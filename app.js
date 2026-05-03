@@ -1,0 +1,2306 @@
+/* app.js: Canvas UI and event handling */
+(function () {
+  "use strict";
+
+  const {
+    hypot2,
+    vectorNorm,
+    MIN_ORIENTATION_LENGTH,
+    Point,
+    Line,
+    Circle,
+    Arc,
+    DistanceConstraint,
+    PointLineDistanceConstraint,
+    LineLineDistanceConstraint,
+    signedPointLineDistance,
+    CoincidentConstraint,
+    PointOnLineConstraint,
+    HorizontalConstraint,
+    VerticalConstraint,
+    ParallelConstraint,
+    PerpendicularConstraint,
+    ConstraintSolver,
+  } = window.GeometrySolver;
+
+  const canvas = document.getElementById("canvas");
+  const ctx = canvas.getContext("2d");
+  const model = { points: [], lines: [], circles: [], arcs: [], constraints: [] };
+  const solver = new ConstraintSolver(model);
+
+  let mode = "select";
+  let selectedPoints = [];
+  let selectedLines = [];
+  let selectedCircles = [];
+  let selectedArcs = [];
+  let dragSession = null;
+  let dimensionDragSession = null;
+  let hoveredPoint = null;
+  let hoveredEndpointPoint = null;
+  let hoveredLine = null;
+  let hoveredCircle = null;
+  let hoveredArc = null;
+  let hoveredDimensionConstraint = null;
+  let selectedDimensionConstraint = null;
+  let panSession = null;
+  let lineStartPoint = null;
+  let circleCenterPoint = null;
+  let arcCenterPoint = null;
+  let arcStartPoint = null;
+  let pointerPreview = null;
+  let pendingCommand = null;
+  let pendingConstraintCommand = null;
+  let pointSeq = 1;
+  let lineSeq = 1;
+  let circleSeq = 1;
+  let arcSeq = 1;
+  const viewport = { x: 0, y: 0, scale: 1 };
+  const MIN_ZOOM = 0.15;
+  const MAX_ZOOM = 8;
+  const CONSTRAINT_ACCEPT_ERROR = 1e-4;
+
+  const constraintButtons = Array.from(document.querySelectorAll("[data-constraint]"));
+  const fixPointBtn = document.getElementById("fixPointBtn");
+
+  for (const btn of document.querySelectorAll("button[aria-label]")) {
+    btn.dataset.tooltip = btn.getAttribute("aria-label");
+  }
+
+  function log(msg) {
+    const el = document.getElementById("log");
+    el.textContent = `${msg}\n` + el.textContent;
+  }
+
+  function setHint(msg, kind = "normal") {
+    const el = document.getElementById("hint");
+    el.textContent = msg;
+    el.classList.toggle("error", kind === "error");
+  }
+
+  function solveAndRefresh(label = "自動solve") {
+    const result = solver.solve();
+    setHint(`${label}: success=${result.success}, error=${result.errorNorm.toExponential(2)}, iter=${result.iterations}`);
+    updateUI();
+    draw();
+    return result;
+  }
+
+  function geometryErrorNorm() {
+    return vectorNorm(solver.computeErrorVector());
+  }
+
+  function addPoint(x, y, fixed = false, kind = "explicit") {
+    const p = new Point(`P${pointSeq++}`, x, y, fixed, kind);
+    model.points.push(p);
+    return p;
+  }
+
+  function addLine(p1, p2) {
+    if (p1 === p2) return null;
+    const l = new Line(`L${lineSeq++}`, p1, p2);
+    model.lines.push(l);
+    return l;
+  }
+
+  function addCircle(center, radiusPoint) {
+    if (center === radiusPoint || hypot2(radiusPoint.x - center.x, radiusPoint.y - center.y) < 1e-9) return null;
+    const c = new Circle(`C${circleSeq++}`, center, radiusPoint);
+    model.circles.push(c);
+    return c;
+  }
+
+  function addArc(center, startPoint, endPoint) {
+    if (center === startPoint || center === endPoint) return null;
+    if (hypot2(startPoint.x - center.x, startPoint.y - center.y) < 1e-9) return null;
+    if (hypot2(endPoint.x - center.x, endPoint.y - center.y) < 1e-9) return null;
+    const a = new Arc(`A${arcSeq++}`, center, startPoint, endPoint);
+    model.arcs.push(a);
+    return a;
+  }
+
+  function snapshotModelState() {
+    return {
+      points: model.points.map((p) => ({ point: p, x: p.x, y: p.y, fixed: p.fixed })),
+      constraintLength: model.constraints.length,
+    };
+  }
+
+  function restoreModelState(snapshot) {
+    for (const p of snapshot.points) {
+      p.point.x = p.x;
+      p.point.y = p.y;
+      p.point.fixed = p.fixed;
+    }
+    model.constraints.length = snapshot.constraintLength;
+  }
+
+  function resetModelState() {
+    model.points.length = 0;
+    model.lines.length = 0;
+    model.circles.length = 0;
+    model.arcs.length = 0;
+    model.constraints.length = 0;
+    clearSelection();
+    dragSession = null;
+    dimensionDragSession = null;
+    panSession = null;
+    lineStartPoint = null;
+    circleCenterPoint = null;
+    arcCenterPoint = null;
+    arcStartPoint = null;
+    pointerPreview = null;
+    pendingCommand = null;
+    pendingConstraintCommand = null;
+    hoveredPoint = null;
+    hoveredEndpointPoint = null;
+    hoveredLine = null;
+    hoveredCircle = null;
+    hoveredArc = null;
+    hoveredDimensionConstraint = null;
+    selectedDimensionConstraint = null;
+    pointSeq = 1;
+    lineSeq = 1;
+    circleSeq = 1;
+    arcSeq = 1;
+  }
+
+  function nextSeq(items, prefix) {
+    const max = items.reduce((n, item) => {
+      const match = String(item.id).match(new RegExp(`^${prefix}(\\d+)$`));
+      return match ? Math.max(n, Number(match[1])) : n;
+    }, 0);
+    return max + 1;
+  }
+
+  function serializeDimension(dimension, target = null) {
+    if (!dimension) return null;
+    const anchor = target ? dimensionAnchor(target, dimension) : dimension;
+    return {
+      x: Number(anchor.x),
+      y: Number(anchor.y),
+      offsetU: Number.isFinite(dimension.offsetU) ? dimension.offsetU : null,
+      offsetN: Number.isFinite(dimension.offsetN) ? dimension.offsetN : null,
+    };
+  }
+
+  function serializeConstraint(c) {
+    if (c instanceof DistanceConstraint) {
+      return { type: "distance", p1: c.p1.id, p2: c.p2.id, target: c.target, dimension: serializeDimension(c.dimension, targetFromConstraint(c)), enabled: c.enabled };
+    }
+    if (c instanceof PointLineDistanceConstraint) {
+      return {
+        type: "pointLineDistance",
+        point: c.point.id,
+        line: c.line.id,
+        target: c.target,
+        sign: c.sign,
+        dimension: serializeDimension(c.dimension, targetFromConstraint(c)),
+        enabled: c.enabled,
+      };
+    }
+    if (c instanceof LineLineDistanceConstraint) {
+      return {
+        type: "lineLineDistance",
+        line1: c.line1.id,
+        line2: c.line2.id,
+        target: c.target,
+        sign: c.sign,
+        dimension: serializeDimension(c.dimension, targetFromConstraint(c)),
+        enabled: c.enabled,
+      };
+    }
+    if (c instanceof CoincidentConstraint) {
+      return { type: "coincident", p1: c.p1.id, p2: c.p2.id, enabled: c.enabled };
+    }
+    if (c instanceof PointOnLineConstraint) {
+      return { type: "pointOnLine", point: c.point.id, line: c.line.id, enabled: c.enabled };
+    }
+    if (c instanceof HorizontalConstraint) {
+      return { type: "horizontal", line: c.line.id, enabled: c.enabled };
+    }
+    if (c instanceof VerticalConstraint) {
+      return { type: "vertical", line: c.line.id, enabled: c.enabled };
+    }
+    if (c instanceof ParallelConstraint) {
+      return { type: "parallel", line1: c.line1.id, line2: c.line2.id, enabled: c.enabled };
+    }
+    if (c instanceof PerpendicularConstraint) {
+      return { type: "perpendicular", line1: c.line1.id, line2: c.line2.id, enabled: c.enabled };
+    }
+    return null;
+  }
+
+  function serializeModel() {
+    return {
+      version: 1,
+      savedAt: new Date().toISOString(),
+      points: model.points.map((p) => ({ id: p.id, x: p.x, y: p.y, fixed: p.fixed, kind: p.kind || (isPointUsedByPrimitive(p) ? "endpoint" : "explicit") })),
+      lines: model.lines.map((l) => ({ id: l.id, p1: l.p1.id, p2: l.p2.id })),
+      circles: model.circles.map((c) => ({ id: c.id, center: c.center.id, radiusPoint: c.radiusPoint.id })),
+      arcs: model.arcs.map((a) => ({ id: a.id, center: a.center.id, startPoint: a.startPoint.id, endPoint: a.endPoint.id })),
+      constraints: model.constraints.map(serializeConstraint).filter(Boolean),
+    };
+  }
+
+  function deserializeConstraint(data, pointById, lineById) {
+    const point = (id) => {
+      const p = pointById.get(String(id));
+      if (!p) throw new Error(`点 ${id} が見つかりません`);
+      return p;
+    };
+    const line = (id) => {
+      const l = lineById.get(String(id));
+      if (!l) throw new Error(`線 ${id} が見つかりません`);
+      return l;
+    };
+
+    let constraint = null;
+    if (data.type === "distance") {
+      constraint = new DistanceConstraint(point(data.p1), point(data.p2), Number(data.target));
+    } else if (data.type === "pointLineDistance") {
+      constraint = new PointLineDistanceConstraint(point(data.point), line(data.line), Number(data.target), Number(data.sign) || null);
+    } else if (data.type === "lineLineDistance") {
+      constraint = new LineLineDistanceConstraint(line(data.line1), line(data.line2), Number(data.target), Number(data.sign) || null);
+    } else if (data.type === "coincident") {
+      constraint = new CoincidentConstraint(point(data.p1), point(data.p2));
+    } else if (data.type === "pointOnLine") {
+      constraint = new PointOnLineConstraint(point(data.point), line(data.line));
+    } else if (data.type === "horizontal") {
+      constraint = new HorizontalConstraint(line(data.line));
+    } else if (data.type === "vertical") {
+      constraint = new VerticalConstraint(line(data.line));
+    } else if (data.type === "parallel") {
+      constraint = new ParallelConstraint(line(data.line1), line(data.line2));
+    } else if (data.type === "perpendicular") {
+      constraint = new PerpendicularConstraint(line(data.line1), line(data.line2));
+    }
+
+    if (constraint) {
+      constraint.enabled = data.enabled !== false;
+      if (data.dimension && Number.isFinite(Number(data.dimension.x)) && Number.isFinite(Number(data.dimension.y))) {
+        constraint.dimension = {
+          x: Number(data.dimension.x),
+          y: Number(data.dimension.y),
+          offsetU: NaN,
+          offsetN: NaN,
+        };
+      }
+    }
+    return constraint;
+  }
+
+  function loadModelData(data) {
+    if (!data || !Array.isArray(data.points) || !Array.isArray(data.lines) || !Array.isArray(data.constraints)) {
+      throw new Error("保存データの形式が正しくありません");
+    }
+
+    const pointById = new Map();
+    const points = [];
+    const hasPointKind = data.points.some((p) => p.kind === "explicit" || p.kind === "endpoint");
+    for (const p of data.points) {
+      const point = new Point(String(p.id), Number(p.x), Number(p.y), Boolean(p.fixed), p.kind === "endpoint" ? "endpoint" : "explicit");
+      points.push(point);
+      pointById.set(point.id, point);
+    }
+
+    const lineById = new Map();
+    const lines = [];
+    for (const l of data.lines) {
+      const p1 = pointById.get(String(l.p1));
+      const p2 = pointById.get(String(l.p2));
+      if (!p1 || !p2) throw new Error(`線 ${l.id} の端点が見つかりません`);
+      const line = new Line(String(l.id), p1, p2);
+      if (!hasPointKind) {
+        p1.kind = "endpoint";
+        p2.kind = "endpoint";
+      }
+      lines.push(line);
+      lineById.set(line.id, line);
+    }
+
+    const circles = [];
+    for (const c of data.circles || []) {
+      const center = pointById.get(String(c.center));
+      const radiusPoint = pointById.get(String(c.radiusPoint));
+      if (!center || !radiusPoint) throw new Error(`円 ${c.id} の参照点が見つかりません`);
+      if (!hasPointKind) {
+        center.kind = "endpoint";
+        radiusPoint.kind = "endpoint";
+      }
+      circles.push(new Circle(String(c.id), center, radiusPoint));
+    }
+
+    const arcs = [];
+    for (const a of data.arcs || []) {
+      const center = pointById.get(String(a.center));
+      const startPoint = pointById.get(String(a.startPoint));
+      const endPoint = pointById.get(String(a.endPoint));
+      if (!center || !startPoint || !endPoint) throw new Error(`円弧 ${a.id} の参照点が見つかりません`);
+      if (!hasPointKind) {
+        center.kind = "endpoint";
+        startPoint.kind = "endpoint";
+        endPoint.kind = "endpoint";
+      }
+      arcs.push(new Arc(String(a.id), center, startPoint, endPoint));
+    }
+
+    const constraints = [];
+    for (const c of data.constraints) {
+      const constraint = deserializeConstraint(c, pointById, lineById);
+      if (!constraint) throw new Error(`未対応の制約です: ${c.type}`);
+      constraints.push(constraint);
+    }
+
+    resetModelState();
+    model.points.push(...points);
+    model.lines.push(...lines);
+    model.circles.push(...circles);
+    model.arcs.push(...arcs);
+    model.constraints.push(...constraints);
+    ensureDimensionDefaults();
+    pointSeq = nextSeq(model.points, "P");
+    lineSeq = nextSeq(model.lines, "L");
+    circleSeq = nextSeq(model.circles, "C");
+    arcSeq = nextSeq(model.arcs, "A");
+  }
+
+  function exportFileData() {
+    try {
+      const data = JSON.stringify(serializeModel(), null, 2);
+      const blob = new Blob([data], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      const stamp = new Date().toISOString().replace(/[:.]/g, "-");
+      a.href = url;
+      a.download = `cad-model-${stamp}.json`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+      setHint("ファイルとして保存しました");
+      log("ファイルとして保存しました");
+    } catch (err) {
+      setHint(`ファイル保存に失敗しました: ${err.message}`);
+      log(`ファイル保存に失敗しました: ${err.message}`);
+    }
+  }
+
+  function importFileData(file) {
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.addEventListener("load", () => {
+      try {
+        loadModelData(JSON.parse(String(reader.result)));
+        solveAndRefresh("ファイル読み込み");
+        log(`ファイルを読み込みました: ${file.name}`);
+      } catch (err) {
+        setHint(`ファイル読み込みに失敗しました: ${err.message}`);
+        log(`ファイル読み込みに失敗しました: ${err.message}`);
+      }
+    });
+    reader.addEventListener("error", () => {
+      setHint("ファイル読み込みに失敗しました");
+      log("ファイル読み込みに失敗しました");
+    });
+    reader.readAsText(file);
+  }
+
+  function pointAt(x, y) {
+    return hitAnyPoint(x, y) || addPoint(x, y);
+  }
+
+  function endpointAt(x, y) {
+    const endpoint = hitEndpointPoint(x, y);
+    if (endpoint) return endpoint;
+    const explicit = hitExplicitPoint(x, y);
+    if (explicit) return addPoint(explicit.x, explicit.y, false, "endpoint");
+    return addPoint(x, y, false, "endpoint");
+  }
+
+  function clearSelection() {
+    selectedPoints = [];
+    selectedLines = [];
+    selectedCircles = [];
+    selectedArcs = [];
+    selectedDimensionConstraint = null;
+  }
+
+  function exitLineMode() {
+    lineStartPoint = null;
+    pointerPreview = null;
+    mode = "select";
+    updateToolbar();
+    setHint("連続線を終了しました");
+    updateUI();
+    draw();
+  }
+
+  function exitDrawMode() {
+    lineStartPoint = null;
+    circleCenterPoint = null;
+    arcCenterPoint = null;
+    arcStartPoint = null;
+    pointerPreview = null;
+    mode = "select";
+    updateToolbar();
+    setHint("選択・ドラッグモードに戻りました");
+    updateUI();
+    draw();
+  }
+
+  function sampleModel() {
+    resetModelState();
+
+    const A = addPoint(160, 160, true, "endpoint");
+    const B = addPoint(300, 180, false, "endpoint");
+    const C = addPoint(280, 290, false, "endpoint");
+    const D = addPoint(140, 270, false, "endpoint");
+    const AB = addLine(A, B);
+    const BC = addLine(B, C);
+    const CD = addLine(C, D);
+    const DA = addLine(D, A);
+
+    model.constraints.push(new DistanceConstraint(A, B, 140));
+    model.constraints.push(new DistanceConstraint(B, C, 100));
+    model.constraints.push(new ParallelConstraint(AB, CD));
+    model.constraints.push(new ParallelConstraint(BC, DA));
+    model.constraints.push(new PerpendicularConstraint(AB, BC));
+    ensureDimensionDefaults();
+
+    solveAndRefresh("サンプル復元");
+    log("サンプルを復元しました");
+  }
+
+  function resizeCanvas(options = {}) {
+    const rect = canvas.getBoundingClientRect();
+    const dpr = window.devicePixelRatio || 1;
+    canvas.width = Math.floor(rect.width * dpr);
+    canvas.height = Math.floor(rect.height * dpr);
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    if (options.centerWorld && rect.width > 0 && rect.height > 0) {
+      viewport.x = rect.width / 2 - options.centerWorld.x * viewport.scale;
+      viewport.y = rect.height / 2 - options.centerWorld.y * viewport.scale;
+    }
+    draw();
+  }
+
+  function currentCanvasCenterWorld() {
+    const rect = canvas.getBoundingClientRect();
+    if (rect.width <= 0 || rect.height <= 0) return null;
+    return screenToWorld({ x: rect.width / 2, y: rect.height / 2 });
+  }
+
+  function clampZoom(scale) {
+    return Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, scale));
+  }
+
+  function canvasScreenPoint(e) {
+    const r = canvas.getBoundingClientRect();
+    return { x: e.clientX - r.left, y: e.clientY - r.top };
+  }
+
+  function screenToWorld(p) {
+    return {
+      x: (p.x - viewport.x) / viewport.scale,
+      y: (p.y - viewport.y) / viewport.scale,
+    };
+  }
+
+  function canvasPoint(e) {
+    return screenToWorld(canvasScreenPoint(e));
+  }
+
+  function isPointUsedByLine(point, lines = model.lines) {
+    return lines.some((line) => line.p1 === point || line.p2 === point);
+  }
+
+  function isPointUsedByCircle(point, circles = model.circles) {
+    return circles.some((circle) => circle.center === point || circle.radiusPoint === point);
+  }
+
+  function isPointUsedByArc(point, arcs = model.arcs) {
+    return arcs.some((arc) => arc.center === point || arc.startPoint === point || arc.endPoint === point);
+  }
+
+  function isPointUsedByPrimitive(point) {
+    return isPointUsedByLine(point) || isPointUsedByCircle(point) || isPointUsedByArc(point);
+  }
+
+  function isEndpointPoint(point) {
+    return point?.kind === "endpoint" || isPointUsedByPrimitive(point);
+  }
+
+  function isExplicitPoint(point) {
+    return point?.kind !== "endpoint";
+  }
+
+  function isStandalonePoint(point) {
+    return isExplicitPoint(point) && !isPointUsedByPrimitive(point);
+  }
+
+  function hitPointByPredicate(x, y, predicate) {
+    const radius = 10 / viewport.scale;
+    for (let i = model.points.length - 1; i >= 0; i--) {
+      const p = model.points[i];
+      if (!predicate(p)) continue;
+      if (hypot2(p.x - x, p.y - y) <= radius) return p;
+    }
+    return null;
+  }
+
+  function hitEndpointPoint(x, y) {
+    return hitPointByPredicate(x, y, isEndpointPoint);
+  }
+
+  function hitExplicitPoint(x, y) {
+    return hitPointByPredicate(x, y, isExplicitPoint);
+  }
+
+  function hitAnyPoint(x, y) {
+    return hitEndpointPoint(x, y) || hitExplicitPoint(x, y);
+  }
+
+  function hitPoint(x, y) {
+    return hitAnyPoint(x, y);
+  }
+
+  function distancePointToSegment(px, py, line) {
+    const x1 = line.p1.x;
+    const y1 = line.p1.y;
+    const x2 = line.p2.x;
+    const y2 = line.p2.y;
+    const dx = x2 - x1;
+    const dy = y2 - y1;
+    const len2 = dx * dx + dy * dy;
+    if (len2 < 1e-12) return hypot2(px - x1, py - y1);
+
+    let t = ((px - x1) * dx + (py - y1) * dy) / len2;
+    t = Math.max(0, Math.min(1, t));
+    return hypot2(px - (x1 + t * dx), py - (y1 + t * dy));
+  }
+
+  function distancePointToSegmentPoints(px, py, a, b) {
+    const dx = b.x - a.x;
+    const dy = b.y - a.y;
+    const len2 = dx * dx + dy * dy;
+    if (len2 < 1e-12) return hypot2(px - a.x, py - a.y);
+    const t = Math.max(0, Math.min(1, ((px - a.x) * dx + (py - a.y) * dy) / len2));
+    return hypot2(px - (a.x + t * dx), py - (a.y + t * dy));
+  }
+
+  function normalizeAngle(angle) {
+    const twoPi = Math.PI * 2;
+    return ((angle % twoPi) + twoPi) % twoPi;
+  }
+
+  function angleBetweenCcw(angle, start, end) {
+    const a = normalizeAngle(angle);
+    const s = normalizeAngle(start);
+    const e = normalizeAngle(end);
+    return s <= e ? a >= s && a <= e : a >= s || a <= e;
+  }
+
+  function arcAngles(arc) {
+    return {
+      start: Math.atan2(arc.startPoint.y - arc.center.y, arc.startPoint.x - arc.center.x),
+      end: Math.atan2(arc.endPoint.y - arc.center.y, arc.endPoint.x - arc.center.x),
+    };
+  }
+
+  function hitLine(x, y) {
+    const threshold = 7 / viewport.scale;
+    for (let i = model.lines.length - 1; i >= 0; i--) {
+      const l = model.lines[i];
+      if (distancePointToSegment(x, y, l) <= threshold) return l;
+    }
+    return null;
+  }
+
+  function hitCircle(x, y) {
+    const threshold = 7 / viewport.scale;
+    for (let i = model.circles.length - 1; i >= 0; i--) {
+      const c = model.circles[i];
+      const d = hypot2(x - c.center.x, y - c.center.y);
+      if (Math.abs(d - c.radius()) <= threshold) return c;
+    }
+    return null;
+  }
+
+  function hitArc(x, y) {
+    const threshold = 7 / viewport.scale;
+    for (let i = model.arcs.length - 1; i >= 0; i--) {
+      const a = model.arcs[i];
+      const radius = a.radius();
+      const d = hypot2(x - a.center.x, y - a.center.y);
+      if (Math.abs(d - radius) > threshold) continue;
+      const angles = arcAngles(a);
+      const angle = Math.atan2(y - a.center.y, x - a.center.x);
+      if (angleBetweenCcw(angle, angles.start, angles.end)) return a;
+    }
+    return null;
+  }
+
+  function hitDimension(x, y) {
+    const threshold = 8 / viewport.scale;
+    for (let i = model.constraints.length - 1; i >= 0; i--) {
+      const constraint = model.constraints[i];
+      const target = targetFromConstraint(constraint);
+      if (!target) continue;
+      const dimension = constraint.dimension || defaultDimensionForTarget(target);
+      const layout = dimensionLayout(target, dimension);
+      if (!layout) continue;
+      if (distancePointToSegmentPoints(x, y, layout.hitA, layout.hitB) <= threshold) {
+        return { constraint, target, dimension };
+      }
+    }
+    return null;
+  }
+
+  function lineUnit(line) {
+    const len = line.length();
+    if (len < 1e-12) return { x: 1, y: 0 };
+    return { x: line.dx() / len, y: line.dy() / len };
+  }
+
+  function lineNormal(line) {
+    const u = lineUnit(line);
+    return { x: -u.y, y: u.x };
+  }
+
+  function linesAreParallel(l1, l2) {
+    if (!lineHasDirection(l1) || !lineHasDirection(l2)) return false;
+    const a = lineUnit(l1);
+    const b = lineUnit(l2);
+    return Math.abs(a.x * b.y - a.y * b.x) < 1e-3;
+  }
+
+  function lineHasDirection(line) {
+    return line.length() >= MIN_ORIENTATION_LENGTH;
+  }
+
+  function projectPointToLine(point, line) {
+    const dx = line.dx();
+    const dy = line.dy();
+    const len2 = dx * dx + dy * dy;
+    if (len2 < 1e-12) return { x: line.p1.x, y: line.p1.y };
+    const t = ((point.x - line.p1.x) * dx + (point.y - line.p1.y) * dy) / len2;
+    return { x: line.p1.x + t * dx, y: line.p1.y + t * dy };
+  }
+
+  function projectPointToSegmentPoint(point, line) {
+    const dx = line.dx();
+    const dy = line.dy();
+    const len2 = dx * dx + dy * dy;
+    if (len2 < 1e-12) return { x: line.p1.x, y: line.p1.y };
+    const t = Math.max(0, Math.min(1, ((point.x - line.p1.x) * dx + (point.y - line.p1.y) * dy) / len2));
+    return { x: line.p1.x + t * dx, y: line.p1.y + t * dy };
+  }
+
+  function distanceTargetFromSelection() {
+    if (selectedPoints.length === 2 && selectedLines.length === 0) {
+      const [p1, p2] = selectedPoints;
+      return { kind: "point-point", p1, p2, value: hypot2(p2.x - p1.x, p2.y - p1.y) };
+    }
+    if (selectedPoints.length === 0 && selectedLines.length === 1) {
+      const [line] = selectedLines;
+      return { kind: "line-length", line, p1: line.p1, p2: line.p2, value: line.length() };
+    }
+    if (selectedPoints.length === 1 && selectedLines.length === 1) {
+      const [point] = selectedPoints;
+      const [line] = selectedLines;
+      if (!lineHasDirection(line)) return { kind: "invalid", reason: "寸法対象の線が短すぎます" };
+      return { kind: "point-line", point, line, value: Math.abs(signedPointLineDistance(point, line)) };
+    }
+    if (selectedPoints.length === 0 && selectedLines.length === 2) {
+      const [line1, line2] = selectedLines;
+      if (!lineHasDirection(line1) || !lineHasDirection(line2)) return { kind: "invalid", reason: "線-線寸法の対象線が短すぎます" };
+      if (!linesAreParallel(line1, line2)) return { kind: "invalid", reason: "線-線寸法は平行線のみです" };
+      return { kind: "line-line", line1, line2, value: Math.abs(signedPointLineDistance(line2.p1, line1)) };
+    }
+    return null;
+  }
+
+  function targetDirection(target) {
+    if (target.kind === "point-point" || target.kind === "line-length") {
+      return lineUnit({ dx: () => target.p2.x - target.p1.x, dy: () => target.p2.y - target.p1.y, length: () => hypot2(target.p2.x - target.p1.x, target.p2.y - target.p1.y) });
+    }
+    if (target.kind === "point-line") {
+      const projection = projectPointToLine(target.point, target.line);
+      const dx = target.point.x - projection.x;
+      const dy = target.point.y - projection.y;
+      const len = hypot2(dx, dy);
+      if (len > 1e-12) return { x: dx / len, y: dy / len };
+      return lineNormal(target.line);
+    }
+    if (target.kind === "line-line") {
+      const projection = projectPointToLine(target.line1.p1, target.line2);
+      const dx = target.line1.p1.x - projection.x;
+      const dy = target.line1.p1.y - projection.y;
+      const len = hypot2(dx, dy);
+      if (len > 1e-12) return { x: dx / len, y: dy / len };
+      return lineNormal(target.line1);
+    }
+    return { x: 1, y: 0 };
+  }
+
+  function targetPointsForDimension(target, anchor = null) {
+    if (target.kind === "point-point" || target.kind === "line-length") return [target.p1, target.p2];
+    if (target.kind === "point-line") return [target.point, projectPointToSegmentPoint(anchor || target.point, target.line)];
+    if (target.kind === "line-line") {
+      return [nearestLineEndpoint(target.line1, anchor), nearestLineEndpoint(target.line2, anchor)];
+    }
+    return [];
+  }
+
+  function nearestLineEndpoint(line, anchor = null) {
+    if (!anchor) return line.p1;
+    const d1 = hypot2(line.p1.x - anchor.x, line.p1.y - anchor.y);
+    const d2 = hypot2(line.p2.x - anchor.x, line.p2.y - anchor.y);
+    return d1 <= d2 ? line.p1 : line.p2;
+  }
+
+  function dimensionBasis(target) {
+    const d = targetDirection(target);
+    return { d, n: { x: -d.y, y: d.x } };
+  }
+
+  function dimensionBasePoint(target) {
+    const points = targetPointsForDimension(target);
+    if (points.length < 2) return { x: 0, y: 0 };
+    return { x: (points[0].x + points[1].x) / 2, y: (points[0].y + points[1].y) / 2 };
+  }
+
+  function dimensionFromAnchor(target, anchor) {
+    const base = dimensionBasePoint(target);
+    const { d, n } = dimensionBasis(target);
+    const dx = anchor.x - base.x;
+    const dy = anchor.y - base.y;
+    return {
+      x: anchor.x,
+      y: anchor.y,
+      offsetU: dx * d.x + dy * d.y,
+      offsetN: dx * n.x + dy * n.y,
+    };
+  }
+
+  function dimensionAnchor(target, dimension) {
+    if (!dimension) return defaultDimensionForTarget(target);
+    const base = dimensionBasePoint(target);
+    const { d, n } = dimensionBasis(target);
+    if (Number.isFinite(dimension.offsetU) && Number.isFinite(dimension.offsetN)) {
+      return {
+        x: base.x + d.x * dimension.offsetU + n.x * dimension.offsetN,
+        y: base.y + d.y * dimension.offsetU + n.y * dimension.offsetN,
+      };
+    }
+    return { x: dimension.x, y: dimension.y };
+  }
+
+  function defaultDimensionForTarget(target) {
+    const points = targetPointsForDimension(target);
+    if (points.length < 2) return { x: 0, y: 0 };
+    const mid = dimensionBasePoint(target);
+    const normal = { x: -targetDirection(target).y, y: targetDirection(target).x };
+    return dimensionFromAnchor(target, { x: mid.x + normal.x * 30, y: mid.y + normal.y * 30 });
+  }
+
+  function targetFromConstraint(c) {
+    if (c instanceof DistanceConstraint) return { kind: "point-point", p1: c.p1, p2: c.p2, value: c.target };
+    if (c instanceof PointLineDistanceConstraint) return { kind: "point-line", point: c.point, line: c.line, value: c.target };
+    if (c instanceof LineLineDistanceConstraint) return { kind: "line-line", line1: c.line1, line2: c.line2, value: c.target };
+    return null;
+  }
+
+  function constraintReferencesPoint(c, point) {
+    if (c instanceof DistanceConstraint) return c.p1 === point || c.p2 === point;
+    if (c instanceof PointLineDistanceConstraint) return c.point === point || c.line.p1 === point || c.line.p2 === point;
+    if (c instanceof LineLineDistanceConstraint) return c.line1.p1 === point || c.line1.p2 === point || c.line2.p1 === point || c.line2.p2 === point;
+    if (c instanceof CoincidentConstraint) return c.p1 === point || c.p2 === point;
+    if (c instanceof PointOnLineConstraint) return c.point === point || c.line.p1 === point || c.line.p2 === point;
+    if (c instanceof HorizontalConstraint || c instanceof VerticalConstraint) return c.line.p1 === point || c.line.p2 === point;
+    if (c instanceof ParallelConstraint || c instanceof PerpendicularConstraint) {
+      return c.line1.p1 === point || c.line1.p2 === point || c.line2.p1 === point || c.line2.p2 === point;
+    }
+    return false;
+  }
+
+  function constraintReferencesLine(c, line) {
+    if (c instanceof DistanceConstraint) {
+      return (c.p1 === line.p1 && c.p2 === line.p2) || (c.p1 === line.p2 && c.p2 === line.p1);
+    }
+    if (c instanceof PointLineDistanceConstraint) return c.line === line;
+    if (c instanceof LineLineDistanceConstraint) return c.line1 === line || c.line2 === line;
+    if (c instanceof PointOnLineConstraint) return c.line === line;
+    if (c instanceof HorizontalConstraint || c instanceof VerticalConstraint) return c.line === line;
+    if (c instanceof ParallelConstraint || c instanceof PerpendicularConstraint) return c.line1 === line || c.line2 === line;
+    return false;
+  }
+
+  function removeFromArray(array, item) {
+    const i = array.indexOf(item);
+    if (i >= 0) array.splice(i, 1);
+  }
+
+  function deleteElements({ points = [], lines = [], circles = [], arcs = [], constraints = [] } = {}) {
+    const pointSet = new Set(points);
+    const lineSet = new Set(lines);
+    const circleSet = new Set(circles);
+    const arcSet = new Set(arcs);
+    const constraintSet = new Set(constraints);
+
+    for (const line of model.lines) {
+      if (pointSet.has(line.p1) || pointSet.has(line.p2)) lineSet.add(line);
+    }
+
+    for (const circle of model.circles) {
+      if (pointSet.has(circle.center) || pointSet.has(circle.radiusPoint)) circleSet.add(circle);
+    }
+    for (const arc of model.arcs) {
+      if (pointSet.has(arc.center) || pointSet.has(arc.startPoint) || pointSet.has(arc.endPoint)) arcSet.add(arc);
+    }
+    const remainingLines = model.lines.filter((line) => !lineSet.has(line));
+    const remainingCircles = model.circles.filter((circle) => !circleSet.has(circle));
+    const remainingArcs = model.arcs.filter((arc) => !arcSet.has(arc));
+    for (const line of lineSet) {
+      if (line.p1.kind === "endpoint" && !isPointUsedByLine(line.p1, remainingLines) && !isPointUsedByCircle(line.p1, remainingCircles) && !isPointUsedByArc(line.p1, remainingArcs)) pointSet.add(line.p1);
+      if (line.p2.kind === "endpoint" && !isPointUsedByLine(line.p2, remainingLines) && !isPointUsedByCircle(line.p2, remainingCircles) && !isPointUsedByArc(line.p2, remainingArcs)) pointSet.add(line.p2);
+    }
+    for (const circle of circleSet) {
+      if (circle.center.kind === "endpoint" && !isPointUsedByCircle(circle.center, remainingCircles) && !isPointUsedByLine(circle.center, remainingLines) && !isPointUsedByArc(circle.center, remainingArcs)) pointSet.add(circle.center);
+      if (circle.radiusPoint.kind === "endpoint" && !isPointUsedByCircle(circle.radiusPoint, remainingCircles) && !isPointUsedByLine(circle.radiusPoint, remainingLines) && !isPointUsedByArc(circle.radiusPoint, remainingArcs)) pointSet.add(circle.radiusPoint);
+    }
+    for (const arc of arcSet) {
+      for (const p of [arc.center, arc.startPoint, arc.endPoint]) {
+        if (p.kind === "endpoint" && !isPointUsedByArc(p, remainingArcs) && !isPointUsedByLine(p, remainingLines) && !isPointUsedByCircle(p, remainingCircles)) pointSet.add(p);
+      }
+    }
+
+    for (const constraint of model.constraints) {
+      for (const point of pointSet) {
+        if (constraintReferencesPoint(constraint, point)) constraintSet.add(constraint);
+      }
+      for (const line of lineSet) {
+        if (constraintReferencesLine(constraint, line)) constraintSet.add(constraint);
+      }
+    }
+
+    if (pointSet.size === 0 && lineSet.size === 0 && circleSet.size === 0 && arcSet.size === 0 && constraintSet.size === 0) return false;
+
+    dragSession = null;
+    dimensionDragSession = null;
+    pendingCommand = null;
+    pendingConstraintCommand = null;
+    lineStartPoint = null;
+    circleCenterPoint = null;
+    arcCenterPoint = null;
+    arcStartPoint = null;
+    pointerPreview = null;
+    mode = "select";
+
+    model.constraints = model.constraints.filter((c) => !constraintSet.has(c));
+    model.lines = model.lines.filter((l) => !lineSet.has(l));
+    model.circles = model.circles.filter((c) => !circleSet.has(c));
+    model.arcs = model.arcs.filter((a) => !arcSet.has(a));
+    model.points = model.points.filter((p) => !pointSet.has(p));
+    selectedPoints = selectedPoints.filter((p) => !pointSet.has(p));
+    selectedLines = selectedLines.filter((l) => !lineSet.has(l));
+    selectedCircles = selectedCircles.filter((c) => !circleSet.has(c));
+    selectedArcs = selectedArcs.filter((a) => !arcSet.has(a));
+    if (constraintSet.has(selectedDimensionConstraint)) selectedDimensionConstraint = null;
+    if (constraintSet.has(hoveredDimensionConstraint)) hoveredDimensionConstraint = null;
+
+    const result = solver.solve();
+    updateToolbar();
+    updateUI();
+    draw();
+    const msg = `削除しました: 点${pointSet.size} / 線${lineSet.size} / 円${circleSet.size} / 円弧${arcSet.size} / 拘束${constraintSet.size}`;
+    setHint(`${msg} (error=${result.errorNorm.toExponential(2)})`, result.success ? "normal" : "error");
+    log(`${msg}\n自動solve: success=${result.success}, error=${result.errorNorm.toExponential(3)}`);
+    return true;
+  }
+
+  function deleteCurrentSelection() {
+    const constraints = selectedDimensionConstraint ? [selectedDimensionConstraint] : [];
+    return deleteElements({ points: selectedPoints, lines: selectedLines, circles: selectedCircles, arcs: selectedArcs, constraints });
+  }
+
+  function ensureDimensionDefaults() {
+    for (const c of model.constraints) {
+      const target = targetFromConstraint(c);
+      if (!target) continue;
+      if (!c.dimension) {
+        c.dimension = defaultDimensionForTarget(target);
+      } else if (!Number.isFinite(c.dimension.offsetU) || !Number.isFinite(c.dimension.offsetN)) {
+        c.dimension = dimensionFromAnchor(target, c.dimension);
+      }
+    }
+  }
+
+  function togglePointSelection(p) {
+    if (!p) return;
+    const i = selectedPoints.indexOf(p);
+    if (i >= 0) selectedPoints.splice(i, 1);
+    else selectedPoints.push(p);
+  }
+
+  function toggleLineSelection(l) {
+    if (!l) return;
+    const i = selectedLines.indexOf(l);
+    if (i >= 0) selectedLines.splice(i, 1);
+    else selectedLines.push(l);
+  }
+
+  function toggleCircleSelection(c) {
+    if (!c) return;
+    const i = selectedCircles.indexOf(c);
+    if (i >= 0) selectedCircles.splice(i, 1);
+    else selectedCircles.push(c);
+  }
+
+  function toggleArcSelection(a) {
+    if (!a) return;
+    const i = selectedArcs.indexOf(a);
+    if (i >= 0) selectedArcs.splice(i, 1);
+    else selectedArcs.push(a);
+  }
+
+  function drawGrid(w, h) {
+    const left = -viewport.x / viewport.scale;
+    const top = -viewport.y / viewport.scale;
+    const right = left + w / viewport.scale;
+    const bottom = top + h / viewport.scale;
+    const step = 25;
+    const startX = Math.floor(left / step) * step;
+    const startY = Math.floor(top / step) * step;
+
+    ctx.save();
+    ctx.strokeStyle = "#eef2f7";
+    ctx.lineWidth = 1 / viewport.scale;
+    for (let x = startX; x <= right; x += step) {
+      ctx.beginPath();
+      ctx.moveTo(x, top);
+      ctx.lineTo(x, bottom);
+      ctx.stroke();
+    }
+    for (let y = startY; y <= bottom; y += step) {
+      ctx.beginPath();
+      ctx.moveTo(left, y);
+      ctx.lineTo(right, y);
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
+
+  function draw() {
+    const r = canvas.getBoundingClientRect();
+    const w = r.width;
+    const h = r.height;
+    const dpr = window.devicePixelRatio || 1;
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, w, h);
+    ctx.save();
+    ctx.translate(viewport.x, viewport.y);
+    ctx.scale(viewport.scale, viewport.scale);
+    drawGrid(w, h);
+    drawLines();
+    drawCircles();
+    drawArcs();
+    drawDimensions();
+    drawDimensionPreview();
+    drawTemporaryLine();
+    drawCirclePreview();
+    drawArcPreview();
+    drawPoints();
+    ctx.restore();
+  }
+
+  function drawLines() {
+    ctx.save();
+    for (const l of model.lines) {
+      const sel = selectedLines.includes(l);
+      const hovered = hoveredLine === l;
+      ctx.strokeStyle = sel || hovered ? "#2563eb" : "#111827";
+      ctx.lineWidth = (sel || hovered ? 3 : 2) / viewport.scale;
+      ctx.lineCap = "round";
+      ctx.lineJoin = "round";
+      ctx.beginPath();
+      ctx.moveTo(l.p1.x, l.p1.y);
+      ctx.lineTo(l.p2.x, l.p2.y);
+      ctx.stroke();
+
+      if (sel || hovered) {
+        const mx = (l.p1.x + l.p2.x) / 2;
+        const my = (l.p1.y + l.p2.y) / 2;
+        ctx.fillStyle = "#2563eb";
+        ctx.font = `${12 / viewport.scale}px system-ui`;
+        ctx.fillText(l.id, mx + 4 / viewport.scale, my - 4 / viewport.scale);
+      }
+    }
+    ctx.restore();
+  }
+
+  function drawCircles() {
+    ctx.save();
+    ctx.lineCap = "round";
+    for (const c of model.circles) {
+      const sel = selectedCircles.includes(c);
+      const hovered = hoveredCircle === c;
+      ctx.strokeStyle = sel || hovered ? "#2563eb" : "#111827";
+      ctx.lineWidth = (sel || hovered ? 3 : 2) / viewport.scale;
+      ctx.beginPath();
+      ctx.arc(c.center.x, c.center.y, c.radius(), 0, Math.PI * 2);
+      ctx.stroke();
+      if (sel || hovered) {
+        ctx.fillStyle = "#2563eb";
+        ctx.font = `${12 / viewport.scale}px system-ui`;
+        ctx.fillText(c.id, c.center.x + c.radius() + 4 / viewport.scale, c.center.y - 4 / viewport.scale);
+      }
+    }
+    ctx.restore();
+  }
+
+  function drawArcs() {
+    ctx.save();
+    ctx.lineCap = "round";
+    for (const a of model.arcs) {
+      const sel = selectedArcs.includes(a);
+      const hovered = hoveredArc === a;
+      const angles = arcAngles(a);
+      ctx.strokeStyle = sel || hovered ? "#2563eb" : "#111827";
+      ctx.lineWidth = (sel || hovered ? 3 : 2) / viewport.scale;
+      ctx.beginPath();
+      ctx.arc(a.center.x, a.center.y, a.radius(), angles.start, angles.end, false);
+      ctx.stroke();
+      if (sel || hovered) {
+        const mid = normalizeAngle(angles.start + ((normalizeAngle(angles.end - angles.start) || Math.PI * 2) / 2));
+        ctx.fillStyle = "#2563eb";
+        ctx.font = `${12 / viewport.scale}px system-ui`;
+        ctx.fillText(a.id, a.center.x + Math.cos(mid) * a.radius(), a.center.y + Math.sin(mid) * a.radius());
+      }
+    }
+    ctx.restore();
+  }
+
+  function drawDimension(target, dimension, label, preview = false, highlighted = false, editState = null) {
+    if (!target || !dimension) return;
+    const layout = dimensionLayout(target, dimension);
+    if (!layout) return;
+    const { a, b, points, d, text } = layout;
+
+    ctx.save();
+    ctx.strokeStyle = preview || highlighted ? "#2563eb" : "#6b7280";
+    ctx.fillStyle = preview || highlighted ? "#2563eb" : "#6b7280";
+    ctx.lineWidth = (highlighted ? 2 : 1.2) / viewport.scale;
+    if (preview) ctx.setLineDash([5 / viewport.scale, 4 / viewport.scale]);
+    ctx.beginPath();
+    ctx.moveTo(a.x, a.y);
+    ctx.lineTo(b.x, b.y);
+    ctx.stroke();
+
+    for (const p of points) {
+      ctx.beginPath();
+      ctx.moveTo(p.extensionStart.x, p.extensionStart.y);
+      ctx.lineTo(p.extensionEnd.x, p.extensionEnd.y);
+      ctx.stroke();
+    }
+
+    ctx.setLineDash([]);
+    drawArrowhead(a, d);
+    drawArrowhead(b, { x: -d.x, y: -d.y });
+
+    if (editState) {
+      drawDimensionEditLabel(label, text, editState);
+    } else {
+      ctx.font = `${12 / viewport.scale}px system-ui`;
+      ctx.textAlign = "center";
+      ctx.textBaseline = "bottom";
+      ctx.fillText(label, text.x, text.y - 4 / viewport.scale);
+    }
+    ctx.restore();
+  }
+
+  function drawDimensionEditLabel(label, text, state) {
+    const fontSize = 12 / viewport.scale;
+    const padX = 6 / viewport.scale;
+    const padY = 4 / viewport.scale;
+    const height = 22 / viewport.scale;
+    ctx.save();
+    ctx.font = `${fontSize}px ui-monospace, SFMono-Regular, Consolas, monospace`;
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    const width = Math.max(44 / viewport.scale, ctx.measureText(label).width + padX * 2);
+    const x = text.x - width / 2;
+    const y = text.y - height - 4 / viewport.scale;
+    const border = state.invalid ? "#dc2626" : "#2563eb";
+
+    ctx.fillStyle = "#fff";
+    ctx.strokeStyle = border;
+    ctx.lineWidth = 1.5 / viewport.scale;
+    ctx.beginPath();
+    ctx.rect(x, y, width, height);
+    ctx.fill();
+    ctx.stroke();
+
+    if (state.selecting && !state.invalid) {
+      ctx.fillStyle = "#dbeafe";
+      ctx.fillRect(x + padX / 2, y + padY / 2, width - padX, height - padY);
+    }
+
+    ctx.fillStyle = border;
+    ctx.fillText(label, text.x, y + height / 2);
+    ctx.restore();
+  }
+
+  function dimensionLayout(target, dimension) {
+    const d = targetDirection(target);
+    const anchor = dimensionAnchor(target, dimension);
+    const points = targetPointsForDimension(target, anchor);
+    if (points.length < 2) return null;
+    const tick = 9 / viewport.scale;
+    const extension = 6 / viewport.scale;
+    const gap = 12 / viewport.scale;
+    const projections = points.map((p) => (p.x - anchor.x) * d.x + (p.y - anchor.y) * d.y);
+    const min = Math.min(...projections);
+    const max = Math.max(...projections);
+    const a = { x: anchor.x + d.x * min, y: anchor.y + d.y * min };
+    const b = { x: anchor.x + d.x * max, y: anchor.y + d.y * max };
+    const projectedPoints = points.map((source) => {
+      const t = (source.x - anchor.x) * d.x + (source.y - anchor.y) * d.y;
+      const onDimension = { x: anchor.x + d.x * t, y: anchor.y + d.y * t };
+      const ex = onDimension.x - source.x;
+      const ey = onDimension.y - source.y;
+      const el = hypot2(ex, ey);
+      const ux = el > 1e-12 ? ex / el : d.x;
+      const uy = el > 1e-12 ? ey / el : d.y;
+      const visibleGap = Math.min(gap, Math.max(0, el - 2 / viewport.scale));
+      return {
+        source,
+        extensionStart: {
+          x: source.x + ux * visibleGap,
+          y: source.y + uy * visibleGap,
+        },
+        onDimension,
+        extensionEnd: {
+          x: onDimension.x + ux * extension,
+          y: onDimension.y + uy * extension,
+        },
+      };
+    });
+    return {
+      a,
+      b,
+      d,
+      points: projectedPoints,
+      text: { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 },
+      hitA: { x: a.x - d.x * tick, y: a.y - d.y * tick },
+      hitB: { x: b.x + d.x * tick, y: b.y + d.y * tick },
+    };
+  }
+
+  function drawArrowhead(point, direction) {
+    const size = 10 / viewport.scale;
+    const wing = 4.5 / viewport.scale;
+    const n = { x: -direction.y, y: direction.x };
+    ctx.beginPath();
+    ctx.moveTo(point.x, point.y);
+    ctx.lineTo(point.x + direction.x * size + n.x * wing, point.y + direction.y * size + n.y * wing);
+    ctx.moveTo(point.x, point.y);
+    ctx.lineTo(point.x + direction.x * size - n.x * wing, point.y + direction.y * size - n.y * wing);
+    ctx.stroke();
+  }
+
+  function drawDimensions() {
+    for (const c of model.constraints) {
+      const target = targetFromConstraint(c);
+      if (!target) continue;
+      const dimension = c.dimension || defaultDimensionForTarget(target);
+      const highlighted = c === hoveredDimensionConstraint || c === selectedDimensionConstraint || c === dimensionDragSession?.constraint;
+      drawDimension(target, dimension, Number(c.target).toFixed(2), false, highlighted);
+    }
+  }
+
+  function drawDimensionPreview() {
+    if (!pendingCommand?.type?.startsWith("distance")) return;
+    const dimension = pendingCommand.type === "distance-place" ? pendingCommand.pointer || defaultDimensionForTarget(pendingCommand.target) : pendingCommand.dimension;
+    if (pendingCommand.type === "distance-value") {
+      const value = Number(pendingCommand.buffer);
+      const invalid = pendingCommand.buffer === "" || !Number.isFinite(value) || value <= 0;
+      drawDimension(pendingCommand.target, dimension, `${pendingCommand.buffer || "_"}|`, true, false, {
+        selecting: !pendingCommand.editing,
+        invalid,
+      });
+      return;
+    }
+    drawDimension(pendingCommand.target, dimension, Number(pendingCommand.target.value).toFixed(2), true);
+  }
+
+  function drawTemporaryLine() {
+    if (mode !== "line" || !lineStartPoint) return;
+    const target = pointerPreview || lineStartPoint;
+    ctx.save();
+    ctx.strokeStyle = "#2563eb";
+    ctx.lineWidth = 2 / viewport.scale;
+    ctx.setLineDash([6 / viewport.scale, 5 / viewport.scale]);
+    ctx.beginPath();
+    ctx.moveTo(lineStartPoint.x, lineStartPoint.y);
+    ctx.lineTo(target.x, target.y);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.beginPath();
+    ctx.arc(lineStartPoint.x, lineStartPoint.y, 12 / viewport.scale, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  function drawCirclePreview() {
+    if (mode !== "circle" || !circleCenterPoint || !pointerPreview) return;
+    const radius = hypot2(pointerPreview.x - circleCenterPoint.x, pointerPreview.y - circleCenterPoint.y);
+    ctx.save();
+    ctx.strokeStyle = "#2563eb";
+    ctx.lineWidth = 2 / viewport.scale;
+    ctx.setLineDash([6 / viewport.scale, 5 / viewport.scale]);
+    ctx.beginPath();
+    ctx.arc(circleCenterPoint.x, circleCenterPoint.y, radius, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  function drawArcPreview() {
+    if (mode !== "arc" || !arcCenterPoint || !arcStartPoint || !pointerPreview) return;
+    const angles = {
+      start: Math.atan2(arcStartPoint.y - arcCenterPoint.y, arcStartPoint.x - arcCenterPoint.x),
+      end: Math.atan2(pointerPreview.y - arcCenterPoint.y, pointerPreview.x - arcCenterPoint.x),
+    };
+    ctx.save();
+    ctx.strokeStyle = "#2563eb";
+    ctx.lineWidth = 2 / viewport.scale;
+    ctx.setLineDash([6 / viewport.scale, 5 / viewport.scale]);
+    ctx.beginPath();
+    ctx.arc(arcCenterPoint.x, arcCenterPoint.y, hypot2(arcStartPoint.x - arcCenterPoint.x, arcStartPoint.y - arcCenterPoint.y), angles.start, angles.end, false);
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  function drawPoints() {
+    for (const p of model.points) {
+      if (!isExplicitPoint(p) && !isPointUsedByPrimitive(p)) continue;
+      const sel = selectedPoints.includes(p);
+      const endpoint = isEndpointPoint(p);
+      const hovered = hoveredPoint === p || hoveredEndpointPoint === p;
+      const dragging = dragSession?.kind === "point" && dragSession.points.some((target) => target.point === p);
+      if (endpoint && !sel && !hovered && !dragging) continue;
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, (sel ? 7 : endpoint ? 5 : 5) / viewport.scale, 0, Math.PI * 2);
+      ctx.fillStyle = p.fixed ? "#dc2626" : sel ? "#2563eb" : hovered ? "#eff6ff" : "#fff";
+      ctx.fill();
+      ctx.strokeStyle = sel ? "#1d4ed8" : hovered ? "#2563eb" : "#111827";
+      ctx.lineWidth = (endpoint ? 2 : 2) / viewport.scale;
+      ctx.stroke();
+      if (sel || hovered || dragging) {
+        ctx.fillStyle = hovered || endpoint ? "#2563eb" : "#111827";
+        ctx.font = `${12 / viewport.scale}px system-ui`;
+        ctx.fillText(p.id, p.x + 8 / viewport.scale, p.y - 8 / viewport.scale);
+      }
+
+      if (p.fixed) {
+        ctx.fillStyle = "#dc2626";
+        ctx.fillText("固定", p.x + 8 / viewport.scale, p.y + 8 / viewport.scale);
+      }
+    }
+  }
+
+  function updateToolbar() {
+    document.getElementById("toolSelect").classList.toggle("active", mode === "select");
+    document.getElementById("toolPoint").classList.toggle("active", mode === "point");
+    document.getElementById("toolLine").classList.toggle("active", mode === "line");
+    document.getElementById("toolCircle").classList.toggle("active", mode === "circle");
+    document.getElementById("toolArc").classList.toggle("active", mode === "arc");
+  }
+
+  function canApplyConstraint(type) {
+    if (type === "distance") {
+      const target = distanceTargetFromSelection();
+      return Boolean(target && target.kind !== "invalid");
+    }
+    if (type === "coincident") return (selectedPoints.length === 2 && selectedLines.length === 0) || (selectedPoints.length === 1 && selectedLines.length === 1);
+    if (type === "horizontal" || type === "vertical") return selectedLines.length === 1 && lineHasDirection(selectedLines[0]);
+    if (type === "parallel" || type === "perpendicular") return selectedLines.length === 2 && selectedLines.every(lineHasDirection);
+    return false;
+  }
+
+  function canCompleteConstraintCommand(type) {
+    if (type !== "distance") return canApplyConstraint(type);
+    const target = distanceTargetFromSelection();
+    if (!target || target.kind === "invalid") return false;
+    return target.kind !== "line-length" || !pendingConstraintCommand;
+  }
+
+  function constraintLabel(type) {
+    const btn = constraintButtons.find((b) => b.dataset.constraint === type);
+    return btn?.dataset.label || btn?.title || type;
+  }
+
+  function constraintTargetHint(type) {
+    if (type === "distance") return "寸法対象を選択してください。線長はEnter、または同じ線をダブルクリックで確定できます。";
+    if (type === "coincident") return "一致させる点を2つ選択してください";
+    if (type === "horizontal") return "水平にする線を1本選択してください";
+    if (type === "vertical") return "垂直にする線を1本選択してください";
+    if (type === "parallel") return "平行にする線を2本選択してください";
+    if (type === "perpendicular") return "直交させる線を2本選択してください";
+    return `${constraintLabel(type)} の対象を選択してください`;
+  }
+
+  function invalidConstraintTargetHint(type) {
+    if (type === "coincident") return "この拘束では点を選択してください";
+    if (type === "horizontal" || type === "vertical" || type === "parallel" || type === "perpendicular") {
+      return "この拘束では線を選択してください";
+    }
+    if (type === "distance") return "寸法対象として点または線を選択してください";
+    return "この拘束では選択できません";
+  }
+
+  function trimConstraintSelection(type) {
+    if (type === "coincident") {
+      selectedPoints = selectedPoints.slice(0, 2);
+      selectedLines = selectedPoints.length >= 2 ? [] : selectedLines.slice(0, 1);
+    } else if (type === "horizontal" || type === "vertical") {
+      selectedPoints = [];
+      selectedLines = selectedLines.slice(0, 1);
+    } else if (type === "parallel" || type === "perpendicular") {
+      selectedPoints = [];
+      selectedLines = selectedLines.slice(0, 2);
+    } else if (type === "distance") {
+      selectedPoints = selectedPoints.slice(0, 2);
+      selectedLines = selectedLines.slice(0, 2);
+      if (selectedPoints.length > 0 && selectedLines.length > 0) {
+        selectedPoints = selectedPoints.slice(0, 1);
+        selectedLines = selectedLines.slice(0, 1);
+      }
+    }
+  }
+
+  function startConstraintTargetCommand(type) {
+    cancelPendingCommand("");
+    if (pendingConstraintCommand?.type === type) {
+      cancelConstraintTargetCommand(`${constraintLabel(type)}の対象選択をキャンセルしました`);
+      return;
+    }
+    pendingConstraintCommand = { type };
+    trimConstraintSelection(type);
+    updateConstraintButtons();
+    setHint(constraintTargetHint(type));
+    draw();
+  }
+
+  function cancelConstraintTargetCommand(message = "拘束対象の選択をキャンセルしました") {
+    if (!pendingConstraintCommand) return;
+    pendingConstraintCommand = null;
+    if (message) setHint(message);
+    updateConstraintButtons();
+    draw();
+  }
+
+  function executeConstraintCommandIfReady() {
+    if (!pendingConstraintCommand) return false;
+    const type = pendingConstraintCommand.type;
+    if (!canCompleteConstraintCommand(type)) {
+      const target = type === "distance" ? distanceTargetFromSelection() : null;
+      if (target?.kind === "invalid") {
+        setHint(target.reason, "error");
+        return false;
+      }
+      if (target?.kind === "line-length") {
+        setHint("線長寸法はEnter、または同じ線をダブルクリックで確定できます。点または別の線をクリックすると距離寸法になります。");
+        return false;
+      }
+      setHint(constraintTargetHint(type));
+      return false;
+    }
+    pendingConstraintCommand = null;
+    updateConstraintButtons();
+    addConstraint(type);
+    return true;
+  }
+
+  function completePendingDimensionLineLength() {
+    if (pendingConstraintCommand?.type !== "distance") return false;
+    const target = distanceTargetFromSelection();
+    if (!target || target.kind !== "line-length") return false;
+    pendingConstraintCommand = null;
+    updateConstraintButtons();
+    startDistanceCommand();
+    return true;
+  }
+
+  function handleConstraintTargetClick(hitP, hitL) {
+    if (!pendingConstraintCommand) return false;
+    const type = pendingConstraintCommand.type;
+    selectedDimensionConstraint = null;
+
+    if (type === "coincident") {
+      if (!hitP && !hitL) {
+        setHint(invalidConstraintTargetHint(type), "error");
+        return true;
+      }
+      if (hitP) {
+        if (!selectedPoints.includes(hitP)) selectedPoints.push(hitP);
+        selectedPoints = selectedPoints.slice(-2);
+        if (selectedPoints.length >= 2) selectedLines = [];
+      } else if (hitL) {
+        selectedLines = [hitL];
+        selectedPoints = selectedPoints.slice(0, 1);
+      }
+    } else if (type === "horizontal" || type === "vertical") {
+      if (!hitL) {
+        setHint(invalidConstraintTargetHint(type), "error");
+        return true;
+      }
+      if (!lineHasDirection(hitL)) {
+        setHint("向き拘束の対象線が短すぎます", "error");
+        return true;
+      }
+      selectedLines = [hitL];
+      selectedPoints = [];
+    } else if (type === "parallel" || type === "perpendicular") {
+      if (!hitL) {
+        setHint(invalidConstraintTargetHint(type), "error");
+        return true;
+      }
+      if (!lineHasDirection(hitL)) {
+        setHint("向き拘束の対象線が短すぎます", "error");
+        return true;
+      }
+      selectedPoints = [];
+      if (!selectedLines.includes(hitL)) selectedLines.push(hitL);
+      selectedLines = selectedLines.slice(-2);
+    } else if (type === "distance") {
+      if (!hitP && !hitL) {
+        const target = distanceTargetFromSelection();
+        if (target?.kind === "line-length") {
+          setHint("線の長さ寸法は、配置したい位置をダブルクリックしてください");
+          return true;
+        }
+        setHint(invalidConstraintTargetHint(type), "error");
+        return true;
+      }
+      if (hitP) {
+        if (!selectedPoints.includes(hitP)) selectedPoints.push(hitP);
+        selectedPoints = selectedPoints.slice(-2);
+        selectedLines = selectedLines.slice(0, 1);
+      } else if (hitL) {
+        if (!selectedLines.includes(hitL)) selectedLines.push(hitL);
+        selectedLines = selectedLines.slice(-2);
+        selectedPoints = selectedPoints.slice(0, 1);
+      }
+      trimConstraintSelection(type);
+    }
+
+    updateUI();
+    if (!executeConstraintCommandIfReady()) draw();
+    return true;
+  }
+
+  function handleConstraintTargetDoubleClick(hitP, hitL, pointer) {
+    if (pendingConstraintCommand?.type !== "distance") return false;
+    if (selectedPoints.length !== 0 || selectedLines.length !== 1) return false;
+    if (hitL && selectedLines[0] !== hitL) return false;
+    pendingConstraintCommand = null;
+    updateConstraintButtons();
+    startDistanceCommand();
+    return true;
+  }
+
+  function startDistanceCommand() {
+    const target = distanceTargetFromSelection();
+    if (!target) return;
+    if (target.kind === "invalid") {
+      setHint(target.reason, "error");
+      log(target.reason);
+      return;
+    }
+    pendingCommand = { type: "distance-place", target, pointer: defaultDimensionForTarget(target) };
+    setHint("寸法線の位置をクリックしてください");
+    draw();
+  }
+
+  function cancelPendingCommand(message = "コマンドをキャンセルしました") {
+    if (!pendingCommand) return;
+    pendingCommand = null;
+    if (message) setHint(message);
+    draw();
+  }
+
+  function startDistanceValueInput(pointer) {
+    if (!pendingCommand || pendingCommand.type !== "distance-place") return;
+    const value = Number(pendingCommand.target.value.toFixed(3));
+    pendingCommand = {
+      type: "distance-value",
+      target: pendingCommand.target,
+      dimension: dimensionFromAnchor(pendingCommand.target, pointer),
+      buffer: String(value),
+      editing: false,
+    };
+    setHint("寸法値を入力中: 数値キーで編集、Enter/ダブルクリックで決定、Escでキャンセル");
+    draw();
+  }
+
+  function updateDistanceBufferLabel() {
+    if (!pendingCommand || pendingCommand.type !== "distance-value") return;
+    setHint("寸法値を入力中: 数値キーで編集、Enter/ダブルクリックで決定、Escでキャンセル");
+    draw();
+  }
+
+  function submitDistanceValue() {
+    if (!pendingCommand || pendingCommand.type !== "distance-value") return;
+    const value = Number(pendingCommand.buffer);
+    if (!Number.isFinite(value) || value <= 0) {
+      setHint("寸法値には0より大きい数値を入力してください", "error");
+      draw();
+      return;
+    }
+    const { target, dimension } = pendingCommand;
+    pendingCommand = null;
+    addDistanceConstraintFromTarget(target, value, dimension);
+  }
+
+  function handleDistanceKey(e) {
+    if (!pendingCommand) return false;
+    if (e.key === "Escape") {
+      e.preventDefault();
+      cancelPendingCommand("寸法入力をキャンセルしました");
+      return true;
+    }
+    if (pendingCommand.type !== "distance-value") return false;
+    if (e.key === "Enter") {
+      e.preventDefault();
+      submitDistanceValue();
+      return true;
+    }
+    if (e.key === "Backspace") {
+      e.preventDefault();
+      pendingCommand.buffer = pendingCommand.buffer.slice(0, -1);
+      pendingCommand.editing = true;
+      updateDistanceBufferLabel();
+      return true;
+    }
+    if (e.key === "Delete") {
+      e.preventDefault();
+      pendingCommand.buffer = "";
+      pendingCommand.editing = true;
+      updateDistanceBufferLabel();
+      return true;
+    }
+    if (/^[0-9.]$/.test(e.key)) {
+      e.preventDefault();
+      if (!pendingCommand.editing) {
+        pendingCommand.buffer = "";
+        pendingCommand.editing = true;
+      }
+      if (e.key === "." && pendingCommand.buffer.includes(".")) return true;
+      pendingCommand.buffer += e.key;
+      updateDistanceBufferLabel();
+      return true;
+    }
+    return false;
+  }
+
+  function updateConstraintButtons() {
+    if (pendingCommand?.type?.startsWith("distance")) {
+      const target = distanceTargetFromSelection();
+      if (!target || target.kind === "invalid") cancelPendingCommand("寸法入力をキャンセルしました");
+    }
+
+    for (const btn of constraintButtons) {
+      btn.setAttribute("aria-disabled", "false");
+      btn.classList.toggle("active", pendingConstraintCommand?.type === btn.dataset.constraint);
+    }
+    fixPointBtn.setAttribute("aria-disabled", String(selectedPoints.length !== 1));
+
+    const enabled = constraintButtons
+      .filter((btn) => btn.getAttribute("aria-disabled") !== "true")
+      .map((btn) => btn.dataset.label || btn.title);
+    const help = enabled.length > 0 ? `追加可能: ${enabled.join(" / ")}` : "点または線を選択すると、追加できる拘束だけが有効になります。";
+    document.getElementById("hint").title = help;
+  }
+
+  function updateUI() {
+    document.getElementById("pointList").innerHTML = model.points
+      .filter(isExplicitPoint)
+      .map(
+        (p) =>
+          `<div class="item list-item"><span>${p.id}` +
+          `<span class="badge">x=${p.x.toFixed(1)}</span>` +
+          `<span class="badge">y=${p.y.toFixed(1)}</span>` +
+          `${p.fixed ? "<span class='badge'>固定</span>" : ""}</span>` +
+          `<button data-id="${p.id}" class="removePointBtn icon-delete-btn" title="削除" aria-label="削除" data-tooltip="削除">` +
+          `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3M7 7l1 13h8l1-13"/></svg>` +
+          `</button></div>`,
+      )
+      .join("");
+
+    document.getElementById("lineList").innerHTML = model.lines
+      .map(
+        (l) =>
+          `<div class="item list-item"><span>${l.id}: ${l.p1.id} - ${l.p2.id}<span class="badge">len=${l.length().toFixed(2)}</span></span>` +
+          `<button data-id="${l.id}" class="removeLineBtn icon-delete-btn" title="削除" aria-label="削除" data-tooltip="削除">` +
+          `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3M7 7l1 13h8l1-13"/></svg>` +
+          `</button></div>`,
+      )
+      .join("");
+
+    document.getElementById("constraintList").innerHTML = model.constraints
+      .map(
+        (c, i) =>
+          `<div class="item constraint-item"><span>${i + 1}. ${c.name}</span>` +
+          `<button data-idx="${i}" class="removeConstraintBtn" title="削除" aria-label="削除" data-tooltip="削除">` +
+          `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3M7 7l1 13h8l1-13"/></svg>` +
+          `</button></div>`,
+      )
+      .join("");
+
+    for (const btn of document.querySelectorAll(".removeConstraintBtn")) {
+      btn.addEventListener("click", () => {
+        const i = Number(btn.dataset.idx);
+        deleteElements({ constraints: [model.constraints[i]] });
+      });
+    }
+
+    for (const btn of document.querySelectorAll(".removePointBtn")) {
+      btn.addEventListener("click", () => {
+        const point = model.points.find((p) => p.id === btn.dataset.id);
+        if (point) deleteElements({ points: [point] });
+      });
+    }
+
+    for (const btn of document.querySelectorAll(".removeLineBtn")) {
+      btn.addEventListener("click", () => {
+        const line = model.lines.find((l) => l.id === btn.dataset.id);
+        if (line) deleteElements({ lines: [line] });
+      });
+    }
+
+    updateConstraintButtons();
+  }
+
+  function commitNewConstraint(type, constraint) {
+    const snapshot = snapshotModelState();
+    model.constraints.push(constraint);
+
+    const result = solver.solve();
+    if (!result.success || result.errorNorm > CONSTRAINT_ACCEPT_ERROR) {
+      restoreModelState(snapshot);
+      const msg = `拘束を追加できません: 矛盾しています (error=${result.errorNorm.toExponential(3)}, reason=${result.reason})`;
+      setHint(msg, "error");
+      updateUI();
+      draw();
+      log(msg);
+      return;
+    }
+
+    updateUI();
+    draw();
+    setHint(`拘束追加: success=${result.success}, error=${result.errorNorm.toExponential(2)}, iter=${result.iterations}`);
+    log(`拘束を追加しました: ${type}\n自動solve: success=${result.success}, error=${result.errorNorm.toExponential(3)}`);
+    return true;
+  }
+
+  function addDistanceConstraintFromTarget(target, value, dimension) {
+    if (!target || target.kind === "invalid") return false;
+    let constraint = null;
+    if (target.kind === "point-point" || target.kind === "line-length") {
+      constraint = new DistanceConstraint(target.p1, target.p2, value);
+    } else if (target.kind === "point-line") {
+      constraint = new PointLineDistanceConstraint(target.point, target.line, value);
+    } else if (target.kind === "line-line") {
+      if (!linesAreParallel(target.line1, target.line2)) {
+        setHint("線-線寸法は平行線のみです", "error");
+        log("線-線寸法は平行線のみです");
+        return false;
+      }
+      constraint = new LineLineDistanceConstraint(target.line1, target.line2, value);
+    }
+    if (!constraint) return false;
+    constraint.dimension = dimension;
+    return commitNewConstraint("dimension", constraint);
+  }
+
+  function addConstraint(type) {
+    if (!canApplyConstraint(type)) return;
+    if (type === "distance") return startDistanceCommand();
+
+    let constraint = null;
+    if (type === "coincident") {
+      if (selectedPoints.length === 1 && selectedLines.length === 1) {
+        constraint = new PointOnLineConstraint(selectedPoints[0], selectedLines[0]);
+      } else {
+        constraint = new CoincidentConstraint(selectedPoints[0], selectedPoints[1]);
+      }
+    } else if (type === "horizontal") {
+      constraint = new HorizontalConstraint(selectedLines[0]);
+    } else if (type === "vertical") {
+      constraint = new VerticalConstraint(selectedLines[0]);
+    } else if (type === "parallel") {
+      constraint = new ParallelConstraint(selectedLines[0], selectedLines[1]);
+    } else if (type === "perpendicular") {
+      constraint = new PerpendicularConstraint(selectedLines[0], selectedLines[1]);
+    }
+
+    if (constraint) commitNewConstraint(type, constraint);
+  }
+
+  function buildDragSession(kind, item, pointer) {
+    if (kind === "point") {
+      if (item.fixed) return null;
+      return {
+        kind,
+        startPointer: pointer,
+        points: [{ point: item, startX: item.x, startY: item.y }],
+      };
+    }
+
+    const sourcePoints = kind === "line" ? [item.p1, item.p2] : kind === "circle" ? [item.center, item.radiusPoint] : [item.center, item.startPoint, item.endPoint];
+    const points = sourcePoints
+      .filter((p, index, arr) => !p.fixed && arr.indexOf(p) === index)
+      .map((p) => ({ point: p, startX: p.x, startY: p.y }));
+    if (points.length === 0) return null;
+    return { kind, startPointer: pointer, points };
+  }
+
+  function dragTargets(session, pointer) {
+    const dx = pointer.x - session.startPointer.x;
+    const dy = pointer.y - session.startPointer.y;
+    return session.points.map((p) => ({ point: p.point, x: p.startX + dx, y: p.startY + dy }));
+  }
+
+  function beginDrag(e, hitP, hitL, hitC, hitA, pointer) {
+    if (hitP) {
+      selectedPoints = [hitP];
+      selectedLines = [];
+      selectedCircles = [];
+      selectedArcs = [];
+      dragSession = buildDragSession("point", hitP, pointer);
+    } else if (hitL) {
+      selectedLines = [hitL];
+      selectedPoints = [];
+      selectedCircles = [];
+      selectedArcs = [];
+      dragSession = buildDragSession("line", hitL, pointer);
+    } else if (hitC) {
+      selectedCircles = [hitC];
+      selectedPoints = [];
+      selectedLines = [];
+      selectedArcs = [];
+      dragSession = buildDragSession("circle", hitC, pointer);
+    } else if (hitA) {
+      selectedArcs = [hitA];
+      selectedPoints = [];
+      selectedLines = [];
+      selectedCircles = [];
+      dragSession = buildDragSession("arc", hitA, pointer);
+    }
+
+    if (dragSession) {
+      canvas.classList.add("is-dragging");
+      canvas.setPointerCapture(e.pointerId);
+      setHint("ドラッグ中: 拘束を保ちながら自動solveしています");
+    }
+  }
+
+  function beginDimensionDrag(e, hit, pointer) {
+    const anchor = dimensionAnchor(hit.target, hit.dimension);
+    selectedDimensionConstraint = hit.constraint;
+    dimensionDragSession = {
+      pointerId: e.pointerId,
+      constraint: hit.constraint,
+      target: hit.target,
+      startPointer: pointer,
+      startAnchor: anchor,
+    };
+    canvas.classList.add("is-dragging");
+    canvas.setPointerCapture(e.pointerId);
+    setHint("寸法線を移動中");
+  }
+
+  function handleLineClick(p) {
+    const endpoint = endpointAt(p.x, p.y);
+    pointerPreview = p;
+
+    if (!lineStartPoint) {
+      lineStartPoint = endpoint;
+      selectedPoints = [endpoint];
+      selectedLines = [];
+      selectedCircles = [];
+      selectedArcs = [];
+      setHint("次の端点をクリックすると線を作成します。終了はEscです。");
+      updateUI();
+      draw();
+      return;
+    }
+
+    const l = addLine(lineStartPoint, endpoint);
+    if (l) {
+      selectedPoints = [];
+      selectedLines = [l];
+      selectedCircles = [];
+      selectedArcs = [];
+      lineStartPoint = endpoint;
+      const result = solveAndRefresh("線追加");
+      log(`線 ${l.id} を追加しました\n自動solve: success=${result.success}`);
+    } else {
+      selectedPoints = [endpoint];
+      selectedLines = [];
+      selectedCircles = [];
+      selectedArcs = [];
+      setHint("同じ端点です。別の位置をクリックしてください。終了はEscです。");
+      updateUI();
+      draw();
+    }
+  }
+
+  function handleCircleClick(p) {
+    const endpoint = endpointAt(p.x, p.y);
+    pointerPreview = p;
+    if (!circleCenterPoint) {
+      circleCenterPoint = endpoint;
+      selectedPoints = [endpoint];
+      selectedLines = [];
+      selectedCircles = [];
+      selectedArcs = [];
+      setHint("半径位置をクリックすると円を作成します。Escで選択モードに戻ります");
+      updateUI();
+      draw();
+      return;
+    }
+    const circle = addCircle(circleCenterPoint, endpoint);
+    if (circle) {
+      selectedPoints = [];
+      selectedLines = [];
+      selectedCircles = [circle];
+      selectedArcs = [];
+      circleCenterPoint = null;
+      pointerPreview = null;
+      solveAndRefresh("円追加");
+    }
+  }
+
+  function handleArcClick(p) {
+    const endpoint = endpointAt(p.x, p.y);
+    pointerPreview = p;
+    if (!arcCenterPoint) {
+      arcCenterPoint = endpoint;
+      selectedPoints = [endpoint];
+      selectedLines = [];
+      selectedCircles = [];
+      selectedArcs = [];
+      setHint("円弧の始点をクリックしてください。Escで選択モードに戻ります");
+      updateUI();
+      draw();
+      return;
+    }
+    if (!arcStartPoint) {
+      arcStartPoint = endpoint;
+      selectedPoints = [endpoint];
+      setHint("円弧の終点をクリックすると円弧を作成します。Escで選択モードに戻ります");
+      updateUI();
+      draw();
+      return;
+    }
+    const arc = addArc(arcCenterPoint, arcStartPoint, endpoint);
+    if (arc) {
+      selectedPoints = [];
+      selectedLines = [];
+      selectedCircles = [];
+      selectedArcs = [arc];
+      arcCenterPoint = null;
+      arcStartPoint = null;
+      pointerPreview = null;
+      solveAndRefresh("円弧追加");
+    }
+  }
+
+  canvas.addEventListener("pointerdown", (e) => {
+    if (e.button === 1) {
+      e.preventDefault();
+      panSession = {
+        pointerId: e.pointerId,
+        startPointer: canvasScreenPoint(e),
+        startX: viewport.x,
+        startY: viewport.y,
+      };
+      canvas.classList.add("is-panning");
+      canvas.setPointerCapture(e.pointerId);
+      setHint("画面移動中: マウススクロールボタンを押しながらドラッグ");
+      return;
+    }
+
+    const p = canvasPoint(e);
+    const hitP = hitPoint(p.x, p.y);
+    const hitL = hitLine(p.x, p.y);
+    const hitC = hitCircle(p.x, p.y);
+    const hitA = hitArc(p.x, p.y);
+    const hitD = hitDimension(p.x, p.y);
+
+    if (pendingCommand?.type === "distance-place") {
+      e.preventDefault();
+      startDistanceValueInput(p);
+      return;
+    }
+
+    if (pendingCommand?.type === "distance-value") {
+      e.preventDefault();
+      return;
+    }
+
+    if (pendingConstraintCommand) {
+      e.preventDefault();
+      handleConstraintTargetClick(hitP, hitL);
+      return;
+    }
+
+    if (mode === "point") {
+      const np = addPoint(p.x, p.y, false);
+      selectedPoints = [np];
+      selectedLines = [];
+      selectedCircles = [];
+      selectedArcs = [];
+      solveAndRefresh("点追加");
+      return;
+    }
+
+    if (mode === "line") {
+      handleLineClick(p);
+      return;
+    }
+
+    if (mode === "circle") {
+      handleCircleClick(p);
+      return;
+    }
+
+    if (mode === "arc") {
+      handleArcClick(p);
+      return;
+    }
+
+    const multiSelect = e.shiftKey || e.ctrlKey;
+
+    if (hitP) {
+      selectedDimensionConstraint = null;
+      if (multiSelect) togglePointSelection(hitP);
+      else beginDrag(e, hitP, null, null, null, p);
+    } else if (hitD && !multiSelect) {
+      selectedPoints = [];
+      selectedLines = [];
+      selectedCircles = [];
+      selectedArcs = [];
+      beginDimensionDrag(e, hitD, p);
+    } else if (hitL) {
+      selectedDimensionConstraint = null;
+      if (multiSelect) toggleLineSelection(hitL);
+      else beginDrag(e, null, hitL, null, null, p);
+    } else if (hitC) {
+      selectedDimensionConstraint = null;
+      if (multiSelect) toggleCircleSelection(hitC);
+      else beginDrag(e, null, null, hitC, null, p);
+    } else if (hitA) {
+      selectedDimensionConstraint = null;
+      if (multiSelect) toggleArcSelection(hitA);
+      else beginDrag(e, null, null, null, hitA, p);
+    } else {
+      clearSelection();
+    }
+
+    updateUI();
+    draw();
+  });
+
+  canvas.addEventListener("pointermove", (e) => {
+    if (panSession) {
+      const p = canvasScreenPoint(e);
+      viewport.x = panSession.startX + (p.x - panSession.startPointer.x);
+      viewport.y = panSession.startY + (p.y - panSession.startPointer.y);
+      draw();
+      return;
+    }
+
+    const p = canvasPoint(e);
+    if (pendingCommand?.type === "distance-place") {
+      pendingCommand.pointer = p;
+      draw();
+      return;
+    }
+
+    if (dimensionDragSession) {
+      const dx = p.x - dimensionDragSession.startPointer.x;
+      const dy = p.y - dimensionDragSession.startPointer.y;
+      const anchor = {
+        x: dimensionDragSession.startAnchor.x + dx,
+        y: dimensionDragSession.startAnchor.y + dy,
+      };
+      dimensionDragSession.constraint.dimension = dimensionFromAnchor(dimensionDragSession.target, anchor);
+      draw();
+      return;
+    }
+
+    if (mode === "line") {
+      pointerPreview = p;
+      draw();
+    }
+
+    if (mode === "circle" || mode === "arc") {
+      pointerPreview = p;
+      draw();
+    }
+
+    if (!dragSession) {
+      const nextEndpointHover = hitEndpointPoint(p.x, p.y);
+      const nextPointHover = nextEndpointHover || hitExplicitPoint(p.x, p.y);
+      const nextLineHover = nextPointHover ? null : hitLine(p.x, p.y);
+      const nextCircleHover = nextPointHover || nextLineHover ? null : hitCircle(p.x, p.y);
+      const nextArcHover = nextPointHover || nextLineHover || nextCircleHover ? null : hitArc(p.x, p.y);
+      const hitD = hitDimension(p.x, p.y);
+      const nextHover = hitD?.constraint || null;
+      if (
+        nextPointHover !== hoveredPoint ||
+        nextEndpointHover !== hoveredEndpointPoint ||
+        nextLineHover !== hoveredLine ||
+        nextCircleHover !== hoveredCircle ||
+        nextArcHover !== hoveredArc ||
+        nextHover !== hoveredDimensionConstraint
+      ) {
+        hoveredPoint = nextPointHover;
+        hoveredEndpointPoint = nextEndpointHover;
+        hoveredLine = nextLineHover;
+        hoveredCircle = nextCircleHover;
+        hoveredArc = nextArcHover;
+        hoveredDimensionConstraint = nextHover;
+        draw();
+      }
+    }
+
+    if (!dragSession) return;
+    const result = solver.solveWithDragTargets(dragTargets(dragSession, p));
+    const error = geometryErrorNorm();
+    setHint(`ドラッグ中: 拘束error=${error.toExponential(2)}, iter=${result.iterations}`);
+    updateUI();
+    draw();
+  });
+
+  function endDrag(e) {
+    if (panSession) {
+      panSession = null;
+      canvas.classList.remove("is-panning");
+      try {
+        canvas.releasePointerCapture(e.pointerId);
+      } catch (_) {
+        // Pointer capture may already be released by the browser.
+      }
+      setHint("画面移動を終了しました");
+      return;
+    }
+
+    if (dimensionDragSession) {
+      dimensionDragSession = null;
+      canvas.classList.remove("is-dragging");
+      try {
+        canvas.releasePointerCapture(e.pointerId);
+      } catch (_) {
+        // Pointer capture may already be released by the browser.
+      }
+      setHint("寸法線の位置を更新しました");
+      updateUI();
+      draw();
+      return;
+    }
+
+    if (!dragSession) return;
+    dragSession = null;
+    canvas.classList.remove("is-dragging");
+    try {
+      canvas.releasePointerCapture(e.pointerId);
+    } catch (_) {
+      // Pointer capture may already be released by the browser.
+    }
+    solveAndRefresh("ドラッグ完了");
+  }
+
+  canvas.addEventListener("pointerup", endDrag);
+  canvas.addEventListener("pointercancel", endDrag);
+  canvas.addEventListener("dblclick", (e) => {
+    const p = canvasPoint(e);
+    const hitL = hitLine(p.x, p.y);
+    const hitP = hitPoint(p.x, p.y);
+    if (handleConstraintTargetDoubleClick(hitP, hitL, p)) {
+      e.preventDefault();
+      return;
+    }
+    if (!pendingCommand?.type?.startsWith("distance")) return;
+    e.preventDefault();
+    if (pendingCommand.type === "distance-place") {
+      startDistanceValueInput(p);
+    }
+    submitDistanceValue();
+  });
+  canvas.addEventListener("auxclick", (e) => {
+    if (e.button === 1) e.preventDefault();
+  });
+  canvas.addEventListener(
+    "wheel",
+    (e) => {
+      e.preventDefault();
+      const screen = canvasScreenPoint(e);
+      const world = screenToWorld(screen);
+      const nextScale = clampZoom(viewport.scale * Math.exp(-e.deltaY * 0.001));
+      viewport.scale = nextScale;
+      viewport.x = screen.x - world.x * viewport.scale;
+      viewport.y = screen.y - world.y * viewport.scale;
+      setHint(`表示倍率: ${(viewport.scale * 100).toFixed(0)}%`);
+      draw();
+    },
+    { passive: false },
+  );
+
+  window.addEventListener("keydown", (e) => {
+    if (handleDistanceKey(e)) return;
+
+    if ((e.key === "Delete" || e.key === "Backspace") && deleteCurrentSelection()) {
+      e.preventDefault();
+      return;
+    }
+
+    if (e.key === "Enter" && completePendingDimensionLineLength()) {
+      e.preventDefault();
+      return;
+    }
+
+    if (e.key === "Escape" && pendingConstraintCommand) {
+      e.preventDefault();
+      cancelConstraintTargetCommand();
+      return;
+    }
+
+    if (e.key === "Escape" && (mode === "line" || mode === "point" || mode === "circle" || mode === "arc")) {
+      e.preventDefault();
+      exitDrawMode();
+    }
+  });
+
+  document.getElementById("toolSelect").addEventListener("click", () => {
+    cancelConstraintTargetCommand("");
+    mode = "select";
+    lineStartPoint = null;
+    circleCenterPoint = null;
+    arcCenterPoint = null;
+    arcStartPoint = null;
+    pointerPreview = null;
+    updateToolbar();
+    setHint("選択・ドラッグできます。Shift/Ctrlクリックで複数選択できます。");
+    draw();
+  });
+
+  document.getElementById("toolPoint").addEventListener("click", () => {
+    cancelConstraintTargetCommand("");
+    mode = "point";
+    lineStartPoint = null;
+    circleCenterPoint = null;
+    arcCenterPoint = null;
+    arcStartPoint = null;
+    pointerPreview = null;
+    updateToolbar();
+    setHint("キャンバスをクリックして点を追加します。");
+    draw();
+  });
+
+  document.getElementById("toolLine").addEventListener("click", () => {
+    cancelConstraintTargetCommand("");
+    mode = "line";
+    lineStartPoint = null;
+    circleCenterPoint = null;
+    arcCenterPoint = null;
+    arcStartPoint = null;
+    pointerPreview = null;
+    updateToolbar();
+    setHint("端点位置をクリックして連続線を作成します。終了はEscです。");
+    draw();
+  });
+
+  document.getElementById("toolCircle").addEventListener("click", () => {
+    cancelConstraintTargetCommand("");
+    mode = "circle";
+    lineStartPoint = null;
+    circleCenterPoint = null;
+    arcCenterPoint = null;
+    arcStartPoint = null;
+    pointerPreview = null;
+    updateToolbar();
+    setHint("円の中心をクリックしてください。Escで選択モードに戻ります");
+    draw();
+  });
+
+  document.getElementById("toolArc").addEventListener("click", () => {
+    cancelConstraintTargetCommand("");
+    mode = "arc";
+    lineStartPoint = null;
+    circleCenterPoint = null;
+    arcCenterPoint = null;
+    arcStartPoint = null;
+    pointerPreview = null;
+    updateToolbar();
+    setHint("円弧の中心をクリックしてください。Escで選択モードに戻ります");
+    draw();
+  });
+
+  document.getElementById("exportBtn").addEventListener("click", exportFileData);
+  document.getElementById("importBtn").addEventListener("click", () => {
+    document.getElementById("importFileInput").click();
+  });
+  document.getElementById("importFileInput").addEventListener("change", (e) => {
+    importFileData(e.target.files[0]);
+    e.target.value = "";
+  });
+
+  document.getElementById("toggleSideBtn").addEventListener("click", () => {
+    const app = document.querySelector(".app");
+    const collapsed = app.classList.toggle("side-collapsed");
+    const btn = document.getElementById("toggleSideBtn");
+    const label = collapsed ? "サイドバーを開く" : "サイドバーをたたむ";
+    btn.setAttribute("aria-label", label);
+    btn.setAttribute("title", label);
+    btn.dataset.tooltip = label;
+    setHint(collapsed ? "サイドバーをたたみました" : "サイドバーを表示しました");
+  });
+
+  for (const btn of constraintButtons) {
+    btn.addEventListener("click", () => {
+      const type = btn.dataset.constraint;
+      if (pendingConstraintCommand?.type === type) {
+        cancelConstraintTargetCommand(`${constraintLabel(type)}の対象選択をキャンセルしました`);
+      } else if (type === "distance" && selectedPoints.length === 0 && selectedLines.length === 1) {
+        startConstraintTargetCommand(type);
+      } else if (canApplyConstraint(type)) {
+        cancelConstraintTargetCommand("");
+        if (type === "distance") startDistanceCommand();
+        else {
+          cancelPendingCommand("");
+          addConstraint(type);
+        }
+      } else {
+        startConstraintTargetCommand(type);
+      }
+    });
+  }
+
+  fixPointBtn.addEventListener("click", () => {
+    if (selectedPoints.length !== 1) return;
+    selectedPoints[0].fixed = !selectedPoints[0].fixed;
+    const result = solveAndRefresh("固定状態変更");
+    log(`${selectedPoints[0].id} の固定状態を ${selectedPoints[0].fixed} にしました\n自動solve: success=${result.success}`);
+  });
+
+  window.addEventListener("resize", () => {
+    resizeCanvas({ centerWorld: currentCanvasCenterWorld() });
+  });
+  sampleModel();
+  resizeCanvas();
+})();

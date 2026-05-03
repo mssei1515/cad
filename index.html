@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>2D幾何拘束ソルバー UI</title>
+  <link rel="stylesheet" href="./style.css" />
+</head>
+<body>
+  <div class="app side-collapsed">
+    <div class="toolbar" aria-label="ツールバー">
+      <div class="toolbar-group" aria-label="作図">
+        <span class="group-label">作図</span>
+        <button id="toolSelect" class="icon-btn active" title="選択・ドラッグ" aria-label="選択・ドラッグ">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 3l14 9-7 2-3 7L5 3z"/></svg>
+        </button>
+        <button id="toolPoint" class="icon-btn" title="点を追加" aria-label="点を追加">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 3v3M12 18v3M3 12h3M18 12h3"/></svg>
+        </button>
+        <button id="toolLine" class="icon-btn" title="連続線" aria-label="連続線">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 18L19 6"/><circle cx="5" cy="18" r="2"/><circle cx="19" cy="6" r="2"/></svg>
+        </button>
+        <button id="toolCircle" class="icon-btn" title="円" aria-label="円">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="7"/><circle cx="12" cy="12" r="1.5"/></svg>
+        </button>
+        <button id="toolArc" class="icon-btn" title="円弧" aria-label="円弧">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 16a8 8 0 0 1 12-8"/><circle cx="6" cy="16" r="1.8"/><circle cx="18" cy="8" r="1.8"/></svg>
+        </button>
+      </div>
+      <div class="toolbar-group" aria-label="拘束">
+        <span class="group-label">拘束</span>
+        <button data-constraint="distance" data-label="寸法" title="寸法" aria-label="寸法">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14"/><path d="M8 9l-3 3 3 3M16 9l3 3-3 3"/></svg>
+        </button>
+        <button data-constraint="coincident" data-label="点一致" title="点一致" aria-label="点一致">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10" cy="12" r="4"/><circle cx="14" cy="12" r="4"/></svg>
+        </button>
+        <button data-constraint="horizontal" data-label="水平" title="水平" aria-label="水平">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14"/></svg>
+        </button>
+        <button data-constraint="vertical" data-label="垂直" title="垂直" aria-label="垂直">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14"/></svg>
+        </button>
+        <button data-constraint="parallel" data-label="平行" title="平行" aria-label="平行">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 19L15 5M12 19l8-14"/></svg>
+        </button>
+        <button data-constraint="perpendicular" data-label="直交" title="直交" aria-label="直交">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 18h12M12 18V6"/></svg>
+        </button>
+        <button id="fixPointBtn" data-label="固定 / 解除" title="固定 / 解除" aria-label="固定 / 解除">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 11V8a5 5 0 0 1 10 0v3"/><rect x="6" y="11" width="12" height="9" rx="2"/></svg>
+        </button>
+      </div>
+      <div class="toolbar-group" aria-label="ファイルと表示">
+        <span class="group-label">表示</span>
+        <button id="exportBtn" class="icon-btn" title="ファイル保存" aria-label="ファイル保存">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 20h14V8l-4-4H5v16z"/><path d="M8 20v-6h8v6M8 4v5h7"/></svg>
+        </button>
+        <button id="importBtn" class="icon-btn" title="ファイル読込" aria-label="ファイル読込">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 20h14V8l-4-4H5v16z"/><path d="M12 17V9M8 13l4 4 4-4"/></svg>
+        </button>
+        <input id="importFileInput" type="file" accept="application/json,.json" hidden />
+        <button id="toggleSideBtn" class="icon-btn" title="サイドバーを開く" aria-label="サイドバーを開く">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v14H4z"/><path d="M15 5v14M10 9l-3 3 3 3"/></svg>
+        </button>
+      </div>
+    </div>
+    <div class="work-area">
+      <div class="canvas-area">
+        <canvas id="canvas"></canvas>
+        <div id="bottomBar" class="bottom-bar" aria-label="操作情報">
+          <div class="status-line">
+            <span class="small" id="hint">連続線は端点位置を順にクリックします。終了はEscです。</span>
+          </div>
+        </div>
+      </div>
+      <aside class="side">
+        <h1>2D幾何拘束ソルバー</h1>
+
+        <details class="panel">
+          <summary>点</summary>
+          <div id="pointList" class="list"></div>
+        </details>
+
+        <details class="panel">
+          <summary>線</summary>
+          <div id="lineList" class="list"></div>
+        </details>
+
+        <details class="panel">
+          <summary>拘束一覧</summary>
+          <div id="constraintList" class="list"></div>
+        </details>
+
+        <details class="panel">
+          <summary>ログ</summary>
+          <div id="log" class="status"></div>
+        </details>
+      </aside>
+    </div>
+  </div>
+  <script src="./constraint_solver.js"></script>
+  <script src="./app.js"></script>
+</body>
+</html>
