@@ -55,27 +55,42 @@
   }
 
   class Circle {
-    constructor(id, center, radiusPoint) {
+    constructor(id, center, radiusValue) {
       this.id = id;
       this.center = center;
-      this.radiusPoint = radiusPoint;
+      this.radiusValue = Math.max(Number(radiusValue) || 0, MIN_ORIENTATION_LENGTH);
     }
 
     radius() {
-      return hypot2(this.radiusPoint.x - this.center.x, this.radiusPoint.y - this.center.y);
+      return this.radiusValue;
     }
   }
 
   class Arc {
-    constructor(id, center, startPoint, endPoint) {
+    constructor(id, center, radiusValue, startAngle, endAngle) {
       this.id = id;
       this.center = center;
-      this.startPoint = startPoint;
-      this.endPoint = endPoint;
+      this.radiusValue = Math.max(Number(radiusValue) || 0, MIN_ORIENTATION_LENGTH);
+      this.startAngle = Number(startAngle) || 0;
+      this.endAngle = Number(endAngle) || 0;
     }
 
     radius() {
-      return hypot2(this.startPoint.x - this.center.x, this.startPoint.y - this.center.y);
+      return this.radiusValue;
+    }
+
+    startPoint() {
+      return {
+        x: this.center.x + Math.cos(this.startAngle) * this.radiusValue,
+        y: this.center.y + Math.sin(this.startAngle) * this.radiusValue,
+      };
+    }
+
+    endPoint() {
+      return {
+        x: this.center.x + Math.cos(this.endAngle) * this.radiusValue,
+        y: this.center.y + Math.sin(this.endAngle) * this.radiusValue,
+      };
     }
   }
 
@@ -331,6 +346,14 @@
           vs.push({ object: p, prop: "y", label: `${p.id}.y` });
         }
       }
+      for (const c of this.model.circles || []) {
+        vs.push({ object: c, prop: "radiusValue", label: `${c.id}.r`, min: MIN_ORIENTATION_LENGTH });
+      }
+      for (const a of this.model.arcs || []) {
+        vs.push({ object: a, prop: "radiusValue", label: `${a.id}.r`, min: MIN_ORIENTATION_LENGTH });
+        vs.push({ object: a, prop: "startAngle", label: `${a.id}.startAngle` });
+        vs.push({ object: a, prop: "endAngle", label: `${a.id}.endAngle` });
+      }
       return vs;
     }
 
@@ -356,9 +379,9 @@
         const v = vars[j];
         const orig = v.object[v.prop];
         const h = this.diffStep * Math.max(1, Math.abs(orig));
-        v.object[v.prop] = orig + h;
+        v.object[v.prop] = Number.isFinite(v.min) ? Math.max(v.min, orig + h) : orig + h;
         const plus = this.computeErrorVector(extra);
-        v.object[v.prop] = orig - h;
+        v.object[v.prop] = Number.isFinite(v.min) ? Math.max(v.min, orig - h) : orig - h;
         const minus = this.computeErrorVector(extra);
         v.object[v.prop] = orig;
         for (let i = 0; i < m; i++) J[i][j] = (plus[i] - minus[i]) / (2 * h);
@@ -395,7 +418,10 @@
     }
 
     applyDelta(vars, dx) {
-      for (let i = 0; i < vars.length; i++) vars[i].object[vars[i].prop] += dx[i];
+      for (let i = 0; i < vars.length; i++) {
+        vars[i].object[vars[i].prop] += dx[i];
+        if (Number.isFinite(vars[i].min)) vars[i].object[vars[i].prop] = Math.max(vars[i].min, vars[i].object[vars[i].prop]);
+      }
     }
 
     limitStep(dx) {
@@ -410,6 +436,9 @@
       let lambda = this.initialLambda;
       let F = this.computeErrorVector(extra);
       let errorNorm = vectorNorm(F);
+      if (F.length === 0) {
+        return { success: true, errorNorm: 0, iterations: 0, reason: "拘束がありません" };
+      }
       if (vars.length === 0) {
         return {
           success: errorNorm < this.tolerance,

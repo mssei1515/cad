@@ -102,18 +102,17 @@
     return l;
   }
 
-  function addCircle(center, radiusPoint) {
-    if (center === radiusPoint || hypot2(radiusPoint.x - center.x, radiusPoint.y - center.y) < 1e-9) return null;
-    const c = new Circle(`C${circleSeq++}`, center, radiusPoint);
+  function addCircle(center, radiusValue) {
+    if (!center || !Number.isFinite(radiusValue) || radiusValue < MIN_ORIENTATION_LENGTH) return null;
+    const c = new Circle(`C${circleSeq++}`, center, radiusValue);
     model.circles.push(c);
     return c;
   }
 
-  function addArc(center, startPoint, endPoint) {
-    if (center === startPoint || center === endPoint) return null;
-    if (hypot2(startPoint.x - center.x, startPoint.y - center.y) < 1e-9) return null;
-    if (hypot2(endPoint.x - center.x, endPoint.y - center.y) < 1e-9) return null;
-    const a = new Arc(`A${arcSeq++}`, center, startPoint, endPoint);
+  function addArc(center, radiusValue, startAngle, endAngle) {
+    if (!center || !Number.isFinite(radiusValue) || radiusValue < MIN_ORIENTATION_LENGTH) return null;
+    if (!Number.isFinite(startAngle) || !Number.isFinite(endAngle)) return null;
+    const a = new Arc(`A${arcSeq++}`, center, radiusValue, startAngle, endAngle);
     model.arcs.push(a);
     return a;
   }
@@ -236,8 +235,8 @@
       savedAt: new Date().toISOString(),
       points: model.points.map((p) => ({ id: p.id, x: p.x, y: p.y, fixed: p.fixed, kind: p.kind || (isPointUsedByPrimitive(p) ? "endpoint" : "explicit") })),
       lines: model.lines.map((l) => ({ id: l.id, p1: l.p1.id, p2: l.p2.id })),
-      circles: model.circles.map((c) => ({ id: c.id, center: c.center.id, radiusPoint: c.radiusPoint.id })),
-      arcs: model.arcs.map((a) => ({ id: a.id, center: a.center.id, startPoint: a.startPoint.id, endPoint: a.endPoint.id })),
+      circles: model.circles.map((c) => ({ id: c.id, center: c.center.id, radius: c.radius() })),
+      arcs: model.arcs.map((a) => ({ id: a.id, center: a.center.id, radius: a.radius(), startAngle: a.startAngle, endAngle: a.endAngle })),
       constraints: model.constraints.map(serializeConstraint).filter(Boolean),
     };
   }
@@ -321,27 +320,39 @@
     const circles = [];
     for (const c of data.circles || []) {
       const center = pointById.get(String(c.center));
-      const radiusPoint = pointById.get(String(c.radiusPoint));
-      if (!center || !radiusPoint) throw new Error(`円 ${c.id} の参照点が見つかりません`);
-      if (!hasPointKind) {
-        center.kind = "endpoint";
-        radiusPoint.kind = "endpoint";
+      if (!center) throw new Error(`円 ${c.id} の中心点が見つかりません`);
+      let radius = Number(c.radius);
+      if (!Number.isFinite(radius) && c.radiusPoint !== undefined) {
+        const radiusPoint = pointById.get(String(c.radiusPoint));
+        if (!radiusPoint) throw new Error(`円 ${c.id} の参照点が見つかりません`);
+        radius = hypot2(radiusPoint.x - center.x, radiusPoint.y - center.y);
+        if (!hasPointKind) radiusPoint.kind = "endpoint";
       }
-      circles.push(new Circle(String(c.id), center, radiusPoint));
+      if (!Number.isFinite(radius) || radius < MIN_ORIENTATION_LENGTH) throw new Error(`円 ${c.id} の半径が正しくありません`);
+      circles.push(new Circle(String(c.id), center, radius));
     }
 
     const arcs = [];
     for (const a of data.arcs || []) {
       const center = pointById.get(String(a.center));
-      const startPoint = pointById.get(String(a.startPoint));
-      const endPoint = pointById.get(String(a.endPoint));
-      if (!center || !startPoint || !endPoint) throw new Error(`円弧 ${a.id} の参照点が見つかりません`);
-      if (!hasPointKind) {
-        center.kind = "endpoint";
-        startPoint.kind = "endpoint";
-        endPoint.kind = "endpoint";
+      if (!center) throw new Error(`円弧 ${a.id} の中心点が見つかりません`);
+      let radius = Number(a.radius);
+      let startAngle = Number(a.startAngle);
+      let endAngle = Number(a.endAngle);
+      if ((!Number.isFinite(radius) || !Number.isFinite(startAngle) || !Number.isFinite(endAngle)) && a.startPoint !== undefined && a.endPoint !== undefined) {
+        const startPoint = pointById.get(String(a.startPoint));
+        const endPoint = pointById.get(String(a.endPoint));
+        if (!startPoint || !endPoint) throw new Error(`円弧 ${a.id} の参照点が見つかりません`);
+        radius = hypot2(startPoint.x - center.x, startPoint.y - center.y);
+        startAngle = Math.atan2(startPoint.y - center.y, startPoint.x - center.x);
+        endAngle = Math.atan2(endPoint.y - center.y, endPoint.x - center.x);
+        if (!hasPointKind) {
+          startPoint.kind = "endpoint";
+          endPoint.kind = "endpoint";
+        }
       }
-      arcs.push(new Arc(String(a.id), center, startPoint, endPoint));
+      if (!Number.isFinite(radius) || radius < MIN_ORIENTATION_LENGTH || !Number.isFinite(startAngle) || !Number.isFinite(endAngle)) throw new Error(`円弧 ${a.id} の形状が正しくありません`);
+      arcs.push(new Arc(String(a.id), center, radius, startAngle, endAngle));
     }
 
     const constraints = [];
@@ -351,8 +362,14 @@
       constraints.push(constraint);
     }
 
+    const retainedPoints = points.filter((p) => {
+      if (p.kind !== "endpoint") return true;
+      if (isPointUsedByLine(p, lines) || isPointUsedByCircle(p, circles) || isPointUsedByArc(p, arcs)) return true;
+      return constraints.some((constraint) => constraintReferencesPoint(constraint, p));
+    });
+
     resetModelState();
-    model.points.push(...points);
+    model.points.push(...retainedPoints);
     model.lines.push(...lines);
     model.circles.push(...circles);
     model.arcs.push(...arcs);
@@ -516,11 +533,11 @@
   }
 
   function isPointUsedByCircle(point, circles = model.circles) {
-    return circles.some((circle) => circle.center === point || circle.radiusPoint === point);
+    return circles.some((circle) => circle.center === point);
   }
 
   function isPointUsedByArc(point, arcs = model.arcs) {
-    return arcs.some((arc) => arc.center === point || arc.startPoint === point || arc.endPoint === point);
+    return arcs.some((arc) => arc.center === point);
   }
 
   function isPointUsedByPrimitive(point) {
@@ -603,8 +620,8 @@
 
   function arcAngles(arc) {
     return {
-      start: Math.atan2(arc.startPoint.y - arc.center.y, arc.startPoint.x - arc.center.x),
-      end: Math.atan2(arc.endPoint.y - arc.center.y, arc.endPoint.x - arc.center.x),
+      start: arc.startAngle,
+      end: arc.endAngle,
     };
   }
 
@@ -854,10 +871,10 @@
     }
 
     for (const circle of model.circles) {
-      if (pointSet.has(circle.center) || pointSet.has(circle.radiusPoint)) circleSet.add(circle);
+      if (pointSet.has(circle.center)) circleSet.add(circle);
     }
     for (const arc of model.arcs) {
-      if (pointSet.has(arc.center) || pointSet.has(arc.startPoint) || pointSet.has(arc.endPoint)) arcSet.add(arc);
+      if (pointSet.has(arc.center)) arcSet.add(arc);
     }
     const remainingLines = model.lines.filter((line) => !lineSet.has(line));
     const remainingCircles = model.circles.filter((circle) => !circleSet.has(circle));
@@ -868,12 +885,9 @@
     }
     for (const circle of circleSet) {
       if (circle.center.kind === "endpoint" && !isPointUsedByCircle(circle.center, remainingCircles) && !isPointUsedByLine(circle.center, remainingLines) && !isPointUsedByArc(circle.center, remainingArcs)) pointSet.add(circle.center);
-      if (circle.radiusPoint.kind === "endpoint" && !isPointUsedByCircle(circle.radiusPoint, remainingCircles) && !isPointUsedByLine(circle.radiusPoint, remainingLines) && !isPointUsedByArc(circle.radiusPoint, remainingArcs)) pointSet.add(circle.radiusPoint);
     }
     for (const arc of arcSet) {
-      for (const p of [arc.center, arc.startPoint, arc.endPoint]) {
-        if (p.kind === "endpoint" && !isPointUsedByArc(p, remainingArcs) && !isPointUsedByLine(p, remainingLines) && !isPointUsedByCircle(p, remainingCircles)) pointSet.add(p);
-      }
+      if (arc.center.kind === "endpoint" && !isPointUsedByArc(arc.center, remainingArcs) && !isPointUsedByLine(arc.center, remainingLines) && !isPointUsedByCircle(arc.center, remainingCircles)) pointSet.add(arc.center);
     }
 
     for (const constraint of model.constraints) {
@@ -1269,7 +1283,7 @@
   function drawArcPreview() {
     if (mode !== "arc" || !arcCenterPoint || !arcStartPoint || !pointerPreview) return;
     const angles = {
-      start: Math.atan2(arcStartPoint.y - arcCenterPoint.y, arcStartPoint.x - arcCenterPoint.x),
+      start: arcStartPoint.startAngle,
       end: Math.atan2(pointerPreview.y - arcCenterPoint.y, pointerPreview.x - arcCenterPoint.x),
     };
     ctx.save();
@@ -1277,7 +1291,7 @@
     ctx.lineWidth = 2 / viewport.scale;
     ctx.setLineDash([6 / viewport.scale, 5 / viewport.scale]);
     ctx.beginPath();
-    ctx.arc(arcCenterPoint.x, arcCenterPoint.y, hypot2(arcStartPoint.x - arcCenterPoint.x, arcStartPoint.y - arcCenterPoint.y), angles.start, angles.end, false);
+    ctx.arc(arcCenterPoint.x, arcCenterPoint.y, arcStartPoint.radius, angles.start, angles.end, false);
     ctx.stroke();
     ctx.restore();
   }
@@ -1289,7 +1303,7 @@
       const endpoint = isEndpointPoint(p);
       const hovered = hoveredPoint === p || hoveredEndpointPoint === p;
       const dragging = dragSession?.kind === "point" && dragSession.points.some((target) => target.point === p);
-      if (endpoint && !sel && !hovered && !dragging) continue;
+      if (!isExplicitPoint(p) && endpoint && !sel && !hovered && !dragging) continue;
       ctx.beginPath();
       ctx.arc(p.x, p.y, (sel ? 7 : endpoint ? 5 : 5) / viewport.scale, 0, Math.PI * 2);
       ctx.fillStyle = p.fixed ? "#dc2626" : sel ? "#2563eb" : hovered ? "#eff6ff" : "#fff";
@@ -1759,7 +1773,7 @@
       };
     }
 
-    const sourcePoints = kind === "line" ? [item.p1, item.p2] : kind === "circle" ? [item.center, item.radiusPoint] : [item.center, item.startPoint, item.endPoint];
+    const sourcePoints = kind === "line" ? [item.p1, item.p2] : [item.center];
     const points = sourcePoints
       .filter((p, index, arr) => !p.fixed && arr.indexOf(p) === index)
       .map((p) => ({ point: p, startX: p.x, startY: p.y }));
@@ -1859,11 +1873,11 @@
   }
 
   function handleCircleClick(p) {
-    const endpoint = endpointAt(p.x, p.y);
     pointerPreview = p;
     if (!circleCenterPoint) {
-      circleCenterPoint = endpoint;
-      selectedPoints = [endpoint];
+      const center = pointAt(p.x, p.y);
+      circleCenterPoint = center;
+      selectedPoints = [center];
       selectedLines = [];
       selectedCircles = [];
       selectedArcs = [];
@@ -1872,7 +1886,7 @@
       draw();
       return;
     }
-    const circle = addCircle(circleCenterPoint, endpoint);
+    const circle = addCircle(circleCenterPoint, hypot2(p.x - circleCenterPoint.x, p.y - circleCenterPoint.y));
     if (circle) {
       selectedPoints = [];
       selectedLines = [];
@@ -1885,11 +1899,11 @@
   }
 
   function handleArcClick(p) {
-    const endpoint = endpointAt(p.x, p.y);
     pointerPreview = p;
     if (!arcCenterPoint) {
-      arcCenterPoint = endpoint;
-      selectedPoints = [endpoint];
+      const center = pointAt(p.x, p.y);
+      arcCenterPoint = center;
+      selectedPoints = [center];
       selectedLines = [];
       selectedCircles = [];
       selectedArcs = [];
@@ -1899,14 +1913,23 @@
       return;
     }
     if (!arcStartPoint) {
-      arcStartPoint = endpoint;
-      selectedPoints = [endpoint];
+      const radius = hypot2(p.x - arcCenterPoint.x, p.y - arcCenterPoint.y);
+      if (radius < MIN_ORIENTATION_LENGTH) {
+        setHint("中心から離れた位置をクリックしてください", "error");
+        draw();
+        return;
+      }
+      arcStartPoint = {
+        radius,
+        startAngle: Math.atan2(p.y - arcCenterPoint.y, p.x - arcCenterPoint.x),
+      };
+      selectedPoints = [arcCenterPoint];
       setHint("円弧の終点をクリックすると円弧を作成します。Escで選択モードに戻ります");
       updateUI();
       draw();
       return;
     }
-    const arc = addArc(arcCenterPoint, arcStartPoint, endpoint);
+    const arc = addArc(arcCenterPoint, arcStartPoint.radius, arcStartPoint.startAngle, Math.atan2(p.y - arcCenterPoint.y, p.x - arcCenterPoint.x));
     if (arc) {
       selectedPoints = [];
       selectedLines = [];
