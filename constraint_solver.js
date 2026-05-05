@@ -32,6 +32,14 @@
     return typeof item.radius === "function" ? item.radius() : 0;
   }
 
+  function arcEndpointPoint(arc, endpoint) {
+    const angle = endpoint === "start" ? arc.startAngle : arc.endAngle;
+    return {
+      x: arc.center.x + Math.cos(angle) * arc.radius(),
+      y: arc.center.y + Math.sin(angle) * arc.radius(),
+    };
+  }
+
   class Point {
     constructor(id, x, y, fixed = false, kind = "explicit") {
       this.id = id;
@@ -189,6 +197,36 @@
     }
   }
 
+  class ArcEndpointCoincidentConstraint extends Constraint {
+    constructor(arc, endpoint, point) {
+      super(`円弧端点一致 ${arc.id}.${endpoint}-${point.id}`, 1);
+      this.arc = arc;
+      this.endpoint = endpoint;
+      this.point = point;
+    }
+
+    rawError() {
+      const p = arcEndpointPoint(this.arc, this.endpoint);
+      return [p.x - this.point.x, p.y - this.point.y];
+    }
+  }
+
+  class ArcEndpointArcEndpointCoincidentConstraint extends Constraint {
+    constructor(a, endpointA, b, endpointB) {
+      super(`円弧端点一致 ${a.id}.${endpointA}-${b.id}.${endpointB}`, 1);
+      this.a = a;
+      this.endpointA = endpointA;
+      this.b = b;
+      this.endpointB = endpointB;
+    }
+
+    rawError() {
+      const a = arcEndpointPoint(this.a, this.endpointA);
+      const b = arcEndpointPoint(this.b, this.endpointB);
+      return [a.x - b.x, a.y - b.y];
+    }
+  }
+
   class PointOnLineConstraint extends Constraint {
     constructor(point, line) {
       super(`轤ｹ-邱壹荳閾ｴ ${point.id}-${line.id}`, 1);
@@ -198,6 +236,19 @@
 
     rawError() {
       return signedPointLineDistance(this.point, this.line);
+    }
+  }
+
+  class ArcEndpointOnLineConstraint extends Constraint {
+    constructor(arc, endpoint, line) {
+      super(`円弧端点-線一致 ${arc.id}.${endpoint}-${line.id}`, 1);
+      this.arc = arc;
+      this.endpoint = endpoint;
+      this.line = line;
+    }
+
+    rawError() {
+      return signedPointLineDistance(arcEndpointPoint(this.arc, this.endpoint), this.line);
     }
   }
 
@@ -267,6 +318,38 @@
     }
   }
 
+  class CollinearConstraint extends Constraint {
+    constructor(l1, l2) {
+      super(`同一直線 ${l1.id}-${l2.id}`, 10);
+      this.line1 = l1;
+      this.line2 = l2;
+      this.degenerateAtCreation = l1.length() < MIN_ORIENTATION_LENGTH || l2.length() < MIN_ORIENTATION_LENGTH;
+    }
+
+    rawError() {
+      const ax = this.line1.dx();
+      const ay = this.line1.dy();
+      const bx = this.line2.dx();
+      const by = this.line2.dy();
+      const la = hypot2(ax, ay);
+      const lb = hypot2(bx, by);
+      if (this.degenerateAtCreation || la < MIN_ORIENTATION_LENGTH || lb < MIN_ORIENTATION_LENGTH) return [0, 0];
+      return [(ax * by - ay * bx) / (la * lb), signedPointLineDistance(this.line2.p1, this.line1) / Math.max(la, 1)];
+    }
+  }
+
+  class EqualLengthConstraint extends Constraint {
+    constructor(line1, line2) {
+      super(`等長 ${line1.id}-${line2.id}`, 1);
+      this.line1 = line1;
+      this.line2 = line2;
+    }
+
+    rawError() {
+      return this.line1.length() - this.line2.length();
+    }
+  }
+
   class RadiusConstraint extends Constraint {
     constructor(primitive, target) {
       super(`半径 ${primitive.id} = ${target}`, 1);
@@ -327,6 +410,21 @@
     rawError() {
       const c = this.primitive.center;
       return hypot2(this.point.x - c.x, this.point.y - c.y) - this.primitive.radius();
+    }
+  }
+
+  class ArcEndpointOnCircleConstraint extends Constraint {
+    constructor(arc, endpoint, primitive) {
+      super(`円弧端点-円周一致 ${arc.id}.${endpoint}-${primitive.id}`, 1);
+      this.arc = arc;
+      this.endpoint = endpoint;
+      this.primitive = primitive;
+    }
+
+    rawError() {
+      const p = arcEndpointPoint(this.arc, this.endpoint);
+      const c = this.primitive.center;
+      return hypot2(p.x - c.x, p.y - c.y) - this.primitive.radius();
     }
   }
 
@@ -621,16 +719,22 @@
     LineLineDistanceConstraint,
     signedPointLineDistance,
     CoincidentConstraint,
+    ArcEndpointCoincidentConstraint,
+    ArcEndpointArcEndpointCoincidentConstraint,
     PointOnLineConstraint,
+    ArcEndpointOnLineConstraint,
     HorizontalConstraint,
     VerticalConstraint,
     ParallelConstraint,
     PerpendicularConstraint,
+    CollinearConstraint,
+    EqualLengthConstraint,
     RadiusConstraint,
     DiameterConstraint,
     ConcentricConstraint,
     EqualRadiusConstraint,
     PointOnCircleConstraint,
+    ArcEndpointOnCircleConstraint,
     LineCircleTangentConstraint,
     CircleCircleTangentConstraint,
     DragConstraint,

@@ -15,16 +15,22 @@
     LineLineDistanceConstraint,
     signedPointLineDistance,
     CoincidentConstraint,
+    ArcEndpointCoincidentConstraint,
+    ArcEndpointArcEndpointCoincidentConstraint,
     PointOnLineConstraint,
+    ArcEndpointOnLineConstraint,
     HorizontalConstraint,
     VerticalConstraint,
     ParallelConstraint,
     PerpendicularConstraint,
+    CollinearConstraint,
+    EqualLengthConstraint,
     RadiusConstraint,
     DiameterConstraint,
     ConcentricConstraint,
     EqualRadiusConstraint,
     PointOnCircleConstraint,
+    ArcEndpointOnCircleConstraint,
     LineCircleTangentConstraint,
     CircleCircleTangentConstraint,
     ConstraintSolver,
@@ -50,6 +56,7 @@
   let hoveredArcEndpoint = null;
   let hoveredDimensionConstraint = null;
   let selectedArcEndpoint = null;
+  let selectedArcEndpointPair = null;
   let selectedDimensionConstraint = null;
   let panSession = null;
   let lineStartPoint = null;
@@ -180,6 +187,7 @@
     hoveredArcEndpoint = null;
     hoveredDimensionConstraint = null;
     selectedArcEndpoint = null;
+    selectedArcEndpointPair = null;
     selectedDimensionConstraint = null;
     pointSeq = 1;
     lineSeq = 1;
@@ -235,8 +243,17 @@
     if (c instanceof CoincidentConstraint) {
       return { type: "coincident", p1: c.p1.id, p2: c.p2.id, enabled: c.enabled };
     }
+    if (c instanceof ArcEndpointCoincidentConstraint) {
+      return { type: "arcEndpointCoincident", arc: c.arc.id, endpoint: c.endpoint, point: c.point.id, enabled: c.enabled };
+    }
+    if (c instanceof ArcEndpointArcEndpointCoincidentConstraint) {
+      return { type: "arcEndpointArcEndpointCoincident", a: c.a.id, endpointA: c.endpointA, b: c.b.id, endpointB: c.endpointB, enabled: c.enabled };
+    }
     if (c instanceof PointOnLineConstraint) {
       return { type: "pointOnLine", point: c.point.id, line: c.line.id, enabled: c.enabled };
+    }
+    if (c instanceof ArcEndpointOnLineConstraint) {
+      return { type: "arcEndpointOnLine", arc: c.arc.id, endpoint: c.endpoint, line: c.line.id, enabled: c.enabled };
     }
     if (c instanceof HorizontalConstraint) {
       return { type: "horizontal", line: c.line.id, enabled: c.enabled };
@@ -249,6 +266,12 @@
     }
     if (c instanceof PerpendicularConstraint) {
       return { type: "perpendicular", line1: c.line1.id, line2: c.line2.id, enabled: c.enabled };
+    }
+    if (c instanceof CollinearConstraint) {
+      return { type: "collinear", line1: c.line1.id, line2: c.line2.id, enabled: c.enabled };
+    }
+    if (c instanceof EqualLengthConstraint) {
+      return { type: "equalLength", line1: c.line1.id, line2: c.line2.id, enabled: c.enabled };
     }
     if (c instanceof RadiusConstraint) {
       return { type: "radiusDimension", primitive: c.primitive.id, target: c.target, dimension: serializeDimension(c.dimension, targetFromConstraint(c)), enabled: c.enabled };
@@ -264,6 +287,9 @@
     }
     if (c instanceof PointOnCircleConstraint) {
       return { type: "pointOnCircle", point: c.point.id, primitive: c.primitive.id, enabled: c.enabled };
+    }
+    if (c instanceof ArcEndpointOnCircleConstraint) {
+      return { type: "arcEndpointOnCircle", arc: c.arc.id, endpoint: c.endpoint, primitive: c.primitive.id, enabled: c.enabled };
     }
     if (c instanceof LineCircleTangentConstraint) {
       return { type: "lineCircleTangent", line: c.line.id, primitive: c.primitive.id, sign: c.sign, enabled: c.enabled };
@@ -313,8 +339,14 @@
       constraint = new LineLineDistanceConstraint(line(data.line1), line(data.line2), Number(data.target), Number(data.sign) || null);
     } else if (data.type === "coincident") {
       constraint = new CoincidentConstraint(point(data.p1), point(data.p2));
+    } else if (data.type === "arcEndpointCoincident") {
+      constraint = new ArcEndpointCoincidentConstraint(primitive(data.arc), data.endpoint === "end" ? "end" : "start", point(data.point));
+    } else if (data.type === "arcEndpointArcEndpointCoincident") {
+      constraint = new ArcEndpointArcEndpointCoincidentConstraint(primitive(data.a), data.endpointA === "end" ? "end" : "start", primitive(data.b), data.endpointB === "end" ? "end" : "start");
     } else if (data.type === "pointOnLine") {
       constraint = new PointOnLineConstraint(point(data.point), line(data.line));
+    } else if (data.type === "arcEndpointOnLine") {
+      constraint = new ArcEndpointOnLineConstraint(primitive(data.arc), data.endpoint === "end" ? "end" : "start", line(data.line));
     } else if (data.type === "horizontal") {
       constraint = new HorizontalConstraint(line(data.line));
     } else if (data.type === "vertical") {
@@ -323,6 +355,10 @@
       constraint = new ParallelConstraint(line(data.line1), line(data.line2));
     } else if (data.type === "perpendicular") {
       constraint = new PerpendicularConstraint(line(data.line1), line(data.line2));
+    } else if (data.type === "collinear") {
+      constraint = new CollinearConstraint(line(data.line1), line(data.line2));
+    } else if (data.type === "equalLength") {
+      constraint = new EqualLengthConstraint(line(data.line1), line(data.line2));
     } else if (data.type === "radiusDimension") {
       constraint = new RadiusConstraint(primitive(data.primitive), Number(data.target));
     } else if (data.type === "diameterDimension") {
@@ -333,6 +369,8 @@
       constraint = new EqualRadiusConstraint(primitive(data.a), primitive(data.b));
     } else if (data.type === "pointOnCircle") {
       constraint = new PointOnCircleConstraint(point(data.point), primitive(data.primitive));
+    } else if (data.type === "arcEndpointOnCircle") {
+      constraint = new ArcEndpointOnCircleConstraint(primitive(data.arc), data.endpoint === "end" ? "end" : "start", primitive(data.primitive));
     } else if (data.type === "lineCircleTangent") {
       constraint = new LineCircleTangentConstraint(line(data.line), primitive(data.primitive), Number(data.sign) || null);
     } else if (data.type === "circleCircleTangent") {
@@ -512,6 +550,7 @@
     selectedCircles = [];
     selectedArcs = [];
     selectedArcEndpoint = null;
+    selectedArcEndpointPair = null;
     selectedDimensionConstraint = null;
   }
 
@@ -538,6 +577,24 @@
     mode = "select";
     updateToolbar();
     setHint("選択・ドラッグモードに戻りました");
+    updateUI();
+    draw();
+  }
+
+  function hasActiveDrawOperation() {
+    return Boolean(lineStartPoint || rectangleStartPoint || filletFirstLine || circleCenterPoint || arcCenterPoint || arcStartPoint);
+  }
+
+  function cancelActiveDrawOperation() {
+    lineStartPoint = null;
+    rectangleStartPoint = null;
+    filletFirstLine = null;
+    circleCenterPoint = null;
+    arcCenterPoint = null;
+    arcStartPoint = null;
+    pointerPreview = null;
+    clearSelection();
+    setHint("作図操作をキャンセルしました");
     updateUI();
     draw();
   }
@@ -690,6 +747,22 @@
   function unwrapAngleNear(angle, reference) {
     const twoPi = Math.PI * 2;
     return angle + Math.round((reference - angle) / twoPi) * twoPi;
+  }
+
+  function shortestAngleFrom(start, end) {
+    const twoPi = Math.PI * 2;
+    let diff = ((end - start + Math.PI) % twoPi + twoPi) % twoPi - Math.PI;
+    if (diff <= -Math.PI) diff += twoPi;
+    return start + diff;
+  }
+
+  function clampArcEndAngle(start, end) {
+    const twoPi = Math.PI * 2;
+    const maxSweep = twoPi - 1e-6;
+    const sweep = end - start;
+    if (sweep > maxSweep) return start + maxSweep;
+    if (sweep < -maxSweep) return start - maxSweep;
+    return end;
   }
 
   function angleOnSignedSweep(angle, start, end) {
@@ -986,13 +1059,18 @@
     if (c instanceof PointLineDistanceConstraint) return c.point === point || c.line.p1 === point || c.line.p2 === point;
     if (c instanceof LineLineDistanceConstraint) return c.line1.p1 === point || c.line1.p2 === point || c.line2.p1 === point || c.line2.p2 === point;
     if (c instanceof CoincidentConstraint) return c.p1 === point || c.p2 === point;
+    if (c instanceof ArcEndpointCoincidentConstraint) return c.arc.center === point || c.point === point;
+    if (c instanceof ArcEndpointArcEndpointCoincidentConstraint) return c.a.center === point || c.b.center === point;
     if (c instanceof PointOnLineConstraint) return c.point === point || c.line.p1 === point || c.line.p2 === point;
+    if (c instanceof ArcEndpointOnLineConstraint) return c.arc.center === point || c.line.p1 === point || c.line.p2 === point;
     if (c instanceof HorizontalConstraint || c instanceof VerticalConstraint) return c.line.p1 === point || c.line.p2 === point;
     if (c instanceof ParallelConstraint || c instanceof PerpendicularConstraint) {
       return c.line1.p1 === point || c.line1.p2 === point || c.line2.p1 === point || c.line2.p2 === point;
     }
+    if (c instanceof CollinearConstraint || c instanceof EqualLengthConstraint) return c.line1.p1 === point || c.line1.p2 === point || c.line2.p1 === point || c.line2.p2 === point;
     if (c instanceof ConcentricConstraint) return c.a === point || c.b === point || c.a.center === point || c.b.center === point;
     if (c instanceof PointOnCircleConstraint) return c.point === point || c.primitive.center === point;
+    if (c instanceof ArcEndpointOnCircleConstraint) return c.arc.center === point || c.primitive.center === point;
     if (c instanceof RadiusConstraint || c instanceof DiameterConstraint) return c.primitive.center === point;
     if (c instanceof EqualRadiusConstraint || c instanceof CircleCircleTangentConstraint) return c.a.center === point || c.b.center === point;
     if (c instanceof LineCircleTangentConstraint) return c.line.p1 === point || c.line.p2 === point || c.primitive.center === point;
@@ -1006,14 +1084,20 @@
     if (c instanceof PointLineDistanceConstraint) return c.line === line;
     if (c instanceof LineLineDistanceConstraint) return c.line1 === line || c.line2 === line;
     if (c instanceof PointOnLineConstraint) return c.line === line;
+    if (c instanceof ArcEndpointOnLineConstraint) return c.line === line;
     if (c instanceof HorizontalConstraint || c instanceof VerticalConstraint) return c.line === line;
     if (c instanceof ParallelConstraint || c instanceof PerpendicularConstraint) return c.line1 === line || c.line2 === line;
+    if (c instanceof CollinearConstraint || c instanceof EqualLengthConstraint) return c.line1 === line || c.line2 === line;
     if (c instanceof LineCircleTangentConstraint) return c.line === line;
     return false;
   }
 
   function constraintReferencesPrimitive(c, primitive) {
+    if (c instanceof ArcEndpointCoincidentConstraint) return c.arc === primitive;
+    if (c instanceof ArcEndpointArcEndpointCoincidentConstraint) return c.a === primitive || c.b === primitive;
+    if (c instanceof ArcEndpointOnLineConstraint) return c.arc === primitive;
     if (c instanceof RadiusConstraint || c instanceof DiameterConstraint || c instanceof PointOnCircleConstraint || c instanceof LineCircleTangentConstraint) return c.primitive === primitive;
+    if (c instanceof ArcEndpointOnCircleConstraint) return c.arc === primitive || c.primitive === primitive;
     if (c instanceof ConcentricConstraint || c instanceof EqualRadiusConstraint || c instanceof CircleCircleTangentConstraint) return c.a === primitive || c.b === primitive;
     return false;
   }
@@ -1466,7 +1550,7 @@
     if (mode !== "arc" || !arcCenterPoint || !arcStartPoint || !pointerPreview) return;
     const angles = {
       start: arcStartPoint.startAngle,
-      end: Math.atan2(pointerPreview.y - arcCenterPoint.y, pointerPreview.x - arcCenterPoint.x),
+      end: shortestAngleFrom(arcStartPoint.startAngle, Math.atan2(pointerPreview.y - arcCenterPoint.y, pointerPreview.x - arcCenterPoint.x)),
     };
     ctx.save();
     ctx.strokeStyle = "#2563eb";
@@ -1558,12 +1642,18 @@
       return Boolean(target && target.kind !== "invalid");
     }
     if (type === "concentric") return (selectedPoints.length === 1 && selectedLines.length === 0 && primitives.length === 1) || (selectedPoints.length === 0 && selectedLines.length === 0 && primitives.length === 2);
+    if (type === "equal") return (selectedLines.length === 2 && selectedPoints.length === 0 && primitives.length === 0) || (selectedPoints.length === 0 && selectedLines.length === 0 && primitives.length === 2);
     if (type === "equalRadius") return selectedPoints.length === 0 && selectedLines.length === 0 && primitives.length === 2;
     if (type === "pointOnCircle") return selectedPoints.length === 1 && selectedLines.length === 0 && primitives.length === 1;
     if (type === "tangent") return (selectedPoints.length === 0 && selectedLines.length === 1 && primitives.length === 1) || (selectedPoints.length === 0 && selectedLines.length === 0 && primitives.length === 2);
-    if (type === "coincident") return (selectedPoints.length === 2 && selectedLines.length === 0) || (selectedPoints.length === 1 && selectedLines.length === 1) || (selectedPoints.length === 1 && selectedLines.length === 0 && primitives.length === 1);
+    if (type === "coincident") {
+      if (selectedArcEndpointPair?.length === 2) return true;
+      if ((selectedPoints.length === 2 && selectedLines.length === 0) || (selectedPoints.length === 1 && selectedLines.length === 1) || (selectedPoints.length === 1 && selectedLines.length === 0 && primitives.length === 1)) return true;
+      return Boolean(selectedArcEndpoint && ((selectedPoints.length === 1 && selectedLines.length === 0 && primitives.length === 0) || (selectedPoints.length === 0 && selectedLines.length === 1 && primitives.length === 0) || (selectedPoints.length === 0 && selectedLines.length === 0 && primitives.length === 1)));
+    }
     if (type === "horizontal" || type === "vertical") return selectedLines.length === 1 && lineHasDirection(selectedLines[0]);
     if (type === "parallel" || type === "perpendicular") return selectedLines.length === 2 && selectedLines.every(lineHasDirection);
+    if (type === "collinear") return selectedLines.length === 2 && selectedLines.every(lineHasDirection);
     return false;
   }
 
@@ -1586,6 +1676,8 @@
     if (type === "pointOnCircle") return "円周上に置く点と、円または円弧を選択してください";
     if (type === "tangent") return "接線にする線と円/円弧、または円/円弧を2つ選択してください";
     if (type === "coincident") return "一致させる点同士、点と線、または点と円周を選択してください";
+    if (type === "collinear") return "同一直線上にする線を2本選択してください";
+    if (type === "equal") return "等しくする線2本、または円/円弧を2つ選択してください";
     if (type === "horizontal") return "水平にする線を1本選択してください";
     if (type === "vertical") return "垂直にする線を1本選択してください";
     if (type === "parallel") return "平行にする線を2本選択してください";
@@ -1599,6 +1691,8 @@
     if (type === "pointOnCircle") return "この拘束では点と円または円弧を選択してください";
     if (type === "tangent") return "この拘束では線と円/円弧、または円/円弧を2つ選択してください";
     if (type === "coincident") return "この拘束では点、線、円または円弧を選択してください";
+    if (type === "collinear") return "この拘束では線を2本選択してください";
+    if (type === "equal") return "この拘束では線2本、または円/円弧を2つ選択してください";
     if (type === "horizontal" || type === "vertical" || type === "parallel" || type === "perpendicular") {
       return "この拘束では線を選択してください";
     }
@@ -1626,10 +1720,24 @@
       selectedCircles = [];
       selectedArcs = [];
       selectedLines = selectedLines.slice(0, 2);
-    } else if (type === "equalRadius") {
+      selectedArcEndpoint = null;
+    } else if (type === "collinear") {
       selectedPoints = [];
-      selectedLines = [];
-      trimPrimitives(2);
+      selectedCircles = [];
+      selectedArcs = [];
+      selectedArcEndpoint = null;
+      selectedLines = selectedLines.slice(0, 2);
+    } else if (type === "equal" || type === "equalRadius") {
+      selectedPoints = [];
+      selectedArcEndpoint = null;
+      if (selectedLines.length > 0) {
+        selectedLines = selectedLines.slice(0, 2);
+        selectedCircles = [];
+        selectedArcs = [];
+      } else {
+        selectedLines = [];
+        trimPrimitives(2);
+      }
     } else if (type === "concentric" || type === "pointOnCircle") {
       selectedPoints = selectedPoints.slice(0, 1);
       selectedLines = [];
@@ -1713,27 +1821,34 @@
     }
   }
 
-  function handleConstraintTargetClick(hitP, hitL, hitC, hitA) {
+  function handleConstraintTargetClick(hitP, hitL, hitC, hitA, hitArcEnd) {
     if (!pendingConstraintCommand) return false;
     const type = pendingConstraintCommand.type;
     selectedDimensionConstraint = null;
     const hitPrimitive = hitC || hitA;
 
     if (type === "coincident") {
-      if (!hitP && !hitL && !hitPrimitive) {
+      if (!hitP && !hitL && !hitPrimitive && !hitArcEnd) {
         setHint(invalidConstraintTargetHint(type), "error");
         return true;
       }
-      if (hitP) {
+      if (hitArcEnd) {
+        const next = { arc: hitArcEnd.arc, endpoint: hitArcEnd.endpoint };
+        if (selectedArcEndpoint && !sameArcEndpoint(selectedArcEndpoint, next)) selectedArcEndpointPair = [selectedArcEndpoint, next];
+        selectedArcEndpoint = next;
+      } else if (hitP) {
+        selectedArcEndpointPair = null;
         if (!selectedPoints.includes(hitP)) selectedPoints.push(hitP);
         selectedPoints = selectedPoints.slice(-2);
         if (selectedPoints.length >= 2) selectedLines = [];
       } else if (hitL) {
+        selectedArcEndpointPair = null;
         selectedLines = [hitL];
         selectedPoints = selectedPoints.slice(0, 1);
         selectedCircles = [];
         selectedArcs = [];
       } else if (hitPrimitive) {
+        selectedArcEndpointPair = null;
         pushPrimitiveSelection(hitPrimitive);
         selectedPoints = selectedPoints.slice(0, 1);
         selectedLines = [];
@@ -1749,7 +1864,7 @@
       }
       selectedLines = [hitL];
       selectedPoints = [];
-    } else if (type === "parallel" || type === "perpendicular") {
+    } else if (type === "parallel" || type === "perpendicular" || type === "collinear") {
       if (!hitL) {
         setHint(invalidConstraintTargetHint(type), "error");
         return true;
@@ -1787,6 +1902,22 @@
         selectedCircles = [];
         selectedArcs = [];
         pushPrimitiveSelection(hitPrimitive);
+      }
+      trimConstraintSelection(type);
+    } else if (type === "equal") {
+      if (hitL) {
+        selectedPoints = [];
+        selectedCircles = [];
+        selectedArcs = [];
+        if (!selectedLines.includes(hitL)) selectedLines.push(hitL);
+        selectedLines = selectedLines.slice(-2);
+      } else if (hitPrimitive) {
+        selectedPoints = [];
+        selectedLines = [];
+        pushPrimitiveSelection(hitPrimitive);
+      } else {
+        setHint(invalidConstraintTargetHint(type), "error");
+        return true;
       }
       trimConstraintSelection(type);
     } else if (type === "concentric" || type === "equalRadius" || type === "pointOnCircle" || type === "tangent") {
@@ -1863,7 +1994,7 @@
   }
 
   function updateDistanceBufferLabel() {
-    if (!pendingCommand || pendingCommand.type !== "distance-value") return;
+    if (!pendingCommand || (pendingCommand.type !== "distance-value" && pendingCommand.type !== "fillet-radius-value")) return;
     setHint("寸法値を入力中: 数値キーで編集、Enter/ダブルクリックで決定、Escでキャンセル");
     draw();
   }
@@ -1888,10 +2019,11 @@
       cancelPendingCommand("寸法入力をキャンセルしました");
       return true;
     }
-    if (pendingCommand.type !== "distance-value") return false;
+    if (pendingCommand.type !== "distance-value" && pendingCommand.type !== "fillet-radius-value") return false;
     if (e.key === "Enter") {
       e.preventDefault();
-      submitDistanceValue();
+      if (pendingCommand.type === "fillet-radius-value") submitFilletRadiusValue();
+      else submitDistanceValue();
       return true;
     }
     if (e.key === "Backspace") {
@@ -2053,7 +2185,16 @@
     let constraint = null;
     const primitives = selectedPrimitives();
     if (type === "coincident") {
-      if (selectedPoints.length === 1 && selectedLines.length === 1) {
+      const endpointPair = selectedArcEndpointPair;
+      if (endpointPair?.length === 2) {
+        constraint = new ArcEndpointArcEndpointCoincidentConstraint(endpointPair[0].arc, endpointPair[0].endpoint, endpointPair[1].arc, endpointPair[1].endpoint);
+      } else if (selectedArcEndpoint && selectedPoints.length === 1) {
+        constraint = new ArcEndpointCoincidentConstraint(selectedArcEndpoint.arc, selectedArcEndpoint.endpoint, selectedPoints[0]);
+      } else if (selectedArcEndpoint && selectedLines.length === 1) {
+        constraint = new ArcEndpointOnLineConstraint(selectedArcEndpoint.arc, selectedArcEndpoint.endpoint, selectedLines[0]);
+      } else if (selectedArcEndpoint && primitives.length === 1) {
+        constraint = new ArcEndpointOnCircleConstraint(selectedArcEndpoint.arc, selectedArcEndpoint.endpoint, primitives[0]);
+      } else if (selectedPoints.length === 1 && selectedLines.length === 1) {
         constraint = new PointOnLineConstraint(selectedPoints[0], selectedLines[0]);
       } else if (selectedPoints.length === 1 && primitives.length === 1) {
         constraint = new PointOnCircleConstraint(selectedPoints[0], primitives[0]);
@@ -2068,6 +2209,11 @@
       constraint = new ParallelConstraint(selectedLines[0], selectedLines[1]);
     } else if (type === "perpendicular") {
       constraint = new PerpendicularConstraint(selectedLines[0], selectedLines[1]);
+    } else if (type === "collinear") {
+      constraint = new CollinearConstraint(selectedLines[0], selectedLines[1]);
+    } else if (type === "equal") {
+      if (selectedLines.length === 2) constraint = new EqualLengthConstraint(selectedLines[0], selectedLines[1]);
+      else constraint = new EqualRadiusConstraint(primitives[0], primitives[1]);
     } else if (type === "concentric") {
       constraint = new ConcentricConstraint(selectedPoints[0] || primitives[0], primitives[selectedPoints.length === 1 ? 0 : 1]);
     } else if (type === "equalRadius") {
@@ -2079,7 +2225,10 @@
       else constraint = new CircleCircleTangentConstraint(primitives[0], primitives[1]);
     }
 
-    if (constraint) commitNewConstraint(type, constraint);
+    if (constraint) {
+      selectedArcEndpointPair = null;
+      commitNewConstraint(type, constraint);
+    }
   }
 
   function buildDragSession(kind, item, pointer) {
@@ -2155,11 +2304,13 @@
   function arcEndpointDragTargets(session, pointer) {
     const prop = session.endpoint === "start" ? "startAngle" : "endAngle";
     const rawAngle = Math.atan2(pointer.y - session.item.center.y, pointer.x - session.item.center.x);
+    const value = unwrapAngleNear(rawAngle, session.item[prop]);
+    const clamped = prop === "startAngle" ? session.item.endAngle - clampArcEndAngle(value, session.item.endAngle) + value : clampArcEndAngle(session.item.startAngle, value);
     return [
       {
         object: session.item,
         prop,
-        value: unwrapAngleNear(rawAngle, session.item[prop]),
+        value: clamped,
       },
     ];
   }
@@ -2293,6 +2444,9 @@
       selectedArcs = [];
       lineStartPoint = endpoint;
       const result = solveAndRefresh("線追加");
+      clearSelection();
+      updateUI();
+      draw();
       log(`線 ${l.id} を追加しました\n自動solve: success=${result.success}`);
     } else {
       selectedPoints = [endpoint];
@@ -2341,6 +2495,9 @@
     rectangleStartPoint = null;
     pointerPreview = null;
     const result = solveAndRefresh("矩形追加");
+    clearSelection();
+    updateUI();
+    draw();
     log(`矩形を追加しました\n自動solve: success=${result.success}`);
   }
 
@@ -2386,9 +2543,53 @@
     setLineEndpoint(line2, corner, t2);
     let startAngle = Math.atan2(t1.y - center.y, t1.x - center.x);
     let endAngle = Math.atan2(t2.y - center.y, t2.x - center.x);
-    if (normalizeAngle(endAngle - startAngle) > Math.PI) endAngle -= Math.PI * 2;
+    endAngle = shortestAngleFrom(startAngle, endAngle);
     const arc = addArc(center, radius, startAngle, endAngle);
-    return { ok: Boolean(arc), arc };
+    if (!arc) return { ok: false, reason: "R面取り円弧を作成できません" };
+    const radiusConstraint = new RadiusConstraint(arc, radius);
+    radiusConstraint.dimension = defaultDimensionForTarget({ kind: "radius", primitive: arc, value: radius });
+    model.constraints.push(
+      new ArcEndpointCoincidentConstraint(arc, "start", t1),
+      new ArcEndpointCoincidentConstraint(arc, "end", t2),
+      new LineCircleTangentConstraint(line1, arc),
+      new LineCircleTangentConstraint(line2, arc),
+      radiusConstraint,
+    );
+    return { ok: true, arc };
+  }
+
+  function startFilletRadiusInput(line1, line2) {
+    pendingCommand = {
+      type: "fillet-radius-value",
+      line1,
+      line2,
+      buffer: String(DEFAULT_FILLET_RADIUS),
+      editing: false,
+    };
+    setHint("R寸法を入力してください。数字キーで編集、Enterで作成、Escでキャンセル");
+    draw();
+  }
+
+  function submitFilletRadiusValue() {
+    if (pendingCommand?.type !== "fillet-radius-value") return false;
+    const value = Number(pendingCommand.buffer);
+    if (!Number.isFinite(value) || value <= 0) {
+      setHint("R寸法には0より大きい数値を入力してください", "error");
+      draw();
+      return true;
+    }
+    const { line1, line2 } = pendingCommand;
+    pendingCommand = null;
+    const result = createFillet(line1, line2, value);
+    if (!result.ok) {
+      setHint(result.reason, "error");
+      draw();
+      return true;
+    }
+    clearSelection();
+    filletFirstLine = null;
+    solveAndRefresh("R面取り追加");
+    return true;
   }
 
   function handleFilletClick(line) {
@@ -2411,17 +2612,8 @@
       setHint("別の接続線をクリックしてください", "error");
       return;
     }
-    const result = createFillet(filletFirstLine, line);
-    if (!result.ok) {
-      setHint(result.reason, "error");
-      return;
-    }
-    selectedLines = [filletFirstLine, line];
-    selectedArcs = [result.arc];
-    selectedPoints = [];
-    selectedCircles = [];
+    startFilletRadiusInput(filletFirstLine, line);
     filletFirstLine = null;
-    solveAndRefresh("R面取り追加");
   }
 
   function handleCircleClick(p) {
@@ -2447,6 +2639,9 @@
       circleCenterPoint = null;
       pointerPreview = null;
       solveAndRefresh("円追加");
+      clearSelection();
+      updateUI();
+      draw();
     }
   }
 
@@ -2481,7 +2676,7 @@
       draw();
       return;
     }
-    const arc = addArc(arcCenterPoint, arcStartPoint.radius, arcStartPoint.startAngle, Math.atan2(p.y - arcCenterPoint.y, p.x - arcCenterPoint.x));
+    const arc = addArc(arcCenterPoint, arcStartPoint.radius, arcStartPoint.startAngle, shortestAngleFrom(arcStartPoint.startAngle, Math.atan2(p.y - arcCenterPoint.y, p.x - arcCenterPoint.x)));
     if (arc) {
       selectedPoints = [];
       selectedLines = [];
@@ -2491,6 +2686,9 @@
       arcStartPoint = null;
       pointerPreview = null;
       solveAndRefresh("円弧追加");
+      clearSelection();
+      updateUI();
+      draw();
     }
   }
 
@@ -2523,14 +2721,14 @@
       return;
     }
 
-    if (pendingCommand?.type === "distance-value") {
+    if (pendingCommand?.type === "distance-value" || pendingCommand?.type === "fillet-radius-value") {
       e.preventDefault();
       return;
     }
 
     if (pendingConstraintCommand) {
       e.preventDefault();
-      handleConstraintTargetClick(hitP, hitL, hitC, hitA);
+      handleConstraintTargetClick(hitP, hitL, hitC, hitA, hitArcEnd);
       return;
     }
 
@@ -2782,6 +2980,10 @@
         cancelConstraintTargetCommand();
         return;
       }
+      if (hasActiveDrawOperation()) {
+        cancelActiveDrawOperation();
+        return;
+      }
       if (mode === "line" || mode === "point" || mode === "rectangle" || mode === "fillet" || mode === "circle" || mode === "arc") {
         exitDrawMode();
         return;
@@ -2865,17 +3067,8 @@
   document.getElementById("toolFillet")?.addEventListener("click", () => {
     cancelConstraintTargetCommand("");
     if (selectedLines.length === 2) {
-      const result = createFillet(selectedLines[0], selectedLines[1]);
-      if (!result.ok) {
-        setHint(result.reason, "error");
-        draw();
-        return;
-      }
-      selectedArcs = [result.arc];
-      selectedPoints = [];
-      selectedCircles = [];
+      startFilletRadiusInput(selectedLines[0], selectedLines[1]);
       filletFirstLine = null;
-      solveAndRefresh("R面取り追加");
       return;
     }
     mode = "fillet";
