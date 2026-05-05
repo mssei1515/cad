@@ -2089,6 +2089,8 @@
         item,
         startPointer: pointer,
         startRadius: item.radius(),
+        startCenterX: item.center.x,
+        startCenterY: item.center.y,
       };
     }
 
@@ -2127,6 +2129,19 @@
     ];
   }
 
+  function primitiveMoveTargets(session, pointer) {
+    if (session.item.center.fixed) return [];
+    const dx = pointer.x - session.startPointer.x;
+    const dy = pointer.y - session.startPointer.y;
+    return [{ point: session.item.center, x: session.startCenterX + dx, y: session.startCenterY + dy }];
+  }
+
+  function hasDirectRadiusDimension(primitive) {
+    return model.constraints.some(
+      (c) => c.enabled !== false && (c instanceof RadiusConstraint || c instanceof DiameterConstraint) && c.primitive === primitive,
+    );
+  }
+
   function arcEndpointDragTargets(session, pointer) {
     const prop = session.endpoint === "start" ? "startAngle" : "endAngle";
     const rawAngle = Math.atan2(pointer.y - session.item.center.y, pointer.x - session.item.center.x);
@@ -2140,12 +2155,30 @@
   }
 
   function dragResultForSession(session, pointer) {
-    if (session.mode === "radius") return solver.solveWithParameterDragTargets(radiusDragTargets(session, pointer));
+    if (session.mode === "radius") {
+      const moveTargets = primitiveMoveTargets(session, pointer);
+      if (hasDirectRadiusDimension(session.item)) {
+        session.activeMode = "move";
+        return solver.solveWithDragTargets(moveTargets);
+      }
+
+      const vars = solver.getVariables();
+      const state = solver.clone(vars);
+      const result = solver.solveWithParameterDragTargets(radiusDragTargets(session, pointer));
+      if (!result.success && moveTargets.length > 0) {
+        solver.restore(state);
+        session.activeMode = "move";
+        return solver.solveWithDragTargets(moveTargets);
+      }
+      session.activeMode = "radius";
+      return result;
+    }
     if (session.mode === "arc-endpoint") return solver.solveWithParameterDragTargets(arcEndpointDragTargets(session, pointer));
     return solver.solveWithDragTargets(dragTargets(session, pointer));
   }
 
   function dragLabel(session) {
+    if (session.mode === "radius" && session.activeMode === "move") return "ドラッグ";
     if (session.mode === "radius") return "半径変更";
     if (session.mode === "arc-endpoint") return "円弧端点変更";
     return "ドラッグ";
