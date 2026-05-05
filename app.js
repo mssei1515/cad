@@ -700,7 +700,7 @@
   }
 
   function hitEndpointPoint(x, y) {
-    return hitPointByPredicate(x, y, isEndpointPoint);
+    return hitPointByPredicate(x, y, (p) => isEndpointPoint(p) && isPointUsedByPrimitive(p));
   }
 
   function hitExplicitPoint(x, y) {
@@ -2602,29 +2602,6 @@
     return { ok: true, corner, t1, t2, center, radius, startAngle, endAngle };
   }
 
-  function constraintExplicitlyReferencesPoint(c, point) {
-    if (c instanceof DistanceConstraint) return c.p1 === point || c.p2 === point;
-    if (c instanceof PointLineDistanceConstraint) return c.point === point;
-    if (c instanceof CoincidentConstraint) return c.p1 === point || c.p2 === point;
-    if (c instanceof PointOnLineConstraint) return c.point === point;
-    if (c instanceof ConcentricConstraint) return c.a === point || c.b === point;
-    if (c instanceof PointOnCircleConstraint) return c.point === point;
-    return false;
-  }
-
-  function removeStaleCornerConstraints(corner) {
-    const before = model.constraints.length;
-    model.constraints = model.constraints.filter((c) => !constraintExplicitlyReferencesPoint(c, corner));
-    return before - model.constraints.length;
-  }
-
-  function removeOrphanEndpointPoint(point) {
-    if (point?.kind !== "endpoint") return;
-    if (isPointUsedByPrimitive(point)) return;
-    if (model.constraints.some((c) => constraintReferencesPoint(c, point))) return;
-    removeFromArray(model.points, point);
-  }
-
   function createFillet(line1, line2, radius = DEFAULT_FILLET_RADIUS) {
     const geometry = computeFilletGeometry(line1, line2, radius);
     if (!geometry.ok) return geometry;
@@ -2632,10 +2609,8 @@
     const t1 = addPoint(t1Pos.x, t1Pos.y, false, "endpoint");
     const t2 = addPoint(t2Pos.x, t2Pos.y, false, "endpoint");
     const center = addPoint(centerPos.x, centerPos.y, false, "endpoint");
-    const removedConstraints = removeStaleCornerConstraints(corner);
     setLineEndpoint(line1, corner, t1);
     setLineEndpoint(line2, corner, t2);
-    removeOrphanEndpointPoint(corner);
     const arc = addArc(center, radius, startAngle, endAngle);
     if (!arc) return { ok: false, reason: "R面取り円弧を作成できません" };
     const radiusConstraint = new RadiusConstraint(arc, radius);
@@ -2647,7 +2622,7 @@
       new LineCircleTangentConstraint(line2, arc),
       radiusConstraint,
     );
-    return { ok: true, arc, removedConstraints };
+    return { ok: true, arc };
   }
 
   function startFilletRadiusInput(line1, line2) {
