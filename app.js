@@ -944,7 +944,8 @@
 
   function targetDirection(target) {
     if (target.kind === "radius" || target.kind === "diameter") {
-      const anchor = target.dimensionAnchor || circlePointAtAngle(target.primitive, 0);
+      const defaultAngle = target.primitive instanceof Arc ? (target.primitive.startAngle + target.primitive.endAngle) / 2 : 0;
+      const anchor = target.dimensionAnchor || circlePointAtAngle(target.primitive, defaultAngle);
       const dx = anchor.x - target.primitive.center.x;
       const dy = anchor.y - target.primitive.center.y;
       const len = hypot2(dx, dy);
@@ -1362,11 +1363,19 @@
     ctx.strokeStyle = preview || highlighted ? "#2563eb" : "#6b7280";
     ctx.fillStyle = preview || highlighted ? "#2563eb" : "#6b7280";
     ctx.lineWidth = (highlighted ? 2 : 1.2) / viewport.scale;
-    if (preview) ctx.setLineDash([5 / viewport.scale, 4 / viewport.scale]);
+    if (preview && layout.kind !== "radius-leader") ctx.setLineDash([5 / viewport.scale, 4 / viewport.scale]);
     ctx.beginPath();
     ctx.moveTo(a.x, a.y);
     ctx.lineTo(b.x, b.y);
     ctx.stroke();
+
+    if (layout.kind === "radius-leader") {
+      ctx.setLineDash([]);
+      drawArrowhead(a, { x: -d.x, y: -d.y });
+      drawDimensionLabel(label, text, editState);
+      ctx.restore();
+      return;
+    }
 
     for (const p of points) {
       ctx.beginPath();
@@ -1379,6 +1388,11 @@
     drawArrowhead(a, d);
     drawArrowhead(b, { x: -d.x, y: -d.y });
 
+    drawDimensionLabel(label, text, editState);
+    ctx.restore();
+  }
+
+  function drawDimensionLabel(label, text, editState = null) {
     if (editState) {
       drawDimensionEditLabel(label, text, editState);
     } else {
@@ -1387,7 +1401,6 @@
       ctx.textBaseline = "bottom";
       ctx.fillText(label, text.x, text.y - 4 / viewport.scale);
     }
-    ctx.restore();
   }
 
   function drawDimensionEditLabel(label, text, state) {
@@ -1427,6 +1440,23 @@
     const d = target.kind === "radius" || target.kind === "diameter" ? targetDirection({ ...target, dimensionAnchor: anchor }) : targetDirection(target);
     const points = targetPointsForDimension(target, anchor);
     if (points.length < 2) return null;
+    if (target.kind === "radius") {
+      const source = points[1];
+      const dx = anchor.x - source.x;
+      const dy = anchor.y - source.y;
+      const len = hypot2(dx, dy);
+      const leader = len > 1e-12 ? { x: dx / len, y: dy / len } : d;
+      return {
+        kind: "radius-leader",
+        a: source,
+        b: anchor,
+        d: leader,
+        points: [],
+        text: anchor,
+        hitA: source,
+        hitB: anchor,
+      };
+    }
     const tick = 9 / viewport.scale;
     const extension = 6 / viewport.scale;
     const gap = 12 / viewport.scale;
@@ -1533,10 +1563,6 @@
     ctx.lineWidth = 2 / viewport.scale;
     ctx.setLineDash([6 / viewport.scale, 5 / viewport.scale]);
     ctx.beginPath();
-    ctx.moveTo(geometry.t1.x, geometry.t1.y);
-    ctx.lineTo(geometry.t2.x, geometry.t2.y);
-    ctx.stroke();
-    ctx.beginPath();
     ctx.arc(geometry.center.x, geometry.center.y, geometry.radius, geometry.startAngle, geometry.endAngle, geometry.endAngle < geometry.startAngle);
     ctx.stroke();
     ctx.restore();
@@ -1602,6 +1628,7 @@
     ctx.arc(arcCenterPoint.x, arcCenterPoint.y, arcStartPoint.radius, angles.start, angles.end, angles.end < angles.start);
     ctx.stroke();
     ctx.restore();
+    drawConstructionPoint(arcCenterPoint);
   }
 
   function drawConstructionPoint(point) {
@@ -3019,6 +3046,11 @@
     const p = canvasPoint(e);
     const hitL = hitLine(p.x, p.y);
     const hitP = hitPoint(p.x, p.y);
+    if (pendingCommand?.type === "fillet-radius-value") {
+      e.preventDefault();
+      submitFilletRadiusValue();
+      return;
+    }
     if (handleConstraintTargetDoubleClick(hitP, hitL, p)) {
       e.preventDefault();
       return;
