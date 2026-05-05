@@ -24,6 +24,14 @@
     return s;
   }
 
+  function centerOf(item) {
+    return item.center || item;
+  }
+
+  function radiusOf(item) {
+    return typeof item.radius === "function" ? item.radius() : 0;
+  }
+
   class Point {
     constructor(id, x, y, fixed = false, kind = "explicit") {
       this.id = id;
@@ -256,6 +264,102 @@
       const lb = hypot2(bx, by);
       if (this.degenerateAtCreation || la < MIN_ORIENTATION_LENGTH || lb < MIN_ORIENTATION_LENGTH) return 0;
       return (ax * bx + ay * by) / (la * lb);
+    }
+  }
+
+  class RadiusConstraint extends Constraint {
+    constructor(primitive, target) {
+      super(`半径 ${primitive.id} = ${target}`, 1);
+      this.primitive = primitive;
+      this.target = target;
+    }
+
+    rawError() {
+      return this.primitive.radius() - this.target;
+    }
+  }
+
+  class DiameterConstraint extends Constraint {
+    constructor(primitive, target) {
+      super(`直径 ${primitive.id} = ${target}`, 1);
+      this.primitive = primitive;
+      this.target = target;
+    }
+
+    rawError() {
+      return this.primitive.radius() * 2 - this.target;
+    }
+  }
+
+  class ConcentricConstraint extends Constraint {
+    constructor(a, b) {
+      super(`同心 ${a.id}-${b.id}`, 1);
+      this.a = a;
+      this.b = b;
+    }
+
+    rawError() {
+      const a = centerOf(this.a);
+      const b = centerOf(this.b);
+      return [a.x - b.x, a.y - b.y];
+    }
+  }
+
+  class EqualRadiusConstraint extends Constraint {
+    constructor(a, b) {
+      super(`同半径 ${a.id}-${b.id}`, 1);
+      this.a = a;
+      this.b = b;
+    }
+
+    rawError() {
+      return radiusOf(this.a) - radiusOf(this.b);
+    }
+  }
+
+  class PointOnCircleConstraint extends Constraint {
+    constructor(point, primitive) {
+      super(`点-円周一致 ${point.id}-${primitive.id}`, 1);
+      this.point = point;
+      this.primitive = primitive;
+    }
+
+    rawError() {
+      const c = this.primitive.center;
+      return hypot2(this.point.x - c.x, this.point.y - c.y) - this.primitive.radius();
+    }
+  }
+
+  class LineCircleTangentConstraint extends Constraint {
+    constructor(line, primitive, sign = null) {
+      super(`接線 ${line.id}-${primitive.id}`, 1);
+      this.line = line;
+      this.primitive = primitive;
+      const current = signedPointLineDistance(primitive.center, line);
+      this.sign = sign || (current < 0 ? -1 : 1);
+    }
+
+    rawError() {
+      return signedPointLineDistance(this.primitive.center, this.line) * this.sign - this.primitive.radius();
+    }
+  }
+
+  class CircleCircleTangentConstraint extends Constraint {
+    constructor(a, b, mode = null) {
+      const currentDistance = hypot2(b.center.x - a.center.x, b.center.y - a.center.y);
+      const externalError = Math.abs(currentDistance - (a.radius() + b.radius()));
+      const internalError = Math.abs(currentDistance - Math.abs(a.radius() - b.radius()));
+      const selectedMode = mode || (internalError < externalError ? "internal" : "external");
+      super(`接線 ${a.id}-${b.id}`, 1);
+      this.a = a;
+      this.b = b;
+      this.mode = selectedMode;
+    }
+
+    rawError() {
+      const distance = hypot2(this.b.center.x - this.a.center.x, this.b.center.y - this.a.center.y);
+      const target = this.mode === "internal" ? Math.abs(this.a.radius() - this.b.radius()) : this.a.radius() + this.b.radius();
+      return distance - target;
     }
   }
 
@@ -522,6 +626,13 @@
     VerticalConstraint,
     ParallelConstraint,
     PerpendicularConstraint,
+    RadiusConstraint,
+    DiameterConstraint,
+    ConcentricConstraint,
+    EqualRadiusConstraint,
+    PointOnCircleConstraint,
+    LineCircleTangentConstraint,
+    CircleCircleTangentConstraint,
     DragConstraint,
     ParameterDragConstraint,
     ConstraintSolver,

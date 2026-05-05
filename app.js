@@ -20,6 +20,13 @@
     VerticalConstraint,
     ParallelConstraint,
     PerpendicularConstraint,
+    RadiusConstraint,
+    DiameterConstraint,
+    ConcentricConstraint,
+    EqualRadiusConstraint,
+    PointOnCircleConstraint,
+    LineCircleTangentConstraint,
+    CircleCircleTangentConstraint,
     ConstraintSolver,
   } = window.GeometrySolver;
 
@@ -122,6 +129,8 @@
   function snapshotModelState() {
     return {
       points: model.points.map((p) => ({ point: p, x: p.x, y: p.y, fixed: p.fixed })),
+      circles: model.circles.map((c) => ({ circle: c, radiusValue: c.radiusValue })),
+      arcs: model.arcs.map((a) => ({ arc: a, radiusValue: a.radiusValue, startAngle: a.startAngle, endAngle: a.endAngle })),
       constraintLength: model.constraints.length,
     };
   }
@@ -131,6 +140,12 @@
       p.point.x = p.x;
       p.point.y = p.y;
       p.point.fixed = p.fixed;
+    }
+    for (const c of snapshot.circles || []) c.circle.radiusValue = c.radiusValue;
+    for (const a of snapshot.arcs || []) {
+      a.arc.radiusValue = a.radiusValue;
+      a.arc.startAngle = a.startAngle;
+      a.arc.endAngle = a.endAngle;
     }
     model.constraints.length = snapshot.constraintLength;
   }
@@ -230,6 +245,27 @@
     if (c instanceof PerpendicularConstraint) {
       return { type: "perpendicular", line1: c.line1.id, line2: c.line2.id, enabled: c.enabled };
     }
+    if (c instanceof RadiusConstraint) {
+      return { type: "radiusDimension", primitive: c.primitive.id, target: c.target, dimension: serializeDimension(c.dimension, targetFromConstraint(c)), enabled: c.enabled };
+    }
+    if (c instanceof DiameterConstraint) {
+      return { type: "diameterDimension", primitive: c.primitive.id, target: c.target, dimension: serializeDimension(c.dimension, targetFromConstraint(c)), enabled: c.enabled };
+    }
+    if (c instanceof ConcentricConstraint) {
+      return { type: "concentric", a: c.a.id, b: c.b.id, enabled: c.enabled };
+    }
+    if (c instanceof EqualRadiusConstraint) {
+      return { type: "equalRadius", a: c.a.id, b: c.b.id, enabled: c.enabled };
+    }
+    if (c instanceof PointOnCircleConstraint) {
+      return { type: "pointOnCircle", point: c.point.id, primitive: c.primitive.id, enabled: c.enabled };
+    }
+    if (c instanceof LineCircleTangentConstraint) {
+      return { type: "lineCircleTangent", line: c.line.id, primitive: c.primitive.id, sign: c.sign, enabled: c.enabled };
+    }
+    if (c instanceof CircleCircleTangentConstraint) {
+      return { type: "circleCircleTangent", a: c.a.id, b: c.b.id, mode: c.mode, enabled: c.enabled };
+    }
     return null;
   }
 
@@ -245,7 +281,7 @@
     };
   }
 
-  function deserializeConstraint(data, pointById, lineById) {
+  function deserializeConstraint(data, pointById, lineById, primitiveById) {
     const point = (id) => {
       const p = pointById.get(String(id));
       if (!p) throw new Error(`点 ${id} が見つかりません`);
@@ -256,6 +292,12 @@
       if (!l) throw new Error(`線 ${id} が見つかりません`);
       return l;
     };
+    const primitive = (id) => {
+      const p = primitiveById.get(String(id));
+      if (!p) throw new Error(`円/円弧 ${id} が見つかりません`);
+      return p;
+    };
+    const pointOrPrimitive = (id) => pointById.get(String(id)) || primitive(id);
 
     let constraint = null;
     if (data.type === "distance") {
@@ -276,6 +318,20 @@
       constraint = new ParallelConstraint(line(data.line1), line(data.line2));
     } else if (data.type === "perpendicular") {
       constraint = new PerpendicularConstraint(line(data.line1), line(data.line2));
+    } else if (data.type === "radiusDimension") {
+      constraint = new RadiusConstraint(primitive(data.primitive), Number(data.target));
+    } else if (data.type === "diameterDimension") {
+      constraint = new DiameterConstraint(primitive(data.primitive), Number(data.target));
+    } else if (data.type === "concentric") {
+      constraint = new ConcentricConstraint(pointOrPrimitive(data.a), pointOrPrimitive(data.b));
+    } else if (data.type === "equalRadius") {
+      constraint = new EqualRadiusConstraint(primitive(data.a), primitive(data.b));
+    } else if (data.type === "pointOnCircle") {
+      constraint = new PointOnCircleConstraint(point(data.point), primitive(data.primitive));
+    } else if (data.type === "lineCircleTangent") {
+      constraint = new LineCircleTangentConstraint(line(data.line), primitive(data.primitive), Number(data.sign) || null);
+    } else if (data.type === "circleCircleTangent") {
+      constraint = new CircleCircleTangentConstraint(primitive(data.a), primitive(data.b), data.mode === "internal" ? "internal" : "external");
     }
 
     if (constraint) {
@@ -361,9 +417,13 @@
       arcs.push(new Arc(String(a.id), center, radius, startAngle, endAngle));
     }
 
+    const primitiveById = new Map();
+    for (const c of circles) primitiveById.set(c.id, c);
+    for (const a of arcs) primitiveById.set(a.id, a);
+
     const constraints = [];
     for (const c of data.constraints) {
-      const constraint = deserializeConstraint(c, pointById, lineById);
+      const constraint = deserializeConstraint(c, pointById, lineById, primitiveById);
       if (!constraint) throw new Error(`未対応の制約です: ${c.type}`);
       constraints.push(constraint);
     }
@@ -751,7 +811,31 @@
     return { x: line.p1.x + t * dx, y: line.p1.y + t * dy };
   }
 
+  function selectedPrimitives() {
+    return [...selectedCircles, ...selectedArcs];
+  }
+
+  function primitiveId(primitive) {
+    return primitive?.id || "";
+  }
+
+  function isPrimitive(item) {
+    return item instanceof Circle || item instanceof Arc;
+  }
+
+  function circlePointAtAngle(primitive, angle) {
+    return {
+      x: primitive.center.x + Math.cos(angle) * primitive.radius(),
+      y: primitive.center.y + Math.sin(angle) * primitive.radius(),
+    };
+  }
+
   function distanceTargetFromSelection() {
+    const primitives = selectedPrimitives();
+    if (selectedPoints.length === 0 && selectedLines.length === 0 && primitives.length === 1) {
+      const [primitive] = primitives;
+      return { kind: "radius", primitive, value: primitive.radius() };
+    }
     if (selectedPoints.length === 2 && selectedLines.length === 0) {
       const [p1, p2] = selectedPoints;
       return { kind: "point-point", p1, p2, value: hypot2(p2.x - p1.x, p2.y - p1.y) };
@@ -776,6 +860,14 @@
   }
 
   function targetDirection(target) {
+    if (target.kind === "radius" || target.kind === "diameter") {
+      const anchor = target.dimensionAnchor || circlePointAtAngle(target.primitive, 0);
+      const dx = anchor.x - target.primitive.center.x;
+      const dy = anchor.y - target.primitive.center.y;
+      const len = hypot2(dx, dy);
+      if (len > 1e-12) return { x: dx / len, y: dy / len };
+      return { x: 1, y: 0 };
+    }
     if (target.kind === "point-point" || target.kind === "line-length") {
       return lineUnit({ dx: () => target.p2.x - target.p1.x, dy: () => target.p2.y - target.p1.y, length: () => hypot2(target.p2.x - target.p1.x, target.p2.y - target.p1.y) });
     }
@@ -799,6 +891,17 @@
   }
 
   function targetPointsForDimension(target, anchor = null) {
+    if (target.kind === "radius") {
+      const dir = targetDirection({ ...target, dimensionAnchor: anchor || target.dimensionAnchor });
+      return [target.primitive.center, { x: target.primitive.center.x + dir.x * target.primitive.radius(), y: target.primitive.center.y + dir.y * target.primitive.radius() }];
+    }
+    if (target.kind === "diameter") {
+      const dir = targetDirection({ ...target, dimensionAnchor: anchor || target.dimensionAnchor });
+      return [
+        { x: target.primitive.center.x - dir.x * target.primitive.radius(), y: target.primitive.center.y - dir.y * target.primitive.radius() },
+        { x: target.primitive.center.x + dir.x * target.primitive.radius(), y: target.primitive.center.y + dir.y * target.primitive.radius() },
+      ];
+    }
     if (target.kind === "point-point" || target.kind === "line-length") return [target.p1, target.p2];
     if (target.kind === "point-line") return [target.point, projectPointToSegmentPoint(anchor || target.point, target.line)];
     if (target.kind === "line-line") {
@@ -863,6 +966,8 @@
     if (c instanceof DistanceConstraint) return { kind: "point-point", p1: c.p1, p2: c.p2, value: c.target };
     if (c instanceof PointLineDistanceConstraint) return { kind: "point-line", point: c.point, line: c.line, value: c.target };
     if (c instanceof LineLineDistanceConstraint) return { kind: "line-line", line1: c.line1, line2: c.line2, value: c.target };
+    if (c instanceof RadiusConstraint) return { kind: "radius", primitive: c.primitive, value: c.target };
+    if (c instanceof DiameterConstraint) return { kind: "diameter", primitive: c.primitive, value: c.target };
     return null;
   }
 
@@ -876,6 +981,11 @@
     if (c instanceof ParallelConstraint || c instanceof PerpendicularConstraint) {
       return c.line1.p1 === point || c.line1.p2 === point || c.line2.p1 === point || c.line2.p2 === point;
     }
+    if (c instanceof ConcentricConstraint) return c.a === point || c.b === point || c.a.center === point || c.b.center === point;
+    if (c instanceof PointOnCircleConstraint) return c.point === point || c.primitive.center === point;
+    if (c instanceof RadiusConstraint || c instanceof DiameterConstraint) return c.primitive.center === point;
+    if (c instanceof EqualRadiusConstraint || c instanceof CircleCircleTangentConstraint) return c.a.center === point || c.b.center === point;
+    if (c instanceof LineCircleTangentConstraint) return c.line.p1 === point || c.line.p2 === point || c.primitive.center === point;
     return false;
   }
 
@@ -888,6 +998,13 @@
     if (c instanceof PointOnLineConstraint) return c.line === line;
     if (c instanceof HorizontalConstraint || c instanceof VerticalConstraint) return c.line === line;
     if (c instanceof ParallelConstraint || c instanceof PerpendicularConstraint) return c.line1 === line || c.line2 === line;
+    if (c instanceof LineCircleTangentConstraint) return c.line === line;
+    return false;
+  }
+
+  function constraintReferencesPrimitive(c, primitive) {
+    if (c instanceof RadiusConstraint || c instanceof DiameterConstraint || c instanceof PointOnCircleConstraint || c instanceof LineCircleTangentConstraint) return c.primitive === primitive;
+    if (c instanceof ConcentricConstraint || c instanceof EqualRadiusConstraint || c instanceof CircleCircleTangentConstraint) return c.a === primitive || c.b === primitive;
     return false;
   }
 
@@ -933,6 +1050,12 @@
       }
       for (const line of lineSet) {
         if (constraintReferencesLine(constraint, line)) constraintSet.add(constraint);
+      }
+      for (const circle of circleSet) {
+        if (constraintReferencesPrimitive(constraint, circle)) constraintSet.add(constraint);
+      }
+      for (const arc of arcSet) {
+        if (constraintReferencesPrimitive(constraint, arc)) constraintSet.add(constraint);
       }
     }
 
@@ -1205,8 +1328,8 @@
   }
 
   function dimensionLayout(target, dimension) {
-    const d = targetDirection(target);
     const anchor = dimensionAnchor(target, dimension);
+    const d = target.kind === "radius" || target.kind === "diameter" ? targetDirection({ ...target, dimensionAnchor: anchor }) : targetDirection(target);
     const points = targetPointsForDimension(target, anchor);
     if (points.length < 2) return null;
     const tick = 9 / viewport.scale;
@@ -1406,10 +1529,16 @@
   }
 
   function canApplyConstraint(type) {
+    const primitives = selectedPrimitives();
     if (type === "distance") {
       const target = distanceTargetFromSelection();
       return Boolean(target && target.kind !== "invalid");
     }
+    if (type === "radiusDimension" || type === "diameterDimension") return selectedPoints.length === 0 && selectedLines.length === 0 && primitives.length === 1;
+    if (type === "concentric") return (selectedPoints.length === 1 && selectedLines.length === 0 && primitives.length === 1) || (selectedPoints.length === 0 && selectedLines.length === 0 && primitives.length === 2);
+    if (type === "equalRadius") return selectedPoints.length === 0 && selectedLines.length === 0 && primitives.length === 2;
+    if (type === "pointOnCircle") return selectedPoints.length === 1 && selectedLines.length === 0 && primitives.length === 1;
+    if (type === "tangent") return (selectedPoints.length === 0 && selectedLines.length === 1 && primitives.length === 1) || (selectedPoints.length === 0 && selectedLines.length === 0 && primitives.length === 2);
     if (type === "coincident") return (selectedPoints.length === 2 && selectedLines.length === 0) || (selectedPoints.length === 1 && selectedLines.length === 1);
     if (type === "horizontal" || type === "vertical") return selectedLines.length === 1 && lineHasDirection(selectedLines[0]);
     if (type === "parallel" || type === "perpendicular") return selectedLines.length === 2 && selectedLines.every(lineHasDirection);
@@ -1430,6 +1559,12 @@
 
   function constraintTargetHint(type) {
     if (type === "distance") return "寸法対象を選択してください。線長はEnter、または同じ線をダブルクリックで確定できます。";
+    if (type === "radiusDimension") return "半径寸法を付ける円または円弧を1つ選択してください";
+    if (type === "diameterDimension") return "直径寸法を付ける円または円弧を1つ選択してください";
+    if (type === "concentric") return "同心にする円/円弧を2つ、または点と円/円弧を選択してください";
+    if (type === "equalRadius") return "同じ半径にする円または円弧を2つ選択してください";
+    if (type === "pointOnCircle") return "円周上に置く点と、円または円弧を選択してください";
+    if (type === "tangent") return "接線にする線と円/円弧、または円/円弧を2つ選択してください";
     if (type === "coincident") return "一致させる点を2つ選択してください";
     if (type === "horizontal") return "水平にする線を1本選択してください";
     if (type === "vertical") return "垂直にする線を1本選択してください";
@@ -1439,6 +1574,11 @@
   }
 
   function invalidConstraintTargetHint(type) {
+    if (type === "radiusDimension" || type === "diameterDimension") return "この拘束では円または円弧を選択してください";
+    if (type === "concentric") return "この拘束では円/円弧を2つ、または点と円/円弧を選択してください";
+    if (type === "equalRadius") return "この拘束では円または円弧を2つ選択してください";
+    if (type === "pointOnCircle") return "この拘束では点と円または円弧を選択してください";
+    if (type === "tangent") return "この拘束では線と円/円弧、または円/円弧を2つ選択してください";
     if (type === "coincident") return "この拘束では点を選択してください";
     if (type === "horizontal" || type === "vertical" || type === "parallel" || type === "perpendicular") {
       return "この拘束では線を選択してください";
@@ -1448,21 +1588,51 @@
   }
 
   function trimConstraintSelection(type) {
+    const trimPrimitives = (count) => {
+      const primitives = selectedPrimitives().slice(0, count);
+      selectedCircles = primitives.filter((p) => p instanceof Circle);
+      selectedArcs = primitives.filter((p) => p instanceof Arc);
+    };
     if (type === "coincident") {
+      selectedCircles = [];
+      selectedArcs = [];
       selectedPoints = selectedPoints.slice(0, 2);
       selectedLines = selectedPoints.length >= 2 ? [] : selectedLines.slice(0, 1);
     } else if (type === "horizontal" || type === "vertical") {
       selectedPoints = [];
+      selectedCircles = [];
+      selectedArcs = [];
       selectedLines = selectedLines.slice(0, 1);
     } else if (type === "parallel" || type === "perpendicular") {
       selectedPoints = [];
+      selectedCircles = [];
+      selectedArcs = [];
       selectedLines = selectedLines.slice(0, 2);
+    } else if (type === "radiusDimension" || type === "diameterDimension") {
+      selectedPoints = [];
+      selectedLines = [];
+      trimPrimitives(1);
+    } else if (type === "equalRadius") {
+      selectedPoints = [];
+      selectedLines = [];
+      trimPrimitives(2);
+    } else if (type === "concentric" || type === "pointOnCircle") {
+      selectedPoints = selectedPoints.slice(0, 1);
+      selectedLines = [];
+      trimPrimitives(type === "concentric" && selectedPoints.length === 0 ? 2 : 1);
+    } else if (type === "tangent") {
+      selectedPoints = [];
+      selectedLines = selectedLines.slice(0, 1);
+      trimPrimitives(selectedLines.length === 1 ? 1 : 2);
     } else if (type === "distance") {
       selectedPoints = selectedPoints.slice(0, 2);
       selectedLines = selectedLines.slice(0, 2);
+      trimPrimitives(1);
       if (selectedPoints.length > 0 && selectedLines.length > 0) {
         selectedPoints = selectedPoints.slice(0, 1);
         selectedLines = selectedLines.slice(0, 1);
+        selectedCircles = [];
+        selectedArcs = [];
       }
     }
   }
@@ -1520,10 +1690,20 @@
     return true;
   }
 
-  function handleConstraintTargetClick(hitP, hitL) {
+  function pushPrimitiveSelection(primitive) {
+    if (!primitive) return;
+    if (primitive instanceof Circle) {
+      if (!selectedCircles.includes(primitive)) selectedCircles.push(primitive);
+    } else if (primitive instanceof Arc) {
+      if (!selectedArcs.includes(primitive)) selectedArcs.push(primitive);
+    }
+  }
+
+  function handleConstraintTargetClick(hitP, hitL, hitC, hitA) {
     if (!pendingConstraintCommand) return false;
     const type = pendingConstraintCommand.type;
     selectedDimensionConstraint = null;
+    const hitPrimitive = hitC || hitA;
 
     if (type === "coincident") {
       if (!hitP && !hitL) {
@@ -1562,7 +1742,7 @@
       if (!selectedLines.includes(hitL)) selectedLines.push(hitL);
       selectedLines = selectedLines.slice(-2);
     } else if (type === "distance") {
-      if (!hitP && !hitL) {
+      if (!hitP && !hitL && !hitPrimitive) {
         const target = distanceTargetFromSelection();
         if (target?.kind === "line-length") {
           setHint("線の長さ寸法は、配置したい位置をダブルクリックしてください");
@@ -1579,6 +1759,37 @@
         if (!selectedLines.includes(hitL)) selectedLines.push(hitL);
         selectedLines = selectedLines.slice(-2);
         selectedPoints = selectedPoints.slice(0, 1);
+        selectedCircles = [];
+        selectedArcs = [];
+      } else if (hitPrimitive) {
+        selectedPoints = [];
+        selectedLines = [];
+        selectedCircles = [];
+        selectedArcs = [];
+        pushPrimitiveSelection(hitPrimitive);
+      }
+      trimConstraintSelection(type);
+    } else if (type === "radiusDimension" || type === "diameterDimension") {
+      if (!hitPrimitive) {
+        setHint(invalidConstraintTargetHint(type), "error");
+        return true;
+      }
+      selectedPoints = [];
+      selectedLines = [];
+      selectedCircles = [];
+      selectedArcs = [];
+      pushPrimitiveSelection(hitPrimitive);
+    } else if (type === "concentric" || type === "equalRadius" || type === "pointOnCircle" || type === "tangent") {
+      if (hitP && (type === "concentric" || type === "pointOnCircle")) {
+        if (!selectedPoints.includes(hitP)) selectedPoints.push(hitP);
+        selectedPoints = selectedPoints.slice(-1);
+      } else if (hitL && type === "tangent") {
+        selectedLines = [hitL];
+      } else if (hitPrimitive) {
+        pushPrimitiveSelection(hitPrimitive);
+      } else {
+        setHint(invalidConstraintTargetHint(type), "error");
+        return true;
       }
       trimConstraintSelection(type);
     }
@@ -1607,6 +1818,15 @@
       return;
     }
     pendingCommand = { type: "distance-place", target, pointer: defaultDimensionForTarget(target) };
+    setHint("寸法線の位置をクリックしてください");
+    draw();
+  }
+
+  function startPrimitiveDimensionCommand(kind) {
+    const primitive = selectedPrimitives()[0];
+    if (!primitive) return;
+    const value = kind === "diameter" ? primitive.radius() * 2 : primitive.radius();
+    pendingCommand = { type: "distance-place", target: { kind, primitive, value }, pointer: defaultDimensionForTarget({ kind, primitive, value }) };
     setHint("寸法線の位置をクリックしてください");
     draw();
   }
@@ -1806,6 +2026,10 @@
         return false;
       }
       constraint = new LineLineDistanceConstraint(target.line1, target.line2, value);
+    } else if (target.kind === "radius") {
+      constraint = new RadiusConstraint(target.primitive, value);
+    } else if (target.kind === "diameter") {
+      constraint = new DiameterConstraint(target.primitive, value);
     }
     if (!constraint) return false;
     constraint.dimension = dimension;
@@ -1815,8 +2039,11 @@
   function addConstraint(type) {
     if (!canApplyConstraint(type)) return;
     if (type === "distance") return startDistanceCommand();
+    if (type === "radiusDimension") return startPrimitiveDimensionCommand("radius");
+    if (type === "diameterDimension") return startPrimitiveDimensionCommand("diameter");
 
     let constraint = null;
+    const primitives = selectedPrimitives();
     if (type === "coincident") {
       if (selectedPoints.length === 1 && selectedLines.length === 1) {
         constraint = new PointOnLineConstraint(selectedPoints[0], selectedLines[0]);
@@ -1831,6 +2058,15 @@
       constraint = new ParallelConstraint(selectedLines[0], selectedLines[1]);
     } else if (type === "perpendicular") {
       constraint = new PerpendicularConstraint(selectedLines[0], selectedLines[1]);
+    } else if (type === "concentric") {
+      constraint = new ConcentricConstraint(selectedPoints[0] || primitives[0], primitives[selectedPoints.length === 1 ? 0 : 1]);
+    } else if (type === "equalRadius") {
+      constraint = new EqualRadiusConstraint(primitives[0], primitives[1]);
+    } else if (type === "pointOnCircle") {
+      constraint = new PointOnCircleConstraint(selectedPoints[0], primitives[0]);
+    } else if (type === "tangent") {
+      if (selectedLines.length === 1) constraint = new LineCircleTangentConstraint(selectedLines[0], primitives[0]);
+      else constraint = new CircleCircleTangentConstraint(primitives[0], primitives[1]);
     }
 
     if (constraint) commitNewConstraint(type, constraint);
@@ -2117,7 +2353,7 @@
 
     if (pendingConstraintCommand) {
       e.preventDefault();
-      handleConstraintTargetClick(hitP, hitL);
+      handleConstraintTargetClick(hitP, hitL, hitC, hitA);
       return;
     }
 
