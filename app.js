@@ -618,11 +618,17 @@
     return ((angle % twoPi) + twoPi) % twoPi;
   }
 
-  function angleBetweenCcw(angle, start, end) {
-    const a = normalizeAngle(angle);
-    const s = normalizeAngle(start);
-    const e = normalizeAngle(end);
-    return s <= e ? a >= s && a <= e : a >= s || a <= e;
+  function unwrapAngleNear(angle, reference) {
+    const twoPi = Math.PI * 2;
+    return angle + Math.round((reference - angle) / twoPi) * twoPi;
+  }
+
+  function angleOnSignedSweep(angle, start, end) {
+    const twoPi = Math.PI * 2;
+    const sweep = end - start;
+    if (Math.abs(sweep) >= twoPi) return true;
+    if (sweep >= 0) return normalizeAngle(angle - start) <= sweep;
+    return normalizeAngle(start - angle) <= -sweep;
   }
 
   function arcAngles(arc) {
@@ -672,7 +678,7 @@
       if (Math.abs(d - radius) > threshold) continue;
       const angles = arcAngles(a);
       const angle = Math.atan2(y - a.center.y, x - a.center.x);
-      if (angleBetweenCcw(angle, angles.start, angles.end)) return a;
+      if (angleOnSignedSweep(angle, angles.start, angles.end)) return a;
     }
     return null;
   }
@@ -1116,10 +1122,10 @@
       ctx.strokeStyle = sel || hovered ? "#2563eb" : "#111827";
       ctx.lineWidth = (sel || hovered ? 3 : 2) / viewport.scale;
       ctx.beginPath();
-      ctx.arc(a.center.x, a.center.y, a.radius(), angles.start, angles.end, false);
+      ctx.arc(a.center.x, a.center.y, a.radius(), angles.start, angles.end, angles.end < angles.start);
       ctx.stroke();
       if (sel || hovered) {
-        const mid = normalizeAngle(angles.start + ((normalizeAngle(angles.end - angles.start) || Math.PI * 2) / 2));
+        const mid = angles.start + (angles.end - angles.start) / 2;
         ctx.fillStyle = "#2563eb";
         ctx.font = `${12 / viewport.scale}px system-ui`;
         ctx.fillText(a.id, a.center.x + Math.cos(mid) * a.radius(), a.center.y + Math.sin(mid) * a.radius());
@@ -1323,7 +1329,7 @@
     ctx.lineWidth = 2 / viewport.scale;
     ctx.setLineDash([6 / viewport.scale, 5 / viewport.scale]);
     ctx.beginPath();
-    ctx.arc(arcCenterPoint.x, arcCenterPoint.y, arcStartPoint.radius, angles.start, angles.end, false);
+    ctx.arc(arcCenterPoint.x, arcCenterPoint.y, arcStartPoint.radius, angles.start, angles.end, angles.end < angles.start);
     ctx.stroke();
     ctx.restore();
   }
@@ -1886,11 +1892,13 @@
   }
 
   function arcEndpointDragTargets(session, pointer) {
+    const prop = session.endpoint === "start" ? "startAngle" : "endAngle";
+    const rawAngle = Math.atan2(pointer.y - session.item.center.y, pointer.x - session.item.center.x);
     return [
       {
         object: session.item,
-        prop: session.endpoint === "start" ? "startAngle" : "endAngle",
-        value: Math.atan2(pointer.y - session.item.center.y, pointer.x - session.item.center.x),
+        prop,
+        value: unwrapAngleNear(rawAngle, session.item[prop]),
       },
     ];
   }
