@@ -20,6 +20,12 @@
         <button id="toolLine" class="icon-btn" title="連続線" aria-label="連続線">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 18L19 6"/><circle cx="5" cy="18" r="2"/><circle cx="19" cy="6" r="2"/></svg>
         </button>
+        <button id="toolRectangle" class="icon-btn" title="矩形" aria-label="矩形">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="6" width="14" height="12"/></svg>
+        </button>
+        <button id="toolFillet" class="icon-btn" title="R面取り" aria-label="R面取り">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 19V7h12"/><path d="M5 19a12 12 0 0 1 12-12"/></svg>
+        </button>
         <button id="toolCircle" class="icon-btn" title="円" aria-label="円">
           <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="7"/></svg>
         </button>
@@ -47,20 +53,11 @@
         <button data-constraint="perpendicular" data-label="直交" title="直交" aria-label="直交">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 18h12M12 18V6"/></svg>
         </button>
-        <button data-constraint="radiusDimension" data-label="半径" title="半径寸法" aria-label="半径寸法">
-          <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="7"/><path d="M12 12l6-3"/><path d="M15 8l3 1-1 3"/></svg>
-        </button>
-        <button data-constraint="diameterDimension" data-label="直径" title="直径寸法" aria-label="直径寸法">
-          <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="7"/><path d="M6 15l12-6"/><path d="M8 12l-2 3 3 1M16 8l2 1-1 3"/></svg>
-        </button>
         <button data-constraint="concentric" data-label="同心" title="同心" aria-label="同心">
           <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="7"/><circle cx="12" cy="12" r="3"/></svg>
         </button>
         <button data-constraint="equalRadius" data-label="同半径" title="同半径" aria-label="同半径">
           <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="8" cy="12" r="4"/><circle cx="16" cy="12" r="4"/><path d="M8 12h8"/></svg>
-        </button>
-        <button data-constraint="pointOnCircle" data-label="円周一致" title="円周一致" aria-label="円周一致">
-          <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="7"/><circle cx="18" cy="12" r="2"/></svg>
         </button>
         <button data-constraint="tangent" data-label="接線" title="接線" aria-label="接線">
           <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10" cy="12" r="5"/><path d="M14 7l6 10"/></svg>

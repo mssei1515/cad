@@ -53,6 +53,8 @@
   let selectedDimensionConstraint = null;
   let panSession = null;
   let lineStartPoint = null;
+  let rectangleStartPoint = null;
+  let filletFirstLine = null;
   let circleCenterPoint = null;
   let arcCenterPoint = null;
   let arcStartPoint = null;
@@ -67,6 +69,7 @@
   const MIN_ZOOM = 0.15;
   const MAX_ZOOM = 8;
   const CONSTRAINT_ACCEPT_ERROR = 1e-4;
+  const DEFAULT_FILLET_RADIUS = 30;
 
   const constraintButtons = Array.from(document.querySelectorAll("[data-constraint]"));
   const fixPointBtn = document.getElementById("fixPointBtn");
@@ -161,6 +164,8 @@
     dimensionDragSession = null;
     panSession = null;
     lineStartPoint = null;
+    rectangleStartPoint = null;
+    filletFirstLine = null;
     circleCenterPoint = null;
     arcCenterPoint = null;
     arcStartPoint = null;
@@ -512,6 +517,8 @@
 
   function exitLineMode() {
     lineStartPoint = null;
+    rectangleStartPoint = null;
+    filletFirstLine = null;
     pointerPreview = null;
     mode = "select";
     updateToolbar();
@@ -522,6 +529,8 @@
 
   function exitDrawMode() {
     lineStartPoint = null;
+    rectangleStartPoint = null;
+    filletFirstLine = null;
     circleCenterPoint = null;
     arcCenterPoint = null;
     arcStartPoint = null;
@@ -834,6 +843,7 @@
     const primitives = selectedPrimitives();
     if (selectedPoints.length === 0 && selectedLines.length === 0 && primitives.length === 1) {
       const [primitive] = primitives;
+      if (primitive instanceof Circle) return { kind: "diameter", primitive, value: primitive.radius() * 2 };
       return { kind: "radius", primitive, value: primitive.radius() };
     }
     if (selectedPoints.length === 2 && selectedLines.length === 0) {
@@ -1183,6 +1193,7 @@
     drawDimensions();
     drawDimensionPreview();
     drawTemporaryLine();
+    drawRectanglePreview();
     drawCirclePreview();
     drawArcPreview();
     drawArcEndpointHandles();
@@ -1428,6 +1439,16 @@
     ctx.restore();
   }
 
+  function drawRectanglePreview() {
+    if (mode !== "rectangle" || !rectangleStartPoint || !pointerPreview) return;
+    ctx.save();
+    ctx.strokeStyle = "#2563eb";
+    ctx.lineWidth = 2 / viewport.scale;
+    ctx.setLineDash([6 / viewport.scale, 5 / viewport.scale]);
+    ctx.strokeRect(rectangleStartPoint.x, rectangleStartPoint.y, pointerPreview.x - rectangleStartPoint.x, pointerPreview.y - rectangleStartPoint.y);
+    ctx.restore();
+  }
+
   function drawCirclePreview() {
     if (mode !== "circle" || !circleCenterPoint || !pointerPreview) return;
     const radius = hypot2(pointerPreview.x - circleCenterPoint.x, pointerPreview.y - circleCenterPoint.y);
@@ -1524,6 +1545,8 @@
     document.getElementById("toolSelect").classList.toggle("active", mode === "select");
     document.getElementById("toolPoint").classList.toggle("active", mode === "point");
     document.getElementById("toolLine").classList.toggle("active", mode === "line");
+    document.getElementById("toolRectangle")?.classList.toggle("active", mode === "rectangle");
+    document.getElementById("toolFillet")?.classList.toggle("active", mode === "fillet");
     document.getElementById("toolCircle").classList.toggle("active", mode === "circle");
     document.getElementById("toolArc").classList.toggle("active", mode === "arc");
   }
@@ -1534,12 +1557,11 @@
       const target = distanceTargetFromSelection();
       return Boolean(target && target.kind !== "invalid");
     }
-    if (type === "radiusDimension" || type === "diameterDimension") return selectedPoints.length === 0 && selectedLines.length === 0 && primitives.length === 1;
     if (type === "concentric") return (selectedPoints.length === 1 && selectedLines.length === 0 && primitives.length === 1) || (selectedPoints.length === 0 && selectedLines.length === 0 && primitives.length === 2);
     if (type === "equalRadius") return selectedPoints.length === 0 && selectedLines.length === 0 && primitives.length === 2;
     if (type === "pointOnCircle") return selectedPoints.length === 1 && selectedLines.length === 0 && primitives.length === 1;
     if (type === "tangent") return (selectedPoints.length === 0 && selectedLines.length === 1 && primitives.length === 1) || (selectedPoints.length === 0 && selectedLines.length === 0 && primitives.length === 2);
-    if (type === "coincident") return (selectedPoints.length === 2 && selectedLines.length === 0) || (selectedPoints.length === 1 && selectedLines.length === 1);
+    if (type === "coincident") return (selectedPoints.length === 2 && selectedLines.length === 0) || (selectedPoints.length === 1 && selectedLines.length === 1) || (selectedPoints.length === 1 && selectedLines.length === 0 && primitives.length === 1);
     if (type === "horizontal" || type === "vertical") return selectedLines.length === 1 && lineHasDirection(selectedLines[0]);
     if (type === "parallel" || type === "perpendicular") return selectedLines.length === 2 && selectedLines.every(lineHasDirection);
     return false;
@@ -1559,13 +1581,11 @@
 
   function constraintTargetHint(type) {
     if (type === "distance") return "寸法対象を選択してください。線長はEnter、または同じ線をダブルクリックで確定できます。";
-    if (type === "radiusDimension") return "半径寸法を付ける円または円弧を1つ選択してください";
-    if (type === "diameterDimension") return "直径寸法を付ける円または円弧を1つ選択してください";
     if (type === "concentric") return "同心にする円/円弧を2つ、または点と円/円弧を選択してください";
     if (type === "equalRadius") return "同じ半径にする円または円弧を2つ選択してください";
     if (type === "pointOnCircle") return "円周上に置く点と、円または円弧を選択してください";
     if (type === "tangent") return "接線にする線と円/円弧、または円/円弧を2つ選択してください";
-    if (type === "coincident") return "一致させる点を2つ選択してください";
+    if (type === "coincident") return "一致させる点同士、点と線、または点と円周を選択してください";
     if (type === "horizontal") return "水平にする線を1本選択してください";
     if (type === "vertical") return "垂直にする線を1本選択してください";
     if (type === "parallel") return "平行にする線を2本選択してください";
@@ -1574,12 +1594,11 @@
   }
 
   function invalidConstraintTargetHint(type) {
-    if (type === "radiusDimension" || type === "diameterDimension") return "この拘束では円または円弧を選択してください";
     if (type === "concentric") return "この拘束では円/円弧を2つ、または点と円/円弧を選択してください";
     if (type === "equalRadius") return "この拘束では円または円弧を2つ選択してください";
     if (type === "pointOnCircle") return "この拘束では点と円または円弧を選択してください";
     if (type === "tangent") return "この拘束では線と円/円弧、または円/円弧を2つ選択してください";
-    if (type === "coincident") return "この拘束では点を選択してください";
+    if (type === "coincident") return "この拘束では点、線、円または円弧を選択してください";
     if (type === "horizontal" || type === "vertical" || type === "parallel" || type === "perpendicular") {
       return "この拘束では線を選択してください";
     }
@@ -1594,10 +1613,9 @@
       selectedArcs = primitives.filter((p) => p instanceof Arc);
     };
     if (type === "coincident") {
-      selectedCircles = [];
-      selectedArcs = [];
       selectedPoints = selectedPoints.slice(0, 2);
       selectedLines = selectedPoints.length >= 2 ? [] : selectedLines.slice(0, 1);
+      trimPrimitives(selectedPoints.length === 1 && selectedLines.length === 0 ? 1 : 0);
     } else if (type === "horizontal" || type === "vertical") {
       selectedPoints = [];
       selectedCircles = [];
@@ -1608,10 +1626,6 @@
       selectedCircles = [];
       selectedArcs = [];
       selectedLines = selectedLines.slice(0, 2);
-    } else if (type === "radiusDimension" || type === "diameterDimension") {
-      selectedPoints = [];
-      selectedLines = [];
-      trimPrimitives(1);
     } else if (type === "equalRadius") {
       selectedPoints = [];
       selectedLines = [];
@@ -1706,7 +1720,7 @@
     const hitPrimitive = hitC || hitA;
 
     if (type === "coincident") {
-      if (!hitP && !hitL) {
+      if (!hitP && !hitL && !hitPrimitive) {
         setHint(invalidConstraintTargetHint(type), "error");
         return true;
       }
@@ -1717,6 +1731,12 @@
       } else if (hitL) {
         selectedLines = [hitL];
         selectedPoints = selectedPoints.slice(0, 1);
+        selectedCircles = [];
+        selectedArcs = [];
+      } else if (hitPrimitive) {
+        pushPrimitiveSelection(hitPrimitive);
+        selectedPoints = selectedPoints.slice(0, 1);
+        selectedLines = [];
       }
     } else if (type === "horizontal" || type === "vertical") {
       if (!hitL) {
@@ -1769,16 +1789,6 @@
         pushPrimitiveSelection(hitPrimitive);
       }
       trimConstraintSelection(type);
-    } else if (type === "radiusDimension" || type === "diameterDimension") {
-      if (!hitPrimitive) {
-        setHint(invalidConstraintTargetHint(type), "error");
-        return true;
-      }
-      selectedPoints = [];
-      selectedLines = [];
-      selectedCircles = [];
-      selectedArcs = [];
-      pushPrimitiveSelection(hitPrimitive);
     } else if (type === "concentric" || type === "equalRadius" || type === "pointOnCircle" || type === "tangent") {
       if (hitP && (type === "concentric" || type === "pointOnCircle")) {
         if (!selectedPoints.includes(hitP)) selectedPoints.push(hitP);
@@ -2039,14 +2049,14 @@
   function addConstraint(type) {
     if (!canApplyConstraint(type)) return;
     if (type === "distance") return startDistanceCommand();
-    if (type === "radiusDimension") return startPrimitiveDimensionCommand("radius");
-    if (type === "diameterDimension") return startPrimitiveDimensionCommand("diameter");
 
     let constraint = null;
     const primitives = selectedPrimitives();
     if (type === "coincident") {
       if (selectedPoints.length === 1 && selectedLines.length === 1) {
         constraint = new PointOnLineConstraint(selectedPoints[0], selectedLines[0]);
+      } else if (selectedPoints.length === 1 && primitives.length === 1) {
+        constraint = new PointOnCircleConstraint(selectedPoints[0], primitives[0]);
       } else {
         constraint = new CoincidentConstraint(selectedPoints[0], selectedPoints[1]);
       }
@@ -2244,7 +2254,21 @@
     setHint("寸法線を移動中");
   }
 
-  function handleLineClick(p) {
+  function orthogonalPointFrom(start, p) {
+    const dx = p.x - start.x;
+    const dy = p.y - start.y;
+    return Math.abs(dx) >= Math.abs(dy) ? { x: p.x, y: start.y } : { x: start.x, y: p.y };
+  }
+
+  function addLineOrientationConstraint(line) {
+    if (!line) return;
+    const dx = Math.abs(line.p2.x - line.p1.x);
+    const dy = Math.abs(line.p2.y - line.p1.y);
+    model.constraints.push(dx >= dy ? new HorizontalConstraint(line) : new VerticalConstraint(line));
+  }
+
+  function handleLineClick(p, lockOrthogonal = false) {
+    if (lineStartPoint && lockOrthogonal) p = orthogonalPointFrom(lineStartPoint, p);
     const endpoint = endpointAt(p.x, p.y);
     pointerPreview = p;
 
@@ -2262,6 +2286,7 @@
 
     const l = addLine(lineStartPoint, endpoint);
     if (l) {
+      if (lockOrthogonal) addLineOrientationConstraint(l);
       selectedPoints = [];
       selectedLines = [l];
       selectedCircles = [];
@@ -2278,6 +2303,125 @@
       updateUI();
       draw();
     }
+  }
+
+  function handleRectangleClick(p) {
+    pointerPreview = p;
+    if (!rectangleStartPoint) {
+      rectangleStartPoint = endpointAt(p.x, p.y);
+      selectedPoints = [rectangleStartPoint];
+      selectedLines = [];
+      selectedCircles = [];
+      selectedArcs = [];
+      setHint("対角の角をクリックすると矩形を作成します。Escで選択モードに戻ります");
+      updateUI();
+      draw();
+      return;
+    }
+
+    if (Math.abs(p.x - rectangleStartPoint.x) < MIN_ORIENTATION_LENGTH || Math.abs(p.y - rectangleStartPoint.y) < MIN_ORIENTATION_LENGTH) {
+      setHint("矩形の幅と高さを確保してください", "error");
+      draw();
+      return;
+    }
+
+    const p1 = rectangleStartPoint;
+    const p2 = addPoint(p.x, p1.y, false, "endpoint");
+    const p3 = addPoint(p.x, p.y, false, "endpoint");
+    const p4 = addPoint(p1.x, p.y, false, "endpoint");
+    const lines = [addLine(p1, p2), addLine(p2, p3), addLine(p3, p4), addLine(p4, p1)].filter(Boolean);
+    if (lines[0]) model.constraints.push(new HorizontalConstraint(lines[0]));
+    if (lines[1]) model.constraints.push(new VerticalConstraint(lines[1]));
+    if (lines[2]) model.constraints.push(new HorizontalConstraint(lines[2]));
+    if (lines[3]) model.constraints.push(new VerticalConstraint(lines[3]));
+    selectedPoints = [];
+    selectedLines = lines;
+    selectedCircles = [];
+    selectedArcs = [];
+    rectangleStartPoint = null;
+    pointerPreview = null;
+    const result = solveAndRefresh("矩形追加");
+    log(`矩形を追加しました\n自動solve: success=${result.success}`);
+  }
+
+  function sharedLinePoint(a, b) {
+    if (a.p1 === b.p1 || a.p1 === b.p2) return a.p1;
+    if (a.p2 === b.p1 || a.p2 === b.p2) return a.p2;
+    return null;
+  }
+
+  function otherLinePoint(line, point) {
+    return line.p1 === point ? line.p2 : line.p2 === point ? line.p1 : null;
+  }
+
+  function setLineEndpoint(line, from, to) {
+    if (line.p1 === from) line.p1 = to;
+    else if (line.p2 === from) line.p2 = to;
+  }
+
+  function createFillet(line1, line2, radius = DEFAULT_FILLET_RADIUS) {
+    const corner = sharedLinePoint(line1, line2);
+    if (!corner) return { ok: false, reason: "接続された2本の線を選択してください" };
+    const o1 = otherLinePoint(line1, corner);
+    const o2 = otherLinePoint(line2, corner);
+    const l1 = hypot2(o1.x - corner.x, o1.y - corner.y);
+    const l2 = hypot2(o2.x - corner.x, o2.y - corner.y);
+    if (l1 < MIN_ORIENTATION_LENGTH || l2 < MIN_ORIENTATION_LENGTH) return { ok: false, reason: "面取り対象の線が短すぎます" };
+
+    const u1 = { x: (o1.x - corner.x) / l1, y: (o1.y - corner.y) / l1 };
+    const u2 = { x: (o2.x - corner.x) / l2, y: (o2.y - corner.y) / l2 };
+    const dot = Math.max(-0.999, Math.min(0.999, u1.x * u2.x + u1.y * u2.y));
+    const theta = Math.acos(dot);
+    const tangent = radius / Math.tan(theta / 2);
+    if (!Number.isFinite(tangent) || tangent <= 0 || tangent >= Math.min(l1, l2)) return { ok: false, reason: "この角度と線長ではR面取りを作成できません" };
+
+    const bis = { x: u1.x + u2.x, y: u1.y + u2.y };
+    const bisLen = hypot2(bis.x, bis.y);
+    if (bisLen < 1e-9) return { ok: false, reason: "180度の角にはR面取りを作成できません" };
+    const centerDistance = radius / Math.sin(theta / 2);
+    const t1 = addPoint(corner.x + u1.x * tangent, corner.y + u1.y * tangent, false, "endpoint");
+    const t2 = addPoint(corner.x + u2.x * tangent, corner.y + u2.y * tangent, false, "endpoint");
+    const center = addPoint(corner.x + (bis.x / bisLen) * centerDistance, corner.y + (bis.y / bisLen) * centerDistance, false, "endpoint");
+    setLineEndpoint(line1, corner, t1);
+    setLineEndpoint(line2, corner, t2);
+    let startAngle = Math.atan2(t1.y - center.y, t1.x - center.x);
+    let endAngle = Math.atan2(t2.y - center.y, t2.x - center.x);
+    if (normalizeAngle(endAngle - startAngle) > Math.PI) endAngle -= Math.PI * 2;
+    const arc = addArc(center, radius, startAngle, endAngle);
+    return { ok: Boolean(arc), arc };
+  }
+
+  function handleFilletClick(line) {
+    if (!line) {
+      setHint("R面取りする線をクリックしてください", "error");
+      return;
+    }
+    if (!filletFirstLine) {
+      filletFirstLine = line;
+      selectedLines = [line];
+      selectedPoints = [];
+      selectedCircles = [];
+      selectedArcs = [];
+      setHint("接続する2本目の線をクリックするとR面取りを作成します");
+      updateUI();
+      draw();
+      return;
+    }
+    if (filletFirstLine === line) {
+      setHint("別の接続線をクリックしてください", "error");
+      return;
+    }
+    const result = createFillet(filletFirstLine, line);
+    if (!result.ok) {
+      setHint(result.reason, "error");
+      return;
+    }
+    selectedLines = [filletFirstLine, line];
+    selectedArcs = [result.arc];
+    selectedPoints = [];
+    selectedCircles = [];
+    filletFirstLine = null;
+    solveAndRefresh("R面取り追加");
   }
 
   function handleCircleClick(p) {
@@ -2401,7 +2545,17 @@
     }
 
     if (mode === "line") {
-      handleLineClick(p);
+      handleLineClick(p, e.shiftKey);
+      return;
+    }
+
+    if (mode === "rectangle") {
+      handleRectangleClick(p);
+      return;
+    }
+
+    if (mode === "fillet") {
+      handleFilletClick(hitL);
       return;
     }
 
@@ -2488,11 +2642,11 @@
     }
 
     if (mode === "line") {
-      pointerPreview = p;
+      pointerPreview = lineStartPoint && e.shiftKey ? orthogonalPointFrom(lineStartPoint, p) : p;
       draw();
     }
 
-    if (mode === "circle" || mode === "arc") {
+    if (mode === "rectangle" || mode === "circle" || mode === "arc") {
       pointerPreview = p;
       draw();
     }
@@ -2628,7 +2782,7 @@
         cancelConstraintTargetCommand();
         return;
       }
-      if (mode === "line" || mode === "point" || mode === "circle" || mode === "arc") {
+      if (mode === "line" || mode === "point" || mode === "rectangle" || mode === "fillet" || mode === "circle" || mode === "arc") {
         exitDrawMode();
         return;
       }
@@ -2652,6 +2806,8 @@
     cancelConstraintTargetCommand("");
     mode = "select";
     lineStartPoint = null;
+    rectangleStartPoint = null;
+    filletFirstLine = null;
     circleCenterPoint = null;
     arcCenterPoint = null;
     arcStartPoint = null;
@@ -2665,6 +2821,8 @@
     cancelConstraintTargetCommand("");
     mode = "point";
     lineStartPoint = null;
+    rectangleStartPoint = null;
+    filletFirstLine = null;
     circleCenterPoint = null;
     arcCenterPoint = null;
     arcStartPoint = null;
@@ -2678,6 +2836,8 @@
     cancelConstraintTargetCommand("");
     mode = "line";
     lineStartPoint = null;
+    rectangleStartPoint = null;
+    filletFirstLine = null;
     circleCenterPoint = null;
     arcCenterPoint = null;
     arcStartPoint = null;
@@ -2687,10 +2847,56 @@
     draw();
   });
 
+  document.getElementById("toolRectangle")?.addEventListener("click", () => {
+    cancelConstraintTargetCommand("");
+    mode = "rectangle";
+    lineStartPoint = null;
+    rectangleStartPoint = null;
+    filletFirstLine = null;
+    circleCenterPoint = null;
+    arcCenterPoint = null;
+    arcStartPoint = null;
+    pointerPreview = null;
+    updateToolbar();
+    setHint("矩形の1つ目の角をクリックしてください。Escで選択モードに戻ります");
+    draw();
+  });
+
+  document.getElementById("toolFillet")?.addEventListener("click", () => {
+    cancelConstraintTargetCommand("");
+    if (selectedLines.length === 2) {
+      const result = createFillet(selectedLines[0], selectedLines[1]);
+      if (!result.ok) {
+        setHint(result.reason, "error");
+        draw();
+        return;
+      }
+      selectedArcs = [result.arc];
+      selectedPoints = [];
+      selectedCircles = [];
+      filletFirstLine = null;
+      solveAndRefresh("R面取り追加");
+      return;
+    }
+    mode = "fillet";
+    lineStartPoint = null;
+    rectangleStartPoint = null;
+    filletFirstLine = null;
+    circleCenterPoint = null;
+    arcCenterPoint = null;
+    arcStartPoint = null;
+    pointerPreview = null;
+    updateToolbar();
+    setHint("R面取りする接続線を2本クリックしてください");
+    draw();
+  });
+
   document.getElementById("toolCircle").addEventListener("click", () => {
     cancelConstraintTargetCommand("");
     mode = "circle";
     lineStartPoint = null;
+    rectangleStartPoint = null;
+    filletFirstLine = null;
     circleCenterPoint = null;
     arcCenterPoint = null;
     arcStartPoint = null;
@@ -2704,6 +2910,8 @@
     cancelConstraintTargetCommand("");
     mode = "arc";
     lineStartPoint = null;
+    rectangleStartPoint = null;
+    filletFirstLine = null;
     circleCenterPoint = null;
     arcCenterPoint = null;
     arcStartPoint = null;
