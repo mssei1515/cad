@@ -1041,6 +1041,7 @@
   function defaultDimensionForTarget(target) {
     const points = targetPointsForDimension(target);
     if (points.length < 2) return { x: 0, y: 0 };
+    if (target.kind === "radius") return dimensionFromAnchor(target, points[1]);
     const mid = dimensionBasePoint(target);
     const normal = { x: -targetDirection(target).y, y: targetDirection(target).x };
     return dimensionFromAnchor(target, { x: mid.x + normal.x * 30, y: mid.y + normal.y * 30 });
@@ -1734,7 +1735,7 @@
     if (type === "tangent") return "接線にする線と円/円弧、または円/円弧を2つ選択してください";
     if (type === "coincident") return "一致させる点同士、点と線、または点と円周を選択してください";
     if (type === "collinear") return "同一直線上にする線を2本選択してください";
-    if (type === "equal") return "等長にする線2本、または同じ半径にする円/円弧を2つ選択してください";
+    if (type === "equal") return "等寸にする線2本、または同じ半径にする円/円弧を2つ選択してください";
     if (type === "horizontal") return "水平にする線を1本選択してください";
     if (type === "vertical") return "垂直にする線を1本選択してください";
     if (type === "parallel") return "平行にする線を2本選択してください";
