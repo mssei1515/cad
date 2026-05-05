@@ -272,6 +272,21 @@
     }
   }
 
+  class ParameterDragConstraint extends Constraint {
+    constructor(object, prop, target, min = null) {
+      super(`ドラッグ ${prop}`, 0.005);
+      this.object = object;
+      this.prop = prop;
+      this.target = target;
+      this.min = min;
+    }
+
+    rawError() {
+      const target = Number.isFinite(this.min) ? Math.max(this.min, this.target) : this.target;
+      return this.object[this.prop] - target;
+    }
+  }
+
   class LinearAlgebra {
     static getColumn(A, c) {
       return A.map((r) => r[c]);
@@ -482,6 +497,10 @@
     solveWithDragTargets(targets) {
       return this.solve(targets.map((target) => new DragConstraint(target.point, target.x, target.y)));
     }
+
+    solveWithParameterDragTargets(targets) {
+      return this.solve(targets.map((target) => new ParameterDragConstraint(target.object, target.prop, target.value, target.min)));
+    }
   }
 
   window.GeometrySolver = {
@@ -504,6 +523,7 @@
     ParallelConstraint,
     PerpendicularConstraint,
     DragConstraint,
+    ParameterDragConstraint,
     ConstraintSolver,
   };
 })();

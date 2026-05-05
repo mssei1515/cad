@@ -40,7 +40,9 @@
   let hoveredLine = null;
   let hoveredCircle = null;
   let hoveredArc = null;
+  let hoveredArcEndpoint = null;
   let hoveredDimensionConstraint = null;
+  let selectedArcEndpoint = null;
   let selectedDimensionConstraint = null;
   let panSession = null;
   let lineStartPoint = null;
@@ -155,7 +157,9 @@
     hoveredLine = null;
     hoveredCircle = null;
     hoveredArc = null;
+    hoveredArcEndpoint = null;
     hoveredDimensionConstraint = null;
+    selectedArcEndpoint = null;
     selectedDimensionConstraint = null;
     pointSeq = 1;
     lineSeq = 1;
@@ -321,6 +325,7 @@
     for (const c of data.circles || []) {
       const center = pointById.get(String(c.center));
       if (!center) throw new Error(`円 ${c.id} の中心点が見つかりません`);
+      center.kind = "endpoint";
       let radius = Number(c.radius);
       if (!Number.isFinite(radius) && c.radiusPoint !== undefined) {
         const radiusPoint = pointById.get(String(c.radiusPoint));
@@ -336,6 +341,7 @@
     for (const a of data.arcs || []) {
       const center = pointById.get(String(a.center));
       if (!center) throw new Error(`円弧 ${a.id} の中心点が見つかりません`);
+      center.kind = "endpoint";
       let radius = Number(a.radius);
       let startAngle = Number(a.startAngle);
       let endAngle = Number(a.endAngle);
@@ -440,6 +446,7 @@
     selectedLines = [];
     selectedCircles = [];
     selectedArcs = [];
+    selectedArcEndpoint = null;
     selectedDimensionConstraint = null;
   }
 
@@ -625,6 +632,18 @@
     };
   }
 
+  function arcEndpointPoint(arc, endpoint) {
+    const angle = endpoint === "start" ? arc.startAngle : arc.endAngle;
+    return {
+      x: arc.center.x + Math.cos(angle) * arc.radius(),
+      y: arc.center.y + Math.sin(angle) * arc.radius(),
+    };
+  }
+
+  function sameArcEndpoint(a, b) {
+    return a?.arc === b?.arc && a?.endpoint === b?.endpoint;
+  }
+
   function hitLine(x, y) {
     const threshold = 7 / viewport.scale;
     for (let i = model.lines.length - 1; i >= 0; i--) {
@@ -654,6 +673,18 @@
       const angles = arcAngles(a);
       const angle = Math.atan2(y - a.center.y, x - a.center.x);
       if (angleBetweenCcw(angle, angles.start, angles.end)) return a;
+    }
+    return null;
+  }
+
+  function hitArcEndpoint(x, y) {
+    const threshold = 10 / viewport.scale;
+    for (let i = model.arcs.length - 1; i >= 0; i--) {
+      const arc = model.arcs[i];
+      for (const endpoint of ["end", "start"]) {
+        const point = arcEndpointPoint(arc, endpoint);
+        if (hypot2(point.x - x, point.y - y) <= threshold) return { arc, endpoint, point };
+      }
     }
     return null;
   }
@@ -1025,6 +1056,7 @@
     drawTemporaryLine();
     drawCirclePreview();
     drawArcPreview();
+    drawArcEndpointHandles();
     drawPoints();
     ctx.restore();
   }
@@ -1296,6 +1328,40 @@
     ctx.restore();
   }
 
+  function shouldShowPrimitiveCenter(point) {
+    if (selectedCircles.some((circle) => circle.center === point) || selectedArcs.some((arc) => arc.center === point)) return true;
+    if (hoveredCircle?.center === point || hoveredArc?.center === point || hoveredArcEndpoint?.arc?.center === point) return true;
+    if ((dragSession?.kind === "circle" || dragSession?.kind === "arc" || dragSession?.kind === "arc-endpoint") && dragSession.item?.center === point) return true;
+    return false;
+  }
+
+  function shouldShowArcEndpointHandle(arc, endpoint) {
+    if (selectedArcs.includes(arc) || hoveredArc === arc) return true;
+    if (sameArcEndpoint(hoveredArcEndpoint, { arc, endpoint }) || sameArcEndpoint(selectedArcEndpoint, { arc, endpoint })) return true;
+    if (dragSession?.kind === "arc-endpoint" && dragSession.item === arc && dragSession.endpoint === endpoint) return true;
+    return false;
+  }
+
+  function drawArcEndpointHandles() {
+    ctx.save();
+    for (const arc of model.arcs) {
+      for (const endpoint of ["start", "end"]) {
+        if (!shouldShowArcEndpointHandle(arc, endpoint)) continue;
+        const p = arcEndpointPoint(arc, endpoint);
+        const selected = sameArcEndpoint(selectedArcEndpoint, { arc, endpoint }) || (dragSession?.kind === "arc-endpoint" && dragSession.item === arc && dragSession.endpoint === endpoint);
+        const hovered = sameArcEndpoint(hoveredArcEndpoint, { arc, endpoint });
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, (selected ? 7 : 5) / viewport.scale, 0, Math.PI * 2);
+        ctx.fillStyle = selected ? "#2563eb" : hovered ? "#eff6ff" : "#fff";
+        ctx.fill();
+        ctx.strokeStyle = selected || hovered ? "#2563eb" : "#111827";
+        ctx.lineWidth = 2 / viewport.scale;
+        ctx.stroke();
+      }
+    }
+    ctx.restore();
+  }
+
   function drawPoints() {
     for (const p of model.points) {
       if (!isExplicitPoint(p) && !isPointUsedByPrimitive(p)) continue;
@@ -1303,12 +1369,13 @@
       const endpoint = isEndpointPoint(p);
       const hovered = hoveredPoint === p || hoveredEndpointPoint === p;
       const dragging = dragSession?.kind === "point" && dragSession.points.some((target) => target.point === p);
-      if (!isExplicitPoint(p) && endpoint && !sel && !hovered && !dragging) continue;
+      const primitiveCenter = shouldShowPrimitiveCenter(p);
+      if (endpoint && !sel && !hovered && !dragging && !primitiveCenter) continue;
       ctx.beginPath();
       ctx.arc(p.x, p.y, (sel ? 7 : endpoint ? 5 : 5) / viewport.scale, 0, Math.PI * 2);
-      ctx.fillStyle = p.fixed ? "#dc2626" : sel ? "#2563eb" : hovered ? "#eff6ff" : "#fff";
+      ctx.fillStyle = p.fixed ? "#dc2626" : sel ? "#2563eb" : hovered || primitiveCenter ? "#eff6ff" : "#fff";
       ctx.fill();
-      ctx.strokeStyle = sel ? "#1d4ed8" : hovered ? "#2563eb" : "#111827";
+      ctx.strokeStyle = sel ? "#1d4ed8" : hovered || primitiveCenter ? "#2563eb" : "#111827";
       ctx.lineWidth = (endpoint ? 2 : 2) / viewport.scale;
       ctx.stroke();
       if (sel || hovered || dragging) {
@@ -1773,7 +1840,27 @@
       };
     }
 
-    const sourcePoints = kind === "line" ? [item.p1, item.p2] : [item.center];
+    if (kind === "circle" || kind === "arc") {
+      return {
+        kind,
+        mode: "radius",
+        item,
+        startPointer: pointer,
+        startRadius: item.radius(),
+      };
+    }
+
+    if (kind === "arc-endpoint") {
+      return {
+        kind,
+        mode: "arc-endpoint",
+        item: item.arc,
+        endpoint: item.endpoint,
+        startPointer: pointer,
+      };
+    }
+
+    const sourcePoints = [item.p1, item.p2];
     const points = sourcePoints
       .filter((p, index, arr) => !p.fixed && arr.indexOf(p) === index)
       .map((p) => ({ point: p, startX: p.x, startY: p.y }));
@@ -1787,37 +1874,81 @@
     return session.points.map((p) => ({ point: p.point, x: p.startX + dx, y: p.startY + dy }));
   }
 
-  function beginDrag(e, hitP, hitL, hitC, hitA, pointer) {
+  function radiusDragTargets(session, pointer) {
+    return [
+      {
+        object: session.item,
+        prop: "radiusValue",
+        value: hypot2(pointer.x - session.item.center.x, pointer.y - session.item.center.y),
+        min: MIN_ORIENTATION_LENGTH,
+      },
+    ];
+  }
+
+  function arcEndpointDragTargets(session, pointer) {
+    return [
+      {
+        object: session.item,
+        prop: session.endpoint === "start" ? "startAngle" : "endAngle",
+        value: Math.atan2(pointer.y - session.item.center.y, pointer.x - session.item.center.x),
+      },
+    ];
+  }
+
+  function dragResultForSession(session, pointer) {
+    if (session.mode === "radius") return solver.solveWithParameterDragTargets(radiusDragTargets(session, pointer));
+    if (session.mode === "arc-endpoint") return solver.solveWithParameterDragTargets(arcEndpointDragTargets(session, pointer));
+    return solver.solveWithDragTargets(dragTargets(session, pointer));
+  }
+
+  function dragLabel(session) {
+    if (session.mode === "radius") return "半径変更";
+    if (session.mode === "arc-endpoint") return "円弧端点変更";
+    return "ドラッグ";
+  }
+
+  function beginDrag(e, hitP, hitL, hitC, hitA, hitArcEnd, pointer) {
     if (hitP) {
       selectedPoints = [hitP];
       selectedLines = [];
       selectedCircles = [];
       selectedArcs = [];
+      selectedArcEndpoint = null;
       dragSession = buildDragSession("point", hitP, pointer);
+    } else if (hitArcEnd) {
+      selectedArcs = [hitArcEnd.arc];
+      selectedArcEndpoint = { arc: hitArcEnd.arc, endpoint: hitArcEnd.endpoint };
+      selectedPoints = [];
+      selectedLines = [];
+      selectedCircles = [];
+      dragSession = buildDragSession("arc-endpoint", hitArcEnd, pointer);
     } else if (hitL) {
       selectedLines = [hitL];
       selectedPoints = [];
       selectedCircles = [];
       selectedArcs = [];
+      selectedArcEndpoint = null;
       dragSession = buildDragSession("line", hitL, pointer);
     } else if (hitC) {
       selectedCircles = [hitC];
       selectedPoints = [];
       selectedLines = [];
       selectedArcs = [];
+      selectedArcEndpoint = null;
       dragSession = buildDragSession("circle", hitC, pointer);
     } else if (hitA) {
       selectedArcs = [hitA];
       selectedPoints = [];
       selectedLines = [];
       selectedCircles = [];
+      selectedArcEndpoint = null;
       dragSession = buildDragSession("arc", hitA, pointer);
     }
 
     if (dragSession) {
       canvas.classList.add("is-dragging");
       canvas.setPointerCapture(e.pointerId);
-      setHint("ドラッグ中: 拘束を保ちながら自動solveしています");
+      setHint(`${dragLabel(dragSession)}中: 拘束を保ちながら自動solveしています`);
     }
   }
 
@@ -1875,7 +2006,7 @@
   function handleCircleClick(p) {
     pointerPreview = p;
     if (!circleCenterPoint) {
-      const center = pointAt(p.x, p.y);
+      const center = endpointAt(p.x, p.y);
       circleCenterPoint = center;
       selectedPoints = [center];
       selectedLines = [];
@@ -1901,7 +2032,7 @@
   function handleArcClick(p) {
     pointerPreview = p;
     if (!arcCenterPoint) {
-      const center = pointAt(p.x, p.y);
+      const center = endpointAt(p.x, p.y);
       arcCenterPoint = center;
       selectedPoints = [center];
       selectedLines = [];
@@ -1961,6 +2092,7 @@
     const hitP = hitPoint(p.x, p.y);
     const hitL = hitLine(p.x, p.y);
     const hitC = hitCircle(p.x, p.y);
+    const hitArcEnd = hitArcEndpoint(p.x, p.y);
     const hitA = hitArc(p.x, p.y);
     const hitD = hitDimension(p.x, p.y);
 
@@ -2011,25 +2143,37 @@
     if (hitP) {
       selectedDimensionConstraint = null;
       if (multiSelect) togglePointSelection(hitP);
-      else beginDrag(e, hitP, null, null, null, p);
+      else beginDrag(e, hitP, null, null, null, null, p);
     } else if (hitD && !multiSelect) {
       selectedPoints = [];
       selectedLines = [];
       selectedCircles = [];
       selectedArcs = [];
+      selectedArcEndpoint = null;
       beginDimensionDrag(e, hitD, p);
+    } else if (hitArcEnd) {
+      selectedDimensionConstraint = null;
+      if (multiSelect) {
+        selectedPoints = [];
+        selectedLines = [];
+        selectedCircles = [];
+        selectedArcs = [hitArcEnd.arc];
+        selectedArcEndpoint = { arc: hitArcEnd.arc, endpoint: hitArcEnd.endpoint };
+      } else {
+        beginDrag(e, null, null, null, null, hitArcEnd, p);
+      }
     } else if (hitL) {
       selectedDimensionConstraint = null;
       if (multiSelect) toggleLineSelection(hitL);
-      else beginDrag(e, null, hitL, null, null, p);
+      else beginDrag(e, null, hitL, null, null, null, p);
     } else if (hitC) {
       selectedDimensionConstraint = null;
       if (multiSelect) toggleCircleSelection(hitC);
-      else beginDrag(e, null, null, hitC, null, p);
+      else beginDrag(e, null, null, hitC, null, null, p);
     } else if (hitA) {
       selectedDimensionConstraint = null;
       if (multiSelect) toggleArcSelection(hitA);
-      else beginDrag(e, null, null, null, hitA, p);
+      else beginDrag(e, null, null, null, hitA, null, p);
     } else {
       clearSelection();
     }
@@ -2081,7 +2225,8 @@
       const nextPointHover = nextEndpointHover || hitExplicitPoint(p.x, p.y);
       const nextLineHover = nextPointHover ? null : hitLine(p.x, p.y);
       const nextCircleHover = nextPointHover || nextLineHover ? null : hitCircle(p.x, p.y);
-      const nextArcHover = nextPointHover || nextLineHover || nextCircleHover ? null : hitArc(p.x, p.y);
+      const nextArcEndpointHover = nextPointHover || nextLineHover || nextCircleHover ? null : hitArcEndpoint(p.x, p.y);
+      const nextArcHover = nextPointHover || nextLineHover || nextCircleHover || nextArcEndpointHover ? null : hitArc(p.x, p.y);
       const hitD = hitDimension(p.x, p.y);
       const nextHover = hitD?.constraint || null;
       if (
@@ -2089,6 +2234,7 @@
         nextEndpointHover !== hoveredEndpointPoint ||
         nextLineHover !== hoveredLine ||
         nextCircleHover !== hoveredCircle ||
+        !sameArcEndpoint(nextArcEndpointHover, hoveredArcEndpoint) ||
         nextArcHover !== hoveredArc ||
         nextHover !== hoveredDimensionConstraint
       ) {
@@ -2096,6 +2242,7 @@
         hoveredEndpointPoint = nextEndpointHover;
         hoveredLine = nextLineHover;
         hoveredCircle = nextCircleHover;
+        hoveredArcEndpoint = nextArcEndpointHover;
         hoveredArc = nextArcHover;
         hoveredDimensionConstraint = nextHover;
         draw();
@@ -2103,9 +2250,9 @@
     }
 
     if (!dragSession) return;
-    const result = solver.solveWithDragTargets(dragTargets(dragSession, p));
+    const result = dragResultForSession(dragSession, p);
     const error = geometryErrorNorm();
-    setHint(`ドラッグ中: 拘束error=${error.toExponential(2)}, iter=${result.iterations}`);
+    setHint(`${dragLabel(dragSession)}中: 拘束error=${error.toExponential(2)}, iter=${result.iterations}`);
     updateUI();
     draw();
   });
@@ -2138,6 +2285,7 @@
     }
 
     if (!dragSession) return;
+    const completedLabel = dragLabel(dragSession);
     dragSession = null;
     canvas.classList.remove("is-dragging");
     try {
@@ -2145,7 +2293,7 @@
     } catch (_) {
       // Pointer capture may already be released by the browser.
     }
-    solveAndRefresh("ドラッグ完了");
+    solveAndRefresh(`${completedLabel}完了`);
   }
 
   canvas.addEventListener("pointerup", endDrag);
@@ -2197,15 +2345,29 @@
       return;
     }
 
-    if (e.key === "Escape" && pendingConstraintCommand) {
+    if (e.key === "Escape") {
       e.preventDefault();
-      cancelConstraintTargetCommand();
-      return;
-    }
-
-    if (e.key === "Escape" && (mode === "line" || mode === "point" || mode === "circle" || mode === "arc")) {
-      e.preventDefault();
-      exitDrawMode();
+      if (pendingConstraintCommand) {
+        cancelConstraintTargetCommand();
+        return;
+      }
+      if (mode === "line" || mode === "point" || mode === "circle" || mode === "arc") {
+        exitDrawMode();
+        return;
+      }
+      if (
+        selectedPoints.length > 0 ||
+        selectedLines.length > 0 ||
+        selectedCircles.length > 0 ||
+        selectedArcs.length > 0 ||
+        selectedArcEndpoint ||
+        selectedDimensionConstraint
+      ) {
+        clearSelection();
+        setHint("選択を解除しました");
+        updateUI();
+        draw();
+      }
     }
   });
 
