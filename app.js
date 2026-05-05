@@ -79,6 +79,7 @@
   const CONSTRAINT_ACCEPT_ERROR = 1e-4;
   const DEFAULT_FILLET_RADIUS = 30;
   const MIN_LINE_LENGTH = Math.max(MIN_ORIENTATION_LENGTH, solver.minLineLength || 12);
+  const MIN_ARC_LENGTH = MIN_LINE_LENGTH;
   let lastLoadLineRepairMessage = "";
 
   const constraintButtons = Array.from(document.querySelectorAll("[data-constraint]"));
@@ -101,6 +102,7 @@
 
   function solveAndRefresh(label = "自動solve") {
     const result = solver.solve();
+    normalizeArcSweeps();
     setHint(`${label}: success=${result.success}, error=${result.errorNorm.toExponential(2)}, iter=${result.iterations}`);
     updateUI();
     draw();
@@ -187,6 +189,7 @@
     if (!center || !Number.isFinite(radiusValue) || radiusValue < MIN_ORIENTATION_LENGTH) return null;
     if (!Number.isFinite(startAngle) || !Number.isFinite(endAngle)) return null;
     const a = new Arc(`A${arcSeq++}`, center, radiusValue, startAngle, endAngle);
+    normalizeArcSweep(a);
     model.arcs.push(a);
     return a;
   }
@@ -537,6 +540,7 @@
     model.lines.push(...lines);
     model.circles.push(...circles);
     model.arcs.push(...arcs);
+    normalizeArcSweeps(model.arcs);
     model.constraints.push(...constraints);
     const lineRepair = enforceMinimumLineLengths(model.lines);
     lastLoadLineRepairMessage =
@@ -889,6 +893,28 @@
       return endpoint === "start" ? arc.endAngle : arc.startAngle;
     }
     return value;
+  }
+
+  function normalizeArcSweep(arc) {
+    const twoPi = Math.PI * 2;
+    const sweep = arc.endAngle - arc.startAngle;
+    if (Math.abs(sweep) >= twoPi - 1e-9) {
+      arc.endAngle = arc.startAngle;
+      return true;
+    }
+    if (Math.abs(sweep) > 0 && Math.abs(sweep) * arc.radius() < MIN_ARC_LENGTH) {
+      arc.endAngle = arc.startAngle;
+      return true;
+    }
+    return false;
+  }
+
+  function normalizeArcSweeps(arcs = model.arcs) {
+    let changed = 0;
+    for (const arc of arcs) {
+      if (normalizeArcSweep(arc)) changed += 1;
+    }
+    return changed;
   }
 
   function angleOnSignedSweep(angle, start, end) {
@@ -1307,6 +1333,7 @@
     if (constraintSet.has(hoveredDimensionConstraint)) hoveredDimensionConstraint = null;
 
     const result = solver.solve();
+    normalizeArcSweeps();
     updateToolbar();
     updateUI();
     draw();
@@ -2299,6 +2326,7 @@
       const previousTarget = constraint.target;
       constraint.target = value;
       const result = solver.solve();
+      normalizeArcSweeps();
       if (!result.success || result.errorNorm > CONSTRAINT_ACCEPT_ERROR) {
         restoreModelState(snapshot);
         constraint.target = previousTarget;
@@ -2438,6 +2466,7 @@
     model.constraints.push(constraint);
 
     const result = solver.solve();
+    normalizeArcSweeps();
     if (!result.success || result.errorNorm > CONSTRAINT_ACCEPT_ERROR) {
       restoreModelState(snapshot);
       const msg = `拘束を追加できません: 矛盾しています (error=${result.errorNorm.toExponential(3)}, reason=${result.reason})`;
@@ -2653,6 +2682,7 @@
         result = solver.solveWithDragTargets(moveTargets);
         const lineRepair = enforceMinimumLineLengths();
         if (lineRepair.changed > 0) result = solver.solve();
+        normalizeArcSweeps();
         result.lineRepair = lineRepair;
         return result;
       }
@@ -2666,12 +2696,14 @@
         result = solver.solveWithDragTargets(moveTargets);
         const lineRepair = enforceMinimumLineLengths();
         if (lineRepair.changed > 0) result = solver.solve();
+        normalizeArcSweeps();
         result.lineRepair = lineRepair;
         return result;
       }
       session.activeMode = "radius";
       const lineRepair = enforceMinimumLineLengths();
       if (lineRepair.changed > 0) result = solver.solve();
+      normalizeArcSweeps();
       result.lineRepair = lineRepair;
       return result;
     }
@@ -2679,6 +2711,7 @@
     else result = solver.solveWithDragTargets(dragTargets(session, pointer));
     const lineRepair = enforceMinimumLineLengths();
     if (lineRepair.changed > 0) result = solver.solve();
+    normalizeArcSweeps();
     result.lineRepair = lineRepair;
     return result;
   }

@@ -2,7 +2,8 @@
 (function () {
   "use strict";
 
-  const MIN_ORIENTATION_LENGTH = 1e-3;
+  const MIN_MODEL_LENGTH = 1e-6;
+  const MIN_ORIENTATION_LENGTH = 1e-9;
 
   function hypot2(x, y) {
     return Math.sqrt(x * x + y * y);
@@ -74,7 +75,7 @@
     constructor(id, center, radiusValue) {
       this.id = id;
       this.center = center;
-      this.radiusValue = Math.max(Number(radiusValue) || 0, MIN_ORIENTATION_LENGTH);
+      this.radiusValue = Math.max(Number(radiusValue) || 0, MIN_MODEL_LENGTH);
     }
 
     radius() {
@@ -86,7 +87,7 @@
     constructor(id, center, radiusValue, startAngle, endAngle) {
       this.id = id;
       this.center = center;
-      this.radiusValue = Math.max(Number(radiusValue) || 0, MIN_ORIENTATION_LENGTH);
+      this.radiusValue = Math.max(Number(radiusValue) || 0, MIN_MODEL_LENGTH);
       this.startAngle = Number(startAngle) || 0;
       this.endAngle = Number(endAngle) || 0;
     }
@@ -566,7 +567,7 @@
       this.initialLambda = 1e-3;
       this.maxLambda = 1e10;
       this.maxStepNorm = 50;
-      this.minLineLength = Math.max(MIN_ORIENTATION_LENGTH, 12);
+      this.minLineLength = MIN_MODEL_LENGTH;
     }
 
     getVariables() {
@@ -578,10 +579,10 @@
         }
       }
       for (const c of this.model.circles || []) {
-        vs.push({ object: c, prop: "radiusValue", label: `${c.id}.r`, min: MIN_ORIENTATION_LENGTH });
+        vs.push({ object: c, prop: "radiusValue", label: `${c.id}.r`, min: MIN_MODEL_LENGTH });
       }
       for (const a of this.model.arcs || []) {
-        vs.push({ object: a, prop: "radiusValue", label: `${a.id}.r`, min: MIN_ORIENTATION_LENGTH });
+        vs.push({ object: a, prop: "radiusValue", label: `${a.id}.r`, min: MIN_MODEL_LENGTH });
         vs.push({ object: a, prop: "startAngle", label: `${a.id}.startAngle` });
         vs.push({ object: a, prop: "endAngle", label: `${a.id}.endAngle` });
       }
