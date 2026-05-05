@@ -78,6 +78,8 @@
   const MAX_ZOOM = 8;
   const CONSTRAINT_ACCEPT_ERROR = 1e-4;
   const DEFAULT_FILLET_RADIUS = 30;
+  const MIN_LINE_LENGTH = Math.max(MIN_ORIENTATION_LENGTH, solver.minLineLength || 12);
+  let lastLoadLineRepairMessage = "";
 
   const constraintButtons = Array.from(document.querySelectorAll("[data-constraint]"));
   const fixPointBtn = document.getElementById("fixPointBtn");
@@ -118,8 +120,60 @@
   function addLine(p1, p2) {
     if (p1 === p2) return null;
     const l = new Line(`L${lineSeq++}`, p1, p2);
+    ensureLineMinimumLength(l);
     model.lines.push(l);
     return l;
+  }
+
+  function preferredDirectionFrom(start, p) {
+    const dx = p.x - start.x;
+    const dy = p.y - start.y;
+    const len = hypot2(dx, dy);
+    if (len >= MIN_LINE_LENGTH) return { x: dx / len, y: dy / len };
+    if (len > 1e-9) return { x: dx / len, y: dy / len };
+    return { x: 1, y: 0 };
+  }
+
+  function pointAtMinimumDistance(start, p) {
+    const dx = p.x - start.x;
+    const dy = p.y - start.y;
+    const len = hypot2(dx, dy);
+    if (len >= MIN_LINE_LENGTH) return p;
+    const dir = preferredDirectionFrom(start, p);
+    return { x: start.x + dir.x * MIN_LINE_LENGTH, y: start.y + dir.y * MIN_LINE_LENGTH };
+  }
+
+  function ensureLineMinimumLength(line, preferred = null) {
+    if (!line) return { changed: false, failed: false };
+    const dx = line.p2.x - line.p1.x;
+    const dy = line.p2.y - line.p1.y;
+    const len = hypot2(dx, dy);
+    if (len >= MIN_LINE_LENGTH) return { changed: false, failed: false };
+    const fallback = preferred || (len > 1e-9 ? { x: dx / len, y: dy / len } : { x: 1, y: 0 });
+    const dirLen = hypot2(fallback.x, fallback.y);
+    const dir = dirLen > 1e-9 ? { x: fallback.x / dirLen, y: fallback.y / dirLen } : { x: 1, y: 0 };
+    if (!line.p2.fixed) {
+      line.p2.x = line.p1.x + dir.x * MIN_LINE_LENGTH;
+      line.p2.y = line.p1.y + dir.y * MIN_LINE_LENGTH;
+      return { changed: true, failed: false };
+    }
+    if (!line.p1.fixed) {
+      line.p1.x = line.p2.x - dir.x * MIN_LINE_LENGTH;
+      line.p1.y = line.p2.y - dir.y * MIN_LINE_LENGTH;
+      return { changed: true, failed: false };
+    }
+    return { changed: false, failed: true };
+  }
+
+  function enforceMinimumLineLengths(lines = model.lines) {
+    let changed = 0;
+    let failed = 0;
+    for (const line of lines) {
+      const result = ensureLineMinimumLength(line);
+      if (result.changed) changed += 1;
+      if (result.failed) failed += 1;
+    }
+    return { changed, failed };
   }
 
   function addCircle(center, radiusValue) {
@@ -484,6 +538,12 @@
     model.circles.push(...circles);
     model.arcs.push(...arcs);
     model.constraints.push(...constraints);
+    const lineRepair = enforceMinimumLineLengths(model.lines);
+    lastLoadLineRepairMessage =
+      lineRepair.changed > 0 || lineRepair.failed > 0
+        ? `短すぎる線を補正しました: ${lineRepair.changed}件${lineRepair.failed ? ` / 補正不能 ${lineRepair.failed}件` : ""}`
+        : "";
+    if (lastLoadLineRepairMessage) log(lastLoadLineRepairMessage);
     ensureDimensionDefaults();
     pointSeq = nextSeq(model.points, "P");
     lineSeq = nextSeq(model.lines, "L");
@@ -2585,26 +2645,42 @@
   }
 
   function dragResultForSession(session, pointer) {
+    let result;
     if (session.mode === "radius") {
       const moveTargets = primitiveMoveTargets(session, pointer);
       if (hasDirectRadiusDimension(session.item)) {
         session.activeMode = "move";
-        return solver.solveWithDragTargets(moveTargets);
+        result = solver.solveWithDragTargets(moveTargets);
+        const lineRepair = enforceMinimumLineLengths();
+        if (lineRepair.changed > 0) result = solver.solve();
+        result.lineRepair = lineRepair;
+        return result;
       }
 
       const vars = solver.getVariables();
       const state = solver.clone(vars);
-      const result = solver.solveWithParameterDragTargets(radiusDragTargets(session, pointer));
+      result = solver.solveWithParameterDragTargets(radiusDragTargets(session, pointer));
       if (!result.success && moveTargets.length > 0) {
         solver.restore(state);
         session.activeMode = "move";
-        return solver.solveWithDragTargets(moveTargets);
+        result = solver.solveWithDragTargets(moveTargets);
+        const lineRepair = enforceMinimumLineLengths();
+        if (lineRepair.changed > 0) result = solver.solve();
+        result.lineRepair = lineRepair;
+        return result;
       }
       session.activeMode = "radius";
+      const lineRepair = enforceMinimumLineLengths();
+      if (lineRepair.changed > 0) result = solver.solve();
+      result.lineRepair = lineRepair;
       return result;
     }
-    if (session.mode === "arc-endpoint") return solver.solveWithParameterDragTargets(arcEndpointDragTargets(session, pointer));
-    return solver.solveWithDragTargets(dragTargets(session, pointer));
+    if (session.mode === "arc-endpoint") result = solver.solveWithParameterDragTargets(arcEndpointDragTargets(session, pointer));
+    else result = solver.solveWithDragTargets(dragTargets(session, pointer));
+    const lineRepair = enforceMinimumLineLengths();
+    if (lineRepair.changed > 0) result = solver.solve();
+    result.lineRepair = lineRepair;
+    return result;
   }
 
   function dragLabel(session) {
@@ -2693,7 +2769,8 @@
 
   function handleLineClick(p, lockOrthogonal = false) {
     if (lineStartPoint && lockOrthogonal) p = orthogonalPointFrom(lineStartPoint, p);
-    const endpoint = endpointAt(p.x, p.y);
+    if (lineStartPoint) p = pointAtMinimumDistance(lineStartPoint, p);
+    const endpoint = lineStartPoint && hypot2(p.x - lineStartPoint.x, p.y - lineStartPoint.y) <= MIN_LINE_LENGTH + 1e-9 ? addPoint(p.x, p.y, false, "endpoint") : endpointAt(p.x, p.y);
     pointerPreview = p;
 
     if (!lineStartPoint) {
@@ -2746,12 +2823,10 @@
       return;
     }
 
-    if (Math.abs(p.x - rectangleStartPoint.x) < MIN_ORIENTATION_LENGTH || Math.abs(p.y - rectangleStartPoint.y) < MIN_ORIENTATION_LENGTH) {
-      setHint("矩形の幅と高さを確保してください", "error");
-      draw();
-      return;
-    }
-
+    const rx = p.x - rectangleStartPoint.x;
+    const ry = p.y - rectangleStartPoint.y;
+    if (Math.abs(rx) < MIN_LINE_LENGTH) p = { ...p, x: rectangleStartPoint.x + (rx < 0 ? -MIN_LINE_LENGTH : MIN_LINE_LENGTH) };
+    if (Math.abs(ry) < MIN_LINE_LENGTH) p = { ...p, y: rectangleStartPoint.y + (ry < 0 ? -MIN_LINE_LENGTH : MIN_LINE_LENGTH) };
     const p1 = rectangleStartPoint;
     const p2 = addPoint(p.x, p1.y, false, "endpoint");
     const p3 = addPoint(p.x, p.y, false, "endpoint");
@@ -2802,7 +2877,16 @@
     const u2 = { x: (o2.x - corner.x) / l2, y: (o2.y - corner.y) / l2 };
     const dot = Math.max(-0.999, Math.min(0.999, u1.x * u2.x + u1.y * u2.y));
     const theta = Math.acos(dot);
-    const tangent = radius / Math.tan(theta / 2);
+    const tangentScale = Math.tan(theta / 2);
+    const maxTangent = Math.min(l1, l2) - MIN_LINE_LENGTH;
+    if (!Number.isFinite(maxTangent) || maxTangent <= 0) return { ok: false, reason: "R面取り後の線長を確保できません" };
+    let tangent = radius / tangentScale;
+    let adjusted = false;
+    if (Number.isFinite(tangent) && tangent >= maxTangent) {
+      tangent = maxTangent;
+      radius = tangent * tangentScale;
+      adjusted = true;
+    }
     if (!Number.isFinite(tangent) || tangent <= 0 || tangent >= Math.min(l1, l2)) return { ok: false, reason: "この角度と線長ではR面取りを作成できません" };
 
     const bis = { x: u1.x + u2.x, y: u1.y + u2.y };
@@ -2814,22 +2898,22 @@
     const center = { x: corner.x + (bis.x / bisLen) * centerDistance, y: corner.y + (bis.y / bisLen) * centerDistance };
     const startAngle = Math.atan2(t1.y - center.y, t1.x - center.x);
     const endAngle = shortestAngleFrom(startAngle, Math.atan2(t2.y - center.y, t2.x - center.x));
-    return { ok: true, corner, t1, t2, center, radius, startAngle, endAngle };
+    return { ok: true, corner, t1, t2, center, radius, startAngle, endAngle, adjusted };
   }
 
   function createFillet(line1, line2, radius = DEFAULT_FILLET_RADIUS) {
     const geometry = computeFilletGeometry(line1, line2, radius);
     if (!geometry.ok) return geometry;
-    const { corner, t1: t1Pos, t2: t2Pos, center: centerPos, startAngle, endAngle } = geometry;
+    const { corner, t1: t1Pos, t2: t2Pos, center: centerPos, radius: finalRadius, startAngle, endAngle } = geometry;
     const t1 = addPoint(t1Pos.x, t1Pos.y, false, "endpoint");
     const t2 = addPoint(t2Pos.x, t2Pos.y, false, "endpoint");
     const center = addPoint(centerPos.x, centerPos.y, false, "endpoint");
     setLineEndpoint(line1, corner, t1);
     setLineEndpoint(line2, corner, t2);
-    const arc = addArc(center, radius, startAngle, endAngle);
+    const arc = addArc(center, finalRadius, startAngle, endAngle);
     if (!arc) return { ok: false, reason: "R面取り円弧を作成できません" };
-    const radiusConstraint = new RadiusConstraint(arc, radius);
-    radiusConstraint.dimension = defaultDimensionForTarget({ kind: "radius", primitive: arc, value: radius });
+    const radiusConstraint = new RadiusConstraint(arc, finalRadius);
+    radiusConstraint.dimension = defaultDimensionForTarget({ kind: "radius", primitive: arc, value: finalRadius });
     model.constraints.push(
       new ArcEndpointCoincidentConstraint(arc, "start", t1),
       new ArcEndpointCoincidentConstraint(arc, "end", t2),

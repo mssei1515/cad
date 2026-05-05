@@ -148,6 +148,19 @@
     return ((point.x - line.p1.x) * -dy + (point.y - line.p1.y) * dx) / len;
   }
 
+  class LineMinimumLengthConstraint extends Constraint {
+    constructor(line, target) {
+      super(`最小線長 ${line.id}`, 1);
+      this.line = line;
+      this.target = target;
+    }
+
+    rawError() {
+      const length = this.line.length();
+      return length >= this.target ? 0 : this.target - length;
+    }
+  }
+
   class PointLineDistanceConstraint extends Constraint {
     constructor(point, line, target, sign = null) {
       super(`寸法 ${point.id}-${line.id} = ${target}`, 1);
@@ -553,6 +566,7 @@
       this.initialLambda = 1e-3;
       this.maxLambda = 1e10;
       this.maxStepNorm = 50;
+      this.minLineLength = Math.max(MIN_ORIENTATION_LENGTH, 12);
     }
 
     getVariables() {
@@ -575,7 +589,8 @@
     }
 
     getConstraints(extra = []) {
-      return [...this.model.constraints, ...extra].filter((c) => c.enabled);
+      const lineMinimums = (this.model.lines || []).map((line) => new LineMinimumLengthConstraint(line, this.minLineLength));
+      return [...this.model.constraints, ...lineMinimums, ...extra].filter((c) => c.enabled);
     }
 
     computeErrorVector(extra = []) {
