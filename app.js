@@ -1491,6 +1491,28 @@
   }
 
   function drawDimensionPreview() {
+    if (pendingCommand?.type === "fillet-radius-value") {
+      const value = Number(pendingCommand.buffer);
+      const radius = Number.isFinite(value) && value > 0 ? value : DEFAULT_FILLET_RADIUS;
+      const geometry = computeFilletGeometry(pendingCommand.line1, pendingCommand.line2, radius);
+      if (!geometry.ok) return;
+      const primitive = {
+        center: geometry.center,
+        radius: () => geometry.radius,
+      };
+      const target = { kind: "radius", primitive, value: radius };
+      const anchor = {
+        x: geometry.center.x + Math.cos((geometry.startAngle + geometry.endAngle) / 2) * geometry.radius * 1.55,
+        y: geometry.center.y + Math.sin((geometry.startAngle + geometry.endAngle) / 2) * geometry.radius * 1.55,
+      };
+      drawFilletPreviewArc(geometry);
+      const invalid = pendingCommand.buffer === "" || !Number.isFinite(value) || value <= 0 || !geometry.ok;
+      drawDimension(target, dimensionFromAnchor(target, anchor), `R${pendingCommand.buffer || "_"}|`, true, false, {
+        selecting: !pendingCommand.editing,
+        invalid,
+      });
+      return;
+    }
     if (!pendingCommand?.type?.startsWith("distance")) return;
     const dimension = pendingCommand.type === "distance-place" ? pendingCommand.pointer || defaultDimensionForTarget(pendingCommand.target) : pendingCommand.dimension;
     if (pendingCommand.type === "distance-value") {
@@ -1503,6 +1525,21 @@
       return;
     }
     drawDimension(pendingCommand.target, dimension, Number(pendingCommand.target.value).toFixed(2), true);
+  }
+
+  function drawFilletPreviewArc(geometry) {
+    ctx.save();
+    ctx.strokeStyle = "#2563eb";
+    ctx.lineWidth = 2 / viewport.scale;
+    ctx.setLineDash([6 / viewport.scale, 5 / viewport.scale]);
+    ctx.beginPath();
+    ctx.moveTo(geometry.t1.x, geometry.t1.y);
+    ctx.lineTo(geometry.t2.x, geometry.t2.y);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.arc(geometry.center.x, geometry.center.y, geometry.radius, geometry.startAngle, geometry.endAngle, geometry.endAngle < geometry.startAngle);
+    ctx.stroke();
+    ctx.restore();
   }
 
   function drawTemporaryLine() {
@@ -1547,7 +1584,12 @@
   }
 
   function drawArcPreview() {
-    if (mode !== "arc" || !arcCenterPoint || !arcStartPoint || !pointerPreview) return;
+    if (mode !== "arc" || !arcCenterPoint) return;
+    if (!arcStartPoint) {
+      drawConstructionPoint(arcCenterPoint);
+      return;
+    }
+    if (!pointerPreview) return;
     const angles = {
       start: arcStartPoint.startAngle,
       end: shortestAngleFrom(arcStartPoint.startAngle, Math.atan2(pointerPreview.y - arcCenterPoint.y, pointerPreview.x - arcCenterPoint.x)),
@@ -1558,6 +1600,18 @@
     ctx.setLineDash([6 / viewport.scale, 5 / viewport.scale]);
     ctx.beginPath();
     ctx.arc(arcCenterPoint.x, arcCenterPoint.y, arcStartPoint.radius, angles.start, angles.end, angles.end < angles.start);
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  function drawConstructionPoint(point) {
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(point.x, point.y, 5 / viewport.scale, 0, Math.PI * 2);
+    ctx.fillStyle = "#eff6ff";
+    ctx.fill();
+    ctx.strokeStyle = "#2563eb";
+    ctx.lineWidth = 2 / viewport.scale;
     ctx.stroke();
     ctx.restore();
   }
@@ -1677,7 +1731,7 @@
     if (type === "tangent") return "接線にする線と円/円弧、または円/円弧を2つ選択してください";
     if (type === "coincident") return "一致させる点同士、点と線、または点と円周を選択してください";
     if (type === "collinear") return "同一直線上にする線を2本選択してください";
-    if (type === "equal") return "等しくする線2本、または円/円弧を2つ選択してください";
+    if (type === "equal") return "同じ寸法にする線2本、または円/円弧を2つ選択してください";
     if (type === "horizontal") return "水平にする線を1本選択してください";
     if (type === "vertical") return "垂直にする線を1本選択してください";
     if (type === "parallel") return "平行にする線を2本選択してください";
@@ -2516,7 +2570,7 @@
     else if (line.p2 === from) line.p2 = to;
   }
 
-  function createFillet(line1, line2, radius = DEFAULT_FILLET_RADIUS) {
+  function computeFilletGeometry(line1, line2, radius = DEFAULT_FILLET_RADIUS) {
     const corner = sharedLinePoint(line1, line2);
     if (!corner) return { ok: false, reason: "接続された2本の線を選択してください" };
     const o1 = otherLinePoint(line1, corner);
@@ -2536,14 +2590,48 @@
     const bisLen = hypot2(bis.x, bis.y);
     if (bisLen < 1e-9) return { ok: false, reason: "180度の角にはR面取りを作成できません" };
     const centerDistance = radius / Math.sin(theta / 2);
-    const t1 = addPoint(corner.x + u1.x * tangent, corner.y + u1.y * tangent, false, "endpoint");
-    const t2 = addPoint(corner.x + u2.x * tangent, corner.y + u2.y * tangent, false, "endpoint");
-    const center = addPoint(corner.x + (bis.x / bisLen) * centerDistance, corner.y + (bis.y / bisLen) * centerDistance, false, "endpoint");
+    const t1 = { x: corner.x + u1.x * tangent, y: corner.y + u1.y * tangent };
+    const t2 = { x: corner.x + u2.x * tangent, y: corner.y + u2.y * tangent };
+    const center = { x: corner.x + (bis.x / bisLen) * centerDistance, y: corner.y + (bis.y / bisLen) * centerDistance };
+    const startAngle = Math.atan2(t1.y - center.y, t1.x - center.x);
+    const endAngle = shortestAngleFrom(startAngle, Math.atan2(t2.y - center.y, t2.x - center.x));
+    return { ok: true, corner, t1, t2, center, radius, startAngle, endAngle };
+  }
+
+  function constraintExplicitlyReferencesPoint(c, point) {
+    if (c instanceof DistanceConstraint) return c.p1 === point || c.p2 === point;
+    if (c instanceof PointLineDistanceConstraint) return c.point === point;
+    if (c instanceof CoincidentConstraint) return c.p1 === point || c.p2 === point;
+    if (c instanceof PointOnLineConstraint) return c.point === point;
+    if (c instanceof ConcentricConstraint) return c.a === point || c.b === point;
+    if (c instanceof PointOnCircleConstraint) return c.point === point;
+    return false;
+  }
+
+  function removeStaleCornerConstraints(corner) {
+    const before = model.constraints.length;
+    model.constraints = model.constraints.filter((c) => !constraintExplicitlyReferencesPoint(c, corner));
+    return before - model.constraints.length;
+  }
+
+  function removeOrphanEndpointPoint(point) {
+    if (point?.kind !== "endpoint") return;
+    if (isPointUsedByPrimitive(point)) return;
+    if (model.constraints.some((c) => constraintReferencesPoint(c, point))) return;
+    removeFromArray(model.points, point);
+  }
+
+  function createFillet(line1, line2, radius = DEFAULT_FILLET_RADIUS) {
+    const geometry = computeFilletGeometry(line1, line2, radius);
+    if (!geometry.ok) return geometry;
+    const { corner, t1: t1Pos, t2: t2Pos, center: centerPos, startAngle, endAngle } = geometry;
+    const t1 = addPoint(t1Pos.x, t1Pos.y, false, "endpoint");
+    const t2 = addPoint(t2Pos.x, t2Pos.y, false, "endpoint");
+    const center = addPoint(centerPos.x, centerPos.y, false, "endpoint");
+    const removedConstraints = removeStaleCornerConstraints(corner);
     setLineEndpoint(line1, corner, t1);
     setLineEndpoint(line2, corner, t2);
-    let startAngle = Math.atan2(t1.y - center.y, t1.x - center.x);
-    let endAngle = Math.atan2(t2.y - center.y, t2.x - center.x);
-    endAngle = shortestAngleFrom(startAngle, endAngle);
+    removeOrphanEndpointPoint(corner);
     const arc = addArc(center, radius, startAngle, endAngle);
     if (!arc) return { ok: false, reason: "R面取り円弧を作成できません" };
     const radiusConstraint = new RadiusConstraint(arc, radius);
@@ -2555,7 +2643,7 @@
       new LineCircleTangentConstraint(line2, arc),
       radiusConstraint,
     );
-    return { ok: true, arc };
+    return { ok: true, arc, removedConstraints };
   }
 
   function startFilletRadiusInput(line1, line2) {
