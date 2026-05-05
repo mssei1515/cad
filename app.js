@@ -1363,19 +1363,11 @@
     ctx.strokeStyle = preview || highlighted ? "#2563eb" : "#6b7280";
     ctx.fillStyle = preview || highlighted ? "#2563eb" : "#6b7280";
     ctx.lineWidth = (highlighted ? 2 : 1.2) / viewport.scale;
-    if (preview && layout.kind !== "radius-leader") ctx.setLineDash([5 / viewport.scale, 4 / viewport.scale]);
+    if (preview) ctx.setLineDash([5 / viewport.scale, 4 / viewport.scale]);
     ctx.beginPath();
     ctx.moveTo(a.x, a.y);
     ctx.lineTo(b.x, b.y);
     ctx.stroke();
-
-    if (layout.kind === "radius-leader") {
-      ctx.setLineDash([]);
-      drawArrowhead(a, { x: -d.x, y: -d.y });
-      drawDimensionLabel(label, text, editState);
-      ctx.restore();
-      return;
-    }
 
     for (const p of points) {
       ctx.beginPath();
@@ -1440,23 +1432,6 @@
     const d = target.kind === "radius" || target.kind === "diameter" ? targetDirection({ ...target, dimensionAnchor: anchor }) : targetDirection(target);
     const points = targetPointsForDimension(target, anchor);
     if (points.length < 2) return null;
-    if (target.kind === "radius") {
-      const source = points[1];
-      const dx = anchor.x - source.x;
-      const dy = anchor.y - source.y;
-      const len = hypot2(dx, dy);
-      const leader = len > 1e-12 ? { x: dx / len, y: dy / len } : d;
-      return {
-        kind: "radius-leader",
-        a: source,
-        b: anchor,
-        d: leader,
-        points: [],
-        text: anchor,
-        hitA: source,
-        hitB: anchor,
-      };
-    }
     const tick = 9 / viewport.scale;
     const extension = 6 / viewport.scale;
     const gap = 12 / viewport.scale;
@@ -1527,13 +1502,14 @@
       const geometry = computeFilletGeometry(pendingCommand.line1, pendingCommand.line2, radius);
       if (!geometry.ok) return;
       const primitive = {
+        id: "R",
         center: geometry.center,
         radius: () => geometry.radius,
       };
       const target = { kind: "radius", primitive, value: radius };
       const anchor = {
-        x: geometry.center.x + Math.cos((geometry.startAngle + geometry.endAngle) / 2) * geometry.radius * 1.55,
-        y: geometry.center.y + Math.sin((geometry.startAngle + geometry.endAngle) / 2) * geometry.radius * 1.55,
+        x: geometry.center.x + Math.cos((geometry.startAngle + geometry.endAngle) / 2) * geometry.radius,
+        y: geometry.center.y + Math.sin((geometry.startAngle + geometry.endAngle) / 2) * geometry.radius,
       };
       drawFilletPreviewArc(geometry);
       const invalid = pendingCommand.buffer === "" || !Number.isFinite(value) || value <= 0 || !geometry.ok;
@@ -1758,7 +1734,7 @@
     if (type === "tangent") return "接線にする線と円/円弧、または円/円弧を2つ選択してください";
     if (type === "coincident") return "一致させる点同士、点と線、または点と円周を選択してください";
     if (type === "collinear") return "同一直線上にする線を2本選択してください";
-    if (type === "equal") return "同じ寸法にする線2本、または円/円弧を2つ選択してください";
+    if (type === "equal") return "等長にする線2本、または同じ半径にする円/円弧を2つ選択してください";
     if (type === "horizontal") return "水平にする線を1本選択してください";
     if (type === "vertical") return "垂直にする線を1本選択してください";
     if (type === "parallel") return "平行にする線を2本選択してください";
