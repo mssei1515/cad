@@ -59,6 +59,7 @@
   let selectedArcEndpointPair = null;
   let selectedDimensionConstraint = null;
   let panSession = null;
+  let selectionRectSession = null;
   let lineStartPoint = null;
   let rectangleStartPoint = null;
   let filletFirstLine = null;
@@ -739,6 +740,60 @@
     return hypot2(px - (a.x + t * dx), py - (a.y + t * dy));
   }
 
+  function rectFromPoints(a, b) {
+    return {
+      x1: Math.min(a.x, b.x),
+      y1: Math.min(a.y, b.y),
+      x2: Math.max(a.x, b.x),
+      y2: Math.max(a.y, b.y),
+    };
+  }
+
+  function pointInRect(p, rect) {
+    return p.x >= rect.x1 && p.x <= rect.x2 && p.y >= rect.y1 && p.y <= rect.y2;
+  }
+
+  function bboxInRect(box, rect) {
+    return box.x1 >= rect.x1 && box.x2 <= rect.x2 && box.y1 >= rect.y1 && box.y2 <= rect.y2;
+  }
+
+  function bboxIntersectsRect(box, rect) {
+    return box.x2 >= rect.x1 && box.x1 <= rect.x2 && box.y2 >= rect.y1 && box.y1 <= rect.y2;
+  }
+
+  function lineBBox(line) {
+    return {
+      x1: Math.min(line.p1.x, line.p2.x),
+      y1: Math.min(line.p1.y, line.p2.y),
+      x2: Math.max(line.p1.x, line.p2.x),
+      y2: Math.max(line.p1.y, line.p2.y),
+    };
+  }
+
+  function primitiveBBox(primitive) {
+    const r = primitive.radius();
+    return {
+      x1: primitive.center.x - r,
+      y1: primitive.center.y - r,
+      x2: primitive.center.x + r,
+      y2: primitive.center.y + r,
+    };
+  }
+
+  function arcSamplePoints(arc, count = 24) {
+    const angles = arcAngles(arc);
+    const points = [];
+    for (let i = 0; i <= count; i++) {
+      const t = count === 0 ? 0 : i / count;
+      const angle = angles.start + (angles.end - angles.start) * t;
+      points.push({
+        x: arc.center.x + Math.cos(angle) * arc.radius(),
+        y: arc.center.y + Math.sin(angle) * arc.radius(),
+      });
+    }
+    return points;
+  }
+
   function normalizeAngle(angle) {
     const twoPi = Math.PI * 2;
     return ((angle % twoPi) + twoPi) % twoPi;
@@ -1246,6 +1301,74 @@
     else selectedArcs.push(a);
   }
 
+  function addUnique(target, item) {
+    if (item && !target.includes(item)) target.push(item);
+  }
+
+  function lineIntersectsRect(line, rect) {
+    if (!bboxIntersectsRect(lineBBox(line), rect)) return false;
+    if (pointInRect(line.p1, rect) || pointInRect(line.p2, rect)) return true;
+    const edges = [
+      [{ x: rect.x1, y: rect.y1 }, { x: rect.x2, y: rect.y1 }],
+      [{ x: rect.x2, y: rect.y1 }, { x: rect.x2, y: rect.y2 }],
+      [{ x: rect.x2, y: rect.y2 }, { x: rect.x1, y: rect.y2 }],
+      [{ x: rect.x1, y: rect.y2 }, { x: rect.x1, y: rect.y1 }],
+    ];
+    return edges.some(([a, b]) => segmentsIntersect(line.p1, line.p2, a, b));
+  }
+
+  function segmentsIntersect(a, b, c, d) {
+    const cross = (p, q, r) => (q.x - p.x) * (r.y - p.y) - (q.y - p.y) * (r.x - p.x);
+    const onSegment = (p, q, r) =>
+      Math.min(p.x, q.x) - 1e-9 <= r.x &&
+      r.x <= Math.max(p.x, q.x) + 1e-9 &&
+      Math.min(p.y, q.y) - 1e-9 <= r.y &&
+      r.y <= Math.max(p.y, q.y) + 1e-9;
+    const c1 = cross(a, b, c);
+    const c2 = cross(a, b, d);
+    const c3 = cross(c, d, a);
+    const c4 = cross(c, d, b);
+    if (Math.abs(c1) < 1e-9 && onSegment(a, b, c)) return true;
+    if (Math.abs(c2) < 1e-9 && onSegment(a, b, d)) return true;
+    if (Math.abs(c3) < 1e-9 && onSegment(c, d, a)) return true;
+    if (Math.abs(c4) < 1e-9 && onSegment(c, d, b)) return true;
+    return c1 * c2 < 0 && c3 * c4 < 0;
+  }
+
+  function selectByRect(rect, crossing, additive = false) {
+    const nextPoints = additive ? [...selectedPoints] : [];
+    const nextLines = additive ? [...selectedLines] : [];
+    const nextCircles = additive ? [...selectedCircles] : [];
+    const nextArcs = additive ? [...selectedArcs] : [];
+
+    for (const p of model.points) {
+      if (!isExplicitPoint(p)) continue;
+      if (pointInRect(p, rect)) addUnique(nextPoints, p);
+    }
+    for (const line of model.lines) {
+      const selected = crossing ? lineIntersectsRect(line, rect) : bboxInRect(lineBBox(line), rect);
+      if (selected) addUnique(nextLines, line);
+    }
+    for (const circle of model.circles) {
+      const box = primitiveBBox(circle);
+      const selected = crossing ? bboxIntersectsRect(box, rect) : bboxInRect(box, rect);
+      if (selected) addUnique(nextCircles, circle);
+    }
+    for (const arc of model.arcs) {
+      const samples = arcSamplePoints(arc);
+      const selected = crossing ? samples.some((p) => pointInRect(p, rect)) : samples.every((p) => pointInRect(p, rect));
+      if (selected) addUnique(nextArcs, arc);
+    }
+
+    selectedPoints = nextPoints;
+    selectedLines = nextLines;
+    selectedCircles = nextCircles;
+    selectedArcs = nextArcs;
+    selectedArcEndpoint = null;
+    selectedArcEndpointPair = null;
+    selectedDimensionConstraint = null;
+  }
+
   function drawGrid(w, h) {
     const left = -viewport.x / viewport.scale;
     const top = -viewport.y / viewport.scale;
@@ -1295,6 +1418,20 @@
     drawArcPreview();
     drawArcEndpointHandles();
     drawPoints();
+    drawSelectionRect();
+    ctx.restore();
+  }
+
+  function drawSelectionRect() {
+    if (!selectionRectSession?.current) return;
+    const rect = rectFromPoints(selectionRectSession.start, selectionRectSession.current);
+    ctx.save();
+    ctx.strokeStyle = selectionRectSession.current.x < selectionRectSession.start.x ? "#f59e0b" : "#2563eb";
+    ctx.fillStyle = selectionRectSession.current.x < selectionRectSession.start.x ? "rgba(245, 158, 11, 0.08)" : "rgba(37, 99, 235, 0.08)";
+    ctx.lineWidth = 1.2 / viewport.scale;
+    ctx.setLineDash([5 / viewport.scale, 4 / viewport.scale]);
+    ctx.fillRect(rect.x1, rect.y1, rect.x2 - rect.x1, rect.y2 - rect.y1);
+    ctx.strokeRect(rect.x1, rect.y1, rect.x2 - rect.x1, rect.y2 - rect.y1);
     ctx.restore();
   }
 
@@ -2336,6 +2473,14 @@
   }
 
   function buildDragSession(kind, item, pointer) {
+    if (kind === "selection") {
+      const points = item
+        .filter((p, index, arr) => p && !p.fixed && arr.indexOf(p) === index)
+        .map((p) => ({ point: p, startX: p.x, startY: p.y }));
+      if (points.length === 0) return null;
+      return { kind, startPointer: pointer, points };
+    }
+
     if (kind === "point") {
       if (item.fixed) return null;
       return {
@@ -2373,6 +2518,27 @@
       .map((p) => ({ point: p, startX: p.x, startY: p.y }));
     if (points.length === 0) return null;
     return { kind, startPointer: pointer, points };
+  }
+
+  function selectedDragPoints() {
+    const points = [...selectedPoints];
+    for (const line of selectedLines) points.push(line.p1, line.p2);
+    for (const circle of selectedCircles) points.push(circle.center);
+    for (const arc of selectedArcs) points.push(arc.center);
+    return points;
+  }
+
+  function selectedElementCount() {
+    return selectedPoints.length + selectedLines.length + selectedCircles.length + selectedArcs.length + (selectedArcEndpoint ? 1 : 0);
+  }
+
+  function hitIsSelected(hitP, hitL, hitC, hitA, hitArcEnd) {
+    if (hitP && selectedPoints.includes(hitP)) return true;
+    if (hitL && selectedLines.includes(hitL)) return true;
+    if (hitC && selectedCircles.includes(hitC)) return true;
+    if (hitA && selectedArcs.includes(hitA)) return true;
+    if (hitArcEnd && sameArcEndpoint(selectedArcEndpoint, { arc: hitArcEnd.arc, endpoint: hitArcEnd.endpoint })) return true;
+    return false;
   }
 
   function dragTargets(session, pointer) {
@@ -2442,6 +2608,7 @@
   }
 
   function dragLabel(session) {
+    if (session.kind === "selection") return "選択移動";
     if (session.mode === "radius" && session.activeMode === "move") return "ドラッグ";
     if (session.mode === "radius") return "半径変更";
     if (session.mode === "arc-endpoint") return "円弧端点変更";
@@ -2449,7 +2616,10 @@
   }
 
   function beginDrag(e, hitP, hitL, hitC, hitA, hitArcEnd, pointer) {
-    if (hitP) {
+    if (selectedElementCount() > 1 && hitIsSelected(hitP, hitL, hitC, hitA, hitArcEnd)) {
+      dragSession = buildDragSession("selection", selectedDragPoints(), pointer);
+      selectedDimensionConstraint = null;
+    } else if (hitP) {
       selectedPoints = [hitP];
       selectedLines = [];
       selectedCircles = [];
@@ -2918,7 +3088,13 @@
       if (multiSelect) toggleArcSelection(hitA);
       else beginDrag(e, null, null, null, hitA, null, p);
     } else {
-      clearSelection();
+      selectionRectSession = {
+        pointerId: e.pointerId,
+        start: p,
+        current: p,
+        additive: multiSelect,
+      };
+      canvas.setPointerCapture(e.pointerId);
     }
 
     updateUI();
@@ -2935,6 +3111,12 @@
     }
 
     const p = canvasPoint(e);
+    if (selectionRectSession) {
+      selectionRectSession.current = p;
+      draw();
+      return;
+    }
+
     if (pendingCommand?.type === "distance-place") {
       pendingCommand.pointer = p;
       draw();
@@ -3022,6 +3204,27 @@
         // Pointer capture may already be released by the browser.
       }
       setHint("寸法線の位置を更新しました");
+      updateUI();
+      draw();
+      return;
+    }
+
+    if (selectionRectSession) {
+      const session = selectionRectSession;
+      selectionRectSession = null;
+      try {
+        canvas.releasePointerCapture(e.pointerId);
+      } catch (_) {
+        // Pointer capture may already be released by the browser.
+      }
+      const current = session.current || session.start;
+      const moved = hypot2(current.x - session.start.x, current.y - session.start.y);
+      if (moved <= 3 / viewport.scale) {
+        if (!session.additive) clearSelection();
+      } else {
+        selectByRect(rectFromPoints(session.start, current), current.x < session.start.x, session.additive);
+      }
+      setHint("矩形選択を更新しました");
       updateUI();
       draw();
       return;
