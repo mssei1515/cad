@@ -765,6 +765,17 @@
     return end;
   }
 
+  function arcEndpointDragValue(arc, endpoint, rawAngle) {
+    const twoPi = Math.PI * 2;
+    const prop = endpoint === "start" ? "startAngle" : "endAngle";
+    const value = unwrapAngleNear(rawAngle, arc[prop]);
+    const sweep = endpoint === "start" ? arc.endAngle - value : value - arc.startAngle;
+    if (Math.abs(sweep) >= twoPi - 1e-6) {
+      return endpoint === "start" ? arc.endAngle : arc.startAngle;
+    }
+    return value;
+  }
+
   function angleOnSignedSweep(angle, start, end) {
     const twoPi = Math.PI * 2;
     const sweep = end - start;
@@ -2051,6 +2062,25 @@
     draw();
   }
 
+  function startDimensionEditInput(hit) {
+    if (!hit?.constraint) return false;
+    const target = targetFromConstraint(hit.constraint);
+    if (!target) return false;
+    pendingCommand = {
+      type: "distance-value",
+      target,
+      dimension: hit.constraint.dimension || hit.dimension || defaultDimensionForTarget(target),
+      buffer: String(Number(hit.constraint.target).toFixed(3)),
+      editing: false,
+      constraint: hit.constraint,
+    };
+    selectedDimensionConstraint = hit.constraint;
+    dimensionDragSession = null;
+    setHint("寸法値を入力中: 数値キーで編集、Enter/ダブルクリックで決定、Escでキャンセル");
+    draw();
+    return true;
+  }
+
   function updateDistanceBufferLabel() {
     if (!pendingCommand || (pendingCommand.type !== "distance-value" && pendingCommand.type !== "fillet-radius-value")) return;
     setHint("寸法値を入力中: 数値キーで編集、Enter/ダブルクリックで決定、Escでキャンセル");
@@ -2065,8 +2095,24 @@
       draw();
       return;
     }
-    const { target, dimension } = pendingCommand;
+    const { target, dimension, constraint } = pendingCommand;
     pendingCommand = null;
+    if (constraint) {
+      const snapshot = snapshotModelState();
+      const previousTarget = constraint.target;
+      constraint.target = value;
+      const result = solver.solve();
+      if (!result.success || result.errorNorm > CONSTRAINT_ACCEPT_ERROR) {
+        restoreModelState(snapshot);
+        constraint.target = previousTarget;
+        setHint(`寸法値を更新できません: 矛盾しています (error=${result.errorNorm.toExponential(3)})`, "error");
+      } else {
+        setHint(`寸法値更新: success=${result.success}, error=${result.errorNorm.toExponential(2)}, iter=${result.iterations}`);
+      }
+      updateUI();
+      draw();
+      return;
+    }
     addDistanceConstraintFromTarget(target, value, dimension);
   }
 
@@ -2362,13 +2408,12 @@
   function arcEndpointDragTargets(session, pointer) {
     const prop = session.endpoint === "start" ? "startAngle" : "endAngle";
     const rawAngle = Math.atan2(pointer.y - session.item.center.y, pointer.x - session.item.center.x);
-    const value = unwrapAngleNear(rawAngle, session.item[prop]);
-    const clamped = prop === "startAngle" ? session.item.endAngle - clampArcEndAngle(value, session.item.endAngle) + value : clampArcEndAngle(session.item.startAngle, value);
+    const value = arcEndpointDragValue(session.item, session.endpoint, rawAngle);
     return [
       {
         object: session.item,
         prop,
-        value: clamped,
+        value,
       },
     ];
   }
@@ -2618,6 +2663,8 @@
     model.constraints.push(
       new ArcEndpointCoincidentConstraint(arc, "start", t1),
       new ArcEndpointCoincidentConstraint(arc, "end", t2),
+      new PointOnLineConstraint(corner, line1),
+      new PointOnLineConstraint(corner, line2),
       new LineCircleTangentConstraint(line1, arc),
       new LineCircleTangentConstraint(line2, arc),
       radiusConstraint,
@@ -2998,9 +3045,14 @@
     const p = canvasPoint(e);
     const hitL = hitLine(p.x, p.y);
     const hitP = hitPoint(p.x, p.y);
+    const hitD = hitDimension(p.x, p.y);
     if (pendingCommand?.type === "fillet-radius-value") {
       e.preventDefault();
       submitFilletRadiusValue();
+      return;
+    }
+    if (!pendingCommand && hitD && startDimensionEditInput(hitD)) {
+      e.preventDefault();
       return;
     }
     if (handleConstraintTargetDoubleClick(hitP, hitL, p)) {
