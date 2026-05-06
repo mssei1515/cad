@@ -3103,6 +3103,10 @@
   function attachLocalSolveContext(session) {
     if (!session) return session;
     session.local = localSolveContextFromSeeds(dragSessionSeeds(session));
+    session.local.pointStarts = model.points
+      .filter((p) => session.local.component.has(p) && !p.fixed && !pointLockedByLineFixed(p))
+      .map((point) => ({ point, startX: point.x, startY: point.y }));
+    session.local.fixedPointCount = model.points.filter((p) => session.local.component.has(p) && (p.fixed || pointLockedByLineFixed(p))).length;
     session.fullDragState = solver.clone(solver.getVariables());
     return session;
   }
@@ -3134,6 +3138,14 @@
     return session.points.map((p) => ({ point: p.point, x: p.startX + dx, y: p.startY + dy }));
   }
 
+  function localComponentMoveTargets(session, pointer) {
+    const pointStarts = session?.local?.pointStarts || [];
+    if (pointStarts.length === 0) return dragTargets(session, pointer);
+    const dx = pointer.x - session.startPointer.x;
+    const dy = pointer.y - session.startPointer.y;
+    return pointStarts.map((p) => ({ point: p.point, x: p.startX + dx, y: p.startY + dy }));
+  }
+
   function radiusDragTargets(session, pointer) {
     return [
       {
@@ -3150,6 +3162,11 @@
     const dx = pointer.x - session.startPointer.x;
     const dy = pointer.y - session.startPointer.y;
     return [{ point: session.item.center, x: session.startCenterX + dx, y: session.startCenterY + dy }];
+  }
+
+  function primitiveGuidedMoveTargets(session, pointer, fallbackTargets) {
+    const targets = localComponentMoveTargets(session, pointer);
+    return targets.length > fallbackTargets.length ? targets : fallbackTargets;
   }
 
   function hasDirectRadiusDimension(primitive) {
@@ -3222,6 +3239,23 @@
     return result;
   }
 
+  function solveTranslatedComponentDrag(session, pointer) {
+    if (!session?.local || session.local.fixedPointCount > 0) return null;
+    const targets = localComponentMoveTargets(session, pointer);
+    if (targets.length < 2) return null;
+    for (const target of targets) {
+      target.point.x = target.x;
+      target.point.y = target.y;
+    }
+    const result = solver.solveSubset({
+      variables: session.local.variables,
+      constraints: session.local.constraints,
+      lines: session.local.lines,
+    });
+    result.translated = true;
+    return result;
+  }
+
   function finalizeDragResult(result, state, session = null, extra = [], retry = null) {
     const lineRepair = enforceMinimumLineLengths(session?.local?.lines || model.lines);
     if (lineRepair.changed > 0) {
@@ -3248,7 +3282,11 @@
       if (hasDirectRadiusDimension(session.item)) {
         session.activeMode = "move";
         const extra = dragConstraintsFromTargets(moveTargets);
-        const retry = () => solveGuidedDragWithFallback(session, moveTargets, extra, () => solver.solve(extra), dragState);
+        const translated = solveTranslatedComponentDrag(session, pointer);
+        if (translated && translated.success && translated.errorNorm <= CONSTRAINT_ACCEPT_ERROR) return finalizeDragResult(translated, dragState, session, extra, () => solveTranslatedComponentDrag(session, pointer));
+        if (translated) solver.restore(dragState);
+        const targets = primitiveGuidedMoveTargets(session, pointer, moveTargets);
+        const retry = () => solveGuidedDragWithFallback(session, targets, extra, () => solver.solve(extra), dragState);
         result = retry();
         return finalizeDragResult(result, dragState, session, extra, retry);
       }
@@ -3261,7 +3299,7 @@
       if (!result.success && moveTargets.length > 0) {
         solver.restore(state);
         session.activeMode = "move";
-        targets = moveTargets;
+        targets = primitiveGuidedMoveTargets(session, pointer, moveTargets);
         extra = dragConstraintsFromTargets(moveTargets);
         retry = () => solveGuidedDragWithFallback(session, targets, extra, () => solver.solve(extra), dragState);
         result = retry();
@@ -3276,8 +3314,12 @@
       targets = arcEndpointDragTargets(session, pointer);
       extra = parameterDragConstraintsFromTargets(targets);
     } else {
-      targets = dragTargets(session, pointer);
-      extra = dragConstraintsFromTargets(targets);
+      const directTargets = dragTargets(session, pointer);
+      targets = localComponentMoveTargets(session, pointer);
+      extra = dragConstraintsFromTargets(directTargets);
+      const translated = directTargets.length >= 2 ? solveTranslatedComponentDrag(session, pointer) : null;
+      if (translated && translated.success && translated.errorNorm <= CONSTRAINT_ACCEPT_ERROR) return finalizeDragResult(translated, dragState, session, extra, () => solveTranslatedComponentDrag(session, pointer));
+      if (translated) solver.restore(dragState);
     }
     const retry = () => solveGuidedDragWithFallback(session, targets, extra, () => solver.solve(extra), dragState);
     result = retry();
@@ -3879,7 +3921,7 @@
       return;
     }
     const scope = result.local
-      ? `${result.guided ? "guided local" : "local"} vars=${result.variableCount}, constraints=${result.constraintCount}${Number.isFinite(result.freeDof) ? `, dof=${result.freeDof}` : ""}`
+      ? `${result.translated ? "translated local" : result.guided ? "guided local" : "local"} vars=${result.variableCount}, constraints=${result.constraintCount}${Number.isFinite(result.freeDof) ? `, dof=${result.freeDof}` : ""}`
       : "global";
     const fallback = result.fallback ? ` fallback from local error=${result.localErrorNorm?.toExponential(2)}` : "";
     setHint(`${dragLabel(dragSession)}中: ${scope}, error=${error.toExponential(2)}, iter=${result.iterations}${fallback}`);

@@ -903,11 +903,17 @@
       const baseErrors = this.computeErrorVectorForConstraints(activeConstraints);
       const J = this.computeJacobianForConstraints(variables, baseErrors, activeConstraints);
       const desired = this.variableTargetDelta(variables, targets);
-      const basis = LinearAlgebra.nullspaceBasis(J, 1e-9);
+      const basis = LinearAlgebra.nullspaceBasis(J, 1e-6);
       const projected = LinearAlgebra.projectOntoBasis(desired, basis);
       const limited = this.limitStep(projected);
       this.applyDelta(variables, limited);
-      const result = this.solveCore(variables, activeConstraints);
+      const projectedErrorNorm = vectorNorm(this.computeErrorVectorForConstraints(activeConstraints));
+      const startingErrorNorm = vectorNorm(baseErrors);
+      const acceptProjectedError = Math.max(this.tolerance, 1e-4, startingErrorNorm * 1.1 + 1e-9);
+      const result =
+        projectedErrorNorm <= acceptProjectedError
+          ? { success: true, errorNorm: projectedErrorNorm, iterations: 0, reason: "投影移動" }
+          : this.solveCore(variables, activeConstraints);
       result.local = true;
       result.guided = true;
       result.variableCount = variables.length;
@@ -915,6 +921,7 @@
       result.freeDof = basis.length;
       result.targetNorm = vectorNorm(desired);
       result.projectedNorm = vectorNorm(limited);
+      result.projectedErrorNorm = projectedErrorNorm;
       return result;
     }
 
