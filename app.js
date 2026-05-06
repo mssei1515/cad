@@ -70,6 +70,7 @@
   let arcCenterPoint = null;
   let arcStartPoint = null;
   let pointerPreview = null;
+  let activeSnap = null;
   let pendingCommand = null;
   let pendingConstraintCommand = null;
   let pointSeq = 1;
@@ -338,6 +339,7 @@
     hoveredArc = null;
     hoveredArcEndpoint = null;
     hoveredDimensionConstraint = null;
+    clearSnap();
     selectedArcEndpoint = null;
     selectedArcEndpointPair = null;
     selectedDimensionConstraint = null;
@@ -713,6 +715,10 @@
     return addPoint(x, y, false, "endpoint");
   }
 
+  function clearSnap() {
+    activeSnap = null;
+  }
+
   function clearSelection() {
     selectedPoints = [];
     selectedLines = [];
@@ -728,6 +734,7 @@
     rectangleStartPoint = null;
     filletFirstLine = null;
     pointerPreview = null;
+    clearSnap();
     mode = "select";
     updateToolbar();
     setHint("連続線を終了しました");
@@ -743,6 +750,7 @@
     arcCenterPoint = null;
     arcStartPoint = null;
     pointerPreview = null;
+    clearSnap();
     mode = "select";
     updateToolbar();
     setHint("選択・ドラッグモードに戻りました");
@@ -762,6 +770,7 @@
     arcCenterPoint = null;
     arcStartPoint = null;
     pointerPreview = null;
+    clearSnap();
     clearSelection();
     setHint("作図操作をキャンセルしました");
     updateUI();
@@ -858,6 +867,10 @@
     return Boolean(point?.kind === "endpoint" && !isPointUsedByPrimitive(point) && model.constraints.some((c) => c.enabled !== false && constraintReferencesPoint(c, point)));
   }
 
+  function isPrimitiveCenterPoint(point) {
+    return model.circles.some((circle) => circle.center === point) || model.arcs.some((arc) => arc.center === point);
+  }
+
   function isStandalonePoint(point) {
     return isExplicitPoint(point) && !isPointUsedByPrimitive(point);
   }
@@ -901,6 +914,17 @@
     let t = ((px - x1) * dx + (py - y1) * dy) / len2;
     t = Math.max(0, Math.min(1, t));
     return hypot2(px - (x1 + t * dx), py - (y1 + t * dy));
+  }
+
+  function closestPointOnSegment(px, py, line) {
+    const x1 = line.p1.x;
+    const y1 = line.p1.y;
+    const dx = line.p2.x - x1;
+    const dy = line.p2.y - y1;
+    const len2 = dx * dx + dy * dy;
+    if (len2 < 1e-12) return { x: x1, y: y1, t: 0 };
+    const t = Math.max(0, Math.min(1, ((px - x1) * dx + (py - y1) * dy) / len2));
+    return { x: x1 + t * dx, y: y1 + t * dy, t };
   }
 
   function distancePointToSegmentPoints(px, py, a, b) {
@@ -1107,6 +1131,81 @@
       }
     }
     return null;
+  }
+
+  function makeSnapCandidate(source, x, y, label, priority, data = {}) {
+    return {
+      x,
+      y,
+      label,
+      priority,
+      source,
+      data,
+      distance: hypot2(source.x - x, source.y - y),
+    };
+  }
+
+  function addSnapCandidate(candidates, source, x, y, label, priority, data = {}) {
+    if (!Number.isFinite(x) || !Number.isFinite(y)) return;
+    candidates.push(makeSnapCandidate(source, x, y, label, priority, data));
+  }
+
+  function circlePointAtPointer(source, primitive) {
+    const dx = source.x - primitive.center.x;
+    const dy = source.y - primitive.center.y;
+    const len = hypot2(dx, dy);
+    if (len < 1e-12) return null;
+    const r = primitive.radius();
+    return { x: primitive.center.x + (dx / len) * r, y: primitive.center.y + (dy / len) * r };
+  }
+
+  function snapCandidates(source) {
+    const candidates = [];
+    for (const p of model.points) {
+      if (isReferencePoint(p)) addSnapCandidate(candidates, source, p.x, p.y, "参照点", 0, { point: p });
+      else if (isPrimitiveCenterPoint(p)) addSnapCandidate(candidates, source, p.x, p.y, "中心", 0, { point: p });
+      else if (isEndpointPoint(p) && isPointUsedByPrimitive(p)) addSnapCandidate(candidates, source, p.x, p.y, "端点", 0, { point: p });
+      else if (isExplicitPoint(p)) addSnapCandidate(candidates, source, p.x, p.y, "点", 0, { point: p });
+    }
+    for (const line of model.lines) {
+      addSnapCandidate(candidates, source, (line.p1.x + line.p2.x) / 2, (line.p1.y + line.p2.y) / 2, "中点", 1, { line });
+      const closest = closestPointOnSegment(source.x, source.y, line);
+      addSnapCandidate(candidates, source, closest.x, closest.y, "線上", 2, { line });
+    }
+    for (const circle of model.circles) {
+      addSnapCandidate(candidates, source, circle.center.x, circle.center.y, "中心", 0, { primitive: circle });
+      const p = circlePointAtPointer(source, circle);
+      if (p) addSnapCandidate(candidates, source, p.x, p.y, "円周", 2, { primitive: circle });
+    }
+    for (const arc of model.arcs) {
+      addSnapCandidate(candidates, source, arc.center.x, arc.center.y, "中心", 0, { primitive: arc });
+      for (const endpoint of ["start", "end"]) {
+        const p = arcEndpointPoint(arc, endpoint);
+        addSnapCandidate(candidates, source, p.x, p.y, "端点", 0, { arc, endpoint });
+      }
+      const p = circlePointAtPointer(source, arc);
+      if (p && angleOnSignedSweep(Math.atan2(p.y - arc.center.y, p.x - arc.center.x), arc.startAngle, arc.endAngle)) {
+        addSnapCandidate(candidates, source, p.x, p.y, "円弧", 2, { arc });
+      }
+    }
+    return candidates;
+  }
+
+  function snapForDrawing(p) {
+    const threshold = 10 / viewport.scale;
+    let best = null;
+    for (const candidate of snapCandidates(p)) {
+      if (candidate.distance > threshold) continue;
+      if (
+        !best ||
+        candidate.priority < best.priority ||
+        (candidate.priority === best.priority && candidate.distance < best.distance)
+      ) {
+        best = candidate;
+      }
+    }
+    activeSnap = best;
+    return best ? { x: best.x, y: best.y } : p;
   }
 
   function hitDimension(x, y) {
@@ -1627,6 +1726,7 @@
     drawRectanglePreview();
     drawCirclePreview();
     drawArcPreview();
+    drawSnapMarker();
     drawArcEndpointHandles();
     drawPoints();
     drawSelectionRect();
@@ -1655,12 +1755,10 @@
       ctx.lineWidth = (sel || hovered ? 3 : 2) / viewport.scale;
       ctx.lineCap = "round";
       ctx.lineJoin = "round";
-      if (findLineFixedConstraint(l)) ctx.setLineDash([8 / viewport.scale, 4 / viewport.scale]);
       ctx.beginPath();
       ctx.moveTo(l.p1.x, l.p1.y);
       ctx.lineTo(l.p2.x, l.p2.y);
       ctx.stroke();
-      ctx.setLineDash([]);
 
       if (sel || hovered) {
         const mx = (l.p1.x + l.p2.x) / 2;
@@ -1969,6 +2067,29 @@
     drawConstructionPoint(arcCenterPoint);
   }
 
+  function drawSnapMarker() {
+    if (!activeSnap) return;
+    ctx.save();
+    const r = 6 / viewport.scale;
+    ctx.strokeStyle = "#f59e0b";
+    ctx.fillStyle = "#f59e0b";
+    ctx.lineWidth = 1.5 / viewport.scale;
+    ctx.beginPath();
+    ctx.moveTo(activeSnap.x - r, activeSnap.y);
+    ctx.lineTo(activeSnap.x + r, activeSnap.y);
+    ctx.moveTo(activeSnap.x, activeSnap.y - r);
+    ctx.lineTo(activeSnap.x, activeSnap.y + r);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.arc(activeSnap.x, activeSnap.y, 3 / viewport.scale, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.font = `${11 / viewport.scale}px system-ui`;
+    ctx.textAlign = "left";
+    ctx.textBaseline = "bottom";
+    ctx.fillText(activeSnap.label, activeSnap.x + 8 / viewport.scale, activeSnap.y - 8 / viewport.scale);
+    ctx.restore();
+  }
+
   function drawConstructionPoint(point) {
     ctx.save();
     ctx.beginPath();
@@ -2018,7 +2139,7 @@
 
   function drawPoints() {
     for (const p of model.points) {
-      if (!isExplicitPoint(p) && !isPointUsedByPrimitive(p)) continue;
+      if (!isExplicitPoint(p) && !isPointUsedByPrimitive(p) && !isReferencePoint(p)) continue;
       const sel = selectedPoints.includes(p);
       const endpoint = isEndpointPoint(p);
       const hovered = hoveredPoint === p || hoveredEndpointPoint === p;
@@ -2988,6 +3109,7 @@
 
   function handleLineClick(p, lockOrthogonal = false) {
     if (lineStartPoint && lockOrthogonal) p = orthogonalPointFrom(lineStartPoint, p);
+    p = snapForDrawing(p);
     if (lineStartPoint) p = pointAtMinimumDistance(lineStartPoint, p);
     const endpoint = lineStartPoint && hypot2(p.x - lineStartPoint.x, p.y - lineStartPoint.y) <= MIN_LINE_LENGTH + 1e-9 ? addPoint(p.x, p.y, false, "endpoint") : endpointAt(p.x, p.y);
     pointerPreview = p;
@@ -3029,6 +3151,7 @@
   }
 
   function handleRectangleClick(p) {
+    p = snapForDrawing(p);
     pointerPreview = p;
     if (!rectangleStartPoint) {
       rectangleStartPoint = endpointAt(p.x, p.y);
@@ -3061,6 +3184,7 @@
     selectedArcs = [];
     rectangleStartPoint = null;
     pointerPreview = null;
+    clearSnap();
     const result = solveAndRefresh("矩形追加");
     clearSelection();
     updateUI();
@@ -3200,6 +3324,7 @@
   }
 
   function handleCircleClick(p) {
+    p = snapForDrawing(p);
     pointerPreview = p;
     if (!circleCenterPoint) {
       const center = endpointAt(p.x, p.y);
@@ -3221,6 +3346,7 @@
       selectedArcs = [];
       circleCenterPoint = null;
       pointerPreview = null;
+      clearSnap();
       solveAndRefresh("円追加");
       clearSelection();
       updateUI();
@@ -3229,6 +3355,7 @@
   }
 
   function handleArcClick(p) {
+    p = snapForDrawing(p);
     pointerPreview = p;
     if (!arcCenterPoint) {
       const center = endpointAt(p.x, p.y);
@@ -3268,6 +3395,7 @@
       arcCenterPoint = null;
       arcStartPoint = null;
       pointerPreview = null;
+      clearSnap();
       solveAndRefresh("円弧追加");
       clearSelection();
       updateUI();
@@ -3316,7 +3444,9 @@
     }
 
     if (mode === "point") {
-      const np = addPoint(p.x, p.y, false);
+      const sp = snapForDrawing(p);
+      const np = addPoint(sp.x, sp.y, false);
+      clearSnap();
       selectedPoints = [np];
       selectedLines = [];
       selectedCircles = [];
@@ -3411,18 +3541,21 @@
 
     const p = canvasPoint(e);
     if (selectionRectSession) {
+      clearSnap();
       selectionRectSession.current = p;
       draw();
       return;
     }
 
     if (pendingCommand?.type === "distance-place") {
+      clearSnap();
       pendingCommand.pointer = p;
       draw();
       return;
     }
 
     if (dimensionDragSession) {
+      clearSnap();
       const dx = p.x - dimensionDragSession.startPointer.x;
       const dy = p.y - dimensionDragSession.startPointer.y;
       const anchor = {
@@ -3435,12 +3568,13 @@
     }
 
     if (mode === "line") {
-      pointerPreview = lineStartPoint && e.shiftKey ? orthogonalPointFrom(lineStartPoint, p) : p;
+      const rawPreview = lineStartPoint && e.shiftKey ? orthogonalPointFrom(lineStartPoint, p) : p;
+      pointerPreview = snapForDrawing(rawPreview);
       draw();
     }
 
     if (mode === "rectangle" || mode === "circle" || mode === "arc") {
-      pointerPreview = p;
+      pointerPreview = snapForDrawing(p);
       draw();
     }
 
@@ -3645,6 +3779,7 @@
     arcCenterPoint = null;
     arcStartPoint = null;
     pointerPreview = null;
+    clearSnap();
     updateToolbar();
     setHint("選択・ドラッグできます。Shift/Ctrlクリックで複数選択できます。");
     draw();
@@ -3660,6 +3795,7 @@
     arcCenterPoint = null;
     arcStartPoint = null;
     pointerPreview = null;
+    clearSnap();
     updateToolbar();
     setHint("キャンバスをクリックして点を追加します。");
     draw();
@@ -3675,6 +3811,7 @@
     arcCenterPoint = null;
     arcStartPoint = null;
     pointerPreview = null;
+    clearSnap();
     updateToolbar();
     setHint("端点位置をクリックして連続線を作成します。終了はEscです。");
     draw();
@@ -3690,6 +3827,7 @@
     arcCenterPoint = null;
     arcStartPoint = null;
     pointerPreview = null;
+    clearSnap();
     updateToolbar();
     setHint("矩形の1つ目の角をクリックしてください。Escで選択モードに戻ります");
     draw();
@@ -3710,6 +3848,7 @@
     arcCenterPoint = null;
     arcStartPoint = null;
     pointerPreview = null;
+    clearSnap();
     updateToolbar();
     setHint("R面取りする接続線を2本クリックしてください");
     draw();
@@ -3725,6 +3864,7 @@
     arcCenterPoint = null;
     arcStartPoint = null;
     pointerPreview = null;
+    clearSnap();
     updateToolbar();
     setHint("円の中心をクリックしてください。Escで選択モードに戻ります");
     draw();
@@ -3740,6 +3880,7 @@
     arcCenterPoint = null;
     arcStartPoint = null;
     pointerPreview = null;
+    clearSnap();
     updateToolbar();
     setHint("円弧の中心をクリックしてください。Escで選択モードに戻ります");
     draw();
