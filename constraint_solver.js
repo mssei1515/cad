@@ -684,10 +684,10 @@
       return vs;
     }
 
-    syncLineOrientationHints(extra = []) {
+    syncLineOrientationHints(extra = [], baseConstraints = this.model.constraints) {
       for (const line of this.model.lines || []) line.orientationHint = null;
       const hints = new Map();
-      for (const c of [...this.model.constraints, ...extra]) {
+      for (const c of [...baseConstraints, ...extra]) {
         if (!c.enabled) continue;
         if (c instanceof HorizontalConstraint) {
           const hint = hints.get(c.line);
@@ -702,13 +702,21 @@
 
     getConstraints(extra = []) {
       this.syncLineOrientationHints(extra);
-      const lineMinimums = (this.model.lines || []).map((line) => new LineMinimumLengthConstraint(line, this.minLineLength));
-      return [...this.model.constraints, ...lineMinimums, ...extra].filter((c) => c.enabled);
+      return this.constraintsWithLineMinimums(this.model.constraints, extra, this.model.lines || []);
+    }
+
+    constraintsWithLineMinimums(constraints = [], extra = [], lines = []) {
+      const lineMinimums = (lines || []).map((line) => new LineMinimumLengthConstraint(line, this.minLineLength));
+      return [...constraints, ...lineMinimums, ...extra].filter((c) => c.enabled);
     }
 
     computeErrorVector(extra = []) {
+      return this.computeErrorVectorForConstraints(this.getConstraints(extra));
+    }
+
+    computeErrorVectorForConstraints(constraints) {
       const errors = [];
-      for (const c of this.getConstraints(extra)) {
+      for (const c of constraints) {
         const e = c.error();
         const vals = Array.isArray(e) ? e : [e];
         for (const v of vals) errors.push(v);
@@ -717,6 +725,10 @@
     }
 
     computeJacobian(vars, baseErrors, extra = []) {
+      return this.computeJacobianForConstraints(vars, baseErrors, this.getConstraints(extra));
+    }
+
+    computeJacobianForConstraints(vars, baseErrors, constraints) {
       const m = baseErrors.length;
       const n = vars.length;
       const J = Array.from({ length: m }, () => Array(n).fill(0));
@@ -725,9 +737,9 @@
         const orig = v.object[v.prop];
         const h = this.diffStep * Math.max(1, Math.abs(orig));
         v.object[v.prop] = Number.isFinite(v.min) ? Math.max(v.min, orig + h) : orig + h;
-        const plus = this.computeErrorVector(extra);
+        const plus = this.computeErrorVectorForConstraints(constraints);
         v.object[v.prop] = Number.isFinite(v.min) ? Math.max(v.min, orig - h) : orig - h;
-        const minus = this.computeErrorVector(extra);
+        const minus = this.computeErrorVectorForConstraints(constraints);
         v.object[v.prop] = orig;
         for (let i = 0; i < m; i++) J[i][j] = (plus[i] - minus[i]) / (2 * h);
       }
@@ -776,10 +788,9 @@
       return dx.map((v) => v * scale);
     }
 
-    solve(extra = []) {
-      const vars = this.getVariables();
+    solveCore(vars, constraints) {
       let lambda = this.initialLambda;
-      let F = this.computeErrorVector(extra);
+      let F = this.computeErrorVectorForConstraints(constraints);
       let errorNorm = vectorNorm(F);
       if (F.length === 0) {
         return { success: true, errorNorm: 0, iterations: 0, reason: "拘束がありません" };
@@ -797,13 +808,13 @@
         if (errorNorm < this.tolerance) return { success: true, errorNorm, iterations: iter, reason: "収束しました" };
 
         const state = this.clone(vars);
-        const J = this.computeJacobian(vars, F, extra);
+        const J = this.computeJacobianForConstraints(vars, F, constraints);
         const { A, b } = this.buildAugmentedSystem(J, F, lambda);
         let dx = LinearAlgebra.solveLeastSquaresQR(A, b);
         dx = this.limitStep(dx);
         this.applyDelta(vars, dx);
 
-        const trialF = this.computeErrorVector(extra);
+        const trialF = this.computeErrorVectorForConstraints(constraints);
         const trialNorm = vectorNorm(trialF);
         if (trialNorm < errorNorm) {
           F = trialF;
@@ -818,6 +829,21 @@
       }
 
       return { success: false, errorNorm, iterations: this.maxIterations, reason: "最大反復" };
+    }
+
+    solve(extra = []) {
+      const vars = this.getVariables();
+      return this.solveCore(vars, this.getConstraints(extra));
+    }
+
+    solveSubset({ variables = [], constraints = [], extra = [], lines = [] } = {}) {
+      this.syncLineOrientationHints(extra, constraints);
+      const activeConstraints = this.constraintsWithLineMinimums(constraints, extra, lines);
+      const result = this.solveCore(variables, activeConstraints);
+      result.local = true;
+      result.variableCount = variables.length;
+      result.constraintCount = activeConstraints.length;
+      return result;
     }
 
     solveWithDrag(point, x, y) {

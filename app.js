@@ -35,6 +35,8 @@
     ArcEndpointOnCircleConstraint,
     LineCircleTangentConstraint,
     CircleCircleTangentConstraint,
+    DragConstraint,
+    ParameterDragConstraint,
     ConstraintSolver,
   } = window.GeometrySolver;
 
@@ -1479,6 +1481,178 @@
     return false;
   }
 
+  function addNode(nodes, value) {
+    if (value) nodes.add(value);
+  }
+
+  function constraintGraphNodes(c) {
+    const nodes = new Set();
+    if (c instanceof DistanceConstraint) {
+      addNode(nodes, c.p1);
+      addNode(nodes, c.p2);
+    } else if (c instanceof PointLineDistanceConstraint) {
+      addNode(nodes, c.point);
+      addNode(nodes, c.line);
+      addNode(nodes, c.line.p1);
+      addNode(nodes, c.line.p2);
+    } else if (c instanceof LineLineDistanceConstraint) {
+      for (const line of [c.line1, c.line2]) {
+        addNode(nodes, line);
+        addNode(nodes, line.p1);
+        addNode(nodes, line.p2);
+      }
+    } else if (c instanceof CoincidentConstraint) {
+      addNode(nodes, c.p1);
+      addNode(nodes, c.p2);
+    } else if (c instanceof ArcEndpointCoincidentConstraint) {
+      addNode(nodes, c.arc);
+      addNode(nodes, c.arc.center);
+      addNode(nodes, c.point);
+    } else if (c instanceof ArcEndpointArcEndpointCoincidentConstraint) {
+      for (const arc of [c.a, c.b]) {
+        addNode(nodes, arc);
+        addNode(nodes, arc.center);
+      }
+    } else if (c instanceof PointOnLineConstraint) {
+      addNode(nodes, c.point);
+      addNode(nodes, c.line);
+      addNode(nodes, c.line.p1);
+      addNode(nodes, c.line.p2);
+    } else if (c instanceof ArcEndpointOnLineConstraint) {
+      addNode(nodes, c.arc);
+      addNode(nodes, c.arc.center);
+      addNode(nodes, c.line);
+      addNode(nodes, c.line.p1);
+      addNode(nodes, c.line.p2);
+    } else if (c instanceof ArcEndpointFixedConstraint) {
+      addNode(nodes, c.arc);
+      addNode(nodes, c.arc.center);
+    } else if (c instanceof LineFixedConstraint || c instanceof HorizontalConstraint || c instanceof VerticalConstraint) {
+      addNode(nodes, c.line);
+      addNode(nodes, c.line.p1);
+      addNode(nodes, c.line.p2);
+    } else if (c instanceof ParallelConstraint || c instanceof PerpendicularConstraint || c instanceof CollinearConstraint || c instanceof EqualLengthConstraint) {
+      for (const line of [c.line1, c.line2]) {
+        addNode(nodes, line);
+        addNode(nodes, line.p1);
+        addNode(nodes, line.p2);
+      }
+    } else if (c instanceof RadiusConstraint || c instanceof DiameterConstraint || c instanceof PointOnCircleConstraint || c instanceof ArcEndpointOnCircleConstraint || c instanceof LineCircleTangentConstraint) {
+      if (c.point) addNode(nodes, c.point);
+      if (c.arc) {
+        addNode(nodes, c.arc);
+        addNode(nodes, c.arc.center);
+      }
+      if (c.line) {
+        addNode(nodes, c.line);
+        addNode(nodes, c.line.p1);
+        addNode(nodes, c.line.p2);
+      }
+      if (c.primitive) {
+        addNode(nodes, c.primitive);
+        addNode(nodes, c.primitive.center);
+      }
+    } else if (c instanceof ConcentricConstraint || c instanceof EqualRadiusConstraint || c instanceof CircleCircleTangentConstraint) {
+      for (const item of [c.a, c.b]) {
+        addNode(nodes, item);
+        addNode(nodes, item.center || item);
+      }
+    }
+    return [...nodes];
+  }
+
+  function addIntrinsicGraphEdges(adjacency, a, b) {
+    if (!a || !b) return;
+    if (!adjacency.has(a)) adjacency.set(a, new Set());
+    if (!adjacency.has(b)) adjacency.set(b, new Set());
+    adjacency.get(a).add(b);
+    adjacency.get(b).add(a);
+  }
+
+  function buildConstraintAdjacency() {
+    const adjacency = new Map();
+    for (const p of model.points) {
+      if (!adjacency.has(p)) adjacency.set(p, new Set());
+    }
+    for (const line of model.lines) {
+      addIntrinsicGraphEdges(adjacency, line, line.p1);
+      addIntrinsicGraphEdges(adjacency, line, line.p2);
+    }
+    for (const circle of model.circles) addIntrinsicGraphEdges(adjacency, circle, circle.center);
+    for (const arc of model.arcs) addIntrinsicGraphEdges(adjacency, arc, arc.center);
+
+    for (const constraint of model.constraints) {
+      if (constraint.enabled === false) continue;
+      const nodes = constraintGraphNodes(constraint);
+      for (const node of nodes) {
+        if (!adjacency.has(node)) adjacency.set(node, new Set());
+      }
+      for (let i = 0; i < nodes.length; i++) {
+        for (let j = i + 1; j < nodes.length; j++) addIntrinsicGraphEdges(adjacency, nodes[i], nodes[j]);
+      }
+    }
+    return adjacency;
+  }
+
+  function connectedComponentFromSeeds(seeds) {
+    const adjacency = buildConstraintAdjacency();
+    const seen = new Set();
+    const queue = [];
+    for (const seed of seeds) {
+      if (!seed || seen.has(seed)) continue;
+      seen.add(seed);
+      queue.push(seed);
+    }
+    while (queue.length > 0) {
+      const node = queue.shift();
+      for (const next of adjacency.get(node) || []) {
+        if (seen.has(next)) continue;
+        seen.add(next);
+        queue.push(next);
+      }
+    }
+    return seen;
+  }
+
+  function localSolveVariables(component) {
+    const vars = [];
+    for (const p of model.points) {
+      if (component.has(p) && !p.fixed) {
+        vars.push({ object: p, prop: "x", label: `${p.id}.x` });
+        vars.push({ object: p, prop: "y", label: `${p.id}.y` });
+      }
+    }
+    for (const c of model.circles) {
+      if (component.has(c)) vars.push({ object: c, prop: "radiusValue", label: `${c.id}.r`, min: MIN_LINE_LENGTH });
+    }
+    for (const a of model.arcs) {
+      if (component.has(a)) {
+        vars.push({ object: a, prop: "radiusValue", label: `${a.id}.r`, min: MIN_LINE_LENGTH });
+        vars.push({ object: a, prop: "startAngle", label: `${a.id}.startAngle` });
+        vars.push({ object: a, prop: "endAngle", label: `${a.id}.endAngle` });
+      }
+    }
+    return vars;
+  }
+
+  function localSolveConstraints(component) {
+    return model.constraints.filter((constraint) => constraint.enabled !== false && constraintGraphNodes(constraint).some((node) => component.has(node)));
+  }
+
+  function localSolveLines(component) {
+    return model.lines.filter((line) => component.has(line));
+  }
+
+  function localSolveContextFromSeeds(seeds) {
+    const component = connectedComponentFromSeeds(seeds);
+    return {
+      component,
+      variables: localSolveVariables(component),
+      constraints: localSolveConstraints(component),
+      lines: localSolveLines(component),
+    };
+  }
+
   function removeFromArray(array, item) {
     const i = array.indexOf(item);
     if (i >= 0) array.splice(i, 1);
@@ -2909,10 +3083,28 @@
 
     const sourcePoints = [item.p1, item.p2];
     const points = sourcePoints
-      .filter((p, index, arr) => !p.fixed && arr.indexOf(p) === index)
+      .filter((p, index, arr) => !p.fixed && !pointLockedByLineFixed(p) && arr.indexOf(p) === index)
       .map((p) => ({ point: p, startX: p.x, startY: p.y }));
     if (points.length === 0) return null;
-    return { kind, startPointer: pointer, points };
+    return { kind, item, startPointer: pointer, points };
+  }
+
+  function dragSessionSeeds(session) {
+    const seeds = [];
+    if (!session) return seeds;
+    if (session.item) {
+      seeds.push(session.item);
+      if (session.item.center) seeds.push(session.item.center);
+    }
+    for (const p of session.points || []) seeds.push(p.point);
+    return seeds;
+  }
+
+  function attachLocalSolveContext(session) {
+    if (!session) return session;
+    session.local = localSolveContextFromSeeds(dragSessionSeeds(session));
+    session.fullDragState = solver.clone(solver.getVariables());
+    return session;
   }
 
   function selectedDragPoints() {
@@ -2979,9 +3171,40 @@
     ];
   }
 
-  function finalizeDragResult(result, state) {
-    const lineRepair = enforceMinimumLineLengths();
-    if (lineRepair.changed > 0) result = solver.solve();
+  function dragConstraintsFromTargets(targets) {
+    return targets.map((target) => new DragConstraint(target.point, target.x, target.y));
+  }
+
+  function parameterDragConstraintsFromTargets(targets) {
+    return targets.map((target) => new ParameterDragConstraint(target.object, target.prop, target.value, target.min));
+  }
+
+  function solveLocalDrag(session, extra) {
+    if (!session?.local) return null;
+    return solver.solveSubset({
+      variables: session.local.variables,
+      constraints: session.local.constraints,
+      lines: session.local.lines,
+      extra,
+    });
+  }
+
+  function solveDragWithFallback(session, extra, fullSolve, restoreState = null) {
+    const localResult = solveLocalDrag(session, extra);
+    if (localResult && localResult.success && localResult.errorNorm <= CONSTRAINT_ACCEPT_ERROR) return localResult;
+    if (restoreState) solver.restore(restoreState);
+    const result = fullSolve();
+    result.local = false;
+    result.fallback = Boolean(localResult);
+    result.localErrorNorm = localResult?.errorNorm;
+    return result;
+  }
+
+  function finalizeDragResult(result, state, session = null, extra = []) {
+    const lineRepair = enforceMinimumLineLengths(session?.local?.lines || model.lines);
+    if (lineRepair.changed > 0) {
+      result = session?.local ? solveDragWithFallback(session, extra, () => solver.solve(extra), state) : solver.solve(extra);
+    }
     normalizeArcSweeps();
     result.lineRepair = lineRepair;
     if (lineRepair.failed) {
@@ -3002,25 +3225,30 @@
       const moveTargets = primitiveMoveTargets(session, pointer);
       if (hasDirectRadiusDimension(session.item)) {
         session.activeMode = "move";
-        result = solver.solveWithDragTargets(moveTargets);
-        return finalizeDragResult(result, dragState);
+        const extra = dragConstraintsFromTargets(moveTargets);
+        result = solveDragWithFallback(session, extra, () => solver.solve(extra), dragState);
+        return finalizeDragResult(result, dragState, session, extra);
       }
 
       const vars = solver.getVariables();
       const state = solver.clone(vars);
-      result = solver.solveWithParameterDragTargets(radiusDragTargets(session, pointer));
+      let extra = parameterDragConstraintsFromTargets(radiusDragTargets(session, pointer));
+      result = solveDragWithFallback(session, extra, () => solver.solve(extra), dragState);
       if (!result.success && moveTargets.length > 0) {
         solver.restore(state);
         session.activeMode = "move";
-        result = solver.solveWithDragTargets(moveTargets);
-        return finalizeDragResult(result, dragState);
+        extra = dragConstraintsFromTargets(moveTargets);
+        result = solveDragWithFallback(session, extra, () => solver.solve(extra), dragState);
+        return finalizeDragResult(result, dragState, session, extra);
       }
       session.activeMode = "radius";
-      return finalizeDragResult(result, dragState);
+      return finalizeDragResult(result, dragState, session, extra);
     }
-    if (session.mode === "arc-endpoint") result = solver.solveWithParameterDragTargets(arcEndpointDragTargets(session, pointer));
-    else result = solver.solveWithDragTargets(dragTargets(session, pointer));
-    return finalizeDragResult(result, dragState);
+    let extra;
+    if (session.mode === "arc-endpoint") extra = parameterDragConstraintsFromTargets(arcEndpointDragTargets(session, pointer));
+    else extra = dragConstraintsFromTargets(dragTargets(session, pointer));
+    result = solveDragWithFallback(session, extra, () => solver.solve(extra), dragState);
+    return finalizeDragResult(result, dragState, session, extra);
   }
 
   function dragLabel(session) {
@@ -3073,6 +3301,7 @@
     }
 
     if (dragSession) {
+      attachLocalSolveContext(dragSession);
       canvas.classList.add("is-dragging");
       canvas.setPointerCapture(e.pointerId);
       setHint(`${dragLabel(dragSession)}中: 拘束を保ちながら自動solveしています`);
@@ -3609,14 +3838,16 @@
 
     if (!dragSession) return;
     const result = dragResultForSession(dragSession, p);
-    const error = geometryErrorNorm();
+    const error = result.errorNorm;
     if (result.blocked) {
       setHint(result.reason, "error");
       updateUI();
       draw();
       return;
     }
-    setHint(`${dragLabel(dragSession)}中: 拘束error=${error.toExponential(2)}, iter=${result.iterations}`);
+    const scope = result.local ? `local vars=${result.variableCount}, constraints=${result.constraintCount}` : "global";
+    const fallback = result.fallback ? ` fallback from local error=${result.localErrorNorm?.toExponential(2)}` : "";
+    setHint(`${dragLabel(dragSession)}中: ${scope}, error=${error.toExponential(2)}, iter=${result.iterations}${fallback}`);
     draw();
   });
 
@@ -3669,7 +3900,8 @@
     }
 
     if (!dragSession) return;
-    const completedLabel = dragLabel(dragSession);
+    const session = dragSession;
+    const completedLabel = dragLabel(session);
     dragSession = null;
     canvas.classList.remove("is-dragging");
     try {
@@ -3677,7 +3909,19 @@
     } catch (_) {
       // Pointer capture may already be released by the browser.
     }
-    solveAndRefresh(`${completedLabel}完了`);
+    const result = solver.solve();
+    normalizeArcSweeps();
+    if (!result.success || result.errorNorm > CONSTRAINT_ACCEPT_ERROR) {
+      if (session.fullDragState) solver.restore(session.fullDragState);
+      setHint(`${completedLabel}完了時の全体solveに失敗しました (error=${result.errorNorm.toExponential(3)})`, "error");
+      updateUI();
+      draw();
+      return;
+    }
+    const analysis = refreshConstraintAnalysis();
+    setHint(`${completedLabel}完了: success=${result.success}, error=${result.errorNorm.toExponential(2)}, iter=${result.iterations} / ${constraintSummaryText()}`, analysis.analysis.stable ? "normal" : "error");
+    updateUI();
+    draw();
   }
 
   canvas.addEventListener("pointerup", endDrag);
