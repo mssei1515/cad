@@ -1532,7 +1532,7 @@
 
   function constraintGraphNodes(c) {
     const nodes = new Set();
-    if (c instanceof DistanceConstraint) {
+    if (c instanceof DistanceConstraint || c instanceof PointAxisDistanceConstraint) {
       addNode(nodes, c.p1);
       addNode(nodes, c.p2);
     } else if (c instanceof PointLineDistanceConstraint) {
@@ -2262,7 +2262,7 @@
       return;
     }
     if (!pendingCommand?.type?.startsWith("distance")) return;
-    const dimension = pendingCommand.type === "distance-place" ? pendingCommand.pointer || defaultDimensionForTarget(pendingCommand.target) : pendingCommand.dimension;
+    const dimension = pendingCommand.type === "distance-place" ? (pendingCommand.pointer ? dimensionFromAnchor(pendingCommand.target, pendingCommand.pointer) : defaultDimensionForTarget(pendingCommand.target)) : pendingCommand.dimension;
     if (pendingCommand.type === "distance-value") {
       const value = Number(pendingCommand.buffer);
       const invalid = pendingCommand.buffer === "" || !Number.isFinite(value) || value <= 0;
