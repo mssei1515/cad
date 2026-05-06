@@ -650,6 +650,40 @@
       }
       return { active, rank, freeColumns };
     }
+
+    static nullspaceBasis(A, tolerance = 1e-9) {
+      const n = A[0]?.length || 0;
+      if (n === 0) return [];
+      if (A.length === 0) {
+        return Array.from({ length: n }, (_, i) => {
+          const v = Array(n).fill(0);
+          v[i] = 1;
+          return v;
+        });
+      }
+      const { rows, pivotCols } = LinearAlgebra.reducedRowEchelon(A, tolerance);
+      const pivotSet = new Set(pivotCols);
+      const basis = [];
+      for (let c = 0; c < n; c++) {
+        if (pivotSet.has(c)) continue;
+        const v = Array(n).fill(0);
+        v[c] = 1;
+        for (let r = 0; r < pivotCols.length; r++) v[pivotCols[r]] = -rows[r][c];
+        basis.push(v);
+      }
+      return basis;
+    }
+
+    static projectOntoBasis(vector, basis) {
+      const projected = Array(vector.length).fill(0);
+      if (basis.length === 0) return projected;
+      const A = Array.from({ length: vector.length }, (_, r) => basis.map((b) => b[r]));
+      const coeffs = LinearAlgebra.solveLeastSquaresQR(A, vector);
+      for (let j = 0; j < basis.length; j++) {
+        for (let i = 0; i < projected.length; i++) projected[i] += basis[j][i] * coeffs[j];
+      }
+      return projected;
+    }
   }
 
   class ConstraintSolver {
@@ -843,6 +877,44 @@
       result.local = true;
       result.variableCount = variables.length;
       result.constraintCount = activeConstraints.length;
+      return result;
+    }
+
+    variableTargetDelta(variables, targets = []) {
+      const delta = Array(variables.length).fill(0);
+      for (let i = 0; i < variables.length; i++) {
+        const v = variables[i];
+        for (const target of targets) {
+          if (target.point && target.point === v.object) {
+            if (v.prop === "x") delta[i] = target.x - v.object.x;
+            if (v.prop === "y") delta[i] = target.y - v.object.y;
+          } else if (target.object && target.object === v.object && target.prop === v.prop) {
+            const value = Number.isFinite(target.min) ? Math.max(target.min, target.value) : target.value;
+            delta[i] = value - v.object[v.prop];
+          }
+        }
+      }
+      return delta;
+    }
+
+    solveSubsetGuided({ variables = [], constraints = [], targets = [], lines = [] } = {}) {
+      this.syncLineOrientationHints([], constraints);
+      const activeConstraints = this.constraintsWithLineMinimums(constraints, [], lines);
+      const baseErrors = this.computeErrorVectorForConstraints(activeConstraints);
+      const J = this.computeJacobianForConstraints(variables, baseErrors, activeConstraints);
+      const desired = this.variableTargetDelta(variables, targets);
+      const basis = LinearAlgebra.nullspaceBasis(J, 1e-9);
+      const projected = LinearAlgebra.projectOntoBasis(desired, basis);
+      const limited = this.limitStep(projected);
+      this.applyDelta(variables, limited);
+      const result = this.solveCore(variables, activeConstraints);
+      result.local = true;
+      result.guided = true;
+      result.variableCount = variables.length;
+      result.constraintCount = activeConstraints.length;
+      result.freeDof = basis.length;
+      result.targetNorm = vectorNorm(desired);
+      result.projectedNorm = vectorNorm(limited);
       return result;
     }
 

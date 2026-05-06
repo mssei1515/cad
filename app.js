@@ -3189,6 +3189,16 @@
     });
   }
 
+  function solveLocalGuidedDrag(session, targets) {
+    if (!session?.local) return null;
+    return solver.solveSubsetGuided({
+      variables: session.local.variables,
+      constraints: session.local.constraints,
+      lines: session.local.lines,
+      targets,
+    });
+  }
+
   function solveDragWithFallback(session, extra, fullSolve, restoreState = null) {
     const localResult = solveLocalDrag(session, extra);
     if (localResult && localResult.success && localResult.errorNorm <= CONSTRAINT_ACCEPT_ERROR) return localResult;
@@ -3200,10 +3210,22 @@
     return result;
   }
 
-  function finalizeDragResult(result, state, session = null, extra = []) {
+  function solveGuidedDragWithFallback(session, targets, fallbackExtra, fullSolve, restoreState = null) {
+    const localResult = solveLocalGuidedDrag(session, targets);
+    if (localResult && localResult.success && localResult.errorNorm <= CONSTRAINT_ACCEPT_ERROR) return localResult;
+    if (restoreState) solver.restore(restoreState);
+    const result = fullSolve();
+    result.local = false;
+    result.guided = false;
+    result.fallback = Boolean(localResult);
+    result.localErrorNorm = localResult?.errorNorm;
+    return result;
+  }
+
+  function finalizeDragResult(result, state, session = null, extra = [], retry = null) {
     const lineRepair = enforceMinimumLineLengths(session?.local?.lines || model.lines);
     if (lineRepair.changed > 0) {
-      result = session?.local ? solveDragWithFallback(session, extra, () => solver.solve(extra), state) : solver.solve(extra);
+      result = retry ? retry() : session?.local ? solveDragWithFallback(session, extra, () => solver.solve(extra), state) : solver.solve(extra);
     }
     normalizeArcSweeps();
     result.lineRepair = lineRepair;
@@ -3219,36 +3241,47 @@
 
   function dragResultForSession(session, pointer) {
     let result;
-    const dragVars = solver.getVariables();
+    const dragVars = session?.local?.variables || solver.getVariables();
     const dragState = solver.clone(dragVars);
     if (session.mode === "radius") {
       const moveTargets = primitiveMoveTargets(session, pointer);
       if (hasDirectRadiusDimension(session.item)) {
         session.activeMode = "move";
         const extra = dragConstraintsFromTargets(moveTargets);
-        result = solveDragWithFallback(session, extra, () => solver.solve(extra), dragState);
-        return finalizeDragResult(result, dragState, session, extra);
+        const retry = () => solveGuidedDragWithFallback(session, moveTargets, extra, () => solver.solve(extra), dragState);
+        result = retry();
+        return finalizeDragResult(result, dragState, session, extra, retry);
       }
 
-      const vars = solver.getVariables();
-      const state = solver.clone(vars);
-      let extra = parameterDragConstraintsFromTargets(radiusDragTargets(session, pointer));
-      result = solveDragWithFallback(session, extra, () => solver.solve(extra), dragState);
+      const state = solver.clone(dragVars);
+      let targets = radiusDragTargets(session, pointer);
+      let extra = parameterDragConstraintsFromTargets(targets);
+      let retry = () => solveGuidedDragWithFallback(session, targets, extra, () => solver.solve(extra), dragState);
+      result = retry();
       if (!result.success && moveTargets.length > 0) {
         solver.restore(state);
         session.activeMode = "move";
+        targets = moveTargets;
         extra = dragConstraintsFromTargets(moveTargets);
-        result = solveDragWithFallback(session, extra, () => solver.solve(extra), dragState);
-        return finalizeDragResult(result, dragState, session, extra);
+        retry = () => solveGuidedDragWithFallback(session, targets, extra, () => solver.solve(extra), dragState);
+        result = retry();
+        return finalizeDragResult(result, dragState, session, extra, retry);
       }
       session.activeMode = "radius";
-      return finalizeDragResult(result, dragState, session, extra);
+      return finalizeDragResult(result, dragState, session, extra, retry);
     }
+    let targets;
     let extra;
-    if (session.mode === "arc-endpoint") extra = parameterDragConstraintsFromTargets(arcEndpointDragTargets(session, pointer));
-    else extra = dragConstraintsFromTargets(dragTargets(session, pointer));
-    result = solveDragWithFallback(session, extra, () => solver.solve(extra), dragState);
-    return finalizeDragResult(result, dragState, session, extra);
+    if (session.mode === "arc-endpoint") {
+      targets = arcEndpointDragTargets(session, pointer);
+      extra = parameterDragConstraintsFromTargets(targets);
+    } else {
+      targets = dragTargets(session, pointer);
+      extra = dragConstraintsFromTargets(targets);
+    }
+    const retry = () => solveGuidedDragWithFallback(session, targets, extra, () => solver.solve(extra), dragState);
+    result = retry();
+    return finalizeDragResult(result, dragState, session, extra, retry);
   }
 
   function dragLabel(session) {
@@ -3845,7 +3878,9 @@
       draw();
       return;
     }
-    const scope = result.local ? `local vars=${result.variableCount}, constraints=${result.constraintCount}` : "global";
+    const scope = result.local
+      ? `${result.guided ? "guided local" : "local"} vars=${result.variableCount}, constraints=${result.constraintCount}${Number.isFinite(result.freeDof) ? `, dof=${result.freeDof}` : ""}`
+      : "global";
     const fallback = result.fallback ? ` fallback from local error=${result.localErrorNorm?.toExponential(2)}` : "";
     setHint(`${dragLabel(dragSession)}中: ${scope}, error=${error.toExponential(2)}, iter=${result.iterations}${fallback}`);
     draw();
