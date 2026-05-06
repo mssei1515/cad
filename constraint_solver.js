@@ -277,6 +277,21 @@
     }
   }
 
+  class ArcEndpointFixedConstraint extends Constraint {
+    constructor(arc, endpoint, x, y) {
+      super(`Arc endpoint fixed ${arc.id}.${endpoint}`, 1);
+      this.arc = arc;
+      this.endpoint = endpoint;
+      this.x = x;
+      this.y = y;
+    }
+
+    rawError() {
+      const p = arcEndpointPoint(this.arc, this.endpoint);
+      return [p.x - this.x, p.y - this.y];
+    }
+  }
+
   class HorizontalConstraint extends Constraint {
     constructor(line) {
       super(`水平 ${line.id}`, 1);
@@ -768,6 +783,7 @@
     ArcEndpointArcEndpointCoincidentConstraint,
     PointOnLineConstraint,
     ArcEndpointOnLineConstraint,
+    ArcEndpointFixedConstraint,
     HorizontalConstraint,
     VerticalConstraint,
     ParallelConstraint,

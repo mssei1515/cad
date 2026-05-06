@@ -19,6 +19,7 @@
     ArcEndpointArcEndpointCoincidentConstraint,
     PointOnLineConstraint,
     ArcEndpointOnLineConstraint,
+    ArcEndpointFixedConstraint,
     HorizontalConstraint,
     VerticalConstraint,
     ParallelConstraint,
@@ -313,6 +314,9 @@
     if (c instanceof ArcEndpointOnLineConstraint) {
       return { type: "arcEndpointOnLine", arc: c.arc.id, endpoint: c.endpoint, line: c.line.id, enabled: c.enabled };
     }
+    if (c instanceof ArcEndpointFixedConstraint) {
+      return { type: "arcEndpointFixed", arc: c.arc.id, endpoint: c.endpoint, x: c.x, y: c.y, enabled: c.enabled };
+    }
     if (c instanceof HorizontalConstraint) {
       return { type: "horizontal", line: c.line.id, enabled: c.enabled };
     }
@@ -405,6 +409,8 @@
       constraint = new PointOnLineConstraint(point(data.point), line(data.line));
     } else if (data.type === "arcEndpointOnLine") {
       constraint = new ArcEndpointOnLineConstraint(primitive(data.arc), data.endpoint === "end" ? "end" : "start", line(data.line));
+    } else if (data.type === "arcEndpointFixed") {
+      constraint = new ArcEndpointFixedConstraint(primitive(data.arc), data.endpoint === "end" ? "end" : "start", Number(data.x), Number(data.y));
     } else if (data.type === "horizontal") {
       constraint = new HorizontalConstraint(line(data.line));
     } else if (data.type === "vertical") {
@@ -944,6 +950,10 @@
     return a?.arc === b?.arc && a?.endpoint === b?.endpoint;
   }
 
+  function findArcEndpointFixedConstraint(arc, endpoint) {
+    return model.constraints.find((c) => c.enabled !== false && c instanceof ArcEndpointFixedConstraint && c.arc === arc && c.endpoint === endpoint);
+  }
+
   function hitLine(x, y) {
     const threshold = 7 / viewport.scale;
     for (let i = model.lines.length - 1; i >= 0; i--) {
@@ -1215,6 +1225,7 @@
     if (c instanceof CoincidentConstraint) return c.p1 === point || c.p2 === point;
     if (c instanceof ArcEndpointCoincidentConstraint) return c.arc.center === point || c.point === point;
     if (c instanceof ArcEndpointArcEndpointCoincidentConstraint) return c.a.center === point || c.b.center === point;
+    if (c instanceof ArcEndpointFixedConstraint) return c.arc.center === point;
     if (c instanceof PointOnLineConstraint) return c.point === point || c.line.p1 === point || c.line.p2 === point;
     if (c instanceof ArcEndpointOnLineConstraint) return c.arc.center === point || c.line.p1 === point || c.line.p2 === point;
     if (c instanceof HorizontalConstraint || c instanceof VerticalConstraint) return c.line.p1 === point || c.line.p2 === point;
@@ -1250,6 +1261,7 @@
     if (c instanceof ArcEndpointCoincidentConstraint) return c.arc === primitive;
     if (c instanceof ArcEndpointArcEndpointCoincidentConstraint) return c.a === primitive || c.b === primitive;
     if (c instanceof ArcEndpointOnLineConstraint) return c.arc === primitive;
+    if (c instanceof ArcEndpointFixedConstraint) return c.arc === primitive;
     if (c instanceof RadiusConstraint || c instanceof DiameterConstraint || c instanceof PointOnCircleConstraint || c instanceof LineCircleTangentConstraint) return c.primitive === primitive;
     if (c instanceof ArcEndpointOnCircleConstraint) return c.arc === primitive || c.primitive === primitive;
     if (c instanceof ConcentricConstraint || c instanceof EqualRadiusConstraint || c instanceof CircleCircleTangentConstraint) return c.a === primitive || c.b === primitive;
@@ -1877,11 +1889,12 @@
         const p = arcEndpointPoint(arc, endpoint);
         const selected = sameArcEndpoint(selectedArcEndpoint, { arc, endpoint }) || (dragSession?.kind === "arc-endpoint" && dragSession.item === arc && dragSession.endpoint === endpoint);
         const hovered = sameArcEndpoint(hoveredArcEndpoint, { arc, endpoint });
+        const fixed = Boolean(findArcEndpointFixedConstraint(arc, endpoint));
         ctx.beginPath();
         ctx.arc(p.x, p.y, (selected ? 7 : 5) / viewport.scale, 0, Math.PI * 2);
-        ctx.fillStyle = selected ? "#2563eb" : hovered ? "#eff6ff" : "#fff";
+        ctx.fillStyle = fixed ? "#fee2e2" : selected ? "#2563eb" : hovered ? "#eff6ff" : "#fff";
         ctx.fill();
-        ctx.strokeStyle = selected || hovered ? "#2563eb" : "#111827";
+        ctx.strokeStyle = fixed ? "#dc2626" : selected || hovered ? "#2563eb" : "#111827";
         ctx.lineWidth = 2 / viewport.scale;
         ctx.stroke();
       }
@@ -2393,7 +2406,7 @@
       btn.setAttribute("aria-disabled", "false");
       btn.classList.toggle("active", pendingConstraintCommand?.type === btn.dataset.constraint);
     }
-    fixPointBtn.setAttribute("aria-disabled", String(selectedPoints.length !== 1));
+    fixPointBtn.setAttribute("aria-disabled", String(selectedPoints.length !== 1 && !selectedArcEndpoint));
 
     const enabled = constraintButtons
       .filter((btn) => btn.getAttribute("aria-disabled") !== "true")
@@ -2461,9 +2474,53 @@
     updateConstraintButtons();
   }
 
+  function supportLineBasis(line) {
+    if (line.orientationHint === "horizontal") {
+      return { anchor: { x: line.p1.x, y: (line.p1.y + line.p2.y) / 2 }, nx: 0, ny: 1 };
+    }
+    if (line.orientationHint === "vertical") {
+      return { anchor: { x: (line.p1.x + line.p2.x) / 2, y: line.p1.y }, nx: 1, ny: 0 };
+    }
+    const dx = line.p2.x - line.p1.x;
+    const dy = line.p2.y - line.p1.y;
+    const len = Math.hypot(dx, dy);
+    if (len < MIN_ORIENTATION_LENGTH) return null;
+    return { anchor: line.p1, nx: -dy / len, ny: dx / len };
+  }
+
+  function preconditionArcEndpointOnLineConstraint(constraint) {
+    solver.syncLineOrientationHints?.();
+    const basis = supportLineBasis(constraint.line);
+    if (!basis) return;
+    const arc = constraint.arc;
+    const prop = constraint.endpoint === "start" ? "startAngle" : "endAngle";
+    const current = arc[prop];
+    let radius = arc.radius();
+    const offset = basis.nx * (arc.center.x - basis.anchor.x) + basis.ny * (arc.center.y - basis.anchor.y);
+    let k = -offset / radius;
+    if (Math.abs(k) > 1 && !hasDirectRadiusDimension(arc)) {
+      arc.radiusValue = Math.max(Math.abs(offset) + MIN_LINE_LENGTH, MIN_LINE_LENGTH);
+      radius = arc.radius();
+      k = -offset / radius;
+    }
+    if (Math.abs(k) > 1) return;
+
+    const normalAngle = Math.atan2(basis.ny, basis.nx);
+    const delta = Math.acos(Math.max(-1, Math.min(1, k)));
+    const candidates = [normalAngle + delta, normalAngle - delta].map((angle) => unwrapAngleNear(angle, current));
+    arc[prop] = candidates.reduce((best, angle) => (Math.abs(angle - current) < Math.abs(best - current) ? angle : best), candidates[0]);
+  }
+
+  function preconditionNewConstraint(constraint) {
+    if (constraint instanceof ArcEndpointOnLineConstraint) {
+      preconditionArcEndpointOnLineConstraint(constraint);
+    }
+  }
+
   function commitNewConstraint(type, constraint) {
     const snapshot = snapshotModelState();
     model.constraints.push(constraint);
+    preconditionNewConstraint(constraint);
 
     const result = solver.solve();
     normalizeArcSweeps();
@@ -2593,6 +2650,7 @@
     }
 
     if (kind === "arc-endpoint") {
+      if (findArcEndpointFixedConstraint(item.arc, item.endpoint)) return null;
       return {
         kind,
         mode: "arc-endpoint",
@@ -3603,6 +3661,18 @@
   }
 
   fixPointBtn.addEventListener("click", () => {
+    if (selectedArcEndpoint) {
+      const { arc, endpoint } = selectedArcEndpoint;
+      const existing = findArcEndpointFixedConstraint(arc, endpoint);
+      if (existing) {
+        deleteElements({ constraints: [existing] });
+        log(`${arc.id}.${endpoint} の固定を解除しました`);
+        return;
+      }
+      const p = arcEndpointPoint(arc, endpoint);
+      commitNewConstraint("fixed", new ArcEndpointFixedConstraint(arc, endpoint, p.x, p.y));
+      return;
+    }
     if (selectedPoints.length !== 1) return;
     selectedPoints[0].fixed = !selectedPoints[0].fixed;
     const result = solveAndRefresh("固定状態変更");
