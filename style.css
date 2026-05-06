@@ -55,6 +55,7 @@ body {
   min-width: 0;
   min-height: 0;
   overflow: hidden;
+  position: relative;
 }
 
 .toolbar {
@@ -109,6 +110,27 @@ button,
 select,
 input {
   font: inherit;
+}
+
+.dimension-value-input {
+  position: absolute;
+  z-index: 4;
+  width: 96px;
+  height: 28px;
+  padding: 3px 7px;
+  border: 1.5px solid var(--accent);
+  border-radius: 4px;
+  background: #fff;
+  color: var(--text);
+  font: 12px ui-monospace, SFMono-Regular, Consolas, monospace;
+  text-align: center;
+  box-shadow: 0 4px 14px rgba(15, 23, 42, 0.16);
+  transform: translate(-50%, -100%);
+}
+
+.dimension-value-input.is-invalid {
+  border-color: #dc2626;
+  color: #dc2626;
 }
 
 button {

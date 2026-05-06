@@ -42,6 +42,7 @@
 
   const canvas = document.getElementById("canvas");
   const ctx = canvas.getContext("2d");
+  const dimensionValueInput = document.getElementById("dimensionValueInput");
   const model = { points: [], lines: [], circles: [], arcs: [], constraints: [] };
   const solver = new ConstraintSolver(model);
 
@@ -834,6 +835,13 @@
     return {
       x: (p.x - viewport.x) / viewport.scale,
       y: (p.y - viewport.y) / viewport.scale,
+    };
+  }
+
+  function worldToCanvasScreen(p) {
+    return {
+      x: p.x * viewport.scale + viewport.x,
+      y: p.y * viewport.scale + viewport.y,
     };
   }
 
@@ -1905,6 +1913,64 @@
     drawPoints();
     drawSelectionRect();
     ctx.restore();
+    syncDimensionValueInput();
+  }
+
+  function hideDimensionValueInput() {
+    if (!dimensionValueInput) return;
+    dimensionValueInput.hidden = true;
+    dimensionValueInput.classList.remove("is-invalid");
+  }
+
+  function dimensionInputPointForPendingCommand() {
+    if (!pendingCommand || (pendingCommand.type !== "distance-value" && pendingCommand.type !== "fillet-radius-value")) return null;
+    if (pendingCommand.type === "fillet-radius-value") {
+      const value = Number(pendingCommand.buffer);
+      const radius = Number.isFinite(value) && value > 0 ? value : DEFAULT_FILLET_RADIUS;
+      const geometry = computeFilletGeometry(pendingCommand.line1, pendingCommand.line2, radius);
+      if (!geometry.ok) return null;
+      const primitive = {
+        id: "R",
+        center: geometry.center,
+        radius: () => geometry.radius,
+      };
+      const target = { kind: "radius", primitive, value: radius };
+      const anchor = filletRadiusDimensionAnchor(geometry);
+      const layout = dimensionLayout(target, dimensionFromAnchor(target, anchor));
+      return layout?.text || null;
+    }
+    const layout = dimensionLayout(pendingCommand.target, pendingCommand.dimension);
+    return layout?.text || null;
+  }
+
+  function syncDimensionValueInput() {
+    if (!dimensionValueInput) return;
+    if (!pendingCommand || (pendingCommand.type !== "distance-value" && pendingCommand.type !== "fillet-radius-value")) {
+      hideDimensionValueInput();
+      return;
+    }
+    const textPoint = dimensionInputPointForPendingCommand();
+    if (!textPoint) {
+      hideDimensionValueInput();
+      return;
+    }
+    const screen = worldToCanvasScreen(textPoint);
+    dimensionValueInput.hidden = false;
+    dimensionValueInput.style.left = `${screen.x}px`;
+    dimensionValueInput.style.top = `${screen.y - 4}px`;
+    if (dimensionValueInput.value !== pendingCommand.buffer) dimensionValueInput.value = pendingCommand.buffer;
+    const value = Number(pendingCommand.buffer);
+    dimensionValueInput.classList.toggle("is-invalid", pendingCommand.buffer === "" || !Number.isFinite(value) || value <= 0);
+  }
+
+  function focusDimensionValueInput() {
+    requestAnimationFrame(() => {
+      syncDimensionValueInput();
+      if (dimensionValueInput?.hidden === false) {
+        dimensionValueInput.focus();
+        dimensionValueInput.select();
+      }
+    });
   }
 
   function drawSelectionRect() {
@@ -2321,14 +2387,14 @@
       const primitiveCenter = shouldShowPrimitiveCenter(p);
       const fixedByLine = pointLockedByLineFixed(p);
       const reference = isReferencePoint(p);
+      if (reference && !sel && !hovered && !dragging) continue;
       if (endpoint && !reference && !sel && !hovered && !dragging && !primitiveCenter) continue;
       ctx.beginPath();
       ctx.arc(p.x, p.y, (sel ? 7 : endpoint || reference ? 5 : 5) / viewport.scale, 0, Math.PI * 2);
-      ctx.fillStyle = p.fixed || fixedByLine ? "#fee2e2" : sel ? "#2563eb" : hovered || primitiveCenter ? "#eff6ff" : reference ? "#f8fafc" : "#fff";
+      ctx.fillStyle = p.fixed || fixedByLine ? "#fee2e2" : sel ? "#2563eb" : hovered || primitiveCenter || reference ? "#eff6ff" : "#fff";
       ctx.fill();
-      ctx.strokeStyle = p.fixed || fixedByLine ? "#dc2626" : constraintStatusColor(p, sel, hovered || primitiveCenter);
+      ctx.strokeStyle = p.fixed || fixedByLine ? "#dc2626" : constraintStatusColor(p, sel, hovered || primitiveCenter || reference);
       ctx.lineWidth = (endpoint ? 2 : 2) / viewport.scale;
-      if (reference && !sel && !hovered) ctx.setLineDash([3 / viewport.scale, 3 / viewport.scale]);
       ctx.stroke();
       ctx.setLineDash([]);
       if (sel || hovered || dragging) {
@@ -2515,7 +2581,6 @@
       setHint(constraintTargetHint(type));
       return false;
     }
-    pendingConstraintCommand = null;
     updateConstraintButtons();
     addConstraint(type);
     return true;
@@ -2525,7 +2590,6 @@
     if (pendingConstraintCommand?.type !== "distance") return false;
     const target = distanceTargetFromSelection();
     if (!target || target.kind !== "line-length") return false;
-    pendingConstraintCommand = null;
     updateConstraintButtons();
     startDistanceCommand();
     return true;
@@ -2663,7 +2727,6 @@
     if (pendingConstraintCommand?.type !== "distance") return false;
     if (selectedPoints.length !== 0 || selectedLines.length !== 1) return false;
     if (hitL && selectedLines[0] !== hitL) return false;
-    pendingConstraintCommand = null;
     updateConstraintButtons();
     startDistanceCommand();
     return true;
@@ -2694,6 +2757,7 @@
   function cancelPendingCommand(message = "コマンドをキャンセルしました") {
     if (!pendingCommand) return;
     pendingCommand = null;
+    hideDimensionValueInput();
     if (message) setHint(message);
     draw();
   }
@@ -2710,6 +2774,7 @@
     };
     setHint("寸法値を入力中: 数値キーで編集、Enter/ダブルクリックで決定、Escでキャンセル");
     draw();
+    focusDimensionValueInput();
   }
 
   function startDimensionEditInput(hit) {
@@ -2728,6 +2793,7 @@
     dimensionDragSession = null;
     setHint("寸法値を入力中: 数値キーで編集、Enter/ダブルクリックで決定、Escでキャンセル");
     draw();
+    focusDimensionValueInput();
     return true;
   }
 
@@ -2747,6 +2813,7 @@
     }
     const { target, dimension, constraint } = pendingCommand;
     pendingCommand = null;
+    hideDimensionValueInput();
     if (constraint) {
       const snapshot = snapshotModelState();
       const previousTarget = constraint.target;
@@ -2953,6 +3020,7 @@
       return;
     }
 
+    clearSelection();
     updateUI();
     draw();
     setHint(`拘束追加: success=${result.success}, error=${result.errorNorm.toExponential(2)}, iter=${result.iterations} / ${constraintSummaryText()}`);
@@ -3579,6 +3647,7 @@
     };
     setHint("R寸法を入力してください。数字キーで編集、Enterで作成、Escでキャンセル");
     draw();
+    focusDimensionValueInput();
   }
 
   function submitFilletRadiusValue() {
@@ -3591,6 +3660,7 @@
     }
     const { line1, line2 } = pendingCommand;
     pendingCommand = null;
+    hideDimensionValueInput();
     const result = createFillet(line1, line2, value);
     if (!result.ok) {
       setHint(result.reason, "error");
@@ -4031,6 +4101,28 @@
   canvas.addEventListener("auxclick", (e) => {
     if (e.button === 1) e.preventDefault();
   });
+  if (dimensionValueInput) {
+    dimensionValueInput.addEventListener("pointerdown", (e) => e.stopPropagation());
+    dimensionValueInput.addEventListener("dblclick", (e) => e.stopPropagation());
+    dimensionValueInput.addEventListener("input", () => {
+      if (!pendingCommand || (pendingCommand.type !== "distance-value" && pendingCommand.type !== "fillet-radius-value")) return;
+      pendingCommand.buffer = dimensionValueInput.value;
+      pendingCommand.editing = true;
+      updateDistanceBufferLabel();
+    });
+    dimensionValueInput.addEventListener("keydown", (e) => {
+      if (!pendingCommand || (pendingCommand.type !== "distance-value" && pendingCommand.type !== "fillet-radius-value")) return;
+      e.stopPropagation();
+      if (e.key === "Enter") {
+        e.preventDefault();
+        if (pendingCommand.type === "fillet-radius-value") submitFilletRadiusValue();
+        else submitDistanceValue();
+      } else if (e.key === "Escape") {
+        e.preventDefault();
+        cancelPendingCommand("寸法入力をキャンセルしました");
+      }
+    });
+  }
   canvas.addEventListener(
     "wheel",
     (e) => {
@@ -4239,6 +4331,7 @@
         if (type === "distance") startDistanceCommand();
         else {
           cancelPendingCommand("");
+          pendingConstraintCommand = { type };
           addConstraint(type);
         }
       } else {
