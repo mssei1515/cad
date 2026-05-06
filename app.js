@@ -2551,6 +2551,7 @@
     } else if (type === "pointOnCircle") {
       constraint = new PointOnCircleConstraint(selectedPoints[0], primitives[0]);
     } else if (type === "tangent") {
+      solver.syncLineOrientationHints?.();
       if (selectedLines.length === 1) constraint = new LineCircleTangentConstraint(selectedLines[0], primitives[0]);
       else constraint = new CircleCircleTangentConstraint(primitives[0], primitives[1]);
     }
@@ -2673,18 +2674,31 @@
     ];
   }
 
+  function finalizeDragResult(result, state) {
+    const lineRepair = enforceMinimumLineLengths();
+    if (lineRepair.changed > 0) result = solver.solve();
+    normalizeArcSweeps();
+    result.lineRepair = lineRepair;
+    if (lineRepair.failed) {
+      solver.restore(state);
+      result.blocked = true;
+      result.success = false;
+      result.reason = "R寸法と固定点によりこれ以上潰せません";
+      result.lineRepair = lineRepair;
+    }
+    return result;
+  }
+
   function dragResultForSession(session, pointer) {
     let result;
+    const dragVars = solver.getVariables();
+    const dragState = solver.clone(dragVars);
     if (session.mode === "radius") {
       const moveTargets = primitiveMoveTargets(session, pointer);
       if (hasDirectRadiusDimension(session.item)) {
         session.activeMode = "move";
         result = solver.solveWithDragTargets(moveTargets);
-        const lineRepair = enforceMinimumLineLengths();
-        if (lineRepair.changed > 0) result = solver.solve();
-        normalizeArcSweeps();
-        result.lineRepair = lineRepair;
-        return result;
+        return finalizeDragResult(result, dragState);
       }
 
       const vars = solver.getVariables();
@@ -2694,26 +2708,14 @@
         solver.restore(state);
         session.activeMode = "move";
         result = solver.solveWithDragTargets(moveTargets);
-        const lineRepair = enforceMinimumLineLengths();
-        if (lineRepair.changed > 0) result = solver.solve();
-        normalizeArcSweeps();
-        result.lineRepair = lineRepair;
-        return result;
+        return finalizeDragResult(result, dragState);
       }
       session.activeMode = "radius";
-      const lineRepair = enforceMinimumLineLengths();
-      if (lineRepair.changed > 0) result = solver.solve();
-      normalizeArcSweeps();
-      result.lineRepair = lineRepair;
-      return result;
+      return finalizeDragResult(result, dragState);
     }
     if (session.mode === "arc-endpoint") result = solver.solveWithParameterDragTargets(arcEndpointDragTargets(session, pointer));
     else result = solver.solveWithDragTargets(dragTargets(session, pointer));
-    const lineRepair = enforceMinimumLineLengths();
-    if (lineRepair.changed > 0) result = solver.solve();
-    normalizeArcSweeps();
-    result.lineRepair = lineRepair;
-    return result;
+    return finalizeDragResult(result, dragState);
   }
 
   function dragLabel(session) {
@@ -2913,13 +2915,8 @@
     const tangentScale = Math.tan(theta / 2);
     const maxTangent = Math.min(l1, l2) - MIN_LINE_LENGTH;
     if (!Number.isFinite(maxTangent) || maxTangent <= 0) return { ok: false, reason: "R面取り後の線長を確保できません" };
-    let tangent = radius / tangentScale;
-    let adjusted = false;
-    if (Number.isFinite(tangent) && tangent >= maxTangent) {
-      tangent = maxTangent;
-      radius = tangent * tangentScale;
-      adjusted = true;
-    }
+    const tangent = radius / tangentScale;
+    if (Number.isFinite(tangent) && tangent >= maxTangent) return { ok: false, reason: "R寸法を保つための直線部を確保できません" };
     if (!Number.isFinite(tangent) || tangent <= 0 || tangent >= Math.min(l1, l2)) return { ok: false, reason: "この角度と線長ではR面取りを作成できません" };
 
     const bis = { x: u1.x + u2.x, y: u1.y + u2.y };
@@ -2931,7 +2928,7 @@
     const center = { x: corner.x + (bis.x / bisLen) * centerDistance, y: corner.y + (bis.y / bisLen) * centerDistance };
     const startAngle = Math.atan2(t1.y - center.y, t1.x - center.x);
     const endAngle = shortestAngleFrom(startAngle, Math.atan2(t2.y - center.y, t2.x - center.x));
-    return { ok: true, corner, t1, t2, center, radius, startAngle, endAngle, adjusted };
+    return { ok: true, corner, t1, t2, center, radius, startAngle, endAngle };
   }
 
   function createFillet(line1, line2, radius = DEFAULT_FILLET_RADIUS) {
@@ -2947,6 +2944,7 @@
     if (!arc) return { ok: false, reason: "R面取り円弧を作成できません" };
     const radiusConstraint = new RadiusConstraint(arc, finalRadius);
     radiusConstraint.dimension = defaultDimensionForTarget({ kind: "radius", primitive: arc, value: finalRadius });
+    solver.syncLineOrientationHints?.();
     model.constraints.push(
       new ArcEndpointCoincidentConstraint(arc, "start", t1),
       new ArcEndpointCoincidentConstraint(arc, "end", t2),
@@ -3294,6 +3292,12 @@
     if (!dragSession) return;
     const result = dragResultForSession(dragSession, p);
     const error = geometryErrorNorm();
+    if (result.blocked) {
+      setHint(result.reason, "error");
+      updateUI();
+      draw();
+      return;
+    }
     setHint(`${dragLabel(dragSession)}中: 拘束error=${error.toExponential(2)}, iter=${result.iterations}`);
     updateUI();
     draw();

@@ -56,6 +56,7 @@
       this.id = id;
       this.p1 = p1;
       this.p2 = p2;
+      this.orientationHint = null;
     }
 
     dx() {
@@ -142,11 +143,21 @@
   }
 
   function signedPointLineDistance(point, line) {
-    const dx = line.dx();
-    const dy = line.dy();
+    let dx = line.dx();
+    let dy = line.dy();
+    let anchor = line.p1;
+    if (line.orientationHint === "horizontal") {
+      dx = 1;
+      dy = 0;
+      anchor = { x: line.p1.x, y: (line.p1.y + line.p2.y) / 2 };
+    } else if (line.orientationHint === "vertical") {
+      dx = 0;
+      dy = 1;
+      anchor = { x: (line.p1.x + line.p2.x) / 2, y: line.p1.y };
+    }
     const len = hypot2(dx, dy);
     if (len < 1e-12) return 0;
-    return ((point.x - line.p1.x) * -dy + (point.y - line.p1.y) * dx) / len;
+    return ((point.x - anchor.x) * -dy + (point.y - anchor.y) * dx) / len;
   }
 
   class LineMinimumLengthConstraint extends Constraint {
@@ -571,6 +582,7 @@
     }
 
     getVariables() {
+      this.syncLineOrientationHints();
       const vs = [];
       for (const p of this.model.points) {
         if (!p.fixed) {
@@ -589,7 +601,24 @@
       return vs;
     }
 
+    syncLineOrientationHints(extra = []) {
+      for (const line of this.model.lines || []) line.orientationHint = null;
+      const hints = new Map();
+      for (const c of [...this.model.constraints, ...extra]) {
+        if (!c.enabled) continue;
+        if (c instanceof HorizontalConstraint) {
+          const hint = hints.get(c.line);
+          hints.set(c.line, hint && hint !== "horizontal" ? "conflict" : "horizontal");
+        } else if (c instanceof VerticalConstraint) {
+          const hint = hints.get(c.line);
+          hints.set(c.line, hint && hint !== "vertical" ? "conflict" : "vertical");
+        }
+      }
+      for (const [line, hint] of hints) line.orientationHint = hint === "conflict" ? null : hint;
+    }
+
     getConstraints(extra = []) {
+      this.syncLineOrientationHints(extra);
       const lineMinimums = (this.model.lines || []).map((line) => new LineMinimumLengthConstraint(line, this.minLineLength));
       return [...this.model.constraints, ...lineMinimums, ...extra].filter((c) => c.enabled);
     }
