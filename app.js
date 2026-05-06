@@ -368,6 +368,8 @@
       y: Number(anchor.y),
       offsetU: Number.isFinite(dimension.offsetU) ? dimension.offsetU : null,
       offsetN: Number.isFinite(dimension.offsetN) ? dimension.offsetN : null,
+      labelOffsetU: Number.isFinite(dimension.labelOffsetU) ? dimension.labelOffsetU : 0,
+      axis: dimension.axis || null,
     };
   }
 
@@ -550,8 +552,10 @@
         constraint.dimension = {
           x: Number(data.dimension.x),
           y: Number(data.dimension.y),
-          offsetU: NaN,
-          offsetN: NaN,
+          offsetU: Number.isFinite(Number(data.dimension.offsetU)) ? Number(data.dimension.offsetU) : NaN,
+          offsetN: Number.isFinite(Number(data.dimension.offsetN)) ? Number(data.dimension.offsetN) : NaN,
+          labelOffsetU: Number.isFinite(Number(data.dimension.labelOffsetU)) ? Number(data.dimension.labelOffsetU) : 0,
+          axis: data.dimension.axis || null,
         };
       }
     }
@@ -1227,8 +1231,11 @@
       const dimension = constraint.dimension || defaultDimensionForTarget(target);
       const layout = dimensionLayout(target, dimension);
       if (!layout) continue;
+      if (hypot2(x - layout.text.x, y - layout.text.y) <= threshold * 1.5) {
+        return { constraint, target, dimension, part: "label" };
+      }
       if (distancePointToSegmentPoints(x, y, layout.hitA, layout.hitB) <= threshold) {
-        return { constraint, target, dimension };
+        return { constraint, target, dimension, part: "line" };
       }
     }
     return null;
@@ -1334,6 +1341,8 @@
       return { x: 1, y: 0 };
     }
     if (target.kind === "point-point" || target.kind === "line-length") {
+      if (target.dimensionAxis === "x") return { x: 1, y: 0 };
+      if (target.dimensionAxis === "y") return { x: 0, y: 1 };
       return lineUnit({ dx: () => target.p2.x - target.p1.x, dy: () => target.p2.y - target.p1.y, length: () => hypot2(target.p2.x - target.p1.x, target.p2.y - target.p1.y) });
     }
     if (target.kind === "point-line") {
@@ -1393,9 +1402,23 @@
     return { x: (points[0].x + points[1].x) / 2, y: (points[0].y + points[1].y) / 2 };
   }
 
+  function dominantDimensionAxis(target) {
+    if (target.kind !== "point-point") return null;
+    return Math.abs(target.p2.x - target.p1.x) >= Math.abs(target.p2.y - target.p1.y) ? "x" : "y";
+  }
+
+  function dimensionAxisForAnchor(target, anchor) {
+    if (target.kind !== "point-point") return target.dimensionAxis || null;
+    const lineDistance = distancePointToSegmentPoints(anchor.x, anchor.y, target.p1, target.p2);
+    if (lineDistance <= 10 / viewport.scale) return null;
+    return target.dimensionAxis || dominantDimensionAxis(target);
+  }
+
   function dimensionFromAnchor(target, anchor) {
+    const axis = dimensionAxisForAnchor(target, anchor);
+    const basisTarget = axis ? { ...target, dimensionAxis: axis } : target;
     const base = dimensionBasePoint(target);
-    const { d, n } = dimensionBasis(target);
+    const { d, n } = dimensionBasis(basisTarget);
     const dx = anchor.x - base.x;
     const dy = anchor.y - base.y;
     return {
@@ -1403,13 +1426,15 @@
       y: anchor.y,
       offsetU: dx * d.x + dy * d.y,
       offsetN: dx * n.x + dy * n.y,
+      labelOffsetU: 0,
+      axis,
     };
   }
 
   function dimensionAnchor(target, dimension) {
     if (!dimension) return defaultDimensionForTarget(target);
     const base = dimensionBasePoint(target);
-    const { d, n } = dimensionBasis(target);
+    const { d, n } = dimensionBasis({ ...target, dimensionAxis: dimension.axis });
     if (Number.isFinite(dimension.offsetU) && Number.isFinite(dimension.offsetN)) {
       return {
         x: base.x + d.x * dimension.offsetU + n.x * dimension.offsetN,
@@ -1424,8 +1449,12 @@
     if (points.length < 2) return { x: 0, y: 0 };
     if (target.kind === "radius") return dimensionFromAnchor(target, points[1]);
     const mid = dimensionBasePoint(target);
-    const normal = { x: -targetDirection(target).y, y: targetDirection(target).x };
-    return dimensionFromAnchor(target, { x: mid.x + normal.x * 30, y: mid.y + normal.y * 30 });
+    const defaultAxis = target.kind === "point-point" ? dominantDimensionAxis(target) : null;
+    const dir = targetDirection(defaultAxis ? { ...target, dimensionAxis: defaultAxis } : target);
+    const normal = { x: -dir.y, y: dir.x };
+    const dimension = dimensionFromAnchor(defaultAxis ? { ...target, dimensionAxis: defaultAxis } : target, { x: mid.x + normal.x * 30, y: mid.y + normal.y * 30 });
+    if (defaultAxis) dimension.axis = defaultAxis;
+    return dimension;
   }
 
   function targetFromConstraint(c) {
@@ -1760,8 +1789,12 @@
       if (!c.dimension) {
         c.dimension = defaultDimensionForTarget(target);
       } else if (!Number.isFinite(c.dimension.offsetU) || !Number.isFinite(c.dimension.offsetN)) {
-        c.dimension = dimensionFromAnchor(target, c.dimension);
+        const previous = c.dimension;
+        c.dimension = dimensionFromAnchor(target, previous);
+        c.dimension.labelOffsetU = Number.isFinite(previous.labelOffsetU) ? previous.labelOffsetU : 0;
+        if (previous.axis) c.dimension.axis = previous.axis;
       }
+      if (!Number.isFinite(c.dimension.labelOffsetU)) c.dimension.labelOffsetU = 0;
     }
   }
 
@@ -2129,7 +2162,8 @@
 
   function dimensionLayout(target, dimension) {
     const anchor = dimensionAnchor(target, dimension);
-    const d = target.kind === "radius" || target.kind === "diameter" ? targetDirection({ ...target, dimensionAnchor: anchor }) : targetDirection(target);
+    const basisTarget = { ...target, dimensionAxis: dimension?.axis };
+    const d = target.kind === "radius" || target.kind === "diameter" ? targetDirection({ ...basisTarget, dimensionAnchor: anchor }) : targetDirection(basisTarget);
     const points = targetPointsForDimension(target, anchor);
     if (points.length < 2) return null;
     const tick = 9 / viewport.scale;
@@ -2167,7 +2201,7 @@
       b,
       d,
       points: projectedPoints,
-      text: { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 },
+      text: { x: (a.x + b.x) / 2 + d.x * (Number(dimension?.labelOffsetU) || 0), y: (a.y + b.y) / 2 + d.y * (Number(dimension?.labelOffsetU) || 0) },
       hitA: { x: a.x - d.x * tick, y: a.y - d.y * tick },
       hitB: { x: b.x + d.x * tick, y: b.y + d.y * tick },
     };
@@ -2352,6 +2386,7 @@
   function shouldShowArcEndpointHandle(arc, endpoint) {
     if (selectedArcs.includes(arc) || hoveredArc === arc) return true;
     if (sameArcEndpoint(hoveredArcEndpoint, { arc, endpoint }) || sameArcEndpoint(selectedArcEndpoint, { arc, endpoint })) return true;
+    if (selectedArcEndpointPair?.some((item) => sameArcEndpoint(item, { arc, endpoint }))) return true;
     if (dragSession?.kind === "arc-endpoint" && dragSession.item === arc && dragSession.endpoint === endpoint) return true;
     return false;
   }
@@ -2362,7 +2397,7 @@
       for (const endpoint of ["start", "end"]) {
         if (!shouldShowArcEndpointHandle(arc, endpoint)) continue;
         const p = arcEndpointPoint(arc, endpoint);
-        const selected = sameArcEndpoint(selectedArcEndpoint, { arc, endpoint }) || (dragSession?.kind === "arc-endpoint" && dragSession.item === arc && dragSession.endpoint === endpoint);
+        const selected = sameArcEndpoint(selectedArcEndpoint, { arc, endpoint }) || selectedArcEndpointPair?.some((item) => sameArcEndpoint(item, { arc, endpoint })) || (dragSession?.kind === "arc-endpoint" && dragSession.item === arc && dragSession.endpoint === endpoint);
         const hovered = sameArcEndpoint(hoveredArcEndpoint, { arc, endpoint });
         const fixed = Boolean(findArcEndpointFixedConstraint(arc, endpoint));
         ctx.beginPath();
@@ -2422,6 +2457,7 @@
 
   function canApplyConstraint(type) {
     const primitives = selectedPrimitives();
+    const coincidentPrimitives = selectedArcEndpoint ? primitives.filter((p) => p !== selectedArcEndpoint.arc) : primitives;
     if (type === "distance") {
       const target = distanceTargetFromSelection();
       return Boolean(target && target.kind !== "invalid");
@@ -2433,8 +2469,8 @@
     if (type === "tangent") return (selectedPoints.length === 0 && selectedLines.length === 1 && primitives.length === 1) || (selectedPoints.length === 0 && selectedLines.length === 0 && primitives.length === 2);
     if (type === "coincident") {
       if (selectedArcEndpointPair?.length === 2) return true;
-      if ((selectedPoints.length === 2 && selectedLines.length === 0) || (selectedPoints.length === 1 && selectedLines.length === 1) || (selectedPoints.length === 1 && selectedLines.length === 0 && primitives.length === 1)) return true;
-      return Boolean(selectedArcEndpoint && ((selectedPoints.length === 1 && selectedLines.length === 0 && primitives.length === 0) || (selectedPoints.length === 0 && selectedLines.length === 1 && primitives.length === 0) || (selectedPoints.length === 0 && selectedLines.length === 0 && primitives.length === 1)));
+      if ((selectedPoints.length === 2 && selectedLines.length === 0) || (selectedPoints.length === 1 && selectedLines.length === 1) || (selectedPoints.length === 1 && selectedLines.length === 0 && coincidentPrimitives.length === 1)) return true;
+      return Boolean(selectedArcEndpoint && ((selectedPoints.length === 1 && selectedLines.length === 0 && coincidentPrimitives.length === 0) || (selectedPoints.length === 0 && selectedLines.length === 1 && coincidentPrimitives.length === 0) || (selectedPoints.length === 0 && selectedLines.length === 0 && coincidentPrimitives.length === 1)));
     }
     if (type === "horizontal" || type === "vertical") return selectedLines.length === 1 && lineHasDirection(selectedLines[0]);
     if (type === "parallel" || type === "perpendicular") return selectedLines.length === 2 && selectedLines.every(lineHasDirection);
@@ -2729,6 +2765,7 @@
     if (hitL && selectedLines[0] !== hitL) return false;
     updateConstraintButtons();
     startDistanceCommand();
+    if (pendingCommand?.type === "distance-place") startDistanceValueInput(defaultDimensionForTarget(pendingCommand.target));
     return true;
   }
 
@@ -3057,7 +3094,8 @@
     if (type === "distance") return startDistanceCommand();
 
     let constraint = null;
-    const primitives = selectedPrimitives();
+    const allPrimitives = selectedPrimitives();
+    const primitives = type === "coincident" && selectedArcEndpoint ? allPrimitives.filter((p) => p !== selectedArcEndpoint.arc) : allPrimitives;
     if (type === "coincident") {
       const endpointPair = selectedArcEndpointPair;
       if (endpointPair?.length === 2) {
@@ -3458,8 +3496,10 @@
       pointerId: e.pointerId,
       constraint: hit.constraint,
       target: hit.target,
+      part: hit.part || "line",
       startPointer: pointer,
       startAnchor: anchor,
+      startLabelOffsetU: Number(hit.dimension?.labelOffsetU) || 0,
     };
     canvas.classList.add("is-dragging");
     canvas.setPointerCapture(e.pointerId);
@@ -3870,11 +3910,10 @@
     } else if (hitArcEnd) {
       selectedDimensionConstraint = null;
       if (multiSelect) {
-        selectedPoints = [];
-        selectedLines = [];
-        selectedCircles = [];
-        selectedArcs = [hitArcEnd.arc];
-        selectedArcEndpoint = { arc: hitArcEnd.arc, endpoint: hitArcEnd.endpoint };
+        const next = { arc: hitArcEnd.arc, endpoint: hitArcEnd.endpoint };
+        if (selectedArcEndpoint && !sameArcEndpoint(selectedArcEndpoint, next)) selectedArcEndpointPair = [selectedArcEndpoint, next];
+        selectedArcEndpoint = next;
+        if (!selectedArcs.includes(hitArcEnd.arc)) selectedArcs.push(hitArcEnd.arc);
       } else {
         beginDrag(e, null, null, null, null, hitArcEnd, p);
       }
@@ -3932,11 +3971,22 @@
       clearSnap();
       const dx = p.x - dimensionDragSession.startPointer.x;
       const dy = p.y - dimensionDragSession.startPointer.y;
+      if (dimensionDragSession.part === "label") {
+        const dimension = dimensionDragSession.constraint.dimension || defaultDimensionForTarget(dimensionDragSession.target);
+        const basisTarget = { ...dimensionDragSession.target, dimensionAxis: dimension.axis };
+        const d = targetDirection(basisTarget);
+        dimension.labelOffsetU = dimensionDragSession.startLabelOffsetU + dx * d.x + dy * d.y;
+        dimensionDragSession.constraint.dimension = dimension;
+        draw();
+        return;
+      }
       const anchor = {
         x: dimensionDragSession.startAnchor.x + dx,
         y: dimensionDragSession.startAnchor.y + dy,
       };
-      dimensionDragSession.constraint.dimension = dimensionFromAnchor(dimensionDragSession.target, anchor);
+      const nextDimension = dimensionFromAnchor(dimensionDragSession.target, anchor);
+      nextDimension.labelOffsetU = dimensionDragSession.startLabelOffsetU;
+      dimensionDragSession.constraint.dimension = nextDimension;
       draw();
       return;
     }
