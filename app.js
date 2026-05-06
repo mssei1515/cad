@@ -364,13 +364,14 @@
   function serializeDimension(dimension, target = null) {
     if (!dimension) return null;
     const anchor = target ? dimensionAnchor(target, dimension) : dimension;
+    const axis = target ? storedDimensionAxis(target, dimension) : dimension.axis || null;
     return {
       x: Number(anchor.x),
       y: Number(anchor.y),
       offsetU: Number.isFinite(dimension.offsetU) ? dimension.offsetU : null,
       offsetN: Number.isFinite(dimension.offsetN) ? dimension.offsetN : null,
       labelOffsetU: Number.isFinite(dimension.labelOffsetU) ? dimension.labelOffsetU : 0,
-      axis: dimension.axis || null,
+      axis,
     };
   }
 
@@ -1413,16 +1414,20 @@
     return Math.abs(target.p2.x - target.p1.x) >= Math.abs(target.p2.y - target.p1.y) ? "x" : "y";
   }
 
-  function dimensionAxisForAnchor(target, anchor) {
+  function dimensionAxisForAnchor(target, anchor, options = {}) {
     if (target.kind !== "point-point") return target.dimensionAxis || null;
     if (target.dimensionAxis) return target.dimensionAxis;
+    if (options.allowPointAxis === false) return null;
     const lineDistance = distancePointToSegmentPoints(anchor.x, anchor.y, target.p1, target.p2);
     if (lineDistance <= 10 / viewport.scale) return null;
-    return dominantDimensionAxis(target);
+    const base = dimensionBasePoint(target);
+    const dx = anchor.x - base.x;
+    const dy = anchor.y - base.y;
+    return Math.abs(dy) >= Math.abs(dx) ? "x" : "y";
   }
 
-  function dimensionFromAnchor(target, anchor) {
-    const axis = dimensionAxisForAnchor(target, anchor);
+  function dimensionFromAnchor(target, anchor, options = {}) {
+    const axis = dimensionAxisForAnchor(target, anchor, options);
     const basisTarget = axis ? { ...target, dimensionAxis: axis } : target;
     const base = dimensionBasePoint(target);
     const { d, n } = dimensionBasis(basisTarget);
@@ -1438,10 +1443,16 @@
     };
   }
 
+  function storedDimensionAxis(target, dimension = null) {
+    if (target.kind === "point-point") return target.dimensionAxis || null;
+    return dimension?.axis || target.dimensionAxis || null;
+  }
+
   function dimensionAnchor(target, dimension) {
     if (!dimension) return defaultDimensionForTarget(target);
     const base = dimensionBasePoint(target);
-    const { d, n } = dimensionBasis({ ...target, dimensionAxis: dimension.axis });
+    const axis = storedDimensionAxis(target, dimension);
+    const { d, n } = dimensionBasis({ ...target, dimensionAxis: axis });
     if (Number.isFinite(dimension.offsetU) && Number.isFinite(dimension.offsetN)) {
       return {
         x: base.x + d.x * dimension.offsetU + n.x * dimension.offsetN,
@@ -1456,10 +1467,10 @@
     if (points.length < 2) return { x: 0, y: 0 };
     if (target.kind === "radius") return dimensionFromAnchor(target, points[1]);
     const mid = dimensionBasePoint(target);
-    const defaultAxis = target.kind === "point-point" ? target.dimensionAxis || dominantDimensionAxis(target) : null;
+    const defaultAxis = target.kind === "point-point" ? target.dimensionAxis || null : null;
     const dir = targetDirection(defaultAxis ? { ...target, dimensionAxis: defaultAxis } : target);
     const normal = { x: -dir.y, y: dir.x };
-    const dimension = dimensionFromAnchor(defaultAxis ? { ...target, dimensionAxis: defaultAxis } : target, { x: mid.x + normal.x * 30, y: mid.y + normal.y * 30 });
+    const dimension = dimensionFromAnchor(defaultAxis ? { ...target, dimensionAxis: defaultAxis } : target, { x: mid.x + normal.x * 30, y: mid.y + normal.y * 30 }, { allowPointAxis: false });
     if (defaultAxis) dimension.axis = defaultAxis;
     return dimension;
   }
@@ -1798,9 +1809,9 @@
         c.dimension = defaultDimensionForTarget(target);
       } else if (!Number.isFinite(c.dimension.offsetU) || !Number.isFinite(c.dimension.offsetN)) {
         const previous = c.dimension;
-        c.dimension = dimensionFromAnchor(target, previous);
+        c.dimension = dimensionFromAnchor(target, previous, { allowPointAxis: false });
         c.dimension.labelOffsetU = Number.isFinite(previous.labelOffsetU) ? previous.labelOffsetU : 0;
-        if (previous.axis) c.dimension.axis = previous.axis;
+        if (target.dimensionAxis) c.dimension.axis = target.dimensionAxis;
       }
       if (!Number.isFinite(c.dimension.labelOffsetU)) c.dimension.labelOffsetU = 0;
     }
@@ -2170,7 +2181,7 @@
 
   function dimensionLayout(target, dimension) {
     const anchor = dimensionAnchor(target, dimension);
-    const basisTarget = { ...target, dimensionAxis: dimension?.axis };
+    const basisTarget = { ...target, dimensionAxis: storedDimensionAxis(target, dimension) };
     const d = target.kind === "radius" || target.kind === "diameter" ? targetDirection({ ...basisTarget, dimensionAnchor: anchor }) : targetDirection(basisTarget);
     const points = targetPointsForDimension(target, anchor);
     if (points.length < 2) return null;
@@ -3084,8 +3095,9 @@
     if (!target || target.kind === "invalid") return false;
     let constraint = null;
     if (target.kind === "point-point" || target.kind === "line-length") {
-      if (target.kind === "point-point" && (dimension?.axis === "x" || dimension?.axis === "y")) {
-        constraint = new PointAxisDistanceConstraint(target.p1, target.p2, value, dimension.axis);
+      const axis = target.dimensionAxis || dimension?.axis;
+      if (target.kind === "point-point" && (axis === "x" || axis === "y")) {
+        constraint = new PointAxisDistanceConstraint(target.p1, target.p2, value, axis);
       } else {
         constraint = new DistanceConstraint(target.p1, target.p2, value);
       }
@@ -3992,7 +4004,7 @@
       const dy = p.y - dimensionDragSession.startPointer.y;
       if (dimensionDragSession.part === "label") {
         const dimension = dimensionDragSession.constraint.dimension || defaultDimensionForTarget(dimensionDragSession.target);
-        const basisTarget = { ...dimensionDragSession.target, dimensionAxis: dimension.axis };
+        const basisTarget = { ...dimensionDragSession.target, dimensionAxis: storedDimensionAxis(dimensionDragSession.target, dimension) };
         const d = targetDirection(basisTarget);
         dimension.labelOffsetU = dimensionDragSession.startLabelOffsetU + dx * d.x + dy * d.y;
         dimensionDragSession.constraint.dimension = dimension;
@@ -4003,7 +4015,7 @@
         x: dimensionDragSession.startAnchor.x + dx,
         y: dimensionDragSession.startAnchor.y + dy,
       };
-      const nextDimension = dimensionFromAnchor(dimensionDragSession.target, anchor);
+      const nextDimension = dimensionFromAnchor(dimensionDragSession.target, anchor, { allowPointAxis: false });
       nextDimension.labelOffsetU = dimensionDragSession.startLabelOffsetU;
       dimensionDragSession.constraint.dimension = nextDimension;
       draw();
