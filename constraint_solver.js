@@ -292,6 +292,21 @@
     }
   }
 
+  class LineFixedConstraint extends Constraint {
+    constructor(line, p1x = line.p1.x, p1y = line.p1.y, p2x = line.p2.x, p2y = line.p2.y) {
+      super(`線固定 ${line.id}`, 1);
+      this.line = line;
+      this.p1x = p1x;
+      this.p1y = p1y;
+      this.p2x = p2x;
+      this.p2y = p2y;
+    }
+
+    rawError() {
+      return [this.line.p1.x - this.p1x, this.line.p1.y - this.p1y, this.line.p2.x - this.p2x, this.line.p2.y - this.p2y];
+    }
+  }
+
   class HorizontalConstraint extends Constraint {
     constructor(line) {
       super(`水平 ${line.id}`, 1);
@@ -860,6 +875,7 @@
     PointOnLineConstraint,
     ArcEndpointOnLineConstraint,
     ArcEndpointFixedConstraint,
+    LineFixedConstraint,
     HorizontalConstraint,
     VerticalConstraint,
     ParallelConstraint,

@@ -20,6 +20,7 @@
     PointOnLineConstraint,
     ArcEndpointOnLineConstraint,
     ArcEndpointFixedConstraint,
+    LineFixedConstraint,
     HorizontalConstraint,
     VerticalConstraint,
     ParallelConstraint,
@@ -84,7 +85,7 @@
   const MIN_ARC_LENGTH = MIN_LINE_LENGTH;
   const CONSTRAINT_STATUS_COLORS = {
     full: "#111827",
-    under: "#2563eb",
+    under: "#f59e0b",
     conflict: "#dc2626",
   };
   let lastLoadLineRepairMessage = "";
@@ -409,6 +410,9 @@
     if (c instanceof ArcEndpointFixedConstraint) {
       return { type: "arcEndpointFixed", arc: c.arc.id, endpoint: c.endpoint, x: c.x, y: c.y, enabled: c.enabled };
     }
+    if (c instanceof LineFixedConstraint) {
+      return { type: "lineFixed", line: c.line.id, p1x: c.p1x, p1y: c.p1y, p2x: c.p2x, p2y: c.p2y, enabled: c.enabled };
+    }
     if (c instanceof HorizontalConstraint) {
       return { type: "horizontal", line: c.line.id, enabled: c.enabled };
     }
@@ -503,6 +507,8 @@
       constraint = new ArcEndpointOnLineConstraint(primitive(data.arc), data.endpoint === "end" ? "end" : "start", line(data.line));
     } else if (data.type === "arcEndpointFixed") {
       constraint = new ArcEndpointFixedConstraint(primitive(data.arc), data.endpoint === "end" ? "end" : "start", Number(data.x), Number(data.y));
+    } else if (data.type === "lineFixed") {
+      constraint = new LineFixedConstraint(line(data.line), Number(data.p1x), Number(data.p1y), Number(data.p2x), Number(data.p2y));
     } else if (data.type === "horizontal") {
       constraint = new HorizontalConstraint(line(data.line));
     } else if (data.type === "vertical") {
@@ -848,6 +854,10 @@
     return point?.kind !== "endpoint";
   }
 
+  function isReferencePoint(point) {
+    return Boolean(point?.kind === "endpoint" && !isPointUsedByPrimitive(point) && model.constraints.some((c) => c.enabled !== false && constraintReferencesPoint(c, point)));
+  }
+
   function isStandalonePoint(point) {
     return isExplicitPoint(point) && !isPointUsedByPrimitive(point);
   }
@@ -863,7 +873,7 @@
   }
 
   function hitEndpointPoint(x, y) {
-    return hitPointByPredicate(x, y, (p) => isEndpointPoint(p) && isPointUsedByPrimitive(p));
+    return hitPointByPredicate(x, y, (p) => (isEndpointPoint(p) && isPointUsedByPrimitive(p)) || isReferencePoint(p));
   }
 
   function hitExplicitPoint(x, y) {
@@ -1044,6 +1054,14 @@
 
   function findArcEndpointFixedConstraint(arc, endpoint) {
     return model.constraints.find((c) => c.enabled !== false && c instanceof ArcEndpointFixedConstraint && c.arc === arc && c.endpoint === endpoint);
+  }
+
+  function findLineFixedConstraint(line) {
+    return model.constraints.find((c) => c.enabled !== false && c instanceof LineFixedConstraint && c.line === line);
+  }
+
+  function pointLockedByLineFixed(point) {
+    return model.constraints.some((c) => c.enabled !== false && c instanceof LineFixedConstraint && (c.line.p1 === point || c.line.p2 === point));
   }
 
   function hitLine(x, y) {
@@ -1318,6 +1336,7 @@
     if (c instanceof ArcEndpointCoincidentConstraint) return c.arc.center === point || c.point === point;
     if (c instanceof ArcEndpointArcEndpointCoincidentConstraint) return c.a.center === point || c.b.center === point;
     if (c instanceof ArcEndpointFixedConstraint) return c.arc.center === point;
+    if (c instanceof LineFixedConstraint) return c.line.p1 === point || c.line.p2 === point;
     if (c instanceof PointOnLineConstraint) return c.point === point || c.line.p1 === point || c.line.p2 === point;
     if (c instanceof ArcEndpointOnLineConstraint) return c.arc.center === point || c.line.p1 === point || c.line.p2 === point;
     if (c instanceof HorizontalConstraint || c instanceof VerticalConstraint) return c.line.p1 === point || c.line.p2 === point;
@@ -1340,6 +1359,7 @@
     }
     if (c instanceof PointLineDistanceConstraint) return c.line === line;
     if (c instanceof LineLineDistanceConstraint) return c.line1 === line || c.line2 === line;
+    if (c instanceof LineFixedConstraint) return c.line === line;
     if (c instanceof PointOnLineConstraint) return c.line === line;
     if (c instanceof ArcEndpointOnLineConstraint) return c.line === line;
     if (c instanceof HorizontalConstraint || c instanceof VerticalConstraint) return c.line === line;
@@ -1533,7 +1553,7 @@
     const nextArcs = additive ? [...selectedArcs] : [];
 
     for (const p of model.points) {
-      if (!isExplicitPoint(p)) continue;
+      if (!isExplicitPoint(p) && !isReferencePoint(p)) continue;
       if (pointInRect(p, rect)) addUnique(nextPoints, p);
     }
     for (const line of model.lines) {
@@ -1635,10 +1655,12 @@
       ctx.lineWidth = (sel || hovered ? 3 : 2) / viewport.scale;
       ctx.lineCap = "round";
       ctx.lineJoin = "round";
+      if (findLineFixedConstraint(l)) ctx.setLineDash([8 / viewport.scale, 4 / viewport.scale]);
       ctx.beginPath();
       ctx.moveTo(l.p1.x, l.p1.y);
       ctx.lineTo(l.p2.x, l.p2.y);
       ctx.stroke();
+      ctx.setLineDash([]);
 
       if (sel || hovered) {
         const mx = (l.p1.x + l.p2.x) / 2;
@@ -2002,14 +2024,18 @@
       const hovered = hoveredPoint === p || hoveredEndpointPoint === p;
       const dragging = dragSession?.kind === "point" && dragSession.points.some((target) => target.point === p);
       const primitiveCenter = shouldShowPrimitiveCenter(p);
-      if (endpoint && !sel && !hovered && !dragging && !primitiveCenter) continue;
+      const fixedByLine = pointLockedByLineFixed(p);
+      const reference = isReferencePoint(p);
+      if (endpoint && !reference && !sel && !hovered && !dragging && !primitiveCenter) continue;
       ctx.beginPath();
-      ctx.arc(p.x, p.y, (sel ? 7 : endpoint ? 5 : 5) / viewport.scale, 0, Math.PI * 2);
-      ctx.fillStyle = p.fixed ? "#dc2626" : sel ? "#2563eb" : hovered || primitiveCenter ? "#eff6ff" : "#fff";
+      ctx.arc(p.x, p.y, (sel ? 7 : endpoint || reference ? 5 : 5) / viewport.scale, 0, Math.PI * 2);
+      ctx.fillStyle = p.fixed || fixedByLine ? "#fee2e2" : sel ? "#2563eb" : hovered || primitiveCenter ? "#eff6ff" : reference ? "#f8fafc" : "#fff";
       ctx.fill();
-      ctx.strokeStyle = p.fixed ? "#dc2626" : constraintStatusColor(p, sel, hovered || primitiveCenter);
+      ctx.strokeStyle = p.fixed || fixedByLine ? "#dc2626" : constraintStatusColor(p, sel, hovered || primitiveCenter);
       ctx.lineWidth = (endpoint ? 2 : 2) / viewport.scale;
+      if (reference && !sel && !hovered) ctx.setLineDash([3 / viewport.scale, 3 / viewport.scale]);
       ctx.stroke();
+      ctx.setLineDash([]);
       if (sel || hovered || dragging) {
         ctx.fillStyle = hovered || endpoint ? "#2563eb" : "#111827";
         ctx.font = `${12 / viewport.scale}px system-ui`;
@@ -2498,7 +2524,11 @@
       btn.setAttribute("aria-disabled", "false");
       btn.classList.toggle("active", pendingConstraintCommand?.type === btn.dataset.constraint);
     }
-    fixPointBtn.setAttribute("aria-disabled", String(selectedPoints.length !== 1 && !selectedArcEndpoint));
+    const canToggleFixed =
+      Boolean(selectedArcEndpoint) ||
+      (selectedPoints.length === 1 && selectedLines.length === 0 && selectedCircles.length === 0 && selectedArcs.length === 0) ||
+      (selectedPoints.length === 0 && selectedLines.length === 1 && selectedCircles.length === 0 && selectedArcs.length === 0);
+    fixPointBtn.setAttribute("aria-disabled", String(!canToggleFixed));
 
     const enabled = constraintButtons
       .filter((btn) => btn.getAttribute("aria-disabled") !== "true")
@@ -2527,7 +2557,7 @@
     document.getElementById("lineList").innerHTML = model.lines
       .map(
         (l) =>
-          `<div class="item list-item"><span>${l.id}: ${l.p1.id} - ${l.p2.id}<span class="badge">len=${l.length().toFixed(2)}</span><span class="badge">${constraintStatusBadge(constraintStatusOf(l))}</span></span>` +
+          `<div class="item list-item"><span>${l.id}: ${l.p1.id} - ${l.p2.id}<span class="badge">len=${l.length().toFixed(2)}</span><span class="badge">${constraintStatusBadge(constraintStatusOf(l))}</span>${findLineFixedConstraint(l) ? "<span class='badge'>固定</span>" : ""}</span>` +
           `<button data-id="${l.id}" class="removeLineBtn icon-delete-btn" title="削除" aria-label="削除" data-tooltip="削除">` +
           `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3M7 7l1 13h8l1-13"/></svg>` +
           `</button></div>`,
@@ -2716,20 +2746,22 @@
   function buildDragSession(kind, item, pointer) {
     if (kind === "selection") {
       const points = item
-        .filter((p, index, arr) => p && !p.fixed && arr.indexOf(p) === index)
+        .filter((p, index, arr) => p && !p.fixed && !pointLockedByLineFixed(p) && arr.indexOf(p) === index)
         .map((p) => ({ point: p, startX: p.x, startY: p.y }));
       if (points.length === 0) return null;
       return { kind, startPointer: pointer, points };
     }
 
     if (kind === "point") {
-      if (item.fixed) return null;
+      if (item.fixed || pointLockedByLineFixed(item)) return null;
       return {
         kind,
         startPointer: pointer,
         points: [{ point: item, startX: item.x, startY: item.y }],
       };
     }
+
+    if (kind === "line" && findLineFixedConstraint(item)) return null;
 
     if (kind === "circle" || kind === "arc") {
       return {
@@ -3451,7 +3483,6 @@
       return;
     }
     setHint(`${dragLabel(dragSession)}中: 拘束error=${error.toExponential(2)}, iter=${result.iterations}`);
-    updateUI();
     draw();
   });
 
@@ -3767,7 +3798,18 @@
       commitNewConstraint("fixed", new ArcEndpointFixedConstraint(arc, endpoint, p.x, p.y));
       return;
     }
-    if (selectedPoints.length !== 1) return;
+    if (selectedPoints.length === 0 && selectedLines.length === 1 && selectedCircles.length === 0 && selectedArcs.length === 0) {
+      const line = selectedLines[0];
+      const existing = findLineFixedConstraint(line);
+      if (existing) {
+        deleteElements({ constraints: [existing] });
+        log(`${line.id} の固定を解除しました`);
+        return;
+      }
+      commitNewConstraint("fixed", new LineFixedConstraint(line));
+      return;
+    }
+    if (selectedPoints.length !== 1 || selectedLines.length > 0 || selectedCircles.length > 0 || selectedArcs.length > 0) return;
     selectedPoints[0].fixed = !selectedPoints[0].fixed;
     const result = solveAndRefresh("固定状態変更");
     log(`${selectedPoints[0].id} の固定状態を ${selectedPoints[0].fixed} にしました\n自動solve: success=${result.success}`);
