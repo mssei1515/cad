@@ -11,6 +11,7 @@
     Circle,
     Arc,
     DistanceConstraint,
+    PointAxisDistanceConstraint,
     PointLineDistanceConstraint,
     LineLineDistanceConstraint,
     signedPointLineDistance,
@@ -374,6 +375,9 @@
   }
 
   function serializeConstraint(c) {
+    if (c instanceof PointAxisDistanceConstraint) {
+      return { type: "pointAxisDistance", p1: c.p1.id, p2: c.p2.id, axis: c.axis, sign: c.sign, target: c.target, dimension: serializeDimension(c.dimension, targetFromConstraint(c)), enabled: c.enabled };
+    }
     if (c instanceof DistanceConstraint) {
       return { type: "distance", p1: c.p1.id, p2: c.p2.id, target: c.target, dimension: serializeDimension(c.dimension, targetFromConstraint(c)), enabled: c.enabled };
     }
@@ -498,6 +502,8 @@
     let constraint = null;
     if (data.type === "distance") {
       constraint = new DistanceConstraint(point(data.p1), point(data.p2), Number(data.target));
+    } else if (data.type === "pointAxisDistance") {
+      constraint = new PointAxisDistanceConstraint(point(data.p1), point(data.p2), Number(data.target), data.axis === "y" ? "y" : "x", Number(data.sign) || null);
     } else if (data.type === "pointLineDistance") {
       constraint = new PointLineDistanceConstraint(point(data.point), line(data.line), Number(data.target), Number(data.sign) || null);
     } else if (data.type === "lineLineDistance") {
@@ -1409,9 +1415,10 @@
 
   function dimensionAxisForAnchor(target, anchor) {
     if (target.kind !== "point-point") return target.dimensionAxis || null;
+    if (target.dimensionAxis) return target.dimensionAxis;
     const lineDistance = distancePointToSegmentPoints(anchor.x, anchor.y, target.p1, target.p2);
     if (lineDistance <= 10 / viewport.scale) return null;
-    return target.dimensionAxis || dominantDimensionAxis(target);
+    return dominantDimensionAxis(target);
   }
 
   function dimensionFromAnchor(target, anchor) {
@@ -1449,7 +1456,7 @@
     if (points.length < 2) return { x: 0, y: 0 };
     if (target.kind === "radius") return dimensionFromAnchor(target, points[1]);
     const mid = dimensionBasePoint(target);
-    const defaultAxis = target.kind === "point-point" ? dominantDimensionAxis(target) : null;
+    const defaultAxis = target.kind === "point-point" ? target.dimensionAxis || dominantDimensionAxis(target) : null;
     const dir = targetDirection(defaultAxis ? { ...target, dimensionAxis: defaultAxis } : target);
     const normal = { x: -dir.y, y: dir.x };
     const dimension = dimensionFromAnchor(defaultAxis ? { ...target, dimensionAxis: defaultAxis } : target, { x: mid.x + normal.x * 30, y: mid.y + normal.y * 30 });
@@ -1459,6 +1466,7 @@
 
   function targetFromConstraint(c) {
     if (c instanceof DistanceConstraint) return { kind: "point-point", p1: c.p1, p2: c.p2, value: c.target };
+    if (c instanceof PointAxisDistanceConstraint) return { kind: "point-point", p1: c.p1, p2: c.p2, value: c.target, dimensionAxis: c.axis };
     if (c instanceof PointLineDistanceConstraint) return { kind: "point-line", point: c.point, line: c.line, value: c.target };
     if (c instanceof LineLineDistanceConstraint) return { kind: "line-line", line1: c.line1, line2: c.line2, value: c.target };
     if (c instanceof RadiusConstraint) return { kind: "radius", primitive: c.primitive, value: c.target };
@@ -1467,7 +1475,7 @@
   }
 
   function constraintReferencesPoint(c, point) {
-    if (c instanceof DistanceConstraint) return c.p1 === point || c.p2 === point;
+    if (c instanceof DistanceConstraint || c instanceof PointAxisDistanceConstraint) return c.p1 === point || c.p2 === point;
     if (c instanceof PointLineDistanceConstraint) return c.point === point || c.line.p1 === point || c.line.p2 === point;
     if (c instanceof LineLineDistanceConstraint) return c.line1.p1 === point || c.line1.p2 === point || c.line2.p1 === point || c.line2.p2 === point;
     if (c instanceof CoincidentConstraint) return c.p1 === point || c.p2 === point;
@@ -1492,7 +1500,7 @@
   }
 
   function constraintReferencesLine(c, line) {
-    if (c instanceof DistanceConstraint) {
+    if (c instanceof DistanceConstraint || c instanceof PointAxisDistanceConstraint) {
       return (c.p1 === line.p1 && c.p2 === line.p2) || (c.p1 === line.p2 && c.p2 === line.p1);
     }
     if (c instanceof PointLineDistanceConstraint) return c.line === line;
@@ -2801,11 +2809,18 @@
 
   function startDistanceValueInput(pointer) {
     if (!pendingCommand || pendingCommand.type !== "distance-place") return;
-    const value = Number(pendingCommand.target.value.toFixed(3));
+    const dimension = dimensionFromAnchor(pendingCommand.target, pointer);
+    const target = { ...pendingCommand.target, dimensionAxis: dimension.axis };
+    const value =
+      pendingCommand.target.kind === "point-point" && dimension.axis === "x"
+        ? Math.abs(pendingCommand.target.p2.x - pendingCommand.target.p1.x)
+        : pendingCommand.target.kind === "point-point" && dimension.axis === "y"
+          ? Math.abs(pendingCommand.target.p2.y - pendingCommand.target.p1.y)
+          : pendingCommand.target.value;
     pendingCommand = {
       type: "distance-value",
-      target: pendingCommand.target,
-      dimension: dimensionFromAnchor(pendingCommand.target, pointer),
+      target,
+      dimension,
       buffer: String(value),
       editing: false,
     };
@@ -3069,7 +3084,11 @@
     if (!target || target.kind === "invalid") return false;
     let constraint = null;
     if (target.kind === "point-point" || target.kind === "line-length") {
-      constraint = new DistanceConstraint(target.p1, target.p2, value);
+      if (target.kind === "point-point" && (dimension?.axis === "x" || dimension?.axis === "y")) {
+        constraint = new PointAxisDistanceConstraint(target.p1, target.p2, value, dimension.axis);
+      } else {
+        constraint = new DistanceConstraint(target.p1, target.p2, value);
+      }
     } else if (target.kind === "point-line") {
       constraint = new PointLineDistanceConstraint(target.point, target.line, value);
     } else if (target.kind === "line-line") {

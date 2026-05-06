@@ -142,6 +142,22 @@
     }
   }
 
+  class PointAxisDistanceConstraint extends Constraint {
+    constructor(p1, p2, target, axis = "x", sign = null) {
+      super(`寸法 ${p1.id}-${p2.id} ${axis} = ${target}`, 1);
+      this.p1 = p1;
+      this.p2 = p2;
+      this.target = target;
+      this.axis = axis === "y" ? "y" : "x";
+      const current = this.p2[this.axis] - this.p1[this.axis];
+      this.sign = sign || (current < 0 ? -1 : 1);
+    }
+
+    rawError() {
+      return (this.p2[this.axis] - this.p1[this.axis]) * this.sign - this.target;
+    }
+  }
+
   function signedPointLineDistance(point, line) {
     let dx = line.dx();
     let dy = line.dy();
@@ -971,6 +987,7 @@
     Arc,
     Constraint,
     DistanceConstraint,
+    PointAxisDistanceConstraint,
     PointLineDistanceConstraint,
     LineLineDistanceConstraint,
     signedPointLineDistance,
