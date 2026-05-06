@@ -582,6 +582,59 @@
       const y = LinearAlgebra.multiplyTransposeVector(Q, b);
       return LinearAlgebra.backSubstitution(R, y);
     }
+
+    static reducedRowEchelon(A, tolerance = 1e-9) {
+      const rows = A.map((row) => [...row]);
+      const m = rows.length;
+      const n = rows[0]?.length || 0;
+      const maxAbs = rows.reduce((best, row) => Math.max(best, ...row.map((v) => Math.abs(v))), 0);
+      const eps = tolerance * Math.max(1, maxAbs);
+      const pivotCols = [];
+      let r = 0;
+
+      for (let c = 0; c < n && r < m; c++) {
+        let pivot = r;
+        for (let i = r + 1; i < m; i++) {
+          if (Math.abs(rows[i][c]) > Math.abs(rows[pivot][c])) pivot = i;
+        }
+        if (Math.abs(rows[pivot][c]) <= eps) continue;
+        [rows[r], rows[pivot]] = [rows[pivot], rows[r]];
+        const v = rows[r][c];
+        for (let j = c; j < n; j++) rows[r][j] /= v;
+        for (let i = 0; i < m; i++) {
+          if (i === r) continue;
+          const f = rows[i][c];
+          if (Math.abs(f) <= eps) continue;
+          for (let j = c; j < n; j++) rows[i][j] -= f * rows[r][j];
+        }
+        pivotCols.push(c);
+        r++;
+      }
+
+      return { rows, pivotCols, rank: pivotCols.length };
+    }
+
+    static nullspaceActivity(A, tolerance = 1e-9, activityTolerance = 1e-7) {
+      const n = A[0]?.length || 0;
+      if (n === 0) return { active: [], rank: 0, freeColumns: [] };
+      if (A.length === 0) return { active: Array(n).fill(true), rank: 0, freeColumns: Array.from({ length: n }, (_, i) => i) };
+      const { rows, pivotCols, rank } = LinearAlgebra.reducedRowEchelon(A, tolerance);
+      const pivotSet = new Set(pivotCols);
+      const freeColumns = [];
+      const active = Array(n).fill(false);
+      for (let c = 0; c < n; c++) {
+        if (!pivotSet.has(c)) {
+          freeColumns.push(c);
+          active[c] = true;
+        }
+      }
+      for (const freeCol of freeColumns) {
+        for (let r = 0; r < pivotCols.length; r++) {
+          if (Math.abs(rows[r][freeCol]) > activityTolerance) active[pivotCols[r]] = true;
+        }
+      }
+      return { active, rank, freeColumns };
+    }
   }
 
   class ConstraintSolver {
@@ -762,6 +815,29 @@
 
     solveWithParameterDragTargets(targets) {
       return this.solve(targets.map((target) => new ParameterDragConstraint(target.object, target.prop, target.value, target.min)));
+    }
+
+    analyzeConstraintState(options = {}) {
+      const errorTolerance = Number.isFinite(options.errorTolerance) ? options.errorTolerance : 1e-4;
+      const rankTolerance = Number.isFinite(options.rankTolerance) ? options.rankTolerance : 1e-9;
+      const activityTolerance = Number.isFinite(options.activityTolerance) ? options.activityTolerance : 1e-7;
+      const vars = this.getVariables();
+      const F = this.computeErrorVector();
+      const errorNorm = vectorNorm(F);
+      const unstable = errorNorm > errorTolerance;
+      const J = unstable || vars.length === 0 ? [] : this.computeJacobian(vars, F);
+      const activity = unstable ? { active: Array(vars.length).fill(false), rank: 0, freeColumns: [] } : LinearAlgebra.nullspaceActivity(J, rankTolerance, activityTolerance);
+      const variableFreedom = new Map();
+      for (let i = 0; i < vars.length; i++) variableFreedom.set(vars[i].object, { ...(variableFreedom.get(vars[i].object) || {}), [vars[i].prop]: Boolean(activity.active[i]) });
+      return {
+        stable: !unstable,
+        errorNorm,
+        rank: activity.rank,
+        variableCount: vars.length,
+        freeVariableCount: activity.freeColumns.length,
+        variables: vars,
+        variableFreedom,
+      };
     }
   }
 

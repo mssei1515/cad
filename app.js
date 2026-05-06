@@ -59,6 +59,7 @@
   let selectedArcEndpoint = null;
   let selectedArcEndpointPair = null;
   let selectedDimensionConstraint = null;
+  let constraintAnalysisState = null;
   let panSession = null;
   let selectionRectSession = null;
   let lineStartPoint = null;
@@ -81,6 +82,11 @@
   const DEFAULT_FILLET_RADIUS = 30;
   const MIN_LINE_LENGTH = Math.max(MIN_ORIENTATION_LENGTH, solver.minLineLength || 12);
   const MIN_ARC_LENGTH = MIN_LINE_LENGTH;
+  const CONSTRAINT_STATUS_COLORS = {
+    full: "#111827",
+    under: "#2563eb",
+    conflict: "#dc2626",
+  };
   let lastLoadLineRepairMessage = "";
 
   const constraintButtons = Array.from(document.querySelectorAll("[data-constraint]"));
@@ -104,7 +110,9 @@
   function solveAndRefresh(label = "自動solve") {
     const result = solver.solve();
     normalizeArcSweeps();
-    setHint(`${label}: success=${result.success}, error=${result.errorNorm.toExponential(2)}, iter=${result.iterations}`);
+    const analysis = refreshConstraintAnalysis();
+    const statusKind = result.success && analysis.analysis.stable ? "normal" : "error";
+    setHint(`${label}: success=${result.success}, error=${result.errorNorm.toExponential(2)}, iter=${result.iterations} / ${constraintSummaryText()}`, statusKind);
     updateUI();
     draw();
     return result;
@@ -112,6 +120,90 @@
 
   function geometryErrorNorm() {
     return vectorNorm(solver.computeErrorVector());
+  }
+
+  function pointHasConstraintFreedom(point, analysis) {
+    if (point.fixed) return false;
+    const freedom = analysis.variableFreedom.get(point);
+    return Boolean(freedom?.x || freedom?.y);
+  }
+
+  function objectHasConstraintFreedom(object, prop, analysis) {
+    return Boolean(analysis.variableFreedom.get(object)?.[prop]);
+  }
+
+  function classifyConstraintStatus(item, kind, analysis) {
+    if (!analysis.stable) return "conflict";
+    if (kind === "point") return pointHasConstraintFreedom(item, analysis) ? "under" : "full";
+    if (kind === "line") return pointHasConstraintFreedom(item.p1, analysis) || pointHasConstraintFreedom(item.p2, analysis) ? "under" : "full";
+    if (kind === "circle") return pointHasConstraintFreedom(item.center, analysis) || objectHasConstraintFreedom(item, "radiusValue", analysis) ? "under" : "full";
+    if (kind === "arc") {
+      return pointHasConstraintFreedom(item.center, analysis) ||
+        objectHasConstraintFreedom(item, "radiusValue", analysis) ||
+        objectHasConstraintFreedom(item, "startAngle", analysis) ||
+        objectHasConstraintFreedom(item, "endAngle", analysis)
+        ? "under"
+        : "full";
+    }
+    return "full";
+  }
+
+  function refreshConstraintAnalysis() {
+    const analysis = solver.analyzeConstraintState({ errorTolerance: CONSTRAINT_ACCEPT_ERROR });
+    const statuses = new Map();
+    const items = [];
+    for (const p of model.points) {
+      const status = classifyConstraintStatus(p, "point", analysis);
+      statuses.set(p, status);
+      if (isExplicitPoint(p)) items.push(status);
+    }
+    for (const l of model.lines) {
+      const status = classifyConstraintStatus(l, "line", analysis);
+      statuses.set(l, status);
+      items.push(status);
+    }
+    for (const c of model.circles) {
+      const status = classifyConstraintStatus(c, "circle", analysis);
+      statuses.set(c, status);
+      items.push(status);
+    }
+    for (const a of model.arcs) {
+      const status = classifyConstraintStatus(a, "arc", analysis);
+      statuses.set(a, status);
+      items.push(status);
+    }
+    const summary = {
+      full: items.filter((status) => status === "full").length,
+      under: items.filter((status) => status === "under").length,
+      conflict: items.filter((status) => status === "conflict").length,
+      total: items.length,
+    };
+    constraintAnalysisState = { analysis, statuses, summary };
+    return constraintAnalysisState;
+  }
+
+  function constraintStatusOf(item) {
+    if (!constraintAnalysisState) refreshConstraintAnalysis();
+    return constraintAnalysisState?.statuses.get(item) || "full";
+  }
+
+  function constraintStatusColor(item, selected = false, hovered = false) {
+    const status = constraintStatusOf(item);
+    if (status === "conflict") return CONSTRAINT_STATUS_COLORS.conflict;
+    if (selected || hovered) return "#2563eb";
+    return CONSTRAINT_STATUS_COLORS[status] || CONSTRAINT_STATUS_COLORS.full;
+  }
+
+  function constraintStatusBadge(status) {
+    if (status === "conflict") return "矛盾";
+    if (status === "under") return "未拘束";
+    return "完全拘束";
+  }
+
+  function constraintSummaryText() {
+    if (!constraintAnalysisState) refreshConstraintAnalysis();
+    const s = constraintAnalysisState?.summary || { full: 0, under: 0, conflict: 0 };
+    return `完全拘束: ${s.full} / 未拘束: ${s.under} / 矛盾: ${s.conflict}`;
   }
 
   function addPoint(x, y, fixed = false, kind = "explicit") {
@@ -1350,7 +1442,7 @@
     updateUI();
     draw();
     const msg = `削除しました: 点${pointSet.size} / 線${lineSet.size} / 円${circleSet.size} / 円弧${arcSet.size} / 拘束${constraintSet.size}`;
-    setHint(`${msg} (error=${result.errorNorm.toExponential(2)})`, result.success ? "normal" : "error");
+    setHint(`${msg} (error=${result.errorNorm.toExponential(2)}) / ${constraintSummaryText()}`, result.success && constraintAnalysisState?.analysis?.stable ? "normal" : "error");
     log(`${msg}\n自動solve: success=${result.success}, error=${result.errorNorm.toExponential(3)}`);
     return true;
   }
@@ -1539,7 +1631,7 @@
     for (const l of model.lines) {
       const sel = selectedLines.includes(l);
       const hovered = hoveredLine === l;
-      ctx.strokeStyle = sel || hovered ? "#2563eb" : "#111827";
+      ctx.strokeStyle = constraintStatusColor(l, sel, hovered);
       ctx.lineWidth = (sel || hovered ? 3 : 2) / viewport.scale;
       ctx.lineCap = "round";
       ctx.lineJoin = "round";
@@ -1565,7 +1657,7 @@
     for (const c of model.circles) {
       const sel = selectedCircles.includes(c);
       const hovered = hoveredCircle === c;
-      ctx.strokeStyle = sel || hovered ? "#2563eb" : "#111827";
+      ctx.strokeStyle = constraintStatusColor(c, sel, hovered);
       ctx.lineWidth = (sel || hovered ? 3 : 2) / viewport.scale;
       ctx.beginPath();
       ctx.arc(c.center.x, c.center.y, c.radius(), 0, Math.PI * 2);
@@ -1586,7 +1678,7 @@
       const sel = selectedArcs.includes(a);
       const hovered = hoveredArc === a;
       const angles = arcAngles(a);
-      ctx.strokeStyle = sel || hovered ? "#2563eb" : "#111827";
+      ctx.strokeStyle = constraintStatusColor(a, sel, hovered);
       ctx.lineWidth = (sel || hovered ? 3 : 2) / viewport.scale;
       ctx.beginPath();
       ctx.arc(a.center.x, a.center.y, a.radius(), angles.start, angles.end, angles.end < angles.start);
@@ -1915,7 +2007,7 @@
       ctx.arc(p.x, p.y, (sel ? 7 : endpoint ? 5 : 5) / viewport.scale, 0, Math.PI * 2);
       ctx.fillStyle = p.fixed ? "#dc2626" : sel ? "#2563eb" : hovered || primitiveCenter ? "#eff6ff" : "#fff";
       ctx.fill();
-      ctx.strokeStyle = sel ? "#1d4ed8" : hovered || primitiveCenter ? "#2563eb" : "#111827";
+      ctx.strokeStyle = p.fixed ? "#dc2626" : constraintStatusColor(p, sel, hovered || primitiveCenter);
       ctx.lineWidth = (endpoint ? 2 : 2) / viewport.scale;
       ctx.stroke();
       if (sel || hovered || dragging) {
@@ -2416,6 +2508,7 @@
   }
 
   function updateUI() {
+    refreshConstraintAnalysis();
     document.getElementById("pointList").innerHTML = model.points
       .filter(isExplicitPoint)
       .map(
@@ -2423,6 +2516,7 @@
           `<div class="item list-item"><span>${p.id}` +
           `<span class="badge">x=${p.x.toFixed(1)}</span>` +
           `<span class="badge">y=${p.y.toFixed(1)}</span>` +
+          `<span class="badge">${constraintStatusBadge(constraintStatusOf(p))}</span>` +
           `${p.fixed ? "<span class='badge'>固定</span>" : ""}</span>` +
           `<button data-id="${p.id}" class="removePointBtn icon-delete-btn" title="削除" aria-label="削除" data-tooltip="削除">` +
           `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3M7 7l1 13h8l1-13"/></svg>` +
@@ -2433,14 +2527,14 @@
     document.getElementById("lineList").innerHTML = model.lines
       .map(
         (l) =>
-          `<div class="item list-item"><span>${l.id}: ${l.p1.id} - ${l.p2.id}<span class="badge">len=${l.length().toFixed(2)}</span></span>` +
+          `<div class="item list-item"><span>${l.id}: ${l.p1.id} - ${l.p2.id}<span class="badge">len=${l.length().toFixed(2)}</span><span class="badge">${constraintStatusBadge(constraintStatusOf(l))}</span></span>` +
           `<button data-id="${l.id}" class="removeLineBtn icon-delete-btn" title="削除" aria-label="削除" data-tooltip="削除">` +
           `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3M7 7l1 13h8l1-13"/></svg>` +
           `</button></div>`,
       )
       .join("");
 
-    document.getElementById("constraintList").innerHTML = model.constraints
+    document.getElementById("constraintList").innerHTML = `<div class="item constraint-item"><span>${constraintSummaryText()}</span></div>` + model.constraints
       .map(
         (c, i) =>
           `<div class="item constraint-item"><span>${i + 1}. ${c.name}</span>` +
@@ -2536,7 +2630,7 @@
 
     updateUI();
     draw();
-    setHint(`拘束追加: success=${result.success}, error=${result.errorNorm.toExponential(2)}, iter=${result.iterations}`);
+    setHint(`拘束追加: success=${result.success}, error=${result.errorNorm.toExponential(2)}, iter=${result.iterations} / ${constraintSummaryText()}`);
     log(`拘束を追加しました: ${type}\n自動solve: success=${result.success}, error=${result.errorNorm.toExponential(3)}`);
     return true;
   }
