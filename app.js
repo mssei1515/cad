@@ -2283,7 +2283,17 @@
       });
       return;
     }
-    drawDimension(pendingCommand.target, dimension, Number(pendingCommand.target.value).toFixed(2), true);
+    const previewTarget =
+      pendingCommand.target.kind === "point-point" && (dimension.axis === "x" || dimension.axis === "y")
+        ? { ...pendingCommand.target, dimensionAxis: dimension.axis }
+        : pendingCommand.target;
+    const previewValue =
+      previewTarget.kind === "point-point" && previewTarget.dimensionAxis === "x"
+        ? Math.abs(previewTarget.p2.x - previewTarget.p1.x)
+        : previewTarget.kind === "point-point" && previewTarget.dimensionAxis === "y"
+          ? Math.abs(previewTarget.p2.y - previewTarget.p1.y)
+          : previewTarget.value;
+    drawDimension(previewTarget, dimension, Number(previewValue).toFixed(2), true);
   }
 
   function drawFilletPreviewArc(geometry) {
