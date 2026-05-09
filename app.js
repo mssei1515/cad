@@ -420,6 +420,8 @@
         line1: c.line1.id,
         line2: c.line2.id,
         target: c.target,
+        startFlip: c.startFlip || 0,
+        endFlip: c.endFlip || 0,
         dimension: serializeDimension(c.dimension, targetFromConstraint(c)),
         enabled: c.enabled,
       };
@@ -533,7 +535,7 @@
     } else if (data.type === "lineLineDistance") {
       constraint = new LineLineDistanceConstraint(line(data.line1), line(data.line2), Number(data.target), Number(data.sign) || null);
     } else if (data.type === "lineAngle") {
-      constraint = new LineAngleConstraint(line(data.line1), line(data.line2), Number(data.target));
+      constraint = new LineAngleConstraint(line(data.line1), line(data.line2), Number(data.target), Number(data.startFlip) || 0, Number(data.endFlip) || 0);
     } else if (data.type === "coincident") {
       constraint = new CoincidentConstraint(point(data.p1), point(data.p2));
     } else if (data.type === "arcEndpointCoincident") {
@@ -594,6 +596,10 @@
           angleEndFlip: Number.isInteger(data.dimension.angleEndFlip) ? data.dimension.angleEndFlip : null,
           angleRadius: Number.isFinite(Number(data.dimension.angleRadius)) ? Number(data.dimension.angleRadius) : NaN,
         };
+        if (constraint instanceof LineAngleConstraint && !Number.isInteger(data.startFlip) && Number.isInteger(constraint.dimension.angleStartFlip)) {
+          constraint.startFlip = constraint.dimension.angleStartFlip ? 1 : 0;
+          constraint.endFlip = constraint.dimension.angleEndFlip ? 1 : 0;
+        }
       }
     }
     return constraint;
@@ -3677,7 +3683,7 @@
       }
       constraint = new LineLineDistanceConstraint(target.line1, target.line2, value);
     } else if (target.kind === "angle") {
-      constraint = new LineAngleConstraint(target.line1, target.line2, (value * Math.PI) / 180);
+      constraint = new LineAngleConstraint(target.line1, target.line2, (value * Math.PI) / 180, dimension?.angleStartFlip || 0, dimension?.angleEndFlip || 0);
     } else if (target.kind === "radius") {
       constraint = new RadiusConstraint(target.primitive, value);
     } else if (target.kind === "diameter") {

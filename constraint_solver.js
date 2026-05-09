@@ -154,11 +154,13 @@
     }
   }
 
-  function lineAxisAngle(line1, line2) {
-    const ax = line1.dx();
-    const ay = line1.dy();
-    const bx = line2.dx();
-    const by = line2.dy();
+  function lineAxisAngle(line1, line2, startFlip = 0, endFlip = 0) {
+    const flip1 = startFlip ? -1 : 1;
+    const flip2 = endFlip ? -1 : 1;
+    const ax = line1.dx() * flip1;
+    const ay = line1.dy() * flip1;
+    const bx = line2.dx() * flip2;
+    const by = line2.dy() * flip2;
     const la = hypot2(ax, ay);
     const lb = hypot2(bx, by);
     if (la < MIN_ORIENTATION_LENGTH || lb < MIN_ORIENTATION_LENGTH) return 0;
@@ -251,15 +253,17 @@
   }
 
   class LineAngleConstraint extends Constraint {
-    constructor(line1, line2, target) {
+    constructor(line1, line2, target, startFlip = 0, endFlip = 0) {
       super(`角度 ${line1.id}-${line2.id} = ${target}`, 1);
       this.line1 = line1;
       this.line2 = line2;
       this.target = normalizeAxisAngle(target);
+      this.startFlip = startFlip ? 1 : 0;
+      this.endFlip = endFlip ? 1 : 0;
     }
 
     rawError() {
-      return lineAxisAngle(this.line1, this.line2) - this.target;
+      return lineAxisAngle(this.line1, this.line2, this.startFlip, this.endFlip) - this.target;
     }
   }
 
