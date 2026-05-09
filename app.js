@@ -1252,6 +1252,123 @@
     return best ? { x: best.x, y: best.y } : p;
   }
 
+  function samePosition(a, b, tolerance = 1e-9) {
+    return Boolean(a && b && hypot2(a.x - b.x, a.y - b.y) <= tolerance);
+  }
+
+  function addConstraintIfMissing(constraint, matches) {
+    if (!constraint) return false;
+    if (model.constraints.some((c) => c.enabled !== false && matches(c))) return false;
+    model.constraints.push(constraint);
+    return true;
+  }
+
+  function addPointSnapConstraints(point, snap) {
+    if (!point || !snap?.data) return 0;
+    const { point: snapPoint, line, primitive, arc, endpoint } = snap.data;
+    let added = 0;
+    if (snapPoint && snapPoint !== point) {
+      added += addConstraintIfMissing(
+        new CoincidentConstraint(point, snapPoint),
+        (c) => c instanceof CoincidentConstraint && ((c.p1 === point && c.p2 === snapPoint) || (c.p1 === snapPoint && c.p2 === point)),
+      ) ? 1 : 0;
+    }
+    if (line) {
+      added += addConstraintIfMissing(
+        new PointOnLineConstraint(point, line),
+        (c) => c instanceof PointOnLineConstraint && c.point === point && c.line === line,
+      ) ? 1 : 0;
+    }
+    if (primitive && primitive.center !== point) {
+      added += addConstraintIfMissing(
+        new PointOnCircleConstraint(point, primitive),
+        (c) => c instanceof PointOnCircleConstraint && c.point === point && c.primitive === primitive,
+      ) ? 1 : 0;
+    }
+    if (arc && endpoint) {
+      added += addConstraintIfMissing(
+        new ArcEndpointCoincidentConstraint(arc, endpoint, point),
+        (c) => c instanceof ArcEndpointCoincidentConstraint && c.arc === arc && c.endpoint === endpoint && c.point === point,
+      ) ? 1 : 0;
+    } else if (arc) {
+      added += addConstraintIfMissing(
+        new PointOnCircleConstraint(point, arc),
+        (c) => c instanceof PointOnCircleConstraint && c.point === point && c.primitive === arc,
+      ) ? 1 : 0;
+    }
+    return added;
+  }
+
+  function addArcEndpointSnapConstraints(arc, endpointName, snap) {
+    if (!arc || !snap?.data) return 0;
+    const { point, line, primitive, arc: snapArc, endpoint } = snap.data;
+    let added = 0;
+    if (point) {
+      added += addConstraintIfMissing(
+        new ArcEndpointCoincidentConstraint(arc, endpointName, point),
+        (c) => c instanceof ArcEndpointCoincidentConstraint && c.arc === arc && c.endpoint === endpointName && c.point === point,
+      ) ? 1 : 0;
+    }
+    if (line) {
+      added += addConstraintIfMissing(
+        new ArcEndpointOnLineConstraint(arc, endpointName, line),
+        (c) => c instanceof ArcEndpointOnLineConstraint && c.arc === arc && c.endpoint === endpointName && c.line === line,
+      ) ? 1 : 0;
+    }
+    if (primitive && primitive !== arc) {
+      added += addConstraintIfMissing(
+        new ArcEndpointOnCircleConstraint(arc, endpointName, primitive),
+        (c) => c instanceof ArcEndpointOnCircleConstraint && c.arc === arc && c.endpoint === endpointName && c.primitive === primitive,
+      ) ? 1 : 0;
+    }
+    if (snapArc && endpoint) {
+      added += addConstraintIfMissing(
+        new ArcEndpointArcEndpointCoincidentConstraint(arc, endpointName, snapArc, endpoint),
+        (c) =>
+          c instanceof ArcEndpointArcEndpointCoincidentConstraint &&
+          ((c.a === arc && c.endpointA === endpointName && c.b === snapArc && c.endpointB === endpoint) ||
+            (c.a === snapArc && c.endpointA === endpoint && c.b === arc && c.endpointB === endpointName)),
+      ) ? 1 : 0;
+    } else if (snapArc && snapArc !== arc) {
+      added += addConstraintIfMissing(
+        new ArcEndpointOnCircleConstraint(arc, endpointName, snapArc),
+        (c) => c instanceof ArcEndpointOnCircleConstraint && c.arc === arc && c.endpoint === endpointName && c.primitive === snapArc,
+      ) ? 1 : 0;
+    }
+    return added;
+  }
+
+  function addCircleBoundarySnapConstraints(circle, snap) {
+    if (!circle || !snap?.data) return 0;
+    const { point, line, primitive, arc, endpoint } = snap.data;
+    let added = 0;
+    if (point) {
+      added += addConstraintIfMissing(
+        new PointOnCircleConstraint(point, circle),
+        (c) => c instanceof PointOnCircleConstraint && c.point === point && c.primitive === circle,
+      ) ? 1 : 0;
+    } else if (arc && endpoint) {
+      added += addConstraintIfMissing(
+        new ArcEndpointOnCircleConstraint(arc, endpoint, circle),
+        (c) => c instanceof ArcEndpointOnCircleConstraint && c.arc === arc && c.endpoint === endpoint && c.primitive === circle,
+      ) ? 1 : 0;
+    } else {
+      const ref = addPoint(snap.x, snap.y, false, "endpoint");
+      added += addPointSnapConstraints(ref, snap);
+      added += addConstraintIfMissing(
+        new PointOnCircleConstraint(ref, circle),
+        (c) => c instanceof PointOnCircleConstraint && c.point === ref && c.primitive === circle,
+      ) ? 1 : 0;
+      if (primitive && primitive !== circle) {
+        added += addConstraintIfMissing(
+          new PointOnCircleConstraint(ref, primitive),
+          (c) => c instanceof PointOnCircleConstraint && c.point === ref && c.primitive === primitive,
+        ) ? 1 : 0;
+      }
+    }
+    return added;
+  }
+
   function hitDimension(x, y) {
     const threshold = 8 / viewport.scale;
     for (let i = model.constraints.length - 1; i >= 0; i--) {
@@ -3913,11 +4030,14 @@
   function handleLineClick(p, lockOrthogonal = false) {
     if (lineStartPoint && lockOrthogonal) p = orthogonalPointFrom(lineStartPoint, p);
     p = snapForDrawing(p);
+    let snap = activeSnap;
     if (lineStartPoint) p = pointAtMinimumDistance(lineStartPoint, p);
+    if (snap && !samePosition(p, snap)) snap = null;
     const endpoint = lineStartPoint && hypot2(p.x - lineStartPoint.x, p.y - lineStartPoint.y) <= MIN_LINE_LENGTH + 1e-9 ? addPoint(p.x, p.y, false, "endpoint") : endpointAt(p.x, p.y);
     pointerPreview = p;
 
     if (!lineStartPoint) {
+      addPointSnapConstraints(endpoint, snap);
       lineStartPoint = endpoint;
       selectedPoints = [endpoint];
       selectedLines = [];
@@ -3931,6 +4051,7 @@
 
     const l = addLine(lineStartPoint, endpoint);
     if (l) {
+      addPointSnapConstraints(endpoint, snap);
       if (lockOrthogonal) addLineOrientationConstraint(l);
       selectedPoints = [];
       selectedLines = [l];
@@ -3955,9 +4076,11 @@
 
   function handleRectangleClick(p) {
     p = snapForDrawing(p);
+    let snap = activeSnap;
     pointerPreview = p;
     if (!rectangleStartPoint) {
       rectangleStartPoint = endpointAt(p.x, p.y);
+      addPointSnapConstraints(rectangleStartPoint, snap);
       selectedPoints = [rectangleStartPoint];
       selectedLines = [];
       selectedCircles = [];
@@ -3972,10 +4095,12 @@
     const ry = p.y - rectangleStartPoint.y;
     if (Math.abs(rx) < MIN_LINE_LENGTH) p = { ...p, x: rectangleStartPoint.x + (rx < 0 ? -MIN_LINE_LENGTH : MIN_LINE_LENGTH) };
     if (Math.abs(ry) < MIN_LINE_LENGTH) p = { ...p, y: rectangleStartPoint.y + (ry < 0 ? -MIN_LINE_LENGTH : MIN_LINE_LENGTH) };
+    if (snap && !samePosition(p, snap)) snap = null;
     const p1 = rectangleStartPoint;
     const p2 = addPoint(p.x, p1.y, false, "endpoint");
     const p3 = addPoint(p.x, p.y, false, "endpoint");
     const p4 = addPoint(p1.x, p.y, false, "endpoint");
+    addPointSnapConstraints(p3, snap);
     const lines = [addLine(p1, p2), addLine(p2, p3), addLine(p3, p4), addLine(p4, p1)].filter(Boolean);
     if (lines[0]) model.constraints.push(new HorizontalConstraint(lines[0]));
     if (lines[1]) model.constraints.push(new VerticalConstraint(lines[1]));
@@ -4130,9 +4255,11 @@
 
   function handleCircleClick(p) {
     p = snapForDrawing(p);
+    const snap = activeSnap;
     pointerPreview = p;
     if (!circleCenterPoint) {
       const center = endpointAt(p.x, p.y);
+      addPointSnapConstraints(center, snap);
       circleCenterPoint = center;
       selectedPoints = [center];
       selectedLines = [];
@@ -4145,6 +4272,7 @@
     }
     const circle = addCircle(circleCenterPoint, hypot2(p.x - circleCenterPoint.x, p.y - circleCenterPoint.y));
     if (circle) {
+      addCircleBoundarySnapConstraints(circle, snap);
       selectedPoints = [];
       selectedLines = [];
       selectedCircles = [circle];
@@ -4161,9 +4289,11 @@
 
   function handleArcClick(p) {
     p = snapForDrawing(p);
+    const snap = activeSnap;
     pointerPreview = p;
     if (!arcCenterPoint) {
       const center = endpointAt(p.x, p.y);
+      addPointSnapConstraints(center, snap);
       arcCenterPoint = center;
       selectedPoints = [center];
       selectedLines = [];
@@ -4184,6 +4314,7 @@
       arcStartPoint = {
         radius,
         startAngle: Math.atan2(p.y - arcCenterPoint.y, p.x - arcCenterPoint.x),
+        snap,
       };
       selectedPoints = [arcCenterPoint];
       setHint("円弧の終点をクリックすると円弧を作成します。Escで選択モードに戻ります");
@@ -4193,6 +4324,8 @@
     }
     const arc = addArc(arcCenterPoint, arcStartPoint.radius, arcStartPoint.startAngle, shortestAngleFrom(arcStartPoint.startAngle, Math.atan2(p.y - arcCenterPoint.y, p.x - arcCenterPoint.x)));
     if (arc) {
+      addArcEndpointSnapConstraints(arc, "start", arcStartPoint.snap);
+      addArcEndpointSnapConstraints(arc, "end", snap);
       selectedPoints = [];
       selectedLines = [];
       selectedCircles = [];
@@ -4251,7 +4384,9 @@
 
     if (mode === "point") {
       const sp = snapForDrawing(p);
+      const snap = activeSnap;
       const np = addPoint(sp.x, sp.y, false);
+      addPointSnapConstraints(np, snap);
       clearSnap();
       selectedPoints = [np];
       selectedLines = [];
