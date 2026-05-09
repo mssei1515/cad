@@ -1429,7 +1429,7 @@
     return Math.abs(a.x * b.y - a.y * b.x) < 1e-3;
   }
 
-  function normalizeAngle(angle) {
+  function normalizeSignedAngle(angle) {
     let a = angle;
     while (a > Math.PI) a -= Math.PI * 2;
     while (a <= -Math.PI) a += Math.PI * 2;
@@ -1441,7 +1441,7 @@
   }
 
   function signedAngleBetweenLines(line1, line2) {
-    return normalizeAngle(lineAngle(line2) - lineAngle(line1));
+    return normalizeSignedAngle(lineAngle(line2) - lineAngle(line1));
   }
 
   function axisAngleBetweenLines(line1, line2) {
@@ -1462,7 +1462,7 @@
   function angleDimensionCandidate(target, startFlip = 0, endFlip = 0) {
     const start = lineAngle(target.line1) + (startFlip ? Math.PI : 0);
     const endAngle = lineAngle(target.line2) + (endFlip ? Math.PI : 0);
-    const signed = normalizeAngle(endAngle - start);
+    const signed = normalizeSignedAngle(endAngle - start);
     if (Math.abs(signed) > Math.PI / 2 + 1e-9) return null;
     return { start, end: start + signed, signed, mid: start + signed / 2, startFlip, endFlip };
   }
@@ -1492,7 +1492,7 @@
       for (const endFlip of [0, 1]) {
         const candidate = angleDimensionCandidate(target, startFlip, endFlip);
         if (!candidate) continue;
-        const score = Math.abs(normalizeAngle(candidate.mid - anchorAngle));
+        const score = Math.abs(normalizeSignedAngle(candidate.mid - anchorAngle));
         if (score < bestScore) {
           bestScore = score;
           best = candidate;
