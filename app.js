@@ -2850,6 +2850,54 @@
     focusDimensionValueInput();
   }
 
+  function retargetPendingLineLengthDimension(hitP, hitL, pointer) {
+    if (pendingCommand?.type !== "distance-place" || pendingCommand.target.kind !== "line-length") return false;
+    const baseLine = pendingCommand.target.line;
+    if (hitP) {
+      if (!lineHasDirection(baseLine)) {
+        setHint("寸法対象の線が短すぎます", "error");
+        return true;
+      }
+      selectedPoints = [hitP];
+      selectedLines = [baseLine];
+      selectedCircles = [];
+      selectedArcs = [];
+      pendingCommand = {
+        type: "distance-place",
+        target: { kind: "point-line", point: hitP, line: baseLine, value: Math.abs(signedPointLineDistance(hitP, baseLine)) },
+        pointer,
+      };
+      setHint("点と線の寸法線の位置をクリックしてください");
+      updateUI();
+      draw();
+      return true;
+    }
+    if (hitL && hitL !== baseLine) {
+      if (!lineHasDirection(baseLine) || !lineHasDirection(hitL)) {
+        setHint("線-線寸法の対象線が短すぎます", "error");
+        return true;
+      }
+      if (!linesAreParallel(baseLine, hitL)) {
+        setHint("線-線寸法は平行線のみです", "error");
+        return true;
+      }
+      selectedPoints = [];
+      selectedLines = [baseLine, hitL];
+      selectedCircles = [];
+      selectedArcs = [];
+      pendingCommand = {
+        type: "distance-place",
+        target: { kind: "line-line", line1: baseLine, line2: hitL, value: Math.abs(signedPointLineDistance(hitL.p1, baseLine)) },
+        pointer,
+      };
+      setHint("線と線の寸法線の位置をクリックしてください");
+      updateUI();
+      draw();
+      return true;
+    }
+    return false;
+  }
+
   function startDimensionEditInput(hit) {
     if (!hit?.constraint) return false;
     const target = targetFromConstraint(hit.constraint);
@@ -2912,6 +2960,11 @@
     if (e.key === "Escape") {
       e.preventDefault();
       cancelPendingCommand("寸法入力をキャンセルしました");
+      return true;
+    }
+    if (pendingCommand.type === "distance-place" && e.key === "Enter") {
+      e.preventDefault();
+      startDistanceValueInput(pendingCommand.pointer || defaultDimensionForTarget(pendingCommand.target));
       return true;
     }
     if (pendingCommand.type !== "distance-value" && pendingCommand.type !== "fillet-radius-value") return false;
@@ -3883,6 +3936,7 @@
 
     if (pendingCommand?.type === "distance-place") {
       e.preventDefault();
+      if (retargetPendingLineLengthDimension(hitP, hitL, p)) return;
       startDistanceValueInput(p);
       return;
     }
@@ -4415,8 +4469,6 @@
       const type = btn.dataset.constraint;
       if (pendingConstraintCommand?.type === type) {
         cancelConstraintTargetCommand(`${constraintLabel(type)}の対象選択をキャンセルしました`);
-      } else if (type === "distance" && selectedPoints.length === 0 && selectedLines.length === 1) {
-        startConstraintTargetCommand(type);
       } else if (canApplyConstraint(type)) {
         cancelConstraintTargetCommand("");
         if (type === "distance") startDistanceCommand();
