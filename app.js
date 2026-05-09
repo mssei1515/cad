@@ -4229,6 +4229,7 @@
     if (disc < -1e-9) return [];
     const roots = Math.abs(disc) < 1e-9 ? [-qb / (2 * qa)] : [(-qb - Math.sqrt(disc)) / (2 * qa), (-qb + Math.sqrt(disc)) / (2 * qa)];
     return roots.map((t) => {
+      if (t < -1e-6 || t > 1 + 1e-6) return null;
       const point = pointOnLineAt(line, t);
       if (requireArc && !angleOnSignedSweep(Math.atan2(point.y - primitive.center.y, point.x - primitive.center.x), primitive.startAngle, primitive.endAngle)) return null;
       return { t, point, source: requireArc ? { arc: primitive } : { primitive } };
@@ -4368,7 +4369,8 @@
   function trimPreviewForCircle(circle, pointer) {
     const t = circleParam(circle, Math.atan2(pointer.y - circle.center.y, pointer.x - circle.center.x));
     const boundaries = circleTrimBoundaries(circle);
-    if (boundaries.length < 2) return { kind: "circle", item: circle, deleteWhole: true };
+    if (boundaries.length === 0) return { kind: "circle", item: circle, deleteWhole: true };
+    if (boundaries.length < 2) return null;
     const interval = cyclicTrimInterval(boundaries, t);
     if (!interval) return null;
     const left = { ...interval.left, angle: angleAtCircleParam(interval.left.t) };
