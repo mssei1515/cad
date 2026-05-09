@@ -115,7 +115,7 @@ input {
 .dimension-value-input {
   position: absolute;
   z-index: 4;
-  width: 96px;
+  width: 132px;
   height: 28px;
   padding: 3px 7px;
   border: 1.5px solid var(--accent);
@@ -123,7 +123,7 @@ input {
   background: #fff;
   color: var(--text);
   font: 12px ui-monospace, SFMono-Regular, Consolas, monospace;
-  text-align: center;
+  text-align: left;
   box-shadow: 0 4px 14px rgba(15, 23, 42, 0.16);
   transform: translate(-50%, -100%);
 }

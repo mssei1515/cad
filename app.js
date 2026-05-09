@@ -2328,6 +2328,7 @@
     dimensionValueInput.hidden = false;
     dimensionValueInput.style.left = `${screen.x}px`;
     dimensionValueInput.style.top = `${screen.y - 4}px`;
+    dimensionValueInput.style.width = `${Math.max(132, Math.min(280, pendingCommand.buffer.length * 9 + 34))}px`;
     if (dimensionValueInput.value !== pendingCommand.buffer) dimensionValueInput.value = pendingCommand.buffer;
     const value = Number(pendingCommand.buffer);
     dimensionValueInput.classList.toggle("is-invalid", pendingCommand.buffer === "" || !Number.isFinite(value) || value <= 0);
@@ -2428,7 +2429,7 @@
     if (target.kind === "angle") return drawAngleDimension(target, dimension, label, preview, highlighted, editState);
     const layout = dimensionLayout(target, dimension);
     if (!layout) return;
-    const { a, b, points, d, text } = layout;
+    const { a, b, lineA, lineB, points, d, text } = layout;
 
     ctx.save();
     ctx.strokeStyle = preview || highlighted ? "#2563eb" : "#6b7280";
@@ -2436,8 +2437,8 @@
     ctx.lineWidth = (highlighted ? 2 : 1.2) / viewport.scale;
     if (preview) ctx.setLineDash([5 / viewport.scale, 4 / viewport.scale]);
     ctx.beginPath();
-    ctx.moveTo(a.x, a.y);
-    ctx.lineTo(b.x, b.y);
+    ctx.moveTo((lineA || a).x, (lineA || a).y);
+    ctx.lineTo((lineB || b).x, (lineB || b).y);
     ctx.stroke();
 
     for (const p of points) {
@@ -2477,6 +2478,7 @@
   }
 
   function drawDimensionLabel(label, text, editState = null) {
+    if (editState?.hidden) return;
     if (editState) {
       drawDimensionEditLabel(label, text, editState);
     } else {
@@ -2534,6 +2536,13 @@
     const max = Math.max(...projections);
     const a = { x: anchor.x + d.x * min, y: anchor.y + d.y * min };
     const b = { x: anchor.x + d.x * max, y: anchor.y + d.y * max };
+    const labelOffset = Number(dimension?.labelOffsetU) || 0;
+    const textProjection = (min + max) / 2 + labelOffset;
+    const labelPad = 18 / viewport.scale;
+    const lineMin = Math.min(min, textProjection - labelPad);
+    const lineMax = Math.max(max, textProjection + labelPad);
+    const lineA = { x: anchor.x + d.x * lineMin, y: anchor.y + d.y * lineMin };
+    const lineB = { x: anchor.x + d.x * lineMax, y: anchor.y + d.y * lineMax };
     const projectedPoints = points.map((source) => {
       const t = (source.x - anchor.x) * d.x + (source.y - anchor.y) * d.y;
       const onDimension = { x: anchor.x + d.x * t, y: anchor.y + d.y * t };
@@ -2559,11 +2568,13 @@
     return {
       a,
       b,
+      lineA,
+      lineB,
       d,
       points: projectedPoints,
-      text: { x: (a.x + b.x) / 2 + d.x * (Number(dimension?.labelOffsetU) || 0), y: (a.y + b.y) / 2 + d.y * (Number(dimension?.labelOffsetU) || 0) },
-      hitA: { x: a.x - d.x * tick, y: a.y - d.y * tick },
-      hitB: { x: b.x + d.x * tick, y: b.y + d.y * tick },
+      text: { x: anchor.x + d.x * textProjection, y: anchor.y + d.y * textProjection },
+      hitA: { x: lineA.x - d.x * tick, y: lineA.y - d.y * tick },
+      hitB: { x: lineB.x + d.x * tick, y: lineB.y + d.y * tick },
     };
   }
 
@@ -2607,7 +2618,8 @@
       const dimension = c.dimension || defaultDimensionForTarget(target);
       const highlighted = c === hoveredDimensionConstraint || c === selectedDimensionConstraint || c === dimensionDragSession?.constraint;
       const label = target.kind === "angle" ? `${Number(angleDegrees(c.target)).toFixed(2)}°` : Number(c.target).toFixed(2);
-      drawDimension(target, dimension, label, false, highlighted);
+      const editing = pendingCommand?.type === "distance-value" && pendingCommand.constraint === c;
+      drawDimension(target, dimension, label, false, highlighted || editing, editing ? { hidden: true } : null);
     }
   }
 
@@ -2632,6 +2644,7 @@
       drawDimension(target, dimensionFromAnchor(target, anchor), `R${pendingCommand.buffer || "_"}|`, true, false, {
         selecting: !pendingCommand.editing,
         invalid,
+        hidden: true,
       });
       return;
     }
@@ -2644,6 +2657,7 @@
       drawDimension(pendingCommand.target, dimension, `${pendingCommand.buffer || "_"}${suffix}|`, true, false, {
         selecting: !pendingCommand.editing,
         invalid,
+        hidden: true,
       });
       return;
     }
@@ -3042,7 +3056,6 @@
         return false;
       }
       if (target?.kind === "line-length") {
-        pendingConstraintCommand = null;
         updateConstraintButtons();
         startDistanceCommand();
         return true;
@@ -3210,7 +3223,9 @@
       log(target.reason);
       return;
     }
+    pendingConstraintCommand = { type: "distance" };
     pendingCommand = { type: "distance-place", target, pointer: defaultDimensionForTarget(target) };
+    updateConstraintButtons();
     setHint("寸法線の位置をクリックしてください");
     draw();
   }
@@ -3219,7 +3234,9 @@
     const primitive = selectedPrimitives()[0];
     if (!primitive) return;
     const value = kind === "diameter" ? primitive.radius() * 2 : primitive.radius();
+    pendingConstraintCommand = { type: "distance" };
     pendingCommand = { type: "distance-place", target: { kind, primitive, value }, pointer: defaultDimensionForTarget({ kind, primitive, value }) };
+    updateConstraintButtons();
     setHint("寸法線の位置をクリックしてください");
     draw();
   }
@@ -3252,6 +3269,7 @@
       editing: false,
     };
     setHint("寸法値を入力中: 数値キーで編集、Enter/ダブルクリックで決定、Escでキャンセル");
+    updateConstraintButtons();
     draw();
     focusDimensionValueInput();
   }
@@ -4867,17 +4885,17 @@
 
     const multiSelect = e.shiftKey || e.ctrlKey;
 
-    if (hitP) {
-      selectedDimensionConstraint = null;
-      if (multiSelect) togglePointSelection(hitP);
-      else beginDrag(e, hitP, null, null, null, null, p);
-    } else if (hitD && !multiSelect) {
+    if (hitD && !multiSelect) {
       selectedPoints = [];
       selectedLines = [];
       selectedCircles = [];
       selectedArcs = [];
       selectedArcEndpoint = null;
       beginDimensionDrag(e, hitD, p);
+    } else if (hitP) {
+      selectedDimensionConstraint = null;
+      if (multiSelect) togglePointSelection(hitP);
+      else beginDrag(e, hitP, null, null, null, null, p);
     } else if (hitArcEnd) {
       selectedDimensionConstraint = null;
       if (multiSelect) {
@@ -5001,14 +5019,14 @@
     }
 
     if (!dragSession) {
-      const nextEndpointHover = hitEndpointPoint(p.x, p.y);
-      const nextPointHover = nextEndpointHover || hitExplicitPoint(p.x, p.y);
+      const hitD = hitDimension(p.x, p.y);
+      const nextHover = hitD?.constraint || null;
+      const nextEndpointHover = nextHover ? null : hitEndpointPoint(p.x, p.y);
+      const nextPointHover = nextHover ? null : nextEndpointHover || hitExplicitPoint(p.x, p.y);
       const nextLineHover = nextPointHover ? null : hitLine(p.x, p.y);
       const nextCircleHover = nextPointHover || nextLineHover ? null : hitCircle(p.x, p.y);
       const nextArcEndpointHover = nextPointHover || nextLineHover || nextCircleHover ? null : hitArcEndpoint(p.x, p.y);
       const nextArcHover = nextPointHover || nextLineHover || nextCircleHover || nextArcEndpointHover ? null : hitArc(p.x, p.y);
-      const hitD = hitDimension(p.x, p.y);
-      const nextHover = hitD?.constraint || null;
       if (
         nextPointHover !== hoveredPoint ||
         nextEndpointHover !== hoveredEndpointPoint ||
