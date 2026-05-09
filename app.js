@@ -1310,6 +1310,39 @@
     return signed;
   }
 
+  function angleDimensionAngles(target, anchor = null) {
+    const baseStart = lineAngle(target.line1);
+    const fallbackSigned = angleDimensionSweep(target);
+    const fallback = {
+      start: baseStart,
+      end: baseStart + fallbackSigned,
+      signed: fallbackSigned,
+      mid: baseStart + fallbackSigned / 2,
+    };
+    if (!anchor) return fallback;
+    const vertex = lineIntersection(target.line1, target.line2);
+    if (!vertex) return fallback;
+    const anchorAngle = Math.atan2(anchor.y - vertex.y, anchor.x - vertex.x);
+    const starts = [baseStart, baseStart + Math.PI];
+    const baseEnd = lineAngle(target.line2);
+    const ends = [baseEnd, baseEnd + Math.PI];
+    let best = fallback;
+    let bestScore = Infinity;
+    for (const start of starts) {
+      for (const endAngle of ends) {
+        const signed = normalizeAngle(endAngle - start);
+        if (Math.abs(signed) > Math.PI / 2 + 1e-9) continue;
+        const mid = start + signed / 2;
+        const score = Math.abs(normalizeAngle(mid - anchorAngle));
+        if (score < bestScore) {
+          bestScore = score;
+          best = { start, end: start + signed, signed, mid };
+        }
+      }
+    }
+    return best;
+  }
+
   function angleDegrees(radians) {
     return Math.abs((radians * 180) / Math.PI);
   }
@@ -1538,9 +1571,7 @@
     if (target.kind === "angle") {
       const vertex = lineIntersection(target.line1, target.line2);
       if (!vertex) return { x: 0, y: 0, offsetU: NaN, offsetN: NaN, labelOffsetU: 0, axis: null };
-      const a1 = lineAngle(target.line1);
-      const signed = angleDimensionSweep(target);
-      const mid = a1 + signed / 2;
+      const { mid } = angleDimensionAngles(target);
       const radius = 45 / viewport.scale;
       return { x: vertex.x + Math.cos(mid) * radius, y: vertex.y + Math.sin(mid) * radius, offsetU: NaN, offsetN: NaN, labelOffsetU: 0, axis: null };
     }
@@ -2336,10 +2367,7 @@
     if (!vertex) return null;
     const anchor = dimensionAnchor(target, dimension);
     const radius = Math.max(14 / viewport.scale, hypot2(anchor.x - vertex.x, anchor.y - vertex.y));
-    const start = lineAngle(target.line1);
-    const signed = angleDimensionSweep(target);
-    const end = start + signed;
-    const mid = start + signed / 2;
+    const { start, end, signed, mid } = angleDimensionAngles(target, anchor);
     return {
       vertex,
       radius,
