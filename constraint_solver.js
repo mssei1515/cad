@@ -977,7 +977,11 @@
       const errorNorm = vectorNorm(F);
       const unstable = errorNorm > errorTolerance;
       const J = unstable || vars.length === 0 ? [] : this.computeJacobian(vars, F);
-      const activity = unstable ? { active: Array(vars.length).fill(false), rank: 0, freeColumns: [] } : LinearAlgebra.nullspaceActivity(J, rankTolerance, activityTolerance);
+      const activity = unstable
+        ? { active: Array(vars.length).fill(false), rank: 0, freeColumns: [] }
+        : F.length === 0
+          ? { active: Array(vars.length).fill(true), rank: 0, freeColumns: Array.from({ length: vars.length }, (_, i) => i) }
+          : LinearAlgebra.nullspaceActivity(J, rankTolerance, activityTolerance);
       const variableFreedom = new Map();
       for (let i = 0; i < vars.length; i++) variableFreedom.set(vars[i].object, { ...(variableFreedom.get(vars[i].object) || {}), [vars[i].prop]: Boolean(activity.active[i]) });
       return {
