@@ -5012,10 +5012,13 @@
         draw();
         return;
       }
-      const anchor = {
-        x: dimensionDragSession.startAnchor.x + dx,
-        y: dimensionDragSession.startAnchor.y + dy,
-      };
+      const anchor =
+        dimensionDragSession.target.kind === "radius" || dimensionDragSession.target.kind === "diameter"
+          ? p
+          : {
+              x: dimensionDragSession.startAnchor.x + dx,
+              y: dimensionDragSession.startAnchor.y + dy,
+            };
       const nextDimension = dimensionFromAnchor(dimensionDragSession.target, anchor, { allowPointAxis: false });
       nextDimension.labelOffsetU = dimensionDragSession.startLabelOffsetU;
       dimensionDragSession.constraint.dimension = nextDimension;
