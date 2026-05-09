@@ -24,8 +24,7 @@
 
   function normalizeAxisAngle(angle) {
     let a = Math.abs(normalizeAngle(angle));
-    if (a > Math.PI / 2) a = Math.PI - a;
-    return clamp(a, 0, Math.PI / 2);
+    return clamp(a, 0, Math.PI);
   }
 
   function clamp(v, min, max) {
@@ -163,7 +162,7 @@
     const la = hypot2(ax, ay);
     const lb = hypot2(bx, by);
     if (la < MIN_ORIENTATION_LENGTH || lb < MIN_ORIENTATION_LENGTH) return 0;
-    const cos = Math.abs((ax * bx + ay * by) / (la * lb));
+    const cos = (ax * bx + ay * by) / (la * lb);
     return Math.acos(clamp(cos, -1, 1));
   }
 

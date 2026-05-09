@@ -1456,22 +1456,19 @@
     if (!lineHasDirection(line1) || !lineHasDirection(line2)) return 0;
     const a = lineUnit(line1);
     const b = lineUnit(line2);
-    const dot = Math.abs(a.x * b.x + a.y * b.y);
+    const dot = a.x * b.x + a.y * b.y;
     return Math.acos(Math.max(-1, Math.min(1, dot)));
   }
 
   function angleDimensionSweep(target) {
-    let signed = signedAngleBetweenLines(target.line1, target.line2);
-    if (signed > Math.PI / 2) signed -= Math.PI;
-    if (signed < -Math.PI / 2) signed += Math.PI;
-    return signed;
+    return signedAngleBetweenLines(target.line1, target.line2);
   }
 
   function angleDimensionCandidate(target, startFlip = 0, endFlip = 0) {
     const start = lineAngle(target.line1) + (startFlip ? Math.PI : 0);
     const endAngle = lineAngle(target.line2) + (endFlip ? Math.PI : 0);
     const signed = normalizeSignedAngle(endAngle - start);
-    if (Math.abs(signed) > Math.PI / 2 + 1e-9) return null;
+    if (Math.abs(signed) < 1e-9 || Math.abs(Math.abs(signed) - Math.PI) < 1e-9) return null;
     return { start, end: start + signed, signed, mid: start + signed / 2, startFlip, endFlip };
   }
 
@@ -1733,6 +1730,9 @@
 
   function dimensionAnchor(target, dimension) {
     if (!dimension) return defaultDimensionForTarget(target);
+    if (target.kind === "radius" || target.kind === "diameter") {
+      if (Number.isFinite(dimension.x) && Number.isFinite(dimension.y)) return { x: dimension.x, y: dimension.y };
+    }
     if (target.kind === "angle") {
       const vertex = lineIntersection(target.line1, target.line2);
       if (vertex && Number.isFinite(dimension.angleRadius)) {
@@ -3027,6 +3027,16 @@
 
   function startConstraintTargetCommand(type) {
     cancelPendingCommand("");
+    mode = "select";
+    lineStartPoint = null;
+    rectangleStartPoint = null;
+    filletFirstLine = null;
+    circleCenterPoint = null;
+    arcCenterPoint = null;
+    arcStartPoint = null;
+    pointerPreview = null;
+    trimPreview = null;
+    updateToolbar();
     if (pendingConstraintCommand?.type === type) {
       cancelConstraintTargetCommand(`${constraintLabel(type)}の対象選択をキャンセルしました`);
       return;
@@ -3223,9 +3233,19 @@
       log(target.reason);
       return;
     }
+    mode = "select";
+    lineStartPoint = null;
+    rectangleStartPoint = null;
+    filletFirstLine = null;
+    circleCenterPoint = null;
+    arcCenterPoint = null;
+    arcStartPoint = null;
+    pointerPreview = null;
+    trimPreview = null;
     pendingConstraintCommand = { type: "distance" };
     pendingCommand = { type: "distance-place", target, pointer: defaultDimensionForTarget(target) };
     updateConstraintButtons();
+    updateToolbar();
     setHint("寸法線の位置をクリックしてください");
     draw();
   }
@@ -3234,9 +3254,19 @@
     const primitive = selectedPrimitives()[0];
     if (!primitive) return;
     const value = kind === "diameter" ? primitive.radius() * 2 : primitive.radius();
+    mode = "select";
+    lineStartPoint = null;
+    rectangleStartPoint = null;
+    filletFirstLine = null;
+    circleCenterPoint = null;
+    arcCenterPoint = null;
+    arcStartPoint = null;
+    pointerPreview = null;
+    trimPreview = null;
     pendingConstraintCommand = { type: "distance" };
     pendingCommand = { type: "distance-place", target: { kind, primitive, value }, pointer: defaultDimensionForTarget({ kind, primitive, value }) };
     updateConstraintButtons();
+    updateToolbar();
     setHint("寸法線の位置をクリックしてください");
     draw();
   }
@@ -3259,7 +3289,7 @@
         : pendingCommand.target.kind === "point-point" && dimension.axis === "y"
           ? Math.abs(pendingCommand.target.p2.y - pendingCommand.target.p1.y)
           : pendingCommand.target.kind === "angle"
-            ? pendingCommand.target.value
+            ? angleDegrees(angleDimensionAngles(pendingCommand.target, pointer, dimension).signed)
           : pendingCommand.target.value;
     pendingCommand = {
       type: "distance-value",
@@ -3370,8 +3400,8 @@
   function submitDistanceValue() {
     if (!pendingCommand || pendingCommand.type !== "distance-value") return;
     const value = Number(pendingCommand.buffer);
-    const maxAngle = pendingCommand.target?.kind === "angle" ? 90 : Infinity;
-    if (!Number.isFinite(value) || value <= 0 || value > maxAngle) {
+    const maxAngle = pendingCommand.target?.kind === "angle" ? 180 : Infinity;
+    if (!Number.isFinite(value) || value <= 0 || value >= maxAngle) {
       setHint("寸法値には0より大きい数値を入力してください", "error");
       draw();
       return;
