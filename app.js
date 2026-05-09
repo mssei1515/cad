@@ -87,7 +87,7 @@
   let arcSeq = 1;
   const viewport = { x: 0, y: 0, scale: 1 };
   const MIN_ZOOM = 0.15;
-  const MAX_ZOOM = 8;
+  const MAX_ZOOM = 10000000;
   const CONSTRAINT_ACCEPT_ERROR = 1e-4;
   const DEFAULT_FILLET_RADIUS = 30;
   const MIN_LINE_LENGTH = Math.max(MIN_ORIENTATION_LENGTH, solver.minLineLength || 12);
@@ -868,6 +868,14 @@
 
   function clampZoom(scale) {
     return Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, scale));
+  }
+
+  function formatZoom(scale) {
+    const percent = scale * 100;
+    if (percent >= 1000000) return `${(percent / 1000000).toFixed(2)}M%`;
+    if (percent >= 10000) return `${(percent / 1000).toFixed(1)}k%`;
+    if (percent >= 1000) return `${percent.toFixed(0)}%`;
+    return `${percent.toFixed(percent >= 100 ? 0 : 1)}%`;
   }
 
   function canvasScreenPoint(e) {
@@ -5173,7 +5181,7 @@
       viewport.scale = nextScale;
       viewport.x = screen.x - world.x * viewport.scale;
       viewport.y = screen.y - world.y * viewport.scale;
-      setHint(`表示倍率: ${(viewport.scale * 100).toFixed(0)}%`);
+      setHint(`表示倍率: ${formatZoom(viewport.scale)}`);
       draw();
     },
     { passive: false },
