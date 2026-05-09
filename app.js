@@ -2471,12 +2471,21 @@
     ctx.fillStyle = preview || highlighted ? "#2563eb" : "#6b7280";
     ctx.lineWidth = (highlighted ? 2 : 1.2) / viewport.scale;
     if (preview) ctx.setLineDash([5 / viewport.scale, 4 / viewport.scale]);
+    const extension = 8 / viewport.scale;
+    const p1 = { x: vertex.x + Math.cos(start) * radius, y: vertex.y + Math.sin(start) * radius };
+    const p2 = { x: vertex.x + Math.cos(end) * radius, y: vertex.y + Math.sin(end) * radius };
+    const e1 = { x: vertex.x + Math.cos(start) * (radius + extension), y: vertex.y + Math.sin(start) * (radius + extension) };
+    const e2 = { x: vertex.x + Math.cos(end) * (radius + extension), y: vertex.y + Math.sin(end) * (radius + extension) };
+    ctx.beginPath();
+    ctx.moveTo(vertex.x, vertex.y);
+    ctx.lineTo(e1.x, e1.y);
+    ctx.moveTo(vertex.x, vertex.y);
+    ctx.lineTo(e2.x, e2.y);
+    ctx.stroke();
     ctx.beginPath();
     ctx.arc(vertex.x, vertex.y, radius, start, end, signed < 0);
     ctx.stroke();
     ctx.setLineDash([]);
-    const p1 = { x: vertex.x + Math.cos(start) * radius, y: vertex.y + Math.sin(start) * radius };
-    const p2 = { x: vertex.x + Math.cos(end) * radius, y: vertex.y + Math.sin(end) * radius };
     drawArrowhead(p1, { x: Math.cos(start + (signed < 0 ? -Math.PI / 2 : Math.PI / 2)), y: Math.sin(start + (signed < 0 ? -Math.PI / 2 : Math.PI / 2)) });
     drawArrowhead(p2, { x: Math.cos(end + (signed < 0 ? Math.PI / 2 : -Math.PI / 2)), y: Math.sin(end + (signed < 0 ? Math.PI / 2 : -Math.PI / 2)) });
     drawDimensionLabel(label, text, editState);
@@ -4137,6 +4146,14 @@
     setHint("寸法線を移動中");
   }
 
+  function syncAngleConstraintFromDimension(constraint, target, dimension) {
+    if (!(constraint instanceof LineAngleConstraint) || target.kind !== "angle" || !dimension) return;
+    const angles = angleDimensionAngles(target, null, dimension);
+    constraint.startFlip = dimension.angleStartFlip ? 1 : 0;
+    constraint.endFlip = dimension.angleEndFlip ? 1 : 0;
+    constraint.target = Math.abs(angles.signed);
+  }
+
   function orthogonalPointFrom(start, p) {
     const dx = p.x - start.x;
     const dy = p.y - start.y;
@@ -5000,10 +5017,12 @@
       if (dimensionDragSession.part === "label") {
         const dimension = dimensionDragSession.constraint.dimension || defaultDimensionForTarget(dimensionDragSession.target);
         if (dimensionDragSession.target.kind === "angle") {
-          dimensionDragSession.constraint.dimension = dimensionFromAnchor(dimensionDragSession.target, {
+          const nextDimension = dimensionFromAnchor(dimensionDragSession.target, {
             x: dimensionDragSession.startAnchor.x + dx,
             y: dimensionDragSession.startAnchor.y + dy,
           }, { allowPointAxis: false });
+          dimensionDragSession.constraint.dimension = nextDimension;
+          syncAngleConstraintFromDimension(dimensionDragSession.constraint, dimensionDragSession.target, nextDimension);
           draw();
           return;
         }
@@ -5028,6 +5047,7 @@
       const nextDimension = dimensionFromAnchor(dimensionDragSession.target, anchor, { allowPointAxis: false });
       nextDimension.labelOffsetU = dimensionDragSession.startLabelOffsetU;
       dimensionDragSession.constraint.dimension = nextDimension;
+      syncAngleConstraintFromDimension(dimensionDragSession.constraint, dimensionDragSession.target, nextDimension);
       draw();
       return;
     }
