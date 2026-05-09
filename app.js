@@ -1741,6 +1741,13 @@
     };
   }
 
+  function applyDefaultCircleDimensionLabelOffset(target, dimension) {
+    if (!dimension || !(target?.primitive instanceof Circle)) return dimension;
+    if (target.kind !== "radius" && target.kind !== "diameter") return dimension;
+    dimension.labelOffsetU = target.primitive.radius() * 0.5;
+    return dimension;
+  }
+
   function storedDimensionAxis(target, dimension = null) {
     if (target.kind === "point-point") return target.dimensionAxis || null;
     return dimension?.axis || target.dimensionAxis || null;
@@ -1796,15 +1803,14 @@
     if (points.length < 2) return { x: 0, y: 0 };
     if (target.kind === "radius") {
       const dimension = dimensionFromAnchor(target, points[1]);
-      if (target.primitive instanceof Circle) dimension.labelOffsetU = target.primitive.radius() * 0.5;
-      return dimension;
+      return applyDefaultCircleDimensionLabelOffset(target, dimension);
     }
     const mid = dimensionBasePoint(target);
     const defaultAxis = target.kind === "point-point" ? target.dimensionAxis || null : null;
     const dir = targetDirection(defaultAxis ? { ...target, dimensionAxis: defaultAxis } : target);
     const normal = { x: -dir.y, y: dir.x };
     const dimension = dimensionFromAnchor(defaultAxis ? { ...target, dimensionAxis: defaultAxis } : target, { x: mid.x + normal.x * 30, y: mid.y + normal.y * 30 }, { allowPointAxis: false });
-    if (target.kind === "diameter" && target.primitive instanceof Circle) dimension.labelOffsetU = target.primitive.radius() * 0.5;
+    applyDefaultCircleDimensionLabelOffset(target, dimension);
     if (defaultAxis) dimension.axis = defaultAxis;
     return dimension;
   }
@@ -2688,7 +2694,10 @@
       return;
     }
     if (!pendingCommand?.type?.startsWith("distance")) return;
-    const dimension = pendingCommand.type === "distance-place" ? (pendingCommand.pointer ? dimensionFromAnchor(pendingCommand.target, pendingCommand.pointer) : defaultDimensionForTarget(pendingCommand.target)) : pendingCommand.dimension;
+    const dimension =
+      pendingCommand.type === "distance-place"
+        ? applyDefaultCircleDimensionLabelOffset(pendingCommand.target, pendingCommand.pointer ? dimensionFromAnchor(pendingCommand.target, pendingCommand.pointer) : defaultDimensionForTarget(pendingCommand.target))
+        : pendingCommand.dimension;
     if (pendingCommand.type === "distance-value") {
       const value = Number(pendingCommand.buffer);
       const invalid = pendingCommand.buffer === "" || !Number.isFinite(value) || value <= 0 || (pendingCommand.target.kind === "angle" && value >= 180);
@@ -3335,7 +3344,7 @@
 
   function startDistanceValueInput(pointer) {
     if (!pendingCommand || pendingCommand.type !== "distance-place") return;
-    const dimension = dimensionFromAnchor(pendingCommand.target, pointer);
+    const dimension = applyDefaultCircleDimensionLabelOffset(pendingCommand.target, dimensionFromAnchor(pendingCommand.target, pointer));
     const target = { ...pendingCommand.target, dimensionAxis: dimension.axis };
     const value =
       pendingCommand.target.kind === "point-point" && dimension.axis === "x"
