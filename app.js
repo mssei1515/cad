@@ -2744,6 +2744,12 @@
       ctx.beginPath();
       ctx.arc(arc.center.x, arc.center.y, arc.radius(), angleAtArcParam(arc, trimPreview.interval.left.t), angleAtArcParam(arc, trimPreview.interval.right.t), arc.endAngle < arc.startAngle);
       ctx.stroke();
+    } else if (trimPreview.kind === "circle") {
+      const circle = trimPreview.item;
+      ctx.beginPath();
+      if (trimPreview.deleteWhole) ctx.arc(circle.center.x, circle.center.y, circle.radius(), 0, Math.PI * 2);
+      else ctx.arc(circle.center.x, circle.center.y, circle.radius(), trimPreview.interval.left.angle, trimPreview.interval.right.angle);
+      ctx.stroke();
     }
     ctx.restore();
   }
@@ -4247,6 +4253,14 @@
     return [{ x: base.x - uy * h, y: base.y + ux * h }, { x: base.x + uy * h, y: base.y - ux * h }];
   }
 
+  function circleParam(circle, angle) {
+    return normalizeAngle(angle) / (Math.PI * 2);
+  }
+
+  function angleAtCircleParam(t) {
+    return t * Math.PI * 2;
+  }
+
   function arcParam(arc, angle) {
     const sweep = arc.endAngle - arc.startAngle;
     if (Math.abs(sweep) < 1e-12) return 0;
@@ -4291,9 +4305,42 @@
     return boundaries.sort((a, b) => a.t - b.t);
   }
 
+  function circleTrimBoundaries(circle) {
+    const boundaries = [];
+    const addPointBoundary = (point, source) => {
+      const angle = Math.atan2(point.y - circle.center.y, point.x - circle.center.x);
+      addUniqueBoundary(boundaries, { t: circleParam(circle, angle), angle, point, source });
+    };
+    for (const line of model.lines) for (const b of lineCircleBoundaries(line, circle)) addPointBoundary(b.point, { line });
+    for (const other of model.circles) {
+      if (other === circle) continue;
+      for (const point of circleCirclePoints(circle, other)) addPointBoundary(point, { primitive: other });
+    }
+    for (const arc of model.arcs) {
+      for (const point of circleCirclePoints(circle, arc)) {
+        if (angleOnSignedSweep(Math.atan2(point.y - arc.center.y, point.x - arc.center.x), arc.startAngle, arc.endAngle)) addPointBoundary(point, { arc });
+      }
+    }
+    return boundaries.sort((a, b) => a.t - b.t);
+  }
+
   function trimInterval(boundaries, t) {
     for (let i = 0; i < boundaries.length - 1; i++) {
       if (t >= boundaries[i].t - 1e-6 && t <= boundaries[i + 1].t + 1e-6) return { left: boundaries[i], right: boundaries[i + 1] };
+    }
+    return null;
+  }
+
+  function cyclicTrimInterval(boundaries, t) {
+    if (boundaries.length < 2) return null;
+    for (let i = 0; i < boundaries.length; i++) {
+      const left = boundaries[i];
+      const right = boundaries[(i + 1) % boundaries.length];
+      if (left.t <= right.t) {
+        if (t >= left.t - 1e-6 && t <= right.t + 1e-6) return { left, right, wraps: false };
+      } else if (t >= left.t - 1e-6 || t <= right.t + 1e-6) {
+        return { left, right, wraps: true };
+      }
     }
     return null;
   }
@@ -4302,7 +4349,8 @@
     const projected = closestPointOnSegment(pointer.x, pointer.y, line);
     const boundaries = lineTrimBoundaries(line);
     const interval = trimInterval(boundaries, lineParam(line, projected));
-    if (!interval || boundaries.length < 3) return null;
+    if (boundaries.length <= 2) return { kind: "line", item: line, deleteWhole: true, interval: { left: boundaries[0], right: boundaries[1] } };
+    if (!interval) return null;
     if (line.length() * Math.max(0, interval.right.t - interval.left.t) < MIN_LINE_LENGTH) return null;
     return { kind: "line", item: line, interval };
   }
@@ -4311,9 +4359,23 @@
     const t = arcParam(arc, Math.atan2(pointer.y - arc.center.y, pointer.x - arc.center.x));
     const boundaries = arcTrimBoundaries(arc);
     const interval = trimInterval(boundaries, t);
-    if (!interval || boundaries.length < 3) return null;
+    if (boundaries.length <= 2) return { kind: "arc", item: arc, deleteWhole: true, interval: { left: boundaries[0], right: boundaries[1] } };
+    if (!interval) return null;
     if (arc.radius() * Math.abs(arc.endAngle - arc.startAngle) * Math.max(0, interval.right.t - interval.left.t) < MIN_ARC_LENGTH) return null;
     return { kind: "arc", item: arc, interval };
+  }
+
+  function trimPreviewForCircle(circle, pointer) {
+    const t = circleParam(circle, Math.atan2(pointer.y - circle.center.y, pointer.x - circle.center.x));
+    const boundaries = circleTrimBoundaries(circle);
+    if (boundaries.length < 2) return { kind: "circle", item: circle, deleteWhole: true };
+    const interval = cyclicTrimInterval(boundaries, t);
+    if (!interval) return null;
+    const left = { ...interval.left, angle: angleAtCircleParam(interval.left.t) };
+    const right = { ...interval.right, angle: angleAtCircleParam(interval.right.t) + (interval.wraps ? Math.PI * 2 : 0) };
+    const span = Math.max(0, right.angle - left.angle);
+    if (span * circle.radius() < MIN_ARC_LENGTH) return null;
+    return { kind: "circle", item: circle, interval: { left, right }, boundaries };
   }
 
   function computeTrimPreview(pointer) {
@@ -4321,6 +4383,8 @@
     if (line) return trimPreviewForLine(line, pointer);
     const arc = hitArc(pointer.x, pointer.y);
     if (arc) return trimPreviewForArc(arc, pointer);
+    const circle = hitCircle(pointer.x, pointer.y);
+    if (circle) return trimPreviewForCircle(circle, pointer);
     return null;
   }
 
@@ -4328,6 +4392,7 @@
     model.constraints = model.constraints.filter((c) => {
       if (item instanceof Line && constraintReferencesLine(c, item)) return false;
       if (item instanceof Arc && constraintReferencesPrimitive(c, item)) return false;
+      if (item instanceof Circle && constraintReferencesPrimitive(c, item)) return false;
       return true;
     });
   }
@@ -4346,8 +4411,29 @@
     else if (source.arc) model.constraints.push(new ArcEndpointOnCircleConstraint(arc, endpoint, source.arc));
   }
 
+  function removeTrimmedItem(item) {
+    cleanupTrimConstraints(item);
+    if (item instanceof Line) {
+      const endpoints = [item.p1, item.p2];
+      model.lines = model.lines.filter((line) => line !== item);
+      model.points = model.points.filter((point) => !endpoints.includes(point) || point.kind !== "endpoint" || isPointUsedByPrimitive(point) || isReferencePoint(point));
+    } else if (item instanceof Circle) {
+      const center = item.center;
+      model.circles = model.circles.filter((circle) => circle !== item);
+      model.points = model.points.filter((point) => point !== center || point.kind !== "endpoint" || isPointUsedByPrimitive(point) || isReferencePoint(point));
+    } else if (item instanceof Arc) {
+      const center = item.center;
+      model.arcs = model.arcs.filter((arc) => arc !== item);
+      model.points = model.points.filter((point) => point !== center || point.kind !== "endpoint" || isPointUsedByPrimitive(point) || isReferencePoint(point));
+    }
+  }
+
   function executeLineTrim(preview) {
     const line = preview.item;
+    if (preview.deleteWhole) {
+      removeTrimmedItem(line);
+      return;
+    }
     const { left, right } = preview.interval;
     cleanupTrimConstraints(line);
     if (left.t <= 1e-6) {
@@ -4372,6 +4458,10 @@
 
   function executeArcTrim(preview) {
     const arc = preview.item;
+    if (preview.deleteWhole) {
+      removeTrimmedItem(arc);
+      return;
+    }
     const { left, right } = preview.interval;
     cleanupTrimConstraints(arc);
     if (left.t <= 1e-6) {
@@ -4390,6 +4480,34 @@
     normalizeArcSweeps();
   }
 
+  function executeCircleTrim(preview) {
+    const circle = preview.item;
+    if (preview.deleteWhole) {
+      removeTrimmedItem(circle);
+      return;
+    }
+    cleanupTrimConstraints(circle);
+    const kept = [];
+    const boundaries = preview.boundaries || [];
+    for (let i = 0; i < boundaries.length; i++) {
+      const left = boundaries[i];
+      const right = boundaries[(i + 1) % boundaries.length];
+      const wraps = left.t > right.t;
+      const start = angleAtCircleParam(left.t);
+      const end = angleAtCircleParam(right.t) + (wraps ? Math.PI * 2 : 0);
+      const sameRemoved = Math.abs(left.t - preview.interval.left.t) <= 1e-6 && Math.abs(right.t - preview.interval.right.t) <= 1e-6;
+      if (sameRemoved || (end - start) * circle.radius() < MIN_ARC_LENGTH) continue;
+      const arc = addArc(circle.center, circle.radius(), start, end);
+      if (arc) {
+        addArcBoundaryConstraint(arc, "start", left);
+        addArcBoundaryConstraint(arc, "end", right);
+        kept.push(arc);
+      }
+    }
+    model.circles = model.circles.filter((item) => item !== circle);
+    if (kept.length === 0) model.points = model.points.filter((p) => p !== circle.center || isPointUsedByPrimitive(p));
+  }
+
   function executeTrimAt(pointer) {
     const preview = computeTrimPreview(pointer);
     if (!preview) {
@@ -4398,7 +4516,8 @@
       return false;
     }
     if (preview.kind === "line") executeLineTrim(preview);
-    else executeArcTrim(preview);
+    else if (preview.kind === "arc") executeArcTrim(preview);
+    else executeCircleTrim(preview);
     trimPreview = null;
     clearSelection();
     const result = solveAndRefresh("トリム");
@@ -4831,11 +4950,20 @@
 
     if (mode === "trim") {
       clearSnap();
+      const hadHover = Boolean(hoveredPoint || hoveredEndpointPoint || hoveredLine || hoveredCircle || hoveredArcEndpoint || hoveredArc || hoveredDimensionConstraint);
+      hoveredPoint = null;
+      hoveredEndpointPoint = null;
+      hoveredLine = null;
+      hoveredCircle = null;
+      hoveredArcEndpoint = null;
+      hoveredArc = null;
+      hoveredDimensionConstraint = null;
       const nextTrimPreview = computeTrimPreview(p);
-      if (nextTrimPreview !== trimPreview) {
+      if (nextTrimPreview !== trimPreview || hadHover) {
         trimPreview = nextTrimPreview;
         draw();
       }
+      return;
     }
 
     if (!dragSession) {
@@ -5164,9 +5292,16 @@
     arcStartPoint = null;
     pointerPreview = null;
     trimPreview = null;
+    hoveredPoint = null;
+    hoveredEndpointPoint = null;
+    hoveredLine = null;
+    hoveredCircle = null;
+    hoveredArcEndpoint = null;
+    hoveredArc = null;
+    hoveredDimensionConstraint = null;
     clearSnap();
     updateToolbar();
-    setHint("トリムする線または円弧の削除したい区間をクリックしてください。Escで選択モードに戻ります");
+    setHint("トリムする線、円、円弧の削除したい区間をクリックしてください。Escで選択モードに戻ります");
     draw();
   });
 
