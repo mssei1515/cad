@@ -560,6 +560,21 @@
     }
   }
 
+  class ArcEndpointDragConstraint extends Constraint {
+    constructor(arc, endpoint, x, y) {
+      super(`ドラッグ ${arc.id}.${endpoint}`, 0.005);
+      this.arc = arc;
+      this.endpoint = endpoint;
+      this.targetX = x;
+      this.targetY = y;
+    }
+
+    rawError() {
+      const p = arcEndpointPoint(this.arc, this.endpoint);
+      return [p.x - this.targetX, p.y - this.targetY];
+    }
+  }
+
   class LinearAlgebra {
     static getColumn(A, c) {
       return A.map((r) => r[c]);
@@ -1014,6 +1029,7 @@
     CircleCircleTangentConstraint,
     DragConstraint,
     ParameterDragConstraint,
+    ArcEndpointDragConstraint,
     ConstraintSolver,
   };
 })();

@@ -38,6 +38,7 @@
     CircleCircleTangentConstraint,
     DragConstraint,
     ParameterDragConstraint,
+    ArcEndpointDragConstraint,
     ConstraintSolver,
   } = window.GeometrySolver;
 
@@ -3413,6 +3414,10 @@
     ];
   }
 
+  function arcEndpointDragConstraints(session, pointer) {
+    return [new ArcEndpointDragConstraint(session.item, session.endpoint, pointer.x, pointer.y)];
+  }
+
   function dragConstraintsFromTargets(targets) {
     return targets.map((target) => new DragConstraint(target.point, target.x, target.y));
   }
@@ -3556,8 +3561,10 @@
     let targets;
     let extra;
     if (session.mode === "arc-endpoint") {
-      targets = arcEndpointDragTargets(session, pointer);
-      extra = parameterDragConstraintsFromTargets(targets);
+      extra = arcEndpointDragConstraints(session, pointer);
+      const retry = () => solveDragWithFallback(session, extra, () => solver.solve(extra), dragState);
+      result = retry();
+      return finalizeDragResult(result, dragState, session, extra, retry);
     } else {
       const directTargets = dragTargets(session, pointer);
       targets = localComponentMoveTargets(session, pointer);
