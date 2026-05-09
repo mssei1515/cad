@@ -5001,7 +5001,11 @@
           draw();
           return;
         }
-        const basisTarget = { ...dimensionDragSession.target, dimensionAxis: storedDimensionAxis(dimensionDragSession.target, dimension) };
+        const basisTarget = {
+          ...dimensionDragSession.target,
+          dimensionAxis: storedDimensionAxis(dimensionDragSession.target, dimension),
+          dimensionAnchor: dimensionAnchor(dimensionDragSession.target, dimension),
+        };
         const d = targetDirection(basisTarget);
         dimension.labelOffsetU = dimensionDragSession.startLabelOffsetU + dx * d.x + dy * d.y;
         dimensionDragSession.constraint.dimension = dimension;
