@@ -14,6 +14,7 @@
     PointAxisDistanceConstraint,
     PointLineDistanceConstraint,
     LineLineDistanceConstraint,
+    LineAngleConstraint,
     signedPointLineDistance,
     CoincidentConstraint,
     ArcEndpointCoincidentConstraint,
@@ -405,6 +406,16 @@
         enabled: c.enabled,
       };
     }
+    if (c instanceof LineAngleConstraint) {
+      return {
+        type: "lineAngle",
+        line1: c.line1.id,
+        line2: c.line2.id,
+        target: c.target,
+        dimension: serializeDimension(c.dimension, targetFromConstraint(c)),
+        enabled: c.enabled,
+      };
+    }
     if (c instanceof CoincidentConstraint) {
       return { type: "coincident", p1: c.p1.id, p2: c.p2.id, enabled: c.enabled };
     }
@@ -510,6 +521,8 @@
       constraint = new PointLineDistanceConstraint(point(data.point), line(data.line), Number(data.target), Number(data.sign) || null);
     } else if (data.type === "lineLineDistance") {
       constraint = new LineLineDistanceConstraint(line(data.line1), line(data.line2), Number(data.target), Number(data.sign) || null);
+    } else if (data.type === "lineAngle") {
+      constraint = new LineAngleConstraint(line(data.line1), line(data.line2), Number(data.target));
     } else if (data.type === "coincident") {
       constraint = new CoincidentConstraint(point(data.p1), point(data.p2));
     } else if (data.type === "arcEndpointCoincident") {
@@ -1267,6 +1280,42 @@
     return Math.abs(a.x * b.y - a.y * b.x) < 1e-3;
   }
 
+  function normalizeAngle(angle) {
+    let a = angle;
+    while (a > Math.PI) a -= Math.PI * 2;
+    while (a <= -Math.PI) a += Math.PI * 2;
+    return a;
+  }
+
+  function lineAngle(line) {
+    return Math.atan2(line.dy(), line.dx());
+  }
+
+  function signedAngleBetweenLines(line1, line2) {
+    return normalizeAngle(lineAngle(line2) - lineAngle(line1));
+  }
+
+  function angleDegrees(radians) {
+    return Math.abs((radians * 180) / Math.PI);
+  }
+
+  function lineIntersection(line1, line2) {
+    const x1 = line1.p1.x;
+    const y1 = line1.p1.y;
+    const x2 = line1.p2.x;
+    const y2 = line1.p2.y;
+    const x3 = line2.p1.x;
+    const y3 = line2.p1.y;
+    const x4 = line2.p2.x;
+    const y4 = line2.p2.y;
+    const den = (x1 - x2) * (y3 - y4) - (y1 - y2) * (x3 - x4);
+    if (Math.abs(den) < 1e-12) return null;
+    return {
+      x: ((x1 * y2 - y1 * x2) * (x3 - x4) - (x1 - x2) * (x3 * y4 - y3 * x4)) / den,
+      y: ((x1 * y2 - y1 * x2) * (y3 - y4) - (y1 - y2) * (x3 * y4 - y3 * x4)) / den,
+    };
+  }
+
   function lineHasDirection(line) {
     return line.length() >= MIN_ORIENTATION_LENGTH;
   }
@@ -1332,7 +1381,10 @@
     if (selectedPoints.length === 0 && selectedLines.length === 2) {
       const [line1, line2] = selectedLines;
       if (!lineHasDirection(line1) || !lineHasDirection(line2)) return { kind: "invalid", reason: "線-線寸法の対象線が短すぎます" };
-      if (!linesAreParallel(line1, line2)) return { kind: "invalid", reason: "線-線寸法は平行線のみです" };
+      if (!linesAreParallel(line1, line2)) {
+        const signedValue = signedAngleBetweenLines(line1, line2);
+        return { kind: "angle", line1, line2, value: angleDegrees(signedValue), signedValue };
+      }
       return { kind: "line-line", line1, line2, value: Math.abs(signedPointLineDistance(line2.p1, line1)) };
     }
     return null;
@@ -1428,6 +1480,9 @@
   }
 
   function dimensionFromAnchor(target, anchor, options = {}) {
+    if (target.kind === "angle") {
+      return { x: anchor.x, y: anchor.y, offsetU: NaN, offsetN: NaN, labelOffsetU: 0, axis: null };
+    }
     const axis = dimensionAxisForAnchor(target, anchor, options);
     const basisTarget = axis ? { ...target, dimensionAxis: axis } : target;
     const base = dimensionBasePoint(target);
@@ -1451,6 +1506,7 @@
 
   function dimensionAnchor(target, dimension) {
     if (!dimension) return defaultDimensionForTarget(target);
+    if (target.kind === "angle") return { x: dimension.x, y: dimension.y };
     const base = dimensionBasePoint(target);
     const axis = storedDimensionAxis(target, dimension);
     const { d, n } = dimensionBasis({ ...target, dimensionAxis: axis });
@@ -1464,6 +1520,15 @@
   }
 
   function defaultDimensionForTarget(target) {
+    if (target.kind === "angle") {
+      const vertex = lineIntersection(target.line1, target.line2);
+      if (!vertex) return { x: 0, y: 0, offsetU: NaN, offsetN: NaN, labelOffsetU: 0, axis: null };
+      const a1 = lineAngle(target.line1);
+      const signed = signedAngleBetweenLines(target.line1, target.line2);
+      const mid = a1 + signed / 2;
+      const radius = 45 / viewport.scale;
+      return { x: vertex.x + Math.cos(mid) * radius, y: vertex.y + Math.sin(mid) * radius, offsetU: NaN, offsetN: NaN, labelOffsetU: 0, axis: null };
+    }
     const points = targetPointsForDimension(target);
     if (points.length < 2) return { x: 0, y: 0 };
     if (target.kind === "radius") return dimensionFromAnchor(target, points[1]);
@@ -1481,6 +1546,7 @@
     if (c instanceof PointAxisDistanceConstraint) return { kind: "point-point", p1: c.p1, p2: c.p2, value: c.target, dimensionAxis: c.axis };
     if (c instanceof PointLineDistanceConstraint) return { kind: "point-line", point: c.point, line: c.line, value: c.target };
     if (c instanceof LineLineDistanceConstraint) return { kind: "line-line", line1: c.line1, line2: c.line2, value: c.target };
+    if (c instanceof LineAngleConstraint) return { kind: "angle", line1: c.line1, line2: c.line2, value: angleDegrees(c.target), signedValue: c.target };
     if (c instanceof RadiusConstraint) return { kind: "radius", primitive: c.primitive, value: c.target };
     if (c instanceof DiameterConstraint) return { kind: "diameter", primitive: c.primitive, value: c.target };
     return null;
@@ -1501,7 +1567,7 @@
     if (c instanceof ParallelConstraint || c instanceof PerpendicularConstraint) {
       return c.line1.p1 === point || c.line1.p2 === point || c.line2.p1 === point || c.line2.p2 === point;
     }
-    if (c instanceof CollinearConstraint || c instanceof EqualLengthConstraint) return c.line1.p1 === point || c.line1.p2 === point || c.line2.p1 === point || c.line2.p2 === point;
+    if (c instanceof CollinearConstraint || c instanceof EqualLengthConstraint || c instanceof LineAngleConstraint) return c.line1.p1 === point || c.line1.p2 === point || c.line2.p1 === point || c.line2.p2 === point;
     if (c instanceof ConcentricConstraint) return c.a === point || c.b === point || c.a.center === point || c.b.center === point;
     if (c instanceof PointOnCircleConstraint) return c.point === point || c.primitive.center === point;
     if (c instanceof ArcEndpointOnCircleConstraint) return c.arc.center === point || c.primitive.center === point;
@@ -1522,7 +1588,7 @@
     if (c instanceof ArcEndpointOnLineConstraint) return c.line === line;
     if (c instanceof HorizontalConstraint || c instanceof VerticalConstraint) return c.line === line;
     if (c instanceof ParallelConstraint || c instanceof PerpendicularConstraint) return c.line1 === line || c.line2 === line;
-    if (c instanceof CollinearConstraint || c instanceof EqualLengthConstraint) return c.line1 === line || c.line2 === line;
+    if (c instanceof CollinearConstraint || c instanceof EqualLengthConstraint || c instanceof LineAngleConstraint) return c.line1 === line || c.line2 === line;
     if (c instanceof LineCircleTangentConstraint) return c.line === line;
     return false;
   }
@@ -1588,7 +1654,7 @@
       addNode(nodes, c.line);
       addNode(nodes, c.line.p1);
       addNode(nodes, c.line.p2);
-    } else if (c instanceof ParallelConstraint || c instanceof PerpendicularConstraint || c instanceof CollinearConstraint || c instanceof EqualLengthConstraint) {
+    } else if (c instanceof ParallelConstraint || c instanceof PerpendicularConstraint || c instanceof CollinearConstraint || c instanceof EqualLengthConstraint || c instanceof LineAngleConstraint) {
       for (const line of [c.line1, c.line2]) {
         addNode(nodes, line);
         addNode(nodes, line.p1);
@@ -2108,6 +2174,7 @@
 
   function drawDimension(target, dimension, label, preview = false, highlighted = false, editState = null) {
     if (!target || !dimension) return;
+    if (target.kind === "angle") return drawAngleDimension(target, dimension, label, preview, highlighted, editState);
     const layout = dimensionLayout(target, dimension);
     if (!layout) return;
     const { a, b, points, d, text } = layout;
@@ -2133,6 +2200,27 @@
     drawArrowhead(a, d);
     drawArrowhead(b, { x: -d.x, y: -d.y });
 
+    drawDimensionLabel(label, text, editState);
+    ctx.restore();
+  }
+
+  function drawAngleDimension(target, dimension, label, preview = false, highlighted = false, editState = null) {
+    const layout = angleDimensionLayout(target, dimension);
+    if (!layout) return;
+    const { vertex, radius, start, end, signed, text } = layout;
+    ctx.save();
+    ctx.strokeStyle = preview || highlighted ? "#2563eb" : "#6b7280";
+    ctx.fillStyle = preview || highlighted ? "#2563eb" : "#6b7280";
+    ctx.lineWidth = (highlighted ? 2 : 1.2) / viewport.scale;
+    if (preview) ctx.setLineDash([5 / viewport.scale, 4 / viewport.scale]);
+    ctx.beginPath();
+    ctx.arc(vertex.x, vertex.y, radius, start, end, signed < 0);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    const p1 = { x: vertex.x + Math.cos(start) * radius, y: vertex.y + Math.sin(start) * radius };
+    const p2 = { x: vertex.x + Math.cos(end) * radius, y: vertex.y + Math.sin(end) * radius };
+    drawArrowhead(p1, { x: Math.cos(start + (signed < 0 ? -Math.PI / 2 : Math.PI / 2)), y: Math.sin(start + (signed < 0 ? -Math.PI / 2 : Math.PI / 2)) });
+    drawArrowhead(p2, { x: Math.cos(end + (signed < 0 ? Math.PI / 2 : -Math.PI / 2)), y: Math.sin(end + (signed < 0 ? Math.PI / 2 : -Math.PI / 2)) });
     drawDimensionLabel(label, text, editState);
     ctx.restore();
   }
@@ -2181,6 +2269,7 @@
   }
 
   function dimensionLayout(target, dimension) {
+    if (target.kind === "angle") return angleDimensionLayout(target, dimension);
     const anchor = dimensionAnchor(target, dimension);
     const basisTarget = { ...target, dimensionAxis: storedDimensionAxis(target, dimension) };
     const d = target.kind === "radius" || target.kind === "diameter" ? targetDirection({ ...basisTarget, dimensionAnchor: anchor }) : targetDirection(basisTarget);
@@ -2227,6 +2316,30 @@
     };
   }
 
+  function angleDimensionLayout(target, dimension) {
+    const vertex = lineIntersection(target.line1, target.line2);
+    if (!vertex) return null;
+    const anchor = dimensionAnchor(target, dimension);
+    const radius = Math.max(14 / viewport.scale, hypot2(anchor.x - vertex.x, anchor.y - vertex.y));
+    const start = lineAngle(target.line1);
+    const signed = signedAngleBetweenLines(target.line1, target.line2);
+    const end = start + signed;
+    const mid = start + signed / 2;
+    return {
+      vertex,
+      radius,
+      start,
+      end,
+      signed,
+      text: {
+        x: vertex.x + Math.cos(mid) * (radius + 14 / viewport.scale),
+        y: vertex.y + Math.sin(mid) * (radius + 14 / viewport.scale),
+      },
+      hitA: { x: vertex.x + Math.cos(start) * radius, y: vertex.y + Math.sin(start) * radius },
+      hitB: { x: vertex.x + Math.cos(end) * radius, y: vertex.y + Math.sin(end) * radius },
+    };
+  }
+
   function drawArrowhead(point, direction) {
     const size = 10 / viewport.scale;
     const wing = 4.5 / viewport.scale;
@@ -2245,7 +2358,8 @@
       if (!target) continue;
       const dimension = c.dimension || defaultDimensionForTarget(target);
       const highlighted = c === hoveredDimensionConstraint || c === selectedDimensionConstraint || c === dimensionDragSession?.constraint;
-      drawDimension(target, dimension, Number(c.target).toFixed(2), false, highlighted);
+      const label = target.kind === "angle" ? `${Number(angleDegrees(c.target)).toFixed(2)}°` : Number(c.target).toFixed(2);
+      drawDimension(target, dimension, label, false, highlighted);
     }
   }
 
@@ -2277,8 +2391,9 @@
     const dimension = pendingCommand.type === "distance-place" ? (pendingCommand.pointer ? dimensionFromAnchor(pendingCommand.target, pendingCommand.pointer) : defaultDimensionForTarget(pendingCommand.target)) : pendingCommand.dimension;
     if (pendingCommand.type === "distance-value") {
       const value = Number(pendingCommand.buffer);
-      const invalid = pendingCommand.buffer === "" || !Number.isFinite(value) || value <= 0;
-      drawDimension(pendingCommand.target, dimension, `${pendingCommand.buffer || "_"}|`, true, false, {
+      const invalid = pendingCommand.buffer === "" || !Number.isFinite(value) || value <= 0 || (pendingCommand.target.kind === "angle" && value >= 180);
+      const suffix = pendingCommand.target.kind === "angle" ? "°" : "";
+      drawDimension(pendingCommand.target, dimension, `${pendingCommand.buffer || "_"}${suffix}|`, true, false, {
         selecting: !pendingCommand.editing,
         invalid,
       });
@@ -2294,7 +2409,8 @@
         : previewTarget.kind === "point-point" && previewTarget.dimensionAxis === "y"
           ? Math.abs(previewTarget.p2.y - previewTarget.p1.y)
           : previewTarget.value;
-    drawDimension(previewTarget, dimension, Number(previewValue).toFixed(2), true);
+    const label = previewTarget.kind === "angle" ? `${Number(previewValue).toFixed(2)}°` : Number(previewValue).toFixed(2);
+    drawDimension(previewTarget, dimension, label, true);
   }
 
   function drawFilletPreviewArc(geometry) {
@@ -2840,6 +2956,8 @@
         ? Math.abs(pendingCommand.target.p2.x - pendingCommand.target.p1.x)
         : pendingCommand.target.kind === "point-point" && dimension.axis === "y"
           ? Math.abs(pendingCommand.target.p2.y - pendingCommand.target.p1.y)
+          : pendingCommand.target.kind === "angle"
+            ? pendingCommand.target.value
           : pendingCommand.target.value;
     pendingCommand = {
       type: "distance-value",
@@ -2880,19 +2998,15 @@
         setHint("線-線寸法の対象線が短すぎます", "error");
         return true;
       }
-      if (!linesAreParallel(baseLine, hitL)) {
-        setHint("線-線寸法は平行線のみです", "error");
-        return true;
-      }
       selectedPoints = [];
       selectedLines = [baseLine, hitL];
       selectedCircles = [];
       selectedArcs = [];
-      pendingCommand = {
-        type: "distance-place",
-        target: { kind: "line-line", line1: baseLine, line2: hitL, value: Math.abs(signedPointLineDistance(hitL.p1, baseLine)) },
-        pointer,
-      };
+      const signedValue = signedAngleBetweenLines(baseLine, hitL);
+      const target = linesAreParallel(baseLine, hitL)
+        ? { kind: "line-line", line1: baseLine, line2: hitL, value: Math.abs(signedPointLineDistance(hitL.p1, baseLine)) }
+        : { kind: "angle", line1: baseLine, line2: hitL, value: angleDegrees(signedValue), signedValue };
+      pendingCommand = { type: "distance-place", target, pointer };
       setHint("線と線の寸法線の位置をクリックしてください");
       updateUI();
       draw();
@@ -2912,7 +3026,7 @@
     const nextEndpointHover = hitEndpointPoint(pointer.x, pointer.y);
     const nextPointHover = nextEndpointHover || hitExplicitPoint(pointer.x, pointer.y);
     const candidateLine = nextPointHover ? null : hitLine(pointer.x, pointer.y);
-    const nextLineHover = candidateLine && candidateLine !== baseLine && lineHasDirection(baseLine) && lineHasDirection(candidateLine) && linesAreParallel(baseLine, candidateLine) ? candidateLine : null;
+    const nextLineHover = candidateLine && candidateLine !== baseLine && lineHasDirection(baseLine) && lineHasDirection(candidateLine) ? candidateLine : null;
     const changed = nextPointHover !== hoveredPoint || nextEndpointHover !== hoveredEndpointPoint || nextLineHover !== hoveredLine || hoveredCircle || hoveredArc || hoveredArcEndpoint || hoveredDimensionConstraint;
     hoveredPoint = nextPointHover;
     hoveredEndpointPoint = nextEndpointHover;
@@ -2932,7 +3046,7 @@
       type: "distance-value",
       target,
       dimension: hit.constraint.dimension || hit.dimension || defaultDimensionForTarget(target),
-      buffer: String(Number(hit.constraint.target).toFixed(3)),
+      buffer: String(Number(target.kind === "angle" ? angleDegrees(hit.constraint.target) : hit.constraint.target).toFixed(3)),
       editing: false,
       constraint: hit.constraint,
     };
@@ -2953,7 +3067,8 @@
   function submitDistanceValue() {
     if (!pendingCommand || pendingCommand.type !== "distance-value") return;
     const value = Number(pendingCommand.buffer);
-    if (!Number.isFinite(value) || value <= 0) {
+    const maxAngle = pendingCommand.target?.kind === "angle" ? 180 : Infinity;
+    if (!Number.isFinite(value) || value <= 0 || value >= maxAngle) {
       setHint("寸法値には0より大きい数値を入力してください", "error");
       draw();
       return;
@@ -2964,7 +3079,8 @@
     if (constraint) {
       const snapshot = snapshotModelState();
       const previousTarget = constraint.target;
-      constraint.target = value;
+      const sign = target.kind === "angle" && constraint.target < 0 ? -1 : 1;
+      constraint.target = target.kind === "angle" ? sign * (value * Math.PI) / 180 : value;
       const result = solver.solve();
       normalizeArcSweeps();
       if (!result.success || result.errorNorm > CONSTRAINT_ACCEPT_ERROR) {
@@ -3228,6 +3344,9 @@
         return false;
       }
       constraint = new LineLineDistanceConstraint(target.line1, target.line2, value);
+    } else if (target.kind === "angle") {
+      const sign = target.signedValue < 0 || signedAngleBetweenLines(target.line1, target.line2) < 0 ? -1 : 1;
+      constraint = new LineAngleConstraint(target.line1, target.line2, sign * (value * Math.PI) / 180);
     } else if (target.kind === "radius") {
       constraint = new RadiusConstraint(target.primitive, value);
     } else if (target.kind === "diameter") {
@@ -4150,6 +4269,13 @@
       const dy = p.y - dimensionDragSession.startPointer.y;
       if (dimensionDragSession.part === "label") {
         const dimension = dimensionDragSession.constraint.dimension || defaultDimensionForTarget(dimensionDragSession.target);
+        if (dimensionDragSession.target.kind === "angle") {
+          dimension.x = dimensionDragSession.startAnchor.x + dx;
+          dimension.y = dimensionDragSession.startAnchor.y + dy;
+          dimensionDragSession.constraint.dimension = dimension;
+          draw();
+          return;
+        }
         const basisTarget = { ...dimensionDragSession.target, dimensionAxis: storedDimensionAxis(dimensionDragSession.target, dimension) };
         const d = targetDirection(basisTarget);
         dimension.labelOffsetU = dimensionDragSession.startLabelOffsetU + dx * d.x + dy * d.y;

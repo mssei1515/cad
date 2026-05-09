@@ -15,6 +15,13 @@
     return Math.sqrt(s);
   }
 
+  function normalizeAngle(angle) {
+    let a = angle;
+    while (a > Math.PI) a -= Math.PI * 2;
+    while (a <= -Math.PI) a += Math.PI * 2;
+    return a;
+  }
+
   function clamp(v, min, max) {
     return Math.max(min, Math.min(max, v));
   }
@@ -223,6 +230,21 @@
       const lb = hypot2(bx, by);
       const parallel = la < MIN_ORIENTATION_LENGTH || lb < MIN_ORIENTATION_LENGTH ? 0 : ((ax * by - ay * bx) / (la * lb)) * Math.max(this.target, 1);
       return [signedPointLineDistance(this.line2.p1, this.line1) * this.sign - this.target, parallel];
+    }
+  }
+
+  class LineAngleConstraint extends Constraint {
+    constructor(line1, line2, target) {
+      super(`角度 ${line1.id}-${line2.id} = ${target}`, 1);
+      this.line1 = line1;
+      this.line2 = line2;
+      this.target = target;
+    }
+
+    rawError() {
+      const a1 = Math.atan2(this.line1.dy(), this.line1.dx());
+      const a2 = Math.atan2(this.line2.dy(), this.line2.dx());
+      return normalizeAngle(a2 - a1 - this.target);
     }
   }
 
@@ -1009,6 +1031,7 @@
     PointAxisDistanceConstraint,
     PointLineDistanceConstraint,
     LineLineDistanceConstraint,
+    LineAngleConstraint,
     signedPointLineDistance,
     CoincidentConstraint,
     ArcEndpointCoincidentConstraint,
