@@ -2685,6 +2685,8 @@
         ? Math.abs(previewTarget.p2.x - previewTarget.p1.x)
         : previewTarget.kind === "point-point" && previewTarget.dimensionAxis === "y"
           ? Math.abs(previewTarget.p2.y - previewTarget.p1.y)
+          : previewTarget.kind === "angle"
+            ? angleDegrees(angleDimensionAngles(previewTarget, pendingCommand.pointer || dimensionAnchor(previewTarget, dimension), dimension).signed)
           : previewTarget.value;
     const label = previewTarget.kind === "angle" ? `${Number(previewValue).toFixed(2)}°` : Number(previewValue).toFixed(2);
     drawDimension(previewTarget, dimension, label, true);
