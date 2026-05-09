@@ -26,6 +26,8 @@
     LineFixedConstraint,
     HorizontalConstraint,
     VerticalConstraint,
+    PointHorizontalConstraint,
+    PointVerticalConstraint,
     ParallelConstraint,
     PerpendicularConstraint,
     CollinearConstraint,
@@ -456,6 +458,12 @@
     if (c instanceof VerticalConstraint) {
       return { type: "vertical", line: c.line.id, enabled: c.enabled };
     }
+    if (c instanceof PointHorizontalConstraint) {
+      return { type: "pointHorizontal", p1: c.p1.id, p2: c.p2.id, enabled: c.enabled };
+    }
+    if (c instanceof PointVerticalConstraint) {
+      return { type: "pointVertical", p1: c.p1.id, p2: c.p2.id, enabled: c.enabled };
+    }
     if (c instanceof ParallelConstraint) {
       return { type: "parallel", line1: c.line1.id, line2: c.line2.id, enabled: c.enabled };
     }
@@ -556,6 +564,10 @@
       constraint = new HorizontalConstraint(line(data.line));
     } else if (data.type === "vertical") {
       constraint = new VerticalConstraint(line(data.line));
+    } else if (data.type === "pointHorizontal") {
+      constraint = new PointHorizontalConstraint(point(data.p1), point(data.p2));
+    } else if (data.type === "pointVertical") {
+      constraint = new PointVerticalConstraint(point(data.p1), point(data.p2));
     } else if (data.type === "parallel") {
       constraint = new ParallelConstraint(line(data.line1), line(data.line2));
     } else if (data.type === "perpendicular") {
@@ -1815,6 +1827,7 @@
     if (c instanceof PointOnLineConstraint || c instanceof PointOnLineMidpointConstraint) return c.point === point || c.line.p1 === point || c.line.p2 === point;
     if (c instanceof ArcEndpointOnLineConstraint) return c.arc.center === point || c.line.p1 === point || c.line.p2 === point;
     if (c instanceof HorizontalConstraint || c instanceof VerticalConstraint) return c.line.p1 === point || c.line.p2 === point;
+    if (c instanceof PointHorizontalConstraint || c instanceof PointVerticalConstraint) return c.p1 === point || c.p2 === point;
     if (c instanceof ParallelConstraint || c instanceof PerpendicularConstraint) {
       return c.line1.p1 === point || c.line1.p2 === point || c.line2.p1 === point || c.line2.p2 === point;
     }
@@ -1830,6 +1843,9 @@
 
   function constraintReferencesLine(c, line) {
     if (c instanceof DistanceConstraint || c instanceof PointAxisDistanceConstraint) {
+      return (c.p1 === line.p1 && c.p2 === line.p2) || (c.p1 === line.p2 && c.p2 === line.p1);
+    }
+    if (c instanceof PointHorizontalConstraint || c instanceof PointVerticalConstraint) {
       return (c.p1 === line.p1 && c.p2 === line.p2) || (c.p1 === line.p2 && c.p2 === line.p1);
     }
     if (c instanceof PointLineDistanceConstraint) return c.line === line;
@@ -1905,6 +1921,9 @@
       addNode(nodes, c.line);
       addNode(nodes, c.line.p1);
       addNode(nodes, c.line.p2);
+    } else if (c instanceof PointHorizontalConstraint || c instanceof PointVerticalConstraint) {
+      addNode(nodes, c.p1);
+      addNode(nodes, c.p2);
     } else if (c instanceof ParallelConstraint || c instanceof PerpendicularConstraint || c instanceof CollinearConstraint || c instanceof EqualLengthConstraint || c instanceof LineAngleConstraint) {
       for (const line of [c.line1, c.line2]) {
         addNode(nodes, line);
@@ -2931,10 +2950,10 @@
     if (type === "tangent") return (selectedPoints.length === 0 && selectedLines.length === 1 && primitives.length === 1) || (selectedPoints.length === 0 && selectedLines.length === 0 && primitives.length === 2);
     if (type === "coincident") {
       if (selectedArcEndpointPair?.length === 2) return true;
-      if ((selectedPoints.length === 2 && selectedLines.length === 0) || (selectedPoints.length === 1 && selectedLines.length === 1) || (selectedPoints.length === 1 && selectedLines.length === 0 && coincidentPrimitives.length === 1)) return true;
+      if ((selectedPoints.length === 2 && selectedLines.length === 0) || (selectedPoints.length === 0 && selectedLines.length === 2 && selectedLines.every(lineHasDirection)) || (selectedPoints.length === 1 && selectedLines.length === 1) || (selectedPoints.length === 1 && selectedLines.length === 0 && coincidentPrimitives.length === 1)) return true;
       return Boolean(selectedArcEndpoint && ((selectedPoints.length === 1 && selectedLines.length === 0 && coincidentPrimitives.length === 0) || (selectedPoints.length === 0 && selectedLines.length === 1 && coincidentPrimitives.length === 0) || (selectedPoints.length === 0 && selectedLines.length === 0 && coincidentPrimitives.length === 1)));
     }
-    if (type === "horizontal" || type === "vertical") return selectedLines.length === 1 && lineHasDirection(selectedLines[0]);
+    if (type === "horizontal" || type === "vertical") return (selectedLines.length === 1 && selectedPoints.length === 0 && lineHasDirection(selectedLines[0])) || (selectedPoints.length === 2 && selectedLines.length === 0);
     if (type === "parallel" || type === "perpendicular") return selectedLines.length === 2 && selectedLines.every(lineHasDirection);
     if (type === "collinear") return selectedLines.length === 2 && selectedLines.every(lineHasDirection);
     return false;
@@ -2958,11 +2977,11 @@
     if (type === "equalRadius") return "同じ半径にする円または円弧を2つ選択してください";
     if (type === "pointOnCircle") return "円周上に置く点と、円または円弧を選択してください";
     if (type === "tangent") return "接線にする線と円/円弧、または円/円弧を2つ選択してください";
-    if (type === "coincident") return "一致させる点同士、点と線、または点と円周を選択してください";
+    if (type === "coincident") return "一致させる点同士、点と線、点と円周、または同一線上にする線2本を選択してください";
     if (type === "collinear") return "同一直線上にする線を2本選択してください";
     if (type === "equal") return "等寸にする線2本、または同じ半径にする円/円弧を2つ選択してください";
-    if (type === "horizontal") return "水平にする線を1本選択してください";
-    if (type === "vertical") return "垂直にする線を1本選択してください";
+    if (type === "horizontal") return "水平にする線1本、または水平関係にする点2つを選択してください";
+    if (type === "vertical") return "垂直にする線1本、または鉛直関係にする点2つを選択してください";
     if (type === "parallel") return "平行にする線を2本選択してください";
     if (type === "perpendicular") return "直交させる線を2本選択してください";
     return `${constraintLabel(type)} の対象を選択してください`;
@@ -2976,7 +2995,10 @@
     if (type === "coincident") return "この拘束では点、線、円または円弧を選択してください";
     if (type === "collinear") return "この拘束では線を2本選択してください";
     if (type === "equal") return "この拘束では線2本、または円/円弧を2つ選択してください";
-    if (type === "horizontal" || type === "vertical" || type === "parallel" || type === "perpendicular") {
+    if (type === "horizontal" || type === "vertical") {
+      return "この拘束では線1本、または点2つを選択してください";
+    }
+    if (type === "parallel" || type === "perpendicular") {
       return "この拘束では線を選択してください";
     }
     if (type === "distance") return "寸法対象として点または線を選択してください";
@@ -2991,13 +3013,13 @@
     };
     if (type === "coincident") {
       selectedPoints = selectedPoints.slice(0, 2);
-      selectedLines = selectedPoints.length >= 2 ? [] : selectedLines.slice(0, 1);
+      selectedLines = selectedPoints.length >= 2 ? [] : selectedLines.slice(0, 2);
       trimPrimitives(selectedPoints.length === 1 && selectedLines.length === 0 ? 1 : 0);
     } else if (type === "horizontal" || type === "vertical") {
-      selectedPoints = [];
+      selectedPoints = selectedLines.length > 0 ? [] : selectedPoints.slice(0, 2);
       selectedCircles = [];
       selectedArcs = [];
-      selectedLines = selectedLines.slice(0, 1);
+      selectedLines = selectedPoints.length > 0 ? [] : selectedLines.slice(0, 1);
     } else if (type === "parallel" || type === "perpendicular") {
       selectedPoints = [];
       selectedCircles = [];
@@ -3135,8 +3157,13 @@
         if (selectedPoints.length >= 2) selectedLines = [];
       } else if (hitL) {
         selectedArcEndpointPair = null;
-        selectedLines = [hitL];
-        selectedPoints = selectedPoints.slice(0, 1);
+        if (selectedPoints.length > 0) {
+          selectedLines = [hitL];
+          selectedPoints = selectedPoints.slice(0, 1);
+        } else {
+          if (!selectedLines.includes(hitL)) selectedLines.push(hitL);
+          selectedLines = selectedLines.slice(-2);
+        }
         selectedCircles = [];
         selectedArcs = [];
       } else if (hitPrimitive) {
@@ -3146,16 +3173,21 @@
         selectedLines = [];
       }
     } else if (type === "horizontal" || type === "vertical") {
-      if (!hitL) {
+      if (!hitL && !hitP) {
         setHint(invalidConstraintTargetHint(type), "error");
         return true;
       }
-      if (!lineHasDirection(hitL)) {
+      if (hitP) {
+        selectedLines = [];
+        if (!selectedPoints.includes(hitP)) selectedPoints.push(hitP);
+        selectedPoints = selectedPoints.slice(-2);
+      } else if (!lineHasDirection(hitL)) {
         setHint("向き拘束の対象線が短すぎます", "error");
         return true;
+      } else {
+        selectedLines = [hitL];
+        selectedPoints = [];
       }
-      selectedLines = [hitL];
-      selectedPoints = [];
     } else if (type === "parallel" || type === "perpendicular" || type === "collinear") {
       if (!hitL) {
         setHint(invalidConstraintTargetHint(type), "error");
@@ -3726,13 +3758,15 @@
         constraint = new PointOnLineConstraint(selectedPoints[0], selectedLines[0]);
       } else if (selectedPoints.length === 1 && primitives.length === 1) {
         constraint = new PointOnCircleConstraint(selectedPoints[0], primitives[0]);
+      } else if (selectedPoints.length === 0 && selectedLines.length === 2) {
+        constraint = new CollinearConstraint(selectedLines[0], selectedLines[1]);
       } else {
         constraint = new CoincidentConstraint(selectedPoints[0], selectedPoints[1]);
       }
     } else if (type === "horizontal") {
-      constraint = new HorizontalConstraint(selectedLines[0]);
+      constraint = selectedPoints.length === 2 ? new PointHorizontalConstraint(selectedPoints[0], selectedPoints[1]) : new HorizontalConstraint(selectedLines[0]);
     } else if (type === "vertical") {
-      constraint = new VerticalConstraint(selectedLines[0]);
+      constraint = selectedPoints.length === 2 ? new PointVerticalConstraint(selectedPoints[0], selectedPoints[1]) : new VerticalConstraint(selectedLines[0]);
     } else if (type === "parallel") {
       constraint = new ParallelConstraint(selectedLines[0], selectedLines[1]);
     } else if (type === "perpendicular") {

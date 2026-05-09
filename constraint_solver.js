@@ -447,7 +447,7 @@
 
   class CollinearConstraint extends Constraint {
     constructor(l1, l2) {
-      super(`同一直線 ${l1.id}-${l2.id}`, 10);
+      super(`一致 ${l1.id}-${l2.id}`, 10);
       this.line1 = l1;
       this.line2 = l2;
       this.degenerateAtCreation = l1.length() < MIN_ORIENTATION_LENGTH || l2.length() < MIN_ORIENTATION_LENGTH;
@@ -613,6 +613,30 @@
     rawError() {
       const target = Number.isFinite(this.min) ? Math.max(this.min, this.target) : this.target;
       return this.object[this.prop] - target;
+    }
+  }
+
+  class PointHorizontalConstraint extends Constraint {
+    constructor(p1, p2) {
+      super(`点水平 ${p1.id}-${p2.id}`, 1);
+      this.p1 = p1;
+      this.p2 = p2;
+    }
+
+    rawError() {
+      return this.p2.y - this.p1.y;
+    }
+  }
+
+  class PointVerticalConstraint extends Constraint {
+    constructor(p1, p2) {
+      super(`点鉛直 ${p1.id}-${p2.id}`, 1);
+      this.p1 = p1;
+      this.p2 = p2;
+    }
+
+    rawError() {
+      return this.p2.x - this.p1.x;
     }
   }
 
@@ -1077,6 +1101,8 @@
     LineFixedConstraint,
     HorizontalConstraint,
     VerticalConstraint,
+    PointHorizontalConstraint,
+    PointVerticalConstraint,
     ParallelConstraint,
     PerpendicularConstraint,
     CollinearConstraint,
