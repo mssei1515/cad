@@ -1794,12 +1794,17 @@
     }
     const points = targetPointsForDimension(target);
     if (points.length < 2) return { x: 0, y: 0 };
-    if (target.kind === "radius") return dimensionFromAnchor(target, points[1]);
+    if (target.kind === "radius") {
+      const dimension = dimensionFromAnchor(target, points[1]);
+      if (target.primitive instanceof Circle) dimension.labelOffsetU = target.primitive.radius() * 0.5;
+      return dimension;
+    }
     const mid = dimensionBasePoint(target);
     const defaultAxis = target.kind === "point-point" ? target.dimensionAxis || null : null;
     const dir = targetDirection(defaultAxis ? { ...target, dimensionAxis: defaultAxis } : target);
     const normal = { x: -dir.y, y: dir.x };
     const dimension = dimensionFromAnchor(defaultAxis ? { ...target, dimensionAxis: defaultAxis } : target, { x: mid.x + normal.x * 30, y: mid.y + normal.y * 30 }, { allowPointAxis: false });
+    if (target.kind === "diameter" && target.primitive instanceof Circle) dimension.labelOffsetU = target.primitive.radius() * 0.5;
     if (defaultAxis) dimension.axis = defaultAxis;
     return dimension;
   }
