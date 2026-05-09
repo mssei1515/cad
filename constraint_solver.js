@@ -22,6 +22,12 @@
     return a;
   }
 
+  function normalizeAxisAngle(angle) {
+    let a = Math.abs(normalizeAngle(angle));
+    if (a > Math.PI / 2) a = Math.PI - a;
+    return clamp(a, 0, Math.PI / 2);
+  }
+
   function clamp(v, min, max) {
     return Math.max(min, Math.min(max, v));
   }
@@ -149,6 +155,18 @@
     }
   }
 
+  function lineAxisAngle(line1, line2) {
+    const ax = line1.dx();
+    const ay = line1.dy();
+    const bx = line2.dx();
+    const by = line2.dy();
+    const la = hypot2(ax, ay);
+    const lb = hypot2(bx, by);
+    if (la < MIN_ORIENTATION_LENGTH || lb < MIN_ORIENTATION_LENGTH) return 0;
+    const cos = Math.abs((ax * bx + ay * by) / (la * lb));
+    return Math.acos(clamp(cos, -1, 1));
+  }
+
   class PointAxisDistanceConstraint extends Constraint {
     constructor(p1, p2, target, axis = "x", sign = null) {
       super(`寸法 ${p1.id}-${p2.id} ${axis} = ${target}`, 1);
@@ -238,13 +256,11 @@
       super(`角度 ${line1.id}-${line2.id} = ${target}`, 1);
       this.line1 = line1;
       this.line2 = line2;
-      this.target = target;
+      this.target = normalizeAxisAngle(target);
     }
 
     rawError() {
-      const a1 = Math.atan2(this.line1.dy(), this.line1.dx());
-      const a2 = Math.atan2(this.line2.dy(), this.line2.dx());
-      return normalizeAngle(a2 - a1 - this.target);
+      return lineAxisAngle(this.line1, this.line2) - this.target;
     }
   }
 
