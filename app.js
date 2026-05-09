@@ -4268,6 +4268,13 @@
     return sweep >= 0 ? normalizeAngle(angle - arc.startAngle) / sweep : normalizeAngle(arc.startAngle - angle) / -sweep;
   }
 
+  function arcParamOnSweep(arc, angle) {
+    const sweep = arc.endAngle - arc.startAngle;
+    if (Math.abs(sweep) < 1e-12) return null;
+    if (!angleOnSignedSweep(angle, arc.startAngle, arc.endAngle)) return null;
+    return sweep >= 0 ? normalizeAngle(angle - arc.startAngle) / sweep : normalizeAngle(arc.startAngle - angle) / -sweep;
+  }
+
   function angleAtArcParam(arc, t) {
     return arc.startAngle + (arc.endAngle - arc.startAngle) * t;
   }
@@ -4292,8 +4299,8 @@
   function arcTrimBoundaries(arc) {
     const boundaries = [{ t: 0, point: arcEndpointPoint(arc, "start") }, { t: 1, point: arcEndpointPoint(arc, "end") }];
     const addPointBoundary = (point, source) => {
-      const t = arcParam(arc, Math.atan2(point.y - arc.center.y, point.x - arc.center.x));
-      if (t >= -1e-6 && t <= 1 + 1e-6) addUniqueBoundary(boundaries, { t, point, source });
+      const t = arcParamOnSweep(arc, Math.atan2(point.y - arc.center.y, point.x - arc.center.x));
+      if (t !== null) addUniqueBoundary(boundaries, { t, point, source });
     };
     for (const line of model.lines) for (const b of lineCircleBoundaries(line, arc, true)) addPointBoundary(b.point, { line });
     for (const circle of model.circles) for (const point of circleCirclePoints(arc, circle)) addPointBoundary(point, { primitive: circle });
@@ -4357,7 +4364,8 @@
   }
 
   function trimPreviewForArc(arc, pointer) {
-    const t = arcParam(arc, Math.atan2(pointer.y - arc.center.y, pointer.x - arc.center.x));
+    const t = arcParamOnSweep(arc, Math.atan2(pointer.y - arc.center.y, pointer.x - arc.center.x));
+    if (t === null) return null;
     const boundaries = arcTrimBoundaries(arc);
     const interval = trimInterval(boundaries, t);
     if (boundaries.length <= 2) return { kind: "arc", item: arc, deleteWhole: true, interval: { left: boundaries[0], right: boundaries[1] } };
@@ -4381,12 +4389,28 @@
   }
 
   function computeTrimPreview(pointer) {
-    const line = hitLine(pointer.x, pointer.y);
-    if (line) return trimPreviewForLine(line, pointer);
-    const arc = hitArc(pointer.x, pointer.y);
-    if (arc) return trimPreviewForArc(arc, pointer);
-    const circle = hitCircle(pointer.x, pointer.y);
-    if (circle) return trimPreviewForCircle(circle, pointer);
+    const threshold = 7 / viewport.scale;
+    const candidates = [];
+    for (const line of model.lines) {
+      const p = closestPointOnSegment(pointer.x, pointer.y, line);
+      const distance = hypot2(pointer.x - p.x, pointer.y - p.y);
+      if (distance <= threshold) candidates.push({ distance, preview: () => trimPreviewForLine(line, pointer) });
+    }
+    for (const arc of model.arcs) {
+      const angle = Math.atan2(pointer.y - arc.center.y, pointer.x - arc.center.x);
+      if (!angleOnSignedSweep(angle, arc.startAngle, arc.endAngle)) continue;
+      const distance = Math.abs(hypot2(pointer.x - arc.center.x, pointer.y - arc.center.y) - arc.radius());
+      if (distance <= threshold) candidates.push({ distance, preview: () => trimPreviewForArc(arc, pointer) });
+    }
+    for (const circle of model.circles) {
+      const distance = Math.abs(hypot2(pointer.x - circle.center.x, pointer.y - circle.center.y) - circle.radius());
+      if (distance <= threshold) candidates.push({ distance, preview: () => trimPreviewForCircle(circle, pointer) });
+    }
+    candidates.sort((a, b) => a.distance - b.distance);
+    for (const candidate of candidates) {
+      const preview = candidate.preview();
+      if (preview) return preview;
+    }
     return null;
   }
 
