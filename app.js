@@ -20,6 +20,7 @@
     ArcEndpointCoincidentConstraint,
     ArcEndpointArcEndpointCoincidentConstraint,
     PointOnLineConstraint,
+    PointOnLineMidpointConstraint,
     ArcEndpointOnLineConstraint,
     ArcEndpointFixedConstraint,
     LineFixedConstraint,
@@ -434,6 +435,9 @@
     if (c instanceof PointOnLineConstraint) {
       return { type: "pointOnLine", point: c.point.id, line: c.line.id, enabled: c.enabled };
     }
+    if (c instanceof PointOnLineMidpointConstraint) {
+      return { type: "pointOnLineMidpoint", point: c.point.id, line: c.line.id, enabled: c.enabled };
+    }
     if (c instanceof ArcEndpointOnLineConstraint) {
       return { type: "arcEndpointOnLine", arc: c.arc.id, endpoint: c.endpoint, line: c.line.id, enabled: c.enabled };
     }
@@ -537,6 +541,8 @@
       constraint = new ArcEndpointArcEndpointCoincidentConstraint(primitive(data.a), data.endpointA === "end" ? "end" : "start", primitive(data.b), data.endpointB === "end" ? "end" : "start");
     } else if (data.type === "pointOnLine") {
       constraint = new PointOnLineConstraint(point(data.point), line(data.line));
+    } else if (data.type === "pointOnLineMidpoint") {
+      constraint = new PointOnLineMidpointConstraint(point(data.point), line(data.line));
     } else if (data.type === "arcEndpointOnLine") {
       constraint = new ArcEndpointOnLineConstraint(primitive(data.arc), data.endpoint === "end" ? "end" : "start", line(data.line));
     } else if (data.type === "arcEndpointFixed") {
@@ -1178,6 +1184,7 @@
   }
 
   function makeSnapCandidate(source, x, y, label, priority, data = {}) {
+    if (data.line && priority === 1) data = { ...data, midpoint: true };
     return {
       x,
       y,
@@ -1265,7 +1272,7 @@
 
   function addPointSnapConstraints(point, snap) {
     if (!point || !snap?.data) return 0;
-    const { point: snapPoint, line, primitive, arc, endpoint } = snap.data;
+    const { point: snapPoint, line, midpoint, primitive, arc, endpoint } = snap.data;
     let added = 0;
     if (snapPoint && snapPoint !== point) {
       added += addConstraintIfMissing(
@@ -1273,7 +1280,12 @@
         (c) => c instanceof CoincidentConstraint && ((c.p1 === point && c.p2 === snapPoint) || (c.p1 === snapPoint && c.p2 === point)),
       ) ? 1 : 0;
     }
-    if (line) {
+    if (line && midpoint) {
+      added += addConstraintIfMissing(
+        new PointOnLineMidpointConstraint(point, line),
+        (c) => c instanceof PointOnLineMidpointConstraint && c.point === point && c.line === line,
+      ) ? 1 : 0;
+    } else if (line) {
       added += addConstraintIfMissing(
         new PointOnLineConstraint(point, line),
         (c) => c instanceof PointOnLineConstraint && c.point === point && c.line === line,
@@ -1301,7 +1313,7 @@
 
   function addArcEndpointSnapConstraints(arc, endpointName, snap) {
     if (!arc || !snap?.data) return 0;
-    const { point, line, primitive, arc: snapArc, endpoint } = snap.data;
+    const { point, line, midpoint, primitive, arc: snapArc, endpoint } = snap.data;
     let added = 0;
     if (point) {
       added += addConstraintIfMissing(
@@ -1309,7 +1321,14 @@
         (c) => c instanceof ArcEndpointCoincidentConstraint && c.arc === arc && c.endpoint === endpointName && c.point === point,
       ) ? 1 : 0;
     }
-    if (line) {
+    if (line && midpoint) {
+      const ref = addPoint(snap.x, snap.y, false, "endpoint");
+      added += addPointSnapConstraints(ref, snap);
+      added += addConstraintIfMissing(
+        new ArcEndpointCoincidentConstraint(arc, endpointName, ref),
+        (c) => c instanceof ArcEndpointCoincidentConstraint && c.arc === arc && c.endpoint === endpointName && c.point === ref,
+      ) ? 1 : 0;
+    } else if (line) {
       added += addConstraintIfMissing(
         new ArcEndpointOnLineConstraint(arc, endpointName, line),
         (c) => c instanceof ArcEndpointOnLineConstraint && c.arc === arc && c.endpoint === endpointName && c.line === line,
@@ -1775,7 +1794,7 @@
     if (c instanceof ArcEndpointArcEndpointCoincidentConstraint) return c.a.center === point || c.b.center === point;
     if (c instanceof ArcEndpointFixedConstraint) return c.arc.center === point;
     if (c instanceof LineFixedConstraint) return c.line.p1 === point || c.line.p2 === point;
-    if (c instanceof PointOnLineConstraint) return c.point === point || c.line.p1 === point || c.line.p2 === point;
+    if (c instanceof PointOnLineConstraint || c instanceof PointOnLineMidpointConstraint) return c.point === point || c.line.p1 === point || c.line.p2 === point;
     if (c instanceof ArcEndpointOnLineConstraint) return c.arc.center === point || c.line.p1 === point || c.line.p2 === point;
     if (c instanceof HorizontalConstraint || c instanceof VerticalConstraint) return c.line.p1 === point || c.line.p2 === point;
     if (c instanceof ParallelConstraint || c instanceof PerpendicularConstraint) {
@@ -1798,7 +1817,7 @@
     if (c instanceof PointLineDistanceConstraint) return c.line === line;
     if (c instanceof LineLineDistanceConstraint) return c.line1 === line || c.line2 === line;
     if (c instanceof LineFixedConstraint) return c.line === line;
-    if (c instanceof PointOnLineConstraint) return c.line === line;
+    if (c instanceof PointOnLineConstraint || c instanceof PointOnLineMidpointConstraint) return c.line === line;
     if (c instanceof ArcEndpointOnLineConstraint) return c.line === line;
     if (c instanceof HorizontalConstraint || c instanceof VerticalConstraint) return c.line === line;
     if (c instanceof ParallelConstraint || c instanceof PerpendicularConstraint) return c.line1 === line || c.line2 === line;
@@ -1850,7 +1869,7 @@
         addNode(nodes, arc);
         addNode(nodes, arc.center);
       }
-    } else if (c instanceof PointOnLineConstraint) {
+    } else if (c instanceof PointOnLineConstraint || c instanceof PointOnLineMidpointConstraint) {
       addNode(nodes, c.point);
       addNode(nodes, c.line);
       addNode(nodes, c.line.p1);
@@ -2722,7 +2741,16 @@
     ctx.font = `${11 / viewport.scale}px system-ui`;
     ctx.textAlign = "left";
     ctx.textBaseline = "bottom";
-    ctx.fillText(activeSnap.label, activeSnap.x + 8 / viewport.scale, activeSnap.y - 8 / viewport.scale);
+    const pointLike = Boolean(activeSnap.data?.point) || activeSnap.priority === 0;
+    const labelX = activeSnap.x + 8 / viewport.scale;
+    const labelY = activeSnap.y + (pointLike ? 20 : -8) / viewport.scale;
+    const paddingX = 3 / viewport.scale;
+    const paddingY = 2 / viewport.scale;
+    const metrics = ctx.measureText(activeSnap.label);
+    ctx.fillStyle = "rgba(255, 255, 255, 0.88)";
+    ctx.fillRect(labelX - paddingX, labelY - 12 / viewport.scale - paddingY, metrics.width + paddingX * 2, 14 / viewport.scale + paddingY * 2);
+    ctx.fillStyle = "#f59e0b";
+    ctx.fillText(activeSnap.label, labelX, labelY);
     ctx.restore();
   }
 

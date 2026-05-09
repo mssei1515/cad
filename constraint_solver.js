@@ -318,6 +318,21 @@
     }
   }
 
+  class PointOnLineMidpointConstraint extends Constraint {
+    constructor(point, line) {
+      super(`中点一致 ${point.id}-${line.id}`, 1);
+      this.point = point;
+      this.line = line;
+    }
+
+    rawError() {
+      return [
+        this.point.x - (this.line.p1.x + this.line.p2.x) / 2,
+        this.point.y - (this.line.p1.y + this.line.p2.y) / 2,
+      ];
+    }
+  }
+
   class ArcEndpointOnLineConstraint extends Constraint {
     constructor(arc, endpoint, line) {
       super(`円弧端点-線一致 ${arc.id}.${endpoint}-${line.id}`, 1);
@@ -1053,6 +1068,7 @@
     ArcEndpointCoincidentConstraint,
     ArcEndpointArcEndpointCoincidentConstraint,
     PointOnLineConstraint,
+    PointOnLineMidpointConstraint,
     ArcEndpointOnLineConstraint,
     ArcEndpointFixedConstraint,
     LineFixedConstraint,
