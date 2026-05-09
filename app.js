@@ -2640,8 +2640,10 @@
         return false;
       }
       if (target?.kind === "line-length") {
-        setHint("線長寸法はEnter、または同じ線をダブルクリックで確定できます。点または別の線をクリックすると距離寸法になります。");
-        return false;
+        pendingConstraintCommand = null;
+        updateConstraintButtons();
+        startDistanceCommand();
+        return true;
       }
       setHint(constraintTargetHint(type));
       return false;
@@ -2896,6 +2898,29 @@
       return true;
     }
     return false;
+  }
+
+  function updatePendingLineLengthHover(pointer) {
+    if (pendingCommand?.type !== "distance-place" || pendingCommand.target.kind !== "line-length") {
+      hoveredPoint = null;
+      hoveredEndpointPoint = null;
+      hoveredLine = null;
+      return false;
+    }
+    const baseLine = pendingCommand.target.line;
+    const nextEndpointHover = hitEndpointPoint(pointer.x, pointer.y);
+    const nextPointHover = nextEndpointHover || hitExplicitPoint(pointer.x, pointer.y);
+    const candidateLine = nextPointHover ? null : hitLine(pointer.x, pointer.y);
+    const nextLineHover = candidateLine && candidateLine !== baseLine && lineHasDirection(baseLine) && lineHasDirection(candidateLine) && linesAreParallel(baseLine, candidateLine) ? candidateLine : null;
+    const changed = nextPointHover !== hoveredPoint || nextEndpointHover !== hoveredEndpointPoint || nextLineHover !== hoveredLine || hoveredCircle || hoveredArc || hoveredArcEndpoint || hoveredDimensionConstraint;
+    hoveredPoint = nextPointHover;
+    hoveredEndpointPoint = nextEndpointHover;
+    hoveredLine = nextLineHover;
+    hoveredCircle = null;
+    hoveredArcEndpoint = null;
+    hoveredArc = null;
+    hoveredDimensionConstraint = null;
+    return changed;
   }
 
   function startDimensionEditInput(hit) {
@@ -4058,6 +4083,7 @@
     if (pendingCommand?.type === "distance-place") {
       clearSnap();
       pendingCommand.pointer = p;
+      updatePendingLineLengthHover(p);
       draw();
       return;
     }
