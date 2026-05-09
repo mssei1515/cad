@@ -367,7 +367,7 @@
     if (!dimension) return null;
     const anchor = target ? dimensionAnchor(target, dimension) : dimension;
     const axis = target ? storedDimensionAxis(target, dimension) : dimension.axis || null;
-    return {
+    const data = {
       x: Number(anchor.x),
       y: Number(anchor.y),
       offsetU: Number.isFinite(dimension.offsetU) ? dimension.offsetU : null,
@@ -375,6 +375,12 @@
       labelOffsetU: Number.isFinite(dimension.labelOffsetU) ? dimension.labelOffsetU : 0,
       axis,
     };
+    if (target?.kind === "angle") {
+      data.angleStartFlip = Number.isInteger(dimension.angleStartFlip) ? dimension.angleStartFlip : null;
+      data.angleEndFlip = Number.isInteger(dimension.angleEndFlip) ? dimension.angleEndFlip : null;
+      data.angleRadius = Number.isFinite(dimension.angleRadius) ? dimension.angleRadius : null;
+    }
+    return data;
   }
 
   function serializeConstraint(c) {
@@ -577,6 +583,9 @@
           offsetN: Number.isFinite(Number(data.dimension.offsetN)) ? Number(data.dimension.offsetN) : NaN,
           labelOffsetU: Number.isFinite(Number(data.dimension.labelOffsetU)) ? Number(data.dimension.labelOffsetU) : 0,
           axis: data.dimension.axis || null,
+          angleStartFlip: Number.isInteger(data.dimension.angleStartFlip) ? data.dimension.angleStartFlip : null,
+          angleEndFlip: Number.isInteger(data.dimension.angleEndFlip) ? data.dimension.angleEndFlip : null,
+          angleRadius: Number.isFinite(Number(data.dimension.angleRadius)) ? Number(data.dimension.angleRadius) : NaN,
         };
       }
     }
@@ -1310,33 +1319,43 @@
     return signed;
   }
 
-  function angleDimensionAngles(target, anchor = null) {
-    const baseStart = lineAngle(target.line1);
+  function angleDimensionCandidate(target, startFlip = 0, endFlip = 0) {
+    const start = lineAngle(target.line1) + (startFlip ? Math.PI : 0);
+    const endAngle = lineAngle(target.line2) + (endFlip ? Math.PI : 0);
+    const signed = normalizeAngle(endAngle - start);
+    if (Math.abs(signed) > Math.PI / 2 + 1e-9) return null;
+    return { start, end: start + signed, signed, mid: start + signed / 2, startFlip, endFlip };
+  }
+
+  function angleDimensionAngles(target, anchor = null, dimension = null) {
+    if (dimension && Number.isInteger(dimension.angleStartFlip) && Number.isInteger(dimension.angleEndFlip)) {
+      const stored = angleDimensionCandidate(target, dimension.angleStartFlip, dimension.angleEndFlip);
+      if (stored) return stored;
+    }
     const fallbackSigned = angleDimensionSweep(target);
+    const baseStart = lineAngle(target.line1);
     const fallback = {
       start: baseStart,
       end: baseStart + fallbackSigned,
       signed: fallbackSigned,
       mid: baseStart + fallbackSigned / 2,
+      startFlip: 0,
+      endFlip: fallbackSigned === signedAngleBetweenLines(target.line1, target.line2) ? 0 : 1,
     };
     if (!anchor) return fallback;
     const vertex = lineIntersection(target.line1, target.line2);
     if (!vertex) return fallback;
     const anchorAngle = Math.atan2(anchor.y - vertex.y, anchor.x - vertex.x);
-    const starts = [baseStart, baseStart + Math.PI];
-    const baseEnd = lineAngle(target.line2);
-    const ends = [baseEnd, baseEnd + Math.PI];
     let best = fallback;
     let bestScore = Infinity;
-    for (const start of starts) {
-      for (const endAngle of ends) {
-        const signed = normalizeAngle(endAngle - start);
-        if (Math.abs(signed) > Math.PI / 2 + 1e-9) continue;
-        const mid = start + signed / 2;
-        const score = Math.abs(normalizeAngle(mid - anchorAngle));
+    for (const startFlip of [0, 1]) {
+      for (const endFlip of [0, 1]) {
+        const candidate = angleDimensionCandidate(target, startFlip, endFlip);
+        if (!candidate) continue;
+        const score = Math.abs(normalizeAngle(candidate.mid - anchorAngle));
         if (score < bestScore) {
           bestScore = score;
-          best = { start, end: start + signed, signed, mid };
+          best = candidate;
         }
       }
     }
@@ -1529,7 +1548,19 @@
 
   function dimensionFromAnchor(target, anchor, options = {}) {
     if (target.kind === "angle") {
-      return { x: anchor.x, y: anchor.y, offsetU: NaN, offsetN: NaN, labelOffsetU: 0, axis: null };
+      const vertex = lineIntersection(target.line1, target.line2);
+      const angles = angleDimensionAngles(target, anchor);
+      return {
+        x: anchor.x,
+        y: anchor.y,
+        offsetU: NaN,
+        offsetN: NaN,
+        labelOffsetU: 0,
+        axis: null,
+        angleStartFlip: angles.startFlip,
+        angleEndFlip: angles.endFlip,
+        angleRadius: vertex ? Math.max(14 / viewport.scale, hypot2(anchor.x - vertex.x, anchor.y - vertex.y)) : NaN,
+      };
     }
     const axis = dimensionAxisForAnchor(target, anchor, options);
     const basisTarget = axis ? { ...target, dimensionAxis: axis } : target;
@@ -1554,7 +1585,17 @@
 
   function dimensionAnchor(target, dimension) {
     if (!dimension) return defaultDimensionForTarget(target);
-    if (target.kind === "angle") return { x: dimension.x, y: dimension.y };
+    if (target.kind === "angle") {
+      const vertex = lineIntersection(target.line1, target.line2);
+      if (vertex && Number.isFinite(dimension.angleRadius)) {
+        const { mid } = angleDimensionAngles(target, null, dimension);
+        return {
+          x: vertex.x + Math.cos(mid) * dimension.angleRadius,
+          y: vertex.y + Math.sin(mid) * dimension.angleRadius,
+        };
+      }
+      return { x: dimension.x, y: dimension.y };
+    }
     const base = dimensionBasePoint(target);
     const axis = storedDimensionAxis(target, dimension);
     const { d, n } = dimensionBasis({ ...target, dimensionAxis: axis });
@@ -1571,9 +1612,19 @@
     if (target.kind === "angle") {
       const vertex = lineIntersection(target.line1, target.line2);
       if (!vertex) return { x: 0, y: 0, offsetU: NaN, offsetN: NaN, labelOffsetU: 0, axis: null };
-      const { mid } = angleDimensionAngles(target);
+      const angles = angleDimensionAngles(target);
       const radius = 45 / viewport.scale;
-      return { x: vertex.x + Math.cos(mid) * radius, y: vertex.y + Math.sin(mid) * radius, offsetU: NaN, offsetN: NaN, labelOffsetU: 0, axis: null };
+      return {
+        x: vertex.x + Math.cos(angles.mid) * radius,
+        y: vertex.y + Math.sin(angles.mid) * radius,
+        offsetU: NaN,
+        offsetN: NaN,
+        labelOffsetU: 0,
+        axis: null,
+        angleStartFlip: angles.startFlip,
+        angleEndFlip: angles.endFlip,
+        angleRadius: radius,
+      };
     }
     const points = targetPointsForDimension(target);
     if (points.length < 2) return { x: 0, y: 0 };
@@ -1920,6 +1971,11 @@
       if (!target) continue;
       if (!c.dimension) {
         c.dimension = defaultDimensionForTarget(target);
+      } else if (target.kind === "angle") {
+        if (!Number.isFinite(c.dimension.angleRadius) || !Number.isInteger(c.dimension.angleStartFlip) || !Number.isInteger(c.dimension.angleEndFlip)) {
+          const previous = dimensionAnchor(target, c.dimension);
+          c.dimension = dimensionFromAnchor(target, previous, { allowPointAxis: false });
+        }
       } else if (!Number.isFinite(c.dimension.offsetU) || !Number.isFinite(c.dimension.offsetN)) {
         const previous = c.dimension;
         c.dimension = dimensionFromAnchor(target, previous, { allowPointAxis: false });
@@ -2367,7 +2423,7 @@
     if (!vertex) return null;
     const anchor = dimensionAnchor(target, dimension);
     const radius = Math.max(14 / viewport.scale, hypot2(anchor.x - vertex.x, anchor.y - vertex.y));
-    const { start, end, signed, mid } = angleDimensionAngles(target, anchor);
+    const { start, end, signed, mid } = angleDimensionAngles(target, anchor, dimension);
     return {
       vertex,
       radius,
@@ -4311,9 +4367,10 @@
       if (dimensionDragSession.part === "label") {
         const dimension = dimensionDragSession.constraint.dimension || defaultDimensionForTarget(dimensionDragSession.target);
         if (dimensionDragSession.target.kind === "angle") {
-          dimension.x = dimensionDragSession.startAnchor.x + dx;
-          dimension.y = dimensionDragSession.startAnchor.y + dy;
-          dimensionDragSession.constraint.dimension = dimension;
+          dimensionDragSession.constraint.dimension = dimensionFromAnchor(dimensionDragSession.target, {
+            x: dimensionDragSession.startAnchor.x + dx,
+            y: dimensionDragSession.startAnchor.y + dy,
+          }, { allowPointAxis: false });
           draw();
           return;
         }
