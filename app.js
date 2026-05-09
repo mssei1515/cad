@@ -3453,6 +3453,26 @@
   }
 
   function solveGuidedDragWithFallback(session, targets, fallbackExtra, fullSolve, restoreState = null) {
+    if (session?.local && session.local.constraints.length === 0) {
+      for (const target of targets) {
+        if (target.point) {
+          target.point.x = target.x;
+          target.point.y = target.y;
+        } else if (target.object && target.prop) {
+          target.object[target.prop] = target.min != null ? Math.max(target.min, target.value) : target.value;
+        }
+      }
+      return {
+        success: true,
+        errorNorm: 0,
+        iterations: 0,
+        reason: "直接移動",
+        local: true,
+        guided: true,
+        variableCount: session.local.variables.length,
+        constraintCount: 0,
+      };
+    }
     const localResult = solveLocalGuidedDrag(session, targets);
     if (localResult && localResult.success && localResult.errorNorm <= CONSTRAINT_ACCEPT_ERROR) return localResult;
     if (restoreState) solver.restore(restoreState);
