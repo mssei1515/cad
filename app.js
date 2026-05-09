@@ -3149,9 +3149,38 @@
     arc[prop] = candidates.reduce((best, angle) => (Math.abs(angle - current) < Math.abs(best - current) ? angle : best), candidates[0]);
   }
 
+  function preconditionArcEndpointToPoint(arc, endpoint, point) {
+    if (!arc || !point) return;
+    const dx = point.x - arc.center.x;
+    const dy = point.y - arc.center.y;
+    const distance = hypot2(dx, dy);
+    if (distance < MIN_LINE_LENGTH) return;
+    if (!hasDirectRadiusDimension(arc)) arc.radiusValue = Math.max(distance, MIN_LINE_LENGTH);
+    const prop = endpoint === "start" ? "startAngle" : "endAngle";
+    arc[prop] = unwrapAngleNear(Math.atan2(dy, dx), arc[prop]);
+  }
+
+  function preconditionArcEndpointCoincidentConstraint(constraint) {
+    preconditionArcEndpointToPoint(constraint.arc, constraint.endpoint, constraint.point);
+  }
+
+  function preconditionArcEndpointArcEndpointCoincidentConstraint(constraint) {
+    const aPoint = arcEndpointPoint(constraint.a, constraint.endpointA);
+    const bPoint = arcEndpointPoint(constraint.b, constraint.endpointB);
+    if (hasDirectRadiusDimension(constraint.a) && !hasDirectRadiusDimension(constraint.b)) {
+      preconditionArcEndpointToPoint(constraint.b, constraint.endpointB, aPoint);
+    } else {
+      preconditionArcEndpointToPoint(constraint.a, constraint.endpointA, bPoint);
+    }
+  }
+
   function preconditionNewConstraint(constraint) {
     if (constraint instanceof ArcEndpointOnLineConstraint) {
       preconditionArcEndpointOnLineConstraint(constraint);
+    } else if (constraint instanceof ArcEndpointCoincidentConstraint) {
+      preconditionArcEndpointCoincidentConstraint(constraint);
+    } else if (constraint instanceof ArcEndpointArcEndpointCoincidentConstraint) {
+      preconditionArcEndpointArcEndpointCoincidentConstraint(constraint);
     }
   }
 
