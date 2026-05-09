@@ -78,6 +78,7 @@
   let arcStartPoint = null;
   let pointerPreview = null;
   let activeSnap = null;
+  let trimPreview = null;
   let pendingCommand = null;
   let pendingConstraintCommand = null;
   let pointSeq = 1;
@@ -777,6 +778,7 @@
     rectangleStartPoint = null;
     filletFirstLine = null;
     pointerPreview = null;
+    trimPreview = null;
     clearSnap();
     mode = "select";
     updateToolbar();
@@ -793,6 +795,7 @@
     arcCenterPoint = null;
     arcStartPoint = null;
     pointerPreview = null;
+    trimPreview = null;
     clearSnap();
     mode = "select";
     updateToolbar();
@@ -813,6 +816,7 @@
     arcCenterPoint = null;
     arcStartPoint = null;
     pointerPreview = null;
+    trimPreview = null;
     clearSnap();
     clearSelection();
     setHint("作図操作をキャンセルしました");
@@ -2265,6 +2269,7 @@
     drawRectanglePreview();
     drawCirclePreview();
     drawArcPreview();
+    drawTrimPreview();
     drawSnapMarker();
     drawArcEndpointHandles();
     drawPoints();
@@ -2722,6 +2727,27 @@
     drawConstructionPoint(arcCenterPoint);
   }
 
+  function drawTrimPreview() {
+    if (mode !== "trim" || !trimPreview) return;
+    ctx.save();
+    ctx.strokeStyle = "#dc2626";
+    ctx.lineWidth = 4 / viewport.scale;
+    ctx.lineCap = "round";
+    ctx.setLineDash([8 / viewport.scale, 5 / viewport.scale]);
+    if (trimPreview.kind === "line") {
+      ctx.beginPath();
+      ctx.moveTo(trimPreview.interval.left.point.x, trimPreview.interval.left.point.y);
+      ctx.lineTo(trimPreview.interval.right.point.x, trimPreview.interval.right.point.y);
+      ctx.stroke();
+    } else if (trimPreview.kind === "arc") {
+      const arc = trimPreview.item;
+      ctx.beginPath();
+      ctx.arc(arc.center.x, arc.center.y, arc.radius(), angleAtArcParam(arc, trimPreview.interval.left.t), angleAtArcParam(arc, trimPreview.interval.right.t), arc.endAngle < arc.startAngle);
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
+
   function drawSnapMarker() {
     if (!activeSnap) return;
     ctx.save();
@@ -2841,6 +2867,7 @@
     document.getElementById("toolLine").classList.toggle("active", mode === "line");
     document.getElementById("toolRectangle")?.classList.toggle("active", mode === "rectangle");
     document.getElementById("toolFillet")?.classList.toggle("active", mode === "fillet");
+    document.getElementById("toolTrim")?.classList.toggle("active", mode === "trim");
     document.getElementById("toolCircle").classList.toggle("active", mode === "circle");
     document.getElementById("toolArc").classList.toggle("active", mode === "arc");
   }
@@ -4148,6 +4175,237 @@
     log(`矩形を追加しました\n自動solve: success=${result.success}`);
   }
 
+  function pointOnLineAt(line, t) {
+    return { x: line.p1.x + (line.p2.x - line.p1.x) * t, y: line.p1.y + (line.p2.y - line.p1.y) * t };
+  }
+
+  function lineParam(line, p) {
+    const dx = line.p2.x - line.p1.x;
+    const dy = line.p2.y - line.p1.y;
+    const len2 = dx * dx + dy * dy;
+    if (len2 < 1e-12) return 0;
+    return ((p.x - line.p1.x) * dx + (p.y - line.p1.y) * dy) / len2;
+  }
+
+  function addUniqueBoundary(list, boundary, tolerance = 1e-6) {
+    if (!Number.isFinite(boundary.t)) return;
+    if (boundary.t < -tolerance || boundary.t > 1 + tolerance) return;
+    boundary.t = Math.max(0, Math.min(1, boundary.t));
+    if (list.some((item) => Math.abs(item.t - boundary.t) <= tolerance)) return;
+    list.push(boundary);
+  }
+
+  function lineLineBoundary(target, other) {
+    const x1 = target.p1.x, y1 = target.p1.y, x2 = target.p2.x, y2 = target.p2.y;
+    const x3 = other.p1.x, y3 = other.p1.y, x4 = other.p2.x, y4 = other.p2.y;
+    const den = (x1 - x2) * (y3 - y4) - (y1 - y2) * (x3 - x4);
+    if (Math.abs(den) < 1e-12) return null;
+    const point = {
+      x: ((x1 * y2 - y1 * x2) * (x3 - x4) - (x1 - x2) * (x3 * y4 - y3 * x4)) / den,
+      y: ((x1 * y2 - y1 * x2) * (y3 - y4) - (y1 - y2) * (x3 * y4 - y3 * x4)) / den,
+    };
+    const t = lineParam(target, point);
+    const u = lineParam(other, point);
+    if (t < -1e-6 || t > 1 + 1e-6 || u < -1e-6 || u > 1 + 1e-6) return null;
+    return { t, point, source: { line: other } };
+  }
+
+  function lineCircleBoundaries(line, primitive, requireArc = false) {
+    const dx = line.p2.x - line.p1.x;
+    const dy = line.p2.y - line.p1.y;
+    const fx = line.p1.x - primitive.center.x;
+    const fy = line.p1.y - primitive.center.y;
+    const qa = dx * dx + dy * dy;
+    if (qa < 1e-12) return [];
+    const qb = 2 * (fx * dx + fy * dy);
+    const qc = fx * fx + fy * fy - primitive.radius() * primitive.radius();
+    const disc = qb * qb - 4 * qa * qc;
+    if (disc < -1e-9) return [];
+    const roots = Math.abs(disc) < 1e-9 ? [-qb / (2 * qa)] : [(-qb - Math.sqrt(disc)) / (2 * qa), (-qb + Math.sqrt(disc)) / (2 * qa)];
+    return roots.map((t) => {
+      const point = pointOnLineAt(line, t);
+      if (requireArc && !angleOnSignedSweep(Math.atan2(point.y - primitive.center.y, point.x - primitive.center.x), primitive.startAngle, primitive.endAngle)) return null;
+      return { t, point, source: requireArc ? { arc: primitive } : { primitive } };
+    }).filter(Boolean);
+  }
+
+  function circleCirclePoints(a, b) {
+    const dx = b.center.x - a.center.x;
+    const dy = b.center.y - a.center.y;
+    const d = hypot2(dx, dy);
+    const r0 = a.radius();
+    const r1 = b.radius();
+    if (d < 1e-12 || d > r0 + r1 + 1e-9 || d < Math.abs(r0 - r1) - 1e-9) return [];
+    const x = (r0 * r0 - r1 * r1 + d * d) / (2 * d);
+    const h2 = r0 * r0 - x * x;
+    if (h2 < -1e-9) return [];
+    const h = Math.sqrt(Math.max(0, h2));
+    const ux = dx / d;
+    const uy = dy / d;
+    const base = { x: a.center.x + ux * x, y: a.center.y + uy * x };
+    if (h < 1e-9) return [base];
+    return [{ x: base.x - uy * h, y: base.y + ux * h }, { x: base.x + uy * h, y: base.y - ux * h }];
+  }
+
+  function arcParam(arc, angle) {
+    const sweep = arc.endAngle - arc.startAngle;
+    if (Math.abs(sweep) < 1e-12) return 0;
+    return sweep >= 0 ? normalizeAngle(angle - arc.startAngle) / sweep : normalizeAngle(arc.startAngle - angle) / -sweep;
+  }
+
+  function angleAtArcParam(arc, t) {
+    return arc.startAngle + (arc.endAngle - arc.startAngle) * t;
+  }
+
+  function pointAtArcParam(arc, t) {
+    const angle = angleAtArcParam(arc, t);
+    return { x: arc.center.x + Math.cos(angle) * arc.radius(), y: arc.center.y + Math.sin(angle) * arc.radius() };
+  }
+
+  function lineTrimBoundaries(line) {
+    const boundaries = [{ t: 0, point: line.p1 }, { t: 1, point: line.p2 }];
+    for (const other of model.lines) {
+      if (other === line) continue;
+      const b = lineLineBoundary(line, other);
+      if (b) addUniqueBoundary(boundaries, b);
+    }
+    for (const circle of model.circles) for (const b of lineCircleBoundaries(line, circle)) addUniqueBoundary(boundaries, b);
+    for (const arc of model.arcs) for (const b of lineCircleBoundaries(line, arc, true)) addUniqueBoundary(boundaries, b);
+    return boundaries.sort((a, b) => a.t - b.t);
+  }
+
+  function arcTrimBoundaries(arc) {
+    const boundaries = [{ t: 0, point: arcEndpointPoint(arc, "start") }, { t: 1, point: arcEndpointPoint(arc, "end") }];
+    const addPointBoundary = (point, source) => {
+      const t = arcParam(arc, Math.atan2(point.y - arc.center.y, point.x - arc.center.x));
+      if (t >= -1e-6 && t <= 1 + 1e-6) addUniqueBoundary(boundaries, { t, point, source });
+    };
+    for (const line of model.lines) for (const b of lineCircleBoundaries(line, arc, true)) addPointBoundary(b.point, { line });
+    for (const circle of model.circles) for (const point of circleCirclePoints(arc, circle)) addPointBoundary(point, { primitive: circle });
+    for (const other of model.arcs) {
+      if (other === arc) continue;
+      for (const point of circleCirclePoints(arc, other)) {
+        if (angleOnSignedSweep(Math.atan2(point.y - other.center.y, point.x - other.center.x), other.startAngle, other.endAngle)) addPointBoundary(point, { arc: other });
+      }
+    }
+    return boundaries.sort((a, b) => a.t - b.t);
+  }
+
+  function trimInterval(boundaries, t) {
+    for (let i = 0; i < boundaries.length - 1; i++) {
+      if (t >= boundaries[i].t - 1e-6 && t <= boundaries[i + 1].t + 1e-6) return { left: boundaries[i], right: boundaries[i + 1] };
+    }
+    return null;
+  }
+
+  function trimPreviewForLine(line, pointer) {
+    const projected = closestPointOnSegment(pointer.x, pointer.y, line);
+    const boundaries = lineTrimBoundaries(line);
+    const interval = trimInterval(boundaries, lineParam(line, projected));
+    if (!interval || boundaries.length < 3) return null;
+    if (line.length() * Math.max(0, interval.right.t - interval.left.t) < MIN_LINE_LENGTH) return null;
+    return { kind: "line", item: line, interval };
+  }
+
+  function trimPreviewForArc(arc, pointer) {
+    const t = arcParam(arc, Math.atan2(pointer.y - arc.center.y, pointer.x - arc.center.x));
+    const boundaries = arcTrimBoundaries(arc);
+    const interval = trimInterval(boundaries, t);
+    if (!interval || boundaries.length < 3) return null;
+    if (arc.radius() * Math.abs(arc.endAngle - arc.startAngle) * Math.max(0, interval.right.t - interval.left.t) < MIN_ARC_LENGTH) return null;
+    return { kind: "arc", item: arc, interval };
+  }
+
+  function computeTrimPreview(pointer) {
+    const line = hitLine(pointer.x, pointer.y);
+    if (line) return trimPreviewForLine(line, pointer);
+    const arc = hitArc(pointer.x, pointer.y);
+    if (arc) return trimPreviewForArc(arc, pointer);
+    return null;
+  }
+
+  function cleanupTrimConstraints(item) {
+    model.constraints = model.constraints.filter((c) => {
+      if (item instanceof Line && constraintReferencesLine(c, item)) return false;
+      if (item instanceof Arc && constraintReferencesPrimitive(c, item)) return false;
+      return true;
+    });
+  }
+
+  function addBoundaryPointConstraint(point, boundary) {
+    const source = boundary?.source || {};
+    if (source.line) model.constraints.push(new PointOnLineConstraint(point, source.line));
+    else if (source.primitive) model.constraints.push(new PointOnCircleConstraint(point, source.primitive));
+    else if (source.arc) model.constraints.push(new PointOnCircleConstraint(point, source.arc));
+  }
+
+  function addArcBoundaryConstraint(arc, endpoint, boundary) {
+    const source = boundary?.source || {};
+    if (source.line) model.constraints.push(new ArcEndpointOnLineConstraint(arc, endpoint, source.line));
+    else if (source.primitive) model.constraints.push(new ArcEndpointOnCircleConstraint(arc, endpoint, source.primitive));
+    else if (source.arc) model.constraints.push(new ArcEndpointOnCircleConstraint(arc, endpoint, source.arc));
+  }
+
+  function executeLineTrim(preview) {
+    const line = preview.item;
+    const { left, right } = preview.interval;
+    cleanupTrimConstraints(line);
+    if (left.t <= 1e-6) {
+      const p = addPoint(right.point.x, right.point.y, false, "endpoint");
+      line.p1 = p;
+      addBoundaryPointConstraint(p, right);
+    } else if (right.t >= 1 - 1e-6) {
+      const p = addPoint(left.point.x, left.point.y, false, "endpoint");
+      line.p2 = p;
+      addBoundaryPointConstraint(p, left);
+    } else {
+      const oldP2 = line.p2;
+      const pLeft = addPoint(left.point.x, left.point.y, false, "endpoint");
+      const pRight = addPoint(right.point.x, right.point.y, false, "endpoint");
+      line.p2 = pLeft;
+      addLine(pRight, oldP2);
+      addBoundaryPointConstraint(pLeft, left);
+      addBoundaryPointConstraint(pRight, right);
+    }
+    enforceMinimumLineLengths([line]);
+  }
+
+  function executeArcTrim(preview) {
+    const arc = preview.item;
+    const { left, right } = preview.interval;
+    cleanupTrimConstraints(arc);
+    if (left.t <= 1e-6) {
+      arc.startAngle = angleAtArcParam(arc, right.t);
+      addArcBoundaryConstraint(arc, "start", right);
+    } else if (right.t >= 1 - 1e-6) {
+      arc.endAngle = angleAtArcParam(arc, left.t);
+      addArcBoundaryConstraint(arc, "end", left);
+    } else {
+      const oldEnd = arc.endAngle;
+      arc.endAngle = angleAtArcParam(arc, left.t);
+      const newArc = addArc(arc.center, arc.radius(), angleAtArcParam(arc, right.t), oldEnd);
+      addArcBoundaryConstraint(arc, "end", left);
+      if (newArc) addArcBoundaryConstraint(newArc, "start", right);
+    }
+    normalizeArcSweeps();
+  }
+
+  function executeTrimAt(pointer) {
+    const preview = computeTrimPreview(pointer);
+    if (!preview) {
+      setHint("トリムできる交点がありません", "error");
+      draw();
+      return false;
+    }
+    if (preview.kind === "line") executeLineTrim(preview);
+    else executeArcTrim(preview);
+    trimPreview = null;
+    clearSelection();
+    const result = solveAndRefresh("トリム");
+    setHint(`トリムしました (error=${result.errorNorm.toExponential(2)})`);
+    return true;
+  }
+
   function sharedLinePoint(a, b) {
     if (a.p1 === b.p1 || a.p1 === b.p2) return a.p1;
     if (a.p2 === b.p1 || a.p2 === b.p2) return a.p2;
@@ -4449,6 +4707,11 @@
       return;
     }
 
+    if (mode === "trim") {
+      executeTrimAt(p);
+      return;
+    }
+
     const multiSelect = e.shiftKey || e.ctrlKey;
 
     if (hitP) {
@@ -4564,6 +4827,15 @@
     if (mode === "rectangle" || mode === "circle" || mode === "arc") {
       pointerPreview = snapForDrawing(p);
       draw();
+    }
+
+    if (mode === "trim") {
+      clearSnap();
+      const nextTrimPreview = computeTrimPreview(p);
+      if (nextTrimPreview !== trimPreview) {
+        trimPreview = nextTrimPreview;
+        draw();
+      }
     }
 
     if (!dragSession) {
@@ -4776,7 +5048,7 @@
         cancelActiveDrawOperation();
         return;
       }
-      if (mode === "line" || mode === "point" || mode === "rectangle" || mode === "fillet" || mode === "circle" || mode === "arc") {
+      if (mode === "line" || mode === "point" || mode === "rectangle" || mode === "fillet" || mode === "trim" || mode === "circle" || mode === "arc") {
         exitDrawMode();
         return;
       }
@@ -4878,6 +5150,23 @@
     clearSnap();
     updateToolbar();
     setHint("R面取りする接続線を2本クリックしてください");
+    draw();
+  });
+
+  document.getElementById("toolTrim")?.addEventListener("click", () => {
+    cancelConstraintTargetCommand("");
+    mode = "trim";
+    lineStartPoint = null;
+    rectangleStartPoint = null;
+    filletFirstLine = null;
+    circleCenterPoint = null;
+    arcCenterPoint = null;
+    arcStartPoint = null;
+    pointerPreview = null;
+    trimPreview = null;
+    clearSnap();
+    updateToolbar();
+    setHint("トリムする線または円弧の削除したい区間をクリックしてください。Escで選択モードに戻ります");
     draw();
   });
 
