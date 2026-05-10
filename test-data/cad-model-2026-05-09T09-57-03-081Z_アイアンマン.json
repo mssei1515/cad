@@ -1,0 +1,392 @@
+{
+  "version": 1,
+  "savedAt": "2026-05-09T09:57:03.080Z",
+  "points": [
+    {
+      "id": "P5",
+      "x": 577.0048557488667,
+      "y": 514.7235754862188,
+      "fixed": true,
+      "kind": "endpoint"
+    },
+    {
+      "id": "P6",
+      "x": 697.0048557488528,
+      "y": 514.7235754862463,
+      "fixed": false,
+      "kind": "endpoint"
+    },
+    {
+      "id": "P7",
+      "x": 809.0380618845102,
+      "y": 354.7235754862325,
+      "fixed": false,
+      "kind": "endpoint"
+    },
+    {
+      "id": "P8",
+      "x": 849.900635157175,
+      "y": 96.72744182559597,
+      "fixed": false,
+      "kind": "endpoint"
+    },
+    {
+      "id": "P9",
+      "x": 464.9716540796981,
+      "y": 354.72357548625394,
+      "fixed": false,
+      "kind": "endpoint"
+    },
+    {
+      "id": "P10",
+      "x": 424.1090882694754,
+      "y": 96.7274418255969,
+      "fixed": false,
+      "kind": "endpoint"
+    },
+    {
+      "id": "P12",
+      "x": 450.52301561720327,
+      "y": 263.49867926813954,
+      "fixed": false,
+      "kind": "endpoint"
+    },
+    {
+      "id": "P13",
+      "x": 488.73843645492275,
+      "y": -135.27642451381533,
+      "fixed": false,
+      "kind": "endpoint"
+    },
+    {
+      "id": "P14",
+      "x": 785.2712750426845,
+      "y": -135.27642451375894,
+      "fixed": false,
+      "kind": "endpoint"
+    },
+    {
+      "id": "P15",
+      "x": 621.8525052874515,
+      "y": 115.56264901649033,
+      "fixed": false,
+      "kind": "endpoint"
+    },
+    {
+      "id": "P16",
+      "x": 637.0048557488036,
+      "y": -135.27642451379305,
+      "fixed": false,
+      "kind": "endpoint"
+    },
+    {
+      "id": "P17",
+      "x": 637.0048557488036,
+      "y": 78.40622520112362,
+      "fixed": false,
+      "kind": "endpoint"
+    },
+    {
+      "id": "P18",
+      "x": 424.10908826951106,
+      "y": 96.72744182559103,
+      "fixed": false,
+      "kind": "endpoint"
+    },
+    {
+      "id": "P19",
+      "x": 849.9006232280963,
+      "y": 96.72744182559033,
+      "fixed": false,
+      "kind": "endpoint"
+    },
+    {
+      "id": "P20",
+      "x": 793.8658508639173,
+      "y": 96.72744182558978,
+      "fixed": false,
+      "kind": "endpoint"
+    },
+    {
+      "id": "P21",
+      "x": 637.0048557488317,
+      "y": 514.7235754862326,
+      "fixed": false,
+      "kind": "endpoint"
+    }
+  ],
+  "lines": [
+    {
+      "id": "L5",
+      "p1": "P5",
+      "p2": "P6"
+    },
+    {
+      "id": "L6",
+      "p1": "P6",
+      "p2": "P7"
+    },
+    {
+      "id": "L7",
+      "p1": "P7",
+      "p2": "P8"
+    },
+    {
+      "id": "L8",
+      "p1": "P5",
+      "p2": "P9"
+    },
+    {
+      "id": "L9",
+      "p1": "P9",
+      "p2": "P10"
+    },
+    {
+      "id": "L10",
+      "p1": "P13",
+      "p2": "P14"
+    },
+    {
+      "id": "L11",
+      "p1": "P16",
+      "p2": "P17"
+    },
+    {
+      "id": "L12",
+      "p1": "P18",
+      "p2": "P19"
+    },
+    {
+      "id": "L13",
+      "p1": "P21",
+      "p2": "P17"
+    },
+    {
+      "id": "L14",
+      "p1": "P10",
+      "p2": "P8"
+    }
+  ],
+  "circles": [],
+  "arcs": [
+    {
+      "id": "A2",
+      "center": "P17",
+      "radius": 213.6826497149226,
+      "startAngle": -3.227438364522514,
+      "endAngle": 0.085845710932711
+    }
+  ],
+  "constraints": [
+    {
+      "type": "horizontal",
+      "line": "L5",
+      "enabled": true
+    },
+    {
+      "type": "distance",
+      "p1": "P5",
+      "p2": "P6",
+      "target": 120,
+      "dimension": {
+        "x": 659.4048191277576,
+        "y": 551.5235632792064,
+        "offsetU": 22.39996337890625,
+        "offsetN": 36.79998779296875,
+        "labelOffsetU": 0,
+        "axis": null
+      },
+      "enabled": true
+    },
+    {
+      "type": "lineAngle",
+      "line1": "L5",
+      "line2": "L6",
+      "target": 0.9599310885968813,
+      "dimension": {
+        "x": 743.973240694362,
+        "y": 490.2733818687559,
+        "offsetU": null,
+        "offsetN": null,
+        "labelOffsetU": 0,
+        "axis": null,
+        "angleStartFlip": 0,
+        "angleEndFlip": 0,
+        "angleRadius": 52.95130925975585
+      },
+      "enabled": true
+    },
+    {
+      "type": "lineAngle",
+      "line1": "L8",
+      "line2": "L5",
+      "target": 0.9599310885968813,
+      "dimension": {
+        "x": 506.45198420263176,
+        "y": 477.9960744017387,
+        "offsetU": null,
+        "offsetN": null,
+        "labelOffsetU": 0,
+        "axis": null,
+        "angleStartFlip": 0,
+        "angleEndFlip": 1,
+        "angleRadius": 79.54003406668863
+      },
+      "enabled": true
+    },
+    {
+      "type": "lineAngle",
+      "line1": "L9",
+      "line2": "L8",
+      "target": 0.4537856055185257,
+      "dimension": {
+        "x": 424.6593971436817,
+        "y": 254.94723160239172,
+        "offsetU": null,
+        "offsetN": null,
+        "labelOffsetU": 0,
+        "axis": null,
+        "angleStartFlip": 0,
+        "angleEndFlip": 0,
+        "angleRadius": 107.61225236052856
+      },
+      "enabled": true
+    },
+    {
+      "type": "lineAngle",
+      "line1": "L7",
+      "line2": "L6",
+      "target": 0.4537856055185257,
+      "dimension": {
+        "x": 837.1074602856697,
+        "y": 285.24937654345075,
+        "offsetU": null,
+        "offsetN": null,
+        "labelOffsetU": 0,
+        "axis": null,
+        "angleStartFlip": 0,
+        "angleEndFlip": 0,
+        "angleRadius": 74.93033728300091
+      },
+      "enabled": true
+    },
+    {
+      "type": "pointLineDistance",
+      "point": "P9",
+      "line": "L5",
+      "target": 160,
+      "sign": -1,
+      "dimension": {
+        "x": 377.3883092839259,
+        "y": 450.72900622679816,
+        "offsetU": -16.005430740594697,
+        "offsetN": -143.59994563035283,
+        "labelOffsetU": 0,
+        "axis": null
+      },
+      "enabled": true
+    },
+    {
+      "type": "horizontal",
+      "line": "L10",
+      "enabled": true
+    },
+    {
+      "type": "pointLineDistance",
+      "point": "P7",
+      "line": "L5",
+      "target": 160,
+      "sign": -1,
+      "dimension": {
+        "x": 916.8610526463093,
+        "y": 416.0126485652813,
+        "offsetU": 18.710926920995668,
+        "offsetN": 163.83959382962348,
+        "labelOffsetU": 0,
+        "axis": null
+      },
+      "enabled": true
+    },
+    {
+      "type": "lineLineDistance",
+      "line1": "L10",
+      "line2": "L5",
+      "target": 650,
+      "sign": 1,
+      "dimension": {
+        "x": -56.64106772435002,
+        "y": 232.7126196283408,
+        "offsetU": -42.98904414227421,
+        "offsetN": -589.5127138262349,
+        "labelOffsetU": 6.839862900361489,
+        "axis": null
+      },
+      "enabled": true
+    },
+    {
+      "type": "pointOnLineMidpoint",
+      "point": "P16",
+      "line": "L10",
+      "enabled": true
+    },
+    {
+      "type": "vertical",
+      "line": "L11",
+      "enabled": true
+    },
+    {
+      "type": "pointOnCircle",
+      "point": "P16",
+      "primitive": "A2",
+      "enabled": true
+    },
+    {
+      "type": "arcEndpointCoincident",
+      "arc": "A2",
+      "endpoint": "start",
+      "point": "P18",
+      "enabled": true
+    },
+    {
+      "type": "horizontal",
+      "line": "L12",
+      "enabled": true
+    },
+    {
+      "type": "arcEndpointCoincident",
+      "arc": "A2",
+      "endpoint": "end",
+      "point": "P19",
+      "enabled": true
+    },
+    {
+      "type": "pointOnLine",
+      "point": "P20",
+      "line": "L12",
+      "enabled": true
+    },
+    {
+      "type": "pointOnLineMidpoint",
+      "point": "P21",
+      "line": "L5",
+      "enabled": true
+    },
+    {
+      "type": "vertical",
+      "line": "L13",
+      "enabled": true
+    },
+    {
+      "type": "horizontal",
+      "line": "L14",
+      "enabled": true
+    },
+    {
+      "type": "arcEndpointCoincident",
+      "arc": "A2",
+      "endpoint": "start",
+      "point": "P10",
+      "enabled": true
+    }
+  ]
+}

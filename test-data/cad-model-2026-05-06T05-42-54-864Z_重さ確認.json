@@ -1,0 +1,1276 @@
+{
+  "version": 1,
+  "savedAt": "2026-05-06T05:42:54.863Z",
+  "points": [
+    {
+      "id": "P1",
+      "x": 160,
+      "y": 160,
+      "fixed": true,
+      "kind": "endpoint"
+    },
+    {
+      "id": "P2",
+      "x": 297.73401510737426,
+      "y": 185.08667140936802,
+      "fixed": false,
+      "kind": "endpoint"
+    },
+    {
+      "id": "P3",
+      "x": 279.8149641006828,
+      "y": 283.4681107717782,
+      "fixed": false,
+      "kind": "endpoint"
+    },
+    {
+      "id": "P4",
+      "x": 142.08094899330857,
+      "y": 258.38143936241016,
+      "fixed": false,
+      "kind": "endpoint"
+    },
+    {
+      "id": "P5",
+      "x": 402.4013761553672,
+      "y": 138.5976727718254,
+      "fixed": false,
+      "kind": "endpoint"
+    },
+    {
+      "id": "P6",
+      "x": 865.5999687294292,
+      "y": 138.5976727718254,
+      "fixed": false,
+      "kind": "endpoint"
+    },
+    {
+      "id": "P7",
+      "x": 865.5999687294292,
+      "y": 366.5975667273257,
+      "fixed": false,
+      "kind": "endpoint"
+    },
+    {
+      "id": "P8",
+      "x": 402.4013761553672,
+      "y": 366.5975667273257,
+      "fixed": false,
+      "kind": "endpoint"
+    },
+    {
+      "id": "P9",
+      "x": 402.4013761553672,
+      "y": 168.59667876338142,
+      "fixed": false,
+      "kind": "endpoint"
+    },
+    {
+      "id": "P10",
+      "x": 432.4012119389491,
+      "y": 138.59767277171906,
+      "fixed": false,
+      "kind": "endpoint"
+    },
+    {
+      "id": "P11",
+      "x": 432.4013761534973,
+      "y": 168.59767277156803,
+      "fixed": false,
+      "kind": "endpoint"
+    },
+    {
+      "id": "P12",
+      "x": 835.5992691462754,
+      "y": 138.59767277193188,
+      "fixed": false,
+      "kind": "endpoint"
+    },
+    {
+      "id": "P13",
+      "x": 865.5999687294292,
+      "y": 168.5994176001458,
+      "fixed": false,
+      "kind": "endpoint"
+    },
+    {
+      "id": "P14",
+      "x": 835.5999687345487,
+      "y": 168.59767277114378,
+      "fixed": false,
+      "kind": "endpoint"
+    },
+    {
+      "id": "P15",
+      "x": 865.5999687294292,
+      "y": 336.59931166409154,
+      "fixed": false,
+      "kind": "endpoint"
+    },
+    {
+      "id": "P16",
+      "x": 835.5992549595379,
+      "y": 366.59756672721363,
+      "fixed": false,
+      "kind": "endpoint"
+    },
+    {
+      "id": "P17",
+      "x": 835.5999687345496,
+      "y": 336.59756672801075,
+      "fixed": false,
+      "kind": "endpoint"
+    },
+    {
+      "id": "P18",
+      "x": 402.4013761553672,
+      "y": 336.59657267211713,
+      "fixed": false,
+      "kind": "endpoint"
+    },
+    {
+      "id": "P19",
+      "x": 432.4012231422126,
+      "y": 366.597566727438,
+      "fixed": false,
+      "kind": "endpoint"
+    },
+    {
+      "id": "P20",
+      "x": 432.4013761534977,
+      "y": 336.5975667275607,
+      "fixed": false,
+      "kind": "endpoint"
+    },
+    {
+      "id": "P21",
+      "x": 994.3988043089122,
+      "y": 189.80001511080337,
+      "fixed": false,
+      "kind": "endpoint"
+    },
+    {
+      "id": "P22",
+      "x": 1302.3988651779557,
+      "y": 189.80001511080337,
+      "fixed": false,
+      "kind": "endpoint"
+    },
+    {
+      "id": "P23",
+      "x": 1302.3988651779557,
+      "y": 432.9998341854707,
+      "fixed": false,
+      "kind": "endpoint"
+    },
+    {
+      "id": "P24",
+      "x": 994.3988043089122,
+      "y": 432.9998341854707,
+      "fixed": false,
+      "kind": "endpoint"
+    },
+    {
+      "id": "P25",
+      "x": 990.4000244140625,
+      "y": 189.80001068115234,
+      "fixed": false,
+      "kind": "endpoint"
+    },
+    {
+      "id": "P26",
+      "x": 1024.3987729770347,
+      "y": 189.80001511080337,
+      "fixed": false,
+      "kind": "endpoint"
+    },
+    {
+      "id": "P27",
+      "x": 994.3988043089114,
+      "y": 219.79999696872233,
+      "fixed": false,
+      "kind": "endpoint"
+    },
+    {
+      "id": "P28",
+      "x": 1024.3988043089091,
+      "y": 219.80001511079521,
+      "fixed": false,
+      "kind": "endpoint"
+    },
+    {
+      "id": "P29",
+      "x": 1272.3988338459303,
+      "y": 189.80001511080337,
+      "fixed": false,
+      "kind": "endpoint"
+    },
+    {
+      "id": "P30",
+      "x": 1302.3988651779564,
+      "y": 219.79999795160853,
+      "fixed": false,
+      "kind": "endpoint"
+    },
+    {
+      "id": "P31",
+      "x": 1272.3988651779584,
+      "y": 219.80001511079521,
+      "fixed": false,
+      "kind": "endpoint"
+    },
+    {
+      "id": "P32",
+      "x": 1302.3988651779546,
+      "y": 402.9998060019392,
+      "fixed": false,
+      "kind": "endpoint"
+    },
+    {
+      "id": "P33",
+      "x": 1272.3988965116707,
+      "y": 432.9998341854707,
+      "fixed": false,
+      "kind": "endpoint"
+    },
+    {
+      "id": "P34",
+      "x": 1272.3988651779619,
+      "y": 402.99983418547885,
+      "fixed": false,
+      "kind": "endpoint"
+    },
+    {
+      "id": "P35",
+      "x": 994.398804308913,
+      "y": 402.9998060191426,
+      "fixed": false,
+      "kind": "endpoint"
+    },
+    {
+      "id": "P36",
+      "x": 1024.3988356427178,
+      "y": 432.9998341854707,
+      "fixed": false,
+      "kind": "endpoint"
+    },
+    {
+      "id": "P37",
+      "x": 1024.398804308906,
+      "y": 402.99983418547885,
+      "fixed": false,
+      "kind": "endpoint"
+    },
+    {
+      "id": "P38",
+      "x": 520.7999877929688,
+      "y": 440.20003509521484,
+      "fixed": false,
+      "kind": "endpoint"
+    },
+    {
+      "id": "P39",
+      "x": 796,
+      "y": 440.20003509521484,
+      "fixed": false,
+      "kind": "endpoint"
+    },
+    {
+      "id": "P40",
+      "x": 796,
+      "y": 586.5999984741211,
+      "fixed": false,
+      "kind": "endpoint"
+    },
+    {
+      "id": "P41",
+      "x": 520.7999877929688,
+      "y": 586.5999984741211,
+      "fixed": false,
+      "kind": "endpoint"
+    },
+    {
+      "id": "P42",
+      "x": 520.7999877929688,
+      "y": 470.20003509521484,
+      "fixed": false,
+      "kind": "endpoint"
+    },
+    {
+      "id": "P43",
+      "x": 550.7999877929688,
+      "y": 440.20003509521484,
+      "fixed": false,
+      "kind": "endpoint"
+    },
+    {
+      "id": "P44",
+      "x": 550.7999877929688,
+      "y": 470.20003509521484,
+      "fixed": false,
+      "kind": "endpoint"
+    },
+    {
+      "id": "P45",
+      "x": 766,
+      "y": 440.20003509521484,
+      "fixed": false,
+      "kind": "endpoint"
+    },
+    {
+      "id": "P46",
+      "x": 796,
+      "y": 470.20003509521484,
+      "fixed": false,
+      "kind": "endpoint"
+    },
+    {
+      "id": "P47",
+      "x": 766,
+      "y": 470.20003509521484,
+      "fixed": false,
+      "kind": "endpoint"
+    },
+    {
+      "id": "P48",
+      "x": 796,
+      "y": 556.5999984741211,
+      "fixed": false,
+      "kind": "endpoint"
+    },
+    {
+      "id": "P49",
+      "x": 766,
+      "y": 586.5999984741211,
+      "fixed": false,
+      "kind": "endpoint"
+    },
+    {
+      "id": "P50",
+      "x": 766,
+      "y": 556.5999984741211,
+      "fixed": false,
+      "kind": "endpoint"
+    },
+    {
+      "id": "P51",
+      "x": 520.7999877929688,
+      "y": 556.5999984741211,
+      "fixed": false,
+      "kind": "endpoint"
+    },
+    {
+      "id": "P52",
+      "x": 550.7999877929688,
+      "y": 586.5999984741211,
+      "fixed": false,
+      "kind": "endpoint"
+    },
+    {
+      "id": "P53",
+      "x": 550.7999877929688,
+      "y": 556.5999984741211,
+      "fixed": false,
+      "kind": "endpoint"
+    }
+  ],
+  "lines": [
+    {
+      "id": "L1",
+      "p1": "P1",
+      "p2": "P2"
+    },
+    {
+      "id": "L2",
+      "p1": "P2",
+      "p2": "P3"
+    },
+    {
+      "id": "L3",
+      "p1": "P3",
+      "p2": "P4"
+    },
+    {
+      "id": "L4",
+      "p1": "P4",
+      "p2": "P1"
+    },
+    {
+      "id": "L5",
+      "p1": "P10",
+      "p2": "P12"
+    },
+    {
+      "id": "L6",
+      "p1": "P13",
+      "p2": "P15"
+    },
+    {
+      "id": "L7",
+      "p1": "P16",
+      "p2": "P19"
+    },
+    {
+      "id": "L8",
+      "p1": "P18",
+      "p2": "P9"
+    },
+    {
+      "id": "L9",
+      "p1": "P26",
+      "p2": "P29"
+    },
+    {
+      "id": "L10",
+      "p1": "P30",
+      "p2": "P32"
+    },
+    {
+      "id": "L11",
+      "p1": "P33",
+      "p2": "P36"
+    },
+    {
+      "id": "L12",
+      "p1": "P35",
+      "p2": "P27"
+    },
+    {
+      "id": "L13",
+      "p1": "P43",
+      "p2": "P45"
+    },
+    {
+      "id": "L14",
+      "p1": "P46",
+      "p2": "P48"
+    },
+    {
+      "id": "L15",
+      "p1": "P49",
+      "p2": "P52"
+    },
+    {
+      "id": "L16",
+      "p1": "P51",
+      "p2": "P42"
+    }
+  ],
+  "circles": [],
+  "arcs": [
+    {
+      "id": "A1",
+      "center": "P11",
+      "radius": 29.999999999999808,
+      "startAngle": 3.14162578719599,
+      "endAngle": 4.7123835065664155
+    },
+    {
+      "id": "A2",
+      "center": "P14",
+      "radius": 30.00000000000052,
+      "startAngle": -1.5708196464040147,
+      "endAngle": 0.00005816096660860282
+    },
+    {
+      "id": "A3",
+      "center": "P17",
+      "radius": 29.99999999999954,
+      "startAngle": 0.00005816453590627015,
+      "endAngle": 1.5708201192952749
+    },
+    {
+      "id": "A4",
+      "center": "P20",
+      "radius": 30.00000000000019,
+      "startAngle": 3.1416257887712287,
+      "endAngle": 1.570801427171069
+    },
+    {
+      "id": "A5",
+      "center": "P28",
+      "radius": 30,
+      "startAngle": -1.5707973711907086,
+      "endAngle": -3.1415920488540308
+    },
+    {
+      "id": "A6",
+      "center": "P31",
+      "radius": 30,
+      "startAngle": -1.5707973711958327,
+      "endAngle": -5.71972889609415e-7
+    },
+    {
+      "id": "A7",
+      "center": "P34",
+      "radius": 30,
+      "startAngle": -9.394513225449302e-7,
+      "endAngle": 1.57079528233793
+    },
+    {
+      "id": "A8",
+      "center": "P37",
+      "radius": 30,
+      "startAngle": 3.1415935924676677,
+      "endAngle": 1.5707952823345017
+    },
+    {
+      "id": "A9",
+      "center": "P44",
+      "radius": 30,
+      "startAngle": 3.141592653589793,
+      "endAngle": 4.71238898038469
+    },
+    {
+      "id": "A10",
+      "center": "P47",
+      "radius": 30,
+      "startAngle": -1.5707963267948966,
+      "endAngle": 0
+    },
+    {
+      "id": "A11",
+      "center": "P50",
+      "radius": 30,
+      "startAngle": 0,
+      "endAngle": 1.5707963267948966
+    },
+    {
+      "id": "A12",
+      "center": "P53",
+      "radius": 30,
+      "startAngle": 3.141592653589793,
+      "endAngle": 1.5707963267948966
+    }
+  ],
+  "constraints": [
+    {
+      "type": "distance",
+      "p1": "P1",
+      "p2": "P2",
+      "target": 140,
+      "dimension": {
+        "x": 223.49129225167968,
+        "y": 202.05776751340707,
+        "offsetU": -3.552713678800501e-15,
+        "offsetN": 30.00000000000001
+      },
+      "enabled": true
+    },
+    {
+      "type": "distance",
+      "p1": "P2",
+      "p2": "P3",
+      "target": 100,
+      "dimension": {
+        "x": 259.2600577953055,
+        "y": 228.90167578856568,
+        "offsetU": -2.6645352591003757e-15,
+        "offsetN": 29.99999999999997
+      },
+      "enabled": true
+    },
+    {
+      "type": "parallel",
+      "line1": "L1",
+      "line2": "L3",
+      "enabled": true
+    },
+    {
+      "type": "parallel",
+      "line1": "L2",
+      "line2": "L4",
+      "enabled": true
+    },
+    {
+      "type": "perpendicular",
+      "line1": "L1",
+      "line2": "L2",
+      "enabled": true
+    },
+    {
+      "type": "horizontal",
+      "line": "L5",
+      "enabled": true
+    },
+    {
+      "type": "vertical",
+      "line": "L6",
+      "enabled": true
+    },
+    {
+      "type": "horizontal",
+      "line": "L7",
+      "enabled": true
+    },
+    {
+      "type": "vertical",
+      "line": "L8",
+      "enabled": true
+    },
+    {
+      "type": "arcEndpointCoincident",
+      "arc": "A1",
+      "endpoint": "start",
+      "point": "P9",
+      "enabled": true
+    },
+    {
+      "type": "arcEndpointCoincident",
+      "arc": "A1",
+      "endpoint": "end",
+      "point": "P10",
+      "enabled": true
+    },
+    {
+      "type": "pointOnLine",
+      "point": "P5",
+      "line": "L8",
+      "enabled": true
+    },
+    {
+      "type": "pointOnLine",
+      "point": "P5",
+      "line": "L5",
+      "enabled": true
+    },
+    {
+      "type": "lineCircleTangent",
+      "line": "L8",
+      "primitive": "A1",
+      "sign": -1,
+      "enabled": true
+    },
+    {
+      "type": "lineCircleTangent",
+      "line": "L5",
+      "primitive": "A1",
+      "sign": 1,
+      "enabled": true
+    },
+    {
+      "type": "radiusDimension",
+      "primitive": "A1",
+      "target": 30,
+      "dimension": {
+        "x": 411.1884660962838,
+        "y": 147.38417596164624,
+        "offsetU": 15.00000000000002,
+        "offsetN": -1.9539925233402755e-14
+      },
+      "enabled": true
+    },
+    {
+      "type": "arcEndpointCoincident",
+      "arc": "A2",
+      "endpoint": "start",
+      "point": "P12",
+      "enabled": true
+    },
+    {
+      "type": "arcEndpointCoincident",
+      "arc": "A2",
+      "endpoint": "end",
+      "point": "P13",
+      "enabled": true
+    },
+    {
+      "type": "pointOnLine",
+      "point": "P6",
+      "line": "L5",
+      "enabled": true
+    },
+    {
+      "type": "pointOnLine",
+      "point": "P6",
+      "line": "L6",
+      "enabled": true
+    },
+    {
+      "type": "lineCircleTangent",
+      "line": "L5",
+      "primitive": "A2",
+      "sign": 1,
+      "enabled": true
+    },
+    {
+      "type": "lineCircleTangent",
+      "line": "L6",
+      "primitive": "A2",
+      "sign": 1,
+      "enabled": true
+    },
+    {
+      "type": "radiusDimension",
+      "primitive": "A2",
+      "target": 30,
+      "dimension": {
+        "x": 856.8135417153286,
+        "y": 147.38483888716829,
+        "offsetU": 14.999999999999979,
+        "offsetN": 0
+      },
+      "enabled": true
+    },
+    {
+      "type": "arcEndpointCoincident",
+      "arc": "A3",
+      "endpoint": "start",
+      "point": "P15",
+      "enabled": true
+    },
+    {
+      "type": "arcEndpointCoincident",
+      "arc": "A3",
+      "endpoint": "end",
+      "point": "P16",
+      "enabled": true
+    },
+    {
+      "type": "pointOnLine",
+      "point": "P7",
+      "line": "L6",
+      "enabled": true
+    },
+    {
+      "type": "pointOnLine",
+      "point": "P7",
+      "line": "L7",
+      "enabled": true
+    },
+    {
+      "type": "lineCircleTangent",
+      "line": "L6",
+      "primitive": "A3",
+      "sign": 1,
+      "enabled": true
+    },
+    {
+      "type": "lineCircleTangent",
+      "line": "L7",
+      "primitive": "A3",
+      "sign": -1,
+      "enabled": true
+    },
+    {
+      "type": "radiusDimension",
+      "primitive": "A3",
+      "target": 30,
+      "dimension": {
+        "x": 856.8123028666932,
+        "y": 357.8116394314375,
+        "offsetU": 15,
+        "offsetN": 2.042810365310288e-14
+      },
+      "enabled": true
+    },
+    {
+      "type": "arcEndpointCoincident",
+      "arc": "A4",
+      "endpoint": "start",
+      "point": "P18",
+      "enabled": true
+    },
+    {
+      "type": "arcEndpointCoincident",
+      "arc": "A4",
+      "endpoint": "end",
+      "point": "P19",
+      "enabled": true
+    },
+    {
+      "type": "pointOnLine",
+      "point": "P8",
+      "line": "L8",
+      "enabled": true
+    },
+    {
+      "type": "pointOnLine",
+      "point": "P8",
+      "line": "L7",
+      "enabled": true
+    },
+    {
+      "type": "lineCircleTangent",
+      "line": "L8",
+      "primitive": "A4",
+      "sign": -1,
+      "enabled": true
+    },
+    {
+      "type": "lineCircleTangent",
+      "line": "L7",
+      "primitive": "A4",
+      "sign": -1,
+      "enabled": true
+    },
+    {
+      "type": "radiusDimension",
+      "primitive": "A4",
+      "target": 30,
+      "dimension": {
+        "x": 411.18776717244685,
+        "y": 357.8103646099497,
+        "offsetU": 15.000000000000039,
+        "offsetN": 0
+      },
+      "enabled": true
+    },
+    {
+      "type": "horizontal",
+      "line": "L9",
+      "enabled": true
+    },
+    {
+      "type": "vertical",
+      "line": "L10",
+      "enabled": true
+    },
+    {
+      "type": "horizontal",
+      "line": "L11",
+      "enabled": true
+    },
+    {
+      "type": "vertical",
+      "line": "L12",
+      "enabled": true
+    },
+    {
+      "type": "arcEndpointCoincident",
+      "arc": "A5",
+      "endpoint": "start",
+      "point": "P26",
+      "enabled": true
+    },
+    {
+      "type": "arcEndpointCoincident",
+      "arc": "A5",
+      "endpoint": "end",
+      "point": "P27",
+      "enabled": true
+    },
+    {
+      "type": "pointOnLine",
+      "point": "P21",
+      "line": "L9",
+      "enabled": true
+    },
+    {
+      "type": "pointOnLine",
+      "point": "P21",
+      "line": "L12",
+      "enabled": true
+    },
+    {
+      "type": "lineCircleTangent",
+      "line": "L9",
+      "primitive": "A5",
+      "sign": 1,
+      "enabled": true
+    },
+    {
+      "type": "lineCircleTangent",
+      "line": "L12",
+      "primitive": "A5",
+      "sign": -1,
+      "enabled": true
+    },
+    {
+      "type": "radiusDimension",
+      "primitive": "A5",
+      "target": 30,
+      "dimension": {
+        "x": 1003.1855962100142,
+        "y": 198.58681633849838,
+        "offsetU": 14.999999999999979,
+        "offsetN": 0
+      },
+      "enabled": true
+    },
+    {
+      "type": "arcEndpointCoincident",
+      "arc": "A6",
+      "endpoint": "start",
+      "point": "P29",
+      "enabled": true
+    },
+    {
+      "type": "arcEndpointCoincident",
+      "arc": "A6",
+      "endpoint": "end",
+      "point": "P30",
+      "enabled": true
+    },
+    {
+      "type": "pointOnLine",
+      "point": "P22",
+      "line": "L9",
+      "enabled": true
+    },
+    {
+      "type": "pointOnLine",
+      "point": "P22",
+      "line": "L10",
+      "enabled": true
+    },
+    {
+      "type": "lineCircleTangent",
+      "line": "L9",
+      "primitive": "A6",
+      "sign": 1,
+      "enabled": true
+    },
+    {
+      "type": "lineCircleTangent",
+      "line": "L10",
+      "primitive": "A6",
+      "sign": 1,
+      "enabled": true
+    },
+    {
+      "type": "radiusDimension",
+      "primitive": "A6",
+      "target": 30,
+      "dimension": {
+        "x": 1293.6120514693146,
+        "y": 198.58679453097233,
+        "offsetU": 14.999999999999979,
+        "offsetN": 0
+      },
+      "enabled": true
+    },
+    {
+      "type": "arcEndpointCoincident",
+      "arc": "A7",
+      "endpoint": "start",
+      "point": "P32",
+      "enabled": true
+    },
+    {
+      "type": "arcEndpointCoincident",
+      "arc": "A7",
+      "endpoint": "end",
+      "point": "P33",
+      "enabled": true
+    },
+    {
+      "type": "pointOnLine",
+      "point": "P23",
+      "line": "L10",
+      "enabled": true
+    },
+    {
+      "type": "pointOnLine",
+      "point": "P23",
+      "line": "L11",
+      "enabled": true
+    },
+    {
+      "type": "lineCircleTangent",
+      "line": "L10",
+      "primitive": "A7",
+      "sign": 1,
+      "enabled": true
+    },
+    {
+      "type": "lineCircleTangent",
+      "line": "L11",
+      "primitive": "A7",
+      "sign": -1,
+      "enabled": true
+    },
+    {
+      "type": "radiusDimension",
+      "primitive": "A7",
+      "target": 30,
+      "dimension": {
+        "x": 1293.6120896560728,
+        "y": 424.2130165785398,
+        "offsetU": 15,
+        "offsetN": 2.042810365310288e-14
+      },
+      "enabled": true
+    },
+    {
+      "type": "arcEndpointCoincident",
+      "arc": "A8",
+      "endpoint": "start",
+      "point": "P35",
+      "enabled": true
+    },
+    {
+      "type": "arcEndpointCoincident",
+      "arc": "A8",
+      "endpoint": "end",
+      "point": "P36",
+      "enabled": true
+    },
+    {
+      "type": "pointOnLine",
+      "point": "P24",
+      "line": "L12",
+      "enabled": true
+    },
+    {
+      "type": "pointOnLine",
+      "point": "P24",
+      "line": "L11",
+      "enabled": true
+    },
+    {
+      "type": "lineCircleTangent",
+      "line": "L12",
+      "primitive": "A8",
+      "sign": -1,
+      "enabled": true
+    },
+    {
+      "type": "lineCircleTangent",
+      "line": "L11",
+      "primitive": "A8",
+      "sign": -1,
+      "enabled": true
+    },
+    {
+      "type": "radiusDimension",
+      "primitive": "A8",
+      "target": 30,
+      "dimension": {
+        "x": 1003.1856019931813,
+        "y": 424.213038740947,
+        "offsetU": 15,
+        "offsetN": -2.042810365310288e-14
+      },
+      "enabled": true
+    },
+    {
+      "type": "horizontal",
+      "line": "L13",
+      "enabled": true
+    },
+    {
+      "type": "vertical",
+      "line": "L14",
+      "enabled": true
+    },
+    {
+      "type": "horizontal",
+      "line": "L15",
+      "enabled": true
+    },
+    {
+      "type": "vertical",
+      "line": "L16",
+      "enabled": true
+    },
+    {
+      "type": "arcEndpointCoincident",
+      "arc": "A9",
+      "endpoint": "start",
+      "point": "P42",
+      "enabled": true
+    },
+    {
+      "type": "arcEndpointCoincident",
+      "arc": "A9",
+      "endpoint": "end",
+      "point": "P43",
+      "enabled": true
+    },
+    {
+      "type": "pointOnLine",
+      "point": "P38",
+      "line": "L16",
+      "enabled": true
+    },
+    {
+      "type": "pointOnLine",
+      "point": "P38",
+      "line": "L13",
+      "enabled": true
+    },
+    {
+      "type": "lineCircleTangent",
+      "line": "L16",
+      "primitive": "A9",
+      "sign": -1,
+      "enabled": true
+    },
+    {
+      "type": "lineCircleTangent",
+      "line": "L13",
+      "primitive": "A9",
+      "sign": 1,
+      "enabled": true
+    },
+    {
+      "type": "radiusDimension",
+      "primitive": "A9",
+      "target": 30,
+      "dimension": {
+        "x": 529.5867843573723,
+        "y": 448.9868316596185,
+        "offsetU": 15.000000000000039,
+        "offsetN": -6.039613253960852e-14
+      },
+      "enabled": true
+    },
+    {
+      "type": "arcEndpointCoincident",
+      "arc": "A10",
+      "endpoint": "start",
+      "point": "P45",
+      "enabled": true
+    },
+    {
+      "type": "arcEndpointCoincident",
+      "arc": "A10",
+      "endpoint": "end",
+      "point": "P46",
+      "enabled": true
+    },
+    {
+      "type": "pointOnLine",
+      "point": "P39",
+      "line": "L13",
+      "enabled": true
+    },
+    {
+      "type": "pointOnLine",
+      "point": "P39",
+      "line": "L14",
+      "enabled": true
+    },
+    {
+      "type": "lineCircleTangent",
+      "line": "L13",
+      "primitive": "A10",
+      "sign": 1,
+      "enabled": true
+    },
+    {
+      "type": "lineCircleTangent",
+      "line": "L14",
+      "primitive": "A10",
+      "sign": 1,
+      "enabled": true
+    },
+    {
+      "type": "radiusDimension",
+      "primitive": "A10",
+      "target": 30,
+      "dimension": {
+        "x": 787.2132034355964,
+        "y": 448.98683165961836,
+        "offsetU": 15,
+        "offsetN": -2.042810365310288e-14
+      },
+      "enabled": true
+    },
+    {
+      "type": "arcEndpointCoincident",
+      "arc": "A11",
+      "endpoint": "start",
+      "point": "P48",
+      "enabled": true
+    },
+    {
+      "type": "arcEndpointCoincident",
+      "arc": "A11",
+      "endpoint": "end",
+      "point": "P49",
+      "enabled": true
+    },
+    {
+      "type": "pointOnLine",
+      "point": "P40",
+      "line": "L14",
+      "enabled": true
+    },
+    {
+      "type": "pointOnLine",
+      "point": "P40",
+      "line": "L15",
+      "enabled": true
+    },
+    {
+      "type": "lineCircleTangent",
+      "line": "L14",
+      "primitive": "A11",
+      "sign": 1,
+      "enabled": true
+    },
+    {
+      "type": "lineCircleTangent",
+      "line": "L15",
+      "primitive": "A11",
+      "sign": -1,
+      "enabled": true
+    },
+    {
+      "type": "radiusDimension",
+      "primitive": "A11",
+      "target": 30,
+      "dimension": {
+        "x": 787.2132034355964,
+        "y": 577.8132019097175,
+        "offsetU": 14.99999999999996,
+        "offsetN": 0
+      },
+      "enabled": true
+    },
+    {
+      "type": "arcEndpointCoincident",
+      "arc": "A12",
+      "endpoint": "start",
+      "point": "P51",
+      "enabled": true
+    },
+    {
+      "type": "arcEndpointCoincident",
+      "arc": "A12",
+      "endpoint": "end",
+      "point": "P52",
+      "enabled": true
+    },
+    {
+      "type": "pointOnLine",
+      "point": "P41",
+      "line": "L16",
+      "enabled": true
+    },
+    {
+      "type": "pointOnLine",
+      "point": "P41",
+      "line": "L15",
+      "enabled": true
+    },
+    {
+      "type": "lineCircleTangent",
+      "line": "L16",
+      "primitive": "A12",
+      "sign": -1,
+      "enabled": true
+    },
+    {
+      "type": "lineCircleTangent",
+      "line": "L15",
+      "primitive": "A12",
+      "sign": -1,
+      "enabled": true
+    },
+    {
+      "type": "radiusDimension",
+      "primitive": "A12",
+      "target": 30,
+      "dimension": {
+        "x": 529.5867843573724,
+        "y": 577.8132019097175,
+        "offsetU": 14.99999999999996,
+        "offsetN": 0
+      },
+      "enabled": true
+    }
+  ]
+}
