@@ -177,6 +177,18 @@
     return model.sketches.filter((sketch) => sketch.parentSketchId === sketchId);
   }
 
+  function descendantSketchIds(sketchId) {
+    const result = [];
+    const visit = (id) => {
+      for (const child of childSketchesOf(id)) {
+        result.push(child.id);
+        visit(child.id);
+      }
+    };
+    visit(sketchId);
+    return result;
+  }
+
   function siblingSketchesOf(sketch) {
     if (!sketch) return [];
     ensureSketchState();
@@ -241,13 +253,13 @@
       const children = byParent.get(parentId || "") || [];
       children.forEach((sketch, index) => {
         const isLast = index === children.length - 1;
-        rows.push({ sketch, depth, isLast, ancestorLastFlags });
+        rows.push({ sketch, depth, isLast, hasChildren: childSketchesOf(sketch.id).length > 0, ancestorLastFlags });
         visit(sketch.id, depth + 1, [...ancestorLastFlags, isLast]);
       });
     };
     visit("", 0, []);
     for (const sketch of model.sketches) {
-      if (!rows.some((row) => row.sketch === sketch)) rows.push({ sketch, depth: 0, isLast: true, ancestorLastFlags: [] });
+      if (!rows.some((row) => row.sketch === sketch)) rows.push({ sketch, depth: 0, isLast: true, hasChildren: false, ancestorLastFlags: [] });
     }
     return rows;
   }
@@ -303,6 +315,10 @@
 
   function constraintTargetsAreActive(constraint) {
     return sameSketchElements(constraintGraphNodes(constraint), activeSketchId());
+  }
+
+  function constraintReferencesSketch(constraint, sketchId) {
+    return constraintGraphNodes(constraint).some((node) => elementSketchId(node) === sketchId);
   }
 
   function activeReferenceSubject() {
@@ -2370,6 +2386,35 @@
     });
   }
 
+  function solveSketchById(sketchId, extra = []) {
+    return solver.solveSubset({
+      variables: sketchSolveVariables(sketchId),
+      constraints: sketchSolveConstraints(sketchId),
+      lines: sketchSolveLines(sketchId),
+      extra,
+    });
+  }
+
+  function solveDescendantSketches(rootSketchId, rollbackState = null) {
+    const results = [];
+    const changedSketches = new Set([rootSketchId]);
+    for (const sketchId of descendantSketchIds(rootSketchId)) {
+      const needsSolve = model.constraints.some(
+        (constraint) => constraint.enabled !== false && constraint.reference && constraintSketchId(constraint) === sketchId && changedSketches.has(constraint.referenceSketchId),
+      );
+      if (!needsSolve) continue;
+      const result = solveSketchById(sketchId);
+      normalizeArcSweeps();
+      results.push({ sketchId, result });
+      if (!result.success || result.errorNorm > CONSTRAINT_ACCEPT_ERROR) {
+        if (rollbackState) solver.restore(rollbackState);
+        return { success: false, sketchId, result, results };
+      }
+      changedSketches.add(sketchId);
+    }
+    return { success: true, results };
+  }
+
   function localSolveContextFromSeeds(seeds) {
     const component = connectedComponentFromSeeds(seeds);
     return {
@@ -3297,7 +3342,6 @@
   }
 
   function canApplyConstraint(type) {
-    if (type === "reference") return Boolean(activeReferenceSubject());
     const primitives = selectedPrimitives();
     const selectedItems = [...selectedPoints, ...selectedLines, ...primitives, selectedArcEndpoint?.arc, ...(selectedArcEndpointPair || []).map((item) => item.arc)].filter(Boolean);
     if (!sameSketchElements(selectedItems, activeSketchId())) return false;
@@ -3336,7 +3380,6 @@
 
   function constraintTargetHint(type) {
     if (type === "distance") return "寸法対象を選択してください。線長はEnter、または同じ線をダブルクリックで確定できます。";
-    if (type === "reference") return "参照元としてアクティブスケッチの点・円中心・円弧中心・円弧端点を1つ選択してください";
     if (type === "concentric") return "同心にする円/円弧を2つ、または点と円/円弧を選択してください";
     if (type === "equalRadius") return "同じ半径にする円または円弧を2つ選択してください";
     if (type === "pointOnCircle") return "円周上に置く点と、円または円弧を選択してください";
@@ -3356,7 +3399,6 @@
     if (type === "equalRadius") return "この拘束では円または円弧を2つ選択してください";
     if (type === "pointOnCircle") return "この拘束では点と円または円弧を選択してください";
     if (type === "tangent") return "この拘束では線と円/円弧、または円/円弧を2つ選択してください";
-    if (type === "reference") return "参照元として点系要素を1つ選択してください";
     if (type === "coincident") return "この拘束では点、線、円または円弧を選択してください";
     if (type === "collinear") return "この拘束では線を2本選択してください";
     if (type === "equal") return "この拘束では線2本、または円/円弧を2つ選択してください";
@@ -3637,6 +3679,24 @@
     startDistanceCommand();
     if (pendingCommand?.type === "distance-place") startDistanceValueInput(defaultDimensionForTarget(pendingCommand.target));
     return true;
+  }
+
+  function handleReferenceConstraintTargetClick(referenceTarget, pointer, type, distanceMode = false) {
+    const subject = activeReferenceSubject();
+    if (!subject || !referenceTarget) return false;
+    if (type === "distance") {
+      if (referenceTarget.kind !== "line") {
+        setHint("参照寸法は、アクティブ側の点系要素と親/祖先の線で指定してください", "error");
+        return true;
+      }
+      return startReferenceDistanceInput(subject, referenceTarget, pointer);
+    }
+    if (type !== "coincident") {
+      setHint("別スケッチの図形は、一致または寸法で参照拘束として扱います", "error");
+      return true;
+    }
+    if (distanceMode && referenceTarget.kind === "line") return startReferenceDistanceInput(subject, referenceTarget, pointer);
+    return handleReferenceTargetClick(referenceTarget, pointer, false);
   }
 
   function startDistanceCommand() {
@@ -3977,7 +4037,7 @@
     const sketchList = document.getElementById("sketchList");
     if (!sketchList) return;
     sketchList.innerHTML = sketchTreeRows()
-      .map(({ sketch, depth, isLast, ancestorLastFlags }) => {
+      .map(({ sketch, depth, isLast, hasChildren, ancestorLastFlags }) => {
         const isActive = sketch.id === activeSketchId();
         const isParent = active.parentSketchId === sketch.id;
         const isSibling = !isActive && !isParent && sketch.parentSketchId === active.parentSketchId;
@@ -4000,7 +4060,7 @@
                 .map((last, index) => `<span class="tree-segment ${index === depth - 1 ? (isLast ? "branch last" : "branch") : last ? "" : "line"}"></span>`)
                 .join("")}</span>`;
         return (
-          `<div class="item sketch-item ${isActive ? "active" : ""}" style="--sketch-depth:${depth}">` +
+          `<div class="item sketch-item ${isActive ? "active" : ""} ${hasChildren ? "has-children" : ""}" style="--sketch-depth:${depth}">` +
           treeLines +
           `<button class="sketchActivateBtn" data-id="${sketch.id}" ${isActive ? "disabled" : ""}>${escapeHtml(sketch.name)}</button>` +
           `<span class="sketch-badges">${badges}</span>` +
@@ -4217,7 +4277,6 @@
       return false;
     }
     clearSelection();
-    pendingConstraintCommand = { type: "reference" };
     updateUI();
     draw();
     setHint(`参照拘束追加: ${sketchName(referenceSketchId)} を参照 / success=${result.success}, error=${result.errorNorm.toExponential(2)}`);
@@ -4285,45 +4344,6 @@
     return true;
   }
 
-  function handleReferenceSourceClick(hitP, hitC, hitA, hitArcEnd) {
-    if (hitArcEnd) {
-      selectedArcEndpoint = { arc: hitArcEnd.arc, endpoint: hitArcEnd.endpoint };
-      selectedArcEndpointPair = null;
-      selectedPoints = [];
-      selectedLines = [];
-      selectedCircles = [];
-      selectedArcs = [hitArcEnd.arc];
-    } else if (hitP) {
-      selectedArcEndpoint = null;
-      selectedArcEndpointPair = null;
-      selectedPoints = [hitP];
-      selectedLines = [];
-      selectedCircles = [];
-      selectedArcs = [];
-    } else if (hitC) {
-      selectedArcEndpoint = null;
-      selectedArcEndpointPair = null;
-      selectedPoints = [];
-      selectedLines = [];
-      selectedCircles = [hitC];
-      selectedArcs = [];
-    } else if (hitA) {
-      selectedArcEndpoint = null;
-      selectedArcEndpointPair = null;
-      selectedPoints = [];
-      selectedLines = [];
-      selectedCircles = [];
-      selectedArcs = [hitA];
-    } else {
-      setHint("参照元として、アクティブスケッチの点・円中心・円弧中心・円弧端点を1つ選択してください", "error");
-      return true;
-    }
-    setHint("参照先として、親または祖先スケッチの点・線・円・円弧をクリックしてください。線はShiftクリックで距離寸法参照です");
-    updateUI();
-    draw();
-    return true;
-  }
-
   function addDistanceConstraintFromTarget(target, value, dimension, options = {}) {
     if (!target || target.kind === "invalid") return false;
     let constraint = null;
@@ -4359,13 +4379,6 @@
   function addConstraint(type) {
     if (!canApplyConstraint(type)) return;
     if (type === "distance") return startDistanceCommand();
-    if (type === "reference") {
-      pendingConstraintCommand = { type: "reference" };
-      setHint("参照先として、親または祖先スケッチの点・線・円・円弧をクリックしてください。線はShiftクリックで距離寸法参照です");
-      updateToolbar();
-      draw();
-      return true;
-    }
 
     let constraint = null;
     const allPrimitives = selectedPrimitives();
@@ -5582,12 +5595,8 @@
 
     if (pendingConstraintCommand) {
       e.preventDefault();
-      if (pendingConstraintCommand.type === "reference") {
-        if (!activeReferenceSubject() && (hitP || hitC || hitA || hitArcEnd)) {
-          handleReferenceSourceClick(hitP, hitC, hitA, hitArcEnd);
-          return;
-        }
-        handleReferenceTargetClick(hitReferenceTarget(p.x, p.y), p, e.shiftKey);
+      const referenceTarget = hitReferenceTarget(p.x, p.y);
+      if (referenceTarget && handleReferenceConstraintTargetClick(referenceTarget, p, pendingConstraintCommand.type, e.shiftKey)) {
         return;
       }
       handleConstraintTargetClick(hitP, hitL, hitC, hitA, hitArcEnd);
@@ -5789,6 +5798,22 @@
       return;
     }
 
+    if (pendingConstraintCommand && !dragSession) {
+      const referenceTarget = hitReferenceTarget(p.x, p.y);
+      const changed = Boolean(referenceTarget) || hoveredPoint || hoveredEndpointPoint || hoveredLine || hoveredCircle || hoveredArcEndpoint || hoveredArc || hoveredDimensionConstraint;
+      if (changed) {
+        hoveredPoint = referenceTarget?.kind === "point" ? referenceTarget.point : null;
+        hoveredEndpointPoint = null;
+        hoveredLine = referenceTarget?.kind === "line" ? referenceTarget.line : null;
+        hoveredCircle = referenceTarget?.primitive instanceof Circle ? referenceTarget.primitive : null;
+        hoveredArc = referenceTarget?.primitive instanceof Arc ? referenceTarget.primitive : null;
+        hoveredArcEndpoint = null;
+        hoveredDimensionConstraint = null;
+        draw();
+      }
+      return;
+    }
+
     if (!dragSession) {
       const hitD = hitDimension(p.x, p.y);
       const nextHover = hitD?.constraint || null;
@@ -5831,7 +5856,15 @@
       ? `${result.guided ? "guided local" : "local"} vars=${result.variableCount}, constraints=${result.constraintCount}${Number.isFinite(result.freeDof) ? `, dof=${result.freeDof}` : ""}`
       : "global";
     const fallback = result.fallback ? ` fallback from local error=${result.localErrorNorm?.toExponential(2)}` : "";
-    setHint(`${dragLabel(dragSession)}中: ${scope}, error=${error.toExponential(2)}, iter=${result.iterations}${fallback}`);
+    const descendantResult = solveDescendantSketches(activeSketchId(), dragSession.fullDragState);
+    if (!descendantResult.success) {
+      setHint(`子スケッチ更新に失敗しました: ${sketchName(descendantResult.sketchId)} (error=${descendantResult.result.errorNorm.toExponential(3)})`, "error");
+      updateUI();
+      draw();
+      return;
+    }
+    const childText = descendantResult.results.length > 0 ? `, child=${descendantResult.results.length}` : "";
+    setHint(`${dragLabel(dragSession)}中: ${scope}, error=${error.toExponential(2)}, iter=${result.iterations}${fallback}${childText}`);
     draw();
   });
 
@@ -5898,6 +5931,13 @@
     if (!result.success || result.errorNorm > CONSTRAINT_ACCEPT_ERROR) {
       if (session.fullDragState) solver.restore(session.fullDragState);
       setHint(`${completedLabel}完了時の全体solveに失敗しました (error=${result.errorNorm.toExponential(3)})`, "error");
+      updateUI();
+      draw();
+      return;
+    }
+    const descendantResult = solveDescendantSketches(activeSketchId(), session.fullDragState);
+    if (!descendantResult.success) {
+      setHint(`${completedLabel}完了時の子スケッチ更新に失敗しました: ${sketchName(descendantResult.sketchId)} (error=${descendantResult.result.errorNorm.toExponential(3)})`, "error");
       updateUI();
       draw();
       return;

@@ -506,6 +506,10 @@ h2 {
   bottom: 50%;
 }
 
+.sketch-item.has-children .tree-segment.branch.last::before {
+  bottom: -1px;
+}
+
 .tree-segment.branch::after {
   position: absolute;
   top: 50%;
