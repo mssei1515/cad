@@ -1052,11 +1052,15 @@
       const errorTolerance = Number.isFinite(options.errorTolerance) ? options.errorTolerance : 1e-4;
       const rankTolerance = Number.isFinite(options.rankTolerance) ? options.rankTolerance : 1e-9;
       const activityTolerance = Number.isFinite(options.activityTolerance) ? options.activityTolerance : 1e-7;
-      const vars = this.getVariables();
-      const F = this.computeErrorVector();
+      const hasSubset = Array.isArray(options.variables) || Array.isArray(options.constraints);
+      const vars = Array.isArray(options.variables) ? options.variables : this.getVariables();
+      const constraints = hasSubset
+        ? this.constraintsWithLineMinimums(options.constraints || [], options.extra || [], options.lines || [])
+        : this.getConstraints(options.extra || []);
+      const F = this.computeErrorVectorForConstraints(constraints);
       const errorNorm = vectorNorm(F);
       const unstable = errorNorm > errorTolerance;
-      const J = unstable || vars.length === 0 ? [] : this.computeJacobian(vars, F);
+      const J = unstable || vars.length === 0 ? [] : this.computeJacobianForConstraints(vars, F, constraints);
       const activity = unstable
         ? { active: Array(vars.length).fill(false), rank: 0, freeColumns: [] }
         : F.length === 0

@@ -379,6 +379,42 @@ h2 {
   min-width: 0;
 }
 
+.sketch-toolbar {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 6px;
+  align-items: center;
+  margin-bottom: 6px;
+}
+
+.small-action-btn,
+.icon-small-btn {
+  min-width: 0;
+  height: 26px;
+  padding: 4px 8px;
+  border-radius: 6px;
+  font-size: 12px;
+}
+
+.sketch-item {
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  gap: 6px;
+  align-items: center;
+}
+
+.sketch-item.active {
+  border-color: var(--accent);
+  background: #eff6ff;
+}
+
+.sketchActivateBtn {
+  min-width: 0;
+  padding: 4px 6px;
+  text-align: left;
+  border-radius: 6px;
+}
+
 .badge {
   display: inline-block;
   padding: 2px 6px;
