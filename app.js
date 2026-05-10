@@ -51,7 +51,7 @@
   const dimensionValueInput = document.getElementById("dimensionValueInput");
   const DEFAULT_SKETCH_ID = "S1";
   const DEFAULT_SKETCH_NAME = "Sketch 1";
-  const model = { sketches: [{ id: DEFAULT_SKETCH_ID, name: DEFAULT_SKETCH_NAME }], activeSketchId: DEFAULT_SKETCH_ID, points: [], lines: [], circles: [], arcs: [], constraints: [] };
+  const model = { sketches: [{ id: DEFAULT_SKETCH_ID, name: DEFAULT_SKETCH_NAME, parentSketchId: null }], activeSketchId: DEFAULT_SKETCH_ID, points: [], lines: [], circles: [], arcs: [], constraints: [] };
   const solver = new ConstraintSolver(model);
 
   let mode = "select";
@@ -122,9 +122,18 @@
     el.classList.toggle("error", kind === "error");
   }
 
+  function escapeHtml(value) {
+    return String(value ?? "").replace(/[&<>"']/g, (ch) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[ch]);
+  }
+
   function ensureSketchState() {
     if (!Array.isArray(model.sketches)) model.sketches = [];
-    if (model.sketches.length === 0) model.sketches.push({ id: DEFAULT_SKETCH_ID, name: DEFAULT_SKETCH_NAME });
+    if (model.sketches.length === 0) model.sketches.push({ id: DEFAULT_SKETCH_ID, name: DEFAULT_SKETCH_NAME, parentSketchId: null });
+    const ids = new Set(model.sketches.map((sketch) => sketch.id));
+    for (const sketch of model.sketches) {
+      if (!Object.prototype.hasOwnProperty.call(sketch, "parentSketchId")) sketch.parentSketchId = null;
+      if (sketch.parentSketchId === sketch.id || !ids.has(sketch.parentSketchId)) sketch.parentSketchId = null;
+    }
     if (!model.activeSketchId || !model.sketches.some((sketch) => sketch.id === model.activeSketchId)) model.activeSketchId = model.sketches[0].id;
   }
 
@@ -136,6 +145,71 @@
   function sketchName(sketchId) {
     ensureSketchState();
     return model.sketches.find((sketch) => sketch.id === sketchId)?.name || sketchId || DEFAULT_SKETCH_NAME;
+  }
+
+  function sketchById(sketchId) {
+    ensureSketchState();
+    return model.sketches.find((sketch) => sketch.id === sketchId) || null;
+  }
+
+  function parentSketchOf(sketch) {
+    return sketch?.parentSketchId ? sketchById(sketch.parentSketchId) : null;
+  }
+
+  function childSketchesOf(sketchId) {
+    ensureSketchState();
+    return model.sketches.filter((sketch) => sketch.parentSketchId === sketchId);
+  }
+
+  function siblingSketchesOf(sketch) {
+    if (!sketch) return [];
+    ensureSketchState();
+    return model.sketches.filter((item) => item.id !== sketch.id && item.parentSketchId === sketch.parentSketchId);
+  }
+
+  function sketchDepth(sketch) {
+    let depth = 0;
+    const visited = new Set();
+    let current = sketch;
+    while (current?.parentSketchId && !visited.has(current.id)) {
+      visited.add(current.id);
+      current = sketchById(current.parentSketchId);
+      if (current) depth++;
+    }
+    return depth;
+  }
+
+  function wouldCreateSketchCycle(sketchId, parentSketchId) {
+    let current = sketchById(parentSketchId);
+    const visited = new Set([sketchId]);
+    while (current) {
+      if (visited.has(current.id)) return true;
+      visited.add(current.id);
+      current = parentSketchOf(current);
+    }
+    return false;
+  }
+
+  function orderedSketches() {
+    ensureSketchState();
+    const byParent = new Map();
+    for (const sketch of model.sketches) {
+      const key = sketch.parentSketchId || "";
+      if (!byParent.has(key)) byParent.set(key, []);
+      byParent.get(key).push(sketch);
+    }
+    const ordered = [];
+    const visit = (parentId) => {
+      for (const sketch of byParent.get(parentId || "") || []) {
+        ordered.push(sketch);
+        visit(sketch.id);
+      }
+    };
+    visit("");
+    for (const sketch of model.sketches) {
+      if (!ordered.includes(sketch)) ordered.push(sketch);
+    }
+    return ordered;
   }
 
   function activeSketchId() {
@@ -449,7 +523,7 @@
     arcSeq = 1;
     sketchSeq = 2;
     model.sketches.length = 0;
-    model.sketches.push({ id: DEFAULT_SKETCH_ID, name: DEFAULT_SKETCH_NAME });
+    model.sketches.push({ id: DEFAULT_SKETCH_ID, name: DEFAULT_SKETCH_NAME, parentSketchId: null });
     model.activeSketchId = DEFAULT_SKETCH_ID;
   }
 
@@ -601,7 +675,7 @@
     return {
       version: 2,
       savedAt: new Date().toISOString(),
-      sketches: model.sketches.map((sketch) => ({ id: sketch.id, name: sketch.name })),
+      sketches: model.sketches.map((sketch) => ({ id: sketch.id, name: sketch.name, parentSketchId: sketch.parentSketchId || null })),
       activeSketchId: activeSketchId(),
       points: model.points.map((p) => ({ id: p.id, x: p.x, y: p.y, fixed: p.fixed, kind: p.kind || (isPointUsedByPrimitive(p) ? "endpoint" : "explicit"), sketchId: elementSketchId(p) })),
       lines: model.lines.map((l) => ({ id: l.id, p1: l.p1.id, p2: l.p2.id, sketchId: elementSketchId(l) })),
@@ -729,9 +803,13 @@
         ? data.sketches.map((sketch, index) => ({
             id: String(sketch.id || `S${index + 1}`),
             name: String(sketch.name || sketch.id || `Sketch ${index + 1}`),
+            parentSketchId: sketch.parentSketchId == null ? null : String(sketch.parentSketchId),
           }))
-        : [{ id: DEFAULT_SKETCH_ID, name: DEFAULT_SKETCH_NAME }];
+        : [{ id: DEFAULT_SKETCH_ID, name: DEFAULT_SKETCH_NAME, parentSketchId: null }];
     const loadedSketchIds = new Set(loadedSketches.map((sketch) => sketch.id));
+    for (const sketch of loadedSketches) {
+      if (sketch.parentSketchId === sketch.id || !loadedSketchIds.has(sketch.parentSketchId)) sketch.parentSketchId = null;
+    }
     const fallbackSketchId = loadedSketches[0].id;
     const normalizeSketchId = (sketchId) => {
       const id = sketchId == null ? fallbackSketchId : String(sketchId);
@@ -3794,11 +3872,12 @@
 
   function createSketch() {
     ensureSketchState();
-    const sketch = { id: `S${sketchSeq++}`, name: `Sketch ${model.sketches.length + 1}` };
+    const parentSketchId = activeSketchId();
+    const sketch = { id: `S${sketchSeq++}`, name: `Sketch ${model.sketches.length + 1}`, parentSketchId };
     model.sketches.push(sketch);
     model.activeSketchId = sketch.id;
     clearInteractionForSketchChange();
-    setHint(`編集中: ${sketch.name}`);
+    setHint(`編集中: ${sketch.name} / 親: ${sketchName(parentSketchId)}`);
     updateUI();
     draw();
   }
@@ -3827,21 +3906,33 @@
   function updateSketchUI() {
     ensureSketchState();
     const activeLabel = document.getElementById("activeSketchLabel");
-    if (activeLabel) activeLabel.textContent = `編集中: ${activeSketch().name}`;
+    const active = activeSketch();
+    const parent = parentSketchOf(active);
+    if (activeLabel) activeLabel.textContent = parent ? `編集中: ${active.name} / 親: ${parent.name}` : `編集中: ${active.name}`;
     const sketchList = document.getElementById("sketchList");
     if (!sketchList) return;
-    sketchList.innerHTML = model.sketches
+    sketchList.innerHTML = orderedSketches()
       .map((sketch) => {
-        const active = sketch.id === activeSketchId();
+        const isActive = sketch.id === activeSketchId();
+        const isParent = active.parentSketchId === sketch.id;
+        const isSibling = !isActive && !isParent && sketch.parentSketchId === active.parentSketchId;
+        const children = childSketchesOf(sketch.id);
+        const depth = sketchDepth(sketch);
         const count =
           model.points.filter((item) => elementSketchId(item) === sketch.id).length +
           model.lines.filter((item) => elementSketchId(item) === sketch.id).length +
           model.circles.filter((item) => elementSketchId(item) === sketch.id).length +
           model.arcs.filter((item) => elementSketchId(item) === sketch.id).length;
+        const badges = [
+          `<span class="badge">${count}</span>`,
+          isParent ? `<span class="badge relation-badge">親</span>` : "",
+          isSibling ? `<span class="badge relation-badge">兄弟</span>` : "",
+          children.length > 0 ? `<span class="badge relation-badge">子 ${children.length}</span>` : "",
+        ].join("");
         return (
-          `<div class="item sketch-item ${active ? "active" : ""}">` +
-          `<button class="sketchActivateBtn" data-id="${sketch.id}" ${active ? "disabled" : ""}>${sketch.name}</button>` +
-          `<span class="badge">${count}</span>` +
+          `<div class="item sketch-item ${isActive ? "active" : ""}" style="--sketch-depth:${depth}">` +
+          `<button class="sketchActivateBtn" data-id="${sketch.id}" ${isActive ? "disabled" : ""}>${escapeHtml(sketch.name)}</button>` +
+          `<span class="sketch-badges">${badges}</span>` +
           `<button class="sketchRenameBtn icon-small-btn" data-id="${sketch.id}" title="名前変更" aria-label="名前変更">Aa</button>` +
           `</div>`
         );

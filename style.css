@@ -379,12 +379,46 @@ h2 {
   min-width: 0;
 }
 
-.sketch-toolbar {
+.sketch-overlay {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  z-index: 3;
+  width: min(340px, calc(100% - 24px));
+  max-height: min(56vh, 420px);
+  display: grid;
+  gap: 8px;
+  padding: 10px;
+  border: 1px solid rgba(148, 163, 184, 0.58);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.86);
+  box-shadow: 0 12px 32px rgba(15, 23, 42, 0.16);
+  backdrop-filter: blur(8px);
+}
+
+.sketch-overlay-header {
   display: grid;
   grid-template-columns: 1fr auto;
   gap: 6px;
   align-items: center;
-  margin-bottom: 6px;
+}
+
+.sketch-active-label {
+  min-width: 0;
+  overflow: hidden;
+  color: #111827;
+  font-size: 12px;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sketch-list {
+  display: grid;
+  gap: 6px;
+  max-height: calc(min(56vh, 420px) - 52px);
+  overflow: auto;
+  padding-right: 2px;
 }
 
 .small-action-btn,
@@ -401,11 +435,14 @@ h2 {
   grid-template-columns: 1fr auto auto;
   gap: 6px;
   align-items: center;
+  padding: 6px;
+  padding-left: calc(6px + var(--sketch-depth, 0) * 14px);
+  background: rgba(255, 255, 255, 0.76);
 }
 
 .sketch-item.active {
   border-color: var(--accent);
-  background: #eff6ff;
+  background: rgba(239, 246, 255, 0.94);
 }
 
 .sketchActivateBtn {
@@ -413,6 +450,26 @@ h2 {
   padding: 4px 6px;
   text-align: left;
   border-radius: 6px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sketch-badges {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 3px;
+  min-width: 0;
+}
+
+.sketch-badges .badge {
+  margin-left: 0;
+}
+
+.relation-badge {
+  background: #ecfeff;
+  color: #0e7490;
 }
 
 .badge {

@@ -87,6 +87,13 @@
       <div class="canvas-area">
         <canvas id="canvas"></canvas>
         <input id="dimensionValueInput" class="dimension-value-input" type="text" inputmode="decimal" autocomplete="off" spellcheck="false" aria-label="寸法値" hidden />
+        <section id="sketchOverlay" class="sketch-overlay" aria-label="スケッチ">
+          <div class="sketch-overlay-header">
+            <span id="activeSketchLabel" class="sketch-active-label">編集中: Sketch 1</span>
+            <button id="addSketchBtn" type="button" class="small-action-btn">追加</button>
+          </div>
+          <div id="sketchList" class="sketch-list"></div>
+        </section>
         <div id="bottomBar" class="bottom-bar" aria-label="操作情報">
           <div class="status-line">
             <span class="small" id="hint">連続線は端点位置を順にクリックします。終了はEscです。</span>
@@ -95,15 +102,6 @@
       </div>
       <aside class="side">
         <h1>2D幾何拘束ソルバー</h1>
-
-        <details class="panel" open>
-          <summary>スケッチ</summary>
-          <div class="sketch-toolbar">
-            <span id="activeSketchLabel" class="small">編集中: Sketch 1</span>
-            <button id="addSketchBtn" type="button" class="small-action-btn">追加</button>
-          </div>
-          <div id="sketchList" class="list"></div>
-        </details>
 
         <details class="panel">
           <summary>点</summary>
