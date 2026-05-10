@@ -212,6 +212,34 @@
     return ordered;
   }
 
+  function sketchTreeRows() {
+    ensureSketchState();
+    const byParent = new Map();
+    for (const sketch of model.sketches) {
+      const key = sketch.parentSketchId || "";
+      if (!byParent.has(key)) byParent.set(key, []);
+      byParent.get(key).push(sketch);
+    }
+    const rows = [];
+    const visit = (parentId, depth, ancestorLastFlags) => {
+      const children = byParent.get(parentId || "") || [];
+      children.forEach((sketch, index) => {
+        const isLast = index === children.length - 1;
+        const prefix =
+          depth === 0
+            ? ""
+            : `${ancestorLastFlags.map((last) => (last ? "  " : "│ ")).join("")}${isLast ? "└ " : "├ "}`;
+        rows.push({ sketch, depth, prefix });
+        visit(sketch.id, depth + 1, [...ancestorLastFlags, isLast]);
+      });
+    };
+    visit("", 0, []);
+    for (const sketch of model.sketches) {
+      if (!rows.some((row) => row.sketch === sketch)) rows.push({ sketch, depth: 0, prefix: "" });
+    }
+    return rows;
+  }
+
   function activeSketchId() {
     return activeSketch().id;
   }
@@ -3870,14 +3898,15 @@
     updateToolbar();
   }
 
-  function createSketch() {
+  function createSketch(kind = "sibling") {
     ensureSketchState();
-    const parentSketchId = activeSketchId();
+    const current = activeSketch();
+    const parentSketchId = kind === "child" ? current.id : current.parentSketchId || null;
     const sketch = { id: `S${sketchSeq++}`, name: `Sketch ${model.sketches.length + 1}`, parentSketchId };
     model.sketches.push(sketch);
     model.activeSketchId = sketch.id;
     clearInteractionForSketchChange();
-    setHint(`編集中: ${sketch.name} / 親: ${sketchName(parentSketchId)}`);
+    setHint(parentSketchId ? `編集中: ${sketch.name} / 親: ${sketchName(parentSketchId)}` : `編集中: ${sketch.name}`);
     updateUI();
     draw();
   }
@@ -3911,13 +3940,12 @@
     if (activeLabel) activeLabel.textContent = parent ? `編集中: ${active.name} / 親: ${parent.name}` : `編集中: ${active.name}`;
     const sketchList = document.getElementById("sketchList");
     if (!sketchList) return;
-    sketchList.innerHTML = orderedSketches()
-      .map((sketch) => {
+    sketchList.innerHTML = sketchTreeRows()
+      .map(({ sketch, depth, prefix }) => {
         const isActive = sketch.id === activeSketchId();
         const isParent = active.parentSketchId === sketch.id;
         const isSibling = !isActive && !isParent && sketch.parentSketchId === active.parentSketchId;
         const children = childSketchesOf(sketch.id);
-        const depth = sketchDepth(sketch);
         const count =
           model.points.filter((item) => elementSketchId(item) === sketch.id).length +
           model.lines.filter((item) => elementSketchId(item) === sketch.id).length +
@@ -3931,6 +3959,7 @@
         ].join("");
         return (
           `<div class="item sketch-item ${isActive ? "active" : ""}" style="--sketch-depth:${depth}">` +
+          `<span class="sketch-tree-prefix">${escapeHtml(prefix)}</span>` +
           `<button class="sketchActivateBtn" data-id="${sketch.id}" ${isActive ? "disabled" : ""}>${escapeHtml(sketch.name)}</button>` +
           `<span class="sketch-badges">${badges}</span>` +
           `<button class="sketchRenameBtn icon-small-btn" data-id="${sketch.id}" title="名前変更" aria-label="名前変更">Aa</button>` +
@@ -5909,7 +5938,8 @@
     importFileData(e.target.files[0]);
     e.target.value = "";
   });
-  document.getElementById("addSketchBtn")?.addEventListener("click", createSketch);
+  document.getElementById("addSketchBtn")?.addEventListener("click", () => createSketch("sibling"));
+  document.getElementById("addChildSketchBtn")?.addEventListener("click", () => createSketch("child"));
 
   document.getElementById("toggleSideBtn").addEventListener("click", () => {
     const app = document.querySelector(".app");

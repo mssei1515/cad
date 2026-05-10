@@ -387,7 +387,7 @@ h2 {
   width: min(300px, calc(100% - 24px));
   max-height: min(56vh, 420px);
   display: grid;
-  gap: 4px;
+  gap: 2px;
   padding: 0;
   border: 0;
   background: transparent;
@@ -401,7 +401,7 @@ h2 {
 .sketch-overlay-header {
   display: grid;
   grid-template-columns: 1fr auto;
-  gap: 6px;
+  gap: 4px;
   align-items: center;
 }
 
@@ -417,19 +417,24 @@ h2 {
 
 .sketch-list {
   display: grid;
-  gap: 6px;
+  gap: 0;
   max-height: calc(min(56vh, 420px) - 52px);
   overflow: auto;
   padding-right: 2px;
 }
 
+.sketch-add-actions {
+  display: flex;
+  gap: 2px;
+}
+
 .small-action-btn,
 .icon-small-btn {
   min-width: 0;
-  height: 22px;
-  padding: 2px 6px;
-  border-radius: 6px;
-  font-size: 11px;
+  height: 19px;
+  padding: 1px 5px;
+  border-radius: 5px;
+  font-size: 10px;
 }
 
 .sketch-overlay .small-action-btn,
@@ -442,13 +447,13 @@ h2 {
 
 .sketch-item {
   display: grid;
-  grid-template-columns: 1fr auto auto;
-  gap: 4px;
+  grid-template-columns: auto 1fr auto auto;
+  gap: 2px;
   align-items: center;
-  padding: 1px 0;
-  padding-left: calc(var(--sketch-depth, 0) * 13px);
+  padding: 0;
   border-color: transparent;
   background: transparent;
+  line-height: 1.12;
 }
 
 .sketch-item.active {
@@ -458,14 +463,21 @@ h2 {
 
 .sketchActivateBtn {
   min-width: 0;
-  padding: 2px 5px;
+  padding: 1px 4px;
   text-align: left;
   border-radius: 5px;
   overflow: hidden;
   color: #111827;
-  font-size: 11px;
+  font-size: 10.5px;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.sketch-tree-prefix {
+  min-width: calc(var(--sketch-depth, 0) * 13px + 8px);
+  color: #475569;
+  font: 10.5px/1.1 Consolas, "SFMono-Regular", ui-monospace, monospace;
+  white-space: pre;
 }
 
 .sketch-item.active .sketchActivateBtn {
@@ -477,7 +489,7 @@ h2 {
   display: flex;
   flex-wrap: wrap;
   justify-content: flex-end;
-  gap: 3px;
+  gap: 2px;
   min-width: 0;
 }
 

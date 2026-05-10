@@ -90,7 +90,10 @@
         <section id="sketchOverlay" class="sketch-overlay" aria-label="スケッチ">
           <div class="sketch-overlay-header">
             <span id="activeSketchLabel" class="sketch-active-label">編集中: Sketch 1</span>
-            <button id="addSketchBtn" type="button" class="small-action-btn">追加</button>
+            <div class="sketch-add-actions">
+              <button id="addSketchBtn" type="button" class="small-action-btn" title="兄弟スケッチを追加">兄弟+</button>
+              <button id="addChildSketchBtn" type="button" class="small-action-btn" title="子スケッチを追加">子+</button>
+            </div>
           </div>
           <div id="sketchList" class="sketch-list"></div>
         </section>
