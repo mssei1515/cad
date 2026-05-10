@@ -478,9 +478,9 @@ h2 {
 .sketch-tree-gutter {
   display: grid;
   grid-auto-flow: column;
-  grid-auto-columns: 13px;
+  grid-auto-columns: 18px;
   align-self: stretch;
-  width: max(8px, calc(var(--sketch-depth, 0) * 13px));
+  width: max(10px, calc(var(--sketch-depth, 0) * 18px));
 }
 
 .sketch-tree-gutter.root {
@@ -497,7 +497,7 @@ h2 {
   position: absolute;
   top: -1px;
   bottom: -1px;
-  left: 6px;
+  left: 7px;
   width: 1px;
   background: rgba(71, 85, 105, 0.72);
   content: "";
@@ -510,21 +510,10 @@ h2 {
 .tree-segment.branch::after {
   position: absolute;
   top: 50%;
-  left: 6px;
-  width: 8px;
+  left: 7px;
+  width: 10px;
   height: 1px;
   background: rgba(71, 85, 105, 0.72);
-  content: "";
-}
-
-.sketch-item.has-children::after {
-  position: absolute;
-  top: 50%;
-  bottom: -1px;
-  left: calc(var(--sketch-depth, 0) * 13px + 6px);
-  width: 1px;
-  background: rgba(71, 85, 105, 0.72);
-  pointer-events: none;
   content: "";
 }
 

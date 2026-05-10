@@ -2321,16 +2321,16 @@
   function localSolveVariables(component) {
     const vars = [];
     for (const p of model.points) {
-      if (component.has(p) && !p.fixed) {
+      if (component.has(p) && isActiveSketchElement(p) && !p.fixed) {
         vars.push({ object: p, prop: "x", label: `${p.id}.x` });
         vars.push({ object: p, prop: "y", label: `${p.id}.y` });
       }
     }
     for (const c of model.circles) {
-      if (component.has(c)) vars.push({ object: c, prop: "radiusValue", label: `${c.id}.r`, min: MIN_LINE_LENGTH });
+      if (component.has(c) && isActiveSketchElement(c)) vars.push({ object: c, prop: "radiusValue", label: `${c.id}.r`, min: MIN_LINE_LENGTH });
     }
     for (const a of model.arcs) {
-      if (component.has(a)) {
+      if (component.has(a) && isActiveSketchElement(a)) {
         vars.push({ object: a, prop: "radiusValue", label: `${a.id}.r`, min: MIN_LINE_LENGTH });
         vars.push({ object: a, prop: "startAngle", label: `${a.id}.startAngle` });
         vars.push({ object: a, prop: "endAngle", label: `${a.id}.endAngle` });
