@@ -4057,7 +4057,7 @@
           depth === 0
             ? `<span class="sketch-tree-gutter root" aria-hidden="true"></span>`
             : `<span class="sketch-tree-gutter" aria-hidden="true">${ancestorLastFlags
-                .map((last, index) => `<span class="tree-segment ${index === depth - 1 ? (isLast ? "branch last" : "branch") : last ? "" : "line"}"></span>`)
+                .map((last, index) => `<span class="tree-segment ${index === depth - 1 ? (isLast ? "branch last" : "branch") : ""}"></span>`)
                 .join("")}</span>`;
         return (
           `<div class="item sketch-item ${isActive ? "active" : ""} ${hasChildren ? "has-children" : ""}" style="--sketch-depth:${depth}">` +
@@ -5800,14 +5800,39 @@
 
     if (pendingConstraintCommand && !dragSession) {
       const referenceTarget = hitReferenceTarget(p.x, p.y);
-      const changed = Boolean(referenceTarget) || hoveredPoint || hoveredEndpointPoint || hoveredLine || hoveredCircle || hoveredArcEndpoint || hoveredArc || hoveredDimensionConstraint;
-      if (changed) {
-        hoveredPoint = referenceTarget?.kind === "point" ? referenceTarget.point : null;
-        hoveredEndpointPoint = null;
-        hoveredLine = referenceTarget?.kind === "line" ? referenceTarget.line : null;
-        hoveredCircle = referenceTarget?.primitive instanceof Circle ? referenceTarget.primitive : null;
-        hoveredArc = referenceTarget?.primitive instanceof Arc ? referenceTarget.primitive : null;
-        hoveredArcEndpoint = null;
+      const nextEndpointHover = referenceTarget ? null : hitEndpointPoint(p.x, p.y);
+      const nextPointHover = referenceTarget ? (referenceTarget.kind === "point" ? referenceTarget.point : null) : nextEndpointHover || hitExplicitPoint(p.x, p.y);
+      const nextLineHover = referenceTarget ? (referenceTarget.kind === "line" ? referenceTarget.line : null) : nextPointHover ? null : hitLine(p.x, p.y);
+      const nextCircleHover = referenceTarget
+        ? referenceTarget.primitive instanceof Circle
+          ? referenceTarget.primitive
+          : null
+        : nextPointHover || nextLineHover
+          ? null
+          : hitCircle(p.x, p.y);
+      const nextArcEndpointHover = referenceTarget || nextPointHover || nextLineHover || nextCircleHover ? null : hitArcEndpoint(p.x, p.y);
+      const nextArcHover = referenceTarget
+        ? referenceTarget.primitive instanceof Arc
+          ? referenceTarget.primitive
+          : null
+        : nextPointHover || nextLineHover || nextCircleHover || nextArcEndpointHover
+          ? null
+          : hitArc(p.x, p.y);
+      if (
+        nextPointHover !== hoveredPoint ||
+        nextEndpointHover !== hoveredEndpointPoint ||
+        nextLineHover !== hoveredLine ||
+        nextCircleHover !== hoveredCircle ||
+        !sameArcEndpoint(nextArcEndpointHover, hoveredArcEndpoint) ||
+        nextArcHover !== hoveredArc ||
+        hoveredDimensionConstraint
+      ) {
+        hoveredPoint = nextPointHover;
+        hoveredEndpointPoint = nextEndpointHover;
+        hoveredLine = nextLineHover;
+        hoveredCircle = nextCircleHover;
+        hoveredArcEndpoint = nextArcEndpointHover;
+        hoveredArc = nextArcHover;
         hoveredDimensionConstraint = null;
         draw();
       }
