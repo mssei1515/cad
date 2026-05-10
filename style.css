@@ -409,7 +409,7 @@ h2 {
   min-width: 0;
   overflow: hidden;
   color: #111827;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 700;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -453,7 +453,8 @@ h2 {
   padding: 0;
   border-color: transparent;
   background: transparent;
-  line-height: 1.12;
+  line-height: 1;
+  min-height: 18px;
 }
 
 .sketch-item.active {
@@ -468,16 +469,51 @@ h2 {
   border-radius: 5px;
   overflow: hidden;
   color: #111827;
-  font-size: 10.5px;
+  font-size: 12px;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.sketch-tree-prefix {
-  min-width: calc(var(--sketch-depth, 0) * 13px + 8px);
-  color: #475569;
-  font: 10.5px/1.1 Consolas, "SFMono-Regular", ui-monospace, monospace;
-  white-space: pre;
+.sketch-tree-gutter {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: 13px;
+  align-self: stretch;
+  width: max(8px, calc(var(--sketch-depth, 0) * 13px));
+}
+
+.sketch-tree-gutter.root {
+  width: 8px;
+}
+
+.tree-segment {
+  position: relative;
+  min-height: 18px;
+}
+
+.tree-segment.line::before,
+.tree-segment.branch::before {
+  position: absolute;
+  top: -1px;
+  bottom: -1px;
+  left: 6px;
+  width: 1px;
+  background: rgba(71, 85, 105, 0.72);
+  content: "";
+}
+
+.tree-segment.branch.last::before {
+  bottom: 50%;
+}
+
+.tree-segment.branch::after {
+  position: absolute;
+  top: 50%;
+  left: 6px;
+  width: 8px;
+  height: 1px;
+  background: rgba(71, 85, 105, 0.72);
+  content: "";
 }
 
 .sketch-item.active .sketchActivateBtn {
