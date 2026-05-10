@@ -446,6 +446,7 @@ h2 {
 }
 
 .sketch-item {
+  position: relative;
   display: grid;
   grid-template-columns: auto 1fr auto auto;
   gap: 2px;
@@ -483,7 +484,7 @@ h2 {
 }
 
 .sketch-tree-gutter.root {
-  width: 8px;
+  width: 0;
 }
 
 .tree-segment {
@@ -506,10 +507,6 @@ h2 {
   bottom: 50%;
 }
 
-.sketch-item.has-children .tree-segment.branch.last::before {
-  bottom: -1px;
-}
-
 .tree-segment.branch::after {
   position: absolute;
   top: 50%;
@@ -517,6 +514,17 @@ h2 {
   width: 8px;
   height: 1px;
   background: rgba(71, 85, 105, 0.72);
+  content: "";
+}
+
+.sketch-item.has-children::after {
+  position: absolute;
+  top: 50%;
+  bottom: -1px;
+  left: calc(var(--sketch-depth, 0) * 13px + 6px);
+  width: 1px;
+  background: rgba(71, 85, 105, 0.72);
+  pointer-events: none;
   content: "";
 }
 
