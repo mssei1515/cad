@@ -464,7 +464,15 @@ h2 {
 
 .sketch-item.active {
   border-color: transparent;
-  background: transparent;
+  background: rgba(37, 99, 235, 0.18);
+}
+
+.sketch-item.ancestor-visible:not(.active) {
+  background: rgba(59, 130, 246, 0.1);
+}
+
+.sketch-item.descendant-visible:not(.active) {
+  background: rgba(100, 116, 139, 0.1);
 }
 
 .sketchActivateBtn {

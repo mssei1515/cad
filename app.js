@@ -436,8 +436,13 @@
   function constraintStatusColor(item, selected = false, hovered = false) {
     const status = constraintStatusOf(item);
     if (status === "conflict") return CONSTRAINT_STATUS_COLORS.conflict;
-    if (selected || hovered) return "#2563eb";
+    if (selected) return "#1d4ed8";
+    if (hovered) return "#3b82f6";
     return CONSTRAINT_STATUS_COLORS[status] || CONSTRAINT_STATUS_COLORS.full;
+  }
+
+  function isReferenceHoverElement(item) {
+    return Boolean(pendingConstraintCommand && item && !isActiveSketchElement(item) && isAncestorSketchId(elementSketchId(item)));
   }
 
   function drawOrderBySketch(items) {
@@ -1597,57 +1602,77 @@
     return Boolean(a && b && hypot2(a.x - b.x, a.y - b.y) <= tolerance);
   }
 
-  function addConstraintIfMissing(constraint, matches) {
+  function addConstraintIfMissing(constraint, matches, options = {}) {
     if (!constraint) return false;
     if (model.constraints.some((c) => c.enabled !== false && matches(c))) return false;
+    if (options.referenceSketchId) markReferenceConstraint(constraint, options.referenceSketchId);
     pushModelConstraint(constraint);
     return true;
   }
 
-  function snapBelongsToActiveSketch(snap) {
-    if (!snap?.data) return true;
+  function snapTargetElement(snap) {
+    if (!snap?.data) return null;
     const { point, line, primitive, arc } = snap.data;
-    const target = point || line || primitive || arc;
-    return !target || isActiveSketchElement(target);
+    return point || line || primitive || arc || null;
+  }
+
+  function snapReferenceSketchId(snap) {
+    const target = snapTargetElement(snap);
+    if (!target || isActiveSketchElement(target)) return null;
+    const sketchId = elementSketchId(target);
+    return isAncestorSketchId(sketchId) ? sketchId : null;
+  }
+
+  function snapCanCreateConstraint(snap) {
+    const target = snapTargetElement(snap);
+    return !target || isActiveSketchElement(target) || Boolean(snapReferenceSketchId(snap));
   }
 
   function addPointSnapConstraints(point, snap) {
     if (!point || !snap?.data) return 0;
-    if (!snapBelongsToActiveSketch(snap)) return 0;
+    if (!snapCanCreateConstraint(snap)) return 0;
+    const referenceSketchId = snapReferenceSketchId(snap);
+    const options = referenceSketchId ? { referenceSketchId } : {};
     const { point: snapPoint, line, midpoint, primitive, arc, endpoint } = snap.data;
     let added = 0;
     if (snapPoint && snapPoint !== point) {
       added += addConstraintIfMissing(
         new CoincidentConstraint(point, snapPoint),
         (c) => c instanceof CoincidentConstraint && ((c.p1 === point && c.p2 === snapPoint) || (c.p1 === snapPoint && c.p2 === point)),
+        options,
       ) ? 1 : 0;
     }
     if (line && midpoint) {
       added += addConstraintIfMissing(
         new PointOnLineMidpointConstraint(point, line),
         (c) => c instanceof PointOnLineMidpointConstraint && c.point === point && c.line === line,
+        options,
       ) ? 1 : 0;
     } else if (line) {
       added += addConstraintIfMissing(
         new PointOnLineConstraint(point, line),
         (c) => c instanceof PointOnLineConstraint && c.point === point && c.line === line,
+        options,
       ) ? 1 : 0;
     }
     if (primitive && primitive.center !== point) {
       added += addConstraintIfMissing(
         new PointOnCircleConstraint(point, primitive),
         (c) => c instanceof PointOnCircleConstraint && c.point === point && c.primitive === primitive,
+        options,
       ) ? 1 : 0;
     }
     if (arc && endpoint) {
       added += addConstraintIfMissing(
         new ArcEndpointCoincidentConstraint(arc, endpoint, point),
         (c) => c instanceof ArcEndpointCoincidentConstraint && c.arc === arc && c.endpoint === endpoint && c.point === point,
+        options,
       ) ? 1 : 0;
     } else if (arc) {
       added += addConstraintIfMissing(
         new PointOnCircleConstraint(point, arc),
         (c) => c instanceof PointOnCircleConstraint && c.point === point && c.primitive === arc,
+        options,
       ) ? 1 : 0;
     }
     return added;
@@ -1655,13 +1680,16 @@
 
   function addArcEndpointSnapConstraints(arc, endpointName, snap) {
     if (!arc || !snap?.data) return 0;
-    if (!snapBelongsToActiveSketch(snap)) return 0;
+    if (!snapCanCreateConstraint(snap)) return 0;
+    const referenceSketchId = snapReferenceSketchId(snap);
+    const options = referenceSketchId ? { referenceSketchId } : {};
     const { point, line, midpoint, primitive, arc: snapArc, endpoint } = snap.data;
     let added = 0;
     if (point) {
       added += addConstraintIfMissing(
         new ArcEndpointCoincidentConstraint(arc, endpointName, point),
         (c) => c instanceof ArcEndpointCoincidentConstraint && c.arc === arc && c.endpoint === endpointName && c.point === point,
+        options,
       ) ? 1 : 0;
     }
     if (line && midpoint) {
@@ -1675,12 +1703,14 @@
       added += addConstraintIfMissing(
         new ArcEndpointOnLineConstraint(arc, endpointName, line),
         (c) => c instanceof ArcEndpointOnLineConstraint && c.arc === arc && c.endpoint === endpointName && c.line === line,
+        options,
       ) ? 1 : 0;
     }
     if (primitive && primitive !== arc) {
       added += addConstraintIfMissing(
         new ArcEndpointOnCircleConstraint(arc, endpointName, primitive),
         (c) => c instanceof ArcEndpointOnCircleConstraint && c.arc === arc && c.endpoint === endpointName && c.primitive === primitive,
+        options,
       ) ? 1 : 0;
     }
     if (snapArc && endpoint) {
@@ -1690,11 +1720,13 @@
           c instanceof ArcEndpointArcEndpointCoincidentConstraint &&
           ((c.a === arc && c.endpointA === endpointName && c.b === snapArc && c.endpointB === endpoint) ||
             (c.a === snapArc && c.endpointA === endpoint && c.b === arc && c.endpointB === endpointName)),
+        options,
       ) ? 1 : 0;
     } else if (snapArc && snapArc !== arc) {
       added += addConstraintIfMissing(
         new ArcEndpointOnCircleConstraint(arc, endpointName, snapArc),
         (c) => c instanceof ArcEndpointOnCircleConstraint && c.arc === arc && c.endpoint === endpointName && c.primitive === snapArc,
+        options,
       ) ? 1 : 0;
     }
     return added;
@@ -1702,18 +1734,22 @@
 
   function addCircleBoundarySnapConstraints(circle, snap) {
     if (!circle || !snap?.data) return 0;
-    if (!snapBelongsToActiveSketch(snap)) return 0;
+    if (!snapCanCreateConstraint(snap)) return 0;
+    const referenceSketchId = snapReferenceSketchId(snap);
+    const options = referenceSketchId ? { referenceSketchId } : {};
     const { point, line, primitive, arc, endpoint } = snap.data;
     let added = 0;
     if (point) {
       added += addConstraintIfMissing(
         new PointOnCircleConstraint(point, circle),
         (c) => c instanceof PointOnCircleConstraint && c.point === point && c.primitive === circle,
+        options,
       ) ? 1 : 0;
     } else if (arc && endpoint) {
       added += addConstraintIfMissing(
         new ArcEndpointOnCircleConstraint(arc, endpoint, circle),
         (c) => c instanceof ArcEndpointOnCircleConstraint && c.arc === arc && c.endpoint === endpoint && c.primitive === circle,
+        options,
       ) ? 1 : 0;
     } else {
       const ref = addPoint(snap.x, snap.y, false, "endpoint");
@@ -1726,6 +1762,7 @@
         added += addConstraintIfMissing(
           new PointOnCircleConstraint(ref, primitive),
           (c) => c instanceof PointOnCircleConstraint && c.point === ref && c.primitive === primitive,
+          options,
         ) ? 1 : 0;
       }
     }
@@ -2789,15 +2826,18 @@
       const active = isActiveSketchElement(l);
       ctx.globalAlpha = sketchAlpha(l);
       const sel = active && selectedLines.includes(l);
-      const hovered = active && hoveredLine === l;
+      const hovered = (active || isReferenceHoverElement(l)) && hoveredLine === l;
       ctx.strokeStyle = constraintStatusColor(l, sel, hovered);
-      ctx.lineWidth = (sel || hovered ? 3 : 2) / viewport.scale;
+      ctx.lineWidth = (sel ? 4 : hovered ? 2.6 : 2) / viewport.scale;
       ctx.lineCap = "round";
       ctx.lineJoin = "round";
+      ctx.shadowColor = sel ? "rgba(37, 99, 235, 0.45)" : "transparent";
+      ctx.shadowBlur = sel ? 8 / viewport.scale : 0;
       ctx.beginPath();
       ctx.moveTo(l.p1.x, l.p1.y);
       ctx.lineTo(l.p2.x, l.p2.y);
       ctx.stroke();
+      ctx.shadowBlur = 0;
 
       if (sel || hovered) {
         const mx = (l.p1.x + l.p2.x) / 2;
@@ -2817,12 +2857,15 @@
       const active = isActiveSketchElement(c);
       ctx.globalAlpha = sketchAlpha(c);
       const sel = active && selectedCircles.includes(c);
-      const hovered = active && hoveredCircle === c;
+      const hovered = (active || isReferenceHoverElement(c)) && hoveredCircle === c;
       ctx.strokeStyle = constraintStatusColor(c, sel, hovered);
-      ctx.lineWidth = (sel || hovered ? 3 : 2) / viewport.scale;
+      ctx.lineWidth = (sel ? 4 : hovered ? 2.6 : 2) / viewport.scale;
+      ctx.shadowColor = sel ? "rgba(37, 99, 235, 0.45)" : "transparent";
+      ctx.shadowBlur = sel ? 8 / viewport.scale : 0;
       ctx.beginPath();
       ctx.arc(c.center.x, c.center.y, c.radius(), 0, Math.PI * 2);
       ctx.stroke();
+      ctx.shadowBlur = 0;
       if (sel || hovered) {
         ctx.fillStyle = "#2563eb";
         ctx.font = `${12 / viewport.scale}px system-ui`;
@@ -2839,13 +2882,16 @@
       const active = isActiveSketchElement(a);
       ctx.globalAlpha = sketchAlpha(a);
       const sel = active && selectedArcs.includes(a);
-      const hovered = active && hoveredArc === a;
+      const hovered = (active || isReferenceHoverElement(a)) && hoveredArc === a;
       const angles = arcAngles(a);
       ctx.strokeStyle = constraintStatusColor(a, sel, hovered);
-      ctx.lineWidth = (sel || hovered ? 3 : 2) / viewport.scale;
+      ctx.lineWidth = (sel ? 4 : hovered ? 2.6 : 2) / viewport.scale;
+      ctx.shadowColor = sel ? "rgba(37, 99, 235, 0.45)" : "transparent";
+      ctx.shadowBlur = sel ? 8 / viewport.scale : 0;
       ctx.beginPath();
       ctx.arc(a.center.x, a.center.y, a.radius(), angles.start, angles.end, angles.end < angles.start);
       ctx.stroke();
+      ctx.shadowBlur = 0;
       if (sel || hovered) {
         const mid = angles.start + (angles.end - angles.start) / 2;
         ctx.fillStyle = "#2563eb";
@@ -3320,7 +3366,7 @@
       ctx.globalAlpha = sketchAlpha(p);
       const sel = active && selectedPoints.includes(p);
       const endpoint = isEndpointPoint(p);
-      const hovered = active && (hoveredPoint === p || hoveredEndpointPoint === p);
+      const hovered = (active || isReferenceHoverElement(p)) && (hoveredPoint === p || hoveredEndpointPoint === p);
       const dragging = dragSession?.kind === "point" && dragSession.points.some((target) => target.point === p);
       const primitiveCenter = shouldShowPrimitiveCenter(p);
       const fixedByLine = pointLockedByLineFixed(p);
@@ -3329,11 +3375,14 @@
       if (endpoint && !reference && !sel && !hovered && !dragging && !primitiveCenter) continue;
       ctx.beginPath();
       ctx.arc(p.x, p.y, (sel ? 7 : endpoint || reference ? 5 : 5) / viewport.scale, 0, Math.PI * 2);
-      ctx.fillStyle = p.fixed || fixedByLine ? "#fee2e2" : sel ? "#2563eb" : hovered || primitiveCenter || reference ? "#eff6ff" : "#fff";
+      ctx.fillStyle = p.fixed || fixedByLine ? "#fee2e2" : sel ? "#1d4ed8" : hovered || primitiveCenter || reference ? "#eff6ff" : "#fff";
       ctx.fill();
       ctx.strokeStyle = p.fixed || fixedByLine ? "#dc2626" : constraintStatusColor(p, sel, hovered || primitiveCenter || reference);
-      ctx.lineWidth = (endpoint ? 2 : 2) / viewport.scale;
+      ctx.lineWidth = (sel ? 3 : 2) / viewport.scale;
+      ctx.shadowColor = sel ? "rgba(37, 99, 235, 0.45)" : "transparent";
+      ctx.shadowBlur = sel ? 8 / viewport.scale : 0;
       ctx.stroke();
+      ctx.shadowBlur = 0;
       ctx.setLineDash([]);
       if (sel || hovered || dragging) {
         ctx.fillStyle = hovered || endpoint ? "#2563eb" : "#111827";
@@ -4090,6 +4139,9 @@
     sketchList.innerHTML = sketchTreeRows()
       .map(({ sketch, depth, hasChildren, segments }) => {
         const isActive = sketch.id === activeSketchId();
+        const isAncestor = isAncestorSketchId(sketch.id);
+        const isDescendant = descendantSketchIds(activeSketchId()).includes(sketch.id);
+        const visible = isVisibleSketchId(sketch.id);
         const count =
           model.points.filter((item) => elementSketchId(item) === sketch.id).length +
           model.lines.filter((item) => elementSketchId(item) === sketch.id).length +
@@ -4102,7 +4154,7 @@
                 .map((segment) => `<span class="tree-segment ${segment}"></span>`)
                 .join("")}</span>`;
         return (
-          `<div class="item sketch-item ${isActive ? "active" : ""} ${hasChildren ? "has-children" : ""}" style="--sketch-depth:${depth}">` +
+          `<div class="item sketch-item ${visible ? "visible" : ""} ${isAncestor ? "ancestor-visible" : ""} ${isDescendant ? "descendant-visible" : ""} ${isActive ? "active" : ""} ${hasChildren ? "has-children" : ""}" style="--sketch-depth:${depth}">` +
           treeLines +
           `<button class="sketchActivateBtn" data-id="${sketch.id}" ${isActive ? "disabled" : ""}>${escapeHtml(sketch.name)}</button>` +
           `<span class="sketch-badges"><span class="badge">${count}</span></span>` +
