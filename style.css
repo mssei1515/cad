@@ -478,6 +478,7 @@ h2 {
 .sketch-tree-gutter {
   --tree-cell: 18px;
   --tree-line-x: 8px;
+  --tree-mid-y: 9px;
   --tree-line-color: #64748b;
   --tree-line-width: 1px;
   display: grid;
@@ -500,23 +501,23 @@ h2 {
   top: -1px;
   bottom: -1px;
   left: var(--tree-line-x);
-  width: var(--tree-line-width);
-  background: var(--tree-line-color);
+  width: 0;
+  border-left: var(--tree-line-width) solid var(--tree-line-color);
   content: "";
 }
 
 .tree-segment.elbow::before {
-  bottom: calc(50% - 1px);
+  bottom: var(--tree-mid-y);
 }
 
 .tree-segment.tee::after,
 .tree-segment.elbow::after {
   position: absolute;
-  top: calc(50% - 0.5px);
+  top: var(--tree-mid-y);
   left: var(--tree-line-x);
   right: 0;
-  height: var(--tree-line-width);
-  background: var(--tree-line-color);
+  height: 0;
+  border-top: var(--tree-line-width) solid var(--tree-line-color);
   content: "";
 }
 
