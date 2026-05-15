@@ -90,6 +90,7 @@
   let circleSeq = 1;
   let arcSeq = 1;
   let sketchSeq = 2;
+  let sketchTreeCollapsed = false;
   const viewport = { x: 0, y: 0, scale: 1 };
   const MIN_ZOOM = 0.15;
   const MAX_ZOOM = 10000000;
@@ -287,6 +288,15 @@
     return elementSketchId(item) === activeSketchId();
   }
 
+  function isVisibleSketchId(sketchId) {
+    const id = sketchId || activeSketchId();
+    return id === activeSketchId() || isAncestorSketchId(id);
+  }
+
+  function isVisibleSketchElement(item) {
+    return isVisibleSketchId(elementSketchId(item));
+  }
+
   function constraintSketchId(constraint) {
     ensureSketchState();
     if (!constraint) return activeSketchId();
@@ -431,7 +441,7 @@
   }
 
   function drawOrderBySketch(items) {
-    return [...items].sort((a, b) => Number(isActiveSketchElement(a)) - Number(isActiveSketchElement(b)));
+    return items.filter(isVisibleSketchElement).sort((a, b) => Number(isActiveSketchElement(a)) - Number(isActiveSketchElement(b)));
   }
 
   function sketchAlpha(item) {
@@ -1533,22 +1543,26 @@
   function snapCandidates(source) {
     const candidates = [];
     for (const p of model.points) {
+      if (!isVisibleSketchElement(p)) continue;
       if (isReferencePoint(p)) addSnapCandidate(candidates, source, p.x, p.y, "参照点", 0, { point: p });
       else if (isPrimitiveCenterPoint(p)) addSnapCandidate(candidates, source, p.x, p.y, "中心", 0, { point: p });
       else if (isEndpointPoint(p) && isPointUsedByPrimitive(p)) addSnapCandidate(candidates, source, p.x, p.y, "端点", 0, { point: p });
       else if (isExplicitPoint(p)) addSnapCandidate(candidates, source, p.x, p.y, "点", 0, { point: p });
     }
     for (const line of model.lines) {
+      if (!isVisibleSketchElement(line)) continue;
       addSnapCandidate(candidates, source, (line.p1.x + line.p2.x) / 2, (line.p1.y + line.p2.y) / 2, "中点", 1, { line });
       const closest = closestPointOnSegment(source.x, source.y, line);
       addSnapCandidate(candidates, source, closest.x, closest.y, "線上", 2, { line });
     }
     for (const circle of model.circles) {
+      if (!isVisibleSketchElement(circle)) continue;
       addSnapCandidate(candidates, source, circle.center.x, circle.center.y, "中心", 0, { primitive: circle });
       const p = circlePointAtPointer(source, circle);
       if (p) addSnapCandidate(candidates, source, p.x, p.y, "円周", 2, { primitive: circle });
     }
     for (const arc of model.arcs) {
+      if (!isVisibleSketchElement(arc)) continue;
       addSnapCandidate(candidates, source, arc.center.x, arc.center.y, "中心", 0, { primitive: arc });
       for (const endpoint of ["start", "end"]) {
         const p = arcEndpointPoint(arc, endpoint);
@@ -2322,6 +2336,7 @@
   function localSolveVariables(component) {
     const vars = [];
     for (const p of model.points) {
+      if (!isVisibleSketchElement(p)) continue;
       if (component.has(p) && isActiveSketchElement(p) && !p.fixed) {
         vars.push({ object: p, prop: "x", label: `${p.id}.x` });
         vars.push({ object: p, prop: "y", label: `${p.id}.y` });
@@ -2618,12 +2633,14 @@
       if (selected) addUnique(nextLines, line);
     }
     for (const circle of model.circles) {
+      if (!isVisibleSketchElement(circle)) continue;
       if (!isActiveSketchElement(circle)) continue;
       const box = primitiveBBox(circle);
       const selected = crossing ? bboxIntersectsRect(box, rect) : bboxInRect(box, rect);
       if (selected) addUnique(nextCircles, circle);
     }
     for (const arc of model.arcs) {
+      if (!isVisibleSketchElement(arc)) continue;
       if (!isActiveSketchElement(arc)) continue;
       const samples = arcSamplePoints(arc);
       const selected = crossing ? samples.some((p) => pointInRect(p, rect)) : samples.every((p) => pointInRect(p, rect));
@@ -3043,6 +3060,7 @@
     for (const c of [...model.constraints].sort((a, b) => Number(isActiveSketchConstraint(a)) - Number(isActiveSketchConstraint(b)))) {
       const target = targetFromConstraint(c);
       if (!target) continue;
+      if (!isActiveSketchConstraint(c) && !constraintReferencesSketch(c, activeSketchId()) && !isVisibleSketchId(constraintSketchId(c))) continue;
       const dimension = c.dimension || defaultDimensionForTarget(target);
       const active = isActiveSketchConstraint(c);
       const highlighted = active && (c === hoveredDimensionConstraint || c === selectedDimensionConstraint || c === dimensionDragSession?.constraint);
@@ -3995,11 +4013,37 @@
     updateToolbar();
   }
 
+  function nextRootSketchName() {
+    let max = 0;
+    for (const sketch of model.sketches) {
+      const match = /^Sketch\s+(\d+)$/.exec(sketch.name || "");
+      if (match) max = Math.max(max, Number(match[1]));
+    }
+    return `Sketch ${Math.max(max + 1, model.sketches.length + 1)}`;
+  }
+
+  function nextChildSketchName(parentSketchId) {
+    const parent = sketchById(parentSketchId);
+    if (!parent) return nextRootSketchName();
+    const prefix = `${parent.name}-`;
+    let max = 0;
+    for (const sketch of childSketchesOf(parentSketchId)) {
+      if (!sketch.name?.startsWith(prefix)) continue;
+      const suffix = sketch.name.slice(prefix.length);
+      if (/^\d+$/.test(suffix)) max = Math.max(max, Number(suffix));
+    }
+    return `${prefix}${max + 1}`;
+  }
+
+  function nextSketchName(parentSketchId) {
+    return parentSketchId ? nextChildSketchName(parentSketchId) : nextRootSketchName();
+  }
+
   function createSketch(kind = "sibling") {
     ensureSketchState();
     const current = activeSketch();
     const parentSketchId = kind === "child" ? current.id : current.parentSketchId || null;
-    const sketch = { id: `S${sketchSeq++}`, name: `Sketch ${model.sketches.length + 1}`, parentSketchId };
+    const sketch = { id: `S${sketchSeq++}`, name: nextSketchName(parentSketchId), parentSketchId };
     model.sketches.push(sketch);
     model.activeSketchId = sketch.id;
     clearInteractionForSketchChange();
@@ -4034,6 +4078,13 @@
     const activeLabel = document.getElementById("activeSketchLabel");
     const active = activeSketch();
     const parent = parentSketchOf(active);
+    const overlay = document.getElementById("sketchOverlay");
+    if (overlay) overlay.classList.toggle("tree-collapsed", sketchTreeCollapsed);
+    const toggleTreeBtn = document.getElementById("toggleSketchTreeBtn");
+    if (toggleTreeBtn) {
+      toggleTreeBtn.textContent = sketchTreeCollapsed ? "Show" : "Hide";
+      toggleTreeBtn.setAttribute("aria-expanded", String(!sketchTreeCollapsed));
+    }
     if (activeLabel) activeLabel.textContent = parent ? `編集中: ${active.name} / 親: ${parent.name}` : `編集中: ${active.name}`;
     const sketchList = document.getElementById("sketchList");
     if (!sketchList) return;
@@ -4526,6 +4577,17 @@
     if (hitA && selectedArcs.includes(hitA)) return true;
     if (hitArcEnd && sameArcEndpoint(selectedArcEndpoint, { arc: hitArcEnd.arc, endpoint: hitArcEnd.endpoint })) return true;
     return false;
+  }
+
+  function selectHitOnly(hitP, hitL, hitC, hitA, hitArcEnd) {
+    selectedDimensionConstraint = null;
+    selectedPoints = hitP ? [hitP] : [];
+    selectedLines = hitL ? [hitL] : [];
+    selectedCircles = hitC ? [hitC] : [];
+    selectedArcs = hitA ? [hitA] : hitArcEnd ? [hitArcEnd.arc] : [];
+    selectedArcEndpoint = hitArcEnd ? { arc: hitArcEnd.arc, endpoint: hitArcEnd.endpoint } : null;
+    selectedArcEndpointPair = null;
+    draw();
   }
 
   function dragTargets(session, pointer) {
@@ -5067,21 +5129,25 @@
     for (let i = model.points.length - 1; i >= 0; i--) {
       const p = model.points[i];
       if (isActiveSketchElement(p)) continue;
+      if (!isVisibleSketchElement(p)) continue;
       if (hypot2(p.x - x, p.y - y) <= 10 / viewport.scale) return { id: p.id, sketchId: elementSketchId(p) };
     }
     for (let i = model.lines.length - 1; i >= 0; i--) {
       const line = model.lines[i];
       if (isActiveSketchElement(line)) continue;
+      if (!isVisibleSketchElement(line)) continue;
       if (distancePointToSegment(x, y, line) <= threshold) return { id: line.id, sketchId: elementSketchId(line) };
     }
     for (let i = model.circles.length - 1; i >= 0; i--) {
       const circle = model.circles[i];
       if (isActiveSketchElement(circle)) continue;
+      if (!isVisibleSketchElement(circle)) continue;
       if (Math.abs(hypot2(x - circle.center.x, y - circle.center.y) - circle.radius()) <= threshold) return { id: circle.id, sketchId: elementSketchId(circle) };
     }
     for (let i = model.arcs.length - 1; i >= 0; i--) {
       const arc = model.arcs[i];
       if (isActiveSketchElement(arc)) continue;
+      if (!isVisibleSketchElement(arc)) continue;
       const angle = Math.atan2(y - arc.center.y, x - arc.center.x);
       if (Math.abs(hypot2(x - arc.center.x, y - arc.center.y) - arc.radius()) <= threshold && angleOnSignedSweep(angle, arc.startAngle, arc.endAngle)) return { id: arc.id, sketchId: elementSketchId(arc) };
     }
@@ -5666,7 +5732,8 @@
     } else if (hitP) {
       selectedDimensionConstraint = null;
       if (multiSelect) togglePointSelection(hitP);
-      else beginDrag(e, hitP, null, null, null, null, p);
+      else if (hitIsSelected(hitP, null, null, null, null)) beginDrag(e, hitP, null, null, null, null, p);
+      else selectHitOnly(hitP, null, null, null, null);
     } else if (hitArcEnd) {
       selectedDimensionConstraint = null;
       if (multiSelect) {
@@ -5675,20 +5742,24 @@
         selectedArcEndpoint = next;
         if (!selectedArcs.includes(hitArcEnd.arc)) selectedArcs.push(hitArcEnd.arc);
       } else {
-        beginDrag(e, null, null, null, null, hitArcEnd, p);
+        if (hitIsSelected(null, null, null, null, hitArcEnd)) beginDrag(e, null, null, null, null, hitArcEnd, p);
+        else selectHitOnly(null, null, null, null, hitArcEnd);
       }
     } else if (hitL) {
       selectedDimensionConstraint = null;
       if (multiSelect) toggleLineSelection(hitL);
-      else beginDrag(e, null, hitL, null, null, null, p);
+      else if (hitIsSelected(null, hitL, null, null, null)) beginDrag(e, null, hitL, null, null, null, p);
+      else selectHitOnly(null, hitL, null, null, null);
     } else if (hitC) {
       selectedDimensionConstraint = null;
       if (multiSelect) toggleCircleSelection(hitC);
-      else beginDrag(e, null, null, hitC, null, null, p);
+      else if (hitIsSelected(null, null, hitC, null, null)) beginDrag(e, null, null, hitC, null, null, p);
+      else selectHitOnly(null, null, hitC, null, null);
     } else if (hitA) {
       selectedDimensionConstraint = null;
       if (multiSelect) toggleArcSelection(hitA);
-      else beginDrag(e, null, null, null, hitA, null, p);
+      else if (hitIsSelected(null, null, null, hitA, null)) beginDrag(e, null, null, null, hitA, null, p);
+      else selectHitOnly(null, null, null, hitA, null);
     } else {
       selectionRectSession = {
         pointerId: e.pointerId,
@@ -6236,6 +6307,10 @@
   });
   document.getElementById("addSketchBtn")?.addEventListener("click", () => createSketch("sibling"));
   document.getElementById("addChildSketchBtn")?.addEventListener("click", () => createSketch("child"));
+  document.getElementById("toggleSketchTreeBtn")?.addEventListener("click", () => {
+    sketchTreeCollapsed = !sketchTreeCollapsed;
+    updateSketchUI();
+  });
 
   document.getElementById("toggleSideBtn").addEventListener("click", () => {
     const app = document.querySelector(".app");

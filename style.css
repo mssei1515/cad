@@ -423,6 +423,10 @@ h2 {
   padding-right: 2px;
 }
 
+.sketch-overlay.tree-collapsed .sketch-list {
+  display: none;
+}
+
 .sketch-add-actions {
   display: flex;
   gap: 2px;
