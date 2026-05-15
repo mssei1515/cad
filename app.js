@@ -451,8 +451,8 @@
     if (selected) return "#1d4ed8";
     if (hovered) return "#3b82f6";
     const relation = sketchRelationOfElement(item);
-    if (relation === "ancestor") return "#64748b";
-    if (relation === "descendant") return "#4b7f67";
+    if (relation === "ancestor") return "#0284c7";
+    if (relation === "descendant") return "#16a34a";
     return CONSTRAINT_STATUS_COLORS[status] || CONSTRAINT_STATUS_COLORS.full;
   }
 
@@ -467,8 +467,8 @@
   function sketchAlpha(item) {
     const relation = sketchRelationOfElement(item);
     if (relation === "active") return 1;
-    if (relation === "ancestor") return 0.42;
-    if (relation === "descendant") return 0.42;
+    if (relation === "ancestor") return 0.58;
+    if (relation === "descendant") return 0.58;
     return 0;
   }
 
@@ -4173,7 +4173,7 @@
                 .map((segment) => `<span class="tree-segment ${segment}"></span>`)
                 .join("")}</span>`;
         return (
-          `<div class="item sketch-item ${visible ? "visible" : ""} ${isAncestor ? "ancestor-visible" : ""} ${isDescendant ? "descendant-visible" : ""} ${isActive ? "active" : ""} ${hasChildren ? "has-children" : ""}" style="--sketch-depth:${depth}">` +
+          `<div class="item sketch-item ${visible ? "visible" : ""} ${isAncestor ? "ancestor-visible" : ""} ${isDescendant ? "descendant-visible" : ""} ${isActive ? "active" : ""} ${hasChildren ? "has-children" : ""}" data-id="${sketch.id}" style="--sketch-depth:${depth}">` +
           treeLines +
           `<button class="sketchActivateBtn" data-id="${sketch.id}" ${isActive ? "disabled" : ""}>${escapeHtml(sketch.name)}</button>` +
           `<span class="sketch-badges"><span class="badge">${count}</span></span>` +
@@ -4185,8 +4185,17 @@
     for (const btn of document.querySelectorAll(".sketchActivateBtn")) {
       btn.addEventListener("click", () => setActiveSketch(btn.dataset.id));
     }
+    for (const row of document.querySelectorAll(".sketch-item")) {
+      row.addEventListener("click", (event) => {
+        if (event.target.closest(".sketchRenameBtn")) return;
+        setActiveSketch(row.dataset.id);
+      });
+    }
     for (const btn of document.querySelectorAll(".sketchRenameBtn")) {
-      btn.addEventListener("click", () => renameSketch(btn.dataset.id));
+      btn.addEventListener("click", (event) => {
+        event.stopPropagation();
+        renameSketch(btn.dataset.id);
+      });
     }
   }
 
