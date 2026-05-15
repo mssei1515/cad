@@ -478,7 +478,7 @@ h2 {
 .sketch-tree-gutter {
   --tree-cell: 18px;
   --tree-line-x: 8px;
-  --tree-line-color: rgba(71, 85, 105, 0.72);
+  --tree-line-color: #64748b;
   --tree-line-width: 1px;
   display: grid;
   grid-auto-flow: column;
@@ -497,8 +497,8 @@ h2 {
 .tree-segment.tee::before,
 .tree-segment.elbow::before {
   position: absolute;
-  top: 0;
-  bottom: 0;
+  top: -1px;
+  bottom: -1px;
   left: var(--tree-line-x);
   width: var(--tree-line-width);
   background: var(--tree-line-color);
@@ -506,13 +506,13 @@ h2 {
 }
 
 .tree-segment.elbow::before {
-  bottom: 50%;
+  bottom: calc(50% - 1px);
 }
 
 .tree-segment.tee::after,
 .tree-segment.elbow::after {
   position: absolute;
-  top: 50%;
+  top: calc(50% - 0.5px);
   left: var(--tree-line-x);
   right: 0;
   height: var(--tree-line-width);
