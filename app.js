@@ -446,14 +446,22 @@
   }
 
   function constraintStatusColor(item, selected = false, hovered = false) {
-    const status = constraintStatusOf(item);
-    if (status === "conflict") return CONSTRAINT_STATUS_COLORS.conflict;
     if (selected) return "#1d4ed8";
     if (hovered) return "#3b82f6";
     const relation = sketchRelationOfElement(item);
-    if (relation === "ancestor") return "#0284c7";
-    if (relation === "descendant") return "#16a34a";
+    if (relation === "ancestor") return "#9ca3af";
+    if (relation === "descendant") return CONSTRAINT_STATUS_COLORS.full;
+    const status = constraintStatusOf(item);
+    if (status === "conflict") return CONSTRAINT_STATUS_COLORS.conflict;
     return CONSTRAINT_STATUS_COLORS[status] || CONSTRAINT_STATUS_COLORS.full;
+  }
+
+  function sketchStrokeWidth(item) {
+    const relation = sketchRelationOfElement(item);
+    if (relation === "active") return 2.6;
+    if (relation === "ancestor") return 2;
+    if (relation === "descendant") return 1.2;
+    return 0;
   }
 
   function isReferenceHoverElement(item) {
@@ -467,8 +475,8 @@
   function sketchAlpha(item) {
     const relation = sketchRelationOfElement(item);
     if (relation === "active") return 1;
-    if (relation === "ancestor") return 0.58;
-    if (relation === "descendant") return 0.58;
+    if (relation === "ancestor") return 0.55;
+    if (relation === "descendant") return 0.85;
     return 0;
   }
 
@@ -2847,7 +2855,7 @@
       const sel = active && selectedLines.includes(l);
       const hovered = (active || isReferenceHoverElement(l)) && hoveredLine === l;
       ctx.strokeStyle = constraintStatusColor(l, sel, hovered);
-      ctx.lineWidth = (sel ? 4 : hovered ? 2.6 : 2) / viewport.scale;
+      ctx.lineWidth = (sel ? 4 : hovered ? 2.6 : sketchStrokeWidth(l)) / viewport.scale;
       ctx.lineCap = "round";
       ctx.lineJoin = "round";
       ctx.shadowColor = sel ? "rgba(37, 99, 235, 0.45)" : "transparent";
@@ -2878,7 +2886,7 @@
       const sel = active && selectedCircles.includes(c);
       const hovered = (active || isReferenceHoverElement(c)) && hoveredCircle === c;
       ctx.strokeStyle = constraintStatusColor(c, sel, hovered);
-      ctx.lineWidth = (sel ? 4 : hovered ? 2.6 : 2) / viewport.scale;
+      ctx.lineWidth = (sel ? 4 : hovered ? 2.6 : sketchStrokeWidth(c)) / viewport.scale;
       ctx.shadowColor = sel ? "rgba(37, 99, 235, 0.45)" : "transparent";
       ctx.shadowBlur = sel ? 8 / viewport.scale : 0;
       ctx.beginPath();
@@ -2904,7 +2912,7 @@
       const hovered = (active || isReferenceHoverElement(a)) && hoveredArc === a;
       const angles = arcAngles(a);
       ctx.strokeStyle = constraintStatusColor(a, sel, hovered);
-      ctx.lineWidth = (sel ? 4 : hovered ? 2.6 : 2) / viewport.scale;
+      ctx.lineWidth = (sel ? 4 : hovered ? 2.6 : sketchStrokeWidth(a)) / viewport.scale;
       ctx.shadowColor = sel ? "rgba(37, 99, 235, 0.45)" : "transparent";
       ctx.shadowBlur = sel ? 8 / viewport.scale : 0;
       ctx.beginPath();
@@ -3397,7 +3405,7 @@
       ctx.fillStyle = p.fixed || fixedByLine ? "#fee2e2" : sel ? "#1d4ed8" : hovered || primitiveCenter || reference ? "#eff6ff" : "#fff";
       ctx.fill();
       ctx.strokeStyle = p.fixed || fixedByLine ? "#dc2626" : constraintStatusColor(p, sel, hovered || primitiveCenter || reference);
-      ctx.lineWidth = (sel ? 3 : 2) / viewport.scale;
+      ctx.lineWidth = (sel ? 3 : Math.max(1.2, sketchStrokeWidth(p))) / viewport.scale;
       ctx.shadowColor = sel ? "rgba(37, 99, 235, 0.45)" : "transparent";
       ctx.shadowBlur = sel ? 8 / viewport.scale : 0;
       ctx.stroke();
