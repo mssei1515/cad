@@ -50,7 +50,7 @@
   const ctx = canvas.getContext("2d");
   const dimensionValueInput = document.getElementById("dimensionValueInput");
   const DEFAULT_SKETCH_ID = "S1";
-  const DEFAULT_SKETCH_NAME = "Sketch 1";
+  const DEFAULT_SKETCH_NAME = "Sketch-1";
   const model = { sketches: [{ id: DEFAULT_SKETCH_ID, name: DEFAULT_SKETCH_NAME, parentSketchId: null }], activeSketchId: DEFAULT_SKETCH_ID, points: [], lines: [], circles: [], arcs: [], constraints: [] };
   const solver = new ConstraintSolver(model);
 
@@ -290,7 +290,7 @@
 
   function isVisibleSketchId(sketchId) {
     const id = sketchId || activeSketchId();
-    return id === activeSketchId() || isAncestorSketchId(id);
+    return id === activeSketchId() || isAncestorSketchId(id) || descendantSketchIds(activeSketchId()).includes(id);
   }
 
   function isVisibleSketchElement(item) {
@@ -445,7 +445,7 @@
   }
 
   function sketchAlpha(item) {
-    return isActiveSketchElement(item) ? 1 : 0.26;
+    return isActiveSketchElement(item) ? 1 : 0.3;
   }
 
   function constraintStatusBadge(status) {
@@ -888,7 +888,7 @@
       Array.isArray(data.sketches) && data.sketches.length > 0
         ? data.sketches.map((sketch, index) => ({
             id: String(sketch.id || `S${index + 1}`),
-            name: String(sketch.name || sketch.id || `Sketch ${index + 1}`),
+            name: String(sketch.name || sketch.id || `Sketch-${index + 1}`),
             parentSketchId: sketch.parentSketchId == null ? null : String(sketch.parentSketchId),
           }))
         : [{ id: DEFAULT_SKETCH_ID, name: DEFAULT_SKETCH_NAME, parentSketchId: null }];
@@ -4016,10 +4016,11 @@
   function nextRootSketchName() {
     let max = 0;
     for (const sketch of model.sketches) {
-      const match = /^Sketch\s+(\d+)$/.exec(sketch.name || "");
+      if (sketch.parentSketchId) continue;
+      const match = /^Sketch[-\s](\d+)$/.exec(sketch.name || "");
       if (match) max = Math.max(max, Number(match[1]));
     }
-    return `Sketch ${Math.max(max + 1, model.sketches.length + 1)}`;
+    return `Sketch-${max + 1}`;
   }
 
   function nextChildSketchName(parentSketchId) {
@@ -4076,8 +4077,6 @@
   function updateSketchUI() {
     ensureSketchState();
     const activeLabel = document.getElementById("activeSketchLabel");
-    const active = activeSketch();
-    const parent = parentSketchOf(active);
     const overlay = document.getElementById("sketchOverlay");
     if (overlay) overlay.classList.toggle("tree-collapsed", sketchTreeCollapsed);
     const toggleTreeBtn = document.getElementById("toggleSketchTreeBtn");
@@ -4085,26 +4084,17 @@
       toggleTreeBtn.textContent = sketchTreeCollapsed ? "Show" : "Hide";
       toggleTreeBtn.setAttribute("aria-expanded", String(!sketchTreeCollapsed));
     }
-    if (activeLabel) activeLabel.textContent = parent ? `編集中: ${active.name} / 親: ${parent.name}` : `編集中: ${active.name}`;
+    if (activeLabel) activeLabel.textContent = "スケッチツリー";
     const sketchList = document.getElementById("sketchList");
     if (!sketchList) return;
     sketchList.innerHTML = sketchTreeRows()
       .map(({ sketch, depth, hasChildren, segments }) => {
         const isActive = sketch.id === activeSketchId();
-        const isParent = active.parentSketchId === sketch.id;
-        const isSibling = !isActive && !isParent && sketch.parentSketchId === active.parentSketchId;
-        const children = childSketchesOf(sketch.id);
         const count =
           model.points.filter((item) => elementSketchId(item) === sketch.id).length +
           model.lines.filter((item) => elementSketchId(item) === sketch.id).length +
           model.circles.filter((item) => elementSketchId(item) === sketch.id).length +
           model.arcs.filter((item) => elementSketchId(item) === sketch.id).length;
-        const badges = [
-          `<span class="badge">${count}</span>`,
-          isParent ? `<span class="badge relation-badge">親</span>` : "",
-          isSibling ? `<span class="badge relation-badge">兄弟</span>` : "",
-          children.length > 0 ? `<span class="badge relation-badge">子 ${children.length}</span>` : "",
-        ].join("");
         const treeLines =
           depth === 0
             ? `<span class="sketch-tree-gutter" aria-hidden="true">${segments.map((segment) => `<span class="tree-segment ${segment}"></span>`).join("")}</span>`
@@ -4115,7 +4105,7 @@
           `<div class="item sketch-item ${isActive ? "active" : ""} ${hasChildren ? "has-children" : ""}" style="--sketch-depth:${depth}">` +
           treeLines +
           `<button class="sketchActivateBtn" data-id="${sketch.id}" ${isActive ? "disabled" : ""}>${escapeHtml(sketch.name)}</button>` +
-          `<span class="sketch-badges">${badges}</span>` +
+          `<span class="sketch-badges"><span class="badge">${count}</span></span>` +
           `<button class="sketchRenameBtn icon-small-btn" data-id="${sketch.id}" title="名前変更" aria-label="名前変更">Aa</button>` +
           `</div>`
         );
