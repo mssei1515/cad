@@ -297,6 +297,18 @@
     return isVisibleSketchId(elementSketchId(item));
   }
 
+  function sketchRelationToActive(sketchId) {
+    const id = sketchId || activeSketchId();
+    if (id === activeSketchId()) return "active";
+    if (isAncestorSketchId(id)) return "ancestor";
+    if (descendantSketchIds(activeSketchId()).includes(id)) return "descendant";
+    return "hidden";
+  }
+
+  function sketchRelationOfElement(item) {
+    return sketchRelationToActive(elementSketchId(item));
+  }
+
   function constraintSketchId(constraint) {
     ensureSketchState();
     if (!constraint) return activeSketchId();
@@ -438,6 +450,9 @@
     if (status === "conflict") return CONSTRAINT_STATUS_COLORS.conflict;
     if (selected) return "#1d4ed8";
     if (hovered) return "#3b82f6";
+    const relation = sketchRelationOfElement(item);
+    if (relation === "ancestor") return "#64748b";
+    if (relation === "descendant") return "#4b7f67";
     return CONSTRAINT_STATUS_COLORS[status] || CONSTRAINT_STATUS_COLORS.full;
   }
 
@@ -450,7 +465,11 @@
   }
 
   function sketchAlpha(item) {
-    return isActiveSketchElement(item) ? 1 : 0.3;
+    const relation = sketchRelationOfElement(item);
+    if (relation === "active") return 1;
+    if (relation === "ancestor") return 0.42;
+    if (relation === "descendant") return 0.42;
+    return 0;
   }
 
   function constraintStatusBadge(status) {

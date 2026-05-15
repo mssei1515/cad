@@ -468,11 +468,11 @@ h2 {
 }
 
 .sketch-item.ancestor-visible:not(.active) {
-  background: rgba(59, 130, 246, 0.1);
+  background: rgba(100, 116, 139, 0.12);
 }
 
 .sketch-item.descendant-visible:not(.active) {
-  background: rgba(100, 116, 139, 0.1);
+  background: rgba(75, 127, 103, 0.12);
 }
 
 .sketchActivateBtn {
