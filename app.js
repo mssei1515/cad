@@ -249,17 +249,18 @@
       byParent.get(key).push(sketch);
     }
     const rows = [];
-    const visit = (parentId, depth, ancestorLastFlags) => {
+    const visit = (parentId, depth, ancestorHasNext) => {
       const children = byParent.get(parentId || "") || [];
       children.forEach((sketch, index) => {
         const isLast = index === children.length - 1;
-        rows.push({ sketch, depth, isLast, hasChildren: childSketchesOf(sketch.id).length > 0, ancestorLastFlags });
-        visit(sketch.id, depth + 1, [...ancestorLastFlags, isLast]);
+        const segments = [...ancestorHasNext.map((hasNext) => (hasNext ? "pipe" : "blank")), isLast ? "elbow" : "tee"];
+        rows.push({ sketch, depth, isLast, hasChildren: childSketchesOf(sketch.id).length > 0, segments });
+        visit(sketch.id, depth + 1, [...ancestorHasNext, !isLast]);
       });
     };
     visit("", 0, []);
     for (const sketch of model.sketches) {
-      if (!rows.some((row) => row.sketch === sketch)) rows.push({ sketch, depth: 0, isLast: true, hasChildren: false, ancestorLastFlags: [] });
+      if (!rows.some((row) => row.sketch === sketch)) rows.push({ sketch, depth: 0, isLast: true, hasChildren: false, segments: ["elbow"] });
     }
     return rows;
   }
@@ -4037,7 +4038,7 @@
     const sketchList = document.getElementById("sketchList");
     if (!sketchList) return;
     sketchList.innerHTML = sketchTreeRows()
-      .map(({ sketch, depth, isLast, hasChildren, ancestorLastFlags }) => {
+      .map(({ sketch, depth, hasChildren, segments }) => {
         const isActive = sketch.id === activeSketchId();
         const isParent = active.parentSketchId === sketch.id;
         const isSibling = !isActive && !isParent && sketch.parentSketchId === active.parentSketchId;
@@ -4055,9 +4056,9 @@
         ].join("");
         const treeLines =
           depth === 0
-            ? `<span class="sketch-tree-gutter root" aria-hidden="true"></span>`
-            : `<span class="sketch-tree-gutter" aria-hidden="true">${ancestorLastFlags
-                .map((last, index) => `<span class="tree-segment ${index === depth - 1 ? (isLast ? "branch last" : "branch") : ""}"></span>`)
+            ? `<span class="sketch-tree-gutter" aria-hidden="true">${segments.map((segment) => `<span class="tree-segment ${segment}"></span>`).join("")}</span>`
+            : `<span class="sketch-tree-gutter" aria-hidden="true">${segments
+                .map((segment) => `<span class="tree-segment ${segment}"></span>`)
                 .join("")}</span>`;
         return (
           `<div class="item sketch-item ${isActive ? "active" : ""} ${hasChildren ? "has-children" : ""}" style="--sketch-depth:${depth}">` +

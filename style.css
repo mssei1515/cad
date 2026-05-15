@@ -476,15 +476,16 @@ h2 {
 }
 
 .sketch-tree-gutter {
+  --tree-cell: 18px;
+  --tree-line-x: 8px;
+  --tree-line-color: rgba(71, 85, 105, 0.72);
+  --tree-line-width: 1px;
   display: grid;
   grid-auto-flow: column;
-  grid-auto-columns: 18px;
+  grid-auto-columns: var(--tree-cell);
   align-self: stretch;
-  width: max(10px, calc(var(--sketch-depth, 0) * 18px));
-}
-
-.sketch-tree-gutter.root {
-  width: 0;
+  width: max(var(--tree-cell), calc((var(--sketch-depth, 0) + 1) * var(--tree-cell)));
+  margin-right: 4px;
 }
 
 .tree-segment {
@@ -492,28 +493,30 @@ h2 {
   min-height: 18px;
 }
 
-.tree-segment.line::before,
-.tree-segment.branch::before {
+.tree-segment.pipe::before,
+.tree-segment.tee::before,
+.tree-segment.elbow::before {
   position: absolute;
-  top: -1px;
-  bottom: -1px;
-  left: 7px;
-  width: 1px;
-  background: rgba(71, 85, 105, 0.72);
+  top: 0;
+  bottom: 0;
+  left: var(--tree-line-x);
+  width: var(--tree-line-width);
+  background: var(--tree-line-color);
   content: "";
 }
 
-.tree-segment.branch.last::before {
+.tree-segment.elbow::before {
   bottom: 50%;
 }
 
-.tree-segment.branch::after {
+.tree-segment.tee::after,
+.tree-segment.elbow::after {
   position: absolute;
   top: 50%;
-  left: 7px;
-  width: 10px;
-  height: 1px;
-  background: rgba(71, 85, 105, 0.72);
+  left: var(--tree-line-x);
+  right: 0;
+  height: var(--tree-line-width);
+  background: var(--tree-line-color);
   content: "";
 }
 
