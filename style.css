@@ -478,6 +478,16 @@ h2 {
   background: rgba(17, 24, 39, 0.08);
 }
 
+.sketch-item.root {
+  cursor: default;
+}
+
+.sketch-item.root .sketchActivateBtn {
+  color: #111827;
+  font-weight: 600;
+  opacity: 1;
+}
+
 .sketchActivateBtn {
   min-width: 0;
   padding: 1px 4px;

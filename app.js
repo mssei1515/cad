@@ -49,9 +49,22 @@
   const canvas = document.getElementById("canvas");
   const ctx = canvas.getContext("2d");
   const dimensionValueInput = document.getElementById("dimensionValueInput");
+  const ROOT_SKETCH_ID = "ROOT";
+  const ROOT_SKETCH_NAME = "Root Sketch";
   const DEFAULT_SKETCH_ID = "S1";
   const DEFAULT_SKETCH_NAME = "Sketch-1";
-  const model = { sketches: [{ id: DEFAULT_SKETCH_ID, name: DEFAULT_SKETCH_NAME, parentSketchId: null }], activeSketchId: DEFAULT_SKETCH_ID, points: [], lines: [], circles: [], arcs: [], constraints: [] };
+  const model = {
+    sketches: [
+      { id: ROOT_SKETCH_ID, name: ROOT_SKETCH_NAME, parentSketchId: null, kind: "root" },
+      { id: DEFAULT_SKETCH_ID, name: DEFAULT_SKETCH_NAME, parentSketchId: ROOT_SKETCH_ID, kind: "sketch" },
+    ],
+    activeSketchId: DEFAULT_SKETCH_ID,
+    points: [],
+    lines: [],
+    circles: [],
+    arcs: [],
+    constraints: [],
+  };
   const solver = new ConstraintSolver(model);
 
   let mode = "select";
@@ -129,18 +142,50 @@
 
   function ensureSketchState() {
     if (!Array.isArray(model.sketches)) model.sketches = [];
-    if (model.sketches.length === 0) model.sketches.push({ id: DEFAULT_SKETCH_ID, name: DEFAULT_SKETCH_NAME, parentSketchId: null });
+    let root = model.sketches.find((sketch) => sketch.kind === "root" || sketch.id === ROOT_SKETCH_ID);
+    if (!root) {
+      root = { id: ROOT_SKETCH_ID, name: ROOT_SKETCH_NAME, parentSketchId: null, kind: "root" };
+      model.sketches.unshift(root);
+    }
+    model.sketches = [root, ...model.sketches.filter((sketch) => sketch !== root && sketch.kind !== "root" && sketch.id !== ROOT_SKETCH_ID)];
+    root.id = ROOT_SKETCH_ID;
+    root.name = root.name || ROOT_SKETCH_NAME;
+    root.parentSketchId = null;
+    root.kind = "root";
+    if (!model.sketches.some((sketch) => sketch.kind !== "root")) {
+      model.sketches.push({ id: DEFAULT_SKETCH_ID, name: DEFAULT_SKETCH_NAME, parentSketchId: ROOT_SKETCH_ID, kind: "sketch" });
+    }
     const ids = new Set(model.sketches.map((sketch) => sketch.id));
     for (const sketch of model.sketches) {
+      if (sketch === root) continue;
+      sketch.kind = "sketch";
       if (!Object.prototype.hasOwnProperty.call(sketch, "parentSketchId")) sketch.parentSketchId = null;
-      if (sketch.parentSketchId === sketch.id || !ids.has(sketch.parentSketchId)) sketch.parentSketchId = null;
+      if (sketch.parentSketchId === sketch.id || !ids.has(sketch.parentSketchId)) sketch.parentSketchId = ROOT_SKETCH_ID;
+      if (sketch.parentSketchId == null) sketch.parentSketchId = ROOT_SKETCH_ID;
     }
-    if (!model.activeSketchId || !model.sketches.some((sketch) => sketch.id === model.activeSketchId)) model.activeSketchId = model.sketches[0].id;
+    if (!model.activeSketchId || !model.sketches.some((sketch) => sketch.id === model.activeSketchId && sketch.kind !== "root")) {
+      model.activeSketchId = model.sketches.find((sketch) => sketch.kind !== "root")?.id || DEFAULT_SKETCH_ID;
+    }
+  }
+
+  function isRootSketch(sketchOrId) {
+    const sketch = typeof sketchOrId === "string" ? sketchById(sketchOrId) : sketchOrId;
+    return sketch?.kind === "root" || sketch?.id === ROOT_SKETCH_ID;
+  }
+
+  function isDrawableSketch(sketchOrId) {
+    const sketch = typeof sketchOrId === "string" ? sketchById(sketchOrId) : sketchOrId;
+    return Boolean(sketch && !isRootSketch(sketch));
+  }
+
+  function firstDrawableSketchId() {
+    ensureSketchState();
+    return model.sketches.find((sketch) => sketch.kind !== "root")?.id || DEFAULT_SKETCH_ID;
   }
 
   function activeSketch() {
     ensureSketchState();
-    return model.sketches.find((sketch) => sketch.id === model.activeSketchId) || model.sketches[0];
+    return model.sketches.find((sketch) => sketch.id === model.activeSketchId && sketch.kind !== "root") || model.sketches.find((sketch) => sketch.kind !== "root");
   }
 
   function sketchName(sketchId) {
@@ -271,7 +316,8 @@
   }
 
   function assignSketchId(item, sketchId = activeSketchId()) {
-    if (item) item.sketchId = sketchId || activeSketchId();
+    const targetSketchId = isDrawableSketch(sketchId) ? sketchId : firstDrawableSketchId();
+    if (item) item.sketchId = targetSketchId || activeSketchId();
     return item;
   }
 
@@ -331,7 +377,8 @@
   }
 
   function assignConstraintSketchId(constraint, sketchId = activeSketchId()) {
-    if (constraint) constraint.sketchId = sketchId || activeSketchId();
+    const targetSketchId = isDrawableSketch(sketchId) ? sketchId : firstDrawableSketchId();
+    if (constraint) constraint.sketchId = targetSketchId || activeSketchId();
     return constraint;
   }
 
@@ -660,7 +707,8 @@
     arcSeq = 1;
     sketchSeq = 2;
     model.sketches.length = 0;
-    model.sketches.push({ id: DEFAULT_SKETCH_ID, name: DEFAULT_SKETCH_NAME, parentSketchId: null });
+    model.sketches.push({ id: ROOT_SKETCH_ID, name: ROOT_SKETCH_NAME, parentSketchId: null, kind: "root" });
+    model.sketches.push({ id: DEFAULT_SKETCH_ID, name: DEFAULT_SKETCH_NAME, parentSketchId: ROOT_SKETCH_ID, kind: "sketch" });
     model.activeSketchId = DEFAULT_SKETCH_ID;
   }
 
@@ -809,10 +857,11 @@
   }
 
   function serializeModel() {
+    ensureSketchState();
     return {
       version: 2,
       savedAt: new Date().toISOString(),
-      sketches: model.sketches.map((sketch) => ({ id: sketch.id, name: sketch.name, parentSketchId: sketch.parentSketchId || null })),
+      sketches: model.sketches.map((sketch) => ({ id: sketch.id, name: sketch.name, parentSketchId: sketch.parentSketchId || null, kind: isRootSketch(sketch) ? "root" : "sketch" })),
       activeSketchId: activeSketchId(),
       points: model.points.map((p) => ({ id: p.id, x: p.x, y: p.y, fixed: p.fixed, kind: p.kind || (isPointUsedByPrimitive(p) ? "endpoint" : "explicit"), sketchId: elementSketchId(p) })),
       lines: model.lines.map((l) => ({ id: l.id, p1: l.p1.id, p2: l.p2.id, sketchId: elementSketchId(l) })),
@@ -939,21 +988,36 @@
       throw new Error("保存データの形式が正しくありません");
     }
 
-    const loadedSketches =
+    let loadedSketches =
       Array.isArray(data.sketches) && data.sketches.length > 0
         ? data.sketches.map((sketch, index) => ({
             id: String(sketch.id || `S${index + 1}`),
             name: String(sketch.name || sketch.id || `Sketch-${index + 1}`),
             parentSketchId: sketch.parentSketchId == null ? null : String(sketch.parentSketchId),
+            kind: sketch.kind === "root" || sketch.id === ROOT_SKETCH_ID ? "root" : "sketch",
           }))
-        : [{ id: DEFAULT_SKETCH_ID, name: DEFAULT_SKETCH_NAME, parentSketchId: null }];
+        : [{ id: DEFAULT_SKETCH_ID, name: DEFAULT_SKETCH_NAME, parentSketchId: ROOT_SKETCH_ID, kind: "sketch" }];
+    let loadedRoot = loadedSketches.find((sketch) => sketch.kind === "root" || sketch.id === ROOT_SKETCH_ID);
+    if (!loadedRoot) loadedRoot = { id: ROOT_SKETCH_ID, name: ROOT_SKETCH_NAME, parentSketchId: null, kind: "root" };
+    loadedSketches = [loadedRoot, ...loadedSketches.filter((sketch) => sketch !== loadedRoot && sketch.kind !== "root" && sketch.id !== ROOT_SKETCH_ID)];
+    loadedRoot.id = ROOT_SKETCH_ID;
+    loadedRoot.name = loadedRoot.name || ROOT_SKETCH_NAME;
+    loadedRoot.parentSketchId = null;
+    loadedRoot.kind = "root";
+    if (!loadedSketches.some((sketch) => sketch.kind !== "root")) {
+      loadedSketches.push({ id: DEFAULT_SKETCH_ID, name: DEFAULT_SKETCH_NAME, parentSketchId: ROOT_SKETCH_ID, kind: "sketch" });
+    }
     const loadedSketchIds = new Set(loadedSketches.map((sketch) => sketch.id));
     for (const sketch of loadedSketches) {
-      if (sketch.parentSketchId === sketch.id || !loadedSketchIds.has(sketch.parentSketchId)) sketch.parentSketchId = null;
+      if (sketch.kind === "root") continue;
+      sketch.kind = "sketch";
+      if (sketch.parentSketchId === sketch.id || !loadedSketchIds.has(sketch.parentSketchId)) sketch.parentSketchId = ROOT_SKETCH_ID;
+      if (sketch.parentSketchId == null) sketch.parentSketchId = ROOT_SKETCH_ID;
     }
-    const fallbackSketchId = loadedSketches[0].id;
+    const fallbackSketchId = loadedSketches.find((sketch) => sketch.kind !== "root")?.id || DEFAULT_SKETCH_ID;
     const normalizeSketchId = (sketchId) => {
       const id = sketchId == null ? fallbackSketchId : String(sketchId);
+      if (id === ROOT_SKETCH_ID) return fallbackSketchId;
       return loadedSketchIds.has(id) ? id : fallbackSketchId;
     };
 
@@ -4132,7 +4196,7 @@
   function nextRootSketchName() {
     let max = 0;
     for (const sketch of model.sketches) {
-      if (sketch.parentSketchId) continue;
+      if (sketch.parentSketchId !== ROOT_SKETCH_ID || isRootSketch(sketch)) continue;
       const match = /^Sketch[-\s](\d+)$/.exec(sketch.name || "");
       if (match) max = Math.max(max, Number(match[1]));
     }
@@ -4141,6 +4205,7 @@
 
   function nextChildSketchName(parentSketchId) {
     const parent = sketchById(parentSketchId);
+    if (isRootSketch(parent)) return nextRootSketchName();
     if (!parent) return nextRootSketchName();
     const prefix = `${parent.name}-`;
     let max = 0;
@@ -4153,14 +4218,14 @@
   }
 
   function nextSketchName(parentSketchId) {
-    return parentSketchId ? nextChildSketchName(parentSketchId) : nextRootSketchName();
+    return parentSketchId && parentSketchId !== ROOT_SKETCH_ID ? nextChildSketchName(parentSketchId) : nextRootSketchName();
   }
 
   function createSketch(kind = "sibling") {
     ensureSketchState();
     const current = activeSketch();
-    const parentSketchId = kind === "child" ? current.id : current.parentSketchId || null;
-    const sketch = { id: `S${sketchSeq++}`, name: nextSketchName(parentSketchId), parentSketchId };
+    const parentSketchId = kind === "child" ? current.id : current.parentSketchId || ROOT_SKETCH_ID;
+    const sketch = { id: `S${sketchSeq++}`, name: nextSketchName(parentSketchId), parentSketchId, kind: "sketch" };
     model.sketches.push(sketch);
     model.activeSketchId = sketch.id;
     clearInteractionForSketchChange();
@@ -4171,7 +4236,7 @@
 
   function setActiveSketch(sketchId) {
     ensureSketchState();
-    if (!model.sketches.some((sketch) => sketch.id === sketchId)) return;
+    if (!model.sketches.some((sketch) => sketch.id === sketchId && isDrawableSketch(sketch))) return;
     if (model.activeSketchId === sketchId) return;
     model.activeSketchId = sketchId;
     clearInteractionForSketchChange();
@@ -4182,7 +4247,7 @@
 
   function renameSketch(sketchId) {
     const sketch = model.sketches.find((item) => item.id === sketchId);
-    if (!sketch) return;
+    if (!sketch || isRootSketch(sketch)) return;
     const next = window.prompt("スケッチ名", sketch.name);
     if (!next) return;
     sketch.name = next.trim() || sketch.name;
@@ -4206,6 +4271,7 @@
     sketchList.innerHTML = sketchTreeRows()
       .map(({ sketch, depth, hasChildren, segments }) => {
         const isActive = sketch.id === activeSketchId();
+        const isRoot = isRootSketch(sketch);
         const isAncestor = isAncestorSketchId(sketch.id);
         const isDescendant = descendantSketchIds(activeSketchId()).includes(sketch.id);
         const visible = isVisibleSketchId(sketch.id);
@@ -4221,11 +4287,11 @@
                 .map((segment) => `<span class="tree-segment ${segment}"></span>`)
                 .join("")}</span>`;
         return (
-          `<div class="item sketch-item ${visible ? "visible" : ""} ${isAncestor ? "ancestor-visible" : ""} ${isDescendant ? "descendant-visible" : ""} ${isActive ? "active" : ""} ${hasChildren ? "has-children" : ""}" data-id="${sketch.id}" style="--sketch-depth:${depth}">` +
+          `<div class="item sketch-item ${visible ? "visible" : ""} ${isRoot ? "root" : ""} ${isAncestor ? "ancestor-visible" : ""} ${isDescendant ? "descendant-visible" : ""} ${isActive ? "active" : ""} ${hasChildren ? "has-children" : ""}" data-id="${sketch.id}" style="--sketch-depth:${depth}">` +
           treeLines +
-          `<button class="sketchActivateBtn" data-id="${sketch.id}" ${isActive ? "disabled" : ""}>${escapeHtml(sketch.name)}</button>` +
+          `<button class="sketchActivateBtn" data-id="${sketch.id}" ${isActive || isRoot ? "disabled" : ""}>${escapeHtml(sketch.name)}</button>` +
           `<span class="sketch-badges"><span class="badge">${count}</span></span>` +
-          `<button class="sketchRenameBtn icon-small-btn" data-id="${sketch.id}" title="名前変更" aria-label="名前変更">Aa</button>` +
+          (isRoot ? "" : `<button class="sketchRenameBtn icon-small-btn" data-id="${sketch.id}" title="名前変更" aria-label="名前変更">Aa</button>`) +
           `</div>`
         );
       })
@@ -4236,6 +4302,7 @@
     for (const row of document.querySelectorAll(".sketch-item")) {
       row.addEventListener("click", (event) => {
         if (event.target.closest(".sketchRenameBtn")) return;
+        if (row.classList.contains("root")) return;
         setActiveSketch(row.dataset.id);
       });
     }
