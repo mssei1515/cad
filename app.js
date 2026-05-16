@@ -356,6 +356,7 @@
   function activeReferenceSubject() {
     if (selectedArcEndpoint) return { kind: "arc-endpoint", arc: selectedArcEndpoint.arc, endpoint: selectedArcEndpoint.endpoint };
     if (selectedPoints.length === 1 && selectedLines.length === 0 && selectedCircles.length === 0 && selectedArcs.length === 0) return { kind: "point", point: selectedPoints[0] };
+    if (selectedPoints.length === 0 && selectedLines.length === 1 && selectedCircles.length === 0 && selectedArcs.length === 0) return { kind: "line", line: selectedLines[0] };
     if (selectedPoints.length === 0 && selectedLines.length === 0 && selectedCircles.length === 1 && selectedArcs.length === 0) return { kind: "point", point: selectedCircles[0].center };
     if (selectedPoints.length === 0 && selectedLines.length === 0 && selectedCircles.length === 0 && selectedArcs.length === 1) return { kind: "point", point: selectedArcs[0].center };
     return null;
@@ -364,8 +365,13 @@
   function referenceSubjectElement(subject) {
     if (!subject) return null;
     if (subject.kind === "point") return subject.point;
+    if (subject.kind === "line") return subject.line;
     if (subject.kind === "arc-endpoint") return subject.arc;
     return null;
+  }
+
+  function referenceSubjectSketchId(subject) {
+    return elementSketchId(referenceSubjectElement(subject));
   }
 
   function solveAndRefresh(label = "自動solve") {
@@ -3819,6 +3825,15 @@
     return handleReferenceTargetClick(referenceTarget, pointer, false);
   }
 
+  function referenceTargetFromHit(hitP, hitL, hitC, hitA) {
+    const item = hitP || hitL || hitC || hitA;
+    if (!item) return null;
+    const sketchId = elementSketchId(item);
+    if (hitP) return { kind: "point", point: hitP, sketchId };
+    if (hitL) return { kind: "line", line: hitL, sketchId };
+    return { kind: "primitive", primitive: hitC || hitA, sketchId };
+  }
+
   function startDistanceCommand() {
     const target = distanceTargetFromSelection();
     if (!target) return;
@@ -4000,7 +4015,7 @@
       draw();
       return;
     }
-    const { target, dimension, constraint, referenceSketchId } = pendingCommand;
+    const { target, dimension, constraint, referenceSketchId, sketchId } = pendingCommand;
     pendingCommand = null;
     hideDimensionValueInput();
     if (constraint) {
@@ -4020,7 +4035,7 @@
       draw();
       return;
     }
-    addDistanceConstraintFromTarget(target, value, dimension, { referenceSketchId });
+    addDistanceConstraintFromTarget(target, value, dimension, { referenceSketchId, sketchId });
   }
 
   function handleDistanceKey(e) {
@@ -4401,26 +4416,26 @@
     return true;
   }
 
-  function markReferenceConstraint(constraint, referenceSketchId) {
+  function markReferenceConstraint(constraint, referenceSketchId, sketchId = activeSketchId()) {
     constraint.reference = true;
     constraint.referenceSketchId = referenceSketchId;
-    constraint.sketchId = activeSketchId();
+    constraint.sketchId = sketchId;
     constraint.name = `参照 ${constraint.name}`;
     return constraint;
   }
 
-  function commitReferenceConstraint(type, constraint, referenceSketchId) {
-    if (!constraint || !isAncestorSketchId(referenceSketchId)) {
+  function commitReferenceConstraint(type, constraint, referenceSketchId, sketchId = activeSketchId()) {
+    if (!constraint || !isAncestorSketchId(referenceSketchId, sketchId)) {
       const msg = "親または祖先スケッチのみ参照できます";
       setHint(msg, "error");
       log(msg);
       return false;
     }
     const snapshot = snapshotModelState();
-    markReferenceConstraint(constraint, referenceSketchId);
-    pushModelConstraint(constraint, activeSketchId());
+    markReferenceConstraint(constraint, referenceSketchId, sketchId);
+    pushModelConstraint(constraint, sketchId);
     preconditionNewConstraint(constraint);
-    const result = solveActiveSketch();
+    const result = solveSketchById(sketchId);
     normalizeArcSweeps();
     if (!result.success || result.errorNorm > CONSTRAINT_ACCEPT_ERROR) {
       restoreModelState(snapshot);
@@ -4446,6 +4461,9 @@
       if (referenceTarget.kind === "line") return new PointOnLineConstraint(subject.point, referenceTarget.line);
       if (referenceTarget.kind === "primitive") return new PointOnCircleConstraint(subject.point, referenceTarget.primitive);
     }
+    if (subject.kind === "line") {
+      if (referenceTarget.kind === "line") return new CollinearConstraint(subject.line, referenceTarget.line);
+    }
     if (subject.kind === "arc-endpoint") {
       if (referenceTarget.kind === "point") return new ArcEndpointCoincidentConstraint(subject.arc, subject.endpoint, referenceTarget.point);
       if (referenceTarget.kind === "line") return new ArcEndpointOnLineConstraint(subject.arc, subject.endpoint, referenceTarget.line);
@@ -4467,6 +4485,7 @@
       buffer: String(Number(target.value).toFixed(3)),
       editing: false,
       referenceSketchId: referenceTarget.sketchId,
+      sketchId: referenceSubjectSketchId(subject),
     };
     pendingConstraintCommand = null;
     setHint("参照寸法値を入力中: Enter/ダブルクリックで決定、Escでキャンセル");
@@ -4477,15 +4496,17 @@
 
   function handleReferenceTargetClick(referenceTarget, pointer, distanceMode = false) {
     const subject = activeReferenceSubject();
-    if (!subject || !isActiveSketchElement(referenceSubjectElement(subject))) {
-      setHint("参照元として、アクティブスケッチの点・円中心・円弧中心・円弧端点を1つ選択してください", "error");
+    const subjectElement = referenceSubjectElement(subject);
+    const subjectSketchId = referenceSubjectSketchId(subject);
+    if (!subject || !isEditableSketchElement(subjectElement)) {
+      setHint("参照先を選ぶ前に、操作可能なスケッチ側の対象を1つ選択してください");
       return true;
     }
     if (!referenceTarget) {
       setHint("親または祖先スケッチの点・線・円・円弧をクリックしてください", "error");
       return true;
     }
-    if (!isAncestorSketchId(referenceTarget.sketchId)) {
+    if (!isAncestorSketchId(referenceTarget.sketchId, subjectSketchId)) {
       setHint("親または祖先スケッチのみ参照できます", "error");
       return true;
     }
@@ -4495,7 +4516,7 @@
       setHint("この参照拘束の組み合わせはまだ対応していません", "error");
       return true;
     }
-    commitReferenceConstraint("reference", constraint, referenceTarget.sketchId);
+    commitReferenceConstraint("reference", constraint, referenceTarget.sketchId, subjectSketchId);
     return true;
   }
 
@@ -4527,7 +4548,7 @@
     }
     if (!constraint) return false;
     constraint.dimension = dimension;
-    if (options.referenceSketchId) return commitReferenceConstraint("referenceDimension", constraint, options.referenceSketchId);
+    if (options.referenceSketchId) return commitReferenceConstraint("referenceDimension", constraint, options.referenceSketchId, options.sketchId || activeSketchId());
     return commitNewConstraint("dimension", constraint);
   }
 
@@ -5783,7 +5804,15 @@
     if (pendingConstraintCommand) {
       e.preventDefault();
       const referenceTarget = hitReferenceTarget(p.x, p.y);
-      if (referenceTarget && handleReferenceConstraintTargetClick(referenceTarget, p, pendingConstraintCommand.type, e.shiftKey)) {
+      if (referenceTarget) {
+        handleReferenceConstraintTargetClick(referenceTarget, p, pendingConstraintCommand.type, e.shiftKey);
+        return;
+      }
+      const hitReferenceLikeTarget = referenceTargetFromHit(hitP, hitL, hitC, hitA);
+      const subject = activeReferenceSubject();
+      const subjectSketchId = referenceSubjectSketchId(subject);
+      if (hitReferenceLikeTarget && subject && isAncestorSketchId(hitReferenceLikeTarget.sketchId, subjectSketchId)) {
+        handleReferenceConstraintTargetClick(hitReferenceLikeTarget, p, pendingConstraintCommand.type, e.shiftKey);
         return;
       }
       handleConstraintTargetClick(hitP, hitL, hitC, hitA, hitArcEnd);
@@ -5852,8 +5881,7 @@
     } else if (hitP) {
       selectedDimensionConstraint = null;
       if (multiSelect) togglePointSelection(hitP);
-      else if (hitIsSelected(hitP, null, null, null, null)) beginDrag(e, hitP, null, null, null, null, p);
-      else selectHitOnly(hitP, null, null, null, null);
+      else beginDrag(e, hitP, null, null, null, null, p);
     } else if (hitArcEnd) {
       selectedDimensionConstraint = null;
       if (multiSelect) {
@@ -5862,24 +5890,20 @@
         selectedArcEndpoint = next;
         if (!selectedArcs.includes(hitArcEnd.arc)) selectedArcs.push(hitArcEnd.arc);
       } else {
-        if (hitIsSelected(null, null, null, null, hitArcEnd)) beginDrag(e, null, null, null, null, hitArcEnd, p);
-        else selectHitOnly(null, null, null, null, hitArcEnd);
+        beginDrag(e, null, null, null, null, hitArcEnd, p);
       }
     } else if (hitL) {
       selectedDimensionConstraint = null;
       if (multiSelect) toggleLineSelection(hitL);
-      else if (hitIsSelected(null, hitL, null, null, null)) beginDrag(e, null, hitL, null, null, null, p);
-      else selectHitOnly(null, hitL, null, null, null);
+      else beginDrag(e, null, hitL, null, null, null, p);
     } else if (hitC) {
       selectedDimensionConstraint = null;
       if (multiSelect) toggleCircleSelection(hitC);
-      else if (hitIsSelected(null, null, hitC, null, null)) beginDrag(e, null, null, hitC, null, null, p);
-      else selectHitOnly(null, null, hitC, null, null);
+      else beginDrag(e, null, null, hitC, null, null, p);
     } else if (hitA) {
       selectedDimensionConstraint = null;
       if (multiSelect) toggleArcSelection(hitA);
-      else if (hitIsSelected(null, null, null, hitA, null)) beginDrag(e, null, null, null, hitA, null, p);
-      else selectHitOnly(null, null, null, hitA, null);
+      else beginDrag(e, null, null, null, hitA, null, p);
     } else {
       selectionRectSession = {
         pointerId: e.pointerId,
