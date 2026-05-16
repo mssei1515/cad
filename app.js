@@ -98,6 +98,8 @@
   let trimPreview = null;
   let pendingCommand = null;
   let pendingConstraintCommand = null;
+  let lastPointerWorld = null;
+  let hoveredSketchIdentity = null;
   let pointSeq = 1;
   let lineSeq = 1;
   let circleSeq = 1;
@@ -349,7 +351,7 @@
 
   function isEditableSketchId(sketchId) {
     const id = sketchId || activeSketchId();
-    return id === activeSketchId() || descendantSketchIds(activeSketchId()).includes(id);
+    return id === activeSketchId();
   }
 
   function isEditableSketchElement(item) {
@@ -533,8 +535,7 @@
     if (selected) return "#1d4ed8";
     if (hovered) return "#3b82f6";
     const relation = sketchRelationOfElement(item);
-    if (relation === "ancestor") return "#9ca3af";
-    if (relation === "descendant") return "#9ca3af";
+    if (relation !== "active") return "#9ca3af";
     const status = constraintStatusOf(item);
     if (status === "conflict") return CONSTRAINT_STATUS_COLORS.conflict;
     return CONSTRAINT_STATUS_COLORS[status] || CONSTRAINT_STATUS_COLORS.full;
@@ -543,8 +544,7 @@
   function sketchStrokeWidth(item) {
     const relation = sketchRelationOfElement(item);
     if (relation === "active") return 2.6;
-    if (relation === "ancestor") return 2;
-    if (relation === "descendant") return 1.2;
+    if (relation === "ancestor" || relation === "descendant") return 1.2;
     return 0;
   }
 
@@ -559,8 +559,7 @@
   function sketchAlpha(item) {
     const relation = sketchRelationOfElement(item);
     if (relation === "active") return 1;
-    if (relation === "ancestor") return 0.55;
-    if (relation === "descendant") return 0.45;
+    if (relation === "ancestor" || relation === "descendant") return 0.45;
     return 0;
   }
 
@@ -711,6 +710,8 @@
     hoveredArc = null;
     hoveredArcEndpoint = null;
     hoveredDimensionConstraint = null;
+    hoveredSketchIdentity = null;
+    lastPointerWorld = null;
     clearSnap();
     selectedArcEndpoint = null;
     selectedArcEndpointPair = null;
@@ -1215,6 +1216,7 @@
     selectedArcEndpoint = null;
     selectedArcEndpointPair = null;
     selectedDimensionConstraint = null;
+    hoveredSketchIdentity = null;
   }
 
   function selectableSketchElement(item) {
@@ -2880,6 +2882,7 @@
     drawSnapMarker();
     drawArcEndpointHandles();
     drawPoints();
+    drawSketchIdentityLabel();
     drawSelectionRect();
     ctx.restore();
     syncDimensionValueInput();
@@ -3442,6 +3445,40 @@
     ctx.fillRect(labelX - paddingX, labelY - 12 / viewport.scale - paddingY, metrics.width + paddingX * 2, 14 / viewport.scale + paddingY * 2);
     ctx.fillStyle = "#f59e0b";
     ctx.fillText(activeSnap.label, labelX, labelY);
+    ctx.restore();
+  }
+
+  function selectedSketchIdentityElement() {
+    if (selectedArcEndpoint?.arc) return { id: `${selectedArcEndpoint.arc.id}端点`, sketchId: elementSketchId(selectedArcEndpoint.arc), item: selectedArcEndpoint.arc };
+    const item = selectedPoints.at(-1) || selectedLines.at(-1) || selectedCircles.at(-1) || selectedArcs.at(-1);
+    return item ? { id: item.id, sketchId: elementSketchId(item), item } : null;
+  }
+
+  function sketchIdentityRelationLabel(sketchId) {
+    return sketchId === activeSketchId() ? "編集中" : "非アクティブ";
+  }
+
+  function drawSketchIdentityLabel() {
+    const identity = hoveredSketchIdentity || selectedSketchIdentityElement();
+    const pointer = lastPointerWorld;
+    if (!identity || !pointer || !isVisibleSketchId(identity.sketchId)) return;
+    const label = `${identity.id} / ${sketchName(identity.sketchId)} / ${sketchIdentityRelationLabel(identity.sketchId)}`;
+    ctx.save();
+    ctx.font = `${11 / viewport.scale}px system-ui`;
+    ctx.textAlign = "left";
+    ctx.textBaseline = "bottom";
+    const paddingX = 4 / viewport.scale;
+    const paddingY = 2 / viewport.scale;
+    const labelX = pointer.x + 14 / viewport.scale;
+    const labelY = pointer.y + 26 / viewport.scale;
+    const metrics = ctx.measureText(label);
+    ctx.fillStyle = "rgba(255, 255, 255, 0.9)";
+    ctx.fillRect(labelX - paddingX, labelY - 12 / viewport.scale - paddingY, metrics.width + paddingX * 2, 14 / viewport.scale + paddingY * 2);
+    ctx.strokeStyle = "rgba(148, 163, 184, 0.75)";
+    ctx.lineWidth = 1 / viewport.scale;
+    ctx.strokeRect(labelX - paddingX, labelY - 12 / viewport.scale - paddingY, metrics.width + paddingX * 2, 14 / viewport.scale + paddingY * 2);
+    ctx.fillStyle = identity.sketchId === activeSketchId() ? "#1d4ed8" : "#64748b";
+    ctx.fillText(label, labelX, labelY);
     ctx.restore();
   }
 
@@ -4201,6 +4238,8 @@
     trimPreview = null;
     pendingCommand = null;
     pendingConstraintCommand = null;
+    hoveredSketchIdentity = null;
+    lastPointerWorld = null;
     hideDimensionValueInput();
     clearSnap();
     mode = "select";
@@ -5343,31 +5382,35 @@
   }
 
   function hitInactiveElement(x, y) {
+    const hit = hitSketchIdentityElement(x, y, { inactiveOnly: true });
+    return hit ? { id: hit.id, sketchId: hit.sketchId, item: hit.item } : null;
+  }
+
+  function hitSketchIdentityElement(x, y, options = {}) {
+    const inactiveOnly = Boolean(options.inactiveOnly);
     const threshold = 7 / viewport.scale;
+    const pointThreshold = 10 / viewport.scale;
+    const accepts = (item) => isVisibleSketchElement(item) && (!inactiveOnly || !isEditableSketchElement(item));
     for (let i = model.points.length - 1; i >= 0; i--) {
       const p = model.points[i];
-      if (isEditableSketchElement(p)) continue;
-      if (!isVisibleSketchElement(p)) continue;
-      if (hypot2(p.x - x, p.y - y) <= 10 / viewport.scale) return { id: p.id, sketchId: elementSketchId(p) };
+      if (!accepts(p)) continue;
+      if (hypot2(p.x - x, p.y - y) <= pointThreshold) return { id: p.id, sketchId: elementSketchId(p), item: p, kind: "point" };
     }
     for (let i = model.lines.length - 1; i >= 0; i--) {
       const line = model.lines[i];
-      if (isEditableSketchElement(line)) continue;
-      if (!isVisibleSketchElement(line)) continue;
-      if (distancePointToSegment(x, y, line) <= threshold) return { id: line.id, sketchId: elementSketchId(line) };
+      if (!accepts(line)) continue;
+      if (distancePointToSegment(x, y, line) <= threshold) return { id: line.id, sketchId: elementSketchId(line), item: line, kind: "line" };
     }
     for (let i = model.circles.length - 1; i >= 0; i--) {
       const circle = model.circles[i];
-      if (isEditableSketchElement(circle)) continue;
-      if (!isVisibleSketchElement(circle)) continue;
-      if (Math.abs(hypot2(x - circle.center.x, y - circle.center.y) - circle.radius()) <= threshold) return { id: circle.id, sketchId: elementSketchId(circle) };
+      if (!accepts(circle)) continue;
+      if (Math.abs(hypot2(x - circle.center.x, y - circle.center.y) - circle.radius()) <= threshold) return { id: circle.id, sketchId: elementSketchId(circle), item: circle, kind: "circle" };
     }
     for (let i = model.arcs.length - 1; i >= 0; i--) {
       const arc = model.arcs[i];
-      if (isEditableSketchElement(arc)) continue;
-      if (!isVisibleSketchElement(arc)) continue;
+      if (!accepts(arc)) continue;
       const angle = Math.atan2(y - arc.center.y, x - arc.center.x);
-      if (Math.abs(hypot2(x - arc.center.x, y - arc.center.y) - arc.radius()) <= threshold && angleOnSignedSweep(angle, arc.startAngle, arc.endAngle)) return { id: arc.id, sketchId: elementSketchId(arc) };
+      if (Math.abs(hypot2(x - arc.center.x, y - arc.center.y) - arc.radius()) <= threshold && angleOnSignedSweep(angle, arc.startAngle, arc.endAngle)) return { id: arc.id, sketchId: elementSketchId(arc), item: arc, kind: "arc" };
     }
     return null;
   }
@@ -5858,12 +5901,14 @@
     }
 
     const p = canvasPoint(e);
+    lastPointerWorld = p;
     const hitP = hitPoint(p.x, p.y);
     const hitL = hitLine(p.x, p.y);
     const hitC = hitCircle(p.x, p.y);
     const hitArcEnd = hitArcEndpoint(p.x, p.y);
     const hitA = hitArc(p.x, p.y);
     const hitD = hitDimension(p.x, p.y);
+    hoveredSketchIdentity = hitSketchIdentityElement(p.x, p.y);
     const inactiveHit = !hitP && !hitL && !hitC && !hitArcEnd && !hitA && !hitD ? hitInactiveElement(p.x, p.y) : null;
 
     if (pendingCommand?.type === "distance-place") {
@@ -6010,8 +6055,10 @@
     }
 
     const p = canvasPoint(e);
+    lastPointerWorld = p;
     if (selectionRectSession) {
       clearSnap();
+      hoveredSketchIdentity = null;
       selectionRectSession.current = p;
       draw();
       return;
@@ -6019,6 +6066,7 @@
 
     if (pendingCommand?.type === "distance-place") {
       clearSnap();
+      hoveredSketchIdentity = hitSketchIdentityElement(p.x, p.y);
       pendingCommand.pointer = p;
       updatePendingLineLengthHover(p);
       draw();
@@ -6071,16 +6119,19 @@
       clearSnap();
       pointerPreview = null;
       trimPreview = null;
+      hoveredSketchIdentity = null;
       return;
     }
 
     if (mode === "line") {
+      hoveredSketchIdentity = null;
       const rawPreview = lineStartPoint && e.shiftKey ? orthogonalPointFrom(lineStartPoint, p) : p;
       pointerPreview = snapForDrawing(rawPreview);
       draw();
     }
 
     if (mode === "rectangle" || mode === "circle" || mode === "arc") {
+      hoveredSketchIdentity = null;
       pointerPreview = snapForDrawing(p);
       draw();
     }
@@ -6095,6 +6146,7 @@
       hoveredArcEndpoint = null;
       hoveredArc = null;
       hoveredDimensionConstraint = null;
+      hoveredSketchIdentity = null;
       const nextTrimPreview = computeTrimPreview(p);
       if (nextTrimPreview !== trimPreview || hadHover) {
         trimPreview = nextTrimPreview;
@@ -6105,6 +6157,7 @@
 
     if (pendingConstraintCommand && !dragSession) {
       const referenceTarget = hitReferenceTarget(p.x, p.y);
+      const nextSketchIdentity = hitSketchIdentityElement(p.x, p.y);
       const nextEndpointHover = referenceTarget ? null : hitEndpointPoint(p.x, p.y);
       const nextPointHover = referenceTarget ? (referenceTarget.kind === "point" ? referenceTarget.point : null) : nextEndpointHover || hitExplicitPoint(p.x, p.y);
       const nextLineHover = referenceTarget ? (referenceTarget.kind === "line" ? referenceTarget.line : null) : nextPointHover ? null : hitLine(p.x, p.y);
@@ -6130,7 +6183,9 @@
         nextCircleHover !== hoveredCircle ||
         !sameArcEndpoint(nextArcEndpointHover, hoveredArcEndpoint) ||
         nextArcHover !== hoveredArc ||
-        hoveredDimensionConstraint
+        hoveredDimensionConstraint ||
+        nextSketchIdentity?.item !== hoveredSketchIdentity?.item ||
+        Boolean(nextSketchIdentity)
       ) {
         hoveredPoint = nextPointHover;
         hoveredEndpointPoint = nextEndpointHover;
@@ -6139,6 +6194,7 @@
         hoveredArcEndpoint = nextArcEndpointHover;
         hoveredArc = nextArcHover;
         hoveredDimensionConstraint = null;
+        hoveredSketchIdentity = nextSketchIdentity;
         draw();
       }
       return;
@@ -6153,6 +6209,7 @@
       const nextCircleHover = nextPointHover || nextLineHover ? null : hitCircle(p.x, p.y);
       const nextArcEndpointHover = nextPointHover || nextLineHover || nextCircleHover ? null : hitArcEndpoint(p.x, p.y);
       const nextArcHover = nextPointHover || nextLineHover || nextCircleHover || nextArcEndpointHover ? null : hitArc(p.x, p.y);
+      const nextSketchIdentity = hitSketchIdentityElement(p.x, p.y);
       if (
         nextPointHover !== hoveredPoint ||
         nextEndpointHover !== hoveredEndpointPoint ||
@@ -6160,7 +6217,9 @@
         nextCircleHover !== hoveredCircle ||
         !sameArcEndpoint(nextArcEndpointHover, hoveredArcEndpoint) ||
         nextArcHover !== hoveredArc ||
-        nextHover !== hoveredDimensionConstraint
+        nextHover !== hoveredDimensionConstraint ||
+        nextSketchIdentity?.item !== hoveredSketchIdentity?.item ||
+        Boolean(nextSketchIdentity)
       ) {
         hoveredPoint = nextPointHover;
         hoveredEndpointPoint = nextEndpointHover;
@@ -6169,6 +6228,7 @@
         hoveredArcEndpoint = nextArcEndpointHover;
         hoveredArc = nextArcHover;
         hoveredDimensionConstraint = nextHover;
+        hoveredSketchIdentity = nextSketchIdentity;
         draw();
       }
     }
