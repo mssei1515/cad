@@ -288,6 +288,15 @@
     return elementSketchId(item) === activeSketchId();
   }
 
+  function isEditableSketchId(sketchId) {
+    const id = sketchId || activeSketchId();
+    return id === activeSketchId() || descendantSketchIds(activeSketchId()).includes(id);
+  }
+
+  function isEditableSketchElement(item) {
+    return isEditableSketchId(elementSketchId(item));
+  }
+
   function isVisibleSketchId(sketchId) {
     const id = sketchId || activeSketchId();
     return id === activeSketchId() || isAncestorSketchId(id) || descendantSketchIds(activeSketchId()).includes(id);
@@ -401,34 +410,43 @@
   }
 
   function refreshConstraintAnalysis() {
-    const sketchId = activeSketchId();
-    const analysis = solver.analyzeConstraintState({
-      variables: sketchSolveVariables(sketchId),
-      constraints: sketchSolveConstraints(sketchId),
-      lines: sketchSolveLines(sketchId),
-      errorTolerance: CONSTRAINT_ACCEPT_ERROR,
-    });
+    const rootSketchId = activeSketchId();
+    const sketchIds = [rootSketchId, ...descendantSketchIds(rootSketchId)];
+    const analyses = new Map();
     const statuses = new Map();
     const items = [];
-    for (const p of model.points) {
-      const status = classifyConstraintStatus(p, "point", analysis);
-      statuses.set(p, status);
-      if (isActiveSketchElement(p) && isExplicitPoint(p)) items.push(status);
-    }
-    for (const l of model.lines) {
-      const status = classifyConstraintStatus(l, "line", analysis);
-      statuses.set(l, status);
-      if (isActiveSketchElement(l)) items.push(status);
-    }
-    for (const c of model.circles) {
-      const status = classifyConstraintStatus(c, "circle", analysis);
-      statuses.set(c, status);
-      if (isActiveSketchElement(c)) items.push(status);
-    }
-    for (const a of model.arcs) {
-      const status = classifyConstraintStatus(a, "arc", analysis);
-      statuses.set(a, status);
-      if (isActiveSketchElement(a)) items.push(status);
+    for (const sketchId of sketchIds) {
+      const analysis = solver.analyzeConstraintState({
+        variables: sketchSolveVariables(sketchId),
+        constraints: sketchSolveConstraints(sketchId),
+        lines: sketchSolveLines(sketchId),
+        errorTolerance: CONSTRAINT_ACCEPT_ERROR,
+      });
+      analyses.set(sketchId, analysis);
+      for (const p of model.points) {
+        if (elementSketchId(p) !== sketchId) continue;
+        const status = classifyConstraintStatus(p, "point", analysis);
+        statuses.set(p, status);
+        if (isEditableSketchElement(p) && isExplicitPoint(p)) items.push(status);
+      }
+      for (const l of model.lines) {
+        if (elementSketchId(l) !== sketchId) continue;
+        const status = classifyConstraintStatus(l, "line", analysis);
+        statuses.set(l, status);
+        if (isEditableSketchElement(l)) items.push(status);
+      }
+      for (const c of model.circles) {
+        if (elementSketchId(c) !== sketchId) continue;
+        const status = classifyConstraintStatus(c, "circle", analysis);
+        statuses.set(c, status);
+        if (isEditableSketchElement(c)) items.push(status);
+      }
+      for (const a of model.arcs) {
+        if (elementSketchId(a) !== sketchId) continue;
+        const status = classifyConstraintStatus(a, "arc", analysis);
+        statuses.set(a, status);
+        if (isEditableSketchElement(a)) items.push(status);
+      }
     }
     const summary = {
       full: items.filter((status) => status === "full").length,
@@ -436,7 +454,7 @@
       conflict: items.filter((status) => status === "conflict").length,
       total: items.length,
     };
-    constraintAnalysisState = { analysis, statuses, summary };
+    constraintAnalysisState = { analysis: analyses.get(rootSketchId), analyses, statuses, summary };
     return constraintAnalysisState;
   }
 
@@ -450,7 +468,6 @@
     if (hovered) return "#3b82f6";
     const relation = sketchRelationOfElement(item);
     if (relation === "ancestor") return "#9ca3af";
-    if (relation === "descendant") return CONSTRAINT_STATUS_COLORS.full;
     const status = constraintStatusOf(item);
     if (status === "conflict") return CONSTRAINT_STATUS_COLORS.conflict;
     return CONSTRAINT_STATUS_COLORS[status] || CONSTRAINT_STATUS_COLORS.full;
@@ -469,7 +486,7 @@
   }
 
   function drawOrderBySketch(items) {
-    return items.filter(isVisibleSketchElement).sort((a, b) => Number(isActiveSketchElement(a)) - Number(isActiveSketchElement(b)));
+    return items.filter(isVisibleSketchElement).sort((a, b) => Number(isEditableSketchElement(a)) - Number(isEditableSketchElement(b)));
   }
 
   function sketchAlpha(item) {
@@ -1116,6 +1133,10 @@
     selectedDimensionConstraint = null;
   }
 
+  function selectableSketchElement(item) {
+    return isEditableSketchElement(item);
+  }
+
   function exitLineMode() {
     lineStartPoint = null;
     rectangleStartPoint = null;
@@ -1284,7 +1305,7 @@
     const radius = 10 / viewport.scale;
     for (let i = model.points.length - 1; i >= 0; i--) {
       const p = model.points[i];
-      if (!isActiveSketchElement(p)) continue;
+      if (!isEditableSketchElement(p)) continue;
       if (!predicate(p)) continue;
       if (hypot2(p.x - x, p.y - y) <= radius) return p;
     }
@@ -1498,7 +1519,7 @@
     const threshold = 7 / viewport.scale;
     for (let i = model.lines.length - 1; i >= 0; i--) {
       const l = model.lines[i];
-      if (!isActiveSketchElement(l)) continue;
+      if (!isEditableSketchElement(l)) continue;
       if (distancePointToSegment(x, y, l) <= threshold) return l;
     }
     return null;
@@ -1508,7 +1529,7 @@
     const threshold = 7 / viewport.scale;
     for (let i = model.circles.length - 1; i >= 0; i--) {
       const c = model.circles[i];
-      if (!isActiveSketchElement(c)) continue;
+      if (!isEditableSketchElement(c)) continue;
       const d = hypot2(x - c.center.x, y - c.center.y);
       if (Math.abs(d - c.radius()) <= threshold) return c;
     }
@@ -1519,7 +1540,7 @@
     const threshold = 7 / viewport.scale;
     for (let i = model.arcs.length - 1; i >= 0; i--) {
       const a = model.arcs[i];
-      if (!isActiveSketchElement(a)) continue;
+      if (!isEditableSketchElement(a)) continue;
       const radius = a.radius();
       const d = hypot2(x - a.center.x, y - a.center.y);
       if (Math.abs(d - radius) > threshold) continue;
@@ -1534,7 +1555,7 @@
     const threshold = 10 / viewport.scale;
     for (let i = model.arcs.length - 1; i >= 0; i--) {
       const arc = model.arcs[i];
-      if (!isActiveSketchElement(arc)) continue;
+      if (!isEditableSketchElement(arc)) continue;
       for (const endpoint of ["end", "start"]) {
         const point = arcEndpointPoint(arc, endpoint);
         if (hypot2(point.x - x, point.y - y) <= threshold) return { arc, endpoint, point };
@@ -2397,20 +2418,20 @@
     return seen;
   }
 
-  function localSolveVariables(component) {
+  function localSolveVariables(component, sketchId = activeSketchId()) {
     const vars = [];
     for (const p of model.points) {
       if (!isVisibleSketchElement(p)) continue;
-      if (component.has(p) && isActiveSketchElement(p) && !p.fixed) {
+      if (component.has(p) && elementSketchId(p) === sketchId && !p.fixed) {
         vars.push({ object: p, prop: "x", label: `${p.id}.x` });
         vars.push({ object: p, prop: "y", label: `${p.id}.y` });
       }
     }
     for (const c of model.circles) {
-      if (component.has(c) && isActiveSketchElement(c)) vars.push({ object: c, prop: "radiusValue", label: `${c.id}.r`, min: MIN_LINE_LENGTH });
+      if (component.has(c) && elementSketchId(c) === sketchId) vars.push({ object: c, prop: "radiusValue", label: `${c.id}.r`, min: MIN_LINE_LENGTH });
     }
     for (const a of model.arcs) {
-      if (component.has(a) && isActiveSketchElement(a)) {
+      if (component.has(a) && elementSketchId(a) === sketchId) {
         vars.push({ object: a, prop: "radiusValue", label: `${a.id}.r`, min: MIN_LINE_LENGTH });
         vars.push({ object: a, prop: "startAngle", label: `${a.id}.startAngle` });
         vars.push({ object: a, prop: "endAngle", label: `${a.id}.endAngle` });
@@ -2419,12 +2440,12 @@
     return vars;
   }
 
-  function localSolveConstraints(component) {
-    return model.constraints.filter((constraint) => constraint.enabled !== false && isActiveSketchConstraint(constraint) && constraintGraphNodes(constraint).some((node) => component.has(node)));
+  function localSolveConstraints(component, sketchId = activeSketchId()) {
+    return model.constraints.filter((constraint) => constraint.enabled !== false && constraintSketchId(constraint) === sketchId && constraintGraphNodes(constraint).some((node) => component.has(node)));
   }
 
-  function localSolveLines(component) {
-    return model.lines.filter((line) => component.has(line) && isActiveSketchElement(line));
+  function localSolveLines(component, sketchId = activeSketchId()) {
+    return model.lines.filter((line) => component.has(line) && elementSketchId(line) === sketchId);
   }
 
   function sketchSolveVariables(sketchId = activeSketchId()) {
@@ -2475,6 +2496,10 @@
     });
   }
 
+  function solveDragSketch(session, extra = []) {
+    return solveSketchById(session?.sketchId || activeSketchId(), extra);
+  }
+
   function solveDescendantSketches(rootSketchId, rollbackState = null) {
     const results = [];
     const changedSketches = new Set([rootSketchId]);
@@ -2495,13 +2520,13 @@
     return { success: true, results };
   }
 
-  function localSolveContextFromSeeds(seeds) {
+  function localSolveContextFromSeeds(seeds, sketchId = activeSketchId()) {
     const component = connectedComponentFromSeeds(seeds);
     return {
       component,
-      variables: localSolveVariables(component),
-      constraints: localSolveConstraints(component),
-      lines: localSolveLines(component),
+      variables: localSolveVariables(component, sketchId),
+      constraints: localSolveConstraints(component, sketchId),
+      lines: localSolveLines(component, sketchId),
     };
   }
 
@@ -2687,25 +2712,25 @@
     const nextArcs = additive ? [...selectedArcs] : [];
 
     for (const p of model.points) {
-      if (!isActiveSketchElement(p)) continue;
+      if (!selectableSketchElement(p)) continue;
       if (!isExplicitPoint(p) && !isReferencePoint(p)) continue;
       if (pointInRect(p, rect)) addUnique(nextPoints, p);
     }
     for (const line of model.lines) {
-      if (!isActiveSketchElement(line)) continue;
+      if (!selectableSketchElement(line)) continue;
       const selected = crossing ? lineIntersectsRect(line, rect) : bboxInRect(lineBBox(line), rect);
       if (selected) addUnique(nextLines, line);
     }
     for (const circle of model.circles) {
       if (!isVisibleSketchElement(circle)) continue;
-      if (!isActiveSketchElement(circle)) continue;
+      if (!selectableSketchElement(circle)) continue;
       const box = primitiveBBox(circle);
       const selected = crossing ? bboxIntersectsRect(box, rect) : bboxInRect(box, rect);
       if (selected) addUnique(nextCircles, circle);
     }
     for (const arc of model.arcs) {
       if (!isVisibleSketchElement(arc)) continue;
-      if (!isActiveSketchElement(arc)) continue;
+      if (!selectableSketchElement(arc)) continue;
       const samples = arcSamplePoints(arc);
       const selected = crossing ? samples.some((p) => pointInRect(p, rect)) : samples.every((p) => pointInRect(p, rect));
       if (selected) addUnique(nextArcs, arc);
@@ -2850,7 +2875,7 @@
   function drawLines() {
     ctx.save();
     for (const l of drawOrderBySketch(model.lines)) {
-      const active = isActiveSketchElement(l);
+      const active = isEditableSketchElement(l);
       ctx.globalAlpha = sketchAlpha(l);
       const sel = active && selectedLines.includes(l);
       const hovered = (active || isReferenceHoverElement(l)) && hoveredLine === l;
@@ -2881,7 +2906,7 @@
     ctx.save();
     ctx.lineCap = "round";
     for (const c of drawOrderBySketch(model.circles)) {
-      const active = isActiveSketchElement(c);
+      const active = isEditableSketchElement(c);
       ctx.globalAlpha = sketchAlpha(c);
       const sel = active && selectedCircles.includes(c);
       const hovered = (active || isReferenceHoverElement(c)) && hoveredCircle === c;
@@ -2906,7 +2931,7 @@
     ctx.save();
     ctx.lineCap = "round";
     for (const a of drawOrderBySketch(model.arcs)) {
-      const active = isActiveSketchElement(a);
+      const active = isEditableSketchElement(a);
       ctx.globalAlpha = sketchAlpha(a);
       const sel = active && selectedArcs.includes(a);
       const hovered = (active || isReferenceHoverElement(a)) && hoveredArc === a;
@@ -3366,7 +3391,7 @@
   function drawArcEndpointHandles() {
     ctx.save();
     for (const arc of model.arcs) {
-      if (!isActiveSketchElement(arc)) continue;
+      if (!isEditableSketchElement(arc)) continue;
       for (const endpoint of ["start", "end"]) {
         if (!shouldShowArcEndpointHandle(arc, endpoint)) continue;
         const p = arcEndpointPoint(arc, endpoint);
@@ -3389,7 +3414,7 @@
     ctx.save();
     for (const p of drawOrderBySketch(model.points)) {
       if (!isExplicitPoint(p) && !isPointUsedByPrimitive(p) && !isReferencePoint(p)) continue;
-      const active = isActiveSketchElement(p);
+      const active = isEditableSketchElement(p);
       ctx.globalAlpha = sketchAlpha(p);
       const sel = active && selectedPoints.includes(p);
       const endpoint = isEndpointPoint(p);
@@ -4563,19 +4588,34 @@
     }
   }
 
+  function dragSketchIdFromSelection(points = []) {
+    const ids = [...new Set(points.filter(Boolean).map(elementSketchId).filter(isEditableSketchId))];
+    if (ids.length === 1) return ids[0];
+    if (ids.includes(activeSketchId())) return activeSketchId();
+    return ids[0] || activeSketchId();
+  }
+
+  function dragSketchIdFor(kind, item) {
+    if (kind === "arc-endpoint") return elementSketchId(item?.arc);
+    if (kind === "selection") return dragSketchIdFromSelection(item);
+    return elementSketchId(item);
+  }
+
   function buildDragSession(kind, item, pointer) {
+    const sketchId = dragSketchIdFor(kind, item);
     if (kind === "selection") {
       const points = item
-        .filter((p, index, arr) => p && !p.fixed && !pointLockedByLineFixed(p) && arr.indexOf(p) === index)
+        .filter((p, index, arr) => p && elementSketchId(p) === sketchId && !p.fixed && !pointLockedByLineFixed(p) && arr.indexOf(p) === index)
         .map((p) => ({ point: p, startX: p.x, startY: p.y }));
       if (points.length === 0) return null;
-      return { kind, startPointer: pointer, points };
+      return { kind, sketchId, startPointer: pointer, points };
     }
 
     if (kind === "point") {
       if (item.fixed || pointLockedByLineFixed(item)) return null;
       return {
         kind,
+        sketchId,
         startPointer: pointer,
         points: [{ point: item, startX: item.x, startY: item.y }],
       };
@@ -4586,6 +4626,7 @@
     if (kind === "circle" || kind === "arc") {
       return {
         kind,
+        sketchId,
         mode: "radius",
         item,
         startPointer: pointer,
@@ -4599,6 +4640,7 @@
       if (findArcEndpointFixedConstraint(item.arc, item.endpoint)) return null;
       return {
         kind,
+        sketchId,
         mode: "arc-endpoint",
         item: item.arc,
         endpoint: item.endpoint,
@@ -4611,7 +4653,7 @@
       .filter((p, index, arr) => !p.fixed && !pointLockedByLineFixed(p) && arr.indexOf(p) === index)
       .map((p) => ({ point: p, startX: p.x, startY: p.y }));
     if (points.length === 0) return null;
-    return { kind, item, startPointer: pointer, points };
+    return { kind, sketchId, item, startPointer: pointer, points };
   }
 
   function dragSessionSeeds(session) {
@@ -4627,7 +4669,7 @@
 
   function attachLocalSolveContext(session) {
     if (!session) return session;
-    session.local = localSolveContextFromSeeds(dragSessionSeeds(session));
+    session.local = localSolveContextFromSeeds(dragSessionSeeds(session), session.sketchId);
     session.local.pointStarts = model.points
       .filter((p) => session.local.component.has(p) && !p.fixed && !pointLockedByLineFixed(p))
       .map((point) => ({ point, startX: point.x, startY: point.y }));
@@ -4789,7 +4831,7 @@
   function finalizeDragResult(result, state, session = null, extra = [], retry = null) {
     const lineRepair = enforceMinimumLineLengths(session?.local?.lines || model.lines);
     if (lineRepair.changed > 0) {
-      result = retry ? retry() : session?.local ? solveDragWithFallback(session, extra, () => solveActiveSketch(extra), state) : solveActiveSketch(extra);
+      result = retry ? retry() : session?.local ? solveDragWithFallback(session, extra, () => solveDragSketch(session, extra), state) : solveDragSketch(session, extra);
     }
     normalizeArcSweeps();
     result.lineRepair = lineRepair;
@@ -4813,7 +4855,7 @@
         session.activeMode = "move";
         const extra = dragConstraintsFromTargets(moveTargets);
         const targets = moveTargets;
-        const retry = () => solveGuidedDragWithFallback(session, targets, extra, () => solveActiveSketch(extra), dragState);
+        const retry = () => solveGuidedDragWithFallback(session, targets, extra, () => solveDragSketch(session, extra), dragState);
         result = retry();
         return finalizeDragResult(result, dragState, session, extra, retry);
       }
@@ -4821,14 +4863,14 @@
       const state = solver.clone(dragVars);
       let targets = radiusDragTargets(session, pointer);
       let extra = parameterDragConstraintsFromTargets(targets);
-      let retry = () => solveGuidedDragWithFallback(session, targets, extra, () => solveActiveSketch(extra), dragState);
+      let retry = () => solveGuidedDragWithFallback(session, targets, extra, () => solveDragSketch(session, extra), dragState);
       result = retry();
       if (!result.success && moveTargets.length > 0) {
         solver.restore(state);
         session.activeMode = "move";
         targets = moveTargets;
         extra = dragConstraintsFromTargets(moveTargets);
-        retry = () => solveGuidedDragWithFallback(session, targets, extra, () => solveActiveSketch(extra), dragState);
+        retry = () => solveGuidedDragWithFallback(session, targets, extra, () => solveDragSketch(session, extra), dragState);
         result = retry();
         return finalizeDragResult(result, dragState, session, extra, retry);
       }
@@ -4839,7 +4881,7 @@
     let extra;
     if (session.mode === "arc-endpoint") {
       extra = arcEndpointDragConstraints(session, pointer);
-      const retry = () => solveDragWithFallback(session, extra, () => solveActiveSketch(extra), dragState);
+      const retry = () => solveDragWithFallback(session, extra, () => solveDragSketch(session, extra), dragState);
       result = retry();
       return finalizeDragResult(result, dragState, session, extra, retry);
     } else {
@@ -4847,7 +4889,7 @@
       targets = directTargets;
       extra = dragConstraintsFromTargets(directTargets);
     }
-    const retry = () => solveGuidedDragWithFallback(session, targets, extra, () => solveActiveSketch(extra), dragState);
+    const retry = () => solveGuidedDragWithFallback(session, targets, extra, () => solveDragSketch(session, extra), dragState);
     result = retry();
     return finalizeDragResult(result, dragState, session, extra, retry);
   }
@@ -5206,25 +5248,25 @@
     const threshold = 7 / viewport.scale;
     for (let i = model.points.length - 1; i >= 0; i--) {
       const p = model.points[i];
-      if (isActiveSketchElement(p)) continue;
+      if (isEditableSketchElement(p)) continue;
       if (!isVisibleSketchElement(p)) continue;
       if (hypot2(p.x - x, p.y - y) <= 10 / viewport.scale) return { id: p.id, sketchId: elementSketchId(p) };
     }
     for (let i = model.lines.length - 1; i >= 0; i--) {
       const line = model.lines[i];
-      if (isActiveSketchElement(line)) continue;
+      if (isEditableSketchElement(line)) continue;
       if (!isVisibleSketchElement(line)) continue;
       if (distancePointToSegment(x, y, line) <= threshold) return { id: line.id, sketchId: elementSketchId(line) };
     }
     for (let i = model.circles.length - 1; i >= 0; i--) {
       const circle = model.circles[i];
-      if (isActiveSketchElement(circle)) continue;
+      if (isEditableSketchElement(circle)) continue;
       if (!isVisibleSketchElement(circle)) continue;
       if (Math.abs(hypot2(x - circle.center.x, y - circle.center.y) - circle.radius()) <= threshold) return { id: circle.id, sketchId: elementSketchId(circle) };
     }
     for (let i = model.arcs.length - 1; i >= 0; i--) {
       const arc = model.arcs[i];
-      if (isActiveSketchElement(arc)) continue;
+      if (isEditableSketchElement(arc)) continue;
       if (!isVisibleSketchElement(arc)) continue;
       const angle = Math.atan2(y - arc.center.y, x - arc.center.x);
       if (Math.abs(hypot2(x - arc.center.x, y - arc.center.y) - arc.radius()) <= threshold && angleOnSignedSweep(angle, arc.startAngle, arc.endAngle)) return { id: arc.id, sketchId: elementSketchId(arc) };
@@ -6031,7 +6073,7 @@
       ? `${result.guided ? "guided local" : "local"} vars=${result.variableCount}, constraints=${result.constraintCount}${Number.isFinite(result.freeDof) ? `, dof=${result.freeDof}` : ""}`
       : "global";
     const fallback = result.fallback ? ` fallback from local error=${result.localErrorNorm?.toExponential(2)}` : "";
-    const descendantResult = solveDescendantSketches(activeSketchId(), dragSession.fullDragState);
+    const descendantResult = solveDescendantSketches(dragSession.sketchId || activeSketchId(), dragSession.fullDragState);
     if (!descendantResult.success) {
       setHint(`子スケッチ更新に失敗しました: ${sketchName(descendantResult.sketchId)} (error=${descendantResult.result.errorNorm.toExponential(3)})`, "error");
       updateUI();
@@ -6101,7 +6143,7 @@
     } catch (_) {
       // Pointer capture may already be released by the browser.
     }
-    const result = solveActiveSketch();
+    const result = solveDragSketch(session);
     normalizeArcSweeps();
     if (!result.success || result.errorNorm > CONSTRAINT_ACCEPT_ERROR) {
       if (session.fullDragState) solver.restore(session.fullDragState);
@@ -6110,7 +6152,7 @@
       draw();
       return;
     }
-    const descendantResult = solveDescendantSketches(activeSketchId(), session.fullDragState);
+    const descendantResult = solveDescendantSketches(session.sketchId || activeSketchId(), session.fullDragState);
     if (!descendantResult.success) {
       setHint(`${completedLabel}完了時の子スケッチ更新に失敗しました: ${sketchName(descendantResult.sketchId)} (error=${descendantResult.result.errorNorm.toExponential(3)})`, "error");
       updateUI();
