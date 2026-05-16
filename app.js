@@ -163,8 +163,8 @@
       if (sketch.parentSketchId === sketch.id || !ids.has(sketch.parentSketchId)) sketch.parentSketchId = ROOT_SKETCH_ID;
       if (sketch.parentSketchId == null) sketch.parentSketchId = ROOT_SKETCH_ID;
     }
-    if (!model.activeSketchId || !model.sketches.some((sketch) => sketch.id === model.activeSketchId && sketch.kind !== "root")) {
-      model.activeSketchId = model.sketches.find((sketch) => sketch.kind !== "root")?.id || DEFAULT_SKETCH_ID;
+    if (!model.activeSketchId || !model.sketches.some((sketch) => sketch.id === model.activeSketchId)) {
+      model.activeSketchId = ROOT_SKETCH_ID;
     }
   }
 
@@ -178,6 +178,19 @@
     return Boolean(sketch && !isRootSketch(sketch));
   }
 
+  function canCreateInActiveSketch() {
+    return isDrawableSketch(activeSketchId());
+  }
+
+  function rejectRootSketchCreation() {
+    if (canCreateInActiveSketch()) return false;
+    setHint("Root Sketchには図形を作成できません。子スケッチを選択してください。", "error");
+    clearSnap();
+    pointerPreview = null;
+    draw();
+    return true;
+  }
+
   function firstDrawableSketchId() {
     ensureSketchState();
     return model.sketches.find((sketch) => sketch.kind !== "root")?.id || DEFAULT_SKETCH_ID;
@@ -185,7 +198,7 @@
 
   function activeSketch() {
     ensureSketchState();
-    return model.sketches.find((sketch) => sketch.id === model.activeSketchId && sketch.kind !== "root") || model.sketches.find((sketch) => sketch.kind !== "root");
+    return model.sketches.find((sketch) => sketch.id === model.activeSketchId) || model.sketches.find((sketch) => isRootSketch(sketch)) || model.sketches[0];
   }
 
   function sketchName(sketchId) {
@@ -299,7 +312,7 @@
       const children = byParent.get(parentId || "") || [];
       children.forEach((sketch, index) => {
         const isLast = index === children.length - 1;
-        const segments = [...ancestorHasNext.map((hasNext) => (hasNext ? "pipe" : "blank")), isLast ? "elbow" : "tee"];
+        const segments = depth === 0 && isRootSketch(sketch) ? [] : [...ancestorHasNext.map((hasNext) => (hasNext ? "pipe" : "blank")), isLast ? "elbow" : "tee"];
         rows.push({ sketch, depth, isLast, hasChildren: childSketchesOf(sketch.id).length > 0, segments });
         visit(sketch.id, depth + 1, [...ancestorHasNext, !isLast]);
       });
@@ -4236,7 +4249,7 @@
 
   function setActiveSketch(sketchId) {
     ensureSketchState();
-    if (!model.sketches.some((sketch) => sketch.id === sketchId && isDrawableSketch(sketch))) return;
+    if (!model.sketches.some((sketch) => sketch.id === sketchId)) return;
     if (model.activeSketchId === sketchId) return;
     model.activeSketchId = sketchId;
     clearInteractionForSketchChange();
@@ -4280,16 +4293,13 @@
           model.lines.filter((item) => elementSketchId(item) === sketch.id).length +
           model.circles.filter((item) => elementSketchId(item) === sketch.id).length +
           model.arcs.filter((item) => elementSketchId(item) === sketch.id).length;
-        const treeLines =
-          depth === 0
-            ? `<span class="sketch-tree-gutter" aria-hidden="true">${segments.map((segment) => `<span class="tree-segment ${segment}"></span>`).join("")}</span>`
-            : `<span class="sketch-tree-gutter" aria-hidden="true">${segments
-                .map((segment) => `<span class="tree-segment ${segment}"></span>`)
-                .join("")}</span>`;
+        const treeLines = segments.length
+          ? `<span class="sketch-tree-gutter" aria-hidden="true">${segments.map((segment) => `<span class="tree-segment ${segment}"></span>`).join("")}</span>`
+          : "";
         return (
           `<div class="item sketch-item ${visible ? "visible" : ""} ${isRoot ? "root" : ""} ${isAncestor ? "ancestor-visible" : ""} ${isDescendant ? "descendant-visible" : ""} ${isActive ? "active" : ""} ${hasChildren ? "has-children" : ""}" data-id="${sketch.id}" style="--sketch-depth:${depth}">` +
           treeLines +
-          `<button class="sketchActivateBtn" data-id="${sketch.id}" ${isActive || isRoot ? "disabled" : ""}>${escapeHtml(sketch.name)}</button>` +
+          `<button class="sketchActivateBtn" data-id="${sketch.id}" ${isActive ? "disabled" : ""}>${escapeHtml(sketch.name)}</button>` +
           `<span class="sketch-badges"><span class="badge">${count}</span></span>` +
           (isRoot ? "" : `<button class="sketchRenameBtn icon-small-btn" data-id="${sketch.id}" title="名前変更" aria-label="名前変更">Aa</button>`) +
           `</div>`
@@ -4302,7 +4312,6 @@
     for (const row of document.querySelectorAll(".sketch-item")) {
       row.addEventListener("click", (event) => {
         if (event.target.closest(".sketchRenameBtn")) return;
-        if (row.classList.contains("root")) return;
         setActiveSketch(row.dataset.id);
       });
     }
@@ -5886,6 +5895,11 @@
       return;
     }
 
+    if (["point", "line", "rectangle", "circle", "arc", "fillet", "trim"].includes(mode) && rejectRootSketchCreation()) {
+      e.preventDefault();
+      return;
+    }
+
     if (mode === "point") {
       const sp = snapForDrawing(p);
       const snap = activeSnap;
@@ -6049,6 +6063,13 @@
       dimensionDragSession.constraint.dimension = nextDimension;
       syncAngleConstraintFromDimension(dimensionDragSession.constraint, dimensionDragSession.target, nextDimension);
       draw();
+      return;
+    }
+
+    if (["point", "line", "rectangle", "circle", "arc", "fillet", "trim"].includes(mode) && !canCreateInActiveSketch()) {
+      clearSnap();
+      pointerPreview = null;
+      trimPreview = null;
       return;
     }
 

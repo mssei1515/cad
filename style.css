@@ -453,7 +453,7 @@ h2 {
   position: relative;
   display: grid;
   grid-template-columns: auto 1fr auto auto;
-  gap: 2px;
+  gap: 0;
   align-items: center;
   padding: 0;
   border: 0;
@@ -475,11 +475,11 @@ h2 {
 }
 
 .sketch-item.descendant-visible:not(.active) {
-  background: rgba(17, 24, 39, 0.08);
+  background: rgba(37, 99, 235, 0.13);
 }
 
 .sketch-item.root {
-  cursor: default;
+  cursor: pointer;
 }
 
 .sketch-item.root .sketchActivateBtn {
@@ -516,7 +516,7 @@ h2 {
   grid-auto-columns: var(--tree-cell);
   align-self: stretch;
   width: max(var(--tree-cell), calc((var(--sketch-depth, 0) + 1) * var(--tree-cell)));
-  margin-right: 4px;
+  margin-right: 0;
 }
 
 .tree-segment {
