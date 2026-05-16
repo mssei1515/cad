@@ -534,6 +534,7 @@
     if (hovered) return "#3b82f6";
     const relation = sketchRelationOfElement(item);
     if (relation === "ancestor") return "#9ca3af";
+    if (relation === "descendant") return "#9ca3af";
     const status = constraintStatusOf(item);
     if (status === "conflict") return CONSTRAINT_STATUS_COLORS.conflict;
     return CONSTRAINT_STATUS_COLORS[status] || CONSTRAINT_STATUS_COLORS.full;
@@ -559,7 +560,7 @@
     const relation = sketchRelationOfElement(item);
     if (relation === "active") return 1;
     if (relation === "ancestor") return 0.55;
-    if (relation === "descendant") return 0.85;
+    if (relation === "descendant") return 0.45;
     return 0;
   }
 

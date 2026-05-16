@@ -475,7 +475,7 @@ h2 {
 }
 
 .sketch-item.descendant-visible:not(.active) {
-  background: rgba(37, 99, 235, 0.13);
+  background: rgba(156, 163, 175, 0.14);
 }
 
 .sketch-item.root {
