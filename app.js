@@ -537,7 +537,7 @@
     if (selected) return "#1d4ed8";
     if (hovered) return "#3b82f6";
     const relation = sketchRelationOfElement(item);
-    if (relation !== "active") return "#9ca3af";
+    if (relation !== "active") return "#cbd5e1";
     const status = constraintStatusOf(item);
     if (status === "conflict") return CONSTRAINT_STATUS_COLORS.conflict;
     return CONSTRAINT_STATUS_COLORS[status] || CONSTRAINT_STATUS_COLORS.full;
@@ -545,7 +545,8 @@
 
   function sketchStrokeWidth(item) {
     const relation = sketchRelationOfElement(item);
-    if (relation === "active" || relation === "ancestor" || relation === "descendant") return 2.6;
+    if (relation === "ancestor" || relation === "descendant") return 1.4;
+    if (relation === "active") return 2.6;
     return 0;
   }
 
