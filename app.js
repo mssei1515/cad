@@ -612,6 +612,15 @@
     return Boolean(pendingConstraintCommand && item && !isActiveSketchElement(item) && isAncestorSketchId(elementSketchId(item)));
   }
 
+  function isPendingReferenceTarget(item) {
+    const target = pendingConstraintCommand?.referenceTarget;
+    if (!target || !item) return false;
+    if (target.kind === "point") return target.point === item;
+    if (target.kind === "line") return target.line === item;
+    if (target.kind === "primitive") return target.primitive === item;
+    return false;
+  }
+
   function drawOrderBySketch(items) {
     return items.filter(isVisibleSketchElement).sort((a, b) => Number(isEditableSketchElement(a)) - Number(isEditableSketchElement(b)));
   }
@@ -811,6 +820,10 @@
       labelOffsetU: Number.isFinite(dimension.labelOffsetU) ? dimension.labelOffsetU : 0,
       axis,
     };
+    if (Number.isFinite(dimension.labelX) && Number.isFinite(dimension.labelY)) {
+      data.labelX = Number(dimension.labelX);
+      data.labelY = Number(dimension.labelY);
+    }
     if (target?.kind === "angle") {
       data.angleStartFlip = Number.isInteger(dimension.angleStartFlip) ? dimension.angleStartFlip : null;
       data.angleEndFlip = Number.isInteger(dimension.angleEndFlip) ? dimension.angleEndFlip : null;
@@ -1048,6 +1061,8 @@
           offsetU: Number.isFinite(Number(data.dimension.offsetU)) ? Number(data.dimension.offsetU) : NaN,
           offsetN: Number.isFinite(Number(data.dimension.offsetN)) ? Number(data.dimension.offsetN) : NaN,
           labelOffsetU: Number.isFinite(Number(data.dimension.labelOffsetU)) ? Number(data.dimension.labelOffsetU) : 0,
+          labelX: Number.isFinite(Number(data.dimension.labelX)) ? Number(data.dimension.labelX) : NaN,
+          labelY: Number.isFinite(Number(data.dimension.labelY)) ? Number(data.dimension.labelY) : NaN,
           axis: data.dimension.axis || null,
           angleStartFlip: Number.isInteger(data.dimension.angleStartFlip) ? data.dimension.angleStartFlip : null,
           angleEndFlip: Number.isInteger(data.dimension.angleEndFlip) ? data.dimension.angleEndFlip : null,
@@ -2291,6 +2306,22 @@
     };
   }
 
+  function dimensionWithLabelAt(target, dimension, labelPoint) {
+    if (!target || !dimension || !labelPoint) return dimension;
+    if (target.kind === "angle") {
+      return { ...dimension, labelX: labelPoint.x, labelY: labelPoint.y };
+    }
+    const anchor = dimensionAnchor(target, dimension);
+    const basisTarget = { ...target, dimensionAxis: storedDimensionAxis(target, dimension) };
+    const d = target.kind === "radius" || target.kind === "diameter" ? targetDirection({ ...basisTarget, dimensionAnchor: anchor }) : targetDirection(basisTarget);
+    const points = targetPointsForDimension(target, anchor);
+    if (points.length < 2) return dimension;
+    const projections = points.map((p) => (p.x - anchor.x) * d.x + (p.y - anchor.y) * d.y);
+    const midpointProjection = (Math.min(...projections) + Math.max(...projections)) / 2;
+    const labelProjection = (labelPoint.x - anchor.x) * d.x + (labelPoint.y - anchor.y) * d.y;
+    return { ...dimension, labelOffsetU: labelProjection - midpointProjection };
+  }
+
   function applyDefaultCircleDimensionLabelOffset(target, dimension) {
     if (!dimension || !(target?.primitive instanceof Circle)) return dimension;
     if (target.kind !== "radius" && target.kind !== "diameter") return dimension;
@@ -3066,7 +3097,8 @@
     for (const l of drawOrderBySketch(model.lines)) {
       const active = isEditableSketchElement(l);
       ctx.globalAlpha = sketchAlpha(l);
-      const sel = active && selectedLines.includes(l);
+      const refSelected = isPendingReferenceTarget(l);
+      const sel = (active && selectedLines.includes(l)) || refSelected;
       const hovered = (active || isReferenceHoverElement(l)) && hoveredLine === l;
       const construction = Boolean(l.construction) && !sel && !hovered;
       ctx.strokeStyle = construction && active ? "#64748b" : constraintStatusColor(l, sel, hovered);
@@ -3101,7 +3133,8 @@
     for (const c of drawOrderBySketch(model.circles)) {
       const active = isEditableSketchElement(c);
       ctx.globalAlpha = sketchAlpha(c);
-      const sel = active && selectedCircles.includes(c);
+      const refSelected = isPendingReferenceTarget(c);
+      const sel = (active && selectedCircles.includes(c)) || refSelected;
       const hovered = (active || isReferenceHoverElement(c)) && hoveredCircle === c;
       ctx.strokeStyle = constraintStatusColor(c, sel, hovered);
       ctx.lineWidth = (sel ? 4 : hovered ? 2.6 : sketchStrokeWidth(c)) / viewport.scale;
@@ -3126,7 +3159,8 @@
     for (const a of drawOrderBySketch(model.arcs)) {
       const active = isEditableSketchElement(a);
       ctx.globalAlpha = sketchAlpha(a);
-      const sel = active && selectedArcs.includes(a);
+      const refSelected = isPendingReferenceTarget(a);
+      const sel = (active && selectedArcs.includes(a)) || refSelected;
       const hovered = (active || isReferenceHoverElement(a)) && hoveredArc === a;
       const angles = arcAngles(a);
       ctx.strokeStyle = constraintStatusColor(a, sel, hovered);
@@ -3327,8 +3361,8 @@
       end,
       signed,
       text: {
-        x: vertex.x + Math.cos(mid) * (radius + 14 / viewport.scale),
-        y: vertex.y + Math.sin(mid) * (radius + 14 / viewport.scale),
+        x: Number.isFinite(dimension?.labelX) ? dimension.labelX : vertex.x + Math.cos(mid) * (radius + 14 / viewport.scale),
+        y: Number.isFinite(dimension?.labelY) ? dimension.labelY : vertex.y + Math.sin(mid) * (radius + 14 / viewport.scale),
       },
       hitA: { x: vertex.x + Math.cos(start) * radius, y: vertex.y + Math.sin(start) * radius },
       hitB: { x: vertex.x + Math.cos(end) * radius, y: vertex.y + Math.sin(end) * radius },
@@ -3418,7 +3452,7 @@
             ? angleDegrees(angleDimensionAngles(previewTarget, pendingCommand.pointer || dimensionAnchor(previewTarget, dimension), dimension).signed)
           : previewTarget.value;
     const label = previewTarget.kind === "angle" ? `${Number(previewValue).toFixed(2)}°` : Number(previewValue).toFixed(2);
-    drawDimension(previewTarget, dimension, label, true);
+    drawDimension(previewTarget, dimensionWithLabelAt(previewTarget, dimension, pendingCommand.pointer), label, true);
   }
 
   function drawFilletPreviewArc(geometry) {
@@ -3676,7 +3710,8 @@
       if (!isExplicitPoint(p) && !isPointUsedByPrimitive(p) && !isReferencePoint(p)) continue;
       const active = isEditableSketchElement(p);
       ctx.globalAlpha = sketchAlpha(p);
-      const sel = active && selectedPoints.includes(p);
+      const refSelected = isPendingReferenceTarget(p);
+      const sel = (active && selectedPoints.includes(p)) || refSelected;
       const endpoint = isEndpointPoint(p);
       const hovered = (active || isReferenceHoverElement(p)) && (hoveredPoint === p || hoveredEndpointPoint === p);
       const dragging = dragSession?.kind === "point" && dragSession.points.some((target) => target.point === p);
@@ -4152,7 +4187,11 @@
 
   function startDistanceValueInput(pointer) {
     if (!pendingCommand || pendingCommand.type !== "distance-place") return;
-    const dimension = applyDefaultCircleDimensionLabelOffset(pendingCommand.target, dimensionFromAnchor(pendingCommand.target, pointer));
+    const dimension = dimensionWithLabelAt(
+      pendingCommand.target,
+      applyDefaultCircleDimensionLabelOffset(pendingCommand.target, dimensionFromAnchor(pendingCommand.target, pointer)),
+      pointer,
+    );
     const target = { ...pendingCommand.target, dimensionAxis: dimension.axis };
     const value =
       pendingCommand.target.kind === "point-point" && dimension.axis === "x"
@@ -4826,7 +4865,7 @@
     pendingCommand = {
       type: "distance-value",
       target,
-      dimension: dimensionFromAnchor(target, pointer),
+      dimension: dimensionWithLabelAt(target, dimensionFromAnchor(target, pointer), pointer),
       buffer: String(Number(target.value).toFixed(3)),
       editing: false,
       referenceSketchId: referenceTarget.sketchId,
@@ -6166,6 +6205,17 @@
     const hitD = hitDimension(p.x, p.y);
     hoveredSketchIdentity = hitSketchIdentityElement(p.x, p.y);
     const inactiveHit = !hitP && !hitL && !hitC && !hitArcEnd && !hitA && !hitD ? hitInactiveElement(p.x, p.y) : null;
+
+    if (hitD && !e.shiftKey && !e.ctrlKey && !pendingCommand) {
+      e.preventDefault();
+      selectedPoints = [];
+      selectedLines = [];
+      selectedCircles = [];
+      selectedArcs = [];
+      selectedArcEndpoint = null;
+      beginDimensionDrag(e, hitD, p);
+      return;
+    }
 
     if (pendingCommand?.type === "distance-place") {
       e.preventDefault();
