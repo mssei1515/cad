@@ -1983,7 +1983,7 @@
   }
 
   function hitDimension(x, y) {
-    const threshold = 8 / viewport.scale;
+    const threshold = 12 / viewport.scale;
     for (let i = model.constraints.length - 1; i >= 0; i--) {
       const constraint = model.constraints[i];
       if (!isActiveSketchConstraint(constraint)) continue;
@@ -1992,10 +1992,10 @@
       const dimension = constraint.dimension || defaultDimensionForTarget(target);
       const layout = dimensionLayout(target, dimension);
       if (!layout) continue;
-      if (hypot2(x - layout.text.x, y - layout.text.y) <= threshold * 1.5) {
+      if (hypot2(x - layout.text.x, y - layout.text.y) <= threshold * 2.2) {
         return { constraint, target, dimension, part: "label" };
       }
-      if (distancePointToSegmentPoints(x, y, layout.hitA, layout.hitB) <= threshold) {
+      if (distancePointToSegmentPoints(x, y, layout.hitA, layout.hitB) <= threshold * 1.4) {
         return { constraint, target, dimension, part: "line" };
       }
     }
@@ -4187,6 +4187,8 @@
 
   function startDistanceValueInput(pointer) {
     if (!pendingCommand || pendingCommand.type !== "distance-place") return;
+    const referenceSketchId = pendingCommand.referenceSketchId;
+    const sketchId = pendingCommand.sketchId;
     const dimension = dimensionWithLabelAt(
       pendingCommand.target,
       applyDefaultCircleDimensionLabelOffset(pendingCommand.target, dimensionFromAnchor(pendingCommand.target, pointer)),
@@ -4207,6 +4209,8 @@
       dimension,
       buffer: String(value),
       editing: false,
+      referenceSketchId,
+      sketchId,
     };
     setHint("寸法値を入力中: 数値キーで編集、Enter/ダブルクリックで決定、Escでキャンセル");
     updateConstraintButtons();
@@ -4863,18 +4867,14 @@
       return false;
     }
     pendingCommand = {
-      type: "distance-value",
+      type: "distance-place",
       target,
-      dimension: dimensionWithLabelAt(target, dimensionFromAnchor(target, pointer), pointer),
-      buffer: String(Number(target.value).toFixed(3)),
-      editing: false,
+      pointer,
       referenceSketchId: referenceTarget.sketchId,
       sketchId: referenceSubjectSketchId(subject),
     };
-    pendingConstraintCommand = null;
-    setHint("参照寸法値を入力中: Enter/ダブルクリックで決定、Escでキャンセル");
+    setHint("参照寸法線の位置をクリックしてください");
     draw();
-    focusDimensionValueInput();
     return true;
   }
 
@@ -6398,25 +6398,20 @@
       const dx = p.x - dimensionDragSession.startPointer.x;
       const dy = p.y - dimensionDragSession.startPointer.y;
       if (dimensionDragSession.part === "label") {
-        const dimension = dimensionDragSession.constraint.dimension || defaultDimensionForTarget(dimensionDragSession.target);
-        if (dimensionDragSession.target.kind === "angle") {
-          const nextDimension = dimensionFromAnchor(dimensionDragSession.target, {
-            x: dimensionDragSession.startAnchor.x + dx,
-            y: dimensionDragSession.startAnchor.y + dy,
-          }, { allowPointAxis: false });
-          dimensionDragSession.constraint.dimension = nextDimension;
-          syncAngleConstraintFromDimension(dimensionDragSession.constraint, dimensionDragSession.target, nextDimension);
-          draw();
-          return;
-        }
-        const basisTarget = {
-          ...dimensionDragSession.target,
-          dimensionAxis: storedDimensionAxis(dimensionDragSession.target, dimension),
-          dimensionAnchor: dimensionAnchor(dimensionDragSession.target, dimension),
-        };
-        const d = targetDirection(basisTarget);
-        dimension.labelOffsetU = dimensionDragSession.startLabelOffsetU + dx * d.x + dy * d.y;
-        dimensionDragSession.constraint.dimension = dimension;
+        const anchor =
+          dimensionDragSession.target.kind === "radius" || dimensionDragSession.target.kind === "diameter"
+            ? p
+            : {
+                x: dimensionDragSession.startAnchor.x + dx,
+                y: dimensionDragSession.startAnchor.y + dy,
+              };
+        const nextDimension = dimensionWithLabelAt(
+          dimensionDragSession.target,
+          dimensionFromAnchor(dimensionDragSession.target, anchor, { allowPointAxis: false }),
+          p,
+        );
+        dimensionDragSession.constraint.dimension = nextDimension;
+        syncAngleConstraintFromDimension(dimensionDragSession.constraint, dimensionDragSession.target, nextDimension);
         draw();
         return;
       }
