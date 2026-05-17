@@ -85,6 +85,7 @@
   let selectedArcEndpointPair = null;
   let selectedDimensionConstraint = null;
   let constraintAnalysisState = null;
+  let sketchSolveStates = new Map();
   let panSession = null;
   let selectionRectSession = null;
   let lineStartPoint = null;
@@ -119,6 +120,7 @@
     under: "#f59e0b",
     conflict: "#dc2626",
   };
+  const SKETCH_SOLVE_ERROR_COLOR = "#dc2626";
   let lastLoadLineRepairMessage = "";
 
   const constraintButtons = Array.from(document.querySelectorAll("[data-constraint]"));
@@ -438,13 +440,58 @@
     return elementSketchId(referenceSubjectElement(subject));
   }
 
+  function resultIsAccepted(result) {
+    return Boolean(result?.success) && result.errorNorm <= CONSTRAINT_ACCEPT_ERROR;
+  }
+
+  function clearSketchSolveState(sketchId) {
+    sketchSolveStates.delete(sketchId);
+  }
+
+  function setSketchSolveOk(sketchId, result, sourceSketchId = sketchId) {
+    sketchSolveStates.set(sketchId, { status: "ok", sourceSketchId, result });
+  }
+
+  function setSketchSolveError(sketchId, result, sourceSketchId = sketchId) {
+    sketchSolveStates.set(sketchId, {
+      status: "error",
+      sourceSketchId,
+      errorNorm: Number.isFinite(result?.errorNorm) ? result.errorNorm : Infinity,
+      reason: result?.reason || "solve failed",
+      result,
+    });
+  }
+
+  function sketchSolveState(sketchId) {
+    return sketchSolveStates.get(sketchId) || null;
+  }
+
+  function sketchHasSolveError(sketchId) {
+    return sketchSolveState(sketchId)?.status === "error";
+  }
+
+  function sketchSolveErrorTitle(sketchId) {
+    const state = sketchSolveState(sketchId);
+    if (state?.status !== "error") return "";
+    const errorText = Number.isFinite(state.errorNorm) ? state.errorNorm.toExponential(3) : "unknown";
+    return `子スケッチ破綻: error=${errorText}, reason=${state.reason}`;
+  }
+
+  function descendantErrorSummary(descendant) {
+    const failures = descendant?.results?.filter((entry) => entry.status === "error") || [];
+    if (failures.length === 0) return "";
+    const first = failures[0];
+    return ` / 子スケッチ破綻: ${sketchName(first.sketchId)} (error=${first.result.errorNorm.toExponential(3)})`;
+  }
+
   function solveAndRefresh(label = "自動solve") {
     const solved = solveSketchAndDescendants(activeSketchId());
     const result = solved.result;
     const analysis = refreshConstraintAnalysis();
-    const statusKind = solved.success && analysis.analysis.stable ? "normal" : "error";
+    const hasChildError = solved.descendant?.success === false;
+    const statusKind = solved.success && analysis.analysis.stable && !hasChildError ? "normal" : "error";
     const childText = solved.descendant?.results?.length > 0 ? `, child=${solved.descendant.results.length}` : "";
-    setHint(`${label}: success=${solved.success}, error=${result.errorNorm.toExponential(2)}, iter=${result.iterations}${childText} / ${constraintSummaryText()}`, statusKind);
+    setHint(`${label}: success=${solved.success}, error=${result.errorNorm.toExponential(2)}, iter=${result.iterations}${childText}${descendantErrorSummary(solved.descendant)} / ${constraintSummaryText()}`, statusKind);
     updateUI();
     draw();
     return result;
@@ -493,28 +540,29 @@
         lines: sketchSolveLines(sketchId),
         errorTolerance: CONSTRAINT_ACCEPT_ERROR,
       });
+      const forceConflict = sketchHasSolveError(sketchId);
       analyses.set(sketchId, analysis);
       for (const p of model.points) {
         if (elementSketchId(p) !== sketchId) continue;
-        const status = classifyConstraintStatus(p, "point", analysis);
+        const status = forceConflict ? "conflict" : classifyConstraintStatus(p, "point", analysis);
         statuses.set(p, status);
         if (isEditableSketchElement(p) && isExplicitPoint(p)) items.push(status);
       }
       for (const l of model.lines) {
         if (elementSketchId(l) !== sketchId) continue;
-        const status = classifyConstraintStatus(l, "line", analysis);
+        const status = forceConflict ? "conflict" : classifyConstraintStatus(l, "line", analysis);
         statuses.set(l, status);
         if (isEditableSketchElement(l)) items.push(status);
       }
       for (const c of model.circles) {
         if (elementSketchId(c) !== sketchId) continue;
-        const status = classifyConstraintStatus(c, "circle", analysis);
+        const status = forceConflict ? "conflict" : classifyConstraintStatus(c, "circle", analysis);
         statuses.set(c, status);
         if (isEditableSketchElement(c)) items.push(status);
       }
       for (const a of model.arcs) {
         if (elementSketchId(a) !== sketchId) continue;
-        const status = classifyConstraintStatus(a, "arc", analysis);
+        const status = forceConflict ? "conflict" : classifyConstraintStatus(a, "arc", analysis);
         statuses.set(a, status);
         if (isEditableSketchElement(a)) items.push(status);
       }
@@ -537,6 +585,7 @@
   function constraintStatusColor(item, selected = false, hovered = false) {
     if (selected) return "#1d4ed8";
     if (hovered) return "#3b82f6";
+    if (sketchHasSolveError(elementSketchId(item))) return SKETCH_SOLVE_ERROR_COLOR;
     const relation = sketchRelationOfElement(item);
     if (relation !== "active") return "#cbd5e1";
     const status = constraintStatusOf(item);
@@ -685,6 +734,7 @@
       a.arc.endAngle = a.endAngle;
     }
     model.constraints.length = snapshot.constraintLength;
+    constraintAnalysisState = null;
   }
 
   function resetModelState() {
@@ -693,6 +743,8 @@
     model.circles.length = 0;
     model.arcs.length = 0;
     model.constraints.length = 0;
+    sketchSolveStates.clear();
+    constraintAnalysisState = null;
     clearSelection();
     dragSession = null;
     dimensionDragSession = null;
@@ -2590,35 +2642,46 @@
     return solveSketchById(session?.sketchId || activeSketchId(), extra);
   }
 
-  function solveDescendantSketches(rootSketchId, rollbackState = null) {
+  function solveDescendantSketches(rootSketchId) {
     const results = [];
     const changedSketches = new Set([rootSketchId]);
-    for (const sketchId of descendantSketchIds(rootSketchId)) {
+    const descendants = descendantSketchIds(rootSketchId);
+    for (const sketchId of descendants) clearSketchSolveState(sketchId);
+    for (const sketchId of descendants) {
       const needsSolve = model.constraints.some(
         (constraint) => constraint.enabled !== false && constraint.reference && constraintSketchId(constraint) === sketchId && changedSketches.has(constraint.referenceSketchId),
       );
       if (!needsSolve) continue;
       const result = solveSketchById(sketchId);
       normalizeArcSweeps();
-      results.push({ sketchId, result });
-      if (!result.success || result.errorNorm > CONSTRAINT_ACCEPT_ERROR) {
-        if (rollbackState) solver.restore(rollbackState);
-        return { success: false, sketchId, result, results };
+      if (resultIsAccepted(result)) {
+        setSketchSolveOk(sketchId, result, rootSketchId);
+        results.push({ sketchId, result, status: "ok" });
+      } else {
+        setSketchSolveError(sketchId, result, rootSketchId);
+        results.push({ sketchId, result, status: "error" });
       }
       changedSketches.add(sketchId);
     }
-    return { success: true, results };
+    const failed = results.find((entry) => entry.status === "error");
+    return { success: !failed, sketchId: failed?.sketchId || null, result: failed?.result || null, results };
   }
 
   function solveSketchAndDescendants(sketchId = activeSketchId(), rollbackState = null) {
+    clearSketchSolveState(sketchId);
     const result = solveSketchById(sketchId);
     normalizeArcSweeps();
-    if (!result.success || result.errorNorm > CONSTRAINT_ACCEPT_ERROR) {
-      if (rollbackState) solver.restore(rollbackState);
+    if (!resultIsAccepted(result)) {
+      if (rollbackState) {
+        solver.restore(rollbackState);
+        clearSketchSolveState(sketchId);
+      } else {
+        setSketchSolveError(sketchId, result, sketchId);
+      }
       return { success: false, sketchId, result, descendant: { success: true, results: [] } };
     }
-    const descendant = solveDescendantSketches(sketchId, rollbackState);
-    if (!descendant.success) return { success: false, sketchId: descendant.sketchId, result: descendant.result, descendant };
+    setSketchSolveOk(sketchId, result, sketchId);
+    const descendant = solveDescendantSketches(sketchId);
     return { success: true, sketchId, result, descendant };
   }
 
@@ -4397,6 +4460,8 @@
         const isAncestor = isAncestorSketchId(sketch.id);
         const isDescendant = descendantSketchIds(activeSketchId()).includes(sketch.id);
         const visible = isVisibleSketchId(sketch.id);
+        const solveError = sketchHasSolveError(sketch.id);
+        const solveErrorTitle = sketchSolveErrorTitle(sketch.id);
         const count =
           model.points.filter((item) => elementSketchId(item) === sketch.id).length +
           model.lines.filter((item) => elementSketchId(item) === sketch.id).length +
@@ -4406,10 +4471,10 @@
           ? `<span class="sketch-tree-gutter" aria-hidden="true">${segments.map((segment) => `<span class="tree-segment ${segment}"></span>`).join("")}</span>`
           : "";
         return (
-          `<div class="item sketch-item ${visible ? "visible" : ""} ${isRoot ? "root" : ""} ${isAncestor ? "ancestor-visible" : ""} ${isDescendant ? "descendant-visible" : ""} ${isActive ? "active" : ""} ${hasChildren ? "has-children" : ""}" data-id="${sketch.id}" style="--sketch-depth:${depth}">` +
+          `<div class="item sketch-item ${visible ? "visible" : ""} ${isRoot ? "root" : ""} ${isAncestor ? "ancestor-visible" : ""} ${isDescendant ? "descendant-visible" : ""} ${isActive ? "active" : ""} ${solveError ? "solve-error" : ""} ${hasChildren ? "has-children" : ""}" data-id="${sketch.id}" title="${escapeHtml(solveErrorTitle)}" style="--sketch-depth:${depth}">` +
           treeLines +
           `<button class="sketchActivateBtn" data-id="${sketch.id}" ${isActive ? "disabled" : ""}>${escapeHtml(sketch.name)}</button>` +
-          `<span class="sketch-badges"><span class="badge">${count}</span></span>` +
+          `<span class="sketch-badges">${solveError ? `<span class="badge sketch-error-badge">!</span>` : ""}<span class="badge">${count}</span></span>` +
           (isRoot ? "" : `<button class="sketchRenameBtn icon-small-btn" data-id="${sketch.id}" title="名前変更" aria-label="名前変更">Aa</button>`) +
           `</div>`
         );
@@ -6319,15 +6384,11 @@
       ? `${result.guided ? "guided local" : "local"} vars=${result.variableCount}, constraints=${result.constraintCount}${Number.isFinite(result.freeDof) ? `, dof=${result.freeDof}` : ""}`
       : "global";
     const fallback = result.fallback ? ` fallback from local error=${result.localErrorNorm?.toExponential(2)}` : "";
-    const descendantResult = solveDescendantSketches(dragSession.sketchId || activeSketchId(), dragSession.fullDragState);
-    if (!descendantResult.success) {
-      setHint(`子スケッチ更新に失敗しました: ${sketchName(descendantResult.sketchId)} (error=${descendantResult.result.errorNorm.toExponential(3)})`, "error");
-      updateUI();
-      draw();
-      return;
-    }
+    const descendantResult = solveDescendantSketches(dragSession.sketchId || activeSketchId());
     const childText = descendantResult.results.length > 0 ? `, child=${descendantResult.results.length}` : "";
-    setHint(`${dragLabel(dragSession)}中: ${scope}, error=${error.toExponential(2)}, iter=${result.iterations}${fallback}${childText}`);
+    const childErrorText = descendantErrorSummary(descendantResult);
+    setHint(`${dragLabel(dragSession)}中: ${scope}, error=${error.toExponential(2)}, iter=${result.iterations}${fallback}${childText}${childErrorText}`, descendantResult.success ? "normal" : "error");
+    if (!descendantResult.success) updateUI();
     draw();
   });
 
@@ -6393,20 +6454,16 @@
     normalizeArcSweeps();
     if (!result.success || result.errorNorm > CONSTRAINT_ACCEPT_ERROR) {
       if (session.fullDragState) solver.restore(session.fullDragState);
+      clearSketchSolveState(session.sketchId || activeSketchId());
       setHint(`${completedLabel}完了時の全体solveに失敗しました (error=${result.errorNorm.toExponential(3)})`, "error");
       updateUI();
       draw();
       return;
     }
-    const descendantResult = solveDescendantSketches(session.sketchId || activeSketchId(), session.fullDragState);
-    if (!descendantResult.success) {
-      setHint(`${completedLabel}完了時の子スケッチ更新に失敗しました: ${sketchName(descendantResult.sketchId)} (error=${descendantResult.result.errorNorm.toExponential(3)})`, "error");
-      updateUI();
-      draw();
-      return;
-    }
+    const descendantResult = solveDescendantSketches(session.sketchId || activeSketchId());
     const analysis = refreshConstraintAnalysis();
-    setHint(`${completedLabel}完了: success=${result.success}, error=${result.errorNorm.toExponential(2)}, iter=${result.iterations} / ${constraintSummaryText()}`, analysis.analysis.stable ? "normal" : "error");
+    const childErrorText = descendantErrorSummary(descendantResult);
+    setHint(`${completedLabel}完了: success=${result.success}, error=${result.errorNorm.toExponential(2)}, iter=${result.iterations}${childErrorText} / ${constraintSummaryText()}`, analysis.analysis.stable && descendantResult.success ? "normal" : "error");
     updateUI();
     draw();
   }

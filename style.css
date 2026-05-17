@@ -478,6 +478,15 @@ h2 {
   background: rgba(156, 163, 175, 0.2);
 }
 
+.sketch-item.solve-error {
+  background: rgba(254, 226, 226, 0.78);
+}
+
+.sketch-item.solve-error .sketchActivateBtn {
+  color: #991b1b;
+  font-weight: 700;
+}
+
 .sketch-item.root {
   cursor: pointer;
 }
@@ -566,6 +575,12 @@ h2 {
 
 .sketch-badges .badge {
   margin-left: 0;
+}
+
+.sketch-error-badge {
+  background: #dc2626;
+  color: #fff;
+  font-weight: 800;
 }
 
 .relation-badge {
