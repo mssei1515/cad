@@ -437,11 +437,12 @@
   }
 
   function solveAndRefresh(label = "自動solve") {
-    const result = solveActiveSketch();
-    normalizeArcSweeps();
+    const solved = solveSketchAndDescendants(activeSketchId());
+    const result = solved.result;
     const analysis = refreshConstraintAnalysis();
-    const statusKind = result.success && analysis.analysis.stable ? "normal" : "error";
-    setHint(`${label}: success=${result.success}, error=${result.errorNorm.toExponential(2)}, iter=${result.iterations} / ${constraintSummaryText()}`, statusKind);
+    const statusKind = solved.success && analysis.analysis.stable ? "normal" : "error";
+    const childText = solved.descendant?.results?.length > 0 ? `, child=${solved.descendant.results.length}` : "";
+    setHint(`${label}: success=${solved.success}, error=${result.errorNorm.toExponential(2)}, iter=${result.iterations}${childText} / ${constraintSummaryText()}`, statusKind);
     updateUI();
     draw();
     return result;
@@ -2605,6 +2606,18 @@
     return { success: true, results };
   }
 
+  function solveSketchAndDescendants(sketchId = activeSketchId(), rollbackState = null) {
+    const result = solveSketchById(sketchId);
+    normalizeArcSweeps();
+    if (!result.success || result.errorNorm > CONSTRAINT_ACCEPT_ERROR) {
+      if (rollbackState) solver.restore(rollbackState);
+      return { success: false, sketchId, result, descendant: { success: true, results: [] } };
+    }
+    const descendant = solveDescendantSketches(sketchId, rollbackState);
+    if (!descendant.success) return { success: false, sketchId: descendant.sketchId, result: descendant.result, descendant };
+    return { success: true, sketchId, result, descendant };
+  }
+
   function localSolveContextFromSeeds(seeds, sketchId = activeSketchId()) {
     const component = connectedComponentFromSeeds(seeds);
     return {
@@ -3453,11 +3466,27 @@
     return item ? { id: item.id, sketchId: elementSketchId(item), item } : null;
   }
 
+  function sketchIdentityRelationLabel(sketchId) {
+    const relation = sketchRelationToActive(sketchId);
+    if (relation === "ancestor") return "祖先";
+    if (relation === "descendant") return "子孫";
+    return "";
+  }
+
+  function sketchIdentityRelationColor(sketchId) {
+    const relation = sketchRelationToActive(sketchId);
+    if (relation === "ancestor") return "#64748b";
+    if (relation === "descendant") return "#059669";
+    return "#64748b";
+  }
+
   function drawSketchIdentityLabel() {
     const identity = hoveredSketchIdentity || selectedSketchIdentityElement();
     const pointer = lastPointerWorld;
     if (!identity || !pointer || !isVisibleSketchId(identity.sketchId) || identity.sketchId === activeSketchId()) return;
-    const label = `${identity.id} / ${sketchName(identity.sketchId)}`;
+    const baseLabel = `${identity.id} / ${sketchName(identity.sketchId)}`;
+    const relationLabel = sketchIdentityRelationLabel(identity.sketchId);
+    const separator = relationLabel ? " / " : "";
     ctx.save();
     ctx.font = `${11 / viewport.scale}px system-ui`;
     ctx.textAlign = "left";
@@ -3466,14 +3495,22 @@
     const paddingY = 2 / viewport.scale;
     const labelX = pointer.x + 14 / viewport.scale;
     const labelY = pointer.y + 26 / viewport.scale;
-    const metrics = ctx.measureText(label);
+    const baseWidth = ctx.measureText(baseLabel).width;
+    const separatorWidth = ctx.measureText(separator).width;
+    const relationWidth = relationLabel ? ctx.measureText(relationLabel).width : 0;
+    const width = baseWidth + separatorWidth + relationWidth;
     ctx.fillStyle = "rgba(255, 255, 255, 0.9)";
-    ctx.fillRect(labelX - paddingX, labelY - 12 / viewport.scale - paddingY, metrics.width + paddingX * 2, 14 / viewport.scale + paddingY * 2);
+    ctx.fillRect(labelX - paddingX, labelY - 12 / viewport.scale - paddingY, width + paddingX * 2, 14 / viewport.scale + paddingY * 2);
     ctx.strokeStyle = "rgba(148, 163, 184, 0.75)";
     ctx.lineWidth = 1 / viewport.scale;
-    ctx.strokeRect(labelX - paddingX, labelY - 12 / viewport.scale - paddingY, metrics.width + paddingX * 2, 14 / viewport.scale + paddingY * 2);
-    ctx.fillStyle = identity.sketchId === activeSketchId() ? "#1d4ed8" : "#64748b";
-    ctx.fillText(label, labelX, labelY);
+    ctx.strokeRect(labelX - paddingX, labelY - 12 / viewport.scale - paddingY, width + paddingX * 2, 14 / viewport.scale + paddingY * 2);
+    ctx.fillStyle = "#64748b";
+    ctx.fillText(baseLabel, labelX, labelY);
+    if (relationLabel) {
+      ctx.fillText(separator, labelX + baseWidth, labelY);
+      ctx.fillStyle = sketchIdentityRelationColor(identity.sketchId);
+      ctx.fillText(relationLabel, labelX + baseWidth + separatorWidth, labelY);
+    }
     ctx.restore();
   }
 
@@ -4132,9 +4169,9 @@
       const snapshot = snapshotModelState();
       const previousTarget = constraint.target;
       constraint.target = target.kind === "angle" ? (value * Math.PI) / 180 : value;
-      const result = solveActiveSketch();
-      normalizeArcSweeps();
-      if (!result.success || result.errorNorm > CONSTRAINT_ACCEPT_ERROR) {
+      const solved = solveSketchAndDescendants(sketchId || constraintSketchId(constraint), snapshot);
+      const result = solved.result;
+      if (!solved.success || result.errorNorm > CONSTRAINT_ACCEPT_ERROR) {
         restoreModelState(snapshot);
         constraint.target = previousTarget;
         setHint(`寸法値を更新できません: 矛盾しています (error=${result.errorNorm.toExponential(3)})`, "error");
@@ -4507,9 +4544,9 @@
     pushModelConstraint(constraint);
     preconditionNewConstraint(constraint);
 
-    const result = solveActiveSketch();
-    normalizeArcSweeps();
-    if (!result.success || result.errorNorm > CONSTRAINT_ACCEPT_ERROR) {
+    const solved = solveSketchAndDescendants(activeSketchId(), snapshot);
+    const result = solved.result;
+    if (!solved.success || result.errorNorm > CONSTRAINT_ACCEPT_ERROR) {
       restoreModelState(snapshot);
       const msg = `拘束を追加できません: 矛盾しています (error=${result.errorNorm.toExponential(3)}, reason=${result.reason})`;
       setHint(msg, "error");
@@ -4546,9 +4583,9 @@
     markReferenceConstraint(constraint, referenceSketchId, sketchId);
     pushModelConstraint(constraint, sketchId);
     preconditionNewConstraint(constraint);
-    const result = solveSketchById(sketchId);
-    normalizeArcSweeps();
-    if (!result.success || result.errorNorm > CONSTRAINT_ACCEPT_ERROR) {
+    const solved = solveSketchAndDescendants(sketchId, snapshot);
+    const result = solved.result;
+    if (!solved.success || result.errorNorm > CONSTRAINT_ACCEPT_ERROR) {
       restoreModelState(snapshot);
       const msg = `参照拘束を追加できません: 矛盾しています (error=${result.errorNorm.toExponential(3)}, reason=${result.reason})`;
       setHint(msg, "error");
