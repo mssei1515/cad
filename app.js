@@ -543,8 +543,7 @@
 
   function sketchStrokeWidth(item) {
     const relation = sketchRelationOfElement(item);
-    if (relation === "active") return 2.6;
-    if (relation === "ancestor" || relation === "descendant") return 1.2;
+    if (relation === "active" || relation === "ancestor" || relation === "descendant") return 2.6;
     return 0;
   }
 
@@ -3454,15 +3453,11 @@
     return item ? { id: item.id, sketchId: elementSketchId(item), item } : null;
   }
 
-  function sketchIdentityRelationLabel(sketchId) {
-    return sketchId === activeSketchId() ? "編集中" : "非アクティブ";
-  }
-
   function drawSketchIdentityLabel() {
     const identity = hoveredSketchIdentity || selectedSketchIdentityElement();
     const pointer = lastPointerWorld;
-    if (!identity || !pointer || !isVisibleSketchId(identity.sketchId)) return;
-    const label = `${identity.id} / ${sketchName(identity.sketchId)} / ${sketchIdentityRelationLabel(identity.sketchId)}`;
+    if (!identity || !pointer || !isVisibleSketchId(identity.sketchId) || identity.sketchId === activeSketchId()) return;
+    const label = `${identity.id} / ${sketchName(identity.sketchId)}`;
     ctx.save();
     ctx.font = `${11 / viewport.scale}px system-ui`;
     ctx.textAlign = "left";
