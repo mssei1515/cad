@@ -3703,15 +3703,23 @@
   }
 
   function updateToolbar() {
-    document.getElementById("toolSelect").classList.toggle("active", mode === "select");
-    document.getElementById("toolPoint").classList.toggle("active", mode === "point");
-    document.getElementById("toolLine").classList.toggle("active", mode === "line");
-    document.getElementById("toolConstructionLine")?.classList.toggle("active", constructionLineMode);
-    document.getElementById("toolRectangle")?.classList.toggle("active", mode === "rectangle");
-    document.getElementById("toolFillet")?.classList.toggle("active", mode === "fillet");
-    document.getElementById("toolTrim")?.classList.toggle("active", mode === "trim");
-    document.getElementById("toolCircle").classList.toggle("active", mode === "circle");
-    document.getElementById("toolArc").classList.toggle("active", mode === "arc");
+    const states = {
+      toolSelect: mode === "select" && !pendingConstraintCommand && !pendingCommand,
+      toolPoint: mode === "point",
+      toolLine: mode === "line" && !constructionLineMode,
+      toolConstructionLine: mode === "line" && constructionLineMode,
+      toolRectangle: mode === "rectangle",
+      toolFillet: mode === "fillet",
+      toolTrim: mode === "trim",
+      toolCircle: mode === "circle",
+      toolArc: mode === "arc",
+    };
+    for (const [id, active] of Object.entries(states)) {
+      const button = document.getElementById(id);
+      if (!button) continue;
+      button.classList.toggle("active", active);
+      button.setAttribute("aria-pressed", String(active));
+    }
   }
 
   function canApplyConstraint(type) {
@@ -3862,6 +3870,7 @@
     }
     pendingConstraintCommand = { type };
     trimConstraintSelection(type);
+    updateToolbar();
     updateConstraintButtons();
     setHint(constraintTargetHint(type));
     draw();
@@ -3872,6 +3881,10 @@
     pendingConstraintCommand = null;
     if (message) setHint(message);
     updateConstraintButtons();
+    updateToolbar();
+    if (document.activeElement instanceof HTMLElement && document.activeElement.matches("[data-constraint]")) {
+      document.activeElement.blur();
+    }
     draw();
   }
 
@@ -4056,20 +4069,27 @@
 
   function handleReferenceConstraintTargetClick(referenceTarget, pointer, type, distanceMode = false) {
     const subject = activeReferenceSubject();
-    if (!subject || !referenceTarget) return false;
-    if (type === "distance") {
-      if (referenceTarget.kind !== "line") {
-        setHint("参照寸法は、アクティブ側の点系要素と親/祖先の線で指定してください", "error");
-        return true;
-      }
-      return startReferenceDistanceInput(subject, referenceTarget, pointer);
-    }
-    if (type !== "coincident") {
-      setHint("別スケッチの図形は、一致または寸法で参照拘束として扱います", "error");
+    if (!subject) {
+      setHint("先にアクティブスケッチ側の対象を選択してください");
       return true;
     }
+    if (!referenceTarget) return false;
+    if (type === "distance") {
+      return startReferenceDistanceInput(subject, referenceTarget, pointer);
+    }
     if (distanceMode && referenceTarget.kind === "line") return startReferenceDistanceInput(subject, referenceTarget, pointer);
-    return handleReferenceTargetClick(referenceTarget, pointer, false);
+    const subjectSketchId = referenceSubjectSketchId(subject);
+    if (!isAncestorSketchId(referenceTarget.sketchId, subjectSketchId)) {
+      setHint("親または祖先スケッチのみ参照できます", "error");
+      return true;
+    }
+    const constraint = referenceConstraintForType(type, subject, referenceTarget);
+    if (!constraint) {
+      setHint("この参照拘束の組み合わせはまだ対応していません", "error");
+      return true;
+    }
+    commitReferenceConstraint("reference", constraint, referenceTarget.sketchId, subjectSketchId);
+    return true;
   }
 
   function referenceTargetFromHit(hitP, hitL, hitC, hitA) {
@@ -4132,6 +4152,8 @@
     pendingCommand = null;
     hideDimensionValueInput();
     if (message) setHint(message);
+    updateToolbar();
+    updateConstraintButtons();
     draw();
   }
 
@@ -4340,7 +4362,9 @@
 
     for (const btn of constraintButtons) {
       btn.setAttribute("aria-disabled", "false");
-      btn.classList.toggle("active", pendingConstraintCommand?.type === btn.dataset.constraint);
+      const active = pendingConstraintCommand?.type === btn.dataset.constraint;
+      btn.classList.toggle("active", active);
+      btn.setAttribute("aria-pressed", String(active));
     }
     const canToggleFixed =
       Boolean(selectedArcEndpoint) ||
@@ -4726,12 +4750,83 @@
     return null;
   }
 
+  function referenceConstraintForType(type, subject, referenceTarget) {
+    if (type === "coincident") return referenceConstraintForSubject(subject, referenceTarget);
+    if (!subject || !referenceTarget) return null;
+    if (type === "horizontal") {
+      if (subject.kind === "point" && referenceTarget.kind === "point") return new PointHorizontalConstraint(subject.point, referenceTarget.point);
+      return null;
+    }
+    if (type === "vertical") {
+      if (subject.kind === "point" && referenceTarget.kind === "point") return new PointVerticalConstraint(subject.point, referenceTarget.point);
+      return null;
+    }
+    if (type === "parallel") {
+      if (subject.kind === "line" && referenceTarget.kind === "line") return new ParallelConstraint(subject.line, referenceTarget.line);
+      return null;
+    }
+    if (type === "perpendicular") {
+      if (subject.kind === "line" && referenceTarget.kind === "line") return new PerpendicularConstraint(subject.line, referenceTarget.line);
+      return null;
+    }
+    if (type === "collinear") {
+      if (subject.kind === "line" && referenceTarget.kind === "line") return new CollinearConstraint(subject.line, referenceTarget.line);
+      return null;
+    }
+    if (type === "equal") {
+      if (subject.kind === "line" && referenceTarget.kind === "line") return new EqualLengthConstraint(subject.line, referenceTarget.line);
+      if (subject.kind === "primitive" && referenceTarget.kind === "primitive") return new EqualRadiusConstraint(subject.primitive, referenceTarget.primitive);
+      return null;
+    }
+    if (type === "equalRadius") {
+      if (subject.kind === "primitive" && referenceTarget.kind === "primitive") return new EqualRadiusConstraint(subject.primitive, referenceTarget.primitive);
+      return null;
+    }
+    if (type === "concentric") {
+      if (subject.kind === "primitive" && referenceTarget.kind === "primitive") return new ConcentricConstraint(subject.primitive, referenceTarget.primitive);
+      if (subject.kind === "primitive" && referenceTarget.kind === "point") return new ConcentricConstraint(subject.primitive, referenceTarget.point);
+      if (subject.kind === "point" && referenceTarget.kind === "primitive") return new ConcentricConstraint(subject.point, referenceTarget.primitive);
+      return null;
+    }
+    if (type === "pointOnCircle") {
+      if (subject.kind === "point" && referenceTarget.kind === "primitive") return new PointOnCircleConstraint(subject.point, referenceTarget.primitive);
+      if (subject.kind === "primitive" && referenceTarget.kind === "point") return new PointOnCircleConstraint(referenceTarget.point, subject.primitive);
+      if (subject.kind === "arc-endpoint" && referenceTarget.kind === "primitive") return new ArcEndpointOnCircleConstraint(subject.arc, subject.endpoint, referenceTarget.primitive);
+      return null;
+    }
+    if (type === "tangent") {
+      if (subject.kind === "line" && referenceTarget.kind === "primitive") return new LineCircleTangentConstraint(subject.line, referenceTarget.primitive);
+      if (subject.kind === "primitive" && referenceTarget.kind === "line") return new LineCircleTangentConstraint(referenceTarget.line, subject.primitive);
+      if (subject.kind === "primitive" && referenceTarget.kind === "primitive") return new CircleCircleTangentConstraint(subject.primitive, referenceTarget.primitive);
+      return null;
+    }
+    return null;
+  }
+
+  function referenceDistanceTargetForSubject(subject, referenceTarget) {
+    if (!subject || !referenceTarget) return null;
+    if (subject.kind === "point" && referenceTarget.kind === "point") {
+      return { kind: "point-point", p1: subject.point, p2: referenceTarget.point, value: hypot2(referenceTarget.point.x - subject.point.x, referenceTarget.point.y - subject.point.y) };
+    }
+    if (subject.kind === "point" && referenceTarget.kind === "line") {
+      return { kind: "point-line", point: subject.point, line: referenceTarget.line, value: Math.abs(signedPointLineDistance(subject.point, referenceTarget.line)) };
+    }
+    if (subject.kind === "line" && referenceTarget.kind === "line") {
+      if (!lineHasDirection(subject.line) || !lineHasDirection(referenceTarget.line)) return { kind: "invalid", reason: "寸法対象の線が短すぎます" };
+      if (!linesAreParallel(subject.line, referenceTarget.line)) {
+        return { kind: "angle", line1: subject.line, line2: referenceTarget.line, value: angleDegrees(axisAngleBetweenLines(subject.line, referenceTarget.line)), signedValue: angleDimensionSweep({ line1: subject.line, line2: referenceTarget.line }) };
+      }
+      return { kind: "line-line", line1: subject.line, line2: referenceTarget.line, value: Math.abs(signedPointLineDistance(referenceTarget.line.p1, subject.line)) };
+    }
+    return null;
+  }
+
   function startReferenceDistanceInput(subject, referenceTarget, pointer) {
-    if (!subject || subject.kind !== "point" || referenceTarget?.kind !== "line") {
-      setHint("参照距離寸法は、点系要素から親/祖先の線への参照で使えます", "error");
+    const target = referenceDistanceTargetForSubject(subject, referenceTarget);
+    if (!target || target.kind === "invalid") {
+      setHint(target?.reason || "参照寸法は、アクティブ側の点/線と親または祖先の点/線で指定してください", "error");
       return false;
     }
-    const target = { kind: "point-line", point: subject.point, line: referenceTarget.line, value: Math.abs(signedPointLineDistance(subject.point, referenceTarget.line)) };
     pendingCommand = {
       type: "distance-value",
       target,
@@ -6790,6 +6885,8 @@
         else {
           cancelPendingCommand("");
           pendingConstraintCommand = { type };
+          updateToolbar();
+          updateConstraintButtons();
           addConstraint(type);
         }
       } else {
