@@ -419,8 +419,8 @@
     if (selectedArcEndpoint) return { kind: "arc-endpoint", arc: selectedArcEndpoint.arc, endpoint: selectedArcEndpoint.endpoint };
     if (selectedPoints.length === 1 && selectedLines.length === 0 && selectedCircles.length === 0 && selectedArcs.length === 0) return { kind: "point", point: selectedPoints[0] };
     if (selectedPoints.length === 0 && selectedLines.length === 1 && selectedCircles.length === 0 && selectedArcs.length === 0) return { kind: "line", line: selectedLines[0] };
-    if (selectedPoints.length === 0 && selectedLines.length === 0 && selectedCircles.length === 1 && selectedArcs.length === 0) return { kind: "point", point: selectedCircles[0].center };
-    if (selectedPoints.length === 0 && selectedLines.length === 0 && selectedCircles.length === 0 && selectedArcs.length === 1) return { kind: "point", point: selectedArcs[0].center };
+    if (selectedPoints.length === 0 && selectedLines.length === 0 && selectedCircles.length === 1 && selectedArcs.length === 0) return { kind: "primitive", primitive: selectedCircles[0] };
+    if (selectedPoints.length === 0 && selectedLines.length === 0 && selectedCircles.length === 0 && selectedArcs.length === 1) return { kind: "primitive", primitive: selectedArcs[0] };
     return null;
   }
 
@@ -428,6 +428,7 @@
     if (!subject) return null;
     if (subject.kind === "point") return subject.point;
     if (subject.kind === "line") return subject.line;
+    if (subject.kind === "primitive") return subject.primitive;
     if (subject.kind === "arc-endpoint") return subject.arc;
     return null;
   }
@@ -559,7 +560,7 @@
   function sketchAlpha(item) {
     const relation = sketchRelationOfElement(item);
     if (relation === "active") return 1;
-    if (relation === "ancestor" || relation === "descendant") return 0.45;
+    if (relation === "ancestor" || relation === "descendant") return 1;
     return 0;
   }
 
@@ -3475,9 +3476,16 @@
 
   function sketchIdentityRelationColor(sketchId) {
     const relation = sketchRelationToActive(sketchId);
-    if (relation === "ancestor") return "#64748b";
-    if (relation === "descendant") return "#059669";
+    if (relation === "ancestor") return "#7c3aed";
+    if (relation === "descendant") return "#047857";
     return "#64748b";
+  }
+
+  function sketchIdentityRelationBackground(sketchId) {
+    const relation = sketchRelationToActive(sketchId);
+    if (relation === "ancestor") return "rgba(237, 233, 254, 0.96)";
+    if (relation === "descendant") return "rgba(209, 250, 229, 0.96)";
+    return "rgba(241, 245, 249, 0.96)";
   }
 
   function drawSketchIdentityLabel() {
@@ -3507,9 +3515,15 @@
     ctx.fillStyle = "#64748b";
     ctx.fillText(baseLabel, labelX, labelY);
     if (relationLabel) {
+      const relationX = labelX + baseWidth + separatorWidth;
+      const relationPadX = 4 / viewport.scale;
+      const relationPadY = 1 / viewport.scale;
       ctx.fillText(separator, labelX + baseWidth, labelY);
+      ctx.fillStyle = sketchIdentityRelationBackground(identity.sketchId);
+      ctx.fillRect(relationX - relationPadX, labelY - 12 / viewport.scale - relationPadY, relationWidth + relationPadX * 2, 14 / viewport.scale + relationPadY * 2);
       ctx.fillStyle = sketchIdentityRelationColor(identity.sketchId);
-      ctx.fillText(relationLabel, labelX + baseWidth + separatorWidth, labelY);
+      ctx.font = `700 ${11 / viewport.scale}px system-ui`;
+      ctx.fillText(relationLabel, relationX, labelY);
     }
     ctx.restore();
   }
@@ -4611,6 +4625,10 @@
     }
     if (subject.kind === "line") {
       if (referenceTarget.kind === "line") return new CollinearConstraint(subject.line, referenceTarget.line);
+    }
+    if (subject.kind === "primitive") {
+      if (referenceTarget.kind === "point") return new PointOnCircleConstraint(referenceTarget.point, subject.primitive);
+      if (referenceTarget.kind === "primitive") return new ConcentricConstraint(subject.primitive, referenceTarget.primitive);
     }
     if (subject.kind === "arc-endpoint") {
       if (referenceTarget.kind === "point") return new ArcEndpointCoincidentConstraint(subject.arc, subject.endpoint, referenceTarget.point);
