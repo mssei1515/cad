@@ -545,7 +545,7 @@
 
   function sketchStrokeWidth(item) {
     const relation = sketchRelationOfElement(item);
-    if (relation === "ancestor" || relation === "descendant") return 1.4;
+    if (relation === "ancestor" || relation === "descendant") return 1.8;
     if (relation === "active") return 2.6;
     return 0;
   }
