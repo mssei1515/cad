@@ -100,6 +100,7 @@
   let pendingConstraintCommand = null;
   let lastPointerWorld = null;
   let hoveredSketchIdentity = null;
+  let constructionLineMode = false;
   let pointSeq = 1;
   let lineSeq = 1;
   let circleSeq = 1;
@@ -584,9 +585,9 @@
     return p;
   }
 
-  function addLine(p1, p2) {
+  function addLine(p1, p2, construction = constructionLineMode) {
     if (p1 === p2) return null;
-    const l = new Line(`L${lineSeq++}`, p1, p2);
+    const l = new Line(`L${lineSeq++}`, p1, p2, construction);
     assignSketchId(l);
     ensureLineMinimumLength(l);
     model.lines.push(l);
@@ -705,6 +706,7 @@
     pointerPreview = null;
     pendingCommand = null;
     pendingConstraintCommand = null;
+    constructionLineMode = false;
     hoveredPoint = null;
     hoveredEndpointPoint = null;
     hoveredLine = null;
@@ -881,7 +883,7 @@
       sketches: model.sketches.map((sketch) => ({ id: sketch.id, name: sketch.name, parentSketchId: sketch.parentSketchId || null, kind: isRootSketch(sketch) ? "root" : "sketch" })),
       activeSketchId: activeSketchId(),
       points: model.points.map((p) => ({ id: p.id, x: p.x, y: p.y, fixed: p.fixed, kind: p.kind || (isPointUsedByPrimitive(p) ? "endpoint" : "explicit"), sketchId: elementSketchId(p) })),
-      lines: model.lines.map((l) => ({ id: l.id, p1: l.p1.id, p2: l.p2.id, sketchId: elementSketchId(l) })),
+      lines: model.lines.map((l) => ({ id: l.id, p1: l.p1.id, p2: l.p2.id, construction: Boolean(l.construction), sketchId: elementSketchId(l) })),
       circles: model.circles.map((c) => ({ id: c.id, center: c.center.id, radius: c.radius(), sketchId: elementSketchId(c) })),
       arcs: model.arcs.map((a) => ({ id: a.id, center: a.center.id, radius: a.radius(), startAngle: a.startAngle, endAngle: a.endAngle, sketchId: elementSketchId(a) })),
       constraints: model.constraints
@@ -1054,7 +1056,7 @@
       const p1 = pointById.get(String(l.p1));
       const p2 = pointById.get(String(l.p2));
       if (!p1 || !p2) throw new Error(`線 ${l.id} の端点が見つかりません`);
-      const line = new Line(String(l.id), p1, p2);
+      const line = new Line(String(l.id), p1, p2, Boolean(l.construction));
       line.sketchId = normalizeSketchId(l.sketchId || p1.sketchId || p2.sketchId);
       if (!hasPointKind) {
         p1.kind = "endpoint";
@@ -2620,6 +2622,10 @@
     return { success: true, sketchId, result, descendant };
   }
 
+  function solveElementSketchAndDescendants(element, rollbackState = null) {
+    return solveSketchAndDescendants(elementSketchId(element), rollbackState);
+  }
+
   function localSolveContextFromSeeds(seeds, sketchId = activeSketchId()) {
     const component = connectedComponentFromSeeds(seeds);
     return {
@@ -2973,6 +2979,17 @@
     ctx.restore();
   }
 
+  function extendedLineSegment(line, extension) {
+    const len = line.length();
+    if (len < 1e-12 || !Number.isFinite(extension) || extension <= 0) return { p1: line.p1, p2: line.p2 };
+    const ux = line.dx() / len;
+    const uy = line.dy() / len;
+    return {
+      p1: { x: line.p1.x - ux * extension, y: line.p1.y - uy * extension },
+      p2: { x: line.p2.x + ux * extension, y: line.p2.y + uy * extension },
+    };
+  }
+
   function drawLines() {
     ctx.save();
     for (const l of drawOrderBySketch(model.lines)) {
@@ -2980,16 +2997,20 @@
       ctx.globalAlpha = sketchAlpha(l);
       const sel = active && selectedLines.includes(l);
       const hovered = (active || isReferenceHoverElement(l)) && hoveredLine === l;
-      ctx.strokeStyle = constraintStatusColor(l, sel, hovered);
-      ctx.lineWidth = (sel ? 4 : hovered ? 2.6 : sketchStrokeWidth(l)) / viewport.scale;
+      const construction = Boolean(l.construction) && !sel && !hovered;
+      ctx.strokeStyle = construction && active ? "#64748b" : constraintStatusColor(l, sel, hovered);
+      ctx.lineWidth = (sel ? 4 : hovered ? 2.6 : construction ? 1.6 : sketchStrokeWidth(l)) / viewport.scale;
       ctx.lineCap = "round";
       ctx.lineJoin = "round";
+      ctx.setLineDash(construction ? [8 / viewport.scale, 5 / viewport.scale] : []);
       ctx.shadowColor = sel ? "rgba(37, 99, 235, 0.45)" : "transparent";
       ctx.shadowBlur = sel ? 8 / viewport.scale : 0;
+      const drawSegment = construction ? extendedLineSegment(l, 12 / viewport.scale) : { p1: l.p1, p2: l.p2 };
       ctx.beginPath();
-      ctx.moveTo(l.p1.x, l.p1.y);
-      ctx.lineTo(l.p2.x, l.p2.y);
+      ctx.moveTo(drawSegment.p1.x, drawSegment.p1.y);
+      ctx.lineTo(drawSegment.p2.x, drawSegment.p2.y);
       ctx.stroke();
+      ctx.setLineDash([]);
       ctx.shadowBlur = 0;
 
       if (sel || hovered) {
@@ -3622,6 +3643,7 @@
     document.getElementById("toolSelect").classList.toggle("active", mode === "select");
     document.getElementById("toolPoint").classList.toggle("active", mode === "point");
     document.getElementById("toolLine").classList.toggle("active", mode === "line");
+    document.getElementById("toolConstructionLine")?.classList.toggle("active", constructionLineMode);
     document.getElementById("toolRectangle")?.classList.toggle("active", mode === "rectangle");
     document.getElementById("toolFillet")?.classList.toggle("active", mode === "fillet");
     document.getElementById("toolTrim")?.classList.toggle("active", mode === "trim");
@@ -4433,7 +4455,7 @@
       .filter(isActiveSketchElement)
       .map(
         (l) =>
-          `<div class="item list-item"><span>${l.id}: ${l.p1.id} - ${l.p2.id}<span class="badge">len=${l.length().toFixed(2)}</span><span class="badge">${constraintStatusBadge(constraintStatusOf(l))}</span>${findLineFixedConstraint(l) ? "<span class='badge'>固定</span>" : ""}</span>` +
+          `<div class="item list-item"><span>${l.id}: ${l.p1.id} - ${l.p2.id}<span class="badge">len=${l.length().toFixed(2)}</span><span class="badge">${constraintStatusBadge(constraintStatusOf(l))}</span>${l.construction ? "<span class='badge'>補助</span>" : ""}${findLineFixedConstraint(l) ? "<span class='badge'>固定</span>" : ""}</span>` +
           `<button data-id="${l.id}" class="removeLineBtn icon-delete-btn" title="削除" aria-label="削除" data-tooltip="削除">` +
           `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3M7 7l1 13h8l1-13"/></svg>` +
           `</button></div>`,
@@ -4559,7 +4581,7 @@
     pushModelConstraint(constraint);
     preconditionNewConstraint(constraint);
 
-    const solved = solveSketchAndDescendants(activeSketchId(), snapshot);
+    const solved = solveSketchAndDescendants(constraintSketchId(constraint), snapshot);
     const result = solved.result;
     if (!solved.success || result.errorNorm > CONSTRAINT_ACCEPT_ERROR) {
       restoreModelState(snapshot);
@@ -6503,6 +6525,7 @@
   document.getElementById("toolSelect").addEventListener("click", () => {
     cancelConstraintTargetCommand("");
     mode = "select";
+    constructionLineMode = false;
     lineStartPoint = null;
     rectangleStartPoint = null;
     filletFirstLine = null;
@@ -6519,6 +6542,7 @@
   document.getElementById("toolPoint").addEventListener("click", () => {
     cancelConstraintTargetCommand("");
     mode = "point";
+    constructionLineMode = false;
     lineStartPoint = null;
     rectangleStartPoint = null;
     filletFirstLine = null;
@@ -6535,6 +6559,7 @@
   document.getElementById("toolLine").addEventListener("click", () => {
     cancelConstraintTargetCommand("");
     mode = "line";
+    constructionLineMode = false;
     lineStartPoint = null;
     rectangleStartPoint = null;
     filletFirstLine = null;
@@ -6548,9 +6573,35 @@
     draw();
   });
 
+  document.getElementById("toolConstructionLine")?.addEventListener("click", () => {
+    cancelConstraintTargetCommand("");
+    if (selectedLines.length > 0 && selectedPoints.length === 0 && selectedCircles.length === 0 && selectedArcs.length === 0 && !selectedArcEndpoint) {
+      const next = !selectedLines.every((line) => line.construction);
+      for (const line of selectedLines) line.construction = next;
+      setHint(next ? "選択線を補助線にしました" : "選択線を通常線にしました");
+      updateUI();
+      draw();
+      return;
+    }
+    mode = "line";
+    constructionLineMode = !constructionLineMode;
+    lineStartPoint = null;
+    rectangleStartPoint = null;
+    filletFirstLine = null;
+    circleCenterPoint = null;
+    arcCenterPoint = null;
+    arcStartPoint = null;
+    pointerPreview = null;
+    clearSnap();
+    updateToolbar();
+    setHint(constructionLineMode ? "補助線作図: 端点位置をクリックしてください" : "通常線作図に戻しました");
+    draw();
+  });
+
   document.getElementById("toolRectangle")?.addEventListener("click", () => {
     cancelConstraintTargetCommand("");
     mode = "rectangle";
+    constructionLineMode = false;
     lineStartPoint = null;
     rectangleStartPoint = null;
     filletFirstLine = null;
@@ -6572,6 +6623,7 @@
       return;
     }
     mode = "fillet";
+    constructionLineMode = false;
     lineStartPoint = null;
     rectangleStartPoint = null;
     filletFirstLine = null;
@@ -6588,6 +6640,7 @@
   document.getElementById("toolTrim")?.addEventListener("click", () => {
     cancelConstraintTargetCommand("");
     mode = "trim";
+    constructionLineMode = false;
     lineStartPoint = null;
     rectangleStartPoint = null;
     filletFirstLine = null;
@@ -6612,6 +6665,7 @@
   document.getElementById("toolCircle").addEventListener("click", () => {
     cancelConstraintTargetCommand("");
     mode = "circle";
+    constructionLineMode = false;
     lineStartPoint = null;
     rectangleStartPoint = null;
     filletFirstLine = null;
@@ -6628,6 +6682,7 @@
   document.getElementById("toolArc").addEventListener("click", () => {
     cancelConstraintTargetCommand("");
     mode = "arc";
+    constructionLineMode = false;
     lineStartPoint = null;
     rectangleStartPoint = null;
     filletFirstLine = null;
@@ -6711,9 +6766,24 @@
       return;
     }
     if (selectedPoints.length !== 1 || selectedLines.length > 0 || selectedCircles.length > 0 || selectedArcs.length > 0) return;
-    selectedPoints[0].fixed = !selectedPoints[0].fixed;
-    const result = solveAndRefresh("固定状態変更");
-    log(`${selectedPoints[0].id} の固定状態を ${selectedPoints[0].fixed} にしました\n自動solve: success=${result.success}`);
+    const point = selectedPoints[0];
+    const snapshot = snapshotModelState();
+    point.fixed = !point.fixed;
+    const solved = solveElementSketchAndDescendants(point, snapshot);
+    const fixedResult = solved.result;
+    if (!solved.success || fixedResult.errorNorm > CONSTRAINT_ACCEPT_ERROR) {
+      restoreModelState(snapshot);
+      setHint(`子スケッチ内で固定状態を変更できません (error=${fixedResult.errorNorm.toExponential(3)})`, "error");
+      updateUI();
+      draw();
+      return;
+    }
+    refreshConstraintAnalysis();
+    setHint(`固定状態変更: success=${fixedResult.success}, error=${fixedResult.errorNorm.toExponential(2)}, iter=${fixedResult.iterations}`);
+    updateUI();
+    draw();
+    log(`${point.id} の固定状態を ${point.fixed} にしました\n自動solve: success=${fixedResult.success}`);
+    return;
   });
 
   window.addEventListener("resize", () => {

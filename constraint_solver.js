@@ -64,10 +64,11 @@
   }
 
   class Line {
-    constructor(id, p1, p2) {
+    constructor(id, p1, p2, construction = false) {
       this.id = id;
       this.p1 = p1;
       this.p2 = p2;
+      this.construction = Boolean(construction);
       this.orientationHint = null;
     }
 
