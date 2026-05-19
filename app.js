@@ -3175,7 +3175,7 @@
         const nx = -uy;
         const ny = ux;
         const alongHalf = constructionExtension;
-        const normalHalf = constructionExtension / 2;
+        const normalHalf = constructionExtension;
         for (const p of [l.p1, l.p2]) {
           ctx.beginPath();
           ctx.moveTo(p.x - ux * alongHalf, p.y - uy * alongHalf);
@@ -4350,6 +4350,16 @@
     );
   }
 
+  function applyReferenceHoverTarget(referenceTarget) {
+    hoveredPoint = referenceTarget?.kind === "point" ? referenceTarget.point : null;
+    hoveredEndpointPoint = hoveredPoint;
+    hoveredLine = referenceTarget?.kind === "line" ? referenceTarget.line : null;
+    hoveredCircle = referenceTarget?.primitive instanceof Circle ? referenceTarget.primitive : null;
+    hoveredArc = referenceTarget?.primitive instanceof Arc ? referenceTarget.primitive : null;
+    hoveredArcEndpoint = null;
+    hoveredDimensionConstraint = null;
+  }
+
   function updatePendingLineLengthHover(pointer) {
     if (pendingCommand?.type !== "distance-place" || pendingCommand.target.kind !== "line-length") {
       hoveredPoint = null;
@@ -4358,6 +4368,17 @@
       return false;
     }
     const baseLine = pendingCommand.target.line;
+    const referenceTarget = hitReferenceTarget(pointer.x, pointer.y);
+    if (referenceTarget) {
+      const changed =
+        (referenceTarget.kind === "point" ? referenceTarget.point : null) !== hoveredPoint ||
+        (referenceTarget.kind === "line" ? referenceTarget.line : null) !== hoveredLine ||
+        (referenceTarget.primitive instanceof Circle ? referenceTarget.primitive : null) !== hoveredCircle ||
+        (referenceTarget.primitive instanceof Arc ? referenceTarget.primitive : null) !== hoveredArc ||
+        hoveredDimensionConstraint;
+      applyReferenceHoverTarget(referenceTarget);
+      return changed;
+    }
     const nextEndpointHover = hitEndpointPoint(pointer.x, pointer.y);
     const nextPointHover = nextEndpointHover || hitExplicitPoint(pointer.x, pointer.y);
     const candidateLine = nextPointHover ? null : hitLine(pointer.x, pointer.y);
@@ -5085,6 +5106,11 @@
     }
     commitConstraintResolution(constraintResolutionFromSubjectAndReference(type === "distance" || (distanceMode && referenceTarget.kind === "line") ? "distance" : type, subject, referenceTarget), pointer);
     return true;
+  }
+
+  function tryStartReferenceDistanceFromHits(activeSubject, referenceTarget, pointer) {
+    if (pendingConstraintCommand?.type !== "distance" || !activeSubject || !referenceTarget) return false;
+    return commitConstraintResolution(constraintResolutionFromSubjectAndReference("distance", activeSubject, referenceTarget), pointer);
   }
 
   function addDistanceConstraintFromTarget(target, value, dimension, options = {}) {
@@ -6397,16 +6423,18 @@
 
     if (pendingConstraintCommand) {
       e.preventDefault();
+      const activeHitSubject = referenceSubjectFromHit(hitP, hitL, hitC, hitA, hitArcEnd);
       if (pendingConstraintCommand.referenceTarget) {
-        const subject = referenceSubjectFromHit(hitP, hitL, hitC, hitA, hitArcEnd);
-        if (subject) {
-          handleReferenceSubjectAndTarget(subject, pendingConstraintCommand.referenceTarget, p, pendingConstraintCommand.type, e.shiftKey);
+        if (tryStartReferenceDistanceFromHits(activeHitSubject, pendingConstraintCommand.referenceTarget, p)) return;
+        if (activeHitSubject) {
+          handleReferenceSubjectAndTarget(activeHitSubject, pendingConstraintCommand.referenceTarget, p, pendingConstraintCommand.type, e.shiftKey);
           return;
         }
       }
       const referenceTarget = hitReferenceTarget(p.x, p.y);
       if (referenceTarget) {
         const subject = activeReferenceSubject();
+        if (tryStartReferenceDistanceFromHits(subject, referenceTarget, p)) return;
         if (subject) {
           handleReferenceSubjectAndTarget(subject, referenceTarget, p, pendingConstraintCommand.type, e.shiftKey);
         } else {
