@@ -3169,13 +3169,18 @@
       if (construction) {
         ctx.strokeStyle = lineColor;
         ctx.lineWidth = 1.4 / viewport.scale;
+        const len = l.length();
+        const ux = len > 1e-12 ? l.dx() / len : 1;
+        const uy = len > 1e-12 ? l.dy() / len : 0;
+        const nx = -uy;
+        const ny = ux;
         const half = constructionExtension / 2;
         for (const p of [l.p1, l.p2]) {
           ctx.beginPath();
-          ctx.moveTo(p.x - half, p.y);
-          ctx.lineTo(p.x + half, p.y);
-          ctx.moveTo(p.x, p.y - half);
-          ctx.lineTo(p.x, p.y + half);
+          ctx.moveTo(p.x - ux * half, p.y - uy * half);
+          ctx.lineTo(p.x + ux * half, p.y + uy * half);
+          ctx.moveTo(p.x - nx * half, p.y - ny * half);
+          ctx.lineTo(p.x + nx * half, p.y + ny * half);
           ctx.stroke();
         }
       }
@@ -5027,7 +5032,7 @@
       if (resolution?.error) setHint(resolution.error, "error");
       return false;
     }
-    if (resolution.type === "distance") return startDistanceResolution(resolution, pointer);
+    if (resolution.type === "distance") return startDistanceResolution(resolution, resolution.referenceSketchId ? null : pointer);
     if (!resolution.constraint) return false;
     if (resolution.referenceSketchId) return commitReferenceConstraint(resolution.type || "reference", resolution.constraint, resolution.referenceSketchId, resolution.sketchId || activeSketchId());
     return commitNewConstraint(resolution.type || "constraint", resolution.constraint);
