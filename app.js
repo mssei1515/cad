@@ -3154,10 +3154,11 @@
       ctx.lineWidth = (treeHovered ? 4 : sel ? 4 : hovered ? 2.6 : construction ? Math.max(1.8, sketchStrokeWidth(l) * 0.72) : sketchStrokeWidth(l)) / viewport.scale;
       ctx.lineCap = "round";
       ctx.lineJoin = "round";
-      ctx.setLineDash(construction ? [8 / viewport.scale, 5 / viewport.scale] : []);
+      ctx.setLineDash(construction ? [12 / viewport.scale, 4 / viewport.scale, 2 / viewport.scale, 4 / viewport.scale] : []);
       ctx.shadowColor = sel || treeHovered ? "rgba(14, 165, 233, 0.45)" : "transparent";
       ctx.shadowBlur = sel || treeHovered ? 8 / viewport.scale : 0;
-      const drawSegment = construction ? extendedLineSegment(l, 12 / viewport.scale) : { p1: l.p1, p2: l.p2 };
+      const constructionExtension = 12 / viewport.scale;
+      const drawSegment = construction ? extendedLineSegment(l, constructionExtension) : { p1: l.p1, p2: l.p2 };
       ctx.beginPath();
       ctx.moveTo(drawSegment.p1.x, drawSegment.p1.y);
       ctx.lineTo(drawSegment.p2.x, drawSegment.p2.y);
@@ -3166,13 +3167,15 @@
       ctx.shadowBlur = 0;
 
       if (construction) {
-        ctx.fillStyle = "#ffffff";
         ctx.strokeStyle = lineColor;
         ctx.lineWidth = 1.4 / viewport.scale;
+        const half = constructionExtension / 2;
         for (const p of [l.p1, l.p2]) {
           ctx.beginPath();
-          ctx.arc(p.x, p.y, 3.4 / viewport.scale, 0, Math.PI * 2);
-          ctx.fill();
+          ctx.moveTo(p.x - half, p.y);
+          ctx.lineTo(p.x + half, p.y);
+          ctx.moveTo(p.x, p.y - half);
+          ctx.lineTo(p.x, p.y + half);
           ctx.stroke();
         }
       }
@@ -6377,6 +6380,13 @@
 
     if (pendingConstraintCommand) {
       e.preventDefault();
+      if (pendingConstraintCommand.referenceTarget) {
+        const subject = referenceSubjectFromHit(hitP, hitL, hitC, hitA, hitArcEnd);
+        if (subject) {
+          handleReferenceSubjectAndTarget(subject, pendingConstraintCommand.referenceTarget, p, pendingConstraintCommand.type, e.shiftKey);
+          return;
+        }
+      }
       const referenceTarget = hitReferenceTarget(p.x, p.y);
       if (referenceTarget) {
         const subject = activeReferenceSubject();
@@ -6388,13 +6398,6 @@
           draw();
         }
         return;
-      }
-      if (pendingConstraintCommand.referenceTarget) {
-        const subject = referenceSubjectFromHit(hitP, hitL, hitC, hitA, hitArcEnd);
-        if (subject) {
-          handleReferenceSubjectAndTarget(subject, pendingConstraintCommand.referenceTarget, p, pendingConstraintCommand.type, e.shiftKey);
-          return;
-        }
       }
       const hitReferenceLikeTarget = referenceTargetFromHit(hitP, hitL, hitC, hitA);
       const subject = activeReferenceSubject();
