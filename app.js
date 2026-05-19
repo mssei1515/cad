@@ -4172,11 +4172,11 @@
   }
 
   function startDistanceCommand() {
-    const target = distanceTargetFromSelection();
-    if (!target) return;
-    if (target.kind === "invalid") {
-      setHint(target.reason, "error");
-      log(target.reason);
+    const resolution = constraintResolutionFromCurrentSelection("distance");
+    if (!resolution) return;
+    if (resolution.error) {
+      setHint(resolution.error, "error");
+      log(resolution.error);
       return;
     }
     mode = "select";
@@ -4189,7 +4189,13 @@
     pointerPreview = null;
     trimPreview = null;
     pendingConstraintCommand = { type: "distance" };
-    pendingCommand = { type: "distance-place", target, pointer: defaultDimensionForTarget(target) };
+    pendingCommand = {
+      type: "distance-place",
+      target: resolution.target,
+      pointer: defaultDimensionForTarget(resolution.target),
+      referenceSketchId: resolution.referenceSketchId,
+      sketchId: resolution.sketchId,
+    };
     updateConstraintButtons();
     updateToolbar();
     setHint("寸法線の位置をクリックしてください");
@@ -4911,21 +4917,79 @@
   }
 
   function startReferenceDistanceInput(subject, referenceTarget, pointer) {
-    const target = referenceDistanceTargetForSubject(subject, referenceTarget);
-    if (!target || target.kind === "invalid") {
-      setHint(target?.reason || "参照寸法は、アクティブ側の点/線と親または祖先の点/線で指定してください", "error");
+    return startDistanceResolution(constraintResolutionFromSubjectAndReference("distance", subject, referenceTarget), pointer);
+  }
+
+  function referenceSketchIdFromPair(subject, referenceTarget) {
+    const subjectSketchId = referenceSubjectSketchId(subject);
+    if (!subjectSketchId || !referenceTarget?.sketchId) return null;
+    return isAncestorSketchId(referenceTarget.sketchId, subjectSketchId) ? referenceTarget.sketchId : null;
+  }
+
+  function constraintResolutionFromSubjectAndReference(type, subject, referenceTarget) {
+    const subjectElement = referenceSubjectElement(subject);
+    const subjectSketchId = referenceSubjectSketchId(subject);
+    const referenceSketchId = referenceSketchIdFromPair(subject, referenceTarget);
+    if (!subject || !subjectElement || !isEditableSketchElement(subjectElement)) {
+      return { error: "アクティブスケッチ側の対象を選択してください" };
+    }
+    if (!referenceTarget || !referenceSketchId) {
+      return { error: "親または祖先スケッチのみ参照できます" };
+    }
+    if (type === "distance") {
+      const target = referenceDistanceTargetForSubject(subject, referenceTarget);
+      if (!target || target.kind === "invalid") return { error: target?.reason || "参照寸法の組み合わせに対応していません" };
+      return { type, target, referenceSketchId, sketchId: subjectSketchId };
+    }
+    const constraint = referenceConstraintForType(type, subject, referenceTarget);
+    if (!constraint) return { error: "この参照拘束の組み合わせには対応していません" };
+    return { type, constraint, referenceSketchId, sketchId: subjectSketchId };
+  }
+
+  function constraintResolutionFromCurrentSelection(type) {
+    const referenceTarget = pendingConstraintCommand?.referenceTarget;
+    if (referenceTarget) return constraintResolutionFromSubjectAndReference(type, activeReferenceSubject(), referenceTarget);
+    if (type === "distance") {
+      const target = distanceTargetFromSelection();
+      if (!target) return null;
+      if (target.kind === "invalid") return { error: target.reason };
+      return { type, target, sketchId: activeSketchId() };
+    }
+    const constraint = constraintFromSelection(type);
+    if (!constraint) return null;
+    return { type, constraint, sketchId: activeSketchId() };
+  }
+
+  function startDistanceResolution(resolution, pointer) {
+    if (!resolution || resolution.error || !resolution.target) {
+      if (resolution?.error) setHint(resolution.error, "error");
       return false;
     }
+    mode = "select";
+    pendingConstraintCommand = { type: "distance" };
     pendingCommand = {
       type: "distance-place",
-      target,
-      pointer,
-      referenceSketchId: referenceTarget.sketchId,
-      sketchId: referenceSubjectSketchId(subject),
+      target: resolution.target,
+      pointer: pointer || defaultDimensionForTarget(resolution.target),
+      referenceSketchId: resolution.referenceSketchId,
+      sketchId: resolution.sketchId,
     };
-    setHint("参照寸法線の位置をクリックしてください");
+    updateConstraintButtons();
+    updateToolbar();
+    setHint(resolution.referenceSketchId ? "参照寸法線の位置をクリックしてください" : "寸法線の位置をクリックしてください");
     draw();
     return true;
+  }
+
+  function commitConstraintResolution(resolution) {
+    if (!resolution || resolution.error) {
+      if (resolution?.error) setHint(resolution.error, "error");
+      return false;
+    }
+    if (resolution.type === "distance") return startDistanceResolution(resolution);
+    if (!resolution.constraint) return false;
+    if (resolution.referenceSketchId) return commitReferenceConstraint(resolution.type || "reference", resolution.constraint, resolution.referenceSketchId, resolution.sketchId || activeSketchId());
+    return commitNewConstraint(resolution.type || "constraint", resolution.constraint);
   }
 
   function handleReferenceTargetClick(referenceTarget, pointer, distanceMode = false) {
@@ -4944,13 +5008,7 @@
       setHint("親または祖先スケッチのみ参照できます", "error");
       return true;
     }
-    if (distanceMode && referenceTarget.kind === "line") return startReferenceDistanceInput(subject, referenceTarget, pointer);
-    const constraint = referenceConstraintForSubject(subject, referenceTarget);
-    if (!constraint) {
-      setHint("この参照拘束の組み合わせはまだ対応していません", "error");
-      return true;
-    }
-    commitReferenceConstraint("reference", constraint, referenceTarget.sketchId, subjectSketchId);
+    commitConstraintResolution(constraintResolutionFromSubjectAndReference(distanceMode && referenceTarget.kind === "line" ? "distance" : "coincident", subject, referenceTarget));
     return true;
   }
 
@@ -4969,15 +5027,7 @@
       setHint("親または祖先スケッチのみ参照できます", "error");
       return true;
     }
-    if (type === "distance" || (distanceMode && referenceTarget.kind === "line")) {
-      return startReferenceDistanceInput(subject, referenceTarget, pointer);
-    }
-    const constraint = referenceConstraintForType(type, subject, referenceTarget);
-    if (!constraint) {
-      setHint("この参照拘束の組み合わせはまだ対応していません", "error");
-      return true;
-    }
-    commitReferenceConstraint("reference", constraint, referenceTarget.sketchId, subjectSketchId);
+    commitConstraintResolution(constraintResolutionFromSubjectAndReference(type === "distance" || (distanceMode && referenceTarget.kind === "line") ? "distance" : type, subject, referenceTarget));
     return true;
   }
 
@@ -5009,14 +5059,15 @@
     }
     if (!constraint) return false;
     constraint.dimension = dimension;
-    if (options.referenceSketchId) return commitReferenceConstraint("referenceDimension", constraint, options.referenceSketchId, options.sketchId || activeSketchId());
-    return commitNewConstraint("dimension", constraint);
+    return commitConstraintResolution({
+      type: options.referenceSketchId ? "referenceDimension" : "dimension",
+      constraint,
+      referenceSketchId: options.referenceSketchId,
+      sketchId: options.sketchId || activeSketchId(),
+    });
   }
 
-  function addConstraint(type) {
-    if (!canApplyConstraint(type)) return;
-    if (type === "distance") return startDistanceCommand();
-
+  function constraintFromSelection(type) {
     let constraint = null;
     const allPrimitives = selectedPrimitives();
     const primitives = type === "coincident" && selectedArcEndpoint ? allPrimitives.filter((p) => p !== selectedArcEndpoint.arc) : allPrimitives;
@@ -5063,10 +5114,17 @@
       if (selectedLines.length === 1) constraint = new LineCircleTangentConstraint(selectedLines[0], primitives[0]);
       else constraint = new CircleCircleTangentConstraint(primitives[0], primitives[1]);
     }
+    return constraint;
+  }
 
-    if (constraint) {
+  function addConstraint(type) {
+    if (!canApplyConstraint(type)) return;
+    if (type === "distance") return startDistanceCommand();
+
+    const resolution = constraintResolutionFromCurrentSelection(type);
+    if (resolution?.constraint) {
       selectedArcEndpointPair = null;
-      commitNewConstraint(type, constraint);
+      commitConstraintResolution(resolution);
     }
   }
 
