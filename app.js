@@ -3174,13 +3174,14 @@
         const uy = len > 1e-12 ? l.dy() / len : 0;
         const nx = -uy;
         const ny = ux;
-        const half = constructionExtension / 2;
+        const alongHalf = constructionExtension;
+        const normalHalf = constructionExtension / 2;
         for (const p of [l.p1, l.p2]) {
           ctx.beginPath();
-          ctx.moveTo(p.x - ux * half, p.y - uy * half);
-          ctx.lineTo(p.x + ux * half, p.y + uy * half);
-          ctx.moveTo(p.x - nx * half, p.y - ny * half);
-          ctx.lineTo(p.x + nx * half, p.y + ny * half);
+          ctx.moveTo(p.x - ux * alongHalf, p.y - uy * alongHalf);
+          ctx.lineTo(p.x + ux * alongHalf, p.y + uy * alongHalf);
+          ctx.moveTo(p.x - nx * normalHalf, p.y - ny * normalHalf);
+          ctx.lineTo(p.x + nx * normalHalf, p.y + ny * normalHalf);
           ctx.stroke();
         }
       }
@@ -4338,6 +4339,15 @@
       return true;
     }
     return false;
+  }
+
+  function retargetPendingLineLengthToReference(referenceTarget, pointer) {
+    if (pendingCommand?.type !== "distance-place" || pendingCommand.target.kind !== "line-length" || !referenceTarget) return false;
+    const baseLine = pendingCommand.target.line;
+    return commitConstraintResolution(
+      constraintResolutionFromSubjectAndReference("distance", { kind: "line", line: baseLine }, referenceTarget),
+      pointer,
+    );
   }
 
   function updatePendingLineLengthHover(pointer) {
@@ -6373,6 +6383,8 @@
 
     if (pendingCommand?.type === "distance-place") {
       e.preventDefault();
+      const referenceTarget = pendingCommand.target.kind === "line-length" ? hitReferenceTarget(p.x, p.y) : null;
+      if (retargetPendingLineLengthToReference(referenceTarget, p)) return;
       if (retargetPendingLineLengthDimension(hitP, hitL, p)) return;
       startDistanceValueInput(p);
       return;
