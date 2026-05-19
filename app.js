@@ -101,6 +101,7 @@
   let pendingConstraintCommand = null;
   let lastPointerWorld = null;
   let hoveredSketchIdentity = null;
+  let hoveredSketchTreeId = null;
   let constructionLineMode = false;
   let pointSeq = 1;
   let lineSeq = 1;
@@ -606,6 +607,10 @@
     if (relation === "ancestor" || relation === "descendant") return 1.8;
     if (relation === "active") return 2.6;
     return 0;
+  }
+
+  function isSketchTreeHoveredElement(item) {
+    return Boolean(hoveredSketchTreeId && elementSketchId(item) === hoveredSketchTreeId);
   }
 
   function isReferenceHoverElement(item) {
@@ -3140,16 +3145,18 @@
       const active = isEditableSketchElement(l);
       ctx.globalAlpha = sketchAlpha(l);
       const refSelected = isPendingReferenceTarget(l);
+      const treeHovered = isSketchTreeHoveredElement(l);
       const sel = (active && selectedLines.includes(l)) || refSelected;
       const hovered = (active || isReferenceHoverElement(l)) && hoveredLine === l;
       const construction = Boolean(l.construction) && !sel && !hovered;
-      ctx.strokeStyle = construction && active ? "#64748b" : constraintStatusColor(l, sel, hovered);
-      ctx.lineWidth = (sel ? 4 : hovered ? 2.6 : construction ? 1.6 : sketchStrokeWidth(l)) / viewport.scale;
+      const lineColor = treeHovered ? "#0ea5e9" : constraintStatusColor(l, sel, hovered);
+      ctx.strokeStyle = lineColor;
+      ctx.lineWidth = (treeHovered ? 4 : sel ? 4 : hovered ? 2.6 : construction ? Math.max(1.8, sketchStrokeWidth(l) * 0.72) : sketchStrokeWidth(l)) / viewport.scale;
       ctx.lineCap = "round";
       ctx.lineJoin = "round";
       ctx.setLineDash(construction ? [8 / viewport.scale, 5 / viewport.scale] : []);
-      ctx.shadowColor = sel ? "rgba(37, 99, 235, 0.45)" : "transparent";
-      ctx.shadowBlur = sel ? 8 / viewport.scale : 0;
+      ctx.shadowColor = sel || treeHovered ? "rgba(14, 165, 233, 0.45)" : "transparent";
+      ctx.shadowBlur = sel || treeHovered ? 8 / viewport.scale : 0;
       const drawSegment = construction ? extendedLineSegment(l, 12 / viewport.scale) : { p1: l.p1, p2: l.p2 };
       ctx.beginPath();
       ctx.moveTo(drawSegment.p1.x, drawSegment.p1.y);
@@ -3158,7 +3165,19 @@
       ctx.setLineDash([]);
       ctx.shadowBlur = 0;
 
-      if (sel || hovered) {
+      if (construction) {
+        ctx.fillStyle = "#ffffff";
+        ctx.strokeStyle = lineColor;
+        ctx.lineWidth = 1.4 / viewport.scale;
+        for (const p of [l.p1, l.p2]) {
+          ctx.beginPath();
+          ctx.arc(p.x, p.y, 3.4 / viewport.scale, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.stroke();
+        }
+      }
+
+      if (sel || hovered || treeHovered) {
         const mx = (l.p1.x + l.p2.x) / 2;
         const my = (l.p1.y + l.p2.y) / 2;
         ctx.fillStyle = "#2563eb";
@@ -3176,17 +3195,18 @@
       const active = isEditableSketchElement(c);
       ctx.globalAlpha = sketchAlpha(c);
       const refSelected = isPendingReferenceTarget(c);
+      const treeHovered = isSketchTreeHoveredElement(c);
       const sel = (active && selectedCircles.includes(c)) || refSelected;
       const hovered = (active || isReferenceHoverElement(c)) && hoveredCircle === c;
-      ctx.strokeStyle = constraintStatusColor(c, sel, hovered);
-      ctx.lineWidth = (sel ? 4 : hovered ? 2.6 : sketchStrokeWidth(c)) / viewport.scale;
-      ctx.shadowColor = sel ? "rgba(37, 99, 235, 0.45)" : "transparent";
-      ctx.shadowBlur = sel ? 8 / viewport.scale : 0;
+      ctx.strokeStyle = treeHovered ? "#0ea5e9" : constraintStatusColor(c, sel, hovered);
+      ctx.lineWidth = (treeHovered ? 4 : sel ? 4 : hovered ? 2.6 : sketchStrokeWidth(c)) / viewport.scale;
+      ctx.shadowColor = sel || treeHovered ? "rgba(14, 165, 233, 0.45)" : "transparent";
+      ctx.shadowBlur = sel || treeHovered ? 8 / viewport.scale : 0;
       ctx.beginPath();
       ctx.arc(c.center.x, c.center.y, c.radius(), 0, Math.PI * 2);
       ctx.stroke();
       ctx.shadowBlur = 0;
-      if (sel || hovered) {
+      if (sel || hovered || treeHovered) {
         ctx.fillStyle = "#2563eb";
         ctx.font = `${12 / viewport.scale}px system-ui`;
         ctx.fillText(c.id, c.center.x + c.radius() + 4 / viewport.scale, c.center.y - 4 / viewport.scale);
@@ -3202,18 +3222,19 @@
       const active = isEditableSketchElement(a);
       ctx.globalAlpha = sketchAlpha(a);
       const refSelected = isPendingReferenceTarget(a);
+      const treeHovered = isSketchTreeHoveredElement(a);
       const sel = (active && selectedArcs.includes(a)) || refSelected;
       const hovered = (active || isReferenceHoverElement(a)) && hoveredArc === a;
       const angles = arcAngles(a);
-      ctx.strokeStyle = constraintStatusColor(a, sel, hovered);
-      ctx.lineWidth = (sel ? 4 : hovered ? 2.6 : sketchStrokeWidth(a)) / viewport.scale;
-      ctx.shadowColor = sel ? "rgba(37, 99, 235, 0.45)" : "transparent";
-      ctx.shadowBlur = sel ? 8 / viewport.scale : 0;
+      ctx.strokeStyle = treeHovered ? "#0ea5e9" : constraintStatusColor(a, sel, hovered);
+      ctx.lineWidth = (treeHovered ? 4 : sel ? 4 : hovered ? 2.6 : sketchStrokeWidth(a)) / viewport.scale;
+      ctx.shadowColor = sel || treeHovered ? "rgba(14, 165, 233, 0.45)" : "transparent";
+      ctx.shadowBlur = sel || treeHovered ? 8 / viewport.scale : 0;
       ctx.beginPath();
       ctx.arc(a.center.x, a.center.y, a.radius(), angles.start, angles.end, angles.end < angles.start);
       ctx.stroke();
       ctx.shadowBlur = 0;
-      if (sel || hovered) {
+      if (sel || hovered || treeHovered) {
         const mid = angles.start + (angles.end - angles.start) / 2;
         ctx.fillStyle = "#2563eb";
         ctx.font = `${12 / viewport.scale}px system-ui`;
@@ -3753,6 +3774,7 @@
       const active = isEditableSketchElement(p);
       ctx.globalAlpha = sketchAlpha(p);
       const refSelected = isPendingReferenceTarget(p);
+      const treeHovered = isSketchTreeHoveredElement(p);
       const sel = (active && selectedPoints.includes(p)) || refSelected;
       const endpoint = isEndpointPoint(p);
       const hovered = (active || isReferenceHoverElement(p)) && (hoveredPoint === p || hoveredEndpointPoint === p);
@@ -3760,20 +3782,20 @@
       const primitiveCenter = shouldShowPrimitiveCenter(p);
       const fixedByLine = pointLockedByLineFixed(p);
       const reference = isReferencePoint(p);
-      if (reference && !sel && !hovered && !dragging) continue;
-      if (endpoint && !reference && !sel && !hovered && !dragging && !primitiveCenter) continue;
+      if (reference && !sel && !hovered && !dragging && !treeHovered) continue;
+      if (endpoint && !reference && !sel && !hovered && !dragging && !primitiveCenter && !treeHovered) continue;
       ctx.beginPath();
-      ctx.arc(p.x, p.y, (sel ? 7 : endpoint || reference ? 5 : 5) / viewport.scale, 0, Math.PI * 2);
-      ctx.fillStyle = p.fixed || fixedByLine ? "#fee2e2" : sel ? "#1d4ed8" : hovered || primitiveCenter || reference ? "#eff6ff" : "#fff";
+      ctx.arc(p.x, p.y, (sel || treeHovered ? 7 : endpoint || reference ? 5 : 5) / viewport.scale, 0, Math.PI * 2);
+      ctx.fillStyle = p.fixed || fixedByLine ? "#fee2e2" : sel ? "#1d4ed8" : treeHovered ? "#e0f2fe" : hovered || primitiveCenter || reference ? "#eff6ff" : "#fff";
       ctx.fill();
-      ctx.strokeStyle = p.fixed || fixedByLine ? "#dc2626" : constraintStatusColor(p, sel, hovered || primitiveCenter || reference);
-      ctx.lineWidth = (sel ? 3 : Math.max(1.2, sketchStrokeWidth(p))) / viewport.scale;
-      ctx.shadowColor = sel ? "rgba(37, 99, 235, 0.45)" : "transparent";
-      ctx.shadowBlur = sel ? 8 / viewport.scale : 0;
+      ctx.strokeStyle = treeHovered ? "#0ea5e9" : p.fixed || fixedByLine ? "#dc2626" : constraintStatusColor(p, sel, hovered || primitiveCenter || reference);
+      ctx.lineWidth = (sel || treeHovered ? 3 : Math.max(1.2, sketchStrokeWidth(p))) / viewport.scale;
+      ctx.shadowColor = sel || treeHovered ? "rgba(14, 165, 233, 0.45)" : "transparent";
+      ctx.shadowBlur = sel || treeHovered ? 8 / viewport.scale : 0;
       ctx.stroke();
       ctx.shadowBlur = 0;
       ctx.setLineDash([]);
-      if (sel || hovered || dragging) {
+      if (sel || hovered || dragging || treeHovered) {
         ctx.fillStyle = hovered || endpoint ? "#2563eb" : "#111827";
         ctx.font = `${12 / viewport.scale}px system-ui`;
         ctx.fillText(p.id, p.x + 8 / viewport.scale, p.y - 8 / viewport.scale);
@@ -4561,6 +4583,12 @@
     if (activeLabel) activeLabel.textContent = "スケッチツリー";
     const sketchList = document.getElementById("sketchList");
     if (!sketchList) return;
+    sketchList.onmouseleave = () => {
+      if (hoveredSketchTreeId) {
+        hoveredSketchTreeId = null;
+        draw();
+      }
+    };
     sketchList.innerHTML = sketchTreeRows()
       .map(({ sketch, depth, hasChildren, segments }) => {
         const isActive = sketch.id === activeSketchId();
@@ -4595,6 +4623,16 @@
       row.addEventListener("click", (event) => {
         if (event.target.closest(".sketchRenameBtn")) return;
         setActiveSketch(row.dataset.id);
+      });
+      row.addEventListener("mouseenter", () => {
+        hoveredSketchTreeId = row.dataset.id;
+        draw();
+      });
+      row.addEventListener("mouseleave", () => {
+        if (hoveredSketchTreeId === row.dataset.id) {
+          hoveredSketchTreeId = null;
+          draw();
+        }
       });
     }
     for (const btn of document.querySelectorAll(".sketchRenameBtn")) {
@@ -4981,12 +5019,12 @@
     return true;
   }
 
-  function commitConstraintResolution(resolution) {
+  function commitConstraintResolution(resolution, pointer = null) {
     if (!resolution || resolution.error) {
       if (resolution?.error) setHint(resolution.error, "error");
       return false;
     }
-    if (resolution.type === "distance") return startDistanceResolution(resolution);
+    if (resolution.type === "distance") return startDistanceResolution(resolution, pointer);
     if (!resolution.constraint) return false;
     if (resolution.referenceSketchId) return commitReferenceConstraint(resolution.type || "reference", resolution.constraint, resolution.referenceSketchId, resolution.sketchId || activeSketchId());
     return commitNewConstraint(resolution.type || "constraint", resolution.constraint);
@@ -5008,7 +5046,7 @@
       setHint("親または祖先スケッチのみ参照できます", "error");
       return true;
     }
-    commitConstraintResolution(constraintResolutionFromSubjectAndReference(distanceMode && referenceTarget.kind === "line" ? "distance" : "coincident", subject, referenceTarget));
+    commitConstraintResolution(constraintResolutionFromSubjectAndReference(distanceMode && referenceTarget.kind === "line" ? "distance" : "coincident", subject, referenceTarget), pointer);
     return true;
   }
 
@@ -5027,7 +5065,7 @@
       setHint("親または祖先スケッチのみ参照できます", "error");
       return true;
     }
-    commitConstraintResolution(constraintResolutionFromSubjectAndReference(type === "distance" || (distanceMode && referenceTarget.kind === "line") ? "distance" : type, subject, referenceTarget));
+    commitConstraintResolution(constraintResolutionFromSubjectAndReference(type === "distance" || (distanceMode && referenceTarget.kind === "line") ? "distance" : type, subject, referenceTarget), pointer);
     return true;
   }
 
