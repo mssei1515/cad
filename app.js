@@ -445,6 +445,24 @@
     return null;
   }
 
+  function selectReferenceSubjectForPreview(subject) {
+    if (!subject) return;
+    selectedPoints = [];
+    selectedLines = [];
+    selectedCircles = [];
+    selectedArcs = [];
+    selectedArcEndpoint = null;
+    selectedArcEndpointPair = null;
+    if (subject.kind === "point") selectedPoints = [subject.point];
+    else if (subject.kind === "line") selectedLines = [subject.line];
+    else if (subject.kind === "primitive") {
+      if (subject.primitive instanceof Circle) selectedCircles = [subject.primitive];
+      else if (subject.primitive instanceof Arc) selectedArcs = [subject.primitive];
+    } else if (subject.kind === "arc-endpoint") {
+      selectedArcEndpoint = { arc: subject.arc, endpoint: subject.endpoint };
+    }
+  }
+
   function referenceSubjectSketchId(subject) {
     return elementSketchId(referenceSubjectElement(subject));
   }
@@ -618,7 +636,7 @@
   }
 
   function isPendingReferenceTarget(item) {
-    const target = pendingConstraintCommand?.referenceTarget;
+    const target = pendingConstraintCommand?.referenceTarget || pendingCommand?.referenceTarget;
     if (!target || !item) return false;
     if (target.kind === "point") return target.point === item;
     if (target.kind === "line") return target.line === item;
@@ -3157,7 +3175,7 @@
       ctx.setLineDash(construction ? [12 / viewport.scale, 4 / viewport.scale, 2 / viewport.scale, 4 / viewport.scale] : []);
       ctx.shadowColor = sel || treeHovered ? "rgba(14, 165, 233, 0.45)" : "transparent";
       ctx.shadowBlur = sel || treeHovered ? 8 / viewport.scale : 0;
-      const constructionExtension = 12 / viewport.scale;
+      const constructionExtension = 6 / viewport.scale;
       const drawSegment = construction ? extendedLineSegment(l, constructionExtension) : { p1: l.p1, p2: l.p2 };
       ctx.beginPath();
       ctx.moveTo(drawSegment.p1.x, drawSegment.p1.y);
@@ -3498,7 +3516,7 @@
     if (!pendingCommand?.type?.startsWith("distance")) return;
     const dimension =
       pendingCommand.type === "distance-place"
-        ? applyDefaultCircleDimensionLabelOffset(pendingCommand.target, pendingCommand.pointer ? dimensionFromAnchor(pendingCommand.target, pendingCommand.pointer) : defaultDimensionForTarget(pendingCommand.target))
+        ? pendingCommand.dimension || applyDefaultCircleDimensionLabelOffset(pendingCommand.target, pendingCommand.pointer ? dimensionFromAnchor(pendingCommand.target, pendingCommand.pointer) : defaultDimensionForTarget(pendingCommand.target))
         : pendingCommand.dimension;
     if (pendingCommand.type === "distance-value") {
       const value = Number(pendingCommand.buffer);
@@ -5016,7 +5034,7 @@
     if (type === "distance") {
       const target = referenceDistanceTargetForSubject(subject, referenceTarget);
       if (!target || target.kind === "invalid") return { error: target?.reason || "参照寸法の組み合わせに対応していません" };
-      return { type, target, referenceSketchId, sketchId: subjectSketchId };
+      return { type, target, referenceSketchId, sketchId: subjectSketchId, referenceTarget, referenceSubject: subject };
     }
     const constraint = referenceConstraintForType(type, subject, referenceTarget);
     if (!constraint) return { error: "この参照拘束の組み合わせには対応していません" };
@@ -5043,11 +5061,17 @@
       return false;
     }
     mode = "select";
-    pendingConstraintCommand = { type: "distance" };
+    const initialDimension = pointer ? null : defaultDimensionForTarget(resolution.target);
+    const initialPointer = pointer || dimensionAnchor(resolution.target, initialDimension);
+    if (resolution.referenceSubject) selectReferenceSubjectForPreview(resolution.referenceSubject);
+    pendingConstraintCommand = { type: "distance", referenceTarget: resolution.referenceTarget };
     pendingCommand = {
       type: "distance-place",
       target: resolution.target,
-      pointer: pointer || defaultDimensionForTarget(resolution.target),
+      pointer: initialPointer,
+      dimension: initialDimension,
+      referenceTarget: resolution.referenceTarget,
+      referenceSubject: resolution.referenceSubject,
       referenceSketchId: resolution.referenceSketchId,
       sketchId: resolution.sketchId,
     };
@@ -6582,6 +6606,7 @@
       clearSnap();
       hoveredSketchIdentity = hitSketchIdentityElement(p.x, p.y);
       pendingCommand.pointer = p;
+      pendingCommand.dimension = null;
       updatePendingLineLengthHover(p);
       draw();
       return;
