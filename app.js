@@ -711,6 +711,48 @@
     return { changed, failed };
   }
 
+  function snapshotLineLength(snapshot, line) {
+    if (!snapshot || !line) return line?.length?.() || 0;
+    const pointState = new Map(snapshot.points.map((p) => [p.point, p]));
+    const p1 = pointState.get(line.p1);
+    const p2 = pointState.get(line.p2);
+    if (!p1 || !p2) return line.length();
+    return hypot2(p2.x - p1.x, p2.y - p1.y);
+  }
+
+  function constraintShouldRejectLineCollapse(constraint) {
+    return (
+      constraint instanceof HorizontalConstraint ||
+      constraint instanceof VerticalConstraint ||
+      constraint instanceof PointHorizontalConstraint ||
+      constraint instanceof PointVerticalConstraint ||
+      constraint instanceof ParallelConstraint ||
+      constraint instanceof PerpendicularConstraint ||
+      constraint instanceof CollinearConstraint ||
+      constraint instanceof PointOnLineConstraint ||
+      constraint instanceof PointOnLineMidpointConstraint ||
+      constraint instanceof ArcEndpointOnLineConstraint ||
+      constraint instanceof LineCircleTangentConstraint
+    );
+  }
+
+  function findLineCollapseAfterConstraint(constraint, snapshot, sketchId = activeSketchId()) {
+    if (!constraintShouldRejectLineCollapse(constraint)) return null;
+    const component = connectedComponentFromSeeds(constraintGraphNodes(constraint));
+    const lines = localSolveLines(component, sketchId);
+    for (const line of lines) {
+      const before = snapshotLineLength(snapshot, line);
+      const after = line.length();
+      if (before <= MIN_LINE_LENGTH * 100) continue;
+      const nearMinimum = after <= MIN_LINE_LENGTH * 5;
+      const collapsedRelativeToBefore = after <= before * 1e-4;
+      if (nearMinimum && collapsedRelativeToBefore) {
+        return { line, before, after };
+      }
+    }
+    return null;
+  }
+
   function addCircle(center, radiusValue) {
     if (!center || !Number.isFinite(radiusValue) || radiusValue < MIN_ORIENTATION_LENGTH) return null;
     const c = new Circle(`C${circleSeq++}`, center, radiusValue);
@@ -4708,13 +4750,17 @@
 
     const solved = solveSketchAndDescendants(constraintSketchId(constraint), snapshot);
     const result = solved.result;
-    if (!solved.success || result.errorNorm > CONSTRAINT_ACCEPT_ERROR) {
+    const collapse = findLineCollapseAfterConstraint(constraint, snapshot, constraintSketchId(constraint));
+    if (!solved.success || result.errorNorm > CONSTRAINT_ACCEPT_ERROR || collapse) {
       restoreModelState(snapshot);
       const msg = `拘束を追加できません: 矛盾しています (error=${result.errorNorm.toExponential(3)}, reason=${result.reason})`;
-      setHint(msg, "error");
+      const collapseMsg = collapse
+        ? `拘束を追加できません: 線${collapse.line.id}が退化するため矛盾しています (${collapse.before.toExponential(3)} -> ${collapse.after.toExponential(3)})`
+        : msg;
+      setHint(collapseMsg, "error");
       updateUI();
       draw();
-      log(msg);
+      log(collapseMsg);
       return;
     }
 
@@ -4747,13 +4793,17 @@
     preconditionNewConstraint(constraint);
     const solved = solveSketchAndDescendants(sketchId, snapshot);
     const result = solved.result;
-    if (!solved.success || result.errorNorm > CONSTRAINT_ACCEPT_ERROR) {
+    const collapse = findLineCollapseAfterConstraint(constraint, snapshot, sketchId);
+    if (!solved.success || result.errorNorm > CONSTRAINT_ACCEPT_ERROR || collapse) {
       restoreModelState(snapshot);
       const msg = `参照拘束を追加できません: 矛盾しています (error=${result.errorNorm.toExponential(3)}, reason=${result.reason})`;
-      setHint(msg, "error");
+      const collapseMsg = collapse
+        ? `参照拘束を追加できません: 線${collapse.line.id}が退化するため矛盾しています (${collapse.before.toExponential(3)} -> ${collapse.after.toExponential(3)})`
+        : msg;
+      setHint(collapseMsg, "error");
       updateUI();
       draw();
-      log(msg);
+      log(collapseMsg);
       return false;
     }
     clearSelection();
