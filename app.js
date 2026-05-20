@@ -420,15 +420,6 @@
     return constraintGraphNodes(constraint).some((node) => elementSketchId(node) === sketchId);
   }
 
-  function activeReferenceSubject() {
-    if (selectedArcEndpoint) return { kind: "arc-endpoint", arc: selectedArcEndpoint.arc, endpoint: selectedArcEndpoint.endpoint };
-    if (selectedPoints.length === 1 && selectedLines.length === 0 && selectedCircles.length === 0 && selectedArcs.length === 0) return { kind: "point", point: selectedPoints[0] };
-    if (selectedPoints.length === 0 && selectedLines.length === 1 && selectedCircles.length === 0 && selectedArcs.length === 0) return { kind: "line", line: selectedLines[0] };
-    if (selectedPoints.length === 0 && selectedLines.length === 0 && selectedCircles.length === 1 && selectedArcs.length === 0) return { kind: "primitive", primitive: selectedCircles[0] };
-    if (selectedPoints.length === 0 && selectedLines.length === 0 && selectedCircles.length === 0 && selectedArcs.length === 1) return { kind: "primitive", primitive: selectedArcs[0] };
-    return null;
-  }
-
   function operandElement(operand) {
     if (!operand) return null;
     if (operand.kind === "point") return operand.point;
@@ -525,15 +516,6 @@
     return operands.filter(Boolean);
   }
 
-  function activeReferenceSubjectForTarget(referenceTarget) {
-    const subject = activeReferenceSubject();
-    if (subject) return subject;
-    if (referenceTarget?.kind === "point" && selectedPoints.length > 0) {
-      return { kind: "point", point: selectedPoints[selectedPoints.length - 1] };
-    }
-    return null;
-  }
-
   function referenceSubjectElement(subject) {
     if (!subject) return null;
     if (subject.kind === "point") return subject.point;
@@ -541,32 +523,6 @@
     if (subject.kind === "primitive") return subject.primitive;
     if (subject.kind === "arc-endpoint") return subject.arc;
     return null;
-  }
-
-  function referenceSubjectFromHit(hitP, hitL, hitC, hitA, hitArcEnd) {
-    if (hitArcEnd) return { kind: "arc-endpoint", arc: hitArcEnd.arc, endpoint: hitArcEnd.endpoint };
-    if (hitP) return { kind: "point", point: hitP };
-    if (hitL) return { kind: "line", line: hitL };
-    if (hitC || hitA) return { kind: "primitive", primitive: hitC || hitA };
-    return null;
-  }
-
-  function selectReferenceSubjectForPreview(subject) {
-    if (!subject) return;
-    selectedPoints = [];
-    selectedLines = [];
-    selectedCircles = [];
-    selectedArcs = [];
-    selectedArcEndpoint = null;
-    selectedArcEndpointPair = null;
-    if (subject.kind === "point") selectedPoints = [subject.point];
-    else if (subject.kind === "line") selectedLines = [subject.line];
-    else if (subject.kind === "primitive") {
-      if (subject.primitive instanceof Circle) selectedCircles = [subject.primitive];
-      else if (subject.primitive instanceof Arc) selectedArcs = [subject.primitive];
-    } else if (subject.kind === "arc-endpoint") {
-      selectedArcEndpoint = { arc: subject.arc, endpoint: subject.endpoint };
-    }
   }
 
   function referenceSubjectSketchId(subject) {
@@ -4451,25 +4407,6 @@
     return true;
   }
 
-  function handleReferenceConstraintTargetClick(referenceTarget, pointer, type, distanceMode = false) {
-    const subject = activeReferenceSubject();
-    if (!subject) {
-      setHint("先にアクティブスケッチ側の対象を選択してください");
-      return true;
-    }
-    if (!referenceTarget) return false;
-    return handleReferenceSubjectAndTarget(subject, referenceTarget, pointer, type, distanceMode);
-  }
-
-  function referenceTargetFromHit(hitP, hitL, hitC, hitA) {
-    const item = hitP || hitL || hitC || hitA;
-    if (!item) return null;
-    const sketchId = elementSketchId(item);
-    if (hitP) return { kind: "point", point: hitP, sketchId };
-    if (hitL) return { kind: "line", line: hitL, sketchId };
-    return { kind: "primitive", primitive: hitC || hitA, sketchId };
-  }
-
   function startDistanceCommand() {
     if (constraintOperands.length === 0) constraintOperands = constraintOperandsFromSelection();
     const resolution = constraintResolutionFromCurrentSelection("distance");
@@ -4566,59 +4503,6 @@
     updateConstraintButtons();
     draw();
     focusDimensionValueInput();
-  }
-
-  function retargetPendingLineLengthDimension(hitP, hitL, pointer) {
-    if (pendingCommand?.type !== "distance-place" || pendingCommand.target.kind !== "line-length") return false;
-    const baseLine = pendingCommand.target.line;
-    if (hitP) {
-      if (!lineHasDirection(baseLine)) {
-        setHint("寸法対象の線が短すぎます", "error");
-        return true;
-      }
-      selectedPoints = [hitP];
-      selectedLines = [baseLine];
-      selectedCircles = [];
-      selectedArcs = [];
-      pendingCommand = {
-        type: "distance-place",
-        target: { kind: "point-line", point: hitP, line: baseLine, value: Math.abs(signedPointLineDistance(hitP, baseLine)) },
-        pointer,
-      };
-      setHint("点と線の寸法線の位置をクリックしてください");
-      updateUI();
-      draw();
-      return true;
-    }
-    if (hitL && hitL !== baseLine) {
-      if (!lineHasDirection(baseLine) || !lineHasDirection(hitL)) {
-        setHint("線-線寸法の対象線が短すぎます", "error");
-        return true;
-      }
-      selectedPoints = [];
-      selectedLines = [baseLine, hitL];
-      selectedCircles = [];
-      selectedArcs = [];
-      const signedValue = angleDimensionSweep({ line1: baseLine, line2: hitL });
-      const target = linesAreParallel(baseLine, hitL)
-        ? { kind: "line-line", line1: baseLine, line2: hitL, value: Math.abs(signedPointLineDistance(hitL.p1, baseLine)) }
-        : { kind: "angle", line1: baseLine, line2: hitL, value: angleDegrees(axisAngleBetweenLines(baseLine, hitL)), signedValue };
-      pendingCommand = { type: "distance-place", target, pointer };
-      setHint("線と線の寸法線の位置をクリックしてください");
-      updateUI();
-      draw();
-      return true;
-    }
-    return false;
-  }
-
-  function retargetPendingLineLengthToReference(referenceTarget, pointer) {
-    if (pendingCommand?.type !== "distance-place" || pendingCommand.target.kind !== "line-length" || !referenceTarget) return false;
-    const baseLine = pendingCommand.target.line;
-    return commitConstraintResolution(
-      constraintResolutionFromSubjectAndReference("distance", { kind: "line", line: baseLine }, referenceTarget),
-      pointer,
-    );
   }
 
   function retargetDistancePlaceWithOperand(pointer, hits = {}) {
@@ -5337,10 +5221,6 @@
     return constraint ? { type, action: "commit", constraint, operands: cleanOperands, sketchId: sketchIds[0] || activeSketchId() } : null;
   }
 
-  function startReferenceDistanceInput(subject, referenceTarget, pointer) {
-    return startDistanceResolution(constraintResolutionFromSubjectAndReference("distance", subject, referenceTarget), pointer);
-  }
-
   function referenceSketchIdFromPair(subject, referenceTarget) {
     const subjectSketchId = referenceSubjectSketchId(subject);
     if (!subjectSketchId || !referenceTarget?.sketchId) return null;
@@ -5360,7 +5240,7 @@
     if (type === "distance") {
       const target = referenceDistanceTargetForSubject(subject, referenceTarget);
       if (!target || target.kind === "invalid") return { error: target?.reason || "参照寸法の組み合わせに対応していません" };
-      return { type, target, referenceSketchId, sketchId: subjectSketchId, referenceTarget, referenceSubject: subject };
+      return { type, target, referenceSketchId, sketchId: subjectSketchId };
     }
     const constraint = referenceConstraintForType(type, subject, referenceTarget);
     if (!constraint) return { error: "この参照拘束の組み合わせには対応していません" };
@@ -5369,8 +5249,6 @@
 
   function constraintResolutionFromCurrentSelection(type) {
     if (constraintOperands.length > 0) return resolveConstraintIntent(type, constraintOperands);
-    const referenceTarget = pendingConstraintCommand?.referenceTarget;
-    if (referenceTarget) return constraintResolutionFromSubjectAndReference(type, activeReferenceSubjectForTarget(referenceTarget), referenceTarget);
     if (type === "distance") {
       const target = distanceTargetFromSelection();
       if (!target) return null;
@@ -5394,16 +5272,13 @@
       constraintOperands = resolution.operands.slice();
       syncSelectionFromConstraintOperands();
     }
-    if (resolution.referenceSubject) selectReferenceSubjectForPreview(resolution.referenceSubject);
-    pendingConstraintCommand = { type: "distance", referenceTarget: resolution.referenceTarget };
+    pendingConstraintCommand = { type: "distance" };
     pendingCommand = {
       type: "distance-place",
       target: resolution.target,
       resolution,
       pointer: initialPointer,
       dimension: initialDimension,
-      referenceTarget: resolution.referenceTarget,
-      referenceSubject: resolution.referenceSubject,
       operands: resolution.operands || constraintOperands.slice(),
       referenceSketchId: resolution.referenceSketchId,
       sketchId: resolution.sketchId,
@@ -5424,50 +5299,6 @@
     if (!resolution.constraint) return false;
     if (resolution.referenceSketchId) return commitReferenceConstraint(resolution.type || "reference", resolution.constraint, resolution.referenceSketchId, resolution.sketchId || activeSketchId());
     return commitNewConstraint(resolution.type || "constraint", resolution.constraint);
-  }
-
-  function handleReferenceTargetClick(referenceTarget, pointer, distanceMode = false) {
-    const subject = activeReferenceSubject();
-    const subjectElement = referenceSubjectElement(subject);
-    const subjectSketchId = referenceSubjectSketchId(subject);
-    if (!subject || !isEditableSketchElement(subjectElement)) {
-      setHint("参照先を選ぶ前に、操作可能なスケッチ側の対象を1つ選択してください");
-      return true;
-    }
-    if (!referenceTarget) {
-      setHint("親または祖先スケッチの点・線・円・円弧をクリックしてください", "error");
-      return true;
-    }
-    if (!isAncestorSketchId(referenceTarget.sketchId, subjectSketchId)) {
-      setHint("親または祖先スケッチのみ参照できます", "error");
-      return true;
-    }
-    commitConstraintResolution(constraintResolutionFromSubjectAndReference(distanceMode && referenceTarget.kind === "line" ? "distance" : "coincident", subject, referenceTarget), pointer);
-    return true;
-  }
-
-  function handleReferenceSubjectAndTarget(subject, referenceTarget, pointer, type, distanceMode = false) {
-    if (!subject) {
-      setHint("アクティブスケッチ側の対象を選択してください", "error");
-      return true;
-    }
-    const subjectElement = referenceSubjectElement(subject);
-    if (!isEditableSketchElement(subjectElement)) {
-      setHint("アクティブスケッチ側の対象を選択してください", "error");
-      return true;
-    }
-    const subjectSketchId = referenceSubjectSketchId(subject);
-    if (!referenceTarget || !isAncestorSketchId(referenceTarget.sketchId, subjectSketchId)) {
-      setHint("親または祖先スケッチのみ参照できます", "error");
-      return true;
-    }
-    commitConstraintResolution(constraintResolutionFromSubjectAndReference(type === "distance" || (distanceMode && referenceTarget.kind === "line") ? "distance" : type, subject, referenceTarget), pointer);
-    return true;
-  }
-
-  function tryStartReferenceDistanceFromHits(activeSubject, referenceTarget, pointer) {
-    if (pendingConstraintCommand?.type !== "distance" || !activeSubject || !referenceTarget) return false;
-    return commitConstraintResolution(constraintResolutionFromSubjectAndReference("distance", activeSubject, referenceTarget), pointer);
   }
 
   function addDistanceConstraintFromTarget(target, value, dimension, options = {}) {
@@ -6769,9 +6600,6 @@
     if (pendingCommand?.type === "distance-place") {
       e.preventDefault();
       if (retargetDistancePlaceWithOperand(p, { hitP, hitL, hitC, hitA, hitArcEnd })) return;
-      const referenceTarget = pendingCommand.target.kind === "line-length" ? hitReferenceTarget(p.x, p.y) : null;
-      if (retargetPendingLineLengthToReference(referenceTarget, p)) return;
-      if (retargetPendingLineLengthDimension(hitP, hitL, p)) return;
       startDistanceValueInput(p);
       return;
     }
@@ -6784,36 +6612,6 @@
     if (pendingConstraintCommand) {
       e.preventDefault();
       handleConstraintOperandClick(p, pendingConstraintCommand.type, { hitP, hitL, hitC, hitA, hitArcEnd });
-      return;
-      const activeHitSubject = referenceSubjectFromHit(hitP, hitL, hitC, hitA, hitArcEnd);
-      if (pendingConstraintCommand.referenceTarget) {
-        if (tryStartReferenceDistanceFromHits(activeHitSubject, pendingConstraintCommand.referenceTarget, p)) return;
-        if (activeHitSubject) {
-          handleReferenceSubjectAndTarget(activeHitSubject, pendingConstraintCommand.referenceTarget, p, pendingConstraintCommand.type, e.shiftKey);
-          return;
-        }
-      }
-      const referenceTarget = hitReferenceTarget(p.x, p.y);
-      if (referenceTarget) {
-        const subject = activeReferenceSubjectForTarget(referenceTarget);
-        if (tryStartReferenceDistanceFromHits(subject, referenceTarget, p)) return;
-        if (subject) {
-          handleReferenceSubjectAndTarget(subject, referenceTarget, p, pendingConstraintCommand.type, e.shiftKey);
-        } else {
-          pendingConstraintCommand.referenceTarget = referenceTarget;
-          setHint(`${sketchName(referenceTarget.sketchId)} の対象を選択しました。続けてアクティブスケッチ側の対象を選択してください`);
-          draw();
-        }
-        return;
-      }
-      const hitReferenceLikeTarget = referenceTargetFromHit(hitP, hitL, hitC, hitA);
-      const subject = activeReferenceSubject();
-      const subjectSketchId = referenceSubjectSketchId(subject);
-      if (hitReferenceLikeTarget && subject && isAncestorSketchId(hitReferenceLikeTarget.sketchId, subjectSketchId)) {
-        handleReferenceConstraintTargetClick(hitReferenceLikeTarget, p, pendingConstraintCommand.type, e.shiftKey);
-        return;
-      }
-      handleConstraintTargetClick(hitP, hitL, hitC, hitA, hitArcEnd);
       return;
     }
 
