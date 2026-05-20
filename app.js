@@ -428,6 +428,15 @@
     return null;
   }
 
+  function activeReferenceSubjectForTarget(referenceTarget) {
+    const subject = activeReferenceSubject();
+    if (subject) return subject;
+    if (referenceTarget?.kind === "point" && selectedPoints.length > 0) {
+      return { kind: "point", point: selectedPoints[selectedPoints.length - 1] };
+    }
+    return null;
+  }
+
   function referenceSubjectElement(subject) {
     if (!subject) return null;
     if (subject.kind === "point") return subject.point;
@@ -5043,7 +5052,7 @@
 
   function constraintResolutionFromCurrentSelection(type) {
     const referenceTarget = pendingConstraintCommand?.referenceTarget;
-    if (referenceTarget) return constraintResolutionFromSubjectAndReference(type, activeReferenceSubject(), referenceTarget);
+    if (referenceTarget) return constraintResolutionFromSubjectAndReference(type, activeReferenceSubjectForTarget(referenceTarget), referenceTarget);
     if (type === "distance") {
       const target = distanceTargetFromSelection();
       if (!target) return null;
@@ -6457,7 +6466,7 @@
       }
       const referenceTarget = hitReferenceTarget(p.x, p.y);
       if (referenceTarget) {
-        const subject = activeReferenceSubject();
+        const subject = activeReferenceSubjectForTarget(referenceTarget);
         if (tryStartReferenceDistanceFromHits(subject, referenceTarget, p)) return;
         if (subject) {
           handleReferenceSubjectAndTarget(subject, referenceTarget, p, pendingConstraintCommand.type, e.shiftKey);
