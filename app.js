@@ -99,6 +99,7 @@
   let trimPreview = null;
   let pendingCommand = null;
   let pendingConstraintCommand = null;
+  let constraintOperands = [];
   let lastPointerWorld = null;
   let hoveredSketchIdentity = null;
   let hoveredSketchTreeId = null;
@@ -426,6 +427,102 @@
     if (selectedPoints.length === 0 && selectedLines.length === 0 && selectedCircles.length === 1 && selectedArcs.length === 0) return { kind: "primitive", primitive: selectedCircles[0] };
     if (selectedPoints.length === 0 && selectedLines.length === 0 && selectedCircles.length === 0 && selectedArcs.length === 1) return { kind: "primitive", primitive: selectedArcs[0] };
     return null;
+  }
+
+  function operandElement(operand) {
+    if (!operand) return null;
+    if (operand.kind === "point") return operand.point;
+    if (operand.kind === "line") return operand.line;
+    if (operand.kind === "primitive") return operand.primitive;
+    if (operand.kind === "arc-endpoint") return operand.arc;
+    return operand.element || null;
+  }
+
+  function operandRelationForSketch(sketchId) {
+    if (isEditableSketchId(sketchId)) return "active";
+    if (isAncestorSketchId(sketchId)) return "ancestor";
+    return null;
+  }
+
+  function makeConstraintOperand(kind, data) {
+    const element = data.element || data.point || data.line || data.primitive || data.arc || null;
+    const sketchId = data.sketchId || elementSketchId(element);
+    const relation = operandRelationForSketch(sketchId);
+    if (!element || !sketchId || !relation) return null;
+    return { kind, ...data, element, sketchId, relation };
+  }
+
+  function operandFromReferenceTarget(target) {
+    if (!target) return null;
+    if (target.kind === "point") return makeConstraintOperand("point", { point: target.point, sketchId: target.sketchId });
+    if (target.kind === "line") return makeConstraintOperand("line", { line: target.line, sketchId: target.sketchId });
+    if (target.kind === "primitive") return makeConstraintOperand("primitive", { primitive: target.primitive, sketchId: target.sketchId });
+    return null;
+  }
+
+  function referenceTargetFromOperand(operand) {
+    if (!operand) return null;
+    if (operand.kind === "point") return { kind: "point", point: operand.point, sketchId: operand.sketchId };
+    if (operand.kind === "line") return { kind: "line", line: operand.line, sketchId: operand.sketchId };
+    if (operand.kind === "primitive") return { kind: "primitive", primitive: operand.primitive, sketchId: operand.sketchId };
+    return null;
+  }
+
+  function subjectFromOperand(operand) {
+    if (!operand) return null;
+    if (operand.kind === "point") return { kind: "point", point: operand.point };
+    if (operand.kind === "line") return { kind: "line", line: operand.line };
+    if (operand.kind === "primitive") return { kind: "primitive", primitive: operand.primitive };
+    if (operand.kind === "arc-endpoint") return { kind: "arc-endpoint", arc: operand.arc, endpoint: operand.endpoint };
+    return null;
+  }
+
+  function sameConstraintOperand(a, b) {
+    if (!a || !b || a.kind !== b.kind) return false;
+    if (a.kind === "arc-endpoint") return sameArcEndpoint(a, b);
+    return operandElement(a) === operandElement(b);
+  }
+
+  function isConstraintOperandSelected(item, options = {}) {
+    if (!item) return false;
+    if (options.arcEndpoint) {
+      return constraintOperands.some((operand) => operand.kind === "arc-endpoint" && sameArcEndpoint(operand, options.arcEndpoint));
+    }
+    return constraintOperands.some((operand) => operandElement(operand) === item);
+  }
+
+  function syncSelectionFromConstraintOperands() {
+    selectedPoints = [];
+    selectedLines = [];
+    selectedCircles = [];
+    selectedArcs = [];
+    selectedArcEndpoint = null;
+    selectedArcEndpointPair = null;
+    for (const operand of constraintOperands) {
+      if (operand.kind === "point" && !selectedPoints.includes(operand.point)) selectedPoints.push(operand.point);
+      else if (operand.kind === "line" && !selectedLines.includes(operand.line)) selectedLines.push(operand.line);
+      else if (operand.kind === "primitive") {
+        if (operand.primitive instanceof Circle && !selectedCircles.includes(operand.primitive)) selectedCircles.push(operand.primitive);
+        if (operand.primitive instanceof Arc && !selectedArcs.includes(operand.primitive)) selectedArcs.push(operand.primitive);
+      } else if (operand.kind === "arc-endpoint") {
+        if (selectedArcEndpoint && !sameArcEndpoint(selectedArcEndpoint, operand)) selectedArcEndpointPair = [selectedArcEndpoint, operand];
+        selectedArcEndpoint = { arc: operand.arc, endpoint: operand.endpoint };
+        if (!selectedArcs.includes(operand.arc)) selectedArcs.push(operand.arc);
+      }
+    }
+  }
+
+  function constraintOperandsFromSelection() {
+    const operands = [];
+    for (const p of selectedPoints) operands.push(makeConstraintOperand("point", { point: p }));
+    for (const l of selectedLines) operands.push(makeConstraintOperand("line", { line: l }));
+    for (const c of selectedCircles) operands.push(makeConstraintOperand("primitive", { primitive: c }));
+    for (const a of selectedArcs) {
+      if (selectedArcEndpoint?.arc === a) continue;
+      operands.push(makeConstraintOperand("primitive", { primitive: a }));
+    }
+    if (selectedArcEndpoint) operands.push(makeConstraintOperand("arc-endpoint", { arc: selectedArcEndpoint.arc, endpoint: selectedArcEndpoint.endpoint }));
+    return operands.filter(Boolean);
   }
 
   function activeReferenceSubjectForTarget(referenceTarget) {
@@ -849,6 +946,7 @@
     pointerPreview = null;
     pendingCommand = null;
     pendingConstraintCommand = null;
+    constraintOperands = [];
     constructionLineMode = false;
     hoveredPoint = null;
     hoveredEndpointPoint = null;
@@ -1369,6 +1467,7 @@
     selectedArcEndpoint = null;
     selectedArcEndpointPair = null;
     selectedDimensionConstraint = null;
+    constraintOperands = [];
     hoveredSketchIdentity = null;
   }
 
@@ -2249,6 +2348,41 @@
     }
     if (selectedPoints.length === 0 && selectedLines.length === 2) {
       const [line1, line2] = selectedLines;
+      if (!lineHasDirection(line1) || !lineHasDirection(line2)) return { kind: "invalid", reason: "線-線寸法の対象線が短すぎます" };
+      if (!linesAreParallel(line1, line2)) {
+        const signedValue = angleDimensionSweep({ line1, line2 });
+        return { kind: "angle", line1, line2, value: angleDegrees(axisAngleBetweenLines(line1, line2)), signedValue };
+      }
+      return { kind: "line-line", line1, line2, value: Math.abs(signedPointLineDistance(line2.p1, line1)) };
+    }
+    return null;
+  }
+
+  function distanceTargetFromOperands(operands) {
+    const points = operands.filter((operand) => operand.kind === "point").map((operand) => operand.point);
+    const lines = operands.filter((operand) => operand.kind === "line").map((operand) => operand.line);
+    const primitives = operands.filter((operand) => operand.kind === "primitive").map((operand) => operand.primitive);
+    if (points.length === 0 && lines.length === 0 && primitives.length === 1) {
+      const [primitive] = primitives;
+      if (primitive instanceof Circle) return { kind: "diameter", primitive, value: primitive.radius() * 2 };
+      return { kind: "radius", primitive, value: primitive.radius() };
+    }
+    if (points.length === 2 && lines.length === 0 && primitives.length === 0) {
+      const [p1, p2] = points;
+      return { kind: "point-point", p1, p2, value: hypot2(p2.x - p1.x, p2.y - p1.y) };
+    }
+    if (points.length === 0 && lines.length === 1 && primitives.length === 0) {
+      const [line] = lines;
+      return { kind: "line-length", line, p1: line.p1, p2: line.p2, value: line.length() };
+    }
+    if (points.length === 1 && lines.length === 1 && primitives.length === 0) {
+      const [point] = points;
+      const [line] = lines;
+      if (!lineHasDirection(line)) return { kind: "invalid", reason: "寸法対象の線が短すぎます" };
+      return { kind: "point-line", point, line, value: Math.abs(signedPointLineDistance(point, line)) };
+    }
+    if (points.length === 0 && lines.length === 2 && primitives.length === 0) {
+      const [line1, line2] = lines;
       if (!lineHasDirection(line1) || !lineHasDirection(line2)) return { kind: "invalid", reason: "線-線寸法の対象線が短すぎます" };
       if (!linesAreParallel(line1, line2)) {
         const signedValue = angleDimensionSweep({ line1, line2 });
@@ -3171,7 +3305,7 @@
     for (const l of drawOrderBySketch(model.lines)) {
       const active = isEditableSketchElement(l);
       ctx.globalAlpha = sketchAlpha(l);
-      const refSelected = isPendingReferenceTarget(l);
+      const refSelected = isPendingReferenceTarget(l) || isConstraintOperandSelected(l);
       const treeHovered = isSketchTreeHoveredElement(l);
       const sel = (active && selectedLines.includes(l)) || refSelected;
       const hovered = (active || isReferenceHoverElement(l)) && hoveredLine === l;
@@ -3230,7 +3364,7 @@
     for (const c of drawOrderBySketch(model.circles)) {
       const active = isEditableSketchElement(c);
       ctx.globalAlpha = sketchAlpha(c);
-      const refSelected = isPendingReferenceTarget(c);
+      const refSelected = isPendingReferenceTarget(c) || isConstraintOperandSelected(c);
       const treeHovered = isSketchTreeHoveredElement(c);
       const sel = (active && selectedCircles.includes(c)) || refSelected;
       const hovered = (active || isReferenceHoverElement(c)) && hoveredCircle === c;
@@ -3257,7 +3391,7 @@
     for (const a of drawOrderBySketch(model.arcs)) {
       const active = isEditableSketchElement(a);
       ctx.globalAlpha = sketchAlpha(a);
-      const refSelected = isPendingReferenceTarget(a);
+      const refSelected = isPendingReferenceTarget(a) || isConstraintOperandSelected(a);
       const treeHovered = isSketchTreeHoveredElement(a);
       const sel = (active && selectedArcs.includes(a)) || refSelected;
       const hovered = (active || isReferenceHoverElement(a)) && hoveredArc === a;
@@ -3788,7 +3922,7 @@
       for (const endpoint of ["start", "end"]) {
         if (!shouldShowArcEndpointHandle(arc, endpoint)) continue;
         const p = arcEndpointPoint(arc, endpoint);
-        const selected = sameArcEndpoint(selectedArcEndpoint, { arc, endpoint }) || selectedArcEndpointPair?.some((item) => sameArcEndpoint(item, { arc, endpoint })) || (dragSession?.kind === "arc-endpoint" && dragSession.item === arc && dragSession.endpoint === endpoint);
+        const selected = sameArcEndpoint(selectedArcEndpoint, { arc, endpoint }) || selectedArcEndpointPair?.some((item) => sameArcEndpoint(item, { arc, endpoint })) || isConstraintOperandSelected(arc, { arcEndpoint: { arc, endpoint } }) || (dragSession?.kind === "arc-endpoint" && dragSession.item === arc && dragSession.endpoint === endpoint);
         const hovered = sameArcEndpoint(hoveredArcEndpoint, { arc, endpoint });
         const fixed = Boolean(findArcEndpointFixedConstraint(arc, endpoint));
         ctx.beginPath();
@@ -3809,7 +3943,7 @@
       if (!isExplicitPoint(p) && !isPointUsedByPrimitive(p) && !isReferencePoint(p)) continue;
       const active = isEditableSketchElement(p);
       ctx.globalAlpha = sketchAlpha(p);
-      const refSelected = isPendingReferenceTarget(p);
+      const refSelected = isPendingReferenceTarget(p) || isConstraintOperandSelected(p);
       const treeHovered = isSketchTreeHoveredElement(p);
       const sel = (active && selectedPoints.includes(p)) || refSelected;
       const endpoint = isEndpointPoint(p);
@@ -3866,6 +4000,10 @@
   }
 
   function canApplyConstraint(type) {
+    if (pendingConstraintCommand?.type === type && constraintOperands.length > 0) {
+      const resolution = resolveConstraintIntent(type, constraintOperands);
+      return Boolean(resolution && !resolution.error && (resolution.constraint || resolution.target || resolution.action));
+    }
     const primitives = selectedPrimitives();
     const selectedItems = [...selectedPoints, ...selectedLines, ...primitives, selectedArcEndpoint?.arc, ...(selectedArcEndpointPair || []).map((item) => item.arc)].filter(Boolean);
     if (!sameSketchElements(selectedItems, activeSketchId())) return false;
@@ -3891,6 +4029,12 @@
   }
 
   function canCompleteConstraintCommand(type) {
+    if (constraintOperands.length > 0) {
+      const resolution = resolveConstraintIntent(type, constraintOperands);
+      if (!resolution || resolution.error) return false;
+      if (type === "distance") return Boolean(resolution.target);
+      return Boolean(resolution.constraint);
+    }
     if (type !== "distance") return canApplyConstraint(type);
     const target = distanceTargetFromSelection();
     if (!target || target.kind === "invalid") return false;
@@ -4011,8 +4155,21 @@
       cancelConstraintTargetCommand(`${constraintLabel(type)}の対象選択をキャンセルしました`);
       return;
     }
+    constraintOperands = constraintOperandsFromSelection();
     pendingConstraintCommand = { type };
     trimConstraintSelection(type);
+    if (constraintOperands.length > 0) {
+      const resolution = resolveConstraintIntent(type, constraintOperands);
+      if (resolution?.action === "place-dimension") {
+        startDistanceResolution(resolution, null);
+        return;
+      }
+      if (resolution?.action === "commit" && resolution.constraint) {
+        commitConstraintResolution(resolution);
+        return;
+      }
+      syncSelectionFromConstraintOperands();
+    }
     updateToolbar();
     updateConstraintButtons();
     setHint(constraintTargetHint(type));
@@ -4022,6 +4179,7 @@
   function cancelConstraintTargetCommand(message = "拘束対象の選択をキャンセルしました") {
     if (!pendingConstraintCommand) return;
     pendingConstraintCommand = null;
+    constraintOperands = [];
     if (message) setHint(message);
     updateConstraintButtons();
     updateToolbar();
@@ -4034,6 +4192,23 @@
   function executeConstraintCommandIfReady() {
     if (!pendingConstraintCommand) return false;
     const type = pendingConstraintCommand.type;
+    if (constraintOperands.length > 0) {
+      const resolution = resolveConstraintIntent(type, constraintOperands);
+      if (resolution?.error) {
+        setHint(resolution.error, "error");
+        return false;
+      }
+      if (resolution?.action === "place-dimension") {
+        startDistanceResolution(resolution, null);
+        return true;
+      }
+      if (resolution?.action === "commit" && resolution.constraint) {
+        commitConstraintResolution(resolution);
+        return true;
+      }
+      setHint(constraintTargetHint(type));
+      return false;
+    }
     if (!canCompleteConstraintCommand(type)) {
       const target = type === "distance" ? distanceTargetFromSelection() : null;
       if (target?.kind === "invalid") {
@@ -4069,6 +4244,72 @@
     } else if (primitive instanceof Arc) {
       if (!selectedArcs.includes(primitive)) selectedArcs.push(primitive);
     }
+  }
+
+  function hitConstraintOperand(pointer, type, hits = {}) {
+    const hitP = hits.hitP ?? hitPoint(pointer.x, pointer.y);
+    const hitL = hits.hitL ?? hitLine(pointer.x, pointer.y);
+    const hitC = hits.hitC ?? hitCircle(pointer.x, pointer.y);
+    const hitA = hits.hitA ?? hitArc(pointer.x, pointer.y);
+    const hitArcEnd = hits.hitArcEnd ?? hitArcEndpoint(pointer.x, pointer.y);
+    if (hitArcEnd && (type === "coincident" || type === "pointOnCircle")) return makeConstraintOperand("arc-endpoint", { arc: hitArcEnd.arc, endpoint: hitArcEnd.endpoint });
+    if (hitP) return makeConstraintOperand("point", { point: hitP });
+    if (hitL) return makeConstraintOperand("line", { line: hitL });
+    if (hitC || hitA) return makeConstraintOperand("primitive", { primitive: hitC || hitA });
+    return operandFromReferenceTarget(hitReferenceTarget(pointer.x, pointer.y));
+  }
+
+  function constraintOperandLimit(type, operands) {
+    if (type === "distance") return operands.some((operand) => operand.kind === "primitive") ? 1 : 2;
+    if (type === "horizontal" || type === "vertical") return operands.some((operand) => operand.kind === "point") ? 2 : 1;
+    return 2;
+  }
+
+  function appendConstraintOperand(type, operand) {
+    if (!operand) return { ok: false, error: invalidConstraintTargetHint(type) };
+    if ((type === "parallel" || type === "perpendicular" || type === "collinear") && operand.kind !== "line") return { ok: false, error: invalidConstraintTargetHint(type) };
+    if ((type === "parallel" || type === "perpendicular" || type === "collinear") && !lineHasDirection(operand.line)) return { ok: false, error: "向き拘束の対象線が短すぎます" };
+    if ((type === "horizontal" || type === "vertical") && operand.kind !== "line" && operand.kind !== "point") return { ok: false, error: invalidConstraintTargetHint(type) };
+    if (type === "tangent" && operand.kind !== "line" && operand.kind !== "primitive") return { ok: false, error: invalidConstraintTargetHint(type) };
+    if ((type === "equal" || type === "equalRadius" || type === "concentric") && operand.kind !== "line" && operand.kind !== "primitive" && operand.kind !== "point") return { ok: false, error: invalidConstraintTargetHint(type) };
+    if (type === "pointOnCircle" && operand.kind !== "point" && operand.kind !== "primitive" && operand.kind !== "arc-endpoint") return { ok: false, error: invalidConstraintTargetHint(type) };
+    if (type === "distance" && operand.kind === "arc-endpoint") return { ok: false, error: invalidConstraintTargetHint(type) };
+
+    let next = constraintOperands.filter((existing) => !sameConstraintOperand(existing, operand));
+    if (type === "distance" && operand.kind === "primitive") next = [];
+    if (type === "distance" && next.some((existing) => existing.kind === "primitive")) next = [];
+    next.push(operand);
+    const limit = constraintOperandLimit(type, next);
+    if (next.length > limit) next = next.slice(next.length - limit);
+    constraintOperands = next;
+    syncSelectionFromConstraintOperands();
+    return { ok: true };
+  }
+
+  function handleConstraintOperandClick(pointer, type, hits = {}) {
+    const added = appendConstraintOperand(type, hitConstraintOperand(pointer, type, hits));
+    if (!added.ok) {
+      setHint(added.error, "error");
+      return true;
+    }
+    const resolution = resolveConstraintIntent(type, constraintOperands);
+    if (resolution?.error) {
+      setHint(resolution.error, "error");
+      draw();
+      return true;
+    }
+    if (resolution?.action === "place-dimension") {
+      startDistanceResolution(resolution, null);
+      return true;
+    }
+    if (resolution?.action === "commit" && resolution.constraint) {
+      commitConstraintResolution(resolution);
+      return true;
+    }
+    updateUI();
+    setHint(constraintTargetHint(type));
+    draw();
+    return true;
   }
 
   function handleConstraintTargetClick(hitP, hitL, hitC, hitA, hitArcEnd) {
@@ -4230,6 +4471,7 @@
   }
 
   function startDistanceCommand() {
+    if (constraintOperands.length === 0) constraintOperands = constraintOperandsFromSelection();
     const resolution = constraintResolutionFromCurrentSelection("distance");
     if (!resolution) return;
     if (resolution.error) {
@@ -4250,7 +4492,9 @@
     pendingCommand = {
       type: "distance-place",
       target: resolution.target,
+      resolution,
       pointer: defaultDimensionForTarget(resolution.target),
+      operands: resolution.operands || constraintOperands.slice(),
       referenceSketchId: resolution.referenceSketchId,
       sketchId: resolution.sketchId,
     };
@@ -4375,6 +4619,23 @@
       constraintResolutionFromSubjectAndReference("distance", { kind: "line", line: baseLine }, referenceTarget),
       pointer,
     );
+  }
+
+  function retargetDistancePlaceWithOperand(pointer, hits = {}) {
+    if (pendingCommand?.type !== "distance-place" || pendingCommand.target.kind !== "line-length") return false;
+    const baseOperands = pendingCommand.operands?.length ? pendingCommand.operands : [{ kind: "line", line: pendingCommand.target.line, element: pendingCommand.target.line, sketchId: elementSketchId(pendingCommand.target.line), relation: "active" }];
+    const operand = hitConstraintOperand(pointer, "distance", hits);
+    if (!operand || sameConstraintOperand(baseOperands[0], operand)) return false;
+    const resolution = resolveConstraintIntent("distance", [baseOperands[0], operand]);
+    if (resolution?.error) {
+      setHint(resolution.error, "error");
+      return true;
+    }
+    if (!resolution?.target) return false;
+    startDistanceResolution(resolution, null);
+    pendingCommand.pointer = pointer;
+    pendingCommand.dimension = null;
+    return true;
   }
 
   function applyReferenceHoverTarget(referenceTarget) {
@@ -5020,6 +5281,62 @@
     return null;
   }
 
+  function splitConstraintOperands(operands) {
+    return {
+      active: operands.filter((operand) => operand.relation === "active"),
+      ancestor: operands.filter((operand) => operand.relation === "ancestor"),
+    };
+  }
+
+  function referenceResolutionFromOperands(type, operands) {
+    const { active, ancestor } = splitConstraintOperands(operands);
+    if (active.length !== 1 || ancestor.length !== 1) return { error: "参照拘束はアクティブスケッチ側1つと親/祖先側1つを選択してください" };
+    return constraintResolutionFromSubjectAndReference(type, subjectFromOperand(active[0]), referenceTargetFromOperand(ancestor[0]));
+  }
+
+  function normalConstraintFromOperands(type, operands) {
+    const previous = {
+      points: selectedPoints,
+      lines: selectedLines,
+      circles: selectedCircles,
+      arcs: selectedArcs,
+      arcEndpoint: selectedArcEndpoint,
+      arcEndpointPair: selectedArcEndpointPair,
+    };
+    constraintOperands = operands.slice();
+    syncSelectionFromConstraintOperands();
+    const constraint = constraintFromSelection(type);
+    selectedPoints = previous.points;
+    selectedLines = previous.lines;
+    selectedCircles = previous.circles;
+    selectedArcs = previous.arcs;
+    selectedArcEndpoint = previous.arcEndpoint;
+    selectedArcEndpointPair = previous.arcEndpointPair;
+    return constraint;
+  }
+
+  function resolveConstraintIntent(type, operands) {
+    const cleanOperands = operands.filter(Boolean);
+    const { active, ancestor } = splitConstraintOperands(cleanOperands);
+    if (ancestor.length > 0) {
+      if (cleanOperands.length < 2 || active.length === 0) return null;
+      if (cleanOperands.length !== 2) return { error: "参照拘束はアクティブスケッチ側と親/祖先側を1つずつ選択してください" };
+      const resolution = referenceResolutionFromOperands(type, cleanOperands);
+      if (type === "distance" && resolution?.target) return { ...resolution, action: "place-dimension", operands: cleanOperands };
+      return resolution?.constraint ? { ...resolution, action: "commit", operands: cleanOperands } : resolution;
+    }
+    if (active.length !== cleanOperands.length) return { error: "拘束対象はアクティブスケッチ、または親/祖先スケッチだけを選択できます" };
+    const sketchIds = [...new Set(cleanOperands.map((operand) => operand.sketchId))];
+    if (sketchIds.length > 1) return { error: "別スケッチ同士は通常拘束できません" };
+    if (type === "distance") {
+      const target = distanceTargetFromOperands(cleanOperands);
+      if (!target || target.kind === "invalid") return target?.kind === "invalid" ? { error: target.reason } : null;
+      return { type, action: "place-dimension", target, operands: cleanOperands, sketchId: sketchIds[0] || activeSketchId() };
+    }
+    const constraint = normalConstraintFromOperands(type, cleanOperands);
+    return constraint ? { type, action: "commit", constraint, operands: cleanOperands, sketchId: sketchIds[0] || activeSketchId() } : null;
+  }
+
   function startReferenceDistanceInput(subject, referenceTarget, pointer) {
     return startDistanceResolution(constraintResolutionFromSubjectAndReference("distance", subject, referenceTarget), pointer);
   }
@@ -5051,6 +5368,7 @@
   }
 
   function constraintResolutionFromCurrentSelection(type) {
+    if (constraintOperands.length > 0) return resolveConstraintIntent(type, constraintOperands);
     const referenceTarget = pendingConstraintCommand?.referenceTarget;
     if (referenceTarget) return constraintResolutionFromSubjectAndReference(type, activeReferenceSubjectForTarget(referenceTarget), referenceTarget);
     if (type === "distance") {
@@ -5072,15 +5390,21 @@
     mode = "select";
     const initialDimension = pointer ? null : defaultDimensionForTarget(resolution.target);
     const initialPointer = pointer || dimensionAnchor(resolution.target, initialDimension);
+    if (resolution.operands) {
+      constraintOperands = resolution.operands.slice();
+      syncSelectionFromConstraintOperands();
+    }
     if (resolution.referenceSubject) selectReferenceSubjectForPreview(resolution.referenceSubject);
     pendingConstraintCommand = { type: "distance", referenceTarget: resolution.referenceTarget };
     pendingCommand = {
       type: "distance-place",
       target: resolution.target,
+      resolution,
       pointer: initialPointer,
       dimension: initialDimension,
       referenceTarget: resolution.referenceTarget,
       referenceSubject: resolution.referenceSubject,
+      operands: resolution.operands || constraintOperands.slice(),
       referenceSketchId: resolution.referenceSketchId,
       sketchId: resolution.sketchId,
     };
@@ -5233,10 +5557,12 @@
   }
 
   function addConstraint(type) {
-    if (!canApplyConstraint(type)) return;
-    if (type === "distance") return startDistanceCommand();
-
     const resolution = constraintResolutionFromCurrentSelection(type);
+    if (!resolution || resolution.error) {
+      if (resolution?.error) setHint(resolution.error, "error");
+      return;
+    }
+    if (resolution.action === "place-dimension" || resolution.target) return startDistanceResolution(resolution, null);
     if (resolution?.constraint) {
       selectedArcEndpointPair = null;
       commitConstraintResolution(resolution);
@@ -6442,6 +6768,7 @@
 
     if (pendingCommand?.type === "distance-place") {
       e.preventDefault();
+      if (retargetDistancePlaceWithOperand(p, { hitP, hitL, hitC, hitA, hitArcEnd })) return;
       const referenceTarget = pendingCommand.target.kind === "line-length" ? hitReferenceTarget(p.x, p.y) : null;
       if (retargetPendingLineLengthToReference(referenceTarget, p)) return;
       if (retargetPendingLineLengthDimension(hitP, hitL, p)) return;
@@ -6456,6 +6783,8 @@
 
     if (pendingConstraintCommand) {
       e.preventDefault();
+      handleConstraintOperandClick(p, pendingConstraintCommand.type, { hitP, hitL, hitC, hitA, hitArcEnd });
+      return;
       const activeHitSubject = referenceSubjectFromHit(hitP, hitL, hitC, hitA, hitArcEnd);
       if (pendingConstraintCommand.referenceTarget) {
         if (tryStartReferenceDistanceFromHits(activeHitSubject, pendingConstraintCommand.referenceTarget, p)) return;
