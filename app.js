@@ -3274,7 +3274,7 @@
       ctx.setLineDash(construction ? [12 / viewport.scale, 4 / viewport.scale, 2 / viewport.scale, 4 / viewport.scale] : []);
       ctx.shadowColor = sel || treeHovered ? "rgba(14, 165, 233, 0.45)" : "transparent";
       ctx.shadowBlur = sel || treeHovered ? 8 / viewport.scale : 0;
-      const constructionExtension = 6 / viewport.scale;
+      const constructionExtension = 12 / viewport.scale;
       const drawSegment = construction ? extendedLineSegment(l, constructionExtension) : { p1: l.p1, p2: l.p2 };
       ctx.beginPath();
       ctx.moveTo(drawSegment.p1.x, drawSegment.p1.y);
@@ -3284,22 +3284,12 @@
       ctx.shadowBlur = 0;
 
       if (construction) {
-        ctx.strokeStyle = lineColor;
-        ctx.lineWidth = 1.4 / viewport.scale;
-        const len = l.length();
-        const ux = len > 1e-12 ? l.dx() / len : 1;
-        const uy = len > 1e-12 ? l.dy() / len : 0;
-        const nx = -uy;
-        const ny = ux;
-        const alongHalf = constructionExtension;
-        const normalHalf = constructionExtension;
+        ctx.fillStyle = lineColor;
+        const endpointRadius = 2.4 / viewport.scale;
         for (const p of [l.p1, l.p2]) {
           ctx.beginPath();
-          ctx.moveTo(p.x - ux * alongHalf, p.y - uy * alongHalf);
-          ctx.lineTo(p.x + ux * alongHalf, p.y + uy * alongHalf);
-          ctx.moveTo(p.x - nx * normalHalf, p.y - ny * normalHalf);
-          ctx.lineTo(p.x + nx * normalHalf, p.y + ny * normalHalf);
-          ctx.stroke();
+          ctx.arc(p.x, p.y, endpointRadius, 0, Math.PI * 2);
+          ctx.fill();
         }
       }
 
