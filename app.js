@@ -333,6 +333,17 @@
     return "";
   }
 
+  function presentationElementFromKey(key) {
+    if (typeof key !== "string") return null;
+    const [kind, id] = key.split(":");
+    if (!kind || !id) return null;
+    if (kind === "point") return model.points.find((item) => item.id === id) || null;
+    if (kind === "line") return model.lines.find((item) => item.id === id) || null;
+    if (kind === "circle") return model.circles.find((item) => item.id === id) || null;
+    if (kind === "arc") return model.arcs.find((item) => item.id === id) || null;
+    return null;
+  }
+
   function presentationBaseStyle(item) {
     return item instanceof Line && item.construction ? DEFAULT_PRESENTATION_CONSTRUCTION_STYLE : DEFAULT_PRESENTATION_STYLE;
   }
@@ -621,6 +632,12 @@
       return { item, anchor: { x: item.center.x + Math.cos(angle) * item.radius(), y: item.center.y + Math.sin(angle) * item.radius() }, geometryRef: presentationElementKey(item) };
     }
     return null;
+  }
+
+  function presentationLeaderAnchorForElement(element) {
+    const item = presentationElementFromKey(element?.geometryRefs?.target);
+    if (!item) return element?.start || null;
+    return presentationLeaderTargetFromItem(item, element.start || null)?.anchor || element.start || null;
   }
 
   function clampAngleToArcSweep(arc, angle) {
@@ -4227,8 +4244,10 @@
 
   function drawPresentationLeader(element, preview = false) {
     if (!element.start || !element.end) return;
+    const start = preview ? element.start : presentationLeaderAnchorForElement(element);
+    if (!start) return;
     const elbow = element.elbow || {
-      x: (element.start.x + element.end.x) / 2,
+      x: (start.x + element.end.x) / 2,
       y: element.end.y,
     };
     ctx.save();
@@ -4237,15 +4256,15 @@
     ctx.lineWidth = Number(element.style?.lineWidthPx || 1.4) / viewport.scale;
     if (preview) ctx.setLineDash([5 / viewport.scale, 4 / viewport.scale]);
     ctx.beginPath();
-    ctx.moveTo(element.start.x, element.start.y);
+    ctx.moveTo(start.x, start.y);
     ctx.lineTo(elbow.x, elbow.y);
     ctx.lineTo(element.end.x, element.end.y);
     ctx.stroke();
     ctx.setLineDash([]);
-    const dx = elbow.x - element.start.x;
-    const dy = elbow.y - element.start.y;
+    const dx = elbow.x - start.x;
+    const dy = elbow.y - start.y;
     const len = Math.max(1e-9, hypot2(dx, dy));
-    drawArrowhead(element.start, { x: dx / len, y: dy / len });
+    drawArrowhead(start, { x: dx / len, y: dy / len });
     if (element.text) drawPresentationText(element);
     ctx.restore();
   }
