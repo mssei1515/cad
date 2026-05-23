@@ -1879,8 +1879,8 @@
   function resizeCanvas(options = {}) {
     const rect = canvas.getBoundingClientRect();
     const dpr = window.devicePixelRatio || 1;
-    canvas.width = Math.floor(rect.width * dpr);
-    canvas.height = Math.floor(rect.height * dpr);
+    canvas.width = Math.max(1, Math.floor(rect.width * dpr));
+    canvas.height = Math.max(1, Math.floor(rect.height * dpr));
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     if (options.centerWorld && rect.width > 0 && rect.height > 0) {
       viewport.x = rect.width / 2 - options.centerWorld.x * viewport.scale;
@@ -3521,8 +3521,15 @@
     const w = r.width;
     const h = r.height;
     const dpr = window.devicePixelRatio || 1;
+    const bitmapWidth = Math.max(1, Math.floor(w * dpr));
+    const bitmapHeight = Math.max(1, Math.floor(h * dpr));
+    if (canvas.width !== bitmapWidth || canvas.height !== bitmapHeight) {
+      canvas.width = bitmapWidth;
+      canvas.height = bitmapHeight;
+    }
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    ctx.clearRect(0, 0, w, h);
     ctx.save();
     ctx.translate(viewport.x, viewport.y);
     ctx.scale(viewport.scale, viewport.scale);
