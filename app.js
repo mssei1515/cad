@@ -4271,6 +4271,21 @@
     ctx.restore();
   }
 
+  function textHitBox(text, x, y, fontSize = 13) {
+    const width = Math.max(28, String(text || "").length * fontSize * 0.62);
+    const height = fontSize + 10;
+    return {
+      left: x - width / 2,
+      right: x + width / 2,
+      top: y - height / 2,
+      bottom: y + height / 2,
+    };
+  }
+
+  function pointInExpandedBox(x, y, box, padding) {
+    return x >= box.left - padding && x <= box.right + padding && y >= box.top - padding && y <= box.bottom + padding;
+  }
+
   function hitPresentationAnnotationElement(x, y) {
     const sheet = activePresentationSheet();
     if (!sheet || !Array.isArray(sheet.elements)) return null;
@@ -4284,14 +4299,17 @@
         const dimension = element.dimension || defaultDimensionForTarget(target);
         const layout = dimensionLayout(target, dimension);
         if (!layout) continue;
-        if (hypot2(x - layout.text.x, y - layout.text.y) <= threshold * 2.4) return { element, type: "annotationDimension", target, dimension, part: "label" };
-        if (distancePointToSegmentPoints(x, y, layout.hitA, layout.hitB) <= threshold * 1.7) return { element, type: "annotationDimension", target, dimension, part: "line" };
+        const label = target.kind === "angle" ? `${Number(presentationTargetValue(target)).toFixed(2)}°` : Number(presentationTargetValue(target)).toFixed(2);
+        if (pointInExpandedBox(x, y, textHitBox(label, layout.text.x, layout.text.y, 13 / viewport.scale), threshold * 0.8)) return { element, type: "annotationDimension", target, dimension, part: "label" };
+        if (hypot2(x - layout.text.x, y - layout.text.y) <= threshold * 3) return { element, type: "annotationDimension", target, dimension, part: "label" };
+        if (distancePointToSegmentPoints(x, y, layout.hitA, layout.hitB) <= threshold * 2.2) return { element, type: "annotationDimension", target, dimension, part: "line" };
       } else if (element.type === "leader") {
         const start = presentationLeaderAnchorForElement(element);
         if (!start || !element.end) continue;
         const elbow = element.elbow || { x: (start.x + element.end.x) / 2, y: element.end.y };
-        if (distancePointToSegmentPoints(x, y, start, elbow) <= threshold * 1.5 || distancePointToSegmentPoints(x, y, elbow, element.end) <= threshold * 1.5) return { element, type: "leader", part: "line" };
-        if (hypot2(x - element.x, y - element.y) <= threshold * 2.4) return { element, type: "leader", part: "label" };
+        if (distancePointToSegmentPoints(x, y, start, elbow) <= threshold * 2.2 || distancePointToSegmentPoints(x, y, elbow, element.end) <= threshold * 2.2) return { element, type: "leader", part: "line" };
+        if (pointInExpandedBox(x, y, textHitBox(element.text, element.x, element.y, Number(element.style?.fontSize || 13) / viewport.scale), threshold)) return { element, type: "leader", part: "label" };
+        if (hypot2(x - element.x, y - element.y) <= threshold * 3) return { element, type: "leader", part: "label" };
       }
     }
     return null;
