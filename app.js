@@ -413,9 +413,39 @@
   }
 
   function presentationTargetFromSelection() {
-    const points = selectedPoints.slice();
-    const lines = selectedLines.slice();
-    const primitives = [...selectedCircles, ...selectedArcs];
+    return presentationTargetFromOperands(presentationOperandsFromSelection());
+  }
+
+  function presentationOperandFromHit(hit) {
+    if (!hit?.item) return null;
+    if (hit.kind === "point") return { kind: "point", item: hit.item };
+    if (hit.kind === "line") return { kind: "line", item: hit.item };
+    if (hit.kind === "circle" || hit.kind === "arc") return { kind: "primitive", item: hit.item };
+    return null;
+  }
+
+  function presentationOperandsFromSelection() {
+    return [
+      ...selectedPoints.map((item) => ({ kind: "point", item })),
+      ...selectedLines.map((item) => ({ kind: "line", item })),
+      ...selectedCircles.map((item) => ({ kind: "primitive", item })),
+      ...selectedArcs.map((item) => ({ kind: "primitive", item })),
+    ];
+  }
+
+  function samePresentationOperand(a, b) {
+    return Boolean(a && b && a.kind === b.kind && a.item === b.item);
+  }
+
+  function presentationTargetFromOperands(operands = []) {
+    const unique = [];
+    for (const operand of operands) {
+      if (!operand?.item || unique.some((item) => samePresentationOperand(item, operand))) continue;
+      unique.push(operand);
+    }
+    const points = unique.filter((operand) => operand.kind === "point").map((operand) => operand.item);
+    const lines = unique.filter((operand) => operand.kind === "line").map((operand) => operand.item);
+    const primitives = unique.filter((operand) => operand.kind === "primitive").map((operand) => operand.item);
     if (points.length === 2 && lines.length === 0 && primitives.length === 0) {
       return { kind: "point-point", p1: points[0], p2: points[1], value: hypot2(points[1].x - points[0].x, points[1].y - points[0].y) };
     }
@@ -439,21 +469,65 @@
     return null;
   }
 
-  function createPresentationAnnotationDimension() {
-    if (!isPresentationMode()) return;
-    const target = presentationTargetFromSelection();
-    if (!target) {
-      setHint("注記寸法: 点2つ、点+線、線1本、線2本、円/円弧1つを選択してください", "error");
-      return;
-    }
+  function startPresentationDimensionPlacement(target, operands = [], pointer = null) {
     pendingCommand = {
       type: "presentation-dimension-place",
       target,
       targetData: presentationTargetToData(target),
-      pointer: lastPointerWorld || dimensionAnchor(target, defaultDimensionForTarget(target)),
+      operands: operands.slice(),
+      pointer: pointer || lastPointerWorld || dimensionAnchor(target, defaultDimensionForTarget(target)),
     };
     setHint("注記寸法線の位置をクリックしてください");
     draw();
+  }
+
+  function createPresentationAnnotationDimension() {
+    if (!isPresentationMode()) return;
+    const target = presentationTargetFromSelection();
+    if (target) {
+      startPresentationDimensionPlacement(target, presentationOperandsFromSelection());
+      return;
+    }
+    clearSelection();
+    pendingCommand = { type: "presentation-dimension-select", operands: [] };
+    setHint("注記寸法対象をクリックしてください");
+    draw();
+  }
+
+  function handlePresentationDimensionTargetClick(hit, pointer) {
+    if (pendingCommand?.type !== "presentation-dimension-select") return false;
+    const operand = presentationOperandFromHit(hit);
+    if (!operand) {
+      setHint("注記寸法対象をクリックしてください", "error");
+      return true;
+    }
+    if (!pendingCommand.operands.some((item) => samePresentationOperand(item, operand))) {
+      pendingCommand.operands.push(operand);
+      setPresentationSelection(hit, true);
+    }
+    const target = presentationTargetFromOperands(pendingCommand.operands);
+    if (target) {
+      startPresentationDimensionPlacement(target, pendingCommand.operands, pointer);
+    } else {
+      setHint("次の注記寸法対象をクリックしてください");
+      updatePresentationUI();
+      draw();
+    }
+    return true;
+  }
+
+  function retargetPresentationDimensionWithHit(hit, pointer) {
+    if (pendingCommand?.type !== "presentation-dimension-place") return false;
+    const operand = presentationOperandFromHit(hit);
+    if (!operand) return false;
+    const operands = pendingCommand.operands?.length ? pendingCommand.operands.slice() : presentationOperandsFromSelection();
+    if (operands.some((item) => samePresentationOperand(item, operand))) return false;
+    operands.push(operand);
+    const target = presentationTargetFromOperands(operands);
+    if (!target) return false;
+    setPresentationSelection(hit, true);
+    startPresentationDimensionPlacement(target, operands, pointer);
+    return true;
   }
 
   function commitPresentationAnnotationDimensionAt(anchor) {
@@ -7274,12 +7348,17 @@
 
     if (isPresentationMode()) {
       e.preventDefault();
+      const presentationHit = hitPresentationElement(p.x, p.y);
       if (pendingCommand?.type === "presentation-dimension-place") {
+        if (presentationHit && retargetPresentationDimensionWithHit(presentationHit, p)) return;
         commitPresentationAnnotationDimensionAt(p);
         draw();
         return;
       }
-      const presentationHit = hitPresentationElement(p.x, p.y);
+      if (pendingCommand?.type === "presentation-dimension-select") {
+        handlePresentationDimensionTargetClick(presentationHit, p);
+        return;
+      }
       if (presentationHit) {
         setPresentationSelection(presentationHit, e.shiftKey || e.ctrlKey);
         updatePresentationUI();
