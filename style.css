@@ -98,6 +98,54 @@ body {
   background: #fff;
 }
 
+.mode-group {
+  gap: 8px;
+  border-color: #bfdbfe;
+  background: linear-gradient(180deg, #f8fbff, #eef6ff);
+}
+
+.mode-switch {
+  display: inline-grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 3px;
+  padding: 3px;
+  border: 1px solid #bfdbfe;
+  border-radius: 12px;
+  background: #eaf2ff;
+}
+
+.mode-switch-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 124px;
+  height: 42px;
+  justify-content: center;
+  padding: 0 13px;
+  border-color: transparent;
+  border-radius: 9px;
+  color: #334155;
+  font-size: 13px;
+  font-weight: 700;
+  background: transparent;
+}
+
+.mode-switch-btn svg {
+  width: 19px;
+  height: 19px;
+}
+
+.mode-switch-btn.active {
+  color: #fff;
+  border-color: #1d4ed8;
+  background: #2563eb;
+  box-shadow: 0 5px 14px rgba(37, 99, 235, 0.26);
+}
+
+.mode-switch-btn.active svg {
+  stroke-width: 2.4;
+}
+
 .group-label {
   color: var(--sub);
   font-size: 11px;
@@ -129,8 +177,61 @@ body:not(.presentation-mode) #renamePresentationSheetBtn {
   opacity: 0.55;
 }
 
+.presentation-style-group {
+  display: none;
+}
+
+body.presentation-mode .presentation-style-group {
+  display: flex;
+}
+
+body.presentation-mode .toolbar-group[aria-label="作図・編集"],
+body.presentation-mode .toolbar-group[aria-label="拘束・寸法"] {
+  opacity: 0.48;
+}
+
+.style-field,
+.style-check {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-height: 28px;
+  color: var(--sub);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.style-field input[type="color"] {
+  width: 30px;
+  height: 28px;
+  padding: 2px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: #fff;
+}
+
+.style-field select,
+.style-field input[type="number"] {
+  height: 28px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: #fff;
+  color: var(--text);
+  padding: 0 6px;
+  font-size: 12px;
+}
+
+.width-field input {
+  width: 58px;
+}
+
+.style-check input {
+  width: 15px;
+  height: 15px;
+}
+
 body.presentation-mode .canvas-area {
-  outline: 2px solid rgba(37, 99, 235, 0.2);
+  outline: 3px solid rgba(37, 99, 235, 0.22);
   outline-offset: -2px;
 }
 

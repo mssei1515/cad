@@ -128,6 +128,20 @@
     under: "#f59e0b",
     conflict: "#dc2626",
   };
+  const DEFAULT_PRESENTATION_STYLE = {
+    visible: true,
+    color: "#111827",
+    lineType: "solid",
+    lineWidthPx: 2.2,
+    opacity: 1,
+  };
+  const DEFAULT_PRESENTATION_CONSTRUCTION_STYLE = {
+    visible: true,
+    color: "#64748b",
+    lineType: "dashdot",
+    lineWidthPx: 1.8,
+    opacity: 1,
+  };
   const SKETCH_SOLVE_ERROR_COLOR = "#dc2626";
   let lastLoadLineRepairMessage = "";
 
@@ -185,7 +199,7 @@
     model.appMode = model.appMode === "presentation" ? "presentation" : "geometry";
     if (!Array.isArray(model.presentationSheets)) model.presentationSheets = [];
     if (model.presentationSheets.length === 0) {
-      model.presentationSheets.push({ id: DEFAULT_PRESENTATION_SHEET_ID, name: DEFAULT_PRESENTATION_SHEET_NAME, visibleGeometrySketchIds: null });
+      model.presentationSheets.push({ id: DEFAULT_PRESENTATION_SHEET_ID, name: DEFAULT_PRESENTATION_SHEET_NAME, visibleGeometrySketchIds: null, elementStyles: {} });
     }
     const seen = new Set();
     model.presentationSheets = model.presentationSheets.map((sheet, index) => {
@@ -196,6 +210,7 @@
         id,
         name: String(sheet.name || `Sheet-${index + 1}`),
         visibleGeometrySketchIds: Array.isArray(sheet.visibleGeometrySketchIds) ? sheet.visibleGeometrySketchIds.map(String) : null,
+        elementStyles: normalizePresentationElementStyles(sheet.elementStyles),
       };
     });
     if (!model.activePresentationSheetId || !model.presentationSheets.some((sheet) => sheet.id === model.activePresentationSheetId)) {
@@ -219,6 +234,106 @@
   function activePresentationSheet() {
     ensurePresentationState();
     return model.presentationSheets.find((sheet) => sheet.id === model.activePresentationSheetId) || model.presentationSheets[0];
+  }
+
+  function normalizePresentationElementStyles(styles) {
+    const result = {};
+    if (!styles || typeof styles !== "object" || Array.isArray(styles)) return result;
+    for (const [key, value] of Object.entries(styles)) {
+      if (!value || typeof value !== "object") continue;
+      const normalized = {};
+      if (Object.prototype.hasOwnProperty.call(value, "visible")) normalized.visible = value.visible !== false;
+      if (typeof value.color === "string" && /^#[0-9a-fA-F]{6}$/.test(value.color)) normalized.color = value.color;
+      if (["solid", "dashed", "dashdot", "dotted"].includes(value.lineType)) normalized.lineType = value.lineType;
+      const lineWidthPx = Number(value.lineWidthPx);
+      if (Number.isFinite(lineWidthPx)) normalized.lineWidthPx = Math.max(0.5, Math.min(10, lineWidthPx));
+      const opacity = Number(value.opacity);
+      if (Number.isFinite(opacity)) normalized.opacity = Math.max(0.05, Math.min(1, opacity));
+      result[key] = normalized;
+    }
+    return result;
+  }
+
+  function presentationElementKey(item) {
+    if (item instanceof Line) return `line:${item.id}`;
+    if (item instanceof Circle) return `circle:${item.id}`;
+    if (item instanceof Arc) return `arc:${item.id}`;
+    if (item instanceof Point) return `point:${item.id}`;
+    return "";
+  }
+
+  function presentationBaseStyle(item) {
+    return item instanceof Line && item.construction ? DEFAULT_PRESENTATION_CONSTRUCTION_STYLE : DEFAULT_PRESENTATION_STYLE;
+  }
+
+  function presentationStyleForElement(item) {
+    const key = presentationElementKey(item);
+    const sheet = activePresentationSheet();
+    const override = key ? sheet?.elementStyles?.[key] || {} : {};
+    return { ...presentationBaseStyle(item), ...override };
+  }
+
+  function presentationLineDash(lineType) {
+    if (lineType === "dashed") return [10 / viewport.scale, 6 / viewport.scale];
+    if (lineType === "dashdot") return [12 / viewport.scale, 4 / viewport.scale, 2 / viewport.scale, 4 / viewport.scale];
+    if (lineType === "dotted") return [2 / viewport.scale, 5 / viewport.scale];
+    return [];
+  }
+
+  function presentationSelectedItems() {
+    return [...selectedLines, ...selectedCircles, ...selectedArcs];
+  }
+
+  function selectedPresentationStyle() {
+    const items = presentationSelectedItems();
+    if (items.length === 0) return { ...DEFAULT_PRESENTATION_STYLE };
+    const first = presentationStyleForElement(items[0]);
+    const mixed = { ...first };
+    for (const item of items.slice(1)) {
+      const style = presentationStyleForElement(item);
+      for (const key of ["visible", "color", "lineType", "lineWidthPx", "opacity"]) {
+        if (mixed[key] !== style[key]) mixed[key] = "";
+      }
+    }
+    return mixed;
+  }
+
+  function setPresentationStyleForSelection(patch) {
+    const sheet = activePresentationSheet();
+    const items = presentationSelectedItems();
+    if (!sheet || items.length === 0) return;
+    if (!sheet.elementStyles || typeof sheet.elementStyles !== "object") sheet.elementStyles = {};
+    for (const item of items) {
+      const key = presentationElementKey(item);
+      if (!key) continue;
+      const current = sheet.elementStyles[key] || {};
+      sheet.elementStyles[key] = { ...current, ...patch };
+    }
+    updatePresentationUI();
+    draw();
+  }
+
+  function setPresentationSelection(hit, additive = false) {
+    if (!additive) {
+      selectedPoints = [];
+      selectedLines = [];
+      selectedCircles = [];
+      selectedArcs = [];
+      selectedArcEndpoint = null;
+      selectedArcEndpointPair = null;
+      selectedDimensionConstraint = null;
+    }
+    if (!hit?.item) return;
+    if (hit.kind === "line") {
+      if (additive && selectedLines.includes(hit.item)) selectedLines = selectedLines.filter((item) => item !== hit.item);
+      else if (!selectedLines.includes(hit.item)) selectedLines.push(hit.item);
+    } else if (hit.kind === "circle") {
+      if (additive && selectedCircles.includes(hit.item)) selectedCircles = selectedCircles.filter((item) => item !== hit.item);
+      else if (!selectedCircles.includes(hit.item)) selectedCircles.push(hit.item);
+    } else if (hit.kind === "arc") {
+      if (additive && selectedArcs.includes(hit.item)) selectedArcs = selectedArcs.filter((item) => item !== hit.item);
+      else if (!selectedArcs.includes(hit.item)) selectedArcs.push(hit.item);
+    }
   }
 
   function rejectPresentationGeometryEdit(action = "Geometry editing") {
@@ -985,7 +1100,7 @@
     model.sketches.push({ id: DEFAULT_SKETCH_ID, name: DEFAULT_SKETCH_NAME, parentSketchId: ROOT_SKETCH_ID, kind: "sketch" });
     model.activeSketchId = DEFAULT_SKETCH_ID;
     model.appMode = "geometry";
-    model.presentationSheets = [{ id: DEFAULT_PRESENTATION_SHEET_ID, name: DEFAULT_PRESENTATION_SHEET_NAME, visibleGeometrySketchIds: null }];
+    model.presentationSheets = [{ id: DEFAULT_PRESENTATION_SHEET_ID, name: DEFAULT_PRESENTATION_SHEET_NAME, visibleGeometrySketchIds: null, elementStyles: {} }];
     model.activePresentationSheetId = DEFAULT_PRESENTATION_SHEET_ID;
   }
 
@@ -1140,7 +1255,7 @@
   function serializeModel() {
     ensureModelState();
     return {
-      version: 3,
+      version: 4,
       savedAt: new Date().toISOString(),
       appMode: model.appMode,
       sketches: model.sketches.map((sketch) => ({ id: sketch.id, name: sketch.name, parentSketchId: sketch.parentSketchId || null, kind: isRootSketch(sketch) ? "root" : "sketch" })),
@@ -1149,6 +1264,7 @@
         id: sheet.id,
         name: sheet.name,
         visibleGeometrySketchIds: Array.isArray(sheet.visibleGeometrySketchIds) ? sheet.visibleGeometrySketchIds.slice() : null,
+        elementStyles: normalizePresentationElementStyles(sheet.elementStyles),
       })),
       activePresentationSheetId: activePresentationSheet().id,
       points: model.points.map((p) => ({ id: p.id, x: p.x, y: p.y, fixed: p.fixed, kind: p.kind || (isPointUsedByPrimitive(p) ? "endpoint" : "explicit"), sketchId: elementSketchId(p) })),
@@ -1316,14 +1432,15 @@
             id: String(sheet.id || `PS${index + 1}`),
             name: String(sheet.name || `Sheet-${index + 1}`),
             visibleGeometrySketchIds: Array.isArray(sheet.visibleGeometrySketchIds) ? sheet.visibleGeometrySketchIds.map(normalizeSketchId) : null,
+            elementStyles: normalizePresentationElementStyles(sheet.elementStyles),
           }))
-        : [{ id: DEFAULT_PRESENTATION_SHEET_ID, name: DEFAULT_PRESENTATION_SHEET_NAME, visibleGeometrySketchIds: null }];
+        : [{ id: DEFAULT_PRESENTATION_SHEET_ID, name: DEFAULT_PRESENTATION_SHEET_NAME, visibleGeometrySketchIds: null, elementStyles: {} }];
     const sheetIds = new Set();
     loadedPresentationSheets = loadedPresentationSheets.map((sheet, index) => {
       let id = sheet.id;
       while (sheetIds.has(id)) id = `PS${index + 1}-${sheetIds.size + 1}`;
       sheetIds.add(id);
-      return { ...sheet, id };
+      return { ...sheet, id, elementStyles: normalizePresentationElementStyles(sheet.elementStyles) };
     });
 
     const pointById = new Map();
@@ -3246,16 +3363,20 @@
     drawLines();
     drawCircles();
     drawArcs();
-    drawDimensions();
-    drawDimensionPreview();
+    if (isGeometryMode()) {
+      drawDimensions();
+      drawDimensionPreview();
+    }
     drawTemporaryLine();
     drawRectanglePreview();
     drawCirclePreview();
     drawArcPreview();
     drawTrimPreview();
     drawSnapMarker();
-    drawArcEndpointHandles();
-    drawPoints();
+    if (isGeometryMode()) {
+      drawArcEndpointHandles();
+      drawPoints();
+    }
     drawSketchIdentityLabel();
     drawSelectionRect();
     ctx.restore();
@@ -3347,19 +3468,22 @@
   function drawLines() {
     ctx.save();
     for (const l of drawOrderBySketch(model.lines)) {
+      const presentation = isPresentationMode();
+      const style = presentation ? presentationStyleForElement(l) : null;
+      if (presentation && style.visible === false) continue;
       const active = isEditableSketchElement(l);
-      ctx.globalAlpha = sketchAlpha(l);
+      ctx.globalAlpha = presentation ? style.opacity : sketchAlpha(l);
       const refSelected = isPendingReferenceTarget(l) || isConstraintOperandSelected(l);
       const treeHovered = isSketchTreeHoveredElement(l);
-      const sel = (active && selectedLines.includes(l)) || refSelected;
-      const hovered = (active || isReferenceHoverElement(l)) && hoveredLine === l;
+      const sel = (active && selectedLines.includes(l)) || (presentation && selectedLines.includes(l)) || refSelected;
+      const hovered = ((active || isReferenceHoverElement(l)) && hoveredLine === l) || (presentation && hoveredLine === l);
       const construction = Boolean(l.construction) && !sel && !hovered;
-      const lineColor = treeHovered ? "#0ea5e9" : constraintStatusColor(l, sel, hovered);
+      const lineColor = treeHovered ? "#0ea5e9" : presentation && !sel && !hovered ? style.color : constraintStatusColor(l, sel, hovered);
       ctx.strokeStyle = lineColor;
-      ctx.lineWidth = (treeHovered ? 4 : sel ? 4 : hovered ? 2.6 : construction ? Math.max(1.8, sketchStrokeWidth(l) * 0.72) : sketchStrokeWidth(l)) / viewport.scale;
+      ctx.lineWidth = (treeHovered ? 4 : sel ? 4 : hovered ? 2.6 : presentation ? style.lineWidthPx : construction ? Math.max(1.8, sketchStrokeWidth(l) * 0.72) : sketchStrokeWidth(l)) / viewport.scale;
       ctx.lineCap = "round";
       ctx.lineJoin = "round";
-      ctx.setLineDash(construction ? [12 / viewport.scale, 4 / viewport.scale, 2 / viewport.scale, 4 / viewport.scale] : []);
+      ctx.setLineDash(presentation ? presentationLineDash(style.lineType) : construction ? [12 / viewport.scale, 4 / viewport.scale, 2 / viewport.scale, 4 / viewport.scale] : []);
       ctx.shadowColor = sel || treeHovered ? "rgba(14, 165, 233, 0.45)" : "transparent";
       ctx.shadowBlur = sel || treeHovered ? 8 / viewport.scale : 0;
       const constructionExtension = 12 / viewport.scale;
@@ -3396,19 +3520,24 @@
     ctx.save();
     ctx.lineCap = "round";
     for (const c of drawOrderBySketch(model.circles)) {
+      const presentation = isPresentationMode();
+      const style = presentation ? presentationStyleForElement(c) : null;
+      if (presentation && style.visible === false) continue;
       const active = isEditableSketchElement(c);
-      ctx.globalAlpha = sketchAlpha(c);
+      ctx.globalAlpha = presentation ? style.opacity : sketchAlpha(c);
       const refSelected = isPendingReferenceTarget(c) || isConstraintOperandSelected(c);
       const treeHovered = isSketchTreeHoveredElement(c);
-      const sel = (active && selectedCircles.includes(c)) || refSelected;
-      const hovered = (active || isReferenceHoverElement(c)) && hoveredCircle === c;
-      ctx.strokeStyle = treeHovered ? "#0ea5e9" : constraintStatusColor(c, sel, hovered);
-      ctx.lineWidth = (treeHovered ? 4 : sel ? 4 : hovered ? 2.6 : sketchStrokeWidth(c)) / viewport.scale;
+      const sel = (active && selectedCircles.includes(c)) || (presentation && selectedCircles.includes(c)) || refSelected;
+      const hovered = ((active || isReferenceHoverElement(c)) && hoveredCircle === c) || (presentation && hoveredCircle === c);
+      ctx.strokeStyle = treeHovered ? "#0ea5e9" : presentation && !sel && !hovered ? style.color : constraintStatusColor(c, sel, hovered);
+      ctx.lineWidth = (treeHovered ? 4 : sel ? 4 : hovered ? 2.6 : presentation ? style.lineWidthPx : sketchStrokeWidth(c)) / viewport.scale;
+      ctx.setLineDash(presentation ? presentationLineDash(style.lineType) : []);
       ctx.shadowColor = sel || treeHovered ? "rgba(14, 165, 233, 0.45)" : "transparent";
       ctx.shadowBlur = sel || treeHovered ? 8 / viewport.scale : 0;
       ctx.beginPath();
       ctx.arc(c.center.x, c.center.y, c.radius(), 0, Math.PI * 2);
       ctx.stroke();
+      ctx.setLineDash([]);
       ctx.shadowBlur = 0;
       if (sel || hovered || treeHovered) {
         ctx.fillStyle = "#2563eb";
@@ -3423,20 +3552,25 @@
     ctx.save();
     ctx.lineCap = "round";
     for (const a of drawOrderBySketch(model.arcs)) {
+      const presentation = isPresentationMode();
+      const style = presentation ? presentationStyleForElement(a) : null;
+      if (presentation && style.visible === false) continue;
       const active = isEditableSketchElement(a);
-      ctx.globalAlpha = sketchAlpha(a);
+      ctx.globalAlpha = presentation ? style.opacity : sketchAlpha(a);
       const refSelected = isPendingReferenceTarget(a) || isConstraintOperandSelected(a);
       const treeHovered = isSketchTreeHoveredElement(a);
-      const sel = (active && selectedArcs.includes(a)) || refSelected;
-      const hovered = (active || isReferenceHoverElement(a)) && hoveredArc === a;
+      const sel = (active && selectedArcs.includes(a)) || (presentation && selectedArcs.includes(a)) || refSelected;
+      const hovered = ((active || isReferenceHoverElement(a)) && hoveredArc === a) || (presentation && hoveredArc === a);
       const angles = arcAngles(a);
-      ctx.strokeStyle = treeHovered ? "#0ea5e9" : constraintStatusColor(a, sel, hovered);
-      ctx.lineWidth = (treeHovered ? 4 : sel ? 4 : hovered ? 2.6 : sketchStrokeWidth(a)) / viewport.scale;
+      ctx.strokeStyle = treeHovered ? "#0ea5e9" : presentation && !sel && !hovered ? style.color : constraintStatusColor(a, sel, hovered);
+      ctx.lineWidth = (treeHovered ? 4 : sel ? 4 : hovered ? 2.6 : presentation ? style.lineWidthPx : sketchStrokeWidth(a)) / viewport.scale;
+      ctx.setLineDash(presentation ? presentationLineDash(style.lineType) : []);
       ctx.shadowColor = sel || treeHovered ? "rgba(14, 165, 233, 0.45)" : "transparent";
       ctx.shadowBlur = sel || treeHovered ? 8 / viewport.scale : 0;
       ctx.beginPath();
       ctx.arc(a.center.x, a.center.y, a.radius(), angles.start, angles.end, angles.end < angles.start);
       ctx.stroke();
+      ctx.setLineDash([]);
       ctx.shadowBlur = 0;
       if (sel || hovered || treeHovered) {
         const mid = angles.start + (angles.end - angles.start) / 2;
@@ -4877,7 +5011,7 @@
   function createPresentationSheet() {
     ensurePresentationState();
     const id = `PS${presentationSheetSeq++}`;
-    const sheet = { id, name: `Sheet-${model.presentationSheets.length + 1}`, visibleGeometrySketchIds: null };
+    const sheet = { id, name: `Sheet-${model.presentationSheets.length + 1}`, visibleGeometrySketchIds: null, elementStyles: {} };
     model.presentationSheets.push(sheet);
     model.activePresentationSheetId = id;
     updateUI();
@@ -4934,6 +5068,11 @@
     const addSketchBtn = document.getElementById("addSketchBtn");
     const addChildSketchBtn = document.getElementById("addChildSketchBtn");
     const sheetLabel = document.getElementById("presentationSheetLabel");
+    const styleGroup = document.getElementById("presentationStyleGroup");
+    const colorInput = document.getElementById("presentationColorInput");
+    const lineTypeSelect = document.getElementById("presentationLineTypeSelect");
+    const lineWidthInput = document.getElementById("presentationLineWidthInput");
+    const visibleInput = document.getElementById("presentationVisibleInput");
     const isPresentation = isPresentationMode();
     if (geometryBtn) {
       geometryBtn.classList.toggle("active", !isPresentation);
@@ -4956,7 +5095,28 @@
     if (sheetLabel) {
       sheetLabel.textContent = isPresentation ? `Presentation: ${activePresentationSheet().name}` : "Geometry Mode";
     }
+    const selectedPresentationCount = presentationSelectedItems().length;
+    if (styleGroup) styleGroup.classList.toggle("has-selection", selectedPresentationCount > 0);
+    const selectedStyle = selectedPresentationStyle();
+    if (colorInput) {
+      colorInput.disabled = !isPresentation || selectedPresentationCount === 0;
+      colorInput.value = selectedStyle.color || DEFAULT_PRESENTATION_STYLE.color;
+    }
+    if (lineTypeSelect) {
+      lineTypeSelect.disabled = !isPresentation || selectedPresentationCount === 0;
+      lineTypeSelect.value = selectedStyle.lineType || DEFAULT_PRESENTATION_STYLE.lineType;
+    }
+    if (lineWidthInput) {
+      lineWidthInput.disabled = !isPresentation || selectedPresentationCount === 0;
+      lineWidthInput.value = selectedStyle.lineWidthPx || DEFAULT_PRESENTATION_STYLE.lineWidthPx;
+    }
+    if (visibleInput) {
+      visibleInput.disabled = !isPresentation || selectedPresentationCount === 0;
+      visibleInput.indeterminate = selectedStyle.visible === "";
+      visibleInput.checked = selectedStyle.visible === "" ? true : selectedStyle.visible !== false;
+    }
     document.body.classList.toggle("presentation-mode", isPresentation);
+    document.body.classList.toggle("geometry-mode", !isPresentation);
   }
 
   function updateSketchUI() {
@@ -6270,6 +6430,27 @@
     return null;
   }
 
+  function hitPresentationElement(x, y) {
+    const threshold = 8 / viewport.scale;
+    for (let i = model.arcs.length - 1; i >= 0; i--) {
+      const arc = model.arcs[i];
+      if (!isVisibleSketchElement(arc) || presentationStyleForElement(arc).visible === false) continue;
+      const angle = Math.atan2(y - arc.center.y, x - arc.center.x);
+      if (Math.abs(hypot2(x - arc.center.x, y - arc.center.y) - arc.radius()) <= threshold && angleOnSignedSweep(angle, arc.startAngle, arc.endAngle)) return { kind: "arc", item: arc };
+    }
+    for (let i = model.circles.length - 1; i >= 0; i--) {
+      const circle = model.circles[i];
+      if (!isVisibleSketchElement(circle) || presentationStyleForElement(circle).visible === false) continue;
+      if (Math.abs(hypot2(x - circle.center.x, y - circle.center.y) - circle.radius()) <= threshold) return { kind: "circle", item: circle };
+    }
+    for (let i = model.lines.length - 1; i >= 0; i--) {
+      const line = model.lines[i];
+      if (!isVisibleSketchElement(line) || presentationStyleForElement(line).visible === false) continue;
+      if (distancePointToSegment(x, y, line) <= threshold) return { kind: "line", item: line };
+    }
+    return null;
+  }
+
   function hitReferenceTarget(x, y) {
     const threshold = 7 / viewport.scale;
     const pointThreshold = 10 / viewport.scale;
@@ -6768,8 +6949,16 @@
 
     if (isPresentationMode()) {
       e.preventDefault();
-      const item = hitP || hitL || hitC || hitArcEnd?.arc || hitA || hitD?.constraint || inactiveHit?.item;
-      setHint(item ? `Presentation Mode: Geometry is reference-only (${activePresentationSheet().name})` : `Presentation Mode: ${activePresentationSheet().name}`);
+      const presentationHit = hitPresentationElement(p.x, p.y);
+      if (presentationHit) {
+        setPresentationSelection(presentationHit, e.shiftKey || e.ctrlKey);
+        updatePresentationUI();
+        setHint(`Presentation Mode: ${activePresentationSheet().name} / ${presentationSelectedItems().length} selected`);
+      } else {
+        clearSelection();
+        updatePresentationUI();
+        setHint(`Presentation Mode: ${activePresentationSheet().name}`);
+      }
       draw();
       return;
     }
@@ -6923,6 +7112,37 @@
       hoveredSketchIdentity = null;
       selectionRectSession.current = p;
       draw();
+      return;
+    }
+
+    if (isPresentationMode()) {
+      clearSnap();
+      const hit = hitPresentationElement(p.x, p.y);
+      const nextLine = hit?.kind === "line" ? hit.item : null;
+      const nextCircle = hit?.kind === "circle" ? hit.item : null;
+      const nextArc = hit?.kind === "arc" ? hit.item : null;
+      const nextSketchIdentity = hitSketchIdentityElement(p.x, p.y);
+      if (
+        hoveredLine !== nextLine ||
+        hoveredCircle !== nextCircle ||
+        hoveredArc !== nextArc ||
+        hoveredPoint ||
+        hoveredEndpointPoint ||
+        hoveredArcEndpoint ||
+        hoveredDimensionConstraint ||
+        nextSketchIdentity?.item !== hoveredSketchIdentity?.item ||
+        Boolean(nextSketchIdentity)
+      ) {
+        hoveredPoint = null;
+        hoveredEndpointPoint = null;
+        hoveredLine = nextLine;
+        hoveredCircle = nextCircle;
+        hoveredArcEndpoint = null;
+        hoveredArc = nextArc;
+        hoveredDimensionConstraint = null;
+        hoveredSketchIdentity = nextSketchIdentity;
+        draw();
+      }
       return;
     }
 
@@ -7306,6 +7526,13 @@
   document.getElementById("presentationSheetSelect")?.addEventListener("change", (event) => setActivePresentationSheet(event.target.value));
   document.getElementById("addPresentationSheetBtn")?.addEventListener("click", createPresentationSheet);
   document.getElementById("renamePresentationSheetBtn")?.addEventListener("click", renamePresentationSheet);
+  document.getElementById("presentationColorInput")?.addEventListener("input", (event) => setPresentationStyleForSelection({ color: event.target.value }));
+  document.getElementById("presentationLineTypeSelect")?.addEventListener("change", (event) => setPresentationStyleForSelection({ lineType: event.target.value }));
+  document.getElementById("presentationLineWidthInput")?.addEventListener("change", (event) => {
+    const lineWidthPx = Number(event.target.value);
+    if (Number.isFinite(lineWidthPx)) setPresentationStyleForSelection({ lineWidthPx: Math.max(0.5, Math.min(10, lineWidthPx)) });
+  });
+  document.getElementById("presentationVisibleInput")?.addEventListener("change", (event) => setPresentationStyleForSelection({ visible: event.target.checked }));
 
   document.getElementById("toolSelect").addEventListener("click", () => {
     if (rejectPresentationGeometryEdit("Geometry selection")) return;

@@ -9,18 +9,45 @@
 <body>
   <div class="app side-collapsed">
     <div class="toolbar" aria-label="ツールバー">
-      <div class="toolbar-group" aria-label="モード">
-        <span class="group-label">モード</span>
-        <button id="geometryModeBtn" class="icon-btn active" title="ジオメトリモード" aria-label="ジオメトリモード">
+      <div class="toolbar-group mode-group" aria-label="モード">
+        <div class="mode-switch" role="group" aria-label="モード切替">
+        <button id="geometryModeBtn" class="mode-switch-btn active" title="ジオメトリモード" aria-label="ジオメトリモード">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 18L12 5l7 13H5z"/><circle cx="12" cy="12" r="2"/></svg>
+          <span>ジオメトリ</span>
         </button>
-        <button id="presentationModeBtn" class="icon-btn" title="プレゼンテーションモード" aria-label="プレゼンテーションモード">
+        <button id="presentationModeBtn" class="mode-switch-btn" title="プレゼンテーションモード" aria-label="プレゼンテーションモード">
           <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="5" width="14" height="14" rx="1"/><path d="M8 9h8M8 13h5M8 17h7"/></svg>
+          <span>プレゼン</span>
         </button>
+        </div>
         <span id="presentationSheetLabel" class="mode-status">Geometry Mode</span>
         <select id="presentationSheetSelect" class="sheet-select" aria-label="Presentation Sheet"></select>
         <button id="addPresentationSheetBtn" class="small-action-btn" type="button" title="Presentation Sheetを追加">Sheet+</button>
         <button id="renamePresentationSheetBtn" class="small-action-btn" type="button" title="Presentation Sheetの名前変更">Aa</button>
+      </div>
+      <div id="presentationStyleGroup" class="toolbar-group presentation-style-group" aria-label="表示スタイル">
+        <span class="group-label">表示</span>
+        <label class="style-field color-field" title="線色">
+          <span>色</span>
+          <input id="presentationColorInput" type="color" value="#111827" aria-label="線色" />
+        </label>
+        <label class="style-field">
+          <span>線種</span>
+          <select id="presentationLineTypeSelect" aria-label="線種">
+            <option value="solid">実線</option>
+            <option value="dashed">破線</option>
+            <option value="dashdot">一点鎖線</option>
+            <option value="dotted">点線</option>
+          </select>
+        </label>
+        <label class="style-field width-field">
+          <span>幅</span>
+          <input id="presentationLineWidthInput" type="number" min="0.5" max="10" step="0.5" value="2.2" aria-label="線幅" />
+        </label>
+        <label class="style-check">
+          <input id="presentationVisibleInput" type="checkbox" checked />
+          <span>表示</span>
+        </label>
       </div>
       <div class="toolbar-group" aria-label="作図・編集">
         <span class="group-label">作図・編集</span>
