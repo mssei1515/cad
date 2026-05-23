@@ -106,6 +106,34 @@ body {
   margin-right: 2px;
 }
 
+.mode-status {
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.sheet-select {
+  height: 28px;
+  min-width: 112px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: #fff;
+  color: var(--text);
+  padding: 0 7px;
+}
+
+body:not(.presentation-mode) .sheet-select,
+body:not(.presentation-mode) #addPresentationSheetBtn,
+body:not(.presentation-mode) #renamePresentationSheetBtn {
+  opacity: 0.55;
+}
+
+body.presentation-mode .canvas-area {
+  outline: 2px solid rgba(37, 99, 235, 0.2);
+  outline-offset: -2px;
+}
+
 button,
 select,
 input {

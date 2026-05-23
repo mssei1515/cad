@@ -9,6 +9,19 @@
 <body>
   <div class="app side-collapsed">
     <div class="toolbar" aria-label="ツールバー">
+      <div class="toolbar-group" aria-label="モード">
+        <span class="group-label">モード</span>
+        <button id="geometryModeBtn" class="icon-btn active" title="ジオメトリモード" aria-label="ジオメトリモード">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 18L12 5l7 13H5z"/><circle cx="12" cy="12" r="2"/></svg>
+        </button>
+        <button id="presentationModeBtn" class="icon-btn" title="プレゼンテーションモード" aria-label="プレゼンテーションモード">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="5" width="14" height="14" rx="1"/><path d="M8 9h8M8 13h5M8 17h7"/></svg>
+        </button>
+        <span id="presentationSheetLabel" class="mode-status">Geometry Mode</span>
+        <select id="presentationSheetSelect" class="sheet-select" aria-label="Presentation Sheet"></select>
+        <button id="addPresentationSheetBtn" class="small-action-btn" type="button" title="Presentation Sheetを追加">Sheet+</button>
+        <button id="renamePresentationSheetBtn" class="small-action-btn" type="button" title="Presentation Sheetの名前変更">Aa</button>
+      </div>
       <div class="toolbar-group" aria-label="作図・編集">
         <span class="group-label">作図・編集</span>
         <button id="toolSelect" class="icon-btn active" title="選択・ドラッグ" aria-label="選択・ドラッグ">

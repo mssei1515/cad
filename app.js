@@ -53,12 +53,17 @@
   const ROOT_SKETCH_NAME = "Root Sketch";
   const DEFAULT_SKETCH_ID = "S1";
   const DEFAULT_SKETCH_NAME = "Sketch-1";
+  const DEFAULT_PRESENTATION_SHEET_ID = "PS1";
+  const DEFAULT_PRESENTATION_SHEET_NAME = "Sheet-1";
   const model = {
+    appMode: "geometry",
     sketches: [
       { id: ROOT_SKETCH_ID, name: ROOT_SKETCH_NAME, parentSketchId: null, kind: "root" },
       { id: DEFAULT_SKETCH_ID, name: DEFAULT_SKETCH_NAME, parentSketchId: ROOT_SKETCH_ID, kind: "sketch" },
     ],
     activeSketchId: DEFAULT_SKETCH_ID,
+    presentationSheets: [{ id: DEFAULT_PRESENTATION_SHEET_ID, name: DEFAULT_PRESENTATION_SHEET_NAME, visibleGeometrySketchIds: null }],
+    activePresentationSheetId: DEFAULT_PRESENTATION_SHEET_ID,
     points: [],
     lines: [],
     circles: [],
@@ -109,6 +114,7 @@
   let circleSeq = 1;
   let arcSeq = 1;
   let sketchSeq = 2;
+  let presentationSheetSeq = 2;
   let sketchTreeCollapsed = false;
   const viewport = { x: 0, y: 0, scale: 1 };
   const MIN_ZOOM = 0.15;
@@ -175,6 +181,57 @@
     }
   }
 
+  function ensurePresentationState() {
+    model.appMode = model.appMode === "presentation" ? "presentation" : "geometry";
+    if (!Array.isArray(model.presentationSheets)) model.presentationSheets = [];
+    if (model.presentationSheets.length === 0) {
+      model.presentationSheets.push({ id: DEFAULT_PRESENTATION_SHEET_ID, name: DEFAULT_PRESENTATION_SHEET_NAME, visibleGeometrySketchIds: null });
+    }
+    const seen = new Set();
+    model.presentationSheets = model.presentationSheets.map((sheet, index) => {
+      let id = String(sheet.id || `PS${index + 1}`);
+      while (seen.has(id)) id = `PS${index + 1}-${seen.size + 1}`;
+      seen.add(id);
+      return {
+        id,
+        name: String(sheet.name || `Sheet-${index + 1}`),
+        visibleGeometrySketchIds: Array.isArray(sheet.visibleGeometrySketchIds) ? sheet.visibleGeometrySketchIds.map(String) : null,
+      };
+    });
+    if (!model.activePresentationSheetId || !model.presentationSheets.some((sheet) => sheet.id === model.activePresentationSheetId)) {
+      model.activePresentationSheetId = model.presentationSheets[0].id;
+    }
+  }
+
+  function ensureModelState() {
+    ensureSketchState();
+    ensurePresentationState();
+  }
+
+  function isGeometryMode() {
+    return model.appMode !== "presentation";
+  }
+
+  function isPresentationMode() {
+    return model.appMode === "presentation";
+  }
+
+  function activePresentationSheet() {
+    ensurePresentationState();
+    return model.presentationSheets.find((sheet) => sheet.id === model.activePresentationSheetId) || model.presentationSheets[0];
+  }
+
+  function rejectPresentationGeometryEdit(action = "Geometry editing") {
+    if (isGeometryMode()) return false;
+    setHint(`${action} is disabled in Presentation Mode`, "error");
+    cancelConstraintTargetCommand("");
+    clearSnap();
+    pointerPreview = null;
+    trimPreview = null;
+    draw();
+    return true;
+  }
+
   function isRootSketch(sketchOrId) {
     const sketch = typeof sketchOrId === "string" ? sketchById(sketchOrId) : sketchOrId;
     return sketch?.kind === "root" || sketch?.id === ROOT_SKETCH_ID;
@@ -186,7 +243,7 @@
   }
 
   function canCreateInActiveSketch() {
-    return isDrawableSketch(activeSketchId());
+    return isGeometryMode() && isDrawableSketch(activeSketchId());
   }
 
   function rejectRootSketchCreation() {
@@ -922,10 +979,14 @@
     circleSeq = 1;
     arcSeq = 1;
     sketchSeq = 2;
+    presentationSheetSeq = 2;
     model.sketches.length = 0;
     model.sketches.push({ id: ROOT_SKETCH_ID, name: ROOT_SKETCH_NAME, parentSketchId: null, kind: "root" });
     model.sketches.push({ id: DEFAULT_SKETCH_ID, name: DEFAULT_SKETCH_NAME, parentSketchId: ROOT_SKETCH_ID, kind: "sketch" });
     model.activeSketchId = DEFAULT_SKETCH_ID;
+    model.appMode = "geometry";
+    model.presentationSheets = [{ id: DEFAULT_PRESENTATION_SHEET_ID, name: DEFAULT_PRESENTATION_SHEET_NAME, visibleGeometrySketchIds: null }];
+    model.activePresentationSheetId = DEFAULT_PRESENTATION_SHEET_ID;
   }
 
   function nextSeq(items, prefix) {
@@ -1077,12 +1138,19 @@
   }
 
   function serializeModel() {
-    ensureSketchState();
+    ensureModelState();
     return {
-      version: 2,
+      version: 3,
       savedAt: new Date().toISOString(),
+      appMode: model.appMode,
       sketches: model.sketches.map((sketch) => ({ id: sketch.id, name: sketch.name, parentSketchId: sketch.parentSketchId || null, kind: isRootSketch(sketch) ? "root" : "sketch" })),
       activeSketchId: activeSketchId(),
+      presentationSheets: model.presentationSheets.map((sheet) => ({
+        id: sheet.id,
+        name: sheet.name,
+        visibleGeometrySketchIds: Array.isArray(sheet.visibleGeometrySketchIds) ? sheet.visibleGeometrySketchIds.slice() : null,
+      })),
+      activePresentationSheetId: activePresentationSheet().id,
       points: model.points.map((p) => ({ id: p.id, x: p.x, y: p.y, fixed: p.fixed, kind: p.kind || (isPointUsedByPrimitive(p) ? "endpoint" : "explicit"), sketchId: elementSketchId(p) })),
       lines: model.lines.map((l) => ({ id: l.id, p1: l.p1.id, p2: l.p2.id, construction: Boolean(l.construction), sketchId: elementSketchId(l) })),
       circles: model.circles.map((c) => ({ id: c.id, center: c.center.id, radius: c.radius(), sketchId: elementSketchId(c) })),
@@ -1242,6 +1310,21 @@
       if (id === ROOT_SKETCH_ID) return fallbackSketchId;
       return loadedSketchIds.has(id) ? id : fallbackSketchId;
     };
+    let loadedPresentationSheets =
+      Array.isArray(data.presentationSheets) && data.presentationSheets.length > 0
+        ? data.presentationSheets.map((sheet, index) => ({
+            id: String(sheet.id || `PS${index + 1}`),
+            name: String(sheet.name || `Sheet-${index + 1}`),
+            visibleGeometrySketchIds: Array.isArray(sheet.visibleGeometrySketchIds) ? sheet.visibleGeometrySketchIds.map(normalizeSketchId) : null,
+          }))
+        : [{ id: DEFAULT_PRESENTATION_SHEET_ID, name: DEFAULT_PRESENTATION_SHEET_NAME, visibleGeometrySketchIds: null }];
+    const sheetIds = new Set();
+    loadedPresentationSheets = loadedPresentationSheets.map((sheet, index) => {
+      let id = sheet.id;
+      while (sheetIds.has(id)) id = `PS${index + 1}-${sheetIds.size + 1}`;
+      sheetIds.add(id);
+      return { ...sheet, id };
+    });
 
     const pointById = new Map();
     const points = [];
@@ -1337,6 +1420,9 @@
     model.sketches.length = 0;
     model.sketches.push(...loadedSketches);
     model.activeSketchId = normalizeSketchId(data.activeSketchId);
+    model.appMode = data.appMode === "presentation" ? "presentation" : "geometry";
+    model.presentationSheets = loadedPresentationSheets;
+    model.activePresentationSheetId = sheetIds.has(String(data.activePresentationSheetId)) ? String(data.activePresentationSheetId) : loadedPresentationSheets[0].id;
     model.points.push(...retainedPoints);
     model.lines.push(...lines);
     model.circles.push(...circles);
@@ -1355,6 +1441,8 @@
     circleSeq = nextSeq(model.circles, "C");
     arcSeq = nextSeq(model.arcs, "A");
     sketchSeq = nextSeq(model.sketches, "S");
+    presentationSheetSeq = nextSeq(model.presentationSheets, "PS");
+    ensurePresentationState();
   }
 
   function exportFileData() {
@@ -3926,26 +4014,29 @@
   }
 
   function updateToolbar() {
+    const geometryMode = isGeometryMode();
     const states = {
-      toolSelect: mode === "select" && !pendingConstraintCommand && !pendingCommand,
-      toolPoint: mode === "point",
-      toolLine: mode === "line" && !constructionLineMode,
-      toolConstructionLine: mode === "line" && constructionLineMode,
-      toolRectangle: mode === "rectangle",
-      toolFillet: mode === "fillet",
-      toolTrim: mode === "trim",
-      toolCircle: mode === "circle",
-      toolArc: mode === "arc",
+      toolSelect: geometryMode && mode === "select" && !pendingConstraintCommand && !pendingCommand,
+      toolPoint: geometryMode && mode === "point",
+      toolLine: geometryMode && mode === "line" && !constructionLineMode,
+      toolConstructionLine: geometryMode && mode === "line" && constructionLineMode,
+      toolRectangle: geometryMode && mode === "rectangle",
+      toolFillet: geometryMode && mode === "fillet",
+      toolTrim: geometryMode && mode === "trim",
+      toolCircle: geometryMode && mode === "circle",
+      toolArc: geometryMode && mode === "arc",
     };
     for (const [id, active] of Object.entries(states)) {
       const button = document.getElementById(id);
       if (!button) continue;
       button.classList.toggle("active", active);
       button.setAttribute("aria-pressed", String(active));
+      button.setAttribute("aria-disabled", String(!geometryMode));
     }
   }
 
   function canApplyConstraint(type) {
+    if (!isGeometryMode()) return false;
     if (pendingConstraintCommand?.type === type && constraintOperands.length > 0) {
       const resolution = resolveConstraintIntent(type, constraintOperands);
       return Boolean(resolution && !resolution.error && (resolution.constraint || resolution.target || resolution.action));
@@ -4086,6 +4177,7 @@
   }
 
   function startConstraintTargetCommand(type) {
+    if (rejectPresentationGeometryEdit("Constraints")) return;
     cancelPendingCommand("");
     mode = "select";
     lineStartPoint = null;
@@ -4662,6 +4754,15 @@
   }
 
   function updateConstraintButtons() {
+    if (!isGeometryMode()) {
+      for (const btn of constraintButtons) {
+        btn.classList.remove("active");
+        btn.setAttribute("aria-disabled", "true");
+        btn.setAttribute("aria-pressed", "false");
+      }
+      fixPointBtn?.setAttribute("aria-disabled", "true");
+      return;
+    }
     if (pendingCommand?.type?.startsWith("distance")) {
       const target = distanceTargetFromSelection();
       if (!target || target.kind === "invalid") cancelPendingCommand("寸法入力をキャンセルしました");
@@ -4738,6 +4839,7 @@
   }
 
   function createSketch(kind = "sibling") {
+    if (rejectPresentationGeometryEdit("Sketch editing")) return;
     ensureSketchState();
     const current = activeSketch();
     const parentSketchId = kind === "child" ? current.id : current.parentSketchId || ROOT_SKETCH_ID;
@@ -4762,6 +4864,7 @@
   }
 
   function renameSketch(sketchId) {
+    if (rejectPresentationGeometryEdit("Sketch editing")) return;
     const sketch = model.sketches.find((item) => item.id === sketchId);
     if (!sketch || isRootSketch(sketch)) return;
     const next = window.prompt("スケッチ名", sketch.name);
@@ -4769,6 +4872,91 @@
     sketch.name = next.trim() || sketch.name;
     updateUI();
     draw();
+  }
+
+  function createPresentationSheet() {
+    ensurePresentationState();
+    const id = `PS${presentationSheetSeq++}`;
+    const sheet = { id, name: `Sheet-${model.presentationSheets.length + 1}`, visibleGeometrySketchIds: null };
+    model.presentationSheets.push(sheet);
+    model.activePresentationSheetId = id;
+    updateUI();
+    draw();
+  }
+
+  function renamePresentationSheet() {
+    const sheet = activePresentationSheet();
+    if (!sheet) return;
+    const next = window.prompt("Presentation Sheet name", sheet.name);
+    if (!next) return;
+    sheet.name = next.trim() || sheet.name;
+    updateUI();
+    draw();
+  }
+
+  function setActivePresentationSheet(sheetId) {
+    ensurePresentationState();
+    if (!model.presentationSheets.some((sheet) => sheet.id === sheetId)) return;
+    model.activePresentationSheetId = sheetId;
+    updateUI();
+    draw();
+  }
+
+  function setAppMode(nextMode) {
+    model.appMode = nextMode === "presentation" ? "presentation" : "geometry";
+    cancelConstraintTargetCommand("");
+    cancelPendingCommand("");
+    clearSelection();
+    lineStartPoint = null;
+    rectangleStartPoint = null;
+    filletFirstLine = null;
+    circleCenterPoint = null;
+    arcCenterPoint = null;
+    arcStartPoint = null;
+    pointerPreview = null;
+    trimPreview = null;
+    clearSnap();
+    mode = "select";
+    constructionLineMode = false;
+    updateUI();
+    updateToolbar();
+    setHint(isPresentationMode() ? `Presentation Mode: ${activePresentationSheet().name}` : "Geometry Mode");
+    draw();
+  }
+
+  function updatePresentationUI() {
+    ensurePresentationState();
+    const geometryBtn = document.getElementById("geometryModeBtn");
+    const presentationBtn = document.getElementById("presentationModeBtn");
+    const sheetSelect = document.getElementById("presentationSheetSelect");
+    const addSheetBtn = document.getElementById("addPresentationSheetBtn");
+    const renameSheetBtn = document.getElementById("renamePresentationSheetBtn");
+    const addSketchBtn = document.getElementById("addSketchBtn");
+    const addChildSketchBtn = document.getElementById("addChildSketchBtn");
+    const sheetLabel = document.getElementById("presentationSheetLabel");
+    const isPresentation = isPresentationMode();
+    if (geometryBtn) {
+      geometryBtn.classList.toggle("active", !isPresentation);
+      geometryBtn.setAttribute("aria-pressed", String(!isPresentation));
+    }
+    if (presentationBtn) {
+      presentationBtn.classList.toggle("active", isPresentation);
+      presentationBtn.setAttribute("aria-pressed", String(isPresentation));
+    }
+    if (sheetSelect) {
+      const current = model.activePresentationSheetId;
+      sheetSelect.innerHTML = model.presentationSheets.map((sheet) => `<option value="${escapeHtml(sheet.id)}">${escapeHtml(sheet.name)}</option>`).join("");
+      sheetSelect.value = current;
+      sheetSelect.disabled = !isPresentation;
+    }
+    if (addSheetBtn) addSheetBtn.disabled = !isPresentation;
+    if (renameSheetBtn) renameSheetBtn.disabled = !isPresentation;
+    if (addSketchBtn) addSketchBtn.disabled = isPresentation;
+    if (addChildSketchBtn) addChildSketchBtn.disabled = isPresentation;
+    if (sheetLabel) {
+      sheetLabel.textContent = isPresentation ? `Presentation: ${activePresentationSheet().name}` : "Geometry Mode";
+    }
+    document.body.classList.toggle("presentation-mode", isPresentation);
   }
 
   function updateSketchUI() {
@@ -4846,6 +5034,7 @@
 
   function updateUI() {
     refreshConstraintAnalysis();
+    updatePresentationUI();
     updateSketchUI();
     document.getElementById("pointList").innerHTML = model.points
       .filter(isActiveSketchElement)
@@ -4983,6 +5172,7 @@
   }
 
   function commitNewConstraint(type, constraint) {
+    if (rejectPresentationGeometryEdit("Constraints")) return false;
     if (!constraintTargetsAreActive(constraint)) {
       const msg = "別スケッチ同士は通常拘束できません";
       setHint(msg, "error");
@@ -6576,6 +6766,14 @@
     hoveredSketchIdentity = hitSketchIdentityElement(p.x, p.y);
     const inactiveHit = !hitP && !hitL && !hitC && !hitArcEnd && !hitA && !hitD ? hitInactiveElement(p.x, p.y) : null;
 
+    if (isPresentationMode()) {
+      e.preventDefault();
+      const item = hitP || hitL || hitC || hitArcEnd?.arc || hitA || hitD?.constraint || inactiveHit?.item;
+      setHint(item ? `Presentation Mode: Geometry is reference-only (${activePresentationSheet().name})` : `Presentation Mode: ${activePresentationSheet().name}`);
+      draw();
+      return;
+    }
+
     if (hitD && !e.shiftKey && !e.ctrlKey && !pendingCommand) {
       e.preventDefault();
       selectedPoints = [];
@@ -7063,7 +7261,7 @@
   window.addEventListener("keydown", (e) => {
     if (handleDistanceKey(e)) return;
 
-    if ((e.key === "Delete" || e.key === "Backspace") && deleteCurrentSelection()) {
+    if ((e.key === "Delete" || e.key === "Backspace") && isGeometryMode() && deleteCurrentSelection()) {
       e.preventDefault();
       return;
     }
@@ -7103,7 +7301,14 @@
     }
   });
 
+  document.getElementById("geometryModeBtn")?.addEventListener("click", () => setAppMode("geometry"));
+  document.getElementById("presentationModeBtn")?.addEventListener("click", () => setAppMode("presentation"));
+  document.getElementById("presentationSheetSelect")?.addEventListener("change", (event) => setActivePresentationSheet(event.target.value));
+  document.getElementById("addPresentationSheetBtn")?.addEventListener("click", createPresentationSheet);
+  document.getElementById("renamePresentationSheetBtn")?.addEventListener("click", renamePresentationSheet);
+
   document.getElementById("toolSelect").addEventListener("click", () => {
+    if (rejectPresentationGeometryEdit("Geometry selection")) return;
     cancelConstraintTargetCommand("");
     mode = "select";
     constructionLineMode = false;
@@ -7121,6 +7326,7 @@
   });
 
   document.getElementById("toolPoint").addEventListener("click", () => {
+    if (rejectPresentationGeometryEdit("Point creation")) return;
     cancelConstraintTargetCommand("");
     mode = "point";
     constructionLineMode = false;
@@ -7138,6 +7344,7 @@
   });
 
   document.getElementById("toolLine").addEventListener("click", () => {
+    if (rejectPresentationGeometryEdit("Line creation")) return;
     cancelConstraintTargetCommand("");
     mode = "line";
     constructionLineMode = false;
@@ -7155,6 +7362,7 @@
   });
 
   document.getElementById("toolConstructionLine")?.addEventListener("click", () => {
+    if (rejectPresentationGeometryEdit("Construction line editing")) return;
     cancelConstraintTargetCommand("");
     if (selectedLines.length > 0 && selectedPoints.length === 0 && selectedCircles.length === 0 && selectedArcs.length === 0 && !selectedArcEndpoint) {
       const next = !selectedLines.every((line) => line.construction);
@@ -7180,6 +7388,7 @@
   });
 
   document.getElementById("toolRectangle")?.addEventListener("click", () => {
+    if (rejectPresentationGeometryEdit("Rectangle creation")) return;
     cancelConstraintTargetCommand("");
     mode = "rectangle";
     constructionLineMode = false;
@@ -7197,6 +7406,7 @@
   });
 
   document.getElementById("toolFillet")?.addEventListener("click", () => {
+    if (rejectPresentationGeometryEdit("Fillet creation")) return;
     cancelConstraintTargetCommand("");
     if (selectedLines.length === 2) {
       startFilletRadiusInput(selectedLines[0], selectedLines[1]);
@@ -7219,6 +7429,7 @@
   });
 
   document.getElementById("toolTrim")?.addEventListener("click", () => {
+    if (rejectPresentationGeometryEdit("Trim")) return;
     cancelConstraintTargetCommand("");
     mode = "trim";
     constructionLineMode = false;
@@ -7244,6 +7455,7 @@
   });
 
   document.getElementById("toolCircle").addEventListener("click", () => {
+    if (rejectPresentationGeometryEdit("Circle creation")) return;
     cancelConstraintTargetCommand("");
     mode = "circle";
     constructionLineMode = false;
@@ -7261,6 +7473,7 @@
   });
 
   document.getElementById("toolArc").addEventListener("click", () => {
+    if (rejectPresentationGeometryEdit("Arc creation")) return;
     cancelConstraintTargetCommand("");
     mode = "arc";
     constructionLineMode = false;
@@ -7306,6 +7519,7 @@
   for (const btn of constraintButtons) {
     btn.addEventListener("click", () => {
       const type = btn.dataset.constraint;
+      if (rejectPresentationGeometryEdit("Constraints")) return;
       if (pendingConstraintCommand?.type === type) {
         cancelConstraintTargetCommand(`${constraintLabel(type)}の対象選択をキャンセルしました`);
       } else if (canApplyConstraint(type)) {
@@ -7325,6 +7539,7 @@
   }
 
   fixPointBtn.addEventListener("click", () => {
+    if (rejectPresentationGeometryEdit("Fixed constraint")) return;
     if (selectedArcEndpoint) {
       const { arc, endpoint } = selectedArcEndpoint;
       const existing = findArcEndpointFixedConstraint(arc, endpoint);
