@@ -98,12 +98,6 @@ body {
   background: #fff;
 }
 
-.mode-group {
-  gap: 8px;
-  border-color: #bfdbfe;
-  background: linear-gradient(180deg, #f8fbff, #eef6ff);
-}
-
 .mode-switch {
   display: inline-grid;
   grid-template-columns: 1fr 1fr;
@@ -118,7 +112,7 @@ body {
   display: inline-flex;
   align-items: center;
   gap: 7px;
-  min-width: 124px;
+  min-width: 174px;
   height: 42px;
   justify-content: center;
   padding: 0 13px;
@@ -233,6 +227,10 @@ body.presentation-mode .toolbar-group[aria-label="拘束・寸法"] {
 body.presentation-mode .canvas-area {
   outline: 3px solid rgba(37, 99, 235, 0.22);
   outline-offset: -2px;
+}
+
+body.presentation-mode canvas {
+  background: #fff;
 }
 
 button,
@@ -521,9 +519,50 @@ h2 {
   min-width: 0;
 }
 
-.sketch-overlay {
+.mode-overlay {
   position: absolute;
   top: 12px;
+  left: 12px;
+  z-index: 4;
+  display: grid;
+  gap: 5px;
+  width: max-content;
+  max-width: calc(100% - 24px);
+  color: #111827;
+}
+
+.mode-overlay .mode-switch {
+  border-color: rgba(147, 197, 253, 0.95);
+  background: rgba(239, 246, 255, 0.88);
+  box-shadow:
+    0 8px 22px rgba(15, 23, 42, 0.12),
+    0 1px 0 rgba(255, 255, 255, 0.84) inset;
+  backdrop-filter: blur(7px);
+}
+
+.mode-overlay-sheet {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  width: fit-content;
+  min-height: 28px;
+  padding: 3px 5px;
+  border: 1px solid rgba(203, 213, 225, 0.8);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.78);
+  box-shadow: 0 5px 16px rgba(15, 23, 42, 0.08);
+  backdrop-filter: blur(6px);
+}
+
+body.geometry-mode .mode-overlay-sheet .sheet-select,
+body.geometry-mode .mode-overlay-sheet #addPresentationSheetBtn,
+body.geometry-mode .mode-overlay-sheet #renamePresentationSheetBtn {
+  display: none;
+}
+
+.sketch-overlay {
+  position: absolute;
+  top: 112px;
   left: 12px;
   z-index: 3;
   width: min(300px, calc(100% - 24px));

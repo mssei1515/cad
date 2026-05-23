@@ -3323,6 +3323,7 @@
   }
 
   function drawGrid(w, h) {
+    if (isPresentationMode()) return;
     const left = -viewport.x / viewport.scale;
     const top = -viewport.y / viewport.scale;
     const right = left + w / viewport.scale;
@@ -5054,7 +5055,7 @@
     constructionLineMode = false;
     updateUI();
     updateToolbar();
-    setHint(isPresentationMode() ? `Presentation Mode: ${activePresentationSheet().name}` : "Geometry Mode");
+    setHint(isPresentationMode() ? `プレゼンテーション・モード: ${activePresentationSheet().name}` : "ジオメトリ・モード");
     draw();
   }
 
@@ -5093,7 +5094,7 @@
     if (addSketchBtn) addSketchBtn.disabled = isPresentation;
     if (addChildSketchBtn) addChildSketchBtn.disabled = isPresentation;
     if (sheetLabel) {
-      sheetLabel.textContent = isPresentation ? `Presentation: ${activePresentationSheet().name}` : "Geometry Mode";
+      sheetLabel.textContent = isPresentation ? `プレゼンテーション・モード: ${activePresentationSheet().name}` : "ジオメトリ・モード";
     }
     const selectedPresentationCount = presentationSelectedItems().length;
     if (styleGroup) styleGroup.classList.toggle("has-selection", selectedPresentationCount > 0);
