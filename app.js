@@ -456,8 +456,7 @@
       return { kind: "line-length", line: lines[0], value: lines[0].length() };
     }
     if (points.length === 0 && lines.length === 2 && primitives.length === 0) {
-      const cross = lines[0].dx() * lines[1].dy() - lines[0].dy() * lines[1].dx();
-      if (Math.abs(cross) < 1e-6) {
+      if (linesNearlyParallelForDimension(lines[0], lines[1])) {
         return { kind: "line-line", line1: lines[0], line2: lines[1], value: Math.abs(signedPointLineDistance(lines[0].p1, lines[1])) };
       }
       return { kind: "angle", line1: lines[0], line2: lines[1], value: angleDegrees(Math.abs(angleDimensionSweep({ line1: lines[0], line2: lines[1] }))), signedValue: angleDimensionSweep({ line1: lines[0], line2: lines[1] }) };
@@ -467,6 +466,13 @@
       return primitive instanceof Circle ? { kind: "diameter", primitive, value: primitive.radius() * 2 } : { kind: "radius", primitive, value: primitive.radius() };
     }
     return null;
+  }
+
+  function linesNearlyParallelForDimension(line1, line2) {
+    if (!lineHasDirection(line1) || !lineHasDirection(line2)) return false;
+    const denom = Math.max(line1.length() * line2.length(), 1e-12);
+    const crossRatio = Math.abs(line1.dx() * line2.dy() - line1.dy() * line2.dx()) / denom;
+    return crossRatio <= Math.sin((5 * Math.PI) / 180);
   }
 
   function startPresentationDimensionPlacement(target, operands = [], pointer = null) {
