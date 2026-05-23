@@ -79,6 +79,7 @@
   let selectedArcs = [];
   let dragSession = null;
   let dimensionDragSession = null;
+  let presentationDragSession = null;
   let hoveredPoint = null;
   let hoveredEndpointPoint = null;
   let hoveredLine = null;
@@ -3552,6 +3553,7 @@
 
     dragSession = null;
     dimensionDragSession = null;
+    presentationDragSession = null;
     pendingCommand = null;
     pendingConstraintCommand = null;
     lineStartPoint = null;
@@ -4267,6 +4269,68 @@
     drawArrowhead(start, { x: dx / len, y: dy / len });
     if (element.text) drawPresentationText(element);
     ctx.restore();
+  }
+
+  function hitPresentationAnnotationElement(x, y) {
+    const sheet = activePresentationSheet();
+    if (!sheet || !Array.isArray(sheet.elements)) return null;
+    const threshold = 12 / viewport.scale;
+    for (let i = sheet.elements.length - 1; i >= 0; i--) {
+      const element = sheet.elements[i];
+      if (!element || element.visible === false) continue;
+      if (element.type === "annotationDimension") {
+        const target = presentationTargetFromData(element.target);
+        if (!target) continue;
+        const dimension = element.dimension || defaultDimensionForTarget(target);
+        const layout = dimensionLayout(target, dimension);
+        if (!layout) continue;
+        if (hypot2(x - layout.text.x, y - layout.text.y) <= threshold * 2.4) return { element, type: "annotationDimension", target, dimension, part: "label" };
+        if (distancePointToSegmentPoints(x, y, layout.hitA, layout.hitB) <= threshold * 1.7) return { element, type: "annotationDimension", target, dimension, part: "line" };
+      } else if (element.type === "leader") {
+        const start = presentationLeaderAnchorForElement(element);
+        if (!start || !element.end) continue;
+        const elbow = element.elbow || { x: (start.x + element.end.x) / 2, y: element.end.y };
+        if (distancePointToSegmentPoints(x, y, start, elbow) <= threshold * 1.5 || distancePointToSegmentPoints(x, y, elbow, element.end) <= threshold * 1.5) return { element, type: "leader", part: "line" };
+        if (hypot2(x - element.x, y - element.y) <= threshold * 2.4) return { element, type: "leader", part: "label" };
+      }
+    }
+    return null;
+  }
+
+  function beginPresentationAnnotationDrag(e, hit, pointer) {
+    presentationDragSession = {
+      pointerId: e.pointerId,
+      hit,
+      startPointer: pointer,
+      startDimension: hit.dimension ? { ...hit.dimension } : null,
+      startAnchor: hit.target && hit.dimension ? dimensionAnchor(hit.target, hit.dimension) : null,
+      startEnd: hit.element?.end ? { ...hit.element.end } : null,
+      startElbow: hit.element?.elbow ? { ...hit.element.elbow } : null,
+      startText: hit.element ? { x: hit.element.x, y: hit.element.y } : null,
+    };
+    canvas.setPointerCapture(e.pointerId);
+    canvas.classList.add("is-dragging");
+    setHint(hit.type === "leader" ? "引出線を移動中" : "注記寸法を移動中");
+  }
+
+  function updatePresentationAnnotationDrag(pointer) {
+    const session = presentationDragSession;
+    if (!session) return;
+    const dx = pointer.x - session.startPointer.x;
+    const dy = pointer.y - session.startPointer.y;
+    const element = session.hit.element;
+    if (session.hit.type === "annotationDimension" && session.hit.target && session.startAnchor) {
+      const anchor = { x: session.startAnchor.x + dx, y: session.startAnchor.y + dy };
+      element.dimension = dimensionFromAnchor(session.hit.target, anchor, { allowPointAxis: false });
+    } else if (session.hit.type === "leader") {
+      if (session.startEnd) element.end = { x: session.startEnd.x + dx, y: session.startEnd.y + dy };
+      if (session.startElbow) element.elbow = { x: session.startElbow.x + dx, y: session.startElbow.y + dy };
+      if (session.startText) {
+        element.x = session.startText.x + dx;
+        element.y = session.startText.y + dy;
+      }
+    }
+    draw();
   }
 
   function drawDimensionPreview() {
@@ -5532,6 +5596,7 @@
     cancelConstraintTargetCommand("");
     cancelPendingCommand("");
     clearSelection();
+    presentationDragSession = null;
     lineStartPoint = null;
     rectangleStartPoint = null;
     filletFirstLine = null;
@@ -7511,6 +7576,7 @@
 
     if (isPresentationMode()) {
       e.preventDefault();
+      const annotationHit = hitPresentationAnnotationElement(p.x, p.y);
       const presentationHit = hitPresentationElement(p.x, p.y);
       if (pendingCommand?.type === "presentation-dimension-place") {
         if (presentationHit && retargetPresentationDimensionWithHit(presentationHit, p)) return;
@@ -7529,6 +7595,10 @@
       if (pendingCommand?.type === "presentation-leader-place") {
         commitPresentationLeaderAt(p);
         draw();
+        return;
+      }
+      if (annotationHit) {
+        beginPresentationAnnotationDrag(e, annotationHit, p);
         return;
       }
       if (presentationHit) {
@@ -7698,6 +7768,10 @@
 
     if (isPresentationMode()) {
       clearSnap();
+      if (presentationDragSession) {
+        updatePresentationAnnotationDrag(p);
+        return;
+      }
       if (pendingCommand?.type === "presentation-dimension-place") {
         pendingCommand.pointer = p;
         hoveredPoint = null;
@@ -7950,6 +8024,20 @@
         // Pointer capture may already be released by the browser.
       }
       setHint("画面移動を終了しました");
+      return;
+    }
+
+    if (presentationDragSession) {
+      presentationDragSession = null;
+      canvas.classList.remove("is-dragging");
+      try {
+        canvas.releasePointerCapture(e.pointerId);
+      } catch (_) {
+        // Pointer capture may already be released by the browser.
+      }
+      setHint("Presentation注記の位置を更新しました");
+      updateUI();
+      draw();
       return;
     }
 
