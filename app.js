@@ -62,7 +62,7 @@
       { id: DEFAULT_SKETCH_ID, name: DEFAULT_SKETCH_NAME, parentSketchId: ROOT_SKETCH_ID, kind: "sketch" },
     ],
     activeSketchId: DEFAULT_SKETCH_ID,
-    presentationSheets: [{ id: DEFAULT_PRESENTATION_SHEET_ID, name: DEFAULT_PRESENTATION_SHEET_NAME, visibleGeometrySketchIds: null }],
+    presentationSheets: [{ id: DEFAULT_PRESENTATION_SHEET_ID, name: DEFAULT_PRESENTATION_SHEET_NAME, visibleGeometrySketchIds: null, elementStyles: {}, elements: [] }],
     activePresentationSheetId: DEFAULT_PRESENTATION_SHEET_ID,
     points: [],
     lines: [],
@@ -115,6 +115,7 @@
   let arcSeq = 1;
   let sketchSeq = 2;
   let presentationSheetSeq = 2;
+  let presentationElementSeq = 1;
   let sketchTreeCollapsed = false;
   const viewport = { x: 0, y: 0, scale: 1 };
   const MIN_ZOOM = 0.15;
@@ -199,7 +200,7 @@
     model.appMode = model.appMode === "presentation" ? "presentation" : "geometry";
     if (!Array.isArray(model.presentationSheets)) model.presentationSheets = [];
     if (model.presentationSheets.length === 0) {
-      model.presentationSheets.push({ id: DEFAULT_PRESENTATION_SHEET_ID, name: DEFAULT_PRESENTATION_SHEET_NAME, visibleGeometrySketchIds: null, elementStyles: {} });
+      model.presentationSheets.push({ id: DEFAULT_PRESENTATION_SHEET_ID, name: DEFAULT_PRESENTATION_SHEET_NAME, visibleGeometrySketchIds: null, elementStyles: {}, elements: [] });
     }
     const seen = new Set();
     model.presentationSheets = model.presentationSheets.map((sheet, index) => {
@@ -211,6 +212,7 @@
         name: String(sheet.name || `Sheet-${index + 1}`),
         visibleGeometrySketchIds: Array.isArray(sheet.visibleGeometrySketchIds) ? sheet.visibleGeometrySketchIds.map(String) : null,
         elementStyles: normalizePresentationElementStyles(sheet.elementStyles),
+        elements: normalizePresentationElements(sheet.elements),
       };
     });
     if (!model.activePresentationSheetId || !model.presentationSheets.some((sheet) => sheet.id === model.activePresentationSheetId)) {
@@ -236,6 +238,27 @@
     return model.presentationSheets.find((sheet) => sheet.id === model.activePresentationSheetId) || model.presentationSheets[0];
   }
 
+  function nextPresentationElementId() {
+    return `PE${presentationElementSeq++}`;
+  }
+
+  function pushPresentationElement(element) {
+    const sheet = activePresentationSheet();
+    if (!sheet) return null;
+    if (!Array.isArray(sheet.elements)) sheet.elements = [];
+    const item = {
+      id: nextPresentationElementId(),
+      visible: true,
+      geometryRefs: {},
+      style: {},
+      ...element,
+    };
+    sheet.elements.push(item);
+    updateUI();
+    draw();
+    return item;
+  }
+
   function normalizePresentationElementStyles(styles) {
     const result = {};
     if (!styles || typeof styles !== "object" || Array.isArray(styles)) return result;
@@ -252,6 +275,56 @@
       result[key] = normalized;
     }
     return result;
+  }
+
+  function normalizePresentationElements(elements) {
+    if (!Array.isArray(elements)) return [];
+    return elements
+      .map((element, index) => {
+        if (!element || typeof element !== "object") return null;
+        const type = String(element.type || "");
+        if (!["annotationDimension", "text", "leader"].includes(type)) return null;
+        return {
+          id: String(element.id || `PE${index + 1}`),
+          type,
+          visible: element.visible !== false,
+          geometryRefs: element.geometryRefs && typeof element.geometryRefs === "object" ? { ...element.geometryRefs } : {},
+          target: element.target && typeof element.target === "object" ? { ...element.target } : null,
+          dimension: element.dimension && typeof element.dimension === "object" ? { ...element.dimension } : null,
+          text: String(element.text || ""),
+          x: Number.isFinite(Number(element.x)) ? Number(element.x) : 0,
+          y: Number.isFinite(Number(element.y)) ? Number(element.y) : 0,
+          start: element.start && Number.isFinite(Number(element.start.x)) && Number.isFinite(Number(element.start.y)) ? { x: Number(element.start.x), y: Number(element.start.y) } : null,
+          end: element.end && Number.isFinite(Number(element.end.x)) && Number.isFinite(Number(element.end.y)) ? { x: Number(element.end.x), y: Number(element.end.y) } : null,
+          style: element.style && typeof element.style === "object" ? { ...element.style } : {},
+        };
+      })
+      .filter(Boolean);
+  }
+
+  function serializePresentationElement(element) {
+    const data = {
+      id: element.id,
+      type: element.type,
+      visible: element.visible !== false,
+      geometryRefs: element.geometryRefs && typeof element.geometryRefs === "object" ? { ...element.geometryRefs } : {},
+      style: element.style && typeof element.style === "object" ? { ...element.style } : {},
+    };
+    if (element.type === "annotationDimension") {
+      data.target = element.target;
+      data.dimension = element.dimension;
+    } else if (element.type === "text") {
+      data.text = element.text || "";
+      data.x = element.x;
+      data.y = element.y;
+    } else if (element.type === "leader") {
+      data.text = element.text || "";
+      data.start = element.start;
+      data.end = element.end;
+      data.x = element.x;
+      data.y = element.y;
+    }
+    return data;
   }
 
   function presentationElementKey(item) {
@@ -281,7 +354,7 @@
   }
 
   function presentationSelectedItems() {
-    return [...selectedLines, ...selectedCircles, ...selectedArcs];
+    return [...selectedPoints, ...selectedLines, ...selectedCircles, ...selectedArcs];
   }
 
   function selectedPresentationStyle() {
@@ -324,7 +397,10 @@
       selectedDimensionConstraint = null;
     }
     if (!hit?.item) return;
-    if (hit.kind === "line") {
+    if (hit.kind === "point") {
+      if (additive && selectedPoints.includes(hit.item)) selectedPoints = selectedPoints.filter((item) => item !== hit.item);
+      else if (!selectedPoints.includes(hit.item)) selectedPoints.push(hit.item);
+    } else if (hit.kind === "line") {
       if (additive && selectedLines.includes(hit.item)) selectedLines = selectedLines.filter((item) => item !== hit.item);
       else if (!selectedLines.includes(hit.item)) selectedLines.push(hit.item);
     } else if (hit.kind === "circle") {
@@ -334,6 +410,92 @@
       if (additive && selectedArcs.includes(hit.item)) selectedArcs = selectedArcs.filter((item) => item !== hit.item);
       else if (!selectedArcs.includes(hit.item)) selectedArcs.push(hit.item);
     }
+  }
+
+  function presentationTargetFromSelection() {
+    const points = selectedPoints.slice();
+    const lines = selectedLines.slice();
+    const primitives = [...selectedCircles, ...selectedArcs];
+    if (points.length === 2 && lines.length === 0 && primitives.length === 0) {
+      return { kind: "point-point", p1: points[0], p2: points[1], value: hypot2(points[1].x - points[0].x, points[1].y - points[0].y) };
+    }
+    if (points.length === 1 && lines.length === 1 && primitives.length === 0) {
+      return { kind: "point-line", point: points[0], line: lines[0], value: Math.abs(signedPointLineDistance(points[0], lines[0])) };
+    }
+    if (points.length === 0 && lines.length === 1 && primitives.length === 0) {
+      return { kind: "line-length", line: lines[0], value: lines[0].length() };
+    }
+    if (points.length === 0 && lines.length === 2 && primitives.length === 0) {
+      const cross = lines[0].dx() * lines[1].dy() - lines[0].dy() * lines[1].dx();
+      if (Math.abs(cross) < 1e-6) {
+        return { kind: "line-line", line1: lines[0], line2: lines[1], value: Math.abs(signedPointLineDistance(lines[0].p1, lines[1])) };
+      }
+      return { kind: "angle", line1: lines[0], line2: lines[1], value: angleDegrees(Math.abs(angleDimensionSweep({ line1: lines[0], line2: lines[1] }))), signedValue: angleDimensionSweep({ line1: lines[0], line2: lines[1] }) };
+    }
+    if (points.length === 0 && lines.length === 0 && primitives.length === 1) {
+      const primitive = primitives[0];
+      return primitive instanceof Circle ? { kind: "diameter", primitive, value: primitive.radius() * 2 } : { kind: "radius", primitive, value: primitive.radius() };
+    }
+    return null;
+  }
+
+  function createPresentationAnnotationDimension() {
+    if (!isPresentationMode()) return;
+    const target = presentationTargetFromSelection();
+    if (!target) {
+      setHint("注記寸法: 点2つ、点+線、線1本、線2本、円/円弧1つを選択してください", "error");
+      return;
+    }
+    pendingCommand = {
+      type: "presentation-dimension-place",
+      target,
+      targetData: presentationTargetToData(target),
+      pointer: lastPointerWorld || dimensionAnchor(target, defaultDimensionForTarget(target)),
+    };
+    setHint("注記寸法線の位置をクリックしてください");
+    draw();
+  }
+
+  function commitPresentationAnnotationDimensionAt(anchor) {
+    if (!pendingCommand || pendingCommand.type !== "presentation-dimension-place") return;
+    const target = pendingCommand.target;
+    const targetData = pendingCommand.targetData || presentationTargetToData(target);
+    const dimension = dimensionFromAnchor(target, anchor);
+    pushPresentationElement({
+      type: "annotationDimension",
+      target: targetData,
+      dimension,
+      geometryRefs: targetData || {},
+      style: {},
+    });
+    pendingCommand = null;
+    setHint("注記寸法を追加しました");
+  }
+
+  function createPresentationText() {
+    if (!isPresentationMode()) return;
+    const text = window.prompt("注記テキスト", "注記");
+    if (!text) return;
+    const p = lastPointerWorld || screenToWorld({ x: 120, y: 120 });
+    pushPresentationElement({ type: "text", text, x: p.x, y: p.y, style: { color: "#111827", fontSize: 13 } });
+    setHint("注記テキストを追加しました");
+  }
+
+  function createPresentationLeader() {
+    if (!isPresentationMode()) return;
+    const text = window.prompt("引出線テキスト", "注記");
+    if (!text) return;
+    const p = lastPointerWorld || screenToWorld({ x: 160, y: 160 });
+    pushPresentationElement({
+      type: "leader",
+      text,
+      start: { x: p.x - 40 / viewport.scale, y: p.y - 22 / viewport.scale },
+      end: { x: p.x, y: p.y },
+      x: p.x + 8 / viewport.scale,
+      y: p.y - 26 / viewport.scale,
+      style: { color: "#111827", fontSize: 13, lineWidthPx: 1.4 },
+    });
+    setHint("引出線を追加しました");
   }
 
   function rejectPresentationGeometryEdit(action = "Geometry editing") {
@@ -1100,8 +1262,9 @@
     model.sketches.push({ id: DEFAULT_SKETCH_ID, name: DEFAULT_SKETCH_NAME, parentSketchId: ROOT_SKETCH_ID, kind: "sketch" });
     model.activeSketchId = DEFAULT_SKETCH_ID;
     model.appMode = "geometry";
-    model.presentationSheets = [{ id: DEFAULT_PRESENTATION_SHEET_ID, name: DEFAULT_PRESENTATION_SHEET_NAME, visibleGeometrySketchIds: null, elementStyles: {} }];
+    model.presentationSheets = [{ id: DEFAULT_PRESENTATION_SHEET_ID, name: DEFAULT_PRESENTATION_SHEET_NAME, visibleGeometrySketchIds: null, elementStyles: {}, elements: [] }];
     model.activePresentationSheetId = DEFAULT_PRESENTATION_SHEET_ID;
+    presentationElementSeq = 1;
   }
 
   function nextSeq(items, prefix) {
@@ -1255,7 +1418,7 @@
   function serializeModel() {
     ensureModelState();
     return {
-      version: 4,
+      version: 5,
       savedAt: new Date().toISOString(),
       appMode: model.appMode,
       sketches: model.sketches.map((sketch) => ({ id: sketch.id, name: sketch.name, parentSketchId: sketch.parentSketchId || null, kind: isRootSketch(sketch) ? "root" : "sketch" })),
@@ -1265,6 +1428,7 @@
         name: sheet.name,
         visibleGeometrySketchIds: Array.isArray(sheet.visibleGeometrySketchIds) ? sheet.visibleGeometrySketchIds.slice() : null,
         elementStyles: normalizePresentationElementStyles(sheet.elementStyles),
+        elements: normalizePresentationElements(sheet.elements).map(serializePresentationElement),
       })),
       activePresentationSheetId: activePresentationSheet().id,
       points: model.points.map((p) => ({ id: p.id, x: p.x, y: p.y, fixed: p.fixed, kind: p.kind || (isPointUsedByPrimitive(p) ? "endpoint" : "explicit"), sketchId: elementSketchId(p) })),
@@ -1433,14 +1597,15 @@
             name: String(sheet.name || `Sheet-${index + 1}`),
             visibleGeometrySketchIds: Array.isArray(sheet.visibleGeometrySketchIds) ? sheet.visibleGeometrySketchIds.map(normalizeSketchId) : null,
             elementStyles: normalizePresentationElementStyles(sheet.elementStyles),
+            elements: normalizePresentationElements(sheet.elements),
           }))
-        : [{ id: DEFAULT_PRESENTATION_SHEET_ID, name: DEFAULT_PRESENTATION_SHEET_NAME, visibleGeometrySketchIds: null, elementStyles: {} }];
+        : [{ id: DEFAULT_PRESENTATION_SHEET_ID, name: DEFAULT_PRESENTATION_SHEET_NAME, visibleGeometrySketchIds: null, elementStyles: {}, elements: [] }];
     const sheetIds = new Set();
     loadedPresentationSheets = loadedPresentationSheets.map((sheet, index) => {
       let id = sheet.id;
       while (sheetIds.has(id)) id = `PS${index + 1}-${sheetIds.size + 1}`;
       sheetIds.add(id);
-      return { ...sheet, id, elementStyles: normalizePresentationElementStyles(sheet.elementStyles) };
+      return { ...sheet, id, elementStyles: normalizePresentationElementStyles(sheet.elementStyles), elements: normalizePresentationElements(sheet.elements) };
     });
 
     const pointById = new Map();
@@ -1559,6 +1724,7 @@
     arcSeq = nextSeq(model.arcs, "A");
     sketchSeq = nextSeq(model.sketches, "S");
     presentationSheetSeq = nextSeq(model.presentationSheets, "PS");
+    presentationElementSeq = Math.max(1, ...model.presentationSheets.flatMap((sheet) => (sheet.elements || []).map((element) => Number(/^PE(\d+)$/.exec(element.id || "")?.[1]) + 1 || 1)));
     ensurePresentationState();
   }
 
@@ -3367,6 +3533,9 @@
     if (isGeometryMode()) {
       drawDimensions();
       drawDimensionPreview();
+    } else {
+      drawPresentationElements();
+      drawPresentationDimensionPreview();
     }
     drawTemporaryLine();
     drawRectanglePreview();
@@ -3377,6 +3546,8 @@
     if (isGeometryMode()) {
       drawArcEndpointHandles();
       drawPoints();
+    } else {
+      drawPresentationPointHandles();
     }
     drawSketchIdentityLabel();
     drawSelectionRect();
@@ -3800,6 +3971,65 @@
     }
   }
 
+  function drawPresentationElements() {
+    const sheet = activePresentationSheet();
+    if (!sheet || !Array.isArray(sheet.elements)) return;
+    for (const element of sheet.elements) {
+      if (element.visible === false) continue;
+      if (element.type === "annotationDimension") {
+        const target = presentationTargetFromData(element.target);
+        if (!target) continue;
+        const dimension = element.dimension || defaultDimensionForTarget(target);
+        const value = presentationTargetValue(target);
+        const label = target.kind === "angle" ? `${Number(value).toFixed(2)}°` : Number(value).toFixed(2);
+        drawDimension(target, dimension, label, false, false);
+      } else if (element.type === "text") {
+        drawPresentationText(element);
+      } else if (element.type === "leader") {
+        drawPresentationLeader(element);
+      }
+    }
+  }
+
+  function drawPresentationDimensionPreview() {
+    if (pendingCommand?.type !== "presentation-dimension-place") return;
+    const target = pendingCommand.target;
+    if (!target) return;
+    const anchor = pendingCommand.pointer || dimensionAnchor(target, defaultDimensionForTarget(target));
+    const dimension = dimensionFromAnchor(target, anchor);
+    const value = presentationTargetValue(target);
+    const label = target.kind === "angle" ? `${Number(value).toFixed(2)}°` : Number(value).toFixed(2);
+    drawDimension(target, dimension, label, true, false);
+  }
+
+  function drawPresentationText(element) {
+    ctx.save();
+    ctx.font = `${Number(element.style?.fontSize || 13) / viewport.scale}px system-ui`;
+    ctx.fillStyle = element.style?.color || "#111827";
+    ctx.textAlign = "left";
+    ctx.textBaseline = "middle";
+    ctx.fillText(element.text || "", element.x, element.y);
+    ctx.restore();
+  }
+
+  function drawPresentationLeader(element) {
+    if (!element.start || !element.end) return;
+    ctx.save();
+    ctx.strokeStyle = element.style?.color || "#111827";
+    ctx.fillStyle = element.style?.color || "#111827";
+    ctx.lineWidth = Number(element.style?.lineWidthPx || 1.4) / viewport.scale;
+    ctx.beginPath();
+    ctx.moveTo(element.start.x, element.start.y);
+    ctx.lineTo(element.end.x, element.end.y);
+    ctx.stroke();
+    const dx = element.start.x - element.end.x;
+    const dy = element.start.y - element.end.y;
+    const len = Math.max(1e-9, hypot2(dx, dy));
+    drawArrowhead(element.start, { x: dx / len, y: dy / len });
+    if (element.text) drawPresentationText(element);
+    ctx.restore();
+  }
+
   function drawDimensionPreview() {
     if (pendingCommand?.type === "fillet-radius-value") {
       const value = Number(pendingCommand.buffer);
@@ -4102,6 +4332,23 @@
         ctx.lineWidth = 2 / viewport.scale;
         ctx.stroke();
       }
+    }
+    ctx.restore();
+  }
+
+  function drawPresentationPointHandles() {
+    ctx.save();
+    const points = new Set([...selectedPoints]);
+    if (hoveredPoint) points.add(hoveredPoint);
+    for (const point of points) {
+      if (!point || !isVisibleSketchElement(point)) continue;
+      ctx.beginPath();
+      ctx.arc(point.x, point.y, (selectedPoints.includes(point) ? 6 : 4.5) / viewport.scale, 0, Math.PI * 2);
+      ctx.fillStyle = selectedPoints.includes(point) ? "#2563eb" : "#eff6ff";
+      ctx.fill();
+      ctx.strokeStyle = "#2563eb";
+      ctx.lineWidth = 1.8 / viewport.scale;
+      ctx.stroke();
     }
     ctx.restore();
   }
@@ -5012,7 +5259,7 @@
   function createPresentationSheet() {
     ensurePresentationState();
     const id = `PS${presentationSheetSeq++}`;
-    const sheet = { id, name: `Sheet-${model.presentationSheets.length + 1}`, visibleGeometrySketchIds: null, elementStyles: {} };
+    const sheet = { id, name: `Sheet-${model.presentationSheets.length + 1}`, visibleGeometrySketchIds: null, elementStyles: {}, elements: [] };
     model.presentationSheets.push(sheet);
     model.activePresentationSheetId = id;
     updateUI();
@@ -5504,6 +5751,69 @@
       return { kind: "line-line", line1: subject.line, line2: referenceTarget.line, value: Math.abs(signedPointLineDistance(referenceTarget.line.p1, subject.line)) };
     }
     return null;
+  }
+
+  function presentationTargetToData(target) {
+    if (!target) return null;
+    if (target.kind === "point-point") return { kind: target.kind, p1: target.p1.id, p2: target.p2.id, dimensionAxis: target.dimensionAxis || null };
+    if (target.kind === "point-line") return { kind: target.kind, point: target.point.id, line: target.line.id };
+    if (target.kind === "line-line") return { kind: target.kind, line1: target.line1.id, line2: target.line2.id };
+    if (target.kind === "line-length") return { kind: target.kind, line: target.line.id };
+    if (target.kind === "angle") return { kind: target.kind, line1: target.line1.id, line2: target.line2.id };
+    if (target.kind === "radius" || target.kind === "diameter") return { kind: target.kind, primitive: target.primitive.id };
+    return null;
+  }
+
+  function presentationTargetFromData(data) {
+    if (!data || typeof data !== "object") return null;
+    const point = (id) => model.points.find((item) => item.id === id) || null;
+    const line = (id) => model.lines.find((item) => item.id === id) || null;
+    const primitive = (id) => model.circles.find((item) => item.id === id) || model.arcs.find((item) => item.id === id) || null;
+    if (data.kind === "point-point") {
+      const p1 = point(data.p1);
+      const p2 = point(data.p2);
+      return p1 && p2 ? { kind: "point-point", p1, p2, dimensionAxis: data.dimensionAxis || null, value: hypot2(p2.x - p1.x, p2.y - p1.y) } : null;
+    }
+    if (data.kind === "point-line") {
+      const p = point(data.point);
+      const l = line(data.line);
+      return p && l ? { kind: "point-line", point: p, line: l, value: Math.abs(signedPointLineDistance(p, l)) } : null;
+    }
+    if (data.kind === "line-line") {
+      const line1 = line(data.line1);
+      const line2 = line(data.line2);
+      return line1 && line2 ? { kind: "line-line", line1, line2, value: Math.abs(signedPointLineDistance(line1.p1, line2)) } : null;
+    }
+    if (data.kind === "line-length") {
+      const l = line(data.line);
+      return l ? { kind: "line-length", line: l, value: l.length() } : null;
+    }
+    if (data.kind === "angle") {
+      const line1 = line(data.line1);
+      const line2 = line(data.line2);
+      return line1 && line2 ? { kind: "angle", line1, line2, value: angleDegrees(Math.abs(angleDimensionSweep({ line1, line2 }))), signedValue: angleDimensionSweep({ line1, line2 }) } : null;
+    }
+    if (data.kind === "radius" || data.kind === "diameter") {
+      const p = primitive(data.primitive);
+      return p ? { kind: data.kind, primitive: p, value: data.kind === "diameter" ? p.radius() * 2 : p.radius() } : null;
+    }
+    return null;
+  }
+
+  function presentationTargetValue(target) {
+    if (!target) return NaN;
+    if (target.kind === "point-point") {
+      if (target.dimensionAxis === "x") return Math.abs(target.p2.x - target.p1.x);
+      if (target.dimensionAxis === "y") return Math.abs(target.p2.y - target.p1.y);
+      return hypot2(target.p2.x - target.p1.x, target.p2.y - target.p1.y);
+    }
+    if (target.kind === "point-line") return Math.abs(signedPointLineDistance(target.point, target.line));
+    if (target.kind === "line-line") return Math.abs(signedPointLineDistance(target.line1.p1, target.line2));
+    if (target.kind === "line-length") return target.line.length();
+    if (target.kind === "angle") return angleDegrees(Math.abs(angleDimensionSweep(target)));
+    if (target.kind === "radius") return target.primitive.radius();
+    if (target.kind === "diameter") return target.primitive.radius() * 2;
+    return target.value;
   }
 
   function splitConstraintOperands(operands) {
@@ -6433,6 +6743,13 @@
 
   function hitPresentationElement(x, y) {
     const threshold = 8 / viewport.scale;
+    const pointThreshold = 10 / viewport.scale;
+    for (let i = model.points.length - 1; i >= 0; i--) {
+      const point = model.points[i];
+      if (!isVisibleSketchElement(point)) continue;
+      if (!isExplicitPoint(point) && !isPointUsedByPrimitive(point) && !isReferencePoint(point)) continue;
+      if (hypot2(point.x - x, point.y - y) <= pointThreshold) return { kind: "point", item: point };
+    }
     for (let i = model.arcs.length - 1; i >= 0; i--) {
       const arc = model.arcs[i];
       if (!isVisibleSketchElement(arc) || presentationStyleForElement(arc).visible === false) continue;
@@ -6950,15 +7267,20 @@
 
     if (isPresentationMode()) {
       e.preventDefault();
+      if (pendingCommand?.type === "presentation-dimension-place") {
+        commitPresentationAnnotationDimensionAt(p);
+        draw();
+        return;
+      }
       const presentationHit = hitPresentationElement(p.x, p.y);
       if (presentationHit) {
         setPresentationSelection(presentationHit, e.shiftKey || e.ctrlKey);
         updatePresentationUI();
-        setHint(`Presentation Mode: ${activePresentationSheet().name} / ${presentationSelectedItems().length} selected`);
+        setHint(`プレゼンテーション・モード: ${activePresentationSheet().name} / ${presentationSelectedItems().length}個選択`);
       } else {
         clearSelection();
         updatePresentationUI();
-        setHint(`Presentation Mode: ${activePresentationSheet().name}`);
+        setHint(`プレゼンテーション・モード: ${activePresentationSheet().name}`);
       }
       draw();
       return;
@@ -7118,23 +7440,37 @@
 
     if (isPresentationMode()) {
       clearSnap();
+      if (pendingCommand?.type === "presentation-dimension-place") {
+        pendingCommand.pointer = p;
+        hoveredPoint = null;
+        hoveredEndpointPoint = null;
+        hoveredLine = null;
+        hoveredCircle = null;
+        hoveredArcEndpoint = null;
+        hoveredArc = null;
+        hoveredDimensionConstraint = null;
+        hoveredSketchIdentity = null;
+        draw();
+        return;
+      }
       const hit = hitPresentationElement(p.x, p.y);
+      const nextPoint = hit?.kind === "point" ? hit.item : null;
       const nextLine = hit?.kind === "line" ? hit.item : null;
       const nextCircle = hit?.kind === "circle" ? hit.item : null;
       const nextArc = hit?.kind === "arc" ? hit.item : null;
       const nextSketchIdentity = hitSketchIdentityElement(p.x, p.y);
       if (
+        hoveredPoint !== nextPoint ||
         hoveredLine !== nextLine ||
         hoveredCircle !== nextCircle ||
         hoveredArc !== nextArc ||
-        hoveredPoint ||
         hoveredEndpointPoint ||
         hoveredArcEndpoint ||
         hoveredDimensionConstraint ||
         nextSketchIdentity?.item !== hoveredSketchIdentity?.item ||
         Boolean(nextSketchIdentity)
       ) {
-        hoveredPoint = null;
+        hoveredPoint = nextPoint;
         hoveredEndpointPoint = null;
         hoveredLine = nextLine;
         hoveredCircle = nextCircle;
@@ -7494,6 +7830,10 @@
 
     if (e.key === "Escape") {
       e.preventDefault();
+      if (pendingCommand) {
+        cancelPendingCommand();
+        return;
+      }
       if (pendingConstraintCommand) {
         cancelConstraintTargetCommand();
         return;
@@ -7534,6 +7874,9 @@
     if (Number.isFinite(lineWidthPx)) setPresentationStyleForSelection({ lineWidthPx: Math.max(0.5, Math.min(10, lineWidthPx)) });
   });
   document.getElementById("presentationVisibleInput")?.addEventListener("change", (event) => setPresentationStyleForSelection({ visible: event.target.checked }));
+  document.getElementById("presentationDimensionBtn")?.addEventListener("click", createPresentationAnnotationDimension);
+  document.getElementById("presentationTextBtn")?.addEventListener("click", createPresentationText);
+  document.getElementById("presentationLeaderBtn")?.addEventListener("click", createPresentationLeader);
 
   document.getElementById("toolSelect").addEventListener("click", () => {
     if (rejectPresentationGeometryEdit("Geometry selection")) return;
