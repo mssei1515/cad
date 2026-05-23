@@ -478,6 +478,8 @@
       pointer: pointer || lastPointerWorld || dimensionAnchor(target, defaultDimensionForTarget(target)),
     };
     setHint("注記寸法線の位置をクリックしてください");
+    updatePresentationUI();
+    updateToolbar();
     draw();
   }
 
@@ -486,11 +488,24 @@
     const target = presentationTargetFromSelection();
     if (target) {
       startPresentationDimensionPlacement(target, presentationOperandsFromSelection());
+      updateToolbar();
       return;
     }
     clearSelection();
     pendingCommand = { type: "presentation-dimension-select", operands: [] };
     setHint("注記寸法対象をクリックしてください");
+    updatePresentationUI();
+    updateToolbar();
+    draw();
+  }
+
+  function enterPresentationSelectCommand(message = "プレゼンテーション選択") {
+    if (!isPresentationMode()) return;
+    pendingCommand = null;
+    pendingConstraintCommand = null;
+    setHint(message);
+    updatePresentationUI();
+    updateToolbar();
     draw();
   }
 
@@ -544,6 +559,7 @@
     });
     pendingCommand = null;
     setHint("注記寸法を追加しました");
+    updateToolbar();
   }
 
   function createPresentationText() {
@@ -4478,6 +4494,7 @@
 
   function updateToolbar() {
     const geometryMode = isGeometryMode();
+    const presentationMode = isPresentationMode();
     const states = {
       toolSelect: geometryMode && mode === "select" && !pendingConstraintCommand && !pendingCommand,
       toolPoint: geometryMode && mode === "point",
@@ -4488,13 +4505,15 @@
       toolTrim: geometryMode && mode === "trim",
       toolCircle: geometryMode && mode === "circle",
       toolArc: geometryMode && mode === "arc",
+      presentationSelectBtn: presentationMode && !pendingCommand,
+      presentationDimensionBtn: presentationMode && Boolean(pendingCommand?.type?.startsWith("presentation-dimension")),
     };
     for (const [id, active] of Object.entries(states)) {
       const button = document.getElementById(id);
       if (!button) continue;
       button.classList.toggle("active", active);
       button.setAttribute("aria-pressed", String(active));
-      button.setAttribute("aria-disabled", String(!geometryMode));
+      button.setAttribute("aria-disabled", id.startsWith("presentation") ? String(!presentationMode) : String(!geometryMode));
     }
   }
 
@@ -5524,6 +5543,7 @@
   function updateUI() {
     refreshConstraintAnalysis();
     updatePresentationUI();
+    updateToolbar();
     updateSketchUI();
     document.getElementById("pointList").innerHTML = model.points
       .filter(isActiveSketchElement)
@@ -6828,7 +6848,7 @@
     for (let i = model.points.length - 1; i >= 0; i--) {
       const point = model.points[i];
       if (!isVisibleSketchElement(point)) continue;
-      if (!isExplicitPoint(point) && !isPointUsedByPrimitive(point) && !isReferencePoint(point)) continue;
+      if (!isExplicitPoint(point) && !isPointUsedByPrimitive(point) && !isPointUsedByLine(point) && !isReferencePoint(point)) continue;
       if (hypot2(point.x - x, point.y - y) <= pointThreshold) return { kind: "point", item: point };
     }
     for (let i = model.arcs.length - 1; i >= 0; i--) {
@@ -7960,6 +7980,7 @@
     if (Number.isFinite(lineWidthPx)) setPresentationStyleForSelection({ lineWidthPx: Math.max(0.5, Math.min(10, lineWidthPx)) });
   });
   document.getElementById("presentationVisibleInput")?.addEventListener("change", (event) => setPresentationStyleForSelection({ visible: event.target.checked }));
+  document.getElementById("presentationSelectBtn")?.addEventListener("click", () => enterPresentationSelectCommand());
   document.getElementById("presentationDimensionBtn")?.addEventListener("click", createPresentationAnnotationDimension);
   document.getElementById("presentationTextBtn")?.addEventListener("click", createPresentationText);
   document.getElementById("presentationLeaderBtn")?.addEventListener("click", createPresentationLeader);
