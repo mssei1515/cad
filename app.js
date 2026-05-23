@@ -283,7 +283,7 @@
       .map((element, index) => {
         if (!element || typeof element !== "object") return null;
         const type = String(element.type || "");
-        if (!["annotationDimension", "text", "leader"].includes(type)) return null;
+        if (!["annotationDimension", "leader"].includes(type)) return null;
         return {
           id: String(element.id || `PE${index + 1}`),
           type,
@@ -295,6 +295,7 @@
           x: Number.isFinite(Number(element.x)) ? Number(element.x) : 0,
           y: Number.isFinite(Number(element.y)) ? Number(element.y) : 0,
           start: element.start && Number.isFinite(Number(element.start.x)) && Number.isFinite(Number(element.start.y)) ? { x: Number(element.start.x), y: Number(element.start.y) } : null,
+          elbow: element.elbow && Number.isFinite(Number(element.elbow.x)) && Number.isFinite(Number(element.elbow.y)) ? { x: Number(element.elbow.x), y: Number(element.elbow.y) } : null,
           end: element.end && Number.isFinite(Number(element.end.x)) && Number.isFinite(Number(element.end.y)) ? { x: Number(element.end.x), y: Number(element.end.y) } : null,
           style: element.style && typeof element.style === "object" ? { ...element.style } : {},
         };
@@ -313,13 +314,10 @@
     if (element.type === "annotationDimension") {
       data.target = element.target;
       data.dimension = element.dimension;
-    } else if (element.type === "text") {
-      data.text = element.text || "";
-      data.x = element.x;
-      data.y = element.y;
     } else if (element.type === "leader") {
       data.text = element.text || "";
       data.start = element.start;
+      data.elbow = element.elbow;
       data.end = element.end;
       data.x = element.x;
       data.y = element.y;
@@ -568,30 +566,143 @@
     updateToolbar();
   }
 
-  function createPresentationText() {
-    if (!isPresentationMode()) return;
-    const text = window.prompt("注記テキスト", "注記");
-    if (!text) return;
-    const p = lastPointerWorld || screenToWorld({ x: 120, y: 120 });
-    pushPresentationElement({ type: "text", text, x: p.x, y: p.y, style: { color: "#111827", fontSize: 13 } });
-    setHint("注記テキストを追加しました");
-  }
-
   function createPresentationLeader() {
     if (!isPresentationMode()) return;
+    const target = presentationLeaderTargetFromSelection(lastPointerWorld);
+    if (target) {
+      startPresentationLeaderPlacement(target, lastPointerWorld);
+      return;
+    }
+    clearSelection();
+    pendingCommand = { type: "presentation-leader-select" };
+    setHint("引出線を付ける図形をクリックしてください");
+    updatePresentationUI();
+    updateToolbar();
+    draw();
+  }
+
+  function handlePresentationLeaderTargetClick(hit, pointer) {
+    if (pendingCommand?.type !== "presentation-leader-select") return false;
+    const target = presentationLeaderTargetFromHit(hit, pointer);
+    if (!target) {
+      setHint("引出線を付ける図形をクリックしてください", "error");
+      return true;
+    }
+    setPresentationSelection(hit, false);
+    startPresentationLeaderPlacement(target, pointer);
+    return true;
+  }
+
+  function presentationLeaderTargetFromSelection(pointer = null) {
+    const items = presentationSelectedItems();
+    if (items.length !== 1) return null;
+    return presentationLeaderTargetFromItem(items[0], pointer);
+  }
+
+  function presentationLeaderTargetFromHit(hit, pointer = null) {
+    if (!hit?.item) return null;
+    return presentationLeaderTargetFromItem(hit.item, pointer);
+  }
+
+  function presentationLeaderTargetFromItem(item, pointer = null) {
+    if (item instanceof Point) return { item, anchor: { x: item.x, y: item.y }, geometryRef: presentationElementKey(item) };
+    if (item instanceof Line) {
+      const anchor = pointer ? projectPointToSegmentPoint(pointer, item) : { x: (item.p1.x + item.p2.x) / 2, y: (item.p1.y + item.p2.y) / 2 };
+      return { item, anchor, geometryRef: presentationElementKey(item) };
+    }
+    if (item instanceof Circle) {
+      const base = pointer || { x: item.center.x + item.radius(), y: item.center.y };
+      const angle = Math.atan2(base.y - item.center.y, base.x - item.center.x);
+      return { item, anchor: { x: item.center.x + Math.cos(angle) * item.radius(), y: item.center.y + Math.sin(angle) * item.radius() }, geometryRef: presentationElementKey(item) };
+    }
+    if (item instanceof Arc) {
+      const base = pointer || arcEndpointPoint(item, "start");
+      const angle = clampAngleToArcSweep(item, Math.atan2(base.y - item.center.y, base.x - item.center.x));
+      return { item, anchor: { x: item.center.x + Math.cos(angle) * item.radius(), y: item.center.y + Math.sin(angle) * item.radius() }, geometryRef: presentationElementKey(item) };
+    }
+    return null;
+  }
+
+  function clampAngleToArcSweep(arc, angle) {
+    if (angleOnSignedSweep(angle, arc.startAngle, arc.endAngle)) return angle;
+    const start = arcEndpointPoint(arc, "start");
+    const end = arcEndpointPoint(arc, "end");
+    const point = {
+      x: arc.center.x + Math.cos(angle) * arc.radius(),
+      y: arc.center.y + Math.sin(angle) * arc.radius(),
+    };
+    return hypot2(point.x - start.x, point.y - start.y) <= hypot2(point.x - end.x, point.y - end.y) ? arc.startAngle : arc.endAngle;
+  }
+
+  function startPresentationLeaderPlacement(target, pointer = null) {
+    pendingCommand = {
+      type: "presentation-leader-place",
+      leaderTarget: target,
+      pointer: pointer || {
+        x: target.anchor.x + 90 / viewport.scale,
+        y: target.anchor.y - 36 / viewport.scale,
+      },
+    };
+    setHint("引出線の文字位置をクリックしてください");
+    updatePresentationUI();
+    updateToolbar();
+    draw();
+  }
+
+  function presentationLeaderLayout(anchor, pointer) {
+    const side = pointer.x >= anchor.x ? 1 : -1;
+    const minShelf = 64 / viewport.scale;
+    const end = { x: pointer.x, y: pointer.y };
+    if (Math.abs(end.x - anchor.x) < minShelf) end.x = anchor.x + side * minShelf;
+    const elbowX = side > 0 ? Math.min(anchor.x + 42 / viewport.scale, end.x - minShelf) : Math.max(anchor.x - 42 / viewport.scale, end.x + minShelf);
+    const elbow = { x: elbowX, y: end.y };
+    const text = {
+      x: (elbow.x + end.x) / 2,
+      y: end.y - 10 / viewport.scale,
+    };
+    return { start: anchor, elbow, end, text };
+  }
+
+  function commitPresentationLeaderAt(pointer) {
+    if (pendingCommand?.type !== "presentation-leader-place" || !pendingCommand.leaderTarget) return;
+    const target = pendingCommand.leaderTarget;
+    const layout = presentationLeaderLayout(target.anchor, pointer);
     const text = window.prompt("引出線テキスト", "注記");
-    if (!text) return;
-    const p = lastPointerWorld || screenToWorld({ x: 160, y: 160 });
+    if (!text) {
+      setHint("引出線をキャンセルしました");
+      pendingCommand = null;
+      updateToolbar();
+      draw();
+      return;
+    }
     pushPresentationElement({
       type: "leader",
       text,
-      start: { x: p.x - 40 / viewport.scale, y: p.y - 22 / viewport.scale },
-      end: { x: p.x, y: p.y },
-      x: p.x + 8 / viewport.scale,
-      y: p.y - 26 / viewport.scale,
+      start: layout.start,
+      elbow: layout.elbow,
+      end: layout.end,
+      x: layout.text.x,
+      y: layout.text.y,
+      geometryRefs: { target: target.geometryRef },
       style: { color: "#111827", fontSize: 13, lineWidthPx: 1.4 },
     });
+    pendingCommand = null;
     setHint("引出線を追加しました");
+    updateToolbar();
+  }
+
+  function drawPresentationLeaderCommandPreview() {
+    if (pendingCommand?.type !== "presentation-leader-place" || !pendingCommand.leaderTarget) return;
+    const layout = presentationLeaderLayout(pendingCommand.leaderTarget.anchor, pendingCommand.pointer);
+    drawPresentationLeader({
+      start: layout.start,
+      elbow: layout.elbow,
+      end: layout.end,
+      x: layout.text.x,
+      y: layout.text.y,
+      text: "注記",
+      style: { color: "#2563eb", fontSize: 13, lineWidthPx: 1.4 },
+    }, true);
   }
 
   function rejectPresentationGeometryEdit(action = "Geometry editing") {
@@ -3639,6 +3750,7 @@
     } else {
       drawPresentationElements();
       drawPresentationDimensionPreview();
+      drawPresentationLeaderCommandPreview();
     }
     drawTemporaryLine();
     drawRectanglePreview();
@@ -4086,8 +4198,6 @@
         const value = presentationTargetValue(target);
         const label = target.kind === "angle" ? `${Number(value).toFixed(2)}°` : Number(value).toFixed(2);
         drawDimension(target, dimension, label, false, false);
-      } else if (element.type === "text") {
-        drawPresentationText(element);
       } else if (element.type === "leader") {
         drawPresentationLeader(element);
       }
@@ -4115,18 +4225,25 @@
     ctx.restore();
   }
 
-  function drawPresentationLeader(element) {
+  function drawPresentationLeader(element, preview = false) {
     if (!element.start || !element.end) return;
+    const elbow = element.elbow || {
+      x: (element.start.x + element.end.x) / 2,
+      y: element.end.y,
+    };
     ctx.save();
     ctx.strokeStyle = element.style?.color || "#111827";
     ctx.fillStyle = element.style?.color || "#111827";
     ctx.lineWidth = Number(element.style?.lineWidthPx || 1.4) / viewport.scale;
+    if (preview) ctx.setLineDash([5 / viewport.scale, 4 / viewport.scale]);
     ctx.beginPath();
     ctx.moveTo(element.start.x, element.start.y);
+    ctx.lineTo(elbow.x, elbow.y);
     ctx.lineTo(element.end.x, element.end.y);
     ctx.stroke();
-    const dx = element.start.x - element.end.x;
-    const dy = element.start.y - element.end.y;
+    ctx.setLineDash([]);
+    const dx = elbow.x - element.start.x;
+    const dy = elbow.y - element.start.y;
     const len = Math.max(1e-9, hypot2(dx, dy));
     drawArrowhead(element.start, { x: dx / len, y: dy / len });
     if (element.text) drawPresentationText(element);
@@ -4513,6 +4630,7 @@
       toolArc: geometryMode && mode === "arc",
       presentationSelectBtn: presentationMode && !pendingCommand,
       presentationDimensionBtn: presentationMode && Boolean(pendingCommand?.type?.startsWith("presentation-dimension")),
+      presentationLeaderBtn: presentationMode && Boolean(pendingCommand?.type?.startsWith("presentation-leader")),
     };
     for (const [id, active] of Object.entries(states)) {
       const button = document.getElementById(id);
@@ -7385,6 +7503,15 @@
         handlePresentationDimensionTargetClick(presentationHit, p);
         return;
       }
+      if (pendingCommand?.type === "presentation-leader-select") {
+        handlePresentationLeaderTargetClick(presentationHit, p);
+        return;
+      }
+      if (pendingCommand?.type === "presentation-leader-place") {
+        commitPresentationLeaderAt(p);
+        draw();
+        return;
+      }
       if (presentationHit) {
         setPresentationSelection(presentationHit, e.shiftKey || e.ctrlKey);
         updatePresentationUI();
@@ -7553,6 +7680,19 @@
     if (isPresentationMode()) {
       clearSnap();
       if (pendingCommand?.type === "presentation-dimension-place") {
+        pendingCommand.pointer = p;
+        hoveredPoint = null;
+        hoveredEndpointPoint = null;
+        hoveredLine = null;
+        hoveredCircle = null;
+        hoveredArcEndpoint = null;
+        hoveredArc = null;
+        hoveredDimensionConstraint = null;
+        hoveredSketchIdentity = null;
+        draw();
+        return;
+      }
+      if (pendingCommand?.type === "presentation-leader-place") {
         pendingCommand.pointer = p;
         hoveredPoint = null;
         hoveredEndpointPoint = null;
@@ -7988,7 +8128,6 @@
   document.getElementById("presentationVisibleInput")?.addEventListener("change", (event) => setPresentationStyleForSelection({ visible: event.target.checked }));
   document.getElementById("presentationSelectBtn")?.addEventListener("click", () => enterPresentationSelectCommand());
   document.getElementById("presentationDimensionBtn")?.addEventListener("click", createPresentationAnnotationDimension);
-  document.getElementById("presentationTextBtn")?.addEventListener("click", createPresentationText);
   document.getElementById("presentationLeaderBtn")?.addEventListener("click", createPresentationLeader);
 
   document.getElementById("toolSelect").addEventListener("click", () => {
