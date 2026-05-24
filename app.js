@@ -2422,6 +2422,53 @@
     return fitBoundsToViewport(sketchGeometryBounds(sketchId), paddingPx);
   }
 
+  function screenBoxForBounds(bounds) {
+    if (!bounds) return null;
+    const p1 = worldToCanvasScreen({ x: bounds.x1, y: bounds.y1 });
+    const p2 = worldToCanvasScreen({ x: bounds.x2, y: bounds.y2 });
+    return {
+      left: Math.min(p1.x, p2.x),
+      right: Math.max(p1.x, p2.x),
+      top: Math.min(p1.y, p2.y),
+      bottom: Math.max(p1.y, p2.y),
+    };
+  }
+
+  function captureSketchScreenFootprint(sketchId = activeSketchId()) {
+    const bounds = sketchGeometryBounds(sketchId);
+    const screenBox = screenBoxForBounds(bounds);
+    if (!bounds || !screenBox) return null;
+    return {
+      bounds,
+      screenBox,
+      center: {
+        x: (screenBox.left + screenBox.right) / 2,
+        y: (screenBox.top + screenBox.bottom) / 2,
+      },
+      width: Math.max(screenBox.right - screenBox.left, 1),
+      height: Math.max(screenBox.bottom - screenBox.top, 1),
+    };
+  }
+
+  function restoreSketchScreenFootprint(sketchId, footprint) {
+    if (!footprint) return false;
+    const bounds = sketchGeometryBounds(sketchId);
+    if (!bounds) return false;
+    const worldWidth = bounds.x2 - bounds.x1;
+    const worldHeight = bounds.y2 - bounds.y1;
+    const scaleCandidates = [];
+    if (worldWidth > MIN_LINE_LENGTH) scaleCandidates.push(footprint.width / worldWidth);
+    if (worldHeight > MIN_LINE_LENGTH) scaleCandidates.push(footprint.height / worldHeight);
+    if (scaleCandidates.length === 0) return false;
+    const nextScale = clampZoom(Math.min(...scaleCandidates));
+    const centerX = (bounds.x1 + bounds.x2) / 2;
+    const centerY = (bounds.y1 + bounds.y2) / 2;
+    viewport.scale = nextScale;
+    viewport.x = footprint.center.x - centerX * viewport.scale;
+    viewport.y = footprint.center.y - centerY * viewport.scale;
+    return true;
+  }
+
   function arcSamplePoints(arc, count = 24) {
     const angles = arcAngles(arc);
     const points = [];
@@ -5548,6 +5595,7 @@
     const { target, dimension, constraint, referenceSketchId, sketchId } = pendingCommand;
     const targetSketchId = sketchId || activeSketchId();
     const shouldFitFirstDimension = !constraint && !sketchHasDimensionConstraint(targetSketchId);
+    const firstDimensionFootprint = shouldFitFirstDimension ? captureSketchScreenFootprint(targetSketchId) : null;
     pendingCommand = null;
     hideDimensionValueInput();
     if (constraint) {
@@ -5569,8 +5617,8 @@
       return;
     }
     const ok = addDistanceConstraintFromTarget(target, value, dimension, { referenceSketchId, sketchId });
-    if (ok && shouldFitFirstDimension && fitSketchToViewport(targetSketchId)) {
-      setHint(`最初の寸法 ${value} に合わせて表示スケールを調整しました`);
+    if (ok && firstDimensionFootprint && restoreSketchScreenFootprint(targetSketchId, firstDimensionFootprint)) {
+      setHint(`最初の寸法 ${value} に合わせて、見た目の大きさを保つよう表示スケールを調整しました`);
       draw();
     }
   }
@@ -6738,19 +6786,59 @@
 
   function solveLocalGuidedDrag(session, targets) {
     if (!session?.local) return null;
-    return solver.solveSubsetGuided({
-      variables: session.local.variables,
-      constraints: session.local.constraints,
-      lines: session.local.lines,
-      targets,
-    });
+    return withDragStepNorm(dragStepNormForTargets(targets), () =>
+      solver.solveSubsetGuided({
+        variables: session.local.variables,
+        constraints: session.local.constraints,
+        lines: session.local.lines,
+        targets,
+      }),
+    );
+  }
+
+  function dragStepNormForTargets(targets = []) {
+    let maxDelta = solver.maxStepNorm;
+    for (const target of targets) {
+      if (target.point) {
+        maxDelta = Math.max(maxDelta, hypot2(target.x - target.point.x, target.y - target.point.y));
+      } else if (target.object && target.prop) {
+        maxDelta = Math.max(maxDelta, Math.abs(target.value - target.object[target.prop]));
+      }
+    }
+    return Math.max(solver.maxStepNorm, maxDelta * 1.25);
+  }
+
+  function dragStepNormForExtra(extra = []) {
+    let maxDelta = solver.maxStepNorm;
+    for (const constraint of extra) {
+      if (constraint instanceof DragConstraint) {
+        maxDelta = Math.max(maxDelta, hypot2(constraint.targetX - constraint.point.x, constraint.targetY - constraint.point.y));
+      } else if (constraint instanceof ArcEndpointDragConstraint) {
+        const p = arcEndpointPoint(constraint.arc, constraint.endpoint);
+        maxDelta = Math.max(maxDelta, hypot2(constraint.targetX - p.x, constraint.targetY - p.y));
+      } else if (constraint instanceof ParameterDragConstraint) {
+        maxDelta = Math.max(maxDelta, Math.abs(constraint.target - constraint.object[constraint.prop]));
+      }
+    }
+    return Math.max(solver.maxStepNorm, maxDelta * 1.25);
+  }
+
+  function withDragStepNorm(stepNorm, callback) {
+    const previous = solver.maxStepNorm;
+    solver.maxStepNorm = Math.max(previous, Number.isFinite(stepNorm) ? stepNorm : previous);
+    try {
+      return callback();
+    } finally {
+      solver.maxStepNorm = previous;
+    }
   }
 
   function solveDragWithFallback(session, extra, fullSolve, restoreState = null) {
-    const localResult = solveLocalDrag(session, extra);
+    const stepNorm = dragStepNormForExtra(extra);
+    const localResult = withDragStepNorm(stepNorm, () => solveLocalDrag(session, extra));
     if (localResult && localResult.success && localResult.errorNorm <= CONSTRAINT_ACCEPT_ERROR) return localResult;
     if (restoreState) solver.restore(restoreState);
-    const result = fullSolve();
+    const result = withDragStepNorm(stepNorm, fullSolve);
     result.local = false;
     result.fallback = Boolean(localResult);
     result.localErrorNorm = localResult?.errorNorm;
@@ -6758,6 +6846,7 @@
   }
 
   function solveGuidedDragWithFallback(session, targets, fallbackExtra, fullSolve, restoreState = null) {
+    const stepNorm = Math.max(dragStepNormForTargets(targets), dragStepNormForExtra(fallbackExtra));
     if (session?.local && session.local.constraints.length === 0) {
       for (const target of targets) {
         if (target.point) {
@@ -6778,10 +6867,10 @@
         constraintCount: 0,
       };
     }
-    const localResult = solveLocalGuidedDrag(session, targets);
+    const localResult = withDragStepNorm(stepNorm, () => solveLocalGuidedDrag(session, targets));
     if (localResult && localResult.success && localResult.errorNorm <= CONSTRAINT_ACCEPT_ERROR) return localResult;
     if (restoreState) solver.restore(restoreState);
-    const result = fullSolve();
+    const result = withDragStepNorm(stepNorm, fullSolve);
     result.local = false;
     result.guided = false;
     result.fallback = Boolean(localResult);
