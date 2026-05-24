@@ -118,6 +118,10 @@
   let presentationSheetSeq = 2;
   let presentationElementSeq = 1;
   let sketchTreeCollapsed = false;
+  let undoStack = [];
+  let redoStack = [];
+  let historyRestoring = false;
+  const HISTORY_LIMIT = 80;
   const viewport = { x: 0, y: 0, scale: 1 };
   const MIN_ZOOM = 0.15;
   const MAX_ZOOM = 10000000;
@@ -394,6 +398,7 @@
     }
     updatePresentationUI();
     draw();
+    recordHistory("Presentation style");
   }
 
   function setPresentationSelection(hit, additive = false) {
@@ -577,6 +582,7 @@
     pendingCommand = null;
     setHint("注記寸法を追加しました");
     updateToolbar();
+    recordHistory("注記寸法追加");
   }
 
   function createPresentationLeader() {
@@ -708,6 +714,7 @@
     pendingCommand = null;
     setHint("引出線を追加しました");
     updateToolbar();
+    recordHistory("引出線追加");
   }
 
   function drawPresentationLeaderCommandPreview() {
@@ -1143,6 +1150,7 @@
     setHint(`${label}: success=${solved.success}, error=${result.errorNorm.toExponential(2)}, iter=${result.iterations}${childText}${descendantErrorSummary(solved.descendant)} / ${constraintSummaryText()}`, statusKind);
     updateUI();
     draw();
+    if (solved.success && !historyRestoring) recordHistory(label);
     return result;
   }
 
@@ -1673,6 +1681,69 @@
         })
         .filter(Boolean),
     };
+  }
+
+  function historySnapshot() {
+    const data = serializeModel();
+    delete data.savedAt;
+    return JSON.stringify(data);
+  }
+
+  function updateHistoryButtons() {
+    const undoBtn = document.getElementById("undoBtn");
+    const redoBtn = document.getElementById("redoBtn");
+    if (undoBtn) undoBtn.disabled = undoStack.length <= 1;
+    if (redoBtn) redoBtn.disabled = redoStack.length === 0;
+  }
+
+  function resetHistory(label = "initial") {
+    undoStack = [historySnapshot()];
+    redoStack = [];
+    updateHistoryButtons();
+    log(`履歴を初期化しました: ${label}`);
+  }
+
+  function recordHistory(label = "変更") {
+    if (historyRestoring) return;
+    const snapshot = historySnapshot();
+    if (undoStack[undoStack.length - 1] === snapshot) {
+      updateHistoryButtons();
+      return;
+    }
+    undoStack.push(snapshot);
+    if (undoStack.length > HISTORY_LIMIT) undoStack.shift();
+    redoStack = [];
+    updateHistoryButtons();
+    log(`履歴に追加しました: ${label}`);
+  }
+
+  function restoreHistorySnapshot(snapshot, label) {
+    historyRestoring = true;
+    try {
+      loadModelData(JSON.parse(snapshot));
+      clearInteractionForSketchChange();
+      solveAndRefresh(label);
+      setHint(label);
+    } finally {
+      historyRestoring = false;
+      updateHistoryButtons();
+    }
+  }
+
+  function undoHistory() {
+    if (undoStack.length <= 1) return false;
+    const current = undoStack.pop();
+    redoStack.push(current);
+    restoreHistorySnapshot(undoStack[undoStack.length - 1], "戻る");
+    return true;
+  }
+
+  function redoHistory() {
+    if (redoStack.length === 0) return false;
+    const snapshot = redoStack.pop();
+    undoStack.push(snapshot);
+    restoreHistorySnapshot(snapshot, "進む");
+    return true;
   }
 
   function deserializeConstraint(data, pointById, lineById, primitiveById) {
@@ -3584,6 +3655,7 @@
     const msg = `削除しました: 点${pointSet.size} / 線${lineSet.size} / 円${circleSet.size} / 円弧${arcSet.size} / 拘束${constraintSet.size}`;
     setHint(`${msg} (error=${result.errorNorm.toExponential(2)}) / ${constraintSummaryText()}`, result.success && constraintAnalysisState?.analysis?.stable ? "normal" : "error");
     log(`${msg}\n自動solve: success=${result.success}, error=${result.errorNorm.toExponential(3)}`);
+    recordHistory("削除");
     return true;
   }
 
@@ -4764,6 +4836,7 @@
       button.setAttribute("aria-pressed", String(active));
       button.setAttribute("aria-disabled", id.startsWith("presentation") ? String(!presentationMode) : String(!geometryMode));
     }
+    updateHistoryButtons();
   }
 
   function canApplyConstraint(type) {
@@ -5429,6 +5502,7 @@
         setHint(`寸法値を更新できません: 矛盾しています (error=${result.errorNorm.toExponential(3)})`, "error");
       } else {
         setHint(`寸法値更新: success=${result.success}, error=${result.errorNorm.toExponential(2)}, iter=${result.iterations}`);
+        recordHistory("寸法値変更");
       }
       updateUI();
       draw();
@@ -5581,6 +5655,7 @@
     setHint(parentSketchId ? `編集中: ${sketch.name} / 親: ${sketchName(parentSketchId)}` : `編集中: ${sketch.name}`);
     updateUI();
     draw();
+    recordHistory("スケッチ追加");
   }
 
   function setActiveSketch(sketchId) {
@@ -5603,6 +5678,7 @@
     sketch.name = next.trim() || sketch.name;
     updateUI();
     draw();
+    recordHistory("スケッチ名変更");
   }
 
   function createPresentationSheet() {
@@ -5613,6 +5689,7 @@
     model.activePresentationSheetId = id;
     updateUI();
     draw();
+    recordHistory("Presentation Sheet追加");
   }
 
   function renamePresentationSheet() {
@@ -5623,6 +5700,7 @@
     sheet.name = next.trim() || sheet.name;
     updateUI();
     draw();
+    recordHistory("Presentation Sheet名変更");
   }
 
   function setActivePresentationSheet(sheetId) {
@@ -5963,6 +6041,7 @@
     draw();
     setHint(`拘束追加: success=${result.success}, error=${result.errorNorm.toExponential(2)}, iter=${result.iterations} / ${constraintSummaryText()}`);
     log(`拘束を追加しました: ${type}\n自動solve: success=${result.success}, error=${result.errorNorm.toExponential(3)}`);
+    recordHistory(`拘束追加: ${type}`);
     return true;
   }
 
@@ -6005,6 +6084,7 @@
     draw();
     setHint(`参照拘束追加: ${sketchName(referenceSketchId)} を参照 / success=${result.success}, error=${result.errorNorm.toExponential(2)}`);
     log(`参照拘束を追加しました: ${type}\n自動solve: success=${result.success}, error=${result.errorNorm.toExponential(3)}`);
+    recordHistory(`参照拘束追加: ${type}`);
     return true;
   }
 
@@ -6299,8 +6379,11 @@
     }
     if (resolution.type === "distance") return startDistanceResolution(resolution, resolution.referenceSketchId ? null : pointer);
     if (!resolution.constraint) return false;
-    if (resolution.referenceSketchId) return commitReferenceConstraint(resolution.type || "reference", resolution.constraint, resolution.referenceSketchId, resolution.sketchId || activeSketchId());
-    return commitNewConstraint(resolution.type || "constraint", resolution.constraint);
+    const ok = resolution.referenceSketchId
+      ? commitReferenceConstraint(resolution.type || "reference", resolution.constraint, resolution.referenceSketchId, resolution.sketchId || activeSketchId())
+      : commitNewConstraint(resolution.type || "constraint", resolution.constraint);
+    if (ok) recordHistory(`拘束追加: ${resolution.type || "constraint"}`);
+    return ok;
   }
 
   function addDistanceConstraintFromTarget(target, value, dimension, options = {}) {
@@ -8080,6 +8163,7 @@
       setHint("Presentation注記の位置を更新しました");
       updateUI();
       draw();
+      recordHistory("Presentation注記移動");
       return;
     }
 
@@ -8094,6 +8178,7 @@
       setHint("寸法線の位置を更新しました");
       updateUI();
       draw();
+      recordHistory("寸法線移動");
       return;
     }
 
@@ -8144,6 +8229,7 @@
     setHint(`${completedLabel}完了: success=${result.success}, error=${result.errorNorm.toExponential(2)}, iter=${result.iterations}${childErrorText} / ${constraintSummaryText()}`, analysis.analysis.stable && descendantResult.success ? "normal" : "error");
     updateUI();
     draw();
+    recordHistory(`${completedLabel}ドラッグ`);
   }
 
   canvas.addEventListener("pointerup", endDrag);
@@ -8217,6 +8303,19 @@
   );
 
   window.addEventListener("keydown", (e) => {
+    const key = e.key.toLowerCase();
+    const commandKey = e.ctrlKey || e.metaKey;
+    if (commandKey && key === "z" && !e.shiftKey) {
+      e.preventDefault();
+      undoHistory();
+      return;
+    }
+    if (commandKey && (key === "y" || (key === "z" && e.shiftKey))) {
+      e.preventDefault();
+      redoHistory();
+      return;
+    }
+
     if (handleDistanceKey(e)) return;
 
     if ((e.key === "Delete" || e.key === "Backspace") && isGeometryMode() && deleteCurrentSelection()) {
@@ -8263,6 +8362,8 @@
     }
   });
 
+  document.getElementById("undoBtn")?.addEventListener("click", undoHistory);
+  document.getElementById("redoBtn")?.addEventListener("click", redoHistory);
   document.getElementById("geometryModeBtn")?.addEventListener("click", () => setAppMode("geometry"));
   document.getElementById("presentationModeBtn")?.addEventListener("click", () => setAppMode("presentation"));
   document.getElementById("presentationSheetSelect")?.addEventListener("change", (event) => setActivePresentationSheet(event.target.value));
@@ -8342,6 +8443,7 @@
       setHint(next ? "選択線を補助線にしました" : "選択線を通常線にしました");
       updateUI();
       draw();
+      recordHistory("補助線切替");
       return;
     }
     mode = "line";
@@ -8655,4 +8757,5 @@
   installTestHooks();
   sampleModel();
   resizeCanvas();
+  resetHistory("起動");
 })();

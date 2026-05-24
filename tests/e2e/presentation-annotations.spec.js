@@ -69,4 +69,14 @@ test("presentation annotations can be dragged on canvas", async ({ page }) => {
   const afterLeader = await page.evaluate(() => window.__cadTest.presentationSnapshot());
   expect(afterLeader.leader.world.x).toBeGreaterThan(beforeLeader.leader.world.x + 20);
   expect(afterLeader.leader.world.y).toBeLessThan(beforeLeader.leader.world.y - 10);
+
+  await page.keyboard.press("Control+Z");
+  const afterUndo = await page.evaluate(() => window.__cadTest.presentationSnapshot());
+  expect(afterUndo.leader.world.x).toBeCloseTo(beforeLeader.leader.world.x, 5);
+  expect(afterUndo.leader.world.y).toBeCloseTo(beforeLeader.leader.world.y, 5);
+
+  await page.keyboard.press("Control+Y");
+  const afterRedo = await page.evaluate(() => window.__cadTest.presentationSnapshot());
+  expect(afterRedo.leader.world.x).toBeCloseTo(afterLeader.leader.world.x, 5);
+  expect(afterRedo.leader.world.y).toBeCloseTo(afterLeader.leader.world.y, 5);
 });
