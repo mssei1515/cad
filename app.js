@@ -2207,6 +2207,18 @@
     return `${percent.toFixed(2)}%`;
   }
 
+  function formatDisplayNumber(value, maxFractionDigits = 10) {
+    const n = Number(value);
+    if (!Number.isFinite(n)) return "";
+    const rounded = Number(n.toFixed(maxFractionDigits));
+    if (Object.is(rounded, -0)) return "0";
+    return rounded.toFixed(maxFractionDigits).replace(/\.?0+$/, "");
+  }
+
+  function formatDimensionLabel(value, suffix = "") {
+    return `${formatDisplayNumber(value)}${suffix}`;
+  }
+
   function canvasScreenPoint(e) {
     const r = canvas.getBoundingClientRect();
     return { x: e.clientX - r.left, y: e.clientY - r.top };
@@ -2466,6 +2478,75 @@
     viewport.scale = nextScale;
     viewport.x = footprint.center.x - centerX * viewport.scale;
     viewport.y = footprint.center.y - centerY * viewport.scale;
+    return true;
+  }
+
+  function scalePointAbout(point, origin, scale) {
+    point.x = origin.x + (point.x - origin.x) * scale;
+    point.y = origin.y + (point.y - origin.y) * scale;
+  }
+
+  function scaleValueAbout(value, originValue, scale) {
+    return originValue + (value - originValue) * scale;
+  }
+
+  function scaleDimensionAbout(dimension, origin, scale) {
+    if (!dimension) return dimension;
+    for (const key of ["x", "labelX"]) {
+      if (Number.isFinite(dimension[key])) dimension[key] = scaleValueAbout(dimension[key], origin.x, scale);
+    }
+    for (const key of ["y", "labelY"]) {
+      if (Number.isFinite(dimension[key])) dimension[key] = scaleValueAbout(dimension[key], origin.y, scale);
+    }
+    for (const key of ["offsetU", "offsetN", "labelOffsetU", "angleRadius"]) {
+      if (Number.isFinite(dimension[key])) dimension[key] *= scale;
+    }
+    return dimension;
+  }
+
+  function currentTargetValue(target) {
+    if (!target) return NaN;
+    if (target.kind === "point-point") {
+      if (target.dimensionAxis === "x") return Math.abs(target.p2.x - target.p1.x);
+      if (target.dimensionAxis === "y") return Math.abs(target.p2.y - target.p1.y);
+      return hypot2(target.p2.x - target.p1.x, target.p2.y - target.p1.y);
+    }
+    if (target.kind === "line-length") return target.line.length();
+    if (target.kind === "point-line") return Math.abs(signedPointLineDistance(target.point, target.line));
+    if (target.kind === "line-line") return Math.abs(signedPointLineDistance(target.line1.p1, target.line2));
+    if (target.kind === "radius") return target.primitive.radius();
+    if (target.kind === "diameter") return target.primitive.radius() * 2;
+    return target.value;
+  }
+
+  function sketchHasReferenceConstraint(sketchId = activeSketchId()) {
+    return model.constraints.some((constraint) => constraintSketchId(constraint) === sketchId && constraint.reference);
+  }
+
+  function sketchHasFixedGeometry(sketchId = activeSketchId()) {
+    if (model.points.some((point) => elementSketchId(point) === sketchId && point.fixed)) return true;
+    return model.constraints.some((constraint) => constraintSketchId(constraint) === sketchId && constraint instanceof LineFixedConstraint);
+  }
+
+  function scaleSketchForFirstDimension(sketchId, target, targetValue, dimension) {
+    if (!sketchId || target?.kind === "angle" || sketchHasReferenceConstraint(sketchId) || sketchHasFixedGeometry(sketchId)) return false;
+    const current = currentTargetValue(target);
+    if (!Number.isFinite(current) || current <= MIN_LINE_LENGTH || !Number.isFinite(targetValue) || targetValue <= 0) return false;
+    const scale = targetValue / current;
+    if (!Number.isFinite(scale) || scale <= 0 || Math.abs(scale - 1) < 1e-9) return false;
+    const bounds = sketchGeometryBounds(sketchId);
+    if (!bounds) return false;
+    const origin = { x: (bounds.x1 + bounds.x2) / 2, y: (bounds.y1 + bounds.y2) / 2 };
+    for (const point of model.points) {
+      if (elementSketchId(point) === sketchId) scalePointAbout(point, origin, scale);
+    }
+    for (const circle of model.circles) {
+      if (elementSketchId(circle) === sketchId) circle.radiusValue = Math.max(MIN_LINE_LENGTH, circle.radiusValue * scale);
+    }
+    for (const arc of model.arcs) {
+      if (elementSketchId(arc) === sketchId) arc.radiusValue = Math.max(MIN_LINE_LENGTH, arc.radiusValue * scale);
+    }
+    scaleDimensionAbout(dimension, origin, scale);
     return true;
   }
 
@@ -4370,7 +4451,7 @@
       const dimension = c.dimension || defaultDimensionForTarget(target);
       const active = isActiveSketchConstraint(c);
       const highlighted = active && (c === hoveredDimensionConstraint || c === selectedDimensionConstraint || c === dimensionDragSession?.constraint);
-      const label = target.kind === "angle" ? `${Number(angleDegrees(c.target)).toFixed(2)}°` : Number(c.target).toFixed(2);
+      const label = target.kind === "angle" ? formatDimensionLabel(angleDegrees(c.target), "°") : formatDimensionLabel(c.target);
       const editing = pendingCommand?.type === "distance-value" && pendingCommand.constraint === c;
       ctx.save();
       ctx.globalAlpha = active ? 1 : 0.26;
@@ -4389,7 +4470,7 @@
         if (!target) continue;
         const dimension = element.dimension || defaultDimensionForTarget(target);
         const value = presentationTargetValue(target);
-        const label = target.kind === "angle" ? `${Number(value).toFixed(2)}°` : Number(value).toFixed(2);
+        const label = target.kind === "angle" ? formatDimensionLabel(value, "°") : formatDimensionLabel(value);
         drawDimension(target, dimension, label, false, false);
       } else if (element.type === "leader") {
         drawPresentationLeader(element);
@@ -4404,7 +4485,7 @@
     const anchor = pendingCommand.pointer || dimensionAnchor(target, defaultDimensionForTarget(target));
     const dimension = dimensionFromAnchor(target, anchor);
     const value = presentationTargetValue(target);
-    const label = target.kind === "angle" ? `${Number(value).toFixed(2)}°` : Number(value).toFixed(2);
+    const label = target.kind === "angle" ? formatDimensionLabel(value, "°") : formatDimensionLabel(value);
     drawDimension(target, dimension, label, true, false);
   }
 
@@ -4484,7 +4565,8 @@
         const dimension = element.dimension || defaultDimensionForTarget(target);
         const layout = dimensionLayout(target, dimension);
         if (!layout) continue;
-        const label = target.kind === "angle" ? `${Number(presentationTargetValue(target)).toFixed(2)}°` : Number(presentationTargetValue(target)).toFixed(2);
+        const presentationValue = presentationTargetValue(target);
+        const label = target.kind === "angle" ? formatDimensionLabel(presentationValue, "°") : formatDimensionLabel(presentationValue);
         if (pointInExpandedBox(x, y, textHitBox(label, layout.text.x, layout.text.y, 13 / viewport.scale), threshold * 0.8)) return { element, type: "annotationDimension", target, dimension, part: "label" };
         if (hypot2(x - layout.text.x, y - layout.text.y) <= threshold * 3) return { element, type: "annotationDimension", target, dimension, part: "label" };
         if (distancePointToSegmentPoints(x, y, layout.hitA, layout.hitB) <= threshold * 2.2) return { element, type: "annotationDimension", target, dimension, part: "line" };
@@ -4601,7 +4683,7 @@
           : previewTarget.kind === "angle"
             ? angleDegrees(angleDimensionAngles(previewTarget, pendingCommand.pointer || dimensionAnchor(previewTarget, dimension), dimension).signed)
           : previewTarget.value;
-    const label = previewTarget.kind === "angle" ? `${Number(previewValue).toFixed(2)}°` : Number(previewValue).toFixed(2);
+    const label = previewTarget.kind === "angle" ? formatDimensionLabel(previewValue, "°") : formatDimensionLabel(previewValue);
     drawDimension(previewTarget, dimensionWithLabelAt(previewTarget, dimension, pendingCommand.pointer), label, true);
   }
 
@@ -5616,6 +5698,7 @@
       draw();
       return;
     }
+    if (shouldFitFirstDimension) scaleSketchForFirstDimension(targetSketchId, target, value, dimension);
     const ok = addDistanceConstraintFromTarget(target, value, dimension, { referenceSketchId, sketchId });
     if (ok && firstDimensionFootprint && restoreSketchScreenFootprint(targetSketchId, firstDimensionFootprint)) {
       setHint(`最初の寸法 ${value} に合わせて、見た目の大きさを保つよう表示スケールを調整しました`);
@@ -6005,7 +6088,7 @@
       .filter(isActiveSketchElement)
       .map(
         (l) =>
-          `<div class="item list-item"><span>${l.id}: ${l.p1.id} - ${l.p2.id}<span class="badge">len=${l.length().toFixed(2)}</span><span class="badge">${constraintStatusBadge(constraintStatusOf(l))}</span>${l.construction ? "<span class='badge'>補助</span>" : ""}${findLineFixedConstraint(l) ? "<span class='badge'>固定</span>" : ""}</span>` +
+          `<div class="item list-item"><span>${l.id}: ${l.p1.id} - ${l.p2.id}<span class="badge">len=${formatDisplayNumber(l.length())}</span><span class="badge">${constraintStatusBadge(constraintStatusOf(l))}</span>${l.construction ? "<span class='badge'>補助</span>" : ""}${findLineFixedConstraint(l) ? "<span class='badge'>固定</span>" : ""}</span>` +
           `<button data-id="${l.id}" class="removeLineBtn icon-delete-btn" title="削除" aria-label="削除" data-tooltip="削除">` +
           `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3M7 7l1 13h8l1-13"/></svg>` +
           `</button></div>`,
