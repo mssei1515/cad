@@ -463,7 +463,8 @@
       return { kind: "point-line", point: points[0], line: lines[0], value: Math.abs(signedPointLineDistance(points[0], lines[0])) };
     }
     if (points.length === 0 && lines.length === 1 && primitives.length === 0) {
-      return { kind: "line-length", line: lines[0], value: lines[0].length() };
+      const [line] = lines;
+      return { kind: "line-length", line, p1: line.p1, p2: line.p2, value: line.length() };
     }
     if (points.length === 0 && lines.length === 2 && primitives.length === 0) {
       if (linesNearlyParallelForDimension(lines[0], lines[1])) {
@@ -4330,9 +4331,16 @@
     return null;
   }
 
+  function presentationElementById(id) {
+    if (!id) return null;
+    const sheet = activePresentationSheet();
+    return sheet?.elements?.find((element) => element.id === id) || null;
+  }
+
   function beginPresentationAnnotationDrag(e, hit, pointer) {
     presentationDragSession = {
       pointerId: e.pointerId,
+      elementId: hit.element?.id || null,
       hit,
       startPointer: pointer,
       startDimension: hit.dimension ? { ...hit.dimension } : null,
@@ -4351,7 +4359,8 @@
     if (!session) return;
     const dx = pointer.x - session.startPointer.x;
     const dy = pointer.y - session.startPointer.y;
-    const element = session.hit.element;
+    const element = presentationElementById(session.elementId) || session.hit.element;
+    if (!element) return;
     if (session.hit.type === "annotationDimension" && session.hit.target && session.startAnchor) {
       const anchor = { x: session.startAnchor.x + dx, y: session.startAnchor.y + dy };
       element.dimension = dimensionFromAnchor(session.hit.target, anchor, { allowPointAxis: false });
@@ -6128,7 +6137,7 @@
     }
     if (data.kind === "line-length") {
       const l = line(data.line);
-      return l ? { kind: "line-length", line: l, value: l.length() } : null;
+      return l ? { kind: "line-length", line: l, p1: l.p1, p2: l.p2, value: l.length() } : null;
     }
     if (data.kind === "angle") {
       const line1 = line(data.line1);
@@ -8553,6 +8562,97 @@
   window.addEventListener("resize", () => {
     resizeCanvas({ centerWorld: currentCanvasCenterWorld() });
   });
+
+  function installTestHooks() {
+    if (!new URLSearchParams(window.location.search).has("test")) return;
+    window.__cadTest = {
+      resetForPresentationDrag() {
+        resetModelState();
+        const p1 = addPoint(-60, -25, false, "endpoint");
+        const p2 = addPoint(60, -25, false, "endpoint");
+        const p3 = addPoint(60, 35, false, "endpoint");
+        const p4 = addPoint(-60, 35, false, "endpoint");
+        const l1 = addLine(p1, p2);
+        addLine(p2, p3);
+        const l3 = addLine(p3, p4);
+        addLine(p4, p1);
+        setAppMode("presentation");
+        const sheet = activePresentationSheet();
+        sheet.elements = [];
+        const dimensionTarget = { kind: "line-length", line: l1, p1: l1.p1, p2: l1.p2, value: l1.length() };
+        pushPresentationElement({
+          type: "annotationDimension",
+          target: presentationTargetToData(dimensionTarget),
+          dimension: dimensionFromAnchor(dimensionTarget, { x: 0, y: -58 }),
+          geometryRefs: presentationTargetToData(dimensionTarget) || {},
+          style: {},
+        });
+        const leaderTarget = presentationLeaderTargetFromItem(l3, { x: 0, y: 35 });
+        const leaderLayout = presentationLeaderLayout(leaderTarget.anchor, { x: 112, y: 82 });
+        pushPresentationElement({
+          type: "leader",
+          text: "注記",
+          start: leaderLayout.start,
+          elbow: leaderLayout.elbow,
+          end: leaderLayout.end,
+          x: leaderLayout.text.x,
+          y: leaderLayout.text.y,
+          geometryRefs: { target: leaderTarget.geometryRef },
+          style: { color: "#111827", fontSize: 13, lineWidthPx: 1.4 },
+        });
+        resizeCanvas({ centerWorld: { x: 20, y: 20 } });
+        return this.presentationSnapshot();
+      },
+      presentationSnapshot() {
+        const sheet = activePresentationSheet();
+        const dimensionElement = [...sheet.elements].reverse().find((element) => element.type === "annotationDimension");
+        const leaderElement = [...sheet.elements].reverse().find((element) => element.type === "leader");
+        const target = dimensionElement ? presentationTargetFromData(dimensionElement.target) : null;
+        const dimensionLayoutValue = target && dimensionElement ? dimensionLayout(target, dimensionElement.dimension) : null;
+        const canvasRect = canvas.getBoundingClientRect();
+        const toViewport = (point) => {
+          const screen = worldToCanvasScreen(point);
+          return { x: canvasRect.left + screen.x, y: canvasRect.top + screen.y };
+        };
+        return {
+          mode: model.appMode,
+          dimension: dimensionLayoutValue
+            ? {
+                world: { ...dimensionLayoutValue.text },
+                viewport: toViewport(dimensionLayoutValue.text),
+                dimension: { ...dimensionElement.dimension },
+              }
+            : null,
+          leader: leaderElement
+            ? {
+                world: { x: leaderElement.x, y: leaderElement.y },
+                viewport: toViewport({ x: leaderElement.x, y: leaderElement.y }),
+                end: { ...leaderElement.end },
+                elbow: leaderElement.elbow ? { ...leaderElement.elbow } : null,
+              }
+            : null,
+        };
+      },
+      presentationAnnotationHitAt(viewportPoint) {
+        const canvasRect = canvas.getBoundingClientRect();
+        const world = screenToWorld({ x: viewportPoint.x - canvasRect.left, y: viewportPoint.y - canvasRect.top });
+        const hit = hitPresentationAnnotationElement(world.x, world.y);
+        return hit ? { type: hit.type, part: hit.part } : null;
+      },
+      presentationDragActive() {
+        const element = presentationElementById(presentationDragSession?.elementId);
+        return presentationDragSession
+          ? {
+              type: presentationDragSession.hit?.type,
+              hasAnchor: Boolean(presentationDragSession.startAnchor),
+              dimension: element?.dimension ? { ...element.dimension } : null,
+            }
+          : null;
+      },
+    };
+  }
+
+  installTestHooks();
   sampleModel();
   resizeCanvas();
 })();

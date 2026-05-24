@@ -1,0 +1,13 @@
+{
+  "name": "cad2",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "serve": "node tools/serve.js",
+    "check": "node --check app.js && node --check constraint_solver.js && node --check tools/serve.js && node --check playwright.config.js && node --check tests/e2e/presentation-annotations.spec.js",
+    "test:e2e": "playwright test"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.52.0"
+  }
+}
