@@ -171,7 +171,7 @@
 
   class PointAxisDistanceConstraint extends Constraint {
     constructor(p1, p2, target, axis = "x", sign = null) {
-      super(`寸法 ${p1.id}-${p2.id} ${axis} = ${target}`, 1);
+      super(`${axis === "y" ? "垂直寸法" : "水平寸法"} ${p1.id}-${p2.id} = ${target}`, 1);
       this.p1 = p1;
       this.p2 = p2;
       this.target = target;
@@ -218,7 +218,7 @@
 
   class PointLineDistanceConstraint extends Constraint {
     constructor(point, line, target, sign = null) {
-      super(`寸法 ${point.id}-${line.id} = ${target}`, 1);
+      super(`点-線寸法 ${point.id}-${line.id} = ${target}`, 1);
       this.point = point;
       this.line = line;
       this.target = target;
@@ -233,7 +233,7 @@
 
   class LineLineDistanceConstraint extends Constraint {
     constructor(line1, line2, target, sign = null) {
-      super(`寸法 ${line1.id}-${line2.id} = ${target}`, 1);
+      super(`線-線寸法 ${line1.id}-${line2.id} = ${target}`, 1);
       this.line1 = line1;
       this.line2 = line2;
       this.target = target;
@@ -270,7 +270,7 @@
 
   class CoincidentConstraint extends Constraint {
     constructor(p1, p2) {
-      super(`点一致 ${p1.id}-${p2.id}`, 1);
+      super(`一致 ${p1.id}-${p2.id}`, 1);
       this.p1 = p1;
       this.p2 = p2;
     }
@@ -312,7 +312,7 @@
 
   class PointOnLineConstraint extends Constraint {
     constructor(point, line) {
-      super(`轤ｹ-邱壹荳閾ｴ ${point.id}-${line.id}`, 1);
+      super(`点-線一致 ${point.id}-${line.id}`, 1);
       this.point = point;
       this.line = line;
     }
@@ -428,7 +428,7 @@
 
   class PerpendicularConstraint extends Constraint {
     constructor(l1, l2) {
-      super(`直交 ${l1.id}-${l2.id}`, 10);
+      super(`垂直 ${l1.id}-${l2.id}`, 10);
       this.line1 = l1;
       this.line2 = l2;
       this.degenerateAtCreation = l1.length() < MIN_ORIENTATION_LENGTH || l2.length() < MIN_ORIENTATION_LENGTH;
@@ -448,7 +448,7 @@
 
   class CollinearConstraint extends Constraint {
     constructor(l1, l2) {
-      super(`一致 ${l1.id}-${l2.id}`, 10);
+      super(`同一直線 ${l1.id}-${l2.id}`, 10);
       this.line1 = l1;
       this.line2 = l2;
       this.degenerateAtCreation = l1.length() < MIN_ORIENTATION_LENGTH || l2.length() < MIN_ORIENTATION_LENGTH;
@@ -468,7 +468,7 @@
 
   class EqualLengthConstraint extends Constraint {
     constructor(line1, line2) {
-      super(`等長 ${line1.id}-${line2.id}`, 1);
+      super(`等寸 ${line1.id}-${line2.id}`, 1);
       this.line1 = line1;
       this.line2 = line2;
     }
@@ -518,7 +518,7 @@
 
   class EqualRadiusConstraint extends Constraint {
     constructor(a, b) {
-      super(`同半径 ${a.id}-${b.id}`, 1);
+      super(`等寸 ${a.id}-${b.id}`, 1);
       this.a = a;
       this.b = b;
     }
@@ -631,7 +631,7 @@
 
   class PointVerticalConstraint extends Constraint {
     constructor(p1, p2) {
-      super(`点鉛直 ${p1.id}-${p2.id}`, 1);
+      super(`点垂直 ${p1.id}-${p2.id}`, 1);
       this.p1 = p1;
       this.p2 = p2;
     }

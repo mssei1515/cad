@@ -123,8 +123,9 @@
   let historyRestoring = false;
   const HISTORY_LIMIT = 80;
   const viewport = { x: 0, y: 0, scale: 1 };
-  const MIN_ZOOM = 0.15;
+  const MIN_ZOOM = 0.001;
   const MAX_ZOOM = 10000000;
+  const GRID_SCREEN_STEP_PX = 32;
   const CONSTRAINT_ACCEPT_ERROR = 1e-4;
   const DEFAULT_FILLET_RADIUS = 30;
   const MIN_LINE_LENGTH = Math.max(MIN_ORIENTATION_LENGTH, solver.minLineLength || 12);
@@ -2201,7 +2202,9 @@
     if (percent >= 1000000) return `${(percent / 1000000).toFixed(2)}M%`;
     if (percent >= 10000) return `${(percent / 1000).toFixed(1)}k%`;
     if (percent >= 1000) return `${percent.toFixed(0)}%`;
-    return `${percent.toFixed(percent >= 100 ? 0 : 1)}%`;
+    if (percent >= 100) return `${percent.toFixed(0)}%`;
+    if (percent >= 1) return `${percent.toFixed(1)}%`;
+    return `${percent.toFixed(2)}%`;
   }
 
   function canvasScreenPoint(e) {
@@ -2363,6 +2366,60 @@
       x2: primitive.center.x + r,
       y2: primitive.center.y + r,
     };
+  }
+
+  function mergeBounds(bounds, box) {
+    if (!box) return bounds;
+    const x1 = box.x1 ?? box.left;
+    const y1 = box.y1 ?? box.top;
+    const x2 = box.x2 ?? box.right;
+    const y2 = box.y2 ?? box.bottom;
+    if (![x1, y1, x2, y2].every(Number.isFinite)) return bounds;
+    if (!bounds) return { x1, y1, x2, y2 };
+    return {
+      x1: Math.min(bounds.x1, x1),
+      y1: Math.min(bounds.y1, y1),
+      x2: Math.max(bounds.x2, x2),
+      y2: Math.max(bounds.y2, y2),
+    };
+  }
+
+  function sketchGeometryBounds(sketchId = activeSketchId()) {
+    let bounds = null;
+    for (const line of model.lines) {
+      if (elementSketchId(line) === sketchId) bounds = mergeBounds(bounds, lineBBox(line));
+    }
+    for (const circle of model.circles) {
+      if (elementSketchId(circle) === sketchId) bounds = mergeBounds(bounds, primitiveBBox(circle));
+    }
+    for (const arc of model.arcs) {
+      if (elementSketchId(arc) === sketchId) bounds = mergeBounds(bounds, primitiveBBox(arc));
+    }
+    for (const point of model.points) {
+      if (elementSketchId(point) === sketchId) bounds = mergeBounds(bounds, { x1: point.x, y1: point.y, x2: point.x, y2: point.y });
+    }
+    return bounds;
+  }
+
+  function fitBoundsToViewport(bounds, paddingPx = 96) {
+    if (!bounds) return false;
+    const rect = canvas.getBoundingClientRect();
+    if (rect.width <= 0 || rect.height <= 0) return false;
+    const width = Math.max(bounds.x2 - bounds.x1, MIN_LINE_LENGTH);
+    const height = Math.max(bounds.y2 - bounds.y1, MIN_LINE_LENGTH);
+    const availableWidth = Math.max(80, rect.width - paddingPx * 2);
+    const availableHeight = Math.max(80, rect.height - paddingPx * 2);
+    const nextScale = clampZoom(Math.min(availableWidth / width, availableHeight / height));
+    const centerX = (bounds.x1 + bounds.x2) / 2;
+    const centerY = (bounds.y1 + bounds.y2) / 2;
+    viewport.scale = nextScale;
+    viewport.x = rect.width / 2 - centerX * viewport.scale;
+    viewport.y = rect.height / 2 - centerY * viewport.scale;
+    return true;
+  }
+
+  function fitSketchToViewport(sketchId = activeSketchId(), paddingPx = 96) {
+    return fitBoundsToViewport(sketchGeometryBounds(sketchId), paddingPx);
   }
 
   function arcSamplePoints(arc, count = 24) {
@@ -3789,27 +3846,24 @@
 
   function drawGrid(w, h) {
     if (isPresentationMode()) return;
-    const left = -viewport.x / viewport.scale;
-    const top = -viewport.y / viewport.scale;
-    const right = left + w / viewport.scale;
-    const bottom = top + h / viewport.scale;
-    const step = 25;
-    const startX = Math.floor(left / step) * step;
-    const startY = Math.floor(top / step) * step;
-
+    const dpr = window.devicePixelRatio || 1;
+    const step = GRID_SCREEN_STEP_PX;
+    const offsetX = ((viewport.x % step) + step) % step;
+    const offsetY = ((viewport.y % step) + step) % step;
     ctx.save();
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.strokeStyle = "#eef2f7";
-    ctx.lineWidth = 1 / viewport.scale;
-    for (let x = startX; x <= right; x += step) {
+    ctx.lineWidth = 1;
+    for (let x = offsetX; x <= w; x += step) {
       ctx.beginPath();
-      ctx.moveTo(x, top);
-      ctx.lineTo(x, bottom);
+      ctx.moveTo(x, 0);
+      ctx.lineTo(x, h);
       ctx.stroke();
     }
-    for (let y = startY; y <= bottom; y += step) {
+    for (let y = offsetY; y <= h; y += step) {
       ctx.beginPath();
-      ctx.moveTo(left, y);
-      ctx.lineTo(right, y);
+      ctx.moveTo(0, y);
+      ctx.lineTo(w, y);
       ctx.stroke();
     }
     ctx.restore();
@@ -5478,6 +5532,10 @@
     draw();
   }
 
+  function sketchHasDimensionConstraint(sketchId = activeSketchId()) {
+    return model.constraints.some((constraint) => constraintSketchId(constraint) === sketchId && constraint.dimension);
+  }
+
   function submitDistanceValue() {
     if (!pendingCommand || pendingCommand.type !== "distance-value") return;
     const value = Number(pendingCommand.buffer);
@@ -5488,6 +5546,8 @@
       return;
     }
     const { target, dimension, constraint, referenceSketchId, sketchId } = pendingCommand;
+    const targetSketchId = sketchId || activeSketchId();
+    const shouldFitFirstDimension = !constraint && !sketchHasDimensionConstraint(targetSketchId);
     pendingCommand = null;
     hideDimensionValueInput();
     if (constraint) {
@@ -5508,7 +5568,11 @@
       draw();
       return;
     }
-    addDistanceConstraintFromTarget(target, value, dimension, { referenceSketchId, sketchId });
+    const ok = addDistanceConstraintFromTarget(target, value, dimension, { referenceSketchId, sketchId });
+    if (ok && shouldFitFirstDimension && fitSketchToViewport(targetSketchId)) {
+      setHint(`最初の寸法 ${value} に合わせて表示スケールを調整しました`);
+      draw();
+    }
   }
 
   function handleDistanceKey(e) {
