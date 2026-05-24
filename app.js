@@ -8203,7 +8203,10 @@
       return;
     }
 
-    if (!dragSession) return;
+    if (!dragSession) {
+      recordHistory("操作");
+      return;
+    }
     const session = dragSession;
     const completedLabel = dragLabel(session);
     dragSession = null;
@@ -8750,6 +8753,14 @@
               dimension: element?.dimension ? { ...element.dimension } : null,
             }
           : null;
+      },
+      historyState() {
+        return {
+          undoCount: undoStack.length,
+          redoCount: redoStack.length,
+          undoDisabled: document.getElementById("undoBtn")?.disabled,
+          redoDisabled: document.getElementById("redoBtn")?.disabled,
+        };
       },
     };
   }

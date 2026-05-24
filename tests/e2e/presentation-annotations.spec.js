@@ -80,3 +80,28 @@ test("presentation annotations can be dragged on canvas", async ({ page }) => {
   expect(afterRedo.leader.world.x).toBeCloseTo(afterLeader.leader.world.x, 5);
   expect(afterRedo.leader.world.y).toBeCloseTo(afterLeader.leader.world.y, 5);
 });
+
+test("history buttons enable after normal canvas edits", async ({ page }) => {
+  await page.goto(`${baseUrl}/index.html?test=1`);
+  await page.waitForFunction(() => window.__cadTest);
+
+  const initial = await page.evaluate(() => window.__cadTest.historyState());
+  expect(initial.undoDisabled).toBe(true);
+  expect(initial.redoDisabled).toBe(true);
+
+  await page.click("#toolPoint");
+  await page.mouse.click(500, 450);
+  const afterEdit = await page.evaluate(() => window.__cadTest.historyState());
+  expect(afterEdit.undoDisabled).toBe(false);
+  expect(afterEdit.redoDisabled).toBe(true);
+
+  await page.click("#undoBtn");
+  const afterUndo = await page.evaluate(() => window.__cadTest.historyState());
+  expect(afterUndo.undoDisabled).toBe(true);
+  expect(afterUndo.redoDisabled).toBe(false);
+
+  await page.keyboard.press("Control+Y");
+  const afterRedo = await page.evaluate(() => window.__cadTest.historyState());
+  expect(afterRedo.undoDisabled).toBe(false);
+  expect(afterRedo.redoDisabled).toBe(true);
+});
