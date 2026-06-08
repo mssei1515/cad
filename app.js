@@ -96,6 +96,7 @@
   let selectionRectSession = null;
   let lineStartPoint = null;
   let rectangleStartPoint = null;
+  let lineStartRollback = null;
   let filletFirstLine = null;
   let circleCenterPoint = null;
   let arcCenterPoint = null;
@@ -2135,7 +2136,33 @@
     return Boolean(lineStartPoint || rectangleStartPoint || filletFirstLine || circleCenterPoint || arcCenterPoint || arcStartPoint);
   }
 
+  function beginTransientLineStartRollback() {
+    lineStartRollback = {
+      pointLength: model.points.length,
+      constraintLength: model.constraints.length,
+      pointSeq,
+      lineLength: model.lines.length,
+    };
+  }
+
+  function clearTransientLineStartRollback() {
+    lineStartRollback = null;
+  }
+
+  function rollbackTransientLineStart() {
+    if (!lineStartRollback) return false;
+    if (model.lines.length === lineStartRollback.lineLength) {
+      model.points.length = lineStartRollback.pointLength;
+      model.constraints.length = lineStartRollback.constraintLength;
+      pointSeq = lineStartRollback.pointSeq;
+      constraintAnalysisState = null;
+    }
+    lineStartRollback = null;
+    return true;
+  }
+
   function cancelActiveDrawOperation() {
+    rollbackTransientLineStart();
     lineStartPoint = null;
     rectangleStartPoint = null;
     filletFirstLine = null;
@@ -4261,6 +4288,7 @@
     ctx.stroke();
 
     for (const p of points) {
+      if (p.showExtension === false) continue;
       ctx.beginPath();
       ctx.moveTo(p.extensionStart.x, p.extensionStart.y);
       ctx.lineTo(p.extensionEnd.x, p.extensionEnd.y);
@@ -4375,7 +4403,7 @@
     const lineMax = Math.max(max, textProjection + labelPad);
     const lineA = { x: anchor.x + d.x * lineMin, y: anchor.y + d.y * lineMin };
     const lineB = { x: anchor.x + d.x * lineMax, y: anchor.y + d.y * lineMax };
-    const projectedPoints = points.map((source) => {
+    const projectedPoints = points.map((source, index) => {
       const t = (source.x - anchor.x) * d.x + (source.y - anchor.y) * d.y;
       const onDimension = { x: anchor.x + d.x * t, y: anchor.y + d.y * t };
       const ex = onDimension.x - source.x;
@@ -4386,6 +4414,7 @@
       const visibleGap = Math.min(gap, Math.max(0, el - 2 / viewport.scale));
       return {
         source,
+        showExtension: shouldShowDimensionExtension(target, index),
         extensionStart: {
           x: source.x + ux * visibleGap,
           y: source.y + uy * visibleGap,
@@ -4408,6 +4437,12 @@
       hitA: { x: lineA.x - d.x * tick, y: lineA.y - d.y * tick },
       hitB: { x: lineB.x + d.x * tick, y: lineB.y + d.y * tick },
     };
+  }
+
+  function shouldShowDimensionExtension(target, index) {
+    if (target.kind === "point-line") return index === 0;
+    if (target.kind === "line-line") return false;
+    return true;
   }
 
   function angleDimensionLayout(target, dimension) {
@@ -4998,11 +5033,12 @@
   function updateToolbar() {
     const geometryMode = isGeometryMode();
     const presentationMode = isPresentationMode();
+    const constructionState = constructionToggleState(geometryMode);
     const states = {
       toolSelect: geometryMode && mode === "select" && !pendingConstraintCommand && !pendingCommand,
       toolPoint: geometryMode && mode === "point",
-      toolLine: geometryMode && mode === "line" && !constructionLineMode,
-      toolConstructionLine: geometryMode && mode === "line" && constructionLineMode,
+      toolLine: geometryMode && mode === "line",
+      toolConstructionLine: constructionState.active,
       toolRectangle: geometryMode && mode === "rectangle",
       toolFillet: geometryMode && mode === "fillet",
       toolTrim: geometryMode && mode === "trim",
@@ -5019,7 +5055,25 @@
       button.setAttribute("aria-pressed", String(active));
       button.setAttribute("aria-disabled", id.startsWith("presentation") ? String(!presentationMode) : String(!geometryMode));
     }
+    const constructionButton = document.getElementById("toolConstructionLine");
+    constructionButton?.classList.toggle("mixed", constructionState.mixed);
+    const constructionStatus = constructionButton?.querySelector(".construction-status");
+    if (constructionStatus) {
+      constructionStatus.textContent = constructionState.mixed ? "混在" : selectedLines.length > 0 ? "補助線" : "補助作図";
+    }
     updateHistoryButtons();
+  }
+
+  function constructionToggleState(geometryMode = isGeometryMode()) {
+    if (!geometryMode) return { active: false, mixed: false };
+    if (selectedLines.length > 0 && selectedPoints.length === 0 && selectedCircles.length === 0 && selectedArcs.length === 0 && !selectedArcEndpoint) {
+      const constructionCount = selectedLines.filter((line) => line.construction).length;
+      return {
+        active: constructionCount === selectedLines.length,
+        mixed: constructionCount > 0 && constructionCount < selectedLines.length,
+      };
+    }
+    return { active: mode === "line" && constructionLineMode, mixed: false };
   }
 
   function canApplyConstraint(type) {
@@ -7128,6 +7182,7 @@
     let snap = activeSnap;
     if (lineStartPoint) p = pointAtMinimumDistance(lineStartPoint, p);
     if (snap && !samePosition(p, snap)) snap = null;
+    if (!lineStartPoint) beginTransientLineStartRollback();
     const endpoint = lineStartPoint && hypot2(p.x - lineStartPoint.x, p.y - lineStartPoint.y) <= MIN_LINE_LENGTH + 1e-9 ? addPoint(p.x, p.y, false, "endpoint") : endpointAt(p.x, p.y);
     pointerPreview = p;
 
@@ -7146,6 +7201,7 @@
 
     const l = addLine(lineStartPoint, endpoint);
     if (l) {
+      clearTransientLineStartRollback();
       addPointSnapConstraints(endpoint, snap);
       if (lockOrthogonal) addLineOrientationConstraint(l);
       selectedPoints = [];
@@ -8680,6 +8736,7 @@
       const next = !selectedLines.every((line) => line.construction);
       for (const line of selectedLines) line.construction = next;
       setHint(next ? "選択線を補助線にしました" : "選択線を通常線にしました");
+      clearSelection();
       updateUI();
       draw();
       recordHistory("補助線切替");
