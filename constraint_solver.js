@@ -1051,7 +1051,7 @@
 
     analyzeConstraintState(options = {}) {
       const errorTolerance = Number.isFinite(options.errorTolerance) ? options.errorTolerance : 1e-4;
-      const rankTolerance = Number.isFinite(options.rankTolerance) ? options.rankTolerance : 1e-9;
+      const rankTolerance = Number.isFinite(options.rankTolerance) ? options.rankTolerance : 1e-8;
       const activityTolerance = Number.isFinite(options.activityTolerance) ? options.activityTolerance : 1e-7;
       const hasSubset = Array.isArray(options.variables) || Array.isArray(options.constraints);
       const vars = Array.isArray(options.variables) ? options.variables : this.getVariables();

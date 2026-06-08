@@ -7675,7 +7675,7 @@
     if (item instanceof Line) {
       const endpoints = [item.p1, item.p2];
       model.lines = model.lines.filter((line) => line !== item);
-      model.points = model.points.filter((point) => !endpoints.includes(point) || point.kind !== "endpoint" || isPointUsedByPrimitive(point) || isReferencePoint(point));
+      removeOrphanTrimmedEndpoints(endpoints);
     } else if (item instanceof Circle) {
       const center = item.center;
       model.circles = model.circles.filter((circle) => circle !== item);
@@ -7685,6 +7685,13 @@
       model.arcs = model.arcs.filter((arc) => arc !== item);
       model.points = model.points.filter((point) => point !== center || point.kind !== "endpoint" || isPointUsedByPrimitive(point) || isReferencePoint(point));
     }
+  }
+
+  function removeOrphanTrimmedEndpoints(points) {
+    const removable = points.filter((point) => point?.kind === "endpoint" && !isPointUsedByPrimitive(point));
+    if (removable.length === 0) return;
+    model.constraints = model.constraints.filter((constraint) => !removable.some((point) => constraintReferencesPoint(constraint, point)));
+    model.points = model.points.filter((point) => !removable.includes(point));
   }
 
   function executeLineTrim(preview) {
