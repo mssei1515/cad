@@ -312,13 +312,6 @@ button svg {
   display: inline;
 }
 
-.construction-toggle-btn.mixed {
-  border-color: #f59e0b;
-  background: #fff7ed;
-  color: #b45309;
-  box-shadow: inset 0 0 0 1px rgb(245 158 11 / 35%);
-}
-
 button.primary {
   background: var(--accent);
   border-color: var(--accent);

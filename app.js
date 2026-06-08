@@ -4412,17 +4412,18 @@
       const ux = el > 1e-12 ? ex / el : d.x;
       const uy = el > 1e-12 ? ey / el : d.y;
       const visibleGap = Math.min(gap, Math.max(0, el - 2 / viewport.scale));
+      const lineSideOffset = dimensionLineSideExtensionOffset(target, index, t, min, max, d, gap);
       return {
         source,
         showExtension: shouldShowDimensionExtension(target, index),
         extensionStart: {
-          x: source.x + ux * visibleGap,
-          y: source.y + uy * visibleGap,
+          x: source.x + lineSideOffset.x + ux * visibleGap,
+          y: source.y + lineSideOffset.y + uy * visibleGap,
         },
         onDimension,
         extensionEnd: {
-          x: onDimension.x + ux * extension,
-          y: onDimension.y + uy * extension,
+          x: onDimension.x + lineSideOffset.x + ux * extension,
+          y: onDimension.y + lineSideOffset.y + uy * extension,
         },
       };
     });
@@ -4440,9 +4441,14 @@
   }
 
   function shouldShowDimensionExtension(target, index) {
-    if (target.kind === "point-line") return index === 0;
-    if (target.kind === "line-line") return false;
     return true;
+  }
+
+  function dimensionLineSideExtensionOffset(target, index, t, min, max, d, gap) {
+    const lineSide = target.kind === "line-line" || (target.kind === "point-line" && index === 1);
+    if (!lineSide) return { x: 0, y: 0 };
+    const sign = t <= (min + max) / 2 ? 1 : -1;
+    return { x: d.x * gap * sign, y: d.y * gap * sign };
   }
 
   function angleDimensionLayout(target, dimension) {
@@ -5056,7 +5062,6 @@
       button.setAttribute("aria-disabled", id.startsWith("presentation") ? String(!presentationMode) : String(!geometryMode));
     }
     const constructionButton = document.getElementById("toolConstructionLine");
-    constructionButton?.classList.toggle("mixed", constructionState.mixed);
     const constructionStatus = constructionButton?.querySelector(".construction-status");
     if (constructionStatus) {
       constructionStatus.textContent = constructionState.mixed ? "混在" : selectedLines.length > 0 ? "補助線" : "補助作図";
@@ -5070,7 +5075,7 @@
       const constructionCount = selectedLines.filter((line) => line.construction).length;
       return {
         active: constructionCount === selectedLines.length,
-        mixed: constructionCount > 0 && constructionCount < selectedLines.length,
+        mixed: false,
       };
     }
     return { active: mode === "line" && constructionLineMode, mixed: false };
@@ -7607,13 +7612,48 @@
     return null;
   }
 
-  function cleanupTrimConstraints(item) {
+  function cleanupTrimConstraints(item, options = {}) {
     model.constraints = model.constraints.filter((c) => {
-      if (item instanceof Line && constraintReferencesLine(c, item)) return false;
+      if (item instanceof Line && constraintReferencesLine(c, item)) return options.preserveLineSupport && shouldPreserveTrimmedLineConstraint(c, item);
       if (item instanceof Arc && constraintReferencesPrimitive(c, item)) return false;
       if (item instanceof Circle && constraintReferencesPrimitive(c, item)) return false;
       return true;
     });
+  }
+
+  function shouldPreserveTrimmedLineConstraint(c, line) {
+    if (c instanceof HorizontalConstraint || c instanceof VerticalConstraint) return true;
+    if (c instanceof ParallelConstraint || c instanceof PerpendicularConstraint || c instanceof CollinearConstraint || c instanceof LineAngleConstraint) return true;
+    if (c instanceof PointOnLineConstraint || c instanceof PointOnLineMidpointConstraint || c instanceof ArcEndpointOnLineConstraint) return true;
+    if (c instanceof PointLineDistanceConstraint || c instanceof LineLineDistanceConstraint || c instanceof LineCircleTangentConstraint) return true;
+    return false;
+  }
+
+  function cloneTrimmedLineConstraint(c, sourceLine, targetLine) {
+    if (c instanceof HorizontalConstraint && c.line === sourceLine) return new HorizontalConstraint(targetLine);
+    if (c instanceof VerticalConstraint && c.line === sourceLine) return new VerticalConstraint(targetLine);
+    if (c instanceof ParallelConstraint) {
+      if (c.line1 === sourceLine) return new ParallelConstraint(targetLine, c.line2);
+      if (c.line2 === sourceLine) return new ParallelConstraint(c.line1, targetLine);
+    }
+    if (c instanceof PerpendicularConstraint) {
+      if (c.line1 === sourceLine) return new PerpendicularConstraint(targetLine, c.line2);
+      if (c.line2 === sourceLine) return new PerpendicularConstraint(c.line1, targetLine);
+    }
+    if (c instanceof CollinearConstraint) {
+      if (c.line1 === sourceLine) return new CollinearConstraint(targetLine, c.line2);
+      if (c.line2 === sourceLine) return new CollinearConstraint(c.line1, targetLine);
+    }
+    if (c instanceof LineAngleConstraint) {
+      if (c.line1 === sourceLine) return new LineAngleConstraint(targetLine, c.line2, c.target, c.startFlip, c.endFlip);
+      if (c.line2 === sourceLine) return new LineAngleConstraint(c.line1, targetLine, c.target, c.startFlip, c.endFlip);
+    }
+    return null;
+  }
+
+  function cloneTrimmedLineConstraints(sourceLine, targetLine) {
+    const clones = model.constraints.map((c) => cloneTrimmedLineConstraint(c, sourceLine, targetLine)).filter(Boolean);
+    for (const clone of clones) pushModelConstraint(clone, elementSketchId(sourceLine));
   }
 
   function addBoundaryPointConstraint(point, boundary) {
@@ -7654,7 +7694,7 @@
       return;
     }
     const { left, right } = preview.interval;
-    cleanupTrimConstraints(line);
+    cleanupTrimConstraints(line, { preserveLineSupport: true });
     if (left.t <= 1e-6) {
       const p = addPoint(right.point.x, right.point.y, false, "endpoint");
       line.p1 = p;
@@ -7668,7 +7708,8 @@
       const pLeft = addPoint(left.point.x, left.point.y, false, "endpoint");
       const pRight = addPoint(right.point.x, right.point.y, false, "endpoint");
       line.p2 = pLeft;
-      addLine(pRight, oldP2);
+      const newLine = addLine(pRight, oldP2, line.construction);
+      if (newLine) cloneTrimmedLineConstraints(line, newLine);
       addBoundaryPointConstraint(pLeft, left);
       addBoundaryPointConstraint(pRight, right);
     }
