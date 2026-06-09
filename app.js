@@ -96,6 +96,7 @@
   let selectionRectSession = null;
   let blankDoubleClickCandidate = null;
   let lineStartPoint = null;
+  let pointStartRollback = null;
   let rectangleStartPoint = null;
   let lineStartRollback = null;
   let filletFirstLine = null;
@@ -128,6 +129,7 @@
   const MIN_ZOOM = 0.001;
   const MAX_ZOOM = 10000000;
   const GRID_SCREEN_STEP_PX = 32;
+  const CONSTRUCTION_EXTENSION_SCREEN_PX = 12;
   const CONSTRAINT_ACCEPT_ERROR = 1e-4;
   const DEFAULT_FILLET_RADIUS = 30;
   const MIN_LINE_LENGTH = Math.max(MIN_ORIENTATION_LENGTH, solver.minLineLength || 12);
@@ -1466,6 +1468,7 @@
     dimensionDragSession = null;
     panSession = null;
     lineStartPoint = null;
+    pointStartRollback = null;
     rectangleStartPoint = null;
     filletFirstLine = null;
     circleCenterPoint = null;
@@ -2119,6 +2122,7 @@
 
   function exitDrawMode() {
     lineStartPoint = null;
+    pointStartRollback = null;
     rectangleStartPoint = null;
     filletFirstLine = null;
     circleCenterPoint = null;
@@ -2151,6 +2155,36 @@
     lineStartRollback = null;
   }
 
+  function beginTransientPointRollback() {
+    pointStartRollback = {
+      pointLength: model.points.length,
+      constraintLength: model.constraints.length,
+      pointSeq,
+      createdPoint: null,
+      createdAt: performance.now(),
+    };
+  }
+
+  function clearTransientPointRollback() {
+    pointStartRollback = null;
+  }
+
+  function rollbackTransientPoint() {
+    if (!pointStartRollback) return false;
+    const transientSnapshot = historySnapshot();
+    model.points.length = pointStartRollback.pointLength;
+    model.constraints.length = pointStartRollback.constraintLength;
+    pointSeq = pointStartRollback.pointSeq;
+    constraintAnalysisState = null;
+    pointStartRollback = null;
+    if (!historyRestoring && undoStack.length > 1 && undoStack[undoStack.length - 1] === transientSnapshot) {
+      undoStack.pop();
+      redoStack = [];
+      updateHistoryButtons();
+    }
+    return true;
+  }
+
   function rollbackTransientLineStart() {
     if (!lineStartRollback) return false;
     if (model.lines.length === lineStartRollback.lineLength) {
@@ -2165,6 +2199,7 @@
 
   function cancelActiveDrawOperation() {
     rollbackTransientLineStart();
+    clearTransientPointRollback();
     lineStartPoint = null;
     rectangleStartPoint = null;
     filletFirstLine = null;
@@ -4176,7 +4211,7 @@
       ctx.setLineDash(presentation ? presentationLineDash(style.lineType) : construction ? [12 / viewport.scale, 4 / viewport.scale, 2 / viewport.scale, 4 / viewport.scale] : []);
       ctx.shadowColor = sel || treeHovered ? "rgba(14, 165, 233, 0.45)" : "transparent";
       ctx.shadowBlur = sel || treeHovered ? 8 / viewport.scale : 0;
-      const constructionExtension = 12 / viewport.scale;
+      const constructionExtension = CONSTRUCTION_EXTENSION_SCREEN_PX / viewport.scale;
       const drawSegment = construction ? extendedLineSegment(l, constructionExtension) : { p1: l.p1, p2: l.p2 };
       ctx.beginPath();
       ctx.moveTo(drawSegment.p1.x, drawSegment.p1.y);
@@ -4415,11 +4450,11 @@
       const el = hypot2(ex, ey);
       const ux = el > 1e-12 ? ex / el : d.x;
       const uy = el > 1e-12 ? ey / el : d.y;
+      const lineSideOffset = dimensionLineSideExtensionOffset(target, index, gap, source);
       const visibleGap = Math.min(gap, Math.max(0, el - 2 / viewport.scale));
-      const lineSideOffset = dimensionLineSideExtensionOffset(target, index, gap);
       return {
         source,
-        showExtension: shouldShowDimensionExtension(target, index),
+        showExtension: shouldShowDimensionExtension(target, index, { source, onDimension, lineSideOffset }),
         extensionStart: {
           x: source.x + lineSideOffset.x + ux * visibleGap,
           y: source.y + lineSideOffset.y + uy * visibleGap,
@@ -4444,17 +4479,46 @@
     };
   }
 
-  function shouldShowDimensionExtension(target, index) {
-    return true;
+  function dimensionSourceLine(target, index) {
+    if (target.kind === "point-line" && index === 1) return target.line;
+    if (target.kind === "line-line") return index === 0 ? target.line1 : target.line2;
+    return null;
   }
 
-  function dimensionLineSideExtensionOffset(target, index, gap) {
-    let line = null;
-    if (target.kind === "point-line" && index === 1) line = target.line;
-    if (target.kind === "line-line") line = index === 0 ? target.line1 : target.line2;
-    if (!line) return { x: 0, y: 0 };
+  function lineOutwardDirectionAtSource(line, source) {
     const u = lineUnit(line);
-    return { x: u.x * gap, y: u.y * gap };
+    const tol = Math.max(MIN_LINE_LENGTH * 10, 1e-7);
+    const d1 = hypot2(source.x - line.p1.x, source.y - line.p1.y);
+    const d2 = hypot2(source.x - line.p2.x, source.y - line.p2.y);
+    if (d1 <= tol && d1 <= d2) return { x: -u.x, y: -u.y, endpoint: "p1" };
+    if (d2 <= tol) return { x: u.x, y: u.y, endpoint: "p2" };
+    return null;
+  }
+
+  function shouldShowDimensionExtension(target, index, context = {}) {
+    const line = dimensionSourceLine(target, index);
+    if (!line || !context.source || !context.onDimension) return true;
+    const vx = context.onDimension.x - context.source.x;
+    const vy = context.onDimension.y - context.source.y;
+    const len = hypot2(vx, vy);
+    if (len <= 1e-12) return false;
+    const v = { x: vx / len, y: vy / len };
+    const u = lineUnit(line);
+    const parallel = Math.abs(v.x * u.y - v.y * u.x) <= 0.08;
+    if (!parallel) return true;
+    const outward = lineOutwardDirectionAtSource(line, context.source);
+    if (!outward) return false;
+    return v.x * outward.x + v.y * outward.y > 0.1;
+  }
+
+  function dimensionLineSideExtensionOffset(target, index, gap, source = null) {
+    const line = dimensionSourceLine(target, index);
+    if (!line) return { x: 0, y: 0 };
+    const outward = source ? lineOutwardDirectionAtSource(line, source) : null;
+    const direction = outward || lineUnit(line);
+    const constructionGap = outward && line.construction ? CONSTRUCTION_EXTENSION_SCREEN_PX / viewport.scale : 0;
+    const totalGap = gap + constructionGap;
+    return { x: direction.x * totalGap, y: direction.y * totalGap };
   }
 
   function angleDimensionLayout(target, dimension) {
@@ -8148,9 +8212,12 @@
     }
 
     if (mode === "point") {
+      clearTransientPointRollback();
+      beginTransientPointRollback();
       const sp = snapForDrawing(p);
       const snap = activeSnap;
       const np = addPoint(sp.x, sp.y, false);
+      if (pointStartRollback) pointStartRollback.createdPoint = np;
       addPointSnapConstraints(np, snap);
       clearSnap();
       selectedPoints = [np];
@@ -8639,8 +8706,32 @@
     );
   }
 
+  function isTransientPointCommandHit(hits = {}) {
+    return Boolean(
+      mode === "point" &&
+        pointStartRollback &&
+        pointStartRollback.createdPoint &&
+        performance.now() - pointStartRollback.createdAt <= 650 &&
+        hits.hitP === pointStartRollback.createdPoint &&
+        model.points.indexOf(pointStartRollback.createdPoint) >= pointStartRollback.pointLength,
+    );
+  }
+
   function isBlankDoubleClickTarget(hits = {}) {
     if (isBlankCanvasHit(hits)) return true;
+    if (
+      isTransientPointCommandHit(hits) &&
+      !hits.hitL &&
+      !hits.hitC &&
+      !hits.hitArcEnd &&
+      !hits.hitA &&
+      !hits.hitD &&
+      !hits.annotationHit &&
+      !hits.presentationHit &&
+      !hits.inactiveHit
+    ) {
+      return true;
+    }
     return isTransientLineStartHit(hits) &&
       !hits.hitC &&
       !hits.hitArcEnd &&
@@ -8689,11 +8780,18 @@
       return true;
     }
     if (mode === "line") {
-      if (hasActiveDrawOperation()) {
+      if (lineStartPoint) {
         cancelActiveDrawOperation();
         updateUI();
         draw();
+      } else {
+        exitDrawMode();
       }
+      return true;
+    }
+    if (mode === "point") {
+      rollbackTransientPoint();
+      exitDrawMode();
       return true;
     }
     if (hasActiveDrawOperation()) {
