@@ -353,7 +353,8 @@
   }
 
   function presentationBaseStyle(item) {
-    return item instanceof Line && item.construction ? DEFAULT_PRESENTATION_CONSTRUCTION_STYLE : DEFAULT_PRESENTATION_STYLE;
+    const construction = (item instanceof Line || item instanceof Circle || item instanceof Arc) && item.construction;
+    return construction ? DEFAULT_PRESENTATION_CONSTRUCTION_STYLE : DEFAULT_PRESENTATION_STYLE;
   }
 
   function presentationStyleForElement(item) {
@@ -1409,18 +1410,18 @@
     return null;
   }
 
-  function addCircle(center, radiusValue) {
+  function addCircle(center, radiusValue, construction = constructionLineMode) {
     if (!center || !Number.isFinite(radiusValue) || radiusValue < MIN_ORIENTATION_LENGTH) return null;
-    const c = new Circle(`C${circleSeq++}`, center, radiusValue);
+    const c = new Circle(`C${circleSeq++}`, center, radiusValue, construction);
     assignSketchId(c);
     model.circles.push(c);
     return c;
   }
 
-  function addArc(center, radiusValue, startAngle, endAngle) {
+  function addArc(center, radiusValue, startAngle, endAngle, construction = constructionLineMode) {
     if (!center || !Number.isFinite(radiusValue) || radiusValue < MIN_ORIENTATION_LENGTH) return null;
     if (!Number.isFinite(startAngle) || !Number.isFinite(endAngle)) return null;
-    const a = new Arc(`A${arcSeq++}`, center, radiusValue, startAngle, endAngle);
+    const a = new Arc(`A${arcSeq++}`, center, radiusValue, startAngle, endAngle, construction);
     assignSketchId(a);
     normalizeArcSweep(a);
     model.arcs.push(a);
@@ -1670,8 +1671,8 @@
       activePresentationSheetId: activePresentationSheet().id,
       points: model.points.map((p) => ({ id: p.id, x: p.x, y: p.y, fixed: p.fixed, kind: p.kind || (isPointUsedByPrimitive(p) ? "endpoint" : "explicit"), sketchId: elementSketchId(p) })),
       lines: model.lines.map((l) => ({ id: l.id, p1: l.p1.id, p2: l.p2.id, construction: Boolean(l.construction), sketchId: elementSketchId(l) })),
-      circles: model.circles.map((c) => ({ id: c.id, center: c.center.id, radius: c.radius(), sketchId: elementSketchId(c) })),
-      arcs: model.arcs.map((a) => ({ id: a.id, center: a.center.id, radius: a.radius(), startAngle: a.startAngle, endAngle: a.endAngle, sketchId: elementSketchId(a) })),
+      circles: model.circles.map((c) => ({ id: c.id, center: c.center.id, radius: c.radius(), construction: Boolean(c.construction), sketchId: elementSketchId(c) })),
+      arcs: model.arcs.map((a) => ({ id: a.id, center: a.center.id, radius: a.radius(), startAngle: a.startAngle, endAngle: a.endAngle, construction: Boolean(a.construction), sketchId: elementSketchId(a) })),
       constraints: model.constraints
         .map((constraint) => {
           const data = serializeConstraint(constraint);
@@ -1947,7 +1948,7 @@
         if (!hasPointKind) radiusPoint.kind = "endpoint";
       }
       if (!Number.isFinite(radius) || radius < MIN_ORIENTATION_LENGTH) throw new Error(`円 ${c.id} の半径が正しくありません`);
-      const circle = new Circle(String(c.id), center, radius);
+      const circle = new Circle(String(c.id), center, radius, Boolean(c.construction));
       circle.sketchId = normalizeSketchId(c.sketchId || center.sketchId);
       circles.push(circle);
     }
@@ -1973,7 +1974,7 @@
         }
       }
       if (!Number.isFinite(radius) || radius < MIN_ORIENTATION_LENGTH || !Number.isFinite(startAngle) || !Number.isFinite(endAngle)) throw new Error(`円弧 ${a.id} の形状が正しくありません`);
-      const arc = new Arc(String(a.id), center, radius, startAngle, endAngle);
+      const arc = new Arc(String(a.id), center, radius, startAngle, endAngle, Boolean(a.construction));
       arc.sketchId = normalizeSketchId(a.sketchId || center.sketchId);
       arcs.push(arc);
     }
@@ -4218,9 +4219,10 @@
       const treeHovered = isSketchTreeHoveredElement(c);
       const sel = (active && selectedCircles.includes(c)) || (presentation && selectedCircles.includes(c)) || refSelected;
       const hovered = ((active || isReferenceHoverElement(c)) && hoveredCircle === c) || (presentation && hoveredCircle === c);
+      const construction = Boolean(c.construction) && !sel && !hovered;
       ctx.strokeStyle = treeHovered ? "#0ea5e9" : presentation && !sel && !hovered ? style.color : constraintStatusColor(c, sel, hovered);
-      ctx.lineWidth = (treeHovered ? 4 : sel ? 4 : hovered ? 2.6 : presentation ? style.lineWidthPx : sketchStrokeWidth(c)) / viewport.scale;
-      ctx.setLineDash(presentation ? presentationLineDash(style.lineType) : []);
+      ctx.lineWidth = (treeHovered ? 4 : sel ? 4 : hovered ? 2.6 : presentation ? style.lineWidthPx : construction ? Math.max(1.8, sketchStrokeWidth(c) * 0.72) : sketchStrokeWidth(c)) / viewport.scale;
+      ctx.setLineDash(presentation ? presentationLineDash(style.lineType) : construction ? [12 / viewport.scale, 4 / viewport.scale, 2 / viewport.scale, 4 / viewport.scale] : []);
       ctx.shadowColor = sel || treeHovered ? "rgba(14, 165, 233, 0.45)" : "transparent";
       ctx.shadowBlur = sel || treeHovered ? 8 / viewport.scale : 0;
       ctx.beginPath();
@@ -4250,10 +4252,11 @@
       const treeHovered = isSketchTreeHoveredElement(a);
       const sel = (active && selectedArcs.includes(a)) || (presentation && selectedArcs.includes(a)) || refSelected;
       const hovered = ((active || isReferenceHoverElement(a)) && hoveredArc === a) || (presentation && hoveredArc === a);
+      const construction = Boolean(a.construction) && !sel && !hovered;
       const angles = arcAngles(a);
       ctx.strokeStyle = treeHovered ? "#0ea5e9" : presentation && !sel && !hovered ? style.color : constraintStatusColor(a, sel, hovered);
-      ctx.lineWidth = (treeHovered ? 4 : sel ? 4 : hovered ? 2.6 : presentation ? style.lineWidthPx : sketchStrokeWidth(a)) / viewport.scale;
-      ctx.setLineDash(presentation ? presentationLineDash(style.lineType) : []);
+      ctx.lineWidth = (treeHovered ? 4 : sel ? 4 : hovered ? 2.6 : presentation ? style.lineWidthPx : construction ? Math.max(1.8, sketchStrokeWidth(a) * 0.72) : sketchStrokeWidth(a)) / viewport.scale;
+      ctx.setLineDash(presentation ? presentationLineDash(style.lineType) : construction ? [12 / viewport.scale, 4 / viewport.scale, 2 / viewport.scale, 4 / viewport.scale] : []);
       ctx.shadowColor = sel || treeHovered ? "rgba(14, 165, 233, 0.45)" : "transparent";
       ctx.shadowBlur = sel || treeHovered ? 8 / viewport.scale : 0;
       ctx.beginPath();
@@ -5069,14 +5072,20 @@
 
   function constructionToggleState(geometryMode = isGeometryMode()) {
     if (!geometryMode) return { active: false, mixed: false };
-    if (selectedLines.length > 0 && selectedPoints.length === 0 && selectedCircles.length === 0 && selectedArcs.length === 0 && !selectedArcEndpoint) {
-      const constructionCount = selectedLines.filter((line) => line.construction).length;
+    const primitives = selectedConstructionTogglePrimitives();
+    if (primitives.length > 0) {
+      const constructionCount = primitives.filter((item) => item.construction).length;
       return {
-        active: constructionCount === selectedLines.length,
+        active: constructionCount === primitives.length,
         mixed: false,
       };
     }
     return { active: constructionLineMode, mixed: false };
+  }
+
+  function selectedConstructionTogglePrimitives() {
+    if (selectedPoints.length > 0 || selectedArcEndpoint || selectedArcEndpointPair || selectedDimensionConstraint) return [];
+    return [...selectedLines, ...selectedCircles, ...selectedArcs];
   }
 
   function canApplyConstraint(type) {
@@ -7757,7 +7766,7 @@
     } else {
       const oldEnd = arc.endAngle;
       arc.endAngle = angleAtArcParam(arc, left.t);
-      const newArc = addArc(arc.center, arc.radius(), angleAtArcParam(arc, right.t), oldEnd);
+      const newArc = addArc(arc.center, arc.radius(), angleAtArcParam(arc, right.t), oldEnd, arc.construction);
       addArcBoundaryConstraint(arc, "end", left);
       if (newArc) addArcBoundaryConstraint(newArc, "start", right);
     }
@@ -7781,7 +7790,7 @@
       const end = angleAtCircleParam(right.t) + (wraps ? Math.PI * 2 : 0);
       const sameRemoved = Math.abs(left.t - preview.interval.left.t) <= 1e-6 && Math.abs(right.t - preview.interval.right.t) <= 1e-6;
       if (sameRemoved || (end - start) * circle.radius() < MIN_ARC_LENGTH) continue;
-      const arc = addArc(circle.center, circle.radius(), start, end);
+      const arc = addArc(circle.center, circle.radius(), start, end, circle.construction);
       if (arc) {
         addArcBoundaryConstraint(arc, "start", left);
         addArcBoundaryConstraint(arc, "end", right);
@@ -7865,7 +7874,7 @@
     const center = addPoint(centerPos.x, centerPos.y, false, "endpoint");
     setLineEndpoint(line1, corner, t1);
     setLineEndpoint(line2, corner, t2);
-    const arc = addArc(center, finalRadius, startAngle, endAngle);
+    const arc = addArc(center, finalRadius, startAngle, endAngle, false);
     if (!arc) return { ok: false, reason: "R面取り円弧を作成できません" };
     const radiusConstraint = new RadiusConstraint(arc, finalRadius);
     radiusConstraint.dimension = defaultDimensionForTarget({ kind: "radius", primitive: arc, value: finalRadius });
@@ -8662,6 +8671,14 @@
   function handleBlankCanvasDoubleClick(pointer, hits = {}) {
     if (!isBlankDoubleClickTarget(hits)) return false;
     blankDoubleClickCandidate = null;
+    if (pendingCommand?.type === "distance-value") {
+      submitDistanceValue();
+      return true;
+    }
+    if (pendingCommand?.type === "fillet-radius-value") {
+      submitFilletRadiusValue();
+      return true;
+    }
     if (pendingCommand) {
       cancelPendingCommand();
       if (isDrawToolMode()) exitDrawMode();
@@ -8669,6 +8686,14 @@
     }
     if (pendingConstraintCommand) {
       cancelConstraintTargetCommand();
+      return true;
+    }
+    if (mode === "line") {
+      if (hasActiveDrawOperation()) {
+        cancelActiveDrawOperation();
+        updateUI();
+        draw();
+      }
       return true;
     }
     if (hasActiveDrawOperation()) {
@@ -8899,10 +8924,11 @@
   document.getElementById("toolConstructionLine")?.addEventListener("click", () => {
     if (rejectPresentationGeometryEdit("Construction line editing")) return;
     cancelConstraintTargetCommand("");
-    if (selectedLines.length > 0 && selectedPoints.length === 0 && selectedCircles.length === 0 && selectedArcs.length === 0 && !selectedArcEndpoint) {
-      const next = !selectedLines.every((line) => line.construction);
-      for (const line of selectedLines) line.construction = next;
-      setHint(next ? "選択線を補助線にしました" : "選択線を通常線にしました");
+    const primitives = selectedConstructionTogglePrimitives();
+    if (primitives.length > 0) {
+      const next = !primitives.every((item) => item.construction);
+      for (const item of primitives) item.construction = next;
+      setHint(next ? "選択図形を補助作図にしました" : "選択図形を通常作図にしました");
       clearSelection();
       updateUI();
       draw();

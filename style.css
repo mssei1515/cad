@@ -181,7 +181,7 @@ body.presentation-mode .presentation-style-group {
 
 body.presentation-mode .toolbar-group[aria-label="作図・編集"],
 body.presentation-mode .toolbar-group[aria-label="拘束・寸法"] {
-  opacity: 0.48;
+  display: none;
 }
 
 .style-field,

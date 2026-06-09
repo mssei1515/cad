@@ -86,10 +86,11 @@
   }
 
   class Circle {
-    constructor(id, center, radiusValue) {
+    constructor(id, center, radiusValue, construction = false) {
       this.id = id;
       this.center = center;
       this.radiusValue = Math.max(Number(radiusValue) || 0, MIN_MODEL_LENGTH);
+      this.construction = Boolean(construction);
     }
 
     radius() {
@@ -98,12 +99,13 @@
   }
 
   class Arc {
-    constructor(id, center, radiusValue, startAngle, endAngle) {
+    constructor(id, center, radiusValue, startAngle, endAngle, construction = false) {
       this.id = id;
       this.center = center;
       this.radiusValue = Math.max(Number(radiusValue) || 0, MIN_MODEL_LENGTH);
       this.startAngle = Number(startAngle) || 0;
       this.endAngle = Number(endAngle) || 0;
+      this.construction = Boolean(construction);
     }
 
     radius() {
