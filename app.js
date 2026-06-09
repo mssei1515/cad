@@ -95,10 +95,12 @@
   let panSession = null;
   let selectionRectSession = null;
   let blankDoubleClickCandidate = null;
+  let suppressNextBlankDoubleClickEvent = false;
   let lineStartPoint = null;
   let pointStartRollback = null;
   let rectangleStartPoint = null;
   let lineStartRollback = null;
+  let lineCompletionRollback = null;
   let filletFirstLine = null;
   let circleCenterPoint = null;
   let arcCenterPoint = null;
@@ -1467,8 +1469,10 @@
     dragSession = null;
     dimensionDragSession = null;
     panSession = null;
+    suppressNextBlankDoubleClickEvent = false;
     lineStartPoint = null;
     pointStartRollback = null;
+    lineCompletionRollback = null;
     rectangleStartPoint = null;
     filletFirstLine = null;
     circleCenterPoint = null;
@@ -2123,6 +2127,7 @@
   function exitDrawMode() {
     lineStartPoint = null;
     pointStartRollback = null;
+    lineCompletionRollback = null;
     rectangleStartPoint = null;
     filletFirstLine = null;
     circleCenterPoint = null;
@@ -2153,6 +2158,44 @@
 
   function clearTransientLineStartRollback() {
     lineStartRollback = null;
+  }
+
+  function beginTransientLineCompletionRollback() {
+    lineCompletionRollback = {
+      pointLength: model.points.length,
+      constraintLength: model.constraints.length,
+      lineLength: model.lines.length,
+      pointSeq,
+      lineSeq,
+      completedEndpoint: null,
+      completedLine: null,
+      startRollback: lineStartRollback ? { ...lineStartRollback } : null,
+      createdAt: performance.now(),
+    };
+  }
+
+  function clearTransientLineCompletionRollback() {
+    lineCompletionRollback = null;
+  }
+
+  function rollbackTransientLineCompletion() {
+    if (!lineCompletionRollback) return false;
+    const transientSnapshot = historySnapshot();
+    const target = lineCompletionRollback.startRollback || lineCompletionRollback;
+    model.points.length = target.pointLength;
+    model.lines.length = target.lineLength ?? lineCompletionRollback.lineLength;
+    model.constraints.length = target.constraintLength;
+    pointSeq = target.pointSeq;
+    lineSeq = lineCompletionRollback.lineSeq;
+    constraintAnalysisState = null;
+    lineCompletionRollback = null;
+    lineStartRollback = null;
+    if (!historyRestoring && undoStack.length > 1 && undoStack[undoStack.length - 1] === transientSnapshot) {
+      undoStack.pop();
+      redoStack = [];
+      updateHistoryButtons();
+    }
+    return true;
   }
 
   function beginTransientPointRollback() {
@@ -2200,6 +2243,7 @@
   function cancelActiveDrawOperation() {
     rollbackTransientLineStart();
     clearTransientPointRollback();
+    clearTransientLineCompletionRollback();
     lineStartPoint = null;
     rectangleStartPoint = null;
     filletFirstLine = null;
@@ -4450,19 +4494,20 @@
       const el = hypot2(ex, ey);
       const ux = el > 1e-12 ? ex / el : d.x;
       const uy = el > 1e-12 ? ey / el : d.y;
-      const lineSideOffset = dimensionLineSideExtensionOffset(target, index, gap, source);
+      const sourceSideOffset = dimensionLineSideExtensionOffset(target, index, gap, source, true);
+      const dimensionSideOffset = dimensionLineSideExtensionOffset(target, index, gap, source, false);
       const visibleGap = Math.min(gap, Math.max(0, el - 2 / viewport.scale));
       return {
         source,
-        showExtension: shouldShowDimensionExtension(target, index, { source, onDimension, lineSideOffset }),
+        showExtension: shouldShowDimensionExtension(target, index, { source, onDimension }),
         extensionStart: {
-          x: source.x + lineSideOffset.x + ux * visibleGap,
-          y: source.y + lineSideOffset.y + uy * visibleGap,
+          x: source.x + sourceSideOffset.x + ux * visibleGap,
+          y: source.y + sourceSideOffset.y + uy * visibleGap,
         },
         onDimension,
         extensionEnd: {
-          x: onDimension.x + lineSideOffset.x + ux * extension,
-          y: onDimension.y + lineSideOffset.y + uy * extension,
+          x: onDimension.x + dimensionSideOffset.x + ux * extension,
+          y: onDimension.y + dimensionSideOffset.y + uy * extension,
         },
       };
     });
@@ -4511,12 +4556,12 @@
     return v.x * outward.x + v.y * outward.y > 0.1;
   }
 
-  function dimensionLineSideExtensionOffset(target, index, gap, source = null) {
+  function dimensionLineSideExtensionOffset(target, index, gap, source = null, includeConstructionExtension = true) {
     const line = dimensionSourceLine(target, index);
     if (!line) return { x: 0, y: 0 };
     const outward = source ? lineOutwardDirectionAtSource(line, source) : null;
     const direction = outward || lineUnit(line);
-    const constructionGap = outward && line.construction ? CONSTRUCTION_EXTENSION_SCREEN_PX / viewport.scale : 0;
+    const constructionGap = includeConstructionExtension && outward && line.construction ? CONSTRUCTION_EXTENSION_SCREEN_PX / viewport.scale : 0;
     const totalGap = gap + constructionGap;
     return { x: direction.x * totalGap, y: direction.y * totalGap };
   }
@@ -7277,7 +7322,8 @@
     let snap = activeSnap;
     if (lineStartPoint) p = pointAtMinimumDistance(lineStartPoint, p);
     if (snap && !samePosition(p, snap)) snap = null;
-    if (!lineStartPoint) beginTransientLineStartRollback();
+    if (lineStartPoint) beginTransientLineCompletionRollback();
+    else beginTransientLineStartRollback();
     const endpoint = lineStartPoint && hypot2(p.x - lineStartPoint.x, p.y - lineStartPoint.y) <= MIN_LINE_LENGTH + 1e-9 ? addPoint(p.x, p.y, false, "endpoint") : endpointAt(p.x, p.y);
     pointerPreview = p;
 
@@ -7296,6 +7342,11 @@
 
     const l = addLine(lineStartPoint, endpoint);
     if (l) {
+      if (lineCompletionRollback) {
+        lineCompletionRollback.completedEndpoint = endpoint;
+        lineCompletionRollback.completedLine = l;
+        lineCompletionRollback.createdAt = performance.now();
+      }
       clearTransientLineStartRollback();
       addPointSnapConstraints(endpoint, snap);
       if (lockOrthogonal) addLineOrientationConstraint(l);
@@ -8133,6 +8184,7 @@
 
     const blankDoubleClickHits = { hitP, hitL, hitC, hitArcEnd, hitA, hitD, inactiveHit, annotationHit: blankAnnotationHit, presentationHit: blankPresentationHit };
     if (isRepeatedBlankDoubleClick(e, blankDoubleClickHits) && handleBlankCanvasDoubleClick(p, blankDoubleClickHits)) {
+      suppressNextBlankDoubleClickEvent = true;
       e.preventDefault();
       return;
     }
@@ -8706,6 +8758,18 @@
     );
   }
 
+  function isTransientLineCompletionHit(hits = {}) {
+    return Boolean(
+      mode === "line" &&
+        lineCompletionRollback &&
+        lineCompletionRollback.completedEndpoint &&
+        performance.now() - lineCompletionRollback.createdAt <= 650 &&
+        hits.hitP === lineCompletionRollback.completedEndpoint &&
+        hits.hitP === lineStartPoint &&
+        model.lines.includes(lineCompletionRollback.completedLine),
+    );
+  }
+
   function isTransientPointCommandHit(hits = {}) {
     return Boolean(
       mode === "point" &&
@@ -8731,6 +8795,15 @@
       !hits.inactiveHit
     ) {
       return true;
+    }
+    if (isTransientLineCompletionHit(hits)) {
+      return !hits.hitC &&
+        !hits.hitArcEnd &&
+        !hits.hitA &&
+        !hits.hitD &&
+        !hits.annotationHit &&
+        !hits.presentationHit &&
+        !hits.inactiveHit;
     }
     return isTransientLineStartHit(hits) &&
       !hits.hitC &&
@@ -8780,7 +8853,19 @@
       return true;
     }
     if (mode === "line") {
-      if (lineStartPoint) {
+      if (isTransientLineCompletionHit(hits)) {
+        rollbackTransientLineCompletion();
+        lineStartPoint = null;
+        pointerPreview = null;
+        clearSnap();
+        clearSelection();
+        setHint("線の作図をキャンセルしました");
+        updateUI();
+        draw();
+      } else if (isTransientLineStartHit(hits) || (lineStartRollback && lineStartPoint && !lineCompletionRollback)) {
+        cancelActiveDrawOperation();
+        exitDrawMode();
+      } else if (lineStartPoint) {
         cancelActiveDrawOperation();
         updateUI();
         draw();
@@ -8816,6 +8901,11 @@
   canvas.addEventListener("pointerup", endDrag);
   canvas.addEventListener("pointercancel", endDrag);
   canvas.addEventListener("dblclick", (e) => {
+    if (suppressNextBlankDoubleClickEvent) {
+      suppressNextBlankDoubleClickEvent = false;
+      e.preventDefault();
+      return;
+    }
     const p = canvasPoint(e);
     const hitL = hitLine(p.x, p.y);
     const hitP = hitPoint(p.x, p.y);
