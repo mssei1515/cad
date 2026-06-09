@@ -94,6 +94,7 @@
   let sketchSolveStates = new Map();
   let panSession = null;
   let selectionRectSession = null;
+  let blankDoubleClickCandidate = null;
   let lineStartPoint = null;
   let rectangleStartPoint = null;
   let lineStartRollback = null;
@@ -8038,11 +8039,19 @@
     const hitD = hitDimension(p.x, p.y);
     hoveredSketchIdentity = hitSketchIdentityElement(p.x, p.y);
     const inactiveHit = !hitP && !hitL && !hitC && !hitArcEnd && !hitA && !hitD ? hitInactiveElement(p.x, p.y) : null;
+    const blankAnnotationHit = isPresentationMode() ? hitPresentationAnnotationElement(p.x, p.y) : null;
+    const blankPresentationHit = isPresentationMode() ? hitPresentationElement(p.x, p.y) : null;
+
+    const blankDoubleClickHits = { hitP, hitL, hitC, hitArcEnd, hitA, hitD, inactiveHit, annotationHit: blankAnnotationHit, presentationHit: blankPresentationHit };
+    if (isRepeatedBlankDoubleClick(e, blankDoubleClickHits) && handleBlankCanvasDoubleClick(p, blankDoubleClickHits)) {
+      e.preventDefault();
+      return;
+    }
 
     if (isPresentationMode()) {
       e.preventDefault();
-      const annotationHit = hitPresentationAnnotationElement(p.x, p.y);
-      const presentationHit = hitPresentationElement(p.x, p.y);
+      const annotationHit = blankAnnotationHit;
+      const presentationHit = blankPresentationHit;
       if (pendingCommand?.type === "presentation-dimension-place") {
         if (presentationHit && retargetPresentationDimensionWithHit(presentationHit, p)) return;
         commitPresentationAnnotationDimensionAt(p);
@@ -8575,12 +8584,105 @@
     recordHistory(`${completedLabel}ドラッグ`);
   }
 
+  function hasSelection() {
+    return selectedPoints.length > 0 ||
+      selectedLines.length > 0 ||
+      selectedCircles.length > 0 ||
+      selectedArcs.length > 0 ||
+      Boolean(selectedArcEndpoint) ||
+      Boolean(selectedDimensionConstraint);
+  }
+
+  function isBlankCanvasHit(hits = {}) {
+    return !hits.hitP &&
+      !hits.hitL &&
+      !hits.hitC &&
+      !hits.hitArcEnd &&
+      !hits.hitA &&
+      !hits.hitD &&
+      !hits.annotationHit &&
+      !hits.presentationHit &&
+      !hits.inactiveHit;
+  }
+
+  function isTransientLineStartHit(hits = {}) {
+    return Boolean(
+      lineStartRollback &&
+        lineStartPoint &&
+        hits.hitP === lineStartPoint &&
+        model.points.indexOf(lineStartPoint) >= lineStartRollback.pointLength,
+    );
+  }
+
+  function isBlankDoubleClickTarget(hits = {}) {
+    if (isBlankCanvasHit(hits)) return true;
+    return isTransientLineStartHit(hits) &&
+      !hits.hitC &&
+      !hits.hitArcEnd &&
+      !hits.hitA &&
+      !hits.hitD &&
+      !hits.annotationHit &&
+      !hits.presentationHit &&
+      !hits.inactiveHit;
+  }
+
+  function isRepeatedBlankDoubleClick(e, hits = {}) {
+    const screen = canvasScreenPoint(e);
+    const now = performance.now();
+    const repeated = Boolean(
+      isBlankDoubleClickTarget(hits) &&
+        blankDoubleClickCandidate &&
+        now - blankDoubleClickCandidate.time <= 450 &&
+        hypot2(screen.x - blankDoubleClickCandidate.x, screen.y - blankDoubleClickCandidate.y) <= 6,
+    );
+    blankDoubleClickCandidate = isBlankDoubleClickTarget(hits) ? { time: now, x: screen.x, y: screen.y } : null;
+    return repeated;
+  }
+
+  function isDrawToolMode() {
+    return mode === "line" || mode === "point" || mode === "rectangle" || mode === "fillet" || mode === "trim" || mode === "circle" || mode === "arc";
+  }
+
+  function handleBlankCanvasDoubleClick(pointer, hits = {}) {
+    if (!isBlankDoubleClickTarget(hits)) return false;
+    blankDoubleClickCandidate = null;
+    if (pendingCommand) {
+      cancelPendingCommand();
+      if (isDrawToolMode()) exitDrawMode();
+      return true;
+    }
+    if (pendingConstraintCommand) {
+      cancelConstraintTargetCommand();
+      return true;
+    }
+    if (hasActiveDrawOperation()) {
+      cancelActiveDrawOperation();
+      exitDrawMode();
+      return true;
+    }
+    if (isDrawToolMode()) {
+      exitDrawMode();
+      return true;
+    }
+    if (hasSelection()) {
+      clearSelection();
+      setHint("選択を解除しました");
+      updateUI();
+      draw();
+      return true;
+    }
+    return false;
+  }
+
   canvas.addEventListener("pointerup", endDrag);
   canvas.addEventListener("pointercancel", endDrag);
   canvas.addEventListener("dblclick", (e) => {
     const p = canvasPoint(e);
     const hitL = hitLine(p.x, p.y);
     const hitP = hitPoint(p.x, p.y);
+    const hitC = hitCircle(p.x, p.y);
+    const hitArcEnd = hitArcEndpoint(p.x, p.y);
+    const hitA = hitArc(p.x, p.y);
     const hitD = hitDimension(p.x, p.y);
     if (pendingCommand?.type === "fillet-radius-value") {
       e.preventDefault();
@@ -8600,6 +8702,10 @@
       return;
     }
     if (handleConstraintTargetDoubleClick(hitP, hitL, p)) {
+      e.preventDefault();
+      return;
+    }
+    if (handleBlankCanvasDoubleClick(p, { hitP, hitL, hitC, hitArcEnd, hitA, hitD })) {
       e.preventDefault();
       return;
     }
