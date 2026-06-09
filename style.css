@@ -293,25 +293,6 @@ button svg {
     min-width 0.14s ease;
 }
 
-.construction-toggle-btn .construction-status {
-  display: none;
-  white-space: nowrap;
-  font-size: 11px;
-  line-height: 1;
-}
-
-.construction-toggle-btn.active {
-  width: auto;
-  min-width: 90px;
-  display: inline-flex;
-  gap: 5px;
-  padding: 0 8px;
-}
-
-.construction-toggle-btn.active .construction-status {
-  display: inline;
-}
-
 button.primary {
   background: var(--accent);
   border-color: var(--accent);

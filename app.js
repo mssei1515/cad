@@ -4413,7 +4413,7 @@
       const ux = el > 1e-12 ? ex / el : d.x;
       const uy = el > 1e-12 ? ey / el : d.y;
       const visibleGap = Math.min(gap, Math.max(0, el - 2 / viewport.scale));
-      const lineSideOffset = dimensionLineSideExtensionOffset(target, index, t, min, max, d, gap);
+      const lineSideOffset = dimensionLineSideExtensionOffset(target, index, gap);
       return {
         source,
         showExtension: shouldShowDimensionExtension(target, index),
@@ -4445,11 +4445,13 @@
     return true;
   }
 
-  function dimensionLineSideExtensionOffset(target, index, t, min, max, d, gap) {
-    const lineSide = target.kind === "line-line" || (target.kind === "point-line" && index === 1);
-    if (!lineSide) return { x: 0, y: 0 };
-    const sign = t <= (min + max) / 2 ? 1 : -1;
-    return { x: d.x * gap * sign, y: d.y * gap * sign };
+  function dimensionLineSideExtensionOffset(target, index, gap) {
+    let line = null;
+    if (target.kind === "point-line" && index === 1) line = target.line;
+    if (target.kind === "line-line") line = index === 0 ? target.line1 : target.line2;
+    if (!line) return { x: 0, y: 0 };
+    const u = lineUnit(line);
+    return { x: u.x * gap, y: u.y * gap };
   }
 
   function angleDimensionLayout(target, dimension) {
@@ -5062,11 +5064,6 @@
       button.setAttribute("aria-pressed", String(active));
       button.setAttribute("aria-disabled", id.startsWith("presentation") ? String(!presentationMode) : String(!geometryMode));
     }
-    const constructionButton = document.getElementById("toolConstructionLine");
-    const constructionStatus = constructionButton?.querySelector(".construction-status");
-    if (constructionStatus) {
-      constructionStatus.textContent = constructionState.mixed ? "混在" : selectedLines.length > 0 ? "補助線" : "補助作図";
-    }
     updateHistoryButtons();
   }
 
@@ -5079,7 +5076,7 @@
         mixed: false,
       };
     }
-    return { active: mode === "line" && constructionLineMode, mixed: false };
+    return { active: constructionLineMode, mixed: false };
   }
 
   function canApplyConstraint(type) {
@@ -5744,7 +5741,7 @@
       const snapshot = snapshotModelState();
       const previousTarget = constraint.target;
       constraint.target = target.kind === "angle" ? (value * Math.PI) / 180 : value;
-      const solved = solveSketchAndDescendants(sketchId || constraintSketchId(constraint), snapshot);
+      const solved = withTemporarySolveStepNorm(solveStepNormForConstraint(constraint), () => solveSketchAndDescendants(sketchId || constraintSketchId(constraint), snapshot));
       const result = solved.result;
       if (!solved.success || result.errorNorm > CONSTRAINT_ACCEPT_ERROR) {
         restoreModelState(snapshot);
@@ -5982,7 +5979,6 @@
     trimPreview = null;
     clearSnap();
     mode = "select";
-    constructionLineMode = false;
     updateUI();
     updateToolbar();
     setHint(isPresentationMode() ? `プレゼンテーション・モード: ${activePresentationSheet().name}` : "ジオメトリ・モード");
@@ -6263,6 +6259,24 @@
     }
   }
 
+  function solveStepNormForConstraint(constraint) {
+    if (!constraint) return solver.maxStepNorm;
+    const e = constraint.error();
+    const values = Array.isArray(e) ? e : [e];
+    const errorNorm = vectorNorm(values);
+    return Math.max(solver.maxStepNorm, errorNorm * 1.5);
+  }
+
+  function withTemporarySolveStepNorm(stepNorm, callback) {
+    const previous = solver.maxStepNorm;
+    solver.maxStepNorm = Math.max(previous, Number.isFinite(stepNorm) ? stepNorm : previous);
+    try {
+      return callback();
+    } finally {
+      solver.maxStepNorm = previous;
+    }
+  }
+
   function commitNewConstraint(type, constraint) {
     if (rejectPresentationGeometryEdit("Constraints")) return false;
     if (!constraintTargetsAreActive(constraint)) {
@@ -6272,10 +6286,11 @@
       return false;
     }
     const snapshot = snapshotModelState();
+    const solveStepNorm = solveStepNormForConstraint(constraint);
     pushModelConstraint(constraint);
     preconditionNewConstraint(constraint);
 
-    const solved = solveSketchAndDescendants(constraintSketchId(constraint), snapshot);
+    const solved = withTemporarySolveStepNorm(solveStepNorm, () => solveSketchAndDescendants(constraintSketchId(constraint), snapshot));
     const result = solved.result;
     const collapse = findLineCollapseAfterConstraint(constraint, snapshot, constraintSketchId(constraint));
     if (!solved.success || result.errorNorm > CONSTRAINT_ACCEPT_ERROR || collapse) {
@@ -6317,9 +6332,10 @@
     }
     const snapshot = snapshotModelState();
     markReferenceConstraint(constraint, referenceSketchId, sketchId);
+    const solveStepNorm = solveStepNormForConstraint(constraint);
     pushModelConstraint(constraint, sketchId);
     preconditionNewConstraint(constraint);
-    const solved = solveSketchAndDescendants(sketchId, snapshot);
+    const solved = withTemporarySolveStepNorm(solveStepNorm, () => solveSketchAndDescendants(sketchId, snapshot));
     const result = solved.result;
     const collapse = findLineCollapseAfterConstraint(constraint, snapshot, sketchId);
     if (!solved.success || result.errorNorm > CONSTRAINT_ACCEPT_ERROR || collapse) {
@@ -8833,7 +8849,6 @@
     if (rejectPresentationGeometryEdit("Geometry selection")) return;
     cancelConstraintTargetCommand("");
     mode = "select";
-    constructionLineMode = false;
     lineStartPoint = null;
     rectangleStartPoint = null;
     filletFirstLine = null;
@@ -8851,7 +8866,6 @@
     if (rejectPresentationGeometryEdit("Point creation")) return;
     cancelConstraintTargetCommand("");
     mode = "point";
-    constructionLineMode = false;
     lineStartPoint = null;
     rectangleStartPoint = null;
     filletFirstLine = null;
@@ -8869,7 +8883,6 @@
     if (rejectPresentationGeometryEdit("Line creation")) return;
     cancelConstraintTargetCommand("");
     mode = "line";
-    constructionLineMode = false;
     lineStartPoint = null;
     rectangleStartPoint = null;
     filletFirstLine = null;
@@ -8915,7 +8928,6 @@
     if (rejectPresentationGeometryEdit("Rectangle creation")) return;
     cancelConstraintTargetCommand("");
     mode = "rectangle";
-    constructionLineMode = false;
     lineStartPoint = null;
     rectangleStartPoint = null;
     filletFirstLine = null;
@@ -8938,7 +8950,6 @@
       return;
     }
     mode = "fillet";
-    constructionLineMode = false;
     lineStartPoint = null;
     rectangleStartPoint = null;
     filletFirstLine = null;
@@ -8956,7 +8967,6 @@
     if (rejectPresentationGeometryEdit("Trim")) return;
     cancelConstraintTargetCommand("");
     mode = "trim";
-    constructionLineMode = false;
     lineStartPoint = null;
     rectangleStartPoint = null;
     filletFirstLine = null;
@@ -8982,7 +8992,6 @@
     if (rejectPresentationGeometryEdit("Circle creation")) return;
     cancelConstraintTargetCommand("");
     mode = "circle";
-    constructionLineMode = false;
     lineStartPoint = null;
     rectangleStartPoint = null;
     filletFirstLine = null;
@@ -9000,7 +9009,6 @@
     if (rejectPresentationGeometryEdit("Arc creation")) return;
     cancelConstraintTargetCommand("");
     mode = "arc";
-    constructionLineMode = false;
     lineStartPoint = null;
     rectangleStartPoint = null;
     filletFirstLine = null;
