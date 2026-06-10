@@ -771,6 +771,13 @@ body.geometry-mode .mode-overlay-sheet #renamePresentationSheetBtn {
   font-weight: 800;
 }
 
+.sketch-duplicate-badge,
+.constraint-duplicate-badge {
+  background: #fee2e2;
+  color: #b91c1c;
+  font-weight: 800;
+}
+
 .relation-badge {
   background: rgba(236, 254, 255, 0.68);
   color: #0e7490;
@@ -792,6 +799,11 @@ body.geometry-mode .mode-overlay-sheet #renamePresentationSheetBtn {
   grid-template-columns: 1fr 26px;
   gap: 6px;
   align-items: center;
+}
+
+.constraint-item.duplicate {
+  border-color: rgba(220, 38, 38, 0.35);
+  background: rgba(254, 226, 226, 0.55);
 }
 
 .removeConstraintBtn,

@@ -91,6 +91,7 @@
   let selectedArcEndpointPair = null;
   let selectedDimensionConstraint = null;
   let constraintAnalysisState = null;
+  let constraintRedundancyState = { constraints: new Map(), sketches: new Map(), count: 0 };
   let sketchSolveStates = new Map();
   let panSession = null;
   let selectionRectSession = null;
@@ -1113,6 +1114,85 @@
     return Boolean(result?.success) && result.errorNorm <= CONSTRAINT_ACCEPT_ERROR;
   }
 
+  function rankStateForConstraints(sketchId, constraints) {
+    return solver.constraintRankState({
+      variables: sketchSolveVariables(sketchId),
+      constraints,
+      errorTolerance: CONSTRAINT_ACCEPT_ERROR,
+      rankTolerance: 1e-8,
+    });
+  }
+
+  function constraintsForRedundancy(sketchId) {
+    return model.constraints.filter((constraint) => constraint.enabled !== false && constraintSketchId(constraint) === sketchId);
+  }
+
+  function redundantConstraintInfo(constraint, sketchId = constraintSketchId(constraint)) {
+    if (!constraint || constraint.enabled === false) return { redundant: false };
+    const constraints = constraintsForRedundancy(sketchId);
+    if (!constraints.includes(constraint)) return { redundant: false };
+    const before = rankStateForConstraints(sketchId, constraints.filter((item) => item !== constraint));
+    const after = rankStateForConstraints(sketchId, constraints);
+    if (!before.stable || !after.stable) return { redundant: false, unstable: true, before, after };
+    return {
+      redundant: after.rank <= before.rank,
+      before,
+      after,
+      rankBefore: before.rank,
+      rankAfter: after.rank,
+    };
+  }
+
+  function refreshConstraintRedundancy() {
+    const byConstraint = new Map();
+    const bySketch = new Map();
+    let count = 0;
+    for (const sketch of model.sketches.filter((item) => !isRootSketch(item))) {
+      const sketchId = sketch.id;
+      const constraints = constraintsForRedundancy(sketchId);
+      const accepted = [];
+      let before = rankStateForConstraints(sketchId, accepted);
+      let sketchCount = 0;
+      for (const constraint of constraints) {
+        const after = rankStateForConstraints(sketchId, [...accepted, constraint]);
+        if (!before.stable || !after.stable) {
+          accepted.push(constraint);
+          before = after;
+          continue;
+        }
+        if (after.rank <= before.rank) {
+          const info = { redundant: true, sketchId, rankBefore: before.rank, rankAfter: after.rank, before, after };
+          byConstraint.set(constraint, info);
+          sketchCount += 1;
+          count += 1;
+        } else {
+          accepted.push(constraint);
+          before = after;
+        }
+      }
+      if (sketchCount > 0) bySketch.set(sketchId, sketchCount);
+    }
+    constraintRedundancyState = { constraints: byConstraint, sketches: bySketch, count };
+    return constraintRedundancyState;
+  }
+
+  function constraintRedundancyInfo(constraint) {
+    return constraintRedundancyState?.constraints?.get(constraint) || null;
+  }
+
+  function constraintIsRedundant(constraint) {
+    return Boolean(constraintRedundancyInfo(constraint)?.redundant);
+  }
+
+  function constraintDuplicateCountForSketch(sketchId) {
+    return constraintRedundancyState?.sketches?.get(sketchId) || 0;
+  }
+
+  function constraintDuplicateSummary() {
+    const count = constraintRedundancyState?.count || 0;
+    return count > 0 ? ` / 重複拘束: ${count}` : "";
+  }
+
   function clearSketchSolveState(sketchId) {
     sketchSolveStates.delete(sketchId);
   }
@@ -1158,7 +1238,8 @@
     const result = solved.result;
     const analysis = refreshConstraintAnalysis();
     const hasChildError = solved.descendant?.success === false;
-    const statusKind = solved.success && analysis.analysis.stable && !hasChildError ? "normal" : "error";
+    const hasDuplicateConstraints = (constraintRedundancyState?.count || 0) > 0;
+    const statusKind = solved.success && analysis.analysis.stable && !hasChildError && !hasDuplicateConstraints ? "normal" : "error";
     const childText = solved.descendant?.results?.length > 0 ? `, child=${solved.descendant.results.length}` : "";
     setHint(`${label}: success=${solved.success}, error=${result.errorNorm.toExponential(2)}, iter=${result.iterations}${childText}${descendantErrorSummary(solved.descendant)} / ${constraintSummaryText()}`, statusKind);
     updateUI();
@@ -1244,6 +1325,7 @@
       total: items.length,
     };
     constraintAnalysisState = { analysis: analyses.get(rootSketchId), analyses, statuses, summary };
+    refreshConstraintRedundancy();
     return constraintAnalysisState;
   }
 
@@ -1307,7 +1389,7 @@
   function constraintSummaryText() {
     if (!constraintAnalysisState) refreshConstraintAnalysis();
     const s = constraintAnalysisState?.summary || { full: 0, under: 0, conflict: 0 };
-    return `完全拘束: ${s.full} / 未拘束: ${s.under} / 矛盾: ${s.conflict}`;
+    return `完全拘束: ${s.full} / 未拘束: ${s.under} / 矛盾: ${s.conflict}${constraintDuplicateSummary()}`;
   }
 
   function addPoint(x, y, fixed = false, kind = "explicit") {
@@ -2914,7 +2996,13 @@
     if (!constraint) return false;
     if (model.constraints.some((c) => c.enabled !== false && matches(c))) return false;
     if (options.referenceSketchId) markReferenceConstraint(constraint, options.referenceSketchId);
-    pushModelConstraint(constraint);
+    pushModelConstraint(constraint, options.sketchId || activeSketchId());
+    const duplicate = redundantConstraintInfo(constraint, constraintSketchId(constraint));
+    if (duplicate?.redundant) {
+      model.constraints = model.constraints.filter((item) => item !== constraint);
+      constraintRedundancyState.constraints.delete(constraint);
+      return false;
+    }
     return true;
   }
 
@@ -6229,6 +6317,7 @@
         const visible = isVisibleSketchId(sketch.id);
         const solveError = sketchHasSolveError(sketch.id);
         const solveErrorTitle = sketchSolveErrorTitle(sketch.id);
+        const duplicateCount = constraintDuplicateCountForSketch(sketch.id);
         const count =
           model.points.filter((item) => elementSketchId(item) === sketch.id).length +
           model.lines.filter((item) => elementSketchId(item) === sketch.id).length +
@@ -6241,7 +6330,7 @@
           `<div class="item sketch-item ${visible ? "visible" : ""} ${isRoot ? "root" : ""} ${isAncestor ? "ancestor-visible" : ""} ${isDescendant ? "descendant-visible" : ""} ${isActive ? "active" : ""} ${solveError ? "solve-error" : ""} ${hasChildren ? "has-children" : ""}" data-id="${sketch.id}" title="${escapeHtml(solveErrorTitle)}" style="--sketch-depth:${depth}">` +
           treeLines +
           `<button class="sketchActivateBtn" data-id="${sketch.id}" ${isActive ? "disabled" : ""}>${escapeHtml(sketch.name)}</button>` +
-          `<span class="sketch-badges">${solveError ? `<span class="badge sketch-error-badge">!</span>` : ""}<span class="badge">${count}</span></span>` +
+          `<span class="sketch-badges">${solveError ? `<span class="badge sketch-error-badge">!</span>` : ""}${duplicateCount ? `<span class="badge sketch-duplicate-badge">重複${duplicateCount}</span>` : ""}<span class="badge">${count}</span></span>` +
           (isRoot ? "" : `<button class="sketchRenameBtn icon-small-btn" data-id="${sketch.id}" title="名前変更" aria-label="名前変更">Aa</button>`) +
           `</div>`
         );
@@ -6310,11 +6399,13 @@
       .map((c, index) => ({ c, index }))
       .filter(({ c }) => isActiveSketchConstraint(c))
       .map(
-        ({ c, index }) =>
-          `<div class="item constraint-item"><span>${index + 1}. ${c.name}${c.reference ? `<span class="badge relation-badge">参照</span>` : ""}</span>` +
+        ({ c, index }) => {
+          const duplicate = constraintIsRedundant(c);
+          return `<div class="item constraint-item ${duplicate ? "duplicate" : ""}"><span>${index + 1}. ${c.name}${c.reference ? `<span class="badge relation-badge">参照</span>` : ""}${duplicate ? `<span class="badge constraint-duplicate-badge">重複</span>` : ""}</span>` +
           `<button data-idx="${index}" class="removeConstraintBtn" title="削除" aria-label="削除" data-tooltip="削除">` +
           `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3M7 7l1 13h8l1-13"/></svg>` +
-          `</button></div>`,
+          `</button></div>`;
+        },
       )
       .join("");
 
@@ -6448,16 +6539,20 @@
     const solved = withTemporarySolveStepNorm(solveStepNorm, () => solveSketchAndDescendants(constraintSketchId(constraint), snapshot));
     const result = solved.result;
     const collapse = findLineCollapseAfterConstraint(constraint, snapshot, constraintSketchId(constraint));
-    if (!solved.success || result.errorNorm > CONSTRAINT_ACCEPT_ERROR || collapse) {
+    const duplicate = solved.success && result.errorNorm <= CONSTRAINT_ACCEPT_ERROR && !collapse ? redundantConstraintInfo(constraint, constraintSketchId(constraint)) : null;
+    if (!solved.success || result.errorNorm > CONSTRAINT_ACCEPT_ERROR || collapse || duplicate?.redundant) {
       restoreModelState(snapshot);
       const msg = `拘束を追加できません: 矛盾しています (error=${result.errorNorm.toExponential(3)}, reason=${result.reason})`;
       const collapseMsg = collapse
         ? `拘束を追加できません: 線${collapse.line.id}が退化するため矛盾しています (${collapse.before.toExponential(3)} -> ${collapse.after.toExponential(3)})`
         : msg;
-      setHint(collapseMsg, "error");
+      const duplicateMsg = duplicate?.redundant
+        ? `拘束を追加できません: 重複しています (rank ${duplicate.rankBefore} -> ${duplicate.rankAfter})`
+        : collapseMsg;
+      setHint(duplicateMsg, "error");
       updateUI();
       draw();
-      log(collapseMsg);
+      log(duplicateMsg);
       return;
     }
 
@@ -6493,16 +6588,20 @@
     const solved = withTemporarySolveStepNorm(solveStepNorm, () => solveSketchAndDescendants(sketchId, snapshot));
     const result = solved.result;
     const collapse = findLineCollapseAfterConstraint(constraint, snapshot, sketchId);
-    if (!solved.success || result.errorNorm > CONSTRAINT_ACCEPT_ERROR || collapse) {
+    const duplicate = solved.success && result.errorNorm <= CONSTRAINT_ACCEPT_ERROR && !collapse ? redundantConstraintInfo(constraint, sketchId) : null;
+    if (!solved.success || result.errorNorm > CONSTRAINT_ACCEPT_ERROR || collapse || duplicate?.redundant) {
       restoreModelState(snapshot);
       const msg = `参照拘束を追加できません: 矛盾しています (error=${result.errorNorm.toExponential(3)}, reason=${result.reason})`;
       const collapseMsg = collapse
         ? `参照拘束を追加できません: 線${collapse.line.id}が退化するため矛盾しています (${collapse.before.toExponential(3)} -> ${collapse.after.toExponential(3)})`
         : msg;
-      setHint(collapseMsg, "error");
+      const duplicateMsg = duplicate?.redundant
+        ? `参照拘束を追加できません: 重複しています (rank ${duplicate.rankBefore} -> ${duplicate.rankAfter})`
+        : collapseMsg;
+      setHint(duplicateMsg, "error");
       updateUI();
       draw();
-      log(collapseMsg);
+      log(duplicateMsg);
       return false;
     }
     clearSelection();

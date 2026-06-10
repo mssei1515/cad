@@ -994,6 +994,22 @@
       return result;
     }
 
+    constraintRankState({ variables = [], constraints = [], errorTolerance = 1e-4, rankTolerance = 1e-8 } = {}) {
+      this.syncLineOrientationHints([], constraints);
+      const activeConstraints = (constraints || []).filter((c) => c.enabled !== false);
+      const F = this.computeErrorVectorForConstraints(activeConstraints);
+      const errorNorm = vectorNorm(F);
+      if (errorNorm > errorTolerance) {
+        return { stable: false, errorNorm, rank: 0, rowCount: F.length, variableCount: variables.length };
+      }
+      if (F.length === 0 || variables.length === 0) {
+        return { stable: true, errorNorm, rank: 0, rowCount: F.length, variableCount: variables.length };
+      }
+      const J = this.computeJacobianForConstraints(variables, F, activeConstraints);
+      const { rank } = LinearAlgebra.reducedRowEchelon(J, rankTolerance);
+      return { stable: true, errorNorm, rank, rowCount: F.length, variableCount: variables.length };
+    }
+
     variableTargetDelta(variables, targets = []) {
       const delta = Array(variables.length).fill(0);
       for (let i = 0; i < variables.length; i++) {
