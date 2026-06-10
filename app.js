@@ -4494,12 +4494,13 @@
       const el = hypot2(ex, ey);
       const ux = el > 1e-12 ? ex / el : d.x;
       const uy = el > 1e-12 ? ey / el : d.y;
-      const sourceSideOffset = dimensionLineSideExtensionOffset(target, index, gap, source, true);
-      const dimensionSideOffset = dimensionLineSideExtensionOffset(target, index, gap, source, false);
+      const extensionDirection = { x: ux, y: uy };
+      const sourceSideOffset = dimensionLineSideExtensionOffset(target, index, gap, source, true, extensionDirection);
+      const dimensionSideOffset = dimensionLineSideExtensionOffset(target, index, gap, source, false, extensionDirection);
       const visibleGap = Math.min(gap, Math.max(0, el - 2 / viewport.scale));
       return {
         source,
-        showExtension: shouldShowDimensionExtension(target, index, { source, onDimension }),
+        showExtension: shouldShowDimensionExtension(target, index, { source, onDimension, extensionDirection }),
         extensionStart: {
           x: source.x + sourceSideOffset.x + ux * visibleGap,
           y: source.y + sourceSideOffset.y + uy * visibleGap,
@@ -4524,9 +4525,32 @@
     };
   }
 
-  function dimensionSourceLine(target, index) {
+  function incidentLinesAtPoint(point) {
+    if (!point) return [];
+    return model.lines.filter((line) => line.p1 === point || line.p2 === point);
+  }
+
+  function chooseIncidentLineForExtension(point, extensionDirection = null) {
+    const candidates = incidentLinesAtPoint(point).filter(lineHasDirection);
+    if (candidates.length === 0) return null;
+    if (!extensionDirection) return candidates[0];
+    let best = candidates[0];
+    let bestScore = -Infinity;
+    for (const line of candidates) {
+      const u = lineUnit(line);
+      const score = Math.abs(u.x * extensionDirection.x + u.y * extensionDirection.y);
+      if (score > bestScore) {
+        bestScore = score;
+        best = line;
+      }
+    }
+    return best;
+  }
+
+  function dimensionSourceLine(target, index, source = null, extensionDirection = null) {
     if (target.kind === "point-line" && index === 1) return target.line;
     if (target.kind === "line-line") return index === 0 ? target.line1 : target.line2;
+    if (source instanceof Point) return chooseIncidentLineForExtension(source, extensionDirection);
     return null;
   }
 
@@ -4541,7 +4565,7 @@
   }
 
   function shouldShowDimensionExtension(target, index, context = {}) {
-    const line = dimensionSourceLine(target, index);
+    const line = dimensionSourceLine(target, index, context.source, context.extensionDirection);
     if (!line || !context.source || !context.onDimension) return true;
     const vx = context.onDimension.x - context.source.x;
     const vy = context.onDimension.y - context.source.y;
@@ -4556,8 +4580,8 @@
     return v.x * outward.x + v.y * outward.y > 0.1;
   }
 
-  function dimensionLineSideExtensionOffset(target, index, gap, source = null, includeConstructionExtension = true) {
-    const line = dimensionSourceLine(target, index);
+  function dimensionLineSideExtensionOffset(target, index, gap, source = null, includeConstructionExtension = true, extensionDirection = null) {
+    const line = dimensionSourceLine(target, index, source, extensionDirection);
     if (!line) return { x: 0, y: 0 };
     const outward = source ? lineOutwardDirectionAtSource(line, source) : null;
     const direction = outward || lineUnit(line);
