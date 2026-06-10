@@ -137,6 +137,8 @@ test("dimension labels hide values below the supported display precision", async
   await page.waitForFunction(() => window.__cadTest);
 
   const result = await page.evaluate(() => window.__cadTest.dimensionDisplayPrecisionCases());
+  expect(result.integerTrailingZero).toBe("140");
+  expect(result.integerHundred).toBe("100");
   expect(result.positiveNoise).toBe("15");
   expect(result.negativeNoise).toBe("825");
   expect(result.precisionBoundaryNoise).toBe("1845");

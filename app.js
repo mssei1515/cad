@@ -2430,7 +2430,9 @@
       }
     }
     if (Object.is(rounded, -0)) return "0";
-    return rounded.toFixed(roundedDigits).replace(/\.?0+$/, "");
+    const formatted = rounded.toFixed(roundedDigits);
+    if (!formatted.includes(".")) return formatted;
+    return formatted.replace(/0+$/, "").replace(/\.$/, "");
   }
 
   function formatDimensionLabel(value, suffix = "") {
@@ -9687,6 +9689,8 @@
       },
       dimensionDisplayPrecisionCases() {
         return {
+          integerTrailingZero: formatDimensionLabel(140),
+          integerHundred: formatDimensionLabel(100),
           positiveNoise: formatDimensionLabel(15.0000000058),
           negativeNoise: formatDimensionLabel(824.9999999982),
           precisionBoundaryNoise: formatDimensionLabel(1844.999999),
