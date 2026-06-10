@@ -4615,7 +4615,47 @@
     const tick = 9 / viewport.scale;
     const extension = DIMENSION_EXTENSION_SCREEN_PX / viewport.scale;
     const gap = DIMENSION_EXTENSION_GAP_SCREEN_PX / viewport.scale;
-    const projections = points.map((p) => (p.x - anchor.x) * d.x + (p.y - anchor.y) * d.y);
+    const projectedPoints = points.map((source, index) => {
+      const initialT = (source.x - anchor.x) * d.x + (source.y - anchor.y) * d.y;
+      const initialOnDimension = { x: anchor.x + d.x * initialT, y: anchor.y + d.y * initialT };
+      const initialEx = initialOnDimension.x - source.x;
+      const initialEy = initialOnDimension.y - source.y;
+      const initialEl = hypot2(initialEx, initialEy);
+      const initialExtensionDirection = {
+        x: initialEl > 1e-12 ? initialEx / initialEl : d.x,
+        y: initialEl > 1e-12 ? initialEy / initialEl : d.y,
+      };
+      const sourceSideOffset = dimensionLineSideExtensionOffset(target, index, gap, source, true, initialExtensionDirection);
+      const adjustedSource = {
+        x: source.x + sourceSideOffset.x,
+        y: source.y + sourceSideOffset.y,
+      };
+      const t = (adjustedSource.x - anchor.x) * d.x + (adjustedSource.y - anchor.y) * d.y;
+      const onDimension = { x: anchor.x + d.x * t, y: anchor.y + d.y * t };
+      const ex = onDimension.x - adjustedSource.x;
+      const ey = onDimension.y - adjustedSource.y;
+      const el = hypot2(ex, ey);
+      const ux = el > 1e-12 ? ex / el : d.x;
+      const uy = el > 1e-12 ? ey / el : d.y;
+      const extensionDirection = { x: ux, y: uy };
+      const pointClearance = dimensionPointSourceClearance(target, index, source, extensionDirection);
+      const visibleGap = Math.min(gap + pointClearance, Math.max(0, el - 2 / viewport.scale));
+      return {
+        source,
+        projection: t,
+        showExtension: shouldShowDimensionExtension(target, index, { source, onDimension, extensionDirection }),
+        extensionStart: {
+          x: adjustedSource.x + ux * visibleGap,
+          y: adjustedSource.y + uy * visibleGap,
+        },
+        onDimension,
+        extensionEnd: {
+          x: onDimension.x + ux * extension,
+          y: onDimension.y + uy * extension,
+        },
+      };
+    });
+    const projections = projectedPoints.map((p) => p.projection);
     const min = Math.min(...projections);
     const max = Math.max(...projections);
     const a = { x: anchor.x + d.x * min, y: anchor.y + d.y * min };
@@ -4627,33 +4667,6 @@
     const lineMax = Math.max(max, textProjection + labelPad);
     const lineA = { x: anchor.x + d.x * lineMin, y: anchor.y + d.y * lineMin };
     const lineB = { x: anchor.x + d.x * lineMax, y: anchor.y + d.y * lineMax };
-    const projectedPoints = points.map((source, index) => {
-      const t = (source.x - anchor.x) * d.x + (source.y - anchor.y) * d.y;
-      const onDimension = { x: anchor.x + d.x * t, y: anchor.y + d.y * t };
-      const ex = onDimension.x - source.x;
-      const ey = onDimension.y - source.y;
-      const el = hypot2(ex, ey);
-      const ux = el > 1e-12 ? ex / el : d.x;
-      const uy = el > 1e-12 ? ey / el : d.y;
-      const extensionDirection = { x: ux, y: uy };
-      const sourceSideOffset = dimensionLineSideExtensionOffset(target, index, gap, source, true, extensionDirection);
-      const dimensionSideOffset = dimensionLineSideExtensionOffset(target, index, gap, source, false, extensionDirection);
-      const pointClearance = dimensionPointSourceClearance(target, index, source, extensionDirection);
-      const visibleGap = Math.min(gap + pointClearance, Math.max(0, el - 2 / viewport.scale));
-      return {
-        source,
-        showExtension: shouldShowDimensionExtension(target, index, { source, onDimension, extensionDirection }),
-        extensionStart: {
-          x: source.x + sourceSideOffset.x + ux * visibleGap,
-          y: source.y + sourceSideOffset.y + uy * visibleGap,
-        },
-        onDimension,
-        extensionEnd: {
-          x: onDimension.x + dimensionSideOffset.x + ux * extension,
-          y: onDimension.y + dimensionSideOffset.y + uy * extension,
-        },
-      };
-    });
     return {
       a,
       b,
