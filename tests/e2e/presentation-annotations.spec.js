@@ -139,6 +139,7 @@ test("dimension labels hide values below the supported display precision", async
   const result = await page.evaluate(() => window.__cadTest.dimensionDisplayPrecisionCases());
   expect(result.positiveNoise).toBe("15");
   expect(result.negativeNoise).toBe("825");
+  expect(result.precisionBoundaryNoise).toBe("1845");
   expect(result.minimumResolution).toBe("0.000001");
   expect(result.roundedFraction).toBe("1.234567");
 });

@@ -2414,11 +2414,22 @@
   function formatDisplayNumber(value, maxFractionDigits = 10) {
     const n = Number(value);
     if (!Number.isFinite(n)) return "";
-    const precisionDigits = Math.max(0, Math.round(-Math.log10(DIMENSION_DISPLAY_PRECISION)));
-    const displayDigits = Math.min(maxFractionDigits, precisionDigits);
-    const rounded = Number(n.toFixed(displayDigits));
+    const displayDigits = Math.max(0, Math.min(10, maxFractionDigits));
+    const floatingPointSlack = Number.EPSILON * Math.max(1, Math.abs(n)) * 8;
+    const snapTolerance = DIMENSION_DISPLAY_PRECISION + floatingPointSlack;
+    let rounded = Number(n.toFixed(displayDigits));
+    let roundedDigits = displayDigits;
+    for (let digits = 0; digits <= displayDigits; digits += 1) {
+      const candidate = Number(n.toFixed(digits));
+      if (candidate === 0 && n !== 0) continue;
+      if (Math.abs(n - candidate) <= snapTolerance) {
+        rounded = candidate;
+        roundedDigits = digits;
+        break;
+      }
+    }
     if (Object.is(rounded, -0)) return "0";
-    return rounded.toFixed(displayDigits).replace(/\.?0+$/, "");
+    return rounded.toFixed(roundedDigits).replace(/\.?0+$/, "");
   }
 
   function formatDimensionLabel(value, suffix = "") {
@@ -9649,6 +9660,7 @@
         return {
           positiveNoise: formatDimensionLabel(15.0000000058),
           negativeNoise: formatDimensionLabel(824.9999999982),
+          precisionBoundaryNoise: formatDimensionLabel(1844.999999),
           minimumResolution: formatDimensionLabel(0.000001),
           roundedFraction: formatDimensionLabel(1.2345674),
         };
