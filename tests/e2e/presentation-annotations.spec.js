@@ -145,3 +145,15 @@ test("dimension labels hide values below the supported display precision", async
   expect(result.measuredMinimumResolution).toBe("0.000001");
   expect(result.roundedFraction).toBe("1.234567");
 });
+
+test("middle line trim transfers right-side point constraints to the new segment", async ({ page }) => {
+  await page.goto(`${baseUrl}/index.html?test=1`);
+  await page.waitForFunction(() => window.__cadTest);
+
+  const result = await page.evaluate(() => window.__cadTest.resetForTrimConstraintTransfer());
+  expect(result.lineCount).toBe(2);
+  expect(result.leftConstraintOnLeftLine).toBe(true);
+  expect(result.rightConstraintOnRightLine).toBe(true);
+  expect(result.leftLineEnd).toEqual({ x: 40, y: 0 });
+  expect(result.rightLineStart).toEqual({ x: 60, y: 0 });
+});

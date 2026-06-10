@@ -8032,6 +8032,28 @@
     for (const clone of clones) pushModelConstraint(clone, elementSketchId(sourceLine));
   }
 
+  function trimmedLinePointConstraintAnchor(constraint, line) {
+    if (constraint instanceof PointOnLineConstraint && constraint.line === line) return constraint.point;
+    if (constraint instanceof ArcEndpointOnLineConstraint && constraint.line === line) return arcEndpointPoint(constraint.arc, constraint.endpoint);
+    return null;
+  }
+
+  function captureRightTrimmedLinePointConstraints(line, rightBoundaryT) {
+    return model.constraints.filter((constraint) => {
+      const anchor = trimmedLinePointConstraintAnchor(constraint, line);
+      return anchor && lineParam(line, anchor) >= rightBoundaryT - 1e-6;
+    });
+  }
+
+  function retargetTrimmedLinePointConstraints(constraints, sourceLine, targetLine) {
+    for (const constraint of constraints) {
+      if (constraint.line !== sourceLine) continue;
+      constraint.line = targetLine;
+      if (constraint instanceof PointOnLineConstraint) constraint.name = new PointOnLineConstraint(constraint.point, targetLine).name;
+      else if (constraint instanceof ArcEndpointOnLineConstraint) constraint.name = new ArcEndpointOnLineConstraint(constraint.arc, constraint.endpoint, targetLine).name;
+    }
+  }
+
   function addBoundaryPointConstraint(point, boundary) {
     const source = boundary?.source || {};
     if (source.line) pushModelConstraint(new PointOnLineConstraint(point, source.line));
@@ -8087,12 +8109,16 @@
       line.p2 = p;
       addBoundaryPointConstraint(p, left);
     } else {
+      const rightSidePointConstraints = captureRightTrimmedLinePointConstraints(line, right.t);
       const oldP2 = line.p2;
       const pLeft = addPoint(left.point.x, left.point.y, false, "endpoint");
       const pRight = addPoint(right.point.x, right.point.y, false, "endpoint");
       line.p2 = pLeft;
       const newLine = addLine(pRight, oldP2, line.construction);
-      if (newLine) cloneTrimmedLineConstraints(line, newLine);
+      if (newLine) {
+        cloneTrimmedLineConstraints(line, newLine);
+        retargetTrimmedLinePointConstraints(rightSidePointConstraints, line, newLine);
+      }
       addBoundaryPointConstraint(pLeft, left);
       addBoundaryPointConstraint(pRight, right);
     }
@@ -9668,6 +9694,33 @@
           minimumResolution: formatDimensionLabel(0.000001),
           measuredMinimumResolution: formatMeasuredDimensionLabel(0.000001),
           roundedFraction: formatDimensionLabel(1.2345674),
+        };
+      },
+      resetForTrimConstraintTransfer() {
+        resetModelState();
+        setAppMode("geometry");
+        const p1 = addPoint(0, 0, false, "endpoint");
+        const p2 = addPoint(100, 0, false, "endpoint");
+        const line = addLine(p1, p2);
+        const leftPoint = addPoint(25, 0, false, "endpoint");
+        const rightPoint = addPoint(75, 0, false, "endpoint");
+        const leftConstraint = pushModelConstraint(new PointOnLineConstraint(leftPoint, line));
+        const rightConstraint = pushModelConstraint(new PointOnLineConstraint(rightPoint, line));
+        executeLineTrim({
+          kind: "line",
+          item: line,
+          interval: {
+            left: { t: 0.4, point: { x: 40, y: 0 }, source: {} },
+            right: { t: 0.6, point: { x: 60, y: 0 }, source: {} },
+          },
+        });
+        const rightLine = model.lines.find((candidate) => candidate !== line);
+        return {
+          lineCount: model.lines.length,
+          leftConstraintOnLeftLine: leftConstraint.line === line,
+          rightConstraintOnRightLine: rightConstraint.line === rightLine,
+          leftLineEnd: { x: line.p2.x, y: line.p2.y },
+          rightLineStart: rightLine ? { x: rightLine.p1.x, y: rightLine.p1.y } : null,
         };
       },
       presentationSnapshot() {
