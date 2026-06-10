@@ -4497,7 +4497,8 @@
       const extensionDirection = { x: ux, y: uy };
       const sourceSideOffset = dimensionLineSideExtensionOffset(target, index, gap, source, true, extensionDirection);
       const dimensionSideOffset = dimensionLineSideExtensionOffset(target, index, gap, source, false, extensionDirection);
-      const visibleGap = Math.min(gap, Math.max(0, el - 2 / viewport.scale));
+      const pointClearance = dimensionPointSourceClearance(target, index, source, extensionDirection);
+      const visibleGap = Math.min(gap + pointClearance, Math.max(0, el - 2 / viewport.scale));
       return {
         source,
         showExtension: shouldShowDimensionExtension(target, index, { source, onDimension, extensionDirection }),
@@ -4580,7 +4581,14 @@
     return v.x * outward.x + v.y * outward.y > 0.1;
   }
 
+  function dimensionPointSourceClearance(target, index, source = null, extensionDirection = null) {
+    if (!(source instanceof Point)) return 0;
+    if (dimensionSourceLine(target, index, source, extensionDirection)) return 0;
+    return 5 / viewport.scale;
+  }
+
   function dimensionLineSideExtensionOffset(target, index, gap, source = null, includeConstructionExtension = true, extensionDirection = null) {
+    if (!includeConstructionExtension) return { x: 0, y: 0 };
     const line = dimensionSourceLine(target, index, source, extensionDirection);
     if (!line) return { x: 0, y: 0 };
     const outward = source ? lineOutwardDirectionAtSource(line, source) : null;
