@@ -132,6 +132,11 @@
   const MAX_ZOOM = 10000000;
   const GRID_SCREEN_STEP_PX = 32;
   const CONSTRUCTION_EXTENSION_SCREEN_PX = 12;
+  const DIMENSION_EXTENSION_GAP_SCREEN_PX = 3;
+  const DIMENSION_EXTENSION_SCREEN_PX = 6;
+  const DIMENSION_POINT_MARKER_RADIUS_SCREEN_PX = 5;
+  const DIMENSION_ARROW_LENGTH_SCREEN_PX = 10;
+  const DIMENSION_ARROW_HALF_WIDTH_SCREEN_PX = 2.4;
   const CONSTRAINT_ACCEPT_ERROR = 1e-4;
   const DEFAULT_FILLET_RADIUS = 30;
   const MIN_LINE_LENGTH = Math.max(MIN_ORIENTATION_LENGTH, solver.minLineLength || 12);
@@ -4395,8 +4400,8 @@
     ctx.fillStyle = preview || highlighted ? "#2563eb" : "#6b7280";
     ctx.lineWidth = (highlighted ? 2 : 1.2) / viewport.scale;
     if (preview) ctx.setLineDash([5 / viewport.scale, 4 / viewport.scale]);
-    const extension = 8 / viewport.scale;
-    const gap = 6 / viewport.scale;
+    const extension = DIMENSION_EXTENSION_SCREEN_PX / viewport.scale;
+    const gap = DIMENSION_EXTENSION_GAP_SCREEN_PX / viewport.scale;
     const visibleGap = Math.min(gap, Math.max(0, radius - 2 / viewport.scale));
     const p1 = { x: vertex.x + Math.cos(start) * radius, y: vertex.y + Math.sin(start) * radius };
     const p2 = { x: vertex.x + Math.cos(end) * radius, y: vertex.y + Math.sin(end) * radius };
@@ -4472,8 +4477,8 @@
     const points = targetPointsForDimension(target, anchor);
     if (points.length < 2) return null;
     const tick = 9 / viewport.scale;
-    const extension = 6 / viewport.scale;
-    const gap = 6 / viewport.scale;
+    const extension = DIMENSION_EXTENSION_SCREEN_PX / viewport.scale;
+    const gap = DIMENSION_EXTENSION_GAP_SCREEN_PX / viewport.scale;
     const projections = points.map((p) => (p.x - anchor.x) * d.x + (p.y - anchor.y) * d.y);
     const min = Math.min(...projections);
     const max = Math.max(...projections);
@@ -4584,7 +4589,7 @@
   function dimensionPointSourceClearance(target, index, source = null, extensionDirection = null) {
     if (!(source instanceof Point)) return 0;
     if (dimensionSourceLine(target, index, source, extensionDirection)) return 0;
-    return 5 / viewport.scale;
+    return DIMENSION_POINT_MARKER_RADIUS_SCREEN_PX / viewport.scale;
   }
 
   function dimensionLineSideExtensionOffset(target, index, gap, source = null, includeConstructionExtension = true, extensionDirection = null) {
@@ -4620,15 +4625,15 @@
   }
 
   function drawArrowhead(point, direction) {
-    const size = 10 / viewport.scale;
-    const wing = 4.5 / viewport.scale;
+    const size = DIMENSION_ARROW_LENGTH_SCREEN_PX / viewport.scale;
+    const wing = DIMENSION_ARROW_HALF_WIDTH_SCREEN_PX / viewport.scale;
     const n = { x: -direction.y, y: direction.x };
     ctx.beginPath();
     ctx.moveTo(point.x, point.y);
     ctx.lineTo(point.x + direction.x * size + n.x * wing, point.y + direction.y * size + n.y * wing);
-    ctx.moveTo(point.x, point.y);
     ctx.lineTo(point.x + direction.x * size - n.x * wing, point.y + direction.y * size - n.y * wing);
-    ctx.stroke();
+    ctx.closePath();
+    ctx.fill();
   }
 
   function drawDimensions() {
