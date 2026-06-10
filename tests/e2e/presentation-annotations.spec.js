@@ -120,3 +120,14 @@ test("duplicate dimensions become read-only reference dimensions", async ({ page
   expect(result.labels.some((label) => /^\(.+\)$/.test(label))).toBe(true);
   expect(Math.max(...result.extensionAlignmentErrors)).toBeLessThan(1e-6);
 });
+
+test("construction extension clearance uses only the dimension-line component", async ({ page }) => {
+  await page.goto(`${baseUrl}/index.html?test=1`);
+  await page.waitForFunction(() => window.__cadTest);
+
+  const result = await page.evaluate(() => window.__cadTest.constructionDimensionClearanceCases());
+  expect(result.sameDirection).toBeCloseTo(12, 6);
+  expect(result.diagonal).toBeCloseTo(12 / Math.sqrt(2), 6);
+  expect(result.perpendicular).toBeCloseTo(0, 6);
+  expect(result.opposite).toBeCloseTo(0, 6);
+});

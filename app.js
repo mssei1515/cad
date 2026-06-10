@@ -4616,37 +4616,24 @@
     const extension = DIMENSION_EXTENSION_SCREEN_PX / viewport.scale;
     const gap = DIMENSION_EXTENSION_GAP_SCREEN_PX / viewport.scale;
     const projectedPoints = points.map((source, index) => {
-      const initialT = (source.x - anchor.x) * d.x + (source.y - anchor.y) * d.y;
-      const initialOnDimension = { x: anchor.x + d.x * initialT, y: anchor.y + d.y * initialT };
-      const initialEx = initialOnDimension.x - source.x;
-      const initialEy = initialOnDimension.y - source.y;
-      const initialEl = hypot2(initialEx, initialEy);
-      const initialExtensionDirection = {
-        x: initialEl > 1e-12 ? initialEx / initialEl : d.x,
-        y: initialEl > 1e-12 ? initialEy / initialEl : d.y,
-      };
-      const sourceSideOffset = dimensionLineSideExtensionOffset(target, index, gap, source, true, initialExtensionDirection);
-      const adjustedSource = {
-        x: source.x + sourceSideOffset.x,
-        y: source.y + sourceSideOffset.y,
-      };
-      const t = (adjustedSource.x - anchor.x) * d.x + (adjustedSource.y - anchor.y) * d.y;
+      const t = (source.x - anchor.x) * d.x + (source.y - anchor.y) * d.y;
       const onDimension = { x: anchor.x + d.x * t, y: anchor.y + d.y * t };
-      const ex = onDimension.x - adjustedSource.x;
-      const ey = onDimension.y - adjustedSource.y;
+      const ex = onDimension.x - source.x;
+      const ey = onDimension.y - source.y;
       const el = hypot2(ex, ey);
       const ux = el > 1e-12 ? ex / el : d.x;
       const uy = el > 1e-12 ? ey / el : d.y;
       const extensionDirection = { x: ux, y: uy };
       const pointClearance = dimensionPointSourceClearance(target, index, source, extensionDirection);
-      const visibleGap = Math.min(gap + pointClearance, Math.max(0, el - 2 / viewport.scale));
+      const constructionClearance = dimensionConstructionExtensionClearance(target, index, source, extensionDirection);
+      const visibleGap = Math.min(gap + pointClearance + constructionClearance, Math.max(0, el - 2 / viewport.scale));
       return {
         source,
         projection: t,
         showExtension: shouldShowDimensionExtension(target, index, { source, onDimension, extensionDirection }),
         extensionStart: {
-          x: adjustedSource.x + ux * visibleGap,
-          y: adjustedSource.y + uy * visibleGap,
+          x: source.x + ux * visibleGap,
+          y: source.y + uy * visibleGap,
         },
         onDimension,
         extensionEnd: {
@@ -4741,20 +4728,14 @@
     return DIMENSION_POINT_MARKER_RADIUS_SCREEN_PX / viewport.scale;
   }
 
-  function dimensionLineSideExtensionOffset(target, index, gap, source = null, includeConstructionExtension = true, extensionDirection = null) {
-    if (!includeConstructionExtension) return { x: 0, y: 0 };
+  function dimensionConstructionExtensionClearance(target, index, source = null, extensionDirection = null) {
+    if (!source || !extensionDirection) return 0;
     const line = dimensionSourceLine(target, index, source, extensionDirection);
-    if (!line) return { x: 0, y: 0 };
-    const lineDirection = lineUnit(line);
-    if (extensionDirection) {
-      const alignment = Math.abs(lineDirection.x * extensionDirection.x + lineDirection.y * extensionDirection.y);
-      if (alignment < 0.92) return { x: 0, y: 0 };
-    }
-    const outward = source ? lineOutwardDirectionAtSource(line, source) : null;
-    const direction = outward || lineDirection;
-    const constructionGap = includeConstructionExtension && outward && line.construction ? CONSTRUCTION_EXTENSION_SCREEN_PX / viewport.scale : 0;
-    const totalGap = gap + constructionGap;
-    return { x: direction.x * totalGap, y: direction.y * totalGap };
+    if (!line?.construction) return 0;
+    const outward = lineOutwardDirectionAtSource(line, source);
+    if (!outward) return 0;
+    const directionalComponent = outward.x * extensionDirection.x + outward.y * extensionDirection.y;
+    return Math.max(0, directionalComponent) * (CONSTRUCTION_EXTENSION_SCREEN_PX / viewport.scale);
   }
 
   function angleDimensionLayout(target, dimension) {
@@ -9642,6 +9623,23 @@
           labels: dimensionConstraints.map((constraint) => dimensionLabelForConstraint(constraint, targetFromConstraint(constraint), constraint.dimension || defaultDimensionForTarget(targetFromConstraint(constraint)))),
           serializedReadOnlyCount: serializeModel().constraints.filter((constraint) => constraint.readOnlyDimension).length,
           extensionAlignmentErrors,
+        };
+      },
+      constructionDimensionClearanceCases() {
+        resetModelState();
+        setAppMode("geometry");
+        const p1 = addPoint(0, 0, false, "endpoint");
+        const p2 = addPoint(100, 0, false, "endpoint");
+        const line = addLine(p1, p2);
+        line.construction = true;
+        const target = { kind: "line-length", line, p1, p2, value: line.length() };
+        const screenClearance = (direction) => dimensionConstructionExtensionClearance(target, 1, p2, direction) * viewport.scale;
+        const diagonal = Math.SQRT1_2;
+        return {
+          sameDirection: screenClearance({ x: 1, y: 0 }),
+          diagonal: screenClearance({ x: diagonal, y: diagonal }),
+          perpendicular: screenClearance({ x: 0, y: 1 }),
+          opposite: screenClearance({ x: -1, y: 0 }),
         };
       },
       presentationSnapshot() {
