@@ -118,4 +118,5 @@ test("duplicate dimensions become read-only reference dimensions", async ({ page
   expect(result.readOnlyCount).toBe(1);
   expect(result.serializedReadOnlyCount).toBe(1);
   expect(result.labels.some((label) => /^\(.+\)$/.test(label))).toBe(true);
+  expect(Math.max(...result.extensionAlignmentErrors)).toBeLessThan(1e-6);
 });

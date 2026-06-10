@@ -4745,8 +4745,13 @@
     if (!includeConstructionExtension) return { x: 0, y: 0 };
     const line = dimensionSourceLine(target, index, source, extensionDirection);
     if (!line) return { x: 0, y: 0 };
+    const lineDirection = lineUnit(line);
+    if (extensionDirection) {
+      const alignment = Math.abs(lineDirection.x * extensionDirection.x + lineDirection.y * extensionDirection.y);
+      if (alignment < 0.92) return { x: 0, y: 0 };
+    }
     const outward = source ? lineOutwardDirectionAtSource(line, source) : null;
-    const direction = outward || lineUnit(line);
+    const direction = outward || lineDirection;
     const constructionGap = includeConstructionExtension && outward && line.construction ? CONSTRUCTION_EXTENSION_SCREEN_PX / viewport.scale : 0;
     const totalGap = gap + constructionGap;
     return { x: direction.x * totalGap, y: direction.y * totalGap };
@@ -9616,9 +9621,18 @@
         const p2 = addPoint(50, 0, false, "endpoint");
         const line = addLine(p1, p2);
         const target = { kind: "line-length", line, p1, p2, value: line.length() };
-        const first = addDistanceConstraintFromTarget(target, line.length(), dimensionFromAnchor(target, { x: 0, y: -28 }), { sketchId: activeSketchId() });
+        const firstDimension = dimensionFromAnchor(target, { x: 0, y: -28 });
+        const first = addDistanceConstraintFromTarget(target, line.length(), firstDimension, { sketchId: activeSketchId() });
         const second = addDistanceConstraintFromTarget(target, line.length(), dimensionFromAnchor(target, { x: 0, y: -54 }), { sketchId: activeSketchId() });
         const dimensionConstraints = model.constraints.filter(isDimensionConstraint);
+        const layout = dimensionLayout(target, firstDimension);
+        const extensionAlignmentErrors = layout.points.map((point) => {
+          const vx = point.extensionEnd.x - point.extensionStart.x;
+          const vy = point.extensionEnd.y - point.extensionStart.y;
+          const wx = point.source.x - point.extensionStart.x;
+          const wy = point.source.y - point.extensionStart.y;
+          return Math.abs(vx * wy - vy * wx) / Math.max(hypot2(vx, vy), 1e-12);
+        });
         return {
           first,
           second,
@@ -9627,6 +9641,7 @@
           readOnlyCount: dimensionConstraints.filter(isReadOnlyDimension).length,
           labels: dimensionConstraints.map((constraint) => dimensionLabelForConstraint(constraint, targetFromConstraint(constraint), constraint.dimension || defaultDimensionForTarget(targetFromConstraint(constraint)))),
           serializedReadOnlyCount: serializeModel().constraints.filter((constraint) => constraint.readOnlyDimension).length,
+          extensionAlignmentErrors,
         };
       },
       presentationSnapshot() {
