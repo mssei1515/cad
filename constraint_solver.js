@@ -1073,6 +1073,7 @@
       const activityTolerance = Number.isFinite(options.activityTolerance) ? options.activityTolerance : 1e-7;
       const hasSubset = Array.isArray(options.variables) || Array.isArray(options.constraints);
       const vars = Array.isArray(options.variables) ? options.variables : this.getVariables();
+      if (hasSubset) this.syncLineOrientationHints(options.extra || [], options.constraints || []);
       const constraints = hasSubset
         ? this.constraintsWithLineMinimums(options.constraints || [], options.extra || [], options.lines || [])
         : this.getConstraints(options.extra || []);
