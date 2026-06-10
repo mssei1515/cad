@@ -133,11 +133,12 @@
   const MAX_ZOOM = 10000000;
   const GRID_SCREEN_STEP_PX = 32;
   const CONSTRUCTION_EXTENSION_SCREEN_PX = 12;
-  const DIMENSION_EXTENSION_GAP_SCREEN_PX = 3;
+  const DIMENSION_EXTENSION_GAP_SCREEN_PX = 4;
   const DIMENSION_EXTENSION_SCREEN_PX = 6;
   const DIMENSION_POINT_MARKER_RADIUS_SCREEN_PX = 5;
   const DIMENSION_ARROW_LENGTH_SCREEN_PX = 10;
   const DIMENSION_ARROW_HALF_WIDTH_SCREEN_PX = 2.4;
+  const DIMENSION_DISPLAY_PRECISION = 1e-6;
   const CONSTRAINT_ACCEPT_ERROR = 1e-4;
   const DEFAULT_FILLET_RADIUS = 30;
   const MIN_LINE_LENGTH = Math.max(MIN_ORIENTATION_LENGTH, solver.minLineLength || 12);
@@ -2413,9 +2414,11 @@
   function formatDisplayNumber(value, maxFractionDigits = 10) {
     const n = Number(value);
     if (!Number.isFinite(n)) return "";
-    const rounded = Number(n.toFixed(maxFractionDigits));
+    const precisionDigits = Math.max(0, Math.round(-Math.log10(DIMENSION_DISPLAY_PRECISION)));
+    const displayDigits = Math.min(maxFractionDigits, precisionDigits);
+    const rounded = Number(n.toFixed(displayDigits));
     if (Object.is(rounded, -0)) return "0";
-    return rounded.toFixed(maxFractionDigits).replace(/\.?0+$/, "");
+    return rounded.toFixed(displayDigits).replace(/\.?0+$/, "");
   }
 
   function formatDimensionLabel(value, suffix = "") {
@@ -9640,6 +9643,14 @@
           diagonal: screenClearance({ x: diagonal, y: diagonal }),
           perpendicular: screenClearance({ x: 0, y: 1 }),
           opposite: screenClearance({ x: -1, y: 0 }),
+        };
+      },
+      dimensionDisplayPrecisionCases() {
+        return {
+          positiveNoise: formatDimensionLabel(15.0000000058),
+          negativeNoise: formatDimensionLabel(824.9999999982),
+          minimumResolution: formatDimensionLabel(0.000001),
+          roundedFraction: formatDimensionLabel(1.2345674),
         };
       },
       presentationSnapshot() {

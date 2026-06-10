@@ -131,3 +131,14 @@ test("construction extension clearance uses only the dimension-line component", 
   expect(result.perpendicular).toBeCloseTo(0, 6);
   expect(result.opposite).toBeCloseTo(0, 6);
 });
+
+test("dimension labels hide values below the supported display precision", async ({ page }) => {
+  await page.goto(`${baseUrl}/index.html?test=1`);
+  await page.waitForFunction(() => window.__cadTest);
+
+  const result = await page.evaluate(() => window.__cadTest.dimensionDisplayPrecisionCases());
+  expect(result.positiveNoise).toBe("15");
+  expect(result.negativeNoise).toBe("825");
+  expect(result.minimumResolution).toBe("0.000001");
+  expect(result.roundedFraction).toBe("1.234567");
+});
