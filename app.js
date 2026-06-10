@@ -139,6 +139,7 @@
   const DIMENSION_ARROW_LENGTH_SCREEN_PX = 10;
   const DIMENSION_ARROW_HALF_WIDTH_SCREEN_PX = 2.4;
   const DIMENSION_DISPLAY_PRECISION = 1e-6;
+  const MEASURED_DIMENSION_SNAP_TOLERANCE = 1e-5;
   const CONSTRAINT_ACCEPT_ERROR = 1e-4;
   const DEFAULT_FILLET_RADIUS = 30;
   const MIN_LINE_LENGTH = Math.max(MIN_ORIENTATION_LENGTH, solver.minLineLength || 12);
@@ -2411,18 +2412,18 @@
     return `${percent.toFixed(2)}%`;
   }
 
-  function formatDisplayNumber(value, maxFractionDigits = 10) {
+  function formatDisplayNumber(value, maxFractionDigits = 10, snapTolerance = DIMENSION_DISPLAY_PRECISION) {
     const n = Number(value);
     if (!Number.isFinite(n)) return "";
     const displayDigits = Math.max(0, Math.min(10, maxFractionDigits));
     const floatingPointSlack = Number.EPSILON * Math.max(1, Math.abs(n)) * 8;
-    const snapTolerance = DIMENSION_DISPLAY_PRECISION + floatingPointSlack;
+    const effectiveSnapTolerance = Math.max(0, snapTolerance) + floatingPointSlack;
     let rounded = Number(n.toFixed(displayDigits));
     let roundedDigits = displayDigits;
     for (let digits = 0; digits <= displayDigits; digits += 1) {
       const candidate = Number(n.toFixed(digits));
       if (candidate === 0 && n !== 0) continue;
-      if (Math.abs(n - candidate) <= snapTolerance) {
+      if (Math.abs(n - candidate) <= effectiveSnapTolerance) {
         rounded = candidate;
         roundedDigits = digits;
         break;
@@ -2434,6 +2435,10 @@
 
   function formatDimensionLabel(value, suffix = "") {
     return `${formatDisplayNumber(value)}${suffix}`;
+  }
+
+  function formatMeasuredDimensionLabel(value, suffix = "") {
+    return `${formatDisplayNumber(value, 10, MEASURED_DIMENSION_SNAP_TOLERANCE)}${suffix}`;
   }
 
   function canvasScreenPoint(e) {
@@ -3678,12 +3683,10 @@
   }
 
   function dimensionLabelForConstraint(constraint, target, dimension) {
-    const value = isReadOnlyDimension(constraint)
-      ? measuredDimensionValue(target, dimension)
-      : target.kind === "angle"
-        ? angleDegrees(constraint.target)
-        : constraint.target;
-    const label = target.kind === "angle" ? formatDimensionLabel(value, "°") : formatDimensionLabel(value);
+    const readOnly = isReadOnlyDimension(constraint);
+    const value = readOnly ? measuredDimensionValue(target, dimension) : target.kind === "angle" ? angleDegrees(constraint.target) : constraint.target;
+    const formatLabel = readOnly ? formatMeasuredDimensionLabel : formatDimensionLabel;
+    const label = target.kind === "angle" ? formatLabel(value, "°") : formatLabel(value);
     return isReadOnlyDimension(constraint) ? `(${label})` : label;
   }
 
@@ -4812,7 +4815,7 @@
         if (!target) continue;
         const dimension = element.dimension || defaultDimensionForTarget(target);
         const value = presentationTargetValue(target);
-        const label = target.kind === "angle" ? formatDimensionLabel(value, "°") : formatDimensionLabel(value);
+        const label = target.kind === "angle" ? formatMeasuredDimensionLabel(value, "°") : formatMeasuredDimensionLabel(value);
         drawDimension(target, dimension, label, false, false);
       } else if (element.type === "leader") {
         drawPresentationLeader(element);
@@ -4827,7 +4830,7 @@
     const anchor = pendingCommand.pointer || dimensionAnchor(target, defaultDimensionForTarget(target));
     const dimension = dimensionFromAnchor(target, anchor);
     const value = presentationTargetValue(target);
-    const label = target.kind === "angle" ? formatDimensionLabel(value, "°") : formatDimensionLabel(value);
+    const label = target.kind === "angle" ? formatMeasuredDimensionLabel(value, "°") : formatMeasuredDimensionLabel(value);
     drawDimension(target, dimension, label, true, false);
   }
 
@@ -4908,7 +4911,7 @@
         const layout = dimensionLayout(target, dimension);
         if (!layout) continue;
         const presentationValue = presentationTargetValue(target);
-        const label = target.kind === "angle" ? formatDimensionLabel(presentationValue, "°") : formatDimensionLabel(presentationValue);
+        const label = target.kind === "angle" ? formatMeasuredDimensionLabel(presentationValue, "°") : formatMeasuredDimensionLabel(presentationValue);
         if (pointInExpandedBox(x, y, textHitBox(label, layout.text.x, layout.text.y, 13 / viewport.scale), threshold * 0.8)) return { element, type: "annotationDimension", target, dimension, part: "label" };
         if (hypot2(x - layout.text.x, y - layout.text.y) <= threshold * 3) return { element, type: "annotationDimension", target, dimension, part: "label" };
         if (distancePointToSegmentPoints(x, y, layout.hitA, layout.hitB) <= threshold * 2.2) return { element, type: "annotationDimension", target, dimension, part: "line" };
@@ -9661,7 +9664,9 @@
           positiveNoise: formatDimensionLabel(15.0000000058),
           negativeNoise: formatDimensionLabel(824.9999999982),
           precisionBoundaryNoise: formatDimensionLabel(1844.999999),
+          measuredAccumulatedNoise: formatMeasuredDimensionLabel(1844.9999986000548),
           minimumResolution: formatDimensionLabel(0.000001),
+          measuredMinimumResolution: formatMeasuredDimensionLabel(0.000001),
           roundedFraction: formatDimensionLabel(1.2345674),
         };
       },

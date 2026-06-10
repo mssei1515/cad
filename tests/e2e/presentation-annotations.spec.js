@@ -140,6 +140,8 @@ test("dimension labels hide values below the supported display precision", async
   expect(result.positiveNoise).toBe("15");
   expect(result.negativeNoise).toBe("825");
   expect(result.precisionBoundaryNoise).toBe("1845");
+  expect(result.measuredAccumulatedNoise).toBe("1845");
   expect(result.minimumResolution).toBe("0.000001");
+  expect(result.measuredMinimumResolution).toBe("0.000001");
   expect(result.roundedFraction).toBe("1.234567");
 });
