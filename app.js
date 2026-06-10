@@ -362,6 +362,12 @@
     return null;
   }
 
+  function decorateSerializedConstraint(data, constraint) {
+    if (!data || !constraint) return data;
+    if (constraint.readOnlyDimension) data.readOnlyDimension = true;
+    return data;
+  }
+
   function presentationBaseStyle(item) {
     const construction = (item instanceof Line || item instanceof Circle || item instanceof Arc) && item.construction;
     return construction ? DEFAULT_PRESENTATION_CONSTRUCTION_STYLE : DEFAULT_PRESENTATION_STYLE;
@@ -1769,7 +1775,7 @@
       arcs: model.arcs.map((a) => ({ id: a.id, center: a.center.id, radius: a.radius(), startAngle: a.startAngle, endAngle: a.endAngle, construction: Boolean(a.construction), sketchId: elementSketchId(a) })),
       constraints: model.constraints
         .map((constraint) => {
-          const data = serializeConstraint(constraint);
+          const data = decorateSerializedConstraint(serializeConstraint(constraint), constraint);
           if (data) data.sketchId = constraintSketchId(constraint);
           if (data && constraint.reference) {
             data.reference = true;
@@ -1925,6 +1931,8 @@
 
     if (constraint) {
       constraint.enabled = data.enabled !== false;
+      constraint.readOnlyDimension = Boolean(data.readOnlyDimension);
+      if (constraint.readOnlyDimension) constraint.enabled = false;
       if (data.dimension && Number.isFinite(Number(data.dimension.x)) && Number.isFinite(Number(data.dimension.y))) {
         constraint.dimension = {
           x: Number(data.dimension.x),
@@ -3625,6 +3633,46 @@
     return null;
   }
 
+  function isDimensionConstraint(constraint) {
+    return (
+      constraint instanceof DistanceConstraint ||
+      constraint instanceof PointAxisDistanceConstraint ||
+      constraint instanceof PointLineDistanceConstraint ||
+      constraint instanceof LineLineDistanceConstraint ||
+      constraint instanceof LineAngleConstraint ||
+      constraint instanceof RadiusConstraint ||
+      constraint instanceof DiameterConstraint
+    );
+  }
+
+  function isReadOnlyDimension(constraint) {
+    return Boolean(constraint?.readOnlyDimension);
+  }
+
+  function measuredDimensionValue(target, dimension = null) {
+    if (!target) return NaN;
+    if (target.kind === "angle") {
+      return angleDegrees(angleDimensionAngles(target, null, dimension).signed);
+    }
+    return presentationTargetValue(target);
+  }
+
+  function measuredConstraintTargetValue(constraint, target = targetFromConstraint(constraint), dimension = constraint?.dimension) {
+    if (!target) return NaN;
+    const measured = measuredDimensionValue(target, dimension);
+    return target.kind === "angle" ? (measured * Math.PI) / 180 : measured;
+  }
+
+  function dimensionLabelForConstraint(constraint, target, dimension) {
+    const value = isReadOnlyDimension(constraint)
+      ? measuredDimensionValue(target, dimension)
+      : target.kind === "angle"
+        ? angleDegrees(constraint.target)
+        : constraint.target;
+    const label = target.kind === "angle" ? formatDimensionLabel(value, "°") : formatDimensionLabel(value);
+    return isReadOnlyDimension(constraint) ? `(${label})` : label;
+  }
+
   function constraintReferencesPoint(c, point) {
     if (c instanceof DistanceConstraint || c instanceof PointAxisDistanceConstraint) return c.p1 === point || c.p2 === point;
     if (c instanceof PointLineDistanceConstraint) return c.point === point || c.line.p1 === point || c.line.p2 === point;
@@ -4732,7 +4780,7 @@
       const dimension = c.dimension || defaultDimensionForTarget(target);
       const active = isActiveSketchConstraint(c);
       const highlighted = active && (c === hoveredDimensionConstraint || c === selectedDimensionConstraint || c === dimensionDragSession?.constraint);
-      const label = target.kind === "angle" ? formatDimensionLabel(angleDegrees(c.target), "°") : formatDimensionLabel(c.target);
+      const label = dimensionLabelForConstraint(c, target, dimension);
       const editing = pendingCommand?.type === "distance-value" && pendingCommand.constraint === c;
       ctx.save();
       ctx.globalAlpha = active ? 1 : 0.26;
@@ -5939,6 +5987,13 @@
     if (!hit?.constraint) return false;
     const target = targetFromConstraint(hit.constraint);
     if (!target) return false;
+    if (isReadOnlyDimension(hit.constraint)) {
+      selectedDimensionConstraint = hit.constraint;
+      dimensionDragSession = null;
+      setHint("読み取り専用寸法の値は編集できません");
+      draw();
+      return true;
+    }
     pendingCommand = {
       type: "distance-value",
       target,
@@ -6401,7 +6456,8 @@
       .map(
         ({ c, index }) => {
           const duplicate = constraintIsRedundant(c);
-          return `<div class="item constraint-item ${duplicate ? "duplicate" : ""}"><span>${index + 1}. ${c.name}${c.reference ? `<span class="badge relation-badge">参照</span>` : ""}${duplicate ? `<span class="badge constraint-duplicate-badge">重複</span>` : ""}</span>` +
+          const readOnly = isReadOnlyDimension(c);
+          return `<div class="item constraint-item ${duplicate ? "duplicate" : ""}"><span>${index + 1}. ${c.name}${c.reference ? `<span class="badge relation-badge">参照</span>` : ""}${readOnly ? `<span class="badge constraint-readonly-badge">読取</span>` : ""}${duplicate ? `<span class="badge constraint-duplicate-badge">重複</span>` : ""}</span>` +
           `<button data-idx="${index}" class="removeConstraintBtn" title="削除" aria-label="削除" data-tooltip="削除">` +
           `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3M7 7l1 13h8l1-13"/></svg>` +
           `</button></div>`;
@@ -6523,6 +6579,24 @@
     }
   }
 
+  function addReadOnlyDimensionConstraint(constraint, sketchId = constraintSketchId(constraint), messagePrefix = "重複寸法") {
+    if (!isDimensionConstraint(constraint)) return false;
+    const target = targetFromConstraint(constraint);
+    if (!target) return false;
+    constraint.target = measuredConstraintTargetValue(constraint, target, constraint.dimension);
+    constraint.readOnlyDimension = true;
+    constraint.enabled = false;
+    pushModelConstraint(constraint, sketchId);
+    clearSelection();
+    refreshConstraintAnalysis();
+    updateUI();
+    draw();
+    setHint(`${messagePrefix}を読み取り専用寸法として追加しました`);
+    log(`${messagePrefix}を読み取り専用寸法として追加しました`);
+    recordHistory(`${messagePrefix}を読み取り専用寸法として追加`);
+    return true;
+  }
+
   function commitNewConstraint(type, constraint) {
     if (rejectPresentationGeometryEdit("Constraints")) return false;
     if (!constraintTargetsAreActive(constraint)) {
@@ -6541,6 +6615,10 @@
     const collapse = findLineCollapseAfterConstraint(constraint, snapshot, constraintSketchId(constraint));
     const duplicate = solved.success && result.errorNorm <= CONSTRAINT_ACCEPT_ERROR && !collapse ? redundantConstraintInfo(constraint, constraintSketchId(constraint)) : null;
     if (!solved.success || result.errorNorm > CONSTRAINT_ACCEPT_ERROR || collapse || duplicate?.redundant) {
+      if (duplicate?.redundant && isDimensionConstraint(constraint)) {
+        restoreModelState(snapshot);
+        return addReadOnlyDimensionConstraint(constraint, constraintSketchId(constraint));
+      }
       restoreModelState(snapshot);
       const msg = `拘束を追加できません: 矛盾しています (error=${result.errorNorm.toExponential(3)}, reason=${result.reason})`;
       const collapseMsg = collapse
@@ -6590,6 +6668,10 @@
     const collapse = findLineCollapseAfterConstraint(constraint, snapshot, sketchId);
     const duplicate = solved.success && result.errorNorm <= CONSTRAINT_ACCEPT_ERROR && !collapse ? redundantConstraintInfo(constraint, sketchId) : null;
     if (!solved.success || result.errorNorm > CONSTRAINT_ACCEPT_ERROR || collapse || duplicate?.redundant) {
+      if (duplicate?.redundant && isDimensionConstraint(constraint)) {
+        restoreModelState(snapshot);
+        return addReadOnlyDimensionConstraint(constraint, sketchId, "重複参照寸法");
+      }
       restoreModelState(snapshot);
       const msg = `参照拘束を追加できません: 矛盾しています (error=${result.errorNorm.toExponential(3)}, reason=${result.reason})`;
       const collapseMsg = collapse
@@ -7433,6 +7515,7 @@
 
   function syncAngleConstraintFromDimension(constraint, target, dimension) {
     if (!(constraint instanceof LineAngleConstraint) || target.kind !== "angle" || !dimension) return;
+    if (isReadOnlyDimension(constraint)) return;
     const angles = angleDimensionAngles(target, null, dimension);
     constraint.startFlip = dimension.angleStartFlip ? 1 : 0;
     constraint.endFlip = dimension.angleEndFlip ? 1 : 0;
@@ -9512,6 +9595,26 @@
         });
         resizeCanvas({ centerWorld: { x: 20, y: 20 } });
         return this.presentationSnapshot();
+      },
+      resetForReadOnlyDuplicateDimension() {
+        resetModelState();
+        setAppMode("geometry");
+        const p1 = addPoint(-50, 0, false, "endpoint");
+        const p2 = addPoint(50, 0, false, "endpoint");
+        const line = addLine(p1, p2);
+        const target = { kind: "line-length", line, p1, p2, value: line.length() };
+        const first = addDistanceConstraintFromTarget(target, line.length(), dimensionFromAnchor(target, { x: 0, y: -28 }), { sketchId: activeSketchId() });
+        const second = addDistanceConstraintFromTarget(target, line.length(), dimensionFromAnchor(target, { x: 0, y: -54 }), { sketchId: activeSketchId() });
+        const dimensionConstraints = model.constraints.filter(isDimensionConstraint);
+        return {
+          first,
+          second,
+          count: dimensionConstraints.length,
+          enabledCount: dimensionConstraints.filter((constraint) => constraint.enabled !== false).length,
+          readOnlyCount: dimensionConstraints.filter(isReadOnlyDimension).length,
+          labels: dimensionConstraints.map((constraint) => dimensionLabelForConstraint(constraint, targetFromConstraint(constraint), constraint.dimension || defaultDimensionForTarget(targetFromConstraint(constraint)))),
+          serializedReadOnlyCount: serializeModel().constraints.filter((constraint) => constraint.readOnlyDimension).length,
+        };
       },
       presentationSnapshot() {
         const sheet = activePresentationSheet();

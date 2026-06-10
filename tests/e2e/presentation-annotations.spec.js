@@ -105,3 +105,17 @@ test("history buttons enable after normal canvas edits", async ({ page }) => {
   expect(afterRedo.undoDisabled).toBe(false);
   expect(afterRedo.redoDisabled).toBe(true);
 });
+
+test("duplicate dimensions become read-only reference dimensions", async ({ page }) => {
+  await page.goto(`${baseUrl}/index.html?test=1`);
+  await page.waitForFunction(() => window.__cadTest);
+
+  const result = await page.evaluate(() => window.__cadTest.resetForReadOnlyDuplicateDimension());
+  expect(result.first).toBe(true);
+  expect(result.second).toBe(true);
+  expect(result.count).toBe(2);
+  expect(result.enabledCount).toBe(1);
+  expect(result.readOnlyCount).toBe(1);
+  expect(result.serializedReadOnlyCount).toBe(1);
+  expect(result.labels.some((label) => /^\(.+\)$/.test(label))).toBe(true);
+});

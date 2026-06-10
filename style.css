@@ -778,6 +778,12 @@ body.geometry-mode .mode-overlay-sheet #renamePresentationSheetBtn {
   font-weight: 800;
 }
 
+.constraint-readonly-badge {
+  background: #e0f2fe;
+  color: #0369a1;
+  font-weight: 800;
+}
+
 .relation-badge {
   background: rgba(236, 254, 255, 0.68);
   color: #0e7490;
