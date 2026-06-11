@@ -5925,6 +5925,13 @@
           : pendingCommand.target.kind === "angle"
             ? angleDegrees(angleDimensionAngles(pendingCommand.target, pointer, dimension).signed)
           : pendingCommand.target.value;
+    const readOnlyConstraint = readOnlyDimensionConstraintForPlacement(target, value, dimension, { referenceSketchId, sketchId });
+    if (readOnlyConstraint) {
+      pendingCommand = null;
+      hideDimensionValueInput();
+      addReadOnlyDimensionConstraint(readOnlyConstraint, sketchId || activeSketchId(), referenceSketchId ? "重複参照寸法" : "重複寸法");
+      return;
+    }
     pendingCommand = {
       type: "distance-value",
       target,
@@ -7011,23 +7018,23 @@
     return ok;
   }
 
-  function addDistanceConstraintFromTarget(target, value, dimension, options = {}) {
-    if (!target || target.kind === "invalid") return false;
+  function distanceConstraintFromTarget(target, value, dimension, options = {}) {
+    if (!target || target.kind === "invalid") return null;
     let constraint = null;
     if (target.kind === "point-point" || target.kind === "line-length") {
       const axis = target.dimensionAxis || dimension?.axis;
-      if (target.kind === "point-point" && (axis === "x" || axis === "y")) {
-        constraint = new PointAxisDistanceConstraint(target.p1, target.p2, value, axis);
-      } else {
-        constraint = new DistanceConstraint(target.p1, target.p2, value);
-      }
+      constraint = target.kind === "point-point" && (axis === "x" || axis === "y")
+        ? new PointAxisDistanceConstraint(target.p1, target.p2, value, axis)
+        : new DistanceConstraint(target.p1, target.p2, value);
     } else if (target.kind === "point-line") {
       constraint = new PointLineDistanceConstraint(target.point, target.line, value);
     } else if (target.kind === "line-line") {
       if (!linesAreParallel(target.line1, target.line2)) {
-        setHint("線-線寸法は平行線のみです", "error");
-        log("線-線寸法は平行線のみです");
-        return false;
+        if (!options.silent) {
+          setHint("線-線寸法は平行線のみです", "error");
+          log("線-線寸法は平行線のみです");
+        }
+        return null;
       }
       constraint = new LineLineDistanceConstraint(target.line1, target.line2, value);
     } else if (target.kind === "angle") {
@@ -7037,8 +7044,25 @@
     } else if (target.kind === "diameter") {
       constraint = new DiameterConstraint(target.primitive, value);
     }
+    if (constraint) constraint.dimension = dimension;
+    return constraint;
+  }
+
+  function readOnlyDimensionConstraintForPlacement(target, value, dimension, options = {}) {
+    const constraint = distanceConstraintFromTarget(target, value, dimension, { silent: true });
+    if (!constraint) return null;
+    const sketchId = options.sketchId || activeSketchId();
+    assignConstraintSketchId(constraint, sketchId);
+    if (options.referenceSketchId) markReferenceConstraint(constraint, options.referenceSketchId, sketchId);
+    model.constraints.push(constraint);
+    const duplicate = redundantConstraintInfo(constraint, sketchId);
+    model.constraints = model.constraints.filter((item) => item !== constraint);
+    return duplicate?.redundant ? constraint : null;
+  }
+
+  function addDistanceConstraintFromTarget(target, value, dimension, options = {}) {
+    const constraint = distanceConstraintFromTarget(target, value, dimension);
     if (!constraint) return false;
-    constraint.dimension = dimension;
     return commitConstraintResolution({
       type: options.referenceSketchId ? "referenceDimension" : "dimension",
       constraint,
@@ -9668,6 +9692,29 @@
           labels: dimensionConstraints.map((constraint) => dimensionLabelForConstraint(constraint, targetFromConstraint(constraint), constraint.dimension || defaultDimensionForTarget(targetFromConstraint(constraint)))),
           serializedReadOnlyCount: serializeModel().constraints.filter((constraint) => constraint.readOnlyDimension).length,
           extensionAlignmentErrors,
+        };
+      },
+      resetForReadOnlyDimensionPlacement() {
+        resetModelState();
+        setAppMode("geometry");
+        const p1 = addPoint(-50, 0, false, "endpoint");
+        const p2 = addPoint(50, 0, false, "endpoint");
+        const line = addLine(p1, p2);
+        const target = { kind: "line-length", line, p1, p2, value: line.length() };
+        addDistanceConstraintFromTarget(target, line.length(), dimensionFromAnchor(target, { x: 0, y: -28 }), { sketchId: activeSketchId() });
+        pendingConstraintCommand = { type: "distance" };
+        pendingCommand = {
+          type: "distance-place",
+          target,
+          pointer: { x: 0, y: -54 },
+          sketchId: activeSketchId(),
+        };
+        startDistanceValueInput({ x: 0, y: -54 });
+        return {
+          pendingType: pendingCommand?.type || null,
+          inputHidden: dimensionValueInput.hidden,
+          readOnlyCount: model.constraints.filter(isReadOnlyDimension).length,
+          dimensionCount: model.constraints.filter(isDimensionConstraint).length,
         };
       },
       constructionDimensionClearanceCases() {

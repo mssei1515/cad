@@ -98,6 +98,12 @@ body {
   background: #fff;
 }
 
+.toolbar-home {
+  display: flex;
+  align-items: center;
+  padding-right: 2px;
+}
+
 .mode-switch {
   display: inline-grid;
   grid-template-columns: 1fr 1fr;
@@ -179,8 +185,8 @@ body.presentation-mode .presentation-style-group {
   display: flex;
 }
 
-body.presentation-mode .toolbar-group[aria-label="作図・編集"],
-body.presentation-mode .toolbar-group[aria-label="拘束・寸法"] {
+body.presentation-mode .geometry-only,
+body.presentation-mode .geometry-toolbar-group {
   display: none;
 }
 
@@ -413,6 +419,31 @@ canvas.is-panning {
   pointer-events: none;
 }
 
+button.sidebar-toggle-btn {
+  position: absolute;
+  right: min(320px, 88vw);
+  top: 50%;
+  z-index: 8;
+  width: 30px;
+  height: 48px;
+  padding: 0;
+  transform: translateY(-50%);
+  border: 1px solid var(--line);
+  border-right: 0;
+  border-radius: 7px 0 0 7px;
+  background: #fff;
+  box-shadow: -3px 2px 8px rgb(17 24 39 / 10%);
+}
+
+.sidebar-toggle-btn svg {
+  width: 18px;
+  height: 18px;
+}
+
+.side-collapsed button.sidebar-toggle-btn {
+  right: 0;
+}
+
 h1 {
   font-size: 16px;
   margin: 0 0 10px;
@@ -444,7 +475,7 @@ h2 {
 }
 
 .constraint-buttons,
-.toolbar-group[aria-label="拘束"] {
+.constraint-toolbar-group {
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
@@ -452,7 +483,7 @@ h2 {
 }
 
 .constraint-buttons button,
-.toolbar-group[aria-label="拘束"] button {
+.constraint-toolbar-group button {
   width: 34px;
   height: 34px;
   display: inline-grid;
@@ -852,7 +883,7 @@ body.geometry-mode .mode-overlay-sheet #renamePresentationSheetBtn {
 
   .icon-btn,
   .constraint-buttons button,
-  .toolbar-group[aria-label="拘束"] button {
+  .constraint-toolbar-group button {
     width: 32px;
     height: 32px;
   }

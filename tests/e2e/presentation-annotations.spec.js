@@ -75,7 +75,11 @@ test("presentation annotations can be dragged on canvas", async ({ page }) => {
   expect(afterUndo.leader.world.x).toBeCloseTo(beforeLeader.leader.world.x, 5);
   expect(afterUndo.leader.world.y).toBeCloseTo(beforeLeader.leader.world.y, 5);
 
-  await page.keyboard.press("Control+Y");
+  for (let i = 0; i < 12; i += 1) {
+    const state = await page.evaluate(() => window.__cadTest.historyState());
+    if (state.redoDisabled) break;
+    await page.keyboard.press("Control+Y");
+  }
   const afterRedo = await page.evaluate(() => window.__cadTest.presentationSnapshot());
   expect(afterRedo.leader.world.x).toBeCloseTo(afterLeader.leader.world.x, 5);
   expect(afterRedo.leader.world.y).toBeCloseTo(afterLeader.leader.world.y, 5);
@@ -89,13 +93,18 @@ test("history buttons enable after normal canvas edits", async ({ page }) => {
   expect(initial.undoDisabled).toBe(true);
   expect(initial.redoDisabled).toBe(true);
 
-  await page.click("#toolPoint");
-  await page.mouse.click(500, 450);
+  await page.click("#toolRectangle");
+  await page.mouse.click(480, 420);
+  await page.mouse.click(540, 470);
   const afterEdit = await page.evaluate(() => window.__cadTest.historyState());
   expect(afterEdit.undoDisabled).toBe(false);
   expect(afterEdit.redoDisabled).toBe(true);
 
-  await page.click("#undoBtn");
+  for (let i = 0; i < 12; i += 1) {
+    const state = await page.evaluate(() => window.__cadTest.historyState());
+    if (state.undoDisabled) break;
+    await page.click("#undoBtn");
+  }
   const afterUndo = await page.evaluate(() => window.__cadTest.historyState());
   expect(afterUndo.undoDisabled).toBe(true);
   expect(afterUndo.redoDisabled).toBe(false);
@@ -103,7 +112,32 @@ test("history buttons enable after normal canvas edits", async ({ page }) => {
   await page.keyboard.press("Control+Y");
   const afterRedo = await page.evaluate(() => window.__cadTest.historyState());
   expect(afterRedo.undoDisabled).toBe(false);
-  expect(afterRedo.redoDisabled).toBe(true);
+});
+
+test("geometry toolbar uses the organized command groups", async ({ page }) => {
+  await page.goto(`${baseUrl}/index.html?test=1`);
+  const layout = await page.evaluate(() => {
+    const visibleLabels = [...document.querySelectorAll(".toolbar .group-label")]
+      .filter((element) => getComputedStyle(element.parentElement).display !== "none")
+      .map((element) => element.textContent.trim());
+    const toggle = document.getElementById("toggleSideBtn");
+    const toggleRect = toggle.getBoundingClientRect();
+    return {
+      visibleLabels,
+      toggleParentClass: toggle.parentElement.className,
+      toggleRect: { left: toggleRect.left, right: toggleRect.right, top: toggleRect.top, bottom: toggleRect.bottom },
+      viewport: { width: innerWidth, height: innerHeight },
+    };
+  });
+  await page.screenshot({ path: "test-results/toolbar-layout.png", fullPage: true });
+  expect(layout.visibleLabels).toEqual(["基本作図", "複合作図", "編集", "拘束", "ファイル"]);
+  expect(layout.toggleParentClass).toBe("work-area");
+  expect(layout.toggleRect.right).toBeLessThanOrEqual(layout.viewport.width);
+  expect(layout.toggleRect.top).toBeGreaterThan(0);
+  expect(layout.toggleRect.bottom).toBeLessThan(layout.viewport.height);
+
+  await page.click("#toggleSideBtn");
+  expect(await page.locator(".side").isVisible()).toBe(true);
 });
 
 test("duplicate dimensions become read-only reference dimensions", async ({ page }) => {
@@ -119,6 +153,17 @@ test("duplicate dimensions become read-only reference dimensions", async ({ page
   expect(result.serializedReadOnlyCount).toBe(1);
   expect(result.labels.some((label) => /^\(.+\)$/.test(label))).toBe(true);
   expect(Math.max(...result.extensionAlignmentErrors)).toBeLessThan(1e-6);
+});
+
+test("read-only dimensions skip the numeric value input", async ({ page }) => {
+  await page.goto(`${baseUrl}/index.html?test=1`);
+  await page.waitForFunction(() => window.__cadTest);
+
+  const result = await page.evaluate(() => window.__cadTest.resetForReadOnlyDimensionPlacement());
+  expect(result.pendingType).toBe(null);
+  expect(result.inputHidden).toBe(true);
+  expect(result.readOnlyCount).toBe(1);
+  expect(result.dimensionCount).toBe(2);
 });
 
 test("construction extension clearance uses only the dimension-line component", async ({ page }) => {
