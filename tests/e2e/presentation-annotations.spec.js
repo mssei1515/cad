@@ -206,13 +206,15 @@ test("sidebar lists circles and arcs and highlights related geometry", async ({ 
   expect(await page.locator("#arcList .geometry-list-row").count()).toBe(1);
 
   await page.locator("#circleList .geometry-list-row").hover();
-  expect(await page.evaluate(() => window.__cadTest.sidebarHighlightIds())).toEqual([ids.circle, ids.circleCenter].sort());
+  expect(await page.evaluate(() => window.__cadTest.sidebarHighlightIds())).toEqual([]);
   await page.locator("#circleList .geometry-list-row").click();
   await page.mouse.move(700, 700);
   expect(await page.locator("#circleList .geometry-list-row").getAttribute("class")).toContain("sidebar-selected");
   expect(await page.evaluate(() => window.__cadTest.sidebarHighlightIds())).toEqual([ids.circle, ids.circleCenter].sort());
 
   await page.locator("#constraintList .constraint-list-row").hover();
+  expect(await page.evaluate(() => window.__cadTest.sidebarHighlightIds())).toEqual([ids.circle, ids.circleCenter].sort());
+  await page.locator("#constraintList .constraint-list-row").click();
   const constraintHighlights = await page.evaluate(() => window.__cadTest.sidebarHighlightIds());
   expect(constraintHighlights).toContain(ids.line);
   expect(await page.locator("#constraintList .constraint-readonly-badge").count()).toBe(0);

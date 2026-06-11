@@ -115,7 +115,6 @@
   let lastPointerWorld = null;
   let hoveredSketchIdentity = null;
   let hoveredSketchTreeId = null;
-  let sidebarHoveredElements = new Set();
   let sidebarPinnedSelection = null;
   let constructionLineMode = false;
   let pointSeq = 1;
@@ -1365,7 +1364,6 @@
   function isSidebarHighlightedElement(item) {
     return Boolean(
       (hoveredSketchTreeId && elementSketchId(item) === hoveredSketchTreeId) ||
-      sidebarHoveredElements.has(item) ||
       sidebarPinnedSelection?.elements?.has(item)
     );
   }
@@ -1593,7 +1591,6 @@
     hoveredDimensionConstraint = null;
     hoveredSketchIdentity = null;
     lastPointerWorld = null;
-    sidebarHoveredElements.clear();
     sidebarPinnedSelection = null;
     clearSnap();
     selectedArcEndpoint = null;
@@ -6192,7 +6189,6 @@
 
   function clearInteractionForSketchChange() {
     clearSelection();
-    sidebarHoveredElements.clear();
     sidebarPinnedSelection = null;
     dragSession = null;
     dimensionDragSession = null;
@@ -6485,11 +6481,6 @@
     return related;
   }
 
-  function setSidebarHoveredElements(items) {
-    sidebarHoveredElements = new Set(items || []);
-    draw();
-  }
-
   function sidebarSelectionMatches(type, item) {
     return sidebarPinnedSelection?.type === type && sidebarPinnedSelection?.item === item;
   }
@@ -6525,11 +6516,6 @@
 
   function bindSidebarItemHover() {
     for (const row of document.querySelectorAll(".geometry-list-row")) {
-      row.addEventListener("mouseenter", () => {
-        const item = sidebarGeometryItem(row.dataset.kind, row.dataset.id);
-        setSidebarHoveredElements(sidebarRelatedElements(item));
-      });
-      row.addEventListener("mouseleave", () => setSidebarHoveredElements([]));
       row.addEventListener("click", (event) => {
         if (event.target.closest("button")) return;
         const item = sidebarGeometryItem(row.dataset.kind, row.dataset.id);
@@ -6537,11 +6523,6 @@
       });
     }
     for (const row of document.querySelectorAll(".constraint-list-row[data-idx]")) {
-      row.addEventListener("mouseenter", () => {
-        const constraint = model.constraints[Number(row.dataset.idx)];
-        setSidebarHoveredElements(constraint ? constraintGraphNodes(constraint) : []);
-      });
-      row.addEventListener("mouseleave", () => setSidebarHoveredElements([]));
       row.addEventListener("click", (event) => {
         if (event.target.closest("button")) return;
         const constraint = model.constraints[Number(row.dataset.idx)];
@@ -6549,11 +6530,6 @@
       });
     }
     for (const row of document.querySelectorAll(".fixed-point-list-row")) {
-      row.addEventListener("mouseenter", () => {
-        const point = model.points.find((item) => item.id === row.dataset.pointId);
-        setSidebarHoveredElements(sidebarRelatedElements(point));
-      });
-      row.addEventListener("mouseleave", () => setSidebarHoveredElements([]));
       row.addEventListener("click", (event) => {
         if (event.target.closest("button")) return;
         const point = model.points.find((item) => item.id === row.dataset.pointId);
@@ -6564,7 +6540,6 @@
   }
 
   function updateUI() {
-    sidebarHoveredElements.clear();
     refreshConstraintAnalysis();
     updatePresentationUI();
     updateToolbar();
@@ -10088,7 +10063,7 @@
         return { line: line.id, fixedPoint: p1.id, circle: circle.id, circleCenter: circleCenter.id, arc: arc.id };
       },
       sidebarHighlightIds() {
-        return [...new Set([...sidebarHoveredElements, ...(sidebarPinnedSelection?.elements || [])])].map((item) => item?.id).filter(Boolean).sort();
+        return [...(sidebarPinnedSelection?.elements || [])].map((item) => item?.id).filter(Boolean).sort();
       },
     };
   }
