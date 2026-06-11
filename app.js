@@ -115,7 +115,8 @@
   let lastPointerWorld = null;
   let hoveredSketchIdentity = null;
   let hoveredSketchTreeId = null;
-  let sidebarHighlightedElements = new Set();
+  let sidebarHoveredElements = new Set();
+  let sidebarPinnedSelection = null;
   let constructionLineMode = false;
   let pointSeq = 1;
   let lineSeq = 1;
@@ -1362,7 +1363,11 @@
   }
 
   function isSidebarHighlightedElement(item) {
-    return Boolean((hoveredSketchTreeId && elementSketchId(item) === hoveredSketchTreeId) || sidebarHighlightedElements.has(item));
+    return Boolean(
+      (hoveredSketchTreeId && elementSketchId(item) === hoveredSketchTreeId) ||
+      sidebarHoveredElements.has(item) ||
+      sidebarPinnedSelection?.elements?.has(item)
+    );
   }
 
   function isReferenceHoverElement(item) {
@@ -1588,7 +1593,8 @@
     hoveredDimensionConstraint = null;
     hoveredSketchIdentity = null;
     lastPointerWorld = null;
-    sidebarHighlightedElements.clear();
+    sidebarHoveredElements.clear();
+    sidebarPinnedSelection = null;
     clearSnap();
     selectedArcEndpoint = null;
     selectedArcEndpointPair = null;
@@ -6186,6 +6192,8 @@
 
   function clearInteractionForSketchChange() {
     clearSelection();
+    sidebarHoveredElements.clear();
+    sidebarPinnedSelection = null;
     dragSession = null;
     dimensionDragSession = null;
     selectionRectSession = null;
@@ -6477,8 +6485,33 @@
     return related;
   }
 
-  function setSidebarHighlightedElements(items) {
-    sidebarHighlightedElements = new Set(items || []);
+  function setSidebarHoveredElements(items) {
+    sidebarHoveredElements = new Set(items || []);
+    draw();
+  }
+
+  function sidebarSelectionMatches(type, item) {
+    return sidebarPinnedSelection?.type === type && sidebarPinnedSelection?.item === item;
+  }
+
+  function updateSidebarPinnedRowClasses() {
+    for (const row of document.querySelectorAll(".geometry-list-row")) {
+      const item = sidebarGeometryItem(row.dataset.kind, row.dataset.id);
+      row.classList.toggle("sidebar-selected", sidebarSelectionMatches("geometry", item));
+    }
+    for (const row of document.querySelectorAll(".constraint-list-row[data-idx]")) {
+      const constraint = model.constraints[Number(row.dataset.idx)];
+      row.classList.toggle("sidebar-selected", sidebarSelectionMatches("constraint", constraint));
+    }
+    for (const row of document.querySelectorAll(".fixed-point-list-row")) {
+      const point = model.points.find((item) => item.id === row.dataset.pointId);
+      row.classList.toggle("sidebar-selected", sidebarSelectionMatches("fixed-point", point));
+    }
+  }
+
+  function toggleSidebarPinnedSelection(type, item, elements) {
+    sidebarPinnedSelection = sidebarSelectionMatches(type, item) ? null : { type, item, elements: new Set(elements || []) };
+    updateSidebarPinnedRowClasses();
     draw();
   }
 
@@ -6494,21 +6527,44 @@
     for (const row of document.querySelectorAll(".geometry-list-row")) {
       row.addEventListener("mouseenter", () => {
         const item = sidebarGeometryItem(row.dataset.kind, row.dataset.id);
-        setSidebarHighlightedElements(sidebarRelatedElements(item));
+        setSidebarHoveredElements(sidebarRelatedElements(item));
       });
-      row.addEventListener("mouseleave", () => setSidebarHighlightedElements([]));
+      row.addEventListener("mouseleave", () => setSidebarHoveredElements([]));
+      row.addEventListener("click", (event) => {
+        if (event.target.closest("button")) return;
+        const item = sidebarGeometryItem(row.dataset.kind, row.dataset.id);
+        toggleSidebarPinnedSelection("geometry", item, sidebarRelatedElements(item));
+      });
     }
     for (const row of document.querySelectorAll(".constraint-list-row[data-idx]")) {
       row.addEventListener("mouseenter", () => {
         const constraint = model.constraints[Number(row.dataset.idx)];
-        setSidebarHighlightedElements(constraint ? constraintGraphNodes(constraint) : []);
+        setSidebarHoveredElements(constraint ? constraintGraphNodes(constraint) : []);
       });
-      row.addEventListener("mouseleave", () => setSidebarHighlightedElements([]));
+      row.addEventListener("mouseleave", () => setSidebarHoveredElements([]));
+      row.addEventListener("click", (event) => {
+        if (event.target.closest("button")) return;
+        const constraint = model.constraints[Number(row.dataset.idx)];
+        toggleSidebarPinnedSelection("constraint", constraint, constraint ? constraintGraphNodes(constraint) : []);
+      });
     }
+    for (const row of document.querySelectorAll(".fixed-point-list-row")) {
+      row.addEventListener("mouseenter", () => {
+        const point = model.points.find((item) => item.id === row.dataset.pointId);
+        setSidebarHoveredElements(sidebarRelatedElements(point));
+      });
+      row.addEventListener("mouseleave", () => setSidebarHoveredElements([]));
+      row.addEventListener("click", (event) => {
+        if (event.target.closest("button")) return;
+        const point = model.points.find((item) => item.id === row.dataset.pointId);
+        toggleSidebarPinnedSelection("fixed-point", point, sidebarRelatedElements(point));
+      });
+    }
+    updateSidebarPinnedRowClasses();
   }
 
   function updateUI() {
-    sidebarHighlightedElements.clear();
+    sidebarHoveredElements.clear();
     refreshConstraintAnalysis();
     updatePresentationUI();
     updateToolbar();
@@ -6562,20 +6618,26 @@
       )
       .join("");
 
-    document.getElementById("constraintList").innerHTML = `<div class="item constraint-item"><span>${constraintSummaryText()}</span></div>` + model.constraints
-      .map((c, index) => ({ c, index }))
-      .filter(({ c }) => isActiveSketchConstraint(c))
-      .map(
-        ({ c, index }) => {
-          const duplicate = constraintIsRedundant(c);
-          const readOnly = isReadOnlyDimension(c);
-          return `<div class="item constraint-item constraint-list-row ${duplicate ? "duplicate" : ""}" data-idx="${index}"><span>${index + 1}. ${c.name}${c.reference ? `<span class="badge relation-badge">参照</span>` : ""}${readOnly ? `<span class="badge constraint-readonly-badge">読取</span>` : ""}${duplicate ? `<span class="badge constraint-duplicate-badge">重複</span>` : ""}</span>` +
-          `<button data-idx="${index}" class="removeConstraintBtn" title="削除" aria-label="削除" data-tooltip="削除">` +
-          `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3M7 7l1 13h8l1-13"/></svg>` +
-          `</button></div>`;
-        },
-      )
-      .join("");
+    const listedConstraints = model.constraints
+      .map((constraint, index) => ({ constraint, index }))
+      .filter(({ constraint }) => isActiveSketchConstraint(constraint) && !isReadOnlyDimension(constraint));
+    const fixedPoints = model.points.filter((point) => isActiveSketchElement(point) && point.fixed);
+    const constraintRows = listedConstraints.map(({ constraint, index }, displayIndex) => {
+      const duplicate = constraintIsRedundant(constraint);
+      return `<div class="item constraint-item constraint-list-row ${duplicate ? "duplicate" : ""}" data-idx="${index}"><span>${displayIndex + 1}. ${constraint.name}${duplicate ? `<span class="badge constraint-duplicate-badge">重複</span>` : ""}</span>` +
+        `<button data-idx="${index}" class="removeConstraintBtn" title="削除" aria-label="削除" data-tooltip="削除">` +
+        `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3M7 7l1 13h8l1-13"/></svg>` +
+        `</button></div>`;
+    });
+    const fixedPointRows = fixedPoints.map((point, fixedIndex) => {
+      const displayIndex = listedConstraints.length + fixedIndex + 1;
+      return `<div class="item constraint-item fixed-point-list-row" data-point-id="${point.id}"><span>${displayIndex}. 固定 ${point.id}</span>` +
+        `<button data-id="${point.id}" class="removeFixedPointBtn icon-delete-btn" title="固定解除" aria-label="固定解除" data-tooltip="固定解除">` +
+        `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3M7 7l1 13h8l1-13"/></svg>` +
+        `</button></div>`;
+    });
+    document.getElementById("constraintList").innerHTML =
+      `<div class="item constraint-item"><span>${constraintSummaryText()}</span></div>` + [...constraintRows, ...fixedPointRows].join("");
 
     for (const btn of document.querySelectorAll(".removeConstraintBtn")) {
       btn.addEventListener("click", () => {
@@ -6595,6 +6657,16 @@
       btn.addEventListener("click", () => {
         const line = model.lines.find((l) => l.id === btn.dataset.id);
         if (line) deleteElements({ lines: [line] });
+      });
+    }
+
+    for (const btn of document.querySelectorAll(".removeFixedPointBtn")) {
+      btn.addEventListener("click", () => {
+        const point = model.points.find((item) => item.id === btn.dataset.id);
+        if (!point) return;
+        if (sidebarSelectionMatches("fixed-point", point)) sidebarPinnedSelection = null;
+        point.fixed = false;
+        solveAndRefresh(`固定解除 ${point.id}`);
       });
     }
 
@@ -9995,21 +10067,28 @@
       resetForSidebarInspection() {
         resetModelState();
         setAppMode("geometry");
-        const p1 = addPoint(-80, 0, false, "endpoint");
+        const p1 = addPoint(-80, 0, true, "endpoint");
         const p2 = addPoint(20, 0, false, "endpoint");
         const line = addLine(p1, p2);
         const circleCenter = addPoint(80, 0, false, "endpoint");
         const circle = addCircle(circleCenter, 28);
         const arcCenter = addPoint(0, 80, false, "endpoint");
         const arc = addArc(arcCenter, 32, Math.PI, Math.PI * 1.75);
-        pushModelConstraint(new HorizontalConstraint(line));
+        const horizontal = pushModelConstraint(new HorizontalConstraint(line));
+        horizontal.reference = true;
+        const readOnly = new DistanceConstraint(p1, p2, line.length());
+        readOnly.dimension = dimensionFromAnchor({ kind: "line-length", line, p1, p2, value: line.length() }, { x: -30, y: -28 });
+        readOnly.readOnlyDimension = true;
+        readOnly.enabled = false;
+        assignConstraintSketchId(readOnly, activeSketchId());
+        model.constraints.push(readOnly);
         updateUI();
         fitAllGeometryToViewport(140);
         draw();
-        return { line: line.id, circle: circle.id, circleCenter: circleCenter.id, arc: arc.id };
+        return { line: line.id, fixedPoint: p1.id, circle: circle.id, circleCenter: circleCenter.id, arc: arc.id };
       },
       sidebarHighlightIds() {
-        return [...sidebarHighlightedElements].map((item) => item?.id).filter(Boolean).sort();
+        return [...new Set([...sidebarHoveredElements, ...(sidebarPinnedSelection?.elements || [])])].map((item) => item?.id).filter(Boolean).sort();
       },
     };
   }

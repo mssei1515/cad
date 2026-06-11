@@ -207,10 +207,18 @@ test("sidebar lists circles and arcs and highlights related geometry", async ({ 
 
   await page.locator("#circleList .geometry-list-row").hover();
   expect(await page.evaluate(() => window.__cadTest.sidebarHighlightIds())).toEqual([ids.circle, ids.circleCenter].sort());
+  await page.locator("#circleList .geometry-list-row").click();
+  await page.mouse.move(700, 700);
+  expect(await page.locator("#circleList .geometry-list-row").getAttribute("class")).toContain("sidebar-selected");
+  expect(await page.evaluate(() => window.__cadTest.sidebarHighlightIds())).toEqual([ids.circle, ids.circleCenter].sort());
 
   await page.locator("#constraintList .constraint-list-row").hover();
   const constraintHighlights = await page.evaluate(() => window.__cadTest.sidebarHighlightIds());
   expect(constraintHighlights).toContain(ids.line);
+  expect(await page.locator("#constraintList .constraint-readonly-badge").count()).toBe(0);
+  expect(await page.locator("#constraintList .relation-badge").count()).toBe(0);
+  expect(await page.locator("#constraintList .fixed-point-list-row").count()).toBe(1);
+  expect(await page.locator("#constraintList .fixed-point-list-row").textContent()).toContain(`固定 ${ids.fixedPoint}`);
   await page.screenshot({ path: "test-results/sidebar-inspection.png", fullPage: true });
 });
 

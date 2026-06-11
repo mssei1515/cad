@@ -839,14 +839,25 @@ body.geometry-mode .mode-overlay-sheet #renamePresentationSheetBtn {
 }
 
 .geometry-list-row,
-.constraint-list-row {
+.constraint-list-row,
+.fixed-point-list-row {
+  cursor: pointer;
   transition: border-color 0.12s ease, background-color 0.12s ease;
 }
 
 .geometry-list-row:hover,
-.constraint-list-row:hover {
+.constraint-list-row:hover,
+.fixed-point-list-row:hover {
   border-color: rgba(14, 165, 233, 0.45);
   background: rgba(224, 242, 254, 0.72);
+}
+
+.geometry-list-row.sidebar-selected,
+.constraint-list-row.sidebar-selected,
+.fixed-point-list-row.sidebar-selected {
+  border-color: #2563eb;
+  background: rgba(219, 234, 254, 0.95);
+  box-shadow: inset 3px 0 0 #2563eb;
 }
 
 .constraint-item.duplicate {
