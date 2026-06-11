@@ -194,6 +194,26 @@ test("all geometry fit includes figures from every sketch", async ({ page }) => 
   expect(result.screen.bottom).toBeLessThanOrEqual(result.canvas.height - 90);
 });
 
+test("sidebar lists circles and arcs and highlights related geometry", async ({ page }) => {
+  await page.goto(`${baseUrl}/index.html?test=1`);
+  const ids = await page.evaluate(() => window.__cadTest.resetForSidebarInspection());
+  await page.click("#toggleSideBtn");
+  await page.locator("details").filter({ has: page.locator("#circleList") }).locator("summary").click();
+  await page.locator("details").filter({ has: page.locator("#arcList") }).locator("summary").click();
+  await page.locator("details").filter({ has: page.locator("#constraintList") }).locator("summary").click();
+
+  expect(await page.locator("#circleList .geometry-list-row").count()).toBe(1);
+  expect(await page.locator("#arcList .geometry-list-row").count()).toBe(1);
+
+  await page.locator("#circleList .geometry-list-row").hover();
+  expect(await page.evaluate(() => window.__cadTest.sidebarHighlightIds())).toEqual([ids.circle, ids.circleCenter].sort());
+
+  await page.locator("#constraintList .constraint-list-row").hover();
+  const constraintHighlights = await page.evaluate(() => window.__cadTest.sidebarHighlightIds());
+  expect(constraintHighlights).toContain(ids.line);
+  await page.screenshot({ path: "test-results/sidebar-inspection.png", fullPage: true });
+});
+
 test("construction extension clearance uses only the dimension-line component", async ({ page }) => {
   await page.goto(`${baseUrl}/index.html?test=1`);
   await page.waitForFunction(() => window.__cadTest);

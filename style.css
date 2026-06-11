@@ -838,6 +838,17 @@ body.geometry-mode .mode-overlay-sheet #renamePresentationSheetBtn {
   align-items: center;
 }
 
+.geometry-list-row,
+.constraint-list-row {
+  transition: border-color 0.12s ease, background-color 0.12s ease;
+}
+
+.geometry-list-row:hover,
+.constraint-list-row:hover {
+  border-color: rgba(14, 165, 233, 0.45);
+  background: rgba(224, 242, 254, 0.72);
+}
+
 .constraint-item.duplicate {
   border-color: rgba(220, 38, 38, 0.35);
   background: rgba(254, 226, 226, 0.55);

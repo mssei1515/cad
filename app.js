@@ -115,6 +115,7 @@
   let lastPointerWorld = null;
   let hoveredSketchIdentity = null;
   let hoveredSketchTreeId = null;
+  let sidebarHighlightedElements = new Set();
   let constructionLineMode = false;
   let pointSeq = 1;
   let lineSeq = 1;
@@ -1360,8 +1361,8 @@
     return 0;
   }
 
-  function isSketchTreeHoveredElement(item) {
-    return Boolean(hoveredSketchTreeId && elementSketchId(item) === hoveredSketchTreeId);
+  function isSidebarHighlightedElement(item) {
+    return Boolean((hoveredSketchTreeId && elementSketchId(item) === hoveredSketchTreeId) || sidebarHighlightedElements.has(item));
   }
 
   function isReferenceHoverElement(item) {
@@ -1587,6 +1588,7 @@
     hoveredDimensionConstraint = null;
     hoveredSketchIdentity = null;
     lastPointerWorld = null;
+    sidebarHighlightedElements.clear();
     clearSnap();
     selectedArcEndpoint = null;
     selectedArcEndpointPair = null;
@@ -4420,7 +4422,7 @@
       const active = isEditableSketchElement(l);
       ctx.globalAlpha = presentation ? style.opacity : sketchAlpha(l);
       const refSelected = isPendingReferenceTarget(l) || isConstraintOperandSelected(l);
-      const treeHovered = isSketchTreeHoveredElement(l);
+      const treeHovered = isSidebarHighlightedElement(l);
       const sel = (active && selectedLines.includes(l)) || (presentation && selectedLines.includes(l)) || refSelected;
       const hovered = ((active || isReferenceHoverElement(l)) && hoveredLine === l) || (presentation && hoveredLine === l);
       const construction = Boolean(l.construction) && !sel && !hovered;
@@ -4472,7 +4474,7 @@
       const active = isEditableSketchElement(c);
       ctx.globalAlpha = presentation ? style.opacity : sketchAlpha(c);
       const refSelected = isPendingReferenceTarget(c) || isConstraintOperandSelected(c);
-      const treeHovered = isSketchTreeHoveredElement(c);
+      const treeHovered = isSidebarHighlightedElement(c);
       const sel = (active && selectedCircles.includes(c)) || (presentation && selectedCircles.includes(c)) || refSelected;
       const hovered = ((active || isReferenceHoverElement(c)) && hoveredCircle === c) || (presentation && hoveredCircle === c);
       const construction = Boolean(c.construction) && !sel && !hovered;
@@ -4505,7 +4507,7 @@
       const active = isEditableSketchElement(a);
       ctx.globalAlpha = presentation ? style.opacity : sketchAlpha(a);
       const refSelected = isPendingReferenceTarget(a) || isConstraintOperandSelected(a);
-      const treeHovered = isSketchTreeHoveredElement(a);
+      const treeHovered = isSidebarHighlightedElement(a);
       const sel = (active && selectedArcs.includes(a)) || (presentation && selectedArcs.includes(a)) || refSelected;
       const hovered = ((active || isReferenceHoverElement(a)) && hoveredArc === a) || (presentation && hoveredArc === a);
       const construction = Boolean(a.construction) && !sel && !hovered;
@@ -5322,7 +5324,7 @@
       const active = isEditableSketchElement(p);
       ctx.globalAlpha = sketchAlpha(p);
       const refSelected = isPendingReferenceTarget(p) || isConstraintOperandSelected(p);
-      const treeHovered = isSketchTreeHoveredElement(p);
+      const treeHovered = isSidebarHighlightedElement(p);
       const sel = (active && selectedPoints.includes(p)) || refSelected;
       const endpoint = isEndpointPoint(p);
       const hovered = (active || isReferenceHoverElement(p)) && (hoveredPoint === p || hoveredEndpointPoint === p);
@@ -6458,7 +6460,55 @@
     }
   }
 
+  function sidebarRelatedElements(item) {
+    const related = new Set();
+    if (!item) return related;
+    related.add(item);
+    if (item instanceof Point) {
+      for (const line of model.lines) if (line.p1 === item || line.p2 === item) related.add(line);
+      for (const circle of model.circles) if (circle.center === item) related.add(circle);
+      for (const arc of model.arcs) if (arc.center === item) related.add(arc);
+    } else if (item instanceof Line) {
+      related.add(item.p1);
+      related.add(item.p2);
+    } else if (item instanceof Circle || item instanceof Arc) {
+      related.add(item.center);
+    }
+    return related;
+  }
+
+  function setSidebarHighlightedElements(items) {
+    sidebarHighlightedElements = new Set(items || []);
+    draw();
+  }
+
+  function sidebarGeometryItem(kind, id) {
+    if (kind === "point") return model.points.find((item) => item.id === id) || null;
+    if (kind === "line") return model.lines.find((item) => item.id === id) || null;
+    if (kind === "circle") return model.circles.find((item) => item.id === id) || null;
+    if (kind === "arc") return model.arcs.find((item) => item.id === id) || null;
+    return null;
+  }
+
+  function bindSidebarItemHover() {
+    for (const row of document.querySelectorAll(".geometry-list-row")) {
+      row.addEventListener("mouseenter", () => {
+        const item = sidebarGeometryItem(row.dataset.kind, row.dataset.id);
+        setSidebarHighlightedElements(sidebarRelatedElements(item));
+      });
+      row.addEventListener("mouseleave", () => setSidebarHighlightedElements([]));
+    }
+    for (const row of document.querySelectorAll(".constraint-list-row[data-idx]")) {
+      row.addEventListener("mouseenter", () => {
+        const constraint = model.constraints[Number(row.dataset.idx)];
+        setSidebarHighlightedElements(constraint ? constraintGraphNodes(constraint) : []);
+      });
+      row.addEventListener("mouseleave", () => setSidebarHighlightedElements([]));
+    }
+  }
+
   function updateUI() {
+    sidebarHighlightedElements.clear();
     refreshConstraintAnalysis();
     updatePresentationUI();
     updateToolbar();
@@ -6468,7 +6518,7 @@
       .filter(isExplicitPoint)
       .map(
         (p) =>
-          `<div class="item list-item"><span>${p.id}` +
+          `<div class="item list-item geometry-list-row" data-kind="point" data-id="${p.id}"><span>${p.id}` +
           `<span class="badge">x=${p.x.toFixed(1)}</span>` +
           `<span class="badge">y=${p.y.toFixed(1)}</span>` +
           `<span class="badge">${constraintStatusBadge(constraintStatusOf(p))}</span>` +
@@ -6483,8 +6533,30 @@
       .filter(isActiveSketchElement)
       .map(
         (l) =>
-          `<div class="item list-item"><span>${l.id}: ${l.p1.id} - ${l.p2.id}<span class="badge">len=${formatDisplayNumber(l.length())}</span><span class="badge">${constraintStatusBadge(constraintStatusOf(l))}</span>${l.construction ? "<span class='badge'>補助</span>" : ""}${findLineFixedConstraint(l) ? "<span class='badge'>固定</span>" : ""}</span>` +
+          `<div class="item list-item geometry-list-row" data-kind="line" data-id="${l.id}"><span>${l.id}: ${l.p1.id} - ${l.p2.id}<span class="badge">len=${formatDisplayNumber(l.length())}</span><span class="badge">${constraintStatusBadge(constraintStatusOf(l))}</span>${l.construction ? "<span class='badge'>補助</span>" : ""}${findLineFixedConstraint(l) ? "<span class='badge'>固定</span>" : ""}</span>` +
           `<button data-id="${l.id}" class="removeLineBtn icon-delete-btn" title="削除" aria-label="削除" data-tooltip="削除">` +
+          `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3M7 7l1 13h8l1-13"/></svg>` +
+          `</button></div>`,
+      )
+      .join("");
+
+    document.getElementById("circleList").innerHTML = model.circles
+      .filter(isActiveSketchElement)
+      .map(
+        (circle) =>
+          `<div class="item list-item geometry-list-row" data-kind="circle" data-id="${circle.id}"><span>${circle.id}: 中心 ${circle.center.id}<span class="badge">R=${formatDisplayNumber(circle.radius())}</span><span class="badge">${constraintStatusBadge(constraintStatusOf(circle))}</span>${circle.construction ? "<span class='badge'>補助</span>" : ""}</span>` +
+          `<button data-id="${circle.id}" class="removeCircleBtn icon-delete-btn" title="削除" aria-label="削除" data-tooltip="削除">` +
+          `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3M7 7l1 13h8l1-13"/></svg>` +
+          `</button></div>`,
+      )
+      .join("");
+
+    document.getElementById("arcList").innerHTML = model.arcs
+      .filter(isActiveSketchElement)
+      .map(
+        (arc) =>
+          `<div class="item list-item geometry-list-row" data-kind="arc" data-id="${arc.id}"><span>${arc.id}: 中心 ${arc.center.id}<span class="badge">R=${formatDisplayNumber(arc.radius())}</span><span class="badge">角度=${formatDisplayNumber(angleDegrees(Math.abs(arc.endAngle - arc.startAngle)))}°</span><span class="badge">${constraintStatusBadge(constraintStatusOf(arc))}</span>${arc.construction ? "<span class='badge'>補助</span>" : ""}</span>` +
+          `<button data-id="${arc.id}" class="removeArcBtn icon-delete-btn" title="削除" aria-label="削除" data-tooltip="削除">` +
           `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3M7 7l1 13h8l1-13"/></svg>` +
           `</button></div>`,
       )
@@ -6497,7 +6569,7 @@
         ({ c, index }) => {
           const duplicate = constraintIsRedundant(c);
           const readOnly = isReadOnlyDimension(c);
-          return `<div class="item constraint-item ${duplicate ? "duplicate" : ""}"><span>${index + 1}. ${c.name}${c.reference ? `<span class="badge relation-badge">参照</span>` : ""}${readOnly ? `<span class="badge constraint-readonly-badge">読取</span>` : ""}${duplicate ? `<span class="badge constraint-duplicate-badge">重複</span>` : ""}</span>` +
+          return `<div class="item constraint-item constraint-list-row ${duplicate ? "duplicate" : ""}" data-idx="${index}"><span>${index + 1}. ${c.name}${c.reference ? `<span class="badge relation-badge">参照</span>` : ""}${readOnly ? `<span class="badge constraint-readonly-badge">読取</span>` : ""}${duplicate ? `<span class="badge constraint-duplicate-badge">重複</span>` : ""}</span>` +
           `<button data-idx="${index}" class="removeConstraintBtn" title="削除" aria-label="削除" data-tooltip="削除">` +
           `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3M7 7l1 13h8l1-13"/></svg>` +
           `</button></div>`;
@@ -6525,6 +6597,22 @@
         if (line) deleteElements({ lines: [line] });
       });
     }
+
+    for (const btn of document.querySelectorAll(".removeCircleBtn")) {
+      btn.addEventListener("click", () => {
+        const circle = model.circles.find((item) => item.id === btn.dataset.id);
+        if (circle) deleteElements({ circles: [circle] });
+      });
+    }
+
+    for (const btn of document.querySelectorAll(".removeArcBtn")) {
+      btn.addEventListener("click", () => {
+        const arc = model.arcs.find((item) => item.id === btn.dataset.id);
+        if (arc) deleteElements({ arcs: [arc] });
+      });
+    }
+
+    bindSidebarItemHover();
 
     updateConstraintButtons();
   }
@@ -9903,6 +9991,25 @@
           canvas: { width: rect.width, height: rect.height },
           scale: viewport.scale,
         };
+      },
+      resetForSidebarInspection() {
+        resetModelState();
+        setAppMode("geometry");
+        const p1 = addPoint(-80, 0, false, "endpoint");
+        const p2 = addPoint(20, 0, false, "endpoint");
+        const line = addLine(p1, p2);
+        const circleCenter = addPoint(80, 0, false, "endpoint");
+        const circle = addCircle(circleCenter, 28);
+        const arcCenter = addPoint(0, 80, false, "endpoint");
+        const arc = addArc(arcCenter, 32, Math.PI, Math.PI * 1.75);
+        pushModelConstraint(new HorizontalConstraint(line));
+        updateUI();
+        fitAllGeometryToViewport(140);
+        draw();
+        return { line: line.id, circle: circle.id, circleCenter: circleCenter.id, arc: arc.id };
+      },
+      sidebarHighlightIds() {
+        return [...sidebarHighlightedElements].map((item) => item?.id).filter(Boolean).sort();
       },
     };
   }
