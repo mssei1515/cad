@@ -224,6 +224,44 @@ test("sidebar lists circles and arcs and highlights related geometry", async ({ 
   await page.screenshot({ path: "test-results/sidebar-inspection.png", fullPage: true });
 });
 
+test("line circle and arc offsets keep editable dimensional relationships", async ({ page }) => {
+  await page.goto(`${baseUrl}/index.html?test=1`);
+  await page.waitForFunction(() => window.__cadTest);
+
+  const result = await page.evaluate(() => window.__cadTest.resetForOffsetConstraints());
+  expect(result.created).toEqual([true, true, true]);
+  expect(result.measurements[0]).toBeCloseTo(25, 5);
+  expect(result.measurements[1]).toBeCloseTo(18, 5);
+  expect(result.measurements[2]).toBeCloseTo(12, 5);
+  expect(result.sourceRadii).toEqual([30, 40]);
+  expect(result.restoredCount).toBe(3);
+  expect(result.restoredTypes).toBe(3);
+  expect(result.restoredTargets).toEqual([25, 18, 12]);
+  expect(result.geometry).toEqual({ lines: 2, circles: 2, arcs: 2 });
+  await page.screenshot({ path: "test-results/offset-constraints.png", fullPage: true });
+});
+
+test("offset tool collects a distance and creates a constrained copy", async ({ page }) => {
+  await page.goto(`${baseUrl}/index.html?test=1`);
+  await page.waitForFunction(() => window.__cadTest);
+  const points = await page.evaluate(() => window.__cadTest.resetForOffsetUi());
+
+  await page.click("#toolOffset");
+  await page.mouse.click(points.source.x, points.source.y);
+  await page.mouse.click(points.side.x, points.side.y);
+  const input = page.locator("#dimensionValueInput");
+  expect(await input.isVisible()).toBe(true);
+  await input.fill("25");
+  await input.press("Enter");
+
+  const state = await page.evaluate(() => window.__cadTest.offsetUiState());
+  expect(state.pendingType).toBe(null);
+  expect(state.lineCount).toBe(2);
+  expect(state.constraintCount).toBe(1);
+  expect(state.targets).toEqual([25]);
+  expect(state.toolActive).toBe(true);
+});
+
 test("construction extension clearance uses only the dimension-line component", async ({ page }) => {
   await page.goto(`${baseUrl}/index.html?test=1`);
   await page.waitForFunction(() => window.__cadTest);

@@ -255,6 +255,51 @@
     }
   }
 
+  class OffsetConstraint extends Constraint {
+    constructor(source, offset, target, sign = null) {
+      super(`オフセット寸法 ${source.id}-${offset.id} = ${target}`, 1);
+      this.source = source;
+      this.offset = offset;
+      this.target = target;
+      if (source instanceof Line && offset instanceof Line) {
+        const current = signedPointLineDistance(offset.p1, source);
+        this.sign = sign || (current < 0 ? -1 : 1);
+      } else {
+        const current = radiusOf(offset) - radiusOf(source);
+        this.sign = sign || (current < 0 ? -1 : 1);
+      }
+    }
+
+    rawError() {
+      if (this.source instanceof Line && this.offset instanceof Line) {
+        const sx = this.source.dx();
+        const sy = this.source.dy();
+        const len = hypot2(sx, sy);
+        const tx = len > MIN_ORIENTATION_LENGTH ? sx / len : 1;
+        const ty = len > MIN_ORIENTATION_LENGTH ? sy / len : 0;
+        const dx = this.offset.p1.x - this.source.p1.x;
+        const dy = this.offset.p1.y - this.source.p1.y;
+        return [
+          this.offset.dx() - sx,
+          this.offset.dy() - sy,
+          dx * tx + dy * ty,
+          signedPointLineDistance(this.offset.p1, this.source) * this.sign - this.target,
+        ];
+      }
+
+      const errors = [
+        this.offset.center.x - this.source.center.x,
+        this.offset.center.y - this.source.center.y,
+        (radiusOf(this.offset) - radiusOf(this.source)) * this.sign - this.target,
+      ];
+      if (this.source instanceof Arc && this.offset instanceof Arc) {
+        errors.push(normalizeAngle(this.offset.startAngle - this.source.startAngle));
+        errors.push(normalizeAngle(this.offset.endAngle - this.source.endAngle));
+      }
+      return errors;
+    }
+  }
+
   class LineAngleConstraint extends Constraint {
     constructor(line1, line2, target, startFlip = 0, endFlip = 0) {
       super(`角度 ${line1.id}-${line2.id} = ${target}`, 1);
@@ -1113,6 +1158,7 @@
     PointAxisDistanceConstraint,
     PointLineDistanceConstraint,
     LineLineDistanceConstraint,
+    OffsetConstraint,
     LineAngleConstraint,
     signedPointLineDistance,
     CoincidentConstraint,

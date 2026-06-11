@@ -14,6 +14,7 @@
     PointAxisDistanceConstraint,
     PointLineDistanceConstraint,
     LineLineDistanceConstraint,
+    OffsetConstraint,
     LineAngleConstraint,
     signedPointLineDistance,
     CoincidentConstraint,
@@ -109,6 +110,7 @@
   let pointerPreview = null;
   let activeSnap = null;
   let trimPreview = null;
+  let offsetSource = null;
   let pendingCommand = null;
   let pendingConstraintCommand = null;
   let constraintOperands = [];
@@ -1531,6 +1533,134 @@
     return a;
   }
 
+  function offsetDistanceFromPointer(source, pointer) {
+    if (source instanceof Line) {
+      const signed = signedPointLineDistance(pointer, source);
+      return { distance: Math.abs(signed), sign: signed < 0 ? -1 : 1 };
+    }
+    const radial = hypot2(pointer.x - source.center.x, pointer.y - source.center.y);
+    const signed = radial - source.radius();
+    return { distance: Math.abs(signed), sign: signed < 0 ? -1 : 1 };
+  }
+
+  function offsetDraftGeometry(source, distance, sign) {
+    if (!source || !Number.isFinite(distance) || distance <= 0) return null;
+    if (source instanceof Line) {
+      const normal = lineNormal(source);
+      const dx = normal.x * sign * distance;
+      const dy = normal.y * sign * distance;
+      const p1 = new Point("OP1", source.p1.x + dx, source.p1.y + dy, false, "endpoint");
+      const p2 = new Point("OP2", source.p2.x + dx, source.p2.y + dy, false, "endpoint");
+      return new Line("OFFSET", p1, p2, source.construction);
+    }
+    const radius = source.radius() + sign * distance;
+    if (radius < MIN_ORIENTATION_LENGTH) return null;
+    const center = new Point("OC", source.center.x, source.center.y, false, "center");
+    if (source instanceof Circle) return new Circle("OFFSET", center, radius, source.construction);
+    if (source instanceof Arc) return new Arc("OFFSET", center, radius, source.startAngle, source.endAngle, source.construction);
+    return null;
+  }
+
+  function offsetDimensionTarget(source, offset, distance, sign) {
+    return { kind: "offset-distance", source, offset, value: distance, sign };
+  }
+
+  function startOffsetDistanceInput(source, pointer) {
+    if (!source || !pointer) return false;
+    let { distance, sign } = offsetDistanceFromPointer(source, pointer);
+    if (distance < MIN_ORIENTATION_LENGTH) distance = Math.max(20 / viewport.scale, MIN_ORIENTATION_LENGTH * 10);
+    const offset = offsetDraftGeometry(source, distance, sign);
+    if (!offset) {
+      setHint("指定した側にはオフセットを作成できません", "error");
+      return false;
+    }
+    const target = offsetDimensionTarget(source, offset, distance, sign);
+    pendingCommand = {
+      type: "offset-value",
+      source,
+      sign,
+      pointer: { ...pointer },
+      target,
+      dimension: dimensionWithLabelAt(target, dimensionFromAnchor(target, pointer, { allowPointAxis: false }), pointer),
+      buffer: formatDisplayNumber(distance),
+      editing: false,
+    };
+    setHint("オフセット距離を入力してください。Enterまたはダブルクリックで決定します");
+    updateToolbar();
+    draw();
+    focusDimensionValueInput();
+    return true;
+  }
+
+  function createOffsetGeometry(source, distance, sign, pointer) {
+    const state = {
+      pointLength: model.points.length,
+      lineLength: model.lines.length,
+      circleLength: model.circles.length,
+      arcLength: model.arcs.length,
+      pointSeq,
+      lineSeq,
+      circleSeq,
+      arcSeq,
+    };
+    let offset = null;
+    if (source instanceof Line) {
+      const normal = lineNormal(source);
+      const dx = normal.x * sign * distance;
+      const dy = normal.y * sign * distance;
+      const p1 = addPoint(source.p1.x + dx, source.p1.y + dy, false, "endpoint");
+      const p2 = addPoint(source.p2.x + dx, source.p2.y + dy, false, "endpoint");
+      offset = addLine(p1, p2, source.construction);
+    } else {
+      const radius = source.radius() + sign * distance;
+      if (radius < MIN_ORIENTATION_LENGTH) return false;
+      const center = addPoint(source.center.x, source.center.y, false, "center");
+      offset = source instanceof Circle
+        ? addCircle(center, radius, source.construction)
+        : addArc(center, radius, source.startAngle, source.endAngle, source.construction);
+    }
+    if (!offset) return false;
+    const constraint = new OffsetConstraint(source, offset, distance, sign);
+    const target = offsetDimensionTarget(source, offset, distance, sign);
+    constraint.dimension = dimensionWithLabelAt(target, dimensionFromAnchor(target, pointer, { allowPointAxis: false }), pointer);
+    const ok = commitNewConstraint("offset", constraint);
+    if (ok) return true;
+
+    model.points.length = state.pointLength;
+    model.lines.length = state.lineLength;
+    model.circles.length = state.circleLength;
+    model.arcs.length = state.arcLength;
+    pointSeq = state.pointSeq;
+    lineSeq = state.lineSeq;
+    circleSeq = state.circleSeq;
+    arcSeq = state.arcSeq;
+    constraintAnalysisState = null;
+    updateUI();
+    draw();
+    return false;
+  }
+
+  function submitOffsetValue() {
+    if (pendingCommand?.type !== "offset-value") return false;
+    const value = Number(pendingCommand.buffer);
+    const { source, sign, pointer } = pendingCommand;
+    if (!Number.isFinite(value) || value <= 0 || (!(source instanceof Line) && source.radius() + sign * value < MIN_ORIENTATION_LENGTH)) {
+      setHint("作成可能な0より大きいオフセット距離を入力してください", "error");
+      draw();
+      return false;
+    }
+    pendingCommand = null;
+    hideDimensionValueInput();
+    const ok = createOffsetGeometry(source, value, sign, pointer);
+    offsetSource = null;
+    pointerPreview = null;
+    clearSelection();
+    updateToolbar();
+    if (ok) setHint(`オフセット ${formatDimensionLabel(value)} を作成しました。次の図形を選択してください`);
+    draw();
+    return ok;
+  }
+
   function snapshotModelState() {
     return {
       points: model.points.map((p) => ({ point: p, x: p.x, y: p.y, fixed: p.fixed })),
@@ -1578,6 +1708,7 @@
     arcCenterPoint = null;
     arcStartPoint = null;
     pointerPreview = null;
+    offsetSource = null;
     pendingCommand = null;
     pendingConstraintCommand = null;
     constraintOperands = [];
@@ -1667,6 +1798,17 @@
         type: "lineLineDistance",
         line1: c.line1.id,
         line2: c.line2.id,
+        target: c.target,
+        sign: c.sign,
+        dimension: serializeDimension(c.dimension, targetFromConstraint(c)),
+        enabled: c.enabled,
+      };
+    }
+    if (c instanceof OffsetConstraint) {
+      return {
+        type: "offsetDimension",
+        source: c.source.id,
+        offset: c.offset.id,
         target: c.target,
         sign: c.sign,
         dimension: serializeDimension(c.dimension, targetFromConstraint(c)),
@@ -1886,6 +2028,11 @@
       constraint = new PointLineDistanceConstraint(point(data.point), line(data.line), Number(data.target), Number(data.sign) || null);
     } else if (data.type === "lineLineDistance") {
       constraint = new LineLineDistanceConstraint(line(data.line1), line(data.line2), Number(data.target), Number(data.sign) || null);
+    } else if (data.type === "offsetDimension") {
+      const source = lineById.get(String(data.source)) || primitiveById.get(String(data.source));
+      const offset = lineById.get(String(data.offset)) || primitiveById.get(String(data.offset));
+      if (!source || !offset) throw new Error(`オフセット対象 ${data.source}/${data.offset} が見つかりません`);
+      constraint = new OffsetConstraint(source, offset, Number(data.target), Number(data.sign) || null);
     } else if (data.type === "lineAngle") {
       constraint = new LineAngleConstraint(line(data.line1), line(data.line2), Number(data.target), Number(data.startFlip) || 0, Number(data.endFlip) || 0);
     } else if (data.type === "coincident") {
@@ -2222,6 +2369,7 @@
     filletFirstLine = null;
     pointerPreview = null;
     trimPreview = null;
+    offsetSource = null;
     clearSnap();
     mode = "select";
     updateToolbar();
@@ -2241,6 +2389,7 @@
     arcStartPoint = null;
     pointerPreview = null;
     trimPreview = null;
+    offsetSource = null;
     clearSnap();
     mode = "select";
     updateToolbar();
@@ -2250,7 +2399,7 @@
   }
 
   function hasActiveDrawOperation() {
-    return Boolean(lineStartPoint || rectangleStartPoint || filletFirstLine || circleCenterPoint || arcCenterPoint || arcStartPoint);
+    return Boolean(lineStartPoint || rectangleStartPoint || filletFirstLine || circleCenterPoint || arcCenterPoint || arcStartPoint || offsetSource);
   }
 
   function beginTransientLineStartRollback() {
@@ -2358,6 +2507,7 @@
     arcStartPoint = null;
     pointerPreview = null;
     trimPreview = null;
+    offsetSource = null;
     clearSnap();
     clearSelection();
     setHint("作図操作をキャンセルしました");
@@ -2762,6 +2912,10 @@
     if (target.kind === "line-line") return Math.abs(signedPointLineDistance(target.line1.p1, target.line2));
     if (target.kind === "radius") return target.primitive.radius();
     if (target.kind === "diameter") return target.primitive.radius() * 2;
+    if (target.kind === "offset-distance") {
+      if (target.source instanceof Line) return Math.abs(signedPointLineDistance(target.offset.p1, target.source));
+      return Math.abs(target.offset.radius() - target.source.radius());
+    }
     return target.value;
   }
 
@@ -3455,6 +3609,23 @@
   }
 
   function targetDirection(target) {
+    if (target.kind === "offset-distance") {
+      if (target.source instanceof Line && target.offset instanceof Line) {
+        const dx = target.offset.p1.x - target.source.p1.x;
+        const dy = target.offset.p1.y - target.source.p1.y;
+        const len = hypot2(dx, dy);
+        if (len > 1e-12) return { x: dx / len, y: dy / len };
+        const normal = lineNormal(target.source);
+        return { x: normal.x * (target.sign || 1), y: normal.y * (target.sign || 1) };
+      }
+      const defaultAngle = target.source instanceof Arc ? (target.source.startAngle + target.source.endAngle) / 2 : 0;
+      const anchor = target.dimensionAnchor || circlePointAtAngle(target.offset, defaultAngle);
+      const dx = anchor.x - target.source.center.x;
+      const dy = anchor.y - target.source.center.y;
+      const len = hypot2(dx, dy);
+      if (len > 1e-12) return { x: dx / len, y: dy / len };
+      return { x: 1, y: 0 };
+    }
     if (target.kind === "radius" || target.kind === "diameter") {
       const defaultAngle = target.primitive instanceof Arc ? (target.primitive.startAngle + target.primitive.endAngle) / 2 : 0;
       const anchor = target.dimensionAnchor || circlePointAtAngle(target.primitive, defaultAngle);
@@ -3489,6 +3660,28 @@
   }
 
   function targetPointsForDimension(target, anchor = null) {
+    if (target.kind === "offset-distance") {
+      if (target.source instanceof Line && target.offset instanceof Line) {
+        const guide = anchor || {
+          x: (target.source.p1.x + target.source.p2.x + target.offset.p1.x + target.offset.p2.x) / 4,
+          y: (target.source.p1.y + target.source.p2.y + target.offset.p1.y + target.offset.p2.y) / 4,
+        };
+        const sourcePoint = projectPointToLine(guide, target.source);
+        const offsetPoint = projectPointToLine(guide, target.offset);
+        return [sourcePoint, offsetPoint];
+      }
+      const dir = targetDirection({ ...target, dimensionAnchor: anchor || target.dimensionAnchor });
+      return [
+        {
+          x: target.source.center.x + dir.x * target.source.radius(),
+          y: target.source.center.y + dir.y * target.source.radius(),
+        },
+        {
+          x: target.offset.center.x + dir.x * target.offset.radius(),
+          y: target.offset.center.y + dir.y * target.offset.radius(),
+        },
+      ];
+    }
     if (target.kind === "radius") {
       const dir = targetDirection({ ...target, dimensionAnchor: anchor || target.dimensionAnchor });
       return [target.primitive.center, { x: target.primitive.center.x + dir.x * target.primitive.radius(), y: target.primitive.center.y + dir.y * target.primitive.radius() }];
@@ -3582,7 +3775,8 @@
     }
     const anchor = dimensionAnchor(target, dimension);
     const basisTarget = { ...target, dimensionAxis: storedDimensionAxis(target, dimension) };
-    const d = target.kind === "radius" || target.kind === "diameter" ? targetDirection({ ...basisTarget, dimensionAnchor: anchor }) : targetDirection(basisTarget);
+    const radial = target.kind === "radius" || target.kind === "diameter" || (target.kind === "offset-distance" && !(target.source instanceof Line));
+    const d = radial ? targetDirection({ ...basisTarget, dimensionAnchor: anchor }) : targetDirection(basisTarget);
     const points = targetPointsForDimension(target, anchor);
     if (points.length < 2) return dimension;
     const projections = points.map((p) => (p.x - anchor.x) * d.x + (p.y - anchor.y) * d.y);
@@ -3605,7 +3799,7 @@
 
   function dimensionAnchor(target, dimension) {
     if (!dimension) return defaultDimensionForTarget(target);
-    if (target.kind === "radius" || target.kind === "diameter") {
+    if (target.kind === "radius" || target.kind === "diameter" || (target.kind === "offset-distance" && !(target.source instanceof Line))) {
       if (Number.isFinite(dimension.x) && Number.isFinite(dimension.y)) return { x: dimension.x, y: dimension.y };
     }
     if (target.kind === "angle") {
@@ -3670,6 +3864,7 @@
     if (c instanceof PointAxisDistanceConstraint) return { kind: "point-point", p1: c.p1, p2: c.p2, value: c.target, dimensionAxis: c.axis };
     if (c instanceof PointLineDistanceConstraint) return { kind: "point-line", point: c.point, line: c.line, value: c.target };
     if (c instanceof LineLineDistanceConstraint) return { kind: "line-line", line1: c.line1, line2: c.line2, value: c.target };
+    if (c instanceof OffsetConstraint) return { kind: "offset-distance", source: c.source, offset: c.offset, value: c.target, sign: c.sign };
     if (c instanceof LineAngleConstraint) return { kind: "angle", line1: c.line1, line2: c.line2, value: angleDegrees(c.target), signedValue: angleDimensionSweep({ line1: c.line1, line2: c.line2 }) };
     if (c instanceof RadiusConstraint) return { kind: "radius", primitive: c.primitive, value: c.target };
     if (c instanceof DiameterConstraint) return { kind: "diameter", primitive: c.primitive, value: c.target };
@@ -3682,6 +3877,7 @@
       constraint instanceof PointAxisDistanceConstraint ||
       constraint instanceof PointLineDistanceConstraint ||
       constraint instanceof LineLineDistanceConstraint ||
+      constraint instanceof OffsetConstraint ||
       constraint instanceof LineAngleConstraint ||
       constraint instanceof RadiusConstraint ||
       constraint instanceof DiameterConstraint
@@ -3718,6 +3914,12 @@
     if (c instanceof DistanceConstraint || c instanceof PointAxisDistanceConstraint) return c.p1 === point || c.p2 === point;
     if (c instanceof PointLineDistanceConstraint) return c.point === point || c.line.p1 === point || c.line.p2 === point;
     if (c instanceof LineLineDistanceConstraint) return c.line1.p1 === point || c.line1.p2 === point || c.line2.p1 === point || c.line2.p2 === point;
+    if (c instanceof OffsetConstraint) {
+      if (c.source instanceof Line && c.offset instanceof Line) {
+        return c.source.p1 === point || c.source.p2 === point || c.offset.p1 === point || c.offset.p2 === point;
+      }
+      return c.source.center === point || c.offset.center === point;
+    }
     if (c instanceof CoincidentConstraint) return c.p1 === point || c.p2 === point;
     if (c instanceof ArcEndpointCoincidentConstraint) return c.arc.center === point || c.point === point;
     if (c instanceof ArcEndpointArcEndpointCoincidentConstraint) return c.a.center === point || c.b.center === point;
@@ -3749,6 +3951,7 @@
     }
     if (c instanceof PointLineDistanceConstraint) return c.line === line;
     if (c instanceof LineLineDistanceConstraint) return c.line1 === line || c.line2 === line;
+    if (c instanceof OffsetConstraint) return c.source === line || c.offset === line;
     if (c instanceof LineFixedConstraint) return c.line === line;
     if (c instanceof PointOnLineConstraint || c instanceof PointOnLineMidpointConstraint) return c.line === line;
     if (c instanceof ArcEndpointOnLineConstraint) return c.line === line;
@@ -3760,6 +3963,7 @@
   }
 
   function constraintReferencesPrimitive(c, primitive) {
+    if (c instanceof OffsetConstraint) return c.source === primitive || c.offset === primitive;
     if (c instanceof ArcEndpointCoincidentConstraint) return c.arc === primitive;
     if (c instanceof ArcEndpointArcEndpointCoincidentConstraint) return c.a === primitive || c.b === primitive;
     if (c instanceof ArcEndpointOnLineConstraint) return c.arc === primitive;
@@ -3789,6 +3993,16 @@
         addNode(nodes, line);
         addNode(nodes, line.p1);
         addNode(nodes, line.p2);
+      }
+    } else if (c instanceof OffsetConstraint) {
+      for (const item of [c.source, c.offset]) {
+        addNode(nodes, item);
+        if (item instanceof Line) {
+          addNode(nodes, item.p1);
+          addNode(nodes, item.p2);
+        } else {
+          addNode(nodes, item.center);
+        }
       }
     } else if (c instanceof CoincidentConstraint) {
       addNode(nodes, c.p1);
@@ -4320,6 +4534,7 @@
     drawRectanglePreview();
     drawCirclePreview();
     drawArcPreview();
+    drawOffsetPreview();
     drawTrimPreview();
     drawSnapMarker();
     if (isGeometryMode()) {
@@ -4341,7 +4556,7 @@
   }
 
   function dimensionInputPointForPendingCommand() {
-    if (!pendingCommand || (pendingCommand.type !== "distance-value" && pendingCommand.type !== "fillet-radius-value")) return null;
+    if (!pendingCommand || !["distance-value", "fillet-radius-value", "offset-value"].includes(pendingCommand.type)) return null;
     if (pendingCommand.type === "fillet-radius-value") {
       const value = Number(pendingCommand.buffer);
       const radius = Number.isFinite(value) && value > 0 ? value : DEFAULT_FILLET_RADIUS;
@@ -4363,7 +4578,7 @@
 
   function syncDimensionValueInput() {
     if (!dimensionValueInput) return;
-    if (!pendingCommand || (pendingCommand.type !== "distance-value" && pendingCommand.type !== "fillet-radius-value")) {
+    if (!pendingCommand || !["distance-value", "fillet-radius-value", "offset-value"].includes(pendingCommand.type)) {
       hideDimensionValueInput();
       return;
     }
@@ -4650,7 +4865,8 @@
     if (target.kind === "angle") return angleDimensionLayout(target, dimension);
     const anchor = dimensionAnchor(target, dimension);
     const basisTarget = { ...target, dimensionAxis: storedDimensionAxis(target, dimension) };
-    const d = target.kind === "radius" || target.kind === "diameter" ? targetDirection({ ...basisTarget, dimensionAnchor: anchor }) : targetDirection(basisTarget);
+    const radial = target.kind === "radius" || target.kind === "diameter" || (target.kind === "offset-distance" && !(target.source instanceof Line));
+    const d = radial ? targetDirection({ ...basisTarget, dimensionAnchor: anchor }) : targetDirection(basisTarget);
     const points = targetPointsForDimension(target, anchor);
     if (points.length < 2) return null;
     const tick = 9 / viewport.scale;
@@ -4733,6 +4949,7 @@
   function dimensionSourceLine(target, index, source = null, extensionDirection = null) {
     if (target.kind === "point-line" && index === 1) return target.line;
     if (target.kind === "line-line") return index === 0 ? target.line1 : target.line2;
+    if (target.kind === "offset-distance" && target.source instanceof Line) return index === 0 ? target.source : target.offset;
     if (source instanceof Point) return chooseIncidentLineForExtension(source, extensionDirection);
     return null;
   }
@@ -5128,6 +5345,42 @@
     drawConstructionPoint(arcCenterPoint);
   }
 
+  function drawOffsetPreview() {
+    if (mode !== "offset" || !offsetSource) return;
+    const pointer = pendingCommand?.type === "offset-value" ? pendingCommand.pointer : pointerPreview;
+    if (!pointer) return;
+    const measured = offsetDistanceFromPointer(offsetSource, pointer);
+    const sign = pendingCommand?.type === "offset-value" ? pendingCommand.sign : measured.sign;
+    const inputValue = pendingCommand?.type === "offset-value" ? Number(pendingCommand.buffer) : measured.distance;
+    const distance = Number.isFinite(inputValue) && inputValue > 0 ? inputValue : measured.distance;
+    const offset = offsetDraftGeometry(offsetSource, distance, sign);
+    if (!offset) return;
+
+    ctx.save();
+    ctx.strokeStyle = "#2563eb";
+    ctx.lineWidth = 2 / viewport.scale;
+    ctx.setLineDash([6 / viewport.scale, 5 / viewport.scale]);
+    ctx.beginPath();
+    if (offset instanceof Line) {
+      ctx.moveTo(offset.p1.x, offset.p1.y);
+      ctx.lineTo(offset.p2.x, offset.p2.y);
+    } else if (offset instanceof Circle) {
+      ctx.arc(offset.center.x, offset.center.y, offset.radius(), 0, Math.PI * 2);
+    } else {
+      ctx.arc(offset.center.x, offset.center.y, offset.radius(), offset.startAngle, offset.endAngle, offset.endAngle < offset.startAngle);
+    }
+    ctx.stroke();
+    ctx.restore();
+
+    const target = offsetDimensionTarget(offsetSource, offset, distance, sign);
+    const dimension = dimensionWithLabelAt(target, dimensionFromAnchor(target, pointer, { allowPointAxis: false }), pointer);
+    if (pendingCommand?.type === "offset-value") {
+      pendingCommand.target = target;
+      pendingCommand.dimension = dimension;
+    }
+    drawDimension(target, dimension, formatDimensionLabel(distance), true);
+  }
+
   function drawTrimPreview() {
     if (mode !== "trim" || !trimPreview) return;
     ctx.save();
@@ -5374,6 +5627,7 @@
       toolRectangle: geometryMode && mode === "rectangle",
       toolFillet: geometryMode && mode === "fillet",
       toolTrim: geometryMode && mode === "trim",
+      toolOffset: geometryMode && mode === "offset",
       toolCircle: geometryMode && mode === "circle",
       toolArc: geometryMode && mode === "arc",
       presentationSelectBtn: presentationMode && !pendingCommand,
@@ -5919,6 +6173,10 @@
 
   function cancelPendingCommand(message = "コマンドをキャンセルしました") {
     if (!pendingCommand) return;
+    if (pendingCommand.type === "offset-value") {
+      offsetSource = null;
+      pointerPreview = null;
+    }
     pendingCommand = null;
     hideDimensionValueInput();
     if (message) setHint(message);
@@ -6056,8 +6314,8 @@
   }
 
   function updateDistanceBufferLabel() {
-    if (!pendingCommand || (pendingCommand.type !== "distance-value" && pendingCommand.type !== "fillet-radius-value")) return;
-    setHint("寸法値を入力中: 数値キーで編集、Enter/ダブルクリックで決定、Escでキャンセル");
+    if (!pendingCommand || !["distance-value", "fillet-radius-value", "offset-value"].includes(pendingCommand.type)) return;
+    setHint(pendingCommand.type === "offset-value" ? "オフセット距離を入力中: Enter/ダブルクリックで決定、Escでキャンセル" : "寸法値を入力中: 数値キーで編集、Enter/ダブルクリックで決定、Escでキャンセル");
     draw();
   }
 
@@ -6084,6 +6342,7 @@
       const snapshot = snapshotModelState();
       const previousTarget = constraint.target;
       constraint.target = target.kind === "angle" ? (value * Math.PI) / 180 : value;
+      preconditionNewConstraint(constraint);
       const solved = withTemporarySolveStepNorm(solveStepNormForConstraint(constraint), () => solveSketchAndDescendants(sketchId || constraintSketchId(constraint), snapshot));
       const result = solved.result;
       if (!solved.success || result.errorNorm > CONSTRAINT_ACCEPT_ERROR) {
@@ -6118,10 +6377,11 @@
       startDistanceValueInput(pendingCommand.pointer || defaultDimensionForTarget(pendingCommand.target));
       return true;
     }
-    if (pendingCommand.type !== "distance-value" && pendingCommand.type !== "fillet-radius-value") return false;
+    if (!["distance-value", "fillet-radius-value", "offset-value"].includes(pendingCommand.type)) return false;
     if (e.key === "Enter") {
       e.preventDefault();
       if (pendingCommand.type === "fillet-radius-value") submitFilletRadiusValue();
+      else if (pendingCommand.type === "offset-value") submitOffsetValue();
       else submitDistanceValue();
       return true;
     }
@@ -6321,6 +6581,7 @@
     arcStartPoint = null;
     pointerPreview = null;
     trimPreview = null;
+    offsetSource = null;
     clearSnap();
     mode = "select";
     updateUI();
@@ -6726,6 +6987,28 @@
     }
   }
 
+  function preconditionOffsetConstraint(constraint) {
+    if (!(constraint instanceof OffsetConstraint)) return;
+    const { source, offset, target, sign } = constraint;
+    if (source instanceof Line && offset instanceof Line) {
+      const normal = lineNormal(source);
+      const dx = normal.x * sign * target;
+      const dy = normal.y * sign * target;
+      offset.p1.x = source.p1.x + dx;
+      offset.p1.y = source.p1.y + dy;
+      offset.p2.x = source.p2.x + dx;
+      offset.p2.y = source.p2.y + dy;
+      return;
+    }
+    offset.center.x = source.center.x;
+    offset.center.y = source.center.y;
+    offset.radiusValue = Math.max(MIN_ORIENTATION_LENGTH, source.radius() + sign * target);
+    if (source instanceof Arc && offset instanceof Arc) {
+      offset.startAngle = source.startAngle;
+      offset.endAngle = source.endAngle;
+    }
+  }
+
   function preconditionNewConstraint(constraint) {
     if (constraint instanceof ArcEndpointOnLineConstraint) {
       preconditionArcEndpointOnLineConstraint(constraint);
@@ -6733,6 +7016,8 @@
       preconditionArcEndpointCoincidentConstraint(constraint);
     } else if (constraint instanceof ArcEndpointArcEndpointCoincidentConstraint) {
       preconditionArcEndpointArcEndpointCoincidentConstraint(constraint);
+    } else if (constraint instanceof OffsetConstraint) {
+      preconditionOffsetConstraint(constraint);
     }
   }
 
@@ -7026,6 +7311,10 @@
     if (target.kind === "angle") return angleDegrees(Math.abs(angleDimensionSweep(target)));
     if (target.kind === "radius") return target.primitive.radius();
     if (target.kind === "diameter") return target.primitive.radius() * 2;
+    if (target.kind === "offset-distance") {
+      if (target.source instanceof Line) return Math.abs(signedPointLineDistance(target.offset.p1, target.source));
+      return Math.abs(target.offset.radius() - target.source.radius());
+    }
     return target.value;
   }
 
@@ -8684,7 +8973,7 @@
       return;
     }
 
-    if (pendingCommand?.type === "distance-value" || pendingCommand?.type === "fillet-radius-value") {
+    if (pendingCommand?.type === "distance-value" || pendingCommand?.type === "fillet-radius-value" || pendingCommand?.type === "offset-value") {
       e.preventDefault();
       return;
     }
@@ -8695,7 +8984,7 @@
       return;
     }
 
-    if (["point", "line", "rectangle", "circle", "arc", "fillet", "trim"].includes(mode) && rejectRootSketchCreation()) {
+    if (["point", "line", "rectangle", "circle", "arc", "fillet", "trim", "offset"].includes(mode) && rejectRootSketchCreation()) {
       e.preventDefault();
       return;
     }
@@ -8744,6 +9033,27 @@
 
     if (mode === "trim") {
       executeTrimAt(p);
+      return;
+    }
+
+    if (mode === "offset") {
+      if (!offsetSource) {
+        offsetSource = hitL || hitC || hitA;
+        if (!offsetSource) {
+          setHint("オフセットする線、円、円弧をクリックしてください", "error");
+          return;
+        }
+        selectedPoints = [];
+        selectedLines = offsetSource instanceof Line ? [offsetSource] : [];
+        selectedCircles = offsetSource instanceof Circle ? [offsetSource] : [];
+        selectedArcs = offsetSource instanceof Arc ? [offsetSource] : [];
+        pointerPreview = p;
+        setHint("オフセットする側と距離の目安をクリックしてください");
+        updateUI();
+        draw();
+        return;
+      }
+      startOffsetDistanceInput(offsetSource, p);
       return;
     }
 
@@ -8930,7 +9240,7 @@
       return;
     }
 
-    if (["point", "line", "rectangle", "circle", "arc", "fillet", "trim"].includes(mode) && !canCreateInActiveSketch()) {
+    if (["point", "line", "rectangle", "circle", "arc", "fillet", "trim", "offset"].includes(mode) && !canCreateInActiveSketch()) {
       clearSnap();
       pointerPreview = null;
       trimPreview = null;
@@ -9079,6 +9389,36 @@
         // Pointer capture may already be released by the browser.
       }
       setHint("画面移動を終了しました");
+      return;
+    }
+
+    if (mode === "offset") {
+      clearSnap();
+      hoveredSketchIdentity = null;
+      if (pendingCommand?.type === "offset-value") {
+        draw();
+        return;
+      }
+      if (offsetSource) {
+        pointerPreview = p;
+        hoveredPoint = null;
+        hoveredEndpointPoint = null;
+        hoveredLine = offsetSource instanceof Line ? offsetSource : null;
+        hoveredCircle = offsetSource instanceof Circle ? offsetSource : null;
+        hoveredArc = offsetSource instanceof Arc ? offsetSource : null;
+      } else {
+        const nextLine = hitLine(p.x, p.y);
+        const nextCircle = nextLine ? null : hitCircle(p.x, p.y);
+        const nextArc = nextLine || nextCircle ? null : hitArc(p.x, p.y);
+        hoveredPoint = null;
+        hoveredEndpointPoint = null;
+        hoveredLine = nextLine;
+        hoveredCircle = nextCircle;
+        hoveredArc = nextArc;
+      }
+      hoveredArcEndpoint = null;
+      hoveredDimensionConstraint = null;
+      draw();
       return;
     }
 
@@ -9266,7 +9606,7 @@
   }
 
   function isDrawToolMode() {
-    return mode === "line" || mode === "point" || mode === "rectangle" || mode === "fillet" || mode === "trim" || mode === "circle" || mode === "arc";
+    return mode === "line" || mode === "point" || mode === "rectangle" || mode === "fillet" || mode === "trim" || mode === "offset" || mode === "circle" || mode === "arc";
   }
 
   function handleBlankCanvasDoubleClick(pointer, hits = {}) {
@@ -9278,6 +9618,10 @@
     }
     if (pendingCommand?.type === "fillet-radius-value") {
       submitFilletRadiusValue();
+      return true;
+    }
+    if (pendingCommand?.type === "offset-value") {
+      submitOffsetValue();
       return true;
     }
     if (pendingCommand) {
@@ -9355,6 +9699,11 @@
       submitFilletRadiusValue();
       return;
     }
+    if (pendingCommand?.type === "offset-value") {
+      e.preventDefault();
+      submitOffsetValue();
+      return;
+    }
     if (!pendingCommand && hitD && startDimensionEditInput(hitD)) {
       e.preventDefault();
       return;
@@ -9383,17 +9732,18 @@
     dimensionValueInput.addEventListener("pointerdown", (e) => e.stopPropagation());
     dimensionValueInput.addEventListener("dblclick", (e) => e.stopPropagation());
     dimensionValueInput.addEventListener("input", () => {
-      if (!pendingCommand || (pendingCommand.type !== "distance-value" && pendingCommand.type !== "fillet-radius-value")) return;
+      if (!pendingCommand || !["distance-value", "fillet-radius-value", "offset-value"].includes(pendingCommand.type)) return;
       pendingCommand.buffer = dimensionValueInput.value;
       pendingCommand.editing = true;
       updateDistanceBufferLabel();
     });
     dimensionValueInput.addEventListener("keydown", (e) => {
-      if (!pendingCommand || (pendingCommand.type !== "distance-value" && pendingCommand.type !== "fillet-radius-value")) return;
+      if (!pendingCommand || !["distance-value", "fillet-radius-value", "offset-value"].includes(pendingCommand.type)) return;
       e.stopPropagation();
       if (e.key === "Enter") {
         e.preventDefault();
         if (pendingCommand.type === "fillet-radius-value") submitFilletRadiusValue();
+        else if (pendingCommand.type === "offset-value") submitOffsetValue();
         else submitDistanceValue();
       } else if (e.key === "Escape") {
         e.preventDefault();
@@ -9457,7 +9807,7 @@
         cancelActiveDrawOperation();
         return;
       }
-      if (mode === "line" || mode === "point" || mode === "rectangle" || mode === "fillet" || mode === "trim" || mode === "circle" || mode === "arc") {
+      if (mode === "line" || mode === "point" || mode === "rectangle" || mode === "fillet" || mode === "trim" || mode === "offset" || mode === "circle" || mode === "arc") {
         exitDrawMode();
         return;
       }
@@ -9626,6 +9976,7 @@
     arcStartPoint = null;
     pointerPreview = null;
     trimPreview = null;
+    offsetSource = null;
     hoveredPoint = null;
     hoveredEndpointPoint = null;
     hoveredLine = null;
@@ -9636,6 +9987,29 @@
     clearSnap();
     updateToolbar();
     setHint("トリムする線、円、円弧の削除したい区間をクリックしてください。Escで選択モードに戻ります");
+    draw();
+  });
+
+  document.getElementById("toolOffset")?.addEventListener("click", () => {
+    if (rejectPresentationGeometryEdit("Offset")) return;
+    cancelConstraintTargetCommand("");
+    cancelPendingCommand("");
+    mode = "offset";
+    lineStartPoint = null;
+    rectangleStartPoint = null;
+    filletFirstLine = null;
+    circleCenterPoint = null;
+    arcCenterPoint = null;
+    arcStartPoint = null;
+    pointerPreview = null;
+    trimPreview = null;
+    const selected = [...selectedLines, ...selectedCircles, ...selectedArcs];
+    offsetSource = selected.length === 1 ? selected[0] : null;
+    if (!offsetSource) clearSelection();
+    clearSnap();
+    updateToolbar();
+    setHint(offsetSource ? "オフセットする側と距離の目安をクリックしてください" : "オフセットする線、円、円弧をクリックしてください");
+    updateUI();
     draw();
   });
 
@@ -10061,6 +10435,69 @@
         fitAllGeometryToViewport(140);
         draw();
         return { line: line.id, fixedPoint: p1.id, circle: circle.id, circleCenter: circleCenter.id, arc: arc.id };
+      },
+      resetForOffsetConstraints() {
+        resetModelState();
+        setAppMode("geometry");
+        const lineP1 = addPoint(-120, -70, true, "endpoint");
+        const lineP2 = addPoint(-20, -70, true, "endpoint");
+        const sourceLine = addLine(lineP1, lineP2);
+        const sourceCircle = addCircle(addPoint(80, -20, true, "center"), 30);
+        const sourceArc = addArc(addPoint(0, 90, true, "center"), 40, 0, Math.PI / 2);
+        pushModelConstraint(new RadiusConstraint(sourceCircle, 30));
+        pushModelConstraint(new RadiusConstraint(sourceArc, 40));
+
+        const lineCreated = createOffsetGeometry(sourceLine, 20, 1, { x: -70, y: -50 });
+        const circleCreated = createOffsetGeometry(sourceCircle, 15, 1, { x: 125, y: -20 });
+        const arcCreated = createOffsetGeometry(sourceArc, 10, -1, { x: 0, y: 120 });
+        const offsets = model.constraints.filter((constraint) => constraint instanceof OffsetConstraint);
+        offsets[0].target = 25;
+        offsets[1].target = 18;
+        offsets[2].target = 12;
+        offsets.forEach(preconditionNewConstraint);
+        solveSketchAndDescendants(activeSketchId(), snapshotModelState());
+        const measurements = offsets.map((constraint) => measuredConstraintTargetValue(constraint));
+        const sourceRadii = [sourceCircle.radius(), sourceArc.radius()];
+        const serialized = serializeModel();
+        loadModelData(serialized);
+        const restored = model.constraints.filter((constraint) => constraint instanceof OffsetConstraint);
+        fitAllGeometryToViewport(140);
+        draw();
+        return {
+          created: [lineCreated, circleCreated, arcCreated],
+          measurements,
+          sourceRadii,
+          restoredCount: restored.length,
+          restoredTypes: serializeModel().constraints.filter((constraint) => constraint.type === "offsetDimension").length,
+          restoredTargets: restored.map((constraint) => constraint.target),
+          geometry: { lines: model.lines.length, circles: model.circles.length, arcs: model.arcs.length },
+        };
+      },
+      resetForOffsetUi() {
+        resetModelState();
+        setAppMode("geometry");
+        const p1 = addPoint(-60, 0, false, "endpoint");
+        const p2 = addPoint(60, 0, false, "endpoint");
+        addLine(p1, p2);
+        fitAllGeometryToViewport(220);
+        draw();
+        const rect = canvas.getBoundingClientRect();
+        const source = worldToCanvasScreen({ x: 0, y: 0 });
+        const side = worldToCanvasScreen({ x: 0, y: 35 });
+        return {
+          source: { x: rect.left + source.x, y: rect.top + source.y },
+          side: { x: rect.left + side.x, y: rect.top + side.y },
+        };
+      },
+      offsetUiState() {
+        const constraints = model.constraints.filter((constraint) => constraint instanceof OffsetConstraint);
+        return {
+          pendingType: pendingCommand?.type || null,
+          lineCount: model.lines.length,
+          constraintCount: constraints.length,
+          targets: constraints.map((constraint) => constraint.target),
+          toolActive: document.getElementById("toolOffset")?.classList.contains("active"),
+        };
       },
       sidebarHighlightIds() {
         return [...(sidebarPinnedSelection?.elements || [])].map((item) => item?.id).filter(Boolean).sort();
