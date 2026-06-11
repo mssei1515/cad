@@ -114,6 +114,18 @@ test("history buttons enable after normal canvas edits", async ({ page }) => {
   expect(afterRedo.undoDisabled).toBe(false);
 });
 
+test("undo preserves construction drawing mode", async ({ page }) => {
+  await page.goto(`${baseUrl}/index.html?test=1`);
+  await page.click("#toolConstructionLine");
+  await page.mouse.click(460, 410);
+  await page.mouse.click(540, 450);
+  await page.click("#undoBtn");
+
+  const state = await page.evaluate(() => window.__cadTest.historyState());
+  expect(state.constructionLineMode).toBe(true);
+  expect(state.constructionButtonActive).toBe(true);
+});
+
 test("geometry toolbar uses the organized command groups", async ({ page }) => {
   await page.goto(`${baseUrl}/index.html?test=1`);
   const layout = await page.evaluate(() => {
@@ -164,6 +176,22 @@ test("read-only dimensions skip the numeric value input", async ({ page }) => {
   expect(result.inputHidden).toBe(true);
   expect(result.readOnlyCount).toBe(1);
   expect(result.dimensionCount).toBe(2);
+});
+
+test("geometry mode only exposes dimensions from the active sketch", async ({ page }) => {
+  await page.goto(`${baseUrl}/index.html?test=1`);
+  const result = await page.evaluate(() => window.__cadTest.resetForActiveSketchDimensionVisibility());
+  expect(result.dimensionSketchIds).toEqual(["S1", "S2"]);
+  expect(result.drawnDimensionSketchIds).toEqual([result.activeSketchId]);
+});
+
+test("all geometry fit includes figures from every sketch", async ({ page }) => {
+  await page.goto(`${baseUrl}/index.html?test=1`);
+  const result = await page.evaluate(() => window.__cadTest.resetForAllGeometryFit());
+  expect(result.screen.left).toBeGreaterThanOrEqual(90);
+  expect(result.screen.right).toBeLessThanOrEqual(result.canvas.width - 90);
+  expect(result.screen.top).toBeGreaterThanOrEqual(90);
+  expect(result.screen.bottom).toBeLessThanOrEqual(result.canvas.height - 90);
 });
 
 test("construction extension clearance uses only the dimension-line component", async ({ page }) => {
