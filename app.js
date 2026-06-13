@@ -95,6 +95,7 @@
   let constraintAnalysisState = null;
   let constraintRedundancyState = { constraints: new Map(), sketches: new Map(), count: 0 };
   let sketchSolveStates = new Map();
+  let invalidReferenceConstraints = new Map();
   let panSession = null;
   let selectionRectSession = null;
   let blankDoubleClickCandidate = null;
@@ -859,13 +860,37 @@
     return siblingSketchesOf(base).some((sketch) => sketch.id === sketchId);
   }
 
+  function siblingBranchSketchIds(baseSketchId = activeSketchId()) {
+    const base = sketchById(baseSketchId);
+    if (!base) return [];
+    const ids = [];
+    for (const sibling of siblingSketchesOf(base)) ids.push(sibling.id, ...descendantSketchIds(sibling.id));
+    return [...new Set(ids)];
+  }
+
+  function isSiblingBranchSketchId(sketchId, baseSketchId = activeSketchId()) {
+    return siblingBranchSketchIds(baseSketchId).includes(sketchId);
+  }
+
+  function isSiblingDescendantSketchId(sketchId, baseSketchId = activeSketchId()) {
+    return isSiblingBranchSketchId(sketchId, baseSketchId) && !isSiblingSketchId(sketchId, baseSketchId);
+  }
+
   function isReferenceSourceSketchId(referenceSketchId, subjectSketchId = activeSketchId()) {
-    return isAncestorSketchId(referenceSketchId, subjectSketchId) || isSiblingSketchId(referenceSketchId, subjectSketchId);
+    return isAncestorSketchId(referenceSketchId, subjectSketchId) || isSiblingBranchSketchId(referenceSketchId, subjectSketchId);
+  }
+
+  function referenceSourceSketchIds(subjectSketchId = activeSketchId()) {
+    return [...new Set([...ancestorSketchIds(subjectSketchId), ...siblingBranchSketchIds(subjectSketchId)])];
+  }
+
+  function constraintIsOperational(constraint) {
+    return constraint?.enabled !== false && !invalidReferenceConstraints.has(constraint);
   }
 
   function referenceSketchTargets(sketchId) {
     return [...new Set(model.constraints
-      .filter((constraint) => constraint.enabled !== false && constraint.reference && constraintSketchId(constraint) === sketchId && constraint.referenceSketchId)
+      .filter((constraint) => constraintIsOperational(constraint) && constraint.reference && constraintSketchId(constraint) === sketchId && constraint.referenceSketchId)
       .map((constraint) => constraint.referenceSketchId))];
   }
 
@@ -884,6 +909,41 @@
 
   function wouldCreateReferenceCycle(subjectSketchId, referenceSketchId) {
     return subjectSketchId === referenceSketchId || referencePathExists(referenceSketchId, subjectSketchId);
+  }
+
+  function refreshReferenceConstraintValidity() {
+    const invalid = new Map();
+    const acceptedTargets = new Map();
+    const targetsOf = (sketchId) => acceptedTargets.get(sketchId) || [];
+    const pathExists = (fromSketchId, toSketchId) => {
+      const pending = [fromSketchId];
+      const visited = new Set();
+      while (pending.length > 0) {
+        const current = pending.pop();
+        if (current === toSketchId) return true;
+        if (!current || visited.has(current)) continue;
+        visited.add(current);
+        pending.push(...targetsOf(current));
+      }
+      return false;
+    };
+    for (const constraint of model.constraints) {
+      if (constraint.enabled === false || !constraint.reference || !constraint.referenceSketchId) continue;
+      const ownerSketchId = constraintSketchId(constraint);
+      const referenceSketchId = constraint.referenceSketchId;
+      if (!isReferenceSourceSketchId(referenceSketchId, ownerSketchId)) {
+        invalid.set(constraint, "参照範囲外");
+        continue;
+      }
+      if (ownerSketchId === referenceSketchId || pathExists(referenceSketchId, ownerSketchId)) {
+        invalid.set(constraint, "循環参照");
+        continue;
+      }
+      if (!acceptedTargets.has(ownerSketchId)) acceptedTargets.set(ownerSketchId, []);
+      acceptedTargets.get(ownerSketchId).push(referenceSketchId);
+    }
+    invalidReferenceConstraints = invalid;
+    return invalid;
   }
 
   function sketchDepth(sketch) {
@@ -988,12 +1048,29 @@
     return isEditableSketchId(elementSketchId(item));
   }
 
+  function visibleBranchPath(sketchId, stopSketchId) {
+    let current = sketchById(sketchId);
+    const visited = new Set();
+    while (current && current.id !== stopSketchId && !visited.has(current.id)) {
+      if (current.visible === false) return false;
+      visited.add(current.id);
+      current = parentSketchOf(current);
+    }
+    return Boolean(current && current.id === stopSketchId);
+  }
+
   function isVisibleSketchId(sketchId) {
     const id = sketchId || activeSketchId();
     if (id === activeSketchId()) return true;
     const sketch = sketchById(id);
-    if (!sketch || sketch.visible === false) return false;
-    return isAncestorSketchId(id) || isSiblingSketchId(id) || descendantSketchIds(activeSketchId()).includes(id);
+    if (!sketch) return false;
+    if (isAncestorSketchId(id)) return sketch.visible !== false;
+    if (descendantSketchIds(activeSketchId()).includes(id)) return visibleBranchPath(id, activeSketchId());
+    if (isSiblingBranchSketchId(id)) {
+      const activeParentId = sketchById(activeSketchId())?.parentSketchId;
+      return Boolean(activeParentId) && visibleBranchPath(id, activeParentId);
+    }
+    return false;
   }
 
   function isVisibleSketchElement(item) {
@@ -1005,6 +1082,7 @@
     if (id === activeSketchId()) return "active";
     if (isAncestorSketchId(id)) return "ancestor";
     if (isSiblingSketchId(id)) return "sibling";
+    if (isSiblingDescendantSketchId(id)) return "sibling-descendant";
     if (descendantSketchIds(activeSketchId()).includes(id)) return "descendant";
     return "hidden";
   }
@@ -1062,6 +1140,7 @@
     if (isEditableSketchId(sketchId)) return "active";
     if (isAncestorSketchId(sketchId)) return "ancestor";
     if (isSiblingSketchId(sketchId)) return "sibling";
+    if (isSiblingDescendantSketchId(sketchId)) return "sibling-descendant";
     return null;
   }
 
@@ -1173,7 +1252,7 @@
   }
 
   function constraintsForRedundancy(sketchId) {
-    return model.constraints.filter((constraint) => constraint.enabled !== false && constraintSketchId(constraint) === sketchId);
+    return model.constraints.filter((constraint) => constraintIsOperational(constraint) && constraintSketchId(constraint) === sketchId);
   }
 
   function redundantConstraintInfo(constraint, sketchId = constraintSketchId(constraint)) {
@@ -1240,6 +1319,23 @@
   function constraintDuplicateSummary() {
     const count = constraintRedundancyState?.count || 0;
     return count > 0 ? ` / 重複拘束: ${count}` : "";
+  }
+
+  function referenceConstraintErrorInfo(constraint) {
+    return invalidReferenceConstraints.get(constraint) || null;
+  }
+
+  function referenceConstraintErrorCountForSketch(sketchId) {
+    let count = 0;
+    for (const constraint of invalidReferenceConstraints.keys()) {
+      if (constraintSketchId(constraint) === sketchId) count += 1;
+    }
+    return count;
+  }
+
+  function referenceConstraintErrorSummary() {
+    const count = invalidReferenceConstraints.size;
+    return count > 0 ? ` / 参照エラー: ${count}` : "";
   }
 
   function clearSketchSolveState(sketchId) {
@@ -1346,6 +1442,7 @@
   }
 
   function refreshConstraintAnalysis() {
+    refreshReferenceConstraintValidity();
     const rootSketchId = activeSketchId();
     const sketchIds = [rootSketchId, ...descendantSketchIds(rootSketchId)];
     const analyses = new Map();
@@ -1415,7 +1512,7 @@
 
   function sketchStrokeWidth(item) {
     const relation = sketchRelationOfElement(item);
-    if (relation === "ancestor" || relation === "sibling" || relation === "descendant") return 1.8;
+    if (relation === "ancestor" || relation === "sibling" || relation === "sibling-descendant" || relation === "descendant") return 1.8;
     if (relation === "active") return 2.6;
     return 0;
   }
@@ -1447,7 +1544,7 @@
   function sketchAlpha(item) {
     const relation = sketchRelationOfElement(item);
     if (relation === "active") return 1;
-    if (relation === "ancestor" || relation === "sibling" || relation === "descendant") return 1;
+    if (relation === "ancestor" || relation === "sibling" || relation === "sibling-descendant" || relation === "descendant") return 1;
     return 0;
   }
 
@@ -1461,7 +1558,7 @@
   function constraintSummaryText() {
     if (!constraintAnalysisState) refreshConstraintAnalysis();
     const s = constraintAnalysisState?.summary || { full: 0, support: 0, under: 0, conflict: 0 };
-    return `完全拘束: ${s.full} / 支持位置拘束: ${s.support} / 未拘束: ${s.under} / 矛盾: ${s.conflict}${constraintDuplicateSummary()}`;
+    return `完全拘束: ${s.full} / 支持位置拘束: ${s.support} / 未拘束: ${s.under} / 矛盾: ${s.conflict}${constraintDuplicateSummary()}${referenceConstraintErrorSummary()}`;
   }
 
   function addPoint(x, y, fixed = false, kind = "explicit") {
@@ -1751,6 +1848,7 @@
     model.arcs.length = 0;
     model.constraints.length = 0;
     sketchSolveStates.clear();
+    invalidReferenceConstraints.clear();
     constraintAnalysisState = null;
     clearSelection();
     dragSession = null;
@@ -2339,6 +2437,7 @@
     model.arcs.push(...arcs);
     normalizeArcSweeps(model.arcs);
     model.constraints.push(...constraints);
+    refreshReferenceConstraintValidity();
     const lineRepair = enforceMinimumLineLengths(model.lines);
     lastLoadLineRepairMessage =
       lineRepair.changed > 0 || lineRepair.failed > 0
@@ -4167,7 +4266,7 @@
     for (const arc of model.arcs) addIntrinsicGraphEdges(adjacency, arc, arc.center);
 
     for (const constraint of model.constraints) {
-      if (constraint.enabled === false) continue;
+      if (!constraintIsOperational(constraint)) continue;
       const nodes = constraintGraphNodes(constraint);
       for (const node of nodes) {
         if (!adjacency.has(node)) adjacency.set(node, new Set());
@@ -4222,7 +4321,7 @@
   }
 
   function localSolveConstraints(component, sketchId = activeSketchId()) {
-    return model.constraints.filter((constraint) => constraint.enabled !== false && constraintSketchId(constraint) === sketchId && constraintGraphNodes(constraint).some((node) => component.has(node)));
+    return model.constraints.filter((constraint) => constraintIsOperational(constraint) && constraintSketchId(constraint) === sketchId && constraintGraphNodes(constraint).some((node) => component.has(node)));
   }
 
   function localSolveLines(component, sketchId = activeSketchId()) {
@@ -4251,7 +4350,7 @@
   }
 
   function sketchSolveConstraints(sketchId = activeSketchId()) {
-    return model.constraints.filter((constraint) => constraint.enabled !== false && constraintSketchId(constraint) === sketchId);
+    return model.constraints.filter((constraint) => constraintIsOperational(constraint) && constraintSketchId(constraint) === sketchId);
   }
 
   function sketchSolveLines(sketchId = activeSketchId()) {
@@ -4282,39 +4381,75 @@
   }
 
   function solveReferenceDependentSketches(rootSketchId) {
+    refreshReferenceConstraintValidity();
     const results = [];
-    const pendingSources = [rootSketchId];
-    const visitedSources = new Set();
-    const solvedDependents = new Set();
-    while (pendingSources.length > 0) {
-      const sourceSketchId = pendingSources.shift();
-      if (!sourceSketchId || visitedSources.has(sourceSketchId)) continue;
-      visitedSources.add(sourceSketchId);
-      const dependents = [...new Set(model.constraints
-        .filter((constraint) => constraint.enabled !== false && constraint.reference && constraint.referenceSketchId === sourceSketchId)
-        .map((constraint) => constraintSketchId(constraint))
-        .filter((sketchId) => sketchId && sketchId !== rootSketchId))];
-      for (const sketchId of dependents) {
-        if (solvedDependents.has(sketchId)) continue;
-        solvedDependents.add(sketchId);
+    const dependentsBySource = new Map();
+    for (const constraint of model.constraints) {
+      if (!constraintIsOperational(constraint) || !constraint.reference || !constraint.referenceSketchId) continue;
+      const dependentSketchId = constraintSketchId(constraint);
+      if (!dependentSketchId || dependentSketchId === constraint.referenceSketchId) continue;
+      if (!dependentsBySource.has(constraint.referenceSketchId)) dependentsBySource.set(constraint.referenceSketchId, new Set());
+      dependentsBySource.get(constraint.referenceSketchId).add(dependentSketchId);
+    }
+
+    const affected = new Set([rootSketchId]);
+    const pending = [rootSketchId];
+    while (pending.length > 0) {
+      const sourceSketchId = pending.shift();
+      for (const dependentSketchId of dependentsBySource.get(sourceSketchId) || []) {
+        if (affected.has(dependentSketchId)) continue;
+        affected.add(dependentSketchId);
+        pending.push(dependentSketchId);
+      }
+    }
+
+    const indegree = new Map([...affected].map((sketchId) => [sketchId, 0]));
+    for (const [sourceSketchId, dependents] of dependentsBySource) {
+      if (!affected.has(sourceSketchId)) continue;
+      for (const dependentSketchId of dependents) {
+        if (affected.has(dependentSketchId)) indegree.set(dependentSketchId, (indegree.get(dependentSketchId) || 0) + 1);
+      }
+    }
+    const orderIndex = new Map(orderedSketches().map((sketch, index) => [sketch.id, index]));
+    const ready = [...affected]
+      .filter((sketchId) => (indegree.get(sketchId) || 0) === 0)
+      .sort((a, b) => (orderIndex.get(a) ?? Infinity) - (orderIndex.get(b) ?? Infinity));
+    const processed = new Set();
+    while (ready.length > 0) {
+      const sketchId = ready.shift();
+      if (processed.has(sketchId)) continue;
+      processed.add(sketchId);
+      if (sketchId !== rootSketchId) {
         clearSketchSolveState(sketchId);
         const result = solveSketchById(sketchId);
         normalizeArcSweeps();
-        if (resultIsAccepted(result)) {
-          setSketchSolveOk(sketchId, result, rootSketchId);
-          results.push({ sketchId, result, status: "ok" });
-        } else {
-          setSketchSolveError(sketchId, result, rootSketchId);
-          results.push({ sketchId, result, status: "error" });
-        }
-        pendingSources.push(sketchId);
+        const status = resultIsAccepted(result) ? "ok" : "error";
+        if (status === "ok") setSketchSolveOk(sketchId, result, rootSketchId);
+        else setSketchSolveError(sketchId, result, rootSketchId);
+        results.push({ sketchId, result, status });
       }
+      for (const dependentSketchId of dependentsBySource.get(sketchId) || []) {
+        if (!affected.has(dependentSketchId)) continue;
+        indegree.set(dependentSketchId, (indegree.get(dependentSketchId) || 0) - 1);
+        if (indegree.get(dependentSketchId) === 0) {
+          ready.push(dependentSketchId);
+          ready.sort((a, b) => (orderIndex.get(a) ?? Infinity) - (orderIndex.get(b) ?? Infinity));
+        }
+      }
+    }
+
+    for (const sketchId of affected) {
+      if (sketchId === rootSketchId || processed.has(sketchId)) continue;
+      const result = { success: false, errorNorm: Infinity, iterations: 0, reason: "循環参照" };
+      setSketchSolveError(sketchId, result, rootSketchId);
+      results.push({ sketchId, result, status: "error" });
     }
     const failed = results.find((entry) => entry.status === "error");
     return { success: !failed, sketchId: failed?.sketchId || null, result: failed?.result || null, results };
   }
 
   function solveSketchAndDependents(sketchId = activeSketchId(), rollbackState = null) {
+    refreshReferenceConstraintValidity();
     clearSketchSolveState(sketchId);
     const result = solveSketchById(sketchId);
     normalizeArcSweeps();
@@ -5537,6 +5672,7 @@
     const relation = sketchRelationToActive(sketchId);
     if (relation === "ancestor") return "祖先";
     if (relation === "sibling") return "兄弟";
+    if (relation === "sibling-descendant") return "兄弟の子孫";
     if (relation === "descendant") return "子孫";
     return "";
   }
@@ -5544,7 +5680,7 @@
   function sketchIdentityRelationColor(sketchId) {
     const relation = sketchRelationToActive(sketchId);
     if (relation === "ancestor") return "#7c3aed";
-    if (relation === "sibling") return "#4338ca";
+    if (relation === "sibling" || relation === "sibling-descendant") return "#4338ca";
     if (relation === "descendant") return "#047857";
     return "#64748b";
   }
@@ -5552,7 +5688,7 @@
   function sketchIdentityRelationBackground(sketchId) {
     const relation = sketchRelationToActive(sketchId);
     if (relation === "ancestor") return "rgba(237, 233, 254, 0.96)";
-    if (relation === "sibling") return "rgba(224, 231, 255, 0.96)";
+    if (relation === "sibling" || relation === "sibling-descendant") return "rgba(224, 231, 255, 0.96)";
     if (relation === "descendant") return "rgba(209, 250, 229, 0.96)";
     return "rgba(241, 245, 249, 0.96)";
   }
@@ -6610,6 +6746,10 @@
     if (!sketch) return;
     if (model.activeSketchId === sketchId) return;
     sketch.visible = true;
+    for (const ancestorId of ancestorSketchIds(sketchId)) {
+      const ancestor = sketchById(ancestorId);
+      if (ancestor) ancestor.visible = true;
+    }
     model.activeSketchId = sketchId;
     clearInteractionForSketchChange();
     setHint(`編集中: ${sketchName(sketchId)}`);
@@ -6656,6 +6796,22 @@
     if (!sketch || isRootSketch(sketch)) return false;
 
     const sketchIds = new Set([sketch.id, ...descendantSketchIds(sketch.id)]);
+    const externalReferences = model.constraints.filter((constraint) => {
+      if (!constraint.reference || !sketchIds.has(constraint.referenceSketchId)) return false;
+      return !sketchIds.has(constraintSketchId(constraint));
+    });
+    if (externalReferences.length > 0) {
+      const owners = new Map();
+      for (const constraint of externalReferences) {
+        const ownerId = constraintSketchId(constraint);
+        owners.set(ownerId, (owners.get(ownerId) || 0) + 1);
+      }
+      const ownerText = [...owners.entries()].map(([ownerId, count]) => `${sketchName(ownerId)} ${count}件`).join("、");
+      const msg = `削除できません: ${sketch.name} またはその子孫が ${ownerText} から参照されています`;
+      setHint(msg, "error");
+      log(msg);
+      return false;
+    }
     const geometryCount = [...model.points, ...model.lines, ...model.circles, ...model.arcs].filter((item) => sketchIds.has(elementSketchId(item))).length;
     if (confirmFirst && !window.confirm(`${sketch.name} と配下のスケッチを削除します。\n図形 ${geometryCount} 件も削除されます。`)) return false;
 
@@ -6841,12 +6997,14 @@
         const isRoot = isRootSketch(sketch);
         const isAncestor = isAncestorSketchId(sketch.id);
         const isSibling = isSiblingSketchId(sketch.id);
+        const isSiblingDescendant = isSiblingDescendantSketchId(sketch.id);
         const isDescendant = descendantSketchIds(activeSketchId()).includes(sketch.id);
         const visible = isVisibleSketchId(sketch.id);
         const visibilityEnabled = sketch.visible !== false;
         const solveError = sketchHasSolveError(sketch.id);
         const solveErrorTitle = sketchSolveErrorTitle(sketch.id);
         const duplicateCount = constraintDuplicateCountForSketch(sketch.id);
+        const referenceErrorCount = referenceConstraintErrorCountForSketch(sketch.id);
         const count =
           model.points.filter((item) => elementSketchId(item) === sketch.id).length +
           model.lines.filter((item) => elementSketchId(item) === sketch.id).length +
@@ -6859,10 +7017,10 @@
           ? ""
           : `<button class="sketchVisibilityBtn icon-small-btn ${visibilityEnabled ? "visible-on" : "visible-off"}" data-id="${sketch.id}" title="${visibilityEnabled ? "非表示にする" : "表示する"}" aria-label="${visibilityEnabled ? "非表示にする" : "表示する"}" aria-pressed="${visibilityEnabled}" ${isActive ? "disabled" : ""}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2.5 12s3.5-6 9.5-6 9.5 6 9.5 6-3.5 6-9.5 6-9.5-6-9.5-6Z"/><circle cx="12" cy="12" r="2.6"/>${visibilityEnabled ? "" : '<path class="visibility-slash" d="M4 4l16 16"/>'}</svg></button>`;
         return (
-          `<div class="item sketch-item ${visible ? "visible" : ""} ${visibilityEnabled ? "visibility-on" : "visibility-off"} ${isRoot ? "root" : ""} ${isAncestor ? "ancestor-visible" : ""} ${isSibling ? "sibling-visible" : ""} ${isDescendant ? "descendant-visible" : ""} ${isActive ? "active" : ""} ${solveError ? "solve-error" : ""} ${hasChildren ? "has-children" : ""}" data-id="${sketch.id}" title="${escapeHtml(solveErrorTitle)}" style="--sketch-depth:${depth}">` +
+          `<div class="item sketch-item ${visible ? "visible" : ""} ${visibilityEnabled ? "visibility-on" : "visibility-off"} ${isRoot ? "root" : ""} ${isAncestor ? "ancestor-visible" : ""} ${isSibling || isSiblingDescendant ? "sibling-visible" : ""} ${isDescendant ? "descendant-visible" : ""} ${isActive ? "active" : ""} ${solveError ? "solve-error" : ""} ${referenceErrorCount ? "reference-error" : ""} ${hasChildren ? "has-children" : ""}" data-id="${sketch.id}" title="${escapeHtml(solveErrorTitle || (referenceErrorCount ? `参照エラー ${referenceErrorCount}件` : ""))}" style="--sketch-depth:${depth}">` +
           treeLines +
           `<button class="sketchActivateBtn" data-id="${sketch.id}" ${isActive ? "disabled" : ""}>${escapeHtml(sketch.name)}</button>` +
-          `<span class="sketch-badges">${solveError ? `<span class="badge sketch-error-badge">!</span>` : ""}${duplicateCount ? `<span class="badge sketch-duplicate-badge">重複${duplicateCount}</span>` : ""}<span class="badge">${count}</span></span>` +
+          `<span class="sketch-badges">${solveError ? `<span class="badge sketch-error-badge">!</span>` : ""}${referenceErrorCount ? `<span class="badge sketch-reference-error-badge" title="参照エラー">参照!${referenceErrorCount}</span>` : ""}${duplicateCount ? `<span class="badge sketch-duplicate-badge">重複${duplicateCount}</span>` : ""}<span class="badge">${count}</span></span>` +
           visibilityButton +
           (isRoot ? "" : `<button class="sketchRenameBtn icon-small-btn" data-id="${sketch.id}" title="名前変更" aria-label="名前変更">Aa</button><button class="sketchDeleteBtn icon-small-btn" data-id="${sketch.id}" title="スケッチ削除" aria-label="スケッチ削除"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3M7 7l1 13h8l1-13"/></svg></button>`) +
           `</div>`
@@ -7043,7 +7201,8 @@
     const fixedPoints = model.points.filter((point) => isActiveSketchElement(point) && point.fixed);
     const constraintRows = listedConstraints.map(({ constraint, index }, displayIndex) => {
       const duplicate = constraintIsRedundant(constraint);
-      return `<div class="item constraint-item constraint-list-row ${duplicate ? "duplicate" : ""}" data-idx="${index}"><span>${displayIndex + 1}. ${constraint.name}${duplicate ? `<span class="badge constraint-duplicate-badge">重複</span>` : ""}</span>` +
+      const referenceError = referenceConstraintErrorInfo(constraint);
+      return `<div class="item constraint-item constraint-list-row ${duplicate ? "duplicate" : ""} ${referenceError ? "reference-error" : ""}" data-idx="${index}" title="${escapeHtml(referenceError || "")}"><span>${displayIndex + 1}. ${constraint.name}${referenceError ? `<span class="badge constraint-reference-error-badge">参照エラー</span>` : ""}${duplicate ? `<span class="badge constraint-duplicate-badge">重複</span>` : ""}</span>` +
         `<button data-idx="${index}" class="removeConstraintBtn" title="削除" aria-label="削除" data-tooltip="削除">` +
         `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3M7 7l1 13h8l1-13"/></svg>` +
         `</button></div>`;
@@ -7296,7 +7455,7 @@
 
   function commitReferenceConstraint(type, constraint, referenceSketchId, sketchId = activeSketchId()) {
     if (!constraint || !isReferenceSourceSketchId(referenceSketchId, sketchId)) {
-      const msg = "先祖または兄弟スケッチのみ参照できます";
+      const msg = "先祖または兄弟サブツリーのみ参照できます";
       setHint(msg, "error");
       log(msg);
       return false;
@@ -7511,13 +7670,13 @@
   function splitConstraintOperands(operands) {
     return {
       active: operands.filter((operand) => operand.relation === "active"),
-      reference: operands.filter((operand) => operand.relation === "ancestor" || operand.relation === "sibling"),
+      reference: operands.filter((operand) => operand.relation === "ancestor" || operand.relation === "sibling" || operand.relation === "sibling-descendant"),
     };
   }
 
   function referenceResolutionFromOperands(type, operands) {
     const { active, reference } = splitConstraintOperands(operands);
-    if (active.length !== 1 || reference.length !== 1) return { error: "参照拘束はアクティブスケッチ側1つと先祖/兄弟側1つを選択してください" };
+    if (active.length !== 1 || reference.length !== 1) return { error: "参照拘束はアクティブスケッチ側1つと先祖/兄弟サブツリー側1つを選択してください" };
     return constraintResolutionFromSubjectAndReference(type, subjectFromOperand(active[0]), referenceTargetFromOperand(reference[0]));
   }
 
@@ -7547,12 +7706,12 @@
     const { active, reference } = splitConstraintOperands(cleanOperands);
     if (reference.length > 0) {
       if (cleanOperands.length < 2 || active.length === 0) return null;
-      if (cleanOperands.length !== 2) return { error: "参照拘束はアクティブスケッチ側と先祖/兄弟側を1つずつ選択してください" };
+      if (cleanOperands.length !== 2) return { error: "参照拘束はアクティブスケッチ側と先祖/兄弟サブツリー側を1つずつ選択してください" };
       const resolution = referenceResolutionFromOperands(type, cleanOperands);
       if (type === "distance" && resolution?.target) return { ...resolution, action: "place-dimension", operands: cleanOperands };
       return resolution?.constraint ? { ...resolution, action: "commit", operands: cleanOperands } : resolution;
     }
-    if (active.length !== cleanOperands.length) return { error: "拘束対象はアクティブスケッチ、または先祖/兄弟スケッチだけを選択できます" };
+    if (active.length !== cleanOperands.length) return { error: "拘束対象はアクティブスケッチ、または先祖/兄弟サブツリーだけを選択できます" };
     const sketchIds = [...new Set(cleanOperands.map((operand) => operand.sketchId))];
     if (sketchIds.length > 1) return { error: "別スケッチ同士は通常拘束できません" };
     if (type === "distance") {
@@ -7578,7 +7737,7 @@
       return { error: "アクティブスケッチ側の対象を選択してください" };
     }
     if (!referenceTarget || !referenceSketchId) {
-      return { error: "先祖または兄弟スケッチのみ参照できます" };
+      return { error: "先祖または兄弟サブツリーのみ参照できます" };
     }
     if (wouldCreateReferenceCycle(subjectSketchId, referenceSketchId)) {
       return { error: "スケッチ間の参照が循環するため追加できません" };
@@ -8537,7 +8696,7 @@
   function hitReferenceTarget(x, y) {
     const threshold = 7 / viewport.scale;
     const pointThreshold = 10 / viewport.scale;
-    const allowedSketches = new Set([...ancestorSketchIds(), ...siblingSketchesOf(activeSketch()).map((sketch) => sketch.id)]);
+    const allowedSketches = new Set(referenceSourceSketchIds());
     if (allowedSketches.size === 0) return null;
     for (let i = model.points.length - 1; i >= 0; i--) {
       const point = model.points[i];
@@ -10788,6 +10947,133 @@
           strokeWidth: sketchStrokeWidth(line),
           color: constraintStatusColor(line),
           rowHasSiblingClass: document.querySelector('.sketch-item[data-id="S2"]')?.classList.contains("sibling-visible") || false,
+        };
+      },
+      resetForSiblingSubtreeReference() {
+        resetModelState();
+        setAppMode("geometry");
+        const parentSketchId = "S10";
+        const siblingSketchId = "S2";
+        const siblingChildId = "S3";
+        const siblingGrandchildId = "S4";
+        const unrelatedSketchId = "S9";
+        const active = sketchById(DEFAULT_SKETCH_ID);
+        active.parentSketchId = parentSketchId;
+        model.sketches.push({ id: parentSketchId, name: "Sketch-P", parentSketchId: ROOT_SKETCH_ID, kind: "sketch", visible: true });
+        model.sketches.push({ id: siblingSketchId, name: "Sketch-S", parentSketchId, kind: "sketch", visible: true });
+        model.sketches.push({ id: siblingChildId, name: "Sketch-S-1", parentSketchId: siblingSketchId, kind: "sketch", visible: true });
+        model.sketches.push({ id: siblingGrandchildId, name: "Sketch-S-1-1", parentSketchId: siblingChildId, kind: "sketch", visible: true });
+        model.sketches.push({ id: unrelatedSketchId, name: "Sketch-U", parentSketchId: ROOT_SKETCH_ID, kind: "sketch", visible: true });
+
+        model.activeSketchId = DEFAULT_SKETCH_ID;
+        const activePoint = addPoint(45, 70, false, "explicit");
+        model.activeSketchId = siblingSketchId;
+        addLine(addPoint(-80, 0, true, "endpoint"), addPoint(80, 0, true, "endpoint"));
+        model.activeSketchId = siblingChildId;
+        addLine(addPoint(-80, 20, true, "endpoint"), addPoint(80, 20, true, "endpoint"));
+        model.activeSketchId = siblingGrandchildId;
+        const referenceLine = addLine(addPoint(-80, 40, true, "endpoint"), addPoint(80, 40, true, "endpoint"));
+        model.activeSketchId = unrelatedSketchId;
+        addLine(addPoint(-80, -40, true, "endpoint"), addPoint(80, -40, true, "endpoint"));
+        model.activeSketchId = DEFAULT_SKETCH_ID;
+        refreshReferenceConstraintValidity();
+        fitAllGeometryToViewport(190);
+        updateUI();
+        draw();
+        const rect = canvas.getBoundingClientRect();
+        const screenPoint = (point) => {
+          const screen = worldToCanvasScreen(point);
+          return { x: rect.left + screen.x, y: rect.top + screen.y };
+        };
+        return {
+          activePoint: screenPoint(activePoint),
+          referenceLine: screenPoint({ x: 45, y: 40 }),
+          relations: Object.fromEntries([parentSketchId, siblingSketchId, siblingChildId, siblingGrandchildId, unrelatedSketchId].map((id) => [id, sketchRelationToActive(id)])),
+          visible: Object.fromEntries([parentSketchId, siblingSketchId, siblingChildId, siblingGrandchildId, unrelatedSketchId].map((id) => [id, isVisibleSketchId(id)])),
+          rowClasses: Object.fromEntries([siblingSketchId, siblingChildId, siblingGrandchildId].map((id) => [id, document.querySelector(`.sketch-item[data-id="${id}"]`)?.classList.contains("sibling-visible") || false])),
+          referenceLineId: referenceLine.id,
+        };
+      },
+      siblingSubtreeVisibilityState() {
+        return Object.fromEntries(["S2", "S3", "S4"].map((id) => [id, {
+          preferenceVisible: sketchById(id)?.visible !== false,
+          effectiveVisible: isVisibleSketchId(id),
+        }]));
+      },
+      moveSiblingSubtreeReferenceLine(dy) {
+        const line = model.lines.find((item) => elementSketchId(item) === "S4");
+        if (!line) return null;
+        line.p1.y += dy;
+        line.p2.y += dy;
+        const result = solveReferenceDependentSketches("S4");
+        refreshConstraintAnalysis();
+        updateUI();
+        draw();
+        const point = model.points.find((item) => elementSketchId(item) === DEFAULT_SKETCH_ID && isExplicitPoint(item));
+        return {
+          success: result.success,
+          dependentSketchIds: result.results.map((entry) => entry.sketchId),
+          point: point ? { x: point.x, y: point.y } : null,
+          line: { p1: { x: line.p1.x, y: line.p1.y }, p2: { x: line.p2.x, y: line.p2.y } },
+        };
+      },
+      deleteSketchForTest(sketchId) {
+        return deleteSketch(sketchId, false);
+      },
+      referenceDependencyOrderCase() {
+        resetModelState();
+        setAppMode("geometry");
+        const parentSketchId = "S10";
+        const siblingSketchId = "S2";
+        const sourceSketchId = "S4";
+        const childSketchId = "S5";
+        sketchById(DEFAULT_SKETCH_ID).parentSketchId = parentSketchId;
+        model.sketches.push({ id: parentSketchId, name: "Sketch-P", parentSketchId: ROOT_SKETCH_ID, kind: "sketch", visible: true });
+        model.sketches.push({ id: siblingSketchId, name: "Sketch-S", parentSketchId, kind: "sketch", visible: true });
+        model.sketches.push({ id: sourceSketchId, name: "Sketch-S-1", parentSketchId: siblingSketchId, kind: "sketch", visible: true });
+        model.sketches.push({ id: childSketchId, name: "Sketch-1-1", parentSketchId: DEFAULT_SKETCH_ID, kind: "sketch", visible: true });
+        model.activeSketchId = sourceSketchId;
+        const sourceLine = addLine(addPoint(-50, 0, true, "endpoint"), addPoint(50, 0, true, "endpoint"));
+        model.activeSketchId = DEFAULT_SKETCH_ID;
+        const activePoint = addPoint(0, 15, false, "explicit");
+        const first = markReferenceConstraint(new PointOnLineConstraint(activePoint, sourceLine), sourceSketchId, DEFAULT_SKETCH_ID);
+        model.constraints.push(first);
+        model.activeSketchId = childSketchId;
+        const childPoint = addPoint(0, 30, false, "explicit");
+        const second = markReferenceConstraint(new CoincidentConstraint(childPoint, activePoint), DEFAULT_SKETCH_ID, childSketchId);
+        model.constraints.push(second);
+        model.activeSketchId = DEFAULT_SKETCH_ID;
+        refreshReferenceConstraintValidity();
+        sourceLine.p1.y = 25;
+        sourceLine.p2.y = 25;
+        const result = solveReferenceDependentSketches(sourceSketchId);
+        return {
+          order: result.results.map((entry) => entry.sketchId),
+          activePointY: activePoint.y,
+          childPointY: childPoint.y,
+        };
+      },
+      cyclicReferenceLoadCase() {
+        resetModelState();
+        setAppMode("geometry");
+        model.sketches.push({ id: "S2", name: "Sketch-2", parentSketchId: ROOT_SKETCH_ID, kind: "sketch", visible: true });
+        model.activeSketchId = DEFAULT_SKETCH_ID;
+        const p1 = addPoint(0, 0, false, "explicit");
+        model.activeSketchId = "S2";
+        const p2 = addPoint(20, 0, false, "explicit");
+        const forward = markReferenceConstraint(new CoincidentConstraint(p1, p2), "S2", DEFAULT_SKETCH_ID);
+        const reverse = markReferenceConstraint(new CoincidentConstraint(p2, p1), DEFAULT_SKETCH_ID, "S2");
+        model.constraints.push(forward, reverse);
+        const serialized = serializeModel();
+        serialized.activeSketchId = DEFAULT_SKETCH_ID;
+        loadModelData(serialized);
+        refreshConstraintAnalysis();
+        updateUI();
+        return {
+          total: model.constraints.length,
+          operational: model.constraints.filter(constraintIsOperational).length,
+          invalid: [...invalidReferenceConstraints.values()],
+          badges: document.querySelectorAll(".sketch-reference-error-badge, .constraint-reference-error-badge").length,
         };
       },
       sketchVisibilityState(sketchId) {

@@ -321,6 +321,36 @@ test("non-active sketch visibility can be toggled and is persisted", async ({ pa
   expect(state).toEqual({ preferenceVisible: true, effectiveVisible: true, serializedVisible: true, buttonPressed: "true" });
 });
 
+test("sibling subtrees are visible and their visibility follows the branch hierarchy", async ({ page }) => {
+  await page.goto(`${baseUrl}/index.html?test=1`);
+  await page.waitForFunction(() => window.__cadTest);
+
+  const setup = await page.evaluate(() => window.__cadTest.resetForSiblingSubtreeReference());
+  expect(setup.relations).toEqual({ S10: "ancestor", S2: "sibling", S3: "sibling-descendant", S4: "sibling-descendant", S9: "hidden" });
+  expect(setup.visible).toEqual({ S10: true, S2: true, S3: true, S4: true, S9: false });
+  expect(setup.rowClasses).toEqual({ S2: true, S3: true, S4: true });
+
+  await page.click('.sketchVisibilityBtn[data-id="S2"]');
+  let state = await page.evaluate(() => window.__cadTest.siblingSubtreeVisibilityState());
+  expect(state).toEqual({
+    S2: { preferenceVisible: false, effectiveVisible: false },
+    S3: { preferenceVisible: true, effectiveVisible: false },
+    S4: { preferenceVisible: true, effectiveVisible: false },
+  });
+
+  await page.click('.sketchVisibilityBtn[data-id="S2"]');
+  state = await page.evaluate(() => window.__cadTest.siblingSubtreeVisibilityState());
+  expect(state.S2.effectiveVisible).toBe(true);
+  expect(state.S3.effectiveVisible).toBe(true);
+  expect(state.S4.effectiveVisible).toBe(true);
+
+  await page.click('.sketchVisibilityBtn[data-id="S3"]');
+  state = await page.evaluate(() => window.__cadTest.siblingSubtreeVisibilityState());
+  expect(state.S2.effectiveVisible).toBe(true);
+  expect(state.S3.effectiveVisible).toBe(false);
+  expect(state.S4.effectiveVisible).toBe(false);
+});
+
 test("blank canvas click clears a selected dimension without leaving the constraint command", async ({ page }) => {
   await page.goto(`${baseUrl}/index.html?test=1`);
   await page.waitForFunction(() => window.__cadTest);
@@ -391,6 +421,48 @@ test("sibling geometry can be referenced without being moved by the active sketc
   expect(state.siblingLine.p2.y).toBeCloseTo(25, 6);
   expect(state.activePoint.y).toBeCloseTo(25, 5);
   expect(state.reverseWouldCycle).toBe(true);
+});
+
+test("sibling descendants are read-only reference sources and protect their branch from deletion", async ({ page }) => {
+  await page.goto(`${baseUrl}/index.html?test=1`);
+  await page.waitForFunction(() => window.__cadTest);
+
+  const points = await page.evaluate(() => window.__cadTest.resetForSiblingSubtreeReference());
+  await page.click('[data-constraint="coincident"]');
+  await page.mouse.click(points.referenceLine.x, points.referenceLine.y);
+  await page.mouse.click(points.activePoint.x, points.activePoint.y);
+
+  let state = await page.evaluate(() => window.__cadTest.referencePointLineState());
+  expect(state.count).toBe(1);
+  expect(state.errors[0]).toBeLessThan(1e-5);
+  expect(state.referenceSketchIds).toEqual(["S4"]);
+  expect(state.sketchIds).toEqual(["S1"]);
+
+  state = await page.evaluate(() => window.__cadTest.moveSiblingSubtreeReferenceLine(25));
+  expect(state.success).toBe(true);
+  expect(state.dependentSketchIds).toEqual(["S1"]);
+  expect(state.line.p1.y).toBeCloseTo(65, 6);
+  expect(state.line.p2.y).toBeCloseTo(65, 6);
+  expect(state.point.y).toBeCloseTo(65, 5);
+
+  expect(await page.evaluate(() => window.__cadTest.deleteSketchForTest("S2"))).toBe(false);
+  expect(await page.evaluate(() => window.__cadTest.sketchVisibilityState("S4").preferenceVisible)).toBe(true);
+});
+
+test("reference dependents solve in topological order and cyclic loaded references are disabled", async ({ page }) => {
+  await page.goto(`${baseUrl}/index.html?test=1`);
+  await page.waitForFunction(() => window.__cadTest);
+
+  const order = await page.evaluate(() => window.__cadTest.referenceDependencyOrderCase());
+  expect(order.order).toEqual(["S1", "S5"]);
+  expect(order.activePointY).toBeCloseTo(25, 5);
+  expect(order.childPointY).toBeCloseTo(25, 5);
+
+  const cycle = await page.evaluate(() => window.__cadTest.cyclicReferenceLoadCase());
+  expect(cycle.total).toBe(2);
+  expect(cycle.operational).toBe(1);
+  expect(cycle.invalid).toEqual(["循環参照"]);
+  expect(cycle.badges).toBeGreaterThan(0);
 });
 
 test("construction extension clearance uses only the dimension-line component", async ({ page }) => {

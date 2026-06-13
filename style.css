@@ -832,6 +832,13 @@ body.geometry-mode .mode-overlay-sheet #renamePresentationSheetBtn {
   font-weight: 800;
 }
 
+.sketch-reference-error-badge,
+.constraint-reference-error-badge {
+  background: #fef2f2;
+  color: #b91c1c;
+  font-weight: 800;
+}
+
 .sketch-duplicate-badge,
 .constraint-duplicate-badge {
   background: #fee2e2;
@@ -893,6 +900,11 @@ body.geometry-mode .mode-overlay-sheet #renamePresentationSheetBtn {
 .constraint-item.duplicate {
   border-color: rgba(220, 38, 38, 0.35);
   background: rgba(254, 226, 226, 0.55);
+}
+
+.constraint-item.reference-error {
+  border-color: rgba(220, 38, 38, 0.42);
+  background: rgba(254, 242, 242, 0.78);
 }
 
 .removeConstraintBtn,
