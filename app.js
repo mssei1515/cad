@@ -7163,6 +7163,7 @@
       if (referenceTarget.kind === "primitive") return new PointOnCircleConstraint(subject.point, referenceTarget.primitive);
     }
     if (subject.kind === "line") {
+      if (referenceTarget.kind === "point") return new PointOnLineConstraint(referenceTarget.point, subject.line);
       if (referenceTarget.kind === "line") return new CollinearConstraint(subject.line, referenceTarget.line);
     }
     if (subject.kind === "primitive") {
@@ -9280,6 +9281,36 @@
       return;
     }
 
+    if (mode === "offset") {
+      clearSnap();
+      hoveredSketchIdentity = null;
+      if (pendingCommand?.type === "offset-value") {
+        draw();
+        return;
+      }
+      if (offsetSource) {
+        pointerPreview = p;
+        hoveredPoint = null;
+        hoveredEndpointPoint = null;
+        hoveredLine = offsetSource instanceof Line ? offsetSource : null;
+        hoveredCircle = offsetSource instanceof Circle ? offsetSource : null;
+        hoveredArc = offsetSource instanceof Arc ? offsetSource : null;
+      } else {
+        const nextLine = hitLine(p.x, p.y);
+        const nextCircle = nextLine ? null : hitCircle(p.x, p.y);
+        const nextArc = nextLine || nextCircle ? null : hitArc(p.x, p.y);
+        hoveredPoint = null;
+        hoveredEndpointPoint = null;
+        hoveredLine = nextLine;
+        hoveredCircle = nextCircle;
+        hoveredArc = nextArc;
+      }
+      hoveredArcEndpoint = null;
+      hoveredDimensionConstraint = null;
+      draw();
+      return;
+    }
+
     if (pendingConstraintCommand && !dragSession) {
       const referenceTarget = hitReferenceTarget(p.x, p.y);
       const nextSketchIdentity = hitSketchIdentityElement(p.x, p.y);
@@ -9389,36 +9420,6 @@
         // Pointer capture may already be released by the browser.
       }
       setHint("画面移動を終了しました");
-      return;
-    }
-
-    if (mode === "offset") {
-      clearSnap();
-      hoveredSketchIdentity = null;
-      if (pendingCommand?.type === "offset-value") {
-        draw();
-        return;
-      }
-      if (offsetSource) {
-        pointerPreview = p;
-        hoveredPoint = null;
-        hoveredEndpointPoint = null;
-        hoveredLine = offsetSource instanceof Line ? offsetSource : null;
-        hoveredCircle = offsetSource instanceof Circle ? offsetSource : null;
-        hoveredArc = offsetSource instanceof Arc ? offsetSource : null;
-      } else {
-        const nextLine = hitLine(p.x, p.y);
-        const nextCircle = nextLine ? null : hitCircle(p.x, p.y);
-        const nextArc = nextLine || nextCircle ? null : hitArc(p.x, p.y);
-        hoveredPoint = null;
-        hoveredEndpointPoint = null;
-        hoveredLine = nextLine;
-        hoveredCircle = nextCircle;
-        hoveredArc = nextArc;
-      }
-      hoveredArcEndpoint = null;
-      hoveredDimensionConstraint = null;
-      draw();
       return;
     }
 
@@ -10491,12 +10492,54 @@
       },
       offsetUiState() {
         const constraints = model.constraints.filter((constraint) => constraint instanceof OffsetConstraint);
+        const preview = offsetSource && pointerPreview ? offsetDistanceFromPointer(offsetSource, pointerPreview) : null;
         return {
           pendingType: pendingCommand?.type || null,
           lineCount: model.lines.length,
           constraintCount: constraints.length,
           targets: constraints.map((constraint) => constraint.target),
           toolActive: document.getElementById("toolOffset")?.classList.contains("active"),
+          previewDistance: preview?.distance ?? null,
+          previewSign: preview?.sign ?? null,
+        };
+      },
+      resetForReferencePointLineCoincidence() {
+        resetModelState();
+        setAppMode("geometry");
+        const parentPoint = addPoint(-45, 0, false, "explicit");
+        const parentLineP1 = addPoint(20, -20, false, "endpoint");
+        const parentLineP2 = addPoint(80, -20, false, "endpoint");
+        const parentLine = addLine(parentLineP1, parentLineP2);
+        const childSketchId = "S2";
+        const parentSketchId = activeSketchId();
+        model.sketches.push({ id: childSketchId, name: "Sketch-1-1", parentSketchId, kind: "sketch" });
+        model.activeSketchId = childSketchId;
+        const childLineP1 = addPoint(-80, 35, false, "endpoint");
+        const childLineP2 = addPoint(-10, 35, false, "endpoint");
+        const childLine = addLine(childLineP1, childLineP2);
+        const childPoint = addPoint(50, 30, false, "explicit");
+        fitAllGeometryToViewport(190);
+        updateUI();
+        draw();
+        const rect = canvas.getBoundingClientRect();
+        const screenPoint = (point) => {
+          const screen = worldToCanvasScreen(point);
+          return { x: rect.left + screen.x, y: rect.top + screen.y };
+        };
+        return {
+          parentPoint: screenPoint(parentPoint),
+          parentLine: screenPoint({ x: 50, y: -20 }),
+          childLine: screenPoint({ x: -45, y: 35 }),
+          childPoint: screenPoint(childPoint),
+        };
+      },
+      referencePointLineState() {
+        const constraints = model.constraints.filter((constraint) => constraint instanceof PointOnLineConstraint && constraint.reference);
+        return {
+          count: constraints.length,
+          errors: constraints.map((constraint) => Math.abs(signedPointLineDistance(constraint.point, constraint.line))),
+          referenceSketchIds: constraints.map((constraint) => constraint.referenceSketchId),
+          sketchIds: constraints.map((constraint) => constraintSketchId(constraint)),
         };
       },
       sidebarHighlightIds() {

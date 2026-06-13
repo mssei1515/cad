@@ -248,6 +248,11 @@ test("offset tool collects a distance and creates a constrained copy", async ({ 
 
   await page.click("#toolOffset");
   await page.mouse.click(points.source.x, points.source.y);
+  await page.mouse.move(points.side.x, points.side.y);
+  const previewState = await page.evaluate(() => window.__cadTest.offsetUiState());
+  expect(previewState.pendingType).toBe(null);
+  expect(previewState.previewDistance).toBeCloseTo(35, 3);
+  await page.screenshot({ path: "test-results/offset-pointer-preview.png", fullPage: true });
   await page.mouse.click(points.side.x, points.side.y);
   const input = page.locator("#dimensionValueInput");
   expect(await input.isVisible()).toBe(true);
@@ -260,6 +265,31 @@ test("offset tool collects a distance and creates a constrained copy", async ({ 
   expect(state.constraintCount).toBe(1);
   expect(state.targets).toEqual([25]);
   expect(state.toolActive).toBe(true);
+});
+
+test("ancestor point and active line can receive a coincidence constraint in either role", async ({ page }) => {
+  await page.goto(`${baseUrl}/index.html?test=1`);
+  await page.waitForFunction(() => window.__cadTest);
+
+  let points = await page.evaluate(() => window.__cadTest.resetForReferencePointLineCoincidence());
+  await page.click('[data-constraint="coincident"]');
+  await page.mouse.click(points.parentPoint.x, points.parentPoint.y);
+  await page.mouse.click(points.childLine.x, points.childLine.y);
+  let state = await page.evaluate(() => window.__cadTest.referencePointLineState());
+  expect(state.count).toBe(1);
+  expect(state.errors[0]).toBeLessThan(1e-5);
+  expect(state.referenceSketchIds).toEqual(["S1"]);
+  expect(state.sketchIds).toEqual(["S2"]);
+
+  points = await page.evaluate(() => window.__cadTest.resetForReferencePointLineCoincidence());
+  await page.click('[data-constraint="coincident"]');
+  await page.mouse.click(points.childPoint.x, points.childPoint.y);
+  await page.mouse.click(points.parentLine.x, points.parentLine.y);
+  state = await page.evaluate(() => window.__cadTest.referencePointLineState());
+  expect(state.count).toBe(1);
+  expect(state.errors[0]).toBeLessThan(1e-5);
+  expect(state.referenceSketchIds).toEqual(["S1"]);
+  expect(state.sketchIds).toEqual(["S2"]);
 });
 
 test("construction extension clearance uses only the dimension-line component", async ({ page }) => {
