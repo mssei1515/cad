@@ -790,12 +790,20 @@
 
     static nullspaceActivity(A, tolerance = 1e-9, activityTolerance = 1e-7) {
       const n = A[0]?.length || 0;
-      if (n === 0) return { active: [], rank: 0, freeColumns: [] };
-      if (A.length === 0) return { active: Array(n).fill(true), rank: 0, freeColumns: Array.from({ length: n }, (_, i) => i) };
+      if (n === 0) return { active: [], rank: 0, freeColumns: [], basis: [] };
+      if (A.length === 0) {
+        const basis = Array.from({ length: n }, (_, i) => {
+          const vector = Array(n).fill(0);
+          vector[i] = 1;
+          return vector;
+        });
+        return { active: Array(n).fill(true), rank: 0, freeColumns: Array.from({ length: n }, (_, i) => i), basis };
+      }
       const { rows, pivotCols, rank } = LinearAlgebra.reducedRowEchelon(A, tolerance);
       const pivotSet = new Set(pivotCols);
       const freeColumns = [];
       const active = Array(n).fill(false);
+      const basis = [];
       for (let c = 0; c < n; c++) {
         if (!pivotSet.has(c)) {
           freeColumns.push(c);
@@ -803,11 +811,15 @@
         }
       }
       for (const freeCol of freeColumns) {
+        const vector = Array(n).fill(0);
+        vector[freeCol] = 1;
         for (let r = 0; r < pivotCols.length; r++) {
+          vector[pivotCols[r]] = -rows[r][freeCol];
           if (Math.abs(rows[r][freeCol]) > activityTolerance) active[pivotCols[r]] = true;
         }
+        basis.push(vector);
       }
-      return { active, rank, freeColumns };
+      return { active, rank, freeColumns, basis };
     }
 
     static nullspaceBasis(A, tolerance = 1e-9) {
@@ -1127,12 +1139,25 @@
       const unstable = errorNorm > errorTolerance;
       const J = unstable || vars.length === 0 ? [] : this.computeJacobianForConstraints(vars, F, constraints);
       const activity = unstable
-        ? { active: Array(vars.length).fill(false), rank: 0, freeColumns: [] }
+        ? { active: Array(vars.length).fill(false), rank: 0, freeColumns: [], basis: [] }
         : F.length === 0
-          ? { active: Array(vars.length).fill(true), rank: 0, freeColumns: Array.from({ length: vars.length }, (_, i) => i) }
+          ? {
+              active: Array(vars.length).fill(true),
+              rank: 0,
+              freeColumns: Array.from({ length: vars.length }, (_, i) => i),
+              basis: Array.from({ length: vars.length }, (_, i) => {
+                const vector = Array(vars.length).fill(0);
+                vector[i] = 1;
+                return vector;
+              }),
+            }
           : LinearAlgebra.nullspaceActivity(J, rankTolerance, activityTolerance);
       const variableFreedom = new Map();
-      for (let i = 0; i < vars.length; i++) variableFreedom.set(vars[i].object, { ...(variableFreedom.get(vars[i].object) || {}), [vars[i].prop]: Boolean(activity.active[i]) });
+      const variableIndex = new Map();
+      for (let i = 0; i < vars.length; i++) {
+        variableFreedom.set(vars[i].object, { ...(variableFreedom.get(vars[i].object) || {}), [vars[i].prop]: Boolean(activity.active[i]) });
+        variableIndex.set(vars[i].object, { ...(variableIndex.get(vars[i].object) || {}), [vars[i].prop]: i });
+      }
       return {
         stable: !unstable,
         errorNorm,
@@ -1141,6 +1166,8 @@
         freeVariableCount: activity.freeColumns.length,
         variables: vars,
         variableFreedom,
+        variableIndex,
+        nullspaceBasis: activity.basis || [],
       };
     }
   }

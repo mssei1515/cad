@@ -149,6 +149,7 @@
   const MIN_ARC_LENGTH = MIN_LINE_LENGTH;
   const CONSTRAINT_STATUS_COLORS = {
     full: "#111827",
+    support: "#0f766e",
     under: "#f59e0b",
     conflict: "#dc2626",
   };
@@ -1273,18 +1274,36 @@
     return Boolean(analysis.variableFreedom.get(object)?.[prop]);
   }
 
+  function variableDeltaInBasis(object, prop, basis, analysis) {
+    const index = analysis.variableIndex?.get(object)?.[prop];
+    return index >= 0 ? basis[index] || 0 : 0;
+  }
+
+  function lineSupportHasConstraintFreedom(line, analysis) {
+    const normal = lineSupportNormal(line);
+    for (const basis of analysis.nullspaceBasis || []) {
+      const norm = Math.max(1, Math.sqrt(basis.reduce((sum, value) => sum + value * value, 0)));
+      const p1Normal = normal.x * variableDeltaInBasis(line.p1, "x", basis, analysis) + normal.y * variableDeltaInBasis(line.p1, "y", basis, analysis);
+      const p2Normal = normal.x * variableDeltaInBasis(line.p2, "x", basis, analysis) + normal.y * variableDeltaInBasis(line.p2, "y", basis, analysis);
+      if (Math.abs(p1Normal) > 1e-7 * norm || Math.abs(p2Normal) > 1e-7 * norm) return true;
+    }
+    return false;
+  }
+
   function classifyConstraintStatus(item, kind, analysis) {
     if (!analysis.stable) return "conflict";
     if (kind === "point") return pointHasConstraintFreedom(item, analysis) ? "under" : "full";
-    if (kind === "line") return pointHasConstraintFreedom(item.p1, analysis) || pointHasConstraintFreedom(item.p2, analysis) ? "under" : "full";
+    if (kind === "line") {
+      const hasEndpointFreedom = pointHasConstraintFreedom(item.p1, analysis) || pointHasConstraintFreedom(item.p2, analysis);
+      if (!hasEndpointFreedom) return "full";
+      return lineSupportHasConstraintFreedom(item, analysis) ? "under" : "support";
+    }
     if (kind === "circle") return pointHasConstraintFreedom(item.center, analysis) || objectHasConstraintFreedom(item, "radiusValue", analysis) ? "under" : "full";
     if (kind === "arc") {
-      return pointHasConstraintFreedom(item.center, analysis) ||
-        objectHasConstraintFreedom(item, "radiusValue", analysis) ||
-        objectHasConstraintFreedom(item, "startAngle", analysis) ||
-        objectHasConstraintFreedom(item, "endAngle", analysis)
-        ? "under"
-        : "full";
+      const supportFreedom = pointHasConstraintFreedom(item.center, analysis) || objectHasConstraintFreedom(item, "radiusValue", analysis);
+      const endpointFreedom = objectHasConstraintFreedom(item, "startAngle", analysis) || objectHasConstraintFreedom(item, "endAngle", analysis);
+      if (!supportFreedom && !endpointFreedom) return "full";
+      return !supportFreedom && endpointFreedom ? "support" : "under";
     }
     return "full";
   }
@@ -1331,6 +1350,7 @@
     }
     const summary = {
       full: items.filter((status) => status === "full").length,
+      support: items.filter((status) => status === "support").length,
       under: items.filter((status) => status === "under").length,
       conflict: items.filter((status) => status === "conflict").length,
       total: items.length,
@@ -1396,14 +1416,15 @@
 
   function constraintStatusBadge(status) {
     if (status === "conflict") return "矛盾";
+    if (status === "support") return "支持位置拘束";
     if (status === "under") return "未拘束";
     return "完全拘束";
   }
 
   function constraintSummaryText() {
     if (!constraintAnalysisState) refreshConstraintAnalysis();
-    const s = constraintAnalysisState?.summary || { full: 0, under: 0, conflict: 0 };
-    return `完全拘束: ${s.full} / 未拘束: ${s.under} / 矛盾: ${s.conflict}${constraintDuplicateSummary()}`;
+    const s = constraintAnalysisState?.summary || { full: 0, support: 0, under: 0, conflict: 0 };
+    return `完全拘束: ${s.full} / 支持位置拘束: ${s.support} / 未拘束: ${s.under} / 矛盾: ${s.conflict}${constraintDuplicateSummary()}`;
   }
 
   function addPoint(x, y, fixed = false, kind = "explicit") {
@@ -1546,7 +1567,7 @@
   function offsetDraftGeometry(source, distance, sign) {
     if (!source || !Number.isFinite(distance) || distance <= 0) return null;
     if (source instanceof Line) {
-      const normal = lineNormal(source);
+      const normal = lineSupportNormal(source);
       const dx = normal.x * sign * distance;
       const dy = normal.y * sign * distance;
       const p1 = new Point("OP1", source.p1.x + dx, source.p1.y + dy, false, "endpoint");
@@ -1605,7 +1626,7 @@
     };
     let offset = null;
     if (source instanceof Line) {
-      const normal = lineNormal(source);
+      const normal = lineSupportNormal(source);
       const dx = normal.x * sign * distance;
       const dy = normal.y * sign * distance;
       const p1 = addPoint(source.p1.x + dx, source.p1.y + dy, false, "endpoint");
@@ -3399,6 +3420,12 @@
   function lineNormal(line) {
     const u = lineUnit(line);
     return { x: -u.y, y: u.x };
+  }
+
+  function lineSupportNormal(line) {
+    if (line.orientationHint === "horizontal") return { x: 0, y: 1 };
+    if (line.orientationHint === "vertical") return { x: -1, y: 0 };
+    return lineNormal(line);
   }
 
   function linesAreParallel(l1, l2) {
@@ -6991,7 +7018,7 @@
     if (!(constraint instanceof OffsetConstraint)) return;
     const { source, offset, target, sign } = constraint;
     if (source instanceof Line && offset instanceof Line) {
-      const normal = lineNormal(source);
+      const normal = lineSupportNormal(source);
       const dx = normal.x * sign * target;
       const dy = normal.y * sign * target;
       offset.p1.x = source.p1.x + dx;
@@ -10501,6 +10528,57 @@
           toolActive: document.getElementById("toolOffset")?.classList.contains("active"),
           previewDistance: preview?.distance ?? null,
           previewSign: preview?.sign ?? null,
+          lineOffsetDeltas: constraints
+            .filter((constraint) => constraint.source instanceof Line)
+            .map((constraint) => ({
+              x: (constraint.offset.p1.x + constraint.offset.p2.x - constraint.source.p1.x - constraint.source.p2.x) / 2,
+              y: (constraint.offset.p1.y + constraint.offset.p2.y - constraint.source.p1.y - constraint.source.p2.y) / 2,
+            })),
+        };
+      },
+      resetForOffsetDirection() {
+        resetModelState();
+        setAppMode("geometry");
+        const p1 = addPoint(0, 60, false, "endpoint");
+        const p2 = addPoint(0, -60, false, "endpoint");
+        const line = addLine(p1, p2);
+        pushModelConstraint(new VerticalConstraint(line));
+        solveAndRefresh("offset direction test");
+        fitAllGeometryToViewport(220);
+        draw();
+        const rect = canvas.getBoundingClientRect();
+        const screenPoint = (point) => {
+          const screen = worldToCanvasScreen(point);
+          return { x: rect.left + screen.x, y: rect.top + screen.y };
+        };
+        return { source: screenPoint({ x: 0, y: 0 }), side: screenPoint({ x: 35, y: 0 }) };
+      },
+      resetForSupportConstraintStatus() {
+        resetModelState();
+        setAppMode("geometry");
+
+        const anchor = addPoint(-60, -40, true, "explicit");
+        const supportLine = addLine(addPoint(-100, -40, false, "endpoint"), addPoint(-20, -40, false, "endpoint"));
+        pushModelConstraint(new HorizontalConstraint(supportLine));
+        pushModelConstraint(new PointOnLineConstraint(anchor, supportLine));
+
+        const underLine = addLine(addPoint(20, 0, false, "endpoint"), addPoint(100, 0, false, "endpoint"));
+        pushModelConstraint(new HorizontalConstraint(underLine));
+
+        const fullLine = addLine(addPoint(-100, 50, true, "endpoint"), addPoint(-20, 50, true, "endpoint"));
+        const supportArc = addArc(addPoint(65, 60, true, "center"), 30, Math.PI, Math.PI * 1.5);
+        pushModelConstraint(new RadiusConstraint(supportArc, 30));
+
+        solveSketchAndDescendants(activeSketchId(), snapshotModelState());
+        refreshConstraintAnalysis();
+        fitAllGeometryToViewport(150);
+        draw();
+        return {
+          supportLine: { status: constraintStatusOf(supportLine), color: constraintStatusColor(supportLine) },
+          underLine: { status: constraintStatusOf(underLine), color: constraintStatusColor(underLine) },
+          fullLine: { status: constraintStatusOf(fullLine), color: constraintStatusColor(fullLine) },
+          supportArc: { status: constraintStatusOf(supportArc), color: constraintStatusColor(supportArc) },
+          summary: constraintAnalysisState.summary,
         };
       },
       resetForReferencePointLineCoincidence() {

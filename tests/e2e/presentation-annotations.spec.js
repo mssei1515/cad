@@ -267,6 +267,38 @@ test("offset tool collects a distance and creates a constrained copy", async ({ 
   expect(state.toolActive).toBe(true);
 });
 
+test("offset stays on the cursor side for a direction-reversed constrained line", async ({ page }) => {
+  await page.goto(`${baseUrl}/index.html?test=1`);
+  await page.waitForFunction(() => window.__cadTest);
+  const points = await page.evaluate(() => window.__cadTest.resetForOffsetDirection());
+
+  await page.click("#toolOffset");
+  await page.mouse.click(points.source.x, points.source.y);
+  await page.mouse.move(points.side.x, points.side.y);
+  await page.mouse.click(points.side.x, points.side.y);
+  const input = page.locator("#dimensionValueInput");
+  await input.fill("20");
+  await input.press("Enter");
+
+  const state = await page.evaluate(() => window.__cadTest.offsetUiState());
+  expect(state.lineOffsetDeltas).toHaveLength(1);
+  expect(state.lineOffsetDeltas[0].x).toBeCloseTo(20, 5);
+  expect(state.lineOffsetDeltas[0].y).toBeCloseTo(0, 5);
+});
+
+test("lines and arcs with fixed support geometry use the support constraint color", async ({ page }) => {
+  await page.goto(`${baseUrl}/index.html?test=1`);
+  await page.waitForFunction(() => window.__cadTest);
+  const state = await page.evaluate(() => window.__cadTest.resetForSupportConstraintStatus());
+
+  expect(state.supportLine).toEqual({ status: "support", color: "#0f766e" });
+  expect(state.supportArc).toEqual({ status: "support", color: "#0f766e" });
+  expect(state.underLine.status).toBe("under");
+  expect(state.fullLine.status).toBe("full");
+  expect(state.summary.support).toBeGreaterThanOrEqual(2);
+  await page.screenshot({ path: "test-results/support-constraint-status.png", fullPage: true });
+});
+
 test("ancestor point and active line can receive a coincidence constraint in either role", async ({ page }) => {
   await page.goto(`${baseUrl}/index.html?test=1`);
   await page.waitForFunction(() => window.__cadTest);
