@@ -345,6 +345,30 @@ test("ancestor point and active line can receive a coincidence constraint in eit
   expect(state.sketchIds).toEqual(["S2"]);
 });
 
+test("sibling geometry can be referenced without being moved by the active sketch", async ({ page }) => {
+  await page.goto(`${baseUrl}/index.html?test=1`);
+  await page.waitForFunction(() => window.__cadTest);
+
+  const points = await page.evaluate(() => window.__cadTest.resetForSiblingPointLineReference());
+  await page.click('[data-constraint="coincident"]');
+  await page.mouse.click(points.siblingLine.x, points.siblingLine.y);
+  await page.mouse.click(points.activePoint.x, points.activePoint.y);
+
+  let state = await page.evaluate(() => window.__cadTest.referencePointLineState());
+  expect(state.count).toBe(1);
+  expect(state.errors[0]).toBeLessThan(1e-5);
+  expect(state.referenceSketchIds).toEqual(["S2"]);
+  expect(state.sketchIds).toEqual(["S1"]);
+
+  state = await page.evaluate(() => window.__cadTest.moveSiblingReferenceLine(25));
+  expect(state.success).toBe(true);
+  expect(state.dependentSketchIds).toEqual(["S1"]);
+  expect(state.siblingLine.p1.y).toBeCloseTo(25, 6);
+  expect(state.siblingLine.p2.y).toBeCloseTo(25, 6);
+  expect(state.activePoint.y).toBeCloseTo(25, 5);
+  expect(state.reverseWouldCycle).toBe(true);
+});
+
 test("construction extension clearance uses only the dimension-line component", async ({ page }) => {
   await page.goto(`${baseUrl}/index.html?test=1`);
   await page.waitForFunction(() => window.__cadTest);

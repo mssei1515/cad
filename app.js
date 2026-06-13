@@ -857,6 +857,33 @@
     return siblingSketchesOf(base).some((sketch) => sketch.id === sketchId);
   }
 
+  function isReferenceSourceSketchId(referenceSketchId, subjectSketchId = activeSketchId()) {
+    return isAncestorSketchId(referenceSketchId, subjectSketchId) || isSiblingSketchId(referenceSketchId, subjectSketchId);
+  }
+
+  function referenceSketchTargets(sketchId) {
+    return [...new Set(model.constraints
+      .filter((constraint) => constraint.enabled !== false && constraint.reference && constraintSketchId(constraint) === sketchId && constraint.referenceSketchId)
+      .map((constraint) => constraint.referenceSketchId))];
+  }
+
+  function referencePathExists(fromSketchId, toSketchId) {
+    const pending = [fromSketchId];
+    const visited = new Set();
+    while (pending.length > 0) {
+      const current = pending.pop();
+      if (current === toSketchId) return true;
+      if (!current || visited.has(current)) continue;
+      visited.add(current);
+      pending.push(...referenceSketchTargets(current));
+    }
+    return false;
+  }
+
+  function wouldCreateReferenceCycle(subjectSketchId, referenceSketchId) {
+    return subjectSketchId === referenceSketchId || referencePathExists(referenceSketchId, subjectSketchId);
+  }
+
   function sketchDepth(sketch) {
     let depth = 0;
     const visited = new Set();
@@ -1029,6 +1056,7 @@
   function operandRelationForSketch(sketchId) {
     if (isEditableSketchId(sketchId)) return "active";
     if (isAncestorSketchId(sketchId)) return "ancestor";
+    if (isSiblingSketchId(sketchId)) return "sibling";
     return null;
   }
 
@@ -1242,22 +1270,22 @@
     return `子スケッチ破綻: error=${errorText}, reason=${state.reason}`;
   }
 
-  function descendantErrorSummary(descendant) {
-    const failures = descendant?.results?.filter((entry) => entry.status === "error") || [];
+  function dependentErrorSummary(dependent) {
+    const failures = dependent?.results?.filter((entry) => entry.status === "error") || [];
     if (failures.length === 0) return "";
     const first = failures[0];
-    return ` / 子スケッチ破綻: ${sketchName(first.sketchId)} (error=${first.result.errorNorm.toExponential(3)})`;
+    return ` / 参照スケッチ破綻: ${sketchName(first.sketchId)} (error=${first.result.errorNorm.toExponential(3)})`;
   }
 
   function solveAndRefresh(label = "自動solve") {
-    const solved = solveSketchAndDescendants(activeSketchId());
+    const solved = solveSketchAndDependents(activeSketchId());
     const result = solved.result;
     const analysis = refreshConstraintAnalysis();
-    const hasChildError = solved.descendant?.success === false;
+    const hasDependentError = solved.dependent?.success === false;
     const hasDuplicateConstraints = (constraintRedundancyState?.count || 0) > 0;
-    const statusKind = solved.success && analysis.analysis.stable && !hasChildError && !hasDuplicateConstraints ? "normal" : "error";
-    const childText = solved.descendant?.results?.length > 0 ? `, child=${solved.descendant.results.length}` : "";
-    setHint(`${label}: success=${solved.success}, error=${result.errorNorm.toExponential(2)}, iter=${result.iterations}${childText}${descendantErrorSummary(solved.descendant)} / ${constraintSummaryText()}`, statusKind);
+    const statusKind = solved.success && analysis.analysis.stable && !hasDependentError && !hasDuplicateConstraints ? "normal" : "error";
+    const dependentText = solved.dependent?.results?.length > 0 ? `, dependent=${solved.dependent.results.length}` : "";
+    setHint(`${label}: success=${solved.success}, error=${result.errorNorm.toExponential(2)}, iter=${result.iterations}${dependentText}${dependentErrorSummary(solved.dependent)} / ${constraintSummaryText()}`, statusKind);
     updateUI();
     draw();
     if (solved.success && !historyRestoring) recordHistory(label);
@@ -1395,7 +1423,7 @@
   }
 
   function isReferenceHoverElement(item) {
-    return Boolean(pendingConstraintCommand && item && !isActiveSketchElement(item) && isAncestorSketchId(elementSketchId(item)));
+    return Boolean(pendingConstraintCommand && item && !isActiveSketchElement(item) && isReferenceSourceSketchId(elementSketchId(item)));
   }
 
   function isPendingReferenceTarget(item) {
@@ -3227,8 +3255,12 @@
   function addConstraintIfMissing(constraint, matches, options = {}) {
     if (!constraint) return false;
     if (model.constraints.some((c) => c.enabled !== false && matches(c))) return false;
-    if (options.referenceSketchId) markReferenceConstraint(constraint, options.referenceSketchId);
-    pushModelConstraint(constraint, options.sketchId || activeSketchId());
+    const sketchId = options.sketchId || activeSketchId();
+    if (options.referenceSketchId) {
+      if (!isReferenceSourceSketchId(options.referenceSketchId, sketchId) || wouldCreateReferenceCycle(sketchId, options.referenceSketchId)) return false;
+      markReferenceConstraint(constraint, options.referenceSketchId, sketchId);
+    }
+    pushModelConstraint(constraint, sketchId);
     const duplicate = redundantConstraintInfo(constraint, constraintSketchId(constraint));
     if (duplicate?.redundant) {
       model.constraints = model.constraints.filter((item) => item !== constraint);
@@ -3248,7 +3280,7 @@
     const target = snapTargetElement(snap);
     if (!target || isActiveSketchElement(target)) return null;
     const sketchId = elementSketchId(target);
-    return isAncestorSketchId(sketchId) ? sketchId : null;
+    return isReferenceSourceSketchId(sketchId) ? sketchId : null;
   }
 
   function snapCanCreateConstraint(snap) {
@@ -4235,32 +4267,40 @@
     return solveSketchById(session?.sketchId || activeSketchId(), extra);
   }
 
-  function solveDescendantSketches(rootSketchId) {
+  function solveReferenceDependentSketches(rootSketchId) {
     const results = [];
-    const changedSketches = new Set([rootSketchId]);
-    const descendants = descendantSketchIds(rootSketchId);
-    for (const sketchId of descendants) clearSketchSolveState(sketchId);
-    for (const sketchId of descendants) {
-      const needsSolve = model.constraints.some(
-        (constraint) => constraint.enabled !== false && constraint.reference && constraintSketchId(constraint) === sketchId && changedSketches.has(constraint.referenceSketchId),
-      );
-      if (!needsSolve) continue;
-      const result = solveSketchById(sketchId);
-      normalizeArcSweeps();
-      if (resultIsAccepted(result)) {
-        setSketchSolveOk(sketchId, result, rootSketchId);
-        results.push({ sketchId, result, status: "ok" });
-      } else {
-        setSketchSolveError(sketchId, result, rootSketchId);
-        results.push({ sketchId, result, status: "error" });
+    const pendingSources = [rootSketchId];
+    const visitedSources = new Set();
+    const solvedDependents = new Set();
+    while (pendingSources.length > 0) {
+      const sourceSketchId = pendingSources.shift();
+      if (!sourceSketchId || visitedSources.has(sourceSketchId)) continue;
+      visitedSources.add(sourceSketchId);
+      const dependents = [...new Set(model.constraints
+        .filter((constraint) => constraint.enabled !== false && constraint.reference && constraint.referenceSketchId === sourceSketchId)
+        .map((constraint) => constraintSketchId(constraint))
+        .filter((sketchId) => sketchId && sketchId !== rootSketchId))];
+      for (const sketchId of dependents) {
+        if (solvedDependents.has(sketchId)) continue;
+        solvedDependents.add(sketchId);
+        clearSketchSolveState(sketchId);
+        const result = solveSketchById(sketchId);
+        normalizeArcSweeps();
+        if (resultIsAccepted(result)) {
+          setSketchSolveOk(sketchId, result, rootSketchId);
+          results.push({ sketchId, result, status: "ok" });
+        } else {
+          setSketchSolveError(sketchId, result, rootSketchId);
+          results.push({ sketchId, result, status: "error" });
+        }
+        pendingSources.push(sketchId);
       }
-      changedSketches.add(sketchId);
     }
     const failed = results.find((entry) => entry.status === "error");
     return { success: !failed, sketchId: failed?.sketchId || null, result: failed?.result || null, results };
   }
 
-  function solveSketchAndDescendants(sketchId = activeSketchId(), rollbackState = null) {
+  function solveSketchAndDependents(sketchId = activeSketchId(), rollbackState = null) {
     clearSketchSolveState(sketchId);
     const result = solveSketchById(sketchId);
     normalizeArcSweeps();
@@ -4271,15 +4311,15 @@
       } else {
         setSketchSolveError(sketchId, result, sketchId);
       }
-      return { success: false, sketchId, result, descendant: { success: true, results: [] } };
+      return { success: false, sketchId, result, dependent: { success: true, results: [] } };
     }
     setSketchSolveOk(sketchId, result, sketchId);
-    const descendant = solveDescendantSketches(sketchId);
-    return { success: true, sketchId, result, descendant };
+    const dependent = solveReferenceDependentSketches(sketchId);
+    return { success: true, sketchId, result, dependent };
   }
 
   function solveElementSketchAndDescendants(element, rollbackState = null) {
-    return solveSketchAndDescendants(elementSketchId(element), rollbackState);
+    return solveSketchAndDependents(elementSketchId(element), rollbackState);
   }
 
   function localSolveContextFromSeeds(seeds, sketchId = activeSketchId()) {
@@ -6379,7 +6419,7 @@
       const previousTarget = constraint.target;
       constraint.target = target.kind === "angle" ? (value * Math.PI) / 180 : value;
       preconditionNewConstraint(constraint);
-      const solved = withTemporarySolveStepNorm(solveStepNormForConstraint(constraint), () => solveSketchAndDescendants(sketchId || constraintSketchId(constraint), snapshot));
+      const solved = withTemporarySolveStepNorm(solveStepNormForConstraint(constraint), () => solveSketchAndDependents(sketchId || constraintSketchId(constraint), snapshot));
       const result = solved.result;
       if (!solved.success || result.errorNorm > CONSTRAINT_ACCEPT_ERROR) {
         restoreModelState(snapshot);
@@ -6624,7 +6664,7 @@
 
     clearInteractionForSketchChange();
     constraintAnalysisState = null;
-    solveSketchAndDescendants(activeSketchId());
+    solveSketchAndDependents(activeSketchId());
     refreshConstraintAnalysis();
     updateUI();
     draw();
@@ -7173,7 +7213,7 @@
     pushModelConstraint(constraint);
     preconditionNewConstraint(constraint);
 
-    const solved = withTemporarySolveStepNorm(solveStepNorm, () => solveSketchAndDescendants(constraintSketchId(constraint), snapshot));
+    const solved = withTemporarySolveStepNorm(solveStepNorm, () => solveSketchAndDependents(constraintSketchId(constraint), snapshot));
     const result = solved.result;
     const collapse = findLineCollapseAfterConstraint(constraint, snapshot, constraintSketchId(constraint));
     const duplicate = solved.success && result.errorNorm <= CONSTRAINT_ACCEPT_ERROR && !collapse ? redundantConstraintInfo(constraint, constraintSketchId(constraint)) : null;
@@ -7215,8 +7255,14 @@
   }
 
   function commitReferenceConstraint(type, constraint, referenceSketchId, sketchId = activeSketchId()) {
-    if (!constraint || !isAncestorSketchId(referenceSketchId, sketchId)) {
-      const msg = "親または祖先スケッチのみ参照できます";
+    if (!constraint || !isReferenceSourceSketchId(referenceSketchId, sketchId)) {
+      const msg = "先祖または兄弟スケッチのみ参照できます";
+      setHint(msg, "error");
+      log(msg);
+      return false;
+    }
+    if (wouldCreateReferenceCycle(sketchId, referenceSketchId)) {
+      const msg = "スケッチ間の参照が循環するため追加できません";
       setHint(msg, "error");
       log(msg);
       return false;
@@ -7226,7 +7272,7 @@
     const solveStepNorm = solveStepNormForConstraint(constraint);
     pushModelConstraint(constraint, sketchId);
     preconditionNewConstraint(constraint);
-    const solved = withTemporarySolveStepNorm(solveStepNorm, () => solveSketchAndDescendants(sketchId, snapshot));
+    const solved = withTemporarySolveStepNorm(solveStepNorm, () => solveSketchAndDependents(sketchId, snapshot));
     const result = solved.result;
     const collapse = findLineCollapseAfterConstraint(constraint, snapshot, sketchId);
     const duplicate = solved.success && result.errorNorm <= CONSTRAINT_ACCEPT_ERROR && !collapse ? redundantConstraintInfo(constraint, sketchId) : null;
@@ -7425,14 +7471,14 @@
   function splitConstraintOperands(operands) {
     return {
       active: operands.filter((operand) => operand.relation === "active"),
-      ancestor: operands.filter((operand) => operand.relation === "ancestor"),
+      reference: operands.filter((operand) => operand.relation === "ancestor" || operand.relation === "sibling"),
     };
   }
 
   function referenceResolutionFromOperands(type, operands) {
-    const { active, ancestor } = splitConstraintOperands(operands);
-    if (active.length !== 1 || ancestor.length !== 1) return { error: "参照拘束はアクティブスケッチ側1つと親/祖先側1つを選択してください" };
-    return constraintResolutionFromSubjectAndReference(type, subjectFromOperand(active[0]), referenceTargetFromOperand(ancestor[0]));
+    const { active, reference } = splitConstraintOperands(operands);
+    if (active.length !== 1 || reference.length !== 1) return { error: "参照拘束はアクティブスケッチ側1つと先祖/兄弟側1つを選択してください" };
+    return constraintResolutionFromSubjectAndReference(type, subjectFromOperand(active[0]), referenceTargetFromOperand(reference[0]));
   }
 
   function normalConstraintFromOperands(type, operands) {
@@ -7458,15 +7504,15 @@
 
   function resolveConstraintIntent(type, operands) {
     const cleanOperands = operands.filter(Boolean);
-    const { active, ancestor } = splitConstraintOperands(cleanOperands);
-    if (ancestor.length > 0) {
+    const { active, reference } = splitConstraintOperands(cleanOperands);
+    if (reference.length > 0) {
       if (cleanOperands.length < 2 || active.length === 0) return null;
-      if (cleanOperands.length !== 2) return { error: "参照拘束はアクティブスケッチ側と親/祖先側を1つずつ選択してください" };
+      if (cleanOperands.length !== 2) return { error: "参照拘束はアクティブスケッチ側と先祖/兄弟側を1つずつ選択してください" };
       const resolution = referenceResolutionFromOperands(type, cleanOperands);
       if (type === "distance" && resolution?.target) return { ...resolution, action: "place-dimension", operands: cleanOperands };
       return resolution?.constraint ? { ...resolution, action: "commit", operands: cleanOperands } : resolution;
     }
-    if (active.length !== cleanOperands.length) return { error: "拘束対象はアクティブスケッチ、または親/祖先スケッチだけを選択できます" };
+    if (active.length !== cleanOperands.length) return { error: "拘束対象はアクティブスケッチ、または先祖/兄弟スケッチだけを選択できます" };
     const sketchIds = [...new Set(cleanOperands.map((operand) => operand.sketchId))];
     if (sketchIds.length > 1) return { error: "別スケッチ同士は通常拘束できません" };
     if (type === "distance") {
@@ -7481,7 +7527,7 @@
   function referenceSketchIdFromPair(subject, referenceTarget) {
     const subjectSketchId = referenceSubjectSketchId(subject);
     if (!subjectSketchId || !referenceTarget?.sketchId) return null;
-    return isAncestorSketchId(referenceTarget.sketchId, subjectSketchId) ? referenceTarget.sketchId : null;
+    return isReferenceSourceSketchId(referenceTarget.sketchId, subjectSketchId) ? referenceTarget.sketchId : null;
   }
 
   function constraintResolutionFromSubjectAndReference(type, subject, referenceTarget) {
@@ -7492,7 +7538,10 @@
       return { error: "アクティブスケッチ側の対象を選択してください" };
     }
     if (!referenceTarget || !referenceSketchId) {
-      return { error: "親または祖先スケッチのみ参照できます" };
+      return { error: "先祖または兄弟スケッチのみ参照できます" };
+    }
+    if (wouldCreateReferenceCycle(subjectSketchId, referenceSketchId)) {
+      return { error: "スケッチ間の参照が循環するため追加できません" };
     }
     if (type === "distance") {
       const target = referenceDistanceTargetForSubject(subject, referenceTarget);
@@ -8448,7 +8497,7 @@
   function hitReferenceTarget(x, y) {
     const threshold = 7 / viewport.scale;
     const pointThreshold = 10 / viewport.scale;
-    const allowedSketches = new Set(ancestorSketchIds());
+    const allowedSketches = new Set([...ancestorSketchIds(), ...siblingSketchesOf(activeSketch()).map((sketch) => sketch.id)]);
     if (allowedSketches.size === 0) return null;
     for (let i = model.points.length - 1; i >= 0; i--) {
       const point = model.points[i];
@@ -9505,11 +9554,11 @@
       ? `${result.guided ? "guided local" : "local"} vars=${result.variableCount}, constraints=${result.constraintCount}${Number.isFinite(result.freeDof) ? `, dof=${result.freeDof}` : ""}`
       : "global";
     const fallback = result.fallback ? ` fallback from local error=${result.localErrorNorm?.toExponential(2)}` : "";
-    const descendantResult = solveDescendantSketches(dragSession.sketchId || activeSketchId());
-    const childText = descendantResult.results.length > 0 ? `, child=${descendantResult.results.length}` : "";
-    const childErrorText = descendantErrorSummary(descendantResult);
-    setHint(`${dragLabel(dragSession)}中: ${scope}, error=${error.toExponential(2)}, iter=${result.iterations}${fallback}${childText}${childErrorText}`, descendantResult.success ? "normal" : "error");
-    if (!descendantResult.success) updateUI();
+    const dependentResult = solveReferenceDependentSketches(dragSession.sketchId || activeSketchId());
+    const dependentText = dependentResult.results.length > 0 ? `, dependent=${dependentResult.results.length}` : "";
+    const dependentErrorText = dependentErrorSummary(dependentResult);
+    setHint(`${dragLabel(dragSession)}中: ${scope}, error=${error.toExponential(2)}, iter=${result.iterations}${fallback}${dependentText}${dependentErrorText}`, dependentResult.success ? "normal" : "error");
+    if (!dependentResult.success) updateUI();
     draw();
   });
 
@@ -9600,10 +9649,10 @@
       draw();
       return;
     }
-    const descendantResult = solveDescendantSketches(session.sketchId || activeSketchId());
+    const dependentResult = solveReferenceDependentSketches(session.sketchId || activeSketchId());
     const analysis = refreshConstraintAnalysis();
-    const childErrorText = descendantErrorSummary(descendantResult);
-    setHint(`${completedLabel}完了: success=${result.success}, error=${result.errorNorm.toExponential(2)}, iter=${result.iterations}${childErrorText} / ${constraintSummaryText()}`, analysis.analysis.stable && descendantResult.success ? "normal" : "error");
+    const dependentErrorText = dependentErrorSummary(dependentResult);
+    setHint(`${completedLabel}完了: success=${result.success}, error=${result.errorNorm.toExponential(2)}, iter=${result.iterations}${dependentErrorText} / ${constraintSummaryText()}`, analysis.analysis.stable && dependentResult.success ? "normal" : "error");
     updateUI();
     draw();
     recordHistory(`${completedLabel}ドラッグ`);
@@ -10231,7 +10280,7 @@
     const snapshot = snapshotModelState();
     const nextFixed = !points.every((point) => point.fixed);
     for (const point of points) point.fixed = nextFixed;
-    const solved = solveSketchAndDescendants(sketchId, snapshot);
+    const solved = solveSketchAndDependents(sketchId, snapshot);
     const fixedResult = solved.result;
     if (!solved.success || fixedResult.errorNorm > CONSTRAINT_ACCEPT_ERROR) {
       restoreModelState(snapshot);
@@ -10559,7 +10608,7 @@
         offsets[1].target = 18;
         offsets[2].target = 12;
         offsets.forEach(preconditionNewConstraint);
-        solveSketchAndDescendants(activeSketchId(), snapshotModelState());
+        solveSketchAndDependents(activeSketchId(), snapshotModelState());
         const measurements = offsets.map((constraint) => measuredConstraintTargetValue(constraint));
         const sourceRadii = [sourceCircle.radius(), sourceArc.radius()];
         const serialized = serializeModel();
@@ -10697,7 +10746,7 @@
         const supportArc = addArc(addPoint(65, 60, true, "center"), 30, Math.PI, Math.PI * 1.5);
         pushModelConstraint(new RadiusConstraint(supportArc, 30));
 
-        solveSketchAndDescendants(activeSketchId(), snapshotModelState());
+        solveSketchAndDependents(activeSketchId(), snapshotModelState());
         refreshConstraintAnalysis();
         fitAllGeometryToViewport(150);
         draw();
@@ -10737,6 +10786,48 @@
           parentLine: screenPoint({ x: 50, y: -20 }),
           childLine: screenPoint({ x: -45, y: 35 }),
           childPoint: screenPoint(childPoint),
+        };
+      },
+      resetForSiblingPointLineReference() {
+        resetModelState();
+        setAppMode("geometry");
+        const activePoint = addPoint(50, 35, false, "explicit");
+        const siblingSketchId = "S2";
+        model.sketches.push({ id: siblingSketchId, name: "Sketch-2", parentSketchId: ROOT_SKETCH_ID, kind: "sketch" });
+        model.activeSketchId = siblingSketchId;
+        const lineP1 = addPoint(10, 0, true, "endpoint");
+        const lineP2 = addPoint(90, 0, true, "endpoint");
+        const siblingLine = addLine(lineP1, lineP2);
+        model.activeSketchId = DEFAULT_SKETCH_ID;
+        fitAllGeometryToViewport(190);
+        updateUI();
+        draw();
+        const rect = canvas.getBoundingClientRect();
+        const screenPoint = (point) => {
+          const screen = worldToCanvasScreen(point);
+          return { x: rect.left + screen.x, y: rect.top + screen.y };
+        };
+        return {
+          activePoint: screenPoint(activePoint),
+          siblingLine: screenPoint({ x: 50, y: 0 }),
+        };
+      },
+      moveSiblingReferenceLine(dy) {
+        const siblingLine = model.lines.find((line) => elementSketchId(line) === "S2");
+        if (!siblingLine) return null;
+        siblingLine.p1.y += dy;
+        siblingLine.p2.y += dy;
+        const result = solveReferenceDependentSketches("S2");
+        refreshConstraintAnalysis();
+        updateUI();
+        draw();
+        const activePoint = model.points.find((point) => elementSketchId(point) === DEFAULT_SKETCH_ID && isExplicitPoint(point));
+        return {
+          success: result.success,
+          dependentSketchIds: result.results.map((entry) => entry.sketchId),
+          activePoint: activePoint ? { x: activePoint.x, y: activePoint.y } : null,
+          siblingLine: { p1: { x: siblingLine.p1.x, y: siblingLine.p1.y }, p2: { x: siblingLine.p2.x, y: siblingLine.p2.y } },
+          reverseWouldCycle: wouldCreateReferenceCycle("S2", DEFAULT_SKETCH_ID),
         };
       },
       referencePointLineState() {
