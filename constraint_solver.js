@@ -205,6 +205,14 @@
     return ((point.x - anchor.x) * -dy + (point.y - anchor.y) * dx) / len;
   }
 
+  function signedPointDirectedLineDistance(point, line) {
+    const dx = line.dx();
+    const dy = line.dy();
+    const len = hypot2(dx, dy);
+    if (len < 1e-12) return 0;
+    return ((point.x - line.p1.x) * -dy + (point.y - line.p1.y) * dx) / len;
+  }
+
   class LineMinimumLengthConstraint extends Constraint {
     constructor(line, target) {
       super(`最小線長 ${line.id}`, 1);
@@ -262,7 +270,7 @@
       this.offset = offset;
       this.target = target;
       if (source instanceof Line && offset instanceof Line) {
-        const current = signedPointLineDistance(offset.p1, source);
+        const current = signedPointDirectedLineDistance(offset.p1, source);
         this.sign = sign || (current < 0 ? -1 : 1);
       } else {
         const current = radiusOf(offset) - radiusOf(source);
@@ -283,7 +291,7 @@
           this.offset.dx() - sx,
           this.offset.dy() - sy,
           dx * tx + dy * ty,
-          signedPointLineDistance(this.offset.p1, this.source) * this.sign - this.target,
+          signedPointDirectedLineDistance(this.offset.p1, this.source) * this.sign - this.target,
         ];
       }
 
@@ -1188,6 +1196,7 @@
     OffsetConstraint,
     LineAngleConstraint,
     signedPointLineDistance,
+    signedPointDirectedLineDistance,
     CoincidentConstraint,
     ArcEndpointCoincidentConstraint,
     ArcEndpointArcEndpointCoincidentConstraint,

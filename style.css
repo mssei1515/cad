@@ -671,7 +671,7 @@ body.geometry-mode .mode-overlay-sheet #renamePresentationSheetBtn {
 .sketch-item {
   position: relative;
   display: grid;
-  grid-template-columns: auto 1fr auto auto;
+  grid-template-columns: auto 1fr auto auto auto;
   gap: 0;
   align-items: center;
   padding: 0;
@@ -689,7 +689,8 @@ body.geometry-mode .mode-overlay-sheet #renamePresentationSheetBtn {
   background: rgba(37, 99, 235, 0.24);
 }
 
-.sketch-item.ancestor-visible:not(.active) {
+.sketch-item.ancestor-visible:not(.active),
+.sketch-item.sibling-visible:not(.active) {
   background: rgba(156, 163, 175, 0.2);
 }
 
@@ -731,6 +732,11 @@ body.geometry-mode .mode-overlay-sheet #renamePresentationSheetBtn {
 .sketch-overlay .sketchActivateBtn {
   background: transparent;
   box-shadow: none;
+}
+
+.sketchDeleteBtn svg {
+  width: 13px;
+  height: 13px;
 }
 
 .sketch-tree-gutter {

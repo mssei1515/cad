@@ -17,6 +17,7 @@
     OffsetConstraint,
     LineAngleConstraint,
     signedPointLineDistance,
+    signedPointDirectedLineDistance,
     CoincidentConstraint,
     ArcEndpointCoincidentConstraint,
     ArcEndpointArcEndpointCoincidentConstraint,
@@ -204,9 +205,6 @@
     root.name = root.name || ROOT_SKETCH_NAME;
     root.parentSketchId = null;
     root.kind = "root";
-    if (!model.sketches.some((sketch) => sketch.kind !== "root")) {
-      model.sketches.push({ id: DEFAULT_SKETCH_ID, name: DEFAULT_SKETCH_NAME, parentSketchId: ROOT_SKETCH_ID, kind: "sketch" });
-    }
     const ids = new Set(model.sketches.map((sketch) => sketch.id));
     for (const sketch of model.sketches) {
       if (sketch === root) continue;
@@ -854,6 +852,11 @@
     return model.sketches.filter((item) => item.id !== sketch.id && item.parentSketchId === sketch.parentSketchId);
   }
 
+  function isSiblingSketchId(sketchId, baseSketchId = activeSketchId()) {
+    const base = sketchById(baseSketchId);
+    return siblingSketchesOf(base).some((sketch) => sketch.id === sketchId);
+  }
+
   function sketchDepth(sketch) {
     let depth = 0;
     const visited = new Set();
@@ -958,7 +961,7 @@
 
   function isVisibleSketchId(sketchId) {
     const id = sketchId || activeSketchId();
-    return id === activeSketchId() || isAncestorSketchId(id) || descendantSketchIds(activeSketchId()).includes(id);
+    return id === activeSketchId() || isAncestorSketchId(id) || isSiblingSketchId(id) || descendantSketchIds(activeSketchId()).includes(id);
   }
 
   function isVisibleSketchElement(item) {
@@ -969,6 +972,7 @@
     const id = sketchId || activeSketchId();
     if (id === activeSketchId()) return "active";
     if (isAncestorSketchId(id)) return "ancestor";
+    if (isSiblingSketchId(id)) return "sibling";
     if (descendantSketchIds(activeSketchId()).includes(id)) return "descendant";
     return "hidden";
   }
@@ -1378,7 +1382,7 @@
 
   function sketchStrokeWidth(item) {
     const relation = sketchRelationOfElement(item);
-    if (relation === "ancestor" || relation === "descendant") return 1.8;
+    if (relation === "ancestor" || relation === "sibling" || relation === "descendant") return 1.8;
     if (relation === "active") return 2.6;
     return 0;
   }
@@ -1410,7 +1414,7 @@
   function sketchAlpha(item) {
     const relation = sketchRelationOfElement(item);
     if (relation === "active") return 1;
-    if (relation === "ancestor" || relation === "descendant") return 1;
+    if (relation === "ancestor" || relation === "sibling" || relation === "descendant") return 1;
     return 0;
   }
 
@@ -1556,7 +1560,7 @@
 
   function offsetDistanceFromPointer(source, pointer) {
     if (source instanceof Line) {
-      const signed = signedPointLineDistance(pointer, source);
+      const signed = signedPointDirectedLineDistance(pointer, source);
       return { distance: Math.abs(signed), sign: signed < 0 ? -1 : 1 };
     }
     const radial = hypot2(pointer.x - source.center.x, pointer.y - source.center.y);
@@ -1567,7 +1571,7 @@
   function offsetDraftGeometry(source, distance, sign) {
     if (!source || !Number.isFinite(distance) || distance <= 0) return null;
     if (source instanceof Line) {
-      const normal = lineSupportNormal(source);
+      const normal = lineNormal(source);
       const dx = normal.x * sign * distance;
       const dy = normal.y * sign * distance;
       const p1 = new Point("OP1", source.p1.x + dx, source.p1.y + dy, false, "endpoint");
@@ -1626,7 +1630,7 @@
     };
     let offset = null;
     if (source instanceof Line) {
-      const normal = lineSupportNormal(source);
+      const normal = lineNormal(source);
       const dx = normal.x * sign * distance;
       const dy = normal.y * sign * distance;
       const p1 = addPoint(source.p1.x + dx, source.p1.y + dy, false, "endpoint");
@@ -1832,6 +1836,7 @@
         offset: c.offset.id,
         target: c.target,
         sign: c.sign,
+        directionBasis: c.source instanceof Line ? "endpoint" : "radial",
         dimension: serializeDimension(c.dimension, targetFromConstraint(c)),
         enabled: c.enabled,
       };
@@ -2053,7 +2058,8 @@
       const source = lineById.get(String(data.source)) || primitiveById.get(String(data.source));
       const offset = lineById.get(String(data.offset)) || primitiveById.get(String(data.offset));
       if (!source || !offset) throw new Error(`オフセット対象 ${data.source}/${data.offset} が見つかりません`);
-      constraint = new OffsetConstraint(source, offset, Number(data.target), Number(data.sign) || null);
+      const savedSign = data.directionBasis === "endpoint" || data.directionBasis === "radial" ? Number(data.sign) || null : null;
+      constraint = new OffsetConstraint(source, offset, Number(data.target), savedSign);
     } else if (data.type === "lineAngle") {
       constraint = new LineAngleConstraint(line(data.line1), line(data.line2), Number(data.target), Number(data.startFlip) || 0, Number(data.endFlip) || 0);
     } else if (data.type === "coincident") {
@@ -5476,6 +5482,7 @@
   function sketchIdentityRelationLabel(sketchId) {
     const relation = sketchRelationToActive(sketchId);
     if (relation === "ancestor") return "祖先";
+    if (relation === "sibling") return "兄弟";
     if (relation === "descendant") return "子孫";
     return "";
   }
@@ -5483,6 +5490,7 @@
   function sketchIdentityRelationColor(sketchId) {
     const relation = sketchRelationToActive(sketchId);
     if (relation === "ancestor") return "#7c3aed";
+    if (relation === "sibling") return "#4338ca";
     if (relation === "descendant") return "#047857";
     return "#64748b";
   }
@@ -5490,6 +5498,7 @@
   function sketchIdentityRelationBackground(sketchId) {
     const relation = sketchRelationToActive(sketchId);
     if (relation === "ancestor") return "rgba(237, 233, 254, 0.96)";
+    if (relation === "sibling") return "rgba(224, 231, 255, 0.96)";
     if (relation === "descendant") return "rgba(209, 250, 229, 0.96)";
     return "rgba(241, 245, 249, 0.96)";
   }
@@ -6564,6 +6573,66 @@
     recordHistory("スケッチ名変更");
   }
 
+  function valueReferencesRemovedGeometry(value, removedIds, removedKeys) {
+    if (typeof value === "string") return removedIds.has(value) || removedKeys.has(value);
+    if (Array.isArray(value)) return value.some((item) => valueReferencesRemovedGeometry(item, removedIds, removedKeys));
+    if (value && typeof value === "object") return Object.values(value).some((item) => valueReferencesRemovedGeometry(item, removedIds, removedKeys));
+    return false;
+  }
+
+  function deleteSketch(sketchId, confirmFirst = true) {
+    if (rejectPresentationGeometryEdit("Sketch editing")) return false;
+    ensureSketchState();
+    const sketch = sketchById(sketchId);
+    if (!sketch || isRootSketch(sketch)) return false;
+
+    const sketchIds = new Set([sketch.id, ...descendantSketchIds(sketch.id)]);
+    const geometryCount = [...model.points, ...model.lines, ...model.circles, ...model.arcs].filter((item) => sketchIds.has(elementSketchId(item))).length;
+    if (confirmFirst && !window.confirm(`${sketch.name} と配下のスケッチを削除します。\n図形 ${geometryCount} 件も削除されます。`)) return false;
+
+    const pointSet = new Set(model.points.filter((point) => sketchIds.has(elementSketchId(point))));
+    const lineSet = new Set(model.lines.filter((line) => sketchIds.has(elementSketchId(line)) || pointSet.has(line.p1) || pointSet.has(line.p2)));
+    const circleSet = new Set(model.circles.filter((circle) => sketchIds.has(elementSketchId(circle)) || pointSet.has(circle.center)));
+    const arcSet = new Set(model.arcs.filter((arc) => sketchIds.has(elementSketchId(arc)) || pointSet.has(arc.center)));
+    const removedItems = [...pointSet, ...lineSet, ...circleSet, ...arcSet];
+    const removedIds = new Set(removedItems.map((item) => item.id));
+    const removedKeys = new Set(removedItems.map(presentationElementKey).filter(Boolean));
+
+    model.constraints = model.constraints.filter((constraint) => {
+      if (sketchIds.has(constraintSketchId(constraint)) || sketchIds.has(constraint.referenceSketchId)) return false;
+      return !constraintGraphNodes(constraint).some((node) => removedItems.includes(node));
+    });
+    model.lines = model.lines.filter((line) => !lineSet.has(line));
+    model.circles = model.circles.filter((circle) => !circleSet.has(circle));
+    model.arcs = model.arcs.filter((arc) => !arcSet.has(arc));
+    model.points = model.points.filter((point) => !pointSet.has(point));
+
+    for (const sheet of model.presentationSheets) {
+      if (Array.isArray(sheet.visibleGeometrySketchIds)) {
+        sheet.visibleGeometrySketchIds = sheet.visibleGeometrySketchIds.filter((id) => !sketchIds.has(id));
+      }
+      for (const key of Object.keys(sheet.elementStyles || {})) {
+        if (removedKeys.has(key)) delete sheet.elementStyles[key];
+      }
+      sheet.elements = (sheet.elements || []).filter((element) => !valueReferencesRemovedGeometry(element.geometryRefs, removedIds, removedKeys));
+    }
+
+    const fallbackId = sketch.parentSketchId && !sketchIds.has(sketch.parentSketchId) ? sketch.parentSketchId : ROOT_SKETCH_ID;
+    model.sketches = model.sketches.filter((item) => !sketchIds.has(item.id));
+    if (sketchIds.has(model.activeSketchId)) model.activeSketchId = sketchById(fallbackId)?.id || ROOT_SKETCH_ID;
+    for (const id of sketchIds) sketchSolveStates.delete(id);
+
+    clearInteractionForSketchChange();
+    constraintAnalysisState = null;
+    solveSketchAndDescendants(activeSketchId());
+    refreshConstraintAnalysis();
+    updateUI();
+    draw();
+    setHint(`${sketch.name} を削除しました`);
+    recordHistory("スケッチ削除");
+    return true;
+  }
+
   function createPresentationSheet() {
     ensurePresentationState();
     const id = `PS${presentationSheetSeq++}`;
@@ -6702,6 +6771,7 @@
         const isActive = sketch.id === activeSketchId();
         const isRoot = isRootSketch(sketch);
         const isAncestor = isAncestorSketchId(sketch.id);
+        const isSibling = isSiblingSketchId(sketch.id);
         const isDescendant = descendantSketchIds(activeSketchId()).includes(sketch.id);
         const visible = isVisibleSketchId(sketch.id);
         const solveError = sketchHasSolveError(sketch.id);
@@ -6716,11 +6786,11 @@
           ? `<span class="sketch-tree-gutter" aria-hidden="true">${segments.map((segment) => `<span class="tree-segment ${segment}"></span>`).join("")}</span>`
           : "";
         return (
-          `<div class="item sketch-item ${visible ? "visible" : ""} ${isRoot ? "root" : ""} ${isAncestor ? "ancestor-visible" : ""} ${isDescendant ? "descendant-visible" : ""} ${isActive ? "active" : ""} ${solveError ? "solve-error" : ""} ${hasChildren ? "has-children" : ""}" data-id="${sketch.id}" title="${escapeHtml(solveErrorTitle)}" style="--sketch-depth:${depth}">` +
+          `<div class="item sketch-item ${visible ? "visible" : ""} ${isRoot ? "root" : ""} ${isAncestor ? "ancestor-visible" : ""} ${isSibling ? "sibling-visible" : ""} ${isDescendant ? "descendant-visible" : ""} ${isActive ? "active" : ""} ${solveError ? "solve-error" : ""} ${hasChildren ? "has-children" : ""}" data-id="${sketch.id}" title="${escapeHtml(solveErrorTitle)}" style="--sketch-depth:${depth}">` +
           treeLines +
           `<button class="sketchActivateBtn" data-id="${sketch.id}" ${isActive ? "disabled" : ""}>${escapeHtml(sketch.name)}</button>` +
           `<span class="sketch-badges">${solveError ? `<span class="badge sketch-error-badge">!</span>` : ""}${duplicateCount ? `<span class="badge sketch-duplicate-badge">重複${duplicateCount}</span>` : ""}<span class="badge">${count}</span></span>` +
-          (isRoot ? "" : `<button class="sketchRenameBtn icon-small-btn" data-id="${sketch.id}" title="名前変更" aria-label="名前変更">Aa</button>`) +
+          (isRoot ? "" : `<button class="sketchRenameBtn icon-small-btn" data-id="${sketch.id}" title="名前変更" aria-label="名前変更">Aa</button><button class="sketchDeleteBtn icon-small-btn" data-id="${sketch.id}" title="スケッチ削除" aria-label="スケッチ削除"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3M7 7l1 13h8l1-13"/></svg></button>`) +
           `</div>`
         );
       })
@@ -6730,7 +6800,7 @@
     }
     for (const row of document.querySelectorAll(".sketch-item")) {
       row.addEventListener("click", (event) => {
-        if (event.target.closest(".sketchRenameBtn")) return;
+        if (event.target.closest(".sketchRenameBtn, .sketchDeleteBtn")) return;
         setActiveSketch(row.dataset.id);
       });
       row.addEventListener("mouseenter", () => {
@@ -6748,6 +6818,12 @@
       btn.addEventListener("click", (event) => {
         event.stopPropagation();
         renameSketch(btn.dataset.id);
+      });
+    }
+    for (const btn of document.querySelectorAll(".sketchDeleteBtn")) {
+      btn.addEventListener("click", (event) => {
+        event.stopPropagation();
+        deleteSketch(btn.dataset.id);
       });
     }
   }
@@ -7018,7 +7094,7 @@
     if (!(constraint instanceof OffsetConstraint)) return;
     const { source, offset, target, sign } = constraint;
     if (source instanceof Line && offset instanceof Line) {
-      const normal = lineSupportNormal(source);
+      const normal = lineNormal(source);
       const dx = normal.x * sign * target;
       const dy = normal.y * sign * target;
       offset.p1.x = source.p1.x + dx;
@@ -10536,13 +10612,14 @@
             })),
         };
       },
-      resetForOffsetDirection() {
+      resetForOffsetDirection(directionCase = "vertical") {
         resetModelState();
         setAppMode("geometry");
-        const p1 = addPoint(0, 60, false, "endpoint");
-        const p2 = addPoint(0, -60, false, "endpoint");
+        const horizontal = directionCase === "horizontal";
+        const p1 = addPoint(horizontal ? 60 : 0, horizontal ? 0 : 60, false, "endpoint");
+        const p2 = addPoint(horizontal ? -60 : 0, horizontal ? 0 : -60, false, "endpoint");
         const line = addLine(p1, p2);
-        pushModelConstraint(new VerticalConstraint(line));
+        pushModelConstraint(horizontal ? new HorizontalConstraint(line) : new VerticalConstraint(line));
         solveAndRefresh("offset direction test");
         fitAllGeometryToViewport(220);
         draw();
@@ -10551,7 +10628,58 @@
           const screen = worldToCanvasScreen(point);
           return { x: rect.left + screen.x, y: rect.top + screen.y };
         };
-        return { source: screenPoint({ x: 0, y: 0 }), side: screenPoint({ x: 35, y: 0 }) };
+        return {
+          source: screenPoint({ x: 0, y: 0 }),
+          side: screenPoint(horizontal ? { x: 0, y: 35 } : { x: 35, y: 0 }),
+          expectedAxis: horizontal ? "y" : "x",
+        };
+      },
+      resetForSketchDeletion() {
+        resetModelState();
+        setAppMode("geometry");
+        model.sketches.push({ id: "S2", name: "Sketch-2", parentSketchId: ROOT_SKETCH_ID, kind: "sketch" });
+        model.sketches.push({ id: "S3", name: "Sketch-2-1", parentSketchId: "S2", kind: "sketch" });
+        model.sketches.push({ id: "S4", name: "Sketch-3", parentSketchId: ROOT_SKETCH_ID, kind: "sketch" });
+        model.activeSketchId = "S2";
+        const p1 = addPoint(0, 0, false, "endpoint");
+        const p2 = addPoint(80, 0, false, "endpoint");
+        const line = addLine(p1, p2);
+        model.activeSketchId = "S3";
+        const center = addPoint(30, 30, false, "center");
+        const circle = addCircle(center, 20);
+        const sheet = activePresentationSheet();
+        sheet.elementStyles[presentationElementKey(line)] = { color: "#ef4444" };
+        sheet.elementStyles[presentationElementKey(circle)] = { color: "#22c55e" };
+        sheet.elements.push({ id: "PE-test", type: "leader", visible: true, geometryRefs: { target: presentationElementKey(line) }, style: {} });
+        model.activeSketchId = "S3";
+        const deleted = deleteSketch("S2", false);
+        return {
+          deleted,
+          sketchIds: model.sketches.map((sketch) => sketch.id),
+          activeSketchId: model.activeSketchId,
+          geometry: { points: model.points.length, lines: model.lines.length, circles: model.circles.length, arcs: model.arcs.length },
+          styleKeys: Object.keys(sheet.elementStyles),
+          presentationElementCount: sheet.elements.length,
+        };
+      },
+      resetForSiblingVisibility() {
+        resetModelState();
+        setAppMode("geometry");
+        model.sketches.push({ id: "S2", name: "Sketch-2", parentSketchId: ROOT_SKETCH_ID, kind: "sketch" });
+        model.activeSketchId = "S2";
+        const p1 = addPoint(-40, 0, false, "endpoint");
+        const p2 = addPoint(40, 0, false, "endpoint");
+        const line = addLine(p1, p2);
+        model.activeSketchId = DEFAULT_SKETCH_ID;
+        updateUI();
+        draw();
+        return {
+          visible: isVisibleSketchId("S2"),
+          relation: sketchRelationToActive("S2"),
+          strokeWidth: sketchStrokeWidth(line),
+          color: constraintStatusColor(line),
+          rowHasSiblingClass: document.querySelector('.sketch-item[data-id="S2"]')?.classList.contains("sibling-visible") || false,
+        };
       },
       resetForSupportConstraintStatus() {
         resetModelState();

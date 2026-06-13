@@ -267,23 +267,44 @@ test("offset tool collects a distance and creates a constrained copy", async ({ 
   expect(state.toolActive).toBe(true);
 });
 
-test("offset stays on the cursor side for a direction-reversed constrained line", async ({ page }) => {
+test("offset stays on the cursor side for direction-reversed constrained lines", async ({ page }) => {
   await page.goto(`${baseUrl}/index.html?test=1`);
   await page.waitForFunction(() => window.__cadTest);
-  const points = await page.evaluate(() => window.__cadTest.resetForOffsetDirection());
+  for (const directionCase of ["vertical", "horizontal"]) {
+    const points = await page.evaluate((value) => window.__cadTest.resetForOffsetDirection(value), directionCase);
+    await page.click("#toolOffset");
+    await page.mouse.click(points.source.x, points.source.y);
+    await page.mouse.move(points.side.x, points.side.y);
+    await page.mouse.click(points.side.x, points.side.y);
+    const input = page.locator("#dimensionValueInput");
+    await input.fill("20");
+    await input.press("Enter");
 
-  await page.click("#toolOffset");
-  await page.mouse.click(points.source.x, points.source.y);
-  await page.mouse.move(points.side.x, points.side.y);
-  await page.mouse.click(points.side.x, points.side.y);
-  const input = page.locator("#dimensionValueInput");
-  await input.fill("20");
-  await input.press("Enter");
+    const state = await page.evaluate(() => window.__cadTest.offsetUiState());
+    expect(state.lineOffsetDeltas).toHaveLength(1);
+    expect(state.lineOffsetDeltas[0][points.expectedAxis]).toBeCloseTo(20, 5);
+    expect(state.lineOffsetDeltas[0][points.expectedAxis === "x" ? "y" : "x"]).toBeCloseTo(0, 5);
+  }
+});
 
-  const state = await page.evaluate(() => window.__cadTest.offsetUiState());
-  expect(state.lineOffsetDeltas).toHaveLength(1);
-  expect(state.lineOffsetDeltas[0].x).toBeCloseTo(20, 5);
-  expect(state.lineOffsetDeltas[0].y).toBeCloseTo(0, 5);
+test("sketch deletion removes its subtree and active sketch siblings remain visible", async ({ page }) => {
+  await page.goto(`${baseUrl}/index.html?test=1`);
+  await page.waitForFunction(() => window.__cadTest);
+
+  const sibling = await page.evaluate(() => window.__cadTest.resetForSiblingVisibility());
+  expect(sibling.visible).toBe(true);
+  expect(sibling.relation).toBe("sibling");
+  expect(sibling.strokeWidth).toBe(1.8);
+  expect(sibling.color).toBe("#cbd5e1");
+  expect(sibling.rowHasSiblingClass).toBe(true);
+
+  const deleted = await page.evaluate(() => window.__cadTest.resetForSketchDeletion());
+  expect(deleted.deleted).toBe(true);
+  expect(deleted.sketchIds).toEqual(["ROOT", "S1", "S4"]);
+  expect(deleted.activeSketchId).toBe("ROOT");
+  expect(deleted.geometry).toEqual({ points: 0, lines: 0, circles: 0, arcs: 0 });
+  expect(deleted.styleKeys).toEqual([]);
+  expect(deleted.presentationElementCount).toBe(0);
 });
 
 test("lines and arcs with fixed support geometry use the support constraint color", async ({ page }) => {
