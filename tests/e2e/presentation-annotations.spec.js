@@ -307,6 +307,30 @@ test("sketch deletion removes its subtree and active sketch siblings remain visi
   expect(deleted.presentationElementCount).toBe(0);
 });
 
+test("non-active sketch visibility can be toggled and is persisted", async ({ page }) => {
+  await page.goto(`${baseUrl}/index.html?test=1`);
+  await page.waitForFunction(() => window.__cadTest);
+
+  await page.evaluate(() => window.__cadTest.resetForSiblingVisibility());
+  await page.click('.sketchVisibilityBtn[data-id="S2"]');
+  let state = await page.evaluate(() => window.__cadTest.sketchVisibilityState("S2"));
+  expect(state).toEqual({ preferenceVisible: false, effectiveVisible: false, serializedVisible: false, buttonPressed: "false" });
+
+  await page.click('.sketchVisibilityBtn[data-id="S2"]');
+  state = await page.evaluate(() => window.__cadTest.sketchVisibilityState("S2"));
+  expect(state).toEqual({ preferenceVisible: true, effectiveVisible: true, serializedVisible: true, buttonPressed: "true" });
+});
+
+test("blank canvas click clears a selected dimension without leaving the constraint command", async ({ page }) => {
+  await page.goto(`${baseUrl}/index.html?test=1`);
+  await page.waitForFunction(() => window.__cadTest);
+
+  const points = await page.evaluate(() => window.__cadTest.resetForConstraintDimensionSelection());
+  expect(await page.evaluate(() => window.__cadTest.constraintDimensionSelectionState())).toEqual({ selected: true, command: "parallel" });
+  await page.mouse.click(points.blank.x, points.blank.y);
+  expect(await page.evaluate(() => window.__cadTest.constraintDimensionSelectionState())).toEqual({ selected: false, command: "parallel" });
+});
+
 test("lines and arcs with fixed support geometry use the support constraint color", async ({ page }) => {
   await page.goto(`${baseUrl}/index.html?test=1`);
   await page.waitForFunction(() => window.__cadTest);

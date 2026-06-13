@@ -60,8 +60,8 @@
   const model = {
     appMode: "geometry",
     sketches: [
-      { id: ROOT_SKETCH_ID, name: ROOT_SKETCH_NAME, parentSketchId: null, kind: "root" },
-      { id: DEFAULT_SKETCH_ID, name: DEFAULT_SKETCH_NAME, parentSketchId: ROOT_SKETCH_ID, kind: "sketch" },
+      { id: ROOT_SKETCH_ID, name: ROOT_SKETCH_NAME, parentSketchId: null, kind: "root", visible: true },
+      { id: DEFAULT_SKETCH_ID, name: DEFAULT_SKETCH_NAME, parentSketchId: ROOT_SKETCH_ID, kind: "sketch", visible: true },
     ],
     activeSketchId: DEFAULT_SKETCH_ID,
     presentationSheets: [{ id: DEFAULT_PRESENTATION_SHEET_ID, name: DEFAULT_PRESENTATION_SHEET_NAME, visibleGeometrySketchIds: null, elementStyles: {}, elements: [] }],
@@ -197,7 +197,7 @@
     if (!Array.isArray(model.sketches)) model.sketches = [];
     let root = model.sketches.find((sketch) => sketch.kind === "root" || sketch.id === ROOT_SKETCH_ID);
     if (!root) {
-      root = { id: ROOT_SKETCH_ID, name: ROOT_SKETCH_NAME, parentSketchId: null, kind: "root" };
+      root = { id: ROOT_SKETCH_ID, name: ROOT_SKETCH_NAME, parentSketchId: null, kind: "root", visible: true };
       model.sketches.unshift(root);
     }
     model.sketches = [root, ...model.sketches.filter((sketch) => sketch !== root && sketch.kind !== "root" && sketch.id !== ROOT_SKETCH_ID)];
@@ -205,10 +205,12 @@
     root.name = root.name || ROOT_SKETCH_NAME;
     root.parentSketchId = null;
     root.kind = "root";
+    root.visible = true;
     const ids = new Set(model.sketches.map((sketch) => sketch.id));
     for (const sketch of model.sketches) {
       if (sketch === root) continue;
       sketch.kind = "sketch";
+      sketch.visible = sketch.visible !== false;
       if (!Object.prototype.hasOwnProperty.call(sketch, "parentSketchId")) sketch.parentSketchId = null;
       if (sketch.parentSketchId === sketch.id || !ids.has(sketch.parentSketchId)) sketch.parentSketchId = ROOT_SKETCH_ID;
       if (sketch.parentSketchId == null) sketch.parentSketchId = ROOT_SKETCH_ID;
@@ -988,7 +990,10 @@
 
   function isVisibleSketchId(sketchId) {
     const id = sketchId || activeSketchId();
-    return id === activeSketchId() || isAncestorSketchId(id) || isSiblingSketchId(id) || descendantSketchIds(activeSketchId()).includes(id);
+    if (id === activeSketchId()) return true;
+    const sketch = sketchById(id);
+    if (!sketch || sketch.visible === false) return false;
+    return isAncestorSketchId(id) || isSiblingSketchId(id) || descendantSketchIds(activeSketchId()).includes(id);
   }
 
   function isVisibleSketchElement(item) {
@@ -1787,8 +1792,8 @@
     sketchSeq = 2;
     presentationSheetSeq = 2;
     model.sketches.length = 0;
-    model.sketches.push({ id: ROOT_SKETCH_ID, name: ROOT_SKETCH_NAME, parentSketchId: null, kind: "root" });
-    model.sketches.push({ id: DEFAULT_SKETCH_ID, name: DEFAULT_SKETCH_NAME, parentSketchId: ROOT_SKETCH_ID, kind: "sketch" });
+    model.sketches.push({ id: ROOT_SKETCH_ID, name: ROOT_SKETCH_NAME, parentSketchId: null, kind: "root", visible: true });
+    model.sketches.push({ id: DEFAULT_SKETCH_ID, name: DEFAULT_SKETCH_NAME, parentSketchId: ROOT_SKETCH_ID, kind: "sketch", visible: true });
     model.activeSketchId = DEFAULT_SKETCH_ID;
     model.appMode = "geometry";
     model.presentationSheets = [{ id: DEFAULT_PRESENTATION_SHEET_ID, name: DEFAULT_PRESENTATION_SHEET_NAME, visibleGeometrySketchIds: null, elementStyles: {}, elements: [] }];
@@ -1959,10 +1964,16 @@
   function serializeModel() {
     ensureModelState();
     return {
-      version: 5,
+      version: 6,
       savedAt: new Date().toISOString(),
       appMode: model.appMode,
-      sketches: model.sketches.map((sketch) => ({ id: sketch.id, name: sketch.name, parentSketchId: sketch.parentSketchId || null, kind: isRootSketch(sketch) ? "root" : "sketch" })),
+      sketches: model.sketches.map((sketch) => ({
+        id: sketch.id,
+        name: sketch.name,
+        parentSketchId: sketch.parentSketchId || null,
+        kind: isRootSketch(sketch) ? "root" : "sketch",
+        visible: isRootSketch(sketch) ? true : sketch.visible !== false,
+      })),
       activeSketchId: activeSketchId(),
       presentationSheets: model.presentationSheets.map((sheet) => ({
         id: sheet.id,
@@ -2179,22 +2190,25 @@
             name: String(sketch.name || sketch.id || `Sketch-${index + 1}`),
             parentSketchId: sketch.parentSketchId == null ? null : String(sketch.parentSketchId),
             kind: sketch.kind === "root" || sketch.id === ROOT_SKETCH_ID ? "root" : "sketch",
+            visible: sketch.visible !== false,
           }))
-        : [{ id: DEFAULT_SKETCH_ID, name: DEFAULT_SKETCH_NAME, parentSketchId: ROOT_SKETCH_ID, kind: "sketch" }];
+        : [{ id: DEFAULT_SKETCH_ID, name: DEFAULT_SKETCH_NAME, parentSketchId: ROOT_SKETCH_ID, kind: "sketch", visible: true }];
     let loadedRoot = loadedSketches.find((sketch) => sketch.kind === "root" || sketch.id === ROOT_SKETCH_ID);
-    if (!loadedRoot) loadedRoot = { id: ROOT_SKETCH_ID, name: ROOT_SKETCH_NAME, parentSketchId: null, kind: "root" };
+    if (!loadedRoot) loadedRoot = { id: ROOT_SKETCH_ID, name: ROOT_SKETCH_NAME, parentSketchId: null, kind: "root", visible: true };
     loadedSketches = [loadedRoot, ...loadedSketches.filter((sketch) => sketch !== loadedRoot && sketch.kind !== "root" && sketch.id !== ROOT_SKETCH_ID)];
     loadedRoot.id = ROOT_SKETCH_ID;
     loadedRoot.name = loadedRoot.name || ROOT_SKETCH_NAME;
     loadedRoot.parentSketchId = null;
     loadedRoot.kind = "root";
+    loadedRoot.visible = true;
     if (!loadedSketches.some((sketch) => sketch.kind !== "root")) {
-      loadedSketches.push({ id: DEFAULT_SKETCH_ID, name: DEFAULT_SKETCH_NAME, parentSketchId: ROOT_SKETCH_ID, kind: "sketch" });
+      loadedSketches.push({ id: DEFAULT_SKETCH_ID, name: DEFAULT_SKETCH_NAME, parentSketchId: ROOT_SKETCH_ID, kind: "sketch", visible: true });
     }
     const loadedSketchIds = new Set(loadedSketches.map((sketch) => sketch.id));
     for (const sketch of loadedSketches) {
       if (sketch.kind === "root") continue;
       sketch.kind = "sketch";
+      sketch.visible = sketch.visible !== false;
       if (sketch.parentSketchId === sketch.id || !loadedSketchIds.has(sketch.parentSketchId)) sketch.parentSketchId = ROOT_SKETCH_ID;
       if (sketch.parentSketchId == null) sketch.parentSketchId = ROOT_SKETCH_ID;
     }
@@ -6580,7 +6594,7 @@
     ensureSketchState();
     const current = activeSketch();
     const parentSketchId = kind === "child" ? current.id : current.parentSketchId || ROOT_SKETCH_ID;
-    const sketch = { id: `S${sketchSeq++}`, name: nextSketchName(parentSketchId), parentSketchId, kind: "sketch" };
+    const sketch = { id: `S${sketchSeq++}`, name: nextSketchName(parentSketchId), parentSketchId, kind: "sketch", visible: true };
     model.sketches.push(sketch);
     model.activeSketchId = sketch.id;
     clearInteractionForSketchChange();
@@ -6592,8 +6606,10 @@
 
   function setActiveSketch(sketchId) {
     ensureSketchState();
-    if (!model.sketches.some((sketch) => sketch.id === sketchId)) return;
+    const sketch = model.sketches.find((item) => item.id === sketchId);
+    if (!sketch) return;
     if (model.activeSketchId === sketchId) return;
+    sketch.visible = true;
     model.activeSketchId = sketchId;
     clearInteractionForSketchChange();
     setHint(`編集中: ${sketchName(sketchId)}`);
@@ -6611,6 +6627,19 @@
     updateUI();
     draw();
     recordHistory("スケッチ名変更");
+  }
+
+  function toggleSketchVisibility(sketchId) {
+    const sketch = sketchById(sketchId);
+    if (!sketch || isRootSketch(sketch) || sketch.id === activeSketchId()) return false;
+    sketch.visible = sketch.visible === false;
+    hoveredSketchTreeId = null;
+    clearSnap();
+    setHint(`${sketch.name}: ${sketch.visible ? "表示" : "非表示"}`);
+    updateUI();
+    draw();
+    recordHistory(sketch.visible ? "スケッチ表示" : "スケッチ非表示");
+    return true;
   }
 
   function valueReferencesRemovedGeometry(value, removedIds, removedKeys) {
@@ -6814,6 +6843,7 @@
         const isSibling = isSiblingSketchId(sketch.id);
         const isDescendant = descendantSketchIds(activeSketchId()).includes(sketch.id);
         const visible = isVisibleSketchId(sketch.id);
+        const visibilityEnabled = sketch.visible !== false;
         const solveError = sketchHasSolveError(sketch.id);
         const solveErrorTitle = sketchSolveErrorTitle(sketch.id);
         const duplicateCount = constraintDuplicateCountForSketch(sketch.id);
@@ -6825,11 +6855,15 @@
         const treeLines = segments.length
           ? `<span class="sketch-tree-gutter" aria-hidden="true">${segments.map((segment) => `<span class="tree-segment ${segment}"></span>`).join("")}</span>`
           : "";
+        const visibilityButton = isRoot
+          ? ""
+          : `<button class="sketchVisibilityBtn icon-small-btn ${visibilityEnabled ? "visible-on" : "visible-off"}" data-id="${sketch.id}" title="${visibilityEnabled ? "非表示にする" : "表示する"}" aria-label="${visibilityEnabled ? "非表示にする" : "表示する"}" aria-pressed="${visibilityEnabled}" ${isActive ? "disabled" : ""}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2.5 12s3.5-6 9.5-6 9.5 6 9.5 6-3.5 6-9.5 6-9.5-6-9.5-6Z"/><circle cx="12" cy="12" r="2.6"/>${visibilityEnabled ? "" : '<path class="visibility-slash" d="M4 4l16 16"/>'}</svg></button>`;
         return (
-          `<div class="item sketch-item ${visible ? "visible" : ""} ${isRoot ? "root" : ""} ${isAncestor ? "ancestor-visible" : ""} ${isSibling ? "sibling-visible" : ""} ${isDescendant ? "descendant-visible" : ""} ${isActive ? "active" : ""} ${solveError ? "solve-error" : ""} ${hasChildren ? "has-children" : ""}" data-id="${sketch.id}" title="${escapeHtml(solveErrorTitle)}" style="--sketch-depth:${depth}">` +
+          `<div class="item sketch-item ${visible ? "visible" : ""} ${visibilityEnabled ? "visibility-on" : "visibility-off"} ${isRoot ? "root" : ""} ${isAncestor ? "ancestor-visible" : ""} ${isSibling ? "sibling-visible" : ""} ${isDescendant ? "descendant-visible" : ""} ${isActive ? "active" : ""} ${solveError ? "solve-error" : ""} ${hasChildren ? "has-children" : ""}" data-id="${sketch.id}" title="${escapeHtml(solveErrorTitle)}" style="--sketch-depth:${depth}">` +
           treeLines +
           `<button class="sketchActivateBtn" data-id="${sketch.id}" ${isActive ? "disabled" : ""}>${escapeHtml(sketch.name)}</button>` +
           `<span class="sketch-badges">${solveError ? `<span class="badge sketch-error-badge">!</span>` : ""}${duplicateCount ? `<span class="badge sketch-duplicate-badge">重複${duplicateCount}</span>` : ""}<span class="badge">${count}</span></span>` +
+          visibilityButton +
           (isRoot ? "" : `<button class="sketchRenameBtn icon-small-btn" data-id="${sketch.id}" title="名前変更" aria-label="名前変更">Aa</button><button class="sketchDeleteBtn icon-small-btn" data-id="${sketch.id}" title="スケッチ削除" aria-label="スケッチ削除"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3M7 7l1 13h8l1-13"/></svg></button>`) +
           `</div>`
         );
@@ -6840,7 +6874,7 @@
     }
     for (const row of document.querySelectorAll(".sketch-item")) {
       row.addEventListener("click", (event) => {
-        if (event.target.closest(".sketchRenameBtn, .sketchDeleteBtn")) return;
+        if (event.target.closest(".sketchVisibilityBtn, .sketchRenameBtn, .sketchDeleteBtn")) return;
         setActiveSketch(row.dataset.id);
       });
       row.addEventListener("mouseenter", () => {
@@ -6858,6 +6892,12 @@
       btn.addEventListener("click", (event) => {
         event.stopPropagation();
         renameSketch(btn.dataset.id);
+      });
+    }
+    for (const btn of document.querySelectorAll(".sketchVisibilityBtn")) {
+      btn.addEventListener("click", (event) => {
+        event.stopPropagation();
+        toggleSketchVisibility(btn.dataset.id);
       });
     }
     for (const btn of document.querySelectorAll(".sketchDeleteBtn")) {
@@ -8502,26 +8542,26 @@
     for (let i = model.points.length - 1; i >= 0; i--) {
       const point = model.points[i];
       const sketchId = elementSketchId(point);
-      if (!allowedSketches.has(sketchId)) continue;
+      if (!allowedSketches.has(sketchId) || !isVisibleSketchElement(point)) continue;
       if (!isExplicitPoint(point) && !isPointUsedByPrimitive(point) && !isReferencePoint(point)) continue;
       if (hypot2(point.x - x, point.y - y) <= pointThreshold) return { kind: "point", point, sketchId };
     }
     for (let i = model.lines.length - 1; i >= 0; i--) {
       const line = model.lines[i];
       const sketchId = elementSketchId(line);
-      if (!allowedSketches.has(sketchId)) continue;
+      if (!allowedSketches.has(sketchId) || !isVisibleSketchElement(line)) continue;
       if (distancePointToSegment(x, y, line) <= threshold) return { kind: "line", line, sketchId };
     }
     for (let i = model.circles.length - 1; i >= 0; i--) {
       const circle = model.circles[i];
       const sketchId = elementSketchId(circle);
-      if (!allowedSketches.has(sketchId)) continue;
+      if (!allowedSketches.has(sketchId) || !isVisibleSketchElement(circle)) continue;
       if (Math.abs(hypot2(x - circle.center.x, y - circle.center.y) - circle.radius()) <= threshold) return { kind: "primitive", primitive: circle, sketchId };
     }
     for (let i = model.arcs.length - 1; i >= 0; i--) {
       const arc = model.arcs[i];
       const sketchId = elementSketchId(arc);
-      if (!allowedSketches.has(sketchId)) continue;
+      if (!allowedSketches.has(sketchId) || !isVisibleSketchElement(arc)) continue;
       const angle = Math.atan2(y - arc.center.y, x - arc.center.x);
       if (Math.abs(hypot2(x - arc.center.x, y - arc.center.y) - arc.radius()) <= threshold && angleOnSignedSweep(angle, arc.startAngle, arc.endAngle)) return { kind: "primitive", primitive: arc, sketchId };
     }
@@ -9128,6 +9168,26 @@
 
     if (pendingCommand?.type === "distance-value" || pendingCommand?.type === "fillet-radius-value" || pendingCommand?.type === "offset-value") {
       e.preventDefault();
+      return;
+    }
+
+    if (
+      pendingConstraintCommand &&
+      selectedDimensionConstraint &&
+      !hitP &&
+      !hitL &&
+      !hitC &&
+      !hitArcEnd &&
+      !hitA &&
+      !hitD &&
+      !inactiveHit
+    ) {
+      e.preventDefault();
+      selectedDimensionConstraint = null;
+      hoveredDimensionConstraint = null;
+      setHint(constraintTargetHint(pendingConstraintCommand.type));
+      updateUI();
+      draw();
       return;
     }
 
@@ -10728,6 +10788,40 @@
           strokeWidth: sketchStrokeWidth(line),
           color: constraintStatusColor(line),
           rowHasSiblingClass: document.querySelector('.sketch-item[data-id="S2"]')?.classList.contains("sibling-visible") || false,
+        };
+      },
+      sketchVisibilityState(sketchId) {
+        const sketch = sketchById(sketchId);
+        const serialized = serializeModel().sketches.find((item) => item.id === sketchId);
+        return {
+          preferenceVisible: sketch?.visible !== false,
+          effectiveVisible: isVisibleSketchId(sketchId),
+          serializedVisible: serialized?.visible,
+          buttonPressed: document.querySelector(`.sketchVisibilityBtn[data-id="${sketchId}"]`)?.getAttribute("aria-pressed") || null,
+        };
+      },
+      resetForConstraintDimensionSelection() {
+        resetModelState();
+        setAppMode("geometry");
+        const p1 = addPoint(-50, 0, false, "endpoint");
+        const p2 = addPoint(50, 0, false, "endpoint");
+        const line = addLine(p1, p2);
+        const target = { kind: "line-length", line, p1, p2, value: line.length() };
+        const constraint = new DistanceConstraint(p1, p2, line.length());
+        constraint.dimension = dimensionFromAnchor(target, { x: 0, y: -30 });
+        pushModelConstraint(constraint);
+        selectedDimensionConstraint = constraint;
+        pendingConstraintCommand = { type: "parallel" };
+        updateUI();
+        fitAllGeometryToViewport(180);
+        draw();
+        const rect = canvas.getBoundingClientRect();
+        return { blank: { x: rect.left + rect.width - 35, y: rect.top + rect.height - 35 } };
+      },
+      constraintDimensionSelectionState() {
+        return {
+          selected: Boolean(selectedDimensionConstraint),
+          command: pendingConstraintCommand?.type || null,
         };
       },
       resetForSupportConstraintStatus() {

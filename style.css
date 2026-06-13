@@ -671,7 +671,7 @@ body.geometry-mode .mode-overlay-sheet #renamePresentationSheetBtn {
 .sketch-item {
   position: relative;
   display: grid;
-  grid-template-columns: auto 1fr auto auto auto;
+  grid-template-columns: auto 1fr auto auto auto auto;
   gap: 0;
   align-items: center;
   padding: 0;
@@ -737,6 +737,30 @@ body.geometry-mode .mode-overlay-sheet #renamePresentationSheetBtn {
 .sketchDeleteBtn svg {
   width: 13px;
   height: 13px;
+}
+
+.sketchVisibilityBtn svg {
+  width: 13px;
+  height: 13px;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.7;
+}
+
+.sketchVisibilityBtn.visible-off {
+  color: #94a3b8;
+}
+
+.sketchVisibilityBtn:disabled {
+  color: var(--accent);
+  opacity: 0.72;
+}
+
+.sketch-item.visibility-off:not(.active) .sketchActivateBtn,
+.sketch-item.visibility-off:not(.active) .sketch-badges {
+  opacity: 0.5;
 }
 
 .sketch-tree-gutter {
