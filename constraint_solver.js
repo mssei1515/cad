@@ -894,6 +894,12 @@
         vs.push({ object: a, prop: "startAngle", label: `${a.id}.startAngle` });
         vs.push({ object: a, prop: "endAngle", label: `${a.id}.endAngle` });
       }
+      for (const instance of this.model.blockInstances || []) {
+        if (instance.fixed) continue;
+        vs.push({ object: instance, prop: "x", label: `${instance.id}.x` });
+        vs.push({ object: instance, prop: "y", label: `${instance.id}.y` });
+        vs.push({ object: instance, prop: "rotation", label: `${instance.id}.rotation` });
+      }
       return vs;
     }
 

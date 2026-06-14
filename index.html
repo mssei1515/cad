@@ -64,6 +64,12 @@
         <button id="toolRectangle" class="icon-btn" title="矩形" aria-label="矩形">
           <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="6" width="14" height="12"/></svg>
         </button>
+        <button id="toolCreateBlock" class="icon-btn" title="選択図形からブロック作成" aria-label="ブロック作成">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="7" height="7"/><rect x="13" y="13" width="7" height="7"/><path d="M11 7.5h5.5V13M7.5 11v5.5H13"/></svg>
+        </button>
+        <button id="toolPlaceBlock" class="icon-btn" title="ブロック配置" aria-label="ブロック配置">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="5" width="9" height="9"/><path d="M10 10h9v9h-9zM14 7h5v5"/></svg>
+        </button>
       </div>
       <div class="toolbar-group geometry-toolbar-group" aria-label="編集">
         <span class="group-label">編集</span>
@@ -159,6 +165,13 @@
             </div>
           </div>
           <div id="sketchList" class="sketch-list"></div>
+        </section>
+        <section id="blockOverlay" class="block-overlay" aria-label="ブロック">
+          <div class="block-overlay-header">
+            <strong id="blockOverlayTitle">ブロック</strong>
+            <button id="exitBlockEditBtn" type="button" class="small-action-btn" hidden>編集終了</button>
+          </div>
+          <div id="blockList" class="block-list"></div>
         </section>
         <div id="bottomBar" class="bottom-bar" aria-label="操作情報">
           <div class="status-line">
