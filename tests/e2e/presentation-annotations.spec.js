@@ -159,10 +159,26 @@ test("geometry toolbar uses the organized command groups", async ({ page }) => {
 
   await page.click("#toggleSideBtn");
   expect(await page.locator(".side").isVisible()).toBe(true);
+  const openSidebarLayout = await page.evaluate(() => {
+    const sideRect = document.querySelector(".side").getBoundingClientRect();
+    const modeRect = document.querySelector(".mode-overlay").getBoundingClientRect();
+    return {
+      sideLeft: sideRect.left,
+      modeRight: modeRect.right,
+      appCollapsed: document.querySelector(".app").classList.contains("side-collapsed"),
+    };
+  });
+  expect(openSidebarLayout.appCollapsed).toBe(false);
+  expect(openSidebarLayout.modeRight).toBeLessThan(openSidebarLayout.sideLeft - 40);
+
+  const canvas = await page.locator("#canvas").boundingBox();
+  await page.mouse.click(canvas.x + canvas.width * 0.48, canvas.y + canvas.height * 0.82);
+  expect(await page.locator(".side").isVisible()).toBe(false);
+  const collapsedModeRight = await page.evaluate(() => document.querySelector(".mode-overlay").getBoundingClientRect().right);
+  expect(collapsedModeRight).toBeGreaterThan(openSidebarLayout.modeRight + 200);
 
   await page.evaluate(() => window.__cadTest.resetForEmptyBlockCreation());
   await page.click("#toolPoint");
-  const canvas = await page.locator("#canvas").boundingBox();
   await page.mouse.click(canvas.x + canvas.width * 0.55, canvas.y + canvas.height * 0.55);
   await page.click('[data-sidebar-tab="points"]');
   expect(await page.locator("#pointList .geometry-list-row").count()).toBe(1);

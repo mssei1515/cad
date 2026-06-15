@@ -539,7 +539,6 @@ h2 {
   border-radius: 10px 0 0 10px;
   background: rgb(248 250 252 / 94%);
   box-shadow: -4px 3px 12px rgb(17 24 39 / 12%);
-  transition: right 0.15s ease;
 }
 
 .side-collapsed .sidebar-tabs {
@@ -616,6 +615,11 @@ h2 {
   width: max-content;
   max-width: calc(100% - 24px);
   color: #111827;
+}
+
+.app:not(.side-collapsed) .mode-overlay {
+  right: calc(var(--sidebar-width) + 58px);
+  max-width: calc(100% - var(--sidebar-width) - 70px);
 }
 
 .mode-overlay .mode-switch {

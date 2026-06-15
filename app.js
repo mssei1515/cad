@@ -210,6 +210,20 @@
     }
   }
 
+  function setSidebarCollapsed(collapsed, hintText = "") {
+    const app = document.querySelector(".app");
+    if (!app) return false;
+    const changed = app.classList.contains("side-collapsed") !== collapsed;
+    app.classList.toggle("side-collapsed", collapsed);
+    const btn = document.getElementById("toggleSideBtn");
+    const label = collapsed ? "サイドバーを開く" : "サイドバーをたたむ";
+    btn?.setAttribute("aria-label", label);
+    btn?.setAttribute("title", label);
+    if (btn) btn.dataset.tooltip = label;
+    if (hintText) setHint(hintText);
+    return changed;
+  }
+
   function setHint(msg, kind = "normal") {
     const el = document.getElementById("hint");
     el.textContent = msg;
@@ -11361,10 +11375,11 @@
       const moved = hypot2(current.x - session.start.x, current.y - session.start.y);
       if (moved <= 3 / viewport.scale) {
         if (!session.additive) clearSelection();
+        setSidebarCollapsed(true, "サイドバーをたたみました");
       } else {
         selectByRect(rectFromPoints(session.start, current), current.x < session.start.x, session.additive);
+        setHint("矩形選択を更新しました");
       }
-      setHint("矩形選択を更新しました");
       updateUI();
       draw();
       return;
@@ -12002,19 +12017,14 @@
 
   document.getElementById("toggleSideBtn").addEventListener("click", () => {
     const app = document.querySelector(".app");
-    const collapsed = app.classList.toggle("side-collapsed");
-    const btn = document.getElementById("toggleSideBtn");
-    const label = collapsed ? "サイドバーを開く" : "サイドバーをたたむ";
-    btn.setAttribute("aria-label", label);
-    btn.setAttribute("title", label);
-    btn.dataset.tooltip = label;
-    setHint(collapsed ? "サイドバーをたたみました" : "サイドバーを表示しました");
+    const isCollapsed = app?.classList.contains("side-collapsed");
+    setSidebarCollapsed(!isCollapsed, isCollapsed ? "サイドバーを表示しました" : "サイドバーをたたみました");
   });
 
   for (const button of document.querySelectorAll("[data-sidebar-tab]")) {
     button.addEventListener("click", () => {
       activateSidebarTab(button.dataset.sidebarTab);
-      document.querySelector(".app")?.classList.remove("side-collapsed");
+      setSidebarCollapsed(false);
     });
   }
 
