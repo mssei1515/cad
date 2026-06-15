@@ -12012,7 +12012,10 @@
   });
 
   for (const button of document.querySelectorAll("[data-sidebar-tab]")) {
-    button.addEventListener("click", () => activateSidebarTab(button.dataset.sidebarTab));
+    button.addEventListener("click", () => {
+      activateSidebarTab(button.dataset.sidebarTab);
+      document.querySelector(".app")?.classList.remove("side-collapsed");
+    });
   }
 
   for (const btn of constraintButtons) {

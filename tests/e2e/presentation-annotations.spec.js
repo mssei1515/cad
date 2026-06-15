@@ -133,11 +133,15 @@ test("geometry toolbar uses the organized command groups", async ({ page }) => {
       .filter((element) => getComputedStyle(element.parentElement).display !== "none")
       .map((element) => element.textContent.trim());
     const toggle = document.getElementById("toggleSideBtn");
+    const sidebarTabs = document.querySelector(".sidebar-tabs");
     const toggleRect = toggle.getBoundingClientRect();
     return {
       visibleLabels,
       pointToolVisible: getComputedStyle(document.getElementById("toolPoint")).display !== "none",
       toggleParentClass: toggle.parentElement.className,
+      tabsParentClass: sidebarTabs.parentElement.className,
+      tabsInsideSidebar: Boolean(sidebarTabs.closest(".side")),
+      tabsDirection: getComputedStyle(sidebarTabs).flexDirection,
       toggleRect: { left: toggleRect.left, right: toggleRect.right, top: toggleRect.top, bottom: toggleRect.bottom },
       viewport: { width: innerWidth, height: innerHeight },
     };
@@ -146,6 +150,9 @@ test("geometry toolbar uses the organized command groups", async ({ page }) => {
   expect(layout.visibleLabels).toEqual(["基本作図", "複合作図", "編集", "拘束", "ファイル"]);
   expect(layout.pointToolVisible).toBe(true);
   expect(layout.toggleParentClass).toBe("work-area");
+  expect(layout.tabsParentClass).toBe("work-area");
+  expect(layout.tabsInsideSidebar).toBe(false);
+  expect(layout.tabsDirection).toBe("column");
   expect(layout.toggleRect.right).toBeLessThanOrEqual(layout.viewport.width);
   expect(layout.toggleRect.top).toBeGreaterThan(0);
   expect(layout.toggleRect.bottom).toBeLessThan(layout.viewport.height);

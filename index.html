@@ -187,14 +187,14 @@
       <button id="toggleSideBtn" class="sidebar-toggle-btn" title="サイドバーを開く" aria-label="サイドバーを開く">
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v14H4z"/><path d="M15 5v14M10 9l-3 3 3 3"/></svg>
       </button>
+      <div class="sidebar-tabs" role="tablist" aria-label="表示する情報" aria-orientation="vertical">
+        <button class="sidebar-tab active" type="button" role="tab" aria-selected="true" aria-controls="sidebarConstraints" data-sidebar-tab="constraints">拘束</button>
+        <button class="sidebar-tab" type="button" role="tab" aria-selected="false" aria-controls="sidebarLines" data-sidebar-tab="lines">線</button>
+        <button class="sidebar-tab" type="button" role="tab" aria-selected="false" aria-controls="sidebarPoints" data-sidebar-tab="points">点</button>
+        <button class="sidebar-tab" type="button" role="tab" aria-selected="false" aria-controls="sidebarCircles" data-sidebar-tab="circles">円</button>
+        <button class="sidebar-tab" type="button" role="tab" aria-selected="false" aria-controls="sidebarArcs" data-sidebar-tab="arcs">円弧</button>
+      </div>
       <aside class="side" aria-label="情報サイドバー">
-        <div class="sidebar-tabs" role="tablist" aria-label="表示する情報">
-          <button class="sidebar-tab active" type="button" role="tab" aria-selected="true" aria-controls="sidebarConstraints" data-sidebar-tab="constraints">拘束</button>
-          <button class="sidebar-tab" type="button" role="tab" aria-selected="false" aria-controls="sidebarLines" data-sidebar-tab="lines">線</button>
-          <button class="sidebar-tab" type="button" role="tab" aria-selected="false" aria-controls="sidebarPoints" data-sidebar-tab="points">点</button>
-          <button class="sidebar-tab" type="button" role="tab" aria-selected="false" aria-controls="sidebarCircles" data-sidebar-tab="circles">円</button>
-          <button class="sidebar-tab" type="button" role="tab" aria-selected="false" aria-controls="sidebarArcs" data-sidebar-tab="arcs">円弧</button>
-        </div>
         <section id="sidebarConstraints" class="sidebar-tab-panel active" role="tabpanel" data-sidebar-panel="constraints">
           <h2>拘束一覧</h2>
           <div id="constraintList" class="list"></div>
