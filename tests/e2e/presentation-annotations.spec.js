@@ -136,6 +136,7 @@ test("geometry toolbar uses the organized command groups", async ({ page }) => {
     const toggleRect = toggle.getBoundingClientRect();
     return {
       visibleLabels,
+      pointToolVisible: getComputedStyle(document.getElementById("toolPoint")).display !== "none",
       toggleParentClass: toggle.parentElement.className,
       toggleRect: { left: toggleRect.left, right: toggleRect.right, top: toggleRect.top, bottom: toggleRect.bottom },
       viewport: { width: innerWidth, height: innerHeight },
@@ -143,6 +144,7 @@ test("geometry toolbar uses the organized command groups", async ({ page }) => {
   });
   await page.screenshot({ path: "test-results/toolbar-layout.png", fullPage: true });
   expect(layout.visibleLabels).toEqual(["基本作図", "複合作図", "編集", "拘束", "ファイル"]);
+  expect(layout.pointToolVisible).toBe(true);
   expect(layout.toggleParentClass).toBe("work-area");
   expect(layout.toggleRect.right).toBeLessThanOrEqual(layout.viewport.width);
   expect(layout.toggleRect.top).toBeGreaterThan(0);
@@ -150,6 +152,13 @@ test("geometry toolbar uses the organized command groups", async ({ page }) => {
 
   await page.click("#toggleSideBtn");
   expect(await page.locator(".side").isVisible()).toBe(true);
+
+  await page.evaluate(() => window.__cadTest.resetForEmptyBlockCreation());
+  await page.click("#toolPoint");
+  const canvas = await page.locator("#canvas").boundingBox();
+  await page.mouse.click(canvas.x + canvas.width * 0.55, canvas.y + canvas.height * 0.55);
+  await page.click('[data-sidebar-tab="points"]');
+  expect(await page.locator("#pointList .geometry-list-row").count()).toBe(1);
 });
 
 test("duplicate dimensions become read-only reference dimensions", async ({ page }) => {
@@ -198,13 +207,14 @@ test("sidebar lists circles and arcs and highlights related geometry", async ({ 
   await page.goto(`${baseUrl}/index.html?test=1`);
   const ids = await page.evaluate(() => window.__cadTest.resetForSidebarInspection());
   await page.click("#toggleSideBtn");
-  await page.locator("details").filter({ has: page.locator("#circleList") }).locator("summary").click();
-  await page.locator("details").filter({ has: page.locator("#arcList") }).locator("summary").click();
-  await page.locator("details").filter({ has: page.locator("#constraintList") }).locator("summary").click();
-
+  await page.click('[data-sidebar-tab="circles"]');
+  await expect(page.locator("#sidebarCircles")).toBeVisible();
   expect(await page.locator("#circleList .geometry-list-row").count()).toBe(1);
+  await page.click('[data-sidebar-tab="arcs"]');
+  await expect(page.locator("#sidebarArcs")).toBeVisible();
   expect(await page.locator("#arcList .geometry-list-row").count()).toBe(1);
 
+  await page.click('[data-sidebar-tab="circles"]');
   await page.locator("#circleList .geometry-list-row").hover();
   expect(await page.evaluate(() => window.__cadTest.sidebarHighlightIds())).toEqual([]);
   await page.locator("#circleList .geometry-list-row").click();
@@ -212,6 +222,8 @@ test("sidebar lists circles and arcs and highlights related geometry", async ({ 
   expect(await page.locator("#circleList .geometry-list-row").getAttribute("class")).toContain("sidebar-selected");
   expect(await page.evaluate(() => window.__cadTest.sidebarHighlightIds())).toEqual([ids.circle, ids.circleCenter].sort());
 
+  await page.click('[data-sidebar-tab="constraints"]');
+  await expect(page.locator("#sidebarConstraints")).toBeVisible();
   await page.locator("#constraintList .constraint-list-row").hover();
   expect(await page.evaluate(() => window.__cadTest.sidebarHighlightIds())).toEqual([ids.circle, ids.circleCenter].sort());
   await page.locator("#constraintList .constraint-list-row").click();

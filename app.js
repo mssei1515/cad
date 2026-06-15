@@ -193,7 +193,21 @@
 
   function log(msg) {
     const el = document.getElementById("log");
+    if (!el) return;
     el.textContent = `${msg}\n` + el.textContent;
+  }
+
+  function activateSidebarTab(tabId) {
+    for (const button of document.querySelectorAll("[data-sidebar-tab]")) {
+      const active = button.dataset.sidebarTab === tabId;
+      button.classList.toggle("active", active);
+      button.setAttribute("aria-selected", String(active));
+    }
+    for (const panel of document.querySelectorAll("[data-sidebar-panel]")) {
+      const active = panel.dataset.sidebarPanel === tabId;
+      panel.classList.toggle("active", active);
+      panel.hidden = !active;
+    }
   }
 
   function setHint(msg, kind = "normal") {
@@ -11996,6 +12010,10 @@
     btn.dataset.tooltip = label;
     setHint(collapsed ? "サイドバーをたたみました" : "サイドバーを表示しました");
   });
+
+  for (const button of document.querySelectorAll("[data-sidebar-tab]")) {
+    button.addEventListener("click", () => activateSidebarTab(button.dataset.sidebarTab));
+  }
 
   for (const btn of constraintButtons) {
     btn.addEventListener("click", () => {

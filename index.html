@@ -40,12 +40,12 @@
         <button id="toolSelect" class="icon-btn active" title="選択・ドラッグ" aria-label="選択・ドラッグ">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 3l14 9-7 2-3 7L5 3z"/></svg>
         </button>
-        <button id="toolPoint" class="icon-btn" title="点を追加" aria-label="点を追加" hidden>
-          <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 3v3M12 18v3M3 12h3M18 12h3"/></svg>
-        </button>
       </div>
       <div class="toolbar-group geometry-toolbar-group" aria-label="基本作図">
         <span class="group-label">基本作図</span>
+        <button id="toolPoint" class="icon-btn" title="点" aria-label="点">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3.5"/><path d="M12 3v3M12 18v3M3 12h3M18 12h3"/></svg>
+        </button>
         <button id="toolLine" class="icon-btn" title="連続線" aria-label="連続線">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 18L19 6"/><circle cx="5" cy="18" r="2"/><circle cx="19" cy="6" r="2"/></svg>
         </button>
@@ -187,36 +187,34 @@
       <button id="toggleSideBtn" class="sidebar-toggle-btn" title="サイドバーを開く" aria-label="サイドバーを開く">
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v14H4z"/><path d="M15 5v14M10 9l-3 3 3 3"/></svg>
       </button>
-      <aside class="side">
-        <details class="panel">
-          <summary>点</summary>
-          <div id="pointList" class="list"></div>
-        </details>
-
-        <details class="panel">
-          <summary>線</summary>
-          <div id="lineList" class="list"></div>
-        </details>
-
-        <details class="panel">
-          <summary>円</summary>
-          <div id="circleList" class="list"></div>
-        </details>
-
-        <details class="panel">
-          <summary>円弧</summary>
-          <div id="arcList" class="list"></div>
-        </details>
-
-        <details class="panel">
-          <summary>拘束一覧</summary>
+      <aside class="side" aria-label="情報サイドバー">
+        <div class="sidebar-tabs" role="tablist" aria-label="表示する情報">
+          <button class="sidebar-tab active" type="button" role="tab" aria-selected="true" aria-controls="sidebarConstraints" data-sidebar-tab="constraints">拘束</button>
+          <button class="sidebar-tab" type="button" role="tab" aria-selected="false" aria-controls="sidebarLines" data-sidebar-tab="lines">線</button>
+          <button class="sidebar-tab" type="button" role="tab" aria-selected="false" aria-controls="sidebarPoints" data-sidebar-tab="points">点</button>
+          <button class="sidebar-tab" type="button" role="tab" aria-selected="false" aria-controls="sidebarCircles" data-sidebar-tab="circles">円</button>
+          <button class="sidebar-tab" type="button" role="tab" aria-selected="false" aria-controls="sidebarArcs" data-sidebar-tab="arcs">円弧</button>
+        </div>
+        <section id="sidebarConstraints" class="sidebar-tab-panel active" role="tabpanel" data-sidebar-panel="constraints">
+          <h2>拘束一覧</h2>
           <div id="constraintList" class="list"></div>
-        </details>
-
-        <details class="panel">
-          <summary>ログ</summary>
-          <div id="log" class="status"></div>
-        </details>
+        </section>
+        <section id="sidebarLines" class="sidebar-tab-panel" role="tabpanel" data-sidebar-panel="lines" hidden>
+          <h2>線</h2>
+          <div id="lineList" class="list"></div>
+        </section>
+        <section id="sidebarPoints" class="sidebar-tab-panel" role="tabpanel" data-sidebar-panel="points" hidden>
+          <h2>点</h2>
+          <div id="pointList" class="list"></div>
+        </section>
+        <section id="sidebarCircles" class="sidebar-tab-panel" role="tabpanel" data-sidebar-panel="circles" hidden>
+          <h2>円</h2>
+          <div id="circleList" class="list"></div>
+        </section>
+        <section id="sidebarArcs" class="sidebar-tab-panel" role="tabpanel" data-sidebar-panel="arcs" hidden>
+          <h2>円弧</h2>
+          <div id="arcList" class="list"></div>
+        </section>
       </aside>
     </div>
   </div>

@@ -406,10 +406,12 @@ canvas.is-panning {
   border-left: 1px solid var(--line);
   box-shadow: -8px 0 18px rgb(17 24 39 / 8%);
   background: var(--panel);
-  overflow: auto;
-  padding: 10px;
+  overflow: hidden;
+  padding: 0;
   min-width: 0;
   min-height: 0;
+  display: flex;
+  flex-direction: column;
 }
 
 .side-collapsed .side {
@@ -522,22 +524,56 @@ h2 {
   max-height: 80px;
 }
 
-.panel {
-  border-top: 1px solid var(--line);
-  margin-top: 8px;
-  padding-top: 2px;
+.sidebar-tabs {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  flex: 0 0 auto;
+  border-bottom: 1px solid var(--line);
+  background: #f8fafc;
+  padding: 8px 8px 0;
+  gap: 2px;
 }
 
-.panel summary {
-  cursor: pointer;
-  font-size: 13px;
+.sidebar-tab {
+  min-width: 0;
+  height: 34px;
+  padding: 0 3px;
+  border: 1px solid transparent;
+  border-bottom: 0;
+  border-radius: 5px 5px 0 0;
+  background: transparent;
+  color: #64748b;
+  font-size: 12px;
   font-weight: 600;
-  padding: 7px 2px;
-  color: var(--text);
 }
 
-.panel[open] summary {
-  margin-bottom: 6px;
+.sidebar-tab:hover {
+  background: #eef2f7;
+  color: #1f2937;
+}
+
+.sidebar-tab.active {
+  border-color: var(--line);
+  background: #fff;
+  color: #1d4ed8;
+  box-shadow: inset 0 2px 0 #2563eb;
+}
+
+.sidebar-tab-panel {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
+  padding: 10px;
+}
+
+.sidebar-tab-panel h2 {
+  margin-top: 0;
+}
+
+.sidebar-tab-panel .list {
+  max-height: none;
+  height: calc(100% - 30px);
+  align-content: start;
 }
 
 .list {
