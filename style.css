@@ -677,6 +677,27 @@ body.geometry-mode .mode-overlay-sheet #renamePresentationSheetBtn {
   font-size: 12px;
 }
 
+.block-editor-name-input {
+  min-width: 80px;
+  flex: 1;
+  height: 22px;
+  padding: 1px 5px;
+  border: 1px solid #94a3b8;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.92);
+}
+
+.block-editor-actions {
+  display: flex;
+  gap: 3px;
+}
+
+.block-editor-actions .primary {
+  border-color: #2563eb;
+  background: #2563eb;
+  color: #fff;
+}
+
 .block-list {
   max-height: calc(28vh - 26px);
   overflow: auto;
@@ -709,10 +730,51 @@ body.geometry-mode .mode-overlay-sheet #renamePresentationSheetBtn {
   font-size: 10px;
 }
 
-body.block-editing .sketch-overlay,
 body.block-editing .mode-overlay {
   opacity: 0.35;
   pointer-events: none;
+}
+
+body.block-editing canvas {
+  background: #edf4f8;
+}
+
+body.block-editing .canvas-area {
+  outline: 3px solid rgba(14, 116, 144, 0.25);
+  outline-offset: -2px;
+}
+
+.block-sketch-config {
+  max-height: 190px;
+  overflow: auto;
+  border-top: 1px solid rgba(148, 163, 184, 0.35);
+  background: rgba(248, 250, 252, 0.94);
+}
+
+.block-sketch-config-title {
+  padding: 4px 7px 2px;
+  color: #475569;
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.block-sketch-option {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  gap: 5px;
+  align-items: center;
+  min-height: 23px;
+  padding: 2px 7px 2px calc(7px + var(--block-sketch-depth, 0) * 14px);
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.block-sketch-option:hover {
+  background: rgba(37, 99, 235, 0.08);
+}
+
+.block-sketch-option small {
+  color: #64748b;
 }
 
 .sketch-add-actions {

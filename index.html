@@ -169,9 +169,14 @@
         <section id="blockOverlay" class="block-overlay" aria-label="ブロック">
           <div class="block-overlay-header">
             <strong id="blockOverlayTitle">ブロック</strong>
-            <button id="exitBlockEditBtn" type="button" class="small-action-btn" hidden>編集終了</button>
+            <input id="blockEditorNameInput" class="block-editor-name-input" type="text" aria-label="ブロック名" hidden />
+            <div class="block-editor-actions" id="blockEditorActions" hidden>
+              <button id="cancelBlockEditBtn" type="button" class="small-action-btn">キャンセル</button>
+              <button id="completeBlockEditBtn" type="button" class="small-action-btn primary">完了</button>
+            </div>
           </div>
           <div id="blockList" class="block-list"></div>
+          <div id="blockSketchConfig" class="block-sketch-config" hidden></div>
         </section>
         <div id="bottomBar" class="bottom-bar" aria-label="操作情報">
           <div class="status-line">

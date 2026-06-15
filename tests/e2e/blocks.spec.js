@@ -51,15 +51,20 @@ test("creates, places, drags, edits, and reloads local-coordinate blocks", async
   await page.waitForFunction(() => window.__cadTest);
 
   const setup = await page.evaluate(() => window.__cadTest.resetForBlockCreationUi());
-  page.once("dialog", (dialog) => dialog.accept("Frame Block"));
   await page.click("#toolCreateBlock");
-  await page.mouse.click(setup.origin.x, setup.origin.y);
+  await expect(page.locator("body")).toHaveClass(/block-editing/);
+  await expect(page.locator("#blockEditorNameInput")).toBeVisible();
+  await page.fill("#blockEditorNameInput", "Frame Block");
+  expect(await page.evaluate(() => window.__cadTest.blockEditorState())).toEqual(expect.objectContaining({ editing: true, isNew: true, hostLineCount: 4, editorLineCount: 4 }));
+  await page.click("#completeBlockEditBtn");
 
   let state = await page.evaluate(() => window.__cadTest.blockState());
   expect(state.definitions).toEqual([
-    expect.objectContaining({ name: "Frame Block", points: 4, lines: 4, constraints: 4 }),
+    expect.objectContaining({ name: "Frame Block", points: 4, lines: 4, constraints: 4, activeSketchId: "S1", origin: { x: 0, y: 0 } }),
   ]);
+  expect(state.definitions[0].sketches).toHaveLength(2);
   expect(state.instances).toHaveLength(1);
+  expect(state.instances[0].enabledSketchIds).toEqual(["S1"]);
   expect(state.projectionLineIds).toHaveLength(4);
   expect(state.projectionLineIds.every((id) => /^BI\d+@L\d+$/.test(id))).toBe(true);
   expect(state.serialized.points).toHaveLength(0);
@@ -78,7 +83,7 @@ test("creates, places, drags, edits, and reloads local-coordinate blocks", async
   const rotationPoints = await page.evaluate(() => window.__cadTest.blockInteractionPoints());
   await page.mouse.move(rotationPoints.handle.x, rotationPoints.handle.y);
   await page.mouse.down();
-  await page.mouse.move(rotationPoints.origin.x, rotationPoints.origin.y + 90, { steps: 4 });
+  await page.mouse.move(rotationPoints.pivot.x, rotationPoints.pivot.y + 90, { steps: 4 });
   await page.mouse.up();
   state = await page.evaluate(() => window.__cadTest.blockState());
   expect(state.instances[0].rotation).toBeCloseTo(Math.PI / 2, 3);
@@ -108,20 +113,20 @@ test("creates, places, drags, edits, and reloads local-coordinate blocks", async
   expect(edited.lengths[1]).toBeCloseTo(edited.lengths[0], 6);
 
   const reloaded = await page.evaluate(() => window.__cadTest.reloadBlockState());
-  expect(reloaded).toEqual({ definitions: 1, instances: 2, projectionLines: 8, serializedVersion: 7 });
+  expect(reloaded).toEqual({ definitions: 1, instances: 2, projectionLines: 8, serializedVersion: 8 });
 
   await page.click(".blockDeleteBtn");
   expect((await page.evaluate(() => window.__cadTest.blockState())).definitions).toHaveLength(1);
   await page.screenshot({ path: "test-results/block-instances.png", fullPage: true });
 });
 
-test("block placement escape commits zero rotation after choosing the origin", async ({ page }) => {
+test("block placement escape commits zero rotation after choosing the display center", async ({ page }) => {
   await page.goto(`${baseUrl}/index.html?test=1`);
   await page.waitForFunction(() => window.__cadTest);
   const setup = await page.evaluate(() => window.__cadTest.resetForBlockCreationUi());
-  page.once("dialog", (dialog) => dialog.accept("Esc Block"));
   await page.click("#toolCreateBlock");
-  await page.mouse.click(setup.origin.x, setup.origin.y);
+  await page.fill("#blockEditorNameInput", "Esc Block");
+  await page.click("#completeBlockEditBtn");
 
   const canvas = await page.locator("#canvas").boundingBox();
   await page.click(".blockPlaceBtn");
@@ -132,6 +137,78 @@ test("block placement escape commits zero rotation after choosing the origin", a
   expect(state.instances).toHaveLength(2);
   expect(state.instances[1].rotation).toBeCloseTo(0, 8);
   expect(state.mode).toBe("select");
+});
+
+test("legacy block data migrates into an internal Sketch-1 without changing projection ids", async ({ page }) => {
+  await page.goto(`${baseUrl}/index.html?test=1`);
+  await page.waitForFunction(() => window.__cadTest);
+  await page.evaluate(() => window.__cadTest.resetForBlockCreationUi());
+  await page.click("#toolCreateBlock");
+  await page.click("#completeBlockEditBtn");
+
+  const before = await page.evaluate(() => window.__cadTest.blockState());
+  const migrated = await page.evaluate(() => window.__cadTest.reloadLegacyBlockState());
+  expect(migrated.version).toBe(8);
+  expect(migrated.origin).toEqual({ x: 0, y: 0 });
+  expect(migrated.sketches).toEqual([
+    expect.objectContaining({ id: "ROOT", kind: "root" }),
+    expect.objectContaining({ id: "S1", parentSketchId: "ROOT" }),
+  ]);
+  expect(new Set(migrated.elementSketchIds)).toEqual(new Set(["S1"]));
+  expect(migrated.enabledSketchIds).toEqual(["S1"]);
+  expect(migrated.projectionLineIds).toEqual(before.projectionLineIds);
+});
+
+test("new block editor supports cancel and independent internal sketch hierarchy", async ({ page }) => {
+  await page.goto(`${baseUrl}/index.html?test=1`);
+  await page.waitForFunction(() => window.__cadTest);
+
+  await page.evaluate(() => window.__cadTest.resetForBlockCreationUi());
+  await page.click("#toolCreateBlock");
+  await expect(page.locator("#sketchOverlay")).toBeVisible();
+  await expect(page.locator("#completeBlockEditBtn")).toBeVisible();
+  const cancelled = await page.evaluate(() => window.__cadTest.cancelBlockEditor());
+  expect(cancelled).toEqual({ editing: false, definitions: 0, instances: 0, lines: 4 });
+
+  await page.evaluate(() => window.__cadTest.resetForEmptyBlockCreation());
+  await page.click("#toolCreateBlock");
+  const initialEditor = await page.evaluate(() => window.__cadTest.blockEditorState());
+  expect(initialEditor.sketches).toEqual([
+    expect.objectContaining({ id: "ROOT", kind: "root" }),
+    expect.objectContaining({ id: "S1", parentSketchId: "ROOT" }),
+  ]);
+  const child = await page.evaluate(() => window.__cadTest.addBlockEditorChildGeometry());
+  expect(child.sketches).toContainEqual(expect.objectContaining({ id: child.sketchId, parentSketchId: "S1" }));
+  await page.fill("#blockEditorNameInput", "Internal Sketch Block");
+  const completed = await page.evaluate(() => window.__cadTest.completeBlockEditor());
+  expect(completed).toEqual({ editing: false, definitions: 1, instances: 0 });
+  const state = await page.evaluate(() => window.__cadTest.blockState());
+  expect(state.definitions[0].sketches).toHaveLength(3);
+});
+
+test("placement and existing instances keep independent enabled internal sketches", async ({ page }) => {
+  await page.goto(`${baseUrl}/index.html?test=1`);
+  await page.waitForFunction(() => window.__cadTest);
+  await page.evaluate(() => window.__cadTest.resetForBlockCreationUi());
+  await page.click("#toolCreateBlock");
+  await page.click("#completeBlockEditBtn");
+
+  await page.dblclick(".block-item[data-id]");
+  const child = await page.evaluate(() => window.__cadTest.addBlockEditorChildGeometry());
+  await page.click("#completeBlockEditBtn");
+  let state = await page.evaluate(() => window.__cadTest.blockState());
+  expect(state.instances[0].enabledSketchIds).toEqual(["S1"]);
+
+  await page.click(".blockPlaceBtn");
+  await expect(page.locator("#blockSketchConfig")).toBeVisible();
+  await page.locator(`#blockSketchConfig input[data-sketch-id="S1"]`).uncheck();
+  await page.locator(`#blockSketchConfig input[data-sketch-id="${child.sketchId}"]`).check();
+  const canvas = await page.locator("#canvas").boundingBox();
+  await page.mouse.click(canvas.x + canvas.width * 0.72, canvas.y + canvas.height * 0.65);
+  await page.mouse.click(canvas.x + canvas.width * 0.8, canvas.y + canvas.height * 0.65);
+  state = await page.evaluate(() => window.__cadTest.blockState());
+  expect(state.instances[1].enabledSketchIds).toEqual([child.sketchId]);
+  expect(state.projectionLineIds).toHaveLength(5);
 });
 
 test("block creation rejects shared boundaries and presentation references without mutation", async ({ page }) => {
