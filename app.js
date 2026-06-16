@@ -10808,6 +10808,7 @@
         setHint(`プレゼンテーション・モード: ${activePresentationSheet().name} / ${presentationSelectedItems().length}個選択`);
       } else {
         clearSelection();
+        setSidebarCollapsed(true);
         updatePresentationUI();
         setHint(`プレゼンテーション・モード: ${activePresentationSheet().name}`);
       }

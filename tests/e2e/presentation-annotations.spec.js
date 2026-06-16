@@ -177,6 +177,26 @@ test("geometry toolbar uses the organized command groups", async ({ page }) => {
   const collapsedModeRight = await page.evaluate(() => document.querySelector(".mode-overlay").getBoundingClientRect().right);
   expect(collapsedModeRight).toBeGreaterThan(openSidebarLayout.modeRight + 200);
 
+  await page.click("#presentationModeBtn");
+  await page.waitForFunction(() => document.body.classList.contains("presentation-mode"));
+  const collapsedPresentationLayout = await page.evaluate(() => {
+    const tabsRect = document.querySelector(".sidebar-tabs").getBoundingClientRect();
+    const modeRect = document.querySelector(".mode-overlay").getBoundingClientRect();
+    return {
+      tabsLeft: tabsRect.left,
+      modeRight: modeRect.right,
+      appCollapsed: document.querySelector(".app").classList.contains("side-collapsed"),
+    };
+  });
+  expect(collapsedPresentationLayout.appCollapsed).toBe(true);
+  expect(collapsedPresentationLayout.modeRight).toBeLessThan(collapsedPresentationLayout.tabsLeft - 4);
+  await page.click("#toggleSideBtn");
+  expect(await page.locator(".side").isVisible()).toBe(true);
+  await page.mouse.click(canvas.x + canvas.width * 0.48, canvas.y + canvas.height * 0.82);
+  expect(await page.locator(".side").isVisible()).toBe(false);
+  await page.click("#geometryModeBtn");
+  await page.waitForFunction(() => document.body.classList.contains("geometry-mode"));
+
   await page.evaluate(() => window.__cadTest.resetForEmptyBlockCreation());
   await page.click("#toolPoint");
   await page.mouse.click(canvas.x + canvas.width * 0.55, canvas.y + canvas.height * 0.55);

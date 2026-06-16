@@ -617,6 +617,11 @@ h2 {
   color: #111827;
 }
 
+.side-collapsed .mode-overlay {
+  right: 62px;
+  max-width: calc(100% - 74px);
+}
+
 .app:not(.side-collapsed) .mode-overlay {
   right: calc(var(--sidebar-width) + 58px);
   max-width: calc(100% - var(--sidebar-width) - 70px);
