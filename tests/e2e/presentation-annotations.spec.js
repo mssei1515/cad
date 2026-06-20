@@ -218,23 +218,36 @@ test("geometry toolbar uses the organized command groups", async ({ page }) => {
     const modeRect = document.querySelector(".mode-overlay").getBoundingClientRect();
     const modeSwitchRect = document.querySelector(".mode-switch").getBoundingClientRect();
     const sketchRect = document.querySelector(".sketch-overlay").getBoundingClientRect();
+    const leftRailRect = document.querySelector(".left-tool-rail").getBoundingClientRect();
+    const tabsRect = document.querySelector(".sidebar-tabs").getBoundingClientRect();
     return {
       sideLeft: sideRect.left,
       modeRight: modeRect.right,
       modeSwitchLeft: modeSwitchRect.left,
+      modeSwitchCenter: (modeSwitchRect.left + modeSwitchRect.right) / 2,
+      visibleCanvasCenter: (leftRailRect.right + tabsRect.left) / 2,
       sketchRight: sketchRect.right,
       appCollapsed: document.querySelector(".app").classList.contains("side-collapsed"),
     };
   });
   expect(openSidebarLayout.appCollapsed).toBe(false);
   expect(openSidebarLayout.modeRight).toBeLessThan(openSidebarLayout.sideLeft - 40);
+  expect(Math.abs(openSidebarLayout.modeSwitchCenter - openSidebarLayout.visibleCanvasCenter)).toBeLessThan(40);
   expect(openSidebarLayout.sketchRight).toBeLessThan(openSidebarLayout.modeSwitchLeft - 4);
 
   const canvas = await page.locator("#canvas").boundingBox();
   await page.mouse.click(canvas.x + canvas.width * 0.48, canvas.y + canvas.height * 0.82);
   expect(await page.locator(".side").isVisible()).toBe(false);
-  const collapsedModeRight = await page.evaluate(() => document.querySelector(".mode-overlay").getBoundingClientRect().right);
-  expect(collapsedModeRight).toBeGreaterThan(openSidebarLayout.modeRight + 200);
+  const collapsedModeLayout = await page.evaluate(() => {
+    const modeSwitchRect = document.querySelector(".mode-switch").getBoundingClientRect();
+    const leftRailRect = document.querySelector(".left-tool-rail").getBoundingClientRect();
+    const tabsRect = document.querySelector(".sidebar-tabs").getBoundingClientRect();
+    return {
+      modeSwitchCenter: (modeSwitchRect.left + modeSwitchRect.right) / 2,
+      visibleCanvasCenter: (leftRailRect.right + tabsRect.left) / 2,
+    };
+  });
+  expect(Math.abs(collapsedModeLayout.modeSwitchCenter - collapsedModeLayout.visibleCanvasCenter)).toBeLessThan(40);
 
   await page.click("#presentationModeBtn");
   await page.waitForFunction(() => document.body.classList.contains("presentation-mode"));

@@ -46,7 +46,7 @@ body {
   min-width: 0;
   overflow: hidden;
   --sidebar-width: min(320px, 88vw);
-  --left-rail-width: 74px;
+  --left-rail-width: 62px;
   --right-rail-width: 62px;
   --right-ui-clearance: var(--right-rail-width);
 }
@@ -127,9 +127,9 @@ body.presentation-mode .work-area {
   width: var(--left-rail-width);
   display: flex;
   flex-direction: column;
-  gap: 7px;
+  gap: 6px;
   align-items: stretch;
-  padding: 8px 7px;
+  padding: 7px 6px;
   border-right: 1px solid rgba(203, 213, 225, 0.8);
   background: rgba(255, 255, 255, 0.92);
   box-shadow: 4px 0 16px rgba(15, 23, 42, 0.08);
@@ -150,8 +150,8 @@ body.presentation-mode .work-area {
   flex-direction: column;
   flex-wrap: nowrap;
   justify-content: center;
-  gap: 5px;
-  padding: 6px 4px;
+  gap: 4px;
+  padding: 5px 3px;
 }
 
 .left-tool-rail .group-label {
@@ -160,10 +160,20 @@ body.presentation-mode .work-area {
   text-align: center;
 }
 
+.left-tool-rail .geometry-toolbar-group .group-label {
+  display: none;
+}
+
 .left-tool-rail .icon-btn,
 .left-tool-rail .constraint-toolbar-group button {
-  width: 36px;
-  height: 36px;
+  width: 30px;
+  height: 30px;
+}
+
+.left-tool-rail .icon-btn svg,
+.left-tool-rail .constraint-toolbar-group button svg {
+  width: 16px;
+  height: 16px;
 }
 
 .left-tool-rail .presentation-style-group {
@@ -180,32 +190,33 @@ body.presentation-mode .work-area {
 .mode-switch {
   display: inline-grid;
   grid-template-columns: 1fr 1fr;
-  gap: 3px;
-  padding: 3px;
+  gap: 2px;
+  padding: 2px;
   border: 1px solid #bfdbfe;
-  border-radius: 12px;
+  border-radius: 10px;
   background: #eaf2ff;
 }
 
 .mode-switch-btn {
   display: inline-flex;
   align-items: center;
-  gap: 7px;
-  min-width: 174px;
-  height: 42px;
+  gap: 5px;
+  min-width: 142px;
+  height: 34px;
   justify-content: center;
-  padding: 0 13px;
+  padding: 0 9px;
   border-color: transparent;
-  border-radius: 9px;
+  border-radius: 8px;
   color: #334155;
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 700;
   background: transparent;
+  white-space: nowrap;
 }
 
 .mode-switch-btn svg {
-  width: 19px;
-  height: 19px;
+  width: 16px;
+  height: 16px;
 }
 
 .mode-switch-btn.active {
@@ -696,14 +707,15 @@ h2 {
 .mode-overlay {
   position: absolute;
   top: 12px;
-  left: var(--left-rail-width);
-  right: var(--right-ui-clearance);
+  left: calc(var(--left-rail-width) + ((100% - var(--left-rail-width) - var(--right-ui-clearance)) / 2));
+  right: auto;
+  transform: translateX(-50%);
   z-index: 4;
   display: grid;
   gap: 5px;
   justify-items: center;
-  width: auto;
-  max-width: none;
+  width: max-content;
+  max-width: calc(100% - var(--left-rail-width) - var(--right-ui-clearance) - 16px);
   color: #111827;
   pointer-events: none;
 }
@@ -713,13 +725,11 @@ h2 {
 }
 
 .side-collapsed .mode-overlay {
-  right: var(--right-ui-clearance);
-  max-width: none;
+  right: auto;
 }
 
 .app:not(.side-collapsed) .mode-overlay {
-  right: var(--right-ui-clearance);
-  max-width: none;
+  right: auto;
 }
 
 .mode-overlay .mode-switch {
