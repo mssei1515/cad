@@ -74,7 +74,7 @@ body.presentation-mode .work-area {
   display: flex;
   gap: 6px;
   align-items: center;
-  justify-content: flex-end;
+  justify-content: flex-start;
   min-height: 50px;
   padding: 7px 10px;
   border-bottom: 1px solid var(--line);
@@ -171,8 +171,11 @@ body.presentation-mode .work-area {
   grid-template-columns: repeat(2, minmax(0, 1fr));
   justify-items: center;
   gap: 3px;
-  padding: 4px 3px;
-  border-radius: 6px;
+  padding: 5px 3px 3px;
+  border: 0;
+  border-top: 1px solid rgba(148, 163, 184, 0.48);
+  border-radius: 0;
+  background: transparent;
 }
 
 .left-tool-rail .icon-btn,
@@ -183,8 +186,8 @@ body.presentation-mode .work-area {
 
 .left-tool-rail .icon-btn svg,
 .left-tool-rail .constraint-toolbar-group button svg {
-  width: 14px;
-  height: 14px;
+  width: 19px;
+  height: 19px;
 }
 
 .left-tool-rail .presentation-style-group {
@@ -770,9 +773,7 @@ h2 {
   backdrop-filter: blur(6px);
 }
 
-body.geometry-mode .mode-overlay-sheet .sheet-select,
-body.geometry-mode .mode-overlay-sheet #addPresentationSheetBtn,
-body.geometry-mode .mode-overlay-sheet #renamePresentationSheetBtn {
+body.geometry-mode .mode-overlay-sheet {
   display: none;
 }
 

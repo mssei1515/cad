@@ -149,6 +149,9 @@ test("geometry toolbar uses the organized command groups", async ({ page }) => {
     const blockRect = blockOverlay.getBoundingClientRect();
     const tabsRect = sidebarTabs.getBoundingClientRect();
     const firstToolGroup = document.querySelector(".left-tool-rail .geometry-toolbar-group");
+    const firstTopButtonRect = document.getElementById("undoBtn").getBoundingClientRect();
+    const geometrySheetDisplay = getComputedStyle(document.querySelector(".mode-overlay-sheet")).display;
+    const firstToolGroupStyle = getComputedStyle(firstToolGroup);
     const firstToolGroupButtons = [...firstToolGroup.querySelectorAll("button")]
       .filter((element) => getComputedStyle(element).display !== "none")
       .map((element) => {
@@ -162,6 +165,11 @@ test("geometry toolbar uses the organized command groups", async ({ page }) => {
       blockCreateParentId: document.getElementById("toolCreateBlock").closest("section").id,
       blockPlaceParentId: document.getElementById("toolPlaceBlock").closest("section").id,
       presentationGroupVisible: getComputedStyle(document.getElementById("presentationStyleGroup")).display !== "none",
+      geometrySheetDisplay,
+      firstToolGroupBorderTopWidth: firstToolGroupStyle.borderTopWidth,
+      firstToolGroupBorderLeftWidth: firstToolGroupStyle.borderLeftWidth,
+      firstToolGroupBackground: firstToolGroupStyle.backgroundColor,
+      firstTopButtonLeft: firstTopButtonRect.left,
       toggleParentClass: toggle.parentElement.className,
       tabsParentClass: sidebarTabs.parentElement.className,
       tabsInsideSidebar: Boolean(sidebarTabs.closest(".side")),
@@ -209,6 +217,11 @@ test("geometry toolbar uses the organized command groups", async ({ page }) => {
   expect(layout.blockCreateParentId).toBe("blockOverlay");
   expect(layout.blockPlaceParentId).toBe("blockOverlay");
   expect(layout.presentationGroupVisible).toBe(false);
+  expect(layout.geometrySheetDisplay).toBe("none");
+  expect(layout.firstToolGroupBorderTopWidth).toBe("1px");
+  expect(layout.firstToolGroupBorderLeftWidth).toBe("0px");
+  expect(layout.firstToolGroupBackground).toBe("rgba(0, 0, 0, 0)");
+  expect(layout.firstTopButtonLeft).toBeLessThan(80);
   expect(layout.firstToolGroupColumnCount).toBe(2);
   expect(layout.leftRailScrollableX).toBe(false);
   expect(layout.leftRailScrollableY).toBe(false);
