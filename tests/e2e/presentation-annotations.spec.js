@@ -240,7 +240,7 @@ test("geometry toolbar uses the organized command groups", async ({ page }) => {
   expect(layout.blockPlaceParentId).toBe("blockOverlay");
   expect(layout.presentationGroupVisible).toBe(false);
   expect(layout.geometrySheetDisplay).toBe("none");
-  expect(layout.fileGroupBorderTopWidth).toBe("1px");
+  expect(layout.fileGroupBorderTopWidth).toBe("0px");
   expect(layout.fileGroupBorderLeftWidth).toBe("0px");
   expect(layout.fileGroupBackground).toBe("rgba(0, 0, 0, 0)");
   expect(layout.firstToolGroupBorderTopWidth).toBe("1px");
