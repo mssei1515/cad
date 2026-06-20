@@ -150,9 +150,11 @@ test("geometry toolbar uses the organized command groups", async ({ page }) => {
     const sketchRect = sketchOverlay.getBoundingClientRect();
     const blockRect = blockOverlay.getBoundingClientRect();
     const fileButtonRect = document.getElementById("exportBtn").getBoundingClientRect();
+    const selectButtonRect = document.getElementById("toolSelect").getBoundingClientRect();
     const firstToolGroup = document.querySelector(".left-tool-rail .geometry-toolbar-group");
     const undoButtonRect = document.getElementById("undoBtn").getBoundingClientRect();
     const geometrySheetDisplay = getComputedStyle(document.querySelector(".mode-overlay-sheet")).display;
+    const fileGroupStyle = getComputedStyle(fileGroup);
     const firstToolGroupStyle = getComputedStyle(firstToolGroup);
     const firstToolGroupButtons = [...firstToolGroup.querySelectorAll("button")]
       .filter(isVisible)
@@ -168,6 +170,9 @@ test("geometry toolbar uses the organized command groups", async ({ page }) => {
       blockPlaceParentId: document.getElementById("toolPlaceBlock").closest("section").id,
       presentationGroupVisible: getComputedStyle(document.getElementById("presentationStyleGroup")).display !== "none",
       geometrySheetDisplay,
+      fileGroupBorderTopWidth: fileGroupStyle.borderTopWidth,
+      fileGroupBorderLeftWidth: fileGroupStyle.borderLeftWidth,
+      fileGroupBackground: fileGroupStyle.backgroundColor,
       firstToolGroupBorderTopWidth: firstToolGroupStyle.borderTopWidth,
       firstToolGroupBorderLeftWidth: firstToolGroupStyle.borderLeftWidth,
       firstToolGroupBackground: firstToolGroupStyle.backgroundColor,
@@ -176,6 +181,8 @@ test("geometry toolbar uses the organized command groups", async ({ page }) => {
       fileGroupText: fileGroup.textContent.trim(),
       fileButtonWidth: fileButtonRect.width,
       fileButtonHeight: fileButtonRect.height,
+      selectButtonWidth: selectButtonRect.width,
+      selectButtonHeight: selectButtonRect.height,
       presentationSheetLabelExists: Boolean(document.getElementById("presentationSheetLabel")),
       undoButtonLeft: undoButtonRect.left,
       tabsParentClass: sidebarTabs.parentElement.className,
@@ -233,6 +240,9 @@ test("geometry toolbar uses the organized command groups", async ({ page }) => {
   expect(layout.blockPlaceParentId).toBe("blockOverlay");
   expect(layout.presentationGroupVisible).toBe(false);
   expect(layout.geometrySheetDisplay).toBe("none");
+  expect(layout.fileGroupBorderTopWidth).toBe("1px");
+  expect(layout.fileGroupBorderLeftWidth).toBe("0px");
+  expect(layout.fileGroupBackground).toBe("rgba(0, 0, 0, 0)");
   expect(layout.firstToolGroupBorderTopWidth).toBe("1px");
   expect(layout.firstToolGroupBorderLeftWidth).toBe("0px");
   expect(layout.firstToolGroupBackground).toBe("rgba(0, 0, 0, 0)");
@@ -241,6 +251,8 @@ test("geometry toolbar uses the organized command groups", async ({ page }) => {
   expect(layout.fileGroupText).toBe("");
   expect(layout.fileButtonWidth).toBe(26);
   expect(layout.fileButtonHeight).toBe(26);
+  expect(layout.selectButtonWidth).toBeGreaterThan(layout.fileButtonWidth * 1.8);
+  expect(layout.selectButtonHeight).toBe(26);
   expect(layout.presentationSheetLabelExists).toBe(false);
   expect(layout.fileGroupRect.left).toBeGreaterThanOrEqual(layout.leftRailRect.left);
   expect(layout.fileGroupRect.right).toBeLessThanOrEqual(layout.leftRailRect.right + 1);
