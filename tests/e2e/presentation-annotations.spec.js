@@ -151,6 +151,7 @@ test("geometry toolbar uses the organized command groups", async ({ page }) => {
     const blockRect = blockOverlay.getBoundingClientRect();
     const fileButtonRect = document.getElementById("exportBtn").getBoundingClientRect();
     const selectButtonRect = document.getElementById("toolSelect").getBoundingClientRect();
+    const selectButtonStyle = getComputedStyle(document.getElementById("toolSelect"));
     const firstToolGroup = document.querySelector(".left-tool-rail .geometry-toolbar-group");
     const undoButtonRect = document.getElementById("undoBtn").getBoundingClientRect();
     const geometrySheetDisplay = getComputedStyle(document.querySelector(".mode-overlay-sheet")).display;
@@ -183,6 +184,7 @@ test("geometry toolbar uses the organized command groups", async ({ page }) => {
       fileButtonHeight: fileButtonRect.height,
       selectButtonWidth: selectButtonRect.width,
       selectButtonHeight: selectButtonRect.height,
+      selectButtonBoxShadow: selectButtonStyle.boxShadow,
       presentationSheetLabelExists: Boolean(document.getElementById("presentationSheetLabel")),
       undoButtonLeft: undoButtonRect.left,
       tabsParentClass: sidebarTabs.parentElement.className,
@@ -253,6 +255,7 @@ test("geometry toolbar uses the organized command groups", async ({ page }) => {
   expect(layout.fileButtonHeight).toBe(26);
   expect(layout.selectButtonWidth).toBeGreaterThan(layout.fileButtonWidth * 1.8);
   expect(layout.selectButtonHeight).toBe(26);
+  expect(layout.selectButtonBoxShadow).not.toContain("0px 0px 0px 3px");
   expect(layout.presentationSheetLabelExists).toBe(false);
   expect(layout.fileGroupRect.left).toBeGreaterThanOrEqual(layout.leftRailRect.left);
   expect(layout.fileGroupRect.right).toBeLessThanOrEqual(layout.leftRailRect.right + 1);

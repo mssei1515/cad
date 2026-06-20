@@ -478,6 +478,10 @@ button.active {
   font-weight: 700;
 }
 
+.left-tool-rail button.active {
+  box-shadow: inset 0 0 0 1px rgb(37 99 235 / 42%);
+}
+
 .toolbar button.active {
   transform: translateY(1px);
 }
