@@ -148,6 +148,13 @@ test("geometry toolbar uses the organized command groups", async ({ page }) => {
     const sketchRect = sketchOverlay.getBoundingClientRect();
     const blockRect = blockOverlay.getBoundingClientRect();
     const tabsRect = sidebarTabs.getBoundingClientRect();
+    const firstToolGroup = document.querySelector(".left-tool-rail .geometry-toolbar-group");
+    const firstToolGroupButtons = [...firstToolGroup.querySelectorAll("button")]
+      .filter((element) => getComputedStyle(element).display !== "none")
+      .map((element) => {
+        const rect = element.getBoundingClientRect();
+        return Math.round((rect.left + rect.right) / 2);
+      });
     return {
       visibleTopButtons,
       visibleLeftCommandIds,
@@ -163,6 +170,9 @@ test("geometry toolbar uses the organized command groups", async ({ page }) => {
       modeRect: { left: modeRect.left, right: modeRect.right },
       modeSwitchCenter: (modeSwitchRect.left + modeSwitchRect.right) / 2,
       visibleCanvasCenter: (leftRailRect.right + tabsRect.left) / 2,
+      leftRailScrollableX: leftRail.scrollWidth > leftRail.clientWidth + 1,
+      leftRailScrollableY: leftRail.scrollHeight > leftRail.clientHeight + 1,
+      firstToolGroupColumnCount: new Set(firstToolGroupButtons).size,
       sketchLeft: sketchRect.left,
       blockLeft: blockRect.left,
       toggleRect: { left: toggleRect.left, right: toggleRect.right, top: toggleRect.top, bottom: toggleRect.bottom },
@@ -199,6 +209,9 @@ test("geometry toolbar uses the organized command groups", async ({ page }) => {
   expect(layout.blockCreateParentId).toBe("blockOverlay");
   expect(layout.blockPlaceParentId).toBe("blockOverlay");
   expect(layout.presentationGroupVisible).toBe(false);
+  expect(layout.firstToolGroupColumnCount).toBe(2);
+  expect(layout.leftRailScrollableX).toBe(false);
+  expect(layout.leftRailScrollableY).toBe(false);
   expect(layout.modeRect.left).toBeGreaterThanOrEqual(layout.leftRailRect.right - 1);
   expect(layout.sketchLeft).toBeGreaterThan(layout.leftRailRect.right);
   expect(layout.blockLeft).toBeGreaterThan(layout.leftRailRect.right);
