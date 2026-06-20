@@ -11766,6 +11766,13 @@
 
   document.getElementById("undoBtn")?.addEventListener("click", undoHistory);
   document.getElementById("redoBtn")?.addEventListener("click", redoHistory);
+  document.getElementById("deleteSelectionBtn")?.addEventListener("click", () => {
+    if (!isGeometryMode()) return;
+    if (deleteCurrentSelection()) {
+      updateUI();
+      draw();
+    }
+  });
   document.getElementById("geometryModeBtn")?.addEventListener("click", () => setAppMode("geometry"));
   document.getElementById("presentationModeBtn")?.addEventListener("click", () => setAppMode("presentation"));
   document.getElementById("presentationSheetSelect")?.addEventListener("change", (event) => setActivePresentationSheet(event.target.value));
