@@ -129,26 +129,80 @@ test("undo preserves construction drawing mode", async ({ page }) => {
 test("geometry toolbar uses the organized command groups", async ({ page }) => {
   await page.goto(`${baseUrl}/index.html?test=1`);
   const layout = await page.evaluate(() => {
-    const visibleLabels = [...document.querySelectorAll(".toolbar .group-label")]
-      .filter((element) => getComputedStyle(element.parentElement).display !== "none")
-      .map((element) => element.textContent.trim());
+    const visibleTopButtons = [...document.querySelectorAll(".toolbar button")]
+      .filter((element) => getComputedStyle(element).display !== "none")
+      .map((element) => element.id);
+    const visibleLeftCommandIds = [...document.querySelectorAll(".left-tool-rail button")]
+      .filter((element) => getComputedStyle(element).display !== "none")
+      .map((element) => element.id || element.dataset.constraint);
     const toggle = document.getElementById("toggleSideBtn");
     const sidebarTabs = document.querySelector(".sidebar-tabs");
+    const leftRail = document.querySelector(".left-tool-rail");
+    const modeOverlay = document.querySelector(".mode-overlay");
+    const sketchOverlay = document.querySelector(".sketch-overlay");
+    const blockOverlay = document.querySelector(".block-overlay");
     const toggleRect = toggle.getBoundingClientRect();
+    const leftRailRect = leftRail.getBoundingClientRect();
+    const modeRect = modeOverlay.getBoundingClientRect();
+    const modeSwitchRect = document.querySelector(".mode-switch").getBoundingClientRect();
+    const sketchRect = sketchOverlay.getBoundingClientRect();
+    const blockRect = blockOverlay.getBoundingClientRect();
+    const tabsRect = sidebarTabs.getBoundingClientRect();
     return {
-      visibleLabels,
+      visibleTopButtons,
+      visibleLeftCommandIds,
       pointToolVisible: getComputedStyle(document.getElementById("toolPoint")).display !== "none",
+      blockCreateParentId: document.getElementById("toolCreateBlock").closest("section").id,
+      blockPlaceParentId: document.getElementById("toolPlaceBlock").closest("section").id,
+      presentationGroupVisible: getComputedStyle(document.getElementById("presentationStyleGroup")).display !== "none",
       toggleParentClass: toggle.parentElement.className,
       tabsParentClass: sidebarTabs.parentElement.className,
       tabsInsideSidebar: Boolean(sidebarTabs.closest(".side")),
       tabsDirection: getComputedStyle(sidebarTabs).flexDirection,
+      leftRailRect: { left: leftRailRect.left, right: leftRailRect.right, top: leftRailRect.top, bottom: leftRailRect.bottom },
+      modeRect: { left: modeRect.left, right: modeRect.right },
+      modeSwitchCenter: (modeSwitchRect.left + modeSwitchRect.right) / 2,
+      visibleCanvasCenter: (leftRailRect.right + tabsRect.left) / 2,
+      sketchLeft: sketchRect.left,
+      blockLeft: blockRect.left,
       toggleRect: { left: toggleRect.left, right: toggleRect.right, top: toggleRect.top, bottom: toggleRect.bottom },
       viewport: { width: innerWidth, height: innerHeight },
     };
   });
   await page.screenshot({ path: "test-results/toolbar-layout.png", fullPage: true });
-  expect(layout.visibleLabels).toEqual(["基本作図", "複合作図", "編集", "拘束", "ファイル"]);
+  expect(layout.visibleTopButtons).toEqual(["undoBtn", "redoBtn", "exportBtn", "importBtn"]);
+  expect(layout.visibleLeftCommandIds).toEqual(
+    expect.arrayContaining([
+      "toolSelect",
+      "toolPoint",
+      "toolLine",
+      "toolCircle",
+      "toolArc",
+      "toolConstructionLine",
+      "toolRectangle",
+      "toolTrim",
+      "toolFillet",
+      "toolOffset",
+      "distance",
+      "coincident",
+      "horizontal",
+      "vertical",
+      "parallel",
+      "perpendicular",
+      "concentric",
+      "equal",
+      "tangent",
+      "fixPointBtn",
+    ]),
+  );
   expect(layout.pointToolVisible).toBe(true);
+  expect(layout.blockCreateParentId).toBe("blockOverlay");
+  expect(layout.blockPlaceParentId).toBe("blockOverlay");
+  expect(layout.presentationGroupVisible).toBe(false);
+  expect(layout.modeRect.left).toBeGreaterThanOrEqual(layout.leftRailRect.right - 1);
+  expect(layout.sketchLeft).toBeGreaterThan(layout.leftRailRect.right);
+  expect(layout.blockLeft).toBeGreaterThan(layout.leftRailRect.right);
+  expect(Math.abs(layout.modeSwitchCenter - layout.visibleCanvasCenter)).toBeLessThan(40);
   expect(layout.toggleParentClass).toBe("work-area");
   expect(layout.tabsParentClass).toBe("work-area");
   expect(layout.tabsInsideSidebar).toBe(false);
@@ -162,14 +216,19 @@ test("geometry toolbar uses the organized command groups", async ({ page }) => {
   const openSidebarLayout = await page.evaluate(() => {
     const sideRect = document.querySelector(".side").getBoundingClientRect();
     const modeRect = document.querySelector(".mode-overlay").getBoundingClientRect();
+    const modeSwitchRect = document.querySelector(".mode-switch").getBoundingClientRect();
+    const sketchRect = document.querySelector(".sketch-overlay").getBoundingClientRect();
     return {
       sideLeft: sideRect.left,
       modeRight: modeRect.right,
+      modeSwitchLeft: modeSwitchRect.left,
+      sketchRight: sketchRect.right,
       appCollapsed: document.querySelector(".app").classList.contains("side-collapsed"),
     };
   });
   expect(openSidebarLayout.appCollapsed).toBe(false);
   expect(openSidebarLayout.modeRight).toBeLessThan(openSidebarLayout.sideLeft - 40);
+  expect(openSidebarLayout.sketchRight).toBeLessThan(openSidebarLayout.modeSwitchLeft - 4);
 
   const canvas = await page.locator("#canvas").boundingBox();
   await page.mouse.click(canvas.x + canvas.width * 0.48, canvas.y + canvas.height * 0.82);
@@ -190,8 +249,32 @@ test("geometry toolbar uses the organized command groups", async ({ page }) => {
   });
   expect(collapsedPresentationLayout.appCollapsed).toBe(true);
   expect(collapsedPresentationLayout.modeRight).toBeLessThan(collapsedPresentationLayout.tabsLeft - 4);
+  const presentationToolLayout = await page.evaluate(() => ({
+    presentationGroupVisible: getComputedStyle(document.getElementById("presentationStyleGroup")).display !== "none",
+    geometryGroupsVisible: [...document.querySelectorAll(".left-tool-rail .geometry-toolbar-group")]
+      .some((element) => getComputedStyle(element).display !== "none"),
+    selectVisible: getComputedStyle(document.getElementById("presentationSelectBtn")).display !== "none",
+    dimensionVisible: getComputedStyle(document.getElementById("presentationDimensionBtn")).display !== "none",
+    leaderVisible: getComputedStyle(document.getElementById("presentationLeaderBtn")).display !== "none",
+  }));
+  expect(presentationToolLayout.presentationGroupVisible).toBe(true);
+  expect(presentationToolLayout.geometryGroupsVisible).toBe(false);
+  expect(presentationToolLayout.selectVisible).toBe(true);
+  expect(presentationToolLayout.dimensionVisible).toBe(true);
+  expect(presentationToolLayout.leaderVisible).toBe(true);
+  await page.screenshot({ path: "test-results/presentation-layout.png", fullPage: true });
   await page.click("#toggleSideBtn");
   expect(await page.locator(".side").isVisible()).toBe(true);
+  const openPresentationLayout = await page.evaluate(() => {
+    const modeSwitchRect = document.querySelector(".mode-switch").getBoundingClientRect();
+    const sketchRect = document.querySelector(".sketch-overlay").getBoundingClientRect();
+    return {
+      modeSwitchLeft: modeSwitchRect.left,
+      sketchRight: sketchRect.right,
+    };
+  });
+  expect(openPresentationLayout.sketchRight).toBeLessThan(openPresentationLayout.modeSwitchLeft - 4);
+  await page.screenshot({ path: "test-results/presentation-sidebar-layout.png", fullPage: true });
   await page.mouse.click(canvas.x + canvas.width * 0.48, canvas.y + canvas.height * 0.82);
   expect(await page.locator(".side").isVisible()).toBe(false);
   await page.click("#geometryModeBtn");
