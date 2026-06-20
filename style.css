@@ -723,31 +723,12 @@ h2 {
 }
 
 .mode-overlay {
-  position: absolute;
-  top: 12px;
-  left: calc(var(--left-rail-width) + ((100% - var(--left-rail-width) - var(--right-ui-clearance)) / 2));
-  right: auto;
-  transform: translateX(-50%);
-  z-index: 4;
-  display: grid;
-  gap: 5px;
-  justify-items: center;
-  width: max-content;
-  max-width: calc(100% - var(--left-rail-width) - var(--right-ui-clearance) - 16px);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: auto;
+  min-width: 0;
   color: #111827;
-  pointer-events: none;
-}
-
-.mode-overlay > * {
-  pointer-events: auto;
-}
-
-.side-collapsed .mode-overlay {
-  right: auto;
-}
-
-.app:not(.side-collapsed) .mode-overlay {
-  right: auto;
 }
 
 .mode-overlay .mode-switch {
