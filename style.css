@@ -169,10 +169,7 @@ body.presentation-mode .work-area {
 }
 
 .left-tool-rail .toolbar-home {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  justify-items: center;
-  gap: 3px;
+  justify-content: center;
   padding: 0;
 }
 
@@ -567,31 +564,6 @@ canvas.is-panning {
   visibility: hidden;
   overflow: hidden;
   pointer-events: none;
-}
-
-button.sidebar-toggle-btn {
-  position: absolute;
-  right: var(--sidebar-width);
-  top: 50%;
-  z-index: 8;
-  width: 30px;
-  height: 48px;
-  padding: 0;
-  transform: translateY(-50%);
-  border: 1px solid var(--line);
-  border-right: 0;
-  border-radius: 7px 0 0 7px;
-  background: #fff;
-  box-shadow: -3px 2px 8px rgb(17 24 39 / 10%);
-}
-
-.sidebar-toggle-btn svg {
-  width: 18px;
-  height: 18px;
-}
-
-.side-collapsed button.sidebar-toggle-btn {
-  right: 0;
 }
 
 h1 {

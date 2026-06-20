@@ -12023,7 +12023,7 @@
     updateSketchUI();
   });
 
-  document.getElementById("toggleSideBtn").addEventListener("click", () => {
+  document.getElementById("toggleSideBtn")?.addEventListener("click", () => {
     const app = document.querySelector(".app");
     const isCollapsed = app?.classList.contains("side-collapsed");
     setSidebarCollapsed(!isCollapsed, isCollapsed ? "サイドバーを表示しました" : "サイドバーをたたみました");

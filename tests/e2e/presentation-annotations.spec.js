@@ -136,7 +136,6 @@ test("geometry toolbar uses the organized command groups", async ({ page }) => {
     const visibleLeftCommandIds = [...document.querySelectorAll(".left-tool-rail button")]
       .filter(isVisible)
       .map((element) => element.id || element.dataset.constraint);
-    const toggle = document.getElementById("toggleSideBtn");
     const sidebarTabs = document.querySelector(".sidebar-tabs");
     const toolbar = document.querySelector(".toolbar");
     const fileGroup = document.querySelector(".file-toolbar-group");
@@ -144,7 +143,6 @@ test("geometry toolbar uses the organized command groups", async ({ page }) => {
     const modeOverlay = document.querySelector(".mode-overlay");
     const sketchOverlay = document.querySelector(".sketch-overlay");
     const blockOverlay = document.querySelector(".block-overlay");
-    const toggleRect = toggle.getBoundingClientRect();
     const toolbarRect = toolbar.getBoundingClientRect();
     const fileGroupRect = fileGroup.getBoundingClientRect();
     const leftRailRect = leftRail.getBoundingClientRect();
@@ -180,7 +178,6 @@ test("geometry toolbar uses the organized command groups", async ({ page }) => {
       fileButtonHeight: fileButtonRect.height,
       presentationSheetLabelExists: Boolean(document.getElementById("presentationSheetLabel")),
       undoButtonLeft: undoButtonRect.left,
-      toggleParentClass: toggle.parentElement.className,
       tabsParentClass: sidebarTabs.parentElement.className,
       tabsInsideSidebar: Boolean(sidebarTabs.closest(".side")),
       tabsDirection: getComputedStyle(sidebarTabs).flexDirection,
@@ -193,7 +190,7 @@ test("geometry toolbar uses the organized command groups", async ({ page }) => {
       firstToolGroupColumnCount: new Set(firstToolGroupButtons).size,
       sketchLeft: sketchRect.left,
       blockLeft: blockRect.left,
-      toggleRect: { left: toggleRect.left, right: toggleRect.right, top: toggleRect.top, bottom: toggleRect.bottom },
+      toggleExists: Boolean(document.getElementById("toggleSideBtn")),
       viewport: { width: innerWidth, height: innerHeight },
     };
   });
@@ -209,7 +206,6 @@ test("geometry toolbar uses the organized command groups", async ({ page }) => {
       "exportBtn",
       "importBtn",
       "toolSelect",
-      "deleteSelectionBtn",
       "toolPoint",
       "toolLine",
       "toolCircle",
@@ -219,6 +215,7 @@ test("geometry toolbar uses the organized command groups", async ({ page }) => {
       "toolTrim",
       "toolFillet",
       "toolOffset",
+      "deleteSelectionBtn",
       "distance",
       "coincident",
       "horizontal",
@@ -255,15 +252,12 @@ test("geometry toolbar uses the organized command groups", async ({ page }) => {
   expect(layout.leftRailScrollableY).toBe(false);
   expect(layout.sketchLeft).toBeGreaterThan(layout.leftRailRect.right);
   expect(layout.blockLeft).toBeGreaterThan(layout.leftRailRect.right);
-  expect(layout.toggleParentClass).toBe("work-area");
+  expect(layout.toggleExists).toBe(false);
   expect(layout.tabsParentClass).toBe("work-area");
   expect(layout.tabsInsideSidebar).toBe(false);
   expect(layout.tabsDirection).toBe("column");
-  expect(layout.toggleRect.right).toBeLessThanOrEqual(layout.viewport.width);
-  expect(layout.toggleRect.top).toBeGreaterThan(0);
-  expect(layout.toggleRect.bottom).toBeLessThan(layout.viewport.height);
 
-  await page.click("#toggleSideBtn");
+  await page.click('[data-sidebar-tab="constraints"]');
   expect(await page.locator(".side").isVisible()).toBe(true);
   const openSidebarLayout = await page.evaluate(() => {
     const sideRect = document.querySelector(".side").getBoundingClientRect();
@@ -349,7 +343,7 @@ test("geometry toolbar uses the organized command groups", async ({ page }) => {
   expect(presentationToolLayout.dimensionVisible).toBe(true);
   expect(presentationToolLayout.leaderVisible).toBe(true);
   await page.screenshot({ path: "test-results/presentation-layout.png", fullPage: true });
-  await page.click("#toggleSideBtn");
+  await page.click('[data-sidebar-tab="constraints"]');
   expect(await page.locator(".side").isVisible()).toBe(true);
   const openPresentationLayout = await page.evaluate(() => {
     const toolbarRect = document.querySelector(".toolbar").getBoundingClientRect();
@@ -431,7 +425,6 @@ test("all geometry fit includes figures from every sketch", async ({ page }) => 
 test("sidebar lists circles and arcs and highlights related geometry", async ({ page }) => {
   await page.goto(`${baseUrl}/index.html?test=1`);
   const ids = await page.evaluate(() => window.__cadTest.resetForSidebarInspection());
-  await page.click("#toggleSideBtn");
   await page.click('[data-sidebar-tab="circles"]');
   await expect(page.locator("#sidebarCircles")).toBeVisible();
   expect(await page.locator("#circleList .geometry-list-row").count()).toBe(1);
