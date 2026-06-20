@@ -151,6 +151,7 @@ test("geometry toolbar uses the organized command groups", async ({ page }) => {
     const modeRect = modeOverlay.getBoundingClientRect();
     const sketchRect = sketchOverlay.getBoundingClientRect();
     const blockRect = blockOverlay.getBoundingClientRect();
+    const fileButtonRect = document.getElementById("exportBtn").getBoundingClientRect();
     const firstToolGroup = document.querySelector(".left-tool-rail .geometry-toolbar-group");
     const undoButtonRect = document.getElementById("undoBtn").getBoundingClientRect();
     const geometrySheetDisplay = getComputedStyle(document.querySelector(".mode-overlay-sheet")).display;
@@ -174,6 +175,10 @@ test("geometry toolbar uses the organized command groups", async ({ page }) => {
       firstToolGroupBackground: firstToolGroupStyle.backgroundColor,
       modeParentClass: modeOverlay.parentElement.className,
       fileGroupParentClass: fileGroup.parentElement.className,
+      fileGroupText: fileGroup.textContent.trim(),
+      fileButtonWidth: fileButtonRect.width,
+      fileButtonHeight: fileButtonRect.height,
+      presentationSheetLabelExists: Boolean(document.getElementById("presentationSheetLabel")),
       undoButtonLeft: undoButtonRect.left,
       toggleParentClass: toggle.parentElement.className,
       tabsParentClass: sidebarTabs.parentElement.className,
@@ -235,6 +240,10 @@ test("geometry toolbar uses the organized command groups", async ({ page }) => {
   expect(layout.firstToolGroupBackground).toBe("rgba(0, 0, 0, 0)");
   expect(layout.modeParentClass).toBe("toolbar-row mode-toolbar-row");
   expect(layout.fileGroupParentClass).toBe("toolbar-row file-toolbar-row");
+  expect(layout.fileGroupText).toBe("");
+  expect(layout.fileButtonWidth).toBe(26);
+  expect(layout.fileButtonHeight).toBe(26);
+  expect(layout.presentationSheetLabelExists).toBe(false);
   expect(layout.fileGroupRect.left).toBeLessThan(20);
   expect(layout.modeRect.left).toBeLessThan(20);
   expect(layout.fileGroupRect.bottom).toBeLessThanOrEqual(layout.modeRect.top + 1);

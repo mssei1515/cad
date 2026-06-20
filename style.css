@@ -120,6 +120,21 @@ body.presentation-mode .work-area {
   background: #fff;
 }
 
+.file-toolbar-group {
+  gap: 3px;
+  padding: 3px;
+}
+
+.file-toolbar-group .icon-btn {
+  width: 26px;
+  height: 26px;
+}
+
+.file-toolbar-group .icon-btn svg {
+  width: 19px;
+  height: 19px;
+}
+
 .toolbar-home {
   display: flex;
   align-items: center;
