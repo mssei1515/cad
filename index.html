@@ -9,39 +9,43 @@
 <body>
   <div class="app side-collapsed">
     <div class="toolbar" aria-label="ツールバー">
-      <section id="modeOverlay" class="mode-overlay" aria-label="モード">
-        <div class="mode-switch" role="group" aria-label="モード切替">
-          <button id="geometryModeBtn" class="mode-switch-btn active" title="ジオメトリ・モード" aria-label="ジオメトリ・モード">
-            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 18L12 5l7 13H5z"/><circle cx="12" cy="12" r="2"/></svg>
-            <span>ジオメトリ・モード</span>
+      <div class="toolbar-row file-toolbar-row">
+        <div class="toolbar-group file-toolbar-group" aria-label="ファイル">
+          <span class="group-label">ファイル</span>
+          <button id="undoBtn" class="icon-btn" title="戻る (Ctrl+Z)" aria-label="戻る" disabled>
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 7L4 12l5 5"/><path d="M5 12h9a5 5 0 1 1 0 10h-3"/></svg>
           </button>
-          <button id="presentationModeBtn" class="mode-switch-btn" title="プレゼンテーション・モード" aria-label="プレゼンテーション・モード">
-            <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="5" width="14" height="14" rx="1"/><path d="M8 9h8M8 13h5M8 17h7"/></svg>
-            <span>プレゼンテーション・モード</span>
+          <button id="redoBtn" class="icon-btn" title="進む (Ctrl+Y)" aria-label="進む" disabled>
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 7l5 5-5 5"/><path d="M19 12h-9a5 5 0 1 0 0 10h3"/></svg>
           </button>
+          <button id="exportBtn" class="icon-btn" title="ファイル保存" aria-label="ファイル保存">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 20h14V8l-4-4H5v16z"/><path d="M8 20v-6h8v6M8 4v5h7"/></svg>
+          </button>
+          <button id="importBtn" class="icon-btn" title="ファイル読込" aria-label="ファイル読込">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 20h14V8l-4-4H5v16z"/><path d="M12 17V9M8 13l4 4 4-4"/></svg>
+          </button>
+          <input id="importFileInput" type="file" accept="application/json,.json" hidden />
         </div>
-        <div class="mode-overlay-sheet">
-          <span id="presentationSheetLabel" class="mode-status">ジオメトリ・モード</span>
-          <select id="presentationSheetSelect" class="sheet-select" aria-label="Presentation Sheet"></select>
-          <button id="addPresentationSheetBtn" class="small-action-btn" type="button" title="Presentation Sheetを追加">Sheet+</button>
-          <button id="renamePresentationSheetBtn" class="small-action-btn" type="button" title="Presentation Sheetの名前変更">Aa</button>
-        </div>
-      </section>
-      <div class="toolbar-group file-toolbar-group" aria-label="ファイル">
-        <span class="group-label">ファイル</span>
-        <button id="undoBtn" class="icon-btn" title="戻る (Ctrl+Z)" aria-label="戻る" disabled>
-          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 7L4 12l5 5"/><path d="M5 12h9a5 5 0 1 1 0 10h-3"/></svg>
-        </button>
-        <button id="redoBtn" class="icon-btn" title="進む (Ctrl+Y)" aria-label="進む" disabled>
-          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 7l5 5-5 5"/><path d="M19 12h-9a5 5 0 1 0 0 10h3"/></svg>
-        </button>
-        <button id="exportBtn" class="icon-btn" title="ファイル保存" aria-label="ファイル保存">
-          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 20h14V8l-4-4H5v16z"/><path d="M8 20v-6h8v6M8 4v5h7"/></svg>
-        </button>
-        <button id="importBtn" class="icon-btn" title="ファイル読込" aria-label="ファイル読込">
-          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 20h14V8l-4-4H5v16z"/><path d="M12 17V9M8 13l4 4 4-4"/></svg>
-        </button>
-        <input id="importFileInput" type="file" accept="application/json,.json" hidden />
+      </div>
+      <div class="toolbar-row mode-toolbar-row">
+        <section id="modeOverlay" class="mode-overlay" aria-label="モード">
+          <div class="mode-switch" role="group" aria-label="モード切替">
+            <button id="geometryModeBtn" class="mode-switch-btn active" title="ジオメトリ・モード" aria-label="ジオメトリ・モード">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 18L12 5l7 13H5z"/><circle cx="12" cy="12" r="2"/></svg>
+              <span>ジオメトリ・モード</span>
+            </button>
+            <button id="presentationModeBtn" class="mode-switch-btn" title="プレゼンテーション・モード" aria-label="プレゼンテーション・モード">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="5" width="14" height="14" rx="1"/><path d="M8 9h8M8 13h5M8 17h7"/></svg>
+              <span>プレゼンテーション・モード</span>
+            </button>
+          </div>
+          <div class="mode-overlay-sheet">
+            <span id="presentationSheetLabel" class="mode-status">ジオメトリ・モード</span>
+            <select id="presentationSheetSelect" class="sheet-select" aria-label="Presentation Sheet"></select>
+            <button id="addPresentationSheetBtn" class="small-action-btn" type="button" title="Presentation Sheetを追加">Sheet+</button>
+            <button id="renamePresentationSheetBtn" class="small-action-btn" type="button" title="Presentation Sheetの名前変更">Aa</button>
+          </div>
+        </section>
       </div>
     </div>
     <div class="work-area">
