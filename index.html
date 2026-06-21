@@ -10,6 +10,33 @@
   <div class="app side-collapsed">
     <div class="toolbar" aria-label="ツールバー">
       <div class="toolbar-row mode-toolbar-row">
+        <section class="document-titlebar" aria-label="ファイル情報">
+          <svg class="app-logo-svg" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" role="img" aria-labelledby="cad2LogoTitle cad2LogoDesc">
+            <title id="cad2LogoTitle">Cad2 logo</title>
+            <desc id="cad2LogoDesc">小さいサイズでも見やすい、Cad2のシンプルなロゴ</desc>
+            <rect x="16" y="16" width="224" height="224" rx="44" fill="#1F2937"/>
+            <path
+              d="M68 78
+                 H160
+                 C188 78 205 96 205 118
+                 C205 139 193 153 174 163
+                 L78 206
+                 H194"
+              fill="none"
+              stroke="#F8FAFC"
+              stroke-width="20"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            />
+            <g stroke="#38BDF8" stroke-width="10" stroke-linecap="round">
+              <line x1="36" y1="78" x2="100" y2="78" />
+              <line x1="68" y1="46" x2="68" y2="110" />
+            </g>
+            <circle cx="68" cy="78" r="20" fill="#38BDF8"/>
+            <circle cx="194" cy="206" r="15" fill="#38BDF8"/>
+          </svg>
+          <input id="documentNameInput" class="document-name-input" type="text" value="無題" autocomplete="off" spellcheck="false" aria-label="ファイル名" />
+        </section>
         <section id="modeOverlay" class="mode-overlay" aria-label="モード">
           <div class="mode-switch" role="group" aria-label="モード切替">
             <button id="geometryModeBtn" class="mode-switch-btn active" title="ジオメトリ・モード" aria-label="ジオメトリ・モード">

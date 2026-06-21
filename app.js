@@ -51,6 +51,8 @@
   const canvas = document.getElementById("canvas");
   const ctx = canvas.getContext("2d");
   const dimensionValueInput = document.getElementById("dimensionValueInput");
+  const documentNameInput = document.getElementById("documentNameInput");
+  const DEFAULT_DOCUMENT_NAME = "無題";
   const ROOT_SKETCH_ID = "ROOT";
   const ROOT_SKETCH_NAME = "Root Sketch";
   const DEFAULT_SKETCH_ID = "S1";
@@ -58,6 +60,7 @@
   const DEFAULT_PRESENTATION_SHEET_ID = "PS1";
   const DEFAULT_PRESENTATION_SHEET_NAME = "Sheet-1";
   const model = {
+    documentName: DEFAULT_DOCUMENT_NAME,
     appMode: "geometry",
     sketches: [
       { id: ROOT_SKETCH_ID, name: ROOT_SKETCH_NAME, parentSketchId: null, kind: "root", visible: true },
@@ -230,6 +233,42 @@
     const el = document.getElementById("hint");
     el.textContent = msg;
     el.classList.toggle("error", kind === "error");
+  }
+
+  function sanitizeDocumentNameValue(value) {
+    return String(value ?? "").replace(/[\r\n\t]+/g, " ");
+  }
+
+  function effectiveDocumentName() {
+    const name = sanitizeDocumentNameValue(model.documentName).trim();
+    return name || DEFAULT_DOCUMENT_NAME;
+  }
+
+  function fileNameStem(fileName) {
+    const name = sanitizeDocumentNameValue(fileName).trim();
+    return name.replace(/\.[^.\\/]+$/, "") || DEFAULT_DOCUMENT_NAME;
+  }
+
+  function safeDownloadBaseName(name) {
+    return effectiveDocumentNameFromValue(name).replace(/[<>:"/\\|?*\x00-\x1F]/g, "_").replace(/[. ]+$/g, "").trim() || "cad-model";
+  }
+
+  function effectiveDocumentNameFromValue(value) {
+    const name = sanitizeDocumentNameValue(value).trim();
+    return name || DEFAULT_DOCUMENT_NAME;
+  }
+
+  function updateDocumentNameUI(forceInput = false) {
+    const displayName = effectiveDocumentName();
+    if (documentNameInput && (forceInput || document.activeElement !== documentNameInput)) {
+      documentNameInput.value = displayName;
+    }
+    document.title = `${displayName} - Cad2`;
+  }
+
+  function setDocumentName(value, { forceInput = false } = {}) {
+    model.documentName = sanitizeDocumentNameValue(value);
+    updateDocumentNameUI(forceInput);
   }
 
   function escapeHtml(value) {
@@ -2711,6 +2750,7 @@
   }
 
   function resetModelState() {
+    model.documentName = DEFAULT_DOCUMENT_NAME;
     model.points.length = 0;
     model.lines.length = 0;
     model.circles.length = 0;
@@ -2947,6 +2987,7 @@
     return {
       version: 8,
       savedAt: new Date().toISOString(),
+      documentName: effectiveDocumentName(),
       appMode: model.appMode,
       sketches: model.sketches.map((sketch) => ({
         id: sketch.id,
@@ -3017,6 +3058,7 @@
   function historySnapshot() {
     const data = serializeModel();
     delete data.savedAt;
+    delete data.documentName;
     return JSON.stringify(data);
   }
 
@@ -3050,9 +3092,11 @@
 
   function restoreHistorySnapshot(snapshot, label) {
     const constructionModeBeforeRestore = constructionLineMode;
+    const documentNameBeforeRestore = model.documentName;
     historyRestoring = true;
     try {
-      loadModelData(JSON.parse(snapshot));
+      loadModelData(JSON.parse(snapshot), { documentNameFallback: documentNameBeforeRestore });
+      model.documentName = documentNameBeforeRestore;
       constructionLineMode = constructionModeBeforeRestore;
       clearInteractionForSketchChange();
       solveAndRefresh(label);
@@ -3199,10 +3243,11 @@
     return constraint;
   }
 
-  function loadModelData(data) {
+  function loadModelData(data, options = {}) {
     if (!data || !Array.isArray(data.points) || !Array.isArray(data.lines) || !Array.isArray(data.constraints)) {
       throw new Error("保存データの形式が正しくありません");
     }
+    model.documentName = effectiveDocumentNameFromValue(data.documentName || options.documentNameFallback || DEFAULT_DOCUMENT_NAME);
 
     let loadedSketches =
       Array.isArray(data.sketches) && data.sketches.length > 0
@@ -3513,9 +3558,8 @@
       const blob = new Blob([data], { type: "application/json" });
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
-      const stamp = new Date().toISOString().replace(/[:.]/g, "-");
       a.href = url;
-      a.download = `cad-model-${stamp}.json`;
+      a.download = `${safeDownloadBaseName(model.documentName)}.json`;
       document.body.appendChild(a);
       a.click();
       a.remove();
@@ -3538,8 +3582,9 @@
     const reader = new FileReader();
     reader.addEventListener("load", () => {
       try {
-        loadModelData(JSON.parse(String(reader.result)));
+        loadModelData(JSON.parse(String(reader.result)), { documentNameFallback: fileNameStem(file.name) });
         solveAndRefresh("ファイル読み込み");
+        updateDocumentNameUI(true);
         fitAllGeometryToViewport();
         draw();
         log(`ファイルを読み込みました: ${file.name}`);
@@ -8669,6 +8714,7 @@
 
   function updateUI() {
     refreshConstraintAnalysis();
+    updateDocumentNameUI();
     updatePresentationUI();
     updateToolbar();
     updateSketchUI();
@@ -11898,6 +11944,24 @@
     }
   });
 
+  documentNameInput?.addEventListener("input", (event) => {
+    setDocumentName(event.target.value, { forceInput: false });
+  });
+  documentNameInput?.addEventListener("blur", () => {
+    setDocumentName(effectiveDocumentName(), { forceInput: true });
+  });
+  documentNameInput?.addEventListener("keydown", (event) => {
+    if (event.key === "Enter") {
+      event.preventDefault();
+      documentNameInput.blur();
+    }
+    if (event.key === "Escape") {
+      event.preventDefault();
+      updateDocumentNameUI(true);
+      documentNameInput.blur();
+    }
+  });
+
   document.getElementById("undoBtn")?.addEventListener("click", undoHistory);
   document.getElementById("redoBtn")?.addEventListener("click", redoHistory);
   document.getElementById("deleteSelectionBtn")?.addEventListener("click", () => {
@@ -12271,6 +12335,14 @@
   function installTestHooks() {
     if (!new URLSearchParams(window.location.search).has("test")) return;
     window.__cadTest = {
+      documentNameState() {
+        return {
+          modelName: model.documentName,
+          displayName: effectiveDocumentName(),
+          serializedName: serializeModel().documentName,
+          title: document.title,
+        };
+      },
       resetForPresentationDrag() {
         resetModelState();
         const p1 = addPoint(-60, -25, false, "endpoint");

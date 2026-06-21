@@ -87,8 +87,52 @@ body.presentation-mode .work-area {
   display: flex;
   align-items: center;
   justify-content: flex-start;
-  gap: 6px;
+  gap: 12px;
   min-width: 0;
+}
+
+.document-titlebar {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  flex: 0 1 360px;
+}
+
+.app-logo-svg {
+  width: 34px;
+  height: 34px;
+  flex: 0 0 auto;
+  display: block;
+}
+
+.document-name-input {
+  width: min(280px, 30vw);
+  min-width: 120px;
+  max-width: 320px;
+  height: 30px;
+  min-height: 30px;
+  padding: 2px 8px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: transparent;
+  color: #111827;
+  font: inherit;
+  font-size: 15px;
+  font-weight: 700;
+  line-height: 1.2;
+  outline: none;
+}
+
+.document-name-input:hover {
+  border-color: #cbd5e1;
+  background: #fff;
+}
+
+.document-name-input:focus {
+  border-color: #60a5fa;
+  background: #fff;
+  box-shadow: 0 0 0 3px rgba(96, 165, 250, 0.22);
 }
 
 .bottom-bar {
