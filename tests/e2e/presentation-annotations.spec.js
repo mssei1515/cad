@@ -559,10 +559,10 @@ test("sketch deletion removes its subtree and active sketch siblings remain visi
 
   const sibling = await page.evaluate(() => window.__cadTest.resetForSiblingVisibility());
   expect(sibling.visible).toBe(true);
-  expect(sibling.relation).toBe("sibling");
+  expect(sibling.relation).toBe("reference");
   expect(sibling.strokeWidth).toBe(1.8);
   expect(sibling.color).toBe("#cbd5e1");
-  expect(sibling.rowHasSiblingClass).toBe(true);
+  expect(sibling.rowHasVisibleClass).toBe(true);
 
   const deleted = await page.evaluate(() => window.__cadTest.resetForSketchDeletion());
   expect(deleted.deleted).toBe(true);
@@ -587,21 +587,21 @@ test("non-active sketch visibility can be toggled and is persisted", async ({ pa
   expect(state).toEqual({ preferenceVisible: true, effectiveVisible: true, serializedVisible: true, buttonPressed: "true" });
 });
 
-test("sibling subtrees are visible and their visibility follows the branch hierarchy", async ({ page }) => {
+test("non-active sketches are visible unless individually hidden", async ({ page }) => {
   await page.goto(`${baseUrl}/index.html?test=1`);
   await page.waitForFunction(() => window.__cadTest);
 
   const setup = await page.evaluate(() => window.__cadTest.resetForSiblingSubtreeReference());
-  expect(setup.relations).toEqual({ S10: "ancestor", S2: "sibling", S3: "sibling-descendant", S4: "sibling-descendant", S9: "hidden" });
-  expect(setup.visible).toEqual({ S10: true, S2: true, S3: true, S4: true, S9: false });
-  expect(setup.rowClasses).toEqual({ S2: true, S3: true, S4: true });
+  expect(setup.relations).toEqual({ S10: "reference", S2: "reference", S3: "reference", S4: "reference", S9: "reference", S11: "descendant" });
+  expect(setup.visible).toEqual({ S10: true, S2: true, S3: true, S4: true, S9: true, S11: true });
+  expect(setup.rowClasses).toEqual({ S2: true, S3: true, S4: true, S9: true, S11: true });
 
   await page.click('.sketchVisibilityBtn[data-id="S2"]');
   let state = await page.evaluate(() => window.__cadTest.siblingSubtreeVisibilityState());
   expect(state).toEqual({
     S2: { preferenceVisible: false, effectiveVisible: false },
-    S3: { preferenceVisible: true, effectiveVisible: false },
-    S4: { preferenceVisible: true, effectiveVisible: false },
+    S3: { preferenceVisible: true, effectiveVisible: true },
+    S4: { preferenceVisible: true, effectiveVisible: true },
   });
 
   await page.click('.sketchVisibilityBtn[data-id="S2"]');
@@ -614,7 +614,7 @@ test("sibling subtrees are visible and their visibility follows the branch hiera
   state = await page.evaluate(() => window.__cadTest.siblingSubtreeVisibilityState());
   expect(state.S2.effectiveVisible).toBe(true);
   expect(state.S3.effectiveVisible).toBe(false);
-  expect(state.S4.effectiveVisible).toBe(false);
+  expect(state.S4.effectiveVisible).toBe(true);
 });
 
 test("blank canvas click clears a selected dimension without leaving the constraint command", async ({ page }) => {
@@ -713,6 +713,23 @@ test("sibling descendants are read-only reference sources and protect their bran
 
   expect(await page.evaluate(() => window.__cadTest.deleteSketchForTest("S2"))).toBe(false);
   expect(await page.evaluate(() => window.__cadTest.sketchVisibilityState("S4").preferenceVisible)).toBe(true);
+
+  const unrelated = await page.evaluate(() => window.__cadTest.resetForSiblingSubtreeReference());
+  await page.click('[data-constraint="coincident"]');
+  await page.mouse.click(unrelated.unrelatedLine.x, unrelated.unrelatedLine.y);
+  await page.mouse.click(unrelated.activePoint.x, unrelated.activePoint.y);
+  state = await page.evaluate(() => window.__cadTest.referencePointLineState());
+  expect(state.count).toBe(1);
+  expect(state.errors[0]).toBeLessThan(1e-5);
+  expect(state.referenceSketchIds).toEqual(["S9"]);
+  expect(state.sketchIds).toEqual(["S1"]);
+
+  const descendant = await page.evaluate(() => window.__cadTest.resetForSiblingSubtreeReference());
+  await page.click('[data-constraint="coincident"]');
+  await page.mouse.click(descendant.childLine.x, descendant.childLine.y);
+  await page.mouse.click(descendant.activePoint.x, descendant.activePoint.y);
+  state = await page.evaluate(() => window.__cadTest.referencePointLineState());
+  expect(state.count).toBe(0);
 });
 
 test("reference dependents solve in topological order and cyclic loaded references are disabled", async ({ page }) => {

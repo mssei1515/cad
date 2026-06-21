@@ -1126,22 +1126,6 @@
     return sketch?.parentSketchId ? sketchById(sketch.parentSketchId) : null;
   }
 
-  function ancestorSketchIds(sketchId = activeSketchId()) {
-    const ids = [];
-    const visited = new Set();
-    let current = sketchById(sketchId);
-    while (current?.parentSketchId && !visited.has(current.id)) {
-      visited.add(current.id);
-      ids.push(current.parentSketchId);
-      current = sketchById(current.parentSketchId);
-    }
-    return ids;
-  }
-
-  function isAncestorSketchId(referenceSketchId, sketchId = activeSketchId()) {
-    return ancestorSketchIds(sketchId).includes(referenceSketchId);
-  }
-
   function childSketchesOf(sketchId) {
     ensureSketchState();
     return model.sketches.filter((sketch) => sketch.parentSketchId === sketchId);
@@ -1159,39 +1143,18 @@
     return result;
   }
 
-  function siblingSketchesOf(sketch) {
-    if (!sketch) return [];
-    ensureSketchState();
-    return model.sketches.filter((item) => item.id !== sketch.id && item.parentSketchId === sketch.parentSketchId);
-  }
-
-  function isSiblingSketchId(sketchId, baseSketchId = activeSketchId()) {
-    const base = sketchById(baseSketchId);
-    return siblingSketchesOf(base).some((sketch) => sketch.id === sketchId);
-  }
-
-  function siblingBranchSketchIds(baseSketchId = activeSketchId()) {
-    const base = sketchById(baseSketchId);
-    if (!base) return [];
-    const ids = [];
-    for (const sibling of siblingSketchesOf(base)) ids.push(sibling.id, ...descendantSketchIds(sibling.id));
-    return [...new Set(ids)];
-  }
-
-  function isSiblingBranchSketchId(sketchId, baseSketchId = activeSketchId()) {
-    return siblingBranchSketchIds(baseSketchId).includes(sketchId);
-  }
-
-  function isSiblingDescendantSketchId(sketchId, baseSketchId = activeSketchId()) {
-    return isSiblingBranchSketchId(sketchId, baseSketchId) && !isSiblingSketchId(sketchId, baseSketchId);
-  }
-
   function isReferenceSourceSketchId(referenceSketchId, subjectSketchId = activeSketchId()) {
-    return isAncestorSketchId(referenceSketchId, subjectSketchId) || isSiblingBranchSketchId(referenceSketchId, subjectSketchId);
+    if (!referenceSketchId || !subjectSketchId) return false;
+    if (!isDrawableSketch(referenceSketchId)) return false;
+    if (referenceSketchId === subjectSketchId) return false;
+    return !descendantSketchIds(subjectSketchId).includes(referenceSketchId);
   }
 
   function referenceSourceSketchIds(subjectSketchId = activeSketchId()) {
-    return [...new Set([...ancestorSketchIds(subjectSketchId), ...siblingBranchSketchIds(subjectSketchId)])];
+    ensureSketchState();
+    return model.sketches
+      .filter((sketch) => isReferenceSourceSketchId(sketch.id, subjectSketchId))
+      .map((sketch) => sketch.id);
   }
 
   function constraintIsOperational(constraint) {
@@ -1358,29 +1321,11 @@
     return isEditableSketchId(elementSketchId(item));
   }
 
-  function visibleBranchPath(sketchId, stopSketchId) {
-    let current = sketchById(sketchId);
-    const visited = new Set();
-    while (current && current.id !== stopSketchId && !visited.has(current.id)) {
-      if (current.visible === false) return false;
-      visited.add(current.id);
-      current = parentSketchOf(current);
-    }
-    return Boolean(current && current.id === stopSketchId);
-  }
-
   function isVisibleSketchId(sketchId) {
     const id = sketchId || activeSketchId();
     if (id === activeSketchId()) return true;
     const sketch = sketchById(id);
-    if (!sketch) return false;
-    if (isAncestorSketchId(id)) return sketch.visible !== false;
-    if (descendantSketchIds(activeSketchId()).includes(id)) return visibleBranchPath(id, activeSketchId());
-    if (isSiblingBranchSketchId(id)) {
-      const activeParentId = sketchById(activeSketchId())?.parentSketchId;
-      return Boolean(activeParentId) && visibleBranchPath(id, activeParentId);
-    }
-    return false;
+    return Boolean(sketch && sketch.visible !== false);
   }
 
   function isVisibleSketchElement(item) {
@@ -1390,10 +1335,8 @@
   function sketchRelationToActive(sketchId) {
     const id = sketchId || activeSketchId();
     if (id === activeSketchId()) return "active";
-    if (isAncestorSketchId(id)) return "ancestor";
-    if (isSiblingSketchId(id)) return "sibling";
-    if (isSiblingDescendantSketchId(id)) return "sibling-descendant";
     if (descendantSketchIds(activeSketchId()).includes(id)) return "descendant";
+    if (isReferenceSourceSketchId(id)) return "reference";
     return "hidden";
   }
 
@@ -1448,9 +1391,8 @@
 
   function operandRelationForSketch(sketchId) {
     if (isEditableSketchId(sketchId)) return "active";
-    if (isAncestorSketchId(sketchId)) return "ancestor";
-    if (isSiblingSketchId(sketchId)) return "sibling";
-    if (isSiblingDescendantSketchId(sketchId)) return "sibling-descendant";
+    if (descendantSketchIds(activeSketchId()).includes(sketchId)) return "descendant";
+    if (isReferenceSourceSketchId(sketchId)) return "reference";
     return null;
   }
 
@@ -1859,8 +1801,8 @@
 
   function sketchStrokeWidth(item) {
     const relation = sketchRelationOfElement(item);
-    if (relation === "ancestor" || relation === "sibling" || relation === "sibling-descendant" || relation === "descendant") return 1.8;
     if (relation === "active") return 2.6;
+    if (relation === "reference" || relation === "descendant") return 1.8;
     return 0;
   }
 
@@ -1908,7 +1850,7 @@
   function sketchAlpha(item) {
     const relation = sketchRelationOfElement(item);
     if (relation === "active") return 1;
-    if (relation === "ancestor" || relation === "sibling" || relation === "sibling-descendant" || relation === "descendant") return 1;
+    if (relation === "reference" || relation === "descendant") return 1;
     return 0;
   }
 
@@ -6985,25 +6927,21 @@
 
   function sketchIdentityRelationLabel(sketchId) {
     const relation = sketchRelationToActive(sketchId);
-    if (relation === "ancestor") return "祖先";
-    if (relation === "sibling") return "兄弟";
-    if (relation === "sibling-descendant") return "兄弟の子孫";
+    if (relation === "reference") return "参照可";
     if (relation === "descendant") return "子孫";
     return "";
   }
 
   function sketchIdentityRelationColor(sketchId) {
     const relation = sketchRelationToActive(sketchId);
-    if (relation === "ancestor") return "#7c3aed";
-    if (relation === "sibling" || relation === "sibling-descendant") return "#4338ca";
+    if (relation === "reference") return "#4338ca";
     if (relation === "descendant") return "#047857";
     return "#64748b";
   }
 
   function sketchIdentityRelationBackground(sketchId) {
     const relation = sketchRelationToActive(sketchId);
-    if (relation === "ancestor") return "rgba(237, 233, 254, 0.96)";
-    if (relation === "sibling" || relation === "sibling-descendant") return "rgba(224, 231, 255, 0.96)";
+    if (relation === "reference") return "rgba(224, 231, 255, 0.96)";
     if (relation === "descendant") return "rgba(209, 250, 229, 0.96)";
     return "rgba(241, 245, 249, 0.96)";
   }
@@ -8077,10 +8015,6 @@
     if (!sketch) return;
     if (model.activeSketchId === sketchId) return;
     sketch.visible = true;
-    for (const ancestorId of ancestorSketchIds(sketchId)) {
-      const ancestor = sketchById(ancestorId);
-      if (ancestor) ancestor.visible = true;
-    }
     model.activeSketchId = sketchId;
     clearInteractionForSketchChange();
     setHint(`編集中: ${sketchName(sketchId)}`);
@@ -8337,10 +8271,6 @@
       .map(({ sketch, depth, hasChildren, segments }) => {
         const isActive = sketch.id === activeSketchId();
         const isRoot = isRootSketch(sketch);
-        const isAncestor = isAncestorSketchId(sketch.id);
-        const isSibling = isSiblingSketchId(sketch.id);
-        const isSiblingDescendant = isSiblingDescendantSketchId(sketch.id);
-        const isDescendant = descendantSketchIds(activeSketchId()).includes(sketch.id);
         const visible = isVisibleSketchId(sketch.id);
         const visibilityEnabled = sketch.visible !== false;
         const solveError = sketchHasSolveError(sketch.id);
@@ -8360,7 +8290,7 @@
           ? ""
           : `<button class="sketchVisibilityBtn icon-small-btn ${visibilityEnabled ? "visible-on" : "visible-off"}" data-id="${sketch.id}" title="${visibilityEnabled ? "非表示にする" : "表示する"}" aria-label="${visibilityEnabled ? "非表示にする" : "表示する"}" aria-pressed="${visibilityEnabled}" ${isActive ? "disabled" : ""}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2.5 12s3.5-6 9.5-6 9.5 6 9.5 6-3.5 6-9.5 6-9.5-6-9.5-6Z"/><circle cx="12" cy="12" r="2.6"/>${visibilityEnabled ? "" : '<path class="visibility-slash" d="M4 4l16 16"/>'}</svg></button>`;
         return (
-          `<div class="item sketch-item ${visible ? "visible" : ""} ${visibilityEnabled ? "visibility-on" : "visibility-off"} ${isRoot ? "root" : ""} ${isAncestor ? "ancestor-visible" : ""} ${isSibling || isSiblingDescendant ? "sibling-visible" : ""} ${isDescendant ? "descendant-visible" : ""} ${isActive ? "active" : ""} ${solveError ? "solve-error" : ""} ${referenceErrorCount ? "reference-error" : ""} ${hasChildren ? "has-children" : ""}" data-id="${sketch.id}" title="${escapeHtml(solveErrorTitle || (referenceErrorCount ? `参照エラー ${referenceErrorCount}件` : ""))}" style="--sketch-depth:${depth}">` +
+          `<div class="item sketch-item ${visible ? "visible" : ""} ${visibilityEnabled ? "visibility-on" : "visibility-off"} ${isRoot ? "root" : ""} ${isActive ? "active" : ""} ${solveError ? "solve-error" : ""} ${referenceErrorCount ? "reference-error" : ""} ${hasChildren ? "has-children" : ""}" data-id="${sketch.id}" title="${escapeHtml(solveErrorTitle || (referenceErrorCount ? `参照エラー ${referenceErrorCount}件` : ""))}" style="--sketch-depth:${depth}">` +
           treeLines +
           `<button class="sketchActivateBtn" data-id="${sketch.id}" ${isActive ? "disabled" : ""}>${escapeHtml(sketch.name)}</button>` +
           `<span class="sketch-badges">${solveError ? `<span class="badge sketch-error-badge">!</span>` : ""}${referenceErrorCount ? `<span class="badge sketch-reference-error-badge" title="参照エラー">参照!${referenceErrorCount}</span>` : ""}${duplicateCount ? `<span class="badge sketch-duplicate-badge">重複${duplicateCount}</span>` : ""}<span class="badge">${count}</span></span>` +
@@ -8950,7 +8880,7 @@
 
   function commitReferenceConstraint(type, constraint, referenceSketchId, sketchId = activeSketchId()) {
     if (!constraint || !isReferenceSourceSketchId(referenceSketchId, sketchId)) {
-      const msg = "先祖または兄弟サブツリーのみ参照できます";
+      const msg = descendantSketchIds(sketchId).includes(referenceSketchId) ? "子孫スケッチは参照できません" : "参照可能な非下位スケッチのみ参照できます";
       setHint(msg, "error");
       log(msg);
       return false;
@@ -9165,13 +9095,14 @@
   function splitConstraintOperands(operands) {
     return {
       active: operands.filter((operand) => operand.relation === "active"),
-      reference: operands.filter((operand) => operand.relation === "ancestor" || operand.relation === "sibling" || operand.relation === "sibling-descendant"),
+      reference: operands.filter((operand) => operand.relation === "reference"),
+      descendant: operands.filter((operand) => operand.relation === "descendant"),
     };
   }
 
   function referenceResolutionFromOperands(type, operands) {
     const { active, reference } = splitConstraintOperands(operands);
-    if (active.length !== 1 || reference.length !== 1) return { error: "参照拘束はアクティブスケッチ側1つと先祖/兄弟サブツリー側1つを選択してください" };
+    if (active.length !== 1 || reference.length !== 1) return { error: "参照拘束はアクティブスケッチ側1つと参照可能スケッチ側1つを選択してください" };
     return constraintResolutionFromSubjectAndReference(type, subjectFromOperand(active[0]), referenceTargetFromOperand(reference[0]));
   }
 
@@ -9198,15 +9129,16 @@
 
   function resolveConstraintIntent(type, operands) {
     const cleanOperands = operands.filter(Boolean);
-    const { active, reference } = splitConstraintOperands(cleanOperands);
+    const { active, reference, descendant } = splitConstraintOperands(cleanOperands);
+    if (descendant.length > 0) return { error: "子孫スケッチは参照できません" };
     if (reference.length > 0) {
       if (cleanOperands.length < 2 || active.length === 0) return null;
-      if (cleanOperands.length !== 2) return { error: "参照拘束はアクティブスケッチ側と先祖/兄弟サブツリー側を1つずつ選択してください" };
+      if (cleanOperands.length !== 2) return { error: "参照拘束はアクティブスケッチ側と参照可能スケッチ側を1つずつ選択してください" };
       const resolution = referenceResolutionFromOperands(type, cleanOperands);
       if (type === "distance" && resolution?.target) return { ...resolution, action: "place-dimension", operands: cleanOperands };
       return resolution?.constraint ? { ...resolution, action: "commit", operands: cleanOperands } : resolution;
     }
-    if (active.length !== cleanOperands.length) return { error: "拘束対象はアクティブスケッチ、または先祖/兄弟サブツリーだけを選択できます" };
+    if (active.length !== cleanOperands.length) return { error: "拘束対象はアクティブスケッチ、または参照可能スケッチだけを選択できます" };
     const sketchIds = [...new Set(cleanOperands.map((operand) => operand.sketchId))];
     if (sketchIds.length > 1) return { error: "別スケッチ同士は通常拘束できません" };
     if (type === "distance") {
@@ -9232,7 +9164,7 @@
       return { error: "アクティブスケッチ側の対象を選択してください" };
     }
     if (!referenceTarget || !referenceSketchId) {
-      return { error: "先祖または兄弟サブツリーのみ参照できます" };
+      return { error: referenceTarget?.sketchId && descendantSketchIds(subjectSketchId).includes(referenceTarget.sketchId) ? "子孫スケッチは参照できません" : "参照可能な非下位スケッチのみ参照できます" };
     }
     if (wouldCreateReferenceCycle(subjectSketchId, referenceSketchId)) {
       return { error: "スケッチ間の参照が循環するため追加できません" };
@@ -12649,7 +12581,7 @@
           relation: sketchRelationToActive("S2"),
           strokeWidth: sketchStrokeWidth(line),
           color: constraintStatusColor(line),
-          rowHasSiblingClass: document.querySelector('.sketch-item[data-id="S2"]')?.classList.contains("sibling-visible") || false,
+          rowHasVisibleClass: document.querySelector('.sketch-item[data-id="S2"]')?.classList.contains("visible") || false,
         };
       },
       resetForSiblingSubtreeReference() {
@@ -12660,6 +12592,7 @@
         const siblingChildId = "S3";
         const siblingGrandchildId = "S4";
         const unrelatedSketchId = "S9";
+        const activeChildSketchId = "S11";
         const active = sketchById(DEFAULT_SKETCH_ID);
         active.parentSketchId = parentSketchId;
         model.sketches.push({ id: parentSketchId, name: "Sketch-P", parentSketchId: ROOT_SKETCH_ID, kind: "sketch", visible: true });
@@ -12667,9 +12600,12 @@
         model.sketches.push({ id: siblingChildId, name: "Sketch-S-1", parentSketchId: siblingSketchId, kind: "sketch", visible: true });
         model.sketches.push({ id: siblingGrandchildId, name: "Sketch-S-1-1", parentSketchId: siblingChildId, kind: "sketch", visible: true });
         model.sketches.push({ id: unrelatedSketchId, name: "Sketch-U", parentSketchId: ROOT_SKETCH_ID, kind: "sketch", visible: true });
+        model.sketches.push({ id: activeChildSketchId, name: "Sketch-1-1", parentSketchId: DEFAULT_SKETCH_ID, kind: "sketch", visible: true });
 
         model.activeSketchId = DEFAULT_SKETCH_ID;
         const activePoint = addPoint(45, 70, false, "explicit");
+        model.activeSketchId = activeChildSketchId;
+        const childLine = addLine(addPoint(-80, 80, true, "endpoint"), addPoint(80, 80, true, "endpoint"));
         model.activeSketchId = siblingSketchId;
         addLine(addPoint(-80, 0, true, "endpoint"), addPoint(80, 0, true, "endpoint"));
         model.activeSketchId = siblingChildId;
@@ -12677,7 +12613,7 @@
         model.activeSketchId = siblingGrandchildId;
         const referenceLine = addLine(addPoint(-80, 40, true, "endpoint"), addPoint(80, 40, true, "endpoint"));
         model.activeSketchId = unrelatedSketchId;
-        addLine(addPoint(-80, -40, true, "endpoint"), addPoint(80, -40, true, "endpoint"));
+        const unrelatedLine = addLine(addPoint(-80, -40, true, "endpoint"), addPoint(80, -40, true, "endpoint"));
         model.activeSketchId = DEFAULT_SKETCH_ID;
         refreshReferenceConstraintValidity();
         fitAllGeometryToViewport(190);
@@ -12691,10 +12627,14 @@
         return {
           activePoint: screenPoint(activePoint),
           referenceLine: screenPoint({ x: 45, y: 40 }),
-          relations: Object.fromEntries([parentSketchId, siblingSketchId, siblingChildId, siblingGrandchildId, unrelatedSketchId].map((id) => [id, sketchRelationToActive(id)])),
-          visible: Object.fromEntries([parentSketchId, siblingSketchId, siblingChildId, siblingGrandchildId, unrelatedSketchId].map((id) => [id, isVisibleSketchId(id)])),
-          rowClasses: Object.fromEntries([siblingSketchId, siblingChildId, siblingGrandchildId].map((id) => [id, document.querySelector(`.sketch-item[data-id="${id}"]`)?.classList.contains("sibling-visible") || false])),
+          unrelatedLine: screenPoint({ x: 45, y: -40 }),
+          childLine: screenPoint({ x: 45, y: 80 }),
+          relations: Object.fromEntries([parentSketchId, siblingSketchId, siblingChildId, siblingGrandchildId, unrelatedSketchId, activeChildSketchId].map((id) => [id, sketchRelationToActive(id)])),
+          visible: Object.fromEntries([parentSketchId, siblingSketchId, siblingChildId, siblingGrandchildId, unrelatedSketchId, activeChildSketchId].map((id) => [id, isVisibleSketchId(id)])),
+          rowClasses: Object.fromEntries([siblingSketchId, siblingChildId, siblingGrandchildId, unrelatedSketchId, activeChildSketchId].map((id) => [id, document.querySelector(`.sketch-item[data-id="${id}"]`)?.classList.contains("visible") || false])),
           referenceLineId: referenceLine.id,
+          unrelatedLineId: unrelatedLine.id,
+          childLineId: childLine.id,
         };
       },
       siblingSubtreeVisibilityState() {

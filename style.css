@@ -1022,12 +1022,7 @@ body.block-editing .canvas-area {
   background: rgba(37, 99, 235, 0.24);
 }
 
-.sketch-item.ancestor-visible:not(.active),
-.sketch-item.sibling-visible:not(.active) {
-  background: rgba(156, 163, 175, 0.2);
-}
-
-.sketch-item.descendant-visible:not(.active) {
+.sketch-item.visible:not(.active):not(.root) {
   background: rgba(156, 163, 175, 0.2);
 }
 
