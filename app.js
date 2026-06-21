@@ -3616,6 +3616,7 @@
     constraintOperands = [];
     hoveredSketchIdentity = null;
     hoveredBlockInstance = null;
+    sidebarPinnedSelection = null;
   }
 
   function selectableSketchElement(item) {
@@ -6043,6 +6044,7 @@
     drawSelectionRect();
     ctx.restore();
     syncDimensionValueInput();
+    updateSidebarPinnedRowClasses();
   }
 
   function hideDimensionValueInput() {
@@ -8389,23 +8391,96 @@
     return sidebarPinnedSelection?.type === type && sidebarPinnedSelection?.item === item;
   }
 
+  function geometryItemSelectedInCanvas(item) {
+    if (!item) return false;
+    if (item instanceof Point) return selectedPoints.includes(item);
+    if (item instanceof Line) return selectedLines.includes(item);
+    if (item instanceof Circle) return selectedCircles.includes(item);
+    if (item instanceof Arc) return selectedArcs.includes(item) || selectedArcEndpoint?.arc === item || selectedArcEndpointPair?.some((endpoint) => endpoint.arc === item);
+    return false;
+  }
+
+  function constraintSelectedInCanvas(constraint) {
+    return Boolean(constraint && selectedDimensionConstraint === constraint);
+  }
+
+  function fixedPointSelectedInCanvas(point) {
+    return Boolean(point && selectedPoints.includes(point));
+  }
+
+  function hasCanvasSidebarSelection() {
+    return selectedPoints.length > 0 ||
+      selectedLines.length > 0 ||
+      selectedCircles.length > 0 ||
+      selectedArcs.length > 0 ||
+      selectedBlockInstances.length > 0 ||
+      Boolean(selectedArcEndpoint) ||
+      Boolean(selectedArcEndpointPair) ||
+      Boolean(selectedDimensionConstraint);
+  }
+
+  function sidebarPinnedSelectionMatchesCanvas() {
+    if (!sidebarPinnedSelection) return false;
+    if (sidebarPinnedSelection.type === "geometry") return geometryItemSelectedInCanvas(sidebarPinnedSelection.item);
+    if (sidebarPinnedSelection.type === "constraint") return constraintSelectedInCanvas(sidebarPinnedSelection.item);
+    if (sidebarPinnedSelection.type === "fixed-point") return fixedPointSelectedInCanvas(sidebarPinnedSelection.item);
+    return false;
+  }
+
   function updateSidebarPinnedRowClasses() {
+    if (sidebarPinnedSelection && hasCanvasSidebarSelection() && !sidebarPinnedSelectionMatchesCanvas()) {
+      sidebarPinnedSelection = null;
+    }
     for (const row of document.querySelectorAll(".geometry-list-row")) {
       const item = sidebarGeometryItem(row.dataset.kind, row.dataset.id);
-      row.classList.toggle("sidebar-selected", sidebarSelectionMatches("geometry", item));
+      row.classList.toggle("sidebar-selected", geometryItemSelectedInCanvas(item) || sidebarSelectionMatches("geometry", item));
     }
     for (const row of document.querySelectorAll(".constraint-list-row[data-idx]")) {
       const constraint = model.constraints[Number(row.dataset.idx)];
-      row.classList.toggle("sidebar-selected", sidebarSelectionMatches("constraint", constraint));
+      row.classList.toggle("sidebar-selected", constraintSelectedInCanvas(constraint) || sidebarSelectionMatches("constraint", constraint));
     }
     for (const row of document.querySelectorAll(".fixed-point-list-row")) {
       const point = model.points.find((item) => item.id === row.dataset.pointId);
-      row.classList.toggle("sidebar-selected", sidebarSelectionMatches("fixed-point", point));
+      row.classList.toggle("sidebar-selected", fixedPointSelectedInCanvas(point) || sidebarSelectionMatches("fixed-point", point));
     }
   }
 
-  function toggleSidebarPinnedSelection(type, item, elements) {
-    sidebarPinnedSelection = sidebarSelectionMatches(type, item) ? null : { type, item, elements: new Set(elements || []) };
+  function selectSidebarGeometryItem(item) {
+    clearSelection();
+    if (!item) {
+      updateSidebarPinnedRowClasses();
+      draw();
+      return;
+    }
+    if (item instanceof Point) selectedPoints = [item];
+    else if (item instanceof Line) selectedLines = [item];
+    else if (item instanceof Circle) selectedCircles = [item];
+    else if (item instanceof Arc) selectedArcs = [item];
+    sidebarPinnedSelection = { type: "geometry", item, elements: sidebarRelatedElements(item) };
+    updateToolbar();
+    updateSidebarPinnedRowClasses();
+    draw();
+  }
+
+  function selectSidebarConstraintItem(constraint) {
+    clearSelection();
+    if (!constraint) {
+      updateSidebarPinnedRowClasses();
+      draw();
+      return;
+    }
+    if (targetFromConstraint(constraint)) selectedDimensionConstraint = constraint;
+    sidebarPinnedSelection = { type: "constraint", item: constraint, elements: new Set(constraintGraphNodes(constraint)) };
+    updateToolbar();
+    updateSidebarPinnedRowClasses();
+    draw();
+  }
+
+  function selectSidebarFixedPoint(point) {
+    clearSelection();
+    if (point) selectedPoints = [point];
+    sidebarPinnedSelection = point ? { type: "fixed-point", item: point, elements: sidebarRelatedElements(point) } : null;
+    updateToolbar();
     updateSidebarPinnedRowClasses();
     draw();
   }
@@ -8423,21 +8498,21 @@
       row.addEventListener("click", (event) => {
         if (event.target.closest("button")) return;
         const item = sidebarGeometryItem(row.dataset.kind, row.dataset.id);
-        toggleSidebarPinnedSelection("geometry", item, sidebarRelatedElements(item));
+        selectSidebarGeometryItem(item);
       });
     }
     for (const row of document.querySelectorAll(".constraint-list-row[data-idx]")) {
       row.addEventListener("click", (event) => {
         if (event.target.closest("button")) return;
         const constraint = model.constraints[Number(row.dataset.idx)];
-        toggleSidebarPinnedSelection("constraint", constraint, constraint ? constraintGraphNodes(constraint) : []);
+        selectSidebarConstraintItem(constraint);
       });
     }
     for (const row of document.querySelectorAll(".fixed-point-list-row")) {
       row.addEventListener("click", (event) => {
         if (event.target.closest("button")) return;
         const point = model.points.find((item) => item.id === row.dataset.pointId);
-        toggleSidebarPinnedSelection("fixed-point", point, sidebarRelatedElements(point));
+        selectSidebarFixedPoint(point);
       });
     }
     updateSidebarPinnedRowClasses();
@@ -12413,7 +12488,17 @@
         updateUI();
         fitAllGeometryToViewport(140);
         draw();
-        return { line: line.id, fixedPoint: p1.id, circle: circle.id, circleCenter: circleCenter.id, arc: arc.id };
+        const rect = canvas.getBoundingClientRect();
+        const lineMid = worldToCanvasScreen({ x: (line.p1.x + line.p2.x) / 2, y: (line.p1.y + line.p2.y) / 2 });
+        return {
+          line: line.id,
+          fixedPoint: p1.id,
+          circle: circle.id,
+          circleCenter: circleCenter.id,
+          arc: arc.id,
+          lineMid: { x: rect.left + lineMid.x, y: rect.top + lineMid.y },
+          blank: { x: rect.left + rect.width - 35, y: rect.top + rect.height - 35 },
+        };
       },
       resetForOffsetConstraints() {
         resetModelState();

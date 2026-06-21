@@ -447,6 +447,12 @@ test("sidebar lists circles and arcs and highlights related geometry", async ({ 
   await expect(page.locator("#sidebarArcs")).toBeVisible();
   expect(await page.locator("#arcList .geometry-list-row").count()).toBe(1);
 
+  await page.click('[data-sidebar-tab="lines"]');
+  await page.mouse.click(ids.lineMid.x, ids.lineMid.y);
+  await expect(page.locator(`#lineList .geometry-list-row[data-id="${ids.line}"]`)).toHaveClass(/sidebar-selected/);
+  await page.keyboard.press("Escape");
+  await expect(page.locator(`#lineList .geometry-list-row[data-id="${ids.line}"]`)).not.toHaveClass(/sidebar-selected/);
+
   await page.click('[data-sidebar-tab="circles"]');
   await page.locator("#circleList .geometry-list-row").hover();
   expect(await page.evaluate(() => window.__cadTest.sidebarHighlightIds())).toEqual([]);
