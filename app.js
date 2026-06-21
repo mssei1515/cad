@@ -96,6 +96,7 @@
   let selectedArcEndpoint = null;
   let selectedArcEndpointPair = null;
   let selectedDimensionConstraint = null;
+  let selectedConstraint = null;
   let constraintAnalysisState = null;
   let constraintRedundancyState = { constraints: new Map(), sketches: new Map(), count: 0 };
   let sketchSolveStates = new Map();
@@ -123,7 +124,6 @@
   let lastPointerWorld = null;
   let hoveredSketchIdentity = null;
   let hoveredSketchTreeId = null;
-  let sidebarPinnedSelection = null;
   let constructionLineMode = false;
   let pointSeq = 1;
   let lineSeq = 1;
@@ -1865,10 +1865,27 @@
   }
 
   function isSidebarHighlightedElement(item) {
-    return Boolean(
-      (hoveredSketchTreeId && elementSketchId(item) === hoveredSketchTreeId) ||
-      sidebarPinnedSelection?.elements?.has(item)
-    );
+    return Boolean(hoveredSketchTreeId && elementSketchId(item) === hoveredSketchTreeId);
+  }
+
+  function hasPrimaryCanvasSelection() {
+    return selectedPoints.length > 0 ||
+      selectedLines.length > 0 ||
+      selectedCircles.length > 0 ||
+      selectedArcs.length > 0 ||
+      selectedBlockInstances.length > 0 ||
+      Boolean(selectedArcEndpoint) ||
+      Boolean(selectedArcEndpointPair) ||
+      Boolean(selectedDimensionConstraint);
+  }
+
+  function effectiveSelectedConstraint() {
+    return hasPrimaryCanvasSelection() ? null : selectedConstraint;
+  }
+
+  function isSelectedConstraintRelatedElement(item) {
+    const constraint = effectiveSelectedConstraint();
+    return Boolean(constraint && constraintGraphNodes(constraint).includes(item));
   }
 
   function isReferenceHoverElement(item) {
@@ -2785,11 +2802,11 @@
     hoveredDimensionConstraint = null;
     hoveredSketchIdentity = null;
     lastPointerWorld = null;
-    sidebarPinnedSelection = null;
     clearSnap();
     selectedArcEndpoint = null;
     selectedArcEndpointPair = null;
     selectedDimensionConstraint = null;
+    selectedConstraint = null;
     selectedBlockInstances = [];
     hoveredBlockInstance = null;
     pointSeq = 1;
@@ -3613,10 +3630,10 @@
     selectedArcEndpoint = null;
     selectedArcEndpointPair = null;
     selectedDimensionConstraint = null;
+    selectedConstraint = null;
     constraintOperands = [];
     hoveredSketchIdentity = null;
     hoveredBlockInstance = null;
-    sidebarPinnedSelection = null;
   }
 
   function selectableSketchElement(item) {
@@ -5736,6 +5753,7 @@
     selectedCircles = selectedCircles.filter((c) => !circleSet.has(c));
     selectedArcs = selectedArcs.filter((a) => !arcSet.has(a));
     if (constraintSet.has(selectedDimensionConstraint)) selectedDimensionConstraint = null;
+    if (constraintSet.has(selectedConstraint)) selectedConstraint = null;
     if (constraintSet.has(hoveredDimensionConstraint)) hoveredDimensionConstraint = null;
 
     const result = solveActiveSketch();
@@ -5771,7 +5789,7 @@
       setHint(`ブロックインスタンスを ${instances.length}個削除しました`);
       return true;
     }
-    const constraints = selectedDimensionConstraint ? [selectedDimensionConstraint] : [];
+    const constraints = [...new Set([selectedDimensionConstraint, effectiveSelectedConstraint()].filter(Boolean))];
     return deleteElements({ points: selectedPoints, lines: selectedLines, circles: selectedCircles, arcs: selectedArcs, constraints });
   }
 
@@ -5798,6 +5816,7 @@
 
   function togglePointSelection(p) {
     if (!p) return;
+    selectedConstraint = null;
     const i = selectedPoints.indexOf(p);
     if (i >= 0) selectedPoints.splice(i, 1);
     else selectedPoints.push(p);
@@ -5805,6 +5824,7 @@
 
   function toggleLineSelection(l) {
     if (!l) return;
+    selectedConstraint = null;
     const i = selectedLines.indexOf(l);
     if (i >= 0) selectedLines.splice(i, 1);
     else selectedLines.push(l);
@@ -5812,6 +5832,7 @@
 
   function toggleCircleSelection(c) {
     if (!c) return;
+    selectedConstraint = null;
     const i = selectedCircles.indexOf(c);
     if (i >= 0) selectedCircles.splice(i, 1);
     else selectedCircles.push(c);
@@ -5819,6 +5840,7 @@
 
   function toggleArcSelection(a) {
     if (!a) return;
+    selectedConstraint = null;
     const i = selectedArcs.indexOf(a);
     if (i >= 0) selectedArcs.splice(i, 1);
     else selectedArcs.push(a);
@@ -5910,6 +5932,7 @@
     selectedArcEndpoint = null;
     selectedArcEndpointPair = null;
     selectedDimensionConstraint = null;
+    selectedConstraint = null;
   }
 
   function drawGrid(w, h) {
@@ -6044,7 +6067,7 @@
     drawSelectionRect();
     ctx.restore();
     syncDimensionValueInput();
-    updateSidebarPinnedRowClasses();
+    updateSidebarSelectionRowClasses();
   }
 
   function hideDimensionValueInput() {
@@ -6139,18 +6162,20 @@
       ctx.globalAlpha = presentation ? style.opacity : sketchAlpha(l);
       const refSelected = isPendingReferenceTarget(l) || isConstraintOperandSelected(l);
       const treeHovered = isSidebarHighlightedElement(l);
+      const relatedHighlighted = isSelectedConstraintRelatedElement(l);
+      const auxiliaryHighlighted = treeHovered || relatedHighlighted;
       const blockSelected = l.blockInstance && selectedBlockInstances.includes(l.blockInstance);
       const sel = blockSelected || (active && selectedLines.includes(l)) || (presentation && selectedLines.includes(l)) || refSelected;
       const hovered = (l.blockInstance && hoveredBlockInstance === l.blockInstance) || ((active || isReferenceHoverElement(l)) && hoveredLine === l) || (presentation && hoveredLine === l);
       const construction = Boolean(l.construction) && !sel && !hovered;
-      const lineColor = treeHovered ? "#0ea5e9" : presentation && !sel && !hovered ? style.color : constraintStatusColor(l, sel, hovered);
+      const lineColor = auxiliaryHighlighted ? "#0ea5e9" : presentation && !sel && !hovered ? style.color : constraintStatusColor(l, sel, hovered);
       ctx.strokeStyle = lineColor;
-      ctx.lineWidth = (treeHovered ? 4 : sel ? 4 : hovered ? 2.6 : presentation ? style.lineWidthPx : construction ? Math.max(1.8, sketchStrokeWidth(l) * 0.72) : sketchStrokeWidth(l)) / viewport.scale;
+      ctx.lineWidth = (auxiliaryHighlighted ? 4 : sel ? 4 : hovered ? 2.6 : presentation ? style.lineWidthPx : construction ? Math.max(1.8, sketchStrokeWidth(l) * 0.72) : sketchStrokeWidth(l)) / viewport.scale;
       ctx.lineCap = "round";
       ctx.lineJoin = "round";
       ctx.setLineDash(presentation ? presentationLineDash(style.lineType) : construction ? [12 / viewport.scale, 4 / viewport.scale, 2 / viewport.scale, 4 / viewport.scale] : []);
-      ctx.shadowColor = sel || treeHovered ? "rgba(14, 165, 233, 0.45)" : "transparent";
-      ctx.shadowBlur = sel || treeHovered ? 8 / viewport.scale : 0;
+      ctx.shadowColor = sel || auxiliaryHighlighted ? "rgba(14, 165, 233, 0.45)" : "transparent";
+      ctx.shadowBlur = sel || auxiliaryHighlighted ? 8 / viewport.scale : 0;
       const constructionExtension = CONSTRUCTION_EXTENSION_SCREEN_PX / viewport.scale;
       const drawSegment = construction ? extendedLineSegment(l, constructionExtension) : { p1: l.p1, p2: l.p2 };
       ctx.beginPath();
@@ -6170,7 +6195,7 @@
         }
       }
 
-      if (sel || hovered || treeHovered) {
+      if (sel || hovered || auxiliaryHighlighted) {
         const mx = (l.p1.x + l.p2.x) / 2;
         const my = (l.p1.y + l.p2.y) / 2;
         ctx.fillStyle = "#2563eb";
@@ -6192,21 +6217,23 @@
       ctx.globalAlpha = presentation ? style.opacity : sketchAlpha(c);
       const refSelected = isPendingReferenceTarget(c) || isConstraintOperandSelected(c);
       const treeHovered = isSidebarHighlightedElement(c);
+      const relatedHighlighted = isSelectedConstraintRelatedElement(c);
+      const auxiliaryHighlighted = treeHovered || relatedHighlighted;
       const blockSelected = c.blockInstance && selectedBlockInstances.includes(c.blockInstance);
       const sel = blockSelected || (active && selectedCircles.includes(c)) || (presentation && selectedCircles.includes(c)) || refSelected;
       const hovered = (c.blockInstance && hoveredBlockInstance === c.blockInstance) || ((active || isReferenceHoverElement(c)) && hoveredCircle === c) || (presentation && hoveredCircle === c);
       const construction = Boolean(c.construction) && !sel && !hovered;
-      ctx.strokeStyle = treeHovered ? "#0ea5e9" : presentation && !sel && !hovered ? style.color : constraintStatusColor(c, sel, hovered);
-      ctx.lineWidth = (treeHovered ? 4 : sel ? 4 : hovered ? 2.6 : presentation ? style.lineWidthPx : construction ? Math.max(1.8, sketchStrokeWidth(c) * 0.72) : sketchStrokeWidth(c)) / viewport.scale;
+      ctx.strokeStyle = auxiliaryHighlighted ? "#0ea5e9" : presentation && !sel && !hovered ? style.color : constraintStatusColor(c, sel, hovered);
+      ctx.lineWidth = (auxiliaryHighlighted ? 4 : sel ? 4 : hovered ? 2.6 : presentation ? style.lineWidthPx : construction ? Math.max(1.8, sketchStrokeWidth(c) * 0.72) : sketchStrokeWidth(c)) / viewport.scale;
       ctx.setLineDash(presentation ? presentationLineDash(style.lineType) : construction ? [12 / viewport.scale, 4 / viewport.scale, 2 / viewport.scale, 4 / viewport.scale] : []);
-      ctx.shadowColor = sel || treeHovered ? "rgba(14, 165, 233, 0.45)" : "transparent";
-      ctx.shadowBlur = sel || treeHovered ? 8 / viewport.scale : 0;
+      ctx.shadowColor = sel || auxiliaryHighlighted ? "rgba(14, 165, 233, 0.45)" : "transparent";
+      ctx.shadowBlur = sel || auxiliaryHighlighted ? 8 / viewport.scale : 0;
       ctx.beginPath();
       ctx.arc(c.center.x, c.center.y, c.radius(), 0, Math.PI * 2);
       ctx.stroke();
       ctx.setLineDash([]);
       ctx.shadowBlur = 0;
-      if (sel || hovered || treeHovered) {
+      if (sel || hovered || auxiliaryHighlighted) {
         ctx.fillStyle = "#2563eb";
         ctx.font = `${12 / viewport.scale}px system-ui`;
         ctx.fillText(c.id, c.center.x + c.radius() + 4 / viewport.scale, c.center.y - 4 / viewport.scale);
@@ -6226,22 +6253,24 @@
       ctx.globalAlpha = presentation ? style.opacity : sketchAlpha(a);
       const refSelected = isPendingReferenceTarget(a) || isConstraintOperandSelected(a);
       const treeHovered = isSidebarHighlightedElement(a);
+      const relatedHighlighted = isSelectedConstraintRelatedElement(a);
+      const auxiliaryHighlighted = treeHovered || relatedHighlighted;
       const blockSelected = a.blockInstance && selectedBlockInstances.includes(a.blockInstance);
       const sel = blockSelected || (active && selectedArcs.includes(a)) || (presentation && selectedArcs.includes(a)) || refSelected;
       const hovered = (a.blockInstance && hoveredBlockInstance === a.blockInstance) || ((active || isReferenceHoverElement(a)) && hoveredArc === a) || (presentation && hoveredArc === a);
       const construction = Boolean(a.construction) && !sel && !hovered;
       const angles = arcAngles(a);
-      ctx.strokeStyle = treeHovered ? "#0ea5e9" : presentation && !sel && !hovered ? style.color : constraintStatusColor(a, sel, hovered);
-      ctx.lineWidth = (treeHovered ? 4 : sel ? 4 : hovered ? 2.6 : presentation ? style.lineWidthPx : construction ? Math.max(1.8, sketchStrokeWidth(a) * 0.72) : sketchStrokeWidth(a)) / viewport.scale;
+      ctx.strokeStyle = auxiliaryHighlighted ? "#0ea5e9" : presentation && !sel && !hovered ? style.color : constraintStatusColor(a, sel, hovered);
+      ctx.lineWidth = (auxiliaryHighlighted ? 4 : sel ? 4 : hovered ? 2.6 : presentation ? style.lineWidthPx : construction ? Math.max(1.8, sketchStrokeWidth(a) * 0.72) : sketchStrokeWidth(a)) / viewport.scale;
       ctx.setLineDash(presentation ? presentationLineDash(style.lineType) : construction ? [12 / viewport.scale, 4 / viewport.scale, 2 / viewport.scale, 4 / viewport.scale] : []);
-      ctx.shadowColor = sel || treeHovered ? "rgba(14, 165, 233, 0.45)" : "transparent";
-      ctx.shadowBlur = sel || treeHovered ? 8 / viewport.scale : 0;
+      ctx.shadowColor = sel || auxiliaryHighlighted ? "rgba(14, 165, 233, 0.45)" : "transparent";
+      ctx.shadowBlur = sel || auxiliaryHighlighted ? 8 / viewport.scale : 0;
       ctx.beginPath();
       ctx.arc(a.center.x, a.center.y, a.radius(), angles.start, angles.end, angles.end < angles.start);
       ctx.stroke();
       ctx.setLineDash([]);
       ctx.shadowBlur = 0;
-      if (sel || hovered || treeHovered) {
+      if (sel || hovered || auxiliaryHighlighted) {
         const mid = angles.start + (angles.end - angles.start) / 2;
         ctx.fillStyle = "#2563eb";
         ctx.font = `${12 / viewport.scale}px system-ui`;
@@ -7086,6 +7115,8 @@
       ctx.globalAlpha = sketchAlpha(p);
       const refSelected = isPendingReferenceTarget(p) || isConstraintOperandSelected(p);
       const treeHovered = isSidebarHighlightedElement(p);
+      const relatedHighlighted = isSelectedConstraintRelatedElement(p);
+      const auxiliaryHighlighted = treeHovered || relatedHighlighted;
       const sel = (active && selectedPoints.includes(p)) || refSelected;
       const endpoint = isEndpointPoint(p);
       const hovered = (active || isReferenceHoverElement(p)) && (hoveredPoint === p || hoveredEndpointPoint === p);
@@ -7093,20 +7124,20 @@
       const primitiveCenter = shouldShowPrimitiveCenter(p);
       const fixedByLine = pointLockedByLineFixed(p);
       const reference = isReferencePoint(p);
-      if (reference && !sel && !hovered && !dragging && !treeHovered) continue;
-      if (endpoint && !reference && !sel && !hovered && !dragging && !primitiveCenter && !treeHovered) continue;
+      if (reference && !sel && !hovered && !dragging && !auxiliaryHighlighted) continue;
+      if (endpoint && !reference && !sel && !hovered && !dragging && !primitiveCenter && !auxiliaryHighlighted) continue;
       ctx.beginPath();
-      ctx.arc(p.x, p.y, (sel || treeHovered ? 7 : endpoint || reference ? 5 : 5) / viewport.scale, 0, Math.PI * 2);
-      ctx.fillStyle = p.fixed || fixedByLine ? "#fee2e2" : sel ? "#1d4ed8" : treeHovered ? "#e0f2fe" : hovered || primitiveCenter || reference ? "#eff6ff" : "#fff";
+      ctx.arc(p.x, p.y, (sel || auxiliaryHighlighted ? 7 : endpoint || reference ? 5 : 5) / viewport.scale, 0, Math.PI * 2);
+      ctx.fillStyle = p.fixed || fixedByLine ? "#fee2e2" : sel ? "#1d4ed8" : auxiliaryHighlighted ? "#e0f2fe" : hovered || primitiveCenter || reference ? "#eff6ff" : "#fff";
       ctx.fill();
-      ctx.strokeStyle = treeHovered ? "#0ea5e9" : p.fixed || fixedByLine ? "#dc2626" : constraintStatusColor(p, sel, hovered || primitiveCenter || reference);
-      ctx.lineWidth = (sel || treeHovered ? 3 : Math.max(1.2, sketchStrokeWidth(p))) / viewport.scale;
-      ctx.shadowColor = sel || treeHovered ? "rgba(14, 165, 233, 0.45)" : "transparent";
-      ctx.shadowBlur = sel || treeHovered ? 8 / viewport.scale : 0;
+      ctx.strokeStyle = auxiliaryHighlighted ? "#0ea5e9" : p.fixed || fixedByLine ? "#dc2626" : constraintStatusColor(p, sel, hovered || primitiveCenter || reference);
+      ctx.lineWidth = (sel || auxiliaryHighlighted ? 3 : Math.max(1.2, sketchStrokeWidth(p))) / viewport.scale;
+      ctx.shadowColor = sel || auxiliaryHighlighted ? "rgba(14, 165, 233, 0.45)" : "transparent";
+      ctx.shadowBlur = sel || auxiliaryHighlighted ? 8 / viewport.scale : 0;
       ctx.stroke();
       ctx.shadowBlur = 0;
       ctx.setLineDash([]);
-      if (sel || hovered || dragging || treeHovered) {
+      if (sel || hovered || dragging || auxiliaryHighlighted) {
         ctx.fillStyle = hovered || endpoint ? "#2563eb" : "#111827";
         ctx.font = `${12 / viewport.scale}px system-ui`;
         ctx.fillText(p.id, p.x + 8 / viewport.scale, p.y - 8 / viewport.scale);
@@ -7806,6 +7837,7 @@
     if (!target) return false;
     if (isReadOnlyDimension(hit.constraint)) {
       selectedDimensionConstraint = hit.constraint;
+      selectedConstraint = null;
       dimensionDragSession = null;
       setHint("読み取り専用寸法の値は編集できません");
       draw();
@@ -7820,6 +7852,7 @@
       constraint: hit.constraint,
     };
     selectedDimensionConstraint = hit.constraint;
+    selectedConstraint = null;
     dimensionDragSession = null;
     setHint("寸法値を入力中: 数値キーで編集、Enter/ダブルクリックで決定、Escでキャンセル");
     draw();
@@ -7967,7 +8000,6 @@
 
   function clearInteractionForSketchChange() {
     clearSelection();
-    sidebarPinnedSelection = null;
     dragSession = null;
     dimensionDragSession = null;
     selectionRectSession = null;
@@ -8370,27 +8402,6 @@
     }
   }
 
-  function sidebarRelatedElements(item) {
-    const related = new Set();
-    if (!item) return related;
-    related.add(item);
-    if (item instanceof Point) {
-      for (const line of model.lines) if (line.p1 === item || line.p2 === item) related.add(line);
-      for (const circle of model.circles) if (circle.center === item) related.add(circle);
-      for (const arc of model.arcs) if (arc.center === item) related.add(arc);
-    } else if (item instanceof Line) {
-      related.add(item.p1);
-      related.add(item.p2);
-    } else if (item instanceof Circle || item instanceof Arc) {
-      related.add(item.center);
-    }
-    return related;
-  }
-
-  function sidebarSelectionMatches(type, item) {
-    return sidebarPinnedSelection?.type === type && sidebarPinnedSelection?.item === item;
-  }
-
   function geometryItemSelectedInCanvas(item) {
     if (!item) return false;
     if (item instanceof Point) return selectedPoints.includes(item);
@@ -8401,54 +8412,32 @@
   }
 
   function constraintSelectedInCanvas(constraint) {
-    return Boolean(constraint && selectedDimensionConstraint === constraint);
+    return Boolean(constraint && (selectedDimensionConstraint === constraint || effectiveSelectedConstraint() === constraint));
   }
 
   function fixedPointSelectedInCanvas(point) {
     return Boolean(point && selectedPoints.includes(point));
   }
 
-  function hasCanvasSidebarSelection() {
-    return selectedPoints.length > 0 ||
-      selectedLines.length > 0 ||
-      selectedCircles.length > 0 ||
-      selectedArcs.length > 0 ||
-      selectedBlockInstances.length > 0 ||
-      Boolean(selectedArcEndpoint) ||
-      Boolean(selectedArcEndpointPair) ||
-      Boolean(selectedDimensionConstraint);
-  }
-
-  function sidebarPinnedSelectionMatchesCanvas() {
-    if (!sidebarPinnedSelection) return false;
-    if (sidebarPinnedSelection.type === "geometry") return geometryItemSelectedInCanvas(sidebarPinnedSelection.item);
-    if (sidebarPinnedSelection.type === "constraint") return constraintSelectedInCanvas(sidebarPinnedSelection.item);
-    if (sidebarPinnedSelection.type === "fixed-point") return fixedPointSelectedInCanvas(sidebarPinnedSelection.item);
-    return false;
-  }
-
-  function updateSidebarPinnedRowClasses() {
-    if (sidebarPinnedSelection && hasCanvasSidebarSelection() && !sidebarPinnedSelectionMatchesCanvas()) {
-      sidebarPinnedSelection = null;
-    }
+  function updateSidebarSelectionRowClasses() {
     for (const row of document.querySelectorAll(".geometry-list-row")) {
       const item = sidebarGeometryItem(row.dataset.kind, row.dataset.id);
-      row.classList.toggle("sidebar-selected", geometryItemSelectedInCanvas(item) || sidebarSelectionMatches("geometry", item));
+      row.classList.toggle("sidebar-selected", geometryItemSelectedInCanvas(item));
     }
     for (const row of document.querySelectorAll(".constraint-list-row[data-idx]")) {
       const constraint = model.constraints[Number(row.dataset.idx)];
-      row.classList.toggle("sidebar-selected", constraintSelectedInCanvas(constraint) || sidebarSelectionMatches("constraint", constraint));
+      row.classList.toggle("sidebar-selected", constraintSelectedInCanvas(constraint));
     }
     for (const row of document.querySelectorAll(".fixed-point-list-row")) {
       const point = model.points.find((item) => item.id === row.dataset.pointId);
-      row.classList.toggle("sidebar-selected", fixedPointSelectedInCanvas(point) || sidebarSelectionMatches("fixed-point", point));
+      row.classList.toggle("sidebar-selected", fixedPointSelectedInCanvas(point));
     }
   }
 
   function selectSidebarGeometryItem(item) {
     clearSelection();
     if (!item) {
-      updateSidebarPinnedRowClasses();
+      updateSidebarSelectionRowClasses();
       draw();
       return;
     }
@@ -8456,32 +8445,30 @@
     else if (item instanceof Line) selectedLines = [item];
     else if (item instanceof Circle) selectedCircles = [item];
     else if (item instanceof Arc) selectedArcs = [item];
-    sidebarPinnedSelection = { type: "geometry", item, elements: sidebarRelatedElements(item) };
     updateToolbar();
-    updateSidebarPinnedRowClasses();
+    updateSidebarSelectionRowClasses();
     draw();
   }
 
   function selectSidebarConstraintItem(constraint) {
     clearSelection();
     if (!constraint) {
-      updateSidebarPinnedRowClasses();
+      updateSidebarSelectionRowClasses();
       draw();
       return;
     }
     if (targetFromConstraint(constraint)) selectedDimensionConstraint = constraint;
-    sidebarPinnedSelection = { type: "constraint", item: constraint, elements: new Set(constraintGraphNodes(constraint)) };
+    else selectedConstraint = constraint;
     updateToolbar();
-    updateSidebarPinnedRowClasses();
+    updateSidebarSelectionRowClasses();
     draw();
   }
 
   function selectSidebarFixedPoint(point) {
     clearSelection();
     if (point) selectedPoints = [point];
-    sidebarPinnedSelection = point ? { type: "fixed-point", item: point, elements: sidebarRelatedElements(point) } : null;
     updateToolbar();
-    updateSidebarPinnedRowClasses();
+    updateSidebarSelectionRowClasses();
     draw();
   }
 
@@ -8515,7 +8502,7 @@
         selectSidebarFixedPoint(point);
       });
     }
-    updateSidebarPinnedRowClasses();
+    updateSidebarSelectionRowClasses();
   }
 
   function blockInstanceDisabledReference(instance, nextEnabledSketchIds) {
@@ -8738,7 +8725,6 @@
       btn.addEventListener("click", () => {
         const point = model.points.find((item) => item.id === btn.dataset.id);
         if (!point) return;
-        if (sidebarSelectionMatches("fixed-point", point)) sidebarPinnedSelection = null;
         point.fixed = false;
         solveAndRefresh(`固定解除 ${point.id}`);
       });
@@ -9570,6 +9556,7 @@
 
   function selectHitOnly(hitP, hitL, hitC, hitA, hitArcEnd) {
     selectedDimensionConstraint = null;
+    selectedConstraint = null;
     selectedPoints = hitP ? [hitP] : [];
     selectedLines = hitL ? [hitL] : [];
     selectedCircles = hitC ? [hitC] : [];
@@ -9837,6 +9824,7 @@
   }
 
   function beginDrag(e, hitP, hitL, hitC, hitA, hitArcEnd, pointer) {
+    selectedConstraint = null;
     if (selectedElementCount() > 1 && hitIsSelected(hitP, hitL, hitC, hitA, hitArcEnd)) {
       dragSession = buildDragSession("selection", selectedDragPoints(), pointer);
       selectedDimensionConstraint = null;
@@ -9888,6 +9876,7 @@
   function beginDimensionDrag(e, hit, pointer) {
     const anchor = dimensionAnchor(hit.target, hit.dimension);
     selectedDimensionConstraint = hit.constraint;
+    selectedConstraint = null;
     dimensionDragSession = {
       pointerId: e.pointerId,
       constraint: hit.constraint,
@@ -10916,7 +10905,7 @@
 
     if (
       pendingConstraintCommand &&
-      selectedDimensionConstraint &&
+      (selectedDimensionConstraint || effectiveSelectedConstraint()) &&
       !hitP &&
       !hitL &&
       !hitC &&
@@ -10927,6 +10916,7 @@
     ) {
       e.preventDefault();
       selectedDimensionConstraint = null;
+      selectedConstraint = null;
       hoveredDimensionConstraint = null;
       setHint(constraintTargetHint(pendingConstraintCommand.type));
       updateUI();
@@ -11501,7 +11491,8 @@
       selectedArcs.length > 0 ||
       selectedBlockInstances.length > 0 ||
       Boolean(selectedArcEndpoint) ||
-      Boolean(selectedDimensionConstraint);
+      Boolean(selectedDimensionConstraint) ||
+      Boolean(effectiveSelectedConstraint());
   }
 
   function isBlankCanvasHit(hits = {}) {
@@ -11829,7 +11820,8 @@
         selectedArcs.length > 0 ||
         selectedBlockInstances.length > 0 ||
         selectedArcEndpoint ||
-        selectedDimensionConstraint
+        selectedDimensionConstraint ||
+        effectiveSelectedConstraint()
       ) {
         clearSelection();
         setHint("選択を解除しました");
@@ -13138,7 +13130,28 @@
         };
       },
       sidebarHighlightIds() {
-        return [...(sidebarPinnedSelection?.elements || [])].map((item) => item?.id).filter(Boolean).sort();
+        const ids = new Set();
+        for (const point of selectedPoints) ids.add(point.id);
+        for (const line of selectedLines) {
+          ids.add(line.id);
+          ids.add(line.p1.id);
+          ids.add(line.p2.id);
+        }
+        for (const circle of selectedCircles) {
+          ids.add(circle.id);
+          ids.add(circle.center.id);
+        }
+        for (const arc of selectedArcs) {
+          ids.add(arc.id);
+          ids.add(arc.center.id);
+        }
+        const constraint = effectiveSelectedConstraint() || selectedDimensionConstraint;
+        if (constraint) {
+          for (const item of constraintGraphNodes(constraint)) {
+            if (item?.id) ids.add(item.id);
+          }
+        }
+        return [...ids].sort();
       },
     };
   }
