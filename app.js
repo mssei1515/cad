@@ -136,6 +136,7 @@
   let blockDefinitionSeq = 1;
   let blockInstanceSeq = 1;
   let blockElementSeq = 1;
+  let lastMiddleAuxClick = null;
   let blockPlacementDefinitionId = null;
   let blockPlacementAnchor = null;
   let blockPlacementEnabledSketchIds = [];
@@ -2750,6 +2751,7 @@
     hoveredSidebarItem = null;
     hoveredSketchIdentity = null;
     lastPointerWorld = null;
+    lastMiddleAuxClick = null;
     clearSnap();
     selectedArcEndpoint = null;
     selectedArcEndpointPair = null;
@@ -4031,6 +4033,28 @@
     return bounds;
   }
 
+  function isVisibleOnCanvasGeometry(item) {
+    if (!isVisibleSketchElement(item)) return false;
+    return !isPresentationMode() || presentationStyleForElement(item).visible !== false;
+  }
+
+  function visibleGeometryBounds() {
+    let bounds = null;
+    for (const line of allGeometryLines()) {
+      if (isVisibleOnCanvasGeometry(line)) bounds = mergeBounds(bounds, lineBBox(line));
+    }
+    for (const circle of allGeometryCircles()) {
+      if (isVisibleOnCanvasGeometry(circle)) bounds = mergeBounds(bounds, primitiveBBox(circle));
+    }
+    for (const arc of allGeometryArcs()) {
+      if (isVisibleOnCanvasGeometry(arc)) bounds = mergeBounds(bounds, primitiveBBox(arc));
+    }
+    for (const point of allGeometryPoints()) {
+      if (isVisibleOnCanvasGeometry(point)) bounds = mergeBounds(bounds, { x1: point.x, y1: point.y, x2: point.x, y2: point.y });
+    }
+    return bounds;
+  }
+
   function fitBoundsToViewport(bounds, paddingPx = 96) {
     if (!bounds) return false;
     const rect = canvas.getBoundingClientRect();
@@ -4054,6 +4078,10 @@
 
   function fitAllGeometryToViewport(paddingPx = 96) {
     return fitBoundsToViewport(allGeometryBounds(), paddingPx);
+  }
+
+  function fitVisibleGeometryToViewport(paddingPx = 96) {
+    return fitBoundsToViewport(visibleGeometryBounds(), paddingPx);
   }
 
   function screenBoxForBounds(bounds) {
@@ -5972,6 +6000,7 @@
       ctx.arc(arc.center.x, arc.center.y, arc.radius(), arc.startAngle, arc.endAngle, arc.endAngle < arc.startAngle);
       ctx.stroke();
     }
+    ctx.setLineDash([]);
     ctx.restore();
   }
 
@@ -6250,7 +6279,7 @@
     ctx.strokeStyle = preview || highlighted ? "#2563eb" : "#6b7280";
     ctx.fillStyle = preview || highlighted ? "#2563eb" : "#6b7280";
     ctx.lineWidth = (highlighted ? 2 : 1.2) / viewport.scale;
-    if (preview) ctx.setLineDash([5 / viewport.scale, 4 / viewport.scale]);
+    ctx.setLineDash(preview ? [5 / viewport.scale, 4 / viewport.scale] : []);
     ctx.beginPath();
     ctx.moveTo((lineA || a).x, (lineA || a).y);
     ctx.lineTo((lineB || b).x, (lineB || b).y);
@@ -6280,7 +6309,7 @@
     ctx.strokeStyle = preview || highlighted ? "#2563eb" : "#6b7280";
     ctx.fillStyle = preview || highlighted ? "#2563eb" : "#6b7280";
     ctx.lineWidth = (highlighted ? 2 : 1.2) / viewport.scale;
-    if (preview) ctx.setLineDash([5 / viewport.scale, 4 / viewport.scale]);
+    ctx.setLineDash(preview ? [5 / viewport.scale, 4 / viewport.scale] : []);
     const extension = DIMENSION_EXTENSION_SCREEN_PX / viewport.scale;
     const gap = DIMENSION_EXTENSION_GAP_SCREEN_PX / viewport.scale;
     const visibleGap = Math.min(gap, Math.max(0, radius - 2 / viewport.scale));
@@ -11690,6 +11719,26 @@
     return false;
   }
 
+  function handleMiddleButtonDoubleClickFit(e) {
+    if (e.button !== 1) return false;
+    const now = performance.now();
+    const screen = canvasScreenPoint(e);
+    const previous = lastMiddleAuxClick;
+    const repeated =
+      previous &&
+      now - previous.time <= 450 &&
+      hypot2(screen.x - previous.x, screen.y - previous.y) <= 12;
+    lastMiddleAuxClick = repeated ? null : { time: now, x: screen.x, y: screen.y };
+    if (!repeated) return false;
+    if (fitVisibleGeometryToViewport()) {
+      setHint("表示中の図形全体が見えるように調整しました");
+    } else {
+      setHint("表示中の図形がありません", "error");
+    }
+    draw();
+    return true;
+  }
+
   canvas.addEventListener("pointerup", endDrag);
   canvas.addEventListener("pointercancel", endDrag);
   canvas.addEventListener("dblclick", (e) => {
@@ -11743,7 +11792,10 @@
     }
   });
   canvas.addEventListener("auxclick", (e) => {
-    if (e.button === 1) e.preventDefault();
+    if (e.button === 1) {
+      e.preventDefault();
+      handleMiddleButtonDoubleClickFit(e);
+    }
   });
   if (dimensionValueInput) {
     dimensionValueInput.addEventListener("pointerdown", (e) => e.stopPropagation());
@@ -12493,6 +12545,36 @@
           screen,
           canvas: { width: rect.width, height: rect.height },
           scale: viewport.scale,
+        };
+      },
+      resetForMiddleButtonFit() {
+        resetModelState();
+        setAppMode("geometry");
+        const nearLine = addLine(addPoint(0, 0, true, "endpoint"), addPoint(100, 0, true, "endpoint"));
+        const hiddenSketchId = "S2";
+        model.sketches.push({ id: hiddenSketchId, name: "Sketch-2", parentSketchId: ROOT_SKETCH_ID, kind: "sketch", visible: false });
+        const previousActive = model.activeSketchId;
+        model.activeSketchId = hiddenSketchId;
+        addLine(addPoint(10000, 0, true, "endpoint"), addPoint(10100, 0, true, "endpoint"));
+        model.activeSketchId = previousActive;
+        viewport.scale = 0.02;
+        viewport.x = 10;
+        viewport.y = 10;
+        updateUI();
+        draw();
+        const rect = canvas.getBoundingClientRect();
+        return {
+          click: { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 },
+          nearLineId: nearLine.id,
+        };
+      },
+      middleButtonFitState() {
+        const rect = canvas.getBoundingClientRect();
+        return {
+          scale: viewport.scale,
+          visibleScreen: screenBoxForBounds(visibleGeometryBounds()),
+          canvas: { width: rect.width, height: rect.height },
+          hiddenVisible: isVisibleSketchId("S2"),
         };
       },
       resetForSidebarInspection() {

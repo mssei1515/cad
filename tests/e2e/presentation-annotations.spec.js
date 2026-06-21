@@ -441,6 +441,19 @@ test("all geometry fit includes figures from every sketch", async ({ page }) => 
   expect(result.screen.bottom).toBeLessThanOrEqual(result.canvas.height - 90);
 });
 
+test("middle mouse double click fits visible geometry", async ({ page }) => {
+  await page.goto(`${baseUrl}/index.html?test=1`);
+  const setup = await page.evaluate(() => window.__cadTest.resetForMiddleButtonFit());
+  await page.mouse.click(setup.click.x, setup.click.y, { button: "middle" });
+  await page.mouse.click(setup.click.x, setup.click.y, { button: "middle" });
+  const result = await page.evaluate(() => window.__cadTest.middleButtonFitState());
+  const width = result.visibleScreen.right - result.visibleScreen.left;
+  expect(result.hiddenVisible).toBe(false);
+  expect(result.visibleScreen.left).toBeGreaterThanOrEqual(90);
+  expect(result.visibleScreen.right).toBeLessThanOrEqual(result.canvas.width - 90);
+  expect(width).toBeGreaterThan(result.canvas.width * 0.45);
+});
+
 test("sidebar lists circles and arcs and highlights related geometry", async ({ page }) => {
   await page.goto(`${baseUrl}/index.html?test=1`);
   const ids = await page.evaluate(() => window.__cadTest.resetForSidebarInspection());
