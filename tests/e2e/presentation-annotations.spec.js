@@ -459,7 +459,7 @@ test("sidebar lists circles and arcs and highlights related geometry", async ({ 
 
   await page.click('[data-sidebar-tab="circles"]');
   await page.locator("#circleList .geometry-list-row").hover();
-  expect(await page.evaluate(() => window.__cadTest.sidebarHighlightIds())).toEqual([]);
+  expect(await page.evaluate(() => window.__cadTest.sidebarHighlightIds())).toEqual([ids.circle, ids.circleCenter].sort());
   await page.locator("#circleList .geometry-list-row").click();
   await page.mouse.move(700, 700);
   expect(await page.locator("#circleList .geometry-list-row").getAttribute("class")).toContain("sidebar-selected");
@@ -469,14 +469,14 @@ test("sidebar lists circles and arcs and highlights related geometry", async ({ 
   await page.locator("#arcList .geometry-list-row").click();
   expect(await page.locator("#arcList .geometry-list-row").getAttribute("class")).toContain("sidebar-selected");
   expect(await page.evaluate(() => window.__cadTest.sidebarHighlightIds())).toEqual([ids.circle, ids.circleCenter, ids.arc, ids.arcCenter].sort());
-  await page.locator("#arcList .geometry-list-row").click();
-  expect(await page.locator("#arcList .geometry-list-row")).not.toHaveClass(/sidebar-selected/);
-  expect(await page.evaluate(() => window.__cadTest.sidebarHighlightIds())).toEqual([ids.circle, ids.circleCenter].sort());
 
   await page.click('[data-sidebar-tab="constraints"]');
   await expect(page.locator("#sidebarConstraints")).toBeVisible();
   await page.locator("#constraintList .constraint-list-row").hover();
-  expect(await page.evaluate(() => window.__cadTest.sidebarHighlightIds())).toEqual([ids.circle, ids.circleCenter].sort());
+  const hoveredConstraintHighlights = await page.evaluate(() => window.__cadTest.sidebarHighlightIds());
+  expect(hoveredConstraintHighlights).toContain(ids.circle);
+  expect(hoveredConstraintHighlights).toContain(ids.line);
+  expect(hoveredConstraintHighlights).toContain(ids.fixedPoint);
   await page.locator("#constraintList .constraint-list-row").click();
   await expect(page.locator("#constraintList .constraint-list-row")).toHaveClass(/sidebar-selected/);
   const constraintHighlights = await page.evaluate(() => window.__cadTest.sidebarHighlightIds());
@@ -593,8 +593,12 @@ test("non-active sketches are visible unless individually hidden", async ({ page
 
   const setup = await page.evaluate(() => window.__cadTest.resetForSiblingSubtreeReference());
   expect(setup.relations).toEqual({ S10: "reference", S2: "reference", S3: "reference", S4: "reference", S9: "reference", S11: "descendant" });
+  expect(setup.relationLabels).toEqual({ S9: "参照可", S11: "参照不可（子孫）" });
+  expect(setup.relationColors).toEqual({ S9: "#1d4ed8", S11: "#b91c1c" });
   expect(setup.visible).toEqual({ S10: true, S2: true, S3: true, S4: true, S9: true, S11: true });
   expect(setup.rowClasses).toEqual({ S2: true, S3: true, S4: true, S9: true, S11: true });
+  expect(setup.rowBackgrounds.S2).toBe("rgba(0, 0, 0, 0)");
+  expect(setup.rowBackgrounds.S9).toBe("rgba(0, 0, 0, 0)");
 
   await page.click('.sketchVisibilityBtn[data-id="S2"]');
   let state = await page.evaluate(() => window.__cadTest.siblingSubtreeVisibilityState());

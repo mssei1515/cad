@@ -97,6 +97,7 @@
   let selectedArcEndpointPair = null;
   let selectedDimensionConstraint = null;
   let selectedConstraint = null;
+  let hoveredSidebarItem = null;
   let constraintAnalysisState = null;
   let constraintRedundancyState = { constraints: new Map(), sketches: new Map(), count: 0 };
   let sketchSolveStates = new Map();
@@ -1810,6 +1811,10 @@
     return Boolean(hoveredSketchTreeId && elementSketchId(item) === hoveredSketchTreeId);
   }
 
+  function isSidebarHoveredElement(item) {
+    return Boolean(item && hoveredSidebarItem?.elements?.has(item));
+  }
+
   function hasPrimaryCanvasSelection() {
     return selectedPoints.length > 0 ||
       selectedLines.length > 0 ||
@@ -2742,6 +2747,7 @@
     hoveredArc = null;
     hoveredArcEndpoint = null;
     hoveredDimensionConstraint = null;
+    hoveredSidebarItem = null;
     hoveredSketchIdentity = null;
     lastPointerWorld = null;
     clearSnap();
@@ -3576,6 +3582,7 @@
     constraintOperands = [];
     hoveredSketchIdentity = null;
     hoveredBlockInstance = null;
+    hoveredSidebarItem = null;
   }
 
   function selectableSketchElement(item) {
@@ -6111,11 +6118,12 @@
       ctx.globalAlpha = presentation ? style.opacity : sketchAlpha(l);
       const refSelected = isPendingReferenceTarget(l) || isConstraintOperandSelected(l);
       const treeHovered = isSidebarHighlightedElement(l);
+      const sidebarHovered = isSidebarHoveredElement(l);
       const relatedHighlighted = isSelectedConstraintRelatedElement(l);
       const auxiliaryHighlighted = treeHovered || relatedHighlighted;
       const blockSelected = l.blockInstance && selectedBlockInstances.includes(l.blockInstance);
       const sel = blockSelected || (active && selectedLines.includes(l)) || (presentation && selectedLines.includes(l)) || refSelected;
-      const hovered = (l.blockInstance && hoveredBlockInstance === l.blockInstance) || ((active || isReferenceHoverElement(l)) && hoveredLine === l) || (presentation && hoveredLine === l);
+      const hovered = sidebarHovered || (l.blockInstance && hoveredBlockInstance === l.blockInstance) || ((active || isReferenceHoverElement(l)) && hoveredLine === l) || (presentation && hoveredLine === l);
       const construction = Boolean(l.construction) && !sel && !hovered;
       const lineColor = auxiliaryHighlighted ? "#0ea5e9" : presentation && !sel && !hovered ? style.color : constraintStatusColor(l, sel, hovered);
       ctx.strokeStyle = lineColor;
@@ -6166,11 +6174,12 @@
       ctx.globalAlpha = presentation ? style.opacity : sketchAlpha(c);
       const refSelected = isPendingReferenceTarget(c) || isConstraintOperandSelected(c);
       const treeHovered = isSidebarHighlightedElement(c);
+      const sidebarHovered = isSidebarHoveredElement(c);
       const relatedHighlighted = isSelectedConstraintRelatedElement(c);
       const auxiliaryHighlighted = treeHovered || relatedHighlighted;
       const blockSelected = c.blockInstance && selectedBlockInstances.includes(c.blockInstance);
       const sel = blockSelected || (active && selectedCircles.includes(c)) || (presentation && selectedCircles.includes(c)) || refSelected;
-      const hovered = (c.blockInstance && hoveredBlockInstance === c.blockInstance) || ((active || isReferenceHoverElement(c)) && hoveredCircle === c) || (presentation && hoveredCircle === c);
+      const hovered = sidebarHovered || (c.blockInstance && hoveredBlockInstance === c.blockInstance) || ((active || isReferenceHoverElement(c)) && hoveredCircle === c) || (presentation && hoveredCircle === c);
       const construction = Boolean(c.construction) && !sel && !hovered;
       ctx.strokeStyle = auxiliaryHighlighted ? "#0ea5e9" : presentation && !sel && !hovered ? style.color : constraintStatusColor(c, sel, hovered);
       ctx.lineWidth = (auxiliaryHighlighted ? 4 : sel ? 4 : hovered ? 2.6 : presentation ? style.lineWidthPx : construction ? Math.max(1.8, sketchStrokeWidth(c) * 0.72) : sketchStrokeWidth(c)) / viewport.scale;
@@ -6202,11 +6211,12 @@
       ctx.globalAlpha = presentation ? style.opacity : sketchAlpha(a);
       const refSelected = isPendingReferenceTarget(a) || isConstraintOperandSelected(a);
       const treeHovered = isSidebarHighlightedElement(a);
+      const sidebarHovered = isSidebarHoveredElement(a);
       const relatedHighlighted = isSelectedConstraintRelatedElement(a);
       const auxiliaryHighlighted = treeHovered || relatedHighlighted;
       const blockSelected = a.blockInstance && selectedBlockInstances.includes(a.blockInstance);
       const sel = blockSelected || (active && selectedArcs.includes(a)) || (presentation && selectedArcs.includes(a)) || refSelected;
-      const hovered = (a.blockInstance && hoveredBlockInstance === a.blockInstance) || ((active || isReferenceHoverElement(a)) && hoveredArc === a) || (presentation && hoveredArc === a);
+      const hovered = sidebarHovered || (a.blockInstance && hoveredBlockInstance === a.blockInstance) || ((active || isReferenceHoverElement(a)) && hoveredArc === a) || (presentation && hoveredArc === a);
       const construction = Boolean(a.construction) && !sel && !hovered;
       const angles = arcAngles(a);
       ctx.strokeStyle = auxiliaryHighlighted ? "#0ea5e9" : presentation && !sel && !hovered ? style.color : constraintStatusColor(a, sel, hovered);
@@ -6928,21 +6938,21 @@
   function sketchIdentityRelationLabel(sketchId) {
     const relation = sketchRelationToActive(sketchId);
     if (relation === "reference") return "参照可";
-    if (relation === "descendant") return "子孫";
+    if (relation === "descendant") return "参照不可（子孫）";
     return "";
   }
 
   function sketchIdentityRelationColor(sketchId) {
     const relation = sketchRelationToActive(sketchId);
-    if (relation === "reference") return "#4338ca";
-    if (relation === "descendant") return "#047857";
+    if (relation === "reference") return "#1d4ed8";
+    if (relation === "descendant") return "#b91c1c";
     return "#64748b";
   }
 
   function sketchIdentityRelationBackground(sketchId) {
     const relation = sketchRelationToActive(sketchId);
-    if (relation === "reference") return "rgba(224, 231, 255, 0.96)";
-    if (relation === "descendant") return "rgba(209, 250, 229, 0.96)";
+    if (relation === "reference") return "rgba(219, 234, 254, 0.96)";
+    if (relation === "descendant") return "rgba(254, 226, 226, 0.96)";
     return "rgba(241, 245, 249, 0.96)";
   }
 
@@ -7060,11 +7070,12 @@
       ctx.globalAlpha = sketchAlpha(p);
       const refSelected = isPendingReferenceTarget(p) || isConstraintOperandSelected(p);
       const treeHovered = isSidebarHighlightedElement(p);
+      const sidebarHovered = isSidebarHoveredElement(p);
       const relatedHighlighted = isSelectedConstraintRelatedElement(p);
       const auxiliaryHighlighted = treeHovered || relatedHighlighted;
       const sel = (active && selectedPoints.includes(p)) || refSelected;
       const endpoint = isEndpointPoint(p);
-      const hovered = (active || isReferenceHoverElement(p)) && (hoveredPoint === p || hoveredEndpointPoint === p);
+      const hovered = sidebarHovered || ((active || isReferenceHoverElement(p)) && (hoveredPoint === p || hoveredEndpointPoint === p));
       const dragging = dragSession?.kind === "point" && dragSession.points.some((target) => target.point === p);
       const primitiveCenter = shouldShowPrimitiveCenter(p);
       const fixedByLine = pointLockedByLineFixed(p);
@@ -8356,6 +8367,57 @@
     return Boolean(point && selectedPoints.includes(point));
   }
 
+  function sidebarHoverElementsForItem(item) {
+    const elements = new Set();
+    if (!item) return elements;
+    elements.add(item);
+    if (item instanceof Point) {
+      for (const line of allGeometryLines()) {
+        if (line.p1 === item || line.p2 === item) elements.add(line);
+      }
+      for (const circle of allGeometryCircles()) {
+        if (circle.center === item) elements.add(circle);
+      }
+      for (const arc of allGeometryArcs()) {
+        if (arc.center === item) elements.add(arc);
+      }
+      return elements;
+    }
+    if (item instanceof Line) {
+      elements.add(item.p1);
+      elements.add(item.p2);
+      return elements;
+    }
+    if (item instanceof Circle) {
+      elements.add(item.center);
+      return elements;
+    }
+    if (item instanceof Arc) {
+      elements.add(item.center);
+      return elements;
+    }
+    return elements;
+  }
+
+  function sidebarHoverElementsForConstraint(constraint) {
+    return new Set(constraint ? constraintGraphNodes(constraint).filter(Boolean) : []);
+  }
+
+  function setSidebarHover(type, item, elements) {
+    hoveredSidebarItem = { type, item, elements };
+    if (type === "constraint" && targetFromConstraint(item)) hoveredDimensionConstraint = item;
+    draw();
+  }
+
+  function clearSidebarHover(type = null, item = null) {
+    if (!hoveredSidebarItem) return;
+    if (type && hoveredSidebarItem.type !== type) return;
+    if (item && hoveredSidebarItem.item !== item) return;
+    if (hoveredDimensionConstraint === hoveredSidebarItem.item) hoveredDimensionConstraint = null;
+    hoveredSidebarItem = null;
+    draw();
+  }
+
   function updateSidebarSelectionRowClasses() {
     for (const row of document.querySelectorAll(".geometry-list-row")) {
       const item = sidebarGeometryItem(row.dataset.kind, row.dataset.id);
@@ -8425,6 +8487,14 @@
 
   function bindSidebarItemHover() {
     for (const row of document.querySelectorAll(".geometry-list-row")) {
+      row.addEventListener("mouseenter", () => {
+        const item = sidebarGeometryItem(row.dataset.kind, row.dataset.id);
+        setSidebarHover("geometry", item, sidebarHoverElementsForItem(item));
+      });
+      row.addEventListener("mouseleave", () => {
+        const item = sidebarGeometryItem(row.dataset.kind, row.dataset.id);
+        clearSidebarHover("geometry", item);
+      });
       row.addEventListener("click", (event) => {
         if (event.target.closest("button")) return;
         const item = sidebarGeometryItem(row.dataset.kind, row.dataset.id);
@@ -8432,6 +8502,14 @@
       });
     }
     for (const row of document.querySelectorAll(".constraint-list-row[data-idx]")) {
+      row.addEventListener("mouseenter", () => {
+        const constraint = model.constraints[Number(row.dataset.idx)];
+        setSidebarHover("constraint", constraint, sidebarHoverElementsForConstraint(constraint));
+      });
+      row.addEventListener("mouseleave", () => {
+        const constraint = model.constraints[Number(row.dataset.idx)];
+        clearSidebarHover("constraint", constraint);
+      });
       row.addEventListener("click", (event) => {
         if (event.target.closest("button")) return;
         const constraint = model.constraints[Number(row.dataset.idx)];
@@ -8439,6 +8517,14 @@
       });
     }
     for (const row of document.querySelectorAll(".fixed-point-list-row")) {
+      row.addEventListener("mouseenter", () => {
+        const point = model.points.find((item) => item.id === row.dataset.pointId);
+        setSidebarHover("fixed-point", point, sidebarHoverElementsForItem(point));
+      });
+      row.addEventListener("mouseleave", () => {
+        const point = model.points.find((item) => item.id === row.dataset.pointId);
+        clearSidebarHover("fixed-point", point);
+      });
       row.addEventListener("click", (event) => {
         if (event.target.closest("button")) return;
         const point = model.points.find((item) => item.id === row.dataset.pointId);
@@ -12630,6 +12716,12 @@
           unrelatedLine: screenPoint({ x: 45, y: -40 }),
           childLine: screenPoint({ x: 45, y: 80 }),
           relations: Object.fromEntries([parentSketchId, siblingSketchId, siblingChildId, siblingGrandchildId, unrelatedSketchId, activeChildSketchId].map((id) => [id, sketchRelationToActive(id)])),
+          relationLabels: Object.fromEntries([unrelatedSketchId, activeChildSketchId].map((id) => [id, sketchIdentityRelationLabel(id)])),
+          relationColors: Object.fromEntries([unrelatedSketchId, activeChildSketchId].map((id) => [id, sketchIdentityRelationColor(id)])),
+          rowBackgrounds: Object.fromEntries([siblingSketchId, siblingChildId, siblingGrandchildId, unrelatedSketchId, activeChildSketchId].map((id) => {
+            const row = document.querySelector(`.sketch-item[data-id="${id}"]`);
+            return [id, row ? getComputedStyle(row).backgroundColor : ""];
+          })),
           visible: Object.fromEntries([parentSketchId, siblingSketchId, siblingChildId, siblingGrandchildId, unrelatedSketchId, activeChildSketchId].map((id) => [id, isVisibleSketchId(id)])),
           rowClasses: Object.fromEntries([siblingSketchId, siblingChildId, siblingGrandchildId, unrelatedSketchId, activeChildSketchId].map((id) => [id, document.querySelector(`.sketch-item[data-id="${id}"]`)?.classList.contains("visible") || false])),
           referenceLineId: referenceLine.id,
@@ -13107,6 +13199,14 @@
         const constraint = effectiveSelectedConstraint() || selectedDimensionConstraint;
         if (constraint) {
           for (const item of constraintGraphNodes(constraint)) {
+            if (item?.id) ids.add(item.id);
+          }
+        }
+        for (const item of hoveredSidebarItem?.elements || []) {
+          if (item?.id) ids.add(item.id);
+        }
+        if (hoveredDimensionConstraint) {
+          for (const item of constraintGraphNodes(hoveredDimensionConstraint)) {
             if (item?.id) ids.add(item.id);
           }
         }
