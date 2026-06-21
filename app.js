@@ -5846,6 +5846,13 @@
     else selectedArcs.push(a);
   }
 
+  function toggleSidebarSelectionById(selection, item) {
+    if (!item) return;
+    const i = selection.findIndex((selected) => selected === item || selected?.id === item.id);
+    if (i >= 0) selection.splice(i, 1);
+    else selection.push(item);
+  }
+
   function addUnique(target, item) {
     if (item && !target.includes(item)) target.push(item);
   }
@@ -8435,16 +8442,19 @@
   }
 
   function selectSidebarGeometryItem(item) {
-    clearSelection();
+    selectedDimensionConstraint = null;
+    selectedConstraint = null;
+    selectedArcEndpoint = null;
+    selectedArcEndpointPair = null;
     if (!item) {
       updateSidebarSelectionRowClasses();
       draw();
       return;
     }
-    if (item instanceof Point) selectedPoints = [item];
-    else if (item instanceof Line) selectedLines = [item];
-    else if (item instanceof Circle) selectedCircles = [item];
-    else if (item instanceof Arc) selectedArcs = [item];
+    if (item instanceof Point) toggleSidebarSelectionById(selectedPoints, item);
+    else if (item instanceof Line) toggleSidebarSelectionById(selectedLines, item);
+    else if (item instanceof Circle) toggleSidebarSelectionById(selectedCircles, item);
+    else if (item instanceof Arc) toggleSidebarSelectionById(selectedArcs, item);
     updateToolbar();
     updateSidebarSelectionRowClasses();
     draw();
@@ -8465,8 +8475,11 @@
   }
 
   function selectSidebarFixedPoint(point) {
-    clearSelection();
-    if (point) selectedPoints = [point];
+    selectedDimensionConstraint = null;
+    selectedConstraint = null;
+    selectedArcEndpoint = null;
+    selectedArcEndpointPair = null;
+    if (point) toggleSidebarSelectionById(selectedPoints, point);
     updateToolbar();
     updateSidebarSelectionRowClasses();
     draw();
@@ -10872,7 +10885,6 @@
         setHint(`プレゼンテーション・モード: ${activePresentationSheet().name} / ${presentationSelectedItems().length}個選択`);
       } else {
         clearSelection();
-        setSidebarCollapsed(true);
         updatePresentationUI();
         setHint(`プレゼンテーション・モード: ${activePresentationSheet().name}`);
       }
@@ -11441,7 +11453,6 @@
       const moved = hypot2(current.x - session.start.x, current.y - session.start.y);
       if (moved <= 3 / viewport.scale) {
         if (!session.additive) clearSelection();
-        setSidebarCollapsed(true, "サイドバーをたたみました");
       } else {
         selectByRect(rectFromPoints(session.start, current), current.x < session.start.x, session.additive);
         setHint("矩形選択を更新しました");
@@ -12098,6 +12109,13 @@
 
   for (const button of document.querySelectorAll("[data-sidebar-tab]")) {
     button.addEventListener("click", () => {
+      const app = document.querySelector(".app");
+      const isCollapsed = app?.classList.contains("side-collapsed");
+      const isActive = button.classList.contains("active");
+      if (isActive && !isCollapsed) {
+        setSidebarCollapsed(true);
+        return;
+      }
       activateSidebarTab(button.dataset.sidebarTab);
       setSidebarCollapsed(false);
     });
@@ -12488,6 +12506,7 @@
           circle: circle.id,
           circleCenter: circleCenter.id,
           arc: arc.id,
+          arcCenter: arcCenter.id,
           lineMid: { x: rect.left + lineMid.x, y: rect.top + lineMid.y },
           blank: { x: rect.left + rect.width - 35, y: rect.top + rect.height - 35 },
         };

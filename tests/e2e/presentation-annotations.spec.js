@@ -303,6 +303,8 @@ test("geometry toolbar uses the organized command groups", async ({ page }) => {
 
   const canvas = await page.locator("#canvas").boundingBox();
   await page.mouse.click(canvas.x + canvas.width * 0.48, canvas.y + canvas.height * 0.82);
+  expect(await page.locator(".side").isVisible()).toBe(true);
+  await page.click('[data-sidebar-tab="constraints"]');
   expect(await page.locator(".side").isVisible()).toBe(false);
   const collapsedModeLayout = await page.evaluate(() => {
     const fileGroupRect = document.querySelector(".file-toolbar-group").getBoundingClientRect();
@@ -382,6 +384,8 @@ test("geometry toolbar uses the organized command groups", async ({ page }) => {
   expect(openPresentationLayout.modeLeft).toBeLessThan(20);
   await page.screenshot({ path: "test-results/presentation-sidebar-layout.png", fullPage: true });
   await page.mouse.click(canvas.x + canvas.width * 0.48, canvas.y + canvas.height * 0.82);
+  expect(await page.locator(".side").isVisible()).toBe(true);
+  await page.click('[data-sidebar-tab="constraints"]');
   expect(await page.locator(".side").isVisible()).toBe(false);
   await page.click("#geometryModeBtn");
   await page.waitForFunction(() => document.body.classList.contains("geometry-mode"));
@@ -459,6 +463,14 @@ test("sidebar lists circles and arcs and highlights related geometry", async ({ 
   await page.locator("#circleList .geometry-list-row").click();
   await page.mouse.move(700, 700);
   expect(await page.locator("#circleList .geometry-list-row").getAttribute("class")).toContain("sidebar-selected");
+  expect(await page.evaluate(() => window.__cadTest.sidebarHighlightIds())).toEqual([ids.circle, ids.circleCenter].sort());
+
+  await page.click('[data-sidebar-tab="arcs"]');
+  await page.locator("#arcList .geometry-list-row").click();
+  expect(await page.locator("#arcList .geometry-list-row").getAttribute("class")).toContain("sidebar-selected");
+  expect(await page.evaluate(() => window.__cadTest.sidebarHighlightIds())).toEqual([ids.circle, ids.circleCenter, ids.arc, ids.arcCenter].sort());
+  await page.locator("#arcList .geometry-list-row").click();
+  expect(await page.locator("#arcList .geometry-list-row")).not.toHaveClass(/sidebar-selected/);
   expect(await page.evaluate(() => window.__cadTest.sidebarHighlightIds())).toEqual([ids.circle, ids.circleCenter].sort());
 
   await page.click('[data-sidebar-tab="constraints"]');
