@@ -71,6 +71,7 @@ test("creates, places, drags, edits, and reloads local-coordinate blocks", async
   expect(state.serialized.lines).toHaveLength(0);
 
   const interaction = await page.evaluate(() => window.__cadTest.blockInteractionPoints());
+  expect(interaction.handle).toBeNull();
   const before = state.instances[0];
   await page.mouse.move(interaction.center.x, interaction.center.y);
   await page.mouse.down();
@@ -79,14 +80,8 @@ test("creates, places, drags, edits, and reloads local-coordinate blocks", async
   state = await page.evaluate(() => window.__cadTest.blockState());
   expect(state.instances[0].x).toBeCloseTo(before.x + 70 / interaction.scale, 3);
   expect(state.instances[0].y).toBeCloseTo(before.y + 35 / interaction.scale, 3);
-
-  const rotationPoints = await page.evaluate(() => window.__cadTest.blockInteractionPoints());
-  await page.mouse.move(rotationPoints.handle.x, rotationPoints.handle.y);
-  await page.mouse.down();
-  await page.mouse.move(rotationPoints.pivot.x, rotationPoints.pivot.y + 90, { steps: 4 });
-  await page.mouse.up();
-  state = await page.evaluate(() => window.__cadTest.blockState());
-  expect(state.instances[0].rotation).toBeCloseTo(Math.PI / 2, 3);
+  expect(state.instances[0].rotation).toBeCloseTo(before.rotation, 8);
+  expect((await page.evaluate(() => window.__cadTest.blockInteractionPoints())).handle).toBeNull();
 
   const canvas = await page.locator("#canvas").boundingBox();
   await page.click(".blockPlaceBtn");

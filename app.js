@@ -4853,24 +4853,7 @@
     return null;
   }
 
-  function blockRotationHandlePoint(instance) {
-    const bundle = blockProjectionBundle(instance);
-    const center = blockInstanceDisplayCenter(instance);
-    const points = bundle.points.length > 0 ? bundle.points : [center];
-    const maxRadius = Math.max(30 / viewport.scale, ...points.map((point) => hypot2(point.x - center.x, point.y - center.y)));
-    return {
-      x: center.x + Math.cos(instance.rotation) * (maxRadius + 28 / viewport.scale),
-      y: center.y + Math.sin(instance.rotation) * (maxRadius + 28 / viewport.scale),
-    };
-  }
-
   function hitBlockRotationHandle(x, y) {
-    const threshold = 10 / viewport.scale;
-    for (const instance of selectedBlockInstances) {
-      const handle = blockRotationHandlePoint(instance);
-      const center = blockInstanceDisplayCenter(instance);
-      if (hypot2(handle.x - x, handle.y - y) <= threshold) return instance;
-    }
     return null;
   }
 
@@ -5967,31 +5950,7 @@
   }
 
   function drawBlockInstanceHandles() {
-    if (!isGeometryMode()) return;
-    withCanvasState(() => {
-      for (const instance of selectedBlockInstances) {
-        if (!isVisibleSketchId(instance.sketchId)) continue;
-        const center = blockInstanceDisplayCenter(instance);
-        const handle = blockRotationHandlePoint(instance);
-        ctx.strokeStyle = "#2563eb";
-        ctx.fillStyle = "#fff";
-        ctx.lineWidth = 1.5 / viewport.scale;
-        ctx.setLineDash([4 / viewport.scale, 3 / viewport.scale]);
-        ctx.beginPath();
-        ctx.moveTo(center.x, center.y);
-        ctx.lineTo(handle.x, handle.y);
-        ctx.stroke();
-        ctx.setLineDash([]);
-        ctx.beginPath();
-        ctx.arc(center.x, center.y, 4 / viewport.scale, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.stroke();
-        ctx.beginPath();
-        ctx.arc(handle.x, handle.y, 6 / viewport.scale, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.stroke();
-      }
-    });
+    resetCanvasStrokeState();
   }
 
   function drawBlockPlacementPreview() {
@@ -13231,11 +13190,10 @@
           : { x: instance.x, y: instance.y };
         const center = worldToCanvasScreen(hitPoint);
         const pivot = worldToCanvasScreen(blockInstanceDisplayCenter(instance));
-        const handle = worldToCanvasScreen(blockRotationHandlePoint(instance));
         return {
           center: { x: rect.left + center.x, y: rect.top + center.y },
           pivot: { x: rect.left + pivot.x, y: rect.top + pivot.y },
-          handle: { x: rect.left + handle.x, y: rect.top + handle.y },
+          handle: null,
           scale: viewport.scale,
         };
       },
