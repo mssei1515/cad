@@ -454,6 +454,24 @@ test("middle mouse double click fits visible geometry", async ({ page }) => {
   expect(width).toBeGreaterThan(result.canvas.width * 0.45);
 });
 
+test("dashed previews do not leak canvas stroke state", async ({ page }) => {
+  await page.goto(`${baseUrl}/index.html?test=1`);
+  const result = await page.evaluate(() => window.__cadTest.canvasDashIsolationCases());
+  expect(result).toEqual({
+    line: [],
+    rectangle: [],
+    circle: [],
+    arc: [],
+    offset: [],
+    trim: [],
+    selection: [],
+    blockPlacement: [],
+    blockHandles: [],
+    presentationLeader: [],
+    frame: [],
+  });
+});
+
 test("sidebar lists circles and arcs and highlights related geometry", async ({ page }) => {
   await page.goto(`${baseUrl}/index.html?test=1`);
   const ids = await page.evaluate(() => window.__cadTest.resetForSidebarInspection());

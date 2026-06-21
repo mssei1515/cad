@@ -5944,31 +5944,54 @@
     ctx.restore();
   }
 
+  function resetCanvasStrokeState() {
+    ctx.setLineDash([]);
+    ctx.lineDashOffset = 0;
+    ctx.shadowBlur = 0;
+    ctx.shadowColor = "transparent";
+    ctx.globalAlpha = 1;
+    ctx.lineCap = "butt";
+    ctx.lineJoin = "miter";
+    ctx.lineWidth = 1;
+  }
+
+  function withCanvasState(drawFn) {
+    ctx.save();
+    try {
+      resetCanvasStrokeState();
+      drawFn();
+    } finally {
+      ctx.restore();
+      resetCanvasStrokeState();
+    }
+  }
+
   function drawBlockInstanceHandles() {
     if (!isGeometryMode()) return;
-    ctx.save();
-    for (const instance of selectedBlockInstances) {
-      if (!isVisibleSketchId(instance.sketchId)) continue;
-      const handle = blockRotationHandlePoint(instance);
-      ctx.strokeStyle = "#2563eb";
-      ctx.fillStyle = "#fff";
-      ctx.lineWidth = 1.5 / viewport.scale;
-      ctx.setLineDash([4 / viewport.scale, 3 / viewport.scale]);
-      ctx.beginPath();
-      ctx.moveTo(center.x, center.y);
-      ctx.lineTo(handle.x, handle.y);
-      ctx.stroke();
-      ctx.setLineDash([]);
-      ctx.beginPath();
-      ctx.arc(center.x, center.y, 4 / viewport.scale, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.stroke();
-      ctx.beginPath();
-      ctx.arc(handle.x, handle.y, 6 / viewport.scale, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.stroke();
-    }
-    ctx.restore();
+    withCanvasState(() => {
+      for (const instance of selectedBlockInstances) {
+        if (!isVisibleSketchId(instance.sketchId)) continue;
+        const center = blockInstanceDisplayCenter(instance);
+        const handle = blockRotationHandlePoint(instance);
+        ctx.strokeStyle = "#2563eb";
+        ctx.fillStyle = "#fff";
+        ctx.lineWidth = 1.5 / viewport.scale;
+        ctx.setLineDash([4 / viewport.scale, 3 / viewport.scale]);
+        ctx.beginPath();
+        ctx.moveTo(center.x, center.y);
+        ctx.lineTo(handle.x, handle.y);
+        ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.beginPath();
+        ctx.arc(center.x, center.y, 4 / viewport.scale, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.arc(handle.x, handle.y, 6 / viewport.scale, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+      }
+    });
   }
 
   function drawBlockPlacementPreview() {
@@ -5980,28 +6003,27 @@
     const translation = blockInstanceTranslationForAnchor(definition, blockPlacementEnabledSketchIds, anchor, rotation);
     const previewInstance = { id: "BLOCK_PREVIEW", definitionId: definition.id, sketchId: activeSketchId(), x: translation.x, y: translation.y, rotation, fixed: false, enabledSketchIds: blockPlacementEnabledSketchIds.slice() };
     const bundle = createBlockProjectionBundle(previewInstance, definition);
-    ctx.save();
-    ctx.strokeStyle = "#2563eb";
-    ctx.lineWidth = 2 / viewport.scale;
-    ctx.setLineDash([6 / viewport.scale, 5 / viewport.scale]);
-    for (const line of bundle.lines) {
-      ctx.beginPath();
-      ctx.moveTo(line.p1.x, line.p1.y);
-      ctx.lineTo(line.p2.x, line.p2.y);
-      ctx.stroke();
-    }
-    for (const circle of bundle.circles) {
-      ctx.beginPath();
-      ctx.arc(circle.center.x, circle.center.y, circle.radius(), 0, Math.PI * 2);
-      ctx.stroke();
-    }
-    for (const arc of bundle.arcs) {
-      ctx.beginPath();
-      ctx.arc(arc.center.x, arc.center.y, arc.radius(), arc.startAngle, arc.endAngle, arc.endAngle < arc.startAngle);
-      ctx.stroke();
-    }
-    ctx.setLineDash([]);
-    ctx.restore();
+    withCanvasState(() => {
+      ctx.strokeStyle = "#2563eb";
+      ctx.lineWidth = 2 / viewport.scale;
+      ctx.setLineDash([6 / viewport.scale, 5 / viewport.scale]);
+      for (const line of bundle.lines) {
+        ctx.beginPath();
+        ctx.moveTo(line.p1.x, line.p1.y);
+        ctx.lineTo(line.p2.x, line.p2.y);
+        ctx.stroke();
+      }
+      for (const circle of bundle.circles) {
+        ctx.beginPath();
+        ctx.arc(circle.center.x, circle.center.y, circle.radius(), 0, Math.PI * 2);
+        ctx.stroke();
+      }
+      for (const arc of bundle.arcs) {
+        ctx.beginPath();
+        ctx.arc(arc.center.x, arc.center.y, arc.radius(), arc.startAngle, arc.endAngle, arc.endAngle < arc.startAngle);
+        ctx.stroke();
+      }
+    });
   }
 
   function draw() {
@@ -6016,11 +6038,14 @@
       canvas.height = bitmapHeight;
     }
     ctx.setTransform(1, 0, 0, 1, 0, 0);
+    resetCanvasStrokeState();
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    resetCanvasStrokeState();
     ctx.save();
     ctx.translate(viewport.x, viewport.y);
     ctx.scale(viewport.scale, viewport.scale);
+    resetCanvasStrokeState();
     drawGrid(w, h);
     drawLines();
     drawCircles();
@@ -6050,7 +6075,9 @@
     }
     drawSketchIdentityLabel();
     drawSelectionRect();
+    resetCanvasStrokeState();
     ctx.restore();
+    resetCanvasStrokeState();
     syncDimensionValueInput();
     updateSidebarSelectionRowClasses();
   }
@@ -6116,14 +6143,14 @@
   function drawSelectionRect() {
     if (!selectionRectSession?.current) return;
     const rect = rectFromPoints(selectionRectSession.start, selectionRectSession.current);
-    ctx.save();
-    ctx.strokeStyle = selectionRectSession.current.x < selectionRectSession.start.x ? "#f59e0b" : "#2563eb";
-    ctx.fillStyle = selectionRectSession.current.x < selectionRectSession.start.x ? "rgba(245, 158, 11, 0.08)" : "rgba(37, 99, 235, 0.08)";
-    ctx.lineWidth = 1.2 / viewport.scale;
-    ctx.setLineDash([5 / viewport.scale, 4 / viewport.scale]);
-    ctx.fillRect(rect.x1, rect.y1, rect.x2 - rect.x1, rect.y2 - rect.y1);
-    ctx.strokeRect(rect.x1, rect.y1, rect.x2 - rect.x1, rect.y2 - rect.y1);
-    ctx.restore();
+    withCanvasState(() => {
+      ctx.strokeStyle = selectionRectSession.current.x < selectionRectSession.start.x ? "#f59e0b" : "#2563eb";
+      ctx.fillStyle = selectionRectSession.current.x < selectionRectSession.start.x ? "rgba(245, 158, 11, 0.08)" : "rgba(37, 99, 235, 0.08)";
+      ctx.lineWidth = 1.2 / viewport.scale;
+      ctx.setLineDash([5 / viewport.scale, 4 / viewport.scale]);
+      ctx.fillRect(rect.x1, rect.y1, rect.x2 - rect.x1, rect.y2 - rect.y1);
+      ctx.strokeRect(rect.x1, rect.y1, rect.x2 - rect.x1, rect.y2 - rect.y1);
+    });
   }
 
   function extendedLineSegment(line, extension) {
@@ -6609,23 +6636,23 @@
       x: (start.x + element.end.x) / 2,
       y: element.end.y,
     };
-    ctx.save();
-    ctx.strokeStyle = element.style?.color || "#111827";
-    ctx.fillStyle = element.style?.color || "#111827";
-    ctx.lineWidth = Number(element.style?.lineWidthPx || 1.4) / viewport.scale;
-    if (preview) ctx.setLineDash([5 / viewport.scale, 4 / viewport.scale]);
-    ctx.beginPath();
-    ctx.moveTo(start.x, start.y);
-    ctx.lineTo(elbow.x, elbow.y);
-    ctx.lineTo(element.end.x, element.end.y);
-    ctx.stroke();
-    ctx.setLineDash([]);
-    const dx = elbow.x - start.x;
-    const dy = elbow.y - start.y;
-    const len = Math.max(1e-9, hypot2(dx, dy));
-    drawArrowhead(start, { x: dx / len, y: dy / len });
-    if (element.text) drawPresentationText(element);
-    ctx.restore();
+    withCanvasState(() => {
+      ctx.strokeStyle = element.style?.color || "#111827";
+      ctx.fillStyle = element.style?.color || "#111827";
+      ctx.lineWidth = Number(element.style?.lineWidthPx || 1.4) / viewport.scale;
+      if (preview) ctx.setLineDash([5 / viewport.scale, 4 / viewport.scale]);
+      ctx.beginPath();
+      ctx.moveTo(start.x, start.y);
+      ctx.lineTo(elbow.x, elbow.y);
+      ctx.lineTo(element.end.x, element.end.y);
+      ctx.stroke();
+      ctx.setLineDash([]);
+      const dx = elbow.x - start.x;
+      const dy = elbow.y - start.y;
+      const len = Math.max(1e-9, hypot2(dx, dy));
+      drawArrowhead(start, { x: dx / len, y: dy / len });
+      if (element.text) drawPresentationText(element);
+    });
   }
 
   function textHitBox(text, x, y, fontSize = 13) {
@@ -6790,55 +6817,55 @@
   }
 
   function drawFilletPreviewArc(geometry) {
-    ctx.save();
-    ctx.strokeStyle = "#2563eb";
-    ctx.lineWidth = 2 / viewport.scale;
-    ctx.setLineDash([6 / viewport.scale, 5 / viewport.scale]);
-    ctx.beginPath();
-    ctx.arc(geometry.center.x, geometry.center.y, geometry.radius, geometry.startAngle, geometry.endAngle, geometry.endAngle < geometry.startAngle);
-    ctx.stroke();
-    ctx.restore();
+    withCanvasState(() => {
+      ctx.strokeStyle = "#2563eb";
+      ctx.lineWidth = 2 / viewport.scale;
+      ctx.setLineDash([6 / viewport.scale, 5 / viewport.scale]);
+      ctx.beginPath();
+      ctx.arc(geometry.center.x, geometry.center.y, geometry.radius, geometry.startAngle, geometry.endAngle, geometry.endAngle < geometry.startAngle);
+      ctx.stroke();
+    });
   }
 
   function drawTemporaryLine() {
     if (mode !== "line" || !lineStartPoint) return;
     const target = pointerPreview || lineStartPoint;
-    ctx.save();
-    ctx.strokeStyle = "#2563eb";
-    ctx.lineWidth = 2 / viewport.scale;
-    ctx.setLineDash([6 / viewport.scale, 5 / viewport.scale]);
-    ctx.beginPath();
-    ctx.moveTo(lineStartPoint.x, lineStartPoint.y);
-    ctx.lineTo(target.x, target.y);
-    ctx.stroke();
-    ctx.setLineDash([]);
-    ctx.beginPath();
-    ctx.arc(lineStartPoint.x, lineStartPoint.y, 12 / viewport.scale, 0, Math.PI * 2);
-    ctx.stroke();
-    ctx.restore();
+    withCanvasState(() => {
+      ctx.strokeStyle = "#2563eb";
+      ctx.lineWidth = 2 / viewport.scale;
+      ctx.setLineDash([6 / viewport.scale, 5 / viewport.scale]);
+      ctx.beginPath();
+      ctx.moveTo(lineStartPoint.x, lineStartPoint.y);
+      ctx.lineTo(target.x, target.y);
+      ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.beginPath();
+      ctx.arc(lineStartPoint.x, lineStartPoint.y, 12 / viewport.scale, 0, Math.PI * 2);
+      ctx.stroke();
+    });
   }
 
   function drawRectanglePreview() {
     if (mode !== "rectangle" || !rectangleStartPoint || !pointerPreview) return;
-    ctx.save();
-    ctx.strokeStyle = "#2563eb";
-    ctx.lineWidth = 2 / viewport.scale;
-    ctx.setLineDash([6 / viewport.scale, 5 / viewport.scale]);
-    ctx.strokeRect(rectangleStartPoint.x, rectangleStartPoint.y, pointerPreview.x - rectangleStartPoint.x, pointerPreview.y - rectangleStartPoint.y);
-    ctx.restore();
+    withCanvasState(() => {
+      ctx.strokeStyle = "#2563eb";
+      ctx.lineWidth = 2 / viewport.scale;
+      ctx.setLineDash([6 / viewport.scale, 5 / viewport.scale]);
+      ctx.strokeRect(rectangleStartPoint.x, rectangleStartPoint.y, pointerPreview.x - rectangleStartPoint.x, pointerPreview.y - rectangleStartPoint.y);
+    });
   }
 
   function drawCirclePreview() {
     if (mode !== "circle" || !circleCenterPoint || !pointerPreview) return;
     const radius = hypot2(pointerPreview.x - circleCenterPoint.x, pointerPreview.y - circleCenterPoint.y);
-    ctx.save();
-    ctx.strokeStyle = "#2563eb";
-    ctx.lineWidth = 2 / viewport.scale;
-    ctx.setLineDash([6 / viewport.scale, 5 / viewport.scale]);
-    ctx.beginPath();
-    ctx.arc(circleCenterPoint.x, circleCenterPoint.y, radius, 0, Math.PI * 2);
-    ctx.stroke();
-    ctx.restore();
+    withCanvasState(() => {
+      ctx.strokeStyle = "#2563eb";
+      ctx.lineWidth = 2 / viewport.scale;
+      ctx.setLineDash([6 / viewport.scale, 5 / viewport.scale]);
+      ctx.beginPath();
+      ctx.arc(circleCenterPoint.x, circleCenterPoint.y, radius, 0, Math.PI * 2);
+      ctx.stroke();
+    });
   }
 
   function drawArcPreview() {
@@ -6852,14 +6879,14 @@
       start: arcStartPoint.startAngle,
       end: shortestAngleFrom(arcStartPoint.startAngle, Math.atan2(pointerPreview.y - arcCenterPoint.y, pointerPreview.x - arcCenterPoint.x)),
     };
-    ctx.save();
-    ctx.strokeStyle = "#2563eb";
-    ctx.lineWidth = 2 / viewport.scale;
-    ctx.setLineDash([6 / viewport.scale, 5 / viewport.scale]);
-    ctx.beginPath();
-    ctx.arc(arcCenterPoint.x, arcCenterPoint.y, arcStartPoint.radius, angles.start, angles.end, angles.end < angles.start);
-    ctx.stroke();
-    ctx.restore();
+    withCanvasState(() => {
+      ctx.strokeStyle = "#2563eb";
+      ctx.lineWidth = 2 / viewport.scale;
+      ctx.setLineDash([6 / viewport.scale, 5 / viewport.scale]);
+      ctx.beginPath();
+      ctx.arc(arcCenterPoint.x, arcCenterPoint.y, arcStartPoint.radius, angles.start, angles.end, angles.end < angles.start);
+      ctx.stroke();
+    });
     drawConstructionPoint(arcCenterPoint);
   }
 
@@ -6874,21 +6901,21 @@
     const offset = offsetDraftGeometry(offsetSource, distance, sign);
     if (!offset) return;
 
-    ctx.save();
-    ctx.strokeStyle = "#2563eb";
-    ctx.lineWidth = 2 / viewport.scale;
-    ctx.setLineDash([6 / viewport.scale, 5 / viewport.scale]);
-    ctx.beginPath();
-    if (offset instanceof Line) {
-      ctx.moveTo(offset.p1.x, offset.p1.y);
-      ctx.lineTo(offset.p2.x, offset.p2.y);
-    } else if (offset instanceof Circle) {
-      ctx.arc(offset.center.x, offset.center.y, offset.radius(), 0, Math.PI * 2);
-    } else {
-      ctx.arc(offset.center.x, offset.center.y, offset.radius(), offset.startAngle, offset.endAngle, offset.endAngle < offset.startAngle);
-    }
-    ctx.stroke();
-    ctx.restore();
+    withCanvasState(() => {
+      ctx.strokeStyle = "#2563eb";
+      ctx.lineWidth = 2 / viewport.scale;
+      ctx.setLineDash([6 / viewport.scale, 5 / viewport.scale]);
+      ctx.beginPath();
+      if (offset instanceof Line) {
+        ctx.moveTo(offset.p1.x, offset.p1.y);
+        ctx.lineTo(offset.p2.x, offset.p2.y);
+      } else if (offset instanceof Circle) {
+        ctx.arc(offset.center.x, offset.center.y, offset.radius(), 0, Math.PI * 2);
+      } else {
+        ctx.arc(offset.center.x, offset.center.y, offset.radius(), offset.startAngle, offset.endAngle, offset.endAngle < offset.startAngle);
+      }
+      ctx.stroke();
+    });
 
     const target = offsetDimensionTarget(offsetSource, offset, distance, sign);
     const dimension = dimensionWithLabelAt(target, dimensionFromAnchor(target, pointer, { allowPointAxis: false }), pointer);
@@ -6901,29 +6928,29 @@
 
   function drawTrimPreview() {
     if (mode !== "trim" || !trimPreview) return;
-    ctx.save();
-    ctx.strokeStyle = "#dc2626";
-    ctx.lineWidth = 4 / viewport.scale;
-    ctx.lineCap = "round";
-    ctx.setLineDash([8 / viewport.scale, 5 / viewport.scale]);
-    if (trimPreview.kind === "line") {
-      ctx.beginPath();
-      ctx.moveTo(trimPreview.interval.left.point.x, trimPreview.interval.left.point.y);
-      ctx.lineTo(trimPreview.interval.right.point.x, trimPreview.interval.right.point.y);
-      ctx.stroke();
-    } else if (trimPreview.kind === "arc") {
-      const arc = trimPreview.item;
-      ctx.beginPath();
-      ctx.arc(arc.center.x, arc.center.y, arc.radius(), angleAtArcParam(arc, trimPreview.interval.left.t), angleAtArcParam(arc, trimPreview.interval.right.t), arc.endAngle < arc.startAngle);
-      ctx.stroke();
-    } else if (trimPreview.kind === "circle") {
-      const circle = trimPreview.item;
-      ctx.beginPath();
-      if (trimPreview.deleteWhole) ctx.arc(circle.center.x, circle.center.y, circle.radius(), 0, Math.PI * 2);
-      else ctx.arc(circle.center.x, circle.center.y, circle.radius(), trimPreview.interval.left.angle, trimPreview.interval.right.angle);
-      ctx.stroke();
-    }
-    ctx.restore();
+    withCanvasState(() => {
+      ctx.strokeStyle = "#dc2626";
+      ctx.lineWidth = 4 / viewport.scale;
+      ctx.lineCap = "round";
+      ctx.setLineDash([8 / viewport.scale, 5 / viewport.scale]);
+      if (trimPreview.kind === "line") {
+        ctx.beginPath();
+        ctx.moveTo(trimPreview.interval.left.point.x, trimPreview.interval.left.point.y);
+        ctx.lineTo(trimPreview.interval.right.point.x, trimPreview.interval.right.point.y);
+        ctx.stroke();
+      } else if (trimPreview.kind === "arc") {
+        const arc = trimPreview.item;
+        ctx.beginPath();
+        ctx.arc(arc.center.x, arc.center.y, arc.radius(), angleAtArcParam(arc, trimPreview.interval.left.t), angleAtArcParam(arc, trimPreview.interval.right.t), arc.endAngle < arc.startAngle);
+        ctx.stroke();
+      } else if (trimPreview.kind === "circle") {
+        const circle = trimPreview.item;
+        ctx.beginPath();
+        if (trimPreview.deleteWhole) ctx.arc(circle.center.x, circle.center.y, circle.radius(), 0, Math.PI * 2);
+        else ctx.arc(circle.center.x, circle.center.y, circle.radius(), trimPreview.interval.left.angle, trimPreview.interval.right.angle);
+        ctx.stroke();
+      }
+    });
   }
 
   function drawSnapMarker() {
@@ -12576,6 +12603,108 @@
           canvas: { width: rect.width, height: rect.height },
           hiddenVisible: isVisibleSketchId("S2"),
         };
+      },
+      canvasDashIsolationCases() {
+        const results = {};
+        const resetForCase = () => {
+          resetModelState();
+          setAppMode("geometry");
+          viewport.scale = 1;
+          viewport.x = 0;
+          viewport.y = 0;
+          pointerPreview = null;
+          trimPreview = null;
+          selectionRectSession = null;
+          mode = "select";
+        };
+        const capture = (name, setup, drawFn) => {
+          resetForCase();
+          setup();
+          ctx.setLineDash([13, 7]);
+          drawFn();
+          results[name] = ctx.getLineDash();
+        };
+        const makeBlockDefinition = () => {
+          const definition = createEmptyBlockDefinition("Block-Dash");
+          const p1 = new Point("BP1", 0, 0, false, "endpoint");
+          const p2 = new Point("BP2", 40, 0, false, "endpoint");
+          p1.sketchId = DEFAULT_SKETCH_ID;
+          p2.sketchId = DEFAULT_SKETCH_ID;
+          const line = new Line("BL1", p1, p2);
+          line.sketchId = DEFAULT_SKETCH_ID;
+          definition.points.push(p1, p2);
+          definition.lines.push(line);
+          model.blockDefinitions.push(definition);
+          return definition;
+        };
+
+        capture("line", () => {
+          mode = "line";
+          lineStartPoint = addPoint(0, 0, true, "endpoint");
+          pointerPreview = { x: 80, y: 0 };
+        }, drawTemporaryLine);
+        capture("rectangle", () => {
+          mode = "rectangle";
+          rectangleStartPoint = { x: 0, y: 0 };
+          pointerPreview = { x: 80, y: 45 };
+        }, drawRectanglePreview);
+        capture("circle", () => {
+          mode = "circle";
+          circleCenterPoint = addPoint(0, 0, true, "center");
+          pointerPreview = { x: 35, y: 0 };
+        }, drawCirclePreview);
+        capture("arc", () => {
+          mode = "arc";
+          arcCenterPoint = addPoint(0, 0, true, "center");
+          arcStartPoint = { radius: 35, startAngle: 0 };
+          pointerPreview = { x: 0, y: 35 };
+        }, drawArcPreview);
+        capture("offset", () => {
+          mode = "offset";
+          offsetSource = addLine(addPoint(0, 0, true, "endpoint"), addPoint(80, 0, true, "endpoint"));
+          pointerPreview = { x: 40, y: 20 };
+        }, drawOffsetPreview);
+        capture("trim", () => {
+          mode = "trim";
+          trimPreview = {
+            kind: "line",
+            interval: {
+              left: { point: { x: 0, y: 0 } },
+              right: { point: { x: 80, y: 0 } },
+            },
+          };
+        }, drawTrimPreview);
+        capture("selection", () => {
+          selectionRectSession = { start: { x: 0, y: 0 }, current: { x: 80, y: 45 } };
+        }, drawSelectionRect);
+        capture("blockPlacement", () => {
+          const definition = makeBlockDefinition();
+          mode = "block-place";
+          blockPlacementDefinitionId = definition.id;
+          blockPlacementEnabledSketchIds = [DEFAULT_SKETCH_ID];
+          pointerPreview = { x: 120, y: 40 };
+        }, drawBlockPlacementPreview);
+        capture("blockHandles", () => {
+          const definition = makeBlockDefinition();
+          const instance = { id: "BI-DASH", definitionId: definition.id, sketchId: activeSketchId(), x: 20, y: 20, rotation: 0, fixed: false, enabledSketchIds: [DEFAULT_SKETCH_ID] };
+          model.blockInstances.push(instance);
+          selectedBlockInstances = [instance];
+        }, drawBlockInstanceHandles);
+        capture("presentationLeader", () => {
+          setAppMode("presentation");
+        }, () => drawPresentationLeader({
+          start: { x: 0, y: 0 },
+          elbow: { x: 40, y: 15 },
+          end: { x: 80, y: 15 },
+          text: "note",
+          x: 84,
+          y: 15,
+          style: {},
+        }, true));
+        capture("frame", () => {
+          addLine(addPoint(0, 0, true, "endpoint"), addPoint(80, 0, true, "endpoint"));
+        }, draw);
+        return results;
       },
       resetForSidebarInspection() {
         resetModelState();
