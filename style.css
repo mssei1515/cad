@@ -87,31 +87,40 @@ body.presentation-mode .work-area {
   display: flex;
   align-items: center;
   justify-content: flex-start;
-  gap: 8px;
+  gap: 10px;
   min-width: 0;
+}
+
+.document-control-stack {
+  display: grid;
+  grid-template-rows: auto auto;
+  align-items: start;
+  gap: 3px;
+  min-width: 0;
+  flex: 0 1 auto;
 }
 
 .document-titlebar {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
   min-width: 0;
-  flex: 0 0 auto;
+  width: fit-content;
+  max-width: 100%;
 }
 
 .app-logo-svg {
-  width: 34px;
-  height: 34px;
+  width: 42px;
+  height: 42px;
   flex: 0 0 auto;
   display: block;
 }
 
 .document-name-input {
-  width: clamp(128px, 14vw, 260px);
+  width: clamp(156px, 18vw, 300px);
   min-width: 0;
-  max-width: 260px;
-  height: 30px;
-  min-height: 30px;
+  max-width: 300px;
+  height: 24px;
+  min-height: 24px;
   padding: 2px 8px;
   border: 1px solid transparent;
   border-radius: 6px;

@@ -200,9 +200,9 @@ test("geometry toolbar uses the organized command groups", async ({ page }) => {
       tabsDirection: getComputedStyle(sidebarTabs).flexDirection,
       toolbarRect: { left: toolbarRect.left, right: toolbarRect.right, top: toolbarRect.top, bottom: toolbarRect.bottom },
       documentTitlebarRect: { left: documentTitlebarRect.left, right: documentTitlebarRect.right, top: documentTitlebarRect.top, bottom: documentTitlebarRect.bottom },
-      modeGapAfterDocumentTitle: modeRect.left - documentTitlebarRect.right,
+      modeOffsetFromTitleLeft: modeRect.left - documentTitlebarRect.left,
       documentNameRect: { left: documentNameRect.left, right: documentNameRect.right, width: documentNameRect.width },
-      appLogoRect: { width: appLogoRect.width, height: appLogoRect.height },
+      appLogoRect: { left: appLogoRect.left, right: appLogoRect.right, width: appLogoRect.width, height: appLogoRect.height },
       fileGroupRect: { left: fileGroupRect.left, right: fileGroupRect.right, top: fileGroupRect.top, bottom: fileGroupRect.bottom },
       leftRailRect: { left: leftRailRect.left, right: leftRailRect.right, top: leftRailRect.top, bottom: leftRailRect.bottom },
       modeRect: { left: modeRect.left, right: modeRect.right, top: modeRect.top, bottom: modeRect.bottom },
@@ -260,7 +260,7 @@ test("geometry toolbar uses the organized command groups", async ({ page }) => {
   expect(layout.firstToolGroupBorderTopWidth).toBe("1px");
   expect(layout.firstToolGroupBorderLeftWidth).toBe("0px");
   expect(layout.firstToolGroupBackground).toBe("rgba(0, 0, 0, 0)");
-  expect(layout.modeParentClass).toBe("toolbar-row mode-toolbar-row");
+  expect(layout.modeParentClass).toBe("document-control-stack");
   expect(layout.fileGroupParentClass).toBe("left-tool-rail");
   expect(layout.fileGroupText).toBe("");
   expect(layout.fileButtonWidth).toBe(26);
@@ -271,16 +271,16 @@ test("geometry toolbar uses the organized command groups", async ({ page }) => {
   expect(layout.presentationSheetLabelExists).toBe(false);
   expect(layout.documentNameValue).toBe("無題");
   expect(layout.documentTitle).toBe("無題 - Cad2");
-  expect(layout.documentTitlebarRect.left).toBeLessThan(20);
-  expect(layout.appLogoRect.width).toBe(34);
-  expect(layout.appLogoRect.height).toBe(34);
+  expect(layout.appLogoRect.left).toBeLessThan(14);
+  expect(layout.appLogoRect.width).toBe(42);
+  expect(layout.appLogoRect.height).toBe(42);
+  expect(layout.documentTitlebarRect.left).toBeGreaterThan(layout.appLogoRect.right);
   expect(layout.documentNameRect.width).toBeGreaterThan(100);
   expect(layout.fileGroupRect.left).toBeGreaterThanOrEqual(layout.leftRailRect.left);
   expect(layout.fileGroupRect.right).toBeLessThanOrEqual(layout.leftRailRect.right + 1);
-  expect(layout.modeRect.left).toBeGreaterThan(layout.documentTitlebarRect.right);
-  expect(layout.modeGapAfterDocumentTitle).toBeGreaterThanOrEqual(4);
-  expect(layout.modeGapAfterDocumentTitle).toBeLessThanOrEqual(14);
-  expect(layout.modeRect.left).toBeLessThan(280);
+  expect(Math.abs(layout.modeOffsetFromTitleLeft)).toBeLessThanOrEqual(2);
+  expect(layout.modeRect.top).toBeGreaterThanOrEqual(layout.documentTitlebarRect.bottom - 1);
+  expect(layout.modeRect.left).toBeLessThan(90);
   expect(layout.modeRect.bottom).toBeLessThanOrEqual(layout.leftRailRect.top + 1);
   expect(layout.undoButtonLeft).toBeGreaterThanOrEqual(layout.leftRailRect.left);
   expect(layout.firstToolGroupColumnCount).toBe(2);
@@ -336,18 +336,18 @@ test("geometry toolbar uses the organized command groups", async ({ page }) => {
       leftRailLeft: leftRailRect.left,
       leftRailRight: leftRailRect.right,
       modeLeft: modeRect.left,
-      documentTitlebarRight: documentTitlebarRect.right,
+      documentTitlebarLeft: documentTitlebarRect.left,
       modeParentClass: document.querySelector(".mode-overlay").parentElement.className,
       modeBottom: modeRect.bottom,
       appCollapsed: document.querySelector(".app").classList.contains("side-collapsed"),
     };
   });
   expect(openSidebarLayout.appCollapsed).toBe(false);
-  expect(openSidebarLayout.modeParentClass).toBe("toolbar-row mode-toolbar-row");
+  expect(openSidebarLayout.modeParentClass).toBe("document-control-stack");
   expect(openSidebarLayout.sideTop).toBeGreaterThanOrEqual(openSidebarLayout.toolbarBottom - 1);
   expect(openSidebarLayout.fileLeft).toBeGreaterThanOrEqual(openSidebarLayout.leftRailLeft);
   expect(openSidebarLayout.fileRight).toBeLessThanOrEqual(openSidebarLayout.leftRailRight + 1);
-  expect(openSidebarLayout.modeLeft).toBeGreaterThan(openSidebarLayout.documentTitlebarRight);
+  expect(Math.abs(openSidebarLayout.modeLeft - openSidebarLayout.documentTitlebarLeft)).toBeLessThanOrEqual(2);
   expect(openSidebarLayout.modeBottom).toBeLessThanOrEqual(openSidebarLayout.toolbarBottom + 1);
 
   const canvas = await page.locator("#canvas").boundingBox();
@@ -366,12 +366,12 @@ test("geometry toolbar uses the organized command groups", async ({ page }) => {
       leftRailLeft: leftRailRect.left,
       leftRailRight: leftRailRect.right,
       modeLeft: modeRect.left,
-      documentTitlebarRight: documentTitlebarRect.right,
+      documentTitlebarLeft: documentTitlebarRect.left,
     };
   });
   expect(collapsedModeLayout.fileLeft).toBeGreaterThanOrEqual(collapsedModeLayout.leftRailLeft);
   expect(collapsedModeLayout.fileRight).toBeLessThanOrEqual(collapsedModeLayout.leftRailRight + 1);
-  expect(collapsedModeLayout.modeLeft).toBeGreaterThan(collapsedModeLayout.documentTitlebarRight);
+  expect(Math.abs(collapsedModeLayout.modeLeft - collapsedModeLayout.documentTitlebarLeft)).toBeLessThanOrEqual(2);
 
   await page.click("#presentationModeBtn");
   await page.waitForFunction(() => document.body.classList.contains("presentation-mode"));
@@ -387,18 +387,18 @@ test("geometry toolbar uses the organized command groups", async ({ page }) => {
       leftRailLeft: leftRailRect.left,
       leftRailRight: leftRailRect.right,
       modeLeft: modeRect.left,
-      documentTitlebarRight: documentTitlebarRect.right,
+      documentTitlebarLeft: documentTitlebarRect.left,
       sheetVisible: Boolean(sheetRect.width && sheetRect.height),
       modeParentClass: document.querySelector(".mode-overlay").parentElement.className,
       appCollapsed: document.querySelector(".app").classList.contains("side-collapsed"),
     };
   });
   expect(collapsedPresentationLayout.appCollapsed).toBe(true);
-  expect(collapsedPresentationLayout.modeParentClass).toBe("toolbar-row mode-toolbar-row");
+  expect(collapsedPresentationLayout.modeParentClass).toBe("document-control-stack");
   expect(collapsedPresentationLayout.sheetVisible).toBe(true);
   expect(collapsedPresentationLayout.fileLeft).toBeGreaterThanOrEqual(collapsedPresentationLayout.leftRailLeft);
   expect(collapsedPresentationLayout.fileRight).toBeLessThanOrEqual(collapsedPresentationLayout.leftRailRight + 1);
-  expect(collapsedPresentationLayout.modeLeft).toBeGreaterThan(collapsedPresentationLayout.documentTitlebarRight);
+  expect(Math.abs(collapsedPresentationLayout.modeLeft - collapsedPresentationLayout.documentTitlebarLeft)).toBeLessThanOrEqual(2);
   const presentationToolLayout = await page.evaluate(() => ({
     presentationGroupVisible: getComputedStyle(document.getElementById("presentationStyleGroup")).display !== "none",
     geometryGroupsVisible: [...document.querySelectorAll(".left-tool-rail .geometry-toolbar-group")]
@@ -430,13 +430,13 @@ test("geometry toolbar uses the organized command groups", async ({ page }) => {
       leftRailLeft: leftRailRect.left,
       leftRailRight: leftRailRect.right,
       modeLeft: modeRect.left,
-      documentTitlebarRight: documentTitlebarRect.right,
+      documentTitlebarLeft: documentTitlebarRect.left,
     };
   });
   expect(openPresentationLayout.sideTop).toBeGreaterThanOrEqual(openPresentationLayout.toolbarBottom - 1);
   expect(openPresentationLayout.fileLeft).toBeGreaterThanOrEqual(openPresentationLayout.leftRailLeft);
   expect(openPresentationLayout.fileRight).toBeLessThanOrEqual(openPresentationLayout.leftRailRight + 1);
-  expect(openPresentationLayout.modeLeft).toBeGreaterThan(openPresentationLayout.documentTitlebarRight);
+  expect(Math.abs(openPresentationLayout.modeLeft - openPresentationLayout.documentTitlebarLeft)).toBeLessThanOrEqual(2);
   await page.screenshot({ path: "test-results/presentation-sidebar-layout.png", fullPage: true });
   await page.mouse.click(canvas.x + canvas.width * 0.48, canvas.y + canvas.height * 0.82);
   expect(await page.locator(".side").isVisible()).toBe(true);
