@@ -272,8 +272,8 @@ test("geometry toolbar uses the organized command groups", async ({ page }) => {
   expect(layout.documentNameValue).toBe("無題");
   expect(layout.documentTitle).toBe("無題 - Cad2");
   expect(layout.appLogoRect.left).toBeLessThan(14);
-  expect(layout.appLogoRect.width).toBe(42);
-  expect(layout.appLogoRect.height).toBe(42);
+  expect(layout.appLogoRect.width).toBe(46);
+  expect(layout.appLogoRect.height).toBe(46);
   expect(layout.documentTitlebarRect.left).toBeGreaterThan(layout.appLogoRect.right);
   expect(layout.documentNameRect.width).toBeGreaterThan(100);
   expect(layout.fileGroupRect.left).toBeGreaterThanOrEqual(layout.leftRailRect.left);

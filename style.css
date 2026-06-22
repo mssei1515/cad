@@ -87,7 +87,7 @@ body.presentation-mode .work-area {
   display: flex;
   align-items: center;
   justify-content: flex-start;
-  gap: 10px;
+  gap: 9px;
   min-width: 0;
 }
 
@@ -95,7 +95,9 @@ body.presentation-mode .work-area {
   display: grid;
   grid-template-rows: auto auto;
   align-items: start;
-  gap: 3px;
+  gap: 4px;
+  width: auto;
+  max-width: calc(100vw - 82px);
   min-width: 0;
   flex: 0 1 auto;
 }
@@ -104,23 +106,23 @@ body.presentation-mode .work-area {
   display: inline-flex;
   align-items: center;
   min-width: 0;
-  width: fit-content;
+  width: clamp(270px, 25vw, 340px);
   max-width: 100%;
 }
 
 .app-logo-svg {
-  width: 42px;
-  height: 42px;
+  width: 46px;
+  height: 46px;
   flex: 0 0 auto;
   display: block;
 }
 
 .document-name-input {
-  width: clamp(156px, 18vw, 300px);
+  width: 100%;
   min-width: 0;
-  max-width: 300px;
-  height: 24px;
-  min-height: 24px;
+  max-width: 100%;
+  height: 23px;
+  min-height: 23px;
   padding: 2px 8px;
   border: 1px solid transparent;
   border-radius: 6px;
@@ -300,8 +302,10 @@ body.presentation-mode .work-area {
 
 .mode-switch {
   display: inline-grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   gap: 2px;
+  width: clamp(270px, 25vw, 340px);
+  flex: 0 0 auto;
   padding: 2px;
   border: 1px solid #bfdbfe;
   border-radius: 10px;
@@ -312,10 +316,10 @@ body.presentation-mode .work-area {
   display: inline-flex;
   align-items: center;
   gap: 5px;
-  min-width: 142px;
-  height: 34px;
+  min-width: 0;
+  height: 29px;
   justify-content: center;
-  padding: 0 9px;
+  padding: 0 8px;
   border-color: transparent;
   border-radius: 8px;
   color: #334155;
@@ -802,6 +806,8 @@ h2 {
   display: flex;
   align-items: center;
   gap: 6px;
+  width: auto;
+  max-width: 100%;
   min-width: 0;
   color: #111827;
 }
