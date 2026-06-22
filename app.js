@@ -3247,7 +3247,7 @@
     if (!data || !Array.isArray(data.points) || !Array.isArray(data.lines) || !Array.isArray(data.constraints)) {
       throw new Error("保存データの形式が正しくありません");
     }
-    model.documentName = effectiveDocumentNameFromValue(data.documentName || options.documentNameFallback || DEFAULT_DOCUMENT_NAME);
+    const loadedDocumentName = effectiveDocumentNameFromValue(options.documentNameOverride || data.documentName || options.documentNameFallback || DEFAULT_DOCUMENT_NAME);
 
     let loadedSketches =
       Array.isArray(data.sketches) && data.sketches.length > 0
@@ -3511,6 +3511,7 @@
     });
 
     resetModelState();
+    model.documentName = loadedDocumentName;
     model.sketches.length = 0;
     model.sketches.push(...loadedSketches);
     model.activeSketchId = normalizeSketchId(data.activeSketchId);
@@ -3573,31 +3574,36 @@
   }
 
   function importFileData(file) {
-    if (!file) return;
+    if (!file) return Promise.resolve(false);
     if (blockEditSession) {
       setHint("ブロック定義編集を終了してから読み込んでください", "error");
-      return;
+      return Promise.resolve(false);
     }
 
-    const reader = new FileReader();
-    reader.addEventListener("load", () => {
-      try {
-        loadModelData(JSON.parse(String(reader.result)), { documentNameFallback: fileNameStem(file.name) });
-        solveAndRefresh("ファイル読み込み");
-        updateDocumentNameUI(true);
-        fitAllGeometryToViewport();
-        draw();
-        log(`ファイルを読み込みました: ${file.name}`);
-      } catch (err) {
-        setHint(`ファイル読み込みに失敗しました: ${err.message}`);
-        log(`ファイル読み込みに失敗しました: ${err.message}`);
-      }
+    return new Promise((resolve) => {
+      const reader = new FileReader();
+      reader.addEventListener("load", () => {
+        try {
+          loadModelData(JSON.parse(String(reader.result)), { documentNameOverride: fileNameStem(file.name) });
+          solveAndRefresh("ファイル読み込み");
+          updateDocumentNameUI(true);
+          fitAllGeometryToViewport();
+          draw();
+          log(`ファイルを読み込みました: ${file.name}`);
+          resolve(true);
+        } catch (err) {
+          setHint(`ファイル読み込みに失敗しました: ${err.message}`);
+          log(`ファイル読み込みに失敗しました: ${err.message}`);
+          resolve(false);
+        }
+      });
+      reader.addEventListener("error", () => {
+        setHint("ファイル読み込みに失敗しました");
+        log("ファイル読み込みに失敗しました");
+        resolve(false);
+      });
+      reader.readAsText(file);
     });
-    reader.addEventListener("error", () => {
-      setHint("ファイル読み込みに失敗しました");
-      log("ファイル読み込みに失敗しました");
-    });
-    reader.readAsText(file);
   }
 
   function pointAt(x, y) {
@@ -12337,6 +12343,17 @@
     window.__cadTest = {
       documentNameState() {
         return {
+          modelName: model.documentName,
+          displayName: effectiveDocumentName(),
+          serializedName: serializeModel().documentName,
+          title: document.title,
+        };
+      },
+      async importDocumentNameFixture(data, fileName) {
+        const file = new File([JSON.stringify(data)], fileName, { type: "application/json" });
+        const success = await importFileData(file);
+        return {
+          success,
           modelName: model.documentName,
           displayName: effectiveDocumentName(),
           serializedName: serializeModel().documentName,

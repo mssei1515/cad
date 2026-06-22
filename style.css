@@ -87,7 +87,7 @@ body.presentation-mode .work-area {
   display: flex;
   align-items: center;
   justify-content: flex-start;
-  gap: 12px;
+  gap: 8px;
   min-width: 0;
 }
 
@@ -96,7 +96,7 @@ body.presentation-mode .work-area {
   align-items: center;
   gap: 8px;
   min-width: 0;
-  flex: 0 1 360px;
+  flex: 0 0 auto;
 }
 
 .app-logo-svg {
@@ -107,9 +107,9 @@ body.presentation-mode .work-area {
 }
 
 .document-name-input {
-  width: min(280px, 30vw);
-  min-width: 120px;
-  max-width: 320px;
+  width: clamp(128px, 14vw, 260px);
+  min-width: 0;
+  max-width: 260px;
   height: 30px;
   min-height: 30px;
   padding: 2px 8px;

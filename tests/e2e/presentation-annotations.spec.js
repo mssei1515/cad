@@ -200,6 +200,7 @@ test("geometry toolbar uses the organized command groups", async ({ page }) => {
       tabsDirection: getComputedStyle(sidebarTabs).flexDirection,
       toolbarRect: { left: toolbarRect.left, right: toolbarRect.right, top: toolbarRect.top, bottom: toolbarRect.bottom },
       documentTitlebarRect: { left: documentTitlebarRect.left, right: documentTitlebarRect.right, top: documentTitlebarRect.top, bottom: documentTitlebarRect.bottom },
+      modeGapAfterDocumentTitle: modeRect.left - documentTitlebarRect.right,
       documentNameRect: { left: documentNameRect.left, right: documentNameRect.right, width: documentNameRect.width },
       appLogoRect: { width: appLogoRect.width, height: appLogoRect.height },
       fileGroupRect: { left: fileGroupRect.left, right: fileGroupRect.right, top: fileGroupRect.top, bottom: fileGroupRect.bottom },
@@ -277,6 +278,9 @@ test("geometry toolbar uses the organized command groups", async ({ page }) => {
   expect(layout.fileGroupRect.left).toBeGreaterThanOrEqual(layout.leftRailRect.left);
   expect(layout.fileGroupRect.right).toBeLessThanOrEqual(layout.leftRailRect.right + 1);
   expect(layout.modeRect.left).toBeGreaterThan(layout.documentTitlebarRect.right);
+  expect(layout.modeGapAfterDocumentTitle).toBeGreaterThanOrEqual(4);
+  expect(layout.modeGapAfterDocumentTitle).toBeLessThanOrEqual(14);
+  expect(layout.modeRect.left).toBeLessThan(280);
   expect(layout.modeRect.bottom).toBeLessThanOrEqual(layout.leftRailRect.top + 1);
   expect(layout.undoButtonLeft).toBeGreaterThanOrEqual(layout.leftRailRect.left);
   expect(layout.firstToolGroupColumnCount).toBe(2);
@@ -300,6 +304,15 @@ test("geometry toolbar uses the organized command groups", async ({ page }) => {
   const downloadPromise = page.waitForEvent("download");
   await page.click("#exportBtn");
   expect((await downloadPromise).suggestedFilename()).toBe("Fixture Part.json");
+  documentNameState = await page.evaluate(() => window.__cadTest.importDocumentNameFixture(
+    { version: 8, documentName: "Stored Name", points: [], lines: [], constraints: [] },
+    "opened-file-name.json",
+  ));
+  expect(documentNameState.success).toBe(true);
+  expect(documentNameState.displayName).toBe("opened-file-name");
+  expect(documentNameState.serializedName).toBe("opened-file-name");
+  expect(documentNameState.title).toBe("opened-file-name - Cad2");
+  await expect(page.locator("#documentNameInput")).toHaveValue("opened-file-name");
   await page.fill("#documentNameInput", "");
   await page.locator("#documentNameInput").blur();
   documentNameState = await page.evaluate(() => window.__cadTest.documentNameState());
