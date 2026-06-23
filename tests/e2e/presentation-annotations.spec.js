@@ -141,6 +141,7 @@ test("geometry toolbar uses the organized command groups", async ({ page }) => {
     const documentTitlebar = document.querySelector(".document-titlebar");
     const documentNameInput = document.querySelector("#documentNameInput");
     const appLogo = document.querySelector(".app-logo-svg");
+    const headerDivider = document.querySelector(".header-divider");
     const fileGroup = document.querySelector(".file-toolbar-group");
     const leftRail = document.querySelector(".left-tool-rail");
     const modeOverlay = document.querySelector(".mode-overlay");
@@ -150,6 +151,7 @@ test("geometry toolbar uses the organized command groups", async ({ page }) => {
     const documentTitlebarRect = documentTitlebar.getBoundingClientRect();
     const documentNameRect = documentNameInput.getBoundingClientRect();
     const appLogoRect = appLogo.getBoundingClientRect();
+    const headerDividerRect = headerDivider.getBoundingClientRect();
     const fileGroupRect = fileGroup.getBoundingClientRect();
     const leftRailRect = leftRail.getBoundingClientRect();
     const modeRect = modeOverlay.getBoundingClientRect();
@@ -203,6 +205,7 @@ test("geometry toolbar uses the organized command groups", async ({ page }) => {
       modeOffsetFromTitleLeft: modeRect.left - documentTitlebarRect.left,
       documentNameRect: { left: documentNameRect.left, right: documentNameRect.right, width: documentNameRect.width },
       appLogoRect: { left: appLogoRect.left, right: appLogoRect.right, width: appLogoRect.width, height: appLogoRect.height },
+      headerDividerRect: { left: headerDividerRect.left, right: headerDividerRect.right, width: headerDividerRect.width, height: headerDividerRect.height },
       fileGroupRect: { left: fileGroupRect.left, right: fileGroupRect.right, top: fileGroupRect.top, bottom: fileGroupRect.bottom },
       leftRailRect: { left: leftRailRect.left, right: leftRailRect.right, top: leftRailRect.top, bottom: leftRailRect.bottom },
       modeRect: { left: modeRect.left, right: modeRect.right, top: modeRect.top, bottom: modeRect.bottom },
@@ -272,9 +275,12 @@ test("geometry toolbar uses the organized command groups", async ({ page }) => {
   expect(layout.documentNameValue).toBe("無題");
   expect(layout.documentTitle).toBe("無題 - Cad2");
   expect(layout.appLogoRect.left).toBeLessThan(14);
-  expect(layout.appLogoRect.width).toBe(46);
-  expect(layout.appLogoRect.height).toBe(46);
-  expect(layout.documentTitlebarRect.left).toBeGreaterThan(layout.appLogoRect.right);
+  expect(layout.appLogoRect.width).toBe(30);
+  expect(layout.appLogoRect.height).toBe(30);
+  expect(layout.headerDividerRect.width).toBe(1);
+  expect(layout.headerDividerRect.height).toBe(30);
+  expect(layout.headerDividerRect.left).toBeGreaterThan(layout.appLogoRect.right);
+  expect(layout.documentTitlebarRect.left).toBeGreaterThan(layout.headerDividerRect.right);
   expect(layout.documentNameRect.width).toBeGreaterThan(100);
   expect(layout.fileGroupRect.left).toBeGreaterThanOrEqual(layout.leftRailRect.left);
   expect(layout.fileGroupRect.right).toBeLessThanOrEqual(layout.leftRailRect.right + 1);
