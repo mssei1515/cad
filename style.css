@@ -102,10 +102,10 @@ body.presentation-mode .work-area {
 
 .document-control-stack {
   display: grid;
-  grid-template-rows: 25px 25px;
+  grid-template-rows: 25px 26px;
   align-items: start;
   gap: 4px;
-  width: min(440px, calc(100vw - 110px));
+  width: min(500px, calc(100vw - 110px));
   min-width: 0;
   flex: 0 1 auto;
 }
@@ -133,7 +133,7 @@ body.presentation-mode .work-area {
   min-height: 25px;
   padding: 2px 8px;
   border: 1px solid transparent;
-  border-radius: 5px;
+  border-radius: 4px;
   background: transparent;
   color: #111827;
   font: inherit;
@@ -315,13 +315,12 @@ body.presentation-mode .work-area {
 .mode-switch {
   display: inline-flex;
   align-items: stretch;
-  gap: 4px;
   min-width: 0;
   flex: 0 1 auto;
   padding: 0;
-  border: 0;
+  border: 1px solid #cfd8e5;
   border-radius: 0;
-  background: transparent;
+  background: #fff;
 }
 
 .mode-switch-btn {
@@ -331,11 +330,11 @@ body.presentation-mode .work-area {
   min-width: 0;
   height: 24px;
   justify-content: center;
-  padding: 0 8px;
-  border-color: transparent;
-  border-width: 0 0 2px;
+  padding: 0 10px;
+  border: 0;
+  border-bottom: 2px solid transparent;
   border-radius: 0;
-  color: #94a3b8;
+  color: #64748b;
   font-size: 11px;
   font-weight: 700;
   background: transparent;
@@ -346,13 +345,17 @@ body.presentation-mode .work-area {
     color 0.15s ease;
 }
 
+.mode-switch-btn + .mode-switch-btn {
+  border-left: 1px solid #cfd8e5;
+}
+
 .mode-switch-btn svg {
   width: 13px;
   height: 13px;
 }
 
 .mode-switch-btn:hover:not(.active) {
-  color: #475569;
+  color: #334155;
   background: #f8fafc;
 }
 
@@ -827,7 +830,7 @@ h2 {
 .mode-overlay {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 10px;
   width: auto;
   max-width: 100%;
   min-width: 0;
@@ -835,8 +838,8 @@ h2 {
 }
 
 .mode-overlay .mode-switch {
-  border: 0;
-  background: transparent;
+  border: 1px solid #cfd8e5;
+  background: #fff;
   box-shadow: none;
   backdrop-filter: none;
 }
@@ -865,7 +868,7 @@ body.geometry-mode .mode-overlay-sheet {
   height: 24px;
   padding: 0 6px;
   border-color: #e5e7eb;
-  border-radius: 4px;
+  border-radius: 3px;
   color: #475569;
   font-size: 11px;
   font-weight: 650;
@@ -876,7 +879,7 @@ body.geometry-mode .mode-overlay-sheet {
   min-width: 24px;
   padding: 0 6px;
   border-color: #e5e7eb;
-  border-radius: 4px;
+  border-radius: 3px;
   color: #475569;
   font-size: 11px;
   font-weight: 650;
