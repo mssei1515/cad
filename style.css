@@ -88,7 +88,7 @@ body.presentation-mode .work-area {
   align-items: center;
   justify-content: flex-start;
   gap: 0;
-  min-height: 54px;
+  min-height: 71px;
   min-width: 0;
 }
 
@@ -102,10 +102,10 @@ body.presentation-mode .work-area {
 
 .document-control-stack {
   display: grid;
-  grid-template-rows: 25px 26px;
+  grid-template-rows: 25px 42px;
   align-items: start;
   gap: 4px;
-  width: min(500px, calc(100vw - 110px));
+  width: min(640px, calc(100vw - 110px));
   min-width: 0;
   flex: 0 1 auto;
 }
@@ -313,51 +313,69 @@ body.presentation-mode .work-area {
 }
 
 .mode-switch {
-  display: inline-flex;
-  align-items: stretch;
+  position: relative;
+  display: inline-grid;
+  grid-template-columns: 1fr 1fr;
   min-width: 0;
   flex: 0 1 auto;
-  padding: 0;
-  border: 1px solid #cfd8e5;
-  border-radius: 0;
-  background: #fff;
+  padding: 4px;
+  overflow: hidden;
+  isolation: isolate;
+  border: 0;
+  border-radius: 10px;
+  background: #e9edf2;
 }
 
 .mode-switch-btn {
+  position: relative;
+  z-index: 2;
   display: inline-flex;
   align-items: center;
-  min-width: 0;
-  height: 24px;
+  min-width: clamp(145px, 14vw, 180px);
+  height: 34px;
   justify-content: center;
-  padding: 0 12px;
+  padding: 0 14px;
   border: 0;
-  border-bottom: 2px solid transparent;
-  border-radius: 0;
-  color: #64748b;
-  font-size: 12px;
+  border-radius: 7px;
+  color: #6b7280;
+  font-size: 13px;
   font-weight: 700;
   background: transparent;
   white-space: nowrap;
+  cursor: pointer;
   transition:
-    background 0.15s ease,
-    border-color 0.15s ease,
-    color 0.15s ease;
-}
-
-.mode-switch-btn + .mode-switch-btn {
-  border-left: 1px solid #cfd8e5;
+    color 0.2s ease,
+    transform 0.2s ease;
 }
 
 .mode-switch-btn:hover:not(.active) {
-  color: #334155;
-  background: #f8fafc;
+  color: #374151;
 }
 
 .mode-switch-btn.active {
-  color: #1d4ed8;
-  border-bottom-color: #2563eb;
-  background: #f3f7ff;
-  box-shadow: none;
+  color: #fff;
+}
+
+.mode-switch-btn:focus-visible {
+  outline: 2px solid #1d4ed8;
+  outline-offset: -2px;
+}
+
+.mode-switch-indicator {
+  position: absolute;
+  z-index: 1;
+  top: 4px;
+  bottom: 4px;
+  left: 4px;
+  width: calc(50% - 4px);
+  border-radius: 7px;
+  background: #2563eb;
+  box-shadow: 0 1px 3px rgba(37, 99, 235, 0.28);
+  transition: transform 0.22s ease;
+}
+
+body.presentation-mode .mode-switch-indicator {
+  transform: translateX(100%);
 }
 
 .group-label {
@@ -828,8 +846,8 @@ h2 {
 }
 
 .mode-overlay .mode-switch {
-  border: 1px solid #cfd8e5;
-  background: #fff;
+  border: 0;
+  background: #e9edf2;
   box-shadow: none;
   backdrop-filter: none;
 }
