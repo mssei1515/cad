@@ -6505,6 +6505,7 @@
     if (target.kind === "point-line" && index === 1) return target.line;
     if (target.kind === "line-line") return index === 0 ? target.line1 : target.line2;
     if (target.kind === "offset-distance" && target.source instanceof Line) return index === 0 ? target.source : target.offset;
+    if (target.kind === "point-point") return null;
     if (source instanceof Point) return chooseIncidentLineForExtension(source, extensionDirection);
     return null;
   }
@@ -6520,7 +6521,6 @@
   }
 
   function shouldShowDimensionExtension(target, index, context = {}) {
-    if (target.kind === "line-line") return true;
     const line = dimensionSourceLine(target, index, context.source, context.extensionDirection);
     if (!line || !context.source || !context.onDimension) return true;
     const vx = context.onDimension.x - context.source.x;
@@ -12468,24 +12468,40 @@
           opposite: screenClearance({ x: -1, y: 0 }),
         };
       },
-      lineLineDimensionExtensionVisibilityCases() {
+      pointPointRectangleDimensionExtensionVisibilityCases() {
         resetModelState();
         setAppMode("geometry");
-        const a1 = addPoint(0, 0, false, "endpoint");
-        const a2 = addPoint(100, 0, false, "endpoint");
-        const b1 = addPoint(100, 40, false, "endpoint");
-        const b2 = addPoint(0, 40, false, "endpoint");
-        const line1 = addLine(a1, a2);
-        const line2 = addLine(b1, b2);
-        const target = { kind: "line-line", line1, line2, value: Math.abs(signedPointLineDistance(line2.p1, line1)) };
-        const visibleFlags = (anchor) => {
-          const layout = dimensionLayout(target, dimensionFromAnchor(target, anchor));
+        const p1 = addPoint(160, 160, true, "endpoint");
+        const p2 = addPoint(297.73401510731196, 185.0866714097212, false, "endpoint");
+        const p3 = addPoint(279.8149641009543, 283.468110772277, false, "endpoint");
+        const p4 = addPoint(142.08094899119854, 258.38143937826186, false, "endpoint");
+        addLine(p1, p2);
+        addLine(p2, p3);
+        addLine(p3, p4);
+        addLine(p4, p1);
+        const topTarget = { kind: "point-point", p1, p2, value: hypot2(p2.x - p1.x, p2.y - p1.y) };
+        const sideTarget = { kind: "point-point", p1: p2, p2: p3, value: hypot2(p3.x - p2.x, p3.y - p2.y) };
+        const visibleFlags = (target, dimension) => {
+          const layout = dimensionLayout(target, dimension);
           return layout.points.map((point) => point.showExtension !== false);
         };
         return {
-          left: visibleFlags({ x: -30, y: 20 }),
-          right: visibleFlags({ x: 130, y: 20 }),
-          acrossSpan: visibleFlags({ x: 50, y: 75 }),
+          top: visibleFlags(topTarget, {
+            x: 275.2991240975706,
+            y: 146.73754454625083,
+            offsetU: 41.05643170185708,
+            offsetN: -33.70830342779351,
+            labelOffsetU: 42.71350462481912,
+            axis: null,
+          }),
+          left: visibleFlags(sideTarget, {
+            x: 109.1051908103851,
+            y: 208.70539753179494,
+            offsetU: 7.036937956365918,
+            offsetN: 181.34350081496538,
+            labelOffsetU: 5.954777756734029,
+            axis: null,
+          }),
         };
       },
       dimensionDisplayPrecisionCases() {
