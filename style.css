@@ -88,7 +88,7 @@ body.presentation-mode .work-area {
   align-items: center;
   justify-content: flex-start;
   gap: 0;
-  min-height: 71px;
+  min-height: 82px;
   min-width: 0;
 }
 
@@ -102,10 +102,10 @@ body.presentation-mode .work-area {
 
 .document-control-stack {
   display: grid;
-  grid-template-rows: 25px 42px;
+  grid-template-rows: 25px 45px;
   align-items: start;
   gap: 4px;
-  width: min(640px, calc(100vw - 110px));
+  width: min(760px, calc(100vw - 110px));
   min-width: 0;
   flex: 0 1 auto;
 }
@@ -331,14 +331,13 @@ body.presentation-mode .work-area {
   z-index: 2;
   display: inline-flex;
   align-items: center;
-  min-width: clamp(145px, 14vw, 180px);
-  height: 34px;
+  min-width: 180px;
   justify-content: center;
-  padding: 0 14px;
+  padding: 10px 18px;
   border: 0;
   border-radius: 7px;
   color: #6b7280;
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 700;
   background: transparent;
   white-space: nowrap;
@@ -354,6 +353,12 @@ body.presentation-mode .work-area {
 
 .mode-switch-btn.active {
   color: #fff;
+  background: transparent;
+  box-shadow: none;
+}
+
+.toolbar .mode-switch-btn.active {
+  transform: none;
 }
 
 .mode-switch-btn:focus-visible {
