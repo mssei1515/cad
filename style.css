@@ -102,10 +102,10 @@ body.presentation-mode .work-area {
 
 .document-control-stack {
   display: grid;
-  grid-template-rows: 25px 45px;
+  grid-template-rows: 25px 38px;
   align-items: start;
   gap: 4px;
-  width: min(560px, calc(100vw - 110px));
+  width: min(500px, calc(100vw - 110px));
   min-width: 0;
   flex: 0 1 auto;
 }
@@ -331,9 +331,9 @@ body.presentation-mode .work-area {
   z-index: 2;
   display: inline-flex;
   align-items: center;
-  min-width: 150px;
+  min-width: 132px;
   justify-content: center;
-  padding: 10px 18px;
+  padding: 7px 10px;
   border: 0;
   border-radius: 7px;
   color: #6b7280;
