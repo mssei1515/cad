@@ -862,6 +862,8 @@ test("point-point rectangle dimensions keep extension lines visible on both pull
   const result = await page.evaluate(() => window.__cadTest.pointPointRectangleDimensionExtensionVisibilityCases());
   expect(result.top).toEqual([true, true]);
   expect(result.left).toEqual([true, true]);
+  expect(result.pointPointPreviewLeft).toEqual([true, true]);
+  expect(result.lineLengthPreviewLeft).toEqual([true, true]);
 });
 
 test("dimension labels hide values below the supported display precision", async ({ page }) => {

@@ -6504,6 +6504,7 @@
   function dimensionSourceLine(target, index, source = null, extensionDirection = null) {
     if (target.kind === "point-line" && index === 1) return target.line;
     if (target.kind === "line-line") return index === 0 ? target.line1 : target.line2;
+    if (target.kind === "line-length") return target.line;
     if (target.kind === "offset-distance" && target.source instanceof Line) return index === 0 ? target.source : target.offset;
     if (target.kind === "point-point") return null;
     if (source instanceof Point) return chooseIncidentLineForExtension(source, extensionDirection);
@@ -12476,15 +12477,21 @@
         const p3 = addPoint(279.8149641009543, 283.468110772277, false, "endpoint");
         const p4 = addPoint(142.08094899119854, 258.38143937826186, false, "endpoint");
         addLine(p1, p2);
-        addLine(p2, p3);
+        const sideLine = addLine(p2, p3);
         addLine(p3, p4);
         addLine(p4, p1);
         const topTarget = { kind: "point-point", p1, p2, value: hypot2(p2.x - p1.x, p2.y - p1.y) };
         const sideTarget = { kind: "point-point", p1: p2, p2: p3, value: hypot2(p3.x - p2.x, p3.y - p2.y) };
+        const sideLineTarget = { kind: "line-length", line: sideLine, p1: p2, p2: p3, value: sideLine.length() };
         const visibleFlags = (target, dimension) => {
           const layout = dimensionLayout(target, dimension);
           return layout.points.map((point) => point.showExtension !== false);
         };
+        const previewFlags = (target, pointer) => {
+          const dimension = dimensionWithLabelAt(target, dimensionFromAnchor(target, pointer), pointer);
+          return visibleFlags(target, dimension);
+        };
+        const leftPointer = { x: 109.1051908103851, y: 208.70539753179494 };
         return {
           top: visibleFlags(topTarget, {
             x: 275.2991240975706,
@@ -12502,6 +12509,8 @@
             labelOffsetU: 5.954777756734029,
             axis: null,
           }),
+          pointPointPreviewLeft: previewFlags(sideTarget, leftPointer),
+          lineLengthPreviewLeft: previewFlags(sideLineTarget, leftPointer),
         };
       },
       dimensionDisplayPrecisionCases() {
