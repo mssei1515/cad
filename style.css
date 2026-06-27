@@ -105,7 +105,7 @@ body.presentation-mode .work-area {
   grid-template-rows: 25px 45px;
   align-items: start;
   gap: 4px;
-  width: min(760px, calc(100vw - 110px));
+  width: min(560px, calc(100vw - 110px));
   min-width: 0;
   flex: 0 1 auto;
 }
@@ -331,7 +331,7 @@ body.presentation-mode .work-area {
   z-index: 2;
   display: inline-flex;
   align-items: center;
-  min-width: 180px;
+  min-width: 150px;
   justify-content: center;
   padding: 10px 18px;
   border: 0;
@@ -348,7 +348,7 @@ body.presentation-mode .work-area {
 }
 
 .mode-switch-btn:hover:not(.active) {
-  color: #374151;
+  color: #1d4ed8;
 }
 
 .mode-switch-btn.active {
