@@ -6520,6 +6520,7 @@
   }
 
   function shouldShowDimensionExtension(target, index, context = {}) {
+    if (target.kind === "line-line") return true;
     const line = dimensionSourceLine(target, index, context.source, context.extensionDirection);
     if (!line || !context.source || !context.onDimension) return true;
     const vx = context.onDimension.x - context.source.x;
@@ -12465,6 +12466,26 @@
           diagonal: screenClearance({ x: diagonal, y: diagonal }),
           perpendicular: screenClearance({ x: 0, y: 1 }),
           opposite: screenClearance({ x: -1, y: 0 }),
+        };
+      },
+      lineLineDimensionExtensionVisibilityCases() {
+        resetModelState();
+        setAppMode("geometry");
+        const a1 = addPoint(0, 0, false, "endpoint");
+        const a2 = addPoint(100, 0, false, "endpoint");
+        const b1 = addPoint(100, 40, false, "endpoint");
+        const b2 = addPoint(0, 40, false, "endpoint");
+        const line1 = addLine(a1, a2);
+        const line2 = addLine(b1, b2);
+        const target = { kind: "line-line", line1, line2, value: Math.abs(signedPointLineDistance(line2.p1, line1)) };
+        const visibleFlags = (anchor) => {
+          const layout = dimensionLayout(target, dimensionFromAnchor(target, anchor));
+          return layout.points.map((point) => point.showExtension !== false);
+        };
+        return {
+          left: visibleFlags({ x: -30, y: 20 }),
+          right: visibleFlags({ x: 130, y: 20 }),
+          acrossSpan: visibleFlags({ x: 50, y: 75 }),
         };
       },
       dimensionDisplayPrecisionCases() {

@@ -855,6 +855,16 @@ test("construction extension clearance uses only the dimension-line component", 
   expect(result.opposite).toBeCloseTo(0, 6);
 });
 
+test("line-line dimensions keep extension lines visible on both pull sides", async ({ page }) => {
+  await page.goto(`${baseUrl}/index.html?test=1`);
+  await page.waitForFunction(() => window.__cadTest);
+
+  const result = await page.evaluate(() => window.__cadTest.lineLineDimensionExtensionVisibilityCases());
+  expect(result.left).toEqual([true, true]);
+  expect(result.right).toEqual([true, true]);
+  expect(result.acrossSpan).toEqual([true, true]);
+});
+
 test("dimension labels hide values below the supported display precision", async ({ page }) => {
   await page.goto(`${baseUrl}/index.html?test=1`);
   await page.waitForFunction(() => window.__cadTest);

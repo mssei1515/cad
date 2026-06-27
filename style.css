@@ -73,11 +73,11 @@ body.presentation-mode .work-area {
 .toolbar {
   display: flex;
   flex-direction: column;
-  gap: 5px;
+  gap: 0;
   align-items: stretch;
   justify-content: flex-start;
   min-height: 0;
-  padding: 8px 12px;
+  padding: 5px 10px;
   border-bottom: 1px solid var(--line);
   background: var(--panel);
   min-width: 0;
@@ -88,23 +88,23 @@ body.presentation-mode .work-area {
   align-items: center;
   justify-content: flex-start;
   gap: 0;
-  min-height: 82px;
+  min-height: 64px;
   min-width: 0;
 }
 
 .header-divider {
   width: 1px;
   height: 30px;
-  margin: 0 10px;
+  margin: 0 8px;
   background: var(--line);
   flex: 0 0 auto;
 }
 
 .document-control-stack {
   display: grid;
-  grid-template-rows: 25px 38px;
+  grid-template-rows: 24px 36px;
   align-items: start;
-  gap: 4px;
+  gap: 1px;
   width: min(500px, calc(100vw - 110px));
   min-width: 0;
   flex: 0 1 auto;
@@ -129,9 +129,9 @@ body.presentation-mode .work-area {
   width: 100%;
   min-width: 0;
   max-width: 100%;
-  height: 25px;
-  min-height: 25px;
-  padding: 2px 8px;
+  height: 24px;
+  min-height: 24px;
+  padding: 1px 7px;
   border: 1px solid transparent;
   border-radius: 4px;
   background: transparent;
