@@ -284,6 +284,20 @@
       "kind": "endpoint"
     },
     {
+      "id": "L_POINT_ON_LINE_PROBE_P1",
+      "x": 300,
+      "y": 0,
+      "fixed": false,
+      "kind": "endpoint"
+    },
+    {
+      "id": "L_POINT_ON_LINE_PROBE_P2",
+      "x": 318,
+      "y": 19,
+      "fixed": false,
+      "kind": "endpoint"
+    },
+    {
       "id": "L_CENTER_C_TINY_P1",
       "x": -1420,
       "y": -620,
@@ -935,6 +949,12 @@
       "p2": "L_COIN_B_P2"
     },
     {
+      "id": "L_POINT_ON_LINE_PROBE",
+      "p1": "L_POINT_ON_LINE_PROBE_P1",
+      "p2": "L_POINT_ON_LINE_PROBE_P2",
+      "construction": true
+    },
+    {
       "id": "L_CENTER_C_TINY",
       "p1": "L_CENTER_C_TINY_P1",
       "p2": "L_CENTER_C_TINY_P2",
@@ -1343,6 +1363,415 @@
   ],
   "constraints": [
     {
+      "type": "horizontal",
+      "line": "L_AXIS_X",
+      "enabled": true
+    },
+    {
+      "type": "vertical",
+      "line": "L_AXIS_Y",
+      "enabled": true
+    },
+    {
+      "type": "horizontal",
+      "line": "L_BOTTOM",
+      "enabled": true
+    },
+    {
+      "type": "parallel",
+      "line1": "L_AXIS_X",
+      "line2": "L_TOP",
+      "enabled": true
+    },
+    {
+      "type": "parallel",
+      "line1": "L_DIAG_45_A",
+      "line2": "L_DIAG_45_B",
+      "enabled": true
+    },
+    {
+      "type": "perpendicular",
+      "line1": "L_DIAG_45_A",
+      "line2": "L_DIAG_NEG",
+      "enabled": true
+    },
+    {
+      "type": "equalLength",
+      "line1": "L_DIAG_45_A",
+      "line2": "L_DIAG_45_B",
+      "enabled": true
+    },
+    {
+      "type": "equalLength",
+      "line1": "L_EQUAL_A",
+      "line2": "L_EQUAL_B",
+      "enabled": true
+    },
+    {
+      "type": "collinear",
+      "line1": "L_AXIS_X",
+      "line2": "L_COL_A",
+      "enabled": true
+    },
+    {
+      "type": "collinear",
+      "line1": "L_COL_A",
+      "line2": "L_COL_B",
+      "enabled": true
+    },
+    {
+      "type": "lineAngle",
+      "line1": "L_AXIS_X",
+      "line2": "L_ANGLE_30",
+      "target": 0.5235987755982988,
+      "enabled": true
+    },
+    {
+      "type": "pointHorizontal",
+      "p1": "L_TINY_P1",
+      "p2": "L_TINY_P2",
+      "enabled": true
+    },
+    {
+      "type": "pointVertical",
+      "p1": "L_MICRO_P1",
+      "p2": "L_MICRO_P2",
+      "enabled": true
+    },
+    {
+      "type": "coincident",
+      "p1": "L_COIN_A_P1",
+      "p2": "L_COIN_B_P1",
+      "enabled": true
+    },
+    {
+      "type": "pointOnLine",
+      "point": "L_POINT_ON_LINE_PROBE_P1",
+      "line": "L_AXIS_X",
+      "enabled": true
+    },
+    {
+      "type": "pointOnLineMidpoint",
+      "point": "L_MID_PROBE_P1",
+      "line": "L_MID_SUPPORT",
+      "enabled": true
+    },
+    {
+      "type": "distance",
+      "p1": "L_EQUAL_A_P1",
+      "p2": "L_EQUAL_A_P2",
+      "target": 134.1640786499874,
+      "enabled": true
+    },
+    {
+      "type": "pointAxisDistance",
+      "p1": "L_EQUAL_A_P1",
+      "p2": "L_EQUAL_A_P2",
+      "axis": "x",
+      "sign": 1,
+      "target": 120,
+      "enabled": true
+    },
+    {
+      "type": "lineLineDistance",
+      "line1": "L_TOP",
+      "line2": "L_BOTTOM",
+      "sign": 1,
+      "target": 1680,
+      "enabled": true
+    },
+    {
+      "type": "pointLineDistance",
+      "point": "L_AXIS_Y_P2",
+      "line": "L_TOP",
+      "sign": 1,
+      "target": 1920,
+      "enabled": true
+    },
+    {
+      "type": "offsetDimension",
+      "source": "L_OFFSET_SOURCE",
+      "offset": "L_OFFSET_COPY",
+      "sign": 1,
+      "target": 37,
+      "directionBasis": "endpoint",
+      "enabled": true
+    },
+    {
+      "type": "diameterDimension",
+      "primitive": "C_TINY",
+      "target": 8,
+      "enabled": true
+    },
+    {
+      "type": "radiusDimension",
+      "primitive": "C_SMALL",
+      "target": 12,
+      "enabled": true
+    },
+    {
+      "type": "radiusDimension",
+      "primitive": "C_BASE",
+      "target": 35,
+      "enabled": true
+    },
+    {
+      "type": "diameterDimension",
+      "primitive": "C_EXT_A",
+      "target": 160,
+      "enabled": true
+    },
+    {
+      "type": "radiusDimension",
+      "primitive": "C_INT_A",
+      "target": 140,
+      "enabled": true
+    },
+    {
+      "type": "diameterDimension",
+      "primitive": "C_HUGE",
+      "target": 840,
+      "enabled": true
+    },
+    {
+      "type": "radiusDimension",
+      "primitive": "C_CONCENTRIC",
+      "target": 210,
+      "enabled": true
+    },
+    {
+      "type": "equalRadius",
+      "a": "C_BASE",
+      "b": "C_EQUAL",
+      "enabled": true
+    },
+    {
+      "type": "concentric",
+      "a": "C_BASE",
+      "b": "C_OFFSET",
+      "enabled": true
+    },
+    {
+      "type": "offsetDimension",
+      "source": "C_BASE",
+      "offset": "C_OFFSET",
+      "sign": 1,
+      "target": 35,
+      "directionBasis": "radial",
+      "enabled": true
+    },
+    {
+      "type": "concentric",
+      "a": "C_HUGE",
+      "b": "C_CONCENTRIC",
+      "enabled": true
+    },
+    {
+      "type": "circleCircleTangent",
+      "a": "C_EXT_A",
+      "b": "C_EXT_B",
+      "mode": "external",
+      "enabled": true
+    },
+    {
+      "type": "circleCircleTangent",
+      "a": "C_INT_A",
+      "b": "C_INT_B",
+      "mode": "internal",
+      "enabled": true
+    },
+    {
+      "type": "circleCircleTangent",
+      "a": "C_HUGE",
+      "b": "C_NEAR",
+      "mode": "external",
+      "enabled": true
+    },
+    {
+      "type": "horizontal",
+      "line": "L_TANGENT_CIRCLE",
+      "enabled": true
+    },
+    {
+      "type": "lineCircleTangent",
+      "line": "L_TANGENT_CIRCLE",
+      "primitive": "C_TANGENT",
+      "sign": -1,
+      "enabled": true
+    },
+    {
+      "type": "pointOnCircle",
+      "point": "L_HUGE_PROBE_P1",
+      "primitive": "C_HUGE",
+      "enabled": true
+    },
+    {
+      "type": "radiusDimension",
+      "primitive": "A_BASE",
+      "target": 160,
+      "enabled": true
+    },
+    {
+      "type": "equalRadius",
+      "a": "A_BASE",
+      "b": "A_EQUAL",
+      "enabled": true
+    },
+    {
+      "type": "arcEndpointOnLine",
+      "arc": "A_EQUAL",
+      "endpoint": "start",
+      "line": "L_RADIAL_A_EQUAL_START",
+      "enabled": true
+    },
+    {
+      "type": "arcEndpointOnLine",
+      "arc": "A_EQUAL",
+      "endpoint": "end",
+      "line": "L_RADIAL_A_EQUAL_END",
+      "enabled": true
+    },
+    {
+      "type": "radiusDimension",
+      "primitive": "A_RADIAL",
+      "target": 95,
+      "enabled": true
+    },
+    {
+      "type": "arcEndpointOnLine",
+      "arc": "A_RADIAL",
+      "endpoint": "start",
+      "line": "L_RADIAL_A_RADIAL_START",
+      "enabled": true
+    },
+    {
+      "type": "arcEndpointOnLine",
+      "arc": "A_RADIAL",
+      "endpoint": "end",
+      "line": "L_RADIAL_A_RADIAL_END",
+      "enabled": true
+    },
+    {
+      "type": "radiusDimension",
+      "primitive": "A_ENDPOINT",
+      "target": 47,
+      "enabled": true
+    },
+    {
+      "type": "arcEndpointFixed",
+      "arc": "A_ENDPOINT",
+      "endpoint": "start",
+      "x": 227,
+      "y": 430,
+      "enabled": true
+    },
+    {
+      "type": "arcEndpointOnLine",
+      "arc": "A_ENDPOINT",
+      "endpoint": "end",
+      "line": "L_RADIAL_A_ENDPOINT_END",
+      "enabled": true
+    },
+    {
+      "type": "lineCircleTangent",
+      "line": "L_TANGENT_ARC",
+      "primitive": "A_TANGENT",
+      "sign": -1,
+      "enabled": true
+    },
+    {
+      "type": "arcEndpointOnLine",
+      "arc": "A_TANGENT",
+      "endpoint": "start",
+      "line": "L_RADIAL_A_TANGENT_START",
+      "enabled": true
+    },
+    {
+      "type": "arcEndpointOnLine",
+      "arc": "A_TANGENT",
+      "endpoint": "end",
+      "line": "L_RADIAL_A_TANGENT_END",
+      "enabled": true
+    },
+    {
+      "type": "radiusDimension",
+      "primitive": "A_OFFSET_BASE",
+      "target": 120,
+      "enabled": true
+    },
+    {
+      "type": "offsetDimension",
+      "source": "A_OFFSET_BASE",
+      "offset": "A_OFFSET",
+      "sign": 1,
+      "target": 60,
+      "directionBasis": "radial",
+      "enabled": true
+    },
+    {
+      "type": "radiusDimension",
+      "primitive": "A_TINY",
+      "target": 5,
+      "enabled": true
+    },
+    {
+      "type": "radiusDimension",
+      "primitive": "A_HUGE",
+      "target": 520,
+      "enabled": true
+    },
+    {
+      "type": "radiusDimension",
+      "primitive": "A_NEAR_FULL",
+      "target": 190,
+      "enabled": true
+    },
+    {
+      "type": "radiusDimension",
+      "primitive": "A_SHARED_1",
+      "target": 100,
+      "enabled": true
+    },
+    {
+      "type": "radiusDimension",
+      "primitive": "A_SHARED_2",
+      "target": 100,
+      "enabled": true
+    },
+    {
+      "type": "radiusDimension",
+      "primitive": "A_OBTUSE",
+      "target": 230,
+      "enabled": true
+    },
+    {
+      "type": "radiusDimension",
+      "primitive": "A_ACUTE",
+      "target": 11,
+      "enabled": true
+    },
+    {
+      "type": "radiusDimension",
+      "primitive": "A_REVERSED",
+      "target": 280,
+      "enabled": true
+    },
+    {
+      "type": "arcEndpointArcEndpointCoincident",
+      "a": "A_SHARED_1",
+      "endpointA": "end",
+      "b": "A_SHARED_2",
+      "endpointB": "start",
+      "enabled": true
+    },
+    {
+      "type": "arcEndpointCoincident",
+      "arc": "A_SHARED_1",
+      "endpoint": "end",
+      "point": "L_SHARED_ENDPOINT_PROBE_P1",
+      "enabled": true
+    },
+    {
       "type": "lineFixed",
       "line": "L_AXIS_X",
       "p1x": -1600,
@@ -1488,15 +1917,6 @@
     },
     {
       "type": "lineFixed",
-      "line": "L_OFFSET_COPY",
-      "p1x": 179.4760927396665,
-      "p1y": -619.2141391094998,
-      "p2x": 479.4760927396665,
-      "p2y": -419.2141391094998,
-      "enabled": true
-    },
-    {
-      "type": "lineFixed",
       "line": "L_ANGLE_30",
       "p1x": 1150,
       "p1y": -300,
@@ -1523,159 +1943,12 @@
       "enabled": true
     },
     {
-      "type": "horizontal",
-      "line": "L_AXIS_X",
-      "enabled": true
-    },
-    {
-      "type": "vertical",
-      "line": "L_AXIS_Y",
-      "enabled": true
-    },
-    {
-      "type": "horizontal",
-      "line": "L_TOP",
-      "enabled": true
-    },
-    {
-      "type": "horizontal",
-      "line": "L_BOTTOM",
-      "enabled": true
-    },
-    {
-      "type": "horizontal",
-      "line": "L_TINY",
-      "enabled": true
-    },
-    {
-      "type": "vertical",
-      "line": "L_MICRO",
-      "enabled": true
-    },
-    {
-      "type": "parallel",
-      "line1": "L_AXIS_X",
-      "line2": "L_TOP",
-      "enabled": true
-    },
-    {
-      "type": "perpendicular",
-      "line1": "L_AXIS_X",
-      "line2": "L_AXIS_Y",
-      "enabled": true
-    },
-    {
-      "type": "parallel",
-      "line1": "L_DIAG_45_A",
-      "line2": "L_DIAG_45_B",
-      "enabled": true
-    },
-    {
-      "type": "perpendicular",
-      "line1": "L_DIAG_45_A",
-      "line2": "L_DIAG_NEG",
-      "enabled": true
-    },
-    {
-      "type": "equalLength",
-      "line1": "L_DIAG_45_A",
-      "line2": "L_DIAG_45_B",
-      "enabled": true
-    },
-    {
-      "type": "equalLength",
-      "line1": "L_EQUAL_A",
-      "line2": "L_EQUAL_B",
-      "enabled": true
-    },
-    {
-      "type": "collinear",
-      "line1": "L_AXIS_X",
-      "line2": "L_COL_A",
-      "enabled": true
-    },
-    {
-      "type": "collinear",
-      "line1": "L_COL_A",
-      "line2": "L_COL_B",
-      "enabled": true
-    },
-    {
-      "type": "lineAngle",
-      "line1": "L_AXIS_X",
-      "line2": "L_ANGLE_30",
-      "target": 0.5235987755982988,
-      "enabled": true
-    },
-    {
-      "type": "pointHorizontal",
-      "p1": "L_TOP_P1",
-      "p2": "L_TOP_P2",
-      "enabled": true
-    },
-    {
-      "type": "pointVertical",
-      "p1": "L_AXIS_Y_P1",
-      "p2": "L_AXIS_Y_P2",
-      "enabled": true
-    },
-    {
-      "type": "coincident",
-      "p1": "L_COIN_A_P1",
-      "p2": "L_COIN_B_P1",
-      "enabled": true
-    },
-    {
-      "type": "pointOnLine",
-      "point": "L_COL_B_P1",
-      "line": "L_AXIS_X",
-      "enabled": true
-    },
-    {
-      "type": "pointOnLineMidpoint",
-      "point": "L_MID_PROBE_P1",
-      "line": "L_MID_SUPPORT",
-      "enabled": true
-    },
-    {
-      "type": "distance",
-      "p1": "L_EQUAL_A_P1",
-      "p2": "L_EQUAL_A_P2",
-      "target": 134.1640786499874,
-      "enabled": true
-    },
-    {
-      "type": "pointAxisDistance",
-      "p1": "L_EQUAL_A_P1",
-      "p2": "L_EQUAL_A_P2",
-      "axis": "x",
-      "sign": 1,
-      "target": 120,
-      "enabled": true
-    },
-    {
-      "type": "lineLineDistance",
-      "line1": "L_TOP",
-      "line2": "L_BOTTOM",
-      "sign": 1,
-      "target": 1680,
-      "enabled": true
-    },
-    {
-      "type": "pointLineDistance",
-      "point": "L_AXIS_Y_P2",
-      "line": "L_TOP",
-      "sign": 1,
-      "target": 1920,
-      "enabled": true
-    },
-    {
-      "type": "offsetDimension",
-      "source": "L_OFFSET_SOURCE",
-      "offset": "L_OFFSET_COPY",
-      "sign": 1,
-      "target": 37,
-      "directionBasis": "endpoint",
+      "type": "lineFixed",
+      "line": "L_POINT_ON_LINE_PROBE",
+      "p1x": 300,
+      "p1y": 0,
+      "p2x": 318,
+      "p2y": 19,
       "enabled": true
     },
     {
@@ -1688,12 +1961,6 @@
       "enabled": true
     },
     {
-      "type": "diameterDimension",
-      "primitive": "C_TINY",
-      "target": 8,
-      "enabled": true
-    },
-    {
       "type": "lineFixed",
       "line": "L_CENTER_C_SMALL",
       "p1x": -1220,
@@ -1703,24 +1970,12 @@
       "enabled": true
     },
     {
-      "type": "radiusDimension",
-      "primitive": "C_SMALL",
-      "target": 12,
-      "enabled": true
-    },
-    {
       "type": "lineFixed",
       "line": "L_CENTER_C_BASE",
       "p1x": -920,
       "p1y": -560,
       "p2x": -910.3702313604257,
       "p2y": -555.8146020561636,
-      "enabled": true
-    },
-    {
-      "type": "radiusDimension",
-      "primitive": "C_BASE",
-      "target": 35,
       "enabled": true
     },
     {
@@ -1760,24 +2015,12 @@
       "enabled": true
     },
     {
-      "type": "diameterDimension",
-      "primitive": "C_EXT_A",
-      "target": 160,
-      "enabled": true
-    },
-    {
       "type": "lineFixed",
       "line": "L_CENTER_C_EXT_B",
       "p1x": 230,
       "p1y": -520,
       "p2x": 243.75681234224908,
       "p2y": -514.0208600802337,
-      "enabled": true
-    },
-    {
-      "type": "radiusDimension",
-      "primitive": "C_EXT_B",
-      "target": 50,
       "enabled": true
     },
     {
@@ -1790,24 +2033,12 @@
       "enabled": true
     },
     {
-      "type": "radiusDimension",
-      "primitive": "C_INT_A",
-      "target": 140,
-      "enabled": true
-    },
-    {
       "type": "lineFixed",
       "line": "L_CENTER_C_INT_B",
       "p1x": 610,
       "p1y": -470,
       "p2x": 623.7568123422491,
       "p2y": -464.02086008023366,
-      "enabled": true
-    },
-    {
-      "type": "diameterDimension",
-      "primitive": "C_INT_B",
-      "target": 100,
       "enabled": true
     },
     {
@@ -1820,24 +2051,12 @@
       "enabled": true
     },
     {
-      "type": "diameterDimension",
-      "primitive": "C_HUGE",
-      "target": 840,
-      "enabled": true
-    },
-    {
       "type": "lineFixed",
       "line": "L_CENTER_C_CONCENTRIC",
       "p1x": 900,
       "p1y": 160,
       "p2x": 928.4307455073148,
       "p2y": 172.35688916751712,
-      "enabled": true
-    },
-    {
-      "type": "radiusDimension",
-      "primitive": "C_CONCENTRIC",
-      "target": 210,
       "enabled": true
     },
     {
@@ -1850,78 +2069,12 @@
       "enabled": true
     },
     {
-      "type": "radiusDimension",
-      "primitive": "C_NEAR",
-      "target": 105,
-      "enabled": true
-    },
-    {
-      "type": "equalRadius",
-      "a": "C_BASE",
-      "b": "C_EQUAL",
-      "enabled": true
-    },
-    {
-      "type": "concentric",
-      "a": "C_BASE",
-      "b": "C_OFFSET",
-      "enabled": true
-    },
-    {
-      "type": "offsetDimension",
-      "source": "C_BASE",
-      "offset": "C_OFFSET",
-      "sign": 1,
-      "target": 35,
-      "directionBasis": "radial",
-      "enabled": true
-    },
-    {
-      "type": "concentric",
-      "a": "C_HUGE",
-      "b": "C_CONCENTRIC",
-      "enabled": true
-    },
-    {
-      "type": "circleCircleTangent",
-      "a": "C_EXT_A",
-      "b": "C_EXT_B",
-      "mode": "external",
-      "enabled": true
-    },
-    {
-      "type": "circleCircleTangent",
-      "a": "C_INT_A",
-      "b": "C_INT_B",
-      "mode": "internal",
-      "enabled": true
-    },
-    {
-      "type": "circleCircleTangent",
-      "a": "C_HUGE",
-      "b": "C_NEAR",
-      "mode": "external",
-      "enabled": true
-    },
-    {
       "type": "lineFixed",
       "line": "L_TANGENT_CIRCLE",
       "p1x": -700,
       "p1y": -265,
       "p2x": -340,
       "p2y": -265,
-      "enabled": true
-    },
-    {
-      "type": "horizontal",
-      "line": "L_TANGENT_CIRCLE",
-      "enabled": true
-    },
-    {
-      "type": "lineCircleTangent",
-      "line": "L_TANGENT_CIRCLE",
-      "primitive": "C_TANGENT",
-      "sign": -1,
       "enabled": true
     },
     {
@@ -1934,24 +2087,12 @@
       "enabled": true
     },
     {
-      "type": "pointOnCircle",
-      "point": "L_HUGE_PROBE_P1",
-      "primitive": "C_HUGE",
-      "enabled": true
-    },
-    {
       "type": "lineFixed",
       "line": "L_CENTER_A_BASE",
       "p1x": -1000,
       "p1y": 350,
       "p2x": -981.7933663652587,
       "p2y": 355.4330922769919,
-      "enabled": true
-    },
-    {
-      "type": "radiusDimension",
-      "primitive": "A_BASE",
-      "target": 160,
       "enabled": true
     },
     {
@@ -1998,26 +2139,6 @@
       "enabled": true
     },
     {
-      "type": "equalRadius",
-      "a": "A_BASE",
-      "b": "A_EQUAL",
-      "enabled": true
-    },
-    {
-      "type": "arcEndpointOnLine",
-      "arc": "A_EQUAL",
-      "endpoint": "start",
-      "line": "L_RADIAL_A_EQUAL_START",
-      "enabled": true
-    },
-    {
-      "type": "arcEndpointOnLine",
-      "arc": "A_EQUAL",
-      "endpoint": "end",
-      "line": "L_RADIAL_A_EQUAL_END",
-      "enabled": true
-    },
-    {
       "type": "lineFixed",
       "line": "L_CENTER_A_RADIAL",
       "p1x": -180,
@@ -2045,26 +2166,6 @@
       "enabled": true
     },
     {
-      "type": "radiusDimension",
-      "primitive": "A_RADIAL",
-      "target": 95,
-      "enabled": true
-    },
-    {
-      "type": "arcEndpointOnLine",
-      "arc": "A_RADIAL",
-      "endpoint": "start",
-      "line": "L_RADIAL_A_RADIAL_START",
-      "enabled": true
-    },
-    {
-      "type": "arcEndpointOnLine",
-      "arc": "A_RADIAL",
-      "endpoint": "end",
-      "line": "L_RADIAL_A_RADIAL_END",
-      "enabled": true
-    },
-    {
       "type": "lineFixed",
       "line": "L_CENTER_A_ENDPOINT",
       "p1x": 180,
@@ -2080,27 +2181,6 @@
       "p1y": 428.36770712993086,
       "p2x": 260.7542357470011,
       "p2y": 415.7608494313117,
-      "enabled": true
-    },
-    {
-      "type": "radiusDimension",
-      "primitive": "A_ENDPOINT",
-      "target": 47,
-      "enabled": true
-    },
-    {
-      "type": "arcEndpointFixed",
-      "arc": "A_ENDPOINT",
-      "endpoint": "start",
-      "x": 227,
-      "y": 430,
-      "enabled": true
-    },
-    {
-      "type": "arcEndpointOnLine",
-      "arc": "A_ENDPOINT",
-      "endpoint": "end",
-      "line": "L_RADIAL_A_ENDPOINT_END",
       "enabled": true
     },
     {
@@ -2140,39 +2220,12 @@
       "enabled": true
     },
     {
-      "type": "lineCircleTangent",
-      "line": "L_TANGENT_ARC",
-      "primitive": "A_TANGENT",
-      "sign": -1,
-      "enabled": true
-    },
-    {
-      "type": "arcEndpointOnLine",
-      "arc": "A_TANGENT",
-      "endpoint": "start",
-      "line": "L_RADIAL_A_TANGENT_START",
-      "enabled": true
-    },
-    {
-      "type": "arcEndpointOnLine",
-      "arc": "A_TANGENT",
-      "endpoint": "end",
-      "line": "L_RADIAL_A_TANGENT_END",
-      "enabled": true
-    },
-    {
       "type": "lineFixed",
       "line": "L_CENTER_A_OFFSET_BASE",
       "p1x": 760,
       "p1y": 430,
       "p2x": 778.2066336347413,
       "p2y": 435.4330922769919,
-      "enabled": true
-    },
-    {
-      "type": "radiusDimension",
-      "primitive": "A_OFFSET_BASE",
-      "target": 120,
       "enabled": true
     },
     {
@@ -2201,27 +2254,12 @@
       "enabled": true
     },
     {
-      "type": "offsetDimension",
-      "source": "A_OFFSET_BASE",
-      "offset": "A_OFFSET",
-      "sign": 1,
-      "target": 60,
-      "directionBasis": "radial",
-      "enabled": true
-    },
-    {
       "type": "lineFixed",
       "line": "L_CENTER_A_TINY",
       "p1x": 1130,
       "p1y": 500,
       "p2x": 1148.2066336347411,
       "p2y": 505.4330922769919,
-      "enabled": true
-    },
-    {
-      "type": "radiusDimension",
-      "primitive": "A_TINY",
-      "target": 5,
       "enabled": true
     },
     {
@@ -2250,12 +2288,6 @@
       "enabled": true
     },
     {
-      "type": "radiusDimension",
-      "primitive": "A_HUGE",
-      "target": 520,
-      "enabled": true
-    },
-    {
       "type": "arcEndpointFixed",
       "arc": "A_HUGE",
       "endpoint": "start",
@@ -2278,12 +2310,6 @@
       "p1y": -40,
       "p2x": 518.2066336347413,
       "p2y": -34.56690772300813,
-      "enabled": true
-    },
-    {
-      "type": "radiusDimension",
-      "primitive": "A_NEAR_FULL",
-      "target": 190,
       "enabled": true
     },
     {
@@ -2312,25 +2338,11 @@
       "enabled": true
     },
     {
-      "type": "radiusDimension",
-      "primitive": "A_SHARED_1",
-      "target": 100,
-      "enabled": true
-    },
-    {
       "type": "arcEndpointFixed",
       "arc": "A_SHARED_1",
       "endpoint": "start",
       "x": 1100,
       "y": -520,
-      "enabled": true
-    },
-    {
-      "type": "arcEndpointFixed",
-      "arc": "A_SHARED_1",
-      "endpoint": "end",
-      "x": 1000,
-      "y": -420,
       "enabled": true
     },
     {
@@ -2340,20 +2352,6 @@
       "p1y": -420,
       "p2x": 1118.2066336347411,
       "p2y": -414.5669077230081,
-      "enabled": true
-    },
-    {
-      "type": "radiusDimension",
-      "primitive": "A_SHARED_2",
-      "target": 100,
-      "enabled": true
-    },
-    {
-      "type": "arcEndpointFixed",
-      "arc": "A_SHARED_2",
-      "endpoint": "start",
-      "x": 1000,
-      "y": -420,
       "enabled": true
     },
     {
@@ -2371,12 +2369,6 @@
       "p1y": -220,
       "p2x": -1031.7933663652589,
       "p2y": -214.56690772300811,
-      "enabled": true
-    },
-    {
-      "type": "radiusDimension",
-      "primitive": "A_OBTUSE",
-      "target": 230,
       "enabled": true
     },
     {
@@ -2405,12 +2397,6 @@
       "enabled": true
     },
     {
-      "type": "radiusDimension",
-      "primitive": "A_ACUTE",
-      "target": 11,
-      "enabled": true
-    },
-    {
       "type": "arcEndpointFixed",
       "arc": "A_ACUTE",
       "endpoint": "start",
@@ -2436,12 +2422,6 @@
       "enabled": true
     },
     {
-      "type": "radiusDimension",
-      "primitive": "A_REVERSED",
-      "target": 280,
-      "enabled": true
-    },
-    {
       "type": "arcEndpointFixed",
       "arc": "A_REVERSED",
       "endpoint": "start",
@@ -2458,27 +2438,12 @@
       "enabled": true
     },
     {
-      "type": "arcEndpointArcEndpointCoincident",
-      "a": "A_SHARED_1",
-      "endpointA": "end",
-      "b": "A_SHARED_2",
-      "endpointB": "start",
-      "enabled": true
-    },
-    {
       "type": "lineFixed",
       "line": "L_SHARED_ENDPOINT_PROBE",
       "p1x": 1000,
       "p1y": -420,
       "p2x": 1030,
       "p2y": -390,
-      "enabled": true
-    },
-    {
-      "type": "arcEndpointCoincident",
-      "arc": "A_SHARED_1",
-      "endpoint": "end",
-      "point": "L_SHARED_ENDPOINT_PROBE_P1",
       "enabled": true
     }
   ],
@@ -2688,16 +2653,6 @@
       {
         "name": "shared-arc-endpoint-multiple",
         "removed": [
-          {
-            "type": "arcEndpointFixed",
-            "arc": "A_SHARED_1",
-            "endpoint": "end"
-          },
-          {
-            "type": "arcEndpointFixed",
-            "arc": "A_SHARED_2",
-            "endpoint": "start"
-          },
           {
             "type": "arcEndpointCoincident",
             "arc": "A_SHARED_1",

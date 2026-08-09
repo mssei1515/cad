@@ -22,6 +22,8 @@ const points = new Map();
 const lines = new Map();
 const circles = new Map();
 const arcs = new Map();
+const constraintKeys = new Set();
+const anchorConstraints = [];
 
 function point(id, x, y, kind = "endpoint") {
   if (points.has(id)) return points.get(id);
@@ -31,8 +33,35 @@ function point(id, x, y, kind = "endpoint") {
   return value;
 }
 
+function constraintKey(value) {
+  const normalized = { ...value };
+  const symmetricFields = {
+    coincident: ["p1", "p2"],
+    parallel: ["line1", "line2"],
+    perpendicular: ["line1", "line2"],
+    collinear: ["line1", "line2"],
+    equalLength: ["line1", "line2"],
+    concentric: ["a", "b"],
+    equalRadius: ["a", "b"],
+    circleCircleTangent: ["a", "b"],
+  }[normalized.type];
+  if (symmetricFields) {
+    const [first, second] = symmetricFields;
+    [normalized[first], normalized[second]] = [normalized[first], normalized[second]].sort();
+  }
+  return JSON.stringify(Object.fromEntries(Object.entries(normalized).sort(([a], [b]) => a.localeCompare(b))));
+}
+
 function addConstraint(value) {
+  const key = constraintKey(value);
+  if (constraintKeys.has(key)) throw new Error(`Duplicate constraint: ${key}`);
+  constraintKeys.add(key);
   data.constraints.push({ ...value, enabled: true });
+  return value;
+}
+
+function addAnchorConstraint(value) {
+  anchorConstraints.push(value);
   return value;
 }
 
@@ -44,7 +73,7 @@ function line(id, x1, y1, x2, y2, options = {}) {
   lines.set(id, { ...value, p1Object: p1, p2Object: p2 });
   data.lines.push(value);
   if (options.fixed !== false) {
-    addConstraint({ type: "lineFixed", line: id, p1x: p1.x, p1y: p1.y, p2x: p2.x, p2y: p2.y });
+    addAnchorConstraint({ type: "lineFixed", line: id, p1x: p1.x, p1y: p1.y, p2x: p2.x, p2y: p2.y });
   }
   return lines.get(id);
 }
@@ -71,7 +100,7 @@ function endpoint(center, radius, angle) {
   return { x: center.x + radius * Math.cos(angle), y: center.y + radius * Math.sin(angle) };
 }
 
-function arc(id, center, radius, startAngle, endAngle, mode = "fixed") {
+function arc(id, center, radius, startAngle, endAngle, mode = "fixed", options = {}) {
   const value = { id, center: center.id, radius, startAngle, endAngle };
   arcs.set(id, { ...value, centerObject: center });
   data.arcs.push(value);
@@ -79,8 +108,8 @@ function arc(id, center, radius, startAngle, endAngle, mode = "fixed") {
     addConstraint({ type: "radiusDimension", primitive: id, target: radius });
     const start = endpoint(center, radius, startAngle);
     const end = endpoint(center, radius, endAngle);
-    addConstraint({ type: "arcEndpointFixed", arc: id, endpoint: "start", x: start.x, y: start.y });
-    addConstraint({ type: "arcEndpointFixed", arc: id, endpoint: "end", x: end.x, y: end.y });
+    if (!options.freeStart) addAnchorConstraint({ type: "arcEndpointFixed", arc: id, endpoint: "start", x: start.x, y: start.y });
+    if (!options.freeEnd) addAnchorConstraint({ type: "arcEndpointFixed", arc: id, endpoint: "end", x: end.x, y: end.y });
   }
   return arcs.get(id);
 }
@@ -139,20 +168,18 @@ const offsetCopy = line(
   offsetSource.p1Object.y + offsetY,
   offsetSource.p2Object.x + offsetX,
   offsetSource.p2Object.y + offsetY,
+  { fixed: false },
 );
 const angle30 = Math.PI / 6;
 const angled = line("L_ANGLE_30", 1150, -300, 1150 + 500 * Math.cos(angle30), -300 + 500 * Math.sin(angle30));
 const coincidentA = line("L_COIN_A", -300, 650, -200, 700);
 const coincidentB = line("L_COIN_B", -300, 650, -250, 780);
+const pointOnLineProbe = line("L_POINT_ON_LINE_PROBE", 300, 0, 318, 19, { construction: true });
 
 addConstraint({ type: "horizontal", line: axisX.id });
 addConstraint({ type: "vertical", line: axisY.id });
-addConstraint({ type: "horizontal", line: top.id });
 addConstraint({ type: "horizontal", line: bottom.id });
-addConstraint({ type: "horizontal", line: tiny.id });
-addConstraint({ type: "vertical", line: micro.id });
 addConstraint({ type: "parallel", line1: axisX.id, line2: top.id });
-addConstraint({ type: "perpendicular", line1: axisX.id, line2: axisY.id });
 addConstraint({ type: "parallel", line1: diag45A.id, line2: diag45B.id });
 addConstraint({ type: "perpendicular", line1: diag45A.id, line2: diagNeg.id });
 addConstraint({ type: "equalLength", line1: diag45A.id, line2: diag45B.id });
@@ -160,10 +187,10 @@ addConstraint({ type: "equalLength", line1: equalA.id, line2: equalB.id });
 addConstraint({ type: "collinear", line1: axisX.id, line2: colA.id });
 addConstraint({ type: "collinear", line1: colA.id, line2: colB.id });
 addConstraint({ type: "lineAngle", line1: axisX.id, line2: angled.id, target: angle30 });
-addConstraint({ type: "pointHorizontal", p1: top.p1, p2: top.p2 });
-addConstraint({ type: "pointVertical", p1: axisY.p1, p2: axisY.p2 });
+addConstraint({ type: "pointHorizontal", p1: tiny.p1, p2: tiny.p2 });
+addConstraint({ type: "pointVertical", p1: micro.p1, p2: micro.p2 });
 addConstraint({ type: "coincident", p1: coincidentA.p1, p2: coincidentB.p1 });
-addConstraint({ type: "pointOnLine", point: colB.p1, line: axisX.id });
+addConstraint({ type: "pointOnLine", point: pointOnLineProbe.p1, line: axisX.id });
 addConstraint({ type: "pointOnLineMidpoint", point: midpointProbe.p1, line: midSupport.id });
 addConstraint({ type: "distance", p1: equalA.p1, p2: equalA.p2, target: lineLength(equalA) });
 addConstraint({ type: "pointAxisDistance", p1: equalA.p1, p2: equalA.p2, axis: "x", sign: 1, target: 120 });
@@ -182,12 +209,12 @@ const circleSpecs = [
   ["C_OFFSET", -920, -560, 70, null],
   ["C_TANGENT", -520, -320, 55, null],
   ["C_EXT_A", 100, -520, 80, "diameterDimension"],
-  ["C_EXT_B", 230, -520, 50, "radiusDimension"],
+  ["C_EXT_B", 230, -520, 50, null],
   ["C_INT_A", 520, -470, 140, "radiusDimension"],
-  ["C_INT_B", 610, -470, 50, "diameterDimension"],
+  ["C_INT_B", 610, -470, 50, null],
   ["C_HUGE", 900, 160, 420, "diameterDimension"],
   ["C_CONCENTRIC", 900, 160, 210, "radiusDimension"],
-  ["C_NEAR", 1425, 160, 105, "radiusDimension"],
+  ["C_NEAR", 1425, 160, 105, null],
 ];
 
 for (const [id, x, y, radius, mode] of circleSpecs) {
@@ -260,15 +287,15 @@ const fixedArcSpecs = [
   ["A_TINY", 1130, 500, 5, 0.2, 0.3221730476],
   ["A_HUGE", -520, -40, 520, -Math.PI / 2, Math.PI],
   ["A_NEAR_FULL", 500, -40, 190, Math.PI / 180, 359 * Math.PI / 180],
-  ["A_SHARED_1", 1000, -520, 100, 0, Math.PI / 2],
-  ["A_SHARED_2", 1100, -420, 100, Math.PI, 3 * Math.PI / 2],
+  ["A_SHARED_1", 1000, -520, 100, 0, Math.PI / 2, { freeEnd: true }],
+  ["A_SHARED_2", 1100, -420, 100, Math.PI, 3 * Math.PI / 2, { freeStart: true }],
   ["A_OBTUSE", -1050, -220, 230, -2.7, 0.35],
   ["A_ACUTE", -620, -350, 11, 1.1, 1.17],
   ["A_REVERSED", 1100, 700, 280, 5.5, 1.2],
 ];
 
-for (const [id, x, y, radius, startAngle, endAngle] of fixedArcSpecs) {
-  arc(id, arcCenter(id, x, y), radius, startAngle, endAngle, "fixed");
+for (const [id, x, y, radius, startAngle, endAngle, options] of fixedArcSpecs) {
+  arc(id, arcCenter(id, x, y), radius, startAngle, endAngle, "fixed", options);
 }
 
 addConstraint({ type: "arcEndpointArcEndpointCoincident", a: "A_SHARED_1", endpointA: "end", b: "A_SHARED_2", endpointB: "start" });
@@ -329,13 +356,16 @@ casePlan(
 casePlan(
   "shared-arc-endpoint-multiple",
   [
-    selector("arcEndpointFixed", { arc: "A_SHARED_1", endpoint: "end" }),
-    selector("arcEndpointFixed", { arc: "A_SHARED_2", endpoint: "start" }),
     selector("arcEndpointCoincident", { arc: "A_SHARED_1", endpoint: "end", point: sharedPoint.p1 }),
     selector("arcEndpointArcEndpointCoincident", { a: "A_SHARED_1", endpointA: "end", b: "A_SHARED_2", endpointB: "start" }),
   ],
   [{ kind: "arc-endpoint", id: "A_SHARED_1", endpoint: "end" }, { kind: "arc-endpoint", id: "A_SHARED_2", endpoint: "start" }],
 );
+
+// Design relationships are intentionally serialized before absolute anchors.
+// This keeps relation constraints meaningful instead of making them redundant
+// behind an earlier line/endpoint fix.
+for (const constraint of anchorConstraints) addConstraint(constraint);
 
 fs.mkdirSync(path.dirname(outputPath), { recursive: true });
 fs.writeFileSync(outputPath, `${JSON.stringify(data, null, 2)}\n`, "utf8");

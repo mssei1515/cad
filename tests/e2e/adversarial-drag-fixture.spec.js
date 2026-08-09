@@ -109,16 +109,18 @@ test("adversarial mixed-scale fixture is completely constrained", async ({ page 
   await page.waitForFunction(() => window.__cadTest);
   await page.evaluate((data) => window.__cadTest.importDocumentNameFixture(data, "意地悪ドラッグ完全拘束.json"), fixture);
   const analysis = await page.evaluate(() => window.__cadTest.constraintAnalysisForTest());
+  const duplicateLabels = await page.locator(".constraint-item.duplicate").allTextContents();
 
   expect(analysis.stable).toBe(true);
   expect(analysis.errorNorm).toBeLessThan(1e-4);
   expect(analysis.freeVariableCount).toBe(0);
+  expect(duplicateLabels, `redundant constraints: ${JSON.stringify(duplicateLabels)}`).toEqual([]);
   expect(analysis).toEqual(expect.objectContaining({
-    pointCount: 118,
-    lineCount: 59,
+    pointCount: 120,
+    lineCount: 60,
     circleCount: 13,
     arcCount: 15,
-    constraintCount: 149,
+    constraintCount: 140,
   }));
 });
 
