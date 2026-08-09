@@ -5507,6 +5507,11 @@
     }
     while (queue.length > 0) {
       const node = queue.shift();
+      // A fixed point is a kinematic boundary: it contributes a constant to
+      // constraints on either side, but motion cannot propagate through it to
+      // otherwise independent geometry. Stopping here keeps large anchored
+      // sketches local during interactive dragging.
+      if (node instanceof Point && node.fixed) continue;
       for (const next of adjacency.get(node) || []) {
         if (seen.has(next)) continue;
         seen.add(next);
@@ -5545,7 +5550,11 @@
   }
 
   function localSolveConstraints(component, sketchId = activeSketchId()) {
-    return model.constraints.filter((constraint) => constraintIsOperational(constraint) && constraintSketchId(constraint) === sketchId && constraintGraphNodes(constraint).some((node) => component.has(node)));
+    return model.constraints.filter((constraint) =>
+      constraintIsOperational(constraint)
+      && constraintSketchId(constraint) === sketchId
+      && constraintGraphNodes(constraint).some((node) => component.has(node) && !(node instanceof Point && node.fixed)),
+    );
   }
 
   function localSolveLines(component, sketchId = activeSketchId()) {
@@ -5613,6 +5622,19 @@
   function solveFinalDragSession(session) {
     const extra = session?.finalDragConstraints || [];
     if (session?.lastGuidedPreviewError > CONSTRAINT_ACCEPT_ERROR) {
+      // Mouse-up is allowed a larger local iteration budget than an animation
+      // frame. This removes accumulated preview error without invoking the
+      // much heavier full-sketch solve for an otherwise isolated component.
+      const localResult = withSolverMaxIterations(100, () => solveLocalDrag(session, []));
+      if (localResult) {
+        const baseErrorNorm = vectorNorm(solver.computeErrorVectorForConstraints(sketchSolveConstraints(session?.sketchId || activeSketchId())));
+        localResult.baseErrorNorm = baseErrorNorm;
+        localResult.localFinalCorrection = true;
+        if (localResult.success || baseErrorNorm <= CONSTRAINT_ACCEPT_ERROR) {
+          localResult.success = true;
+          return localResult;
+        }
+      }
       const result = solveDragSketch(session);
       result.guidedFinalFallback = true;
       return result;
@@ -8768,8 +8790,8 @@
     }
   }
 
-  function updateUI() {
-    refreshConstraintAnalysis();
+  function updateUI({ refreshAnalysis = true } = {}) {
+    if (refreshAnalysis) refreshConstraintAnalysis();
     updateDocumentNameUI();
     updatePresentationUI();
     updateToolbar();
@@ -9882,6 +9904,16 @@
     }
   }
 
+  function withSolverMaxIterations(maxIterations, callback) {
+    const previous = solver.maxIterations;
+    solver.maxIterations = Math.max(previous, maxIterations);
+    try {
+      return callback();
+    } finally {
+      solver.maxIterations = previous;
+    }
+  }
+
   function solveDragWithFallback(session, extra, fullSolve, restoreState = null) {
     const stepNorm = dragStepNormForExtra(extra);
     const localResult = withDragStepNorm(stepNorm, () => solveLocalDrag(session, extra));
@@ -9934,7 +9966,21 @@
       if (scale < 1) solver.restore(guidedAttemptState);
       localResult = withDragStepNorm(stepNorm, () => solveLocalGuidedDrag(session, targets, targetStep.norm * scale));
       localAcceptError = Number.isFinite(localResult?.acceptError) ? localResult.acceptError : CONSTRAINT_ACCEPT_ERROR;
-      if (localResult && localResult.success && localResult.errorNorm <= localAcceptError) break;
+      const locallyAcceptable = localResult
+        && Number.isFinite(localResult.errorNorm)
+        && localResult.errorNorm <= localAcceptError;
+      if (locallyAcceptable) {
+        // The nonlinear correction can exhaust its strict iteration budget
+        // after already reaching the looser, screen-space preview tolerance.
+        // Keep that visually valid local result; a full-document fallback is
+        // both slower and less likely to converge during a sparse drag event.
+        if (!localResult.success) {
+          localResult.success = true;
+          localResult.approximate = true;
+          localResult.reason = "プレビュー許容誤差内";
+        }
+        break;
+      }
       guidedRetryCount += 1;
     }
     if (localResult && localResult.success && localResult.errorNorm <= localAcceptError) {
@@ -11300,7 +11346,9 @@
       canvas.setPointerCapture(e.pointerId);
     }
 
-    updateUI();
+    // Selection does not change the model, so keep the most recent constraint
+    // analysis instead of repeating the expensive redundancy scan.
+    updateUI({ refreshAnalysis: false });
     draw();
   });
 
@@ -12501,6 +12549,31 @@
           title: document.title,
         };
       },
+      loadDocumentFixtureForDragTest(data, fileName = "drag-fixture.json") {
+        try {
+          loadModelData(structuredClone(data), { documentNameOverride: fileNameStem(fileName) });
+          return { success: true, constraintCount: model.constraints.length };
+        } catch (error) {
+          return { success: false, error: error.message };
+        }
+      },
+      selectPointForTest(id) {
+        const point = model.points.find((candidate) => candidate.id === id);
+        if (!point) return null;
+        const startedAt = performance.now();
+        clearSelection();
+        selectedPoints = [point];
+        const session = buildDragSession("point", point, { x: point.x, y: point.y });
+        if (session) attachLocalSolveContext(session);
+        updateUI({ refreshAnalysis: false });
+        draw();
+        return {
+          elapsedMs: performance.now() - startedAt,
+          selectedPointIds: selectedPoints.map((candidate) => candidate.id),
+          localVariableCount: session?.local?.variables?.length || 0,
+          localConstraintCount: session?.local?.constraints?.length || 0,
+        };
+      },
       guidedPointDragForTest(id, dx, dy) {
         const point = model.points.find((item) => item.id === id);
         if (!point) return null;
@@ -12664,6 +12737,9 @@
             projectedErrorNorm: result.projectedErrorNorm,
             targetErrorNorm: result.targetErrorNorm,
             freeDof: result.freeDof,
+            variableCount: result.variableCount,
+            constraintCount: result.constraintCount,
+            guidedRetryCount: result.guidedRetryCount,
             reason: result.reason,
             local: result.local,
             guided: result.guided,
@@ -12700,6 +12776,20 @@
           lines: sketchSolveLines(sketchId),
           errorTolerance: CONSTRAINT_ACCEPT_ERROR,
         });
+        const largestConstraintErrors = constraints
+          .map((constraint, index) => {
+            const error = constraint.error();
+            const values = Array.isArray(error) ? error : [error];
+            return {
+              index,
+              name: constraint.name,
+              type: constraint.constructor.name,
+              errorNorm: vectorNorm(values),
+            };
+          })
+          .filter((entry) => entry.errorNorm > 1e-8)
+          .sort((a, b) => b.errorNorm - a.errorNorm)
+          .slice(0, 12);
         return {
           stable: analysis.stable,
           errorNorm: analysis.errorNorm,
@@ -12711,6 +12801,7 @@
           lineCount: model.lines.filter((line) => elementSketchId(line) === sketchId).length,
           circleCount: model.circles.filter((circle) => elementSketchId(circle) === sketchId).length,
           arcCount: model.arcs.filter((arc) => elementSketchId(arc) === sketchId).length,
+          largestConstraintErrors,
         };
       },
       resetForPresentationDrag() {

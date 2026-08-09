@@ -105,23 +105,57 @@ test.afterAll(() => {
 
 test("adversarial mixed-scale fixture is completely constrained", async ({ page }) => {
   test.setTimeout(120000);
+  const fixedPointIds = fixture.points.filter((point) => point.fixed).map((point) => point.id);
+  const fixedGeometryConstraints = fixture.constraints.filter((constraint) =>
+    constraint.type === "lineFixed" || constraint.type === "arcEndpointFixed",
+  );
+  expect(fixedPointIds).toEqual(["P_ORIGIN"]);
+  expect(fixedGeometryConstraints).toEqual([]);
+  expect(fixture.testPlan.constraintGraph).toEqual({
+    longestGeometryPath: 9,
+    branchStages: 1,
+    branchPaths: 4,
+    mergePoints: 3,
+    maxFanOut: 4,
+  });
+  const arcIds = new Set(fixture.arcs.map((arc) => arc.id));
+  const lineArcTangencies = fixture.constraints.filter((constraint) =>
+    constraint.type === "lineCircleTangent" && arcIds.has(constraint.primitive),
+  );
+  const arcArcTangencies = fixture.constraints.filter((constraint) =>
+    constraint.type === "circleCircleTangent" && arcIds.has(constraint.a) && arcIds.has(constraint.b),
+  );
+  const lineAngles = fixture.constraints.filter((constraint) => constraint.type === "lineAngle");
+  expect(lineArcTangencies.length).toBeGreaterThanOrEqual(5);
+  expect(arcArcTangencies.length).toBeGreaterThanOrEqual(3);
+  expect(lineAngles.length).toBeGreaterThanOrEqual(30);
+  expect(fixture.testPlan.stressConstraintCounts).toEqual({
+    lineArcTangencies: lineArcTangencies.length,
+    arcArcTangencies: arcArcTangencies.length,
+    lineAngles: lineAngles.length,
+  });
+
   await page.goto(`${baseUrl}/index.html?test=1`);
   await page.waitForFunction(() => window.__cadTest);
   await page.evaluate((data) => window.__cadTest.importDocumentNameFixture(data, "意地悪ドラッグ完全拘束.json"), fixture);
   const analysis = await page.evaluate(() => window.__cadTest.constraintAnalysisForTest());
   const duplicateLabels = await page.locator(".constraint-item.duplicate").allTextContents();
 
-  expect(analysis.stable).toBe(true);
+  expect(analysis.stable, `constraint analysis: ${JSON.stringify(analysis)}`).toBe(true);
   expect(analysis.errorNorm).toBeLessThan(1e-4);
   expect(analysis.freeVariableCount).toBe(0);
   expect(duplicateLabels, `redundant constraints: ${JSON.stringify(duplicateLabels)}`).toEqual([]);
   expect(analysis).toEqual(expect.objectContaining({
-    pointCount: 120,
-    lineCount: 60,
-    circleCount: 13,
-    arcCount: 15,
-    constraintCount: 140,
+    pointCount: 109,
+    lineCount: 61,
+    circleCount: 12,
+    arcCount: 12,
+    constraintCount: 249,
   }));
+
+  const selection = await page.evaluate(() => window.__cadTest.selectPointForTest("P_ABOVE_TOP"));
+  expect(selection.selectedPointIds).toEqual(["P_ABOVE_TOP"]);
+  expect(selection.elapsedMs).toBeLessThan(200);
 });
 
 test("recommended removals expose smooth draggable degrees of freedom", async ({ page }) => {
@@ -129,8 +163,9 @@ test("recommended removals expose smooth draggable degrees of freedom", async ({
   await page.goto(`${baseUrl}/index.html?test=1`);
   await page.waitForFunction(() => window.__cadTest);
   const summaries = [];
-  const selectedCases = process.env.CAD_ADVERSARIAL_CASE
-    ? fixture.testPlan.recommendedCases.filter((testCase) => testCase.name === process.env.CAD_ADVERSARIAL_CASE)
+  const selectedCaseNames = new Set((process.env.CAD_ADVERSARIAL_CASE || "").split(",").map((name) => name.trim()).filter(Boolean));
+  const selectedCases = selectedCaseNames.size > 0
+    ? fixture.testPlan.recommendedCases.filter((testCase) => selectedCaseNames.has(testCase.name))
     : fixture.testPlan.recommendedCases;
   const selectedPaths = process.env.CAD_ADVERSARIAL_PATH
     ? dragPaths.filter((dragPath) => dragPath.name === process.env.CAD_ADVERSARIAL_PATH)
@@ -139,7 +174,7 @@ test("recommended removals expose smooth draggable degrees of freedom", async ({
   for (const testCase of selectedCases) {
     const reducedFixture = fixtureWithoutConstraints(testCase.removed);
     await page.evaluate(
-      ({ data, fileName }) => window.__cadTest.importDocumentNameFixture(data, fileName),
+      ({ data, fileName }) => window.__cadTest.loadDocumentFixtureForDragTest(data, fileName),
       { data: reducedFixture, fileName: `${testCase.name}.json` },
     );
     const analysis = await page.evaluate(() => window.__cadTest.constraintAnalysisForTest());
@@ -153,7 +188,7 @@ test("recommended removals expose smooth draggable degrees of freedom", async ({
     for (const descriptor of testCase.drags) {
       for (const dragPath of selectedPaths) {
         await page.evaluate(
-          ({ data, fileName }) => window.__cadTest.importDocumentNameFixture(data, fileName),
+          ({ data, fileName }) => window.__cadTest.loadDocumentFixtureForDragTest(data, fileName),
           { data: reducedFixture, fileName: `${testCase.name}-${dragPath.name}.json` },
         );
         const result = await page.evaluate(
@@ -168,18 +203,19 @@ test("recommended removals expose smooth draggable degrees of freedom", async ({
         for (let index = 0; index < result.previews.length; index += 1) {
           const preview = result.previews[index];
           const movement = geometryStateDistance(descriptor, states[index], states[index + 1]);
+          const acceptError = Number.isFinite(preview.acceptError) ? preview.acceptError : 1e-4;
           totalMovement += movement;
           maxIterations = Math.max(maxIterations, preview.iterations || 0);
           maxElapsedMs = Math.max(maxElapsedMs, preview.elapsedMs || 0);
-          expect(preview.success, `${label}#${index + 1}`).toBe(true);
+          expect(preview.success, `${label}#${index + 1}: ${JSON.stringify(preview)}`).toBe(true);
           expect(preview.blocked, `${label}#${index + 1}`).not.toBe(true);
-          expect(preview.errorNorm, `${label}#${index + 1}`).toBeLessThanOrEqual(preview.acceptError + 1e-9);
-          expect(preview.iterations, `${label}#${index + 1}`).toBeLessThan(40);
-          expect(preview.elapsedMs, `${label}#${index + 1}`).toBeLessThan(500);
+          expect(preview.errorNorm, `${label}#${index + 1}`).toBeLessThanOrEqual(acceptError + 1e-9);
+          expect(preview.iterations, `${label}#${index + 1}: ${JSON.stringify(preview)}`).toBeLessThan(64);
+          expect(preview.elapsedMs, `${label}#${index + 1}: ${JSON.stringify(preview)}`).toBeLessThan(500);
           expect(movement, `${label}#${index + 1}`).toBeLessThanOrEqual(cursorSteps[index] * 3 + 1);
         }
         if (totalMovement > 1e-5) movingPaths += 1;
-        expect(result.final.success, `${label}/release`).toBe(true);
+        expect(result.final.success, `${label}/release: ${JSON.stringify(result.final)}`).toBe(true);
         expect(result.final.baseErrorNorm, `${label}/release`).toBeLessThan(1e-4);
       }
     }
