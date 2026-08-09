@@ -651,7 +651,7 @@ test("sketch deletion removes its subtree and active sketch siblings remain visi
 
   const sibling = await page.evaluate(() => window.__cadTest.resetForSiblingVisibility());
   expect(sibling.visible).toBe(true);
-  expect(sibling.relation).toBe("reference");
+  expect(sibling.relation).toBe("inactive");
   expect(sibling.strokeWidth).toBe(1.8);
   expect(sibling.color).toBe("#cbd5e1");
   expect(sibling.rowHasVisibleClass).toBe(true);
@@ -684,9 +684,9 @@ test("non-active sketches are visible unless individually hidden", async ({ page
   await page.waitForFunction(() => window.__cadTest);
 
   const setup = await page.evaluate(() => window.__cadTest.resetForSiblingSubtreeReference());
-  expect(setup.relations).toEqual({ S10: "reference", S2: "reference", S3: "reference", S4: "reference", S9: "reference", S11: "descendant" });
-  expect(setup.relationLabels).toEqual({ S9: "参照可", S11: "参照不可（子孫）" });
-  expect(setup.relationColors).toEqual({ S9: "#1d4ed8", S11: "#b91c1c" });
+  expect(setup.relations).toEqual({ S10: "reference", S2: "inactive", S3: "inactive", S4: "inactive", S9: "inactive", S11: "descendant" });
+  expect(setup.relationLabels).toEqual({ S9: "参照不可", S11: "参照不可（子孫）" });
+  expect(setup.relationColors).toEqual({ S9: "#64748b", S11: "#b91c1c" });
   expect(setup.visible).toEqual({ S10: true, S2: true, S3: true, S4: true, S9: true, S11: true });
   expect(setup.rowClasses).toEqual({ S2: true, S3: true, S4: true, S9: true, S11: true });
   expect(setup.rowBackgrounds.S2).toBe("rgba(0, 0, 0, 0)");
@@ -761,7 +761,7 @@ test("ancestor point and active line can receive a coincidence constraint in eit
   expect(state.sketchIds).toEqual(["S2"]);
 });
 
-test("sibling geometry can be referenced without being moved by the active sketch", async ({ page }) => {
+test("sibling geometry is visible but cannot be referenced", async ({ page }) => {
   await page.goto(`${baseUrl}/index.html?test=1`);
   await page.waitForFunction(() => window.__cadTest);
 
@@ -770,22 +770,11 @@ test("sibling geometry can be referenced without being moved by the active sketc
   await page.mouse.click(points.siblingLine.x, points.siblingLine.y);
   await page.mouse.click(points.activePoint.x, points.activePoint.y);
 
-  let state = await page.evaluate(() => window.__cadTest.referencePointLineState());
-  expect(state.count).toBe(1);
-  expect(state.errors[0]).toBeLessThan(1e-5);
-  expect(state.referenceSketchIds).toEqual(["S2"]);
-  expect(state.sketchIds).toEqual(["S1"]);
-
-  state = await page.evaluate(() => window.__cadTest.moveSiblingReferenceLine(25));
-  expect(state.success).toBe(true);
-  expect(state.dependentSketchIds).toEqual(["S1"]);
-  expect(state.siblingLine.p1.y).toBeCloseTo(25, 6);
-  expect(state.siblingLine.p2.y).toBeCloseTo(25, 6);
-  expect(state.activePoint.y).toBeCloseTo(25, 5);
-  expect(state.reverseWouldCycle).toBe(true);
+  const state = await page.evaluate(() => window.__cadTest.referencePointLineState());
+  expect(state.count).toBe(0);
 });
 
-test("sibling descendants are read-only reference sources and protect their branch from deletion", async ({ page }) => {
+test("sibling descendants and unrelated sketches cannot be referenced", async ({ page }) => {
   await page.goto(`${baseUrl}/index.html?test=1`);
   await page.waitForFunction(() => window.__cadTest);
 
@@ -795,30 +784,14 @@ test("sibling descendants are read-only reference sources and protect their bran
   await page.mouse.click(points.activePoint.x, points.activePoint.y);
 
   let state = await page.evaluate(() => window.__cadTest.referencePointLineState());
-  expect(state.count).toBe(1);
-  expect(state.errors[0]).toBeLessThan(1e-5);
-  expect(state.referenceSketchIds).toEqual(["S4"]);
-  expect(state.sketchIds).toEqual(["S1"]);
-
-  state = await page.evaluate(() => window.__cadTest.moveSiblingSubtreeReferenceLine(25));
-  expect(state.success).toBe(true);
-  expect(state.dependentSketchIds).toEqual(["S1"]);
-  expect(state.line.p1.y).toBeCloseTo(65, 6);
-  expect(state.line.p2.y).toBeCloseTo(65, 6);
-  expect(state.point.y).toBeCloseTo(65, 5);
-
-  expect(await page.evaluate(() => window.__cadTest.deleteSketchForTest("S2"))).toBe(false);
-  expect(await page.evaluate(() => window.__cadTest.sketchVisibilityState("S4").preferenceVisible)).toBe(true);
+  expect(state.count).toBe(0);
 
   const unrelated = await page.evaluate(() => window.__cadTest.resetForSiblingSubtreeReference());
   await page.click('[data-constraint="coincident"]');
   await page.mouse.click(unrelated.unrelatedLine.x, unrelated.unrelatedLine.y);
   await page.mouse.click(unrelated.activePoint.x, unrelated.activePoint.y);
   state = await page.evaluate(() => window.__cadTest.referencePointLineState());
-  expect(state.count).toBe(1);
-  expect(state.errors[0]).toBeLessThan(1e-5);
-  expect(state.referenceSketchIds).toEqual(["S9"]);
-  expect(state.sketchIds).toEqual(["S1"]);
+  expect(state.count).toBe(0);
 
   const descendant = await page.evaluate(() => window.__cadTest.resetForSiblingSubtreeReference());
   await page.click('[data-constraint="coincident"]');
@@ -828,7 +801,7 @@ test("sibling descendants are read-only reference sources and protect their bran
   expect(state.count).toBe(0);
 });
 
-test("reference dependents solve in topological order and cyclic loaded references are disabled", async ({ page }) => {
+test("reference dependents solve in topological order and out-of-scope loaded references are disabled", async ({ page }) => {
   await page.goto(`${baseUrl}/index.html?test=1`);
   await page.waitForFunction(() => window.__cadTest);
 
@@ -839,8 +812,8 @@ test("reference dependents solve in topological order and cyclic loaded referenc
 
   const cycle = await page.evaluate(() => window.__cadTest.cyclicReferenceLoadCase());
   expect(cycle.total).toBe(2);
-  expect(cycle.operational).toBe(1);
-  expect(cycle.invalid).toEqual(["循環参照"]);
+  expect(cycle.operational).toBe(0);
+  expect(cycle.invalid).toHaveLength(2);
   expect(cycle.badges).toBeGreaterThan(0);
 });
 

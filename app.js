@@ -1185,11 +1185,25 @@
     return result;
   }
 
+  function ancestorSketchIds(sketchId) {
+    const result = [];
+    const visited = new Set([sketchId]);
+    let current = sketchById(sketchId);
+    while (current?.parentSketchId && !visited.has(current.parentSketchId)) {
+      const parent = sketchById(current.parentSketchId);
+      if (!parent) break;
+      visited.add(parent.id);
+      if (isDrawableSketch(parent)) result.push(parent.id);
+      current = parent;
+    }
+    return result;
+  }
+
   function isReferenceSourceSketchId(referenceSketchId, subjectSketchId = activeSketchId()) {
     if (!referenceSketchId || !subjectSketchId) return false;
     if (!isDrawableSketch(referenceSketchId)) return false;
     if (referenceSketchId === subjectSketchId) return false;
-    return !descendantSketchIds(subjectSketchId).includes(referenceSketchId);
+    return ancestorSketchIds(subjectSketchId).includes(referenceSketchId);
   }
 
   function referenceSourceSketchIds(subjectSketchId = activeSketchId()) {
@@ -1379,7 +1393,7 @@
     if (id === activeSketchId()) return "active";
     if (descendantSketchIds(activeSketchId()).includes(id)) return "descendant";
     if (isReferenceSourceSketchId(id)) return "reference";
-    return "hidden";
+    return "inactive";
   }
 
   function sketchRelationOfElement(item) {
@@ -1844,7 +1858,7 @@
   function sketchStrokeWidth(item) {
     const relation = sketchRelationOfElement(item);
     if (relation === "active") return 2.6;
-    if (relation === "reference" || relation === "descendant") return 1.8;
+    if (relation === "reference" || relation === "descendant" || relation === "inactive") return 1.8;
     return 0;
   }
 
@@ -1896,7 +1910,7 @@
   function sketchAlpha(item) {
     const relation = sketchRelationOfElement(item);
     if (relation === "active") return 1;
-    if (relation === "reference" || relation === "descendant") return 1;
+    if (relation === "reference" || relation === "descendant" || relation === "inactive") return 1;
     return 0;
   }
 
@@ -7040,6 +7054,7 @@
     const relation = sketchRelationToActive(sketchId);
     if (relation === "reference") return "参照可";
     if (relation === "descendant") return "参照不可（子孫）";
+    if (relation === "inactive") return "参照不可";
     return "";
   }
 
@@ -9068,7 +9083,7 @@
 
   function commitReferenceConstraint(type, constraint, referenceSketchId, sketchId = activeSketchId()) {
     if (!constraint || !isReferenceSourceSketchId(referenceSketchId, sketchId)) {
-      const msg = descendantSketchIds(sketchId).includes(referenceSketchId) ? "子孫スケッチは参照できません" : "参照可能な非下位スケッチのみ参照できます";
+      const msg = descendantSketchIds(sketchId).includes(referenceSketchId) ? "子孫スケッチは参照できません" : "先祖スケッチのみ参照できます";
       setHint(msg, "error");
       log(msg);
       return false;
@@ -9290,7 +9305,7 @@
 
   function referenceResolutionFromOperands(type, operands) {
     const { active, reference } = splitConstraintOperands(operands);
-    if (active.length !== 1 || reference.length !== 1) return { error: "参照拘束はアクティブスケッチ側1つと参照可能スケッチ側1つを選択してください" };
+    if (active.length !== 1 || reference.length !== 1) return { error: "参照拘束はアクティブスケッチ側1つと先祖スケッチ側1つを選択してください" };
     return constraintResolutionFromSubjectAndReference(type, subjectFromOperand(active[0]), referenceTargetFromOperand(reference[0]));
   }
 
@@ -9321,12 +9336,12 @@
     if (descendant.length > 0) return { error: "子孫スケッチは参照できません" };
     if (reference.length > 0) {
       if (cleanOperands.length < 2 || active.length === 0) return null;
-      if (cleanOperands.length !== 2) return { error: "参照拘束はアクティブスケッチ側と参照可能スケッチ側を1つずつ選択してください" };
+      if (cleanOperands.length !== 2) return { error: "参照拘束はアクティブスケッチ側と先祖スケッチ側を1つずつ選択してください" };
       const resolution = referenceResolutionFromOperands(type, cleanOperands);
       if (type === "distance" && resolution?.target) return { ...resolution, action: "place-dimension", operands: cleanOperands };
       return resolution?.constraint ? { ...resolution, action: "commit", operands: cleanOperands } : resolution;
     }
-    if (active.length !== cleanOperands.length) return { error: "拘束対象はアクティブスケッチ、または参照可能スケッチだけを選択できます" };
+    if (active.length !== cleanOperands.length) return { error: "拘束対象はアクティブスケッチ、または先祖スケッチだけを選択できます" };
     const sketchIds = [...new Set(cleanOperands.map((operand) => operand.sketchId))];
     if (sketchIds.length > 1) return { error: "別スケッチ同士は通常拘束できません" };
     if (type === "distance") {
@@ -9352,7 +9367,7 @@
       return { error: "アクティブスケッチ側の対象を選択してください" };
     }
     if (!referenceTarget || !referenceSketchId) {
-      return { error: referenceTarget?.sketchId && descendantSketchIds(subjectSketchId).includes(referenceTarget.sketchId) ? "子孫スケッチは参照できません" : "参照可能な非下位スケッチのみ参照できます" };
+      return { error: referenceTarget?.sketchId && descendantSketchIds(subjectSketchId).includes(referenceTarget.sketchId) ? "子孫スケッチは参照できません" : "先祖スケッチのみ参照できます" };
     }
     if (wouldCreateReferenceCycle(subjectSketchId, referenceSketchId)) {
       return { error: "スケッチ間の参照が循環するため追加できません" };
@@ -13400,19 +13415,15 @@
         resetModelState();
         setAppMode("geometry");
         const parentSketchId = "S10";
-        const siblingSketchId = "S2";
-        const sourceSketchId = "S4";
         const childSketchId = "S5";
         sketchById(DEFAULT_SKETCH_ID).parentSketchId = parentSketchId;
         model.sketches.push({ id: parentSketchId, name: "Sketch-P", parentSketchId: ROOT_SKETCH_ID, kind: "sketch", visible: true });
-        model.sketches.push({ id: siblingSketchId, name: "Sketch-S", parentSketchId, kind: "sketch", visible: true });
-        model.sketches.push({ id: sourceSketchId, name: "Sketch-S-1", parentSketchId: siblingSketchId, kind: "sketch", visible: true });
         model.sketches.push({ id: childSketchId, name: "Sketch-1-1", parentSketchId: DEFAULT_SKETCH_ID, kind: "sketch", visible: true });
-        model.activeSketchId = sourceSketchId;
+        model.activeSketchId = parentSketchId;
         const sourceLine = addLine(addPoint(-50, 0, true, "endpoint"), addPoint(50, 0, true, "endpoint"));
         model.activeSketchId = DEFAULT_SKETCH_ID;
         const activePoint = addPoint(0, 15, false, "explicit");
-        const first = markReferenceConstraint(new PointOnLineConstraint(activePoint, sourceLine), sourceSketchId, DEFAULT_SKETCH_ID);
+        const first = markReferenceConstraint(new PointOnLineConstraint(activePoint, sourceLine), parentSketchId, DEFAULT_SKETCH_ID);
         model.constraints.push(first);
         model.activeSketchId = childSketchId;
         const childPoint = addPoint(0, 30, false, "explicit");
@@ -13422,7 +13433,7 @@
         refreshReferenceConstraintValidity();
         sourceLine.p1.y = 25;
         sourceLine.p2.y = 25;
-        const result = solveReferenceDependentSketches(sourceSketchId);
+        const result = solveReferenceDependentSketches(parentSketchId);
         return {
           order: result.results.map((entry) => entry.sketchId),
           activePointY: activePoint.y,
