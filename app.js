@@ -9770,6 +9770,16 @@
     );
   }
 
+  function guidedTargetHasNoActivity(result) {
+    return Boolean(
+      result?.guided
+      && Array.isArray(result.targetConstraints)
+      && result.targetConstraints.length === 0
+      && Array.isArray(result.targetActivity)
+      && result.targetActivity.every((activity) => activity <= 1e-8)
+    );
+  }
+
   function arcEndpointDragTargets(session, pointer) {
     const prop = session.endpoint === "start" ? "startAngle" : "endAngle";
     const rawAngle = Math.atan2(pointer.y - session.item.center.y, pointer.x - session.item.center.x);
@@ -10068,7 +10078,7 @@
       let extra = parameterDragConstraintsFromTargets(targets);
       let retry = () => solveGuidedDragWithFallback(session, targets, extra, () => solveDragSketch(session, extra), dragState);
       result = retry();
-      if (!result.success && moveTargets.length > 0) {
+      if ((!result.success || guidedTargetHasNoActivity(result)) && moveTargets.length > 0) {
         solver.restore(state);
         session.activeMode = "move";
         targets = moveTargets;

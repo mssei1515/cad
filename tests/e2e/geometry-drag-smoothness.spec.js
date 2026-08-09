@@ -408,3 +408,28 @@ test("keeps additional point, line, circle, arc, and endpoint drags smooth", asy
   expect(summaries).toHaveLength(selectedVariants.length);
   expect(summaries.flatMap((summary) => summary.failures.map((failure) => `${summary.name}: ${failure}`))).toEqual([]);
 });
+
+test("moves arcs by their centers when an indirectly constrained radius has no drag freedom", async ({ page }) => {
+  test.setTimeout(120000);
+  await page.goto(`${baseUrl}/index.html?test=1`);
+  await page.waitForFunction(() => window.__cadTest);
+  const fixture = fixtureWithoutConstraints([
+    { type: "pointAxisDistance", p1: "P27", p2: "P46", axis: "x" },
+  ]);
+
+  for (const id of ["A1", "A2", "A5", "A6"]) {
+    await page.evaluate(
+      ({ data, fileName }) => window.__cadTest.loadDocumentFixtureForDragTest(data, fileName),
+      { data: fixture, fileName: `indirect-radius-${id}.json` },
+    );
+    const result = await page.evaluate(
+      ({ target, deltas }) => window.__cadTest.geometryDragPathForTest(target, deltas),
+      { target: { kind: "arc", id }, deltas: [[10, 0], [20, 0]] },
+    );
+    const centerMovement = pointDistance(result.startState.center, result.previews.at(-1).state.center);
+    expect(result.sessionAvailable, id).toBe(true);
+    expect(centerMovement, `${id}: ${JSON.stringify(result)}`).toBeGreaterThan(5);
+    expect(result.final.success, id).toBe(true);
+    expect(result.final.baseErrorNorm, id).toBeLessThan(1e-4);
+  }
+});
