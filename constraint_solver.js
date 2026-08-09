@@ -4,6 +4,17 @@
 
   const MIN_MODEL_LENGTH = 1e-6;
   const MIN_ORIENTATION_LENGTH = 1e-9;
+  const GUIDED_DRAG_BACKGROUND_WEIGHT = 1e-4;
+  const GUIDED_DRAG_TARGET_CONSTRAINT_WEIGHT = 1;
+  const GUIDED_DRAG_SINGLE_TARGET_MOTION_FACTOR = 1;
+  const GUIDED_DRAG_MULTI_TARGET_MOTION_FACTOR = 2;
+  const GUIDED_DRAG_ACTIVITY_TOLERANCE = 1e-4;
+  const GUIDED_DRAG_FAST_TARGET_STEP = 10;
+  const GUIDED_DRAG_FAST_MULTI_TARGET_TOLERANCE = 5e-2;
+  // Direct point coordinates stay precise during previews; curved multi-part
+  // motion uses the relaxed preview tolerance above and is solved exactly on
+  // pointer-up.
+  const GUIDED_DRAG_SMALL_ERROR_TOLERANCE = 1e-5;
 
   function hypot2(x, y) {
     return Math.sqrt(x * x + y * y);
@@ -827,7 +838,11 @@
         }
         basis.push(vector);
       }
-      return { active, rank, freeColumns, basis };
+      const stableBasis = LinearAlgebra.orthonormalizeVectors(basis);
+      const stableActive = Array.from({ length: n }, (_, index) =>
+        vectorNorm(stableBasis.map((basisVector) => basisVector[index])) > activityTolerance,
+      );
+      return { active: stableActive, rank, freeColumns, basis: stableBasis };
     }
 
     static nullspaceBasis(A, tolerance = 1e-9) {
@@ -853,13 +868,37 @@
       return basis;
     }
 
-    static projectOntoBasis(vector, basis) {
+    static orthonormalizeVectors(vectors, tolerance = 1e-10) {
+      const result = [];
+      for (const vector of vectors) {
+        const candidate = [...vector];
+        const originalNorm = vectorNorm(candidate);
+        // Re-orthogonalize once; RREF-derived null-space vectors can have very
+        // different scales and a single Gram-Schmidt pass loses accuracy.
+        for (let pass = 0; pass < 2; pass++) {
+          for (const basisVector of result) {
+            const coefficient = dot(candidate, basisVector);
+            for (let index = 0; index < candidate.length; index++) candidate[index] -= coefficient * basisVector[index];
+          }
+        }
+        const norm = vectorNorm(candidate);
+        if (norm <= tolerance * Math.max(1, originalNorm)) continue;
+        result.push(candidate.map((value) => value / norm));
+      }
+      return result;
+    }
+
+    static projectOntoBasis(vector, basis, weights = null) {
       const projected = Array(vector.length).fill(0);
       if (basis.length === 0) return projected;
-      const A = Array.from({ length: vector.length }, (_, r) => basis.map((b) => b[r]));
-      const coeffs = LinearAlgebra.solveLeastSquaresQR(A, vector);
-      for (let j = 0; j < basis.length; j++) {
-        for (let i = 0; i < projected.length; i++) projected[i] += basis[j][i] * coeffs[j];
+      const stableBasis = LinearAlgebra.orthonormalizeVectors(basis);
+      if (stableBasis.length === 0) return projected;
+      const weightAt = (index) => weights?.[index] ?? 1;
+      const A = Array.from({ length: vector.length }, (_, r) => stableBasis.map((b) => b[r] * weightAt(r)));
+      const weightedVector = vector.map((value, index) => value * weightAt(index));
+      const coeffs = LinearAlgebra.solveLeastSquaresQR(A, weightedVector);
+      for (let j = 0; j < stableBasis.length; j++) {
+        for (let i = 0; i < projected.length; i++) projected[i] += stableBasis[j][i] * coeffs[j];
       }
       return projected;
     }
@@ -1000,14 +1039,24 @@
       }
     }
 
-    limitStep(dx) {
+    limitStep(dx, maxNorm = this.maxStepNorm) {
       const n = vectorNorm(dx);
-      if (n <= this.maxStepNorm) return dx;
-      const scale = this.maxStepNorm / n;
+      if (n <= maxNorm) return dx;
+      const scale = maxNorm / n;
       return dx.map((v) => v * scale);
     }
 
-    solveCore(vars, constraints) {
+    variableMotionScale(variable) {
+      if (
+        (variable?.prop === "startAngle" || variable?.prop === "endAngle")
+        && Number.isFinite(variable?.object?.radiusValue)
+      ) {
+        return Math.max(MIN_MODEL_LENGTH, Math.abs(variable.object.radiusValue));
+      }
+      return 1;
+    }
+
+    solveCore(vars, constraints, tolerance = this.tolerance) {
       let lambda = this.initialLambda;
       let F = this.computeErrorVectorForConstraints(constraints);
       let errorNorm = vectorNorm(F);
@@ -1016,15 +1065,15 @@
       }
       if (vars.length === 0) {
         return {
-          success: errorNorm < this.tolerance,
+          success: errorNorm < tolerance,
           errorNorm,
           iterations: 0,
-          reason: errorNorm < this.tolerance ? "可動変数がありません" : "可動変数がなく拘束を満たせません",
+          reason: errorNorm < tolerance ? "可動変数がありません" : "可動変数がなく拘束を満たせません",
         };
       }
 
       for (let iter = 0; iter < this.maxIterations; iter++) {
-        if (errorNorm < this.tolerance) return { success: true, errorNorm, iterations: iter, reason: "収束しました" };
+        if (errorNorm < tolerance) return { success: true, errorNorm, iterations: iter, reason: "収束しました" };
 
         const state = this.clone(vars);
         const J = this.computeJacobianForConstraints(vars, F, constraints);
@@ -1098,31 +1147,189 @@
       return delta;
     }
 
-    solveSubsetGuided({ variables = [], constraints = [], targets = [], lines = [] } = {}) {
+    variableTargetMask(variables, targets = []) {
+      return variables.map((variable) => targets.some((target) =>
+        (target.point && target.point === variable.object && (variable.prop === "x" || variable.prop === "y")) ||
+        (target.object && target.object === variable.object && target.prop === variable.prop),
+      ));
+    }
+
+    independentTargetMask(variables, targetMask, desired, activity, retainedTargets = []) {
+      // Target coordinates form a local chart for the reachable drag motion. Keep
+      // only independent, well-conditioned rows so one DOF is not pinned by both x and y.
+      const selected = [];
+      let selectedRank = 0;
+      const retained = new Set(variables
+        .map((variable, index) => retainedTargets.some((target) => target.object === variable.object && target.prop === variable.prop) ? index : -1)
+        .filter((index) => index >= 0));
+      const candidates = targetMask
+        .map((targeted, index) => targeted && activity.active[index] ? index : -1)
+        .filter((index) => index >= 0)
+        .sort((a, b) => {
+          const retainedDifference = Number(retained.has(b)) - Number(retained.has(a));
+          if (retainedDifference !== 0) return retainedDifference;
+          const normAt = (index) => vectorNorm(activity.basis.map((basis) => basis[index]));
+          const normDifference = normAt(b) - normAt(a);
+          if (normDifference !== 0) return normDifference;
+          return Math.abs(desired[b]) - Math.abs(desired[a]);
+        });
+
+      for (const index of candidates) {
+        const rows = [...selected, index].map((variableIndex) => activity.basis.map((basis) => basis[variableIndex]));
+        const rank = LinearAlgebra.reducedRowEchelon(rows, 1e-8).rank;
+        if (rank <= selectedRank) continue;
+        selected.push(index);
+        selectedRank = rank;
+      }
+
+      const selectedSet = new Set(selected);
+      return targetMask.map((_, index) => selectedSet.has(index));
+    }
+
+    solveSubsetGuided({ variables = [], constraints = [], targets = [], lines = [], errorTolerance = 1e-4, activeTargetVariables = [], targetStepNorm = null } = {}) {
       this.syncLineOrientationHints([], constraints);
       const activeConstraints = this.constraintsWithLineMinimums(constraints, [], lines);
       const baseErrors = this.computeErrorVectorForConstraints(activeConstraints);
+      const startingErrorNorm = vectorNorm(baseErrors);
       const J = this.computeJacobianForConstraints(variables, baseErrors, activeConstraints);
       const desired = this.variableTargetDelta(variables, targets);
-      const basis = LinearAlgebra.nullspaceBasis(J, 1e-6);
-      const projected = LinearAlgebra.projectOntoBasis(desired, basis);
-      const limited = this.limitStep(projected);
-      this.applyDelta(variables, limited);
-      const projectedErrorNorm = vectorNorm(this.computeErrorVectorForConstraints(activeConstraints));
-      const startingErrorNorm = vectorNorm(baseErrors);
-      const acceptProjectedError = Math.max(this.tolerance, 1e-4, startingErrorNorm * 1.1 + 1e-9);
+      const targetMask = this.variableTargetMask(variables, targets);
+      const activity = LinearAlgebra.nullspaceActivity(J, 1e-8, GUIDED_DRAG_ACTIVITY_TOLERANCE);
+      const basis = activity.basis;
+      const activeTargetMask = this.independentTargetMask(variables, targetMask, desired, activity, activeTargetVariables);
+      const projectionTargetMask = targetMask.map((targeted, index) => targeted && activity.active[index]);
+      const targetActivity = targetMask.map((targeted, index) => targeted
+        ? vectorNorm(basis.map((basisVector) => basisVector[index]))
+        : 0);
+      const targetVariableCount = activeTargetMask.filter(Boolean).length;
+      if (targetVariableCount === 0) {
+        return {
+          success: true,
+          errorNorm: startingErrorNorm,
+          iterations: 0,
+          reason: "可動方向なし",
+          local: true,
+          guided: true,
+          variableCount: variables.length,
+          constraintCount: activeConstraints.length,
+          freeDof: basis.length,
+          targetActivity: targetActivity.filter((_, index) => targetMask[index]),
+          targetNorm: vectorNorm(desired),
+          projectedNorm: 0,
+          projectedErrorNorm: startingErrorNorm,
+          targetErrorNorm: 0,
+          acceptError: Math.max(this.tolerance, errorTolerance),
+          targetConstraints: [],
+          activeTargetVariables: [],
+        };
+      }
+      const motionScales = variables.map((variable) => this.variableMotionScale(variable));
+      const physicalDesired = desired.map((value, index) => value * motionScales[index]);
+      const physicalBasis = basis.map((basisVector) =>
+        basisVector.map((value, index) => value * motionScales[index]));
+      const weights = projectionTargetMask.map((targeted) => targeted ? 1 : GUIDED_DRAG_BACKGROUND_WEIGHT);
+      const physicalProjected = LinearAlgebra.projectOntoBasis(physicalDesired, physicalBasis, weights);
+      const componentScale = Math.sqrt(Math.max(1, variables.length / Math.max(1, targetVariableCount)));
+      // Near-singular null-space directions can turn a tiny pointer movement into
+      // enormous changes in remote geometry. A rigid component legitimately moves
+      // several variables, so scale with its size, but always keep that motion
+      // proportional to the actual cursor request.
+      const requestedTargetNorm = vectorNorm(physicalDesired);
+      const boundedTargetNorm = Number.isFinite(targetStepNorm) && targetStepNorm > 0
+        ? Math.min(requestedTargetNorm, targetStepNorm)
+        : requestedTargetNorm;
+      const motionFactor = targetVariableCount === 1
+        ? GUIDED_DRAG_SINGLE_TARGET_MOTION_FACTOR
+        : GUIDED_DRAG_MULTI_TARGET_MOTION_FACTOR;
+      const cursorScaledMaxNorm = boundedTargetNorm * componentScale * motionFactor;
+      const guidedMaxNorm = Math.min(this.maxStepNorm * componentScale, cursorScaledMaxNorm);
+      let limitedPhysical = this.limitStep(physicalProjected, guidedMaxNorm);
+      let limited = limitedPhysical.map((value, index) => value / motionScales[index]);
+      const relativeErrorLimit = Math.min(startingErrorNorm * 1.1 + 1e-9, errorTolerance * 2);
+      const acceptProjectedError = Math.max(this.tolerance, errorTolerance, relativeErrorLimit);
+      const projectionState = this.clone(variables);
+      const directPointTargetVariables = variables.filter((_, index) => activeTargetMask[index]);
+      const requestedPointTargets = targets.filter((target) => target.point).map((target) => target.point);
+      const preserveDirectPointTarget = directPointTargetVariables.length > 0
+        && directPointTargetVariables.every((variable) => variable.prop === "x" || variable.prop === "y")
+        && targets.length === requestedPointTargets.length
+        && new Set(requestedPointTargets).size === 1;
+      const requestedParameterTargets = targets.filter((target) => target.object).map((target) => target.object);
+      const preserveDirectBlockTarget = Boolean(requestedParameterTargets.length === targets.length
+        && new Set(requestedParameterTargets).size === 1
+        && requestedParameterTargets[0]?.definitionId);
+      const preserveDirectTarget = preserveDirectPointTarget || preserveDirectBlockTarget;
+      let projectionScale = 1;
+      let projectedErrors = [];
+      let projectedErrorNorm = Infinity;
+      // The null-space is a tangent approximation. On strongly curved
+      // manifolds, backtrack before invoking the nonlinear solver so one large
+      // pointer event cannot spend dozens of iterations returning to the
+      // constraint surface.
+      while (true) {
+        this.restore(projectionState);
+        this.applyDelta(variables, limited);
+        projectedErrors = this.computeErrorVectorForConstraints(activeConstraints);
+        projectedErrorNorm = vectorNorm(projectedErrors);
+        if (preserveDirectTarget || projectedErrorNorm <= acceptProjectedError * 2 || projectionScale <= 1 / 32) break;
+        projectionScale *= 0.5;
+        limitedPhysical = limitedPhysical.map((value) => value * 0.5);
+        limited = limited.map((value) => value * 0.5);
+      }
+      const projectedTargetValues = variables.map((variable) => variable.object[variable.prop]);
+      const holdSingleTargetDuringPreview = targetVariableCount === 1 && (
+        preserveDirectPointTarget
+        || !Number.isFinite(targetStepNorm)
+        || targetStepNorm < GUIDED_DRAG_FAST_TARGET_STEP
+      );
+      const previewTargetConstraints = holdSingleTargetDuringPreview
+        ? variables
+            .map((variable, index) => {
+              if (!activeTargetMask[index]) return null;
+              const constraint = new ParameterDragConstraint(variable.object, variable.prop, projectedTargetValues[index], variable.min);
+              constraint.weight = GUIDED_DRAG_TARGET_CONSTRAINT_WEIGHT;
+              return constraint;
+            })
+            .filter(Boolean)
+        : [];
+      const previewTargetErrors = this.computeErrorVectorForConstraints(previewTargetConstraints);
+      const previewTargetErrorNorm = vectorNorm(previewTargetErrors);
+      const previewErrorNorm = vectorNorm([...projectedErrors, ...previewTargetErrors]);
+      const previewSolveTolerance = targetVariableCount === 1 && preserveDirectPointTarget
+        ? GUIDED_DRAG_SMALL_ERROR_TOLERANCE
+        : GUIDED_DRAG_FAST_MULTI_TARGET_TOLERANCE;
+      const solveTolerance = Math.min(acceptProjectedError, previewSolveTolerance);
       const result =
-        projectedErrorNorm <= acceptProjectedError
-          ? { success: true, errorNorm: projectedErrorNorm, iterations: 0, reason: "投影移動" }
-          : this.solveCore(variables, activeConstraints);
+        previewErrorNorm <= solveTolerance
+          ? { success: true, errorNorm: previewErrorNorm, iterations: 0, reason: "投影移動" }
+          : this.solveCore(variables, [...activeConstraints, ...previewTargetConstraints], solveTolerance);
+      // The preview solve is deliberately free to make the smallest normal
+      // correction back onto the constraint manifold. Pin the coordinates it
+      // actually reached for mouse-up; pinning the pre-solve projection during
+      // the preview can make otherwise valid underconstrained systems singular.
+      const targetConstraints = variables
+        .map((variable, index) => {
+          if (!activeTargetMask[index]) return null;
+          const constraint = new ParameterDragConstraint(variable.object, variable.prop, variable.object[variable.prop], variable.min);
+          constraint.weight = GUIDED_DRAG_TARGET_CONSTRAINT_WEIGHT;
+          return constraint;
+        })
+        .filter(Boolean);
       result.local = true;
       result.guided = true;
       result.variableCount = variables.length;
       result.constraintCount = activeConstraints.length;
       result.freeDof = basis.length;
-      result.targetNorm = vectorNorm(desired);
-      result.projectedNorm = vectorNorm(limited);
+      result.targetActivity = targetActivity.filter((_, index) => targetMask[index]);
+      result.targetNorm = requestedTargetNorm;
+      result.targetStepNorm = targetStepNorm;
+      result.projectedNorm = vectorNorm(limitedPhysical);
+      result.projectionScale = projectionScale;
       result.projectedErrorNorm = projectedErrorNorm;
+      result.targetErrorNorm = previewTargetErrorNorm;
+      result.acceptError = acceptProjectedError;
+      result.targetConstraints = targetConstraints;
+      result.activeTargetVariables = targetConstraints.map((constraint) => ({ object: constraint.object, prop: constraint.prop }));
       return result;
     }
 

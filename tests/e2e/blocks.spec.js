@@ -28,6 +28,113 @@ function waitForServer(url, timeoutMs = 10000) {
   });
 }
 
+function constrainedBlockGridFixture({ fixed = false } = {}) {
+  const sketches = [
+    { id: "ROOT", name: "Root Sketch", parentSketchId: null, kind: "root", visible: true },
+    { id: "S1", name: "Sketch-1", parentSketchId: "ROOT", kind: "sketch", visible: true },
+  ];
+  const instances = [
+    ["BI10", 0, 0],
+    ["BI11", 0, 500],
+    ["BI12", -500, 0],
+    ["BI13", -500, 500],
+    ["BI14", -500, 1000],
+    ["BI15", 0, 1000],
+  ].map(([id, x, y]) => ({
+    id,
+    definitionId: "B1",
+    sketchId: "S1",
+    x,
+    y,
+    rotation: 0,
+    fixed,
+    enabledSketchIds: ["S1"],
+  }));
+  const constraints = [
+    ...["BI11", "BI10", "BI13", "BI14", "BI15"].map((id) => ({ type: "horizontal", line: `${id}@L1`, enabled: true, sketchId: "S1" })),
+    { type: "collinear", line1: "BI12@L3", line2: "BI13@L1", enabled: true, sketchId: "S1" },
+    { type: "collinear", line1: "BI12@L4", line2: "BI13@L4", enabled: true, sketchId: "S1" },
+    { type: "collinear", line1: "BI13@L4", line2: "BI14@L4", enabled: true, sketchId: "S1" },
+    { type: "collinear", line1: "BI13@L3", line2: "BI14@L1", enabled: true, sketchId: "S1" },
+    { type: "collinear", line1: "BI15@L4", line2: "BI14@L2", enabled: true, sketchId: "S1" },
+    { type: "collinear", line1: "BI15@L1", line2: "BI14@L1", enabled: true, sketchId: "S1" },
+    { type: "collinear", line1: "BI11@L4", line2: "BI13@L2", enabled: true, sketchId: "S1" },
+    { type: "collinear", line1: "BI11@L3", line2: "BI15@L1", enabled: true, sketchId: "S1" },
+    { type: "collinear", line1: "BI10@L4", line2: "BI12@L2", enabled: true, sketchId: "S1" },
+    { type: "collinear", line1: "BI10@L3", line2: "BI11@L1", enabled: true, sketchId: "S1" },
+  ];
+  return {
+    version: 8,
+    documentName: "Constrained Block Grid",
+    appMode: "geometry",
+    sketches,
+    activeSketchId: "S1",
+    presentationSheets: [{ id: "PS1", name: "Sheet-1", visibleGeometrySketchIds: null, elementStyles: {}, elements: [] }],
+    activePresentationSheetId: "PS1",
+    blockDefinitions: [{
+      id: "B1",
+      name: "Tile",
+      revision: 1,
+      origin: { x: 0, y: 0 },
+      sketches,
+      activeSketchId: "S1",
+      points: [
+        { id: "P1", x: -250, y: -250, fixed: false, kind: "endpoint", sketchId: "S1" },
+        { id: "P2", x: 250, y: -250, fixed: false, kind: "endpoint", sketchId: "S1" },
+        { id: "P3", x: 250, y: 250, fixed: false, kind: "endpoint", sketchId: "S1" },
+        { id: "P4", x: -250, y: 250, fixed: false, kind: "endpoint", sketchId: "S1" },
+      ],
+      lines: [
+        { id: "L1", p1: "P1", p2: "P2", construction: false, sketchId: "S1" },
+        { id: "L2", p1: "P2", p2: "P3", construction: false, sketchId: "S1" },
+        { id: "L3", p1: "P3", p2: "P4", construction: false, sketchId: "S1" },
+        { id: "L4", p1: "P4", p2: "P1", construction: false, sketchId: "S1" },
+      ],
+      circles: [],
+      arcs: [],
+      constraints: [],
+    }],
+    blockInstances: instances,
+    points: [],
+    lines: [],
+    circles: [],
+    arcs: [],
+    constraints,
+  };
+}
+
+function guidedPointDragFixture({ x = 0, y = 100 } = {}) {
+  return {
+    version: 8,
+    documentName: "Guided Point Drag",
+    appMode: "geometry",
+    sketches: [
+      { id: "ROOT", name: "Root Sketch", parentSketchId: null, kind: "root", visible: true },
+      { id: "S1", name: "Sketch-1", parentSketchId: "ROOT", kind: "sketch", visible: true },
+    ],
+    activeSketchId: "S1",
+    presentationSheets: [{ id: "PS1", name: "Sheet-1", visibleGeometrySketchIds: null, elementStyles: {}, elements: [] }],
+    activePresentationSheetId: "PS1",
+    blockDefinitions: [],
+    blockInstances: [],
+    points: [
+      { id: "P0", x: 0, y: 0, fixed: true, kind: "endpoint", sketchId: "S1" },
+      { id: "P26", x, y, fixed: false, kind: "endpoint", sketchId: "S1" },
+    ],
+    lines: [],
+    circles: [
+      { id: "C0", center: "P0", radius: 50, construction: false, sketchId: "S1" },
+      { id: "C1", center: "P26", radius: 50, construction: false, sketchId: "S1" },
+    ],
+    arcs: [],
+    constraints: [
+      { type: "radiusDimension", primitive: "C0", target: 50, enabled: true, sketchId: "S1" },
+      { type: "radiusDimension", primitive: "C1", target: 50, enabled: true, sketchId: "S1" },
+      { type: "circleCircleTangent", a: "C0", b: "C1", mode: "external", enabled: true, sketchId: "S1" },
+    ],
+  };
+}
+
 test.beforeAll(async () => {
   try {
     await waitForServer(`${baseUrl}/index.html`, 300);
@@ -113,6 +220,90 @@ test("creates, places, drags, edits, and reloads local-coordinate blocks", async
   await page.click(".blockDeleteBtn");
   expect((await page.evaluate(() => window.__cadTest.blockState())).definitions).toHaveLength(1);
   await page.screenshot({ path: "test-results/block-instances.png", fullPage: true });
+});
+
+test("constrained block grids track a single pointer move without diluting drag distance", async ({ page }) => {
+  await page.goto(`${baseUrl}/index.html?test=1`);
+  await page.waitForFunction(() => window.__cadTest);
+  await page.evaluate((fixture) => window.__cadTest.importDocumentNameFixture(fixture, "constrained-block-grid.json"), constrainedBlockGridFixture());
+
+  const interaction = await page.evaluate(() => window.__cadTest.blockInteractionPoints());
+  const before = await page.evaluate(() => window.__cadTest.blockState().instances);
+  const screenDx = 80;
+  const screenDy = 40;
+  const expectedDx = screenDx / interaction.scale;
+  const expectedDy = screenDy / interaction.scale;
+
+  await page.mouse.move(interaction.center.x, interaction.center.y);
+  await page.mouse.down();
+  await page.mouse.move(interaction.center.x + screenDx, interaction.center.y + screenDy, { steps: 1 });
+  await page.mouse.up();
+
+  const after = await page.evaluate(() => window.__cadTest.blockState().instances);
+  expect(after).toHaveLength(6);
+  for (let i = 0; i < after.length; i++) {
+    expect(after[i].x - before[i].x).toBeCloseTo(expectedDx, 3);
+    expect(after[i].y - before[i].y).toBeCloseTo(expectedDy, 3);
+    expect(after[i].rotation).toBeCloseTo(before[i].rotation, 8);
+  }
+
+  await page.evaluate((fixture) => window.__cadTest.importDocumentNameFixture(fixture, "fixed-block-grid.json"), constrainedBlockGridFixture({ fixed: true }));
+  const fixedInteraction = await page.evaluate(() => window.__cadTest.blockInteractionPoints());
+  const fixedBefore = await page.evaluate(() => window.__cadTest.blockState().instances);
+  await page.mouse.move(fixedInteraction.center.x, fixedInteraction.center.y);
+  await page.mouse.down();
+  await page.mouse.move(fixedInteraction.center.x + screenDx, fixedInteraction.center.y + screenDy, { steps: 1 });
+  await page.mouse.up();
+  expect(await page.evaluate(() => window.__cadTest.blockState().instances)).toEqual(fixedBefore);
+});
+
+test("guided point drags keep the free target axis responsive and solve exactly on release", async ({ page }) => {
+  await page.goto(`${baseUrl}/index.html?test=1`);
+  await page.waitForFunction(() => window.__cadTest);
+  await page.evaluate((fixture) => window.__cadTest.importDocumentNameFixture(fixture, "guided-point-drag.json"), guidedPointDragFixture());
+
+  const result = await page.evaluate(() => window.__cadTest.guidedPointDragForTest("P26", 25, 12));
+  expect(result.targetConstraintCount).toBe(1);
+  expect(result.preview.success).toBe(true);
+  expect(result.preview.iterations).toBeLessThan(8);
+  expect(result.preview.errorNorm).toBeLessThanOrEqual(result.preview.acceptError);
+  expect(Math.abs(result.preview.point.x - result.target.x)).toBeLessThanOrEqual(result.preview.acceptError);
+  expect(result.preview.point.y).toBeLessThan(result.target.y);
+  expect(result.final.success).toBe(true);
+  expect(result.final.errorNorm).toBeLessThan(1e-5);
+  expect(result.final.baseErrorNorm).toBeLessThan(1e-5);
+  expect(result.final.point.x).toBeCloseTo(result.target.x, 4);
+  expect(Math.hypot(result.final.point.x, result.final.point.y)).toBeCloseTo(100, 4);
+
+  await page.evaluate((fixture) => window.__cadTest.importDocumentNameFixture(fixture, "guided-curved-point-drag.json"), guidedPointDragFixture({ x: 60, y: 80 }));
+  const curved = await page.evaluate(() => window.__cadTest.guidedPointDragForTest("P26", 40, 0));
+  expect(curved.targetConstraintCount).toBe(1);
+  expect(curved.preview.success).toBe(true);
+  expect(curved.preview.iterations).toBeLessThan(8);
+  expect(curved.final.success).toBe(true);
+  expect(curved.final.errorNorm).toBeLessThan(1e-5);
+  expect(curved.final.baseErrorNorm).toBeLessThan(1e-5);
+  expect(curved.final.point.x).toBeGreaterThan(60);
+  expect(curved.final.point.x).toBeLessThan(curved.target.x);
+  expect(curved.final.point.y).toBeLessThan(80);
+  expect(Math.hypot(curved.final.point.x, curved.final.point.y)).toBeCloseTo(100, 4);
+
+  await page.evaluate((fixture) => window.__cadTest.importDocumentNameFixture(fixture, "guided-continuous-point-drag.json"), guidedPointDragFixture({ x: 60, y: 80 }));
+  const continuous = await page.evaluate(() => window.__cadTest.guidedPointDragPathForTest(
+    "P26",
+    Array.from({ length: 10 }, (_, index) => [(index + 1) * 4, 0]),
+  ));
+  expect(continuous.previews).toHaveLength(10);
+  for (let index = 0; index < continuous.previews.length; index++) {
+    const preview = continuous.previews[index];
+    expect(preview.success).toBe(true);
+    expect(preview.blocked).not.toBe(true);
+    expect(preview.errorNorm).toBeLessThanOrEqual(1e-3);
+    if (index > 0) expect(preview.point.x).toBeGreaterThan(continuous.previews[index - 1].point.x);
+  }
+  expect(continuous.final.success).toBe(true);
+  expect(continuous.final.errorNorm).toBeLessThan(1e-5);
+  expect(Math.hypot(continuous.final.point.x, continuous.final.point.y)).toBeCloseTo(100, 4);
 });
 
 test("block placement escape commits zero rotation after choosing the display center", async ({ page }) => {

@@ -1,4 +1,6 @@
-test-data/
+test-data/*
+!test-data/テスト図形.json
+!test-data/意地悪ドラッグ完全拘束.json
 node_modules/
 playwright-report/
 test-results/

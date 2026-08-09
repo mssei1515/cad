@@ -163,6 +163,7 @@
   const DIMENSION_DISPLAY_PRECISION = 1e-6;
   const MEASURED_DIMENSION_SNAP_TOLERANCE = 1e-5;
   const CONSTRAINT_ACCEPT_ERROR = 1e-4;
+  const DRAG_PREVIEW_ERROR_SCREEN_PX = 0.1;
   const DEFAULT_FILLET_RADIUS = 30;
   const MIN_LINE_LENGTH = Math.max(MIN_ORIENTATION_LENGTH, solver.minLineLength || 12);
   const MIN_ARC_LENGTH = MIN_LINE_LENGTH;
@@ -4297,11 +4298,18 @@
 
   function arcEndpointDragValue(arc, endpoint, rawAngle) {
     const twoPi = Math.PI * 2;
+    const maxSweep = twoPi - 1e-6;
     const prop = endpoint === "start" ? "startAngle" : "endAngle";
     const value = unwrapAngleNear(rawAngle, arc[prop]);
     const sweep = endpoint === "start" ? arc.endAngle - value : value - arc.startAngle;
-    if (Math.abs(sweep) >= twoPi - 1e-6) {
-      return endpoint === "start" ? arc.endAngle : arc.startAngle;
+    if (Math.abs(sweep) >= maxSweep) {
+      // Stay on the same angular branch at the almost-full-circle boundary.
+      // Returning the opposite endpoint collapses the sweep to zero and makes
+      // a small pointer crossing jump most of the circumference.
+      const direction = sweep < 0 ? -1 : 1;
+      return endpoint === "start"
+        ? arc.endAngle - direction * maxSweep
+        : arc.startAngle + direction * maxSweep;
     }
     return value;
   }
@@ -5586,6 +5594,31 @@
 
   function solveDragSketch(session, extra = []) {
     return solveSketchById(session?.sketchId || activeSketchId(), extra);
+  }
+
+  function solveFinalDragSession(session) {
+    const extra = session?.finalDragConstraints || [];
+    if (session?.lastGuidedPreviewError > CONSTRAINT_ACCEPT_ERROR) {
+      const result = solveDragSketch(session);
+      result.guidedFinalFallback = true;
+      return result;
+    }
+    const variables = sketchSolveVariables(session?.sketchId || activeSketchId());
+    const state = solver.clone(variables);
+    const guidedResult = solveDragSketch(session, extra);
+    if (guidedResult.success || guidedResult.errorNorm <= CONSTRAINT_ACCEPT_ERROR) {
+      if (!guidedResult.success) guidedResult.acceptedAtDragTolerance = true;
+      guidedResult.success = true;
+      return guidedResult;
+    }
+    solver.restore(state);
+    const fallbackResult = solveDragSketch(session);
+    fallbackResult.guidedFinalFallback = true;
+    if (!fallbackResult.success && fallbackResult.errorNorm <= CONSTRAINT_ACCEPT_ERROR) {
+      fallbackResult.acceptedAtDragTolerance = true;
+      fallbackResult.success = true;
+    }
+    return fallbackResult;
   }
 
   function solveReferenceDependentSketches(rootSketchId) {
@@ -9677,7 +9710,11 @@
       {
         object: session.item,
         prop: "radiusValue",
-        value: hypot2(pointer.x - session.item.center.x, pointer.y - session.item.center.y),
+        // Keep the radius request tied to the geometry at pointer-down. The
+        // constrained solve may move the center; measuring from that moving
+        // center feeds the solver's own correction back into the next event
+        // and can amplify a one-pixel cursor step into a large radius jump.
+        value: hypot2(pointer.x - session.startCenterX, pointer.y - session.startCenterY),
         min: MIN_ORIENTATION_LENGTH,
       },
     ];
@@ -9709,10 +9746,6 @@
     ];
   }
 
-  function arcEndpointDragConstraints(session, pointer) {
-    return [new ArcEndpointDragConstraint(session.item, session.endpoint, pointer.x, pointer.y)];
-  }
-
   function dragConstraintsFromTargets(targets) {
     return targets.map((target) => new DragConstraint(target.point, target.x, target.y));
   }
@@ -9731,14 +9764,68 @@
     });
   }
 
-  function solveLocalGuidedDrag(session, targets) {
+  function guidedTargetEntries(targets = []) {
+    const entries = [];
+    for (const target of targets) {
+      if (target.point) {
+        entries.push({ object: target.point, prop: "x", value: target.x });
+        entries.push({ object: target.point, prop: "y", value: target.y });
+      } else if (target.object && target.prop) {
+        entries.push({ object: target.object, prop: target.prop, value: target.value });
+      }
+    }
+    return entries;
+  }
+
+  function sameGuidedTargetEntries(a = [], b = []) {
+    return a.length === b.length && a.every((entry, index) =>
+      entry.object === b[index].object && entry.prop === b[index].prop && entry.value === b[index].value,
+    );
+  }
+
+  function guidedTargetStepForSession(session, targets) {
+    const entries = guidedTargetEntries(targets);
+    if (sameGuidedTargetEntries(entries, session?.pendingGuidedTargetEntries)) {
+      return { entries, norm: session.pendingGuidedTargetStepNorm };
+    }
+    const previous = session?.lastGuidedTargetEntries || [];
+    const deltas = entries.map((entry) => {
+      const prior = previous.find((candidate) => candidate.object === entry.object && candidate.prop === entry.prop);
+      const previousValue = prior ? prior.value : entry.object[entry.prop];
+      const rawDelta = entry.value - previousValue;
+      if (
+        (entry.prop === "startAngle" || entry.prop === "endAngle")
+        && Number.isFinite(entry.object?.radiusValue)
+      ) {
+        return rawDelta * Math.max(MIN_ORIENTATION_LENGTH, Math.abs(entry.object.radiusValue));
+      }
+      return rawDelta;
+    });
+    const norm = vectorNorm(deltas);
+    if (session) {
+      session.pendingGuidedTargetEntries = entries;
+      session.pendingGuidedTargetStepNorm = norm;
+    }
+    return { entries, norm };
+  }
+
+  function commitGuidedTargetStep(session, targetStep) {
+    if (!session || !targetStep) return;
+    session.lastGuidedTargetEntries = targetStep.entries;
+  }
+
+  function solveLocalGuidedDrag(session, targets, targetStepNorm = null) {
     if (!session?.local) return null;
+    const errorTolerance = Math.max(CONSTRAINT_ACCEPT_ERROR, DRAG_PREVIEW_ERROR_SCREEN_PX / Math.max(viewport.scale, 1e-9));
     return withDragStepNorm(dragStepNormForTargets(targets), () =>
       solver.solveSubsetGuided({
         variables: session.local.variables,
         constraints: session.local.constraints,
         lines: session.local.lines,
         targets,
+        errorTolerance,
+        activeTargetVariables: session.guidedTargetVariables || [],
+        targetStepNorm,
       }),
     );
   }
@@ -9793,6 +9880,7 @@
   }
 
   function solveGuidedDragWithFallback(session, targets, fallbackExtra, fullSolve, restoreState = null) {
+    const targetStep = guidedTargetStepForSession(session, targets);
     const stepNorm = Math.max(dragStepNormForTargets(targets), dragStepNormForExtra(fallbackExtra));
     if (session?.local && session.local.constraints.length === 0) {
       for (const target of targets) {
@@ -9803,6 +9891,8 @@
           target.object[target.prop] = target.min != null ? Math.max(target.min, target.value) : target.value;
         }
       }
+      commitGuidedTargetStep(session, targetStep);
+      session.lastGuidedPreviewError = 0;
       return {
         success: true,
         errorNorm: 0,
@@ -9814,14 +9904,44 @@
         constraintCount: 0,
       };
     }
-    const localResult = withDragStepNorm(stepNorm, () => solveLocalGuidedDrag(session, targets));
-    if (localResult && localResult.success && localResult.errorNorm <= CONSTRAINT_ACCEPT_ERROR) return localResult;
+    const guidedAttemptState = restoreState || solver.clone(session.local?.variables || solver.getVariables());
+    let localResult = null;
+    let localAcceptError = CONSTRAINT_ACCEPT_ERROR;
+    let guidedRetryCount = 0;
+    // A sparse pointer stream can deliver a very large reversal in one event.
+    // Re-project with a shorter manifold step when the first linearization is
+    // too coarse instead of jumping straight to an exact, often singular solve.
+    const canShortenSparseStep = session?.mode !== "block" && session?.mode !== "block-rotation";
+    const guidedScales = canShortenSparseStep && targetStep.norm > 50
+      ? [0.25, 0.125, 0.0625]
+      : [1, 0.5, 0.25, 0.125, 0.0625];
+    for (const scale of guidedScales) {
+      if (scale < 1) solver.restore(guidedAttemptState);
+      localResult = withDragStepNorm(stepNorm, () => solveLocalGuidedDrag(session, targets, targetStep.norm * scale));
+      localAcceptError = Number.isFinite(localResult?.acceptError) ? localResult.acceptError : CONSTRAINT_ACCEPT_ERROR;
+      if (localResult && localResult.success && localResult.errorNorm <= localAcceptError) break;
+      guidedRetryCount += 1;
+    }
+    if (localResult && localResult.success && localResult.errorNorm <= localAcceptError) {
+      localResult.guidedRetryCount = guidedRetryCount;
+      session.finalDragConstraints = localResult.targetConstraints || [];
+      session.guidedTargetVariables = localResult.activeTargetVariables || [];
+      commitGuidedTargetStep(session, targetStep);
+      session.lastGuidedPreviewError = localResult.errorNorm;
+      return localResult;
+    }
     if (restoreState) solver.restore(restoreState);
     const result = withDragStepNorm(stepNorm, fullSolve);
+    if (result.success) {
+      session.finalDragConstraints = fallbackExtra;
+      commitGuidedTargetStep(session, targetStep);
+      session.lastGuidedPreviewError = result.errorNorm;
+    }
     result.local = false;
     result.guided = false;
     result.fallback = Boolean(localResult);
     result.localErrorNorm = localResult?.errorNorm;
+    result.guidedRetryCount = guidedRetryCount;
     return result;
   }
 
@@ -9838,6 +9958,9 @@
       result.success = false;
       result.reason = "R寸法と固定点によりこれ以上潰せません";
       result.lineRepair = lineRepair;
+    } else if (!result.success) {
+      solver.restore(state);
+      result.blocked = true;
     }
     return result;
   }
@@ -9899,8 +10022,9 @@
     let targets;
     let extra;
     if (session.mode === "arc-endpoint") {
-      extra = arcEndpointDragConstraints(session, pointer);
-      const retry = () => solveDragWithFallback(session, extra, () => solveDragSketch(session, extra), dragState);
+      targets = arcEndpointDragTargets(session, pointer);
+      extra = parameterDragConstraintsFromTargets(targets);
+      const retry = () => solveGuidedDragWithFallback(session, targets, extra, () => solveDragSketch(session, extra), dragState);
       result = retry();
       return finalizeDragResult(result, dragState, session, extra, retry);
     } else {
@@ -11562,7 +11686,7 @@
     } catch (_) {
       // Pointer capture may already be released by the browser.
     }
-    const result = solveDragSketch(session);
+    const result = solveFinalDragSession(session);
     normalizeArcSweeps();
     if (!result.success || result.errorNorm > CONSTRAINT_ACCEPT_ERROR) {
       if (session.fullDragState) solver.restore(session.fullDragState);
@@ -12360,6 +12484,218 @@
           displayName: effectiveDocumentName(),
           serializedName: serializeModel().documentName,
           title: document.title,
+        };
+      },
+      guidedPointDragForTest(id, dx, dy) {
+        const point = model.points.find((item) => item.id === id);
+        if (!point) return null;
+        const startPointer = { x: point.x, y: point.y };
+        const session = buildDragSession("point", point, startPointer);
+        if (!session) return null;
+        attachLocalSolveContext(session);
+        const target = { x: startPointer.x + dx, y: startPointer.y + dy };
+        const previewResult = dragResultForSession(session, target);
+        const previewPoint = { x: point.x, y: point.y };
+        const finalResult = solveFinalDragSession(session);
+        normalizeArcSweeps();
+        const baseErrorNorm = vectorNorm(solver.computeErrorVectorForConstraints(sketchSolveConstraints(session.sketchId)));
+        return {
+          target,
+          targetConstraintCount: session.finalDragConstraints?.length || 0,
+          preview: {
+            success: previewResult.success,
+            errorNorm: previewResult.errorNorm,
+            acceptError: previewResult.acceptError,
+            iterations: previewResult.iterations,
+            point: previewPoint,
+          },
+          final: {
+            success: finalResult.success,
+            errorNorm: finalResult.errorNorm,
+            baseErrorNorm,
+            iterations: finalResult.iterations,
+            point: { x: point.x, y: point.y },
+          },
+        };
+      },
+      guidedPointDragPathForTest(id, deltas) {
+        const point = model.points.find((item) => item.id === id);
+        if (!point) return null;
+        const startPointer = { x: point.x, y: point.y };
+        const session = buildDragSession("point", point, startPointer);
+        if (!session) return null;
+        attachLocalSolveContext(session);
+        const previews = [];
+        for (const [dx, dy] of deltas) {
+          const target = { x: startPointer.x + dx, y: startPointer.y + dy };
+          const startedAt = performance.now();
+          const result = dragResultForSession(session, target);
+          previews.push({
+            success: result.success,
+            blocked: result.blocked,
+            errorNorm: result.errorNorm,
+            acceptError: result.acceptError,
+            iterations: result.iterations,
+            elapsedMs: performance.now() - startedAt,
+            target,
+            targetNorm: result.targetNorm,
+            targetStepNorm: result.targetStepNorm,
+            projectedNorm: result.projectedNorm,
+            projectedErrorNorm: result.projectedErrorNorm,
+            targetErrorNorm: result.targetErrorNorm,
+            targetConstraintCount: result.targetConstraints?.length || 0,
+            freeDof: result.freeDof,
+            targetActivity: result.targetActivity,
+            variableCount: result.variableCount,
+            constraintCount: result.constraintCount,
+            reason: result.reason,
+            local: result.local,
+            guided: result.guided,
+            fallback: result.fallback,
+            point: { x: point.x, y: point.y },
+          });
+        }
+        const finalResult = solveFinalDragSession(session);
+        normalizeArcSweeps();
+        const baseErrorNorm = vectorNorm(solver.computeErrorVectorForConstraints(sketchSolveConstraints(session.sketchId)));
+        return {
+          startPoint: startPointer,
+          previews,
+          final: {
+            success: finalResult.success,
+            errorNorm: finalResult.errorNorm,
+            baseErrorNorm,
+            iterations: finalResult.iterations,
+            reason: finalResult.reason,
+            point: { x: point.x, y: point.y },
+          },
+        };
+      },
+      geometryDragPathForTest(descriptor, deltas) {
+        const kind = descriptor?.kind;
+        const id = descriptor?.id;
+        const endpoint = descriptor?.endpoint === "end" ? "end" : "start";
+        let item = null;
+        let sessionItem = null;
+        let startPointer = null;
+        if (kind === "point") {
+          item = model.points.find((candidate) => candidate.id === id);
+          sessionItem = item;
+          if (item) startPointer = { x: item.x, y: item.y };
+        } else if (kind === "line") {
+          item = model.lines.find((candidate) => candidate.id === id);
+          sessionItem = item;
+          if (item) startPointer = { x: (item.p1.x + item.p2.x) / 2, y: (item.p1.y + item.p2.y) / 2 };
+        } else if (kind === "circle") {
+          item = model.circles.find((candidate) => candidate.id === id);
+          sessionItem = item;
+          if (item) startPointer = { x: item.center.x + item.radius(), y: item.center.y };
+        } else if (kind === "arc") {
+          item = model.arcs.find((candidate) => candidate.id === id);
+          sessionItem = item;
+          if (item) {
+            const angle = (item.startAngle + item.endAngle) / 2;
+            startPointer = { x: item.center.x + item.radius() * Math.cos(angle), y: item.center.y + item.radius() * Math.sin(angle) };
+          }
+        } else if (kind === "arc-endpoint") {
+          item = model.arcs.find((candidate) => candidate.id === id);
+          sessionItem = item ? { arc: item, endpoint } : null;
+          if (item) startPointer = arcEndpointPoint(item, endpoint);
+        }
+        if (!item || !startPointer) return null;
+
+        const snapshot = () => {
+          if (kind === "point") return { x: item.x, y: item.y };
+          if (kind === "line") {
+            return {
+              p1: { x: item.p1.x, y: item.p1.y },
+              p2: { x: item.p2.x, y: item.p2.y },
+              midpoint: { x: (item.p1.x + item.p2.x) / 2, y: (item.p1.y + item.p2.y) / 2 },
+              length: item.length(),
+            };
+          }
+          if (kind === "circle") return { center: { x: item.center.x, y: item.center.y }, radius: item.radius() };
+          const start = arcEndpointPoint(item, "start");
+          const end = arcEndpointPoint(item, "end");
+          return {
+            center: { x: item.center.x, y: item.center.y },
+            radius: item.radius(),
+            start,
+            end,
+            draggedEndpoint: kind === "arc-endpoint" ? (endpoint === "start" ? start : end) : null,
+          };
+        };
+
+        const session = buildDragSession(kind, sessionItem, startPointer);
+        const startState = snapshot();
+        if (!session) return { sessionAvailable: false, startPointer, startState, previews: [], final: null };
+        attachLocalSolveContext(session);
+        const previews = [];
+        for (const [dx, dy] of deltas) {
+          const target = { x: startPointer.x + dx, y: startPointer.y + dy };
+          const startedAt = performance.now();
+          const result = dragResultForSession(session, target);
+          previews.push({
+            success: result.success,
+            blocked: result.blocked,
+            errorNorm: result.errorNorm,
+            acceptError: result.acceptError,
+            iterations: result.iterations,
+            elapsedMs: performance.now() - startedAt,
+            target,
+            targetNorm: result.targetNorm,
+            targetStepNorm: result.targetStepNorm,
+            projectedNorm: result.projectedNorm,
+            projectedErrorNorm: result.projectedErrorNorm,
+            targetErrorNorm: result.targetErrorNorm,
+            freeDof: result.freeDof,
+            reason: result.reason,
+            local: result.local,
+            guided: result.guided,
+            fallback: result.fallback,
+            localErrorNorm: result.localErrorNorm,
+            state: snapshot(),
+          });
+        }
+        const finalResult = solveFinalDragSession(session);
+        normalizeArcSweeps();
+        const baseErrorNorm = vectorNorm(solver.computeErrorVectorForConstraints(sketchSolveConstraints(session.sketchId)));
+        return {
+          sessionAvailable: true,
+          startPointer,
+          startState,
+          previews,
+          final: {
+            success: finalResult.success,
+            errorNorm: finalResult.errorNorm,
+            baseErrorNorm,
+            iterations: finalResult.iterations,
+            reason: finalResult.reason,
+            state: snapshot(),
+          },
+        };
+      },
+      constraintAnalysisForTest() {
+        const sketchId = activeSketchId();
+        const variables = sketchSolveVariables(sketchId);
+        const constraints = sketchSolveConstraints(sketchId);
+        const analysis = solver.analyzeConstraintState({
+          variables,
+          constraints,
+          lines: sketchSolveLines(sketchId),
+          errorTolerance: CONSTRAINT_ACCEPT_ERROR,
+        });
+        return {
+          stable: analysis.stable,
+          errorNorm: analysis.errorNorm,
+          rank: analysis.rank,
+          variableCount: analysis.variableCount,
+          freeVariableCount: analysis.freeVariableCount,
+          constraintCount: constraints.length,
+          pointCount: model.points.filter((point) => elementSketchId(point) === sketchId).length,
+          lineCount: model.lines.filter((line) => elementSketchId(line) === sketchId).length,
+          circleCount: model.circles.filter((circle) => elementSketchId(circle) === sketchId).length,
+          arcCount: model.arcs.filter((arc) => elementSketchId(arc) === sketchId).length,
         };
       },
       resetForPresentationDrag() {
