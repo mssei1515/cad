@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "serve": "node tools/serve.js",
-    "check": "node --check app.js && node --check constraint_solver.js && node --check tools/serve.js && node --check tools/generate-adversarial-drag-fixture.js && node --check playwright.config.js && node --check tests/e2e/presentation-annotations.spec.js && node --check tests/e2e/blocks.spec.js && node --check tests/e2e/drag-smoothness.spec.js && node --check tests/e2e/geometry-drag-smoothness.spec.js && node --check tests/e2e/adversarial-drag-fixture.spec.js",
+    "check": "node --check app.js && node --check constraint_solver.js && node --check tools/serve.js && node --check tools/generate-adversarial-drag-fixture.js && node --check playwright.config.js && node --check tests/e2e/presentation-annotations.spec.js && node --check tests/e2e/blocks.spec.js && node --check tests/e2e/drag-smoothness.spec.js && node --check tests/e2e/geometry-drag-smoothness.spec.js && node --check tests/e2e/adversarial-drag-fixture.spec.js && node --check tests/e2e/adversarial-authoring-performance.spec.js",
     "test:e2e": "playwright test"
   },
   "devDependencies": {

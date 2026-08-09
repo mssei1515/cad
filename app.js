@@ -103,6 +103,7 @@
   let hoveredSidebarItem = null;
   let constraintAnalysisState = null;
   let constraintRedundancyState = { constraints: new Map(), sketches: new Map(), count: 0 };
+  let lastAuthoringPerformance = null;
   let sketchSolveStates = new Map();
   let invalidReferenceConstraints = new Map();
   let panSession = null;
@@ -1551,15 +1552,6 @@
     return Boolean(result?.success) && result.errorNorm <= CONSTRAINT_ACCEPT_ERROR;
   }
 
-  function rankStateForConstraints(sketchId, constraints) {
-    return solver.constraintRankState({
-      variables: sketchSolveVariables(sketchId),
-      constraints,
-      errorTolerance: CONSTRAINT_ACCEPT_ERROR,
-      rankTolerance: 1e-8,
-    });
-  }
-
   function constraintsForRedundancy(sketchId) {
     return model.constraints.filter((constraint) => constraintIsOperational(constraint) && constraintSketchId(constraint) === sketchId);
   }
@@ -1568,31 +1560,35 @@
     if (!constraint || constraint.enabled === false) return { redundant: false };
     const constraints = constraintsForRedundancy(sketchId);
     if (!constraints.includes(constraint)) return { redundant: false };
-    const before = rankStateForConstraints(sketchId, constraints.filter((item) => item !== constraint));
-    const after = rankStateForConstraints(sketchId, constraints);
-    if (!before.stable || !after.stable) return { redundant: false, unstable: true, before, after };
+    const redundancy = solver.constraintRedundancyState({
+      variables: sketchSolveVariables(sketchId),
+      constraints,
+      errorTolerance: CONSTRAINT_ACCEPT_ERROR,
+      rankTolerance: 1e-8,
+    });
+    const contribution = redundancy.byConstraint.get(constraint);
+    if (!redundancy.stable || !contribution) return { redundant: false, unstable: true, redundancy };
     return {
-      redundant: after.rank <= before.rank,
-      before,
-      after,
-      rankBefore: before.rank,
-      rankAfter: after.rank,
+      redundant: contribution.redundant,
+      rankBefore: contribution.rankBefore,
+      rankAfter: contribution.rankAfter,
+      redundancy,
     };
   }
 
-  function refreshConstraintRedundancy() {
+  function refreshConstraintRedundancy(precomputedBySketch = null) {
     const byConstraint = new Map();
     const bySketch = new Map();
     let count = 0;
     for (const sketch of model.sketches.filter((item) => !isRootSketch(item))) {
       const sketchId = sketch.id;
       const constraints = constraintsForRedundancy(sketchId);
-      const redundancy = solver.constraintRedundancyState({
-        variables: sketchSolveVariables(sketchId),
-        constraints,
-        errorTolerance: CONSTRAINT_ACCEPT_ERROR,
-        rankTolerance: 1e-8,
-      });
+      const redundancy = precomputedBySketch?.get(sketchId) || solver.constraintRedundancyState({
+          variables: sketchSolveVariables(sketchId),
+          constraints,
+          errorTolerance: CONSTRAINT_ACCEPT_ERROR,
+          rankTolerance: 1e-8,
+        });
       let sketchCount = 0;
       for (const constraint of constraints) {
         const contribution = redundancy.byConstraint.get(constraint);
@@ -1773,7 +1769,7 @@
     return translationFree || rotationFree ? "under" : "full";
   }
 
-  function refreshConstraintAnalysis() {
+  function refreshConstraintAnalysis(options = {}) {
     refreshReferenceConstraintValidity();
     const rootSketchId = activeSketchId();
     const sketchIds = [rootSketchId, ...descendantSketchIds(rootSketchId)];
@@ -1830,7 +1826,7 @@
       total: items.length,
     };
     constraintAnalysisState = { analysis: analyses.get(rootSketchId), analyses, statuses, summary };
-    refreshConstraintRedundancy();
+    refreshConstraintRedundancy(options.redundancyBySketch || null);
     return constraintAnalysisState;
   }
 
@@ -2760,6 +2756,8 @@
   }
 
   function resetModelState() {
+    mode = "select";
+    lastAuthoringPerformance = null;
     model.documentName = DEFAULT_DOCUMENT_NAME;
     model.points.length = 0;
     model.lines.length = 0;
@@ -5739,6 +5737,37 @@
     return { success: true, sketchId, result, dependent };
   }
 
+  function solveConstraintComponentAndDependents(constraint, rollbackState = null) {
+    const sketchId = constraintSketchId(constraint);
+    refreshReferenceConstraintValidity();
+    clearSketchSolveState(sketchId);
+    const context = localSolveContextFromSeeds(constraintGraphNodes(constraint), sketchId);
+    let result = solver.solveSubset(context);
+    normalizeArcSweeps();
+    const globalConstraints = sketchSolveConstraints(sketchId);
+    const globalErrorAfterLocal = vectorNorm(solver.computeErrorVectorForConstraints(globalConstraints));
+    let fullFallback = false;
+    if (resultIsAccepted(result) && globalErrorAfterLocal > CONSTRAINT_ACCEPT_ERROR) {
+      result = solveSketchById(sketchId);
+      normalizeArcSweeps();
+      result.localErrorNorm = globalErrorAfterLocal;
+      result.fullFallback = true;
+      fullFallback = true;
+    }
+    if (!resultIsAccepted(result)) {
+      if (rollbackState) {
+        solver.restore(rollbackState);
+        clearSketchSolveState(sketchId);
+      } else {
+        setSketchSolveError(sketchId, result, sketchId);
+      }
+      return { success: false, sketchId, result, dependent: { success: true, results: [] }, local: !fullFallback, fullFallback };
+    }
+    setSketchSolveOk(sketchId, result, sketchId);
+    const dependent = solveReferenceDependentSketches(sketchId);
+    return { success: true, sketchId, result, dependent, local: !fullFallback, fullFallback };
+  }
+
   function solveElementSketchAndDescendants(element, rollbackState = null) {
     return solveSketchAndDependents(elementSketchId(element), rollbackState);
   }
@@ -6160,6 +6189,15 @@
     if (!dimensionValueInput) return;
     dimensionValueInput.hidden = true;
     dimensionValueInput.classList.remove("is-invalid");
+  }
+
+  function filletRadiusDimensionAnchor(geometry) {
+    const angle = geometry.startAngle + (geometry.endAngle - geometry.startAngle) / 2;
+    const distance = geometry.radius + 34 / viewport.scale;
+    return {
+      x: geometry.center.x + Math.cos(angle) * distance,
+      y: geometry.center.y + Math.sin(angle) * distance,
+    };
   }
 
   function dimensionInputPointForPendingCommand() {
@@ -7605,7 +7643,7 @@
       commitConstraintResolution(resolution);
       return true;
     }
-    updateUI();
+    updateGeometrySelectionUI();
     setHint(constraintTargetHint(type));
     draw();
     return true;
@@ -8267,7 +8305,7 @@
     constraintAnalysisState = null;
     solveSketchAndDependents(activeSketchId());
     refreshConstraintAnalysis();
-    updateUI();
+    updateUI({ refreshAnalysis: false });
     draw();
     setHint(`${sketch.name} を削除しました`);
     recordHistory("スケッチ削除");
@@ -8564,6 +8602,12 @@
       const point = model.points.find((item) => item.id === row.dataset.pointId);
       row.classList.toggle("sidebar-selected", fixedPointSelectedInCanvas(point));
     }
+  }
+
+  function updateGeometrySelectionUI() {
+    updateToolbar();
+    updateConstraintButtons();
+    updateSidebarSelectionRowClasses();
   }
 
   function selectSidebarGeometryItem(item) {
@@ -9036,7 +9080,7 @@
     pushModelConstraint(constraint, sketchId);
     clearSelection();
     refreshConstraintAnalysis();
-    updateUI();
+    updateUI({ refreshAnalysis: false });
     draw();
     setHint(`${messagePrefix}を読み取り専用寸法として追加しました`);
     log(`${messagePrefix}を読み取り専用寸法として追加しました`);
@@ -9052,15 +9096,26 @@
       log(msg);
       return false;
     }
+    const performanceTrace = { kind: "constraint", type, startedAt: performance.now() };
     const snapshot = snapshotModelState();
+    performanceTrace.snapshotMs = performance.now() - performanceTrace.startedAt;
     const solveStepNorm = solveStepNormForConstraint(constraint);
     pushModelConstraint(constraint);
     preconditionNewConstraint(constraint);
 
-    const solved = withTemporarySolveStepNorm(solveStepNorm, () => solveSketchAndDependents(constraintSketchId(constraint), snapshot));
+    const solveStartedAt = performance.now();
+    const solved = withTemporarySolveStepNorm(solveStepNorm, () => solveConstraintComponentAndDependents(constraint, snapshot));
+    performanceTrace.solveMs = performance.now() - solveStartedAt;
     const result = solved.result;
+    performanceTrace.solveVariableCount = result.variableCount;
+    performanceTrace.solveConstraintCount = result.constraintCount;
+    performanceTrace.solveErrorNorm = result.errorNorm;
+    performanceTrace.solveIterations = result.iterations;
+    performanceTrace.fullFallback = Boolean(result.fullFallback);
     const collapse = findLineCollapseAfterConstraint(constraint, snapshot, constraintSketchId(constraint));
+    const redundancyStartedAt = performance.now();
     const duplicate = solved.success && result.errorNorm <= CONSTRAINT_ACCEPT_ERROR && !collapse ? redundantConstraintInfo(constraint, constraintSketchId(constraint)) : null;
+    performanceTrace.redundancyMs = performance.now() - redundancyStartedAt;
     if (!solved.success || result.errorNorm > CONSTRAINT_ACCEPT_ERROR || collapse || duplicate?.redundant) {
       if (duplicate?.redundant && isDimensionConstraint(constraint)) {
         restoreModelState(snapshot);
@@ -9082,11 +9137,19 @@
     }
 
     clearSelection();
-    updateUI();
+    const redundancyBySketch = duplicate?.redundancy ? new Map([[constraintSketchId(constraint), duplicate.redundancy]]) : null;
+    const analysisStartedAt = performance.now();
+    refreshConstraintAnalysis({ redundancyBySketch });
+    performanceTrace.analysisMs = performance.now() - analysisStartedAt;
+    const uiStartedAt = performance.now();
+    updateUI({ refreshAnalysis: false });
     draw();
+    performanceTrace.uiMs = performance.now() - uiStartedAt;
     setHint(`拘束追加: success=${result.success}, error=${result.errorNorm.toExponential(2)}, iter=${result.iterations} / ${constraintSummaryText()}`);
     log(`拘束を追加しました: ${type}\n自動solve: success=${result.success}, error=${result.errorNorm.toExponential(3)}`);
     recordHistory(`拘束追加: ${type}`);
+    performanceTrace.totalMs = performance.now() - performanceTrace.startedAt;
+    lastAuthoringPerformance = performanceTrace;
     return true;
   }
 
@@ -9116,7 +9179,7 @@
     const solveStepNorm = solveStepNormForConstraint(constraint);
     pushModelConstraint(constraint, sketchId);
     preconditionNewConstraint(constraint);
-    const solved = withTemporarySolveStepNorm(solveStepNorm, () => solveSketchAndDependents(sketchId, snapshot));
+    const solved = withTemporarySolveStepNorm(solveStepNorm, () => solveConstraintComponentAndDependents(constraint, snapshot));
     const result = solved.result;
     const collapse = findLineCollapseAfterConstraint(constraint, snapshot, sketchId);
     const duplicate = solved.success && result.errorNorm <= CONSTRAINT_ACCEPT_ERROR && !collapse ? redundantConstraintInfo(constraint, sketchId) : null;
@@ -9140,7 +9203,9 @@
       return false;
     }
     clearSelection();
-    updateUI();
+    const redundancyBySketch = duplicate?.redundancy ? new Map([[sketchId, duplicate.redundancy]]) : null;
+    refreshConstraintAnalysis({ redundancyBySketch });
+    updateUI({ refreshAnalysis: false });
     draw();
     setHint(`参照拘束追加: ${sketchName(referenceSketchId)} を参照 / success=${result.success}, error=${result.errorNorm.toExponential(2)}`);
     log(`参照拘束を追加しました: ${type}\n自動solve: success=${result.success}, error=${result.errorNorm.toExponential(3)}`);
@@ -10242,10 +10307,8 @@
       selectedCircles = [];
       selectedArcs = [];
       lineStartPoint = endpoint;
-      const result = solveAndRefresh("線追加");
       clearSelection();
-      updateUI();
-      draw();
+      const result = solveAndRefresh("線追加");
       log(`線 ${l.id} を追加しました\n自動solve: success=${result.success}`);
     } else {
       selectedPoints = [endpoint];
@@ -10297,10 +10360,8 @@
     rectangleStartPoint = null;
     pointerPreview = null;
     clearSnap();
-    const result = solveAndRefresh("矩形追加");
     clearSelection();
-    updateUI();
-    draw();
+    const result = solveAndRefresh("矩形追加");
     log(`矩形を追加しました\n自動solve: success=${result.success}`);
   }
 
@@ -10992,7 +11053,7 @@
       selectedCircles = [];
       selectedArcs = [];
       setHint("接続する2本目の線をクリックするとR面取りを作成します");
-      updateUI();
+      updateGeometrySelectionUI();
       draw();
       return;
     }
@@ -11031,10 +11092,8 @@
       circleCenterPoint = null;
       pointerPreview = null;
       clearSnap();
-      solveAndRefresh("円追加");
       clearSelection();
-      updateUI();
-      draw();
+      solveAndRefresh("円追加");
     }
   }
 
@@ -11085,10 +11144,8 @@
       arcStartPoint = null;
       pointerPreview = null;
       clearSnap();
-      solveAndRefresh("円弧追加");
       clearSelection();
-      updateUI();
-      draw();
+      solveAndRefresh("円弧追加");
     }
   }
 
@@ -11169,7 +11226,7 @@
       return;
     }
 
-    if (hitD && !e.shiftKey && !e.ctrlKey && !pendingCommand) {
+    if (hitD && !e.shiftKey && !e.ctrlKey && !pendingCommand && !pendingConstraintCommand) {
       e.preventDefault();
       selectedPoints = [];
       selectedLines = [];
@@ -11208,7 +11265,7 @@
       selectedConstraint = null;
       hoveredDimensionConstraint = null;
       setHint(constraintTargetHint(pendingConstraintCommand.type));
-      updateUI();
+      updateGeometrySelectionUI();
       draw();
       return;
     }
@@ -11290,7 +11347,7 @@
         selectedArcs = offsetSource instanceof Arc ? [offsetSource] : [];
         pointerPreview = p;
         setHint("オフセットする側と距離の目安をクリックしてください");
-        updateUI();
+        updateGeometrySelectionUI();
         draw();
         return;
       }
@@ -11353,7 +11410,7 @@
 
     // Selection does not change the model, so keep the most recent constraint
     // analysis instead of repeating the expensive redundancy scan.
-    updateUI({ refreshAnalysis: false });
+    updateGeometrySelectionUI();
     draw();
   });
 
@@ -11739,7 +11796,7 @@
         selectByRect(rectFromPoints(session.start, current), current.x < session.start.x, session.additive);
         setHint("矩形選択を更新しました");
       }
-      updateUI({ refreshAnalysis: false });
+      updateGeometrySelectionUI();
       draw();
       return;
     }
@@ -11759,7 +11816,6 @@
     }
     if (!session.previewMoved) {
       setHint("図形を選択しました");
-      updateUI({ refreshAnalysis: false });
       draw();
       return;
     }
@@ -11953,7 +12009,7 @@
     if (hasSelection()) {
       clearSelection();
       setHint("選択を解除しました");
-      updateUI();
+      updateGeometrySelectionUI();
       draw();
       return true;
     }
@@ -12531,7 +12587,7 @@
     }
     refreshConstraintAnalysis();
     setHint(`固定状態変更: success=${fixedResult.success}, error=${fixedResult.errorNorm.toExponential(2)}, iter=${fixedResult.iterations}`);
-    updateUI();
+    updateUI({ refreshAnalysis: false });
     draw();
     log(`${points.map((point) => point.id).join(", ")} の固定状態を ${nextFixed} にしました\n自動solve: success=${fixedResult.success}`);
     return;
@@ -12579,6 +12635,77 @@
           lines: selectedLines.map((line) => line.id),
           circles: selectedCircles.map((circle) => circle.id),
           arcs: selectedArcs.map((arc) => arc.id),
+        };
+      },
+      focusWorldForTest(center, scale = 1) {
+        viewport.scale = clampZoom(Number(scale) || 1);
+        resizeCanvas({ centerWorld: { x: Number(center?.x) || 0, y: Number(center?.y) || 0 } });
+        draw();
+        const rect = canvas.getBoundingClientRect();
+        return {
+          scale: viewport.scale,
+          center: currentCanvasCenterWorld(),
+          canvas: { left: rect.left, top: rect.top, width: rect.width, height: rect.height },
+        };
+      },
+      worldClientPositionForTest(point) {
+        const rect = canvas.getBoundingClientRect();
+        const screen = worldToCanvasScreen({ x: Number(point?.x) || 0, y: Number(point?.y) || 0 });
+        return { x: rect.left + screen.x, y: rect.top + screen.y };
+      },
+      hitGeometryAtWorldForTest(point) {
+        const x = Number(point?.x) || 0;
+        const y = Number(point?.y) || 0;
+        const arcEndpoint = hitArcEndpoint(x, y);
+        return {
+          point: hitPoint(x, y)?.id || null,
+          line: hitLine(x, y)?.id || null,
+          circle: hitCircle(x, y)?.id || null,
+          arc: hitArc(x, y)?.id || null,
+          arcEndpoint: arcEndpoint ? { id: arcEndpoint.arc.id, endpoint: arcEndpoint.endpoint } : null,
+        };
+      },
+      geometryClientPositionForTest(kind, id, detail = null) {
+        let point = null;
+        if (kind === "point") point = model.points.find((item) => item.id === id) || null;
+        if (kind === "line") {
+          const line = model.lines.find((item) => item.id === id);
+          if (line) point = { x: (line.p1.x + line.p2.x) / 2, y: (line.p1.y + line.p2.y) / 2 };
+        }
+        if (kind === "circle") {
+          const circle = model.circles.find((item) => item.id === id);
+          if (circle) point = { x: circle.center.x + circle.radius(), y: circle.center.y };
+        }
+        if (kind === "arc") {
+          const arc = model.arcs.find((item) => item.id === id);
+          if (arc) {
+            const angle = detail === "start" ? arc.startAngle : detail === "end" ? arc.endAngle : arc.startAngle + (arc.endAngle - arc.startAngle) / 2;
+            point = { x: arc.center.x + arc.radius() * Math.cos(angle), y: arc.center.y + arc.radius() * Math.sin(angle) };
+          }
+        }
+        return point ? this.worldClientPositionForTest(point) : null;
+      },
+      authoringStateForTest() {
+        return {
+          mode,
+          pendingConstraintType: pendingConstraintCommand?.type || null,
+          pendingCommandType: pendingCommand?.type || null,
+          pendingPlacementPoint: pendingCommand?.type === "distance-place" && pendingCommand.pointer
+            ? { x: pendingCommand.pointer.x, y: pendingCommand.pointer.y }
+            : null,
+          pendingCommandPreview: pendingCommand?.type === "fillet-radius-value"
+            ? computeFilletGeometry(pendingCommand.line1, pendingCommand.line2, Number(pendingCommand.buffer) || DEFAULT_FILLET_RADIUS)
+            : null,
+          pointCount: model.points.length,
+          lineCount: model.lines.length,
+          circleCount: model.circles.length,
+          arcCount: model.arcs.length,
+          constraintCount: model.constraints.length,
+          fixedPointIds: model.points.filter((point) => point.fixed).map((point) => point.id),
+          lastLine: model.lines.length > 0 ? { id: model.lines[model.lines.length - 1].id, construction: Boolean(model.lines[model.lines.length - 1].construction) } : null,
+          lastConstraint: model.constraints.length > 0 ? decorateSerializedConstraint(serializeConstraint(model.constraints[model.constraints.length - 1]), model.constraints[model.constraints.length - 1]) : null,
+          lastPerformance: lastAuthoringPerformance ? { ...lastAuthoringPerformance } : null,
+          selected: this.selectedGeometryIdsForTest(),
         };
       },
       selectableLineClientPositionForTest() {
