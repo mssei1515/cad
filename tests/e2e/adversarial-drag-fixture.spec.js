@@ -137,7 +137,7 @@ test("adversarial mixed-scale fixture is completely constrained", async ({ page 
 
   await page.goto(`${baseUrl}/index.html?test=1`);
   await page.waitForFunction(() => window.__cadTest);
-  await page.evaluate((data) => window.__cadTest.importDocumentNameFixture(data, "意地悪ドラッグ完全拘束.json"), fixture);
+  const imported = await page.evaluate((data) => window.__cadTest.importDocumentNameFixture(data, "意地悪ドラッグ完全拘束.json"), fixture);
   const analysis = await page.evaluate(() => window.__cadTest.constraintAnalysisForTest());
   const duplicateLabels = await page.locator(".constraint-item.duplicate").allTextContents();
 
@@ -153,9 +153,15 @@ test("adversarial mixed-scale fixture is completely constrained", async ({ page 
     constraintCount: 249,
   }));
 
-  const selection = await page.evaluate(() => window.__cadTest.selectPointForTest("P_ABOVE_TOP"));
-  expect(selection.selectedPointIds).toEqual(["P_ABOVE_TOP"]);
-  expect(selection.elapsedMs).toBeLessThan(200);
+  const linePosition = await page.evaluate(() => window.__cadTest.selectableLineClientPositionForTest());
+  const selectionStartedAt = Date.now();
+  await page.mouse.click(linePosition.x, linePosition.y);
+  const selectionElapsedMs = Date.now() - selectionStartedAt;
+  const selectedGeometryIds = await page.evaluate(() => window.__cadTest.selectedGeometryIdsForTest());
+  console.log(JSON.stringify({ importElapsedMs: imported.elapsedMs, selectionElapsedMs, linePosition, selectedGeometryIds }));
+  expect(imported.elapsedMs).toBeLessThan(500);
+  expect(selectionElapsedMs).toBeLessThan(200);
+  expect(selectedGeometryIds.lines).toEqual([linePosition.id]);
 });
 
 test("recommended removals expose smooth draggable degrees of freedom", async ({ page }) => {

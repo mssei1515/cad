@@ -1130,6 +1130,73 @@
       return { stable: true, errorNorm, rank, rowCount: F.length, variableCount: variables.length };
     }
 
+    constraintRedundancyState({ variables = [], constraints = [], errorTolerance = 1e-4, rankTolerance = 1e-8 } = {}) {
+      this.syncLineOrientationHints([], constraints);
+      const activeConstraints = (constraints || []).filter((constraint) => constraint.enabled !== false);
+      const errors = [];
+      const rowRanges = [];
+      for (const constraint of activeConstraints) {
+        const value = constraint.error();
+        const values = Array.isArray(value) ? value : [value];
+        const start = errors.length;
+        errors.push(...values);
+        rowRanges.push({ constraint, start, end: errors.length });
+      }
+      const errorNorm = vectorNorm(errors);
+      if (errorNorm > errorTolerance) {
+        return { stable: false, errorNorm, rank: 0, byConstraint: new Map() };
+      }
+      if (errors.length === 0) {
+        return { stable: true, errorNorm, rank: 0, byConstraint: new Map() };
+      }
+      if (variables.length === 0) {
+        const byConstraint = new Map(activeConstraints.map((constraint) => [constraint, {
+          redundant: true,
+          rankBefore: 0,
+          rankAfter: 0,
+        }]));
+        return { stable: true, errorNorm, rank: 0, byConstraint };
+      }
+
+      // Compute the finite-difference Jacobian once, then incrementally extend
+      // a row-echelon basis in constraint order. The previous implementation
+      // rebuilt the entire Jacobian for every prefix of the constraint list.
+      const jacobian = this.computeJacobianForConstraints(variables, errors, activeConstraints);
+      const basis = [];
+      const pivots = [];
+      const addIndependentRow = (source) => {
+        const row = [...source];
+        for (let index = 0; index < basis.length; index += 1) {
+          const pivot = pivots[index];
+          const factor = row[pivot];
+          if (Math.abs(factor) <= rankTolerance) continue;
+          for (let column = pivot; column < row.length; column += 1) row[column] -= factor * basis[index][column];
+        }
+        const pivot = row.findIndex((value) => Math.abs(value) > rankTolerance);
+        if (pivot < 0) return false;
+        const scale = row[pivot];
+        for (let column = pivot; column < row.length; column += 1) row[column] /= scale;
+        let insertAt = pivots.findIndex((value) => value > pivot);
+        if (insertAt < 0) insertAt = pivots.length;
+        pivots.splice(insertAt, 0, pivot);
+        basis.splice(insertAt, 0, row);
+        return true;
+      };
+
+      const byConstraint = new Map();
+      for (const range of rowRanges) {
+        const rankBefore = basis.length;
+        for (let row = range.start; row < range.end; row += 1) addIndependentRow(jacobian[row]);
+        const rankAfter = basis.length;
+        byConstraint.set(range.constraint, {
+          redundant: rankAfter <= rankBefore,
+          rankBefore,
+          rankAfter,
+        });
+      }
+      return { stable: true, errorNorm, rank: basis.length, byConstraint };
+    }
+
     variableTargetDelta(variables, targets = []) {
       const delta = Array(variables.length).fill(0);
       for (let i = 0; i < variables.length; i++) {

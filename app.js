@@ -1587,25 +1587,20 @@
     for (const sketch of model.sketches.filter((item) => !isRootSketch(item))) {
       const sketchId = sketch.id;
       const constraints = constraintsForRedundancy(sketchId);
-      const accepted = [];
-      let before = rankStateForConstraints(sketchId, accepted);
+      const redundancy = solver.constraintRedundancyState({
+        variables: sketchSolveVariables(sketchId),
+        constraints,
+        errorTolerance: CONSTRAINT_ACCEPT_ERROR,
+        rankTolerance: 1e-8,
+      });
       let sketchCount = 0;
       for (const constraint of constraints) {
-        const after = rankStateForConstraints(sketchId, [...accepted, constraint]);
-        if (!before.stable || !after.stable) {
-          accepted.push(constraint);
-          before = after;
-          continue;
-        }
-        if (after.rank <= before.rank) {
-          const info = { redundant: true, sketchId, rankBefore: before.rank, rankAfter: after.rank, before, after };
-          byConstraint.set(constraint, info);
-          sketchCount += 1;
-          count += 1;
-        } else {
-          accepted.push(constraint);
-          before = after;
-        }
+        const contribution = redundancy.byConstraint.get(constraint);
+        if (!redundancy.stable || !contribution?.redundant) continue;
+        const info = { redundant: true, sketchId, rankBefore: contribution.rankBefore, rankAfter: contribution.rankAfter };
+        byConstraint.set(constraint, info);
+        sketchCount += 1;
+        count += 1;
       }
       if (sketchCount > 0) bySketch.set(sketchId, sketchCount);
     }
@@ -1696,7 +1691,7 @@
     const statusKind = solved.success && analysis.analysis.stable && !hasDependentError && !hasDuplicateConstraints ? "normal" : "error";
     const dependentText = solved.dependent?.results?.length > 0 ? `, dependent=${solved.dependent.results.length}` : "";
     setHint(`${label}: success=${solved.success}, error=${result.errorNorm.toExponential(2)}, iter=${result.iterations}${dependentText}${dependentErrorSummary(solved.dependent)} / ${constraintSummaryText()}`, statusKind);
-    updateUI();
+    updateUI({ refreshAnalysis: false });
     draw();
     if (solved.success && !historyRestoring) recordHistory(label);
     return result;
@@ -10518,7 +10513,7 @@
     canvas.classList.add("is-dragging");
     canvas.setPointerCapture(e.pointerId);
     setHint(rotate ? "ブロックを回転中" : "ブロックを移動中");
-    updateUI();
+    updateUI({ refreshAnalysis: false });
     draw();
   }
 
@@ -11662,11 +11657,14 @@
     }
 
     if (!dragSession) return;
+    const pointerDistance = hypot2(p.x - dragSession.startPointer.x, p.y - dragSession.startPointer.y);
+    if (!dragSession.previewMoved && pointerDistance <= 3 / viewport.scale) return;
+    dragSession.previewMoved = true;
     const result = dragResultForSession(dragSession, p);
     const error = result.errorNorm;
     if (result.blocked) {
       setHint(result.reason, "error");
-      updateUI();
+      updateUI({ refreshAnalysis: false });
       draw();
       return;
     }
@@ -11741,7 +11739,7 @@
         selectByRect(rectFromPoints(session.start, current), current.x < session.start.x, session.additive);
         setHint("矩形選択を更新しました");
       }
-      updateUI();
+      updateUI({ refreshAnalysis: false });
       draw();
       return;
     }
@@ -11759,6 +11757,12 @@
     } catch (_) {
       // Pointer capture may already be released by the browser.
     }
+    if (!session.previewMoved) {
+      setHint("図形を選択しました");
+      updateUI({ refreshAnalysis: false });
+      draw();
+      return;
+    }
     const result = solveFinalDragSession(session);
     normalizeArcSweeps();
     if (!result.success || result.errorNorm > CONSTRAINT_ACCEPT_ERROR) {
@@ -11774,7 +11778,7 @@
     const analysis = refreshConstraintAnalysis();
     const dependentErrorText = dependentErrorSummary(dependentResult);
     setHint(`${completedLabel}完了: success=${result.success}, error=${result.errorNorm.toExponential(2)}, iter=${result.iterations}${dependentErrorText} / ${constraintSummaryText()}`, analysis.analysis.stable && dependentResult.success ? "normal" : "error");
-    updateUI();
+    updateUI({ refreshAnalysis: false });
     draw();
     recordHistory(`${completedLabel}ドラッグ`);
   }
@@ -12549,10 +12553,12 @@
         };
       },
       async importDocumentNameFixture(data, fileName) {
+        const startedAt = performance.now();
         const file = new File([JSON.stringify(data)], fileName, { type: "application/json" });
         const success = await importFileData(file);
         return {
           success,
+          elapsedMs: performance.now() - startedAt,
           modelName: model.documentName,
           displayName: effectiveDocumentName(),
           serializedName: serializeModel().documentName,
@@ -12567,22 +12573,32 @@
           return { success: false, error: error.message };
         }
       },
-      selectPointForTest(id) {
-        const point = model.points.find((candidate) => candidate.id === id);
-        if (!point) return null;
-        const startedAt = performance.now();
-        clearSelection();
-        selectedPoints = [point];
-        const session = buildDragSession("point", point, { x: point.x, y: point.y });
-        if (session) attachLocalSolveContext(session);
-        updateUI({ refreshAnalysis: false });
-        draw();
+      selectedGeometryIdsForTest() {
         return {
-          elapsedMs: performance.now() - startedAt,
-          selectedPointIds: selectedPoints.map((candidate) => candidate.id),
-          localVariableCount: session?.local?.variables?.length || 0,
-          localConstraintCount: session?.local?.constraints?.length || 0,
+          points: selectedPoints.map((point) => point.id),
+          lines: selectedLines.map((line) => line.id),
+          circles: selectedCircles.map((circle) => circle.id),
+          arcs: selectedArcs.map((arc) => arc.id),
         };
+      },
+      selectableLineClientPositionForTest() {
+        const rect = canvas.getBoundingClientRect();
+        for (const line of model.lines) {
+          for (const t of [0.37, 0.63, 0.5]) {
+            const world = {
+              x: line.p1.x + (line.p2.x - line.p1.x) * t,
+              y: line.p1.y + (line.p2.y - line.p1.y) * t,
+            };
+            if (hitPoint(world.x, world.y) || hitLine(world.x, world.y) !== line || hitDimension(world.x, world.y)) continue;
+            const screen = worldToCanvasScreen(world);
+            const x = rect.left + screen.x;
+            const y = rect.top + screen.y;
+            if (x < rect.left || x > rect.right || y < rect.top || y > rect.bottom) continue;
+            if (document.elementFromPoint(x, y) !== canvas) continue;
+            return { id: line.id, x, y };
+          }
+        }
+        return null;
       },
       guidedPointDragForTest(id, dx, dy) {
         const point = model.points.find((item) => item.id === id);
