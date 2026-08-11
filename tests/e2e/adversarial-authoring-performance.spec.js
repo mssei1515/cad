@@ -33,6 +33,7 @@ const constraintToolTypes = [
   "vertical",
   "parallel",
   "perpendicular",
+  "symmetry",
   "concentric",
   "equal",
   "tangent",
@@ -378,6 +379,16 @@ test("constraint target clicks and commits stay responsive at full fixture compl
       },
     },
     {
+      name: "symmetric-points",
+      type: "symmetry",
+      build: ({ point, line }) => {
+        point("P1", x - 70, -35, "explicit");
+        point("P2", x + 45, 75, "explicit");
+        line("AXIS", point("A1", x - 130, 0), point("A2", x + 130, 0));
+        return [{ x: x - 70, y: -35 }, { x: x + 45, y: 75 }, { x, y: 0 }];
+      },
+    },
+    {
       name: "equal-lines",
       type: "equal",
       build: ({ point, line }) => {
@@ -468,6 +479,53 @@ test("constraint target clicks and commits stay responsive at full fixture compl
   }
 
   console.log(JSON.stringify({ kind: "constraint-authoring-latency", ...latencySummary(results, traces) }));
+});
+
+test("symmetry constraint mirrors two points and survives serialization", async ({ page }) => {
+  const data = fixtureMilestone(0);
+  data.points.push(
+    { id: "SYM_A1", x: -100, y: 0, fixed: true, kind: "endpoint" },
+    { id: "SYM_A2", x: 100, y: 0, fixed: true, kind: "endpoint" },
+    { id: "SYM_P1", x: -50, y: -30, fixed: false, kind: "explicit" },
+    { id: "SYM_P2", x: 60, y: 80, fixed: false, kind: "explicit" },
+  );
+  data.lines.push({ id: "SYM_AXIS", p1: "SYM_A1", p2: "SYM_A2", construction: true });
+  await loadFixture(page, data, { x: 0, y: 0 }, 1);
+
+  await page.evaluate(() => window.__cadTest.selectGeometryIdsForTest({
+    points: ["SYM_P1", "SYM_P2"],
+    lines: ["SYM_AXIS"],
+  }));
+  await page.locator('[data-constraint="symmetry"]').click();
+
+  const committed = await page.evaluate(() => ({
+    authoring: window.__cadTest.authoringStateForTest(),
+    model: window.__cadTest.serializedModelForTest(),
+    analysis: window.__cadTest.constraintAnalysisForTest(),
+  }));
+  expect(committed.authoring.lastConstraint).toMatchObject({
+    type: "symmetry",
+    p1: "SYM_P1",
+    p2: "SYM_P2",
+    axis: "SYM_AXIS",
+  });
+  const p1 = committed.model.points.find((point) => point.id === "SYM_P1");
+  const p2 = committed.model.points.find((point) => point.id === "SYM_P2");
+  expect(Math.abs(p1.x - p2.x)).toBeLessThan(1e-5);
+  expect(Math.abs(p1.y + p2.y)).toBeLessThan(1e-5);
+  expect(committed.analysis.errorNorm).toBeLessThan(1e-5);
+
+  const restored = await page.evaluate((model) => {
+    const result = window.__cadTest.loadDocumentFixtureForDragTest(model, "symmetry-round-trip.json");
+    return {
+      result,
+      authoring: window.__cadTest.authoringStateForTest(),
+      analysis: window.__cadTest.constraintAnalysisForTest(),
+    };
+  }, committed.model);
+  expect(restored.result.success).toBe(true);
+  expect(restored.authoring.lastConstraint).toMatchObject({ type: "symmetry", axis: "SYM_AXIS" });
+  expect(restored.analysis.errorNorm).toBeLessThan(1e-5);
 });
 
 test("distance, diameter, radius and angle input phases stay responsive", async ({ page }) => {

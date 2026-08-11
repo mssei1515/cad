@@ -163,6 +163,9 @@
           <button data-constraint="perpendicular" data-label="直角" title="直角" aria-label="直角">
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 18h12M12 18V6"/></svg>
           </button>
+          <button data-constraint="symmetry" data-label="対称" title="対称" aria-label="対称">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v16" stroke-dasharray="2 2"/><circle cx="7" cy="12" r="2.5"/><circle cx="17" cy="12" r="2.5"/><path d="M9.5 8.5h5M9.5 15.5h5"/></svg>
+          </button>
           <button data-constraint="concentric" data-label="同心" title="同心" aria-label="同心">
             <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="7"/><circle cx="12" cy="12" r="3"/></svg>
           </button>
@@ -202,7 +205,6 @@
           </div>
           <div class="block-overlay-actions">
             <button id="toolCreateBlock" class="small-action-btn" type="button" title="選択図形からブロック作成" aria-label="ブロック作成">作成</button>
-            <button id="toolPlaceBlock" class="small-action-btn" type="button" title="ブロック配置" aria-label="ブロック配置">配置</button>
           </div>
           <div id="blockList" class="block-list"></div>
           <div id="blockSketchConfig" class="block-sketch-config" hidden></div>

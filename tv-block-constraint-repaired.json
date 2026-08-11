@@ -1,0 +1,1484 @@
+{
+  "version": 8,
+  "savedAt": "2026-08-11T04:59:43.542Z",
+  "documentName": "テレビ (1) (4)",
+  "appMode": "geometry",
+  "sketches": [
+    {
+      "id": "ROOT",
+      "name": "Root Sketch",
+      "parentSketchId": null,
+      "kind": "root",
+      "visible": true
+    },
+    {
+      "id": "S1",
+      "name": "部屋外寸",
+      "parentSketchId": "ROOT",
+      "kind": "sketch",
+      "visible": true
+    },
+    {
+      "id": "S2",
+      "name": "部屋外寸-1",
+      "parentSketchId": "S1",
+      "kind": "sketch",
+      "visible": true
+    }
+  ],
+  "activeSketchId": "S2",
+  "presentationSheets": [
+    {
+      "id": "PS1",
+      "name": "Sheet-1",
+      "visibleGeometrySketchIds": null,
+      "elementStyles": {},
+      "elements": []
+    }
+  ],
+  "activePresentationSheetId": "PS1",
+  "blockDefinitions": [
+    {
+      "id": "B1",
+      "name": "棚",
+      "revision": 2,
+      "origin": {
+        "x": 0,
+        "y": 0
+      },
+      "sketches": [
+        {
+          "id": "ROOT",
+          "name": "Root Sketch",
+          "parentSketchId": null,
+          "kind": "root",
+          "visible": true
+        },
+        {
+          "id": "S1",
+          "name": "Sketch-1",
+          "parentSketchId": "ROOT",
+          "kind": "sketch",
+          "visible": true
+        },
+        {
+          "id": "S3",
+          "name": "Sketch-1-1",
+          "parentSketchId": "S1",
+          "kind": "sketch",
+          "visible": true
+        }
+      ],
+      "activeSketchId": "S3",
+      "points": [
+        {
+          "id": "P21",
+          "x": -604.999999989865,
+          "y": -409.9999999999893,
+          "fixed": false,
+          "kind": "endpoint",
+          "sketchId": "S1"
+        },
+        {
+          "id": "P22",
+          "x": -201.66666665941645,
+          "y": -409.9999999999933,
+          "fixed": false,
+          "kind": "endpoint",
+          "sketchId": "S1"
+        },
+        {
+          "id": "P23",
+          "x": 201.6666666683459,
+          "y": -410.0000000000039,
+          "fixed": false,
+          "kind": "endpoint",
+          "sketchId": "S1"
+        },
+        {
+          "id": "P24",
+          "x": 604.9999999954277,
+          "y": -410.0000000000197,
+          "fixed": false,
+          "kind": "endpoint",
+          "sketchId": "S1"
+        },
+        {
+          "id": "P25",
+          "x": 604.9999999919019,
+          "y": -1.6214585230045486e-11,
+          "fixed": false,
+          "kind": "endpoint",
+          "sketchId": "S1"
+        },
+        {
+          "id": "P26",
+          "x": 604.9999999857575,
+          "y": 410.0000000000087,
+          "fixed": false,
+          "kind": "endpoint",
+          "sketchId": "S1"
+        },
+        {
+          "id": "P27",
+          "x": -604.9999999954277,
+          "y": 410.0000000000197,
+          "fixed": true,
+          "kind": "endpoint",
+          "sketchId": "S1"
+        },
+        {
+          "id": "P28",
+          "x": -201.66666665661867,
+          "y": 410.0000000000195,
+          "fixed": false,
+          "kind": "endpoint",
+          "sketchId": "S1"
+        },
+        {
+          "id": "P29",
+          "x": 201.6666666674032,
+          "y": 410.0000000000195,
+          "fixed": false,
+          "kind": "endpoint",
+          "sketchId": "S1"
+        },
+        {
+          "id": "P30",
+          "x": -604.9999999882929,
+          "y": -3.7189806789683644e-11,
+          "fixed": false,
+          "kind": "endpoint",
+          "sketchId": "S1"
+        },
+        {
+          "id": "P31",
+          "x": 1149.3534038050584,
+          "y": -410.0000001119725,
+          "fixed": false,
+          "kind": "endpoint",
+          "sketchId": "S3"
+        },
+        {
+          "id": "P32",
+          "x": 1434.353403813027,
+          "y": -410.0000001119725,
+          "fixed": false,
+          "kind": "endpoint",
+          "sketchId": "S3"
+        },
+        {
+          "id": "P33",
+          "x": 1434.3534038186049,
+          "y": 410.0000000000087,
+          "fixed": true,
+          "kind": "endpoint",
+          "sketchId": "S3"
+        },
+        {
+          "id": "P34",
+          "x": 1149.3534037994805,
+          "y": 410.0000000000087,
+          "fixed": false,
+          "kind": "endpoint",
+          "sketchId": "S3"
+        }
+      ],
+      "lines": [
+        {
+          "id": "L18",
+          "p1": "P21",
+          "p2": "P22",
+          "construction": false,
+          "sketchId": "S1"
+        },
+        {
+          "id": "L19",
+          "p1": "P22",
+          "p2": "P23",
+          "construction": false,
+          "sketchId": "S1"
+        },
+        {
+          "id": "L20",
+          "p1": "P23",
+          "p2": "P24",
+          "construction": false,
+          "sketchId": "S1"
+        },
+        {
+          "id": "L21",
+          "p1": "P24",
+          "p2": "P25",
+          "construction": false,
+          "sketchId": "S1"
+        },
+        {
+          "id": "L22",
+          "p1": "P25",
+          "p2": "P26",
+          "construction": false,
+          "sketchId": "S1"
+        },
+        {
+          "id": "L23",
+          "p1": "P26",
+          "p2": "P27",
+          "construction": false,
+          "sketchId": "S1"
+        },
+        {
+          "id": "L24",
+          "p1": "P27",
+          "p2": "P21",
+          "construction": false,
+          "sketchId": "S1"
+        },
+        {
+          "id": "L25",
+          "p1": "P22",
+          "p2": "P28",
+          "construction": false,
+          "sketchId": "S1"
+        },
+        {
+          "id": "L26",
+          "p1": "P23",
+          "p2": "P29",
+          "construction": false,
+          "sketchId": "S1"
+        },
+        {
+          "id": "L27",
+          "p1": "P25",
+          "p2": "P30",
+          "construction": false,
+          "sketchId": "S1"
+        },
+        {
+          "id": "L28",
+          "p1": "P31",
+          "p2": "P32",
+          "construction": false,
+          "sketchId": "S3"
+        },
+        {
+          "id": "L29",
+          "p1": "P32",
+          "p2": "P33",
+          "construction": false,
+          "sketchId": "S3"
+        },
+        {
+          "id": "L30",
+          "p1": "P33",
+          "p2": "P34",
+          "construction": false,
+          "sketchId": "S3"
+        },
+        {
+          "id": "L31",
+          "p1": "P34",
+          "p2": "P31",
+          "construction": false,
+          "sketchId": "S3"
+        }
+      ],
+      "circles": [],
+      "arcs": [],
+      "constraints": [
+        {
+          "type": "horizontal",
+          "line": "L18",
+          "enabled": true,
+          "sketchId": "S1"
+        },
+        {
+          "type": "horizontal",
+          "line": "L19",
+          "enabled": true,
+          "sketchId": "S1"
+        },
+        {
+          "type": "horizontal",
+          "line": "L20",
+          "enabled": true,
+          "sketchId": "S1"
+        },
+        {
+          "type": "vertical",
+          "line": "L21",
+          "enabled": true,
+          "sketchId": "S1"
+        },
+        {
+          "type": "vertical",
+          "line": "L22",
+          "enabled": true,
+          "sketchId": "S1"
+        },
+        {
+          "type": "horizontal",
+          "line": "L23",
+          "enabled": true,
+          "sketchId": "S1"
+        },
+        {
+          "type": "vertical",
+          "line": "L24",
+          "enabled": true,
+          "sketchId": "S1"
+        },
+        {
+          "type": "pointOnLine",
+          "point": "P28",
+          "line": "L23",
+          "enabled": true,
+          "sketchId": "S1"
+        },
+        {
+          "type": "vertical",
+          "line": "L25",
+          "enabled": true,
+          "sketchId": "S1"
+        },
+        {
+          "type": "pointOnLine",
+          "point": "P29",
+          "line": "L23",
+          "enabled": true,
+          "sketchId": "S1"
+        },
+        {
+          "type": "vertical",
+          "line": "L26",
+          "enabled": true,
+          "sketchId": "S1"
+        },
+        {
+          "type": "pointOnLine",
+          "point": "P30",
+          "line": "L24",
+          "enabled": true,
+          "sketchId": "S1"
+        },
+        {
+          "type": "horizontal",
+          "line": "L27",
+          "enabled": true,
+          "sketchId": "S1"
+        },
+        {
+          "type": "equalLength",
+          "line1": "L22",
+          "line2": "L21",
+          "enabled": true,
+          "sketchId": "S1"
+        },
+        {
+          "type": "equalLength",
+          "line1": "L20",
+          "line2": "L19",
+          "enabled": true,
+          "sketchId": "S1"
+        },
+        {
+          "type": "equalLength",
+          "line1": "L18",
+          "line2": "L19",
+          "enabled": true,
+          "sketchId": "S1"
+        },
+        {
+          "type": "lineLineDistance",
+          "line1": "L18",
+          "line2": "L23",
+          "target": 820,
+          "sign": 1,
+          "dimension": {
+            "x": -772.1225482518502,
+            "y": 137.90111239170233,
+            "offsetU": -137.90111239168556,
+            "offsetN": -772.1225482497977,
+            "labelOffsetU": -137.9011123916857,
+            "axis": null
+          },
+          "enabled": true,
+          "sketchId": "S1"
+        },
+        {
+          "type": "lineLineDistance",
+          "line1": "L24",
+          "line2": "L21",
+          "target": 1210,
+          "sign": -1,
+          "dimension": {
+            "x": 91.9634696426446,
+            "y": -556.8946237139919,
+            "offsetU": -91.96346963785537,
+            "offsetN": 556.8946237147828,
+            "labelOffsetU": -91.96346963915016,
+            "axis": null
+          },
+          "enabled": true,
+          "sketchId": "S1"
+        },
+        {
+          "type": "horizontal",
+          "line": "L28",
+          "enabled": true,
+          "sketchId": "S3"
+        },
+        {
+          "type": "vertical",
+          "line": "L29",
+          "enabled": true,
+          "sketchId": "S3"
+        },
+        {
+          "type": "horizontal",
+          "line": "L30",
+          "enabled": true,
+          "sketchId": "S3"
+        },
+        {
+          "type": "vertical",
+          "line": "L31",
+          "enabled": true,
+          "sketchId": "S3"
+        },
+        {
+          "type": "collinear",
+          "line1": "L30",
+          "line2": "L23",
+          "enabled": true,
+          "sketchId": "S3",
+          "reference": true,
+          "referenceSketchId": "S1"
+        },
+        {
+          "type": "collinear",
+          "line1": "L28",
+          "line2": "L20",
+          "enabled": true,
+          "sketchId": "S3",
+          "reference": true,
+          "referenceSketchId": "S1"
+        },
+        {
+          "type": "distance",
+          "p1": "P31",
+          "p2": "P32",
+          "target": 285,
+          "dimension": {
+            "x": 1177.6393078600247,
+            "y": -587.093440983391,
+            "offsetU": -114.21409594901797,
+            "offsetN": -177.09344087141858,
+            "labelOffsetU": -114.21409594901809,
+            "axis": null
+          },
+          "enabled": true,
+          "sketchId": "S3"
+        }
+      ]
+    },
+    {
+      "id": "B2",
+      "name": "TV",
+      "revision": 1,
+      "origin": {
+        "x": 0,
+        "y": 0
+      },
+      "sketches": [
+        {
+          "id": "ROOT",
+          "name": "Root Sketch",
+          "parentSketchId": null,
+          "kind": "root",
+          "visible": true
+        },
+        {
+          "id": "S1",
+          "name": "Sketch-1",
+          "parentSketchId": "ROOT",
+          "kind": "sketch",
+          "visible": true
+        }
+      ],
+      "activeSketchId": "S1",
+      "points": [
+        {
+          "id": "P43",
+          "x": -358.99999999727675,
+          "y": -212.00000002671038,
+          "fixed": false,
+          "kind": "endpoint",
+          "sketchId": "S1"
+        },
+        {
+          "id": "P44",
+          "x": 359.0000000022137,
+          "y": -212.0000000224933,
+          "fixed": false,
+          "kind": "endpoint",
+          "sketchId": "S1"
+        },
+        {
+          "id": "P45",
+          "x": 359.0000000022246,
+          "y": 212.00000002464193,
+          "fixed": false,
+          "kind": "endpoint",
+          "sketchId": "S1"
+        },
+        {
+          "id": "P46",
+          "x": -358.99999999728743,
+          "y": 212.00000002627738,
+          "fixed": false,
+          "kind": "endpoint",
+          "sketchId": "S1"
+        },
+        {
+          "id": "P47",
+          "x": -3.3114702091552317e-9,
+          "y": -212.00000002644128,
+          "fixed": false,
+          "kind": "endpoint",
+          "sketchId": "S1"
+        },
+        {
+          "id": "P48",
+          "x": 4.806679498869926e-10,
+          "y": 212.0000000267104,
+          "fixed": false,
+          "kind": "endpoint",
+          "sketchId": "S1"
+        },
+        {
+          "id": "P49",
+          "x": -359.0000000022244,
+          "y": 9.247941079593147e-9,
+          "fixed": false,
+          "kind": "endpoint",
+          "sketchId": "S1"
+        },
+        {
+          "id": "P50",
+          "x": 359.0000000000391,
+          "y": -1.5108696516108466e-9,
+          "fixed": false,
+          "kind": "endpoint",
+          "sketchId": "S1"
+        }
+      ],
+      "lines": [
+        {
+          "id": "L40",
+          "p1": "P43",
+          "p2": "P44",
+          "construction": false,
+          "sketchId": "S1"
+        },
+        {
+          "id": "L41",
+          "p1": "P44",
+          "p2": "P45",
+          "construction": false,
+          "sketchId": "S1"
+        },
+        {
+          "id": "L42",
+          "p1": "P45",
+          "p2": "P46",
+          "construction": false,
+          "sketchId": "S1"
+        },
+        {
+          "id": "L43",
+          "p1": "P46",
+          "p2": "P43",
+          "construction": false,
+          "sketchId": "S1"
+        },
+        {
+          "id": "L44",
+          "p1": "P47",
+          "p2": "P48",
+          "construction": true,
+          "sketchId": "S1"
+        },
+        {
+          "id": "L45",
+          "p1": "P49",
+          "p2": "P50",
+          "construction": true,
+          "sketchId": "S1"
+        }
+      ],
+      "circles": [],
+      "arcs": [],
+      "constraints": [
+        {
+          "type": "horizontal",
+          "line": "L40",
+          "enabled": true,
+          "sketchId": "S1"
+        },
+        {
+          "type": "vertical",
+          "line": "L41",
+          "enabled": true,
+          "sketchId": "S1"
+        },
+        {
+          "type": "horizontal",
+          "line": "L42",
+          "enabled": true,
+          "sketchId": "S1"
+        },
+        {
+          "type": "vertical",
+          "line": "L43",
+          "enabled": true,
+          "sketchId": "S1"
+        },
+        {
+          "type": "distance",
+          "p1": "P43",
+          "p2": "P44",
+          "target": 718,
+          "dimension": {
+            "x": -16.890830744461596,
+            "y": -271.2370835270679,
+            "offsetU": -16.890830747278,
+            "offsetN": -59.23708350236687,
+            "labelOffsetU": 1.1688355253004197,
+            "axis": null
+          },
+          "enabled": true,
+          "sketchId": "S1"
+        },
+        {
+          "type": "distance",
+          "p1": "P46",
+          "p2": "P43",
+          "target": 424,
+          "dimension": {
+            "x": -406.3865971572362,
+            "y": 39.68812717968267,
+            "offsetU": -39.68812717990036,
+            "offsetN": -47.38659715995313,
+            "labelOffsetU": -17.37567791791621,
+            "axis": null
+          },
+          "enabled": true,
+          "sketchId": "S1"
+        },
+        {
+          "type": "pointOnLineMidpoint",
+          "point": "P47",
+          "line": "L40",
+          "enabled": true,
+          "sketchId": "S1"
+        },
+        {
+          "type": "pointOnLineMidpoint",
+          "point": "P48",
+          "line": "L42",
+          "enabled": true,
+          "sketchId": "S1"
+        },
+        {
+          "type": "pointOnLineMidpoint",
+          "point": "P49",
+          "line": "L43",
+          "enabled": true,
+          "sketchId": "S1"
+        },
+        {
+          "type": "pointOnLineMidpoint",
+          "point": "P50",
+          "line": "L41",
+          "enabled": true,
+          "sketchId": "S1"
+        }
+      ]
+    },
+    {
+      "id": "B3",
+      "name": "ラブリコ",
+      "revision": 1,
+      "origin": {
+        "x": 0,
+        "y": 0
+      },
+      "sketches": [
+        {
+          "id": "ROOT",
+          "name": "Root Sketch",
+          "parentSketchId": null,
+          "kind": "root",
+          "visible": true
+        },
+        {
+          "id": "S1",
+          "name": "Sketch-1",
+          "parentSketchId": "ROOT",
+          "kind": "sketch",
+          "visible": true
+        }
+      ],
+      "activeSketchId": "S1",
+      "points": [
+        {
+          "id": "P35",
+          "x": -249.20960849842163,
+          "y": -432.64127873363503,
+          "fixed": false,
+          "kind": "endpoint",
+          "sketchId": "S1"
+        },
+        {
+          "id": "P36",
+          "x": -159.20960849842038,
+          "y": -432.6412787337839,
+          "fixed": false,
+          "kind": "endpoint",
+          "sketchId": "S1"
+        },
+        {
+          "id": "P37",
+          "x": -159.20960849841975,
+          "y": 477.3587212659182,
+          "fixed": true,
+          "kind": "endpoint",
+          "sketchId": "S1"
+        },
+        {
+          "id": "P38",
+          "x": -249.20960849842163,
+          "y": 477.3587212657693,
+          "fixed": false,
+          "kind": "endpoint",
+          "sketchId": "S1"
+        },
+        {
+          "id": "P51",
+          "x": -204.20960849841967,
+          "y": -432.6412787336101,
+          "fixed": false,
+          "kind": "endpoint",
+          "sketchId": "S1"
+        },
+        {
+          "id": "P52",
+          "x": -204.20960849841936,
+          "y": 477.35872126574475,
+          "fixed": false,
+          "kind": "endpoint",
+          "sketchId": "S1"
+        }
+      ],
+      "lines": [
+        {
+          "id": "L32",
+          "p1": "P35",
+          "p2": "P36",
+          "construction": false,
+          "sketchId": "S1"
+        },
+        {
+          "id": "L33",
+          "p1": "P36",
+          "p2": "P37",
+          "construction": false,
+          "sketchId": "S1"
+        },
+        {
+          "id": "L34",
+          "p1": "P37",
+          "p2": "P38",
+          "construction": false,
+          "sketchId": "S1"
+        },
+        {
+          "id": "L35",
+          "p1": "P38",
+          "p2": "P35",
+          "construction": false,
+          "sketchId": "S1"
+        },
+        {
+          "id": "L46",
+          "p1": "P51",
+          "p2": "P52",
+          "construction": true,
+          "sketchId": "S1"
+        }
+      ],
+      "circles": [],
+      "arcs": [],
+      "constraints": [
+        {
+          "type": "horizontal",
+          "line": "L32",
+          "enabled": true,
+          "sketchId": "S1"
+        },
+        {
+          "type": "vertical",
+          "line": "L33",
+          "enabled": true,
+          "sketchId": "S1"
+        },
+        {
+          "type": "horizontal",
+          "line": "L34",
+          "enabled": true,
+          "sketchId": "S1"
+        },
+        {
+          "type": "vertical",
+          "line": "L35",
+          "enabled": true,
+          "sketchId": "S1"
+        },
+        {
+          "type": "lineLineDistance",
+          "line1": "L35",
+          "line2": "L33",
+          "target": 90,
+          "sign": -1,
+          "dimension": {
+            "x": -391.1870612274581,
+            "y": -62.680705240272175,
+            "offsetU": 186.97745272903708,
+            "offsetN": 85.03942650626487,
+            "labelOffsetU": 186.9774527298091,
+            "axis": null
+          },
+          "enabled": true,
+          "sketchId": "S1"
+        },
+        {
+          "type": "pointOnLineMidpoint",
+          "point": "P51",
+          "line": "L32",
+          "enabled": true,
+          "sketchId": "S1"
+        },
+        {
+          "type": "pointOnLineMidpoint",
+          "point": "P52",
+          "line": "L34",
+          "enabled": true,
+          "sketchId": "S1"
+        },
+        {
+          "type": "distance",
+          "p1": "P36",
+          "p2": "P37",
+          "target": 910,
+          "dimension": {
+            "x": 74.52907078727546,
+            "y": 37.264506963115245,
+            "offsetU": 14.905785697048273,
+            "offsetN": -233.73867928569553,
+            "labelOffsetU": 14.905785697048287,
+            "axis": null
+          },
+          "enabled": true,
+          "sketchId": "S1"
+        }
+      ]
+    }
+  ],
+  "blockInstances": [
+    {
+      "id": "BI1",
+      "definitionId": "B1",
+      "sketchId": "S2",
+      "x": 1834.0000000896923,
+      "y": 1070.1047338350854,
+      "rotation": 9.865386744508315e-15,
+      "fixed": false,
+      "enabledSketchIds": [
+        "S1"
+      ]
+    },
+    {
+      "id": "BI2",
+      "definitionId": "B1",
+      "sketchId": "S2",
+      "x": 3921.866902028532,
+      "y": 1070.1047338350913,
+      "rotation": 0,
+      "fixed": false,
+      "enabledSketchIds": [
+        "S3"
+      ]
+    },
+    {
+      "id": "BI3",
+      "definitionId": "B2",
+      "sketchId": "S2",
+      "x": 1813.6244289174997,
+      "y": 200.91505756100992,
+      "rotation": 0,
+      "fixed": false,
+      "enabledSketchIds": [
+        "S1"
+      ]
+    },
+    {
+      "id": "BI4",
+      "definitionId": "B3",
+      "sketchId": "S2",
+      "x": 1276.4131143999773,
+      "y": 156.91907734815968,
+      "rotation": -0.3123393683455674,
+      "fixed": false,
+      "enabledSketchIds": [
+        "S1"
+      ]
+    },
+    {
+      "id": "BI5",
+      "definitionId": "B3",
+      "sketchId": "S2",
+      "x": 2570.6351373112625,
+      "y": 156.92201946768677,
+      "rotation": -0.31174740050203237,
+      "fixed": false,
+      "enabledSketchIds": [
+        "S1"
+      ]
+    }
+  ],
+  "points": [
+    {
+      "id": "P5",
+      "x": -960.9999999245542,
+      "y": 1480.1047338351,
+      "fixed": false,
+      "kind": "endpoint",
+      "sketchId": "S1"
+    },
+    {
+      "id": "P6",
+      "x": 2439.0000000754458,
+      "y": 1480.1047338351,
+      "fixed": true,
+      "kind": "endpoint",
+      "sketchId": "S1"
+    },
+    {
+      "id": "P7",
+      "x": 2439.0000000754458,
+      "y": -819.8952661649138,
+      "fixed": false,
+      "kind": "endpoint",
+      "sketchId": "S1"
+    },
+    {
+      "id": "P8",
+      "x": -960.9999999245542,
+      "y": -819.8952661649204,
+      "fixed": false,
+      "kind": "endpoint",
+      "sketchId": "S1"
+    },
+    {
+      "id": "P9",
+      "x": -960.9999999245542,
+      "y": -349.89526616493083,
+      "fixed": false,
+      "kind": "endpoint",
+      "sketchId": "S1"
+    },
+    {
+      "id": "P10",
+      "x": 2439.0000000754458,
+      "y": -349.8952661649374,
+      "fixed": false,
+      "kind": "endpoint",
+      "sketchId": "S1"
+    },
+    {
+      "id": "P11",
+      "x": -960.9999999245542,
+      "y": -249.89526616494774,
+      "fixed": false,
+      "kind": "endpoint",
+      "sketchId": "S1"
+    },
+    {
+      "id": "P12",
+      "x": 2439.0000000754458,
+      "y": -249.8952661649546,
+      "fixed": false,
+      "kind": "endpoint",
+      "sketchId": "S1"
+    },
+    {
+      "id": "P13",
+      "x": 4597.163710345252,
+      "y": 1480.1047338351,
+      "fixed": false,
+      "kind": "endpoint",
+      "sketchId": "S1"
+    },
+    {
+      "id": "P14",
+      "x": 5356.220305847137,
+      "y": 1480.1047338351,
+      "fixed": true,
+      "kind": "endpoint",
+      "sketchId": "S1"
+    },
+    {
+      "id": "P15",
+      "x": 5356.220305847137,
+      "y": -249.8952677449854,
+      "fixed": false,
+      "kind": "endpoint",
+      "sketchId": "S1"
+    },
+    {
+      "id": "P16",
+      "x": 5328.220305847137,
+      "y": -249.89526774499146,
+      "fixed": false,
+      "kind": "endpoint",
+      "sketchId": "S1"
+    },
+    {
+      "id": "P17",
+      "x": 5328.220305847137,
+      "y": -349.89526616493407,
+      "fixed": false,
+      "kind": "endpoint",
+      "sketchId": "S1"
+    },
+    {
+      "id": "P18",
+      "x": 5143.220305847137,
+      "y": -349.89526616493407,
+      "fixed": false,
+      "kind": "endpoint",
+      "sketchId": "S1"
+    },
+    {
+      "id": "P19",
+      "x": 5143.220305847137,
+      "y": -819.8952661649172,
+      "fixed": false,
+      "kind": "endpoint",
+      "sketchId": "S1"
+    },
+    {
+      "id": "P20",
+      "x": 4597.163710344458,
+      "y": -819.8952661649172,
+      "fixed": false,
+      "kind": "endpoint",
+      "sketchId": "S1"
+    }
+  ],
+  "lines": [
+    {
+      "id": "L5",
+      "p1": "P5",
+      "p2": "P6",
+      "construction": false,
+      "sketchId": "S1"
+    },
+    {
+      "id": "L6",
+      "p1": "P6",
+      "p2": "P7",
+      "construction": false,
+      "sketchId": "S1"
+    },
+    {
+      "id": "L7",
+      "p1": "P7",
+      "p2": "P8",
+      "construction": false,
+      "sketchId": "S1"
+    },
+    {
+      "id": "L8",
+      "p1": "P8",
+      "p2": "P5",
+      "construction": false,
+      "sketchId": "S1"
+    },
+    {
+      "id": "L9",
+      "p1": "P9",
+      "p2": "P10",
+      "construction": false,
+      "sketchId": "S1"
+    },
+    {
+      "id": "L10",
+      "p1": "P11",
+      "p2": "P12",
+      "construction": false,
+      "sketchId": "S1"
+    },
+    {
+      "id": "L11",
+      "p1": "P13",
+      "p2": "P14",
+      "construction": false,
+      "sketchId": "S1"
+    },
+    {
+      "id": "L12",
+      "p1": "P14",
+      "p2": "P15",
+      "construction": false,
+      "sketchId": "S1"
+    },
+    {
+      "id": "L13",
+      "p1": "P15",
+      "p2": "P16",
+      "construction": false,
+      "sketchId": "S1"
+    },
+    {
+      "id": "L14",
+      "p1": "P16",
+      "p2": "P17",
+      "construction": false,
+      "sketchId": "S1"
+    },
+    {
+      "id": "L15",
+      "p1": "P17",
+      "p2": "P18",
+      "construction": false,
+      "sketchId": "S1"
+    },
+    {
+      "id": "L16",
+      "p1": "P18",
+      "p2": "P19",
+      "construction": false,
+      "sketchId": "S1"
+    },
+    {
+      "id": "L17",
+      "p1": "P19",
+      "p2": "P20",
+      "construction": false,
+      "sketchId": "S1"
+    }
+  ],
+  "circles": [],
+  "arcs": [],
+  "constraints": [
+    {
+      "type": "horizontal",
+      "line": "L5",
+      "enabled": true,
+      "sketchId": "S1"
+    },
+    {
+      "type": "vertical",
+      "line": "L6",
+      "enabled": true,
+      "sketchId": "S1"
+    },
+    {
+      "type": "horizontal",
+      "line": "L7",
+      "enabled": true,
+      "sketchId": "S1"
+    },
+    {
+      "type": "vertical",
+      "line": "L8",
+      "enabled": true,
+      "sketchId": "S1"
+    },
+    {
+      "type": "distance",
+      "p1": "P5",
+      "p2": "P6",
+      "target": 3400,
+      "dimension": {
+        "x": 204.50757617850843,
+        "y": 1808.2805385019296,
+        "offsetU": -534.4924238969373,
+        "offsetN": 328.1758046668298,
+        "labelOffsetU": -534.4924238969371,
+        "axis": null
+      },
+      "enabled": true,
+      "sketchId": "S1"
+    },
+    {
+      "type": "distance",
+      "p1": "P6",
+      "p2": "P7",
+      "target": 2300,
+      "dimension": {
+        "x": 3365.615249868342,
+        "y": 194.97346600113997,
+        "offsetU": 135.13126783395313,
+        "offsetN": 926.6152497928962,
+        "labelOffsetU": 212.4450839998152,
+        "axis": null
+      },
+      "enabled": true,
+      "sketchId": "S1"
+    },
+    {
+      "type": "pointOnLine",
+      "point": "P9",
+      "line": "L8",
+      "enabled": true,
+      "sketchId": "S1"
+    },
+    {
+      "type": "pointOnLine",
+      "point": "P10",
+      "line": "L6",
+      "enabled": true,
+      "sketchId": "S1"
+    },
+    {
+      "type": "horizontal",
+      "line": "L9",
+      "enabled": true,
+      "sketchId": "S1"
+    },
+    {
+      "type": "lineLineDistance",
+      "line1": "L7",
+      "line2": "L9",
+      "target": 470,
+      "sign": 1,
+      "dimension": {
+        "x": 2887.8294919144428,
+        "y": -499.74622712756224,
+        "offsetU": -85.14903903736422,
+        "offsetN": 2148.829491838997,
+        "labelOffsetU": -85.14903903736428,
+        "axis": null
+      },
+      "enabled": true,
+      "sketchId": "S1"
+    },
+    {
+      "type": "pointOnLine",
+      "point": "P11",
+      "line": "L8",
+      "enabled": true,
+      "sketchId": "S1"
+    },
+    {
+      "type": "pointOnLine",
+      "point": "P12",
+      "line": "L6",
+      "enabled": true,
+      "sketchId": "S1"
+    },
+    {
+      "type": "horizontal",
+      "line": "L10",
+      "enabled": true,
+      "sketchId": "S1"
+    },
+    {
+      "type": "lineLineDistance",
+      "line1": "L9",
+      "line2": "L10",
+      "target": 100,
+      "sign": 1,
+      "dimension": {
+        "x": 2772.002585712406,
+        "y": -65.9894101972278,
+        "offsetU": -233.90585596772,
+        "offsetN": 3733.00258563696,
+        "labelOffsetU": -224.5101949375032,
+        "axis": null
+      },
+      "enabled": true,
+      "sketchId": "S1"
+    },
+    {
+      "type": "lineLineDistance",
+      "line1": "L9",
+      "line2": "L5",
+      "target": 1829.9999998958883,
+      "sign": 1,
+      "dimension": {
+        "x": 3071.221755880407,
+        "y": 590.6189951602319,
+        "offsetU": -25.514261325147324,
+        "offsetN": 4032.221755804961,
+        "labelOffsetU": 32.398823575889736,
+        "axis": null
+      },
+      "enabled": false,
+      "readOnlyDimension": true,
+      "sketchId": "S1"
+    },
+    {
+      "type": "horizontal",
+      "line": "L11",
+      "enabled": true,
+      "sketchId": "S1"
+    },
+    {
+      "type": "vertical",
+      "line": "L12",
+      "enabled": true,
+      "sketchId": "S1"
+    },
+    {
+      "type": "horizontal",
+      "line": "L13",
+      "enabled": true,
+      "sketchId": "S1"
+    },
+    {
+      "type": "collinear",
+      "line1": "L10",
+      "line2": "L13",
+      "enabled": true,
+      "sketchId": "S1"
+    },
+    {
+      "type": "vertical",
+      "line": "L14",
+      "enabled": true,
+      "sketchId": "S1"
+    },
+    {
+      "type": "horizontal",
+      "line": "L15",
+      "enabled": true,
+      "sketchId": "S1"
+    },
+    {
+      "type": "vertical",
+      "line": "L16",
+      "enabled": true,
+      "sketchId": "S1"
+    },
+    {
+      "type": "pointLineDistance",
+      "point": "P15",
+      "line": "L14",
+      "target": 28,
+      "sign": -1,
+      "dimension": {
+        "x": 5274.7232847844325,
+        "y": 31.84437372807639,
+        "offsetU": -67.49702106270433,
+        "offsetN": 281.7396414730648,
+        "labelOffsetU": -67.49702106270433,
+        "axis": null
+      },
+      "enabled": true,
+      "sketchId": "S1"
+    },
+    {
+      "type": "pointOnLine",
+      "point": "P18",
+      "line": "L9",
+      "enabled": true,
+      "sketchId": "S1"
+    },
+    {
+      "type": "lineLineDistance",
+      "line1": "L16",
+      "line2": "L14",
+      "target": 185,
+      "sign": -1,
+      "dimension": {
+        "x": 5482.902770517671,
+        "y": -496.33361807486125,
+        "offsetU": -247.1824646705345,
+        "offsetN": 196.43835111989847,
+        "labelOffsetU": -247.18246467053405,
+        "axis": null
+      },
+      "enabled": true,
+      "sketchId": "S1"
+    },
+    {
+      "type": "horizontal",
+      "line": "L17",
+      "enabled": true,
+      "sketchId": "S1"
+    },
+    {
+      "type": "pointOnLine",
+      "point": "P20",
+      "line": "L7",
+      "enabled": true,
+      "sketchId": "S1"
+    },
+    {
+      "type": "pointVertical",
+      "p1": "P20",
+      "p2": "P13",
+      "enabled": true,
+      "sketchId": "S1"
+    },
+    {
+      "type": "horizontal",
+      "line": "BI1@L18",
+      "enabled": true,
+      "sketchId": "S2"
+    },
+    {
+      "type": "coincident",
+      "p1": "BI1@P26",
+      "p2": "P6",
+      "enabled": true,
+      "sketchId": "S2",
+      "reference": true,
+      "referenceSketchId": "S1"
+    },
+    {
+      "type": "horizontal",
+      "line": "BI2@L28",
+      "enabled": true,
+      "sketchId": "S2"
+    },
+    {
+      "type": "coincident",
+      "p1": "BI2@P33",
+      "p2": "P14",
+      "enabled": true,
+      "sketchId": "S2",
+      "reference": true,
+      "referenceSketchId": "S1"
+    },
+    {
+      "type": "pointOnLine",
+      "point": "BI4@P37",
+      "line": "BI1@L18",
+      "enabled": true,
+      "sketchId": "S2"
+    },
+    {
+      "type": "pointOnLine",
+      "point": "BI5@P37",
+      "line": "BI1@L18",
+      "enabled": true,
+      "sketchId": "S2"
+    }
+  ]
+}

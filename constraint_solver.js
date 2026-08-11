@@ -707,6 +707,40 @@
     }
   }
 
+  class SymmetryConstraint extends Constraint {
+    constructor(p1, p2, axis) {
+      super(`対称 ${p1.id}-${p2.id} / ${axis.id}`, 1);
+      this.p1 = p1;
+      this.p2 = p2;
+      this.axis = axis;
+      this.degenerateAtCreation = axis.length() < MIN_ORIENTATION_LENGTH;
+    }
+
+    rawError() {
+      let dx = this.axis.dx();
+      let dy = this.axis.dy();
+      if (this.axis.orientationHint === "horizontal") {
+        dx = 1;
+        dy = 0;
+      } else if (this.axis.orientationHint === "vertical") {
+        dx = 0;
+        dy = 1;
+      }
+      const length = hypot2(dx, dy);
+      if (this.degenerateAtCreation || length < MIN_ORIENTATION_LENGTH) return [0, 0];
+      const ux = dx / length;
+      const uy = dy / length;
+      const midpoint = {
+        x: (this.p1.x + this.p2.x) / 2,
+        y: (this.p1.y + this.p2.y) / 2,
+      };
+      return [
+        (this.p2.x - this.p1.x) * ux + (this.p2.y - this.p1.y) * uy,
+        signedPointLineDistance(midpoint, this.axis) * 2,
+      ];
+    }
+  }
+
   class ArcEndpointDragConstraint extends Constraint {
     constructor(arc, endpoint, x, y) {
       super(`ドラッグ ${arc.id}.${endpoint}`, 0.005);
@@ -937,7 +971,7 @@
         if (instance.fixed) continue;
         vs.push({ object: instance, prop: "x", label: `${instance.id}.x` });
         vs.push({ object: instance, prop: "y", label: `${instance.id}.y` });
-        vs.push({ object: instance, prop: "rotation", label: `${instance.id}.rotation` });
+        if (!instance.rotationLocked) vs.push({ object: instance, prop: "rotation", label: `${instance.id}.rotation` });
       }
       return vs;
     }
@@ -1489,6 +1523,7 @@
     VerticalConstraint,
     PointHorizontalConstraint,
     PointVerticalConstraint,
+    SymmetryConstraint,
     ParallelConstraint,
     PerpendicularConstraint,
     CollinearConstraint,

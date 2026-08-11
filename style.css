@@ -966,7 +966,9 @@ body.presentation-mode .app:not(.side-collapsed) .sketch-overlay {
   bottom: 48px;
   z-index: 3;
   width: min(300px, calc(100% - 24px));
-  max-height: 28vh;
+  max-height: min(46vh, 520px);
+  display: flex;
+  flex-direction: column;
   overflow: hidden;
   color: #111827;
   background: rgba(255, 255, 255, 0.78);
@@ -984,6 +986,7 @@ body.presentation-mode .app:not(.side-collapsed) .sketch-overlay {
 }
 
 .block-overlay-header {
+  flex: 0 0 auto;
   justify-content: space-between;
   min-height: 24px;
   padding: 2px 5px;
@@ -993,6 +996,7 @@ body.presentation-mode .app:not(.side-collapsed) .sketch-overlay {
 
 .block-overlay-actions {
   display: flex;
+  flex: 0 0 auto;
   gap: 5px;
   padding: 5px;
   border-bottom: 1px solid rgba(148, 163, 184, 0.18);
@@ -1025,8 +1029,10 @@ body.presentation-mode .app:not(.side-collapsed) .sketch-overlay {
 }
 
 .block-list {
-  max-height: calc(28vh - 26px);
+  min-height: 48px;
+  flex: 1 1 auto;
   overflow: auto;
+  overscroll-behavior: contain;
 }
 
 .block-item {
@@ -1034,6 +1040,11 @@ body.presentation-mode .app:not(.side-collapsed) .sketch-overlay {
   padding: 2px 4px 2px 7px;
   border-bottom: 1px solid rgba(226, 232, 240, 0.85);
   font-size: 11px;
+}
+
+.block-item.block-selected {
+  background: rgba(219, 234, 254, 0.9);
+  box-shadow: inset 3px 0 0 #2563eb;
 }
 
 .block-item-name {
@@ -1071,7 +1082,9 @@ body.block-editing .canvas-area {
 }
 
 .block-sketch-config {
-  max-height: 190px;
+  min-height: 72px;
+  max-height: min(190px, 20vh);
+  flex: 0 1 190px;
   overflow: auto;
   border-top: 1px solid rgba(148, 163, 184, 0.35);
   background: rgba(248, 250, 252, 0.94);
@@ -1082,6 +1095,37 @@ body.block-editing .canvas-area {
   color: #475569;
   font-size: 10px;
   font-weight: 700;
+}
+
+.block-rotation-config {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px 9px;
+  align-items: center;
+  padding: 2px 7px 5px;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.24);
+  font-size: 11px;
+}
+
+.block-rotation-config .block-sketch-config-title {
+  flex: 0 0 100%;
+  padding: 2px 0 0;
+}
+
+.block-rotation-config label {
+  display: inline-flex;
+  gap: 4px;
+  align-items: center;
+  cursor: pointer;
+}
+
+.block-rotation-config label:has(input:disabled) {
+  color: #94a3b8;
+  cursor: not-allowed;
+}
+
+.block-rotation-config small {
+  color: #b45309;
 }
 
 .block-sketch-option {
@@ -1335,6 +1379,12 @@ body.block-editing .canvas-area {
 .fixed-point-list-row:hover {
   border-color: rgba(14, 165, 233, 0.45);
   background: rgba(224, 242, 254, 0.72);
+}
+
+.constraint-list-row.sidebar-related {
+  border-color: #0ea5e9;
+  background: rgba(224, 242, 254, 0.82);
+  box-shadow: inset 3px 0 0 #0ea5e9;
 }
 
 .geometry-list-row.sidebar-selected,

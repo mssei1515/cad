@@ -114,6 +114,112 @@ test("history buttons enable after normal canvas edits", async ({ page }) => {
   expect(afterRedo.undoDisabled).toBe(false);
 });
 
+test("geometry copy and paste crosses sketches with internal constraints and stepped offsets", async ({ page }) => {
+  await page.goto(`${baseUrl}/index.html?test=1`);
+  await page.waitForFunction(() => window.__cadTest);
+  const initial = await page.evaluate(() => window.__cadTest.resetForGeometryClipboardTest());
+
+  expect(initial.geometryBySketch.S1.points).toHaveLength(6);
+  expect(initial.geometryBySketch.S1.lines).toHaveLength(1);
+  expect(initial.constraints).toHaveLength(7);
+  expect(initial.geometryBySketch.S1.points.some((item) => item.fixed)).toBe(true);
+  expect(initial.constraints.map((item) => item.type)).toEqual(expect.arrayContaining(["lineFixed", "arcEndpointFixed"]));
+  await expect(page.locator("#copySelectionBtn")).toHaveCount(0);
+  await expect(page.locator("#cutSelectionBtn")).toHaveCount(0);
+  await expect(page.locator("#pasteSelectionBtn")).toHaveCount(0);
+
+  await page.keyboard.press("Control+C");
+  let state = await page.evaluate(() => window.__cadTest.clipboardStateForTest());
+  expect(state.clipboard).toEqual({ pasteCount: 0, points: 5, lines: 1, circles: 1, arcs: 1, constraints: 4, blockInstances: 0 });
+
+  await page.click('.sketchActivateBtn[data-id="S2"]');
+  await page.keyboard.press("Control+V");
+  state = await page.evaluate(() => window.__cadTest.clipboardStateForTest());
+  expect(state.activeSketchId).toBe("S2");
+  expect(state.geometryBySketch.S2.points).toHaveLength(5);
+  expect(state.geometryBySketch.S2.lines).toHaveLength(1);
+  expect(state.geometryBySketch.S2.circles).toHaveLength(1);
+  expect(state.geometryBySketch.S2.arcs).toHaveLength(1);
+  expect(state.constraints.filter((item) => item.sketchId === "S2")).toHaveLength(4);
+  expect(state.constraints.filter((item) => item.sketchId === "S2").some((item) => item.type === "lineFixed" || item.type === "arcEndpointFixed")).toBe(false);
+  expect(state.geometryBySketch.S2.points.every((item) => !item.fixed)).toBe(true);
+  expect(state.constraints.filter((item) => item.sketchId === "S2").every((item) => !item.reference)).toBe(true);
+  expect(state.selected.points).toHaveLength(1);
+  expect(state.selected.lines).toHaveLength(1);
+  expect(state.selected.circles).toHaveLength(1);
+  expect(state.selected.arcs).toHaveLength(1);
+  expect(state.geometryBySketch.S2.lines[0].id).not.toBe(state.geometryBySketch.S1.lines[0].id);
+  const sourceDimension = state.constraints.find((item) => item.sketchId === "S1" && item.type === "distance").dimension;
+  const pastedDimension = state.constraints.find((item) => item.sketchId === "S2" && item.type === "distance").dimension;
+  expect(pastedDimension.x - sourceDimension.x).toBeCloseTo(24, 6);
+  expect(pastedDimension.y - sourceDimension.y).toBeCloseTo(24, 6);
+
+  await page.keyboard.press("Control+V");
+  state = await page.evaluate(() => window.__cadTest.clipboardStateForTest());
+  expect(state.clipboard.pasteCount).toBe(2);
+  expect(state.geometryBySketch.S2.lines).toHaveLength(2);
+  expect(state.geometryBySketch.S2.lines[1].p1).not.toBe(state.geometryBySketch.S2.lines[0].p1);
+  await page.keyboard.press("Control+Z");
+  state = await page.evaluate(() => window.__cadTest.clipboardStateForTest());
+  expect(state.geometryBySketch.S2.lines).toHaveLength(1);
+});
+
+test("cut uses one undo step and keeps a pasteable cross-sketch payload", async ({ page }) => {
+  await page.goto(`${baseUrl}/index.html?test=1`);
+  await page.waitForFunction(() => window.__cadTest);
+  await page.evaluate(() => window.__cadTest.resetForGeometryClipboardTest());
+
+  await page.keyboard.press("Control+X");
+  let state = await page.evaluate(() => window.__cadTest.clipboardStateForTest());
+  expect(state.clipboard.constraints).toBe(4);
+  expect(state.geometryBySketch.S1.points).toHaveLength(1);
+  expect(state.geometryBySketch.S1.lines).toHaveLength(0);
+  expect(state.geometryBySketch.S1.circles).toHaveLength(0);
+  expect(state.geometryBySketch.S1.arcs).toHaveLength(0);
+  expect(state.constraints).toHaveLength(0);
+  expect(state.history.undoCount).toBe(2);
+
+  await page.click('.sketchActivateBtn[data-id="S2"]');
+  await page.keyboard.press("Control+V");
+  state = await page.evaluate(() => window.__cadTest.clipboardStateForTest());
+  expect(state.geometryBySketch.S1.lines).toHaveLength(0);
+  expect(state.geometryBySketch.S2.lines).toHaveLength(1);
+  expect(state.constraints.filter((item) => item.sketchId === "S2")).toHaveLength(4);
+
+  await page.keyboard.press("Control+Z");
+  state = await page.evaluate(() => window.__cadTest.clipboardStateForTest());
+  expect(state.geometryBySketch.S1.lines).toHaveLength(0);
+  expect(state.geometryBySketch.S2.lines).toHaveLength(0);
+  await page.keyboard.press("Control+Z");
+  state = await page.evaluate(() => window.__cadTest.clipboardStateForTest());
+  expect(state.geometryBySketch.S1.lines).toHaveLength(1);
+  expect(state.constraints).toHaveLength(7);
+  expect(state.clipboard.constraints).toBe(4);
+});
+
+test("block instances and their closed constraints can be copied across sketches", async ({ page }) => {
+  await page.goto(`${baseUrl}/index.html?test=1`);
+  await page.waitForFunction(() => window.__cadTest);
+  await page.evaluate(() => window.__cadTest.resetForBlockClipboardTest());
+
+  await page.keyboard.press("Control+C");
+  let state = await page.evaluate(() => window.__cadTest.clipboardStateForTest());
+  expect(state.clipboard).toEqual({ pasteCount: 0, points: 0, lines: 0, circles: 0, arcs: 0, constraints: 1, blockInstances: 1 });
+  await page.click('.sketchActivateBtn[data-id="S2"]');
+  await page.keyboard.press("Control+V");
+  state = await page.evaluate(() => window.__cadTest.clipboardStateForTest());
+  expect(state.geometryBySketch.S2.blockInstances).toHaveLength(1);
+  expect(state.geometryBySketch.S2.blockInstances[0]).toEqual(expect.objectContaining({ x: 34, y: 44, definitionId: "B1", fixed: false, rotationLocked: true }));
+  expect(state.selectedBlockInstanceIds).toEqual([state.geometryBySketch.S2.blockInstances[0].id]);
+  const pastedConstraints = state.constraints.filter((item) => item.sketchId === "S2");
+  expect(pastedConstraints).toHaveLength(1);
+  expect(pastedConstraints[0].line).toContain(`${state.geometryBySketch.S2.blockInstances[0].id}@`);
+
+  await page.keyboard.press("Control+Z");
+  state = await page.evaluate(() => window.__cadTest.clipboardStateForTest());
+  expect(state.geometryBySketch.S2.blockInstances).toHaveLength(0);
+});
+
 test("undo preserves construction drawing mode", async ({ page }) => {
   await page.goto(`${baseUrl}/index.html?test=1`);
   await page.click("#toolConstructionLine");
@@ -176,7 +282,7 @@ test("geometry toolbar uses the organized command groups", async ({ page }) => {
       visibleLeftCommandIds,
       pointToolVisible: getComputedStyle(document.getElementById("toolPoint")).display !== "none",
       blockCreateParentId: document.getElementById("toolCreateBlock").closest("section").id,
-      blockPlaceParentId: document.getElementById("toolPlaceBlock").closest("section").id,
+      blockTopPlaceExists: Boolean(document.getElementById("toolPlaceBlock")),
       presentationGroupVisible: getComputedStyle(document.getElementById("presentationStyleGroup")).display !== "none",
       geometrySheetDisplay,
       fileGroupBorderTopWidth: fileGroupStyle.borderTopWidth,
@@ -254,7 +360,7 @@ test("geometry toolbar uses the organized command groups", async ({ page }) => {
   );
   expect(layout.pointToolVisible).toBe(true);
   expect(layout.blockCreateParentId).toBe("blockOverlay");
-  expect(layout.blockPlaceParentId).toBe("blockOverlay");
+  expect(layout.blockTopPlaceExists).toBe(false);
   expect(layout.presentationGroupVisible).toBe(false);
   expect(layout.geometrySheetDisplay).toBe("none");
   expect(layout.fileGroupBorderTopWidth).toBe("0px");
@@ -580,6 +686,29 @@ test("sidebar lists circles and arcs and highlights related geometry", async ({ 
   await page.keyboard.press("Delete");
   await expect(page.locator("#constraintList .constraint-list-row")).toHaveCount(0);
   await page.screenshot({ path: "test-results/sidebar-inspection.png", fullPage: true });
+});
+
+test("constraint sidebar highlights only rows that directly reference selected geometry", async ({ page }) => {
+  await page.goto(`${baseUrl}/index.html?test=1`);
+  await page.waitForFunction(() => window.__cadTest);
+  const ids = await page.evaluate(() => window.__cadTest.resetForSidebarInspection());
+  if (await page.locator(".app").evaluate((element) => element.classList.contains("side-collapsed"))) {
+    await page.click('[data-sidebar-tab="constraints"]');
+  }
+  await expect(page.locator("#sidebarConstraints")).toBeVisible();
+  const constraintRow = page.locator("#constraintList .constraint-list-row");
+  await expect(constraintRow).toHaveCount(1);
+
+  await page.evaluate((lineId) => window.__cadTest.selectGeometryIdsForTest({ lines: [lineId] }), ids.line);
+  await expect(constraintRow).toHaveClass(/sidebar-related/);
+
+  await page.evaluate((circleId) => window.__cadTest.selectGeometryIdsForTest({ circles: [circleId] }), ids.circle);
+  await expect(constraintRow).not.toHaveClass(/sidebar-related/);
+
+  await page.evaluate((pointId) => window.__cadTest.selectGeometryIdsForTest({ points: [pointId] }), ids.fixedPoint);
+  await expect(constraintRow).toHaveClass(/sidebar-related/);
+  await page.evaluate(() => window.__cadTest.selectGeometryIdsForTest({}));
+  await expect(constraintRow).not.toHaveClass(/sidebar-related/);
 });
 
 test("line circle and arc offsets keep editable dimensional relationships", async ({ page }) => {
