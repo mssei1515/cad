@@ -1,4 +1,4 @@
-const { test, expect } = require("@playwright/test");
+const { test, expect } = require("./test-fixture");
 const { spawn } = require("child_process");
 const http = require("http");
 const path = require("path");

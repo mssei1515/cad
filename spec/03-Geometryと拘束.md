@@ -150,4 +150,6 @@ Geometry は解析結果により次の状態で描き分ける。
 
 ## 9. Geometry の削除
 
-Geometry の削除時は、共有 Point の利用状況を考慮して不要 Point を整理し、対象を参照する拘束、寸法、Presentation style、Presentation Element を除去する。1回のユーザー操作は1つの履歴単位にする。
+Geometry の削除時は、共有 Point の利用状況を考慮して不要 Pointを整理し、対象を参照する拘束と拘束寸法を除去する。1回のユーザー操作は1つの履歴単位にする。
+
+Presentation styleとPresentation Elementも同時に除去するのが参照ライフサイクル上の期待仕様だが、通常Documentの直接Geometry削除では現在残存する。Sketch削除、Block Instance削除、Block Definition編集では整理される。この差は既知の不整合である。

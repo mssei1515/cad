@@ -179,7 +179,7 @@ Leader style は色、フォントサイズ、線幅を描画に利用するが�
 
 Annotation Dimension は `target` と同内容の ID を `geometryRefs` にも保持する。Leader は `geometryRefs.target` に `<kind>:<id>` を保持する。
 
-- 通常 Geometry 削除時は、参照する Presentation Element と style を削除する。
+- 通常 Geometry の直接削除では、現在Presentation Elementとstyleが残る既知の不整合がある。
 - Sketch 削除時も同じ整理を行う。
 - Block Instance 削除、Definition 要素削除でも Projection 参照を整理する。
 - Block の内部 Sketch 無効化は、参照する注記 Element があれば拒否する。
