@@ -13,6 +13,16 @@
 
 モデル長の下限は `1e-6` である。Line、Circle、Arc の作成、読込、拘束追加ではゼロ長または下限近傍への崩壊を防止・補正する。
 
+### 共通数学契約
+
+UI adapterとSolverが共有する副作用のない計算は`geometry_kernel.js`に置く。
+
+- `normalizeAnglePositive`は角度を`[0, 2π)`へ正規化し、Arc sweep判定、trim、hit test等のUI側計算で使う。
+- `normalizeAngleSigned`は角度を`(-π, π]`へ正規化し、Solverの角度残差で使う。境界の`-π`は`π`になる。
+- `arcEndpointPoint`はArcの中心、公開`radius()`、指定した開始／終了角から端点座標を返し、SolverとUI側計算が同じ実装を使う。
+
+この2種類の角度範囲は用途が異なるため統合せず、呼び出し側で明示する。
+
 ## 2. 作図コマンド
 
 ### 点

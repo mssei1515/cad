@@ -2,6 +2,11 @@
 (function () {
   "use strict";
 
+  const {
+    normalizeAngleSigned,
+    arcEndpointPoint,
+  } = window.GeometryKernel;
+
   const MIN_MODEL_LENGTH = 1e-6;
   const MIN_ORIENTATION_LENGTH = 1e-9;
   const GUIDED_DRAG_BACKGROUND_WEIGHT = 1e-4;
@@ -26,15 +31,8 @@
     return Math.sqrt(s);
   }
 
-  function normalizeAngle(angle) {
-    let a = angle;
-    while (a > Math.PI) a -= Math.PI * 2;
-    while (a <= -Math.PI) a += Math.PI * 2;
-    return a;
-  }
-
   function normalizeAxisAngle(angle) {
-    let a = Math.abs(normalizeAngle(angle));
+    let a = Math.abs(normalizeAngleSigned(angle));
     return clamp(a, 0, Math.PI);
   }
 
@@ -54,14 +52,6 @@
 
   function radiusOf(item) {
     return typeof item.radius === "function" ? item.radius() : 0;
-  }
-
-  function arcEndpointPoint(arc, endpoint) {
-    const angle = endpoint === "start" ? arc.startAngle : arc.endAngle;
-    return {
-      x: arc.center.x + Math.cos(angle) * arc.radius(),
-      y: arc.center.y + Math.sin(angle) * arc.radius(),
-    };
   }
 
   class Point {
@@ -312,8 +302,8 @@
         (radiusOf(this.offset) - radiusOf(this.source)) * this.sign - this.target,
       ];
       if (this.source instanceof Arc && this.offset instanceof Arc) {
-        errors.push(normalizeAngle(this.offset.startAngle - this.source.startAngle));
-        errors.push(normalizeAngle(this.offset.endAngle - this.source.endAngle));
+        errors.push(normalizeAngleSigned(this.offset.startAngle - this.source.startAngle));
+        errors.push(normalizeAngleSigned(this.offset.endAngle - this.source.endAngle));
       }
       return errors;
     }

@@ -5,10 +5,12 @@ const test = require("node:test");
 const vm = require("node:vm");
 
 function loadGeometrySolver() {
-  const source = fs.readFileSync(path.resolve(__dirname, "../../constraint_solver.js"), "utf8");
   const sandbox = { window: {} };
   vm.createContext(sandbox);
-  vm.runInContext(source, sandbox, { filename: "constraint_solver.js" });
+  for (const fileName of ["geometry_kernel.js", "constraint_solver.js"]) {
+    const source = fs.readFileSync(path.resolve(__dirname, `../../${fileName}`), "utf8");
+    vm.runInContext(source, sandbox, { filename: fileName });
+  }
   return sandbox.window.GeometrySolver;
 }
 

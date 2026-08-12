@@ -3,6 +3,11 @@
   "use strict";
 
   const {
+    normalizeAnglePositive,
+    arcEndpointPoint,
+  } = window.GeometryKernel;
+
+  const {
     hypot2,
     vectorNorm,
     MIN_ORIENTATION_LENGTH,
@@ -5111,11 +5116,6 @@
     return points;
   }
 
-  function normalizeAngle(angle) {
-    const twoPi = Math.PI * 2;
-    return ((angle % twoPi) + twoPi) % twoPi;
-  }
-
   function unwrapAngleNear(angle, reference) {
     const twoPi = Math.PI * 2;
     return angle + Math.round((reference - angle) / twoPi) * twoPi;
@@ -5181,22 +5181,14 @@
     const twoPi = Math.PI * 2;
     const sweep = end - start;
     if (Math.abs(sweep) >= twoPi) return true;
-    if (sweep >= 0) return normalizeAngle(angle - start) <= sweep;
-    return normalizeAngle(start - angle) <= -sweep;
+    if (sweep >= 0) return normalizeAnglePositive(angle - start) <= sweep;
+    return normalizeAnglePositive(start - angle) <= -sweep;
   }
 
   function arcAngles(arc) {
     return {
       start: arc.startAngle,
       end: arc.endAngle,
-    };
-  }
-
-  function arcEndpointPoint(arc, endpoint) {
-    const angle = endpoint === "start" ? arc.startAngle : arc.endAngle;
-    return {
-      x: arc.center.x + Math.cos(angle) * arc.radius(),
-      y: arc.center.y + Math.sin(angle) * arc.radius(),
     };
   }
 
@@ -11911,7 +11903,7 @@
   }
 
   function circleParam(circle, angle) {
-    return normalizeAngle(angle) / (Math.PI * 2);
+    return normalizeAnglePositive(angle) / (Math.PI * 2);
   }
 
   function angleAtCircleParam(t) {
@@ -11921,14 +11913,14 @@
   function arcParam(arc, angle) {
     const sweep = arc.endAngle - arc.startAngle;
     if (Math.abs(sweep) < 1e-12) return 0;
-    return sweep >= 0 ? normalizeAngle(angle - arc.startAngle) / sweep : normalizeAngle(arc.startAngle - angle) / -sweep;
+    return sweep >= 0 ? normalizeAnglePositive(angle - arc.startAngle) / sweep : normalizeAnglePositive(arc.startAngle - angle) / -sweep;
   }
 
   function arcParamOnSweep(arc, angle) {
     const sweep = arc.endAngle - arc.startAngle;
     if (Math.abs(sweep) < 1e-12) return null;
     if (!angleOnSignedSweep(angle, arc.startAngle, arc.endAngle)) return null;
-    return sweep >= 0 ? normalizeAngle(angle - arc.startAngle) / sweep : normalizeAngle(arc.startAngle - angle) / -sweep;
+    return sweep >= 0 ? normalizeAnglePositive(angle - arc.startAngle) / sweep : normalizeAnglePositive(arc.startAngle - angle) / -sweep;
   }
 
   function angleAtArcParam(arc, t) {
