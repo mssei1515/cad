@@ -984,6 +984,58 @@ test("dimension labels hide values below the supported display precision", async
   expect(result.roundedFraction).toBe("1.234567");
 });
 
+test("dimension labels follow JIS reading directions in every quadrant", async ({ page }) => {
+  await page.goto(`${baseUrl}/index.html?test=1`);
+  await page.waitForFunction(() => window.__cadTest);
+
+  const result = await page.evaluate(() => window.__cadTest.dimensionTextAngleCases());
+  expect(result.zero.angle).toBeCloseTo(0, 8);
+  expect(result.zero.offset).toEqual(expect.objectContaining({ x: 0, y: -1 }));
+  expect(result.quadrant1.angle).toBeCloseTo(-30, 8);
+  expect(result.quadrant1.offset.x).toBeLessThan(0);
+  expect(result.quadrant1.offset.y).toBeLessThan(0);
+  expect(result.vertical90.angle).toBeCloseTo(-90, 8);
+  expect(result.vertical90.offset.x).toBeCloseTo(-1, 8);
+  expect(result.vertical90.offset.y).toBeCloseTo(0, 8);
+  expect(result.quadrant2.angle).toBeCloseTo(30, 8);
+  expect(result.quadrant2.offset.x).toBeGreaterThan(0);
+  expect(result.quadrant2.offset.y).toBeLessThan(0);
+  expect(result.straight180.angle).toBeCloseTo(0, 8);
+  expect(result.straight180.offset.y).toBeCloseTo(-1, 8);
+  expect(result.quadrant3.angle).toBeCloseTo(-30, 8);
+  expect(result.quadrant3.offset.x).toBeLessThan(0);
+  expect(result.quadrant3.offset.y).toBeLessThan(0);
+  expect(result.vertical270.angle).toBeCloseTo(-90, 8);
+  expect(result.vertical270.offset.x).toBeCloseTo(-1, 8);
+  expect(result.vertical270.offset.y).toBeCloseTo(0, 8);
+  expect(result.quadrant4.angle).toBeCloseTo(30, 8);
+  expect(result.quadrant4.offset.x).toBeGreaterThan(0);
+  expect(result.quadrant4.offset.y).toBeLessThan(0);
+  expect(result.quadrant4NearVertical.angle).toBeCloseTo(87, 8);
+  expect(result.quadrant4NearVertical.offset.x).toBeGreaterThan(0);
+  expect(result.quadrant4NearVertical.offset.y).toBeLessThan(0);
+});
+
+test("angle dimension labels follow geometry and dimension-line movement", async ({ page }) => {
+  await page.goto(`${baseUrl}/index.html?test=1`);
+  await page.waitForFunction(() => window.__cadTest);
+
+  const result = await page.evaluate(() => window.__cadTest.angleDimensionLabelFollowCase());
+  expect(result.migratedLegacyCoordinates).toBe(true);
+  expect(result.recoveredCorruptedOffsets.radial).toBeCloseTo(0, 8);
+  expect(result.recoveredCorruptedOffsets.tangent).toBeCloseTo(0, 8);
+  expect(result.storedOffsets.radial).toBeCloseTo(11, 8);
+  expect(result.storedOffsets.tangent).toBeCloseTo(7, 8);
+  expect(result.labelTranslationError).toBeLessThan(1e-8);
+  expect(result.arcTranslationError).toBeLessThan(1e-8);
+  expect(result.radiusFollowError).toBeLessThan(1e-8);
+  expect(result.repeatedDragOffsetError).toBeLessThan(1e-8);
+  expect(result.repeatedDragRadialPointerError).toBeLessThan(1e-8);
+  expect(result.serializedRelativeOffsets).toBe(true);
+  expect(result.serializedPlacementVersion).toBe(2);
+  expect(result.serializedLegacyCoordinates).toBe(false);
+});
+
 test("middle line trim transfers right-side point constraints to the new segment", async ({ page }) => {
   await page.goto(`${baseUrl}/index.html?test=1`);
   await page.waitForFunction(() => window.__cadTest);

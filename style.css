@@ -512,7 +512,8 @@ input {
   font: 12px ui-monospace, SFMono-Regular, Consolas, monospace;
   text-align: left;
   box-shadow: 0 4px 14px rgba(15, 23, 42, 0.16);
-  transform: translate(-50%, -100%);
+  transform: translate(-50%, -100%) rotate(var(--dimension-text-angle, 0rad));
+  transform-origin: 50% 100%;
 }
 
 .dimension-value-input.is-invalid {

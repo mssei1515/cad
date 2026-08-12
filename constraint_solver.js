@@ -741,6 +741,69 @@
     }
   }
 
+  function reflectedPointAcrossLine(point, axis) {
+    const dx = axis.dx();
+    const dy = axis.dy();
+    const lengthSquared = dx * dx + dy * dy;
+    if (lengthSquared < MIN_ORIENTATION_LENGTH * MIN_ORIENTATION_LENGTH) return { x: point.x, y: point.y };
+    const t = ((point.x - axis.p1.x) * dx + (point.y - axis.p1.y) * dy) / lengthSquared;
+    const projectionX = axis.p1.x + dx * t;
+    const projectionY = axis.p1.y + dy * t;
+    return { x: projectionX * 2 - point.x, y: projectionY * 2 - point.y };
+  }
+
+  function pointPairSymmetryError(p1, p2, axis, degenerateAtCreation) {
+    let dx = axis.dx();
+    let dy = axis.dy();
+    if (axis.orientationHint === "horizontal") {
+      dx = 1;
+      dy = 0;
+    } else if (axis.orientationHint === "vertical") {
+      dx = 0;
+      dy = 1;
+    }
+    const length = hypot2(dx, dy);
+    if (degenerateAtCreation || length < MIN_ORIENTATION_LENGTH) return [0, 0];
+    const ux = dx / length;
+    const uy = dy / length;
+    const midpoint = { x: (p1.x + p2.x) / 2, y: (p1.y + p2.y) / 2 };
+    return [
+      (p2.x - p1.x) * ux + (p2.y - p1.y) * uy,
+      signedPointLineDistance(midpoint, axis) * 2,
+    ];
+  }
+
+  class LineSymmetryConstraint extends Constraint {
+    constructor(line1, line2, axis, reversed = null) {
+      super(`線対称 ${line1.id}-${line2.id} / ${axis.id}`, 1);
+      this.line1 = line1;
+      this.line2 = line2;
+      this.axis = axis;
+      this.degenerateAtCreation = axis.length() < MIN_ORIENTATION_LENGTH || line1.length() < MIN_ORIENTATION_LENGTH || line2.length() < MIN_ORIENTATION_LENGTH;
+      if (typeof reversed === "boolean") {
+        this.reversed = reversed;
+      } else {
+        const reflectedP1 = reflectedPointAcrossLine(line1.p1, axis);
+        const reflectedP2 = reflectedPointAcrossLine(line1.p2, axis);
+        const direct = (reflectedP1.x - line2.p1.x) ** 2 + (reflectedP1.y - line2.p1.y) ** 2
+          + (reflectedP2.x - line2.p2.x) ** 2 + (reflectedP2.y - line2.p2.y) ** 2;
+        const reverse = (reflectedP1.x - line2.p2.x) ** 2 + (reflectedP1.y - line2.p2.y) ** 2
+          + (reflectedP2.x - line2.p1.x) ** 2 + (reflectedP2.y - line2.p1.y) ** 2;
+        this.reversed = reverse < direct;
+      }
+    }
+
+    rawError() {
+      if (this.degenerateAtCreation) return [0, 0, 0, 0];
+      const line2Start = this.reversed ? this.line2.p2 : this.line2.p1;
+      const line2End = this.reversed ? this.line2.p1 : this.line2.p2;
+      return [
+        ...pointPairSymmetryError(this.line1.p1, line2Start, this.axis, this.degenerateAtCreation),
+        ...pointPairSymmetryError(this.line1.p2, line2End, this.axis, this.degenerateAtCreation),
+      ];
+    }
+  }
+
   class ArcEndpointDragConstraint extends Constraint {
     constructor(arc, endpoint, x, y) {
       super(`ドラッグ ${arc.id}.${endpoint}`, 0.005);
@@ -1524,6 +1587,7 @@
     PointHorizontalConstraint,
     PointVerticalConstraint,
     SymmetryConstraint,
+    LineSymmetryConstraint,
     ParallelConstraint,
     PerpendicularConstraint,
     CollinearConstraint,

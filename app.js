@@ -31,6 +31,7 @@
     PointHorizontalConstraint,
     PointVerticalConstraint,
     SymmetryConstraint,
+    LineSymmetryConstraint,
     ParallelConstraint,
     PerpendicularConstraint,
     CollinearConstraint,
@@ -2152,6 +2153,7 @@
       constraint instanceof PointHorizontalConstraint ||
       constraint instanceof PointVerticalConstraint ||
       constraint instanceof SymmetryConstraint ||
+      constraint instanceof LineSymmetryConstraint ||
       constraint instanceof ParallelConstraint ||
       constraint instanceof PerpendicularConstraint ||
       constraint instanceof CollinearConstraint ||
@@ -3423,6 +3425,7 @@
 
   function serializeDimension(dimension, target = null) {
     if (!dimension) return null;
+    if (target?.kind === "angle") migrateAngleDimensionLabelPlacement(target, dimension);
     const anchor = target ? dimensionAnchor(target, dimension) : dimension;
     const axis = target ? storedDimensionAxis(target, dimension) : dimension.axis || null;
     const data = {
@@ -3441,6 +3444,11 @@
       data.angleStartFlip = Number.isInteger(dimension.angleStartFlip) ? dimension.angleStartFlip : null;
       data.angleEndFlip = Number.isInteger(dimension.angleEndFlip) ? dimension.angleEndFlip : null;
       data.angleRadius = Number.isFinite(dimension.angleRadius) ? dimension.angleRadius : null;
+      if (Number.isFinite(dimension.angleLabelOffsetR) && Number.isFinite(dimension.angleLabelOffsetT)) {
+        data.angleLabelOffsetR = dimension.angleLabelOffsetR;
+        data.angleLabelOffsetT = dimension.angleLabelOffsetT;
+        data.angleLabelPlacementVersion = 2;
+      }
     }
     return data;
   }
@@ -3536,6 +3544,9 @@
     }
     if (c instanceof SymmetryConstraint) {
       return { type: "symmetry", p1: c.p1.id, p2: c.p2.id, axis: c.axis.id, enabled: c.enabled };
+    }
+    if (c instanceof LineSymmetryConstraint) {
+      return { type: "lineSymmetry", line1: c.line1.id, line2: c.line2.id, axis: c.axis.id, reversed: c.reversed, enabled: c.enabled };
     }
     if (c instanceof ParallelConstraint) {
       return { type: "parallel", line1: c.line1.id, line2: c.line2.id, enabled: c.enabled };
@@ -3914,6 +3925,8 @@
       constraint = new PointVerticalConstraint(point(data.p1), point(data.p2));
     } else if (data.type === "symmetry") {
       constraint = new SymmetryConstraint(point(data.p1), point(data.p2), line(data.axis));
+    } else if (data.type === "lineSymmetry") {
+      constraint = new LineSymmetryConstraint(line(data.line1), line(data.line2), line(data.axis), typeof data.reversed === "boolean" ? data.reversed : null);
     } else if (data.type === "parallel") {
       constraint = new ParallelConstraint(line(data.line1), line(data.line2));
     } else if (data.type === "perpendicular") {
@@ -3957,6 +3970,9 @@
           angleStartFlip: Number.isInteger(data.dimension.angleStartFlip) ? data.dimension.angleStartFlip : null,
           angleEndFlip: Number.isInteger(data.dimension.angleEndFlip) ? data.dimension.angleEndFlip : null,
           angleRadius: Number.isFinite(Number(data.dimension.angleRadius)) ? Number(data.dimension.angleRadius) : NaN,
+          angleLabelOffsetR: data.dimension.angleLabelOffsetR != null && Number.isFinite(Number(data.dimension.angleLabelOffsetR)) ? Number(data.dimension.angleLabelOffsetR) : NaN,
+          angleLabelOffsetT: data.dimension.angleLabelOffsetT != null && Number.isFinite(Number(data.dimension.angleLabelOffsetT)) ? Number(data.dimension.angleLabelOffsetT) : NaN,
+          angleLabelPlacementVersion: Number.isInteger(data.dimension.angleLabelPlacementVersion) ? data.dimension.angleLabelPlacementVersion : null,
         };
         if (constraint instanceof LineAngleConstraint && !Number.isInteger(data.startFlip) && Number.isInteger(constraint.dimension.angleStartFlip)) {
           constraint.startFlip = constraint.dimension.angleStartFlip ? 1 : 0;
@@ -5025,7 +5041,7 @@
     for (const key of ["y", "labelY"]) {
       if (Number.isFinite(dimension[key])) dimension[key] = scaleValueAbout(dimension[key], origin.y, scale);
     }
-    for (const key of ["offsetU", "offsetN", "labelOffsetU", "angleRadius"]) {
+    for (const key of ["offsetU", "offsetN", "labelOffsetU", "angleRadius", "angleLabelOffsetR", "angleLabelOffsetT"]) {
       if (Number.isFinite(dimension[key])) dimension[key] *= scale;
     }
     return dimension;
@@ -5964,10 +5980,80 @@
     };
   }
 
+  function angleDimensionLabelBasis(target, dimension) {
+    if (target?.kind !== "angle" || !dimension) return null;
+    const vertex = lineIntersection(target.line1, target.line2);
+    if (!vertex) return null;
+    const anchor = dimensionAnchor(target, dimension);
+    const radius = Math.max(14 / viewport.scale, hypot2(anchor.x - vertex.x, anchor.y - vertex.y));
+    const { mid } = angleDimensionAngles(target, anchor, dimension);
+    const radial = { x: Math.cos(mid), y: Math.sin(mid) };
+    const tangent = { x: -radial.y, y: radial.x };
+    return {
+      vertex,
+      radius,
+      radial,
+      tangent,
+      arcPoint: {
+        x: vertex.x + radial.x * radius,
+        y: vertex.y + radial.y * radius,
+      },
+    };
+  }
+
+  function angleDimensionLabelOffsets(target, dimension) {
+    if (!dimension) return null;
+    if (Number.isFinite(dimension.angleLabelOffsetR) && Number.isFinite(dimension.angleLabelOffsetT)) {
+      return { radial: dimension.angleLabelOffsetR, tangent: dimension.angleLabelOffsetT };
+    }
+    if (!Number.isFinite(dimension.labelX) || !Number.isFinite(dimension.labelY)) return null;
+    const basis = angleDimensionLabelBasis(target, dimension);
+    if (!basis) return null;
+    const dx = dimension.labelX - basis.arcPoint.x;
+    const dy = dimension.labelY - basis.arcPoint.y;
+    return {
+      radial: dx * basis.radial.x + dy * basis.radial.y,
+      tangent: dx * basis.tangent.x + dy * basis.tangent.y,
+    };
+  }
+
+  function setAngleDimensionLabelOffsets(dimension, offsets) {
+    if (!dimension || !offsets) return dimension;
+    dimension.angleLabelOffsetR = offsets.radial;
+    dimension.angleLabelOffsetT = offsets.tangent;
+    dimension.angleLabelPlacementVersion = 2;
+    delete dimension.labelX;
+    delete dimension.labelY;
+    return dimension;
+  }
+
+  function migrateAngleDimensionLabelPlacement(target, dimension) {
+    if (target?.kind !== "angle" || !dimension) return dimension;
+    if (Number.isFinite(dimension.angleLabelOffsetR) && Number.isFinite(dimension.angleLabelOffsetT)) {
+      if (dimension.angleLabelPlacementVersion !== 2) {
+        dimension.angleLabelOffsetR = 0;
+        dimension.angleLabelOffsetT = 0;
+      }
+      dimension.angleLabelPlacementVersion = 2;
+      delete dimension.labelX;
+      delete dimension.labelY;
+      return dimension;
+    }
+    return setAngleDimensionLabelOffsets(dimension, angleDimensionLabelOffsets(target, dimension));
+  }
+
   function dimensionWithLabelAt(target, dimension, labelPoint) {
     if (!target || !dimension || !labelPoint) return dimension;
     if (target.kind === "angle") {
-      return { ...dimension, labelX: labelPoint.x, labelY: labelPoint.y };
+      const next = { ...dimension };
+      const basis = angleDimensionLabelBasis(target, next);
+      if (!basis) return next;
+      const dx = labelPoint.x - basis.arcPoint.x;
+      const dy = labelPoint.y - basis.arcPoint.y;
+      return setAngleDimensionLabelOffsets(next, {
+        radial: dx * basis.radial.x + dy * basis.radial.y,
+        tangent: dx * basis.tangent.x + dy * basis.tangent.y,
+      });
     }
     const anchor = dimensionAnchor(target, dimension);
     const basisTarget = { ...target, dimensionAxis: storedDimensionAxis(target, dimension) };
@@ -5979,6 +6065,25 @@
     const midpointProjection = (Math.min(...projections) + Math.max(...projections)) / 2;
     const labelProjection = (labelPoint.x - anchor.x) * d.x + (labelPoint.y - anchor.y) * d.y;
     return { ...dimension, labelOffsetU: labelProjection - midpointProjection };
+  }
+
+  function angleDimensionFromLabelPoint(target, labelPoint, labelOffsets = null) {
+    if (target?.kind !== "angle" || !labelPoint) return null;
+    const offsets = labelOffsets || { radial: 14 / viewport.scale, tangent: 0 };
+    const vertex = lineIntersection(target.line1, target.line2);
+    if (!vertex) return null;
+    const angles = angleDimensionAngles(target, labelPoint);
+    const radial = { x: Math.cos(angles.mid), y: Math.sin(angles.mid) };
+    const projectedLabelRadius =
+      (labelPoint.x - vertex.x) * radial.x +
+      (labelPoint.y - vertex.y) * radial.y;
+    const radius = Math.max(14 / viewport.scale, projectedLabelRadius - offsets.radial);
+    const anchor = {
+      x: vertex.x + radial.x * radius,
+      y: vertex.y + radial.y * radius,
+    };
+    const dimension = dimensionFromAnchor(target, anchor, { allowPointAxis: false });
+    return setAngleDimensionLabelOffsets(dimension, offsets);
   }
 
   function applyDefaultCircleDimensionLabelOffset(target, dimension) {
@@ -6126,6 +6231,9 @@
     if (c instanceof HorizontalConstraint || c instanceof VerticalConstraint) return c.line.p1 === point || c.line.p2 === point;
     if (c instanceof PointHorizontalConstraint || c instanceof PointVerticalConstraint) return c.p1 === point || c.p2 === point;
     if (c instanceof SymmetryConstraint) return c.p1 === point || c.p2 === point || c.axis.p1 === point || c.axis.p2 === point;
+    if (c instanceof LineSymmetryConstraint) {
+      return c.line1.p1 === point || c.line1.p2 === point || c.line2.p1 === point || c.line2.p2 === point || c.axis.p1 === point || c.axis.p2 === point;
+    }
     if (c instanceof ParallelConstraint || c instanceof PerpendicularConstraint) {
       return c.line1.p1 === point || c.line1.p2 === point || c.line2.p1 === point || c.line2.p2 === point;
     }
@@ -6147,6 +6255,7 @@
       return (c.p1 === line.p1 && c.p2 === line.p2) || (c.p1 === line.p2 && c.p2 === line.p1);
     }
     if (c instanceof SymmetryConstraint) return c.axis === line;
+    if (c instanceof LineSymmetryConstraint) return c.line1 === line || c.line2 === line || c.axis === line;
     if (c instanceof PointLineDistanceConstraint) return c.line === line;
     if (c instanceof LineLineDistanceConstraint) return c.line1 === line || c.line2 === line;
     if (c instanceof OffsetConstraint) return c.source === line || c.offset === line;
@@ -6241,6 +6350,12 @@
       addNode(nodes, c.axis);
       addNode(nodes, c.axis.p1);
       addNode(nodes, c.axis.p2);
+    } else if (c instanceof LineSymmetryConstraint) {
+      for (const line of [c.line1, c.line2, c.axis]) {
+        addNode(nodes, line);
+        addNode(nodes, line.p1);
+        addNode(nodes, line.p2);
+      }
     } else if (c instanceof ParallelConstraint || c instanceof PerpendicularConstraint || c instanceof CollinearConstraint || c instanceof EqualLengthConstraint || c instanceof LineAngleConstraint) {
       for (const line of [c.line1, c.line2]) {
         addNode(nodes, line);
@@ -7016,9 +7131,12 @@
       if (!c.dimension) {
         c.dimension = defaultDimensionForTarget(target);
       } else if (target.kind === "angle") {
+        migrateAngleDimensionLabelPlacement(target, c.dimension);
         if (!Number.isFinite(c.dimension.angleRadius) || !Number.isInteger(c.dimension.angleStartFlip) || !Number.isInteger(c.dimension.angleEndFlip)) {
-          const previous = dimensionAnchor(target, c.dimension);
-          c.dimension = dimensionFromAnchor(target, previous, { allowPointAxis: false });
+          const previousDimension = c.dimension;
+          const previousAnchor = dimensionAnchor(target, previousDimension);
+          c.dimension = dimensionFromAnchor(target, previousAnchor, { allowPointAxis: false });
+          setAngleDimensionLabelOffsets(c.dimension, angleDimensionLabelOffsets(target, previousDimension));
         }
       } else if (!Number.isFinite(c.dimension.offsetU) || !Number.isFinite(c.dimension.offsetN)) {
         const previous = c.dimension;
@@ -7318,7 +7436,7 @@
     };
   }
 
-  function dimensionInputPointForPendingCommand() {
+  function dimensionInputLayoutForPendingCommand() {
     if (!pendingCommand || !["distance-value", "fillet-radius-value", "offset-value"].includes(pendingCommand.type)) return null;
     if (pendingCommand.type === "fillet-radius-value") {
       const value = Number(pendingCommand.buffer);
@@ -7332,11 +7450,9 @@
       };
       const target = { kind: "radius", primitive, value: radius };
       const anchor = filletRadiusDimensionAnchor(geometry);
-      const layout = dimensionLayout(target, dimensionFromAnchor(target, anchor));
-      return layout?.text || null;
+      return dimensionLayout(target, dimensionFromAnchor(target, anchor));
     }
-    const layout = dimensionLayout(pendingCommand.target, pendingCommand.dimension);
-    return layout?.text || null;
+    return dimensionLayout(pendingCommand.target, pendingCommand.dimension);
   }
 
   function syncDimensionValueInput() {
@@ -7345,15 +7461,19 @@
       hideDimensionValueInput();
       return;
     }
-    const textPoint = dimensionInputPointForPendingCommand();
-    if (!textPoint) {
+    const layout = dimensionInputLayoutForPendingCommand();
+    if (!layout?.text) {
       hideDimensionValueInput();
       return;
     }
-    const screen = worldToCanvasScreen(textPoint);
+    const screen = worldToCanvasScreen(layout.text);
+    const angle = Number.isFinite(layout.textAngle) ? layout.textAngle : 0;
+    const labelGap = 4;
+    const labelOffset = dimensionTextOffset(angle, labelGap);
     dimensionValueInput.hidden = false;
-    dimensionValueInput.style.left = `${screen.x}px`;
-    dimensionValueInput.style.top = `${screen.y - 4}px`;
+    dimensionValueInput.style.left = `${screen.x + labelOffset.x}px`;
+    dimensionValueInput.style.top = `${screen.y + labelOffset.y}px`;
+    dimensionValueInput.style.setProperty("--dimension-text-angle", `${angle}rad`);
     dimensionValueInput.style.width = `${Math.max(132, Math.min(280, pendingCommand.buffer.length * 9 + 34))}px`;
     if (dimensionValueInput.value !== pendingCommand.buffer) dimensionValueInput.value = pendingCommand.buffer;
     const value = Number(pendingCommand.buffer);
@@ -7530,7 +7650,7 @@
     if (target.kind === "angle") return drawAngleDimension(target, dimension, label, preview, highlighted, editState);
     const layout = dimensionLayout(target, dimension);
     if (!layout) return;
-    const { a, b, lineA, lineB, points, d, text } = layout;
+    const { a, b, lineA, lineB, points, d, text, textAngle } = layout;
 
     ctx.save();
     ctx.strokeStyle = preview || highlighted ? "#2563eb" : "#6b7280";
@@ -7554,14 +7674,14 @@
     drawArrowhead(a, d);
     drawArrowhead(b, { x: -d.x, y: -d.y });
 
-    drawDimensionLabel(label, text, editState);
+    drawDimensionLabel(label, text, textAngle, editState);
     ctx.restore();
   }
 
   function drawAngleDimension(target, dimension, label, preview = false, highlighted = false, editState = null) {
     const layout = angleDimensionLayout(target, dimension);
     if (!layout) return;
-    const { vertex, radius, start, end, signed, text } = layout;
+    const { vertex, radius, start, end, signed, text, textAngle } = layout;
     ctx.save();
     ctx.strokeStyle = preview || highlighted ? "#2563eb" : "#6b7280";
     ctx.fillStyle = preview || highlighted ? "#2563eb" : "#6b7280";
@@ -7588,34 +7708,60 @@
     ctx.setLineDash([]);
     drawArrowhead(p1, { x: Math.cos(start + (signed < 0 ? -Math.PI / 2 : Math.PI / 2)), y: Math.sin(start + (signed < 0 ? -Math.PI / 2 : Math.PI / 2)) });
     drawArrowhead(p2, { x: Math.cos(end + (signed < 0 ? Math.PI / 2 : -Math.PI / 2)), y: Math.sin(end + (signed < 0 ? Math.PI / 2 : -Math.PI / 2)) });
-    drawDimensionLabel(label, text, editState);
+    drawDimensionLabel(label, text, textAngle, editState);
     ctx.restore();
   }
 
-  function drawDimensionLabel(label, text, editState = null) {
+  function jisDimensionTextAngle(direction) {
+    const x = Number(direction?.x) || 0;
+    const y = Number(direction?.y) || 0;
+    // JIS aligned notation: horizontal text is read from the bottom edge and
+    // vertical text from the right edge. Non-vertical text always progresses
+    // left-to-right; an exact vertical always progresses bottom-to-top.
+    if (Math.abs(x) <= 1e-12 && Math.abs(y) > 1e-12) return -Math.PI / 2;
+    let angle = Math.atan2(y, x);
+    if (angle >= Math.PI / 2) angle -= Math.PI;
+    if (angle < -Math.PI / 2) angle += Math.PI;
+    return angle;
+  }
+
+  function dimensionTextOffset(angle, distance) {
+    return {
+      x: Math.sin(angle) * distance,
+      y: -Math.cos(angle) * distance,
+    };
+  }
+
+  function drawDimensionLabel(label, text, angle = 0, editState = null) {
     if (editState?.hidden) return;
     if (editState) {
-      drawDimensionEditLabel(label, text, editState);
+      drawDimensionEditLabel(label, text, angle, editState);
     } else {
+      ctx.save();
+      ctx.translate(text.x, text.y);
+      ctx.rotate(angle);
       ctx.font = `${12 / viewport.scale}px system-ui`;
       ctx.textAlign = "center";
       ctx.textBaseline = "bottom";
-      ctx.fillText(label, text.x, text.y - 4 / viewport.scale);
+      ctx.fillText(label, 0, -4 / viewport.scale);
+      ctx.restore();
     }
   }
 
-  function drawDimensionEditLabel(label, text, state) {
+  function drawDimensionEditLabel(label, text, angle, state) {
     const fontSize = 12 / viewport.scale;
     const padX = 6 / viewport.scale;
     const padY = 4 / viewport.scale;
     const height = 22 / viewport.scale;
     ctx.save();
+    ctx.translate(text.x, text.y);
+    ctx.rotate(angle);
     ctx.font = `${fontSize}px ui-monospace, SFMono-Regular, Consolas, monospace`;
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
     const width = Math.max(44 / viewport.scale, ctx.measureText(label).width + padX * 2);
-    const x = text.x - width / 2;
-    const y = text.y - height - 4 / viewport.scale;
+    const x = -width / 2;
+    const y = -height - 4 / viewport.scale;
     const border = state.invalid ? "#dc2626" : "#2563eb";
 
     ctx.fillStyle = "#fff";
@@ -7632,7 +7778,7 @@
     }
 
     ctx.fillStyle = border;
-    ctx.fillText(label, text.x, y + height / 2);
+    ctx.fillText(label, 0, y + height / 2);
     ctx.restore();
   }
 
@@ -7692,6 +7838,7 @@
       lineA,
       lineB,
       d,
+      textAngle: jisDimensionTextAngle(d),
       points: projectedPoints,
       text: { x: anchor.x + d.x * textProjection, y: anchor.y + d.y * textProjection },
       hitA: { x: lineA.x - d.x * tick, y: lineA.y - d.y * tick },
@@ -7774,20 +7921,28 @@
   }
 
   function angleDimensionLayout(target, dimension) {
+    migrateAngleDimensionLabelPlacement(target, dimension);
     const vertex = lineIntersection(target.line1, target.line2);
     if (!vertex) return null;
     const anchor = dimensionAnchor(target, dimension);
     const radius = Math.max(14 / viewport.scale, hypot2(anchor.x - vertex.x, anchor.y - vertex.y));
     const { start, end, signed, mid } = angleDimensionAngles(target, anchor, dimension);
+    const radial = { x: Math.cos(mid), y: Math.sin(mid) };
+    const tangent = { x: -radial.y, y: radial.x };
+    const arcPoint = { x: vertex.x + radial.x * radius, y: vertex.y + radial.y * radius };
+    const labelOffsets = angleDimensionLabelOffsets(target, dimension);
+    const labelOffsetR = labelOffsets ? labelOffsets.radial : 14 / viewport.scale;
+    const labelOffsetT = labelOffsets ? labelOffsets.tangent : 0;
     return {
       vertex,
       radius,
       start,
       end,
       signed,
+      textAngle: jisDimensionTextAngle(tangent),
       text: {
-        x: Number.isFinite(dimension?.labelX) ? dimension.labelX : vertex.x + Math.cos(mid) * (radius + 14 / viewport.scale),
-        y: Number.isFinite(dimension?.labelY) ? dimension.labelY : vertex.y + Math.sin(mid) * (radius + 14 / viewport.scale),
+        x: arcPoint.x + radial.x * labelOffsetR + tangent.x * labelOffsetT,
+        y: arcPoint.y + radial.y * labelOffsetR + tangent.y * labelOffsetT,
       },
       hitA: { x: vertex.x + Math.cos(start) * radius, y: vertex.y + Math.sin(start) * radius },
       hitB: { x: vertex.x + Math.cos(end) * radius, y: vertex.y + Math.sin(end) * radius },
@@ -8475,7 +8630,11 @@
     }
     if (type === "horizontal" || type === "vertical") return (selectedLines.length === 1 && selectedPoints.length === 0 && lineHasDirection(selectedLines[0])) || (selectedPoints.length === 2 && selectedLines.length === 0);
     if (type === "parallel" || type === "perpendicular") return selectedLines.length === 2 && selectedLines.every(lineHasDirection);
-    if (type === "symmetry") return selectedPoints.length === 2 && selectedLines.length === 1 && lineHasDirection(selectedLines[0]) && primitives.length === 0;
+    if (type === "symmetry") {
+      const pointTargets = selectedPoints.length === 2 && selectedLines.length === 1;
+      const lineTargets = selectedPoints.length === 0 && selectedLines.length === 3;
+      return primitives.length === 0 && (pointTargets || lineTargets) && selectedLines.every(lineHasDirection);
+    }
     if (type === "collinear") return selectedLines.length === 2 && selectedLines.every(lineHasDirection);
     return false;
   }
@@ -8511,7 +8670,12 @@
     if (type === "vertical") return "垂直にする線1本、または鉛直関係にする点2つを選択してください";
     if (type === "parallel") return "平行にする線を2本選択してください";
     if (type === "perpendicular") return "直交させる線を2本選択してください";
-    if (type === "symmetry") return "対称にする2点と、対称軸にする線を選択してください";
+    if (type === "symmetry") {
+      if (constraintOperands.length === 0) return "最初に対称軸にする線を選択してください";
+      if (constraintOperands.length === 1) return "対称にする1つ目の点または線を選択してください";
+      const subjectKind = constraintOperands[1]?.kind === "line" ? "線" : "点";
+      return `対称にする2つ目の${subjectKind}を選択してください`;
+    }
     return `${constraintLabel(type)} の対象を選択してください`;
   }
 
@@ -8529,7 +8693,11 @@
     if (type === "parallel" || type === "perpendicular") {
       return "この拘束では線を選択してください";
     }
-    if (type === "symmetry") return "この拘束では対称にする2点と対称軸の線を選択してください";
+    if (type === "symmetry") {
+      if (constraintOperands.length === 0) return "最初の対象には対称軸にする線を選択してください";
+      if (constraintOperands.length === 1) return "2番目の対象には対称にする点または線を選択してください";
+      return `3番目の対象には2番目と同じ種類の${constraintOperands[1]?.kind === "line" ? "線" : "点"}を選択してください`;
+    }
     if (type === "distance") return "寸法対象として点または線を選択してください";
     return "この拘束では選択できません";
   }
@@ -8557,7 +8725,7 @@
       selectedArcEndpoint = null;
     } else if (type === "symmetry") {
       selectedPoints = selectedPoints.slice(0, 2);
-      selectedLines = selectedLines.slice(0, 1);
+      selectedLines = selectedPoints.length > 0 ? selectedLines.slice(0, 1) : selectedLines.slice(0, 3);
       selectedCircles = [];
       selectedArcs = [];
       selectedArcEndpoint = null;
@@ -8616,7 +8784,8 @@
       cancelConstraintTargetCommand(`${constraintLabel(type)}の対象選択をキャンセルしました`);
       return;
     }
-    constraintOperands = constraintOperandsFromSelection();
+    if (type === "symmetry") clearSelection();
+    constraintOperands = type === "symmetry" ? [] : constraintOperandsFromSelection();
     pendingConstraintCommand = { type };
     trimConstraintSelection(type);
     if (constraintOperands.length > 0) {
@@ -8713,6 +8882,14 @@
     const hitC = hits.hitC ?? hitCircle(pointer.x, pointer.y);
     const hitA = hits.hitA ?? hitArc(pointer.x, pointer.y);
     const hitArcEnd = hits.hitArcEnd ?? hitArcEndpoint(pointer.x, pointer.y);
+    if (type === "symmetry") {
+      const subjectKind = constraintOperands[1]?.kind || null;
+      if (constraintOperands.length === 0 && hitL) return makeConstraintOperand("line", { line: hitL });
+      if (subjectKind === "point" && hitP) return makeConstraintOperand("point", { point: hitP });
+      if (subjectKind === "line" && hitL) return makeConstraintOperand("line", { line: hitL });
+      if (!subjectKind && hitP) return makeConstraintOperand("point", { point: hitP });
+      if (!subjectKind && hitL) return makeConstraintOperand("line", { line: hitL });
+    }
     if (hitArcEnd && (type === "coincident" || type === "pointOnCircle")) return makeConstraintOperand("arc-endpoint", { arc: hitArcEnd.arc, endpoint: hitArcEnd.endpoint });
     if (hitP) return makeConstraintOperand("point", { point: hitP });
     if (hitL) return makeConstraintOperand("line", { line: hitL });
@@ -8731,10 +8908,20 @@
 
   function appendConstraintOperand(type, operand) {
     if (!operand) return { ok: false, error: invalidConstraintTargetHint(type) };
+    if (type === "symmetry") {
+      const step = constraintOperands.length;
+      if (step === 0 && operand.kind !== "line") return { ok: false, error: invalidConstraintTargetHint(type) };
+      if (step > 0 && operand.kind !== "point" && operand.kind !== "line") return { ok: false, error: invalidConstraintTargetHint(type) };
+      if (operand.kind === "line" && !lineHasDirection(operand.line)) return { ok: false, error: step === 0 ? "対称軸の線が短すぎます" : "対称対象の線が短すぎます" };
+      if (constraintOperands.some((existing) => sameConstraintOperand(existing, operand))) return { ok: false, error: "対称軸と2つの対象には異なる要素を選択してください" };
+      if (step >= 2 && operand.kind !== constraintOperands[1].kind) return { ok: false, error: invalidConstraintTargetHint(type) };
+      if (step >= 3) return { ok: false, error: "対称拘束の対象はすでに3つ選択されています" };
+      constraintOperands = [...constraintOperands, operand];
+      syncSelectionFromConstraintOperands();
+      return { ok: true };
+    }
     if ((type === "parallel" || type === "perpendicular" || type === "collinear") && operand.kind !== "line") return { ok: false, error: invalidConstraintTargetHint(type) };
     if ((type === "parallel" || type === "perpendicular" || type === "collinear") && !lineHasDirection(operand.line)) return { ok: false, error: "向き拘束の対象線が短すぎます" };
-    if (type === "symmetry" && operand.kind !== "point" && operand.kind !== "line") return { ok: false, error: invalidConstraintTargetHint(type) };
-    if (type === "symmetry" && operand.kind === "line" && !lineHasDirection(operand.line)) return { ok: false, error: "対称軸の線が短すぎます" };
     if ((type === "horizontal" || type === "vertical") && operand.kind !== "line" && operand.kind !== "point") return { ok: false, error: invalidConstraintTargetHint(type) };
     if (type === "tangent" && operand.kind !== "line" && operand.kind !== "primitive") return { ok: false, error: invalidConstraintTargetHint(type) };
     if ((type === "equal" || type === "equalRadius" || type === "concentric") && operand.kind !== "line" && operand.kind !== "primitive" && operand.kind !== "point") return { ok: false, error: invalidConstraintTargetHint(type) };
@@ -8742,12 +8929,6 @@
     if (type === "distance" && operand.kind === "arc-endpoint") return { ok: false, error: invalidConstraintTargetHint(type) };
 
     let next = constraintOperands.filter((existing) => !sameConstraintOperand(existing, operand));
-    if (type === "symmetry" && operand.kind === "point") {
-      const points = next.filter((existing) => existing.kind === "point").slice(-1);
-      const lines = next.filter((existing) => existing.kind === "line").slice(-1);
-      next = [...points, ...lines];
-    }
-    if (type === "symmetry" && operand.kind === "line") next = next.filter((existing) => existing.kind !== "line");
     if (type === "distance" && operand.kind === "primitive") next = [];
     if (type === "distance" && next.some((existing) => existing.kind === "primitive")) next = [];
     next.push(operand);
@@ -10632,6 +10813,7 @@
   }
 
   function normalConstraintFromOperands(type, operands) {
+    if (type === "symmetry") return symmetryConstraintFromOperands(operands);
     const previous = {
       points: selectedPoints,
       lines: selectedLines,
@@ -10652,14 +10834,20 @@
     return constraint;
   }
 
+  function symmetryConstraintFromOperands(operands) {
+    if (operands.length !== 3) return null;
+    const [axisOperand, first, second] = operands;
+    if (axisOperand.kind !== "line" || !axisOperand.line || first.kind !== second.kind) return null;
+    if (first.kind === "point") return new SymmetryConstraint(first.point, second.point, axisOperand.line);
+    if (first.kind === "line") return new LineSymmetryConstraint(first.line, second.line, axisOperand.line);
+    return null;
+  }
+
   function symmetryReferenceResolutionFromOperands(operands) {
     if (operands.length < 3) return null;
     const { active, reference } = splitConstraintOperands(operands);
-    const points = operands.filter((operand) => operand.kind === "point");
-    const axes = operands.filter((operand) => operand.kind === "line");
-    if (operands.length !== 3 || points.length !== 2 || axes.length !== 1 || active.length === 0 || reference.length === 0) {
-      return { error: "参照対称拘束では、対称にする2点と対称軸の線を選択してください" };
-    }
+    const constraint = symmetryConstraintFromOperands(operands);
+    if (!constraint || active.length === 0 || reference.length === 0) return { error: "参照対称拘束では、対称軸、同種の対象2つの順に選択してください" };
     const referenceSketchIds = [...new Set(reference.map((operand) => operand.sketchId))];
     if (referenceSketchIds.length !== 1) return { error: "参照対称拘束の参照対象は同じ先祖スケッチから選択してください" };
     const sketchId = active[0].sketchId;
@@ -10671,7 +10859,7 @@
     return {
       type: "symmetry",
       action: "commit",
-      constraint: new SymmetryConstraint(points[0].point, points[1].point, axes[0].line),
+      constraint,
       operands,
       referenceSketchId,
       sketchId,
@@ -10887,6 +11075,7 @@
       constraint = new PerpendicularConstraint(selectedLines[0], selectedLines[1]);
     } else if (type === "symmetry") {
       if (selectedPoints.length === 2 && selectedLines.length === 1) constraint = new SymmetryConstraint(selectedPoints[0], selectedPoints[1], selectedLines[0]);
+      else if (selectedPoints.length === 0 && selectedLines.length === 3) constraint = new LineSymmetryConstraint(selectedLines[1], selectedLines[2], selectedLines[0]);
     } else if (type === "collinear") {
       constraint = new CollinearConstraint(selectedLines[0], selectedLines[1]);
     } else if (type === "equal") {
@@ -11501,6 +11690,7 @@
 
   function beginDimensionDrag(e, hit, pointer, commandHits = null) {
     const anchor = dimensionAnchor(hit.target, hit.dimension);
+    migrateAngleDimensionLabelPlacement(hit.target, hit.dimension);
     selectedDimensionConstraint = hit.constraint;
     selectedConstraint = null;
     dimensionDragSession = {
@@ -11511,6 +11701,10 @@
       startPointer: pointer,
       startAnchor: anchor,
       startLabelOffsetU: Number(hit.dimension?.labelOffsetU) || 0,
+      startAngleLabelOffsets:
+        hit.target.kind === "angle"
+          ? angleDimensionLabelOffsets(hit.target, hit.dimension) || { radial: 14 / viewport.scale, tangent: 0 }
+          : null,
       startedDuringDimensionCommand: isDimensionConstraintCommandActive(),
       commandHits,
       moved: false,
@@ -12017,6 +12211,7 @@
     if (c instanceof HorizontalConstraint || c instanceof VerticalConstraint) return true;
     if (c instanceof ParallelConstraint || c instanceof PerpendicularConstraint || c instanceof CollinearConstraint || c instanceof LineAngleConstraint) return true;
     if (c instanceof SymmetryConstraint && c.axis === line) return true;
+    if (c instanceof LineSymmetryConstraint && c.axis === line) return true;
     if (c instanceof PointOnLineConstraint || c instanceof PointOnLineMidpointConstraint || c instanceof ArcEndpointOnLineConstraint) return true;
     if (c instanceof PointLineDistanceConstraint || c instanceof LineLineDistanceConstraint || c instanceof LineCircleTangentConstraint) return true;
     return false;
@@ -12792,6 +12987,18 @@
         dimensionDragSession.moved = true;
       }
       if (dimensionDragSession.part === "label") {
+        if (dimensionDragSession.target.kind === "angle") {
+          const nextDimension = angleDimensionFromLabelPoint(
+            dimensionDragSession.target,
+            p,
+            dimensionDragSession.startAngleLabelOffsets,
+          );
+          if (!nextDimension) return;
+          dimensionDragSession.constraint.dimension = nextDimension;
+          syncAngleConstraintFromDimension(dimensionDragSession.constraint, dimensionDragSession.target, nextDimension);
+          draw();
+          return;
+        }
         const anchor =
           dimensionDragSession.target.kind === "radius" || dimensionDragSession.target.kind === "diameter"
             ? p
@@ -12818,6 +13025,9 @@
             };
       const nextDimension = dimensionFromAnchor(dimensionDragSession.target, anchor, { allowPointAxis: false });
       nextDimension.labelOffsetU = dimensionDragSession.startLabelOffsetU;
+      if (dimensionDragSession.target.kind === "angle") {
+        setAngleDimensionLabelOffsets(nextDimension, dimensionDragSession.startAngleLabelOffsets);
+      }
       dimensionDragSession.constraint.dimension = nextDimension;
       syncAngleConstraintFromDimension(dimensionDragSession.constraint, dimensionDragSession.target, nextDimension);
       draw();
@@ -13844,6 +14054,8 @@
       if (rejectPresentationGeometryEdit("Constraints")) return;
       if (pendingConstraintCommand?.type === type) {
         cancelConstraintTargetCommand(`${constraintLabel(type)}の対象選択をキャンセルしました`);
+      } else if (type === "symmetry") {
+        startConstraintTargetCommand(type);
       } else if (canApplyConstraint(type)) {
         cancelConstraintTargetCommand("");
         if (type === "distance") startDistanceCommand();
@@ -14589,6 +14801,131 @@
           minimumResolution: formatDimensionLabel(0.000001),
           measuredMinimumResolution: formatMeasuredDimensionLabel(0.000001),
           roundedFraction: formatDimensionLabel(1.2345674),
+        };
+      },
+      dimensionTextAngleCases() {
+        const resultForDrawingAngle = (degrees) => {
+          const radians = (degrees * Math.PI) / 180;
+          const direction = { x: Math.cos(radians), y: -Math.sin(radians) };
+          const angle = jisDimensionTextAngle(direction);
+          return {
+            angle: (angle * 180) / Math.PI,
+            offset: dimensionTextOffset(angle, 1),
+          };
+        };
+        return {
+          zero: resultForDrawingAngle(0),
+          quadrant1: resultForDrawingAngle(30),
+          vertical90: resultForDrawingAngle(90),
+          quadrant2: resultForDrawingAngle(150),
+          straight180: resultForDrawingAngle(180),
+          quadrant3: resultForDrawingAngle(210),
+          vertical270: resultForDrawingAngle(270),
+          quadrant4: resultForDrawingAngle(330),
+          quadrant4NearVertical: resultForDrawingAngle(273),
+        };
+      },
+      angleDimensionLabelFollowCase() {
+        resetModelState();
+        setAppMode("geometry");
+        const p1 = addPoint(-80, 0, false, "endpoint");
+        const p2 = addPoint(80, 0, false, "endpoint");
+        const p3 = addPoint(0, -80, false, "endpoint");
+        const p4 = addPoint(0, 80, false, "endpoint");
+        const line1 = addLine(p1, p2);
+        const line2 = addLine(p3, p4);
+        const target = { kind: "angle", line1, line2, value: 90 };
+        const initial = dimensionFromAnchor(target, { x: 45, y: 45 });
+        const initialBasis = angleDimensionLabelBasis(target, initial);
+        initial.labelX = initialBasis.arcPoint.x + initialBasis.radial.x * 11 + initialBasis.tangent.x * 7;
+        initial.labelY = initialBasis.arcPoint.y + initialBasis.radial.y * 11 + initialBasis.tangent.y * 7;
+
+        const corruptedRelativePlacement = {
+          ...dimensionFromAnchor(target, { x: 45, y: 45 }),
+          angleLabelOffsetR: 27.337291652719134,
+          angleLabelOffsetT: -6.399630529188789,
+        };
+        angleDimensionLayout(target, corruptedRelativePlacement);
+        const recoveredCorruptedOffsets = angleDimensionLabelOffsets(target, corruptedRelativePlacement);
+
+        const before = angleDimensionLayout(target, initial);
+        const beforeBasis = angleDimensionLabelBasis(target, initial);
+        const translation = { x: 34, y: -19 };
+        for (const point of [p1, p2, p3, p4]) {
+          point.x += translation.x;
+          point.y += translation.y;
+        }
+        const afterTranslation = angleDimensionLayout(target, initial);
+        const afterTranslationBasis = angleDimensionLabelBasis(target, initial);
+        const labelTranslationError = hypot2(
+          afterTranslation.text.x - before.text.x - translation.x,
+          afterTranslation.text.y - before.text.y - translation.y,
+        );
+        const arcTranslationError = hypot2(
+          afterTranslationBasis.arcPoint.x - beforeBasis.arcPoint.x - translation.x,
+          afterTranslationBasis.arcPoint.y - beforeBasis.arcPoint.y - translation.y,
+        );
+
+        const storedOffsets = angleDimensionLabelOffsets(target, initial);
+        const movedAnchor = {
+          x: afterTranslationBasis.arcPoint.x + afterTranslationBasis.radial.x * 26,
+          y: afterTranslationBasis.arcPoint.y + afterTranslationBasis.radial.y * 26,
+        };
+        const movedDimension = dimensionFromAnchor(target, movedAnchor, { allowPointAxis: false });
+        setAngleDimensionLabelOffsets(movedDimension, storedOffsets);
+        const afterRadiusMove = angleDimensionLayout(target, movedDimension);
+        const afterRadiusMoveBasis = angleDimensionLabelBasis(target, movedDimension);
+        const labelRadiusDelta = {
+          x: afterRadiusMove.text.x - afterTranslation.text.x,
+          y: afterRadiusMove.text.y - afterTranslation.text.y,
+        };
+        const arcRadiusDelta = {
+          x: afterRadiusMoveBasis.arcPoint.x - afterTranslationBasis.arcPoint.x,
+          y: afterRadiusMoveBasis.arcPoint.y - afterTranslationBasis.arcPoint.y,
+        };
+        let repeatedlyDraggedDimension = movedDimension;
+        const dragOffsets = angleDimensionLabelOffsets(target, repeatedlyDraggedDimension);
+        let repeatedDragOffsetError = 0;
+        let repeatedDragRadialPointerError = 0;
+        for (let index = 0; index < 8; index++) {
+          const currentLayout = angleDimensionLayout(target, repeatedlyDraggedDimension);
+          const pointer = {
+            x: currentLayout.text.x + (index % 2 === 0 ? 13 : -9),
+            y: currentLayout.text.y + (index % 3 === 0 ? 8 : -6),
+          };
+          repeatedlyDraggedDimension = angleDimensionFromLabelPoint(
+            target,
+            pointer,
+            angleDimensionLabelOffsets(target, repeatedlyDraggedDimension),
+          );
+          const nextOffsets = angleDimensionLabelOffsets(target, repeatedlyDraggedDimension);
+          const nextLayout = angleDimensionLayout(target, repeatedlyDraggedDimension);
+          const nextBasis = angleDimensionLabelBasis(target, repeatedlyDraggedDimension);
+          repeatedDragOffsetError = Math.max(
+            repeatedDragOffsetError,
+            hypot2(nextOffsets.radial - dragOffsets.radial, nextOffsets.tangent - dragOffsets.tangent),
+          );
+          repeatedDragRadialPointerError = Math.max(
+            repeatedDragRadialPointerError,
+            Math.abs(
+              (nextLayout.text.x - pointer.x) * nextBasis.radial.x +
+              (nextLayout.text.y - pointer.y) * nextBasis.radial.y,
+            ),
+          );
+        }
+        const serialized = serializeDimension(repeatedlyDraggedDimension, target);
+        return {
+          migratedLegacyCoordinates: !Object.hasOwn(initial, "labelX") && !Object.hasOwn(initial, "labelY"),
+          recoveredCorruptedOffsets,
+          storedOffsets,
+          labelTranslationError,
+          arcTranslationError,
+          radiusFollowError: hypot2(labelRadiusDelta.x - arcRadiusDelta.x, labelRadiusDelta.y - arcRadiusDelta.y),
+          repeatedDragOffsetError,
+          repeatedDragRadialPointerError,
+          serializedRelativeOffsets: Number.isFinite(serialized.angleLabelOffsetR) && Number.isFinite(serialized.angleLabelOffsetT),
+          serializedPlacementVersion: serialized.angleLabelPlacementVersion,
+          serializedLegacyCoordinates: Object.hasOwn(serialized, "labelX") || Object.hasOwn(serialized, "labelY"),
         };
       },
       resetForTrimConstraintTransfer() {

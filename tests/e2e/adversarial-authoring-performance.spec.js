@@ -385,7 +385,17 @@ test("constraint target clicks and commits stay responsive at full fixture compl
         point("P1", x - 70, -35, "explicit");
         point("P2", x + 45, 75, "explicit");
         line("AXIS", point("A1", x - 130, 0), point("A2", x + 130, 0));
-        return [{ x: x - 70, y: -35 }, { x: x + 45, y: 75 }, { x, y: 0 }];
+        return [{ x, y: 0 }, { x: x - 70, y: -35 }, { x: x + 45, y: 75 }];
+      },
+    },
+    {
+      name: "symmetric-lines",
+      type: "symmetry",
+      build: ({ point, line }) => {
+        line("AXIS", point("A1", x, -130), point("A2", x, 130));
+        line("L1", point("P1", x - 100, -70), point("P2", x - 55, 60));
+        line("L2", point("P3", x + 90, -55), point("P4", x + 45, 75));
+        return [{ x, y: 0 }, { x: x - 77.5, y: -5 }, { x: x + 67.5, y: 10 }];
       },
     },
     {
@@ -492,11 +502,12 @@ test("symmetry constraint mirrors two points and survives serialization", async 
   data.lines.push({ id: "SYM_AXIS", p1: "SYM_A1", p2: "SYM_A2", construction: true });
   await loadFixture(page, data, { x: 0, y: 0 }, 1);
 
-  await page.evaluate(() => window.__cadTest.selectGeometryIdsForTest({
-    points: ["SYM_P1", "SYM_P2"],
-    lines: ["SYM_AXIS"],
-  }));
   await page.locator('[data-constraint="symmetry"]').click();
+  await clickWorld(page, { x: 0, y: 0 });
+  const axisSelection = await page.evaluate(() => window.__cadTest.selectedGeometryIdsForTest());
+  expect(axisSelection).toMatchObject({ points: [], lines: ["SYM_AXIS"] });
+  await clickWorld(page, { x: -50, y: -30 });
+  await clickWorld(page, { x: 60, y: 80 });
 
   const committed = await page.evaluate(() => ({
     authoring: window.__cadTest.authoringStateForTest(),
@@ -525,6 +536,65 @@ test("symmetry constraint mirrors two points and survives serialization", async 
   }, committed.model);
   expect(restored.result.success).toBe(true);
   expect(restored.authoring.lastConstraint).toMatchObject({ type: "symmetry", axis: "SYM_AXIS" });
+  expect(restored.analysis.errorNorm).toBeLessThan(1e-5);
+});
+
+test("symmetry constraint mirrors two lines after selecting the axis first", async ({ page }) => {
+  const data = fixtureMilestone(0);
+  data.points.push(
+    { id: "LS_A1", x: 0, y: -120, fixed: true, kind: "endpoint" },
+    { id: "LS_A2", x: 0, y: 120, fixed: true, kind: "endpoint" },
+    { id: "LS_P1", x: -80, y: -70, fixed: false, kind: "endpoint" },
+    { id: "LS_P2", x: -45, y: 55, fixed: false, kind: "endpoint" },
+    { id: "LS_P3", x: 70, y: -50, fixed: false, kind: "endpoint" },
+    { id: "LS_P4", x: 65, y: 75, fixed: false, kind: "endpoint" },
+  );
+  data.lines.push(
+    { id: "LS_AXIS", p1: "LS_A1", p2: "LS_A2", construction: true },
+    { id: "LS_L1", p1: "LS_P1", p2: "LS_P2" },
+    { id: "LS_L2", p1: "LS_P3", p2: "LS_P4" },
+  );
+  await loadFixture(page, data, { x: 0, y: 0 }, 1);
+
+  await page.locator('[data-constraint="symmetry"]').click();
+  await clickWorld(page, { x: 0, y: 0 });
+  await clickWorld(page, { x: -62.5, y: -7.5 });
+  await clickWorld(page, { x: 67.5, y: 12.5 });
+
+  const committed = await page.evaluate(() => ({
+    authoring: window.__cadTest.authoringStateForTest(),
+    model: window.__cadTest.serializedModelForTest(),
+    analysis: window.__cadTest.constraintAnalysisForTest(),
+  }));
+  expect(committed.authoring.lastConstraint).toMatchObject({
+    type: "lineSymmetry",
+    line1: "LS_L1",
+    line2: "LS_L2",
+    axis: "LS_AXIS",
+  });
+  const points = new Map(committed.model.points.map((point) => [point.id, point]));
+  const lineConstraint = committed.authoring.lastConstraint;
+  const pairs = lineConstraint.reversed
+    ? [["LS_P1", "LS_P4"], ["LS_P2", "LS_P3"]]
+    : [["LS_P1", "LS_P3"], ["LS_P2", "LS_P4"]];
+  for (const [leftId, rightId] of pairs) {
+    const left = points.get(leftId);
+    const right = points.get(rightId);
+    expect(Math.abs(left.x + right.x)).toBeLessThan(1e-5);
+    expect(Math.abs(left.y - right.y)).toBeLessThan(1e-5);
+  }
+  expect(committed.analysis.errorNorm).toBeLessThan(1e-5);
+
+  const restored = await page.evaluate((model) => {
+    const result = window.__cadTest.loadDocumentFixtureForDragTest(model, "line-symmetry-round-trip.json");
+    return {
+      result,
+      authoring: window.__cadTest.authoringStateForTest(),
+      analysis: window.__cadTest.constraintAnalysisForTest(),
+    };
+  }, committed.model);
+  expect(restored.result.success).toBe(true);
+  expect(restored.authoring.lastConstraint).toMatchObject({ type: "lineSymmetry", axis: "LS_AXIS" });
   expect(restored.analysis.errorNorm).toBeLessThan(1e-5);
 });
 
