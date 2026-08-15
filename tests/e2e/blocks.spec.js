@@ -373,6 +373,34 @@ function nestedConstraintCleanupFixture({ stale = false } = {}) {
   return fixture;
 }
 
+function shortNestedBlockDimensionFixture() {
+  const fixture = nestedBlockEditingFixture();
+  const leaf = fixture.blockDefinitions.find((definition) => definition.id === "B1");
+  leaf.points = [
+    { id: "P1", x: 0, y: -3.5, fixed: false, kind: "endpoint", sketchId: "S1" },
+    { id: "P2", x: 0, y: 3.5, fixed: false, kind: "endpoint", sketchId: "S1" },
+  ];
+  leaf.lines = [{ id: "L1", p1: "P1", p2: "P2", construction: true, sketchId: "S1" }];
+  const room = fixture.blockDefinitions.find((definition) => definition.id === "B2");
+  room.points = [
+    { id: "P10", x: 50, y: -100, fixed: false, kind: "endpoint", sketchId: "S1" },
+    { id: "P11", x: 50, y: 100, fixed: false, kind: "endpoint", sketchId: "S1" },
+  ];
+  room.lines = [{ id: "L10", p1: "P10", p2: "P11", construction: true, sketchId: "S1" }];
+  room.blockInstances = [{
+    id: "BI19",
+    definitionId: "B1",
+    sketchId: "S1",
+    x: -50,
+    y: 0,
+    rotation: 0,
+    fixed: false,
+    rotationLocked: true,
+    enabledSketchIds: ["S1"],
+  }];
+  return fixture;
+}
+
 function nestedComposableBlocksFixture() {
   const fixture = nestedBlockEditingFixture();
   const room = fixture.blockDefinitions.find((definition) => definition.id === "B2");
@@ -1590,6 +1618,58 @@ test("a first block projection line stays pending so a second line can be dimens
     pendingConstraintType: "distance",
     pendingCommandType: "distance-place",
   }));
+});
+
+test("a short block projection line can be dimensioned from its midpoint", async ({ page }) => {
+  await page.goto(`${baseUrl}/index.html?test=1`);
+  await page.waitForFunction(() => window.__cadTest);
+  await page.evaluate(
+    (fixture) => window.__cadTest.importDocumentNameFixture(fixture, "short-nested-block-dimension.json"),
+    shortNestedBlockDimensionFixture(),
+  );
+  await page.click('.block-item[data-id="B2"] .blockEditBtn');
+
+  const targets = await page.evaluate(() => ({
+    shortLine: window.__cadTest.worldClientPositionForTest({ x: -50, y: 0 }),
+    directLine: window.__cadTest.worldClientPositionForTest({ x: 50, y: 0 }),
+  }));
+  await page.click('[data-constraint="distance"]');
+  await page.mouse.move(targets.shortLine.x, targets.shortLine.y);
+  expect(await page.evaluate(() => window.__cadTest.blockProjectionHoverState())).toEqual(expect.objectContaining({
+    pointId: null,
+    lineId: "BI19@L1",
+  }));
+  await page.mouse.click(targets.shortLine.x, targets.shortLine.y);
+  await page.mouse.move(targets.directLine.x, targets.directLine.y);
+  expect(await page.evaluate(() => window.__cadTest.blockProjectionHoverState())).toEqual(expect.objectContaining({
+    lineId: "L10",
+  }));
+  await page.mouse.click(targets.directLine.x, targets.directLine.y);
+  expect(await page.evaluate(() => window.__cadTest.authoringStateForTest())).toEqual(expect.objectContaining({
+    pendingConstraintType: "distance",
+    pendingCommandType: "distance-place",
+  }));
+});
+
+test("hovering a block highlights its projection without showing every geometry id", async ({ page }) => {
+  await page.goto(`${baseUrl}/index.html?test=1`);
+  await page.waitForFunction(() => window.__cadTest);
+
+  await page.evaluate(() => window.__cadTest.resetForBlockCreationUi());
+  await page.click("#toolCreateBlock");
+  await page.click("#completeBlockEditBtn");
+  await page.keyboard.press("Escape");
+  expect((await page.evaluate(() => window.__cadTest.blockState())).selectedInstanceIds).toEqual([]);
+  const interaction = await page.evaluate(() => window.__cadTest.blockInteractionPoints());
+  const labelPoint = { x: interaction.center.x + 20, y: interaction.center.y - 9 };
+  const labelBefore = await canvasPatch(page, labelPoint, 5);
+
+  await page.mouse.move(interaction.center.x, interaction.center.y);
+  expect(await page.evaluate(() => window.__cadTest.blockProjectionHoverState())).toEqual(expect.objectContaining({
+    blockInstanceId: "BI1",
+  }));
+  const labelAfter = await canvasPatch(page, labelPoint, 5);
+  expect(labelAfter).toEqual(labelBefore);
 });
 
 test("block projection endpoints visibly highlight during constraint commands", async ({ page }) => {

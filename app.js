@@ -5699,16 +5699,19 @@
   function hitBlockProjectionOperand(x, y) {
     const threshold = 8 / viewport.scale;
     const pointThreshold = 10 / viewport.scale;
+    const pointPriorityThreshold = 6 / viewport.scale;
     for (const bundle of blockProjectionBundles().slice().reverse()) {
       if (!isVisibleSketchId(bundle.instance.sketchId)) continue;
       const relation = operandRelationForSketch(bundle.instance.sketchId);
       if (!relation) continue;
-      for (const point of bundle.points.slice().reverse()) {
-        if (hypot2(point.x - x, point.y - y) <= pointThreshold) return makeConstraintOperand("point", { point });
+      const pointHit = bundle.points.slice().reverse().find((point) => hypot2(point.x - x, point.y - y) <= pointThreshold) || null;
+      if (pointHit && hypot2(pointHit.x - x, pointHit.y - y) <= pointPriorityThreshold) {
+        return makeConstraintOperand("point", { point: pointHit });
       }
       for (const line of bundle.lines.slice().reverse()) {
         if (distancePointToSegment(x, y, line) <= threshold) return makeConstraintOperand("line", { line });
       }
+      if (pointHit) return makeConstraintOperand("point", { point: pointHit });
       for (const circle of bundle.circles.slice().reverse()) {
         if (Math.abs(hypot2(x - circle.center.x, y - circle.center.y) - circle.radius()) <= threshold) return makeConstraintOperand("primitive", { primitive: circle });
       }
@@ -7468,7 +7471,8 @@
       const auxiliaryHighlighted = treeHovered || relatedHighlighted;
       const blockSelected = l.blockInstance && selectedBlockInstances.includes(l.blockInstance);
       const sel = blockSelected || (active && selectedLines.includes(l)) || (presentation && selectedLines.includes(l)) || refSelected;
-      const hovered = sidebarHovered || (l.blockInstance && hoveredBlockInstance === l.blockInstance) || ((active || isReferenceHoverElement(l)) && hoveredLine === l) || (presentation && hoveredLine === l);
+      const directlyHovered = sidebarHovered || ((active || isReferenceHoverElement(l)) && hoveredLine === l) || (presentation && hoveredLine === l);
+      const hovered = directlyHovered || (l.blockInstance && hoveredBlockInstance === l.blockInstance);
       const construction = Boolean(l.construction) && !sel && !hovered;
       const lineColor = auxiliaryHighlighted ? "#0ea5e9" : presentation && !sel && !hovered ? style.color : constraintStatusColor(l, sel, hovered);
       ctx.strokeStyle = lineColor;
@@ -7497,7 +7501,7 @@
         }
       }
 
-      if (sel || hovered || auxiliaryHighlighted) {
+      if (sel || directlyHovered || auxiliaryHighlighted) {
         const mx = (l.p1.x + l.p2.x) / 2;
         const my = (l.p1.y + l.p2.y) / 2;
         ctx.fillStyle = "#2563eb";
@@ -7524,7 +7528,8 @@
       const auxiliaryHighlighted = treeHovered || relatedHighlighted;
       const blockSelected = c.blockInstance && selectedBlockInstances.includes(c.blockInstance);
       const sel = blockSelected || (active && selectedCircles.includes(c)) || (presentation && selectedCircles.includes(c)) || refSelected;
-      const hovered = sidebarHovered || (c.blockInstance && hoveredBlockInstance === c.blockInstance) || ((active || isReferenceHoverElement(c)) && hoveredCircle === c) || (presentation && hoveredCircle === c);
+      const directlyHovered = sidebarHovered || ((active || isReferenceHoverElement(c)) && hoveredCircle === c) || (presentation && hoveredCircle === c);
+      const hovered = directlyHovered || (c.blockInstance && hoveredBlockInstance === c.blockInstance);
       const construction = Boolean(c.construction) && !sel && !hovered;
       ctx.strokeStyle = auxiliaryHighlighted ? "#0ea5e9" : presentation && !sel && !hovered ? style.color : constraintStatusColor(c, sel, hovered);
       ctx.lineWidth = (auxiliaryHighlighted ? 4 : sel ? 4 : hovered ? 2.6 : presentation ? style.lineWidthPx : construction ? Math.max(1.8, sketchStrokeWidth(c) * 0.72) : sketchStrokeWidth(c)) / viewport.scale;
@@ -7536,7 +7541,7 @@
       ctx.stroke();
       ctx.setLineDash([]);
       ctx.shadowBlur = 0;
-      if (sel || hovered || auxiliaryHighlighted) {
+      if (sel || directlyHovered || auxiliaryHighlighted) {
         ctx.fillStyle = "#2563eb";
         ctx.font = `${12 / viewport.scale}px system-ui`;
         ctx.fillText(c.id, c.center.x + c.radius() + 4 / viewport.scale, c.center.y - 4 / viewport.scale);
@@ -7561,7 +7566,8 @@
       const auxiliaryHighlighted = treeHovered || relatedHighlighted;
       const blockSelected = a.blockInstance && selectedBlockInstances.includes(a.blockInstance);
       const sel = blockSelected || (active && selectedArcs.includes(a)) || (presentation && selectedArcs.includes(a)) || refSelected;
-      const hovered = sidebarHovered || (a.blockInstance && hoveredBlockInstance === a.blockInstance) || ((active || isReferenceHoverElement(a)) && hoveredArc === a) || (presentation && hoveredArc === a);
+      const directlyHovered = sidebarHovered || ((active || isReferenceHoverElement(a)) && hoveredArc === a) || (presentation && hoveredArc === a);
+      const hovered = directlyHovered || (a.blockInstance && hoveredBlockInstance === a.blockInstance);
       const construction = Boolean(a.construction) && !sel && !hovered;
       const angles = arcAngles(a);
       ctx.strokeStyle = auxiliaryHighlighted ? "#0ea5e9" : presentation && !sel && !hovered ? style.color : constraintStatusColor(a, sel, hovered);
@@ -7574,7 +7580,7 @@
       ctx.stroke();
       ctx.setLineDash([]);
       ctx.shadowBlur = 0;
-      if (sel || hovered || auxiliaryHighlighted) {
+      if (sel || directlyHovered || auxiliaryHighlighted) {
         const mid = angles.start + (angles.end - angles.start) / 2;
         ctx.fillStyle = "#2563eb";
         ctx.font = `${12 / viewport.scale}px system-ui`;
@@ -15769,6 +15775,7 @@
       blockProjectionHoverState() {
         return {
           command: pendingConstraintCommand?.type || null,
+          blockInstanceId: hoveredBlockInstance?.id || null,
           pointId: hoveredPoint?.id || null,
           pointIsBlockProjection: Boolean(hoveredPoint?.blockProjection),
           lineId: hoveredLine?.id || null,
