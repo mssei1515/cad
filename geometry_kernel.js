@@ -4,6 +4,7 @@
 
   const MIN_ORIENTATION_LENGTH = 1e-9;
   const MIN_PROJECTION_LENGTH_SQUARED = 1e-12;
+  const MIN_LINE_INTERSECTION_DETERMINANT = 1e-12;
 
   function normalizeAnglePositive(angle) {
     const twoPi = Math.PI * 2;
@@ -118,6 +119,23 @@
     return Math.sqrt(dx * dx + dy * dy);
   }
 
+  function lineIntersection(line1, line2) {
+    const x1 = line1.p1.x;
+    const y1 = line1.p1.y;
+    const x2 = line1.p2.x;
+    const y2 = line1.p2.y;
+    const x3 = line2.p1.x;
+    const y3 = line2.p1.y;
+    const x4 = line2.p2.x;
+    const y4 = line2.p2.y;
+    const determinant = (x1 - x2) * (y3 - y4) - (y1 - y2) * (x3 - x4);
+    if (Math.abs(determinant) < MIN_LINE_INTERSECTION_DETERMINANT) return null;
+    return {
+      x: ((x1 * y2 - y1 * x2) * (x3 - x4) - (x1 - x2) * (x3 * y4 - y3 * x4)) / determinant,
+      y: ((x1 * y2 - y1 * x2) * (y3 - y4) - (y1 - y2) * (x3 * y4 - y3 * x4)) / determinant,
+    };
+  }
+
   window.GeometryKernel = Object.freeze({
     MIN_ORIENTATION_LENGTH,
     normalizeAnglePositive,
@@ -135,5 +153,6 @@
     closestPointOnSegment,
     distancePointToSegment,
     distancePointToSegmentPoints,
+    lineIntersection,
   });
 })();

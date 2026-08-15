@@ -209,3 +209,37 @@ test("segment distance and degeneracy preserve the existing squared-length bound
   assert.ok(Math.abs(boundaryLineProjection.x - 5e-7) < 1e-12);
   assert.equal(boundaryLineProjection.y, 1);
 });
+
+test("line intersection preserves infinite-line and determinant boundary contracts", () => {
+  const horizontal = { p1: { x: 0, y: 1 }, p2: { x: 4, y: 1 } };
+  const vertical = { p1: { x: 2, y: 3 }, p2: { x: 2, y: 4 } };
+  const crossing = kernel.lineIntersection(horizontal, vertical);
+  assert.equal(crossing.x, 2);
+  assert.equal(crossing.y, 1);
+
+  const reversed = kernel.lineIntersection(
+    { p1: horizontal.p2, p2: horizontal.p1 },
+    { p1: vertical.p2, p2: vertical.p1 },
+  );
+  assert.equal(reversed.x, crossing.x);
+  assert.equal(reversed.y, crossing.y);
+
+  const parallel = kernel.lineIntersection(horizontal, {
+    p1: { x: 0, y: 3 },
+    p2: { x: 4, y: 3 },
+  });
+  assert.equal(parallel, null);
+
+  const belowBoundary = kernel.lineIntersection(
+    { p1: { x: 0, y: 0 }, p2: { x: 1, y: 0 } },
+    { p1: { x: 0, y: 0 }, p2: { x: 1, y: 5e-13 } },
+  );
+  assert.equal(belowBoundary, null);
+
+  const atBoundary = kernel.lineIntersection(
+    { p1: { x: 0, y: 0 }, p2: { x: 1, y: 0 } },
+    { p1: { x: 0, y: 0 }, p2: { x: 1, y: 1e-12 } },
+  );
+  assert.equal(Math.abs(atBoundary.x), 0);
+  assert.equal(Math.abs(atBoundary.y), 0);
+});

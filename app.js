@@ -19,6 +19,7 @@
     closestPointOnSegment,
     distancePointToSegment,
     distancePointToSegmentPoints,
+    lineIntersection,
   } = window.GeometryKernel;
 
   const {
@@ -5606,23 +5607,6 @@
 
   function angleDegrees(radians) {
     return Math.abs((radians * 180) / Math.PI);
-  }
-
-  function lineIntersection(line1, line2) {
-    const x1 = line1.p1.x;
-    const y1 = line1.p1.y;
-    const x2 = line1.p2.x;
-    const y2 = line1.p2.y;
-    const x3 = line2.p1.x;
-    const y3 = line2.p1.y;
-    const x4 = line2.p2.x;
-    const y4 = line2.p2.y;
-    const den = (x1 - x2) * (y3 - y4) - (y1 - y2) * (x3 - x4);
-    if (Math.abs(den) < 1e-12) return null;
-    return {
-      x: ((x1 * y2 - y1 * x2) * (x3 - x4) - (x1 - x2) * (x3 * y4 - y3 * x4)) / den,
-      y: ((x1 * y2 - y1 * x2) * (y3 - y4) - (y1 - y2) * (x3 * y4 - y3 * x4)) / den,
-    };
   }
 
   function selectedPrimitives() {
@@ -11806,14 +11790,8 @@
   }
 
   function lineLineBoundary(target, other) {
-    const x1 = target.p1.x, y1 = target.p1.y, x2 = target.p2.x, y2 = target.p2.y;
-    const x3 = other.p1.x, y3 = other.p1.y, x4 = other.p2.x, y4 = other.p2.y;
-    const den = (x1 - x2) * (y3 - y4) - (y1 - y2) * (x3 - x4);
-    if (Math.abs(den) < 1e-12) return null;
-    const point = {
-      x: ((x1 * y2 - y1 * x2) * (x3 - x4) - (x1 - x2) * (x3 * y4 - y3 * x4)) / den,
-      y: ((x1 * y2 - y1 * x2) * (y3 - y4) - (y1 - y2) * (x3 * y4 - y3 * x4)) / den,
-    };
+    const point = lineIntersection(target, other);
+    if (!point) return null;
     const t = lineParam(target, point);
     const u = lineParam(other, point);
     if (t < -1e-6 || t > 1 + 1e-6 || u < -1e-6 || u > 1 + 1e-6) return null;
