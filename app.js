@@ -8965,6 +8965,12 @@
       return true;
     }
     if (resolution?.action === "place-dimension") {
+      if (resolution.target?.kind === "line-length" && constraintOperands.length === 1) {
+        updateGeometrySelectionUI();
+        setHint(constraintTargetHint(type));
+        draw();
+        return true;
+      }
       startDistanceResolution(resolution, null);
       return true;
     }

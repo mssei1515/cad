@@ -609,7 +609,7 @@ test("distance, diameter, radius and angle input phases stay responsive", async 
       value: "160",
       build: ({ point, line }) => {
         line("L1", point("P1", x - 70, 0), point("P2", x + 70, 0));
-        return { operands: [{ x, y: 0 }], anchor: { x, y: -55 }, expectedType: "distance" };
+        return { operands: [{ x, y: 0 }], confirmWithEnter: true, anchor: { x, y: -55 }, expectedType: "distance" };
       },
     },
     {
@@ -656,6 +656,9 @@ test("distance, diameter, radius and angle input phases stay responsive", async 
     await measureInteraction(page, results, `${dimensionCase.name}/command`, () => page.locator('[data-constraint="distance"]').click(), 250);
     for (let index = 0; index < target.operands.length; index += 1) {
       await measureInteraction(page, results, `${dimensionCase.name}/operand-${index + 1}`, () => clickWorld(page, target.operands[index]), 300);
+    }
+    if (target.confirmWithEnter) {
+      await measureInteraction(page, results, `${dimensionCase.name}/confirm-target`, () => page.keyboard.press("Enter"), 250);
     }
     await measureInteraction(page, results, `${dimensionCase.name}/place`, () => clickWorld(page, target.anchor), 250);
     const input = page.locator("#dimensionValueInput");

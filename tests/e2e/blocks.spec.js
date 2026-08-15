@@ -1551,6 +1551,47 @@ test("existing dimension lines remain draggable while the dimension command is a
   expect(state.anchor.y - setup.anchor.y).toBeCloseTo(36 / setup.scale, 3);
 });
 
+test("a first block projection line stays pending so a second line can be dimensioned", async ({ page }) => {
+  await page.goto(`${baseUrl}/index.html?test=1`);
+  await page.waitForFunction(() => window.__cadTest);
+  await page.evaluate(
+    (fixture) => window.__cadTest.importDocumentNameFixture(fixture, "nested-block-dimension.json"),
+    nestedConstraintCleanupFixture(),
+  );
+  await page.click('.block-item[data-id="B2"] .blockEditBtn');
+
+  const targets = await page.evaluate(() => {
+    const first = window.__cadTest.blockInteractionPoints("BI19");
+    return {
+      first: first.center,
+      second: { x: first.center.x, y: first.center.y + 20 * first.scale },
+    };
+  });
+  await page.click('[data-constraint="distance"]');
+  await page.mouse.move(targets.first.x, targets.first.y);
+  expect(await page.evaluate(() => window.__cadTest.blockProjectionHoverState())).toEqual(expect.objectContaining({
+    command: "distance",
+    lineId: "BI19@L1",
+  }));
+
+  await page.mouse.click(targets.first.x, targets.first.y);
+  expect(await page.evaluate(() => window.__cadTest.authoringStateForTest())).toEqual(expect.objectContaining({
+    pendingConstraintType: "distance",
+    pendingCommandType: null,
+  }));
+
+  await page.mouse.move(targets.second.x, targets.second.y);
+  expect(await page.evaluate(() => window.__cadTest.blockProjectionHoverState())).toEqual(expect.objectContaining({
+    command: "distance",
+    lineId: "BI19@L2",
+  }));
+  await page.mouse.click(targets.second.x, targets.second.y);
+  expect(await page.evaluate(() => window.__cadTest.authoringStateForTest())).toEqual(expect.objectContaining({
+    pendingConstraintType: "distance",
+    pendingCommandType: "distance-place",
+  }));
+});
+
 test("block projection endpoints visibly highlight during constraint commands", async ({ page }) => {
   await page.goto(`${baseUrl}/index.html?test=1`);
   await page.waitForFunction(() => window.__cadTest);
