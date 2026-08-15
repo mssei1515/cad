@@ -3,6 +3,7 @@
   "use strict";
 
   const MIN_ORIENTATION_LENGTH = 1e-9;
+  const MIN_PROJECTION_LENGTH_SQUARED = 1e-12;
 
   function normalizeAnglePositive(angle) {
     const twoPi = Math.PI * 2;
@@ -76,6 +77,47 @@
     return ((point.x - line.p1.x) * -dy + (point.y - line.p1.y) * dx) / length;
   }
 
+  function closestPointOnSegmentCoordinates(px, py, a, b) {
+    const dx = b.x - a.x;
+    const dy = b.y - a.y;
+    const lengthSquared = dx * dx + dy * dy;
+    if (lengthSquared < MIN_PROJECTION_LENGTH_SQUARED) return { x: a.x, y: a.y, t: 0 };
+    const t = Math.max(0, Math.min(1, ((px - a.x) * dx + (py - a.y) * dy) / lengthSquared));
+    return { x: a.x + t * dx, y: a.y + t * dy, t };
+  }
+
+  function projectPointToLine(point, line) {
+    const dx = line.dx();
+    const dy = line.dy();
+    const lengthSquared = dx * dx + dy * dy;
+    if (lengthSquared < MIN_PROJECTION_LENGTH_SQUARED) return { x: line.p1.x, y: line.p1.y };
+    const t = ((point.x - line.p1.x) * dx + (point.y - line.p1.y) * dy) / lengthSquared;
+    return { x: line.p1.x + t * dx, y: line.p1.y + t * dy };
+  }
+
+  function projectPointToSegmentPoint(point, line) {
+    const projected = closestPointOnSegmentCoordinates(point.x, point.y, line.p1, line.p2);
+    return { x: projected.x, y: projected.y };
+  }
+
+  function closestPointOnSegment(px, py, line) {
+    return closestPointOnSegmentCoordinates(px, py, line.p1, line.p2);
+  }
+
+  function distancePointToSegment(px, py, line) {
+    const projected = closestPointOnSegmentCoordinates(px, py, line.p1, line.p2);
+    const dx = px - projected.x;
+    const dy = py - projected.y;
+    return Math.sqrt(dx * dx + dy * dy);
+  }
+
+  function distancePointToSegmentPoints(px, py, a, b) {
+    const projected = closestPointOnSegmentCoordinates(px, py, a, b);
+    const dx = px - projected.x;
+    const dy = py - projected.y;
+    return Math.sqrt(dx * dx + dy * dy);
+  }
+
   window.GeometryKernel = Object.freeze({
     MIN_ORIENTATION_LENGTH,
     normalizeAnglePositive,
@@ -88,5 +130,10 @@
     lineAngle,
     signedPointLineDistance,
     signedPointDirectedLineDistance,
+    projectPointToLine,
+    projectPointToSegmentPoint,
+    closestPointOnSegment,
+    distancePointToSegment,
+    distancePointToSegmentPoints,
   });
 })();

@@ -139,3 +139,73 @@ test("support normals and signed distances preserve orientation hints and direct
   assert.equal(kernel.signedPointLineDistance({ x: 4, y: 5 }, degenerate), 0);
   assert.equal(kernel.signedPointDirectedLineDistance({ x: 4, y: 5 }, degenerate), 0);
 });
+
+test("line and segment projection preserve unclamped and clamped parameters", () => {
+  const line = {
+    p1: { x: 0, y: 0 },
+    p2: { x: 4, y: 0 },
+    dx: () => 4,
+    dy: () => 0,
+  };
+
+  const lineProjection = kernel.projectPointToLine({ x: 8, y: 3 }, line);
+  assert.equal(lineProjection.x, 8);
+  assert.equal(lineProjection.y, 0);
+
+  const segmentProjection = kernel.projectPointToSegmentPoint({ x: 8, y: 3 }, line);
+  assert.equal(segmentProjection.x, 4);
+  assert.equal(segmentProjection.y, 0);
+
+  const interior = kernel.closestPointOnSegment(2, 3, line);
+  assert.equal(interior.x, 2);
+  assert.equal(interior.y, 0);
+  assert.equal(interior.t, 0.5);
+
+  const before = kernel.closestPointOnSegment(-3, 2, line);
+  assert.equal(before.x, 0);
+  assert.equal(before.y, 0);
+  assert.equal(before.t, 0);
+});
+
+test("segment distance and degeneracy preserve the existing squared-length boundary", () => {
+  const line = {
+    p1: { x: 0, y: 0 },
+    p2: { x: 4, y: 0 },
+    dx: () => 4,
+    dy: () => 0,
+  };
+  assert.equal(kernel.distancePointToSegment(8, 3, line), 5);
+  assert.equal(kernel.distancePointToSegmentPoints(8, 3, line.p1, line.p2), 5);
+
+  const degenerate = {
+    p1: { x: 1, y: 1 },
+    p2: { x: 1 + 5e-7, y: 1 },
+    dx: () => 5e-7,
+    dy: () => 0,
+  };
+  const degenerateProjection = kernel.closestPointOnSegment(4, 5, degenerate);
+  assert.equal(degenerateProjection.x, 1);
+  assert.equal(degenerateProjection.y, 1);
+  assert.equal(degenerateProjection.t, 0);
+  const degenerateLineProjection = kernel.projectPointToLine({ x: 4, y: 5 }, degenerate);
+  assert.equal(degenerateLineProjection.x, 1);
+  assert.equal(degenerateLineProjection.y, 1);
+  const degenerateSegmentProjection = kernel.projectPointToSegmentPoint({ x: 4, y: 5 }, degenerate);
+  assert.equal(degenerateSegmentProjection.x, 1);
+  assert.equal(degenerateSegmentProjection.y, 1);
+  assert.equal(kernel.distancePointToSegment(4, 5, degenerate), 5);
+
+  const boundary = {
+    p1: { x: 0, y: 1 },
+    p2: { x: 1e-6, y: 1 },
+    dx: () => 1e-6,
+    dy: () => 0,
+  };
+  const boundaryProjection = kernel.closestPointOnSegment(5e-7, 2, boundary);
+  assert.ok(Math.abs(boundaryProjection.x - 5e-7) < 1e-12);
+  assert.equal(boundaryProjection.y, 1);
+  assert.ok(Math.abs(boundaryProjection.t - 0.5) < 1e-9);
+  const boundaryLineProjection = kernel.projectPointToLine({ x: 5e-7, y: 2 }, boundary);
+  assert.ok(Math.abs(boundaryLineProjection.x - 5e-7) < 1e-12);
+  assert.equal(boundaryLineProjection.y, 1);
+});

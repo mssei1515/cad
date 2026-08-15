@@ -14,6 +14,11 @@
     lineAngle,
     signedPointLineDistance,
     signedPointDirectedLineDistance,
+    projectPointToLine,
+    projectPointToSegmentPoint,
+    closestPointOnSegment,
+    distancePointToSegment,
+    distancePointToSegmentPoints,
   } = window.GeometryKernel;
 
   const {
@@ -4841,41 +4846,6 @@
     return hitAnyPoint(x, y);
   }
 
-  function distancePointToSegment(px, py, line) {
-    const x1 = line.p1.x;
-    const y1 = line.p1.y;
-    const x2 = line.p2.x;
-    const y2 = line.p2.y;
-    const dx = x2 - x1;
-    const dy = y2 - y1;
-    const len2 = dx * dx + dy * dy;
-    if (len2 < 1e-12) return hypot2(px - x1, py - y1);
-
-    let t = ((px - x1) * dx + (py - y1) * dy) / len2;
-    t = Math.max(0, Math.min(1, t));
-    return hypot2(px - (x1 + t * dx), py - (y1 + t * dy));
-  }
-
-  function closestPointOnSegment(px, py, line) {
-    const x1 = line.p1.x;
-    const y1 = line.p1.y;
-    const dx = line.p2.x - x1;
-    const dy = line.p2.y - y1;
-    const len2 = dx * dx + dy * dy;
-    if (len2 < 1e-12) return { x: x1, y: y1, t: 0 };
-    const t = Math.max(0, Math.min(1, ((px - x1) * dx + (py - y1) * dy) / len2));
-    return { x: x1 + t * dx, y: y1 + t * dy, t };
-  }
-
-  function distancePointToSegmentPoints(px, py, a, b) {
-    const dx = b.x - a.x;
-    const dy = b.y - a.y;
-    const len2 = dx * dx + dy * dy;
-    if (len2 < 1e-12) return hypot2(px - a.x, py - a.y);
-    const t = Math.max(0, Math.min(1, ((px - a.x) * dx + (py - a.y) * dy) / len2));
-    return hypot2(px - (a.x + t * dx), py - (a.y + t * dy));
-  }
-
   function rectFromPoints(a, b) {
     return {
       x1: Math.min(a.x, b.x),
@@ -5653,24 +5623,6 @@
       x: ((x1 * y2 - y1 * x2) * (x3 - x4) - (x1 - x2) * (x3 * y4 - y3 * x4)) / den,
       y: ((x1 * y2 - y1 * x2) * (y3 - y4) - (y1 - y2) * (x3 * y4 - y3 * x4)) / den,
     };
-  }
-
-  function projectPointToLine(point, line) {
-    const dx = line.dx();
-    const dy = line.dy();
-    const len2 = dx * dx + dy * dy;
-    if (len2 < 1e-12) return { x: line.p1.x, y: line.p1.y };
-    const t = ((point.x - line.p1.x) * dx + (point.y - line.p1.y) * dy) / len2;
-    return { x: line.p1.x + t * dx, y: line.p1.y + t * dy };
-  }
-
-  function projectPointToSegmentPoint(point, line) {
-    const dx = line.dx();
-    const dy = line.dy();
-    const len2 = dx * dx + dy * dy;
-    if (len2 < 1e-12) return { x: line.p1.x, y: line.p1.y };
-    const t = Math.max(0, Math.min(1, ((point.x - line.p1.x) * dx + (point.y - line.p1.y) * dy) / len2));
-    return { x: line.p1.x + t * dx, y: line.p1.y + t * dy };
   }
 
   function selectedPrimitives() {
