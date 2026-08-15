@@ -7,6 +7,13 @@
     normalizeAnglePositive,
     normalizeAngleSigned,
     arcEndpointPoint,
+    arcSweep,
+    unwrapAngleNear,
+    shortestAngleFrom,
+    angleOnSignedSweep,
+    arcParamOnSweep,
+    angleAtArcParam,
+    arcSamplePoints,
     lineUnit,
     lineNormal,
     lineSupportNormal,
@@ -5100,41 +5107,6 @@
     return true;
   }
 
-  function arcSamplePoints(arc, count = 24) {
-    const angles = arcAngles(arc);
-    const points = [];
-    for (let i = 0; i <= count; i++) {
-      const t = count === 0 ? 0 : i / count;
-      const angle = angles.start + (angles.end - angles.start) * t;
-      points.push({
-        x: arc.center.x + Math.cos(angle) * arc.radius(),
-        y: arc.center.y + Math.sin(angle) * arc.radius(),
-      });
-    }
-    return points;
-  }
-
-  function unwrapAngleNear(angle, reference) {
-    const twoPi = Math.PI * 2;
-    return angle + Math.round((reference - angle) / twoPi) * twoPi;
-  }
-
-  function shortestAngleFrom(start, end) {
-    const twoPi = Math.PI * 2;
-    let diff = ((end - start + Math.PI) % twoPi + twoPi) % twoPi - Math.PI;
-    if (diff <= -Math.PI) diff += twoPi;
-    return start + diff;
-  }
-
-  function clampArcEndAngle(start, end) {
-    const twoPi = Math.PI * 2;
-    const maxSweep = twoPi - 1e-6;
-    const sweep = end - start;
-    if (sweep > maxSweep) return start + maxSweep;
-    if (sweep < -maxSweep) return start - maxSweep;
-    return end;
-  }
-
   function arcEndpointDragValue(arc, endpoint, rawAngle) {
     const twoPi = Math.PI * 2;
     const maxSweep = twoPi - 1e-6;
@@ -5155,7 +5127,7 @@
 
   function normalizeArcSweep(arc) {
     const twoPi = Math.PI * 2;
-    const sweep = arc.endAngle - arc.startAngle;
+    const sweep = arcSweep(arc);
     if (Math.abs(sweep) >= twoPi - 1e-9) {
       arc.endAngle = arc.startAngle;
       return true;
@@ -5173,21 +5145,6 @@
       if (normalizeArcSweep(arc)) changed += 1;
     }
     return changed;
-  }
-
-  function angleOnSignedSweep(angle, start, end) {
-    const twoPi = Math.PI * 2;
-    const sweep = end - start;
-    if (Math.abs(sweep) >= twoPi) return true;
-    if (sweep >= 0) return normalizeAnglePositive(angle - start) <= sweep;
-    return normalizeAnglePositive(start - angle) <= -sweep;
-  }
-
-  function arcAngles(arc) {
-    return {
-      start: arc.startAngle,
-      end: arc.endAngle,
-    };
   }
 
   function sameArcEndpoint(a, b) {
@@ -5235,9 +5192,8 @@
       const radius = a.radius();
       const d = hypot2(x - a.center.x, y - a.center.y);
       if (Math.abs(d - radius) > threshold) continue;
-      const angles = arcAngles(a);
       const angle = Math.atan2(y - a.center.y, x - a.center.x);
-      if (angleOnSignedSweep(angle, angles.start, angles.end)) return a;
+      if (angleOnSignedSweep(angle, a.startAngle, a.endAngle)) return a;
     }
     return null;
   }
@@ -7550,19 +7506,18 @@
       const directlyHovered = sidebarHovered || ((active || isReferenceHoverElement(a)) && hoveredArc === a) || (presentation && hoveredArc === a);
       const hovered = directlyHovered || (a.blockInstance && hoveredBlockInstance === a.blockInstance);
       const construction = Boolean(a.construction) && !sel && !hovered;
-      const angles = arcAngles(a);
       ctx.strokeStyle = auxiliaryHighlighted ? "#0ea5e9" : presentation && !sel && !hovered ? style.color : constraintStatusColor(a, sel, hovered);
       ctx.lineWidth = (auxiliaryHighlighted ? 4 : sel ? 4 : hovered ? 2.6 : presentation ? style.lineWidthPx : construction ? Math.max(1.8, sketchStrokeWidth(a) * 0.72) : sketchStrokeWidth(a)) / viewport.scale;
       ctx.setLineDash(presentation ? presentationLineDash(style.lineType) : construction ? [12 / viewport.scale, 4 / viewport.scale, 2 / viewport.scale, 4 / viewport.scale] : []);
       ctx.shadowColor = sel || auxiliaryHighlighted ? "rgba(14, 165, 233, 0.45)" : "transparent";
       ctx.shadowBlur = sel || auxiliaryHighlighted ? 8 / viewport.scale : 0;
       ctx.beginPath();
-      ctx.arc(a.center.x, a.center.y, a.radius(), angles.start, angles.end, angles.end < angles.start);
+      ctx.arc(a.center.x, a.center.y, a.radius(), a.startAngle, a.endAngle, a.endAngle < a.startAngle);
       ctx.stroke();
       ctx.setLineDash([]);
       ctx.shadowBlur = 0;
       if (sel || directlyHovered || auxiliaryHighlighted) {
-        const mid = angles.start + (angles.end - angles.start) / 2;
+        const mid = a.startAngle + arcSweep(a) / 2;
         ctx.fillStyle = "#2563eb";
         ctx.font = `${12 / viewport.scale}px system-ui`;
         ctx.fillText(a.id, a.center.x + Math.cos(mid) * a.radius(), a.center.y + Math.sin(mid) * a.radius());
@@ -11844,28 +11799,6 @@
     return t * Math.PI * 2;
   }
 
-  function arcParam(arc, angle) {
-    const sweep = arc.endAngle - arc.startAngle;
-    if (Math.abs(sweep) < 1e-12) return 0;
-    return sweep >= 0 ? normalizeAnglePositive(angle - arc.startAngle) / sweep : normalizeAnglePositive(arc.startAngle - angle) / -sweep;
-  }
-
-  function arcParamOnSweep(arc, angle) {
-    const sweep = arc.endAngle - arc.startAngle;
-    if (Math.abs(sweep) < 1e-12) return null;
-    if (!angleOnSignedSweep(angle, arc.startAngle, arc.endAngle)) return null;
-    return sweep >= 0 ? normalizeAnglePositive(angle - arc.startAngle) / sweep : normalizeAnglePositive(arc.startAngle - angle) / -sweep;
-  }
-
-  function angleAtArcParam(arc, t) {
-    return arc.startAngle + (arc.endAngle - arc.startAngle) * t;
-  }
-
-  function pointAtArcParam(arc, t) {
-    const angle = angleAtArcParam(arc, t);
-    return { x: arc.center.x + Math.cos(angle) * arc.radius(), y: arc.center.y + Math.sin(angle) * arc.radius() };
-  }
-
   function lineTrimBoundaries(line) {
     const boundaries = [{ t: 0, point: line.p1 }, { t: 1, point: line.p2 }];
     for (const other of model.lines) {
@@ -12077,7 +12010,7 @@
     const interval = trimInterval(boundaries, t);
     if (boundaries.length <= 2) return { kind: "arc", item: arc, deleteWhole: true, interval: { left: boundaries[0], right: boundaries[1] } };
     if (!interval) return null;
-    if (arc.radius() * Math.abs(arc.endAngle - arc.startAngle) * Math.max(0, interval.right.t - interval.left.t) < MIN_ARC_LENGTH) return null;
+    if (arc.radius() * Math.abs(arcSweep(arc)) * Math.max(0, interval.right.t - interval.left.t) < MIN_ARC_LENGTH) return null;
     return { kind: "arc", item: arc, interval };
   }
 

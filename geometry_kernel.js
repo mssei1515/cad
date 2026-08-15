@@ -2,14 +2,14 @@
 (function () {
   "use strict";
 
+  const TWO_PI = Math.PI * 2;
   const MIN_ORIENTATION_LENGTH = 1e-9;
   const MIN_PROJECTION_LENGTH_SQUARED = 1e-12;
   const MIN_LINE_INTERSECTION_DETERMINANT = 1e-12;
   const MIN_REFLECTION_LENGTH_SQUARED = MIN_ORIENTATION_LENGTH * MIN_ORIENTATION_LENGTH;
 
   function normalizeAnglePositive(angle) {
-    const twoPi = Math.PI * 2;
-    return ((angle % twoPi) + twoPi) % twoPi;
+    return ((angle % TWO_PI) + TWO_PI) % TWO_PI;
   }
 
   function normalizeAngleSigned(angle) {
@@ -25,6 +25,57 @@
       x: arc.center.x + Math.cos(angle) * arc.radius(),
       y: arc.center.y + Math.sin(angle) * arc.radius(),
     };
+  }
+
+  function arcSweep(arc) {
+    return arc.endAngle - arc.startAngle;
+  }
+
+  function unwrapAngleNear(angle, reference) {
+    return angle + Math.round((reference - angle) / TWO_PI) * TWO_PI;
+  }
+
+  function shortestAngleFrom(start, end) {
+    let difference = ((end - start + Math.PI) % TWO_PI + TWO_PI) % TWO_PI - Math.PI;
+    if (difference <= -Math.PI) difference += TWO_PI;
+    return start + difference;
+  }
+
+  function angleOnSignedSweep(angle, start, end) {
+    const sweep = end - start;
+    if (Math.abs(sweep) >= TWO_PI) return true;
+    if (sweep >= 0) return normalizeAnglePositive(angle - start) <= sweep;
+    return normalizeAnglePositive(start - angle) <= -sweep;
+  }
+
+  function arcParamOnSweep(arc, angle) {
+    const sweep = arcSweep(arc);
+    if (Math.abs(sweep) < 1e-12) return null;
+    if (!angleOnSignedSweep(angle, arc.startAngle, arc.endAngle)) return null;
+    return sweep >= 0
+      ? normalizeAnglePositive(angle - arc.startAngle) / sweep
+      : normalizeAnglePositive(arc.startAngle - angle) / -sweep;
+  }
+
+  function angleAtArcParam(arc, t) {
+    return arc.startAngle + arcSweep(arc) * t;
+  }
+
+  function pointAtArcParam(arc, t) {
+    const angle = angleAtArcParam(arc, t);
+    return {
+      x: arc.center.x + Math.cos(angle) * arc.radius(),
+      y: arc.center.y + Math.sin(angle) * arc.radius(),
+    };
+  }
+
+  function arcSamplePoints(arc, count = 24) {
+    const points = [];
+    for (let i = 0; i <= count; i++) {
+      const t = count === 0 ? 0 : i / count;
+      points.push(pointAtArcParam(arc, t));
+    }
+    return points;
   }
 
   function lineUnit(line) {
@@ -153,6 +204,14 @@
     normalizeAnglePositive,
     normalizeAngleSigned,
     arcEndpointPoint,
+    arcSweep,
+    unwrapAngleNear,
+    shortestAngleFrom,
+    angleOnSignedSweep,
+    arcParamOnSweep,
+    angleAtArcParam,
+    pointAtArcParam,
+    arcSamplePoints,
     lineUnit,
     lineNormal,
     lineSupportNormal,

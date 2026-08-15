@@ -20,6 +20,9 @@ UI adapterとSolverが共有する副作用のない計算は`geometry_kernel.js
 - `normalizeAnglePositive`は角度を`[0, 2π)`へ正規化し、Arc sweep判定、trim、hit test等のUI側計算で使う。
 - `normalizeAngleSigned`は角度を`(-π, π]`へ正規化し、Solverの角度残差で使う。境界の`-π`は`π`になる。
 - `arcEndpointPoint`はArcの中心、公開`radius()`、指定した開始／終了角から端点座標を返し、SolverとUI側計算が同じ実装を使う。
+- `arcSweep`は`endAngle - startAngle`を符号付きのまま返す。正のsweepと負のsweepは別方向として扱い、絶対値が`2π`以上なら`angleOnSignedSweep`は全角度を範囲内とする。端点は範囲に含み、sweepが0の場合は開始角と同じ正規化角だけを範囲内とする。
+- `unwrapAngleNear`は指定角度と同値な`2π`周期の候補からreferenceに最も近い分岐を返す。ちょうど半周の境界ではJavaScriptの`Math.round`規則を維持する。`shortestAngleFrom`は開始角から終了角への差を`(-π, π]`へ収め、反対方向が同距離となる`-π`境界は`π`側を選ぶ。
+- `arcParamOnSweep`は符号付きsweep上の角度を開始0から終了1のparameterへ変換する。範囲外またはsweepの絶対値が`1e-12`未満なら`null`を返し、ちょうど`1e-12`では通常計算する。`angleAtArcParam`は同じ符号付きsweepを線形補間し、`pointAtArcParam`と`arcSamplePoints`はその角度と公開`radius()`から座標を返す。サンプル数`count`は区間数であり、通常は両端を含む`count + 1`点、0なら開始点1点を返す。
 - Lineの向きが有効となる下限`MIN_ORIENTATION_LENGTH`は`1e-9`である。`lineHasDirection`は長さがこの値以上の場合にtrueを返す。
 - `lineUnit`、`lineNormal`、`lineSupportNormal`、`lineAngle`はUIとSolverが参照するLine方向契約である。長さ`1e-12`未満のLineでは単位方向を`(1, 0)`、法線を`(0, 1)`とする。orientation hintがhorizontal／verticalの場合、支持法線はそれぞれ`(0, 1)`／`(-1, 0)`とする。
 - `signedPointLineDistance`はorientation hintを考慮し、hint方向の支持線anchorには両端座標の中点を使う。`signedPointDirectedLineDistance`はhintを無視し、Lineの端点方向から符号を決める。長さ`1e-12`未満ではどちらも0を返す。
@@ -28,7 +31,7 @@ UI adapterとSolverが共有する副作用のない計算は`geometry_kernel.js
 - `lineIntersection`は2本の無限直線の交点を返し、線分内に収まるかは判定しない。行列式の絶対値が`1e-12`未満の場合は平行または縮退として`null`を返し、ちょうど`1e-12`の場合は交点を計算する。trimの線分範囲と許容差は呼び出し側が判定する。
 - `reflectedPointAcrossLine`はLine端点が表す無限直線に対する点の鏡映を返す。orientation hintは参照しない。Line長が`MIN_ORIENTATION_LENGTH`未満の場合は入力点と同じ座標を返し、ちょうど`MIN_ORIENTATION_LENGTH`の場合は鏡映を計算する。この反射境界はUI投影の長さ二乗`1e-12`境界とは用途が異なる。
 
-2種類の角度範囲と2種類の符号付き距離は用途が異なるため統合せず、呼び出し側で明示する。
+2種類の角度範囲と2種類の符号付き距離は用途が異なるため統合せず、呼び出し側で明示する。Arcモデルを直接補正する`normalizeArcSweep`とドラッグ中のほぼ一周判定を含む`arcEndpointDragValue`は、pureな数学関数ではなくUIの編集policyとして`app.js`に置く。
 
 ## 2. 作図コマンド
 

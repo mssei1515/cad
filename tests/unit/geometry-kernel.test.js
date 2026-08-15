@@ -298,3 +298,69 @@ test("line reflection preserves endpoint direction and orientation-length bounda
   assert.equal(boundaryReflection.x, 2);
   assert.equal(boundaryReflection.y, -3);
 });
+
+test("arc angle unwrapping and shortest branches preserve signed boundaries", () => {
+  const twoPi = Math.PI * 2;
+  assert.equal(kernel.unwrapAngleNear(0, Math.PI * 1.5), twoPi);
+  assert.equal(kernel.unwrapAngleNear(0, -Math.PI * 1.5), -twoPi);
+  assert.equal(kernel.unwrapAngleNear(0, Math.PI), twoPi);
+  assert.equal(kernel.unwrapAngleNear(0, -Math.PI), 0);
+
+  assert.ok(Math.abs(kernel.shortestAngleFrom(0, Math.PI * 1.5) + Math.PI / 2) < 1e-12);
+  assert.equal(kernel.shortestAngleFrom(0, -Math.PI), Math.PI);
+  assert.ok(Math.abs(kernel.shortestAngleFrom(twoPi * 2, Math.PI / 2) - (twoPi * 2 + Math.PI / 2)) < 1e-12);
+});
+
+test("signed arc sweep membership and parameters preserve direction and degeneracy", () => {
+  const twoPi = Math.PI * 2;
+  assert.equal(kernel.angleOnSignedSweep(0, Math.PI * 1.5, Math.PI * 2.5), true);
+  assert.equal(kernel.angleOnSignedSweep(Math.PI, Math.PI * 1.5, Math.PI * 2.5), false);
+  assert.equal(kernel.angleOnSignedSweep(0, Math.PI / 2, -Math.PI / 2), true);
+  assert.equal(kernel.angleOnSignedSweep(Math.PI, Math.PI / 2, -Math.PI / 2), false);
+  assert.equal(kernel.angleOnSignedSweep(123, 0, twoPi), true);
+  assert.equal(kernel.angleOnSignedSweep(twoPi, 0, 0), true);
+  assert.equal(kernel.angleOnSignedSweep(Math.PI, 0, 0), false);
+
+  const positive = { startAngle: Math.PI * 1.5, endAngle: Math.PI * 2.5 };
+  const negative = { startAngle: Math.PI / 2, endAngle: -Math.PI / 2 };
+  assert.equal(kernel.arcSweep(positive), Math.PI);
+  assert.equal(kernel.arcSweep(negative), -Math.PI);
+  assert.ok(Math.abs(kernel.arcParamOnSweep(positive, 0) - 0.5) < 1e-12);
+  assert.ok(Math.abs(kernel.arcParamOnSweep(negative, 0) - 0.5) < 1e-12);
+  assert.equal(kernel.arcParamOnSweep(positive, Math.PI), null);
+  assert.equal(kernel.arcParamOnSweep({ startAngle: 0, endAngle: 5e-13 }, 0), null);
+  assert.equal(
+    kernel.arcParamOnSweep({ startAngle: 0, endAngle: 1e-12 }, 5e-13),
+    kernel.normalizeAnglePositive(5e-13) / 1e-12,
+  );
+});
+
+test("arc parameter conversion and sampling preserve signed interpolation", () => {
+  const arc = {
+    center: { x: 1, y: 2 },
+    radius: () => 2,
+    startAngle: Math.PI * 1.5,
+    endAngle: Math.PI * 2.5,
+  };
+  assert.equal(kernel.angleAtArcParam(arc, 0), arc.startAngle);
+  assert.equal(kernel.angleAtArcParam(arc, 1), arc.endAngle);
+  assert.ok(Math.abs(kernel.angleAtArcParam(arc, 0.5) - Math.PI * 2) < 1e-12);
+
+  const midpoint = kernel.pointAtArcParam(arc, 0.5);
+  assert.ok(Math.abs(midpoint.x - 3) < 1e-12);
+  assert.ok(Math.abs(midpoint.y - 2) < 1e-12);
+
+  const samples = kernel.arcSamplePoints(arc, 2);
+  assert.equal(samples.length, 3);
+  assert.ok(Math.abs(samples[0].x - 1) < 1e-12);
+  assert.ok(Math.abs(samples[0].y) < 1e-12);
+  assert.ok(Math.abs(samples[1].x - 3) < 1e-12);
+  assert.ok(Math.abs(samples[1].y - 2) < 1e-12);
+  assert.ok(Math.abs(samples[2].x - 1) < 1e-12);
+  assert.ok(Math.abs(samples[2].y - 4) < 1e-12);
+
+  const startOnly = kernel.arcSamplePoints(arc, 0);
+  assert.equal(startOnly.length, 1);
+  assert.ok(Math.abs(startOnly[0].x - samples[0].x) < 1e-12);
+  assert.ok(Math.abs(startOnly[0].y - samples[0].y) < 1e-12);
+});
