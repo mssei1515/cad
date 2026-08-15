@@ -179,6 +179,10 @@ Leader style は色、フォントサイズ、線幅を描画に利用するが�
 
 Annotation Dimension は `target` と同内容の ID を `geometryRefs` にも保持する。Leader は `geometryRefs.target` に `<kind>:<id>` を保持する。
 
+Presentation style、Annotation Dimension、Leaderの参照生成と復元は共通`GeometryRef`を使う。typed keyは最初の`:`より前をkind、後ろをGeometry IDとして解析し、Projection階層は`@`でpathへ分解する。例えば`line:BI1@BI2@L1`は`{ kind: "line", path: ["BI1", "BI2", "L1"] }`となる。不明kind、空ID、空path要素は解決せず`null`として扱い、保存データ自体へ新しい形式やmigrationは導入しない。
+
+参照解決はkindに対応する現在のGeometry集合からcanonical IDが一致する要素を探す。通常GeometryとProjectionは同じresolverを使用する。
+
 - 通常 Geometry の直接削除では、現在Presentation Elementとstyleが残る既知の不整合がある。
 - Sketch 削除時も同じ整理を行う。
 - Block Instance 削除、Definition 要素削除でも Projection 参照を整理する。

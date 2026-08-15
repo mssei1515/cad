@@ -30,6 +30,15 @@
   } = window.GeometryKernel;
 
   const {
+    create: createGeometryRef,
+    parseId: parseGeometryRefId,
+    parseKey: parseGeometryRefKey,
+    id: geometryRefId,
+    key: geometryRefKey,
+    equals: geometryRefsEqual,
+  } = window.GeometryRef;
+
+  const {
     hypot2,
     vectorNorm,
     Point,
@@ -588,23 +597,35 @@
     return data;
   }
 
+  function geometryKindForItem(item) {
+    if (item instanceof Line) return "line";
+    if (item instanceof Circle) return "circle";
+    if (item instanceof Arc) return "arc";
+    if (item instanceof Point) return "point";
+    return null;
+  }
+
+  function geometryRefForItem(item) {
+    const kind = geometryKindForItem(item);
+    return kind ? parseGeometryRefId(kind, item?.id) : null;
+  }
+
+  function resolveGeometryRef(ref) {
+    const canonicalId = geometryRefId(ref);
+    if (canonicalId == null) return null;
+    if (ref.kind === "point") return allGeometryPoints().find((item) => item.id === canonicalId) || null;
+    if (ref.kind === "line") return allGeometryLines().find((item) => item.id === canonicalId) || null;
+    if (ref.kind === "circle") return allGeometryCircles().find((item) => item.id === canonicalId) || null;
+    if (ref.kind === "arc") return allGeometryArcs().find((item) => item.id === canonicalId) || null;
+    return null;
+  }
+
   function presentationElementKey(item) {
-    if (item instanceof Line) return `line:${item.id}`;
-    if (item instanceof Circle) return `circle:${item.id}`;
-    if (item instanceof Arc) return `arc:${item.id}`;
-    if (item instanceof Point) return `point:${item.id}`;
-    return "";
+    return geometryRefKey(geometryRefForItem(item)) || "";
   }
 
   function presentationElementFromKey(key) {
-    if (typeof key !== "string") return null;
-    const [kind, id] = key.split(":");
-    if (!kind || !id) return null;
-    if (kind === "point") return allGeometryPoints().find((item) => item.id === id) || null;
-    if (kind === "line") return allGeometryLines().find((item) => item.id === id) || null;
-    if (kind === "circle") return allGeometryCircles().find((item) => item.id === id) || null;
-    if (kind === "arc") return allGeometryArcs().find((item) => item.id === id) || null;
-    return null;
+    return resolveGeometryRef(parseGeometryRefKey(key));
   }
 
   function blockDefinitionById(id) {
@@ -731,8 +752,10 @@
     return model.blockInstances.find((instance) => instance.id === id) || null;
   }
 
-  function blockProjectionId(instance, localElement) {
-    return `${instance.id}@${typeof localElement === "string" ? localElement : localElement.id}`;
+  function blockProjectionId(kind, instance, localElement) {
+    const localRef = createGeometryRef(kind, Array.isArray(localElement) ? localElement : typeof localElement === "string" ? localElement : localElement?.id);
+    if (!localRef) return "";
+    return geometryRefId(createGeometryRef(kind, [String(instance.id), ...localRef.path])) || "";
   }
 
   function blockProjectionLocalId(item) {
@@ -749,7 +772,7 @@
   }
 
   function createProjectedPoint(transform, ownerInstance, definition, localPoint, localPath) {
-    const point = new Point(blockProjectionId(ownerInstance, localPath), 0, 0, false, localPoint.kind || "endpoint");
+    const point = new Point(blockProjectionId("point", ownerInstance, localPath), 0, 0, false, localPoint.kind || "endpoint");
     Object.defineProperties(point, {
       x: { configurable: true, enumerable: true, get: () => blockWorldPoint(transform, localPoint).x },
       y: { configurable: true, enumerable: true, get: () => blockWorldPoint(transform, localPoint).y },
@@ -759,7 +782,7 @@
     point.blockInstance = ownerInstance;
     point.blockDefinition = definition;
     point.localElement = localPoint;
-    point.blockLocalId = localPath;
+    point.blockLocalId = geometryRefId(createGeometryRef("point", localPath));
     return point;
   }
 
@@ -769,7 +792,7 @@
     if (visiting.has(definition.id)) return { points: [], lines: [], circles: [], arcs: [], pointByLocalId: new Map() };
     const nextVisiting = new Set(visiting).add(definition.id);
     const ownerInstance = options.ownerInstance || instance;
-    const pathPrefix = options.pathPrefix || "";
+    const pathPrefix = Array.isArray(options.pathPrefix) ? options.pathPrefix.map(String) : [];
     const definitionResolver = options.definitionResolver || blockDefinitionById;
     const includeAllSketches = Boolean(options.includeAllSketches);
     const enabledSketchIds = includeAllSketches
@@ -777,33 +800,34 @@
       : enabledSketchIdsOverride
       ? new Set(enabledSketchIdsOverride.map(String))
       : blockInstanceEnabledSketchSet(instance, definition);
-    const localPath = (id) => pathPrefix ? `${pathPrefix}@${id}` : String(id);
+    const localPath = (id) => [...pathPrefix, String(id)];
+    const localId = (kind, id) => geometryRefId(createGeometryRef(kind, localPath(id)));
     const pointByLocalId = new Map();
     const allPoints = definition.points.map((localPoint) => {
       const path = localPath(localPoint.id);
       const point = createProjectedPoint(instance, ownerInstance, definition, localPoint, path);
-      pointByLocalId.set(path, point);
+      pointByLocalId.set(localId("point", localPoint.id), point);
       return point;
     });
-    const mark = (item, localElement) => {
+    const mark = (item, localElement, kind) => {
       const path = localPath(localElement.id);
-      item.id = blockProjectionId(ownerInstance, path);
+      item.id = blockProjectionId(kind, ownerInstance, path);
       item.sketchId = ownerInstance.sketchId;
       item.blockProjection = true;
       item.blockInstance = ownerInstance;
       item.blockDefinition = definition;
       item.localElement = localElement;
-      item.blockLocalId = path;
+      item.blockLocalId = geometryRefId(createGeometryRef(kind, path));
       return item;
     };
-    const lines = definition.lines.filter((localLine) => enabledSketchIds.has(String(localLine.sketchId))).map((localLine) => mark(new Line(localLine.id, pointByLocalId.get(localPath(localLine.p1.id)), pointByLocalId.get(localPath(localLine.p2.id)), localLine.construction), localLine));
+    const lines = definition.lines.filter((localLine) => enabledSketchIds.has(String(localLine.sketchId))).map((localLine) => mark(new Line(localLine.id, pointByLocalId.get(localId("point", localLine.p1.id)), pointByLocalId.get(localId("point", localLine.p2.id)), localLine.construction), localLine, "line"));
     const circles = definition.circles.filter((localCircle) => enabledSketchIds.has(String(localCircle.sketchId))).map((localCircle) => {
-      const circle = mark(new Circle(localCircle.id, pointByLocalId.get(localPath(localCircle.center.id)), localCircle.radius(), localCircle.construction), localCircle);
+      const circle = mark(new Circle(localCircle.id, pointByLocalId.get(localId("point", localCircle.center.id)), localCircle.radius(), localCircle.construction), localCircle, "circle");
       Object.defineProperty(circle, "radiusValue", { configurable: true, enumerable: true, get: () => localCircle.radius() });
       return circle;
     });
     const arcs = definition.arcs.filter((localArc) => enabledSketchIds.has(String(localArc.sketchId))).map((localArc) => {
-      const arc = mark(new Arc(localArc.id, pointByLocalId.get(localPath(localArc.center.id)), localArc.radius(), localArc.startAngle, localArc.endAngle, localArc.construction), localArc);
+      const arc = mark(new Arc(localArc.id, pointByLocalId.get(localId("point", localArc.center.id)), localArc.radius(), localArc.startAngle, localArc.endAngle, localArc.construction), localArc, "arc");
       Object.defineProperties(arc, {
         radiusValue: { configurable: true, enumerable: true, get: () => localArc.radius() },
         startAngle: { configurable: true, enumerable: true, get: () => localArc.startAngle + instance.rotation },
@@ -814,7 +838,7 @@
     const visiblePointIds = new Set();
     for (const line of lines) visiblePointIds.add(line.p1.id).add(line.p2.id);
     for (const primitive of [...circles, ...arcs]) visiblePointIds.add(primitive.center.id);
-    for (const localPoint of definition.points) if (enabledSketchIds.has(String(localPoint.sketchId)) && localPoint.kind === "explicit") visiblePointIds.add(blockProjectionId(ownerInstance, localPath(localPoint.id)));
+    for (const localPoint of definition.points) if (enabledSketchIds.has(String(localPoint.sketchId)) && localPoint.kind === "explicit") visiblePointIds.add(blockProjectionId("point", ownerInstance, localPath(localPoint.id)));
     const points = allPoints.filter((point) => visiblePointIds.has(point.id));
     for (const nestedInstance of definition.blockInstances || []) {
       if (!enabledSketchIds.has(String(nestedInstance.sketchId))) continue;
@@ -2029,7 +2053,7 @@
   function sameConstraintDisplayElement(a, b) {
     if (a === b) return true;
     if (!a?.blockProjection || !b?.blockProjection) return false;
-    return presentationElementKey(a) === presentationElementKey(b);
+    return geometryRefsEqual(geometryRefForItem(a), geometryRefForItem(b));
   }
 
   function isSidebarHoveredElement(item) {
@@ -3025,8 +3049,11 @@
             const oldKey = presentationElementKey(source);
             const style = sheet.elementStyles?.[oldKey];
             if (!style) continue;
-            const projectedKind = source instanceof Point ? "point" : source instanceof Line ? "line" : source instanceof Circle ? "circle" : "arc";
-            sheet.elementStyles[`${projectedKind}:${createdInstance.id}@${source.id}`] = { ...style };
+            const sourceRef = geometryRefForItem(source);
+            const projectedRef = sourceRef ? createGeometryRef(sourceRef.kind, [String(createdInstance.id), ...sourceRef.path]) : null;
+            const projectedKey = geometryRefKey(projectedRef);
+            if (!projectedKey) continue;
+            sheet.elementStyles[projectedKey] = { ...style };
             delete sheet.elementStyles[oldKey];
           }
         }
@@ -3057,9 +3084,11 @@
       const removedProjectionKeys = new Set();
       for (const instance of model.blockInstances.filter((item) => item.definitionId === definition.id)) {
         for (const localId of removedLocalIds) {
-          const projectionId = `${instance.id}@${localId}`;
-          removedProjectionIds.add(projectionId);
-          for (const kind of ["point", "line", "circle", "arc"]) removedProjectionKeys.add(`${kind}:${projectionId}`);
+          for (const kind of ["point", "line", "circle", "arc"]) {
+            const ref = createGeometryRef(kind, [String(instance.id), String(localId)]);
+            removedProjectionIds.add(geometryRefId(ref));
+            removedProjectionKeys.add(geometryRefKey(ref));
+          }
         }
       }
       for (const sheet of model.presentationSheets) {
@@ -9959,7 +9988,7 @@
     const nextIds = new Set([...nextItems.points, ...nextItems.lines, ...nextItems.circles, ...nextItems.arcs].map((item) => item.id));
     const removedIds = new Set([...allItems.points, ...allItems.lines, ...allItems.circles, ...allItems.arcs].map((item) => item.id).filter((id) => !nextIds.has(id)));
     const constraints = model.constraints.filter((constraint) => constraintGraphNodes(constraint).some((node) => removedIds.has(node?.id)));
-    const removedKeys = new Set([...removedIds].flatMap((id) => ["point", "line", "circle", "arc"].map((kind) => `${kind}:${id}`)));
+    const removedKeys = new Set([...removedIds].flatMap((id) => ["point", "line", "circle", "arc"].map((kind) => geometryRefKey(parseGeometryRefId(kind, id)))));
     for (const sheet of model.presentationSheets) {
       const element = (sheet.elements || []).find((item) => valueReferencesRemovedGeometry(item.geometryRefs, removedIds, removedKeys));
       if (element) return { constraints, referenceError: `${sheet.name} の注記 ${element.id} から参照されています` };
@@ -10620,20 +10649,21 @@
 
   function presentationTargetToData(target) {
     if (!target) return null;
-    if (target.kind === "point-point") return { kind: target.kind, p1: target.p1.id, p2: target.p2.id, dimensionAxis: target.dimensionAxis || null };
-    if (target.kind === "point-line") return { kind: target.kind, point: target.point.id, line: target.line.id };
-    if (target.kind === "line-line") return { kind: target.kind, line1: target.line1.id, line2: target.line2.id };
-    if (target.kind === "line-length") return { kind: target.kind, line: target.line.id };
-    if (target.kind === "angle") return { kind: target.kind, line1: target.line1.id, line2: target.line2.id };
-    if (target.kind === "radius" || target.kind === "diameter") return { kind: target.kind, primitive: target.primitive.id };
+    const id = (item) => geometryRefId(geometryRefForItem(item));
+    if (target.kind === "point-point") return { kind: target.kind, p1: id(target.p1), p2: id(target.p2), dimensionAxis: target.dimensionAxis || null };
+    if (target.kind === "point-line") return { kind: target.kind, point: id(target.point), line: id(target.line) };
+    if (target.kind === "line-line") return { kind: target.kind, line1: id(target.line1), line2: id(target.line2) };
+    if (target.kind === "line-length") return { kind: target.kind, line: id(target.line) };
+    if (target.kind === "angle") return { kind: target.kind, line1: id(target.line1), line2: id(target.line2) };
+    if (target.kind === "radius" || target.kind === "diameter") return { kind: target.kind, primitive: id(target.primitive) };
     return null;
   }
 
   function presentationTargetFromData(data) {
     if (!data || typeof data !== "object") return null;
-    const point = (id) => allGeometryPoints().find((item) => item.id === id) || null;
-    const line = (id) => allGeometryLines().find((item) => item.id === id) || null;
-    const primitive = (id) => allGeometryCircles().find((item) => item.id === id) || allGeometryArcs().find((item) => item.id === id) || null;
+    const point = (id) => resolveGeometryRef(parseGeometryRefId("point", id));
+    const line = (id) => resolveGeometryRef(parseGeometryRefId("line", id));
+    const primitive = (id) => resolveGeometryRef(parseGeometryRefId("circle", id)) || resolveGeometryRef(parseGeometryRefId("arc", id));
     if (data.kind === "point-point") {
       const p1 = point(data.p1);
       const p2 = point(data.p2);
