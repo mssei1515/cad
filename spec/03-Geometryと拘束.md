@@ -26,6 +26,7 @@ UI adapterとSolverが共有する副作用のない計算は`geometry_kernel.js
 - `projectPointToLine`は無限直線へ投影し、Lineの端点範囲には丸めない。`projectPointToSegmentPoint`と`closestPointOnSegment`は投影parameterを`[0, 1]`へ丸め、後者は投影点に加えてparameter `t`を返す。
 - `distancePointToSegment`と`distancePointToSegmentPoints`は同じ線分投影契約から距離を計算する。投影・線分距離ではLineの長さの二乗が`1e-12`未満の場合に第1端点へfallbackし、ちょうど`1e-12`の場合は通常の投影を行う。
 - `lineIntersection`は2本の無限直線の交点を返し、線分内に収まるかは判定しない。行列式の絶対値が`1e-12`未満の場合は平行または縮退として`null`を返し、ちょうど`1e-12`の場合は交点を計算する。trimの線分範囲と許容差は呼び出し側が判定する。
+- `reflectedPointAcrossLine`はLine端点が表す無限直線に対する点の鏡映を返す。orientation hintは参照しない。Line長が`MIN_ORIENTATION_LENGTH`未満の場合は入力点と同じ座標を返し、ちょうど`MIN_ORIENTATION_LENGTH`の場合は鏡映を計算する。この反射境界はUI投影の長さ二乗`1e-12`境界とは用途が異なる。
 
 2種類の角度範囲と2種類の符号付き距離は用途が異なるため統合せず、呼び出し側で明示する。
 

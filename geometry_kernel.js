@@ -5,6 +5,7 @@
   const MIN_ORIENTATION_LENGTH = 1e-9;
   const MIN_PROJECTION_LENGTH_SQUARED = 1e-12;
   const MIN_LINE_INTERSECTION_DETERMINANT = 1e-12;
+  const MIN_REFLECTION_LENGTH_SQUARED = MIN_ORIENTATION_LENGTH * MIN_ORIENTATION_LENGTH;
 
   function normalizeAnglePositive(angle) {
     const twoPi = Math.PI * 2;
@@ -136,6 +137,17 @@
     };
   }
 
+  function reflectedPointAcrossLine(point, axis) {
+    const dx = axis.dx();
+    const dy = axis.dy();
+    const lengthSquared = dx * dx + dy * dy;
+    if (lengthSquared < MIN_REFLECTION_LENGTH_SQUARED) return { x: point.x, y: point.y };
+    const t = ((point.x - axis.p1.x) * dx + (point.y - axis.p1.y) * dy) / lengthSquared;
+    const projectionX = axis.p1.x + dx * t;
+    const projectionY = axis.p1.y + dy * t;
+    return { x: projectionX * 2 - point.x, y: projectionY * 2 - point.y };
+  }
+
   window.GeometryKernel = Object.freeze({
     MIN_ORIENTATION_LENGTH,
     normalizeAnglePositive,
@@ -154,5 +166,6 @@
     distancePointToSegment,
     distancePointToSegmentPoints,
     lineIntersection,
+    reflectedPointAcrossLine,
   });
 })();

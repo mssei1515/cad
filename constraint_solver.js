@@ -8,6 +8,7 @@
     arcEndpointPoint,
     signedPointLineDistance,
     signedPointDirectedLineDistance,
+    reflectedPointAcrossLine,
   } = window.GeometryKernel;
 
   const MIN_MODEL_LENGTH = 1e-6;
@@ -705,17 +706,6 @@
         signedPointLineDistance(midpoint, this.axis) * 2,
       ];
     }
-  }
-
-  function reflectedPointAcrossLine(point, axis) {
-    const dx = axis.dx();
-    const dy = axis.dy();
-    const lengthSquared = dx * dx + dy * dy;
-    if (lengthSquared < MIN_ORIENTATION_LENGTH * MIN_ORIENTATION_LENGTH) return { x: point.x, y: point.y };
-    const t = ((point.x - axis.p1.x) * dx + (point.y - axis.p1.y) * dy) / lengthSquared;
-    const projectionX = axis.p1.x + dx * t;
-    const projectionY = axis.p1.y + dy * t;
-    return { x: projectionX * 2 - point.x, y: projectionY * 2 - point.y };
   }
 
   function pointPairSymmetryError(p1, p2, axis, degenerateAtCreation) {

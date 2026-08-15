@@ -243,3 +243,58 @@ test("line intersection preserves infinite-line and determinant boundary contrac
   assert.equal(Math.abs(atBoundary.x), 0);
   assert.equal(Math.abs(atBoundary.y), 0);
 });
+
+test("line reflection preserves endpoint direction and orientation-length boundary", () => {
+  const horizontal = {
+    p1: { x: 0, y: 0 },
+    p2: { x: 4, y: 0 },
+    orientationHint: null,
+    dx: () => 4,
+    dy: () => 0,
+  };
+  const reflected = kernel.reflectedPointAcrossLine({ x: 2, y: 3 }, horizontal);
+  assert.equal(reflected.x, 2);
+  assert.equal(reflected.y, -3);
+
+  const diagonalWithIgnoredHint = {
+    p1: { x: 0, y: 0 },
+    p2: { x: 1, y: 1 },
+    orientationHint: "horizontal",
+    dx: () => 1,
+    dy: () => 1,
+  };
+  const diagonalReflection = kernel.reflectedPointAcrossLine({ x: 2, y: 0 }, diagonalWithIgnoredHint);
+  assert.ok(Math.abs(diagonalReflection.x) < 1e-12);
+  assert.equal(diagonalReflection.y, 2);
+
+  const reversed = {
+    ...diagonalWithIgnoredHint,
+    p1: diagonalWithIgnoredHint.p2,
+    p2: diagonalWithIgnoredHint.p1,
+    dx: () => -1,
+    dy: () => -1,
+  };
+  const reversedReflection = kernel.reflectedPointAcrossLine({ x: 2, y: 0 }, reversed);
+  assert.ok(Math.abs(reversedReflection.x - diagonalReflection.x) < 1e-12);
+  assert.equal(reversedReflection.y, diagonalReflection.y);
+
+  const belowBoundary = {
+    p1: { x: 0, y: 0 },
+    p2: { x: 5e-10, y: 0 },
+    dx: () => 5e-10,
+    dy: () => 0,
+  };
+  const unchanged = kernel.reflectedPointAcrossLine({ x: 2, y: 3 }, belowBoundary);
+  assert.equal(unchanged.x, 2);
+  assert.equal(unchanged.y, 3);
+
+  const atBoundary = {
+    p1: { x: 0, y: 0 },
+    p2: { x: 1e-9, y: 0 },
+    dx: () => 1e-9,
+    dy: () => 0,
+  };
+  const boundaryReflection = kernel.reflectedPointAcrossLine({ x: 2, y: 3 }, atBoundary);
+  assert.equal(boundaryReflection.x, 2);
+  assert.equal(boundaryReflection.y, -3);
+});
