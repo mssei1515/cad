@@ -60,6 +60,12 @@
     return a.path.every((segment, index) => segment === b.path[index]);
   }
 
+  function resolve(ref, lookup) {
+    const canonicalId = id(ref);
+    if (canonicalId == null || typeof lookup !== "function") return null;
+    return lookup(ref.kind, canonicalId) ?? null;
+  }
+
   function ancestorInstanceIds(ref) {
     if (!valid(ref) || ref.path.length === 1) return EMPTY_PATH;
     return Object.freeze(ref.path.slice(0, -1));
@@ -81,6 +87,7 @@
     id,
     key,
     equals,
+    resolve,
     ancestorInstanceIds,
     ownerInstanceId,
     localElementId,

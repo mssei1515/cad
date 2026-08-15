@@ -33,6 +33,20 @@ UI adapterとSolverが共有する副作用のない計算は`geometry_kernel.js
 
 2種類の角度範囲と2種類の符号付き距離は用途が異なるため統合せず、呼び出し側で明示する。Arcモデルを直接補正する`normalizeArcSweep`とドラッグ中のほぼ一周判定を含む`arcEndpointDragValue`は、pureな数学関数ではなくUIの編集policyとして`app.js`に置く。
 
+### 共通参照契約
+
+GeometryとBlock Projectionの参照は`GeometryRef { kind, path[] }`として扱う。kindは`point`、`line`、`circle`、`arc`のいずれかで、pathは1要素以上の文字列配列である。通常GeometryのIDは1要素、Projectionの階層は`@`で区切った複数要素として表す。
+
+Constraintの各Geometry参照fieldは保存形式上は従来どおりbare IDを使う。例えば入れ子Projectionを参照するLine拘束は`"line": "BI1@BI2@L1"`となり、kindを保存文字列へ追加しない。保存時はGeometryの型とIDから共通codecでcanonical IDを生成し、読込時はConstraint fieldが要求するkindとbare IDから共通resolverで実体を引く。
+
+複数kindを許すfieldの解決順は次のとおりである。
+
+- Offsetのsource／offsetはLine、Circle、Arcの順に解決する。
+- Concentricのa／bはPoint、Circle、Arcの順に解決する。
+- CircleまたはArcを許すprimitive fieldはCircle、Arcの順に解決する。
+
+参照を解決できない場合のConstraint読込エラーと、Constraint型ごとの保存・復元規則は従来どおりである。Constraint型分岐は参照codecとは別の責務として保持する。
+
 ## 2. 作図コマンド
 
 ### 点

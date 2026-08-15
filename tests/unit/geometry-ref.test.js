@@ -65,3 +65,21 @@ test("invalid references return null and valid values are immutable", () => {
   assert.equal(Object.isFrozen(ref), true);
   assert.equal(Object.isFrozen(ref.path), true);
 });
+
+test("resolver delegates valid canonical references and rejects invalid inputs", () => {
+  const resolved = { id: "BI1@BI2@L1" };
+  const calls = [];
+  const ref = geometryRef.parseKey("line:BI1@BI2@L1");
+
+  assert.equal(geometryRef.resolve(ref, (kind, id) => {
+    calls.push({ kind, id });
+    return resolved;
+  }), resolved);
+  assert.deepEqual(calls, [{ kind: "line", id: "BI1@BI2@L1" }]);
+
+  assert.equal(geometryRef.resolve(ref, () => undefined), null);
+  assert.equal(geometryRef.resolve(ref, null), null);
+  assert.equal(geometryRef.resolve({ kind: "line", path: [""] }, () => {
+    throw new Error("invalid references must not reach the lookup");
+  }), null);
+});
