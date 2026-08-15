@@ -201,6 +201,7 @@
   };
   const SKETCH_SOLVE_ERROR_COLOR = "#dc2626";
   let lastLoadLineRepairMessage = "";
+  let lastLoadBlockConstraintRepairMessage = "";
 
   const constraintButtons = Array.from(document.querySelectorAll("[data-constraint]"));
   const fixPointBtn = document.getElementById("fixPointBtn");
@@ -2428,7 +2429,12 @@
     const constraints = [];
     for (const source of definition.constraints || []) {
       const data = decorateSerializedConstraint(serializeConstraint(source), source);
-      const constraint = data ? deserializeConstraint(data, pointById, lineById, primitiveById) : null;
+      let constraint = null;
+      try {
+        constraint = data ? deserializeConstraint(data, pointById, lineById, primitiveById) : null;
+      } catch (_error) {
+        constraint = null;
+      }
       if (!constraint) {
         removed += 1;
         continue;
@@ -3992,6 +3998,7 @@
     if (!data || !Array.isArray(data.points) || !Array.isArray(data.lines) || !Array.isArray(data.constraints)) {
       throw new Error("保存データの形式が正しくありません");
     }
+    lastLoadBlockConstraintRepairMessage = "";
     const loadedDocumentName = effectiveDocumentNameFromValue(options.documentNameOverride || data.documentName || options.documentNameFallback || DEFAULT_DOCUMENT_NAME);
 
     let loadedSketches =
@@ -4196,6 +4203,7 @@
       const cycle = loadedCyclePath(definition.id);
       if (cycle) throw new Error(`ブロックの循環参照があります: ${cycle.join(" → ")}`);
     }
+    let repairedBlockConstraintCount = 0;
     for (const definition of loadedBlockDefinitions) {
       const meta = loadedBlockDefinitionMeta.get(definition.id);
       const pointById = new Map(definition.points.map((point) => [point.id, point]));
@@ -4206,8 +4214,16 @@
         addBlockProjectionElementsToMaps(createBlockProjectionBundle(instance, nestedDefinition, null, { definitionResolver: loadedDefinitionById }), pointById, lineById, primitiveById);
       }
       definition.constraints = (meta.rawDefinition.constraints || []).map((rawConstraint) => {
-        const constraint = deserializeConstraint(rawConstraint, pointById, lineById, primitiveById);
-        if (!constraint) return null;
+        let constraint = null;
+        try {
+          constraint = deserializeConstraint(rawConstraint, pointById, lineById, primitiveById);
+        } catch (_error) {
+          constraint = null;
+        }
+        if (!constraint) {
+          repairedBlockConstraintCount += 1;
+          return null;
+        }
         constraint.sketchId = meta.normalizeDefinitionSketchId(rawConstraint.sketchId || constraintSketchId(constraint));
         constraint.reference = Boolean(rawConstraint.reference);
         constraint.referenceSketchId = rawConstraint.referenceSketchId == null ? null : meta.normalizeDefinitionSketchId(rawConstraint.referenceSketchId);
@@ -4376,6 +4392,10 @@
         ? `短すぎる線を補正しました: ${lineRepair.changed}件${lineRepair.failed ? ` / 補正不能 ${lineRepair.failed}件` : ""}`
         : "";
     if (lastLoadLineRepairMessage) log(lastLoadLineRepairMessage);
+    lastLoadBlockConstraintRepairMessage = repairedBlockConstraintCount > 0
+      ? `参照先が見つからないブロック内部拘束を${repairedBlockConstraintCount}件解除しました`
+      : "";
+    if (lastLoadBlockConstraintRepairMessage) log(lastLoadBlockConstraintRepairMessage);
     ensureDimensionDefaults();
     reserveGeometryElementSequences({
       points: [...model.points, ...model.blockDefinitions.flatMap((definition) => definition.points)],
@@ -4436,6 +4456,7 @@
           updateDocumentNameUI(true);
           fitAllGeometryToViewport();
           draw();
+          if (lastLoadBlockConstraintRepairMessage) setHint(lastLoadBlockConstraintRepairMessage);
           log(`ファイルを読み込みました: ${file.name}`);
           resolve(true);
         } catch (err) {

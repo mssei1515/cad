@@ -344,6 +344,35 @@ function nestedRootConstraintFixture() {
   return fixture;
 }
 
+function nestedConstraintCleanupFixture({ stale = false } = {}) {
+  const fixture = nestedBlockEditingFixture();
+  const leaf = fixture.blockDefinitions.find((definition) => definition.id === "B1");
+  leaf.points.push(
+    { id: "P3", x: -10, y: 20, fixed: false, kind: "endpoint", sketchId: "S1" },
+    { id: "P4", x: 10, y: 20, fixed: false, kind: "endpoint", sketchId: "S1" },
+  );
+  leaf.lines.push({ id: "L2", p1: "P3", p2: "P4", construction: false, sketchId: "S1" });
+  const room = fixture.blockDefinitions.find((definition) => definition.id === "B2");
+  room.blockInstances = [{
+    id: "BI19",
+    definitionId: "B1",
+    sketchId: "S1",
+    x: 20,
+    y: 10,
+    rotation: 0,
+    fixed: false,
+    rotationLocked: true,
+    enabledSketchIds: ["S1"],
+  }];
+  room.constraints = [{
+    type: "horizontal",
+    line: stale ? "BI19@L404" : "BI19@L1",
+    enabled: true,
+    sketchId: "S1",
+  }];
+  return fixture;
+}
+
 function nestedComposableBlocksFixture() {
   const fixture = nestedBlockEditingFixture();
   const room = fixture.blockDefinitions.find((definition) => definition.id === "B2");
@@ -1371,6 +1400,42 @@ test("root constraints can reload nested block projection ids", async ({ page })
   state = await page.evaluate(() => window.__cadTest.blockState());
   expect(state.projectionLineIds).toContain("BI100@BI19@L1");
   expect(state.serialized.constraints).toHaveLength(1);
+});
+
+test("loading removes stale nested block constraints and keeps the parent editable", async ({ page }) => {
+  await page.goto(`${baseUrl}/index.html?test=1`);
+  await page.waitForFunction(() => window.__cadTest);
+
+  const imported = await page.evaluate(
+    (fixture) => window.__cadTest.importDocumentNameFixture(fixture, "stale-nested-constraint.json"),
+    nestedConstraintCleanupFixture({ stale: true }),
+  );
+  expect(imported.success).toBe(true);
+  await expect(page.locator("#hint")).toContainText("ブロック内部拘束を1件解除しました");
+  expect((await page.evaluate(() => window.__cadTest.blockState())).definitions.find((definition) => definition.id === "B2").constraints).toBe(0);
+
+  await page.click('.block-item[data-id="B2"] .blockEditBtn');
+  expect(await page.evaluate(() => window.__cadTest.blockEditorState())).toEqual(expect.objectContaining({ depth: 1 }));
+});
+
+test("deleting child geometry removes parent constraints without interrupting nested editing", async ({ page }) => {
+  await page.goto(`${baseUrl}/index.html?test=1`);
+  await page.waitForFunction(() => window.__cadTest);
+  await page.evaluate(
+    (fixture) => window.__cadTest.importDocumentNameFixture(fixture, "nested-constraint-cleanup.json"),
+    nestedConstraintCleanupFixture(),
+  );
+
+  await page.click('.block-item[data-id="B2"] .blockEditBtn');
+  await page.click('.block-item[data-id="B1"] .blockEditBtn');
+  await page.evaluate(() => window.__cadTest.selectGeometryIdsForTest({ lines: ["L1"] }));
+  await page.click("#deleteSelectionBtn");
+  await page.click("#completeBlockEditBtn");
+
+  expect(await page.evaluate(() => window.__cadTest.blockEditorState())).toEqual(expect.objectContaining({ depth: 1 }));
+  const state = await page.evaluate(() => window.__cadTest.blockState());
+  expect(state.definitions.find((definition) => definition.id === "B1").lines).toBe(1);
+  expect(state.definitions.find((definition) => definition.id === "B2").constraints).toBe(0);
 });
 
 test("block editor uses the same scoped block actions and keeps sketch choices visible with many children", async ({ page }) => {
