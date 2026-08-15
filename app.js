@@ -39,6 +39,8 @@
     resolve: resolveGeometryRefValue,
   } = window.GeometryRef;
 
+  const { create: createConstraintCodecRegistry } = window.ConstraintCodecRegistry;
+
   const {
     hypot2,
     vectorNorm,
@@ -3517,138 +3519,209 @@
     return data;
   }
 
+  const constraintCodecs = createConstraintCodecRegistry([
+    {
+      type: "pointAxisDistance",
+      constraintClass: PointAxisDistanceConstraint,
+      serialize: (c) => ({ p1: constraintGeometryId(c.p1), p2: constraintGeometryId(c.p2), axis: c.axis, sign: c.sign, target: c.target, dimension: serializeDimension(c.dimension, targetFromConstraint(c)), enabled: c.enabled }),
+      deserialize: (data, refs) => new PointAxisDistanceConstraint(refs.point(data.p1), refs.point(data.p2), Number(data.target), data.axis === "y" ? "y" : "x", Number(data.sign) || null),
+    },
+    {
+      type: "distance",
+      constraintClass: DistanceConstraint,
+      serialize: (c) => ({ p1: constraintGeometryId(c.p1), p2: constraintGeometryId(c.p2), target: c.target, dimension: serializeDimension(c.dimension, targetFromConstraint(c)), enabled: c.enabled }),
+      deserialize: (data, refs) => new DistanceConstraint(refs.point(data.p1), refs.point(data.p2), Number(data.target)),
+    },
+    {
+      type: "pointLineDistance",
+      constraintClass: PointLineDistanceConstraint,
+      serialize: (c) => ({ point: constraintGeometryId(c.point), line: constraintGeometryId(c.line), target: c.target, sign: c.sign, dimension: serializeDimension(c.dimension, targetFromConstraint(c)), enabled: c.enabled }),
+      deserialize: (data, refs) => new PointLineDistanceConstraint(refs.point(data.point), refs.line(data.line), Number(data.target), Number(data.sign) || null),
+    },
+    {
+      type: "lineLineDistance",
+      constraintClass: LineLineDistanceConstraint,
+      serialize: (c) => ({ line1: constraintGeometryId(c.line1), line2: constraintGeometryId(c.line2), target: c.target, sign: c.sign, dimension: serializeDimension(c.dimension, targetFromConstraint(c)), enabled: c.enabled }),
+      deserialize: (data, refs) => new LineLineDistanceConstraint(refs.line(data.line1), refs.line(data.line2), Number(data.target), Number(data.sign) || null),
+    },
+    {
+      type: "offsetDimension",
+      constraintClass: OffsetConstraint,
+      serialize: (c) => ({ source: constraintGeometryId(c.source), offset: constraintGeometryId(c.offset), target: c.target, sign: c.sign, directionBasis: c.source instanceof Line ? "endpoint" : "radial", dimension: serializeDimension(c.dimension, targetFromConstraint(c)), enabled: c.enabled }),
+      deserialize(data, refs) {
+        const source = refs.lineOrPrimitive(data.source);
+        const offset = refs.lineOrPrimitive(data.offset);
+        if (!source || !offset) throw new Error(`オフセット対象 ${data.source}/${data.offset} が見つかりません`);
+        const savedSign = data.directionBasis === "endpoint" || data.directionBasis === "radial" ? Number(data.sign) || null : null;
+        return new OffsetConstraint(source, offset, Number(data.target), savedSign);
+      },
+    },
+    {
+      type: "lineAngle",
+      constraintClass: LineAngleConstraint,
+      serialize: (c) => ({ line1: constraintGeometryId(c.line1), line2: constraintGeometryId(c.line2), target: c.target, startFlip: c.startFlip || 0, endFlip: c.endFlip || 0, dimension: serializeDimension(c.dimension, targetFromConstraint(c)), enabled: c.enabled }),
+      deserialize: (data, refs) => new LineAngleConstraint(refs.line(data.line1), refs.line(data.line2), Number(data.target), Number(data.startFlip) || 0, Number(data.endFlip) || 0),
+    },
+    {
+      type: "coincident",
+      constraintClass: CoincidentConstraint,
+      serialize: (c) => ({ p1: constraintGeometryId(c.p1), p2: constraintGeometryId(c.p2), enabled: c.enabled }),
+      deserialize: (data, refs) => new CoincidentConstraint(refs.point(data.p1), refs.point(data.p2)),
+    },
+    {
+      type: "arcEndpointCoincident",
+      constraintClass: ArcEndpointCoincidentConstraint,
+      serialize: (c) => ({ arc: constraintGeometryId(c.arc), endpoint: c.endpoint, point: constraintGeometryId(c.point), enabled: c.enabled }),
+      deserialize: (data, refs) => new ArcEndpointCoincidentConstraint(refs.primitive(data.arc), data.endpoint === "end" ? "end" : "start", refs.point(data.point)),
+    },
+    {
+      type: "arcEndpointArcEndpointCoincident",
+      constraintClass: ArcEndpointArcEndpointCoincidentConstraint,
+      serialize: (c) => ({ a: constraintGeometryId(c.a), endpointA: c.endpointA, b: constraintGeometryId(c.b), endpointB: c.endpointB, enabled: c.enabled }),
+      deserialize: (data, refs) => new ArcEndpointArcEndpointCoincidentConstraint(refs.primitive(data.a), data.endpointA === "end" ? "end" : "start", refs.primitive(data.b), data.endpointB === "end" ? "end" : "start"),
+    },
+    {
+      type: "pointOnLine",
+      constraintClass: PointOnLineConstraint,
+      serialize: (c) => ({ point: constraintGeometryId(c.point), line: constraintGeometryId(c.line), enabled: c.enabled }),
+      deserialize: (data, refs) => new PointOnLineConstraint(refs.point(data.point), refs.line(data.line)),
+    },
+    {
+      type: "pointOnLineMidpoint",
+      constraintClass: PointOnLineMidpointConstraint,
+      serialize: (c) => ({ point: constraintGeometryId(c.point), line: constraintGeometryId(c.line), enabled: c.enabled }),
+      deserialize: (data, refs) => new PointOnLineMidpointConstraint(refs.point(data.point), refs.line(data.line)),
+    },
+    {
+      type: "arcEndpointOnLine",
+      constraintClass: ArcEndpointOnLineConstraint,
+      serialize: (c) => ({ arc: constraintGeometryId(c.arc), endpoint: c.endpoint, line: constraintGeometryId(c.line), enabled: c.enabled }),
+      deserialize: (data, refs) => new ArcEndpointOnLineConstraint(refs.primitive(data.arc), data.endpoint === "end" ? "end" : "start", refs.line(data.line)),
+    },
+    {
+      type: "arcEndpointFixed",
+      constraintClass: ArcEndpointFixedConstraint,
+      serialize: (c) => ({ arc: constraintGeometryId(c.arc), endpoint: c.endpoint, x: c.x, y: c.y, enabled: c.enabled }),
+      deserialize: (data, refs) => new ArcEndpointFixedConstraint(refs.primitive(data.arc), data.endpoint === "end" ? "end" : "start", Number(data.x), Number(data.y)),
+    },
+    {
+      type: "lineFixed",
+      constraintClass: LineFixedConstraint,
+      serialize: (c) => ({ line: constraintGeometryId(c.line), p1x: c.p1x, p1y: c.p1y, p2x: c.p2x, p2y: c.p2y, enabled: c.enabled }),
+      deserialize: (data, refs) => new LineFixedConstraint(refs.line(data.line), Number(data.p1x), Number(data.p1y), Number(data.p2x), Number(data.p2y)),
+    },
+    {
+      type: "horizontal",
+      constraintClass: HorizontalConstraint,
+      serialize: (c) => ({ line: constraintGeometryId(c.line), enabled: c.enabled }),
+      deserialize: (data, refs) => new HorizontalConstraint(refs.line(data.line)),
+    },
+    {
+      type: "vertical",
+      constraintClass: VerticalConstraint,
+      serialize: (c) => ({ line: constraintGeometryId(c.line), enabled: c.enabled }),
+      deserialize: (data, refs) => new VerticalConstraint(refs.line(data.line)),
+    },
+    {
+      type: "pointHorizontal",
+      constraintClass: PointHorizontalConstraint,
+      serialize: (c) => ({ p1: constraintGeometryId(c.p1), p2: constraintGeometryId(c.p2), enabled: c.enabled }),
+      deserialize: (data, refs) => new PointHorizontalConstraint(refs.point(data.p1), refs.point(data.p2)),
+    },
+    {
+      type: "pointVertical",
+      constraintClass: PointVerticalConstraint,
+      serialize: (c) => ({ p1: constraintGeometryId(c.p1), p2: constraintGeometryId(c.p2), enabled: c.enabled }),
+      deserialize: (data, refs) => new PointVerticalConstraint(refs.point(data.p1), refs.point(data.p2)),
+    },
+    {
+      type: "symmetry",
+      constraintClass: SymmetryConstraint,
+      serialize: (c) => ({ p1: constraintGeometryId(c.p1), p2: constraintGeometryId(c.p2), axis: constraintGeometryId(c.axis), enabled: c.enabled }),
+      deserialize: (data, refs) => new SymmetryConstraint(refs.point(data.p1), refs.point(data.p2), refs.line(data.axis)),
+    },
+    {
+      type: "lineSymmetry",
+      constraintClass: LineSymmetryConstraint,
+      serialize: (c) => ({ line1: constraintGeometryId(c.line1), line2: constraintGeometryId(c.line2), axis: constraintGeometryId(c.axis), reversed: c.reversed, enabled: c.enabled }),
+      deserialize: (data, refs) => new LineSymmetryConstraint(refs.line(data.line1), refs.line(data.line2), refs.line(data.axis), typeof data.reversed === "boolean" ? data.reversed : null),
+    },
+    {
+      type: "parallel",
+      constraintClass: ParallelConstraint,
+      serialize: (c) => ({ line1: constraintGeometryId(c.line1), line2: constraintGeometryId(c.line2), enabled: c.enabled }),
+      deserialize: (data, refs) => new ParallelConstraint(refs.line(data.line1), refs.line(data.line2)),
+    },
+    {
+      type: "perpendicular",
+      constraintClass: PerpendicularConstraint,
+      serialize: (c) => ({ line1: constraintGeometryId(c.line1), line2: constraintGeometryId(c.line2), enabled: c.enabled }),
+      deserialize: (data, refs) => new PerpendicularConstraint(refs.line(data.line1), refs.line(data.line2)),
+    },
+    {
+      type: "collinear",
+      constraintClass: CollinearConstraint,
+      serialize: (c) => ({ line1: constraintGeometryId(c.line1), line2: constraintGeometryId(c.line2), enabled: c.enabled }),
+      deserialize: (data, refs) => new CollinearConstraint(refs.line(data.line1), refs.line(data.line2)),
+    },
+    {
+      type: "equalLength",
+      constraintClass: EqualLengthConstraint,
+      serialize: (c) => ({ line1: constraintGeometryId(c.line1), line2: constraintGeometryId(c.line2), enabled: c.enabled }),
+      deserialize: (data, refs) => new EqualLengthConstraint(refs.line(data.line1), refs.line(data.line2)),
+    },
+    {
+      type: "radiusDimension",
+      constraintClass: RadiusConstraint,
+      serialize: (c) => ({ primitive: constraintGeometryId(c.primitive), target: c.target, dimension: serializeDimension(c.dimension, targetFromConstraint(c)), enabled: c.enabled }),
+      deserialize: (data, refs) => new RadiusConstraint(refs.primitive(data.primitive), Number(data.target)),
+    },
+    {
+      type: "diameterDimension",
+      constraintClass: DiameterConstraint,
+      serialize: (c) => ({ primitive: constraintGeometryId(c.primitive), target: c.target, dimension: serializeDimension(c.dimension, targetFromConstraint(c)), enabled: c.enabled }),
+      deserialize: (data, refs) => new DiameterConstraint(refs.primitive(data.primitive), Number(data.target)),
+    },
+    {
+      type: "concentric",
+      constraintClass: ConcentricConstraint,
+      serialize: (c) => ({ a: constraintGeometryId(c.a), b: constraintGeometryId(c.b), enabled: c.enabled }),
+      deserialize: (data, refs) => new ConcentricConstraint(refs.pointOrPrimitive(data.a), refs.pointOrPrimitive(data.b)),
+    },
+    {
+      type: "equalRadius",
+      constraintClass: EqualRadiusConstraint,
+      serialize: (c) => ({ a: constraintGeometryId(c.a), b: constraintGeometryId(c.b), enabled: c.enabled }),
+      deserialize: (data, refs) => new EqualRadiusConstraint(refs.primitive(data.a), refs.primitive(data.b)),
+    },
+    {
+      type: "pointOnCircle",
+      constraintClass: PointOnCircleConstraint,
+      serialize: (c) => ({ point: constraintGeometryId(c.point), primitive: constraintGeometryId(c.primitive), enabled: c.enabled }),
+      deserialize: (data, refs) => new PointOnCircleConstraint(refs.point(data.point), refs.primitive(data.primitive)),
+    },
+    {
+      type: "arcEndpointOnCircle",
+      constraintClass: ArcEndpointOnCircleConstraint,
+      serialize: (c) => ({ arc: constraintGeometryId(c.arc), endpoint: c.endpoint, primitive: constraintGeometryId(c.primitive), enabled: c.enabled }),
+      deserialize: (data, refs) => new ArcEndpointOnCircleConstraint(refs.primitive(data.arc), data.endpoint === "end" ? "end" : "start", refs.primitive(data.primitive)),
+    },
+    {
+      type: "lineCircleTangent",
+      constraintClass: LineCircleTangentConstraint,
+      serialize: (c) => ({ line: constraintGeometryId(c.line), primitive: constraintGeometryId(c.primitive), sign: c.sign, enabled: c.enabled }),
+      deserialize: (data, refs) => new LineCircleTangentConstraint(refs.line(data.line), refs.primitive(data.primitive), Number(data.sign) || null),
+    },
+    {
+      type: "circleCircleTangent",
+      constraintClass: CircleCircleTangentConstraint,
+      serialize: (c) => ({ a: constraintGeometryId(c.a), b: constraintGeometryId(c.b), mode: c.mode, enabled: c.enabled }),
+      deserialize: (data, refs) => new CircleCircleTangentConstraint(refs.primitive(data.a), refs.primitive(data.b), data.mode === "internal" ? "internal" : "external"),
+    },
+  ]);
+
   function serializeConstraint(c) {
-    if (c instanceof PointAxisDistanceConstraint) {
-      return { type: "pointAxisDistance", p1: constraintGeometryId(c.p1), p2: constraintGeometryId(c.p2), axis: c.axis, sign: c.sign, target: c.target, dimension: serializeDimension(c.dimension, targetFromConstraint(c)), enabled: c.enabled };
-    }
-    if (c instanceof DistanceConstraint) {
-      return { type: "distance", p1: constraintGeometryId(c.p1), p2: constraintGeometryId(c.p2), target: c.target, dimension: serializeDimension(c.dimension, targetFromConstraint(c)), enabled: c.enabled };
-    }
-    if (c instanceof PointLineDistanceConstraint) {
-      return {
-        type: "pointLineDistance",
-        point: constraintGeometryId(c.point),
-        line: constraintGeometryId(c.line),
-        target: c.target,
-        sign: c.sign,
-        dimension: serializeDimension(c.dimension, targetFromConstraint(c)),
-        enabled: c.enabled,
-      };
-    }
-    if (c instanceof LineLineDistanceConstraint) {
-      return {
-        type: "lineLineDistance",
-        line1: constraintGeometryId(c.line1),
-        line2: constraintGeometryId(c.line2),
-        target: c.target,
-        sign: c.sign,
-        dimension: serializeDimension(c.dimension, targetFromConstraint(c)),
-        enabled: c.enabled,
-      };
-    }
-    if (c instanceof OffsetConstraint) {
-      return {
-        type: "offsetDimension",
-        source: constraintGeometryId(c.source),
-        offset: constraintGeometryId(c.offset),
-        target: c.target,
-        sign: c.sign,
-        directionBasis: c.source instanceof Line ? "endpoint" : "radial",
-        dimension: serializeDimension(c.dimension, targetFromConstraint(c)),
-        enabled: c.enabled,
-      };
-    }
-    if (c instanceof LineAngleConstraint) {
-      return {
-        type: "lineAngle",
-        line1: constraintGeometryId(c.line1),
-        line2: constraintGeometryId(c.line2),
-        target: c.target,
-        startFlip: c.startFlip || 0,
-        endFlip: c.endFlip || 0,
-        dimension: serializeDimension(c.dimension, targetFromConstraint(c)),
-        enabled: c.enabled,
-      };
-    }
-    if (c instanceof CoincidentConstraint) {
-      return { type: "coincident", p1: constraintGeometryId(c.p1), p2: constraintGeometryId(c.p2), enabled: c.enabled };
-    }
-    if (c instanceof ArcEndpointCoincidentConstraint) {
-      return { type: "arcEndpointCoincident", arc: constraintGeometryId(c.arc), endpoint: c.endpoint, point: constraintGeometryId(c.point), enabled: c.enabled };
-    }
-    if (c instanceof ArcEndpointArcEndpointCoincidentConstraint) {
-      return { type: "arcEndpointArcEndpointCoincident", a: constraintGeometryId(c.a), endpointA: c.endpointA, b: constraintGeometryId(c.b), endpointB: c.endpointB, enabled: c.enabled };
-    }
-    if (c instanceof PointOnLineConstraint) {
-      return { type: "pointOnLine", point: constraintGeometryId(c.point), line: constraintGeometryId(c.line), enabled: c.enabled };
-    }
-    if (c instanceof PointOnLineMidpointConstraint) {
-      return { type: "pointOnLineMidpoint", point: constraintGeometryId(c.point), line: constraintGeometryId(c.line), enabled: c.enabled };
-    }
-    if (c instanceof ArcEndpointOnLineConstraint) {
-      return { type: "arcEndpointOnLine", arc: constraintGeometryId(c.arc), endpoint: c.endpoint, line: constraintGeometryId(c.line), enabled: c.enabled };
-    }
-    if (c instanceof ArcEndpointFixedConstraint) {
-      return { type: "arcEndpointFixed", arc: constraintGeometryId(c.arc), endpoint: c.endpoint, x: c.x, y: c.y, enabled: c.enabled };
-    }
-    if (c instanceof LineFixedConstraint) {
-      return { type: "lineFixed", line: constraintGeometryId(c.line), p1x: c.p1x, p1y: c.p1y, p2x: c.p2x, p2y: c.p2y, enabled: c.enabled };
-    }
-    if (c instanceof HorizontalConstraint) {
-      return { type: "horizontal", line: constraintGeometryId(c.line), enabled: c.enabled };
-    }
-    if (c instanceof VerticalConstraint) {
-      return { type: "vertical", line: constraintGeometryId(c.line), enabled: c.enabled };
-    }
-    if (c instanceof PointHorizontalConstraint) {
-      return { type: "pointHorizontal", p1: constraintGeometryId(c.p1), p2: constraintGeometryId(c.p2), enabled: c.enabled };
-    }
-    if (c instanceof PointVerticalConstraint) {
-      return { type: "pointVertical", p1: constraintGeometryId(c.p1), p2: constraintGeometryId(c.p2), enabled: c.enabled };
-    }
-    if (c instanceof SymmetryConstraint) {
-      return { type: "symmetry", p1: constraintGeometryId(c.p1), p2: constraintGeometryId(c.p2), axis: constraintGeometryId(c.axis), enabled: c.enabled };
-    }
-    if (c instanceof LineSymmetryConstraint) {
-      return { type: "lineSymmetry", line1: constraintGeometryId(c.line1), line2: constraintGeometryId(c.line2), axis: constraintGeometryId(c.axis), reversed: c.reversed, enabled: c.enabled };
-    }
-    if (c instanceof ParallelConstraint) {
-      return { type: "parallel", line1: constraintGeometryId(c.line1), line2: constraintGeometryId(c.line2), enabled: c.enabled };
-    }
-    if (c instanceof PerpendicularConstraint) {
-      return { type: "perpendicular", line1: constraintGeometryId(c.line1), line2: constraintGeometryId(c.line2), enabled: c.enabled };
-    }
-    if (c instanceof CollinearConstraint) {
-      return { type: "collinear", line1: constraintGeometryId(c.line1), line2: constraintGeometryId(c.line2), enabled: c.enabled };
-    }
-    if (c instanceof EqualLengthConstraint) {
-      return { type: "equalLength", line1: constraintGeometryId(c.line1), line2: constraintGeometryId(c.line2), enabled: c.enabled };
-    }
-    if (c instanceof RadiusConstraint) {
-      return { type: "radiusDimension", primitive: constraintGeometryId(c.primitive), target: c.target, dimension: serializeDimension(c.dimension, targetFromConstraint(c)), enabled: c.enabled };
-    }
-    if (c instanceof DiameterConstraint) {
-      return { type: "diameterDimension", primitive: constraintGeometryId(c.primitive), target: c.target, dimension: serializeDimension(c.dimension, targetFromConstraint(c)), enabled: c.enabled };
-    }
-    if (c instanceof ConcentricConstraint) {
-      return { type: "concentric", a: constraintGeometryId(c.a), b: constraintGeometryId(c.b), enabled: c.enabled };
-    }
-    if (c instanceof EqualRadiusConstraint) {
-      return { type: "equalRadius", a: constraintGeometryId(c.a), b: constraintGeometryId(c.b), enabled: c.enabled };
-    }
-    if (c instanceof PointOnCircleConstraint) {
-      return { type: "pointOnCircle", point: constraintGeometryId(c.point), primitive: constraintGeometryId(c.primitive), enabled: c.enabled };
-    }
-    if (c instanceof ArcEndpointOnCircleConstraint) {
-      return { type: "arcEndpointOnCircle", arc: constraintGeometryId(c.arc), endpoint: c.endpoint, primitive: constraintGeometryId(c.primitive), enabled: c.enabled };
-    }
-    if (c instanceof LineCircleTangentConstraint) {
-      return { type: "lineCircleTangent", line: constraintGeometryId(c.line), primitive: constraintGeometryId(c.primitive), sign: c.sign, enabled: c.enabled };
-    }
-    if (c instanceof CircleCircleTangentConstraint) {
-      return { type: "circleCircleTangent", a: constraintGeometryId(c.a), b: constraintGeometryId(c.b), mode: c.mode, enabled: c.enabled };
-    }
-    return null;
+    return constraintCodecs.serialize(c);
   }
 
   function serializeModel() {
@@ -3957,77 +4030,8 @@
       return p;
     };
     const pointOrPrimitive = (id) => resolveStoredGeometry("point", id) || primitive(id);
-
-    let constraint = null;
-    if (data.type === "distance") {
-      constraint = new DistanceConstraint(point(data.p1), point(data.p2), Number(data.target));
-    } else if (data.type === "pointAxisDistance") {
-      constraint = new PointAxisDistanceConstraint(point(data.p1), point(data.p2), Number(data.target), data.axis === "y" ? "y" : "x", Number(data.sign) || null);
-    } else if (data.type === "pointLineDistance") {
-      constraint = new PointLineDistanceConstraint(point(data.point), line(data.line), Number(data.target), Number(data.sign) || null);
-    } else if (data.type === "lineLineDistance") {
-      constraint = new LineLineDistanceConstraint(line(data.line1), line(data.line2), Number(data.target), Number(data.sign) || null);
-    } else if (data.type === "offsetDimension") {
-      const source = resolveStoredGeometry("line", data.source) || primitiveValue(data.source);
-      const offset = resolveStoredGeometry("line", data.offset) || primitiveValue(data.offset);
-      if (!source || !offset) throw new Error(`オフセット対象 ${data.source}/${data.offset} が見つかりません`);
-      const savedSign = data.directionBasis === "endpoint" || data.directionBasis === "radial" ? Number(data.sign) || null : null;
-      constraint = new OffsetConstraint(source, offset, Number(data.target), savedSign);
-    } else if (data.type === "lineAngle") {
-      constraint = new LineAngleConstraint(line(data.line1), line(data.line2), Number(data.target), Number(data.startFlip) || 0, Number(data.endFlip) || 0);
-    } else if (data.type === "coincident") {
-      constraint = new CoincidentConstraint(point(data.p1), point(data.p2));
-    } else if (data.type === "arcEndpointCoincident") {
-      constraint = new ArcEndpointCoincidentConstraint(primitive(data.arc), data.endpoint === "end" ? "end" : "start", point(data.point));
-    } else if (data.type === "arcEndpointArcEndpointCoincident") {
-      constraint = new ArcEndpointArcEndpointCoincidentConstraint(primitive(data.a), data.endpointA === "end" ? "end" : "start", primitive(data.b), data.endpointB === "end" ? "end" : "start");
-    } else if (data.type === "pointOnLine") {
-      constraint = new PointOnLineConstraint(point(data.point), line(data.line));
-    } else if (data.type === "pointOnLineMidpoint") {
-      constraint = new PointOnLineMidpointConstraint(point(data.point), line(data.line));
-    } else if (data.type === "arcEndpointOnLine") {
-      constraint = new ArcEndpointOnLineConstraint(primitive(data.arc), data.endpoint === "end" ? "end" : "start", line(data.line));
-    } else if (data.type === "arcEndpointFixed") {
-      constraint = new ArcEndpointFixedConstraint(primitive(data.arc), data.endpoint === "end" ? "end" : "start", Number(data.x), Number(data.y));
-    } else if (data.type === "lineFixed") {
-      constraint = new LineFixedConstraint(line(data.line), Number(data.p1x), Number(data.p1y), Number(data.p2x), Number(data.p2y));
-    } else if (data.type === "horizontal") {
-      constraint = new HorizontalConstraint(line(data.line));
-    } else if (data.type === "vertical") {
-      constraint = new VerticalConstraint(line(data.line));
-    } else if (data.type === "pointHorizontal") {
-      constraint = new PointHorizontalConstraint(point(data.p1), point(data.p2));
-    } else if (data.type === "pointVertical") {
-      constraint = new PointVerticalConstraint(point(data.p1), point(data.p2));
-    } else if (data.type === "symmetry") {
-      constraint = new SymmetryConstraint(point(data.p1), point(data.p2), line(data.axis));
-    } else if (data.type === "lineSymmetry") {
-      constraint = new LineSymmetryConstraint(line(data.line1), line(data.line2), line(data.axis), typeof data.reversed === "boolean" ? data.reversed : null);
-    } else if (data.type === "parallel") {
-      constraint = new ParallelConstraint(line(data.line1), line(data.line2));
-    } else if (data.type === "perpendicular") {
-      constraint = new PerpendicularConstraint(line(data.line1), line(data.line2));
-    } else if (data.type === "collinear") {
-      constraint = new CollinearConstraint(line(data.line1), line(data.line2));
-    } else if (data.type === "equalLength") {
-      constraint = new EqualLengthConstraint(line(data.line1), line(data.line2));
-    } else if (data.type === "radiusDimension") {
-      constraint = new RadiusConstraint(primitive(data.primitive), Number(data.target));
-    } else if (data.type === "diameterDimension") {
-      constraint = new DiameterConstraint(primitive(data.primitive), Number(data.target));
-    } else if (data.type === "concentric") {
-      constraint = new ConcentricConstraint(pointOrPrimitive(data.a), pointOrPrimitive(data.b));
-    } else if (data.type === "equalRadius") {
-      constraint = new EqualRadiusConstraint(primitive(data.a), primitive(data.b));
-    } else if (data.type === "pointOnCircle") {
-      constraint = new PointOnCircleConstraint(point(data.point), primitive(data.primitive));
-    } else if (data.type === "arcEndpointOnCircle") {
-      constraint = new ArcEndpointOnCircleConstraint(primitive(data.arc), data.endpoint === "end" ? "end" : "start", primitive(data.primitive));
-    } else if (data.type === "lineCircleTangent") {
-      constraint = new LineCircleTangentConstraint(line(data.line), primitive(data.primitive), Number(data.sign) || null);
-    } else if (data.type === "circleCircleTangent") {
-      constraint = new CircleCircleTangentConstraint(primitive(data.a), primitive(data.b), data.mode === "internal" ? "internal" : "external");
-    }
+    const lineOrPrimitive = (id) => resolveStoredGeometry("line", id) || primitiveValue(id);
+    const constraint = constraintCodecs.deserialize(data, { point, line, primitive, pointOrPrimitive, lineOrPrimitive });
 
     if (constraint) {
       constraint.enabled = data.enabled !== false;

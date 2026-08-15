@@ -45,7 +45,7 @@ Constraintの各Geometry参照fieldは保存形式上は従来どおりbare ID�
 - Concentricのa／bはPoint、Circle、Arcの順に解決する。
 - CircleまたはArcを許すprimitive fieldはCircle、Arcの順に解決する。
 
-参照を解決できない場合のConstraint読込エラーと、Constraint型ごとの保存・復元規則は従来どおりである。Constraint型分岐は参照codecとは別の責務として保持する。
+参照を解決できない場合のConstraint読込エラーと、Constraint型ごとの保存・復元規則は従来どおりである。永続Constraint型のclass、保存type、serialize、deserializeは単一registryで対応付ける。参照列挙、表示名、未登録型のユーザー向け拒否policyは永続codecとは別の責務として保持する。
 
 ## 2. 作図コマンド
 
