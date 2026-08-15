@@ -4,14 +4,14 @@ const path = require("node:path");
 const test = require("node:test");
 const vm = require("node:vm");
 
-function loadGeometrySolver() {
+function loadGeometryRuntime() {
   const sandbox = { window: {} };
   vm.createContext(sandbox);
   for (const fileName of ["geometry_kernel.js", "constraint_solver.js"]) {
     const source = fs.readFileSync(path.resolve(__dirname, `../../${fileName}`), "utf8");
     vm.runInContext(source, sandbox, { filename: fileName });
   }
-  return sandbox.window.GeometrySolver;
+  return sandbox.window;
 }
 
 function residualNorm(value) {
@@ -19,7 +19,15 @@ function residualNorm(value) {
   return Math.sqrt(values.reduce((sum, item) => sum + item * item, 0));
 }
 
-const geometry = loadGeometrySolver();
+const runtime = loadGeometryRuntime();
+const geometry = runtime.GeometrySolver;
+const kernel = runtime.GeometryKernel;
+
+test("legacy solver math exports alias the shared geometry kernel", () => {
+  assert.equal(geometry.MIN_ORIENTATION_LENGTH, kernel.MIN_ORIENTATION_LENGTH);
+  assert.equal(geometry.signedPointLineDistance, kernel.signedPointLineDistance);
+  assert.equal(geometry.signedPointDirectedLineDistance, kernel.signedPointDirectedLineDistance);
+});
 
 test("geometry primitives preserve their public measurement contract", () => {
   const center = new geometry.Point("P0", 2, -3, true);

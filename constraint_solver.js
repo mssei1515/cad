@@ -3,12 +3,14 @@
   "use strict";
 
   const {
+    MIN_ORIENTATION_LENGTH,
     normalizeAngleSigned,
     arcEndpointPoint,
+    signedPointLineDistance,
+    signedPointDirectedLineDistance,
   } = window.GeometryKernel;
 
   const MIN_MODEL_LENGTH = 1e-6;
-  const MIN_ORIENTATION_LENGTH = 1e-9;
   const GUIDED_DRAG_BACKGROUND_WEIGHT = 1e-4;
   const GUIDED_DRAG_TARGET_CONSTRAINT_WEIGHT = 1;
   const GUIDED_DRAG_SINGLE_TARGET_MOTION_FACTOR = 1;
@@ -186,32 +188,6 @@
     rawError() {
       return (this.p2[this.axis] - this.p1[this.axis]) * this.sign - this.target;
     }
-  }
-
-  function signedPointLineDistance(point, line) {
-    let dx = line.dx();
-    let dy = line.dy();
-    let anchor = line.p1;
-    if (line.orientationHint === "horizontal") {
-      dx = 1;
-      dy = 0;
-      anchor = { x: line.p1.x, y: (line.p1.y + line.p2.y) / 2 };
-    } else if (line.orientationHint === "vertical") {
-      dx = 0;
-      dy = 1;
-      anchor = { x: (line.p1.x + line.p2.x) / 2, y: line.p1.y };
-    }
-    const len = hypot2(dx, dy);
-    if (len < 1e-12) return 0;
-    return ((point.x - anchor.x) * -dy + (point.y - anchor.y) * dx) / len;
-  }
-
-  function signedPointDirectedLineDistance(point, line) {
-    const dx = line.dx();
-    const dy = line.dy();
-    const len = hypot2(dx, dy);
-    if (len < 1e-12) return 0;
-    return ((point.x - line.p1.x) * -dy + (point.y - line.p1.y) * dx) / len;
   }
 
   class LineMinimumLengthConstraint extends Constraint {

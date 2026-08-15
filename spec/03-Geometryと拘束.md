@@ -20,8 +20,11 @@ UI adapterとSolverが共有する副作用のない計算は`geometry_kernel.js
 - `normalizeAnglePositive`は角度を`[0, 2π)`へ正規化し、Arc sweep判定、trim、hit test等のUI側計算で使う。
 - `normalizeAngleSigned`は角度を`(-π, π]`へ正規化し、Solverの角度残差で使う。境界の`-π`は`π`になる。
 - `arcEndpointPoint`はArcの中心、公開`radius()`、指定した開始／終了角から端点座標を返し、SolverとUI側計算が同じ実装を使う。
+- Lineの向きが有効となる下限`MIN_ORIENTATION_LENGTH`は`1e-9`である。`lineHasDirection`は長さがこの値以上の場合にtrueを返す。
+- `lineUnit`、`lineNormal`、`lineSupportNormal`、`lineAngle`はUIとSolverが参照するLine方向契約である。長さ`1e-12`未満のLineでは単位方向を`(1, 0)`、法線を`(0, 1)`とする。orientation hintがhorizontal／verticalの場合、支持法線はそれぞれ`(0, 1)`／`(-1, 0)`とする。
+- `signedPointLineDistance`はorientation hintを考慮し、hint方向の支持線anchorには両端座標の中点を使う。`signedPointDirectedLineDistance`はhintを無視し、Lineの端点方向から符号を決める。長さ`1e-12`未満ではどちらも0を返す。
 
-この2種類の角度範囲は用途が異なるため統合せず、呼び出し側で明示する。
+2種類の角度範囲と2種類の符号付き距離は用途が異なるため統合せず、呼び出し側で明示する。
 
 ## 2. 作図コマンド
 

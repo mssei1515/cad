@@ -3,14 +3,22 @@
   "use strict";
 
   const {
+    MIN_ORIENTATION_LENGTH,
     normalizeAnglePositive,
+    normalizeAngleSigned,
     arcEndpointPoint,
+    lineUnit,
+    lineNormal,
+    lineSupportNormal,
+    lineHasDirection,
+    lineAngle,
+    signedPointLineDistance,
+    signedPointDirectedLineDistance,
   } = window.GeometryKernel;
 
   const {
     hypot2,
     vectorNorm,
-    MIN_ORIENTATION_LENGTH,
     Point,
     Line,
     Circle,
@@ -21,8 +29,6 @@
     LineLineDistanceConstraint,
     OffsetConstraint,
     LineAngleConstraint,
-    signedPointLineDistance,
-    signedPointDirectedLineDistance,
     CoincidentConstraint,
     ArcEndpointCoincidentConstraint,
     ArcEndpointArcEndpointCoincidentConstraint,
@@ -5562,23 +5568,6 @@
     return null;
   }
 
-  function lineUnit(line) {
-    const len = line.length();
-    if (len < 1e-12) return { x: 1, y: 0 };
-    return { x: line.dx() / len, y: line.dy() / len };
-  }
-
-  function lineNormal(line) {
-    const u = lineUnit(line);
-    return { x: -u.y, y: u.x };
-  }
-
-  function lineSupportNormal(line) {
-    if (line.orientationHint === "horizontal") return { x: 0, y: 1 };
-    if (line.orientationHint === "vertical") return { x: -1, y: 0 };
-    return lineNormal(line);
-  }
-
   function linesAreParallel(l1, l2) {
     if (!lineHasDirection(l1) || !lineHasDirection(l2)) return false;
     const a = lineUnit(l1);
@@ -5586,19 +5575,8 @@
     return Math.abs(a.x * b.y - a.y * b.x) < 1e-3;
   }
 
-  function normalizeSignedAngle(angle) {
-    let a = angle;
-    while (a > Math.PI) a -= Math.PI * 2;
-    while (a <= -Math.PI) a += Math.PI * 2;
-    return a;
-  }
-
-  function lineAngle(line) {
-    return Math.atan2(line.dy(), line.dx());
-  }
-
   function signedAngleBetweenLines(line1, line2) {
-    return normalizeSignedAngle(lineAngle(line2) - lineAngle(line1));
+    return normalizeAngleSigned(lineAngle(line2) - lineAngle(line1));
   }
 
   function axisAngleBetweenLines(line1, line2) {
@@ -5616,7 +5594,7 @@
   function angleDimensionCandidate(target, startFlip = 0, endFlip = 0) {
     const start = lineAngle(target.line1) + (startFlip ? Math.PI : 0);
     const endAngle = lineAngle(target.line2) + (endFlip ? Math.PI : 0);
-    const signed = normalizeSignedAngle(endAngle - start);
+    const signed = normalizeAngleSigned(endAngle - start);
     if (Math.abs(signed) < 1e-9 || Math.abs(Math.abs(signed) - Math.PI) < 1e-9) return null;
     return { start, end: start + signed, signed, mid: start + signed / 2, startFlip, endFlip };
   }
@@ -5646,7 +5624,7 @@
       for (const endFlip of [0, 1]) {
         const candidate = angleDimensionCandidate(target, startFlip, endFlip);
         if (!candidate) continue;
-        const score = Math.abs(normalizeSignedAngle(candidate.mid - anchorAngle));
+        const score = Math.abs(normalizeAngleSigned(candidate.mid - anchorAngle));
         if (score < bestScore) {
           bestScore = score;
           best = candidate;
@@ -5675,10 +5653,6 @@
       x: ((x1 * y2 - y1 * x2) * (x3 - x4) - (x1 - x2) * (x3 * y4 - y3 * x4)) / den,
       y: ((x1 * y2 - y1 * x2) * (y3 - y4) - (y1 - y2) * (x3 * y4 - y3 * x4)) / den,
     };
-  }
-
-  function lineHasDirection(line) {
-    return line.length() >= MIN_ORIENTATION_LENGTH;
   }
 
   function projectPointToLine(point, line) {
