@@ -159,6 +159,35 @@ test("complete v8 documents are semantically stable across repeated round trips"
   expect(first.presentationSheets[0].elements.map((element) => element.type).sort()).toEqual(["annotationDimension", "leader"]);
 });
 
+test("constraint commit accepts a stalled solver result within the application tolerance", async ({ page }) => {
+  await openTestApp(page);
+
+  const accepted = await page.evaluate(() => window.__cadTest.commitConstraintWithForcedSolveResultForTest({
+    success: false,
+    errorNorm: 2.317e-7,
+    iterations: 14,
+    reason: "lambda上限",
+  }));
+  expect(accepted).toEqual(expect.objectContaining({
+    committed: true,
+    constraintCount: 1,
+    hintIsError: false,
+  }));
+  expect(accepted.hint).toContain("success=true");
+
+  const rejected = await page.evaluate(() => window.__cadTest.commitConstraintWithForcedSolveResultForTest({
+    success: false,
+    errorNorm: 2.317e-3,
+    iterations: 14,
+    reason: "lambda上限",
+  }));
+  expect(rejected).toEqual(expect.objectContaining({
+    committed: false,
+    constraintCount: 0,
+    hintIsError: true,
+  }));
+});
+
 test("complete v8 documents are byte-shape stable apart from savedAt", async ({ page }) => {
   test.fail(true, "Known Phase 0 gap: angle dimensions serialize unused linear offsets as null, then reload them as zero");
   await openTestApp(page);

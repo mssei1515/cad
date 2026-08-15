@@ -1709,7 +1709,7 @@
   }
 
   function resultIsAccepted(result) {
-    return Boolean(result?.success) && result.errorNorm <= CONSTRAINT_ACCEPT_ERROR;
+    return Boolean(result) && Number.isFinite(result.errorNorm) && result.errorNorm <= CONSTRAINT_ACCEPT_ERROR;
   }
 
   function constraintsForRedundancy(sketchId) {
@@ -5699,19 +5699,16 @@
   function hitBlockProjectionOperand(x, y) {
     const threshold = 8 / viewport.scale;
     const pointThreshold = 10 / viewport.scale;
-    const pointPriorityThreshold = 6 / viewport.scale;
     for (const bundle of blockProjectionBundles().slice().reverse()) {
       if (!isVisibleSketchId(bundle.instance.sketchId)) continue;
       const relation = operandRelationForSketch(bundle.instance.sketchId);
       if (!relation) continue;
-      const pointHit = bundle.points.slice().reverse().find((point) => hypot2(point.x - x, point.y - y) <= pointThreshold) || null;
-      if (pointHit && hypot2(pointHit.x - x, pointHit.y - y) <= pointPriorityThreshold) {
-        return makeConstraintOperand("point", { point: pointHit });
+      for (const point of bundle.points.slice().reverse()) {
+        if (hypot2(point.x - x, point.y - y) <= pointThreshold) return makeConstraintOperand("point", { point });
       }
       for (const line of bundle.lines.slice().reverse()) {
         if (distancePointToSegment(x, y, line) <= threshold) return makeConstraintOperand("line", { line });
       }
-      if (pointHit) return makeConstraintOperand("point", { point: pointHit });
       for (const circle of bundle.circles.slice().reverse()) {
         if (Math.abs(hypot2(x - circle.center.x, y - circle.center.y) - circle.radius()) <= threshold) return makeConstraintOperand("primitive", { primitive: circle });
       }
@@ -10517,8 +10514,8 @@
     updateUI({ refreshAnalysis: false });
     draw();
     performanceTrace.uiMs = performance.now() - uiStartedAt;
-    setHint(`拘束追加: success=${result.success}, error=${result.errorNorm.toExponential(2)}, iter=${result.iterations} / ${constraintSummaryText()}`);
-    log(`拘束を追加しました: ${type}\n自動solve: success=${result.success}, error=${result.errorNorm.toExponential(3)}`);
+    setHint(`拘束追加: success=${solved.success}, error=${result.errorNorm.toExponential(2)}, iter=${result.iterations} / ${constraintSummaryText()}`);
+    log(`拘束を追加しました: ${type}\n自動solve: success=${solved.success}, error=${result.errorNorm.toExponential(3)}`);
     recordHistory(`拘束追加: ${type}`);
     performanceTrace.totalMs = performance.now() - performanceTrace.startedAt;
     lastAuthoringPerformance = performanceTrace;
@@ -14095,6 +14092,35 @@
   function installTestHooks() {
     if (!new URLSearchParams(window.location.search).has("test")) return;
     window.__cadTest = {
+      commitConstraintWithForcedSolveResultForTest(forcedResult) {
+        resetModelState();
+        setAppMode("geometry");
+        const p1 = addPoint(0, 0, true, "endpoint");
+        const p2 = addPoint(10, 0, false, "endpoint");
+        const constraint = new DistanceConstraint(p1, p2, 10);
+        const solveSubset = solver.solveSubset;
+        solver.solveSubset = () => ({
+          success: Boolean(forcedResult?.success),
+          errorNorm: Number(forcedResult?.errorNorm),
+          iterations: Number(forcedResult?.iterations) || 0,
+          reason: String(forcedResult?.reason || "test"),
+          variableCount: 2,
+          constraintCount: 1,
+        });
+        let committed = false;
+        try {
+          committed = commitNewConstraint("distance", constraint) === true;
+        } finally {
+          solver.solveSubset = solveSubset;
+        }
+        const hint = document.getElementById("hint");
+        return {
+          committed,
+          constraintCount: model.constraints.length,
+          hint: hint?.textContent || "",
+          hintIsError: Boolean(hint?.classList.contains("error")),
+        };
+      },
       resetForGeometryClipboardTest() {
         resetModelState();
         geometryClipboard = null;
