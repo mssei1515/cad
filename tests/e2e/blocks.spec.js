@@ -813,8 +813,8 @@ test("selecting a block highlights only constraints that directly reference its 
   await page.goto(`${baseUrl}/index.html?test=1`);
   await page.waitForFunction(() => window.__cadTest);
   await page.evaluate((fixture) => window.__cadTest.importDocumentNameFixture(fixture, "block-related-constraint.json"), blockPointOnLineFixture({ subjectY: -50, includeConstraint: true }));
-  await page.click('[data-explorer-tab="objects"]');
-  await expect(page.locator("#explorerObjects")).toBeVisible();
+  await page.click('[data-explorer-tab="constraint"]');
+  await expect(page.locator("#explorerConstraint")).toBeVisible();
 
   await page.evaluate(() => window.__cadTest.selectGeometryIdsForTest({ blockInstances: ["BI2"] }));
   await expect(page.locator("#constraintList .constraint-list-row")).toHaveClass(/sidebar-related/);
@@ -1106,8 +1106,8 @@ test("a block point-on-line constraint keeps the subject block under-constrained
   expect(afterDrag.analysis).toEqual(expect.objectContaining({ stable: true, freeVariableCount: 2 }));
   expect(afterDrag.status.projections.every((projection) => projection.status === "under")).toBe(true);
 
-  await page.click('[data-explorer-tab="objects"]');
-  await page.locator("#explorerObjects > details", {
+  await page.click('[data-explorer-tab="constraint"]');
+  await page.locator("#explorerConstraint > details", {
     has: page.locator("summary", { hasText: /^Constraint$/ }),
   }).locator("summary").click();
   await page.hover('.constraint-list-row[data-idx="0"]');

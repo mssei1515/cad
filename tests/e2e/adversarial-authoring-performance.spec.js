@@ -840,10 +840,12 @@ test("selection, deletion, undo and redo stay responsive on the complete fixture
 
   await measureInteraction(page, results, "explorer/sketches", () => page.locator('[data-explorer-tab="sketches"]').click(), 250);
   await measureInteraction(page, results, "explorer/blocks", () => page.locator('[data-explorer-tab="blocks"]').click(), 250);
-  await measureInteraction(page, results, "explorer/objects", () => page.locator('[data-explorer-tab="objects"]').click(), 250);
+  await measureInteraction(page, results, "explorer/geometry", () => page.locator('[data-explorer-tab="geometry"]').click(), 250);
   for (let index = 0; index < 5; index += 1) {
-    await measureInteraction(page, results, `explorer/group-${index}`, () => page.locator("#explorerObjects summary").nth(index).click(), 250);
+    await measureInteraction(page, results, `explorer/geometry-group-${index}`, () => page.locator("#explorerGeometry summary").nth(index).click(), 250);
   }
+  await measureInteraction(page, results, "explorer/constraint", () => page.locator('[data-explorer-tab="constraint"]').click(), 250);
+  await measureInteraction(page, results, "explorer/constraint-group", () => page.locator("#explorerConstraint summary").click(), 250);
 
   const canvas = loaded.viewport.canvas;
   await measureInteraction(page, results, "view/wheel-zoom", () => page.mouse.wheel(0, -240), 150);

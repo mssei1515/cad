@@ -13,7 +13,6 @@
         <svg class="app-logo-svg" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" role="img" aria-labelledby="cad2LogoTitle cad2LogoDesc">
           <title id="cad2LogoTitle">Cad2 logo</title>
           <desc id="cad2LogoDesc">小さいサイズでも見やすい、Cad2のシンプルなロゴ</desc>
-          <rect x="16" y="16" width="224" height="224" rx="44" fill="#1F2937"/>
           <path d="M68 78 H160 C188 78 205 96 205 118 C205 139 193 153 174 163 L78 206 H194" fill="none" stroke="#F8FAFC" stroke-width="20" stroke-linecap="round" stroke-linejoin="round"/>
           <g stroke="#38BDF8" stroke-width="10" stroke-linecap="round">
             <line x1="36" y1="78" x2="100" y2="78"/>
@@ -69,7 +68,7 @@
       <div class="tool-group" aria-label="選択"><button id="toolSelect" class="tool-button active" type="button" title="選択・ドラッグ" aria-label="選択・ドラッグ"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 3l14 9-7 2-3 7L5 3z"/></svg></button></div>
       <div class="tool-group" aria-label="表示">
         <span class="tool-group-label">View</span>
-        <button id="constraintStatusViewBtn" class="tool-button" type="button" title="拘束状態表示を切り替え（Space長押しでも一時表示）" aria-label="拘束状態表示" aria-pressed="false"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/><circle cx="8" cy="7" r="2"/><circle cx="15" cy="12" r="2"/><circle cx="11" cy="17" r="2"/></svg></button>
+        <button id="constraintStatusViewBtn" class="tool-button" type="button" title="拘束状態表示を切り替え（Space長押しでも一時表示）" aria-label="拘束状態表示" aria-pressed="false"><svg class="constraint-status-icon" viewBox="0 0 24 24" aria-hidden="true"><path class="constraint-status-eye" d="M3 10.5s3.2-5 9-5 9 5 9 5-3.2 5-9 5-9-5-9-5Z"/><circle class="constraint-status-eye" cx="12" cy="10.5" r="2.3"/><path class="constraint-status-swatch status-full" d="M3 19h3"/><path class="constraint-status-swatch status-support" d="M8 19h3"/><path class="constraint-status-swatch status-under" d="M13 19h3"/><path class="constraint-status-swatch status-conflict" d="M18 19h3"/></svg></button>
       </div>
       <div class="tool-group" aria-label="Geometry">
         <span class="tool-group-label">Geometry</span>
@@ -110,7 +109,8 @@
         <div class="panel-tabs" role="tablist">
           <button class="panel-tab active" type="button" data-explorer-tab="sketches" aria-selected="true">Sketches</button>
           <button class="panel-tab" type="button" data-explorer-tab="blocks" aria-selected="false">Blocks</button>
-          <button class="panel-tab" type="button" data-explorer-tab="objects" aria-selected="false">Objects</button>
+          <button class="panel-tab" type="button" data-explorer-tab="geometry" aria-selected="false">Geometry</button>
+          <button class="panel-tab" type="button" data-explorer-tab="constraint" aria-selected="false">Constraint</button>
         </div>
         <div class="explorer-scroll">
           <section id="explorerSketches" class="explorer-panel active" data-explorer-panel="sketches">
@@ -129,14 +129,16 @@
               <div id="blockList" class="tree-list"></div><div id="blockSketchConfig" class="block-sketch-config" hidden></div>
             </section>
           </section>
-          <section id="explorerObjects" class="explorer-panel" data-explorer-panel="objects" hidden>
-            <details><summary>Constraint</summary><div id="constraintList" class="list"></div></details>
+          <section id="explorerGeometry" class="explorer-panel object-explorer-panel" data-explorer-panel="geometry" hidden>
             <details><summary>Point</summary><div id="pointList" class="list"></div></details>
             <details><summary>Line</summary><div id="lineList" class="list"></div></details>
             <details><summary>Circle</summary><div id="circleList" class="list"></div></details>
             <details><summary>Arc</summary><div id="arcList" class="list"></div></details>
             <details><summary>Block Instance</summary><div id="blockInstanceObjectList" class="list"></div></details>
             <details><summary>Annotation</summary><div id="annotationObjectList" class="list"></div></details>
+          </section>
+          <section id="explorerConstraint" class="explorer-panel object-explorer-panel" data-explorer-panel="constraint" hidden>
+            <details><summary>Constraint</summary><div id="constraintList" class="list"></div></details>
           </section>
         </div>
       </aside>

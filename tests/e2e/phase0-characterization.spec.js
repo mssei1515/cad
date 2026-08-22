@@ -350,7 +350,7 @@ test("selection, hit testing, viewport changes, and canceled commands do not mut
   await page.mouse.move(canvas.x + canvas.width / 2 + 80, canvas.y + canvas.height / 2 + 45, { steps: 4 });
   await page.mouse.up({ button: "middle" });
   await page.mouse.dblclick(canvas.x + canvas.width / 2, canvas.y + canvas.height / 2, { button: "middle" });
-  await page.click('[data-explorer-tab="objects"]');
+  await page.click('[data-explorer-tab="geometry"]');
   await page.click('[data-explorer-tab="sketches"]');
 
   expect(semanticDocument(await page.evaluate(() => window.__cadTest.serializedModelForTest()))).toEqual(semanticDocument(before));

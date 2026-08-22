@@ -5365,6 +5365,7 @@
       const target = targetFromConstraint(constraint);
       if (!target) continue;
       const dimension = constraint.dimension || defaultDimensionForTarget(target);
+      if (!viewState.constraintStatus && dimension?.display?.visible === false) continue;
       const layout = dimensionLayout(target, dimension);
       if (!layout) continue;
       if (hypot2(x - layout.text.x, y - layout.text.y) <= threshold * 2.2) {
@@ -7728,7 +7729,7 @@
       const target = targetFromConstraint(c);
       if (!target) continue;
       const dimension = c.dimension || defaultDimensionForTarget(target);
-      if (dimension?.display?.visible === false) continue;
+      if (!viewState.constraintStatus && dimension?.display?.visible === false) continue;
       const highlighted = c === hoveredDimensionConstraint || c === selectedDimensionConstraint || c === dimensionDragSession?.constraint;
       const label = dimensionLabelForConstraint(c, target, dimension);
       const editing = pendingCommand?.type === "distance-value" && pendingCommand.constraint === c;
@@ -13691,37 +13692,39 @@
     const workspace = document.querySelector(".workspace");
     setWorkspacePanelCollapsed("properties", !workspace?.classList.contains("properties-collapsed"));
   });
-  document.getElementById("explorerObjects")?.addEventListener("click", (event) => {
-    if (event.target.closest("button")) return;
-    const row = event.target.closest("[data-object-kind], .geometry-list-row, .constraint-list-row");
-    if (!row) return;
-    clearSelection();
-    if (row.dataset.objectKind === "block") selectedBlockInstances = model.blockInstances.filter((item) => item.id === row.dataset.id);
-    else if (row.dataset.objectKind === "annotation") selectedAnnotation = model.annotations.find((item) => item.id === row.dataset.id) || null;
-    else if (row.classList.contains("constraint-list-row")) selectedConstraint = model.constraints[Number(row.dataset.idx)] || null;
-    else {
-      const kind = row.dataset.kind;
-      if (kind === "point") selectedPoints = model.points.filter((item) => item.id === row.dataset.id);
-      if (kind === "line") selectedLines = model.lines.filter((item) => item.id === row.dataset.id);
-      if (kind === "circle") selectedCircles = model.circles.filter((item) => item.id === row.dataset.id);
-      if (kind === "arc") selectedArcs = model.arcs.filter((item) => item.id === row.dataset.id);
-    }
-    updateUI();
-    draw();
-  });
-  document.getElementById("explorerObjects")?.addEventListener("pointerover", (event) => {
-    const row = event.target.closest("[data-object-kind]");
-    if (!row) return;
-    if (row.dataset.objectKind === "block") hoveredBlockInstance = model.blockInstances.find((item) => item.id === row.dataset.id) || null;
-    if (row.dataset.objectKind === "annotation") hoveredAnnotation = model.annotations.find((item) => item.id === row.dataset.id) || null;
-    draw();
-  });
-  document.getElementById("explorerObjects")?.addEventListener("pointerout", (event) => {
-    if (!event.target.closest("[data-object-kind]")) return;
-    hoveredBlockInstance = null;
-    hoveredAnnotation = null;
-    draw();
-  });
+  for (const panel of document.querySelectorAll(".object-explorer-panel")) {
+    panel.addEventListener("click", (event) => {
+      if (event.target.closest("button")) return;
+      const row = event.target.closest("[data-object-kind], .geometry-list-row, .constraint-list-row");
+      if (!row) return;
+      clearSelection();
+      if (row.dataset.objectKind === "block") selectedBlockInstances = model.blockInstances.filter((item) => item.id === row.dataset.id);
+      else if (row.dataset.objectKind === "annotation") selectedAnnotation = model.annotations.find((item) => item.id === row.dataset.id) || null;
+      else if (row.classList.contains("constraint-list-row")) selectedConstraint = model.constraints[Number(row.dataset.idx)] || null;
+      else {
+        const kind = row.dataset.kind;
+        if (kind === "point") selectedPoints = model.points.filter((item) => item.id === row.dataset.id);
+        if (kind === "line") selectedLines = model.lines.filter((item) => item.id === row.dataset.id);
+        if (kind === "circle") selectedCircles = model.circles.filter((item) => item.id === row.dataset.id);
+        if (kind === "arc") selectedArcs = model.arcs.filter((item) => item.id === row.dataset.id);
+      }
+      updateUI();
+      draw();
+    });
+    panel.addEventListener("pointerover", (event) => {
+      const row = event.target.closest("[data-object-kind]");
+      if (!row) return;
+      if (row.dataset.objectKind === "block") hoveredBlockInstance = model.blockInstances.find((item) => item.id === row.dataset.id) || null;
+      if (row.dataset.objectKind === "annotation") hoveredAnnotation = model.annotations.find((item) => item.id === row.dataset.id) || null;
+      draw();
+    });
+    panel.addEventListener("pointerout", (event) => {
+      if (!event.target.closest("[data-object-kind]")) return;
+      hoveredBlockInstance = null;
+      hoveredAnnotation = null;
+      draw();
+    });
+  }
   document.getElementById("documentSettingsBtn")?.addEventListener("click", () => {
     const fields = document.getElementById("documentAppearanceFields");
     if (fields) {

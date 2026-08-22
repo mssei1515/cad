@@ -9,7 +9,7 @@ const baseUrl = `http://${host}:${port}`;
 let serverProcess = null;
 
 function objectSection(page, label) {
-  return page.locator("#explorerObjects > details", {
+  return page.locator(".object-explorer-panel > details", {
     has: page.locator("summary", { hasText: new RegExp(`^${label}$`) }),
   });
 }
@@ -275,6 +275,11 @@ test("unified workspace uses fixed Explorer Canvas Properties and Status regions
         count: document.querySelectorAll(".app-logo-svg").length,
         viewBox: document.querySelector(".app-logo-svg")?.getAttribute("viewBox"),
         width: document.querySelector(".app-logo-svg")?.getBoundingClientRect().width,
+        backgroundCount: document.querySelectorAll(".app-logo-svg > rect").length,
+      },
+      constraintStatusIcon: {
+        eyeCount: document.querySelectorAll("#constraintStatusViewBtn .constraint-status-eye").length,
+        swatches: [...document.querySelectorAll("#constraintStatusViewBtn .constraint-status-swatch")].map((item) => getComputedStyle(item).stroke),
       },
       documentNameControls: document.querySelectorAll("#documentNameInput, .document-name-input").length,
       menuBackground: getComputedStyle(document.querySelector(".menu-bar")).backgroundColor,
@@ -295,7 +300,11 @@ test("unified workspace uses fixed Explorer Canvas Properties and Status regions
   expect(layout.iconButtons.every((button) => button.text === "" && button.hasIcon && button.title && button.label)).toBe(true);
   expect(layout.canvasCursor).toBe("default");
   expect(layout.gridControls).toBe(0);
-  expect(layout.logo).toEqual({ count: 1, viewBox: "0 0 256 256", width: 30 });
+  expect(layout.logo).toEqual({ count: 1, viewBox: "0 0 256 256", width: 30, backgroundCount: 0 });
+  expect(layout.constraintStatusIcon).toEqual({
+    eyeCount: 2,
+    swatches: ["rgb(17, 24, 39)", "rgb(15, 118, 110)", "rgb(245, 158, 11)", "rgb(220, 38, 38)"],
+  });
   expect(layout.documentNameControls).toBe(0);
   expect(layout.menuBackground).toBe("rgb(30, 58, 95)");
   expect(layout.menuBackground).toBe(layout.statusBackground);
@@ -305,9 +314,11 @@ test("unified workspace uses fixed Explorer Canvas Properties and Status regions
   expect(layout.explorerTabs).toEqual([
     { id: "sketches", text: "Sketches" },
     { id: "blocks", text: "Blocks" },
-    { id: "objects", text: "Objects" },
+    { id: "geometry", text: "Geometry" },
+    { id: "constraint", text: "Constraint" },
   ]);
-  expect(await page.locator("#blockInstanceObjectList").evaluate((element) => element.closest("[data-explorer-panel]")?.dataset.explorerPanel)).toBe("objects");
+  expect(await page.locator("#blockInstanceObjectList").evaluate((element) => element.closest("[data-explorer-panel]")?.dataset.explorerPanel)).toBe("geometry");
+  expect(await page.locator("#constraintList").evaluate((element) => element.closest("[data-explorer-panel]")?.dataset.explorerPanel)).toBe("constraint");
   expect(layout.explorer.left).toBe(0);
   expect(layout.explorer.right).toBeCloseTo(layout.canvas.left, 0);
   expect(layout.canvas.right).toBeCloseTo(layout.properties.left, 0);
@@ -316,26 +327,32 @@ test("unified workspace uses fixed Explorer Canvas Properties and Status regions
 
   await expect(page.locator("#explorerSketches")).toBeVisible();
   await expect(page.locator("#explorerBlocks")).toBeHidden();
-  await expect(page.locator("#explorerObjects")).toBeHidden();
+  await expect(page.locator("#explorerGeometry")).toBeHidden();
+  await expect(page.locator("#explorerConstraint")).toBeHidden();
   await page.click('[data-explorer-tab="blocks"]');
   await expect(page.locator("#explorerSketches")).toBeHidden();
   await expect(page.locator("#explorerBlocks")).toBeVisible();
-  await expect(page.locator("#explorerObjects")).toBeHidden();
+  await expect(page.locator("#explorerGeometry")).toBeHidden();
+  await expect(page.locator("#explorerConstraint")).toBeHidden();
   await expect(page.locator("#blockOverlay")).toBeVisible();
-  await page.click('[data-explorer-tab="objects"]');
-  await expect(page.locator("#explorerObjects")).toBeVisible();
+  await page.click('[data-explorer-tab="geometry"]');
+  await expect(page.locator("#explorerGeometry")).toBeVisible();
   await expect(page.locator("#explorerSketches")).toBeHidden();
   await expect(page.locator("#explorerBlocks")).toBeHidden();
-  expect(await page.locator("#explorerObjects > details").evaluateAll((details) => details.map((item) => item.open))).toEqual([
-    false, false, false, false, false, false, false,
+  await expect(page.locator("#explorerConstraint")).toBeHidden();
+  expect(await page.locator("#explorerGeometry > details").evaluateAll((details) => details.map((item) => item.open))).toEqual([
+    false, false, false, false, false, false,
   ]);
   await expect(page.locator("#pointList .geometry-list-row")).toHaveCount(4);
   const pointSection = await expandObjectSection(page, "Point");
   await expect(pointSection).toHaveAttribute("open", "");
   await page.click('[data-explorer-tab="sketches"]');
   await expect(page.locator("#explorerSketches")).toBeVisible();
-  await page.click('[data-explorer-tab="objects"]');
+  await page.click('[data-explorer-tab="geometry"]');
   await expect(pointSection).toHaveAttribute("open", "");
+  await page.click('[data-explorer-tab="constraint"]');
+  await expect(page.locator("#explorerConstraint")).toBeVisible();
+  expect(await page.locator("#explorerConstraint > details").evaluateAll((details) => details.map((item) => item.open))).toEqual([false]);
   await page.click('[data-explorer-tab="sketches"]');
 
   expect(await page.evaluate(() => window.__cadTest.documentNameState())).toEqual({
@@ -416,7 +433,7 @@ test("unified workspace uses fixed Explorer Canvas Properties and Status regions
   const canvas = await page.locator("#canvas").boundingBox();
   await page.click("#toolPoint");
   await page.mouse.click(canvas.x + canvas.width * 0.55, canvas.y + canvas.height * 0.55);
-  await page.click('[data-explorer-tab="objects"]');
+  await page.click('[data-explorer-tab="geometry"]');
   await expect(page.locator("#pointList .geometry-list-row")).toHaveCount(1);
   await page.locator("#pointList .geometry-list-row").click();
   await expect(page.locator("#propertiesPanel")).toContainText("Point");
@@ -502,7 +519,7 @@ test("Appearance cascades, color palette resets to the inherited value, and cons
     visible: true,
   });
 
-  await page.click('[data-explorer-tab="objects"]');
+  await page.click('[data-explorer-tab="geometry"]');
   await expandObjectSection(page, "Line");
   await page.locator('#lineList .geometry-list-row[data-id="L1"]').click();
   await expect(page.locator('#propertyVisible option[value=""]')).toHaveText("既定");
@@ -627,7 +644,7 @@ test("Constraint dimensions persist display properties without creating annotati
   await page.goto(`${baseUrl}/index.html?test=1`);
   await page.waitForFunction(() => window.__cadTest);
   await page.evaluate(() => window.__cadTest.resetForReadOnlyDuplicateDimension());
-  await page.click('[data-explorer-tab="objects"]');
+  await page.click('[data-explorer-tab="constraint"]');
   await expandObjectSection(page, "Constraint");
   await page.locator("#constraintList .constraint-list-row").first().click();
   await page.locator('[data-dimension-display="precision"]').fill("3");
@@ -646,12 +663,17 @@ test("Constraint dimensions persist display properties without creating annotati
   await page.mouse.down();
   await page.mouse.move(label.x + 36, label.y + 18, { steps: 4 });
   await page.mouse.up();
+  await page.locator('[data-dimension-display="visible"]').uncheck();
+  expect(await page.evaluate(() => window.__cadTest.drawnDimensionLabelsForTest())).not.toEqual(expect.arrayContaining([expect.stringMatching(/REF .* mm/)]));
+  await page.locator("#constraintStatusViewBtn").click();
+  expect(await page.evaluate(() => window.__cadTest.drawnDimensionLabelsForTest())).toEqual(expect.arrayContaining([expect.stringMatching(/REF .* mm/)]));
+  await page.locator("#constraintStatusViewBtn").click();
   const serialized = await page.evaluate(() => window.__cadTest.serializedModelForTest());
-  expect(serialized.constraints[0].dimension.display).toEqual(expect.objectContaining({ precision: 3, prefix: "REF ", suffix: " mm", arrows: false }));
+  expect(serialized.constraints[0].dimension.display).toEqual(expect.objectContaining({ visible: false, precision: 3, prefix: "REF ", suffix: " mm", arrows: false }));
   expect(serialized.annotations).toEqual([]);
 });
 
-test("Sketch tree and Objects hover use the same geometry emphasis as canvas hover without tree Geometry IDs", async ({ page }) => {
+test("Sketch tree and Geometry Explorer hover use the same emphasis as canvas hover without tree Geometry IDs", async ({ page }) => {
   await page.goto(`${baseUrl}/index.html?test=1`);
   await page.waitForFunction(() => window.__cadTest);
   const ids = await page.evaluate(() => window.__cadTest.resetForSidebarInspection());
@@ -662,7 +684,7 @@ test("Sketch tree and Objects hover use the same geometry emphasis as canvas hov
   const treeHover = await page.evaluate((lineId) => window.__cadTest.hoverDisplayStateForTest("line", lineId), ids.line);
   expect(treeHover).toEqual(expect.objectContaining({ treeHovered: true, color: canvasHover.color, width: canvasHover.width }));
   expect(await page.evaluate(() => window.__cadTest.drawnGeometryIdLabelsForTest())).toEqual([]);
-  await page.click('[data-explorer-tab="objects"]');
+  await page.click('[data-explorer-tab="geometry"]');
   await expandObjectSection(page, "Line");
   await page.locator(`#lineList .geometry-list-row[data-id="${ids.line}"]`).hover();
   const objectHover = await page.evaluate((lineId) => window.__cadTest.hoverDisplayStateForTest("line", lineId), ids.line);
@@ -828,11 +850,11 @@ test("construction line endpoint overhang remains while geometry or its block is
   });
 });
 
-test("Objects explorer lists geometry and synchronizes selection and hover", async ({ page }) => {
+test("Geometry and Constraint Explorer tabs list and synchronize their respective objects", async ({ page }) => {
   await page.goto(`${baseUrl}/index.html?test=1`);
   const ids = await page.evaluate(() => window.__cadTest.resetForSidebarInspection());
-  await page.click('[data-explorer-tab="objects"]');
-  await expect(page.locator("#explorerObjects")).toBeVisible();
+  await page.click('[data-explorer-tab="geometry"]');
+  await expect(page.locator("#explorerGeometry")).toBeVisible();
   await expect(page.locator("#pointList .geometry-list-row")).toHaveCount(2);
   await expect(page.locator(`#pointList .geometry-list-row[data-id="${ids.fixedPoint}"]`)).toHaveCount(1);
   await expect(page.locator("#circleList .geometry-list-row")).toHaveCount(1);
@@ -852,6 +874,8 @@ test("Objects explorer lists geometry and synchronizes selection and hover", asy
   await expect(page.locator("#circleList .geometry-list-row")).toHaveClass(/selected/);
   await expect(page.locator("#propertiesPanel")).toContainText(`Circle ${ids.circle}`);
 
+  await page.click('[data-explorer-tab="constraint"]');
+  await expect(page.locator("#explorerConstraint")).toBeVisible();
   await expandObjectSection(page, "Constraint");
   await page.locator("#constraintList .constraint-list-row").click();
   await expect(page.locator("#constraintList .constraint-list-row")).toHaveClass(/selected/);
@@ -863,7 +887,7 @@ test("constraint rows highlight only directly related selected geometry", async 
   await page.goto(`${baseUrl}/index.html?test=1`);
   await page.waitForFunction(() => window.__cadTest);
   const ids = await page.evaluate(() => window.__cadTest.resetForSidebarInspection());
-  await page.click('[data-explorer-tab="objects"]');
+  await page.click('[data-explorer-tab="constraint"]');
   const constraintRow = page.locator("#constraintList .constraint-list-row");
   await expect(constraintRow).toHaveCount(1);
 
