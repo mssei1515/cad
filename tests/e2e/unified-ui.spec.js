@@ -308,6 +308,9 @@ test("unified workspace uses fixed Explorer Canvas Properties and Status regions
         radius: getComputedStyle(document.querySelector(".panel-tab.active")).borderTopLeftRadius,
         background: getComputedStyle(document.querySelector(".panel-tab.active")).backgroundColor,
         borderBottom: getComputedStyle(document.querySelector(".panel-tab.active")).borderBottomColor,
+        height: document.querySelector(".panel-tab.active").getBoundingClientRect().height,
+        stripHeight: document.querySelector(".panel-tabs").getBoundingClientRect().height,
+        inactiveBackground: getComputedStyle(document.querySelector(".panel-tab:not(.active)")).backgroundColor,
       },
     };
   });
@@ -336,7 +339,14 @@ test("unified workspace uses fixed Explorer Canvas Properties and Status regions
     { id: "blocks", text: "ブロック" },
     { id: "constraint", text: "拘束" },
   ]);
-  expect(layout.activeTabStyle).toEqual({ radius: "7px", background: "rgb(255, 255, 255)", borderBottom: "rgb(255, 255, 255)" });
+  expect(layout.activeTabStyle).toEqual({
+    radius: "5px",
+    background: "rgb(255, 255, 255)",
+    borderBottom: "rgb(255, 255, 255)",
+    height: 27,
+    stripHeight: 32,
+    inactiveBackground: "rgba(0, 0, 0, 0)",
+  });
   expect(await page.locator("#blockInstanceObjectList").evaluate((element) => element.closest("[data-explorer-panel]")?.dataset.explorerPanel)).toBe("blocks");
   expect(await page.locator("#constraintList").evaluate((element) => element.closest("[data-explorer-panel]")?.dataset.explorerPanel)).toBe("constraint");
   expect(await page.locator("#sketchOverlay").evaluate((element) => element.parentElement?.classList.contains("canvas-area"))).toBe(true);
@@ -387,6 +397,13 @@ test("unified workspace uses fixed Explorer Canvas Properties and Status regions
   await expect(page.locator("#explorerConstraint")).toBeVisible();
   await expect(page.locator("#explorerConstraint > details")).toHaveCount(0);
   await expect(page.locator("#constraintList")).toBeVisible();
+  await expect(page.locator("#constraintList > .constraint-summary-row")).toHaveCount(1);
+  const explorerHeaderBackgrounds = await page.evaluate(() => ({
+    block: getComputedStyle(document.querySelector("#explorerBlocks .section-header")).backgroundColor,
+    constraint: getComputedStyle(document.querySelector("#constraintList > .constraint-summary-row")).backgroundColor,
+  }));
+  expect(explorerHeaderBackgrounds.constraint).toBe(explorerHeaderBackgrounds.block);
+  expect(explorerHeaderBackgrounds.constraint).not.toBe("rgba(0, 0, 0, 0)");
   await page.click('[data-explorer-tab="geometry"]');
 
   expect(await page.evaluate(() => window.__cadTest.documentNameState())).toEqual({

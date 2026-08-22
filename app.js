@@ -10519,7 +10519,7 @@
         `</button></div>`;
     });
     document.getElementById("constraintList").innerHTML =
-      `<div class="item constraint-item"><span>${constraintSummaryText()}</span></div>` + [...constraintRows, ...fixedPointRows].join("");
+      `<div class="constraint-summary-row"><span>${constraintSummaryText()}</span></div>` + [...constraintRows, ...fixedPointRows].join("");
 
     for (const btn of document.querySelectorAll(".removeConstraintBtn")) {
       btn.addEventListener("click", () => {
