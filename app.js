@@ -191,6 +191,8 @@
   const BLOCK_ORTHOGONAL_ROTATION_STEP = Math.PI / 2;
   const viewport = { x: 0, y: 0, scale: 1 };
   const viewState = { constraintStatus: false, geometryIds: false };
+  let constraintStatusMouseLatched = false;
+  let constraintStatusSpaceHeld = false;
   const MIN_ZOOM = 0.001;
   const MAX_ZOOM = 10000000;
   const CONSTRUCTION_EXTENSION_SCREEN_PX = 12;
@@ -1944,6 +1946,17 @@
     if (!constraintAnalysisState) refreshConstraintAnalysis();
     const s = constraintAnalysisState?.summary || { full: 0, support: 0, under: 0, conflict: 0 };
     return `完全拘束: ${s.full} / 支持位置拘束: ${s.support} / 未拘束: ${s.under} / 矛盾: ${s.conflict}${constraintDuplicateSummary()}${referenceConstraintErrorSummary()}`;
+  }
+
+  function syncConstraintStatusView({ hint = true } = {}) {
+    const next = constraintStatusMouseLatched || constraintStatusSpaceHeld;
+    const changed = viewState.constraintStatus !== next;
+    viewState.constraintStatus = next;
+    const button = document.getElementById("constraintStatusViewBtn");
+    button?.classList.toggle("active", next);
+    button?.setAttribute("aria-pressed", String(next));
+    if (hint && changed) setHint(next ? "拘束状態表示: Document内の全Geometryを表示しています" : "通常表示");
+    if (changed) draw();
   }
 
   function addPoint(x, y, fixed = false, kind = "explicit") {
@@ -5343,11 +5356,12 @@
     return added;
   }
 
-  function hitDimension(x, y) {
+  function hitDimension(x, y, { activeOnly = true } = {}) {
     const threshold = 12 / viewport.scale;
     for (let i = model.constraints.length - 1; i >= 0; i--) {
       const constraint = model.constraints[i];
-      if (!isActiveSketchConstraint(constraint)) continue;
+      if (activeOnly && !isActiveSketchConstraint(constraint)) continue;
+      if (!isVisibleSketchId(constraintSketchId(constraint))) continue;
       const target = targetFromConstraint(constraint);
       if (!target) continue;
       const dimension = constraint.dimension || defaultDimensionForTarget(target);
@@ -7262,11 +7276,12 @@
       const treeHovered = isSidebarHighlightedElement(l);
       const sidebarHovered = isSidebarHoveredElement(l);
       const relatedHighlighted = isSelectedConstraintRelatedElement(l);
-      const auxiliaryHighlighted = treeHovered || relatedHighlighted;
+      const auxiliaryHighlighted = relatedHighlighted;
       const blockSelected = l.blockInstance && selectedBlockInstances.includes(l.blockInstance);
       const geometrySelected = (active && selectedLines.includes(l)) || refSelected;
       const sel = blockSelected || geometrySelected;
-      const directlyHovered = sidebarHovered || ((active || isReferenceHoverElement(l)) && hoveredLine === l);
+      const canvasHovered = (active || isReferenceHoverElement(l)) && hoveredLine === l;
+      const directlyHovered = treeHovered || sidebarHovered || canvasHovered;
       const hovered = directlyHovered || (l.blockInstance && hoveredBlockInstance === l.blockInstance);
       const construction = Boolean(l.construction);
       ctx.globalAlpha = sketchAlpha(l) * (construction && !sel && !hovered && !auxiliaryHighlighted ? CONSTRUCTION_GEOMETRY_ALPHA : 1);
@@ -7286,7 +7301,7 @@
       ctx.setLineDash([]);
       ctx.shadowBlur = 0;
 
-      if (construction) {
+      if (construction && !viewState.constraintStatus) {
         ctx.fillStyle = lineColor;
         const endpointRadius = 2.4 / viewport.scale;
         for (const p of [l.p1, l.p2]) {
@@ -7296,7 +7311,7 @@
         }
       }
 
-      if (viewState.geometryIds || geometrySelected || directlyHovered || relatedHighlighted) {
+      if (viewState.geometryIds || geometrySelected || sidebarHovered || canvasHovered || relatedHighlighted) {
         const mx = (l.p1.x + l.p2.x) / 2;
         const my = (l.p1.y + l.p2.y) / 2;
         ctx.fillStyle = "#2563eb";
@@ -7317,11 +7332,12 @@
       const treeHovered = isSidebarHighlightedElement(c);
       const sidebarHovered = isSidebarHoveredElement(c);
       const relatedHighlighted = isSelectedConstraintRelatedElement(c);
-      const auxiliaryHighlighted = treeHovered || relatedHighlighted;
+      const auxiliaryHighlighted = relatedHighlighted;
       const blockSelected = c.blockInstance && selectedBlockInstances.includes(c.blockInstance);
       const geometrySelected = (active && selectedCircles.includes(c)) || refSelected;
       const sel = blockSelected || geometrySelected;
-      const directlyHovered = sidebarHovered || ((active || isReferenceHoverElement(c)) && hoveredCircle === c);
+      const canvasHovered = (active || isReferenceHoverElement(c)) && hoveredCircle === c;
+      const directlyHovered = treeHovered || sidebarHovered || canvasHovered;
       const hovered = directlyHovered || (c.blockInstance && hoveredBlockInstance === c.blockInstance);
       const construction = Boolean(c.construction) && !sel && !hovered;
       ctx.globalAlpha = sketchAlpha(c) * (construction && !auxiliaryHighlighted ? CONSTRUCTION_GEOMETRY_ALPHA : 1);
@@ -7335,7 +7351,7 @@
       ctx.stroke();
       ctx.setLineDash([]);
       ctx.shadowBlur = 0;
-      if (viewState.geometryIds || geometrySelected || directlyHovered || relatedHighlighted) {
+      if (viewState.geometryIds || geometrySelected || sidebarHovered || canvasHovered || relatedHighlighted) {
         ctx.fillStyle = "#2563eb";
         ctx.font = `${12 / viewport.scale}px system-ui`;
         ctx.fillText(c.id, c.center.x + c.radius() + 4 / viewport.scale, c.center.y - 4 / viewport.scale);
@@ -7354,11 +7370,12 @@
       const treeHovered = isSidebarHighlightedElement(a);
       const sidebarHovered = isSidebarHoveredElement(a);
       const relatedHighlighted = isSelectedConstraintRelatedElement(a);
-      const auxiliaryHighlighted = treeHovered || relatedHighlighted;
+      const auxiliaryHighlighted = relatedHighlighted;
       const blockSelected = a.blockInstance && selectedBlockInstances.includes(a.blockInstance);
       const geometrySelected = (active && selectedArcs.includes(a)) || refSelected;
       const sel = blockSelected || geometrySelected;
-      const directlyHovered = sidebarHovered || ((active || isReferenceHoverElement(a)) && hoveredArc === a);
+      const canvasHovered = (active || isReferenceHoverElement(a)) && hoveredArc === a;
+      const directlyHovered = treeHovered || sidebarHovered || canvasHovered;
       const hovered = directlyHovered || (a.blockInstance && hoveredBlockInstance === a.blockInstance);
       const construction = Boolean(a.construction) && !sel && !hovered;
       ctx.globalAlpha = sketchAlpha(a) * (construction && !auxiliaryHighlighted ? CONSTRUCTION_GEOMETRY_ALPHA : 1);
@@ -7372,7 +7389,7 @@
       ctx.stroke();
       ctx.setLineDash([]);
       ctx.shadowBlur = 0;
-      if (viewState.geometryIds || geometrySelected || directlyHovered || relatedHighlighted) {
+      if (viewState.geometryIds || geometrySelected || sidebarHovered || canvasHovered || relatedHighlighted) {
         const mid = a.startAngle + arcSweep(a) / 2;
         ctx.fillStyle = "#2563eb";
         ctx.font = `${12 / viewport.scale}px system-ui`;
@@ -8113,7 +8130,7 @@
     const identity = hoveredSketchIdentity || selectedSketchIdentityElement();
     const pointer = lastPointerWorld;
     if (!identity || !pointer || !isVisibleSketchId(identity.sketchId) || identity.sketchId === activeSketchId()) return;
-    const baseLabel = `${identity.id} / ${sketchName(identity.sketchId)}`;
+    const baseLabel = `${identity.label || identity.id} / ${sketchName(identity.sketchId)}`;
     const relationLabel = sketchIdentityRelationLabel(identity.sketchId);
     const separator = relationLabel ? " / " : "";
     ctx.save();
@@ -8164,6 +8181,7 @@
   function shouldShowPrimitiveCenter(point) {
     if (selectedCircles.some((circle) => circle.center === point) || selectedArcs.some((arc) => arc.center === point)) return true;
     if (hoveredCircle?.center === point || hoveredArc?.center === point || hoveredArcEndpoint?.arc?.center === point) return true;
+    if (hoveredSidebarItem?.item?.center === point) return true;
     if ((dragSession?.kind === "circle" || dragSession?.kind === "arc" || dragSession?.kind === "arc-endpoint") && dragSession.item?.center === point) return true;
     return false;
   }
@@ -8202,6 +8220,7 @@
     ctx.save();
     for (const p of drawOrderBySketch(allGeometryPoints())) {
       const appearance = effectiveAppearanceForElement(p);
+      if (viewState.constraintStatus && p.kind === "endpoint") continue;
       if (!viewState.constraintStatus && !p.blockProjection && !isExplicitPoint(p) && !isPointUsedByPrimitive(p) && !isReferencePoint(p)) continue;
       const active = isEditableSketchElement(p);
       ctx.globalAlpha = sketchAlpha(p);
@@ -8209,10 +8228,11 @@
       const treeHovered = isSidebarHighlightedElement(p);
       const sidebarHovered = isSidebarHoveredElement(p);
       const relatedHighlighted = isSelectedConstraintRelatedElement(p);
-      const auxiliaryHighlighted = treeHovered || relatedHighlighted;
+      const auxiliaryHighlighted = relatedHighlighted;
       const sel = (active && selectedPoints.includes(p)) || refSelected;
       const endpoint = isEndpointPoint(p);
-      const hovered = sidebarHovered || ((active || isReferenceHoverElement(p)) && (hoveredPoint === p || hoveredEndpointPoint === p));
+      const canvasHovered = (active || isReferenceHoverElement(p)) && (hoveredPoint === p || hoveredEndpointPoint === p);
+      const hovered = treeHovered || sidebarHovered || canvasHovered;
       const dragging = dragSession?.kind === "point" && dragSession.points.some((target) => target.point === p);
       const primitiveCenter = shouldShowPrimitiveCenter(p);
       const fixedByLine = pointLockedByLineFixed(p);
@@ -8231,7 +8251,7 @@
       ctx.stroke();
       ctx.shadowBlur = 0;
       ctx.setLineDash([]);
-      if (viewState.geometryIds || sel || hovered || dragging || relatedHighlighted) {
+      if (viewState.geometryIds || sel || sidebarHovered || canvasHovered || dragging || relatedHighlighted) {
         ctx.fillStyle = hovered || endpoint ? "#2563eb" : "#111827";
         ctx.font = `${12 / viewport.scale}px system-ui`;
         ctx.fillText(p.id, p.x + 8 / viewport.scale, p.y - 8 / viewport.scale);
@@ -9490,35 +9510,11 @@
     const elements = new Set();
     if (!item) return elements;
     elements.add(item);
-    if (item instanceof Point) {
-      for (const line of allGeometryLines()) {
-        if (line.p1 === item || line.p2 === item) elements.add(line);
-      }
-      for (const circle of allGeometryCircles()) {
-        if (circle.center === item) elements.add(circle);
-      }
-      for (const arc of allGeometryArcs()) {
-        if (arc.center === item) elements.add(arc);
-      }
-      return elements;
-    }
-    if (item instanceof Line) {
-      elements.add(item.p1);
-      elements.add(item.p2);
-      return elements;
-    }
-    if (item instanceof Circle) {
-      elements.add(item.center);
-      return elements;
-    }
-    if (item instanceof Arc) {
-      elements.add(item.center);
-      return elements;
-    }
     return elements;
   }
 
   function sidebarHoverElementsForConstraint(constraint) {
+    if (constraint && targetFromConstraint(constraint)) return new Set();
     return new Set(constraint ? constraintGraphNodes(constraint).filter(Boolean) : []);
   }
 
@@ -9865,17 +9861,29 @@
     return document.documentElement.lang.toLowerCase().startsWith("ja") ? "既定" : "Default";
   }
 
+  function resetAppearanceLabel() {
+    return document.documentElement.lang.toLowerCase().startsWith("ja") ? "既定へ戻す" : "Reset to default";
+  }
+
+  function colorPickerValue(value) {
+    const color = String(value || "").trim();
+    if (/^#[0-9a-f]{6}$/i.test(color)) return color.toLowerCase();
+    if (/^#[0-9a-f]{3}$/i.test(color)) return `#${[...color.slice(1)].map((part) => part.repeat(2)).join("")}`.toLowerCase();
+    return "#111827";
+  }
+
   function appearancePropertyRows(owner, effective, { allowInheritance = true } = {}) {
     const direct = normalizeAppearance(owner);
     const inherited = (key) => allowInheritance && direct[key] == null;
     const option = (value, label, selected) => `<option value="${value}" ${selected ? "selected" : ""}>${label}</option>`;
     const defaultLabel = defaultAppearanceLabel();
+    const colorValue = colorPickerValue(direct.color || effective.color);
     return `
       <div class="property-row"><label for="propertyVisible">Visible</label><select id="propertyVisible" data-appearance-key="visible">
         ${allowInheritance ? option("", defaultLabel, inherited("visible")) : ""}
         ${option("true", "表示", direct.visible === true || !allowInheritance && effective.visible !== false)}${option("false", "非表示", direct.visible === false)}
       </select></div>
-      <div class="property-row"><label for="propertyColor">Color</label><input id="propertyColor" data-appearance-key="color" type="text" placeholder="${defaultLabel}" value="${escapeHtml(direct.color || "")}" /></div>
+      <div class="property-row"><label for="propertyColor">Color</label><div class="property-color-control"><input id="propertyColor" data-appearance-key="color" type="text" placeholder="${defaultLabel}" value="${escapeHtml(direct.color || "")}" /><input class="property-color-picker" data-appearance-color-picker type="color" value="${colorValue}" title="Color palette" aria-label="Color palette" />${allowInheritance ? `<button class="property-color-default" data-appearance-default="color" type="button">${resetAppearanceLabel()}</button>` : ""}</div></div>
       <div class="property-row"><label for="propertyLineType">Line type</label><select id="propertyLineType" data-appearance-key="lineType">
         ${allowInheritance ? option("", defaultLabel, inherited("lineType")) : ""}
         ${option("solid", "実線", direct.lineType === "solid" || !allowInheritance && effective.lineType === "solid")}${option("dashed", "破線", direct.lineType === "dashed")}${option("dashdot", "一点鎖線", direct.lineType === "dashdot")}${option("dotted", "点線", direct.lineType === "dotted")}
@@ -9956,6 +9964,7 @@
 
     panel.oninput = handlePropertiesInput;
     panel.onchange = handlePropertiesChange;
+    panel.onclick = handlePropertiesClick;
   }
 
   function applyAppearanceInput(target, key, rawValue) {
@@ -9981,23 +9990,54 @@
     return true;
   }
 
+  function appearanceOwnerForPropertiesTarget(target) {
+    if (target.kind === "block") return (target.item.appearanceOverride ||= {});
+    if (target.kind === "geometry" || target.kind === "sketch") return (target.item.appearance ||= {});
+    return null;
+  }
+
+  function syncAppearanceColorInput(picker) {
+    if (!picker?.matches?.("[data-appearance-color-picker]")) return picker;
+    const input = picker.closest(".property-color-control")?.querySelector('[data-appearance-key="color"]');
+    if (input) input.value = picker.value;
+    return input || picker;
+  }
+
   function handlePropertiesInput(event) {
     const input = event.target;
+    if (input.matches("[data-appearance-color-picker]")) {
+      const target = selectedPropertiesTarget();
+      const owner = appearanceOwnerForPropertiesTarget(target);
+      const colorInput = syncAppearanceColorInput(input);
+      applyAppearanceInput(owner, "color", colorInput.value.trim());
+      if (target.kind === "block") invalidateBlockProjectionCache(target.item.id);
+      draw();
+      return;
+    }
     if (!input.matches('[data-dimension-display="prefix"], [data-dimension-display="suffix"]')) return;
     const target = selectedPropertiesTarget();
     if (target.kind !== "constraint" || !applyDimensionDisplayInput(target.item, input)) return;
     draw();
   }
 
+  function clearCanvasHover() {
+    hoveredPoint = null;
+    hoveredEndpointPoint = null;
+    hoveredLine = null;
+    hoveredCircle = null;
+    hoveredArcEndpoint = null;
+    hoveredArc = null;
+    hoveredDimensionConstraint = null;
+    hoveredSketchIdentity = null;
+    hoveredBlockInstance = null;
+    hoveredAnnotation = null;
+  }
+
   function handlePropertiesChange(event) {
     const target = selectedPropertiesTarget();
-    const input = event.target;
+    const input = syncAppearanceColorInput(event.target);
     if (input.dataset.appearanceKey) {
-      const owner = target.kind === "block"
-        ? (target.item.appearanceOverride ||= {})
-        : target.kind === "geometry" || target.kind === "sketch"
-          ? (target.item.appearance ||= {})
-          : null;
+      const owner = appearanceOwnerForPropertiesTarget(target);
       applyAppearanceInput(owner, input.dataset.appearanceKey, input.value.trim());
       if (target.kind === "block") invalidateBlockProjectionCache(target.item.id);
       recordHistory(target.kind === "block" ? "Appearance Override変更" : "Appearance変更");
@@ -10041,6 +10081,19 @@
       if (property === "annotation-color") target.item.style = { ...target.item.style, color: input.value || "#111827" };
       recordHistory("注記変更");
     }
+    updateUI();
+    draw();
+  }
+
+  function handlePropertiesClick(event) {
+    const button = event.target.closest("[data-appearance-default]");
+    if (!button) return;
+    const target = selectedPropertiesTarget();
+    const owner = appearanceOwnerForPropertiesTarget(target);
+    if (!owner) return;
+    applyAppearanceInput(owner, button.dataset.appearanceDefault, "");
+    if (target.kind === "block") invalidateBlockProjectionCache(target.item.id);
+    recordHistory(target.kind === "block" ? "Appearance Override変更" : "Appearance変更");
     updateUI();
     draw();
   }
@@ -11508,6 +11561,7 @@
       startPointer: pointer,
       startAnchor: anchor,
       startLabelOffsetU: Number(hit.dimension?.labelOffsetU) || 0,
+      startDisplay: hit.dimension?.display ? { ...hit.dimension.display } : null,
       startAngleLabelOffsets:
         hit.target.kind === "angle"
           ? angleDimensionLabelOffsets(hit.target, hit.dimension) || { radial: 14 / viewport.scale, tangent: 0 }
@@ -11519,6 +11573,11 @@
     canvas.classList.add("is-dragging");
     canvas.setPointerCapture(e.pointerId);
     setHint("寸法線を移動中");
+  }
+
+  function preserveDimensionDragDisplay(session, dimension) {
+    if (session?.startDisplay) dimension.display = { ...session.startDisplay };
+    return dimension;
   }
 
   function isDimensionConstraintCommandActive() {
@@ -11788,6 +11847,19 @@
     const threshold = 7 / viewport.scale;
     const pointThreshold = 10 / viewport.scale;
     const accepts = (item) => isVisibleSketchElement(item) && (!inactiveOnly || !isEditableSketchElement(item));
+    const dimensionHit = hitDimension(x, y, { activeOnly: false });
+    if (dimensionHit) {
+      const sketchId = constraintSketchId(dimensionHit.constraint);
+      if (!inactiveOnly || sketchId !== activeSketchId()) {
+        return {
+          id: dimensionHit.constraint.name || "寸法",
+          label: dimensionHit.constraint.name || "寸法",
+          sketchId,
+          item: dimensionHit.constraint,
+          kind: "dimension",
+        };
+      }
+    }
     for (let i = model.points.length - 1; i >= 0; i--) {
       const p = model.points[i];
       if (!accepts(p)) continue;
@@ -11808,6 +11880,17 @@
       if (!accepts(arc)) continue;
       const angle = Math.atan2(y - arc.center.y, x - arc.center.x);
       if (Math.abs(hypot2(x - arc.center.x, y - arc.center.y) - arc.radius()) <= threshold && angleOnSignedSweep(angle, arc.startAngle, arc.endAngle)) return { id: arc.id, sketchId: elementSketchId(arc), item: arc, kind: "arc" };
+    }
+    const block = hitBlockInstance(x, y, false);
+    if (block && (!inactiveOnly || block.sketchId !== activeSketchId())) {
+      const definition = blockDefinitionById(block.definitionId);
+      return {
+        id: block.id,
+        label: `Block ${block.id}${definition?.name ? `: ${definition.name}` : ""}`,
+        sketchId: block.sketchId,
+        item: block,
+        kind: "block",
+      };
     }
     return null;
   }
@@ -12721,6 +12804,7 @@
             dimensionDragSession.startAngleLabelOffsets,
           );
           if (!nextDimension) return;
+          preserveDimensionDragDisplay(dimensionDragSession, nextDimension);
           dimensionDragSession.constraint.dimension = nextDimension;
           syncAngleConstraintFromDimension(dimensionDragSession.constraint, dimensionDragSession.target, nextDimension);
           draw();
@@ -12738,6 +12822,7 @@
           dimensionFromAnchor(dimensionDragSession.target, anchor, { allowPointAxis: false }),
           p,
         );
+        preserveDimensionDragDisplay(dimensionDragSession, nextDimension);
         dimensionDragSession.constraint.dimension = nextDimension;
         syncAngleConstraintFromDimension(dimensionDragSession.constraint, dimensionDragSession.target, nextDimension);
         draw();
@@ -12752,6 +12837,7 @@
             };
       const nextDimension = dimensionFromAnchor(dimensionDragSession.target, anchor, { allowPointAxis: false });
       nextDimension.labelOffsetU = dimensionDragSession.startLabelOffsetU;
+      preserveDimensionDragDisplay(dimensionDragSession, nextDimension);
       if (dimensionDragSession.target.kind === "angle") {
         setAngleDimensionLabelOffsets(nextDimension, dimensionDragSession.startAngleLabelOffsets);
       }
@@ -12931,7 +13017,7 @@
     }
 
     if (!dragSession) {
-      const hitD = hitDimension(p.x, p.y);
+      const hitD = hitDimension(p.x, p.y, { activeOnly: false });
       const nextHover = hitD?.constraint || null;
       const nextEndpointHover = nextHover ? null : hitEndpointPoint(p.x, p.y);
       const nextPointHover = nextHover ? null : nextEndpointHover || hitExplicitPoint(p.x, p.y);
@@ -12940,7 +13026,7 @@
       const nextArcEndpointHover = nextPointHover || nextLineHover || nextCircleHover ? null : hitArcEndpoint(p.x, p.y);
       const nextArcHover = nextPointHover || nextLineHover || nextCircleHover || nextArcEndpointHover ? null : hitArc(p.x, p.y);
       const nextSketchIdentity = hitSketchIdentityElement(p.x, p.y);
-      const nextBlockHover = nextHover || nextPointHover || nextLineHover || nextCircleHover || nextArcEndpointHover || nextArcHover ? null : hitBlockInstance(p.x, p.y);
+      const nextBlockHover = nextHover || nextPointHover || nextLineHover || nextCircleHover || nextArcEndpointHover || nextArcHover ? null : hitBlockInstance(p.x, p.y, false);
       const annotationHit = nextHover || nextPointHover || nextLineHover || nextCircleHover || nextArcEndpointHover || nextArcHover || nextBlockHover
         ? null
         : hitAnnotationElement(p.x, p.y);
@@ -13305,6 +13391,11 @@
 
   canvas.addEventListener("pointerup", endDrag);
   canvas.addEventListener("pointercancel", endDrag);
+  canvas.addEventListener("pointerleave", () => {
+    if (dragSession || dimensionDragSession || annotationDragSession || selectionRectSession || panSession) return;
+    clearCanvasHover();
+    draw();
+  });
   canvas.addEventListener("dblclick", (e) => {
     if (suppressNextBlankDoubleClickEvent) {
       suppressNextBlankDoubleClickEvent = false;
@@ -13404,11 +13495,10 @@
     const key = e.key.toLowerCase();
     const commandKey = e.ctrlKey || e.metaKey;
     const textEditingTarget = e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement || e.target?.isContentEditable;
-    if (e.code === "Space" && !textEditingTarget && !viewState.constraintStatus) {
+    if (e.code === "Space" && !textEditingTarget && !constraintStatusSpaceHeld) {
       e.preventDefault();
-      viewState.constraintStatus = true;
-      setHint("拘束状態表示: Document内の全Geometryを表示しています");
-      draw();
+      constraintStatusSpaceHeld = true;
+      syncConstraintStatusView();
       return;
     }
     if (commandKey && isGeometryMode() && !textEditingTarget && ["c", "x", "v"].includes(key)) {
@@ -13493,16 +13583,15 @@
     }
   });
   window.addEventListener("keyup", (e) => {
-    if (e.code !== "Space" || !viewState.constraintStatus) return;
+    if (e.code !== "Space" || !constraintStatusSpaceHeld) return;
     e.preventDefault();
-    viewState.constraintStatus = false;
-    setHint("通常表示");
-    draw();
+    constraintStatusSpaceHeld = false;
+    syncConstraintStatusView();
   });
   window.addEventListener("blur", () => {
-    if (!viewState.constraintStatus) return;
-    viewState.constraintStatus = false;
-    draw();
+    if (!constraintStatusSpaceHeld) return;
+    constraintStatusSpaceHeld = false;
+    syncConstraintStatusView({ hint: false });
   });
 
   document.getElementById("undoBtn")?.addEventListener("click", undoHistory);
@@ -13516,6 +13605,10 @@
   });
   document.getElementById("annotationLeaderBtn")?.addEventListener("click", createLeaderAnnotation);
   document.getElementById("annotationTextBtn")?.addEventListener("click", createTextAnnotation);
+  document.getElementById("constraintStatusViewBtn")?.addEventListener("click", () => {
+    constraintStatusMouseLatched = !constraintStatusMouseLatched;
+    syncConstraintStatusView();
+  });
   document.getElementById("viewGeometryIdsInput")?.addEventListener("change", (event) => {
     viewState.geometryIds = event.target.checked;
     draw();
@@ -13634,8 +13727,17 @@
     if (fields) {
       const effective = normalizeAppearance(model.defaultAppearance, { partial: false });
       fields.innerHTML = appearancePropertyRows(effective, effective, { allowInheritance: false });
+      fields.oninput = (event) => {
+        if (!event.target.matches("[data-appearance-color-picker]")) return;
+        const input = syncAppearanceColorInput(event.target);
+        applyAppearanceInput(model.defaultAppearance, "color", input.value.trim());
+        model.defaultAppearance = normalizeAppearance(model.defaultAppearance, { partial: false });
+        draw();
+      };
       fields.onchange = (event) => {
-        applyAppearanceInput(model.defaultAppearance, event.target.dataset.appearanceKey, event.target.value.trim());
+        const input = syncAppearanceColorInput(event.target);
+        if (!input.dataset.appearanceKey) return;
+        applyAppearanceInput(model.defaultAppearance, input.dataset.appearanceKey, input.value.trim());
         model.defaultAppearance = normalizeAppearance(model.defaultAppearance, { partial: false });
         recordHistory("Document Default Appearance変更");
         draw();
@@ -14113,7 +14215,11 @@
         return item ? { direct: normalizeAppearance(item.appearance), effective: effectiveAppearanceForElement(item), visible: isVisibleSketchElement(item) } : null;
       },
       viewStateForTest() {
-        return { ...viewState };
+        return {
+          ...viewState,
+          mouseLatched: constraintStatusMouseLatched,
+          spaceHeld: constraintStatusSpaceHeld,
+        };
       },
       async importDocumentNameFixture(data, fileName) {
         const startedAt = performance.now();
@@ -14214,6 +14320,32 @@
           }
         }
         return point ? this.worldClientPositionForTest(point) : null;
+      },
+      hoverDisplayStateForTest(kind, id) {
+        let item = null;
+        if (kind === "point") item = allGeometryPoints().find((value) => value.id === id);
+        if (kind === "line") item = allGeometryLines().find((value) => value.id === id);
+        if (kind === "circle") item = allGeometryCircles().find((value) => value.id === id);
+        if (kind === "arc") item = allGeometryArcs().find((value) => value.id === id);
+        if (kind === "block") {
+          const instance = blockInstanceById(id);
+          item = instance ? blockProjectionBundle(instance).lines[0] || blockProjectionBundle(instance).circles[0] || blockProjectionBundle(instance).arcs[0] : null;
+        }
+        if (!item) return null;
+        const appearance = effectiveAppearanceForElement(item);
+        const treeHovered = isSidebarHighlightedElement(item);
+        const sidebarHovered = isSidebarHoveredElement(item);
+        const canvasHovered = hoveredLine === item || hoveredCircle === item || hoveredArc === item || hoveredPoint === item || hoveredEndpointPoint === item;
+        const blockHovered = Boolean(item.blockInstance && hoveredBlockInstance === item.blockInstance);
+        const hovered = treeHovered || sidebarHovered || canvasHovered || blockHovered;
+        return {
+          treeHovered,
+          sidebarHovered,
+          canvasHovered,
+          blockHovered,
+          color: geometryDisplayColor(item, appearance, false, hovered),
+          width: geometryStrokeWidth(item, { hovered, appearance, construction: Boolean(item.construction) }),
+        };
       },
       authoringStateForTest() {
         return {
@@ -15227,6 +15359,73 @@
           rowHasVisibleClass: document.querySelector('.sketch-item[data-id="S2"]')?.classList.contains("visible") || false,
         };
       },
+      resetForInactiveDimensionAndBlockHover() {
+        resetModelState();
+        const sourceSketchId = activeSketchId();
+        const p1 = addPoint(-120, -55, false, "endpoint");
+        const p2 = addPoint(-20, -55, false, "endpoint");
+        const line = addLine(p1, p2);
+        const target = { kind: "line-length", line, p1, p2, value: line.length() };
+        addDistanceConstraintFromTarget(
+          target,
+          line.length(),
+          dimensionFromAnchor(target, { x: -70, y: -95 }),
+          { sketchId: sourceSketchId },
+        );
+        const dimensionConstraint = model.constraints.find((constraint) => isDimensionConstraint(constraint));
+
+        const definition = createEmptyBlockDefinition("Hover Block");
+        const bp1 = new Point("BP1", -30, 0, false, "endpoint");
+        const bp2 = new Point("BP2", 30, 0, false, "endpoint");
+        bp1.sketchId = sourceSketchId;
+        bp2.sketchId = sourceSketchId;
+        const blockLine = new Line("BL1", bp1, bp2);
+        blockLine.sketchId = sourceSketchId;
+        definition.points.push(bp1, bp2);
+        definition.lines.push(blockLine);
+        model.blockDefinitions.push(definition);
+        const instance = {
+          id: `BI${blockInstanceSeq++}`,
+          definitionId: definition.id,
+          sketchId: sourceSketchId,
+          x: 95,
+          y: 65,
+          rotation: 0,
+          fixed: false,
+          rotationLocked: false,
+          enabledSketchIds: [sourceSketchId],
+          appearanceOverride: {},
+        };
+        model.blockInstances.push(instance);
+        invalidateBlockProjectionCache();
+
+        const activeChildId = "S2";
+        model.sketches.push({ id: activeChildId, name: "Sketch-2", parentSketchId: sourceSketchId, kind: "sketch", visible: true, appearance: {} });
+        model.activeSketchId = activeChildId;
+        fitAllGeometryToViewport(180);
+        updateUI();
+        draw();
+        const layout = dimensionLayout(targetFromConstraint(dimensionConstraint), dimensionConstraint.dimension);
+        return {
+          dimension: this.worldClientPositionForTest(layout.text),
+          block: this.worldClientPositionForTest(blockInstanceDisplayCenter(instance)),
+          dimensionId: dimensionConstraint.name || "寸法",
+          blockId: instance.id,
+          sourceSketchId,
+          activeSketchId: activeChildId,
+          relation: sketchIdentityRelationLabel(sourceSketchId),
+        };
+      },
+      hoverIdentityStateForTest() {
+        return hoveredSketchIdentity ? {
+          kind: hoveredSketchIdentity.kind || null,
+          id: hoveredSketchIdentity.id,
+          sketchId: hoveredSketchIdentity.sketchId,
+          relation: sketchIdentityRelationLabel(hoveredSketchIdentity.sketchId),
+          hoveredDimension: hoveredDimensionConstraint ? hoveredDimensionConstraint.name || "寸法" : null,
+          hoveredBlock: hoveredBlockInstance?.id || null,
+        } : null;
+      },
       geometryStrokeStyleCasesForTest() {
         resetModelState();
         const activeNormal = addLine(addPoint(-80, -25, false, "endpoint"), addPoint(80, -25, false, "endpoint"));
@@ -15803,6 +16002,21 @@
         }
         return labels;
       },
+      constraintStatusEndpointMarkerCountForTest() {
+        let count = 0;
+        const originalArc = ctx.arc;
+        ctx.arc = (...args) => {
+          count += 1;
+          return originalArc.apply(ctx, args);
+        };
+        try {
+          drawLines();
+          drawPoints();
+        } finally {
+          ctx.arc = originalArc;
+        }
+        return count;
+      },
       drawnDimensionLabelsForTest() {
         const labels = [];
         const originalFillText = ctx.fillText;
@@ -15813,6 +16027,12 @@
           ctx.fillText = originalFillText;
         }
         return labels;
+      },
+      dimensionClientPositionForTest(index = 0) {
+        const constraint = model.constraints.filter(isDimensionConstraint)[index] || null;
+        const target = targetFromConstraint(constraint);
+        const layout = constraint && target ? dimensionLayout(target, constraint.dimension) : null;
+        return layout?.text ? this.worldClientPositionForTest(layout.text) : null;
       },
       blockDefinitionUpdateCase() {
         const definition = model.blockDefinitions[0];

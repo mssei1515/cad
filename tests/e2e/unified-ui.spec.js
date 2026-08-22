@@ -476,7 +476,7 @@ test("Canvas selection updates Properties, side panels collapse, and narrow tool
   expect(narrowToolbar).toEqual({ labelsHidden: true, overlaps: false });
 });
 
-test("Appearance cascades from Document to Sketch to Geometry and Space reveals hidden geometry", async ({ page }) => {
+test("Appearance cascades, color palette resets to the inherited value, and constraint status supports mouse and Space", async ({ page }) => {
   await page.goto(`${baseUrl}/index.html?test=1`);
   await page.waitForFunction(() => window.__cadTest);
   const fixture = {
@@ -509,6 +509,8 @@ test("Appearance cascades from Document to Sketch to Geometry and Space reveals 
   await expect(page.locator('#propertyLineType option[value=""]')).toHaveText("既定");
   await expect(page.locator("#propertyColor")).toHaveAttribute("placeholder", "既定");
   await expect(page.locator("#propertyLineWidth")).toHaveAttribute("placeholder", "既定");
+  await expect(page.locator(".property-color-picker")).toHaveValue("#16a34a");
+  await expect(page.locator(".property-color-default")).toHaveText("既定へ戻す");
   await expect(page.locator("#propertiesPanel")).not.toContainText("継承");
   await page.evaluate(() => {
     document.documentElement.lang = "en";
@@ -518,20 +520,36 @@ test("Appearance cascades from Document to Sketch to Geometry and Space reveals 
   await expect(page.locator('#propertyLineType option[value=""]')).toHaveText("Default");
   await expect(page.locator("#propertyColor")).toHaveAttribute("placeholder", "Default");
   await expect(page.locator("#propertyLineWidth")).toHaveAttribute("placeholder", "Default");
+  await expect(page.locator(".property-color-default")).toHaveText("Reset to default");
   await page.evaluate(() => {
     document.documentElement.lang = "ja";
     window.__cadTest.selectGeometryIdsForTest({ lines: ["L1"] });
   });
+  await page.locator(".property-color-picker").fill("#0ea5e9");
+  expect((await page.evaluate(() => window.__cadTest.serializedModelForTest())).lines[0].appearance.color).toBe("#0ea5e9");
+  await page.locator(".property-color-default").click();
+  expect((await page.evaluate(() => window.__cadTest.serializedModelForTest())).lines[0].appearance.color).toBeUndefined();
+  await expect(page.locator(".property-color-picker")).toHaveValue("#16a34a");
   await page.locator("#propertyColor").fill("#2563eb");
   await page.locator("#propertyColor").blur();
   expect((await page.evaluate(() => window.__cadTest.serializedModelForTest())).lines[0].appearance.color).toBe("#2563eb");
 
   await page.locator("#propertyVisible").selectOption("false");
   expect((await page.evaluate(() => window.__cadTest.appearanceStateForTest("line", "L1"))).visible).toBe(false);
+  await expect(page.locator("#constraintStatusViewBtn")).toHaveAttribute("aria-pressed", "false");
+  await page.locator("#constraintStatusViewBtn").click();
+  expect(await page.evaluate(() => window.__cadTest.viewStateForTest())).toEqual(expect.objectContaining({ constraintStatus: true, mouseLatched: true, spaceHeld: false }));
+  expect(await page.evaluate(() => window.__cadTest.constraintStatusEndpointMarkerCountForTest())).toBe(0);
   await page.keyboard.down("Space");
-  expect(await page.evaluate(() => window.__cadTest.viewStateForTest())).toEqual(expect.objectContaining({ constraintStatus: true }));
+  await page.keyboard.up("Space");
+  expect(await page.evaluate(() => window.__cadTest.viewStateForTest())).toEqual(expect.objectContaining({ constraintStatus: true, mouseLatched: true, spaceHeld: false }));
+  await page.locator("#constraintStatusViewBtn").click();
+  expect(await page.evaluate(() => window.__cadTest.viewStateForTest())).toEqual(expect.objectContaining({ constraintStatus: false, mouseLatched: false, spaceHeld: false }));
+  await page.keyboard.down("Space");
+  expect(await page.evaluate(() => window.__cadTest.viewStateForTest())).toEqual(expect.objectContaining({ constraintStatus: true, mouseLatched: false, spaceHeld: true }));
   expect((await page.evaluate(() => window.__cadTest.appearanceStateForTest("line", "L1"))).visible).toBe(true);
   await page.keyboard.up("Space");
+  expect(await page.evaluate(() => window.__cadTest.viewStateForTest())).toEqual(expect.objectContaining({ constraintStatus: false, mouseLatched: false, spaceHeld: false }));
 });
 
 test("startup sample L2 and L3 reuse the responsive P3 drag path while P1 stays fixed", async ({ page }) => {
@@ -623,16 +641,57 @@ test("Constraint dimensions persist display properties without creating annotati
   expect(await page.evaluate(() => window.__cadTest.drawnDimensionLabelsForTest())).toEqual(expect.arrayContaining([expect.stringMatching(/REF .* mm/)]));
   await suffix.blur();
   await page.locator('[data-dimension-display="arrows"]').uncheck();
+  const label = await page.evaluate(() => window.__cadTest.dimensionClientPositionForTest(0));
+  await page.mouse.move(label.x, label.y);
+  await page.mouse.down();
+  await page.mouse.move(label.x + 36, label.y + 18, { steps: 4 });
+  await page.mouse.up();
   const serialized = await page.evaluate(() => window.__cadTest.serializedModelForTest());
   expect(serialized.constraints[0].dimension.display).toEqual(expect.objectContaining({ precision: 3, prefix: "REF ", suffix: " mm", arrows: false }));
   expect(serialized.annotations).toEqual([]);
 });
 
-test("Sketch tree hover highlights geometry without displaying Geometry IDs", async ({ page }) => {
+test("Sketch tree and Objects hover use the same geometry emphasis as canvas hover without tree Geometry IDs", async ({ page }) => {
   await page.goto(`${baseUrl}/index.html?test=1`);
   await page.waitForFunction(() => window.__cadTest);
+  const ids = await page.evaluate(() => window.__cadTest.resetForSidebarInspection());
+  await page.mouse.move(ids.lineMid.x, ids.lineMid.y);
+  const canvasHover = await page.evaluate((lineId) => window.__cadTest.hoverDisplayStateForTest("line", lineId), ids.line);
+  expect(canvasHover).toEqual(expect.objectContaining({ canvasHovered: true, color: "#3b82f6", width: 2.2 }));
   await page.locator('.sketch-item[data-id="S1"]').hover();
+  const treeHover = await page.evaluate((lineId) => window.__cadTest.hoverDisplayStateForTest("line", lineId), ids.line);
+  expect(treeHover).toEqual(expect.objectContaining({ treeHovered: true, color: canvasHover.color, width: canvasHover.width }));
   expect(await page.evaluate(() => window.__cadTest.drawnGeometryIdLabelsForTest())).toEqual([]);
+  await page.click('[data-explorer-tab="objects"]');
+  await expandObjectSection(page, "Line");
+  await page.locator(`#lineList .geometry-list-row[data-id="${ids.line}"]`).hover();
+  const objectHover = await page.evaluate((lineId) => window.__cadTest.hoverDisplayStateForTest("line", lineId), ids.line);
+  expect(objectHover).toEqual(expect.objectContaining({ sidebarHovered: true, color: canvasHover.color, width: canvasHover.width }));
+});
+
+test("inactive sketch dimensions and blocks show sketch identity and reference availability on hover", async ({ page }) => {
+  await page.goto(`${baseUrl}/index.html?test=1`);
+  await page.waitForFunction(() => window.__cadTest);
+  const points = await page.evaluate(() => window.__cadTest.resetForInactiveDimensionAndBlockHover());
+  expect(points.relation).toBe("参照可");
+
+  await page.mouse.move(points.dimension.x, points.dimension.y);
+  expect(await page.evaluate(() => window.__cadTest.hoverIdentityStateForTest())).toEqual(expect.objectContaining({
+    kind: "dimension",
+    id: points.dimensionId,
+    sketchId: points.sourceSketchId,
+    relation: "参照可",
+    hoveredDimension: points.dimensionId,
+  }));
+
+  await page.mouse.move(points.block.x, points.block.y);
+  expect(await page.evaluate(() => window.__cadTest.hoverIdentityStateForTest())).toEqual(expect.objectContaining({
+    kind: "block",
+    id: points.blockId,
+    sketchId: points.sourceSketchId,
+    relation: "参照可",
+    hoveredBlock: points.blockId,
+  }));
 });
 
 test("duplicate dimensions become read-only reference dimensions", async ({ page }) => {
@@ -786,8 +845,9 @@ test("Objects explorer lists geometry and synchronizes selection and hover", asy
   await expandObjectSection(page, "Circle");
   await page.locator("#circleList .geometry-list-row").hover();
   expect(await page.evaluate(() => window.__cadTest.sidebarHighlightIds())).toEqual(
-    expect.arrayContaining([ids.line, ids.circle, ids.circleCenter]),
+    expect.arrayContaining([ids.line, ids.circle]),
   );
+  expect(await page.evaluate(() => window.__cadTest.sidebarHighlightIds())).not.toContain(ids.circleCenter);
   await page.locator("#circleList .geometry-list-row").click();
   await expect(page.locator("#circleList .geometry-list-row")).toHaveClass(/selected/);
   await expect(page.locator("#propertiesPanel")).toContainText(`Circle ${ids.circle}`);

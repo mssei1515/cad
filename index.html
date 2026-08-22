@@ -37,7 +37,7 @@
         </div></details>
         <details class="app-menu"><summary>表示</summary><div class="menu-popover">
           <label><input id="viewGeometryIdsInput" type="checkbox" /> Geometry ID</label>
-          <span class="menu-note">Space: 拘束状態を一時表示</span>
+          <button type="button" data-menu-tool="constraintStatusViewBtn">拘束状態表示 <kbd>Space</kbd></button>
         </div></details>
         <details class="app-menu"><summary>Geometry</summary><div class="menu-popover menu-command-list">
           <button type="button" data-menu-tool="toolPoint">点</button><button type="button" data-menu-tool="toolLine">線</button>
@@ -67,6 +67,10 @@
         <button id="deleteSelectionBtn" class="tool-button" type="button" title="削除" aria-label="削除"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3M7 7l1 13h8l1-13"/></svg></button>
       </div>
       <div class="tool-group" aria-label="選択"><button id="toolSelect" class="tool-button active" type="button" title="選択・ドラッグ" aria-label="選択・ドラッグ"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 3l14 9-7 2-3 7L5 3z"/></svg></button></div>
+      <div class="tool-group" aria-label="表示">
+        <span class="tool-group-label">View</span>
+        <button id="constraintStatusViewBtn" class="tool-button" type="button" title="拘束状態表示を切り替え（Space長押しでも一時表示）" aria-label="拘束状態表示" aria-pressed="false"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/><circle cx="8" cy="7" r="2"/><circle cx="15" cy="12" r="2"/><circle cx="11" cy="17" r="2"/></svg></button>
+      </div>
       <div class="tool-group" aria-label="Geometry">
         <span class="tool-group-label">Geometry</span>
         <button id="toolPoint" class="tool-button" type="button" title="点" aria-label="点"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3.5"/><path d="M12 3v3M12 18v3M3 12h3M18 12h3"/></svg></button>

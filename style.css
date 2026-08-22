@@ -129,6 +129,9 @@ body.block-editing .canvas-area { background: #f5f3ff; box-shadow: none; }
 .property-row input, .property-row select, .property-row textarea { width: 100%; min-width: 0; padding: 5px 6px; border: 1px solid var(--border-strong); border-radius: 3px; background: #fff; }
 .property-row input[type="checkbox"] { width: auto; justify-self: start; }
 .property-row textarea { min-height: 60px; resize: vertical; }
+.property-color-control { min-width: 0; display: grid; grid-template-columns: minmax(0, 1fr) 36px; gap: 5px; }
+.property-color-control .property-color-picker { width: 36px; min-width: 36px; height: 30px; padding: 2px; cursor: pointer; }
+.property-color-default { grid-column: 1 / -1; min-height: 25px; padding: 3px 7px; color: var(--muted); font-size: 11px; }
 .property-readonly { color: var(--muted); text-align: right; overflow-wrap: anywhere; }
 .status-bar { display: grid; grid-template-columns: 130px minmax(0, 1fr) auto 170px; align-items: center; gap: 10px; padding: 0 10px; color: #dbeafe; background: #1e3a5f; font-size: 11px; }
 #hint { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
