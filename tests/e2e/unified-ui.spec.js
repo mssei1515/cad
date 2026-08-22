@@ -793,6 +793,26 @@ test("Sketch tree and Geometry Explorer hover use the same emphasis as canvas ho
   expect(objectHover).toEqual(expect.objectContaining({ sidebarHovered: true, color: canvasHover.color, width: canvasHover.width }));
 });
 
+test("Sketch tree block hover matches canvas block hover without Block Projection point markers", async ({ page }) => {
+  await page.goto(`${baseUrl}/index.html?test=1`);
+  await page.waitForFunction(() => window.__cadTest);
+  const ids = await page.evaluate(() => window.__cadTest.resetForSketchTreeBlockHoverTest());
+  expect(ids.projectedExplicitPointIds).toHaveLength(4);
+
+  await page.mouse.move(ids.blockLineMid.x, ids.blockLineMid.y);
+  const canvasHover = await page.evaluate((instanceId) => window.__cadTest.hoverDisplayStateForTest("block", instanceId), ids.instanceId);
+  expect(canvasHover).toEqual(expect.objectContaining({ blockHovered: true, color: "#3b82f6", width: 2.2 }));
+  expect(await page.evaluate(() => window.__cadTest.drawnPointMarkerCountForTest())).toBe(0);
+
+  await page.locator(`.sketch-item[data-id="${ids.sketchId}"]`).hover();
+  const treeHover = await page.evaluate((instanceId) => window.__cadTest.hoverDisplayStateForTest("block", instanceId), ids.instanceId);
+  expect(treeHover).toEqual(expect.objectContaining({ treeHovered: true, color: canvasHover.color, width: canvasHover.width }));
+  for (const pointId of ids.projectedExplicitPointIds) {
+    expect(await page.evaluate((id) => window.__cadTest.hoverDisplayStateForTest("point", id), pointId)).toEqual(expect.objectContaining({ treeHovered: false }));
+  }
+  expect(await page.evaluate(() => window.__cadTest.drawnPointMarkerCountForTest())).toBe(0);
+});
+
 test("inactive sketch geometry, blocks, and dimensions show identity without hover emphasis or selection", async ({ page }) => {
   await page.goto(`${baseUrl}/index.html?test=1`);
   await page.waitForFunction(() => window.__cadTest);

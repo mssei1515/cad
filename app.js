@@ -8425,7 +8425,7 @@
       const active = isEditableSketchElement(p);
       ctx.globalAlpha = sketchAlpha(p);
       const refSelected = isPendingReferenceTarget(p) || isConstraintOperandSelected(p);
-      const treeHovered = isSidebarHighlightedElement(p) && !isAnyLineEndpoint(p);
+      const treeHovered = isSidebarHighlightedElement(p) && !p.blockProjection && !isAnyLineEndpoint(p);
       const sidebarHovered = isSidebarHoveredElement(p);
       const relatedHighlighted = isSelectedConstraintRelatedElement(p);
       const auxiliaryHighlighted = relatedHighlighted;
@@ -14679,7 +14679,7 @@
         }
         if (!item) return null;
         const appearance = effectiveAppearanceForElement(item);
-        const treeHovered = isSidebarHighlightedElement(item) && (!(item instanceof Point) || !isAnyLineEndpoint(item));
+        const treeHovered = isSidebarHighlightedElement(item) && (!(item instanceof Point) || (!item.blockProjection && !isAnyLineEndpoint(item)));
         const sidebarHovered = isSidebarHoveredElement(item);
         const canvasHovered = hoveredLine === item || hoveredCircle === item || hoveredArc === item || hoveredPoint === item || hoveredEndpointPoint === item;
         const blockHovered = Boolean(item.blockInstance && hoveredBlockInstance === item.blockInstance);
@@ -15570,6 +15570,53 @@
           arcCenter: arcCenter.id,
           lineMid: { x: rect.left + lineMid.x, y: rect.top + lineMid.y },
           blank: { x: rect.left + rect.width - 35, y: rect.top + rect.height - 35 },
+        };
+      },
+      resetForSketchTreeBlockHoverTest() {
+        resetModelState();
+        viewport.scale = 1;
+        const definition = createEmptyBlockDefinition("Tree Hover Block");
+        const lineP1 = new Point("BP1", -80, 0, false, "endpoint");
+        const lineP2 = new Point("BP2", 80, 0, false, "endpoint");
+        lineP1.sketchId = DEFAULT_SKETCH_ID;
+        lineP2.sketchId = DEFAULT_SKETCH_ID;
+        const blockLine = new Line("BL1", lineP1, lineP2);
+        blockLine.sketchId = DEFAULT_SKETCH_ID;
+        const explicitPoints = [
+          new Point("BP3", -70, -45, false, "explicit"),
+          new Point("BP4", 70, -45, false, "explicit"),
+          new Point("BP5", -70, 45, false, "explicit"),
+          new Point("BP6", 70, 45, false, "explicit"),
+        ];
+        explicitPoints.forEach((point) => {
+          point.sketchId = DEFAULT_SKETCH_ID;
+        });
+        definition.points.push(lineP1, lineP2, ...explicitPoints);
+        definition.lines.push(blockLine);
+        model.blockDefinitions.push(definition);
+        const instance = {
+          id: `BI${blockInstanceSeq++}`,
+          definitionId: definition.id,
+          sketchId: DEFAULT_SKETCH_ID,
+          x: 0,
+          y: 0,
+          rotation: 0,
+          fixed: false,
+          rotationLocked: false,
+          enabledSketchIds: [DEFAULT_SKETCH_ID],
+          appearanceOverride: {},
+        };
+        model.blockInstances.push(instance);
+        invalidateBlockProjectionCache();
+        updateUI();
+        fitAllGeometryToViewport(180);
+        draw();
+        const bundle = blockProjectionBundle(instance);
+        return {
+          sketchId: DEFAULT_SKETCH_ID,
+          instanceId: instance.id,
+          projectedExplicitPointIds: bundle.points.filter((point) => point.localElement?.kind === "explicit").map((point) => point.id),
+          blockLineMid: this.worldClientPositionForTest({ x: 0, y: 0 }),
         };
       },
       resetForOffsetConstraints() {
