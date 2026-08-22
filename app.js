@@ -192,10 +192,9 @@
   const CLIPBOARD_PASTE_OFFSET_SCREEN_PX = 24;
   const BLOCK_ORTHOGONAL_ROTATION_STEP = Math.PI / 2;
   const viewport = { x: 0, y: 0, scale: 1 };
-  const viewState = { constraintStatus: false, grid: true, geometryIds: false };
+  const viewState = { constraintStatus: false, geometryIds: false };
   const MIN_ZOOM = 0.001;
   const MAX_ZOOM = 10000000;
-  const GRID_SCREEN_STEP_PX = 32;
   const CONSTRUCTION_EXTENSION_SCREEN_PX = 12;
   const CONSTRUCTION_GEOMETRY_ALPHA = 0.72;
   const DIMENSION_EXTENSION_GAP_SCREEN_PX = 6;
@@ -4583,6 +4582,20 @@
     draw();
   }
 
+  function setWorkspacePanelCollapsed(side, collapsed) {
+    const workspace = document.querySelector(".workspace");
+    const button = document.getElementById(side === "explorer" ? "toggleExplorerPanelBtn" : "togglePropertiesPanelBtn");
+    if (!workspace || !button) return;
+    const centerWorld = currentCanvasCenterWorld();
+    const className = `${side}-collapsed`;
+    const label = side === "explorer" ? "Explorer" : "Properties";
+    workspace.classList.toggle(className, collapsed);
+    button.setAttribute("aria-expanded", String(!collapsed));
+    button.setAttribute("aria-label", `${label}を${collapsed ? "展開" : "最小化"}`);
+    button.title = `${label}を${collapsed ? "展開" : "最小化"}`;
+    resizeCanvas({ centerWorld });
+  }
+
   function currentCanvasCenterWorld() {
     const rect = canvas.getBoundingClientRect();
     if (rect.width <= 0 || rect.height <= 0) return null;
@@ -7046,31 +7059,6 @@
     selectedConstraint = null;
   }
 
-  function drawGrid(w, h) {
-    if (!viewState.grid) return;
-    const dpr = window.devicePixelRatio || 1;
-    const step = GRID_SCREEN_STEP_PX;
-    const offsetX = ((viewport.x % step) + step) % step;
-    const offsetY = ((viewport.y % step) + step) % step;
-    ctx.save();
-    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    ctx.strokeStyle = "#eef2f7";
-    ctx.lineWidth = 1;
-    for (let x = offsetX; x <= w; x += step) {
-      ctx.beginPath();
-      ctx.moveTo(x, 0);
-      ctx.lineTo(x, h);
-      ctx.stroke();
-    }
-    for (let y = offsetY; y <= h; y += step) {
-      ctx.beginPath();
-      ctx.moveTo(0, y);
-      ctx.lineTo(w, y);
-      ctx.stroke();
-    }
-    ctx.restore();
-  }
-
   function resetCanvasStrokeState() {
     ctx.setLineDash([]);
     ctx.lineDashOffset = 0;
@@ -7149,7 +7137,6 @@
     ctx.translate(viewport.x, viewport.y);
     ctx.scale(viewport.scale, viewport.scale);
     resetCanvasStrokeState();
-    drawGrid(w, h);
     drawLines();
     drawCircles();
     drawArcs();
@@ -9581,6 +9568,7 @@
     updateConstraintButtons();
     updateBlockUI();
     updateSidebarSelectionRowClasses();
+    updatePropertiesUI();
   }
 
   function selectSidebarGeometryItem(item) {
@@ -9888,16 +9876,15 @@
     const option = (value, label, selected) => `<option value="${value}" ${selected ? "selected" : ""}>${label}</option>`;
     return `
       <div class="property-row"><label for="propertyVisible">Visible</label><select id="propertyVisible" data-appearance-key="visible">
-        ${allowInheritance ? option("", `継承 (${effective.visible === false ? "非表示" : "表示"})`, inherited("visible")) : ""}
+        ${allowInheritance ? option("", "—", inherited("visible")) : ""}
         ${option("true", "表示", direct.visible === true || !allowInheritance && effective.visible !== false)}${option("false", "非表示", direct.visible === false)}
       </select></div>
-      <div class="property-row"><label for="propertyColor">Color</label><input id="propertyColor" data-appearance-key="color" type="text" placeholder="継承 (${escapeHtml(effective.color)})" value="${escapeHtml(direct.color || "")}" /></div>
+      <div class="property-row"><label for="propertyColor">Color</label><input id="propertyColor" data-appearance-key="color" type="text" placeholder="—" value="${escapeHtml(direct.color || "")}" /></div>
       <div class="property-row"><label for="propertyLineType">Line type</label><select id="propertyLineType" data-appearance-key="lineType">
-        ${allowInheritance ? option("", `継承 (${effective.lineType})`, inherited("lineType")) : ""}
+        ${allowInheritance ? option("", "—", inherited("lineType")) : ""}
         ${option("solid", "実線", direct.lineType === "solid" || !allowInheritance && effective.lineType === "solid")}${option("dashed", "破線", direct.lineType === "dashed")}${option("dashdot", "一点鎖線", direct.lineType === "dashdot")}${option("dotted", "点線", direct.lineType === "dotted")}
       </select></div>
-      <div class="property-row"><label for="propertyLineWidth">Line width</label><input id="propertyLineWidth" data-appearance-key="lineWidth" type="number" min="0.1" max="20" step="0.1" placeholder="継承 (${effective.lineWidth})" value="${direct.lineWidth ?? ""}" /></div>
-      ${allowInheritance ? '<div class="inherited-note">空欄または「継承」で上位のAppearanceを使用します。</div>' : ""}`;
+      <div class="property-row"><label for="propertyLineWidth">Line width</label><input id="propertyLineWidth" data-appearance-key="lineWidth" type="number" min="0.1" max="20" step="0.1" placeholder="—" value="${direct.lineWidth ?? ""}" /></div>`;
   }
 
   function selectedPropertiesTarget() {
@@ -13535,10 +13522,6 @@
   });
   document.getElementById("annotationLeaderBtn")?.addEventListener("click", createLeaderAnnotation);
   document.getElementById("annotationTextBtn")?.addEventListener("click", createTextAnnotation);
-  document.getElementById("viewGridInput")?.addEventListener("change", (event) => {
-    viewState.grid = event.target.checked;
-    draw();
-  });
   document.getElementById("viewGeometryIdsInput")?.addEventListener("change", (event) => {
     viewState.geometryIds = event.target.checked;
     draw();
@@ -13590,6 +13573,14 @@
       }
     });
   }
+  document.getElementById("toggleExplorerPanelBtn")?.addEventListener("click", () => {
+    const workspace = document.querySelector(".workspace");
+    setWorkspacePanelCollapsed("explorer", !workspace?.classList.contains("explorer-collapsed"));
+  });
+  document.getElementById("togglePropertiesPanelBtn")?.addEventListener("click", () => {
+    const workspace = document.querySelector(".workspace");
+    setWorkspacePanelCollapsed("properties", !workspace?.classList.contains("properties-collapsed"));
+  });
   document.getElementById("explorerObjects")?.addEventListener("click", (event) => {
     if (event.target.closest("button")) return;
     const row = event.target.closest("[data-object-kind], .geometry-list-row, .constraint-list-row");

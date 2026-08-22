@@ -26,7 +26,6 @@
           <button type="button" data-menu-tool="deleteSelectionBtn">削除 <kbd>Del</kbd></button>
         </div></details>
         <details class="app-menu"><summary>表示</summary><div class="menu-popover">
-          <label><input id="viewGridInput" type="checkbox" checked /> グリッド</label>
           <label><input id="viewGeometryIdsInput" type="checkbox" /> Geometry ID</label>
           <span class="menu-note">Space: 拘束状態を一時表示</span>
         </div></details>
@@ -88,7 +87,7 @@
 
     <main class="workspace">
       <aside class="explorer" aria-label="Explorer">
-        <div class="panel-title">Explorer</div>
+        <div class="panel-title"><span class="panel-title-label">Explorer</span><button id="toggleExplorerPanelBtn" class="panel-collapse-button" type="button" title="Explorerを最小化" aria-label="Explorerを最小化" aria-expanded="true"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg></button></div>
         <div class="panel-tabs" role="tablist">
           <button class="panel-tab active" type="button" data-explorer-tab="structure" aria-selected="true">Structure</button>
           <button class="panel-tab" type="button" data-explorer-tab="objects" aria-selected="false">Objects</button>
@@ -122,7 +121,7 @@
 
       <section class="canvas-area" aria-label="Canvas"><canvas id="canvas"></canvas><input id="dimensionValueInput" class="dimension-value-input" type="text" inputmode="decimal" autocomplete="off" spellcheck="false" aria-label="寸法値" hidden /></section>
 
-      <aside class="properties" aria-label="Properties"><div class="panel-title">Properties</div><div id="propertiesPanel" class="properties-scroll"></div></aside>
+      <aside class="properties" aria-label="Properties"><div class="panel-title"><span class="panel-title-label">Properties</span><button id="togglePropertiesPanelBtn" class="panel-collapse-button" type="button" title="Propertiesを最小化" aria-label="Propertiesを最小化" aria-expanded="true"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 18l6-6-6-6"/></svg></button></div><div id="propertiesPanel" class="properties-scroll"></div></aside>
     </main>
 
     <footer id="bottomBar" class="status-bar" aria-label="Status Bar"><span id="statusCommand">選択</span><span id="hint">Geometryを選択または作成します。Spaceで拘束状態を表示します。</span><span id="statusConstraint"></span><span id="statusCoordinates">X 0.00 / Y 0.00</span></footer>

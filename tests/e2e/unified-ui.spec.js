@@ -258,6 +258,7 @@ test("unified workspace uses fixed Explorer Canvas Properties and Status regions
         label: item.getAttribute("aria-label"),
       })),
       canvasCursor: getComputedStyle(document.querySelector("#canvas")).cursor,
+      gridControls: document.querySelectorAll("#viewGridInput").length,
     };
   });
 
@@ -265,8 +266,8 @@ test("unified workspace uses fixed Explorer Canvas Properties and Status regions
   expect(layout.menus).toEqual(["ファイル", "編集", "表示", "Geometry", "Constraint", "Annotation", "ヘルプ"]);
   expect(layout.toolIds).toEqual(expect.arrayContaining(["undoBtn", "redoBtn", "deleteSelectionBtn", "toolSelect", "toolPoint", "toolLine", "annotationLeaderBtn", "annotationTextBtn"]));
   expect(layout.iconButtons.every((button) => button.text === "" && button.hasIcon && button.title && button.label)).toBe(true);
-  expect(layout.canvasCursor).toContain("data:image/svg+xml");
-  expect(layout.canvasCursor).not.toContain("%3Ccircle");
+  expect(layout.canvasCursor).toBe("crosshair");
+  expect(layout.gridControls).toBe(0);
   expect(layout.explorer.left).toBe(0);
   expect(layout.explorer.right).toBeCloseTo(layout.canvas.left, 0);
   expect(layout.canvas.right).toBeCloseTo(layout.properties.left, 0);
@@ -320,6 +321,58 @@ test("unified workspace uses fixed Explorer Canvas Properties and Status regions
   await expect(page.locator("#pointList .geometry-list-row")).toHaveCount(0);
 });
 
+test("Canvas selection updates Properties, side panels collapse, and narrow toolbar labels do not overlap", async ({ page }) => {
+  await page.goto(`${baseUrl}/index.html?test=1`);
+  await page.waitForFunction(() => window.__cadTest);
+
+  const linePosition = await page.evaluate(() => window.__cadTest.geometryClientPositionForTest("line", "L1"));
+  await page.mouse.click(linePosition.x, linePosition.y);
+  await expect(page.locator("#propertiesPanel")).toContainText("Line L1");
+
+  const initial = await page.evaluate(() => ({
+    explorer: document.querySelector(".explorer").getBoundingClientRect().width,
+    properties: document.querySelector(".properties").getBoundingClientRect().width,
+    canvas: document.querySelector(".canvas-area").getBoundingClientRect().width,
+  }));
+  await page.click("#toggleExplorerPanelBtn");
+  await expect(page.locator("#toggleExplorerPanelBtn")).toHaveAttribute("aria-expanded", "false");
+  await page.click("#togglePropertiesPanelBtn");
+  await expect(page.locator("#togglePropertiesPanelBtn")).toHaveAttribute("aria-expanded", "false");
+  const collapsed = await page.evaluate(() => ({
+    explorer: document.querySelector(".explorer").getBoundingClientRect().width,
+    properties: document.querySelector(".properties").getBoundingClientRect().width,
+    canvas: document.querySelector(".canvas-area").getBoundingClientRect().width,
+  }));
+  expect(collapsed.explorer).toBeCloseTo(36, 0);
+  expect(collapsed.properties).toBeCloseTo(36, 0);
+  expect(collapsed.canvas).toBeGreaterThan(initial.canvas);
+
+  await page.click("#toggleExplorerPanelBtn");
+  await page.click("#togglePropertiesPanelBtn");
+  const restored = await page.evaluate(() => ({
+    explorer: document.querySelector(".explorer").getBoundingClientRect().width,
+    properties: document.querySelector(".properties").getBoundingClientRect().width,
+  }));
+  expect(restored.explorer).toBeCloseTo(initial.explorer, 0);
+  expect(restored.properties).toBeCloseTo(initial.properties, 0);
+
+  await page.setViewportSize({ width: 800, height: 700 });
+  const narrowToolbar = await page.evaluate(() => {
+    const labels = [...document.querySelectorAll(".tool-group-label")];
+    const buttons = [...document.querySelectorAll(".command-toolbar button")];
+    const overlaps = labels.some((label) => {
+      if (getComputedStyle(label).display === "none") return false;
+      const a = label.getBoundingClientRect();
+      return buttons.some((button) => {
+        const b = button.getBoundingClientRect();
+        return a.left < b.right && a.right > b.left && a.top < b.bottom && a.bottom > b.top;
+      });
+    });
+    return { labelsHidden: labels.every((label) => getComputedStyle(label).display === "none"), overlaps };
+  });
+  expect(narrowToolbar).toEqual({ labelsHidden: true, overlaps: false });
+});
+
 test("Appearance cascades from Document to Sketch to Geometry and Space reveals hidden geometry", async ({ page }) => {
   await page.goto(`${baseUrl}/index.html?test=1`);
   await page.waitForFunction(() => window.__cadTest);
@@ -348,6 +401,11 @@ test("Appearance cascades from Document to Sketch to Geometry and Space reveals 
 
   await page.click('[data-explorer-tab="objects"]');
   await page.locator('#lineList .geometry-list-row[data-id="L1"]').click();
+  await expect(page.locator('#propertyVisible option[value=""]')).toHaveText("—");
+  await expect(page.locator('#propertyLineType option[value=""]')).toHaveText("—");
+  await expect(page.locator("#propertyColor")).toHaveAttribute("placeholder", "—");
+  await expect(page.locator("#propertyLineWidth")).toHaveAttribute("placeholder", "—");
+  await expect(page.locator("#propertiesPanel")).not.toContainText("継承");
   await page.locator("#propertyColor").fill("#2563eb");
   await page.locator("#propertyColor").blur();
   expect((await page.evaluate(() => window.__cadTest.serializedModelForTest())).lines[0].appearance.color).toBe("#2563eb");

@@ -24,6 +24,6 @@
 | Appearance | visible、color、lineType、lineWidthから成る表示属性 |
 | Document Annotation | Geometryを変更しない引出線または自由テキスト |
 | Interaction State | 選択、作図、拘束入力、注記配置など現在の操作状態 |
-| View State | Grid、Geometry ID、Space押下中の拘束状態表示など一時的な表示状態 |
+| View State | Geometry ID、Space押下中の拘束状態表示など一時的な表示状態 |
 
 Cad2には表示用の別モードやSheetは存在しない。作図、拘束、表示属性、注記は同じCanvas上で扱う。
