@@ -139,7 +139,7 @@ test.afterAll(() => {
   if (serverProcess) serverProcess.kill();
 });
 
-test("complete v8 documents are semantically stable across repeated round trips", async ({ page }) => {
+test("complete documents normalize to stable v9 unified-canvas data", async ({ page }) => {
   await openTestApp(page);
   const first = await importFixture(page);
   const reload = await page.evaluate(
@@ -154,9 +154,10 @@ test("complete v8 documents are semantically stable across repeated round trips"
   expect(first.blockDefinitions.map((definition) => definition.id)).toEqual(["B1", "B2"]);
   expect(first.blockDefinitions.find((definition) => definition.id === "B1").parentDefinitionId).toBe("B2");
   expect(first.blockInstances[0].enabledSketchIds).toEqual(["S1", "S2"]);
-  expect(first.presentationSheets).toHaveLength(2);
-  expect(first.presentationSheets[0].elementStyles).toHaveProperty("line:BI1@B2I1@LB1");
-  expect(first.presentationSheets[0].elements.map((element) => element.type).sort()).toEqual(["annotationDimension", "leader"]);
+  expect(first.version).toBe(9);
+  expect(first).not.toHaveProperty("presentationSheets");
+  expect(first).not.toHaveProperty("activePresentationSheetId");
+  expect(first.annotations).toEqual([]);
 });
 
 test("constraint commit accepts a stalled solver result within the application tolerance", async ({ page }) => {
@@ -188,7 +189,7 @@ test("constraint commit accepts a stalled solver result within the application t
   }));
 });
 
-test("complete v8 documents are byte-shape stable apart from savedAt", async ({ page }) => {
+test("complete v9 documents are byte-shape stable apart from savedAt", async ({ page }) => {
   test.fail(true, "Known Phase 0 gap: angle dimensions serialize unused linear offsets as null, then reload them as zero");
   await openTestApp(page);
   const first = await importFixture(page);
@@ -201,11 +202,11 @@ test("complete v8 documents are byte-shape stable apart from savedAt", async ({ 
   expect(exactPersistedDocument(second)).toEqual(exactPersistedDocument(first));
 });
 
-test("legacy v1 documents normalize to stable v8 data and reserve new ids", async ({ page }) => {
+test("legacy v1 documents normalize to stable v9 data and reserve new ids", async ({ page }) => {
   await openTestApp(page);
   const legacy = JSON.parse(fs.readFileSync(path.resolve(__dirname, "../../test-data/テスト図形.json"), "utf8"));
   const first = await importFixture(page, legacy, "legacy-v1.json");
-  expect(first.version).toBe(8);
+  expect(first.version).toBe(9);
   expect(first.sketches).toEqual(expect.arrayContaining([
     expect.objectContaining({ id: "ROOT", kind: "root" }),
     expect.objectContaining({ id: "S1", parentSketchId: "ROOT" }),
@@ -249,20 +250,15 @@ test("direct geometry deletion removes constraints and undo restores the documen
   expect(semanticDocument(await page.evaluate(() => window.__cadTest.serializedModelForTest()))).toEqual(semanticDocument(deleted));
 });
 
-test("direct geometry deletion also removes Presentation styles and annotations", async ({ page }) => {
-  test.fail(true, "Known Phase 0 gap: direct Geometry deletion leaves Presentation dependents behind");
+test("legacy Presentation payload is discarded on import", async ({ page }) => {
   await openTestApp(page);
-  await importFixture(page);
-  await page.evaluate(() => window.__cadTest.selectGeometryIdsForTest({ lines: ["L1"] }));
-  await page.click("#deleteSelectionBtn");
-  const deleted = await page.evaluate(() => window.__cadTest.serializedModelForTest());
-  for (const sheet of deleted.presentationSheets) {
-    expect(sheet.elementStyles).not.toHaveProperty("line:L1");
-    expect(sheet.elements.some((element) => references(element.geometryRefs, "L1"))).toBe(false);
-  }
+  const normalized = await importFixture(page);
+  expect(normalized).not.toHaveProperty("presentationSheets");
+  expect(normalized).not.toHaveProperty("activePresentationSheetId");
+  expect(normalized.annotations).toEqual([]);
 });
 
-test("sketch subtree deletion cleans constraints, styles, dimensions, leaders, and restores on undo", async ({ page }) => {
+test("sketch subtree deletion cleans geometry, constraints, and annotations and restores on undo", async ({ page }) => {
   await openTestApp(page);
   const before = await importFixture(page);
   const historyBefore = await page.evaluate(() => window.__cadTest.historyState());
@@ -280,18 +276,14 @@ test("sketch subtree deletion cleans constraints, styles, dimensions, leaders, a
     blockInstances: deleted.blockInstances.length,
     constraints: deleted.constraints.length,
   }).toEqual({ points: 0, lines: 0, circles: 0, arcs: 0, blockInstances: 0, constraints: 0 });
-  for (const sheet of deleted.presentationSheets) {
-    expect(sheet.visibleGeometrySketchIds).toEqual([]);
-    expect(sheet.elementStyles).toEqual({});
-    expect(sheet.elements).toEqual([]);
-  }
+  expect(deleted.annotations).toEqual([]);
   expect(historyAfter.undoCount).toBe(historyBefore.undoCount + 1);
 
   await page.click("#undoBtn");
   expect(semanticDocument(await page.evaluate(() => window.__cadTest.serializedModelForTest()))).toEqual(semanticDocument(before));
 });
 
-test("block instance and definition deletion clean projection presentation references", async ({ page }) => {
+test("block instance and definition deletion clean projection references", async ({ page }) => {
   await openTestApp(page);
   const beforeInstanceDelete = await importFixture(page);
   await page.evaluate(() => window.__cadTest.selectGeometryIdsForTest({ blockInstances: ["BI1"] }));
@@ -301,10 +293,7 @@ test("block instance and definition deletion clean projection presentation refer
 
   expect(withoutInstance.blockInstances).toHaveLength(0);
   expect(withoutInstance.constraints.some((constraint) => references(constraint, "BI1@LB20"))).toBe(false);
-  for (const sheet of withoutInstance.presentationSheets) {
-    expect(Object.keys(sheet.elementStyles).some((key) => key.includes("BI1@"))).toBe(false);
-    expect(sheet.elements.some((element) => references(element.geometryRefs, "BI1@B2I1@LB1"))).toBe(false);
-  }
+  expect(withoutInstance.annotations).toEqual([]);
   await page.click("#undoBtn");
   expect(semanticDocument(await page.evaluate(() => window.__cadTest.serializedModelForTest()))).toEqual(semanticDocument(beforeInstanceDelete));
 
@@ -316,31 +305,25 @@ test("block instance and definition deletion clean projection presentation refer
   await page.click("#completeBlockEditBtn");
   const afterDefinitionEdit = await page.evaluate(() => window.__cadTest.serializedModelForTest());
   expect(afterDefinitionEdit.blockDefinitions.find((definition) => definition.id === "B2").lines.map((line) => line.id)).toEqual(["LB20"]);
-  expect(afterDefinitionEdit.presentationSheets[0].elementStyles).not.toHaveProperty("line:BI1@LB2");
-  expect(afterDefinitionEdit.presentationSheets[0].elementStyles).toHaveProperty("line:BI1@B2I1@LB1");
+  expect(afterDefinitionEdit).not.toHaveProperty("presentationSheets");
   await page.click("#undoBtn");
   expect(semanticDocument(await page.evaluate(() => window.__cadTest.serializedModelForTest()))).toEqual(semanticDocument(beforeInstanceDelete));
 });
 
-test("block sketch disabling removes constraints, retains styles, and rejects annotation orphans", async ({ page }) => {
+test("block sketch disabling removes constraints and ignores discarded legacy Presentation references", async ({ page }) => {
   await openTestApp(page);
   const before = await importFixture(page);
   expect(await page.evaluate(() => window.__cadTest.setFirstBlockInstanceSketches(["S1"]))).toBe(true);
   const disabled = await page.evaluate(() => window.__cadTest.serializedModelForTest());
   expect(disabled.blockInstances[0].enabledSketchIds).toEqual(["S1"]);
   expect(disabled.constraints.some((constraint) => references(constraint, "BI1@LB20"))).toBe(false);
-  expect(disabled.presentationSheets[0].elementStyles).toHaveProperty("line:BI1@LB20");
+  expect(disabled).not.toHaveProperty("presentationSheets");
   await page.click("#undoBtn");
   expect(semanticDocument(await page.evaluate(() => window.__cadTest.serializedModelForTest()))).toEqual(semanticDocument(before));
 
-  const guarded = await importFixture(page, phase0DocumentFixture({ presentationRefOnSecondaryBlockSketch: true }), "phase0-guarded.json");
-  const historyBefore = await page.evaluate(() => window.__cadTest.historyState());
-  expect(await page.evaluate(() => window.__cadTest.setFirstBlockInstanceSketches(["S1"]))).toBe(false);
-  await expect(page.locator("#hint")).toContainText("注記 PE3 から参照されています");
-  const afterReject = await page.evaluate(() => window.__cadTest.serializedModelForTest());
-  const historyAfter = await page.evaluate(() => window.__cadTest.historyState());
-  expect(semanticDocument(afterReject)).toEqual(semanticDocument(guarded));
-  expect(historyAfter).toEqual(historyBefore);
+  const legacyGuarded = await importFixture(page, phase0DocumentFixture({ presentationRefOnSecondaryBlockSketch: true }), "phase0-guarded.json");
+  expect(legacyGuarded.annotations).toEqual([]);
+  expect(await page.evaluate(() => window.__cadTest.setFirstBlockInstanceSketches(["S1"]))).toBe(true);
 });
 
 test("selection, hit testing, viewport changes, and canceled commands do not mutate model data", async ({ page }) => {
@@ -361,8 +344,8 @@ test("selection, hit testing, viewport changes, and canceled commands do not mut
   await page.mouse.move(canvas.x + canvas.width / 2 + 80, canvas.y + canvas.height / 2 + 45, { steps: 4 });
   await page.mouse.up({ button: "middle" });
   await page.mouse.dblclick(canvas.x + canvas.width / 2, canvas.y + canvas.height / 2, { button: "middle" });
-  await page.click('[data-sidebar-tab="lines"]');
-  await page.click('[data-sidebar-tab="lines"]');
+  await page.click('[data-explorer-tab="objects"]');
+  await page.click('[data-explorer-tab="structure"]');
 
   expect(semanticDocument(await page.evaluate(() => window.__cadTest.serializedModelForTest()))).toEqual(semanticDocument(before));
   expect(await page.evaluate(() => window.__cadTest.historyState())).toEqual(historyBefore);
@@ -439,32 +422,24 @@ test("block editor history is isolated and cancel or root undo restores exact do
   expect(semanticDocument(await page.evaluate(() => window.__cadTest.serializedModelForTest()))).toEqual(semanticDocument(committed));
 });
 
-test("presentation sheet, style, and annotation edits never modify geometry or solve state", async ({ page }) => {
+test("document annotation edits never modify geometry or solve state", async ({ page }) => {
   await openTestApp(page);
-  await page.evaluate(() => window.__cadTest.resetForPresentationDrag());
+  await page.evaluate(() => window.__cadTest.resetForAnnotationDrag());
   const before = await page.evaluate(() => window.__cadTest.serializedModelForTest());
   const analysisBefore = await page.evaluate(() => window.__cadTest.constraintAnalysisForTest());
 
-  await page.evaluate(() => window.__cadTest.selectGeometryIdsForTest({ lines: ["L1"] }));
-  await page.locator("#presentationColorInput").evaluate((input) => {
-    input.value = "#2563eb";
-    input.dispatchEvent(new Event("input", { bubbles: true }));
-  });
-  const snapshot = await page.evaluate(() => window.__cadTest.presentationSnapshot());
-  await page.mouse.move(snapshot.dimension.viewport.x, snapshot.dimension.viewport.y);
+  const snapshot = await page.evaluate(() => window.__cadTest.annotationSnapshot());
+  await page.mouse.move(snapshot.leader.viewport.x, snapshot.leader.viewport.y);
   await page.mouse.down();
-  await page.mouse.move(snapshot.dimension.viewport.x, snapshot.dimension.viewport.y + 55, { steps: 6 });
+  await page.mouse.move(snapshot.leader.viewport.x + 55, snapshot.leader.viewport.y + 30, { steps: 6 });
   await page.mouse.up();
-  await page.click("#addPresentationSheetBtn");
 
   const after = await page.evaluate(() => window.__cadTest.serializedModelForTest());
   const analysisAfter = await page.evaluate(() => window.__cadTest.constraintAnalysisForTest());
   expect(geometryContract(after)).toEqual(geometryContract(before));
   expect({ stable: analysisAfter.stable, errorNorm: analysisAfter.errorNorm, freeVariableCount: analysisAfter.freeVariableCount })
     .toEqual({ stable: analysisBefore.stable, errorNorm: analysisBefore.errorNorm, freeVariableCount: analysisBefore.freeVariableCount });
-  expect(after.presentationSheets).toHaveLength(before.presentationSheets.length + 1);
-  expect(after.presentationSheets[0].elementStyles["line:L1"].color).toBe("#2563eb");
-  expect(after.presentationSheets[0].elements[0].dimension).not.toEqual(before.presentationSheets[0].elements[0].dimension);
+  expect(after.annotations).not.toEqual(before.annotations);
 });
 
 test("visual regression: geometry and constraint states", async ({ page }) => {
@@ -480,10 +455,10 @@ test("visual regression: nested block projections", async ({ page }) => {
   await expect(page.locator("#canvas")).toHaveScreenshot("phase0-nested-block.png", { animations: "disabled", maxDiffPixelRatio: 0.002 });
 });
 
-test("visual regression: presentation annotations", async ({ page }) => {
+test("visual regression: unified document annotations", async ({ page }) => {
   await openTestApp(page);
-  await page.evaluate(() => window.__cadTest.resetForPresentationDrag());
-  await expect(page.locator("#canvas")).toHaveScreenshot("phase0-presentation.png", { animations: "disabled", maxDiffPixelRatio: 0.002 });
+  await page.evaluate(() => window.__cadTest.resetForAnnotationDrag());
+  await expect(page.locator("#canvas")).toHaveScreenshot("phase0-annotations.png", { animations: "disabled", maxDiffPixelRatio: 0.002 });
 });
 
 test("visual regression: block editor", async ({ page }) => {

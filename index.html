@@ -7,249 +7,116 @@
   <link rel="stylesheet" href="./style.css" />
 </head>
 <body>
-  <div class="app side-collapsed">
-    <div class="toolbar" aria-label="ツールバー">
-      <div class="toolbar-row mode-toolbar-row">
-        <svg class="app-logo-svg" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" role="img" aria-labelledby="cad2LogoTitle cad2LogoDesc">
-          <title id="cad2LogoTitle">Cad2 logo</title>
-          <desc id="cad2LogoDesc">小さいサイズでも見やすい、Cad2のシンプルなロゴ</desc>
-          <rect x="16" y="16" width="224" height="224" rx="44" fill="#1F2937"/>
-          <path
-            d="M68 78
-               H160
-               C188 78 205 96 205 118
-               C205 139 193 153 174 163
-               L78 206
-               H194"
-            fill="none"
-            stroke="#F8FAFC"
-            stroke-width="20"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-          />
-          <g stroke="#38BDF8" stroke-width="10" stroke-linecap="round">
-            <line x1="36" y1="78" x2="100" y2="78" />
-            <line x1="68" y1="46" x2="68" y2="110" />
-          </g>
-          <circle cx="68" cy="78" r="20" fill="#38BDF8"/>
-          <circle cx="194" cy="206" r="15" fill="#38BDF8"/>
-        </svg>
-        <div class="header-divider" aria-hidden="true"></div>
-        <div class="document-control-stack">
-          <section class="document-titlebar" aria-label="ファイル情報">
-            <input id="documentNameInput" class="document-name-input" type="text" value="無題" autocomplete="off" spellcheck="false" aria-label="ファイル名" />
-          </section>
-          <section id="modeOverlay" class="mode-overlay" aria-label="モード">
-            <div class="mode-switch" role="group" aria-label="モード切替">
-              <span class="mode-switch-indicator" aria-hidden="true"></span>
-              <button id="geometryModeBtn" class="mode-switch-btn active" title="Geometry Mode" aria-label="Geometry Mode">
-                <span>Geometry Mode</span>
-              </button>
-              <button id="presentationModeBtn" class="mode-switch-btn" title="Presentation Mode" aria-label="Presentation Mode">
-                <span>Presentation Mode</span>
-              </button>
-            </div>
-            <div class="mode-overlay-sheet">
-              <select id="presentationSheetSelect" class="sheet-select" aria-label="Presentation Sheet"></select>
-              <button id="addPresentationSheetBtn" class="small-action-btn" type="button" title="Presentation Sheetを追加">Sheet+</button>
-              <button id="renamePresentationSheetBtn" class="small-action-btn" type="button" title="Presentation Sheetの名前変更">Aa</button>
-            </div>
-          </section>
-        </div>
+  <div class="app">
+    <header class="menu-bar">
+      <div class="brand" aria-label="Cad2">
+        <span class="brand-mark">C2</span>
+        <input id="documentNameInput" class="document-name-input" type="text" value="無題" autocomplete="off" spellcheck="false" aria-label="ドキュメント名" />
       </div>
-    </div>
-    <div class="work-area">
-      <nav class="left-tool-rail" aria-label="ツール">
-        <div class="toolbar-group file-toolbar-group" aria-label="ファイル">
-          <button id="undoBtn" class="icon-btn" title="戻る (Ctrl+Z)" aria-label="戻る" disabled>
-            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 7L4 12l5 5"/><path d="M5 12h9a5 5 0 1 1 0 10h-3"/></svg>
-          </button>
-          <button id="redoBtn" class="icon-btn" title="進む (Ctrl+Y)" aria-label="進む" disabled>
-            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 7l5 5-5 5"/><path d="M19 12h-9a5 5 0 1 0 0 10h3"/></svg>
-          </button>
-          <button id="exportBtn" class="icon-btn" title="ファイル保存" aria-label="ファイル保存">
-            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 20h14V8l-4-4H5v16z"/><path d="M8 20v-6h8v6M8 4v5h7"/></svg>
-          </button>
-          <button id="importBtn" class="icon-btn" title="ファイル読込" aria-label="ファイル読込">
-            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 20h14V8l-4-4H5v16z"/><path d="M12 17V9M8 13l4 4 4-4"/></svg>
-          </button>
-          <input id="importFileInput" type="file" accept="application/json,.json" hidden />
-        </div>
-        <div id="presentationStyleGroup" class="toolbar-group presentation-style-group" aria-label="表示スタイル">
-          <span class="group-label">表示</span>
-          <label class="style-field color-field" title="線色">
-            <span>色</span>
-            <input id="presentationColorInput" type="color" value="#111827" aria-label="線色" />
-          </label>
-          <label class="style-field">
-            <span>線種</span>
-            <select id="presentationLineTypeSelect" aria-label="線種">
-              <option value="solid">実線</option>
-              <option value="dashed">破線</option>
-              <option value="dashdot">一点鎖線</option>
-              <option value="dotted">点線</option>
-            </select>
-          </label>
-          <label class="style-field width-field">
-            <span>幅</span>
-            <input id="presentationLineWidthInput" type="number" min="0.5" max="10" step="0.5" value="2.2" aria-label="線幅" />
-          </label>
-          <label class="style-check">
-            <input id="presentationVisibleInput" type="checkbox" checked />
-            <span>表示</span>
-          </label>
-          <button id="presentationSelectBtn" class="small-action-btn active" type="button" title="プレゼンテーション選択">選択</button>
-          <button id="presentationDimensionBtn" class="small-action-btn" type="button" title="選択Geometryから注記寸法を追加">注記寸法</button>
-          <button id="presentationLeaderBtn" class="small-action-btn" type="button" title="引出線を追加">引出線</button>
-        </div>
-        <div class="toolbar-home geometry-only" aria-label="選択">
-          <button id="toolSelect" class="icon-btn active" title="選択・ドラッグ" aria-label="選択・ドラッグ">
-            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 3l14 9-7 2-3 7L5 3z"/></svg>
-          </button>
-        </div>
-        <div class="toolbar-group geometry-toolbar-group" aria-label="基本作図">
-          <span class="group-label">基本作図</span>
-          <button id="toolPoint" class="icon-btn" title="点" aria-label="点">
-            <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3.5"/><path d="M12 3v3M12 18v3M3 12h3M18 12h3"/></svg>
-          </button>
-          <button id="toolLine" class="icon-btn" title="連続線" aria-label="連続線">
-            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 18L19 6"/><circle cx="5" cy="18" r="2"/><circle cx="19" cy="6" r="2"/></svg>
-          </button>
-          <button id="toolCircle" class="icon-btn" title="円" aria-label="円">
-            <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="7"/></svg>
-          </button>
-          <button id="toolArc" class="icon-btn" title="円弧" aria-label="円弧">
-            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 16a8 8 0 0 1 12-8"/><circle cx="6" cy="16" r="1.8"/><circle cx="18" cy="8" r="1.8"/></svg>
-          </button>
-          <button id="toolConstructionLine" class="icon-btn construction-toggle-btn" title="実線/補助線を切り替え" aria-label="実線/補助線を切り替え">
-            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20l3-3M10 14l4-4M17 7l3-3" stroke-width="2.4" stroke-linecap="round"/></svg>
-          </button>
-          <button id="toolRectangle" class="icon-btn" title="矩形" aria-label="矩形">
-            <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="6" width="14" height="12"/></svg>
-          </button>
-        </div>
-        <div class="toolbar-group geometry-toolbar-group" aria-label="編集">
-          <span class="group-label">編集</span>
-          <button id="toolTrim" class="icon-btn" title="トリム" aria-label="トリム">
-            <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="6" cy="7" r="2.5"/><circle cx="6" cy="17" r="2.5"/><path d="M8 8.5l4 3.5M8 15.5L20 8M12 12l8 4"/></svg>
-          </button>
-          <button id="toolFillet" class="icon-btn" title="R面取り" aria-label="R面取り">
-            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 19V7h12"/><path d="M5 19a12 12 0 0 1 12-12"/></svg>
-          </button>
-          <button id="toolOffset" class="icon-btn" title="オフセット" aria-label="オフセット">
-            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 17L15 7"/><path d="M9 21L19 11"/><path d="M15 17h4M17 15l2 2-2 2"/></svg>
-          </button>
-          <button id="deleteSelectionBtn" class="icon-btn" title="選択を削除" aria-label="選択を削除">
-            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3M7 7l1 13h8l1-13"/></svg>
-          </button>
-        </div>
-        <div class="toolbar-group geometry-toolbar-group constraint-toolbar-group" aria-label="拘束">
-          <span class="group-label">拘束</span>
-          <button data-constraint="distance" data-label="寸法" title="寸法" aria-label="寸法">
-            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14"/><path d="M8 9l-3 3 3 3M16 9l3 3-3 3"/></svg>
-          </button>
-          <button data-constraint="coincident" data-label="一致" title="一致" aria-label="一致">
-            <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10" cy="12" r="4"/><circle cx="14" cy="12" r="4"/></svg>
-          </button>
-          <button data-constraint="horizontal" data-label="水平" title="水平" aria-label="水平">
-            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14"/></svg>
-          </button>
-          <button data-constraint="vertical" data-label="垂直" title="垂直" aria-label="垂直">
-            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14"/></svg>
-          </button>
-          <button data-constraint="parallel" data-label="平行" title="平行" aria-label="平行">
-            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 19L15 5M12 19l8-14"/></svg>
-          </button>
-          <button data-constraint="perpendicular" data-label="直角" title="直角" aria-label="直角">
-            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 18h12M12 18V6"/></svg>
-          </button>
-          <button data-constraint="symmetry" data-label="対称" title="対称" aria-label="対称">
-            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v16" stroke-dasharray="2 2"/><circle cx="7" cy="12" r="2.5"/><circle cx="17" cy="12" r="2.5"/><path d="M9.5 8.5h5M9.5 15.5h5"/></svg>
-          </button>
-          <button data-constraint="concentric" data-label="同心" title="同心" aria-label="同心">
-            <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="7"/><circle cx="12" cy="12" r="3"/></svg>
-          </button>
-          <button data-constraint="equal" data-label="等寸" title="等寸" aria-label="等寸">
-            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 10h12M6 14h12"/></svg>
-          </button>
-          <button data-constraint="tangent" data-label="接線" title="接線" aria-label="接線">
-            <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10" cy="12" r="5"/><path d="M14 7l6 10"/></svg>
-          </button>
-          <button id="fixPointBtn" data-label="固定／固定解除" title="固定／固定解除" aria-label="固定／固定解除">
-            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 11V8a5 5 0 0 1 10 0v3"/><rect x="6" y="11" width="12" height="9" rx="2"/></svg>
-          </button>
-        </div>
+      <nav class="app-menus" aria-label="メニューバー">
+        <details class="app-menu"><summary>ファイル</summary><div class="menu-popover">
+          <button id="exportBtn" type="button">保存</button>
+          <button id="importBtn" type="button">開く</button>
+          <button id="documentSettingsBtn" type="button">ドキュメント設定</button>
+          <button id="applicationSettingsBtn" type="button">アプリケーション設定</button>
+        </div></details>
+        <details class="app-menu"><summary>編集</summary><div class="menu-popover">
+          <button type="button" data-menu-tool="undoBtn">元に戻す <kbd>Ctrl+Z</kbd></button>
+          <button type="button" data-menu-tool="redoBtn">やり直す <kbd>Ctrl+Y</kbd></button>
+          <button type="button" data-menu-tool="deleteSelectionBtn">削除 <kbd>Del</kbd></button>
+        </div></details>
+        <details class="app-menu"><summary>表示</summary><div class="menu-popover">
+          <label><input id="viewGridInput" type="checkbox" checked /> グリッド</label>
+          <label><input id="viewGeometryIdsInput" type="checkbox" /> Geometry ID</label>
+          <span class="menu-note">Space: 拘束状態を一時表示</span>
+        </div></details>
+        <details class="app-menu"><summary>Geometry</summary><div class="menu-popover menu-command-list">
+          <button type="button" data-menu-tool="toolPoint">点</button><button type="button" data-menu-tool="toolLine">線</button>
+          <button type="button" data-menu-tool="toolRectangle">矩形</button><button type="button" data-menu-tool="toolCircle">円</button>
+          <button type="button" data-menu-tool="toolArc">円弧</button><button type="button" data-menu-tool="toolTrim">トリム</button>
+          <button type="button" data-menu-tool="toolFillet">フィレット</button><button type="button" data-menu-tool="toolOffset">オフセット</button>
+        </div></details>
+        <details class="app-menu"><summary>Constraint</summary><div class="menu-popover"><span class="menu-note">拘束ツールはツールバーから選択します</span></div></details>
+        <details class="app-menu"><summary>Annotation</summary><div class="menu-popover">
+          <button type="button" data-menu-tool="annotationLeaderBtn">引出線</button>
+          <button type="button" data-menu-tool="annotationTextBtn">自由テキスト</button>
+        </div></details>
+        <details class="app-menu"><summary>ヘルプ</summary><div class="menu-popover"><span class="menu-note">Cad2 unified canvas</span></div></details>
       </nav>
-      <div class="canvas-area">
-        <canvas id="canvas"></canvas>
-        <input id="dimensionValueInput" class="dimension-value-input" type="text" inputmode="decimal" autocomplete="off" spellcheck="false" aria-label="寸法値" hidden />
-        <section id="sketchOverlay" class="sketch-overlay" aria-label="スケッチ">
-          <div class="sketch-overlay-header">
-            <span id="activeSketchLabel" class="sketch-active-label">スケッチツリー</span>
-            <div class="sketch-add-actions">
-              <button id="toggleSketchTreeBtn" type="button" class="small-action-btn" title="Tree">Tree</button>
-              <button id="addSketchBtn" type="button" class="small-action-btn" title="兄弟スケッチを追加">兄弟+</button>
-              <button id="addChildSketchBtn" type="button" class="small-action-btn" title="子スケッチを追加">子+</button>
-            </div>
-          </div>
-          <div id="sketchList" class="sketch-list"></div>
-        </section>
-        <section id="blockOverlay" class="block-overlay" aria-label="ブロック">
-          <div class="block-overlay-header">
-            <strong id="blockOverlayTitle">ブロック</strong>
-            <input id="blockEditorNameInput" class="block-editor-name-input" type="text" aria-label="ブロック名" hidden />
-            <div class="block-editor-actions" id="blockEditorActions" hidden>
-              <button id="cancelBlockEditBtn" type="button" class="small-action-btn">キャンセル</button>
-              <button id="completeBlockEditBtn" type="button" class="small-action-btn primary">完了</button>
-            </div>
-          </div>
-          <div class="block-overlay-actions">
-            <button id="toolCreateBlock" class="small-action-btn" type="button" title="選択図形からブロック作成" aria-label="ブロック作成">作成</button>
-          </div>
-          <div id="blockList" class="block-list"></div>
-          <div id="blockSketchConfig" class="block-sketch-config" hidden></div>
-        </section>
-        <div id="bottomBar" class="bottom-bar" aria-label="操作情報">
-          <div class="status-line">
-            <span class="small" id="hint">連続線は端点位置を順にクリックします。終了はEscです。</span>
-          </div>
+      <input id="importFileInput" type="file" accept="application/json,.json" hidden />
+    </header>
+
+    <nav class="command-toolbar" aria-label="ツールバー">
+      <div class="tool-group" aria-label="編集"><button id="undoBtn" class="tool-button" title="元に戻す" disabled>↶</button><button id="redoBtn" class="tool-button" title="やり直す" disabled>↷</button><button id="deleteSelectionBtn" class="tool-button" title="削除">削除</button></div>
+      <div class="tool-group" aria-label="選択"><button id="toolSelect" class="tool-button active" title="選択・ドラッグ">選択</button></div>
+      <div class="tool-group" aria-label="Geometry">
+        <span class="tool-group-label">Geometry</span>
+        <button id="toolPoint" class="tool-button" title="点">点</button><button id="toolLine" class="tool-button" title="連続線">線</button>
+        <button id="toolRectangle" class="tool-button" title="矩形">矩形</button><button id="toolCircle" class="tool-button" title="円">円</button>
+        <button id="toolArc" class="tool-button" title="円弧">円弧</button><button id="toolConstructionLine" class="tool-button" title="実線／補助線">補助線</button>
+        <button id="toolTrim" class="tool-button" title="トリム">トリム</button><button id="toolFillet" class="tool-button" title="R面取り">R</button>
+        <button id="toolOffset" class="tool-button" title="オフセット">Offset</button>
+      </div>
+      <div class="tool-group constraint-toolbar-group" aria-label="Constraint">
+        <span class="tool-group-label">Constraint</span>
+        <button data-constraint="distance" data-label="寸法">寸法</button><button data-constraint="coincident" data-label="一致">一致</button>
+        <button data-constraint="horizontal" data-label="水平">水平</button><button data-constraint="vertical" data-label="垂直">垂直</button>
+        <button data-constraint="parallel" data-label="平行">平行</button><button data-constraint="perpendicular" data-label="直角">直角</button>
+        <button data-constraint="symmetry" data-label="対称">対称</button><button data-constraint="concentric" data-label="同心">同心</button>
+        <button data-constraint="equal" data-label="等寸">等寸</button><button data-constraint="tangent" data-label="接線">接線</button>
+        <button id="fixPointBtn" data-label="固定／解除">固定</button>
+      </div>
+      <div class="tool-group" aria-label="Annotation">
+        <span class="tool-group-label">Annotation</span>
+        <button id="annotationLeaderBtn" class="tool-button" type="button">引出線</button><button id="annotationTextBtn" class="tool-button" type="button">テキスト</button>
+      </div>
+    </nav>
+
+    <main class="workspace">
+      <aside class="explorer" aria-label="Explorer">
+        <div class="panel-title">Explorer</div>
+        <div class="panel-tabs" role="tablist">
+          <button class="panel-tab active" type="button" data-explorer-tab="structure" aria-selected="true">Structure</button>
+          <button class="panel-tab" type="button" data-explorer-tab="objects" aria-selected="false">Objects</button>
         </div>
-      </div>
-      <div class="sidebar-tabs" role="tablist" aria-label="表示する情報" aria-orientation="vertical">
-        <button class="sidebar-tab active" type="button" role="tab" aria-selected="true" aria-controls="sidebarConstraints" data-sidebar-tab="constraints">拘束</button>
-        <button class="sidebar-tab" type="button" role="tab" aria-selected="false" aria-controls="sidebarLines" data-sidebar-tab="lines">線</button>
-        <button class="sidebar-tab" type="button" role="tab" aria-selected="false" aria-controls="sidebarPoints" data-sidebar-tab="points">点</button>
-        <button class="sidebar-tab" type="button" role="tab" aria-selected="false" aria-controls="sidebarCircles" data-sidebar-tab="circles">円</button>
-        <button class="sidebar-tab" type="button" role="tab" aria-selected="false" aria-controls="sidebarArcs" data-sidebar-tab="arcs">円弧</button>
-      </div>
-      <aside class="side" aria-label="情報サイドバー">
-        <section id="sidebarConstraints" class="sidebar-tab-panel active" role="tabpanel" data-sidebar-panel="constraints">
-          <h2>拘束一覧</h2>
-          <div id="constraintList" class="list"></div>
-        </section>
-        <section id="sidebarLines" class="sidebar-tab-panel" role="tabpanel" data-sidebar-panel="lines" hidden>
-          <h2>線</h2>
-          <div id="lineList" class="list"></div>
-        </section>
-        <section id="sidebarPoints" class="sidebar-tab-panel" role="tabpanel" data-sidebar-panel="points" hidden>
-          <h2>点</h2>
-          <div id="pointList" class="list"></div>
-        </section>
-        <section id="sidebarCircles" class="sidebar-tab-panel" role="tabpanel" data-sidebar-panel="circles" hidden>
-          <h2>円</h2>
-          <div id="circleList" class="list"></div>
-        </section>
-        <section id="sidebarArcs" class="sidebar-tab-panel" role="tabpanel" data-sidebar-panel="arcs" hidden>
-          <h2>円弧</h2>
-          <div id="arcList" class="list"></div>
-        </section>
+        <div class="explorer-scroll">
+          <section id="explorerStructure" class="explorer-panel active">
+            <section id="sketchOverlay" class="explorer-section" aria-label="スケッチ">
+              <div class="section-header"><strong id="activeSketchLabel">Sketch</strong><span>
+                <button id="toggleSketchTreeBtn" type="button" class="compact-button">折畳</button><button id="addSketchBtn" type="button" class="compact-button">＋</button><button id="addChildSketchBtn" type="button" class="compact-button">子＋</button>
+              </span></div>
+              <div id="sketchList" class="tree-list"></div>
+            </section>
+            <section id="blockOverlay" class="explorer-section" aria-label="Block Definitions">
+              <div class="section-header"><strong id="blockOverlayTitle">Block Definitions</strong><button id="toolCreateBlock" class="compact-button" type="button">作成</button></div>
+              <input id="blockEditorNameInput" class="block-editor-name-input" type="text" aria-label="ブロック名" hidden />
+              <div class="block-editor-actions" id="blockEditorActions" hidden><button id="cancelBlockEditBtn" type="button" class="compact-button">キャンセル</button><button id="completeBlockEditBtn" type="button" class="compact-button primary">完了</button></div>
+              <div id="blockList" class="tree-list"></div><div id="blockSketchConfig" class="block-sketch-config" hidden></div>
+            </section>
+          </section>
+          <section id="explorerObjects" class="explorer-panel" hidden>
+            <details open><summary>Constraint</summary><div id="constraintList" class="list"></div></details>
+            <details open><summary>Point</summary><div id="pointList" class="list"></div></details>
+            <details open><summary>Line</summary><div id="lineList" class="list"></div></details>
+            <details open><summary>Circle</summary><div id="circleList" class="list"></div></details>
+            <details open><summary>Arc</summary><div id="arcList" class="list"></div></details>
+            <details open><summary>Block Instance</summary><div id="blockInstanceObjectList" class="list"></div></details>
+            <details open><summary>Annotation</summary><div id="annotationObjectList" class="list"></div></details>
+          </section>
+        </div>
       </aside>
-    </div>
+
+      <section class="canvas-area" aria-label="Canvas"><canvas id="canvas"></canvas><input id="dimensionValueInput" class="dimension-value-input" type="text" inputmode="decimal" autocomplete="off" spellcheck="false" aria-label="寸法値" hidden /></section>
+
+      <aside class="properties" aria-label="Properties"><div class="panel-title">Properties</div><div id="propertiesPanel" class="properties-scroll"></div></aside>
+    </main>
+
+    <footer id="bottomBar" class="status-bar" aria-label="Status Bar"><span id="statusCommand">選択</span><span id="hint">Geometryを選択または作成します。Spaceで拘束状態を表示します。</span><span id="statusConstraint"></span><span id="statusCoordinates">X 0.00 / Y 0.00</span></footer>
   </div>
-  <script src="./geometry_kernel.js"></script>
-  <script src="./geometry_ref.js"></script>
-  <script src="./constraint_codec_registry.js"></script>
-  <script src="./constraint_solver.js"></script>
-  <script src="./app.js"></script>
+
+  <dialog id="documentSettingsDialog" class="settings-dialog"><form method="dialog"><header><strong>ドキュメント設定</strong><button value="cancel">×</button></header><section><h3>Default Appearance</h3><div id="documentAppearanceFields"></div></section><footer><button value="cancel">閉じる</button></footer></form></dialog>
+  <dialog id="applicationSettingsDialog" class="settings-dialog app-settings-view"><form method="dialog"><header><strong>アプリケーション設定</strong><button value="cancel">×</button></header><section><h3>General</h3><p>アプリケーション全体の設定をドキュメント設定から分離して管理します。</p></section><footer><button value="cancel">閉じる</button></footer></form></dialog>
+
+  <script src="./geometry_kernel.js"></script><script src="./geometry_ref.js"></script><script src="./constraint_codec_registry.js"></script><script src="./constraint_solver.js"></script><script src="./app.js"></script>
 </body>
 </html>

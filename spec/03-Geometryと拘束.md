@@ -73,7 +73,7 @@ Constraintの各Geometry参照fieldは保存形式上は従来どおりbare ID�
 
 補助切替は Line、Circle、Arc に適用する。選択中の対象があれば対象の `construction` を切り替え、対象がなければ今後作成する Geometry の既定値を切り替える。
 
-Geometry Mode の通常 Geometry は、アクティブ Sketch を2.0px、非アクティブ・参照・子孫 Sketch を1.2pxの画面線幅で描く。補助 Geometry は一点鎖線を使い、アクティブ Sketch を1.1px、その他を0.9pxへ細くし、通常時の不透明度を72%にする。選択、ホバー、矛盾等の状態色は優先して表示する。
+通常GeometryはAppearanceで解決した色、線種、線幅、visibleを使用する。初期Document Defaultは線幅2.0pxである。補助Geometryは既定で一点鎖線、1.1px、通常時の不透明度72%とし、SketchまたはGeometryの明示Appearanceを優先する。選択とhoverは一時的な強調を優先し、Space押下中は拘束状態色を優先する。
 
 ### R面取り
 
@@ -156,12 +156,12 @@ UIで利用できる組み合わせを次に示す。
 
 読み取り専用寸法は `readOnlyDimension = true`、`enabled = false` とし、実測値を括弧付きで表示する。数値入力は表示しない。
 
-Geometry Mode ではアクティブ Sketch に所属する寸法だけを描画する。
+単一CanvasではアクティブSketchに所属するConstraint Dimensionだけを描画する。
 
 ## 7. 数値表示
 
 - 拘束寸法は `1e-6` 以内の浮動小数誤差を簡潔な10進値へ正規化する。
-- 読み取り専用寸法と Presentation 注記寸法は実測値のため `1e-5` を使う。
+- 読み取り専用寸法は実測値のため `1e-5` を使う。
 - ゼロではない値をゼロへ丸めない。
 - 小数部がゼロなら整数表示し、末尾の不要なゼロを除く。
 - 角度ラベルには `°` を付ける。
@@ -188,4 +188,4 @@ Geometry は解析結果により次の状態で描き分ける。
 
 Geometry の削除時は、共有 Point の利用状況を考慮して不要 Pointを整理し、対象を参照する拘束と拘束寸法を除去する。1回のユーザー操作は1つの履歴単位にする。
 
-Presentation styleとPresentation Elementも同時に除去するのが参照ライフサイクル上の期待仕様だが、通常Documentの直接Geometry削除では現在残存する。Sketch削除、Block Instance削除、Block Definition編集では整理される。この差は既知の不整合である。
+Geometryを削除すると、そのGeometryを参照するConstraintとDocument Leaderも同時に除去する。Sketch削除、Block Instance削除、Block Definition編集でも同じ参照ライフサイクルを適用する。

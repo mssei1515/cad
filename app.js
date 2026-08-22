@@ -95,18 +95,15 @@
   const ROOT_SKETCH_NAME = "Root Sketch";
   const DEFAULT_SKETCH_ID = "S1";
   const DEFAULT_SKETCH_NAME = "Sketch-1";
-  const DEFAULT_PRESENTATION_SHEET_ID = "PS1";
-  const DEFAULT_PRESENTATION_SHEET_NAME = "Sheet-1";
   const model = {
     documentName: DEFAULT_DOCUMENT_NAME,
-    appMode: "geometry",
+    defaultAppearance: null,
     sketches: [
-      { id: ROOT_SKETCH_ID, name: ROOT_SKETCH_NAME, parentSketchId: null, kind: "root", visible: true },
-      { id: DEFAULT_SKETCH_ID, name: DEFAULT_SKETCH_NAME, parentSketchId: ROOT_SKETCH_ID, kind: "sketch", visible: true },
+      { id: ROOT_SKETCH_ID, name: ROOT_SKETCH_NAME, parentSketchId: null, kind: "root", appearance: {} },
+      { id: DEFAULT_SKETCH_ID, name: DEFAULT_SKETCH_NAME, parentSketchId: ROOT_SKETCH_ID, kind: "sketch", appearance: {} },
     ],
     activeSketchId: DEFAULT_SKETCH_ID,
-    presentationSheets: [{ id: DEFAULT_PRESENTATION_SHEET_ID, name: DEFAULT_PRESENTATION_SHEET_NAME, visibleGeometrySketchIds: null, elementStyles: {}, elements: [] }],
-    activePresentationSheetId: DEFAULT_PRESENTATION_SHEET_ID,
+    annotations: [],
     points: [],
     lines: [],
     circles: [],
@@ -125,7 +122,7 @@
   let selectedBlockInstances = [];
   let dragSession = null;
   let dimensionDragSession = null;
-  let presentationDragSession = null;
+  let annotationDragSession = null;
   let hoveredPoint = null;
   let hoveredEndpointPoint = null;
   let hoveredLine = null;
@@ -138,6 +135,8 @@
   let selectedArcEndpointPair = null;
   let selectedDimensionConstraint = null;
   let selectedConstraint = null;
+  let selectedAnnotation = null;
+  let hoveredAnnotation = null;
   let hoveredSidebarItem = null;
   let constraintAnalysisState = null;
   let constraintRedundancyState = { constraints: new Map(), sketches: new Map(), count: 0 };
@@ -173,8 +172,7 @@
   let circleSeq = 1;
   let arcSeq = 1;
   let sketchSeq = 2;
-  let presentationSheetSeq = 2;
-  let presentationElementSeq = 1;
+  let annotationSeq = 1;
   let blockDefinitionSeq = 1;
   let blockInstanceSeq = 1;
   let blockElementSeq = 1;
@@ -194,6 +192,7 @@
   const CLIPBOARD_PASTE_OFFSET_SCREEN_PX = 24;
   const BLOCK_ORTHOGONAL_ROTATION_STEP = Math.PI / 2;
   const viewport = { x: 0, y: 0, scale: 1 };
+  const viewState = { constraintStatus: false, grid: true, geometryIds: false };
   const MIN_ZOOM = 0.001;
   const MAX_ZOOM = 10000000;
   const GRID_SCREEN_STEP_PX = 32;
@@ -208,6 +207,7 @@
   const MEASURED_DIMENSION_SNAP_TOLERANCE = 1e-5;
   const CONSTRAINT_ACCEPT_ERROR = 1e-4;
   const DRAG_PREVIEW_ERROR_SCREEN_PX = 0.1;
+  const DRAG_PREVIEW_MAX_MODEL_ERROR = 0.125;
   const DEFAULT_FILLET_RADIUS = 30;
   const MIN_LINE_LENGTH = Math.max(MIN_ORIENTATION_LENGTH, solver.minLineLength || 12);
   const MIN_ARC_LENGTH = MIN_LINE_LENGTH;
@@ -217,19 +217,16 @@
     under: "#f59e0b",
     conflict: "#dc2626",
   };
-  const DEFAULT_PRESENTATION_STYLE = {
+  const DEFAULT_APPEARANCE = {
     visible: true,
     color: "#111827",
     lineType: "solid",
-    lineWidthPx: 2.2,
-    opacity: 1,
+    lineWidth: 2,
   };
-  const DEFAULT_PRESENTATION_CONSTRUCTION_STYLE = {
-    visible: true,
+  const DEFAULT_CONSTRUCTION_APPEARANCE = {
     color: "#64748b",
     lineType: "dashdot",
-    lineWidthPx: 1.8,
-    opacity: 1,
+    lineWidth: 1.1,
   };
   const SKETCH_SOLVE_ERROR_COLOR = "#dc2626";
   let lastLoadLineRepairMessage = "";
@@ -321,11 +318,48 @@
     return String(value ?? "").replace(/[&<>"']/g, (ch) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[ch]);
   }
 
+  function normalizeAppearance(value, { partial = true } = {}) {
+    const source = value && typeof value === "object" && !Array.isArray(value) ? value : {};
+    const result = partial ? {} : { ...DEFAULT_APPEARANCE };
+    if (Object.prototype.hasOwnProperty.call(source, "visible")) result.visible = source.visible !== false;
+    if (typeof source.color === "string" && /^#[0-9a-fA-F]{6}$/.test(source.color)) result.color = source.color.toLowerCase();
+    if (["solid", "dashed", "dashdot", "dotted"].includes(source.lineType)) result.lineType = source.lineType;
+    const lineWidth = Number(source.lineWidth ?? source.lineWidthPx);
+    if (Number.isFinite(lineWidth)) result.lineWidth = Math.max(0.5, Math.min(10, lineWidth));
+    return result;
+  }
+
+  function normalizeAnnotations(items) {
+    if (!Array.isArray(items)) return [];
+    return items.map((item, index) => {
+      if (!item || typeof item !== "object") return null;
+      const type = item.type === "text" ? "text" : item.type === "leader" ? "leader" : null;
+      if (!type) return null;
+      const normalized = {
+        id: String(item.id || `AN${index + 1}`),
+        type,
+        visible: item.visible !== false,
+        text: String(item.text || ""),
+        x: Number.isFinite(Number(item.x)) ? Number(item.x) : 0,
+        y: Number.isFinite(Number(item.y)) ? Number(item.y) : 0,
+        style: item.style && typeof item.style === "object" ? { ...item.style } : {},
+      };
+      if (type === "leader") {
+        normalized.geometryRef = item.geometryRef && typeof item.geometryRef === "object" ? { ...item.geometryRef } : null;
+        for (const key of ["start", "elbow", "end"]) {
+          const point = item[key];
+          normalized[key] = point && Number.isFinite(Number(point.x)) && Number.isFinite(Number(point.y)) ? { x: Number(point.x), y: Number(point.y) } : null;
+        }
+      }
+      return normalized;
+    }).filter(Boolean);
+  }
+
   function ensureSketchState() {
     if (!Array.isArray(model.sketches)) model.sketches = [];
     let root = model.sketches.find((sketch) => sketch.kind === "root" || sketch.id === ROOT_SKETCH_ID);
     if (!root) {
-      root = { id: ROOT_SKETCH_ID, name: ROOT_SKETCH_NAME, parentSketchId: null, kind: "root", visible: true };
+      root = { id: ROOT_SKETCH_ID, name: ROOT_SKETCH_NAME, parentSketchId: null, kind: "root", appearance: {} };
       model.sketches.unshift(root);
     }
     model.sketches = [root, ...model.sketches.filter((sketch) => sketch !== root && sketch.kind !== "root" && sketch.id !== ROOT_SKETCH_ID)];
@@ -333,12 +367,14 @@
     root.name = root.name || ROOT_SKETCH_NAME;
     root.parentSketchId = null;
     root.kind = "root";
+    root.appearance = normalizeAppearance(root.appearance);
     root.visible = true;
     const ids = new Set(model.sketches.map((sketch) => sketch.id));
     for (const sketch of model.sketches) {
       if (sketch === root) continue;
       sketch.kind = "sketch";
-      sketch.visible = sketch.visible !== false;
+      sketch.appearance = normalizeAppearance(sketch.appearance || (sketch.visible === false ? { visible: false } : {}));
+      sketch.visible = sketch.appearance.visible !== false;
       if (!Object.prototype.hasOwnProperty.call(sketch, "parentSketchId")) sketch.parentSketchId = null;
       if (sketch.parentSketchId === sketch.id || !ids.has(sketch.parentSketchId)) sketch.parentSketchId = ROOT_SKETCH_ID;
       if (sketch.parentSketchId == null) sketch.parentSketchId = ROOT_SKETCH_ID;
@@ -348,28 +384,10 @@
     }
   }
 
-  function ensurePresentationState() {
-    model.appMode = model.appMode === "presentation" ? "presentation" : "geometry";
-    if (!Array.isArray(model.presentationSheets)) model.presentationSheets = [];
-    if (model.presentationSheets.length === 0) {
-      model.presentationSheets.push({ id: DEFAULT_PRESENTATION_SHEET_ID, name: DEFAULT_PRESENTATION_SHEET_NAME, visibleGeometrySketchIds: null, elementStyles: {}, elements: [] });
-    }
-    const seen = new Set();
-    model.presentationSheets = model.presentationSheets.map((sheet, index) => {
-      let id = String(sheet.id || `PS${index + 1}`);
-      while (seen.has(id)) id = `PS${index + 1}-${seen.size + 1}`;
-      seen.add(id);
-      return {
-        id,
-        name: String(sheet.name || `Sheet-${index + 1}`),
-        visibleGeometrySketchIds: Array.isArray(sheet.visibleGeometrySketchIds) ? sheet.visibleGeometrySketchIds.map(String) : null,
-        elementStyles: normalizePresentationElementStyles(sheet.elementStyles),
-        elements: normalizePresentationElements(sheet.elements),
-      };
-    });
-    if (!model.activePresentationSheetId || !model.presentationSheets.some((sheet) => sheet.id === model.activePresentationSheetId)) {
-      model.activePresentationSheetId = model.presentationSheets[0].id;
-    }
+  function ensureAppearanceState() {
+    model.defaultAppearance = normalizeAppearance(model.defaultAppearance, { partial: false });
+    model.annotations = normalizeAnnotations(model.annotations);
+    for (const item of [...model.points, ...model.lines, ...model.circles, ...model.arcs]) item.appearance = normalizeAppearance(item.appearance);
   }
 
   function ensureBlockState() {
@@ -389,23 +407,24 @@
       };
       if (!Array.isArray(definition.sketches) || definition.sketches.length === 0) {
         definition.sketches = [
-          { id: ROOT_SKETCH_ID, name: ROOT_SKETCH_NAME, parentSketchId: null, kind: "root", visible: true },
-          { id: DEFAULT_SKETCH_ID, name: DEFAULT_SKETCH_NAME, parentSketchId: ROOT_SKETCH_ID, kind: "sketch", visible: true },
+          { id: ROOT_SKETCH_ID, name: ROOT_SKETCH_NAME, parentSketchId: null, kind: "root", appearance: {} },
+          { id: DEFAULT_SKETCH_ID, name: DEFAULT_SKETCH_NAME, parentSketchId: ROOT_SKETCH_ID, kind: "sketch", appearance: {} },
         ];
       }
       let root = definition.sketches.find((sketch) => sketch?.kind === "root" || sketch?.id === ROOT_SKETCH_ID);
       if (!root) {
-        root = { id: ROOT_SKETCH_ID, name: ROOT_SKETCH_NAME, parentSketchId: null, kind: "root", visible: true };
+        root = { id: ROOT_SKETCH_ID, name: ROOT_SKETCH_NAME, parentSketchId: null, kind: "root", appearance: {} };
         definition.sketches.unshift(root);
       }
       root.id = ROOT_SKETCH_ID;
       root.name = ROOT_SKETCH_NAME;
       root.parentSketchId = null;
       root.kind = "root";
+      root.appearance = normalizeAppearance(root.appearance);
       root.visible = true;
       definition.sketches = [root, ...definition.sketches.filter((sketch) => sketch && sketch !== root && sketch.id !== ROOT_SKETCH_ID && sketch.kind !== "root")];
       if (!definition.sketches.some((sketch) => sketch.kind !== "root")) {
-        definition.sketches.push({ id: DEFAULT_SKETCH_ID, name: DEFAULT_SKETCH_NAME, parentSketchId: ROOT_SKETCH_ID, kind: "sketch", visible: true });
+        definition.sketches.push({ id: DEFAULT_SKETCH_ID, name: DEFAULT_SKETCH_NAME, parentSketchId: ROOT_SKETCH_ID, kind: "sketch", appearance: {} });
       }
       const sketchIds = new Set(definition.sketches.map((sketch) => String(sketch.id)));
       for (const sketch of definition.sketches) {
@@ -413,7 +432,8 @@
         if (sketch === root) continue;
         sketch.kind = "sketch";
         sketch.name = String(sketch.name || sketch.id);
-        sketch.visible = sketch.visible !== false;
+        sketch.appearance = normalizeAppearance(sketch.appearance || (sketch.visible === false ? { visible: false } : {}));
+        sketch.visible = sketch.appearance.visible !== false;
         sketch.parentSketchId = sketch.parentSketchId == null ? ROOT_SKETCH_ID : String(sketch.parentSketchId);
         if (sketch.parentSketchId === sketch.id || !sketchIds.has(sketch.parentSketchId)) sketch.parentSketchId = ROOT_SKETCH_ID;
       }
@@ -428,6 +448,7 @@
       for (const item of [...definition.points, ...definition.lines, ...definition.circles, ...definition.arcs, ...definition.constraints]) {
         if (!sketchIds.has(String(item.sketchId)) || item.sketchId === ROOT_SKETCH_ID) item.sketchId = fallbackSketchId;
         else item.sketchId = String(item.sketchId);
+        if (item instanceof Point || item instanceof Line || item instanceof Circle || item instanceof Arc) item.appearance = normalizeAppearance(item.appearance);
       }
       definition.revision = Number(definition.revision) || 0;
       return definition;
@@ -460,6 +481,7 @@
           instance.rotation = Number(instance.rotation) || 0;
           instance.fixed = Boolean(instance.fixed);
           instance.rotationLocked = Boolean(instance.rotationLocked);
+          instance.appearanceOverride = normalizeAppearance(instance.appearanceOverride);
           const nestedDefinition = model.blockDefinitions.find((item) => item.id === instance.definitionId);
           const nestedDrawableIds = blockDefinitionDrawableSketchIds(nestedDefinition);
           const requested = Array.isArray(instance.enabledSketchIds) ? instance.enabledSketchIds.map(String) : nestedDrawableIds;
@@ -486,6 +508,7 @@
       instance.rotation = Number(instance.rotation) || 0;
       instance.fixed = Boolean(instance.fixed);
       instance.rotationLocked = Boolean(instance.rotationLocked);
+      instance.appearanceOverride = normalizeAppearance(instance.appearanceOverride);
       const definition = model.blockDefinitions.find((item) => item.id === instance.definitionId);
       const drawableIds = blockDefinitionDrawableSketchIds(definition);
       const requested = Array.isArray(instance.enabledSketchIds) ? instance.enabledSketchIds.map(String) : drawableIds;
@@ -497,106 +520,46 @@
 
   function ensureModelState() {
     ensureSketchState();
-    ensurePresentationState();
+    ensureAppearanceState();
     ensureBlockState();
   }
 
   function isGeometryMode() {
-    return model.appMode !== "presentation";
+    return true;
   }
 
-  function isPresentationMode() {
-    return model.appMode === "presentation";
+  function nextAnnotationId() {
+    return `AN${annotationSeq++}`;
   }
 
-  function activePresentationSheet() {
-    ensurePresentationState();
-    return model.presentationSheets.find((sheet) => sheet.id === model.activePresentationSheetId) || model.presentationSheets[0];
-  }
-
-  function nextPresentationElementId() {
-    return `PE${presentationElementSeq++}`;
-  }
-
-  function pushPresentationElement(element) {
-    const sheet = activePresentationSheet();
-    if (!sheet) return null;
-    if (!Array.isArray(sheet.elements)) sheet.elements = [];
+  function pushAnnotation(element) {
     const item = {
-      id: nextPresentationElementId(),
+      id: nextAnnotationId(),
       visible: true,
-      geometryRefs: {},
       style: {},
       ...element,
     };
-    sheet.elements.push(item);
+    model.annotations.push(item);
     updateUI();
     draw();
     return item;
   }
 
-  function normalizePresentationElementStyles(styles) {
-    const result = {};
-    if (!styles || typeof styles !== "object" || Array.isArray(styles)) return result;
-    for (const [key, value] of Object.entries(styles)) {
-      if (!value || typeof value !== "object") continue;
-      const normalized = {};
-      if (Object.prototype.hasOwnProperty.call(value, "visible")) normalized.visible = value.visible !== false;
-      if (typeof value.color === "string" && /^#[0-9a-fA-F]{6}$/.test(value.color)) normalized.color = value.color;
-      if (["solid", "dashed", "dashdot", "dotted"].includes(value.lineType)) normalized.lineType = value.lineType;
-      const lineWidthPx = Number(value.lineWidthPx);
-      if (Number.isFinite(lineWidthPx)) normalized.lineWidthPx = Math.max(0.5, Math.min(10, lineWidthPx));
-      const opacity = Number(value.opacity);
-      if (Number.isFinite(opacity)) normalized.opacity = Math.max(0.05, Math.min(1, opacity));
-      result[key] = normalized;
-    }
-    return result;
-  }
-
-  function normalizePresentationElements(elements) {
-    if (!Array.isArray(elements)) return [];
-    return elements
-      .map((element, index) => {
-        if (!element || typeof element !== "object") return null;
-        const type = String(element.type || "");
-        if (!["annotationDimension", "leader"].includes(type)) return null;
-        return {
-          id: String(element.id || `PE${index + 1}`),
-          type,
-          visible: element.visible !== false,
-          geometryRefs: element.geometryRefs && typeof element.geometryRefs === "object" ? { ...element.geometryRefs } : {},
-          target: element.target && typeof element.target === "object" ? { ...element.target } : null,
-          dimension: element.dimension && typeof element.dimension === "object" ? { ...element.dimension } : null,
-          text: String(element.text || ""),
-          x: Number.isFinite(Number(element.x)) ? Number(element.x) : 0,
-          y: Number.isFinite(Number(element.y)) ? Number(element.y) : 0,
-          start: element.start && Number.isFinite(Number(element.start.x)) && Number.isFinite(Number(element.start.y)) ? { x: Number(element.start.x), y: Number(element.start.y) } : null,
-          elbow: element.elbow && Number.isFinite(Number(element.elbow.x)) && Number.isFinite(Number(element.elbow.y)) ? { x: Number(element.elbow.x), y: Number(element.elbow.y) } : null,
-          end: element.end && Number.isFinite(Number(element.end.x)) && Number.isFinite(Number(element.end.y)) ? { x: Number(element.end.x), y: Number(element.end.y) } : null,
-          style: element.style && typeof element.style === "object" ? { ...element.style } : {},
-        };
-      })
-      .filter(Boolean);
-  }
-
-  function serializePresentationElement(element) {
+  function serializeAnnotation(element) {
     const data = {
       id: element.id,
       type: element.type,
       visible: element.visible !== false,
-      geometryRefs: element.geometryRefs && typeof element.geometryRefs === "object" ? { ...element.geometryRefs } : {},
+      text: element.text || "",
+      x: Number(element.x) || 0,
+      y: Number(element.y) || 0,
       style: element.style && typeof element.style === "object" ? { ...element.style } : {},
     };
-    if (element.type === "annotationDimension") {
-      data.target = element.target;
-      data.dimension = element.dimension;
-    } else if (element.type === "leader") {
-      data.text = element.text || "";
+    if (element.type === "leader") {
+      data.geometryRef = element.geometryRef && typeof element.geometryRef === "object" ? { ...element.geometryRef } : null;
       data.start = element.start;
       data.elbow = element.elbow;
       data.end = element.end;
-      data.x = element.x;
-      data.y = element.y;
     }
     return data;
   }
@@ -628,11 +591,11 @@
     });
   }
 
-  function presentationElementKey(item) {
+  function geometryElementKey(item) {
     return geometryRefKey(geometryRefForItem(item)) || "";
   }
 
-  function presentationElementFromKey(key) {
+  function geometryElementFromKey(key) {
     return resolveGeometryRef(parseGeometryRefKey(key));
   }
 
@@ -803,6 +766,7 @@
     const pathPrefix = Array.isArray(options.pathPrefix) ? options.pathPrefix.map(String) : [];
     const definitionResolver = options.definitionResolver || blockDefinitionById;
     const includeAllSketches = Boolean(options.includeAllSketches);
+    const appearanceOverrides = [instance.appearanceOverride, ...(options.appearanceOverrides || [])].filter(Boolean);
     const enabledSketchIds = includeAllSketches
       ? new Set(blockDefinitionDrawableSketchIds(definition))
       : enabledSketchIdsOverride
@@ -814,6 +778,7 @@
     const allPoints = definition.points.map((localPoint) => {
       const path = localPath(localPoint.id);
       const point = createProjectedPoint(instance, ownerInstance, definition, localPoint, path);
+      point.blockAppearanceOverrides = appearanceOverrides;
       pointByLocalId.set(localId("point", localPoint.id), point);
       return point;
     });
@@ -826,6 +791,7 @@
       item.blockDefinition = definition;
       item.localElement = localElement;
       item.blockLocalId = geometryRefId(createGeometryRef(kind, path));
+      item.blockAppearanceOverrides = appearanceOverrides;
       return item;
     };
     const lines = definition.lines.filter((localLine) => enabledSketchIds.has(String(localLine.sketchId))).map((localLine) => mark(new Line(localLine.id, pointByLocalId.get(localId("point", localLine.p1.id)), pointByLocalId.get(localId("point", localLine.p2.id)), localLine.construction), localLine, "line"));
@@ -865,6 +831,7 @@
         definitionResolver,
         includeAllSketches,
         visiting: nextVisiting,
+        appearanceOverrides,
       });
       points.push(...nestedBundle.points);
       lines.push(...nestedBundle.lines);
@@ -928,60 +895,55 @@
     return data;
   }
 
-  function presentationBaseStyle(item) {
+  function effectiveAppearanceForElement(item) {
+    let result = { ...normalizeAppearance(model.defaultAppearance, { partial: false }) };
     const construction = (item instanceof Line || item instanceof Circle || item instanceof Arc) && item.construction;
-    return construction ? DEFAULT_PRESENTATION_CONSTRUCTION_STYLE : DEFAULT_PRESENTATION_STYLE;
+    if (construction) result = { ...result, ...DEFAULT_CONSTRUCTION_APPEARANCE };
+    const outerSketch = sketchById(elementSketchId(item));
+    if (outerSketch) result = cascadeSketchAppearance(outerSketch, model.sketches, result);
+    if (item?.blockProjection) {
+      const definitionSketch = item.blockDefinition?.sketches?.find((sketch) => sketch.id === item.localElement?.sketchId);
+      if (definitionSketch) result = cascadeSketchAppearance(definitionSketch, item.blockDefinition.sketches, result);
+      result = { ...result, ...normalizeAppearance(item.localElement?.appearance) };
+      for (const override of item.blockAppearanceOverrides || [item.blockInstance?.appearanceOverride]) result = { ...result, ...normalizeAppearance(override) };
+    } else {
+      result = { ...result, ...normalizeAppearance(item?.appearance) };
+    }
+    return result;
   }
 
-  function presentationStyleForElement(item) {
-    const key = presentationElementKey(item);
-    const sheet = activePresentationSheet();
-    const override = key ? sheet?.elementStyles?.[key] || {} : {};
-    return { ...presentationBaseStyle(item), ...override };
-  }
-
-  function presentationLineDash(lineType) {
+  function appearanceLineDash(lineType) {
     if (lineType === "dashed") return [10 / viewport.scale, 6 / viewport.scale];
     if (lineType === "dashdot") return [12 / viewport.scale, 4 / viewport.scale, 2 / viewport.scale, 4 / viewport.scale];
     if (lineType === "dotted") return [2 / viewport.scale, 5 / viewport.scale];
     return [];
   }
 
-  function presentationSelectedItems() {
+  function selectedGeometryItems() {
     return [...selectedPoints, ...selectedLines, ...selectedCircles, ...selectedArcs];
   }
 
-  function selectedPresentationStyle() {
-    const items = presentationSelectedItems();
-    if (items.length === 0) return { ...DEFAULT_PRESENTATION_STYLE };
-    const first = presentationStyleForElement(items[0]);
-    const mixed = { ...first };
-    for (const item of items.slice(1)) {
-      const style = presentationStyleForElement(item);
-      for (const key of ["visible", "color", "lineType", "lineWidthPx", "opacity"]) {
-        if (mixed[key] !== style[key]) mixed[key] = "";
-      }
+  function appearanceSelectionTarget() {
+    if (selectedBlockInstances.length === 1 && selectedGeometryItems().length === 0) {
+      return { kind: "blockInstance", item: selectedBlockInstances[0], key: "appearanceOverride" };
     }
-    return mixed;
+    const items = selectedGeometryItems().filter((item) => !item.blockProjection);
+    if (items.length !== 1 || selectedBlockInstances.length > 0) return null;
+    return { kind: "geometry", item: items[0], key: "appearance" };
   }
 
-  function setPresentationStyleForSelection(patch) {
-    const sheet = activePresentationSheet();
-    const items = presentationSelectedItems();
-    if (!sheet || items.length === 0) return;
-    if (!sheet.elementStyles || typeof sheet.elementStyles !== "object") sheet.elementStyles = {};
-    for (const item of items) {
-      const key = presentationElementKey(item);
-      if (!key) continue;
-      const current = sheet.elementStyles[key] || {};
-      sheet.elementStyles[key] = { ...current, ...patch };
-    }
-    updatePresentationUI();
+  function setAppearanceForSelection(patch) {
+    const target = appearanceSelectionTarget();
+    if (!target) return false;
+    target.item[target.key] = normalizeAppearance({ ...target.item[target.key], ...patch });
+    if (target.kind === "blockInstance") invalidateBlockProjectionCache(target.item.id);
+    updatePropertiesUI();
     draw();
-    recordHistory("Presentation style");
+    recordHistory("Appearance変更");
+    return true;
   }
 
-  function setPresentationSelection(hit, additive = false) {
+  function setGeometrySelection(hit, additive = false) {
     if (!additive) {
       selectedPoints = [];
       selectedLines = [];
@@ -1007,225 +969,65 @@
     }
   }
 
-  function presentationTargetFromSelection() {
-    return presentationTargetFromOperands(presentationOperandsFromSelection());
-  }
-
-  function presentationOperandFromHit(hit) {
-    if (!hit?.item) return null;
-    if (hit.kind === "point") return { kind: "point", item: hit.item };
-    if (hit.kind === "line") return { kind: "line", item: hit.item };
-    if (hit.kind === "circle" || hit.kind === "arc") return { kind: "primitive", item: hit.item };
-    return null;
-  }
-
-  function presentationOperandsFromSelection() {
-    return [
-      ...selectedPoints.map((item) => ({ kind: "point", item })),
-      ...selectedLines.map((item) => ({ kind: "line", item })),
-      ...selectedCircles.map((item) => ({ kind: "primitive", item })),
-      ...selectedArcs.map((item) => ({ kind: "primitive", item })),
-    ];
-  }
-
-  function samePresentationOperand(a, b) {
-    return Boolean(a && b && a.kind === b.kind && a.item === b.item);
-  }
-
-  function presentationTargetFromOperands(operands = []) {
-    const unique = [];
-    for (const operand of operands) {
-      if (!operand?.item || unique.some((item) => samePresentationOperand(item, operand))) continue;
-      unique.push(operand);
-    }
-    const points = unique.filter((operand) => operand.kind === "point").map((operand) => operand.item);
-    const lines = unique.filter((operand) => operand.kind === "line").map((operand) => operand.item);
-    const primitives = unique.filter((operand) => operand.kind === "primitive").map((operand) => operand.item);
-    if (points.length === 2 && lines.length === 0 && primitives.length === 0) {
-      return { kind: "point-point", p1: points[0], p2: points[1], value: hypot2(points[1].x - points[0].x, points[1].y - points[0].y) };
-    }
-    if (points.length === 1 && lines.length === 1 && primitives.length === 0) {
-      return { kind: "point-line", point: points[0], line: lines[0], value: Math.abs(signedPointLineDistance(points[0], lines[0])) };
-    }
-    if (points.length === 0 && lines.length === 1 && primitives.length === 0) {
-      const [line] = lines;
-      return { kind: "line-length", line, p1: line.p1, p2: line.p2, value: line.length() };
-    }
-    if (points.length === 0 && lines.length === 2 && primitives.length === 0) {
-      if (linesNearlyParallelForDimension(lines[0], lines[1])) {
-        return { kind: "line-line", line1: lines[0], line2: lines[1], value: Math.abs(signedPointLineDistance(lines[0].p1, lines[1])) };
-      }
-      return { kind: "angle", line1: lines[0], line2: lines[1], value: angleDegrees(Math.abs(angleDimensionSweep({ line1: lines[0], line2: lines[1] }))), signedValue: angleDimensionSweep({ line1: lines[0], line2: lines[1] }) };
-    }
-    if (points.length === 0 && lines.length === 0 && primitives.length === 1) {
-      const primitive = primitives[0];
-      return primitive instanceof Circle ? { kind: "diameter", primitive, value: primitive.radius() * 2 } : { kind: "radius", primitive, value: primitive.radius() };
-    }
-    return null;
-  }
-
-  function linesNearlyParallelForDimension(line1, line2) {
-    if (!lineHasDirection(line1) || !lineHasDirection(line2)) return false;
-    const denom = Math.max(line1.length() * line2.length(), 1e-12);
-    const crossRatio = Math.abs(line1.dx() * line2.dy() - line1.dy() * line2.dx()) / denom;
-    return crossRatio <= Math.sin((5 * Math.PI) / 180);
-  }
-
-  function startPresentationDimensionPlacement(target, operands = [], pointer = null) {
-    pendingCommand = {
-      type: "presentation-dimension-place",
-      target,
-      targetData: presentationTargetToData(target),
-      operands: operands.slice(),
-      pointer: pointer || lastPointerWorld || dimensionAnchor(target, defaultDimensionForTarget(target)),
-    };
-    setHint("注記寸法線の位置をクリックしてください");
-    updatePresentationUI();
-    updateToolbar();
-    draw();
-  }
-
-  function createPresentationAnnotationDimension() {
-    if (!isPresentationMode()) return;
-    const target = presentationTargetFromSelection();
+  function createLeaderAnnotation() {
+    const target = annotationLeaderTargetFromSelection(lastPointerWorld);
     if (target) {
-      startPresentationDimensionPlacement(target, presentationOperandsFromSelection());
-      updateToolbar();
+      startLeaderAnnotationPlacement(target, lastPointerWorld);
       return;
     }
     clearSelection();
-    pendingCommand = { type: "presentation-dimension-select", operands: [] };
-    setHint("注記寸法対象をクリックしてください");
-    updatePresentationUI();
-    updateToolbar();
-    draw();
-  }
-
-  function enterPresentationSelectCommand(message = "プレゼンテーション選択") {
-    if (!isPresentationMode()) return;
-    pendingCommand = null;
-    pendingConstraintCommand = null;
-    setHint(message);
-    updatePresentationUI();
-    updateToolbar();
-    draw();
-  }
-
-  function handlePresentationDimensionTargetClick(hit, pointer) {
-    if (pendingCommand?.type !== "presentation-dimension-select") return false;
-    const operand = presentationOperandFromHit(hit);
-    if (!operand) {
-      setHint("注記寸法対象をクリックしてください", "error");
-      return true;
-    }
-    if (!pendingCommand.operands.some((item) => samePresentationOperand(item, operand))) {
-      pendingCommand.operands.push(operand);
-      setPresentationSelection(hit, true);
-    }
-    const target = presentationTargetFromOperands(pendingCommand.operands);
-    if (target) {
-      startPresentationDimensionPlacement(target, pendingCommand.operands, pointer);
-    } else {
-      setHint("次の注記寸法対象をクリックしてください");
-      updatePresentationUI();
-      draw();
-    }
-    return true;
-  }
-
-  function retargetPresentationDimensionWithHit(hit, pointer) {
-    if (pendingCommand?.type !== "presentation-dimension-place") return false;
-    const operand = presentationOperandFromHit(hit);
-    if (!operand) return false;
-    const operands = pendingCommand.operands?.length ? pendingCommand.operands.slice() : presentationOperandsFromSelection();
-    if (operands.some((item) => samePresentationOperand(item, operand))) return false;
-    operands.push(operand);
-    const target = presentationTargetFromOperands(operands);
-    if (!target) return false;
-    setPresentationSelection(hit, true);
-    startPresentationDimensionPlacement(target, operands, pointer);
-    return true;
-  }
-
-  function commitPresentationAnnotationDimensionAt(anchor) {
-    if (!pendingCommand || pendingCommand.type !== "presentation-dimension-place") return;
-    const target = pendingCommand.target;
-    const targetData = pendingCommand.targetData || presentationTargetToData(target);
-    const dimension = dimensionFromAnchor(target, anchor);
-    pushPresentationElement({
-      type: "annotationDimension",
-      target: targetData,
-      dimension,
-      geometryRefs: targetData || {},
-      style: {},
-    });
-    pendingCommand = null;
-    setHint("注記寸法を追加しました");
-    updateToolbar();
-    recordHistory("注記寸法追加");
-  }
-
-  function createPresentationLeader() {
-    if (!isPresentationMode()) return;
-    const target = presentationLeaderTargetFromSelection(lastPointerWorld);
-    if (target) {
-      startPresentationLeaderPlacement(target, lastPointerWorld);
-      return;
-    }
-    clearSelection();
-    pendingCommand = { type: "presentation-leader-select" };
+    pendingCommand = { type: "annotation-leader-select" };
     setHint("引出線を付ける図形をクリックしてください");
-    updatePresentationUI();
     updateToolbar();
     draw();
   }
 
-  function handlePresentationLeaderTargetClick(hit, pointer) {
-    if (pendingCommand?.type !== "presentation-leader-select") return false;
-    const target = presentationLeaderTargetFromHit(hit, pointer);
+  function handleLeaderAnnotationTargetClick(hit, pointer) {
+    if (pendingCommand?.type !== "annotation-leader-select") return false;
+    const target = annotationLeaderTargetFromHit(hit, pointer);
     if (!target) {
       setHint("引出線を付ける図形をクリックしてください", "error");
       return true;
     }
-    setPresentationSelection(hit, false);
-    startPresentationLeaderPlacement(target, pointer);
+    setGeometrySelection(hit, false);
+    startLeaderAnnotationPlacement(target, pointer);
     return true;
   }
 
-  function presentationLeaderTargetFromSelection(pointer = null) {
-    const items = presentationSelectedItems();
+  function annotationLeaderTargetFromSelection(pointer = null) {
+    const items = selectedGeometryItems();
     if (items.length !== 1) return null;
-    return presentationLeaderTargetFromItem(items[0], pointer);
+    return annotationLeaderTargetFromItem(items[0], pointer);
   }
 
-  function presentationLeaderTargetFromHit(hit, pointer = null) {
+  function annotationLeaderTargetFromHit(hit, pointer = null) {
     if (!hit?.item) return null;
-    return presentationLeaderTargetFromItem(hit.item, pointer);
+    return annotationLeaderTargetFromItem(hit.item, pointer);
   }
 
-  function presentationLeaderTargetFromItem(item, pointer = null) {
-    if (item instanceof Point) return { item, anchor: { x: item.x, y: item.y }, geometryRef: presentationElementKey(item) };
+  function annotationLeaderTargetFromItem(item, pointer = null) {
+    if (item instanceof Point) return { item, anchor: { x: item.x, y: item.y }, geometryRef: geometryRefForItem(item) };
     if (item instanceof Line) {
       const anchor = pointer ? projectPointToSegmentPoint(pointer, item) : { x: (item.p1.x + item.p2.x) / 2, y: (item.p1.y + item.p2.y) / 2 };
-      return { item, anchor, geometryRef: presentationElementKey(item) };
+      return { item, anchor, geometryRef: geometryRefForItem(item) };
     }
     if (item instanceof Circle) {
       const base = pointer || { x: item.center.x + item.radius(), y: item.center.y };
       const angle = Math.atan2(base.y - item.center.y, base.x - item.center.x);
-      return { item, anchor: { x: item.center.x + Math.cos(angle) * item.radius(), y: item.center.y + Math.sin(angle) * item.radius() }, geometryRef: presentationElementKey(item) };
+      return { item, anchor: { x: item.center.x + Math.cos(angle) * item.radius(), y: item.center.y + Math.sin(angle) * item.radius() }, geometryRef: geometryRefForItem(item) };
     }
     if (item instanceof Arc) {
       const base = pointer || arcEndpointPoint(item, "start");
       const angle = clampAngleToArcSweep(item, Math.atan2(base.y - item.center.y, base.x - item.center.x));
-      return { item, anchor: { x: item.center.x + Math.cos(angle) * item.radius(), y: item.center.y + Math.sin(angle) * item.radius() }, geometryRef: presentationElementKey(item) };
+      return { item, anchor: { x: item.center.x + Math.cos(angle) * item.radius(), y: item.center.y + Math.sin(angle) * item.radius() }, geometryRef: geometryRefForItem(item) };
     }
     return null;
   }
 
-  function presentationLeaderAnchorForElement(element) {
-    const item = presentationElementFromKey(element?.geometryRefs?.target);
+  function annotationLeaderAnchor(element) {
+    const item = resolveGeometryRef(element?.geometryRef);
     if (!item) return element?.start || null;
-    return presentationLeaderTargetFromItem(item, element.start || null)?.anchor || element.start || null;
+    return annotationLeaderTargetFromItem(item, element.start || null)?.anchor || element.start || null;
   }
 
   function clampAngleToArcSweep(arc, angle) {
@@ -1239,9 +1041,9 @@
     return hypot2(point.x - start.x, point.y - start.y) <= hypot2(point.x - end.x, point.y - end.y) ? arc.startAngle : arc.endAngle;
   }
 
-  function startPresentationLeaderPlacement(target, pointer = null) {
+  function startLeaderAnnotationPlacement(target, pointer = null) {
     pendingCommand = {
-      type: "presentation-leader-place",
+      type: "annotation-leader-place",
       leaderTarget: target,
       pointer: pointer || {
         x: target.anchor.x + 90 / viewport.scale,
@@ -1249,12 +1051,11 @@
       },
     };
     setHint("引出線の文字位置をクリックしてください");
-    updatePresentationUI();
     updateToolbar();
     draw();
   }
 
-  function presentationLeaderLayout(anchor, pointer) {
+  function annotationLeaderLayout(anchor, pointer) {
     const side = pointer.x >= anchor.x ? 1 : -1;
     const minShelf = 64 / viewport.scale;
     const end = { x: pointer.x, y: pointer.y };
@@ -1268,10 +1069,10 @@
     return { start: anchor, elbow, end, text };
   }
 
-  function commitPresentationLeaderAt(pointer) {
-    if (pendingCommand?.type !== "presentation-leader-place" || !pendingCommand.leaderTarget) return;
+  function commitLeaderAnnotationAt(pointer) {
+    if (pendingCommand?.type !== "annotation-leader-place" || !pendingCommand.leaderTarget) return;
     const target = pendingCommand.leaderTarget;
-    const layout = presentationLeaderLayout(target.anchor, pointer);
+    const layout = annotationLeaderLayout(target.anchor, pointer);
     const text = window.prompt("引出線テキスト", "注記");
     if (!text) {
       setHint("引出線をキャンセルしました");
@@ -1280,7 +1081,7 @@
       draw();
       return;
     }
-    pushPresentationElement({
+    pushAnnotation({
       type: "leader",
       text,
       start: layout.start,
@@ -1288,8 +1089,8 @@
       end: layout.end,
       x: layout.text.x,
       y: layout.text.y,
-      geometryRefs: { target: target.geometryRef },
-      style: { color: "#111827", fontSize: 13, lineWidthPx: 1.4 },
+      geometryRef: target.geometryRef,
+      style: { color: "#111827", fontSize: 13, lineWidth: 1.4 },
     });
     pendingCommand = null;
     setHint("引出線を追加しました");
@@ -1297,27 +1098,40 @@
     recordHistory("引出線追加");
   }
 
-  function drawPresentationLeaderCommandPreview() {
-    if (pendingCommand?.type !== "presentation-leader-place" || !pendingCommand.leaderTarget) return;
-    const layout = presentationLeaderLayout(pendingCommand.leaderTarget.anchor, pendingCommand.pointer);
-    drawPresentationLeader({
+  function drawLeaderAnnotationCommandPreview() {
+    if (pendingCommand?.type !== "annotation-leader-place" || !pendingCommand.leaderTarget) return;
+    const layout = annotationLeaderLayout(pendingCommand.leaderTarget.anchor, pendingCommand.pointer);
+    drawAnnotationLeader({
       start: layout.start,
       elbow: layout.elbow,
       end: layout.end,
       x: layout.text.x,
       y: layout.text.y,
       text: "注記",
-      style: { color: "#2563eb", fontSize: 13, lineWidthPx: 1.4 },
+      style: { color: "#2563eb", fontSize: 13, lineWidth: 1.4 },
     }, true);
   }
 
-  function rejectPresentationGeometryEdit(action = "Geometry editing") {
-    if (isGeometryMode()) return false;
-    setHint(`${action} is disabled in Presentation Mode`, "error");
-    cancelConstraintTargetCommand("");
-    clearSnap();
-    pointerPreview = null;
-    trimPreview = null;
+  function createTextAnnotation() {
+    cancelPendingCommand("");
+    pendingCommand = { type: "annotation-text-place", pointer: lastPointerWorld || { x: 0, y: 0 } };
+    setHint("テキストを配置する位置をクリックしてください");
+    updateToolbar();
+    draw();
+  }
+
+  function commitTextAnnotationAt(pointer) {
+    if (pendingCommand?.type !== "annotation-text-place") return false;
+    const text = window.prompt("テキスト", "注記");
+    if (text) {
+      pushAnnotation({ type: "text", text, x: pointer.x, y: pointer.y, style: { color: "#111827", fontSize: 13 } });
+      recordHistory("テキスト追加");
+      setHint("テキストを追加しました");
+    } else {
+      setHint("テキストをキャンセルしました");
+    }
+    pendingCommand = null;
+    updateToolbar();
     draw();
     return true;
   }
@@ -1580,13 +1394,15 @@
 
   function isVisibleSketchId(sketchId) {
     const id = sketchId || activeSketchId();
-    if (id === activeSketchId()) return true;
+    if (viewState.constraintStatus) return true;
     const sketch = sketchById(id);
-    return Boolean(sketch && sketch.visible !== false);
+    if (!sketch) return false;
+    const appearance = effectiveAppearanceForSketch(sketch);
+    return appearance.visible !== false;
   }
 
   function isVisibleSketchElement(item) {
-    return isVisibleSketchId(elementSketchId(item));
+    return viewState.constraintStatus || (isVisibleSketchId(elementSketchId(item)) && effectiveAppearanceForElement(item).visible !== false);
   }
 
   function sketchRelationToActive(sketchId) {
@@ -2054,10 +1870,16 @@
     return 0;
   }
 
-  function geometryStrokeWidth(item, { auxiliaryHighlighted = false, selected = false, hovered = false, presentationStyle = null, construction = false } = {}) {
+  function geometryDisplayColor(item, appearance, selected = false, hovered = false) {
+    if (selected) return "#1d4ed8";
+    if (hovered) return "#3b82f6";
+    return viewState.constraintStatus ? constraintStatusColor(item) : appearance.color;
+  }
+
+  function geometryStrokeWidth(item, { auxiliaryHighlighted = false, selected = false, hovered = false, appearance = null, construction = false } = {}) {
     if (auxiliaryHighlighted || selected) return 3;
     if (hovered) return 2.2;
-    if (presentationStyle) return presentationStyle.lineWidthPx;
+    if (appearance) return appearance.lineWidth;
     if (construction) return Math.max(0.9, sketchStrokeWidth(item) * 0.55);
     return sketchStrokeWidth(item);
   }
@@ -2302,15 +2124,9 @@
         internalConstraints.push(constraint);
       }
     }
-    const selectedIds = new Set(geometry.map((item) => item.id));
-    for (const sheet of model.presentationSheets) {
-      for (const element of sheet.elements || []) {
-        if (Object.values(element.geometryRefs || {}).map(String).some((value) => {
-          if (selectedIds.has(value)) return true;
-          const referenced = presentationElementFromKey(value);
-          return referenced ? isSelectedNode(referenced) : false;
-        })) return { error: `Presentation注記 ${element.id} が選択図形を参照しています` };
-      }
+    for (const annotation of model.annotations) {
+      const referenced = annotation.type === "leader" ? resolveGeometryRef(annotation.geometryRef) : null;
+      if (referenced && isSelectedNode(referenced)) return { error: `注記 ${annotation.id} が選択図形を参照しています` };
     }
     return { points: [...points], lines, circles, arcs, blockInstances, projectedGeometry, constraints: internalConstraints, externalConstraints };
   }
@@ -2334,8 +2150,8 @@
   function createBlockSketchState() {
     return {
       sketches: [
-        { id: ROOT_SKETCH_ID, name: ROOT_SKETCH_NAME, parentSketchId: null, kind: "root", visible: true },
-        { id: DEFAULT_SKETCH_ID, name: DEFAULT_SKETCH_NAME, parentSketchId: ROOT_SKETCH_ID, kind: "sketch", visible: true },
+        { id: ROOT_SKETCH_ID, name: ROOT_SKETCH_NAME, parentSketchId: null, kind: "root", appearance: {} },
+        { id: DEFAULT_SKETCH_ID, name: DEFAULT_SKETCH_NAME, parentSketchId: ROOT_SKETCH_ID, kind: "sketch", appearance: {} },
       ],
       activeSketchId: DEFAULT_SKETCH_ID,
     };
@@ -2371,6 +2187,7 @@
       fixed: Boolean(instance.fixed),
       rotationLocked: Boolean(instance.rotationLocked),
       enabledSketchIds: Array.isArray(instance.enabledSketchIds) ? instance.enabledSketchIds.slice() : [],
+      appearanceOverride: normalizeAppearance(instance.appearanceOverride),
     };
   }
 
@@ -2380,6 +2197,7 @@
     const points = selection.points.map((source) => {
       const point = new Point(source.id, source.x - origin.x, source.y - origin.y, source.fixed, source.kind || "endpoint");
       point.sketchId = DEFAULT_SKETCH_ID;
+      point.appearance = normalizeAppearance(source.appearance);
       pointById.set(point.id, point);
       return point;
     });
@@ -2387,6 +2205,7 @@
     const lines = selection.lines.map((source) => {
       const line = new Line(source.id, pointById.get(source.p1.id), pointById.get(source.p2.id), source.construction);
       line.sketchId = DEFAULT_SKETCH_ID;
+      line.appearance = normalizeAppearance(source.appearance);
       lineById.set(line.id, line);
       return line;
     });
@@ -2394,12 +2213,14 @@
     const circles = selection.circles.map((source) => {
       const circle = new Circle(source.id, pointById.get(source.center.id), source.radius(), source.construction);
       circle.sketchId = DEFAULT_SKETCH_ID;
+      circle.appearance = normalizeAppearance(source.appearance);
       primitiveById.set(circle.id, circle);
       return circle;
     });
     const arcs = selection.arcs.map((source) => {
       const arc = new Arc(source.id, pointById.get(source.center.id), source.radius(), source.startAngle, source.endAngle, source.construction);
       arc.sketchId = DEFAULT_SKETCH_ID;
+      arc.appearance = normalizeAppearance(source.appearance);
       primitiveById.set(arc.id, arc);
       return arc;
     });
@@ -2430,6 +2251,7 @@
     const points = definition.points.map((source) => {
       const point = new Point(source.id, source.x, source.y, source.fixed, source.kind || "endpoint");
       point.sketchId = source.sketchId;
+      point.appearance = normalizeAppearance(source.appearance);
       pointById.set(point.id, point);
       return point;
     });
@@ -2437,6 +2259,7 @@
     const lines = definition.lines.map((source) => {
       const line = new Line(source.id, pointById.get(source.p1.id), pointById.get(source.p2.id), source.construction);
       line.sketchId = source.sketchId;
+      line.appearance = normalizeAppearance(source.appearance);
       lineById.set(line.id, line);
       return line;
     });
@@ -2444,12 +2267,14 @@
     const circles = definition.circles.map((source) => {
       const circle = new Circle(source.id, pointById.get(source.center.id), source.radius(), source.construction);
       circle.sketchId = source.sketchId;
+      circle.appearance = normalizeAppearance(source.appearance);
       primitiveById.set(circle.id, circle);
       return circle;
     });
     const arcs = definition.arcs.map((source) => {
       const arc = new Arc(source.id, pointById.get(source.center.id), source.radius(), source.startAngle, source.endAngle, source.construction);
       arc.sketchId = source.sketchId;
+      arc.appearance = normalizeAppearance(source.appearance);
       primitiveById.set(arc.id, arc);
       return arc;
     });
@@ -2464,7 +2289,7 @@
       name: definition.name,
       parentDefinitionId: definition.parentDefinitionId || null,
       origin: { x: Number(definition.origin?.x) || 0, y: Number(definition.origin?.y) || 0 },
-      sketches: definition.sketches.map((sketch) => ({ ...sketch })),
+      sketches: definition.sketches.map((sketch) => ({ ...sketch, appearance: normalizeAppearance(sketch.appearance) })),
       activeSketchId: definition.activeSketchId,
       points,
       lines,
@@ -2682,7 +2507,6 @@
       blockInstances: model.blockInstances,
       sketches: model.sketches,
       activeSketchId: model.activeSketchId,
-      appMode: model.appMode,
       viewport: { ...viewport },
     };
     const defaultName = `Block-${blockDefinitionSeq}`;
@@ -2739,7 +2563,7 @@
     }
     const committedRotation = blockPlacementRotationLocked ? snappedBlockRotation(rotation) : rotation;
     const translation = blockInstanceTranslationForAnchor(definition, enabledSketchIds, blockPlacementAnchor, committedRotation);
-    const instance = { id: `BI${blockInstanceSeq++}`, definitionId: definition.id, sketchId: activeSketchId(), x: translation.x, y: translation.y, rotation: committedRotation, fixed: false, rotationLocked: blockPlacementRotationLocked, enabledSketchIds: enabledSketchIds.slice() };
+    const instance = { id: `BI${blockInstanceSeq++}`, definitionId: definition.id, sketchId: activeSketchId(), x: translation.x, y: translation.y, rotation: committedRotation, fixed: false, rotationLocked: blockPlacementRotationLocked, enabledSketchIds: enabledSketchIds.slice(), appearanceOverride: {} };
     model.blockInstances.push(instance);
     invalidateBlockProjectionCache(instance.id);
     clearSelection();
@@ -2785,7 +2609,6 @@
       blockInstances: model.blockInstances,
       sketches: model.sketches,
       activeSketchId: model.activeSketchId,
-      appMode: model.appMode,
       viewport: { ...viewport },
     };
     const sourceDefinition = options.sourceDefinition || null;
@@ -2804,7 +2627,7 @@
       transientDefinitionIds: new Set(options.initialTransientDefinitionIds || []),
       definitionRollbackEntries: new Map(options.definitionRollbackEntries || []),
       originalProjectionIds: new Set(originalProjectionItems.map((item) => item.id)),
-      originalProjectionKeys: new Set(originalProjectionItems.map(presentationElementKey)),
+      originalProjectionKeys: new Set(originalProjectionItems.map(geometryElementKey)),
       historyUndo: [],
       historyRedo: [],
     };
@@ -2816,7 +2639,6 @@
     model.blockInstances = draft.blockInstances || [];
     model.sketches = draft.sketches;
     model.activeSketchId = draft.activeSketchId;
-    model.appMode = "geometry";
     reserveGeometryElementSequences(draft);
     sketchSeq = Math.max(sketchSeq, nextSeq(draft.sketches || [], "S"));
     resetBlockEditorHistory();
@@ -2903,6 +2725,7 @@
       point.fixed = source.fixed;
       point.kind = source.kind;
       point.sketchId = source.sketchId;
+      point.appearance = normalizeAppearance(source.appearance);
       pointById.set(point.id, point);
       return point;
     });
@@ -2914,6 +2737,7 @@
       line.p2 = pointById.get(source.p2.id);
       line.construction = source.construction;
       line.sketchId = source.sketchId;
+      line.appearance = normalizeAppearance(source.appearance);
       lineById.set(line.id, line);
       return line;
     });
@@ -2925,6 +2749,7 @@
       circle.radiusValue = source.radius();
       circle.construction = source.construction;
       circle.sketchId = source.sketchId;
+      circle.appearance = normalizeAppearance(source.appearance);
       primitiveById.set(circle.id, circle);
       return circle;
     });
@@ -2937,6 +2762,7 @@
       arc.endAngle = source.endAngle;
       arc.construction = source.construction;
       arc.sketchId = source.sketchId;
+      arc.appearance = normalizeAppearance(source.appearance);
       primitiveById.set(arc.id, arc);
       return arc;
     });
@@ -2951,6 +2777,7 @@
       instance.fixed = Boolean(source.fixed);
       instance.rotationLocked = Boolean(source.rotationLocked);
       instance.enabledSketchIds = Array.isArray(source.enabledSketchIds) ? source.enabledSketchIds.slice() : [];
+      instance.appearanceOverride = normalizeAppearance(source.appearanceOverride);
       return instance;
     });
     for (const instance of blockInstances) {
@@ -2961,7 +2788,7 @@
     target.name = draft.name;
     target.parentDefinitionId = draft.parentDefinitionId || null;
     target.origin = { ...draft.origin };
-    target.sketches = draft.sketches.map((sketch) => ({ ...sketch }));
+    target.sketches = draft.sketches.map((sketch) => ({ ...sketch, appearance: normalizeAppearance(sketch.appearance) }));
     target.activeSketchId = draft.activeSketchId;
     target.points = points;
     target.lines = lines;
@@ -2983,7 +2810,6 @@
     model.blockInstances = original.blockInstances;
     model.sketches = original.sketches;
     model.activeSketchId = original.activeSketchId;
-    model.appMode = original.appMode;
     Object.assign(viewport, original.viewport);
     blockEditSession = session.parentSession || null;
     document.body.classList.toggle("block-editing", Boolean(blockEditSession));
@@ -3020,7 +2846,7 @@
     draft.arcs = model.arcs;
     draft.blockInstances = model.blockInstances;
     draft.constraints = model.constraints;
-    draft.sketches = model.sketches.map((sketch) => ({ ...sketch }));
+    draft.sketches = model.sketches.map((sketch) => ({ ...sketch, appearance: normalizeAppearance(sketch.appearance) }));
     draft.activeSketchId = activeSketchId();
     const validation = validateBlockDraft(draft);
     if (!validation.success) {
@@ -3058,21 +2884,8 @@
       model.blockDefinitions.push(definition);
       if (creationSelection) {
         const enabledSketchIds = blockDefinitionGeometrySketchIds(definition);
-        createdInstance = { id: `BI${blockInstanceSeq++}`, definitionId: definition.id, sketchId: model.activeSketchId, x: session.replacementCenter.x, y: session.replacementCenter.y, rotation: 0, fixed: false, rotationLocked: true, enabledSketchIds };
+        createdInstance = { id: `BI${blockInstanceSeq++}`, definitionId: definition.id, sketchId: model.activeSketchId, x: session.replacementCenter.x, y: session.replacementCenter.y, rotation: 0, fixed: false, rotationLocked: true, enabledSketchIds, appearanceOverride: {} };
         model.blockInstances.push(createdInstance);
-        for (const sheet of model.presentationSheets) {
-          for (const source of [...creationSelection.points, ...creationSelection.lines, ...creationSelection.circles, ...creationSelection.arcs, ...(creationSelection.projectedGeometry || [])]) {
-            const oldKey = presentationElementKey(source);
-            const style = sheet.elementStyles?.[oldKey];
-            if (!style) continue;
-            const sourceRef = geometryRefForItem(source);
-            const projectedRef = sourceRef ? createGeometryRef(sourceRef.kind, [String(createdInstance.id), ...sourceRef.path]) : null;
-            const projectedKey = geometryRefKey(projectedRef);
-            if (!projectedKey) continue;
-            sheet.elementStyles[projectedKey] = { ...style };
-            delete sheet.elementStyles[oldKey];
-          }
-        }
         blockCreationExternalConstraints = creationSelection.externalConstraints || [];
         model.constraints = model.constraints.filter((constraint) => !creationSelection.constraints.includes(constraint) && !blockCreationExternalConstraints.includes(constraint));
         model.lines = model.lines.filter((line) => !creationSelection.lines.includes(line));
@@ -3107,23 +2920,17 @@
           }
         }
       }
-      for (const sheet of model.presentationSheets) {
-        for (const key of Object.keys(sheet.elementStyles || {})) if (removedProjectionKeys.has(key)) delete sheet.elementStyles[key];
-        sheet.elements = (sheet.elements || []).filter((element) => !valueReferencesRemovedGeometry(element.geometryRefs, removedProjectionIds, removedProjectionKeys));
-      }
+      model.annotations = model.annotations.filter((annotation) => !annotationReferencesRemovedGeometry(annotation, removedProjectionIds, removedProjectionKeys));
     }
     invalidateBlockProjectionCache();
     const currentProjectionItems = blockProjectionBundles().flatMap((bundle) => [...bundle.points, ...bundle.lines, ...bundle.circles, ...bundle.arcs]);
     const currentProjectionIds = new Set(currentProjectionItems.map((item) => item.id));
-    const currentProjectionKeys = new Set(currentProjectionItems.map(presentationElementKey));
+    const currentProjectionKeys = new Set(currentProjectionItems.map(geometryElementKey));
     const removedProjectionIds = new Set([...session.originalProjectionIds].filter((id) => !currentProjectionIds.has(id)));
     const removedProjectionKeys = new Set([...session.originalProjectionKeys].filter((key) => !currentProjectionKeys.has(key)));
     if (removedProjectionIds.size > 0) {
       model.constraints = model.constraints.filter((constraint) => !constraintGraphNodes(constraint).some((node) => removedProjectionIds.has(node?.id)));
-      for (const sheet of model.presentationSheets) {
-        for (const key of Object.keys(sheet.elementStyles || {})) if (removedProjectionKeys.has(key)) delete sheet.elementStyles[key];
-        sheet.elements = (sheet.elements || []).filter((element) => !valueReferencesRemovedGeometry(element.geometryRefs, removedProjectionIds, removedProjectionKeys));
-      }
+      model.annotations = model.annotations.filter((annotation) => !annotationReferencesRemovedGeometry(annotation, removedProjectionIds, removedProjectionKeys));
     }
     const affectedSketchIds = [...new Set(model.blockInstances.filter((instance) => blockDefinitionDependsOn(instance.definitionId, definition.id)).map((instance) => instance.sketchId))];
     for (const sketchId of affectedSketchIds) {
@@ -3447,6 +3254,7 @@
     selectedArcEndpointPair = null;
     selectedDimensionConstraint = null;
     selectedConstraint = null;
+    selectedAnnotation = null;
     selectedBlockInstances = [];
     hoveredBlockInstance = null;
     pointSeq = 1;
@@ -3454,7 +3262,7 @@
     circleSeq = 1;
     arcSeq = 1;
     sketchSeq = 2;
-    presentationSheetSeq = 2;
+    annotationSeq = 1;
     blockDefinitionSeq = 1;
     blockInstanceSeq = 1;
     blockElementSeq = 1;
@@ -3464,13 +3272,12 @@
     blockPlacementRotationLocked = true;
     blockEditSession = null;
     model.sketches.length = 0;
-    model.sketches.push({ id: ROOT_SKETCH_ID, name: ROOT_SKETCH_NAME, parentSketchId: null, kind: "root", visible: true });
-    model.sketches.push({ id: DEFAULT_SKETCH_ID, name: DEFAULT_SKETCH_NAME, parentSketchId: ROOT_SKETCH_ID, kind: "sketch", visible: true });
+    model.sketches.push({ id: ROOT_SKETCH_ID, name: ROOT_SKETCH_NAME, parentSketchId: null, kind: "root", appearance: {} });
+    model.sketches.push({ id: DEFAULT_SKETCH_ID, name: DEFAULT_SKETCH_NAME, parentSketchId: ROOT_SKETCH_ID, kind: "sketch", appearance: {} });
     model.activeSketchId = DEFAULT_SKETCH_ID;
-    model.appMode = "geometry";
-    model.presentationSheets = [{ id: DEFAULT_PRESENTATION_SHEET_ID, name: DEFAULT_PRESENTATION_SHEET_NAME, visibleGeometrySketchIds: null, elementStyles: {}, elements: [] }];
-    model.activePresentationSheetId = DEFAULT_PRESENTATION_SHEET_ID;
-    presentationElementSeq = 1;
+    model.defaultAppearance = { ...DEFAULT_APPEARANCE };
+    model.annotations = [];
+    annotationDragSession = null;
   }
 
   function nextSeq(items, prefix) {
@@ -3510,6 +3317,7 @@
       offsetN: Number.isFinite(dimension.offsetN) ? dimension.offsetN : null,
       labelOffsetU: Number.isFinite(dimension.labelOffsetU) ? dimension.labelOffsetU : 0,
       axis,
+      display: dimension.display ? { ...dimensionDisplayState(dimension) } : null,
     };
     if (Number.isFinite(dimension.labelX) && Number.isFinite(dimension.labelY)) {
       data.labelX = Number(dimension.labelX);
@@ -3736,38 +3544,31 @@
   function serializeModel() {
     ensureModelState();
     return {
-      version: 8,
+      version: 9,
       savedAt: new Date().toISOString(),
       documentName: effectiveDocumentName(),
-      appMode: model.appMode,
+      defaultAppearance: normalizeAppearance(model.defaultAppearance, { partial: false }),
       sketches: model.sketches.map((sketch) => ({
         id: sketch.id,
         name: sketch.name,
         parentSketchId: sketch.parentSketchId || null,
         kind: isRootSketch(sketch) ? "root" : "sketch",
-        visible: isRootSketch(sketch) ? true : sketch.visible !== false,
+        appearance: normalizeAppearance(sketch.appearance),
       })),
       activeSketchId: activeSketchId(),
-      presentationSheets: model.presentationSheets.map((sheet) => ({
-        id: sheet.id,
-        name: sheet.name,
-        visibleGeometrySketchIds: Array.isArray(sheet.visibleGeometrySketchIds) ? sheet.visibleGeometrySketchIds.slice() : null,
-        elementStyles: normalizePresentationElementStyles(sheet.elementStyles),
-        elements: normalizePresentationElements(sheet.elements).map(serializePresentationElement),
-      })),
-      activePresentationSheetId: activePresentationSheet().id,
+      annotations: normalizeAnnotations(model.annotations).map(serializeAnnotation),
       blockDefinitions: model.blockDefinitions.map((definition) => ({
         id: definition.id,
         name: definition.name,
         parentDefinitionId: definition.parentDefinitionId || null,
         revision: Number(definition.revision) || 0,
         origin: { x: Number(definition.origin?.x) || 0, y: Number(definition.origin?.y) || 0 },
-        sketches: definition.sketches.map((sketch) => ({ id: sketch.id, name: sketch.name, parentSketchId: sketch.parentSketchId || null, kind: sketch.kind === "root" ? "root" : "sketch", visible: sketch.visible !== false })),
+        sketches: definition.sketches.map((sketch) => ({ id: sketch.id, name: sketch.name, parentSketchId: sketch.parentSketchId || null, kind: sketch.kind === "root" ? "root" : "sketch", appearance: normalizeAppearance(sketch.appearance) })),
         activeSketchId: definition.activeSketchId,
-        points: definition.points.map((point) => ({ id: point.id, x: point.x, y: point.y, fixed: point.fixed, kind: point.kind || "endpoint", sketchId: point.sketchId })),
-        lines: definition.lines.map((line) => ({ id: line.id, p1: line.p1.id, p2: line.p2.id, construction: Boolean(line.construction), sketchId: line.sketchId })),
-        circles: definition.circles.map((circle) => ({ id: circle.id, center: circle.center.id, radius: circle.radius(), construction: Boolean(circle.construction), sketchId: circle.sketchId })),
-        arcs: definition.arcs.map((arc) => ({ id: arc.id, center: arc.center.id, radius: arc.radius(), startAngle: arc.startAngle, endAngle: arc.endAngle, construction: Boolean(arc.construction), sketchId: arc.sketchId })),
+        points: definition.points.map((point) => ({ id: point.id, x: point.x, y: point.y, fixed: point.fixed, kind: point.kind || "endpoint", sketchId: point.sketchId, appearance: normalizeAppearance(point.appearance) })),
+        lines: definition.lines.map((line) => ({ id: line.id, p1: line.p1.id, p2: line.p2.id, construction: Boolean(line.construction), sketchId: line.sketchId, appearance: normalizeAppearance(line.appearance) })),
+        circles: definition.circles.map((circle) => ({ id: circle.id, center: circle.center.id, radius: circle.radius(), construction: Boolean(circle.construction), sketchId: circle.sketchId, appearance: normalizeAppearance(circle.appearance) })),
+        arcs: definition.arcs.map((arc) => ({ id: arc.id, center: arc.center.id, radius: arc.radius(), startAngle: arc.startAngle, endAngle: arc.endAngle, construction: Boolean(arc.construction), sketchId: arc.sketchId, appearance: normalizeAppearance(arc.appearance) })),
         blockInstances: (definition.blockInstances || []).map((instance) => ({
           id: instance.id,
           definitionId: instance.definitionId,
@@ -3778,6 +3579,7 @@
           fixed: Boolean(instance.fixed),
           rotationLocked: Boolean(instance.rotationLocked),
           enabledSketchIds: Array.isArray(instance.enabledSketchIds) ? instance.enabledSketchIds.slice() : [],
+          appearanceOverride: normalizeAppearance(instance.appearanceOverride),
         })),
         constraints: definition.constraints.map((constraint) => {
           const data = decorateSerializedConstraint(serializeConstraint(constraint), constraint);
@@ -3800,11 +3602,12 @@
         fixed: Boolean(instance.fixed),
         rotationLocked: Boolean(instance.rotationLocked),
         enabledSketchIds: Array.isArray(instance.enabledSketchIds) ? instance.enabledSketchIds.slice() : [],
+        appearanceOverride: normalizeAppearance(instance.appearanceOverride),
       })),
-      points: model.points.map((p) => ({ id: p.id, x: p.x, y: p.y, fixed: p.fixed, kind: p.kind || (isPointUsedByPrimitive(p) ? "endpoint" : "explicit"), sketchId: elementSketchId(p) })),
-      lines: model.lines.map((l) => ({ id: l.id, p1: l.p1.id, p2: l.p2.id, construction: Boolean(l.construction), sketchId: elementSketchId(l) })),
-      circles: model.circles.map((c) => ({ id: c.id, center: c.center.id, radius: c.radius(), construction: Boolean(c.construction), sketchId: elementSketchId(c) })),
-      arcs: model.arcs.map((a) => ({ id: a.id, center: a.center.id, radius: a.radius(), startAngle: a.startAngle, endAngle: a.endAngle, construction: Boolean(a.construction), sketchId: elementSketchId(a) })),
+      points: model.points.map((p) => ({ id: p.id, x: p.x, y: p.y, fixed: p.fixed, kind: p.kind || (isPointUsedByPrimitive(p) ? "endpoint" : "explicit"), sketchId: elementSketchId(p), appearance: normalizeAppearance(p.appearance) })),
+      lines: model.lines.map((l) => ({ id: l.id, p1: l.p1.id, p2: l.p2.id, construction: Boolean(l.construction), sketchId: elementSketchId(l), appearance: normalizeAppearance(l.appearance) })),
+      circles: model.circles.map((c) => ({ id: c.id, center: c.center.id, radius: c.radius(), construction: Boolean(c.construction), sketchId: elementSketchId(c), appearance: normalizeAppearance(c.appearance) })),
+      arcs: model.arcs.map((a) => ({ id: a.id, center: a.center.id, radius: a.radius(), startAngle: a.startAngle, endAngle: a.endAngle, construction: Boolean(a.construction), sketchId: elementSketchId(a), appearance: normalizeAppearance(a.appearance) })),
       constraints: model.constraints
         .map((constraint) => {
           const data = decorateSerializedConstraint(serializeConstraint(constraint), constraint);
@@ -4063,6 +3866,7 @@
           angleLabelOffsetT: data.dimension.angleLabelOffsetT != null && Number.isFinite(Number(data.dimension.angleLabelOffsetT)) ? Number(data.dimension.angleLabelOffsetT) : NaN,
           angleLabelPlacementVersion: Number.isInteger(data.dimension.angleLabelPlacementVersion) ? data.dimension.angleLabelPlacementVersion : null,
         };
+        if (data.dimension.display) constraint.dimension.display = { ...dimensionDisplayState({ display: data.dimension.display }) };
         if (constraint instanceof LineAngleConstraint && !Number.isInteger(data.startFlip) && Number.isInteger(constraint.dimension.angleStartFlip)) {
           constraint.startFlip = constraint.dimension.angleStartFlip ? 1 : 0;
           constraint.endFlip = constraint.dimension.angleEndFlip ? 1 : 0;
@@ -4086,25 +3890,27 @@
             name: String(sketch.name || sketch.id || `Sketch-${index + 1}`),
             parentSketchId: sketch.parentSketchId == null ? null : String(sketch.parentSketchId),
             kind: sketch.kind === "root" || sketch.id === ROOT_SKETCH_ID ? "root" : "sketch",
-            visible: sketch.visible !== false,
+            appearance: normalizeAppearance(sketch.appearance || (sketch.visible === false ? { visible: false } : {})),
           }))
-        : [{ id: DEFAULT_SKETCH_ID, name: DEFAULT_SKETCH_NAME, parentSketchId: ROOT_SKETCH_ID, kind: "sketch", visible: true }];
+        : [{ id: DEFAULT_SKETCH_ID, name: DEFAULT_SKETCH_NAME, parentSketchId: ROOT_SKETCH_ID, kind: "sketch", appearance: {} }];
     let loadedRoot = loadedSketches.find((sketch) => sketch.kind === "root" || sketch.id === ROOT_SKETCH_ID);
-    if (!loadedRoot) loadedRoot = { id: ROOT_SKETCH_ID, name: ROOT_SKETCH_NAME, parentSketchId: null, kind: "root", visible: true };
+    if (!loadedRoot) loadedRoot = { id: ROOT_SKETCH_ID, name: ROOT_SKETCH_NAME, parentSketchId: null, kind: "root", appearance: {} };
     loadedSketches = [loadedRoot, ...loadedSketches.filter((sketch) => sketch !== loadedRoot && sketch.kind !== "root" && sketch.id !== ROOT_SKETCH_ID)];
     loadedRoot.id = ROOT_SKETCH_ID;
     loadedRoot.name = loadedRoot.name || ROOT_SKETCH_NAME;
     loadedRoot.parentSketchId = null;
     loadedRoot.kind = "root";
+    loadedRoot.appearance = normalizeAppearance(loadedRoot.appearance);
     loadedRoot.visible = true;
     if (!loadedSketches.some((sketch) => sketch.kind !== "root")) {
-      loadedSketches.push({ id: DEFAULT_SKETCH_ID, name: DEFAULT_SKETCH_NAME, parentSketchId: ROOT_SKETCH_ID, kind: "sketch", visible: true });
+      loadedSketches.push({ id: DEFAULT_SKETCH_ID, name: DEFAULT_SKETCH_NAME, parentSketchId: ROOT_SKETCH_ID, kind: "sketch", appearance: {} });
     }
     const loadedSketchIds = new Set(loadedSketches.map((sketch) => sketch.id));
     for (const sketch of loadedSketches) {
       if (sketch.kind === "root") continue;
       sketch.kind = "sketch";
-      sketch.visible = sketch.visible !== false;
+      sketch.appearance = normalizeAppearance(sketch.appearance);
+      sketch.visible = sketch.appearance.visible !== false;
       if (sketch.parentSketchId === sketch.id || !loadedSketchIds.has(sketch.parentSketchId)) sketch.parentSketchId = ROOT_SKETCH_ID;
       if (sketch.parentSketchId == null) sketch.parentSketchId = ROOT_SKETCH_ID;
     }
@@ -4124,26 +3930,29 @@
             name: String(sketch.name || sketch.id || `Sketch-${index + 1}`),
             parentSketchId: sketch.parentSketchId == null ? null : String(sketch.parentSketchId),
             kind: sketch.kind === "root" || sketch.id === ROOT_SKETCH_ID ? "root" : "sketch",
-            visible: sketch.visible !== false,
+            appearance: normalizeAppearance(sketch.appearance || (sketch.visible === false ? { visible: false } : {})),
           }))
         : [
-            { id: ROOT_SKETCH_ID, name: ROOT_SKETCH_NAME, parentSketchId: null, kind: "root", visible: true },
-            { id: DEFAULT_SKETCH_ID, name: DEFAULT_SKETCH_NAME, parentSketchId: ROOT_SKETCH_ID, kind: "sketch", visible: true },
+            { id: ROOT_SKETCH_ID, name: ROOT_SKETCH_NAME, parentSketchId: null, kind: "root", appearance: {} },
+            { id: DEFAULT_SKETCH_ID, name: DEFAULT_SKETCH_NAME, parentSketchId: ROOT_SKETCH_ID, kind: "sketch", appearance: {} },
           ];
       let definitionRoot = definitionSketches.find((sketch) => sketch.kind === "root" || sketch.id === ROOT_SKETCH_ID);
-      if (!definitionRoot) definitionRoot = { id: ROOT_SKETCH_ID, name: ROOT_SKETCH_NAME, parentSketchId: null, kind: "root", visible: true };
+      if (!definitionRoot) definitionRoot = { id: ROOT_SKETCH_ID, name: ROOT_SKETCH_NAME, parentSketchId: null, kind: "root", appearance: {} };
       definitionSketches = [definitionRoot, ...definitionSketches.filter((sketch) => sketch !== definitionRoot && sketch.kind !== "root" && sketch.id !== ROOT_SKETCH_ID)];
       definitionRoot.id = ROOT_SKETCH_ID;
       definitionRoot.name = ROOT_SKETCH_NAME;
       definitionRoot.parentSketchId = null;
       definitionRoot.kind = "root";
+      definitionRoot.appearance = normalizeAppearance(definitionRoot.appearance);
       definitionRoot.visible = true;
-      if (!definitionSketches.some((sketch) => sketch.kind !== "root")) definitionSketches.push({ id: DEFAULT_SKETCH_ID, name: DEFAULT_SKETCH_NAME, parentSketchId: ROOT_SKETCH_ID, kind: "sketch", visible: true });
+      if (!definitionSketches.some((sketch) => sketch.kind !== "root")) definitionSketches.push({ id: DEFAULT_SKETCH_ID, name: DEFAULT_SKETCH_NAME, parentSketchId: ROOT_SKETCH_ID, kind: "sketch", appearance: {} });
       const definitionSketchIds = new Set(definitionSketches.map((sketch) => sketch.id));
       const definitionFallbackSketchId = definitionSketches.find((sketch) => sketch.kind !== "root")?.id || DEFAULT_SKETCH_ID;
       for (const sketch of definitionSketches) {
         if (sketch.kind === "root") continue;
         sketch.kind = "sketch";
+        sketch.appearance = normalizeAppearance(sketch.appearance);
+        sketch.visible = sketch.appearance.visible !== false;
         sketch.parentSketchId = sketch.parentSketchId == null ? ROOT_SKETCH_ID : String(sketch.parentSketchId);
         if (sketch.parentSketchId === sketch.id || !definitionSketchIds.has(sketch.parentSketchId)) sketch.parentSketchId = ROOT_SKETCH_ID;
       }
@@ -4155,6 +3964,7 @@
       const points = (rawDefinition.points || []).map((rawPoint) => {
         const point = new Point(String(rawPoint.id), Number(rawPoint.x), Number(rawPoint.y), Boolean(rawPoint.fixed), rawPoint.kind === "explicit" ? "explicit" : "endpoint");
         point.sketchId = normalizeDefinitionSketchId(rawPoint.sketchId);
+        point.appearance = normalizeAppearance(rawPoint.appearance);
         pointById.set(point.id, point);
         return point;
       });
@@ -4165,6 +3975,7 @@
         if (!p1 || !p2) throw new Error(`ブロック ${rawDefinition.id} の線端点が見つかりません`);
         const line = new Line(String(rawLine.id), p1, p2, Boolean(rawLine.construction));
         line.sketchId = normalizeDefinitionSketchId(rawLine.sketchId || p1.sketchId || p2.sketchId);
+        line.appearance = normalizeAppearance(rawLine.appearance);
         lineById.set(line.id, line);
         return line;
       });
@@ -4174,6 +3985,7 @@
         if (!center) throw new Error(`ブロック ${rawDefinition.id} の円中心が見つかりません`);
         const circle = new Circle(String(rawCircle.id), center, Number(rawCircle.radius), Boolean(rawCircle.construction));
         circle.sketchId = normalizeDefinitionSketchId(rawCircle.sketchId || center.sketchId);
+        circle.appearance = normalizeAppearance(rawCircle.appearance);
         primitiveById.set(circle.id, circle);
         return circle;
       });
@@ -4182,6 +3994,7 @@
         if (!center) throw new Error(`ブロック ${rawDefinition.id} の円弧中心が見つかりません`);
         const arc = new Arc(String(rawArc.id), center, Number(rawArc.radius), Number(rawArc.startAngle), Number(rawArc.endAngle), Boolean(rawArc.construction));
         arc.sketchId = normalizeDefinitionSketchId(rawArc.sketchId || center.sketchId);
+        arc.appearance = normalizeAppearance(rawArc.appearance);
         primitiveById.set(arc.id, arc);
         return arc;
       });
@@ -4239,6 +4052,7 @@
             fixed: Boolean(instance.fixed),
             rotationLocked: Boolean(instance.rotationLocked),
             enabledSketchIds: [...new Set(enabled.length > 0 ? enabled : drawableIds)],
+            appearanceOverride: normalizeAppearance(instance.appearanceOverride),
           };
         });
     }
@@ -4320,6 +4134,7 @@
         fixed: Boolean(instance.fixed),
         rotationLocked: Boolean(instance.rotationLocked),
         enabledSketchIds: Array.isArray(instance.enabledSketchIds) ? instance.enabledSketchIds.map(String) : null,
+        appearanceOverride: normalizeAppearance(instance.appearanceOverride),
       }));
     for (const instance of loadedBlockInstances) {
       const definition = loadedDefinitionById(instance.definitionId);
@@ -4331,23 +4146,7 @@
       const enabled = Array.isArray(instance.enabledSketchIds) ? instance.enabledSketchIds.filter((id) => drawableIds.includes(id)) : drawableIds;
       instance.enabledSketchIds = enabled.length > 0 ? [...new Set(enabled)] : loadedDefinitionGeometrySketchIds(definition);
     }
-    let loadedPresentationSheets =
-      Array.isArray(data.presentationSheets) && data.presentationSheets.length > 0
-        ? data.presentationSheets.map((sheet, index) => ({
-            id: String(sheet.id || `PS${index + 1}`),
-            name: String(sheet.name || `Sheet-${index + 1}`),
-            visibleGeometrySketchIds: Array.isArray(sheet.visibleGeometrySketchIds) ? sheet.visibleGeometrySketchIds.map(normalizeSketchId) : null,
-            elementStyles: normalizePresentationElementStyles(sheet.elementStyles),
-            elements: normalizePresentationElements(sheet.elements),
-          }))
-        : [{ id: DEFAULT_PRESENTATION_SHEET_ID, name: DEFAULT_PRESENTATION_SHEET_NAME, visibleGeometrySketchIds: null, elementStyles: {}, elements: [] }];
-    const sheetIds = new Set();
-    loadedPresentationSheets = loadedPresentationSheets.map((sheet, index) => {
-      let id = sheet.id;
-      while (sheetIds.has(id)) id = `PS${index + 1}-${sheetIds.size + 1}`;
-      sheetIds.add(id);
-      return { ...sheet, id, elementStyles: normalizePresentationElementStyles(sheet.elementStyles), elements: normalizePresentationElements(sheet.elements) };
-    });
+    const loadedAnnotations = normalizeAnnotations(data.annotations);
 
     const pointById = new Map();
     const points = [];
@@ -4355,6 +4154,8 @@
     for (const p of data.points) {
       const point = new Point(String(p.id), Number(p.x), Number(p.y), Boolean(p.fixed), p.kind === "endpoint" ? "endpoint" : "explicit");
       point.sketchId = normalizeSketchId(p.sketchId);
+      const appearance = normalizeAppearance(p.appearance);
+      if (Object.keys(appearance).length > 0) point.appearance = appearance;
       points.push(point);
       pointById.set(point.id, point);
     }
@@ -4367,6 +4168,8 @@
       if (!p1 || !p2) throw new Error(`線 ${l.id} の端点が見つかりません`);
       const line = new Line(String(l.id), p1, p2, Boolean(l.construction));
       line.sketchId = normalizeSketchId(l.sketchId || p1.sketchId || p2.sketchId);
+      const appearance = normalizeAppearance(l.appearance);
+      if (Object.keys(appearance).length > 0) line.appearance = appearance;
       if (!hasPointKind) {
         p1.kind = "endpoint";
         p2.kind = "endpoint";
@@ -4390,6 +4193,8 @@
       if (!Number.isFinite(radius) || radius < MIN_ORIENTATION_LENGTH) throw new Error(`円 ${c.id} の半径が正しくありません`);
       const circle = new Circle(String(c.id), center, radius, Boolean(c.construction));
       circle.sketchId = normalizeSketchId(c.sketchId || center.sketchId);
+      const appearance = normalizeAppearance(c.appearance);
+      if (Object.keys(appearance).length > 0) circle.appearance = appearance;
       circles.push(circle);
     }
 
@@ -4416,6 +4221,8 @@
       if (!Number.isFinite(radius) || radius < MIN_ORIENTATION_LENGTH || !Number.isFinite(startAngle) || !Number.isFinite(endAngle)) throw new Error(`円弧 ${a.id} の形状が正しくありません`);
       const arc = new Arc(String(a.id), center, radius, startAngle, endAngle, Boolean(a.construction));
       arc.sketchId = normalizeSketchId(a.sketchId || center.sketchId);
+      const appearance = normalizeAppearance(a.appearance);
+      if (Object.keys(appearance).length > 0) arc.appearance = appearance;
       arcs.push(arc);
     }
 
@@ -4451,9 +4258,8 @@
     model.sketches.length = 0;
     model.sketches.push(...loadedSketches);
     model.activeSketchId = normalizeSketchId(data.activeSketchId);
-    model.appMode = data.appMode === "presentation" ? "presentation" : "geometry";
-    model.presentationSheets = loadedPresentationSheets;
-    model.activePresentationSheetId = sheetIds.has(String(data.activePresentationSheetId)) ? String(data.activePresentationSheetId) : loadedPresentationSheets[0].id;
+    model.defaultAppearance = normalizeAppearance(data.defaultAppearance, { partial: false });
+    model.annotations = loadedAnnotations;
     model.blockDefinitions = loadedBlockDefinitions;
     model.blockInstances = loadedBlockInstances;
     invalidateBlockProjectionCache();
@@ -4485,12 +4291,11 @@
       nextSeq(model.sketches, "S"),
       ...model.blockDefinitions.map((definition) => nextSeq(definition.sketches || [], "S")),
     );
-    presentationSheetSeq = nextSeq(model.presentationSheets, "PS");
-    presentationElementSeq = Math.max(1, ...model.presentationSheets.flatMap((sheet) => (sheet.elements || []).map((element) => Number(/^PE(\d+)$/.exec(element.id || "")?.[1]) + 1 || 1)));
+    annotationSeq = nextSeq(model.annotations, "AN");
     blockDefinitionSeq = nextSeq(model.blockDefinitions, "B");
     blockInstanceSeq = nextSeq([...model.blockInstances, ...model.blockDefinitions.flatMap((definition) => definition.blockInstances || [])], "BI");
     blockElementSeq = Math.max(1, ...model.blockDefinitions.flatMap((definition) => [...definition.points, ...definition.lines, ...definition.circles, ...definition.arcs].map((element) => Number(/^[PLCA](\d+)$/.exec(element.id || "")?.[1]) + 1 || 1)));
-    ensurePresentationState();
+    ensureAppearanceState();
     ensureBlockState();
   }
 
@@ -4578,10 +4383,12 @@
     selectedArcEndpointPair = null;
     selectedDimensionConstraint = null;
     selectedConstraint = null;
+    selectedAnnotation = null;
     constraintOperands = [];
     hoveredSketchIdentity = null;
     hoveredBlockInstance = null;
     hoveredSidebarItem = null;
+    hoveredAnnotation = null;
   }
 
   function selectableSketchElement(item) {
@@ -4996,8 +4803,7 @@
   }
 
   function isVisibleOnCanvasGeometry(item) {
-    if (!isVisibleSketchElement(item)) return false;
-    return !isPresentationMode() || presentationStyleForElement(item).visible !== false;
+    return isVisibleSketchElement(item);
   }
 
   function visibleGeometryBounds() {
@@ -6132,7 +5938,7 @@
     if (target.kind === "angle") {
       return angleDegrees(angleDimensionAngles(target, null, dimension).signed);
     }
-    return presentationTargetValue(target);
+    return geometryTargetValue(target);
   }
 
   function measuredConstraintTargetValue(constraint, target = targetFromConstraint(constraint), dimension = constraint?.dimension) {
@@ -6145,8 +5951,14 @@
     const readOnly = isReadOnlyDimension(constraint);
     const value = readOnly ? measuredDimensionValue(target, dimension) : target.kind === "angle" ? angleDegrees(constraint.target) : constraint.target;
     const formatLabel = readOnly ? formatMeasuredDimensionLabel : formatDimensionLabel;
-    const label = target.kind === "angle" ? formatLabel(value, "°") : formatLabel(value);
-    return isReadOnlyDimension(constraint) ? `(${label})` : label;
+    const display = dimensionDisplayState(dimension);
+    const number = display.precision == null ? formatLabel(value) : Number(value).toFixed(display.precision);
+    const unit = target.kind === "angle" ? "°" : "";
+    const tolerance = display.toleranceUpper !== "" || display.toleranceLower !== ""
+      ? ` +${display.toleranceUpper === "" ? "0" : display.toleranceUpper}/-${display.toleranceLower === "" ? "0" : Math.abs(Number(display.toleranceLower))}`
+      : "";
+    const label = `${display.prefix}${number}${unit}${display.suffix}${tolerance}`;
+    return readOnly ? `(${label})` : label;
   }
 
   function constraintReferencesPoint(c, point) {
@@ -6716,7 +6528,7 @@
 
     dragSession = null;
     dimensionDragSession = null;
-    presentationDragSession = null;
+    annotationDragSession = null;
     pendingCommand = null;
     pendingConstraintCommand = null;
     lineStartPoint = null;
@@ -6752,6 +6564,16 @@
   }
 
   function deleteCurrentSelection() {
+    if (selectedAnnotation) {
+      const id = selectedAnnotation.id;
+      model.annotations = model.annotations.filter((item) => item !== selectedAnnotation);
+      selectedAnnotation = null;
+      updateUI();
+      draw();
+      setHint(`注記 ${id} を削除しました`);
+      recordHistory("注記削除");
+      return true;
+    }
     let deletedBlockCount = 0;
     if (selectedBlockInstances.length > 0) {
       const instances = [...selectedBlockInstances];
@@ -6760,12 +6582,9 @@
         return [...bundle.points, ...bundle.lines, ...bundle.circles, ...bundle.arcs];
       });
       const removedIds = new Set(projectionItems.map((item) => item.id));
-      const removedKeys = new Set(projectionItems.map(presentationElementKey));
+      const removedKeys = new Set(projectionItems.map(geometryElementKey));
       model.constraints = model.constraints.filter((constraint) => !constraintGraphNodes(constraint).some((node) => instances.includes(node) || projectionItems.includes(node)));
-      for (const sheet of model.presentationSheets) {
-        for (const key of Object.keys(sheet.elementStyles || {})) if (removedKeys.has(key)) delete sheet.elementStyles[key];
-        sheet.elements = (sheet.elements || []).filter((element) => !valueReferencesRemovedGeometry(element.geometryRefs, removedIds, removedKeys));
-      }
+      model.annotations = model.annotations.filter((annotation) => !annotationReferencesRemovedGeometry(annotation, removedIds, removedKeys));
       model.blockInstances = model.blockInstances.filter((instance) => !instances.includes(instance));
       invalidateBlockProjectionCache();
       selectedBlockInstances = [];
@@ -6833,10 +6652,11 @@
         y: point.y,
         fixed: false,
         kind: dependentPoints.has(point) ? point.kind || "endpoint" : "explicit",
+        appearance: normalizeAppearance(point.appearance),
       })),
-      lines: lines.map((line) => ({ id: line.id, p1: line.p1.id, p2: line.p2.id, construction: Boolean(line.construction) })),
-      circles: circles.map((circle) => ({ id: circle.id, center: circle.center.id, radius: circle.radius(), construction: Boolean(circle.construction) })),
-      arcs: arcs.map((arc) => ({ id: arc.id, center: arc.center.id, radius: arc.radius(), startAngle: arc.startAngle, endAngle: arc.endAngle, construction: Boolean(arc.construction) })),
+      lines: lines.map((line) => ({ id: line.id, p1: line.p1.id, p2: line.p2.id, construction: Boolean(line.construction), appearance: normalizeAppearance(line.appearance) })),
+      circles: circles.map((circle) => ({ id: circle.id, center: circle.center.id, radius: circle.radius(), construction: Boolean(circle.construction), appearance: normalizeAppearance(circle.appearance) })),
+      arcs: arcs.map((arc) => ({ id: arc.id, center: arc.center.id, radius: arc.radius(), startAngle: arc.startAngle, endAngle: arc.endAngle, construction: Boolean(arc.construction), appearance: normalizeAppearance(arc.appearance) })),
       constraints,
       blockInstances: blockInstances.map((instance) => ({
         id: instance.id,
@@ -6847,6 +6667,7 @@
         fixed: false,
         rotationLocked: Boolean(instance.rotationLocked),
         enabledSketchIds: Array.isArray(instance.enabledSketchIds) ? instance.enabledSketchIds.slice() : [],
+        appearanceOverride: normalizeAppearance(instance.appearanceOverride),
         projection: blockProjectionData.get(instance),
       })),
       selection: {
@@ -6970,6 +6791,7 @@
       for (const source of payload.points) {
         const point = new Point(`P${pointSeq++}`, source.x + dx, source.y + dy, source.fixed, source.kind === "endpoint" ? "endpoint" : "explicit");
         point.sketchId = targetSketchId;
+        point.appearance = normalizeAppearance(source.appearance);
         model.points.push(point);
         idMap.set(source.id, point.id);
         pointById.set(point.id, point);
@@ -6977,6 +6799,7 @@
       for (const source of payload.lines) {
         const line = new Line(`L${lineSeq++}`, pointById.get(idMap.get(source.p1)), pointById.get(idMap.get(source.p2)), source.construction);
         line.sketchId = targetSketchId;
+        line.appearance = normalizeAppearance(source.appearance);
         ensureLineMinimumLength(line);
         model.lines.push(line);
         idMap.set(source.id, line.id);
@@ -6985,6 +6808,7 @@
       for (const source of payload.circles) {
         const circle = new Circle(`C${circleSeq++}`, pointById.get(idMap.get(source.center)), source.radius, source.construction);
         circle.sketchId = targetSketchId;
+        circle.appearance = normalizeAppearance(source.appearance);
         model.circles.push(circle);
         idMap.set(source.id, circle.id);
         primitiveById.set(circle.id, circle);
@@ -6992,6 +6816,7 @@
       for (const source of payload.arcs) {
         const arc = new Arc(`A${arcSeq++}`, pointById.get(idMap.get(source.center)), source.radius, source.startAngle, source.endAngle, source.construction);
         arc.sketchId = targetSketchId;
+        arc.appearance = normalizeAppearance(source.appearance);
         normalizeArcSweep(arc);
         model.arcs.push(arc);
         idMap.set(source.id, arc.id);
@@ -7011,6 +6836,7 @@
           fixed: source.fixed,
           rotationLocked: Boolean(source.rotationLocked),
           enabledSketchIds: source.enabledSketchIds.slice(),
+          appearanceOverride: normalizeAppearance(source.appearanceOverride),
         };
         model.blockInstances.push(instance);
         pastedBlockInstances.push(instance);
@@ -7221,7 +7047,7 @@
   }
 
   function drawGrid(w, h) {
-    if (isPresentationMode()) return;
+    if (!viewState.grid) return;
     const dpr = window.devicePixelRatio || 1;
     const step = GRID_SCREEN_STEP_PX;
     const offsetX = ((viewport.x % step) + step) % step;
@@ -7328,14 +7154,10 @@
     drawCircles();
     drawArcs();
     drawBlockInstanceHandles();
-    if (isGeometryMode()) {
-      drawDimensions();
-      drawDimensionPreview();
-    } else {
-      drawPresentationElements();
-      drawPresentationDimensionPreview();
-      drawPresentationLeaderCommandPreview();
-    }
+    drawDimensions();
+    drawDimensionPreview();
+    drawAnnotations();
+    drawLeaderAnnotationCommandPreview();
     drawTemporaryLine();
     drawRectanglePreview();
     drawCirclePreview();
@@ -7344,12 +7166,8 @@
     drawOffsetPreview();
     drawTrimPreview();
     drawSnapMarker();
-    if (isGeometryMode()) {
-      drawArcEndpointHandles();
-      drawPoints();
-    } else {
-      drawPresentationPointHandles();
-    }
+    drawArcEndpointHandles();
+    drawPoints();
     drawSketchIdentityLabel();
     drawSelectionRect();
     resetCanvasStrokeState();
@@ -7455,9 +7273,7 @@
   function drawLines() {
     ctx.save();
     for (const l of drawOrderBySketch(allGeometryLines())) {
-      const presentation = isPresentationMode();
-      const style = presentation ? presentationStyleForElement(l) : null;
-      if (presentation && style.visible === false) continue;
+      const appearance = effectiveAppearanceForElement(l);
       const active = isEditableSketchElement(l);
       const refSelected = isPendingReferenceTarget(l) || isConstraintOperandSelected(l);
       const treeHovered = isSidebarHighlightedElement(l);
@@ -7465,17 +7281,17 @@
       const relatedHighlighted = isSelectedConstraintRelatedElement(l);
       const auxiliaryHighlighted = treeHovered || relatedHighlighted;
       const blockSelected = l.blockInstance && selectedBlockInstances.includes(l.blockInstance);
-      const sel = blockSelected || (active && selectedLines.includes(l)) || (presentation && selectedLines.includes(l)) || refSelected;
-      const directlyHovered = sidebarHovered || ((active || isReferenceHoverElement(l)) && hoveredLine === l) || (presentation && hoveredLine === l);
+      const sel = blockSelected || (active && selectedLines.includes(l)) || refSelected;
+      const directlyHovered = sidebarHovered || ((active || isReferenceHoverElement(l)) && hoveredLine === l);
       const hovered = directlyHovered || (l.blockInstance && hoveredBlockInstance === l.blockInstance);
       const construction = Boolean(l.construction) && !sel && !hovered;
-      ctx.globalAlpha = presentation ? style.opacity : sketchAlpha(l) * (construction && !auxiliaryHighlighted ? CONSTRUCTION_GEOMETRY_ALPHA : 1);
-      const lineColor = auxiliaryHighlighted ? "#0ea5e9" : presentation && !sel && !hovered ? style.color : constraintStatusColor(l, sel, hovered);
+      ctx.globalAlpha = sketchAlpha(l) * (construction && !auxiliaryHighlighted ? CONSTRUCTION_GEOMETRY_ALPHA : 1);
+      const lineColor = auxiliaryHighlighted ? "#0ea5e9" : geometryDisplayColor(l, appearance, sel, hovered);
       ctx.strokeStyle = lineColor;
-      ctx.lineWidth = geometryStrokeWidth(l, { auxiliaryHighlighted, selected: sel, hovered, presentationStyle: presentation ? style : null, construction }) / viewport.scale;
+      ctx.lineWidth = geometryStrokeWidth(l, { auxiliaryHighlighted, selected: sel, hovered, appearance, construction }) / viewport.scale;
       ctx.lineCap = "round";
       ctx.lineJoin = "round";
-      ctx.setLineDash(presentation ? presentationLineDash(style.lineType) : construction ? [12 / viewport.scale, 4 / viewport.scale, 2 / viewport.scale, 4 / viewport.scale] : []);
+      ctx.setLineDash(appearanceLineDash(appearance.lineType));
       ctx.shadowColor = sel || auxiliaryHighlighted ? "rgba(14, 165, 233, 0.45)" : "transparent";
       ctx.shadowBlur = sel || auxiliaryHighlighted ? 8 / viewport.scale : 0;
       const constructionExtension = CONSTRUCTION_EXTENSION_SCREEN_PX / viewport.scale;
@@ -7497,7 +7313,7 @@
         }
       }
 
-      if (sel || directlyHovered || auxiliaryHighlighted) {
+      if (viewState.geometryIds || sel || directlyHovered || auxiliaryHighlighted) {
         const mx = (l.p1.x + l.p2.x) / 2;
         const my = (l.p1.y + l.p2.y) / 2;
         ctx.fillStyle = "#2563eb";
@@ -7512,9 +7328,7 @@
     ctx.save();
     ctx.lineCap = "round";
     for (const c of drawOrderBySketch(allGeometryCircles())) {
-      const presentation = isPresentationMode();
-      const style = presentation ? presentationStyleForElement(c) : null;
-      if (presentation && style.visible === false) continue;
+      const appearance = effectiveAppearanceForElement(c);
       const active = isEditableSketchElement(c);
       const refSelected = isPendingReferenceTarget(c) || isConstraintOperandSelected(c);
       const treeHovered = isSidebarHighlightedElement(c);
@@ -7522,14 +7336,14 @@
       const relatedHighlighted = isSelectedConstraintRelatedElement(c);
       const auxiliaryHighlighted = treeHovered || relatedHighlighted;
       const blockSelected = c.blockInstance && selectedBlockInstances.includes(c.blockInstance);
-      const sel = blockSelected || (active && selectedCircles.includes(c)) || (presentation && selectedCircles.includes(c)) || refSelected;
-      const directlyHovered = sidebarHovered || ((active || isReferenceHoverElement(c)) && hoveredCircle === c) || (presentation && hoveredCircle === c);
+      const sel = blockSelected || (active && selectedCircles.includes(c)) || refSelected;
+      const directlyHovered = sidebarHovered || ((active || isReferenceHoverElement(c)) && hoveredCircle === c);
       const hovered = directlyHovered || (c.blockInstance && hoveredBlockInstance === c.blockInstance);
       const construction = Boolean(c.construction) && !sel && !hovered;
-      ctx.globalAlpha = presentation ? style.opacity : sketchAlpha(c) * (construction && !auxiliaryHighlighted ? CONSTRUCTION_GEOMETRY_ALPHA : 1);
-      ctx.strokeStyle = auxiliaryHighlighted ? "#0ea5e9" : presentation && !sel && !hovered ? style.color : constraintStatusColor(c, sel, hovered);
-      ctx.lineWidth = geometryStrokeWidth(c, { auxiliaryHighlighted, selected: sel, hovered, presentationStyle: presentation ? style : null, construction }) / viewport.scale;
-      ctx.setLineDash(presentation ? presentationLineDash(style.lineType) : construction ? [12 / viewport.scale, 4 / viewport.scale, 2 / viewport.scale, 4 / viewport.scale] : []);
+      ctx.globalAlpha = sketchAlpha(c) * (construction && !auxiliaryHighlighted ? CONSTRUCTION_GEOMETRY_ALPHA : 1);
+      ctx.strokeStyle = auxiliaryHighlighted ? "#0ea5e9" : geometryDisplayColor(c, appearance, sel, hovered);
+      ctx.lineWidth = geometryStrokeWidth(c, { auxiliaryHighlighted, selected: sel, hovered, appearance, construction }) / viewport.scale;
+      ctx.setLineDash(appearanceLineDash(appearance.lineType));
       ctx.shadowColor = sel || auxiliaryHighlighted ? "rgba(14, 165, 233, 0.45)" : "transparent";
       ctx.shadowBlur = sel || auxiliaryHighlighted ? 8 / viewport.scale : 0;
       ctx.beginPath();
@@ -7537,7 +7351,7 @@
       ctx.stroke();
       ctx.setLineDash([]);
       ctx.shadowBlur = 0;
-      if (sel || directlyHovered || auxiliaryHighlighted) {
+      if (viewState.geometryIds || sel || directlyHovered || auxiliaryHighlighted) {
         ctx.fillStyle = "#2563eb";
         ctx.font = `${12 / viewport.scale}px system-ui`;
         ctx.fillText(c.id, c.center.x + c.radius() + 4 / viewport.scale, c.center.y - 4 / viewport.scale);
@@ -7550,9 +7364,7 @@
     ctx.save();
     ctx.lineCap = "round";
     for (const a of drawOrderBySketch(allGeometryArcs())) {
-      const presentation = isPresentationMode();
-      const style = presentation ? presentationStyleForElement(a) : null;
-      if (presentation && style.visible === false) continue;
+      const appearance = effectiveAppearanceForElement(a);
       const active = isEditableSketchElement(a);
       const refSelected = isPendingReferenceTarget(a) || isConstraintOperandSelected(a);
       const treeHovered = isSidebarHighlightedElement(a);
@@ -7560,14 +7372,14 @@
       const relatedHighlighted = isSelectedConstraintRelatedElement(a);
       const auxiliaryHighlighted = treeHovered || relatedHighlighted;
       const blockSelected = a.blockInstance && selectedBlockInstances.includes(a.blockInstance);
-      const sel = blockSelected || (active && selectedArcs.includes(a)) || (presentation && selectedArcs.includes(a)) || refSelected;
-      const directlyHovered = sidebarHovered || ((active || isReferenceHoverElement(a)) && hoveredArc === a) || (presentation && hoveredArc === a);
+      const sel = blockSelected || (active && selectedArcs.includes(a)) || refSelected;
+      const directlyHovered = sidebarHovered || ((active || isReferenceHoverElement(a)) && hoveredArc === a);
       const hovered = directlyHovered || (a.blockInstance && hoveredBlockInstance === a.blockInstance);
       const construction = Boolean(a.construction) && !sel && !hovered;
-      ctx.globalAlpha = presentation ? style.opacity : sketchAlpha(a) * (construction && !auxiliaryHighlighted ? CONSTRUCTION_GEOMETRY_ALPHA : 1);
-      ctx.strokeStyle = auxiliaryHighlighted ? "#0ea5e9" : presentation && !sel && !hovered ? style.color : constraintStatusColor(a, sel, hovered);
-      ctx.lineWidth = geometryStrokeWidth(a, { auxiliaryHighlighted, selected: sel, hovered, presentationStyle: presentation ? style : null, construction }) / viewport.scale;
-      ctx.setLineDash(presentation ? presentationLineDash(style.lineType) : construction ? [12 / viewport.scale, 4 / viewport.scale, 2 / viewport.scale, 4 / viewport.scale] : []);
+      ctx.globalAlpha = sketchAlpha(a) * (construction && !auxiliaryHighlighted ? CONSTRUCTION_GEOMETRY_ALPHA : 1);
+      ctx.strokeStyle = auxiliaryHighlighted ? "#0ea5e9" : geometryDisplayColor(a, appearance, sel, hovered);
+      ctx.lineWidth = geometryStrokeWidth(a, { auxiliaryHighlighted, selected: sel, hovered, appearance, construction }) / viewport.scale;
+      ctx.setLineDash(appearanceLineDash(appearance.lineType));
       ctx.shadowColor = sel || auxiliaryHighlighted ? "rgba(14, 165, 233, 0.45)" : "transparent";
       ctx.shadowBlur = sel || auxiliaryHighlighted ? 8 / viewport.scale : 0;
       ctx.beginPath();
@@ -7575,7 +7387,7 @@
       ctx.stroke();
       ctx.setLineDash([]);
       ctx.shadowBlur = 0;
-      if (sel || directlyHovered || auxiliaryHighlighted) {
+      if (viewState.geometryIds || sel || directlyHovered || auxiliaryHighlighted) {
         const mid = a.startAngle + arcSweep(a) / 2;
         ctx.fillStyle = "#2563eb";
         ctx.font = `${12 / viewport.scale}px system-ui`;
@@ -7603,6 +7415,7 @@
     ctx.stroke();
 
     for (const p of points) {
+      if (dimension?.display?.extensionLines === false) continue;
       if (p.showExtension === false) continue;
       ctx.beginPath();
       ctx.moveTo(p.extensionStart.x, p.extensionStart.y);
@@ -7611,8 +7424,10 @@
     }
 
     ctx.setLineDash([]);
-    drawArrowhead(a, d);
-    drawArrowhead(b, { x: -d.x, y: -d.y });
+    if (dimension?.display?.arrows !== false) {
+      drawArrowhead(a, d);
+      drawArrowhead(b, { x: -d.x, y: -d.y });
+    }
 
     drawDimensionLabel(label, text, textAngle, editState);
     ctx.restore();
@@ -7636,18 +7451,22 @@
     const s2 = { x: vertex.x + Math.cos(end) * visibleGap, y: vertex.y + Math.sin(end) * visibleGap };
     const e1 = { x: vertex.x + Math.cos(start) * (radius + extension), y: vertex.y + Math.sin(start) * (radius + extension) };
     const e2 = { x: vertex.x + Math.cos(end) * (radius + extension), y: vertex.y + Math.sin(end) * (radius + extension) };
-    ctx.beginPath();
-    ctx.moveTo(s1.x, s1.y);
-    ctx.lineTo(e1.x, e1.y);
-    ctx.moveTo(s2.x, s2.y);
-    ctx.lineTo(e2.x, e2.y);
-    ctx.stroke();
+    if (dimension?.display?.extensionLines !== false) {
+      ctx.beginPath();
+      ctx.moveTo(s1.x, s1.y);
+      ctx.lineTo(e1.x, e1.y);
+      ctx.moveTo(s2.x, s2.y);
+      ctx.lineTo(e2.x, e2.y);
+      ctx.stroke();
+    }
     ctx.beginPath();
     ctx.arc(vertex.x, vertex.y, radius, start, end, signed < 0);
     ctx.stroke();
     ctx.setLineDash([]);
-    drawArrowhead(p1, { x: Math.cos(start + (signed < 0 ? -Math.PI / 2 : Math.PI / 2)), y: Math.sin(start + (signed < 0 ? -Math.PI / 2 : Math.PI / 2)) });
-    drawArrowhead(p2, { x: Math.cos(end + (signed < 0 ? Math.PI / 2 : -Math.PI / 2)), y: Math.sin(end + (signed < 0 ? Math.PI / 2 : -Math.PI / 2)) });
+    if (dimension?.display?.arrows !== false) {
+      drawArrowhead(p1, { x: Math.cos(start + (signed < 0 ? -Math.PI / 2 : Math.PI / 2)), y: Math.sin(start + (signed < 0 ? -Math.PI / 2 : Math.PI / 2)) });
+      drawArrowhead(p2, { x: Math.cos(end + (signed < 0 ? Math.PI / 2 : -Math.PI / 2)), y: Math.sin(end + (signed < 0 ? Math.PI / 2 : -Math.PI / 2)) });
+    }
     drawDimensionLabel(label, text, textAngle, editState);
     ctx.restore();
   }
@@ -7907,6 +7726,7 @@
       const target = targetFromConstraint(c);
       if (!target) continue;
       const dimension = c.dimension || defaultDimensionForTarget(target);
+      if (dimension?.display?.visible === false) continue;
       const highlighted = c === hoveredDimensionConstraint || c === selectedDimensionConstraint || c === dimensionDragSession?.constraint;
       const label = dimensionLabelForConstraint(c, target, dimension);
       const editing = pendingCommand?.type === "distance-value" && pendingCommand.constraint === c;
@@ -7916,57 +7736,37 @@
     }
   }
 
-  function drawPresentationElements() {
-    const sheet = activePresentationSheet();
-    if (!sheet || !Array.isArray(sheet.elements)) return;
-    for (const element of sheet.elements) {
+  function drawAnnotations() {
+    for (const element of model.annotations) {
       if (element.visible === false) continue;
-      if (element.type === "annotationDimension") {
-        const target = presentationTargetFromData(element.target);
-        if (!target) continue;
-        const dimension = element.dimension || defaultDimensionForTarget(target);
-        const value = presentationTargetValue(target);
-        const label = target.kind === "angle" ? formatMeasuredDimensionLabel(value, "°") : formatMeasuredDimensionLabel(value);
-        drawDimension(target, dimension, label, false, false);
-      } else if (element.type === "leader") {
-        drawPresentationLeader(element);
-      }
+      if (element.type === "leader") drawAnnotationLeader(element);
+      else if (element.type === "text") drawAnnotationText(element);
     }
   }
 
-  function drawPresentationDimensionPreview() {
-    if (pendingCommand?.type !== "presentation-dimension-place") return;
-    const target = pendingCommand.target;
-    if (!target) return;
-    const anchor = pendingCommand.pointer || dimensionAnchor(target, defaultDimensionForTarget(target));
-    const dimension = dimensionFromAnchor(target, anchor);
-    const value = presentationTargetValue(target);
-    const label = target.kind === "angle" ? formatMeasuredDimensionLabel(value, "°") : formatMeasuredDimensionLabel(value);
-    drawDimension(target, dimension, label, true, false);
-  }
-
-  function drawPresentationText(element) {
+  function drawAnnotationText(element) {
     ctx.save();
     ctx.font = `${Number(element.style?.fontSize || 13) / viewport.scale}px system-ui`;
-    ctx.fillStyle = element.style?.color || "#111827";
+    ctx.fillStyle = element === selectedAnnotation ? "#2563eb" : element === hoveredAnnotation ? "#0ea5e9" : element.style?.color || "#111827";
     ctx.textAlign = "left";
     ctx.textBaseline = "middle";
     ctx.fillText(element.text || "", element.x, element.y);
     ctx.restore();
   }
 
-  function drawPresentationLeader(element, preview = false) {
+  function drawAnnotationLeader(element, preview = false) {
     if (!element.start || !element.end) return;
-    const start = preview ? element.start : presentationLeaderAnchorForElement(element);
+    const start = preview ? element.start : annotationLeaderAnchor(element);
     if (!start) return;
     const elbow = element.elbow || {
       x: (start.x + element.end.x) / 2,
       y: element.end.y,
     };
     withCanvasState(() => {
-      ctx.strokeStyle = element.style?.color || "#111827";
-      ctx.fillStyle = element.style?.color || "#111827";
-      ctx.lineWidth = Number(element.style?.lineWidthPx || 1.4) / viewport.scale;
+      const color = element === selectedAnnotation ? "#2563eb" : element === hoveredAnnotation ? "#0ea5e9" : element.style?.color || "#111827";
+      ctx.strokeStyle = color;
+      ctx.fillStyle = color;
+      ctx.lineWidth = Number(element.style?.lineWidth || 1.4) / viewport.scale;
       if (preview) ctx.setLineDash([5 / viewport.scale, 4 / viewport.scale]);
       ctx.beginPath();
       ctx.moveTo(start.x, start.y);
@@ -7978,7 +7778,7 @@
       const dy = elbow.y - start.y;
       const len = Math.max(1e-9, hypot2(dx, dy));
       drawArrowhead(start, { x: dx / len, y: dy / len });
-      if (element.text) drawPresentationText(element);
+      if (element.text) drawAnnotationText(element);
     });
   }
 
@@ -8008,28 +7808,13 @@
     };
   }
 
-  function hitPresentationAnnotationElement(x, y) {
-    const sheet = activePresentationSheet();
-    if (!sheet || !Array.isArray(sheet.elements)) return null;
+  function hitAnnotationElement(x, y) {
     const threshold = 12 / viewport.scale;
-    for (let i = sheet.elements.length - 1; i >= 0; i--) {
-      const element = sheet.elements[i];
+    for (let i = model.annotations.length - 1; i >= 0; i--) {
+      const element = model.annotations[i];
       if (!element || element.visible === false) continue;
-      if (element.type === "annotationDimension") {
-        const target = presentationTargetFromData(element.target);
-        if (!target) continue;
-        const dimension = element.dimension || defaultDimensionForTarget(target);
-        const layout = dimensionLayout(target, dimension);
-        if (!layout) continue;
-        const presentationValue = presentationTargetValue(target);
-        const label = target.kind === "angle" ? formatMeasuredDimensionLabel(presentationValue, "°") : formatMeasuredDimensionLabel(presentationValue);
-        if (pointInExpandedBox(x, y, textHitBox(label, layout.text.x, layout.text.y, 13 / viewport.scale), threshold * 0.8)) return { element, type: "annotationDimension", target, dimension, part: "label" };
-        if (hypot2(x - layout.text.x, y - layout.text.y) <= threshold * 3) return { element, type: "annotationDimension", target, dimension, part: "label" };
-        if (distancePointToSegmentPoints(x, y, layout.hitA, layout.hitB) <= threshold * 2.2) return { element, type: "annotationDimension", target, dimension, part: "line" };
-        const dimensionBox = boxFromPoints([layout.hitA, layout.hitB, layout.text, ...(layout.points || []).flatMap((p) => [p.extensionStart, p.extensionEnd])]);
-        if (dimensionBox && pointInExpandedBox(x, y, dimensionBox, threshold * 2.5)) return { element, type: "annotationDimension", target, dimension, part: "line" };
-      } else if (element.type === "leader") {
-        const start = presentationLeaderAnchorForElement(element);
+      if (element.type === "leader") {
+        const start = annotationLeaderAnchor(element);
         if (!start || !element.end) continue;
         const elbow = element.elbow || { x: (start.x + element.end.x) / 2, y: element.end.y };
         if (distancePointToSegmentPoints(x, y, start, elbow) <= threshold * 2.2 || distancePointToSegmentPoints(x, y, elbow, element.end) <= threshold * 2.2) return { element, type: "leader", part: "line" };
@@ -8037,51 +7822,50 @@
         if (hypot2(x - element.x, y - element.y) <= threshold * 3) return { element, type: "leader", part: "label" };
         const leaderBox = boxFromPoints([start, elbow, element.end, { x: element.x, y: element.y }]);
         if (leaderBox && pointInExpandedBox(x, y, leaderBox, threshold * 2.2)) return { element, type: "leader", part: "line" };
+      } else if (element.type === "text") {
+        if (pointInExpandedBox(x, y, textHitBox(element.text, element.x, element.y, Number(element.style?.fontSize || 13) / viewport.scale), threshold)) return { element, type: "text", part: "label" };
       }
     }
     return null;
   }
 
-  function presentationElementById(id) {
-    if (!id) return null;
-    const sheet = activePresentationSheet();
-    return sheet?.elements?.find((element) => element.id === id) || null;
+  function annotationById(id) {
+    return id ? model.annotations.find((element) => element.id === id) || null : null;
   }
 
-  function beginPresentationAnnotationDrag(e, hit, pointer) {
-    presentationDragSession = {
+  function beginAnnotationDrag(e, hit, pointer) {
+    annotationDragSession = {
       pointerId: e.pointerId,
       elementId: hit.element?.id || null,
       hit,
       startPointer: pointer,
-      startDimension: hit.dimension ? { ...hit.dimension } : null,
-      startAnchor: hit.target && hit.dimension ? dimensionAnchor(hit.target, hit.dimension) : null,
       startEnd: hit.element?.end ? { ...hit.element.end } : null,
       startElbow: hit.element?.elbow ? { ...hit.element.elbow } : null,
       startText: hit.element ? { x: hit.element.x, y: hit.element.y } : null,
     };
+    selectedAnnotation = hit.element;
     canvas.setPointerCapture(e.pointerId);
     canvas.classList.add("is-dragging");
-    setHint(hit.type === "leader" ? "引出線を移動中" : "注記寸法を移動中");
+    setHint(hit.type === "leader" ? "引出線を移動中" : "テキストを移動中");
   }
 
-  function updatePresentationAnnotationDrag(pointer) {
-    const session = presentationDragSession;
+  function updateAnnotationDrag(pointer) {
+    const session = annotationDragSession;
     if (!session) return;
     const dx = pointer.x - session.startPointer.x;
     const dy = pointer.y - session.startPointer.y;
-    const element = presentationElementById(session.elementId) || session.hit.element;
+    const element = annotationById(session.elementId) || session.hit.element;
     if (!element) return;
-    if (session.hit.type === "annotationDimension" && session.hit.target && session.startAnchor) {
-      const anchor = { x: session.startAnchor.x + dx, y: session.startAnchor.y + dy };
-      element.dimension = dimensionFromAnchor(session.hit.target, anchor, { allowPointAxis: false });
-    } else if (session.hit.type === "leader") {
+    if (session.hit.type === "leader") {
       if (session.startEnd) element.end = { x: session.startEnd.x + dx, y: session.startEnd.y + dy };
       if (session.startElbow) element.elbow = { x: session.startElbow.x + dx, y: session.startElbow.y + dy };
       if (session.startText) {
         element.x = session.startText.x + dx;
         element.y = session.startText.y + dy;
       }
+    } else if (session.hit.type === "text" && session.startText) {
+      element.x = session.startText.x + dx;
+      element.y = session.startText.y + dy;
     }
     draw();
   }
@@ -8429,27 +8213,11 @@
     ctx.restore();
   }
 
-  function drawPresentationPointHandles() {
-    ctx.save();
-    const points = new Set([...selectedPoints]);
-    if (hoveredPoint) points.add(hoveredPoint);
-    for (const point of points) {
-      if (!point || !isVisibleSketchElement(point)) continue;
-      ctx.beginPath();
-      ctx.arc(point.x, point.y, (selectedPoints.includes(point) ? 6 : 4.5) / viewport.scale, 0, Math.PI * 2);
-      ctx.fillStyle = selectedPoints.includes(point) ? "#2563eb" : "#eff6ff";
-      ctx.fill();
-      ctx.strokeStyle = "#2563eb";
-      ctx.lineWidth = 1.8 / viewport.scale;
-      ctx.stroke();
-    }
-    ctx.restore();
-  }
-
   function drawPoints() {
     ctx.save();
     for (const p of drawOrderBySketch(allGeometryPoints())) {
-      if (!p.blockProjection && !isExplicitPoint(p) && !isPointUsedByPrimitive(p) && !isReferencePoint(p)) continue;
+      const appearance = effectiveAppearanceForElement(p);
+      if (!viewState.constraintStatus && !p.blockProjection && !isExplicitPoint(p) && !isPointUsedByPrimitive(p) && !isReferencePoint(p)) continue;
       const active = isEditableSketchElement(p);
       ctx.globalAlpha = sketchAlpha(p);
       const refSelected = isPendingReferenceTarget(p) || isConstraintOperandSelected(p);
@@ -8464,21 +8232,21 @@
       const primitiveCenter = shouldShowPrimitiveCenter(p);
       const fixedByLine = pointLockedByLineFixed(p);
       const reference = isReferencePoint(p);
-      if (p.blockProjection && !sel && !hovered && !dragging && !primitiveCenter && !auxiliaryHighlighted) continue;
-      if (reference && !sel && !hovered && !dragging && !auxiliaryHighlighted) continue;
-      if (endpoint && !reference && !sel && !hovered && !dragging && !primitiveCenter && !auxiliaryHighlighted) continue;
+      if (!viewState.constraintStatus && p.blockProjection && !sel && !hovered && !dragging && !primitiveCenter && !auxiliaryHighlighted) continue;
+      if (!viewState.constraintStatus && reference && !sel && !hovered && !dragging && !auxiliaryHighlighted) continue;
+      if (!viewState.constraintStatus && endpoint && !reference && !sel && !hovered && !dragging && !primitiveCenter && !auxiliaryHighlighted) continue;
       ctx.beginPath();
       ctx.arc(p.x, p.y, (sel || auxiliaryHighlighted ? 7 : endpoint || reference ? 5 : 5) / viewport.scale, 0, Math.PI * 2);
       ctx.fillStyle = p.fixed || fixedByLine ? "#fee2e2" : sel ? "#1d4ed8" : auxiliaryHighlighted ? "#e0f2fe" : hovered || primitiveCenter || reference ? "#eff6ff" : "#fff";
       ctx.fill();
-      ctx.strokeStyle = auxiliaryHighlighted ? "#0ea5e9" : p.fixed || fixedByLine ? "#dc2626" : constraintStatusColor(p, sel, hovered || primitiveCenter || reference);
+      ctx.strokeStyle = auxiliaryHighlighted ? "#0ea5e9" : p.fixed || fixedByLine ? "#dc2626" : geometryDisplayColor(p, appearance, sel, hovered || primitiveCenter || reference);
       ctx.lineWidth = (sel || auxiliaryHighlighted ? 3 : Math.max(1.2, sketchStrokeWidth(p))) / viewport.scale;
       ctx.shadowColor = sel || auxiliaryHighlighted ? "rgba(14, 165, 233, 0.45)" : "transparent";
       ctx.shadowBlur = sel || auxiliaryHighlighted ? 8 / viewport.scale : 0;
       ctx.stroke();
       ctx.shadowBlur = 0;
       ctx.setLineDash([]);
-      if (sel || hovered || dragging || auxiliaryHighlighted) {
+      if (viewState.geometryIds || sel || hovered || dragging || auxiliaryHighlighted) {
         ctx.fillStyle = hovered || endpoint ? "#2563eb" : "#111827";
         ctx.font = `${12 / viewport.scale}px system-ui`;
         ctx.fillText(p.id, p.x + 8 / viewport.scale, p.y - 8 / viewport.scale);
@@ -8494,7 +8262,6 @@
 
   function updateToolbar() {
     const geometryMode = isGeometryMode();
-    const presentationMode = isPresentationMode();
     const constructionState = constructionToggleState(geometryMode);
     const states = {
       toolSelect: geometryMode && mode === "select" && !pendingConstraintCommand && !pendingCommand,
@@ -8508,16 +8275,15 @@
       toolOffset: geometryMode && mode === "offset",
       toolCircle: geometryMode && mode === "circle",
       toolArc: geometryMode && mode === "arc",
-      presentationSelectBtn: presentationMode && !pendingCommand,
-      presentationDimensionBtn: presentationMode && Boolean(pendingCommand?.type?.startsWith("presentation-dimension")),
-      presentationLeaderBtn: presentationMode && Boolean(pendingCommand?.type?.startsWith("presentation-leader")),
+      annotationLeaderBtn: Boolean(pendingCommand?.type?.startsWith("annotation-leader")),
+      annotationTextBtn: pendingCommand?.type === "annotation-text-place",
     };
     for (const [id, active] of Object.entries(states)) {
       const button = document.getElementById(id);
       if (!button) continue;
       button.classList.toggle("active", active);
       button.setAttribute("aria-pressed", String(active));
-      button.setAttribute("aria-disabled", id.startsWith("presentation") ? String(!presentationMode) : String(!geometryMode));
+      button.setAttribute("aria-disabled", String(!geometryMode));
     }
     for (const id of ["toolCreateBlock"]) {
       const button = document.getElementById(id);
@@ -8713,7 +8479,6 @@
   }
 
   function startConstraintTargetCommand(type) {
-    if (rejectPresentationGeometryEdit("Constraints")) return;
     cancelPendingCommand("");
     mode = "select";
     lineStartPoint = null;
@@ -9465,11 +9230,10 @@
   }
 
   function createSketch(kind = "sibling") {
-    if (rejectPresentationGeometryEdit("Sketch editing")) return;
     ensureSketchState();
     const current = activeSketch();
     const parentSketchId = kind === "child" ? current.id : current.parentSketchId || ROOT_SKETCH_ID;
-    const sketch = { id: `S${sketchSeq++}`, name: nextSketchName(parentSketchId), parentSketchId, kind: "sketch", visible: true };
+    const sketch = { id: `S${sketchSeq++}`, name: nextSketchName(parentSketchId), parentSketchId, kind: "sketch", appearance: {} };
     model.sketches.push(sketch);
     model.activeSketchId = sketch.id;
     clearInteractionForSketchChange();
@@ -9484,6 +9248,7 @@
     const sketch = model.sketches.find((item) => item.id === sketchId);
     if (!sketch) return;
     if (model.activeSketchId === sketchId) return;
+    sketch.appearance = { ...normalizeAppearance(sketch.appearance), visible: true };
     sketch.visible = true;
     model.activeSketchId = sketchId;
     clearInteractionForSketchChange();
@@ -9493,7 +9258,6 @@
   }
 
   function renameSketch(sketchId) {
-    if (rejectPresentationGeometryEdit("Sketch editing")) return;
     const sketch = model.sketches.find((item) => item.id === sketchId);
     if (!sketch || isRootSketch(sketch)) return;
     const next = window.prompt("スケッチ名", sketch.name);
@@ -9507,7 +9271,9 @@
   function toggleSketchVisibility(sketchId) {
     const sketch = sketchById(sketchId);
     if (!sketch || isRootSketch(sketch) || sketch.id === activeSketchId()) return false;
-    sketch.visible = sketch.visible === false;
+    const nextVisible = effectiveAppearanceForElement({ sketchId: sketch.id, appearance: {} }).visible === false;
+    sketch.appearance = { ...normalizeAppearance(sketch.appearance), visible: nextVisible };
+    sketch.visible = nextVisible;
     hoveredSketchTreeId = null;
     clearSnap();
     setHint(`${sketch.name}: ${sketch.visible ? "表示" : "非表示"}`);
@@ -9524,8 +9290,14 @@
     return false;
   }
 
+  function annotationReferencesRemovedGeometry(annotation, removedIds, removedKeys) {
+    if (annotation?.type !== "leader" || !annotation.geometryRef) return false;
+    const id = geometryRefId(annotation.geometryRef);
+    const key = geometryRefKey(annotation.geometryRef);
+    return Boolean((id && removedIds.has(id)) || (key && removedKeys.has(key)));
+  }
+
   function deleteSketch(sketchId, confirmFirst = true) {
-    if (rejectPresentationGeometryEdit("Sketch editing")) return false;
     ensureSketchState();
     const sketch = sketchById(sketchId);
     if (!sketch || isRootSketch(sketch)) return false;
@@ -9561,7 +9333,7 @@
     const arcSet = new Set(model.arcs.filter((arc) => sketchIds.has(elementSketchId(arc)) || pointSet.has(arc.center)));
     const removedItems = [...pointSet, ...lineSet, ...circleSet, ...arcSet, ...blockProjectionItemsToRemove];
     const removedIds = new Set(removedItems.map((item) => item.id));
-    const removedKeys = new Set(removedItems.map(presentationElementKey).filter(Boolean));
+    const removedKeys = new Set(removedItems.map(geometryElementKey).filter(Boolean));
 
     model.constraints = model.constraints.filter((constraint) => {
       if (sketchIds.has(constraintSketchId(constraint)) || sketchIds.has(constraint.referenceSketchId)) return false;
@@ -9574,15 +9346,7 @@
     model.blockInstances = model.blockInstances.filter((instance) => !blockInstancesToRemove.includes(instance));
     invalidateBlockProjectionCache();
 
-    for (const sheet of model.presentationSheets) {
-      if (Array.isArray(sheet.visibleGeometrySketchIds)) {
-        sheet.visibleGeometrySketchIds = sheet.visibleGeometrySketchIds.filter((id) => !sketchIds.has(id));
-      }
-      for (const key of Object.keys(sheet.elementStyles || {})) {
-        if (removedKeys.has(key)) delete sheet.elementStyles[key];
-      }
-      sheet.elements = (sheet.elements || []).filter((element) => !valueReferencesRemovedGeometry(element.geometryRefs, removedIds, removedKeys));
-    }
+    model.annotations = model.annotations.filter((annotation) => !annotationReferencesRemovedGeometry(annotation, removedIds, removedKeys));
 
     const fallbackId = sketch.parentSketchId && !sketchIds.has(sketch.parentSketchId) ? sketch.parentSketchId : ROOT_SKETCH_ID;
     model.sketches = model.sketches.filter((item) => !sketchIds.has(item.id));
@@ -9598,124 +9362,6 @@
     setHint(`${sketch.name} を削除しました`);
     recordHistory("スケッチ削除");
     return true;
-  }
-
-  function createPresentationSheet() {
-    ensurePresentationState();
-    const id = `PS${presentationSheetSeq++}`;
-    const sheet = { id, name: `Sheet-${model.presentationSheets.length + 1}`, visibleGeometrySketchIds: null, elementStyles: {}, elements: [] };
-    model.presentationSheets.push(sheet);
-    model.activePresentationSheetId = id;
-    updateUI();
-    draw();
-    recordHistory("Presentation Sheet追加");
-  }
-
-  function renamePresentationSheet() {
-    const sheet = activePresentationSheet();
-    if (!sheet) return;
-    const next = window.prompt("Presentation Sheet name", sheet.name);
-    if (!next) return;
-    sheet.name = next.trim() || sheet.name;
-    updateUI();
-    draw();
-    recordHistory("Presentation Sheet名変更");
-  }
-
-  function setActivePresentationSheet(sheetId) {
-    ensurePresentationState();
-    if (!model.presentationSheets.some((sheet) => sheet.id === sheetId)) return;
-    model.activePresentationSheetId = sheetId;
-    updateUI();
-    draw();
-  }
-
-  function setAppMode(nextMode) {
-    if (blockEditSession && nextMode === "presentation") {
-      setHint("ブロック定義編集中はプレゼンテーション・モードへ切り替えられません", "error");
-      return;
-    }
-    model.appMode = nextMode === "presentation" ? "presentation" : "geometry";
-    cancelConstraintTargetCommand("");
-    cancelPendingCommand("");
-    clearSelection();
-    presentationDragSession = null;
-    lineStartPoint = null;
-    rectangleStartPoint = null;
-    filletFirstLine = null;
-    circleCenterPoint = null;
-    arcCenterPoint = null;
-    arcStartPoint = null;
-    pointerPreview = null;
-    trimPreview = null;
-    offsetSource = null;
-    clearSnap();
-    mode = "select";
-    updateUI();
-    updateToolbar();
-    setHint(isPresentationMode() ? `プレゼンテーション・モード: ${activePresentationSheet().name}` : "ジオメトリ・モード");
-    draw();
-  }
-
-  function updatePresentationUI() {
-    ensurePresentationState();
-    const geometryBtn = document.getElementById("geometryModeBtn");
-    const presentationBtn = document.getElementById("presentationModeBtn");
-    const sheetSelect = document.getElementById("presentationSheetSelect");
-    const addSheetBtn = document.getElementById("addPresentationSheetBtn");
-    const renameSheetBtn = document.getElementById("renamePresentationSheetBtn");
-    const addSketchBtn = document.getElementById("addSketchBtn");
-    const addChildSketchBtn = document.getElementById("addChildSketchBtn");
-    const sheetLabel = document.getElementById("presentationSheetLabel");
-    const styleGroup = document.getElementById("presentationStyleGroup");
-    const colorInput = document.getElementById("presentationColorInput");
-    const lineTypeSelect = document.getElementById("presentationLineTypeSelect");
-    const lineWidthInput = document.getElementById("presentationLineWidthInput");
-    const visibleInput = document.getElementById("presentationVisibleInput");
-    const isPresentation = isPresentationMode();
-    if (geometryBtn) {
-      geometryBtn.classList.toggle("active", !isPresentation);
-      geometryBtn.setAttribute("aria-pressed", String(!isPresentation));
-    }
-    if (presentationBtn) {
-      presentationBtn.classList.toggle("active", isPresentation);
-      presentationBtn.setAttribute("aria-pressed", String(isPresentation));
-    }
-    if (sheetSelect) {
-      const current = model.activePresentationSheetId;
-      sheetSelect.innerHTML = model.presentationSheets.map((sheet) => `<option value="${escapeHtml(sheet.id)}">${escapeHtml(sheet.name)}</option>`).join("");
-      sheetSelect.value = current;
-      sheetSelect.disabled = !isPresentation;
-    }
-    if (addSheetBtn) addSheetBtn.disabled = !isPresentation;
-    if (renameSheetBtn) renameSheetBtn.disabled = !isPresentation;
-    if (addSketchBtn) addSketchBtn.disabled = isPresentation;
-    if (addChildSketchBtn) addChildSketchBtn.disabled = isPresentation;
-    if (sheetLabel) {
-      sheetLabel.textContent = isPresentation ? `プレゼンテーション・モード: ${activePresentationSheet().name}` : "ジオメトリ・モード";
-    }
-    const selectedPresentationCount = presentationSelectedItems().length;
-    if (styleGroup) styleGroup.classList.toggle("has-selection", selectedPresentationCount > 0);
-    const selectedStyle = selectedPresentationStyle();
-    if (colorInput) {
-      colorInput.disabled = !isPresentation || selectedPresentationCount === 0;
-      colorInput.value = selectedStyle.color || DEFAULT_PRESENTATION_STYLE.color;
-    }
-    if (lineTypeSelect) {
-      lineTypeSelect.disabled = !isPresentation || selectedPresentationCount === 0;
-      lineTypeSelect.value = selectedStyle.lineType || DEFAULT_PRESENTATION_STYLE.lineType;
-    }
-    if (lineWidthInput) {
-      lineWidthInput.disabled = !isPresentation || selectedPresentationCount === 0;
-      lineWidthInput.value = selectedStyle.lineWidthPx || DEFAULT_PRESENTATION_STYLE.lineWidthPx;
-    }
-    if (visibleInput) {
-      visibleInput.disabled = !isPresentation || selectedPresentationCount === 0;
-      visibleInput.indeterminate = selectedStyle.visible === "";
-      visibleInput.checked = selectedStyle.visible === "" ? true : selectedStyle.visible !== false;
-    }
-    document.body.classList.toggle("presentation-mode", isPresentation);
-    document.body.classList.toggle("geometry-mode", !isPresentation);
   }
 
   function updateSketchUI() {
@@ -10045,10 +9691,8 @@
     const removedIds = new Set([...allItems.points, ...allItems.lines, ...allItems.circles, ...allItems.arcs].map((item) => item.id).filter((id) => !nextIds.has(id)));
     const constraints = model.constraints.filter((constraint) => constraintGraphNodes(constraint).some((node) => removedIds.has(node?.id)));
     const removedKeys = new Set([...removedIds].flatMap((id) => ["point", "line", "circle", "arc"].map((kind) => geometryRefKey(parseGeometryRefId(kind, id)))));
-    for (const sheet of model.presentationSheets) {
-      const element = (sheet.elements || []).find((item) => valueReferencesRemovedGeometry(item.geometryRefs, removedIds, removedKeys));
-      if (element) return { constraints, referenceError: `${sheet.name} の注記 ${element.id} から参照されています` };
-    }
+    const annotation = model.annotations.find((item) => annotationReferencesRemovedGeometry(item, removedIds, removedKeys));
+    if (annotation) return { constraints, referenceError: `注記 ${annotation.id} から参照されています` };
     return { constraints, referenceError: null };
   }
 
@@ -10222,10 +9866,209 @@
     }
   }
 
+  function cascadeSketchAppearance(sketch, sketches, base) {
+    let result = { ...base };
+    const chain = [];
+    let current = sketch;
+    while (current) {
+      chain.unshift(current);
+      current = current.parentSketchId ? sketches.find((item) => item.id === current.parentSketchId) : null;
+    }
+    for (const item of chain) result = { ...result, ...normalizeAppearance(item.appearance) };
+    return result;
+  }
+
+  function effectiveAppearanceForSketch(sketch) {
+    return cascadeSketchAppearance(sketch, model.sketches, normalizeAppearance(model.defaultAppearance, { partial: false }));
+  }
+
+  function appearancePropertyRows(owner, effective, { allowInheritance = true } = {}) {
+    const direct = normalizeAppearance(owner);
+    const inherited = (key) => allowInheritance && direct[key] == null;
+    const option = (value, label, selected) => `<option value="${value}" ${selected ? "selected" : ""}>${label}</option>`;
+    return `
+      <div class="property-row"><label for="propertyVisible">Visible</label><select id="propertyVisible" data-appearance-key="visible">
+        ${allowInheritance ? option("", `継承 (${effective.visible === false ? "非表示" : "表示"})`, inherited("visible")) : ""}
+        ${option("true", "表示", direct.visible === true || !allowInheritance && effective.visible !== false)}${option("false", "非表示", direct.visible === false)}
+      </select></div>
+      <div class="property-row"><label for="propertyColor">Color</label><input id="propertyColor" data-appearance-key="color" type="text" placeholder="継承 (${escapeHtml(effective.color)})" value="${escapeHtml(direct.color || "")}" /></div>
+      <div class="property-row"><label for="propertyLineType">Line type</label><select id="propertyLineType" data-appearance-key="lineType">
+        ${allowInheritance ? option("", `継承 (${effective.lineType})`, inherited("lineType")) : ""}
+        ${option("solid", "実線", direct.lineType === "solid" || !allowInheritance && effective.lineType === "solid")}${option("dashed", "破線", direct.lineType === "dashed")}${option("dashdot", "一点鎖線", direct.lineType === "dashdot")}${option("dotted", "点線", direct.lineType === "dotted")}
+      </select></div>
+      <div class="property-row"><label for="propertyLineWidth">Line width</label><input id="propertyLineWidth" data-appearance-key="lineWidth" type="number" min="0.1" max="20" step="0.1" placeholder="継承 (${effective.lineWidth})" value="${direct.lineWidth ?? ""}" /></div>
+      ${allowInheritance ? '<div class="inherited-note">空欄または「継承」で上位のAppearanceを使用します。</div>' : ""}`;
+  }
+
+  function selectedPropertiesTarget() {
+    if (selectedAnnotation) return { kind: "annotation", item: selectedAnnotation };
+    const constraint = selectedDimensionConstraint || effectiveSelectedConstraint();
+    if (constraint) return { kind: "constraint", item: constraint };
+    if (selectedBlockInstances.length === 1 && selectedGeometryItems().length === 0) return { kind: "block", item: selectedBlockInstances[0] };
+    const geometry = selectedGeometryItems();
+    if (geometry.length === 1 && selectedBlockInstances.length === 0) return { kind: "geometry", item: geometry[0] };
+    if (geometry.length + selectedBlockInstances.length > 1) return { kind: "multiple", count: geometry.length + selectedBlockInstances.length };
+    return { kind: "sketch", item: sketchById(activeSketchId()) };
+  }
+
+  function geometryPropertyName(item) {
+    if (item instanceof Point) return `Point ${item.id}`;
+    if (item instanceof Line) return `Line ${item.id}`;
+    if (item instanceof Circle) return `Circle ${item.id}`;
+    if (item instanceof Arc) return `Arc ${item.id}`;
+    return item?.id || "Geometry";
+  }
+
+  function dimensionDisplayState(dimension) {
+    const display = dimension?.display || {};
+    return {
+      visible: display.visible !== false,
+      precision: Number.isInteger(display.precision) ? Math.max(0, Math.min(10, display.precision)) : null,
+      prefix: String(display.prefix || ""),
+      suffix: String(display.suffix || ""),
+      toleranceUpper: display.toleranceUpper == null ? "" : String(display.toleranceUpper),
+      toleranceLower: display.toleranceLower == null ? "" : String(display.toleranceLower),
+      arrows: display.arrows !== false,
+      extensionLines: display.extensionLines !== false,
+    };
+  }
+
+  function updatePropertiesUI() {
+    const panel = document.getElementById("propertiesPanel");
+    if (!panel) return;
+    const target = selectedPropertiesTarget();
+    if (!target.item && target.kind !== "multiple") {
+      panel.innerHTML = '<p class="properties-empty">選択したオブジェクトのプロパティを表示します。</p>';
+      return;
+    }
+    if (target.kind === "multiple") {
+      panel.innerHTML = `<h2 class="property-heading">${target.count} objects</h2><p class="properties-empty">複数選択の共通プロパティ編集は今回の対象外です。</p>`;
+      return;
+    }
+    const item = target.item;
+    if (target.kind === "geometry") {
+      const effective = effectiveAppearanceForElement(item);
+      const values = item instanceof Point
+        ? `<div class="property-row"><span>X</span><span class="property-readonly">${formatDisplayNumber(item.x)}</span></div><div class="property-row"><span>Y</span><span class="property-readonly">${formatDisplayNumber(item.y)}</span></div>`
+        : item instanceof Line
+          ? `<div class="property-row"><span>Length</span><span class="property-readonly">${formatDisplayNumber(item.length())}</span></div><div class="property-row"><label>Construction</label><input data-property="construction" type="checkbox" ${item.construction ? "checked" : ""}></div>`
+          : `<div class="property-row"><span>Radius</span><span class="property-readonly">${formatDisplayNumber(item.radius())}</span></div><div class="property-row"><label>Construction</label><input data-property="construction" type="checkbox" ${item.construction ? "checked" : ""}></div>`;
+      panel.innerHTML = `<h2 class="property-heading">${escapeHtml(geometryPropertyName(item))}</h2><section class="property-section"><h3>Geometry</h3>${values}</section><section class="property-section"><h3>Appearance</h3>${appearancePropertyRows(item.appearance, effective)}</section>`;
+    } else if (target.kind === "block") {
+      const definition = blockDefinitionById(item.definitionId);
+      const effective = blockProjectionBundle(item).lines[0] ? effectiveAppearanceForElement(blockProjectionBundle(item).lines[0]) : normalizeAppearance(model.defaultAppearance, { partial: false });
+      panel.innerHTML = `<h2 class="property-heading">Block Instance ${escapeHtml(item.id)}</h2><section class="property-section"><h3>Placement</h3><div class="property-row"><span>Definition</span><span class="property-readonly">${escapeHtml(definition?.name || item.definitionId)}</span></div><div class="property-row"><label>X</label><input data-property="block-x" type="number" step="0.1" value="${item.x}"></div><div class="property-row"><label>Y</label><input data-property="block-y" type="number" step="0.1" value="${item.y}"></div><div class="property-row"><label>Rotation</label><input data-property="block-rotation" type="number" step="1" value="${angleDegrees(item.rotation)}"></div></section><section class="property-section"><h3>Appearance Override</h3>${appearancePropertyRows(item.appearanceOverride, effective)}</section>`;
+    } else if (target.kind === "constraint") {
+      const dimension = item.dimension;
+      const display = dimensionDisplayState(dimension);
+      const targetValue = targetFromConstraint(item);
+      const value = targetValue?.kind === "angle" ? angleDegrees(item.target) : item.target;
+      panel.innerHTML = `<h2 class="property-heading">${escapeHtml(item.name || "Constraint")}</h2><section class="property-section"><h3>Constraint</h3><div class="property-row"><span>Type</span><span class="property-readonly">${escapeHtml(item.constructor.name)}</span></div>${Number.isFinite(value) && !item.readOnlyDimension ? `<div class="property-row"><label>Value</label><input data-property="constraint-value" type="number" step="0.1" value="${value}"></div>` : ""}</section>${dimension ? `<section class="property-section"><h3>Dimension Display</h3><div class="property-row"><label>Visible</label><input data-dimension-display="visible" type="checkbox" ${display.visible ? "checked" : ""}></div><div class="property-row"><label>Precision</label><input data-dimension-display="precision" type="number" min="0" max="10" placeholder="自動" value="${display.precision ?? ""}"></div><div class="property-row"><label>Prefix</label><input data-dimension-display="prefix" value="${escapeHtml(display.prefix)}"></div><div class="property-row"><label>Suffix</label><input data-dimension-display="suffix" value="${escapeHtml(display.suffix)}"></div><div class="property-row"><label>Upper tol.</label><input data-dimension-display="toleranceUpper" type="number" step="0.001" value="${escapeHtml(display.toleranceUpper)}"></div><div class="property-row"><label>Lower tol.</label><input data-dimension-display="toleranceLower" type="number" step="0.001" value="${escapeHtml(display.toleranceLower)}"></div><div class="property-row"><label>Arrows</label><input data-dimension-display="arrows" type="checkbox" ${display.arrows ? "checked" : ""}></div><div class="property-row"><label>Extension lines</label><input data-dimension-display="extensionLines" type="checkbox" ${display.extensionLines ? "checked" : ""}></div></section>` : ""}`;
+    } else if (target.kind === "annotation") {
+      panel.innerHTML = `<h2 class="property-heading">${item.type === "leader" ? "Leader" : "Free Text"} ${escapeHtml(item.id)}</h2><section class="property-section"><h3>Annotation</h3><div class="property-row"><label>Visible</label><input data-property="annotation-visible" type="checkbox" ${item.visible !== false ? "checked" : ""}></div>${item.type === "text" ? `<div class="property-row"><label>Text</label><textarea data-property="annotation-text">${escapeHtml(item.text || "")}</textarea></div><div class="property-row"><label>Font size</label><input data-property="annotation-font-size" type="number" min="6" max="72" value="${Number(item.style?.fontSize || 13)}"></div>` : ""}<div class="property-row"><label>Color</label><input data-property="annotation-color" type="text" value="${escapeHtml(item.style?.color || "#111827")}"></div></section>`;
+    } else {
+      const effective = effectiveAppearanceForSketch(item);
+      panel.innerHTML = `<h2 class="property-heading">Sketch ${escapeHtml(item.name)}</h2><section class="property-section"><h3>Sketch</h3><div class="property-row"><span>ID</span><span class="property-readonly">${escapeHtml(item.id)}</span></div><div class="property-row"><span>Active</span><span class="property-readonly">${item.id === activeSketchId() ? "Yes" : "No"}</span></div></section><section class="property-section"><h3>Appearance</h3>${appearancePropertyRows(item.appearance, effective)}</section>`;
+    }
+
+    panel.onchange = handlePropertiesChange;
+  }
+
+  function applyAppearanceInput(target, key, rawValue) {
+    if (!target) return;
+    const next = { ...normalizeAppearance(target) };
+    if (rawValue === "") delete next[key];
+    else if (key === "visible") next[key] = rawValue === "true";
+    else if (key === "lineWidth") next[key] = Math.max(0.1, Math.min(20, Number(rawValue)));
+    else next[key] = rawValue;
+    Object.assign(target, normalizeAppearance(next));
+    for (const existingKey of ["visible", "color", "lineType", "lineWidth"]) if (next[existingKey] == null) delete target[existingKey];
+  }
+
+  function handlePropertiesChange(event) {
+    const target = selectedPropertiesTarget();
+    const input = event.target;
+    if (input.dataset.appearanceKey) {
+      const owner = target.kind === "block"
+        ? (target.item.appearanceOverride ||= {})
+        : target.kind === "geometry" || target.kind === "sketch"
+          ? (target.item.appearance ||= {})
+          : null;
+      applyAppearanceInput(owner, input.dataset.appearanceKey, input.value.trim());
+      if (target.kind === "block") invalidateBlockProjectionCache(target.item.id);
+      recordHistory(target.kind === "block" ? "Appearance Override変更" : "Appearance変更");
+      updateUI();
+      draw();
+      return;
+    }
+    if (input.dataset.dimensionDisplay && target.kind === "constraint" && target.item.dimension) {
+      const display = { ...(target.item.dimension.display || {}) };
+      const key = input.dataset.dimensionDisplay;
+      if (input.type === "checkbox") display[key] = input.checked;
+      else if (key === "precision") display[key] = input.value === "" ? null : Math.max(0, Math.min(10, Math.round(Number(input.value))));
+      else if (key === "toleranceUpper" || key === "toleranceLower") display[key] = input.value === "" ? null : Number(input.value);
+      else display[key] = input.value;
+      target.item.dimension.display = display;
+      recordHistory("寸法表示変更");
+      updatePropertiesUI();
+      draw();
+      return;
+    }
+    const property = input.dataset.property;
+    if (!property) return;
+    if (target.kind === "geometry" && property === "construction") {
+      target.item.construction = input.checked;
+      recordHistory("補助線変更");
+    } else if (target.kind === "block" && property.startsWith("block-")) {
+      if (property === "block-x") target.item.x = Number(input.value) || 0;
+      if (property === "block-y") target.item.y = Number(input.value) || 0;
+      if (property === "block-rotation") setBlockInstanceRotationAroundDisplayCenter(target.item, (Number(input.value) * Math.PI) / 180);
+      invalidateBlockProjectionCache(target.item.id);
+      solveAndRefresh("Block Instance変更");
+      return;
+    } else if (target.kind === "constraint" && property === "constraint-value") {
+      const constraintTarget = targetFromConstraint(target.item);
+      const value = Number(input.value);
+      if (Number.isFinite(value) && value > 0) {
+        target.item.target = constraintTarget?.kind === "angle" ? (value * Math.PI) / 180 : value;
+        preconditionNewConstraint(target.item);
+        solveAndRefresh("寸法値変更");
+      }
+      return;
+    } else if (target.kind === "annotation") {
+      if (property === "annotation-visible") target.item.visible = input.checked;
+      if (property === "annotation-text") target.item.text = input.value;
+      if (property === "annotation-font-size") target.item.style = { ...target.item.style, fontSize: Math.max(6, Math.min(72, Number(input.value) || 13)) };
+      if (property === "annotation-color") target.item.style = { ...target.item.style, color: input.value || "#111827" };
+      recordHistory("注記変更");
+    }
+    updateUI();
+    draw();
+  }
+
+  function updateObjectExplorerUI() {
+    const blockList = document.getElementById("blockInstanceObjectList");
+    if (blockList) blockList.innerHTML = model.blockInstances.filter(isActiveSketchElement).map((item) => `<div class="item object-row ${selectedBlockInstances.includes(item) ? "selected" : ""}" data-object-kind="block" data-id="${escapeHtml(item.id)}"><span>${escapeHtml(item.id)}</span><span class="badge">${escapeHtml(blockDefinitionById(item.definitionId)?.name || item.definitionId)}</span></div>`).join("");
+    const annotationList = document.getElementById("annotationObjectList");
+    if (annotationList) annotationList.innerHTML = model.annotations.map((item) => `<div class="item object-row ${selectedAnnotation === item ? "selected" : ""}" data-object-kind="annotation" data-id="${escapeHtml(item.id)}"><span>${item.type === "leader" ? "Leader" : "Text"} ${escapeHtml(item.id)}</span></div>`).join("");
+    for (const row of document.querySelectorAll(".geometry-list-row")) {
+      const kind = row.dataset.kind;
+      const item = kind === "point" ? model.points.find((value) => value.id === row.dataset.id) : kind === "line" ? model.lines.find((value) => value.id === row.dataset.id) : kind === "circle" ? model.circles.find((value) => value.id === row.dataset.id) : model.arcs.find((value) => value.id === row.dataset.id);
+      row.classList.toggle("selected", selectedGeometryItems().includes(item));
+    }
+    for (const row of document.querySelectorAll(".constraint-list-row")) row.classList.toggle("selected", model.constraints[Number(row.dataset.idx)] === (selectedDimensionConstraint || effectiveSelectedConstraint()));
+  }
+
+  function updateStatusUI() {
+    const command = document.getElementById("statusCommand");
+    if (command) command.textContent = pendingCommand?.type?.startsWith("annotation-") ? "Annotation" : pendingConstraintCommand ? "Constraint" : mode === "select" ? "選択" : mode;
+    const constraint = document.getElementById("statusConstraint");
+    if (constraint) constraint.textContent = viewState.constraintStatus ? "拘束状態表示中" : constraintSummaryText();
+  }
+
   function updateUI({ refreshAnalysis = true } = {}) {
     if (refreshAnalysis) refreshConstraintAnalysis();
     updateDocumentNameUI();
-    updatePresentationUI();
     updateToolbar();
     updateSketchUI();
     updateBlockUI();
@@ -10346,6 +10189,9 @@
 
     bindSidebarItemHover();
 
+    updateObjectExplorerUI();
+    updatePropertiesUI();
+    updateStatusUI();
     updateConstraintButtons();
   }
 
@@ -10482,7 +10328,6 @@
   }
 
   function commitNewConstraint(type, constraint) {
-    if (rejectPresentationGeometryEdit("Constraints")) return false;
     if (!constraintTargetsAreActive(constraint)) {
       const msg = "別スケッチ同士は通常拘束できません";
       setHint(msg, "error");
@@ -10703,55 +10548,7 @@
     return null;
   }
 
-  function presentationTargetToData(target) {
-    if (!target) return null;
-    const id = (item) => geometryRefId(geometryRefForItem(item));
-    if (target.kind === "point-point") return { kind: target.kind, p1: id(target.p1), p2: id(target.p2), dimensionAxis: target.dimensionAxis || null };
-    if (target.kind === "point-line") return { kind: target.kind, point: id(target.point), line: id(target.line) };
-    if (target.kind === "line-line") return { kind: target.kind, line1: id(target.line1), line2: id(target.line2) };
-    if (target.kind === "line-length") return { kind: target.kind, line: id(target.line) };
-    if (target.kind === "angle") return { kind: target.kind, line1: id(target.line1), line2: id(target.line2) };
-    if (target.kind === "radius" || target.kind === "diameter") return { kind: target.kind, primitive: id(target.primitive) };
-    return null;
-  }
-
-  function presentationTargetFromData(data) {
-    if (!data || typeof data !== "object") return null;
-    const point = (id) => resolveGeometryRef(parseGeometryRefId("point", id));
-    const line = (id) => resolveGeometryRef(parseGeometryRefId("line", id));
-    const primitive = (id) => resolveGeometryRef(parseGeometryRefId("circle", id)) || resolveGeometryRef(parseGeometryRefId("arc", id));
-    if (data.kind === "point-point") {
-      const p1 = point(data.p1);
-      const p2 = point(data.p2);
-      return p1 && p2 ? { kind: "point-point", p1, p2, dimensionAxis: data.dimensionAxis || null, value: hypot2(p2.x - p1.x, p2.y - p1.y) } : null;
-    }
-    if (data.kind === "point-line") {
-      const p = point(data.point);
-      const l = line(data.line);
-      return p && l ? { kind: "point-line", point: p, line: l, value: Math.abs(signedPointLineDistance(p, l)) } : null;
-    }
-    if (data.kind === "line-line") {
-      const line1 = line(data.line1);
-      const line2 = line(data.line2);
-      return line1 && line2 ? { kind: "line-line", line1, line2, value: Math.abs(signedPointLineDistance(line1.p1, line2)) } : null;
-    }
-    if (data.kind === "line-length") {
-      const l = line(data.line);
-      return l ? { kind: "line-length", line: l, p1: l.p1, p2: l.p2, value: l.length() } : null;
-    }
-    if (data.kind === "angle") {
-      const line1 = line(data.line1);
-      const line2 = line(data.line2);
-      return line1 && line2 ? { kind: "angle", line1, line2, value: angleDegrees(Math.abs(angleDimensionSweep({ line1, line2 }))), signedValue: angleDimensionSweep({ line1, line2 }) } : null;
-    }
-    if (data.kind === "radius" || data.kind === "diameter") {
-      const p = primitive(data.primitive);
-      return p ? { kind: data.kind, primitive: p, value: data.kind === "diameter" ? p.radius() * 2 : p.radius() } : null;
-    }
-    return null;
-  }
-
-  function presentationTargetValue(target) {
+  function geometryTargetValue(target) {
     if (!target) return NaN;
     if (target.kind === "point-point") {
       if (target.dimensionAxis === "x") return Math.abs(target.p2.x - target.p1.x);
@@ -11360,7 +11157,10 @@
 
   function solveLocalGuidedDrag(session, targets, targetStepNorm = null) {
     if (!session?.local) return null;
-    const errorTolerance = Math.max(CONSTRAINT_ACCEPT_ERROR, DRAG_PREVIEW_ERROR_SCREEN_PX / Math.max(viewport.scale, 1e-9));
+    const errorTolerance = Math.max(
+      CONSTRAINT_ACCEPT_ERROR,
+      Math.min(DRAG_PREVIEW_MAX_MODEL_ERROR, DRAG_PREVIEW_ERROR_SCREEN_PX / Math.max(viewport.scale, 1e-9)),
+    );
     return withDragStepNorm(dragStepNormForTargets(targets), () =>
       solver.solveSubsetGuided({
         variables: session.local.variables,
@@ -12001,7 +11801,7 @@
     draw();
   }
 
-  function hitPresentationElement(x, y) {
+  function hitAnnotationTarget(x, y) {
     const threshold = 8 / viewport.scale;
     const pointThreshold = 10 / viewport.scale;
     const points = allGeometryPoints();
@@ -12016,18 +11816,18 @@
     }
     for (let i = arcs.length - 1; i >= 0; i--) {
       const arc = arcs[i];
-      if (!isVisibleSketchElement(arc) || presentationStyleForElement(arc).visible === false) continue;
+      if (!isVisibleSketchElement(arc)) continue;
       const angle = Math.atan2(y - arc.center.y, x - arc.center.x);
       if (Math.abs(hypot2(x - arc.center.x, y - arc.center.y) - arc.radius()) <= threshold && angleOnSignedSweep(angle, arc.startAngle, arc.endAngle)) return { kind: "arc", item: arc };
     }
     for (let i = circles.length - 1; i >= 0; i--) {
       const circle = circles[i];
-      if (!isVisibleSketchElement(circle) || presentationStyleForElement(circle).visible === false) continue;
+      if (!isVisibleSketchElement(circle)) continue;
       if (Math.abs(hypot2(x - circle.center.x, y - circle.center.y) - circle.radius()) <= threshold) return { kind: "circle", item: circle };
     }
     for (let i = lines.length - 1; i >= 0; i--) {
       const line = lines[i];
-      if (!isVisibleSketchElement(line) || presentationStyleForElement(line).visible === false) continue;
+      if (!isVisibleSketchElement(line)) continue;
       if (distancePointToSegment(x, y, line) <= threshold) return { kind: "line", item: line };
     }
     return null;
@@ -12601,52 +12401,39 @@
     const hitBlock = hitBlockHandle || hitBlockInstance(p.x, p.y);
     hoveredSketchIdentity = hitSketchIdentityElement(p.x, p.y);
     const inactiveHit = !hitP && !hitL && !hitC && !hitArcEnd && !hitA && !hitD && !hitBlock ? hitInactiveElement(p.x, p.y) : null;
-    const blankAnnotationHit = isPresentationMode() ? hitPresentationAnnotationElement(p.x, p.y) : null;
-    const blankPresentationHit = isPresentationMode() ? hitPresentationElement(p.x, p.y) : null;
+    const blankAnnotationHit = hitAnnotationElement(p.x, p.y);
+    const annotationTargetHit = hitAnnotationTarget(p.x, p.y);
 
-    const blankDoubleClickHits = { hitP, hitL, hitC, hitArcEnd, hitA, hitD, hitBlock, inactiveHit, annotationHit: blankAnnotationHit, presentationHit: blankPresentationHit };
+    const blankDoubleClickHits = { hitP, hitL, hitC, hitArcEnd, hitA, hitD, hitBlock, inactiveHit, annotationHit: blankAnnotationHit };
     if (isRepeatedBlankDoubleClick(e, blankDoubleClickHits) && handleBlankCanvasDoubleClick(p, blankDoubleClickHits)) {
       suppressNextBlankDoubleClickEvent = true;
       e.preventDefault();
       return;
     }
 
-    if (isPresentationMode()) {
+    if (pendingCommand?.type === "annotation-text-place") {
       e.preventDefault();
-      const annotationHit = blankAnnotationHit;
-      const presentationHit = blankPresentationHit;
-      if (pendingCommand?.type === "presentation-dimension-place") {
-        if (presentationHit && retargetPresentationDimensionWithHit(presentationHit, p)) return;
-        commitPresentationAnnotationDimensionAt(p);
-        draw();
-        return;
-      }
-      if (pendingCommand?.type === "presentation-dimension-select") {
-        handlePresentationDimensionTargetClick(presentationHit, p);
-        return;
-      }
-      if (pendingCommand?.type === "presentation-leader-select") {
-        handlePresentationLeaderTargetClick(presentationHit, p);
-        return;
-      }
-      if (pendingCommand?.type === "presentation-leader-place") {
-        commitPresentationLeaderAt(p);
-        draw();
-        return;
-      }
-      if (annotationHit) {
-        beginPresentationAnnotationDrag(e, annotationHit, p);
-        return;
-      }
-      if (presentationHit) {
-        setPresentationSelection(presentationHit, e.shiftKey || e.ctrlKey);
-        updatePresentationUI();
-        setHint(`プレゼンテーション・モード: ${activePresentationSheet().name} / ${presentationSelectedItems().length}個選択`);
-      } else {
-        clearSelection();
-        updatePresentationUI();
-        setHint(`プレゼンテーション・モード: ${activePresentationSheet().name}`);
-      }
+      commitTextAnnotationAt(p);
+      return;
+    }
+
+    if (pendingCommand?.type === "annotation-leader-select") {
+      e.preventDefault();
+      handleLeaderAnnotationTargetClick(annotationTargetHit, p);
+      return;
+    }
+
+    if (pendingCommand?.type === "annotation-leader-place") {
+      e.preventDefault();
+      commitLeaderAnnotationAt(p);
+      return;
+    }
+
+    if (blankAnnotationHit && mode === "select" && !pendingCommand && !pendingConstraintCommand) {
+      e.preventDefault();
+      clearSelection();
+      beginAnnotationDrag(e, blankAnnotationHit, p);
+      updateUI({ refreshAnalysis: false });
       draw();
       return;
     }
@@ -12849,6 +12636,9 @@
   });
 
   canvas.addEventListener("pointermove", (e) => {
+    const coordinatePoint = screenToWorld(canvasScreenPoint(e));
+    const coordinateStatus = document.getElementById("statusCoordinates");
+    if (coordinateStatus) coordinateStatus.textContent = `X ${formatDisplayNumber(coordinatePoint.x, 3)} / Y ${formatDisplayNumber(coordinatePoint.y, 3)}`;
     if (panSession) {
       const p = canvasScreenPoint(e);
       viewport.x = panSession.startX + (p.x - panSession.startPointer.x);
@@ -12867,65 +12657,23 @@
       return;
     }
 
-    if (isPresentationMode()) {
+    if (annotationDragSession) {
       clearSnap();
-      if (presentationDragSession) {
-        updatePresentationAnnotationDrag(p);
-        return;
-      }
-      if (pendingCommand?.type === "presentation-dimension-place") {
-        pendingCommand.pointer = p;
-        hoveredPoint = null;
-        hoveredEndpointPoint = null;
-        hoveredLine = null;
-        hoveredCircle = null;
-        hoveredArcEndpoint = null;
-        hoveredArc = null;
-        hoveredDimensionConstraint = null;
-        hoveredSketchIdentity = null;
-        draw();
-        return;
-      }
-      if (pendingCommand?.type === "presentation-leader-place") {
-        pendingCommand.pointer = p;
-        hoveredPoint = null;
-        hoveredEndpointPoint = null;
-        hoveredLine = null;
-        hoveredCircle = null;
-        hoveredArcEndpoint = null;
-        hoveredArc = null;
-        hoveredDimensionConstraint = null;
-        hoveredSketchIdentity = null;
-        draw();
-        return;
-      }
-      const hit = hitPresentationElement(p.x, p.y);
-      const nextPoint = hit?.kind === "point" ? hit.item : null;
-      const nextLine = hit?.kind === "line" ? hit.item : null;
-      const nextCircle = hit?.kind === "circle" ? hit.item : null;
-      const nextArc = hit?.kind === "arc" ? hit.item : null;
-      const nextSketchIdentity = hitSketchIdentityElement(p.x, p.y);
-      if (
-        hoveredPoint !== nextPoint ||
-        hoveredLine !== nextLine ||
-        hoveredCircle !== nextCircle ||
-        hoveredArc !== nextArc ||
-        hoveredEndpointPoint ||
-        hoveredArcEndpoint ||
-        hoveredDimensionConstraint ||
-        nextSketchIdentity?.item !== hoveredSketchIdentity?.item ||
-        Boolean(nextSketchIdentity)
-      ) {
-        hoveredPoint = nextPoint;
-        hoveredEndpointPoint = null;
-        hoveredLine = nextLine;
-        hoveredCircle = nextCircle;
-        hoveredArcEndpoint = null;
-        hoveredArc = nextArc;
-        hoveredDimensionConstraint = null;
-        hoveredSketchIdentity = nextSketchIdentity;
-        draw();
-      }
+      updateAnnotationDrag(p);
+      return;
+    }
+
+    if (pendingCommand?.type === "annotation-leader-place" || pendingCommand?.type === "annotation-text-place") {
+      pendingCommand.pointer = p;
+      hoveredPoint = null;
+      hoveredEndpointPoint = null;
+      hoveredLine = null;
+      hoveredCircle = null;
+      hoveredArcEndpoint = null;
+      hoveredArc = null;
+      hoveredDimensionConstraint = null;
+      hoveredSketchIdentity = null;
+      draw();
       return;
     }
 
@@ -13165,6 +12913,10 @@
       const nextArcHover = nextPointHover || nextLineHover || nextCircleHover || nextArcEndpointHover ? null : hitArc(p.x, p.y);
       const nextSketchIdentity = hitSketchIdentityElement(p.x, p.y);
       const nextBlockHover = nextHover || nextPointHover || nextLineHover || nextCircleHover || nextArcEndpointHover || nextArcHover ? null : hitBlockInstance(p.x, p.y);
+      const annotationHit = nextHover || nextPointHover || nextLineHover || nextCircleHover || nextArcEndpointHover || nextArcHover || nextBlockHover
+        ? null
+        : hitAnnotationElement(p.x, p.y);
+      const nextAnnotationHover = annotationHit?.element || null;
       if (
         nextPointHover !== hoveredPoint ||
         nextEndpointHover !== hoveredEndpointPoint ||
@@ -13174,7 +12926,8 @@
         nextArcHover !== hoveredArc ||
         nextHover !== hoveredDimensionConstraint ||
         nextSketchIdentity?.item !== hoveredSketchIdentity?.item ||
-        Boolean(nextSketchIdentity) || nextBlockHover !== hoveredBlockInstance
+        Boolean(nextSketchIdentity) || nextBlockHover !== hoveredBlockInstance ||
+        nextAnnotationHover !== hoveredAnnotation
       ) {
         hoveredPoint = nextPointHover;
         hoveredEndpointPoint = nextEndpointHover;
@@ -13185,6 +12938,7 @@
         hoveredDimensionConstraint = nextHover;
         hoveredSketchIdentity = nextSketchIdentity;
         hoveredBlockInstance = nextBlockHover;
+        hoveredAnnotation = nextAnnotationHover;
         draw();
       }
     }
@@ -13226,18 +12980,18 @@
       return;
     }
 
-    if (presentationDragSession) {
-      presentationDragSession = null;
+    if (annotationDragSession) {
+      annotationDragSession = null;
       canvas.classList.remove("is-dragging");
       try {
         canvas.releasePointerCapture(e.pointerId);
       } catch (_) {
         // Pointer capture may already be released by the browser.
       }
-      setHint("Presentation注記の位置を更新しました");
+      setHint("注記の位置を更新しました");
       updateUI();
       draw();
-      recordHistory("Presentation注記移動");
+      recordHistory("注記移動");
       return;
     }
 
@@ -13335,6 +13089,7 @@
       selectedBlockInstances.length > 0 ||
       Boolean(selectedArcEndpoint) ||
       Boolean(selectedDimensionConstraint) ||
+      Boolean(selectedAnnotation) ||
       Boolean(effectiveSelectedConstraint());
   }
 
@@ -13347,7 +13102,6 @@
       !hits.hitD &&
       !hits.hitBlock &&
       !hits.annotationHit &&
-      !hits.presentationHit &&
       !hits.inactiveHit;
   }
 
@@ -13393,7 +13147,6 @@
       !hits.hitA &&
       !hits.hitD &&
       !hits.annotationHit &&
-      !hits.presentationHit &&
       !hits.inactiveHit
     ) {
       return true;
@@ -13404,7 +13157,6 @@
         !hits.hitA &&
         !hits.hitD &&
         !hits.annotationHit &&
-        !hits.presentationHit &&
         !hits.inactiveHit;
     }
     return isTransientLineStartHit(hits) &&
@@ -13413,7 +13165,6 @@
       !hits.hitA &&
       !hits.hitD &&
       !hits.annotationHit &&
-      !hits.presentationHit &&
       !hits.inactiveHit;
   }
 
@@ -13625,6 +13376,13 @@
     const key = e.key.toLowerCase();
     const commandKey = e.ctrlKey || e.metaKey;
     const textEditingTarget = e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement || e.target?.isContentEditable;
+    if (e.code === "Space" && !textEditingTarget && !viewState.constraintStatus) {
+      e.preventDefault();
+      viewState.constraintStatus = true;
+      setHint("拘束状態表示: Document内の全Geometryを表示しています");
+      draw();
+      return;
+    }
     if (commandKey && isGeometryMode() && !textEditingTarget && ["c", "x", "v"].includes(key)) {
       e.preventDefault();
       if (key === "c") copySelectionToClipboard();
@@ -13696,6 +13454,7 @@
         selectedBlockInstances.length > 0 ||
         selectedArcEndpoint ||
         selectedDimensionConstraint ||
+        selectedAnnotation ||
         effectiveSelectedConstraint()
       ) {
         clearSelection();
@@ -13704,6 +13463,18 @@
         draw();
       }
     }
+  });
+  window.addEventListener("keyup", (e) => {
+    if (e.code !== "Space" || !viewState.constraintStatus) return;
+    e.preventDefault();
+    viewState.constraintStatus = false;
+    setHint("通常表示");
+    draw();
+  });
+  window.addEventListener("blur", () => {
+    if (!viewState.constraintStatus) return;
+    viewState.constraintStatus = false;
+    draw();
   });
 
   documentNameInput?.addEventListener("input", (event) => {
@@ -13733,21 +13504,84 @@
       draw();
     }
   });
-  document.getElementById("geometryModeBtn")?.addEventListener("click", () => setAppMode("geometry"));
-  document.getElementById("presentationModeBtn")?.addEventListener("click", () => setAppMode("presentation"));
-  document.getElementById("presentationSheetSelect")?.addEventListener("change", (event) => setActivePresentationSheet(event.target.value));
-  document.getElementById("addPresentationSheetBtn")?.addEventListener("click", createPresentationSheet);
-  document.getElementById("renamePresentationSheetBtn")?.addEventListener("click", renamePresentationSheet);
-  document.getElementById("presentationColorInput")?.addEventListener("input", (event) => setPresentationStyleForSelection({ color: event.target.value }));
-  document.getElementById("presentationLineTypeSelect")?.addEventListener("change", (event) => setPresentationStyleForSelection({ lineType: event.target.value }));
-  document.getElementById("presentationLineWidthInput")?.addEventListener("change", (event) => {
-    const lineWidthPx = Number(event.target.value);
-    if (Number.isFinite(lineWidthPx)) setPresentationStyleForSelection({ lineWidthPx: Math.max(0.5, Math.min(10, lineWidthPx)) });
+  document.getElementById("annotationLeaderBtn")?.addEventListener("click", createLeaderAnnotation);
+  document.getElementById("annotationTextBtn")?.addEventListener("click", createTextAnnotation);
+  document.getElementById("viewGridInput")?.addEventListener("change", (event) => {
+    viewState.grid = event.target.checked;
+    draw();
   });
-  document.getElementById("presentationVisibleInput")?.addEventListener("change", (event) => setPresentationStyleForSelection({ visible: event.target.checked }));
-  document.getElementById("presentationSelectBtn")?.addEventListener("click", () => enterPresentationSelectCommand());
-  document.getElementById("presentationDimensionBtn")?.addEventListener("click", createPresentationAnnotationDimension);
-  document.getElementById("presentationLeaderBtn")?.addEventListener("click", createPresentationLeader);
+  document.getElementById("viewGeometryIdsInput")?.addEventListener("change", (event) => {
+    viewState.geometryIds = event.target.checked;
+    draw();
+  });
+  for (const button of document.querySelectorAll("[data-menu-tool]")) {
+    button.addEventListener("click", () => {
+      document.getElementById(button.dataset.menuTool)?.click();
+      button.closest("details")?.removeAttribute("open");
+    });
+  }
+  document.querySelector(".app-menus")?.addEventListener("click", (event) => {
+    const button = event.target.closest("button");
+    button?.closest("details")?.removeAttribute("open");
+  });
+  for (const button of document.querySelectorAll("[data-explorer-tab]")) {
+    button.addEventListener("click", () => {
+      const structure = button.dataset.explorerTab === "structure";
+      document.getElementById("explorerStructure").hidden = !structure;
+      document.getElementById("explorerObjects").hidden = structure;
+      for (const tab of document.querySelectorAll("[data-explorer-tab]")) {
+        const active = tab === button;
+        tab.classList.toggle("active", active);
+        tab.setAttribute("aria-selected", String(active));
+      }
+    });
+  }
+  document.getElementById("explorerObjects")?.addEventListener("click", (event) => {
+    if (event.target.closest("button")) return;
+    const row = event.target.closest("[data-object-kind], .geometry-list-row, .constraint-list-row");
+    if (!row) return;
+    clearSelection();
+    if (row.dataset.objectKind === "block") selectedBlockInstances = model.blockInstances.filter((item) => item.id === row.dataset.id);
+    else if (row.dataset.objectKind === "annotation") selectedAnnotation = model.annotations.find((item) => item.id === row.dataset.id) || null;
+    else if (row.classList.contains("constraint-list-row")) selectedConstraint = model.constraints[Number(row.dataset.idx)] || null;
+    else {
+      const kind = row.dataset.kind;
+      if (kind === "point") selectedPoints = model.points.filter((item) => item.id === row.dataset.id);
+      if (kind === "line") selectedLines = model.lines.filter((item) => item.id === row.dataset.id);
+      if (kind === "circle") selectedCircles = model.circles.filter((item) => item.id === row.dataset.id);
+      if (kind === "arc") selectedArcs = model.arcs.filter((item) => item.id === row.dataset.id);
+    }
+    updateUI();
+    draw();
+  });
+  document.getElementById("explorerObjects")?.addEventListener("pointerover", (event) => {
+    const row = event.target.closest("[data-object-kind]");
+    if (!row) return;
+    if (row.dataset.objectKind === "block") hoveredBlockInstance = model.blockInstances.find((item) => item.id === row.dataset.id) || null;
+    if (row.dataset.objectKind === "annotation") hoveredAnnotation = model.annotations.find((item) => item.id === row.dataset.id) || null;
+    draw();
+  });
+  document.getElementById("explorerObjects")?.addEventListener("pointerout", (event) => {
+    if (!event.target.closest("[data-object-kind]")) return;
+    hoveredBlockInstance = null;
+    hoveredAnnotation = null;
+    draw();
+  });
+  document.getElementById("documentSettingsBtn")?.addEventListener("click", () => {
+    const fields = document.getElementById("documentAppearanceFields");
+    if (fields) {
+      const effective = normalizeAppearance(model.defaultAppearance, { partial: false });
+      fields.innerHTML = appearancePropertyRows(effective, effective, { allowInheritance: false });
+      fields.onchange = (event) => {
+        applyAppearanceInput(model.defaultAppearance, event.target.dataset.appearanceKey, event.target.value.trim());
+        model.defaultAppearance = normalizeAppearance(model.defaultAppearance, { partial: false });
+        recordHistory("Document Default Appearance変更");
+        draw();
+      };
+    }
+    document.getElementById("documentSettingsDialog")?.showModal();
+  });
+  document.getElementById("applicationSettingsBtn")?.addEventListener("click", () => document.getElementById("applicationSettingsDialog")?.showModal());
   document.getElementById("completeBlockEditBtn")?.addEventListener("click", completeBlockDefinitionEdit);
   document.getElementById("cancelBlockEditBtn")?.addEventListener("click", cancelBlockDefinitionEdit);
   document.getElementById("blockEditorNameInput")?.addEventListener("input", (event) => {
@@ -13761,7 +13595,6 @@
   });
 
   document.getElementById("toolSelect").addEventListener("click", () => {
-    if (rejectPresentationGeometryEdit("Geometry selection")) return;
     cancelConstraintTargetCommand("");
     mode = "select";
     lineStartPoint = null;
@@ -13778,7 +13611,6 @@
   });
 
   document.getElementById("toolPoint").addEventListener("click", () => {
-    if (rejectPresentationGeometryEdit("Point creation")) return;
     cancelConstraintTargetCommand("");
     mode = "point";
     lineStartPoint = null;
@@ -13795,7 +13627,6 @@
   });
 
   document.getElementById("toolLine").addEventListener("click", () => {
-    if (rejectPresentationGeometryEdit("Line creation")) return;
     cancelConstraintTargetCommand("");
     mode = "line";
     lineStartPoint = null;
@@ -13812,7 +13643,6 @@
   });
 
   document.getElementById("toolConstructionLine")?.addEventListener("click", () => {
-    if (rejectPresentationGeometryEdit("Construction line editing")) return;
     cancelConstraintTargetCommand("");
     const primitives = selectedConstructionTogglePrimitives();
     if (primitives.length > 0) {
@@ -13841,7 +13671,6 @@
   });
 
   document.getElementById("toolRectangle")?.addEventListener("click", () => {
-    if (rejectPresentationGeometryEdit("Rectangle creation")) return;
     cancelConstraintTargetCommand("");
     mode = "rectangle";
     lineStartPoint = null;
@@ -13858,7 +13687,6 @@
   });
 
   document.getElementById("toolFillet")?.addEventListener("click", () => {
-    if (rejectPresentationGeometryEdit("Fillet creation")) return;
     cancelConstraintTargetCommand("");
     if (selectedLines.length === 2) {
       startFilletRadiusInput(selectedLines[0], selectedLines[1]);
@@ -13880,7 +13708,6 @@
   });
 
   document.getElementById("toolTrim")?.addEventListener("click", () => {
-    if (rejectPresentationGeometryEdit("Trim")) return;
     cancelConstraintTargetCommand("");
     mode = "trim";
     lineStartPoint = null;
@@ -13908,7 +13735,6 @@
   document.getElementById("toolCreateBlock")?.addEventListener("click", startBlockCreation);
 
   document.getElementById("toolOffset")?.addEventListener("click", () => {
-    if (rejectPresentationGeometryEdit("Offset")) return;
     cancelConstraintTargetCommand("");
     cancelPendingCommand("");
     mode = "offset";
@@ -13931,7 +13757,6 @@
   });
 
   document.getElementById("toolCircle").addEventListener("click", () => {
-    if (rejectPresentationGeometryEdit("Circle creation")) return;
     cancelConstraintTargetCommand("");
     mode = "circle";
     lineStartPoint = null;
@@ -13948,7 +13773,6 @@
   });
 
   document.getElementById("toolArc").addEventListener("click", () => {
-    if (rejectPresentationGeometryEdit("Arc creation")) return;
     cancelConstraintTargetCommand("");
     mode = "arc";
     lineStartPoint = null;
@@ -14002,7 +13826,6 @@
   for (const btn of constraintButtons) {
     btn.addEventListener("click", () => {
       const type = btn.dataset.constraint;
-      if (rejectPresentationGeometryEdit("Constraints")) return;
       if (pendingConstraintCommand?.type === type) {
         cancelConstraintTargetCommand(`${constraintLabel(type)}の対象選択をキャンセルしました`);
       } else if (type === "symmetry") {
@@ -14024,7 +13847,6 @@
   }
 
   fixPointBtn.addEventListener("click", () => {
-    if (rejectPresentationGeometryEdit("Fixed constraint")) return;
     const projectedSelection = [...selectedPoints, ...selectedLines, ...selectedCircles, ...selectedArcs].filter((item) => item?.blockProjection);
     const projectedInstances = [...new Set(projectedSelection.map((item) => item.blockInstance))];
     const instance = selectedBlockInstances.length === 1
@@ -14097,7 +13919,6 @@
     window.__cadTest = {
       commitConstraintWithForcedSolveResultForTest(forcedResult) {
         resetModelState();
-        setAppMode("geometry");
         const p1 = addPoint(0, 0, true, "endpoint");
         const p2 = addPoint(10, 0, false, "endpoint");
         const constraint = new DistanceConstraint(p1, p2, 10);
@@ -14220,6 +14041,21 @@
       },
       serializedModelForTest() {
         return structuredClone(serializeModel());
+      },
+      appearanceStateForTest(kind, id) {
+        let item = null;
+        if (kind === "point") item = allGeometryPoints().find((value) => value.id === id);
+        if (kind === "line") item = allGeometryLines().find((value) => value.id === id);
+        if (kind === "circle") item = allGeometryCircles().find((value) => value.id === id);
+        if (kind === "arc") item = allGeometryArcs().find((value) => value.id === id);
+        if (kind === "block") {
+          const instance = blockInstanceById(id);
+          item = instance ? [...blockProjectionBundle(instance).lines, ...blockProjectionBundle(instance).circles, ...blockProjectionBundle(instance).arcs][0] : null;
+        }
+        return item ? { direct: normalizeAppearance(item.appearance), effective: effectiveAppearanceForElement(item), visible: isVisibleSketchElement(item) } : null;
+      },
+      viewStateForTest() {
+        return { ...viewState };
       },
       async importDocumentNameFixture(data, fileName) {
         const startedAt = performance.now();
@@ -14619,46 +14455,32 @@
           serialized: serializeModel(),
         };
       },
-      resetForPresentationDrag() {
+      resetForAnnotationDrag() {
         resetModelState();
         const p1 = addPoint(-60, -25, false, "endpoint");
         const p2 = addPoint(60, -25, false, "endpoint");
         const p3 = addPoint(60, 35, false, "endpoint");
         const p4 = addPoint(-60, 35, false, "endpoint");
-        const l1 = addLine(p1, p2);
+        addLine(p1, p2);
         addLine(p2, p3);
         const l3 = addLine(p3, p4);
         addLine(p4, p1);
-        setAppMode("presentation");
-        const sheet = activePresentationSheet();
-        sheet.elements = [];
-        const dimensionTarget = { kind: "line-length", line: l1, p1: l1.p1, p2: l1.p2, value: l1.length() };
-        pushPresentationElement({
-          type: "annotationDimension",
-          target: presentationTargetToData(dimensionTarget),
-          dimension: dimensionFromAnchor(dimensionTarget, { x: 0, y: -58 }),
-          geometryRefs: presentationTargetToData(dimensionTarget) || {},
-          style: {},
-        });
-        const leaderTarget = presentationLeaderTargetFromItem(l3, { x: 0, y: 35 });
-        const leaderLayout = presentationLeaderLayout(leaderTarget.anchor, { x: 112, y: 82 });
-        pushPresentationElement({
+        const leaderTarget = annotationLeaderTargetFromItem(l3, { x: 0, y: 35 });
+        pushAnnotation({
           type: "leader",
           text: "注記",
-          start: leaderLayout.start,
-          elbow: leaderLayout.elbow,
-          end: leaderLayout.end,
-          x: leaderLayout.text.x,
-          y: leaderLayout.text.y,
-          geometryRefs: { target: leaderTarget.geometryRef },
-          style: { color: "#111827", fontSize: 13, lineWidthPx: 1.4 },
+          start: { ...leaderTarget.anchor },
+          elbow: { x: 56, y: 82 },
+          end: { x: 112, y: 82 },
+          geometryRef: leaderTarget.geometryRef,
+          style: { color: "#111827", fontSize: 13, lineWidth: 1.4 },
         });
+        pushAnnotation({ type: "text", text: "自由テキスト", x: -90, y: 80, style: { color: "#111827", fontSize: 13 } });
         resizeCanvas({ centerWorld: { x: 20, y: 20 } });
-        return this.presentationSnapshot();
+        return this.annotationSnapshot();
       },
       resetForReadOnlyDuplicateDimension() {
         resetModelState();
-        setAppMode("geometry");
         const p1 = addPoint(-50, 0, false, "endpoint");
         const p2 = addPoint(50, 0, false, "endpoint");
         const line = addLine(p1, p2);
@@ -14688,7 +14510,6 @@
       },
       resetForReadOnlyDimensionPlacement() {
         resetModelState();
-        setAppMode("geometry");
         const p1 = addPoint(-50, 0, false, "endpoint");
         const p2 = addPoint(50, 0, false, "endpoint");
         const line = addLine(p1, p2);
@@ -14711,7 +14532,6 @@
       },
       constructionDimensionClearanceCases() {
         resetModelState();
-        setAppMode("geometry");
         const p1 = addPoint(0, 0, false, "endpoint");
         const p2 = addPoint(100, 0, false, "endpoint");
         const line = addLine(p1, p2);
@@ -14728,7 +14548,6 @@
       },
       pointPointRectangleDimensionExtensionVisibilityCases() {
         resetModelState();
-        setAppMode("geometry");
         const p1 = addPoint(160, 160, true, "endpoint");
         const p2 = addPoint(297.73401510731196, 185.0866714097212, false, "endpoint");
         const p3 = addPoint(279.8149641009543, 283.468110772277, false, "endpoint");
@@ -14807,7 +14626,6 @@
       },
       angleDimensionLabelFollowCase() {
         resetModelState();
-        setAppMode("geometry");
         const p1 = addPoint(-80, 0, false, "endpoint");
         const p2 = addPoint(80, 0, false, "endpoint");
         const p3 = addPoint(0, -80, false, "endpoint");
@@ -14910,7 +14728,6 @@
       },
       resetForTrimConstraintTransfer() {
         resetModelState();
-        setAppMode("geometry");
         const p1 = addPoint(0, 0, false, "endpoint");
         const p2 = addPoint(100, 0, false, "endpoint");
         const line = addLine(p1, p2);
@@ -14935,49 +14752,39 @@
           rightLineStart: rightLine ? { x: rightLine.p1.x, y: rightLine.p1.y } : null,
         };
       },
-      presentationSnapshot() {
-        const sheet = activePresentationSheet();
-        const dimensionElement = [...sheet.elements].reverse().find((element) => element.type === "annotationDimension");
-        const leaderElement = [...sheet.elements].reverse().find((element) => element.type === "leader");
-        const target = dimensionElement ? presentationTargetFromData(dimensionElement.target) : null;
-        const dimensionLayoutValue = target && dimensionElement ? dimensionLayout(target, dimensionElement.dimension) : null;
+      annotationSnapshot() {
+        const leaderElement = [...model.annotations].reverse().find((element) => element.type === "leader");
+        const textElement = [...model.annotations].reverse().find((element) => element.type === "text");
         const canvasRect = canvas.getBoundingClientRect();
         const toViewport = (point) => {
           const screen = worldToCanvasScreen(point);
           return { x: canvasRect.left + screen.x, y: canvasRect.top + screen.y };
         };
         return {
-          mode: model.appMode,
-          dimension: dimensionLayoutValue
-            ? {
-                world: { ...dimensionLayoutValue.text },
-                viewport: toViewport(dimensionLayoutValue.text),
-                dimension: { ...dimensionElement.dimension },
-              }
-            : null,
           leader: leaderElement
             ? {
-                world: { x: leaderElement.x, y: leaderElement.y },
-                viewport: toViewport({ x: leaderElement.x, y: leaderElement.y }),
+                world: { ...leaderElement.end },
+                viewport: toViewport(leaderElement.end),
                 end: { ...leaderElement.end },
                 elbow: leaderElement.elbow ? { ...leaderElement.elbow } : null,
               }
             : null,
+          text: textElement ? { world: { x: textElement.x, y: textElement.y }, viewport: toViewport(textElement) } : null,
         };
       },
-      presentationAnnotationHitAt(viewportPoint) {
+      annotationHitAt(viewportPoint) {
         const canvasRect = canvas.getBoundingClientRect();
         const world = screenToWorld({ x: viewportPoint.x - canvasRect.left, y: viewportPoint.y - canvasRect.top });
-        const hit = hitPresentationAnnotationElement(world.x, world.y);
+        const hit = hitAnnotationElement(world.x, world.y);
         return hit ? { type: hit.type, part: hit.part } : null;
       },
-      presentationDragActive() {
-        const element = presentationElementById(presentationDragSession?.elementId);
-        return presentationDragSession
+      annotationDragActive() {
+        const element = annotationById(annotationDragSession?.elementId);
+        return annotationDragSession
           ? {
-              type: presentationDragSession.hit?.type,
-              hasAnchor: Boolean(presentationDragSession.startAnchor),
-              dimension: element?.dimension ? { ...element.dimension } : null,
+              type: annotationDragSession.hit?.type,
+              hasStart: Boolean(annotationDragSession.start),
+              elementId: element?.id || null,
             }
           : null;
       },
@@ -14996,7 +14803,6 @@
       },
       resetForActiveSketchDimensionVisibility() {
         resetModelState();
-        setAppMode("geometry");
         const firstSketchId = activeSketchId();
         const p1 = addPoint(0, 0, false, "endpoint");
         const p2 = addPoint(100, 0, false, "endpoint");
@@ -15055,7 +14861,6 @@
       },
       resetForMiddleButtonFit() {
         resetModelState();
-        setAppMode("geometry");
         const nearLine = addLine(addPoint(0, 0, true, "endpoint"), addPoint(100, 0, true, "endpoint"));
         const hiddenSketchId = "S2";
         model.sketches.push({ id: hiddenSketchId, name: "Sketch-2", parentSketchId: ROOT_SKETCH_ID, kind: "sketch", visible: false });
@@ -15087,7 +14892,6 @@
         const results = {};
         const resetForCase = () => {
           resetModelState();
-          setAppMode("geometry");
           viewport.scale = 1;
           viewport.x = 0;
           viewport.y = 0;
@@ -15169,15 +14973,11 @@
           model.blockInstances.push(instance);
           selectedBlockInstances = [instance];
         }, drawBlockInstanceHandles);
-        capture("presentationLeader", () => {
-          setAppMode("presentation");
-        }, () => drawPresentationLeader({
+        capture("annotationLeader", () => {}, () => drawAnnotationLeader({
           start: { x: 0, y: 0 },
           elbow: { x: 40, y: 15 },
           end: { x: 80, y: 15 },
           text: "note",
-          x: 84,
-          y: 15,
           style: {},
         }, true));
         capture("frame", () => {
@@ -15187,7 +14987,6 @@
       },
       resetForSidebarInspection() {
         resetModelState();
-        setAppMode("geometry");
         const p1 = addPoint(-80, 0, true, "endpoint");
         const p2 = addPoint(20, 0, false, "endpoint");
         const line = addLine(p1, p2);
@@ -15221,7 +15020,6 @@
       },
       resetForOffsetConstraints() {
         resetModelState();
-        setAppMode("geometry");
         const lineP1 = addPoint(-120, -70, true, "endpoint");
         const lineP2 = addPoint(-20, -70, true, "endpoint");
         const sourceLine = addLine(lineP1, lineP2);
@@ -15258,7 +15056,6 @@
       },
       resetForOffsetUi() {
         resetModelState();
-        setAppMode("geometry");
         const p1 = addPoint(-60, 0, false, "endpoint");
         const p2 = addPoint(60, 0, false, "endpoint");
         addLine(p1, p2);
@@ -15293,7 +15090,6 @@
       },
       resetForOffsetDirection(directionCase = "vertical") {
         resetModelState();
-        setAppMode("geometry");
         const horizontal = directionCase === "horizontal";
         const p1 = addPoint(horizontal ? 60 : 0, horizontal ? 0 : 60, false, "endpoint");
         const p2 = addPoint(horizontal ? -60 : 0, horizontal ? 0 : -60, false, "endpoint");
@@ -15315,7 +15111,6 @@
       },
       resetForSketchDeletion() {
         resetModelState();
-        setAppMode("geometry");
         model.sketches.push({ id: "S2", name: "Sketch-2", parentSketchId: ROOT_SKETCH_ID, kind: "sketch" });
         model.sketches.push({ id: "S3", name: "Sketch-2-1", parentSketchId: "S2", kind: "sketch" });
         model.sketches.push({ id: "S4", name: "Sketch-3", parentSketchId: ROOT_SKETCH_ID, kind: "sketch" });
@@ -15326,10 +15121,9 @@
         model.activeSketchId = "S3";
         const center = addPoint(30, 30, false, "center");
         const circle = addCircle(center, 20);
-        const sheet = activePresentationSheet();
-        sheet.elementStyles[presentationElementKey(line)] = { color: "#ef4444" };
-        sheet.elementStyles[presentationElementKey(circle)] = { color: "#22c55e" };
-        sheet.elements.push({ id: "PE-test", type: "leader", visible: true, geometryRefs: { target: presentationElementKey(line) }, style: {} });
+        line.appearance = { color: "#ef4444" };
+        circle.appearance = { color: "#22c55e" };
+        model.annotations.push({ id: "AN-test", type: "leader", visible: true, geometryRef: geometryRefForItem(line), start: { x: 0, y: 0 }, end: { x: 30, y: 20 }, style: {} });
         model.activeSketchId = "S3";
         const deleted = deleteSketch("S2", false);
         return {
@@ -15337,13 +15131,11 @@
           sketchIds: model.sketches.map((sketch) => sketch.id),
           activeSketchId: model.activeSketchId,
           geometry: { points: model.points.length, lines: model.lines.length, circles: model.circles.length, arcs: model.arcs.length },
-          styleKeys: Object.keys(sheet.elementStyles),
-          presentationElementCount: sheet.elements.length,
+          annotationCount: model.annotations.length,
         };
       },
       resetForSiblingVisibility() {
         resetModelState();
-        setAppMode("geometry");
         model.sketches.push({ id: "S2", name: "Sketch-2", parentSketchId: ROOT_SKETCH_ID, kind: "sketch" });
         model.activeSketchId = "S2";
         const p1 = addPoint(-40, 0, false, "endpoint");
@@ -15362,7 +15154,6 @@
       },
       geometryStrokeStyleCasesForTest() {
         resetModelState();
-        setAppMode("geometry");
         const activeNormal = addLine(addPoint(-80, -25, false, "endpoint"), addPoint(80, -25, false, "endpoint"));
         const activeConstruction = addLine(addPoint(-80, 25, false, "endpoint"), addPoint(80, 25, false, "endpoint"), true);
         model.sketches.push({ id: "S2", name: "Sketch-2", parentSketchId: ROOT_SKETCH_ID, kind: "sketch", visible: true });
@@ -15382,7 +15173,6 @@
       },
       resetForSiblingSubtreeReference() {
         resetModelState();
-        setAppMode("geometry");
         const parentSketchId = "S10";
         const siblingSketchId = "S2";
         const siblingChildId = "S3";
@@ -15467,7 +15257,6 @@
       },
       referenceDependencyOrderCase() {
         resetModelState();
-        setAppMode("geometry");
         const parentSketchId = "S10";
         const childSketchId = "S5";
         sketchById(DEFAULT_SKETCH_ID).parentSketchId = parentSketchId;
@@ -15496,7 +15285,6 @@
       },
       cyclicReferenceLoadCase() {
         resetModelState();
-        setAppMode("geometry");
         model.sketches.push({ id: "S2", name: "Sketch-2", parentSketchId: ROOT_SKETCH_ID, kind: "sketch", visible: true });
         model.activeSketchId = DEFAULT_SKETCH_ID;
         const p1 = addPoint(0, 0, false, "explicit");
@@ -15523,13 +15311,12 @@
         return {
           preferenceVisible: sketch?.visible !== false,
           effectiveVisible: isVisibleSketchId(sketchId),
-          serializedVisible: serialized?.visible,
+          serializedVisible: serialized?.appearance?.visible,
           buttonPressed: document.querySelector(`.sketchVisibilityBtn[data-id="${sketchId}"]`)?.getAttribute("aria-pressed") || null,
         };
       },
       resetForConstraintDimensionSelection() {
         resetModelState();
-        setAppMode("geometry");
         const p1 = addPoint(-50, 0, false, "endpoint");
         const p2 = addPoint(50, 0, false, "endpoint");
         const line = addLine(p1, p2);
@@ -15553,7 +15340,6 @@
       },
       resetForSupportConstraintStatus() {
         resetModelState();
-        setAppMode("geometry");
 
         const anchor = addPoint(-60, -40, true, "explicit");
         const supportLine = addLine(addPoint(-100, -40, false, "endpoint"), addPoint(-20, -40, false, "endpoint"));
@@ -15581,7 +15367,6 @@
       },
       resetForReferencePointLineCoincidence() {
         resetModelState();
-        setAppMode("geometry");
         const parentPoint = addPoint(-45, 0, false, "explicit");
         const parentLineP1 = addPoint(20, -20, false, "endpoint");
         const parentLineP2 = addPoint(80, -20, false, "endpoint");
@@ -15611,7 +15396,6 @@
       },
       resetForSiblingPointLineReference() {
         resetModelState();
-        setAppMode("geometry");
         const activePoint = addPoint(50, 35, false, "explicit");
         const siblingSketchId = "S2";
         model.sketches.push({ id: siblingSketchId, name: "Sketch-2", parentSketchId: ROOT_SKETCH_ID, kind: "sketch" });
@@ -15662,7 +15446,6 @@
       },
       resetForBlockCreationUi() {
         resetModelState();
-        setAppMode("geometry");
         const p1 = addPoint(-60, -30, false, "endpoint");
         const p2 = addPoint(60, -30, false, "endpoint");
         const p3 = addPoint(60, 30, false, "endpoint");
@@ -15682,14 +15465,12 @@
       },
       resetForEmptyBlockCreation() {
         resetModelState();
-        setAppMode("geometry");
         updateUI();
         draw();
         return { definitions: model.blockDefinitions.length, lines: model.lines.length };
       },
       resetForDimensionCommandLineDrag() {
         resetModelState();
-        setAppMode("geometry");
         const p1 = addPoint(-70, -35, false, "endpoint");
         const p2 = addPoint(70, -35, false, "endpoint");
         const dimensionedLine = addLine(p1, p2);
@@ -15727,7 +15508,6 @@
       },
       resetForLineLengthClickPlacement() {
         resetModelState();
-        setAppMode("geometry");
         const line = addLine(addPoint(-80, 0, false, "endpoint"), addPoint(80, 0, false, "endpoint"));
         fitAllGeometryToViewport(190);
         updateUI();
@@ -16012,7 +15792,6 @@
       },
       blockCreationRejectionCases() {
         resetModelState();
-        setAppMode("geometry");
         const p1 = addPoint(0, 0, false, "endpoint");
         const p2 = addPoint(60, 0, false, "endpoint");
         const p3 = addPoint(100, 30, false, "endpoint");
@@ -16023,22 +15802,23 @@
         const sharedCounts = { definitions: model.blockDefinitions.length, instances: model.blockInstances.length, lines: model.lines.length };
 
         resetModelState();
-        setAppMode("geometry");
         const line = addLine(addPoint(0, 0, false, "endpoint"), addPoint(60, 0, false, "endpoint"));
-        activePresentationSheet().elements.push({
-          id: "PE-block-ref",
+        model.annotations.push({
+          id: "AN-block-ref",
           type: "leader",
           visible: true,
-          geometryRefs: { target: presentationElementKey(line) },
+          geometryRef: geometryRefForItem(line),
+          start: { x: 0, y: 0 },
+          end: { x: 30, y: 20 },
           style: {},
         });
         selectedLines = [line];
-        const presentationError = blockSelectionGeometry().error || null;
+        const annotationError = blockSelectionGeometry().error || null;
         return {
           sharedPointError,
           sharedCounts,
-          presentationError,
-          presentationCounts: { definitions: model.blockDefinitions.length, instances: model.blockInstances.length, lines: model.lines.length },
+          annotationError,
+          annotationCounts: { definitions: model.blockDefinitions.length, instances: model.blockInstances.length, lines: model.lines.length },
         };
       },
       sidebarHighlightIds() {
@@ -16076,7 +15856,7 @@
       currentSidebarHoveredGeometryKeys() {
         return [...allGeometryPoints(), ...allGeometryLines(), ...allGeometryCircles(), ...allGeometryArcs()]
           .filter(isSidebarHoveredElement)
-          .map(presentationElementKey)
+          .map(geometryElementKey)
           .sort();
       },
     };

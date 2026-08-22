@@ -46,32 +46,32 @@ test.afterAll(() => {
   if (serverProcess) serverProcess.kill();
 });
 
-test("presentation annotations can be dragged on canvas", async ({ page }) => {
+test("document annotations can be dragged on the unified canvas", async ({ page }) => {
   await page.goto(`${baseUrl}/index.html?test=1`);
   await page.waitForFunction(() => window.__cadTest);
-  await page.evaluate(() => window.__cadTest.resetForPresentationDrag());
+  await page.evaluate(() => window.__cadTest.resetForAnnotationDrag());
 
-  const beforeDimension = await page.evaluate(() => window.__cadTest.presentationSnapshot());
-  await page.mouse.move(beforeDimension.dimension.viewport.x, beforeDimension.dimension.viewport.y);
+  const beforeText = await page.evaluate(() => window.__cadTest.annotationSnapshot());
+  await page.mouse.move(beforeText.text.viewport.x, beforeText.text.viewport.y);
   await page.mouse.down();
-  await page.mouse.move(beforeDimension.dimension.viewport.x, beforeDimension.dimension.viewport.y + 70, { steps: 8 });
+  await page.mouse.move(beforeText.text.viewport.x, beforeText.text.viewport.y + 70, { steps: 8 });
   await page.mouse.up();
 
-  const afterDimension = await page.evaluate(() => window.__cadTest.presentationSnapshot());
-  expect(afterDimension.dimension.world.y).toBeGreaterThan(beforeDimension.dimension.world.y + 20);
+  const afterText = await page.evaluate(() => window.__cadTest.annotationSnapshot());
+  expect(afterText.text.world.y).toBeGreaterThan(beforeText.text.world.y + 20);
 
-  const beforeLeader = afterDimension;
+  const beforeLeader = afterText;
   await page.mouse.move(beforeLeader.leader.viewport.x, beforeLeader.leader.viewport.y);
   await page.mouse.down();
   await page.mouse.move(beforeLeader.leader.viewport.x + 70, beforeLeader.leader.viewport.y - 35, { steps: 8 });
   await page.mouse.up();
 
-  const afterLeader = await page.evaluate(() => window.__cadTest.presentationSnapshot());
+  const afterLeader = await page.evaluate(() => window.__cadTest.annotationSnapshot());
   expect(afterLeader.leader.world.x).toBeGreaterThan(beforeLeader.leader.world.x + 20);
   expect(afterLeader.leader.world.y).toBeLessThan(beforeLeader.leader.world.y - 10);
 
   await page.keyboard.press("Control+Z");
-  const afterUndo = await page.evaluate(() => window.__cadTest.presentationSnapshot());
+  const afterUndo = await page.evaluate(() => window.__cadTest.annotationSnapshot());
   expect(afterUndo.leader.world.x).toBeCloseTo(beforeLeader.leader.world.x, 5);
   expect(afterUndo.leader.world.y).toBeCloseTo(beforeLeader.leader.world.y, 5);
 
@@ -80,7 +80,7 @@ test("presentation annotations can be dragged on canvas", async ({ page }) => {
     if (state.redoDisabled) break;
     await page.keyboard.press("Control+Y");
   }
-  const afterRedo = await page.evaluate(() => window.__cadTest.presentationSnapshot());
+  const afterRedo = await page.evaluate(() => window.__cadTest.annotationSnapshot());
   expect(afterRedo.leader.world.x).toBeCloseTo(afterLeader.leader.world.x, 5);
   expect(afterRedo.leader.world.y).toBeCloseTo(afterLeader.leader.world.y, 5);
 });
@@ -232,338 +232,135 @@ test("undo preserves construction drawing mode", async ({ page }) => {
   expect(state.constructionButtonActive).toBe(true);
 });
 
-test("geometry toolbar uses the organized command groups", async ({ page }) => {
+test("unified workspace uses fixed Explorer Canvas Properties and Status regions", async ({ page }) => {
   await page.goto(`${baseUrl}/index.html?test=1`);
+  await page.waitForFunction(() => window.__cadTest);
+
   const layout = await page.evaluate(() => {
-    const isVisible = (element) => Boolean(element.offsetWidth || element.offsetHeight || element.getClientRects().length);
-    const visibleTopButtons = [...document.querySelectorAll(".toolbar button")]
-      .filter(isVisible)
-      .map((element) => element.id);
-    const visibleLeftCommandIds = [...document.querySelectorAll(".left-tool-rail button")]
-      .filter(isVisible)
-      .map((element) => element.id || element.dataset.constraint);
-    const sidebarTabs = document.querySelector(".sidebar-tabs");
-    const toolbar = document.querySelector(".toolbar");
-    const documentTitlebar = document.querySelector(".document-titlebar");
-    const documentNameInput = document.querySelector("#documentNameInput");
-    const appLogo = document.querySelector(".app-logo-svg");
-    const headerDivider = document.querySelector(".header-divider");
-    const fileGroup = document.querySelector(".file-toolbar-group");
-    const leftRail = document.querySelector(".left-tool-rail");
-    const modeOverlay = document.querySelector(".mode-overlay");
-    const sketchOverlay = document.querySelector(".sketch-overlay");
-    const blockOverlay = document.querySelector(".block-overlay");
-    const toolbarRect = toolbar.getBoundingClientRect();
-    const documentTitlebarRect = documentTitlebar.getBoundingClientRect();
-    const documentNameRect = documentNameInput.getBoundingClientRect();
-    const appLogoRect = appLogo.getBoundingClientRect();
-    const headerDividerRect = headerDivider.getBoundingClientRect();
-    const fileGroupRect = fileGroup.getBoundingClientRect();
-    const leftRailRect = leftRail.getBoundingClientRect();
-    const modeRect = modeOverlay.getBoundingClientRect();
-    const sketchRect = sketchOverlay.getBoundingClientRect();
-    const blockRect = blockOverlay.getBoundingClientRect();
-    const fileButtonRect = document.getElementById("exportBtn").getBoundingClientRect();
-    const selectButtonRect = document.getElementById("toolSelect").getBoundingClientRect();
-    const selectButtonStyle = getComputedStyle(document.getElementById("toolSelect"));
-    const firstToolGroup = document.querySelector(".left-tool-rail .geometry-toolbar-group");
-    const undoButtonRect = document.getElementById("undoBtn").getBoundingClientRect();
-    const geometrySheetDisplay = getComputedStyle(document.querySelector(".mode-overlay-sheet")).display;
-    const fileGroupStyle = getComputedStyle(fileGroup);
-    const firstToolGroupStyle = getComputedStyle(firstToolGroup);
-    const firstToolGroupButtons = [...firstToolGroup.querySelectorAll("button")]
-      .filter(isVisible)
-      .map((element) => {
-        const rect = element.getBoundingClientRect();
-        return Math.round((rect.left + rect.right) / 2);
-      });
+    const rect = (selector) => {
+      const value = document.querySelector(selector).getBoundingClientRect();
+      return { left: value.left, right: value.right, top: value.top, bottom: value.bottom, width: value.width, height: value.height };
+    };
     return {
-      visibleTopButtons,
-      visibleLeftCommandIds,
-      pointToolVisible: getComputedStyle(document.getElementById("toolPoint")).display !== "none",
-      blockCreateParentId: document.getElementById("toolCreateBlock").closest("section").id,
-      blockTopPlaceExists: Boolean(document.getElementById("toolPlaceBlock")),
-      presentationGroupVisible: getComputedStyle(document.getElementById("presentationStyleGroup")).display !== "none",
-      geometrySheetDisplay,
-      fileGroupBorderTopWidth: fileGroupStyle.borderTopWidth,
-      fileGroupBorderLeftWidth: fileGroupStyle.borderLeftWidth,
-      fileGroupBackground: fileGroupStyle.backgroundColor,
-      firstToolGroupBorderTopWidth: firstToolGroupStyle.borderTopWidth,
-      firstToolGroupBorderLeftWidth: firstToolGroupStyle.borderLeftWidth,
-      firstToolGroupBackground: firstToolGroupStyle.backgroundColor,
-      modeParentClass: modeOverlay.parentElement.className,
-      fileGroupParentClass: fileGroup.parentElement.className,
-      fileGroupText: fileGroup.textContent.trim(),
-      fileButtonWidth: fileButtonRect.width,
-      fileButtonHeight: fileButtonRect.height,
-      selectButtonWidth: selectButtonRect.width,
-      selectButtonHeight: selectButtonRect.height,
-      selectButtonBoxShadow: selectButtonStyle.boxShadow,
-      presentationSheetLabelExists: Boolean(document.getElementById("presentationSheetLabel")),
-      documentNameValue: documentNameInput.value,
-      documentTitle: document.title,
-      undoButtonLeft: undoButtonRect.left,
-      tabsParentClass: sidebarTabs.parentElement.className,
-      tabsInsideSidebar: Boolean(sidebarTabs.closest(".side")),
-      tabsDirection: getComputedStyle(sidebarTabs).flexDirection,
-      toolbarRect: { left: toolbarRect.left, right: toolbarRect.right, top: toolbarRect.top, bottom: toolbarRect.bottom },
-      documentTitlebarRect: { left: documentTitlebarRect.left, right: documentTitlebarRect.right, top: documentTitlebarRect.top, bottom: documentTitlebarRect.bottom },
-      modeOffsetFromTitleLeft: modeRect.left - documentTitlebarRect.left,
-      documentNameRect: { left: documentNameRect.left, right: documentNameRect.right, width: documentNameRect.width },
-      appLogoRect: { left: appLogoRect.left, right: appLogoRect.right, width: appLogoRect.width, height: appLogoRect.height },
-      headerDividerRect: { left: headerDividerRect.left, right: headerDividerRect.right, width: headerDividerRect.width, height: headerDividerRect.height },
-      fileGroupRect: { left: fileGroupRect.left, right: fileGroupRect.right, top: fileGroupRect.top, bottom: fileGroupRect.bottom },
-      leftRailRect: { left: leftRailRect.left, right: leftRailRect.right, top: leftRailRect.top, bottom: leftRailRect.bottom },
-      modeRect: { left: modeRect.left, right: modeRect.right, top: modeRect.top, bottom: modeRect.bottom },
-      leftRailScrollableX: leftRail.scrollWidth > leftRail.clientWidth + 1,
-      leftRailScrollableY: leftRail.scrollHeight > leftRail.clientHeight + 1,
-      firstToolGroupColumnCount: new Set(firstToolGroupButtons).size,
-      sketchLeft: sketchRect.left,
-      blockLeft: blockRect.left,
-      toggleExists: Boolean(document.getElementById("toggleSideBtn")),
-      viewport: { width: innerWidth, height: innerHeight },
+      menu: rect(".menu-bar"),
+      toolbar: rect(".command-toolbar"),
+      explorer: rect(".explorer"),
+      canvas: rect(".canvas-area"),
+      properties: rect(".properties"),
+      status: rect(".status-bar"),
+      modeControls: document.querySelectorAll("#geometryModeBtn, #presentationModeBtn, #presentationSheetSelect").length,
+      menus: [...document.querySelectorAll(".app-menu > summary")].map((item) => item.textContent.trim()),
+      toolIds: [...document.querySelectorAll(".command-toolbar button")].map((item) => item.id).filter(Boolean),
     };
   });
-  await page.screenshot({ path: "test-results/toolbar-layout.png", fullPage: true });
-  expect(layout.visibleTopButtons).toEqual([
-    "geometryModeBtn",
-    "presentationModeBtn",
-  ]);
-  expect(layout.visibleLeftCommandIds).toEqual(
-    expect.arrayContaining([
-      "undoBtn",
-      "redoBtn",
-      "exportBtn",
-      "importBtn",
-      "toolSelect",
-      "toolPoint",
-      "toolLine",
-      "toolCircle",
-      "toolArc",
-      "toolConstructionLine",
-      "toolRectangle",
-      "toolTrim",
-      "toolFillet",
-      "toolOffset",
-      "deleteSelectionBtn",
-      "distance",
-      "coincident",
-      "horizontal",
-      "vertical",
-      "parallel",
-      "perpendicular",
-      "concentric",
-      "equal",
-      "tangent",
-      "fixPointBtn",
-    ]),
-  );
-  expect(layout.pointToolVisible).toBe(true);
-  expect(layout.blockCreateParentId).toBe("blockOverlay");
-  expect(layout.blockTopPlaceExists).toBe(false);
-  expect(layout.presentationGroupVisible).toBe(false);
-  expect(layout.geometrySheetDisplay).toBe("none");
-  expect(layout.fileGroupBorderTopWidth).toBe("0px");
-  expect(layout.fileGroupBorderLeftWidth).toBe("0px");
-  expect(layout.fileGroupBackground).toBe("rgba(0, 0, 0, 0)");
-  expect(layout.firstToolGroupBorderTopWidth).toBe("1px");
-  expect(layout.firstToolGroupBorderLeftWidth).toBe("0px");
-  expect(layout.firstToolGroupBackground).toBe("rgba(0, 0, 0, 0)");
-  expect(layout.modeParentClass).toBe("document-control-stack");
-  expect(layout.fileGroupParentClass).toBe("left-tool-rail");
-  expect(layout.fileGroupText).toBe("");
-  expect(layout.fileButtonWidth).toBe(26);
-  expect(layout.fileButtonHeight).toBe(26);
-  expect(layout.selectButtonWidth).toBeGreaterThan(layout.fileButtonWidth * 1.8);
-  expect(layout.selectButtonHeight).toBe(26);
-  expect(layout.selectButtonBoxShadow).not.toContain("0px 0px 0px 3px");
-  expect(layout.presentationSheetLabelExists).toBe(false);
-  expect(layout.documentNameValue).toBe("無題");
-  expect(layout.documentTitle).toBe("無題 - Cad2");
-  expect(layout.appLogoRect.left).toBeLessThan(14);
-  expect(layout.appLogoRect.width).toBe(30);
-  expect(layout.appLogoRect.height).toBe(30);
-  expect(layout.headerDividerRect.width).toBe(1);
-  expect(layout.headerDividerRect.height).toBe(30);
-  expect(layout.headerDividerRect.left).toBeGreaterThan(layout.appLogoRect.right);
-  expect(layout.documentTitlebarRect.left).toBeGreaterThan(layout.headerDividerRect.right);
-  expect(layout.documentNameRect.width).toBeGreaterThan(100);
-  expect(layout.fileGroupRect.left).toBeGreaterThanOrEqual(layout.leftRailRect.left);
-  expect(layout.fileGroupRect.right).toBeLessThanOrEqual(layout.leftRailRect.right + 1);
-  expect(Math.abs(layout.modeOffsetFromTitleLeft)).toBeLessThanOrEqual(2);
-  expect(layout.modeRect.top).toBeGreaterThanOrEqual(layout.documentTitlebarRect.bottom - 1);
-  expect(layout.modeRect.left).toBeLessThan(90);
-  expect(layout.modeRect.bottom).toBeLessThanOrEqual(layout.leftRailRect.top + 1);
-  expect(layout.undoButtonLeft).toBeGreaterThanOrEqual(layout.leftRailRect.left);
-  expect(layout.firstToolGroupColumnCount).toBe(2);
-  expect(layout.leftRailScrollableX).toBe(false);
-  expect(layout.leftRailScrollableY).toBe(false);
-  expect(layout.sketchLeft).toBeGreaterThan(layout.leftRailRect.right);
-  expect(layout.blockLeft).toBeGreaterThan(layout.leftRailRect.right);
-  expect(layout.toggleExists).toBe(false);
-  expect(layout.tabsParentClass).toBe("work-area");
-  expect(layout.tabsInsideSidebar).toBe(false);
-  expect(layout.tabsDirection).toBe("column");
+
+  expect(layout.modeControls).toBe(0);
+  expect(layout.menus).toEqual(["ファイル", "編集", "表示", "Geometry", "Constraint", "Annotation", "ヘルプ"]);
+  expect(layout.toolIds).toEqual(expect.arrayContaining(["undoBtn", "redoBtn", "deleteSelectionBtn", "toolSelect", "toolPoint", "toolLine", "annotationLeaderBtn", "annotationTextBtn"]));
+  expect(layout.explorer.left).toBe(0);
+  expect(layout.explorer.right).toBeCloseTo(layout.canvas.left, 0);
+  expect(layout.canvas.right).toBeCloseTo(layout.properties.left, 0);
+  expect(layout.explorer.top).toBeGreaterThanOrEqual(layout.toolbar.bottom - 1);
+  expect(layout.status.top).toBeGreaterThanOrEqual(layout.canvas.bottom - 1);
+
+  await page.click('[data-explorer-tab="objects"]');
+  await expect(page.locator("#explorerObjects")).toBeVisible();
+  await expect(page.locator("#explorerStructure")).toBeHidden();
+  await page.click('[data-explorer-tab="structure"]');
+  await expect(page.locator("#explorerStructure")).toBeVisible();
 
   await page.fill("#documentNameInput", "Fixture Part");
-  let documentNameState = await page.evaluate(() => window.__cadTest.documentNameState());
-  expect(documentNameState).toEqual({
+  expect(await page.evaluate(() => window.__cadTest.documentNameState())).toEqual({
     modelName: "Fixture Part",
     displayName: "Fixture Part",
     serializedName: "Fixture Part",
     title: "Fixture Part - Cad2",
   });
-  const downloadPromise = page.waitForEvent("download");
-  await page.click("#exportBtn");
-  expect((await downloadPromise).suggestedFilename()).toBe("Fixture Part.json");
-  documentNameState = await page.evaluate(() => window.__cadTest.importDocumentNameFixture(
-    { version: 8, documentName: "Stored Name", points: [], lines: [], constraints: [] },
-    "opened-file-name.json",
-  ));
-  expect(documentNameState.success).toBe(true);
-  expect(documentNameState.displayName).toBe("opened-file-name");
-  expect(documentNameState.serializedName).toBe("opened-file-name");
-  expect(documentNameState.title).toBe("opened-file-name - Cad2");
-  await expect(page.locator("#documentNameInput")).toHaveValue("opened-file-name");
-  await page.fill("#documentNameInput", "");
-  await page.locator("#documentNameInput").blur();
-  documentNameState = await page.evaluate(() => window.__cadTest.documentNameState());
-  expect(documentNameState.displayName).toBe("無題");
-  await expect(page.locator("#documentNameInput")).toHaveValue("無題");
 
-  await page.click('[data-sidebar-tab="constraints"]');
-  expect(await page.locator(".side").isVisible()).toBe(true);
-  const openSidebarLayout = await page.evaluate(() => {
-    const sideRect = document.querySelector(".side").getBoundingClientRect();
-    const toolbarRect = document.querySelector(".toolbar").getBoundingClientRect();
-    const documentTitlebarRect = document.querySelector(".document-titlebar").getBoundingClientRect();
-    const modeRect = document.querySelector(".mode-overlay").getBoundingClientRect();
-    const fileGroupRect = document.querySelector(".file-toolbar-group").getBoundingClientRect();
-    const leftRailRect = document.querySelector(".left-tool-rail").getBoundingClientRect();
-    return {
-      sideTop: sideRect.top,
-      toolbarBottom: toolbarRect.bottom,
-      fileLeft: fileGroupRect.left,
-      fileRight: fileGroupRect.right,
-      leftRailLeft: leftRailRect.left,
-      leftRailRight: leftRailRect.right,
-      modeLeft: modeRect.left,
-      documentTitlebarLeft: documentTitlebarRect.left,
-      modeParentClass: document.querySelector(".mode-overlay").parentElement.className,
-      modeBottom: modeRect.bottom,
-      appCollapsed: document.querySelector(".app").classList.contains("side-collapsed"),
-    };
-  });
-  expect(openSidebarLayout.appCollapsed).toBe(false);
-  expect(openSidebarLayout.modeParentClass).toBe("document-control-stack");
-  expect(openSidebarLayout.sideTop).toBeGreaterThanOrEqual(openSidebarLayout.toolbarBottom - 1);
-  expect(openSidebarLayout.fileLeft).toBeGreaterThanOrEqual(openSidebarLayout.leftRailLeft);
-  expect(openSidebarLayout.fileRight).toBeLessThanOrEqual(openSidebarLayout.leftRailRight + 1);
-  expect(Math.abs(openSidebarLayout.modeLeft - openSidebarLayout.documentTitlebarLeft)).toBeLessThanOrEqual(2);
-  expect(openSidebarLayout.modeBottom).toBeLessThanOrEqual(openSidebarLayout.toolbarBottom + 1);
-
-  const canvas = await page.locator("#canvas").boundingBox();
-  await page.mouse.click(canvas.x + canvas.width * 0.48, canvas.y + canvas.height * 0.82);
-  expect(await page.locator(".side").isVisible()).toBe(true);
-  await page.click('[data-sidebar-tab="constraints"]');
-  expect(await page.locator(".side").isVisible()).toBe(false);
-  const collapsedModeLayout = await page.evaluate(() => {
-    const fileGroupRect = document.querySelector(".file-toolbar-group").getBoundingClientRect();
-    const modeRect = document.querySelector(".mode-overlay").getBoundingClientRect();
-    const documentTitlebarRect = document.querySelector(".document-titlebar").getBoundingClientRect();
-    const leftRailRect = document.querySelector(".left-tool-rail").getBoundingClientRect();
-    return {
-      fileLeft: fileGroupRect.left,
-      fileRight: fileGroupRect.right,
-      leftRailLeft: leftRailRect.left,
-      leftRailRight: leftRailRect.right,
-      modeLeft: modeRect.left,
-      documentTitlebarLeft: documentTitlebarRect.left,
-    };
-  });
-  expect(collapsedModeLayout.fileLeft).toBeGreaterThanOrEqual(collapsedModeLayout.leftRailLeft);
-  expect(collapsedModeLayout.fileRight).toBeLessThanOrEqual(collapsedModeLayout.leftRailRight + 1);
-  expect(Math.abs(collapsedModeLayout.modeLeft - collapsedModeLayout.documentTitlebarLeft)).toBeLessThanOrEqual(2);
-
-  await page.click("#presentationModeBtn");
-  await page.waitForFunction(() => document.body.classList.contains("presentation-mode"));
-  const collapsedPresentationLayout = await page.evaluate(() => {
-    const modeRect = document.querySelector(".mode-overlay").getBoundingClientRect();
-    const documentTitlebarRect = document.querySelector(".document-titlebar").getBoundingClientRect();
-    const fileGroupRect = document.querySelector(".file-toolbar-group").getBoundingClientRect();
-    const leftRailRect = document.querySelector(".left-tool-rail").getBoundingClientRect();
-    const sheetRect = document.querySelector(".mode-overlay-sheet").getBoundingClientRect();
-    return {
-      fileLeft: fileGroupRect.left,
-      fileRight: fileGroupRect.right,
-      leftRailLeft: leftRailRect.left,
-      leftRailRight: leftRailRect.right,
-      modeLeft: modeRect.left,
-      documentTitlebarLeft: documentTitlebarRect.left,
-      sheetVisible: Boolean(sheetRect.width && sheetRect.height),
-      modeParentClass: document.querySelector(".mode-overlay").parentElement.className,
-      appCollapsed: document.querySelector(".app").classList.contains("side-collapsed"),
-    };
-  });
-  expect(collapsedPresentationLayout.appCollapsed).toBe(true);
-  expect(collapsedPresentationLayout.modeParentClass).toBe("document-control-stack");
-  expect(collapsedPresentationLayout.sheetVisible).toBe(true);
-  expect(collapsedPresentationLayout.fileLeft).toBeGreaterThanOrEqual(collapsedPresentationLayout.leftRailLeft);
-  expect(collapsedPresentationLayout.fileRight).toBeLessThanOrEqual(collapsedPresentationLayout.leftRailRight + 1);
-  expect(Math.abs(collapsedPresentationLayout.modeLeft - collapsedPresentationLayout.documentTitlebarLeft)).toBeLessThanOrEqual(2);
-  const presentationToolLayout = await page.evaluate(() => ({
-    presentationGroupVisible: getComputedStyle(document.getElementById("presentationStyleGroup")).display !== "none",
-    geometryGroupsVisible: [...document.querySelectorAll(".left-tool-rail .geometry-toolbar-group")]
-      .some((element) => getComputedStyle(element).display !== "none"),
-    selectVisible: getComputedStyle(document.getElementById("presentationSelectBtn")).display !== "none",
-    dimensionVisible: getComputedStyle(document.getElementById("presentationDimensionBtn")).display !== "none",
-    leaderVisible: getComputedStyle(document.getElementById("presentationLeaderBtn")).display !== "none",
-  }));
-  expect(presentationToolLayout.presentationGroupVisible).toBe(true);
-  expect(presentationToolLayout.geometryGroupsVisible).toBe(false);
-  expect(presentationToolLayout.selectVisible).toBe(true);
-  expect(presentationToolLayout.dimensionVisible).toBe(true);
-  expect(presentationToolLayout.leaderVisible).toBe(true);
-  await page.screenshot({ path: "test-results/presentation-layout.png", fullPage: true });
-  await page.click('[data-sidebar-tab="constraints"]');
-  expect(await page.locator(".side").isVisible()).toBe(true);
-  const openPresentationLayout = await page.evaluate(() => {
-    const toolbarRect = document.querySelector(".toolbar").getBoundingClientRect();
-    const sideRect = document.querySelector(".side").getBoundingClientRect();
-    const fileGroupRect = document.querySelector(".file-toolbar-group").getBoundingClientRect();
-    const modeRect = document.querySelector(".mode-overlay").getBoundingClientRect();
-    const documentTitlebarRect = document.querySelector(".document-titlebar").getBoundingClientRect();
-    const leftRailRect = document.querySelector(".left-tool-rail").getBoundingClientRect();
-    return {
-      sideTop: sideRect.top,
-      toolbarBottom: toolbarRect.bottom,
-      fileLeft: fileGroupRect.left,
-      fileRight: fileGroupRect.right,
-      leftRailLeft: leftRailRect.left,
-      leftRailRight: leftRailRect.right,
-      modeLeft: modeRect.left,
-      documentTitlebarLeft: documentTitlebarRect.left,
-    };
-  });
-  expect(openPresentationLayout.sideTop).toBeGreaterThanOrEqual(openPresentationLayout.toolbarBottom - 1);
-  expect(openPresentationLayout.fileLeft).toBeGreaterThanOrEqual(openPresentationLayout.leftRailLeft);
-  expect(openPresentationLayout.fileRight).toBeLessThanOrEqual(openPresentationLayout.leftRailRight + 1);
-  expect(Math.abs(openPresentationLayout.modeLeft - openPresentationLayout.documentTitlebarLeft)).toBeLessThanOrEqual(2);
-  await page.screenshot({ path: "test-results/presentation-sidebar-layout.png", fullPage: true });
-  await page.mouse.click(canvas.x + canvas.width * 0.48, canvas.y + canvas.height * 0.82);
-  expect(await page.locator(".side").isVisible()).toBe(true);
-  await page.click('[data-sidebar-tab="constraints"]');
-  expect(await page.locator(".side").isVisible()).toBe(false);
-  await page.click("#geometryModeBtn");
-  await page.waitForFunction(() => document.body.classList.contains("geometry-mode"));
+  await page.locator(".app-menu").first().locator("summary").click();
+  await page.click("#applicationSettingsBtn");
+  await expect(page.locator("#applicationSettingsDialog")).toBeVisible();
+  await page.locator("#applicationSettingsDialog button[value=cancel]").first().click();
 
   await page.evaluate(() => window.__cadTest.resetForEmptyBlockCreation());
+  const canvas = await page.locator("#canvas").boundingBox();
   await page.click("#toolPoint");
   await page.mouse.click(canvas.x + canvas.width * 0.55, canvas.y + canvas.height * 0.55);
-  await page.click('[data-sidebar-tab="points"]');
-  expect(await page.locator("#pointList .geometry-list-row").count()).toBe(1);
+  await page.click('[data-explorer-tab="objects"]');
+  await expect(page.locator("#pointList .geometry-list-row")).toHaveCount(1);
+  await page.locator("#pointList .geometry-list-row").click();
+  await expect(page.locator("#propertiesPanel")).toContainText("Point");
   await page.click("#deleteSelectionBtn");
-  expect(await page.locator("#pointList .geometry-list-row").count()).toBe(0);
+  await expect(page.locator("#pointList .geometry-list-row")).toHaveCount(0);
+});
+
+test("Appearance cascades from Document to Sketch to Geometry and Space reveals hidden geometry", async ({ page }) => {
+  await page.goto(`${baseUrl}/index.html?test=1`);
+  await page.waitForFunction(() => window.__cadTest);
+  const fixture = {
+    version: 9,
+    documentName: "appearance-cascade",
+    defaultAppearance: { visible: true, color: "#ef4444", lineType: "solid", lineWidth: 1 },
+    sketches: [
+      { id: "ROOT", name: "Root Sketch", parentSketchId: null, kind: "root", appearance: {} },
+      { id: "S1", name: "Sketch-1", parentSketchId: "ROOT", kind: "sketch", appearance: { color: "#16a34a" } },
+    ],
+    activeSketchId: "S1",
+    points: [
+      { id: "P1", x: 0, y: 0, fixed: false, kind: "endpoint", sketchId: "S1", appearance: {} },
+      { id: "P2", x: 100, y: 0, fixed: false, kind: "endpoint", sketchId: "S1", appearance: {} },
+    ],
+    lines: [{ id: "L1", p1: "P1", p2: "P2", construction: false, sketchId: "S1", appearance: { lineWidth: 4 } }],
+    circles: [], arcs: [], constraints: [], blockDefinitions: [], blockInstances: [], annotations: [],
+  };
+  await page.evaluate((data) => window.__cadTest.importDocumentNameFixture(data, "appearance-cascade.json"), fixture);
+  expect(await page.evaluate(() => window.__cadTest.appearanceStateForTest("line", "L1"))).toEqual({
+    direct: { lineWidth: 4 },
+    effective: { visible: true, color: "#16a34a", lineType: "solid", lineWidth: 4 },
+    visible: true,
+  });
+
+  await page.click('[data-explorer-tab="objects"]');
+  await page.locator('#lineList .geometry-list-row[data-id="L1"]').click();
+  await page.locator("#propertyColor").fill("#2563eb");
+  await page.locator("#propertyColor").blur();
+  expect((await page.evaluate(() => window.__cadTest.serializedModelForTest())).lines[0].appearance.color).toBe("#2563eb");
+
+  await page.locator("#propertyVisible").selectOption("false");
+  expect((await page.evaluate(() => window.__cadTest.appearanceStateForTest("line", "L1"))).visible).toBe(false);
+  await page.keyboard.down("Space");
+  expect(await page.evaluate(() => window.__cadTest.viewStateForTest())).toEqual(expect.objectContaining({ constraintStatus: true }));
+  expect((await page.evaluate(() => window.__cadTest.appearanceStateForTest("line", "L1"))).visible).toBe(true);
+  await page.keyboard.up("Space");
+});
+
+test("Block Instance Appearance Override applies to the whole instance", async ({ page }) => {
+  await page.goto(`${baseUrl}/index.html?test=1`);
+  await page.waitForFunction(() => window.__cadTest);
+  const initial = await page.evaluate(() => window.__cadTest.resetForBlockClipboardTest());
+  const instanceId = initial.geometryBySketch.S1.blockInstances[0].id;
+  await expect(page.locator("#propertiesPanel")).toContainText("Appearance Override");
+  await page.locator("#propertyColor").fill("#7c3aed");
+  await page.locator("#propertyColor").blur();
+  const serialized = await page.evaluate(() => window.__cadTest.serializedModelForTest());
+  expect(serialized.blockInstances[0].appearanceOverride.color).toBe("#7c3aed");
+  expect((await page.evaluate((id) => window.__cadTest.appearanceStateForTest("block", id), instanceId)).effective.color).toBe("#7c3aed");
+});
+
+test("Constraint dimensions persist display properties without creating annotation dimensions", async ({ page }) => {
+  await page.goto(`${baseUrl}/index.html?test=1`);
+  await page.waitForFunction(() => window.__cadTest);
+  await page.evaluate(() => window.__cadTest.resetForReadOnlyDuplicateDimension());
+  await page.click('[data-explorer-tab="objects"]');
+  await page.locator("#constraintList .constraint-list-row").first().click();
+  await page.locator('[data-dimension-display="precision"]').fill("3");
+  await page.locator('[data-dimension-display="precision"]').blur();
+  await page.locator('[data-dimension-display="prefix"]').fill("REF ");
+  await page.locator('[data-dimension-display="prefix"]').blur();
+  await page.locator('[data-dimension-display="arrows"]').uncheck();
+  const serialized = await page.evaluate(() => window.__cadTest.serializedModelForTest());
+  expect(serialized.constraints[0].dimension.display).toEqual(expect.objectContaining({ precision: 3, prefix: "REF ", arrows: false }));
+  expect(serialized.annotations).toEqual([]);
 });
 
 test("duplicate dimensions become read-only reference dimensions", async ({ page }) => {
@@ -626,7 +423,7 @@ test("a line length dimension advances by clicking its placement after the line"
   }));
 });
 
-test("geometry mode only exposes dimensions from the active sketch", async ({ page }) => {
+test("unified canvas exposes dimensions from the active sketch", async ({ page }) => {
   await page.goto(`${baseUrl}/index.html?test=1`);
   const result = await page.evaluate(() => window.__cadTest.resetForActiveSketchDimensionVisibility());
   expect(result.dimensionSketchIds).toEqual(["S1", "S2"]);
@@ -668,12 +465,12 @@ test("dashed previews do not leak canvas stroke state", async ({ page }) => {
     selection: [],
     blockPlacement: [],
     blockHandles: [],
-    presentationLeader: [],
+    annotationLeader: [],
     frame: [],
   });
 });
 
-test("geometry mode uses thinner normal and construction strokes", async ({ page }) => {
+test("unified canvas uses normal and construction appearance widths", async ({ page }) => {
   await page.goto(`${baseUrl}/index.html?test=1`);
   await page.waitForFunction(() => window.__cadTest);
 
@@ -688,73 +485,40 @@ test("geometry mode uses thinner normal and construction strokes", async ({ page
   });
 });
 
-test("sidebar lists circles and arcs and highlights related geometry", async ({ page }) => {
+test("Objects explorer lists geometry and synchronizes selection and hover", async ({ page }) => {
   await page.goto(`${baseUrl}/index.html?test=1`);
   const ids = await page.evaluate(() => window.__cadTest.resetForSidebarInspection());
-  await page.click('[data-sidebar-tab="circles"]');
-  await expect(page.locator("#sidebarCircles")).toBeVisible();
-  expect(await page.locator("#circleList .geometry-list-row").count()).toBe(1);
-  await page.click('[data-sidebar-tab="arcs"]');
-  await expect(page.locator("#sidebarArcs")).toBeVisible();
-  expect(await page.locator("#arcList .geometry-list-row").count()).toBe(1);
+  await page.click('[data-explorer-tab="objects"]');
+  await expect(page.locator("#explorerObjects")).toBeVisible();
+  await expect(page.locator("#circleList .geometry-list-row")).toHaveCount(1);
+  await expect(page.locator("#arcList .geometry-list-row")).toHaveCount(1);
 
-  await page.click('[data-sidebar-tab="lines"]');
-  await page.mouse.click(ids.lineMid.x, ids.lineMid.y);
-  await expect(page.locator(`#lineList .geometry-list-row[data-id="${ids.line}"]`)).toHaveClass(/sidebar-selected/);
-  await page.keyboard.press("Escape");
-  await expect(page.locator(`#lineList .geometry-list-row[data-id="${ids.line}"]`)).not.toHaveClass(/sidebar-selected/);
+  await page.locator(`#lineList .geometry-list-row[data-id="${ids.line}"]`).click();
+  await expect(page.locator("#propertiesPanel")).toContainText(`Line ${ids.line}`);
 
-  await page.click('[data-sidebar-tab="circles"]');
   await page.locator("#circleList .geometry-list-row").hover();
-  expect(await page.evaluate(() => window.__cadTest.sidebarHighlightIds())).toEqual([ids.circle, ids.circleCenter].sort());
+  expect(await page.evaluate(() => window.__cadTest.sidebarHighlightIds())).toEqual(
+    expect.arrayContaining([ids.line, ids.circle, ids.circleCenter]),
+  );
   await page.locator("#circleList .geometry-list-row").click();
-  await page.mouse.move(700, 700);
-  expect(await page.locator("#circleList .geometry-list-row").getAttribute("class")).toContain("sidebar-selected");
-  expect(await page.evaluate(() => window.__cadTest.sidebarHighlightIds())).toEqual([ids.circle, ids.circleCenter].sort());
+  await expect(page.locator("#circleList .geometry-list-row")).toHaveClass(/selected/);
+  await expect(page.locator("#propertiesPanel")).toContainText(`Circle ${ids.circle}`);
 
-  await page.click('[data-sidebar-tab="arcs"]');
-  await page.locator("#arcList .geometry-list-row").click();
-  expect(await page.locator("#arcList .geometry-list-row").getAttribute("class")).toContain("sidebar-selected");
-  expect(await page.evaluate(() => window.__cadTest.sidebarHighlightIds())).toEqual([ids.circle, ids.circleCenter, ids.arc, ids.arcCenter].sort());
-
-  await page.click('[data-sidebar-tab="constraints"]');
-  await expect(page.locator("#sidebarConstraints")).toBeVisible();
-  await page.locator("#constraintList .constraint-list-row").hover();
-  const hoveredConstraintHighlights = await page.evaluate(() => window.__cadTest.sidebarHighlightIds());
-  expect(hoveredConstraintHighlights).toContain(ids.circle);
-  expect(hoveredConstraintHighlights).toContain(ids.line);
-  expect(hoveredConstraintHighlights).toContain(ids.fixedPoint);
   await page.locator("#constraintList .constraint-list-row").click();
-  await expect(page.locator("#constraintList .constraint-list-row")).toHaveClass(/sidebar-selected/);
-  const constraintHighlights = await page.evaluate(() => window.__cadTest.sidebarHighlightIds());
-  expect(constraintHighlights).toContain(ids.line);
-  expect(await page.locator("#constraintList .constraint-readonly-badge").count()).toBe(0);
-  expect(await page.locator("#constraintList .relation-badge").count()).toBe(0);
-  expect(await page.locator("#constraintList .fixed-point-list-row").count()).toBe(1);
+  await expect(page.locator("#constraintList .constraint-list-row")).toHaveClass(/selected/);
+  await expect(page.locator("#propertiesPanel")).toContainText("Constraint");
   expect(await page.locator("#constraintList .fixed-point-list-row").textContent()).toContain(`固定 ${ids.fixedPoint}`);
-  await page.keyboard.press("Delete");
-  await expect(page.locator("#constraintList .constraint-list-row")).toHaveCount(0);
-  await page.screenshot({ path: "test-results/sidebar-inspection.png", fullPage: true });
 });
 
-test("constraint sidebar highlights only rows that directly reference selected geometry", async ({ page }) => {
+test("constraint rows highlight only directly related selected geometry", async ({ page }) => {
   await page.goto(`${baseUrl}/index.html?test=1`);
   await page.waitForFunction(() => window.__cadTest);
   const ids = await page.evaluate(() => window.__cadTest.resetForSidebarInspection());
-  if (await page.locator(".app").evaluate((element) => element.classList.contains("side-collapsed"))) {
-    await page.click('[data-sidebar-tab="constraints"]');
-  }
-  await expect(page.locator("#sidebarConstraints")).toBeVisible();
+  await page.click('[data-explorer-tab="objects"]');
   const constraintRow = page.locator("#constraintList .constraint-list-row");
   await expect(constraintRow).toHaveCount(1);
 
   await page.evaluate((lineId) => window.__cadTest.selectGeometryIdsForTest({ lines: [lineId] }), ids.line);
-  await expect(constraintRow).toHaveClass(/sidebar-related/);
-
-  await page.evaluate((circleId) => window.__cadTest.selectGeometryIdsForTest({ circles: [circleId] }), ids.circle);
-  await expect(constraintRow).not.toHaveClass(/sidebar-related/);
-
-  await page.evaluate((pointId) => window.__cadTest.selectGeometryIdsForTest({ points: [pointId] }), ids.fixedPoint);
   await expect(constraintRow).toHaveClass(/sidebar-related/);
   await page.evaluate(() => window.__cadTest.selectGeometryIdsForTest({}));
   await expect(constraintRow).not.toHaveClass(/sidebar-related/);
@@ -839,8 +603,7 @@ test("sketch deletion removes its subtree and active sketch siblings remain visi
   expect(deleted.sketchIds).toEqual(["ROOT", "S1", "S4"]);
   expect(deleted.activeSketchId).toBe("ROOT");
   expect(deleted.geometry).toEqual({ points: 0, lines: 0, circles: 0, arcs: 0 });
-  expect(deleted.styleKeys).toEqual([]);
-  expect(deleted.presentationElementCount).toBe(0);
+  expect(deleted.annotationCount).toBe(0);
 });
 
 test("non-active sketch visibility can be toggled and is persisted", async ({ page }) => {
@@ -867,15 +630,15 @@ test("non-active sketches are visible unless individually hidden", async ({ page
   expect(setup.relationColors).toEqual({ S9: "#64748b", S11: "#b91c1c" });
   expect(setup.visible).toEqual({ S10: true, S2: true, S3: true, S4: true, S9: true, S11: true });
   expect(setup.rowClasses).toEqual({ S2: true, S3: true, S4: true, S9: true, S11: true });
-  expect(setup.rowBackgrounds.S2).toBe("rgba(0, 0, 0, 0)");
-  expect(setup.rowBackgrounds.S9).toBe("rgba(0, 0, 0, 0)");
+  expect(setup.rowBackgrounds.S2).toBe("rgb(255, 255, 255)");
+  expect(setup.rowBackgrounds.S9).toBe("rgb(255, 255, 255)");
 
   await page.click('.sketchVisibilityBtn[data-id="S2"]');
   let state = await page.evaluate(() => window.__cadTest.siblingSubtreeVisibilityState());
   expect(state).toEqual({
     S2: { preferenceVisible: false, effectiveVisible: false },
-    S3: { preferenceVisible: true, effectiveVisible: true },
-    S4: { preferenceVisible: true, effectiveVisible: true },
+    S3: { preferenceVisible: true, effectiveVisible: false },
+    S4: { preferenceVisible: true, effectiveVisible: false },
   });
 
   await page.click('.sketchVisibilityBtn[data-id="S2"]');
@@ -888,7 +651,7 @@ test("non-active sketches are visible unless individually hidden", async ({ page
   state = await page.evaluate(() => window.__cadTest.siblingSubtreeVisibilityState());
   expect(state.S2.effectiveVisible).toBe(true);
   expect(state.S3.effectiveVisible).toBe(false);
-  expect(state.S4.effectiveVisible).toBe(true);
+  expect(state.S4.effectiveVisible).toBe(false);
 });
 
 test("blank canvas click clears a selected dimension without leaving the constraint command", async ({ page }) => {

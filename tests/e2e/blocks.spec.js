@@ -66,11 +66,8 @@ function constrainedBlockGridFixture({ fixed = false } = {}) {
   return {
     version: 8,
     documentName: "Constrained Block Grid",
-    appMode: "geometry",
     sketches,
     activeSketchId: "S1",
-    presentationSheets: [{ id: "PS1", name: "Sheet-1", visibleGeometrySketchIds: null, elementStyles: {}, elements: [] }],
-    activePresentationSheetId: "PS1",
     blockDefinitions: [{
       id: "B1",
       name: "Tile",
@@ -124,11 +121,8 @@ function blockPointOnLineFixture({ subjectY = -50, includeConstraint = false, su
   return {
     version: 8,
     documentName: "Block Point On Line",
-    appMode: "geometry",
     sketches,
     activeSketchId: "S1",
-    presentationSheets: [{ id: "PS1", name: "Sheet-1", visibleGeometrySketchIds: null, elementStyles: {}, elements: [] }],
-    activePresentationSheetId: "PS1",
     blockDefinitions: [
       definition(
         "B1",
@@ -176,11 +170,8 @@ function blockSketchDisableConstraintFixture() {
   return {
     version: 8,
     documentName: "Block Sketch Constraint Removal",
-    appMode: "geometry",
     sketches: hostSketches,
     activeSketchId: "S2",
-    presentationSheets: [{ id: "PS1", name: "Sheet-1", visibleGeometrySketchIds: null, elementStyles: {}, elements: [] }],
-    activePresentationSheetId: "PS1",
     blockDefinitions: [{
       id: "B1",
       name: "Shelf",
@@ -233,11 +224,8 @@ function sparseBlockEditorLineDragFixture() {
   return {
     version: 8,
     documentName: "Sparse Block Editor Line Drag",
-    appMode: "geometry",
     sketches,
     activeSketchId: "S1",
-    presentationSheets: [{ id: "PS1", name: "Sheet-1", visibleGeometrySketchIds: null, elementStyles: {}, elements: [] }],
-    activePresentationSheetId: "PS1",
     blockDefinitions: [{
       id: "B1",
       name: "Room",
@@ -286,11 +274,8 @@ function nestedBlockEditingFixture() {
   return {
     version: 8,
     documentName: "Nested Block Editing",
-    appMode: "geometry",
     sketches,
     activeSketchId: "S1",
-    presentationSheets: [{ id: "PS1", name: "Sheet-1", visibleGeometrySketchIds: null, elementStyles: {}, elements: [] }],
-    activePresentationSheetId: "PS1",
     blockDefinitions: [
       definition(
         "B1",
@@ -441,14 +426,11 @@ function rotationLockFixture({ constrained = false, fixed = false } = {}) {
   return {
     version: 8,
     documentName: "Rotation Lock",
-    appMode: "geometry",
     sketches: [
       { id: "ROOT", name: "Root Sketch", parentSketchId: null, kind: "root", visible: true },
       { id: "S1", name: "Sketch-1", parentSketchId: "ROOT", kind: "sketch", visible: true },
     ],
     activeSketchId: "S1",
-    presentationSheets: [{ id: "PS1", name: "Sheet-1", visibleGeometrySketchIds: null, elementStyles: {}, elements: [] }],
-    activePresentationSheetId: "PS1",
     blockDefinitions: [{
       id: "B1",
       name: "Rotating Block",
@@ -483,14 +465,11 @@ function guidedPointDragFixture({ x = 0, y = 100 } = {}) {
   return {
     version: 8,
     documentName: "Guided Point Drag",
-    appMode: "geometry",
     sketches: [
       { id: "ROOT", name: "Root Sketch", parentSketchId: null, kind: "root", visible: true },
       { id: "S1", name: "Sketch-1", parentSketchId: "ROOT", kind: "sketch", visible: true },
     ],
     activeSketchId: "S1",
-    presentationSheets: [{ id: "PS1", name: "Sheet-1", visibleGeometrySketchIds: null, elementStyles: {}, elements: [] }],
-    activePresentationSheetId: "PS1",
     blockDefinitions: [],
     blockInstances: [],
     points: [
@@ -520,11 +499,8 @@ function externallyConstrainedBlockFixture() {
   return {
     version: 8,
     documentName: "External Constraint Block",
-    appMode: "geometry",
     sketches,
     activeSketchId: "S2",
-    presentationSheets: [{ id: "PS1", name: "Sheet-1", visibleGeometrySketchIds: null, elementStyles: {}, elements: [] }],
-    activePresentationSheetId: "PS1",
     blockDefinitions: [{
       id: "B1",
       name: "Existing Block",
@@ -672,7 +648,7 @@ test("creates, places, drags, edits, and reloads local-coordinate blocks", async
   expect(edited.lengths[1]).toBeCloseTo(edited.lengths[0], 6);
 
   const reloaded = await page.evaluate(() => window.__cadTest.reloadBlockState());
-  expect(reloaded).toEqual({ definitions: 1, instances: 2, projectionLines: 8, serializedVersion: 8 });
+  expect(reloaded).toEqual({ definitions: 1, instances: 2, projectionLines: 8, serializedVersion: 9 });
 
   await page.click(".blockDeleteBtn");
   expect((await page.evaluate(() => window.__cadTest.blockState())).definitions).toHaveLength(1);
@@ -823,10 +799,8 @@ test("selecting a block highlights only constraints that directly reference its 
   await page.goto(`${baseUrl}/index.html?test=1`);
   await page.waitForFunction(() => window.__cadTest);
   await page.evaluate((fixture) => window.__cadTest.importDocumentNameFixture(fixture, "block-related-constraint.json"), blockPointOnLineFixture({ subjectY: -50, includeConstraint: true }));
-  if (await page.locator(".app").evaluate((element) => element.classList.contains("side-collapsed"))) {
-    await page.click('[data-sidebar-tab="constraints"]');
-  }
-  await expect(page.locator("#sidebarConstraints")).toBeVisible();
+  await page.click('[data-explorer-tab="objects"]');
+  await expect(page.locator("#explorerObjects")).toBeVisible();
 
   await page.evaluate(() => window.__cadTest.selectGeometryIdsForTest({ blockInstances: ["BI2"] }));
   await expect(page.locator("#constraintList .constraint-list-row")).toHaveClass(/sidebar-related/);
@@ -1108,7 +1082,7 @@ test("a block point-on-line constraint keeps the subject block under-constrained
   expect(afterDrag.analysis).toEqual(expect.objectContaining({ stable: true, freeVariableCount: 2 }));
   expect(afterDrag.status.projections.every((projection) => projection.status === "under")).toBe(true);
 
-  await page.click('[data-sidebar-tab="constraints"]');
+  await page.click('[data-explorer-tab="objects"]');
   await page.hover('.constraint-list-row[data-idx="0"]');
   expect(await page.evaluate(() => window.__cadTest.currentSidebarHoveredGeometryKeys())).toEqual([
     "line:BI1@L1",
@@ -1215,7 +1189,7 @@ test("legacy block data migrates into an internal Sketch-1 without changing proj
 
   const before = await page.evaluate(() => window.__cadTest.blockState());
   const migrated = await page.evaluate(() => window.__cadTest.reloadLegacyBlockState());
-  expect(migrated.version).toBe(8);
+  expect(migrated.version).toBe(9);
   expect(migrated.origin).toEqual({ x: 0, y: 0 });
   expect(migrated.sketches).toEqual([
     expect.objectContaining({ id: "ROOT", kind: "root" }),
@@ -1452,22 +1426,17 @@ test("block editor uses the same scoped block actions and keeps sketch choices v
   await page.click('.block-item[data-id="B1"] .blockPlaceBtn');
   await expect(page.locator("#blockSketchConfig")).toBeVisible();
   const layout = await page.evaluate(() => {
-    const overlay = document.querySelector(".block-overlay").getBoundingClientRect();
-    const list = document.querySelector("#blockList");
+    const explorer = document.querySelector(".explorer-scroll");
     const config = document.querySelector("#blockSketchConfig").getBoundingClientRect();
     return {
-      listScrollHeight: list.scrollHeight,
-      listClientHeight: list.clientHeight,
+      explorerScrollHeight: explorer.scrollHeight,
+      explorerClientHeight: explorer.clientHeight,
       configHeight: config.height,
-      configBottom: config.bottom,
-      overlayBottom: overlay.bottom,
       viewportHeight: window.innerHeight,
     };
   });
-  expect(layout.listScrollHeight).toBeGreaterThan(layout.listClientHeight);
+  expect(layout.explorerScrollHeight).toBeGreaterThan(layout.explorerClientHeight);
   expect(layout.configHeight).toBeGreaterThanOrEqual(70);
-  expect(layout.configBottom).toBeLessThanOrEqual(layout.overlayBottom + 1);
-  expect(layout.overlayBottom).toBeLessThanOrEqual(layout.viewportHeight + 1);
   await page.keyboard.press("Escape");
 
   await page.click('.block-item[data-id="B1"] .blockEditBtn');
@@ -1715,14 +1684,14 @@ test("disabling a block sketch automatically removes related constraints and rep
   expect(state.serialized.constraints).toHaveLength(2);
 });
 
-test("block creation rejects shared boundaries and presentation references without mutation", async ({ page }) => {
+test("block creation rejects shared boundaries and annotation references without mutation", async ({ page }) => {
   await page.goto(`${baseUrl}/index.html?test=1`);
   await page.waitForFunction(() => window.__cadTest);
   const result = await page.evaluate(() => window.__cadTest.blockCreationRejectionCases());
   expect(result.sharedPointError).toContain("非選択図形と共有");
   expect(result.sharedCounts).toEqual({ definitions: 0, instances: 0, lines: 2 });
-  expect(result.presentationError).toContain("Presentation注記");
-  expect(result.presentationCounts).toEqual({ definitions: 0, instances: 0, lines: 1 });
+  expect(result.annotationError).toContain("注記");
+  expect(result.annotationCounts).toEqual({ definitions: 0, instances: 0, lines: 1 });
 });
 
 test("block creation keeps internal constraints and removes every external constraint", async ({ page }) => {
