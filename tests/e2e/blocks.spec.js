@@ -1083,6 +1083,9 @@ test("a block point-on-line constraint keeps the subject block under-constrained
   expect(afterDrag.status.projections.every((projection) => projection.status === "under")).toBe(true);
 
   await page.click('[data-explorer-tab="objects"]');
+  await page.locator("#explorerObjects > details", {
+    has: page.locator("summary", { hasText: /^Constraint$/ }),
+  }).locator("summary").click();
   await page.hover('.constraint-list-row[data-idx="0"]');
   expect(await page.evaluate(() => window.__cadTest.currentSidebarHoveredGeometryKeys())).toEqual([
     "line:BI1@L1",
@@ -1209,8 +1212,13 @@ test("new block editor supports cancel and independent internal sketch hierarchy
   await page.click("#toolCreateBlock");
   await expect(page.locator("#sketchOverlay")).toBeVisible();
   await expect(page.locator("#completeBlockEditBtn")).toBeVisible();
+  expect(await page.locator(".canvas-area").evaluate((element) => {
+    const style = getComputedStyle(element);
+    return { background: style.backgroundColor, boxShadow: style.boxShadow };
+  })).toEqual({ background: "rgb(245, 243, 255)", boxShadow: "none" });
   const cancelled = await page.evaluate(() => window.__cadTest.cancelBlockEditor());
   expect(cancelled).toEqual({ editing: false, definitions: 0, instances: 0, lines: 4 });
+  await expect(page.locator(".canvas-area")).toHaveCSS("background-color", "rgb(255, 255, 255)");
 
   await page.evaluate(() => window.__cadTest.resetForEmptyBlockCreation());
   await page.click("#toolCreateBlock");
@@ -1580,6 +1588,9 @@ test("hovering a block highlights its projection without showing every geometry 
   }));
   const labelAfter = await canvasPatch(page, labelPoint, 5);
   expect(labelAfter).toEqual(labelBefore);
+
+  await page.evaluate(() => window.__cadTest.selectGeometryIdsForTest({ blockInstances: ["BI1"] }));
+  expect(await page.evaluate(() => window.__cadTest.drawnGeometryIdLabelsForTest())).toEqual([]);
 });
 
 test("block projection endpoints visibly highlight during constraint commands", async ({ page }) => {

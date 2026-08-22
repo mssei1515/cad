@@ -7247,6 +7247,12 @@
     };
   }
 
+  function lineDisplaySegment(line) {
+    return line.construction
+      ? extendedLineSegment(line, CONSTRUCTION_EXTENSION_SCREEN_PX / viewport.scale)
+      : { p1: line.p1, p2: line.p2 };
+  }
+
   function drawLines() {
     ctx.save();
     for (const l of drawOrderBySketch(allGeometryLines())) {
@@ -7258,11 +7264,12 @@
       const relatedHighlighted = isSelectedConstraintRelatedElement(l);
       const auxiliaryHighlighted = treeHovered || relatedHighlighted;
       const blockSelected = l.blockInstance && selectedBlockInstances.includes(l.blockInstance);
-      const sel = blockSelected || (active && selectedLines.includes(l)) || refSelected;
+      const geometrySelected = (active && selectedLines.includes(l)) || refSelected;
+      const sel = blockSelected || geometrySelected;
       const directlyHovered = sidebarHovered || ((active || isReferenceHoverElement(l)) && hoveredLine === l);
       const hovered = directlyHovered || (l.blockInstance && hoveredBlockInstance === l.blockInstance);
-      const construction = Boolean(l.construction) && !sel && !hovered;
-      ctx.globalAlpha = sketchAlpha(l) * (construction && !auxiliaryHighlighted ? CONSTRUCTION_GEOMETRY_ALPHA : 1);
+      const construction = Boolean(l.construction);
+      ctx.globalAlpha = sketchAlpha(l) * (construction && !sel && !hovered && !auxiliaryHighlighted ? CONSTRUCTION_GEOMETRY_ALPHA : 1);
       const lineColor = auxiliaryHighlighted ? "#0ea5e9" : geometryDisplayColor(l, appearance, sel, hovered);
       ctx.strokeStyle = lineColor;
       ctx.lineWidth = geometryStrokeWidth(l, { auxiliaryHighlighted, selected: sel, hovered, appearance, construction }) / viewport.scale;
@@ -7271,8 +7278,7 @@
       ctx.setLineDash(appearanceLineDash(appearance.lineType));
       ctx.shadowColor = sel || auxiliaryHighlighted ? "rgba(14, 165, 233, 0.45)" : "transparent";
       ctx.shadowBlur = sel || auxiliaryHighlighted ? 8 / viewport.scale : 0;
-      const constructionExtension = CONSTRUCTION_EXTENSION_SCREEN_PX / viewport.scale;
-      const drawSegment = construction ? extendedLineSegment(l, constructionExtension) : { p1: l.p1, p2: l.p2 };
+      const drawSegment = lineDisplaySegment(l);
       ctx.beginPath();
       ctx.moveTo(drawSegment.p1.x, drawSegment.p1.y);
       ctx.lineTo(drawSegment.p2.x, drawSegment.p2.y);
@@ -7290,7 +7296,7 @@
         }
       }
 
-      if (viewState.geometryIds || sel || directlyHovered || auxiliaryHighlighted) {
+      if (viewState.geometryIds || geometrySelected || directlyHovered || auxiliaryHighlighted) {
         const mx = (l.p1.x + l.p2.x) / 2;
         const my = (l.p1.y + l.p2.y) / 2;
         ctx.fillStyle = "#2563eb";
@@ -7313,7 +7319,8 @@
       const relatedHighlighted = isSelectedConstraintRelatedElement(c);
       const auxiliaryHighlighted = treeHovered || relatedHighlighted;
       const blockSelected = c.blockInstance && selectedBlockInstances.includes(c.blockInstance);
-      const sel = blockSelected || (active && selectedCircles.includes(c)) || refSelected;
+      const geometrySelected = (active && selectedCircles.includes(c)) || refSelected;
+      const sel = blockSelected || geometrySelected;
       const directlyHovered = sidebarHovered || ((active || isReferenceHoverElement(c)) && hoveredCircle === c);
       const hovered = directlyHovered || (c.blockInstance && hoveredBlockInstance === c.blockInstance);
       const construction = Boolean(c.construction) && !sel && !hovered;
@@ -7328,7 +7335,7 @@
       ctx.stroke();
       ctx.setLineDash([]);
       ctx.shadowBlur = 0;
-      if (viewState.geometryIds || sel || directlyHovered || auxiliaryHighlighted) {
+      if (viewState.geometryIds || geometrySelected || directlyHovered || auxiliaryHighlighted) {
         ctx.fillStyle = "#2563eb";
         ctx.font = `${12 / viewport.scale}px system-ui`;
         ctx.fillText(c.id, c.center.x + c.radius() + 4 / viewport.scale, c.center.y - 4 / viewport.scale);
@@ -7349,7 +7356,8 @@
       const relatedHighlighted = isSelectedConstraintRelatedElement(a);
       const auxiliaryHighlighted = treeHovered || relatedHighlighted;
       const blockSelected = a.blockInstance && selectedBlockInstances.includes(a.blockInstance);
-      const sel = blockSelected || (active && selectedArcs.includes(a)) || refSelected;
+      const geometrySelected = (active && selectedArcs.includes(a)) || refSelected;
+      const sel = blockSelected || geometrySelected;
       const directlyHovered = sidebarHovered || ((active || isReferenceHoverElement(a)) && hoveredArc === a);
       const hovered = directlyHovered || (a.blockInstance && hoveredBlockInstance === a.blockInstance);
       const construction = Boolean(a.construction) && !sel && !hovered;
@@ -7364,7 +7372,7 @@
       ctx.stroke();
       ctx.setLineDash([]);
       ctx.shadowBlur = 0;
-      if (viewState.geometryIds || sel || directlyHovered || auxiliaryHighlighted) {
+      if (viewState.geometryIds || geometrySelected || directlyHovered || auxiliaryHighlighted) {
         const mid = a.startAngle + arcSweep(a) / 2;
         ctx.fillStyle = "#2563eb";
         ctx.font = `${12 / viewport.scale}px system-ui`;
@@ -7699,7 +7707,7 @@
 
   function drawDimensions() {
     for (const c of [...model.constraints].sort((a, b) => Number(isActiveSketchConstraint(a)) - Number(isActiveSketchConstraint(b)))) {
-      if (!isActiveSketchConstraint(c)) continue;
+      if (!isVisibleSketchId(constraintSketchId(c))) continue;
       const target = targetFromConstraint(c);
       if (!target) continue;
       const dimension = c.dimension || defaultDimensionForTarget(target);
@@ -10044,7 +10052,7 @@
     updateBlockUI();
     document.getElementById("pointList").innerHTML = model.points
       .filter(isActiveSketchElement)
-      .filter(isExplicitPoint)
+      .filter((point) => isExplicitPoint(point) || isPointUsedByLine(point))
       .map(
         (p) =>
           `<div class="item list-item geometry-list-row" data-kind="point" data-id="${p.id}"><span>${p.id}` +
@@ -14855,12 +14863,29 @@
           { sketchId: secondSketchId },
         );
         model.activeSketchId = firstSketchId;
+        const captureDimensionLabels = () => {
+          const labels = [];
+          const originalFillText = ctx.fillText;
+          ctx.fillText = (value) => labels.push(String(value));
+          try {
+            drawDimensions();
+          } finally {
+            ctx.fillText = originalFillText;
+          }
+          return labels;
+        };
+        const drawnDimensionLabels = captureDimensionLabels();
+        sketchById(secondSketchId).appearance = { ...sketchById(secondSketchId).appearance, visible: false };
+        const labelsAfterHidingSecondSketch = captureDimensionLabels();
+        sketchById(secondSketchId).appearance = { ...sketchById(secondSketchId).appearance, visible: true };
         return {
           activeSketchId: firstSketchId,
           dimensionSketchIds: model.constraints.filter(isDimensionConstraint).map((constraint) => constraintSketchId(constraint)),
           drawnDimensionSketchIds: model.constraints
-            .filter((constraint) => isDimensionConstraint(constraint) && isActiveSketchConstraint(constraint))
+            .filter((constraint) => isDimensionConstraint(constraint) && isVisibleSketchId(constraintSketchId(constraint)))
             .map((constraint) => constraintSketchId(constraint)),
+          drawnDimensionLabels,
+          labelsAfterHidingSecondSketch,
         };
       },
       resetForAllGeometryFit() {
@@ -15198,6 +15223,71 @@
           hovered: geometryStrokeWidth(activeNormal, { hovered: true }),
           constructionAlpha: CONSTRUCTION_GEOMETRY_ALPHA,
         };
+      },
+      constructionLineHoverDisplayCasesForTest() {
+        const distance = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
+        const captureOverhang = (line, setupHover) => {
+          const segments = [];
+          let start = null;
+          const originalMoveTo = ctx.moveTo;
+          const originalLineTo = ctx.lineTo;
+          ctx.moveTo = (x, y) => {
+            start = { x, y };
+          };
+          ctx.lineTo = (x, y) => {
+            if (start) segments.push({ p1: start, p2: { x, y } });
+          };
+          try {
+            setupHover();
+            drawLines();
+          } finally {
+            ctx.moveTo = originalMoveTo;
+            ctx.lineTo = originalLineTo;
+          }
+          const segment = segments[0];
+          return segment ? ((distance(segment.p1, line.p1) + distance(segment.p2, line.p2)) / 2) * viewport.scale : null;
+        };
+
+        resetModelState();
+        viewport.scale = 2;
+        const line = addLine(addPoint(-40, 0, false, "endpoint"), addPoint(40, 0, false, "endpoint"), true);
+        const direct = captureOverhang(line, () => {
+          hoveredLine = line;
+        });
+
+        resetModelState();
+        viewport.scale = 2;
+        const definition = createEmptyBlockDefinition("Block-Construction-Hover");
+        const p1 = new Point("BP1", -40, 0, false, "endpoint");
+        const p2 = new Point("BP2", 40, 0, false, "endpoint");
+        p1.sketchId = DEFAULT_SKETCH_ID;
+        p2.sketchId = DEFAULT_SKETCH_ID;
+        const localLine = new Line("BL1", p1, p2, true);
+        localLine.sketchId = DEFAULT_SKETCH_ID;
+        definition.points.push(p1, p2);
+        definition.lines.push(localLine);
+        model.blockDefinitions.push(definition);
+        const instance = {
+          id: "BI-HOVER",
+          definitionId: definition.id,
+          sketchId: DEFAULT_SKETCH_ID,
+          x: 0,
+          y: 0,
+          rotation: 0,
+          fixed: false,
+          rotationLocked: false,
+          enabledSketchIds: [DEFAULT_SKETCH_ID],
+          appearanceOverride: {},
+        };
+        model.blockInstances.push(instance);
+        invalidateBlockProjectionCache();
+        const projection = blockProjectionBundle(instance).lines[0];
+        const block = captureOverhang(projection, () => {
+          hoveredBlockInstance = instance;
+        });
+        hoveredLine = null;
+        hoveredBlockInstance = null;
+        return { direct, block };
       },
       resetForSiblingSubtreeReference() {
         resetModelState();
@@ -15668,6 +15758,28 @@
           lineId: hoveredLine?.id || null,
           arcEndpointId: hoveredArcEndpoint ? `${hoveredArcEndpoint.arc.id}.${hoveredArcEndpoint.endpoint}` : null,
         };
+      },
+      drawnGeometryIdLabelsForTest() {
+        const geometryIds = new Set([
+          ...allGeometryPoints().map((point) => point.id),
+          ...allGeometryLines().map((line) => line.id),
+          ...allGeometryCircles().map((circle) => circle.id),
+          ...allGeometryArcs().map((arc) => arc.id),
+        ]);
+        const labels = [];
+        const originalFillText = ctx.fillText;
+        ctx.fillText = (value) => {
+          if (geometryIds.has(String(value))) labels.push(String(value));
+        };
+        try {
+          drawLines();
+          drawCircles();
+          drawArcs();
+          drawPoints();
+        } finally {
+          ctx.fillText = originalFillText;
+        }
+        return labels;
       },
       blockDefinitionUpdateCase() {
         const definition = model.blockDefinitions[0];
