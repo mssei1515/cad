@@ -259,6 +259,12 @@ test("unified workspace uses fixed Explorer Canvas Properties and Status regions
       })),
       canvasCursor: getComputedStyle(document.querySelector("#canvas")).cursor,
       gridControls: document.querySelectorAll("#viewGridInput").length,
+      logo: {
+        count: document.querySelectorAll(".app-logo-svg").length,
+        viewBox: document.querySelector(".app-logo-svg")?.getAttribute("viewBox"),
+        width: document.querySelector(".app-logo-svg")?.getBoundingClientRect().width,
+      },
+      documentNameControls: document.querySelectorAll("#documentNameInput, .document-name-input").length,
     };
   });
 
@@ -267,10 +273,14 @@ test("unified workspace uses fixed Explorer Canvas Properties and Status regions
   expect(layout.toolIds).toEqual(expect.arrayContaining(["undoBtn", "redoBtn", "deleteSelectionBtn", "toolSelect", "toolPoint", "toolLine", "annotationLeaderBtn", "annotationTextBtn"]));
   expect(layout.iconButtons.every((button) => button.text === "" && button.hasIcon && button.title && button.label)).toBe(true);
   expect(layout.canvasCursor).toContain("data:image/svg+xml");
-  expect(layout.canvasCursor).toContain("%230f172a");
+  expect(layout.canvasCursor).toContain("width='19'");
+  expect(layout.canvasCursor).toContain("%23111827");
+  expect(layout.canvasCursor).toContain("stroke-width='1.3'");
   expect(layout.canvasCursor).not.toContain("%23fff");
   expect(layout.canvasCursor).not.toContain("%3Ccircle");
   expect(layout.gridControls).toBe(0);
+  expect(layout.logo).toEqual({ count: 1, viewBox: "0 0 256 256", width: 30 });
+  expect(layout.documentNameControls).toBe(0);
   expect(layout.explorer.left).toBe(0);
   expect(layout.explorer.right).toBeCloseTo(layout.canvas.left, 0);
   expect(layout.canvas.right).toBeCloseTo(layout.properties.left, 0);
@@ -283,13 +293,27 @@ test("unified workspace uses fixed Explorer Canvas Properties and Status regions
   await page.click('[data-explorer-tab="structure"]');
   await expect(page.locator("#explorerStructure")).toBeVisible();
 
-  await page.fill("#documentNameInput", "Fixture Part");
   expect(await page.evaluate(() => window.__cadTest.documentNameState())).toEqual({
-    modelName: "Fixture Part",
-    displayName: "Fixture Part",
-    serializedName: "Fixture Part",
-    title: "Fixture Part - Cad2",
+    modelName: "無題",
+    displayName: "無題",
+    serializedName: "無題",
+    title: "無題 - Cad2",
   });
+
+  const sketchTree = await page.evaluate(() => {
+    const row = document.querySelector('.sketch-item[data-id="S1"]');
+    const gutter = row?.querySelector(".sketch-tree-gutter");
+    const elbow = gutter?.querySelector(".tree-segment.elbow");
+    return {
+      rowHeight: row?.getBoundingClientRect().height,
+      rowDisplay: row ? getComputedStyle(row).display : null,
+      gutterDisplay: gutter ? getComputedStyle(gutter).display : null,
+      segmentCount: gutter?.children.length || 0,
+      verticalLine: elbow ? getComputedStyle(elbow, "::before").borderLeftWidth : null,
+      horizontalLine: elbow ? getComputedStyle(elbow, "::after").borderTopWidth : null,
+    };
+  });
+  expect(sketchTree).toEqual({ rowHeight: 19, rowDisplay: "grid", gutterDisplay: "grid", segmentCount: 2, verticalLine: "1px", horizontalLine: "1px" });
 
   const fileMenu = page.locator(".app-menu").nth(0);
   const editMenu = page.locator(".app-menu").nth(1);
@@ -299,18 +323,31 @@ test("unified workspace uses fixed Explorer Canvas Properties and Status regions
   await expect(page.locator(".app-menu[open]")).toHaveCount(0);
   await fileMenu.locator("summary").click();
   await expect(fileMenu).toHaveAttribute("open", "");
+  await page.evaluate(() => {
+    const summary = document.querySelectorAll(".app-menu > summary")[1];
+    const menu = summary.parentElement;
+    window.__menuHoverTiming = {};
+    summary.addEventListener("pointerenter", () => {
+      window.__menuHoverTiming.startedAt = performance.now();
+    }, { once: true });
+    menu.addEventListener("toggle", () => {
+      if (menu.open) window.__menuHoverTiming.openedAt = performance.now();
+    });
+  });
   await editMenu.locator("summary").hover();
   await expect(fileMenu).not.toHaveAttribute("open", "");
   await expect(editMenu).toHaveAttribute("open", "");
+  const menuHoverElapsed = await page.evaluate(() => window.__menuHoverTiming.openedAt - window.__menuHoverTiming.startedAt);
+  expect(menuHoverElapsed).toBeLessThan(50);
   await expect(page.locator(".app-menu[open]")).toHaveCount(1);
   expect(await page.evaluate(() => document.activeElement?.textContent?.trim())).toBe("編集");
-  await page.locator(".brand-mark").click();
+  await page.locator(".app-logo-svg").click();
   await expect(page.locator(".app-menu[open]")).toHaveCount(0);
   await fileMenu.locator("summary").click();
   await geometryMenu.locator("summary").click();
   await expect(fileMenu).not.toHaveAttribute("open", "");
   await expect(geometryMenu).toHaveAttribute("open", "");
-  await page.locator(".brand-mark").click();
+  await page.locator(".app-logo-svg").click();
   await page.evaluate(() => window.__cadTest.selectGeometryIdsForTest({ lines: ["L1"] }));
   await fileMenu.locator("summary").click();
   await page.keyboard.press("Escape");

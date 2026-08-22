@@ -89,7 +89,6 @@
   const canvas = document.getElementById("canvas");
   const ctx = canvas.getContext("2d");
   const dimensionValueInput = document.getElementById("dimensionValueInput");
-  const documentNameInput = document.getElementById("documentNameInput");
   const DEFAULT_DOCUMENT_NAME = "無題";
   const ROOT_SKETCH_ID = "ROOT";
   const ROOT_SKETCH_NAME = "Root Sketch";
@@ -300,17 +299,9 @@
     return name || DEFAULT_DOCUMENT_NAME;
   }
 
-  function updateDocumentNameUI(forceInput = false) {
+  function updateDocumentNameUI() {
     const displayName = effectiveDocumentName();
-    if (documentNameInput && (forceInput || document.activeElement !== documentNameInput)) {
-      documentNameInput.value = displayName;
-    }
     document.title = `${displayName} - Cad2`;
-  }
-
-  function setDocumentName(value, { forceInput = false } = {}) {
-    model.documentName = sanitizeDocumentNameValue(value);
-    updateDocumentNameUI(forceInput);
   }
 
   function escapeHtml(value) {
@@ -4335,7 +4326,7 @@
         try {
           loadModelData(JSON.parse(String(reader.result)), { documentNameOverride: fileNameStem(file.name) });
           solveAndRefresh("ファイル読み込み");
-          updateDocumentNameUI(true);
+          updateDocumentNameUI();
           fitAllGeometryToViewport();
           draw();
           if (lastLoadBlockConstraintRepairMessage) setHint(lastLoadBlockConstraintRepairMessage);
@@ -13493,24 +13484,6 @@
     draw();
   });
 
-  documentNameInput?.addEventListener("input", (event) => {
-    setDocumentName(event.target.value, { forceInput: false });
-  });
-  documentNameInput?.addEventListener("blur", () => {
-    setDocumentName(effectiveDocumentName(), { forceInput: true });
-  });
-  documentNameInput?.addEventListener("keydown", (event) => {
-    if (event.key === "Enter") {
-      event.preventDefault();
-      documentNameInput.blur();
-    }
-    if (event.key === "Escape") {
-      event.preventDefault();
-      updateDocumentNameUI(true);
-      documentNameInput.blur();
-    }
-  });
-
   document.getElementById("undoBtn")?.addEventListener("click", undoHistory);
   document.getElementById("redoBtn")?.addEventListener("click", redoHistory);
   document.getElementById("deleteSelectionBtn")?.addEventListener("click", () => {
@@ -13552,7 +13525,7 @@
         closeAppMenus(menu);
         menu.setAttribute("open", "");
         summary.focus({ preventScroll: true });
-      }, 120);
+      }, 16);
     });
     summary?.addEventListener("pointerleave", cancelAppMenuHoverSwitch);
     summary?.addEventListener("pointerdown", cancelAppMenuHoverSwitch);
