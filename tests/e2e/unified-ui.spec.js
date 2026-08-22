@@ -607,6 +607,10 @@ test("Appearance cascades, used file colors are selectable, and constraint statu
   await page.click('[data-explorer-tab="geometry"]');
   await expandObjectSection(page, "Line");
   await page.locator('#lineList .geometry-list-row[data-id="L1"]').click();
+  await expect(page.locator("#propertiesPanel")).toContainText("ジオメトリ");
+  await expect(page.locator("#propertiesPanel")).toContainText("長さ");
+  await expect(page.locator("#propertiesPanel")).toContainText("外観");
+  await expect(page.locator("#propertiesPanel")).not.toContainText(/Geometry|Length|Appearance|Visible|Color|Line type|Line width/);
   await expect(page.locator('#propertyVisible option[value=""]')).toHaveText("既定");
   await expect(page.locator('#propertyLineType option[value=""]')).toHaveText("既定");
   await expect(page.locator("#propertyColor")).toHaveAttribute("placeholder", "既定");
@@ -616,8 +620,20 @@ test("Appearance cascades, used file colors are selectable, and constraint statu
   await page.locator(".property-color-picker").click();
   await expect(page.locator("#colorPaletteDialog")).toBeVisible();
   expect(await page.locator("#defaultColorPalette .property-color-swatch").evaluateAll((items) => items.map((item) => item.dataset.paletteColor))).toEqual([
-    "#111827", "#64748b", "#dc2626", "#f97316", "#f59e0b", "#16a34a", "#0ea5e9", "#2563eb", "#7c3aed", "#db2777", "#ffffff",
+    "#000000", "#111827", "#374151", "#64748b", "#94a3b8", "#cbd5e1", "#ffffff",
+    "#fca5a5", "#dc2626", "#991b1b",
+    "#fdba74", "#f97316", "#c2410c",
+    "#fde68a", "#f59e0b", "#b45309",
+    "#86efac", "#16a34a", "#166534",
+    "#5eead4", "#14b8a6", "#0f766e",
+    "#67e8f9", "#0ea5e9", "#0e7490",
+    "#93c5fd", "#2563eb", "#1e40af",
+    "#c4b5fd", "#7c3aed", "#5b21b6",
+    "#f9a8d4", "#db2777", "#9d174d",
   ]);
+  const redSwatch = page.locator('#defaultColorPalette .property-color-swatch[data-palette-color="#dc2626"]');
+  await redSwatch.hover();
+  expect(await redSwatch.evaluate((item) => getComputedStyle(item).backgroundColor)).toBe("rgb(220, 38, 38)");
   expect(await page.locator("#usedColorPalette .property-color-swatch").evaluateAll((items) => items.map((item) => item.dataset.paletteColor))).toEqual([
     "#ef4444", "#16a34a", "#f97316", "#0ea5e9",
   ]);

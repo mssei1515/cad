@@ -90,7 +90,18 @@
   const ctx = canvas.getContext("2d");
   const dimensionValueInput = document.getElementById("dimensionValueInput");
   const APPLICATION_LANGUAGE_STORAGE_KEY = "cad2.application.language";
-  const DEFAULT_COLOR_PALETTE = ["#111827", "#64748b", "#dc2626", "#f97316", "#f59e0b", "#16a34a", "#0ea5e9", "#2563eb", "#7c3aed", "#db2777", "#ffffff"];
+  const DEFAULT_COLOR_PALETTE = [
+    "#000000", "#111827", "#374151", "#64748b", "#94a3b8", "#cbd5e1", "#ffffff",
+    "#fca5a5", "#dc2626", "#991b1b",
+    "#fdba74", "#f97316", "#c2410c",
+    "#fde68a", "#f59e0b", "#b45309",
+    "#86efac", "#16a34a", "#166534",
+    "#5eead4", "#14b8a6", "#0f766e",
+    "#67e8f9", "#0ea5e9", "#0e7490",
+    "#93c5fd", "#2563eb", "#1e40af",
+    "#c4b5fd", "#7c3aed", "#5b21b6",
+    "#f9a8d4", "#db2777", "#9d174d",
+  ];
   const UI_TRANSLATIONS = [
     ["ファイル", "File"], ["編集", "Edit"], ["ヘルプ", "Help"],
     ["保存", "Save"], ["開く", "Open"], ["ドキュメント設定", "Document Settings"], ["アプリケーション設定", "Application Settings"],
@@ -10208,10 +10219,12 @@
     const target = selectedPropertiesTarget();
     if (!target.item && target.kind !== "multiple") {
       panel.innerHTML = '<p class="properties-empty">選択したオブジェクトのプロパティを表示します。</p>';
+      localizeApplicationUI(panel);
       return;
     }
     if (target.kind === "multiple") {
       panel.innerHTML = `<h2 class="property-heading">${target.count} ${applicationText("個のオブジェクト", "objects")}</h2><p class="properties-empty">複数選択の共通プロパティ編集は今回の対象外です。</p>`;
+      localizeApplicationUI(panel);
       return;
     }
     const item = target.item;
@@ -10240,6 +10253,7 @@
       panel.innerHTML = `<h2 class="property-heading">${applicationText("スケッチ", "Sketch")} <span data-user-content>${escapeHtml(item.name)}</span></h2><section class="property-section"><h3>Sketch</h3><div class="property-row"><span>ID</span><span class="property-readonly">${escapeHtml(item.id)}</span></div><div class="property-row"><span>Active</span><span class="property-readonly">${applicationText("はい", "Yes")}</span></div></section><section class="property-section"><h3>Appearance</h3>${appearancePropertyRows(item.appearance, effective)}</section>`;
     }
 
+    localizeApplicationUI(panel);
     panel.oninput = handlePropertiesInput;
     panel.onchange = handlePropertiesChange;
     panel.onclick = handlePropertiesClick;
