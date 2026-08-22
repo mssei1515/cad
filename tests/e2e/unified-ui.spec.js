@@ -813,6 +813,33 @@ test("Sketch tree block hover matches canvas block hover without Block Projectio
   expect(await page.evaluate(() => window.__cadTest.drawnPointMarkerCountForTest())).toBe(0);
 });
 
+test("fixed explicit points show red emphasis and the fixed label only while hovered or selected", async ({ page }) => {
+  await page.goto(`${baseUrl}/index.html?test=1`);
+  await page.waitForFunction(() => window.__cadTest);
+  const fixture = await page.evaluate(() => window.__cadTest.resetForFixedPointDisplayTest());
+
+  expect(await page.evaluate((id) => window.__cadTest.pointDisplayStateForTest(id), fixture.pointId)).toEqual(expect.objectContaining({
+    fill: "#ffffff",
+    stroke: "#111827",
+    labels: [],
+  }));
+
+  await page.mouse.move(fixture.point.x, fixture.point.y);
+  expect(await page.evaluate((id) => window.__cadTest.pointDisplayStateForTest(id), fixture.pointId)).toEqual(expect.objectContaining({
+    fill: "#fee2e2",
+    stroke: "#dc2626",
+    labels: expect.arrayContaining([fixture.pointId, "固定"]),
+  }));
+
+  await page.mouse.move(fixture.blank.x, fixture.blank.y);
+  await page.evaluate((id) => window.__cadTest.selectGeometryIdsForTest({ points: [id] }), fixture.pointId);
+  expect(await page.evaluate((id) => window.__cadTest.pointDisplayStateForTest(id), fixture.pointId)).toEqual(expect.objectContaining({
+    fill: "#fee2e2",
+    stroke: "#dc2626",
+    labels: expect.arrayContaining([fixture.pointId, "固定"]),
+  }));
+});
+
 test("inactive sketch geometry, blocks, and dimensions show identity without hover emphasis or selection", async ({ page }) => {
   await page.goto(`${baseUrl}/index.html?test=1`);
   await page.waitForFunction(() => window.__cadTest);

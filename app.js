@@ -8436,15 +8436,16 @@
       const dragging = dragSession?.kind === "point" && dragSession.points.some((target) => target.point === p);
       const primitiveCenter = shouldShowPrimitiveCenter(p);
       const fixedByLine = pointLockedByLineFixed(p);
+      const fixedHighlighted = (p.fixed || fixedByLine) && (sel || hovered);
       const reference = isReferencePoint(p);
       if (!viewState.constraintStatus && p.blockProjection && !sel && !hovered && !dragging && !primitiveCenter && !auxiliaryHighlighted) continue;
       if (!viewState.constraintStatus && reference && !sel && !hovered && !dragging && !auxiliaryHighlighted) continue;
       if (!viewState.constraintStatus && endpoint && !reference && !sel && !hovered && !dragging && !primitiveCenter && !auxiliaryHighlighted) continue;
       ctx.beginPath();
       ctx.arc(p.x, p.y, (sel || auxiliaryHighlighted ? 7 : endpoint || reference ? 5 : 5) / viewport.scale, 0, Math.PI * 2);
-      ctx.fillStyle = p.fixed || fixedByLine ? "#fee2e2" : sel ? "#1d4ed8" : auxiliaryHighlighted ? "#e0f2fe" : hovered || primitiveCenter || reference ? "#eff6ff" : "#fff";
+      ctx.fillStyle = fixedHighlighted ? "#fee2e2" : sel ? "#1d4ed8" : auxiliaryHighlighted ? "#e0f2fe" : hovered || primitiveCenter || reference ? "#eff6ff" : "#fff";
       ctx.fill();
-      ctx.strokeStyle = auxiliaryHighlighted ? "#0ea5e9" : p.fixed || fixedByLine ? "#dc2626" : geometryDisplayColor(p, appearance, sel, hovered || primitiveCenter || reference);
+      ctx.strokeStyle = auxiliaryHighlighted ? "#0ea5e9" : fixedHighlighted ? "#dc2626" : geometryDisplayColor(p, appearance, sel, hovered || primitiveCenter || reference);
       ctx.lineWidth = (sel || auxiliaryHighlighted ? 3 : Math.max(1.2, sketchStrokeWidth(p))) / viewport.scale;
       ctx.shadowColor = sel || auxiliaryHighlighted ? "rgba(14, 165, 233, 0.45)" : "transparent";
       ctx.shadowBlur = sel || auxiliaryHighlighted ? 8 / viewport.scale : 0;
@@ -8457,8 +8458,9 @@
         ctx.fillText(p.id, p.x + 8 / viewport.scale, p.y - 8 / viewport.scale);
       }
 
-      if (p.fixed) {
+      if (p.fixed && (sel || hovered)) {
         ctx.fillStyle = "#dc2626";
+        ctx.font = `${12 / viewport.scale}px system-ui`;
         ctx.fillText(applicationText("固定", "Fixed"), p.x + 8 / viewport.scale, p.y + 8 / viewport.scale);
       }
     }
@@ -15572,6 +15574,20 @@
           blank: { x: rect.left + rect.width - 35, y: rect.top + rect.height - 35 },
         };
       },
+      resetForFixedPointDisplayTest() {
+        resetModelState();
+        viewport.scale = 1;
+        const point = addPoint(0, 0, true, "explicit");
+        updateUI();
+        fitAllGeometryToViewport(220);
+        draw();
+        const rect = canvas.getBoundingClientRect();
+        return {
+          pointId: point.id,
+          point: this.worldClientPositionForTest(point),
+          blank: { x: rect.left + rect.width - 30, y: rect.top + rect.height - 30 },
+        };
+      },
       resetForSketchTreeBlockHoverTest() {
         resetModelState();
         viewport.scale = 1;
@@ -16426,6 +16442,42 @@
           ctx.arc = originalArc;
         }
         return count;
+      },
+      pointDisplayStateForTest(id) {
+        const point = allGeometryPoints().find((item) => item.id === id);
+        if (!point) return null;
+        let drawingTarget = false;
+        let marker = null;
+        const labels = [];
+        const originalArc = ctx.arc;
+        const originalFill = ctx.fill;
+        const originalStroke = ctx.stroke;
+        const originalFillText = ctx.fillText;
+        ctx.arc = (x, y, ...args) => {
+          drawingTarget = Math.abs(x - point.x) < 1e-9 && Math.abs(y - point.y) < 1e-9;
+          return originalArc.call(ctx, x, y, ...args);
+        };
+        ctx.fill = (...args) => {
+          if (drawingTarget) marker = { ...(marker || {}), fill: String(ctx.fillStyle) };
+          return originalFill.apply(ctx, args);
+        };
+        ctx.stroke = (...args) => {
+          if (drawingTarget) marker = { ...(marker || {}), stroke: String(ctx.strokeStyle), lineWidth: ctx.lineWidth };
+          return originalStroke.apply(ctx, args);
+        };
+        ctx.fillText = (value, ...args) => {
+          if (drawingTarget) labels.push(String(value));
+          return originalFillText.call(ctx, value, ...args);
+        };
+        try {
+          drawPoints();
+        } finally {
+          ctx.arc = originalArc;
+          ctx.fill = originalFill;
+          ctx.stroke = originalStroke;
+          ctx.fillText = originalFillText;
+        }
+        return { ...(marker || {}), labels };
       },
       drawnDimensionLabelsForTest() {
         const labels = [];
