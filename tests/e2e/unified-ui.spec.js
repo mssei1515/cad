@@ -251,12 +251,21 @@ test("unified workspace uses fixed Explorer Canvas Properties and Status regions
       modeControls: document.querySelectorAll("#geometryModeBtn, #presentationModeBtn, #presentationSheetSelect").length,
       menus: [...document.querySelectorAll(".app-menu > summary")].map((item) => item.textContent.trim()),
       toolIds: [...document.querySelectorAll(".command-toolbar button")].map((item) => item.id).filter(Boolean),
+      iconButtons: [...document.querySelectorAll(".command-toolbar button")].map((item) => ({
+        text: item.textContent.trim(),
+        hasIcon: Boolean(item.querySelector(":scope > svg")),
+        title: item.getAttribute("title"),
+        label: item.getAttribute("aria-label"),
+      })),
+      canvasCursor: getComputedStyle(document.querySelector("#canvas")).cursor,
     };
   });
 
   expect(layout.modeControls).toBe(0);
   expect(layout.menus).toEqual(["ファイル", "編集", "表示", "Geometry", "Constraint", "Annotation", "ヘルプ"]);
   expect(layout.toolIds).toEqual(expect.arrayContaining(["undoBtn", "redoBtn", "deleteSelectionBtn", "toolSelect", "toolPoint", "toolLine", "annotationLeaderBtn", "annotationTextBtn"]));
+  expect(layout.iconButtons.every((button) => button.text === "" && button.hasIcon && button.title && button.label)).toBe(true);
+  expect(layout.canvasCursor).toContain("data:image/svg+xml");
   expect(layout.explorer.left).toBe(0);
   expect(layout.explorer.right).toBeCloseTo(layout.canvas.left, 0);
   expect(layout.canvas.right).toBeCloseTo(layout.properties.left, 0);
@@ -277,8 +286,24 @@ test("unified workspace uses fixed Explorer Canvas Properties and Status regions
     title: "Fixture Part - Cad2",
   });
 
-  await page.locator(".app-menu").first().locator("summary").click();
+  const fileMenu = page.locator(".app-menu").nth(0);
+  const editMenu = page.locator(".app-menu").nth(1);
+  await fileMenu.locator("summary").click();
+  await expect(fileMenu).toHaveAttribute("open", "");
+  await editMenu.locator("summary").click();
+  await expect(fileMenu).not.toHaveAttribute("open", "");
+  await expect(editMenu).toHaveAttribute("open", "");
+  await expect(page.locator(".app-menu[open]")).toHaveCount(1);
+  await page.locator(".brand-mark").click();
+  await expect(page.locator(".app-menu[open]")).toHaveCount(0);
+  await page.evaluate(() => window.__cadTest.selectGeometryIdsForTest({ lines: ["L1"] }));
+  await fileMenu.locator("summary").click();
+  await page.keyboard.press("Escape");
+  await expect(page.locator(".app-menu[open]")).toHaveCount(0);
+  expect((await page.evaluate(() => window.__cadTest.selectedGeometryIdsForTest())).lines).toEqual(["L1"]);
+  await fileMenu.locator("summary").click();
   await page.click("#applicationSettingsBtn");
+  await expect(page.locator(".app-menu[open]")).toHaveCount(0);
   await expect(page.locator("#applicationSettingsDialog")).toBeVisible();
   await page.locator("#applicationSettingsDialog button[value=cancel]").first().click();
 
@@ -332,6 +357,26 @@ test("Appearance cascades from Document to Sketch to Geometry and Space reveals 
   expect(await page.evaluate(() => window.__cadTest.viewStateForTest())).toEqual(expect.objectContaining({ constraintStatus: true }));
   expect((await page.evaluate(() => window.__cadTest.appearanceStateForTest("line", "L1"))).visible).toBe(true);
   await page.keyboard.up("Space");
+});
+
+test("startup sample lines follow the same responsive drag path", async ({ page }) => {
+  const deltas = Array.from({ length: 10 }, (_, index) => [(index + 1) * 4, (index + 1) * 3]);
+
+  for (const id of ["L1", "L2", "L3", "L4"]) {
+    await page.goto(`${baseUrl}/index.html?test=1`);
+    await page.waitForFunction(() => window.__cadTest);
+    expect((await page.evaluate(() => window.__cadTest.authoringStateForTest())).fixedPointIds).toEqual([]);
+    const result = await page.evaluate(
+      ({ lineId, dragDeltas }) => window.__cadTest.geometryDragPathForTest({ kind: "line", id: lineId }, dragDeltas),
+      { lineId: id, dragDeltas: deltas },
+    );
+    const finalMidpoint = result.previews.at(-1).state.midpoint;
+    expect(result.sessionAvailable, id).toBe(true);
+    expect(result.previews.every((preview) => preview.success && !preview.blocked), id).toBe(true);
+    expect(finalMidpoint.x - result.startState.midpoint.x, id).toBeCloseTo(40, 5);
+    expect(finalMidpoint.y - result.startState.midpoint.y, id).toBeCloseTo(30, 5);
+    expect(Math.max(...result.previews.map((preview) => preview.elapsedMs)), id).toBeLessThan(100);
+  }
 });
 
 test("Block Instance Appearance Override applies to the whole instance", async ({ page }) => {

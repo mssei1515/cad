@@ -4550,7 +4550,7 @@
   function sampleModel() {
     resetModelState();
 
-    const A = addPoint(160, 160, true, "endpoint");
+    const A = addPoint(160, 160, false, "endpoint");
     const B = addPoint(300, 180, false, "endpoint");
     const C = addPoint(280, 290, false, "endpoint");
     const D = addPoint(140, 270, false, "endpoint");
@@ -13514,6 +13514,31 @@
     viewState.geometryIds = event.target.checked;
     draw();
   });
+  const appMenus = Array.from(document.querySelectorAll(".app-menu"));
+  function closeAppMenus(except = null) {
+    for (const menu of appMenus) {
+      if (menu !== except) menu.removeAttribute("open");
+    }
+  }
+  for (const menu of appMenus) {
+    menu.querySelector(":scope > summary")?.addEventListener("click", () => closeAppMenus(menu));
+    menu.addEventListener("toggle", () => {
+      if (menu.open) closeAppMenus(menu);
+    });
+  }
+  document.addEventListener("pointerdown", (event) => {
+    if (!event.target.closest(".app-menus")) closeAppMenus();
+  });
+  document.addEventListener("keydown", (event) => {
+    if (event.key !== "Escape") return;
+    const openMenu = appMenus.find((menu) => menu.open);
+    if (!openMenu) return;
+    event.preventDefault();
+    event.stopPropagation();
+    closeAppMenus();
+    openMenu.querySelector(":scope > summary")?.focus();
+  });
+  window.addEventListener("blur", () => closeAppMenus());
   for (const button of document.querySelectorAll("[data-menu-tool]")) {
     button.addEventListener("click", () => {
       document.getElementById(button.dataset.menuTool)?.click();

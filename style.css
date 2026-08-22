@@ -39,7 +39,8 @@ button:disabled { opacity: .45; cursor: default; }
 .app-menu > summary { list-style: none; height: 100%; display: flex; align-items: center; padding: 0 10px; font-size: 13px; cursor: pointer; }
 .app-menu > summary::-webkit-details-marker { display: none; }
 .app-menu[open] > summary, .app-menu > summary:hover { background: #334155; }
-.menu-popover { position: absolute; top: calc(100% - 1px); left: 0; min-width: 210px; padding: 6px; display: grid; gap: 3px; color: var(--text); background: #fff; border: 1px solid var(--border); border-radius: 0 0 6px 6px; box-shadow: 0 10px 24px rgba(15, 23, 42, .18); }
+.app-menu > summary:focus-visible { outline: 2px solid #7dd3fc; outline-offset: -2px; }
+.menu-popover { position: absolute; z-index: 1; top: calc(100% - 1px); left: 0; min-width: 210px; padding: 6px; display: grid; gap: 3px; color: var(--text); background: #fff; border: 1px solid var(--border); border-radius: 0 0 6px 6px; box-shadow: 0 10px 24px rgba(15, 23, 42, .18); }
 .menu-popover button, .menu-popover label, .menu-note { min-height: 30px; padding: 6px 9px; border: 0; border-radius: 3px; background: transparent; text-align: left; white-space: nowrap; }
 .menu-popover button:hover { background: var(--accent-soft); }
 .menu-popover button { display: flex; justify-content: space-between; }
@@ -51,7 +52,8 @@ button:disabled { opacity: .45; cursor: default; }
 .tool-group { flex: 0 0 auto; display: flex; align-items: flex-end; gap: 3px; padding: 16px 7px 3px; position: relative; border-right: 1px solid var(--border); }
 .tool-group:last-child { border-right: 0; }
 .tool-group-label { position: absolute; top: 0; left: 8px; color: var(--muted); font-size: 10px; letter-spacing: .04em; }
-.tool-group button, .tool-button { min-width: 38px; height: 30px; padding: 0 8px; font-size: 12px; }
+.tool-group button, .tool-button { display: grid; place-items: center; width: 34px; min-width: 34px; height: 30px; padding: 4px 6px; font-size: 12px; }
+.tool-group button svg, .tool-button svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; pointer-events: none; }
 .tool-group button.active, .tool-button.active { color: #fff; background: var(--accent); border-color: #1d4ed8; }
 
 .workspace { min-height: 0; min-width: 0; display: grid; grid-template-columns: var(--explorer-w) minmax(320px, 1fr) var(--properties-w); }
@@ -97,7 +99,8 @@ button:disabled { opacity: .45; cursor: default; }
 #explorerObjects > details > summary { padding: 8px; background: var(--panel-2); cursor: pointer; font-size: 12px; font-weight: 600; }
 
 .canvas-area { position: relative; min-width: 0; min-height: 0; overflow: hidden; background: var(--canvas); }
-#canvas { display: block; width: 100%; height: 100%; cursor: crosshair; }
+#canvas { display: block; width: 100%; height: 100%; cursor: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='25' height='25' viewBox='0 0 25 25'%3E%3Cpath d='M12.5 1v23M1 12.5h23' stroke='%23fff' stroke-width='3'/%3E%3Cpath d='M12.5 1v23M1 12.5h23' stroke='%23111827' stroke-width='1.3'/%3E%3Ccircle cx='12.5' cy='12.5' r='2.2' fill='%23fff' stroke='%23111827' stroke-width='1.2'/%3E%3C/svg%3E") 12 12, crosshair; }
+#canvas.is-panning { cursor: grabbing; }
 .dimension-value-input { position: absolute; z-index: 5; width: 100px; padding: 5px 7px; border: 2px solid var(--accent); border-radius: 4px; background: #fff; }
 body.block-editing .canvas-area { box-shadow: inset 0 0 0 3px #8b5cf6; }
 
