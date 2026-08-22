@@ -266,7 +266,10 @@ test("unified workspace uses fixed Explorer Canvas Properties and Status regions
   expect(layout.menus).toEqual(["ファイル", "編集", "表示", "Geometry", "Constraint", "Annotation", "ヘルプ"]);
   expect(layout.toolIds).toEqual(expect.arrayContaining(["undoBtn", "redoBtn", "deleteSelectionBtn", "toolSelect", "toolPoint", "toolLine", "annotationLeaderBtn", "annotationTextBtn"]));
   expect(layout.iconButtons.every((button) => button.text === "" && button.hasIcon && button.title && button.label)).toBe(true);
-  expect(layout.canvasCursor).toBe("crosshair");
+  expect(layout.canvasCursor).toContain("data:image/svg+xml");
+  expect(layout.canvasCursor).toContain("%230f172a");
+  expect(layout.canvasCursor).not.toContain("%23fff");
+  expect(layout.canvasCursor).not.toContain("%3Ccircle");
   expect(layout.gridControls).toBe(0);
   expect(layout.explorer.left).toBe(0);
   expect(layout.explorer.right).toBeCloseTo(layout.canvas.left, 0);
@@ -290,14 +293,24 @@ test("unified workspace uses fixed Explorer Canvas Properties and Status regions
 
   const fileMenu = page.locator(".app-menu").nth(0);
   const editMenu = page.locator(".app-menu").nth(1);
+  const geometryMenu = page.locator(".app-menu").nth(3);
+  await editMenu.locator("summary").hover();
+  await page.waitForTimeout(180);
+  await expect(page.locator(".app-menu[open]")).toHaveCount(0);
   await fileMenu.locator("summary").click();
   await expect(fileMenu).toHaveAttribute("open", "");
-  await editMenu.locator("summary").click();
+  await editMenu.locator("summary").hover();
   await expect(fileMenu).not.toHaveAttribute("open", "");
   await expect(editMenu).toHaveAttribute("open", "");
   await expect(page.locator(".app-menu[open]")).toHaveCount(1);
+  expect(await page.evaluate(() => document.activeElement?.textContent?.trim())).toBe("編集");
   await page.locator(".brand-mark").click();
   await expect(page.locator(".app-menu[open]")).toHaveCount(0);
+  await fileMenu.locator("summary").click();
+  await geometryMenu.locator("summary").click();
+  await expect(fileMenu).not.toHaveAttribute("open", "");
+  await expect(geometryMenu).toHaveAttribute("open", "");
+  await page.locator(".brand-mark").click();
   await page.evaluate(() => window.__cadTest.selectGeometryIdsForTest({ lines: ["L1"] }));
   await fileMenu.locator("summary").click();
   await page.keyboard.press("Escape");

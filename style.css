@@ -109,7 +109,7 @@ button:disabled { opacity: .45; cursor: default; }
 #explorerObjects > details > summary { padding: 8px; background: var(--panel-2); cursor: pointer; font-size: 12px; font-weight: 600; }
 
 .canvas-area { position: relative; min-width: 0; min-height: 0; overflow: hidden; background: var(--canvas); }
-#canvas { display: block; width: 100%; height: 100%; cursor: crosshair; }
+#canvas { display: block; width: 100%; height: 100%; cursor: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='17' height='17' viewBox='0 0 17 17'%3E%3Cpath d='M8.5 2v13M2 8.5h13' stroke='%230f172a' stroke-width='1'/%3E%3C/svg%3E") 8 8, crosshair; }
 #canvas.is-panning { cursor: grabbing; }
 .dimension-value-input { position: absolute; z-index: 5; width: 100px; padding: 5px 7px; border: 2px solid var(--accent); border-radius: 4px; background: #fff; }
 body.block-editing .canvas-area { box-shadow: inset 0 0 0 3px #8b5cf6; }

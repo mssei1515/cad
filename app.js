@@ -13527,13 +13527,35 @@
     draw();
   });
   const appMenus = Array.from(document.querySelectorAll(".app-menu"));
+  let appMenuHoverTimer = null;
+  function cancelAppMenuHoverSwitch() {
+    if (appMenuHoverTimer == null) return;
+    window.clearTimeout(appMenuHoverTimer);
+    appMenuHoverTimer = null;
+  }
   function closeAppMenus(except = null) {
+    cancelAppMenuHoverSwitch();
     for (const menu of appMenus) {
       if (menu !== except) menu.removeAttribute("open");
     }
   }
   for (const menu of appMenus) {
-    menu.querySelector(":scope > summary")?.addEventListener("click", () => closeAppMenus(menu));
+    const summary = menu.querySelector(":scope > summary");
+    summary?.addEventListener("click", () => closeAppMenus(menu));
+    summary?.addEventListener("pointerenter", (event) => {
+      if (event.pointerType === "touch") return;
+      if (!appMenus.some((item) => item !== menu && item.open)) return;
+      cancelAppMenuHoverSwitch();
+      appMenuHoverTimer = window.setTimeout(() => {
+        appMenuHoverTimer = null;
+        if (!appMenus.some((item) => item !== menu && item.open)) return;
+        closeAppMenus(menu);
+        menu.setAttribute("open", "");
+        summary.focus({ preventScroll: true });
+      }, 120);
+    });
+    summary?.addEventListener("pointerleave", cancelAppMenuHoverSwitch);
+    summary?.addEventListener("pointerdown", cancelAppMenuHoverSwitch);
     menu.addEventListener("toggle", () => {
       if (menu.open) closeAppMenus(menu);
     });
