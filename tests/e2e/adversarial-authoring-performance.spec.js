@@ -845,7 +845,7 @@ test("selection, deletion, undo and redo stay responsive on the complete fixture
     await measureInteraction(page, results, `explorer/geometry-group-${index}`, () => page.locator("#explorerGeometry summary").nth(index).click(), 250);
   }
   await measureInteraction(page, results, "explorer/constraint", () => page.locator('[data-explorer-tab="constraint"]').click(), 250);
-  await measureInteraction(page, results, "explorer/constraint-group", () => page.locator("#explorerConstraint summary").click(), 250);
+  await expect(page.locator("#constraintList")).toBeVisible();
 
   const canvas = loaded.viewport.canvas;
   await measureInteraction(page, results, "view/wheel-zoom", () => page.mouse.wheel(0, -240), 150);

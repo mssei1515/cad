@@ -90,6 +90,7 @@
   const ctx = canvas.getContext("2d");
   const dimensionValueInput = document.getElementById("dimensionValueInput");
   const APPLICATION_LANGUAGE_STORAGE_KEY = "cad2.application.language";
+  const DEFAULT_COLOR_PALETTE = ["#111827", "#64748b", "#dc2626", "#f97316", "#f59e0b", "#16a34a", "#0ea5e9", "#2563eb", "#7c3aed", "#db2777", "#ffffff"];
   const UI_TRANSLATIONS = [
     ["ファイル", "File"], ["編集", "Edit"], ["ヘルプ", "Help"],
     ["保存", "Save"], ["開く", "Open"], ["ドキュメント設定", "Document Settings"], ["アプリケーション設定", "Application Settings"],
@@ -111,6 +112,7 @@
     ["アプリケーション全体の設定をドキュメント設定から分離して管理します。", "Application-wide settings are managed separately from document settings."],
     ["既定", "Default"], ["表示", "Visible"], ["非表示", "Hidden"], ["色", "Color"], ["線種", "Line type"], ["線幅", "Line width"],
     ["実線", "Solid"], ["破線", "Dashed"], ["一点鎖線", "Dash-dot"], ["点線", "Dotted"], ["使用済みの色", "Colors used in this file"],
+    ["標準色", "Standard colors"], ["このファイルで使用中の色", "Colors used in this file"], ["任意の色", "Custom color"], ["使用中の色はありません", "No colors are used yet"], ["適用", "Apply"],
     ["外観", "Appearance"], ["外観の上書き", "Appearance Override"], ["配置情報", "Placement"], ["定義", "Definition"], ["回転", "Rotation"],
     ["長さ", "Length"], ["半径", "Radius"], ["補助線", "Construction"], ["種類", "Type"], ["値", "Value"],
     ["寸法表示", "Dimension Display"], ["精度", "Precision"], ["接頭辞", "Prefix"], ["接尾辞", "Suffix"], ["矢印", "Arrows"], ["寸法補助線", "Extension lines"],
@@ -249,6 +251,7 @@
   let pendingConstraintCommand = null;
   let constraintOperands = [];
   let lastPointerWorld = null;
+  let colorPaletteSession = null;
   let hoveredSketchIdentity = null;
   let hoveredSketchTreeId = null;
   let constructionLineMode = false;
@@ -4869,6 +4872,10 @@
     return lines.some((line) => line.p1 === point || line.p2 === point);
   }
 
+  function isAnyLineEndpoint(point) {
+    return isPointUsedByLine(point, allGeometryLines());
+  }
+
   function isPointUsedByCircle(point, circles = model.circles) {
     return circles.some((circle) => circle.center === point);
   }
@@ -8418,7 +8425,7 @@
       const active = isEditableSketchElement(p);
       ctx.globalAlpha = sketchAlpha(p);
       const refSelected = isPendingReferenceTarget(p) || isConstraintOperandSelected(p);
-      const treeHovered = isSidebarHighlightedElement(p) && !isPointUsedByLine(p);
+      const treeHovered = isSidebarHighlightedElement(p) && !isAnyLineEndpoint(p);
       const sidebarHovered = isSidebarHoveredElement(p);
       const relatedHighlighted = isSelectedConstraintRelatedElement(p);
       const auxiliaryHighlighted = relatedHighlighted;
@@ -10118,14 +10125,11 @@
     return colors;
   }
 
-  function usedColorSwatches(selectedColor) {
-    const selected = String(selectedColor || "").toLowerCase();
-    const colors = usedFileColors();
-    if (colors.length === 0) return "";
-    const label = applicationText("使用済みの色", "Colors used in this file");
-    return `<div class="property-color-swatches" role="group" aria-label="${label}">${colors.map((color) =>
-      `<button class="property-color-swatch" data-appearance-used-color="${color}" type="button" style="--swatch-color:${color}" title="${label}: ${color}" aria-label="${label}: ${color}" aria-pressed="${selected === color}"></button>`,
-    ).join("")}</div>`;
+  function colorPaletteSwatches(colors, selectedColor, groupLabel) {
+    const selected = colorPickerValue(selectedColor);
+    return colors.map((color) =>
+      `<button class="property-color-swatch" data-palette-color="${color}" type="button" style="--swatch-color:${color}" title="${escapeHtml(groupLabel)}: ${color}" aria-label="${escapeHtml(groupLabel)}: ${color}" aria-pressed="${selected === color}"></button>`,
+    ).join("");
   }
 
   function appearancePropertyRows(owner, effective, { allowInheritance = true } = {}) {
@@ -10139,7 +10143,7 @@
         ${allowInheritance ? option("", defaultLabel, inherited("visible")) : ""}
         ${option("true", "表示", direct.visible === true || !allowInheritance && effective.visible !== false)}${option("false", "非表示", direct.visible === false)}
       </select></div>
-      <div class="property-row"><label for="propertyColor">Color</label><div class="property-color-control"><input id="propertyColor" data-appearance-key="color" type="text" placeholder="${defaultLabel}" value="${escapeHtml(direct.color || "")}" /><input class="property-color-picker" data-appearance-color-picker type="color" value="${colorValue}" title="Color palette" aria-label="Color palette" />${usedColorSwatches(direct.color)}</div></div>
+      <div class="property-row"><label for="propertyColor">Color</label><div class="property-color-control"><input id="propertyColor" data-appearance-key="color" type="text" placeholder="${defaultLabel}" value="${escapeHtml(direct.color || "")}" /><button class="property-color-picker" data-appearance-palette-open data-current-color="${colorValue}" type="button" title="カラーパレット" aria-label="カラーパレット"><span class="property-color-picker-swatch" style="--swatch-color:${colorValue}" aria-hidden="true"></span></button></div></div>
       <div class="property-row"><label for="propertyLineType">Line type</label><select id="propertyLineType" data-appearance-key="lineType">
         ${allowInheritance ? option("", defaultLabel, inherited("lineType")) : ""}
         ${option("solid", "実線", direct.lineType === "solid" || !allowInheritance && effective.lineType === "solid")}${option("dashed", "破線", direct.lineType === "dashed")}${option("dashdot", "一点鎖線", direct.lineType === "dashdot")}${option("dotted", "点線", direct.lineType === "dotted")}
@@ -10268,24 +10272,72 @@
     return null;
   }
 
-  function syncAppearanceColorInput(picker) {
-    if (!picker?.matches?.("[data-appearance-color-picker]")) return picker;
-    const input = picker.closest(".property-color-control")?.querySelector('[data-appearance-key="color"]');
-    if (input) input.value = picker.value;
-    return input || picker;
+  function renderColorPaletteDialog(selectedColor) {
+    const defaultPalette = document.getElementById("defaultColorPalette");
+    const usedPalette = document.getElementById("usedColorPalette");
+    const customPicker = document.getElementById("customColorPicker");
+    const defaultsLabel = applicationText("標準色", "Standard colors");
+    const usedLabel = applicationText("このファイルで使用中の色", "Colors used in this file");
+    const selected = colorPickerValue(selectedColor);
+    if (defaultPalette) defaultPalette.innerHTML = colorPaletteSwatches(DEFAULT_COLOR_PALETTE, selected, defaultsLabel);
+    if (usedPalette) {
+      const colors = usedFileColors();
+      usedPalette.innerHTML = colors.length > 0
+        ? colorPaletteSwatches(colors, selected, usedLabel)
+        : `<p class="color-palette-empty">${applicationText("使用中の色はありません", "No colors are used yet")}</p>`;
+    }
+    if (customPicker) customPicker.value = selected;
+    const dialog = document.getElementById("colorPaletteDialog");
+    if (dialog) localizeApplicationUI(dialog);
+  }
+
+  function openAppearanceColorPalette(button, context = "properties") {
+    let target = null;
+    let owner = null;
+    let historyLabel = "Appearance変更";
+    if (context === "document") {
+      owner = model.defaultAppearance;
+      historyLabel = "Document Default Appearance変更";
+    } else {
+      target = selectedPropertiesTarget();
+      owner = appearanceOwnerForPropertiesTarget(target);
+      historyLabel = target.kind === "block" ? "Appearance Override変更" : "Appearance変更";
+    }
+    if (!owner) return;
+    colorPaletteSession = {
+      owner,
+      target,
+      historyLabel,
+      sourceButton: button,
+      sourceInput: button.closest(".property-color-control")?.querySelector('[data-appearance-key="color"]') || null,
+    };
+    const selected = colorPaletteSession.sourceInput?.value.trim() || button.dataset.currentColor || owner.color;
+    renderColorPaletteDialog(selected);
+    const dialog = document.getElementById("colorPaletteDialog");
+    if (dialog && !dialog.open) dialog.showModal();
+  }
+
+  function commitColorPaletteValue(value) {
+    if (!colorPaletteSession) return;
+    const color = colorPickerValue(value);
+    const { owner, target, historyLabel, sourceButton, sourceInput } = colorPaletteSession;
+    applyAppearanceInput(owner, "color", color);
+    if (target?.kind === "block") invalidateBlockProjectionCache(target.item.id);
+    if (!target) model.defaultAppearance = normalizeAppearance(model.defaultAppearance, { partial: false });
+    if (sourceInput) sourceInput.value = color;
+    if (sourceButton) {
+      sourceButton.dataset.currentColor = color;
+      sourceButton.querySelector(".property-color-picker-swatch")?.style.setProperty("--swatch-color", color);
+    }
+    recordHistory(historyLabel);
+    document.getElementById("colorPaletteDialog")?.close();
+    colorPaletteSession = null;
+    updateUI();
+    draw();
   }
 
   function handlePropertiesInput(event) {
     const input = event.target;
-    if (input.matches("[data-appearance-color-picker]")) {
-      const target = selectedPropertiesTarget();
-      const owner = appearanceOwnerForPropertiesTarget(target);
-      const colorInput = syncAppearanceColorInput(input);
-      applyAppearanceInput(owner, "color", colorInput.value.trim());
-      if (target.kind === "block") invalidateBlockProjectionCache(target.item.id);
-      draw();
-      return;
-    }
     if (!input.matches('[data-dimension-display="prefix"], [data-dimension-display="suffix"]')) return;
     const target = selectedPropertiesTarget();
     if (target.kind !== "constraint" || !applyDimensionDisplayInput(target.item, input)) return;
@@ -10307,7 +10359,7 @@
 
   function handlePropertiesChange(event) {
     const target = selectedPropertiesTarget();
-    const input = syncAppearanceColorInput(event.target);
+    const input = event.target;
     if (input.dataset.appearanceKey) {
       const owner = appearanceOwnerForPropertiesTarget(target);
       applyAppearanceInput(owner, input.dataset.appearanceKey, input.value.trim());
@@ -10358,16 +10410,9 @@
   }
 
   function handlePropertiesClick(event) {
-    const button = event.target.closest("[data-appearance-used-color]");
+    const button = event.target.closest("[data-appearance-palette-open]");
     if (!button) return;
-    const target = selectedPropertiesTarget();
-    const owner = appearanceOwnerForPropertiesTarget(target);
-    if (!owner) return;
-    applyAppearanceInput(owner, "color", button.dataset.appearanceUsedColor);
-    if (target.kind === "block") invalidateBlockProjectionCache(target.item.id);
-    recordHistory(target.kind === "block" ? "Appearance Override変更" : "Appearance変更");
-    updateUI();
-    draw();
+    openAppearanceColorPalette(button);
   }
 
   function updateObjectExplorerUI() {
@@ -10401,9 +10446,16 @@
     updateToolbar();
     updateSketchUI();
     updateBlockUI();
-    document.getElementById("pointList").innerHTML = model.points
-      .filter(isActiveSketchElement)
-      .filter((point) => isExplicitPoint(point) || isPointUsedByLine(point))
+    const listedPoints = model.points.filter(isActiveSketchElement).filter((point) => isExplicitPoint(point) || isPointUsedByLine(point));
+    const listedLines = model.lines.filter(isActiveSketchElement);
+    const listedCircles = model.circles.filter(isActiveSketchElement);
+    const listedArcs = model.arcs.filter(isActiveSketchElement);
+    document.getElementById("pointCount").textContent = String(listedPoints.length);
+    document.getElementById("lineCount").textContent = String(listedLines.length);
+    document.getElementById("circleCount").textContent = String(listedCircles.length);
+    document.getElementById("arcCount").textContent = String(listedArcs.length);
+    document.getElementById("annotationCount").textContent = String(model.annotations.length);
+    document.getElementById("pointList").innerHTML = listedPoints
       .map(
         (p) =>
           `<div class="item list-item geometry-list-row" data-kind="point" data-id="${p.id}"><span>${p.id}` +
@@ -10417,8 +10469,7 @@
       )
       .join("");
 
-    document.getElementById("lineList").innerHTML = model.lines
-      .filter(isActiveSketchElement)
+    document.getElementById("lineList").innerHTML = listedLines
       .map(
         (l) =>
           `<div class="item list-item geometry-list-row" data-kind="line" data-id="${l.id}"><span>${l.id}: ${l.p1.id} - ${l.p2.id}<span class="badge">len=${formatDisplayNumber(l.length())}</span><span class="badge">${constraintStatusBadge(constraintStatusOf(l))}</span>${l.construction ? "<span class='badge'>補助</span>" : ""}${findLineFixedConstraint(l) ? "<span class='badge'>固定</span>" : ""}</span>` +
@@ -10428,8 +10479,7 @@
       )
       .join("");
 
-    document.getElementById("circleList").innerHTML = model.circles
-      .filter(isActiveSketchElement)
+    document.getElementById("circleList").innerHTML = listedCircles
       .map(
         (circle) =>
           `<div class="item list-item geometry-list-row" data-kind="circle" data-id="${circle.id}"><span>${circle.id}: 中心 ${circle.center.id}<span class="badge">R=${formatDisplayNumber(circle.radius())}</span><span class="badge">${constraintStatusBadge(constraintStatusOf(circle))}</span>${circle.construction ? "<span class='badge'>補助</span>" : ""}</span>` +
@@ -10439,8 +10489,7 @@
       )
       .join("");
 
-    document.getElementById("arcList").innerHTML = model.arcs
-      .filter(isActiveSketchElement)
+    document.getElementById("arcList").innerHTML = listedArcs
       .map(
         (arc) =>
           `<div class="item list-item geometry-list-row" data-kind="arc" data-id="${arc.id}"><span>${arc.id}: 中心 ${arc.center.id}<span class="badge">R=${formatDisplayNumber(arc.radius())}</span><span class="badge">角度=${formatDisplayNumber(angleDegrees(Math.abs(arc.endAngle - arc.startAngle)))}°</span><span class="badge">${constraintStatusBadge(constraintStatusOf(arc))}</span>${arc.construction ? "<span class='badge'>補助</span>" : ""}</span>` +
@@ -12781,7 +12830,7 @@
     const hitD = hitDimension(p.x, p.y);
     const hitBlockHandle = hitBlockRotationHandle(p.x, p.y);
     const hitBlock = hitBlockHandle || hitBlockInstance(p.x, p.y);
-    hoveredSketchIdentity = hitSketchIdentityElement(p.x, p.y, { allowInactiveGeometry: Boolean(pendingConstraintCommand || pendingCommand?.type?.startsWith("distance")) });
+    hoveredSketchIdentity = hitSketchIdentityElement(p.x, p.y, { allowInactiveGeometry: true });
     const inactiveHit = null;
     const blankAnnotationHit = hitAnnotationElement(p.x, p.y);
     const annotationTargetHit = hitAnnotationTarget(p.x, p.y);
@@ -13289,14 +13338,14 @@
 
     if (!dragSession) {
       const hitD = hitDimension(p.x, p.y, { activeOnly: false });
-      const nextHover = hitD?.constraint || null;
+      const nextHover = hitD && isActiveSketchConstraint(hitD.constraint) ? hitD.constraint : null;
       const nextEndpointHover = nextHover ? null : hitEndpointPoint(p.x, p.y);
       const nextPointHover = nextHover ? null : nextEndpointHover || hitExplicitPoint(p.x, p.y);
       const nextLineHover = nextPointHover ? null : hitLine(p.x, p.y);
       const nextCircleHover = nextPointHover || nextLineHover ? null : hitCircle(p.x, p.y);
       const nextArcEndpointHover = nextPointHover || nextLineHover || nextCircleHover ? null : hitArcEndpoint(p.x, p.y);
       const nextArcHover = nextPointHover || nextLineHover || nextCircleHover || nextArcEndpointHover ? null : hitArc(p.x, p.y);
-      const nextSketchIdentity = hitSketchIdentityElement(p.x, p.y);
+      const nextSketchIdentity = hitSketchIdentityElement(p.x, p.y, { allowInactiveGeometry: true });
       const nextBlockHover = nextHover || nextPointHover || nextLineHover || nextCircleHover || nextArcEndpointHover || nextArcHover ? null : hitBlockInstance(p.x, p.y);
       const annotationHit = nextHover || nextPointHover || nextLineHover || nextCircleHover || nextArcEndpointHover || nextArcHover || nextBlockHover
         ? null
@@ -14000,15 +14049,8 @@
     if (fields) {
       const effective = normalizeAppearance(model.defaultAppearance, { partial: false });
       fields.innerHTML = appearancePropertyRows(effective, effective, { allowInheritance: false });
-      fields.oninput = (event) => {
-        if (!event.target.matches("[data-appearance-color-picker]")) return;
-        const input = syncAppearanceColorInput(event.target);
-        applyAppearanceInput(model.defaultAppearance, "color", input.value.trim());
-        model.defaultAppearance = normalizeAppearance(model.defaultAppearance, { partial: false });
-        draw();
-      };
       fields.onchange = (event) => {
-        const input = syncAppearanceColorInput(event.target);
+        const input = event.target;
         if (!input.dataset.appearanceKey) return;
         applyAppearanceInput(model.defaultAppearance, input.dataset.appearanceKey, input.value.trim());
         model.defaultAppearance = normalizeAppearance(model.defaultAppearance, { partial: false });
@@ -14016,17 +14058,22 @@
         draw();
       };
       fields.onclick = (event) => {
-        const button = event.target.closest("[data-appearance-used-color]");
+        const button = event.target.closest("[data-appearance-palette-open]");
         if (!button) return;
-        applyAppearanceInput(model.defaultAppearance, "color", button.dataset.appearanceUsedColor);
-        model.defaultAppearance = normalizeAppearance(model.defaultAppearance, { partial: false });
-        recordHistory("Document Default Appearance変更");
-        fields.innerHTML = appearancePropertyRows(model.defaultAppearance, model.defaultAppearance, { allowInheritance: false });
-        localizeApplicationUI(fields);
-        draw();
+        openAppearanceColorPalette(button, "document");
       };
     }
     document.getElementById("documentSettingsDialog")?.showModal();
+  });
+  document.getElementById("colorPaletteDialog")?.addEventListener("click", (event) => {
+    const swatch = event.target.closest("[data-palette-color]");
+    if (swatch) commitColorPaletteValue(swatch.dataset.paletteColor);
+  });
+  document.getElementById("applyCustomColorBtn")?.addEventListener("click", () => {
+    commitColorPaletteValue(document.getElementById("customColorPicker")?.value);
+  });
+  document.getElementById("colorPaletteDialog")?.addEventListener("close", () => {
+    colorPaletteSession = null;
   });
   document.getElementById("applicationSettingsBtn")?.addEventListener("click", () => {
     const select = document.getElementById("applicationLanguageSelect");
@@ -14632,7 +14679,7 @@
         }
         if (!item) return null;
         const appearance = effectiveAppearanceForElement(item);
-        const treeHovered = isSidebarHighlightedElement(item) && (!(item instanceof Point) || !isPointUsedByLine(item));
+        const treeHovered = isSidebarHighlightedElement(item) && (!(item instanceof Point) || !isAnyLineEndpoint(item));
         const sidebarHovered = isSidebarHoveredElement(item);
         const canvasHovered = hoveredLine === item || hoveredCircle === item || hoveredArc === item || hoveredPoint === item || hoveredEndpointPoint === item;
         const blockHovered = Boolean(item.blockInstance && hoveredBlockInstance === item.blockInstance);
@@ -15711,6 +15758,7 @@
           line: this.worldClientPositionForTest({ x: (line.p1.x + line.p2.x) / 2, y: (line.p1.y + line.p2.y) / 2 }),
           block: this.worldClientPositionForTest(blockInstanceDisplayCenter(instance)),
           dimensionId: dimensionConstraint.name || "寸法",
+          lineId: line.id,
           blockId: instance.id,
           sourceSketchId,
           activeSketchId: activeChildId,

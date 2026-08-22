@@ -121,19 +121,19 @@
         </div>
         <div class="explorer-scroll">
           <section id="explorerGeometry" class="explorer-panel object-explorer-panel active" data-explorer-panel="geometry">
-            <details><summary>Point</summary><div id="pointList" class="list"></div></details>
-            <details><summary>Line</summary><div id="lineList" class="list"></div></details>
-            <details><summary>Circle</summary><div id="circleList" class="list"></div></details>
-            <details><summary>Arc</summary><div id="arcList" class="list"></div></details>
-            <details><summary>Annotation</summary><div id="annotationObjectList" class="list"></div></details>
+            <details><summary><span class="explorer-section-label">Point</span><span id="pointCount" class="explorer-count">0</span></summary><div id="pointList" class="list"></div></details>
+            <details><summary><span class="explorer-section-label">Line</span><span id="lineCount" class="explorer-count">0</span></summary><div id="lineList" class="list"></div></details>
+            <details><summary><span class="explorer-section-label">Circle</span><span id="circleCount" class="explorer-count">0</span></summary><div id="circleList" class="list"></div></details>
+            <details><summary><span class="explorer-section-label">Arc</span><span id="arcCount" class="explorer-count">0</span></summary><div id="arcList" class="list"></div></details>
+            <details><summary><span class="explorer-section-label">Annotation</span><span id="annotationCount" class="explorer-count">0</span></summary><div id="annotationObjectList" class="list"></div></details>
           </section>
           <section id="explorerBlocks" class="explorer-panel object-explorer-panel" data-explorer-panel="blocks" hidden>
             <section class="explorer-section block-definition-launcher"><div class="section-header"><strong>ブロック</strong><button id="openBlockDefinitionsBtn" class="compact-button" type="button">ブロック定義…</button></div></section>
-            <details><summary>Block Instance</summary><div id="blockInstanceObjectList" class="list"></div></details>
+            <div id="blockInstanceObjectList" class="list explorer-direct-list"></div>
             <div id="blockSketchConfig" class="block-sketch-config" hidden></div>
           </section>
           <section id="explorerConstraint" class="explorer-panel object-explorer-panel" data-explorer-panel="constraint" hidden>
-            <details><summary>Constraint</summary><div id="constraintList" class="list"></div></details>
+            <div id="constraintList" class="list explorer-direct-list"></div>
           </section>
         </div>
       </aside>
@@ -160,6 +160,7 @@
   <dialog id="documentSettingsDialog" class="settings-dialog"><form method="dialog"><header><strong>ドキュメント設定</strong><button value="cancel">×</button></header><section><h3>Default Appearance</h3><div id="documentAppearanceFields"></div></section><footer><button value="cancel">閉じる</button></footer></form></dialog>
   <dialog id="applicationSettingsDialog" class="settings-dialog app-settings-view"><form method="dialog"><header><strong>アプリケーション設定</strong><button value="cancel">×</button></header><section><h3>General</h3><div class="settings-row"><label for="applicationLanguageSelect">言語</label><select id="applicationLanguageSelect"><option value="ja" data-i18n-ja="日本語" data-i18n-en="Japanese">日本語</option><option value="en" data-i18n-ja="English" data-i18n-en="English">English</option></select></div><p>アプリケーション全体の設定をドキュメント設定から分離して管理します。</p></section><footer><button value="cancel">閉じる</button></footer></form></dialog>
   <dialog id="blockDefinitionsDialog" class="settings-dialog block-definitions-dialog"><form method="dialog"><header><strong>ブロック定義</strong><button value="cancel">×</button></header><section><div id="blockList" class="block-definition-list"></div></section><footer><button value="cancel">閉じる</button></footer></form></dialog>
+  <dialog id="colorPaletteDialog" class="settings-dialog color-palette-dialog"><form method="dialog"><header><strong>カラーパレット</strong><button value="cancel">×</button></header><section><h3>標準色</h3><div id="defaultColorPalette" class="color-palette-grid"></div><h3>このファイルで使用中の色</h3><div id="usedColorPalette" class="color-palette-grid"></div><div class="settings-row color-custom-row"><label for="customColorPicker">任意の色</label><input id="customColorPicker" type="color" value="#111827" /></div></section><footer><button value="cancel">キャンセル</button><button id="applyCustomColorBtn" class="primary" type="button">適用</button></footer></form></dialog>
 
   <script src="./geometry_kernel.js"></script><script src="./geometry_ref.js"></script><script src="./constraint_codec_registry.js"></script><script src="./constraint_solver.js"></script><script src="./app.js"></script>
 </body>
