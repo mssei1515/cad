@@ -7296,7 +7296,7 @@
         }
       }
 
-      if (viewState.geometryIds || geometrySelected || directlyHovered || auxiliaryHighlighted) {
+      if (viewState.geometryIds || geometrySelected || directlyHovered || relatedHighlighted) {
         const mx = (l.p1.x + l.p2.x) / 2;
         const my = (l.p1.y + l.p2.y) / 2;
         ctx.fillStyle = "#2563eb";
@@ -7335,7 +7335,7 @@
       ctx.stroke();
       ctx.setLineDash([]);
       ctx.shadowBlur = 0;
-      if (viewState.geometryIds || geometrySelected || directlyHovered || auxiliaryHighlighted) {
+      if (viewState.geometryIds || geometrySelected || directlyHovered || relatedHighlighted) {
         ctx.fillStyle = "#2563eb";
         ctx.font = `${12 / viewport.scale}px system-ui`;
         ctx.fillText(c.id, c.center.x + c.radius() + 4 / viewport.scale, c.center.y - 4 / viewport.scale);
@@ -7372,7 +7372,7 @@
       ctx.stroke();
       ctx.setLineDash([]);
       ctx.shadowBlur = 0;
-      if (viewState.geometryIds || geometrySelected || directlyHovered || auxiliaryHighlighted) {
+      if (viewState.geometryIds || geometrySelected || directlyHovered || relatedHighlighted) {
         const mid = a.startAngle + arcSweep(a) / 2;
         ctx.fillStyle = "#2563eb";
         ctx.font = `${12 / viewport.scale}px system-ui`;
@@ -8231,7 +8231,7 @@
       ctx.stroke();
       ctx.shadowBlur = 0;
       ctx.setLineDash([]);
-      if (viewState.geometryIds || sel || hovered || dragging || auxiliaryHighlighted) {
+      if (viewState.geometryIds || sel || hovered || dragging || relatedHighlighted) {
         ctx.fillStyle = hovered || endpoint ? "#2563eb" : "#111827";
         ctx.font = `${12 / viewport.scale}px system-ui`;
         ctx.fillText(p.id, p.x + 8 / viewport.scale, p.y - 8 / viewport.scale);
@@ -9861,21 +9861,26 @@
     return cascadeSketchAppearance(sketch, model.sketches, normalizeAppearance(model.defaultAppearance, { partial: false }));
   }
 
+  function defaultAppearanceLabel() {
+    return document.documentElement.lang.toLowerCase().startsWith("ja") ? "既定" : "Default";
+  }
+
   function appearancePropertyRows(owner, effective, { allowInheritance = true } = {}) {
     const direct = normalizeAppearance(owner);
     const inherited = (key) => allowInheritance && direct[key] == null;
     const option = (value, label, selected) => `<option value="${value}" ${selected ? "selected" : ""}>${label}</option>`;
+    const defaultLabel = defaultAppearanceLabel();
     return `
       <div class="property-row"><label for="propertyVisible">Visible</label><select id="propertyVisible" data-appearance-key="visible">
-        ${allowInheritance ? option("", "—", inherited("visible")) : ""}
+        ${allowInheritance ? option("", defaultLabel, inherited("visible")) : ""}
         ${option("true", "表示", direct.visible === true || !allowInheritance && effective.visible !== false)}${option("false", "非表示", direct.visible === false)}
       </select></div>
-      <div class="property-row"><label for="propertyColor">Color</label><input id="propertyColor" data-appearance-key="color" type="text" placeholder="—" value="${escapeHtml(direct.color || "")}" /></div>
+      <div class="property-row"><label for="propertyColor">Color</label><input id="propertyColor" data-appearance-key="color" type="text" placeholder="${defaultLabel}" value="${escapeHtml(direct.color || "")}" /></div>
       <div class="property-row"><label for="propertyLineType">Line type</label><select id="propertyLineType" data-appearance-key="lineType">
-        ${allowInheritance ? option("", "—", inherited("lineType")) : ""}
+        ${allowInheritance ? option("", defaultLabel, inherited("lineType")) : ""}
         ${option("solid", "実線", direct.lineType === "solid" || !allowInheritance && effective.lineType === "solid")}${option("dashed", "破線", direct.lineType === "dashed")}${option("dashdot", "一点鎖線", direct.lineType === "dashdot")}${option("dotted", "点線", direct.lineType === "dotted")}
       </select></div>
-      <div class="property-row"><label for="propertyLineWidth">Line width</label><input id="propertyLineWidth" data-appearance-key="lineWidth" type="number" min="0.1" max="20" step="0.1" placeholder="—" value="${direct.lineWidth ?? ""}" /></div>`;
+      <div class="property-row"><label for="propertyLineWidth">Line width</label><input id="propertyLineWidth" data-appearance-key="lineWidth" type="number" min="0.1" max="20" step="0.1" placeholder="${defaultLabel}" value="${direct.lineWidth ?? ""}" /></div>`;
   }
 
   function selectedPropertiesTarget() {
@@ -9941,7 +9946,7 @@
       const display = dimensionDisplayState(dimension);
       const targetValue = targetFromConstraint(item);
       const value = targetValue?.kind === "angle" ? angleDegrees(item.target) : item.target;
-      panel.innerHTML = `<h2 class="property-heading">${escapeHtml(item.name || "Constraint")}</h2><section class="property-section"><h3>Constraint</h3><div class="property-row"><span>Type</span><span class="property-readonly">${escapeHtml(item.constructor.name)}</span></div>${Number.isFinite(value) && !item.readOnlyDimension ? `<div class="property-row"><label>Value</label><input data-property="constraint-value" type="number" step="0.1" value="${value}"></div>` : ""}</section>${dimension ? `<section class="property-section"><h3>Dimension Display</h3><div class="property-row"><label>Visible</label><input data-dimension-display="visible" type="checkbox" ${display.visible ? "checked" : ""}></div><div class="property-row"><label>Precision</label><input data-dimension-display="precision" type="number" min="0" max="10" placeholder="自動" value="${display.precision ?? ""}"></div><div class="property-row"><label>Prefix</label><input data-dimension-display="prefix" value="${escapeHtml(display.prefix)}"></div><div class="property-row"><label>Suffix</label><input data-dimension-display="suffix" value="${escapeHtml(display.suffix)}"></div><div class="property-row"><label>Upper tol.</label><input data-dimension-display="toleranceUpper" type="number" step="0.001" value="${escapeHtml(display.toleranceUpper)}"></div><div class="property-row"><label>Lower tol.</label><input data-dimension-display="toleranceLower" type="number" step="0.001" value="${escapeHtml(display.toleranceLower)}"></div><div class="property-row"><label>Arrows</label><input data-dimension-display="arrows" type="checkbox" ${display.arrows ? "checked" : ""}></div><div class="property-row"><label>Extension lines</label><input data-dimension-display="extensionLines" type="checkbox" ${display.extensionLines ? "checked" : ""}></div></section>` : ""}`;
+      panel.innerHTML = `<h2 class="property-heading">${escapeHtml(item.name || "Constraint")}</h2><section class="property-section"><h3>Constraint</h3><div class="property-row"><span>Type</span><span class="property-readonly">${escapeHtml(item.constructor.name)}</span></div>${Number.isFinite(value) && !item.readOnlyDimension ? `<div class="property-row"><label>Value</label><input data-property="constraint-value" type="number" step="0.1" value="${value}"></div>` : ""}</section>${dimension ? `<section class="property-section"><h3>Dimension Display</h3><div class="property-row"><label>Visible</label><input data-dimension-display="visible" type="checkbox" ${display.visible ? "checked" : ""}></div><div class="property-row"><label>Precision</label><input data-dimension-display="precision" type="number" min="0" max="10" placeholder="自動" value="${display.precision ?? ""}"></div><div class="property-row"><label>Prefix</label><input data-dimension-display="prefix" value="${escapeHtml(display.prefix)}"></div><div class="property-row"><label>Suffix</label><input data-dimension-display="suffix" value="${escapeHtml(display.suffix)}"></div><div class="property-row"><label>Arrows</label><input data-dimension-display="arrows" type="checkbox" ${display.arrows ? "checked" : ""}></div><div class="property-row"><label>Extension lines</label><input data-dimension-display="extensionLines" type="checkbox" ${display.extensionLines ? "checked" : ""}></div></section>` : ""}`;
     } else if (target.kind === "annotation") {
       panel.innerHTML = `<h2 class="property-heading">${item.type === "leader" ? "Leader" : "Free Text"} ${escapeHtml(item.id)}</h2><section class="property-section"><h3>Annotation</h3><div class="property-row"><label>Visible</label><input data-property="annotation-visible" type="checkbox" ${item.visible !== false ? "checked" : ""}></div>${item.type === "text" ? `<div class="property-row"><label>Text</label><textarea data-property="annotation-text">${escapeHtml(item.text || "")}</textarea></div><div class="property-row"><label>Font size</label><input data-property="annotation-font-size" type="number" min="6" max="72" value="${Number(item.style?.fontSize || 13)}"></div>` : ""}<div class="property-row"><label>Color</label><input data-property="annotation-color" type="text" value="${escapeHtml(item.style?.color || "#111827")}"></div></section>`;
     } else {
@@ -9949,6 +9954,7 @@
       panel.innerHTML = `<h2 class="property-heading">Sketch ${escapeHtml(item.name)}</h2><section class="property-section"><h3>Sketch</h3><div class="property-row"><span>ID</span><span class="property-readonly">${escapeHtml(item.id)}</span></div><div class="property-row"><span>Active</span><span class="property-readonly">${item.id === activeSketchId() ? "Yes" : "No"}</span></div></section><section class="property-section"><h3>Appearance</h3>${appearancePropertyRows(item.appearance, effective)}</section>`;
     }
 
+    panel.oninput = handlePropertiesInput;
     panel.onchange = handlePropertiesChange;
   }
 
@@ -9961,6 +9967,26 @@
     else next[key] = rawValue;
     Object.assign(target, normalizeAppearance(next));
     for (const existingKey of ["visible", "color", "lineType", "lineWidth"]) if (next[existingKey] == null) delete target[existingKey];
+  }
+
+  function applyDimensionDisplayInput(constraint, input) {
+    if (!constraint?.dimension || !input?.dataset.dimensionDisplay) return false;
+    const display = { ...(constraint.dimension.display || {}) };
+    const key = input.dataset.dimensionDisplay;
+    if (input.type === "checkbox") display[key] = input.checked;
+    else if (key === "precision") display[key] = input.value === "" ? null : Math.max(0, Math.min(10, Math.round(Number(input.value))));
+    else if (key === "toleranceUpper" || key === "toleranceLower") display[key] = input.value === "" ? null : Number(input.value);
+    else display[key] = input.value;
+    constraint.dimension.display = display;
+    return true;
+  }
+
+  function handlePropertiesInput(event) {
+    const input = event.target;
+    if (!input.matches('[data-dimension-display="prefix"], [data-dimension-display="suffix"]')) return;
+    const target = selectedPropertiesTarget();
+    if (target.kind !== "constraint" || !applyDimensionDisplayInput(target.item, input)) return;
+    draw();
   }
 
   function handlePropertiesChange(event) {
@@ -9980,15 +10006,10 @@
       return;
     }
     if (input.dataset.dimensionDisplay && target.kind === "constraint" && target.item.dimension) {
-      const display = { ...(target.item.dimension.display || {}) };
-      const key = input.dataset.dimensionDisplay;
-      if (input.type === "checkbox") display[key] = input.checked;
-      else if (key === "precision") display[key] = input.value === "" ? null : Math.max(0, Math.min(10, Math.round(Number(input.value))));
-      else if (key === "toleranceUpper" || key === "toleranceLower") display[key] = input.value === "" ? null : Number(input.value);
-      else display[key] = input.value;
-      target.item.dimension.display = display;
+      const liveTextInput = input.dataset.dimensionDisplay === "prefix" || input.dataset.dimensionDisplay === "suffix";
+      applyDimensionDisplayInput(target.item, input);
       recordHistory("寸法表示変更");
-      updatePropertiesUI();
+      if (!liveTextInput) updatePropertiesUI();
       draw();
       return;
     }
@@ -13558,9 +13579,10 @@
   });
   for (const button of document.querySelectorAll("[data-explorer-tab]")) {
     button.addEventListener("click", () => {
-      const structure = button.dataset.explorerTab === "structure";
-      document.getElementById("explorerStructure").hidden = !structure;
-      document.getElementById("explorerObjects").hidden = structure;
+      const target = button.dataset.explorerTab;
+      for (const panel of document.querySelectorAll("[data-explorer-panel]")) {
+        panel.hidden = panel.dataset.explorerPanel !== target;
+      }
       for (const tab of document.querySelectorAll("[data-explorer-tab]")) {
         const active = tab === button;
         tab.classList.toggle("active", active);
@@ -15776,6 +15798,17 @@
           drawCircles();
           drawArcs();
           drawPoints();
+        } finally {
+          ctx.fillText = originalFillText;
+        }
+        return labels;
+      },
+      drawnDimensionLabelsForTest() {
+        const labels = [];
+        const originalFillText = ctx.fillText;
+        ctx.fillText = (value) => labels.push(String(value));
+        try {
+          drawDimensions();
         } finally {
           ctx.fillText = originalFillText;
         }

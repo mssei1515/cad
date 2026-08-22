@@ -112,6 +112,11 @@ async function openTestApp(page) {
   await page.waitForFunction(() => window.__cadTest);
 }
 
+async function openBlocksExplorer(page) {
+  const tab = page.locator('[data-explorer-tab="blocks"]');
+  if ((await tab.getAttribute("aria-selected")) !== "true") await tab.click();
+}
+
 async function importFixture(page, fixture = phase0DocumentFixture(), name = "phase0-golden.json") {
   const result = await page.evaluate(
     ({ data, fileName }) => window.__cadTest.importDocumentNameFixture(data, fileName),
@@ -297,6 +302,7 @@ test("block instance and definition deletion clean projection references", async
   await page.click("#undoBtn");
   expect(semanticDocument(await page.evaluate(() => window.__cadTest.serializedModelForTest()))).toEqual(semanticDocument(beforeInstanceDelete));
 
+  await openBlocksExplorer(page);
   await page.click('.block-item[data-id="B2"] .blockEditBtn');
   const linePoint = await page.evaluate(() => window.__cadTest.geometryClientPositionForTest("line", "LB2"));
   expect(linePoint).not.toBeNull();
@@ -345,7 +351,7 @@ test("selection, hit testing, viewport changes, and canceled commands do not mut
   await page.mouse.up({ button: "middle" });
   await page.mouse.dblclick(canvas.x + canvas.width / 2, canvas.y + canvas.height / 2, { button: "middle" });
   await page.click('[data-explorer-tab="objects"]');
-  await page.click('[data-explorer-tab="structure"]');
+  await page.click('[data-explorer-tab="sketches"]');
 
   expect(semanticDocument(await page.evaluate(() => window.__cadTest.serializedModelForTest()))).toEqual(semanticDocument(before));
   expect(await page.evaluate(() => window.__cadTest.historyState())).toEqual(historyBefore);
@@ -400,6 +406,7 @@ test("block editor history is isolated and cancel or root undo restores exact do
   const before = await importFixture(page);
   const baselineHistory = await page.evaluate(() => window.__cadTest.historyState());
 
+  await openBlocksExplorer(page);
   await page.click("#toolCreateBlock");
   await page.evaluate(() => window.__cadTest.addBlockEditorChildGeometry());
   expect(await page.evaluate(() => window.__cadTest.historyState())).toEqual(expect.objectContaining({ blockEditing: true, undoCount: 3, redoCount: 0 }));
@@ -410,6 +417,7 @@ test("block editor history is isolated and cancel or root undo restores exact do
   expect(semanticDocument(await page.evaluate(() => window.__cadTest.serializedModelForTest()))).toEqual(semanticDocument(before));
   expect(await page.evaluate(() => window.__cadTest.historyState())).toEqual(expect.objectContaining({ blockEditing: false, undoCount: baselineHistory.undoCount, redoCount: 0 }));
 
+  await openBlocksExplorer(page);
   await page.click("#toolCreateBlock");
   await page.evaluate(() => window.__cadTest.addBlockEditorChildGeometry());
   await page.evaluate(() => window.__cadTest.completeBlockEditor());
@@ -464,6 +472,7 @@ test("visual regression: unified document annotations", async ({ page }) => {
 test("visual regression: block editor", async ({ page }) => {
   await openTestApp(page);
   await page.evaluate(() => window.__cadTest.resetForBlockCreationUi());
+  await openBlocksExplorer(page);
   await page.click("#toolCreateBlock");
   await expect(page.locator("#canvas")).toHaveScreenshot("phase0-block-editor.png", { animations: "disabled", maxDiffPixelRatio: 0.002 });
 });

@@ -8,6 +8,11 @@ const port = Number(process.env.CAD2_E2E_PORT || 8765) + 1;
 const baseUrl = `http://${host}:${port}`;
 let serverProcess = null;
 
+async function openBlocksExplorer(page) {
+  const tab = page.locator('[data-explorer-tab="blocks"]');
+  if ((await tab.getAttribute("aria-selected")) !== "true") await tab.click();
+}
+
 function waitForServer(url, timeoutMs = 10000) {
   const startedAt = Date.now();
   return new Promise((resolve, reject) => {
@@ -591,6 +596,7 @@ test("creates, places, drags, edits, and reloads local-coordinate blocks", async
   await page.waitForFunction(() => window.__cadTest);
 
   const setup = await page.evaluate(() => window.__cadTest.resetForBlockCreationUi());
+  await openBlocksExplorer(page);
   await page.click("#toolCreateBlock");
   await expect(page.locator("body")).toHaveClass(/block-editing/);
   await expect(page.locator("#blockEditorNameInput")).toBeVisible();
@@ -624,6 +630,7 @@ test("creates, places, drags, edits, and reloads local-coordinate blocks", async
   expect((await page.evaluate(() => window.__cadTest.blockInteractionPoints())).handle).toBeNull();
 
   const canvas = await page.locator("#canvas").boundingBox();
+  await openBlocksExplorer(page);
   await page.click(".blockPlaceBtn");
   await page.mouse.click(canvas.x + canvas.width * 0.72, canvas.y + canvas.height * 0.58);
   await page.mouse.click(canvas.x + canvas.width * 0.8, canvas.y + canvas.height * 0.58);
@@ -650,6 +657,7 @@ test("creates, places, drags, edits, and reloads local-coordinate blocks", async
   const reloaded = await page.evaluate(() => window.__cadTest.reloadBlockState());
   expect(reloaded).toEqual({ definitions: 1, instances: 2, projectionLines: 8, serializedVersion: 9 });
 
+  await openBlocksExplorer(page);
   await page.click(".blockDeleteBtn");
   expect((await page.evaluate(() => window.__cadTest.blockState())).definitions).toHaveLength(1);
   await page.screenshot({ path: "test-results/block-instances.png", fullPage: true });
@@ -659,6 +667,7 @@ test("block placement defaults to persistent orthogonal rotation lock and can us
   await page.goto(`${baseUrl}/index.html?test=1`);
   await page.waitForFunction(() => window.__cadTest);
   await page.evaluate(() => window.__cadTest.resetForBlockCreationUi());
+  await openBlocksExplorer(page);
   await page.click("#toolCreateBlock");
   await page.click("#completeBlockEditBtn");
 
@@ -674,6 +683,7 @@ test("block placement defaults to persistent orthogonal rotation lock and can us
   ];
   for (let index = 0; index < orthogonalCases.length; index += 1) {
     const item = orthogonalCases[index];
+    await openBlocksExplorer(page);
     await page.click(".blockPlaceBtn");
     await expect(page.locator('input[data-rotation-mode="locked"]')).toBeChecked();
     const center = { x: canvas.x + canvas.width * (0.56 + index * 0.04), y: canvas.y + canvas.height * 0.48 };
@@ -700,6 +710,7 @@ test("block placement defaults to persistent orthogonal rotation lock and can us
   expect(lockState.x).not.toBeCloseTo(locked.x, 6);
   expect(lockState.rotation).toBeCloseTo(locked.rotation, 8);
 
+  await openBlocksExplorer(page);
   await page.click(".blockPlaceBtn");
   await page.click('input[data-rotation-mode="free"]');
   await expect(page.locator('input[data-rotation-mode="free"]')).toBeChecked();
@@ -727,6 +738,7 @@ test("selected blocks can change rotation mode and reject an unsatisfied orthogo
   await page.waitForFunction(() => window.__cadTest);
   await page.evaluate((fixture) => window.__cadTest.importDocumentNameFixture(fixture, "rotation-lock.json"), rotationLockFixture());
   await page.evaluate(() => window.__cadTest.selectGeometryIdsForTest({ blockInstances: ["BI1"] }));
+  await openBlocksExplorer(page);
   await expect(page.locator('input[data-rotation-mode="free"]')).toBeChecked();
   const before = await page.evaluate(() => window.__cadTest.blockRotationLockStateForTest("BI1"));
   await page.click('input[data-rotation-mode="locked"]');
@@ -776,6 +788,7 @@ test("block lower settings only appear during placement or single-block selectio
   await page.goto(`${baseUrl}/index.html?test=1`);
   await page.waitForFunction(() => window.__cadTest);
   await page.evaluate(() => window.__cadTest.resetForBlockCreationUi());
+  await openBlocksExplorer(page);
   await page.click("#toolCreateBlock");
   await page.click("#completeBlockEditBtn");
 
@@ -784,6 +797,7 @@ test("block lower settings only appear during placement or single-block selectio
   await page.evaluate(() => window.__cadTest.selectGeometryIdsForTest({}));
   await expect(page.locator("#blockSketchConfig")).toBeHidden();
 
+  await openBlocksExplorer(page);
   await page.click(".blockPlaceBtn");
   await expect(page.locator("#blockSketchConfig")).toBeVisible();
   await page.keyboard.press("Escape");
@@ -867,6 +881,7 @@ test("selected block definitions move under a new parent without changing ids or
   await page.evaluate((data) => window.__cadTest.importDocumentNameFixture(data, "block-parent-compose.json"), fixture);
   const before = (await page.evaluate(() => window.__cadTest.blockState())).instances;
   await page.evaluate(() => window.__cadTest.selectGeometryIdsForTest({ lines: ["L100"], blockInstances: ["BI1", "BI2"] }));
+  await openBlocksExplorer(page);
   await page.click("#toolCreateBlock");
   const editor = await page.evaluate(() => window.__cadTest.blockEditorState());
   expect(editor).toEqual(expect.objectContaining({ depth: 1 }));
@@ -924,6 +939,7 @@ test("parent creation rejects a block definition that still has unselected insta
   await page.evaluate((data) => window.__cadTest.importDocumentNameFixture(data, "shared-block-parent.json"), fixture);
   const before = await page.evaluate(() => window.__cadTest.blockState());
   await page.evaluate(() => window.__cadTest.selectGeometryIdsForTest({ blockInstances: ["BI10"] }));
+  await openBlocksExplorer(page);
   await page.click("#toolCreateBlock");
   await expect(page.locator("#hint")).toContainText("対象インスタンスをすべて選択してください");
   expect(await page.evaluate(() => window.__cadTest.blockEditorState())).toEqual(expect.objectContaining({ editing: false }));
@@ -933,6 +949,7 @@ test("parent creation rejects a block definition that still has unselected insta
 
   const allInstanceIds = before.instances.map((instance) => instance.id);
   await page.evaluate((blockInstances) => window.__cadTest.selectGeometryIdsForTest({ blockInstances }), allInstanceIds);
+  await openBlocksExplorer(page);
   await page.click("#toolCreateBlock");
   await page.click("#completeBlockEditBtn");
   const completed = await page.evaluate(() => window.__cadTest.blockState());
@@ -950,6 +967,7 @@ test("wrapping selected blocks removes constraints that reference blocks left ou
   await page.waitForFunction(() => window.__cadTest);
   await page.evaluate((fixture) => window.__cadTest.importDocumentNameFixture(fixture, "block-parent-external-constraint.json"), blockPointOnLineFixture({ subjectY: -50, includeConstraint: true }));
   await page.evaluate(() => window.__cadTest.selectGeometryIdsForTest({ blockInstances: ["BI2"] }));
+  await openBlocksExplorer(page);
   await page.click("#toolCreateBlock");
   await page.click("#completeBlockEditBtn");
 
@@ -971,8 +989,10 @@ test("canceling parent creation restores moved definitions after nested child ed
   await page.evaluate((fixture) => window.__cadTest.importDocumentNameFixture(fixture, "block-parent-cancel.json"), blockPointOnLineFixture({ subjectY: -200 }));
   const before = await page.evaluate(() => window.__cadTest.blockState());
   await page.evaluate(() => window.__cadTest.selectGeometryIdsForTest({ blockInstances: ["BI1", "BI2"] }));
+  await openBlocksExplorer(page);
   await page.click("#toolCreateBlock");
   expect(await page.evaluate(() => window.__cadTest.blockEditorState())).toEqual(expect.objectContaining({ depth: 1, hostBlockInstanceCount: 2 }));
+  await openBlocksExplorer(page);
   await page.click('.block-item[data-id="B1"] .blockEditBtn');
   await page.locator("#blockEditorNameInput").fill("Edited staged child");
   await page.click("#completeBlockEditBtn");
@@ -992,8 +1012,10 @@ test("block editor can wrap existing child blocks and rolls ownership back with 
   await page.evaluate((fixture) => window.__cadTest.importDocumentNameFixture(fixture, "nested-child-parent.json"), nestedComposableBlocksFixture());
   expect((await page.evaluate(() => window.__cadTest.blockState())).definitions.find((definition) => definition.id === "B2").blockInstances.map((instance) => instance.id).sort()).toEqual(["BI1", "BI2"]);
 
+  await openBlocksExplorer(page);
   await page.click('.block-item[data-id="B2"] .blockEditBtn');
   await page.evaluate(() => window.__cadTest.selectGeometryIdsForTest({ blockInstances: ["BI1", "BI2"] }));
+  await openBlocksExplorer(page);
   await page.click("#toolCreateBlock");
   await page.click("#completeBlockEditBtn");
   const parentEditor = await page.evaluate(() => window.__cadTest.blockEditorState());
@@ -1005,8 +1027,10 @@ test("block editor can wrap existing child blocks and rolls ownership back with 
   expect(state.definitions.find((definition) => definition.id === "B3").parentDefinitionId).toBe("B2");
   expect(state.definitions.find((definition) => definition.id === "B2").blockInstances.map((instance) => instance.id).sort()).toEqual(["BI1", "BI2"]);
 
+  await openBlocksExplorer(page);
   await page.click('.block-item[data-id="B2"] .blockEditBtn');
   await page.evaluate(() => window.__cadTest.selectGeometryIdsForTest({ blockInstances: ["BI1", "BI2"] }));
+  await openBlocksExplorer(page);
   await page.click("#toolCreateBlock");
   await page.click("#completeBlockEditBtn");
   await page.click("#completeBlockEditBtn");
@@ -1167,11 +1191,13 @@ test("block placement escape commits zero rotation after choosing the display ce
   await page.goto(`${baseUrl}/index.html?test=1`);
   await page.waitForFunction(() => window.__cadTest);
   const setup = await page.evaluate(() => window.__cadTest.resetForBlockCreationUi());
+  await openBlocksExplorer(page);
   await page.click("#toolCreateBlock");
   await page.fill("#blockEditorNameInput", "Esc Block");
   await page.click("#completeBlockEditBtn");
 
   const canvas = await page.locator("#canvas").boundingBox();
+  await openBlocksExplorer(page);
   await page.click(".blockPlaceBtn");
   await page.mouse.click(canvas.x + canvas.width * 0.75, canvas.y + canvas.height * 0.7);
   await page.keyboard.press("Escape");
@@ -1187,6 +1213,7 @@ test("legacy block data migrates into an internal Sketch-1 without changing proj
   await page.goto(`${baseUrl}/index.html?test=1`);
   await page.waitForFunction(() => window.__cadTest);
   await page.evaluate(() => window.__cadTest.resetForBlockCreationUi());
+  await openBlocksExplorer(page);
   await page.click("#toolCreateBlock");
   await page.click("#completeBlockEditBtn");
 
@@ -1209,8 +1236,11 @@ test("new block editor supports cancel and independent internal sketch hierarchy
   await page.waitForFunction(() => window.__cadTest);
 
   await page.evaluate(() => window.__cadTest.resetForBlockCreationUi());
+  await openBlocksExplorer(page);
   await page.click("#toolCreateBlock");
+  await page.click('[data-explorer-tab="sketches"]');
   await expect(page.locator("#sketchOverlay")).toBeVisible();
+  await page.click('[data-explorer-tab="blocks"]');
   await expect(page.locator("#completeBlockEditBtn")).toBeVisible();
   expect(await page.locator(".canvas-area").evaluate((element) => {
     const style = getComputedStyle(element);
@@ -1221,6 +1251,7 @@ test("new block editor supports cancel and independent internal sketch hierarchy
   await expect(page.locator(".canvas-area")).toHaveCSS("background-color", "rgb(255, 255, 255)");
 
   await page.evaluate(() => window.__cadTest.resetForEmptyBlockCreation());
+  await openBlocksExplorer(page);
   await page.click("#toolCreateBlock");
   const initialEditor = await page.evaluate(() => window.__cadTest.blockEditorState());
   expect(initialEditor.sketches).toEqual([
@@ -1241,6 +1272,7 @@ test("block editor undo and redo use an independent local history", async ({ pag
   await page.waitForFunction(() => window.__cadTest);
 
   await page.evaluate(() => window.__cadTest.resetForEmptyBlockCreation());
+  await openBlocksExplorer(page);
   await page.click("#toolCreateBlock");
   expect(await page.evaluate(() => window.__cadTest.historyState())).toEqual(expect.objectContaining({
     blockEditing: true,
@@ -1285,11 +1317,13 @@ test("block editor can place existing blocks and create nested blocks that survi
 
   await expect(page.locator('.block-item[data-id="B2"]')).toHaveCount(1);
   await expect(page.locator('.block-item[data-id="B1"]')).toHaveCount(0);
+  await openBlocksExplorer(page);
   await page.click('.block-item[data-id="B2"] .blockEditBtn');
   await expect(page.locator("#blockList")).toBeVisible();
   await expect(page.locator('.block-item[data-id="B1"] .blockPlaceBtn')).toBeEnabled();
   await expect(page.locator('.block-item[data-id="B2"]')).toHaveCount(0);
 
+  await openBlocksExplorer(page);
   await page.click('.block-item[data-id="B1"] .blockPlaceBtn');
   const placed = await page.evaluate(() => window.__cadTest.commitBlockPlacementForTest({ x: 20, y: 10 }, Math.PI / 2));
   expect(placed).toEqual(expect.objectContaining({ definitionId: "B1", rotation: Math.PI / 2, rotationLocked: true }));
@@ -1302,6 +1336,7 @@ test("block editor can place existing blocks and create nested blocks that survi
   expect(editor.editorBlockInstances).toHaveLength(1);
 
   await page.evaluate(() => window.__cadTest.selectGeometryIdsForTest({ lines: ["L10"] }));
+  await openBlocksExplorer(page);
   await page.click("#toolCreateBlock");
   editor = await page.evaluate(() => window.__cadTest.blockEditorState());
   expect(editor).toEqual(expect.objectContaining({ editing: true, isNew: true, depth: 2, editorLineCount: 1 }));
@@ -1339,6 +1374,7 @@ test("block editor can place existing blocks and create nested blocks that survi
   expect(state.projectionLineIds.every((id) => id.startsWith("BI100@BI") && id.split("@").length === 3)).toBe(true);
 
   await page.evaluate(() => window.__cadTest.selectGeometryIdsForTest({ blockInstances: ["BI100"] }));
+  await openBlocksExplorer(page);
   await page.click("#toolCreateBlock");
   expect(await page.evaluate(() => window.__cadTest.blockEditorState())).toEqual(expect.objectContaining({ depth: 1, editorLineCount: 0 }));
   await page.click("#completeBlockEditBtn");
@@ -1396,6 +1432,7 @@ test("loading removes stale nested block constraints and keeps the parent editab
   await expect(page.locator("#hint")).toContainText("ブロック内部拘束を1件解除しました");
   expect((await page.evaluate(() => window.__cadTest.blockState())).definitions.find((definition) => definition.id === "B2").constraints).toBe(0);
 
+  await openBlocksExplorer(page);
   await page.click('.block-item[data-id="B2"] .blockEditBtn');
   expect(await page.evaluate(() => window.__cadTest.blockEditorState())).toEqual(expect.objectContaining({ depth: 1 }));
 });
@@ -1408,7 +1445,9 @@ test("deleting child geometry removes parent constraints without interrupting ne
     nestedConstraintCleanupFixture(),
   );
 
+  await openBlocksExplorer(page);
   await page.click('.block-item[data-id="B2"] .blockEditBtn');
+  await openBlocksExplorer(page);
   await page.click('.block-item[data-id="B1"] .blockEditBtn');
   await page.evaluate(() => window.__cadTest.selectGeometryIdsForTest({ lines: ["L1"] }));
   await page.click("#deleteSelectionBtn");
@@ -1427,10 +1466,12 @@ test("block editor uses the same scoped block actions and keeps sketch choices v
 
   await expect(page.locator('.block-item[data-id="B2"]')).toHaveCount(1);
   await expect(page.locator('.block-item[data-id="B1"]')).toHaveCount(0);
+  await openBlocksExplorer(page);
   await page.click('.block-item[data-id="B2"] .blockEditBtn');
   await expect(page.locator('.block-item[data-id="B1"]')).toHaveCount(1);
   await expect(page.locator('.block-item[data-id="B2"]')).toHaveCount(0);
 
+  await openBlocksExplorer(page);
   await page.click('.block-item[data-id="B1"] .blockPlaceBtn');
   await expect(page.locator("#blockSketchConfig")).toBeVisible();
   const layout = await page.evaluate(() => {
@@ -1447,6 +1488,7 @@ test("block editor uses the same scoped block actions and keeps sketch choices v
   expect(layout.configHeight).toBeGreaterThanOrEqual(70);
   await page.keyboard.press("Escape");
 
+  await openBlocksExplorer(page);
   await page.click('.block-item[data-id="B1"] .blockEditBtn');
   expect(await page.evaluate(() => window.__cadTest.blockEditorState())).toEqual(expect.objectContaining({ depth: 2 }));
   await page.locator("#blockEditorNameInput").fill("Leaf edited");
@@ -1455,9 +1497,11 @@ test("block editor uses the same scoped block actions and keeps sketch choices v
   expect((await page.evaluate(() => window.__cadTest.blockState())).definitions.find((definition) => definition.id === "B1").name).toBe("Leaf edited");
 
   page.once("dialog", (dialog) => dialog.accept("Leaf renamed"));
+  await openBlocksExplorer(page);
   await page.click('.block-item[data-id="B1"] .blockRenameBtn');
   await expect(page.locator('.block-item[data-id="B1"] .block-item-name')).toHaveText("Leaf renamed");
 
+  await openBlocksExplorer(page);
   await page.click('.block-item[data-id="B24"] .blockDeleteBtn');
   await expect(page.locator('.block-item[data-id="B24"]')).toHaveCount(0);
   await page.click("#cancelBlockEditBtn");
@@ -1471,8 +1515,10 @@ test("canceling nested block creation restores the containing block and removes 
   await page.waitForFunction(() => window.__cadTest);
   await page.evaluate((fixture) => window.__cadTest.importDocumentNameFixture(fixture, "nested-block-cancel.json"), nestedBlockEditingFixture());
 
+  await openBlocksExplorer(page);
   await page.click('.block-item[data-id="B2"] .blockEditBtn');
   await page.evaluate(() => window.__cadTest.selectGeometryIdsForTest({ lines: ["L10"] }));
+  await openBlocksExplorer(page);
   await page.click("#toolCreateBlock");
   expect(await page.evaluate(() => window.__cadTest.blockEditorState())).toEqual(expect.objectContaining({ depth: 2, editorLineCount: 1 }));
   await page.click("#cancelBlockEditBtn");
@@ -1480,6 +1526,7 @@ test("canceling nested block creation restores the containing block and removes 
   expect((await page.evaluate(() => window.__cadTest.blockState())).definitions).toHaveLength(2);
 
   await page.evaluate(() => window.__cadTest.selectGeometryIdsForTest({ lines: ["L10"] }));
+  await openBlocksExplorer(page);
   await page.click("#toolCreateBlock");
   await page.click("#completeBlockEditBtn");
   expect((await page.evaluate(() => window.__cadTest.blockState())).definitions).toHaveLength(3);
@@ -1494,6 +1541,7 @@ test("long constrained lines in the block editor follow sparse pointer moves wit
   await page.goto(`${baseUrl}/index.html?test=1`);
   await page.waitForFunction(() => window.__cadTest);
   await page.evaluate((fixture) => window.__cadTest.importDocumentNameFixture(fixture, "sparse-block-line.json"), sparseBlockEditorLineDragFixture());
+  await openBlocksExplorer(page);
   await page.click('.block-item[data-id="B1"] .blockEditBtn');
 
   const result = await page.evaluate(() => window.__cadTest.geometryDragPathForTest(
@@ -1535,6 +1583,7 @@ test("a first block projection line stays pending so a second line can be dimens
     (fixture) => window.__cadTest.importDocumentNameFixture(fixture, "nested-block-dimension.json"),
     nestedConstraintCleanupFixture(),
   );
+  await openBlocksExplorer(page);
   await page.click('.block-item[data-id="B2"] .blockEditBtn');
 
   const targets = await page.evaluate(() => {
@@ -1574,6 +1623,7 @@ test("hovering a block highlights its projection without showing every geometry 
   await page.waitForFunction(() => window.__cadTest);
 
   await page.evaluate(() => window.__cadTest.resetForBlockCreationUi());
+  await openBlocksExplorer(page);
   await page.click("#toolCreateBlock");
   await page.click("#completeBlockEditBtn");
   await page.keyboard.press("Escape");
@@ -1598,6 +1648,7 @@ test("block projection endpoints visibly highlight during constraint commands", 
   await page.waitForFunction(() => window.__cadTest);
 
   await page.evaluate(() => window.__cadTest.resetForBlockCreationUi());
+  await openBlocksExplorer(page);
   await page.click("#toolCreateBlock");
   await page.click("#completeBlockEditBtn");
   const endpoint = await page.evaluate(() => window.__cadTest.blockProjectionEndpointForTest());
@@ -1621,6 +1672,7 @@ test("reloaded block editing reserves existing internal geometry and sketch ids"
   await page.waitForFunction(() => window.__cadTest);
 
   await page.evaluate(() => window.__cadTest.resetForBlockCreationUi());
+  await openBlocksExplorer(page);
   await page.click("#toolCreateBlock");
   await page.click("#completeBlockEditBtn");
   const beforeReload = await page.evaluate(() => window.__cadTest.blockState());
@@ -1629,6 +1681,7 @@ test("reloaded block editing reserves existing internal geometry and sketch ids"
   expect(originalDefinition.lines).toHaveLength(4);
 
   await page.evaluate(() => window.__cadTest.reloadBlockState());
+  await openBlocksExplorer(page);
   await page.dblclick(".block-item[data-id]");
   const child = await page.evaluate(() => window.__cadTest.addBlockEditorChildGeometry());
   await page.click("#completeBlockEditBtn");
@@ -1651,15 +1704,18 @@ test("placement and existing instances keep independent enabled internal sketche
   await page.goto(`${baseUrl}/index.html?test=1`);
   await page.waitForFunction(() => window.__cadTest);
   await page.evaluate(() => window.__cadTest.resetForBlockCreationUi());
+  await openBlocksExplorer(page);
   await page.click("#toolCreateBlock");
   await page.click("#completeBlockEditBtn");
 
+  await openBlocksExplorer(page);
   await page.dblclick(".block-item[data-id]");
   const child = await page.evaluate(() => window.__cadTest.addBlockEditorChildGeometry());
   await page.click("#completeBlockEditBtn");
   let state = await page.evaluate(() => window.__cadTest.blockState());
   expect(state.instances[0].enabledSketchIds).toEqual(["S1"]);
 
+  await openBlocksExplorer(page);
   await page.click(".blockPlaceBtn");
   await expect(page.locator("#blockSketchConfig")).toBeVisible();
   await page.locator(`#blockSketchConfig input[data-sketch-id="S1"]`).uncheck();
@@ -1715,6 +1771,7 @@ test("block creation keeps internal constraints and removes every external const
   expect(selection.internalConstraintCount).toBe(6);
   expect(selection.externalConstraintCount).toBe(3);
 
+  await openBlocksExplorer(page);
   await page.click("#toolCreateBlock");
   await expect(page.locator("#hint")).toContainText("選択外につながる拘束3件は完了時に解除されます");
   await page.click("#completeBlockEditBtn");

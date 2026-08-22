@@ -282,6 +282,10 @@ test("unified workspace uses fixed Explorer Canvas Properties and Status regions
       geometryMenuColumnCount: getComputedStyle(document.querySelector(".menu-command-list")).gridTemplateColumns.split(" ").length,
       fileMenuTools: [...document.querySelectorAll(".app-menu:first-of-type [data-menu-tool]")].map((item) => item.dataset.menuTool),
       sketchTreeToggleCount: document.querySelectorAll("#toggleSketchTreeBtn").length,
+      explorerTabs: [...document.querySelectorAll("[data-explorer-tab]")].map((item) => ({
+        id: item.dataset.explorerTab,
+        text: item.textContent.trim(),
+      })),
     };
   });
 
@@ -298,26 +302,41 @@ test("unified workspace uses fixed Explorer Canvas Properties and Status regions
   expect(layout.geometryMenuColumnCount).toBe(1);
   expect(layout.fileMenuTools).toEqual(["exportBtn", "importBtn"]);
   expect(layout.sketchTreeToggleCount).toBe(0);
+  expect(layout.explorerTabs).toEqual([
+    { id: "sketches", text: "Sketches" },
+    { id: "blocks", text: "Blocks" },
+    { id: "objects", text: "Objects" },
+  ]);
+  expect(await page.locator("#blockInstanceObjectList").evaluate((element) => element.closest("[data-explorer-panel]")?.dataset.explorerPanel)).toBe("objects");
   expect(layout.explorer.left).toBe(0);
   expect(layout.explorer.right).toBeCloseTo(layout.canvas.left, 0);
   expect(layout.canvas.right).toBeCloseTo(layout.properties.left, 0);
   expect(layout.explorer.top).toBeGreaterThanOrEqual(layout.toolbar.bottom - 1);
   expect(layout.status.top).toBeGreaterThanOrEqual(layout.canvas.bottom - 1);
 
+  await expect(page.locator("#explorerSketches")).toBeVisible();
+  await expect(page.locator("#explorerBlocks")).toBeHidden();
+  await expect(page.locator("#explorerObjects")).toBeHidden();
+  await page.click('[data-explorer-tab="blocks"]');
+  await expect(page.locator("#explorerSketches")).toBeHidden();
+  await expect(page.locator("#explorerBlocks")).toBeVisible();
+  await expect(page.locator("#explorerObjects")).toBeHidden();
+  await expect(page.locator("#blockOverlay")).toBeVisible();
   await page.click('[data-explorer-tab="objects"]');
   await expect(page.locator("#explorerObjects")).toBeVisible();
-  await expect(page.locator("#explorerStructure")).toBeHidden();
+  await expect(page.locator("#explorerSketches")).toBeHidden();
+  await expect(page.locator("#explorerBlocks")).toBeHidden();
   expect(await page.locator("#explorerObjects > details").evaluateAll((details) => details.map((item) => item.open))).toEqual([
     false, false, false, false, false, false, false,
   ]);
   await expect(page.locator("#pointList .geometry-list-row")).toHaveCount(4);
   const pointSection = await expandObjectSection(page, "Point");
   await expect(pointSection).toHaveAttribute("open", "");
-  await page.click('[data-explorer-tab="structure"]');
-  await expect(page.locator("#explorerStructure")).toBeVisible();
+  await page.click('[data-explorer-tab="sketches"]');
+  await expect(page.locator("#explorerSketches")).toBeVisible();
   await page.click('[data-explorer-tab="objects"]');
   await expect(pointSection).toHaveAttribute("open", "");
-  await page.click('[data-explorer-tab="structure"]');
+  await page.click('[data-explorer-tab="sketches"]');
 
   expect(await page.evaluate(() => window.__cadTest.documentNameState())).toEqual({
     modelName: "無題",
@@ -486,11 +505,23 @@ test("Appearance cascades from Document to Sketch to Geometry and Space reveals 
   await page.click('[data-explorer-tab="objects"]');
   await expandObjectSection(page, "Line");
   await page.locator('#lineList .geometry-list-row[data-id="L1"]').click();
-  await expect(page.locator('#propertyVisible option[value=""]')).toHaveText("—");
-  await expect(page.locator('#propertyLineType option[value=""]')).toHaveText("—");
-  await expect(page.locator("#propertyColor")).toHaveAttribute("placeholder", "—");
-  await expect(page.locator("#propertyLineWidth")).toHaveAttribute("placeholder", "—");
+  await expect(page.locator('#propertyVisible option[value=""]')).toHaveText("既定");
+  await expect(page.locator('#propertyLineType option[value=""]')).toHaveText("既定");
+  await expect(page.locator("#propertyColor")).toHaveAttribute("placeholder", "既定");
+  await expect(page.locator("#propertyLineWidth")).toHaveAttribute("placeholder", "既定");
   await expect(page.locator("#propertiesPanel")).not.toContainText("継承");
+  await page.evaluate(() => {
+    document.documentElement.lang = "en";
+    window.__cadTest.selectGeometryIdsForTest({ lines: ["L1"] });
+  });
+  await expect(page.locator('#propertyVisible option[value=""]')).toHaveText("Default");
+  await expect(page.locator('#propertyLineType option[value=""]')).toHaveText("Default");
+  await expect(page.locator("#propertyColor")).toHaveAttribute("placeholder", "Default");
+  await expect(page.locator("#propertyLineWidth")).toHaveAttribute("placeholder", "Default");
+  await page.evaluate(() => {
+    document.documentElement.lang = "ja";
+    window.__cadTest.selectGeometryIdsForTest({ lines: ["L1"] });
+  });
   await page.locator("#propertyColor").fill("#2563eb");
   await page.locator("#propertyColor").blur();
   expect((await page.evaluate(() => window.__cadTest.serializedModelForTest())).lines[0].appearance.color).toBe("#2563eb");
@@ -583,12 +614,25 @@ test("Constraint dimensions persist display properties without creating annotati
   await page.locator("#constraintList .constraint-list-row").first().click();
   await page.locator('[data-dimension-display="precision"]').fill("3");
   await page.locator('[data-dimension-display="precision"]').blur();
-  await page.locator('[data-dimension-display="prefix"]').fill("REF ");
-  await page.locator('[data-dimension-display="prefix"]').blur();
+  await expect(page.locator('[data-dimension-display="toleranceUpper"], [data-dimension-display="toleranceLower"]')).toHaveCount(0);
+  const prefix = page.locator('[data-dimension-display="prefix"]');
+  await prefix.fill("REF ");
+  expect(await page.evaluate(() => window.__cadTest.drawnDimensionLabelsForTest())).toEqual(expect.arrayContaining([expect.stringContaining("REF ")]));
+  const suffix = page.locator('[data-dimension-display="suffix"]');
+  await suffix.fill(" mm");
+  expect(await page.evaluate(() => window.__cadTest.drawnDimensionLabelsForTest())).toEqual(expect.arrayContaining([expect.stringMatching(/REF .* mm/)]));
+  await suffix.blur();
   await page.locator('[data-dimension-display="arrows"]').uncheck();
   const serialized = await page.evaluate(() => window.__cadTest.serializedModelForTest());
-  expect(serialized.constraints[0].dimension.display).toEqual(expect.objectContaining({ precision: 3, prefix: "REF ", arrows: false }));
+  expect(serialized.constraints[0].dimension.display).toEqual(expect.objectContaining({ precision: 3, prefix: "REF ", suffix: " mm", arrows: false }));
   expect(serialized.annotations).toEqual([]);
+});
+
+test("Sketch tree hover highlights geometry without displaying Geometry IDs", async ({ page }) => {
+  await page.goto(`${baseUrl}/index.html?test=1`);
+  await page.waitForFunction(() => window.__cadTest);
+  await page.locator('.sketch-item[data-id="S1"]').hover();
+  expect(await page.evaluate(() => window.__cadTest.drawnGeometryIdLabelsForTest())).toEqual([]);
 });
 
 test("duplicate dimensions become read-only reference dimensions", async ({ page }) => {

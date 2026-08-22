@@ -104,17 +104,20 @@
       <aside class="explorer" aria-label="Explorer">
         <div class="panel-title"><span class="panel-title-label">Explorer</span><button id="toggleExplorerPanelBtn" class="panel-collapse-button" type="button" title="Explorerを最小化" aria-label="Explorerを最小化" aria-expanded="true"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg></button></div>
         <div class="panel-tabs" role="tablist">
-          <button class="panel-tab active" type="button" data-explorer-tab="structure" aria-selected="true">Structure</button>
+          <button class="panel-tab active" type="button" data-explorer-tab="sketches" aria-selected="true">Sketches</button>
+          <button class="panel-tab" type="button" data-explorer-tab="blocks" aria-selected="false">Blocks</button>
           <button class="panel-tab" type="button" data-explorer-tab="objects" aria-selected="false">Objects</button>
         </div>
         <div class="explorer-scroll">
-          <section id="explorerStructure" class="explorer-panel active">
+          <section id="explorerSketches" class="explorer-panel active" data-explorer-panel="sketches">
             <section id="sketchOverlay" class="explorer-section" aria-label="スケッチ">
               <div class="section-header"><strong id="activeSketchLabel">Sketch</strong><span>
                 <button id="addSketchBtn" type="button" class="compact-button">＋</button><button id="addChildSketchBtn" type="button" class="compact-button">子＋</button>
               </span></div>
               <div id="sketchList" class="tree-list"></div>
             </section>
+          </section>
+          <section id="explorerBlocks" class="explorer-panel" data-explorer-panel="blocks" hidden>
             <section id="blockOverlay" class="explorer-section" aria-label="Block Definitions">
               <div class="section-header"><strong id="blockOverlayTitle">Block Definitions</strong><button id="toolCreateBlock" class="compact-button" type="button">作成</button></div>
               <input id="blockEditorNameInput" class="block-editor-name-input" type="text" aria-label="ブロック名" hidden />
@@ -122,7 +125,7 @@
               <div id="blockList" class="tree-list"></div><div id="blockSketchConfig" class="block-sketch-config" hidden></div>
             </section>
           </section>
-          <section id="explorerObjects" class="explorer-panel" hidden>
+          <section id="explorerObjects" class="explorer-panel" data-explorer-panel="objects" hidden>
             <details><summary>Constraint</summary><div id="constraintList" class="list"></div></details>
             <details><summary>Point</summary><div id="pointList" class="list"></div></details>
             <details><summary>Line</summary><div id="lineList" class="list"></div></details>

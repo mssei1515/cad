@@ -69,7 +69,7 @@ button:disabled { opacity: .45; cursor: default; }
 .workspace.explorer-collapsed .explorer .panel-title, .workspace.properties-collapsed .properties .panel-title { justify-content: center; padding: 0; }
 .workspace.explorer-collapsed .explorer .panel-title-label, .workspace.properties-collapsed .properties .panel-title-label { display: none; }
 .workspace.explorer-collapsed #toggleExplorerPanelBtn svg, .workspace.properties-collapsed #togglePropertiesPanelBtn svg { transform: rotate(180deg); }
-.panel-tabs { flex: 0 0 34px; display: grid; grid-template-columns: 1fr 1fr; border-bottom: 1px solid var(--border); }
+.panel-tabs { flex: 0 0 34px; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); border-bottom: 1px solid var(--border); }
 .panel-tab { border: 0; border-radius: 0; background: transparent; color: var(--muted); font-size: 12px; }
 .panel-tab.active { color: var(--accent); background: #fff; box-shadow: inset 0 -2px var(--accent); }
 .explorer-scroll, .properties-scroll { min-height: 0; flex: 1; overflow: auto; }
