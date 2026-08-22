@@ -4550,7 +4550,7 @@
   function sampleModel() {
     resetModelState();
 
-    const A = addPoint(160, 160, false, "endpoint");
+    const A = addPoint(160, 160, true, "endpoint");
     const B = addPoint(300, 180, false, "endpoint");
     const C = addPoint(280, 290, false, "endpoint");
     const D = addPoint(140, 270, false, "endpoint");
@@ -10993,6 +10993,34 @@
       .filter((p) => session.local.component.has(p) && !p.fixed && !pointLockedByLineFixed(p))
       .map((point) => ({ point, startX: point.x, startY: point.y }));
     session.local.fixedPointCount = model.points.filter((p) => session.local.component.has(p) && (p.fixed || pointLockedByLineFixed(p))).length;
+    // In an anchored component with one remaining DOF, translating both
+    // endpoints asks that DOF to satisfy redundant drag targets. Use the most
+    // active endpoint so line dragging follows its responsive point-drag path.
+    if (session.kind === "line" && session.points.length > 1 && session.local.fixedPointCount > 0) {
+      const analysis = solver.analyzeConstraintState({
+        variables: session.local.variables,
+        constraints: session.local.constraints,
+        lines: session.local.lines,
+      });
+      if (analysis.stable && analysis.freeVariableCount === 1) {
+        const fixedPoints = model.points.filter((point) =>
+          session.local.component.has(point) && (point.fixed || pointLockedByLineFixed(point)));
+        const pointActivity = (entry) => {
+          const index = analysis.variableIndex.get(entry.point) || {};
+          return Math.sqrt((analysis.nullspaceBasis || []).reduce((sum, basis) =>
+            sum + (basis[index.x] || 0) ** 2 + (basis[index.y] || 0) ** 2, 0));
+        };
+        const nearestFixedDistance = (entry) => Math.min(...fixedPoints.map((fixed) =>
+          hypot2(entry.point.x - fixed.x, entry.point.y - fixed.y)));
+        const best = session.points.reduce((current, candidate) => {
+          if (!current) return candidate;
+          const activityDifference = pointActivity(candidate) - pointActivity(current);
+          if (Math.abs(activityDifference) > 1e-8) return activityDifference > 0 ? candidate : current;
+          return nearestFixedDistance(candidate) > nearestFixedDistance(current) ? candidate : current;
+        }, null);
+        if (best && pointActivity(best) > 1e-8) session.lineDragPoint = best;
+      }
+    }
     session.fullDragState = solver.clone(solver.getVariables());
     return session;
   }
@@ -11033,7 +11061,8 @@
   function dragTargets(session, pointer) {
     const dx = pointer.x - session.startPointer.x;
     const dy = pointer.y - session.startPointer.y;
-    return session.points.map((p) => ({ point: p.point, x: p.startX + dx, y: p.startY + dy }));
+    const points = session.lineDragPoint ? [session.lineDragPoint] : session.points;
+    return points.map((p) => ({ point: p.point, x: p.startX + dx, y: p.startY + dy }));
   }
 
   function radiusDragTargets(session, pointer) {

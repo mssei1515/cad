@@ -266,6 +266,7 @@ test("unified workspace uses fixed Explorer Canvas Properties and Status regions
   expect(layout.toolIds).toEqual(expect.arrayContaining(["undoBtn", "redoBtn", "deleteSelectionBtn", "toolSelect", "toolPoint", "toolLine", "annotationLeaderBtn", "annotationTextBtn"]));
   expect(layout.iconButtons.every((button) => button.text === "" && button.hasIcon && button.title && button.label)).toBe(true);
   expect(layout.canvasCursor).toContain("data:image/svg+xml");
+  expect(layout.canvasCursor).not.toContain("%3Ccircle");
   expect(layout.explorer.left).toBe(0);
   expect(layout.explorer.right).toBeCloseTo(layout.canvas.left, 0);
   expect(layout.canvas.right).toBeCloseTo(layout.properties.left, 0);
@@ -359,24 +360,62 @@ test("Appearance cascades from Document to Sketch to Geometry and Space reveals 
   await page.keyboard.up("Space");
 });
 
-test("startup sample lines follow the same responsive drag path", async ({ page }) => {
-  const deltas = Array.from({ length: 10 }, (_, index) => [(index + 1) * 4, (index + 1) * 3]);
+test("startup sample L2 and L3 reuse the responsive P3 drag path while P1 stays fixed", async ({ page }) => {
+  const deltas = Array.from({ length: 10 }, (_, index) => [-(index + 1) * 4, (index + 1) * 3]);
+  await page.goto(`${baseUrl}/index.html?test=1`);
+  await page.waitForFunction(() => window.__cadTest);
+  expect((await page.evaluate(() => window.__cadTest.authoringStateForTest())).fixedPointIds).toEqual(["P1"]);
+  const pointResult = await page.evaluate(
+    (dragDeltas) => window.__cadTest.geometryDragPathForTest({ kind: "point", id: "P3" }, dragDeltas),
+    deltas,
+  );
+  const pointFinal = pointResult.previews.at(-1).state;
+  expect(pointResult.previews.every((preview) => preview.success && !preview.blocked)).toBe(true);
+  const pointMovement = Math.hypot(
+    pointFinal.x - pointResult.startState.x,
+    pointFinal.y - pointResult.startState.y,
+  );
+  expect(pointMovement).toBeGreaterThan(10);
 
-  for (const id of ["L1", "L2", "L3", "L4"]) {
+  for (const id of ["L2", "L3"]) {
     await page.goto(`${baseUrl}/index.html?test=1`);
     await page.waitForFunction(() => window.__cadTest);
-    expect((await page.evaluate(() => window.__cadTest.authoringStateForTest())).fixedPointIds).toEqual([]);
     const result = await page.evaluate(
       ({ lineId, dragDeltas }) => window.__cadTest.geometryDragPathForTest({ kind: "line", id: lineId }, dragDeltas),
       { lineId: id, dragDeltas: deltas },
     );
-    const finalMidpoint = result.previews.at(-1).state.midpoint;
+    const lineFinal = result.previews.at(-1).state;
+    const draggedP3 = id === "L2" ? lineFinal.p2 : lineFinal.p1;
     expect(result.sessionAvailable, id).toBe(true);
     expect(result.previews.every((preview) => preview.success && !preview.blocked), id).toBe(true);
-    expect(finalMidpoint.x - result.startState.midpoint.x, id).toBeCloseTo(40, 5);
-    expect(finalMidpoint.y - result.startState.midpoint.y, id).toBeCloseTo(30, 5);
+    expect(draggedP3.x, id).toBeCloseTo(pointFinal.x, 5);
+    expect(draggedP3.y, id).toBeCloseTo(pointFinal.y, 5);
     expect(Math.max(...result.previews.map((preview) => preview.elapsedMs)), id).toBeLessThan(100);
   }
+
+  const pointerResults = [];
+  for (const id of ["L2", "L3"]) {
+    await page.goto(`${baseUrl}/index.html?test=1`);
+    await page.waitForFunction(() => window.__cadTest);
+    const before = await page.evaluate((lineId) => ({
+      line: window.__cadTest.geometryClientPositionForTest("line", lineId),
+      p1: window.__cadTest.geometryClientPositionForTest("point", "P1"),
+      p3: window.__cadTest.geometryClientPositionForTest("point", "P3"),
+    }), id);
+    await page.mouse.move(before.line.x, before.line.y);
+    await page.mouse.down();
+    await page.mouse.move(before.line.x - 40, before.line.y + 30, { steps: 10 });
+    await page.mouse.up();
+    const after = await page.evaluate(() => ({
+      p1: window.__cadTest.geometryClientPositionForTest("point", "P1"),
+      p3: window.__cadTest.geometryClientPositionForTest("point", "P3"),
+    }));
+    expect(after.p1.x, `${id}/P1.x`).toBeCloseTo(before.p1.x, 5);
+    expect(after.p1.y, `${id}/P1.y`).toBeCloseTo(before.p1.y, 5);
+    pointerResults.push({ x: after.p3.x - before.p3.x, y: after.p3.y - before.p3.y });
+  }
+  expect(pointerResults[0].x).toBeCloseTo(pointerResults[1].x, 4);
+  expect(pointerResults[0].y).toBeCloseTo(pointerResults[1].y, 4);
 });
 
 test("Block Instance Appearance Override applies to the whole instance", async ({ page }) => {
