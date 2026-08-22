@@ -30,6 +30,12 @@ async function openApplicationSettings(page) {
   await button.click();
 }
 
+async function openDocumentSettings(page) {
+  const button = page.locator("#documentSettingsBtn");
+  if (!(await button.isVisible())) await page.locator(".app-menu > summary").first().click();
+  await button.click();
+}
+
 function waitForServer(url, timeoutMs = 10000) {
   const startedAt = Date.now();
   return new Promise((resolve, reject) => {
@@ -561,6 +567,11 @@ test("application language defaults to Japanese and persists the full UI selecti
   await expect(page.locator(".properties .panel-title-label")).toHaveText("Properties");
   await expect(page.locator("#hint")).toContainText("Fully constrained");
   await page.locator("#applicationSettingsDialog button[value=cancel]").first().click();
+  await openDocumentSettings(page);
+  await expect(page.locator("#documentSettingsDialog")).toContainText("Document Settings");
+  await expect(page.locator('#documentAppearanceFields select[data-appearance-key="visible"] option')).toHaveText(["Visible", "Hidden"]);
+  await expect(page.locator('#documentAppearanceFields select[data-appearance-key="lineType"] option')).toHaveText(["Solid", "Dashed", "Dash-dot", "Dotted"]);
+  await page.locator("#documentSettingsDialog button[value=cancel]").first().click();
   await page.click('[data-explorer-tab="blocks"]');
   await page.click("#openBlockDefinitionsBtn");
   await expect(page.locator("#blockDefinitionsDialog")).toContainText("No blocks");

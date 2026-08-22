@@ -14065,6 +14065,7 @@
     if (fields) {
       const effective = normalizeAppearance(model.defaultAppearance, { partial: false });
       fields.innerHTML = appearancePropertyRows(effective, effective, { allowInheritance: false });
+      localizeApplicationUI(fields);
       fields.onchange = (event) => {
         const input = event.target;
         if (!input.dataset.appearanceKey) return;
