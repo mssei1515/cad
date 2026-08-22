@@ -1108,7 +1108,7 @@ test("a block point-on-line constraint keeps the subject block under-constrained
 
   await page.click('[data-explorer-tab="constraint"]');
   await page.locator("#explorerConstraint > details", {
-    has: page.locator("summary", { hasText: /^Constraint$/ }),
+    has: page.locator("summary", { hasText: /^(?:Constraint|拘束)$/ }),
   }).locator("summary").click();
   await page.hover('.constraint-list-row[data-idx="0"]');
   expect(await page.evaluate(() => window.__cadTest.currentSidebarHoveredGeometryKeys())).toEqual([

@@ -34,7 +34,7 @@
           <button type="button" data-menu-tool="redoBtn">やり直す <kbd>Ctrl+Y</kbd></button>
           <button type="button" data-menu-tool="deleteSelectionBtn">削除 <kbd>Del</kbd></button>
         </div></details>
-        <details class="app-menu"><summary>表示</summary><div class="menu-popover">
+        <details class="app-menu"><summary data-i18n-ja="表示" data-i18n-en="View">表示</summary><div class="menu-popover">
           <label><input id="viewGeometryIdsInput" type="checkbox" /> Geometry ID</label>
           <button type="button" data-menu-tool="constraintStatusViewBtn">拘束状態表示 <kbd>Space</kbd></button>
         </div></details>
@@ -66,8 +66,8 @@
         <button id="deleteSelectionBtn" class="tool-button" type="button" title="削除" aria-label="削除"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3M7 7l1 13h8l1-13"/></svg></button>
       </div>
       <div class="tool-group" aria-label="選択"><button id="toolSelect" class="tool-button active" type="button" title="選択・ドラッグ" aria-label="選択・ドラッグ"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 3l14 9-7 2-3 7L5 3z"/></svg></button></div>
-      <div class="tool-group" aria-label="表示">
-        <span class="tool-group-label">View</span>
+      <div class="tool-group" aria-label="表示ツール">
+        <span class="tool-group-label" data-i18n-ja="表示" data-i18n-en="View">View</span>
         <button id="constraintStatusViewBtn" class="tool-button" type="button" title="拘束状態表示を切り替え（Space長押しでも一時表示）" aria-label="拘束状態表示" aria-pressed="false"><svg class="constraint-status-icon" viewBox="0 0 24 24" aria-hidden="true"><path class="constraint-status-eye" d="M3 10.5s3.2-5 9-5 9 5 9 5-3.2 5-9 5-9-5-9-5Z"/><circle class="constraint-status-eye" cx="12" cy="10.5" r="2.3"/><path class="constraint-status-swatch status-full" d="M3 19h3"/><path class="constraint-status-swatch status-support" d="M8 19h3"/><path class="constraint-status-swatch status-under" d="M13 19h3"/><path class="constraint-status-swatch status-conflict" d="M18 19h3"/></svg></button>
       </div>
       <div class="tool-group" aria-label="Geometry">
@@ -105,7 +105,7 @@
 
     <main class="workspace">
       <aside class="explorer" aria-label="Explorer">
-        <div class="panel-title"><span class="panel-title-label">Explorer</span><button id="toggleExplorerPanelBtn" class="panel-collapse-button" type="button" title="Explorerを最小化" aria-label="Explorerを最小化" aria-expanded="true"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg></button></div>
+        <div class="panel-title"><span class="panel-title-label">Explorer</span><button id="toggleExplorerPanelBtn" class="panel-collapse-button" type="button" title="エクスプローラーを最小化" aria-label="エクスプローラーを最小化" aria-expanded="true"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg></button></div>
         <div class="panel-tabs" role="tablist">
           <button class="panel-tab active" type="button" data-explorer-tab="sketches" aria-selected="true">Sketches</button>
           <button class="panel-tab" type="button" data-explorer-tab="blocks" aria-selected="false">Blocks</button>
@@ -145,14 +145,14 @@
 
       <section class="canvas-area" aria-label="Canvas"><canvas id="canvas"></canvas><input id="dimensionValueInput" class="dimension-value-input" type="text" inputmode="decimal" autocomplete="off" spellcheck="false" aria-label="寸法値" hidden /></section>
 
-      <aside class="properties" aria-label="Properties"><div class="panel-title"><span class="panel-title-label">Properties</span><button id="togglePropertiesPanelBtn" class="panel-collapse-button" type="button" title="Propertiesを最小化" aria-label="Propertiesを最小化" aria-expanded="true"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 18l6-6-6-6"/></svg></button></div><div id="propertiesPanel" class="properties-scroll"></div></aside>
+      <aside class="properties" aria-label="Properties"><div class="panel-title"><span class="panel-title-label">Properties</span><button id="togglePropertiesPanelBtn" class="panel-collapse-button" type="button" title="プロパティを最小化" aria-label="プロパティを最小化" aria-expanded="true"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 18l6-6-6-6"/></svg></button></div><div id="propertiesPanel" class="properties-scroll"></div></aside>
     </main>
 
     <footer id="bottomBar" class="status-bar" aria-label="Status Bar"><span id="statusCommand">選択</span><span id="hint">Geometryを選択または作成します。Spaceで拘束状態を表示します。</span><span id="statusConstraint"></span><span id="statusCoordinates">X 0.00 / Y 0.00</span></footer>
   </div>
 
   <dialog id="documentSettingsDialog" class="settings-dialog"><form method="dialog"><header><strong>ドキュメント設定</strong><button value="cancel">×</button></header><section><h3>Default Appearance</h3><div id="documentAppearanceFields"></div></section><footer><button value="cancel">閉じる</button></footer></form></dialog>
-  <dialog id="applicationSettingsDialog" class="settings-dialog app-settings-view"><form method="dialog"><header><strong>アプリケーション設定</strong><button value="cancel">×</button></header><section><h3>General</h3><p>アプリケーション全体の設定をドキュメント設定から分離して管理します。</p></section><footer><button value="cancel">閉じる</button></footer></form></dialog>
+  <dialog id="applicationSettingsDialog" class="settings-dialog app-settings-view"><form method="dialog"><header><strong>アプリケーション設定</strong><button value="cancel">×</button></header><section><h3>General</h3><div class="settings-row"><label for="applicationLanguageSelect">言語</label><select id="applicationLanguageSelect"><option value="ja" data-i18n-ja="日本語" data-i18n-en="Japanese">日本語</option><option value="en" data-i18n-ja="English" data-i18n-en="English">English</option></select></div><p>アプリケーション全体の設定をドキュメント設定から分離して管理します。</p></section><footer><button value="cancel">閉じる</button></footer></form></dialog>
 
   <script src="./geometry_kernel.js"></script><script src="./geometry_ref.js"></script><script src="./constraint_codec_registry.js"></script><script src="./constraint_solver.js"></script><script src="./app.js"></script>
 </body>

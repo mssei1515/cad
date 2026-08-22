@@ -89,6 +89,92 @@
   const canvas = document.getElementById("canvas");
   const ctx = canvas.getContext("2d");
   const dimensionValueInput = document.getElementById("dimensionValueInput");
+  const APPLICATION_LANGUAGE_STORAGE_KEY = "cad2.application.language";
+  const UI_TRANSLATIONS = [
+    ["ファイル", "File"], ["編集", "Edit"], ["ヘルプ", "Help"],
+    ["保存", "Save"], ["開く", "Open"], ["ドキュメント設定", "Document Settings"], ["アプリケーション設定", "Application Settings"],
+    ["元に戻す", "Undo"], ["やり直す", "Redo"], ["削除", "Delete"], ["選択", "Select"], ["選択・ドラッグ", "Select / Drag"],
+    ["ジオメトリ", "Geometry"], ["拘束", "Constraint"], ["注記", "Annotation"], ["ツールバー", "Toolbar"], ["メニューバー", "Menu bar"], ["表示ツール", "View"],
+    ["点", "Point"], ["線", "Line"], ["連続線", "Polyline"], ["矩形", "Rectangle"], ["円", "Circle"], ["円弧", "Arc"],
+    ["実線／補助線", "Normal / Construction"], ["トリム", "Trim"], ["R面取り", "Fillet"], ["フィレット", "Fillet"], ["オフセット", "Offset"],
+    ["寸法", "Dimension"], ["一致", "Coincident"], ["水平", "Horizontal"], ["垂直", "Vertical"], ["平行", "Parallel"], ["直角", "Perpendicular"],
+    ["対称", "Symmetry"], ["同心", "Concentric"], ["等寸", "Equal"], ["接線", "Tangent"], ["固定／解除", "Fix / Unfix"], ["固定解除", "Unfix"],
+    ["引出線", "Leader"], ["自由テキスト", "Free Text"], ["拘束状態表示", "Constraint Status View"],
+    ["拘束状態表示を切り替え（Space長押しでも一時表示）", "Toggle constraint status view (hold Space for temporary view)"],
+    ["拘束ツールはツールバーから選択します", "Select constraint tools from the toolbar"],
+    ["エクスプローラー", "Explorer"], ["プロパティ", "Properties"], ["スケッチ", "Sketch"], ["スケッチツリー", "Sketch Tree"],
+    ["スケッチ一覧", "Sketches"], ["ブロック一覧", "Blocks"], ["ブロック", "Block"], ["ブロック定義", "Block Definitions"], ["ブロックインスタンス", "Block Instance"],
+    ["作成", "Create"], ["キャンセル", "Cancel"], ["完了", "Done"], ["閉じる", "Close"], ["子＋", "Child +"],
+    ["名前変更", "Rename"], ["スケッチ削除", "Delete Sketch"], ["ブロック名", "Block name"], ["配置", "Place"], ["非表示にする", "Hide"], ["表示する", "Show"],
+    ["キャンバス", "Canvas"], ["ステータスバー", "Status Bar"], ["寸法値", "Dimension value"],
+    ["既定の外観", "Default Appearance"], ["一般", "General"], ["言語", "Language"],
+    ["アプリケーション全体の設定をドキュメント設定から分離して管理します。", "Application-wide settings are managed separately from document settings."],
+    ["既定", "Default"], ["表示", "Visible"], ["非表示", "Hidden"], ["色", "Color"], ["線種", "Line type"], ["線幅", "Line width"],
+    ["実線", "Solid"], ["破線", "Dashed"], ["一点鎖線", "Dash-dot"], ["点線", "Dotted"], ["使用済みの色", "Colors used in this file"],
+    ["外観", "Appearance"], ["外観の上書き", "Appearance Override"], ["配置情報", "Placement"], ["定義", "Definition"], ["回転", "Rotation"],
+    ["長さ", "Length"], ["半径", "Radius"], ["補助線", "Construction"], ["種類", "Type"], ["値", "Value"],
+    ["寸法表示", "Dimension Display"], ["精度", "Precision"], ["接頭辞", "Prefix"], ["接尾辞", "Suffix"], ["矢印", "Arrows"], ["寸法補助線", "Extension lines"],
+    ["テキスト", "Text"], ["文字サイズ", "Font size"], ["アクティブ", "Active"], ["はい", "Yes"], ["いいえ", "No"],
+    ["選択したオブジェクトのプロパティを表示します。", "Select an object to display its properties."],
+    ["複数選択の共通プロパティ編集は今回の対象外です。", "Editing shared properties for multiple selections is not supported."],
+    ["個のオブジェクト", "objects"], ["自動", "Auto"], ["中心", "Center"], ["角度", "Angle"], ["補助", "Construction"], ["固定", "Fixed"],
+    ["完全拘束", "Fully constrained"], ["支持位置拘束", "Supported position"], ["未拘束", "Under-constrained"], ["矛盾", "Conflict"],
+    ["参照エラー", "Reference error"], ["重複", "Duplicate"], ["拘束状態表示中", "Constraint status view"],
+    ["Geometryを選択または作成します。Spaceで拘束状態を表示します。", "Select or create geometry. Hold Space to show constraint status."],
+    ["エクスプローラーを最小化", "Collapse Explorer"], ["エクスプローラーを展開", "Expand Explorer"], ["プロパティを最小化", "Collapse Properties"], ["プロパティを展開", "Expand Properties"],
+    ["カラーパレット", "Color palette"], ["ジオメトリID", "Geometry ID"], ["日本語", "Japanese"], ["英語", "English"],
+    ["小さいサイズでも見やすい、Cad2のシンプルなロゴ", "A simple Cad2 logo designed to remain clear at small sizes"],
+    ["通常表示", "Normal view"], ["選択・ドラッグできます。Shift/Ctrlクリックで複数選択できます。", "Select and drag geometry. Use Shift/Ctrl-click for multiple selection."],
+    ["キャンバスをクリックして点を追加します。", "Click the canvas to add a point."], ["端点位置をクリックして連続線を作成します。終了はEscです。", "Click endpoint positions to create connected lines. Press Esc to finish."],
+    ["矩形の1つ目の角をクリックしてください。Escで選択モードに戻ります", "Click the first rectangle corner. Press Esc to return to selection mode."],
+    ["円の中心をクリックしてください。Escで選択モードに戻ります", "Click the circle center. Press Esc to return to selection mode."],
+    ["円弧の中心をクリックしてください。Escで選択モードに戻ります", "Click the arc center. Press Esc to return to selection mode."],
+    ["引出線を付ける図形をクリックしてください", "Click geometry to attach the leader."], ["引出線の文字位置をクリックしてください", "Click the leader text position."],
+    ["引出線をキャンセルしました", "Leader creation was canceled."], ["引出線を追加しました", "Leader was added."],
+    ["テキストを配置する位置をクリックしてください", "Click where you want to place the text."], ["テキストを追加しました", "Text was added."], ["テキストをキャンセルしました", "Text creation was canceled."],
+    ["Root Sketchには図形を作成できません。子スケッチを選択してください。", "Geometry cannot be created in the Root Sketch. Select a child sketch."],
+    ["配置する内部スケッチを選び、表示中心をクリックしてください", "Select internal sketches to place, then click the display center."],
+    ["図形を持つ内部スケッチを1つ以上有効にしてください", "Enable at least one internal sketch that contains geometry."],
+    ["回転方向をクリックしてください。Escで角度0度として配置します", "Click to set the rotation direction. Press Esc to place at 0 degrees."],
+    ["ブロック定義編集をキャンセルしました", "Block definition editing was canceled."], ["ブロック作成をキャンセルしました", "Block creation was canceled."],
+    ["指定した側にはオフセットを作成できません", "An offset cannot be created on the specified side."],
+    ["オフセット距離を入力してください。Enterまたはダブルクリックで決定します", "Enter the offset distance. Confirm with Enter or double-click."],
+    ["作成可能な0より大きいオフセット距離を入力してください", "Enter an offset distance greater than zero."],
+    ["ブロック定義編集を終了してから保存してください", "Finish block definition editing before saving."], ["ファイルとして保存しました", "The document was saved to a file."],
+    ["ブロック定義編集を終了してから読み込んでください", "Finish block definition editing before opening a file."], ["ファイル読み込みに失敗しました", "Failed to open the file."],
+    ["連続線を終了しました", "Polyline creation finished."], ["選択・ドラッグモードに戻りました", "Returned to Select / Drag mode."], ["作図操作をキャンセルしました", "Drawing was canceled."],
+    ["コピーする図形を選択してください", "Select geometry to copy."], ["貼り付ける図形がありません", "There is no geometry to paste."], ["貼り付け先のスケッチをアクティブにしてください", "Activate the destination sketch before pasting."],
+    ["寸法線の位置をクリックしてください", "Click the dimension-line position."], ["寸法対象を選択してください。", "Select dimension targets."],
+    ["寸法値を入力中: 数値キーで編集、Enter/ダブルクリックで決定、Escでキャンセル", "Entering a dimension value: type a number, confirm with Enter/double-click, or cancel with Esc."],
+    ["オフセット距離を入力中: Enter/ダブルクリックで決定、Escでキャンセル", "Entering an offset distance: confirm with Enter/double-click, or cancel with Esc."],
+    ["読み取り専用寸法の値は編集できません", "A read-only dimension value cannot be edited."], ["寸法値には0より大きい数値を入力してください", "Enter a dimension value greater than zero."],
+    ["回転がロックされたブロックインスタンスです", "This block instance has locked rotation."], ["固定されたブロックインスタンスです", "This block instance is fixed."],
+    ["ブロックを回転中", "Rotating block"], ["ブロックを移動中", "Moving block"], ["引出線を移動中", "Moving leader"], ["テキストを移動中", "Moving text"],
+    ["トリムできる交点がありません", "No intersection is available for trimming."], ["R寸法を入力してください。数字キーで編集、Enterで作成、Escでキャンセル", "Enter the fillet radius. Type a number, press Enter to create, or Esc to cancel."],
+    ["R寸法には0より大きい数値を入力してください", "Enter a fillet radius greater than zero."], ["R面取りする線をクリックしてください", "Click a line to fillet."],
+    ["接続する2本目の線をクリックするとR面取りを作成します", "Click the second connected line to create the fillet."], ["別の接続線をクリックしてください", "Click a different connected line."],
+    ["半径位置をクリックすると円を作成します。Escで選択モードに戻ります", "Click the radius position to create the circle. Press Esc to return to selection mode."],
+    ["円弧の始点をクリックしてください。Escで選択モードに戻ります", "Click the arc start point. Press Esc to return to selection mode."], ["中心から離れた位置をクリックしてください", "Click a position away from the center."],
+    ["円弧の終点をクリックすると円弧を作成します。Escで選択モードに戻ります", "Click the arc end point to create the arc. Press Esc to return to selection mode."],
+    ["画面移動中: マウススクロールボタンを押しながらドラッグ", "Panning: drag while holding the middle mouse button."],
+    ["オフセットする線、円、円弧をクリックしてください", "Click the line, circle, or arc to offset."], ["オフセットする側と距離の目安をクリックしてください", "Click the offset side and an approximate distance."],
+    ["画面移動を終了しました", "Panning finished."], ["注記の位置を更新しました", "Annotation position updated."], ["寸法線の位置を更新しました", "Dimension-line position updated."],
+    ["矩形選択を更新しました", "Rectangle selection updated."], ["図形を選択しました", "Geometry selected."], ["線の作図をキャンセルしました", "Line creation canceled."],
+    ["選択を解除しました", "Selection cleared."], ["表示中の図形全体が見えるように調整しました", "Fitted all visible geometry."], ["表示中の図形がありません", "There is no visible geometry."],
+    ["ブロック配置をキャンセルしました", "Block placement canceled."], ["選択図形を補助作図にしました", "Selected geometry changed to construction geometry."],
+    ["選択図形を通常作図にしました", "Selected geometry changed to normal geometry."], ["補助線作図: 端点位置をクリックしてください", "Construction line: click an endpoint position."],
+    ["通常線作図に戻しました", "Returned to normal line creation."], ["R面取りする接続線を2本クリックしてください", "Click two connected lines to fillet."],
+    ["トリムする線、円、円弧の削除したい区間をクリックしてください。Escで選択モードに戻ります", "Click the segment of a line, circle, or arc to trim. Press Esc to return to selection mode."],
+    ["ブロックはありません", "No blocks"], ["配置するスケッチ", "Sketches to place"], ["表示するスケッチ", "Visible sketches"],
+  ];
+  let applicationLanguage = (() => {
+    try {
+      return localStorage.getItem(APPLICATION_LANGUAGE_STORAGE_KEY) === "en" ? "en" : "ja";
+    } catch (_error) {
+      return "ja";
+    }
+  })();
+  document.documentElement.lang = applicationLanguage;
   const DEFAULT_DOCUMENT_NAME = "無題";
   const ROOT_SKETCH_ID = "ROOT";
   const ROOT_SKETCH_NAME = "Root Sketch";
@@ -234,6 +320,106 @@
   const constraintButtons = Array.from(document.querySelectorAll("[data-constraint]"));
   const fixPointBtn = document.getElementById("fixPointBtn");
 
+  function applicationText(ja, en) {
+    return applicationLanguage === "en" ? en : ja;
+  }
+
+  function translatedExactText(value) {
+    const text = String(value ?? "");
+    const match = text.match(/^(\s*)(.*?)(\s*)$/s);
+    const prefix = match?.[1] || "";
+    const core = match?.[2] || "";
+    const suffix = match?.[3] || "";
+    if (!core) return text;
+    if (applicationLanguage === "en") {
+      const pair = UI_TRANSLATIONS.find(([ja]) => ja === core);
+      return pair ? `${prefix}${pair[1]}${suffix}` : text;
+    }
+    const pair = UI_TRANSLATIONS.find(([, en]) => en === core);
+    return pair ? `${prefix}${pair[0]}${suffix}` : text;
+  }
+
+  function translatedHintText(value) {
+    const exact = translatedExactText(value);
+    if (applicationLanguage !== "en") {
+      return exact
+        .replace(/^Sample restored:/, "サンプル復元:")
+        .replace(/^Constraint added:/, "拘束追加:")
+        .replace(/^Reference constraint added:/, "参照拘束追加:")
+        .replace(/^Fixed state updated:/, "固定状態変更:")
+        .replace(/^Dimension value updated:/, "寸法値更新:")
+        .replace(/Fully constrained:/g, "完全拘束:")
+        .replace(/Supported position:/g, "支持位置拘束:")
+        .replace(/Under-constrained:/g, "未拘束:")
+        .replace(/Conflict:/g, "矛盾:")
+        .replace(/Duplicate constraints:/g, "重複拘束:")
+        .replace(/Reference errors:/g, "参照エラー:");
+    }
+    if (exact !== String(value ?? "")) return exact;
+    return String(value ?? "")
+      .replace(/^サンプル復元:/, "Sample restored:")
+      .replace(/^拘束追加:/, "Constraint added:")
+      .replace(/^参照拘束追加:/, "Reference constraint added:")
+      .replace(/^固定状態変更:/, "Fixed state updated:")
+      .replace(/^寸法値更新:/, "Dimension value updated:")
+      .replace(/完全拘束:/g, "Fully constrained:")
+      .replace(/支持位置拘束:/g, "Supported position:")
+      .replace(/未拘束:/g, "Under-constrained:")
+      .replace(/矛盾:/g, "Conflict:")
+      .replace(/重複拘束:/g, "Duplicate constraints:")
+      .replace(/参照エラー:/g, "Reference errors:");
+  }
+
+  function shouldSkipAutomaticLocalization(node) {
+    const element = node.nodeType === Node.ELEMENT_NODE ? node : node.parentElement;
+    return Boolean(element?.closest("script, style, canvas, input, textarea, .sketch-name, .block-item-name, [data-user-content]"));
+  }
+
+  function localizeApplicationUI(root = document) {
+    const scope = root.nodeType === Node.ELEMENT_NODE ? root : document.documentElement;
+    const explicit = [scope, ...(scope.querySelectorAll?.("[data-i18n-ja][data-i18n-en]") || [])]
+      .filter((element) => element?.matches?.("[data-i18n-ja][data-i18n-en]"));
+    for (const element of explicit) element.textContent = element.dataset[applicationLanguage === "en" ? "i18nEn" : "i18nJa"];
+
+    const walker = document.createTreeWalker(scope, NodeFilter.SHOW_TEXT);
+    const textNodes = [];
+    while (walker.nextNode()) textNodes.push(walker.currentNode);
+    for (const node of textNodes) {
+      if (shouldSkipAutomaticLocalization(node) || node.parentElement?.closest("[data-i18n-ja][data-i18n-en]")) continue;
+      const translated = translatedExactText(node.nodeValue);
+      if (translated !== node.nodeValue) node.nodeValue = translated;
+    }
+
+    const attributes = ["title", "aria-label", "placeholder", "data-tooltip", "data-label"];
+    for (const element of [scope, ...(scope.querySelectorAll?.("*") || [])]) {
+      if (element.closest?.("script, style, canvas, .sketch-name, .block-item-name, [data-user-content]")) continue;
+      for (const attribute of attributes) {
+        if (!element.hasAttribute?.(attribute)) continue;
+        const value = element.getAttribute(attribute);
+        const translated = translatedExactText(value);
+        if (translated !== value) element.setAttribute(attribute, translated);
+      }
+    }
+    const select = document.getElementById("applicationLanguageSelect");
+    if (select) select.value = applicationLanguage;
+  }
+
+  function setApplicationLanguage(language, { persist = true, refresh = true } = {}) {
+    applicationLanguage = language === "en" ? "en" : "ja";
+    document.documentElement.lang = applicationLanguage;
+    if (persist) {
+      try {
+        localStorage.setItem(APPLICATION_LANGUAGE_STORAGE_KEY, applicationLanguage);
+      } catch (_error) {
+        // The setting remains active for this session when storage is unavailable.
+      }
+    }
+    if (refresh) updateUI({ refreshAnalysis: false });
+    localizeApplicationUI();
+    const hint = document.getElementById("hint");
+    if (hint?.dataset.hintSource) hint.textContent = translatedHintText(hint.dataset.hintSource);
+  }
+
   for (const btn of document.querySelectorAll("button[aria-label]")) {
     btn.dataset.tooltip = btn.getAttribute("aria-label");
   }
@@ -273,7 +459,8 @@
 
   function setHint(msg, kind = "normal") {
     const el = document.getElementById("hint");
-    el.textContent = msg;
+    el.dataset.hintSource = String(msg);
+    el.textContent = translatedHintText(msg);
     el.classList.toggle("error", kind === "error");
   }
 
@@ -1625,7 +1812,7 @@
 
   function constraintDuplicateSummary() {
     const count = constraintRedundancyState?.count || 0;
-    return count > 0 ? ` / 重複拘束: ${count}` : "";
+    return count > 0 ? applicationLanguage === "en" ? ` / Duplicate constraints: ${count}` : ` / 重複拘束: ${count}` : "";
   }
 
   function referenceConstraintErrorInfo(constraint) {
@@ -1642,7 +1829,7 @@
 
   function referenceConstraintErrorSummary() {
     const count = invalidReferenceConstraints.size;
-    return count > 0 ? ` / 参照エラー: ${count}` : "";
+    return count > 0 ? applicationLanguage === "en" ? ` / Reference errors: ${count}` : ` / 参照エラー: ${count}` : "";
   }
 
   function clearSketchSolveState(sketchId) {
@@ -1936,16 +2123,18 @@
   }
 
   function constraintStatusBadge(status) {
-    if (status === "conflict") return "矛盾";
-    if (status === "support") return "支持位置拘束";
-    if (status === "under") return "未拘束";
-    return "完全拘束";
+    if (status === "conflict") return applicationText("矛盾", "Conflict");
+    if (status === "support") return applicationText("支持位置拘束", "Supported position");
+    if (status === "under") return applicationText("未拘束", "Under-constrained");
+    return applicationText("完全拘束", "Fully constrained");
   }
 
   function constraintSummaryText() {
     if (!constraintAnalysisState) refreshConstraintAnalysis();
     const s = constraintAnalysisState?.summary || { full: 0, support: 0, under: 0, conflict: 0 };
-    return `完全拘束: ${s.full} / 支持位置拘束: ${s.support} / 未拘束: ${s.under} / 矛盾: ${s.conflict}${constraintDuplicateSummary()}${referenceConstraintErrorSummary()}`;
+    return applicationLanguage === "en"
+      ? `Fully constrained: ${s.full} / Supported position: ${s.support} / Under-constrained: ${s.under} / Conflict: ${s.conflict}${constraintDuplicateSummary()}${referenceConstraintErrorSummary()}`
+      : `完全拘束: ${s.full} / 支持位置拘束: ${s.support} / 未拘束: ${s.under} / 矛盾: ${s.conflict}${constraintDuplicateSummary()}${referenceConstraintErrorSummary()}`;
   }
 
   function syncConstraintStatusView({ hint = true } = {}) {
@@ -4591,11 +4780,12 @@
     if (!workspace || !button) return;
     const centerWorld = currentCanvasCenterWorld();
     const className = `${side}-collapsed`;
-    const label = side === "explorer" ? "Explorer" : "Properties";
+    const label = side === "explorer" ? applicationText("エクスプローラー", "Explorer") : applicationText("プロパティ", "Properties");
     workspace.classList.toggle(className, collapsed);
     button.setAttribute("aria-expanded", String(!collapsed));
-    button.setAttribute("aria-label", `${label}を${collapsed ? "展開" : "最小化"}`);
-    button.title = `${label}を${collapsed ? "展開" : "最小化"}`;
+    const actionLabel = applicationLanguage === "en" ? `${collapsed ? "Expand" : "Collapse"} ${label}` : `${label}を${collapsed ? "展開" : "最小化"}`;
+    button.setAttribute("aria-label", actionLabel);
+    button.title = actionLabel;
     resizeCanvas({ centerWorld });
   }
 
@@ -8107,9 +8297,9 @@
 
   function sketchIdentityRelationLabel(sketchId) {
     const relation = sketchRelationToActive(sketchId);
-    if (relation === "reference") return "参照可";
-    if (relation === "descendant") return "参照不可（子孫）";
-    if (relation === "inactive") return "参照不可";
+    if (relation === "reference") return applicationText("参照可", "Reference available");
+    if (relation === "descendant") return applicationText("参照不可（子孫）", "Not referenceable (descendant)");
+    if (relation === "inactive") return applicationText("参照不可", "Not referenceable");
     return "";
   }
 
@@ -8226,7 +8416,7 @@
       const active = isEditableSketchElement(p);
       ctx.globalAlpha = sketchAlpha(p);
       const refSelected = isPendingReferenceTarget(p) || isConstraintOperandSelected(p);
-      const treeHovered = isSidebarHighlightedElement(p);
+      const treeHovered = isSidebarHighlightedElement(p) && !isPointUsedByLine(p);
       const sidebarHovered = isSidebarHoveredElement(p);
       const relatedHighlighted = isSelectedConstraintRelatedElement(p);
       const auxiliaryHighlighted = relatedHighlighted;
@@ -8260,7 +8450,7 @@
 
       if (p.fixed) {
         ctx.fillStyle = "#dc2626";
-        ctx.fillText("固定", p.x + 8 / viewport.scale, p.y + 8 / viewport.scale);
+        ctx.fillText(applicationText("固定", "Fixed"), p.x + 8 / viewport.scale, p.y + 8 / viewport.scale);
       }
     }
     ctx.restore();
@@ -8372,31 +8562,49 @@
   function constraintTargetHint(type) {
     if (type === "distance") {
       if (constraintOperands.length === 1 && constraintOperands[0]?.kind === "line") {
-        return "2本目の線を選ぶと線間・角度寸法、空白をクリックすると線長寸法になります。Enterまたは同じ線のダブルクリックでも線長を確定できます。";
+        return applicationText("2本目の線を選ぶと線間・角度寸法、空白をクリックすると線長寸法になります。Enterまたは同じ線のダブルクリックでも線長を確定できます。", "Select a second line for a line-to-line or angle dimension, or click empty space for a line-length dimension. Enter or double-clicking the same line also confirms line length.");
       }
-      return "寸法対象を選択してください。";
+      return applicationText("寸法対象を選択してください。", "Select dimension targets.");
     }
-    if (type === "concentric") return "同心にする円/円弧を2つ、または点と円/円弧を選択してください";
-    if (type === "equalRadius") return "同じ半径にする円または円弧を2つ選択してください";
-    if (type === "pointOnCircle") return "円周上に置く点と、円または円弧を選択してください";
-    if (type === "tangent") return "接線にする線と円/円弧、または円/円弧を2つ選択してください";
-    if (type === "coincident") return "一致させる点同士、点と線、点と円周、または同一線上にする線2本を選択してください";
-    if (type === "collinear") return "同一直線上にする線を2本選択してください";
-    if (type === "equal") return "等寸にする線2本、または同じ半径にする円/円弧を2つ選択してください";
-    if (type === "horizontal") return "水平にする線1本、または水平関係にする点2つを選択してください";
-    if (type === "vertical") return "垂直にする線1本、または鉛直関係にする点2つを選択してください";
-    if (type === "parallel") return "平行にする線を2本選択してください";
-    if (type === "perpendicular") return "直交させる線を2本選択してください";
+    if (type === "concentric") return applicationText("同心にする円/円弧を2つ、または点と円/円弧を選択してください", "Select two circles/arcs, or a point and a circle/arc, to make them concentric.");
+    if (type === "equalRadius") return applicationText("同じ半径にする円または円弧を2つ選択してください", "Select two circles or arcs to give them equal radii.");
+    if (type === "pointOnCircle") return applicationText("円周上に置く点と、円または円弧を選択してください", "Select a point and a circle or arc to place the point on its circumference.");
+    if (type === "tangent") return applicationText("接線にする線と円/円弧、または円/円弧を2つ選択してください", "Select a line and a circle/arc, or two circles/arcs, to make them tangent.");
+    if (type === "coincident") return applicationText("一致させる点同士、点と線、点と円周、または同一線上にする線2本を選択してください", "Select two points, a point and line, a point and circumference, or two lines to make coincident.");
+    if (type === "collinear") return applicationText("同一直線上にする線を2本選択してください", "Select two lines to make them collinear.");
+    if (type === "equal") return applicationText("等寸にする線2本、または同じ半径にする円/円弧を2つ選択してください", "Select two lines for equal length, or two circles/arcs for equal radii.");
+    if (type === "horizontal") return applicationText("水平にする線1本、または水平関係にする点2つを選択してください", "Select one line to make horizontal, or two points to align horizontally.");
+    if (type === "vertical") return applicationText("垂直にする線1本、または鉛直関係にする点2つを選択してください", "Select one line to make vertical, or two points to align vertically.");
+    if (type === "parallel") return applicationText("平行にする線を2本選択してください", "Select two lines to make parallel.");
+    if (type === "perpendicular") return applicationText("直交させる線を2本選択してください", "Select two lines to make perpendicular.");
     if (type === "symmetry") {
-      if (constraintOperands.length === 0) return "最初に対称軸にする線を選択してください";
-      if (constraintOperands.length === 1) return "対称にする1つ目の点または線を選択してください";
+      if (constraintOperands.length === 0) return applicationText("最初に対称軸にする線を選択してください", "First select the symmetry-axis line.");
+      if (constraintOperands.length === 1) return applicationText("対称にする1つ目の点または線を選択してください", "Select the first point or line to mirror.");
       const subjectKind = constraintOperands[1]?.kind === "line" ? "線" : "点";
-      return `対称にする2つ目の${subjectKind}を選択してください`;
+      return applicationLanguage === "en" ? `Select the second ${subjectKind === "線" ? "line" : "point"} to mirror.` : `対称にする2つ目の${subjectKind}を選択してください`;
     }
-    return `${constraintLabel(type)} の対象を選択してください`;
+    return applicationLanguage === "en" ? `Select targets for ${constraintLabel(type)}.` : `${constraintLabel(type)} の対象を選択してください`;
   }
 
   function invalidConstraintTargetHint(type) {
+    if (applicationLanguage === "en") {
+      if (type === "symmetry") {
+        if (constraintOperands.length === 0) return "Select a line as the symmetry axis for the first target.";
+        if (constraintOperands.length === 1) return "Select a point or line to mirror for the second target.";
+        return `Select a ${constraintOperands[1]?.kind === "line" ? "line" : "point"} matching the second target type.`;
+      }
+      const hints = {
+        concentric: "Select two circles/arcs, or a point and a circle/arc, for this constraint.",
+        equalRadius: "Select two circles or arcs for this constraint.",
+        pointOnCircle: "Select a point and a circle or arc for this constraint.",
+        tangent: "Select a line and a circle/arc, or two circles/arcs, for this constraint.",
+        coincident: "Select points, lines, circles, or arcs supported by this constraint.",
+        collinear: "Select two lines for this constraint.", equal: "Select two lines or two circles/arcs for this constraint.",
+        horizontal: "Select one line or two points for this constraint.", vertical: "Select one line or two points for this constraint.",
+        parallel: "Select lines for this constraint.", perpendicular: "Select lines for this constraint.", distance: "Select a point or line as a dimension target.",
+      };
+      return hints[type] || "The current selection cannot be used for this constraint.";
+    }
     if (type === "concentric") return "この拘束では円/円弧を2つ、または点と円/円弧を選択してください";
     if (type === "equalRadius") return "この拘束では円または円弧を2つ選択してください";
     if (type === "pointOnCircle") return "この拘束では点と円または円弧を選択してください";
@@ -9179,8 +9387,10 @@
 
     const enabled = constraintButtons
       .filter((btn) => btn.getAttribute("aria-disabled") !== "true")
-      .map((btn) => btn.dataset.label || btn.title);
-    const help = enabled.length > 0 ? `追加可能: ${enabled.join(" / ")}` : "点または線を選択すると、追加できる拘束だけが有効になります。";
+      .map((btn) => translatedExactText(btn.dataset.label || btn.title));
+    const help = enabled.length > 0
+      ? `${applicationText("追加可能", "Available")}: ${enabled.join(" / ")}`
+      : applicationText("点または線を選択すると、追加できる拘束だけが有効になります。", "Select points or lines to enable applicable constraints.");
     document.getElementById("hint").title = help;
   }
 
@@ -9859,11 +10069,7 @@
   }
 
   function defaultAppearanceLabel() {
-    return document.documentElement.lang.toLowerCase().startsWith("ja") ? "既定" : "Default";
-  }
-
-  function resetAppearanceLabel() {
-    return document.documentElement.lang.toLowerCase().startsWith("ja") ? "既定へ戻す" : "Reset to default";
+    return applicationText("既定", "Default");
   }
 
   function colorPickerValue(value) {
@@ -9871,6 +10077,42 @@
     if (/^#[0-9a-f]{6}$/i.test(color)) return color.toLowerCase();
     if (/^#[0-9a-f]{3}$/i.test(color)) return `#${[...color.slice(1)].map((part) => part.repeat(2)).join("")}`.toLowerCase();
     return "#111827";
+  }
+
+  function usedFileColors() {
+    const colors = [];
+    const seen = new Set();
+    const add = (value) => {
+      const color = String(value || "").trim();
+      if (!/^#[0-9a-f]{3}(?:[0-9a-f]{3})?$/i.test(color)) return;
+      const normalized = colorPickerValue(color);
+      if (seen.has(normalized)) return;
+      seen.add(normalized);
+      colors.push(normalized);
+    };
+    const addAppearance = (appearance) => add(appearance?.color);
+    addAppearance(model.defaultAppearance);
+    for (const sketch of model.sketches) addAppearance(sketch.appearance);
+    for (const item of [...model.points, ...model.lines, ...model.circles, ...model.arcs]) addAppearance(item.appearance);
+    for (const instance of model.blockInstances) addAppearance(instance.appearanceOverride);
+    for (const annotation of model.annotations) add(annotation.style?.color);
+    for (const definition of model.blockDefinitions) {
+      for (const sketch of definition.sketches || []) addAppearance(sketch.appearance);
+      for (const item of [...(definition.points || []), ...(definition.lines || []), ...(definition.circles || []), ...(definition.arcs || [])]) addAppearance(item.appearance);
+      for (const instance of definition.blockInstances || []) addAppearance(instance.appearanceOverride);
+      for (const annotation of definition.annotations || []) add(annotation.style?.color);
+    }
+    return colors;
+  }
+
+  function usedColorSwatches(selectedColor) {
+    const selected = String(selectedColor || "").toLowerCase();
+    const colors = usedFileColors();
+    if (colors.length === 0) return "";
+    const label = applicationText("使用済みの色", "Colors used in this file");
+    return `<div class="property-color-swatches" role="group" aria-label="${label}">${colors.map((color) =>
+      `<button class="property-color-swatch" data-appearance-used-color="${color}" type="button" style="--swatch-color:${color}" title="${label}: ${color}" aria-label="${label}: ${color}" aria-pressed="${selected === color}"></button>`,
+    ).join("")}</div>`;
   }
 
   function appearancePropertyRows(owner, effective, { allowInheritance = true } = {}) {
@@ -9884,7 +10126,7 @@
         ${allowInheritance ? option("", defaultLabel, inherited("visible")) : ""}
         ${option("true", "表示", direct.visible === true || !allowInheritance && effective.visible !== false)}${option("false", "非表示", direct.visible === false)}
       </select></div>
-      <div class="property-row"><label for="propertyColor">Color</label><div class="property-color-control"><input id="propertyColor" data-appearance-key="color" type="text" placeholder="${defaultLabel}" value="${escapeHtml(direct.color || "")}" /><input class="property-color-picker" data-appearance-color-picker type="color" value="${colorValue}" title="Color palette" aria-label="Color palette" />${allowInheritance ? `<button class="property-color-default" data-appearance-default="color" type="button">${resetAppearanceLabel()}</button>` : ""}</div></div>
+      <div class="property-row"><label for="propertyColor">Color</label><div class="property-color-control"><input id="propertyColor" data-appearance-key="color" type="text" placeholder="${defaultLabel}" value="${escapeHtml(direct.color || "")}" /><input class="property-color-picker" data-appearance-color-picker type="color" value="${colorValue}" title="Color palette" aria-label="Color palette" />${usedColorSwatches(direct.color)}</div></div>
       <div class="property-row"><label for="propertyLineType">Line type</label><select id="propertyLineType" data-appearance-key="lineType">
         ${allowInheritance ? option("", defaultLabel, inherited("lineType")) : ""}
         ${option("solid", "実線", direct.lineType === "solid" || !allowInheritance && effective.lineType === "solid")}${option("dashed", "破線", direct.lineType === "dashed")}${option("dashdot", "一点鎖線", direct.lineType === "dashdot")}${option("dotted", "点線", direct.lineType === "dotted")}
@@ -9904,11 +10146,11 @@
   }
 
   function geometryPropertyName(item) {
-    if (item instanceof Point) return `Point ${item.id}`;
-    if (item instanceof Line) return `Line ${item.id}`;
-    if (item instanceof Circle) return `Circle ${item.id}`;
-    if (item instanceof Arc) return `Arc ${item.id}`;
-    return item?.id || "Geometry";
+    if (item instanceof Point) return `${applicationText("点", "Point")} ${item.id}`;
+    if (item instanceof Line) return `${applicationText("線", "Line")} ${item.id}`;
+    if (item instanceof Circle) return `${applicationText("円", "Circle")} ${item.id}`;
+    if (item instanceof Arc) return `${applicationText("円弧", "Arc")} ${item.id}`;
+    return item?.id || applicationText("ジオメトリ", "Geometry");
   }
 
   function dimensionDisplayState(dimension) {
@@ -9925,6 +10167,22 @@
     };
   }
 
+  function localizedConstraintName(name) {
+    const value = String(name || applicationText("拘束", "Constraint"));
+    if (applicationLanguage !== "en") return value;
+    const replacements = [
+      [/^円弧端点-円周一致/, "Arc endpoint on circumference"], [/^円弧端点-線一致/, "Arc endpoint on line"], [/^円弧端点一致/, "Arc endpoint coincident"],
+      [/^点-線寸法/, "Point-line dimension"], [/^線-線寸法/, "Line-line dimension"], [/^オフセット寸法/, "Offset dimension"],
+      [/^水平寸法/, "Horizontal dimension"], [/^垂直寸法/, "Vertical dimension"], [/^点-線一致/, "Point-line coincident"], [/^点-円周一致/, "Point on circumference"],
+      [/^中点一致/, "Midpoint coincident"], [/^最小線長/, "Minimum line length"], [/^線固定/, "Fixed line"], [/^点水平/, "Point horizontal"], [/^点垂直/, "Point vertical"],
+      [/^線対称/, "Line symmetry"], [/^同一直線/, "Collinear"], [/^寸法/, "Dimension"], [/^角度/, "Angle"], [/^一致/, "Coincident"],
+      [/^水平/, "Horizontal"], [/^垂直/, "Vertical"], [/^平行/, "Parallel"], [/^等寸/, "Equal"], [/^半径/, "Radius"], [/^直径/, "Diameter"],
+      [/^同心/, "Concentric"], [/^接線/, "Tangent"], [/^対称/, "Symmetry"], [/^ドラッグ/, "Drag"],
+    ];
+    for (const [pattern, replacement] of replacements) if (pattern.test(value)) return value.replace(pattern, replacement);
+    return value;
+  }
+
   function updatePropertiesUI() {
     const panel = document.getElementById("propertiesPanel");
     if (!panel) return;
@@ -9934,7 +10192,7 @@
       return;
     }
     if (target.kind === "multiple") {
-      panel.innerHTML = `<h2 class="property-heading">${target.count} objects</h2><p class="properties-empty">複数選択の共通プロパティ編集は今回の対象外です。</p>`;
+      panel.innerHTML = `<h2 class="property-heading">${target.count} ${applicationText("個のオブジェクト", "objects")}</h2><p class="properties-empty">複数選択の共通プロパティ編集は今回の対象外です。</p>`;
       return;
     }
     const item = target.item;
@@ -9949,18 +10207,18 @@
     } else if (target.kind === "block") {
       const definition = blockDefinitionById(item.definitionId);
       const effective = blockProjectionBundle(item).lines[0] ? effectiveAppearanceForElement(blockProjectionBundle(item).lines[0]) : normalizeAppearance(model.defaultAppearance, { partial: false });
-      panel.innerHTML = `<h2 class="property-heading">Block Instance ${escapeHtml(item.id)}</h2><section class="property-section"><h3>Placement</h3><div class="property-row"><span>Definition</span><span class="property-readonly">${escapeHtml(definition?.name || item.definitionId)}</span></div><div class="property-row"><label>X</label><input data-property="block-x" type="number" step="0.1" value="${item.x}"></div><div class="property-row"><label>Y</label><input data-property="block-y" type="number" step="0.1" value="${item.y}"></div><div class="property-row"><label>Rotation</label><input data-property="block-rotation" type="number" step="1" value="${angleDegrees(item.rotation)}"></div></section><section class="property-section"><h3>Appearance Override</h3>${appearancePropertyRows(item.appearanceOverride, effective)}</section>`;
+      panel.innerHTML = `<h2 class="property-heading">${applicationText("ブロックインスタンス", "Block Instance")} ${escapeHtml(item.id)}</h2><section class="property-section"><h3>Placement</h3><div class="property-row"><span>Definition</span><span class="property-readonly" data-user-content>${escapeHtml(definition?.name || item.definitionId)}</span></div><div class="property-row"><label>X</label><input data-property="block-x" type="number" step="0.1" value="${item.x}"></div><div class="property-row"><label>Y</label><input data-property="block-y" type="number" step="0.1" value="${item.y}"></div><div class="property-row"><label>Rotation</label><input data-property="block-rotation" type="number" step="1" value="${angleDegrees(item.rotation)}"></div></section><section class="property-section"><h3>Appearance Override</h3>${appearancePropertyRows(item.appearanceOverride, effective)}</section>`;
     } else if (target.kind === "constraint") {
       const dimension = item.dimension;
       const display = dimensionDisplayState(dimension);
       const targetValue = targetFromConstraint(item);
       const value = targetValue?.kind === "angle" ? angleDegrees(item.target) : item.target;
-      panel.innerHTML = `<h2 class="property-heading">${escapeHtml(item.name || "Constraint")}</h2><section class="property-section"><h3>Constraint</h3><div class="property-row"><span>Type</span><span class="property-readonly">${escapeHtml(item.constructor.name)}</span></div>${Number.isFinite(value) && !item.readOnlyDimension ? `<div class="property-row"><label>Value</label><input data-property="constraint-value" type="number" step="0.1" value="${value}"></div>` : ""}</section>${dimension ? `<section class="property-section"><h3>Dimension Display</h3><div class="property-row"><label>Visible</label><input data-dimension-display="visible" type="checkbox" ${display.visible ? "checked" : ""}></div><div class="property-row"><label>Precision</label><input data-dimension-display="precision" type="number" min="0" max="10" placeholder="自動" value="${display.precision ?? ""}"></div><div class="property-row"><label>Prefix</label><input data-dimension-display="prefix" value="${escapeHtml(display.prefix)}"></div><div class="property-row"><label>Suffix</label><input data-dimension-display="suffix" value="${escapeHtml(display.suffix)}"></div><div class="property-row"><label>Arrows</label><input data-dimension-display="arrows" type="checkbox" ${display.arrows ? "checked" : ""}></div><div class="property-row"><label>Extension lines</label><input data-dimension-display="extensionLines" type="checkbox" ${display.extensionLines ? "checked" : ""}></div></section>` : ""}`;
+      panel.innerHTML = `<h2 class="property-heading">${escapeHtml(localizedConstraintName(item.name))}</h2><section class="property-section"><h3>Constraint</h3><div class="property-row"><span>Type</span><span class="property-readonly">${escapeHtml(item.constructor.name)}</span></div>${Number.isFinite(value) && !item.readOnlyDimension ? `<div class="property-row"><label>Value</label><input data-property="constraint-value" type="number" step="0.1" value="${value}"></div>` : ""}</section>${dimension ? `<section class="property-section"><h3>Dimension Display</h3><div class="property-row"><label>Visible</label><input data-dimension-display="visible" type="checkbox" ${display.visible ? "checked" : ""}></div><div class="property-row"><label>Precision</label><input data-dimension-display="precision" type="number" min="0" max="10" placeholder="自動" value="${display.precision ?? ""}"></div><div class="property-row"><label>Prefix</label><input data-dimension-display="prefix" value="${escapeHtml(display.prefix)}"></div><div class="property-row"><label>Suffix</label><input data-dimension-display="suffix" value="${escapeHtml(display.suffix)}"></div><div class="property-row"><label>Arrows</label><input data-dimension-display="arrows" type="checkbox" ${display.arrows ? "checked" : ""}></div><div class="property-row"><label>Extension lines</label><input data-dimension-display="extensionLines" type="checkbox" ${display.extensionLines ? "checked" : ""}></div></section>` : ""}`;
     } else if (target.kind === "annotation") {
-      panel.innerHTML = `<h2 class="property-heading">${item.type === "leader" ? "Leader" : "Free Text"} ${escapeHtml(item.id)}</h2><section class="property-section"><h3>Annotation</h3><div class="property-row"><label>Visible</label><input data-property="annotation-visible" type="checkbox" ${item.visible !== false ? "checked" : ""}></div>${item.type === "text" ? `<div class="property-row"><label>Text</label><textarea data-property="annotation-text">${escapeHtml(item.text || "")}</textarea></div><div class="property-row"><label>Font size</label><input data-property="annotation-font-size" type="number" min="6" max="72" value="${Number(item.style?.fontSize || 13)}"></div>` : ""}<div class="property-row"><label>Color</label><input data-property="annotation-color" type="text" value="${escapeHtml(item.style?.color || "#111827")}"></div></section>`;
+      panel.innerHTML = `<h2 class="property-heading">${item.type === "leader" ? applicationText("引出線", "Leader") : applicationText("自由テキスト", "Free Text")} ${escapeHtml(item.id)}</h2><section class="property-section"><h3>Annotation</h3><div class="property-row"><label>Visible</label><input data-property="annotation-visible" type="checkbox" ${item.visible !== false ? "checked" : ""}></div>${item.type === "text" ? `<div class="property-row"><label>Text</label><textarea data-property="annotation-text">${escapeHtml(item.text || "")}</textarea></div><div class="property-row"><label>Font size</label><input data-property="annotation-font-size" type="number" min="6" max="72" value="${Number(item.style?.fontSize || 13)}"></div>` : ""}<div class="property-row"><label>Color</label><input data-property="annotation-color" type="text" value="${escapeHtml(item.style?.color || "#111827")}"></div></section>`;
     } else {
       const effective = effectiveAppearanceForSketch(item);
-      panel.innerHTML = `<h2 class="property-heading">Sketch ${escapeHtml(item.name)}</h2><section class="property-section"><h3>Sketch</h3><div class="property-row"><span>ID</span><span class="property-readonly">${escapeHtml(item.id)}</span></div><div class="property-row"><span>Active</span><span class="property-readonly">${item.id === activeSketchId() ? "Yes" : "No"}</span></div></section><section class="property-section"><h3>Appearance</h3>${appearancePropertyRows(item.appearance, effective)}</section>`;
+      panel.innerHTML = `<h2 class="property-heading">${applicationText("スケッチ", "Sketch")} <span data-user-content>${escapeHtml(item.name)}</span></h2><section class="property-section"><h3>Sketch</h3><div class="property-row"><span>ID</span><span class="property-readonly">${escapeHtml(item.id)}</span></div><div class="property-row"><span>Active</span><span class="property-readonly">${applicationText("はい", "Yes")}</span></div></section><section class="property-section"><h3>Appearance</h3>${appearancePropertyRows(item.appearance, effective)}</section>`;
     }
 
     panel.oninput = handlePropertiesInput;
@@ -10087,12 +10345,12 @@
   }
 
   function handlePropertiesClick(event) {
-    const button = event.target.closest("[data-appearance-default]");
+    const button = event.target.closest("[data-appearance-used-color]");
     if (!button) return;
     const target = selectedPropertiesTarget();
     const owner = appearanceOwnerForPropertiesTarget(target);
     if (!owner) return;
-    applyAppearanceInput(owner, button.dataset.appearanceDefault, "");
+    applyAppearanceInput(owner, "color", button.dataset.appearanceUsedColor);
     if (target.kind === "block") invalidateBlockProjectionCache(target.item.id);
     recordHistory(target.kind === "block" ? "Appearance Override変更" : "Appearance変更");
     updateUI();
@@ -10103,7 +10361,7 @@
     const blockList = document.getElementById("blockInstanceObjectList");
     if (blockList) blockList.innerHTML = model.blockInstances.filter(isActiveSketchElement).map((item) => `<div class="item object-row ${selectedBlockInstances.includes(item) ? "selected" : ""}" data-object-kind="block" data-id="${escapeHtml(item.id)}"><span>${escapeHtml(item.id)}</span><span class="badge">${escapeHtml(blockDefinitionById(item.definitionId)?.name || item.definitionId)}</span></div>`).join("");
     const annotationList = document.getElementById("annotationObjectList");
-    if (annotationList) annotationList.innerHTML = model.annotations.map((item) => `<div class="item object-row ${selectedAnnotation === item ? "selected" : ""}" data-object-kind="annotation" data-id="${escapeHtml(item.id)}"><span>${item.type === "leader" ? "Leader" : "Text"} ${escapeHtml(item.id)}</span></div>`).join("");
+    if (annotationList) annotationList.innerHTML = model.annotations.map((item) => `<div class="item object-row ${selectedAnnotation === item ? "selected" : ""}" data-object-kind="annotation" data-id="${escapeHtml(item.id)}"><span>${item.type === "leader" ? applicationText("引出線", "Leader") : applicationText("テキスト", "Text")} ${escapeHtml(item.id)}</span></div>`).join("");
     for (const row of document.querySelectorAll(".geometry-list-row")) {
       const kind = row.dataset.kind;
       const item = kind === "point" ? model.points.find((value) => value.id === row.dataset.id) : kind === "line" ? model.lines.find((value) => value.id === row.dataset.id) : kind === "circle" ? model.circles.find((value) => value.id === row.dataset.id) : model.arcs.find((value) => value.id === row.dataset.id);
@@ -10114,7 +10372,12 @@
 
   function updateStatusUI() {
     const command = document.getElementById("statusCommand");
-    if (command) command.textContent = pendingCommand?.type?.startsWith("annotation-") ? "Annotation" : pendingConstraintCommand ? "Constraint" : mode === "select" ? "選択" : mode;
+    const modeLabels = {
+      select: applicationText("選択", "Select"), point: applicationText("点", "Point"), line: applicationText("線", "Line"), rectangle: applicationText("矩形", "Rectangle"),
+      circle: applicationText("円", "Circle"), arc: applicationText("円弧", "Arc"), fillet: applicationText("R面取り", "Fillet"), trim: applicationText("トリム", "Trim"),
+      offset: applicationText("オフセット", "Offset"), "block-place": applicationText("ブロック配置", "Block placement"),
+    };
+    if (command) command.textContent = pendingCommand?.type?.startsWith("annotation-") ? applicationText("注記", "Annotation") : pendingConstraintCommand ? applicationText("拘束", "Constraint") : modeLabels[mode] || mode;
     const constraint = document.getElementById("statusConstraint");
     if (constraint) constraint.textContent = viewState.constraintStatus ? "拘束状態表示中" : constraintSummaryText();
   }
@@ -10181,7 +10444,7 @@
     const constraintRows = listedConstraints.map(({ constraint, index }, displayIndex) => {
       const duplicate = constraintIsRedundant(constraint);
       const referenceError = referenceConstraintErrorInfo(constraint);
-      return `<div class="item constraint-item constraint-list-row ${duplicate ? "duplicate" : ""} ${referenceError ? "reference-error" : ""}" data-idx="${index}" title="${escapeHtml(referenceError || "")}"><span>${displayIndex + 1}. ${constraint.name}${referenceError ? `<span class="badge constraint-reference-error-badge">参照エラー</span>` : ""}${duplicate ? `<span class="badge constraint-duplicate-badge">重複</span>` : ""}</span>` +
+      return `<div class="item constraint-item constraint-list-row ${duplicate ? "duplicate" : ""} ${referenceError ? "reference-error" : ""}" data-idx="${index}" title="${escapeHtml(referenceError || "")}"><span>${displayIndex + 1}. ${escapeHtml(localizedConstraintName(constraint.name))}${referenceError ? `<span class="badge constraint-reference-error-badge">参照エラー</span>` : ""}${duplicate ? `<span class="badge constraint-duplicate-badge">重複</span>` : ""}</span>` +
         `<button data-idx="${index}" class="removeConstraintBtn" title="削除" aria-label="削除" data-tooltip="削除">` +
         `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3M7 7l1 13h8l1-13"/></svg>` +
         `</button></div>`;
@@ -10246,6 +10509,7 @@
     updatePropertiesUI();
     updateStatusUI();
     updateConstraintButtons();
+    localizeApplicationUI();
   }
 
   function supportLineBasis(line) {
@@ -11490,13 +11754,13 @@
   }
 
   function dragLabel(session) {
-    if (session.mode === "block") return "ブロック移動";
-    if (session.mode === "block-rotation") return "ブロック回転";
-    if (session.kind === "selection") return "選択移動";
-    if (session.mode === "radius" && session.activeMode === "move") return "ドラッグ";
-    if (session.mode === "radius") return "半径変更";
-    if (session.mode === "arc-endpoint") return "円弧端点変更";
-    return "ドラッグ";
+    if (session.mode === "block") return applicationText("ブロック移動", "Block move");
+    if (session.mode === "block-rotation") return applicationText("ブロック回転", "Block rotation");
+    if (session.kind === "selection") return applicationText("選択移動", "Selection move");
+    if (session.mode === "radius" && session.activeMode === "move") return applicationText("ドラッグ", "Drag");
+    if (session.mode === "radius") return applicationText("半径変更", "Radius change");
+    if (session.mode === "arc-endpoint") return applicationText("円弧端点変更", "Arc endpoint change");
+    return applicationText("ドラッグ", "Drag");
   }
 
   function beginDrag(e, hitP, hitL, hitC, hitA, hitArcEnd, pointer) {
@@ -11838,28 +12102,21 @@
     return null;
   }
 
-  function hitInactiveElement(x, y) {
-    const hit = hitSketchIdentityElement(x, y, { inactiveOnly: true });
-    return hit ? { id: hit.id, sketchId: hit.sketchId, item: hit.item } : null;
-  }
-
   function hitSketchIdentityElement(x, y, options = {}) {
-    const inactiveOnly = Boolean(options.inactiveOnly);
+    const allowInactiveGeometry = Boolean(options.allowInactiveGeometry);
     const threshold = 7 / viewport.scale;
     const pointThreshold = 10 / viewport.scale;
-    const accepts = (item) => isVisibleSketchElement(item) && (!inactiveOnly || !isEditableSketchElement(item));
+    const accepts = (item) => isVisibleSketchElement(item) && (allowInactiveGeometry || isEditableSketchElement(item));
     const dimensionHit = hitDimension(x, y, { activeOnly: false });
     if (dimensionHit) {
       const sketchId = constraintSketchId(dimensionHit.constraint);
-      if (!inactiveOnly || sketchId !== activeSketchId()) {
-        return {
-          id: dimensionHit.constraint.name || "寸法",
-          label: dimensionHit.constraint.name || "寸法",
-          sketchId,
-          item: dimensionHit.constraint,
-          kind: "dimension",
-        };
-      }
+      return {
+        id: dimensionHit.constraint.name || "寸法",
+        label: dimensionHit.constraint.name || "寸法",
+        sketchId,
+        item: dimensionHit.constraint,
+        kind: "dimension",
+      };
     }
     for (let i = model.points.length - 1; i >= 0; i--) {
       const p = model.points[i];
@@ -11882,8 +12139,8 @@
       const angle = Math.atan2(y - arc.center.y, x - arc.center.x);
       if (Math.abs(hypot2(x - arc.center.x, y - arc.center.y) - arc.radius()) <= threshold && angleOnSignedSweep(angle, arc.startAngle, arc.endAngle)) return { id: arc.id, sketchId: elementSketchId(arc), item: arc, kind: "arc" };
     }
-    const block = hitBlockInstance(x, y, false);
-    if (block && (!inactiveOnly || block.sketchId !== activeSketchId())) {
+    const block = hitBlockInstance(x, y, !allowInactiveGeometry);
+    if (block) {
       const definition = blockDefinitionById(block.definitionId);
       return {
         id: block.id,
@@ -12511,8 +12768,8 @@
     const hitD = hitDimension(p.x, p.y);
     const hitBlockHandle = hitBlockRotationHandle(p.x, p.y);
     const hitBlock = hitBlockHandle || hitBlockInstance(p.x, p.y);
-    hoveredSketchIdentity = hitSketchIdentityElement(p.x, p.y);
-    const inactiveHit = !hitP && !hitL && !hitC && !hitArcEnd && !hitA && !hitD && !hitBlock ? hitInactiveElement(p.x, p.y) : null;
+    hoveredSketchIdentity = hitSketchIdentityElement(p.x, p.y, { allowInactiveGeometry: Boolean(pendingConstraintCommand || pendingCommand?.type?.startsWith("distance")) });
+    const inactiveHit = null;
     const blankAnnotationHit = hitAnnotationElement(p.x, p.y);
     const annotationTargetHit = hitAnnotationTarget(p.x, p.y);
 
@@ -12880,7 +13137,7 @@
     if (pendingCommand?.type === "distance-place") {
       clearSnap();
       const hitD = hitDimension(p.x, p.y);
-      hoveredSketchIdentity = hitSketchIdentityElement(p.x, p.y);
+      hoveredSketchIdentity = hitSketchIdentityElement(p.x, p.y, { allowInactiveGeometry: true });
       pendingCommand.pointer = p;
       pendingCommand.dimension = null;
       updatePendingLineLengthHover(p);
@@ -12974,7 +13231,7 @@
         return;
       }
       const referenceTarget = hitReferenceTarget(p.x, p.y);
-      const nextSketchIdentity = hitSketchIdentityElement(p.x, p.y);
+      const nextSketchIdentity = hitSketchIdentityElement(p.x, p.y, { allowInactiveGeometry: true });
       const nextEndpointHover = referenceTarget ? null : hitEndpointPoint(p.x, p.y);
       const nextPointHover = referenceTarget ? (referenceTarget.kind === "point" ? referenceTarget.point : null) : nextEndpointHover || hitExplicitPoint(p.x, p.y);
       const nextLineHover = referenceTarget ? (referenceTarget.kind === "line" ? referenceTarget.line : null) : nextPointHover ? null : hitLine(p.x, p.y);
@@ -13027,7 +13284,7 @@
       const nextArcEndpointHover = nextPointHover || nextLineHover || nextCircleHover ? null : hitArcEndpoint(p.x, p.y);
       const nextArcHover = nextPointHover || nextLineHover || nextCircleHover || nextArcEndpointHover ? null : hitArc(p.x, p.y);
       const nextSketchIdentity = hitSketchIdentityElement(p.x, p.y);
-      const nextBlockHover = nextHover || nextPointHover || nextLineHover || nextCircleHover || nextArcEndpointHover || nextArcHover ? null : hitBlockInstance(p.x, p.y, false);
+      const nextBlockHover = nextHover || nextPointHover || nextLineHover || nextCircleHover || nextArcEndpointHover || nextArcHover ? null : hitBlockInstance(p.x, p.y);
       const annotationHit = nextHover || nextPointHover || nextLineHover || nextCircleHover || nextArcEndpointHover || nextArcHover || nextBlockHover
         ? null
         : hitAnnotationElement(p.x, p.y);
@@ -13522,7 +13779,7 @@
 
     if (handleDistanceKey(e)) return;
 
-    if ((e.key === "Delete" || e.key === "Backspace") && isGeometryMode() && deleteCurrentSelection()) {
+    if (!textEditingTarget && (e.key === "Delete" || e.key === "Backspace") && isGeometryMode() && deleteCurrentSelection()) {
       e.preventDefault();
       return;
     }
@@ -13745,10 +14002,28 @@
         recordHistory("Document Default Appearance変更");
         draw();
       };
+      fields.onclick = (event) => {
+        const button = event.target.closest("[data-appearance-used-color]");
+        if (!button) return;
+        applyAppearanceInput(model.defaultAppearance, "color", button.dataset.appearanceUsedColor);
+        model.defaultAppearance = normalizeAppearance(model.defaultAppearance, { partial: false });
+        recordHistory("Document Default Appearance変更");
+        fields.innerHTML = appearancePropertyRows(model.defaultAppearance, model.defaultAppearance, { allowInheritance: false });
+        localizeApplicationUI(fields);
+        draw();
+      };
     }
     document.getElementById("documentSettingsDialog")?.showModal();
   });
-  document.getElementById("applicationSettingsBtn")?.addEventListener("click", () => document.getElementById("applicationSettingsDialog")?.showModal());
+  document.getElementById("applicationSettingsBtn")?.addEventListener("click", () => {
+    const select = document.getElementById("applicationLanguageSelect");
+    if (select) select.value = applicationLanguage;
+    document.getElementById("applicationSettingsDialog")?.showModal();
+  });
+  document.getElementById("applicationLanguageSelect")?.addEventListener("change", (event) => {
+    setApplicationLanguage(event.target.value);
+    draw();
+  });
   document.getElementById("completeBlockEditBtn")?.addEventListener("click", completeBlockDefinitionEdit);
   document.getElementById("cancelBlockEditBtn")?.addEventListener("click", cancelBlockDefinitionEdit);
   document.getElementById("blockEditorNameInput")?.addEventListener("input", (event) => {
@@ -14336,7 +14611,7 @@
         }
         if (!item) return null;
         const appearance = effectiveAppearanceForElement(item);
-        const treeHovered = isSidebarHighlightedElement(item);
+        const treeHovered = isSidebarHighlightedElement(item) && (!(item instanceof Point) || !isPointUsedByLine(item));
         const sidebarHovered = isSidebarHoveredElement(item);
         const canvasHovered = hoveredLine === item || hoveredCircle === item || hoveredArc === item || hoveredPoint === item || hoveredEndpointPoint === item;
         const blockHovered = Boolean(item.blockInstance && hoveredBlockInstance === item.blockInstance);
@@ -15219,6 +15494,7 @@
         const lineMid = worldToCanvasScreen({ x: (line.p1.x + line.p2.x) / 2, y: (line.p1.y + line.p2.y) / 2 });
         return {
           line: line.id,
+          lineEndpoints: [p1.id, p2.id],
           fixedPoint: p1.id,
           circle: circle.id,
           circleCenter: circleCenter.id,
@@ -15411,6 +15687,7 @@
         const layout = dimensionLayout(targetFromConstraint(dimensionConstraint), dimensionConstraint.dimension);
         return {
           dimension: this.worldClientPositionForTest(layout.text),
+          line: this.worldClientPositionForTest({ x: (line.p1.x + line.p2.x) / 2, y: (line.p1.y + line.p2.y) / 2 }),
           block: this.worldClientPositionForTest(blockInstanceDisplayCenter(instance)),
           dimensionId: dimensionConstraint.name || "寸法",
           blockId: instance.id,
@@ -16020,6 +16297,20 @@
         }
         return count;
       },
+      drawnPointMarkerCountForTest() {
+        let count = 0;
+        const originalArc = ctx.arc;
+        ctx.arc = (...args) => {
+          count += 1;
+          return originalArc.apply(ctx, args);
+        };
+        try {
+          drawPoints();
+        } finally {
+          ctx.arc = originalArc;
+        }
+        return count;
+      },
       drawnDimensionLabelsForTest() {
         const labels = [];
         const originalFillText = ctx.fillText;
@@ -16260,6 +16551,7 @@
 
   installTestHooks();
   sampleModel();
+  setApplicationLanguage(applicationLanguage, { persist: false, refresh: false });
   resizeCanvas();
   resetHistory("起動");
 })();
