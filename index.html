@@ -25,8 +25,8 @@
       </div>
       <nav class="app-menus" aria-label="メニューバー">
         <details class="app-menu"><summary>ファイル</summary><div class="menu-popover">
-          <button id="exportBtn" type="button">保存</button>
-          <button id="importBtn" type="button">開く</button>
+          <button type="button" data-menu-tool="exportBtn">保存</button>
+          <button type="button" data-menu-tool="importBtn">開く</button>
           <button id="documentSettingsBtn" type="button">ドキュメント設定</button>
           <button id="applicationSettingsBtn" type="button">アプリケーション設定</button>
         </div></details>
@@ -56,6 +56,11 @@
     </header>
 
     <nav class="command-toolbar" aria-label="ツールバー">
+      <div class="tool-group" aria-label="ファイル">
+        <span class="tool-group-label">File</span>
+        <button id="exportBtn" class="tool-button" type="button" title="保存" aria-label="保存"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 20h14V8l-4-4H5v16z"/><path d="M8 20v-6h8v6M8 4v5h7"/></svg></button>
+        <button id="importBtn" class="tool-button" type="button" title="開く" aria-label="開く"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 20h14V8l-4-4H5v16z"/><path d="M12 17V9M8 13l4 4 4-4"/></svg></button>
+      </div>
       <div class="tool-group" aria-label="編集">
         <button id="undoBtn" class="tool-button" type="button" title="元に戻す" aria-label="元に戻す" disabled><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 7L4 12l5 5"/><path d="M5 12h9a5 5 0 1 1 0 10h-3"/></svg></button>
         <button id="redoBtn" class="tool-button" type="button" title="やり直す" aria-label="やり直す" disabled><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 7l5 5-5 5"/><path d="M19 12h-9a5 5 0 1 0 0 10h3"/></svg></button>
@@ -106,7 +111,7 @@
           <section id="explorerStructure" class="explorer-panel active">
             <section id="sketchOverlay" class="explorer-section" aria-label="スケッチ">
               <div class="section-header"><strong id="activeSketchLabel">Sketch</strong><span>
-                <button id="toggleSketchTreeBtn" type="button" class="compact-button">折畳</button><button id="addSketchBtn" type="button" class="compact-button">＋</button><button id="addChildSketchBtn" type="button" class="compact-button">子＋</button>
+                <button id="addSketchBtn" type="button" class="compact-button">＋</button><button id="addChildSketchBtn" type="button" class="compact-button">子＋</button>
               </span></div>
               <div id="sketchList" class="tree-list"></div>
             </section>

@@ -182,7 +182,6 @@
   let blockPlacementRotationLocked = true;
   let blockEditSession = null;
   let blockProjectionCache = new Map();
-  let sketchTreeCollapsed = false;
   let undoStack = [];
   let redoStack = [];
   let historyRestoring = false;
@@ -9345,13 +9344,6 @@
   function updateSketchUI() {
     ensureSketchState();
     const activeLabel = document.getElementById("activeSketchLabel");
-    const overlay = document.getElementById("sketchOverlay");
-    if (overlay) overlay.classList.toggle("tree-collapsed", sketchTreeCollapsed);
-    const toggleTreeBtn = document.getElementById("toggleSketchTreeBtn");
-    if (toggleTreeBtn) {
-      toggleTreeBtn.textContent = sketchTreeCollapsed ? "Show" : "Hide";
-      toggleTreeBtn.setAttribute("aria-expanded", String(!sketchTreeCollapsed));
-    }
     if (activeLabel) activeLabel.textContent = "スケッチツリー";
     const sketchList = document.getElementById("sketchList");
     if (!sketchList) return;
@@ -13838,10 +13830,6 @@
   });
   document.getElementById("addSketchBtn")?.addEventListener("click", () => createSketch("sibling"));
   document.getElementById("addChildSketchBtn")?.addEventListener("click", () => createSketch("child"));
-  document.getElementById("toggleSketchTreeBtn")?.addEventListener("click", () => {
-    sketchTreeCollapsed = !sketchTreeCollapsed;
-    updateSketchUI();
-  });
 
   document.getElementById("toggleSideBtn")?.addEventListener("click", () => {
     const app = document.querySelector(".app");

@@ -265,22 +265,27 @@ test("unified workspace uses fixed Explorer Canvas Properties and Status regions
         width: document.querySelector(".app-logo-svg")?.getBoundingClientRect().width,
       },
       documentNameControls: document.querySelectorAll("#documentNameInput, .document-name-input").length,
+      menuBackground: getComputedStyle(document.querySelector(".menu-bar")).backgroundColor,
+      statusBackground: getComputedStyle(document.querySelector(".status-bar")).backgroundColor,
+      geometryMenuColumnCount: getComputedStyle(document.querySelector(".menu-command-list")).gridTemplateColumns.split(" ").length,
+      fileMenuTools: [...document.querySelectorAll(".app-menu:first-of-type [data-menu-tool]")].map((item) => item.dataset.menuTool),
+      sketchTreeToggleCount: document.querySelectorAll("#toggleSketchTreeBtn").length,
     };
   });
 
   expect(layout.modeControls).toBe(0);
   expect(layout.menus).toEqual(["ファイル", "編集", "表示", "Geometry", "Constraint", "Annotation", "ヘルプ"]);
-  expect(layout.toolIds).toEqual(expect.arrayContaining(["undoBtn", "redoBtn", "deleteSelectionBtn", "toolSelect", "toolPoint", "toolLine", "annotationLeaderBtn", "annotationTextBtn"]));
+  expect(layout.toolIds).toEqual(expect.arrayContaining(["exportBtn", "importBtn", "undoBtn", "redoBtn", "deleteSelectionBtn", "toolSelect", "toolPoint", "toolLine", "annotationLeaderBtn", "annotationTextBtn"]));
   expect(layout.iconButtons.every((button) => button.text === "" && button.hasIcon && button.title && button.label)).toBe(true);
-  expect(layout.canvasCursor).toContain("data:image/svg+xml");
-  expect(layout.canvasCursor).toContain("width='19'");
-  expect(layout.canvasCursor).toContain("%23111827");
-  expect(layout.canvasCursor).toContain("stroke-width='1.3'");
-  expect(layout.canvasCursor).not.toContain("%23fff");
-  expect(layout.canvasCursor).not.toContain("%3Ccircle");
+  expect(layout.canvasCursor).toBe("default");
   expect(layout.gridControls).toBe(0);
   expect(layout.logo).toEqual({ count: 1, viewBox: "0 0 256 256", width: 30 });
   expect(layout.documentNameControls).toBe(0);
+  expect(layout.menuBackground).toBe("rgb(30, 58, 95)");
+  expect(layout.menuBackground).toBe(layout.statusBackground);
+  expect(layout.geometryMenuColumnCount).toBe(1);
+  expect(layout.fileMenuTools).toEqual(["exportBtn", "importBtn"]);
+  expect(layout.sketchTreeToggleCount).toBe(0);
   expect(layout.explorer.left).toBe(0);
   expect(layout.explorer.right).toBeCloseTo(layout.canvas.left, 0);
   expect(layout.canvas.right).toBeCloseTo(layout.properties.left, 0);
@@ -314,6 +319,14 @@ test("unified workspace uses fixed Explorer Canvas Properties and Status regions
     };
   });
   expect(sketchTree).toEqual({ rowHeight: 19, rowDisplay: "grid", gutterDisplay: "grid", segmentCount: 2, verticalLine: "1px", horizontalLine: "1px" });
+
+  expect(await page.evaluate(() => {
+    const canvas = document.querySelector("#canvas");
+    canvas.classList.add("is-dragging");
+    const cursor = getComputedStyle(canvas).cursor;
+    canvas.classList.remove("is-dragging");
+    return cursor;
+  })).toBe("default");
 
   const fileMenu = page.locator(".app-menu").nth(0);
   const editMenu = page.locator(".app-menu").nth(1);
