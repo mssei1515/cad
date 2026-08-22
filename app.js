@@ -103,8 +103,8 @@
     ["拘束状態表示を切り替え（Space長押しでも一時表示）", "Toggle constraint status view (hold Space for temporary view)"],
     ["拘束ツールはツールバーから選択します", "Select constraint tools from the toolbar"],
     ["エクスプローラー", "Explorer"], ["プロパティ", "Properties"], ["スケッチ", "Sketch"], ["スケッチツリー", "Sketch Tree"],
-    ["スケッチ一覧", "Sketches"], ["ブロック一覧", "Blocks"], ["ブロック", "Block"], ["ブロック定義", "Block Definitions"], ["ブロックインスタンス", "Block Instance"],
-    ["作成", "Create"], ["キャンセル", "Cancel"], ["完了", "Done"], ["閉じる", "Close"], ["子＋", "Child +"],
+    ["スケッチ一覧", "Sketches"], ["ブロック一覧", "Blocks"], ["ブロック", "Block"], ["ブロック定義", "Block Definitions"], ["ブロック定義…", "Block Definitions…"], ["ブロックインスタンス", "Block Instance"],
+    ["ブロック作成", "Create Block"], ["作成", "Create"], ["キャンセル", "Cancel"], ["完了", "Done"], ["閉じる", "Close"], ["子＋", "Child +"],
     ["名前変更", "Rename"], ["スケッチ削除", "Delete Sketch"], ["ブロック名", "Block name"], ["配置", "Place"], ["非表示にする", "Hide"], ["表示する", "Show"],
     ["キャンバス", "Canvas"], ["ステータスバー", "Status Bar"], ["寸法値", "Dimension value"],
     ["既定の外観", "Default Appearance"], ["一般", "General"], ["言語", "Language"],
@@ -2689,6 +2689,8 @@
 
   function startBlockCreation() {
     if (!isGeometryMode() || !canCreateInActiveSketch()) return;
+    const definitionsDialog = document.getElementById("blockDefinitionsDialog");
+    if (definitionsDialog?.open) definitionsDialog.close();
     const creationHost = {
       points: model.points,
       lines: model.lines,
@@ -9962,10 +9964,12 @@
     ensureBlockState();
     const list = document.getElementById("blockList");
     const title = document.getElementById("blockOverlayTitle");
+    const editorOverlay = document.getElementById("blockEditorOverlay");
     const nameInput = document.getElementById("blockEditorNameInput");
     const editorActions = document.getElementById("blockEditorActions");
     const sketchConfig = document.getElementById("blockSketchConfig");
     if (title) title.textContent = blockEditSession ? "ブロックエディタ" : "ブロック";
+    if (editorOverlay) editorOverlay.hidden = !blockEditSession;
     if (nameInput) {
       nameInput.hidden = !blockEditSession;
       if (blockEditSession && document.activeElement !== nameInput) nameInput.value = blockEditSession.draft.name;
@@ -9975,7 +9979,7 @@
     list.hidden = false;
     const scopedDefinitions = blockDefinitionsInCurrentScope();
     if (scopedDefinitions.length === 0) {
-      list.innerHTML = '<div class="block-item"><span class="block-item-name">ブロックはありません</span></div>';
+      list.innerHTML = '<div class="block-item"><span class="block-item-name" data-i18n-ja="ブロックはありません" data-i18n-en="No blocks">ブロックはありません</span></div>';
       if (sketchConfig) sketchConfig.hidden = true;
       return;
     }
@@ -9989,12 +9993,21 @@
       row.classList.toggle("block-selected", selected);
       row.setAttribute("aria-selected", String(selected));
     }
-    for (const button of document.querySelectorAll(".blockPlaceBtn")) button.addEventListener("click", () => startBlockPlacement(button.dataset.id));
-    for (const button of document.querySelectorAll(".blockEditBtn")) button.addEventListener("click", () => enterBlockDefinitionEdit(button.dataset.id));
+    for (const button of document.querySelectorAll(".blockPlaceBtn")) button.addEventListener("click", () => {
+      document.getElementById("blockDefinitionsDialog")?.close();
+      startBlockPlacement(button.dataset.id);
+    });
+    for (const button of document.querySelectorAll(".blockEditBtn")) button.addEventListener("click", () => {
+      document.getElementById("blockDefinitionsDialog")?.close();
+      enterBlockDefinitionEdit(button.dataset.id);
+    });
     for (const button of document.querySelectorAll(".blockRenameBtn")) button.addEventListener("click", () => renameBlockDefinition(button.dataset.id));
     for (const button of document.querySelectorAll(".blockDeleteBtn")) button.addEventListener("click", () => deleteBlockDefinition(button.dataset.id));
     for (const row of document.querySelectorAll(".block-item[data-id]")) row.addEventListener("dblclick", (event) => {
-      if (!event.target.closest("button")) enterBlockDefinitionEdit(row.dataset.id);
+      if (!event.target.closest("button")) {
+        document.getElementById("blockDefinitionsDialog")?.close();
+        enterBlockDefinitionEdit(row.dataset.id);
+      }
     });
     const configuringPlacement = mode === "block-place" && blockPlacementDefinitionId;
     const configuringInstance = !configuringPlacement && selectedBlockInstances.length === 1 ? selectedBlockInstances[0] : null;
@@ -14023,6 +14036,14 @@
   document.getElementById("applicationLanguageSelect")?.addEventListener("change", (event) => {
     setApplicationLanguage(event.target.value);
     draw();
+  });
+  document.getElementById("openBlockDefinitionsBtn")?.addEventListener("click", () => {
+    updateBlockUI();
+    const dialog = document.getElementById("blockDefinitionsDialog");
+    if (dialog && !dialog.open) {
+      localizeApplicationUI(dialog);
+      dialog.showModal();
+    }
   });
   document.getElementById("completeBlockEditBtn")?.addEventListener("click", completeBlockDefinitionEdit);
   document.getElementById("cancelBlockEditBtn")?.addEventListener("click", cancelBlockDefinitionEdit);

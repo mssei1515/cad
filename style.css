@@ -74,9 +74,10 @@ button:disabled { opacity: .45; cursor: default; }
 .workspace.explorer-collapsed .explorer .panel-title, .workspace.properties-collapsed .properties .panel-title { justify-content: center; padding: 0; }
 .workspace.explorer-collapsed .explorer .panel-title-label, .workspace.properties-collapsed .properties .panel-title-label { display: none; }
 .workspace.explorer-collapsed #toggleExplorerPanelBtn svg, .workspace.properties-collapsed #togglePropertiesPanelBtn svg { transform: rotate(180deg); }
-.panel-tabs { flex: 0 0 34px; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); border-bottom: 1px solid var(--border); }
-.panel-tab { border: 0; border-radius: 0; background: transparent; color: var(--muted); font-size: 12px; }
-.panel-tab.active { color: var(--accent); background: #fff; box-shadow: inset 0 -2px var(--accent); }
+.panel-tabs { flex: 0 0 38px; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); align-items: end; gap: 3px; padding: 5px 6px 0; background: #e7ecf3; border-bottom: 1px solid var(--border); }
+.panel-tab { height: 32px; margin-bottom: -1px; padding: 4px 5px; border: 1px solid transparent; border-radius: 7px 7px 0 0; background: #dbe2eb; color: #526174; font-size: 12px; }
+.panel-tab:hover { background: #edf2f7; color: #1f2937; }
+.panel-tab.active { position: relative; z-index: 1; color: var(--accent); background: #fff; border-color: var(--border); border-bottom-color: #fff; box-shadow: inset 0 2px var(--accent); }
 .explorer-scroll, .properties-scroll { min-height: 0; flex: 1; overflow: auto; }
 .explorer-panel { min-height: 100%; }
 .explorer-section { border-bottom: 1px solid var(--border); }
@@ -122,6 +123,18 @@ button:disabled { opacity: .45; cursor: default; }
 #canvas { display: block; width: 100%; height: 100%; cursor: default; }
 #canvas.is-dragging { cursor: default; }
 #canvas.is-panning { cursor: grabbing; }
+.sketch-overlay { position: absolute; top: 12px; left: 12px; z-index: 3; width: min(260px, calc(100% - 24px)); max-height: min(56vh, 420px); display: grid; gap: 2px; color: #111827; text-shadow: 0 1px 0 rgba(255, 255, 255, .96), 0 0 4px rgba(255, 255, 255, .92); }
+.sketch-overlay-header { min-height: 24px; display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 4px; }
+.sketch-overlay-header strong { overflow: hidden; font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
+.sketch-overlay-header span { display: flex; gap: 3px; }
+.sketch-overlay .compact-button { min-height: 20px; padding: 1px 5px; border-color: rgba(148, 163, 184, .5); background: rgba(255, 255, 255, .76); box-shadow: 0 1px 4px rgba(15, 23, 42, .08); }
+.sketch-list { max-height: calc(min(56vh, 420px) - 28px); overflow: auto; padding-right: 2px; }
+.sketch-overlay .sketch-item { background: #fff; }
+.sketch-overlay .sketch-item:hover { background: rgba(239, 246, 255, .9); }
+.sketch-overlay .sketch-item.active { background: rgba(219, 234, 254, .92); }
+.block-editor-overlay { position: absolute; top: 12px; right: 12px; z-index: 4; width: min(280px, calc(100% - 24px)); padding: 8px; border: 1px solid #c4b5fd; border-radius: 8px; background: rgba(245, 243, 255, .94); box-shadow: 0 8px 24px rgba(76, 29, 149, .14); }
+.block-editor-overlay .block-editor-name-input { width: 100%; margin: 6px 0; }
+.block-editor-overlay .block-editor-actions { justify-content: flex-end; padding: 0; }
 .dimension-value-input { position: absolute; z-index: 5; width: 100px; padding: 5px 7px; border: 2px solid var(--accent); border-radius: 4px; background: #fff; }
 body.block-editing .canvas-area { background: #f5f3ff; box-shadow: none; }
 
@@ -154,6 +167,11 @@ body.block-editing .canvas-area { background: #f5f3ff; box-shadow: none; }
 .settings-dialog form > footer { justify-content: flex-end; border-top: 1px solid var(--border); }
 .settings-dialog form > section { min-height: 150px; padding: 16px; }
 .settings-dialog h3 { margin-top: 0; }
+.block-definitions-dialog { width: min(720px, calc(100vw - 40px)); }
+.block-definitions-dialog form > section { min-height: 240px; max-height: min(62vh, 620px); overflow: auto; padding: 12px; }
+.block-definition-list { border: 1px solid var(--border); border-radius: 6px; overflow: hidden; }
+.block-definition-list .block-item:last-child { border-bottom: 0; }
+.block-definition-launcher .section-header { min-height: 42px; }
 .settings-row { display: grid; grid-template-columns: minmax(100px, 1fr) minmax(150px, 1fr); align-items: center; gap: 12px; margin-bottom: 14px; font-size: 13px; }
 .settings-row select { width: 100%; padding: 6px 8px; border: 1px solid var(--border-strong); border-radius: 4px; background: #fff; }
 

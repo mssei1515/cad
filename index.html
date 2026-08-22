@@ -44,6 +44,10 @@
           <button type="button" data-menu-tool="toolArc">円弧</button><button type="button" data-menu-tool="toolTrim">トリム</button>
           <button type="button" data-menu-tool="toolFillet">フィレット</button><button type="button" data-menu-tool="toolOffset">オフセット</button>
         </div></details>
+        <details class="app-menu"><summary>ブロック</summary><div class="menu-popover">
+          <button type="button" data-menu-tool="toolCreateBlock">ブロック作成</button>
+          <button type="button" data-menu-tool="openBlockDefinitionsBtn">ブロック定義</button>
+        </div></details>
         <details class="app-menu"><summary>Constraint</summary><div class="menu-popover"><span class="menu-note">拘束ツールはツールバーから選択します</span></div></details>
         <details class="app-menu"><summary>Annotation</summary><div class="menu-popover">
           <button type="button" data-menu-tool="annotationLeaderBtn">引出線</button>
@@ -82,6 +86,10 @@
         <button id="toolFillet" class="tool-button" type="button" title="R面取り" aria-label="R面取り"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 19V7h12"/><path d="M5 19a12 12 0 0 1 12-12"/></svg></button>
         <button id="toolOffset" class="tool-button" type="button" title="オフセット" aria-label="オフセット"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 17L15 7"/><path d="M9 21L19 11"/><path d="M15 17h4M17 15l2 2-2 2"/></svg></button>
       </div>
+      <div class="tool-group" aria-label="Block">
+        <span class="tool-group-label">Block</span>
+        <button id="toolCreateBlock" class="tool-button" type="button" title="ブロック作成" aria-label="ブロック作成"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="5" width="10" height="10"/><path d="M9 9h10v10H9z"/><path d="M17 3v4M15 5h4"/></svg></button>
+      </div>
       <div class="tool-group constraint-toolbar-group" aria-label="Constraint">
         <span class="tool-group-label">Constraint</span>
         <button type="button" data-constraint="distance" data-label="寸法" title="寸法" aria-label="寸法"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14"/><path d="M8 9l-3 3 3 3M16 9l3 3-3 3"/></svg></button>
@@ -107,35 +115,22 @@
       <aside class="explorer" aria-label="Explorer">
         <div class="panel-title"><span class="panel-title-label">Explorer</span><button id="toggleExplorerPanelBtn" class="panel-collapse-button" type="button" title="エクスプローラーを最小化" aria-label="エクスプローラーを最小化" aria-expanded="true"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg></button></div>
         <div class="panel-tabs" role="tablist">
-          <button class="panel-tab active" type="button" data-explorer-tab="sketches" aria-selected="true">Sketches</button>
-          <button class="panel-tab" type="button" data-explorer-tab="blocks" aria-selected="false">Blocks</button>
-          <button class="panel-tab" type="button" data-explorer-tab="geometry" aria-selected="false">Geometry</button>
+          <button class="panel-tab active" type="button" data-explorer-tab="geometry" aria-selected="true">Geometry</button>
+          <button class="panel-tab" type="button" data-explorer-tab="blocks" aria-selected="false">Block</button>
           <button class="panel-tab" type="button" data-explorer-tab="constraint" aria-selected="false">Constraint</button>
         </div>
         <div class="explorer-scroll">
-          <section id="explorerSketches" class="explorer-panel active" data-explorer-panel="sketches">
-            <section id="sketchOverlay" class="explorer-section" aria-label="スケッチ">
-              <div class="section-header"><strong id="activeSketchLabel">Sketch</strong><span>
-                <button id="addSketchBtn" type="button" class="compact-button">＋</button><button id="addChildSketchBtn" type="button" class="compact-button">子＋</button>
-              </span></div>
-              <div id="sketchList" class="tree-list"></div>
-            </section>
-          </section>
-          <section id="explorerBlocks" class="explorer-panel" data-explorer-panel="blocks" hidden>
-            <section id="blockOverlay" class="explorer-section" aria-label="Block Definitions">
-              <div class="section-header"><strong id="blockOverlayTitle">Block Definitions</strong><button id="toolCreateBlock" class="compact-button" type="button">作成</button></div>
-              <input id="blockEditorNameInput" class="block-editor-name-input" type="text" aria-label="ブロック名" hidden />
-              <div class="block-editor-actions" id="blockEditorActions" hidden><button id="cancelBlockEditBtn" type="button" class="compact-button">キャンセル</button><button id="completeBlockEditBtn" type="button" class="compact-button primary">完了</button></div>
-              <div id="blockList" class="tree-list"></div><div id="blockSketchConfig" class="block-sketch-config" hidden></div>
-            </section>
-          </section>
-          <section id="explorerGeometry" class="explorer-panel object-explorer-panel" data-explorer-panel="geometry" hidden>
+          <section id="explorerGeometry" class="explorer-panel object-explorer-panel active" data-explorer-panel="geometry">
             <details><summary>Point</summary><div id="pointList" class="list"></div></details>
             <details><summary>Line</summary><div id="lineList" class="list"></div></details>
             <details><summary>Circle</summary><div id="circleList" class="list"></div></details>
             <details><summary>Arc</summary><div id="arcList" class="list"></div></details>
-            <details><summary>Block Instance</summary><div id="blockInstanceObjectList" class="list"></div></details>
             <details><summary>Annotation</summary><div id="annotationObjectList" class="list"></div></details>
+          </section>
+          <section id="explorerBlocks" class="explorer-panel object-explorer-panel" data-explorer-panel="blocks" hidden>
+            <section class="explorer-section block-definition-launcher"><div class="section-header"><strong>ブロック</strong><button id="openBlockDefinitionsBtn" class="compact-button" type="button">ブロック定義…</button></div></section>
+            <details><summary>Block Instance</summary><div id="blockInstanceObjectList" class="list"></div></details>
+            <div id="blockSketchConfig" class="block-sketch-config" hidden></div>
           </section>
           <section id="explorerConstraint" class="explorer-panel object-explorer-panel" data-explorer-panel="constraint" hidden>
             <details><summary>Constraint</summary><div id="constraintList" class="list"></div></details>
@@ -143,7 +138,18 @@
         </div>
       </aside>
 
-      <section class="canvas-area" aria-label="Canvas"><canvas id="canvas"></canvas><input id="dimensionValueInput" class="dimension-value-input" type="text" inputmode="decimal" autocomplete="off" spellcheck="false" aria-label="寸法値" hidden /></section>
+      <section class="canvas-area" aria-label="Canvas">
+        <canvas id="canvas"></canvas><input id="dimensionValueInput" class="dimension-value-input" type="text" inputmode="decimal" autocomplete="off" spellcheck="false" aria-label="寸法値" hidden />
+        <section id="sketchOverlay" class="sketch-overlay" aria-label="スケッチツリー">
+          <div class="sketch-overlay-header"><strong id="activeSketchLabel">スケッチツリー</strong><span><button id="addSketchBtn" type="button" class="compact-button">＋</button><button id="addChildSketchBtn" type="button" class="compact-button">子＋</button></span></div>
+          <div id="sketchList" class="tree-list sketch-list"></div>
+        </section>
+        <section id="blockEditorOverlay" class="block-editor-overlay" aria-label="ブロックエディタ" hidden>
+          <strong id="blockOverlayTitle">ブロックエディタ</strong>
+          <input id="blockEditorNameInput" class="block-editor-name-input" type="text" aria-label="ブロック名" hidden />
+          <div class="block-editor-actions" id="blockEditorActions" hidden><button id="cancelBlockEditBtn" type="button" class="compact-button">キャンセル</button><button id="completeBlockEditBtn" type="button" class="compact-button primary">完了</button></div>
+        </section>
+      </section>
 
       <aside class="properties" aria-label="Properties"><div class="panel-title"><span class="panel-title-label">Properties</span><button id="togglePropertiesPanelBtn" class="panel-collapse-button" type="button" title="プロパティを最小化" aria-label="プロパティを最小化" aria-expanded="true"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 18l6-6-6-6"/></svg></button></div><div id="propertiesPanel" class="properties-scroll"></div></aside>
     </main>
@@ -153,6 +159,7 @@
 
   <dialog id="documentSettingsDialog" class="settings-dialog"><form method="dialog"><header><strong>ドキュメント設定</strong><button value="cancel">×</button></header><section><h3>Default Appearance</h3><div id="documentAppearanceFields"></div></section><footer><button value="cancel">閉じる</button></footer></form></dialog>
   <dialog id="applicationSettingsDialog" class="settings-dialog app-settings-view"><form method="dialog"><header><strong>アプリケーション設定</strong><button value="cancel">×</button></header><section><h3>General</h3><div class="settings-row"><label for="applicationLanguageSelect">言語</label><select id="applicationLanguageSelect"><option value="ja" data-i18n-ja="日本語" data-i18n-en="Japanese">日本語</option><option value="en" data-i18n-ja="English" data-i18n-en="English">English</option></select></div><p>アプリケーション全体の設定をドキュメント設定から分離して管理します。</p></section><footer><button value="cancel">閉じる</button></footer></form></dialog>
+  <dialog id="blockDefinitionsDialog" class="settings-dialog block-definitions-dialog"><form method="dialog"><header><strong>ブロック定義</strong><button value="cancel">×</button></header><section><div id="blockList" class="block-definition-list"></div></section><footer><button value="cancel">閉じる</button></footer></form></dialog>
 
   <script src="./geometry_kernel.js"></script><script src="./geometry_ref.js"></script><script src="./constraint_codec_registry.js"></script><script src="./constraint_solver.js"></script><script src="./app.js"></script>
 </body>

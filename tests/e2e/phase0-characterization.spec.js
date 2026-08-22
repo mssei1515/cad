@@ -117,6 +117,12 @@ async function openBlocksExplorer(page) {
   if ((await tab.getAttribute("aria-selected")) !== "true") await tab.click();
 }
 
+async function openBlockDefinitions(page) {
+  await openBlocksExplorer(page);
+  const dialog = page.locator("#blockDefinitionsDialog");
+  if (!(await dialog.isVisible())) await page.click("#openBlockDefinitionsBtn");
+}
+
 async function importFixture(page, fixture = phase0DocumentFixture(), name = "phase0-golden.json") {
   const result = await page.evaluate(
     ({ data, fileName }) => window.__cadTest.importDocumentNameFixture(data, fileName),
@@ -302,7 +308,7 @@ test("block instance and definition deletion clean projection references", async
   await page.click("#undoBtn");
   expect(semanticDocument(await page.evaluate(() => window.__cadTest.serializedModelForTest()))).toEqual(semanticDocument(beforeInstanceDelete));
 
-  await openBlocksExplorer(page);
+  await openBlockDefinitions(page);
   await page.click('.block-item[data-id="B2"] .blockEditBtn');
   const linePoint = await page.evaluate(() => window.__cadTest.geometryClientPositionForTest("line", "LB2"));
   expect(linePoint).not.toBeNull();
@@ -350,8 +356,8 @@ test("selection, hit testing, viewport changes, and canceled commands do not mut
   await page.mouse.move(canvas.x + canvas.width / 2 + 80, canvas.y + canvas.height / 2 + 45, { steps: 4 });
   await page.mouse.up({ button: "middle" });
   await page.mouse.dblclick(canvas.x + canvas.width / 2, canvas.y + canvas.height / 2, { button: "middle" });
+  await page.click('[data-explorer-tab="blocks"]');
   await page.click('[data-explorer-tab="geometry"]');
-  await page.click('[data-explorer-tab="sketches"]');
 
   expect(semanticDocument(await page.evaluate(() => window.__cadTest.serializedModelForTest()))).toEqual(semanticDocument(before));
   expect(await page.evaluate(() => window.__cadTest.historyState())).toEqual(historyBefore);

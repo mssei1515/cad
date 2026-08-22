@@ -838,7 +838,7 @@ test("selection, deletion, undo and redo stay responsive on the complete fixture
   await measureInteraction(page, results, "history/undo", () => page.locator("#undoBtn").click(), 500);
   await measureInteraction(page, results, "history/redo", () => page.locator("#redoBtn").click(), 500);
 
-  await measureInteraction(page, results, "explorer/sketches", () => page.locator('[data-explorer-tab="sketches"]').click(), 250);
+  await expect(page.locator("#sketchOverlay")).toBeVisible();
   await measureInteraction(page, results, "explorer/blocks", () => page.locator('[data-explorer-tab="blocks"]').click(), 250);
   await measureInteraction(page, results, "explorer/geometry", () => page.locator('[data-explorer-tab="geometry"]').click(), 250);
   for (let index = 0; index < 5; index += 1) {

@@ -263,6 +263,7 @@ test("unified workspace uses fixed Explorer Canvas Properties and Status regions
       const value = document.querySelector(selector).getBoundingClientRect();
       return { left: value.left, right: value.right, top: value.top, bottom: value.bottom, width: value.width, height: value.height };
     };
+    const blockMenu = [...document.querySelectorAll(".app-menu")].find((item) => item.querySelector(":scope > summary")?.textContent.trim() === "ブロック");
     return {
       menu: rect(".menu-bar"),
       toolbar: rect(".command-toolbar"),
@@ -296,17 +297,24 @@ test("unified workspace uses fixed Explorer Canvas Properties and Status regions
       statusBackground: getComputedStyle(document.querySelector(".status-bar")).backgroundColor,
       geometryMenuColumnCount: getComputedStyle(document.querySelector(".menu-command-list")).gridTemplateColumns.split(" ").length,
       fileMenuTools: [...document.querySelectorAll(".app-menu:first-of-type [data-menu-tool]")].map((item) => item.dataset.menuTool),
+      blockMenuTools: blockMenu ? [...blockMenu.querySelectorAll("[data-menu-tool]")].map((item) => item.dataset.menuTool) : [],
+      blockCreateButtonCount: document.querySelectorAll("#toolCreateBlock").length,
       sketchTreeToggleCount: document.querySelectorAll("#toggleSketchTreeBtn").length,
       explorerTabs: [...document.querySelectorAll("[data-explorer-tab]")].map((item) => ({
         id: item.dataset.explorerTab,
         text: item.textContent.trim(),
       })),
+      activeTabStyle: {
+        radius: getComputedStyle(document.querySelector(".panel-tab.active")).borderTopLeftRadius,
+        background: getComputedStyle(document.querySelector(".panel-tab.active")).backgroundColor,
+        borderBottom: getComputedStyle(document.querySelector(".panel-tab.active")).borderBottomColor,
+      },
     };
   });
 
   expect(layout.modeControls).toBe(0);
-  expect(layout.menus).toEqual(["ファイル", "編集", "表示", "ジオメトリ", "拘束", "注記", "ヘルプ"]);
-  expect(layout.toolIds).toEqual(expect.arrayContaining(["exportBtn", "importBtn", "undoBtn", "redoBtn", "deleteSelectionBtn", "toolSelect", "toolPoint", "toolLine", "annotationLeaderBtn", "annotationTextBtn"]));
+  expect(layout.menus).toEqual(["ファイル", "編集", "表示", "ジオメトリ", "ブロック", "拘束", "注記", "ヘルプ"]);
+  expect(layout.toolIds).toEqual(expect.arrayContaining(["exportBtn", "importBtn", "undoBtn", "redoBtn", "deleteSelectionBtn", "toolSelect", "toolPoint", "toolLine", "toolCreateBlock", "annotationLeaderBtn", "annotationTextBtn"]));
   expect(layout.iconButtons.every((button) => button.text === "" && button.hasIcon && button.title && button.label)).toBe(true);
   expect(layout.canvasCursor).toBe("default");
   expect(layout.gridControls).toBe(0);
@@ -320,50 +328,56 @@ test("unified workspace uses fixed Explorer Canvas Properties and Status regions
   expect(layout.menuBackground).toBe(layout.statusBackground);
   expect(layout.geometryMenuColumnCount).toBe(1);
   expect(layout.fileMenuTools).toEqual(["exportBtn", "importBtn"]);
+  expect(layout.blockMenuTools).toEqual(["toolCreateBlock", "openBlockDefinitionsBtn"]);
+  expect(layout.blockCreateButtonCount).toBe(1);
   expect(layout.sketchTreeToggleCount).toBe(0);
   expect(layout.explorerTabs).toEqual([
-    { id: "sketches", text: "スケッチ一覧" },
-    { id: "blocks", text: "ブロック一覧" },
     { id: "geometry", text: "ジオメトリ" },
+    { id: "blocks", text: "ブロック" },
     { id: "constraint", text: "拘束" },
   ]);
-  expect(await page.locator("#blockInstanceObjectList").evaluate((element) => element.closest("[data-explorer-panel]")?.dataset.explorerPanel)).toBe("geometry");
+  expect(layout.activeTabStyle).toEqual({ radius: "7px", background: "rgb(255, 255, 255)", borderBottom: "rgb(255, 255, 255)" });
+  expect(await page.locator("#blockInstanceObjectList").evaluate((element) => element.closest("[data-explorer-panel]")?.dataset.explorerPanel)).toBe("blocks");
   expect(await page.locator("#constraintList").evaluate((element) => element.closest("[data-explorer-panel]")?.dataset.explorerPanel)).toBe("constraint");
+  expect(await page.locator("#sketchOverlay").evaluate((element) => element.parentElement?.classList.contains("canvas-area"))).toBe(true);
   expect(layout.explorer.left).toBe(0);
   expect(layout.explorer.right).toBeCloseTo(layout.canvas.left, 0);
   expect(layout.canvas.right).toBeCloseTo(layout.properties.left, 0);
   expect(layout.explorer.top).toBeGreaterThanOrEqual(layout.toolbar.bottom - 1);
   expect(layout.status.top).toBeGreaterThanOrEqual(layout.canvas.bottom - 1);
 
-  await expect(page.locator("#explorerSketches")).toBeVisible();
+  await expect(page.locator("#explorerGeometry")).toBeVisible();
   await expect(page.locator("#explorerBlocks")).toBeHidden();
-  await expect(page.locator("#explorerGeometry")).toBeHidden();
   await expect(page.locator("#explorerConstraint")).toBeHidden();
   await page.click('[data-explorer-tab="blocks"]');
-  await expect(page.locator("#explorerSketches")).toBeHidden();
   await expect(page.locator("#explorerBlocks")).toBeVisible();
   await expect(page.locator("#explorerGeometry")).toBeHidden();
   await expect(page.locator("#explorerConstraint")).toBeHidden();
-  await expect(page.locator("#blockOverlay")).toBeVisible();
+  await page.click("#openBlockDefinitionsBtn");
+  await expect(page.locator("#blockDefinitionsDialog")).toBeVisible();
+  await expect(page.locator("#blockList")).toBeVisible();
+  await page.locator("#blockDefinitionsDialog button[value=cancel]").first().click();
+  await page.locator(".app-menu > summary").filter({ hasText: /^ブロック$/ }).click();
+  await page.locator('.app-menu[open] [data-menu-tool="openBlockDefinitionsBtn"]').click();
+  await expect(page.locator("#blockDefinitionsDialog")).toBeVisible();
+  await page.locator("#blockDefinitionsDialog button[value=cancel]").first().click();
   await page.click('[data-explorer-tab="geometry"]');
   await expect(page.locator("#explorerGeometry")).toBeVisible();
-  await expect(page.locator("#explorerSketches")).toBeHidden();
   await expect(page.locator("#explorerBlocks")).toBeHidden();
   await expect(page.locator("#explorerConstraint")).toBeHidden();
   expect(await page.locator("#explorerGeometry > details").evaluateAll((details) => details.map((item) => item.open))).toEqual([
-    false, false, false, false, false, false,
+    false, false, false, false, false,
   ]);
   await expect(page.locator("#pointList .geometry-list-row")).toHaveCount(4);
   const pointSection = await expandObjectSection(page, "Point");
   await expect(pointSection).toHaveAttribute("open", "");
-  await page.click('[data-explorer-tab="sketches"]');
-  await expect(page.locator("#explorerSketches")).toBeVisible();
+  await page.click('[data-explorer-tab="blocks"]');
   await page.click('[data-explorer-tab="geometry"]');
   await expect(pointSection).toHaveAttribute("open", "");
   await page.click('[data-explorer-tab="constraint"]');
   await expect(page.locator("#explorerConstraint")).toBeVisible();
   expect(await page.locator("#explorerConstraint > details").evaluateAll((details) => details.map((item) => item.open))).toEqual([false]);
-  await page.click('[data-explorer-tab="sketches"]');
+  await page.click('[data-explorer-tab="geometry"]');
 
   expect(await page.evaluate(() => window.__cadTest.documentNameState())).toEqual({
     modelName: "無題",
@@ -508,7 +522,7 @@ test("application language defaults to Japanese and persists the full UI selecti
   await page.waitForFunction(() => window.__cadTest);
   await expect(page.locator("html")).toHaveAttribute("lang", "ja");
   await expect(page.locator(".app-menu > summary").first()).toHaveText("ファイル");
-  await expect(page.locator('[data-explorer-tab="sketches"]')).toHaveText("スケッチ一覧");
+  await expect(page.locator('[data-explorer-tab="blocks"]')).toHaveText("ブロック");
   await expect(page.locator(".properties .panel-title-label")).toHaveText("プロパティ");
 
   await openApplicationSettings(page);
@@ -516,10 +530,14 @@ test("application language defaults to Japanese and persists the full UI selecti
   await page.locator("#applicationLanguageSelect").selectOption("en");
   await expect(page.locator("html")).toHaveAttribute("lang", "en");
   await expect(page.locator(".app-menu > summary").first()).toHaveText("File");
-  await expect(page.locator('[data-explorer-tab="sketches"]')).toHaveText("Sketches");
+  await expect(page.locator('[data-explorer-tab="blocks"]')).toHaveText("Block");
   await expect(page.locator(".properties .panel-title-label")).toHaveText("Properties");
   await expect(page.locator("#hint")).toContainText("Fully constrained");
   await page.locator("#applicationSettingsDialog button[value=cancel]").first().click();
+  await page.click('[data-explorer-tab="blocks"]');
+  await page.click("#openBlockDefinitionsBtn");
+  await expect(page.locator("#blockDefinitionsDialog")).toContainText("No blocks");
+  await page.locator("#blockDefinitionsDialog button[value=cancel]").first().click();
 
   await page.reload();
   await page.waitForFunction(() => window.__cadTest);
