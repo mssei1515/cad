@@ -1577,7 +1577,7 @@ test("a first block projection line stays pending so a second line can be dimens
   await page.mouse.click(targets.first.x, targets.first.y);
   expect(await page.evaluate(() => window.__cadTest.authoringStateForTest())).toEqual(expect.objectContaining({
     pendingConstraintType: "distance",
-    pendingCommandType: null,
+    pendingCommandType: "distance-place",
   }));
 
   await page.mouse.move(targets.second.x, targets.second.y);

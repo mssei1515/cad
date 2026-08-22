@@ -198,6 +198,7 @@
   const MAX_ZOOM = 10000000;
   const GRID_SCREEN_STEP_PX = 32;
   const CONSTRUCTION_EXTENSION_SCREEN_PX = 12;
+  const CONSTRUCTION_GEOMETRY_ALPHA = 0.72;
   const DIMENSION_EXTENSION_GAP_SCREEN_PX = 6;
   const DIMENSION_EXTENSION_SCREEN_PX = 6;
   const DIMENSION_POINT_MARKER_RADIUS_SCREEN_PX = 5;
@@ -2048,9 +2049,17 @@
 
   function sketchStrokeWidth(item) {
     const relation = sketchRelationOfElement(item);
-    if (relation === "active") return 2.6;
-    if (relation === "reference" || relation === "descendant" || relation === "inactive") return 1.8;
+    if (relation === "active") return 2;
+    if (relation === "reference" || relation === "descendant" || relation === "inactive") return 1.2;
     return 0;
+  }
+
+  function geometryStrokeWidth(item, { auxiliaryHighlighted = false, selected = false, hovered = false, presentationStyle = null, construction = false } = {}) {
+    if (auxiliaryHighlighted || selected) return 3;
+    if (hovered) return 2.2;
+    if (presentationStyle) return presentationStyle.lineWidthPx;
+    if (construction) return Math.max(0.9, sketchStrokeWidth(item) * 0.55);
+    return sketchStrokeWidth(item);
   }
 
   function isSidebarHighlightedElement(item) {
@@ -7450,7 +7459,6 @@
       const style = presentation ? presentationStyleForElement(l) : null;
       if (presentation && style.visible === false) continue;
       const active = isEditableSketchElement(l);
-      ctx.globalAlpha = presentation ? style.opacity : sketchAlpha(l);
       const refSelected = isPendingReferenceTarget(l) || isConstraintOperandSelected(l);
       const treeHovered = isSidebarHighlightedElement(l);
       const sidebarHovered = isSidebarHoveredElement(l);
@@ -7461,9 +7469,10 @@
       const directlyHovered = sidebarHovered || ((active || isReferenceHoverElement(l)) && hoveredLine === l) || (presentation && hoveredLine === l);
       const hovered = directlyHovered || (l.blockInstance && hoveredBlockInstance === l.blockInstance);
       const construction = Boolean(l.construction) && !sel && !hovered;
+      ctx.globalAlpha = presentation ? style.opacity : sketchAlpha(l) * (construction && !auxiliaryHighlighted ? CONSTRUCTION_GEOMETRY_ALPHA : 1);
       const lineColor = auxiliaryHighlighted ? "#0ea5e9" : presentation && !sel && !hovered ? style.color : constraintStatusColor(l, sel, hovered);
       ctx.strokeStyle = lineColor;
-      ctx.lineWidth = (auxiliaryHighlighted ? 4 : sel ? 4 : hovered ? 2.6 : presentation ? style.lineWidthPx : construction ? Math.max(1.8, sketchStrokeWidth(l) * 0.72) : sketchStrokeWidth(l)) / viewport.scale;
+      ctx.lineWidth = geometryStrokeWidth(l, { auxiliaryHighlighted, selected: sel, hovered, presentationStyle: presentation ? style : null, construction }) / viewport.scale;
       ctx.lineCap = "round";
       ctx.lineJoin = "round";
       ctx.setLineDash(presentation ? presentationLineDash(style.lineType) : construction ? [12 / viewport.scale, 4 / viewport.scale, 2 / viewport.scale, 4 / viewport.scale] : []);
@@ -7507,7 +7516,6 @@
       const style = presentation ? presentationStyleForElement(c) : null;
       if (presentation && style.visible === false) continue;
       const active = isEditableSketchElement(c);
-      ctx.globalAlpha = presentation ? style.opacity : sketchAlpha(c);
       const refSelected = isPendingReferenceTarget(c) || isConstraintOperandSelected(c);
       const treeHovered = isSidebarHighlightedElement(c);
       const sidebarHovered = isSidebarHoveredElement(c);
@@ -7518,8 +7526,9 @@
       const directlyHovered = sidebarHovered || ((active || isReferenceHoverElement(c)) && hoveredCircle === c) || (presentation && hoveredCircle === c);
       const hovered = directlyHovered || (c.blockInstance && hoveredBlockInstance === c.blockInstance);
       const construction = Boolean(c.construction) && !sel && !hovered;
+      ctx.globalAlpha = presentation ? style.opacity : sketchAlpha(c) * (construction && !auxiliaryHighlighted ? CONSTRUCTION_GEOMETRY_ALPHA : 1);
       ctx.strokeStyle = auxiliaryHighlighted ? "#0ea5e9" : presentation && !sel && !hovered ? style.color : constraintStatusColor(c, sel, hovered);
-      ctx.lineWidth = (auxiliaryHighlighted ? 4 : sel ? 4 : hovered ? 2.6 : presentation ? style.lineWidthPx : construction ? Math.max(1.8, sketchStrokeWidth(c) * 0.72) : sketchStrokeWidth(c)) / viewport.scale;
+      ctx.lineWidth = geometryStrokeWidth(c, { auxiliaryHighlighted, selected: sel, hovered, presentationStyle: presentation ? style : null, construction }) / viewport.scale;
       ctx.setLineDash(presentation ? presentationLineDash(style.lineType) : construction ? [12 / viewport.scale, 4 / viewport.scale, 2 / viewport.scale, 4 / viewport.scale] : []);
       ctx.shadowColor = sel || auxiliaryHighlighted ? "rgba(14, 165, 233, 0.45)" : "transparent";
       ctx.shadowBlur = sel || auxiliaryHighlighted ? 8 / viewport.scale : 0;
@@ -7545,7 +7554,6 @@
       const style = presentation ? presentationStyleForElement(a) : null;
       if (presentation && style.visible === false) continue;
       const active = isEditableSketchElement(a);
-      ctx.globalAlpha = presentation ? style.opacity : sketchAlpha(a);
       const refSelected = isPendingReferenceTarget(a) || isConstraintOperandSelected(a);
       const treeHovered = isSidebarHighlightedElement(a);
       const sidebarHovered = isSidebarHoveredElement(a);
@@ -7556,8 +7564,9 @@
       const directlyHovered = sidebarHovered || ((active || isReferenceHoverElement(a)) && hoveredArc === a) || (presentation && hoveredArc === a);
       const hovered = directlyHovered || (a.blockInstance && hoveredBlockInstance === a.blockInstance);
       const construction = Boolean(a.construction) && !sel && !hovered;
+      ctx.globalAlpha = presentation ? style.opacity : sketchAlpha(a) * (construction && !auxiliaryHighlighted ? CONSTRUCTION_GEOMETRY_ALPHA : 1);
       ctx.strokeStyle = auxiliaryHighlighted ? "#0ea5e9" : presentation && !sel && !hovered ? style.color : constraintStatusColor(a, sel, hovered);
-      ctx.lineWidth = (auxiliaryHighlighted ? 4 : sel ? 4 : hovered ? 2.6 : presentation ? style.lineWidthPx : construction ? Math.max(1.8, sketchStrokeWidth(a) * 0.72) : sketchStrokeWidth(a)) / viewport.scale;
+      ctx.lineWidth = geometryStrokeWidth(a, { auxiliaryHighlighted, selected: sel, hovered, presentationStyle: presentation ? style : null, construction }) / viewport.scale;
       ctx.setLineDash(presentation ? presentationLineDash(style.lineType) : construction ? [12 / viewport.scale, 4 / viewport.scale, 2 / viewport.scale, 4 / viewport.scale] : []);
       ctx.shadowColor = sel || auxiliaryHighlighted ? "rgba(14, 165, 233, 0.45)" : "transparent";
       ctx.shadowBlur = sel || auxiliaryHighlighted ? 8 / viewport.scale : 0;
@@ -8589,7 +8598,12 @@
   }
 
   function constraintTargetHint(type) {
-    if (type === "distance") return "寸法対象を選択してください。線長はEnter、または同じ線をダブルクリックで確定できます。";
+    if (type === "distance") {
+      if (constraintOperands.length === 1 && constraintOperands[0]?.kind === "line") {
+        return "2本目の線を選ぶと線間・角度寸法、空白をクリックすると線長寸法になります。Enterまたは同じ線のダブルクリックでも線長を確定できます。";
+      }
+      return "寸法対象を選択してください。";
+    }
     if (type === "concentric") return "同心にする円/円弧を2つ、または点と円/円弧を選択してください";
     if (type === "equalRadius") return "同じ半径にする円または円弧を2つ選択してください";
     if (type === "pointOnCircle") return "円周上に置く点と、円または円弧を選択してください";
@@ -8871,7 +8885,16 @@
   }
 
   function handleConstraintOperandClick(pointer, type, hits = {}) {
-    const added = appendConstraintOperand(type, hitConstraintOperand(pointer, type, hits));
+    const operand = hitConstraintOperand(pointer, type, hits);
+    if (!operand && type === "distance") {
+      const resolution = resolveConstraintIntent(type, constraintOperands);
+      if (resolution?.action === "place-dimension" && resolution.target?.kind === "line-length") {
+        startDistanceResolution(resolution, pointer);
+        startDistanceValueInput(pointer);
+        return true;
+      }
+    }
+    const added = appendConstraintOperand(type, operand);
     if (!added.ok) {
       setHint(added.error, "error");
       return true;
@@ -8884,9 +8907,7 @@
     }
     if (resolution?.action === "place-dimension") {
       if (resolution.target?.kind === "line-length" && constraintOperands.length === 1) {
-        updateGeometrySelectionUI();
-        setHint(constraintTargetHint(type));
-        draw();
+        startDistanceResolution(resolution, pointer);
         return true;
       }
       startDistanceResolution(resolution, null);
@@ -9185,6 +9206,20 @@
       return false;
     }
     const baseLine = pendingCommand.target.line;
+    const blockOperand = hitBlockProjectionOperand(pointer.x, pointer.y);
+    const blockTarget = blockOperand && operandElement(blockOperand) !== baseLine ? referenceTargetFromOperand(blockOperand) : null;
+    if (blockTarget) {
+      const changed =
+        (blockTarget.kind === "point" ? blockTarget.point : null) !== hoveredPoint ||
+        (blockTarget.kind === "line" ? blockTarget.line : null) !== hoveredLine ||
+        (blockTarget.primitive instanceof Circle ? blockTarget.primitive : null) !== hoveredCircle ||
+        (blockTarget.primitive instanceof Arc ? blockTarget.primitive : null) !== hoveredArc ||
+        hoveredArcEndpoint ||
+        hoveredDimensionConstraint;
+      applyReferenceHoverTarget(blockTarget);
+      hoveredBlockInstance = null;
+      return changed;
+    }
     const referenceTarget = hitReferenceTarget(pointer.x, pointer.y);
     if (referenceTarget) {
       const changed =
@@ -10895,7 +10930,13 @@
     };
     updateConstraintButtons();
     updateToolbar();
-    setHint(resolution.referenceSketchId ? "参照寸法線の位置をクリックしてください" : "寸法線の位置をクリックしてください");
+    setHint(
+      resolution.referenceSketchId
+        ? "参照寸法線の位置をクリックしてください"
+        : resolution.target.kind === "line-length"
+          ? "仮寸法の位置をマウスで調整し、空白をクリックして線長寸法を確定してください。2本目の線を選ぶと線間・角度寸法になります。"
+          : "寸法線の位置をクリックしてください",
+    );
     draw();
     return true;
   }
@@ -15319,6 +15360,26 @@
           rowHasVisibleClass: document.querySelector('.sketch-item[data-id="S2"]')?.classList.contains("visible") || false,
         };
       },
+      geometryStrokeStyleCasesForTest() {
+        resetModelState();
+        setAppMode("geometry");
+        const activeNormal = addLine(addPoint(-80, -25, false, "endpoint"), addPoint(80, -25, false, "endpoint"));
+        const activeConstruction = addLine(addPoint(-80, 25, false, "endpoint"), addPoint(80, 25, false, "endpoint"), true);
+        model.sketches.push({ id: "S2", name: "Sketch-2", parentSketchId: ROOT_SKETCH_ID, kind: "sketch", visible: true });
+        model.activeSketchId = "S2";
+        const inactiveNormal = addLine(addPoint(-80, 75, false, "endpoint"), addPoint(80, 75, false, "endpoint"));
+        const inactiveConstruction = addLine(addPoint(-80, 125, false, "endpoint"), addPoint(80, 125, false, "endpoint"), true);
+        model.activeSketchId = DEFAULT_SKETCH_ID;
+        return {
+          activeNormal: geometryStrokeWidth(activeNormal),
+          activeConstruction: geometryStrokeWidth(activeConstruction, { construction: true }),
+          inactiveNormal: geometryStrokeWidth(inactiveNormal),
+          inactiveConstruction: geometryStrokeWidth(inactiveConstruction, { construction: true }),
+          selected: geometryStrokeWidth(activeNormal, { selected: true }),
+          hovered: geometryStrokeWidth(activeNormal, { hovered: true }),
+          constructionAlpha: CONSTRUCTION_GEOMETRY_ALPHA,
+        };
+      },
       resetForSiblingSubtreeReference() {
         resetModelState();
         setAppMode("geometry");
@@ -15662,6 +15723,36 @@
           point: { x: rect.left + screen.x, y: rect.top + screen.y },
           scale: viewport.scale,
           anchor: dimensionAnchor(target, constraint.dimension),
+        };
+      },
+      resetForLineLengthClickPlacement() {
+        resetModelState();
+        setAppMode("geometry");
+        const line = addLine(addPoint(-80, 0, false, "endpoint"), addPoint(80, 0, false, "endpoint"));
+        fitAllGeometryToViewport(190);
+        updateUI();
+        draw();
+        const rect = canvas.getBoundingClientRect();
+        const clientPoint = (point) => {
+          const screen = worldToCanvasScreen(point);
+          return { x: rect.left + screen.x, y: rect.top + screen.y };
+        };
+        return {
+          line: clientPoint({ x: 0, y: 0 }),
+          placement: clientPoint({ x: 0, y: -50 }),
+          lineId: line.id,
+        };
+      },
+      lineLengthClickPlacementState() {
+        const constraints = model.constraints.filter(isDimensionConstraint);
+        const constraint = constraints.at(-1) || null;
+        return {
+          dimensionCount: constraints.length,
+          target: constraint?.target ?? null,
+          inputHidden: Boolean(dimensionValueInput?.hidden),
+          pendingCommandType: pendingCommand?.type || null,
+          previewTargetKind: pendingCommand?.target?.kind || null,
+          previewPointer: pendingCommand?.pointer ? { ...pendingCommand.pointer } : null,
         };
       },
       dimensionCommandLineDragState() {

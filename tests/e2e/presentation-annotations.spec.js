@@ -592,6 +592,40 @@ test("read-only dimensions skip the numeric value input", async ({ page }) => {
   expect(result.dimensionCount).toBe(2);
 });
 
+test("a line length dimension advances by clicking its placement after the line", async ({ page }) => {
+  await page.goto(`${baseUrl}/index.html?test=1`);
+  await page.waitForFunction(() => window.__cadTest);
+
+  const points = await page.evaluate(() => window.__cadTest.resetForLineLengthClickPlacement());
+  await page.click('[data-constraint="distance"]');
+  await page.mouse.click(points.line.x, points.line.y);
+  expect(await page.locator("#hint").textContent()).toContain("仮寸法の位置をマウスで調整");
+  await page.mouse.move(points.placement.x, points.placement.y);
+  const preview = await page.evaluate(() => window.__cadTest.lineLengthClickPlacementState());
+  expect(preview).toEqual(expect.objectContaining({
+    dimensionCount: 0,
+    pendingCommandType: "distance-place",
+    previewTargetKind: "line-length",
+  }));
+  expect(preview.previewPointer.x).toBeCloseTo(0, 6);
+  expect(preview.previewPointer.y).toBeCloseTo(-50, 6);
+  await page.mouse.click(points.placement.x, points.placement.y);
+
+  const input = page.locator("#dimensionValueInput");
+  await expect(input).toBeVisible();
+  await input.fill("180");
+  await input.press("Enter");
+  const state = await page.evaluate(() => window.__cadTest.lineLengthClickPlacementState());
+  expect(state).toEqual(expect.objectContaining({
+    dimensionCount: 1,
+    target: 180,
+    inputHidden: true,
+    pendingCommandType: null,
+    previewTargetKind: null,
+    previewPointer: null,
+  }));
+});
+
 test("geometry mode only exposes dimensions from the active sketch", async ({ page }) => {
   await page.goto(`${baseUrl}/index.html?test=1`);
   const result = await page.evaluate(() => window.__cadTest.resetForActiveSketchDimensionVisibility());
@@ -636,6 +670,21 @@ test("dashed previews do not leak canvas stroke state", async ({ page }) => {
     blockHandles: [],
     presentationLeader: [],
     frame: [],
+  });
+});
+
+test("geometry mode uses thinner normal and construction strokes", async ({ page }) => {
+  await page.goto(`${baseUrl}/index.html?test=1`);
+  await page.waitForFunction(() => window.__cadTest);
+
+  expect(await page.evaluate(() => window.__cadTest.geometryStrokeStyleCasesForTest())).toEqual({
+    activeNormal: 2,
+    activeConstruction: 1.1,
+    inactiveNormal: 1.2,
+    inactiveConstruction: 0.9,
+    selected: 3,
+    hovered: 2.2,
+    constructionAlpha: 0.72,
   });
 });
 
@@ -781,7 +830,7 @@ test("sketch deletion removes its subtree and active sketch siblings remain visi
   const sibling = await page.evaluate(() => window.__cadTest.resetForSiblingVisibility());
   expect(sibling.visible).toBe(true);
   expect(sibling.relation).toBe("inactive");
-  expect(sibling.strokeWidth).toBe(1.8);
+  expect(sibling.strokeWidth).toBe(1.2);
   expect(sibling.color).toBe("#cbd5e1");
   expect(sibling.rowHasVisibleClass).toBe(true);
 

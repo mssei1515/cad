@@ -73,6 +73,8 @@ Constraintの各Geometry参照fieldは保存形式上は従来どおりbare ID�
 
 補助切替は Line、Circle、Arc に適用する。選択中の対象があれば対象の `construction` を切り替え、対象がなければ今後作成する Geometry の既定値を切り替える。
 
+Geometry Mode の通常 Geometry は、アクティブ Sketch を2.0px、非アクティブ・参照・子孫 Sketch を1.2pxの画面線幅で描く。補助 Geometry は一点鎖線を使い、アクティブ Sketch を1.1px、その他を0.9pxへ細くし、通常時の不透明度を72%にする。選択、ホバー、矛盾等の状態色は優先して表示する。
+
 ### R面取り
 
 接続する2本の Line と半径から接線 Arc を作る。元 Line の端をトリムし、接線関係と半径寸法を構成する。成立しない半径や Geometry では作成しない。
