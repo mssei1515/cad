@@ -150,6 +150,14 @@ body.block-editing .canvas-area { background: #f5f3ff; box-shadow: none; }
 .property-row input, .property-row select, .property-row textarea { width: 100%; min-width: 0; padding: 5px 6px; border: 1px solid var(--border-strong); border-radius: 3px; background: #fff; }
 .property-row input[type="checkbox"] { width: auto; justify-self: start; }
 .property-row textarea { min-height: 60px; resize: vertical; }
+.property-option-group { margin-top: 10px; padding-top: 8px; border-top: 1px solid var(--border); }
+.property-option-group-title { margin-bottom: 5px; color: #475569; font-size: 12px; font-weight: 600; }
+.property-option-group > small { display: block; margin: 3px 0 0 22px; color: var(--muted); font-size: 10px; }
+.property-option { display: flex; align-items: center; gap: 6px; min-height: 26px; font-size: 12px; }
+.property-option input { width: auto; margin: 0; }
+.property-sketch-option { padding-left: calc(var(--property-sketch-depth, 0) * 12px); }
+.property-sketch-option span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.property-sketch-option small { margin-left: auto; color: var(--muted); }
 .property-color-control { min-width: 0; display: grid; grid-template-columns: minmax(0, 1fr) 36px; gap: 5px; }
 .property-color-control .property-color-picker { width: 36px; min-width: 36px; height: 30px; padding: 3px; border: 1px solid var(--border-strong); border-radius: 3px; background: #fff; cursor: pointer; }
 .property-color-picker-swatch { display: block; width: 100%; height: 100%; border: 1px solid rgba(15, 23, 42, .28); border-radius: 2px; background: var(--swatch-color); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .5); }

@@ -97,6 +97,9 @@ test("document annotations can be dragged on the unified canvas", async ({ page 
   const afterLeader = await page.evaluate(() => window.__cadTest.annotationSnapshot());
   expect(afterLeader.leader.world.x).toBeGreaterThan(beforeLeader.leader.world.x + 20);
   expect(afterLeader.leader.world.y).toBeLessThan(beforeLeader.leader.world.y - 10);
+  const annotationRows = await page.locator("#propertiesPanel .property-section").first().locator(".property-row").allTextContents();
+  expect(annotationRows[0]).toBe("種類引出線");
+  expect(annotationRows[1]).toMatch(/^ID.+/);
 
   await page.keyboard.press("Control+Z");
   const afterUndo = await page.evaluate(() => window.__cadTest.annotationSnapshot());
@@ -498,6 +501,10 @@ test("unified workspace uses fixed Explorer Canvas Properties and Status regions
   await expect(page.locator("#pointList .geometry-list-row")).toHaveCount(1);
   await page.locator("#pointList .geometry-list-row").click();
   await expect(page.locator("#propertiesPanel")).toContainText("点");
+  const pointRows = await page.locator("#propertiesPanel .property-section").first().locator(".property-row").allTextContents();
+  expect(pointRows[0]).toBe("種類点");
+  expect(pointRows[1]).toMatch(/^ID.+/);
+  expect(pointRows).toEqual(expect.arrayContaining([expect.stringMatching(/^X座標/), expect.stringMatching(/^Y座標/)]));
   await page.click("#deleteSelectionBtn");
   await expect(page.locator("#pointList .geometry-list-row")).toHaveCount(0);
 });
@@ -509,6 +516,9 @@ test("Canvas selection updates Properties, side panels collapse, and narrow tool
   const linePosition = await page.evaluate(() => window.__cadTest.geometryClientPositionForTest("line", "L1"));
   await page.mouse.click(linePosition.x, linePosition.y);
   await expect(page.locator("#propertiesPanel")).toContainText("線 L1");
+  expect(await page.locator("#propertiesPanel .property-section").first().locator(".property-row").allTextContents()).toEqual([
+    "種類線", "IDL1", "始点IDP1", "終点IDP2", "長さ140", "拘束状態未拘束", "補助線",
+  ]);
 
   const initial = await page.evaluate(() => ({
     explorer: document.querySelector(".explorer").getBoundingClientRect().width,
@@ -561,6 +571,9 @@ test("application language defaults to Japanese and persists the full UI selecti
   await expect(page.locator(".app-menu > summary").first()).toHaveText("ファイル");
   await expect(page.locator('[data-explorer-tab="blocks"]')).toHaveText("ブロック");
   await expect(page.locator(".properties .panel-title-label")).toHaveText("プロパティ");
+  expect(await page.locator("#propertiesPanel .property-section").first().locator(".property-row").allTextContents()).toEqual(expect.arrayContaining([
+    "種類スケッチ", "IDS1", "名前Sketch-1", "親スケッチRoot Sketch (ROOT)", "アクティブはい",
+  ]));
 
   await openApplicationSettings(page);
   await expect(page.locator("#applicationLanguageSelect")).toHaveValue("ja");
@@ -1076,6 +1089,15 @@ test("Geometry and Constraint Explorer tabs list and synchronize their respectiv
   await page.locator("#circleList .geometry-list-row").click();
   await expect(page.locator("#circleList .geometry-list-row")).toHaveClass(/selected/);
   await expect(page.locator("#propertiesPanel")).toContainText(`円 ${ids.circle}`);
+  expect(await page.locator("#propertiesPanel .property-section").first().locator(".property-row").allTextContents()).toEqual(expect.arrayContaining([
+    `ID${ids.circle}`, `中心点ID${ids.circleCenter}`,
+  ]));
+
+  await expandObjectSection(page, "Arc");
+  await page.locator("#arcList .geometry-list-row").click();
+  expect(await page.locator("#propertiesPanel .property-section").first().locator(".property-row").allTextContents()).toEqual(expect.arrayContaining([
+    `ID${ids.arc}`, `中心点ID${ids.arcCenter}`, "始点角度180°", "終点角度315°",
+  ]));
 
   await page.click('[data-explorer-tab="constraint"]');
   await expect(page.locator("#explorerConstraint")).toBeVisible();

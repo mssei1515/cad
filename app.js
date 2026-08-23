@@ -9980,6 +9980,26 @@
     return true;
   }
 
+  function blockDefinitionSketchRows(definition) {
+    if (!definition) return [];
+    const children = new Map();
+    for (const sketch of definition.sketches) {
+      if (!children.has(sketch.parentSketchId)) children.set(sketch.parentSketchId, []);
+      children.get(sketch.parentSketchId).push(sketch);
+    }
+    const rows = [];
+    const visit = (parentId, depth) => {
+      for (const sketch of children.get(parentId) || []) {
+        if (sketch.kind === "root") continue;
+        const count = [...definition.lines, ...definition.circles, ...definition.arcs, ...(definition.blockInstances || [])].filter((item) => item.sketchId === sketch.id).length;
+        rows.push({ sketch, depth, count });
+        visit(sketch.id, depth + 1);
+      }
+    };
+    visit(ROOT_SKETCH_ID, 0);
+    return rows;
+  }
+
   function updateBlockUI() {
     ensureBlockState();
     const list = document.getElementById("blockList");
@@ -10030,57 +10050,29 @@
       }
     });
     const configuringPlacement = mode === "block-place" && blockPlacementDefinitionId;
-    const configuringInstance = !configuringPlacement && selectedBlockInstances.length === 1 ? selectedBlockInstances[0] : null;
-    const definition = configuringPlacement ? blockDefinitionById(blockPlacementDefinitionId) : configuringInstance ? blockDefinitionById(configuringInstance.definitionId) : null;
+    const definition = configuringPlacement ? blockDefinitionById(blockPlacementDefinitionId) : null;
     if (!sketchConfig || !definition) {
       if (sketchConfig) sketchConfig.hidden = true;
       return;
     }
     sketchConfig.hidden = false;
-    const enabled = new Set(configuringPlacement ? blockPlacementEnabledSketchIds : configuringInstance.enabledSketchIds);
-    const rotationLocked = configuringPlacement ? blockPlacementRotationLocked : Boolean(configuringInstance.rotationLocked);
-    const rotationDisabled = Boolean(configuringInstance?.fixed);
-    const children = new Map();
-    for (const sketch of definition.sketches) {
-      if (!children.has(sketch.parentSketchId)) children.set(sketch.parentSketchId, []);
-      children.get(sketch.parentSketchId).push(sketch);
-    }
-    const rows = [];
-    const visit = (parentId, depth) => {
-      for (const sketch of children.get(parentId) || []) {
-        if (sketch.kind === "root") continue;
-        rows.push({ sketch, depth });
-        visit(sketch.id, depth + 1);
-      }
-    };
-    visit(ROOT_SKETCH_ID, 0);
-    const rotationConfig = `<div class="block-rotation-config"><div class="block-sketch-config-title">回転</div><label><input type="radio" name="blockRotationMode" data-rotation-mode="locked" ${rotationLocked ? "checked" : ""} ${rotationDisabled ? "disabled" : ""}><span>直交回転ロック</span></label><label><input type="radio" name="blockRotationMode" data-rotation-mode="free" ${rotationLocked ? "" : "checked"} ${rotationDisabled ? "disabled" : ""}><span>自由回転</span></label>${rotationDisabled ? "<small>全固定中</small>" : ""}</div>`;
-    sketchConfig.innerHTML = rotationConfig + `<div class="block-sketch-config-title">${configuringPlacement ? "配置するスケッチ" : "表示するスケッチ"}</div>` + rows.map(({ sketch, depth }) => {
-      const count = [...definition.lines, ...definition.circles, ...definition.arcs, ...(definition.blockInstances || [])].filter((item) => item.sketchId === sketch.id).length;
+    const enabled = new Set(blockPlacementEnabledSketchIds);
+    const rotationConfig = `<div class="block-rotation-config"><div class="block-sketch-config-title">回転</div><label><input type="radio" name="blockRotationMode" data-rotation-mode="locked" ${blockPlacementRotationLocked ? "checked" : ""}><span>直交回転ロック</span></label><label><input type="radio" name="blockRotationMode" data-rotation-mode="free" ${blockPlacementRotationLocked ? "" : "checked"}><span>自由回転</span></label></div>`;
+    sketchConfig.innerHTML = rotationConfig + `<div class="block-sketch-config-title">配置するスケッチ</div>` + blockDefinitionSketchRows(definition).map(({ sketch, depth, count }) => {
       return `<label class="block-sketch-option" style="--block-sketch-depth:${depth}"><input type="checkbox" data-sketch-id="${escapeHtml(sketch.id)}" ${enabled.has(sketch.id) ? "checked" : ""}><span>${escapeHtml(sketch.name)}</span><small>${count}</small></label>`;
     }).join("");
     for (const input of sketchConfig.querySelectorAll("input[data-rotation-mode]")) {
       input.addEventListener("change", () => {
-        const locked = input.dataset.rotationMode === "locked";
-        if (configuringPlacement) {
-          blockPlacementRotationLocked = locked;
-          setHint(locked ? "配置角度を90°単位にロックします" : "配置角度を自由回転にします");
-          draw();
-          return;
-        }
-        setBlockInstanceRotationLocked(configuringInstance, locked);
+        blockPlacementRotationLocked = input.dataset.rotationMode === "locked";
+        setHint(blockPlacementRotationLocked ? "配置角度を90°単位にロックします" : "配置角度を自由回転にします");
+        draw();
       });
     }
     for (const input of sketchConfig.querySelectorAll("input[data-sketch-id]")) {
       input.addEventListener("change", () => {
-        const next = [...sketchConfig.querySelectorAll("input[data-sketch-id]:checked")].map((item) => item.dataset.sketchId);
-        if (configuringPlacement) {
-          blockPlacementEnabledSketchIds = next;
-          invalidateBlockProjectionCache();
-          draw();
-          return;
-        }
-        setBlockInstanceEnabledSketchIds(configuringInstance, next);
+        blockPlacementEnabledSketchIds = [...sketchConfig.querySelectorAll("input[data-sketch-id]:checked")].map((item) => item.dataset.sketchId);
+        invalidateBlockProjectionCache();
+        draw();
       });
     }
   }
@@ -10183,6 +10175,60 @@
     return item?.id || applicationText("ジオメトリ", "Geometry");
   }
 
+  function propertyReadonlyRow(labelJa, labelEn, value, { userContent = false } = {}) {
+    return `<div class="property-row"><span>${escapeHtml(applicationText(labelJa, labelEn))}</span><span class="property-readonly" ${userContent ? "data-user-content" : ""}>${escapeHtml(value)}</span></div>`;
+  }
+
+  function geometryPropertyRows(item) {
+    const type = item instanceof Point
+      ? applicationText("点", "Point")
+      : item instanceof Line
+        ? applicationText("線", "Line")
+        : item instanceof Circle
+          ? applicationText("円", "Circle")
+          : applicationText("円弧", "Arc");
+    let rows = propertyReadonlyRow("種類", "Type", type) + propertyReadonlyRow("ID", "ID", item.id);
+    if (item instanceof Point) {
+      rows += propertyReadonlyRow("X座標", "X coordinate", formatDisplayNumber(item.x));
+      rows += propertyReadonlyRow("Y座標", "Y coordinate", formatDisplayNumber(item.y));
+      rows += propertyReadonlyRow("固定", "Fixed", applicationText(item.fixed ? "はい" : "いいえ", item.fixed ? "Yes" : "No"));
+      return rows;
+    }
+    if (item instanceof Line) {
+      rows += propertyReadonlyRow("始点ID", "Start point ID", item.p1.id);
+      rows += propertyReadonlyRow("終点ID", "End point ID", item.p2.id);
+      rows += propertyReadonlyRow("長さ", "Length", formatDisplayNumber(item.length()));
+      rows += propertyReadonlyRow("拘束状態", "Constraint status", constraintStatusBadge(constraintStatusOf(item)));
+    } else {
+      rows += propertyReadonlyRow("中心点ID", "Center point ID", item.center.id);
+      rows += propertyReadonlyRow("半径", "Radius", formatDisplayNumber(item.radius()));
+      if (item instanceof Arc) {
+        rows += propertyReadonlyRow("始点角度", "Start angle", `${formatDisplayNumber(angleDegrees(item.startAngle))}°`);
+        rows += propertyReadonlyRow("終点角度", "End angle", `${formatDisplayNumber(angleDegrees(item.endAngle))}°`);
+      }
+    }
+    rows += `<div class="property-row"><label>${applicationText("補助線", "Construction")}</label><input data-property="construction" type="checkbox" aria-label="${applicationText("補助線", "Construction")}" ${item.construction ? "checked" : ""}></div>`;
+    return rows;
+  }
+
+  function blockPropertiesConfiguration(item, definition) {
+    const enabled = blockInstanceEnabledSketchSet(item, definition);
+    const rotationLocked = Boolean(item.rotationLocked);
+    const rotationDisabled = Boolean(item.fixed);
+    const rows = blockDefinitionSketchRows(definition);
+    return `
+      <div class="property-option-group">
+        <div class="property-option-group-title">${applicationText("回転モード", "Rotation mode")}</div>
+        <label class="property-option"><input type="radio" name="propertyBlockRotationMode" data-block-rotation-mode="locked" ${rotationLocked ? "checked" : ""} ${rotationDisabled ? "disabled" : ""}><span>${applicationText("直交回転ロック", "Orthogonal rotation lock")}</span></label>
+        <label class="property-option"><input type="radio" name="propertyBlockRotationMode" data-block-rotation-mode="free" ${rotationLocked ? "" : "checked"} ${rotationDisabled ? "disabled" : ""}><span>${applicationText("自由回転", "Free rotation")}</span></label>
+        ${rotationDisabled ? `<small>${applicationText("全固定中", "Fully fixed")}</small>` : ""}
+      </div>
+      <div class="property-option-group">
+        <div class="property-option-group-title">${applicationText("表示するスケッチ", "Visible sketches")}</div>
+        ${rows.map(({ sketch, depth, count }) => `<label class="property-option property-sketch-option" style="--property-sketch-depth:${depth}"><input type="checkbox" data-block-sketch-id="${escapeHtml(sketch.id)}" ${enabled.has(sketch.id) ? "checked" : ""}><span data-user-content>${escapeHtml(sketch.name)}</span><small>${count}</small></label>`).join("")}
+      </div>`;
+  }
+
   function dimensionDisplayState(dimension) {
     const display = dimension?.display || {};
     return {
@@ -10230,16 +10276,15 @@
     const item = target.item;
     if (target.kind === "geometry") {
       const effective = effectiveAppearanceForElement(item);
-      const values = item instanceof Point
-        ? `<div class="property-row"><span>X</span><span class="property-readonly">${formatDisplayNumber(item.x)}</span></div><div class="property-row"><span>Y</span><span class="property-readonly">${formatDisplayNumber(item.y)}</span></div>`
-        : item instanceof Line
-          ? `<div class="property-row"><span>Length</span><span class="property-readonly">${formatDisplayNumber(item.length())}</span></div><div class="property-row"><label>Construction</label><input data-property="construction" type="checkbox" ${item.construction ? "checked" : ""}></div>`
-          : `<div class="property-row"><span>Radius</span><span class="property-readonly">${formatDisplayNumber(item.radius())}</span></div><div class="property-row"><label>Construction</label><input data-property="construction" type="checkbox" ${item.construction ? "checked" : ""}></div>`;
-      panel.innerHTML = `<h2 class="property-heading">${escapeHtml(geometryPropertyName(item))}</h2><section class="property-section"><h3>Geometry</h3>${values}</section><section class="property-section"><h3>Appearance</h3>${appearancePropertyRows(item.appearance, effective)}</section>`;
+      panel.innerHTML = `<h2 class="property-heading">${escapeHtml(geometryPropertyName(item))}</h2><section class="property-section"><h3>Geometry</h3>${geometryPropertyRows(item)}</section><section class="property-section"><h3>Appearance</h3>${appearancePropertyRows(item.appearance, effective)}</section>`;
     } else if (target.kind === "block") {
       const definition = blockDefinitionById(item.definitionId);
       const effective = blockProjectionBundle(item).lines[0] ? effectiveAppearanceForElement(blockProjectionBundle(item).lines[0]) : normalizeAppearance(model.defaultAppearance, { partial: false });
-      panel.innerHTML = `<h2 class="property-heading">${applicationText("ブロックインスタンス", "Block Instance")} ${escapeHtml(item.id)}</h2><section class="property-section"><h3>Placement</h3><div class="property-row"><span>Definition</span><span class="property-readonly" data-user-content>${escapeHtml(definition?.name || item.definitionId)}</span></div><div class="property-row"><label>X</label><input data-property="block-x" type="number" step="0.1" value="${item.x}"></div><div class="property-row"><label>Y</label><input data-property="block-y" type="number" step="0.1" value="${item.y}"></div><div class="property-row"><label>Rotation</label><input data-property="block-rotation" type="number" step="1" value="${angleDegrees(item.rotation)}"></div></section><section class="property-section"><h3>Appearance Override</h3>${appearancePropertyRows(item.appearanceOverride, effective)}</section>`;
+      const definitionLabel = definition ? `${definition.name} (${definition.id})` : item.definitionId;
+      const rows = propertyReadonlyRow("種類", "Type", applicationText("ブロック", "Block"))
+        + propertyReadonlyRow("ID", "ID", item.id)
+        + propertyReadonlyRow("ブロック定義", "Block definition", definitionLabel, { userContent: true });
+      panel.innerHTML = `<h2 class="property-heading">${applicationText("ブロック", "Block")} ${escapeHtml(item.id)}</h2><section class="property-section"><h3>Block</h3>${rows}<div class="property-row"><label>X</label><input data-property="block-x" type="number" step="0.1" value="${item.x}"></div><div class="property-row"><label>Y</label><input data-property="block-y" type="number" step="0.1" value="${item.y}"></div><div class="property-row"><label>${applicationText("角度", "Angle")}</label><input data-property="block-rotation" type="number" step="1" value="${angleDegrees(item.rotation)}"></div>${blockPropertiesConfiguration(item, definition)}</section><section class="property-section"><h3>Appearance Override</h3>${appearancePropertyRows(item.appearanceOverride, effective)}</section>`;
     } else if (target.kind === "constraint") {
       const dimension = item.dimension;
       const display = dimensionDisplayState(dimension);
@@ -10247,10 +10292,18 @@
       const value = targetValue?.kind === "angle" ? angleDegrees(item.target) : item.target;
       panel.innerHTML = `<h2 class="property-heading">${escapeHtml(localizedConstraintName(item.name))}</h2><section class="property-section"><h3>Constraint</h3><div class="property-row"><span>Type</span><span class="property-readonly">${escapeHtml(item.constructor.name)}</span></div>${Number.isFinite(value) && !item.readOnlyDimension ? `<div class="property-row"><label>Value</label><input data-property="constraint-value" type="number" step="0.1" value="${value}"></div>` : ""}</section>${dimension ? `<section class="property-section"><h3>Dimension Display</h3><div class="property-row"><label>Visible</label><input data-dimension-display="visible" type="checkbox" ${display.visible ? "checked" : ""}></div><div class="property-row"><label>Precision</label><input data-dimension-display="precision" type="number" min="0" max="10" placeholder="自動" value="${display.precision ?? ""}"></div><div class="property-row"><label>Prefix</label><input data-dimension-display="prefix" value="${escapeHtml(display.prefix)}"></div><div class="property-row"><label>Suffix</label><input data-dimension-display="suffix" value="${escapeHtml(display.suffix)}"></div><div class="property-row"><label>Arrows</label><input data-dimension-display="arrows" type="checkbox" ${display.arrows ? "checked" : ""}></div><div class="property-row"><label>Extension lines</label><input data-dimension-display="extensionLines" type="checkbox" ${display.extensionLines ? "checked" : ""}></div></section>` : ""}`;
     } else if (target.kind === "annotation") {
-      panel.innerHTML = `<h2 class="property-heading">${item.type === "leader" ? applicationText("引出線", "Leader") : applicationText("自由テキスト", "Free Text")} ${escapeHtml(item.id)}</h2><section class="property-section"><h3>Annotation</h3><div class="property-row"><label>Visible</label><input data-property="annotation-visible" type="checkbox" ${item.visible !== false ? "checked" : ""}></div>${item.type === "text" ? `<div class="property-row"><label>Text</label><textarea data-property="annotation-text">${escapeHtml(item.text || "")}</textarea></div><div class="property-row"><label>Font size</label><input data-property="annotation-font-size" type="number" min="6" max="72" value="${Number(item.style?.fontSize || 13)}"></div>` : ""}<div class="property-row"><label>Color</label><input data-property="annotation-color" type="text" value="${escapeHtml(item.style?.color || "#111827")}"></div></section>`;
+      const annotationType = item.type === "leader" ? applicationText("引出線", "Leader") : applicationText("自由テキスト", "Free Text");
+      panel.innerHTML = `<h2 class="property-heading">${annotationType} ${escapeHtml(item.id)}</h2><section class="property-section"><h3>Annotation</h3>${propertyReadonlyRow("種類", "Type", annotationType)}${propertyReadonlyRow("ID", "ID", item.id)}<div class="property-row"><label>Visible</label><input data-property="annotation-visible" type="checkbox" ${item.visible !== false ? "checked" : ""}></div>${item.type === "text" ? `<div class="property-row"><label>Text</label><textarea data-property="annotation-text">${escapeHtml(item.text || "")}</textarea></div><div class="property-row"><label>Font size</label><input data-property="annotation-font-size" type="number" min="6" max="72" value="${Number(item.style?.fontSize || 13)}"></div>` : ""}<div class="property-row"><label>Color</label><input data-property="annotation-color" type="text" value="${escapeHtml(item.style?.color || "#111827")}"></div></section>`;
     } else {
       const effective = effectiveAppearanceForSketch(item);
-      panel.innerHTML = `<h2 class="property-heading">${applicationText("スケッチ", "Sketch")} <span data-user-content>${escapeHtml(item.name)}</span></h2><section class="property-section"><h3>Sketch</h3><div class="property-row"><span>ID</span><span class="property-readonly">${escapeHtml(item.id)}</span></div><div class="property-row"><span>Active</span><span class="property-readonly">${applicationText("はい", "Yes")}</span></div></section><section class="property-section"><h3>Appearance</h3>${appearancePropertyRows(item.appearance, effective)}</section>`;
+      const parent = sketchById(item.parentSketchId);
+      const parentLabel = parent ? `${parent.name} (${parent.id})` : applicationText("なし", "None");
+      const rows = propertyReadonlyRow("種類", "Type", applicationText("スケッチ", "Sketch"))
+        + propertyReadonlyRow("ID", "ID", item.id)
+        + propertyReadonlyRow("名前", "Name", item.name, { userContent: true })
+        + propertyReadonlyRow("親スケッチ", "Parent sketch", parentLabel, { userContent: Boolean(parent) })
+        + propertyReadonlyRow("アクティブ", "Active", applicationText("はい", "Yes"));
+      panel.innerHTML = `<h2 class="property-heading">${applicationText("スケッチ", "Sketch")} <span data-user-content>${escapeHtml(item.name)}</span></h2><section class="property-section"><h3>Sketch</h3>${rows}</section><section class="property-section"><h3>Appearance</h3>${appearancePropertyRows(item.appearance, effective)}</section>`;
     }
 
     localizeApplicationUI(panel);
@@ -10391,6 +10444,15 @@
       recordHistory("寸法表示変更");
       if (!liveTextInput) updatePropertiesUI();
       draw();
+      return;
+    }
+    if (target.kind === "block" && input.dataset.blockRotationMode) {
+      if (!setBlockInstanceRotationLocked(target.item, input.dataset.blockRotationMode === "locked")) updatePropertiesUI();
+      return;
+    }
+    if (target.kind === "block" && input.dataset.blockSketchId) {
+      const next = [...input.closest("#propertiesPanel").querySelectorAll("input[data-block-sketch-id]:checked")].map((item) => item.dataset.blockSketchId);
+      if (!setBlockInstanceEnabledSketchIds(target.item, next)) updatePropertiesUI();
       return;
     }
     const property = input.dataset.property;

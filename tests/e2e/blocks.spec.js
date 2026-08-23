@@ -745,9 +745,16 @@ test("selected blocks can change rotation mode and reject an unsatisfied orthogo
   await page.evaluate((fixture) => window.__cadTest.importDocumentNameFixture(fixture, "rotation-lock.json"), rotationLockFixture());
   await page.evaluate(() => window.__cadTest.selectGeometryIdsForTest({ blockInstances: ["BI1"] }));
   await openBlocksExplorer(page);
-  await expect(page.locator('input[data-rotation-mode="free"]')).toBeChecked();
+  await expect(page.locator('#propertiesPanel input[data-block-rotation-mode="free"]')).toBeChecked();
+  await expect(page.locator("#propertiesPanel .property-heading")).toHaveText("ブロック BI1");
+  await expect(page.locator("#propertiesPanel")).toContainText("ブロック定義");
+  await expect(page.locator("#propertiesPanel")).not.toContainText("ブロックインスタンス");
+  expect(await page.locator("#propertiesPanel .property-section").first().locator(".property-row").allTextContents()).toEqual(expect.arrayContaining([
+    "種類ブロック", "IDBI1", expect.stringMatching(/^ブロック定義/),
+  ]));
+  await expect(page.locator("#blockSketchConfig")).toBeHidden();
   const before = await page.evaluate(() => window.__cadTest.blockRotationLockStateForTest("BI1"));
-  await page.click('input[data-rotation-mode="locked"]');
+  await page.click('#propertiesPanel input[data-block-rotation-mode="locked"]');
   let after = await page.evaluate(() => window.__cadTest.blockRotationLockStateForTest("BI1"));
   expect(after.rotationLocked).toBe(true);
   expect(after.rotation).toBeCloseTo(0, 8);
@@ -766,7 +773,7 @@ test("selected blocks can change rotation mode and reject an unsatisfied orthogo
   expect(restored.rotation).toBeCloseTo(0, 8);
   await page.evaluate(() => window.__cadTest.selectGeometryIdsForTest({ blockInstances: ["BI1"] }));
 
-  await page.click('input[data-rotation-mode="free"]');
+  await page.click('#propertiesPanel input[data-block-rotation-mode="free"]');
   after = await page.evaluate(() => window.__cadTest.blockRotationLockStateForTest("BI1"));
   expect(after.rotationLocked).toBe(false);
   expect(after.rotation).toBeCloseTo(0, 8);
@@ -774,23 +781,23 @@ test("selected blocks can change rotation mode and reject an unsatisfied orthogo
 
   await page.evaluate((fixture) => window.__cadTest.importDocumentNameFixture(fixture, "fixed-rotation-lock.json"), rotationLockFixture({ fixed: true }));
   await page.evaluate(() => window.__cadTest.selectGeometryIdsForTest({ blockInstances: ["BI1"] }));
-  await expect(page.locator('input[data-rotation-mode="locked"]')).toBeDisabled();
-  await expect(page.locator('input[data-rotation-mode="free"]')).toBeDisabled();
+  await expect(page.locator('#propertiesPanel input[data-block-rotation-mode="locked"]')).toBeDisabled();
+  await expect(page.locator('#propertiesPanel input[data-block-rotation-mode="free"]')).toBeDisabled();
 
   await page.evaluate((fixture) => window.__cadTest.importDocumentNameFixture(fixture, "constrained-rotation-lock.json"), rotationLockFixture({ constrained: true }));
   await page.evaluate(() => window.__cadTest.selectGeometryIdsForTest({ blockInstances: ["BI1"] }));
   const constrainedBefore = await page.evaluate(() => window.__cadTest.blockRotationLockStateForTest("BI1"));
-  await page.click('input[data-rotation-mode="locked"]');
+  await page.click('#propertiesPanel input[data-block-rotation-mode="locked"]');
   const rejected = await page.evaluate(() => window.__cadTest.blockRotationLockStateForTest("BI1"));
   expect(rejected.rotationLocked).toBe(false);
   expect(rejected.rotation).toBeCloseTo(constrainedBefore.rotation, 8);
   expect(rejected.x).toBeCloseTo(constrainedBefore.x, 8);
   expect(rejected.y).toBeCloseTo(constrainedBefore.y, 8);
   await expect(page.locator("#hint")).toContainText("直交回転ロックを適用できません");
-  await expect(page.locator('input[data-rotation-mode="free"]')).toBeChecked();
+  await expect(page.locator('#propertiesPanel input[data-block-rotation-mode="free"]')).toBeChecked();
 });
 
-test("block lower settings only appear during placement or single-block selection", async ({ page }) => {
+test("block placement settings stay in Explorer while selected-block settings appear in Properties", async ({ page }) => {
   await page.goto(`${baseUrl}/index.html?test=1`);
   await page.waitForFunction(() => window.__cadTest);
   await page.evaluate(() => window.__cadTest.resetForBlockCreationUi());
@@ -799,9 +806,12 @@ test("block lower settings only appear during placement or single-block selectio
   await page.click("#completeBlockEditBtn");
 
   const instanceId = (await page.evaluate(() => window.__cadTest.blockState())).instances[0].id;
-  await expect(page.locator("#blockSketchConfig")).toBeVisible();
+  await expect(page.locator("#blockSketchConfig")).toBeHidden();
+  await expect(page.locator('#propertiesPanel input[data-block-rotation-mode="locked"]')).toBeVisible();
+  await expect(page.locator("#propertiesPanel input[data-block-sketch-id]")).toHaveCount(1);
   await page.evaluate(() => window.__cadTest.selectGeometryIdsForTest({}));
   await expect(page.locator("#blockSketchConfig")).toBeHidden();
+  await expect(page.locator("#propertiesPanel input[data-block-rotation-mode]")).toHaveCount(0);
 
   await openBlockDefinitions(page);
   await page.click(".blockPlaceBtn");
@@ -810,9 +820,11 @@ test("block lower settings only appear during placement or single-block selectio
   await expect(page.locator("#blockSketchConfig")).toBeHidden();
 
   await page.evaluate((id) => window.__cadTest.selectGeometryIdsForTest({ blockInstances: [id] }), instanceId);
-  await expect(page.locator("#blockSketchConfig")).toBeVisible();
+  await expect(page.locator("#blockSketchConfig")).toBeHidden();
+  await expect(page.locator("#propertiesPanel input[data-block-sketch-id]")).toHaveCount(1);
   await page.evaluate(() => window.__cadTest.selectGeometryIdsForTest({}));
   await expect(page.locator("#blockSketchConfig")).toBeHidden();
+  await expect(page.locator("#propertiesPanel input[data-block-sketch-id]")).toHaveCount(0);
 });
 
 test("selecting a block highlights only constraints that directly reference its projections", async ({ page }) => {
@@ -1737,6 +1749,13 @@ test("placement and existing instances keep independent enabled internal sketche
   state = await page.evaluate(() => window.__cadTest.blockState());
   expect(state.instances[1].enabledSketchIds).toEqual([child.sketchId]);
   expect(state.projectionLineIds).toHaveLength(5);
+
+  await page.evaluate((id) => window.__cadTest.selectGeometryIdsForTest({ blockInstances: [id] }), state.instances[0].id);
+  await expect(page.locator("#blockSketchConfig")).toBeHidden();
+  await page.locator(`#propertiesPanel input[data-block-sketch-id="${child.sketchId}"]`).check();
+  state = await page.evaluate(() => window.__cadTest.blockState());
+  expect(state.instances[0].enabledSketchIds.sort()).toEqual(["S1", child.sketchId].sort());
+  expect(state.instances[1].enabledSketchIds).toEqual([child.sketchId]);
 });
 
 test("disabling a block sketch automatically removes related constraints and reports it", async ({ page }) => {
