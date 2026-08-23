@@ -10283,8 +10283,11 @@
       const definitionLabel = definition ? `${definition.name} (${definition.id})` : item.definitionId;
       const rows = propertyReadonlyRow("種類", "Type", applicationText("ブロック", "Block"))
         + propertyReadonlyRow("ID", "ID", item.id)
-        + propertyReadonlyRow("ブロック定義", "Block definition", definitionLabel, { userContent: true });
-      panel.innerHTML = `<h2 class="property-heading">${applicationText("ブロック", "Block")} ${escapeHtml(item.id)}</h2><section class="property-section"><h3>Block</h3>${rows}<div class="property-row"><label>X</label><input data-property="block-x" type="number" step="0.1" value="${item.x}"></div><div class="property-row"><label>Y</label><input data-property="block-y" type="number" step="0.1" value="${item.y}"></div><div class="property-row"><label>${applicationText("角度", "Angle")}</label><input data-property="block-rotation" type="number" step="1" value="${angleDegrees(item.rotation)}"></div>${blockPropertiesConfiguration(item, definition)}</section><section class="property-section"><h3>Appearance Override</h3>${appearancePropertyRows(item.appearanceOverride, effective)}</section>`;
+        + propertyReadonlyRow("ブロック定義", "Block definition", definitionLabel, { userContent: true })
+        + propertyReadonlyRow("X座標", "X coordinate", formatDisplayNumber(item.x))
+        + propertyReadonlyRow("Y座標", "Y coordinate", formatDisplayNumber(item.y))
+        + propertyReadonlyRow("回転角度", "Rotation angle", `${formatDisplayNumber(angleDegrees(item.rotation))}°`);
+      panel.innerHTML = `<h2 class="property-heading">${applicationText("ブロック", "Block")} ${escapeHtml(item.id)}</h2><section class="property-section"><h3>Block</h3>${rows}${blockPropertiesConfiguration(item, definition)}</section><section class="property-section"><h3>Appearance Override</h3>${appearancePropertyRows(item.appearanceOverride, effective)}</section>`;
     } else if (target.kind === "constraint") {
       const dimension = item.dimension;
       const display = dimensionDisplayState(dimension);
@@ -10460,13 +10463,6 @@
     if (target.kind === "geometry" && property === "construction") {
       target.item.construction = input.checked;
       recordHistory("補助線変更");
-    } else if (target.kind === "block" && property.startsWith("block-")) {
-      if (property === "block-x") target.item.x = Number(input.value) || 0;
-      if (property === "block-y") target.item.y = Number(input.value) || 0;
-      if (property === "block-rotation") setBlockInstanceRotationAroundDisplayCenter(target.item, (Number(input.value) * Math.PI) / 180);
-      invalidateBlockProjectionCache(target.item.id);
-      solveAndRefresh("Block Instance変更");
-      return;
     } else if (target.kind === "constraint" && property === "constraint-value") {
       const constraintTarget = targetFromConstraint(target.item);
       const value = Number(input.value);

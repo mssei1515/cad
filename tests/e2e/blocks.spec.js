@@ -750,8 +750,11 @@ test("selected blocks can change rotation mode and reject an unsatisfied orthogo
   await expect(page.locator("#propertiesPanel")).toContainText("ブロック定義");
   await expect(page.locator("#propertiesPanel")).not.toContainText("ブロックインスタンス");
   expect(await page.locator("#propertiesPanel .property-section").first().locator(".property-row").allTextContents()).toEqual(expect.arrayContaining([
-    "種類ブロック", "IDBI1", expect.stringMatching(/^ブロック定義/),
+    "種類ブロック", "IDBI1", expect.stringMatching(/^ブロック定義/), "X座標120", "Y座標80", "回転角度30°",
   ]));
+  await expect(page.locator('#propertiesPanel input[data-property="block-x"]')).toHaveCount(0);
+  await expect(page.locator('#propertiesPanel input[data-property="block-y"]')).toHaveCount(0);
+  await expect(page.locator('#propertiesPanel input[data-property="block-rotation"]')).toHaveCount(0);
   await expect(page.locator("#blockSketchConfig")).toBeHidden();
   const before = await page.evaluate(() => window.__cadTest.blockRotationLockStateForTest("BI1"));
   await page.click('#propertiesPanel input[data-block-rotation-mode="locked"]');
