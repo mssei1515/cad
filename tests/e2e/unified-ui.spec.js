@@ -1006,6 +1006,36 @@ test("startup sample L2 and L3 reuse the responsive P3 drag path while P1 stays 
   expect(pointerResults[0].y).toBeCloseTo(pointerResults[1].y, 4);
 });
 
+test("arc body selection and hover do not highlight endpoints", async ({ page }) => {
+  await page.goto(`${baseUrl}/index.html?test=1`);
+  await page.waitForFunction(() => window.__cadTest);
+  const fixture = {
+    version: 9,
+    documentName: "arc-endpoint-display",
+    sketches: [
+      { id: "ROOT", name: "Root Sketch", parentSketchId: null, kind: "root", appearance: {} },
+      { id: "S1", name: "Sketch-1", parentSketchId: "ROOT", kind: "sketch", appearance: {} },
+    ],
+    activeSketchId: "S1",
+    points: [{ id: "PC", x: 0, y: 0, fixed: false, kind: "endpoint", sketchId: "S1", appearance: {} }],
+    lines: [], circles: [],
+    arcs: [{ id: "A1", center: "PC", radius: 50, startAngle: 0, endAngle: Math.PI / 2, construction: false, sketchId: "S1", appearance: {} }],
+    constraints: [], blockDefinitions: [], blockInstances: [], annotations: [],
+  };
+  await page.evaluate((data) => window.__cadTest.loadDocumentFixtureForDragTest(data, "arc-endpoint-display.json"), fixture);
+  await page.evaluate(() => window.__cadTest.focusWorldForTest({ x: 0, y: 0 }, 2));
+  await page.evaluate(() => window.__cadTest.selectGeometryIdsForTest({ arcs: ["A1"] }));
+  expect(await page.evaluate(() => window.__cadTest.arcEndpointHandleCountForTest())).toBe(0);
+
+  const body = await page.evaluate(() => window.__cadTest.geometryClientPositionForTest("arc", "A1"));
+  await page.mouse.move(body.x, body.y);
+  expect(await page.evaluate(() => window.__cadTest.arcEndpointHandleCountForTest())).toBe(0);
+
+  const endpoint = await page.evaluate(() => window.__cadTest.geometryClientPositionForTest("arc", "A1", "start"));
+  await page.mouse.move(endpoint.x, endpoint.y);
+  expect(await page.evaluate(() => window.__cadTest.arcEndpointHandleCountForTest())).toBe(1);
+});
+
 test("Block Instance Appearance Override applies to the whole instance", async ({ page }) => {
   await page.goto(`${baseUrl}/index.html?test=1`);
   await page.waitForFunction(() => window.__cadTest);

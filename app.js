@@ -8943,7 +8943,6 @@
   }
 
   function shouldShowArcEndpointHandle(arc, endpoint) {
-    if (selectedArcs.includes(arc) || hoveredArc === arc) return true;
     if (sameArcEndpoint(hoveredArcEndpoint, { arc, endpoint }) || sameArcEndpoint(selectedArcEndpoint, { arc, endpoint })) return true;
     if (selectedArcEndpointPair?.some((item) => sameArcEndpoint(item, { arc, endpoint }))) return true;
     if (dragSession?.kind === "arc-endpoint" && dragSession.item === arc && dragSession.endpoint === endpoint) return true;
@@ -17947,6 +17946,20 @@
         };
         try {
           drawPoints();
+        } finally {
+          ctx.arc = originalArc;
+        }
+        return count;
+      },
+      arcEndpointHandleCountForTest() {
+        let count = 0;
+        const originalArc = ctx.arc;
+        ctx.arc = (...args) => {
+          count += 1;
+          return originalArc.apply(ctx, args);
+        };
+        try {
+          drawArcEndpointHandles();
         } finally {
           ctx.arc = originalArc;
         }
