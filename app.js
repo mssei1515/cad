@@ -40,6 +40,13 @@
   } = window.GeometryRef;
 
   const { create: createConstraintCodecRegistry } = window.ConstraintCodecRegistry;
+  const {
+    dependencies: expressionDependencies,
+    evaluate: evaluateParameterExpression,
+    evaluateDefinitions: evaluateParameterDefinitions,
+    validateIdentifier: validateParameterIdentifier,
+    rewriteIdentifiers: rewriteParameterIdentifiers,
+  } = window.ParameterEngine;
 
   const {
     hypot2,
@@ -104,7 +111,7 @@
   ];
   const UI_TRANSLATIONS = [
     ["ファイル", "File"], ["編集", "Edit"], ["ヘルプ", "Help"],
-    ["保存", "Save"], ["開く", "Open"], ["ドキュメント設定", "Document Settings"], ["アプリケーション設定", "Application Settings"],
+    ["保存", "Save"], ["開く", "Open"], ["Parameter…", "Parameters…"], ["ドキュメント設定", "Document Settings"], ["アプリケーション設定", "Application Settings"],
     ["元に戻す", "Undo"], ["やり直す", "Redo"], ["削除", "Delete"], ["選択", "Select"], ["選択・ドラッグ", "Select / Drag"],
     ["ジオメトリ", "Geometry"], ["拘束", "Constraint"], ["注記", "Annotation"], ["ツールバー", "Toolbar"], ["メニューバー", "Menu bar"], ["表示ツール", "View"],
     ["点", "Point"], ["線", "Line"], ["連続線", "Polyline"], ["矩形", "Rectangle"], ["円", "Circle"], ["円弧", "Arc"],
@@ -123,7 +130,8 @@
     ["アプリケーション全体の設定をドキュメント設定から分離して管理します。", "Application-wide settings are managed separately from document settings."],
     ["既定", "Default"], ["表示", "Visible"], ["非表示", "Hidden"], ["色", "Color"], ["線種", "Line type"], ["線幅", "Line width"],
     ["実線", "Solid"], ["破線", "Dashed"], ["一点鎖線", "Dash-dot"], ["点線", "Dotted"], ["端部のはみ出し", "Endpoint overhang"], ["端部の点", "Endpoint points"], ["あり", "Enabled"], ["なし", "Disabled"], ["使用済みの色", "Colors used in this file"],
-    ["標準色", "Standard colors"], ["このファイルで使用中の色", "Colors used in this file"], ["任意の色", "Custom color"], ["使用中の色はありません", "No colors are used yet"], ["適用", "Apply"],
+    ["標準色", "Standard colors"], ["このファイルで使用中の色", "Colors used in this file"], ["任意の色", "Custom color"], ["使用中の色はありません", "No colors are used yet"], ["適用", "Apply"], ["破棄", "Discard"], ["追加", "Add"],
+    ["名前空間", "Namespace"], ["名前", "Name"], ["数式", "Expression"], ["評価値", "Evaluated value"], ["種類／所属", "Type / owner"], ["Parameter名", "Parameter name"], ["読み取り専用", "Read-only"], ["Geometryから測定", "Measured from geometry"],
     ["外観", "Appearance"], ["外観の上書き", "Appearance Override"], ["配置情報", "Placement"], ["定義", "Definition"], ["回転", "Rotation"],
     ["長さ", "Length"], ["半径", "Radius"], ["補助線", "Construction"], ["種類", "Type"], ["値", "Value"],
     ["寸法表示", "Dimension Display"], ["精度", "Precision"], ["接頭辞", "Prefix"], ["接尾辞", "Suffix"], ["矢印", "Arrows"], ["寸法補助線", "Extension lines"],
@@ -208,6 +216,8 @@
     circles: [],
     arcs: [],
     constraints: [],
+    parameters: [],
+    nextDimensionParameterIndex: 1,
     blockDefinitions: [],
     blockInstances: [],
   };
@@ -264,6 +274,7 @@
   let constraintOperands = [];
   let lastPointerWorld = null;
   let colorPaletteSession = null;
+  let parameterDialogSession = null;
   let hoveredSketchIdentity = null;
   let hoveredSketchTreeId = null;
   let constructionLineMode = false;
@@ -306,6 +317,8 @@
   const DIMENSION_DISPLAY_PRECISION = 1e-6;
   const MEASURED_DIMENSION_SNAP_TOLERANCE = 1e-5;
   const CONSTRAINT_ACCEPT_ERROR = 1e-4;
+  const PARAMETER_STABILIZATION_MAX_PASSES = 20;
+  const PARAMETER_STABILIZATION_RELATIVE_TOLERANCE = 1e-7;
   const DRAG_PREVIEW_ERROR_SCREEN_PX = 0.1;
   const DRAG_PREVIEW_MAX_MODEL_ERROR = 0.125;
   const DEFAULT_FILLET_RADIUS = 30;
@@ -724,6 +737,232 @@
     ensureSketchState();
     ensureAppearanceState();
     ensureBlockState();
+    ensureParameterNamespace(model);
+  }
+
+  function currentParameterNamespace() {
+    return model;
+  }
+
+  function dimensionExpressionValue(constraint) {
+    const target = targetFromConstraint(constraint);
+    return target?.kind === "angle" ? angleDegrees(constraint.target) : Number(constraint.target);
+  }
+
+  function numericDimensionExpression(constraint) {
+    const value = dimensionExpressionValue(constraint);
+    return Number.isFinite(value) ? String(Number(value.toPrecision(15))) : "0";
+  }
+
+  function dimensionConstraintsInNamespace(namespace) {
+    return (namespace?.constraints || []).filter(isDimensionConstraint);
+  }
+
+  function allocateDimensionParameterName(namespace) {
+    ensureParameterNamespace(namespace, { assignDimensions: false });
+    const used = new Set([
+      ...(namespace.parameters || []).map((parameter) => String(parameter.name)),
+      ...dimensionConstraintsInNamespace(namespace).map((constraint) => String(constraint.parameterName || "")),
+    ]);
+    let index = Math.max(1, Number(namespace.nextDimensionParameterIndex) || 1);
+    while (used.has(`d${index}`)) index += 1;
+    namespace.nextDimensionParameterIndex = index + 1;
+    return `d${index}`;
+  }
+
+  function ensureDimensionParameter(constraint, namespace = currentParameterNamespace()) {
+    if (!isDimensionConstraint(constraint)) return constraint;
+    if (!constraint.parameterName) constraint.parameterName = allocateDimensionParameterName(namespace);
+    const autoMatch = /^d(\d+)$/.exec(String(constraint.parameterName));
+    if (autoMatch) namespace.nextDimensionParameterIndex = Math.max(Number(namespace.nextDimensionParameterIndex) || 1, Number(autoMatch[1]) + 1);
+    if (isReadOnlyDimension(constraint)) {
+      delete constraint.expression;
+    } else if (typeof constraint.expression !== "string" || !constraint.expression.trim()) {
+      constraint.expression = numericDimensionExpression(constraint);
+    }
+    return constraint;
+  }
+
+  function ensureParameterNamespace(namespace, options = {}) {
+    if (!namespace) return namespace;
+    namespace.parameters = Array.isArray(namespace.parameters) ? namespace.parameters : [];
+    for (let index = 0; index < namespace.parameters.length; index += 1) {
+      const parameter = namespace.parameters[index];
+      if (!parameter || typeof parameter !== "object") namespace.parameters[index] = { name: "", expression: "" };
+      else {
+        parameter.name = String(parameter.name || "");
+        parameter.expression = String(parameter.expression ?? "");
+      }
+    }
+    namespace.nextDimensionParameterIndex = Math.max(1, Number(namespace.nextDimensionParameterIndex) || 1);
+    if (options.assignDimensions !== false) {
+      for (const constraint of dimensionConstraintsInNamespace(namespace)) ensureDimensionParameter(constraint, namespace);
+    }
+    return namespace;
+  }
+
+  function parameterErrorText(error) {
+    const name = error?.identifier ? ` ${error.identifier}` : "";
+    const messages = {
+      INVALID_IDENTIFIER: applicationText(`名前${name}は使用できません`, `Name${name} is invalid`),
+      RESERVED_IDENTIFIER: applicationText(`名前${name}は寸法用に予約されています`, `Name${name} is reserved for dimensions`),
+      DUPLICATE_IDENTIFIER: applicationText(`名前${name}が重複しています`, `Name${name} is duplicated`),
+      UNKNOWN_IDENTIFIER: applicationText(`未定義の名前${name}があります`, `Unknown name${name}`),
+      CYCLE: applicationText("Parameterに循環参照があります", "Parameters contain a circular dependency"),
+      DIVISION_BY_ZERO: applicationText("0で除算しています", "Division by zero"),
+      NON_FINITE: applicationText("計算結果が有限値ではありません", "The result is not finite"),
+      EMPTY_EXPRESSION: applicationText("数式が空です", "The expression is empty"),
+    };
+    return messages[error?.code] || error?.message || applicationText("Parameterを評価できません", "Could not evaluate parameters");
+  }
+
+  function referenceDimensionValues(namespace) {
+    const values = new Map();
+    for (const constraint of dimensionConstraintsInNamespace(namespace)) {
+      if (!isReadOnlyDimension(constraint)) continue;
+      const target = targetFromConstraint(constraint);
+      const measured = target ? measuredDimensionValue(target, constraint.dimension) : NaN;
+      if (!Number.isFinite(measured)) throw new Error(`${constraint.parameterName}: ${applicationText("参照寸法を測定できません", "Reference dimension could not be measured")}`);
+      values.set(constraint.parameterName, measured);
+      constraint.target = target?.kind === "angle" ? (measured * Math.PI) / 180 : measured;
+      constraint.evaluatedParameterValue = measured;
+    }
+    return values;
+  }
+
+  function validateParameterSymbolNames(parameters, dimensions) {
+    const seen = new Set();
+    for (const parameter of parameters || []) {
+      const name = validateParameterIdentifier(parameter.name);
+      if (seen.has(name)) throw Object.assign(new Error(`Duplicate identifier '${name}'`), { code: "DUPLICATE_IDENTIFIER", identifier: name });
+      seen.add(name);
+    }
+    for (const dimension of dimensions || []) {
+      const name = validateParameterIdentifier(dimension.parameterName != null ? dimension.parameterName : dimension.name, { dimension: true });
+      if (seen.has(name)) throw Object.assign(new Error(`Duplicate identifier '${name}'`), { code: "DUPLICATE_IDENTIFIER", identifier: name });
+      seen.add(name);
+    }
+  }
+
+  function evaluateParameterNamespace(namespace, options = {}) {
+    ensureParameterNamespace(namespace);
+    validateParameterSymbolNames(namespace.parameters, dimensionConstraintsInNamespace(namespace));
+    const inputs = options.referenceValues || referenceDimensionValues(namespace);
+    const definitions = [
+      ...namespace.parameters.map((parameter) => ({ ...parameter, kind: "parameter" })),
+      ...dimensionConstraintsInNamespace(namespace)
+        .filter((constraint) => !isReadOnlyDimension(constraint))
+        .map((constraint) => ({ name: constraint.parameterName, expression: constraint.expression, kind: "dimension", constraint })),
+    ];
+    const evaluated = evaluateParameterDefinitions(definitions, inputs);
+    for (const parameter of namespace.parameters) parameter.evaluatedValue = evaluated.values.get(parameter.name);
+    for (const constraint of dimensionConstraintsInNamespace(namespace)) {
+      const value = evaluated.values.get(constraint.parameterName);
+      if (!Number.isFinite(value)) throw new Error(`${constraint.parameterName}: ${applicationText("値を計算できません", "Value could not be evaluated")}`);
+      const target = targetFromConstraint(constraint);
+      if (!isReadOnlyDimension(constraint)) {
+        const max = target?.kind === "angle" ? 180 : Infinity;
+        if (value <= 0 || value >= max) throw new Error(`${constraint.parameterName}: ${applicationText("寸法値の範囲が正しくありません", "Dimension value is out of range")}`);
+        constraint.target = target?.kind === "angle" ? (value * Math.PI) / 180 : value;
+      }
+      constraint.evaluatedParameterValue = value;
+    }
+    namespace.parameterValues = evaluated.values;
+    namespace.parameterDependencies = evaluated.dependencies;
+    return evaluated;
+  }
+
+  function validateParameterNamespace(namespace) {
+    try {
+      return { success: true, evaluation: evaluateParameterNamespace(namespace) };
+    } catch (error) {
+      return { success: false, error, reason: parameterErrorText(error) };
+    }
+  }
+
+  function prepareLoadedParameterNamespace(namespace, sourceVersion, label) {
+    if (sourceVersion >= 10) {
+      if (!Array.isArray(namespace.parameters) || !Number.isInteger(Number(namespace.nextDimensionParameterIndex)) || Number(namespace.nextDimensionParameterIndex) < 1) {
+        throw new Error(`${label}: ${applicationText("Parameter名前空間の形式が正しくありません", "The parameter namespace is invalid")}`);
+      }
+      for (const constraint of dimensionConstraintsInNamespace(namespace)) {
+        if (typeof constraint.parameterName !== "string" || !constraint.parameterName) {
+          throw new Error(`${label}: ${applicationText("寸法のParameter名がありません", "A dimension parameter name is missing")}`);
+        }
+        if (!isReadOnlyDimension(constraint) && (typeof constraint.expression !== "string" || !constraint.expression.trim())) {
+          throw new Error(`${label}/${constraint.parameterName}: ${applicationText("寸法式がありません", "The dimension expression is missing")}`);
+        }
+      }
+    }
+    ensureParameterNamespace(namespace);
+    const validation = validateParameterNamespace(namespace);
+    if (!validation.success) throw new Error(`${label}: ${validation.reason}`);
+    return namespace;
+  }
+
+  function parameterDependents(namespace, names, removedConstraints = new Set()) {
+    ensureParameterNamespace(namespace);
+    const removedNames = new Set(names);
+    const dependents = [];
+    const formulas = [
+      ...namespace.parameters.map((parameter) => ({ name: parameter.name, expression: parameter.expression })),
+      ...dimensionConstraintsInNamespace(namespace)
+        .filter((constraint) => !isReadOnlyDimension(constraint) && !removedConstraints.has(constraint))
+        .map((constraint) => ({ name: constraint.parameterName, expression: constraint.expression })),
+    ];
+    for (const item of formulas) {
+      if (removedNames.has(item.name)) continue;
+      let dependencies;
+      try {
+        dependencies = expressionDependencies(item.expression);
+      } catch (_error) {
+        continue;
+      }
+      if ([...dependencies].some((name) => removedNames.has(name))) dependents.push(item.name);
+    }
+    return [...new Set(dependents)];
+  }
+
+  function guardDimensionSymbolDeletion(constraints, namespace = currentParameterNamespace()) {
+    const removedConstraints = new Set(constraints || []);
+    const removedNames = [...removedConstraints].filter(isDimensionConstraint).map((constraint) => constraint.parameterName).filter(Boolean);
+    if (removedNames.length === 0) return true;
+    const dependents = parameterDependents(namespace, removedNames, removedConstraints);
+    if (dependents.length === 0) return true;
+    const message = applicationLanguage === "en"
+      ? `Cannot delete ${removedNames.join(", ")}; referenced by ${dependents.join(", ")}`
+      : `${removedNames.join("、")} は ${dependents.join("、")} から参照されているため削除できません`;
+    setHint(message, "error");
+    log(message);
+    return false;
+  }
+
+  function evaluateDimensionExpressionDraft(constraint, expression, namespace = currentParameterNamespace()) {
+    ensureParameterNamespace(namespace);
+    validateParameterSymbolNames(namespace.parameters, dimensionConstraintsInNamespace(namespace));
+    const referenceValues = new Map();
+    const definitions = namespace.parameters.map((parameter) => ({ ...parameter, kind: "parameter" }));
+    for (const item of dimensionConstraintsInNamespace(namespace)) {
+      if (isReadOnlyDimension(item)) {
+        const target = targetFromConstraint(item);
+        const value = target ? measuredDimensionValue(target, item.dimension) : NaN;
+        referenceValues.set(item.parameterName, value);
+      } else {
+        definitions.push({
+          name: item.parameterName,
+          expression: item === constraint ? String(expression) : item.expression,
+          kind: "dimension",
+        });
+      }
+    }
+    const evaluated = evaluateParameterDefinitions(definitions, referenceValues);
+    const value = constraint
+      ? evaluated.values.get(constraint.parameterName)
+      : evaluateParameterExpression(String(expression), evaluated.values);
+    const target = constraint ? targetFromConstraint(constraint) : null;
+    const max = target?.kind === "angle" ? 180 : Infinity;
+    if (!Number.isFinite(value) || value <= 0 || value >= max) throw new Error(applicationText("寸法値の範囲が正しくありません", "Dimension value is out of range"));
+    return value;
   }
 
   function isGeometryMode() {
@@ -1094,6 +1333,10 @@
   function decorateSerializedConstraint(data, constraint) {
     if (!data || !constraint) return data;
     if (constraint.readOnlyDimension) data.readOnlyDimension = true;
+    if (isDimensionConstraint(constraint)) {
+      data.parameterName = constraint.parameterName || null;
+      if (!constraint.readOnlyDimension) data.expression = constraint.expression || numericDimensionExpression(constraint);
+    }
     return data;
   }
 
@@ -1640,6 +1883,7 @@
   function pushModelConstraint(constraint, sketchId = activeSketchId()) {
     assignConstraintSketchId(constraint, sketchId);
     model.constraints.push(constraint);
+    ensureDimensionParameter(constraint, currentParameterNamespace());
     return constraint;
   }
 
@@ -1897,7 +2141,7 @@
   }
 
   function solveAndRefresh(label = "自動solve") {
-    const solved = solveSketchAndDependents(activeSketchId());
+    const solved = stabilizeActiveParameterNamespace(activeSketchId());
     const result = solved.result;
     const analysis = refreshConstraintAnalysis();
     const hasDependentError = solved.dependent?.success === false;
@@ -1909,6 +2153,68 @@
     draw();
     if (solved.success && !historyRestoring) recordHistory(label);
     return result;
+  }
+
+  function referenceValuesConverged(previous, next) {
+    if (previous.size !== next.size) return false;
+    for (const [name, value] of next) {
+      const before = previous.get(name);
+      if (!Number.isFinite(before)) return false;
+      const tolerance = PARAMETER_STABILIZATION_RELATIVE_TOLERANCE * Math.max(1, Math.abs(value));
+      if (Math.abs(value - before) > tolerance) return false;
+    }
+
+    return true;
+  }
+
+  function parameterFailureResult(reason) {
+    return { success: false, errorNorm: Infinity, iterations: 0, reason };
+  }
+
+  function stabilizeActiveParameterNamespace(sketchId = activeSketchId(), options = {}) {
+    let previous;
+    try {
+      ensureParameterNamespace(currentParameterNamespace());
+      previous = referenceDimensionValues(currentParameterNamespace());
+    } catch (error) {
+      const result = parameterFailureResult(parameterErrorText(error));
+      return { success: false, sketchId, result, dependent: { success: true, results: [] }, parameterError: error };
+    }
+    const hasReferences = previous.size > 0;
+    for (let pass = 0; pass < PARAMETER_STABILIZATION_MAX_PASSES; pass += 1) {
+      try {
+        evaluateParameterNamespace(currentParameterNamespace(), { referenceValues: previous });
+      } catch (error) {
+        const result = parameterFailureResult(parameterErrorText(error));
+        return { success: false, sketchId, result, dependent: { success: true, results: [] }, parameterError: error };
+      }
+      const requestedSketchIds = Array.isArray(options.allSketches) && options.allSketches.length > 0 ? options.allSketches : [sketchId];
+      let solved = null;
+      const dependentResults = [];
+      for (const requestedSketchId of [...new Set(requestedSketchIds)]) {
+        const item = solveSketchAndDependents(requestedSketchId);
+        solved ||= item;
+        dependentResults.push(...(item.dependent?.results || []));
+        if (!item.success || item.dependent?.success === false) return item;
+      }
+      solved ||= { success: true, sketchId, result: { success: true, errorNorm: 0, iterations: 0 }, dependent: { success: true, results: [] } };
+      solved.dependent = { success: true, results: dependentResults };
+      let next;
+      try {
+        next = referenceDimensionValues(currentParameterNamespace());
+      } catch (error) {
+        const result = parameterFailureResult(parameterErrorText(error));
+        return { success: false, sketchId, result, dependent: solved.dependent, parameterError: error };
+      }
+      if (!hasReferences || referenceValuesConverged(previous, next)) {
+        evaluateParameterNamespace(currentParameterNamespace(), { referenceValues: next });
+        solved.parameterPasses = pass + 1;
+        return solved;
+      }
+      previous = next;
+    }
+    const result = parameterFailureResult(applicationText("Parameter計算が収束しません", "Parameter calculation did not converge"));
+    return { success: false, sketchId, result, dependent: { success: true, results: [] }, parameterNonConvergent: true };
   }
 
   function geometryErrorNorm() {
@@ -2451,14 +2757,20 @@
     const constraints = selection.constraints.map((constraint) => {
       const cloned = cloneConstraintForBlock(constraint, pointById, lineById, primitiveById, origin);
       cloned.sketchId = DEFAULT_SKETCH_ID;
+      if (isDimensionConstraint(cloned)) {
+        delete cloned.parameterName;
+        if (!isReadOnlyDimension(cloned)) cloned.expression = numericDimensionExpression(cloned);
+      }
       return cloned;
     });
-    return { id: `B${blockDefinitionSeq++}`, name, parentDefinitionId: null, origin: { x: 0, y: 0 }, ...sketchState, points, lines, circles, arcs, blockInstances, constraints, revision: 1 };
+    const definition = { id: `B${blockDefinitionSeq++}`, name, parentDefinitionId: null, origin: { x: 0, y: 0 }, ...sketchState, points, lines, circles, arcs, blockInstances, constraints, parameters: [], nextDimensionParameterIndex: 1, revision: 1 };
+    ensureParameterNamespace(definition);
+    return definition;
   }
 
   function createEmptyBlockDefinition(name) {
     const sketchState = createBlockSketchState();
-    return { id: `B${blockDefinitionSeq++}`, name, parentDefinitionId: null, origin: { x: 0, y: 0 }, ...sketchState, points: [], lines: [], circles: [], arcs: [], blockInstances: [], constraints: [], revision: 1 };
+    return { id: `B${blockDefinitionSeq++}`, name, parentDefinitionId: null, origin: { x: 0, y: 0 }, ...sketchState, points: [], lines: [], circles: [], arcs: [], blockInstances: [], constraints: [], parameters: [], nextDimensionParameterIndex: 1, revision: 1 };
   }
 
   function cloneBlockDefinition(definition) {
@@ -2512,6 +2824,8 @@
       arcs,
       blockInstances,
       constraints,
+      parameters: (definition.parameters || []).map((parameter) => ({ name: parameter.name, expression: parameter.expression })),
+      nextDimensionParameterIndex: Math.max(1, Number(definition.nextDimensionParameterIndex) || 1),
       revision: Number(definition.revision) || 0,
     };
   }
@@ -2608,6 +2922,8 @@
     session.draft.arcs = model.arcs;
     session.draft.blockInstances = model.blockInstances;
     session.draft.constraints = model.constraints;
+    session.draft.parameters = model.parameters;
+    session.draft.nextDimensionParameterIndex = model.nextDimensionParameterIndex;
     session.draft.sketches = model.sketches.map((sketch) => ({ ...sketch }));
     session.draft.activeSketchId = activeSketchId();
     return session.draft;
@@ -2721,6 +3037,8 @@
       circles: model.circles,
       arcs: model.arcs,
       constraints: model.constraints,
+      parameters: model.parameters,
+      nextDimensionParameterIndex: model.nextDimensionParameterIndex,
       blockInstances: model.blockInstances,
       sketches: model.sketches,
       activeSketchId: model.activeSketchId,
@@ -2741,6 +3059,7 @@
         setHint(definitionMoveError, "error");
         return;
       }
+      if (!guardDimensionSymbolDeletion(new Set([...(selection.constraints || []), ...(selection.externalConstraints || [])]))) return;
       origin = blockSelectionBoundsCenter(selection);
     }
     const draft = selection ? createBlockDefinitionFromSelection(selection, origin, defaultName) : createEmptyBlockDefinition(defaultName);
@@ -2823,6 +3142,8 @@
       circles: model.circles,
       arcs: model.arcs,
       constraints: model.constraints,
+      parameters: model.parameters,
+      nextDimensionParameterIndex: model.nextDimensionParameterIndex,
       blockInstances: model.blockInstances,
       sketches: model.sketches,
       activeSketchId: model.activeSketchId,
@@ -2853,6 +3174,8 @@
     model.circles = draft.circles;
     model.arcs = draft.arcs;
     model.constraints = draft.constraints;
+    model.parameters = draft.parameters || [];
+    model.nextDimensionParameterIndex = Math.max(1, Number(draft.nextDimensionParameterIndex) || 1);
     model.blockInstances = draft.blockInstances || [];
     model.sketches = draft.sketches;
     model.activeSketchId = draft.activeSketchId;
@@ -3013,6 +3336,8 @@
     target.arcs = arcs;
     target.blockInstances = blockInstances;
     target.constraints = constraints;
+    target.parameters = (draft.parameters || []).map((parameter) => ({ name: parameter.name, expression: parameter.expression }));
+    target.nextDimensionParameterIndex = Math.max(1, Number(draft.nextDimensionParameterIndex) || 1);
     target.revision = (Number(target.revision) || 0) + 1;
     return target;
   }
@@ -3024,6 +3349,8 @@
     model.circles = original.circles;
     model.arcs = original.arcs;
     model.constraints = original.constraints;
+    model.parameters = original.parameters || [];
+    model.nextDimensionParameterIndex = Math.max(1, Number(original.nextDimensionParameterIndex) || 1);
     model.blockInstances = original.blockInstances;
     model.sketches = original.sketches;
     model.activeSketchId = original.activeSketchId;
@@ -3063,6 +3390,8 @@
     draft.arcs = model.arcs;
     draft.blockInstances = model.blockInstances;
     draft.constraints = model.constraints;
+    draft.parameters = model.parameters;
+    draft.nextDimensionParameterIndex = model.nextDimensionParameterIndex;
     draft.sketches = model.sketches.map((sketch) => ({ ...sketch, appearance: normalizeAppearance(sketch.appearance) }));
     draft.activeSketchId = activeSketchId();
     const validation = validateBlockDraft(draft);
@@ -3394,6 +3723,15 @@
         rotationLocked: instance.rotationLocked,
       })),
       constraintLength: model.constraints.length,
+      constraints: model.constraints.map((constraint) => ({
+        constraint,
+        target: constraint.target,
+        parameterName: constraint.parameterName,
+        expression: constraint.expression,
+        evaluatedParameterValue: constraint.evaluatedParameterValue,
+      })),
+      parameters: model.parameters.map((parameter) => ({ name: parameter.name, expression: parameter.expression })),
+      nextDimensionParameterIndex: model.nextDimensionParameterIndex,
     };
   }
 
@@ -3418,6 +3756,15 @@
     }
     invalidateBlockProjectionCache();
     model.constraints.length = snapshot.constraintLength;
+    for (const entry of snapshot.constraints || []) {
+      entry.constraint.target = entry.target;
+      entry.constraint.parameterName = entry.parameterName;
+      if (entry.expression == null) delete entry.constraint.expression;
+      else entry.constraint.expression = entry.expression;
+      entry.constraint.evaluatedParameterValue = entry.evaluatedParameterValue;
+    }
+    model.parameters = (snapshot.parameters || []).map((parameter) => ({ ...parameter }));
+    model.nextDimensionParameterIndex = Math.max(1, Number(snapshot.nextDimensionParameterIndex) || 1);
     constraintAnalysisState = null;
   }
 
@@ -3430,6 +3777,8 @@
     model.circles.length = 0;
     model.arcs.length = 0;
     model.constraints.length = 0;
+    model.parameters = [];
+    model.nextDimensionParameterIndex = 1;
     model.blockDefinitions.length = 0;
     model.blockInstances.length = 0;
     invalidateBlockProjectionCache();
@@ -3762,7 +4111,7 @@
   function serializeModel() {
     ensureModelState();
     return {
-      version: 9,
+      version: 10,
       savedAt: new Date().toISOString(),
       documentName: effectiveDocumentName(),
       defaultAppearance: normalizeAppearance(model.defaultAppearance, { partial: false }),
@@ -3776,6 +4125,8 @@
       })),
       activeSketchId: activeSketchId(),
       annotations: normalizeAnnotations(model.annotations).map(serializeAnnotation),
+      parameters: model.parameters.map((parameter) => ({ name: parameter.name, expression: parameter.expression })),
+      nextDimensionParameterIndex: model.nextDimensionParameterIndex,
       blockDefinitions: model.blockDefinitions.map((definition) => ({
         id: definition.id,
         name: definition.name,
@@ -3784,6 +4135,8 @@
         origin: { x: Number(definition.origin?.x) || 0, y: Number(definition.origin?.y) || 0 },
         sketches: definition.sketches.map((sketch) => ({ id: sketch.id, name: sketch.name, parentSketchId: sketch.parentSketchId || null, kind: sketch.kind === "root" ? "root" : "sketch", appearance: normalizeAppearance(sketch.appearance) })),
         activeSketchId: definition.activeSketchId,
+        parameters: (definition.parameters || []).map((parameter) => ({ name: parameter.name, expression: parameter.expression })),
+        nextDimensionParameterIndex: Math.max(1, Number(definition.nextDimensionParameterIndex) || 1),
         points: definition.points.map((point) => ({ id: point.id, x: point.x, y: point.y, fixed: point.fixed, kind: point.kind || "endpoint", sketchId: point.sketchId, appearance: normalizeAppearance(point.appearance) })),
         lines: definition.lines.map((line) => ({ id: line.id, p1: line.p1.id, p2: line.p2.id, construction: Boolean(line.construction), sketchId: line.sketchId, appearance: normalizeAppearance(line.appearance) })),
         circles: definition.circles.map((circle) => ({ id: circle.id, center: circle.center.id, radius: circle.radius(), construction: Boolean(circle.construction), sketchId: circle.sketchId, appearance: normalizeAppearance(circle.appearance) })),
@@ -3858,6 +4211,8 @@
       arcs: model.arcs,
       blockInstances: model.blockInstances,
       constraints: model.constraints,
+      parameters: model.parameters,
+      nextDimensionParameterIndex: model.nextDimensionParameterIndex,
       sketches: model.sketches,
       activeSketchId: activeSketchId(),
     };
@@ -3871,6 +4226,8 @@
       origin: { x: Number(definition.origin?.x) || 0, y: Number(definition.origin?.y) || 0 },
       sketches: definition.sketches.map((sketch) => ({ ...sketch })),
       activeSketchId: definition.activeSketchId,
+      parameters: (definition.parameters || []).map((parameter) => ({ name: parameter.name, expression: parameter.expression })),
+      nextDimensionParameterIndex: Math.max(1, Number(definition.nextDimensionParameterIndex) || 1),
       points: definition.points.map((point) => ({ id: point.id, x: point.x, y: point.y, fixed: point.fixed, kind: point.kind, sketchId: point.sketchId })),
       lines: definition.lines.map((line) => ({ id: line.id, p1: line.p1.id, p2: line.p2.id, construction: Boolean(line.construction), sketchId: line.sketchId })),
       circles: definition.circles.map((circle) => ({ id: circle.id, center: circle.center.id, radius: circle.radius(), construction: Boolean(circle.construction), sketchId: circle.sketchId })),
@@ -3988,6 +4345,8 @@
       model.circles = restored.circles;
       model.arcs = restored.arcs;
       model.constraints = restored.constraints;
+      model.parameters = restored.parameters || [];
+      model.nextDimensionParameterIndex = Math.max(1, Number(restored.nextDimensionParameterIndex) || 1);
       model.blockInstances = restored.blockInstances || [];
       model.sketches = restored.sketches;
       model.activeSketchId = restored.activeSketchId;
@@ -4068,6 +4427,10 @@
       constraint.enabled = data.enabled !== false;
       constraint.readOnlyDimension = Boolean(data.readOnlyDimension);
       if (constraint.readOnlyDimension) constraint.enabled = false;
+      if (isDimensionConstraint(constraint)) {
+        constraint.parameterName = typeof data.parameterName === "string" ? data.parameterName : null;
+        if (!constraint.readOnlyDimension && typeof data.expression === "string") constraint.expression = data.expression;
+      }
       if (data.dimension && Number.isFinite(Number(data.dimension.x)) && Number.isFinite(Number(data.dimension.y))) {
         constraint.dimension = {
           x: Number(data.dimension.x),
@@ -4100,6 +4463,7 @@
       throw new Error("保存データの形式が正しくありません");
     }
     lastLoadBlockConstraintRepairMessage = "";
+    const sourceVersion = Number(data.version) || 1;
     const loadedDocumentName = effectiveDocumentNameFromValue(options.documentNameOverride || data.documentName || options.documentNameFallback || DEFAULT_DOCUMENT_NAME);
 
     let loadedSketches =
@@ -4224,6 +4588,8 @@
         origin: { x: Number(rawDefinition.origin?.x) || 0, y: Number(rawDefinition.origin?.y) || 0 },
         sketches: definitionSketches,
         activeSketchId: normalizeDefinitionSketchId(rawDefinition.activeSketchId),
+        parameters: Array.isArray(rawDefinition.parameters) ? rawDefinition.parameters.map((parameter) => ({ name: String(parameter?.name || ""), expression: String(parameter?.expression ?? "") })) : [],
+        nextDimensionParameterIndex: Number(rawDefinition.nextDimensionParameterIndex) || 1,
         points,
         lines,
         circles,
@@ -4340,6 +4706,7 @@
         constraint.referenceSketchId = rawConstraint.referenceSketchId == null ? null : meta.normalizeDefinitionSketchId(rawConstraint.referenceSketchId);
         return constraint;
       }).filter(Boolean);
+      prepareLoadedParameterNamespace(definition, sourceVersion, `${applicationText("ブロック", "Block")} ${definition.name}`);
     }
     const loadedBlockInstances = (Array.isArray(data.blockInstances) ? data.blockInstances : [])
       .filter((instance) => loadedDefinitionIds.has(String(instance.definitionId)))
@@ -4466,6 +4833,13 @@
       constraints.push(constraint);
     }
 
+    const loadedRootNamespace = {
+      constraints,
+      parameters: Array.isArray(data.parameters) ? data.parameters.map((parameter) => ({ name: String(parameter?.name || ""), expression: String(parameter?.expression ?? "") })) : [],
+      nextDimensionParameterIndex: Number(data.nextDimensionParameterIndex) || 1,
+    };
+    prepareLoadedParameterNamespace(loadedRootNamespace, sourceVersion, applicationText("Document", "Document"));
+
     const retainedPoints = points.filter((p) => {
       if (p.kind !== "endpoint") return true;
       if (isPointUsedByLine(p, lines) || isPointUsedByCircle(p, circles) || isPointUsedByArc(p, arcs)) return true;
@@ -4489,6 +4863,8 @@
     model.arcs.push(...arcs);
     normalizeArcSweeps(model.arcs);
     model.constraints.push(...constraints);
+    model.parameters = loadedRootNamespace.parameters;
+    model.nextDimensionParameterIndex = loadedRootNamespace.nextDimensionParameterIndex;
     refreshReferenceConstraintValidity();
     const lineRepair = enforceMinimumLineLengths(model.lines);
     lastLoadLineRepairMessage =
@@ -6766,6 +7142,7 @@
     }
 
     if (pointSet.size === 0 && lineSet.size === 0 && circleSet.size === 0 && arcSet.size === 0 && constraintSet.size === 0) return false;
+    if (!guardDimensionSymbolDeletion(constraintSet)) return false;
 
     dragSession = null;
     dimensionDragSession = null;
@@ -6824,7 +7201,9 @@
       });
       const removedIds = new Set(projectionItems.map((item) => item.id));
       const removedKeys = new Set(projectionItems.map(geometryElementKey));
-      model.constraints = model.constraints.filter((constraint) => !constraintGraphNodes(constraint).some((node) => instances.includes(node) || projectionItems.includes(node)));
+      const removedConstraints = new Set(model.constraints.filter((constraint) => constraintGraphNodes(constraint).some((node) => instances.includes(node) || projectionItems.includes(node))));
+      if (!guardDimensionSymbolDeletion(removedConstraints)) return false;
+      model.constraints = model.constraints.filter((constraint) => !removedConstraints.has(constraint));
       model.annotations = model.annotations.filter((annotation) => !annotationReferencesRemovedGeometry(annotation, removedIds, removedKeys));
       model.blockInstances = model.blockInstances.filter((instance) => !instances.includes(instance));
       invalidateBlockProjectionCache();
@@ -6887,6 +7266,8 @@
     const orderedPoints = model.points.filter((point) => points.has(point));
     return {
       pasteCount: 0,
+      parameterNamespaceKey: currentBlockDefinitionScopeId() ? `block:${currentBlockDefinitionScopeId()}` : "document",
+      cut: false,
       points: orderedPoints.map((point) => ({
         id: point.id,
         x: point.x,
@@ -6935,6 +7316,7 @@
       return false;
     }
     geometryClipboard = payload;
+    geometryClipboard.cut = Boolean(options.cut);
     updateToolbar();
     if (options.cut) {
       const deleted = deleteCurrentSelection();
@@ -6971,6 +7353,11 @@
     delete data.reference;
     delete data.referenceSketchId;
     return data;
+  }
+
+  function serializedDimensionExpressionValue(data) {
+    const value = Number(data?.target);
+    return data?.type === "lineAngle" ? angleDegrees(value) : value;
   }
 
   function mapClipboardBlockProjection(source, instance, idMap, pointById, lineById, primitiveById) {
@@ -7022,7 +7409,7 @@
       constraints: model.constraints.length,
       blockInstances: model.blockInstances.length,
     };
-    const initialSequences = { pointSeq, lineSeq, circleSeq, arcSeq, blockInstanceSeq };
+    const initialSequences = { pointSeq, lineSeq, circleSeq, arcSeq, blockInstanceSeq, nextDimensionParameterIndex: model.nextDimensionParameterIndex };
 
     try {
       const idMap = new Map();
@@ -7086,14 +7473,33 @@
       if (pastedBlockInstances.length > 0) invalidateBlockProjectionCache();
       payload.blockInstances.forEach((source, index) => mapClipboardBlockProjection(source, pastedBlockInstances[index], idMap, pointById, lineById, primitiveById));
 
+      const targetNamespaceKey = currentBlockDefinitionScopeId() ? `block:${currentBlockDefinitionScopeId()}` : "document";
+      const sameNamespace = payload.parameterNamespaceKey === targetNamespaceKey;
+      const copiedDimensionNames = new Map();
+      for (const source of payload.constraints) {
+        if (!source.parameterName) continue;
+        const keepCutName = payload.cut && sameNamespace
+          && !dimensionConstraintsInNamespace(currentParameterNamespace()).some((constraint) => constraint.parameterName === source.parameterName)
+          && !(currentParameterNamespace().parameters || []).some((parameter) => parameter.name === source.parameterName);
+        copiedDimensionNames.set(source.parameterName, keepCutName ? source.parameterName : allocateDimensionParameterName(currentParameterNamespace()));
+      }
       for (const source of payload.constraints) {
         const data = translatedClipboardConstraintData(source, idMap, dx, dy);
+        if (source.parameterName) {
+          data.parameterName = copiedDimensionNames.get(source.parameterName);
+          if (!data.readOnlyDimension) {
+            data.expression = sameNamespace
+              ? rewriteParameterIdentifiers(source.expression || String(serializedDimensionExpressionValue(source)), copiedDimensionNames)
+              : String(serializedDimensionExpressionValue(source));
+          }
+        }
         const constraint = deserializeConstraint(data, pointById, lineById, primitiveById);
         if (!constraint) throw new Error(`拘束 ${source.type} を複製できません`);
         constraint.sketchId = targetSketchId;
         constraint.reference = false;
         constraint.referenceSketchId = null;
         model.constraints.push(constraint);
+        ensureDimensionParameter(constraint, currentParameterNamespace());
       }
 
       clearSelection();
@@ -7120,6 +7526,7 @@
       circleSeq = initialSequences.circleSeq;
       arcSeq = initialSequences.arcSeq;
       blockInstanceSeq = initialSequences.blockInstanceSeq;
+      model.nextDimensionParameterIndex = initialSequences.nextDimensionParameterIndex;
       invalidateBlockProjectionCache();
       clearSelection();
       updateUI();
@@ -7447,8 +7854,18 @@
     dimensionValueInput.style.setProperty("--dimension-text-angle", `${angle}rad`);
     dimensionValueInput.style.width = `${Math.max(132, Math.min(280, pendingCommand.buffer.length * 9 + 34))}px`;
     if (dimensionValueInput.value !== pendingCommand.buffer) dimensionValueInput.value = pendingCommand.buffer;
-    const value = Number(pendingCommand.buffer);
-    dimensionValueInput.classList.toggle("is-invalid", pendingCommand.buffer === "" || !Number.isFinite(value) || value <= 0);
+    let invalid = pendingCommand.buffer === "";
+    if (!invalid) {
+      try {
+        const value = pendingCommand.type === "distance-value"
+          ? evaluateDimensionExpressionDraft(pendingCommand.constraint || null, pendingCommand.buffer)
+          : Number(pendingCommand.buffer);
+        invalid = !Number.isFinite(value) || value <= 0 || (pendingCommand.target?.kind === "angle" && value >= 180);
+      } catch (_error) {
+        invalid = true;
+      }
+    }
+    dimensionValueInput.classList.toggle("is-invalid", invalid);
   }
 
   function focusDimensionValueInput() {
@@ -8128,10 +8545,16 @@
         ? pendingCommand.dimension || applyDefaultCircleDimensionLabelOffset(pendingCommand.target, pendingCommand.pointer ? dimensionFromAnchor(pendingCommand.target, pendingCommand.pointer) : defaultDimensionForTarget(pendingCommand.target))
         : pendingCommand.dimension;
     if (pendingCommand.type === "distance-value") {
-      const value = Number(pendingCommand.buffer);
-      const invalid = pendingCommand.buffer === "" || !Number.isFinite(value) || value <= 0 || (pendingCommand.target.kind === "angle" && value >= 180);
+      let value = NaN;
+      let invalid = false;
+      try {
+        value = evaluateDimensionExpressionDraft(pendingCommand.constraint || null, pendingCommand.buffer);
+        invalid = value <= 0 || (pendingCommand.target.kind === "angle" && value >= 180);
+      } catch (_error) {
+        invalid = true;
+      }
       const suffix = pendingCommand.target.kind === "angle" ? "°" : "";
-      drawDimension(pendingCommand.target, dimension, `${pendingCommand.buffer || "_"}${suffix}|`, true, false, {
+      drawDimension(pendingCommand.target, dimension, `${Number.isFinite(value) ? formatDisplayNumber(value) : "_"}${suffix}|`, true, false, {
         selecting: !pendingCommand.editing,
         invalid,
         hidden: true,
@@ -9277,7 +9700,7 @@
       type: "distance-value",
       target,
       dimension: hit.constraint.dimension || hit.dimension || defaultDimensionForTarget(target),
-      buffer: String(Number(target.kind === "angle" ? angleDegrees(hit.constraint.target) : hit.constraint.target).toFixed(3)),
+      buffer: hit.constraint.expression || numericDimensionExpression(hit.constraint),
       editing: false,
       constraint: hit.constraint,
     };
@@ -9302,10 +9725,19 @@
 
   function submitDistanceValue() {
     if (!pendingCommand || pendingCommand.type !== "distance-value") return;
-    const value = Number(pendingCommand.buffer);
+    const expression = pendingCommand.buffer.trim();
+    let value;
+    try {
+      value = evaluateDimensionExpressionDraft(pendingCommand.constraint || null, expression);
+    } catch (error) {
+      setHint(`${applicationText("寸法式を評価できません", "Could not evaluate the dimension expression")}: ${parameterErrorText(error)}`, "error");
+      syncDimensionValueInput();
+      draw();
+      return;
+    }
     const maxAngle = pendingCommand.target?.kind === "angle" ? 180 : Infinity;
     if (!Number.isFinite(value) || value <= 0 || value >= maxAngle) {
-      setHint("寸法値には0より大きい数値を入力してください", "error");
+      setHint(applicationText("寸法値の範囲が正しくありません", "Dimension value is out of range"), "error");
       draw();
       return;
     }
@@ -9313,20 +9745,20 @@
     const targetSketchId = sketchId || activeSketchId();
     const shouldFitFirstDimension = !constraint && !sketchHasDimensionConstraint(targetSketchId);
     const firstDimensionFootprint = shouldFitFirstDimension ? captureSketchScreenFootprint(targetSketchId) : null;
-    pendingCommand = null;
-    hideDimensionValueInput();
     if (constraint) {
       const snapshot = snapshotModelState();
-      const previousTarget = constraint.target;
+      constraint.expression = expression;
       constraint.target = target.kind === "angle" ? (value * Math.PI) / 180 : value;
       preconditionNewConstraint(constraint);
-      const solved = withTemporarySolveStepNorm(solveStepNormForConstraint(constraint), () => solveSketchAndDependents(sketchId || constraintSketchId(constraint), snapshot));
+      const solved = withTemporarySolveStepNorm(solveStepNormForConstraint(constraint), () => stabilizeActiveParameterNamespace(sketchId || constraintSketchId(constraint)));
       const result = solved.result;
-      if (!solved.success || result.errorNorm > CONSTRAINT_ACCEPT_ERROR) {
+      if (!solved.success || solved.dependent?.success === false || result.errorNorm > CONSTRAINT_ACCEPT_ERROR) {
         restoreModelState(snapshot);
-        constraint.target = previousTarget;
-        setHint(`寸法値を更新できません: 矛盾しています (error=${result.errorNorm.toExponential(3)})`, "error");
+        setHint(`${applicationText("寸法式を更新できません", "Could not update the dimension expression")}: ${result.reason || `error=${result.errorNorm.toExponential(3)}`}`, "error");
+        syncDimensionValueInput();
       } else {
+        pendingCommand = null;
+        hideDimensionValueInput();
         setHint(`寸法値更新: success=${result.success}, error=${result.errorNorm.toExponential(2)}, iter=${result.iterations}`);
         recordHistory("寸法値変更");
       }
@@ -9335,7 +9767,11 @@
       return;
     }
     if (shouldFitFirstDimension) scaleSketchForFirstDimension(targetSketchId, target, value, dimension);
-    const ok = addDistanceConstraintFromTarget(target, value, dimension, { referenceSketchId, sketchId });
+    const ok = addDistanceConstraintFromTarget(target, value, dimension, { referenceSketchId, sketchId, expression });
+    if (ok) {
+      pendingCommand = null;
+      hideDimensionValueInput();
+    }
     if (ok && firstDimensionFootprint && restoreSketchScreenFootprint(targetSketchId, firstDimensionFootprint)) {
       setHint(`最初の寸法 ${value} に合わせて、見た目の大きさを保つよう表示スケールを調整しました`);
       draw();
@@ -9586,11 +10022,14 @@
     const removedItems = [...pointSet, ...lineSet, ...circleSet, ...arcSet, ...blockProjectionItemsToRemove];
     const removedIds = new Set(removedItems.map((item) => item.id));
     const removedKeys = new Set(removedItems.map(geometryElementKey).filter(Boolean));
+    const removedConstraints = new Set(model.constraints.filter((constraint) =>
+      sketchIds.has(constraintSketchId(constraint))
+      || sketchIds.has(constraint.referenceSketchId)
+      || constraintGraphNodes(constraint).some((node) => removedItems.includes(node)),
+    ));
+    if (!guardDimensionSymbolDeletion(removedConstraints)) return false;
 
-    model.constraints = model.constraints.filter((constraint) => {
-      if (sketchIds.has(constraintSketchId(constraint)) || sketchIds.has(constraint.referenceSketchId)) return false;
-      return !constraintGraphNodes(constraint).some((node) => removedItems.includes(node));
-    });
+    model.constraints = model.constraints.filter((constraint) => !removedConstraints.has(constraint));
     model.lines = model.lines.filter((line) => !lineSet.has(line));
     model.circles = model.circles.filter((circle) => !circleSet.has(circle));
     model.arcs = model.arcs.filter((arc) => !arcSet.has(arc));
@@ -9936,6 +10375,10 @@
     }
     const removedConstraintSet = new Set(disableImpact.constraints);
     if (removedConstraintSet.size > 0) {
+      if (!guardDimensionSymbolDeletion(removedConstraintSet)) {
+        updateBlockUI();
+        return false;
+      }
       model.constraints = model.constraints.filter((constraint) => !removedConstraintSet.has(constraint));
       if (removedConstraintSet.has(selectedDimensionConstraint)) selectedDimensionConstraint = null;
       if (removedConstraintSet.has(selectedConstraint)) selectedConstraint = null;
@@ -10316,8 +10759,17 @@
       const dimension = item.dimension;
       const display = dimensionDisplayState(dimension);
       const targetValue = targetFromConstraint(item);
-      const value = targetValue?.kind === "angle" ? angleDegrees(item.target) : item.target;
-      panel.innerHTML = `<h2 class="property-heading">${escapeHtml(localizedConstraintName(item.name))}</h2><section class="property-section"><h3>Constraint</h3><div class="property-row"><span>Type</span><span class="property-readonly">${escapeHtml(item.constructor.name)}</span></div>${Number.isFinite(value) && !item.readOnlyDimension ? `<div class="property-row"><label>Value</label><input data-property="constraint-value" type="number" step="0.1" value="${value}"></div>` : ""}</section>${dimension ? `<section class="property-section"><h3>Dimension Display</h3><div class="property-row"><label>Visible</label><input data-dimension-display="visible" type="checkbox" ${display.visible ? "checked" : ""}></div><div class="property-row"><label>Precision</label><input data-dimension-display="precision" type="number" min="0" max="10" placeholder="自動" value="${display.precision ?? ""}"></div><div class="property-row"><label>Prefix</label><input data-dimension-display="prefix" value="${escapeHtml(display.prefix)}"></div><div class="property-row"><label>Suffix</label><input data-dimension-display="suffix" value="${escapeHtml(display.suffix)}"></div><div class="property-row"><label>Arrows</label><input data-dimension-display="arrows" type="checkbox" ${display.arrows ? "checked" : ""}></div><div class="property-row"><label>Extension lines</label><input data-dimension-display="extensionLines" type="checkbox" ${display.extensionLines ? "checked" : ""}></div></section>` : ""}`;
+      const value = isReadOnlyDimension(item)
+        ? measuredDimensionValue(targetValue, dimension)
+        : targetValue?.kind === "angle" ? angleDegrees(item.target) : item.target;
+      const parameterRows = dimension
+        ? `<div class="property-row"><label>${applicationText("Parameter名", "Parameter name")}</label><input data-property="constraint-parameter-name" value="${escapeHtml(item.parameterName || "")}"></div>`
+          + (!isReadOnlyDimension(item)
+            ? `<div class="property-row"><label>${applicationText("数式", "Expression")}</label><input data-property="constraint-expression" value="${escapeHtml(item.expression || numericDimensionExpression(item))}"></div>`
+            : `<div class="property-row"><span>${applicationText("数式", "Expression")}</span><span class="property-readonly">${applicationText("Geometryから測定", "Measured from geometry")}</span></div>`)
+          + propertyReadonlyRow("評価値", "Evaluated value", Number.isFinite(value) ? formatDisplayNumber(value) : "—")
+        : "";
+      panel.innerHTML = `<h2 class="property-heading">${escapeHtml(localizedConstraintName(item.name))}</h2><section class="property-section"><h3>Constraint</h3><div class="property-row"><span>Type</span><span class="property-readonly">${escapeHtml(item.constructor.name)}</span></div>${parameterRows}</section>${dimension ? `<section class="property-section"><h3>Dimension Display</h3><div class="property-row"><label>Visible</label><input data-dimension-display="visible" type="checkbox" ${display.visible ? "checked" : ""}></div><div class="property-row"><label>Precision</label><input data-dimension-display="precision" type="number" min="0" max="10" placeholder="自動" value="${display.precision ?? ""}"></div><div class="property-row"><label>Prefix</label><input data-dimension-display="prefix" value="${escapeHtml(display.prefix)}"></div><div class="property-row"><label>Suffix</label><input data-dimension-display="suffix" value="${escapeHtml(display.suffix)}"></div><div class="property-row"><label>Arrows</label><input data-dimension-display="arrows" type="checkbox" ${display.arrows ? "checked" : ""}></div><div class="property-row"><label>Extension lines</label><input data-dimension-display="extensionLines" type="checkbox" ${display.extensionLines ? "checked" : ""}></div></section>` : ""}`;
     } else if (target.kind === "annotation") {
       const annotationType = item.type === "leader" ? applicationText("引出線", "Leader") : applicationText("自由テキスト", "Free Text");
       panel.innerHTML = `<h2 class="property-heading">${annotationType} ${escapeHtml(item.id)}</h2><section class="property-section"><h3>Annotation</h3>${propertyReadonlyRow("種類", "Type", annotationType)}${propertyReadonlyRow("ID", "ID", item.id)}<div class="property-row"><label>Visible</label><input data-property="annotation-visible" type="checkbox" ${item.visible !== false ? "checked" : ""}></div>${item.type === "text" ? `<div class="property-row"><label>Text</label><textarea data-property="annotation-text">${escapeHtml(item.text || "")}</textarea></div><div class="property-row"><label>Font size</label><input data-property="annotation-font-size" type="number" min="6" max="72" value="${Number(item.style?.fontSize || 13)}"></div>` : ""}<div class="property-row"><label>Color</label><input data-property="annotation-color" type="text" value="${escapeHtml(item.style?.color || "#111827")}"></div></section>`;
@@ -10458,6 +10910,45 @@
     hoveredAnnotation = null;
   }
 
+  function commitDimensionParameterName(constraint, requestedName) {
+    const namespace = currentParameterNamespace();
+    ensureParameterNamespace(namespace);
+    const oldName = constraint.parameterName;
+    const nextName = validateParameterIdentifier(String(requestedName || "").trim(), { dimension: true });
+    if (nextName === oldName) return true;
+    const conflict = namespace.parameters.some((parameter) => parameter.name === nextName)
+      || dimensionConstraintsInNamespace(namespace).some((item) => item !== constraint && item.parameterName === nextName);
+    if (conflict) throw Object.assign(new Error(`Duplicate identifier '${nextName}'`), { code: "DUPLICATE_IDENTIFIER", identifier: nextName });
+    const replacements = new Map([[oldName, nextName]]);
+    for (const parameter of namespace.parameters) parameter.expression = rewriteParameterIdentifiers(parameter.expression, replacements);
+    for (const item of dimensionConstraintsInNamespace(namespace)) {
+      if (!isReadOnlyDimension(item)) item.expression = rewriteParameterIdentifiers(item.expression, replacements);
+    }
+    constraint.parameterName = nextName;
+    const autoMatch = /^d(\d+)$/.exec(nextName);
+    if (autoMatch) namespace.nextDimensionParameterIndex = Math.max(namespace.nextDimensionParameterIndex, Number(autoMatch[1]) + 1);
+    return true;
+  }
+
+  function commitDimensionPropertyEdit(constraint, property, value) {
+    const snapshot = snapshotModelState();
+    try {
+      if (property === "constraint-parameter-name") commitDimensionParameterName(constraint, value);
+      else if (property === "constraint-expression") constraint.expression = String(value).trim();
+      const solved = stabilizeActiveParameterNamespace(constraintSketchId(constraint));
+      if (!solved.success || solved.dependent?.success === false || solved.result.errorNorm > CONSTRAINT_ACCEPT_ERROR) {
+        throw new Error(solved.result.reason || applicationText("拘束が成立しません", "Constraints could not be satisfied"));
+      }
+      recordHistory(property === "constraint-parameter-name" ? "寸法Parameter名変更" : "寸法式変更");
+      setHint(property === "constraint-parameter-name" ? applicationText("寸法Parameter名を変更しました", "Dimension parameter name changed") : applicationText("寸法式を変更しました", "Dimension expression changed"));
+      return true;
+    } catch (error) {
+      restoreModelState(snapshot);
+      setHint(parameterErrorText(error), "error");
+      return false;
+    }
+  }
+
   function handlePropertiesChange(event) {
     const target = selectedPropertiesTarget();
     const input = event.target;
@@ -10492,14 +10983,10 @@
     if (target.kind === "geometry" && property === "construction") {
       target.item.construction = input.checked;
       recordHistory("補助線変更");
-    } else if (target.kind === "constraint" && property === "constraint-value") {
-      const constraintTarget = targetFromConstraint(target.item);
-      const value = Number(input.value);
-      if (Number.isFinite(value) && value > 0) {
-        target.item.target = constraintTarget?.kind === "angle" ? (value * Math.PI) / 180 : value;
-        preconditionNewConstraint(target.item);
-        solveAndRefresh("寸法値変更");
-      }
+    } else if (target.kind === "constraint" && (property === "constraint-parameter-name" || property === "constraint-expression")) {
+      commitDimensionPropertyEdit(target.item, property, input.value);
+      updateUI();
+      draw();
       return;
     } else if (target.kind === "annotation") {
       if (property === "annotation-visible") target.item.visible = input.checked;
@@ -10544,6 +11031,7 @@
   }
 
   function updateUI({ refreshAnalysis = true } = {}) {
+    ensureParameterNamespace(currentParameterNamespace());
     if (refreshAnalysis) refreshConstraintAnalysis();
     updateDocumentNameUI();
     updateToolbar();
@@ -10604,12 +11092,14 @@
 
     const listedConstraints = model.constraints
       .map((constraint, index) => ({ constraint, index }))
-      .filter(({ constraint }) => isActiveSketchConstraint(constraint) && !isReadOnlyDimension(constraint));
+      .filter(({ constraint }) => isActiveSketchConstraint(constraint));
     const fixedPoints = model.points.filter((point) => isActiveSketchElement(point) && point.fixed);
     const constraintRows = listedConstraints.map(({ constraint, index }, displayIndex) => {
       const duplicate = constraintIsRedundant(constraint);
       const referenceError = referenceConstraintErrorInfo(constraint);
-      return `<div class="item constraint-item constraint-list-row ${duplicate ? "duplicate" : ""} ${referenceError ? "reference-error" : ""}" data-idx="${index}" title="${escapeHtml(referenceError || "")}"><span>${displayIndex + 1}. ${escapeHtml(localizedConstraintName(constraint.name))}${referenceError ? `<span class="badge constraint-reference-error-badge">参照エラー</span>` : ""}${duplicate ? `<span class="badge constraint-duplicate-badge">重複</span>` : ""}</span>` +
+      const parameterPrefix = isDimensionConstraint(constraint) ? `${constraint.parameterName}: ` : "";
+      const readOnlyBadge = isReadOnlyDimension(constraint) ? `<span class="badge">${applicationText("読み取り専用", "Read-only")}</span>` : "";
+      return `<div class="item constraint-item constraint-list-row ${duplicate ? "duplicate" : ""} ${referenceError ? "reference-error" : ""}" data-idx="${index}" title="${escapeHtml(referenceError || "")}"><span>${displayIndex + 1}. ${escapeHtml(parameterPrefix + localizedConstraintName(constraint.name))}${readOnlyBadge}${referenceError ? `<span class="badge constraint-reference-error-badge">参照エラー</span>` : ""}${duplicate ? `<span class="badge constraint-duplicate-badge">重複</span>` : ""}</span>` +
         `<button data-idx="${index}" class="removeConstraintBtn" title="削除" aria-label="削除" data-tooltip="削除">` +
         `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3M7 7l1 13h8l1-13"/></svg>` +
         `</button></div>`;
@@ -10824,7 +11314,11 @@
     preconditionNewConstraint(constraint);
 
     const solveStartedAt = performance.now();
-    const solved = withTemporarySolveStepNorm(solveStepNorm, () => solveConstraintComponentAndDependents(constraint, snapshot));
+    let solved = withTemporarySolveStepNorm(solveStepNorm, () => solveConstraintComponentAndDependents(constraint, snapshot));
+    if (solved.success && isDimensionConstraint(constraint) && !isReadOnlyDimension(constraint)) {
+      const stabilized = stabilizeActiveParameterNamespace(constraintSketchId(constraint));
+      if (!stabilized.success || stabilized.dependent?.success === false) solved = stabilized;
+    }
     performanceTrace.solveMs = performance.now() - solveStartedAt;
     const result = solved.result;
     performanceTrace.solveVariableCount = result.variableCount;
@@ -11292,6 +11786,7 @@
   function addDistanceConstraintFromTarget(target, value, dimension, options = {}) {
     const constraint = distanceConstraintFromTarget(target, value, dimension);
     if (!constraint) return false;
+    if (!options.referenceSketchId) constraint.expression = String(options.expression || value);
     return commitConstraintResolution({
       type: options.referenceSketchId ? "referenceDimension" : "dimension",
       constraint,
@@ -11504,6 +11999,7 @@
       }
     }
     session.fullDragState = solver.clone(solver.getVariables());
+    session.parameterDragSnapshot = snapshotModelState();
     return session;
   }
 
@@ -13601,15 +14097,25 @@
     const result = solveFinalDragSession(session);
     normalizeArcSweeps();
     if (!result.success || result.errorNorm > CONSTRAINT_ACCEPT_ERROR) {
-      if (session.fullDragState) solver.restore(session.fullDragState);
+      if (session.parameterDragSnapshot) restoreModelState(session.parameterDragSnapshot);
+      else if (session.fullDragState) solver.restore(session.fullDragState);
       clearSketchSolveState(session.sketchId || activeSketchId());
       setHint(`${completedLabel}完了時の全体solveに失敗しました (error=${result.errorNorm.toExponential(3)})`, "error");
       updateUI();
       draw();
       return;
     }
-    const dependentResult = solveReferenceDependentSketches(session.sketchId || activeSketchId());
     if (session.item && model.blockInstances.includes(session.item)) invalidateBlockProjectionCache(session.item.id);
+    const stabilized = stabilizeActiveParameterNamespace(session.sketchId || activeSketchId());
+    if (!stabilized.success || stabilized.dependent?.success === false || stabilized.result.errorNorm > CONSTRAINT_ACCEPT_ERROR) {
+      if (session.parameterDragSnapshot) restoreModelState(session.parameterDragSnapshot);
+      clearSketchSolveState(session.sketchId || activeSketchId());
+      setHint(`${completedLabel}${applicationText("後のParameter計算に失敗しました", " parameter calculation failed")}: ${stabilized.result.reason || "solve failed"}`, "error");
+      updateUI();
+      draw();
+      return;
+    }
+    const dependentResult = stabilized.dependent;
     const analysis = refreshConstraintAnalysis();
     const dependentErrorText = dependentErrorSummary(dependentResult);
     setHint(`${completedLabel}完了: success=${result.success}, error=${result.errorNorm.toExponential(2)}, iter=${result.iterations}${dependentErrorText} / ${constraintSummaryText()}`, analysis.analysis.stable && dependentResult.success ? "normal" : "error");
@@ -14036,6 +14542,249 @@
     viewState.geometryIds = event.target.checked;
     draw();
   });
+  function parameterScopeOptions() {
+    if (blockEditSession) return [{ key: `block:${blockEditSession.draft.id}`, label: `${applicationText("ブロック", "Block")}: ${blockEditSession.draft.name}`, namespace: model }];
+    return [
+      { key: "document", label: "Document", namespace: model },
+      ...model.blockDefinitions.map((definition) => ({ key: `block:${definition.id}`, label: `${applicationText("ブロック", "Block")}: ${definition.name}`, namespace: definition })),
+    ];
+  }
+
+  function parameterScopeForKey(key) {
+    return parameterScopeOptions().find((option) => option.key === key) || parameterScopeOptions()[0] || null;
+  }
+
+  function parameterDraftSignature(session = parameterDialogSession) {
+    if (!session) return "";
+    return JSON.stringify({
+      parameters: session.parameters.map(({ name, expression }) => ({ name, expression })),
+      dimensions: session.dimensions.map(({ name, expression, readOnly }) => ({ name, expression: readOnly ? null : expression, readOnly })),
+    });
+  }
+
+  function parameterDialogIsDirty() {
+    return Boolean(parameterDialogSession && parameterDraftSignature() !== parameterDialogSession.originalSignature);
+  }
+
+  function createParameterDialogSession(scope) {
+    ensureParameterNamespace(scope.namespace);
+    const dimensions = dimensionConstraintsInNamespace(scope.namespace).map((constraint) => ({
+      constraint,
+      name: constraint.parameterName,
+      committedName: constraint.parameterName,
+      expression: isReadOnlyDimension(constraint) ? "" : constraint.expression,
+      readOnly: isReadOnlyDimension(constraint),
+    }));
+    const session = {
+      key: scope.key,
+      namespace: scope.namespace,
+      parameters: scope.namespace.parameters.map((parameter) => ({ name: parameter.name, committedName: parameter.name, expression: parameter.expression, isNew: false })),
+      dimensions,
+    };
+    session.originalSignature = parameterDraftSignature(session);
+    return session;
+  }
+
+  function parameterDraftEvaluation(session = parameterDialogSession) {
+    validateParameterSymbolNames(session.parameters, session.dimensions);
+    const inputValues = new Map();
+    const definitions = session.parameters.map((parameter) => ({ name: parameter.name, expression: parameter.expression, kind: "parameter" }));
+    for (const dimension of session.dimensions) {
+      if (dimension.readOnly) {
+        const target = targetFromConstraint(dimension.constraint);
+        inputValues.set(dimension.name, measuredDimensionValue(target, dimension.constraint.dimension));
+      } else {
+        definitions.push({ name: dimension.name, expression: dimension.expression, kind: "dimension" });
+      }
+    }
+    return evaluateParameterDefinitions(definitions, inputValues);
+  }
+
+  function setParameterDialogError(message = "") {
+    const error = document.getElementById("parameterDialogError");
+    if (!error) return;
+    error.hidden = !message;
+    error.textContent = message;
+  }
+
+  function parameterDimensionSource(dimension, namespace) {
+    const constraint = dimension.constraint;
+    const sketchId = constraint.sketchId || DEFAULT_SKETCH_ID;
+    const sketch = (namespace.sketches || []).find((item) => item.id === sketchId);
+    const kind = isReadOnlyDimension(constraint) ? applicationText("参照寸法", "Reference dimension") : applicationText("拘束寸法", "Driving dimension");
+    return `${kind} / ${sketch?.name || sketchId}`;
+  }
+
+  function renderParameterDialog() {
+    const session = parameterDialogSession;
+    if (!session) return;
+    const scopeSelect = document.getElementById("parameterScopeSelect");
+    if (scopeSelect) {
+      scopeSelect.innerHTML = parameterScopeOptions().map((option) => `<option value="${escapeHtml(option.key)}" ${option.key === session.key ? "selected" : ""}>${escapeHtml(option.label)}</option>`).join("");
+      scopeSelect.disabled = Boolean(blockEditSession);
+    }
+    let evaluation = null;
+    let evaluationError = null;
+    try {
+      evaluation = parameterDraftEvaluation(session);
+    } catch (error) {
+      evaluationError = error;
+    }
+    const parameterRows = document.getElementById("parameterRows");
+    if (parameterRows) parameterRows.innerHTML = session.parameters.length > 0
+      ? session.parameters.map((parameter, index) => `<tr><td><input data-parameter-row="${index}" data-parameter-field="name" value="${escapeHtml(parameter.name)}"></td><td><input data-parameter-row="${index}" data-parameter-field="expression" value="${escapeHtml(parameter.expression)}"></td><td class="parameter-value">${escapeHtml(formatDisplayNumber(evaluation?.values.get(parameter.name)))}</td><td class="parameter-delete-cell"><button class="compact-button" type="button" data-delete-parameter="${index}">${applicationText("削除", "Delete")}</button></td></tr>`).join("")
+      : `<tr><td colspan="4" class="parameter-source">${applicationText("Parameterはありません", "No parameters")}</td></tr>`;
+    const dimensionRows = document.getElementById("parameterDimensionRows");
+    if (dimensionRows) dimensionRows.innerHTML = session.dimensions.length > 0
+      ? session.dimensions.map((dimension, index) => `<tr><td><input data-dimension-row="${index}" data-dimension-field="name" value="${escapeHtml(dimension.name)}"></td><td class="parameter-source">${escapeHtml(parameterDimensionSource(dimension, session.namespace))}</td><td><input data-dimension-row="${index}" data-dimension-field="expression" value="${escapeHtml(dimension.readOnly ? applicationText("Geometryから測定", "Measured from geometry") : dimension.expression)}" ${dimension.readOnly ? "readonly" : ""}></td><td class="parameter-value">${escapeHtml(formatDisplayNumber(evaluation?.values.get(dimension.name)))}</td></tr>`).join("")
+      : `<tr><td colspan="4" class="parameter-source">${applicationText("寸法はありません", "No dimensions")}</td></tr>`;
+    setParameterDialogError(evaluationError ? parameterErrorText(evaluationError) : "");
+    localizeApplicationUI(document.getElementById("parametersDialog"));
+  }
+
+  function rewriteParameterDraftName(oldName, nextName) {
+    if (!oldName || oldName === nextName) return;
+    const replacements = new Map([[oldName, nextName]]);
+    for (const parameter of parameterDialogSession.parameters) parameter.expression = rewriteParameterIdentifiers(parameter.expression, replacements);
+    for (const dimension of parameterDialogSession.dimensions) if (!dimension.readOnly) dimension.expression = rewriteParameterIdentifiers(dimension.expression, replacements);
+  }
+
+  function loadParameterDialogScope(key) {
+    const scope = parameterScopeForKey(key);
+    if (!scope) return false;
+    parameterDialogSession = createParameterDialogSession(scope);
+    renderParameterDialog();
+    return true;
+  }
+
+  function withStoredDefinitionAsModel(definition, callback) {
+    const saved = {
+      points: model.points, lines: model.lines, circles: model.circles, arcs: model.arcs,
+      constraints: model.constraints, parameters: model.parameters, nextDimensionParameterIndex: model.nextDimensionParameterIndex,
+      blockInstances: model.blockInstances, sketches: model.sketches, activeSketchId: model.activeSketchId,
+    };
+    model.points = definition.points;
+    model.lines = definition.lines;
+    model.circles = definition.circles;
+    model.arcs = definition.arcs;
+    model.constraints = definition.constraints;
+    model.parameters = definition.parameters;
+    model.nextDimensionParameterIndex = definition.nextDimensionParameterIndex;
+    model.blockInstances = definition.blockInstances || [];
+    model.sketches = definition.sketches;
+    model.activeSketchId = definition.activeSketchId;
+    try {
+      return callback();
+    } finally {
+      definition.points = model.points;
+      definition.lines = model.lines;
+      definition.circles = model.circles;
+      definition.arcs = model.arcs;
+      definition.constraints = model.constraints;
+      definition.parameters = model.parameters;
+      definition.nextDimensionParameterIndex = model.nextDimensionParameterIndex;
+      definition.blockInstances = model.blockInstances;
+      definition.sketches = model.sketches;
+      definition.activeSketchId = model.activeSketchId;
+      Object.assign(model, saved);
+    }
+  }
+
+  function stabilizeStoredBlockDefinition(definition) {
+    return withStoredDefinitionAsModel(definition, () => stabilizeActiveParameterNamespace(definition.activeSketchId, { allSketches: blockDefinitionDrawableSketchIds(definition) }));
+  }
+
+  function rebuildRootConstraintObjects() {
+    const pointById = new Map(model.points.map((point) => [point.id, point]));
+    const lineById = new Map(model.lines.map((line) => [line.id, line]));
+    const primitiveById = new Map([...model.circles, ...model.arcs].map((primitive) => [primitive.id, primitive]));
+    for (const bundle of blockProjectionBundles()) addBlockProjectionElementsToMaps(bundle, pointById, lineById, primitiveById);
+    model.constraints = model.constraints.map((source) => {
+      const data = decorateSerializedConstraint(serializeConstraint(source), source);
+      const constraint = data ? deserializeConstraint(data, pointById, lineById, primitiveById) : null;
+      if (!constraint) throw new Error(applicationText("Document拘束を再構築できません", "Document constraints could not be rebuilt"));
+      constraint.sketchId = source.sketchId;
+      constraint.reference = Boolean(source.reference);
+      constraint.referenceSketchId = source.referenceSketchId || null;
+      return constraint;
+    });
+    clearSelection();
+  }
+
+  function propagateBlockParameterChange(definition) {
+    definition.revision = (Number(definition.revision) || 0) + 1;
+    invalidateBlockProjectionCache();
+    let parentId = definition.parentDefinitionId || null;
+    while (parentId) {
+      const parent = blockDefinitionById(parentId);
+      if (!parent) throw new Error(applicationText("親Block Definitionが見つかりません", "Parent block definition was not found"));
+      rebuildBlockDefinitionConstraintObjects(parent);
+      const result = stabilizeStoredBlockDefinition(parent);
+      if (!result.success || result.dependent?.success === false) throw new Error(result.result.reason || applicationText("親Blockの拘束が成立しません", "Parent block constraints could not be satisfied"));
+      parent.revision = (Number(parent.revision) || 0) + 1;
+      parentId = parent.parentDefinitionId || null;
+      invalidateBlockProjectionCache();
+    }
+    rebuildRootConstraintObjects();
+    const rootResult = stabilizeActiveParameterNamespace(activeSketchId(), { allSketches: model.sketches.filter((sketch) => !isRootSketch(sketch)).map((sketch) => sketch.id) });
+    if (!rootResult.success || rootResult.dependent?.success === false) throw new Error(rootResult.result.reason || applicationText("Document拘束が成立しません", "Document constraints could not be satisfied"));
+  }
+
+  function applyParameterDialogDraft() {
+    const session = parameterDialogSession;
+    if (!session) return false;
+    const documentSnapshot = blockEditSession ? null : historySnapshot();
+    const localSnapshot = blockEditSession ? snapshotModelState() : null;
+    try {
+      session.namespace.parameters = session.parameters.map((parameter) => ({ name: parameter.name.trim(), expression: parameter.expression.trim() }));
+      session.dimensions.forEach((dimension) => {
+        dimension.constraint.parameterName = dimension.name.trim();
+        if (!dimension.readOnly) dimension.constraint.expression = dimension.expression.trim();
+      });
+      ensureParameterNamespace(session.namespace);
+      let result;
+      if (session.namespace === model) {
+        result = stabilizeActiveParameterNamespace(activeSketchId(), { allSketches: model.sketches.filter((sketch) => !isRootSketch(sketch)).map((sketch) => sketch.id) });
+      } else {
+        result = stabilizeStoredBlockDefinition(session.namespace);
+      }
+      if (!result.success || result.dependent?.success === false || result.result.errorNorm > CONSTRAINT_ACCEPT_ERROR) {
+        throw new Error(result.result.reason || applicationText("拘束が成立しません", "Constraints could not be satisfied"));
+      }
+      if (session.namespace !== model) propagateBlockParameterChange(session.namespace);
+      recordHistory("Parameter変更");
+      setHint(applicationText("Parameterを適用しました", "Parameters applied"));
+      loadParameterDialogScope(session.key);
+      updateUI();
+      draw();
+      return true;
+    } catch (error) {
+      if (blockEditSession && localSnapshot) restoreModelState(localSnapshot);
+      else if (documentSnapshot) loadModelData(JSON.parse(documentSnapshot), { documentNameFallback: model.documentName });
+      const scopeKey = session.key;
+      loadParameterDialogScope(scopeKey);
+      setParameterDialogError(parameterErrorText(error));
+      setHint(parameterErrorText(error), "error");
+      updateUI();
+      draw();
+      return false;
+    }
+  }
+
+  function resolveDirtyParameterDialog() {
+    if (!parameterDialogIsDirty()) return true;
+    if (window.confirm(applicationText("未適用の変更を適用しますか？", "Apply the pending changes?"))) return applyParameterDialogDraft();
+    return window.confirm(applicationText("未適用の変更を破棄しますか？", "Discard the pending changes?"));
+  }
+
+  function openParametersDialog() {
+    const options = parameterScopeOptions();
+    if (options.length === 0) return;
+    loadParameterDialogScope(options[0].key);
+    const dialog = document.getElementById("parametersDialog");
+    if (dialog && !dialog.open) dialog.showModal();
+  }
+
   const appMenus = Array.from(document.querySelectorAll(".app-menu"));
   let appMenuHoverTimer = null;
   function cancelAppMenuHoverSwitch() {
@@ -14147,6 +14896,85 @@
       draw();
     });
   }
+  document.getElementById("parametersBtn")?.addEventListener("click", openParametersDialog);
+  document.getElementById("parameterScopeSelect")?.addEventListener("change", (event) => {
+    const previousKey = parameterDialogSession?.key;
+    if (!resolveDirtyParameterDialog()) {
+      event.target.value = previousKey;
+      return;
+    }
+    loadParameterDialogScope(event.target.value);
+  });
+  document.getElementById("parametersForm")?.addEventListener("input", (event) => {
+    if (!parameterDialogSession) return;
+    const input = event.target;
+    if (input.dataset.parameterRow != null) {
+      const row = parameterDialogSession.parameters[Number(input.dataset.parameterRow)];
+      if (row) row[input.dataset.parameterField] = input.value;
+    }
+    if (input.dataset.dimensionRow != null) {
+      const row = parameterDialogSession.dimensions[Number(input.dataset.dimensionRow)];
+      if (row && !(row.readOnly && input.dataset.dimensionField === "expression")) row[input.dataset.dimensionField] = input.value;
+    }
+  });
+  document.getElementById("parametersForm")?.addEventListener("change", (event) => {
+    if (!parameterDialogSession) return;
+    const input = event.target;
+    let row = null;
+    if (input.dataset.parameterRow != null) row = parameterDialogSession.parameters[Number(input.dataset.parameterRow)];
+    if (input.dataset.dimensionRow != null) row = parameterDialogSession.dimensions[Number(input.dataset.dimensionRow)];
+    const isName = input.dataset.parameterField === "name" || input.dataset.dimensionField === "name";
+    if (row && isName) {
+      rewriteParameterDraftName(row.committedName, row.name);
+      row.committedName = row.name;
+    }
+    if (input.id !== "parameterScopeSelect") renderParameterDialog();
+  });
+  document.getElementById("parametersForm")?.addEventListener("click", (event) => {
+    const deleteButton = event.target.closest("[data-delete-parameter]");
+    if (!deleteButton || !parameterDialogSession) return;
+    const index = Number(deleteButton.dataset.deleteParameter);
+    const parameter = parameterDialogSession.parameters[index];
+    if (!parameter) return;
+    const dependencies = [];
+    for (const item of [
+      ...parameterDialogSession.parameters.filter((_, itemIndex) => itemIndex !== index),
+      ...parameterDialogSession.dimensions.filter((dimension) => !dimension.readOnly),
+    ]) {
+      try {
+        if (expressionDependencies(item.expression).has(parameter.name)) dependencies.push(item.name);
+      } catch (_error) {
+        // The complete draft validation reports unrelated syntax errors.
+      }
+    }
+    if (dependencies.length > 0) {
+      setParameterDialogError(applicationLanguage === "en" ? `${parameter.name} is referenced by ${dependencies.join(", ")}` : `${parameter.name} は ${dependencies.join("、")} から参照されています`);
+      return;
+    }
+    parameterDialogSession.parameters.splice(index, 1);
+    renderParameterDialog();
+  });
+  document.getElementById("addParameterBtn")?.addEventListener("click", () => {
+    if (!parameterDialogSession) return;
+    const used = new Set([...parameterDialogSession.parameters.map((item) => item.name), ...parameterDialogSession.dimensions.map((item) => item.name)]);
+    let index = 1;
+    while (used.has(`parameter${index}`)) index += 1;
+    const name = `parameter${index}`;
+    parameterDialogSession.parameters.push({ name, committedName: name, expression: "0", isNew: true });
+    renderParameterDialog();
+  });
+  document.getElementById("applyParametersBtn")?.addEventListener("click", applyParameterDialogDraft);
+  document.getElementById("discardParametersBtn")?.addEventListener("click", () => loadParameterDialogScope(parameterDialogSession?.key));
+  document.getElementById("parametersCloseBtn")?.addEventListener("click", () => {
+    if (!resolveDirtyParameterDialog()) return;
+    document.getElementById("parametersDialog")?.close();
+  });
+  document.getElementById("parametersDialog")?.addEventListener("cancel", (event) => {
+    if (!resolveDirtyParameterDialog()) event.preventDefault();
+  });
+  document.getElementById("parametersDialog")?.addEventListener("close", () => {
+    parameterDialogSession = null;
+  });
   document.getElementById("documentSettingsBtn")?.addEventListener("click", () => {
     const fields = document.getElementById("documentAppearanceFields");
     if (fields) {
@@ -14675,6 +15503,139 @@
       },
       serializedModelForTest() {
         return structuredClone(serializeModel());
+      },
+      resetForParameterTest() {
+        resetModelState();
+        const p1 = addPoint(0, 0, true, "endpoint");
+        const p2 = addPoint(100, 0, false, "endpoint");
+        const drivenLine = addLine(p1, p2);
+        pushModelConstraint(new HorizontalConstraint(drivenLine));
+        const driven = new DistanceConstraint(p1, p2, 100);
+        driven.dimension = dimensionFromAnchor({ kind: "line-length", line: drivenLine, p1, p2, value: 100 }, { x: 50, y: -30 });
+        pushModelConstraint(driven);
+        const p3 = addPoint(0, 60, true, "endpoint");
+        const p4 = addPoint(40, 60, true, "endpoint");
+        const measuredLine = addLine(p3, p4);
+        const measured = new DistanceConstraint(p3, p4, 40);
+        measured.dimension = dimensionFromAnchor({ kind: "line-length", line: measuredLine, p1: p3, p2: p4, value: 40 }, { x: 20, y: 85 });
+        measured.readOnlyDimension = true;
+        measured.enabled = false;
+        pushModelConstraint(measured);
+        model.parameters = [
+          { name: "width", expression: `${measured.parameterName} * 2` },
+          { name: "margin", expression: "10" },
+        ];
+        driven.expression = "width / 2 + margin";
+        const definition = createEmptyBlockDefinition("Param Block");
+        const bp1 = new Point("BP1", 0, 0, true, "endpoint");
+        const bp2 = new Point("BP2", 25, 0, false, "endpoint");
+        bp1.sketchId = DEFAULT_SKETCH_ID;
+        bp2.sketchId = DEFAULT_SKETCH_ID;
+        const blockLine = new Line("BL1", bp1, bp2);
+        blockLine.sketchId = DEFAULT_SKETCH_ID;
+        const blockHorizontal = new HorizontalConstraint(blockLine);
+        blockHorizontal.sketchId = DEFAULT_SKETCH_ID;
+        const blockDimension = new DistanceConstraint(bp1, bp2, 25);
+        blockDimension.sketchId = DEFAULT_SKETCH_ID;
+        blockDimension.dimension = { x: 12.5, y: -20 };
+        definition.points.push(bp1, bp2);
+        definition.lines.push(blockLine);
+        definition.constraints.push(blockHorizontal, blockDimension);
+        definition.parameters = [{ name: "width", expression: "25" }];
+        ensureParameterNamespace(definition);
+        blockDimension.expression = "width";
+        model.blockDefinitions.push(definition);
+        model.blockInstances.push({ id: `BI${blockInstanceSeq++}`, definitionId: definition.id, sketchId: DEFAULT_SKETCH_ID, x: 180, y: 0, rotation: 0, fixed: false, rotationLocked: true, enabledSketchIds: [DEFAULT_SKETCH_ID], appearanceOverride: {} });
+        const otherDefinition = createEmptyBlockDefinition("Other Param Block");
+        const op1 = new Point("BP1", 0, 0, true, "endpoint");
+        const op2 = new Point("BP2", 15, 0, false, "endpoint");
+        op1.sketchId = DEFAULT_SKETCH_ID;
+        op2.sketchId = DEFAULT_SKETCH_ID;
+        const otherLine = new Line("BL1", op1, op2);
+        otherLine.sketchId = DEFAULT_SKETCH_ID;
+        const otherHorizontal = new HorizontalConstraint(otherLine);
+        otherHorizontal.sketchId = DEFAULT_SKETCH_ID;
+        const otherDimension = new DistanceConstraint(op1, op2, 15);
+        otherDimension.sketchId = DEFAULT_SKETCH_ID;
+        otherDimension.dimension = { x: 7.5, y: -20 };
+        otherDefinition.points.push(op1, op2);
+        otherDefinition.lines.push(otherLine);
+        otherDefinition.constraints.push(otherHorizontal, otherDimension);
+        otherDefinition.parameters = [{ name: "width", expression: "15" }];
+        ensureParameterNamespace(otherDefinition);
+        otherDimension.expression = "width";
+        model.blockDefinitions.push(otherDefinition);
+        model.blockInstances.push({ id: `BI${blockInstanceSeq++}`, definitionId: otherDefinition.id, sketchId: DEFAULT_SKETCH_ID, x: 260, y: 0, rotation: 0, fixed: false, rotationLocked: true, enabledSketchIds: [DEFAULT_SKETCH_ID], appearanceOverride: {} });
+        invalidateBlockProjectionCache();
+        const result = stabilizeActiveParameterNamespace(activeSketchId(), { allSketches: [activeSketchId()] });
+        resetHistory("parameter test");
+        updateUI();
+        draw();
+        return { success: result.success, drivenName: driven.parameterName, measuredName: measured.parameterName, length: drivenLine.length() };
+      },
+      resetForParameterFeedbackTest() {
+        resetModelState();
+        const p1 = addPoint(0, 0, true, "endpoint");
+        const p2 = addPoint(40, 0, false, "endpoint");
+        const line = addLine(p1, p2);
+        pushModelConstraint(new HorizontalConstraint(line));
+        const driving = new DistanceConstraint(p1, p2, 40);
+        driving.dimension = dimensionFromAnchor({ kind: "line-length", line, p1, p2, value: 40 }, { x: 20, y: -25 });
+        pushModelConstraint(driving);
+        const measured = new DistanceConstraint(p1, p2, 40);
+        measured.dimension = dimensionFromAnchor({ kind: "line-length", line, p1, p2, value: 40 }, { x: 20, y: 25 });
+        measured.readOnlyDimension = true;
+        measured.enabled = false;
+        pushModelConstraint(measured);
+        driving.expression = "40";
+        const result = stabilizeActiveParameterNamespace(activeSketchId(), { allSketches: [activeSketchId()] });
+        resetHistory("parameter feedback test");
+        updateUI();
+        draw();
+        return { success: result.success, drivingName: driving.parameterName, measuredName: measured.parameterName, length: line.length() };
+      },
+      parameterStateForTest() {
+        const evaluation = validateParameterNamespace(model);
+        return {
+          valid: evaluation.success,
+          parameters: model.parameters.map((parameter) => ({ name: parameter.name, expression: parameter.expression, value: parameter.evaluatedValue })),
+          dimensions: dimensionConstraintsInNamespace(model).map((constraint) => ({
+            name: constraint.parameterName,
+            expression: constraint.expression || null,
+            readOnly: isReadOnlyDimension(constraint),
+            value: constraint.evaluatedParameterValue,
+            target: dimensionExpressionValue(constraint),
+          })),
+          blockNamespaces: model.blockDefinitions.map((definition) => ({
+            id: definition.id,
+            parameters: definition.parameters.map((parameter) => ({ name: parameter.name, expression: parameter.expression })),
+            dimensions: dimensionConstraintsInNamespace(definition).map((constraint) => ({ name: constraint.parameterName, expression: constraint.expression, target: dimensionExpressionValue(constraint) })),
+            lineLengths: definition.lines.map((line) => line.length()),
+          })),
+          instanceProjectionLengths: model.blockInstances.flatMap((instance) => blockProjectionBundle(instance).lines.map((line) => line.length())),
+          serialized: serializeModel(),
+        };
+      },
+      blockParameterFreezeForTest() {
+        const line = model.lines[0];
+        if (!line) return null;
+        clearSelection();
+        selectedLines = [line];
+        const selection = blockSelectionGeometry();
+        if (selection.error) return { error: selection.error };
+        const definition = createBlockDefinitionFromSelection(selection, blockSelectionBoundsCenter(selection), "Frozen Formula Block");
+        const dimension = dimensionConstraintsInNamespace(definition)[0];
+        return {
+          parameters: definition.parameters,
+          name: dimension?.parameterName || null,
+          expression: dimension?.expression || null,
+          sourceExpression: dimensionConstraintsInNamespace(model)[0]?.expression || null,
+        };
+      },
+      deleteDimensionByNameForTest(name) {
+        const constraint = dimensionConstraintsInNamespace(model).find((item) => item.parameterName === name);
+        const deleted = constraint ? deleteElements({ constraints: [constraint] }) : false;
+        return { deleted, names: dimensionConstraintsInNamespace(model).map((item) => item.parameterName), hint: document.getElementById("hint")?.textContent || "" };
       },
       appearanceStateForTest(kind, id) {
         let item = null;
@@ -15781,6 +16742,9 @@
         offsets[0].target = 25;
         offsets[1].target = 18;
         offsets[2].target = 12;
+        offsets[0].expression = "25";
+        offsets[1].expression = "18";
+        offsets[2].expression = "12";
         offsets.forEach(preconditionNewConstraint);
         solveSketchAndDependents(activeSketchId(), snapshotModelState());
         const measurements = offsets.map((constraint) => measuredConstraintTargetValue(constraint));

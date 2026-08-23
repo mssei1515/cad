@@ -74,6 +74,108 @@ test.afterAll(() => {
   if (serverProcess) serverProcess.kill();
 });
 
+async function openParameterDialog(page) {
+  await page.locator(".app-menu > summary").first().click();
+  await page.locator("#parametersBtn").click();
+  await expect(page.locator("#parametersDialog")).toBeVisible();
+}
+
+test("document parameters, dimension formulas, rename propagation, and v10 persistence work together", async ({ page }) => {
+  await page.goto(`${baseUrl}/index.html?test=1`);
+  await page.waitForFunction(() => window.__cadTest);
+  const initial = await page.evaluate(() => window.__cadTest.resetForParameterTest());
+  expect(initial.success).toBe(true);
+  expect(initial.length).toBeCloseTo(50, 5);
+  const guardedDelete = await page.evaluate((name) => window.__cadTest.deleteDimensionByNameForTest(name), initial.measuredName);
+  expect(guardedDelete.deleted).toBe(false);
+  expect(guardedDelete.names).toContain(initial.measuredName);
+  expect(guardedDelete.hint).toContain("参照されているため削除できません");
+  expect(await page.evaluate(() => window.__cadTest.blockParameterFreezeForTest())).toEqual({
+    parameters: [],
+    name: "d1",
+    expression: "50",
+    sourceExpression: "width / 2 + margin",
+  });
+
+  await openParameterDialog(page);
+  await expect(page.locator("#parameterRows tr")).toHaveCount(2);
+  await expect(page.locator("#parameterDimensionRows tr")).toHaveCount(2);
+  await expect(page.locator('#parameterDimensionRows input[readonly]')).toHaveCount(1);
+  const widthName = page.locator('[data-parameter-field="name"]').first();
+  await widthName.fill("span");
+  await widthName.press("Tab");
+  await page.locator("#applyParametersBtn").click();
+  await expect(page.locator("#parameterDialogError")).toBeHidden();
+
+  const state = await page.evaluate(() => window.__cadTest.parameterStateForTest());
+  expect(state.valid).toBe(true);
+  expect(state.parameters.map((item) => item.name)).toEqual(["span", "margin"]);
+  expect(state.dimensions.find((item) => !item.readOnly).expression).toContain("span");
+  expect(state.serialized.version).toBe(10);
+  expect(state.serialized.constraints.every((constraint) => !constraint.dimension || constraint.parameterName)).toBe(true);
+});
+
+test("block parameter namespaces are independent and directly update definitions", async ({ page }) => {
+  await page.goto(`${baseUrl}/index.html?test=1`);
+  await page.waitForFunction(() => window.__cadTest);
+  await page.evaluate(() => window.__cadTest.resetForParameterTest());
+  await openParameterDialog(page);
+  const scope = page.locator("#parameterScopeSelect");
+  await expect(scope.locator("option")).toHaveCount(3);
+  const blockScopeValue = await scope.locator("option").filter({ hasText: /^ブロック: Param Block$/ }).getAttribute("value");
+  await scope.selectOption(blockScopeValue);
+  await page.locator('[data-parameter-field="expression"]').first().fill("30");
+  await page.locator('[data-parameter-field="expression"]').first().press("Tab");
+  await page.locator("#applyParametersBtn").click();
+  await expect(page.locator("#parameterDialogError")).toBeHidden();
+
+  const state = await page.evaluate(() => window.__cadTest.parameterStateForTest());
+  expect(state.parameters.find((item) => item.name === "width").value).toBe(80);
+  expect(state.blockNamespaces).toHaveLength(2);
+  expect(state.blockNamespaces[0].parameters).toEqual([{ name: "width", expression: "30" }]);
+  expect(state.blockNamespaces[0].dimensions[0].target).toBeCloseTo(30, 5);
+  expect(state.blockNamespaces[0].lineLengths[0]).toBeCloseTo(30, 5);
+  expect(state.blockNamespaces[1].parameters).toEqual([{ name: "width", expression: "15" }]);
+  expect(state.blockNamespaces[1].dimensions[0].target).toBeCloseTo(15, 5);
+  expect(state.blockNamespaces[1].lineLengths[0]).toBeCloseTo(15, 5);
+  expect(state.instanceProjectionLengths[0]).toBeCloseTo(30, 5);
+  expect(state.instanceProjectionLengths[1]).toBeCloseTo(15, 5);
+});
+
+test("invalid v10 parameter expressions reject loading without replacing the document", async ({ page }) => {
+  await page.goto(`${baseUrl}/index.html?test=1`);
+  await page.waitForFunction(() => window.__cadTest);
+  await page.evaluate(() => window.__cadTest.resetForParameterTest());
+  const before = await page.evaluate(() => window.__cadTest.serializedModelForTest());
+  const invalid = structuredClone(before);
+  invalid.parameters[0].expression = "missing + 1";
+  const result = await page.evaluate((data) => window.__cadTest.loadDocumentFixtureForDragTest(data, "invalid-v10.json"), invalid);
+  expect(result.success).toBe(false);
+  expect(result.error).toContain("未定義");
+  const after = await page.evaluate(() => window.__cadTest.serializedModelForTest());
+  expect(after.parameters).toEqual(before.parameters);
+  expect(after.constraints.map((constraint) => constraint.expression)).toEqual(before.constraints.map((constraint) => constraint.expression));
+});
+
+test("non-convergent reference feedback rolls back the complete parameter apply", async ({ page }) => {
+  await page.goto(`${baseUrl}/index.html?test=1`);
+  await page.waitForFunction(() => window.__cadTest);
+  const initial = await page.evaluate(() => window.__cadTest.resetForParameterFeedbackTest());
+  expect(initial.success).toBe(true);
+  expect(initial.length).toBeCloseTo(40, 5);
+  await openParameterDialog(page);
+  const drivingExpression = page.locator('#parameterDimensionRows input[data-dimension-field="expression"]:not([readonly])');
+  await drivingExpression.fill(`120 - ${initial.measuredName}`);
+  await drivingExpression.press("Tab");
+  await page.locator("#applyParametersBtn").click();
+  await expect(page.locator("#parameterDialogError")).toContainText("収束しません");
+  const state = await page.evaluate(() => window.__cadTest.parameterStateForTest());
+  const driving = state.dimensions.find((dimension) => dimension.name === initial.drivingName);
+  expect(driving.expression).toBe("40");
+  expect(driving.target).toBeCloseTo(40, 5);
+  await expect(page.locator("#undoBtn")).toBeDisabled();
+});
+
 test("document annotations can be dragged on the unified canvas", async ({ page }) => {
   await page.goto(`${baseUrl}/index.html?test=1`);
   await page.waitForFunction(() => window.__cadTest);
@@ -1191,8 +1293,8 @@ test("Geometry and Constraint Explorer tabs list and synchronize their respectiv
 
   await page.click('[data-explorer-tab="constraint"]');
   await expect(page.locator("#explorerConstraint")).toBeVisible();
-  await page.locator("#constraintList .constraint-list-row").click();
-  await expect(page.locator("#constraintList .constraint-list-row")).toHaveClass(/selected/);
+  await page.locator("#constraintList .constraint-list-row").first().click();
+  await expect(page.locator("#constraintList .constraint-list-row").first()).toHaveClass(/selected/);
   await expect(page.locator("#propertiesPanel")).toContainText("拘束");
   expect(await page.locator("#constraintList .fixed-point-list-row").textContent()).toContain(`固定 ${ids.fixedPoint}`);
 });
@@ -1203,12 +1305,12 @@ test("constraint rows highlight only directly related selected geometry", async 
   const ids = await page.evaluate(() => window.__cadTest.resetForSidebarInspection());
   await page.click('[data-explorer-tab="constraint"]');
   const constraintRow = page.locator("#constraintList .constraint-list-row");
-  await expect(constraintRow).toHaveCount(1);
+  await expect(constraintRow).toHaveCount(2);
 
   await page.evaluate((lineId) => window.__cadTest.selectGeometryIdsForTest({ lines: [lineId] }), ids.line);
-  await expect(constraintRow).toHaveClass(/sidebar-related/);
+  await expect(constraintRow.first()).toHaveClass(/sidebar-related/);
   await page.evaluate(() => window.__cadTest.selectGeometryIdsForTest({}));
-  await expect(constraintRow).not.toHaveClass(/sidebar-related/);
+  await expect(constraintRow.first()).not.toHaveClass(/sidebar-related/);
 });
 
 test("line circle and arc offsets keep editable dimensional relationships", async ({ page }) => {

@@ -150,7 +150,7 @@ test.afterAll(() => {
   if (serverProcess) serverProcess.kill();
 });
 
-test("complete documents normalize to stable v9 unified-canvas data", async ({ page }) => {
+test("complete documents normalize to stable v10 unified-canvas data", async ({ page }) => {
   await openTestApp(page);
   const first = await importFixture(page);
   const reload = await page.evaluate(
@@ -165,7 +165,7 @@ test("complete documents normalize to stable v9 unified-canvas data", async ({ p
   expect(first.blockDefinitions.map((definition) => definition.id)).toEqual(["B1", "B2"]);
   expect(first.blockDefinitions.find((definition) => definition.id === "B1").parentDefinitionId).toBe("B2");
   expect(first.blockInstances[0].enabledSketchIds).toEqual(["S1", "S2"]);
-  expect(first.version).toBe(9);
+  expect(first.version).toBe(10);
   expect(first).not.toHaveProperty("presentationSheets");
   expect(first).not.toHaveProperty("activePresentationSheetId");
   expect(first.annotations).toEqual([]);
@@ -200,7 +200,7 @@ test("constraint commit accepts a stalled solver result within the application t
   }));
 });
 
-test("complete v9 documents are byte-shape stable apart from savedAt", async ({ page }) => {
+test("complete v10 documents are byte-shape stable apart from savedAt", async ({ page }) => {
   test.fail(true, "Known Phase 0 gap: angle dimensions serialize unused linear offsets as null, then reload them as zero");
   await openTestApp(page);
   const first = await importFixture(page);
@@ -213,11 +213,11 @@ test("complete v9 documents are byte-shape stable apart from savedAt", async ({ 
   expect(exactPersistedDocument(second)).toEqual(exactPersistedDocument(first));
 });
 
-test("legacy v1 documents normalize to stable v9 data and reserve new ids", async ({ page }) => {
+test("legacy v1 documents normalize to stable v10 data and reserve new ids", async ({ page }) => {
   await openTestApp(page);
   const legacy = JSON.parse(fs.readFileSync(path.resolve(__dirname, "../../test-data/テスト図形.json"), "utf8"));
   const first = await importFixture(page, legacy, "legacy-v1.json");
-  expect(first.version).toBe(9);
+  expect(first.version).toBe(10);
   expect(first.sketches).toEqual(expect.arrayContaining([
     expect.objectContaining({ id: "ROOT", kind: "root" }),
     expect.objectContaining({ id: "S1", parentSketchId: "ROOT" }),

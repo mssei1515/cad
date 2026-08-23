@@ -11,16 +11,18 @@
 5. [ブロック](./05-ブロック.md)
 6. [表示と注記](./06-表示と注記.md)
 7. [UI・操作・履歴](./07-UI・操作・履歴.md)
-8. [実装対応表とテスト](./90-実装対応表とテスト.md)
-9. [改善バックログ](./91-改善バックログ.md) — 仕様ではない技術課題
+8. [Parameter](./08-Parameter.md)
+9. [実装対応表とテスト](./90-実装対応表とテスト.md)
+10. [改善バックログ](./91-改善バックログ.md) — 仕様ではない技術課題
 
 ## 用語
 
 | 用語 | 意味 |
 | --- | --- |
-| Document | 1つの保存対象。Geometry、Constraint、Sketch、Block、Appearance、Annotationを持つ |
+| Document | 1つの保存対象。Geometry、Constraint、Sketch、Block、Parameter、Appearance、Annotationを持つ |
 | Geometry | Point、Line、Circle、Arc、およびBlock Projection |
 | Constraint | Geometryの成立条件。寸法もConstraintに属する |
+| Parameter | 名前と数式を持ち、同じ名前空間の寸法と相互参照できるスカラー値 |
 | Appearance | visible、color、lineType、lineWidthと、補助Line用のendpointOverhang／endpointMarkersから成る表示属性 |
 | Document Annotation | Geometryを変更しない引出線または自由テキスト |
 | Interaction State | 選択、作図、拘束入力、注記配置など現在の操作状態 |
