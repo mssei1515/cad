@@ -194,9 +194,12 @@ button.property-color-swatch:hover:not(:disabled), button.property-color-swatch:
 .settings-row { display: grid; grid-template-columns: minmax(100px, 1fr) minmax(150px, 1fr); align-items: center; gap: 12px; margin-bottom: 14px; font-size: 13px; }
 .settings-row select { width: 100%; padding: 6px 8px; border: 1px solid var(--border-strong); border-radius: 4px; background: #fff; }
 
+@media (max-width: 1260px) {
+  .tool-group { align-items: center; padding-top: 3px; }
+  .tool-group-label { display: none; }
+}
+
 @media (max-width: 1000px) {
   :root { --explorer-w: 230px; --properties-w: 250px; }
   .app-menus .app-menu:nth-last-child(-n+2) { display: none; }
-  .tool-group { align-items: center; padding-top: 3px; }
-  .tool-group-label { display: none; }
 }

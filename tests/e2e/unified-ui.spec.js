@@ -546,22 +546,32 @@ test("Canvas selection updates Properties, side panels collapse, and narrow tool
   }));
   expect(restored.explorer).toBeCloseTo(initial.explorer, 0);
   expect(restored.properties).toBeCloseTo(initial.properties, 0);
+  await expect(page.locator(".tool-group-label").first()).toBeVisible();
 
-  await page.setViewportSize({ width: 800, height: 700 });
-  const narrowToolbar = await page.evaluate(() => {
-    const labels = [...document.querySelectorAll(".tool-group-label")];
-    const buttons = [...document.querySelectorAll(".command-toolbar button")];
-    const overlaps = labels.some((label) => {
-      if (getComputedStyle(label).display === "none") return false;
-      const a = label.getBoundingClientRect();
-      return buttons.some((button) => {
-        const b = button.getBoundingClientRect();
-        return a.left < b.right && a.right > b.left && a.top < b.bottom && a.bottom > b.top;
+  for (const width of [1260, 1200, 800]) {
+    await page.setViewportSize({ width, height: 700 });
+    const narrowToolbar = await page.evaluate(() => {
+      const labels = [...document.querySelectorAll(".tool-group-label")];
+      const buttons = [...document.querySelectorAll(".command-toolbar button")];
+      const menuItems = [...document.querySelectorAll(".app-menu > summary")];
+      const intersects = (a, b) => a.left < b.right && a.right > b.left && a.top < b.bottom && a.bottom > b.top;
+      const labelOverlaps = labels.some((label) => {
+        if (getComputedStyle(label).display === "none") return false;
+        const rect = label.getBoundingClientRect();
+        return buttons.some((button) => intersects(rect, button.getBoundingClientRect()));
       });
+      const menuOverlaps = menuItems.some((item) => {
+        const rect = item.getBoundingClientRect();
+        return buttons.some((button) => intersects(rect, button.getBoundingClientRect()));
+      });
+      return {
+        labelsHidden: labels.every((label) => getComputedStyle(label).display === "none"),
+        labelOverlaps,
+        menuOverlaps,
+      };
     });
-    return { labelsHidden: labels.every((label) => getComputedStyle(label).display === "none"), overlaps };
-  });
-  expect(narrowToolbar).toEqual({ labelsHidden: true, overlaps: false });
+    expect(narrowToolbar).toEqual({ labelsHidden: true, labelOverlaps: false, menuOverlaps: false });
+  }
 });
 
 test("application language defaults to Japanese and persists the full UI selection", async ({ page }) => {
