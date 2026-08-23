@@ -36,6 +36,11 @@ async function openDocumentSettings(page) {
   await button.click();
 }
 
+async function selectSketch(page, sketchId) {
+  await page.locator(`.sketch-item[data-id="${sketchId}"]`).click();
+  await expect(page.locator("#propertiesPanel .property-heading")).toContainText(sketchId === "ROOT" ? "Root Sketch" : "Sketch");
+}
+
 function waitForServer(url, timeoutMs = 10000) {
   const startedAt = Date.now();
   return new Promise((resolve, reject) => {
@@ -701,11 +706,14 @@ test("application language defaults to Japanese and persists the full UI selecti
   await page.locator("#applicationSettingsDialog button[value=cancel]").first().click();
   await openDocumentSettings(page);
   await expect(page.locator("#documentSettingsDialog")).toContainText("Document Settings");
-  await expect(page.locator('#documentAppearanceFields select[data-appearance-key="visible"] option')).toHaveText(["Visible", "Hidden"]);
-  await expect(page.locator('#documentAppearanceFields select[data-appearance-key="lineType"] option')).toHaveText(["Solid", "Dashed", "Dash-dot", "Dotted"]);
-  await expect(page.locator("#documentSettingsDialog")).toContainText("Default Dimension Appearance");
-  await expect(page.locator('#documentDimensionAppearanceFields select[data-dimension-display="visible"] option')).toHaveText(["Visible", "Hidden"]);
+  await expect(page.locator("#documentSettingsDialog")).toContainText("No document settings are currently available.");
+  await expect(page.locator("#documentAppearanceFields, #documentConstructionAppearanceFields, #documentDimensionAppearanceFields")).toHaveCount(0);
   await page.locator("#documentSettingsDialog button[value=cancel]").first().click();
+  await selectSketch(page, "ROOT");
+  await expect(page.locator("#propertiesPanel .property-section h3")).toContainText(["Sketch", "Appearance", "Default Construction Appearance", "Default Dimension Appearance"]);
+  await expect(page.locator('#rootConstructionPropertyVisible option')).toHaveText(["Visible", "Hidden"]);
+  await expect(page.locator('#rootConstructionPropertyLineType option')).toHaveText(["Solid", "Dashed", "Dash-dot", "Dotted"]);
+  await expect(page.locator('#rootDimensionVisible option')).toHaveText(["Visible", "Hidden"]);
   await openParameterDialog(page);
   expect(await page.locator("#parametersDialog thead th").allTextContents()).toEqual([
     "Name", "Value / Expression", "Evaluated value", "", "Name", "Type / owner", "Value / Expression", "Evaluated value",
@@ -729,6 +737,24 @@ test("application language defaults to Japanese and persists the full UI selecti
   await expect(page.locator(".app-menu > summary").first()).toHaveText("ファイル");
   await expect(page.locator("#hint")).toContainText("完全拘束");
   await expect(page.locator("#hint")).not.toContainText("Fully constrained");
+});
+
+test("Root Sketch owns the user-facing default appearance settings", async ({ page }) => {
+  await page.goto(`${baseUrl}/index.html?test=1`);
+  await page.waitForFunction(() => window.__cadTest);
+  await selectSketch(page, "ROOT");
+  await expect(page.locator("#propertiesPanel .property-section h3")).toContainText(["スケッチ", "外観", "既定の補助線外観", "既定の寸法外観"]);
+
+  await page.locator("#propertyColor").fill("#2563eb");
+  await page.locator("#propertyColor").blur();
+  const serialized = await page.evaluate(() => window.__cadTest.serializedModelForTest());
+  expect(serialized.sketches.find((sketch) => sketch.id === "ROOT").appearance.color).toBe("#2563eb");
+  expect(serialized.defaultAppearance.color).not.toBe("#2563eb");
+  expect((await page.evaluate(() => window.__cadTest.appearanceStateForTest("line", "L1"))).effective.color).toBe("#2563eb");
+
+  await openDocumentSettings(page);
+  await expect(page.locator("#documentSettingsDialog")).toContainText("現在の設定項目はありません。");
+  await expect(page.locator("#documentSettingsDialog [data-appearance-key], #documentSettingsDialog [data-dimension-display]")).toHaveCount(0);
 });
 
 test("Appearance cascades, used file colors are selectable, and constraint status supports mouse and Space", async ({ page }) => {
@@ -938,11 +964,10 @@ test("Constraint dimensions expose defining geometry and inheritable appearance 
   await expect(page.locator("#propertiesPanel")).toContainText("P2");
   await expect(page.locator("#propertiesPanel")).not.toContainText("寸法表示");
 
-  await openDocumentSettings(page);
-  await expect(page.locator("#documentSettingsDialog")).toContainText("既定の寸法外観");
-  await page.locator("#documentDimensionColor").fill("#0e7490");
-  await page.locator("#documentDimensionColor").blur();
-  await page.locator("#documentSettingsDialog button[value=cancel]").first().click();
+  await selectSketch(page, "ROOT");
+  await expect(page.locator("#propertiesPanel")).toContainText("既定の寸法外観");
+  await page.locator("#rootDimensionColor").fill("#0e7490");
+  await page.locator("#rootDimensionColor").blur();
   expect(await page.evaluate(() => window.__cadTest.dimensionAppearanceStateForTest())).toEqual(expect.objectContaining({
     documentDefault: expect.objectContaining({ color: "#0e7490" }),
     direct: expect.not.objectContaining({ color: expect.anything() }),
@@ -950,6 +975,9 @@ test("Constraint dimensions expose defining geometry and inheritable appearance 
   }));
   expect(await page.evaluate(() => window.__cadTest.drawnDimensionColorsForTest())).toContain("#0e7490");
 
+  await selectSketch(page, "S1");
+  await page.click('[data-explorer-tab="constraint"]');
+  await page.locator("#constraintList .constraint-list-row").first().click();
   const properties = page.locator("#propertiesPanel");
   await properties.locator('[data-dimension-display="precision"]').selectOption("3");
   await expect(page.locator('[data-dimension-display="toleranceUpper"], [data-dimension-display="toleranceLower"]')).toHaveCount(0);
@@ -995,10 +1023,9 @@ test("Constraint dimensions expose defining geometry and inheritable appearance 
   expect(roundTrip.constraints[0].dimension.display).toEqual(serialized.constraints[0].dimension.display);
 
   await page.evaluate(() => window.__cadTest.resetForParameterTest());
-  await openDocumentSettings(page);
-  await page.locator("#documentDimensionColor").fill("#db2777");
-  await page.locator("#documentDimensionColor").blur();
-  await page.locator("#documentSettingsDialog button[value=cancel]").first().click();
+  await selectSketch(page, "ROOT");
+  await page.locator("#rootDimensionColor").fill("#db2777");
+  await page.locator("#rootDimensionColor").blur();
   const blockAppearance = await page.evaluate(() => window.__cadTest.dimensionAppearanceStateForTest().blockDefinitions);
   expect(blockAppearance.flatMap((definition) => definition.dimensions).map((dimension) => dimension.effective.color)).toEqual(["#db2777", "#db2777"]);
 });
@@ -1280,7 +1307,7 @@ test("construction line endpoint overhang remains while geometry or its block is
   });
 });
 
-test("construction line endpoint appearance inherits document defaults and supports line overrides", async ({ page }) => {
+test("construction line endpoint appearance inherits Root Sketch defaults and supports line overrides", async ({ page }) => {
   await page.goto(`${baseUrl}/index.html?test=1`);
   await page.waitForFunction(() => window.__cadTest);
   const fixture = {
@@ -1323,16 +1350,15 @@ test("construction line endpoint appearance inherits document defaults and suppo
 
   await page.locator("#propertyEndpointOverhang").selectOption("");
   await page.locator("#propertyEndpointMarkers").selectOption("");
-  await openDocumentSettings(page);
-  await expect(page.locator("#documentSettingsDialog")).toContainText("既定の補助線外観");
-  await page.locator("#constructionPropertyColor").fill("#dc2626");
-  await page.locator("#constructionPropertyColor").blur();
-  await page.locator("#constructionPropertyLineType").selectOption("dotted");
-  await page.locator("#constructionPropertyLineWidth").fill("2.5");
-  await page.locator("#constructionPropertyLineWidth").blur();
-  await page.locator("#constructionPropertyEndpointOverhang").selectOption("false");
-  await page.locator("#constructionPropertyEndpointMarkers").selectOption("false");
-  await page.locator("#documentSettingsDialog button[value=cancel]").first().click();
+  await selectSketch(page, "ROOT");
+  await expect(page.locator("#propertiesPanel")).toContainText("既定の補助線外観");
+  await page.locator("#rootConstructionPropertyColor").fill("#dc2626");
+  await page.locator("#rootConstructionPropertyColor").blur();
+  await page.locator("#rootConstructionPropertyLineType").selectOption("dotted");
+  await page.locator("#rootConstructionPropertyLineWidth").fill("2.5");
+  await page.locator("#rootConstructionPropertyLineWidth").blur();
+  await page.locator("#rootConstructionPropertyEndpointOverhang").selectOption("false");
+  await page.locator("#rootConstructionPropertyEndpointMarkers").selectOption("false");
 
   serialized = await page.evaluate(() => window.__cadTest.serializedModelForTest());
   expect(serialized.defaultConstructionAppearance).toEqual(expect.objectContaining({

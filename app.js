@@ -127,6 +127,7 @@
     ["名前変更", "Rename"], ["スケッチ削除", "Delete Sketch"], ["ブロック名", "Block name"], ["配置", "Place"], ["非表示にする", "Hide"], ["表示する", "Show"],
     ["キャンバス", "Canvas"], ["ステータスバー", "Status Bar"], ["寸法値", "Dimension value"],
     ["既定の外観", "Default Appearance"], ["既定の補助線外観", "Default Construction Appearance"], ["既定の寸法外観", "Default Dimension Appearance"], ["一般", "General"], ["言語", "Language"],
+    ["現在の設定項目はありません。", "No document settings are currently available."],
     ["アプリケーション全体の設定をドキュメント設定から分離して管理します。", "Application-wide settings are managed separately from document settings."],
     ["既定", "Default"], ["表示", "Visible"], ["非表示", "Hidden"], ["色", "Color"], ["線種", "Line type"], ["線幅", "Line width"],
     ["実線", "Solid"], ["破線", "Dashed"], ["一点鎖線", "Dash-dot"], ["点線", "Dotted"], ["端部のはみ出し", "Endpoint overhang"], ["端部の点", "Endpoint points"], ["あり", "Enabled"], ["なし", "Disabled"], ["使用済みの色", "Colors used in this file"],
@@ -10936,7 +10937,18 @@
         + propertyReadonlyRow("名前", "Name", item.name, { userContent: true })
         + propertyReadonlyRow("親スケッチ", "Parent sketch", parentLabel, { userContent: Boolean(parent) })
         + propertyReadonlyRow("アクティブ", "Active", applicationText("はい", "Yes"));
-      panel.innerHTML = `<h2 class="property-heading">${applicationText("スケッチ", "Sketch")} <span data-user-content>${escapeHtml(item.name)}</span></h2><section class="property-section"><h3>Sketch</h3>${rows}</section><section class="property-section"><h3>Appearance</h3>${appearancePropertyRows(item.appearance, effective)}</section>`;
+      const rootDefaults = !blockEditSession && isRootSketch(item)
+        ? `<section class="property-section" data-root-default-appearance="construction"><h3>Default Construction Appearance</h3>${appearancePropertyRows(
+          model.defaultConstructionAppearance,
+          { ...normalizeAppearance(model.defaultAppearance, { partial: false }), ...normalizeConstructionAppearance(model.defaultConstructionAppearance, { partial: false }) },
+          { allowInheritance: false, constructionEndpoints: true, idPrefix: "rootConstructionProperty" },
+        )}</section><section class="property-section" data-root-default-appearance="dimension"><h3>Default Dimension Appearance</h3>${dimensionAppearancePropertyRows(
+          model.defaultDimensionAppearance,
+          normalizeDimensionAppearance(model.defaultDimensionAppearance, { partial: false }),
+          { allowInheritance: false, idPrefix: "rootDimension" },
+        )}</section>`
+        : "";
+      panel.innerHTML = `<h2 class="property-heading">${applicationText("スケッチ", "Sketch")} <span data-user-content>${escapeHtml(item.name)}</span></h2><section class="property-section"><h3>Sketch</h3>${rows}</section><section class="property-section"><h3>Appearance</h3>${appearancePropertyRows(item.appearance, effective)}</section>${rootDefaults}`;
     }
 
     localizeApplicationUI(panel);
@@ -10986,6 +10998,11 @@
     return null;
   }
 
+  function rootDefaultAppearanceContext(input, target = selectedPropertiesTarget()) {
+    if (blockEditSession || target.kind !== "sketch" || !isRootSketch(target.item)) return null;
+    return input.closest("[data-root-default-appearance]")?.dataset.rootDefaultAppearance || null;
+  }
+
   function renderColorPaletteDialog(selectedColor) {
     const defaultPalette = document.getElementById("defaultColorPalette");
     const usedPalette = document.getElementById("usedColorPalette");
@@ -11009,15 +11026,12 @@
     let target = null;
     let owner = null;
     let historyLabel = "Appearance変更";
-    if (context === "document") {
-      owner = model.defaultAppearance;
-      historyLabel = "Document Default Appearance変更";
-    } else if (context === "document-construction") {
+    if (context === "root-construction") {
       owner = model.defaultConstructionAppearance;
-      historyLabel = "Document Default Construction Appearance変更";
-    } else if (context === "document-dimension") {
+      historyLabel = "Root Default Construction Appearance変更";
+    } else if (context === "root-dimension") {
       owner = model.defaultDimensionAppearance;
-      historyLabel = "Document Default Dimension Appearance変更";
+      historyLabel = "Root Default Dimension Appearance変更";
     } else {
       target = selectedPropertiesTarget();
       if (target.kind === "constraint" && target.item.dimension) {
@@ -11047,12 +11061,11 @@
     if (!colorPaletteSession) return;
     const color = colorPickerValue(value);
     const { owner, target, historyLabel, context, sourceButton, sourceInput } = colorPaletteSession;
-    if (target?.kind === "constraint" || context === "document-dimension") applyDimensionAppearanceValue(owner, "color", color, { allowInheritance: context !== "document-dimension" });
+    if (target?.kind === "constraint" || context === "root-dimension") applyDimensionAppearanceValue(owner, "color", color, { allowInheritance: context !== "root-dimension" });
     else applyAppearanceInput(owner, "color", color);
     if (target?.kind === "block") invalidateBlockProjectionCache(target.item.id);
-    if (!target && context === "document") model.defaultAppearance = normalizeAppearance(model.defaultAppearance, { partial: false });
-    if (!target && context === "document-construction") model.defaultConstructionAppearance = normalizeConstructionAppearance(model.defaultConstructionAppearance, { partial: false });
-    if (!target && context === "document-dimension") model.defaultDimensionAppearance = normalizeDimensionAppearance(model.defaultDimensionAppearance, { partial: false });
+    if (!target && context === "root-construction") model.defaultConstructionAppearance = normalizeConstructionAppearance(model.defaultConstructionAppearance, { partial: false });
+    if (!target && context === "root-dimension") model.defaultDimensionAppearance = normalizeDimensionAppearance(model.defaultDimensionAppearance, { partial: false });
     if (sourceInput) sourceInput.value = color;
     if (sourceButton) {
       sourceButton.dataset.currentColor = color;
@@ -11069,6 +11082,12 @@
     const input = event.target;
     if (!input.matches('[data-dimension-display="prefix"], [data-dimension-display="suffix"]')) return;
     const target = selectedPropertiesTarget();
+    if (rootDefaultAppearanceContext(input, target) === "dimension") {
+      applyDimensionAppearanceValue(model.defaultDimensionAppearance, input.dataset.dimensionDisplay, input.value, { allowInheritance: false });
+      model.defaultDimensionAppearance = normalizeDimensionAppearance(model.defaultDimensionAppearance, { partial: false });
+      draw();
+      return;
+    }
     if (target.kind !== "constraint" || !applyDimensionDisplayInput(target.item, input)) return;
     draw();
   }
@@ -11128,6 +11147,25 @@
   function handlePropertiesChange(event) {
     const target = selectedPropertiesTarget();
     const input = event.target;
+    const rootDefaultContext = rootDefaultAppearanceContext(input, target);
+    if (rootDefaultContext === "construction" && input.dataset.appearanceKey) {
+      applyAppearanceInput(model.defaultConstructionAppearance, input.dataset.appearanceKey, input.value.trim());
+      model.defaultConstructionAppearance = normalizeConstructionAppearance(model.defaultConstructionAppearance, { partial: false });
+      recordHistory("Root Default Construction Appearance変更");
+      updateUI();
+      draw();
+      return;
+    }
+    if (rootDefaultContext === "dimension" && input.dataset.dimensionDisplay) {
+      const liveTextInput = input.dataset.dimensionDisplay === "prefix" || input.dataset.dimensionDisplay === "suffix";
+      const rawValue = liveTextInput ? input.value : input.value.trim();
+      applyDimensionAppearanceValue(model.defaultDimensionAppearance, input.dataset.dimensionDisplay, rawValue, { allowInheritance: false });
+      model.defaultDimensionAppearance = normalizeDimensionAppearance(model.defaultDimensionAppearance, { partial: false });
+      recordHistory("Root Default Dimension Appearance変更");
+      if (!liveTextInput) updatePropertiesUI();
+      draw();
+      return;
+    }
     if (input.dataset.appearanceKey) {
       const owner = appearanceOwnerForPropertiesTarget(target);
       applyAppearanceInput(owner, input.dataset.appearanceKey, input.value.trim());
@@ -11178,7 +11216,8 @@
   function handlePropertiesClick(event) {
     const button = event.target.closest("[data-appearance-palette-open]");
     if (!button) return;
-    openAppearanceColorPalette(button);
+    const rootContext = rootDefaultAppearanceContext(button);
+    openAppearanceColorPalette(button, rootContext ? `root-${rootContext}` : "properties");
   }
 
   function updateObjectExplorerUI() {
@@ -15156,74 +15195,6 @@
     parameterDialogSession = null;
   });
   document.getElementById("documentSettingsBtn")?.addEventListener("click", () => {
-    const fields = document.getElementById("documentAppearanceFields");
-    if (fields) {
-      const effective = normalizeAppearance(model.defaultAppearance, { partial: false });
-      fields.innerHTML = appearancePropertyRows(effective, effective, { allowInheritance: false, idPrefix: "documentProperty" });
-      localizeApplicationUI(fields);
-      fields.onchange = (event) => {
-        const input = event.target;
-        if (!input.dataset.appearanceKey) return;
-        applyAppearanceInput(model.defaultAppearance, input.dataset.appearanceKey, input.value.trim());
-        model.defaultAppearance = normalizeAppearance(model.defaultAppearance, { partial: false });
-        recordHistory("Document Default Appearance変更");
-        draw();
-      };
-      fields.onclick = (event) => {
-        const button = event.target.closest("[data-appearance-palette-open]");
-        if (!button) return;
-        openAppearanceColorPalette(button, "document");
-      };
-    }
-    const constructionFields = document.getElementById("documentConstructionAppearanceFields");
-    if (constructionFields) {
-      const construction = normalizeConstructionAppearance(model.defaultConstructionAppearance, { partial: false });
-      const effective = { ...normalizeAppearance(model.defaultAppearance, { partial: false }), ...construction };
-      constructionFields.innerHTML = appearancePropertyRows(construction, effective, {
-        allowInheritance: false,
-        constructionEndpoints: true,
-        idPrefix: "constructionProperty",
-      });
-      localizeApplicationUI(constructionFields);
-      constructionFields.onchange = (event) => {
-        const input = event.target;
-        if (!input.dataset.appearanceKey) return;
-        applyAppearanceInput(model.defaultConstructionAppearance, input.dataset.appearanceKey, input.value.trim());
-        model.defaultConstructionAppearance = normalizeConstructionAppearance(model.defaultConstructionAppearance, { partial: false });
-        recordHistory("Document Default Construction Appearance変更");
-        draw();
-      };
-      constructionFields.onclick = (event) => {
-        const button = event.target.closest("[data-appearance-palette-open]");
-        if (!button) return;
-        openAppearanceColorPalette(button, "document-construction");
-      };
-    }
-    const dimensionFields = document.getElementById("documentDimensionAppearanceFields");
-    if (dimensionFields) {
-      const appearance = normalizeDimensionAppearance(model.defaultDimensionAppearance, { partial: false });
-      dimensionFields.innerHTML = dimensionAppearancePropertyRows(appearance, appearance, {
-        allowInheritance: false,
-        idPrefix: "documentDimension",
-      });
-      localizeApplicationUI(dimensionFields);
-      dimensionFields.onchange = (event) => {
-        const input = event.target;
-        if (!input.dataset.dimensionDisplay) return;
-        const key = input.dataset.dimensionDisplay;
-        const rawValue = ["prefix", "suffix"].includes(key) ? input.value : input.value.trim();
-        applyDimensionAppearanceValue(model.defaultDimensionAppearance, key, rawValue, { allowInheritance: false });
-        model.defaultDimensionAppearance = normalizeDimensionAppearance(model.defaultDimensionAppearance, { partial: false });
-        recordHistory("Document Default Dimension Appearance変更");
-        updateUI();
-        draw();
-      };
-      dimensionFields.onclick = (event) => {
-        const button = event.target.closest("[data-appearance-palette-open]");
-        if (!button) return;
-        openAppearanceColorPalette(button, "document-dimension");
-      };
-    }
     document.getElementById("documentSettingsDialog")?.showModal();
   });
   document.getElementById("colorPaletteDialog")?.addEventListener("click", (event) => {
