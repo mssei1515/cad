@@ -811,19 +811,33 @@ test("Appearance cascades, used file colors are selectable, and constraint statu
 
   await page.locator("#propertyVisible").selectOption("false");
   expect((await page.evaluate(() => window.__cadTest.appearanceStateForTest("line", "L1"))).visible).toBe(false);
+  const viewMenuSummary = page.locator(".app-menu > summary").nth(2);
+  const statusMenuInput = page.locator("#viewConstraintStatusInput");
+  await viewMenuSummary.click();
+  await expect(statusMenuInput).not.toBeChecked();
+  await statusMenuInput.check();
+  await expect(page.locator("#constraintStatusViewBtn")).toHaveAttribute("aria-pressed", "true");
+  expect(await page.evaluate(() => window.__cadTest.viewStateForTest())).toEqual(expect.objectContaining({ constraintStatus: true, mouseLatched: true, spaceHeld: false }));
+  await statusMenuInput.uncheck();
+  await expect(page.locator("#constraintStatusViewBtn")).toHaveAttribute("aria-pressed", "false");
+  await viewMenuSummary.click();
   await expect(page.locator("#constraintStatusViewBtn")).toHaveAttribute("aria-pressed", "false");
   await page.locator("#constraintStatusViewBtn").click();
+  await expect(statusMenuInput).toBeChecked();
   expect(await page.evaluate(() => window.__cadTest.viewStateForTest())).toEqual(expect.objectContaining({ constraintStatus: true, mouseLatched: true, spaceHeld: false }));
   expect(await page.evaluate(() => window.__cadTest.constraintStatusEndpointMarkerCountForTest())).toBe(0);
   await page.keyboard.down("Space");
   await page.keyboard.up("Space");
   expect(await page.evaluate(() => window.__cadTest.viewStateForTest())).toEqual(expect.objectContaining({ constraintStatus: true, mouseLatched: true, spaceHeld: false }));
   await page.locator("#constraintStatusViewBtn").click();
+  await expect(statusMenuInput).not.toBeChecked();
   expect(await page.evaluate(() => window.__cadTest.viewStateForTest())).toEqual(expect.objectContaining({ constraintStatus: false, mouseLatched: false, spaceHeld: false }));
   await page.keyboard.down("Space");
+  await expect(statusMenuInput).toBeChecked();
   expect(await page.evaluate(() => window.__cadTest.viewStateForTest())).toEqual(expect.objectContaining({ constraintStatus: true, mouseLatched: false, spaceHeld: true }));
   expect((await page.evaluate(() => window.__cadTest.appearanceStateForTest("line", "L1"))).visible).toBe(true);
   await page.keyboard.up("Space");
+  await expect(statusMenuInput).not.toBeChecked();
   expect(await page.evaluate(() => window.__cadTest.viewStateForTest())).toEqual(expect.objectContaining({ constraintStatus: false, mouseLatched: false, spaceHeld: false }));
 });
 
@@ -1176,11 +1190,16 @@ test("a line length dimension advances by clicking its placement after the line"
 
 test("unified canvas exposes dimensions from every visible sketch", async ({ page }) => {
   await page.goto(`${baseUrl}/index.html?test=1`);
+  await page.waitForFunction(() => window.__cadTest);
   const result = await page.evaluate(() => window.__cadTest.resetForActiveSketchDimensionVisibility());
   expect(result.dimensionSketchIds).toEqual(["S1", "S2"]);
   expect(result.drawnDimensionSketchIds).toEqual(["S1", "S2"]);
   expect(new Set(result.drawnDimensionLabels)).toEqual(new Set(["100", "160"]));
   expect(result.labelsAfterHidingSecondSketch).toEqual(["100"]);
+  expect(await page.evaluate(() => window.__cadTest.drawnDimensionColorsForTest())).toEqual(["#6b7280"]);
+  await page.locator("#constraintStatusViewBtn").click();
+  expect(new Set(await page.evaluate(() => window.__cadTest.drawnDimensionColorsForTest()))).toEqual(new Set(["#6b7280", "#cbd5e1"]));
+  await page.locator("#constraintStatusViewBtn").click();
 });
 
 test("all geometry fit includes figures from every sketch", async ({ page }) => {

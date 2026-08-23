@@ -41,8 +41,11 @@ button:disabled { opacity: .45; cursor: default; }
 .app-menu > summary:focus-visible { outline: 2px solid #7dd3fc; outline-offset: -2px; }
 .menu-popover { position: absolute; z-index: 1; top: calc(100% - 1px); left: 0; min-width: 210px; padding: 6px; display: grid; gap: 3px; color: var(--text); background: #fff; border: 1px solid var(--border); border-radius: 0 0 6px 6px; box-shadow: 0 10px 24px rgba(15, 23, 42, .18); }
 .menu-popover button, .menu-popover label, .menu-note { min-height: 30px; padding: 6px 9px; border: 0; border-radius: 3px; background: transparent; text-align: left; white-space: nowrap; }
-.menu-popover button:hover { background: var(--accent-soft); }
+.menu-popover button:hover, .menu-popover label:hover { background: var(--accent-soft); }
 .menu-popover button { display: flex; justify-content: space-between; }
+.menu-popover label { display: flex; align-items: center; gap: 7px; cursor: pointer; }
+.menu-popover label input { margin: 0; }
+.menu-popover label kbd { margin-left: auto; }
 .menu-popover kbd { margin-left: 20px; color: var(--muted); font-size: 11px; }
 .menu-note { color: var(--muted); font-size: 12px; }
 .menu-command-list { grid-template-columns: minmax(0, 1fr); }

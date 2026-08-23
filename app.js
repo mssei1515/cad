@@ -331,6 +331,7 @@
     under: "#f59e0b",
     conflict: "#dc2626",
   };
+  const INACTIVE_CONSTRAINT_STATUS_COLOR = "#cbd5e1";
   const DEFAULT_APPEARANCE = {
     visible: true,
     color: "#111827",
@@ -2409,7 +2410,7 @@
     if (hovered) return "#3b82f6";
     if (sketchHasSolveError(elementSketchId(item))) return SKETCH_SOLVE_ERROR_COLOR;
     const relation = sketchRelationOfElement(item);
-    if (relation !== "active") return "#cbd5e1";
+    if (relation !== "active") return INACTIVE_CONSTRAINT_STATUS_COLOR;
     const status = constraintStatusOf(item);
     if (status === "conflict") return CONSTRAINT_STATUS_COLORS.conflict;
     return CONSTRAINT_STATUS_COLORS[status] || CONSTRAINT_STATUS_COLORS.full;
@@ -2520,6 +2521,8 @@
     const button = document.getElementById("constraintStatusViewBtn");
     button?.classList.toggle("active", next);
     button?.setAttribute("aria-pressed", String(next));
+    const menuInput = document.getElementById("viewConstraintStatusInput");
+    if (menuInput) menuInput.checked = next;
     if (hint && changed) setHint(next ? "拘束状態表示: Document内の全Geometryを表示しています" : "通常表示");
     if (changed) draw();
   }
@@ -8089,17 +8092,18 @@
     ctx.restore();
   }
 
-  function drawDimension(target, dimension, label, preview = false, highlighted = false, editState = null) {
+  function drawDimension(target, dimension, label, preview = false, highlighted = false, editState = null, colorOverride = null) {
     if (!target || !dimension) return;
-    if (target.kind === "angle") return drawAngleDimension(target, dimension, label, preview, highlighted, editState);
+    if (target.kind === "angle") return drawAngleDimension(target, dimension, label, preview, highlighted, editState, colorOverride);
     const layout = dimensionLayout(target, dimension);
     if (!layout) return;
     const { a, b, lineA, lineB, points, d, text, textAngle } = layout;
 
     ctx.save();
     const appearance = effectiveDimensionAppearance(dimension);
-    ctx.strokeStyle = preview || highlighted ? "#2563eb" : appearance.color;
-    ctx.fillStyle = preview || highlighted ? "#2563eb" : appearance.color;
+    const color = preview || highlighted ? "#2563eb" : colorOverride || appearance.color;
+    ctx.strokeStyle = color;
+    ctx.fillStyle = color;
     ctx.lineWidth = (highlighted ? 2 : 1.2) / viewport.scale;
     ctx.setLineDash(preview ? [5 / viewport.scale, 4 / viewport.scale] : []);
     ctx.beginPath();
@@ -8126,14 +8130,15 @@
     ctx.restore();
   }
 
-  function drawAngleDimension(target, dimension, label, preview = false, highlighted = false, editState = null) {
+  function drawAngleDimension(target, dimension, label, preview = false, highlighted = false, editState = null, colorOverride = null) {
     const layout = angleDimensionLayout(target, dimension);
     if (!layout) return;
     const { vertex, radius, start, end, signed, text, textAngle } = layout;
     ctx.save();
     const appearance = effectiveDimensionAppearance(dimension);
-    ctx.strokeStyle = preview || highlighted ? "#2563eb" : appearance.color;
-    ctx.fillStyle = preview || highlighted ? "#2563eb" : appearance.color;
+    const color = preview || highlighted ? "#2563eb" : colorOverride || appearance.color;
+    ctx.strokeStyle = color;
+    ctx.fillStyle = color;
     ctx.lineWidth = (highlighted ? 2 : 1.2) / viewport.scale;
     ctx.setLineDash(preview ? [5 / viewport.scale, 4 / viewport.scale] : []);
     const extension = DIMENSION_EXTENSION_SCREEN_PX / viewport.scale;
@@ -8425,8 +8430,9 @@
       const highlighted = c === hoveredDimensionConstraint || c === selectedDimensionConstraint || c === dimensionDragSession?.constraint;
       const label = dimensionLabelForConstraint(c, target, dimension);
       const editing = pendingCommand?.type === "distance-value" && pendingCommand.constraint === c;
+      const colorOverride = viewState.constraintStatus && !isActiveSketchConstraint(c) ? INACTIVE_CONSTRAINT_STATUS_COLOR : null;
       ctx.save();
-      drawDimension(target, dimension, label, false, highlighted || editing, editing ? { hidden: true } : null);
+      drawDimension(target, dimension, label, false, highlighted || editing, editing ? { hidden: true } : null, colorOverride);
       ctx.restore();
     }
   }
@@ -14664,6 +14670,10 @@
   document.getElementById("annotationTextBtn")?.addEventListener("click", createTextAnnotation);
   document.getElementById("constraintStatusViewBtn")?.addEventListener("click", () => {
     constraintStatusMouseLatched = !constraintStatusMouseLatched;
+    syncConstraintStatusView();
+  });
+  document.getElementById("viewConstraintStatusInput")?.addEventListener("change", (event) => {
+    constraintStatusMouseLatched = event.target.checked;
     syncConstraintStatusView();
   });
   document.getElementById("viewGeometryIdsInput")?.addEventListener("change", (event) => {
