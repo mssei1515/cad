@@ -119,10 +119,10 @@
     ["ブロック作成", "Create Block"], ["作成", "Create"], ["キャンセル", "Cancel"], ["完了", "Done"], ["閉じる", "Close"], ["子＋", "Child +"],
     ["名前変更", "Rename"], ["スケッチ削除", "Delete Sketch"], ["ブロック名", "Block name"], ["配置", "Place"], ["非表示にする", "Hide"], ["表示する", "Show"],
     ["キャンバス", "Canvas"], ["ステータスバー", "Status Bar"], ["寸法値", "Dimension value"],
-    ["既定の外観", "Default Appearance"], ["一般", "General"], ["言語", "Language"],
+    ["既定の外観", "Default Appearance"], ["既定の補助線外観", "Default Construction Appearance"], ["一般", "General"], ["言語", "Language"],
     ["アプリケーション全体の設定をドキュメント設定から分離して管理します。", "Application-wide settings are managed separately from document settings."],
     ["既定", "Default"], ["表示", "Visible"], ["非表示", "Hidden"], ["色", "Color"], ["線種", "Line type"], ["線幅", "Line width"],
-    ["実線", "Solid"], ["破線", "Dashed"], ["一点鎖線", "Dash-dot"], ["点線", "Dotted"], ["使用済みの色", "Colors used in this file"],
+    ["実線", "Solid"], ["破線", "Dashed"], ["一点鎖線", "Dash-dot"], ["点線", "Dotted"], ["端部のはみ出し", "Endpoint overhang"], ["端部の点", "Endpoint points"], ["あり", "Enabled"], ["なし", "Disabled"], ["使用済みの色", "Colors used in this file"],
     ["標準色", "Standard colors"], ["このファイルで使用中の色", "Colors used in this file"], ["任意の色", "Custom color"], ["使用中の色はありません", "No colors are used yet"], ["適用", "Apply"],
     ["外観", "Appearance"], ["外観の上書き", "Appearance Override"], ["配置情報", "Placement"], ["定義", "Definition"], ["回転", "Rotation"],
     ["長さ", "Length"], ["半径", "Radius"], ["補助線", "Construction"], ["種類", "Type"], ["値", "Value"],
@@ -196,6 +196,7 @@
   const model = {
     documentName: DEFAULT_DOCUMENT_NAME,
     defaultAppearance: null,
+    defaultConstructionAppearance: null,
     sketches: [
       { id: ROOT_SKETCH_ID, name: ROOT_SKETCH_NAME, parentSketchId: null, kind: "root", appearance: {} },
       { id: DEFAULT_SKETCH_ID, name: DEFAULT_SKETCH_NAME, parentSketchId: ROOT_SKETCH_ID, kind: "sketch", appearance: {} },
@@ -326,6 +327,8 @@
     color: "#64748b",
     lineType: "dashdot",
     lineWidth: 1.1,
+    endpointOverhang: true,
+    endpointMarkers: true,
   };
   const SKETCH_SOLVE_ERROR_COLOR = "#dc2626";
   let lastLoadLineRepairMessage = "";
@@ -518,7 +521,13 @@
     if (["solid", "dashed", "dashdot", "dotted"].includes(source.lineType)) result.lineType = source.lineType;
     const lineWidth = Number(source.lineWidth ?? source.lineWidthPx);
     if (Number.isFinite(lineWidth)) result.lineWidth = Math.max(0.5, Math.min(10, lineWidth));
+    if (Object.prototype.hasOwnProperty.call(source, "endpointOverhang")) result.endpointOverhang = source.endpointOverhang !== false;
+    if (Object.prototype.hasOwnProperty.call(source, "endpointMarkers")) result.endpointMarkers = source.endpointMarkers !== false;
     return result;
+  }
+
+  function normalizeConstructionAppearance(value, { partial = true } = {}) {
+    return { ...(partial ? {} : DEFAULT_CONSTRUCTION_APPEARANCE), ...normalizeAppearance(value) };
   }
 
   function normalizeAnnotations(items) {
@@ -578,6 +587,7 @@
 
   function ensureAppearanceState() {
     model.defaultAppearance = normalizeAppearance(model.defaultAppearance, { partial: false });
+    model.defaultConstructionAppearance = normalizeConstructionAppearance(model.defaultConstructionAppearance, { partial: false });
     model.annotations = normalizeAnnotations(model.annotations);
     for (const item of [...model.points, ...model.lines, ...model.circles, ...model.arcs]) item.appearance = normalizeAppearance(item.appearance);
   }
@@ -1090,7 +1100,7 @@
   function effectiveAppearanceForElement(item) {
     let result = { ...normalizeAppearance(model.defaultAppearance, { partial: false }) };
     const construction = (item instanceof Line || item instanceof Circle || item instanceof Arc) && item.construction;
-    if (construction) result = { ...result, ...DEFAULT_CONSTRUCTION_APPEARANCE };
+    if (construction) result = { ...result, ...normalizeConstructionAppearance(model.defaultConstructionAppearance, { partial: false }) };
     const outerSketch = sketchById(elementSketchId(item));
     if (outerSketch) result = cascadeSketchAppearance(outerSketch, model.sketches, result);
     if (item?.blockProjection) {
@@ -3483,6 +3493,7 @@
     model.sketches.push({ id: DEFAULT_SKETCH_ID, name: DEFAULT_SKETCH_NAME, parentSketchId: ROOT_SKETCH_ID, kind: "sketch", appearance: {} });
     model.activeSketchId = DEFAULT_SKETCH_ID;
     model.defaultAppearance = { ...DEFAULT_APPEARANCE };
+    model.defaultConstructionAppearance = { ...DEFAULT_CONSTRUCTION_APPEARANCE };
     model.annotations = [];
     annotationDragSession = null;
   }
@@ -3755,6 +3766,7 @@
       savedAt: new Date().toISOString(),
       documentName: effectiveDocumentName(),
       defaultAppearance: normalizeAppearance(model.defaultAppearance, { partial: false }),
+      defaultConstructionAppearance: normalizeConstructionAppearance(model.defaultConstructionAppearance, { partial: false }),
       sketches: model.sketches.map((sketch) => ({
         id: sketch.id,
         name: sketch.name,
@@ -4466,6 +4478,7 @@
     model.sketches.push(...loadedSketches);
     model.activeSketchId = normalizeSketchId(data.activeSketchId);
     model.defaultAppearance = normalizeAppearance(data.defaultAppearance, { partial: false });
+    model.defaultConstructionAppearance = normalizeConstructionAppearance(data.defaultConstructionAppearance, { partial: false });
     model.annotations = loadedAnnotations;
     model.blockDefinitions = loadedBlockDefinitions;
     model.blockInstances = loadedBlockInstances;
@@ -7472,8 +7485,8 @@
     };
   }
 
-  function lineDisplaySegment(line) {
-    return line.construction
+  function lineDisplaySegment(line, appearance = effectiveAppearanceForElement(line)) {
+    return line.construction && appearance.endpointOverhang !== false
       ? extendedLineSegment(line, CONSTRUCTION_EXTENSION_SCREEN_PX / viewport.scale)
       : { p1: line.p1, p2: line.p2 };
   }
@@ -7504,7 +7517,7 @@
       ctx.setLineDash(appearanceLineDash(appearance.lineType));
       ctx.shadowColor = sel || auxiliaryHighlighted ? "rgba(14, 165, 233, 0.45)" : "transparent";
       ctx.shadowBlur = sel || auxiliaryHighlighted ? 8 / viewport.scale : 0;
-      const drawSegment = lineDisplaySegment(l);
+      const drawSegment = lineDisplaySegment(l, appearance);
       ctx.beginPath();
       ctx.moveTo(drawSegment.p1.x, drawSegment.p1.y);
       ctx.lineTo(drawSegment.p2.x, drawSegment.p2.y);
@@ -7512,7 +7525,7 @@
       ctx.setLineDash([]);
       ctx.shadowBlur = 0;
 
-      if (construction && !viewState.constraintStatus) {
+      if (construction && appearance.endpointMarkers !== false && !viewState.constraintStatus) {
         ctx.fillStyle = lineColor;
         const endpointRadius = 2.4 / viewport.scale;
         for (const p of [l.p1, l.p2]) {
@@ -7886,6 +7899,7 @@
     if (!source || !extensionDirection) return 0;
     const line = dimensionSourceLine(target, index, source, extensionDirection);
     if (!line?.construction) return 0;
+    if (effectiveAppearanceForElement(line).endpointOverhang === false) return 0;
     const outward = lineOutwardDirectionAtSource(line, source);
     if (!outward) return 0;
     const directionalComponent = outward.x * extensionDirection.x + outward.y * extensionDirection.y;
@@ -10117,6 +10131,7 @@
     };
     const addAppearance = (appearance) => add(appearance?.color);
     addAppearance(model.defaultAppearance);
+    addAppearance(model.defaultConstructionAppearance);
     for (const sketch of model.sketches) addAppearance(sketch.appearance);
     for (const item of [...model.points, ...model.lines, ...model.circles, ...model.arcs]) addAppearance(item.appearance);
     for (const instance of model.blockInstances) addAppearance(instance.appearanceOverride);
@@ -10137,23 +10152,32 @@
     ).join("");
   }
 
-  function appearancePropertyRows(owner, effective, { allowInheritance = true } = {}) {
+  function appearancePropertyRows(owner, effective, { allowInheritance = true, constructionEndpoints = false, idPrefix = "property" } = {}) {
     const direct = normalizeAppearance(owner);
     const inherited = (key) => allowInheritance && direct[key] == null;
     const option = (value, label, selected) => `<option value="${value}" ${selected ? "selected" : ""}>${label}</option>`;
     const defaultLabel = defaultAppearanceLabel();
     const colorValue = colorPickerValue(direct.color || effective.color);
+    const endpointRows = constructionEndpoints ? `
+      <div class="property-row"><label for="${idPrefix}EndpointOverhang">${applicationText("端部のはみ出し", "Endpoint overhang")}</label><select id="${idPrefix}EndpointOverhang" data-appearance-key="endpointOverhang">
+        ${allowInheritance ? option("", defaultLabel, inherited("endpointOverhang")) : ""}
+        ${option("true", applicationText("あり", "Enabled"), direct.endpointOverhang === true || !allowInheritance && effective.endpointOverhang !== false)}${option("false", applicationText("なし", "Disabled"), direct.endpointOverhang === false)}
+      </select></div>
+      <div class="property-row"><label for="${idPrefix}EndpointMarkers">${applicationText("端部の点", "Endpoint points")}</label><select id="${idPrefix}EndpointMarkers" data-appearance-key="endpointMarkers">
+        ${allowInheritance ? option("", defaultLabel, inherited("endpointMarkers")) : ""}
+        ${option("true", applicationText("表示", "Visible"), direct.endpointMarkers === true || !allowInheritance && effective.endpointMarkers !== false)}${option("false", applicationText("非表示", "Hidden"), direct.endpointMarkers === false)}
+      </select></div>` : "";
     return `
-      <div class="property-row"><label for="propertyVisible">Visible</label><select id="propertyVisible" data-appearance-key="visible">
+      <div class="property-row"><label for="${idPrefix}Visible">Visible</label><select id="${idPrefix}Visible" data-appearance-key="visible">
         ${allowInheritance ? option("", defaultLabel, inherited("visible")) : ""}
         ${option("true", "表示", direct.visible === true || !allowInheritance && effective.visible !== false)}${option("false", "非表示", direct.visible === false)}
       </select></div>
-      <div class="property-row"><label for="propertyColor">Color</label><div class="property-color-control"><input id="propertyColor" data-appearance-key="color" type="text" placeholder="${defaultLabel}" value="${escapeHtml(direct.color || "")}" /><button class="property-color-picker" data-appearance-palette-open data-current-color="${colorValue}" type="button" title="カラーパレット" aria-label="カラーパレット"><span class="property-color-picker-swatch" style="--swatch-color:${colorValue}" aria-hidden="true"></span></button></div></div>
-      <div class="property-row"><label for="propertyLineType">Line type</label><select id="propertyLineType" data-appearance-key="lineType">
+      <div class="property-row"><label for="${idPrefix}Color">Color</label><div class="property-color-control"><input id="${idPrefix}Color" data-appearance-key="color" type="text" placeholder="${defaultLabel}" value="${escapeHtml(direct.color || "")}" /><button class="property-color-picker" data-appearance-palette-open data-current-color="${colorValue}" type="button" title="カラーパレット" aria-label="カラーパレット"><span class="property-color-picker-swatch" style="--swatch-color:${colorValue}" aria-hidden="true"></span></button></div></div>
+      <div class="property-row"><label for="${idPrefix}LineType">Line type</label><select id="${idPrefix}LineType" data-appearance-key="lineType">
         ${allowInheritance ? option("", defaultLabel, inherited("lineType")) : ""}
         ${option("solid", "実線", direct.lineType === "solid" || !allowInheritance && effective.lineType === "solid")}${option("dashed", "破線", direct.lineType === "dashed")}${option("dashdot", "一点鎖線", direct.lineType === "dashdot")}${option("dotted", "点線", direct.lineType === "dotted")}
       </select></div>
-      <div class="property-row"><label for="propertyLineWidth">Line width</label><input id="propertyLineWidth" data-appearance-key="lineWidth" type="number" min="0.1" max="20" step="0.1" placeholder="${defaultLabel}" value="${direct.lineWidth ?? ""}" /></div>`;
+      <div class="property-row"><label for="${idPrefix}LineWidth">Line width</label><input id="${idPrefix}LineWidth" data-appearance-key="lineWidth" type="number" min="0.1" max="20" step="0.1" placeholder="${defaultLabel}" value="${direct.lineWidth ?? ""}" /></div>${endpointRows}`;
   }
 
   function selectedPropertiesTarget() {
@@ -10276,7 +10300,7 @@
     const item = target.item;
     if (target.kind === "geometry") {
       const effective = effectiveAppearanceForElement(item);
-      panel.innerHTML = `<h2 class="property-heading">${escapeHtml(geometryPropertyName(item))}</h2><section class="property-section"><h3>Geometry</h3>${geometryPropertyRows(item)}</section><section class="property-section"><h3>Appearance</h3>${appearancePropertyRows(item.appearance, effective)}</section>`;
+      panel.innerHTML = `<h2 class="property-heading">${escapeHtml(geometryPropertyName(item))}</h2><section class="property-section"><h3>Geometry</h3>${geometryPropertyRows(item)}</section><section class="property-section"><h3>Appearance</h3>${appearancePropertyRows(item.appearance, effective, { constructionEndpoints: item instanceof Line && item.construction })}</section>`;
     } else if (target.kind === "block") {
       const definition = blockDefinitionById(item.definitionId);
       const effective = blockProjectionBundle(item).lines[0] ? effectiveAppearanceForElement(blockProjectionBundle(item).lines[0]) : normalizeAppearance(model.defaultAppearance, { partial: false });
@@ -10319,11 +10343,11 @@
     if (!target) return;
     const next = { ...normalizeAppearance(target) };
     if (rawValue === "") delete next[key];
-    else if (key === "visible") next[key] = rawValue === "true";
+    else if (["visible", "endpointOverhang", "endpointMarkers"].includes(key)) next[key] = rawValue === "true";
     else if (key === "lineWidth") next[key] = Math.max(0.1, Math.min(20, Number(rawValue)));
     else next[key] = rawValue;
     Object.assign(target, normalizeAppearance(next));
-    for (const existingKey of ["visible", "color", "lineType", "lineWidth"]) if (next[existingKey] == null) delete target[existingKey];
+    for (const existingKey of ["visible", "color", "lineType", "lineWidth", "endpointOverhang", "endpointMarkers"]) if (next[existingKey] == null) delete target[existingKey];
   }
 
   function applyDimensionDisplayInput(constraint, input) {
@@ -10370,6 +10394,9 @@
     if (context === "document") {
       owner = model.defaultAppearance;
       historyLabel = "Document Default Appearance変更";
+    } else if (context === "document-construction") {
+      owner = model.defaultConstructionAppearance;
+      historyLabel = "Document Default Construction Appearance変更";
     } else {
       target = selectedPropertiesTarget();
       owner = appearanceOwnerForPropertiesTarget(target);
@@ -10380,6 +10407,7 @@
       owner,
       target,
       historyLabel,
+      context,
       sourceButton: button,
       sourceInput: button.closest(".property-color-control")?.querySelector('[data-appearance-key="color"]') || null,
     };
@@ -10392,10 +10420,11 @@
   function commitColorPaletteValue(value) {
     if (!colorPaletteSession) return;
     const color = colorPickerValue(value);
-    const { owner, target, historyLabel, sourceButton, sourceInput } = colorPaletteSession;
+    const { owner, target, historyLabel, context, sourceButton, sourceInput } = colorPaletteSession;
     applyAppearanceInput(owner, "color", color);
     if (target?.kind === "block") invalidateBlockProjectionCache(target.item.id);
-    if (!target) model.defaultAppearance = normalizeAppearance(model.defaultAppearance, { partial: false });
+    if (!target && context === "document") model.defaultAppearance = normalizeAppearance(model.defaultAppearance, { partial: false });
+    if (!target && context === "document-construction") model.defaultConstructionAppearance = normalizeConstructionAppearance(model.defaultConstructionAppearance, { partial: false });
     if (sourceInput) sourceInput.value = color;
     if (sourceButton) {
       sourceButton.dataset.currentColor = color;
@@ -14122,7 +14151,7 @@
     const fields = document.getElementById("documentAppearanceFields");
     if (fields) {
       const effective = normalizeAppearance(model.defaultAppearance, { partial: false });
-      fields.innerHTML = appearancePropertyRows(effective, effective, { allowInheritance: false });
+      fields.innerHTML = appearancePropertyRows(effective, effective, { allowInheritance: false, idPrefix: "documentProperty" });
       localizeApplicationUI(fields);
       fields.onchange = (event) => {
         const input = event.target;
@@ -14136,6 +14165,30 @@
         const button = event.target.closest("[data-appearance-palette-open]");
         if (!button) return;
         openAppearanceColorPalette(button, "document");
+      };
+    }
+    const constructionFields = document.getElementById("documentConstructionAppearanceFields");
+    if (constructionFields) {
+      const construction = normalizeConstructionAppearance(model.defaultConstructionAppearance, { partial: false });
+      const effective = { ...normalizeAppearance(model.defaultAppearance, { partial: false }), ...construction };
+      constructionFields.innerHTML = appearancePropertyRows(construction, effective, {
+        allowInheritance: false,
+        constructionEndpoints: true,
+        idPrefix: "constructionProperty",
+      });
+      localizeApplicationUI(constructionFields);
+      constructionFields.onchange = (event) => {
+        const input = event.target;
+        if (!input.dataset.appearanceKey) return;
+        applyAppearanceInput(model.defaultConstructionAppearance, input.dataset.appearanceKey, input.value.trim());
+        model.defaultConstructionAppearance = normalizeConstructionAppearance(model.defaultConstructionAppearance, { partial: false });
+        recordHistory("Document Default Construction Appearance変更");
+        draw();
+      };
+      constructionFields.onclick = (event) => {
+        const button = event.target.closest("[data-appearance-palette-open]");
+        if (!button) return;
+        openAppearanceColorPalette(button, "document-construction");
       };
     }
     document.getElementById("documentSettingsDialog")?.showModal();
@@ -15150,12 +15203,15 @@
         const target = { kind: "line-length", line, p1, p2, value: line.length() };
         const screenClearance = (direction) => dimensionConstructionExtensionClearance(target, 1, p2, direction) * viewport.scale;
         const diagonal = Math.SQRT1_2;
-        return {
+        const result = {
           sameDirection: screenClearance({ x: 1, y: 0 }),
           diagonal: screenClearance({ x: diagonal, y: diagonal }),
           perpendicular: screenClearance({ x: 0, y: 1 }),
           opposite: screenClearance({ x: -1, y: 0 }),
         };
+        line.appearance = { ...normalizeAppearance(line.appearance), endpointOverhang: false };
+        result.disabled = screenClearance({ x: 1, y: 0 });
+        return result;
       },
       pointPointRectangleDimensionExtensionVisibilityCases() {
         resetModelState();
@@ -15994,6 +16050,43 @@
         hoveredLine = null;
         hoveredBlockInstance = null;
         return { direct, block };
+      },
+      constructionLineRenderingForTest(lineId) {
+        const line = allGeometryLines().find((item) => item.id === lineId);
+        if (!line) return null;
+        const segments = [];
+        let start = null;
+        let endpointMarkerCount = 0;
+        const originalMoveTo = ctx.moveTo;
+        const originalLineTo = ctx.lineTo;
+        const originalArc = ctx.arc;
+        ctx.moveTo = (x, y) => {
+          start = { x, y };
+        };
+        ctx.lineTo = (x, y) => {
+          if (start) segments.push({ p1: start, p2: { x, y } });
+        };
+        ctx.arc = (...args) => {
+          endpointMarkerCount += 1;
+          return originalArc.apply(ctx, args);
+        };
+        try {
+          drawLines();
+        } finally {
+          ctx.moveTo = originalMoveTo;
+          ctx.lineTo = originalLineTo;
+          ctx.arc = originalArc;
+        }
+        const segment = segments[0];
+        const distance = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
+        const overhangPx = segment ? ((distance(segment.p1, line.p1) + distance(segment.p2, line.p2)) / 2) * viewport.scale : null;
+        const appearance = effectiveAppearanceForElement(line);
+        return {
+          endpointOverhang: appearance.endpointOverhang !== false,
+          endpointMarkers: appearance.endpointMarkers !== false,
+          overhangPx: overhangPx == null ? null : Number(overhangPx.toFixed(6)),
+          endpointMarkerCount,
+        };
       },
       resetForSiblingSubtreeReference() {
         resetModelState();

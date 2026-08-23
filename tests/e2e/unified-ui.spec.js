@@ -663,7 +663,7 @@ test("Appearance cascades, used file colors are selectable, and constraint statu
   await redSwatch.hover();
   expect(await redSwatch.evaluate((item) => getComputedStyle(item).backgroundColor)).toBe("rgb(220, 38, 38)");
   expect(await page.locator("#usedColorPalette .property-color-swatch").evaluateAll((items) => items.map((item) => item.dataset.paletteColor))).toEqual([
-    "#ef4444", "#16a34a", "#f97316", "#0ea5e9",
+    "#ef4444", "#64748b", "#16a34a", "#f97316", "#0ea5e9",
   ]);
   await page.locator("#colorPaletteDialog button[value=cancel]").first().click();
   await expect(page.locator("#propertiesPanel")).not.toContainText("継承");
@@ -1066,6 +1066,86 @@ test("construction line endpoint overhang remains while geometry or its block is
   });
 });
 
+test("construction line endpoint appearance inherits document defaults and supports line overrides", async ({ page }) => {
+  await page.goto(`${baseUrl}/index.html?test=1`);
+  await page.waitForFunction(() => window.__cadTest);
+  const fixture = {
+    version: 9,
+    documentName: "construction-appearance",
+    defaultAppearance: { visible: true, color: "#111827", lineType: "solid", lineWidth: 2 },
+    sketches: [
+      { id: "ROOT", name: "Root Sketch", parentSketchId: null, kind: "root", appearance: {} },
+      { id: "S1", name: "Sketch-1", parentSketchId: "ROOT", kind: "sketch", appearance: {} },
+    ],
+    activeSketchId: "S1",
+    points: [
+      { id: "P1", x: -60, y: 0, fixed: false, kind: "endpoint", sketchId: "S1", appearance: {} },
+      { id: "P2", x: 60, y: 0, fixed: false, kind: "endpoint", sketchId: "S1", appearance: {} },
+    ],
+    lines: [{ id: "L1", p1: "P1", p2: "P2", construction: true, sketchId: "S1", appearance: {} }],
+    circles: [], arcs: [], constraints: [], blockDefinitions: [], blockInstances: [], annotations: [],
+  };
+  await page.evaluate((data) => window.__cadTest.importDocumentNameFixture(data, "construction-appearance.json"), fixture);
+  await page.evaluate(() => window.__cadTest.selectGeometryIdsForTest({ lines: ["L1"] }));
+  await expect(page.locator("#propertyEndpointOverhang")).toHaveValue("");
+  await expect(page.locator("#propertyEndpointMarkers")).toHaveValue("");
+  expect(await page.evaluate(() => window.__cadTest.constructionLineRenderingForTest("L1"))).toEqual({
+    endpointOverhang: true,
+    endpointMarkers: true,
+    overhangPx: 12,
+    endpointMarkerCount: 2,
+  });
+
+  await page.locator("#propertyEndpointOverhang").selectOption("false");
+  await page.locator("#propertyEndpointMarkers").selectOption("false");
+  let serialized = await page.evaluate(() => window.__cadTest.serializedModelForTest());
+  expect(serialized.lines[0].appearance).toEqual(expect.objectContaining({ endpointOverhang: false, endpointMarkers: false }));
+  expect(await page.evaluate(() => window.__cadTest.constructionLineRenderingForTest("L1"))).toEqual({
+    endpointOverhang: false,
+    endpointMarkers: false,
+    overhangPx: 0,
+    endpointMarkerCount: 0,
+  });
+
+  await page.locator("#propertyEndpointOverhang").selectOption("");
+  await page.locator("#propertyEndpointMarkers").selectOption("");
+  await openDocumentSettings(page);
+  await expect(page.locator("#documentSettingsDialog")).toContainText("既定の補助線外観");
+  await page.locator("#constructionPropertyColor").fill("#dc2626");
+  await page.locator("#constructionPropertyColor").blur();
+  await page.locator("#constructionPropertyLineType").selectOption("dotted");
+  await page.locator("#constructionPropertyLineWidth").fill("2.5");
+  await page.locator("#constructionPropertyLineWidth").blur();
+  await page.locator("#constructionPropertyEndpointOverhang").selectOption("false");
+  await page.locator("#constructionPropertyEndpointMarkers").selectOption("false");
+  await page.locator("#documentSettingsDialog button[value=cancel]").first().click();
+
+  serialized = await page.evaluate(() => window.__cadTest.serializedModelForTest());
+  expect(serialized.defaultConstructionAppearance).toEqual(expect.objectContaining({
+    color: "#dc2626",
+    lineType: "dotted",
+    lineWidth: 2.5,
+    endpointOverhang: false,
+    endpointMarkers: false,
+  }));
+  expect((await page.evaluate(() => window.__cadTest.appearanceStateForTest("line", "L1"))).effective).toEqual(expect.objectContaining({
+    color: "#dc2626",
+    lineType: "dotted",
+    lineWidth: 2.5,
+    endpointOverhang: false,
+    endpointMarkers: false,
+  }));
+  expect(await page.evaluate(() => window.__cadTest.constructionLineRenderingForTest("L1"))).toEqual({
+    endpointOverhang: false,
+    endpointMarkers: false,
+    overhangPx: 0,
+    endpointMarkerCount: 0,
+  });
+
+  await page.evaluate((data) => window.__cadTest.importDocumentNameFixture(data, "construction-appearance-reload.json"), serialized);
+  expect((await page.evaluate(() => window.__cadTest.serializedModelForTest())).defaultConstructionAppearance).toEqual(serialized.defaultConstructionAppearance);
+});
+
 test("Geometry and Constraint Explorer tabs list and synchronize their respective objects", async ({ page }) => {
   await page.goto(`${baseUrl}/index.html?test=1`);
   const ids = await page.evaluate(() => window.__cadTest.resetForSidebarInspection());
@@ -1364,6 +1444,7 @@ test("construction extension clearance uses only the dimension-line component", 
   expect(result.diagonal).toBeCloseTo(12 / Math.sqrt(2), 6);
   expect(result.perpendicular).toBeCloseTo(0, 6);
   expect(result.opposite).toBeCloseTo(0, 6);
+  expect(result.disabled).toBeCloseTo(0, 6);
 });
 
 test("point-point rectangle dimensions keep extension lines visible on both pull sides", async ({ page }) => {
