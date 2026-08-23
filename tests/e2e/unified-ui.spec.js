@@ -997,6 +997,28 @@ test("Sketch tree and Geometry Explorer hover use the same emphasis as canvas ho
   expect(objectHover).toEqual(expect.objectContaining({ sidebarHovered: true, color: canvasHover.color, width: canvasHover.width }));
 });
 
+test("Root Sketch tree hover highlights geometry and blocks in every descendant sketch", async ({ page }) => {
+  await page.goto(`${baseUrl}/index.html?test=1`);
+  await page.waitForFunction(() => window.__cadTest);
+  const ids = await page.evaluate(() => window.__cadTest.resetForRootSketchTreeHoverTest());
+
+  await page.locator(`.sketch-item[data-id="${ids.rootSketchId}"]`).hover();
+  for (const [kind, id] of [["line", ids.lineId], ["circle", ids.circleId], ["arc", ids.arcId], ["block", ids.blockInstanceId]]) {
+    expect(await page.evaluate(({ itemKind, itemId }) => window.__cadTest.hoverDisplayStateForTest(itemKind, itemId), { itemKind: kind, itemId: id })).toEqual(expect.objectContaining({
+      treeHovered: true,
+      color: "#3b82f6",
+      width: 2.2,
+    }));
+  }
+  expect(await page.evaluate((id) => window.__cadTest.hoverDisplayStateForTest("point", id), ids.lineEndpointId)).toEqual(expect.objectContaining({ treeHovered: false }));
+
+  await page.locator(`.sketch-item[data-id="${ids.secondSketchId}"]`).hover();
+  expect(await page.evaluate((id) => window.__cadTest.hoverDisplayStateForTest("line", id), ids.lineId)).toEqual(expect.objectContaining({ treeHovered: false }));
+  expect(await page.evaluate((id) => window.__cadTest.hoverDisplayStateForTest("circle", id), ids.circleId)).toEqual(expect.objectContaining({ treeHovered: true }));
+  expect(await page.evaluate((id) => window.__cadTest.hoverDisplayStateForTest("arc", id), ids.arcId)).toEqual(expect.objectContaining({ treeHovered: false }));
+  expect(await page.evaluate((id) => window.__cadTest.hoverDisplayStateForTest("block", id), ids.blockInstanceId)).toEqual(expect.objectContaining({ treeHovered: true }));
+});
+
 test("Sketch tree block hover matches canvas block hover without Block Projection point markers", async ({ page }) => {
   await page.goto(`${baseUrl}/index.html?test=1`);
   await page.waitForFunction(() => window.__cadTest);

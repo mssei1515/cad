@@ -2437,7 +2437,9 @@
   }
 
   function isSidebarHighlightedElement(item) {
-    return Boolean(hoveredSketchTreeId && elementSketchId(item) === hoveredSketchTreeId);
+    if (!hoveredSketchTreeId || !item) return false;
+    const itemSketchId = elementSketchId(item);
+    return hoveredSketchTreeId === ROOT_SKETCH_ID ? itemSketchId !== ROOT_SKETCH_ID : itemSketchId === hoveredSketchTreeId;
   }
 
   function sameConstraintDisplayElement(a, b) {
@@ -16851,6 +16853,61 @@
           arcCenter: arcCenter.id,
           lineMid: { x: rect.left + lineMid.x, y: rect.top + lineMid.y },
           blank: { x: rect.left + rect.width - 35, y: rect.top + rect.height - 35 },
+        };
+      },
+      resetForRootSketchTreeHoverTest() {
+        resetModelState();
+        const p1 = addPoint(-110, -45, false, "endpoint");
+        const p2 = addPoint(-30, -45, false, "endpoint");
+        const line = addLine(p1, p2);
+
+        const secondSketchId = "S2";
+        const childSketchId = "S3";
+        model.sketches.push({ id: secondSketchId, name: "Sketch-2", parentSketchId: ROOT_SKETCH_ID, kind: "sketch", appearance: {} });
+        model.activeSketchId = secondSketchId;
+        const circle = addCircle(addPoint(45, -35, false, "center"), 24);
+
+        model.sketches.push({ id: childSketchId, name: "Sketch-2-1", parentSketchId: secondSketchId, kind: "sketch", appearance: {} });
+        model.activeSketchId = childSketchId;
+        const arc = addArc(addPoint(55, 55, false, "center"), 30, Math.PI, Math.PI * 1.8);
+
+        const definition = createEmptyBlockDefinition("Root Hover Block");
+        const bp1 = new Point("BP1", -25, 0, false, "endpoint");
+        const bp2 = new Point("BP2", 25, 0, false, "endpoint");
+        bp1.sketchId = DEFAULT_SKETCH_ID;
+        bp2.sketchId = DEFAULT_SKETCH_ID;
+        const blockLine = new Line("BL1", bp1, bp2);
+        blockLine.sketchId = DEFAULT_SKETCH_ID;
+        definition.points.push(bp1, bp2);
+        definition.lines.push(blockLine);
+        model.blockDefinitions.push(definition);
+        const instance = {
+          id: `BI${blockInstanceSeq++}`,
+          definitionId: definition.id,
+          sketchId: secondSketchId,
+          x: -35,
+          y: 55,
+          rotation: 0,
+          fixed: false,
+          rotationLocked: false,
+          enabledSketchIds: [DEFAULT_SKETCH_ID],
+          appearanceOverride: {},
+        };
+        model.blockInstances.push(instance);
+        model.activeSketchId = DEFAULT_SKETCH_ID;
+        invalidateBlockProjectionCache();
+        updateUI();
+        fitAllGeometryToViewport(150);
+        draw();
+        return {
+          rootSketchId: ROOT_SKETCH_ID,
+          secondSketchId,
+          childSketchId,
+          lineId: line.id,
+          lineEndpointId: p1.id,
+          circleId: circle.id,
+          arcId: arc.id,
+          blockInstanceId: instance.id,
         };
       },
       resetForFixedPointDisplayTest() {
