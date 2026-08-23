@@ -172,9 +172,10 @@
     ["読み取り専用寸法の値は編集できません", "A read-only dimension value cannot be edited."], ["寸法値には0より大きい数値を入力してください", "Enter a dimension value greater than zero."],
     ["回転がロックされたブロックインスタンスです", "This block instance has locked rotation."], ["固定されたブロックインスタンスです", "This block instance is fixed."],
     ["ブロックを回転中", "Rotating block"], ["ブロックを移動中", "Moving block"], ["引出線を移動中", "Moving leader"], ["テキストを移動中", "Moving text"],
-    ["トリムできる交点がありません", "No intersection is available for trimming."], ["R寸法を入力してください。数字キーで編集、Enterで作成、Escでキャンセル", "Enter the fillet radius. Type a number, press Enter to create, or Esc to cancel."],
-    ["R寸法には0より大きい数値を入力してください", "Enter a fillet radius greater than zero."], ["R面取りする線をクリックしてください", "Click a line to fillet."],
-    ["接続する2本目の線をクリックするとR面取りを作成します", "Click the second connected line to create the fillet."], ["別の接続線をクリックしてください", "Click a different connected line."],
+    ["トリムできる交点がありません", "No intersection is available for trimming."], ["R面取りする線をクリックしてください", "Click a line to fillet."],
+    ["接続する2本目の線をクリックしてください", "Click the second connected line."], ["別の接続線をクリックしてください", "Click a different connected line."],
+    ["マウスを動かしてR寸法を決め、クリックで確定してください。Escでキャンセルします", "Move the pointer to set the fillet radius, then click to confirm. Press Esc to cancel."],
+    ["共有端点から離れた位置へマウスを移動してください", "Move the pointer away from the shared endpoint."],
     ["半径位置をクリックすると円を作成します。Escで選択モードに戻ります", "Click the radius position to create the circle. Press Esc to return to selection mode."],
     ["円弧の始点をクリックしてください。Escで選択モードに戻ります", "Click the arc start point. Press Esc to return to selection mode."], ["中心から離れた位置をクリックしてください", "Click a position away from the center."],
     ["円弧の終点をクリックすると円弧を作成します。Escで選択モードに戻ります", "Click the arc end point to create the arc. Press Esc to return to selection mode."],
@@ -324,7 +325,6 @@
   const PARAMETER_STABILIZATION_RELATIVE_TOLERANCE = 1e-7;
   const DRAG_PREVIEW_ERROR_SCREEN_PX = 0.1;
   const DRAG_PREVIEW_MAX_MODEL_ERROR = 0.125;
-  const DEFAULT_FILLET_RADIUS = 30;
   const MIN_LINE_LENGTH = Math.max(MIN_ORIENTATION_LENGTH, solver.minLineLength || 12);
   const MIN_ARC_LENGTH = MIN_LINE_LENGTH;
   const CONSTRAINT_STATUS_COLORS = {
@@ -7933,37 +7933,14 @@
     dimensionValueInput.classList.remove("is-invalid");
   }
 
-  function filletRadiusDimensionAnchor(geometry) {
-    const angle = geometry.startAngle + (geometry.endAngle - geometry.startAngle) / 2;
-    const distance = geometry.radius + 34 / viewport.scale;
-    return {
-      x: geometry.center.x + Math.cos(angle) * distance,
-      y: geometry.center.y + Math.sin(angle) * distance,
-    };
-  }
-
   function dimensionInputLayoutForPendingCommand() {
-    if (!pendingCommand || !["distance-value", "fillet-radius-value", "offset-value"].includes(pendingCommand.type)) return null;
-    if (pendingCommand.type === "fillet-radius-value") {
-      const value = Number(pendingCommand.buffer);
-      const radius = Number.isFinite(value) && value > 0 ? value : DEFAULT_FILLET_RADIUS;
-      const geometry = computeFilletGeometry(pendingCommand.line1, pendingCommand.line2, radius);
-      if (!geometry.ok) return null;
-      const primitive = {
-        id: "R",
-        center: geometry.center,
-        radius: () => geometry.radius,
-      };
-      const target = { kind: "radius", primitive, value: radius };
-      const anchor = filletRadiusDimensionAnchor(geometry);
-      return dimensionLayout(target, dimensionFromAnchor(target, anchor));
-    }
+    if (!pendingCommand || !["distance-value", "offset-value"].includes(pendingCommand.type)) return null;
     return dimensionLayout(pendingCommand.target, pendingCommand.dimension);
   }
 
   function syncDimensionValueInput() {
     if (!dimensionValueInput) return;
-    if (!pendingCommand || !["distance-value", "fillet-radius-value", "offset-value"].includes(pendingCommand.type)) {
+    if (!pendingCommand || !["distance-value", "offset-value"].includes(pendingCommand.type)) {
       hideDimensionValueInput();
       return;
     }
@@ -8649,26 +8626,23 @@
   }
 
   function drawDimensionPreview() {
-    if (pendingCommand?.type === "fillet-radius-value") {
-      const value = Number(pendingCommand.buffer);
-      const radius = Number.isFinite(value) && value > 0 ? value : DEFAULT_FILLET_RADIUS;
-      const geometry = computeFilletGeometry(pendingCommand.line1, pendingCommand.line2, radius);
+    if (pendingCommand?.type === "fillet-radius-place") {
+      const geometry = pendingCommand.preview;
       if (!geometry.ok) return;
       const primitive = {
         id: "R",
         center: geometry.center,
         radius: () => geometry.radius,
       };
-      const target = { kind: "radius", primitive, value: radius };
-      const anchor = {
+      const target = { kind: "radius", primitive, value: geometry.radius };
+      const anchor = pendingCommand.pointer || {
         x: geometry.center.x + Math.cos((geometry.startAngle + geometry.endAngle) / 2) * geometry.radius,
         y: geometry.center.y + Math.sin((geometry.startAngle + geometry.endAngle) / 2) * geometry.radius,
       };
       drawFilletPreviewArc(geometry);
-      const invalid = pendingCommand.buffer === "" || !Number.isFinite(value) || value <= 0 || !geometry.ok;
-      drawDimension(target, dimensionFromAnchor(target, anchor), `R${pendingCommand.buffer || "_"}|`, true, false, {
-        selecting: !pendingCommand.editing,
-        invalid,
+      drawDimension(target, dimensionFromAnchor(target, anchor), `R${formatDisplayNumber(geometry.radius)}`, true, false, {
+        selecting: true,
+        invalid: false,
         hidden: true,
       });
       return;
@@ -9848,7 +9822,7 @@
   }
 
   function updateDistanceBufferLabel() {
-    if (!pendingCommand || !["distance-value", "fillet-radius-value", "offset-value"].includes(pendingCommand.type)) return;
+    if (!pendingCommand || !["distance-value", "offset-value"].includes(pendingCommand.type)) return;
     setHint(pendingCommand.type === "offset-value" ? "オフセット距離を入力中: Enter/ダブルクリックで決定、Escでキャンセル" : "寸法値を入力中: 数値キーで編集、Enter/ダブルクリックで決定、Escでキャンセル");
     draw();
   }
@@ -9913,7 +9887,7 @@
   }
 
   function handleDistanceKey(e) {
-    if (!pendingCommand) return false;
+    if (!pendingCommand || !["distance-place", "distance-value", "offset-value"].includes(pendingCommand.type)) return false;
     if (e.key === "Escape") {
       e.preventDefault();
       cancelPendingCommand("寸法入力をキャンセルしました");
@@ -9924,11 +9898,10 @@
       startDistanceValueInput(pendingCommand.pointer || defaultDimensionForTarget(pendingCommand.target));
       return true;
     }
-    if (!["distance-value", "fillet-radius-value", "offset-value"].includes(pendingCommand.type)) return false;
+    if (!["distance-value", "offset-value"].includes(pendingCommand.type)) return false;
     if (e.key === "Enter") {
       e.preventDefault();
-      if (pendingCommand.type === "fillet-radius-value") submitFilletRadiusValue();
-      else if (pendingCommand.type === "offset-value") submitOffsetValue();
+      if (pendingCommand.type === "offset-value") submitOffsetValue();
       else submitDistanceValue();
       return true;
     }
@@ -13504,7 +13477,7 @@
     else if (line.p2 === from) line.p2 = to;
   }
 
-  function computeFilletGeometry(line1, line2, radius = DEFAULT_FILLET_RADIUS) {
+  function filletGeometryBasis(line1, line2) {
     const corner = sharedLinePoint(line1, line2);
     if (!corner) return { ok: false, reason: "接続された2本の線を選択してください" };
     const o1 = otherLinePoint(line1, corner);
@@ -13520,13 +13493,23 @@
     const tangentScale = Math.tan(theta / 2);
     const maxTangent = Math.min(l1, l2) - MIN_LINE_LENGTH;
     if (!Number.isFinite(maxTangent) || maxTangent <= 0) return { ok: false, reason: "R面取り後の線長を確保できません" };
+    const maximumRadius = maxTangent * tangentScale;
+    if (!Number.isFinite(maximumRadius) || maximumRadius <= MIN_ORIENTATION_LENGTH) return { ok: false, reason: "R面取り後の線長を確保できません" };
+    const bis = { x: u1.x + u2.x, y: u1.y + u2.y };
+    const bisLen = hypot2(bis.x, bis.y);
+    if (bisLen < 1e-9) return { ok: false, reason: "180度の角にはR面取りを作成できません" };
+    return { ok: true, corner, u1, u2, l1, l2, theta, tangentScale, maxTangent, maximumRadius, bis, bisLen };
+  }
+
+  function computeFilletGeometry(line1, line2, radius) {
+    const basis = filletGeometryBasis(line1, line2);
+    if (!basis.ok) return basis;
+    if (!Number.isFinite(radius) || radius < MIN_ORIENTATION_LENGTH) return { ok: false, reason: "共有端点から離れた位置へマウスを移動してください" };
+    const { corner, u1, u2, l1, l2, theta, tangentScale, maxTangent, bis, bisLen } = basis;
     const tangent = radius / tangentScale;
     if (Number.isFinite(tangent) && tangent >= maxTangent) return { ok: false, reason: "R寸法を保つための直線部を確保できません" };
     if (!Number.isFinite(tangent) || tangent <= 0 || tangent >= Math.min(l1, l2)) return { ok: false, reason: "この角度と線長ではR面取りを作成できません" };
 
-    const bis = { x: u1.x + u2.x, y: u1.y + u2.y };
-    const bisLen = hypot2(bis.x, bis.y);
-    if (bisLen < 1e-9) return { ok: false, reason: "180度の角にはR面取りを作成できません" };
     const centerDistance = radius / Math.sin(theta / 2);
     const t1 = { x: corner.x + u1.x * tangent, y: corner.y + u1.y * tangent };
     const t2 = { x: corner.x + u2.x * tangent, y: corner.y + u2.y * tangent };
@@ -13536,7 +13519,18 @@
     return { ok: true, corner, t1, t2, center, radius, startAngle, endAngle };
   }
 
-  function createFillet(line1, line2, radius = DEFAULT_FILLET_RADIUS) {
+  function filletGeometryFromPointer(line1, line2, pointer) {
+    const basis = filletGeometryBasis(line1, line2);
+    if (!basis.ok) return basis;
+    if (!pointer) return { ok: false, reason: "共有端点から離れた位置へマウスを移動してください" };
+    const requestedRadius = hypot2(pointer.x - basis.corner.x, pointer.y - basis.corner.y);
+    const maximumRadius = basis.maximumRadius;
+    const radius = Math.min(requestedRadius, maximumRadius * (1 - 1e-6));
+    const geometry = computeFilletGeometry(line1, line2, radius);
+    return geometry.ok ? { ...geometry, requestedRadius, maximumRadius } : geometry;
+  }
+
+  function createFillet(line1, line2, radius) {
     const geometry = computeFilletGeometry(line1, line2, radius);
     if (!geometry.ok) return geometry;
     const { corner, t1: t1Pos, t2: t2Pos, center: centerPos, radius: finalRadius, startAngle, endAngle } = geometry;
@@ -13562,31 +13556,46 @@
     return { ok: true, arc };
   }
 
-  function startFilletRadiusInput(line1, line2) {
+  function startFilletRadiusPlacement(line1, line2, pointer = null) {
+    const basis = filletGeometryBasis(line1, line2);
+    if (!basis.ok) {
+      setHint(basis.reason, "error");
+      draw();
+      return false;
+    }
     pendingCommand = {
-      type: "fillet-radius-value",
+      type: "fillet-radius-place",
       line1,
       line2,
-      buffer: String(DEFAULT_FILLET_RADIUS),
-      editing: false,
+      pointer: pointer ? { x: pointer.x, y: pointer.y } : null,
+      preview: filletGeometryFromPointer(line1, line2, pointer),
     };
-    setHint("R寸法を入力してください。数字キーで編集、Enterで作成、Escでキャンセル");
+    hideDimensionValueInput();
+    setHint("マウスを動かしてR寸法を決め、クリックで確定してください。Escでキャンセルします");
     draw();
-    focusDimensionValueInput();
+    return true;
   }
 
-  function submitFilletRadiusValue() {
-    if (pendingCommand?.type !== "fillet-radius-value") return false;
-    const value = Number(pendingCommand.buffer);
-    if (!Number.isFinite(value) || value <= 0) {
-      setHint("R寸法には0より大きい数値を入力してください", "error");
+  function updateFilletRadiusPlacement(pointer) {
+    if (pendingCommand?.type !== "fillet-radius-place") return false;
+    pendingCommand.pointer = { x: pointer.x, y: pointer.y };
+    pendingCommand.preview = filletGeometryFromPointer(pendingCommand.line1, pendingCommand.line2, pointer);
+    return true;
+  }
+
+  function submitFilletRadiusPlacement(pointer) {
+    if (pendingCommand?.type !== "fillet-radius-place") return false;
+    updateFilletRadiusPlacement(pointer);
+    const preview = pendingCommand.preview;
+    if (!preview.ok) {
+      setHint(preview.reason, "error");
       draw();
       return true;
     }
     const { line1, line2 } = pendingCommand;
     pendingCommand = null;
     hideDimensionValueInput();
-    const result = createFillet(line1, line2, value);
+    const result = createFillet(line1, line2, preview.radius);
     if (!result.ok) {
       setHint(result.reason, "error");
       draw();
@@ -13598,7 +13607,7 @@
     return true;
   }
 
-  function handleFilletClick(line) {
+  function handleFilletClick(line, pointer) {
     if (!line) {
       setHint("R面取りする線をクリックしてください", "error");
       return;
@@ -13609,7 +13618,7 @@
       selectedPoints = [];
       selectedCircles = [];
       selectedArcs = [];
-      setHint("接続する2本目の線をクリックするとR面取りを作成します");
+      setHint("接続する2本目の線をクリックしてください");
       updateGeometrySelectionUI();
       draw();
       return;
@@ -13618,8 +13627,7 @@
       setHint("別の接続線をクリックしてください", "error");
       return;
     }
-    startFilletRadiusInput(filletFirstLine, line);
-    filletFirstLine = null;
+    if (startFilletRadiusPlacement(filletFirstLine, line, pointer)) filletFirstLine = null;
   }
 
   function handleCircleClick(p) {
@@ -13761,6 +13769,12 @@
       return;
     }
 
+    if (pendingCommand?.type === "fillet-radius-place") {
+      e.preventDefault();
+      submitFilletRadiusPlacement(p);
+      return;
+    }
+
     if (blankAnnotationHit && mode === "select" && !pendingCommand && !pendingConstraintCommand) {
       e.preventDefault();
       clearSelection();
@@ -13790,7 +13804,7 @@
       return;
     }
 
-    if (pendingCommand?.type === "distance-value" || pendingCommand?.type === "fillet-radius-value" || pendingCommand?.type === "offset-value") {
+    if (pendingCommand?.type === "distance-value" || pendingCommand?.type === "offset-value") {
       e.preventDefault();
       return;
     }
@@ -13861,7 +13875,7 @@
     }
 
     if (mode === "fillet") {
-      handleFilletClick(hitL);
+      handleFilletClick(hitL, p);
       return;
     }
 
@@ -14005,6 +14019,21 @@
       hoveredArc = null;
       hoveredDimensionConstraint = null;
       hoveredSketchIdentity = null;
+      draw();
+      return;
+    }
+
+    if (pendingCommand?.type === "fillet-radius-place") {
+      clearSnap();
+      hoveredPoint = null;
+      hoveredEndpointPoint = null;
+      hoveredLine = null;
+      hoveredCircle = null;
+      hoveredArcEndpoint = null;
+      hoveredArc = null;
+      hoveredDimensionConstraint = null;
+      hoveredSketchIdentity = null;
+      updateFilletRadiusPlacement(p);
       draw();
       return;
     }
@@ -14537,10 +14566,6 @@
       submitDistanceValue();
       return true;
     }
-    if (pendingCommand?.type === "fillet-radius-value") {
-      submitFilletRadiusValue();
-      return true;
-    }
     if (pendingCommand?.type === "offset-value") {
       submitOffsetValue();
       return true;
@@ -14641,11 +14666,6 @@
     const hitA = hitArc(p.x, p.y);
     const hitD = hitDimension(p.x, p.y);
     const hitBlock = hitBlockInstance(p.x, p.y);
-    if (pendingCommand?.type === "fillet-radius-value") {
-      e.preventDefault();
-      submitFilletRadiusValue();
-      return;
-    }
     if (pendingCommand?.type === "offset-value") {
       e.preventDefault();
       submitOffsetValue();
@@ -14687,18 +14707,17 @@
     dimensionValueInput.addEventListener("pointerdown", (e) => e.stopPropagation());
     dimensionValueInput.addEventListener("dblclick", (e) => e.stopPropagation());
     dimensionValueInput.addEventListener("input", () => {
-      if (!pendingCommand || !["distance-value", "fillet-radius-value", "offset-value"].includes(pendingCommand.type)) return;
+      if (!pendingCommand || !["distance-value", "offset-value"].includes(pendingCommand.type)) return;
       pendingCommand.buffer = dimensionValueInput.value;
       pendingCommand.editing = true;
       updateDistanceBufferLabel();
     });
     dimensionValueInput.addEventListener("keydown", (e) => {
-      if (!pendingCommand || !["distance-value", "fillet-radius-value", "offset-value"].includes(pendingCommand.type)) return;
+      if (!pendingCommand || !["distance-value", "offset-value"].includes(pendingCommand.type)) return;
       e.stopPropagation();
       if (e.key === "Enter") {
         e.preventDefault();
-        if (pendingCommand.type === "fillet-radius-value") submitFilletRadiusValue();
-        else if (pendingCommand.type === "offset-value") submitOffsetValue();
+        if (pendingCommand.type === "offset-value") submitOffsetValue();
         else submitDistanceValue();
       } else if (e.key === "Escape") {
         e.preventDefault();
@@ -15418,8 +15437,7 @@
   document.getElementById("toolFillet")?.addEventListener("click", () => {
     cancelConstraintTargetCommand("");
     if (selectedLines.length === 2) {
-      startFilletRadiusInput(selectedLines[0], selectedLines[1]);
-      filletFirstLine = null;
+      if (startFilletRadiusPlacement(selectedLines[0], selectedLines[1], lastPointerWorld)) filletFirstLine = null;
       return;
     }
     mode = "fillet";
@@ -16096,8 +16114,8 @@
           pendingPlacementPoint: pendingCommand?.type === "distance-place" && pendingCommand.pointer
             ? { x: pendingCommand.pointer.x, y: pendingCommand.pointer.y }
             : null,
-          pendingCommandPreview: pendingCommand?.type === "fillet-radius-value"
-            ? computeFilletGeometry(pendingCommand.line1, pendingCommand.line2, Number(pendingCommand.buffer) || DEFAULT_FILLET_RADIUS)
+          pendingCommandPreview: pendingCommand?.type === "fillet-radius-place"
+            ? pendingCommand.preview
             : null,
           pointCount: model.points.length,
           lineCount: model.lines.length,

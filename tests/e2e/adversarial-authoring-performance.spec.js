@@ -202,6 +202,11 @@ async function clickWorld(page, world) {
   await page.mouse.click(position.x, position.y);
 }
 
+async function moveWorld(page, world) {
+  const position = await clientPosition(page, world);
+  await page.mouse.move(position.x, position.y);
+}
+
 async function pressEscape(page) {
   await page.keyboard.press("Escape");
   await settleAfterPaint(page);
@@ -786,9 +791,9 @@ test("construction, fixed, trim, fillet and offset operations stay responsive", 
 
   const filletSandbox = sandboxFixture(({ point, line }) => {
     const corner = point("CORNER", x, 0);
-    line("L1", point("P1", x - 120, 0), corner);
-    line("L2", corner, point("P2", x, 120));
-    return { first: { x: x - 60, y: 0 }, second: { x, y: 60 } };
+    line("L1", point("P1", x - 24, 0), corner);
+    line("L2", corner, point("P2", x, 24));
+    return { first: { x: x - 15, y: 0 }, second: { x, y: 15 }, radius: { x: x + 6, y: 6 } };
   });
   const filletLoaded = await loadFixture(page, filletSandbox.data);
   await measureInteraction(page, results, "fillet/command", () => page.locator("#toolFillet").click(), 250);
@@ -798,12 +803,15 @@ test("construction, fixed, trim, fillet and offset operations stay responsive", 
   expect(filletFirstState.selected.lines).toHaveLength(1);
   await measureInteraction(page, results, "fillet/second-line", () => clickWorld(page, filletSandbox.targets.second), 300);
   const filletSecondState = await page.evaluate(() => window.__cadTest.authoringStateForTest());
-  expect(filletSecondState.pendingCommandType).toBe("fillet-radius-value");
+  expect(filletSecondState.pendingCommandType).toBe("fillet-radius-place");
   expect(filletSecondState.pendingCommandPreview?.ok, JSON.stringify(filletSecondState.pendingCommandPreview)).toBe(true);
+  expect(filletSecondState.pendingCommandPreview.maximumRadius).toBeLessThan(30);
   let input = page.locator("#dimensionValueInput");
-  await expect(input).toBeVisible();
-  await input.fill("20");
-  await measureInteraction(page, results, "fillet/submit-radius", () => input.press("Enter"), 350);
+  await expect(input).toBeHidden();
+  await measureInteraction(page, results, "fillet/radius-preview", () => moveWorld(page, filletSandbox.targets.radius), 300);
+  const filletPreviewState = await page.evaluate(() => window.__cadTest.authoringStateForTest());
+  expect(filletPreviewState.pendingCommandPreview?.radius).toBeCloseTo(Math.hypot(6, 6), 5);
+  await measureInteraction(page, results, "fillet/submit-radius", () => clickWorld(page, filletSandbox.targets.radius), 350);
   state = await page.evaluate(() => window.__cadTest.authoringStateForTest());
   expect(state.arcCount).toBe(filletLoaded.state.arcCount + 1);
   await pressEscape(page);
