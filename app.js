@@ -9002,7 +9002,6 @@
     ctx.save();
     for (const p of drawOrderBySketch(allGeometryPoints())) {
       const appearance = effectiveAppearanceForElement(p);
-      if (viewState.constraintStatus && p.kind === "endpoint") continue;
       if (!viewState.constraintStatus && !p.blockProjection && !isExplicitPoint(p) && !isPointUsedByPrimitive(p) && !isReferencePoint(p)) continue;
       const active = isEditableSketchElement(p);
       ctx.globalAlpha = sketchAlpha(p);
@@ -9014,6 +9013,7 @@
       const sel = (active && selectedPoints.includes(p)) || refSelected;
       const endpoint = isEndpointPoint(p);
       const canvasHovered = (active || isReferenceHoverElement(p)) && (hoveredPoint === p || hoveredEndpointPoint === p);
+      if (viewState.constraintStatus && p.kind === "endpoint" && !canvasHovered) continue;
       const hovered = treeHovered || sidebarHovered || canvasHovered;
       const dragging = dragSession?.kind === "point" && dragSession.points.some((target) => target.point === p);
       const primitiveCenter = shouldShowPrimitiveCenter(p);

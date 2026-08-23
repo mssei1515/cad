@@ -914,6 +914,17 @@ test("Appearance cascades, used file colors are selectable, and constraint statu
   await expect(statusMenuInput).toBeChecked();
   expect(await page.evaluate(() => window.__cadTest.viewStateForTest())).toEqual(expect.objectContaining({ constraintStatus: true, mouseLatched: true, spaceHeld: false }));
   expect(await page.evaluate(() => window.__cadTest.constraintStatusEndpointMarkerCountForTest())).toBe(0);
+  const endpointPosition = await page.evaluate(() => window.__cadTest.geometryClientPositionForTest("point", "P2"));
+  await page.mouse.move(endpointPosition.x, endpointPosition.y);
+  expect(await page.evaluate(() => window.__cadTest.constraintStatusEndpointMarkerCountForTest())).toBe(1);
+  expect(await page.evaluate(() => window.__cadTest.pointDisplayStateForTest("P2"))).toEqual(expect.objectContaining({
+    fill: "#eff6ff",
+    stroke: "#3b82f6",
+    labels: expect.arrayContaining(["P2"]),
+  }));
+  const canvasBox = await page.locator("#canvas").boundingBox();
+  await page.mouse.move(canvasBox.x + 20, canvasBox.y + canvasBox.height - 20);
+  expect(await page.evaluate(() => window.__cadTest.constraintStatusEndpointMarkerCountForTest())).toBe(0);
   await page.keyboard.down("Space");
   await page.keyboard.up("Space");
   expect(await page.evaluate(() => window.__cadTest.viewStateForTest())).toEqual(expect.objectContaining({ constraintStatus: true, mouseLatched: true, spaceHeld: false }));
