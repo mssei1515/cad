@@ -415,8 +415,7 @@ function manyNestedBlockDefinitionsFixture(count = 24) {
   return fixture;
 }
 
-function rotationLockFixture({ constrained = false, fixed = false } = {}) {
-  const rotation = Math.PI / 6;
+function rotationLockFixture({ constrained = false, fixed = false, rotation = Math.PI / 6, rotationLocked = false } = {}) {
   const x = 120;
   const y = 80;
   const localPoints = [
@@ -460,7 +459,7 @@ function rotationLockFixture({ constrained = false, fixed = false } = {}) {
       blockInstances: [],
       constraints: [],
     }],
-    blockInstances: [{ id: "BI1", definitionId: "B1", sketchId: "S1", x, y, rotation, fixed, rotationLocked: false, enabledSketchIds: ["S1"] }],
+    blockInstances: [{ id: "BI1", definitionId: "B1", sketchId: "S1", x, y, rotation, fixed, rotationLocked, enabledSketchIds: ["S1"] }],
     points: anchors,
     lines: [],
     circles: [],
@@ -755,6 +754,7 @@ test("selected blocks can change rotation mode and reject an unsatisfied orthogo
   await expect(page.locator('#propertiesPanel input[data-property="block-x"]')).toHaveCount(0);
   await expect(page.locator('#propertiesPanel input[data-property="block-y"]')).toHaveCount(0);
   await expect(page.locator('#propertiesPanel input[data-property="block-rotation"]')).toHaveCount(0);
+  await expect(page.locator('#propertiesPanel select[data-property="block-orthogonal-rotation"]')).toHaveCount(0);
   await expect(page.locator("#blockSketchConfig")).toBeHidden();
   const before = await page.evaluate(() => window.__cadTest.blockRotationLockStateForTest("BI1"));
   await page.click('#propertiesPanel input[data-block-rotation-mode="locked"]');
@@ -765,6 +765,7 @@ test("selected blocks can change rotation mode and reject an unsatisfied orthogo
   expect(after.displayCenter.y).toBeCloseTo(before.displayCenter.y, 8);
   expect(after.solverVariables).toEqual(["x", "y"]);
   expect(after.rotationSessionAvailable).toBe(false);
+  await expect(page.locator('#propertiesPanel select[data-property="block-orthogonal-rotation"]')).toHaveValue("0");
 
   await page.click("#undoBtn");
   let restored = await page.evaluate(() => window.__cadTest.blockRotationLockStateForTest("BI1"));
@@ -776,16 +777,32 @@ test("selected blocks can change rotation mode and reject an unsatisfied orthogo
   expect(restored.rotation).toBeCloseTo(0, 8);
   await page.evaluate(() => window.__cadTest.selectGeometryIdsForTest({ blockInstances: ["BI1"] }));
 
+  const angleBefore = await page.evaluate(() => window.__cadTest.blockRotationLockStateForTest("BI1"));
+  await page.locator('#propertiesPanel select[data-property="block-orthogonal-rotation"]').selectOption("90");
+  let angleChanged = await page.evaluate(() => window.__cadTest.blockRotationLockStateForTest("BI1"));
+  expect(angleChanged.rotationLocked).toBe(true);
+  expect(angleChanged.rotation).toBeCloseTo(Math.PI / 2, 8);
+  expect(angleChanged.displayCenter.x).toBeCloseTo(angleBefore.displayCenter.x, 8);
+  expect(angleChanged.displayCenter.y).toBeCloseTo(angleBefore.displayCenter.y, 8);
+  await page.click("#undoBtn");
+  angleChanged = await page.evaluate(() => window.__cadTest.blockRotationLockStateForTest("BI1"));
+  expect(angleChanged.rotation).toBeCloseTo(0, 8);
+  await page.click("#redoBtn");
+  angleChanged = await page.evaluate(() => window.__cadTest.blockRotationLockStateForTest("BI1"));
+  expect(angleChanged.rotation).toBeCloseTo(Math.PI / 2, 8);
+  await page.evaluate(() => window.__cadTest.selectGeometryIdsForTest({ blockInstances: ["BI1"] }));
+
   await page.click('#propertiesPanel input[data-block-rotation-mode="free"]');
   after = await page.evaluate(() => window.__cadTest.blockRotationLockStateForTest("BI1"));
   expect(after.rotationLocked).toBe(false);
-  expect(after.rotation).toBeCloseTo(0, 8);
+  expect(after.rotation).toBeCloseTo(Math.PI / 2, 8);
   expect(after.solverVariables).toEqual(["rotation", "x", "y"]);
 
-  await page.evaluate((fixture) => window.__cadTest.importDocumentNameFixture(fixture, "fixed-rotation-lock.json"), rotationLockFixture({ fixed: true }));
+  await page.evaluate((fixture) => window.__cadTest.importDocumentNameFixture(fixture, "fixed-rotation-lock.json"), rotationLockFixture({ fixed: true, rotation: 0, rotationLocked: true }));
   await page.evaluate(() => window.__cadTest.selectGeometryIdsForTest({ blockInstances: ["BI1"] }));
   await expect(page.locator('#propertiesPanel input[data-block-rotation-mode="locked"]')).toBeDisabled();
   await expect(page.locator('#propertiesPanel input[data-block-rotation-mode="free"]')).toBeDisabled();
+  await expect(page.locator('#propertiesPanel select[data-property="block-orthogonal-rotation"]')).toBeDisabled();
 
   await page.evaluate((fixture) => window.__cadTest.importDocumentNameFixture(fixture, "constrained-rotation-lock.json"), rotationLockFixture({ constrained: true }));
   await page.evaluate(() => window.__cadTest.selectGeometryIdsForTest({ blockInstances: ["BI1"] }));
@@ -798,6 +815,17 @@ test("selected blocks can change rotation mode and reject an unsatisfied orthogo
   expect(rejected.y).toBeCloseTo(constrainedBefore.y, 8);
   await expect(page.locator("#hint")).toContainText("直交回転ロックを適用できません");
   await expect(page.locator('#propertiesPanel input[data-block-rotation-mode="free"]')).toBeChecked();
+
+  await page.evaluate((fixture) => window.__cadTest.importDocumentNameFixture(fixture, "constrained-orthogonal-angle.json"), rotationLockFixture({ constrained: true, rotation: 0, rotationLocked: true }));
+  await page.evaluate(() => window.__cadTest.selectGeometryIdsForTest({ blockInstances: ["BI1"] }));
+  const angleRejectedBefore = await page.evaluate(() => window.__cadTest.blockRotationLockStateForTest("BI1"));
+  await page.locator('#propertiesPanel select[data-property="block-orthogonal-rotation"]').selectOption("90");
+  const angleRejected = await page.evaluate(() => window.__cadTest.blockRotationLockStateForTest("BI1"));
+  expect(angleRejected.rotation).toBeCloseTo(angleRejectedBefore.rotation, 8);
+  expect(angleRejected.x).toBeCloseTo(angleRejectedBefore.x, 8);
+  expect(angleRejected.y).toBeCloseTo(angleRejectedBefore.y, 8);
+  await expect(page.locator("#hint")).toContainText("直交回転角度を変更できません");
+  await expect(page.locator('#propertiesPanel select[data-property="block-orthogonal-rotation"]')).toHaveValue("0");
 });
 
 test("block placement settings stay in Explorer while selected-block settings appear in Properties", async ({ page }) => {

@@ -10543,6 +10543,38 @@
     return true;
   }
 
+  function setBlockInstanceOrthogonalRotation(instance, rotation) {
+    if (!instance || !model.blockInstances.includes(instance) || !instance.rotationLocked) return false;
+    if (instance.fixed) {
+      setHint(applicationText("全固定を解除してから回転角度を変更してください", "Release full fixation before changing the rotation angle."), "error");
+      updatePropertiesUI();
+      return false;
+    }
+    const targetRotation = snappedBlockRotation(rotation);
+    const difference = Math.atan2(Math.sin(targetRotation - instance.rotation), Math.cos(targetRotation - instance.rotation));
+    if (Math.abs(difference) < 1e-12) return true;
+
+    const snapshot = snapshotModelState();
+    setBlockInstanceRotationAroundDisplayCenter(instance, targetRotation);
+    const solved = solveSketchAndDependents(instance.sketchId);
+    if (!solved.success || solved.dependent?.success === false) {
+      restoreModelState(snapshot);
+      solveSketchAndDependents(instance.sketchId);
+      refreshConstraintAnalysis();
+      setHint(applicationText("既存の拘束が成立しないため、直交回転角度を変更できません", "The orthogonal rotation angle could not be changed because existing constraints would not be satisfied."), "error");
+      updateUI({ refreshAnalysis: false });
+      draw();
+      return false;
+    }
+    refreshConstraintAnalysis();
+    const angle = Math.round(targetRotation * 180 / Math.PI);
+    setHint(applicationText(`${blockDefinitionById(instance.definitionId)?.name || instance.id} の回転角度を${angle}°に変更しました`, `Changed ${blockDefinitionById(instance.definitionId)?.name || instance.id} rotation angle to ${angle}°.`));
+    updateUI({ refreshAnalysis: false });
+    draw();
+    recordHistory("ブロック直交回転角度変更");
+    return true;
+  }
+
   function blockDefinitionSketchRows(definition) {
     if (!definition) return [];
     const children = new Map();
@@ -10869,6 +10901,16 @@
       </div>`;
   }
 
+  function blockRotationPropertyRow(item) {
+    if (!item.rotationLocked) return propertyReadonlyRow("回転角度", "Rotation angle", `${formatDisplayNumber(angleDegrees(item.rotation))}°`);
+    const rotation = snappedBlockRotation(item.rotation);
+    const options = [0, 90, 180, 270].map((angle) => {
+      const value = angle * Math.PI / 180;
+      return `<option value="${angle}" ${Math.abs(value - rotation) < 1e-12 ? "selected" : ""}>${angle}°</option>`;
+    }).join("");
+    return `<div class="property-row"><label>${applicationText("回転角度", "Rotation angle")}</label><select data-property="block-orthogonal-rotation" aria-label="${applicationText("回転角度", "Rotation angle")}" ${item.fixed ? "disabled" : ""}>${options}</select></div>`;
+  }
+
   function dimensionDisplayState(dimension, sketchId = activeSketchId(), sketches = model.sketches) {
     const display = effectiveDimensionAppearance(dimension, sketchId, sketches);
     return {
@@ -10963,7 +11005,7 @@
         + propertyReadonlyRow("ブロック定義", "Block definition", definitionLabel, { userContent: true })
         + propertyReadonlyRow("X座標", "X coordinate", formatDisplayNumber(item.x))
         + propertyReadonlyRow("Y座標", "Y coordinate", formatDisplayNumber(item.y))
-        + propertyReadonlyRow("回転角度", "Rotation angle", `${formatDisplayNumber(angleDegrees(item.rotation))}°`);
+        + blockRotationPropertyRow(item);
       panel.innerHTML = `<h2 class="property-heading">${applicationText("ブロック", "Block")} ${escapeHtml(item.id)}</h2><section class="property-section"><h3>Block</h3>${rows}${blockPropertiesConfiguration(item, definition)}</section><section class="property-section"><h3>Appearance Override</h3>${appearancePropertyRows(item.appearanceOverride, effective)}</section>`;
     } else if (target.kind === "constraint") {
       const dimension = item.dimension;
@@ -11253,6 +11295,10 @@
     }
     const property = input.dataset.property;
     if (!property) return;
+    if (target.kind === "block" && property === "block-orthogonal-rotation") {
+      if (!setBlockInstanceOrthogonalRotation(target.item, Number(input.value) * Math.PI / 180)) updatePropertiesUI();
+      return;
+    }
     if (target.kind === "geometry" && property === "construction") {
       target.item.construction = input.checked;
       recordHistory("補助線変更");
