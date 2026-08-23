@@ -39,7 +39,7 @@ Block Parameterの適用はDefinition内部を再計算した後、親Definition
 
 File menuのParameter画面ではDocumentまたは各Block Definitionを選択し、ユーザーParameterと寸法symbolを一覧編集する。Block Editor中は編集中Definitionだけを編集できる。変更はstageされ、「適用」で名前空間全体を検証して1回のUndo単位として反映する。未適用の変更がある状態でscopeを切り替える、または画面を閉じる場合は適用／破棄／キャンセルを確認する。
 
-Propertiesでは拘束寸法と参照寸法の名前を変更できる。拘束寸法は式も編集でき、参照寸法の値は読み取り専用である。Canvas上の寸法入力も式を受け付け、無効な入力では画面を閉じず理由を表示する。Canvasの寸法ラベルは式やsymbol名を表示せず、prefix／suffixを含む評価後の数値表示を維持する。
+Propertiesでは拘束寸法と参照寸法の名前を変更できる。拘束寸法の数値または式を入力する欄は`値 / 数式`（英語`Value / Expression`）と表示し、参照寸法では同じ項目を読み取り専用で表示する。Canvas上の寸法入力も式を受け付け、無効な入力では画面を閉じず理由を表示する。Canvasの寸法ラベルは式やsymbol名を表示せず、prefix／suffixを含む評価後の数値表示を維持する。
 
 Constraint tabは拘束寸法と参照寸法の両方を表示し、`d1: 寸法…`の形式でsymbol名を先頭へ置く。参照寸法には読み取り専用表示を付ける。
 

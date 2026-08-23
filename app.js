@@ -131,7 +131,7 @@
     ["既定", "Default"], ["表示", "Visible"], ["非表示", "Hidden"], ["色", "Color"], ["線種", "Line type"], ["線幅", "Line width"],
     ["実線", "Solid"], ["破線", "Dashed"], ["一点鎖線", "Dash-dot"], ["点線", "Dotted"], ["端部のはみ出し", "Endpoint overhang"], ["端部の点", "Endpoint points"], ["あり", "Enabled"], ["なし", "Disabled"], ["使用済みの色", "Colors used in this file"],
     ["標準色", "Standard colors"], ["このファイルで使用中の色", "Colors used in this file"], ["任意の色", "Custom color"], ["使用中の色はありません", "No colors are used yet"], ["適用", "Apply"], ["破棄", "Discard"], ["追加", "Add"],
-    ["名前空間", "Namespace"], ["名前", "Name"], ["数式", "Expression"], ["評価値", "Evaluated value"], ["種類／所属", "Type / owner"], ["Parameter名", "Parameter name"], ["読み取り専用", "Read-only"], ["Geometryから測定", "Measured from geometry"],
+    ["名前空間", "Namespace"], ["名前", "Name"], ["値 / 数式", "Value / Expression"], ["評価値", "Evaluated value"], ["種類／所属", "Type / owner"], ["Parameter名", "Parameter name"], ["読み取り専用", "Read-only"], ["Geometryから測定", "Measured from geometry"],
     ["外観", "Appearance"], ["外観の上書き", "Appearance Override"], ["配置情報", "Placement"], ["定義", "Definition"], ["回転", "Rotation"],
     ["長さ", "Length"], ["半径", "Radius"], ["補助線", "Construction"], ["種類", "Type"], ["値", "Value"],
     ["精度", "Precision"], ["接頭辞", "Prefix"], ["接尾辞", "Suffix"], ["矢印", "Arrows"], ["寸法補助線", "Extension lines"],
@@ -856,7 +856,7 @@
       CYCLE: applicationText("Parameterに循環参照があります", "Parameters contain a circular dependency"),
       DIVISION_BY_ZERO: applicationText("0で除算しています", "Division by zero"),
       NON_FINITE: applicationText("計算結果が有限値ではありません", "The result is not finite"),
-      EMPTY_EXPRESSION: applicationText("数式が空です", "The expression is empty"),
+      EMPTY_EXPRESSION: applicationText("値 / 数式が空です", "Value / Expression is empty"),
     };
     return messages[error?.code] || error?.message || applicationText("Parameterを評価できません", "Could not evaluate parameters");
   }
@@ -935,7 +935,7 @@
           throw new Error(`${label}: ${applicationText("寸法のParameter名がありません", "A dimension parameter name is missing")}`);
         }
         if (!isReadOnlyDimension(constraint) && (typeof constraint.expression !== "string" || !constraint.expression.trim())) {
-          throw new Error(`${label}/${constraint.parameterName}: ${applicationText("寸法式がありません", "The dimension expression is missing")}`);
+          throw new Error(`${label}/${constraint.parameterName}: ${applicationText("寸法の値 / 数式がありません", "The dimension has no Value / Expression")}`);
         }
       }
     }
@@ -9821,7 +9821,7 @@
     try {
       value = evaluateDimensionExpressionDraft(pendingCommand.constraint || null, expression);
     } catch (error) {
-      setHint(`${applicationText("寸法式を評価できません", "Could not evaluate the dimension expression")}: ${parameterErrorText(error)}`, "error");
+      setHint(`${applicationText("寸法の値 / 数式を評価できません", "Could not evaluate the dimension Value / Expression")}: ${parameterErrorText(error)}`, "error");
       syncDimensionValueInput();
       draw();
       return;
@@ -9845,7 +9845,7 @@
       const result = solved.result;
       if (!solved.success || solved.dependent?.success === false || result.errorNorm > CONSTRAINT_ACCEPT_ERROR) {
         restoreModelState(snapshot);
-        setHint(`${applicationText("寸法式を更新できません", "Could not update the dimension expression")}: ${result.reason || `error=${result.errorNorm.toExponential(3)}`}`, "error");
+        setHint(`${applicationText("寸法の値 / 数式を更新できません", "Could not update the dimension Value / Expression")}: ${result.reason || `error=${result.errorNorm.toExponential(3)}`}`, "error");
         syncDimensionValueInput();
       } else {
         pendingCommand = null;
@@ -10916,8 +10916,8 @@
       const parameterRows = dimension
         ? `<div class="property-row"><label>${applicationText("Parameter名", "Parameter name")}</label><input data-property="constraint-parameter-name" value="${escapeHtml(item.parameterName || "")}"></div>`
           + (!isReadOnlyDimension(item)
-            ? `<div class="property-row"><label>${applicationText("数式", "Expression")}</label><input data-property="constraint-expression" value="${escapeHtml(item.expression || numericDimensionExpression(item))}"></div>`
-            : `<div class="property-row"><span>${applicationText("数式", "Expression")}</span><span class="property-readonly">${applicationText("Geometryから測定", "Measured from geometry")}</span></div>`)
+            ? `<div class="property-row"><label>${applicationText("値 / 数式", "Value / Expression")}</label><input data-property="constraint-expression" value="${escapeHtml(item.expression || numericDimensionExpression(item))}"></div>`
+            : `<div class="property-row"><span>${applicationText("値 / 数式", "Value / Expression")}</span><span class="property-readonly">${applicationText("Geometryから測定", "Measured from geometry")}</span></div>`)
           + propertyReadonlyRow("評価値", "Evaluated value", Number.isFinite(value) ? formatDisplayNumber(value) : "—")
         : "";
       const definingGeometryRows = dimension
@@ -11116,7 +11116,7 @@
         throw new Error(solved.result.reason || applicationText("拘束が成立しません", "Constraints could not be satisfied"));
       }
       recordHistory(property === "constraint-parameter-name" ? "寸法Parameter名変更" : "寸法式変更");
-      setHint(property === "constraint-parameter-name" ? applicationText("寸法Parameter名を変更しました", "Dimension parameter name changed") : applicationText("寸法式を変更しました", "Dimension expression changed"));
+      setHint(property === "constraint-parameter-name" ? applicationText("寸法Parameter名を変更しました", "Dimension parameter name changed") : applicationText("寸法の値 / 数式を変更しました", "Dimension Value / Expression changed"));
       return true;
     } catch (error) {
       restoreModelState(snapshot);

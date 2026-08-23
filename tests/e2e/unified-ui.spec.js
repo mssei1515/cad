@@ -98,6 +98,9 @@ test("document parameters, dimension formulas, rename propagation, and v10 persi
   });
 
   await openParameterDialog(page);
+  expect(await page.locator("#parametersDialog thead th").allTextContents()).toEqual([
+    "名前", "値 / 数式", "評価値", "", "名前", "種類／所属", "値 / 数式", "評価値",
+  ]);
   await expect(page.locator("#parameterRows tr")).toHaveCount(2);
   await expect(page.locator("#parameterDimensionRows tr")).toHaveCount(2);
   await expect(page.locator('#parameterDimensionRows input[readonly]')).toHaveCount(1);
@@ -703,6 +706,15 @@ test("application language defaults to Japanese and persists the full UI selecti
   await expect(page.locator("#documentSettingsDialog")).toContainText("Default Dimension Appearance");
   await expect(page.locator('#documentDimensionAppearanceFields select[data-dimension-display="visible"] option')).toHaveText(["Visible", "Hidden"]);
   await page.locator("#documentSettingsDialog button[value=cancel]").first().click();
+  await openParameterDialog(page);
+  expect(await page.locator("#parametersDialog thead th").allTextContents()).toEqual([
+    "Name", "Value / Expression", "Evaluated value", "", "Name", "Type / owner", "Value / Expression", "Evaluated value",
+  ]);
+  await page.locator("#parametersCloseBtn").click();
+  await page.evaluate(() => window.__cadTest.resetForReadOnlyDuplicateDimension());
+  await page.click('[data-explorer-tab="constraint"]');
+  await page.locator("#constraintList .constraint-list-row").first().click();
+  await expect(page.locator("#propertiesPanel")).toContainText("Value / Expression");
   await page.click('[data-explorer-tab="blocks"]');
   await page.click("#openBlockDefinitionsBtn");
   await expect(page.locator("#blockDefinitionsDialog")).toContainText("No blocks");
@@ -919,6 +931,7 @@ test("Constraint dimensions expose defining geometry and inheritable appearance 
   await page.click('[data-explorer-tab="constraint"]');
   await page.locator("#constraintList .constraint-list-row").first().click();
   await expect(page.locator("#propertiesPanel .property-section h3")).toContainText(["拘束", "外観"]);
+  await expect(page.locator("#propertiesPanel")).toContainText("値 / 数式");
   await expect(page.locator("#propertiesPanel")).toContainText("始点ID");
   await expect(page.locator("#propertiesPanel")).toContainText("終点ID");
   await expect(page.locator("#propertiesPanel")).toContainText("P1");
