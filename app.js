@@ -126,7 +126,7 @@
     ["ブロック作成", "Create Block"], ["作成", "Create"], ["キャンセル", "Cancel"], ["完了", "Done"], ["閉じる", "Close"], ["子＋", "Child +"],
     ["名前変更", "Rename"], ["スケッチ削除", "Delete Sketch"], ["ブロック名", "Block name"], ["配置", "Place"], ["非表示にする", "Hide"], ["表示する", "Show"],
     ["キャンバス", "Canvas"], ["ステータスバー", "Status Bar"], ["寸法値", "Dimension value"],
-    ["既定の外観", "Default Appearance"], ["既定の補助線外観", "Default Construction Appearance"], ["既定の寸法外観", "Default Dimension Appearance"], ["一般", "General"], ["言語", "Language"],
+    ["既定の外観", "Default Appearance"], ["既定の補助線外観", "Default Construction Appearance"], ["既定の寸法外観", "Default Dimension Appearance"], ["一般外観", "General Appearance"], ["補助線外観", "Construction Appearance"], ["寸法外観", "Dimension Appearance"], ["一般", "General"], ["言語", "Language"],
     ["現在の設定項目はありません。", "No document settings are currently available."],
     ["アプリケーション全体の設定をドキュメント設定から分離して管理します。", "Application-wide settings are managed separately from document settings."],
     ["既定", "Default"], ["表示", "Visible"], ["非表示", "Hidden"], ["色", "Color"], ["線種", "Line type"], ["線幅", "Line width"],
@@ -277,6 +277,7 @@
   let lastPointerWorld = null;
   let colorPaletteSession = null;
   let parameterDialogSession = null;
+  const sketchAppearanceSectionOpenState = { general: true, construction: true, dimension: true };
   let hoveredSketchIdentity = null;
   let hoveredSketchTreeId = null;
   let constructionLineMode = false;
@@ -10958,6 +10959,11 @@
     return value;
   }
 
+  function collapsibleSketchAppearanceSection(key, labelJa, labelEn, content, attributes = "") {
+    const open = sketchAppearanceSectionOpenState[key] !== false ? " open" : "";
+    return `<details class="property-section property-section-collapsible" data-property-section="${key}"${attributes}${open}><summary><h3>${applicationText(labelJa, labelEn)}</h3></summary><div class="property-section-content">${content}</div></details>`;
+  }
+
   function updatePropertiesUI() {
     const panel = document.getElementById("propertiesPanel");
     if (!panel) return;
@@ -11017,19 +11023,25 @@
         + propertyReadonlyRow("名前", "Name", item.name, { userContent: true })
         + propertyReadonlyRow("親スケッチ", "Parent sketch", parentLabel, { userContent: Boolean(parent) })
         + propertyReadonlyRow("アクティブ", "Active", applicationText("はい", "Yes"));
-      const sketchDefaults = `<section class="property-section" data-sketch-default-appearance="construction"><h3>Default Construction Appearance</h3>${appearancePropertyRows(
+      const sketchDefaults = collapsibleSketchAppearanceSection("construction", "補助線外観", "Construction Appearance", appearancePropertyRows(
         item.constructionAppearance,
         effectiveConstructionAppearanceForSketch(item),
         { constructionEndpoints: true, idPrefix: "sketchConstructionProperty" },
-      )}</section><section class="property-section" data-sketch-default-appearance="dimension"><h3>Default Dimension Appearance</h3>${dimensionAppearancePropertyRows(
+      ), ' data-sketch-default-appearance="construction"') + collapsibleSketchAppearanceSection("dimension", "寸法外観", "Dimension Appearance", dimensionAppearancePropertyRows(
         item.dimensionAppearance,
         effectiveDimensionAppearanceForSketch(item),
         { idPrefix: "sketchDimension" },
-      )}</section>`;
-      panel.innerHTML = `<h2 class="property-heading">${applicationText("スケッチ", "Sketch")} <span data-user-content>${escapeHtml(item.name)}</span></h2><section class="property-section"><h3>Sketch</h3>${rows}</section><section class="property-section"><h3>Appearance</h3>${appearancePropertyRows(item.appearance, effective)}</section>${sketchDefaults}`;
+      ), ' data-sketch-default-appearance="dimension"');
+      const generalAppearance = collapsibleSketchAppearanceSection("general", "一般外観", "General Appearance", appearancePropertyRows(item.appearance, effective));
+      panel.innerHTML = `<h2 class="property-heading">${applicationText("スケッチ", "Sketch")} <span data-user-content>${escapeHtml(item.name)}</span></h2><section class="property-section"><h3>Sketch</h3>${rows}</section>${generalAppearance}${sketchDefaults}`;
     }
 
     localizeApplicationUI(panel);
+    for (const section of panel.querySelectorAll(".property-section-collapsible[data-property-section]")) {
+      section.addEventListener("toggle", () => {
+        sketchAppearanceSectionOpenState[section.dataset.propertySection] = section.open;
+      });
+    }
     panel.oninput = handlePropertiesInput;
     panel.onchange = handlePropertiesChange;
     panel.onclick = handlePropertiesClick;

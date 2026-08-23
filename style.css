@@ -144,25 +144,32 @@ button:disabled { opacity: .45; cursor: default; }
 .dimension-value-input { position: absolute; z-index: 5; width: 100px; padding: 5px 7px; border: 2px solid var(--accent); border-radius: 4px; background: #fff; }
 body.block-editing .canvas-area { background: #f5f3ff; box-shadow: none; }
 
-.properties-scroll { padding: 10px; background: #fff; }
+.properties-scroll { padding: 7px; background: #fff; }
 .properties-empty { color: var(--muted); font-size: 12px; line-height: 1.6; }
-.property-heading { margin: 0 0 10px; font-size: 14px; }
-.property-section { margin: 0 -2px 12px; padding: 9px; border: 1px solid var(--border); border-radius: 5px; background: var(--panel); }
-.property-section > h3 { margin: 0 0 8px; color: #475569; font-size: 11px; text-transform: uppercase; letter-spacing: .04em; }
-.property-row { display: grid; grid-template-columns: minmax(85px, 1fr) minmax(110px, 1.25fr); align-items: center; gap: 8px; min-height: 32px; font-size: 12px; }
-.property-row input, .property-row select, .property-row textarea { width: 100%; min-width: 0; padding: 5px 6px; border: 1px solid var(--border-strong); border-radius: 3px; background: #fff; }
-.property-row input[type="checkbox"] { width: auto; justify-self: start; }
-.property-row textarea { min-height: 60px; resize: vertical; }
-.property-option-group { margin-top: 10px; padding-top: 8px; border-top: 1px solid var(--border); }
-.property-option-group-title { margin-bottom: 5px; color: #475569; font-size: 12px; font-weight: 600; }
-.property-option-group > small { display: block; margin: 3px 0 0 22px; color: var(--muted); font-size: 10px; }
-.property-option { display: flex; align-items: center; gap: 6px; min-height: 26px; font-size: 12px; }
+.property-heading { margin: 0 0 6px; font-size: 14px; }
+.property-section { margin: 0 0 7px; padding: 6px; border: 1px solid var(--border); border-radius: 5px; background: var(--panel); }
+.property-section > h3, .property-section > summary h3 { margin: 0 0 4px; color: #475569; font-size: 11px; text-transform: uppercase; letter-spacing: .04em; }
+.property-section-collapsible > summary { min-height: 18px; display: flex; align-items: center; gap: 6px; list-style: none; cursor: pointer; user-select: none; }
+.property-section-collapsible > summary::-webkit-details-marker { display: none; }
+.property-section-collapsible > summary::before { width: 0; height: 0; flex: 0 0 auto; border-top: 4px solid transparent; border-bottom: 4px solid transparent; border-left: 5px solid #64748b; content: ""; transition: transform .12s ease; }
+.property-section-collapsible[open] > summary::before { transform: rotate(90deg); }
+.property-section-collapsible > summary:focus-visible { border-radius: 3px; outline: 2px solid rgba(37, 99, 235, .35); outline-offset: 1px; }
+.property-section-collapsible > summary h3 { margin: 0; }
+.property-section-collapsible[open] > summary { margin-bottom: 4px; }
+.property-row { display: grid; grid-template-columns: minmax(82px, 1fr) minmax(105px, 1.25fr); align-items: center; gap: 6px; min-height: 26px; font-size: 12px; line-height: 1.2; }
+.property-row input, .property-row select, .property-row textarea { width: 100%; min-width: 0; min-height: 25px; padding: 3px 5px; border: 1px solid var(--border-strong); border-radius: 3px; background: #fff; font-size: 12px; line-height: 1.2; }
+.property-row input[type="checkbox"] { width: auto; min-height: 0; justify-self: start; }
+.property-row textarea { min-height: 48px; resize: vertical; }
+.property-option-group { margin-top: 7px; padding-top: 5px; border-top: 1px solid var(--border); }
+.property-option-group-title { margin-bottom: 3px; color: #475569; font-size: 12px; font-weight: 600; }
+.property-option-group > small { display: block; margin: 2px 0 0 20px; color: var(--muted); font-size: 10px; }
+.property-option { display: flex; align-items: center; gap: 5px; min-height: 22px; font-size: 12px; }
 .property-option input { width: auto; margin: 0; }
 .property-sketch-option { padding-left: calc(var(--property-sketch-depth, 0) * 12px); }
 .property-sketch-option span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .property-sketch-option small { margin-left: auto; color: var(--muted); }
-.property-color-control { min-width: 0; display: grid; grid-template-columns: minmax(0, 1fr) 36px; gap: 5px; }
-.property-color-control .property-color-picker { width: 36px; min-width: 36px; height: 30px; padding: 3px; border: 1px solid var(--border-strong); border-radius: 3px; background: #fff; cursor: pointer; }
+.property-color-control { min-width: 0; display: grid; grid-template-columns: minmax(0, 1fr) 30px; gap: 4px; }
+.property-color-control .property-color-picker { width: 30px; min-width: 30px; height: 25px; padding: 3px; border: 1px solid var(--border-strong); border-radius: 3px; background: #fff; cursor: pointer; }
 .property-color-picker-swatch { display: block; width: 100%; height: 100%; border: 1px solid rgba(15, 23, 42, .28); border-radius: 2px; background: var(--swatch-color); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .5); }
 .property-color-swatch { width: 24px; height: 24px; padding: 0; border: 1px solid #94a3b8; border-radius: 4px; background: var(--swatch-color); cursor: pointer; box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .65); }
 button.property-color-swatch:hover:not(:disabled), button.property-color-swatch:focus-visible { border-color: var(--accent); outline: 2px solid rgba(37, 99, 235, .2); outline-offset: 1px; background: var(--swatch-color); }

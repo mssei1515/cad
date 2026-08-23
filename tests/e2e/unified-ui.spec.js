@@ -710,7 +710,7 @@ test("application language defaults to Japanese and persists the full UI selecti
   await expect(page.locator("#documentAppearanceFields, #documentConstructionAppearanceFields, #documentDimensionAppearanceFields")).toHaveCount(0);
   await page.locator("#documentSettingsDialog button[value=cancel]").first().click();
   await selectSketch(page, "ROOT");
-  await expect(page.locator("#propertiesPanel .property-section h3")).toContainText(["Sketch", "Appearance", "Default Construction Appearance", "Default Dimension Appearance"]);
+  await expect(page.locator("#propertiesPanel .property-section h3")).toContainText(["Sketch", "General Appearance", "Construction Appearance", "Dimension Appearance"]);
   await expect(page.locator('#sketchConstructionPropertyVisible option')).toHaveText(["Default", "Visible", "Hidden"]);
   await expect(page.locator('#sketchConstructionPropertyLineType option')).toHaveText(["Default", "Solid", "Dashed", "Dash-dot", "Dotted"]);
   await expect(page.locator('#sketchDimensionVisible option')).toHaveText(["Default", "Visible", "Hidden"]);
@@ -739,11 +739,30 @@ test("application language defaults to Japanese and persists the full UI selecti
   await expect(page.locator("#hint")).not.toContainText("Fully constrained");
 });
 
-test("Root and child Sketch Properties expose the same inheritable appearance settings", async ({ page }) => {
+test("Root and child Sketch Properties expose compact collapsible appearance settings", async ({ page }) => {
   await page.goto(`${baseUrl}/index.html?test=1`);
   await page.waitForFunction(() => window.__cadTest);
   await selectSketch(page, "ROOT");
-  await expect(page.locator("#propertiesPanel .property-section h3")).toContainText(["スケッチ", "外観", "既定の補助線外観", "既定の寸法外観"]);
+  await expect(page.locator("#propertiesPanel .property-section h3")).toContainText(["スケッチ", "一般外観", "補助線外観", "寸法外観"]);
+  const appearanceSections = page.locator("#propertiesPanel .property-section-collapsible");
+  await expect(appearanceSections).toHaveCount(3);
+  for (const key of ["general", "construction", "dimension"]) {
+    const section = page.locator(`[data-property-section="${key}"]`);
+    await expect(section).toHaveAttribute("open", "");
+    await section.locator("summary").click();
+    await expect(section).not.toHaveAttribute("open", "");
+    await expect(section.locator(".property-section-content")).toBeHidden();
+    await section.locator("summary").click();
+    await expect(section).toHaveAttribute("open", "");
+  }
+  const compactMetrics = await page.evaluate(() => ({
+    panelPadding: getComputedStyle(document.querySelector("#propertiesPanel")).paddingTop,
+    sectionPadding: getComputedStyle(document.querySelector("#propertiesPanel .property-section")).paddingTop,
+    rowMinHeight: getComputedStyle(document.querySelector("#propertiesPanel .property-row")).minHeight,
+    inputHeight: document.querySelector("#propertyColor").getBoundingClientRect().height,
+  }));
+  expect(compactMetrics).toEqual(expect.objectContaining({ panelPadding: "7px", sectionPadding: "6px", rowMinHeight: "26px" }));
+  expect(compactMetrics.inputHeight).toBeLessThanOrEqual(25);
 
   await page.locator("#propertyColor").fill("#2563eb");
   await page.locator("#propertyColor").blur();
@@ -762,8 +781,12 @@ test("Root and child Sketch Properties expose the same inheritable appearance se
     dimensionAppearance: expect.objectContaining({ color: "#0e7490" }),
   }));
 
+  await page.locator('[data-property-section="dimension"] > summary').click();
+  await expect(page.locator('[data-property-section="dimension"]')).not.toHaveAttribute("open", "");
   await selectSketch(page, "S1");
-  await expect(page.locator("#propertiesPanel .property-section h3")).toContainText(["スケッチ", "外観", "既定の補助線外観", "既定の寸法外観"]);
+  await expect(page.locator("#propertiesPanel .property-section h3")).toContainText(["スケッチ", "一般外観", "補助線外観", "寸法外観"]);
+  await expect(page.locator('[data-property-section="dimension"]')).not.toHaveAttribute("open", "");
+  await page.locator('[data-property-section="dimension"] > summary').click();
   await expect(page.locator("#sketchConstructionPropertyColor")).toHaveValue("");
   await expect(page.locator("#sketchDimensionColor")).toHaveValue("");
   await expect(page.locator('[data-sketch-default-appearance="construction"] .property-color-picker')).toHaveAttribute("data-current-color", "#dc2626");
@@ -992,7 +1015,7 @@ test("Constraint dimensions expose defining geometry and inheritable appearance 
   await expect(page.locator("#propertiesPanel")).not.toContainText("寸法表示");
 
   await selectSketch(page, "ROOT");
-  await expect(page.locator("#propertiesPanel")).toContainText("既定の寸法外観");
+  await expect(page.locator("#propertiesPanel")).toContainText("寸法外観");
   await page.locator("#sketchDimensionColor").fill("#0e7490");
   await page.locator("#sketchDimensionColor").blur();
   expect(await page.evaluate(() => window.__cadTest.dimensionAppearanceStateForTest())).toEqual(expect.objectContaining({
@@ -1393,7 +1416,7 @@ test("construction line endpoint appearance inherits Sketch defaults and support
   await page.locator("#propertyEndpointOverhang").selectOption("");
   await page.locator("#propertyEndpointMarkers").selectOption("");
   await selectSketch(page, "ROOT");
-  await expect(page.locator("#propertiesPanel")).toContainText("既定の補助線外観");
+  await expect(page.locator("#propertiesPanel")).toContainText("補助線外観");
   await page.locator("#sketchConstructionPropertyColor").fill("#dc2626");
   await page.locator("#sketchConstructionPropertyColor").blur();
   await page.locator("#sketchConstructionPropertyLineType").selectOption("dotted");
