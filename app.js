@@ -208,8 +208,8 @@
     defaultConstructionAppearance: null,
     defaultDimensionAppearance: null,
     sketches: [
-      { id: ROOT_SKETCH_ID, name: ROOT_SKETCH_NAME, parentSketchId: null, kind: "root", appearance: {} },
-      { id: DEFAULT_SKETCH_ID, name: DEFAULT_SKETCH_NAME, parentSketchId: ROOT_SKETCH_ID, kind: "sketch", appearance: {} },
+      { id: ROOT_SKETCH_ID, name: ROOT_SKETCH_NAME, parentSketchId: null, kind: "root", appearance: {}, constructionAppearance: {}, dimensionAppearance: {} },
+      { id: DEFAULT_SKETCH_ID, name: DEFAULT_SKETCH_NAME, parentSketchId: ROOT_SKETCH_ID, kind: "sketch", appearance: {}, constructionAppearance: {}, dimensionAppearance: {} },
     ],
     activeSketchId: DEFAULT_SKETCH_ID,
     annotations: [],
@@ -581,9 +581,19 @@
     return result;
   }
 
-  function effectiveDimensionAppearance(dimension) {
+  function normalizedSketchCopy(sketch) {
     return {
-      ...normalizeDimensionAppearance(model.defaultDimensionAppearance, { partial: false }),
+      ...sketch,
+      appearance: normalizeAppearance(sketch?.appearance),
+      constructionAppearance: normalizeConstructionAppearance(sketch?.constructionAppearance),
+      dimensionAppearance: normalizeDimensionAppearance(sketch?.dimensionAppearance),
+    };
+  }
+
+  function effectiveDimensionAppearance(dimension, sketchId = activeSketchId(), sketches = model.sketches) {
+    const sketch = sketches.find((item) => item.id === sketchId) || sketches.find((item) => isRootSketch(item)) || null;
+    return {
+      ...effectiveDimensionAppearanceForSketch(sketch, sketches),
       ...normalizeDimensionAppearance(dimension?.display),
     };
   }
@@ -627,12 +637,16 @@
     root.parentSketchId = null;
     root.kind = "root";
     root.appearance = normalizeAppearance(root.appearance);
+    root.constructionAppearance = normalizeConstructionAppearance(root.constructionAppearance);
+    root.dimensionAppearance = normalizeDimensionAppearance(root.dimensionAppearance);
     root.visible = true;
     const ids = new Set(model.sketches.map((sketch) => sketch.id));
     for (const sketch of model.sketches) {
       if (sketch === root) continue;
       sketch.kind = "sketch";
       sketch.appearance = normalizeAppearance(sketch.appearance || (sketch.visible === false ? { visible: false } : {}));
+      sketch.constructionAppearance = normalizeConstructionAppearance(sketch.constructionAppearance);
+      sketch.dimensionAppearance = normalizeDimensionAppearance(sketch.dimensionAppearance);
       sketch.visible = sketch.appearance.visible !== false;
       if (!Object.prototype.hasOwnProperty.call(sketch, "parentSketchId")) sketch.parentSketchId = null;
       if (sketch.parentSketchId === sketch.id || !ids.has(sketch.parentSketchId)) sketch.parentSketchId = ROOT_SKETCH_ID;
@@ -682,6 +696,8 @@
       root.parentSketchId = null;
       root.kind = "root";
       root.appearance = normalizeAppearance(root.appearance);
+      root.constructionAppearance = normalizeConstructionAppearance(root.constructionAppearance);
+      root.dimensionAppearance = normalizeDimensionAppearance(root.dimensionAppearance);
       root.visible = true;
       definition.sketches = [root, ...definition.sketches.filter((sketch) => sketch && sketch !== root && sketch.id !== ROOT_SKETCH_ID && sketch.kind !== "root")];
       if (!definition.sketches.some((sketch) => sketch.kind !== "root")) {
@@ -694,6 +710,8 @@
         sketch.kind = "sketch";
         sketch.name = String(sketch.name || sketch.id);
         sketch.appearance = normalizeAppearance(sketch.appearance || (sketch.visible === false ? { visible: false } : {}));
+        sketch.constructionAppearance = normalizeConstructionAppearance(sketch.constructionAppearance);
+        sketch.dimensionAppearance = normalizeDimensionAppearance(sketch.dimensionAppearance);
         sketch.visible = sketch.appearance.visible !== false;
         sketch.parentSketchId = sketch.parentSketchId == null ? ROOT_SKETCH_ID : String(sketch.parentSketchId);
         if (sketch.parentSketchId === sketch.id || !sketchIds.has(sketch.parentSketchId)) sketch.parentSketchId = ROOT_SKETCH_ID;
@@ -1391,10 +1409,10 @@
     const construction = (item instanceof Line || item instanceof Circle || item instanceof Arc) && item.construction;
     if (construction) result = { ...result, ...normalizeConstructionAppearance(model.defaultConstructionAppearance, { partial: false }) };
     const outerSketch = sketchById(elementSketchId(item));
-    if (outerSketch) result = cascadeSketchAppearance(outerSketch, model.sketches, result);
+    if (outerSketch) result = cascadeSketchGeometryAppearance(outerSketch, model.sketches, result, construction);
     if (item?.blockProjection) {
       const definitionSketch = item.blockDefinition?.sketches?.find((sketch) => sketch.id === item.localElement?.sketchId);
-      if (definitionSketch) result = cascadeSketchAppearance(definitionSketch, item.blockDefinition.sketches, result);
+      if (definitionSketch) result = cascadeSketchGeometryAppearance(definitionSketch, item.blockDefinition.sketches, result, construction);
       result = { ...result, ...normalizeAppearance(item.localElement?.appearance) };
       for (const override of item.blockAppearanceOverrides || [item.blockInstance?.appearanceOverride]) result = { ...result, ...normalizeAppearance(override) };
     } else {
@@ -2721,8 +2739,8 @@
   function createBlockSketchState() {
     return {
       sketches: [
-        { id: ROOT_SKETCH_ID, name: ROOT_SKETCH_NAME, parentSketchId: null, kind: "root", appearance: {} },
-        { id: DEFAULT_SKETCH_ID, name: DEFAULT_SKETCH_NAME, parentSketchId: ROOT_SKETCH_ID, kind: "sketch", appearance: {} },
+        { id: ROOT_SKETCH_ID, name: ROOT_SKETCH_NAME, parentSketchId: null, kind: "root", appearance: {}, constructionAppearance: {}, dimensionAppearance: {} },
+        { id: DEFAULT_SKETCH_ID, name: DEFAULT_SKETCH_NAME, parentSketchId: ROOT_SKETCH_ID, kind: "sketch", appearance: {}, constructionAppearance: {}, dimensionAppearance: {} },
       ],
       activeSketchId: DEFAULT_SKETCH_ID,
     };
@@ -2866,7 +2884,7 @@
       name: definition.name,
       parentDefinitionId: definition.parentDefinitionId || null,
       origin: { x: Number(definition.origin?.x) || 0, y: Number(definition.origin?.y) || 0 },
-      sketches: definition.sketches.map((sketch) => ({ ...sketch, appearance: normalizeAppearance(sketch.appearance) })),
+      sketches: definition.sketches.map(normalizedSketchCopy),
       activeSketchId: definition.activeSketchId,
       points,
       lines,
@@ -2974,7 +2992,7 @@
     session.draft.constraints = model.constraints;
     session.draft.parameters = model.parameters;
     session.draft.nextDimensionParameterIndex = model.nextDimensionParameterIndex;
-    session.draft.sketches = model.sketches.map((sketch) => ({ ...sketch }));
+    session.draft.sketches = model.sketches.map(normalizedSketchCopy);
     session.draft.activeSketchId = activeSketchId();
     return session.draft;
   }
@@ -3378,7 +3396,7 @@
     target.name = draft.name;
     target.parentDefinitionId = draft.parentDefinitionId || null;
     target.origin = { ...draft.origin };
-    target.sketches = draft.sketches.map((sketch) => ({ ...sketch, appearance: normalizeAppearance(sketch.appearance) }));
+    target.sketches = draft.sketches.map(normalizedSketchCopy);
     target.activeSketchId = draft.activeSketchId;
     target.points = points;
     target.lines = lines;
@@ -3442,7 +3460,7 @@
     draft.constraints = model.constraints;
     draft.parameters = model.parameters;
     draft.nextDimensionParameterIndex = model.nextDimensionParameterIndex;
-    draft.sketches = model.sketches.map((sketch) => ({ ...sketch, appearance: normalizeAppearance(sketch.appearance) }));
+    draft.sketches = model.sketches.map(normalizedSketchCopy);
     draft.activeSketchId = activeSketchId();
     const validation = validateBlockDraft(draft);
     if (!validation.success) {
@@ -3888,8 +3906,8 @@
     blockPlacementRotationLocked = true;
     blockEditSession = null;
     model.sketches.length = 0;
-    model.sketches.push({ id: ROOT_SKETCH_ID, name: ROOT_SKETCH_NAME, parentSketchId: null, kind: "root", appearance: {} });
-    model.sketches.push({ id: DEFAULT_SKETCH_ID, name: DEFAULT_SKETCH_NAME, parentSketchId: ROOT_SKETCH_ID, kind: "sketch", appearance: {} });
+    model.sketches.push({ id: ROOT_SKETCH_ID, name: ROOT_SKETCH_NAME, parentSketchId: null, kind: "root", appearance: {}, constructionAppearance: {}, dimensionAppearance: {} });
+    model.sketches.push({ id: DEFAULT_SKETCH_ID, name: DEFAULT_SKETCH_NAME, parentSketchId: ROOT_SKETCH_ID, kind: "sketch", appearance: {}, constructionAppearance: {}, dimensionAppearance: {} });
     model.activeSketchId = DEFAULT_SKETCH_ID;
     model.defaultAppearance = { ...DEFAULT_APPEARANCE };
     model.defaultConstructionAppearance = { ...DEFAULT_CONSTRUCTION_APPEARANCE };
@@ -4174,6 +4192,8 @@
         parentSketchId: sketch.parentSketchId || null,
         kind: isRootSketch(sketch) ? "root" : "sketch",
         appearance: normalizeAppearance(sketch.appearance),
+        constructionAppearance: normalizeConstructionAppearance(sketch.constructionAppearance),
+        dimensionAppearance: normalizeDimensionAppearance(sketch.dimensionAppearance),
       })),
       activeSketchId: activeSketchId(),
       annotations: normalizeAnnotations(model.annotations).map(serializeAnnotation),
@@ -4185,7 +4205,15 @@
         parentDefinitionId: definition.parentDefinitionId || null,
         revision: Number(definition.revision) || 0,
         origin: { x: Number(definition.origin?.x) || 0, y: Number(definition.origin?.y) || 0 },
-        sketches: definition.sketches.map((sketch) => ({ id: sketch.id, name: sketch.name, parentSketchId: sketch.parentSketchId || null, kind: sketch.kind === "root" ? "root" : "sketch", appearance: normalizeAppearance(sketch.appearance) })),
+        sketches: definition.sketches.map((sketch) => ({
+          id: sketch.id,
+          name: sketch.name,
+          parentSketchId: sketch.parentSketchId || null,
+          kind: sketch.kind === "root" ? "root" : "sketch",
+          appearance: normalizeAppearance(sketch.appearance),
+          constructionAppearance: normalizeConstructionAppearance(sketch.constructionAppearance),
+          dimensionAppearance: normalizeDimensionAppearance(sketch.dimensionAppearance),
+        })),
         activeSketchId: definition.activeSketchId,
         parameters: (definition.parameters || []).map((parameter) => ({ name: parameter.name, expression: parameter.expression })),
         nextDimensionParameterIndex: Math.max(1, Number(definition.nextDimensionParameterIndex) || 1),
@@ -4526,6 +4554,8 @@
             parentSketchId: sketch.parentSketchId == null ? null : String(sketch.parentSketchId),
             kind: sketch.kind === "root" || sketch.id === ROOT_SKETCH_ID ? "root" : "sketch",
             appearance: normalizeAppearance(sketch.appearance || (sketch.visible === false ? { visible: false } : {})),
+            constructionAppearance: normalizeConstructionAppearance(sketch.constructionAppearance),
+            dimensionAppearance: normalizeDimensionAppearance(sketch.dimensionAppearance),
           }))
         : [{ id: DEFAULT_SKETCH_ID, name: DEFAULT_SKETCH_NAME, parentSketchId: ROOT_SKETCH_ID, kind: "sketch", appearance: {} }];
     let loadedRoot = loadedSketches.find((sketch) => sketch.kind === "root" || sketch.id === ROOT_SKETCH_ID);
@@ -4536,6 +4566,8 @@
     loadedRoot.parentSketchId = null;
     loadedRoot.kind = "root";
     loadedRoot.appearance = normalizeAppearance(loadedRoot.appearance);
+    loadedRoot.constructionAppearance = normalizeConstructionAppearance(loadedRoot.constructionAppearance);
+    loadedRoot.dimensionAppearance = normalizeDimensionAppearance(loadedRoot.dimensionAppearance);
     loadedRoot.visible = true;
     if (!loadedSketches.some((sketch) => sketch.kind !== "root")) {
       loadedSketches.push({ id: DEFAULT_SKETCH_ID, name: DEFAULT_SKETCH_NAME, parentSketchId: ROOT_SKETCH_ID, kind: "sketch", appearance: {} });
@@ -4545,6 +4577,8 @@
       if (sketch.kind === "root") continue;
       sketch.kind = "sketch";
       sketch.appearance = normalizeAppearance(sketch.appearance);
+      sketch.constructionAppearance = normalizeConstructionAppearance(sketch.constructionAppearance);
+      sketch.dimensionAppearance = normalizeDimensionAppearance(sketch.dimensionAppearance);
       sketch.visible = sketch.appearance.visible !== false;
       if (sketch.parentSketchId === sketch.id || !loadedSketchIds.has(sketch.parentSketchId)) sketch.parentSketchId = ROOT_SKETCH_ID;
       if (sketch.parentSketchId == null) sketch.parentSketchId = ROOT_SKETCH_ID;
@@ -4566,6 +4600,8 @@
             parentSketchId: sketch.parentSketchId == null ? null : String(sketch.parentSketchId),
             kind: sketch.kind === "root" || sketch.id === ROOT_SKETCH_ID ? "root" : "sketch",
             appearance: normalizeAppearance(sketch.appearance || (sketch.visible === false ? { visible: false } : {})),
+            constructionAppearance: normalizeConstructionAppearance(sketch.constructionAppearance),
+            dimensionAppearance: normalizeDimensionAppearance(sketch.dimensionAppearance),
           }))
         : [
             { id: ROOT_SKETCH_ID, name: ROOT_SKETCH_NAME, parentSketchId: null, kind: "root", appearance: {} },
@@ -4579,6 +4615,8 @@
       definitionRoot.parentSketchId = null;
       definitionRoot.kind = "root";
       definitionRoot.appearance = normalizeAppearance(definitionRoot.appearance);
+      definitionRoot.constructionAppearance = normalizeConstructionAppearance(definitionRoot.constructionAppearance);
+      definitionRoot.dimensionAppearance = normalizeDimensionAppearance(definitionRoot.dimensionAppearance);
       definitionRoot.visible = true;
       if (!definitionSketches.some((sketch) => sketch.kind !== "root")) definitionSketches.push({ id: DEFAULT_SKETCH_ID, name: DEFAULT_SKETCH_NAME, parentSketchId: ROOT_SKETCH_ID, kind: "sketch", appearance: {} });
       const definitionSketchIds = new Set(definitionSketches.map((sketch) => sketch.id));
@@ -4587,6 +4625,8 @@
         if (sketch.kind === "root") continue;
         sketch.kind = "sketch";
         sketch.appearance = normalizeAppearance(sketch.appearance);
+        sketch.constructionAppearance = normalizeConstructionAppearance(sketch.constructionAppearance);
+        sketch.dimensionAppearance = normalizeDimensionAppearance(sketch.dimensionAppearance);
         sketch.visible = sketch.appearance.visible !== false;
         sketch.parentSketchId = sketch.parentSketchId == null ? ROOT_SKETCH_ID : String(sketch.parentSketchId);
         if (sketch.parentSketchId === sketch.id || !definitionSketchIds.has(sketch.parentSketchId)) sketch.parentSketchId = ROOT_SKETCH_ID;
@@ -6017,7 +6057,7 @@
       const target = targetFromConstraint(constraint);
       if (!target) continue;
       const dimension = constraint.dimension || defaultDimensionForTarget(target);
-      if (!viewState.constraintStatus && effectiveDimensionAppearance(dimension).visible === false) continue;
+      if (!viewState.constraintStatus && effectiveDimensionAppearance(dimension, constraintSketchId(constraint)).visible === false) continue;
       const layout = dimensionLayout(target, dimension);
       if (!layout) continue;
       if (hypot2(x - layout.text.x, y - layout.text.y) <= threshold * 2.2) {
@@ -6621,7 +6661,7 @@
     const readOnly = isReadOnlyDimension(constraint);
     const value = readOnly ? measuredDimensionValue(target, dimension) : target.kind === "angle" ? angleDegrees(constraint.target) : constraint.target;
     const formatLabel = readOnly ? formatMeasuredDimensionLabel : formatDimensionLabel;
-    const display = dimensionDisplayState(dimension);
+    const display = dimensionDisplayState(dimension, constraintSketchId(constraint));
     const number = display.precision == null ? formatLabel(value) : Number(value).toFixed(display.precision);
     const unit = target.kind === "angle" ? "°" : "";
     const tolerance = display.toleranceUpper !== "" || display.toleranceLower !== ""
@@ -8127,15 +8167,15 @@
     ctx.restore();
   }
 
-  function drawDimension(target, dimension, label, preview = false, highlighted = false, editState = null, colorOverride = null) {
+  function drawDimension(target, dimension, label, preview = false, highlighted = false, editState = null, colorOverride = null, sketchId = activeSketchId()) {
     if (!target || !dimension) return;
-    if (target.kind === "angle") return drawAngleDimension(target, dimension, label, preview, highlighted, editState, colorOverride);
+    if (target.kind === "angle") return drawAngleDimension(target, dimension, label, preview, highlighted, editState, colorOverride, sketchId);
     const layout = dimensionLayout(target, dimension);
     if (!layout) return;
     const { a, b, lineA, lineB, points, d, text, textAngle } = layout;
 
     ctx.save();
-    const appearance = effectiveDimensionAppearance(dimension);
+    const appearance = effectiveDimensionAppearance(dimension, sketchId);
     const color = preview || highlighted ? "#2563eb" : colorOverride || appearance.color;
     ctx.strokeStyle = color;
     ctx.fillStyle = color;
@@ -8165,12 +8205,12 @@
     ctx.restore();
   }
 
-  function drawAngleDimension(target, dimension, label, preview = false, highlighted = false, editState = null, colorOverride = null) {
+  function drawAngleDimension(target, dimension, label, preview = false, highlighted = false, editState = null, colorOverride = null, sketchId = activeSketchId()) {
     const layout = angleDimensionLayout(target, dimension);
     if (!layout) return;
     const { vertex, radius, start, end, signed, text, textAngle } = layout;
     ctx.save();
-    const appearance = effectiveDimensionAppearance(dimension);
+    const appearance = effectiveDimensionAppearance(dimension, sketchId);
     const color = preview || highlighted ? "#2563eb" : colorOverride || appearance.color;
     ctx.strokeStyle = color;
     ctx.fillStyle = color;
@@ -8461,13 +8501,14 @@
       const target = targetFromConstraint(c);
       if (!target) continue;
       const dimension = c.dimension || defaultDimensionForTarget(target);
-      if (!viewState.constraintStatus && effectiveDimensionAppearance(dimension).visible === false) continue;
+      const sketchId = constraintSketchId(c);
+      if (!viewState.constraintStatus && effectiveDimensionAppearance(dimension, sketchId).visible === false) continue;
       const highlighted = c === hoveredDimensionConstraint || c === selectedDimensionConstraint || c === dimensionDragSession?.constraint;
       const label = dimensionLabelForConstraint(c, target, dimension);
       const editing = pendingCommand?.type === "distance-value" && pendingCommand.constraint === c;
       const colorOverride = viewState.constraintStatus && !isActiveSketchConstraint(c) ? INACTIVE_CONSTRAINT_STATUS_COLOR : null;
       ctx.save();
-      drawDimension(target, dimension, label, false, highlighted || editing, editing ? { hidden: true } : null, colorOverride);
+      drawDimension(target, dimension, label, false, highlighted || editing, editing ? { hidden: true } : null, colorOverride, sketchId);
       ctx.restore();
     }
   }
@@ -10013,7 +10054,7 @@
     ensureSketchState();
     const current = activeSketch();
     const parentSketchId = kind === "child" ? current.id : current.parentSketchId || ROOT_SKETCH_ID;
-    const sketch = { id: `S${sketchSeq++}`, name: nextSketchName(parentSketchId), parentSketchId, kind: "sketch", appearance: {} };
+    const sketch = { id: `S${sketchSeq++}`, name: nextSketchName(parentSketchId), parentSketchId, kind: "sketch", appearance: {}, constructionAppearance: {}, dimensionAppearance: {} };
     model.sketches.push(sketch);
     model.activeSketchId = sketch.id;
     clearInteractionForSketchChange();
@@ -10626,15 +10667,46 @@
     }
   }
 
-  function cascadeSketchAppearance(sketch, sketches, base) {
-    let result = { ...base };
+  function sketchAppearanceChain(sketch, sketches) {
     const chain = [];
     let current = sketch;
     while (current) {
       chain.unshift(current);
       current = current.parentSketchId ? sketches.find((item) => item.id === current.parentSketchId) : null;
     }
+    return chain;
+  }
+
+  function cascadeSketchAppearance(sketch, sketches, base) {
+    let result = { ...base };
+    const chain = sketchAppearanceChain(sketch, sketches);
     for (const item of chain) result = { ...result, ...normalizeAppearance(item.appearance) };
+    return result;
+  }
+
+  function cascadeSketchGeometryAppearance(sketch, sketches, base, construction = false) {
+    let result = { ...base };
+    for (const item of sketchAppearanceChain(sketch, sketches)) {
+      result = { ...result, ...normalizeAppearance(item.appearance) };
+      if (construction) result = { ...result, ...normalizeConstructionAppearance(item.constructionAppearance) };
+    }
+    return result;
+  }
+
+  function effectiveConstructionAppearanceForSketch(sketch, sketches = model.sketches) {
+    const base = {
+      ...normalizeAppearance(model.defaultAppearance, { partial: false }),
+      ...normalizeConstructionAppearance(model.defaultConstructionAppearance, { partial: false }),
+    };
+    return sketch ? cascadeSketchGeometryAppearance(sketch, sketches, base, true) : base;
+  }
+
+  function effectiveDimensionAppearanceForSketch(sketch, sketches = model.sketches) {
+    let result = normalizeDimensionAppearance(model.defaultDimensionAppearance, { partial: false });
+    if (!sketch) return result;
+    for (const item of sketchAppearanceChain(sketch, sketches)) {
+      result = { ...result, ...normalizeDimensionAppearance(item.dimensionAppearance) };
+    }
     return result;
   }
 
@@ -10668,13 +10740,21 @@
     addAppearance(model.defaultAppearance);
     addAppearance(model.defaultConstructionAppearance);
     addAppearance(model.defaultDimensionAppearance);
-    for (const sketch of model.sketches) addAppearance(sketch.appearance);
+    for (const sketch of model.sketches) {
+      addAppearance(sketch.appearance);
+      addAppearance(sketch.constructionAppearance);
+      addAppearance(sketch.dimensionAppearance);
+    }
     for (const item of [...model.points, ...model.lines, ...model.circles, ...model.arcs]) addAppearance(item.appearance);
     for (const instance of model.blockInstances) addAppearance(instance.appearanceOverride);
     for (const constraint of model.constraints) addAppearance(constraint.dimension?.display);
     for (const annotation of model.annotations) add(annotation.style?.color);
     for (const definition of model.blockDefinitions) {
-      for (const sketch of definition.sketches || []) addAppearance(sketch.appearance);
+      for (const sketch of definition.sketches || []) {
+        addAppearance(sketch.appearance);
+        addAppearance(sketch.constructionAppearance);
+        addAppearance(sketch.dimensionAppearance);
+      }
       for (const item of [...(definition.points || []), ...(definition.lines || []), ...(definition.circles || []), ...(definition.arcs || [])]) addAppearance(item.appearance);
       for (const instance of definition.blockInstances || []) addAppearance(instance.appearanceOverride);
       for (const constraint of definition.constraints || []) addAppearance(constraint.dimension?.display);
@@ -10816,8 +10896,8 @@
       </div>`;
   }
 
-  function dimensionDisplayState(dimension) {
-    const display = effectiveDimensionAppearance(dimension);
+  function dimensionDisplayState(dimension, sketchId = activeSketchId(), sketches = model.sketches) {
+    const display = effectiveDimensionAppearance(dimension, sketchId, sketches);
     return {
       visible: display.visible !== false,
       color: display.color || DEFAULT_DIMENSION_APPEARANCE.color,
@@ -10910,7 +10990,7 @@
     } else if (target.kind === "constraint") {
       const dimension = item.dimension;
       const targetValue = targetFromConstraint(item);
-      const display = dimensionDisplayState(dimension);
+      const display = dimensionDisplayState(dimension, constraintSketchId(item));
       const value = isReadOnlyDimension(item)
         ? measuredDimensionValue(targetValue, dimension)
         : targetValue?.kind === "angle" ? angleDegrees(item.target) : item.target;
@@ -10937,18 +11017,16 @@
         + propertyReadonlyRow("名前", "Name", item.name, { userContent: true })
         + propertyReadonlyRow("親スケッチ", "Parent sketch", parentLabel, { userContent: Boolean(parent) })
         + propertyReadonlyRow("アクティブ", "Active", applicationText("はい", "Yes"));
-      const rootDefaults = !blockEditSession && isRootSketch(item)
-        ? `<section class="property-section" data-root-default-appearance="construction"><h3>Default Construction Appearance</h3>${appearancePropertyRows(
-          model.defaultConstructionAppearance,
-          { ...normalizeAppearance(model.defaultAppearance, { partial: false }), ...normalizeConstructionAppearance(model.defaultConstructionAppearance, { partial: false }) },
-          { allowInheritance: false, constructionEndpoints: true, idPrefix: "rootConstructionProperty" },
-        )}</section><section class="property-section" data-root-default-appearance="dimension"><h3>Default Dimension Appearance</h3>${dimensionAppearancePropertyRows(
-          model.defaultDimensionAppearance,
-          normalizeDimensionAppearance(model.defaultDimensionAppearance, { partial: false }),
-          { allowInheritance: false, idPrefix: "rootDimension" },
-        )}</section>`
-        : "";
-      panel.innerHTML = `<h2 class="property-heading">${applicationText("スケッチ", "Sketch")} <span data-user-content>${escapeHtml(item.name)}</span></h2><section class="property-section"><h3>Sketch</h3>${rows}</section><section class="property-section"><h3>Appearance</h3>${appearancePropertyRows(item.appearance, effective)}</section>${rootDefaults}`;
+      const sketchDefaults = `<section class="property-section" data-sketch-default-appearance="construction"><h3>Default Construction Appearance</h3>${appearancePropertyRows(
+        item.constructionAppearance,
+        effectiveConstructionAppearanceForSketch(item),
+        { constructionEndpoints: true, idPrefix: "sketchConstructionProperty" },
+      )}</section><section class="property-section" data-sketch-default-appearance="dimension"><h3>Default Dimension Appearance</h3>${dimensionAppearancePropertyRows(
+        item.dimensionAppearance,
+        effectiveDimensionAppearanceForSketch(item),
+        { idPrefix: "sketchDimension" },
+      )}</section>`;
+      panel.innerHTML = `<h2 class="property-heading">${applicationText("スケッチ", "Sketch")} <span data-user-content>${escapeHtml(item.name)}</span></h2><section class="property-section"><h3>Sketch</h3>${rows}</section><section class="property-section"><h3>Appearance</h3>${appearancePropertyRows(item.appearance, effective)}</section>${sketchDefaults}`;
     }
 
     localizeApplicationUI(panel);
@@ -10998,9 +11076,9 @@
     return null;
   }
 
-  function rootDefaultAppearanceContext(input, target = selectedPropertiesTarget()) {
-    if (blockEditSession || target.kind !== "sketch" || !isRootSketch(target.item)) return null;
-    return input.closest("[data-root-default-appearance]")?.dataset.rootDefaultAppearance || null;
+  function sketchDefaultAppearanceContext(input, target = selectedPropertiesTarget()) {
+    if (target.kind !== "sketch") return null;
+    return input.closest("[data-sketch-default-appearance]")?.dataset.sketchDefaultAppearance || null;
   }
 
   function renderColorPaletteDialog(selectedColor) {
@@ -11026,12 +11104,14 @@
     let target = null;
     let owner = null;
     let historyLabel = "Appearance変更";
-    if (context === "root-construction") {
-      owner = model.defaultConstructionAppearance;
-      historyLabel = "Root Default Construction Appearance変更";
-    } else if (context === "root-dimension") {
-      owner = model.defaultDimensionAppearance;
-      historyLabel = "Root Default Dimension Appearance変更";
+    if (context === "sketch-construction") {
+      target = selectedPropertiesTarget();
+      owner = (target.item.constructionAppearance ||= {});
+      historyLabel = "Sketch Default Construction Appearance変更";
+    } else if (context === "sketch-dimension") {
+      target = selectedPropertiesTarget();
+      owner = (target.item.dimensionAppearance ||= {});
+      historyLabel = "Sketch Default Dimension Appearance変更";
     } else {
       target = selectedPropertiesTarget();
       if (target.kind === "constraint" && target.item.dimension) {
@@ -11061,11 +11141,9 @@
     if (!colorPaletteSession) return;
     const color = colorPickerValue(value);
     const { owner, target, historyLabel, context, sourceButton, sourceInput } = colorPaletteSession;
-    if (target?.kind === "constraint" || context === "root-dimension") applyDimensionAppearanceValue(owner, "color", color, { allowInheritance: context !== "root-dimension" });
+    if (target?.kind === "constraint" || context === "sketch-dimension") applyDimensionAppearanceValue(owner, "color", color);
     else applyAppearanceInput(owner, "color", color);
     if (target?.kind === "block") invalidateBlockProjectionCache(target.item.id);
-    if (!target && context === "root-construction") model.defaultConstructionAppearance = normalizeConstructionAppearance(model.defaultConstructionAppearance, { partial: false });
-    if (!target && context === "root-dimension") model.defaultDimensionAppearance = normalizeDimensionAppearance(model.defaultDimensionAppearance, { partial: false });
     if (sourceInput) sourceInput.value = color;
     if (sourceButton) {
       sourceButton.dataset.currentColor = color;
@@ -11082,9 +11160,8 @@
     const input = event.target;
     if (!input.matches('[data-dimension-display="prefix"], [data-dimension-display="suffix"]')) return;
     const target = selectedPropertiesTarget();
-    if (rootDefaultAppearanceContext(input, target) === "dimension") {
-      applyDimensionAppearanceValue(model.defaultDimensionAppearance, input.dataset.dimensionDisplay, input.value, { allowInheritance: false });
-      model.defaultDimensionAppearance = normalizeDimensionAppearance(model.defaultDimensionAppearance, { partial: false });
+    if (sketchDefaultAppearanceContext(input, target) === "dimension") {
+      applyDimensionAppearanceValue((target.item.dimensionAppearance ||= {}), input.dataset.dimensionDisplay, input.value);
       draw();
       return;
     }
@@ -11147,21 +11224,19 @@
   function handlePropertiesChange(event) {
     const target = selectedPropertiesTarget();
     const input = event.target;
-    const rootDefaultContext = rootDefaultAppearanceContext(input, target);
-    if (rootDefaultContext === "construction" && input.dataset.appearanceKey) {
-      applyAppearanceInput(model.defaultConstructionAppearance, input.dataset.appearanceKey, input.value.trim());
-      model.defaultConstructionAppearance = normalizeConstructionAppearance(model.defaultConstructionAppearance, { partial: false });
-      recordHistory("Root Default Construction Appearance変更");
+    const sketchDefaultContext = sketchDefaultAppearanceContext(input, target);
+    if (sketchDefaultContext === "construction" && input.dataset.appearanceKey) {
+      applyAppearanceInput((target.item.constructionAppearance ||= {}), input.dataset.appearanceKey, input.value.trim());
+      recordHistory("Sketch Default Construction Appearance変更");
       updateUI();
       draw();
       return;
     }
-    if (rootDefaultContext === "dimension" && input.dataset.dimensionDisplay) {
+    if (sketchDefaultContext === "dimension" && input.dataset.dimensionDisplay) {
       const liveTextInput = input.dataset.dimensionDisplay === "prefix" || input.dataset.dimensionDisplay === "suffix";
       const rawValue = liveTextInput ? input.value : input.value.trim();
-      applyDimensionAppearanceValue(model.defaultDimensionAppearance, input.dataset.dimensionDisplay, rawValue, { allowInheritance: false });
-      model.defaultDimensionAppearance = normalizeDimensionAppearance(model.defaultDimensionAppearance, { partial: false });
-      recordHistory("Root Default Dimension Appearance変更");
+      applyDimensionAppearanceValue((target.item.dimensionAppearance ||= {}), input.dataset.dimensionDisplay, rawValue);
+      recordHistory("Sketch Default Dimension Appearance変更");
       if (!liveTextInput) updatePropertiesUI();
       draw();
       return;
@@ -11216,8 +11291,8 @@
   function handlePropertiesClick(event) {
     const button = event.target.closest("[data-appearance-palette-open]");
     if (!button) return;
-    const rootContext = rootDefaultAppearanceContext(button);
-    openAppearanceColorPalette(button, rootContext ? `root-${rootContext}` : "properties");
+    const sketchContext = sketchDefaultAppearanceContext(button);
+    openAppearanceColorPalette(button, sketchContext ? `sketch-${sketchContext}` : "properties");
   }
 
   function updateObjectExplorerUI() {
@@ -15682,15 +15757,20 @@
       },
       dimensionAppearanceStateForTest(index = 0) {
         const constraint = model.constraints.filter(isDimensionConstraint)[index] || null;
+        const sketchId = constraint ? constraintSketchId(constraint) : activeSketchId();
+        const sketch = model.sketches.find((item) => item.id === sketchId) || null;
         return {
           documentDefault: structuredClone(normalizeDimensionAppearance(model.defaultDimensionAppearance, { partial: false })),
+          sketchDirect: structuredClone(normalizeDimensionAppearance(sketch?.dimensionAppearance)),
+          sketchEffective: structuredClone(effectiveDimensionAppearanceForSketch(sketch)),
           direct: structuredClone(normalizeDimensionAppearance(constraint?.dimension?.display)),
-          effective: constraint ? structuredClone(dimensionDisplayState(constraint.dimension)) : null,
+          effective: constraint ? structuredClone(dimensionDisplayState(constraint.dimension, sketchId)) : null,
           blockDefinitions: model.blockDefinitions.map((definition) => ({
             id: definition.id,
             dimensions: (definition.constraints || []).filter(isDimensionConstraint).map((item) => ({
+              sketchDirect: structuredClone(normalizeDimensionAppearance(definition.sketches.find((sketchItem) => sketchItem.id === item.sketchId)?.dimensionAppearance)),
               direct: structuredClone(normalizeDimensionAppearance(item.dimension?.display)),
-              effective: structuredClone(dimensionDisplayState(item.dimension)),
+              effective: structuredClone(dimensionDisplayState(item.dimension, item.sketchId, definition.sketches)),
             })),
           })),
         };
