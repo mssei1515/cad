@@ -925,6 +925,14 @@ test("Appearance cascades, used file colors are selectable, and constraint statu
   const canvasBox = await page.locator("#canvas").boundingBox();
   await page.mouse.move(canvasBox.x + 20, canvasBox.y + canvasBox.height - 20);
   expect(await page.evaluate(() => window.__cadTest.constraintStatusEndpointMarkerCountForTest())).toBe(0);
+  await page.mouse.click(endpointPosition.x, endpointPosition.y);
+  await page.mouse.move(canvasBox.x + 20, canvasBox.y + canvasBox.height - 20);
+  expect(await page.evaluate(() => window.__cadTest.selectedGeometryIdsForTest())).toEqual(expect.objectContaining({ points: ["P2"] }));
+  expect(await page.evaluate(() => window.__cadTest.constraintStatusEndpointMarkerCountForTest())).toBe(1);
+  expect(await page.evaluate(() => window.__cadTest.pointDisplayStateForTest("P2"))).toEqual(expect.objectContaining({
+    fill: "#1d4ed8",
+    stroke: "#1d4ed8",
+  }));
   await page.keyboard.down("Space");
   await page.keyboard.up("Space");
   expect(await page.evaluate(() => window.__cadTest.viewStateForTest())).toEqual(expect.objectContaining({ constraintStatus: true, mouseLatched: true, spaceHeld: false }));
