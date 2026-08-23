@@ -126,7 +126,7 @@
     ["ブロック作成", "Create Block"], ["作成", "Create"], ["キャンセル", "Cancel"], ["完了", "Done"], ["閉じる", "Close"], ["子＋", "Child +"],
     ["名前変更", "Rename"], ["スケッチ削除", "Delete Sketch"], ["ブロック名", "Block name"], ["配置", "Place"], ["非表示にする", "Hide"], ["表示する", "Show"],
     ["キャンバス", "Canvas"], ["ステータスバー", "Status Bar"], ["寸法値", "Dimension value"],
-    ["既定の外観", "Default Appearance"], ["既定の補助線外観", "Default Construction Appearance"], ["一般", "General"], ["言語", "Language"],
+    ["既定の外観", "Default Appearance"], ["既定の補助線外観", "Default Construction Appearance"], ["既定の寸法外観", "Default Dimension Appearance"], ["一般", "General"], ["言語", "Language"],
     ["アプリケーション全体の設定をドキュメント設定から分離して管理します。", "Application-wide settings are managed separately from document settings."],
     ["既定", "Default"], ["表示", "Visible"], ["非表示", "Hidden"], ["色", "Color"], ["線種", "Line type"], ["線幅", "Line width"],
     ["実線", "Solid"], ["破線", "Dashed"], ["一点鎖線", "Dash-dot"], ["点線", "Dotted"], ["端部のはみ出し", "Endpoint overhang"], ["端部の点", "Endpoint points"], ["あり", "Enabled"], ["なし", "Disabled"], ["使用済みの色", "Colors used in this file"],
@@ -134,7 +134,7 @@
     ["名前空間", "Namespace"], ["名前", "Name"], ["数式", "Expression"], ["評価値", "Evaluated value"], ["種類／所属", "Type / owner"], ["Parameter名", "Parameter name"], ["読み取り専用", "Read-only"], ["Geometryから測定", "Measured from geometry"],
     ["外観", "Appearance"], ["外観の上書き", "Appearance Override"], ["配置情報", "Placement"], ["定義", "Definition"], ["回転", "Rotation"],
     ["長さ", "Length"], ["半径", "Radius"], ["補助線", "Construction"], ["種類", "Type"], ["値", "Value"],
-    ["寸法表示", "Dimension Display"], ["精度", "Precision"], ["接頭辞", "Prefix"], ["接尾辞", "Suffix"], ["矢印", "Arrows"], ["寸法補助線", "Extension lines"],
+    ["精度", "Precision"], ["接頭辞", "Prefix"], ["接尾辞", "Suffix"], ["矢印", "Arrows"], ["寸法補助線", "Extension lines"],
     ["テキスト", "Text"], ["文字サイズ", "Font size"], ["アクティブ", "Active"], ["はい", "Yes"], ["いいえ", "No"],
     ["選択したオブジェクトのプロパティを表示します。", "Select an object to display its properties."],
     ["複数選択の共通プロパティ編集は今回の対象外です。", "Editing shared properties for multiple selections is not supported."],
@@ -205,6 +205,7 @@
     documentName: DEFAULT_DOCUMENT_NAME,
     defaultAppearance: null,
     defaultConstructionAppearance: null,
+    defaultDimensionAppearance: null,
     sketches: [
       { id: ROOT_SKETCH_ID, name: ROOT_SKETCH_NAME, parentSketchId: null, kind: "root", appearance: {} },
       { id: DEFAULT_SKETCH_ID, name: DEFAULT_SKETCH_NAME, parentSketchId: ROOT_SKETCH_ID, kind: "sketch", appearance: {} },
@@ -342,6 +343,15 @@
     lineWidth: 1.1,
     endpointOverhang: true,
     endpointMarkers: true,
+  };
+  const DEFAULT_DIMENSION_APPEARANCE = {
+    visible: true,
+    color: "#6b7280",
+    precision: null,
+    prefix: "",
+    suffix: "",
+    arrows: true,
+    extensionLines: true,
   };
   const SKETCH_SOLVE_ERROR_COLOR = "#dc2626";
   let lastLoadLineRepairMessage = "";
@@ -543,6 +553,39 @@
     return { ...(partial ? {} : DEFAULT_CONSTRUCTION_APPEARANCE), ...normalizeAppearance(value) };
   }
 
+  function normalizeDimensionAppearance(value, { partial = true } = {}) {
+    const source = value && typeof value === "object" && !Array.isArray(value) ? value : {};
+    const result = partial ? {} : { ...DEFAULT_DIMENSION_APPEARANCE };
+    if (Object.prototype.hasOwnProperty.call(source, "visible")) result.visible = source.visible !== false;
+    if (typeof source.color === "string" && /^#[0-9a-fA-F]{6}$/.test(source.color)) result.color = source.color.toLowerCase();
+    if (Object.prototype.hasOwnProperty.call(source, "precision")) {
+      const precision = Number(source.precision);
+      result.precision = source.precision == null || source.precision === "" || !Number.isFinite(precision)
+        ? null
+        : Math.max(0, Math.min(10, Math.round(precision)));
+    }
+    if (Object.prototype.hasOwnProperty.call(source, "prefix")) result.prefix = String(source.prefix || "");
+    if (Object.prototype.hasOwnProperty.call(source, "suffix")) result.suffix = String(source.suffix || "");
+    if (Object.prototype.hasOwnProperty.call(source, "toleranceUpper")) {
+      const tolerance = Number(source.toleranceUpper);
+      result.toleranceUpper = source.toleranceUpper == null || source.toleranceUpper === "" || !Number.isFinite(tolerance) ? null : tolerance;
+    }
+    if (Object.prototype.hasOwnProperty.call(source, "toleranceLower")) {
+      const tolerance = Number(source.toleranceLower);
+      result.toleranceLower = source.toleranceLower == null || source.toleranceLower === "" || !Number.isFinite(tolerance) ? null : tolerance;
+    }
+    if (Object.prototype.hasOwnProperty.call(source, "arrows")) result.arrows = source.arrows !== false;
+    if (Object.prototype.hasOwnProperty.call(source, "extensionLines")) result.extensionLines = source.extensionLines !== false;
+    return result;
+  }
+
+  function effectiveDimensionAppearance(dimension) {
+    return {
+      ...normalizeDimensionAppearance(model.defaultDimensionAppearance, { partial: false }),
+      ...normalizeDimensionAppearance(dimension?.display),
+    };
+  }
+
   function normalizeAnnotations(items) {
     if (!Array.isArray(items)) return [];
     return items.map((item, index) => {
@@ -601,6 +644,7 @@
   function ensureAppearanceState() {
     model.defaultAppearance = normalizeAppearance(model.defaultAppearance, { partial: false });
     model.defaultConstructionAppearance = normalizeConstructionAppearance(model.defaultConstructionAppearance, { partial: false });
+    model.defaultDimensionAppearance = normalizeDimensionAppearance(model.defaultDimensionAppearance, { partial: false });
     model.annotations = normalizeAnnotations(model.annotations);
     for (const item of [...model.points, ...model.lines, ...model.circles, ...model.arcs]) item.appearance = normalizeAppearance(item.appearance);
   }
@@ -3843,6 +3887,7 @@
     model.activeSketchId = DEFAULT_SKETCH_ID;
     model.defaultAppearance = { ...DEFAULT_APPEARANCE };
     model.defaultConstructionAppearance = { ...DEFAULT_CONSTRUCTION_APPEARANCE };
+    model.defaultDimensionAppearance = { ...DEFAULT_DIMENSION_APPEARANCE };
     model.annotations = [];
     annotationDragSession = null;
   }
@@ -3884,7 +3929,7 @@
       offsetN: Number.isFinite(dimension.offsetN) ? dimension.offsetN : null,
       labelOffsetU: Number.isFinite(dimension.labelOffsetU) ? dimension.labelOffsetU : 0,
       axis,
-      display: dimension.display ? { ...dimensionDisplayState(dimension) } : null,
+      display: dimension.display ? normalizeDimensionAppearance(dimension.display) : null,
     };
     if (Number.isFinite(dimension.labelX) && Number.isFinite(dimension.labelY)) {
       data.labelX = Number(dimension.labelX);
@@ -4116,6 +4161,7 @@
       documentName: effectiveDocumentName(),
       defaultAppearance: normalizeAppearance(model.defaultAppearance, { partial: false }),
       defaultConstructionAppearance: normalizeConstructionAppearance(model.defaultConstructionAppearance, { partial: false }),
+      defaultDimensionAppearance: normalizeDimensionAppearance(model.defaultDimensionAppearance, { partial: false }),
       sketches: model.sketches.map((sketch) => ({
         id: sketch.id,
         name: sketch.name,
@@ -4448,7 +4494,7 @@
           angleLabelOffsetT: data.dimension.angleLabelOffsetT != null && Number.isFinite(Number(data.dimension.angleLabelOffsetT)) ? Number(data.dimension.angleLabelOffsetT) : NaN,
           angleLabelPlacementVersion: Number.isInteger(data.dimension.angleLabelPlacementVersion) ? data.dimension.angleLabelPlacementVersion : null,
         };
-        if (data.dimension.display) constraint.dimension.display = { ...dimensionDisplayState({ display: data.dimension.display }) };
+        if (data.dimension.display) constraint.dimension.display = normalizeDimensionAppearance(data.dimension.display);
         if (constraint instanceof LineAngleConstraint && !Number.isInteger(data.startFlip) && Number.isInteger(constraint.dimension.angleStartFlip)) {
           constraint.startFlip = constraint.dimension.angleStartFlip ? 1 : 0;
           constraint.endFlip = constraint.dimension.angleEndFlip ? 1 : 0;
@@ -4853,6 +4899,7 @@
     model.activeSketchId = normalizeSketchId(data.activeSketchId);
     model.defaultAppearance = normalizeAppearance(data.defaultAppearance, { partial: false });
     model.defaultConstructionAppearance = normalizeConstructionAppearance(data.defaultConstructionAppearance, { partial: false });
+    model.defaultDimensionAppearance = normalizeDimensionAppearance(data.defaultDimensionAppearance, { partial: false });
     model.annotations = loadedAnnotations;
     model.blockDefinitions = loadedBlockDefinitions;
     model.blockInstances = loadedBlockInstances;
@@ -5964,7 +6011,7 @@
       const target = targetFromConstraint(constraint);
       if (!target) continue;
       const dimension = constraint.dimension || defaultDimensionForTarget(target);
-      if (!viewState.constraintStatus && dimension?.display?.visible === false) continue;
+      if (!viewState.constraintStatus && effectiveDimensionAppearance(dimension).visible === false) continue;
       const layout = dimensionLayout(target, dimension);
       if (!layout) continue;
       if (hypot2(x - layout.text.x, y - layout.text.y) <= threshold * 2.2) {
@@ -8048,8 +8095,9 @@
     const { a, b, lineA, lineB, points, d, text, textAngle } = layout;
 
     ctx.save();
-    ctx.strokeStyle = preview || highlighted ? "#2563eb" : "#6b7280";
-    ctx.fillStyle = preview || highlighted ? "#2563eb" : "#6b7280";
+    const appearance = effectiveDimensionAppearance(dimension);
+    ctx.strokeStyle = preview || highlighted ? "#2563eb" : appearance.color;
+    ctx.fillStyle = preview || highlighted ? "#2563eb" : appearance.color;
     ctx.lineWidth = (highlighted ? 2 : 1.2) / viewport.scale;
     ctx.setLineDash(preview ? [5 / viewport.scale, 4 / viewport.scale] : []);
     ctx.beginPath();
@@ -8058,7 +8106,7 @@
     ctx.stroke();
 
     for (const p of points) {
-      if (dimension?.display?.extensionLines === false) continue;
+      if (appearance.extensionLines === false) continue;
       if (p.showExtension === false) continue;
       ctx.beginPath();
       ctx.moveTo(p.extensionStart.x, p.extensionStart.y);
@@ -8067,7 +8115,7 @@
     }
 
     ctx.setLineDash([]);
-    if (dimension?.display?.arrows !== false) {
+    if (appearance.arrows !== false) {
       drawArrowhead(a, d);
       drawArrowhead(b, { x: -d.x, y: -d.y });
     }
@@ -8081,8 +8129,9 @@
     if (!layout) return;
     const { vertex, radius, start, end, signed, text, textAngle } = layout;
     ctx.save();
-    ctx.strokeStyle = preview || highlighted ? "#2563eb" : "#6b7280";
-    ctx.fillStyle = preview || highlighted ? "#2563eb" : "#6b7280";
+    const appearance = effectiveDimensionAppearance(dimension);
+    ctx.strokeStyle = preview || highlighted ? "#2563eb" : appearance.color;
+    ctx.fillStyle = preview || highlighted ? "#2563eb" : appearance.color;
     ctx.lineWidth = (highlighted ? 2 : 1.2) / viewport.scale;
     ctx.setLineDash(preview ? [5 / viewport.scale, 4 / viewport.scale] : []);
     const extension = DIMENSION_EXTENSION_SCREEN_PX / viewport.scale;
@@ -8094,7 +8143,7 @@
     const s2 = { x: vertex.x + Math.cos(end) * visibleGap, y: vertex.y + Math.sin(end) * visibleGap };
     const e1 = { x: vertex.x + Math.cos(start) * (radius + extension), y: vertex.y + Math.sin(start) * (radius + extension) };
     const e2 = { x: vertex.x + Math.cos(end) * (radius + extension), y: vertex.y + Math.sin(end) * (radius + extension) };
-    if (dimension?.display?.extensionLines !== false) {
+    if (appearance.extensionLines !== false) {
       ctx.beginPath();
       ctx.moveTo(s1.x, s1.y);
       ctx.lineTo(e1.x, e1.y);
@@ -8106,7 +8155,7 @@
     ctx.arc(vertex.x, vertex.y, radius, start, end, signed < 0);
     ctx.stroke();
     ctx.setLineDash([]);
-    if (dimension?.display?.arrows !== false) {
+    if (appearance.arrows !== false) {
       drawArrowhead(p1, { x: Math.cos(start + (signed < 0 ? -Math.PI / 2 : Math.PI / 2)), y: Math.sin(start + (signed < 0 ? -Math.PI / 2 : Math.PI / 2)) });
       drawArrowhead(p2, { x: Math.cos(end + (signed < 0 ? Math.PI / 2 : -Math.PI / 2)), y: Math.sin(end + (signed < 0 ? Math.PI / 2 : -Math.PI / 2)) });
     }
@@ -8370,7 +8419,7 @@
       const target = targetFromConstraint(c);
       if (!target) continue;
       const dimension = c.dimension || defaultDimensionForTarget(target);
-      if (!viewState.constraintStatus && dimension?.display?.visible === false) continue;
+      if (!viewState.constraintStatus && effectiveDimensionAppearance(dimension).visible === false) continue;
       const highlighted = c === hoveredDimensionConstraint || c === selectedDimensionConstraint || c === dimensionDragSession?.constraint;
       const label = dimensionLabelForConstraint(c, target, dimension);
       const editing = pendingCommand?.type === "distance-value" && pendingCommand.constraint === c;
@@ -10575,14 +10624,17 @@
     const addAppearance = (appearance) => add(appearance?.color);
     addAppearance(model.defaultAppearance);
     addAppearance(model.defaultConstructionAppearance);
+    addAppearance(model.defaultDimensionAppearance);
     for (const sketch of model.sketches) addAppearance(sketch.appearance);
     for (const item of [...model.points, ...model.lines, ...model.circles, ...model.arcs]) addAppearance(item.appearance);
     for (const instance of model.blockInstances) addAppearance(instance.appearanceOverride);
+    for (const constraint of model.constraints) addAppearance(constraint.dimension?.display);
     for (const annotation of model.annotations) add(annotation.style?.color);
     for (const definition of model.blockDefinitions) {
       for (const sketch of definition.sketches || []) addAppearance(sketch.appearance);
       for (const item of [...(definition.points || []), ...(definition.lines || []), ...(definition.circles || []), ...(definition.arcs || [])]) addAppearance(item.appearance);
       for (const instance of definition.blockInstances || []) addAppearance(instance.appearanceOverride);
+      for (const constraint of definition.constraints || []) addAppearance(constraint.dimension?.display);
       for (const annotation of definition.annotations || []) add(annotation.style?.color);
     }
     return colors;
@@ -10621,6 +10673,31 @@
         ${option("solid", "実線", direct.lineType === "solid" || !allowInheritance && effective.lineType === "solid")}${option("dashed", "破線", direct.lineType === "dashed")}${option("dashdot", "一点鎖線", direct.lineType === "dashdot")}${option("dotted", "点線", direct.lineType === "dotted")}
       </select></div>
       <div class="property-row"><label for="${idPrefix}LineWidth">Line width</label><input id="${idPrefix}LineWidth" data-appearance-key="lineWidth" type="number" min="0.1" max="20" step="0.1" placeholder="${defaultLabel}" value="${direct.lineWidth ?? ""}" /></div>${endpointRows}`;
+  }
+
+  function dimensionAppearancePropertyRows(owner, effective, { allowInheritance = true, idPrefix = "dimensionProperty" } = {}) {
+    const direct = normalizeDimensionAppearance(owner);
+    const hasDirect = (key) => Object.prototype.hasOwnProperty.call(direct, key);
+    const option = (value, label, selected) => `<option value="${value}" ${selected ? "selected" : ""}>${label}</option>`;
+    const defaultLabel = defaultAppearanceLabel();
+    const colorValue = colorPickerValue(direct.color || effective.color);
+    const booleanOptions = (key, enabledLabel = applicationText("表示", "Visible"), disabledLabel = applicationText("非表示", "Hidden")) => `
+      ${allowInheritance ? option("", defaultLabel, !hasDirect(key)) : ""}
+      ${option("true", enabledLabel, direct[key] === true || !allowInheritance && effective[key] !== false)}
+      ${option("false", disabledLabel, direct[key] === false)}`;
+    const precisionOptions = [
+      allowInheritance ? option("", defaultLabel, !hasDirect("precision")) : "",
+      option("auto", applicationText("自動", "Auto"), hasDirect("precision") && direct.precision == null || !allowInheritance && effective.precision == null),
+      ...Array.from({ length: 11 }, (_, precision) => option(String(precision), String(precision), direct.precision === precision || !allowInheritance && effective.precision === precision)),
+    ].join("");
+    return `
+      <div class="property-row"><label for="${idPrefix}Visible">${applicationText("表示", "Visible")}</label><select id="${idPrefix}Visible" data-dimension-display="visible">${booleanOptions("visible")}</select></div>
+      <div class="property-row"><label for="${idPrefix}Color">${applicationText("色", "Color")}</label><div class="property-color-control"><input id="${idPrefix}Color" data-dimension-display="color" type="text" placeholder="${defaultLabel}" value="${escapeHtml(direct.color || "")}" /><button class="property-color-picker" data-appearance-palette-open data-current-color="${colorValue}" type="button" title="${applicationText("カラーパレット", "Color palette")}" aria-label="${applicationText("カラーパレット", "Color palette")}"><span class="property-color-picker-swatch" style="--swatch-color:${colorValue}" aria-hidden="true"></span></button></div></div>
+      <div class="property-row"><label for="${idPrefix}Precision">${applicationText("精度", "Precision")}</label><select id="${idPrefix}Precision" data-dimension-display="precision">${precisionOptions}</select></div>
+      <div class="property-row"><label for="${idPrefix}Prefix">${applicationText("接頭辞", "Prefix")}</label><input id="${idPrefix}Prefix" data-dimension-display="prefix" placeholder="${allowInheritance ? defaultLabel : ""}" value="${escapeHtml(direct.prefix ?? "")}"></div>
+      <div class="property-row"><label for="${idPrefix}Suffix">${applicationText("接尾辞", "Suffix")}</label><input id="${idPrefix}Suffix" data-dimension-display="suffix" placeholder="${allowInheritance ? defaultLabel : ""}" value="${escapeHtml(direct.suffix ?? "")}"></div>
+      <div class="property-row"><label for="${idPrefix}Arrows">${applicationText("矢印", "Arrows")}</label><select id="${idPrefix}Arrows" data-dimension-display="arrows">${booleanOptions("arrows", applicationText("あり", "Enabled"), applicationText("なし", "Disabled"))}</select></div>
+      <div class="property-row"><label for="${idPrefix}ExtensionLines">${applicationText("寸法補助線", "Extension lines")}</label><select id="${idPrefix}ExtensionLines" data-dimension-display="extensionLines">${booleanOptions("extensionLines", applicationText("あり", "Enabled"), applicationText("なし", "Disabled"))}</select></div>`;
   }
 
   function selectedPropertiesTarget() {
@@ -10697,9 +10774,10 @@
   }
 
   function dimensionDisplayState(dimension) {
-    const display = dimension?.display || {};
+    const display = effectiveDimensionAppearance(dimension);
     return {
       visible: display.visible !== false,
+      color: display.color || DEFAULT_DIMENSION_APPEARANCE.color,
       precision: Number.isInteger(display.precision) ? Math.max(0, Math.min(10, display.precision)) : null,
       prefix: String(display.prefix || ""),
       suffix: String(display.suffix || ""),
@@ -10708,6 +10786,31 @@
       arrows: display.arrows !== false,
       extensionLines: display.extensionLines !== false,
     };
+  }
+
+  function dimensionGeometryPropertyRows(target) {
+    if (!target) return "";
+    const geometryId = (item) => constraintGeometryId(item) || "—";
+    if (target.kind === "point-point") {
+      return propertyReadonlyRow("始点ID", "Start point ID", geometryId(target.p1))
+        + propertyReadonlyRow("終点ID", "End point ID", geometryId(target.p2));
+    }
+    if (target.kind === "point-line") {
+      return propertyReadonlyRow("点ID", "Point ID", geometryId(target.point))
+        + propertyReadonlyRow("線ID", "Line ID", geometryId(target.line));
+    }
+    if (target.kind === "line-line" || target.kind === "angle") {
+      return propertyReadonlyRow("1本目の線ID", "First line ID", geometryId(target.line1))
+        + propertyReadonlyRow("2本目の線ID", "Second line ID", geometryId(target.line2));
+    }
+    if (target.kind === "offset-distance") {
+      return propertyReadonlyRow("基準線ID", "Source line ID", geometryId(target.source))
+        + propertyReadonlyRow("オフセット線ID", "Offset line ID", geometryId(target.offset));
+    }
+    if (target.kind === "radius" || target.kind === "diameter") {
+      return propertyReadonlyRow("ジオメトリID", "Geometry ID", geometryId(target.primitive));
+    }
+    return "";
   }
 
   function localizedConstraintName(name) {
@@ -10757,8 +10860,8 @@
       panel.innerHTML = `<h2 class="property-heading">${applicationText("ブロック", "Block")} ${escapeHtml(item.id)}</h2><section class="property-section"><h3>Block</h3>${rows}${blockPropertiesConfiguration(item, definition)}</section><section class="property-section"><h3>Appearance Override</h3>${appearancePropertyRows(item.appearanceOverride, effective)}</section>`;
     } else if (target.kind === "constraint") {
       const dimension = item.dimension;
-      const display = dimensionDisplayState(dimension);
       const targetValue = targetFromConstraint(item);
+      const display = dimensionDisplayState(dimension);
       const value = isReadOnlyDimension(item)
         ? measuredDimensionValue(targetValue, dimension)
         : targetValue?.kind === "angle" ? angleDegrees(item.target) : item.target;
@@ -10769,7 +10872,8 @@
             : `<div class="property-row"><span>${applicationText("数式", "Expression")}</span><span class="property-readonly">${applicationText("Geometryから測定", "Measured from geometry")}</span></div>`)
           + propertyReadonlyRow("評価値", "Evaluated value", Number.isFinite(value) ? formatDisplayNumber(value) : "—")
         : "";
-      panel.innerHTML = `<h2 class="property-heading">${escapeHtml(localizedConstraintName(item.name))}</h2><section class="property-section"><h3>Constraint</h3><div class="property-row"><span>Type</span><span class="property-readonly">${escapeHtml(item.constructor.name)}</span></div>${parameterRows}</section>${dimension ? `<section class="property-section"><h3>Dimension Display</h3><div class="property-row"><label>Visible</label><input data-dimension-display="visible" type="checkbox" ${display.visible ? "checked" : ""}></div><div class="property-row"><label>Precision</label><input data-dimension-display="precision" type="number" min="0" max="10" placeholder="自動" value="${display.precision ?? ""}"></div><div class="property-row"><label>Prefix</label><input data-dimension-display="prefix" value="${escapeHtml(display.prefix)}"></div><div class="property-row"><label>Suffix</label><input data-dimension-display="suffix" value="${escapeHtml(display.suffix)}"></div><div class="property-row"><label>Arrows</label><input data-dimension-display="arrows" type="checkbox" ${display.arrows ? "checked" : ""}></div><div class="property-row"><label>Extension lines</label><input data-dimension-display="extensionLines" type="checkbox" ${display.extensionLines ? "checked" : ""}></div></section>` : ""}`;
+      const definingGeometryRows = dimension ? dimensionGeometryPropertyRows(targetValue) : "";
+      panel.innerHTML = `<h2 class="property-heading">${escapeHtml(localizedConstraintName(item.name))}</h2><section class="property-section"><h3>Constraint</h3><div class="property-row"><span>Type</span><span class="property-readonly">${escapeHtml(item.constructor.name)}</span></div>${definingGeometryRows}${parameterRows}</section>${dimension ? `<section class="property-section"><h3>Appearance</h3>${dimensionAppearancePropertyRows(dimension.display || {}, display)}</section>` : ""}`;
     } else if (target.kind === "annotation") {
       const annotationType = item.type === "leader" ? applicationText("引出線", "Leader") : applicationText("自由テキスト", "Free Text");
       panel.innerHTML = `<h2 class="property-heading">${annotationType} ${escapeHtml(item.id)}</h2><section class="property-section"><h3>Annotation</h3>${propertyReadonlyRow("種類", "Type", annotationType)}${propertyReadonlyRow("ID", "ID", item.id)}<div class="property-row"><label>Visible</label><input data-property="annotation-visible" type="checkbox" ${item.visible !== false ? "checked" : ""}></div>${item.type === "text" ? `<div class="property-row"><label>Text</label><textarea data-property="annotation-text">${escapeHtml(item.text || "")}</textarea></div><div class="property-row"><label>Font size</label><input data-property="annotation-font-size" type="number" min="6" max="72" value="${Number(item.style?.fontSize || 13)}"></div>` : ""}<div class="property-row"><label>Color</label><input data-property="annotation-color" type="text" value="${escapeHtml(item.style?.color || "#111827")}"></div></section>`;
@@ -10802,15 +10906,27 @@
     for (const existingKey of ["visible", "color", "lineType", "lineWidth", "endpointOverhang", "endpointMarkers"]) if (next[existingKey] == null) delete target[existingKey];
   }
 
+  function applyDimensionAppearanceValue(owner, key, rawValue, { allowInheritance = true } = {}) {
+    if (!owner) return false;
+    const next = { ...normalizeDimensionAppearance(owner) };
+    if (allowInheritance && rawValue === "") delete next[key];
+    else if (["visible", "arrows", "extensionLines"].includes(key)) next[key] = rawValue === "true";
+    else if (key === "precision") {
+      next[key] = rawValue === "auto" || rawValue === "" ? null : Math.max(0, Math.min(10, Math.round(Number(rawValue))));
+    } else if (key === "toleranceUpper" || key === "toleranceLower") next[key] = rawValue === "" ? null : Number(rawValue);
+    else next[key] = rawValue;
+    const normalized = normalizeDimensionAppearance(next, { partial: allowInheritance });
+    for (const existingKey of ["visible", "color", "precision", "prefix", "suffix", "toleranceUpper", "toleranceLower", "arrows", "extensionLines"]) delete owner[existingKey];
+    Object.assign(owner, normalized);
+    return true;
+  }
+
   function applyDimensionDisplayInput(constraint, input) {
     if (!constraint?.dimension || !input?.dataset.dimensionDisplay) return false;
-    const display = { ...(constraint.dimension.display || {}) };
+    const display = (constraint.dimension.display ||= {});
     const key = input.dataset.dimensionDisplay;
-    if (input.type === "checkbox") display[key] = input.checked;
-    else if (key === "precision") display[key] = input.value === "" ? null : Math.max(0, Math.min(10, Math.round(Number(input.value))));
-    else if (key === "toleranceUpper" || key === "toleranceLower") display[key] = input.value === "" ? null : Number(input.value);
-    else display[key] = input.value;
-    constraint.dimension.display = display;
+    const rawValue = input.type === "checkbox" ? String(input.checked) : ["prefix", "suffix"].includes(key) ? input.value : input.value.trim();
+    applyDimensionAppearanceValue(display, key, rawValue);
     return true;
   }
 
@@ -10849,10 +10965,18 @@
     } else if (context === "document-construction") {
       owner = model.defaultConstructionAppearance;
       historyLabel = "Document Default Construction Appearance変更";
+    } else if (context === "document-dimension") {
+      owner = model.defaultDimensionAppearance;
+      historyLabel = "Document Default Dimension Appearance変更";
     } else {
       target = selectedPropertiesTarget();
-      owner = appearanceOwnerForPropertiesTarget(target);
-      historyLabel = target.kind === "block" ? "Appearance Override変更" : "Appearance変更";
+      if (target.kind === "constraint" && target.item.dimension) {
+        owner = (target.item.dimension.display ||= {});
+        historyLabel = "寸法外観変更";
+      } else {
+        owner = appearanceOwnerForPropertiesTarget(target);
+        historyLabel = target.kind === "block" ? "Appearance Override変更" : "Appearance変更";
+      }
     }
     if (!owner) return;
     colorPaletteSession = {
@@ -10861,7 +10985,7 @@
       historyLabel,
       context,
       sourceButton: button,
-      sourceInput: button.closest(".property-color-control")?.querySelector('[data-appearance-key="color"]') || null,
+      sourceInput: button.closest(".property-color-control")?.querySelector('[data-appearance-key="color"], [data-dimension-display="color"]') || null,
     };
     const selected = colorPaletteSession.sourceInput?.value.trim() || button.dataset.currentColor || owner.color;
     renderColorPaletteDialog(selected);
@@ -10873,10 +10997,12 @@
     if (!colorPaletteSession) return;
     const color = colorPickerValue(value);
     const { owner, target, historyLabel, context, sourceButton, sourceInput } = colorPaletteSession;
-    applyAppearanceInput(owner, "color", color);
+    if (target?.kind === "constraint" || context === "document-dimension") applyDimensionAppearanceValue(owner, "color", color, { allowInheritance: context !== "document-dimension" });
+    else applyAppearanceInput(owner, "color", color);
     if (target?.kind === "block") invalidateBlockProjectionCache(target.item.id);
     if (!target && context === "document") model.defaultAppearance = normalizeAppearance(model.defaultAppearance, { partial: false });
     if (!target && context === "document-construction") model.defaultConstructionAppearance = normalizeConstructionAppearance(model.defaultConstructionAppearance, { partial: false });
+    if (!target && context === "document-dimension") model.defaultDimensionAppearance = normalizeDimensionAppearance(model.defaultDimensionAppearance, { partial: false });
     if (sourceInput) sourceInput.value = color;
     if (sourceButton) {
       sourceButton.dataset.currentColor = color;
@@ -10964,7 +11090,7 @@
     if (input.dataset.dimensionDisplay && target.kind === "constraint" && target.item.dimension) {
       const liveTextInput = input.dataset.dimensionDisplay === "prefix" || input.dataset.dimensionDisplay === "suffix";
       applyDimensionDisplayInput(target.item, input);
-      recordHistory("寸法表示変更");
+      recordHistory("寸法外観変更");
       if (!liveTextInput) updatePropertiesUI();
       draw();
       return;
@@ -15019,6 +15145,31 @@
         openAppearanceColorPalette(button, "document-construction");
       };
     }
+    const dimensionFields = document.getElementById("documentDimensionAppearanceFields");
+    if (dimensionFields) {
+      const appearance = normalizeDimensionAppearance(model.defaultDimensionAppearance, { partial: false });
+      dimensionFields.innerHTML = dimensionAppearancePropertyRows(appearance, appearance, {
+        allowInheritance: false,
+        idPrefix: "documentDimension",
+      });
+      localizeApplicationUI(dimensionFields);
+      dimensionFields.onchange = (event) => {
+        const input = event.target;
+        if (!input.dataset.dimensionDisplay) return;
+        const key = input.dataset.dimensionDisplay;
+        const rawValue = ["prefix", "suffix"].includes(key) ? input.value : input.value.trim();
+        applyDimensionAppearanceValue(model.defaultDimensionAppearance, key, rawValue, { allowInheritance: false });
+        model.defaultDimensionAppearance = normalizeDimensionAppearance(model.defaultDimensionAppearance, { partial: false });
+        recordHistory("Document Default Dimension Appearance変更");
+        updateUI();
+        draw();
+      };
+      dimensionFields.onclick = (event) => {
+        const button = event.target.closest("[data-appearance-palette-open]");
+        if (!button) return;
+        openAppearanceColorPalette(button, "document-dimension");
+      };
+    }
     document.getElementById("documentSettingsDialog")?.showModal();
   });
   document.getElementById("colorPaletteDialog")?.addEventListener("click", (event) => {
@@ -15503,6 +15654,44 @@
       },
       serializedModelForTest() {
         return structuredClone(serializeModel());
+      },
+      dimensionAppearanceStateForTest(index = 0) {
+        const constraint = model.constraints.filter(isDimensionConstraint)[index] || null;
+        return {
+          documentDefault: structuredClone(normalizeDimensionAppearance(model.defaultDimensionAppearance, { partial: false })),
+          direct: structuredClone(normalizeDimensionAppearance(constraint?.dimension?.display)),
+          effective: constraint ? structuredClone(dimensionDisplayState(constraint.dimension)) : null,
+          blockDefinitions: model.blockDefinitions.map((definition) => ({
+            id: definition.id,
+            dimensions: (definition.constraints || []).filter(isDimensionConstraint).map((item) => ({
+              direct: structuredClone(normalizeDimensionAppearance(item.dimension?.display)),
+              effective: structuredClone(dimensionDisplayState(item.dimension)),
+            })),
+          })),
+        };
+      },
+      drawnDimensionColorsForTest() {
+        const colors = [];
+        const previousSelectedDimension = selectedDimensionConstraint;
+        const previousSelectedConstraint = selectedConstraint;
+        const previousHoveredDimension = hoveredDimensionConstraint;
+        const originalStroke = ctx.stroke;
+        selectedDimensionConstraint = null;
+        selectedConstraint = null;
+        hoveredDimensionConstraint = null;
+        ctx.stroke = (...args) => {
+          colors.push(String(ctx.strokeStyle).toLowerCase());
+          return originalStroke.apply(ctx, args);
+        };
+        try {
+          drawDimensions();
+        } finally {
+          ctx.stroke = originalStroke;
+          selectedDimensionConstraint = previousSelectedDimension;
+          selectedConstraint = previousSelectedConstraint;
+          hoveredDimensionConstraint = previousHoveredDimension;
+        }
+        return [...new Set(colors)];
       },
       resetForParameterTest() {
         resetModelState();

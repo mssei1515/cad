@@ -700,6 +700,8 @@ test("application language defaults to Japanese and persists the full UI selecti
   await expect(page.locator("#documentSettingsDialog")).toContainText("Document Settings");
   await expect(page.locator('#documentAppearanceFields select[data-appearance-key="visible"] option')).toHaveText(["Visible", "Hidden"]);
   await expect(page.locator('#documentAppearanceFields select[data-appearance-key="lineType"] option')).toHaveText(["Solid", "Dashed", "Dash-dot", "Dotted"]);
+  await expect(page.locator("#documentSettingsDialog")).toContainText("Default Dimension Appearance");
+  await expect(page.locator('#documentDimensionAppearanceFields select[data-dimension-display="visible"] option')).toHaveText(["Visible", "Hidden"]);
   await page.locator("#documentSettingsDialog button[value=cancel]").first().click();
   await page.click('[data-explorer-tab="blocks"]');
   await page.click("#openBlockDefinitionsBtn");
@@ -775,7 +777,7 @@ test("Appearance cascades, used file colors are selectable, and constraint statu
   await redSwatch.hover();
   expect(await redSwatch.evaluate((item) => getComputedStyle(item).backgroundColor)).toBe("rgb(220, 38, 38)");
   expect(await page.locator("#usedColorPalette .property-color-swatch").evaluateAll((items) => items.map((item) => item.dataset.paletteColor))).toEqual([
-    "#ef4444", "#64748b", "#16a34a", "#f97316", "#0ea5e9",
+    "#ef4444", "#64748b", "#6b7280", "#16a34a", "#f97316", "#0ea5e9",
   ]);
   await page.locator("#colorPaletteDialog button[value=cancel]").first().click();
   await expect(page.locator("#propertiesPanel")).not.toContainText("継承");
@@ -896,36 +898,82 @@ test("Block Instance Appearance Override applies to the whole instance", async (
   expect((await page.evaluate((id) => window.__cadTest.appearanceStateForTest("block", id), instanceId)).effective.color).toBe("#7c3aed");
 });
 
-test("Constraint dimensions persist display properties without creating annotation dimensions", async ({ page }) => {
+test("Constraint dimensions expose defining geometry and inheritable appearance without creating annotation dimensions", async ({ page }) => {
   await page.goto(`${baseUrl}/index.html?test=1`);
   await page.waitForFunction(() => window.__cadTest);
   await page.evaluate(() => window.__cadTest.resetForReadOnlyDuplicateDimension());
   await page.click('[data-explorer-tab="constraint"]');
   await page.locator("#constraintList .constraint-list-row").first().click();
-  await page.locator('[data-dimension-display="precision"]').fill("3");
-  await page.locator('[data-dimension-display="precision"]').blur();
+  await expect(page.locator("#propertiesPanel .property-section h3")).toContainText(["拘束", "外観"]);
+  await expect(page.locator("#propertiesPanel")).toContainText("始点ID");
+  await expect(page.locator("#propertiesPanel")).toContainText("終点ID");
+  await expect(page.locator("#propertiesPanel")).toContainText("P1");
+  await expect(page.locator("#propertiesPanel")).toContainText("P2");
+  await expect(page.locator("#propertiesPanel")).not.toContainText("寸法表示");
+
+  await openDocumentSettings(page);
+  await expect(page.locator("#documentSettingsDialog")).toContainText("既定の寸法外観");
+  await page.locator("#documentDimensionColor").fill("#0e7490");
+  await page.locator("#documentDimensionColor").blur();
+  await page.locator("#documentSettingsDialog button[value=cancel]").first().click();
+  expect(await page.evaluate(() => window.__cadTest.dimensionAppearanceStateForTest())).toEqual(expect.objectContaining({
+    documentDefault: expect.objectContaining({ color: "#0e7490" }),
+    direct: expect.not.objectContaining({ color: expect.anything() }),
+    effective: expect.objectContaining({ color: "#0e7490" }),
+  }));
+  expect(await page.evaluate(() => window.__cadTest.drawnDimensionColorsForTest())).toContain("#0e7490");
+
+  const properties = page.locator("#propertiesPanel");
+  await properties.locator('[data-dimension-display="precision"]').selectOption("3");
   await expect(page.locator('[data-dimension-display="toleranceUpper"], [data-dimension-display="toleranceLower"]')).toHaveCount(0);
-  const prefix = page.locator('[data-dimension-display="prefix"]');
+  const prefix = properties.locator('[data-dimension-display="prefix"]');
   await prefix.fill("REF ");
   expect(await page.evaluate(() => window.__cadTest.drawnDimensionLabelsForTest())).toEqual(expect.arrayContaining([expect.stringContaining("REF ")]));
-  const suffix = page.locator('[data-dimension-display="suffix"]');
+  const suffix = properties.locator('[data-dimension-display="suffix"]');
   await suffix.fill(" mm");
   expect(await page.evaluate(() => window.__cadTest.drawnDimensionLabelsForTest())).toEqual(expect.arrayContaining([expect.stringMatching(/REF .* mm/)]));
   await suffix.blur();
-  await page.locator('[data-dimension-display="arrows"]').uncheck();
+  await properties.locator('[data-dimension-display="arrows"]').selectOption("false");
+  await properties.locator('[data-dimension-display="color"] + [data-appearance-palette-open]').click();
+  await page.locator('[data-palette-color="#7c3aed"]').first().click();
+  expect(await page.evaluate(() => window.__cadTest.dimensionAppearanceStateForTest())).toEqual(expect.objectContaining({
+    direct: expect.objectContaining({ color: "#7c3aed" }),
+    effective: expect.objectContaining({ color: "#7c3aed" }),
+  }));
+  await properties.locator('[data-dimension-display="color"]').fill("");
+  await properties.locator('[data-dimension-display="color"]').blur();
+  expect(await page.evaluate(() => window.__cadTest.dimensionAppearanceStateForTest())).toEqual(expect.objectContaining({
+    direct: expect.not.objectContaining({ color: expect.anything() }),
+    effective: expect.objectContaining({ color: "#0e7490" }),
+  }));
+  await properties.locator('[data-dimension-display="color"]').fill("#7c3aed");
+  await properties.locator('[data-dimension-display="color"]').blur();
   const label = await page.evaluate(() => window.__cadTest.dimensionClientPositionForTest(0));
   await page.mouse.move(label.x, label.y);
   await page.mouse.down();
   await page.mouse.move(label.x + 36, label.y + 18, { steps: 4 });
   await page.mouse.up();
-  await page.locator('[data-dimension-display="visible"]').uncheck();
+  await properties.locator('[data-dimension-display="visible"]').selectOption("false");
   expect(await page.evaluate(() => window.__cadTest.drawnDimensionLabelsForTest())).not.toEqual(expect.arrayContaining([expect.stringMatching(/REF .* mm/)]));
   await page.locator("#constraintStatusViewBtn").click();
   expect(await page.evaluate(() => window.__cadTest.drawnDimensionLabelsForTest())).toEqual(expect.arrayContaining([expect.stringMatching(/REF .* mm/)]));
   await page.locator("#constraintStatusViewBtn").click();
   const serialized = await page.evaluate(() => window.__cadTest.serializedModelForTest());
-  expect(serialized.constraints[0].dimension.display).toEqual(expect.objectContaining({ visible: false, precision: 3, prefix: "REF ", suffix: " mm", arrows: false }));
+  expect(serialized.defaultDimensionAppearance).toEqual(expect.objectContaining({ color: "#0e7490" }));
+  expect(serialized.constraints[0].dimension.display).toEqual(expect.objectContaining({ visible: false, color: "#7c3aed", precision: 3, prefix: "REF ", suffix: " mm", arrows: false }));
   expect(serialized.annotations).toEqual([]);
+  await page.evaluate((documentData) => window.__cadTest.loadDocumentFixtureForDragTest(documentData, "dimension-appearance.json"), serialized);
+  const roundTrip = await page.evaluate(() => window.__cadTest.serializedModelForTest());
+  expect(roundTrip.defaultDimensionAppearance).toEqual(serialized.defaultDimensionAppearance);
+  expect(roundTrip.constraints[0].dimension.display).toEqual(serialized.constraints[0].dimension.display);
+
+  await page.evaluate(() => window.__cadTest.resetForParameterTest());
+  await openDocumentSettings(page);
+  await page.locator("#documentDimensionColor").fill("#db2777");
+  await page.locator("#documentDimensionColor").blur();
+  await page.locator("#documentSettingsDialog button[value=cancel]").first().click();
+  const blockAppearance = await page.evaluate(() => window.__cadTest.dimensionAppearanceStateForTest().blockDefinitions);
+  expect(blockAppearance.flatMap((definition) => definition.dimensions).map((dimension) => dimension.effective.color)).toEqual(["#db2777", "#db2777"]);
 });
 
 test("Sketch tree and Geometry Explorer hover use the same emphasis as canvas hover without tree Geometry IDs", async ({ page }) => {
