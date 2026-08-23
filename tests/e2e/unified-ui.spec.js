@@ -1382,9 +1382,16 @@ test("Geometry and Constraint Explorer tabs list and synchronize their respectiv
 
   await page.click('[data-explorer-tab="constraint"]');
   await expect(page.locator("#explorerConstraint")).toBeVisible();
-  await page.locator("#constraintList .constraint-list-row").first().click();
-  await expect(page.locator("#constraintList .constraint-list-row").first()).toHaveClass(/selected/);
+  const horizontalConstraintRow = page.locator("#constraintList .constraint-list-row").first();
+  await horizontalConstraintRow.hover();
+  expect(await page.evaluate(() => window.__cadTest.currentSidebarHoveredGeometryKeys())).toEqual([`line:${ids.line}`]);
+  await horizontalConstraintRow.click();
+  await expect(horizontalConstraintRow).toHaveClass(/selected/);
   await expect(page.locator("#propertiesPanel")).toContainText("拘束");
+  expect(await page.locator("#propertiesPanel .property-section").first().locator(".property-row").allTextContents()).toEqual(expect.arrayContaining([
+    `線ID${ids.line}`,
+  ]));
+  expect(await page.evaluate(() => window.__cadTest.sidebarHighlightIds())).toEqual([ids.line]);
   expect(await page.locator("#constraintList .fixed-point-list-row").textContent()).toContain(`固定 ${ids.fixedPoint}`);
 });
 

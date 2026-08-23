@@ -2472,7 +2472,7 @@
 
   function isSelectedConstraintRelatedElement(item) {
     const constraint = effectiveSelectedConstraint();
-    return Boolean(constraint && constraintGraphNodes(constraint).some((element) => sameConstraintDisplayElement(element, item)));
+    return Boolean(constraint && constraintHighlightNodes(constraint).some((element) => sameConstraintDisplayElement(element, item)));
   }
 
   function isReferenceHoverElement(item) {
@@ -6808,6 +6808,40 @@
     return [...nodes];
   }
 
+  function constraintDefiningGeometryEntries(constraint) {
+    if (!constraint) return [];
+    const roles = [
+      ["p1", "1つ目の点ID", "First point ID"],
+      ["p2", "2つ目の点ID", "Second point ID"],
+      ["point", "点ID", "Point ID"],
+      ["line", "線ID", "Line ID"],
+      ["line1", "1本目の線ID", "First line ID"],
+      ["line2", "2本目の線ID", "Second line ID"],
+      ["source", "基準図形ID", "Source geometry ID"],
+      ["offset", "オフセット図形ID", "Offset geometry ID"],
+      ["arc", "円弧ID", "Arc ID"],
+      ["primitive", "図形ID", "Geometry ID"],
+      ["a", "1つ目の図形ID", "First geometry ID"],
+      ["b", "2つ目の図形ID", "Second geometry ID"],
+      ["axis", "対称軸ID", "Symmetry axis ID"],
+    ];
+    return roles
+      .map(([key, labelJa, labelEn]) => ({ key, labelJa, labelEn, item: constraint[key] }))
+      .filter(({ item }) => item instanceof Point || item instanceof Line || item instanceof Circle || item instanceof Arc);
+  }
+
+  function constraintHighlightNodes(constraint) {
+    const entries = constraintDefiningGeometryEntries(constraint);
+    const directPoints = new Set(entries.map(({ item }) => item).filter((item) => item instanceof Point));
+    const lineEndpoints = new Set();
+    for (const { item } of entries) {
+      if (!(item instanceof Line)) continue;
+      lineEndpoints.add(item.p1);
+      lineEndpoints.add(item.p2);
+    }
+    return constraintGraphNodes(constraint).filter((item) => !lineEndpoints.has(item) || directPoints.has(item));
+  }
+
   function addIntrinsicGraphEdges(adjacency, a, b) {
     if (!a || !b) return;
     if (!adjacency.has(a)) adjacency.set(a, new Set());
@@ -10258,7 +10292,7 @@
 
   function sidebarHoverElementsForConstraint(constraint) {
     if (constraint && targetFromConstraint(constraint)) return new Set();
-    return new Set(constraint ? constraintGraphNodes(constraint).filter(Boolean) : []);
+    return new Set(constraint ? constraintHighlightNodes(constraint).filter(Boolean) : []);
   }
 
   function setSidebarHover(type, item, elements) {
@@ -10821,6 +10855,12 @@
     return "";
   }
 
+  function constraintDefiningGeometryPropertyRows(constraint) {
+    return constraintDefiningGeometryEntries(constraint)
+      .map(({ labelJa, labelEn, item }) => propertyReadonlyRow(labelJa, labelEn, constraintGeometryId(item) || "—"))
+      .join("");
+  }
+
   function localizedConstraintName(name) {
     const value = String(name || applicationText("拘束", "Constraint"));
     if (applicationLanguage !== "en") return value;
@@ -10880,7 +10920,9 @@
             : `<div class="property-row"><span>${applicationText("数式", "Expression")}</span><span class="property-readonly">${applicationText("Geometryから測定", "Measured from geometry")}</span></div>`)
           + propertyReadonlyRow("評価値", "Evaluated value", Number.isFinite(value) ? formatDisplayNumber(value) : "—")
         : "";
-      const definingGeometryRows = dimension ? dimensionGeometryPropertyRows(targetValue) : "";
+      const definingGeometryRows = dimension
+        ? dimensionGeometryPropertyRows(targetValue)
+        : constraintDefiningGeometryPropertyRows(item);
       panel.innerHTML = `<h2 class="property-heading">${escapeHtml(localizedConstraintName(item.name))}</h2><section class="property-section"><h3>Constraint</h3><div class="property-row"><span>Type</span><span class="property-readonly">${escapeHtml(item.constructor.name)}</span></div>${definingGeometryRows}${parameterRows}</section>${dimension ? `<section class="property-section"><h3>Appearance</h3>${dimensionAppearancePropertyRows(dimension.display || {}, display)}</section>` : ""}`;
     } else if (target.kind === "annotation") {
       const annotationType = item.type === "leader" ? applicationText("引出線", "Leader") : applicationText("自由テキスト", "Free Text");
@@ -18080,7 +18122,7 @@
         }
         const constraint = effectiveSelectedConstraint() || selectedDimensionConstraint;
         if (constraint) {
-          for (const item of constraintGraphNodes(constraint)) {
+          for (const item of constraintHighlightNodes(constraint)) {
             if (item?.id) ids.add(item.id);
           }
         }
@@ -18088,7 +18130,7 @@
           if (item?.id) ids.add(item.id);
         }
         if (hoveredDimensionConstraint) {
-          for (const item of constraintGraphNodes(hoveredDimensionConstraint)) {
+          for (const item of constraintHighlightNodes(hoveredDimensionConstraint)) {
             if (item?.id) ids.add(item.id);
           }
         }

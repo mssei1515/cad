@@ -1132,10 +1132,13 @@ test("a block point-on-line constraint keeps the subject block under-constrained
   await page.hover('.constraint-list-row[data-idx="0"]');
   expect(await page.evaluate(() => window.__cadTest.currentSidebarHoveredGeometryKeys())).toEqual([
     "line:BI1@L1",
-    "point:BI1@P1",
-    "point:BI1@P2",
     "point:BI2@P3",
   ]);
+  await page.click('.constraint-list-row[data-idx="0"]');
+  expect(await page.locator("#propertiesPanel .property-section").first().locator(".property-row").allTextContents()).toEqual(expect.arrayContaining([
+    "点IDBI2@P3",
+    "線IDBI1@L1",
+  ]));
   await page.mouse.move(5, 5);
   expect(await page.evaluate(() => window.__cadTest.currentSidebarHoveredGeometryKeys())).toEqual([]);
 });
