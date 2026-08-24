@@ -581,7 +581,7 @@ test("undo preserves construction drawing mode", async ({ page }) => {
   expect(state.constructionButtonActive).toBe(true);
 });
 
-test("workspace integrates compact Object groups into Sketch Tree and removes Explorer", async ({ page }) => {
+test("workspace integrates transparent compact Object groups into Sketch Tree and removes Explorer", async ({ page }) => {
   await page.goto(`${baseUrl}/index.html?test=1`);
   await page.waitForFunction(() => window.__cadTest);
 
@@ -628,6 +628,21 @@ test("workspace integrates compact Object groups into Sketch Tree and removes Ex
       sketchTreeToggleCount: document.querySelectorAll("#toggleSketchTreeBtn").length,
       explorerCount: document.querySelectorAll(".explorer, [data-explorer-tab], [data-explorer-panel]").length,
       sketchOverlay: rect("#sketchOverlay"),
+      sketchOverlaySurface: (() => {
+        const overlay = getComputedStyle(document.querySelector("#sketchOverlay"));
+        const header = getComputedStyle(document.querySelector(".sketch-overlay-header"));
+        const group = getComputedStyle(document.querySelector(".sketch-group-row"));
+        return {
+          background: overlay.backgroundColor,
+          border: [overlay.borderTopWidth, overlay.borderRightWidth, overlay.borderBottomWidth, overlay.borderLeftWidth],
+          radius: overlay.borderRadius,
+          shadow: overlay.boxShadow,
+          backdropFilter: overlay.backdropFilter,
+          headerBackground: header.backgroundColor,
+          headerBorderBottom: header.borderBottomWidth,
+          groupBackground: group.backgroundColor,
+        };
+      })(),
       workspaceColumns: getComputedStyle(document.querySelector(".workspace")).gridTemplateColumns,
     };
   });
@@ -660,6 +675,16 @@ test("workspace integrates compact Object groups into Sketch Tree and removes Ex
 
   expect(layout.sketchOverlay.width).toBe(320);
   expect(layout.sketchOverlay.height).toBeLessThanOrEqual(0.7 * 700 + 1);
+  expect(layout.sketchOverlaySurface).toEqual({
+    background: "rgba(0, 0, 0, 0)",
+    border: ["0px", "0px", "0px", "0px"],
+    radius: "0px",
+    shadow: "none",
+    backdropFilter: "none",
+    headerBackground: "rgba(0, 0, 0, 0)",
+    headerBorderBottom: "0px",
+    groupBackground: "rgba(0, 0, 0, 0)",
+  });
   const groupState = await page.locator('.sketch-group-row[data-sketch-id="S1"]').evaluateAll((rows) => rows.map((row) => ({
     category: row.dataset.category,
     open: row.getAttribute("aria-expanded"),
@@ -685,8 +710,8 @@ test("workspace integrates compact Object groups into Sketch Tree and removes Ex
   await expect(lineGroup).toHaveAttribute("aria-expanded", "true");
   const lineRows = page.locator('.sketch-object-row[data-object-kind="line"]');
   await expect(lineRows).toHaveCount(4);
-  expect(await lineRows.evaluateAll((rows) => rows.map((row) => ({ height: row.getBoundingClientRect().height, icon: Boolean(row.querySelector("svg")) })))).toEqual([
-    { height: 22, icon: true }, { height: 22, icon: true }, { height: 22, icon: true }, { height: 22, icon: true },
+  expect(await lineRows.evaluateAll((rows) => rows.map((row) => ({ height: row.getBoundingClientRect().height, icon: Boolean(row.querySelector("svg")), background: getComputedStyle(row).backgroundColor })))).toEqual([
+    { height: 22, icon: true, background: "rgba(0, 0, 0, 0)" }, { height: 22, icon: true, background: "rgba(0, 0, 0, 0)" }, { height: 22, icon: true, background: "rgba(0, 0, 0, 0)" }, { height: 22, icon: true, background: "rgba(0, 0, 0, 0)" },
   ]);
   const treeIndentation = await page.evaluate(() => {
     const group = document.querySelector('.sketch-group-row[data-sketch-id="S1"][data-category="line"]');
@@ -723,6 +748,7 @@ test("workspace integrates compact Object groups into Sketch Tree and removes Ex
       segmentCount: gutter.children.length,
       gutterWidth: gutter.getBoundingClientRect().width,
       title: row.title,
+      background: getComputedStyle(row).backgroundColor,
     };
   });
   expect(constraintSummary).toEqual({
@@ -731,6 +757,7 @@ test("workspace integrates compact Object groups into Sketch Tree and removes Ex
     segmentCount: 4,
     gutterWidth: 72,
     title: "完全拘束: 1 / 支持位置拘束: 0 / 未拘束: 7 / 矛盾: 0",
+    background: "rgba(0, 0, 0, 0)",
   });
 
   expect(await page.evaluate(() => window.__cadTest.documentNameState())).toEqual({

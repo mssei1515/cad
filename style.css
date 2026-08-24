@@ -114,23 +114,23 @@ button:disabled { opacity: .45; cursor: default; }
 #canvas { display: block; width: 100%; height: 100%; cursor: default; }
 #canvas.is-dragging { cursor: default; }
 #canvas.is-panning { cursor: grabbing; }
-.sketch-overlay { position: absolute; top: 12px; left: 12px; z-index: 3; width: min(320px, calc(100% - 24px)); max-height: min(70vh, 680px); display: grid; gap: 2px; overflow: hidden; color: #111827; background: rgba(255, 255, 255, .94); border: 1px solid rgba(148, 163, 184, .58); border-radius: 7px; box-shadow: 0 8px 24px rgba(15, 23, 42, .14); backdrop-filter: blur(5px); }
-.sketch-overlay-header { min-height: 27px; display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 4px; padding: 2px 5px 2px 8px; border-bottom: 1px solid rgba(203, 213, 225, .82); background: rgba(248, 250, 252, .9); }
+.sketch-overlay { position: absolute; top: 12px; left: 12px; z-index: 3; width: min(320px, calc(100% - 24px)); max-height: min(70vh, 680px); display: grid; gap: 2px; overflow: hidden; color: #111827; background: transparent; border: 0; border-radius: 0; box-shadow: none; backdrop-filter: none; }
+.sketch-overlay-header { min-height: 27px; display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 4px; padding: 2px 5px 2px 8px; border: 0; background: transparent; }
 .sketch-overlay-header strong { overflow: hidden; font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
 .sketch-overlay-header span { display: flex; gap: 3px; }
-.sketch-overlay .compact-button { min-height: 20px; padding: 1px 5px; border-color: rgba(148, 163, 184, .5); background: rgba(255, 255, 255, .76); box-shadow: 0 1px 4px rgba(15, 23, 42, .08); }
+.sketch-overlay .compact-button { min-height: 20px; padding: 1px 5px; border-color: rgba(148, 163, 184, .5); background: transparent; box-shadow: none; }
 .sketch-list { max-height: calc(min(70vh, 680px) - 30px); overflow: auto; }
 .sketch-overlay .sketch-item { min-height: 19px; background: transparent; }
 .sketch-overlay .sketch-item:hover { background: rgba(239, 246, 255, .92); }
 .sketch-overlay .sketch-item.active { background: rgba(219, 234, 254, .94); }
-.sketch-group-row { position: relative; min-height: 20px; display: grid; grid-template-columns: auto 16px minmax(0, 1fr) auto; align-items: center; color: #475569; background: rgba(248, 250, 252, .78); cursor: pointer; user-select: none; }
+.sketch-group-row { position: relative; min-height: 20px; display: grid; grid-template-columns: auto 16px minmax(0, 1fr) auto; align-items: center; color: #475569; background: transparent; cursor: pointer; user-select: none; }
 .sketch-group-row:hover { color: #1e3a5f; background: rgba(226, 232, 240, .84); }
 .sketch-group-row.has-active-descendant { color: #1d4ed8; background: rgba(219, 234, 254, .88); box-shadow: inset 3px 0 #3b82f6; }
 .sketch-group-chevron { display: grid; place-items: center; width: 16px; height: 20px; font-size: 10px; transition: transform .1s ease; }
 .sketch-group-row.open .sketch-group-chevron { transform: rotate(90deg); }
 .sketch-group-label { min-width: 0; overflow: hidden; font-size: 11px; font-weight: 650; text-overflow: ellipsis; white-space: nowrap; }
 .sketch-group-count { min-width: 20px; margin-right: 5px; padding: 0 5px; border-radius: 999px; color: #475569; background: #e2e8f0; font-size: 9px; line-height: 15px; text-align: center; font-variant-numeric: tabular-nums; }
-.sketch-object-row { position: relative; min-height: 22px; display: grid; grid-template-columns: auto 18px minmax(0, 1fr) auto; align-items: center; color: #334155; background: rgba(255, 255, 255, .84); cursor: pointer; }
+.sketch-object-row { position: relative; min-height: 22px; display: grid; grid-template-columns: auto 18px minmax(0, 1fr) auto; align-items: center; color: #334155; background: transparent; cursor: pointer; }
 .sketch-object-row:hover, .sketch-object-row.sidebar-related { background: rgba(239, 246, 255, .94); }
 .sketch-object-row.selected, .sketch-object-row.sidebar-selected { color: #1d4ed8; background: rgba(219, 234, 254, .96); }
 .sketch-object-icon { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; pointer-events: none; }
@@ -140,7 +140,7 @@ button:disabled { opacity: .45; cursor: default; }
 .sketch-object-actions { min-width: 23px; display: flex; justify-content: flex-end; }
 .sketch-object-row .icon-delete-btn, .sketch-object-row .removeConstraintBtn { width: 22px; height: 20px; padding: 2px; border-color: transparent; background: transparent; opacity: .34; }
 .sketch-object-row:hover .icon-delete-btn, .sketch-object-row:hover .removeConstraintBtn, .sketch-object-row .icon-delete-btn:focus-visible, .sketch-object-row .removeConstraintBtn:focus-visible { opacity: 1; }
-.sketch-tree-summary { min-height: 22px; display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: center; color: #475569; background: rgba(248, 250, 252, .76); font-size: 9px; line-height: 1; }
+.sketch-tree-summary { min-height: 22px; display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: center; color: #475569; background: transparent; font-size: 9px; line-height: 1; }
 .sketch-tree-summary-content { min-width: 0; display: flex; align-items: center; gap: 6px; padding: 0 5px 0 2px; overflow: hidden; white-space: nowrap; }
 .sketch-tree-summary-item { min-width: 0; display: inline-flex; align-items: center; gap: 2px; }
 .sketch-tree-summary-item strong { color: #334155; font-size: 9px; font-variant-numeric: tabular-nums; }
