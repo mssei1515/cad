@@ -742,8 +742,10 @@ test("workspace integrates compact Object groups into Sketch Tree and removes Ex
 
   const sketchTree = await page.evaluate(() => {
     const row = document.querySelector('.sketch-item[data-id="S1"]');
+    const rootRow = document.querySelector('.sketch-item[data-id="ROOT"]');
     const gutter = row?.querySelector(".sketch-tree-gutter");
     const elbow = gutter?.querySelector(".tree-segment.elbow");
+    const icon = row?.querySelector(".sketch-row-icon");
     return {
       rowHeight: row?.getBoundingClientRect().height,
       rowDisplay: row ? getComputedStyle(row).display : null,
@@ -751,9 +753,24 @@ test("workspace integrates compact Object groups into Sketch Tree and removes Ex
       segmentCount: gutter?.children.length || 0,
       verticalLine: elbow ? getComputedStyle(elbow, "::before").borderLeftWidth : null,
       horizontalLine: elbow ? getComputedStyle(elbow, "::after").borderTopWidth : null,
+      iconCount: document.querySelectorAll(".sketch-item .sketch-row-icon").length,
+      rootHasIcon: Boolean(rootRow?.querySelector(".sketch-row-icon")),
+      iconSize: icon ? [icon.getBoundingClientRect().width, icon.getBoundingClientRect().height] : null,
+      iconBeforeName: icon?.nextElementSibling?.classList.contains("sketch-name") || false,
     };
   });
-  expect(sketchTree).toEqual({ rowHeight: 19, rowDisplay: "grid", gutterDisplay: "grid", segmentCount: 2, verticalLine: "1px", horizontalLine: "1px" });
+  expect(sketchTree).toEqual({
+    rowHeight: 19,
+    rowDisplay: "grid",
+    gutterDisplay: "grid",
+    segmentCount: 2,
+    verticalLine: "1px",
+    horizontalLine: "1px",
+    iconCount: 2,
+    rootHasIcon: true,
+    iconSize: [13, 13],
+    iconBeforeName: true,
+  });
 
   expect(await page.evaluate(() => {
     const canvas = document.querySelector("#canvas");

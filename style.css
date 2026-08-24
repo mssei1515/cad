@@ -88,7 +88,9 @@ button:disabled { opacity: .45; cursor: default; }
 .sketch-item { position: relative; display: grid; grid-template-columns: auto 1fr auto auto auto auto; gap: 0; align-items: center; min-height: 18px; padding: 0; border: 0; border-radius: 0; border-color: transparent; line-height: 1; cursor: pointer; }
 .sketch-item.active { background: var(--accent-soft); }
 .sketch-item.solve-error, .item.reference-error { box-shadow: inset 3px 0 var(--danger); }
-.sketchActivateBtn { min-width: 0; padding: 1px 4px; border: 0; border-radius: 0; background: transparent; color: #111827; font-size: 12px; text-align: left; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sketchActivateBtn { min-width: 0; display: flex; align-items: center; gap: 3px; padding: 1px 4px; border: 0; border-radius: 0; background: transparent; color: #111827; font-size: 12px; text-align: left; overflow: hidden; white-space: nowrap; }
+.sketch-row-icon { width: 13px; height: 13px; flex: 0 0 13px; fill: none; stroke: #2563eb; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
+.sketch-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .sketch-badges { white-space: nowrap; }
 .sketch-tree-gutter { --tree-cell: 18px; --tree-line-x: 8px; --tree-mid-y: 9px; --tree-line-color: #64748b; --tree-line-width: 1px; display: grid; grid-auto-flow: column; grid-auto-columns: var(--tree-cell); align-self: stretch; width: calc(var(--tree-segment-count, 1) * var(--tree-cell)); min-width: 0; margin-right: 0; overflow: visible; }
 .tree-segment { position: relative; min-height: 18px; }
