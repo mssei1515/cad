@@ -686,6 +686,25 @@ test("workspace integrates compact Object groups into Sketch Tree and removes Ex
   expect(await lineRows.evaluateAll((rows) => rows.map((row) => ({ height: row.getBoundingClientRect().height, icon: Boolean(row.querySelector("svg")) })))).toEqual([
     { height: 22, icon: true }, { height: 22, icon: true }, { height: 22, icon: true }, { height: 22, icon: true },
   ]);
+  const treeIndentation = await page.evaluate(() => {
+    const group = document.querySelector('.sketch-group-row[data-sketch-id="S1"][data-category="line"]');
+    const object = document.querySelector('.sketch-object-row[data-object-kind="line"]');
+    const measure = (row) => {
+      const gutter = row.querySelector(".sketch-tree-gutter");
+      const icon = row.querySelector(".sketch-object-icon");
+      return {
+        segments: gutter.children.length,
+        gutterWidth: gutter.getBoundingClientRect().width,
+        gutterOffset: gutter.getBoundingClientRect().right - row.getBoundingClientRect().left,
+        iconOffset: icon ? icon.getBoundingClientRect().left - row.getBoundingClientRect().left : null,
+      };
+    };
+    return { group: measure(group), object: measure(object) };
+  });
+  expect(treeIndentation).toEqual({
+    group: { segments: 3, gutterWidth: 54, gutterOffset: 54, iconOffset: null },
+    object: { segments: 4, gutterWidth: 72, gutterOffset: 72, iconOffset: 72 },
+  });
   const lineIconMatchesToolbar = await page.evaluate(() => {
     const normalize = (svg) => svg?.innerHTML.replace(/\s+/g, " ").trim();
     return normalize(document.querySelector('.sketch-object-row[data-object-kind="line"] svg')) === normalize(document.querySelector("#toolLine svg"));
@@ -694,7 +713,23 @@ test("workspace integrates compact Object groups into Sketch Tree and removes Ex
   const constraintGroup = await expandSketchTreeGroup(page, "constraint");
   await expect(constraintGroup).toHaveAttribute("aria-expanded", "true");
   await expect(page.locator(".sketch-tree-summary")).toHaveCount(1);
-  expect(await page.locator(".sketch-tree-summary").evaluate((row) => getComputedStyle(row).backgroundColor)).not.toBe("rgba(0, 0, 0, 0)");
+  const constraintSummary = await page.locator(".sketch-tree-summary").evaluate((row) => {
+    const gutter = row.querySelector(".sketch-tree-gutter");
+    return {
+      height: row.getBoundingClientRect().height,
+      labels: [...row.querySelectorAll(".sketch-tree-summary-item")].map((item) => item.textContent.trim()),
+      segmentCount: gutter.children.length,
+      gutterWidth: gutter.getBoundingClientRect().width,
+      title: row.title,
+    };
+  });
+  expect(constraintSummary).toEqual({
+    height: 22,
+    labels: ["完全1", "支持0", "未拘束7", "矛盾0"],
+    segmentCount: 4,
+    gutterWidth: 72,
+    title: "完全拘束: 1 / 支持位置拘束: 0 / 未拘束: 7 / 矛盾: 0",
+  });
 
   expect(await page.evaluate(() => window.__cadTest.documentNameState())).toEqual({
     modelName: "無題",

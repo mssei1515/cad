@@ -10482,7 +10482,7 @@
   }
 
   function sketchTreeGutter(segments) {
-    return segments.length ? `<span class="sketch-tree-gutter" aria-hidden="true">${segments.map((segment) => `<span class="tree-segment ${segment}"></span>`).join("")}</span>` : "";
+    return segments.length ? `<span class="sketch-tree-gutter" style="--tree-segment-count:${segments.length}" aria-hidden="true">${segments.map((segment) => `<span class="tree-segment ${segment}"></span>`).join("")}</span>` : "";
   }
 
   function toolbarSvgMarkup(selector) {
@@ -10516,7 +10516,7 @@
     return index;
   }
 
-  function sketchConstraintSummaryText(sketchId, groups) {
+  function sketchConstraintSummaryCounts(sketchId, groups) {
     if (!constraintAnalysisState) refreshConstraintAnalysis();
     const statuses = [
       ...groups.point.map(constraintStatusOf), ...groups.line.map(constraintStatusOf), ...groups.circle.map(constraintStatusOf), ...groups.arc.map(constraintStatusOf),
@@ -10526,9 +10526,23 @@
       }),
     ];
     const count = (status) => statuses.filter((item) => item === status).length;
+    return { full: count("full"), support: count("support"), under: count("under"), conflict: count("conflict") };
+  }
+
+  function sketchConstraintSummaryText(sketchId, groups) {
+    const counts = sketchConstraintSummaryCounts(sketchId, groups);
     return applicationLanguage === "en"
-      ? `Fully constrained: ${count("full")} / Supported position: ${count("support")} / Under-constrained: ${count("under")} / Conflict: ${count("conflict")}`
-      : `完全拘束: ${count("full")} / 支持位置拘束: ${count("support")} / 未拘束: ${count("under")} / 矛盾: ${count("conflict")}`;
+      ? `Fully constrained: ${counts.full} / Supported position: ${counts.support} / Under-constrained: ${counts.under} / Conflict: ${counts.conflict}`
+      : `完全拘束: ${counts.full} / 支持位置拘束: ${counts.support} / 未拘束: ${counts.under} / 矛盾: ${counts.conflict}`;
+  }
+
+  function sketchConstraintSummaryMarkup(sketchId, groups, segments) {
+    const counts = sketchConstraintSummaryCounts(sketchId, groups);
+    const items = applicationLanguage === "en"
+      ? [["full", "Full"], ["support", "Support"], ["under", "Under"], ["conflict", "Conflict"]]
+      : [["full", "完全"], ["support", "支持"], ["under", "未拘束"], ["conflict", "矛盾"]];
+    const content = items.map(([status, label]) => `<span class="sketch-tree-summary-item status-${status}"><span class="sketch-tree-summary-dot" aria-hidden="true"></span><span>${label}</span><strong>${counts[status]}</strong></span>`).join("");
+    return `<div class="sketch-tree-summary" title="${escapeHtml(sketchConstraintSummaryText(sketchId, groups))}">${sketchTreeGutter(segments)}<span class="sketch-tree-summary-content">${content}</span></div>`;
   }
 
   function sketchTreeObjectSelected(category, entry) {
@@ -10647,7 +10661,10 @@
         const hasState = items.some((item) => sketchTreeObjectSelected(entry.category, item) || sketchTreeObjectHovered(entry.category, item));
         html.push(`<div class="sketch-group-row ${open ? "open" : ""} ${hasState ? "has-active-descendant" : ""}" data-category="${entry.category}" data-sketch-id="${escapeHtml(sketch.id)}" aria-expanded="${open}">${sketchTreeGutter(childSegments)}<span class="sketch-group-chevron">▶</span><span class="sketch-group-label">${escapeHtml(entry.label)}</span><span class="sketch-group-count">${items.length}</span></div>`);
         if (!open) return;
-        if (entry.category === "constraint") html.push(`<div class="sketch-tree-summary">${escapeHtml(sketchConstraintSummaryText(sketch.id, groups))}</div>`);
+        if (entry.category === "constraint") {
+          const summarySegments = [...childSegments.slice(0, -1), entryLast ? "blank" : "pipe", "tee"];
+          html.push(sketchConstraintSummaryMarkup(sketch.id, groups, summarySegments));
+        }
         items.forEach((item, itemIndex) => {
           const objectSegments = [...childSegments.slice(0, -1), entryLast ? "blank" : "pipe", itemIndex === items.length - 1 ? "elbow" : "tee"];
           html.push(sketchTreeObjectRow(entry.category, item, objectSegments, sketch.id));

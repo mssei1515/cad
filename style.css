@@ -90,7 +90,7 @@ button:disabled { opacity: .45; cursor: default; }
 .sketch-item.solve-error, .item.reference-error { box-shadow: inset 3px 0 var(--danger); }
 .sketchActivateBtn { min-width: 0; padding: 1px 4px; border: 0; border-radius: 0; background: transparent; color: #111827; font-size: 12px; text-align: left; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .sketch-badges { white-space: nowrap; }
-.sketch-tree-gutter { --tree-cell: 18px; --tree-line-x: 8px; --tree-mid-y: 9px; --tree-line-color: #64748b; --tree-line-width: 1px; display: grid; grid-auto-flow: column; grid-auto-columns: var(--tree-cell); align-self: stretch; width: max(var(--tree-cell), calc((var(--sketch-depth, 0) + 1) * var(--tree-cell))); min-width: 0; margin-right: 0; overflow: visible; }
+.sketch-tree-gutter { --tree-cell: 18px; --tree-line-x: 8px; --tree-mid-y: 9px; --tree-line-color: #64748b; --tree-line-width: 1px; display: grid; grid-auto-flow: column; grid-auto-columns: var(--tree-cell); align-self: stretch; width: calc(var(--tree-segment-count, 1) * var(--tree-cell)); min-width: 0; margin-right: 0; overflow: visible; }
 .tree-segment { position: relative; min-height: 18px; }
 .tree-segment.pipe::before, .tree-segment.tee::before, .tree-segment.elbow::before { position: absolute; top: -1px; bottom: -1px; left: var(--tree-line-x); width: 0; border-left: var(--tree-line-width) solid var(--tree-line-color); content: ""; }
 .tree-segment.elbow::before { bottom: var(--tree-mid-y); }
@@ -138,10 +138,19 @@ button:disabled { opacity: .45; cursor: default; }
 .sketch-object-actions { min-width: 23px; display: flex; justify-content: flex-end; }
 .sketch-object-row .icon-delete-btn, .sketch-object-row .removeConstraintBtn { width: 22px; height: 20px; padding: 2px; border-color: transparent; background: transparent; opacity: .34; }
 .sketch-object-row:hover .icon-delete-btn, .sketch-object-row:hover .removeConstraintBtn, .sketch-object-row .icon-delete-btn:focus-visible, .sketch-object-row .removeConstraintBtn:focus-visible { opacity: 1; }
-.sketch-tree-summary { min-height: 28px; display: flex; align-items: center; padding: 3px 7px; color: #475569; background: var(--panel-2); border-bottom: 1px solid var(--border); font-size: 10px; line-height: 1.35; }
-.sketch-group-row .sketch-tree-gutter, .sketch-object-row .sketch-tree-gutter { height: 100%; }
-.sketch-group-row .tree-segment, .sketch-object-row .tree-segment { min-height: 20px; }
+.sketch-tree-summary { min-height: 22px; display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: center; color: #475569; background: rgba(248, 250, 252, .76); font-size: 9px; line-height: 1; }
+.sketch-tree-summary-content { min-width: 0; display: flex; align-items: center; gap: 6px; padding: 0 5px 0 2px; overflow: hidden; white-space: nowrap; }
+.sketch-tree-summary-item { min-width: 0; display: inline-flex; align-items: center; gap: 2px; }
+.sketch-tree-summary-item strong { color: #334155; font-size: 9px; font-variant-numeric: tabular-nums; }
+.sketch-tree-summary-dot { width: 5px; height: 5px; flex: 0 0 auto; border-radius: 50%; background: currentColor; }
+.sketch-tree-summary-item.status-full { color: #111827; }
+.sketch-tree-summary-item.status-support { color: #0f766e; }
+.sketch-tree-summary-item.status-under { color: #b45309; }
+.sketch-tree-summary-item.status-conflict { color: #dc2626; }
+.sketch-group-row .sketch-tree-gutter, .sketch-object-row .sketch-tree-gutter, .sketch-tree-summary .sketch-tree-gutter { height: 100%; }
+.sketch-group-row .tree-segment, .sketch-object-row .tree-segment, .sketch-tree-summary .tree-segment { min-height: 20px; }
 .sketch-object-row .tree-segment { min-height: 22px; }
+.sketch-tree-summary .tree-segment { min-height: 22px; }
 .block-editor-overlay { position: absolute; top: 12px; right: 12px; z-index: 4; width: min(280px, calc(100% - 24px)); padding: 8px; border: 1px solid #c4b5fd; border-radius: 8px; background: rgba(245, 243, 255, .94); box-shadow: 0 8px 24px rgba(76, 29, 149, .14); }
 .block-editor-overlay .block-editor-name-input { width: 100%; margin: 6px 0; }
 .block-editor-overlay .block-editor-actions { justify-content: flex-end; padding: 0; }
