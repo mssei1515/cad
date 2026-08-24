@@ -38,7 +38,7 @@ async function openDocumentSettings(page) {
 
 async function selectSketch(page, sketchId) {
   await page.locator(`.sketch-item[data-id="${sketchId}"]`).click();
-  await expect(page.locator("#propertiesPanel .property-heading")).toContainText(sketchId === "ROOT" ? "Root Sketch" : /Sketch|スケッチ/);
+  await expect(page.locator("#propertiesPanel .property-heading")).toHaveText(/^(?:Sketch|スケッチ)$/);
 }
 
 function annotationSketchFixture(version = 11) {
@@ -256,6 +256,8 @@ test("document annotations can be dragged on the unified canvas", async ({ page 
   const afterLeader = await page.evaluate(() => window.__cadTest.annotationSnapshot());
   expect(afterLeader.leader.world.x).toBeGreaterThan(beforeLeader.leader.world.x + 20);
   expect(afterLeader.leader.world.y).toBeLessThan(beforeLeader.leader.world.y - 10);
+  await expect(page.locator("#propertiesPanel .property-heading")).toHaveText("引出線");
+  await expect(page.locator("#propertiesPanel .property-section h3").first()).toHaveText("基本情報");
   const annotationRows = await page.locator("#propertiesPanel .property-section").first().locator(".property-row").allTextContents();
   expect(annotationRows[0]).toBe("種類引出線");
   expect(annotationRows[1]).toMatch(/^ID.+/);
@@ -812,7 +814,8 @@ test("workspace integrates compact Object groups into Sketch Tree and removes Ex
   await expandSketchTreeGroup(page, "point");
   await expect(page.locator('.sketch-object-row[data-object-kind="point"]')).toHaveCount(1);
   await page.locator('.sketch-object-row[data-object-kind="point"]').click();
-  await expect(page.locator("#propertiesPanel")).toContainText("点");
+  await expect(page.locator("#propertiesPanel .property-heading")).toHaveText("点");
+  await expect(page.locator("#propertiesPanel .property-section h3").first()).toHaveText("基本情報");
   const pointRows = await page.locator("#propertiesPanel .property-section").first().locator(".property-row").allTextContents();
   expect(pointRows[0]).toBe("種類点");
   expect(pointRows[1]).toMatch(/^ID.+/);
@@ -827,7 +830,8 @@ test("Canvas selection updates Properties, Properties collapses, and narrow tool
 
   const linePosition = await page.evaluate(() => window.__cadTest.geometryClientPositionForTest("line", "L1"));
   await page.mouse.click(linePosition.x, linePosition.y);
-  await expect(page.locator("#propertiesPanel")).toContainText("線 L1");
+  await expect(page.locator("#propertiesPanel .property-heading")).toHaveText("線");
+  await expect(page.locator("#propertiesPanel .property-section h3").first()).toHaveText("基本情報");
   expect(await page.locator("#propertiesPanel .property-section").first().locator(".property-row").allTextContents()).toEqual([
     "種類線", "IDL1", "始点IDP1", "終点IDP2", "長さ140", "拘束状態未拘束", "補助線",
   ]);
@@ -886,6 +890,8 @@ test("application language defaults to Japanese and persists the full UI selecti
   await expect(page.locator(".app-menu > summary").first()).toHaveText("ファイル");
   await expect(page.locator("#activeSketchLabel")).toHaveText("スケッチツリー");
   await expect(page.locator(".properties .panel-title-label")).toHaveText("プロパティ");
+  await expect(page.locator("#propertiesPanel .property-heading")).toHaveText("スケッチ");
+  await expect(page.locator("#propertiesPanel .property-section h3").first()).toHaveText("基本情報");
   expect(await page.locator("#propertiesPanel .property-section").first().locator(".property-row").allTextContents()).toEqual(expect.arrayContaining([
     "種類スケッチ", "IDS1", "名前Sketch-1", "親スケッチRoot Sketch (ROOT)", "アクティブはい",
   ]));
@@ -907,10 +913,10 @@ test("application language defaults to Japanese and persists the full UI selecti
   await expect(page.locator('#documentDimensionAppearanceFields select[data-dimension-display="visible"] option')).toHaveText(["Visible", "Hidden"]);
   await page.locator("#documentSettingsDialog button[value=cancel]").first().click();
   await selectSketch(page, "ROOT");
-  await expect(page.locator("#propertiesPanel .property-section h3")).toHaveText(["Sketch"]);
+  await expect(page.locator("#propertiesPanel .property-section h3")).toHaveText(["Basic Information"]);
   await expect(page.locator("#propertiesPanel .property-section-collapsible")).toHaveCount(0);
   await selectSketch(page, "S1");
-  await expect(page.locator("#propertiesPanel .property-section h3")).toContainText(["Sketch", "General Appearance", "Construction Appearance", "Dimension Appearance"]);
+  await expect(page.locator("#propertiesPanel .property-section h3")).toContainText(["Basic Information", "General Line Appearance", "Construction Appearance", "Dimension Appearance"]);
   await expect(page.locator('#sketchConstructionPropertyVisible option')).toHaveText(["Default", "Visible", "Hidden"]);
   await expect(page.locator('#sketchConstructionPropertyLineType option')).toHaveText(["Default", "Solid", "Dashed", "Dash-dot", "Dotted"]);
   await expect(page.locator('#sketchDimensionVisible option')).toHaveText(["Default", "Visible", "Hidden"]);
@@ -942,7 +948,7 @@ test("Document owns appearance defaults while only non-root Sketches expose comp
   await page.goto(`${baseUrl}/index.html?test=1`);
   await page.waitForFunction(() => window.__cadTest);
   await selectSketch(page, "ROOT");
-  await expect(page.locator("#propertiesPanel .property-section h3")).toHaveText(["スケッチ"]);
+  await expect(page.locator("#propertiesPanel .property-section h3")).toHaveText(["基本情報"]);
   await expect(page.locator("#propertiesPanel [data-appearance-key], #propertiesPanel [data-dimension-display]")).toHaveCount(0);
 
   await openDocumentSettings(page);
@@ -969,18 +975,19 @@ test("Document owns appearance defaults while only non-root Sketches expose comp
   expect((await page.evaluate(() => window.__cadTest.serializedModelForTest())).defaultDimensionAppearance.color).toBe("#0e7490");
 
   await selectSketch(page, "S1");
-  await expect(page.locator("#propertiesPanel .property-section h3")).toContainText(["スケッチ", "一般外観", "補助線外観", "寸法外観"]);
+  await expect(page.locator("#propertiesPanel .property-section h3")).toContainText(["基本情報", "一般線外観", "補助線外観", "寸法外観"]);
   const appearanceSections = page.locator("#propertiesPanel .property-section-collapsible");
   await expect(appearanceSections).toHaveCount(3);
   for (const key of ["general", "construction", "dimension"]) {
     const section = page.locator(`[data-property-section="${key}"]`);
-    await expect(section).toHaveAttribute("open", "");
-    await section.locator("summary").click();
     await expect(section).not.toHaveAttribute("open", "");
     await expect(section.locator(".property-section-content")).toBeHidden();
     await section.locator("summary").click();
     await expect(section).toHaveAttribute("open", "");
   }
+  await selectSketch(page, "ROOT");
+  await selectSketch(page, "S1");
+  for (const key of ["general", "construction", "dimension"]) await expect(page.locator(`[data-property-section="${key}"]`)).toHaveAttribute("open", "");
   const compactMetrics = await page.evaluate(() => ({
     panelPadding: getComputedStyle(document.querySelector("#propertiesPanel")).paddingTop,
     sectionPadding: getComputedStyle(document.querySelector("#propertiesPanel .property-section")).paddingTop,
@@ -1123,7 +1130,7 @@ test("Appearance cascades, used file colors are selectable, and constraint statu
 
   await expandSketchTreeGroup(page, "line");
   await page.locator('.sketch-object-row[data-object-kind="line"][data-id="L1"]').click();
-  await expect(page.locator("#propertiesPanel")).toContainText("ジオメトリ");
+  await expect(page.locator("#propertiesPanel")).toContainText("基本情報");
   await expect(page.locator("#propertiesPanel")).toContainText("長さ");
   await expect(page.locator("#propertiesPanel")).toContainText("外観");
   await expect(page.locator("#propertiesPanel")).not.toContainText(/Geometry|Length|Appearance|Visible|Color|Line type|Line width/);
@@ -1341,7 +1348,7 @@ test("Constraint dimensions expose defining geometry and inheritable appearance 
   await page.evaluate(() => window.__cadTest.resetForReadOnlyDuplicateDimension());
   await expandSketchTreeGroup(page, "constraint");
   await page.locator('.sketch-object-row[data-object-kind="constraint"]').first().click();
-  await expect(page.locator("#propertiesPanel .property-section h3")).toContainText(["拘束", "外観"]);
+  await expect(page.locator("#propertiesPanel .property-section h3")).toContainText(["基本情報", "外観"]);
   await expect(page.locator("#propertiesPanel")).toContainText("値 / 数式");
   await expect(page.locator("#propertiesPanel")).toContainText("始点ID");
   await expect(page.locator("#propertiesPanel")).toContainText("終点ID");
@@ -1366,6 +1373,7 @@ test("Constraint dimensions expose defining geometry and inheritable appearance 
   await selectSketch(page, "ROOT");
   await selectSketch(page, "S1");
   await expect(page.locator("#sketchDimensionColor")).toHaveValue("");
+  await page.locator('[data-property-section="dimension"] summary').click();
   await page.locator("#sketchDimensionColor").fill("#f97316");
   await page.locator("#sketchDimensionColor").blur();
   expect(await page.evaluate(() => window.__cadTest.dimensionAppearanceStateForTest())).toEqual(expect.objectContaining({
@@ -1785,6 +1793,7 @@ test("construction line endpoint appearance inherits Document defaults and suppo
   await selectSketch(page, "ROOT");
   await selectSketch(page, "S1");
   await expect(page.locator("#sketchConstructionPropertyColor")).toHaveValue("");
+  await page.locator('[data-property-section="construction"] summary').click();
   await page.locator("#sketchConstructionPropertyColor").fill("#16a34a");
   await page.locator("#sketchConstructionPropertyColor").blur();
   expect((await page.evaluate(() => window.__cadTest.appearanceStateForTest("line", "L1"))).effective.color).toBe("#16a34a");
@@ -1810,7 +1819,8 @@ test("Sketch Tree groups list and synchronize Geometry and Constraint objects", 
 
   await expandSketchTreeGroup(page, "line");
   await page.locator(`.sketch-object-row[data-object-kind="line"][data-id="${ids.line}"]`).click();
-  await expect(page.locator("#propertiesPanel")).toContainText(`線 ${ids.line}`);
+  await expect(page.locator("#propertiesPanel .property-heading")).toHaveText("線");
+  await expect(page.locator("#propertiesPanel .property-section h3").first()).toHaveText("基本情報");
 
   await page.locator('.sketch-object-row[data-object-kind="circle"]').hover();
   expect(await page.evaluate(() => window.__cadTest.sidebarHighlightIds())).toEqual(
@@ -1819,7 +1829,7 @@ test("Sketch Tree groups list and synchronize Geometry and Constraint objects", 
   expect(await page.evaluate(() => window.__cadTest.sidebarHighlightIds())).not.toContain(ids.circleCenter);
   await page.locator('.sketch-object-row[data-object-kind="circle"]').click();
   await expect(page.locator('.sketch-object-row[data-object-kind="circle"]')).toHaveClass(/selected/);
-  await expect(page.locator("#propertiesPanel")).toContainText(`円 ${ids.circle}`);
+  await expect(page.locator("#propertiesPanel .property-heading")).toHaveText("円");
   expect(await page.locator("#propertiesPanel .property-section").first().locator(".property-row").allTextContents()).toEqual(expect.arrayContaining([
     `ID${ids.circle}`, `中心点ID${ids.circleCenter}`,
   ]));
@@ -1835,7 +1845,8 @@ test("Sketch Tree groups list and synchronize Geometry and Constraint objects", 
   expect(await page.evaluate(() => window.__cadTest.currentSidebarHoveredGeometryKeys())).toEqual([`line:${ids.line}`]);
   await horizontalConstraintRow.click();
   await expect(horizontalConstraintRow).toHaveClass(/selected/);
-  await expect(page.locator("#propertiesPanel")).toContainText("拘束");
+  await expect(page.locator("#propertiesPanel .property-heading")).toHaveText("水平");
+  await expect(page.locator("#propertiesPanel .property-section h3").first()).toHaveText("基本情報");
   expect(await page.locator("#propertiesPanel .property-section").first().locator(".property-row").allTextContents()).toEqual(expect.arrayContaining([
     `線ID${ids.line}`,
   ]));

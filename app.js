@@ -126,7 +126,7 @@
     ["ブロック作成", "Create Block"], ["作成", "Create"], ["キャンセル", "Cancel"], ["完了", "Done"], ["閉じる", "Close"], ["子＋", "Child +"],
     ["名前変更", "Rename"], ["スケッチ削除", "Delete Sketch"], ["ブロック名", "Block name"], ["配置", "Place"], ["非表示にする", "Hide"], ["表示する", "Show"],
     ["キャンバス", "Canvas"], ["ステータスバー", "Status Bar"], ["寸法値", "Dimension value"],
-    ["既定の外観", "Default Appearance"], ["既定の補助線外観", "Default Construction Appearance"], ["既定の寸法外観", "Default Dimension Appearance"], ["一般外観", "General Appearance"], ["補助線外観", "Construction Appearance"], ["寸法外観", "Dimension Appearance"], ["一般", "General"], ["言語", "Language"],
+    ["既定の外観", "Default Appearance"], ["既定の補助線外観", "Default Construction Appearance"], ["既定の寸法外観", "Default Dimension Appearance"], ["一般外観", "General Appearance"], ["一般線外観", "General Line Appearance"], ["補助線外観", "Construction Appearance"], ["寸法外観", "Dimension Appearance"], ["基本情報", "Basic Information"], ["一般", "General"], ["言語", "Language"],
     ["アプリケーション全体の設定をドキュメント設定から分離して管理します。", "Application-wide settings are managed separately from document settings."],
     ["既定", "Default"], ["表示", "Visible"], ["非表示", "Hidden"], ["色", "Color"], ["線種", "Line type"], ["線幅", "Line width"],
     ["実線", "Solid"], ["破線", "Dashed"], ["一点鎖線", "Dash-dot"], ["点線", "Dotted"], ["端部のはみ出し", "Endpoint overhang"], ["端部の点", "Endpoint points"], ["あり", "Enabled"], ["なし", "Disabled"], ["使用済みの色", "Colors used in this file"],
@@ -277,7 +277,7 @@
   let lastPointerWorld = null;
   let colorPaletteSession = null;
   let parameterDialogSession = null;
-  const sketchAppearanceSectionOpenState = { general: true, construction: true, dimension: true };
+  const sketchAppearanceSectionOpenState = { general: false, construction: false, dimension: false };
   const sketchTreeGroupOpenState = new Map();
   let hoveredSketchIdentity = null;
   let hoveredSketchTreeId = null;
@@ -11387,11 +11387,11 @@
   }
 
   function geometryPropertyName(item) {
-    if (item instanceof Point) return `${applicationText("点", "Point")} ${item.id}`;
-    if (item instanceof Line) return `${applicationText("線", "Line")} ${item.id}`;
-    if (item instanceof Circle) return `${applicationText("円", "Circle")} ${item.id}`;
-    if (item instanceof Arc) return `${applicationText("円弧", "Arc")} ${item.id}`;
-    return item?.id || applicationText("ジオメトリ", "Geometry");
+    if (item instanceof Point) return applicationText("点", "Point");
+    if (item instanceof Line) return applicationText("線", "Line");
+    if (item instanceof Circle) return applicationText("円", "Circle");
+    if (item instanceof Arc) return applicationText("円弧", "Arc");
+    return applicationText("ジオメトリ", "Geometry");
   }
 
   function propertyReadonlyRow(labelJa, labelEn, value, { userContent = false } = {}) {
@@ -11504,9 +11504,8 @@
       .join("");
   }
 
-  function localizedConstraintName(name) {
+  function localizedConstraintName(name, { typeOnly = false } = {}) {
     const value = String(name || applicationText("拘束", "Constraint"));
-    if (applicationLanguage !== "en") return value;
     const replacements = [
       [/^円弧端点-円周一致/, "Arc endpoint on circumference"], [/^円弧端点-線一致/, "Arc endpoint on line"], [/^円弧端点一致/, "Arc endpoint coincident"],
       [/^点-線寸法/, "Point-line dimension"], [/^線-線寸法/, "Line-line dimension"], [/^オフセット寸法/, "Offset dimension"],
@@ -11516,12 +11515,21 @@
       [/^水平/, "Horizontal"], [/^垂直/, "Vertical"], [/^平行/, "Parallel"], [/^等寸/, "Equal"], [/^半径/, "Radius"], [/^直径/, "Diameter"],
       [/^同心/, "Concentric"], [/^接線/, "Tangent"], [/^対称/, "Symmetry"], [/^ドラッグ/, "Drag"],
     ];
+    if (typeOnly) {
+      const matched = replacements.find(([pattern]) => pattern.test(value));
+      if (matched) {
+        const [pattern, replacement] = matched;
+        return applicationLanguage === "en" ? replacement : value.match(pattern)?.[0] || value;
+      }
+      if (/^Arc endpoint fixed\b/.test(value)) return applicationText("円弧端点固定", "Arc endpoint fixed");
+    }
+    if (applicationLanguage !== "en") return value;
     for (const [pattern, replacement] of replacements) if (pattern.test(value)) return value.replace(pattern, replacement);
     return value;
   }
 
   function collapsibleSketchAppearanceSection(key, labelJa, labelEn, content, attributes = "") {
-    const open = sketchAppearanceSectionOpenState[key] !== false ? " open" : "";
+    const open = sketchAppearanceSectionOpenState[key] === true ? " open" : "";
     return `<details class="property-section property-section-collapsible" data-property-section="${key}"${attributes}${open}><summary><h3>${applicationText(labelJa, labelEn)}</h3></summary><div class="property-section-content">${content}</div></details>`;
   }
 
@@ -11540,9 +11548,10 @@
       return;
     }
     const item = target.item;
+    const basicInformationHeading = `<h3>${applicationText("基本情報", "Basic Information")}</h3>`;
     if (target.kind === "geometry") {
       const effective = effectiveAppearanceForElement(item);
-      panel.innerHTML = `<h2 class="property-heading">${escapeHtml(geometryPropertyName(item))}</h2><section class="property-section"><h3>Geometry</h3>${geometryPropertyRows(item)}</section><section class="property-section"><h3>Appearance</h3>${appearancePropertyRows(item.appearance, effective, { constructionEndpoints: item instanceof Line && item.construction })}</section>`;
+      panel.innerHTML = `<h2 class="property-heading">${escapeHtml(geometryPropertyName(item))}</h2><section class="property-section">${basicInformationHeading}${geometryPropertyRows(item)}</section><section class="property-section"><h3>Appearance</h3>${appearancePropertyRows(item.appearance, effective, { constructionEndpoints: item instanceof Line && item.construction })}</section>`;
     } else if (target.kind === "block") {
       const definition = blockDefinitionById(item.definitionId);
       const effective = blockProjectionBundle(item).lines[0] ? effectiveAppearanceForElement(blockProjectionBundle(item).lines[0]) : normalizeAppearance(model.defaultAppearance, { partial: false });
@@ -11553,7 +11562,7 @@
         + propertyReadonlyRow("X座標", "X coordinate", formatDisplayNumber(item.x))
         + propertyReadonlyRow("Y座標", "Y coordinate", formatDisplayNumber(item.y))
         + blockRotationPropertyRow(item);
-      panel.innerHTML = `<h2 class="property-heading">${applicationText("ブロック", "Block")} ${escapeHtml(item.id)}</h2><section class="property-section"><h3>Block</h3>${rows}${blockPropertiesConfiguration(item, definition)}</section><section class="property-section"><h3>Appearance Override</h3>${appearancePropertyRows(item.appearanceOverride, effective)}</section>`;
+      panel.innerHTML = `<h2 class="property-heading">${applicationText("ブロック", "Block")}</h2><section class="property-section">${basicInformationHeading}${rows}${blockPropertiesConfiguration(item, definition)}</section><section class="property-section"><h3>Appearance Override</h3>${appearancePropertyRows(item.appearanceOverride, effective)}</section>`;
     } else if (target.kind === "constraint") {
       const dimension = item.dimension;
       const targetValue = targetFromConstraint(item);
@@ -11571,13 +11580,13 @@
       const definingGeometryRows = dimension
         ? dimensionGeometryPropertyRows(targetValue)
         : constraintDefiningGeometryPropertyRows(item);
-      panel.innerHTML = `<h2 class="property-heading">${escapeHtml(localizedConstraintName(item.name))}</h2><section class="property-section"><h3>Constraint</h3><div class="property-row"><span>Type</span><span class="property-readonly">${escapeHtml(item.constructor.name)}</span></div>${definingGeometryRows}${parameterRows}</section>${dimension ? `<section class="property-section"><h3>Appearance</h3>${dimensionAppearancePropertyRows(dimension.display || {}, display)}</section>` : ""}`;
+      panel.innerHTML = `<h2 class="property-heading">${escapeHtml(localizedConstraintName(item.name, { typeOnly: true }))}</h2><section class="property-section">${basicInformationHeading}<div class="property-row"><span>Type</span><span class="property-readonly">${escapeHtml(item.constructor.name)}</span></div>${definingGeometryRows}${parameterRows}</section>${dimension ? `<section class="property-section"><h3>Appearance</h3>${dimensionAppearancePropertyRows(dimension.display || {}, display)}</section>` : ""}`;
     } else if (target.kind === "annotation") {
       const annotationType = item.type === "leader" ? applicationText("引出線", "Leader") : applicationText("自由テキスト", "Free Text");
-      panel.innerHTML = `<h2 class="property-heading">${annotationType} ${escapeHtml(item.id)}</h2><section class="property-section"><h3>Annotation</h3>${propertyReadonlyRow("種類", "Type", annotationType)}${propertyReadonlyRow("ID", "ID", item.id)}${propertyReadonlyRow("所属スケッチ", "Owning sketch", `${sketchName(item.sketchId)} (${item.sketchId})`, { userContent: true })}<div class="property-row"><label>Visible</label><input data-property="annotation-visible" type="checkbox" ${item.visible !== false ? "checked" : ""}></div>${item.type === "text" ? `<div class="property-row"><label>Text</label><textarea data-property="annotation-text">${escapeHtml(item.text || "")}</textarea></div><div class="property-row"><label>Font size</label><input data-property="annotation-font-size" type="number" min="6" max="72" value="${Number(item.style?.fontSize || 13)}"></div>` : ""}<div class="property-row"><label>Color</label><input data-property="annotation-color" type="text" value="${escapeHtml(item.style?.color || "#111827")}"></div></section>`;
+      panel.innerHTML = `<h2 class="property-heading">${annotationType}</h2><section class="property-section">${basicInformationHeading}${propertyReadonlyRow("種類", "Type", annotationType)}${propertyReadonlyRow("ID", "ID", item.id)}${propertyReadonlyRow("所属スケッチ", "Owning sketch", `${sketchName(item.sketchId)} (${item.sketchId})`, { userContent: true })}<div class="property-row"><label>Visible</label><input data-property="annotation-visible" type="checkbox" ${item.visible !== false ? "checked" : ""}></div>${item.type === "text" ? `<div class="property-row"><label>Text</label><textarea data-property="annotation-text">${escapeHtml(item.text || "")}</textarea></div><div class="property-row"><label>Font size</label><input data-property="annotation-font-size" type="number" min="6" max="72" value="${Number(item.style?.fontSize || 13)}"></div>` : ""}<div class="property-row"><label>Color</label><input data-property="annotation-color" type="text" value="${escapeHtml(item.style?.color || "#111827")}"></div></section>`;
     } else if (target.kind === "blockPlacement") {
       const enabled = new Set(blockPlacementEnabledSketchIds);
-      panel.innerHTML = `<h2 class="property-heading">${applicationText("ブロック配置", "Block placement")}</h2><section class="property-section"><h3>Block</h3>${propertyReadonlyRow("ブロック定義", "Block definition", item.name, { userContent: true })}<div class="property-option-group"><div class="property-option-group-title">${applicationText("回転モード", "Rotation mode")}</div><label class="property-option"><input type="radio" name="placementRotationMode" data-placement-rotation-mode="locked" ${blockPlacementRotationLocked ? "checked" : ""}><span>${applicationText("直交回転ロック", "Orthogonal rotation lock")}</span></label><label class="property-option"><input type="radio" name="placementRotationMode" data-placement-rotation-mode="free" ${blockPlacementRotationLocked ? "" : "checked"}><span>${applicationText("自由回転", "Free rotation")}</span></label></div><div class="property-option-group"><div class="property-option-group-title">${applicationText("配置するスケッチ", "Sketches to place")}</div>${blockDefinitionSketchRows(item).map(({ sketch, depth, count }) => `<label class="property-option property-sketch-option" style="--property-sketch-depth:${depth}"><input type="checkbox" data-placement-sketch-id="${escapeHtml(sketch.id)}" ${enabled.has(sketch.id) ? "checked" : ""}><span data-user-content>${escapeHtml(sketch.name)}</span><small>${count}</small></label>`).join("")}</div></section>`;
+      panel.innerHTML = `<h2 class="property-heading">${applicationText("ブロック配置", "Block placement")}</h2><section class="property-section">${basicInformationHeading}${propertyReadonlyRow("ブロック定義", "Block definition", item.name, { userContent: true })}<div class="property-option-group"><div class="property-option-group-title">${applicationText("回転モード", "Rotation mode")}</div><label class="property-option"><input type="radio" name="placementRotationMode" data-placement-rotation-mode="locked" ${blockPlacementRotationLocked ? "checked" : ""}><span>${applicationText("直交回転ロック", "Orthogonal rotation lock")}</span></label><label class="property-option"><input type="radio" name="placementRotationMode" data-placement-rotation-mode="free" ${blockPlacementRotationLocked ? "" : "checked"}><span>${applicationText("自由回転", "Free rotation")}</span></label></div><div class="property-option-group"><div class="property-option-group-title">${applicationText("配置するスケッチ", "Sketches to place")}</div>${blockDefinitionSketchRows(item).map(({ sketch, depth, count }) => `<label class="property-option property-sketch-option" style="--property-sketch-depth:${depth}"><input type="checkbox" data-placement-sketch-id="${escapeHtml(sketch.id)}" ${enabled.has(sketch.id) ? "checked" : ""}><span data-user-content>${escapeHtml(sketch.name)}</span><small>${count}</small></label>`).join("")}</div></section>`;
     } else {
       const parent = sketchById(item.parentSketchId);
       const parentLabel = parent ? `${parent.name} (${parent.id})` : applicationText("なし", "None");
@@ -11586,7 +11595,7 @@
         + propertyReadonlyRow("名前", "Name", item.name, { userContent: true })
         + propertyReadonlyRow("親スケッチ", "Parent sketch", parentLabel, { userContent: Boolean(parent) })
         + propertyReadonlyRow("アクティブ", "Active", applicationText("はい", "Yes"));
-      const appearanceSections = isRootSketch(item) ? "" : collapsibleSketchAppearanceSection("general", "一般外観", "General Appearance", appearancePropertyRows(
+      const appearanceSections = isRootSketch(item) ? "" : collapsibleSketchAppearanceSection("general", "一般線外観", "General Line Appearance", appearancePropertyRows(
         item.appearance,
         effectiveAppearanceForSketch(item),
       )) + collapsibleSketchAppearanceSection("construction", "補助線外観", "Construction Appearance", appearancePropertyRows(
@@ -11598,12 +11607,16 @@
         effectiveDimensionAppearanceForSketch(item),
         { idPrefix: "sketchDimension" },
       ), ' data-sketch-default-appearance="dimension"');
-      panel.innerHTML = `<h2 class="property-heading">${applicationText("スケッチ", "Sketch")} <span data-user-content>${escapeHtml(item.name)}</span></h2><section class="property-section"><h3>Sketch</h3>${rows}</section>${appearanceSections}`;
+      panel.innerHTML = `<h2 class="property-heading">${applicationText("スケッチ", "Sketch")}</h2><section class="property-section">${basicInformationHeading}${rows}</section>${appearanceSections}`;
     }
 
     localizeApplicationUI(panel);
     for (const section of panel.querySelectorAll(".property-section-collapsible[data-property-section]")) {
+      section.querySelector("summary")?.addEventListener("click", () => {
+        sketchAppearanceSectionOpenState[section.dataset.propertySection] = !section.open;
+      });
       section.addEventListener("toggle", () => {
+        if (!section.isConnected) return;
         sketchAppearanceSectionOpenState[section.dataset.propertySection] = section.open;
       });
     }

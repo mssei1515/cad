@@ -756,7 +756,8 @@ test("selected blocks can change rotation mode and reject an unsatisfied orthogo
   await page.evaluate(() => window.__cadTest.selectGeometryIdsForTest({ blockInstances: ["BI1"] }));
   await openBlocksExplorer(page);
   await expect(page.locator('#propertiesPanel input[data-block-rotation-mode="free"]')).toBeChecked();
-  await expect(page.locator("#propertiesPanel .property-heading")).toHaveText("ブロック BI1");
+  await expect(page.locator("#propertiesPanel .property-heading")).toHaveText("ブロック");
+  await expect(page.locator("#propertiesPanel .property-section h3").first()).toHaveText("基本情報");
   await expect(page.locator("#propertiesPanel")).toContainText("ブロック定義");
   await expect(page.locator("#propertiesPanel")).not.toContainText("ブロックインスタンス");
   expect(await page.locator("#propertiesPanel .property-section").first().locator(".property-row").allTextContents()).toEqual(expect.arrayContaining([
@@ -862,6 +863,7 @@ test("block placement and selected-block settings stay in Properties", async ({ 
   await expect(page.locator("#togglePropertiesPanelBtn")).toHaveAttribute("aria-expanded", "true");
   await expect(page.locator('#propertiesPanel input[data-placement-rotation-mode="locked"]')).toBeVisible();
   await expect(page.locator("#propertiesPanel input[data-placement-sketch-id]")).toHaveCount(1);
+  await expect(page.locator("#propertiesPanel .property-section h3").first()).toHaveText("基本情報");
   await page.keyboard.press("Escape");
   await expect(page.locator("#togglePropertiesPanelBtn")).toHaveAttribute("aria-expanded", "false");
   await page.click("#togglePropertiesPanelBtn");
