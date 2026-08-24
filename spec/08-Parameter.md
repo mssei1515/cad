@@ -41,7 +41,7 @@ File menuのParameter画面ではDocumentまたは各Block Definitionを選択�
 
 Propertiesでは拘束寸法と参照寸法の名前を変更できる。拘束寸法の数値または式を入力する欄は`値 / 数式`（英語`Value / Expression`）と表示し、参照寸法では同じ項目を読み取り専用で表示する。Canvas上の寸法入力も式を受け付け、無効な入力では画面を閉じず理由を表示する。Canvasの寸法ラベルは式やsymbol名を表示せず、prefix／suffixを含む評価後の数値表示を維持する。
 
-Constraint tabは拘束寸法と参照寸法の両方を表示し、`d1: 寸法…`の形式でsymbol名を先頭へ置く。参照寸法には読み取り専用表示を付ける。
+Sketch TreeのConstraint分類は拘束寸法と参照寸法の両方を表示し、`d1: 寸法…`の形式でsymbol名を先頭へ置く。参照寸法には読み取り専用表示を付ける。
 
 ## 6. 削除・コピー・Block化
 
@@ -53,6 +53,6 @@ Parameter、寸法、寸法を含むGeometry、Sketch、Block Instanceを削除�
 
 ## 7. 永続化
 
-JSON version 10では`target`を評価済みcacheとして残し、拘束寸法の`expression`を正式な入力値とする。Document、Block Definition、History、Block Editor draft、clipboardへParameter、寸法名、式、採番counterを保存する。
+JSON version 11では、version 10で導入したParameterの意味を維持し、`target`を評価済みcacheとして残して拘束寸法の`expression`を正式な入力値とする。Document、Block Definition、History、Block Editor draft、clipboardへParameter、寸法名、式、採番counterを保存する。
 
-version 9以前の読込では名前空間ごとの寸法配列順に`d1`以降を付与し、拘束寸法の既存`target`を現在のUI単位による数値式へ変換する。参照寸法には名前だけを付与する。version 10の式または依存関係が不正な場合は読込全体を拒否し、現在のDocumentを維持する。
+version 9以前の読込では名前空間ごとの寸法配列順に`d1`以降を付与し、拘束寸法の既存`target`を現在のUI単位による数値式へ変換する。参照寸法には名前だけを付与する。version 10以降の式または依存関係が不正な場合は読込全体を拒否し、現在のDocumentを維持する。

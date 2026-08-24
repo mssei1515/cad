@@ -121,7 +121,7 @@
     ["引出線", "Leader"], ["自由テキスト", "Free Text"], ["拘束状態表示", "Constraint Status View"],
     ["拘束状態表示を切り替え（Space長押しでも一時表示）", "Toggle constraint status view (hold Space for temporary view)"],
     ["拘束ツールはツールバーから選択します", "Select constraint tools from the toolbar"],
-    ["エクスプローラー", "Explorer"], ["プロパティ", "Properties"], ["スケッチ", "Sketch"], ["スケッチツリー", "Sketch Tree"],
+    ["プロパティ", "Properties"], ["スケッチ", "Sketch"], ["スケッチツリー", "Sketch Tree"],
     ["スケッチ一覧", "Sketches"], ["ブロック一覧", "Blocks"], ["ブロック", "Block"], ["ブロック定義", "Block Definitions"], ["ブロック定義…", "Block Definitions…"], ["ブロックインスタンス", "Block Instance"],
     ["ブロック作成", "Create Block"], ["作成", "Create"], ["キャンセル", "Cancel"], ["完了", "Done"], ["閉じる", "Close"], ["子＋", "Child +"],
     ["名前変更", "Rename"], ["スケッチ削除", "Delete Sketch"], ["ブロック名", "Block name"], ["配置", "Place"], ["非表示にする", "Hide"], ["表示する", "Show"],
@@ -142,7 +142,7 @@
     ["完全拘束", "Fully constrained"], ["支持位置拘束", "Supported position"], ["未拘束", "Under-constrained"], ["矛盾", "Conflict"],
     ["参照エラー", "Reference error"], ["重複", "Duplicate"], ["拘束状態表示中", "Constraint status view"],
     ["Geometryを選択または作成します。Spaceで拘束状態を表示します。", "Select or create geometry. Hold Space to show constraint status."],
-    ["エクスプローラーを最小化", "Collapse Explorer"], ["エクスプローラーを展開", "Expand Explorer"], ["プロパティを最小化", "Collapse Properties"], ["プロパティを展開", "Expand Properties"],
+    ["プロパティを最小化", "Collapse Properties"], ["プロパティを展開", "Expand Properties"],
     ["カラーパレット", "Color palette"], ["ジオメトリID", "Geometry ID"], ["日本語", "Japanese"], ["英語", "English"],
     ["小さいサイズでも見やすい、Cad2のシンプルなロゴ", "A simple Cad2 logo designed to remain clear at small sizes"],
     ["通常表示", "Normal view"], ["選択・ドラッグできます。Shift/Ctrlクリックで複数選択できます。", "Select and drag geometry. Use Shift/Ctrl-click for multiple selection."],
@@ -155,7 +155,7 @@
     ["テキストを配置する位置をクリックしてください", "Click where you want to place the text."], ["テキストを追加しました", "Text was added."], ["テキストをキャンセルしました", "Text creation was canceled."],
     ["Root Sketchには図形を作成できません。子スケッチを選択してください。", "Geometry cannot be created in the Root Sketch. Select a child sketch."],
     ["配置する内部スケッチを選び、表示中心をクリックしてください", "Select internal sketches to place, then click the display center."],
-    ["図形を持つ内部スケッチを1つ以上有効にしてください", "Enable at least one internal sketch that contains geometry."],
+    ["オブジェクトを持つ内部スケッチを1つ以上有効にしてください", "Enable at least one internal sketch that contains objects."],
     ["回転方向をクリックしてください。Escで角度0度として配置します", "Click to set the rotation direction. Press Esc to place at 0 degrees."],
     ["ブロック定義編集をキャンセルしました", "Block definition editing was canceled."], ["ブロック作成をキャンセルしました", "Block creation was canceled."],
     ["指定した側にはオフセットを作成できません", "An offset cannot be created on the specified side."],
@@ -246,7 +246,7 @@
   let selectedArcEndpointPair = null;
   let selectedDimensionConstraint = null;
   let selectedConstraint = null;
-  let selectedAnnotation = null;
+  let selectedAnnotations = [];
   let hoveredAnnotation = null;
   let hoveredSidebarItem = null;
   let constraintAnalysisState = null;
@@ -278,6 +278,7 @@
   let colorPaletteSession = null;
   let parameterDialogSession = null;
   const sketchAppearanceSectionOpenState = { general: true, construction: true, dimension: true };
+  const sketchTreeGroupOpenState = new Map();
   let hoveredSketchIdentity = null;
   let hoveredSketchTreeId = null;
   let constructionLineMode = false;
@@ -295,6 +296,7 @@
   let blockPlacementAnchor = null;
   let blockPlacementEnabledSketchIds = [];
   let blockPlacementRotationLocked = true;
+  let blockPlacementPropertiesWasCollapsed = null;
   let blockEditSession = null;
   let blockProjectionCache = new Map();
   let undoStack = [];
@@ -599,7 +601,7 @@
     };
   }
 
-  function normalizeAnnotations(items) {
+  function normalizeAnnotations(items, fallbackSketchId = null) {
     if (!Array.isArray(items)) return [];
     return items.map((item, index) => {
       if (!item || typeof item !== "object") return null;
@@ -608,6 +610,7 @@
       const normalized = {
         id: String(item.id || `AN${index + 1}`),
         type,
+        sketchId: item.sketchId == null ? fallbackSketchId : String(item.sketchId),
         visible: item.visible !== false,
         text: String(item.text || ""),
         x: Number.isFinite(Number(item.x)) ? Number(item.x) : 0,
@@ -682,7 +685,8 @@
       root.constructionAppearance = {};
       root.dimensionAppearance = {};
     }
-    model.annotations = normalizeAnnotations(model.annotations);
+    const fallbackSketchId = model.sketches.find((sketch) => !isRootSketch(sketch))?.id || DEFAULT_SKETCH_ID;
+    model.annotations = normalizeAnnotations(model.annotations, fallbackSketchId);
     for (const item of [...model.points, ...model.lines, ...model.circles, ...model.arcs]) item.appearance = normalizeAppearance(item.appearance);
   }
 
@@ -752,6 +756,7 @@
       definition.lines = Array.isArray(definition.lines) ? definition.lines : [];
       definition.circles = Array.isArray(definition.circles) ? definition.circles : [];
       definition.arcs = Array.isArray(definition.arcs) ? definition.arcs : [];
+      definition.annotations = normalizeAnnotations(definition.annotations, fallbackSketchId);
       definition.blockInstances = Array.isArray(definition.blockInstances) ? definition.blockInstances : [];
       definition.constraints = Array.isArray(definition.constraints) ? definition.constraints : [];
       for (const item of [...definition.points, ...definition.lines, ...definition.circles, ...definition.arcs, ...definition.constraints]) {
@@ -1068,8 +1073,13 @@
   }
 
   function pushAnnotation(element) {
+    if (!canCreateInActiveSketch()) {
+      rejectRootSketchCreation();
+      return null;
+    }
     const item = {
       id: nextAnnotationId(),
+      sketchId: activeSketchId(),
       visible: true,
       style: {},
       ...element,
@@ -1084,6 +1094,7 @@
     const data = {
       id: element.id,
       type: element.type,
+      sketchId: element.sketchId,
       visible: element.visible !== false,
       text: element.text || "",
       x: Number(element.x) || 0,
@@ -1144,14 +1155,14 @@
 
   function blockDefinitionHasGeometry(definition, visiting = new Set()) {
     if (!definition || visiting.has(definition.id)) return false;
-    if ((definition.lines?.length || 0) + (definition.circles?.length || 0) + (definition.arcs?.length || 0) > 0) return true;
+    if ((definition.lines?.length || 0) + (definition.circles?.length || 0) + (definition.arcs?.length || 0) + (definition.annotations?.length || 0) > 0) return true;
     const nextVisiting = new Set(visiting).add(definition.id);
     return (definition.blockInstances || []).some((instance) => blockDefinitionHasGeometry(blockDefinitionById(instance.definitionId), nextVisiting));
   }
 
   function blockDefinitionGeometrySketchIds(definition, visiting = new Set()) {
     if (!definition || visiting.has(definition.id)) return [];
-    const ids = new Set([...(definition.lines || []), ...(definition.circles || []), ...(definition.arcs || [])].map((item) => String(item.sketchId || DEFAULT_SKETCH_ID)));
+    const ids = new Set([...(definition.lines || []), ...(definition.circles || []), ...(definition.arcs || []), ...(definition.annotations || [])].map((item) => String(item.sketchId || DEFAULT_SKETCH_ID)));
     const nextVisiting = new Set(visiting).add(definition.id);
     for (const instance of definition.blockInstances || []) {
       if (blockDefinitionHasGeometry(blockDefinitionById(instance.definitionId), nextVisiting)) ids.add(String(instance.sketchId || DEFAULT_SKETCH_ID));
@@ -1164,6 +1175,38 @@
     const requested = Array.isArray(instance?.enabledSketchIds) ? instance.enabledSketchIds.map(String) : drawableIds;
     const enabled = requested.filter((id) => drawableIds.includes(id));
     return new Set(enabled.length > 0 ? enabled : blockDefinitionGeometrySketchIds(definition));
+  }
+
+  function annotationBounds(element) {
+    if (!element) return null;
+    const fontSize = Math.max(6, Number(element.style?.fontSize) || 13);
+    const textWidth = Math.max(28, String(element.text || "").length * fontSize * 0.62);
+    const textHeight = fontSize + 10;
+    const center = { x: Number(element.x) || 0, y: Number(element.y) || 0 };
+    const rotation = Number(element.rotation) || 0;
+    const cos = Math.cos(rotation);
+    const sin = Math.sin(rotation);
+    const textCorners = [
+      { x: -textWidth / 2, y: -textHeight / 2 },
+      { x: textWidth / 2, y: -textHeight / 2 },
+      { x: textWidth / 2, y: textHeight / 2 },
+      { x: -textWidth / 2, y: textHeight / 2 },
+    ].map((point) => ({
+      x: center.x + point.x * cos - point.y * sin,
+      y: center.y + point.x * sin + point.y * cos,
+    }));
+    let bounds = {
+      x1: Math.min(...textCorners.map((point) => point.x)),
+      y1: Math.min(...textCorners.map((point) => point.y)),
+      x2: Math.max(...textCorners.map((point) => point.x)),
+      y2: Math.max(...textCorners.map((point) => point.y)),
+    };
+    if (element.type === "leader") {
+      for (const point of [element.start, element.elbow, element.end]) {
+        if (point) bounds = mergeBounds(bounds, { x1: point.x, y1: point.y, x2: point.x, y2: point.y });
+      }
+    }
+    return bounds;
   }
 
   function blockLocalGeometryBounds(definition, enabledSketchIds = blockDefinitionDrawableSketchIds(definition), visiting = new Set()) {
@@ -1188,6 +1231,11 @@
           points.push({ x: arc.center.x + Math.cos(angle) * arc.radius(), y: arc.center.y + Math.sin(angle) * arc.radius() });
         }
       }
+    }
+    for (const annotation of definition.annotations || []) {
+      if (!enabled.has(String(annotation.sketchId)) || annotation.visible === false) continue;
+      const bounds = annotationBounds(annotation);
+      if (bounds) points.push({ x: bounds.x1, y: bounds.y1 }, { x: bounds.x2, y: bounds.y2 });
     }
     for (const instance of definition.blockInstances || []) {
       if (!enabled.has(String(instance.sketchId))) continue;
@@ -1292,10 +1340,47 @@
     return point;
   }
 
+  function blockProjectionAnnotationId(ownerInstance, localPath) {
+    return [String(ownerInstance.id), ...localPath.map(String)].join("/");
+  }
+
+  function createProjectedAnnotation(transform, ownerInstance, definition, localAnnotation, localPath, appearanceOverrides = []) {
+    const transformPoint = (point) => point ? blockWorldPoint(transform, point) : null;
+    const projected = {
+      ...serializeAnnotation(localAnnotation),
+      id: blockProjectionAnnotationId(ownerInstance, localPath),
+      sketchId: ownerInstance.sketchId,
+      x: blockWorldPoint(transform, { x: localAnnotation.x, y: localAnnotation.y }).x,
+      y: blockWorldPoint(transform, { x: localAnnotation.x, y: localAnnotation.y }).y,
+      start: transformPoint(localAnnotation.start),
+      elbow: transformPoint(localAnnotation.elbow),
+      end: transformPoint(localAnnotation.end),
+      rotation: (Number(localAnnotation.rotation) || 0) + (Number(transform.rotation) || 0),
+      style: { ...(localAnnotation.style || {}) },
+      blockProjection: true,
+      blockInstance: ownerInstance,
+      blockDefinition: definition,
+      localElement: localAnnotation,
+      blockLocalId: localPath.join("/"),
+      blockAppearanceOverrides: appearanceOverrides,
+    };
+    if (localAnnotation.geometryRef?.kind && Array.isArray(localAnnotation.geometryRef.path)) {
+      projected.geometryRef = createGeometryRef(localAnnotation.geometryRef.kind, [...localPath.slice(0, -1), ...localAnnotation.geometryRef.path]);
+      if (projected.geometryRef) projected.geometryRef = createGeometryRef(projected.geometryRef.kind, [String(ownerInstance.id), ...projected.geometryRef.path]);
+    }
+    for (const override of appearanceOverrides) {
+      const normalized = normalizeAppearance(override);
+      if (normalized.color) projected.style.color = normalized.color;
+      if (normalized.lineWidth != null) projected.style.lineWidth = normalized.lineWidth;
+      if (Object.prototype.hasOwnProperty.call(normalized, "visible")) projected.visible = normalized.visible !== false;
+    }
+    return projected;
+  }
+
   function createBlockProjectionBundle(instance, definition, enabledSketchIdsOverride = null, options = {}) {
-    if (!definition) return { points: [], lines: [], circles: [], arcs: [], pointByLocalId: new Map() };
+    if (!definition) return { points: [], lines: [], circles: [], arcs: [], annotations: [], pointByLocalId: new Map() };
     const visiting = options.visiting || new Set();
-    if (visiting.has(definition.id)) return { points: [], lines: [], circles: [], arcs: [], pointByLocalId: new Map() };
+    if (visiting.has(definition.id)) return { points: [], lines: [], circles: [], arcs: [], annotations: [], pointByLocalId: new Map() };
     const nextVisiting = new Set(visiting).add(definition.id);
     const ownerInstance = options.ownerInstance || instance;
     const pathPrefix = Array.isArray(options.pathPrefix) ? options.pathPrefix.map(String) : [];
@@ -1344,6 +1429,9 @@
       });
       return arc;
     });
+    const annotations = (definition.annotations || [])
+      .filter((localAnnotation) => enabledSketchIds.has(String(localAnnotation.sketchId)))
+      .map((localAnnotation) => createProjectedAnnotation(instance, ownerInstance, definition, localAnnotation, localPath(localAnnotation.id), appearanceOverrides));
     const visiblePointIds = new Set();
     for (const line of lines) visiblePointIds.add(line.p1.id).add(line.p2.id);
     for (const primitive of [...circles, ...arcs]) visiblePointIds.add(primitive.center.id);
@@ -1372,20 +1460,21 @@
       lines.push(...nestedBundle.lines);
       circles.push(...nestedBundle.circles);
       arcs.push(...nestedBundle.arcs);
+      annotations.push(...nestedBundle.annotations);
       for (const [id, point] of nestedBundle.pointByLocalId) pointByLocalId.set(id, point);
     }
-    return { definition, revision: definition.revision, sketchId: instance.sketchId, enabledSketchKey: [...enabledSketchIds].sort().join("|"), instance, points, lines, circles, arcs, pointByLocalId };
+    return { definition, revision: definition.revision, sketchId: instance.sketchId, enabledSketchKey: [...enabledSketchIds].sort().join("|"), instance, points, lines, circles, arcs, annotations, pointByLocalId };
   }
 
   function blockAllProjectionBundle(instance) {
     const definition = blockDefinitionById(instance?.definitionId);
-    if (!definition) return { points: [], lines: [], circles: [], arcs: [], pointByLocalId: new Map() };
+    if (!definition) return { points: [], lines: [], circles: [], arcs: [], annotations: [], pointByLocalId: new Map() };
     return createBlockProjectionBundle(instance, definition, blockDefinitionDrawableSketchIds(definition), { includeAllSketches: true });
   }
 
   function blockProjectionBundle(instance) {
     const definition = blockDefinitionById(instance.definitionId);
-    if (!definition) return { points: [], lines: [], circles: [], arcs: [], pointByLocalId: new Map() };
+    if (!definition) return { points: [], lines: [], circles: [], arcs: [], annotations: [], pointByLocalId: new Map() };
     const cached = blockProjectionCache.get(instance.id);
     const enabledSketchKey = [...blockInstanceEnabledSketchSet(instance, definition)].sort().join("|");
     if (cached && cached.definition === definition && cached.revision === definition.revision && cached.sketchId === instance.sketchId && cached.enabledSketchKey === enabledSketchKey) return cached;
@@ -1418,6 +1507,10 @@
 
   function allGeometryArcs() {
     return [...model.arcs, ...blockProjectionBundles().flatMap((bundle) => bundle.arcs)];
+  }
+
+  function allAnnotations() {
+    return [...model.annotations, ...blockProjectionBundles().flatMap((bundle) => bundle.annotations || [])];
   }
 
   function allGeometryPrimitives() {
@@ -1510,6 +1603,7 @@
   }
 
   function createLeaderAnnotation() {
+    if (rejectRootSketchCreation()) return;
     const target = annotationLeaderTargetFromSelection(lastPointerWorld);
     if (target) {
       startLeaderAnnotationPlacement(target, lastPointerWorld);
@@ -1546,6 +1640,7 @@
   }
 
   function annotationLeaderTargetFromItem(item, pointer = null) {
+    if (!item || elementSketchId(item) !== activeSketchId()) return null;
     if (item instanceof Point) return { item, anchor: { x: item.x, y: item.y }, geometryRef: geometryRefForItem(item) };
     if (item instanceof Line) {
       const anchor = pointer ? projectPointToSegmentPoint(pointer, item) : { x: (item.p1.x + item.p2.x) / 2, y: (item.p1.y + item.p2.y) / 2 };
@@ -1653,6 +1748,7 @@
   }
 
   function createTextAnnotation() {
+    if (rejectRootSketchCreation()) return;
     cancelPendingCommand("");
     pendingCommand = { type: "annotation-text-place", pointer: lastPointerWorld || { x: 0, y: 0 } };
     setHint("テキストを配置する位置をクリックしてください");
@@ -2712,6 +2808,7 @@
     const arcs = selectedArcs.filter((item) => !item.blockProjection);
     const points = new Set(selectedPoints.filter((item) => !item.blockProjection));
     const blockInstances = selectedBlockInstances.filter((instance) => model.blockInstances.includes(instance));
+    const annotations = selectedAnnotations.filter((annotation) => model.annotations.includes(annotation));
     for (const line of lines) {
       points.add(line.p1);
       points.add(line.p2);
@@ -2722,8 +2819,9 @@
       return [...bundle.points, ...bundle.lines, ...bundle.circles, ...bundle.arcs];
     });
     const geometry = [...points, ...lines, ...circles, ...arcs, ...blockInstances, ...projectedGeometry];
-    if (lines.length + circles.length + arcs.length + blockInstances.length === 0) return { error: "ブロック化する図形を選択してください" };
+    if (lines.length + circles.length + arcs.length + blockInstances.length + annotations.length === 0) return { error: applicationText("ブロック化する図形または注記を選択してください", "Select geometry or annotations to create a block") };
     if (!geometry.every((item) => elementSketchId(item) === activeSketchId())) return { error: "アクティブスケッチ内の図形だけをブロック化できます" };
+    if (!annotations.every((item) => item.sketchId === activeSketchId())) return { error: applicationText("アクティブスケッチ内の注記だけをブロック化できます", "Only annotations in the active sketch can be converted to a block") };
     const selectedSet = new Set(geometry);
     const selectedProjectionIds = new Set(projectedGeometry.map((item) => item.id));
     const isSelectedNode = (node) => selectedSet.has(node) || Boolean(node?.blockProjection && selectedProjectionIds.has(node.id));
@@ -2744,11 +2842,17 @@
         internalConstraints.push(constraint);
       }
     }
+    for (const annotation of annotations) {
+      if (annotation.type !== "leader") continue;
+      const referenced = resolveGeometryRef(annotation.geometryRef);
+      if (!referenced || !isSelectedNode(referenced)) return { error: applicationText(`注記 ${annotation.id} の参照先も選択してください`, `Also select the target referenced by annotation ${annotation.id}`) };
+    }
     for (const annotation of model.annotations) {
+      if (annotations.includes(annotation)) continue;
       const referenced = annotation.type === "leader" ? resolveGeometryRef(annotation.geometryRef) : null;
       if (referenced && isSelectedNode(referenced)) return { error: `注記 ${annotation.id} が選択図形を参照しています` };
     }
-    return { points: [...points], lines, circles, arcs, blockInstances, projectedGeometry, constraints: internalConstraints, externalConstraints };
+    return { points: [...points], lines, circles, arcs, annotations, blockInstances, projectedGeometry, constraints: internalConstraints, externalConstraints };
   }
 
   function cloneConstraintForBlock(constraint, pointById, lineById, primitiveById, origin = { x: 0, y: 0 }, preserveReference = false) {
@@ -2781,11 +2885,13 @@
     let bounds = null;
     for (const line of selection.lines || []) bounds = mergeBounds(bounds, lineBBox(line));
     for (const primitive of [...(selection.circles || []), ...(selection.arcs || [])]) bounds = mergeBounds(bounds, primitiveBBox(primitive));
+    for (const annotation of selection.annotations || []) bounds = mergeBounds(bounds, annotationBounds(annotation));
     for (const instance of selection.blockInstances || []) {
       const bundle = blockProjectionBundle(instance);
       for (const line of bundle.lines) bounds = mergeBounds(bounds, lineBBox(line));
       for (const primitive of [...bundle.circles, ...bundle.arcs]) bounds = mergeBounds(bounds, primitiveBBox(primitive));
       for (const point of bundle.points) bounds = mergeBounds(bounds, { x1: point.x, y1: point.y, x2: point.x, y2: point.y });
+      for (const annotation of bundle.annotations || []) bounds = mergeBounds(bounds, annotationBounds(annotation));
     }
     return bounds ? { x: (bounds.x1 + bounds.x2) / 2, y: (bounds.y1 + bounds.y2) / 2 } : { x: 0, y: 0 };
   }
@@ -2862,14 +2968,23 @@
       }
       return cloned;
     });
-    const definition = { id: `B${blockDefinitionSeq++}`, name, parentDefinitionId: null, origin: { x: 0, y: 0 }, ...sketchState, points, lines, circles, arcs, blockInstances, constraints, parameters: [], nextDimensionParameterIndex: 1, revision: 1 };
+    const annotations = (selection.annotations || []).map((source) => {
+      const cloned = serializeAnnotation(source);
+      cloned.id = source.id;
+      cloned.sketchId = DEFAULT_SKETCH_ID;
+      cloned.x -= origin.x;
+      cloned.y -= origin.y;
+      for (const key of ["start", "elbow", "end"]) if (cloned[key]) cloned[key] = { x: cloned[key].x - origin.x, y: cloned[key].y - origin.y };
+      return cloned;
+    });
+    const definition = { id: `B${blockDefinitionSeq++}`, name, parentDefinitionId: null, origin: { x: 0, y: 0 }, ...sketchState, points, lines, circles, arcs, annotations, blockInstances, constraints, parameters: [], nextDimensionParameterIndex: 1, revision: 1 };
     ensureParameterNamespace(definition);
     return definition;
   }
 
   function createEmptyBlockDefinition(name) {
     const sketchState = createBlockSketchState();
-    return { id: `B${blockDefinitionSeq++}`, name, parentDefinitionId: null, origin: { x: 0, y: 0 }, ...sketchState, points: [], lines: [], circles: [], arcs: [], blockInstances: [], constraints: [], parameters: [], nextDimensionParameterIndex: 1, revision: 1 };
+    return { id: `B${blockDefinitionSeq++}`, name, parentDefinitionId: null, origin: { x: 0, y: 0 }, ...sketchState, points: [], lines: [], circles: [], arcs: [], annotations: [], blockInstances: [], constraints: [], parameters: [], nextDimensionParameterIndex: 1, revision: 1 };
   }
 
   function cloneBlockDefinition(definition) {
@@ -2921,6 +3036,7 @@
       lines,
       circles,
       arcs,
+      annotations: normalizeAnnotations(definition.annotations, definition.activeSketchId).map((annotation) => serializeAnnotation(annotation)),
       blockInstances,
       constraints,
       parameters: (definition.parameters || []).map((parameter) => ({ name: parameter.name, expression: parameter.expression })),
@@ -3019,6 +3135,7 @@
     session.draft.lines = model.lines;
     session.draft.circles = model.circles;
     session.draft.arcs = model.arcs;
+    session.draft.annotations = model.annotations;
     session.draft.blockInstances = model.blockInstances;
     session.draft.constraints = model.constraints;
     session.draft.parameters = model.parameters;
@@ -3135,6 +3252,7 @@
       lines: model.lines,
       circles: model.circles,
       arcs: model.arcs,
+      annotations: model.annotations,
       constraints: model.constraints,
       parameters: model.parameters,
       nextDimensionParameterIndex: model.nextDimensionParameterIndex,
@@ -3144,7 +3262,7 @@
       viewport: { ...viewport },
     };
     const defaultName = `Block-${blockDefinitionSeq}`;
-    const hasGeometrySelection = selectedLines.length + selectedCircles.length + selectedArcs.length > 0;
+    const hasGeometrySelection = selectedLines.length + selectedCircles.length + selectedArcs.length + selectedAnnotations.length > 0;
     let selection = null;
     let origin = { x: 0, y: 0 };
     if (hasGeometrySelection || selectedBlockInstances.length > 0) {
@@ -3181,10 +3299,12 @@
     blockPlacementAnchor = null;
     blockPlacementEnabledSketchIds = blockDefinitionDrawableSketchIds(blockDefinitionById(definitionId));
     blockPlacementRotationLocked = true;
+    const workspace = document.querySelector(".workspace");
+    blockPlacementPropertiesWasCollapsed = Boolean(workspace?.classList.contains("properties-collapsed"));
+    if (blockPlacementPropertiesWasCollapsed) setPropertiesPanelCollapsed(false);
     pointerPreview = lastPointerWorld || { x: 0, y: 0 };
     setHint("配置する内部スケッチを選び、表示中心をクリックしてください");
-    updateToolbar();
-    updateBlockUI();
+    updateUI();
     draw();
   }
 
@@ -3193,7 +3313,7 @@
     if (!definition || !blockPlacementAnchor) return null;
     const enabledSketchIds = blockPlacementEnabledSketchIds.filter((id) => blockDefinitionDrawableSketchIds(definition).includes(id));
     if (!enabledSketchIds.some((id) => blockDefinitionGeometrySketchIds(definition).includes(id))) {
-      setHint("図形を持つ内部スケッチを1つ以上有効にしてください", "error");
+      setHint("オブジェクトを持つ内部スケッチを1つ以上有効にしてください", "error");
       return null;
     }
     const committedRotation = blockPlacementRotationLocked ? snappedBlockRotation(rotation) : rotation;
@@ -3207,6 +3327,7 @@
     blockPlacementEnabledSketchIds = [];
     pointerPreview = null;
     mode = "select";
+    restoreBlockPlacementPropertiesPanel();
     solveAndRefresh("ブロック配置");
     setHint(`${definition.name} を配置しました`);
     updateUI();
@@ -3218,7 +3339,7 @@
   function handleBlockPlacementClick(pointer) {
     if (!blockPlacementAnchor) {
       if (!blockPlacementEnabledSketchIds.some((id) => blockDefinitionGeometrySketchIds(blockDefinitionById(blockPlacementDefinitionId)).includes(id))) {
-        setHint("図形を持つ内部スケッチを1つ以上有効にしてください", "error");
+        setHint("オブジェクトを持つ内部スケッチを1つ以上有効にしてください", "error");
         return;
       }
       blockPlacementAnchor = { x: pointer.x, y: pointer.y };
@@ -3240,6 +3361,7 @@
       lines: model.lines,
       circles: model.circles,
       arcs: model.arcs,
+      annotations: model.annotations,
       constraints: model.constraints,
       parameters: model.parameters,
       nextDimensionParameterIndex: model.nextDimensionParameterIndex,
@@ -3272,6 +3394,7 @@
     model.lines = draft.lines;
     model.circles = draft.circles;
     model.arcs = draft.arcs;
+    model.annotations = draft.annotations || [];
     model.constraints = draft.constraints;
     model.parameters = draft.parameters || [];
     model.nextDimensionParameterIndex = Math.max(1, Number(draft.nextDimensionParameterIndex) || 1);
@@ -3280,11 +3403,12 @@
     model.activeSketchId = draft.activeSketchId;
     reserveGeometryElementSequences(draft);
     sketchSeq = Math.max(sketchSeq, nextSeq(draft.sketches || [], "S"));
+    annotationSeq = Math.max(annotationSeq, nextSeq(draft.annotations || [], "AN"));
     resetBlockEditorHistory();
     clearSelection();
     mode = "select";
     document.body.classList.add("block-editing");
-    if (draft.lines.length + draft.circles.length + draft.arcs.length + model.blockInstances.length > 0) fitAllGeometryToViewport();
+    if (draft.lines.length + draft.circles.length + draft.arcs.length + (draft.annotations?.length || 0) + model.blockInstances.length > 0) fitAllGeometryToViewport();
     else {
       const rect = canvas.getBoundingClientRect();
       viewport.scale = 1;
@@ -3318,7 +3442,7 @@
   }
 
   function validateBlockDraft(draft) {
-    if (draft.lines.length + draft.circles.length + draft.arcs.length + (draft.blockInstances?.length || 0) === 0) return { success: false, reason: "ブロックには図形が必要です" };
+    if (draft.lines.length + draft.circles.length + draft.arcs.length + (draft.annotations?.length || 0) + (draft.blockInstances?.length || 0) === 0) return { success: false, reason: applicationText("ブロックには図形または注記が必要です", "A block must contain geometry or annotations") };
     const outOfScopeInstance = (draft.blockInstances || []).find((instance) => blockDefinitionById(instance.definitionId)?.parentDefinitionId !== draft.id);
     if (outOfScopeInstance) return { success: false, reason: "現在のブロックに属さない子ブロックが含まれています" };
     const cycle = blockDefinitionCyclePath(draft.id);
@@ -3351,6 +3475,11 @@
     for (const instance of definition.blockInstances || []) {
       instance.x += dx;
       instance.y += dy;
+    }
+    for (const annotation of definition.annotations || []) {
+      annotation.x += dx;
+      annotation.y += dy;
+      for (const key of ["start", "elbow", "end"]) if (annotation[key]) annotation[key] = { x: annotation[key].x + dx, y: annotation[key].y + dy };
     }
   }
 
@@ -3433,6 +3562,7 @@
     target.lines = lines;
     target.circles = circles;
     target.arcs = arcs;
+    target.annotations = normalizeAnnotations(draft.annotations, draft.activeSketchId).map((annotation) => serializeAnnotation(annotation));
     target.blockInstances = blockInstances;
     target.constraints = constraints;
     target.parameters = (draft.parameters || []).map((parameter) => ({ name: parameter.name, expression: parameter.expression }));
@@ -3447,6 +3577,7 @@
     model.lines = original.lines;
     model.circles = original.circles;
     model.arcs = original.arcs;
+    model.annotations = original.annotations || [];
     model.constraints = original.constraints;
     model.parameters = original.parameters || [];
     model.nextDimensionParameterIndex = Math.max(1, Number(original.nextDimensionParameterIndex) || 1);
@@ -3487,6 +3618,7 @@
     draft.lines = model.lines;
     draft.circles = model.circles;
     draft.arcs = model.arcs;
+    draft.annotations = model.annotations;
     draft.blockInstances = model.blockInstances;
     draft.constraints = model.constraints;
     draft.parameters = model.parameters;
@@ -3537,6 +3669,7 @@
         model.circles = model.circles.filter((circle) => !creationSelection.circles.includes(circle));
         model.arcs = model.arcs.filter((arc) => !creationSelection.arcs.includes(arc));
         model.points = model.points.filter((point) => !creationSelection.points.includes(point));
+        model.annotations = model.annotations.filter((annotation) => !(creationSelection.annotations || []).includes(annotation));
         model.blockInstances = model.blockInstances.filter((instance) => !(creationSelection.blockInstances || []).includes(instance));
       }
     }
@@ -3919,7 +4052,7 @@
     selectedArcEndpointPair = null;
     selectedDimensionConstraint = null;
     selectedConstraint = null;
-    selectedAnnotation = null;
+    selectedAnnotations = [];
     selectedBlockInstances = [];
     hoveredBlockInstance = null;
     pointSeq = 1;
@@ -3935,6 +4068,7 @@
     blockPlacementAnchor = null;
     blockPlacementEnabledSketchIds = [];
     blockPlacementRotationLocked = true;
+    blockPlacementPropertiesWasCollapsed = null;
     blockEditSession = null;
     model.sketches.length = 0;
     model.sketches.push({ id: ROOT_SKETCH_ID, name: ROOT_SKETCH_NAME, parentSketchId: null, kind: "root", appearance: {}, constructionAppearance: {}, dimensionAppearance: {} });
@@ -3944,6 +4078,7 @@
     model.defaultConstructionAppearance = { ...DEFAULT_CONSTRUCTION_APPEARANCE };
     model.defaultDimensionAppearance = { ...DEFAULT_DIMENSION_APPEARANCE };
     model.annotations = [];
+    sketchTreeGroupOpenState.clear();
     annotationDragSession = null;
   }
 
@@ -4211,7 +4346,7 @@
   function serializeModel() {
     ensureModelState();
     return {
-      version: 10,
+      version: 11,
       savedAt: new Date().toISOString(),
       documentName: effectiveDocumentName(),
       defaultAppearance: normalizeAppearance(model.defaultAppearance, { partial: false }),
@@ -4252,6 +4387,7 @@
         lines: definition.lines.map((line) => ({ id: line.id, p1: line.p1.id, p2: line.p2.id, construction: Boolean(line.construction), sketchId: line.sketchId, appearance: normalizeAppearance(line.appearance) })),
         circles: definition.circles.map((circle) => ({ id: circle.id, center: circle.center.id, radius: circle.radius(), construction: Boolean(circle.construction), sketchId: circle.sketchId, appearance: normalizeAppearance(circle.appearance) })),
         arcs: definition.arcs.map((arc) => ({ id: arc.id, center: arc.center.id, radius: arc.radius(), startAngle: arc.startAngle, endAngle: arc.endAngle, construction: Boolean(arc.construction), sketchId: arc.sketchId, appearance: normalizeAppearance(arc.appearance) })),
+        annotations: normalizeAnnotations(definition.annotations, definition.activeSketchId).map(serializeAnnotation),
         blockInstances: (definition.blockInstances || []).map((instance) => ({
           id: instance.id,
           definitionId: instance.definitionId,
@@ -4320,6 +4456,7 @@
       lines: model.lines,
       circles: model.circles,
       arcs: model.arcs,
+      annotations: model.annotations,
       blockInstances: model.blockInstances,
       constraints: model.constraints,
       parameters: model.parameters,
@@ -4343,6 +4480,7 @@
       lines: definition.lines.map((line) => ({ id: line.id, p1: line.p1.id, p2: line.p2.id, construction: Boolean(line.construction), sketchId: line.sketchId })),
       circles: definition.circles.map((circle) => ({ id: circle.id, center: circle.center.id, radius: circle.radius(), construction: Boolean(circle.construction), sketchId: circle.sketchId })),
       arcs: definition.arcs.map((arc) => ({ id: arc.id, center: arc.center.id, radius: arc.radius(), startAngle: arc.startAngle, endAngle: arc.endAngle, construction: Boolean(arc.construction), sketchId: arc.sketchId })),
+      annotations: normalizeAnnotations(definition.annotations, definition.activeSketchId).map(serializeAnnotation),
       blockInstances: (definition.blockInstances || []).map((instance) => ({
         id: instance.id,
         definitionId: instance.definitionId,
@@ -4433,7 +4571,7 @@
     const documentNameBeforeRestore = model.documentName;
     historyRestoring = true;
     try {
-      loadModelData(JSON.parse(snapshot), { documentNameFallback: documentNameBeforeRestore });
+      loadModelData(JSON.parse(snapshot), { documentNameFallback: documentNameBeforeRestore, preserveSketchTreeGroups: true });
       model.documentName = documentNameBeforeRestore;
       constructionLineMode = constructionModeBeforeRestore;
       clearInteractionForSketchChange();
@@ -4455,6 +4593,7 @@
       model.lines = restored.lines;
       model.circles = restored.circles;
       model.arcs = restored.arcs;
+      model.annotations = restored.annotations || [];
       model.constraints = restored.constraints;
       model.parameters = restored.parameters || [];
       model.nextDimensionParameterIndex = Math.max(1, Number(restored.nextDimensionParameterIndex) || 1);
@@ -4463,6 +4602,7 @@
       model.activeSketchId = restored.activeSketchId;
       reserveGeometryElementSequences(restored);
       sketchSeq = Math.max(sketchSeq, nextSeq(restored.sketches || [], "S"));
+      annotationSeq = Math.max(annotationSeq, nextSeq(restored.annotations || [], "AN"));
       invalidateBlockProjectionCache();
       clearInteractionForSketchChange();
       solveAndRefresh(label);
@@ -4576,6 +4716,7 @@
     lastLoadBlockConstraintRepairMessage = "";
     const sourceVersion = Number(data.version) || 1;
     const loadedDocumentName = effectiveDocumentNameFromValue(options.documentNameOverride || data.documentName || options.documentNameFallback || DEFAULT_DOCUMENT_NAME);
+    const preservedSketchTreeGroups = options.preserveSketchTreeGroups ? new Map(sketchTreeGroupOpenState) : null;
 
     let loadedSketches =
       Array.isArray(data.sketches) && data.sketches.length > 0
@@ -4717,6 +4858,14 @@
         lines,
         circles,
         arcs,
+        annotations: (() => {
+          const rawAnnotations = Array.isArray(rawDefinition.annotations) ? rawDefinition.annotations : [];
+          if (sourceVersion >= 11) {
+            const invalid = rawAnnotations.find((annotation) => annotation?.sketchId === ROOT_SKETCH_ID || !definitionSketchIds.has(String(annotation?.sketchId || "")));
+            if (invalid) throw new Error(`${applicationText("ブロック注記", "Block annotation")} ${invalid?.id || "?"}: ${applicationText("所属Sketchが正しくありません", "invalid owning sketch")}`);
+          }
+          return normalizeAnnotations(rawAnnotations, normalizeDefinitionSketchId(rawDefinition.activeSketchId));
+        })(),
         blockInstances: [],
         constraints: [],
         revision: Number(rawDefinition.revision) || 0,
@@ -4732,13 +4881,13 @@
     const loadedDefinitionById = (definitionId) => loadedBlockDefinitions.find((definition) => definition.id === definitionId) || null;
     const loadedDefinitionHasGeometry = (definition, visiting = new Set()) => {
       if (!definition || visiting.has(definition.id)) return false;
-      if (definition.lines.length + definition.circles.length + definition.arcs.length > 0) return true;
+      if (definition.lines.length + definition.circles.length + definition.arcs.length + definition.annotations.length > 0) return true;
       const next = new Set(visiting).add(definition.id);
       return definition.blockInstances.some((instance) => loadedDefinitionHasGeometry(loadedDefinitionById(instance.definitionId), next));
     };
     const loadedDefinitionGeometrySketchIds = (definition) => {
       if (!definition) return [];
-      const ids = new Set([...definition.lines, ...definition.circles, ...definition.arcs].map((item) => String(item.sketchId)));
+      const ids = new Set([...definition.lines, ...definition.circles, ...definition.arcs, ...definition.annotations].map((item) => String(item.sketchId)));
       for (const instance of definition.blockInstances) if (loadedDefinitionHasGeometry(loadedDefinitionById(instance.definitionId))) ids.add(String(instance.sketchId));
       return blockDefinitionDrawableSketchIds(definition).filter((id) => ids.has(id));
     };
@@ -4813,6 +4962,35 @@
         const nestedDefinition = loadedDefinitionById(instance.definitionId);
         addBlockProjectionElementsToMaps(createBlockProjectionBundle(instance, nestedDefinition, null, { definitionResolver: loadedDefinitionById }), pointById, lineById, primitiveById);
       }
+      if (sourceVersion >= 11) {
+        for (const annotation of definition.annotations) {
+          if (annotation.type !== "leader") continue;
+          const referenced = resolveGeometryRefValue(annotation.geometryRef, (kind, canonicalId) => {
+            if (kind === "point") return pointById.get(canonicalId) || null;
+            if (kind === "line") return lineById.get(canonicalId) || null;
+            if (kind === "circle" || kind === "arc") return primitiveById.get(canonicalId) || null;
+            return null;
+          });
+          if (!referenced || elementSketchId(referenced) !== annotation.sketchId) {
+            throw new Error(`${applicationText("ブロック引出線", "Block leader")} ${annotation.id}: ${applicationText("参照先は同じ所属Sketchに必要です", "target must belong to the same sketch")}`);
+          }
+        }
+      }
+      if (sourceVersion < 11) {
+        for (const annotation of definition.annotations) {
+          if (annotation.type !== "leader") {
+            annotation.sketchId = definition.activeSketchId;
+            continue;
+          }
+          const referenced = resolveGeometryRefValue(annotation.geometryRef, (kind, canonicalId) => {
+            if (kind === "point") return pointById.get(canonicalId) || null;
+            if (kind === "line") return lineById.get(canonicalId) || null;
+            if (kind === "circle" || kind === "arc") return primitiveById.get(canonicalId) || null;
+            return null;
+          });
+          annotation.sketchId = referenced?.sketchId || definition.activeSketchId;
+        }
+      }
       definition.constraints = (meta.rawDefinition.constraints || []).map((rawConstraint) => {
         let constraint = null;
         try {
@@ -4855,7 +5033,7 @@
       const enabled = Array.isArray(instance.enabledSketchIds) ? instance.enabledSketchIds.filter((id) => drawableIds.includes(id)) : drawableIds;
       instance.enabledSketchIds = enabled.length > 0 ? [...new Set(enabled)] : loadedDefinitionGeometrySketchIds(definition);
     }
-    const loadedAnnotations = normalizeAnnotations(data.annotations);
+    const rawLoadedAnnotations = Array.isArray(data.annotations) ? data.annotations : [];
 
     const pointById = new Map();
     const points = [];
@@ -4946,6 +5124,33 @@
       for (const primitive of [...bundle.circles, ...bundle.arcs]) primitiveById.set(primitive.id, primitive);
     }
 
+    if (sourceVersion >= 11) {
+      const invalidAnnotation = rawLoadedAnnotations.find((annotation) => annotation?.sketchId === ROOT_SKETCH_ID || !loadedSketchIds.has(String(annotation?.sketchId || "")));
+      if (invalidAnnotation) throw new Error(`${applicationText("注記", "Annotation")} ${invalidAnnotation?.id || "?"}: ${applicationText("所属Sketchが正しくありません", "invalid owning sketch")}`);
+    }
+    const loadedAnnotationFallback = normalizeSketchId(data.activeSketchId);
+    const loadedAnnotations = normalizeAnnotations(rawLoadedAnnotations, loadedAnnotationFallback);
+    const resolveLoadedGeometryRef = (ref) => resolveGeometryRefValue(ref, (kind, canonicalId) => {
+      if (kind === "point") return pointById.get(canonicalId) || null;
+      if (kind === "line") return lineById.get(canonicalId) || null;
+      if (kind === "circle" || kind === "arc") return primitiveById.get(canonicalId) || null;
+      return null;
+    });
+    if (sourceVersion >= 11) {
+      for (const annotation of loadedAnnotations) {
+        if (annotation.type !== "leader") continue;
+        const referenced = resolveLoadedGeometryRef(annotation.geometryRef);
+        if (!referenced || elementSketchId(referenced) !== annotation.sketchId) {
+          throw new Error(`${applicationText("引出線", "Leader")} ${annotation.id}: ${applicationText("参照先は同じ所属Sketchに必要です", "target must belong to the same sketch")}`);
+        }
+      }
+    } else {
+      for (const annotation of loadedAnnotations) {
+        const referenced = annotation.type === "leader" ? resolveLoadedGeometryRef(annotation.geometryRef) : null;
+        annotation.sketchId = referenced && referenced.sketchId !== ROOT_SKETCH_ID ? referenced.sketchId : loadedAnnotationFallback;
+      }
+    }
+
     const constraints = [];
     for (const c of data.constraints) {
       const constraint = deserializeConstraint(c, pointById, lineById, primitiveById);
@@ -4970,6 +5175,10 @@
     });
 
     resetModelState();
+    if (preservedSketchTreeGroups) {
+      sketchTreeGroupOpenState.clear();
+      for (const [key, value] of preservedSketchTreeGroups) sketchTreeGroupOpenState.set(key, value);
+    }
     model.documentName = loadedDocumentName;
     model.sketches.length = 0;
     model.sketches.push(...loadedSketches);
@@ -5011,7 +5220,7 @@
       nextSeq(model.sketches, "S"),
       ...model.blockDefinitions.map((definition) => nextSeq(definition.sketches || [], "S")),
     );
-    annotationSeq = nextSeq(model.annotations, "AN");
+    annotationSeq = Math.max(nextSeq(model.annotations, "AN"), ...model.blockDefinitions.map((definition) => nextSeq(definition.annotations || [], "AN")));
     blockDefinitionSeq = nextSeq(model.blockDefinitions, "B");
     blockInstanceSeq = nextSeq([...model.blockInstances, ...model.blockDefinitions.flatMap((definition) => definition.blockInstances || [])], "BI");
     blockElementSeq = Math.max(1, ...model.blockDefinitions.flatMap((definition) => [...definition.points, ...definition.lines, ...definition.circles, ...definition.arcs].map((element) => Number(/^[PLCA](\d+)$/.exec(element.id || "")?.[1]) + 1 || 1)));
@@ -5103,7 +5312,7 @@
     selectedArcEndpointPair = null;
     selectedDimensionConstraint = null;
     selectedConstraint = null;
-    selectedAnnotation = null;
+    selectedAnnotations = [];
     constraintOperands = [];
     hoveredSketchIdentity = null;
     hoveredBlockInstance = null;
@@ -5303,14 +5512,18 @@
     draw();
   }
 
-  function setWorkspacePanelCollapsed(side, collapsed) {
+  function restoreBlockPlacementPropertiesPanel() {
+    if (blockPlacementPropertiesWasCollapsed) setPropertiesPanelCollapsed(true);
+    blockPlacementPropertiesWasCollapsed = null;
+  }
+
+  function setPropertiesPanelCollapsed(collapsed) {
     const workspace = document.querySelector(".workspace");
-    const button = document.getElementById(side === "explorer" ? "toggleExplorerPanelBtn" : "togglePropertiesPanelBtn");
+    const button = document.getElementById("togglePropertiesPanelBtn");
     if (!workspace || !button) return;
     const centerWorld = currentCanvasCenterWorld();
-    const className = `${side}-collapsed`;
-    const label = side === "explorer" ? applicationText("エクスプローラー", "Explorer") : applicationText("プロパティ", "Properties");
-    workspace.classList.toggle(className, collapsed);
+    const label = applicationText("プロパティ", "Properties");
+    workspace.classList.toggle("properties-collapsed", collapsed);
     button.setAttribute("aria-expanded", String(!collapsed));
     const actionLabel = applicationLanguage === "en" ? `${collapsed ? "Expand" : "Collapse"} ${label}` : `${label}を${collapsed ? "展開" : "最小化"}`;
     button.setAttribute("aria-label", actionLabel);
@@ -5529,6 +5742,7 @@
     for (const point of allGeometryPoints()) {
       if (elementSketchId(point) === sketchId) bounds = mergeBounds(bounds, { x1: point.x, y1: point.y, x2: point.x, y2: point.y });
     }
+    for (const annotation of allAnnotations()) if (annotation.sketchId === sketchId) bounds = mergeBounds(bounds, annotationBounds(annotation));
     return bounds;
   }
 
@@ -5538,6 +5752,7 @@
     for (const circle of allGeometryCircles()) bounds = mergeBounds(bounds, primitiveBBox(circle));
     for (const arc of allGeometryArcs()) bounds = mergeBounds(bounds, primitiveBBox(arc));
     for (const point of allGeometryPoints()) bounds = mergeBounds(bounds, { x1: point.x, y1: point.y, x2: point.x, y2: point.y });
+    for (const annotation of allAnnotations()) bounds = mergeBounds(bounds, annotationBounds(annotation));
     return bounds;
   }
 
@@ -5559,6 +5774,7 @@
     for (const point of allGeometryPoints()) {
       if (isVisibleOnCanvasGeometry(point)) bounds = mergeBounds(bounds, { x1: point.x, y1: point.y, x2: point.x, y2: point.y });
     }
+    for (const annotation of allAnnotations()) if (annotation.visible !== false && isVisibleSketchId(annotation.sketchId)) bounds = mergeBounds(bounds, annotationBounds(annotation));
     return bounds;
   }
 
@@ -6234,6 +6450,10 @@
       if (bundle.lines.some((line) => distancePointToSegment(x, y, line) <= threshold)) return instance;
       if (bundle.circles.some((circle) => Math.abs(hypot2(x - circle.center.x, y - circle.center.y) - circle.radius()) <= threshold)) return instance;
       if (bundle.arcs.some((arc) => Math.abs(hypot2(x - arc.center.x, y - arc.center.y) - arc.radius()) <= threshold && angleOnSignedSweep(Math.atan2(y - arc.center.y, x - arc.center.x), arc.startAngle, arc.endAngle))) return instance;
+      if ((bundle.annotations || []).some((annotation) => {
+        const bounds = annotationBounds(annotation);
+        return bounds && x >= bounds.x1 - threshold && x <= bounds.x2 + threshold && y >= bounds.y1 - threshold && y <= bounds.y2 + threshold;
+      })) return instance;
     }
     return null;
   }
@@ -7319,6 +7539,11 @@
     model.circles = model.circles.filter((c) => !circleSet.has(c));
     model.arcs = model.arcs.filter((a) => !arcSet.has(a));
     model.points = model.points.filter((p) => !pointSet.has(p));
+    const removedGeometry = [...pointSet, ...lineSet, ...circleSet, ...arcSet];
+    const removedIds = new Set(removedGeometry.map((item) => item.id));
+    const removedKeys = new Set(removedGeometry.map(geometryElementKey).filter(Boolean));
+    model.annotations = model.annotations.filter((annotation) => !annotationReferencesRemovedGeometry(annotation, removedIds, removedKeys));
+    selectedAnnotations = selectedAnnotations.filter((annotation) => model.annotations.includes(annotation));
     selectedPoints = selectedPoints.filter((p) => !pointSet.has(p));
     selectedLines = selectedLines.filter((l) => !lineSet.has(l));
     selectedCircles = selectedCircles.filter((c) => !circleSet.has(c));
@@ -7340,15 +7565,10 @@
   }
 
   function deleteCurrentSelection() {
-    if (selectedAnnotation) {
-      const id = selectedAnnotation.id;
-      model.annotations = model.annotations.filter((item) => item !== selectedAnnotation);
-      selectedAnnotation = null;
-      updateUI();
-      draw();
-      setHint(`注記 ${id} を削除しました`);
-      recordHistory("注記削除");
-      return true;
+    const annotationsToDelete = selectedAnnotations.filter((annotation) => model.annotations.includes(annotation));
+    if (annotationsToDelete.length > 0) {
+      model.annotations = model.annotations.filter((item) => !annotationsToDelete.includes(item));
+      selectedAnnotations = [];
     }
     let deletedBlockCount = 0;
     if (selectedBlockInstances.length > 0) {
@@ -7371,10 +7591,15 @@
     const constraints = [...new Set([selectedDimensionConstraint, effectiveSelectedConstraint()].filter(Boolean))];
     const deletedGeometry = deleteElements({ points: selectedPoints, lines: selectedLines, circles: selectedCircles, arcs: selectedArcs, constraints });
     if (deletedGeometry) return true;
-    if (deletedBlockCount === 0) return false;
+    if (deletedBlockCount === 0 && annotationsToDelete.length === 0) return false;
     clearSelection();
-    solveAndRefresh("ブロックインスタンス削除");
-    setHint(`ブロックインスタンスを${deletedBlockCount}個削除しました`);
+    if (deletedBlockCount > 0) solveAndRefresh("ブロック削除");
+    else {
+      updateUI();
+      draw();
+      recordHistory("注記削除");
+    }
+    setHint(applicationText(`削除しました: ブロック${deletedBlockCount} / 注記${annotationsToDelete.length}`, `Deleted: blocks ${deletedBlockCount} / annotations ${annotationsToDelete.length}`));
     return true;
   }
 
@@ -7384,6 +7609,7 @@
     const circles = selectedCircles.filter((circle) => model.circles.includes(circle));
     const arcs = selectedArcs.filter((arc) => model.arcs.includes(arc));
     const blockInstances = selectedBlockInstances.filter((instance) => model.blockInstances.includes(instance));
+    const annotations = selectedAnnotations.filter((annotation) => model.annotations.includes(annotation));
     const dependentPoints = new Set();
     for (const line of lines) {
       points.add(line.p1);
@@ -7395,7 +7621,7 @@
       points.add(primitive.center);
       dependentPoints.add(primitive.center);
     }
-    if (points.size + lines.length + circles.length + arcs.length + blockInstances.length === 0) return null;
+    if (points.size + lines.length + circles.length + arcs.length + blockInstances.length + annotations.length === 0) return null;
 
     const selectedNodes = new Set([...points, ...lines, ...circles, ...arcs, ...blockInstances]);
     const selectedBlockProjectionIds = new Set();
@@ -7413,6 +7639,14 @@
         circles: bundle.circles.map((item) => ({ id: item.id, localId: blockProjectionLocalId(item) })),
         arcs: bundle.arcs.map((item) => ({ id: item.id, localId: blockProjectionLocalId(item) })),
       });
+    }
+    for (const annotation of annotations) {
+      if (annotation.type !== "leader") continue;
+      const referenced = resolveGeometryRef(annotation.geometryRef);
+      if (!referenced || (!selectedNodes.has(referenced) && !selectedBlockProjectionIds.has(referenced.id))) {
+        setHint(applicationText(`注記 ${annotation.id} の参照先も選択してください`, `Also select the target referenced by annotation ${annotation.id}`), "error");
+        return null;
+      }
     }
 
     const constraints = model.constraints.map((constraint) => {
@@ -7450,19 +7684,21 @@
         appearanceOverride: normalizeAppearance(instance.appearanceOverride),
         projection: blockProjectionData.get(instance),
       })),
+      annotations: annotations.map(serializeAnnotation),
       selection: {
         points: selectedPoints.filter((point) => points.has(point)).map((point) => point.id),
         lines: lines.map((line) => line.id),
         circles: circles.map((circle) => circle.id),
         arcs: arcs.map((arc) => arc.id),
         blockInstances: blockInstances.map((instance) => instance.id),
+        annotations: annotations.map((annotation) => annotation.id),
       },
     };
   }
 
   function clipboardPayloadCount(payload = geometryClipboard) {
     if (!payload) return 0;
-    return payload.points.length + payload.lines.length + payload.circles.length + payload.arcs.length + payload.blockInstances.length;
+    return payload.points.length + payload.lines.length + payload.circles.length + payload.arcs.length + payload.blockInstances.length + (payload.annotations?.length || 0);
   }
 
   function copySelectionToClipboard(options = {}) {
@@ -7566,8 +7802,9 @@
       arcs: model.arcs.length,
       constraints: model.constraints.length,
       blockInstances: model.blockInstances.length,
+      annotations: model.annotations.length,
     };
-    const initialSequences = { pointSeq, lineSeq, circleSeq, arcSeq, blockInstanceSeq, nextDimensionParameterIndex: model.nextDimensionParameterIndex };
+    const initialSequences = { pointSeq, lineSeq, circleSeq, arcSeq, annotationSeq, blockInstanceSeq, nextDimensionParameterIndex: model.nextDimensionParameterIndex };
 
     try {
       const idMap = new Map();
@@ -7630,6 +7867,19 @@
       }
       if (pastedBlockInstances.length > 0) invalidateBlockProjectionCache();
       payload.blockInstances.forEach((source, index) => mapClipboardBlockProjection(source, pastedBlockInstances[index], idMap, pointById, lineById, primitiveById));
+      const pastedAnnotations = [];
+      for (const source of payload.annotations || []) {
+        const annotation = serializeAnnotation(source);
+        annotation.id = `AN${annotationSeq++}`;
+        annotation.sketchId = targetSketchId;
+        annotation.x += dx;
+        annotation.y += dy;
+        for (const key of ["start", "elbow", "end"]) if (annotation[key]) annotation[key] = { x: annotation[key].x + dx, y: annotation[key].y + dy };
+        if (annotation.geometryRef) annotation.geometryRef = remapClipboardValue(annotation.geometryRef, idMap);
+        model.annotations.push(annotation);
+        pastedAnnotations.push(annotation);
+        idMap.set(source.id, annotation.id);
+      }
 
       const targetNamespaceKey = currentBlockDefinitionScopeId() ? `block:${currentBlockDefinitionScopeId()}` : "document";
       const sameNamespace = payload.parameterNamespaceKey === targetNamespaceKey;
@@ -7667,6 +7917,7 @@
       selectedCircles = selectedIds.circles.map((id) => primitiveById.get(idMap.get(id))).filter((item) => item instanceof Circle);
       selectedArcs = selectedIds.arcs.map((id) => primitiveById.get(idMap.get(id))).filter((item) => item instanceof Arc);
       selectedBlockInstances = pastedBlockInstances;
+      selectedAnnotations = (selectedIds.annotations || []).map((id) => pastedAnnotations.find((annotation) => annotation.id === idMap.get(id))).filter(Boolean);
       payload.pasteCount = pasteNumber;
       mode = "select";
       solveAndRefresh("貼り付け");
@@ -7679,11 +7930,13 @@
       model.arcs.length = initialLengths.arcs;
       model.constraints.length = initialLengths.constraints;
       model.blockInstances.length = initialLengths.blockInstances;
+      model.annotations.length = initialLengths.annotations;
       pointSeq = initialSequences.pointSeq;
       lineSeq = initialSequences.lineSeq;
       circleSeq = initialSequences.circleSeq;
       arcSeq = initialSequences.arcSeq;
       blockInstanceSeq = initialSequences.blockInstanceSeq;
+      annotationSeq = initialSequences.annotationSeq;
       model.nextDimensionParameterIndex = initialSequences.nextDimensionParameterIndex;
       invalidateBlockProjectionCache();
       clearSelection();
@@ -7803,6 +8056,7 @@
     const nextCircles = additive ? [...selectedCircles] : [];
     const nextArcs = additive ? [...selectedArcs] : [];
     const nextBlocks = additive ? [...selectedBlockInstances] : [];
+    const nextAnnotations = additive ? [...selectedAnnotations] : [];
 
     for (const p of model.points) {
       if (!selectableSketchElement(p)) continue;
@@ -7836,9 +8090,17 @@
       for (const circle of bundle.circles) box = mergeBounds(box, primitiveBBox(circle));
       for (const arc of bundle.arcs) box = mergeBounds(box, primitiveBBox(arc));
       for (const point of bundle.points) box = mergeBounds(box, { x1: point.x, y1: point.y, x2: point.x, y2: point.y });
+      for (const annotation of bundle.annotations || []) box = mergeBounds(box, annotationBounds(annotation));
       if (!box) continue;
       const selected = crossing ? bboxIntersectsRect(box, rect) : bboxInRect(box, rect);
       if (selected) addUnique(nextBlocks, instance);
+    }
+    for (const annotation of model.annotations) {
+      if (annotation.sketchId !== activeSketchId() || annotation.visible === false || !isVisibleSketchId(annotation.sketchId)) continue;
+      const box = annotationBounds(annotation);
+      if (!box) continue;
+      const selected = crossing ? bboxIntersectsRect(box, rect) : bboxInRect(box, rect);
+      if (selected) addUnique(nextAnnotations, annotation);
     }
 
     selectedPoints = nextPoints;
@@ -7846,6 +8108,7 @@
     selectedCircles = nextCircles;
     selectedArcs = nextArcs;
     selectedBlockInstances = nextBlocks;
+    selectedAnnotations = nextAnnotations;
     selectedArcEndpoint = null;
     selectedArcEndpointPair = null;
     selectedDimensionConstraint = null;
@@ -7906,6 +8169,11 @@
         ctx.beginPath();
         ctx.arc(arc.center.x, arc.center.y, arc.radius(), arc.startAngle, arc.endAngle, arc.endAngle < arc.startAngle);
         ctx.stroke();
+      }
+      for (const annotation of bundle.annotations || []) {
+        const preview = { ...annotation, style: { ...annotation.style, color: "#2563eb" } };
+        if (preview.type === "leader") drawAnnotationLeader(preview, true);
+        else drawAnnotationText(preview);
       }
     });
   }
@@ -8522,8 +8790,8 @@
   }
 
   function drawAnnotations() {
-    for (const element of model.annotations) {
-      if (element.visible === false) continue;
+    for (const element of allAnnotations()) {
+      if (element.visible === false || !isVisibleSketchId(element.sketchId)) continue;
       if (element.type === "leader") drawAnnotationLeader(element);
       else if (element.type === "text") drawAnnotationText(element);
     }
@@ -8532,10 +8800,12 @@
   function drawAnnotationText(element) {
     ctx.save();
     ctx.font = `${Number(element.style?.fontSize || 13) / viewport.scale}px system-ui`;
-    ctx.fillStyle = element === selectedAnnotation ? "#2563eb" : element === hoveredAnnotation ? "#0ea5e9" : element.style?.color || "#111827";
+    ctx.fillStyle = selectedAnnotations.includes(element) ? "#2563eb" : element === hoveredAnnotation ? "#0ea5e9" : element.style?.color || "#111827";
     ctx.textAlign = "left";
     ctx.textBaseline = "middle";
-    ctx.fillText(element.text || "", element.x, element.y);
+    ctx.translate(element.x, element.y);
+    ctx.rotate(Number(element.rotation) || 0);
+    ctx.fillText(element.text || "", 0, 0);
     ctx.restore();
   }
 
@@ -8548,7 +8818,7 @@
       y: element.end.y,
     };
     withCanvasState(() => {
-      const color = element === selectedAnnotation ? "#2563eb" : element === hoveredAnnotation ? "#0ea5e9" : element.style?.color || "#111827";
+      const color = selectedAnnotations.includes(element) ? "#2563eb" : element === hoveredAnnotation ? "#0ea5e9" : element.style?.color || "#111827";
       ctx.strokeStyle = color;
       ctx.fillStyle = color;
       ctx.lineWidth = Number(element.style?.lineWidth || 1.4) / viewport.scale;
@@ -8582,6 +8852,16 @@
     return x >= box.left - padding && x <= box.right + padding && y >= box.top - padding && y <= box.bottom + padding;
   }
 
+  function pointInAnnotationTextBox(x, y, element, padding = 0) {
+    const rotation = -(Number(element?.rotation) || 0);
+    const dx = x - (Number(element?.x) || 0);
+    const dy = y - (Number(element?.y) || 0);
+    const localX = dx * Math.cos(rotation) - dy * Math.sin(rotation) + (Number(element?.x) || 0);
+    const localY = dx * Math.sin(rotation) + dy * Math.cos(rotation) + (Number(element?.y) || 0);
+    const fontSize = Number(element?.style?.fontSize || 13) / viewport.scale;
+    return pointInExpandedBox(localX, localY, textHitBox(element?.text, element?.x, element?.y, fontSize), padding);
+  }
+
   function boxFromPoints(points) {
     const valid = points.filter((p) => p && Number.isFinite(p.x) && Number.isFinite(p.y));
     if (valid.length === 0) return null;
@@ -8595,20 +8875,22 @@
 
   function hitAnnotationElement(x, y) {
     const threshold = 12 / viewport.scale;
-    for (let i = model.annotations.length - 1; i >= 0; i--) {
-      const element = model.annotations[i];
-      if (!element || element.visible === false) continue;
+    const annotations = allAnnotations();
+    for (let i = annotations.length - 1; i >= 0; i--) {
+      const element = annotations[i];
+      if (!element || element.visible === false || !isVisibleSketchId(element.sketchId)) continue;
+      if (!element.blockProjection && element.sketchId !== activeSketchId()) continue;
       if (element.type === "leader") {
         const start = annotationLeaderAnchor(element);
         if (!start || !element.end) continue;
         const elbow = element.elbow || { x: (start.x + element.end.x) / 2, y: element.end.y };
         if (distancePointToSegmentPoints(x, y, start, elbow) <= threshold * 2.2 || distancePointToSegmentPoints(x, y, elbow, element.end) <= threshold * 2.2) return { element, type: "leader", part: "line" };
-        if (pointInExpandedBox(x, y, textHitBox(element.text, element.x, element.y, Number(element.style?.fontSize || 13) / viewport.scale), threshold)) return { element, type: "leader", part: "label" };
+        if (pointInAnnotationTextBox(x, y, element, threshold)) return { element, type: "leader", part: "label" };
         if (hypot2(x - element.x, y - element.y) <= threshold * 3) return { element, type: "leader", part: "label" };
         const leaderBox = boxFromPoints([start, elbow, element.end, { x: element.x, y: element.y }]);
         if (leaderBox && pointInExpandedBox(x, y, leaderBox, threshold * 2.2)) return { element, type: "leader", part: "line" };
       } else if (element.type === "text") {
-        if (pointInExpandedBox(x, y, textHitBox(element.text, element.x, element.y, Number(element.style?.fontSize || 13) / viewport.scale), threshold)) return { element, type: "text", part: "label" };
+        if (pointInAnnotationTextBox(x, y, element, threshold)) return { element, type: "text", part: "label" };
       }
     }
     return null;
@@ -8628,7 +8910,7 @@
       startElbow: hit.element?.elbow ? { ...hit.element.elbow } : null,
       startText: hit.element ? { x: hit.element.x, y: hit.element.y } : null,
     };
-    selectedAnnotation = hit.element;
+    selectedAnnotations = [hit.element];
     canvas.setPointerCapture(e.pointerId);
     canvas.classList.add("is-dragging");
     setHint(hit.type === "leader" ? "引出線を移動中" : "テキストを移動中");
@@ -10173,7 +10455,7 @@
     model.blockInstances = model.blockInstances.filter((instance) => !blockInstancesToRemove.includes(instance));
     invalidateBlockProjectionCache();
 
-    model.annotations = model.annotations.filter((annotation) => !annotationReferencesRemovedGeometry(annotation, removedIds, removedKeys));
+    model.annotations = model.annotations.filter((annotation) => !sketchIds.has(annotation.sketchId) && !annotationReferencesRemovedGeometry(annotation, removedIds, removedKeys));
 
     const fallbackId = sketch.parentSketchId && !sketchIds.has(sketch.parentSketchId) ? sketch.parentSketchId : ROOT_SKETCH_ID;
     model.sketches = model.sketches.filter((item) => !sketchIds.has(item.id));
@@ -10191,87 +10473,304 @@
     return true;
   }
 
+  function sketchTreeScopeKey() {
+    return blockEditSession?.draft?.id ? `block:${blockEditSession.draft.id}` : "document";
+  }
+
+  function sketchTreeGroupKey(sketchId, category) {
+    return `${sketchTreeScopeKey()}|${sketchId}|${category}`;
+  }
+
+  function sketchTreeGutter(segments) {
+    return segments.length ? `<span class="sketch-tree-gutter" aria-hidden="true">${segments.map((segment) => `<span class="tree-segment ${segment}"></span>`).join("")}</span>` : "";
+  }
+
+  function toolbarSvgMarkup(selector) {
+    const svg = document.querySelector(selector)?.querySelector("svg");
+    return svg ? svg.outerHTML.replace("<svg", '<svg class="sketch-object-icon"') : "";
+  }
+
+  function constraintToolbarIcon(constraint, fixedPoint = false) {
+    if (fixedPoint || constraint instanceof LineFixedConstraint || constraint instanceof ArcEndpointFixedConstraint) return toolbarSvgMarkup("#fixPointBtn");
+    if (isDimensionConstraint(constraint)) return toolbarSvgMarkup('[data-constraint="distance"]');
+    const name = String(constraint?.name || "");
+    const mappings = [
+      [/水平/, "horizontal"], [/垂直/, "vertical"], [/平行/, "parallel"], [/直角/, "perpendicular"], [/対称/, "symmetry"],
+      [/同心/, "concentric"], [/等寸/, "equal"], [/接線/, "tangent"], [/一致|中点|円周/, "coincident"],
+    ];
+    const type = mappings.find(([pattern]) => pattern.test(name))?.[1] || "coincident";
+    return toolbarSvgMarkup(`[data-constraint="${type}"]`);
+  }
+
+  function sketchTreeObjectIndex() {
+    const index = new Map(model.sketches.map((sketch) => [sketch.id, { point: [], line: [], circle: [], arc: [], block: [], constraint: [], annotation: [] }]));
+    const group = (sketchId, category) => index.get(sketchId)?.[category];
+    for (const point of model.points) if ((isExplicitPoint(point) || isPointUsedByLine(point)) && group(elementSketchId(point), "point")) group(elementSketchId(point), "point").push(point);
+    for (const line of model.lines) group(elementSketchId(line), "line")?.push(line);
+    for (const circle of model.circles) group(elementSketchId(circle), "circle")?.push(circle);
+    for (const arc of model.arcs) group(elementSketchId(arc), "arc")?.push(arc);
+    for (const block of model.blockInstances) group(block.sketchId, "block")?.push(block);
+    model.constraints.forEach((constraint, modelIndex) => group(constraintSketchId(constraint), "constraint")?.push({ kind: "constraint", constraint, modelIndex }));
+    for (const point of model.points.filter((item) => item.fixed)) group(elementSketchId(point), "constraint")?.push({ kind: "fixed-point", point });
+    for (const annotation of model.annotations) group(annotation.sketchId, "annotation")?.push(annotation);
+    return index;
+  }
+
+  function sketchConstraintSummaryText(sketchId, groups) {
+    if (!constraintAnalysisState) refreshConstraintAnalysis();
+    const statuses = [
+      ...groups.point.map(constraintStatusOf), ...groups.line.map(constraintStatusOf), ...groups.circle.map(constraintStatusOf), ...groups.arc.map(constraintStatusOf),
+      ...model.blockInstances.filter((instance) => instance.sketchId === sketchId).flatMap((instance) => {
+        const bundle = blockProjectionBundle(instance);
+        return [...bundle.lines, ...bundle.circles, ...bundle.arcs].map(constraintStatusOf);
+      }),
+    ];
+    const count = (status) => statuses.filter((item) => item === status).length;
+    return applicationLanguage === "en"
+      ? `Fully constrained: ${count("full")} / Supported position: ${count("support")} / Under-constrained: ${count("under")} / Conflict: ${count("conflict")}`
+      : `完全拘束: ${count("full")} / 支持位置拘束: ${count("support")} / 未拘束: ${count("under")} / 矛盾: ${count("conflict")}`;
+  }
+
+  function sketchTreeObjectSelected(category, entry) {
+    if (category === "block") return selectedBlockInstances.includes(entry);
+    if (category === "annotation") return selectedAnnotations.includes(entry);
+    if (category === "constraint") return entry.kind === "fixed-point" ? selectedPoints.includes(entry.point) : constraintSelectedInCanvas(entry.constraint);
+    return geometryItemSelectedInCanvas(entry);
+  }
+
+  function sketchTreeObjectHovered(category, entry) {
+    if (category === "block") return hoveredBlockInstance === entry;
+    if (category === "annotation") return hoveredAnnotation === entry;
+    const item = category === "constraint" ? (entry.kind === "fixed-point" ? entry.point : entry.constraint) : entry;
+    return hoveredSidebarItem?.item === item;
+  }
+
+  function sketchTreeObjectRow(category, entry, segments, sketchId) {
+    const deleteSvg = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3M7 7l1 13h8l1-13"/></svg>';
+    let icon = "";
+    let primary = "";
+    let secondary = "";
+    let badges = "";
+    let action = "";
+    let data = `data-object-kind="${category}"`;
+    if (category === "point") {
+      icon = toolbarSvgMarkup("#toolPoint"); primary = entry.id; secondary = `X ${formatDisplayNumber(entry.x)} / Y ${formatDisplayNumber(entry.y)}`;
+      if (entry.fixed) badges += `<span class="badge">${applicationText("固定", "Fixed")}</span>`;
+      action = `<button data-id="${escapeHtml(entry.id)}" class="removePointBtn icon-delete-btn" title="${applicationText("削除", "Delete")}" aria-label="${applicationText("削除", "Delete")}">${deleteSvg}</button>`;
+      data += ` data-id="${escapeHtml(entry.id)}"`;
+    } else if (category === "line") {
+      icon = toolbarSvgMarkup("#toolLine"); primary = entry.id; secondary = `${entry.p1.id}–${entry.p2.id}`;
+      if (entry.construction) badges += `<span class="badge">${applicationText("補助", "Construction")}</span>`;
+      if (findLineFixedConstraint(entry)) badges += `<span class="badge">${applicationText("固定", "Fixed")}</span>`;
+      action = `<button data-id="${escapeHtml(entry.id)}" class="removeLineBtn icon-delete-btn" title="${applicationText("削除", "Delete")}" aria-label="${applicationText("削除", "Delete")}">${deleteSvg}</button>`;
+      data += ` data-id="${escapeHtml(entry.id)}"`;
+    } else if (category === "circle" || category === "arc") {
+      icon = toolbarSvgMarkup(category === "circle" ? "#toolCircle" : "#toolArc"); primary = entry.id; secondary = `${applicationText("中心", "Center")} ${entry.center.id} / R ${formatDisplayNumber(entry.radius())}`;
+      if (entry.construction) badges += `<span class="badge">${applicationText("補助", "Construction")}</span>`;
+      action = `<button data-id="${escapeHtml(entry.id)}" class="${category === "circle" ? "removeCircleBtn" : "removeArcBtn"} icon-delete-btn" title="${applicationText("削除", "Delete")}" aria-label="${applicationText("削除", "Delete")}">${deleteSvg}</button>`;
+      data += ` data-id="${escapeHtml(entry.id)}"`;
+    } else if (category === "block") {
+      icon = toolbarSvgMarkup("#toolCreateBlock"); primary = entry.id; secondary = blockDefinitionById(entry.definitionId)?.name || entry.definitionId;
+      if (entry.fixed) badges += `<span class="badge">${applicationText("固定", "Fixed")}</span>`;
+      data += ` data-id="${escapeHtml(entry.id)}"`;
+    } else if (category === "annotation") {
+      icon = toolbarSvgMarkup(entry.type === "leader" ? "#annotationLeaderBtn" : "#annotationTextBtn"); primary = entry.id;
+      secondary = `${entry.type === "leader" ? applicationText("引出線", "Leader") : applicationText("テキスト", "Text")} ${String(entry.text || "").slice(0, 28)}`;
+      data += ` data-id="${escapeHtml(entry.id)}"`;
+    } else if (entry.kind === "fixed-point") {
+      icon = constraintToolbarIcon(null, true); primary = entry.point.id; secondary = applicationText("固定", "Fixed");
+      action = `<button data-id="${escapeHtml(entry.point.id)}" class="removeFixedPointBtn icon-delete-btn" title="${applicationText("固定解除", "Unfix")}" aria-label="${applicationText("固定解除", "Unfix")}">${deleteSvg}</button>`;
+      data += ` data-fixed-point-id="${escapeHtml(entry.point.id)}"`;
+    } else {
+      const constraint = entry.constraint;
+      icon = constraintToolbarIcon(constraint); primary = isDimensionConstraint(constraint) ? constraint.parameterName || "—" : localizedConstraintName(constraint.name);
+      secondary = isDimensionConstraint(constraint) ? localizedConstraintName(constraint.name) : "";
+      if (isReadOnlyDimension(constraint)) badges += `<span class="badge">${applicationText("読み取り専用", "Read-only")}</span>`;
+      if (constraintIsRedundant(constraint)) badges += `<span class="badge">${applicationText("重複", "Duplicate")}</span>`;
+      if (referenceConstraintErrorInfo(constraint)) badges += `<span class="badge constraint-reference-error-badge">${applicationText("参照エラー", "Reference error")}</span>`;
+      action = `<button data-idx="${entry.modelIndex}" class="removeConstraintBtn" title="${applicationText("削除", "Delete")}" aria-label="${applicationText("削除", "Delete")}">${deleteSvg}</button>`;
+      data += ` data-constraint-index="${entry.modelIndex}"`;
+    }
+    const selected = sketchTreeObjectSelected(category, entry);
+    const hovered = sketchTreeObjectHovered(category, entry);
+    const related = category === "constraint" && entry.kind !== "fixed-point"
+      ? constraintDirectlyReferencesCanvasSelection(entry.constraint, selectedConstraintReferenceElements())
+      : false;
+    const title = `${primary}${secondary ? ` — ${secondary}` : ""}`;
+    return `<div class="sketch-object-row ${selected ? "selected sidebar-selected" : ""} ${hovered || related ? "sidebar-related" : ""}" ${data} data-sketch-id="${escapeHtml(sketchId)}" title="${escapeHtml(title)}">${sketchTreeGutter(segments)}${icon}<span class="sketch-object-content"><span class="sketch-object-primary">${escapeHtml(primary)}</span><span class="sketch-object-secondary">${escapeHtml(secondary)}</span>${badges}</span><span class="sketch-object-actions">${action}</span></div>`;
+  }
+
   function updateSketchUI() {
     ensureSketchState();
     const activeLabel = document.getElementById("activeSketchLabel");
-    if (activeLabel) activeLabel.textContent = "スケッチツリー";
+    if (activeLabel) activeLabel.textContent = applicationText("スケッチツリー", "Sketch Tree");
     const sketchList = document.getElementById("sketchList");
     if (!sketchList) return;
-    sketchList.onmouseleave = () => {
-      if (hoveredSketchTreeId) {
-        hoveredSketchTreeId = null;
-        draw();
-      }
-    };
-    sketchList.innerHTML = sketchTreeRows()
-      .map(({ sketch, depth, hasChildren, segments }) => {
-        const isActive = sketch.id === activeSketchId();
-        const isRoot = isRootSketch(sketch);
-        const visible = isVisibleSketchId(sketch.id);
-        const visibilityEnabled = sketch.visible !== false;
-        const solveError = sketchHasSolveError(sketch.id);
-        const solveErrorTitle = sketchSolveErrorTitle(sketch.id);
-        const duplicateCount = constraintDuplicateCountForSketch(sketch.id);
-        const referenceErrorCount = referenceConstraintErrorCountForSketch(sketch.id);
-        const count =
-          model.points.filter((item) => elementSketchId(item) === sketch.id).length +
-          model.lines.filter((item) => elementSketchId(item) === sketch.id).length +
-          model.circles.filter((item) => elementSketchId(item) === sketch.id).length +
-          model.arcs.filter((item) => elementSketchId(item) === sketch.id).length +
-          model.blockInstances.filter((item) => item.sketchId === sketch.id).length;
-        const treeLines = segments.length
-          ? `<span class="sketch-tree-gutter" aria-hidden="true">${segments.map((segment) => `<span class="tree-segment ${segment}"></span>`).join("")}</span>`
-          : "";
-        const visibilityButton = isRoot
-          ? ""
-          : `<button class="sketchVisibilityBtn icon-small-btn ${visibilityEnabled ? "visible-on" : "visible-off"}" data-id="${sketch.id}" title="${visibilityEnabled ? "非表示にする" : "表示する"}" aria-label="${visibilityEnabled ? "非表示にする" : "表示する"}" aria-pressed="${visibilityEnabled}" ${isActive ? "disabled" : ""}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2.5 12s3.5-6 9.5-6 9.5 6 9.5 6-3.5 6-9.5 6-9.5-6-9.5-6Z"/><circle cx="12" cy="12" r="2.6"/>${visibilityEnabled ? "" : '<path class="visibility-slash" d="M4 4l16 16"/>'}</svg></button>`;
-        return (
-          `<div class="item sketch-item ${visible ? "visible" : ""} ${visibilityEnabled ? "visibility-on" : "visibility-off"} ${isRoot ? "root" : ""} ${isActive ? "active" : ""} ${solveError ? "solve-error" : ""} ${referenceErrorCount ? "reference-error" : ""} ${hasChildren ? "has-children" : ""}" data-id="${sketch.id}" title="${escapeHtml(solveErrorTitle || (referenceErrorCount ? `参照エラー ${referenceErrorCount}件` : ""))}" style="--sketch-depth:${depth}">` +
-          treeLines +
-          `<button class="sketchActivateBtn" data-id="${sketch.id}" ${isActive ? "disabled" : ""}>${escapeHtml(sketch.name)}</button>` +
-          `<span class="sketch-badges">${solveError ? `<span class="badge sketch-error-badge">!</span>` : ""}${referenceErrorCount ? `<span class="badge sketch-reference-error-badge" title="参照エラー">参照!${referenceErrorCount}</span>` : ""}${duplicateCount ? `<span class="badge sketch-duplicate-badge">重複${duplicateCount}</span>` : ""}<span class="badge">${count}</span></span>` +
-          visibilityButton +
-          (isRoot ? "" : `<button class="sketchRenameBtn icon-small-btn" data-id="${sketch.id}" title="名前変更" aria-label="名前変更">Aa</button><button class="sketchDeleteBtn icon-small-btn" data-id="${sketch.id}" title="スケッチ削除" aria-label="スケッチ削除"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3M7 7l1 13h8l1-13"/></svg></button>`) +
-          `</div>`
-        );
-      })
-      .join("");
-    for (const btn of document.querySelectorAll(".sketchActivateBtn")) {
-      btn.addEventListener("click", () => setActiveSketch(btn.dataset.id));
+    const objectIndex = sketchTreeObjectIndex();
+    const children = new Map();
+    for (const sketch of model.sketches) {
+      const key = sketch.parentSketchId || "";
+      if (!children.has(key)) children.set(key, []);
+      children.get(key).push(sketch);
     }
-    for (const row of document.querySelectorAll(".sketch-item")) {
-      row.addEventListener("click", (event) => {
-        if (event.target.closest(".sketchVisibilityBtn, .sketchRenameBtn, .sketchDeleteBtn")) return;
-        setActiveSketch(row.dataset.id);
-      });
-      row.addEventListener("mouseenter", () => {
-        hoveredSketchTreeId = row.dataset.id;
-        draw();
-      });
-      row.addEventListener("mouseleave", () => {
-        if (hoveredSketchTreeId === row.dataset.id) {
-          hoveredSketchTreeId = null;
-          draw();
+    const categoryDefinitions = [
+      ["point", applicationText("点", "Point")], ["line", applicationText("線", "Line")], ["circle", applicationText("円", "Circle")],
+      ["arc", applicationText("円弧", "Arc")], ["block", applicationText("ブロック", "Block")], ["constraint", applicationText("拘束", "Constraint")], ["annotation", applicationText("注記", "Annotation")],
+    ];
+    const html = [];
+    const renderSketch = (sketch, depth, ancestorHasNext, isLast) => {
+      const groups = objectIndex.get(sketch.id) || { point: [], line: [], circle: [], arc: [], block: [], constraint: [], annotation: [] };
+      const nonEmptyCategories = isRootSketch(sketch) ? [] : categoryDefinitions.filter(([category]) => groups[category].length > 0);
+      const childSketches = children.get(sketch.id) || [];
+      const hasChildren = nonEmptyCategories.length + childSketches.length > 0;
+      const segments = depth === 0 && isRootSketch(sketch) ? [] : [...ancestorHasNext.map((hasNext) => hasNext ? "pipe" : "blank"), isLast ? "elbow" : "tee"];
+      const isActive = sketch.id === activeSketchId();
+      const isRoot = isRootSketch(sketch);
+      const visibilityEnabled = sketch.visible !== false;
+      const solveError = sketchHasSolveError(sketch.id);
+      const referenceErrorCount = referenceConstraintErrorCountForSketch(sketch.id);
+      const duplicateCount = constraintDuplicateCountForSketch(sketch.id);
+      const count = Object.values(groups).reduce((sum, items) => sum + items.length, 0);
+      const visibilityButton = isRoot ? "" : `<button class="sketchVisibilityBtn icon-small-btn ${visibilityEnabled ? "visible-on" : "visible-off"}" data-id="${sketch.id}" title="${visibilityEnabled ? applicationText("非表示にする", "Hide") : applicationText("表示する", "Show")}" aria-pressed="${visibilityEnabled}" ${isActive ? "disabled" : ""}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2.5 12s3.5-6 9.5-6 9.5 6 9.5 6-3.5 6-9.5 6-9.5-6-9.5-6Z"/><circle cx="12" cy="12" r="2.6"/>${visibilityEnabled ? "" : '<path class="visibility-slash" d="M4 4l16 16"/>'}</svg></button>`;
+      html.push(`<div class="item sketch-item ${isActive ? "active" : ""} ${visibilityEnabled ? "visible" : ""} ${solveError ? "solve-error" : ""} ${referenceErrorCount ? "reference-error" : ""} ${hasChildren ? "has-children" : ""}" data-id="${escapeHtml(sketch.id)}" style="--sketch-depth:${depth}">${sketchTreeGutter(segments)}<button class="sketchActivateBtn" data-id="${escapeHtml(sketch.id)}" ${isActive ? "disabled" : ""}>${escapeHtml(sketch.name)}</button><span class="sketch-badges">${solveError ? '<span class="badge">!</span>' : ""}${referenceErrorCount ? `<span class="badge sketch-reference-error-badge">${applicationText("参照", "Ref")}!${referenceErrorCount}</span>` : ""}${duplicateCount ? `<span class="badge">${applicationText("重複", "Duplicate")}${duplicateCount}</span>` : ""}<span class="badge">${count}</span></span>${visibilityButton}${isRoot ? "" : `<button class="sketchRenameBtn icon-small-btn" data-id="${escapeHtml(sketch.id)}" title="${applicationText("名前変更", "Rename")}">Aa</button><button class="sketchDeleteBtn icon-small-btn" data-id="${escapeHtml(sketch.id)}" title="${applicationText("スケッチ削除", "Delete sketch")}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3M7 7l1 13h8l1-13"/></svg></button>`}</div>`);
+      const entries = [...nonEmptyCategories.map(([category, label]) => ({ type: "category", category, label })), ...childSketches.map((child) => ({ type: "sketch", sketch: child }))];
+      entries.forEach((entry, entryIndex) => {
+        const entryLast = entryIndex === entries.length - 1;
+        if (entry.type === "sketch") {
+          renderSketch(entry.sketch, depth + 1, [...ancestorHasNext, !isLast], entryLast);
+          return;
         }
+        const key = sketchTreeGroupKey(sketch.id, entry.category);
+        const open = sketchTreeGroupOpenState.get(key) === true;
+        const items = groups[entry.category];
+        const childSegments = [...ancestorHasNext.map((hasNext) => hasNext ? "pipe" : "blank"), !isLast ? "pipe" : "blank", entryLast ? "elbow" : "tee"];
+        const hasState = items.some((item) => sketchTreeObjectSelected(entry.category, item) || sketchTreeObjectHovered(entry.category, item));
+        html.push(`<div class="sketch-group-row ${open ? "open" : ""} ${hasState ? "has-active-descendant" : ""}" data-category="${entry.category}" data-sketch-id="${escapeHtml(sketch.id)}" aria-expanded="${open}">${sketchTreeGutter(childSegments)}<span class="sketch-group-chevron">▶</span><span class="sketch-group-label">${escapeHtml(entry.label)}</span><span class="sketch-group-count">${items.length}</span></div>`);
+        if (!open) return;
+        if (entry.category === "constraint") html.push(`<div class="sketch-tree-summary">${escapeHtml(sketchConstraintSummaryText(sketch.id, groups))}</div>`);
+        items.forEach((item, itemIndex) => {
+          const objectSegments = [...childSegments.slice(0, -1), entryLast ? "blank" : "pipe", itemIndex === items.length - 1 ? "elbow" : "tee"];
+          html.push(sketchTreeObjectRow(entry.category, item, objectSegments, sketch.id));
+        });
       });
+    };
+    const roots = children.get("") || model.sketches.filter((sketch) => !sketch.parentSketchId);
+    roots.forEach((sketch, index) => renderSketch(sketch, 0, [], index === roots.length - 1));
+    sketchList.innerHTML = html.join("");
+    sketchList.onclick = (event) => handleSketchTreeClick(event);
+    sketchList.onpointerover = (event) => handleSketchTreePointerOver(event);
+    sketchList.onpointerout = (event) => handleSketchTreePointerOut(event);
+    sketchList.onmouseleave = () => {
+      hoveredSketchTreeId = null;
+      clearSidebarHover();
+      hoveredBlockInstance = null;
+      hoveredAnnotation = null;
+      draw();
+    };
+  }
+
+  function activateSketchTreeObject(row, additive) {
+    const sketchId = row.dataset.sketchId;
+    const category = row.dataset.objectKind;
+    if (sketchId !== activeSketchId()) {
+      setActiveSketch(sketchId);
+      additive = false;
     }
-    for (const btn of document.querySelectorAll(".sketchRenameBtn")) {
-      btn.addEventListener("click", (event) => {
-        event.stopPropagation();
-        renameSketch(btn.dataset.id);
-      });
+    if (!additive || category === "constraint") clearSelection();
+    if (["point", "line", "circle", "arc"].includes(category)) {
+      const item = sidebarGeometryItem(category, row.dataset.id);
+      if (item) {
+        const selection = category === "point" ? selectedPoints : category === "line" ? selectedLines : category === "circle" ? selectedCircles : selectedArcs;
+        if (additive) toggleSidebarSelectionById(selection, item); else selection.push(item);
+      }
+    } else if (category === "block") {
+      const item = model.blockInstances.find((block) => block.id === row.dataset.id);
+      if (item) additive ? toggleBlockInstanceSelection(item) : selectedBlockInstances.push(item);
+    } else if (category === "annotation") {
+      const item = model.annotations.find((annotation) => annotation.id === row.dataset.id);
+      if (item) {
+        if (additive) toggleSidebarSelectionById(selectedAnnotations, item); else selectedAnnotations.push(item);
+      }
+    } else if (row.dataset.fixedPointId) {
+      const point = model.points.find((item) => item.id === row.dataset.fixedPointId);
+      if (point) selectedPoints = [point];
+    } else {
+      const constraint = model.constraints[Number(row.dataset.constraintIndex)];
+      if (constraint) {
+        if (targetFromConstraint(constraint)) selectedDimensionConstraint = constraint;
+        else selectedConstraint = constraint;
+      }
     }
-    for (const btn of document.querySelectorAll(".sketchVisibilityBtn")) {
-      btn.addEventListener("click", (event) => {
-        event.stopPropagation();
-        toggleSketchVisibility(btn.dataset.id);
-      });
+    updateUI();
+    draw();
+  }
+
+  function handleSketchTreeClick(event) {
+    const categoryRow = event.target.closest(".sketch-group-row");
+    if (categoryRow) {
+      const key = sketchTreeGroupKey(categoryRow.dataset.sketchId, categoryRow.dataset.category);
+      sketchTreeGroupOpenState.set(key, sketchTreeGroupOpenState.get(key) !== true);
+      updateSketchUI();
+      return;
     }
-    for (const btn of document.querySelectorAll(".sketchDeleteBtn")) {
-      btn.addEventListener("click", (event) => {
-        event.stopPropagation();
-        deleteSketch(btn.dataset.id);
-      });
+    const action = event.target.closest("button");
+    if (action?.classList.contains("sketchVisibilityBtn")) return void toggleSketchVisibility(action.dataset.id);
+    if (action?.classList.contains("sketchRenameBtn")) return void renameSketch(action.dataset.id);
+    if (action?.classList.contains("sketchDeleteBtn")) return void deleteSketch(action.dataset.id);
+    if (action?.classList.contains("removePointBtn")) return void deleteElements({ points: [model.points.find((item) => item.id === action.dataset.id)].filter(Boolean) });
+    if (action?.classList.contains("removeLineBtn")) return void deleteElements({ lines: [model.lines.find((item) => item.id === action.dataset.id)].filter(Boolean) });
+    if (action?.classList.contains("removeCircleBtn")) return void deleteElements({ circles: [model.circles.find((item) => item.id === action.dataset.id)].filter(Boolean) });
+    if (action?.classList.contains("removeArcBtn")) return void deleteElements({ arcs: [model.arcs.find((item) => item.id === action.dataset.id)].filter(Boolean) });
+    if (action?.classList.contains("removeConstraintBtn")) return void deleteElements({ constraints: [model.constraints[Number(action.dataset.idx)]].filter(Boolean) });
+    if (action?.classList.contains("removeFixedPointBtn")) {
+      const point = model.points.find((item) => item.id === action.dataset.id);
+      if (point) { point.fixed = false; solveAndRefresh(`固定解除 ${point.id}`); }
+      return;
+    }
+    const objectRow = event.target.closest(".sketch-object-row");
+    if (objectRow) return void activateSketchTreeObject(objectRow, event.ctrlKey || event.shiftKey);
+    const sketchRow = event.target.closest(".sketch-item");
+    if (sketchRow) setActiveSketch(sketchRow.dataset.id);
+  }
+
+  function handleSketchTreePointerOver(event) {
+    const objectRow = event.target.closest(".sketch-object-row");
+    if (objectRow && !objectRow.contains(event.relatedTarget) && objectRow.dataset.sketchId === activeSketchId()) {
+      const category = objectRow.dataset.objectKind;
+      if (category === "block") hoveredBlockInstance = model.blockInstances.find((item) => item.id === objectRow.dataset.id) || null;
+      else if (category === "annotation") hoveredAnnotation = model.annotations.find((item) => item.id === objectRow.dataset.id) || null;
+      else if (objectRow.dataset.fixedPointId) {
+        const point = model.points.find((item) => item.id === objectRow.dataset.fixedPointId);
+        setSidebarHover("fixed-point", point, sidebarHoverElementsForItem(point));
+      } else if (category === "constraint") {
+        const constraint = model.constraints[Number(objectRow.dataset.constraintIndex)];
+        setSidebarHover("constraint", constraint, sidebarHoverElementsForConstraint(constraint));
+      } else {
+        const item = sidebarGeometryItem(category, objectRow.dataset.id);
+        setSidebarHover("geometry", item, sidebarHoverElementsForItem(item));
+      }
+      draw();
+      return;
+    }
+    const sketchRow = event.target.closest(".sketch-item");
+    if (sketchRow && !sketchRow.contains(event.relatedTarget)) {
+      hoveredSketchTreeId = sketchRow.dataset.id;
+      draw();
+    }
+  }
+
+  function handleSketchTreePointerOut(event) {
+    const objectRow = event.target.closest(".sketch-object-row");
+    if (objectRow && !objectRow.contains(event.relatedTarget)) {
+      clearSidebarHover();
+      hoveredBlockInstance = null;
+      hoveredAnnotation = null;
+      draw();
+    }
+    const sketchRow = event.target.closest(".sketch-item");
+    if (sketchRow && !sketchRow.contains(event.relatedTarget) && hoveredSketchTreeId === sketchRow.dataset.id) {
+      hoveredSketchTreeId = null;
+      draw();
     }
   }
 
@@ -10372,11 +10871,47 @@
     }
   }
 
+  function updateSketchTreeSelectionState() {
+    const selectedConstraintElements = selectedConstraintReferenceElements();
+    for (const row of document.querySelectorAll("#sketchList .sketch-object-row")) {
+      const category = row.dataset.objectKind;
+      let entry = null;
+      if (["point", "line", "circle", "arc"].includes(category)) {
+        entry = sidebarGeometryItem(category, row.dataset.id);
+      } else if (category === "block") {
+        entry = model.blockInstances.find((item) => item.id === row.dataset.id) || null;
+      } else if (category === "annotation") {
+        entry = model.annotations.find((item) => item.id === row.dataset.id) || null;
+      } else if (row.dataset.fixedPointId) {
+        const point = model.points.find((item) => item.id === row.dataset.fixedPointId) || null;
+        if (point) entry = { kind: "fixed-point", point };
+      } else if (category === "constraint") {
+        const modelIndex = Number(row.dataset.constraintIndex);
+        const constraint = model.constraints[modelIndex] || null;
+        if (constraint) entry = { kind: "constraint", constraint, modelIndex };
+      }
+      const selected = Boolean(entry && sketchTreeObjectSelected(category, entry));
+      const hovered = Boolean(entry && sketchTreeObjectHovered(category, entry));
+      const related = Boolean(entry && category === "constraint" && entry.kind !== "fixed-point"
+        && constraintDirectlyReferencesCanvasSelection(entry.constraint, selectedConstraintElements));
+      row.classList.toggle("selected", selected);
+      row.classList.toggle("sidebar-selected", selected);
+      row.classList.toggle("sidebar-related", hovered || related);
+    }
+    const objectIndex = sketchTreeObjectIndex();
+    for (const groupRow of document.querySelectorAll("#sketchList .sketch-group-row")) {
+      const items = objectIndex.get(groupRow.dataset.sketchId)?.[groupRow.dataset.category] || [];
+      groupRow.classList.toggle("has-active-descendant", items.some((item) =>
+        sketchTreeObjectSelected(groupRow.dataset.category, item) || sketchTreeObjectHovered(groupRow.dataset.category, item),
+      ));
+    }
+  }
+
   function updateGeometrySelectionUI() {
     updateToolbar();
     updateConstraintButtons();
-    updateBlockUI();
-    updateSidebarSelectionRowClasses();
+    if (document.getElementById("blockDefinitionsDialog")?.open) updateBlockUI();
+    updateSketchTreeSelectionState();
     updatePropertiesUI();
   }
 
@@ -10499,7 +11034,7 @@
     const drawableIds = blockDefinitionDrawableSketchIds(definition);
     const next = [...new Set(nextIds.filter((id) => drawableIds.includes(id)))];
     if (!next.some((id) => blockDefinitionGeometrySketchIds(definition).includes(id))) {
-      setHint("図形を持つ内部スケッチを1つ以上有効にしてください", "error");
+      setHint("オブジェクトを持つ内部スケッチを1つ以上有効にしてください", "error");
       updateBlockUI();
       return false;
     }
@@ -10616,7 +11151,7 @@
     const visit = (parentId, depth) => {
       for (const sketch of children.get(parentId) || []) {
         if (sketch.kind === "root") continue;
-        const count = [...definition.lines, ...definition.circles, ...definition.arcs, ...(definition.blockInstances || [])].filter((item) => item.sketchId === sketch.id).length;
+        const count = [...definition.lines, ...definition.circles, ...definition.arcs, ...(definition.annotations || []), ...(definition.blockInstances || [])].filter((item) => item.sketchId === sketch.id).length;
         rows.push({ sketch, depth, count });
         visit(sketch.id, depth + 1);
       }
@@ -10632,7 +11167,6 @@
     const editorOverlay = document.getElementById("blockEditorOverlay");
     const nameInput = document.getElementById("blockEditorNameInput");
     const editorActions = document.getElementById("blockEditorActions");
-    const sketchConfig = document.getElementById("blockSketchConfig");
     if (title) title.textContent = blockEditSession ? "ブロックエディタ" : "ブロック";
     if (editorOverlay) editorOverlay.hidden = !blockEditSession;
     if (nameInput) {
@@ -10645,7 +11179,6 @@
     const scopedDefinitions = blockDefinitionsInCurrentScope();
     if (scopedDefinitions.length === 0) {
       list.innerHTML = '<div class="block-item"><span class="block-item-name" data-i18n-ja="ブロックはありません" data-i18n-en="No blocks">ブロックはありません</span></div>';
-      if (sketchConfig) sketchConfig.hidden = true;
       return;
     }
     list.innerHTML = scopedDefinitions.map((definition) => {
@@ -10674,32 +11207,6 @@
         enterBlockDefinitionEdit(row.dataset.id);
       }
     });
-    const configuringPlacement = mode === "block-place" && blockPlacementDefinitionId;
-    const definition = configuringPlacement ? blockDefinitionById(blockPlacementDefinitionId) : null;
-    if (!sketchConfig || !definition) {
-      if (sketchConfig) sketchConfig.hidden = true;
-      return;
-    }
-    sketchConfig.hidden = false;
-    const enabled = new Set(blockPlacementEnabledSketchIds);
-    const rotationConfig = `<div class="block-rotation-config"><div class="block-sketch-config-title">回転</div><label><input type="radio" name="blockRotationMode" data-rotation-mode="locked" ${blockPlacementRotationLocked ? "checked" : ""}><span>直交回転ロック</span></label><label><input type="radio" name="blockRotationMode" data-rotation-mode="free" ${blockPlacementRotationLocked ? "" : "checked"}><span>自由回転</span></label></div>`;
-    sketchConfig.innerHTML = rotationConfig + `<div class="block-sketch-config-title">配置するスケッチ</div>` + blockDefinitionSketchRows(definition).map(({ sketch, depth, count }) => {
-      return `<label class="block-sketch-option" style="--block-sketch-depth:${depth}"><input type="checkbox" data-sketch-id="${escapeHtml(sketch.id)}" ${enabled.has(sketch.id) ? "checked" : ""}><span>${escapeHtml(sketch.name)}</span><small>${count}</small></label>`;
-    }).join("");
-    for (const input of sketchConfig.querySelectorAll("input[data-rotation-mode]")) {
-      input.addEventListener("change", () => {
-        blockPlacementRotationLocked = input.dataset.rotationMode === "locked";
-        setHint(blockPlacementRotationLocked ? "配置角度を90°単位にロックします" : "配置角度を自由回転にします");
-        draw();
-      });
-    }
-    for (const input of sketchConfig.querySelectorAll("input[data-sketch-id]")) {
-      input.addEventListener("change", () => {
-        blockPlacementEnabledSketchIds = [...sketchConfig.querySelectorAll("input[data-sketch-id]:checked")].map((item) => item.dataset.sketchId);
-        invalidateBlockProjectionCache();
-        draw();
-      });
-    }
   }
 
   function sketchAppearanceLayers(sketch) {
@@ -10851,13 +11358,14 @@
   }
 
   function selectedPropertiesTarget() {
-    if (selectedAnnotation) return { kind: "annotation", item: selectedAnnotation };
+    if (mode === "block-place" && blockPlacementDefinitionId) return { kind: "blockPlacement", item: blockDefinitionById(blockPlacementDefinitionId) };
     const constraint = selectedDimensionConstraint || effectiveSelectedConstraint();
     if (constraint) return { kind: "constraint", item: constraint };
-    if (selectedBlockInstances.length === 1 && selectedGeometryItems().length === 0) return { kind: "block", item: selectedBlockInstances[0] };
+    if (selectedAnnotations.length === 1 && selectedBlockInstances.length === 0 && selectedGeometryItems().length === 0) return { kind: "annotation", item: selectedAnnotations[0] };
+    if (selectedBlockInstances.length === 1 && selectedGeometryItems().length === 0 && selectedAnnotations.length === 0) return { kind: "block", item: selectedBlockInstances[0] };
     const geometry = selectedGeometryItems();
-    if (geometry.length === 1 && selectedBlockInstances.length === 0) return { kind: "geometry", item: geometry[0] };
-    if (geometry.length + selectedBlockInstances.length > 1) return { kind: "multiple", count: geometry.length + selectedBlockInstances.length };
+    if (geometry.length === 1 && selectedBlockInstances.length === 0 && selectedAnnotations.length === 0) return { kind: "geometry", item: geometry[0] };
+    if (geometry.length + selectedBlockInstances.length + selectedAnnotations.length > 1) return { kind: "multiple", count: geometry.length + selectedBlockInstances.length + selectedAnnotations.length };
     return { kind: "sketch", item: sketchById(activeSketchId()) };
   }
 
@@ -11049,7 +11557,10 @@
       panel.innerHTML = `<h2 class="property-heading">${escapeHtml(localizedConstraintName(item.name))}</h2><section class="property-section"><h3>Constraint</h3><div class="property-row"><span>Type</span><span class="property-readonly">${escapeHtml(item.constructor.name)}</span></div>${definingGeometryRows}${parameterRows}</section>${dimension ? `<section class="property-section"><h3>Appearance</h3>${dimensionAppearancePropertyRows(dimension.display || {}, display)}</section>` : ""}`;
     } else if (target.kind === "annotation") {
       const annotationType = item.type === "leader" ? applicationText("引出線", "Leader") : applicationText("自由テキスト", "Free Text");
-      panel.innerHTML = `<h2 class="property-heading">${annotationType} ${escapeHtml(item.id)}</h2><section class="property-section"><h3>Annotation</h3>${propertyReadonlyRow("種類", "Type", annotationType)}${propertyReadonlyRow("ID", "ID", item.id)}<div class="property-row"><label>Visible</label><input data-property="annotation-visible" type="checkbox" ${item.visible !== false ? "checked" : ""}></div>${item.type === "text" ? `<div class="property-row"><label>Text</label><textarea data-property="annotation-text">${escapeHtml(item.text || "")}</textarea></div><div class="property-row"><label>Font size</label><input data-property="annotation-font-size" type="number" min="6" max="72" value="${Number(item.style?.fontSize || 13)}"></div>` : ""}<div class="property-row"><label>Color</label><input data-property="annotation-color" type="text" value="${escapeHtml(item.style?.color || "#111827")}"></div></section>`;
+      panel.innerHTML = `<h2 class="property-heading">${annotationType} ${escapeHtml(item.id)}</h2><section class="property-section"><h3>Annotation</h3>${propertyReadonlyRow("種類", "Type", annotationType)}${propertyReadonlyRow("ID", "ID", item.id)}${propertyReadonlyRow("所属スケッチ", "Owning sketch", `${sketchName(item.sketchId)} (${item.sketchId})`, { userContent: true })}<div class="property-row"><label>Visible</label><input data-property="annotation-visible" type="checkbox" ${item.visible !== false ? "checked" : ""}></div>${item.type === "text" ? `<div class="property-row"><label>Text</label><textarea data-property="annotation-text">${escapeHtml(item.text || "")}</textarea></div><div class="property-row"><label>Font size</label><input data-property="annotation-font-size" type="number" min="6" max="72" value="${Number(item.style?.fontSize || 13)}"></div>` : ""}<div class="property-row"><label>Color</label><input data-property="annotation-color" type="text" value="${escapeHtml(item.style?.color || "#111827")}"></div></section>`;
+    } else if (target.kind === "blockPlacement") {
+      const enabled = new Set(blockPlacementEnabledSketchIds);
+      panel.innerHTML = `<h2 class="property-heading">${applicationText("ブロック配置", "Block placement")}</h2><section class="property-section"><h3>Block</h3>${propertyReadonlyRow("ブロック定義", "Block definition", item.name, { userContent: true })}<div class="property-option-group"><div class="property-option-group-title">${applicationText("回転モード", "Rotation mode")}</div><label class="property-option"><input type="radio" name="placementRotationMode" data-placement-rotation-mode="locked" ${blockPlacementRotationLocked ? "checked" : ""}><span>${applicationText("直交回転ロック", "Orthogonal rotation lock")}</span></label><label class="property-option"><input type="radio" name="placementRotationMode" data-placement-rotation-mode="free" ${blockPlacementRotationLocked ? "" : "checked"}><span>${applicationText("自由回転", "Free rotation")}</span></label></div><div class="property-option-group"><div class="property-option-group-title">${applicationText("配置するスケッチ", "Sketches to place")}</div>${blockDefinitionSketchRows(item).map(({ sketch, depth, count }) => `<label class="property-option property-sketch-option" style="--property-sketch-depth:${depth}"><input type="checkbox" data-placement-sketch-id="${escapeHtml(sketch.id)}" ${enabled.has(sketch.id) ? "checked" : ""}><span data-user-content>${escapeHtml(sketch.name)}</span><small>${count}</small></label>`).join("")}</div></section>`;
     } else {
       const parent = sketchById(item.parentSketchId);
       const parentLabel = parent ? `${parent.name} (${parent.id})` : applicationText("なし", "None");
@@ -11285,6 +11796,18 @@
   function handlePropertiesChange(event) {
     const target = selectedPropertiesTarget();
     const input = event.target;
+    if (target.kind === "blockPlacement" && input.dataset.placementRotationMode) {
+      blockPlacementRotationLocked = input.dataset.placementRotationMode === "locked";
+      setHint(blockPlacementRotationLocked ? applicationText("配置角度を90°単位にロックします", "Placement rotation is locked to 90° increments") : applicationText("配置角度を自由回転にします", "Placement rotation is free"));
+      draw();
+      return;
+    }
+    if (target.kind === "blockPlacement" && input.dataset.placementSketchId) {
+      blockPlacementEnabledSketchIds = [...input.closest("#propertiesPanel").querySelectorAll("input[data-placement-sketch-id]:checked")].map((item) => item.dataset.placementSketchId);
+      invalidateBlockProjectionCache();
+      draw();
+      return;
+    }
     const sketchDefaultContext = sketchDefaultAppearanceContext(input, target);
     if (sketchDefaultContext === "construction" && input.dataset.appearanceKey) {
       applyAppearanceInput((target.item.constructionAppearance ||= {}), input.dataset.appearanceKey, input.value.trim());
@@ -11360,19 +11883,6 @@
     openAppearanceColorPalette(button, sketchContext ? `sketch-${sketchContext}` : "properties");
   }
 
-  function updateObjectExplorerUI() {
-    const blockList = document.getElementById("blockInstanceObjectList");
-    if (blockList) blockList.innerHTML = model.blockInstances.filter(isActiveSketchElement).map((item) => `<div class="item object-row ${selectedBlockInstances.includes(item) ? "selected" : ""}" data-object-kind="block" data-id="${escapeHtml(item.id)}"><span>${escapeHtml(item.id)}</span><span class="badge">${escapeHtml(blockDefinitionById(item.definitionId)?.name || item.definitionId)}</span></div>`).join("");
-    const annotationList = document.getElementById("annotationObjectList");
-    if (annotationList) annotationList.innerHTML = model.annotations.map((item) => `<div class="item object-row ${selectedAnnotation === item ? "selected" : ""}" data-object-kind="annotation" data-id="${escapeHtml(item.id)}"><span>${item.type === "leader" ? applicationText("引出線", "Leader") : applicationText("テキスト", "Text")} ${escapeHtml(item.id)}</span></div>`).join("");
-    for (const row of document.querySelectorAll(".geometry-list-row")) {
-      const kind = row.dataset.kind;
-      const item = kind === "point" ? model.points.find((value) => value.id === row.dataset.id) : kind === "line" ? model.lines.find((value) => value.id === row.dataset.id) : kind === "circle" ? model.circles.find((value) => value.id === row.dataset.id) : model.arcs.find((value) => value.id === row.dataset.id);
-      row.classList.toggle("selected", selectedGeometryItems().includes(item));
-    }
-    for (const row of document.querySelectorAll(".constraint-list-row")) row.classList.toggle("selected", model.constraints[Number(row.dataset.idx)] === (selectedDimensionConstraint || effectiveSelectedConstraint()));
-  }
-
   function updateStatusUI() {
     const command = document.getElementById("statusCommand");
     const modeLabels = {
@@ -11392,130 +11902,6 @@
     updateToolbar();
     updateSketchUI();
     updateBlockUI();
-    const listedPoints = model.points.filter(isActiveSketchElement).filter((point) => isExplicitPoint(point) || isPointUsedByLine(point));
-    const listedLines = model.lines.filter(isActiveSketchElement);
-    const listedCircles = model.circles.filter(isActiveSketchElement);
-    const listedArcs = model.arcs.filter(isActiveSketchElement);
-    document.getElementById("pointCount").textContent = String(listedPoints.length);
-    document.getElementById("lineCount").textContent = String(listedLines.length);
-    document.getElementById("circleCount").textContent = String(listedCircles.length);
-    document.getElementById("arcCount").textContent = String(listedArcs.length);
-    document.getElementById("annotationCount").textContent = String(model.annotations.length);
-    document.getElementById("pointList").innerHTML = listedPoints
-      .map(
-        (p) =>
-          `<div class="item list-item geometry-list-row" data-kind="point" data-id="${p.id}"><span>${p.id}` +
-          `<span class="badge">x=${p.x.toFixed(1)}</span>` +
-          `<span class="badge">y=${p.y.toFixed(1)}</span>` +
-          `<span class="badge">${constraintStatusBadge(constraintStatusOf(p))}</span>` +
-          `${p.fixed ? "<span class='badge'>固定</span>" : ""}</span>` +
-          `<button data-id="${p.id}" class="removePointBtn icon-delete-btn" title="削除" aria-label="削除" data-tooltip="削除">` +
-          `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3M7 7l1 13h8l1-13"/></svg>` +
-          `</button></div>`,
-      )
-      .join("");
-
-    document.getElementById("lineList").innerHTML = listedLines
-      .map(
-        (l) =>
-          `<div class="item list-item geometry-list-row" data-kind="line" data-id="${l.id}"><span>${l.id}: ${l.p1.id} - ${l.p2.id}<span class="badge">len=${formatDisplayNumber(l.length())}</span><span class="badge">${constraintStatusBadge(constraintStatusOf(l))}</span>${l.construction ? "<span class='badge'>補助</span>" : ""}${findLineFixedConstraint(l) ? "<span class='badge'>固定</span>" : ""}</span>` +
-          `<button data-id="${l.id}" class="removeLineBtn icon-delete-btn" title="削除" aria-label="削除" data-tooltip="削除">` +
-          `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3M7 7l1 13h8l1-13"/></svg>` +
-          `</button></div>`,
-      )
-      .join("");
-
-    document.getElementById("circleList").innerHTML = listedCircles
-      .map(
-        (circle) =>
-          `<div class="item list-item geometry-list-row" data-kind="circle" data-id="${circle.id}"><span>${circle.id}: 中心 ${circle.center.id}<span class="badge">R=${formatDisplayNumber(circle.radius())}</span><span class="badge">${constraintStatusBadge(constraintStatusOf(circle))}</span>${circle.construction ? "<span class='badge'>補助</span>" : ""}</span>` +
-          `<button data-id="${circle.id}" class="removeCircleBtn icon-delete-btn" title="削除" aria-label="削除" data-tooltip="削除">` +
-          `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3M7 7l1 13h8l1-13"/></svg>` +
-          `</button></div>`,
-      )
-      .join("");
-
-    document.getElementById("arcList").innerHTML = listedArcs
-      .map(
-        (arc) =>
-          `<div class="item list-item geometry-list-row" data-kind="arc" data-id="${arc.id}"><span>${arc.id}: 中心 ${arc.center.id}<span class="badge">R=${formatDisplayNumber(arc.radius())}</span><span class="badge">角度=${formatDisplayNumber(angleDegrees(Math.abs(arc.endAngle - arc.startAngle)))}°</span><span class="badge">${constraintStatusBadge(constraintStatusOf(arc))}</span>${arc.construction ? "<span class='badge'>補助</span>" : ""}</span>` +
-          `<button data-id="${arc.id}" class="removeArcBtn icon-delete-btn" title="削除" aria-label="削除" data-tooltip="削除">` +
-          `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3M7 7l1 13h8l1-13"/></svg>` +
-          `</button></div>`,
-      )
-      .join("");
-
-    const listedConstraints = model.constraints
-      .map((constraint, index) => ({ constraint, index }))
-      .filter(({ constraint }) => isActiveSketchConstraint(constraint));
-    const fixedPoints = model.points.filter((point) => isActiveSketchElement(point) && point.fixed);
-    const constraintRows = listedConstraints.map(({ constraint, index }, displayIndex) => {
-      const duplicate = constraintIsRedundant(constraint);
-      const referenceError = referenceConstraintErrorInfo(constraint);
-      const parameterPrefix = isDimensionConstraint(constraint) ? `${constraint.parameterName}: ` : "";
-      const readOnlyBadge = isReadOnlyDimension(constraint) ? `<span class="badge">${applicationText("読み取り専用", "Read-only")}</span>` : "";
-      return `<div class="item constraint-item constraint-list-row ${duplicate ? "duplicate" : ""} ${referenceError ? "reference-error" : ""}" data-idx="${index}" title="${escapeHtml(referenceError || "")}"><span>${displayIndex + 1}. ${escapeHtml(parameterPrefix + localizedConstraintName(constraint.name))}${readOnlyBadge}${referenceError ? `<span class="badge constraint-reference-error-badge">参照エラー</span>` : ""}${duplicate ? `<span class="badge constraint-duplicate-badge">重複</span>` : ""}</span>` +
-        `<button data-idx="${index}" class="removeConstraintBtn" title="削除" aria-label="削除" data-tooltip="削除">` +
-        `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3M7 7l1 13h8l1-13"/></svg>` +
-        `</button></div>`;
-    });
-    const fixedPointRows = fixedPoints.map((point, fixedIndex) => {
-      const displayIndex = listedConstraints.length + fixedIndex + 1;
-      return `<div class="item constraint-item fixed-point-list-row" data-point-id="${point.id}"><span>${displayIndex}. 固定 ${point.id}</span>` +
-        `<button data-id="${point.id}" class="removeFixedPointBtn icon-delete-btn" title="固定解除" aria-label="固定解除" data-tooltip="固定解除">` +
-        `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3M7 7l1 13h8l1-13"/></svg>` +
-        `</button></div>`;
-    });
-    document.getElementById("constraintList").innerHTML =
-      `<div class="constraint-summary-row"><span>${constraintSummaryText()}</span></div>` + [...constraintRows, ...fixedPointRows].join("");
-
-    for (const btn of document.querySelectorAll(".removeConstraintBtn")) {
-      btn.addEventListener("click", () => {
-        const i = Number(btn.dataset.idx);
-        deleteElements({ constraints: [model.constraints[i]] });
-      });
-    }
-
-    for (const btn of document.querySelectorAll(".removePointBtn")) {
-      btn.addEventListener("click", () => {
-        const point = model.points.find((p) => p.id === btn.dataset.id);
-        if (point) deleteElements({ points: [point] });
-      });
-    }
-
-    for (const btn of document.querySelectorAll(".removeLineBtn")) {
-      btn.addEventListener("click", () => {
-        const line = model.lines.find((l) => l.id === btn.dataset.id);
-        if (line) deleteElements({ lines: [line] });
-      });
-    }
-
-    for (const btn of document.querySelectorAll(".removeFixedPointBtn")) {
-      btn.addEventListener("click", () => {
-        const point = model.points.find((item) => item.id === btn.dataset.id);
-        if (!point) return;
-        point.fixed = false;
-        solveAndRefresh(`固定解除 ${point.id}`);
-      });
-    }
-
-    for (const btn of document.querySelectorAll(".removeCircleBtn")) {
-      btn.addEventListener("click", () => {
-        const circle = model.circles.find((item) => item.id === btn.dataset.id);
-        if (circle) deleteElements({ circles: [circle] });
-      });
-    }
-
-    for (const btn of document.querySelectorAll(".removeArcBtn")) {
-      btn.addEventListener("click", () => {
-        const arc = model.arcs.find((item) => item.id === btn.dataset.id);
-        if (arc) deleteElements({ arcs: [arc] });
-      });
-    }
-
-    bindSidebarItemHover();
-
-    updateObjectExplorerUI();
     updatePropertiesUI();
     updateStatusUI();
     updateConstraintButtons();
@@ -12382,6 +12768,8 @@
   function selectHitOnly(hitP, hitL, hitC, hitA, hitArcEnd) {
     selectedDimensionConstraint = null;
     selectedConstraint = null;
+    selectedBlockInstances = [];
+    selectedAnnotations = [];
     selectedPoints = hitP ? [hitP] : [];
     selectedLines = hitL ? [hitL] : [];
     selectedCircles = hitC ? [hitC] : [];
@@ -13857,6 +14245,20 @@
 
     if (blankAnnotationHit && mode === "select" && !pendingCommand && !pendingConstraintCommand) {
       e.preventDefault();
+      if (blankAnnotationHit.element.blockProjection) {
+        if (!e.ctrlKey && !e.shiftKey) clearSelection();
+        if (e.ctrlKey || e.shiftKey) toggleBlockInstanceSelection(blankAnnotationHit.element.blockInstance);
+        else selectedBlockInstances = [blankAnnotationHit.element.blockInstance];
+        updateUI({ refreshAnalysis: false });
+        draw();
+        return;
+      }
+      if (e.ctrlKey || e.shiftKey) {
+        toggleSidebarSelectionById(selectedAnnotations, blankAnnotationHit.element);
+        updateUI({ refreshAnalysis: false });
+        draw();
+        return;
+      }
       clearSelection();
       beginAnnotationDrag(e, blankAnnotationHit, p);
       updateUI({ refreshAnalysis: false });
@@ -14543,7 +14945,7 @@
       selectedBlockInstances.length > 0 ||
       Boolean(selectedArcEndpoint) ||
       Boolean(selectedDimensionConstraint) ||
-      Boolean(selectedAnnotation) ||
+      selectedAnnotations.length > 0 ||
       Boolean(effectiveSelectedConstraint());
   }
 
@@ -14872,6 +15274,7 @@
           blockPlacementRotationLocked = true;
           pointerPreview = null;
           mode = "select";
+          restoreBlockPlacementPropertiesPanel();
           setHint("ブロック配置をキャンセルしました");
           updateUI();
           draw();
@@ -14902,7 +15305,7 @@
         selectedBlockInstances.length > 0 ||
         selectedArcEndpoint ||
         selectedDimensionConstraint ||
-        selectedAnnotation ||
+        selectedAnnotations.length > 0 ||
         effectiveSelectedConstraint()
       ) {
         clearSelection();
@@ -15065,6 +15468,7 @@
   function withStoredDefinitionAsModel(definition, callback) {
     const saved = {
       points: model.points, lines: model.lines, circles: model.circles, arcs: model.arcs,
+      annotations: model.annotations,
       constraints: model.constraints, parameters: model.parameters, nextDimensionParameterIndex: model.nextDimensionParameterIndex,
       blockInstances: model.blockInstances, sketches: model.sketches, activeSketchId: model.activeSketchId,
     };
@@ -15072,6 +15476,7 @@
     model.lines = definition.lines;
     model.circles = definition.circles;
     model.arcs = definition.arcs;
+    model.annotations = definition.annotations || [];
     model.constraints = definition.constraints;
     model.parameters = definition.parameters;
     model.nextDimensionParameterIndex = definition.nextDimensionParameterIndex;
@@ -15085,6 +15490,7 @@
       definition.lines = model.lines;
       definition.circles = model.circles;
       definition.arcs = model.arcs;
+      definition.annotations = model.annotations;
       definition.constraints = model.constraints;
       definition.parameters = model.parameters;
       definition.nextDimensionParameterIndex = model.nextDimensionParameterIndex;
@@ -15247,60 +15653,10 @@
     const button = event.target.closest("button");
     button?.closest("details")?.removeAttribute("open");
   });
-  for (const button of document.querySelectorAll("[data-explorer-tab]")) {
-    button.addEventListener("click", () => {
-      const target = button.dataset.explorerTab;
-      for (const panel of document.querySelectorAll("[data-explorer-panel]")) {
-        panel.hidden = panel.dataset.explorerPanel !== target;
-      }
-      for (const tab of document.querySelectorAll("[data-explorer-tab]")) {
-        const active = tab === button;
-        tab.classList.toggle("active", active);
-        tab.setAttribute("aria-selected", String(active));
-      }
-    });
-  }
-  document.getElementById("toggleExplorerPanelBtn")?.addEventListener("click", () => {
-    const workspace = document.querySelector(".workspace");
-    setWorkspacePanelCollapsed("explorer", !workspace?.classList.contains("explorer-collapsed"));
-  });
   document.getElementById("togglePropertiesPanelBtn")?.addEventListener("click", () => {
     const workspace = document.querySelector(".workspace");
-    setWorkspacePanelCollapsed("properties", !workspace?.classList.contains("properties-collapsed"));
+    setPropertiesPanelCollapsed(!workspace?.classList.contains("properties-collapsed"));
   });
-  for (const panel of document.querySelectorAll(".object-explorer-panel")) {
-    panel.addEventListener("click", (event) => {
-      if (event.target.closest("button")) return;
-      const row = event.target.closest("[data-object-kind], .geometry-list-row, .constraint-list-row");
-      if (!row) return;
-      clearSelection();
-      if (row.dataset.objectKind === "block") selectedBlockInstances = model.blockInstances.filter((item) => item.id === row.dataset.id);
-      else if (row.dataset.objectKind === "annotation") selectedAnnotation = model.annotations.find((item) => item.id === row.dataset.id) || null;
-      else if (row.classList.contains("constraint-list-row")) selectedConstraint = model.constraints[Number(row.dataset.idx)] || null;
-      else {
-        const kind = row.dataset.kind;
-        if (kind === "point") selectedPoints = model.points.filter((item) => item.id === row.dataset.id);
-        if (kind === "line") selectedLines = model.lines.filter((item) => item.id === row.dataset.id);
-        if (kind === "circle") selectedCircles = model.circles.filter((item) => item.id === row.dataset.id);
-        if (kind === "arc") selectedArcs = model.arcs.filter((item) => item.id === row.dataset.id);
-      }
-      updateUI();
-      draw();
-    });
-    panel.addEventListener("pointerover", (event) => {
-      const row = event.target.closest("[data-object-kind]");
-      if (!row) return;
-      if (row.dataset.objectKind === "block") hoveredBlockInstance = model.blockInstances.find((item) => item.id === row.dataset.id) || null;
-      if (row.dataset.objectKind === "annotation") hoveredAnnotation = model.annotations.find((item) => item.id === row.dataset.id) || null;
-      draw();
-    });
-    panel.addEventListener("pointerout", (event) => {
-      if (!event.target.closest("[data-object-kind]")) return;
-      hoveredBlockInstance = null;
-      hoveredAnnotation = null;
-      draw();
-    });
-  }
   document.getElementById("parametersBtn")?.addEventListener("click", openParametersDialog);
   document.getElementById("parameterScopeSelect")?.addEventListener("change", (event) => {
     const previousKey = parameterDialogSession?.key;
@@ -16141,6 +16497,8 @@
       loadDocumentFixtureForDragTest(data, fileName = "drag-fixture.json") {
         try {
           loadModelData(structuredClone(data), { documentNameOverride: fileNameStem(fileName) });
+          updateUI();
+          draw();
           return { success: true, constraintCount: model.constraints.length };
         } catch (error) {
           return { success: false, error: error.message };
@@ -16869,6 +17227,36 @@
           text: textElement ? { world: { x: textElement.x, y: textElement.y }, viewport: toViewport(textElement) } : null,
         };
       },
+      annotationOwnershipStateForTest() {
+        const rect = canvas.getBoundingClientRect();
+        const clientPoint = (annotation) => {
+          const screen = worldToCanvasScreen({ x: annotation.x, y: annotation.y });
+          return { x: rect.left + screen.x, y: rect.top + screen.y };
+        };
+        return {
+          direct: model.annotations.map((annotation) => ({ ...serializeAnnotation(annotation) })),
+          projected: allAnnotations().filter((annotation) => annotation.blockProjection).map((annotation) => ({
+            id: annotation.id,
+            sketchId: annotation.sketchId,
+            type: annotation.type,
+            text: annotation.text,
+            x: annotation.x,
+            y: annotation.y,
+            rotation: Number(annotation.rotation) || 0,
+            visible: annotation.visible !== false,
+            style: { ...(annotation.style || {}) },
+            client: clientPoint(annotation),
+            ownerId: annotation.blockInstance?.id || null,
+          })),
+          selectedIds: selectedAnnotations.map((annotation) => annotation.id),
+          bounds: allGeometryBounds(),
+        };
+      },
+      fitAllGeometryForTest(padding = 120) {
+        const fitted = fitAllGeometryToViewport(Number(padding) || 120);
+        draw();
+        return fitted;
+      },
       annotationHitAt(viewportPoint) {
         const canvasRect = canvas.getBoundingClientRect();
         const world = screenToWorld({ x: viewportPoint.x - canvasRect.left, y: viewportPoint.y - canvasRect.top });
@@ -17357,7 +17745,7 @@
         const circle = addCircle(center, 20);
         line.appearance = { color: "#ef4444" };
         circle.appearance = { color: "#22c55e" };
-        model.annotations.push({ id: "AN-test", type: "leader", visible: true, geometryRef: geometryRefForItem(line), start: { x: 0, y: 0 }, end: { x: 30, y: 20 }, style: {} });
+        model.annotations.push({ id: "AN-test", type: "leader", visible: true, sketchId: "S2", geometryRef: geometryRefForItem(line), start: { x: 0, y: 0 }, end: { x: 30, y: 20 }, style: {} });
         model.activeSketchId = "S3";
         const deleted = deleteSketch("S2", false);
         return {
@@ -17430,6 +17818,7 @@
         model.sketches.push({ id: activeChildId, name: "Sketch-2", parentSketchId: sourceSketchId, kind: "sketch", visible: true, appearance: {} });
         model.activeSketchId = activeChildId;
         fitAllGeometryToViewport(180);
+        viewport.x += 80;
         updateUI();
         draw();
         const layout = dimensionLayout(targetFromConstraint(dimensionConstraint), dimensionConstraint.dimension);
@@ -18330,6 +18719,7 @@
           id: "AN-block-ref",
           type: "leader",
           visible: true,
+          sketchId: activeSketchId(),
           geometryRef: geometryRefForItem(line),
           start: { x: 0, y: 0 },
           end: { x: 30, y: 20 },

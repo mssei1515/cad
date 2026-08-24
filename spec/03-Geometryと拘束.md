@@ -195,4 +195,4 @@ Geometry は解析結果により次の状態で描き分ける。
 
 Geometry の削除時は、共有 Point の利用状況を考慮して不要 Pointを整理し、対象を参照する拘束と拘束寸法を除去する。ただし削除後も残る式が削除対象の寸法symbolを参照する場合は、依存元の名前を表示して操作を拒否する。依存元も同時に削除する操作、または名前空間全体の削除は許可する。1回のユーザー操作は1つの履歴単位にする。
 
-Geometryを削除すると、そのGeometryを参照するConstraintとDocument Leaderも同時に除去する。Sketch削除、Block Instance削除、Block Definition編集でも同じ参照ライフサイクルを適用する。
+Geometryを削除すると、そのGeometryを参照するConstraintとLeaderも同時に除去する。Sketch削除、Block Instance削除、Block Definition編集でも同じ参照ライフサイクルを適用する。

@@ -47,7 +47,7 @@
         </div></details>
         <details class="app-menu"><summary>ブロック</summary><div class="menu-popover">
           <button type="button" data-menu-tool="toolCreateBlock">ブロック作成</button>
-          <button type="button" data-menu-tool="openBlockDefinitionsBtn">ブロック定義</button>
+          <button id="openBlockDefinitionsBtn" type="button">ブロック定義</button>
         </div></details>
         <details class="app-menu"><summary>Constraint</summary><div class="menu-popover"><span class="menu-note">拘束ツールはツールバーから選択します</span></div></details>
         <details class="app-menu"><summary>Annotation</summary><div class="menu-popover">
@@ -113,32 +113,6 @@
     </nav>
 
     <main class="workspace">
-      <aside class="explorer" aria-label="Explorer">
-        <div class="panel-title"><span class="panel-title-label">Explorer</span><button id="toggleExplorerPanelBtn" class="panel-collapse-button" type="button" title="エクスプローラーを最小化" aria-label="エクスプローラーを最小化" aria-expanded="true"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg></button></div>
-        <div class="panel-tabs" role="tablist">
-          <button class="panel-tab active" type="button" data-explorer-tab="geometry" aria-selected="true">Geometry</button>
-          <button class="panel-tab" type="button" data-explorer-tab="blocks" aria-selected="false">Block</button>
-          <button class="panel-tab" type="button" data-explorer-tab="constraint" aria-selected="false">Constraint</button>
-        </div>
-        <div class="explorer-scroll">
-          <section id="explorerGeometry" class="explorer-panel object-explorer-panel active" data-explorer-panel="geometry">
-            <details><summary><span class="explorer-section-label">Point</span><span id="pointCount" class="explorer-count">0</span></summary><div id="pointList" class="list"></div></details>
-            <details><summary><span class="explorer-section-label">Line</span><span id="lineCount" class="explorer-count">0</span></summary><div id="lineList" class="list"></div></details>
-            <details><summary><span class="explorer-section-label">Circle</span><span id="circleCount" class="explorer-count">0</span></summary><div id="circleList" class="list"></div></details>
-            <details><summary><span class="explorer-section-label">Arc</span><span id="arcCount" class="explorer-count">0</span></summary><div id="arcList" class="list"></div></details>
-            <details><summary><span class="explorer-section-label">Annotation</span><span id="annotationCount" class="explorer-count">0</span></summary><div id="annotationObjectList" class="list"></div></details>
-          </section>
-          <section id="explorerBlocks" class="explorer-panel object-explorer-panel" data-explorer-panel="blocks" hidden>
-            <section class="explorer-section block-definition-launcher"><div class="section-header"><strong>ブロック</strong><button id="openBlockDefinitionsBtn" class="compact-button" type="button">ブロック定義…</button></div></section>
-            <div id="blockInstanceObjectList" class="list explorer-direct-list"></div>
-            <div id="blockSketchConfig" class="block-sketch-config" hidden></div>
-          </section>
-          <section id="explorerConstraint" class="explorer-panel object-explorer-panel" data-explorer-panel="constraint" hidden>
-            <div id="constraintList" class="list explorer-direct-list"></div>
-          </section>
-        </div>
-      </aside>
-
       <section class="canvas-area" aria-label="Canvas">
         <canvas id="canvas"></canvas><input id="dimensionValueInput" class="dimension-value-input" type="text" inputmode="decimal" autocomplete="off" spellcheck="false" aria-label="寸法値" hidden />
         <section id="sketchOverlay" class="sketch-overlay" aria-label="スケッチツリー">

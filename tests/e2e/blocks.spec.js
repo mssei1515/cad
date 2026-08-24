@@ -8,15 +8,26 @@ const port = Number(process.env.CAD2_E2E_PORT || 8765) + 1;
 const baseUrl = `http://${host}:${port}`;
 let serverProcess = null;
 
-async function openBlocksExplorer(page) {
-  const tab = page.locator('[data-explorer-tab="blocks"]');
-  if ((await tab.getAttribute("aria-selected")) !== "true") await tab.click();
+async function openBlockDefinitions(page) {
+  const dialog = page.locator("#blockDefinitionsDialog");
+  if (!(await dialog.isVisible())) {
+    await page.locator(".app-menu > summary").filter({ hasText: /^(?:ブロック|Block)$/ }).click();
+    await page.locator("#openBlockDefinitionsBtn").click();
+  }
 }
 
-async function openBlockDefinitions(page) {
-  await openBlocksExplorer(page);
-  const dialog = page.locator("#blockDefinitionsDialog");
-  if (!(await dialog.isVisible())) await page.click("#openBlockDefinitionsBtn");
+async function openBlocksExplorer(page) {
+  await expect(page.locator(".explorer, [data-explorer-tab]")).toHaveCount(0);
+}
+
+function sketchTreeGroup(page, category, sketchId = "S1") {
+  return page.locator(`.sketch-group-row[data-sketch-id="${sketchId}"][data-category="${category}"]`);
+}
+
+async function expandSketchTreeGroup(page, category, sketchId = "S1") {
+  const group = sketchTreeGroup(page, category, sketchId);
+  if ((await group.getAttribute("aria-expanded")) !== "true") await group.click();
+  return group;
 }
 
 function waitForServer(url, timeoutMs = 10000) {
@@ -660,7 +671,7 @@ test("creates, places, drags, edits, and reloads local-coordinate blocks", async
   expect(edited.lengths[1]).toBeCloseTo(edited.lengths[0], 6);
 
   const reloaded = await page.evaluate(() => window.__cadTest.reloadBlockState());
-  expect(reloaded).toEqual({ definitions: 1, instances: 2, projectionLines: 8, serializedVersion: 10 });
+  expect(reloaded).toEqual({ definitions: 1, instances: 2, projectionLines: 8, serializedVersion: 11 });
 
   await openBlockDefinitions(page);
   await page.click(".blockDeleteBtn");
@@ -690,7 +701,7 @@ test("block placement defaults to persistent orthogonal rotation lock and can us
     const item = orthogonalCases[index];
     await openBlockDefinitions(page);
     await page.click(".blockPlaceBtn");
-    await expect(page.locator('input[data-rotation-mode="locked"]')).toBeChecked();
+    await expect(page.locator('input[data-placement-rotation-mode="locked"]')).toBeChecked();
     const center = { x: canvas.x + canvas.width * (0.56 + index * 0.04), y: canvas.y + canvas.height * 0.48 };
     await page.mouse.click(center.x, center.y);
     await page.mouse.click(center.x + item.dx, center.y + item.dy);
@@ -717,8 +728,8 @@ test("block placement defaults to persistent orthogonal rotation lock and can us
 
   await openBlockDefinitions(page);
   await page.click(".blockPlaceBtn");
-  await page.click('input[data-rotation-mode="free"]');
-  await expect(page.locator('input[data-rotation-mode="free"]')).toBeChecked();
+  await page.click('input[data-placement-rotation-mode="free"]');
+  await expect(page.locator('input[data-placement-rotation-mode="free"]')).toBeChecked();
   const freeCenter = { x: canvas.x + canvas.width * 0.7, y: canvas.y + canvas.height * 0.64 };
   await page.mouse.click(freeCenter.x, freeCenter.y);
   await page.mouse.click(freeCenter.x + 90, freeCenter.y + 42);
@@ -755,7 +766,7 @@ test("selected blocks can change rotation mode and reject an unsatisfied orthogo
   await expect(page.locator('#propertiesPanel input[data-property="block-y"]')).toHaveCount(0);
   await expect(page.locator('#propertiesPanel input[data-property="block-rotation"]')).toHaveCount(0);
   await expect(page.locator('#propertiesPanel select[data-property="block-orthogonal-rotation"]')).toHaveCount(0);
-  await expect(page.locator("#blockSketchConfig")).toBeHidden();
+  await expect(page.locator("#blockSketchConfig")).toHaveCount(0);
   const before = await page.evaluate(() => window.__cadTest.blockRotationLockStateForTest("BI1"));
   await page.click('#propertiesPanel input[data-block-rotation-mode="locked"]');
   let after = await page.evaluate(() => window.__cadTest.blockRotationLockStateForTest("BI1"));
@@ -828,7 +839,7 @@ test("selected blocks can change rotation mode and reject an unsatisfied orthogo
   await expect(page.locator('#propertiesPanel select[data-property="block-orthogonal-rotation"]')).toHaveValue("0");
 });
 
-test("block placement settings stay in Explorer while selected-block settings appear in Properties", async ({ page }) => {
+test("block placement and selected-block settings stay in Properties", async ({ page }) => {
   await page.goto(`${baseUrl}/index.html?test=1`);
   await page.waitForFunction(() => window.__cadTest);
   await page.evaluate(() => window.__cadTest.resetForBlockCreationUi());
@@ -837,24 +848,29 @@ test("block placement settings stay in Explorer while selected-block settings ap
   await page.click("#completeBlockEditBtn");
 
   const instanceId = (await page.evaluate(() => window.__cadTest.blockState())).instances[0].id;
-  await expect(page.locator("#blockSketchConfig")).toBeHidden();
+  await expect(page.locator("#blockSketchConfig")).toHaveCount(0);
   await expect(page.locator('#propertiesPanel input[data-block-rotation-mode="locked"]')).toBeVisible();
   await expect(page.locator("#propertiesPanel input[data-block-sketch-id]")).toHaveCount(1);
   await page.evaluate(() => window.__cadTest.selectGeometryIdsForTest({}));
-  await expect(page.locator("#blockSketchConfig")).toBeHidden();
+  await expect(page.locator("#blockSketchConfig")).toHaveCount(0);
   await expect(page.locator("#propertiesPanel input[data-block-rotation-mode]")).toHaveCount(0);
 
+  await page.click("#togglePropertiesPanelBtn");
+  await expect(page.locator("#togglePropertiesPanelBtn")).toHaveAttribute("aria-expanded", "false");
   await openBlockDefinitions(page);
   await page.click(".blockPlaceBtn");
-  await expect(page.locator("#blockSketchConfig")).toBeVisible();
+  await expect(page.locator("#togglePropertiesPanelBtn")).toHaveAttribute("aria-expanded", "true");
+  await expect(page.locator('#propertiesPanel input[data-placement-rotation-mode="locked"]')).toBeVisible();
+  await expect(page.locator("#propertiesPanel input[data-placement-sketch-id]")).toHaveCount(1);
   await page.keyboard.press("Escape");
-  await expect(page.locator("#blockSketchConfig")).toBeHidden();
+  await expect(page.locator("#togglePropertiesPanelBtn")).toHaveAttribute("aria-expanded", "false");
+  await page.click("#togglePropertiesPanelBtn");
 
   await page.evaluate((id) => window.__cadTest.selectGeometryIdsForTest({ blockInstances: [id] }), instanceId);
-  await expect(page.locator("#blockSketchConfig")).toBeHidden();
+  await expect(page.locator("#blockSketchConfig")).toHaveCount(0);
   await expect(page.locator("#propertiesPanel input[data-block-sketch-id]")).toHaveCount(1);
   await page.evaluate(() => window.__cadTest.selectGeometryIdsForTest({}));
-  await expect(page.locator("#blockSketchConfig")).toBeHidden();
+  await expect(page.locator("#blockSketchConfig")).toHaveCount(0);
   await expect(page.locator("#propertiesPanel input[data-block-sketch-id]")).toHaveCount(0);
 });
 
@@ -862,13 +878,12 @@ test("selecting a block highlights only constraints that directly reference its 
   await page.goto(`${baseUrl}/index.html?test=1`);
   await page.waitForFunction(() => window.__cadTest);
   await page.evaluate((fixture) => window.__cadTest.importDocumentNameFixture(fixture, "block-related-constraint.json"), blockPointOnLineFixture({ subjectY: -50, includeConstraint: true }));
-  await page.click('[data-explorer-tab="constraint"]');
-  await expect(page.locator("#explorerConstraint")).toBeVisible();
+  await expandSketchTreeGroup(page, "constraint");
 
   await page.evaluate(() => window.__cadTest.selectGeometryIdsForTest({ blockInstances: ["BI2"] }));
-  await expect(page.locator("#constraintList .constraint-list-row")).toHaveClass(/sidebar-related/);
+  await expect(page.locator('.sketch-object-row[data-object-kind="constraint"][data-constraint-index]')).toHaveClass(/sidebar-related/);
   await page.evaluate(() => window.__cadTest.selectGeometryIdsForTest({}));
-  await expect(page.locator("#constraintList .constraint-list-row")).not.toHaveClass(/sidebar-related/);
+  await expect(page.locator('.sketch-object-row[data-object-kind="constraint"][data-constraint-index]')).not.toHaveClass(/sidebar-related/);
 });
 
 test("selected block instances highlight their definitions in the block window", async ({ page }) => {
@@ -901,7 +916,7 @@ test("shift and ctrl clicks toggle block multiselection without moving instances
   await page.mouse.click(second.center.x, second.center.y);
   await page.keyboard.up("Shift");
   expect((await page.evaluate(() => window.__cadTest.blockState())).selectedInstanceIds.sort()).toEqual(["BI1", "BI2"]);
-  await expect(page.locator("#blockSketchConfig")).toBeHidden();
+  await expect(page.locator("#blockSketchConfig")).toHaveCount(0);
 
   await page.keyboard.down("Control");
   await page.mouse.click(first.center.x, first.center.y);
@@ -1156,13 +1171,13 @@ test("a block point-on-line constraint keeps the subject block under-constrained
   expect(afterDrag.analysis).toEqual(expect.objectContaining({ stable: true, freeVariableCount: 2 }));
   expect(afterDrag.status.projections.every((projection) => projection.status === "under")).toBe(true);
 
-  await page.click('[data-explorer-tab="constraint"]');
-  await page.hover('.constraint-list-row[data-idx="0"]');
+  await expandSketchTreeGroup(page, "constraint");
+  await page.hover('.sketch-object-row[data-object-kind="constraint"][data-constraint-index="0"]');
   expect(await page.evaluate(() => window.__cadTest.currentSidebarHoveredGeometryKeys())).toEqual([
     "line:BI1@L1",
     "point:BI2@P3",
   ]);
-  await page.click('.constraint-list-row[data-idx="0"]');
+  await page.click('.sketch-object-row[data-object-kind="constraint"][data-constraint-index="0"]');
   expect(await page.locator("#propertiesPanel .property-section").first().locator(".property-row").allTextContents()).toEqual(expect.arrayContaining([
     "点IDBI2@P3",
     "線IDBI1@L1",
@@ -1269,7 +1284,7 @@ test("legacy block data migrates into an internal Sketch-1 without changing proj
 
   const before = await page.evaluate(() => window.__cadTest.blockState());
   const migrated = await page.evaluate(() => window.__cadTest.reloadLegacyBlockState());
-  expect(migrated.version).toBe(10);
+  expect(migrated.version).toBe(11);
   expect(migrated.origin).toEqual({ x: 0, y: 0 });
   expect(migrated.sketches).toEqual([
     expect.objectContaining({ id: "ROOT", kind: "root" }),
@@ -1289,9 +1304,6 @@ test("new block editor supports cancel and independent internal sketch hierarchy
   await openBlocksExplorer(page);
   await page.click("#toolCreateBlock");
   await expect(page.locator("#sketchOverlay")).toBeVisible();
-  await page.click('[data-explorer-tab="geometry"]');
-  await expect(page.locator("#sketchOverlay")).toBeVisible();
-  await page.click('[data-explorer-tab="blocks"]');
   await expect(page.locator("#sketchOverlay")).toBeVisible();
   await expect(page.locator("#completeBlockEditBtn")).toBeVisible();
   expect(await page.locator(".canvas-area").evaluate((element) => {
@@ -1527,21 +1539,22 @@ test("block definition window uses scoped actions and keeps sketch choices visib
 
   await openBlockDefinitions(page);
   await page.click('.block-item[data-id="B1"] .blockPlaceBtn');
-  await expect(page.locator("#blockSketchConfig")).toBeVisible();
+  await expect(page.locator("#propertiesPanel input[data-placement-sketch-id]")).toHaveCount(1);
   const layout = await page.evaluate(() => {
-    const explorer = document.querySelector(".explorer-scroll");
-    const config = document.querySelector("#blockSketchConfig").getBoundingClientRect();
+    const properties = document.querySelector(".properties-scroll");
+    const groups = [...document.querySelectorAll("#propertiesPanel .property-option-group")];
+    const config = groups.at(-1).getBoundingClientRect();
     return {
-      explorerScrollHeight: explorer.scrollHeight,
-      explorerClientHeight: explorer.clientHeight,
+      propertiesScrollHeight: properties.scrollHeight,
+      propertiesClientHeight: properties.clientHeight,
       configHeight: config.height,
       configBottom: config.bottom,
-      explorerBottom: explorer.getBoundingClientRect().bottom,
+      propertiesBottom: properties.getBoundingClientRect().bottom,
     };
   });
-  expect(layout.explorerScrollHeight).toBeGreaterThanOrEqual(layout.explorerClientHeight);
-  expect(layout.configHeight).toBeGreaterThanOrEqual(70);
-  expect(layout.configBottom).toBeLessThanOrEqual(layout.explorerBottom + 1);
+  expect(layout.propertiesScrollHeight).toBeGreaterThanOrEqual(layout.propertiesClientHeight);
+  expect(layout.configHeight).toBeGreaterThanOrEqual(40);
+  expect(layout.configBottom).toBeLessThanOrEqual(layout.propertiesBottom + layout.propertiesScrollHeight);
   await page.keyboard.press("Escape");
 
   await openBlockDefinitions(page);
@@ -1774,9 +1787,9 @@ test("placement and existing instances keep independent enabled internal sketche
 
   await openBlockDefinitions(page);
   await page.click(".blockPlaceBtn");
-  await expect(page.locator("#blockSketchConfig")).toBeVisible();
-  await page.locator(`#blockSketchConfig input[data-sketch-id="S1"]`).uncheck();
-  await page.locator(`#blockSketchConfig input[data-sketch-id="${child.sketchId}"]`).check();
+  await expect(page.locator("#blockSketchConfig")).toHaveCount(0);
+  await page.locator('#propertiesPanel input[data-placement-sketch-id="S1"]').uncheck();
+  await page.locator(`#propertiesPanel input[data-placement-sketch-id="${child.sketchId}"]`).check();
   const canvas = await page.locator("#canvas").boundingBox();
   await page.mouse.click(canvas.x + canvas.width * 0.72, canvas.y + canvas.height * 0.65);
   await page.mouse.click(canvas.x + canvas.width * 0.8, canvas.y + canvas.height * 0.65);
@@ -1785,7 +1798,7 @@ test("placement and existing instances keep independent enabled internal sketche
   expect(state.projectionLineIds).toHaveLength(5);
 
   await page.evaluate((id) => window.__cadTest.selectGeometryIdsForTest({ blockInstances: [id] }), state.instances[0].id);
-  await expect(page.locator("#blockSketchConfig")).toBeHidden();
+  await expect(page.locator("#blockSketchConfig")).toHaveCount(0);
   await page.locator(`#propertiesPanel input[data-block-sketch-id="${child.sketchId}"]`).check();
   state = await page.evaluate(() => window.__cadTest.blockState());
   expect(state.instances[0].enabledSketchIds.sort()).toEqual(["S1", child.sketchId].sort());

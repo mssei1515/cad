@@ -8,20 +8,20 @@ const port = Number(process.env.CAD2_E2E_PORT || 8765);
 const baseUrl = `http://${host}:${port}`;
 let serverProcess = null;
 
-function objectSection(page, label) {
-  const localized = {
-    Point: ["Point", "点"], Line: ["Line", "線"], Circle: ["Circle", "円"], Arc: ["Arc", "円弧"],
-    "Block Instance": ["Block Instance", "ブロックインスタンス"], Annotation: ["Annotation", "注記"], Constraint: ["Constraint", "拘束"],
-  }[label] || [label];
-  return page.locator(".object-explorer-panel > details", {
-    has: page.locator("summary .explorer-section-label", { hasText: new RegExp(`^(?:${localized.join("|")})$`) }),
-  });
+function sketchTreeGroup(page, category, sketchId = "S1") {
+  return page.locator(`.sketch-group-row[data-sketch-id="${sketchId}"][data-category="${category}"]`);
 }
 
-async function expandObjectSection(page, label) {
-  const section = objectSection(page, label);
-  if ((await section.getAttribute("open")) === null) await section.locator("summary").click();
-  return section;
+async function expandSketchTreeGroup(page, category, sketchId = "S1") {
+  const group = sketchTreeGroup(page, category, sketchId);
+  if ((await group.getAttribute("aria-expanded")) !== "true") await group.click();
+  return group;
+}
+
+async function openBlockDefinitions(page) {
+  const blockMenu = page.locator(".app-menu > summary").filter({ hasText: /^(?:ブロック|Block)$/ });
+  await blockMenu.click();
+  await page.locator("#openBlockDefinitionsBtn").click();
 }
 
 async function openApplicationSettings(page) {
@@ -39,6 +39,55 @@ async function openDocumentSettings(page) {
 async function selectSketch(page, sketchId) {
   await page.locator(`.sketch-item[data-id="${sketchId}"]`).click();
   await expect(page.locator("#propertiesPanel .property-heading")).toContainText(sketchId === "ROOT" ? "Root Sketch" : /Sketch|スケッチ/);
+}
+
+function annotationSketchFixture(version = 11) {
+  const annotations = [
+    { id: "AN1", type: "text", sketchId: "S1", visible: true, text: "Room note", x: -30, y: -24, style: { color: "#2563eb", fontSize: 14 } },
+    {
+      id: "AN2",
+      type: "leader",
+      sketchId: "S1",
+      visible: true,
+      text: "Wall",
+      x: 10,
+      y: -34,
+      start: { x: 0, y: 0 },
+      elbow: { x: 10, y: -20 },
+      end: { x: 10, y: -34 },
+      geometryRef: { kind: "line", path: ["L1"] },
+      style: { color: "#111827", lineWidth: 1.5 },
+    },
+  ];
+  if (version < 11) for (const annotation of annotations) delete annotation.sketchId;
+  return {
+    version,
+    documentName: "Annotation tree",
+    sketches: [
+      { id: "ROOT", name: "Root Sketch", parentSketchId: null, kind: "root", appearance: {} },
+      { id: "S1", name: "Walls", parentSketchId: "ROOT", kind: "sketch", appearance: {} },
+      { id: "S2", name: "Notes", parentSketchId: "ROOT", kind: "sketch", appearance: {} },
+    ],
+    activeSketchId: "S2",
+    annotations,
+    parameters: [],
+    nextDimensionParameterIndex: 1,
+    blockDefinitions: [],
+    blockInstances: [],
+    points: [
+      { id: "P1", x: -60, y: 0, fixed: false, kind: "endpoint", sketchId: "S1" },
+      { id: "P2", x: 60, y: 0, fixed: false, kind: "endpoint", sketchId: "S1" },
+      { id: "P3", x: -40, y: 50, fixed: false, kind: "endpoint", sketchId: "S2" },
+      { id: "P4", x: 40, y: 50, fixed: false, kind: "endpoint", sketchId: "S2" },
+    ],
+    lines: [
+      { id: "L1", p1: "P1", p2: "P2", construction: false, sketchId: "S1" },
+      { id: "L2", p1: "P3", p2: "P4", construction: false, sketchId: "S2" },
+    ],
+    circles: [],
+    arcs: [],
+    constraints: [],
+  };
 }
 
 function waitForServer(url, timeoutMs = 10000) {
@@ -85,7 +134,7 @@ async function openParameterDialog(page) {
   await expect(page.locator("#parametersDialog")).toBeVisible();
 }
 
-test("document parameters, dimension formulas, rename propagation, and v10 persistence work together", async ({ page }) => {
+test("document parameters, dimension formulas, rename propagation, and v11 persistence work together", async ({ page }) => {
   await page.goto(`${baseUrl}/index.html?test=1`);
   await page.waitForFunction(() => window.__cadTest);
   const initial = await page.evaluate(() => window.__cadTest.resetForParameterTest());
@@ -119,7 +168,7 @@ test("document parameters, dimension formulas, rename propagation, and v10 persi
   expect(state.valid).toBe(true);
   expect(state.parameters.map((item) => item.name)).toEqual(["span", "margin"]);
   expect(state.dimensions.find((item) => !item.readOnly).expression).toContain("span");
-  expect(state.serialized.version).toBe(10);
+  expect(state.serialized.version).toBe(11);
   expect(state.serialized.constraints.every((constraint) => !constraint.dimension || constraint.parameterName)).toBe(true);
 });
 
@@ -150,14 +199,14 @@ test("block parameter namespaces are independent and directly update definitions
   expect(state.instanceProjectionLengths[1]).toBeCloseTo(15, 5);
 });
 
-test("invalid v10 parameter expressions reject loading without replacing the document", async ({ page }) => {
+test("invalid v11 parameter expressions reject loading without replacing the document", async ({ page }) => {
   await page.goto(`${baseUrl}/index.html?test=1`);
   await page.waitForFunction(() => window.__cadTest);
   await page.evaluate(() => window.__cadTest.resetForParameterTest());
   const before = await page.evaluate(() => window.__cadTest.serializedModelForTest());
   const invalid = structuredClone(before);
   invalid.parameters[0].expression = "missing + 1";
-  const result = await page.evaluate((data) => window.__cadTest.loadDocumentFixtureForDragTest(data, "invalid-v10.json"), invalid);
+  const result = await page.evaluate((data) => window.__cadTest.loadDocumentFixtureForDragTest(data, "invalid-v11.json"), invalid);
   expect(result.success).toBe(false);
   expect(result.error).toContain("未定義");
   const after = await page.evaluate(() => window.__cadTest.serializedModelForTest());
@@ -224,6 +273,163 @@ test("document annotations can be dragged on the unified canvas", async ({ page 
   const afterRedo = await page.evaluate(() => window.__cadTest.annotationSnapshot());
   expect(afterRedo.leader.world.x).toBeCloseTo(afterLeader.leader.world.x, 5);
   expect(afterRedo.leader.world.y).toBeCloseTo(afterLeader.leader.world.y, 5);
+});
+
+test("Sketch Tree owns object groups, activates inactive rows, and copies annotations across sketches", async ({ page }) => {
+  await page.goto(`${baseUrl}/index.html?test=1`);
+  await page.waitForFunction(() => window.__cadTest);
+  const fixture = annotationSketchFixture();
+  expect(await page.evaluate((data) => window.__cadTest.loadDocumentFixtureForDragTest(data, "annotation-tree.json"), fixture)).toEqual(expect.objectContaining({ success: true }));
+
+  expect(await page.locator('.sketch-group-row[data-sketch-id="S1"]').evaluateAll((rows) => rows.map((row) => row.dataset.category))).toEqual(["point", "line", "annotation"]);
+  await expect(page.locator('.sketch-group-row[data-sketch-id="S1"]')).toHaveCount(3);
+  await expect(page.locator('.sketch-object-row[data-sketch-id="S1"]')).toHaveCount(0);
+  await expect(sketchTreeGroup(page, "line", "S1")).toHaveAttribute("aria-expanded", "false");
+
+  await expandSketchTreeGroup(page, "line", "S1");
+  const inactiveLine = page.locator('.sketch-object-row[data-object-kind="line"][data-id="L1"]');
+  await expect(inactiveLine).toBeVisible();
+  await inactiveLine.hover();
+  expect((await page.evaluate(() => window.__cadTest.selectedGeometryIdsForTest())).lines).toEqual([]);
+  await inactiveLine.click();
+  expect((await page.evaluate(() => window.__cadTest.serializedModelForTest())).activeSketchId).toBe("S1");
+  expect((await page.evaluate(() => window.__cadTest.selectedGeometryIdsForTest())).lines).toEqual(["L1"]);
+  await expect(page.locator("#propertiesPanel")).toContainText("L1");
+
+  await sketchTreeGroup(page, "line", "S1").click();
+  await expect(sketchTreeGroup(page, "line", "S1")).toHaveClass(/has-active-descendant/);
+  await expect(sketchTreeGroup(page, "line", "S1")).toHaveAttribute("aria-expanded", "false");
+  await expandSketchTreeGroup(page, "line", "S1");
+  await expandSketchTreeGroup(page, "annotation", "S1");
+  await page.locator('.sketch-object-row[data-object-kind="annotation"][data-id="AN1"]').click({ modifiers: ["Control"] });
+  expect((await page.evaluate(() => window.__cadTest.annotationOwnershipStateForTest())).selectedIds).toEqual(["AN1"]);
+
+  await page.keyboard.press("Control+C");
+  await page.locator('.sketchActivateBtn[data-id="S2"]').click();
+  await page.keyboard.press("Control+V");
+  const pasted = await page.evaluate(() => window.__cadTest.serializedModelForTest());
+  const copiedAnnotation = pasted.annotations.find((annotation) => annotation.id !== "AN1" && annotation.id !== "AN2");
+  expect(copiedAnnotation).toEqual(expect.objectContaining({ type: "text", sketchId: "S2", text: "Room note" }));
+  expect(pasted.lines.filter((line) => line.sketchId === "S2")).toHaveLength(2);
+
+  await expect(sketchTreeGroup(page, "line", "S1")).toHaveAttribute("aria-expanded", "true");
+  expect(await page.evaluate((data) => window.__cadTest.loadDocumentFixtureForDragTest(data, "annotation-tree-reload.json"), pasted)).toEqual(expect.objectContaining({ success: true }));
+  await expect(sketchTreeGroup(page, "line", "S1")).toHaveAttribute("aria-expanded", "false");
+  await expect(page.locator('.sketch-object-row[data-sketch-id="S1"]')).toHaveCount(0);
+});
+
+test("v10 annotations migrate by target or active sketch and invalid v11 ownership is atomic", async ({ page }) => {
+  await page.goto(`${baseUrl}/index.html?test=1`);
+  await page.waitForFunction(() => window.__cadTest);
+  const legacy = annotationSketchFixture(10);
+  expect(await page.evaluate((data) => window.__cadTest.loadDocumentFixtureForDragTest(data, "annotation-v10.json"), legacy)).toEqual(expect.objectContaining({ success: true }));
+  const migrated = await page.evaluate(() => window.__cadTest.serializedModelForTest());
+  expect(migrated.version).toBe(11);
+  expect(migrated.annotations.find((annotation) => annotation.id === "AN1").sketchId).toBe("S2");
+  expect(migrated.annotations.find((annotation) => annotation.id === "AN2").sketchId).toBe("S1");
+
+  const invalid = structuredClone(migrated);
+  invalid.annotations[0].sketchId = "ROOT";
+  const result = await page.evaluate((data) => window.__cadTest.loadDocumentFixtureForDragTest(data, "invalid-annotation-v11.json"), invalid);
+  expect(result.success).toBe(false);
+  expect(result.error).toMatch(/所属Sketch|owning sketch/);
+  const retained = await page.evaluate(() => window.__cadTest.serializedModelForTest());
+  expect(retained.annotations).toEqual(migrated.annotations);
+  expect(retained.lines).toEqual(migrated.lines);
+});
+
+test("annotation-only blocks project nested text with transforms, overrides, bounds, and block hit selection", async ({ page }) => {
+  await page.goto(`${baseUrl}/index.html?test=1`);
+  await page.waitForFunction(() => window.__cadTest);
+  const fixture = annotationSketchFixture();
+  fixture.activeSketchId = "S1";
+  fixture.annotations = [fixture.annotations[0]];
+  expect(await page.evaluate((data) => window.__cadTest.loadDocumentFixtureForDragTest(data, "annotation-only.json"), fixture)).toEqual(expect.objectContaining({ success: true }));
+  await expandSketchTreeGroup(page, "annotation", "S1");
+  await page.locator('.sketch-object-row[data-object-kind="annotation"][data-id="AN1"]').click();
+  await page.locator("#toolCreateBlock").click();
+  await expect(page.locator("body")).toHaveClass(/block-editing/);
+  await page.locator("#completeBlockEditBtn").click();
+  const created = await page.evaluate(() => window.__cadTest.blockState());
+  expect(created.serialized.annotations).toHaveLength(0);
+  expect(created.serialized.blockDefinitions).toHaveLength(1);
+  expect(created.serialized.blockDefinitions[0].lines).toHaveLength(0);
+  expect(created.serialized.blockDefinitions[0].annotations).toHaveLength(1);
+  expect(created.serialized.blockInstances).toHaveLength(1);
+  expect((await page.evaluate(() => window.__cadTest.annotationOwnershipStateForTest())).projected).toHaveLength(1);
+
+  const nested = annotationSketchFixture();
+  nested.points = [];
+  nested.lines = [];
+  nested.annotations = [];
+  nested.activeSketchId = "S1";
+  const internalSketches = [
+    { id: "ROOT", name: "Root Sketch", parentSketchId: null, kind: "root", appearance: {} },
+    { id: "S1", name: "Content", parentSketchId: "ROOT", kind: "sketch", appearance: {} },
+  ];
+  const emptyDefinition = (id, name, parentDefinitionId) => ({
+    id,
+    name,
+    parentDefinitionId,
+    revision: 1,
+    origin: { x: 0, y: 0 },
+    sketches: internalSketches,
+    activeSketchId: "S1",
+    parameters: [],
+    nextDimensionParameterIndex: 1,
+    points: [],
+    lines: [],
+    circles: [],
+    arcs: [],
+    annotations: [],
+    blockInstances: [],
+    constraints: [],
+  });
+  const leaf = emptyDefinition("B1", "Leaf note", "B2");
+  leaf.annotations = [{ id: "AN1", type: "text", sketchId: "S1", visible: false, text: "Nested note", x: 10, y: 0, style: { color: "#0000ff", fontSize: 16 } }];
+  const parent = emptyDefinition("B2", "Parent note", null);
+  parent.blockInstances = [{
+    id: "BI-child",
+    definitionId: "B1",
+    sketchId: "S1",
+    x: 20,
+    y: 0,
+    rotation: Math.PI / 2,
+    fixed: false,
+    rotationLocked: true,
+    enabledSketchIds: ["S1"],
+    appearanceOverride: { color: "#00ff00", lineWidth: 2 },
+  }];
+  nested.blockDefinitions = [leaf, parent];
+  nested.blockInstances = [{
+    id: "BI-root",
+    definitionId: "B2",
+    sketchId: "S1",
+    x: 300,
+    y: 50,
+    rotation: Math.PI / 2,
+    fixed: false,
+    rotationLocked: true,
+    enabledSketchIds: ["S1"],
+    appearanceOverride: { visible: true, color: "#ef4444", lineWidth: 3 },
+  }];
+  expect(await page.evaluate((data) => window.__cadTest.loadDocumentFixtureForDragTest(data, "nested-annotation.json"), nested)).toEqual(expect.objectContaining({ success: true }));
+  await page.evaluate(() => window.__cadTest.fitAllGeometryForTest());
+  const projectedState = await page.evaluate(() => window.__cadTest.annotationOwnershipStateForTest());
+  expect(projectedState.projected).toHaveLength(1);
+  const projected = projectedState.projected[0];
+  expect(projected.id).toBe("BI-root/BI-child/AN1");
+  expect(projected.rotation).toBeCloseTo(Math.PI, 8);
+  expect(projected.visible).toBe(true);
+  expect(projected.style).toEqual(expect.objectContaining({ color: "#ef4444", lineWidth: 3 }));
+  expect(projectedState.bounds).not.toBeNull();
+  expect(await page.evaluate((point) => window.__cadTest.annotationHitAt(point), projected.client)).toEqual({ type: "text", part: "label" });
+  expect(await page.evaluate((point) => {
+    const target = document.elementFromPoint(point.x, point.y);
+    return { id: target?.id || "", tag: target?.tagName || "", className: target?.className || "" };
+  }, projected.client)).toEqual({ id: "canvas", tag: "CANVAS", className: "" });
+  await page.mouse.click(projected.client.x, projected.client.y);
+  expect((await page.evaluate(() => window.__cadTest.blockState())).selectedInstanceIds).toEqual(["BI-root"]);
 });
 
 test("history buttons enable after normal canvas edits", async ({ page }) => {
@@ -373,7 +579,7 @@ test("undo preserves construction drawing mode", async ({ page }) => {
   expect(state.constructionButtonActive).toBe(true);
 });
 
-test("unified workspace uses fixed Explorer Canvas Properties and Status regions", async ({ page }) => {
+test("workspace integrates compact Object groups into Sketch Tree and removes Explorer", async ({ page }) => {
   await page.goto(`${baseUrl}/index.html?test=1`);
   await page.waitForFunction(() => window.__cadTest);
 
@@ -386,7 +592,6 @@ test("unified workspace uses fixed Explorer Canvas Properties and Status regions
     return {
       menu: rect(".menu-bar"),
       toolbar: rect(".command-toolbar"),
-      explorer: rect(".explorer"),
       canvas: rect(".canvas-area"),
       properties: rect(".properties"),
       status: rect(".status-bar"),
@@ -419,20 +624,9 @@ test("unified workspace uses fixed Explorer Canvas Properties and Status regions
       blockMenuTools: blockMenu ? [...blockMenu.querySelectorAll("[data-menu-tool]")].map((item) => item.dataset.menuTool) : [],
       blockCreateButtonCount: document.querySelectorAll("#toolCreateBlock").length,
       sketchTreeToggleCount: document.querySelectorAll("#toggleSketchTreeBtn").length,
-      explorerTabs: [...document.querySelectorAll("[data-explorer-tab]")].map((item) => ({
-        id: item.dataset.explorerTab,
-        text: item.textContent.trim(),
-      })),
-      activeTabStyle: {
-        radius: getComputedStyle(document.querySelector(".panel-tab.active")).borderTopLeftRadius,
-        background: getComputedStyle(document.querySelector(".panel-tab.active")).backgroundColor,
-        borderBottom: getComputedStyle(document.querySelector(".panel-tab.active")).borderBottomColor,
-        fontSize: getComputedStyle(document.querySelector(".panel-tab.active")).fontSize,
-        contentFontSize: getComputedStyle(document.querySelector(".object-explorer-panel > details > summary")).fontSize,
-        height: document.querySelector(".panel-tab.active").getBoundingClientRect().height,
-        stripHeight: document.querySelector(".panel-tabs").getBoundingClientRect().height,
-        inactiveBackground: getComputedStyle(document.querySelector(".panel-tab:not(.active)")).backgroundColor,
-      },
+      explorerCount: document.querySelectorAll(".explorer, [data-explorer-tab], [data-explorer-panel]").length,
+      sketchOverlay: rect("#sketchOverlay"),
+      workspaceColumns: getComputedStyle(document.querySelector(".workspace")).gridTemplateColumns,
     };
   });
 
@@ -452,82 +646,55 @@ test("unified workspace uses fixed Explorer Canvas Properties and Status regions
   expect(layout.menuBackground).toBe(layout.statusBackground);
   expect(layout.geometryMenuColumnCount).toBe(1);
   expect(layout.fileMenuTools).toEqual(["exportBtn", "importBtn"]);
-  expect(layout.blockMenuTools).toEqual(["toolCreateBlock", "openBlockDefinitionsBtn"]);
+  expect(layout.blockMenuTools).toEqual(["toolCreateBlock"]);
+  await expect(page.locator("#openBlockDefinitionsBtn")).toHaveCount(1);
   expect(layout.blockCreateButtonCount).toBe(1);
   expect(layout.sketchTreeToggleCount).toBe(0);
-  expect(layout.explorerTabs).toEqual([
-    { id: "geometry", text: "ジオメトリ" },
-    { id: "blocks", text: "ブロック" },
-    { id: "constraint", text: "拘束" },
-  ]);
-  expect(layout.activeTabStyle).toEqual({
-    radius: "5px",
-    background: "rgb(255, 255, 255)",
-    borderBottom: "rgb(255, 255, 255)",
-    fontSize: "12px",
-    contentFontSize: "12px",
-    height: 27,
-    stripHeight: 32,
-    inactiveBackground: "rgba(0, 0, 0, 0)",
-  });
-  expect(await page.locator("#blockInstanceObjectList").evaluate((element) => element.closest("[data-explorer-panel]")?.dataset.explorerPanel)).toBe("blocks");
-  expect(await page.locator("#constraintList").evaluate((element) => element.closest("[data-explorer-panel]")?.dataset.explorerPanel)).toBe("constraint");
+  expect(layout.explorerCount).toBe(0);
   expect(await page.locator("#sketchOverlay").evaluate((element) => element.parentElement?.classList.contains("canvas-area"))).toBe(true);
-  expect(layout.explorer.left).toBe(0);
-  expect(layout.explorer.right).toBeCloseTo(layout.canvas.left, 0);
+  expect(layout.canvas.left).toBe(0);
   expect(layout.canvas.right).toBeCloseTo(layout.properties.left, 0);
-  expect(layout.explorer.top).toBeGreaterThanOrEqual(layout.toolbar.bottom - 1);
   expect(layout.status.top).toBeGreaterThanOrEqual(layout.canvas.bottom - 1);
 
-  await expect(page.locator("#explorerGeometry")).toBeVisible();
-  await expect(page.locator("#explorerBlocks")).toBeHidden();
-  await expect(page.locator("#explorerConstraint")).toBeHidden();
-  await page.click('[data-explorer-tab="blocks"]');
-  await expect(page.locator("#explorerBlocks")).toBeVisible();
-  await expect(page.locator("#explorerBlocks > details")).toHaveCount(0);
-  await expect(page.locator("#blockInstanceObjectList")).toBeVisible();
-  await expect(page.locator("#explorerGeometry")).toBeHidden();
-  await expect(page.locator("#explorerConstraint")).toBeHidden();
-  await page.click("#openBlockDefinitionsBtn");
+  expect(layout.sketchOverlay.width).toBe(320);
+  expect(layout.sketchOverlay.height).toBeLessThanOrEqual(0.7 * 700 + 1);
+  const groupState = await page.locator('.sketch-group-row[data-sketch-id="S1"]').evaluateAll((rows) => rows.map((row) => ({
+    category: row.dataset.category,
+    open: row.getAttribute("aria-expanded"),
+    height: row.getBoundingClientRect().height,
+    count: Number(row.querySelector(".sketch-group-count")?.textContent),
+  })));
+  expect(groupState).toEqual([
+    { category: "point", open: "false", height: 20, count: 4 },
+    { category: "line", open: "false", height: 20, count: 4 },
+    { category: "constraint", open: "false", height: 20, count: 6 },
+  ]);
+  await expect(page.locator(".sketch-object-row")).toHaveCount(0);
+
+  await openBlockDefinitions(page);
   await expect(page.locator("#blockDefinitionsDialog")).toBeVisible();
   await expect(page.locator("#blockList")).toBeVisible();
   await page.locator("#blockDefinitionsDialog button[value=cancel]").first().click();
   await page.locator(".app-menu > summary").filter({ hasText: /^ブロック$/ }).click();
-  await page.locator('.app-menu[open] [data-menu-tool="openBlockDefinitionsBtn"]').click();
+  await page.locator("#openBlockDefinitionsBtn").click();
   await expect(page.locator("#blockDefinitionsDialog")).toBeVisible();
   await page.locator("#blockDefinitionsDialog button[value=cancel]").first().click();
-  await page.click('[data-explorer-tab="geometry"]');
-  await expect(page.locator("#explorerGeometry")).toBeVisible();
-  await expect(page.locator("#explorerBlocks")).toBeHidden();
-  await expect(page.locator("#explorerConstraint")).toBeHidden();
-  expect(await page.locator("#explorerGeometry > details").evaluateAll((details) => details.map((item) => item.open))).toEqual([
-    false, false, false, false, false,
+  const lineGroup = await expandSketchTreeGroup(page, "line");
+  await expect(lineGroup).toHaveAttribute("aria-expanded", "true");
+  const lineRows = page.locator('.sketch-object-row[data-object-kind="line"]');
+  await expect(lineRows).toHaveCount(4);
+  expect(await lineRows.evaluateAll((rows) => rows.map((row) => ({ height: row.getBoundingClientRect().height, icon: Boolean(row.querySelector("svg")) })))).toEqual([
+    { height: 22, icon: true }, { height: 22, icon: true }, { height: 22, icon: true }, { height: 22, icon: true },
   ]);
-  await expect(page.locator("#pointList .geometry-list-row")).toHaveCount(4);
-  const geometryCounts = await page.evaluate(() => Object.fromEntries([
-    ["point", "pointList"], ["line", "lineList"], ["circle", "circleList"], ["arc", "arcList"], ["annotation", "annotationObjectList"],
-  ].map(([kind, listId]) => [kind, {
-    shown: Number(document.getElementById(`${kind}Count`)?.textContent),
-    listed: document.getElementById(listId)?.children.length,
-  }])));
-  expect(Object.values(geometryCounts).every(({ shown, listed }) => shown === listed)).toBe(true);
-  const pointSection = await expandObjectSection(page, "Point");
-  await expect(pointSection).toHaveAttribute("open", "");
-  await page.click('[data-explorer-tab="blocks"]');
-  await page.click('[data-explorer-tab="geometry"]');
-  await expect(pointSection).toHaveAttribute("open", "");
-  await page.click('[data-explorer-tab="constraint"]');
-  await expect(page.locator("#explorerConstraint")).toBeVisible();
-  await expect(page.locator("#explorerConstraint > details")).toHaveCount(0);
-  await expect(page.locator("#constraintList")).toBeVisible();
-  await expect(page.locator("#constraintList > .constraint-summary-row")).toHaveCount(1);
-  const explorerHeaderBackgrounds = await page.evaluate(() => ({
-    block: getComputedStyle(document.querySelector("#explorerBlocks .section-header")).backgroundColor,
-    constraint: getComputedStyle(document.querySelector("#constraintList > .constraint-summary-row")).backgroundColor,
-  }));
-  expect(explorerHeaderBackgrounds.constraint).toBe(explorerHeaderBackgrounds.block);
-  expect(explorerHeaderBackgrounds.constraint).not.toBe("rgba(0, 0, 0, 0)");
-  await page.click('[data-explorer-tab="geometry"]');
+  const lineIconMatchesToolbar = await page.evaluate(() => {
+    const normalize = (svg) => svg?.innerHTML.replace(/\s+/g, " ").trim();
+    return normalize(document.querySelector('.sketch-object-row[data-object-kind="line"] svg')) === normalize(document.querySelector("#toolLine svg"));
+  });
+  expect(lineIconMatchesToolbar).toBe(true);
+  const constraintGroup = await expandSketchTreeGroup(page, "constraint");
+  await expect(constraintGroup).toHaveAttribute("aria-expanded", "true");
+  await expect(page.locator(".sketch-tree-summary")).toHaveCount(1);
+  expect(await page.locator(".sketch-tree-summary").evaluate((row) => getComputedStyle(row).backgroundColor)).not.toBe("rgba(0, 0, 0, 0)");
 
   expect(await page.evaluate(() => window.__cadTest.documentNameState())).toEqual({
     modelName: "無題",
@@ -607,19 +774,19 @@ test("unified workspace uses fixed Explorer Canvas Properties and Status regions
   const canvas = await page.locator("#canvas").boundingBox();
   await page.click("#toolPoint");
   await page.mouse.click(canvas.x + canvas.width * 0.55, canvas.y + canvas.height * 0.55);
-  await page.click('[data-explorer-tab="geometry"]');
-  await expect(page.locator("#pointList .geometry-list-row")).toHaveCount(1);
-  await page.locator("#pointList .geometry-list-row").click();
+  await expandSketchTreeGroup(page, "point");
+  await expect(page.locator('.sketch-object-row[data-object-kind="point"]')).toHaveCount(1);
+  await page.locator('.sketch-object-row[data-object-kind="point"]').click();
   await expect(page.locator("#propertiesPanel")).toContainText("点");
   const pointRows = await page.locator("#propertiesPanel .property-section").first().locator(".property-row").allTextContents();
   expect(pointRows[0]).toBe("種類点");
   expect(pointRows[1]).toMatch(/^ID.+/);
   expect(pointRows).toEqual(expect.arrayContaining([expect.stringMatching(/^X座標/), expect.stringMatching(/^Y座標/)]));
   await page.click("#deleteSelectionBtn");
-  await expect(page.locator("#pointList .geometry-list-row")).toHaveCount(0);
+  await expect(page.locator('.sketch-group-row[data-category="point"]')).toHaveCount(0);
 });
 
-test("Canvas selection updates Properties, side panels collapse, and narrow toolbar labels do not overlap", async ({ page }) => {
+test("Canvas selection updates Properties, Properties collapses, and narrow toolbar labels do not overlap", async ({ page }) => {
   await page.goto(`${baseUrl}/index.html?test=1`);
   await page.waitForFunction(() => window.__cadTest);
 
@@ -631,30 +798,23 @@ test("Canvas selection updates Properties, side panels collapse, and narrow tool
   ]);
 
   const initial = await page.evaluate(() => ({
-    explorer: document.querySelector(".explorer").getBoundingClientRect().width,
     properties: document.querySelector(".properties").getBoundingClientRect().width,
     canvas: document.querySelector(".canvas-area").getBoundingClientRect().width,
   }));
-  await page.click("#toggleExplorerPanelBtn");
-  await expect(page.locator("#toggleExplorerPanelBtn")).toHaveAttribute("aria-expanded", "false");
+  await expect(page.locator("#toggleExplorerPanelBtn, .explorer")).toHaveCount(0);
   await page.click("#togglePropertiesPanelBtn");
   await expect(page.locator("#togglePropertiesPanelBtn")).toHaveAttribute("aria-expanded", "false");
   const collapsed = await page.evaluate(() => ({
-    explorer: document.querySelector(".explorer").getBoundingClientRect().width,
     properties: document.querySelector(".properties").getBoundingClientRect().width,
     canvas: document.querySelector(".canvas-area").getBoundingClientRect().width,
   }));
-  expect(collapsed.explorer).toBeCloseTo(36, 0);
   expect(collapsed.properties).toBeCloseTo(36, 0);
   expect(collapsed.canvas).toBeGreaterThan(initial.canvas);
 
-  await page.click("#toggleExplorerPanelBtn");
   await page.click("#togglePropertiesPanelBtn");
   const restored = await page.evaluate(() => ({
-    explorer: document.querySelector(".explorer").getBoundingClientRect().width,
     properties: document.querySelector(".properties").getBoundingClientRect().width,
   }));
-  expect(restored.explorer).toBeCloseTo(initial.explorer, 0);
   expect(restored.properties).toBeCloseTo(initial.properties, 0);
   await expect(page.locator(".tool-group-label").first()).toBeVisible();
 
@@ -689,7 +849,7 @@ test("application language defaults to Japanese and persists the full UI selecti
   await page.waitForFunction(() => window.__cadTest);
   await expect(page.locator("html")).toHaveAttribute("lang", "ja");
   await expect(page.locator(".app-menu > summary").first()).toHaveText("ファイル");
-  await expect(page.locator('[data-explorer-tab="blocks"]')).toHaveText("ブロック");
+  await expect(page.locator("#activeSketchLabel")).toHaveText("スケッチツリー");
   await expect(page.locator(".properties .panel-title-label")).toHaveText("プロパティ");
   expect(await page.locator("#propertiesPanel .property-section").first().locator(".property-row").allTextContents()).toEqual(expect.arrayContaining([
     "種類スケッチ", "IDS1", "名前Sketch-1", "親スケッチRoot Sketch (ROOT)", "アクティブはい",
@@ -700,7 +860,7 @@ test("application language defaults to Japanese and persists the full UI selecti
   await page.locator("#applicationLanguageSelect").selectOption("en");
   await expect(page.locator("html")).toHaveAttribute("lang", "en");
   await expect(page.locator(".app-menu > summary").first()).toHaveText("File");
-  await expect(page.locator('[data-explorer-tab="blocks"]')).toHaveText("Block");
+  await expect(page.locator("#activeSketchLabel")).toHaveText("Sketch Tree");
   await expect(page.locator(".properties .panel-title-label")).toHaveText("Properties");
   await expect(page.locator("#hint")).toContainText("Fully constrained");
   await page.locator("#applicationSettingsDialog button[value=cancel]").first().click();
@@ -725,11 +885,10 @@ test("application language defaults to Japanese and persists the full UI selecti
   ]);
   await page.locator("#parametersCloseBtn").click();
   await page.evaluate(() => window.__cadTest.resetForReadOnlyDuplicateDimension());
-  await page.click('[data-explorer-tab="constraint"]');
-  await page.locator("#constraintList .constraint-list-row").first().click();
+  await expandSketchTreeGroup(page, "constraint");
+  await page.locator('.sketch-object-row[data-object-kind="constraint"]').first().click();
   await expect(page.locator("#propertiesPanel")).toContainText("Value / Expression");
-  await page.click('[data-explorer-tab="blocks"]');
-  await page.click("#openBlockDefinitionsBtn");
+  await openBlockDefinitions(page);
   await expect(page.locator("#blockDefinitionsDialog")).toContainText("No blocks");
   await page.locator("#blockDefinitionsDialog button[value=cancel]").first().click();
 
@@ -927,9 +1086,8 @@ test("Appearance cascades, used file colors are selectable, and constraint statu
     visible: true,
   });
 
-  await page.click('[data-explorer-tab="geometry"]');
-  await expandObjectSection(page, "Line");
-  await page.locator('#lineList .geometry-list-row[data-id="L1"]').click();
+  await expandSketchTreeGroup(page, "line");
+  await page.locator('.sketch-object-row[data-object-kind="line"][data-id="L1"]').click();
   await expect(page.locator("#propertiesPanel")).toContainText("ジオメトリ");
   await expect(page.locator("#propertiesPanel")).toContainText("長さ");
   await expect(page.locator("#propertiesPanel")).toContainText("外観");
@@ -1146,8 +1304,8 @@ test("Constraint dimensions expose defining geometry and inheritable appearance 
   await page.goto(`${baseUrl}/index.html?test=1`);
   await page.waitForFunction(() => window.__cadTest);
   await page.evaluate(() => window.__cadTest.resetForReadOnlyDuplicateDimension());
-  await page.click('[data-explorer-tab="constraint"]');
-  await page.locator("#constraintList .constraint-list-row").first().click();
+  await expandSketchTreeGroup(page, "constraint");
+  await page.locator('.sketch-object-row[data-object-kind="constraint"]').first().click();
   await expect(page.locator("#propertiesPanel .property-section h3")).toContainText(["拘束", "外観"]);
   await expect(page.locator("#propertiesPanel")).toContainText("値 / 数式");
   await expect(page.locator("#propertiesPanel")).toContainText("始点ID");
@@ -1181,8 +1339,8 @@ test("Constraint dimensions expose defining geometry and inheritable appearance 
   }));
   await page.locator("#sketchDimensionColor").fill("");
   await page.locator("#sketchDimensionColor").blur();
-  await page.click('[data-explorer-tab="constraint"]');
-  await page.locator("#constraintList .constraint-list-row").first().click();
+  await expandSketchTreeGroup(page, "constraint");
+  await page.locator('.sketch-object-row[data-object-kind="constraint"]').first().click();
   const properties = page.locator("#propertiesPanel");
   await properties.locator('[data-dimension-display="precision"]').selectOption("3");
   await expect(page.locator('[data-dimension-display="toleranceUpper"], [data-dimension-display="toleranceLower"]')).toHaveCount(0);
@@ -1237,7 +1395,7 @@ test("Constraint dimensions expose defining geometry and inheritable appearance 
   expect(blockAppearance.flatMap((definition) => definition.dimensions).map((dimension) => dimension.effective.color)).toEqual(["#db2777", "#db2777"]);
 });
 
-test("Sketch tree and Geometry Explorer hover use the same emphasis as canvas hover without tree Geometry IDs", async ({ page }) => {
+test("Sketch and Object rows use the same emphasis as canvas hover without tree Geometry IDs", async ({ page }) => {
   await page.goto(`${baseUrl}/index.html?test=1`);
   await page.waitForFunction(() => window.__cadTest);
   const ids = await page.evaluate(() => window.__cadTest.resetForSidebarInspection());
@@ -1251,9 +1409,8 @@ test("Sketch tree and Geometry Explorer hover use the same emphasis as canvas ho
     expect(await page.evaluate((id) => window.__cadTest.hoverDisplayStateForTest("point", id), pointId)).toEqual(expect.objectContaining({ treeHovered: false }));
   }
   expect(await page.evaluate(() => window.__cadTest.drawnGeometryIdLabelsForTest())).toEqual([]);
-  await page.click('[data-explorer-tab="geometry"]');
-  await expandObjectSection(page, "Line");
-  await page.locator(`#lineList .geometry-list-row[data-id="${ids.line}"]`).hover();
+  await expandSketchTreeGroup(page, "line");
+  await page.locator(`.sketch-object-row[data-object-kind="line"][data-id="${ids.line}"]`).hover();
   const objectHover = await page.evaluate((lineId) => window.__cadTest.hoverDisplayStateForTest("line", lineId), ids.line);
   expect(objectHover).toEqual(expect.objectContaining({ sidebarHovered: true, color: canvasHover.color, width: canvasHover.width }));
 });
@@ -1605,42 +1762,40 @@ test("construction line endpoint appearance inherits Document defaults and suppo
   expect((await page.evaluate(() => window.__cadTest.serializedModelForTest())).defaultConstructionAppearance).toEqual(serialized.defaultConstructionAppearance);
 });
 
-test("Geometry and Constraint Explorer tabs list and synchronize their respective objects", async ({ page }) => {
+test("Sketch Tree groups list and synchronize Geometry and Constraint objects", async ({ page }) => {
   await page.goto(`${baseUrl}/index.html?test=1`);
   const ids = await page.evaluate(() => window.__cadTest.resetForSidebarInspection());
-  await page.click('[data-explorer-tab="geometry"]');
-  await expect(page.locator("#explorerGeometry")).toBeVisible();
-  await expect(page.locator("#pointList .geometry-list-row")).toHaveCount(2);
-  await expect(page.locator(`#pointList .geometry-list-row[data-id="${ids.fixedPoint}"]`)).toHaveCount(1);
-  await expect(page.locator("#circleList .geometry-list-row")).toHaveCount(1);
-  await expect(page.locator("#arcList .geometry-list-row")).toHaveCount(1);
+  await expandSketchTreeGroup(page, "point");
+  await expect(page.locator('.sketch-object-row[data-object-kind="point"]')).toHaveCount(2);
+  await expect(page.locator(`.sketch-object-row[data-object-kind="point"][data-id="${ids.fixedPoint}"]`)).toHaveCount(1);
+  await expandSketchTreeGroup(page, "circle");
+  await expect(page.locator('.sketch-object-row[data-object-kind="circle"]')).toHaveCount(1);
+  await expandSketchTreeGroup(page, "arc");
+  await expect(page.locator('.sketch-object-row[data-object-kind="arc"]')).toHaveCount(1);
 
-  await expandObjectSection(page, "Line");
-  await page.locator(`#lineList .geometry-list-row[data-id="${ids.line}"]`).click();
+  await expandSketchTreeGroup(page, "line");
+  await page.locator(`.sketch-object-row[data-object-kind="line"][data-id="${ids.line}"]`).click();
   await expect(page.locator("#propertiesPanel")).toContainText(`線 ${ids.line}`);
 
-  await expandObjectSection(page, "Circle");
-  await page.locator("#circleList .geometry-list-row").hover();
+  await page.locator('.sketch-object-row[data-object-kind="circle"]').hover();
   expect(await page.evaluate(() => window.__cadTest.sidebarHighlightIds())).toEqual(
     expect.arrayContaining([ids.line, ids.circle]),
   );
   expect(await page.evaluate(() => window.__cadTest.sidebarHighlightIds())).not.toContain(ids.circleCenter);
-  await page.locator("#circleList .geometry-list-row").click();
-  await expect(page.locator("#circleList .geometry-list-row")).toHaveClass(/selected/);
+  await page.locator('.sketch-object-row[data-object-kind="circle"]').click();
+  await expect(page.locator('.sketch-object-row[data-object-kind="circle"]')).toHaveClass(/selected/);
   await expect(page.locator("#propertiesPanel")).toContainText(`円 ${ids.circle}`);
   expect(await page.locator("#propertiesPanel .property-section").first().locator(".property-row").allTextContents()).toEqual(expect.arrayContaining([
     `ID${ids.circle}`, `中心点ID${ids.circleCenter}`,
   ]));
 
-  await expandObjectSection(page, "Arc");
-  await page.locator("#arcList .geometry-list-row").click();
+  await page.locator('.sketch-object-row[data-object-kind="arc"]').click();
   expect(await page.locator("#propertiesPanel .property-section").first().locator(".property-row").allTextContents()).toEqual(expect.arrayContaining([
     `ID${ids.arc}`, `中心点ID${ids.arcCenter}`, "始点角度180°", "終点角度315°",
   ]));
 
-  await page.click('[data-explorer-tab="constraint"]');
-  await expect(page.locator("#explorerConstraint")).toBeVisible();
-  const horizontalConstraintRow = page.locator("#constraintList .constraint-list-row").first();
+  await expandSketchTreeGroup(page, "constraint");
+  const horizontalConstraintRow = page.locator('.sketch-object-row[data-object-kind="constraint"][data-constraint-index]').first();
   await horizontalConstraintRow.hover();
   expect(await page.evaluate(() => window.__cadTest.currentSidebarHoveredGeometryKeys())).toEqual([`line:${ids.line}`]);
   await horizontalConstraintRow.click();
@@ -1650,15 +1805,15 @@ test("Geometry and Constraint Explorer tabs list and synchronize their respectiv
     `線ID${ids.line}`,
   ]));
   expect(await page.evaluate(() => window.__cadTest.sidebarHighlightIds())).toEqual([ids.line]);
-  expect(await page.locator("#constraintList .fixed-point-list-row").textContent()).toContain(`固定 ${ids.fixedPoint}`);
+  expect(await page.locator('.sketch-object-row[data-fixed-point-id]').textContent()).toContain(`${ids.fixedPoint}固定`);
 });
 
 test("constraint rows highlight only directly related selected geometry", async ({ page }) => {
   await page.goto(`${baseUrl}/index.html?test=1`);
   await page.waitForFunction(() => window.__cadTest);
   const ids = await page.evaluate(() => window.__cadTest.resetForSidebarInspection());
-  await page.click('[data-explorer-tab="constraint"]');
-  const constraintRow = page.locator("#constraintList .constraint-list-row");
+  await expandSketchTreeGroup(page, "constraint");
+  const constraintRow = page.locator('.sketch-object-row[data-object-kind="constraint"][data-constraint-index]');
   await expect(constraintRow).toHaveCount(2);
 
   await page.evaluate((lineId) => window.__cadTest.selectGeometryIdsForTest({ lines: [lineId] }), ids.line);
@@ -1773,8 +1928,8 @@ test("non-active sketches are visible unless individually hidden", async ({ page
   expect(setup.relationColors).toEqual({ S9: "#64748b", S11: "#b91c1c" });
   expect(setup.visible).toEqual({ S10: true, S2: true, S3: true, S4: true, S9: true, S11: true });
   expect(setup.rowClasses).toEqual({ S2: true, S3: true, S4: true, S9: true, S11: true });
-  expect(setup.rowBackgrounds.S2).toBe("rgb(255, 255, 255)");
-  expect(setup.rowBackgrounds.S9).toBe("rgb(255, 255, 255)");
+  expect(setup.rowBackgrounds.S2).toBe("rgba(0, 0, 0, 0)");
+  expect(setup.rowBackgrounds.S9).toBe("rgba(0, 0, 0, 0)");
 
   await page.click('.sketchVisibilityBtn[data-id="S2"]');
   let state = await page.evaluate(() => window.__cadTest.siblingSubtreeVisibilityState());

@@ -24,7 +24,7 @@
 | Constraint | Geometryの成立条件。寸法もConstraintに属する |
 | Parameter | 名前と数式を持ち、同じ名前空間の寸法と相互参照できるスカラー値 |
 | Appearance | visible、color、lineType、lineWidthと、補助Line用のendpointOverhang／endpointMarkersから成る表示属性 |
-| Document Annotation | Geometryを変更しない引出線または自由テキスト |
+| Sketch所属Annotation | Geometryを変更しない引出線または自由テキスト |
 | Interaction State | 選択、作図、拘束入力、注記配置など現在の操作状態 |
 | View State | Geometry ID、Space押下中の拘束状態表示など一時的な表示状態 |
 
