@@ -868,6 +868,125 @@ test("workspace integrates transparent compact Object groups into Sketch Tree an
   await expect(page.locator('.sketch-group-row[data-category="point"]')).toHaveCount(0);
 });
 
+test("Canvas context menu exposes common and object-specific operations", async ({ page }) => {
+  await page.goto(`${baseUrl}/index.html?test=1`);
+  await page.waitForFunction(() => window.__cadTest);
+  const menu = page.locator("#canvasContextMenu");
+  const canvasArea = await page.locator(".canvas-area").boundingBox();
+  const blank = { x: canvasArea.x + canvasArea.width - 18, y: canvasArea.y + canvasArea.height - 18 };
+
+  await page.mouse.click(blank.x, blank.y, { button: "right" });
+  await expect(menu).toBeVisible();
+  await expect(menu).toHaveAttribute("aria-label", "キャンバスコンテキストメニュー");
+  const blankItems = await menu.locator("button").evaluateAll((buttons) => buttons.map((button) => ({
+    action: button.dataset.contextAction,
+    label: button.querySelector("span")?.textContent,
+    disabled: button.disabled,
+  })));
+  expect(blankItems).toEqual([
+    { action: "paste", label: "貼り付け", disabled: true },
+    { action: "undo", label: "元に戻す", disabled: true },
+    { action: "redo", label: "やり直す", disabled: true },
+    { action: "fit-visible", label: "表示中図形へフィット", disabled: false },
+  ]);
+  const menuBounds = await menu.boundingBox();
+  expect(menuBounds.x).toBeGreaterThanOrEqual(canvasArea.x);
+  expect(menuBounds.y).toBeGreaterThanOrEqual(canvasArea.y);
+  expect(menuBounds.x + menuBounds.width).toBeLessThanOrEqual(canvasArea.x + canvasArea.width);
+  expect(menuBounds.y + menuBounds.height).toBeLessThanOrEqual(canvasArea.y + canvasArea.height);
+  expect(await page.evaluate(() => document.activeElement?.dataset.contextAction)).toBe("fit-visible");
+  await page.keyboard.press("Escape");
+  await expect(menu).toBeHidden();
+
+  const linePosition = await page.evaluate(() => window.__cadTest.geometryClientPositionForTest("line", "L1"));
+  await page.evaluate(() => window.__cadTest.selectGeometryIdsForTest({ lines: ["L1", "L2"] }));
+  await page.mouse.click(linePosition.x, linePosition.y, { button: "right" });
+  expect((await page.evaluate(() => window.__cadTest.selectedGeometryIdsForTest())).lines).toEqual(["L1", "L2"]);
+  await expect(menu.locator('[data-context-action="fillet"]')).toBeEnabled();
+  await page.keyboard.press("Escape");
+  await page.evaluate(() => window.__cadTest.selectGeometryIdsForTest({ lines: ["L1"] }));
+  await page.mouse.click(linePosition.x, linePosition.y, { button: "right" });
+  await expect(menu).toBeVisible();
+  expect((await page.evaluate(() => window.__cadTest.selectedGeometryIdsForTest())).lines).toEqual(["L1"]);
+  const lineItems = await menu.locator("button").evaluateAll((buttons) => buttons.map((button) => ({ action: button.dataset.contextAction, label: button.querySelector("span")?.textContent, disabled: button.disabled })));
+  expect(lineItems).toEqual(expect.arrayContaining([
+    { action: "fix-toggle", label: "固定", disabled: false },
+    { action: "construction-toggle", label: "補助線に変更", disabled: false },
+    { action: "offset", label: "ここからオフセット", disabled: false },
+    { action: "fillet", label: "R面取り", disabled: true },
+    { action: "add-leader", label: "引出線を追加", disabled: false },
+    { action: "create-block", label: "選択からブロック作成", disabled: false },
+    { action: "cut", label: "切り取り", disabled: false },
+    { action: "copy", label: "コピー", disabled: false },
+    { action: "delete", label: "削除", disabled: false },
+    { action: "show-properties", label: "プロパティを表示", disabled: false },
+  ]));
+  await menu.locator('[data-context-action="construction-toggle"]').click();
+  await expect(menu).toBeHidden();
+  expect((await page.evaluate(() => window.__cadTest.serializedModelForTest())).lines.find((line) => line.id === "L1").construction).toBe(true);
+
+  await page.click("#togglePropertiesPanelBtn");
+  await expect(page.locator("#togglePropertiesPanelBtn")).toHaveAttribute("aria-expanded", "false");
+  const collapsedLinePosition = await page.evaluate(() => window.__cadTest.geometryClientPositionForTest("line", "L1"));
+  await page.mouse.click(collapsedLinePosition.x, collapsedLinePosition.y, { button: "right" });
+  await expect(menu.locator('[data-context-action="construction-toggle"] span')).toHaveText("実線に変更");
+  await menu.locator('[data-context-action="show-properties"]').click();
+  await expect(page.locator("#togglePropertiesPanelBtn")).toHaveAttribute("aria-expanded", "true");
+  await expect(page.locator("#propertiesPanel .property-heading")).toHaveText("線");
+
+  const fixedPointPosition = await page.evaluate(() => window.__cadTest.geometryClientPositionForTest("point", "P1"));
+  await page.mouse.click(fixedPointPosition.x, fixedPointPosition.y, { button: "right" });
+  await expect(menu.locator('[data-context-action="fix-toggle"] span')).toHaveText("固定解除");
+  await menu.locator('[data-context-action="fix-toggle"]').click();
+  expect((await page.evaluate(() => window.__cadTest.serializedModelForTest())).points.find((point) => point.id === "P1").fixed).toBe(false);
+  await page.keyboard.press("Control+z");
+  expect((await page.evaluate(() => window.__cadTest.serializedModelForTest())).points.find((point) => point.id === "P1").fixed).toBe(true);
+
+  const dimensionPosition = await page.evaluate(() => window.__cadTest.dimensionClientPositionForTest(0));
+  await page.mouse.click(dimensionPosition.x, dimensionPosition.y, { button: "right" });
+  await expect(menu.locator('[data-context-action="dimension-edit"] span')).toHaveText("値 / 数式を編集");
+  await menu.locator('[data-context-action="dimension-edit"]').click();
+  await expect(page.locator("#dimensionValueInput")).toBeVisible();
+  await page.keyboard.press("Escape");
+
+  await page.click("#toolLine");
+  await page.mouse.click(blank.x, blank.y, { button: "right" });
+  await expect(menu.locator('[data-context-action="cancel-command"] span')).toHaveText("コマンドをキャンセル");
+  await menu.locator('[data-context-action="cancel-command"]').click();
+  await expect(page.locator("#toolSelect")).toHaveClass(/active/);
+
+  const blockState = await page.evaluate(() => window.__cadTest.resetForBlockClipboardTest());
+  await page.evaluate(() => window.__cadTest.focusWorldForTest({ x: 50, y: 20 }, 2));
+  const blockPosition = await page.evaluate(() => window.__cadTest.blockInteractionPoints());
+  await page.mouse.click(blockPosition.center.x, blockPosition.center.y, { button: "right" });
+  await expect(menu.locator('[data-context-action="block-edit"] span')).toHaveText("ブロック定義を編集");
+  await expect(menu.locator('[data-context-action="block-rotation-toggle"] span')).toHaveText("自由回転");
+  await expect(menu.locator('[data-context-action="block-rotation-toggle"]')).toBeDisabled();
+  await expect(menu.locator('[data-context-action="fix-toggle"] span')).toHaveText("固定解除");
+  await menu.locator('[data-context-action="fix-toggle"]').click();
+  expect((await page.evaluate((id) => window.__cadTest.blockRotationLockStateForTest(id), blockState.selectedBlockInstanceIds[0])).fixed).toBe(false);
+  await page.mouse.click(blockPosition.center.x, blockPosition.center.y, { button: "right" });
+  await expect(menu.locator('[data-context-action="block-rotation-toggle"]')).toBeEnabled();
+  await menu.locator('[data-context-action="block-rotation-toggle"]').click();
+  expect((await page.evaluate((id) => window.__cadTest.blockRotationLockStateForTest(id), blockState.selectedBlockInstanceIds[0])).rotationLocked).toBe(false);
+
+  await page.mouse.click(blockPosition.center.x, blockPosition.center.y, { button: "right" });
+  await page.locator(".properties").click({ position: { x: 8, y: 8 } });
+  await expect(menu).toBeHidden();
+  await page.mouse.click(blockPosition.center.x, blockPosition.center.y, { button: "right" });
+  await menu.locator('[data-context-action="block-edit"]').click();
+  await expect(page.locator("body")).toHaveClass(/block-editing/);
+  await page.locator("#cancelBlockEditBtn").click();
+  await expect(page.locator("body")).not.toHaveClass(/block-editing/);
+
+  await openApplicationSettings(page);
+  await page.locator("#applicationLanguageSelect").selectOption("en");
+  await page.locator("#applicationSettingsDialog button[value=cancel]").first().click();
+  await page.mouse.click(blank.x, blank.y, { button: "right" });
+  await expect(menu).toHaveAttribute("aria-label", "Canvas context menu");
+  await expect(menu.locator('[data-context-action="fit-visible"] span')).toHaveText("Fit Visible Geometry");
+});
+
 test("Canvas selection updates Properties, Properties collapses, and narrow toolbar labels do not overlap", async ({ page }) => {
   await page.goto(`${baseUrl}/index.html?test=1`);
   await page.waitForFunction(() => window.__cadTest);

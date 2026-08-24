@@ -114,6 +114,13 @@ button:disabled { opacity: .45; cursor: default; }
 #canvas { display: block; width: 100%; height: 100%; cursor: default; }
 #canvas.is-dragging { cursor: default; }
 #canvas.is-panning { cursor: grabbing; }
+.canvas-context-menu { position: absolute; z-index: 30; min-width: 210px; max-width: min(280px, calc(100% - 8px)); padding: 4px; border: 1px solid #cbd5e1; border-radius: 6px; color: #1f2937; background: #fff; box-shadow: 0 10px 28px rgba(15, 23, 42, .2); }
+.canvas-context-menu button { width: 100%; min-height: 28px; display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 18px; padding: 4px 8px; border: 0; border-radius: 3px; background: transparent; font-size: 12px; text-align: left; white-space: nowrap; }
+.canvas-context-menu button:hover:not(:disabled), .canvas-context-menu button:focus-visible { color: #1e3a5f; background: #dbeafe; }
+.canvas-context-menu button:disabled { color: #94a3b8; opacity: 1; }
+.canvas-context-menu button.danger:not(:disabled) { color: #b91c1c; }
+.canvas-context-menu kbd { color: #64748b; font-size: 10px; font-weight: 400; }
+.canvas-context-menu-separator { height: 1px; margin: 3px 4px; background: #e2e8f0; }
 .sketch-overlay { position: absolute; top: 12px; left: 12px; z-index: 3; width: min(320px, calc(100% - 24px)); max-height: min(70vh, 680px); display: grid; gap: 2px; overflow: hidden; color: #111827; background: transparent; border: 0; border-radius: 0; box-shadow: none; backdrop-filter: none; }
 .sketch-overlay-header { min-height: 27px; display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 4px; padding: 2px 5px 2px 8px; border: 0; background: transparent; }
 .sketch-overlay-header strong { overflow: hidden; font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }

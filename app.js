@@ -96,6 +96,7 @@
   const canvas = document.getElementById("canvas");
   const ctx = canvas.getContext("2d");
   const dimensionValueInput = document.getElementById("dimensionValueInput");
+  const canvasContextMenu = document.getElementById("canvasContextMenu");
   const APPLICATION_LANGUAGE_STORAGE_KEY = "cad2.application.language";
   const DEFAULT_COLOR_PALETTE = [
     "#000000", "#111827", "#374151", "#64748b", "#94a3b8", "#cbd5e1", "#ffffff",
@@ -189,6 +190,10 @@
     ["通常線作図に戻しました", "Returned to normal line creation."], ["R面取りする接続線を2本クリックしてください", "Click two connected lines to fillet."],
     ["トリムする線、円、円弧の削除したい区間をクリックしてください。Escで選択モードに戻ります", "Click the segment of a line, circle, or arc to trim. Press Esc to return to selection mode."],
     ["ブロックはありません", "No blocks"], ["配置するスケッチ", "Sketches to place"], ["表示するスケッチ", "Visible sketches"],
+    ["キャンバスコンテキストメニュー", "Canvas context menu"], ["コマンドをキャンセル", "Cancel Command"],
+    ["切り取り", "Cut"], ["コピー", "Copy"], ["貼り付け", "Paste"], ["プロパティを表示", "Show Properties"], ["表示中図形へフィット", "Fit Visible Geometry"],
+    ["補助線に変更", "Convert to Construction"], ["実線に変更", "Convert to Normal"], ["ここからオフセット", "Offset from Here"], ["引出線を追加", "Add Leader"],
+    ["選択からブロック作成", "Create Block from Selection"], ["ブロック定義を編集", "Edit Block Definition"], ["直交回転ロック", "Lock Orthogonal Rotation"], ["自由回転", "Free Rotation"], ["値 / 数式を編集", "Edit Value / Expression"],
   ];
   let applicationLanguage = (() => {
     try {
@@ -248,6 +253,8 @@
   let selectedDimensionConstraint = null;
   let selectedConstraint = null;
   let selectedAnnotations = [];
+  let canvasContextTarget = null;
+  let canvasContextPointer = null;
   let hoveredAnnotation = null;
   let hoveredSidebarItem = null;
   let constraintAnalysisState = null;
@@ -14290,7 +14297,311 @@
     }
   }
 
+  function canvasContextTargetAt(pointer) {
+    const annotationHit = hitAnnotationElement(pointer.x, pointer.y);
+    if (annotationHit?.element?.blockProjection) return { kind: "block", item: annotationHit.element.blockInstance };
+    if (annotationHit?.element) return { kind: "annotation", item: annotationHit.element, hit: annotationHit };
+    const dimensionHit = hitDimension(pointer.x, pointer.y);
+    if (dimensionHit) return { kind: "dimension", item: dimensionHit.constraint, hit: dimensionHit };
+    const block = hitBlockInstance(pointer.x, pointer.y);
+    if (block) return { kind: "block", item: block };
+    const point = hitPoint(pointer.x, pointer.y);
+    if (point) return { kind: "point", item: point };
+    const arcEndpoint = hitArcEndpoint(pointer.x, pointer.y);
+    if (arcEndpoint) return { kind: "arc-endpoint", item: arcEndpoint.arc, endpoint: arcEndpoint.endpoint, hit: arcEndpoint };
+    const line = hitLine(pointer.x, pointer.y);
+    if (line) return { kind: "line", item: line };
+    const circle = hitCircle(pointer.x, pointer.y);
+    if (circle) return { kind: "circle", item: circle };
+    const arc = hitArc(pointer.x, pointer.y);
+    if (arc) return { kind: "arc", item: arc };
+    return { kind: "blank", item: null };
+  }
+
+  function canvasContextTargetIsSelected(target) {
+    if (!target?.item) return false;
+    if (target.kind === "point") return selectedPoints.includes(target.item);
+    if (target.kind === "line") return selectedLines.includes(target.item);
+    if (target.kind === "circle") return selectedCircles.includes(target.item);
+    if (target.kind === "arc") return selectedArcs.includes(target.item);
+    if (target.kind === "arc-endpoint") return sameArcEndpoint(selectedArcEndpoint, { arc: target.item, endpoint: target.endpoint });
+    if (target.kind === "block") return selectedBlockInstances.includes(target.item);
+    if (target.kind === "annotation") return selectedAnnotations.includes(target.item);
+    if (target.kind === "dimension") return selectedDimensionConstraint === target.item || effectiveSelectedConstraint() === target.item;
+    return false;
+  }
+
+  function selectCanvasContextTarget(target) {
+    if (!target?.item || target.kind === "blank" || canvasContextTargetIsSelected(target)) return;
+    clearSelection();
+    if (target.kind === "point") selectedPoints = [target.item];
+    else if (target.kind === "line") selectedLines = [target.item];
+    else if (target.kind === "circle") selectedCircles = [target.item];
+    else if (target.kind === "arc") selectedArcs = [target.item];
+    else if (target.kind === "arc-endpoint") {
+      selectedArcs = [target.item];
+      selectedArcEndpoint = { arc: target.item, endpoint: target.endpoint };
+    } else if (target.kind === "block") selectedBlockInstances = [target.item];
+    else if (target.kind === "annotation") selectedAnnotations = [target.item];
+    else if (target.kind === "dimension") selectedDimensionConstraint = target.item;
+  }
+
+  function hasCancellableCanvasCommand() {
+    return mode === "block-place" || Boolean(pendingCommand) || Boolean(pendingConstraintCommand) || hasActiveDrawOperation() || isDrawToolMode();
+  }
+
+  function cancelCanvasCommandFromContextMenu() {
+    let canceled = false;
+    if (mode === "block-place") {
+      blockPlacementDefinitionId = null;
+      blockPlacementAnchor = null;
+      blockPlacementEnabledSketchIds = [];
+      blockPlacementRotationLocked = true;
+      pointerPreview = null;
+      mode = "select";
+      restoreBlockPlacementPropertiesPanel();
+      setHint(applicationText("ブロック配置をキャンセルしました", "Block placement canceled."));
+      canceled = true;
+    }
+    if (pendingCommand) {
+      cancelPendingCommand("");
+      canceled = true;
+    }
+    if (pendingConstraintCommand) {
+      cancelConstraintTargetCommand("");
+      canceled = true;
+    }
+    if (hasActiveDrawOperation()) {
+      cancelActiveDrawOperation();
+      canceled = true;
+    }
+    if (isDrawToolMode()) {
+      exitDrawMode();
+      canceled = true;
+    }
+    if (canceled) {
+      setHint(applicationText("コマンドをキャンセルしました", "Command canceled."));
+      updateUI();
+      draw();
+    }
+    return canceled;
+  }
+
+  function hasCopyableCanvasSelection() {
+    const hasSelectionItems = selectedPoints.some((item) => model.points.includes(item)) ||
+      selectedLines.some((item) => model.lines.includes(item)) ||
+      selectedCircles.some((item) => model.circles.includes(item)) ||
+      selectedArcs.some((item) => model.arcs.includes(item)) ||
+      selectedBlockInstances.some((item) => model.blockInstances.includes(item)) ||
+      selectedAnnotations.some((item) => model.annotations.includes(item));
+    if (!hasSelectionItems) return false;
+    const selectedNodes = new Set([...selectedPoints, ...selectedLines, ...selectedCircles, ...selectedArcs, ...selectedBlockInstances]);
+    for (const line of selectedLines) selectedNodes.add(line.p1).add(line.p2);
+    for (const primitive of [...selectedCircles, ...selectedArcs]) selectedNodes.add(primitive.center);
+    const selectedProjectionIds = new Set();
+    for (const instance of selectedBlockInstances) {
+      const bundle = blockProjectionBundle(instance);
+      for (const item of [...bundle.points, ...bundle.lines, ...bundle.circles, ...bundle.arcs]) selectedProjectionIds.add(item.id);
+    }
+    return selectedAnnotations.every((annotation) => {
+      if (annotation.type !== "leader") return true;
+      const referenced = resolveGeometryRef(annotation.geometryRef);
+      return Boolean(referenced && (selectedNodes.has(referenced) || selectedProjectionIds.has(referenced.id)));
+    });
+  }
+
+  function canvasContextFixState(target) {
+    if (target.kind === "point") {
+      const enabled = selectedPoints.length > 0 && selectedLines.length + selectedCircles.length + selectedArcs.length + selectedBlockInstances.length === 0 && !selectedArcEndpoint;
+      return { enabled, fixed: enabled && selectedPoints.every((point) => point.fixed) };
+    }
+    if (target.kind === "line") {
+      const enabled = selectedLines.length === 1 && selectedPoints.length + selectedCircles.length + selectedArcs.length + selectedBlockInstances.length === 0 && !selectedArcEndpoint;
+      return { enabled, fixed: Boolean(findLineFixedConstraint(target.item)) };
+    }
+    if (target.kind === "arc-endpoint") {
+      return { enabled: true, fixed: Boolean(findArcEndpointFixedConstraint(target.item, target.endpoint)) };
+    }
+    if (target.kind === "block") {
+      return { enabled: selectedBlockInstances.length === 1 && selectedGeometryItems().length === 0, fixed: Boolean(target.item.fixed) };
+    }
+    return null;
+  }
+
+  function canvasContextMenuItems(target, commandActive = false) {
+    const groups = [];
+    if (commandActive) {
+      groups.push([{ action: "cancel-command", label: applicationText("コマンドをキャンセル", "Cancel Command"), shortcut: "Esc" }]);
+      groups.push([
+        { action: "undo", label: applicationText("元に戻す", "Undo"), shortcut: "Ctrl+Z", disabled: Boolean(document.getElementById("undoBtn")?.disabled) },
+        { action: "redo", label: applicationText("やり直す", "Redo"), shortcut: "Ctrl+Y", disabled: Boolean(document.getElementById("redoBtn")?.disabled) },
+      ]);
+    } else if (target.kind === "blank") {
+      groups.push([{ action: "paste", label: applicationText("貼り付け", "Paste"), shortcut: "Ctrl+V", disabled: !geometryClipboard || !canCreateInActiveSketch() }]);
+      groups.push([
+        { action: "undo", label: applicationText("元に戻す", "Undo"), shortcut: "Ctrl+Z", disabled: Boolean(document.getElementById("undoBtn")?.disabled) },
+        { action: "redo", label: applicationText("やり直す", "Redo"), shortcut: "Ctrl+Y", disabled: Boolean(document.getElementById("redoBtn")?.disabled) },
+      ]);
+      groups.push([{ action: "fit-visible", label: applicationText("表示中図形へフィット", "Fit Visible Geometry"), disabled: !visibleGeometryBounds() }]);
+    } else {
+      const specific = [];
+      if (target.kind === "dimension") {
+        specific.push({ action: "dimension-edit", label: applicationText("値 / 数式を編集", "Edit Value / Expression"), disabled: isReadOnlyDimension(target.item) });
+      }
+      if (target.kind === "block") {
+        specific.push({ action: "block-edit", label: applicationText("ブロック定義を編集", "Edit Block Definition"), disabled: Boolean(blockDefinitionScopeError(target.item.definitionId) || blockDefinitionEditError(target.item.definitionId)) });
+        specific.push({ action: "block-rotation-toggle", label: target.item.rotationLocked ? applicationText("自由回転", "Free Rotation") : applicationText("直交回転ロック", "Lock Orthogonal Rotation"), disabled: Boolean(target.item.fixed) });
+      }
+      const fix = canvasContextFixState(target);
+      if (fix) specific.push({ action: "fix-toggle", label: fix.fixed ? applicationText("固定解除", "Unfix") : applicationText("固定", "Fix"), disabled: !fix.enabled });
+      if (["line", "circle", "arc"].includes(target.kind)) {
+        const primitives = selectedConstructionTogglePrimitives();
+        const construction = primitives.length > 0 && primitives.every((item) => item.construction);
+        specific.push({ action: "construction-toggle", label: construction ? applicationText("実線に変更", "Convert to Normal") : applicationText("補助線に変更", "Convert to Construction"), disabled: primitives.length === 0 });
+        specific.push({ action: "offset", label: applicationText("ここからオフセット", "Offset from Here"), disabled: primitives.length !== 1 });
+        if (target.kind === "line") specific.push({ action: "fillet", label: applicationText("R面取り", "Fillet"), disabled: selectedLines.length !== 2 || selectedPoints.length + selectedCircles.length + selectedArcs.length + selectedBlockInstances.length > 0 });
+      }
+      if (["point", "line", "circle", "arc"].includes(target.kind)) {
+        specific.push({ action: "add-leader", label: applicationText("引出線を追加", "Add Leader"), disabled: selectedGeometryItems().length !== 1 || selectedBlockInstances.length + selectedAnnotations.length > 0 });
+      }
+      if (["line", "circle", "arc", "block", "annotation"].includes(target.kind)) {
+        const canCreateBlock = selectedLines.length + selectedCircles.length + selectedArcs.length + selectedBlockInstances.length + selectedAnnotations.length > 0;
+        specific.push({ action: "create-block", label: applicationText("選択からブロック作成", "Create Block from Selection"), disabled: !canCreateBlock || !canCreateInActiveSketch() });
+      }
+      if (specific.length > 0) groups.push(specific);
+      const copyable = hasCopyableCanvasSelection();
+      groups.push([
+        { action: "cut", label: applicationText("切り取り", "Cut"), shortcut: "Ctrl+X", disabled: !copyable },
+        { action: "copy", label: applicationText("コピー", "Copy"), shortcut: "Ctrl+C", disabled: !copyable },
+        { action: "delete", label: applicationText("削除", "Delete"), shortcut: "Del", disabled: !hasSelection(), danger: true },
+      ]);
+      groups.push([{ action: "show-properties", label: applicationText("プロパティを表示", "Show Properties") }]);
+    }
+    return groups.flatMap((group, groupIndex) => [
+      ...(groupIndex > 0 ? [{ separator: true }] : []),
+      ...group,
+    ]);
+  }
+
+  function closeCanvasContextMenu() {
+    if (!canvasContextMenu || canvasContextMenu.hidden) return false;
+    canvasContextMenu.hidden = true;
+    canvasContextMenu.innerHTML = "";
+    canvasContextTarget = null;
+    canvasContextPointer = null;
+    return true;
+  }
+
+  function renderCanvasContextMenu(items) {
+    if (!canvasContextMenu) return;
+    canvasContextMenu.innerHTML = items.map((item) => item.separator
+      ? '<div class="canvas-context-menu-separator" role="separator"></div>'
+      : `<button type="button" role="menuitem" data-context-action="${item.action}" class="${item.danger ? "danger" : ""}" ${item.disabled ? "disabled" : ""}><span>${escapeHtml(item.label)}</span>${item.shortcut ? `<kbd>${escapeHtml(item.shortcut)}</kbd>` : ""}</button>`).join("");
+  }
+
+  function openCanvasContextMenu(event) {
+    if (!canvasContextMenu || !isGeometryMode()) return;
+    event.preventDefault();
+    closeAppMenus();
+    const pointer = canvasPoint(event);
+    lastPointerWorld = pointer;
+    const commandActive = hasCancellableCanvasCommand();
+    const target = commandActive ? { kind: "blank", item: null } : canvasContextTargetAt(pointer);
+    if (!commandActive && target.kind !== "blank") {
+      selectCanvasContextTarget(target);
+      updateUI({ refreshAnalysis: false });
+      draw();
+    }
+    canvasContextTarget = target;
+    canvasContextPointer = pointer;
+    renderCanvasContextMenu(canvasContextMenuItems(target, commandActive));
+    canvasContextMenu.setAttribute("aria-label", applicationText("キャンバスコンテキストメニュー", "Canvas context menu"));
+    canvasContextMenu.hidden = false;
+    canvasContextMenu.style.left = "0px";
+    canvasContextMenu.style.top = "0px";
+    const area = canvas.closest(".canvas-area")?.getBoundingClientRect();
+    const bounds = canvasContextMenu.getBoundingClientRect();
+    if (area) {
+      const left = Math.max(4, Math.min(event.clientX - area.left, area.width - bounds.width - 4));
+      const top = Math.max(4, Math.min(event.clientY - area.top, area.height - bounds.height - 4));
+      canvasContextMenu.style.left = `${left}px`;
+      canvasContextMenu.style.top = `${top}px`;
+    }
+    canvasContextMenu.querySelector("button:not(:disabled)")?.focus({ preventScroll: true });
+  }
+
+  function showSelectedObjectProperties() {
+    setPropertiesPanelCollapsed(false);
+    updatePropertiesUI();
+    const panel = document.getElementById("propertiesPanel");
+    if (panel) panel.scrollTop = 0;
+    setHint(applicationText("選択したオブジェクトのプロパティを表示します。", "Select an object to display its properties."));
+  }
+
+  function executeCanvasContextAction(action) {
+    const target = canvasContextTarget;
+    const pointer = canvasContextPointer;
+    closeCanvasContextMenu();
+    if (action === "cancel-command") cancelCanvasCommandFromContextMenu();
+    else if (action === "undo") undoHistory();
+    else if (action === "redo") redoHistory();
+    else if (action === "cut") copySelectionToClipboard({ cut: true });
+    else if (action === "copy") copySelectionToClipboard();
+    else if (action === "paste") pasteGeometryClipboard();
+    else if (action === "delete") document.getElementById("deleteSelectionBtn")?.click();
+    else if (action === "show-properties") showSelectedObjectProperties();
+    else if (action === "construction-toggle") document.getElementById("toolConstructionLine")?.click();
+    else if (action === "fix-toggle") fixPointBtn?.click();
+    else if (action === "offset") document.getElementById("toolOffset")?.click();
+    else if (action === "fillet") document.getElementById("toolFillet")?.click();
+    else if (action === "add-leader") document.getElementById("annotationLeaderBtn")?.click();
+    else if (action === "create-block") document.getElementById("toolCreateBlock")?.click();
+    else if (action === "block-edit" && target?.item) enterBlockDefinitionEdit(target.item.definitionId);
+    else if (action === "block-rotation-toggle" && target?.item) setBlockInstanceRotationLocked(target.item, !target.item.rotationLocked);
+    else if (action === "dimension-edit" && target?.hit) startDimensionEditInput(target.hit);
+    else if (action === "fit-visible") {
+      if (fitVisibleGeometryToViewport()) setHint(applicationText("表示中の図形全体が見えるように調整しました", "Fitted all visible geometry."));
+      else setHint(applicationText("表示中の図形がありません", "There is no visible geometry."), "error");
+      draw();
+    }
+  }
+
+  canvasContextMenu?.addEventListener("click", (event) => {
+    const button = event.target.closest("[data-context-action]");
+    if (!button || button.disabled) return;
+    executeCanvasContextAction(button.dataset.contextAction);
+  });
+  canvasContextMenu?.addEventListener("keydown", (event) => {
+    if (event.key === "Escape") {
+      event.preventDefault();
+      event.stopPropagation();
+      closeCanvasContextMenu();
+      return;
+    }
+    if (!['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key)) return;
+    event.preventDefault();
+    const buttons = [...canvasContextMenu.querySelectorAll("button:not(:disabled)")];
+    if (buttons.length === 0) return;
+    const current = buttons.indexOf(document.activeElement);
+    let next = current;
+    if (event.key === "Home") next = 0;
+    else if (event.key === "End") next = buttons.length - 1;
+    else if (event.key === "ArrowDown") next = (current + 1 + buttons.length) % buttons.length;
+    else next = (current - 1 + buttons.length) % buttons.length;
+    buttons[next].focus({ preventScroll: true });
+  });
+  canvas.addEventListener("contextmenu", openCanvasContextMenu);
+  document.addEventListener("pointerdown", (event) => {
+    if (!event.target.closest("#canvasContextMenu")) closeCanvasContextMenu();
+  });
+  window.addEventListener("blur", closeCanvasContextMenu);
+
   canvas.addEventListener("pointerdown", (e) => {
+    if (e.button === 2) {
+      e.preventDefault();
+      return;
+    }
+    closeCanvasContextMenu();
     if (e.button === 1) {
       e.preventDefault();
       panSession = {
@@ -15319,6 +15630,7 @@
     "wheel",
     (e) => {
       e.preventDefault();
+      closeCanvasContextMenu();
       const screen = canvasScreenPoint(e);
       const world = screenToWorld(screen);
       const nextScale = clampZoom(viewport.scale * Math.exp(-e.deltaY * 0.001));
@@ -15332,6 +15644,11 @@
   );
 
   window.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && canvasContextMenu && !canvasContextMenu.hidden) {
+      e.preventDefault();
+      closeCanvasContextMenu();
+      return;
+    }
     const key = e.key.toLowerCase();
     const commandKey = e.ctrlKey || e.metaKey;
     const textEditingTarget = e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement || e.target?.isContentEditable;
@@ -16259,10 +16576,12 @@
     updateUI({ refreshAnalysis: false });
     draw();
     log(`${points.map((point) => point.id).join(", ")} の固定状態を ${nextFixed} にしました\n自動solve: success=${fixedResult.success}`);
+    recordHistory("固定状態変更");
     return;
   });
 
   window.addEventListener("resize", () => {
+    closeCanvasContextMenu();
     resizeCanvas({ centerWorld: currentCanvasCenterWorld() });
   });
 
