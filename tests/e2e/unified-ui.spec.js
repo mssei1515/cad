@@ -815,7 +815,7 @@ test("Document owns appearance defaults while only non-root Sketches expose comp
   }));
 });
 
-test("nested Sketches inherit Document appearance instead of parent Sketch appearance", async ({ page }) => {
+test("nested Sketches inherit independent Document appearance defaults instead of general or parent Sketch appearance", async ({ page }) => {
   await page.goto(`${baseUrl}/index.html?test=1`);
   await page.waitForFunction(() => window.__cadTest);
   const fixture = {
@@ -827,7 +827,7 @@ test("nested Sketches inherit Document appearance instead of parent Sketch appea
     sketches: [
       { id: "ROOT", name: "Root Sketch", parentSketchId: null, kind: "root", appearance: {} },
       { id: "S1", name: "Parent", parentSketchId: "ROOT", kind: "sketch", appearance: { color: "#dc2626" }, constructionAppearance: { color: "#f97316" }, dimensionAppearance: { color: "#0e7490" } },
-      { id: "S2", name: "Child", parentSketchId: "S1", kind: "sketch", appearance: {}, constructionAppearance: {}, dimensionAppearance: {} },
+      { id: "S2", name: "Child", parentSketchId: "S1", kind: "sketch", appearance: { visible: false, color: "#a855f7", lineType: "dotted", lineWidth: 7 }, constructionAppearance: { lineType: "dashed" }, dimensionAppearance: {} },
     ],
     activeSketchId: "S2",
     points: [
@@ -850,10 +850,10 @@ test("nested Sketches inherit Document appearance instead of parent Sketch appea
   };
   await page.evaluate((data) => window.__cadTest.importDocumentNameFixture(data, "document-appearance-inheritance.json"), fixture);
   expect((await page.evaluate(() => window.__cadTest.appearanceStateForTest("line", "L1"))).effective).toEqual(expect.objectContaining({
-    color: "#16a34a", lineType: "dashdot", lineWidth: 1.1,
+    visible: true, color: "#16a34a", lineType: "dashed", lineWidth: 1.1,
   }));
   await selectSketch(page, "S2");
-  await expect(page.locator('[data-property-section="general"] .property-color-picker')).toHaveAttribute("data-current-color", "#2563eb");
+  await expect(page.locator('[data-property-section="general"] .property-color-picker')).toHaveAttribute("data-current-color", "#a855f7");
   await expect(page.locator('[data-property-section="construction"] .property-color-picker')).toHaveAttribute("data-current-color", "#16a34a");
   await expect(page.locator('[data-property-section="dimension"] .property-color-picker')).toHaveAttribute("data-current-color", "#7c3aed");
   const serialized = await page.evaluate(() => window.__cadTest.serializedModelForTest());

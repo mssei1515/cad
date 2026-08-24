@@ -340,6 +340,7 @@
     lineWidth: 2,
   };
   const DEFAULT_CONSTRUCTION_APPEARANCE = {
+    visible: true,
     color: "#64748b",
     lineType: "dashdot",
     lineWidth: 1.1,
@@ -1434,9 +1435,10 @@
   }
 
   function effectiveAppearanceForElement(item) {
-    let result = { ...normalizeAppearance(model.defaultAppearance, { partial: false }) };
     const construction = (item instanceof Line || item instanceof Circle || item instanceof Arc) && item.construction;
-    if (construction) result = { ...result, ...normalizeConstructionAppearance(model.defaultConstructionAppearance, { partial: false }) };
+    let result = construction
+      ? { ...normalizeConstructionAppearance(model.defaultConstructionAppearance, { partial: false }) }
+      : { ...normalizeAppearance(model.defaultAppearance, { partial: false }) };
     const outerSketch = sketchById(elementSketchId(item));
     if (outerSketch) result = cascadeSketchGeometryAppearance(outerSketch, model.sketches, result, construction);
     if (item?.blockProjection) {
@@ -10714,17 +10716,15 @@
   function cascadeSketchGeometryAppearance(sketch, sketches, base, construction = false) {
     let result = { ...base };
     for (const item of sketchAppearanceLayers(sketch)) {
-      result = { ...result, ...normalizeAppearance(item.appearance) };
-      if (construction) result = { ...result, ...normalizeConstructionAppearance(item.constructionAppearance) };
+      result = construction
+        ? { ...result, ...normalizeConstructionAppearance(item.constructionAppearance) }
+        : { ...result, ...normalizeAppearance(item.appearance) };
     }
     return result;
   }
 
   function effectiveConstructionAppearanceForSketch(sketch, sketches = model.sketches) {
-    const base = {
-      ...normalizeAppearance(model.defaultAppearance, { partial: false }),
-      ...normalizeConstructionAppearance(model.defaultConstructionAppearance, { partial: false }),
-    };
+    const base = normalizeConstructionAppearance(model.defaultConstructionAppearance, { partial: false });
     return sketch ? cascadeSketchGeometryAppearance(sketch, sketches, base, true) : base;
   }
 
