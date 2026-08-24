@@ -38,7 +38,7 @@ async function openDocumentSettings(page) {
 
 async function selectSketch(page, sketchId) {
   await page.locator(`.sketch-item[data-id="${sketchId}"]`).click();
-  await expect(page.locator("#propertiesPanel .property-heading")).toContainText(sketchId === "ROOT" ? "Root Sketch" : "Sketch");
+  await expect(page.locator("#propertiesPanel .property-heading")).toContainText(sketchId === "ROOT" ? "Root Sketch" : /Sketch|スケッチ/);
 }
 
 function waitForServer(url, timeoutMs = 10000) {
@@ -706,10 +706,15 @@ test("application language defaults to Japanese and persists the full UI selecti
   await page.locator("#applicationSettingsDialog button[value=cancel]").first().click();
   await openDocumentSettings(page);
   await expect(page.locator("#documentSettingsDialog")).toContainText("Document Settings");
-  await expect(page.locator("#documentSettingsDialog")).toContainText("No document settings are currently available.");
-  await expect(page.locator("#documentAppearanceFields, #documentConstructionAppearanceFields, #documentDimensionAppearanceFields")).toHaveCount(0);
+  await expect(page.locator("#documentSettingsDialog h3")).toHaveText(["General Appearance", "Construction Appearance", "Dimension Appearance"]);
+  await expect(page.locator('#documentAppearanceFields select[data-appearance-key="visible"] option')).toHaveText(["Visible", "Hidden"]);
+  await expect(page.locator('#documentConstructionAppearanceFields select[data-appearance-key="lineType"] option')).toHaveText(["Solid", "Dashed", "Dash-dot", "Dotted"]);
+  await expect(page.locator('#documentDimensionAppearanceFields select[data-dimension-display="visible"] option')).toHaveText(["Visible", "Hidden"]);
   await page.locator("#documentSettingsDialog button[value=cancel]").first().click();
   await selectSketch(page, "ROOT");
+  await expect(page.locator("#propertiesPanel .property-section h3")).toHaveText(["Sketch"]);
+  await expect(page.locator("#propertiesPanel .property-section-collapsible")).toHaveCount(0);
+  await selectSketch(page, "S1");
   await expect(page.locator("#propertiesPanel .property-section h3")).toContainText(["Sketch", "General Appearance", "Construction Appearance", "Dimension Appearance"]);
   await expect(page.locator('#sketchConstructionPropertyVisible option')).toHaveText(["Default", "Visible", "Hidden"]);
   await expect(page.locator('#sketchConstructionPropertyLineType option')).toHaveText(["Default", "Solid", "Dashed", "Dash-dot", "Dotted"]);
@@ -739,10 +744,37 @@ test("application language defaults to Japanese and persists the full UI selecti
   await expect(page.locator("#hint")).not.toContainText("Fully constrained");
 });
 
-test("Root and child Sketch Properties expose compact collapsible appearance settings", async ({ page }) => {
+test("Document owns appearance defaults while only non-root Sketches expose compact overrides", async ({ page }) => {
   await page.goto(`${baseUrl}/index.html?test=1`);
   await page.waitForFunction(() => window.__cadTest);
   await selectSketch(page, "ROOT");
+  await expect(page.locator("#propertiesPanel .property-section h3")).toHaveText(["スケッチ"]);
+  await expect(page.locator("#propertiesPanel [data-appearance-key], #propertiesPanel [data-dimension-display]")).toHaveCount(0);
+
+  await openDocumentSettings(page);
+  await expect(page.locator("#documentSettingsDialog h3")).toHaveText(["一般外観", "補助線外観", "寸法外観"]);
+  await page.locator("#documentPropertyColor").fill("#2563eb");
+  await page.locator("#documentPropertyColor").blur();
+  await page.locator("#documentConstructionPropertyColor").fill("#dc2626");
+  await page.locator("#documentConstructionPropertyColor").blur();
+  await page.locator("#documentDimensionColor").fill("#0e7490");
+  await page.locator("#documentDimensionColor").blur();
+  await page.locator("#documentSettingsDialog button[value=cancel]").first().click();
+
+  const documentSettings = await page.evaluate(() => window.__cadTest.serializedModelForTest());
+  expect(documentSettings.defaultAppearance.color).toBe("#2563eb");
+  expect(documentSettings.defaultConstructionAppearance.color).toBe("#dc2626");
+  expect(documentSettings.defaultDimensionAppearance.color).toBe("#0e7490");
+  expect(documentSettings.sketches.find((sketch) => sketch.id === "ROOT")).toEqual(expect.objectContaining({
+    appearance: {}, constructionAppearance: {}, dimensionAppearance: {},
+  }));
+  expect((await page.evaluate(() => window.__cadTest.appearanceStateForTest("line", "L1"))).effective.color).toBe("#2563eb");
+  await page.click("#undoBtn");
+  expect((await page.evaluate(() => window.__cadTest.serializedModelForTest())).defaultDimensionAppearance.color).toBe("#6b7280");
+  await page.click("#redoBtn");
+  expect((await page.evaluate(() => window.__cadTest.serializedModelForTest())).defaultDimensionAppearance.color).toBe("#0e7490");
+
+  await selectSketch(page, "S1");
   await expect(page.locator("#propertiesPanel .property-section h3")).toContainText(["スケッチ", "一般外観", "補助線外観", "寸法外観"]);
   const appearanceSections = page.locator("#propertiesPanel .property-section-collapsible");
   await expect(appearanceSections).toHaveCount(3);
@@ -764,47 +796,108 @@ test("Root and child Sketch Properties expose compact collapsible appearance set
   expect(compactMetrics).toEqual(expect.objectContaining({ panelPadding: "7px", sectionPadding: "6px", rowMinHeight: "26px" }));
   expect(compactMetrics.inputHeight).toBeLessThanOrEqual(25);
 
-  await page.locator("#propertyColor").fill("#2563eb");
-  await page.locator("#propertyColor").blur();
-  const serialized = await page.evaluate(() => window.__cadTest.serializedModelForTest());
-  expect(serialized.sketches.find((sketch) => sketch.id === "ROOT").appearance.color).toBe("#2563eb");
-  expect(serialized.defaultAppearance.color).not.toBe("#2563eb");
-  expect((await page.evaluate(() => window.__cadTest.appearanceStateForTest("line", "L1"))).effective.color).toBe("#2563eb");
-
-  await page.locator("#sketchConstructionPropertyColor").fill("#dc2626");
-  await page.locator("#sketchConstructionPropertyColor").blur();
-  await page.locator("#sketchDimensionColor").fill("#0e7490");
-  await page.locator("#sketchDimensionColor").blur();
-  const rootSettings = await page.evaluate(() => window.__cadTest.serializedModelForTest().sketches.find((sketch) => sketch.id === "ROOT"));
-  expect(rootSettings).toEqual(expect.objectContaining({
-    constructionAppearance: expect.objectContaining({ color: "#dc2626" }),
-    dimensionAppearance: expect.objectContaining({ color: "#0e7490" }),
-  }));
-
-  await page.locator('[data-property-section="dimension"] > summary').click();
-  await expect(page.locator('[data-property-section="dimension"]')).not.toHaveAttribute("open", "");
-  await selectSketch(page, "S1");
-  await expect(page.locator("#propertiesPanel .property-section h3")).toContainText(["スケッチ", "一般外観", "補助線外観", "寸法外観"]);
-  await expect(page.locator('[data-property-section="dimension"]')).not.toHaveAttribute("open", "");
-  await page.locator('[data-property-section="dimension"] > summary').click();
   await expect(page.locator("#sketchConstructionPropertyColor")).toHaveValue("");
   await expect(page.locator("#sketchDimensionColor")).toHaveValue("");
   await expect(page.locator('[data-sketch-default-appearance="construction"] .property-color-picker')).toHaveAttribute("data-current-color", "#dc2626");
   await expect(page.locator('[data-sketch-default-appearance="dimension"] .property-color-picker')).toHaveAttribute("data-current-color", "#0e7490");
 
+  await page.locator("#propertyColor").fill("#f97316");
+  await page.locator("#propertyColor").blur();
   await page.locator("#sketchConstructionPropertyColor").fill("#16a34a");
   await page.locator("#sketchConstructionPropertyColor").blur();
   await page.locator("#sketchDimensionColor").fill("#7c3aed");
   await page.locator("#sketchDimensionColor").blur();
   const childSettings = await page.evaluate(() => window.__cadTest.serializedModelForTest().sketches.find((sketch) => sketch.id === "S1"));
   expect(childSettings).toEqual(expect.objectContaining({
+    appearance: expect.objectContaining({ color: "#f97316" }),
     constructionAppearance: expect.objectContaining({ color: "#16a34a" }),
     dimensionAppearance: expect.objectContaining({ color: "#7c3aed" }),
   }));
+});
 
-  await openDocumentSettings(page);
-  await expect(page.locator("#documentSettingsDialog")).toContainText("現在の設定項目はありません。");
-  await expect(page.locator("#documentSettingsDialog [data-appearance-key], #documentSettingsDialog [data-dimension-display]")).toHaveCount(0);
+test("nested Sketches inherit Document appearance instead of parent Sketch appearance", async ({ page }) => {
+  await page.goto(`${baseUrl}/index.html?test=1`);
+  await page.waitForFunction(() => window.__cadTest);
+  const fixture = {
+    version: 10,
+    documentName: "document-appearance-inheritance",
+    defaultAppearance: { visible: true, color: "#2563eb", lineType: "solid", lineWidth: 2 },
+    defaultConstructionAppearance: { visible: true, color: "#16a34a", lineType: "dashdot", lineWidth: 1.1, endpointOverhang: true, endpointMarkers: true },
+    defaultDimensionAppearance: { visible: true, color: "#7c3aed", precision: null, prefix: "", suffix: "", arrows: true, extensionLines: true },
+    sketches: [
+      { id: "ROOT", name: "Root Sketch", parentSketchId: null, kind: "root", appearance: {} },
+      { id: "S1", name: "Parent", parentSketchId: "ROOT", kind: "sketch", appearance: { color: "#dc2626" }, constructionAppearance: { color: "#f97316" }, dimensionAppearance: { color: "#0e7490" } },
+      { id: "S2", name: "Child", parentSketchId: "S1", kind: "sketch", appearance: {}, constructionAppearance: {}, dimensionAppearance: {} },
+    ],
+    activeSketchId: "S2",
+    points: [
+      { id: "P1", x: 0, y: 0, fixed: false, kind: "endpoint", sketchId: "S2", appearance: {} },
+      { id: "P2", x: 100, y: 0, fixed: false, kind: "endpoint", sketchId: "S2", appearance: {} },
+    ],
+    lines: [{ id: "L1", p1: "P1", p2: "P2", construction: true, sketchId: "S2", appearance: {} }],
+    circles: [], arcs: [], constraints: [], parameters: [], nextDimensionParameterIndex: 1,
+    blockDefinitions: [{
+      id: "B1", name: "Legacy Root Appearance", revision: 1, origin: { x: 0, y: 0 },
+      sketches: [
+        { id: "ROOT", name: "Root Sketch", parentSketchId: null, kind: "root", appearance: { color: "#db2777" }, constructionAppearance: { color: "#f97316" }, dimensionAppearance: { color: "#0ea5e9" } },
+        { id: "S1", name: "Sketch-1", parentSketchId: "ROOT", kind: "sketch", appearance: {}, constructionAppearance: {}, dimensionAppearance: {} },
+      ],
+      activeSketchId: "S1",
+      points: [], lines: [], circles: [], arcs: [], constraints: [], blockInstances: [], annotations: [],
+      parameters: [], nextDimensionParameterIndex: 1,
+    }],
+    blockInstances: [], annotations: [],
+  };
+  await page.evaluate((data) => window.__cadTest.importDocumentNameFixture(data, "document-appearance-inheritance.json"), fixture);
+  expect((await page.evaluate(() => window.__cadTest.appearanceStateForTest("line", "L1"))).effective).toEqual(expect.objectContaining({
+    color: "#16a34a", lineType: "dashdot", lineWidth: 1.1,
+  }));
+  await selectSketch(page, "S2");
+  await expect(page.locator('[data-property-section="general"] .property-color-picker')).toHaveAttribute("data-current-color", "#2563eb");
+  await expect(page.locator('[data-property-section="construction"] .property-color-picker')).toHaveAttribute("data-current-color", "#16a34a");
+  await expect(page.locator('[data-property-section="dimension"] .property-color-picker')).toHaveAttribute("data-current-color", "#7c3aed");
+  const serialized = await page.evaluate(() => window.__cadTest.serializedModelForTest());
+  const definitionRoot = serialized.blockDefinitions[0].sketches.find((sketch) => sketch.id === "ROOT");
+  const definitionSketch = serialized.blockDefinitions[0].sketches.find((sketch) => sketch.id === "S1");
+  expect(definitionRoot).toEqual(expect.objectContaining({ appearance: {}, constructionAppearance: {}, dimensionAppearance: {} }));
+  expect(definitionSketch).toEqual(expect.objectContaining({
+    appearance: expect.objectContaining({ color: "#db2777" }),
+    constructionAppearance: expect.objectContaining({ color: "#f97316" }),
+    dimensionAppearance: expect.objectContaining({ color: "#0ea5e9" }),
+  }));
+});
+
+test("legacy Root Sketch appearance moves to Document defaults on load", async ({ page }) => {
+  await page.goto(`${baseUrl}/index.html?test=1`);
+  await page.waitForFunction(() => window.__cadTest);
+  const fixture = {
+    version: 10,
+    documentName: "root-appearance-migration",
+    defaultAppearance: { visible: true, color: "#111827", lineType: "solid", lineWidth: 2 },
+    defaultConstructionAppearance: { visible: true, color: "#64748b", lineType: "dashdot", lineWidth: 1.1, endpointOverhang: true, endpointMarkers: true },
+    defaultDimensionAppearance: { visible: true, color: "#6b7280", precision: null, prefix: "", suffix: "", arrows: true, extensionLines: true },
+    sketches: [
+      { id: "ROOT", name: "Root Sketch", parentSketchId: null, kind: "root", appearance: { color: "#2563eb" }, constructionAppearance: { color: "#16a34a" }, dimensionAppearance: { color: "#7c3aed" } },
+      { id: "S1", name: "Sketch-1", parentSketchId: "ROOT", kind: "sketch", appearance: {}, constructionAppearance: {}, dimensionAppearance: {} },
+    ],
+    activeSketchId: "S1",
+    points: [
+      { id: "P1", x: 0, y: 0, fixed: false, kind: "endpoint", sketchId: "S1", appearance: {} },
+      { id: "P2", x: 100, y: 0, fixed: false, kind: "endpoint", sketchId: "S1", appearance: {} },
+    ],
+    lines: [{ id: "L1", p1: "P1", p2: "P2", construction: false, sketchId: "S1", appearance: {} }],
+    circles: [], arcs: [], constraints: [], parameters: [], nextDimensionParameterIndex: 1,
+    blockDefinitions: [], blockInstances: [], annotations: [],
+  };
+  await page.evaluate((data) => window.__cadTest.importDocumentNameFixture(data, "root-appearance-migration.json"), fixture);
+  const serialized = await page.evaluate(() => window.__cadTest.serializedModelForTest());
+  expect(serialized.defaultAppearance.color).toBe("#2563eb");
+  expect(serialized.defaultConstructionAppearance.color).toBe("#16a34a");
+  expect(serialized.defaultDimensionAppearance.color).toBe("#7c3aed");
+  expect(serialized.sketches.find((sketch) => sketch.id === "ROOT")).toEqual(expect.objectContaining({
+    appearance: {}, constructionAppearance: {}, dimensionAppearance: {},
+  }));
+  expect((await page.evaluate(() => window.__cadTest.appearanceStateForTest("line", "L1"))).effective.color).toBe("#2563eb");
 });
 
 test("Appearance cascades, used file colors are selectable, and constraint status supports mouse and Space", async ({ page }) => {
@@ -1063,12 +1156,13 @@ test("Constraint dimensions expose defining geometry and inheritable appearance 
   await expect(page.locator("#propertiesPanel")).toContainText("P2");
   await expect(page.locator("#propertiesPanel")).not.toContainText("寸法表示");
 
-  await selectSketch(page, "ROOT");
-  await expect(page.locator("#propertiesPanel")).toContainText("寸法外観");
-  await page.locator("#sketchDimensionColor").fill("#0e7490");
-  await page.locator("#sketchDimensionColor").blur();
+  await openDocumentSettings(page);
+  await expect(page.locator("#documentSettingsDialog")).toContainText("寸法外観");
+  await page.locator("#documentDimensionColor").fill("#0e7490");
+  await page.locator("#documentDimensionColor").blur();
+  await page.locator("#documentSettingsDialog button[value=cancel]").first().click();
   expect(await page.evaluate(() => window.__cadTest.dimensionAppearanceStateForTest())).toEqual(expect.objectContaining({
-    documentDefault: expect.not.objectContaining({ color: "#0e7490" }),
+    documentDefault: expect.objectContaining({ color: "#0e7490" }),
     sketchDirect: {},
     sketchEffective: expect.objectContaining({ color: "#0e7490" }),
     direct: expect.not.objectContaining({ color: expect.anything() }),
@@ -1076,6 +1170,7 @@ test("Constraint dimensions expose defining geometry and inheritable appearance 
   }));
   expect(await page.evaluate(() => window.__cadTest.drawnDimensionColorsForTest())).toContain("#0e7490");
 
+  await selectSketch(page, "ROOT");
   await selectSketch(page, "S1");
   await expect(page.locator("#sketchDimensionColor")).toHaveValue("");
   await page.locator("#sketchDimensionColor").fill("#f97316");
@@ -1124,24 +1219,22 @@ test("Constraint dimensions expose defining geometry and inheritable appearance 
   expect(await page.evaluate(() => window.__cadTest.drawnDimensionLabelsForTest())).toEqual(expect.arrayContaining([expect.stringMatching(/REF .* mm/)]));
   await page.locator("#constraintStatusViewBtn").click();
   const serialized = await page.evaluate(() => window.__cadTest.serializedModelForTest());
-  expect(serialized.sketches.find((sketch) => sketch.id === "ROOT").dimensionAppearance).toEqual(expect.objectContaining({ color: "#0e7490" }));
+  expect(serialized.defaultDimensionAppearance).toEqual(expect.objectContaining({ color: "#0e7490" }));
+  expect(serialized.sketches.find((sketch) => sketch.id === "ROOT").dimensionAppearance).toEqual({});
   expect(serialized.constraints[0].dimension.display).toEqual(expect.objectContaining({ visible: false, color: "#7c3aed", precision: 3, prefix: "REF ", suffix: " mm", arrows: false }));
   expect(serialized.annotations).toEqual([]);
   await page.evaluate((documentData) => window.__cadTest.loadDocumentFixtureForDragTest(documentData, "dimension-appearance.json"), serialized);
   const roundTrip = await page.evaluate(() => window.__cadTest.serializedModelForTest());
-  expect(roundTrip.sketches.find((sketch) => sketch.id === "ROOT").dimensionAppearance).toEqual(serialized.sketches.find((sketch) => sketch.id === "ROOT").dimensionAppearance);
+  expect(roundTrip.defaultDimensionAppearance).toEqual(serialized.defaultDimensionAppearance);
   expect(roundTrip.constraints[0].dimension.display).toEqual(serialized.constraints[0].dimension.display);
 
   await page.evaluate(() => window.__cadTest.resetForParameterTest());
-  await page.click('[data-explorer-tab="blocks"]');
-  await page.click("#openBlockDefinitionsBtn");
-  await page.locator(".blockEditBtn").first().click();
-  await selectSketch(page, "ROOT");
-  await page.locator("#sketchDimensionColor").fill("#db2777");
-  await page.locator("#sketchDimensionColor").blur();
-  await page.click("#completeBlockEditBtn");
+  await openDocumentSettings(page);
+  await page.locator("#documentDimensionColor").fill("#db2777");
+  await page.locator("#documentDimensionColor").blur();
+  await page.locator("#documentSettingsDialog button[value=cancel]").first().click();
   const blockAppearance = await page.evaluate(() => window.__cadTest.dimensionAppearanceStateForTest().blockDefinitions);
-  expect(blockAppearance.flatMap((definition) => definition.dimensions).map((dimension) => dimension.effective.color)).toEqual(["#db2777", "#6b7280"]);
+  expect(blockAppearance.flatMap((definition) => definition.dimensions).map((dimension) => dimension.effective.color)).toEqual(["#db2777", "#db2777"]);
 });
 
 test("Sketch tree and Geometry Explorer hover use the same emphasis as canvas hover without tree Geometry IDs", async ({ page }) => {
@@ -1421,7 +1514,7 @@ test("construction line endpoint overhang remains while geometry or its block is
   });
 });
 
-test("construction line endpoint appearance inherits Sketch defaults and supports line overrides", async ({ page }) => {
+test("construction line endpoint appearance inherits Document defaults and supports Sketch and line overrides", async ({ page }) => {
   await page.goto(`${baseUrl}/index.html?test=1`);
   await page.waitForFunction(() => window.__cadTest);
   const fixture = {
@@ -1464,18 +1557,19 @@ test("construction line endpoint appearance inherits Sketch defaults and support
 
   await page.locator("#propertyEndpointOverhang").selectOption("");
   await page.locator("#propertyEndpointMarkers").selectOption("");
-  await selectSketch(page, "ROOT");
-  await expect(page.locator("#propertiesPanel")).toContainText("補助線外観");
-  await page.locator("#sketchConstructionPropertyColor").fill("#dc2626");
-  await page.locator("#sketchConstructionPropertyColor").blur();
-  await page.locator("#sketchConstructionPropertyLineType").selectOption("dotted");
-  await page.locator("#sketchConstructionPropertyLineWidth").fill("2.5");
-  await page.locator("#sketchConstructionPropertyLineWidth").blur();
-  await page.locator("#sketchConstructionPropertyEndpointOverhang").selectOption("false");
-  await page.locator("#sketchConstructionPropertyEndpointMarkers").selectOption("false");
+  await openDocumentSettings(page);
+  await expect(page.locator("#documentSettingsDialog")).toContainText("補助線外観");
+  await page.locator("#documentConstructionPropertyColor").fill("#dc2626");
+  await page.locator("#documentConstructionPropertyColor").blur();
+  await page.locator("#documentConstructionPropertyLineType").selectOption("dotted");
+  await page.locator("#documentConstructionPropertyLineWidth").fill("2.5");
+  await page.locator("#documentConstructionPropertyLineWidth").blur();
+  await page.locator("#documentConstructionPropertyEndpointOverhang").selectOption("false");
+  await page.locator("#documentConstructionPropertyEndpointMarkers").selectOption("false");
+  await page.locator("#documentSettingsDialog button[value=cancel]").first().click();
 
   serialized = await page.evaluate(() => window.__cadTest.serializedModelForTest());
-  expect(serialized.sketches.find((sketch) => sketch.id === "ROOT").constructionAppearance).toEqual(expect.objectContaining({
+  expect(serialized.defaultConstructionAppearance).toEqual(expect.objectContaining({
     color: "#dc2626",
     lineType: "dotted",
     lineWidth: 2.5,
@@ -1496,6 +1590,7 @@ test("construction line endpoint appearance inherits Sketch defaults and support
     endpointMarkerCount: 0,
   });
 
+  await selectSketch(page, "ROOT");
   await selectSketch(page, "S1");
   await expect(page.locator("#sketchConstructionPropertyColor")).toHaveValue("");
   await page.locator("#sketchConstructionPropertyColor").fill("#16a34a");
@@ -1507,7 +1602,7 @@ test("construction line endpoint appearance inherits Sketch defaults and support
   serialized = await page.evaluate(() => window.__cadTest.serializedModelForTest());
 
   await page.evaluate((data) => window.__cadTest.importDocumentNameFixture(data, "construction-appearance-reload.json"), serialized);
-  expect((await page.evaluate(() => window.__cadTest.serializedModelForTest())).sketches.find((sketch) => sketch.id === "ROOT").constructionAppearance).toEqual(serialized.sketches.find((sketch) => sketch.id === "ROOT").constructionAppearance);
+  expect((await page.evaluate(() => window.__cadTest.serializedModelForTest())).defaultConstructionAppearance).toEqual(serialized.defaultConstructionAppearance);
 });
 
 test("Geometry and Constraint Explorer tabs list and synchronize their respective objects", async ({ page }) => {
@@ -1685,8 +1780,8 @@ test("non-active sketches are visible unless individually hidden", async ({ page
   let state = await page.evaluate(() => window.__cadTest.siblingSubtreeVisibilityState());
   expect(state).toEqual({
     S2: { preferenceVisible: false, effectiveVisible: false },
-    S3: { preferenceVisible: true, effectiveVisible: false },
-    S4: { preferenceVisible: true, effectiveVisible: false },
+    S3: { preferenceVisible: true, effectiveVisible: true },
+    S4: { preferenceVisible: true, effectiveVisible: true },
   });
 
   await page.click('.sketchVisibilityBtn[data-id="S2"]');
@@ -1699,7 +1794,7 @@ test("non-active sketches are visible unless individually hidden", async ({ page
   state = await page.evaluate(() => window.__cadTest.siblingSubtreeVisibilityState());
   expect(state.S2.effectiveVisible).toBe(true);
   expect(state.S3.effectiveVisible).toBe(false);
-  expect(state.S4.effectiveVisible).toBe(false);
+  expect(state.S4.effectiveVisible).toBe(true);
 });
 
 test("blank canvas click clears a selected dimension without leaving the constraint command", async ({ page }) => {

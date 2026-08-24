@@ -127,7 +127,6 @@
     ["名前変更", "Rename"], ["スケッチ削除", "Delete Sketch"], ["ブロック名", "Block name"], ["配置", "Place"], ["非表示にする", "Hide"], ["表示する", "Show"],
     ["キャンバス", "Canvas"], ["ステータスバー", "Status Bar"], ["寸法値", "Dimension value"],
     ["既定の外観", "Default Appearance"], ["既定の補助線外観", "Default Construction Appearance"], ["既定の寸法外観", "Default Dimension Appearance"], ["一般外観", "General Appearance"], ["補助線外観", "Construction Appearance"], ["寸法外観", "Dimension Appearance"], ["一般", "General"], ["言語", "Language"],
-    ["現在の設定項目はありません。", "No document settings are currently available."],
     ["アプリケーション全体の設定をドキュメント設定から分離して管理します。", "Application-wide settings are managed separately from document settings."],
     ["既定", "Default"], ["表示", "Visible"], ["非表示", "Hidden"], ["色", "Color"], ["線種", "Line type"], ["線幅", "Line width"],
     ["実線", "Solid"], ["破線", "Dashed"], ["一点鎖線", "Dash-dot"], ["点線", "Dotted"], ["端部のはみ出し", "Endpoint overhang"], ["端部の点", "Endpoint points"], ["あり", "Enabled"], ["なし", "Disabled"], ["使用済みの色", "Colors used in this file"],
@@ -662,6 +661,26 @@
     model.defaultAppearance = normalizeAppearance(model.defaultAppearance, { partial: false });
     model.defaultConstructionAppearance = normalizeConstructionAppearance(model.defaultConstructionAppearance, { partial: false });
     model.defaultDimensionAppearance = normalizeDimensionAppearance(model.defaultDimensionAppearance, { partial: false });
+    const root = model.sketches.find((sketch) => isRootSketch(sketch));
+    if (root) {
+      const legacyAppearance = normalizeAppearance(root.appearance);
+      const legacyConstructionAppearance = normalizeConstructionAppearance(root.constructionAppearance);
+      const legacyDimensionAppearance = normalizeDimensionAppearance(root.dimensionAppearance);
+      if (blockEditSession) {
+        for (const sketch of model.sketches.filter((item) => !isRootSketch(item))) {
+          sketch.appearance = { ...legacyAppearance, ...normalizeAppearance(sketch.appearance) };
+          sketch.constructionAppearance = { ...legacyConstructionAppearance, ...normalizeConstructionAppearance(sketch.constructionAppearance) };
+          sketch.dimensionAppearance = { ...legacyDimensionAppearance, ...normalizeDimensionAppearance(sketch.dimensionAppearance) };
+        }
+      } else {
+        model.defaultAppearance = { ...model.defaultAppearance, ...legacyAppearance };
+        model.defaultConstructionAppearance = { ...model.defaultConstructionAppearance, ...legacyConstructionAppearance };
+        model.defaultDimensionAppearance = { ...model.defaultDimensionAppearance, ...legacyDimensionAppearance };
+      }
+      root.appearance = {};
+      root.constructionAppearance = {};
+      root.dimensionAppearance = {};
+    }
     model.annotations = normalizeAnnotations(model.annotations);
     for (const item of [...model.points, ...model.lines, ...model.circles, ...model.arcs]) item.appearance = normalizeAppearance(item.appearance);
   }
@@ -699,6 +718,12 @@
       root.appearance = normalizeAppearance(root.appearance);
       root.constructionAppearance = normalizeConstructionAppearance(root.constructionAppearance);
       root.dimensionAppearance = normalizeDimensionAppearance(root.dimensionAppearance);
+      const legacyRootAppearance = root.appearance;
+      const legacyRootConstructionAppearance = root.constructionAppearance;
+      const legacyRootDimensionAppearance = root.dimensionAppearance;
+      root.appearance = {};
+      root.constructionAppearance = {};
+      root.dimensionAppearance = {};
       root.visible = true;
       definition.sketches = [root, ...definition.sketches.filter((sketch) => sketch && sketch !== root && sketch.id !== ROOT_SKETCH_ID && sketch.kind !== "root")];
       if (!definition.sketches.some((sketch) => sketch.kind !== "root")) {
@@ -713,6 +738,9 @@
         sketch.appearance = normalizeAppearance(sketch.appearance || (sketch.visible === false ? { visible: false } : {}));
         sketch.constructionAppearance = normalizeConstructionAppearance(sketch.constructionAppearance);
         sketch.dimensionAppearance = normalizeDimensionAppearance(sketch.dimensionAppearance);
+        if (Object.keys(legacyRootAppearance).length > 0) sketch.appearance = { ...legacyRootAppearance, ...sketch.appearance };
+        if (Object.keys(legacyRootConstructionAppearance).length > 0) sketch.constructionAppearance = { ...legacyRootConstructionAppearance, ...sketch.constructionAppearance };
+        if (Object.keys(legacyRootDimensionAppearance).length > 0) sketch.dimensionAppearance = { ...legacyRootDimensionAppearance, ...sketch.dimensionAppearance };
         sketch.visible = sketch.appearance.visible !== false;
         sketch.parentSketchId = sketch.parentSketchId == null ? ROOT_SKETCH_ID : String(sketch.parentSketchId);
         if (sketch.parentSketchId === sketch.id || !sketchIds.has(sketch.parentSketchId)) sketch.parentSketchId = ROOT_SKETCH_ID;
@@ -10672,26 +10700,20 @@
     }
   }
 
-  function sketchAppearanceChain(sketch, sketches) {
-    const chain = [];
-    let current = sketch;
-    while (current) {
-      chain.unshift(current);
-      current = current.parentSketchId ? sketches.find((item) => item.id === current.parentSketchId) : null;
-    }
-    return chain;
+  function sketchAppearanceLayers(sketch) {
+    return sketch && !isRootSketch(sketch) ? [sketch] : [];
   }
 
   function cascadeSketchAppearance(sketch, sketches, base) {
     let result = { ...base };
-    const chain = sketchAppearanceChain(sketch, sketches);
+    const chain = sketchAppearanceLayers(sketch);
     for (const item of chain) result = { ...result, ...normalizeAppearance(item.appearance) };
     return result;
   }
 
   function cascadeSketchGeometryAppearance(sketch, sketches, base, construction = false) {
     let result = { ...base };
-    for (const item of sketchAppearanceChain(sketch, sketches)) {
+    for (const item of sketchAppearanceLayers(sketch)) {
       result = { ...result, ...normalizeAppearance(item.appearance) };
       if (construction) result = { ...result, ...normalizeConstructionAppearance(item.constructionAppearance) };
     }
@@ -10709,7 +10731,7 @@
   function effectiveDimensionAppearanceForSketch(sketch, sketches = model.sketches) {
     let result = normalizeDimensionAppearance(model.defaultDimensionAppearance, { partial: false });
     if (!sketch) return result;
-    for (const item of sketchAppearanceChain(sketch, sketches)) {
+    for (const item of sketchAppearanceLayers(sketch)) {
       result = { ...result, ...normalizeDimensionAppearance(item.dimensionAppearance) };
     }
     return result;
@@ -11029,7 +11051,6 @@
       const annotationType = item.type === "leader" ? applicationText("引出線", "Leader") : applicationText("自由テキスト", "Free Text");
       panel.innerHTML = `<h2 class="property-heading">${annotationType} ${escapeHtml(item.id)}</h2><section class="property-section"><h3>Annotation</h3>${propertyReadonlyRow("種類", "Type", annotationType)}${propertyReadonlyRow("ID", "ID", item.id)}<div class="property-row"><label>Visible</label><input data-property="annotation-visible" type="checkbox" ${item.visible !== false ? "checked" : ""}></div>${item.type === "text" ? `<div class="property-row"><label>Text</label><textarea data-property="annotation-text">${escapeHtml(item.text || "")}</textarea></div><div class="property-row"><label>Font size</label><input data-property="annotation-font-size" type="number" min="6" max="72" value="${Number(item.style?.fontSize || 13)}"></div>` : ""}<div class="property-row"><label>Color</label><input data-property="annotation-color" type="text" value="${escapeHtml(item.style?.color || "#111827")}"></div></section>`;
     } else {
-      const effective = effectiveAppearanceForSketch(item);
       const parent = sketchById(item.parentSketchId);
       const parentLabel = parent ? `${parent.name} (${parent.id})` : applicationText("なし", "None");
       const rows = propertyReadonlyRow("種類", "Type", applicationText("スケッチ", "Sketch"))
@@ -11037,7 +11058,10 @@
         + propertyReadonlyRow("名前", "Name", item.name, { userContent: true })
         + propertyReadonlyRow("親スケッチ", "Parent sketch", parentLabel, { userContent: Boolean(parent) })
         + propertyReadonlyRow("アクティブ", "Active", applicationText("はい", "Yes"));
-      const sketchDefaults = collapsibleSketchAppearanceSection("construction", "補助線外観", "Construction Appearance", appearancePropertyRows(
+      const appearanceSections = isRootSketch(item) ? "" : collapsibleSketchAppearanceSection("general", "一般外観", "General Appearance", appearancePropertyRows(
+        item.appearance,
+        effectiveAppearanceForSketch(item),
+      )) + collapsibleSketchAppearanceSection("construction", "補助線外観", "Construction Appearance", appearancePropertyRows(
         item.constructionAppearance,
         effectiveConstructionAppearanceForSketch(item),
         { constructionEndpoints: true, idPrefix: "sketchConstructionProperty" },
@@ -11046,8 +11070,7 @@
         effectiveDimensionAppearanceForSketch(item),
         { idPrefix: "sketchDimension" },
       ), ' data-sketch-default-appearance="dimension"');
-      const generalAppearance = collapsibleSketchAppearanceSection("general", "一般外観", "General Appearance", appearancePropertyRows(item.appearance, effective));
-      panel.innerHTML = `<h2 class="property-heading">${applicationText("スケッチ", "Sketch")} <span data-user-content>${escapeHtml(item.name)}</span></h2><section class="property-section"><h3>Sketch</h3>${rows}</section>${generalAppearance}${sketchDefaults}`;
+      panel.innerHTML = `<h2 class="property-heading">${applicationText("スケッチ", "Sketch")} <span data-user-content>${escapeHtml(item.name)}</span></h2><section class="property-section"><h3>Sketch</h3>${rows}</section>${appearanceSections}`;
     }
 
     localizeApplicationUI(panel);
@@ -11130,7 +11153,16 @@
     let target = null;
     let owner = null;
     let historyLabel = "Appearance変更";
-    if (context === "sketch-construction") {
+    if (context === "document") {
+      owner = model.defaultAppearance;
+      historyLabel = "Document Default Appearance変更";
+    } else if (context === "document-construction") {
+      owner = model.defaultConstructionAppearance;
+      historyLabel = "Document Default Construction Appearance変更";
+    } else if (context === "document-dimension") {
+      owner = model.defaultDimensionAppearance;
+      historyLabel = "Document Default Dimension Appearance変更";
+    } else if (context === "sketch-construction") {
       target = selectedPropertiesTarget();
       owner = (target.item.constructionAppearance ||= {});
       historyLabel = "Sketch Default Construction Appearance変更";
@@ -11167,9 +11199,12 @@
     if (!colorPaletteSession) return;
     const color = colorPickerValue(value);
     const { owner, target, historyLabel, context, sourceButton, sourceInput } = colorPaletteSession;
-    if (target?.kind === "constraint" || context === "sketch-dimension") applyDimensionAppearanceValue(owner, "color", color);
+    if (target?.kind === "constraint" || context === "sketch-dimension" || context === "document-dimension") applyDimensionAppearanceValue(owner, "color", color, { allowInheritance: context !== "document-dimension" });
     else applyAppearanceInput(owner, "color", color);
     if (target?.kind === "block") invalidateBlockProjectionCache(target.item.id);
+    if (context === "document") model.defaultAppearance = normalizeAppearance(model.defaultAppearance, { partial: false });
+    if (context === "document-construction") model.defaultConstructionAppearance = normalizeConstructionAppearance(model.defaultConstructionAppearance, { partial: false });
+    if (context === "document-dimension") model.defaultDimensionAppearance = normalizeDimensionAppearance(model.defaultDimensionAppearance, { partial: false });
     if (sourceInput) sourceInput.value = color;
     if (sourceButton) {
       sourceButton.dataset.currentColor = color;
@@ -15346,6 +15381,71 @@
     parameterDialogSession = null;
   });
   document.getElementById("documentSettingsBtn")?.addEventListener("click", () => {
+    const fields = document.getElementById("documentAppearanceFields");
+    if (fields) {
+      const appearance = normalizeAppearance(model.defaultAppearance, { partial: false });
+      fields.innerHTML = appearancePropertyRows(appearance, appearance, { allowInheritance: false, idPrefix: "documentProperty" });
+      localizeApplicationUI(fields);
+      fields.onchange = (event) => {
+        const input = event.target;
+        if (!input.dataset.appearanceKey) return;
+        applyAppearanceInput(model.defaultAppearance, input.dataset.appearanceKey, input.value.trim());
+        model.defaultAppearance = normalizeAppearance(model.defaultAppearance, { partial: false });
+        recordHistory("Document Default Appearance変更");
+        updateUI();
+        draw();
+      };
+      fields.onclick = (event) => {
+        const button = event.target.closest("[data-appearance-palette-open]");
+        if (button) openAppearanceColorPalette(button, "document");
+      };
+    }
+    const constructionFields = document.getElementById("documentConstructionAppearanceFields");
+    if (constructionFields) {
+      const appearance = normalizeConstructionAppearance(model.defaultConstructionAppearance, { partial: false });
+      const effective = { ...normalizeAppearance(model.defaultAppearance, { partial: false }), ...appearance };
+      constructionFields.innerHTML = appearancePropertyRows(appearance, effective, { allowInheritance: false, constructionEndpoints: true, idPrefix: "documentConstructionProperty" });
+      localizeApplicationUI(constructionFields);
+      constructionFields.onchange = (event) => {
+        const input = event.target;
+        if (!input.dataset.appearanceKey) return;
+        applyAppearanceInput(model.defaultConstructionAppearance, input.dataset.appearanceKey, input.value.trim());
+        model.defaultConstructionAppearance = normalizeConstructionAppearance(model.defaultConstructionAppearance, { partial: false });
+        recordHistory("Document Default Construction Appearance変更");
+        updateUI();
+        draw();
+      };
+      constructionFields.onclick = (event) => {
+        const button = event.target.closest("[data-appearance-palette-open]");
+        if (button) openAppearanceColorPalette(button, "document-construction");
+      };
+    }
+    const dimensionFields = document.getElementById("documentDimensionAppearanceFields");
+    if (dimensionFields) {
+      const appearance = normalizeDimensionAppearance(model.defaultDimensionAppearance, { partial: false });
+      dimensionFields.innerHTML = dimensionAppearancePropertyRows(appearance, appearance, { allowInheritance: false, idPrefix: "documentDimension" });
+      localizeApplicationUI(dimensionFields);
+      const applyDimensionInput = (input, { history = true } = {}) => {
+        if (!input.dataset.dimensionDisplay) return;
+        const key = input.dataset.dimensionDisplay;
+        const rawValue = ["prefix", "suffix"].includes(key) ? input.value : input.value.trim();
+        applyDimensionAppearanceValue(model.defaultDimensionAppearance, key, rawValue, { allowInheritance: false });
+        model.defaultDimensionAppearance = normalizeDimensionAppearance(model.defaultDimensionAppearance, { partial: false });
+        if (history) recordHistory("Document Default Dimension Appearance変更");
+        draw();
+      };
+      dimensionFields.oninput = (event) => {
+        if (["prefix", "suffix"].includes(event.target.dataset.dimensionDisplay)) applyDimensionInput(event.target, { history: false });
+      };
+      dimensionFields.onchange = (event) => {
+        applyDimensionInput(event.target);
+        updateUI();
+      };
+      dimensionFields.onclick = (event) => {
+        const button = event.target.closest("[data-appearance-palette-open]");
+        if (button) openAppearanceColorPalette(button, "document-dimension");
+      };
+    }
     document.getElementById("documentSettingsDialog")?.showModal();
   });
   document.getElementById("colorPaletteDialog")?.addEventListener("click", (event) => {
