@@ -176,6 +176,8 @@ body.block-editing .canvas-area { background: #f5f3ff; box-shadow: none; }
 .property-option-group { margin-top: 7px; padding-top: 5px; border-top: 1px solid var(--border); }
 .property-option-group-title { margin-bottom: 3px; color: #475569; font-size: 12px; font-weight: 600; }
 .property-option-group > small { display: block; margin: 2px 0 0 20px; color: var(--muted); font-size: 10px; }
+.dimension-appearance-group { margin-top: 5px; padding: 5px 5px 3px; border: 1px solid var(--border); border-radius: 4px; background: rgba(248, 250, 252, .72); }
+.dimension-appearance-group-title { margin-bottom: 2px; color: #475569; font-size: 12px; font-weight: 600; }
 .property-option { display: flex; align-items: center; gap: 5px; min-height: 22px; font-size: 12px; }
 .property-option input { width: auto; margin: 0; }
 .property-sketch-option { padding-left: calc(var(--property-sketch-depth, 0) * 12px); }

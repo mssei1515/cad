@@ -911,6 +911,13 @@ test("application language defaults to Japanese and persists the full UI selecti
   await expect(page.locator('#documentAppearanceFields select[data-appearance-key="visible"] option')).toHaveText(["Visible", "Hidden"]);
   await expect(page.locator('#documentConstructionAppearanceFields select[data-appearance-key="lineType"] option')).toHaveText(["Solid", "Dashed", "Dash-dot", "Dotted"]);
   await expect(page.locator('#documentDimensionAppearanceFields select[data-dimension-display="visible"] option')).toHaveText(["Visible", "Hidden"]);
+  await expect(page.locator("#documentDimensionAppearanceFields .dimension-appearance-group-title")).toHaveText(["Extension lines", "Arrows", "Dimension text"]);
+  await expect(page.locator('label[for="documentDimensionExtensionLineOvershoot"]')).toHaveText("Overshoot");
+  await expect(page.locator('label[for="documentDimensionExtensionLineOriginGap"]')).toHaveText("Origin gap");
+  await expect(page.locator('label[for="documentDimensionArrowheadLength"]')).toHaveText("Length");
+  await expect(page.locator('label[for="documentDimensionArrowheadAngle"]')).toHaveText("Opening angle");
+  await expect(page.locator('label[for="documentDimensionDimensionTextHeight"]')).toHaveText("Height");
+  await expect(page.locator('label[for="documentDimensionDimensionTextGap"]')).toHaveText("Gap from dimension line");
   await page.locator("#documentSettingsDialog button[value=cancel]").first().click();
   await selectSketch(page, "ROOT");
   await expect(page.locator("#propertiesPanel .property-section h3")).toHaveText(["Basic Information"]);
@@ -1358,11 +1365,37 @@ test("Constraint dimensions expose defining geometry and inheritable appearance 
 
   await openDocumentSettings(page);
   await expect(page.locator("#documentSettingsDialog")).toContainText("寸法外観");
+  await expect(page.locator("#documentDimensionAppearanceFields .dimension-appearance-group-title")).toHaveText(["寸法補助線", "矢印", "寸法文字"]);
+  await expect(page.locator("#documentDimensionExtensionLineOvershoot")).toHaveValue("6");
+  await expect(page.locator("#documentDimensionExtensionLineOriginGap")).toHaveValue("6");
+  await expect(page.locator("#documentDimensionArrowheadLength")).toHaveValue("10");
+  await expect(page.locator("#documentDimensionArrowheadAngle")).toHaveValue("27");
+  await expect(page.locator("#documentDimensionDimensionTextHeight")).toHaveValue("12");
+  await expect(page.locator("#documentDimensionDimensionTextGap")).toHaveValue("4");
   await page.locator("#documentDimensionColor").fill("#0e7490");
   await page.locator("#documentDimensionColor").blur();
+  for (const [selector, value] of [
+    ["#documentDimensionExtensionLineOvershoot", "8"],
+    ["#documentDimensionExtensionLineOriginGap", "7"],
+    ["#documentDimensionArrowheadLength", "11"],
+    ["#documentDimensionArrowheadAngle", "30"],
+    ["#documentDimensionDimensionTextHeight", "13"],
+    ["#documentDimensionDimensionTextGap", "5"],
+  ]) {
+    await page.locator(selector).fill(value);
+    await page.locator(selector).blur();
+  }
   await page.locator("#documentSettingsDialog button[value=cancel]").first().click();
   expect(await page.evaluate(() => window.__cadTest.dimensionAppearanceStateForTest())).toEqual(expect.objectContaining({
-    documentDefault: expect.objectContaining({ color: "#0e7490" }),
+    documentDefault: expect.objectContaining({
+      color: "#0e7490",
+      extensionLineOvershoot: 8,
+      extensionLineOriginGap: 7,
+      arrowheadLength: 11,
+      arrowheadAngle: 30,
+      dimensionTextHeight: 13,
+      dimensionTextGap: 5,
+    }),
     sketchDirect: {},
     sketchEffective: expect.objectContaining({ color: "#0e7490" }),
     direct: expect.not.objectContaining({ color: expect.anything() }),
@@ -1395,6 +1428,26 @@ test("Constraint dimensions expose defining geometry and inheritable appearance 
   expect(await page.evaluate(() => window.__cadTest.drawnDimensionLabelsForTest())).toEqual(expect.arrayContaining([expect.stringMatching(/REF .* mm/)]));
   await suffix.blur();
   await properties.locator('[data-dimension-display="arrows"]').selectOption("false");
+  for (const [key, value] of [
+    ["extensionLineOvershoot", "12"],
+    ["extensionLineOriginGap", "9"],
+    ["arrowheadLength", "18"],
+    ["arrowheadAngle", "40"],
+    ["dimensionTextHeight", "20"],
+    ["dimensionTextGap", "7"],
+  ]) {
+    const input = properties.locator(`[data-dimension-display="${key}"]`);
+    await input.fill(value);
+    await input.blur();
+  }
+  const renderMetrics = await page.evaluate(() => window.__cadTest.dimensionAppearanceRenderMetricsForTest());
+  expect(renderMetrics.linearExtension.originGap).toBeCloseTo(14, 6); // 9px setting + existing 5px standalone-point marker clearance
+  expect(renderMetrics.linearExtension.overshoot).toBeCloseTo(12, 6);
+  expect(renderMetrics.angleExtension.originGap).toBeCloseTo(9, 6);
+  expect(renderMetrics.angleExtension.overshoot).toBeCloseTo(12, 6);
+  expect(renderMetrics.arrowhead.length).toBeCloseTo(18, 6);
+  expect(renderMetrics.arrowhead.openingAngle).toBeCloseTo(40, 6);
+  expect(renderMetrics.text).toEqual({ height: 20, gap: 7 });
   await properties.locator('[data-dimension-display="color"] + [data-appearance-palette-open]').click();
   await page.locator('[data-palette-color="#7c3aed"]').first().click();
   expect(await page.evaluate(() => window.__cadTest.dimensionAppearanceStateForTest())).toEqual(expect.objectContaining({
@@ -1422,7 +1475,20 @@ test("Constraint dimensions expose defining geometry and inheritable appearance 
   const serialized = await page.evaluate(() => window.__cadTest.serializedModelForTest());
   expect(serialized.defaultDimensionAppearance).toEqual(expect.objectContaining({ color: "#0e7490" }));
   expect(serialized.sketches.find((sketch) => sketch.id === "ROOT").dimensionAppearance).toEqual({});
-  expect(serialized.constraints[0].dimension.display).toEqual(expect.objectContaining({ visible: false, color: "#7c3aed", precision: 3, prefix: "REF ", suffix: " mm", arrows: false }));
+  expect(serialized.constraints[0].dimension.display).toEqual(expect.objectContaining({
+    visible: false,
+    color: "#7c3aed",
+    precision: 3,
+    prefix: "REF ",
+    suffix: " mm",
+    arrows: false,
+    extensionLineOvershoot: 12,
+    extensionLineOriginGap: 9,
+    arrowheadLength: 18,
+    arrowheadAngle: 40,
+    dimensionTextHeight: 20,
+    dimensionTextGap: 7,
+  }));
   expect(serialized.annotations).toEqual([]);
   await page.evaluate((documentData) => window.__cadTest.loadDocumentFixtureForDragTest(documentData, "dimension-appearance.json"), serialized);
   const roundTrip = await page.evaluate(() => window.__cadTest.serializedModelForTest());

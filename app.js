@@ -134,7 +134,8 @@
     ["名前空間", "Namespace"], ["名前", "Name"], ["値 / 数式", "Value / Expression"], ["評価値", "Evaluated value"], ["種類／所属", "Type / owner"], ["Parameter名", "Parameter name"], ["読み取り専用", "Read-only"], ["Geometryから測定", "Measured from geometry"],
     ["外観", "Appearance"], ["外観の上書き", "Appearance Override"], ["配置情報", "Placement"], ["定義", "Definition"], ["回転", "Rotation"],
     ["長さ", "Length"], ["半径", "Radius"], ["補助線", "Construction"], ["種類", "Type"], ["値", "Value"],
-    ["精度", "Precision"], ["接頭辞", "Prefix"], ["接尾辞", "Suffix"], ["矢印", "Arrows"], ["寸法補助線", "Extension lines"],
+    ["精度", "Precision"], ["接頭辞", "Prefix"], ["接尾辞", "Suffix"], ["矢印", "Arrows"], ["寸法補助線", "Extension lines"], ["寸法文字", "Dimension text"],
+    ["突出量", "Overshoot"], ["起点すき間", "Origin gap"], ["開き角", "Opening angle"], ["高さ", "Height"], ["寸法線との間隔", "Gap from dimension line"],
     ["テキスト", "Text"], ["文字サイズ", "Font size"], ["アクティブ", "Active"], ["はい", "Yes"], ["いいえ", "No"],
     ["選択したオブジェクトのプロパティを表示します。", "Select an object to display its properties."],
     ["複数選択の共通プロパティ編集は今回の対象外です。", "Editing shared properties for multiple selections is not supported."],
@@ -314,11 +315,7 @@
   const MAX_ZOOM = 10000000;
   const CONSTRUCTION_EXTENSION_SCREEN_PX = 12;
   const CONSTRUCTION_GEOMETRY_ALPHA = 0.72;
-  const DIMENSION_EXTENSION_GAP_SCREEN_PX = 6;
-  const DIMENSION_EXTENSION_SCREEN_PX = 6;
   const DIMENSION_POINT_MARKER_RADIUS_SCREEN_PX = 5;
-  const DIMENSION_ARROW_LENGTH_SCREEN_PX = 10;
-  const DIMENSION_ARROW_HALF_WIDTH_SCREEN_PX = 2.4;
   const DIMENSION_DISPLAY_PRECISION = 1e-6;
   const MEASURED_DIMENSION_SNAP_TOLERANCE = 1e-5;
   const CONSTRAINT_ACCEPT_ERROR = 1e-4;
@@ -357,6 +354,20 @@
     suffix: "",
     arrows: true,
     extensionLines: true,
+    extensionLineOvershoot: 6,
+    extensionLineOriginGap: 6,
+    arrowheadLength: 10,
+    arrowheadAngle: 27,
+    dimensionTextHeight: 12,
+    dimensionTextGap: 4,
+  };
+  const DIMENSION_APPEARANCE_NUMERIC_RULES = {
+    extensionLineOvershoot: { min: 0, max: 1000 },
+    extensionLineOriginGap: { min: 0, max: 1000 },
+    arrowheadLength: { min: 0.1, max: 1000 },
+    arrowheadAngle: { min: 1, max: 179 },
+    dimensionTextHeight: { min: 0.1, max: 1000 },
+    dimensionTextGap: { min: 0, max: 1000 },
   };
   const SKETCH_SOLVE_ERROR_COLOR = "#dc2626";
   let lastLoadLineRepairMessage = "";
@@ -581,6 +592,12 @@
     }
     if (Object.prototype.hasOwnProperty.call(source, "arrows")) result.arrows = source.arrows !== false;
     if (Object.prototype.hasOwnProperty.call(source, "extensionLines")) result.extensionLines = source.extensionLines !== false;
+    for (const [key, rule] of Object.entries(DIMENSION_APPEARANCE_NUMERIC_RULES)) {
+      if (!Object.prototype.hasOwnProperty.call(source, key)) continue;
+      if (source[key] == null || source[key] === "") continue;
+      const numeric = Number(source[key]);
+      if (Number.isFinite(numeric)) result[key] = Math.max(rule.min, Math.min(rule.max, numeric));
+    }
     return result;
   }
 
@@ -8249,12 +8266,14 @@
     }
     const screen = worldToCanvasScreen(layout.text);
     const angle = Number.isFinite(layout.textAngle) ? layout.textAngle : 0;
-    const labelGap = 4;
+    const appearance = effectiveDimensionAppearance(pendingCommand.dimension, pendingCommand.constraint ? constraintSketchId(pendingCommand.constraint) : activeSketchId());
+    const labelGap = appearance.dimensionTextGap;
     const labelOffset = dimensionTextOffset(angle, labelGap);
     dimensionValueInput.hidden = false;
     dimensionValueInput.style.left = `${screen.x + labelOffset.x}px`;
     dimensionValueInput.style.top = `${screen.y + labelOffset.y}px`;
     dimensionValueInput.style.setProperty("--dimension-text-angle", `${angle}rad`);
+    dimensionValueInput.style.fontSize = `${appearance.dimensionTextHeight}px`;
     dimensionValueInput.style.width = `${Math.max(132, Math.min(280, pendingCommand.buffer.length * 9 + 34))}px`;
     if (dimensionValueInput.value !== pendingCommand.buffer) dimensionValueInput.value = pendingCommand.buffer;
     let invalid = pendingCommand.buffer === "";
@@ -8446,12 +8465,12 @@
   function drawDimension(target, dimension, label, preview = false, highlighted = false, editState = null, colorOverride = null, sketchId = activeSketchId()) {
     if (!target || !dimension) return;
     if (target.kind === "angle") return drawAngleDimension(target, dimension, label, preview, highlighted, editState, colorOverride, sketchId);
-    const layout = dimensionLayout(target, dimension);
+    const appearance = effectiveDimensionAppearance(dimension, sketchId);
+    const layout = dimensionLayout(target, dimension, appearance);
     if (!layout) return;
     const { a, b, lineA, lineB, points, d, text, textAngle } = layout;
 
     ctx.save();
-    const appearance = effectiveDimensionAppearance(dimension, sketchId);
     const color = preview || highlighted ? "#2563eb" : colorOverride || appearance.color;
     ctx.strokeStyle = color;
     ctx.fillStyle = color;
@@ -8473,11 +8492,11 @@
 
     ctx.setLineDash([]);
     if (appearance.arrows !== false) {
-      drawArrowhead(a, d);
-      drawArrowhead(b, { x: -d.x, y: -d.y });
+      drawArrowhead(a, d, appearance);
+      drawArrowhead(b, { x: -d.x, y: -d.y }, appearance);
     }
 
-    drawDimensionLabel(label, text, textAngle, editState);
+    drawDimensionLabel(label, text, textAngle, editState, appearance);
     ctx.restore();
   }
 
@@ -8492,21 +8511,15 @@
     ctx.fillStyle = color;
     ctx.lineWidth = (highlighted ? 2 : 1.2) / viewport.scale;
     ctx.setLineDash(preview ? [5 / viewport.scale, 4 / viewport.scale] : []);
-    const extension = DIMENSION_EXTENSION_SCREEN_PX / viewport.scale;
-    const gap = DIMENSION_EXTENSION_GAP_SCREEN_PX / viewport.scale;
-    const visibleGap = Math.min(gap, Math.max(0, radius - 2 / viewport.scale));
     const p1 = { x: vertex.x + Math.cos(start) * radius, y: vertex.y + Math.sin(start) * radius };
     const p2 = { x: vertex.x + Math.cos(end) * radius, y: vertex.y + Math.sin(end) * radius };
-    const s1 = { x: vertex.x + Math.cos(start) * visibleGap, y: vertex.y + Math.sin(start) * visibleGap };
-    const s2 = { x: vertex.x + Math.cos(end) * visibleGap, y: vertex.y + Math.sin(end) * visibleGap };
-    const e1 = { x: vertex.x + Math.cos(start) * (radius + extension), y: vertex.y + Math.sin(start) * (radius + extension) };
-    const e2 = { x: vertex.x + Math.cos(end) * (radius + extension), y: vertex.y + Math.sin(end) * (radius + extension) };
+    const [firstExtension, secondExtension] = angleDimensionExtensionSegments({ vertex, radius, start, end }, appearance);
     if (appearance.extensionLines !== false) {
       ctx.beginPath();
-      ctx.moveTo(s1.x, s1.y);
-      ctx.lineTo(e1.x, e1.y);
-      ctx.moveTo(s2.x, s2.y);
-      ctx.lineTo(e2.x, e2.y);
+      ctx.moveTo(firstExtension.start.x, firstExtension.start.y);
+      ctx.lineTo(firstExtension.end.x, firstExtension.end.y);
+      ctx.moveTo(secondExtension.start.x, secondExtension.start.y);
+      ctx.lineTo(secondExtension.end.x, secondExtension.end.y);
       ctx.stroke();
     }
     ctx.beginPath();
@@ -8514,10 +8527,10 @@
     ctx.stroke();
     ctx.setLineDash([]);
     if (appearance.arrows !== false) {
-      drawArrowhead(p1, { x: Math.cos(start + (signed < 0 ? -Math.PI / 2 : Math.PI / 2)), y: Math.sin(start + (signed < 0 ? -Math.PI / 2 : Math.PI / 2)) });
-      drawArrowhead(p2, { x: Math.cos(end + (signed < 0 ? Math.PI / 2 : -Math.PI / 2)), y: Math.sin(end + (signed < 0 ? Math.PI / 2 : -Math.PI / 2)) });
+      drawArrowhead(p1, { x: Math.cos(start + (signed < 0 ? -Math.PI / 2 : Math.PI / 2)), y: Math.sin(start + (signed < 0 ? -Math.PI / 2 : Math.PI / 2)) }, appearance);
+      drawArrowhead(p2, { x: Math.cos(end + (signed < 0 ? Math.PI / 2 : -Math.PI / 2)), y: Math.sin(end + (signed < 0 ? Math.PI / 2 : -Math.PI / 2)) }, appearance);
     }
-    drawDimensionLabel(label, text, textAngle, editState);
+    drawDimensionLabel(label, text, textAngle, editState, appearance);
     ctx.restore();
   }
 
@@ -8541,27 +8554,37 @@
     };
   }
 
-  function drawDimensionLabel(label, text, angle = 0, editState = null) {
+  function dimensionTextDrawingMetrics(appearance = DEFAULT_DIMENSION_APPEARANCE) {
+    const resolved = normalizeDimensionAppearance(appearance, { partial: false });
+    return {
+      height: resolved.dimensionTextHeight / viewport.scale,
+      gap: resolved.dimensionTextGap / viewport.scale,
+    };
+  }
+
+  function drawDimensionLabel(label, text, angle = 0, editState = null, appearance = DEFAULT_DIMENSION_APPEARANCE) {
     if (editState?.hidden) return;
     if (editState) {
-      drawDimensionEditLabel(label, text, angle, editState);
+      drawDimensionEditLabel(label, text, angle, editState, appearance);
     } else {
+      const metrics = dimensionTextDrawingMetrics(appearance);
       ctx.save();
       ctx.translate(text.x, text.y);
       ctx.rotate(angle);
-      ctx.font = `${12 / viewport.scale}px system-ui`;
+      ctx.font = `${metrics.height}px system-ui`;
       ctx.textAlign = "center";
       ctx.textBaseline = "bottom";
-      ctx.fillText(label, 0, -4 / viewport.scale);
+      ctx.fillText(label, 0, -metrics.gap);
       ctx.restore();
     }
   }
 
-  function drawDimensionEditLabel(label, text, angle, state) {
-    const fontSize = 12 / viewport.scale;
+  function drawDimensionEditLabel(label, text, angle, state, appearance = DEFAULT_DIMENSION_APPEARANCE) {
+    const metrics = dimensionTextDrawingMetrics(appearance);
+    const fontSize = metrics.height;
     const padX = 6 / viewport.scale;
     const padY = 4 / viewport.scale;
-    const height = 22 / viewport.scale;
+    const height = fontSize + 10 / viewport.scale;
     ctx.save();
     ctx.translate(text.x, text.y);
     ctx.rotate(angle);
@@ -8570,7 +8593,7 @@
     ctx.textBaseline = "middle";
     const width = Math.max(44 / viewport.scale, ctx.measureText(label).width + padX * 2);
     const x = -width / 2;
-    const y = -height - 4 / viewport.scale;
+    const y = -height - metrics.gap;
     const border = state.invalid ? "#dc2626" : "#2563eb";
 
     ctx.fillStyle = "#fff";
@@ -8591,8 +8614,9 @@
     ctx.restore();
   }
 
-  function dimensionLayout(target, dimension) {
+  function dimensionLayout(target, dimension, appearance = effectiveDimensionAppearance(dimension)) {
     if (target.kind === "angle") return angleDimensionLayout(target, dimension);
+    appearance = normalizeDimensionAppearance(appearance, { partial: false });
     const anchor = dimensionAnchor(target, dimension);
     const basisTarget = { ...target, dimensionAxis: storedDimensionAxis(target, dimension) };
     const radial = target.kind === "radius" || target.kind === "diameter" || (target.kind === "offset-distance" && !(target.source instanceof Line));
@@ -8600,8 +8624,8 @@
     const points = targetPointsForDimension(target, anchor);
     if (points.length < 2) return null;
     const tick = 9 / viewport.scale;
-    const extension = DIMENSION_EXTENSION_SCREEN_PX / viewport.scale;
-    const gap = DIMENSION_EXTENSION_GAP_SCREEN_PX / viewport.scale;
+    const extension = appearance.extensionLineOvershoot / viewport.scale;
+    const gap = appearance.extensionLineOriginGap / viewport.scale;
     const projectedPoints = points.map((source, index) => {
       const t = (source.x - anchor.x) * d.x + (source.y - anchor.y) * d.y;
       const onDimension = { x: anchor.x + d.x * t, y: anchor.y + d.y * t };
@@ -8759,14 +8783,42 @@
     };
   }
 
-  function drawArrowhead(point, direction) {
-    const size = DIMENSION_ARROW_LENGTH_SCREEN_PX / viewport.scale;
-    const wing = DIMENSION_ARROW_HALF_WIDTH_SCREEN_PX / viewport.scale;
+  function angleDimensionExtensionSegments(layout, appearance = DEFAULT_DIMENSION_APPEARANCE) {
+    const resolved = normalizeDimensionAppearance(appearance, { partial: false });
+    const extension = resolved.extensionLineOvershoot / viewport.scale;
+    const gap = resolved.extensionLineOriginGap / viewport.scale;
+    const visibleGap = Math.min(gap, Math.max(0, layout.radius - 2 / viewport.scale));
+    return [layout.start, layout.end].map((angle) => ({
+      start: {
+        x: layout.vertex.x + Math.cos(angle) * visibleGap,
+        y: layout.vertex.y + Math.sin(angle) * visibleGap,
+      },
+      end: {
+        x: layout.vertex.x + Math.cos(angle) * (layout.radius + extension),
+        y: layout.vertex.y + Math.sin(angle) * (layout.radius + extension),
+      },
+    }));
+  }
+
+  function dimensionArrowheadPoints(point, direction, appearance = DEFAULT_DIMENSION_APPEARANCE) {
+    const resolved = normalizeDimensionAppearance(appearance, { partial: false });
+    const size = resolved.arrowheadLength / viewport.scale;
+    const halfAngle = resolved.arrowheadAngle * Math.PI / 360;
+    const wing = size * Math.tan(halfAngle);
     const n = { x: -direction.y, y: direction.x };
+    return [
+      { x: point.x, y: point.y },
+      { x: point.x + direction.x * size + n.x * wing, y: point.y + direction.y * size + n.y * wing },
+      { x: point.x + direction.x * size - n.x * wing, y: point.y + direction.y * size - n.y * wing },
+    ];
+  }
+
+  function drawArrowhead(point, direction, appearance = DEFAULT_DIMENSION_APPEARANCE) {
+    const [tip, firstWing, secondWing] = dimensionArrowheadPoints(point, direction, appearance);
     ctx.beginPath();
-    ctx.moveTo(point.x, point.y);
-    ctx.lineTo(point.x + direction.x * size + n.x * wing, point.y + direction.y * size + n.y * wing);
-    ctx.lineTo(point.x + direction.x * size - n.x * wing, point.y + direction.y * size - n.y * wing);
+    ctx.moveTo(tip.x, tip.y);
+    ctx.lineTo(firstWing.x, firstWing.y);
+    ctx.lineTo(secondWing.x, secondWing.y);
     ctx.closePath();
     ctx.fill();
   }
@@ -11364,14 +11416,29 @@
       option("auto", applicationText("自動", "Auto"), hasDirect("precision") && direct.precision == null || !allowInheritance && effective.precision == null),
       ...Array.from({ length: 11 }, (_, precision) => option(String(precision), String(precision), direct.precision === precision || !allowInheritance && effective.precision === precision)),
     ].join("");
+    const numericRow = (key, idSuffix, labelJa, labelEn, { min = 0, max = 1000, step = 0.1, titleJa = "", titleEn = "" } = {}) => {
+      const value = hasDirect(key) ? direct[key] : "";
+      const title = titleJa ? ` title="${escapeHtml(applicationText(titleJa, titleEn))}"` : "";
+      return `<div class="property-row"><label for="${idPrefix}${idSuffix}"${title}>${applicationText(labelJa, labelEn)}</label><input id="${idPrefix}${idSuffix}" data-dimension-display="${key}" type="number" min="${min}" max="${max}" step="${step}" placeholder="${allowInheritance ? defaultLabel : ""}" value="${value}"${title}></div>`;
+    };
+    const group = (key, titleJa, titleEn, rows) => `<div class="dimension-appearance-group" data-dimension-appearance-group="${key}"><div class="dimension-appearance-group-title">${applicationText(titleJa, titleEn)}</div>${rows}</div>`;
     return `
       <div class="property-row"><label for="${idPrefix}Visible">${applicationText("表示", "Visible")}</label><select id="${idPrefix}Visible" data-dimension-display="visible">${booleanOptions("visible")}</select></div>
       <div class="property-row"><label for="${idPrefix}Color">${applicationText("色", "Color")}</label><div class="property-color-control"><input id="${idPrefix}Color" data-dimension-display="color" type="text" placeholder="${defaultLabel}" value="${escapeHtml(direct.color || "")}" /><button class="property-color-picker" data-appearance-palette-open data-current-color="${colorValue}" type="button" title="${applicationText("カラーパレット", "Color palette")}" aria-label="${applicationText("カラーパレット", "Color palette")}"><span class="property-color-picker-swatch" style="--swatch-color:${colorValue}" aria-hidden="true"></span></button></div></div>
       <div class="property-row"><label for="${idPrefix}Precision">${applicationText("精度", "Precision")}</label><select id="${idPrefix}Precision" data-dimension-display="precision">${precisionOptions}</select></div>
       <div class="property-row"><label for="${idPrefix}Prefix">${applicationText("接頭辞", "Prefix")}</label><input id="${idPrefix}Prefix" data-dimension-display="prefix" placeholder="${allowInheritance ? defaultLabel : ""}" value="${escapeHtml(direct.prefix ?? "")}"></div>
       <div class="property-row"><label for="${idPrefix}Suffix">${applicationText("接尾辞", "Suffix")}</label><input id="${idPrefix}Suffix" data-dimension-display="suffix" placeholder="${allowInheritance ? defaultLabel : ""}" value="${escapeHtml(direct.suffix ?? "")}"></div>
-      <div class="property-row"><label for="${idPrefix}Arrows">${applicationText("矢印", "Arrows")}</label><select id="${idPrefix}Arrows" data-dimension-display="arrows">${booleanOptions("arrows", applicationText("あり", "Enabled"), applicationText("なし", "Disabled"))}</select></div>
-      <div class="property-row"><label for="${idPrefix}ExtensionLines">${applicationText("寸法補助線", "Extension lines")}</label><select id="${idPrefix}ExtensionLines" data-dimension-display="extensionLines">${booleanOptions("extensionLines", applicationText("あり", "Enabled"), applicationText("なし", "Disabled"))}</select></div>`;
+      ${group("extension-lines", "寸法補助線", "Extension lines", `
+        <div class="property-row"><label for="${idPrefix}ExtensionLines">${applicationText("表示", "Visible")}</label><select id="${idPrefix}ExtensionLines" data-dimension-display="extensionLines">${booleanOptions("extensionLines", applicationText("あり", "Enabled"), applicationText("なし", "Disabled"))}</select></div>
+        ${numericRow("extensionLineOvershoot", "ExtensionLineOvershoot", "突出量", "Overshoot", { titleJa: "寸法補助線が寸法線を越えて外側へ伸びる長さ", titleEn: "Length that extension lines project beyond the dimension line" })}
+        ${numericRow("extensionLineOriginGap", "ExtensionLineOriginGap", "起点すき間", "Origin gap", { titleJa: "寸法対象の図形と寸法補助線の開始位置との間隔", titleEn: "Gap between measured geometry and the start of extension lines" })}`)}
+      ${group("arrows", "矢印", "Arrows", `
+        <div class="property-row"><label for="${idPrefix}Arrows">${applicationText("表示", "Visible")}</label><select id="${idPrefix}Arrows" data-dimension-display="arrows">${booleanOptions("arrows", applicationText("あり", "Enabled"), applicationText("なし", "Disabled"))}</select></div>
+        ${numericRow("arrowheadLength", "ArrowheadLength", "長さ", "Length", { min: 0.1, titleJa: "矢印の寸法線方向の長さ", titleEn: "Arrow length along the dimension line" })}
+        ${numericRow("arrowheadAngle", "ArrowheadAngle", "開き角", "Opening angle", { min: 1, max: 179, step: 1, titleJa: "矢印を構成する2辺のなす角度（度）", titleEn: "Included angle between the two arrow sides in degrees" })}`)}
+      ${group("dimension-text", "寸法文字", "Dimension text", `
+        ${numericRow("dimensionTextHeight", "DimensionTextHeight", "高さ", "Height", { min: 0.1, titleJa: "寸法文字の表示高さ", titleEn: "Display height of dimension text" })}
+        ${numericRow("dimensionTextGap", "DimensionTextGap", "寸法線との間隔", "Gap from dimension line", { titleJa: "寸法文字領域と寸法線との間隔", titleEn: "Gap between the dimension text region and dimension line" })}`)}`;
   }
 
   function selectedPropertiesTarget() {
@@ -11470,6 +11537,12 @@
       toleranceLower: display.toleranceLower == null ? "" : String(display.toleranceLower),
       arrows: display.arrows !== false,
       extensionLines: display.extensionLines !== false,
+      extensionLineOvershoot: display.extensionLineOvershoot,
+      extensionLineOriginGap: display.extensionLineOriginGap,
+      arrowheadLength: display.arrowheadLength,
+      arrowheadAngle: display.arrowheadAngle,
+      dimensionTextHeight: display.dimensionTextHeight,
+      dimensionTextGap: display.dimensionTextGap,
     };
   }
 
@@ -11644,9 +11717,10 @@
     else if (key === "precision") {
       next[key] = rawValue === "auto" || rawValue === "" ? null : Math.max(0, Math.min(10, Math.round(Number(rawValue))));
     } else if (key === "toleranceUpper" || key === "toleranceLower") next[key] = rawValue === "" ? null : Number(rawValue);
+    else if (Object.prototype.hasOwnProperty.call(DIMENSION_APPEARANCE_NUMERIC_RULES, key)) next[key] = rawValue === "" ? DEFAULT_DIMENSION_APPEARANCE[key] : Number(rawValue);
     else next[key] = rawValue;
     const normalized = normalizeDimensionAppearance(next, { partial: allowInheritance });
-    for (const existingKey of ["visible", "color", "precision", "prefix", "suffix", "toleranceUpper", "toleranceLower", "arrows", "extensionLines"]) delete owner[existingKey];
+    for (const existingKey of ["visible", "color", "precision", "prefix", "suffix", "toleranceUpper", "toleranceLower", "arrows", "extensionLines", ...Object.keys(DIMENSION_APPEARANCE_NUMERIC_RULES)]) delete owner[existingKey];
     Object.assign(owner, normalized);
     return true;
   }
@@ -16334,6 +16408,40 @@
               effective: structuredClone(dimensionDisplayState(item.dimension, item.sketchId, definition.sketches)),
             })),
           })),
+        };
+      },
+      dimensionAppearanceRenderMetricsForTest(index = 0) {
+        const constraint = model.constraints.filter(isDimensionConstraint)[index] || null;
+        const target = targetFromConstraint(constraint);
+        const sketchId = constraint ? constraintSketchId(constraint) : activeSketchId();
+        const dimension = constraint?.dimension || (target ? defaultDimensionForTarget(target) : null);
+        const appearance = effectiveDimensionAppearance(dimension, sketchId);
+        const layout = target && target.kind !== "angle" ? dimensionLayout(target, dimension, appearance) : null;
+        const firstExtension = layout?.points?.find((point) => point.showExtension !== false) || null;
+        const arrow = dimensionArrowheadPoints({ x: 0, y: 0 }, { x: 1, y: 0 }, appearance);
+        const arrowLength = (arrow[1].x - arrow[0].x) * viewport.scale;
+        const arrowHalfWidth = Math.abs(arrow[1].y - arrow[0].y) * viewport.scale;
+        const text = dimensionTextDrawingMetrics(appearance);
+        const angleRadius = 50 / viewport.scale;
+        const [angleExtension] = angleDimensionExtensionSegments({ vertex: { x: 0, y: 0 }, radius: angleRadius, start: 0, end: Math.PI / 2 }, appearance);
+        return {
+          appearance: structuredClone(appearance),
+          linearExtension: firstExtension ? {
+            originGap: hypot2(firstExtension.extensionStart.x - firstExtension.source.x, firstExtension.extensionStart.y - firstExtension.source.y) * viewport.scale,
+            overshoot: hypot2(firstExtension.extensionEnd.x - firstExtension.onDimension.x, firstExtension.extensionEnd.y - firstExtension.onDimension.y) * viewport.scale,
+          } : null,
+          angleExtension: {
+            originGap: hypot2(angleExtension.start.x, angleExtension.start.y) * viewport.scale,
+            overshoot: (hypot2(angleExtension.end.x, angleExtension.end.y) - angleRadius) * viewport.scale,
+          },
+          arrowhead: {
+            length: arrowLength,
+            openingAngle: Math.atan2(arrowHalfWidth, arrowLength) * 360 / Math.PI,
+          },
+          text: {
+            height: text.height * viewport.scale,
+            gap: text.gap * viewport.scale,
+          },
         };
       },
       drawnDimensionColorsForTest() {
