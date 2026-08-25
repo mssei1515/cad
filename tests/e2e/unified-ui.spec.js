@@ -134,7 +134,7 @@ async function openParameterDialog(page) {
   await expect(page.locator("#parametersDialog")).toBeVisible();
 }
 
-test("document parameters, dimension formulas, rename propagation, and v11 persistence work together", async ({ page }) => {
+test("document parameters, dimension formulas, rename propagation, and v12 persistence work together", async ({ page }) => {
   await page.goto(`${baseUrl}/index.html?test=1`);
   await page.waitForFunction(() => window.__cadTest);
   const initial = await page.evaluate(() => window.__cadTest.resetForParameterTest());
@@ -168,7 +168,7 @@ test("document parameters, dimension formulas, rename propagation, and v11 persi
   expect(state.valid).toBe(true);
   expect(state.parameters.map((item) => item.name)).toEqual(["span", "margin"]);
   expect(state.dimensions.find((item) => !item.readOnly).expression).toContain("span");
-  expect(state.serialized.version).toBe(11);
+  expect(state.serialized.version).toBe(12);
   expect(state.serialized.constraints.every((constraint) => !constraint.dimension || constraint.parameterName)).toBe(true);
 });
 
@@ -199,14 +199,14 @@ test("block parameter namespaces are independent and directly update definitions
   expect(state.instanceProjectionLengths[1]).toBeCloseTo(15, 5);
 });
 
-test("invalid v11 parameter expressions reject loading without replacing the document", async ({ page }) => {
+test("invalid v12 parameter expressions reject loading without replacing the document", async ({ page }) => {
   await page.goto(`${baseUrl}/index.html?test=1`);
   await page.waitForFunction(() => window.__cadTest);
   await page.evaluate(() => window.__cadTest.resetForParameterTest());
   const before = await page.evaluate(() => window.__cadTest.serializedModelForTest());
   const invalid = structuredClone(before);
   invalid.parameters[0].expression = "missing + 1";
-  const result = await page.evaluate((data) => window.__cadTest.loadDocumentFixtureForDragTest(data, "invalid-v11.json"), invalid);
+  const result = await page.evaluate((data) => window.__cadTest.loadDocumentFixtureForDragTest(data, "invalid-v12.json"), invalid);
   expect(result.success).toBe(false);
   expect(result.error).toContain("未定義");
   const after = await page.evaluate(() => window.__cadTest.serializedModelForTest());
@@ -326,7 +326,7 @@ test("v10 annotations migrate by target or active sketch and invalid v11 ownersh
   const legacy = annotationSketchFixture(10);
   expect(await page.evaluate((data) => window.__cadTest.loadDocumentFixtureForDragTest(data, "annotation-v10.json"), legacy)).toEqual(expect.objectContaining({ success: true }));
   const migrated = await page.evaluate(() => window.__cadTest.serializedModelForTest());
-  expect(migrated.version).toBe(11);
+  expect(migrated.version).toBe(12);
   expect(migrated.annotations.find((annotation) => annotation.id === "AN1").sketchId).toBe("S2");
   expect(migrated.annotations.find((annotation) => annotation.id === "AN2").sketchId).toBe("S1");
 
@@ -626,6 +626,11 @@ test("workspace integrates transparent compact Object groups into Sketch Tree an
       blockMenuTools: blockMenu ? [...blockMenu.querySelectorAll("[data-menu-tool]")].map((item) => item.dataset.menuTool) : [],
       blockCreateButtonCount: document.querySelectorAll("#toolCreateBlock").length,
       sketchTreeToggleCount: document.querySelectorAll("#toggleSketchTreeBtn").length,
+      sketchTreeResizeHandle: {
+        count: document.querySelectorAll("#sketchOverlayResizeHandle").length,
+        cursor: getComputedStyle(document.querySelector("#sketchOverlayResizeHandle")).cursor,
+        value: document.querySelector("#sketchOverlayResizeHandle")?.getAttribute("aria-valuenow"),
+      },
       explorerCount: document.querySelectorAll(".explorer, [data-explorer-tab], [data-explorer-panel]").length,
       sketchOverlay: rect("#sketchOverlay"),
       sketchOverlaySurface: (() => {
@@ -667,6 +672,7 @@ test("workspace integrates transparent compact Object groups into Sketch Tree an
   await expect(page.locator("#openBlockDefinitionsBtn")).toHaveCount(1);
   expect(layout.blockCreateButtonCount).toBe(1);
   expect(layout.sketchTreeToggleCount).toBe(0);
+  expect(layout.sketchTreeResizeHandle).toEqual({ count: 1, cursor: "col-resize", value: "320" });
   expect(layout.explorerCount).toBe(0);
   expect(await page.locator("#sketchOverlay").evaluate((element) => element.parentElement?.classList.contains("canvas-area"))).toBe(true);
   expect(layout.canvas.left).toBe(0);
@@ -685,6 +691,17 @@ test("workspace integrates transparent compact Object groups into Sketch Tree an
     headerBorderBottom: "0px",
     groupBackground: "rgba(0, 0, 0, 0)",
   });
+  const resizeHandle = page.locator("#sketchOverlayResizeHandle");
+  const resizeHandleBounds = await resizeHandle.boundingBox();
+  await page.mouse.move(resizeHandleBounds.x + resizeHandleBounds.width / 2, resizeHandleBounds.y + 20);
+  await page.mouse.down();
+  await page.mouse.move(resizeHandleBounds.x + resizeHandleBounds.width / 2 + 80, resizeHandleBounds.y + 20, { steps: 4 });
+  await page.mouse.up();
+  await expect(page.locator("#sketchOverlay")).toHaveCSS("width", "400px");
+  await expect(resizeHandle).toHaveAttribute("aria-valuenow", "400");
+  await resizeHandle.focus();
+  await page.keyboard.press("ArrowLeft");
+  await expect(page.locator("#sketchOverlay")).toHaveCSS("width", "384px");
   const groupState = await page.locator('.sketch-group-row[data-sketch-id="S1"]').evaluateAll((rows) => rows.map((row) => ({
     category: row.dataset.category,
     open: row.getAttribute("aria-expanded"),
@@ -1074,10 +1091,13 @@ test("application language defaults to Japanese and persists the full UI selecti
   await expect(page.locator('#documentAppearanceFields select[data-appearance-key="visible"] option')).toHaveText(["Visible", "Hidden"]);
   await expect(page.locator('#documentConstructionAppearanceFields select[data-appearance-key="lineType"] option')).toHaveText(["Solid", "Dashed", "Dash-dot", "Dotted"]);
   await expect(page.locator('#documentDimensionAppearanceFields select[data-dimension-display="visible"] option')).toHaveText(["Visible", "Hidden"]);
-  await expect(page.locator("#documentDimensionAppearanceFields .dimension-appearance-group-title")).toHaveText(["Extension lines", "Arrows", "Dimension text"]);
+  await expect(page.locator("#documentDimensionAppearanceFields .dimension-appearance-group-title")).toHaveText(["Extension lines", "Terminators", "Dimension text"]);
+  await expect(page.locator('#documentDimensionAppearanceFields [data-dimension-display="extensionLines"]')).toHaveCount(0);
+  await expect(page.locator("#documentDimensionAppearanceFields .property-input-unit")).toHaveText(["mm", "mm", "mm", "°", "mm", "mm"]);
   await expect(page.locator('label[for="documentDimensionExtensionLineOvershoot"]')).toHaveText("Overshoot");
   await expect(page.locator('label[for="documentDimensionExtensionLineOriginGap"]')).toHaveText("Origin gap");
-  await expect(page.locator('label[for="documentDimensionArrowheadLength"]')).toHaveText("Length");
+  await expect(page.locator('label[for="documentDimensionTerminatorType"]')).toHaveText("Type");
+  await expect(page.locator('label[for="documentDimensionTerminatorSize"]')).toHaveText("Size");
   await expect(page.locator('label[for="documentDimensionArrowheadAngle"]')).toHaveText("Opening angle");
   await expect(page.locator('label[for="documentDimensionDimensionTextHeight"]')).toHaveText("Height");
   await expect(page.locator('label[for="documentDimensionDimensionTextGap"]')).toHaveText("Gap from dimension line");
@@ -1087,9 +1107,11 @@ test("application language defaults to Japanese and persists the full UI selecti
   await expect(page.locator("#propertiesPanel .property-section-collapsible")).toHaveCount(0);
   await selectSketch(page, "S1");
   await expect(page.locator("#propertiesPanel .property-section h3")).toContainText(["Basic Information", "General Line Appearance", "Construction Appearance", "Dimension Appearance"]);
-  await expect(page.locator('#sketchConstructionPropertyVisible option')).toHaveText(["Default", "Visible", "Hidden"]);
-  await expect(page.locator('#sketchConstructionPropertyLineType option')).toHaveText(["Default", "Solid", "Dashed", "Dash-dot", "Dotted"]);
-  await expect(page.locator('#sketchDimensionVisible option')).toHaveText(["Default", "Visible", "Hidden"]);
+  await expect(page.locator('#sketchConstructionPropertyVisible option')).toHaveText(["Default (Visible)", "Visible", "Hidden"]);
+  await expect(page.locator('#sketchConstructionPropertyLineType option')).toHaveText(["Default (Dash-dot)", "Solid", "Dashed", "Dash-dot", "Dotted"]);
+  await expect(page.locator('#sketchDimensionVisible option')).toHaveText(["Default (Visible)", "Visible", "Hidden"]);
+  await expect(page.locator("#sketchDimensionColor")).toHaveAttribute("placeholder", "Default (#6b7280)");
+  await expect(page.locator("#sketchDimensionPrefix")).toHaveAttribute("placeholder", "Default (Empty)");
   await openParameterDialog(page);
   expect(await page.locator("#parametersDialog thead th").allTextContents()).toEqual([
     "Name", "Value / Expression", "Evaluated value", "", "Name", "Type / owner", "Value / Expression", "Evaluated value",
@@ -1169,6 +1191,12 @@ test("Document owns appearance defaults while only non-root Sketches expose comp
 
   await expect(page.locator("#sketchConstructionPropertyColor")).toHaveValue("");
   await expect(page.locator("#sketchDimensionColor")).toHaveValue("");
+  await expect(page.locator("#propertyColor")).toHaveAttribute("placeholder", "既定 (#2563eb)");
+  await expect(page.locator("#sketchConstructionPropertyColor")).toHaveAttribute("placeholder", "既定 (#dc2626)");
+  await expect(page.locator("#sketchDimensionColor")).toHaveAttribute("placeholder", "既定 (#0e7490)");
+  await expect(page.locator("#sketchConstructionPropertyLineType option").first()).toHaveText("既定 (一点鎖線)");
+  await expect(page.locator("#sketchDimensionTerminatorType option").first()).toHaveText("既定 (標準矢印)");
+  await expect(page.locator("#sketchDimensionTerminatorSize")).toHaveAttribute("placeholder", "既定 (2.5 mm)");
   await expect(page.locator('[data-sketch-default-appearance="construction"] .property-color-picker')).toHaveAttribute("data-current-color", "#dc2626");
   await expect(page.locator('[data-sketch-default-appearance="dimension"] .property-color-picker')).toHaveAttribute("data-current-color", "#0e7490");
 
@@ -1304,10 +1332,10 @@ test("Appearance cascades, used file colors are selectable, and constraint statu
   await expect(page.locator("#propertiesPanel")).toContainText("長さ");
   await expect(page.locator("#propertiesPanel")).toContainText("外観");
   await expect(page.locator("#propertiesPanel")).not.toContainText(/Geometry|Length|Appearance|Visible|Color|Line type|Line width/);
-  await expect(page.locator('#propertyVisible option[value=""]')).toHaveText("既定");
-  await expect(page.locator('#propertyLineType option[value=""]')).toHaveText("既定");
-  await expect(page.locator("#propertyColor")).toHaveAttribute("placeholder", "既定");
-  await expect(page.locator("#propertyLineWidth")).toHaveAttribute("placeholder", "既定");
+  await expect(page.locator('#propertyVisible option[value=""]')).toHaveText("既定 (表示)");
+  await expect(page.locator('#propertyLineType option[value=""]')).toHaveText("既定 (実線)");
+  await expect(page.locator("#propertyColor")).toHaveAttribute("placeholder", "既定 (#16a34a)");
+  await expect(page.locator("#propertyLineWidth")).toHaveAttribute("placeholder", "既定 (4)");
   await expect(page.locator(".property-color-picker")).toHaveAttribute("data-current-color", "#16a34a");
   await expect(page.locator(".property-color-default")).toHaveCount(0);
   await page.locator(".property-color-picker").click();
@@ -1335,10 +1363,10 @@ test("Appearance cascades, used file colors are selectable, and constraint statu
   await openApplicationSettings(page);
   await page.locator("#applicationLanguageSelect").selectOption("en");
   await page.locator("#applicationSettingsDialog button[value=cancel]").first().click();
-  await expect(page.locator('#propertyVisible option[value=""]')).toHaveText("Default");
-  await expect(page.locator('#propertyLineType option[value=""]')).toHaveText("Default");
-  await expect(page.locator("#propertyColor")).toHaveAttribute("placeholder", "Default");
-  await expect(page.locator("#propertyLineWidth")).toHaveAttribute("placeholder", "Default");
+  await expect(page.locator('#propertyVisible option[value=""]')).toHaveText("Default (Visible)");
+  await expect(page.locator('#propertyLineType option[value=""]')).toHaveText("Default (Solid)");
+  await expect(page.locator("#propertyColor")).toHaveAttribute("placeholder", "Default (#16a34a)");
+  await expect(page.locator("#propertyLineWidth")).toHaveAttribute("placeholder", "Default (4)");
   await expect(page.locator(".property-color-default")).toHaveCount(0);
   await openApplicationSettings(page);
   await page.locator("#applicationLanguageSelect").selectOption("ja");
@@ -1528,22 +1556,28 @@ test("Constraint dimensions expose defining geometry and inheritable appearance 
 
   await openDocumentSettings(page);
   await expect(page.locator("#documentSettingsDialog")).toContainText("寸法外観");
-  await expect(page.locator("#documentDimensionAppearanceFields .dimension-appearance-group-title")).toHaveText(["寸法補助線", "矢印", "寸法文字"]);
-  await expect(page.locator("#documentDimensionExtensionLineOvershoot")).toHaveValue("6");
-  await expect(page.locator("#documentDimensionExtensionLineOriginGap")).toHaveValue("6");
-  await expect(page.locator("#documentDimensionArrowheadLength")).toHaveValue("10");
+  await expect(page.locator("#documentDimensionAppearanceFields .dimension-appearance-group-title")).toHaveText(["寸法補助線", "端末記号", "寸法文字"]);
+  await expect(page.locator('#documentDimensionAppearanceFields [data-dimension-display="extensionLines"], #documentDimensionAppearanceFields [data-dimension-display="arrows"]')).toHaveCount(0);
+  await expect(page.locator("#documentDimensionExtensionLineOvershoot")).toHaveValue("1.5");
+  await expect(page.locator("#documentDimensionExtensionLineOriginGap")).toHaveValue("1.5");
+  await expect(page.locator("#documentDimensionTerminatorType")).toHaveValue("arrow");
+  await expect(page.locator("#documentDimensionTerminatorSize")).toHaveValue("2.5");
   await expect(page.locator("#documentDimensionArrowheadAngle")).toHaveValue("27");
-  await expect(page.locator("#documentDimensionDimensionTextHeight")).toHaveValue("12");
-  await expect(page.locator("#documentDimensionDimensionTextGap")).toHaveValue("4");
+  await page.locator("#documentDimensionTerminatorType").selectOption("dot");
+  await expect(page.locator("#documentDimensionAppearanceFields [data-terminator-angle-row]")).toBeHidden();
+  await page.locator("#documentDimensionTerminatorType").selectOption("arrow");
+  await expect(page.locator("#documentDimensionAppearanceFields [data-terminator-angle-row]")).toBeVisible();
+  await expect(page.locator("#documentDimensionDimensionTextHeight")).toHaveValue("3");
+  await expect(page.locator("#documentDimensionDimensionTextGap")).toHaveValue("1");
   await page.locator("#documentDimensionColor").fill("#0e7490");
   await page.locator("#documentDimensionColor").blur();
   for (const [selector, value] of [
-    ["#documentDimensionExtensionLineOvershoot", "8"],
-    ["#documentDimensionExtensionLineOriginGap", "7"],
-    ["#documentDimensionArrowheadLength", "11"],
+    ["#documentDimensionExtensionLineOvershoot", "2"],
+    ["#documentDimensionExtensionLineOriginGap", "1.8"],
+    ["#documentDimensionTerminatorSize", "3"],
     ["#documentDimensionArrowheadAngle", "30"],
-    ["#documentDimensionDimensionTextHeight", "13"],
-    ["#documentDimensionDimensionTextGap", "5"],
+    ["#documentDimensionDimensionTextHeight", "3.5"],
+    ["#documentDimensionDimensionTextGap", "1.2"],
   ]) {
     await page.locator(selector).fill(value);
     await page.locator(selector).blur();
@@ -1552,12 +1586,13 @@ test("Constraint dimensions expose defining geometry and inheritable appearance 
   expect(await page.evaluate(() => window.__cadTest.dimensionAppearanceStateForTest())).toEqual(expect.objectContaining({
     documentDefault: expect.objectContaining({
       color: "#0e7490",
-      extensionLineOvershoot: 8,
-      extensionLineOriginGap: 7,
-      arrowheadLength: 11,
+      extensionLineOvershoot: 2,
+      extensionLineOriginGap: 1.8,
+      terminatorType: "arrow",
+      terminatorSize: 3,
       arrowheadAngle: 30,
-      dimensionTextHeight: 13,
-      dimensionTextGap: 5,
+      dimensionTextHeight: 3.5,
+      dimensionTextGap: 1.2,
     }),
     sketchDirect: {},
     sketchEffective: expect.objectContaining({ color: "#0e7490" }),
@@ -1590,27 +1625,41 @@ test("Constraint dimensions expose defining geometry and inheritable appearance 
   await suffix.fill(" mm");
   expect(await page.evaluate(() => window.__cadTest.drawnDimensionLabelsForTest())).toEqual(expect.arrayContaining([expect.stringMatching(/REF .* mm/)]));
   await suffix.blur();
-  await properties.locator('[data-dimension-display="arrows"]').selectOption("false");
+  await properties.locator('[data-dimension-display="terminatorType"]').selectOption("dot");
+  await expect(properties.locator("[data-terminator-angle-row]")).toBeHidden();
+  expect((await page.evaluate(() => window.__cadTest.dimensionAppearanceRenderMetricsForTest())).terminator).toEqual(expect.objectContaining({ type: "dot", openingAngle: null }));
+  await properties.locator('[data-dimension-display="terminatorType"]').selectOption("filledArrow");
+  await expect(properties.locator("[data-terminator-angle-row]")).toBeVisible();
   for (const [key, value] of [
-    ["extensionLineOvershoot", "12"],
-    ["extensionLineOriginGap", "9"],
-    ["arrowheadLength", "18"],
+    ["extensionLineOvershoot", "3"],
+    ["extensionLineOriginGap", "2.5"],
+    ["terminatorSize", "4"],
     ["arrowheadAngle", "40"],
-    ["dimensionTextHeight", "20"],
-    ["dimensionTextGap", "7"],
+    ["dimensionTextHeight", "4"],
+    ["dimensionTextGap", "1.5"],
   ]) {
     const input = properties.locator(`[data-dimension-display="${key}"]`);
     await input.fill(value);
     await input.blur();
   }
+  await page.evaluate(() => window.__cadTest.focusWorldForTest({ x: 0, y: 0 }, 1));
   const renderMetrics = await page.evaluate(() => window.__cadTest.dimensionAppearanceRenderMetricsForTest());
-  expect(renderMetrics.linearExtension.originGap).toBeCloseTo(14, 6); // 9px setting + existing 5px standalone-point marker clearance
-  expect(renderMetrics.linearExtension.overshoot).toBeCloseTo(12, 6);
-  expect(renderMetrics.angleExtension.originGap).toBeCloseTo(9, 6);
-  expect(renderMetrics.angleExtension.overshoot).toBeCloseTo(12, 6);
-  expect(renderMetrics.arrowhead.length).toBeCloseTo(18, 6);
-  expect(renderMetrics.arrowhead.openingAngle).toBeCloseTo(40, 6);
-  expect(renderMetrics.text).toEqual({ height: 20, gap: 7 });
+  await page.evaluate(() => window.__cadTest.focusWorldForTest({ x: 0, y: 0 }, 4));
+  const zoomedRenderMetrics = await page.evaluate(() => window.__cadTest.dimensionAppearanceRenderMetricsForTest());
+  expect(zoomedRenderMetrics.linearExtension.originGap).toBeCloseTo(renderMetrics.linearExtension.originGap, 6);
+  expect(zoomedRenderMetrics.linearExtension.overshoot).toBeCloseTo(renderMetrics.linearExtension.overshoot, 6);
+  expect(zoomedRenderMetrics.angleExtension.originGap).toBeCloseTo(renderMetrics.angleExtension.originGap, 6);
+  expect(zoomedRenderMetrics.terminator.size).toBeCloseTo(renderMetrics.terminator.size, 6);
+  expect(zoomedRenderMetrics.text.height).toBeCloseTo(renderMetrics.text.height, 6);
+  expect(renderMetrics.linearExtension.originGap).toBeCloseTo(2.5 * 96 / 25.4 + 5, 6);
+  expect(renderMetrics.linearExtension.overshoot).toBeCloseTo(3 * 96 / 25.4, 6);
+  expect(renderMetrics.angleExtension.originGap).toBeCloseTo(2.5 * 96 / 25.4, 6);
+  expect(renderMetrics.angleExtension.overshoot).toBeCloseTo(3 * 96 / 25.4, 6);
+  expect(renderMetrics.terminator).toEqual(expect.objectContaining({ type: "filledArrow" }));
+  expect(renderMetrics.terminator.size).toBeCloseTo(4 * 96 / 25.4, 6);
+  expect(renderMetrics.terminator.openingAngle).toBeCloseTo(40, 6);
+  expect(renderMetrics.text.height).toBeCloseTo(4 * 96 / 25.4, 6);
+  expect(renderMetrics.text.gap).toBeCloseTo(1.5 * 96 / 25.4, 6);
   await properties.locator('[data-dimension-display="color"] + [data-appearance-palette-open]').click();
   await page.locator('[data-palette-color="#7c3aed"]').first().click();
   expect(await page.evaluate(() => window.__cadTest.dimensionAppearanceStateForTest())).toEqual(expect.objectContaining({
@@ -1644,19 +1693,54 @@ test("Constraint dimensions expose defining geometry and inheritable appearance 
     precision: 3,
     prefix: "REF ",
     suffix: " mm",
-    arrows: false,
-    extensionLineOvershoot: 12,
-    extensionLineOriginGap: 9,
-    arrowheadLength: 18,
+    terminatorType: "filledArrow",
+    extensionLineOvershoot: 3,
+    extensionLineOriginGap: 2.5,
+    terminatorSize: 4,
     arrowheadAngle: 40,
-    dimensionTextHeight: 20,
-    dimensionTextGap: 7,
+    dimensionTextHeight: 4,
+    dimensionTextGap: 1.5,
   }));
   expect(serialized.annotations).toEqual([]);
   await page.evaluate((documentData) => window.__cadTest.loadDocumentFixtureForDragTest(documentData, "dimension-appearance.json"), serialized);
   const roundTrip = await page.evaluate(() => window.__cadTest.serializedModelForTest());
+  expect(roundTrip.version).toBe(12);
   expect(roundTrip.defaultDimensionAppearance).toEqual(serialized.defaultDimensionAppearance);
   expect(roundTrip.constraints[0].dimension.display).toEqual(serialized.constraints[0].dimension.display);
+
+  const legacyPixels = structuredClone(serialized);
+  legacyPixels.version = 11;
+  legacyPixels.defaultDimensionAppearance = {
+    ...legacyPixels.defaultDimensionAppearance,
+    extensionLineOvershoot: 6,
+    extensionLineOriginGap: 6,
+    arrowheadLength: 10,
+    dimensionTextHeight: 12,
+    dimensionTextGap: 4,
+    arrows: true,
+    extensionLines: false,
+  };
+  delete legacyPixels.defaultDimensionAppearance.terminatorType;
+  delete legacyPixels.defaultDimensionAppearance.terminatorSize;
+  legacyPixels.constraints[0].dimension.display = {
+    ...legacyPixels.constraints[0].dimension.display,
+    arrowheadLength: 18,
+    arrows: false,
+    extensionLines: false,
+  };
+  delete legacyPixels.constraints[0].dimension.display.terminatorType;
+  delete legacyPixels.constraints[0].dimension.display.terminatorSize;
+  await page.evaluate((documentData) => window.__cadTest.loadDocumentFixtureForDragTest(documentData, "legacy-dimension-pixels.json"), legacyPixels);
+  const migratedPixels = await page.evaluate(() => window.__cadTest.dimensionAppearanceStateForTest());
+  expect(migratedPixels.documentDefault.extensionLineOvershoot).toBeCloseTo(6 * 25.4 / 96, 8);
+  expect(migratedPixels.documentDefault.dimensionTextHeight).toBeCloseTo(12 * 25.4 / 96, 8);
+  expect(migratedPixels.direct.terminatorSize).toBeCloseTo(18 * 25.4 / 96, 8);
+  expect(migratedPixels.direct.terminatorType).toBeUndefined();
+  const migratedSerialized = await page.evaluate(() => window.__cadTest.serializedModelForTest());
+  expect(migratedSerialized.version).toBe(12);
+  expect(migratedSerialized.defaultDimensionAppearance).not.toHaveProperty("arrows");
+  expect(migratedSerialized.defaultDimensionAppearance).not.toHaveProperty("extensionLines");
+  expect(migratedSerialized.constraints[0].dimension.display).not.toHaveProperty("arrowheadLength");
 
   await page.evaluate(() => window.__cadTest.resetForParameterTest());
   await openDocumentSettings(page);

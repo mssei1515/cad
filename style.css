@@ -121,11 +121,14 @@ button:disabled { opacity: .45; cursor: default; }
 .canvas-context-menu button.danger:not(:disabled) { color: #b91c1c; }
 .canvas-context-menu kbd { color: #64748b; font-size: 10px; font-weight: 400; }
 .canvas-context-menu-separator { height: 1px; margin: 3px 4px; background: #e2e8f0; }
-.sketch-overlay { position: absolute; top: 12px; left: 12px; z-index: 3; width: min(320px, calc(100% - 24px)); max-height: min(70vh, 680px); display: grid; gap: 2px; overflow: hidden; color: #111827; background: transparent; border: 0; border-radius: 0; box-shadow: none; backdrop-filter: none; }
+.sketch-overlay { position: absolute; top: 12px; left: 12px; z-index: 3; width: min(320px, calc(100% - 24px)); max-height: min(70vh, 680px); display: grid; gap: 2px; overflow: visible; color: #111827; background: transparent; border: 0; border-radius: 0; box-shadow: none; backdrop-filter: none; }
 .sketch-overlay-header { min-height: 27px; display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 4px; padding: 2px 5px 2px 8px; border: 0; background: transparent; }
 .sketch-overlay-header strong { overflow: hidden; font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
 .sketch-overlay-header span { display: flex; gap: 3px; }
 .sketch-overlay .compact-button { min-height: 20px; padding: 1px 5px; border-color: rgba(148, 163, 184, .5); background: transparent; box-shadow: none; }
+.sketch-overlay-resize-handle { position: absolute; top: 0; right: -5px; bottom: 0; width: 10px; cursor: col-resize; touch-action: none; outline: none; }
+.sketch-overlay-resize-handle::after { content: ""; position: absolute; top: 4px; right: 4px; bottom: 4px; width: 1px; border-radius: 1px; background: transparent; transition: background-color .12s ease, width .12s ease; }
+.sketch-overlay-resize-handle:hover::after, .sketch-overlay-resize-handle:focus-visible::after, .sketch-overlay.resizing .sketch-overlay-resize-handle::after { width: 2px; background: #60a5fa; }
 .sketch-list { max-height: calc(min(70vh, 680px) - 30px); overflow: auto; }
 .sketch-overlay .sketch-item { min-height: 19px; background: transparent; }
 .sketch-overlay .sketch-item:hover { background: rgba(239, 246, 255, .92); }
@@ -180,6 +183,8 @@ body.block-editing .canvas-area { background: #f5f3ff; box-shadow: none; }
 .property-section-collapsible[open] > summary { margin-bottom: 4px; }
 .property-row { display: grid; grid-template-columns: minmax(82px, 1fr) minmax(105px, 1.25fr); align-items: center; gap: 6px; min-height: 26px; font-size: 12px; line-height: 1.2; }
 .property-row input, .property-row select, .property-row textarea { width: 100%; min-width: 0; min-height: 25px; padding: 3px 5px; border: 1px solid var(--border-strong); border-radius: 3px; background: #fff; font-size: 12px; line-height: 1.2; }
+.property-input-with-unit { min-width: 0; display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 5px; }
+.property-input-unit { min-width: 18px; color: #64748b; font-size: 11px; }
 .property-row input[type="checkbox"] { width: auto; min-height: 0; justify-self: start; }
 .property-row textarea { min-height: 48px; resize: vertical; }
 .property-option-group { margin-top: 7px; padding-top: 5px; border-top: 1px solid var(--border); }
