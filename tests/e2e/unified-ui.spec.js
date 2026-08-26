@@ -1110,7 +1110,7 @@ test("application language defaults to Japanese and persists the full UI selecti
   await expect(page.locator('#sketchConstructionPropertyVisible option')).toHaveText(["Default (Visible)", "Visible", "Hidden"]);
   await expect(page.locator('#sketchConstructionPropertyLineType option')).toHaveText(["Default (Dash-dot)", "Solid", "Dashed", "Dash-dot", "Dotted"]);
   await expect(page.locator('#sketchDimensionVisible option')).toHaveText(["Default (Visible)", "Visible", "Hidden"]);
-  await expect(page.locator("#sketchDimensionColor")).toHaveAttribute("placeholder", "Default (#6b7280)");
+  await expect(page.locator("#sketchDimensionColor")).toHaveAttribute("placeholder", "Default (#64748b)");
   await expect(page.locator("#sketchDimensionPrefix")).toHaveAttribute("placeholder", "Default (Empty)");
   await openParameterDialog(page);
   expect(await page.locator("#parametersDialog thead th").allTextContents()).toEqual([
@@ -1139,6 +1139,25 @@ test("application language defaults to Japanese and persists the full UI selecti
 test("Document owns appearance defaults while only non-root Sketches expose compact overrides", async ({ page }) => {
   await page.goto(`${baseUrl}/index.html?test=1`);
   await page.waitForFunction(() => window.__cadTest);
+  const initialDefaults = await page.evaluate(() => window.__cadTest.serializedModelForTest());
+  expect(initialDefaults.defaultAppearance).toEqual({ visible: true, color: "#111827", lineType: "solid", lineWidth: 2 });
+  expect(initialDefaults.defaultConstructionAppearance).toEqual({
+    visible: true, color: "#64748b", lineType: "dashdot", lineWidth: 1, endpointOverhang: true, endpointMarkers: true,
+  });
+  expect(initialDefaults.defaultDimensionAppearance).toEqual({
+    visible: true,
+    color: "#64748b",
+    precision: null,
+    prefix: "",
+    suffix: "",
+    terminatorType: "arrow",
+    extensionLineOvershoot: 1.5,
+    extensionLineOriginGap: 0.5,
+    terminatorSize: 4,
+    arrowheadAngle: 30,
+    dimensionTextHeight: 5,
+    dimensionTextGap: 0,
+  });
   await selectSketch(page, "ROOT");
   await expect(page.locator("#propertiesPanel .property-section h3")).toHaveText(["基本情報"]);
   await expect(page.locator("#propertiesPanel [data-appearance-key], #propertiesPanel [data-dimension-display]")).toHaveCount(0);
@@ -1162,7 +1181,7 @@ test("Document owns appearance defaults while only non-root Sketches expose comp
   }));
   expect((await page.evaluate(() => window.__cadTest.appearanceStateForTest("line", "L1"))).effective.color).toBe("#2563eb");
   await page.click("#undoBtn");
-  expect((await page.evaluate(() => window.__cadTest.serializedModelForTest())).defaultDimensionAppearance.color).toBe("#6b7280");
+  expect((await page.evaluate(() => window.__cadTest.serializedModelForTest())).defaultDimensionAppearance.color).toBe("#64748b");
   await page.click("#redoBtn");
   expect((await page.evaluate(() => window.__cadTest.serializedModelForTest())).defaultDimensionAppearance.color).toBe("#0e7490");
 
@@ -1196,7 +1215,7 @@ test("Document owns appearance defaults while only non-root Sketches expose comp
   await expect(page.locator("#sketchDimensionColor")).toHaveAttribute("placeholder", "既定 (#0e7490)");
   await expect(page.locator("#sketchConstructionPropertyLineType option").first()).toHaveText("既定 (一点鎖線)");
   await expect(page.locator("#sketchDimensionTerminatorType option").first()).toHaveText("既定 (標準矢印)");
-  await expect(page.locator("#sketchDimensionTerminatorSize")).toHaveAttribute("placeholder", "既定 (2.5 mm)");
+  await expect(page.locator("#sketchDimensionTerminatorSize")).toHaveAttribute("placeholder", "既定 (4 mm)");
   await expect(page.locator('[data-sketch-default-appearance="construction"] .property-color-picker')).toHaveAttribute("data-current-color", "#dc2626");
   await expect(page.locator('[data-sketch-default-appearance="dimension"] .property-color-picker')).toHaveAttribute("data-current-color", "#0e7490");
 
@@ -1356,7 +1375,7 @@ test("Appearance cascades, used file colors are selectable, and constraint statu
   await redSwatch.hover();
   expect(await redSwatch.evaluate((item) => getComputedStyle(item).backgroundColor)).toBe("rgb(220, 38, 38)");
   expect(await page.locator("#usedColorPalette .property-color-swatch").evaluateAll((items) => items.map((item) => item.dataset.paletteColor))).toEqual([
-    "#ef4444", "#64748b", "#6b7280", "#16a34a", "#f97316", "#0ea5e9",
+    "#ef4444", "#64748b", "#16a34a", "#f97316", "#0ea5e9",
   ]);
   await page.locator("#colorPaletteDialog button[value=cancel]").first().click();
   await expect(page.locator("#propertiesPanel")).not.toContainText("継承");
@@ -1559,16 +1578,16 @@ test("Constraint dimensions expose defining geometry and inheritable appearance 
   await expect(page.locator("#documentDimensionAppearanceFields .dimension-appearance-group-title")).toHaveText(["寸法補助線", "端末記号", "寸法文字"]);
   await expect(page.locator('#documentDimensionAppearanceFields [data-dimension-display="extensionLines"], #documentDimensionAppearanceFields [data-dimension-display="arrows"]')).toHaveCount(0);
   await expect(page.locator("#documentDimensionExtensionLineOvershoot")).toHaveValue("1.5");
-  await expect(page.locator("#documentDimensionExtensionLineOriginGap")).toHaveValue("1.5");
+  await expect(page.locator("#documentDimensionExtensionLineOriginGap")).toHaveValue("0.5");
   await expect(page.locator("#documentDimensionTerminatorType")).toHaveValue("arrow");
-  await expect(page.locator("#documentDimensionTerminatorSize")).toHaveValue("2.5");
-  await expect(page.locator("#documentDimensionArrowheadAngle")).toHaveValue("27");
+  await expect(page.locator("#documentDimensionTerminatorSize")).toHaveValue("4");
+  await expect(page.locator("#documentDimensionArrowheadAngle")).toHaveValue("30");
   await page.locator("#documentDimensionTerminatorType").selectOption("dot");
   await expect(page.locator("#documentDimensionAppearanceFields [data-terminator-angle-row]")).toBeHidden();
   await page.locator("#documentDimensionTerminatorType").selectOption("arrow");
   await expect(page.locator("#documentDimensionAppearanceFields [data-terminator-angle-row]")).toBeVisible();
-  await expect(page.locator("#documentDimensionDimensionTextHeight")).toHaveValue("3");
-  await expect(page.locator("#documentDimensionDimensionTextGap")).toHaveValue("1");
+  await expect(page.locator("#documentDimensionDimensionTextHeight")).toHaveValue("5");
+  await expect(page.locator("#documentDimensionDimensionTextGap")).toHaveValue("0");
   await page.locator("#documentDimensionColor").fill("#0e7490");
   await page.locator("#documentDimensionColor").blur();
   for (const [selector, value] of [
@@ -1956,9 +1975,9 @@ test("unified canvas exposes dimensions from every visible sketch", async ({ pag
   expect(result.drawnDimensionSketchIds).toEqual(["S1", "S2"]);
   expect(new Set(result.drawnDimensionLabels)).toEqual(new Set(["100", "160"]));
   expect(result.labelsAfterHidingSecondSketch).toEqual(["100"]);
-  expect(await page.evaluate(() => window.__cadTest.drawnDimensionColorsForTest())).toEqual(["#6b7280"]);
+  expect(await page.evaluate(() => window.__cadTest.drawnDimensionColorsForTest())).toEqual(["#64748b"]);
   await page.locator("#constraintStatusViewBtn").click();
-  expect(new Set(await page.evaluate(() => window.__cadTest.drawnDimensionColorsForTest()))).toEqual(new Set(["#6b7280", "#cbd5e1"]));
+  expect(new Set(await page.evaluate(() => window.__cadTest.drawnDimensionColorsForTest()))).toEqual(new Set(["#64748b", "#cbd5e1"]));
   await page.locator("#constraintStatusViewBtn").click();
 });
 
