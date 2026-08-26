@@ -87,6 +87,10 @@ Line、Circle、Arc と他 Geometry の交点からクリック区間を除去�
 
 Line、Circle、Arc を選び、側と距離を入力して複製する。元と複製の間に `OffsetConstraint` を置くため、後から寸法として編集できる。
 
+### ハッチング
+
+アクティブSketchの通常Line、Circle、Arcが作る閉領域内をclickして、境界へ関連付いた平行線Hatchを作る。補助Geometry、非アクティブSketch、Block Projectionは境界候補に含めない。未分割交差も内部の平面グラフで分割して面を検出し、内側の閉輪郭は穴として除外する。1clickごとに1つのUndo単位で確定し、Escまで連続作成する。詳細な境界追従と無効化は[ハッチング](./09-ハッチング.md)を参照する。
+
 ## 3. 選択と編集
 
 - 単一クリック後のドラッグで Point、Line、Circle、Arc、Arc 端点を編集する。
@@ -99,6 +103,7 @@ Line、Circle、Arc を選び、側と距離を入力して複製する。元と
 - Block Instance は、内部で閉じる外部拘束とともにコピーできる。
 - 同じParameter名前空間へ寸法をコピーすると新しい`dN`を付与し、同時にコピーした寸法間の参照だけを新しい名前へトークン単位で書き換える。
 - 別のParameter名前空間へコピーすると、拘束寸法式をコピー時点の評価値による数値式へ固定して新しい`dN`を付与する。
+- HatchのCopy／Cut／PasteとBlock化は参照する全境界Geometryの同時選択を必須とし、不足時は操作全体を拒否する。Pasteでは境界GeometryRefを新IDへ書き換える。
 
 ドラッグ中は選択に関係する拘束連結成分だけを優先して local solve し、必要な場合に全 Sketch solve へフォールバックする。Parameterの参照寸法feedbackはドラッグ中に反復せず、Pointer-upで最終精度のsolveとParameter再評価を行う。式エラー、拘束矛盾、非収束時はドラッグ開始前へ戻す。
 
@@ -195,4 +200,4 @@ Geometry は解析結果により次の状態で描き分ける。
 
 Geometry の削除時は、共有 Point の利用状況を考慮して不要 Pointを整理し、対象を参照する拘束と拘束寸法を除去する。ただし削除後も残る式が削除対象の寸法symbolを参照する場合は、依存元の名前を表示して操作を拒否する。依存元も同時に削除する操作、または名前空間全体の削除は許可する。1回のユーザー操作は1つの履歴単位にする。
 
-Geometryを削除すると、そのGeometryを参照するConstraintとLeaderも同時に除去する。Sketch削除、Block Instance削除、Block Definition編集でも同じ参照ライフサイクルを適用する。
+Geometryを削除すると、そのGeometryを参照するConstraintとLeaderも同時に除去する。Hatchの境界Geometryは例外であり、Hatch Objectを残したまま境界エラーの無効状態にする。Sketch削除では所属Hatchも削除する。Sketch削除、Block Instance削除、Block Definition編集でも各Objectの参照ライフサイクルを適用する。

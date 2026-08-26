@@ -39,6 +39,16 @@
     resolve: resolveGeometryRefValue,
   } = window.GeometryRef;
 
+  const {
+    createRegionIndex: createHatchRegionIndex,
+    findFaceInIndex: findHatchFaceInIndex,
+    resolveBoundary: resolveHatchBoundaryLoops,
+    containsPoint: hatchContainsPoint,
+    normalizeBoundaryLoops: normalizeHatchBoundaryLoops,
+    boundaryGeometryRefs: hatchBoundaryGeometryRefs,
+    rewriteBoundaryRefs: rewriteHatchBoundaryRefs,
+  } = window.HatchRegionEngine;
+
   const { create: createConstraintCodecRegistry } = window.ConstraintCodecRegistry;
   const {
     dependencies: expressionDependencies,
@@ -118,7 +128,7 @@
     ["元に戻す", "Undo"], ["やり直す", "Redo"], ["削除", "Delete"], ["選択", "Select"], ["選択・ドラッグ", "Select / Drag"],
     ["ジオメトリ", "Geometry"], ["拘束", "Constraint"], ["注記", "Annotation"], ["ツールバー", "Toolbar"], ["メニューバー", "Menu bar"], ["表示ツール", "View"],
     ["点", "Point"], ["線", "Line"], ["連続線", "Polyline"], ["矩形", "Rectangle"], ["円", "Circle"], ["円弧", "Arc"],
-    ["実線／補助線", "Normal / Construction"], ["トリム", "Trim"], ["R面取り", "Fillet"], ["フィレット", "Fillet"], ["オフセット", "Offset"],
+    ["実線／補助線", "Normal / Construction"], ["トリム", "Trim"], ["R面取り", "Fillet"], ["フィレット", "Fillet"], ["オフセット", "Offset"], ["ハッチング", "Hatching"],
     ["寸法", "Dimension"], ["一致", "Coincident"], ["水平", "Horizontal"], ["垂直", "Vertical"], ["平行", "Parallel"], ["直角", "Perpendicular"],
     ["対称", "Symmetry"], ["同心", "Concentric"], ["等寸", "Equal"], ["接線", "Tangent"], ["固定／解除", "Fix / Unfix"], ["固定解除", "Unfix"],
     ["引出線", "Leader"], ["自由テキスト", "Free Text"], ["拘束状態表示", "Constraint Status View"],
@@ -222,6 +232,8 @@
     ],
     activeSketchId: DEFAULT_SKETCH_ID,
     annotations: [],
+    hatches: [],
+    nextHatchIndex: 1,
     points: [],
     lines: [],
     circles: [],
@@ -256,9 +268,11 @@
   let selectedDimensionConstraint = null;
   let selectedConstraint = null;
   let selectedAnnotations = [];
+  let selectedHatches = [];
   let canvasContextTarget = null;
   let canvasContextPointer = null;
   let hoveredAnnotation = null;
+  let hoveredHatch = null;
   let hoveredSidebarItem = null;
   let constraintAnalysisState = null;
   let constraintRedundancyState = { constraints: new Map(), sketches: new Map(), count: 0 };
@@ -281,6 +295,8 @@
   let pointerPreview = null;
   let activeSnap = null;
   let trimPreview = null;
+  let hatchPreview = null;
+  let hatchRepairTarget = null;
   let offsetSource = null;
   let pendingCommand = null;
   let pendingConstraintCommand = null;
@@ -301,6 +317,7 @@
   let arcSeq = 1;
   let sketchSeq = 2;
   let annotationSeq = 1;
+  let hatchSeq = 1;
   let blockDefinitionSeq = 1;
   let blockInstanceSeq = 1;
   let blockElementSeq = 1;
@@ -312,12 +329,14 @@
   let blockPlacementPropertiesWasCollapsed = null;
   let blockEditSession = null;
   let blockProjectionCache = new Map();
+  let hatchResolutionCache = new WeakMap();
+  let hatchFaceCache = new Map();
   let undoStack = [];
   let redoStack = [];
   let historyRestoring = false;
   let geometryClipboard = null;
   const HISTORY_LIMIT = 80;
-  const CURRENT_JSON_VERSION = 12;
+  const CURRENT_JSON_VERSION = 13;
   const SKETCH_TREE_MIN_WIDTH = 220;
   const SKETCH_TREE_MAX_WIDTH = 560;
   const SKETCH_TREE_KEYBOARD_RESIZE_STEP = 16;
@@ -332,6 +351,7 @@
   const CONSTRUCTION_EXTENSION_SCREEN_PX = 12;
   const CONSTRUCTION_GEOMETRY_ALPHA = 0.72;
   const DIMENSION_SCREEN_PX_PER_MM = 96 / 25.4;
+  const HATCH_SCREEN_PX_PER_MM = 96 / 25.4;
   const DIMENSION_APPEARANCE_LENGTH_KEYS = ["extensionLineOvershoot", "extensionLineOriginGap", "terminatorSize", "dimensionTextHeight", "dimensionTextGap"];
   const DIMENSION_DISPLAY_PRECISION = 1e-6;
   const MEASURED_DIMENSION_SNAP_TOLERANCE = 1e-5;
@@ -376,6 +396,14 @@
     arrowheadAngle: 30,
     dimensionTextHeight: 5,
     dimensionTextGap: 0,
+  };
+  const DEFAULT_HATCH_APPEARANCE = {
+    visible: true,
+    patternType: "parallel",
+    angle: 45,
+    spacing: 3,
+    color: "#64748b",
+    lineWidth: 1,
   };
   const DIMENSION_APPEARANCE_NUMERIC_RULES = {
     extensionLineOvershoot: { min: 0, max: 1000 },
@@ -633,6 +661,71 @@
     return normalizeDimensionAppearance(source, options);
   }
 
+  function normalizeHatchAppearance(value) {
+    const source = value && typeof value === "object" && !Array.isArray(value) ? value : {};
+    const spacing = Number(source.spacing);
+    const angle = Number(source.angle);
+    const lineWidth = Number(source.lineWidth);
+    return {
+      visible: source.visible !== false,
+      patternType: "parallel",
+      angle: Number.isFinite(angle) ? Math.max(-3600, Math.min(3600, angle)) : DEFAULT_HATCH_APPEARANCE.angle,
+      spacing: Number.isFinite(spacing) ? Math.max(0.25, Math.min(1000, spacing)) : DEFAULT_HATCH_APPEARANCE.spacing,
+      color: typeof source.color === "string" && /^#[0-9a-fA-F]{6}$/.test(source.color) ? source.color.toLowerCase() : DEFAULT_HATCH_APPEARANCE.color,
+      lineWidth: Number.isFinite(lineWidth) ? Math.max(0.5, Math.min(10, lineWidth)) : DEFAULT_HATCH_APPEARANCE.lineWidth,
+    };
+  }
+
+  function normalizeHatches(items, fallbackSketchId = null) {
+    if (!Array.isArray(items)) return [];
+    return items.map((item, index) => {
+      if (!item || typeof item !== "object") return null;
+      const boundaryLoops = normalizeHatchBoundaryLoops(item.boundaryLoops);
+      if (!boundaryLoops) return null;
+      const seed = item.seed && Number.isFinite(Number(item.seed.x)) && Number.isFinite(Number(item.seed.y))
+        ? { x: Number(item.seed.x), y: Number(item.seed.y) }
+        : { x: 0, y: 0 };
+      const normalized = {
+        id: String(item.id || `H${index + 1}`),
+        sketchId: item.sketchId == null ? fallbackSketchId : String(item.sketchId),
+        seed,
+        boundaryLoops,
+        appearance: normalizeHatchAppearance(item.appearance),
+      };
+      Object.assign(item, normalized);
+      return item;
+    }).filter(Boolean);
+  }
+
+  function validSerializedHatch(value) {
+    if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+    if (typeof value.id !== "string" || !value.id.trim() || typeof value.sketchId !== "string" || !value.sketchId.trim()) return false;
+    if (!value.seed || !Number.isFinite(Number(value.seed.x)) || !Number.isFinite(Number(value.seed.y))) return false;
+    if (!Array.isArray(value.boundaryLoops) || value.boundaryLoops.length === 0 || !normalizeHatchBoundaryLoops(value.boundaryLoops)) return false;
+    const appearance = value.appearance;
+    if (!appearance || typeof appearance !== "object" || Array.isArray(appearance)) return false;
+    return typeof appearance.visible === "boolean"
+      && appearance.patternType === "parallel"
+      && Number.isFinite(Number(appearance.angle))
+      && Number.isFinite(Number(appearance.spacing)) && Number(appearance.spacing) >= 0.25
+      && typeof appearance.color === "string" && /^#[0-9a-fA-F]{6}$/.test(appearance.color)
+      && Number.isFinite(Number(appearance.lineWidth)) && Number(appearance.lineWidth) >= 0.5;
+  }
+
+  function validSerializedHatchList(items) {
+    return Array.isArray(items) && items.every(validSerializedHatch) && new Set(items.map((item) => item.id)).size === items.length;
+  }
+
+  function serializeHatch(hatch) {
+    return {
+      id: String(hatch.id),
+      sketchId: String(hatch.sketchId),
+      seed: { x: Number(hatch.seed?.x) || 0, y: Number(hatch.seed?.y) || 0 },
+      boundaryLoops: normalizeHatchBoundaryLoops(hatch.boundaryLoops),
+      appearance: normalizeHatchAppearance(hatch.appearance),
+    };
+  }
+
   function normalizedSketchCopy(sketch) {
     return {
       ...sketch,
@@ -736,6 +829,7 @@
     }
     const fallbackSketchId = model.sketches.find((sketch) => !isRootSketch(sketch))?.id || DEFAULT_SKETCH_ID;
     model.annotations = normalizeAnnotations(model.annotations, fallbackSketchId);
+    model.hatches = normalizeHatches(model.hatches, fallbackSketchId);
     for (const item of [...model.points, ...model.lines, ...model.circles, ...model.arcs]) item.appearance = normalizeAppearance(item.appearance);
   }
 
@@ -806,6 +900,8 @@
       definition.circles = Array.isArray(definition.circles) ? definition.circles : [];
       definition.arcs = Array.isArray(definition.arcs) ? definition.arcs : [];
       definition.annotations = normalizeAnnotations(definition.annotations, fallbackSketchId);
+      definition.hatches = normalizeHatches(definition.hatches, fallbackSketchId);
+      definition.nextHatchIndex = Math.max(nextSeq(definition.hatches, "H"), Number(definition.nextHatchIndex) || 1);
       definition.blockInstances = Array.isArray(definition.blockInstances) ? definition.blockInstances : [];
       definition.constraints = Array.isArray(definition.constraints) ? definition.constraints : [];
       for (const item of [...definition.points, ...definition.lines, ...definition.circles, ...definition.arcs, ...definition.constraints]) {
@@ -1204,14 +1300,14 @@
 
   function blockDefinitionHasGeometry(definition, visiting = new Set()) {
     if (!definition || visiting.has(definition.id)) return false;
-    if ((definition.lines?.length || 0) + (definition.circles?.length || 0) + (definition.arcs?.length || 0) + (definition.annotations?.length || 0) > 0) return true;
+    if ((definition.lines?.length || 0) + (definition.circles?.length || 0) + (definition.arcs?.length || 0) + (definition.hatches?.length || 0) + (definition.annotations?.length || 0) > 0) return true;
     const nextVisiting = new Set(visiting).add(definition.id);
     return (definition.blockInstances || []).some((instance) => blockDefinitionHasGeometry(blockDefinitionById(instance.definitionId), nextVisiting));
   }
 
   function blockDefinitionGeometrySketchIds(definition, visiting = new Set()) {
     if (!definition || visiting.has(definition.id)) return [];
-    const ids = new Set([...(definition.lines || []), ...(definition.circles || []), ...(definition.arcs || []), ...(definition.annotations || [])].map((item) => String(item.sketchId || DEFAULT_SKETCH_ID)));
+    const ids = new Set([...(definition.lines || []), ...(definition.circles || []), ...(definition.arcs || []), ...(definition.hatches || []), ...(definition.annotations || [])].map((item) => String(item.sketchId || DEFAULT_SKETCH_ID)));
     const nextVisiting = new Set(visiting).add(definition.id);
     for (const instance of definition.blockInstances || []) {
       if (blockDefinitionHasGeometry(blockDefinitionById(instance.definitionId), nextVisiting)) ids.add(String(instance.sketchId || DEFAULT_SKETCH_ID));
@@ -1285,6 +1381,12 @@
       if (!enabled.has(String(annotation.sketchId)) || annotation.visible === false) continue;
       const bounds = annotationBounds(annotation);
       if (bounds) points.push({ x: bounds.x1, y: bounds.y1 }, { x: bounds.x2, y: bounds.y2 });
+    }
+    for (const hatch of definition.hatches || []) {
+      if (!enabled.has(String(hatch.sketchId)) || hatch.appearance?.visible === false) continue;
+      const resolved = resolveHatchBoundaryLoops(hatch.boundaryLoops, hatchPrimitivesForScope(definition, hatch.sketchId));
+      if (resolved.ok) for (const loop of resolved.loops) points.push(...loop.points);
+      else if (hatch.seed) points.push(hatch.seed);
     }
     for (const instance of definition.blockInstances || []) {
       if (!enabled.has(String(instance.sketchId))) continue;
@@ -1426,10 +1528,66 @@
     return projected;
   }
 
+  function hatchPrimitiveForElement(element) {
+    if (element instanceof Line) return { kind: "line", id: element.id, p1: element.p1, p2: element.p2 };
+    if (element instanceof Circle) return { kind: "circle", id: element.id, center: element.center, radius: element.radius() };
+    if (element instanceof Arc) return { kind: "arc", id: element.id, center: element.center, radius: element.radius(), startAngle: element.startAngle, endAngle: element.endAngle };
+    return null;
+  }
+
+  function hatchPrimitivesForScope(scope, sketchId, { visibleOnly = false } = {}) {
+    const elements = [...(scope?.lines || []), ...(scope?.circles || []), ...(scope?.arcs || [])];
+    return elements
+      .filter((element) => String(element.sketchId) === String(sketchId) && !element.construction)
+      .filter((element) => !visibleOnly || effectiveAppearanceForElement(element).visible !== false)
+      .map(hatchPrimitiveForElement)
+      .filter(Boolean);
+  }
+
+  function blockProjectionHatchId(ownerInstance, localPath) {
+    return [String(ownerInstance.id), ...localPath.map(String)].join("/");
+  }
+
+  function createProjectedHatch(transform, ownerInstance, definition, localHatch, localPath, appearanceOverrides = []) {
+    const localResolved = resolveHatchBoundaryLoops(localHatch.boundaryLoops, hatchPrimitivesForScope(definition, localHatch.sketchId));
+    const appearance = normalizeHatchAppearance(localHatch.appearance);
+    for (const override of appearanceOverrides) {
+      const normalized = normalizeAppearance(override);
+      if (normalized.color) appearance.color = normalized.color;
+      if (normalized.lineWidth != null) appearance.lineWidth = normalized.lineWidth;
+      if (Object.prototype.hasOwnProperty.call(normalized, "visible")) appearance.visible = normalized.visible !== false;
+    }
+    const projectedResolved = localResolved.ok
+      ? {
+          ok: true,
+          epsilon: localResolved.epsilon,
+          loops: localResolved.loops.map((loop) => ({
+            role: loop.role,
+            points: loop.points.map((point) => blockWorldPoint(transform, point)),
+          })),
+        }
+      : localResolved;
+    return {
+      ...serializeHatch(localHatch),
+      id: blockProjectionHatchId(ownerInstance, localPath),
+      sketchId: ownerInstance.sketchId,
+      seed: blockWorldPoint(transform, localHatch.seed),
+      patternOrigin: blockWorldPoint(transform, { x: 0, y: 0 }),
+      appearance: { ...appearance, angle: appearance.angle + (Number(transform.rotation) || 0) * 180 / Math.PI },
+      resolvedBoundary: projectedResolved,
+      blockProjection: true,
+      blockInstance: ownerInstance,
+      blockDefinition: definition,
+      localElement: localHatch,
+      blockLocalId: localPath.join("/"),
+      blockAppearanceOverrides: appearanceOverrides,
+    };
+  }
+
   function createBlockProjectionBundle(instance, definition, enabledSketchIdsOverride = null, options = {}) {
-    if (!definition) return { points: [], lines: [], circles: [], arcs: [], annotations: [], pointByLocalId: new Map() };
+    if (!definition) return { points: [], lines: [], circles: [], arcs: [], hatches: [], annotations: [], pointByLocalId: new Map() };
     const visiting = options.visiting || new Set();
-    if (visiting.has(definition.id)) return { points: [], lines: [], circles: [], arcs: [], annotations: [], pointByLocalId: new Map() };
+    if (visiting.has(definition.id)) return { points: [], lines: [], circles: [], arcs: [], hatches: [], annotations: [], pointByLocalId: new Map() };
     const nextVisiting = new Set(visiting).add(definition.id);
     const ownerInstance = options.ownerInstance || instance;
     const pathPrefix = Array.isArray(options.pathPrefix) ? options.pathPrefix.map(String) : [];
@@ -1481,6 +1639,9 @@
     const annotations = (definition.annotations || [])
       .filter((localAnnotation) => enabledSketchIds.has(String(localAnnotation.sketchId)))
       .map((localAnnotation) => createProjectedAnnotation(instance, ownerInstance, definition, localAnnotation, localPath(localAnnotation.id), appearanceOverrides));
+    const hatches = (definition.hatches || [])
+      .filter((localHatch) => enabledSketchIds.has(String(localHatch.sketchId)))
+      .map((localHatch) => createProjectedHatch(instance, ownerInstance, definition, localHatch, localPath(localHatch.id), appearanceOverrides));
     const visiblePointIds = new Set();
     for (const line of lines) visiblePointIds.add(line.p1.id).add(line.p2.id);
     for (const primitive of [...circles, ...arcs]) visiblePointIds.add(primitive.center.id);
@@ -1509,21 +1670,22 @@
       lines.push(...nestedBundle.lines);
       circles.push(...nestedBundle.circles);
       arcs.push(...nestedBundle.arcs);
+      hatches.push(...nestedBundle.hatches);
       annotations.push(...nestedBundle.annotations);
       for (const [id, point] of nestedBundle.pointByLocalId) pointByLocalId.set(id, point);
     }
-    return { definition, revision: definition.revision, sketchId: instance.sketchId, enabledSketchKey: [...enabledSketchIds].sort().join("|"), instance, points, lines, circles, arcs, annotations, pointByLocalId };
+    return { definition, revision: definition.revision, sketchId: instance.sketchId, enabledSketchKey: [...enabledSketchIds].sort().join("|"), instance, points, lines, circles, arcs, hatches, annotations, pointByLocalId };
   }
 
   function blockAllProjectionBundle(instance) {
     const definition = blockDefinitionById(instance?.definitionId);
-    if (!definition) return { points: [], lines: [], circles: [], arcs: [], annotations: [], pointByLocalId: new Map() };
+    if (!definition) return { points: [], lines: [], circles: [], arcs: [], hatches: [], annotations: [], pointByLocalId: new Map() };
     return createBlockProjectionBundle(instance, definition, blockDefinitionDrawableSketchIds(definition), { includeAllSketches: true });
   }
 
   function blockProjectionBundle(instance) {
     const definition = blockDefinitionById(instance.definitionId);
-    if (!definition) return { points: [], lines: [], circles: [], arcs: [], annotations: [], pointByLocalId: new Map() };
+    if (!definition) return { points: [], lines: [], circles: [], arcs: [], hatches: [], annotations: [], pointByLocalId: new Map() };
     const cached = blockProjectionCache.get(instance.id);
     const enabledSketchKey = [...blockInstanceEnabledSketchSet(instance, definition)].sort().join("|");
     if (cached && cached.definition === definition && cached.revision === definition.revision && cached.sketchId === instance.sketchId && cached.enabledSketchKey === enabledSketchKey) return cached;
@@ -1560,6 +1722,51 @@
 
   function allAnnotations() {
     return [...model.annotations, ...blockProjectionBundles().flatMap((bundle) => bundle.annotations || [])];
+  }
+
+  function allHatches() {
+    if (model.hatches.length === 0 && !model.blockDefinitions.some((definition) => (definition.hatches?.length || 0) > 0)) return [];
+    return [...model.hatches, ...blockProjectionBundles().flatMap((bundle) => bundle.hatches || [])];
+  }
+
+  function hatchBoundaryFingerprint(hatch, scope = model) {
+    const byKey = new Map([
+      ...(scope.lines || []).map((item) => [`line:${item.id}`, item]),
+      ...(scope.circles || []).map((item) => [`circle:${item.id}`, item]),
+      ...(scope.arcs || []).map((item) => [`arc:${item.id}`, item]),
+    ]);
+    return hatchBoundaryGeometryRefs(hatch.boundaryLoops).map((ref) => {
+      const item = byKey.get(`${ref.kind}:${geometryRefId(ref)}`);
+      if (!item) return `${ref.kind}:${geometryRefId(ref)}:missing`;
+      if (item instanceof Line) return `line:${item.id}:${item.construction}:${item.p1.x}:${item.p1.y}:${item.p2.x}:${item.p2.y}`;
+      return `${ref.kind}:${item.id}:${item.construction}:${item.center.x}:${item.center.y}:${item.radius()}:${item instanceof Arc ? `${item.startAngle}:${item.endAngle}` : ""}`;
+    }).join("|");
+  }
+
+  function resolvedHatchBoundary(hatch) {
+    if (!hatch) return { ok: false, code: "missing-hatch", reason: applicationText("ハッチングが見つかりません", "Hatch not found") };
+    if (hatch.blockProjection) return hatch.resolvedBoundary || { ok: false, code: "invalid-boundary", reason: applicationText("ブロック内の境界が無効です", "The block hatch boundary is invalid") };
+    const fingerprint = hatchBoundaryFingerprint(hatch);
+    const cached = hatchResolutionCache.get(hatch);
+    if (cached?.fingerprint === fingerprint) return cached.result;
+    const result = resolveHatchBoundaryLoops(hatch.boundaryLoops, hatchPrimitivesForScope(model, hatch.sketchId));
+    hatchResolutionCache.set(hatch, { fingerprint, result });
+    return result;
+  }
+
+  function hitHatchAt(x, y, { activeOnly = true } = {}) {
+    const point = { x, y };
+    const candidates = allHatches().filter((hatch) => {
+      if (!isVisibleSketchId(hatch.sketchId) || hatchAppearanceForDisplay(hatch).visible === false) return false;
+      if (!activeOnly) return true;
+      return hatch.sketchId === activeSketchId();
+    });
+    for (let index = candidates.length - 1; index >= 0; index--) {
+      const hatch = candidates[index];
+      const resolved = resolvedHatchBoundary(hatch);
+      if (resolved.ok && hatchContainsPoint(resolved, point)) return hatch;
+    }
+    return null;
   }
 
   function allGeometryPrimitives() {
@@ -2851,6 +3058,118 @@
     return a;
   }
 
+  function hatchRegionErrorText(result) {
+    const messages = {
+      "invalid-point": ["位置が正しくありません", "Invalid point"],
+      "point-on-boundary": ["境界線から離れた領域内をクリックしてください", "Click inside the region, away from its boundary"],
+      "open-region": ["クリック位置に閉領域がありません", "No closed region was found at the clicked point"],
+      "overlapping-boundary": ["境界に重複する図形があるため判定できません", "The boundary contains overlapping geometry"],
+      "missing-boundary": ["境界図形が見つかりません", "Boundary geometry is missing"],
+      "changed-topology": ["境界の接続関係が変化しています", "The boundary topology has changed"],
+      "open-boundary": ["境界が閉じていません", "The boundary is no longer closed"],
+      "collapsed-boundary": ["境界領域がつぶれています", "The boundary has collapsed"],
+      "invalid-boundary": ["境界データが正しくありません", "The hatch boundary data is invalid"],
+    };
+    const pair = messages[result?.code];
+    return pair ? applicationText(pair[0], pair[1]) : applicationText("閉領域を判定できません", result?.reason || "Could not detect a closed region");
+  }
+
+  function hatchFaceAt(pointer) {
+    const sketchId = activeSketchId();
+    const primitives = hatchPrimitivesForScope(model, sketchId, { visibleOnly: true });
+    const fingerprint = primitives.map((item) => item.kind === "line"
+      ? `${item.kind}:${item.id}:${item.p1.x}:${item.p1.y}:${item.p2.x}:${item.p2.y}`
+      : `${item.kind}:${item.id}:${item.center.x}:${item.center.y}:${item.radius}:${item.startAngle ?? ""}:${item.endAngle ?? ""}`).join("|");
+    let cached = hatchFaceCache.get(sketchId);
+    if (!cached || cached.fingerprint !== fingerprint) {
+      cached = { fingerprint, index: createHatchRegionIndex(primitives) };
+      hatchFaceCache.set(sketchId, cached);
+    }
+    return findHatchFaceInIndex(cached.index, pointer);
+  }
+
+  function updateHatchPreview(pointer) {
+    if (!pointer || !["hatch", "hatch-repair"].includes(mode)) return;
+    hatchPreview = { pointer: { x: pointer.x, y: pointer.y }, result: hatchFaceAt(pointer) };
+  }
+
+  function startHatchCreation() {
+    cancelConstraintTargetCommand("");
+    cancelPendingCommand("");
+    if (!canCreateInActiveSketch()) {
+      rejectRootSketchCreation();
+      return;
+    }
+    mode = "hatch";
+    hatchRepairTarget = null;
+    pointerPreview = lastPointerWorld;
+    hatchPreview = null;
+    if (pointerPreview) updateHatchPreview(pointerPreview);
+    clearSnap();
+    updateToolbar();
+    updateStatusUI();
+    setHint(applicationText("ハッチングする閉領域の内側をクリックしてください。終了はEscです", "Click inside a closed region to hatch it. Press Esc to finish."));
+    draw();
+  }
+
+  function startHatchBoundaryRepair(hatch) {
+    if (!hatch || hatch.blockProjection || !model.hatches.includes(hatch)) return false;
+    if (hatch.sketchId !== activeSketchId()) setActiveSketch(hatch.sketchId);
+    mode = "hatch-repair";
+    hatchRepairTarget = hatch;
+    hatchPreview = null;
+    pointerPreview = lastPointerWorld;
+    if (pointerPreview) updateHatchPreview(pointerPreview);
+    updateToolbar();
+    updateStatusUI();
+    setHint(applicationText(`${hatch.id} の新しい閉領域をクリックしてください`, `Click a new closed region for ${hatch.id}`));
+    draw();
+    return true;
+  }
+
+  function commitHatchAt(pointer) {
+    const result = hatchFaceAt(pointer);
+    hatchPreview = { pointer: { x: pointer.x, y: pointer.y }, result };
+    if (!result.ok) {
+      setHint(hatchRegionErrorText(result), "error");
+      draw();
+      return false;
+    }
+    if (mode === "hatch-repair" && hatchRepairTarget) {
+      const hatch = hatchRepairTarget;
+      hatch.seed = { x: pointer.x, y: pointer.y };
+      hatch.boundaryLoops = result.boundaryLoops;
+      hatchResolutionCache.delete(hatch);
+      clearSelection();
+      selectedHatches = [hatch];
+      hatchRepairTarget = null;
+      hatchPreview = null;
+      pointerPreview = null;
+      mode = "select";
+      updateUI({ refreshAnalysis: false });
+      draw();
+      recordHistory("ハッチング境界再指定");
+      setHint(applicationText(`${hatch.id} の境界を再指定しました`, `Reassigned the boundary of ${hatch.id}`));
+      return true;
+    }
+    const hatch = {
+      id: `H${hatchSeq++}`,
+      sketchId: activeSketchId(),
+      seed: { x: pointer.x, y: pointer.y },
+      boundaryLoops: result.boundaryLoops,
+      appearance: { ...DEFAULT_HATCH_APPEARANCE },
+    };
+    model.hatches.push(hatch);
+    model.nextHatchIndex = hatchSeq;
+    clearSelection();
+    selectedHatches = [hatch];
+    updateUI({ refreshAnalysis: false });
+    draw();
+    recordHistory("ハッチング追加");
+    setHint(applicationText(`${hatch.id} を作成しました。続けて閉領域をクリックできます`, `Created ${hatch.id}. Click another closed region to continue.`));
+    return true;
+  }
+
   function blockSelectionGeometry() {
     const lines = selectedLines.filter((item) => !item.blockProjection);
     const circles = selectedCircles.filter((item) => !item.blockProjection);
@@ -2858,6 +3177,7 @@
     const points = new Set(selectedPoints.filter((item) => !item.blockProjection));
     const blockInstances = selectedBlockInstances.filter((instance) => model.blockInstances.includes(instance));
     const annotations = selectedAnnotations.filter((annotation) => model.annotations.includes(annotation));
+    const hatches = selectedHatches.filter((hatch) => model.hatches.includes(hatch));
     for (const line of lines) {
       points.add(line.p1);
       points.add(line.p2);
@@ -2868,9 +3188,10 @@
       return [...bundle.points, ...bundle.lines, ...bundle.circles, ...bundle.arcs];
     });
     const geometry = [...points, ...lines, ...circles, ...arcs, ...blockInstances, ...projectedGeometry];
-    if (lines.length + circles.length + arcs.length + blockInstances.length + annotations.length === 0) return { error: applicationText("ブロック化する図形または注記を選択してください", "Select geometry or annotations to create a block") };
+    if (lines.length + circles.length + arcs.length + blockInstances.length + annotations.length + hatches.length === 0) return { error: applicationText("ブロック化する図形、ハッチングまたは注記を選択してください", "Select geometry, hatching, or annotations to create a block") };
     if (!geometry.every((item) => elementSketchId(item) === activeSketchId())) return { error: "アクティブスケッチ内の図形だけをブロック化できます" };
     if (!annotations.every((item) => item.sketchId === activeSketchId())) return { error: applicationText("アクティブスケッチ内の注記だけをブロック化できます", "Only annotations in the active sketch can be converted to a block") };
+    if (!hatches.every((item) => item.sketchId === activeSketchId())) return { error: applicationText("アクティブスケッチ内のハッチングだけをブロック化できます", "Only hatching in the active sketch can be converted to a block") };
     const selectedSet = new Set(geometry);
     const selectedProjectionIds = new Set(projectedGeometry.map((item) => item.id));
     const isSelectedNode = (node) => selectedSet.has(node) || Boolean(node?.blockProjection && selectedProjectionIds.has(node.id));
@@ -2901,7 +3222,18 @@
       const referenced = annotation.type === "leader" ? resolveGeometryRef(annotation.geometryRef) : null;
       if (referenced && isSelectedNode(referenced)) return { error: `注記 ${annotation.id} が選択図形を参照しています` };
     }
-    return { points: [...points], lines, circles, arcs, annotations, blockInstances, projectedGeometry, constraints: internalConstraints, externalConstraints };
+    const selectedBoundaryKeys = new Set([...lines, ...circles, ...arcs].map((item) => `${item instanceof Line ? "line" : item instanceof Circle ? "circle" : "arc"}:${item.id}`));
+    for (const hatch of hatches) {
+      const missing = hatchBoundaryGeometryRefs(hatch.boundaryLoops).filter((ref) => !selectedBoundaryKeys.has(`${ref.kind}:${geometryRefId(ref)}`));
+      if (missing.length) return { error: applicationText(`ハッチング ${hatch.id} の境界 ${missing.map(geometryRefId).join("、")} も選択してください`, `Also select boundary ${missing.map(geometryRefId).join(", ")} for hatch ${hatch.id}`) };
+    }
+    for (const hatch of model.hatches) {
+      if (hatches.includes(hatch)) continue;
+      if (hatchBoundaryGeometryRefs(hatch.boundaryLoops).some((ref) => selectedBoundaryKeys.has(`${ref.kind}:${geometryRefId(ref)}`))) {
+        return { error: applicationText(`ハッチング ${hatch.id} も選択してください`, `Also select hatch ${hatch.id}`) };
+      }
+    }
+    return { points: [...points], lines, circles, arcs, annotations, hatches, blockInstances, projectedGeometry, constraints: internalConstraints, externalConstraints };
   }
 
   function cloneConstraintForBlock(constraint, pointById, lineById, primitiveById, origin = { x: 0, y: 0 }, preserveReference = false) {
@@ -3026,14 +3358,19 @@
       for (const key of ["start", "elbow", "end"]) if (cloned[key]) cloned[key] = { x: cloned[key].x - origin.x, y: cloned[key].y - origin.y };
       return cloned;
     });
-    const definition = { id: `B${blockDefinitionSeq++}`, name, parentDefinitionId: null, origin: { x: 0, y: 0 }, ...sketchState, points, lines, circles, arcs, annotations, blockInstances, constraints, parameters: [], nextDimensionParameterIndex: 1, revision: 1 };
+    const hatches = (selection.hatches || []).map((source) => ({
+      ...serializeHatch(source),
+      sketchId: DEFAULT_SKETCH_ID,
+      seed: { x: source.seed.x - origin.x, y: source.seed.y - origin.y },
+    }));
+    const definition = { id: `B${blockDefinitionSeq++}`, name, parentDefinitionId: null, origin: { x: 0, y: 0 }, ...sketchState, points, lines, circles, arcs, annotations, hatches, nextHatchIndex: Math.max(1, nextSeq(hatches, "H")), blockInstances, constraints, parameters: [], nextDimensionParameterIndex: 1, revision: 1 };
     ensureParameterNamespace(definition);
     return definition;
   }
 
   function createEmptyBlockDefinition(name) {
     const sketchState = createBlockSketchState();
-    return { id: `B${blockDefinitionSeq++}`, name, parentDefinitionId: null, origin: { x: 0, y: 0 }, ...sketchState, points: [], lines: [], circles: [], arcs: [], annotations: [], blockInstances: [], constraints: [], parameters: [], nextDimensionParameterIndex: 1, revision: 1 };
+    return { id: `B${blockDefinitionSeq++}`, name, parentDefinitionId: null, origin: { x: 0, y: 0 }, ...sketchState, points: [], lines: [], circles: [], arcs: [], annotations: [], hatches: [], nextHatchIndex: 1, blockInstances: [], constraints: [], parameters: [], nextDimensionParameterIndex: 1, revision: 1 };
   }
 
   function cloneBlockDefinition(definition) {
@@ -3086,6 +3423,8 @@
       circles,
       arcs,
       annotations: normalizeAnnotations(definition.annotations, definition.activeSketchId).map((annotation) => serializeAnnotation(annotation)),
+      hatches: normalizeHatches(definition.hatches, definition.activeSketchId).map(serializeHatch),
+      nextHatchIndex: Math.max(nextSeq(definition.hatches || [], "H"), Number(definition.nextHatchIndex) || 1),
       blockInstances,
       constraints,
       parameters: (definition.parameters || []).map((parameter) => ({ name: parameter.name, expression: parameter.expression })),
@@ -3185,6 +3524,8 @@
     session.draft.circles = model.circles;
     session.draft.arcs = model.arcs;
     session.draft.annotations = model.annotations;
+    session.draft.hatches = model.hatches;
+    session.draft.nextHatchIndex = Math.max(hatchSeq, Number(model.nextHatchIndex) || 1);
     session.draft.blockInstances = model.blockInstances;
     session.draft.constraints = model.constraints;
     session.draft.parameters = model.parameters;
@@ -3302,6 +3643,8 @@
       circles: model.circles,
       arcs: model.arcs,
       annotations: model.annotations,
+      hatches: model.hatches,
+      nextHatchIndex: model.nextHatchIndex,
       constraints: model.constraints,
       parameters: model.parameters,
       nextDimensionParameterIndex: model.nextDimensionParameterIndex,
@@ -3311,7 +3654,7 @@
       viewport: { ...viewport },
     };
     const defaultName = `Block-${blockDefinitionSeq}`;
-    const hasGeometrySelection = selectedLines.length + selectedCircles.length + selectedArcs.length + selectedAnnotations.length > 0;
+    const hasGeometrySelection = selectedLines.length + selectedCircles.length + selectedArcs.length + selectedAnnotations.length + selectedHatches.length > 0;
     let selection = null;
     let origin = { x: 0, y: 0 };
     if (hasGeometrySelection || selectedBlockInstances.length > 0) {
@@ -3411,6 +3754,8 @@
       circles: model.circles,
       arcs: model.arcs,
       annotations: model.annotations,
+      hatches: model.hatches,
+      nextHatchIndex: model.nextHatchIndex,
       constraints: model.constraints,
       parameters: model.parameters,
       nextDimensionParameterIndex: model.nextDimensionParameterIndex,
@@ -3444,6 +3789,8 @@
     model.circles = draft.circles;
     model.arcs = draft.arcs;
     model.annotations = draft.annotations || [];
+    model.hatches = draft.hatches || [];
+    model.nextHatchIndex = Math.max(nextSeq(model.hatches, "H"), Number(draft.nextHatchIndex) || 1);
     model.constraints = draft.constraints;
     model.parameters = draft.parameters || [];
     model.nextDimensionParameterIndex = Math.max(1, Number(draft.nextDimensionParameterIndex) || 1);
@@ -3453,11 +3800,12 @@
     reserveGeometryElementSequences(draft);
     sketchSeq = Math.max(sketchSeq, nextSeq(draft.sketches || [], "S"));
     annotationSeq = Math.max(annotationSeq, nextSeq(draft.annotations || [], "AN"));
+    hatchSeq = Math.max(hatchSeq, model.nextHatchIndex, nextSeq(draft.hatches || [], "H"));
     resetBlockEditorHistory();
     clearSelection();
     mode = "select";
     document.body.classList.add("block-editing");
-    if (draft.lines.length + draft.circles.length + draft.arcs.length + (draft.annotations?.length || 0) + model.blockInstances.length > 0) fitAllGeometryToViewport();
+    if (draft.lines.length + draft.circles.length + draft.arcs.length + (draft.annotations?.length || 0) + (draft.hatches?.length || 0) + model.blockInstances.length > 0) fitAllGeometryToViewport();
     else {
       const rect = canvas.getBoundingClientRect();
       viewport.scale = 1;
@@ -3491,7 +3839,7 @@
   }
 
   function validateBlockDraft(draft) {
-    if (draft.lines.length + draft.circles.length + draft.arcs.length + (draft.annotations?.length || 0) + (draft.blockInstances?.length || 0) === 0) return { success: false, reason: applicationText("ブロックには図形または注記が必要です", "A block must contain geometry or annotations") };
+    if (draft.lines.length + draft.circles.length + draft.arcs.length + (draft.annotations?.length || 0) + (draft.hatches?.length || 0) + (draft.blockInstances?.length || 0) === 0) return { success: false, reason: applicationText("ブロックには図形、ハッチングまたは注記が必要です", "A block must contain geometry, hatching, or annotations") };
     const outOfScopeInstance = (draft.blockInstances || []).find((instance) => blockDefinitionById(instance.definitionId)?.parentDefinitionId !== draft.id);
     if (outOfScopeInstance) return { success: false, reason: "現在のブロックに属さない子ブロックが含まれています" };
     const cycle = blockDefinitionCyclePath(draft.id);
@@ -3529,6 +3877,10 @@
       annotation.x += dx;
       annotation.y += dy;
       for (const key of ["start", "elbow", "end"]) if (annotation[key]) annotation[key] = { x: annotation[key].x + dx, y: annotation[key].y + dy };
+    }
+    for (const hatch of definition.hatches || []) {
+      hatch.seed.x += dx;
+      hatch.seed.y += dy;
     }
   }
 
@@ -3612,6 +3964,8 @@
     target.circles = circles;
     target.arcs = arcs;
     target.annotations = normalizeAnnotations(draft.annotations, draft.activeSketchId).map((annotation) => serializeAnnotation(annotation));
+    target.hatches = normalizeHatches(draft.hatches, draft.activeSketchId).map(serializeHatch);
+    target.nextHatchIndex = Math.max(hatchSeq, Number(draft.nextHatchIndex) || 1, nextSeq(target.hatches, "H"));
     target.blockInstances = blockInstances;
     target.constraints = constraints;
     target.parameters = (draft.parameters || []).map((parameter) => ({ name: parameter.name, expression: parameter.expression }));
@@ -3627,6 +3981,8 @@
     model.circles = original.circles;
     model.arcs = original.arcs;
     model.annotations = original.annotations || [];
+    model.hatches = original.hatches || [];
+    model.nextHatchIndex = Math.max(nextSeq(model.hatches, "H"), Number(original.nextHatchIndex) || 1);
     model.constraints = original.constraints;
     model.parameters = original.parameters || [];
     model.nextDimensionParameterIndex = Math.max(1, Number(original.nextDimensionParameterIndex) || 1);
@@ -3668,6 +4024,8 @@
     draft.circles = model.circles;
     draft.arcs = model.arcs;
     draft.annotations = model.annotations;
+    draft.hatches = model.hatches;
+    draft.nextHatchIndex = Math.max(hatchSeq, Number(model.nextHatchIndex) || 1);
     draft.blockInstances = model.blockInstances;
     draft.constraints = model.constraints;
     draft.parameters = model.parameters;
@@ -3719,6 +4077,7 @@
         model.arcs = model.arcs.filter((arc) => !creationSelection.arcs.includes(arc));
         model.points = model.points.filter((point) => !creationSelection.points.includes(point));
         model.annotations = model.annotations.filter((annotation) => !(creationSelection.annotations || []).includes(annotation));
+        model.hatches = model.hatches.filter((hatch) => !(creationSelection.hatches || []).includes(hatch));
         model.blockInstances = model.blockInstances.filter((instance) => !(creationSelection.blockInstances || []).includes(instance));
       }
     }
@@ -4062,6 +4421,7 @@
     model.nextDimensionParameterIndex = 1;
     model.blockDefinitions.length = 0;
     model.blockInstances.length = 0;
+    model.hatches.length = 0;
     invalidateBlockProjectionCache();
     sketchSolveStates.clear();
     invalidReferenceConstraints.clear();
@@ -4102,14 +4462,17 @@
     selectedDimensionConstraint = null;
     selectedConstraint = null;
     selectedAnnotations = [];
+    selectedHatches = [];
     selectedBlockInstances = [];
     hoveredBlockInstance = null;
+    hoveredHatch = null;
     pointSeq = 1;
     lineSeq = 1;
     circleSeq = 1;
     arcSeq = 1;
     sketchSeq = 2;
     annotationSeq = 1;
+    hatchSeq = 1;
     blockDefinitionSeq = 1;
     blockInstanceSeq = 1;
     blockElementSeq = 1;
@@ -4127,6 +4490,12 @@
     model.defaultConstructionAppearance = { ...DEFAULT_CONSTRUCTION_APPEARANCE };
     model.defaultDimensionAppearance = { ...DEFAULT_DIMENSION_APPEARANCE };
     model.annotations = [];
+    model.hatches = [];
+    model.nextHatchIndex = 1;
+    hatchPreview = null;
+    hatchRepairTarget = null;
+    hatchResolutionCache = new WeakMap();
+    hatchFaceCache = new Map();
     sketchTreeGroupOpenState.clear();
     annotationDragSession = null;
   }
@@ -4144,11 +4513,12 @@
     lineSeq = Math.max(lineSeq, nextSeq(source?.lines || [], "L"));
     circleSeq = Math.max(circleSeq, nextSeq(source?.circles || [], "C"));
     arcSeq = Math.max(arcSeq, nextSeq(source?.arcs || [], "A"));
+    hatchSeq = Math.max(hatchSeq, nextSeq(source?.hatches || [], "H"));
   }
 
   function duplicateBlockElementId(definition) {
     const seen = new Set();
-    for (const item of [...(definition?.points || []), ...(definition?.lines || []), ...(definition?.circles || []), ...(definition?.arcs || []), ...(definition?.blockInstances || [])]) {
+    for (const item of [...(definition?.points || []), ...(definition?.lines || []), ...(definition?.circles || []), ...(definition?.arcs || []), ...(definition?.hatches || []), ...(definition?.blockInstances || [])]) {
       const id = String(item?.id || "");
       if (seen.has(id)) return id;
       seen.add(id);
@@ -4412,6 +4782,8 @@
       })),
       activeSketchId: activeSketchId(),
       annotations: normalizeAnnotations(model.annotations).map(serializeAnnotation),
+      hatches: normalizeHatches(model.hatches).map(serializeHatch),
+      nextHatchIndex: Math.max(hatchSeq, Number(model.nextHatchIndex) || 1),
       parameters: model.parameters.map((parameter) => ({ name: parameter.name, expression: parameter.expression })),
       nextDimensionParameterIndex: model.nextDimensionParameterIndex,
       blockDefinitions: model.blockDefinitions.map((definition) => ({
@@ -4437,6 +4809,8 @@
         circles: definition.circles.map((circle) => ({ id: circle.id, center: circle.center.id, radius: circle.radius(), construction: Boolean(circle.construction), sketchId: circle.sketchId, appearance: normalizeAppearance(circle.appearance) })),
         arcs: definition.arcs.map((arc) => ({ id: arc.id, center: arc.center.id, radius: arc.radius(), startAngle: arc.startAngle, endAngle: arc.endAngle, construction: Boolean(arc.construction), sketchId: arc.sketchId, appearance: normalizeAppearance(arc.appearance) })),
         annotations: normalizeAnnotations(definition.annotations, definition.activeSketchId).map(serializeAnnotation),
+        hatches: normalizeHatches(definition.hatches, definition.activeSketchId).map(serializeHatch),
+        nextHatchIndex: Math.max(nextSeq(definition.hatches || [], "H"), Number(definition.nextHatchIndex) || 1),
         blockInstances: (definition.blockInstances || []).map((instance) => ({
           id: instance.id,
           definitionId: instance.definitionId,
@@ -4506,6 +4880,8 @@
       circles: model.circles,
       arcs: model.arcs,
       annotations: model.annotations,
+      hatches: model.hatches,
+      nextHatchIndex: model.nextHatchIndex,
       blockInstances: model.blockInstances,
       constraints: model.constraints,
       parameters: model.parameters,
@@ -4530,6 +4906,8 @@
       circles: definition.circles.map((circle) => ({ id: circle.id, center: circle.center.id, radius: circle.radius(), construction: Boolean(circle.construction), sketchId: circle.sketchId })),
       arcs: definition.arcs.map((arc) => ({ id: arc.id, center: arc.center.id, radius: arc.radius(), startAngle: arc.startAngle, endAngle: arc.endAngle, construction: Boolean(arc.construction), sketchId: arc.sketchId })),
       annotations: normalizeAnnotations(definition.annotations, definition.activeSketchId).map(serializeAnnotation),
+      hatches: normalizeHatches(definition.hatches, definition.activeSketchId).map(serializeHatch),
+      nextHatchIndex: Math.max(nextSeq(definition.hatches || [], "H"), Number(definition.nextHatchIndex) || 1),
       blockInstances: (definition.blockInstances || []).map((instance) => ({
         id: instance.id,
         definitionId: instance.definitionId,
@@ -4643,6 +5021,8 @@
       model.circles = restored.circles;
       model.arcs = restored.arcs;
       model.annotations = restored.annotations || [];
+      model.hatches = restored.hatches || [];
+      model.nextHatchIndex = Math.max(nextSeq(model.hatches, "H"), Number(restored.nextHatchIndex) || 1);
       model.constraints = restored.constraints;
       model.parameters = restored.parameters || [];
       model.nextDimensionParameterIndex = Math.max(1, Number(restored.nextDimensionParameterIndex) || 1);
@@ -4652,6 +5032,7 @@
       reserveGeometryElementSequences(restored);
       sketchSeq = Math.max(sketchSeq, nextSeq(restored.sketches || [], "S"));
       annotationSeq = Math.max(annotationSeq, nextSeq(restored.annotations || [], "AN"));
+      hatchSeq = Math.max(hatchSeq, model.nextHatchIndex, nextSeq(restored.hatches || [], "H"));
       invalidateBlockProjectionCache();
       clearInteractionForSketchChange();
       solveAndRefresh(label);
@@ -4916,6 +5297,18 @@
           }
           return normalizeAnnotations(rawAnnotations, normalizeDefinitionSketchId(rawDefinition.activeSketchId));
         })(),
+        hatches: (() => {
+          if (sourceVersion < 13) return [];
+          if (!Number.isInteger(Number(rawDefinition.nextHatchIndex)) || Number(rawDefinition.nextHatchIndex) < 1) throw new Error(`${applicationText("ブロックハッチングの採番値が正しくありません", "Invalid block hatch sequence")}`);
+          if (!validSerializedHatchList(rawDefinition.hatches)) throw new Error(`${applicationText("ブロックハッチングの形式が正しくありません", "Invalid block hatch data")}`);
+          const rawHatches = rawDefinition.hatches;
+          const invalidOwner = rawHatches.find((hatch) => hatch?.sketchId === ROOT_SKETCH_ID || !definitionSketchIds.has(String(hatch?.sketchId || "")));
+          if (invalidOwner) throw new Error(`${applicationText("ブロックハッチング", "Block hatch")} ${invalidOwner?.id || "?"}: ${applicationText("所属Sketchが正しくありません", "invalid owning sketch")}`);
+          const normalized = normalizeHatches(rawHatches, normalizeDefinitionSketchId(rawDefinition.activeSketchId));
+          if (normalized.length !== rawHatches.length) throw new Error(`${applicationText("ブロックハッチングの形式が正しくありません", "Invalid block hatch data")}`);
+          return normalized;
+        })(),
+        nextHatchIndex: Math.max(1, Number(rawDefinition.nextHatchIndex) || 1),
         blockInstances: [],
         constraints: [],
         revision: Number(rawDefinition.revision) || 0,
@@ -4931,13 +5324,13 @@
     const loadedDefinitionById = (definitionId) => loadedBlockDefinitions.find((definition) => definition.id === definitionId) || null;
     const loadedDefinitionHasGeometry = (definition, visiting = new Set()) => {
       if (!definition || visiting.has(definition.id)) return false;
-      if (definition.lines.length + definition.circles.length + definition.arcs.length + definition.annotations.length > 0) return true;
+      if (definition.lines.length + definition.circles.length + definition.arcs.length + definition.hatches.length + definition.annotations.length > 0) return true;
       const next = new Set(visiting).add(definition.id);
       return definition.blockInstances.some((instance) => loadedDefinitionHasGeometry(loadedDefinitionById(instance.definitionId), next));
     };
     const loadedDefinitionGeometrySketchIds = (definition) => {
       if (!definition) return [];
-      const ids = new Set([...definition.lines, ...definition.circles, ...definition.arcs, ...definition.annotations].map((item) => String(item.sketchId)));
+      const ids = new Set([...definition.lines, ...definition.circles, ...definition.arcs, ...definition.hatches, ...definition.annotations].map((item) => String(item.sketchId)));
       for (const instance of definition.blockInstances) if (loadedDefinitionHasGeometry(loadedDefinitionById(instance.definitionId))) ids.add(String(instance.sketchId));
       return blockDefinitionDrawableSketchIds(definition).filter((id) => ids.has(id));
     };
@@ -5084,6 +5477,8 @@
       instance.enabledSketchIds = enabled.length > 0 ? [...new Set(enabled)] : loadedDefinitionGeometrySketchIds(definition);
     }
     const rawLoadedAnnotations = Array.isArray(data.annotations) ? data.annotations : [];
+    if (sourceVersion >= 13 && (!validSerializedHatchList(data.hatches) || !Number.isInteger(Number(data.nextHatchIndex)) || Number(data.nextHatchIndex) < 1)) throw new Error(applicationText("ハッチングの形式または採番値が正しくありません", "Invalid hatch data or sequence"));
+    const rawLoadedHatches = sourceVersion >= 13 ? data.hatches : [];
 
     const pointById = new Map();
     const points = [];
@@ -5180,6 +5575,12 @@
     }
     const loadedAnnotationFallback = normalizeSketchId(data.activeSketchId);
     const loadedAnnotations = normalizeAnnotations(rawLoadedAnnotations, loadedAnnotationFallback);
+    if (sourceVersion >= 13) {
+      const invalidHatchOwner = rawLoadedHatches.find((hatch) => hatch?.sketchId === ROOT_SKETCH_ID || !loadedSketchIds.has(String(hatch?.sketchId || "")));
+      if (invalidHatchOwner) throw new Error(`${applicationText("ハッチング", "Hatch")} ${invalidHatchOwner?.id || "?"}: ${applicationText("所属Sketchが正しくありません", "invalid owning sketch")}`);
+    }
+    const loadedHatches = normalizeHatches(rawLoadedHatches, loadedAnnotationFallback);
+    if (sourceVersion >= 13 && loadedHatches.length !== rawLoadedHatches.length) throw new Error(applicationText("ハッチングの形式が正しくありません", "Invalid hatch data"));
     const resolveLoadedGeometryRef = (ref) => resolveGeometryRefValue(ref, (kind, canonicalId) => {
       if (kind === "point") return pointById.get(canonicalId) || null;
       if (kind === "line") return lineById.get(canonicalId) || null;
@@ -5237,6 +5638,8 @@
     model.defaultConstructionAppearance = normalizeConstructionAppearance(data.defaultConstructionAppearance, { partial: false });
     model.defaultDimensionAppearance = normalizeLoadedDimensionAppearance(data.defaultDimensionAppearance, { partial: false });
     model.annotations = loadedAnnotations;
+    model.hatches = loadedHatches;
+    model.nextHatchIndex = Math.max(nextSeq(loadedHatches, "H"), Number(data.nextHatchIndex) || 1);
     model.blockDefinitions = loadedBlockDefinitions;
     model.blockInstances = loadedBlockInstances;
     invalidateBlockProjectionCache();
@@ -5265,12 +5668,14 @@
       lines: [...model.lines, ...model.blockDefinitions.flatMap((definition) => definition.lines)],
       circles: [...model.circles, ...model.blockDefinitions.flatMap((definition) => definition.circles)],
       arcs: [...model.arcs, ...model.blockDefinitions.flatMap((definition) => definition.arcs)],
+      hatches: [...model.hatches, ...model.blockDefinitions.flatMap((definition) => definition.hatches || [])],
     });
     sketchSeq = Math.max(
       nextSeq(model.sketches, "S"),
       ...model.blockDefinitions.map((definition) => nextSeq(definition.sketches || [], "S")),
     );
     annotationSeq = Math.max(nextSeq(model.annotations, "AN"), ...model.blockDefinitions.map((definition) => nextSeq(definition.annotations || [], "AN")));
+    hatchSeq = Math.max(model.nextHatchIndex, nextSeq(model.hatches, "H"), ...model.blockDefinitions.map((definition) => Math.max(Number(definition.nextHatchIndex) || 1, nextSeq(definition.hatches || [], "H"))));
     blockDefinitionSeq = nextSeq(model.blockDefinitions, "B");
     blockInstanceSeq = nextSeq([...model.blockInstances, ...model.blockDefinitions.flatMap((definition) => definition.blockInstances || [])], "BI");
     blockElementSeq = Math.max(1, ...model.blockDefinitions.flatMap((definition) => [...definition.points, ...definition.lines, ...definition.circles, ...definition.arcs].map((element) => Number(/^[PLCA](\d+)$/.exec(element.id || "")?.[1]) + 1 || 1)));
@@ -5363,11 +5768,13 @@
     selectedDimensionConstraint = null;
     selectedConstraint = null;
     selectedAnnotations = [];
+    selectedHatches = [];
     constraintOperands = [];
     hoveredSketchIdentity = null;
     hoveredBlockInstance = null;
     hoveredSidebarItem = null;
     hoveredAnnotation = null;
+    hoveredHatch = null;
   }
 
   function selectableSketchElement(item) {
@@ -5401,6 +5808,8 @@
     pointerPreview = null;
     trimPreview = null;
     offsetSource = null;
+    hatchPreview = null;
+    hatchRepairTarget = null;
     clearSnap();
     mode = "select";
     updateToolbar();
@@ -5519,6 +5928,8 @@
     pointerPreview = null;
     trimPreview = null;
     offsetSource = null;
+    hatchPreview = null;
+    hatchRepairTarget = null;
     clearSnap();
     clearSelection();
     setHint("作図操作をキャンセルしました");
@@ -5794,6 +6205,7 @@
       if (elementSketchId(point) === sketchId) bounds = mergeBounds(bounds, { x1: point.x, y1: point.y, x2: point.x, y2: point.y });
     }
     for (const annotation of allAnnotations()) if (annotation.sketchId === sketchId) bounds = mergeBounds(bounds, annotationBounds(annotation));
+    for (const hatch of allHatches()) if (hatch.sketchId === sketchId) bounds = mergeBounds(bounds, resolvedLoopBounds(resolvedHatchBoundary(hatch)));
     return bounds;
   }
 
@@ -5804,6 +6216,7 @@
     for (const arc of allGeometryArcs()) bounds = mergeBounds(bounds, primitiveBBox(arc));
     for (const point of allGeometryPoints()) bounds = mergeBounds(bounds, { x1: point.x, y1: point.y, x2: point.x, y2: point.y });
     for (const annotation of allAnnotations()) bounds = mergeBounds(bounds, annotationBounds(annotation));
+    for (const hatch of allHatches()) bounds = mergeBounds(bounds, resolvedLoopBounds(resolvedHatchBoundary(hatch)));
     return bounds;
   }
 
@@ -5826,6 +6239,7 @@
       if (isVisibleOnCanvasGeometry(point)) bounds = mergeBounds(bounds, { x1: point.x, y1: point.y, x2: point.x, y2: point.y });
     }
     for (const annotation of allAnnotations()) if (annotation.visible !== false && isVisibleSketchId(annotation.sketchId)) bounds = mergeBounds(bounds, annotationBounds(annotation));
+    for (const hatch of allHatches()) if (hatchAppearanceForDisplay(hatch).visible !== false && isVisibleSketchId(hatch.sketchId)) bounds = mergeBounds(bounds, resolvedLoopBounds(resolvedHatchBoundary(hatch)));
     return bounds;
   }
 
@@ -6504,6 +6918,10 @@
       if ((bundle.annotations || []).some((annotation) => {
         const bounds = annotationBounds(annotation);
         return bounds && x >= bounds.x1 - threshold && x <= bounds.x2 + threshold && y >= bounds.y1 - threshold && y <= bounds.y2 + threshold;
+      })) return instance;
+      if ((bundle.hatches || []).some((hatch) => {
+        const resolved = resolvedHatchBoundary(hatch);
+        return resolved.ok && hatchAppearanceForDisplay(hatch).visible !== false && hatchContainsPoint(resolved, { x, y });
       })) return instance;
     }
     return null;
@@ -7617,9 +8035,14 @@
 
   function deleteCurrentSelection() {
     const annotationsToDelete = selectedAnnotations.filter((annotation) => model.annotations.includes(annotation));
+    const hatchesToDelete = selectedHatches.filter((hatch) => model.hatches.includes(hatch));
     if (annotationsToDelete.length > 0) {
       model.annotations = model.annotations.filter((item) => !annotationsToDelete.includes(item));
       selectedAnnotations = [];
+    }
+    if (hatchesToDelete.length > 0) {
+      model.hatches = model.hatches.filter((item) => !hatchesToDelete.includes(item));
+      selectedHatches = [];
     }
     let deletedBlockCount = 0;
     if (selectedBlockInstances.length > 0) {
@@ -7642,15 +8065,15 @@
     const constraints = [...new Set([selectedDimensionConstraint, effectiveSelectedConstraint()].filter(Boolean))];
     const deletedGeometry = deleteElements({ points: selectedPoints, lines: selectedLines, circles: selectedCircles, arcs: selectedArcs, constraints });
     if (deletedGeometry) return true;
-    if (deletedBlockCount === 0 && annotationsToDelete.length === 0) return false;
+    if (deletedBlockCount === 0 && annotationsToDelete.length === 0 && hatchesToDelete.length === 0) return false;
     clearSelection();
     if (deletedBlockCount > 0) solveAndRefresh("ブロック削除");
     else {
       updateUI();
       draw();
-      recordHistory("注記削除");
+      recordHistory(hatchesToDelete.length ? "ハッチング削除" : "注記削除");
     }
-    setHint(applicationText(`削除しました: ブロック${deletedBlockCount} / 注記${annotationsToDelete.length}`, `Deleted: blocks ${deletedBlockCount} / annotations ${annotationsToDelete.length}`));
+    setHint(applicationText(`削除しました: ブロック${deletedBlockCount} / ハッチング${hatchesToDelete.length} / 注記${annotationsToDelete.length}`, `Deleted: blocks ${deletedBlockCount} / hatches ${hatchesToDelete.length} / annotations ${annotationsToDelete.length}`));
     return true;
   }
 
@@ -7661,6 +8084,7 @@
     const arcs = selectedArcs.filter((arc) => model.arcs.includes(arc));
     const blockInstances = selectedBlockInstances.filter((instance) => model.blockInstances.includes(instance));
     const annotations = selectedAnnotations.filter((annotation) => model.annotations.includes(annotation));
+    const hatches = selectedHatches.filter((hatch) => model.hatches.includes(hatch));
     const dependentPoints = new Set();
     for (const line of lines) {
       points.add(line.p1);
@@ -7672,7 +8096,7 @@
       points.add(primitive.center);
       dependentPoints.add(primitive.center);
     }
-    if (points.size + lines.length + circles.length + arcs.length + blockInstances.length + annotations.length === 0) return null;
+    if (points.size + lines.length + circles.length + arcs.length + blockInstances.length + annotations.length + hatches.length === 0) return null;
 
     const selectedNodes = new Set([...points, ...lines, ...circles, ...arcs, ...blockInstances]);
     const selectedBlockProjectionIds = new Set();
@@ -7696,6 +8120,14 @@
       const referenced = resolveGeometryRef(annotation.geometryRef);
       if (!referenced || (!selectedNodes.has(referenced) && !selectedBlockProjectionIds.has(referenced.id))) {
         setHint(applicationText(`注記 ${annotation.id} の参照先も選択してください`, `Also select the target referenced by annotation ${annotation.id}`), "error");
+        return null;
+      }
+    }
+    const selectedBoundaryKeys = new Set([...lines, ...circles, ...arcs].map((item) => `${item instanceof Line ? "line" : item instanceof Circle ? "circle" : "arc"}:${item.id}`));
+    for (const hatch of hatches) {
+      const missing = hatchBoundaryGeometryRefs(hatch.boundaryLoops).filter((ref) => !selectedBoundaryKeys.has(`${ref.kind}:${geometryRefId(ref)}`));
+      if (missing.length) {
+        setHint(applicationText(`ハッチング ${hatch.id} の境界 ${missing.map(geometryRefId).join("、")} も選択してください`, `Also select boundary ${missing.map(geometryRefId).join(", ")} for hatch ${hatch.id}`), "error");
         return null;
       }
     }
@@ -7736,6 +8168,7 @@
         projection: blockProjectionData.get(instance),
       })),
       annotations: annotations.map(serializeAnnotation),
+      hatches: hatches.map(serializeHatch),
       selection: {
         points: selectedPoints.filter((point) => points.has(point)).map((point) => point.id),
         lines: lines.map((line) => line.id),
@@ -7743,13 +8176,14 @@
         arcs: arcs.map((arc) => arc.id),
         blockInstances: blockInstances.map((instance) => instance.id),
         annotations: annotations.map((annotation) => annotation.id),
+        hatches: hatches.map((hatch) => hatch.id),
       },
     };
   }
 
   function clipboardPayloadCount(payload = geometryClipboard) {
     if (!payload) return 0;
-    return payload.points.length + payload.lines.length + payload.circles.length + payload.arcs.length + payload.blockInstances.length + (payload.annotations?.length || 0);
+    return payload.points.length + payload.lines.length + payload.circles.length + payload.arcs.length + payload.blockInstances.length + (payload.hatches?.length || 0) + (payload.annotations?.length || 0);
   }
 
   function copySelectionToClipboard(options = {}) {
@@ -7854,8 +8288,9 @@
       constraints: model.constraints.length,
       blockInstances: model.blockInstances.length,
       annotations: model.annotations.length,
+      hatches: model.hatches.length,
     };
-    const initialSequences = { pointSeq, lineSeq, circleSeq, arcSeq, annotationSeq, blockInstanceSeq, nextDimensionParameterIndex: model.nextDimensionParameterIndex };
+    const initialSequences = { pointSeq, lineSeq, circleSeq, arcSeq, annotationSeq, hatchSeq, nextHatchIndex: model.nextHatchIndex, blockInstanceSeq, nextDimensionParameterIndex: model.nextDimensionParameterIndex };
 
     try {
       const idMap = new Map();
@@ -7931,6 +8366,25 @@
         pastedAnnotations.push(annotation);
         idMap.set(source.id, annotation.id);
       }
+      const pastedHatches = [];
+      for (const source of payload.hatches || []) {
+        const boundaryLoops = rewriteHatchBoundaryRefs(source.boundaryLoops, (ref) => {
+          const mappedId = idMap.get(geometryRefId(ref));
+          return mappedId ? createGeometryRef(ref.kind, mappedId) : null;
+        });
+        if (!boundaryLoops) throw new Error(`${source.id}: ${applicationText("ハッチング境界を書き換えられません", "Could not rewrite hatch boundary")}`);
+        const hatch = {
+          ...serializeHatch(source),
+          id: `H${hatchSeq++}`,
+          sketchId: targetSketchId,
+          seed: { x: Number(source.seed?.x) + dx, y: Number(source.seed?.y) + dy },
+          boundaryLoops,
+        };
+        model.hatches.push(hatch);
+        pastedHatches.push(hatch);
+        idMap.set(source.id, hatch.id);
+      }
+      model.nextHatchIndex = Math.max(hatchSeq, Number(model.nextHatchIndex) || 1);
 
       const targetNamespaceKey = currentBlockDefinitionScopeId() ? `block:${currentBlockDefinitionScopeId()}` : "document";
       const sameNamespace = payload.parameterNamespaceKey === targetNamespaceKey;
@@ -7969,6 +8423,7 @@
       selectedArcs = selectedIds.arcs.map((id) => primitiveById.get(idMap.get(id))).filter((item) => item instanceof Arc);
       selectedBlockInstances = pastedBlockInstances;
       selectedAnnotations = (selectedIds.annotations || []).map((id) => pastedAnnotations.find((annotation) => annotation.id === idMap.get(id))).filter(Boolean);
+      selectedHatches = (selectedIds.hatches || []).map((id) => pastedHatches.find((hatch) => hatch.id === idMap.get(id))).filter(Boolean);
       payload.pasteCount = pasteNumber;
       mode = "select";
       solveAndRefresh("貼り付け");
@@ -7982,12 +8437,15 @@
       model.constraints.length = initialLengths.constraints;
       model.blockInstances.length = initialLengths.blockInstances;
       model.annotations.length = initialLengths.annotations;
+      model.hatches.length = initialLengths.hatches;
       pointSeq = initialSequences.pointSeq;
       lineSeq = initialSequences.lineSeq;
       circleSeq = initialSequences.circleSeq;
       arcSeq = initialSequences.arcSeq;
       blockInstanceSeq = initialSequences.blockInstanceSeq;
       annotationSeq = initialSequences.annotationSeq;
+      hatchSeq = initialSequences.hatchSeq;
+      model.nextHatchIndex = initialSequences.nextHatchIndex;
       model.nextDimensionParameterIndex = initialSequences.nextDimensionParameterIndex;
       invalidateBlockProjectionCache();
       clearSelection();
@@ -8108,6 +8566,7 @@
     const nextArcs = additive ? [...selectedArcs] : [];
     const nextBlocks = additive ? [...selectedBlockInstances] : [];
     const nextAnnotations = additive ? [...selectedAnnotations] : [];
+    const nextHatches = additive ? [...selectedHatches] : [];
 
     for (const p of model.points) {
       if (!selectableSketchElement(p)) continue;
@@ -8142,6 +8601,7 @@
       for (const arc of bundle.arcs) box = mergeBounds(box, primitiveBBox(arc));
       for (const point of bundle.points) box = mergeBounds(box, { x1: point.x, y1: point.y, x2: point.x, y2: point.y });
       for (const annotation of bundle.annotations || []) box = mergeBounds(box, annotationBounds(annotation));
+      for (const hatch of bundle.hatches || []) box = mergeBounds(box, resolvedLoopBounds(resolvedHatchBoundary(hatch)));
       if (!box) continue;
       const selected = crossing ? bboxIntersectsRect(box, rect) : bboxInRect(box, rect);
       if (selected) addUnique(nextBlocks, instance);
@@ -8153,6 +8613,13 @@
       const selected = crossing ? bboxIntersectsRect(box, rect) : bboxInRect(box, rect);
       if (selected) addUnique(nextAnnotations, annotation);
     }
+    for (const hatch of model.hatches) {
+      if (hatch.sketchId !== activeSketchId() || hatchAppearanceForDisplay(hatch).visible === false || !isVisibleSketchId(hatch.sketchId)) continue;
+      const box = resolvedLoopBounds(resolvedHatchBoundary(hatch));
+      if (!box) continue;
+      const selected = crossing ? bboxIntersectsRect(box, rect) : bboxInRect(box, rect);
+      if (selected) addUnique(nextHatches, hatch);
+    }
 
     selectedPoints = nextPoints;
     selectedLines = nextLines;
@@ -8160,6 +8627,7 @@
     selectedArcs = nextArcs;
     selectedBlockInstances = nextBlocks;
     selectedAnnotations = nextAnnotations;
+    selectedHatches = nextHatches;
     selectedArcEndpoint = null;
     selectedArcEndpointPair = null;
     selectedDimensionConstraint = null;
@@ -8192,6 +8660,104 @@
     resetCanvasStrokeState();
   }
 
+  function hatchAppearanceForDisplay(hatch) {
+    return normalizeHatchAppearance(hatch?.appearance);
+  }
+
+  function hatchPatternOrigin(hatch) {
+    return hatch?.patternOrigin || { x: 0, y: 0 };
+  }
+
+  function resolvedLoopBounds(resolved) {
+    const points = resolved?.loops?.flatMap((loop) => loop.points || []) || [];
+    if (!points.length) return null;
+    return {
+      x1: Math.min(...points.map((point) => point.x)),
+      y1: Math.min(...points.map((point) => point.y)),
+      x2: Math.max(...points.map((point) => point.x)),
+      y2: Math.max(...points.map((point) => point.y)),
+    };
+  }
+
+  function visibleWorldBounds() {
+    const rect = canvas.getBoundingClientRect();
+    return {
+      x1: -viewport.x / viewport.scale,
+      y1: -viewport.y / viewport.scale,
+      x2: (rect.width - viewport.x) / viewport.scale,
+      y2: (rect.height - viewport.y) / viewport.scale,
+    };
+  }
+
+  function intersectBounds(a, b) {
+    if (!a || !b) return null;
+    const result = { x1: Math.max(a.x1, b.x1), y1: Math.max(a.y1, b.y1), x2: Math.min(a.x2, b.x2), y2: Math.min(a.y2, b.y2) };
+    return result.x1 <= result.x2 && result.y1 <= result.y2 ? result : null;
+  }
+
+  function traceResolvedHatchPath(resolved) {
+    ctx.beginPath();
+    for (const loop of resolved?.loops || []) {
+      if (!loop.points?.length) continue;
+      ctx.moveTo(loop.points[0].x, loop.points[0].y);
+      for (let index = 1; index < loop.points.length; index++) ctx.lineTo(loop.points[index].x, loop.points[index].y);
+      ctx.closePath();
+    }
+  }
+
+  function drawResolvedHatch(resolved, appearance, origin = { x: 0, y: 0 }, { selected = false, hovered = false, preview = false, alpha = 1 } = {}) {
+    if (!resolved?.ok || !resolved.loops?.length || appearance.visible === false) return;
+    const bounds = intersectBounds(resolvedLoopBounds(resolved), visibleWorldBounds());
+    if (!bounds) return;
+    const angle = Number(appearance.angle) * Math.PI / 180;
+    const direction = { x: Math.cos(angle), y: Math.sin(angle) };
+    const normal = { x: -direction.y, y: direction.x };
+    const spacing = Math.max(0.25, Number(appearance.spacing) || DEFAULT_HATCH_APPEARANCE.spacing) * HATCH_SCREEN_PX_PER_MM / viewport.scale;
+    const corners = [
+      { x: bounds.x1, y: bounds.y1 }, { x: bounds.x2, y: bounds.y1 },
+      { x: bounds.x2, y: bounds.y2 }, { x: bounds.x1, y: bounds.y2 },
+    ];
+    const normalProjection = corners.map((point) => (point.x - origin.x) * normal.x + (point.y - origin.y) * normal.y);
+    const directionProjection = corners.map((point) => (point.x - origin.x) * direction.x + (point.y - origin.y) * direction.y);
+    const first = Math.floor(Math.min(...normalProjection) / spacing) - 1;
+    const last = Math.ceil(Math.max(...normalProjection) / spacing) + 1;
+    const minAlong = Math.min(...directionProjection) - spacing * 2;
+    const maxAlong = Math.max(...directionProjection) + spacing * 2;
+    ctx.save();
+    traceResolvedHatchPath(resolved);
+    ctx.clip("evenodd");
+    if (preview) {
+      ctx.fillStyle = "rgba(14, 165, 233, 0.10)";
+      traceResolvedHatchPath(resolved);
+      ctx.fill("evenodd");
+    }
+    ctx.globalAlpha = alpha;
+    ctx.strokeStyle = selected ? "#2563eb" : hovered || preview ? "#0ea5e9" : appearance.color;
+    ctx.lineWidth = (selected || hovered ? Math.max(1.5, appearance.lineWidth) : appearance.lineWidth) / viewport.scale;
+    ctx.beginPath();
+    for (let index = first; index <= last; index++) {
+      const offset = index * spacing;
+      const base = { x: origin.x + normal.x * offset, y: origin.y + normal.y * offset };
+      ctx.moveTo(base.x + direction.x * minAlong, base.y + direction.y * minAlong);
+      ctx.lineTo(base.x + direction.x * maxAlong, base.y + direction.y * maxAlong);
+    }
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  function drawHatches() {
+    for (const hatch of allHatches()) {
+      if (!isVisibleSketchId(hatch.sketchId)) continue;
+      const appearance = hatchAppearanceForDisplay(hatch);
+      const selected = hatch.blockProjection ? selectedBlockInstances.includes(hatch.blockInstance) : hatch.sketchId === activeSketchId() && selectedHatches.includes(hatch);
+      const hovered = hatch.blockProjection ? hoveredBlockInstance === hatch.blockInstance : hatch.sketchId === activeSketchId() && hoveredHatch === hatch;
+      drawResolvedHatch(resolvedHatchBoundary(hatch), appearance, hatchPatternOrigin(hatch), { selected, hovered, alpha: sketchAlpha(hatch) });
+    }
+    if (["hatch", "hatch-repair"].includes(mode) && hatchPreview?.result?.ok) {
+      drawResolvedHatch({ ...hatchPreview.result.resolved, ok: true }, DEFAULT_HATCH_APPEARANCE, { x: 0, y: 0 }, { preview: true });
+    }
+  }
+
   function drawBlockPlacementPreview() {
     if (mode !== "block-place" || !blockPlacementDefinitionId || !pointerPreview) return;
     const definition = blockDefinitionById(blockPlacementDefinitionId);
@@ -8202,6 +8768,9 @@
     const previewInstance = { id: "BLOCK_PREVIEW", definitionId: definition.id, sketchId: activeSketchId(), x: translation.x, y: translation.y, rotation, fixed: false, rotationLocked: blockPlacementRotationLocked, enabledSketchIds: blockPlacementEnabledSketchIds.slice() };
     const bundle = createBlockProjectionBundle(previewInstance, definition);
     withCanvasState(() => {
+      for (const hatch of bundle.hatches || []) {
+        drawResolvedHatch(resolvedHatchBoundary(hatch), { ...hatchAppearanceForDisplay(hatch), color: "#2563eb" }, hatchPatternOrigin(hatch), { preview: true, alpha: 0.75 });
+      }
       ctx.strokeStyle = "#2563eb";
       ctx.lineWidth = 2 / viewport.scale;
       ctx.setLineDash([6 / viewport.scale, 5 / viewport.scale]);
@@ -8249,6 +8818,7 @@
     ctx.translate(viewport.x, viewport.y);
     ctx.scale(viewport.scale, viewport.scale);
     resetCanvasStrokeState();
+    drawHatches();
     drawLines();
     drawCircles();
     drawArcs();
@@ -9445,6 +10015,7 @@
       toolOffset: geometryMode && mode === "offset",
       toolCircle: geometryMode && mode === "circle",
       toolArc: geometryMode && mode === "arc",
+      toolHatch: geometryMode && (mode === "hatch" || mode === "hatch-repair"),
       annotationLeaderBtn: Boolean(pendingCommand?.type?.startsWith("annotation-leader")),
       annotationTextBtn: pendingCommand?.type === "annotation-text-place",
     };
@@ -10552,6 +11123,7 @@
     invalidateBlockProjectionCache();
 
     model.annotations = model.annotations.filter((annotation) => !sketchIds.has(annotation.sketchId) && !annotationReferencesRemovedGeometry(annotation, removedIds, removedKeys));
+    model.hatches = model.hatches.filter((hatch) => !sketchIds.has(hatch.sketchId));
 
     const fallbackId = sketch.parentSketchId && !sketchIds.has(sketch.parentSketchId) ? sketch.parentSketchId : ROOT_SKETCH_ID;
     model.sketches = model.sketches.filter((item) => !sketchIds.has(item.id));
@@ -10603,12 +11175,13 @@
   }
 
   function sketchTreeObjectIndex() {
-    const index = new Map(model.sketches.map((sketch) => [sketch.id, { point: [], line: [], circle: [], arc: [], block: [], constraint: [], annotation: [] }]));
+    const index = new Map(model.sketches.map((sketch) => [sketch.id, { point: [], line: [], circle: [], arc: [], hatch: [], block: [], constraint: [], annotation: [] }]));
     const group = (sketchId, category) => index.get(sketchId)?.[category];
     for (const point of model.points) if ((isExplicitPoint(point) || isPointUsedByLine(point)) && group(elementSketchId(point), "point")) group(elementSketchId(point), "point").push(point);
     for (const line of model.lines) group(elementSketchId(line), "line")?.push(line);
     for (const circle of model.circles) group(elementSketchId(circle), "circle")?.push(circle);
     for (const arc of model.arcs) group(elementSketchId(arc), "arc")?.push(arc);
+    for (const hatch of model.hatches) group(hatch.sketchId, "hatch")?.push(hatch);
     for (const block of model.blockInstances) group(block.sketchId, "block")?.push(block);
     model.constraints.forEach((constraint, modelIndex) => group(constraintSketchId(constraint), "constraint")?.push({ kind: "constraint", constraint, modelIndex }));
     for (const point of model.points.filter((item) => item.fixed)) group(elementSketchId(point), "constraint")?.push({ kind: "fixed-point", point });
@@ -10646,6 +11219,7 @@
   }
 
   function sketchTreeObjectSelected(category, entry) {
+    if (category === "hatch") return selectedHatches.includes(entry);
     if (category === "block") return selectedBlockInstances.includes(entry);
     if (category === "annotation") return selectedAnnotations.includes(entry);
     if (category === "constraint") return entry.kind === "fixed-point" ? selectedPoints.includes(entry.point) : constraintSelectedInCanvas(entry.constraint);
@@ -10653,6 +11227,7 @@
   }
 
   function sketchTreeObjectHovered(category, entry) {
+    if (category === "hatch") return hoveredHatch === entry;
     if (category === "block") return hoveredBlockInstance === entry;
     if (category === "annotation") return hoveredAnnotation === entry;
     const item = category === "constraint" ? (entry.kind === "fixed-point" ? entry.point : entry.constraint) : entry;
@@ -10686,6 +11261,11 @@
     } else if (category === "block") {
       icon = toolbarSvgMarkup("#toolCreateBlock"); primary = entry.id; secondary = blockDefinitionById(entry.definitionId)?.name || entry.definitionId;
       if (entry.fixed) badges += `<span class="badge">${applicationText("固定", "Fixed")}</span>`;
+      data += ` data-id="${escapeHtml(entry.id)}"`;
+    } else if (category === "hatch") {
+      const resolved = resolvedHatchBoundary(entry);
+      icon = toolbarSvgMarkup("#toolHatch"); primary = entry.id; secondary = applicationText("平行線", "Parallel");
+      if (!resolved.ok) badges += `<span class="badge constraint-reference-error-badge">${applicationText("境界エラー", "Boundary error")}</span>`;
       data += ` data-id="${escapeHtml(entry.id)}"`;
     } else if (category === "annotation") {
       icon = toolbarSvgMarkup(entry.type === "leader" ? "#annotationLeaderBtn" : "#annotationTextBtn"); primary = entry.id;
@@ -10787,11 +11367,11 @@
     }
     const categoryDefinitions = [
       ["point", applicationText("点", "Point")], ["line", applicationText("線", "Line")], ["circle", applicationText("円", "Circle")],
-      ["arc", applicationText("円弧", "Arc")], ["block", applicationText("ブロック", "Block")], ["constraint", applicationText("拘束", "Constraint")], ["annotation", applicationText("注記", "Annotation")],
+      ["arc", applicationText("円弧", "Arc")], ["hatch", applicationText("ハッチング", "Hatching")], ["block", applicationText("ブロック", "Block")], ["constraint", applicationText("拘束", "Constraint")], ["annotation", applicationText("注記", "Annotation")],
     ];
     const html = [];
     const renderSketch = (sketch, depth, ancestorHasNext, isLast) => {
-      const groups = objectIndex.get(sketch.id) || { point: [], line: [], circle: [], arc: [], block: [], constraint: [], annotation: [] };
+      const groups = objectIndex.get(sketch.id) || { point: [], line: [], circle: [], arc: [], hatch: [], block: [], constraint: [], annotation: [] };
       const nonEmptyCategories = isRootSketch(sketch) ? [] : categoryDefinitions.filter(([category]) => groups[category].length > 0);
       const childSketches = children.get(sketch.id) || [];
       const hasChildren = nonEmptyCategories.length + childSketches.length > 0;
@@ -10840,6 +11420,7 @@
       clearSidebarHover();
       hoveredBlockInstance = null;
       hoveredAnnotation = null;
+      hoveredHatch = null;
       draw();
     };
   }
@@ -10858,6 +11439,9 @@
         const selection = category === "point" ? selectedPoints : category === "line" ? selectedLines : category === "circle" ? selectedCircles : selectedArcs;
         if (additive) toggleSidebarSelectionById(selection, item); else selection.push(item);
       }
+    } else if (category === "hatch") {
+      const item = model.hatches.find((hatch) => hatch.id === row.dataset.id);
+      if (item) additive ? toggleSidebarSelectionById(selectedHatches, item) : selectedHatches.push(item);
     } else if (category === "block") {
       const item = model.blockInstances.find((block) => block.id === row.dataset.id);
       if (item) additive ? toggleBlockInstanceSelection(item) : selectedBlockInstances.push(item);
@@ -10913,6 +11497,7 @@
     if (objectRow && !objectRow.contains(event.relatedTarget) && objectRow.dataset.sketchId === activeSketchId()) {
       const category = objectRow.dataset.objectKind;
       if (category === "block") hoveredBlockInstance = model.blockInstances.find((item) => item.id === objectRow.dataset.id) || null;
+      else if (category === "hatch") hoveredHatch = model.hatches.find((item) => item.id === objectRow.dataset.id) || null;
       else if (category === "annotation") hoveredAnnotation = model.annotations.find((item) => item.id === objectRow.dataset.id) || null;
       else if (objectRow.dataset.fixedPointId) {
         const point = model.points.find((item) => item.id === objectRow.dataset.fixedPointId);
@@ -10940,6 +11525,7 @@
       clearSidebarHover();
       hoveredBlockInstance = null;
       hoveredAnnotation = null;
+      hoveredHatch = null;
       draw();
     }
     const sketchRow = event.target.closest(".sketch-item");
@@ -11055,6 +11641,8 @@
         entry = sidebarGeometryItem(category, row.dataset.id);
       } else if (category === "block") {
         entry = model.blockInstances.find((item) => item.id === row.dataset.id) || null;
+      } else if (category === "hatch") {
+        entry = model.hatches.find((item) => item.id === row.dataset.id) || null;
       } else if (category === "annotation") {
         entry = model.annotations.find((item) => item.id === row.dataset.id) || null;
       } else if (row.dataset.fixedPointId) {
@@ -11457,8 +12045,10 @@
     for (const item of [...model.points, ...model.lines, ...model.circles, ...model.arcs]) addAppearance(item.appearance);
     for (const instance of model.blockInstances) addAppearance(instance.appearanceOverride);
     for (const constraint of model.constraints) addAppearance(constraint.dimension?.display);
+    for (const hatch of model.hatches) addAppearance(hatch.appearance);
     for (const annotation of model.annotations) add(annotation.style?.color);
     for (const definition of model.blockDefinitions) {
+      for (const hatch of definition.hatches || []) addAppearance(hatch.appearance);
       for (const sketch of definition.sketches || []) {
         addAppearance(sketch.appearance);
         addAppearance(sketch.constructionAppearance);
@@ -11597,11 +12187,12 @@
     if (mode === "block-place" && blockPlacementDefinitionId) return { kind: "blockPlacement", item: blockDefinitionById(blockPlacementDefinitionId) };
     const constraint = selectedDimensionConstraint || effectiveSelectedConstraint();
     if (constraint) return { kind: "constraint", item: constraint };
-    if (selectedAnnotations.length === 1 && selectedBlockInstances.length === 0 && selectedGeometryItems().length === 0) return { kind: "annotation", item: selectedAnnotations[0] };
-    if (selectedBlockInstances.length === 1 && selectedGeometryItems().length === 0 && selectedAnnotations.length === 0) return { kind: "block", item: selectedBlockInstances[0] };
+    if (selectedHatches.length === 1 && selectedAnnotations.length === 0 && selectedBlockInstances.length === 0 && selectedGeometryItems().length === 0) return { kind: "hatch", item: selectedHatches[0] };
+    if (selectedAnnotations.length === 1 && selectedHatches.length === 0 && selectedBlockInstances.length === 0 && selectedGeometryItems().length === 0) return { kind: "annotation", item: selectedAnnotations[0] };
+    if (selectedBlockInstances.length === 1 && selectedGeometryItems().length === 0 && selectedAnnotations.length === 0 && selectedHatches.length === 0) return { kind: "block", item: selectedBlockInstances[0] };
     const geometry = selectedGeometryItems();
-    if (geometry.length === 1 && selectedBlockInstances.length === 0 && selectedAnnotations.length === 0) return { kind: "geometry", item: geometry[0] };
-    if (geometry.length + selectedBlockInstances.length + selectedAnnotations.length > 1) return { kind: "multiple", count: geometry.length + selectedBlockInstances.length + selectedAnnotations.length };
+    if (geometry.length === 1 && selectedBlockInstances.length === 0 && selectedAnnotations.length === 0 && selectedHatches.length === 0) return { kind: "geometry", item: geometry[0] };
+    if (geometry.length + selectedBlockInstances.length + selectedAnnotations.length + selectedHatches.length > 1) return { kind: "multiple", count: geometry.length + selectedBlockInstances.length + selectedAnnotations.length + selectedHatches.length };
     return { kind: "sketch", item: sketchById(activeSketchId()) };
   }
 
@@ -11776,6 +12367,20 @@
     if (target.kind === "geometry") {
       const effective = effectiveAppearanceForElement(item);
       panel.innerHTML = `<h2 class="property-heading">${escapeHtml(geometryPropertyName(item))}</h2><section class="property-section">${basicInformationHeading}${geometryPropertyRows(item)}</section><section class="property-section"><h3>Appearance</h3>${appearancePropertyRows(item.appearance, effective, { constructionEndpoints: item instanceof Line && item.construction })}</section>`;
+    } else if (target.kind === "hatch") {
+      const appearance = hatchAppearanceForDisplay(item);
+      const boundary = resolvedHatchBoundary(item);
+      const boundaryStatus = boundary.ok ? applicationText("有効", "Valid") : applicationText("無効", "Invalid");
+      const color = colorPickerValue(appearance.color);
+      const repair = boundary.ok ? "" : `<div class="property-row property-row-action"><span>${applicationText("理由", "Reason")}</span><span class="property-readonly">${escapeHtml(hatchRegionErrorText(boundary))}</span></div><button type="button" class="property-action-button" data-property-action="hatch-repair">${applicationText("境界を再指定", "Reselect boundary")}</button>`;
+      const appearanceRows = `
+        ${propertyReadonlyRow("種類", "Type", applicationText("平行線", "Parallel"))}
+        <div class="property-row"><label>${applicationText("表示", "Visible")}</label><input data-hatch-property="visible" type="checkbox" ${appearance.visible !== false ? "checked" : ""}></div>
+        <div class="property-row"><label>${applicationText("角度", "Angle")}</label><div class="property-input-with-unit"><input data-hatch-property="angle" type="number" step="1" value="${appearance.angle}"><span class="property-input-unit">°</span></div></div>
+        <div class="property-row"><label>${applicationText("間隔", "Spacing")}</label><div class="property-input-with-unit"><input data-hatch-property="spacing" type="number" min="0.25" max="1000" step="0.1" value="${appearance.spacing}"><span class="property-input-unit">mm</span></div></div>
+        <div class="property-row"><label>${applicationText("色", "Color")}</label><div class="property-color-control"><input data-hatch-property="color" type="text" value="${escapeHtml(appearance.color)}"><button class="property-color-picker" data-appearance-palette-open data-current-color="${color}" type="button" title="${applicationText("カラーパレット", "Color palette")}" aria-label="${applicationText("カラーパレット", "Color palette")}"><span class="property-color-picker-swatch" style="--swatch-color:${color}" aria-hidden="true"></span></button></div></div>
+        <div class="property-row"><label>${applicationText("線幅", "Line width")}</label><input data-hatch-property="lineWidth" type="number" min="0.5" max="10" step="0.1" value="${appearance.lineWidth}"></div>`;
+      panel.innerHTML = `<h2 class="property-heading">${applicationText("ハッチング", "Hatching")}</h2><section class="property-section">${basicInformationHeading}${propertyReadonlyRow("種類", "Type", applicationText("ハッチング", "Hatching"))}${propertyReadonlyRow("ID", "ID", item.id)}${propertyReadonlyRow("所属スケッチ", "Owning sketch", `${sketchName(item.sketchId)} (${item.sketchId})`, { userContent: true })}${propertyReadonlyRow("境界状態", "Boundary status", boundaryStatus)}${repair}</section><section class="property-section"><h3>Appearance</h3>${appearanceRows}</section>`;
     } else if (target.kind === "block") {
       const definition = blockDefinitionById(item.definitionId);
       const effective = blockProjectionBundle(item).lines[0] ? effectiveAppearanceForElement(blockProjectionBundle(item).lines[0]) : normalizeAppearance(model.defaultAppearance, { partial: false });
@@ -11888,6 +12493,7 @@
 
   function appearanceOwnerForPropertiesTarget(target) {
     if (target.kind === "block") return (target.item.appearanceOverride ||= {});
+    if (target.kind === "hatch") return (target.item.appearance ||= normalizeHatchAppearance());
     if (target.kind === "geometry" || target.kind === "sketch") return (target.item.appearance ||= {});
     return null;
   }
@@ -11954,7 +12560,7 @@
       historyLabel,
       context,
       sourceButton: button,
-      sourceInput: button.closest(".property-color-control")?.querySelector('[data-appearance-key="color"], [data-dimension-display="color"]') || null,
+      sourceInput: button.closest(".property-color-control")?.querySelector('[data-appearance-key="color"], [data-dimension-display="color"], [data-hatch-property="color"]') || null,
     };
     const selected = colorPaletteSession.sourceInput?.value.trim() || button.dataset.currentColor || owner.color;
     renderColorPaletteDialog(selected);
@@ -11967,6 +12573,7 @@
     const color = colorPickerValue(value);
     const { owner, target, historyLabel, context, sourceButton, sourceInput } = colorPaletteSession;
     if (target?.kind === "constraint" || context === "sketch-dimension" || context === "document-dimension") applyDimensionAppearanceValue(owner, "color", color, { allowInheritance: context !== "document-dimension" });
+    else if (target?.kind === "hatch") Object.assign(owner, normalizeHatchAppearance({ ...owner, color }));
     else applyAppearanceInput(owner, "color", color);
     if (target?.kind === "block") invalidateBlockProjectionCache(target.item.id);
     if (context === "document") model.defaultAppearance = normalizeAppearance(model.defaultAppearance, { partial: false });
@@ -12008,6 +12615,7 @@
     hoveredSketchIdentity = null;
     hoveredBlockInstance = null;
     hoveredAnnotation = null;
+    hoveredHatch = null;
   }
 
   function commitDimensionParameterName(constraint, requestedName) {
@@ -12052,6 +12660,19 @@
   function handlePropertiesChange(event) {
     const target = selectedPropertiesTarget();
     const input = event.target;
+    if (target.kind === "hatch" && input.dataset.hatchProperty) {
+      const key = input.dataset.hatchProperty;
+      const raw = input.type === "checkbox" ? input.checked : input.value.trim();
+      const next = { ...target.item.appearance };
+      if (key === "visible") next.visible = Boolean(raw);
+      else if (["angle", "spacing", "lineWidth"].includes(key)) next[key] = Number(raw);
+      else if (key === "color") next.color = raw;
+      target.item.appearance = normalizeHatchAppearance(next);
+      recordHistory("ハッチング外観変更");
+      updateUI();
+      draw();
+      return;
+    }
     if (target.kind === "blockPlacement" && input.dataset.placementRotationMode) {
       blockPlacementRotationLocked = input.dataset.placementRotationMode === "locked";
       setHint(blockPlacementRotationLocked ? applicationText("配置角度を90°単位にロックします", "Placement rotation is locked to 90° increments") : applicationText("配置角度を自由回転にします", "Placement rotation is free"));
@@ -12133,6 +12754,11 @@
   }
 
   function handlePropertiesClick(event) {
+    const action = event.target.closest("[data-property-action]")?.dataset.propertyAction;
+    if (action === "hatch-repair") {
+      const target = selectedPropertiesTarget();
+      return target.kind === "hatch" ? startHatchBoundaryRepair(target.item) : false;
+    }
     const button = event.target.closest("[data-appearance-palette-open]");
     if (!button) return;
     const sketchContext = sketchDefaultAppearanceContext(button);
@@ -12144,7 +12770,7 @@
     const modeLabels = {
       select: applicationText("選択", "Select"), point: applicationText("点", "Point"), line: applicationText("線", "Line"), rectangle: applicationText("矩形", "Rectangle"),
       circle: applicationText("円", "Circle"), arc: applicationText("円弧", "Arc"), fillet: applicationText("R面取り", "Fillet"), trim: applicationText("トリム", "Trim"),
-      offset: applicationText("オフセット", "Offset"), "block-place": applicationText("ブロック配置", "Block placement"),
+      offset: applicationText("オフセット", "Offset"), hatch: applicationText("ハッチング", "Hatching"), "hatch-repair": applicationText("境界を再指定", "Reselect boundary"), "block-place": applicationText("ブロック配置", "Block placement"),
     };
     if (command) command.textContent = pendingCommand?.type?.startsWith("annotation-") ? applicationText("注記", "Annotation") : pendingConstraintCommand ? applicationText("拘束", "Constraint") : modeLabels[mode] || mode;
     const constraint = document.getElementById("statusConstraint");
@@ -13009,7 +13635,7 @@
   }
 
   function selectedElementCount() {
-    return selectedPoints.length + selectedLines.length + selectedCircles.length + selectedArcs.length + selectedBlockInstances.length + (selectedArcEndpoint ? 1 : 0);
+    return selectedPoints.length + selectedLines.length + selectedCircles.length + selectedArcs.length + selectedBlockInstances.length + selectedAnnotations.length + selectedHatches.length + (selectedArcEndpoint ? 1 : 0);
   }
 
   function hitIsSelected(hitP, hitL, hitC, hitA, hitArcEnd) {
@@ -13026,6 +13652,7 @@
     selectedConstraint = null;
     selectedBlockInstances = [];
     selectedAnnotations = [];
+    selectedHatches = [];
     selectedPoints = hitP ? [hitP] : [];
     selectedLines = hitL ? [hitL] : [];
     selectedCircles = hitC ? [hitC] : [];
@@ -13425,38 +14052,44 @@
 
   function beginDrag(e, hitP, hitL, hitC, hitA, hitArcEnd, pointer) {
     selectedConstraint = null;
-    if (selectedElementCount() > 1 && hitIsSelected(hitP, hitL, hitC, hitA, hitArcEnd)) {
+    const preserveMixedSelection = selectedElementCount() > 1 && hitIsSelected(hitP, hitL, hitC, hitA, hitArcEnd);
+    if (preserveMixedSelection) {
       dragSession = buildDragSession("selection", selectedDragPoints(), pointer);
       selectedDimensionConstraint = null;
-    } else if (hitP) {
+    } else {
+      selectedBlockInstances = [];
+      selectedAnnotations = [];
+      selectedHatches = [];
+    }
+    if (!preserveMixedSelection && hitP) {
       selectedPoints = [hitP];
       selectedLines = [];
       selectedCircles = [];
       selectedArcs = [];
       selectedArcEndpoint = null;
       dragSession = buildDragSession("point", hitP, pointer);
-    } else if (hitArcEnd) {
+    } else if (!preserveMixedSelection && hitArcEnd) {
       selectedArcs = [hitArcEnd.arc];
       selectedArcEndpoint = { arc: hitArcEnd.arc, endpoint: hitArcEnd.endpoint };
       selectedPoints = [];
       selectedLines = [];
       selectedCircles = [];
       dragSession = buildDragSession("arc-endpoint", hitArcEnd, pointer);
-    } else if (hitL) {
+    } else if (!preserveMixedSelection && hitL) {
       selectedLines = [hitL];
       selectedPoints = [];
       selectedCircles = [];
       selectedArcs = [];
       selectedArcEndpoint = null;
       dragSession = buildDragSession("line", hitL, pointer);
-    } else if (hitC) {
+    } else if (!preserveMixedSelection && hitC) {
       selectedCircles = [hitC];
       selectedPoints = [];
       selectedLines = [];
       selectedArcs = [];
       selectedArcEndpoint = null;
       dragSession = buildDragSession("circle", hitC, pointer);
-    } else if (hitA) {
+    } else if (!preserveMixedSelection && hitA) {
       selectedArcs = [hitA];
       selectedPoints = [];
       selectedLines = [];
@@ -14439,23 +15072,28 @@
   }
 
   function canvasContextTargetAt(pointer) {
+    const point = hitPoint(pointer.x, pointer.y);
+    if (point) return point.blockProjection ? { kind: "block", item: point.blockInstance } : { kind: "point", item: point };
+    const arcEndpoint = hitArcEndpoint(pointer.x, pointer.y);
+    if (arcEndpoint) return arcEndpoint.arc.blockProjection
+      ? { kind: "block", item: arcEndpoint.arc.blockInstance }
+      : { kind: "arc-endpoint", item: arcEndpoint.arc, endpoint: arcEndpoint.endpoint, hit: arcEndpoint };
+    const line = hitLine(pointer.x, pointer.y);
+    if (line) return line.blockProjection ? { kind: "block", item: line.blockInstance } : { kind: "line", item: line };
+    const circle = hitCircle(pointer.x, pointer.y);
+    if (circle) return circle.blockProjection ? { kind: "block", item: circle.blockInstance } : { kind: "circle", item: circle };
+    const arc = hitArc(pointer.x, pointer.y);
+    if (arc) return arc.blockProjection ? { kind: "block", item: arc.blockInstance } : { kind: "arc", item: arc };
+    const dimensionHit = hitDimension(pointer.x, pointer.y);
+    if (dimensionHit) return { kind: "dimension", item: dimensionHit.constraint, hit: dimensionHit };
     const annotationHit = hitAnnotationElement(pointer.x, pointer.y);
     if (annotationHit?.element?.blockProjection) return { kind: "block", item: annotationHit.element.blockInstance };
     if (annotationHit?.element) return { kind: "annotation", item: annotationHit.element, hit: annotationHit };
-    const dimensionHit = hitDimension(pointer.x, pointer.y);
-    if (dimensionHit) return { kind: "dimension", item: dimensionHit.constraint, hit: dimensionHit };
     const block = hitBlockInstance(pointer.x, pointer.y);
     if (block) return { kind: "block", item: block };
-    const point = hitPoint(pointer.x, pointer.y);
-    if (point) return { kind: "point", item: point };
-    const arcEndpoint = hitArcEndpoint(pointer.x, pointer.y);
-    if (arcEndpoint) return { kind: "arc-endpoint", item: arcEndpoint.arc, endpoint: arcEndpoint.endpoint, hit: arcEndpoint };
-    const line = hitLine(pointer.x, pointer.y);
-    if (line) return { kind: "line", item: line };
-    const circle = hitCircle(pointer.x, pointer.y);
-    if (circle) return { kind: "circle", item: circle };
-    const arc = hitArc(pointer.x, pointer.y);
-    if (arc) return { kind: "arc", item: arc };
+    const hatch = hitHatchAt(pointer.x, pointer.y);
+    if (hatch?.blockProjection) return { kind: "block", item: hatch.blockInstance };
+    if (hatch) return { kind: "hatch", item: hatch };
     return { kind: "blank", item: null };
   }
 
@@ -14468,6 +15106,7 @@
     if (target.kind === "arc-endpoint") return sameArcEndpoint(selectedArcEndpoint, { arc: target.item, endpoint: target.endpoint });
     if (target.kind === "block") return selectedBlockInstances.includes(target.item);
     if (target.kind === "annotation") return selectedAnnotations.includes(target.item);
+    if (target.kind === "hatch") return selectedHatches.includes(target.item);
     if (target.kind === "dimension") return selectedDimensionConstraint === target.item || effectiveSelectedConstraint() === target.item;
     return false;
   }
@@ -14484,6 +15123,7 @@
       selectedArcEndpoint = { arc: target.item, endpoint: target.endpoint };
     } else if (target.kind === "block") selectedBlockInstances = [target.item];
     else if (target.kind === "annotation") selectedAnnotations = [target.item];
+    else if (target.kind === "hatch") selectedHatches = [target.item];
     else if (target.kind === "dimension") selectedDimensionConstraint = target.item;
   }
 
@@ -14534,7 +15174,8 @@
       selectedCircles.some((item) => model.circles.includes(item)) ||
       selectedArcs.some((item) => model.arcs.includes(item)) ||
       selectedBlockInstances.some((item) => model.blockInstances.includes(item)) ||
-      selectedAnnotations.some((item) => model.annotations.includes(item));
+      selectedAnnotations.some((item) => model.annotations.includes(item)) ||
+      selectedHatches.some((item) => model.hatches.includes(item));
     if (!hasSelectionItems) return false;
     const selectedNodes = new Set([...selectedPoints, ...selectedLines, ...selectedCircles, ...selectedArcs, ...selectedBlockInstances]);
     for (const line of selectedLines) selectedNodes.add(line.p1).add(line.p2);
@@ -14544,6 +15185,12 @@
       const bundle = blockProjectionBundle(instance);
       for (const item of [...bundle.points, ...bundle.lines, ...bundle.circles, ...bundle.arcs]) selectedProjectionIds.add(item.id);
     }
+    const selectedGeometryRefs = new Set([
+      ...selectedLines.map((item) => `line:${item.id}`),
+      ...selectedCircles.map((item) => `circle:${item.id}`),
+      ...selectedArcs.map((item) => `arc:${item.id}`),
+    ]);
+    if (!selectedHatches.every((hatch) => hatchBoundaryGeometryRefs(hatch.boundaryLoops).every((ref) => selectedGeometryRefs.has(`${ref.kind}:${geometryRefId(ref)}`)))) return false;
     return selectedAnnotations.every((annotation) => {
       if (annotation.type !== "leader") return true;
       const referenced = resolveGeometryRef(annotation.geometryRef);
@@ -14593,6 +15240,7 @@
         specific.push({ action: "block-edit", label: applicationText("ブロック定義を編集", "Edit Block Definition"), disabled: Boolean(blockDefinitionScopeError(target.item.definitionId) || blockDefinitionEditError(target.item.definitionId)) });
         specific.push({ action: "block-rotation-toggle", label: target.item.rotationLocked ? applicationText("自由回転", "Free Rotation") : applicationText("直交回転ロック", "Lock Orthogonal Rotation"), disabled: Boolean(target.item.fixed) });
       }
+      if (target.kind === "hatch") specific.push({ action: "hatch-repair", label: applicationText("境界を再指定", "Reselect Boundary") });
       const fix = canvasContextFixState(target);
       if (fix) specific.push({ action: "fix-toggle", label: fix.fixed ? applicationText("固定解除", "Unfix") : applicationText("固定", "Fix"), disabled: !fix.enabled });
       if (["line", "circle", "arc"].includes(target.kind)) {
@@ -14605,8 +15253,8 @@
       if (["point", "line", "circle", "arc"].includes(target.kind)) {
         specific.push({ action: "add-leader", label: applicationText("引出線を追加", "Add Leader"), disabled: selectedGeometryItems().length !== 1 || selectedBlockInstances.length + selectedAnnotations.length > 0 });
       }
-      if (["line", "circle", "arc", "block", "annotation"].includes(target.kind)) {
-        const canCreateBlock = selectedLines.length + selectedCircles.length + selectedArcs.length + selectedBlockInstances.length + selectedAnnotations.length > 0;
+      if (["line", "circle", "arc", "hatch", "block", "annotation"].includes(target.kind)) {
+        const canCreateBlock = selectedLines.length + selectedCircles.length + selectedArcs.length + selectedHatches.length + selectedBlockInstances.length + selectedAnnotations.length > 0;
         specific.push({ action: "create-block", label: applicationText("選択からブロック作成", "Create Block from Selection"), disabled: !canCreateBlock || !canCreateInActiveSketch() });
       }
       if (specific.length > 0) groups.push(specific);
@@ -14700,6 +15348,7 @@
     else if (action === "block-edit" && target?.item) enterBlockDefinitionEdit(target.item.definitionId);
     else if (action === "block-rotation-toggle" && target?.item) setBlockInstanceRotationLocked(target.item, !target.item.rotationLocked);
     else if (action === "dimension-edit" && target?.hit) startDimensionEditInput(target.hit);
+    else if (action === "hatch-repair" && target?.item) startHatchBoundaryRepair(target.item);
     else if (action === "fit-visible") {
       if (fitVisibleGeometryToViewport()) setHint(applicationText("表示中の図形全体が見えるように調整しました", "Fitted all visible geometry."));
       else setHint(applicationText("表示中の図形がありません", "There is no visible geometry."), "error");
@@ -14764,15 +15413,29 @@
     const hitC = hitCircle(p.x, p.y);
     const hitArcEnd = hitArcEndpoint(p.x, p.y);
     const hitA = hitArc(p.x, p.y);
+    const hatchHit = hitHatchAt(p.x, p.y);
     const hitD = hitDimension(p.x, p.y);
     const hitBlockHandle = hitBlockRotationHandle(p.x, p.y);
     const hitBlock = hitBlockHandle || hitBlockInstance(p.x, p.y);
+    const directGeometryHit = Boolean(
+      (hitP && !hitP.blockProjection) ||
+      (hitArcEnd && !hitArcEnd.arc.blockProjection) ||
+      (hitL && !hitL.blockProjection) ||
+      (hitC && !hitC.blockProjection) ||
+      (hitA && !hitA.blockProjection)
+    );
     hoveredSketchIdentity = hitSketchIdentityElement(p.x, p.y, { allowInactiveGeometry: true });
     const inactiveHit = null;
     const blankAnnotationHit = hitAnnotationElement(p.x, p.y);
     const annotationTargetHit = hitAnnotationTarget(p.x, p.y);
 
-    const blankDoubleClickHits = { hitP, hitL, hitC, hitArcEnd, hitA, hitD, hitBlock, inactiveHit, annotationHit: blankAnnotationHit };
+    if (mode === "hatch" || mode === "hatch-repair") {
+      e.preventDefault();
+      commitHatchAt(p);
+      return;
+    }
+
+    const blankDoubleClickHits = { hitP, hitL, hitC, hitArcEnd, hitA, hitD, hitBlock, hatchHit, inactiveHit, annotationHit: blankAnnotationHit };
     if (isRepeatedBlankDoubleClick(e, blankDoubleClickHits) && handleBlankCanvasDoubleClick(p, blankDoubleClickHits)) {
       suppressNextBlankDoubleClickEvent = true;
       e.preventDefault();
@@ -14803,7 +15466,7 @@
       return;
     }
 
-    if (blankAnnotationHit && mode === "select" && !pendingCommand && !pendingConstraintCommand) {
+    if (blankAnnotationHit && !directGeometryHit && !hitD && mode === "select" && !pendingCommand && !pendingConstraintCommand) {
       e.preventDefault();
       if (blankAnnotationHit.element.blockProjection) {
         if (!e.ctrlKey && !e.shiftKey) clearSelection();
@@ -14826,7 +15489,7 @@
       return;
     }
 
-    if (hitD && !e.shiftKey && !e.ctrlKey && ((!pendingCommand && !pendingConstraintCommand) || isDimensionConstraintCommandActive())) {
+    if (hitD && !directGeometryHit && !e.shiftKey && !e.ctrlKey && ((!pendingCommand && !pendingConstraintCommand) || isDimensionConstraintCommandActive())) {
       e.preventDefault();
       if (!isDimensionConstraintCommandActive()) {
         selectedPoints = [];
@@ -14884,7 +15547,7 @@
       return;
     }
 
-    if (["point", "line", "rectangle", "circle", "arc", "fillet", "trim", "offset", "block-place"].includes(mode) && rejectRootSketchCreation()) {
+    if (["point", "line", "rectangle", "circle", "arc", "fillet", "trim", "offset", "block-place", "hatch", "hatch-repair"].includes(mode) && rejectRootSketchCreation()) {
       e.preventDefault();
       return;
     }
@@ -14965,7 +15628,7 @@
 
     const multiSelect = e.shiftKey || e.ctrlKey;
 
-    if (hitBlock) {
+    if (hitBlock && !directGeometryHit) {
       if (multiSelect) {
         selectedDimensionConstraint = null;
         selectedConstraint = null;
@@ -14974,7 +15637,7 @@
         updateGeometrySelectionUI();
         draw();
       } else beginBlockDrag(e, hitBlock, p, Boolean(hitBlockHandle));
-    } else if (hitD && !multiSelect) {
+    } else if (hitD && !directGeometryHit && !multiSelect) {
       selectedPoints = [];
       selectedLines = [];
       selectedCircles = [];
@@ -15007,6 +15670,16 @@
       selectedDimensionConstraint = null;
       if (multiSelect) toggleArcSelection(hitA);
       else beginDrag(e, null, null, null, hitA, null, p);
+    } else if (hatchHit) {
+      if (hatchHit.blockProjection) {
+        if (!multiSelect) clearSelection();
+        if (multiSelect) toggleBlockInstanceSelection(hatchHit.blockInstance);
+        else selectedBlockInstances = [hatchHit.blockInstance];
+      } else {
+        if (!multiSelect) clearSelection();
+        if (multiSelect) toggleSidebarSelectionById(selectedHatches, hatchHit);
+        else selectedHatches = [hatchHit];
+      }
     } else {
       selectionRectSession = {
         pointerId: e.pointerId,
@@ -15037,6 +15710,14 @@
 
     const p = canvasPoint(e);
     lastPointerWorld = p;
+    if (mode === "hatch" || mode === "hatch-repair") {
+      clearSnap();
+      clearCanvasHover();
+      pointerPreview = p;
+      updateHatchPreview(p);
+      draw();
+      return;
+    }
     if (selectionRectSession) {
       clearSnap();
       hoveredSketchIdentity = null;
@@ -15318,11 +15999,14 @@
       const nextArcEndpointHover = nextPointHover || nextLineHover || nextCircleHover ? null : hitArcEndpoint(p.x, p.y);
       const nextArcHover = nextPointHover || nextLineHover || nextCircleHover || nextArcEndpointHover ? null : hitArc(p.x, p.y);
       const nextSketchIdentity = hitSketchIdentityElement(p.x, p.y, { allowInactiveGeometry: true });
-      const nextBlockHover = nextHover || nextPointHover || nextLineHover || nextCircleHover || nextArcEndpointHover || nextArcHover ? null : hitBlockInstance(p.x, p.y);
+      let nextBlockHover = nextHover || nextPointHover || nextLineHover || nextCircleHover || nextArcEndpointHover || nextArcHover ? null : hitBlockInstance(p.x, p.y);
       const annotationHit = nextHover || nextPointHover || nextLineHover || nextCircleHover || nextArcEndpointHover || nextArcHover || nextBlockHover
         ? null
         : hitAnnotationElement(p.x, p.y);
       const nextAnnotationHover = annotationHit?.element || null;
+      const rawHatchHover = nextAnnotationHover ? null : hitHatchAt(p.x, p.y);
+      if (!nextBlockHover && rawHatchHover?.blockProjection) nextBlockHover = rawHatchHover.blockInstance;
+      const nextHatchHover = rawHatchHover?.blockProjection ? null : rawHatchHover;
       if (
         nextPointHover !== hoveredPoint ||
         nextEndpointHover !== hoveredEndpointPoint ||
@@ -15333,7 +16017,8 @@
         nextHover !== hoveredDimensionConstraint ||
         nextSketchIdentity?.item !== hoveredSketchIdentity?.item ||
         Boolean(nextSketchIdentity) || nextBlockHover !== hoveredBlockInstance ||
-        nextAnnotationHover !== hoveredAnnotation
+        nextAnnotationHover !== hoveredAnnotation ||
+        nextHatchHover !== hoveredHatch
       ) {
         hoveredPoint = nextPointHover;
         hoveredEndpointPoint = nextEndpointHover;
@@ -15345,6 +16030,7 @@
         hoveredSketchIdentity = nextSketchIdentity;
         hoveredBlockInstance = nextBlockHover;
         hoveredAnnotation = nextAnnotationHover;
+        hoveredHatch = nextHatchHover;
         draw();
       }
     }
@@ -15506,6 +16192,7 @@
       Boolean(selectedArcEndpoint) ||
       Boolean(selectedDimensionConstraint) ||
       selectedAnnotations.length > 0 ||
+      selectedHatches.length > 0 ||
       Boolean(effectiveSelectedConstraint());
   }
 
@@ -15517,6 +16204,7 @@
       !hits.hitA &&
       !hits.hitD &&
       !hits.hitBlock &&
+      !hits.hatchHit &&
       !hits.annotationHit &&
       !hits.inactiveHit;
   }
@@ -15598,7 +16286,7 @@
   }
 
   function isDrawToolMode() {
-    return mode === "line" || mode === "point" || mode === "rectangle" || mode === "fillet" || mode === "trim" || mode === "offset" || mode === "circle" || mode === "arc";
+    return mode === "line" || mode === "point" || mode === "rectangle" || mode === "fillet" || mode === "trim" || mode === "offset" || mode === "circle" || mode === "arc" || mode === "hatch" || mode === "hatch-repair";
   }
 
   function handleBlankCanvasDoubleClick(pointer, hits = {}) {
@@ -15859,7 +16547,7 @@
         cancelActiveDrawOperation();
         return;
       }
-      if (mode === "line" || mode === "point" || mode === "rectangle" || mode === "fillet" || mode === "trim" || mode === "offset" || mode === "circle" || mode === "arc") {
+      if (isDrawToolMode()) {
         exitDrawMode();
         return;
       }
@@ -15872,6 +16560,7 @@
         selectedArcEndpoint ||
         selectedDimensionConstraint ||
         selectedAnnotations.length > 0 ||
+        selectedHatches.length > 0 ||
         effectiveSelectedConstraint()
       ) {
         clearSelection();
@@ -16035,6 +16724,8 @@
     const saved = {
       points: model.points, lines: model.lines, circles: model.circles, arcs: model.arcs,
       annotations: model.annotations,
+      hatches: model.hatches,
+      nextHatchIndex: model.nextHatchIndex,
       constraints: model.constraints, parameters: model.parameters, nextDimensionParameterIndex: model.nextDimensionParameterIndex,
       blockInstances: model.blockInstances, sketches: model.sketches, activeSketchId: model.activeSketchId,
     };
@@ -16043,6 +16734,8 @@
     model.circles = definition.circles;
     model.arcs = definition.arcs;
     model.annotations = definition.annotations || [];
+    model.hatches = definition.hatches || [];
+    model.nextHatchIndex = Math.max(nextSeq(model.hatches, "H"), Number(definition.nextHatchIndex) || 1);
     model.constraints = definition.constraints;
     model.parameters = definition.parameters;
     model.nextDimensionParameterIndex = definition.nextDimensionParameterIndex;
@@ -16057,6 +16750,8 @@
       definition.circles = model.circles;
       definition.arcs = model.arcs;
       definition.annotations = model.annotations;
+      definition.hatches = model.hatches;
+      definition.nextHatchIndex = Math.max(hatchSeq, Number(model.nextHatchIndex) || 1);
       definition.constraints = model.constraints;
       definition.parameters = model.parameters;
       definition.nextDimensionParameterIndex = model.nextDimensionParameterIndex;
@@ -16723,6 +17418,8 @@
     return;
   });
 
+  document.getElementById("toolHatch")?.addEventListener("click", startHatchCreation);
+
   window.addEventListener("resize", () => {
     closeCanvasContextMenu();
     resizeCanvas({ centerWorld: currentCanvasCenterWorld() });
@@ -16731,6 +17428,138 @@
   function installTestHooks() {
     if (!new URLSearchParams(window.location.search).has("test")) return;
     window.__cadTest = {
+      resetForHatchTest() {
+        resetModelState();
+        viewport.scale = 1;
+        const points = [
+          addPoint(0, 0, false, "endpoint"), addPoint(120, 0, false, "endpoint"),
+          addPoint(120, 80, false, "endpoint"), addPoint(0, 80, false, "endpoint"),
+        ];
+        addLine(points[0], points[1]);
+        addLine(points[1], points[2]);
+        addLine(points[2], points[3]);
+        addLine(points[3], points[0]);
+        fitSketchToViewport(activeSketchId(), 160);
+        resetHistory("hatch test");
+        updateUI();
+        draw();
+        const rect = canvas.getBoundingClientRect();
+        const screen = worldToCanvasScreen({ x: 60, y: 40 });
+        const boundaryScreen = worldToCanvasScreen({ x: 60, y: 0 });
+        return {
+          client: { x: rect.left + screen.x, y: rect.top + screen.y },
+          boundaryClient: { x: rect.left + boundaryScreen.x, y: rect.top + boundaryScreen.y },
+          serialized: serializeModel(),
+        };
+      },
+      resetForProjectedHatchTest() {
+        resetModelState();
+        const child = createEmptyBlockDefinition("Hatch Child");
+        const childPoints = [
+          new Point("P1", 0, 0, false, "endpoint"), new Point("P2", 100, 0, false, "endpoint"),
+          new Point("P3", 100, 60, false, "endpoint"), new Point("P4", 0, 60, false, "endpoint"),
+        ];
+        childPoints.forEach((point) => { point.sketchId = DEFAULT_SKETCH_ID; });
+        child.points.push(...childPoints);
+        [[0, 1], [1, 2], [2, 3], [3, 0]].forEach(([a, b], index) => {
+          const line = new Line(`L${index + 1}`, childPoints[a], childPoints[b]);
+          line.sketchId = DEFAULT_SKETCH_ID;
+          child.lines.push(line);
+        });
+        const face = findHatchFaceInIndex(createHatchRegionIndex(hatchPrimitivesForScope(child, DEFAULT_SKETCH_ID)), { x: 50, y: 30 });
+        child.hatches = [{ id: "H1", sketchId: DEFAULT_SKETCH_ID, seed: { x: 50, y: 30 }, boundaryLoops: face.boundaryLoops, appearance: { ...DEFAULT_HATCH_APPEARANCE } }];
+        child.nextHatchIndex = 2;
+
+        const parent = createEmptyBlockDefinition("Hatch Parent");
+        child.parentDefinitionId = parent.id;
+        parent.blockInstances.push({ id: "BI_INNER", definitionId: child.id, sketchId: DEFAULT_SKETCH_ID, x: 20, y: 10, rotation: Math.PI / 6, fixed: false, rotationLocked: false, enabledSketchIds: [DEFAULT_SKETCH_ID], appearanceOverride: {} });
+        model.blockDefinitions.push(child, parent);
+        const instance = { id: "BI1", definitionId: parent.id, sketchId: DEFAULT_SKETCH_ID, x: 240, y: 180, rotation: Math.PI / 2, fixed: false, rotationLocked: false, enabledSketchIds: [DEFAULT_SKETCH_ID], appearanceOverride: { color: "#db2777", lineWidth: 3, visible: true } };
+        model.blockInstances.push(instance);
+        invalidateBlockProjectionCache();
+        const projected = blockProjectionBundle(instance).hatches[0];
+        const rect = canvas.getBoundingClientRect();
+        const screen = worldToCanvasScreen(projected.seed);
+        updateUI();
+        draw();
+        return {
+          projected: { id: projected.id, angle: projected.appearance.angle, color: projected.appearance.color, lineWidth: projected.appearance.lineWidth, valid: resolvedHatchBoundary(projected).ok },
+          ownerAtSeed: hitBlockInstance(projected.seed.x, projected.seed.y)?.id || null,
+          client: { x: rect.left + screen.x, y: rect.top + screen.y },
+          serialized: serializeModel(),
+        };
+      },
+      projectedHatchStateForTest() {
+        const projected = allHatches().find((hatch) => hatch.blockProjection) || null;
+        return projected ? { id: projected.id, angle: projected.appearance.angle, color: projected.appearance.color, lineWidth: projected.appearance.lineWidth, valid: resolvedHatchBoundary(projected).ok, ownerId: projected.blockInstance?.id || null } : null;
+      },
+      exerciseHatchTransferForTest() {
+        const hatch = model.hatches[0];
+        const boundaryLines = model.lines.slice();
+        clearSelection();
+        selectedHatches = hatch ? [hatch] : [];
+        const missingCopyAccepted = Boolean(copyableSelectionPayload());
+        selectedLines = boundaryLines;
+        const payload = copyableSelectionPayload();
+        geometryClipboard = payload;
+        const pasteAccepted = Boolean(payload && pasteGeometryClipboard());
+        const pasted = model.hatches.find((item) => item !== hatch);
+        const pastedRefs = pasted ? hatchBoundaryGeometryRefs(pasted.boundaryLoops).map(geometryRefId) : [];
+
+        clearSelection();
+        selectedHatches = hatch ? [hatch] : [];
+        const missingBlock = blockSelectionGeometry();
+        selectedLines = boundaryLines;
+        const selection = blockSelectionGeometry();
+        const definition = selection.error ? null : createBlockDefinitionFromSelection(selection, blockSelectionBoundsCenter(selection), "Hatch Transfer");
+        const blockHatch = definition?.hatches?.[0] || null;
+        const blockBoundary = blockHatch ? resolveHatchBoundaryLoops(blockHatch.boundaryLoops, hatchPrimitivesForScope(definition, blockHatch.sketchId)) : null;
+        return {
+          missingCopyAccepted,
+          pasteAccepted,
+          pasted: pasted ? { id: pasted.id, refs: pastedRefs, valid: resolvedHatchBoundary(pasted).ok } : null,
+          missingBlockError: missingBlock.error || null,
+          block: blockHatch ? { id: blockHatch.id, valid: Boolean(blockBoundary?.ok) } : null,
+        };
+      },
+      hatchStateForTest() {
+        return {
+          mode,
+          direct: model.hatches.map((hatch) => {
+            const resolved = resolvedHatchBoundary(hatch);
+            return { ...serializeHatch(hatch), valid: resolved.ok, reason: resolved.ok ? null : hatchRegionErrorText(resolved) };
+          }),
+          selectedIds: selectedHatches.map((hatch) => hatch.id),
+          preview: hatchPreview ? { ok: Boolean(hatchPreview.result?.ok), code: hatchPreview.result?.code || null } : null,
+          serialized: serializeModel(),
+          treeHatchRows: document.querySelectorAll('#sketchList [data-object-kind="hatch"]').length,
+          propertiesText: document.getElementById("propertiesPanel")?.textContent || "",
+          spacingWorldAtScale: model.hatches[0] ? model.hatches[0].appearance.spacing * HATCH_SCREEN_PX_PER_MM / viewport.scale : null,
+        };
+      },
+      setViewportScaleForHatchTest(scale) {
+        viewport.scale = Math.max(0.01, Number(scale) || 1);
+        draw();
+        return model.hatches[0] ? model.hatches[0].appearance.spacing * HATCH_SCREEN_PX_PER_MM / viewport.scale : null;
+      },
+      breakFirstHatchBoundaryForTest() {
+        if (!model.lines.length) return false;
+        model.lines.splice(0, 1);
+        updateUI({ refreshAnalysis: false });
+        draw();
+        return true;
+      },
+      restoreClosedBoundaryForHatchTest() {
+        const first = model.points.find((point) => Math.abs(point.x) < 1e-9 && Math.abs(point.y) < 1e-9);
+        const second = model.points.find((point) => Math.abs(point.x - 120) < 1e-9 && Math.abs(point.y) < 1e-9);
+        if (!first || !second) return null;
+        const line = addLine(first, second);
+        updateUI({ refreshAnalysis: false });
+        draw();
+        const rect = canvas.getBoundingClientRect();
+        const screen = worldToCanvasScreen({ x: 60, y: 40 });
+        return { id: line?.id || null, client: { x: rect.left + screen.x, y: rect.top + screen.y } };
+      },
       commitConstraintWithForcedSolveResultForTest(forcedResult) {
         resetModelState();
         const p1 = addPoint(0, 0, true, "endpoint");
