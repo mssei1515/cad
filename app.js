@@ -124,7 +124,7 @@
   ];
   const UI_TRANSLATIONS = [
     ["ファイル", "File"], ["編集", "Edit"], ["ヘルプ", "Help"],
-    ["保存", "Save"], ["開く", "Open"], ["Parameter…", "Parameters…"], ["ドキュメント設定", "Document Settings"], ["アプリケーション設定", "Application Settings"],
+    ["保存", "Save"], ["名前を付けて保存", "Save As"], ["開く", "Open"], ["Parameter…", "Parameters…"], ["ドキュメント設定", "Document Settings"], ["アプリケーション設定", "Application Settings"],
     ["元に戻す", "Undo"], ["やり直す", "Redo"], ["削除", "Delete"], ["選択", "Select"], ["選択・ドラッグ", "Select / Drag"],
     ["ジオメトリ", "Geometry"], ["拘束", "Constraint"], ["注記", "Annotation"], ["ツールバー", "Toolbar"], ["メニューバー", "Menu bar"], ["表示ツール", "View"],
     ["点", "Point"], ["線", "Line"], ["連続線", "Polyline"], ["矩形", "Rectangle"], ["円", "Circle"], ["円弧", "Arc"],
@@ -177,6 +177,7 @@
     ["オフセット距離を入力してください。Enterまたはダブルクリックで決定します", "Enter the offset distance. Confirm with Enter or double-click."],
     ["作成可能な0より大きいオフセット距離を入力してください", "Enter an offset distance greater than zero."],
     ["ブロック定義編集を終了してから保存してください", "Finish block definition editing before saving."], ["ファイルとして保存しました", "The document was saved to a file."],
+    ["保存をキャンセルしました", "Save was canceled."], ["ファイルを開く操作をキャンセルしました", "Open was canceled."],
     ["ブロック定義編集を終了してから読み込んでください", "Finish block definition editing before opening a file."], ["ファイル読み込みに失敗しました", "Failed to open the file."],
     ["連続線を終了しました", "Polyline creation finished."], ["選択・ドラッグモードに戻りました", "Returned to Select / Drag mode."], ["作図操作をキャンセルしました", "Drawing was canceled."],
     ["コピーする図形を選択してください", "Select geometry to copy."], ["貼り付ける図形がありません", "There is no geometry to paste."], ["貼り付け先のスケッチをアクティブにしてください", "Activate the destination sketch before pasting."],
@@ -217,6 +218,8 @@
   })();
   document.documentElement.lang = applicationLanguage;
   const DEFAULT_DOCUMENT_NAME = "無題";
+  const CAD2_FILE_EXTENSION = ".cad2";
+  const CAD2_FILE_MIME_TYPE = "application/json";
   const ROOT_SKETCH_ID = "ROOT";
   const ROOT_SKETCH_NAME = "Root Sketch";
   const DEFAULT_SKETCH_ID = "S1";
@@ -247,6 +250,7 @@
   const solver = new ConstraintSolver(model);
 
   let mode = "select";
+  let currentFileHandle = null;
   let selectedPoints = [];
   let selectedLines = [];
   let selectedCircles = [];
@@ -5692,28 +5696,77 @@
     ensureBlockState();
   }
 
-  function exportFileData() {
+  function cad2FilePickerTypes() {
+    return [{
+      description: applicationText("Cad2ドキュメント", "Cad2 document"),
+      accept: { [CAD2_FILE_MIME_TYPE]: [CAD2_FILE_EXTENSION] },
+    }];
+  }
+
+  function fileSystemAccessSupported(method) {
+    return typeof window[method] === "function";
+  }
+
+  function filePickerCanceled(error) {
+    return error?.name === "AbortError";
+  }
+
+  function ensureFileSystemAccess(method, actionJa, actionEn) {
+    if (fileSystemAccessSupported(method)) return true;
+    const message = applicationText(
+      `このブラウザでは${actionJa}に必要なFile System Access APIを使用できません`,
+      `The File System Access API required to ${actionEn} is not available in this browser.`,
+    );
+    setHint(message, "error");
+    log(message);
+    return false;
+  }
+
+  function serializedCad2FileData() {
+    return JSON.stringify(serializeModel(), null, 2);
+  }
+
+  async function writeCad2File(handle) {
+    const writable = await handle.createWritable();
+    await writable.write(serializedCad2FileData());
+    await writable.close();
+  }
+
+  async function saveCad2File({ saveAs = false } = {}) {
     if (blockEditSession) {
       setHint("ブロック定義編集を終了してから保存してください", "error");
-      return;
+      return false;
     }
+    if (!ensureFileSystemAccess("showSaveFilePicker", "保存", "save files")) return false;
+    let handle = saveAs ? null : currentFileHandle;
     try {
-      const data = JSON.stringify(serializeModel(), null, 2);
-      const blob = new Blob([data], { type: "application/json" });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `${safeDownloadBaseName(model.documentName)}.json`;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      URL.revokeObjectURL(url);
-      setHint("ファイルとして保存しました");
-      log("ファイルとして保存しました");
-    } catch (err) {
-      setHint(`ファイル保存に失敗しました: ${err.message}`);
-      log(`ファイル保存に失敗しました: ${err.message}`);
+      if (!handle) {
+        handle = await window.showSaveFilePicker({
+          suggestedName: `${safeDownloadBaseName(model.documentName)}${CAD2_FILE_EXTENSION}`,
+          types: cad2FilePickerTypes(),
+          excludeAcceptAllOption: true,
+        });
+      }
+      await writeCad2File(handle);
+      currentFileHandle = handle;
+      const message = applicationText(`保存しました: ${handle.name}`, `Saved: ${handle.name}`);
+      setHint(message);
+      log(message);
+      return true;
+    } catch (error) {
+      if (filePickerCanceled(error)) {
+        setHint("保存をキャンセルしました");
+        return false;
+      }
+      const message = applicationText(`ファイル保存に失敗しました: ${error.message}`, `Failed to save the file: ${error.message}`);
+      setHint(message, "error");
+      log(message);
+      return false;
     }
+  }
+
+  function saveCad2FileAs() {
+    return saveCad2File({ saveAs: true });
   }
 
   function importFileData(file) {
@@ -5748,6 +5801,39 @@
       });
       reader.readAsText(file);
     });
+  }
+
+  async function openCad2File() {
+    if (blockEditSession) {
+      setHint("ブロック定義編集を終了してから読み込んでください", "error");
+      return false;
+    }
+    if (!ensureFileSystemAccess("showOpenFilePicker", "ファイルを開く操作", "open files")) return false;
+    try {
+      const [handle] = await window.showOpenFilePicker({
+        types: cad2FilePickerTypes(),
+        excludeAcceptAllOption: true,
+        multiple: false,
+      });
+      if (!handle) return false;
+      const file = await handle.getFile();
+      const opened = await importFileData(file);
+      if (!opened) return false;
+      currentFileHandle = handle;
+      const message = applicationText(`ファイルを開きました: ${file.name}`, `Opened: ${file.name}`);
+      setHint(message);
+      log(message);
+      return true;
+    } catch (error) {
+      if (filePickerCanceled(error)) {
+        setHint("ファイルを開く操作をキャンセルしました");
+        return false;
+      }
+      const message = applicationText(`ファイル読み込みに失敗しました: ${error.message}`, `Failed to open the file: ${error.message}`);
+      setHint(message, "error");
+      log(message);
+      return false;
+    }
   }
 
   function pointAt(x, y) {
@@ -16593,6 +16679,13 @@
       syncConstraintStatusView();
       return;
     }
+    if (commandKey && key === "s") {
+      e.preventDefault();
+      if (e.repeat) return;
+      if (e.shiftKey) void saveCad2FileAs();
+      else void saveCad2File();
+      return;
+    }
     if (commandKey && isGeometryMode() && !textEditingTarget && ["c", "x", "v"].includes(key)) {
       e.preventDefault();
       if (key === "c") copySelectionToClipboard();
@@ -17405,14 +17498,9 @@
     draw();
   });
 
-  document.getElementById("exportBtn").addEventListener("click", exportFileData);
-  document.getElementById("importBtn").addEventListener("click", () => {
-    document.getElementById("importFileInput").click();
-  });
-  document.getElementById("importFileInput").addEventListener("change", (e) => {
-    importFileData(e.target.files[0]);
-    e.target.value = "";
-  });
+  document.getElementById("exportBtn").addEventListener("click", () => void saveCad2File());
+  document.getElementById("saveAsBtn")?.addEventListener("click", () => void saveCad2FileAs());
+  document.getElementById("importBtn").addEventListener("click", () => void openCad2File());
   document.getElementById("addSketchBtn")?.addEventListener("click", () => createSketch("sibling"));
   document.getElementById("addChildSketchBtn")?.addEventListener("click", () => createSketch("child"));
 
@@ -17812,6 +17900,12 @@
           displayName: effectiveDocumentName(),
           serializedName: serializeModel().documentName,
           title: document.title,
+        };
+      },
+      fileSystemAccessStateForTest() {
+        return {
+          hasHandle: Boolean(currentFileHandle),
+          handleName: currentFileHandle?.name || null,
         };
       },
       serializedModelForTest() {

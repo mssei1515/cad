@@ -885,6 +885,161 @@ test("workspace integrates transparent compact Object groups into Sketch Tree an
   await expect(page.locator('.sketch-group-row[data-category="point"]')).toHaveCount(0);
 });
 
+test("Cad2 files open, overwrite, save as, and cancel without errors", async ({ page }) => {
+  await page.addInitScript(() => {
+    const state = window.__cad2FsMock = {
+      saveCalls: [],
+      openCalls: [],
+      records: [],
+      saveNames: ["first-save.cad2", "second-save.cad2"],
+      openRecord: null,
+      cancelNextSave: false,
+      cancelNextOpen: false,
+    };
+    const makeHandle = (record) => ({
+      name: record.name,
+      async getFile() {
+        return new File([record.content], record.name, { type: "application/json" });
+      },
+      async createWritable() {
+        return {
+          async write(value) {
+            record.content = value instanceof Blob ? await value.text() : String(value);
+            record.writeCount = (record.writeCount || 0) + 1;
+          },
+          async close() {
+            record.closeCount = (record.closeCount || 0) + 1;
+          },
+        };
+      },
+    });
+    Object.defineProperty(window, "showSaveFilePicker", {
+      configurable: true,
+      value: async (options) => {
+        state.saveCalls.push(options);
+        if (state.cancelNextSave) {
+          state.cancelNextSave = false;
+          throw new DOMException("Canceled", "AbortError");
+        }
+        const record = {
+          name: state.saveNames.shift() || options.suggestedName,
+          content: "",
+          writeCount: 0,
+          closeCount: 0,
+        };
+        state.records.push(record);
+        return makeHandle(record);
+      },
+    });
+    Object.defineProperty(window, "showOpenFilePicker", {
+      configurable: true,
+      value: async (options) => {
+        state.openCalls.push(options);
+        if (state.cancelNextOpen) {
+          state.cancelNextOpen = false;
+          throw new DOMException("Canceled", "AbortError");
+        }
+        return state.openRecord ? [makeHandle(state.openRecord)] : [];
+      },
+    });
+  });
+  await page.goto(`${baseUrl}/index.html?test=1`);
+  await page.waitForFunction(() => window.__cadTest);
+
+  await expect(page.locator("#saveAsBtn")).toContainText("名前を付けて保存");
+  await page.click("#exportBtn");
+  await expect.poll(() => page.evaluate(() => window.__cad2FsMock.records[0]?.writeCount)).toBe(1);
+  let state = await page.evaluate(() => ({
+    saveCallCount: window.__cad2FsMock.saveCalls.length,
+    suggestedName: window.__cad2FsMock.saveCalls[0].suggestedName,
+    excludeAcceptAllOption: window.__cad2FsMock.saveCalls[0].excludeAcceptAllOption,
+    accept: window.__cad2FsMock.saveCalls[0].types[0].accept,
+    saved: JSON.parse(window.__cad2FsMock.records[0].content),
+    fileState: window.__cadTest.fileSystemAccessStateForTest(),
+  }));
+  expect(state.saveCallCount).toBe(1);
+  expect(state.suggestedName).toBe("無題.cad2");
+  expect(state.excludeAcceptAllOption).toBe(true);
+  expect(state.accept).toEqual({ "application/json": [".cad2"] });
+  expect(state.saved.version).toBe(13);
+  expect(state.saved.documentName).toBe("無題");
+  expect(state.fileState).toEqual({ hasHandle: true, handleName: "first-save.cad2" });
+
+  await page.keyboard.press("Control+S");
+  await expect.poll(() => page.evaluate(() => window.__cad2FsMock.records[0].writeCount)).toBe(2);
+  expect(await page.evaluate(() => window.__cad2FsMock.saveCalls.length)).toBe(1);
+
+  await page.keyboard.press("Control+Shift+S");
+  await expect.poll(() => page.evaluate(() => window.__cad2FsMock.records[1]?.writeCount)).toBe(1);
+  state = await page.evaluate(() => ({
+    saveCallCount: window.__cad2FsMock.saveCalls.length,
+    fileState: window.__cadTest.fileSystemAccessStateForTest(),
+  }));
+  expect(state).toEqual({
+    saveCallCount: 2,
+    fileState: { hasHandle: true, handleName: "second-save.cad2" },
+  });
+
+  await page.evaluate(() => {
+    window.__cad2FsMock.openRecord = {
+      name: "opened-design.cad2",
+      content: window.__cad2FsMock.records[0].content,
+      writeCount: 0,
+      closeCount: 0,
+    };
+  });
+  await page.click("#importBtn");
+  await expect.poll(() => page.evaluate(() => window.__cadTest.fileSystemAccessStateForTest().handleName))
+    .toBe("opened-design.cad2");
+  state = await page.evaluate(() => ({
+    openCallCount: window.__cad2FsMock.openCalls.length,
+    multiple: window.__cad2FsMock.openCalls[0].multiple,
+    excludeAcceptAllOption: window.__cad2FsMock.openCalls[0].excludeAcceptAllOption,
+    accept: window.__cad2FsMock.openCalls[0].types[0].accept,
+    nameState: window.__cadTest.documentNameState(),
+  }));
+  expect(state.openCallCount).toBe(1);
+  expect(state.multiple).toBe(false);
+  expect(state.excludeAcceptAllOption).toBe(true);
+  expect(state.accept).toEqual({ "application/json": [".cad2"] });
+  expect(state.nameState).toEqual({
+    modelName: "opened-design",
+    displayName: "opened-design",
+    serializedName: "opened-design",
+    title: "opened-design - Cad2",
+  });
+
+  await page.keyboard.press("Control+S");
+  await expect.poll(() => page.evaluate(() => window.__cad2FsMock.openRecord.writeCount)).toBe(1);
+  expect(await page.evaluate(() => window.__cad2FsMock.saveCalls.length)).toBe(2);
+
+  await page.evaluate(() => { window.__cad2FsMock.cancelNextSave = true; });
+  await page.keyboard.press("Control+Shift+S");
+  await expect.poll(() => page.evaluate(() => window.__cad2FsMock.saveCalls.length)).toBe(3);
+  await expect(page.locator("#hint")).toHaveText("保存をキャンセルしました");
+  await expect(page.locator("#hint")).not.toHaveClass(/error/);
+  expect(await page.evaluate(() => window.__cadTest.fileSystemAccessStateForTest().handleName))
+    .toBe("opened-design.cad2");
+
+  await page.evaluate(() => { window.__cad2FsMock.cancelNextOpen = true; });
+  await page.click("#importBtn");
+  await expect.poll(() => page.evaluate(() => window.__cad2FsMock.openCalls.length)).toBe(2);
+  await expect(page.locator("#hint")).toHaveText("ファイルを開く操作をキャンセルしました");
+  await expect(page.locator("#hint")).not.toHaveClass(/error/);
+  expect(await page.evaluate(() => ({
+    fileState: window.__cadTest.fileSystemAccessStateForTest(),
+    nameState: window.__cadTest.documentNameState(),
+  }))).toEqual({
+    fileState: { hasHandle: true, handleName: "opened-design.cad2" },
+    nameState: {
+      modelName: "opened-design",
+      displayName: "opened-design",
+      serializedName: "opened-design",
+      title: "opened-design - Cad2",
+    },
+  });
+});
+
 test("Canvas context menu exposes common and object-specific operations", async ({ page }) => {
   await page.goto(`${baseUrl}/index.html?test=1`);
   await page.waitForFunction(() => window.__cadTest);

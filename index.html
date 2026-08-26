@@ -24,8 +24,9 @@
       </div>
       <nav class="app-menus" aria-label="メニューバー">
         <details class="app-menu"><summary>ファイル</summary><div class="menu-popover">
-          <button type="button" data-menu-tool="exportBtn">保存</button>
+          <button type="button" data-menu-tool="exportBtn">保存 <kbd>Ctrl+S</kbd></button>
           <button type="button" data-menu-tool="importBtn">開く</button>
+          <button id="saveAsBtn" type="button">名前を付けて保存 <kbd>Ctrl+Shift+S</kbd></button>
           <button id="parametersBtn" type="button">Parameter…</button>
           <button id="documentSettingsBtn" type="button">ドキュメント設定</button>
           <button id="applicationSettingsBtn" type="button">アプリケーション設定</button>
@@ -57,7 +58,6 @@
         </div></details>
         <details class="app-menu"><summary>ヘルプ</summary><div class="menu-popover"><span class="menu-note">Cad2 unified canvas</span></div></details>
       </nav>
-      <input id="importFileInput" type="file" accept="application/json,.json" hidden />
     </header>
 
     <nav class="command-toolbar" aria-label="ツールバー">
