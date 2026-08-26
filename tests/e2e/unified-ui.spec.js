@@ -1170,7 +1170,7 @@ test("Document owns appearance defaults while only non-root Sketches expose comp
     suffix: "",
     terminatorType: "arrow",
     extensionLineOvershoot: 1.5,
-    extensionLineOriginGap: 0.5,
+    extensionLineOriginGap: 1.5,
     terminatorSize: 4,
     arrowheadAngle: 30,
     dimensionTextHeight: 5,
@@ -1615,7 +1615,7 @@ test("Constraint dimensions expose defining geometry and inheritable appearance 
   await expect(page.locator("#documentDimensionAppearanceFields .dimension-appearance-group-title")).toHaveText(["寸法補助線", "端末記号", "寸法文字"]);
   await expect(page.locator('#documentDimensionAppearanceFields [data-dimension-display="extensionLines"], #documentDimensionAppearanceFields [data-dimension-display="arrows"]')).toHaveCount(0);
   await expect(page.locator("#documentDimensionExtensionLineOvershoot")).toHaveValue("1.5");
-  await expect(page.locator("#documentDimensionExtensionLineOriginGap")).toHaveValue("0.5");
+  await expect(page.locator("#documentDimensionExtensionLineOriginGap")).toHaveValue("1.5");
   await expect(page.locator("#documentDimensionTerminatorType")).toHaveValue("arrow");
   await expect(page.locator("#documentDimensionTerminatorSize")).toHaveValue("4");
   await expect(page.locator("#documentDimensionArrowheadAngle")).toHaveValue("30");

@@ -371,7 +371,7 @@
     suffix: "",
     terminatorType: "arrow",
     extensionLineOvershoot: 1.5,
-    extensionLineOriginGap: 0.5,
+    extensionLineOriginGap: 1.5,
     terminatorSize: 4,
     arrowheadAngle: 30,
     dimensionTextHeight: 5,
