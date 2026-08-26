@@ -1092,6 +1092,24 @@ test("application language defaults to Japanese and persists the full UI selecti
   await expect(page.locator('#documentConstructionAppearanceFields select[data-appearance-key="lineType"] option')).toHaveText(["Solid", "Dashed", "Dash-dot", "Dotted"]);
   await expect(page.locator('#documentDimensionAppearanceFields select[data-dimension-display="visible"] option')).toHaveText(["Visible", "Hidden"]);
   await expect(page.locator("#documentDimensionAppearanceFields .dimension-appearance-group-title")).toHaveText(["Extension lines", "Terminators", "Dimension text"]);
+  expect(await page.locator("#documentDimensionAppearanceFields .dimension-appearance-group").first().evaluate((element) => {
+    const style = getComputedStyle(element);
+    return {
+      backgroundColor: style.backgroundColor,
+      borderTopStyle: style.borderTopStyle,
+      borderRightWidth: style.borderRightWidth,
+      borderBottomWidth: style.borderBottomWidth,
+      borderLeftWidth: style.borderLeftWidth,
+      borderRadius: style.borderRadius,
+    };
+  })).toEqual({
+    backgroundColor: "rgba(0, 0, 0, 0)",
+    borderTopStyle: "solid",
+    borderRightWidth: "0px",
+    borderBottomWidth: "0px",
+    borderLeftWidth: "0px",
+    borderRadius: "0px",
+  });
   await expect(page.locator('#documentDimensionAppearanceFields [data-dimension-display="extensionLines"]')).toHaveCount(0);
   await expect(page.locator("#documentDimensionAppearanceFields .property-input-unit")).toHaveText(["mm", "mm", "mm", "°", "mm", "mm"]);
   await expect(page.locator('label[for="documentDimensionExtensionLineOvershoot"]')).toHaveText("Overshoot");
@@ -1572,6 +1590,25 @@ test("Constraint dimensions expose defining geometry and inheritable appearance 
   await expect(page.locator("#propertiesPanel")).toContainText("P1");
   await expect(page.locator("#propertiesPanel")).toContainText("P2");
   await expect(page.locator("#propertiesPanel")).not.toContainText("寸法表示");
+  await expect(page.locator("#propertiesPanel .dimension-appearance-group-title")).toHaveText(["寸法補助線", "端末記号", "寸法文字"]);
+  expect(await page.locator("#propertiesPanel .dimension-appearance-group").first().evaluate((element) => {
+    const style = getComputedStyle(element);
+    return {
+      backgroundColor: style.backgroundColor,
+      borderTopStyle: style.borderTopStyle,
+      borderRightWidth: style.borderRightWidth,
+      borderBottomWidth: style.borderBottomWidth,
+      borderLeftWidth: style.borderLeftWidth,
+      borderRadius: style.borderRadius,
+    };
+  })).toEqual({
+    backgroundColor: "rgba(0, 0, 0, 0)",
+    borderTopStyle: "solid",
+    borderRightWidth: "0px",
+    borderBottomWidth: "0px",
+    borderLeftWidth: "0px",
+    borderRadius: "0px",
+  });
 
   await openDocumentSettings(page);
   await expect(page.locator("#documentSettingsDialog")).toContainText("寸法外観");
