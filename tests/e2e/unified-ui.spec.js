@@ -1686,6 +1686,12 @@ test("Constraint dimensions expose defining geometry and inheritable appearance 
   expect((await page.evaluate(() => window.__cadTest.dimensionAppearanceRenderMetricsForTest())).terminator).toEqual(expect.objectContaining({ type: "dot", openingAngle: null }));
   await properties.locator('[data-dimension-display="terminatorType"]').selectOption("filledArrow");
   await expect(properties.locator("[data-terminator-angle-row]")).toBeVisible();
+  const originGapInput = properties.locator('[data-dimension-display="extensionLineOriginGap"]');
+  await originGapInput.fill("0");
+  await originGapInput.blur();
+  const zeroGapRenderMetrics = await page.evaluate(() => window.__cadTest.dimensionAppearanceRenderMetricsForTest());
+  expect(zeroGapRenderMetrics.linearExtension.originGap).toBeCloseTo(0, 6);
+  expect(zeroGapRenderMetrics.angleExtension.originGap).toBeCloseTo(0, 6);
   for (const [key, value] of [
     ["extensionLineOvershoot", "3"],
     ["extensionLineOriginGap", "2.5"],
@@ -1707,7 +1713,7 @@ test("Constraint dimensions expose defining geometry and inheritable appearance 
   expect(zoomedRenderMetrics.angleExtension.originGap).toBeCloseTo(renderMetrics.angleExtension.originGap, 6);
   expect(zoomedRenderMetrics.terminator.size).toBeCloseTo(renderMetrics.terminator.size, 6);
   expect(zoomedRenderMetrics.text.height).toBeCloseTo(renderMetrics.text.height, 6);
-  expect(renderMetrics.linearExtension.originGap).toBeCloseTo(2.5 * 96 / 25.4 + 5, 6);
+  expect(renderMetrics.linearExtension.originGap).toBeCloseTo(2.5 * 96 / 25.4, 6);
   expect(renderMetrics.linearExtension.overshoot).toBeCloseTo(3 * 96 / 25.4, 6);
   expect(renderMetrics.angleExtension.originGap).toBeCloseTo(2.5 * 96 / 25.4, 6);
   expect(renderMetrics.angleExtension.overshoot).toBeCloseTo(3 * 96 / 25.4, 6);
@@ -2469,18 +2475,6 @@ test("reference dependents solve in topological order and out-of-scope loaded re
   expect(cycle.operational).toBe(0);
   expect(cycle.invalid).toHaveLength(2);
   expect(cycle.badges).toBeGreaterThan(0);
-});
-
-test("construction extension clearance uses only the dimension-line component", async ({ page }) => {
-  await page.goto(`${baseUrl}/index.html?test=1`);
-  await page.waitForFunction(() => window.__cadTest);
-
-  const result = await page.evaluate(() => window.__cadTest.constructionDimensionClearanceCases());
-  expect(result.sameDirection).toBeCloseTo(12, 6);
-  expect(result.diagonal).toBeCloseTo(12 / Math.sqrt(2), 6);
-  expect(result.perpendicular).toBeCloseTo(0, 6);
-  expect(result.opposite).toBeCloseTo(0, 6);
-  expect(result.disabled).toBeCloseTo(0, 6);
 });
 
 test("point-point rectangle dimensions keep extension lines visible on both pull sides", async ({ page }) => {

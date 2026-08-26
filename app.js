@@ -331,7 +331,6 @@
   const MAX_ZOOM = 10000000;
   const CONSTRUCTION_EXTENSION_SCREEN_PX = 12;
   const CONSTRUCTION_GEOMETRY_ALPHA = 0.72;
-  const DIMENSION_POINT_MARKER_RADIUS_SCREEN_PX = 5;
   const DIMENSION_SCREEN_PX_PER_MM = 96 / 25.4;
   const DIMENSION_APPEARANCE_LENGTH_KEYS = ["extensionLineOvershoot", "extensionLineOriginGap", "terminatorSize", "dimensionTextHeight", "dimensionTextGap"];
   const DIMENSION_DISPLAY_PRECISION = 1e-6;
@@ -8667,9 +8666,7 @@
       const ux = el > 1e-12 ? ex / el : d.x;
       const uy = el > 1e-12 ? ey / el : d.y;
       const extensionDirection = { x: ux, y: uy };
-      const pointClearance = dimensionPointSourceClearance(target, index, source, extensionDirection);
-      const constructionClearance = dimensionConstructionExtensionClearance(target, index, source, extensionDirection);
-      const visibleGap = Math.min(gap + pointClearance + constructionClearance, Math.max(0, el - 2 / viewport.scale));
+      const visibleGap = Math.min(gap, Math.max(0, el - 2 / viewport.scale));
       return {
         source,
         projection: t,
@@ -8767,23 +8764,6 @@
     const outward = lineOutwardDirectionAtSource(line, context.source);
     if (!outward) return false;
     return v.x * outward.x + v.y * outward.y > 0.1;
-  }
-
-  function dimensionPointSourceClearance(target, index, source = null, extensionDirection = null) {
-    if (!(source instanceof Point)) return 0;
-    if (dimensionSourceLine(target, index, source, extensionDirection)) return 0;
-    return DIMENSION_POINT_MARKER_RADIUS_SCREEN_PX / viewport.scale;
-  }
-
-  function dimensionConstructionExtensionClearance(target, index, source = null, extensionDirection = null) {
-    if (!source || !extensionDirection) return 0;
-    const line = dimensionSourceLine(target, index, source, extensionDirection);
-    if (!line?.construction) return 0;
-    if (effectiveAppearanceForElement(line).endpointOverhang === false) return 0;
-    const outward = lineOutwardDirectionAtSource(line, source);
-    if (!outward) return 0;
-    const directionalComponent = outward.x * extensionDirection.x + outward.y * extensionDirection.y;
-    return Math.max(0, directionalComponent) * (CONSTRUCTION_EXTENSION_SCREEN_PX / viewport.scale);
   }
 
   function angleDimensionLayout(target, dimension) {
@@ -17606,25 +17586,6 @@
           readOnlyCount: model.constraints.filter(isReadOnlyDimension).length,
           dimensionCount: model.constraints.filter(isDimensionConstraint).length,
         };
-      },
-      constructionDimensionClearanceCases() {
-        resetModelState();
-        const p1 = addPoint(0, 0, false, "endpoint");
-        const p2 = addPoint(100, 0, false, "endpoint");
-        const line = addLine(p1, p2);
-        line.construction = true;
-        const target = { kind: "line-length", line, p1, p2, value: line.length() };
-        const screenClearance = (direction) => dimensionConstructionExtensionClearance(target, 1, p2, direction) * viewport.scale;
-        const diagonal = Math.SQRT1_2;
-        const result = {
-          sameDirection: screenClearance({ x: 1, y: 0 }),
-          diagonal: screenClearance({ x: diagonal, y: diagonal }),
-          perpendicular: screenClearance({ x: 0, y: 1 }),
-          opposite: screenClearance({ x: -1, y: 0 }),
-        };
-        line.appearance = { ...normalizeAppearance(line.appearance), endpointOverhang: false };
-        result.disabled = screenClearance({ x: 1, y: 0 });
-        return result;
       },
       pointPointRectangleDimensionExtensionVisibilityCases() {
         resetModelState();
