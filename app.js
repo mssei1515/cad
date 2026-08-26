@@ -331,6 +331,7 @@
   let blockProjectionCache = new Map();
   let hatchResolutionCache = new WeakMap();
   let hatchFaceCache = new Map();
+  const dimensionTextWidthCache = new WeakMap();
   let undoStack = [];
   let redoStack = [];
   let historyRestoring = false;
@@ -386,6 +387,7 @@
   const DEFAULT_DIMENSION_APPEARANCE = {
     visible: true,
     color: "#64748b",
+    lineWidth: 1.2,
     precision: null,
     prefix: "",
     suffix: "",
@@ -406,6 +408,7 @@
     lineWidth: 1,
   };
   const DIMENSION_APPEARANCE_NUMERIC_RULES = {
+    lineWidth: { min: 0.5, max: 10 },
     extensionLineOvershoot: { min: 0, max: 1000 },
     extensionLineOriginGap: { min: 0, max: 1000 },
     terminatorSize: { min: 0.1, max: 1000 },
@@ -9090,13 +9093,13 @@
     const appearance = effectiveDimensionAppearance(dimension, sketchId);
     const layout = dimensionLayout(target, dimension, appearance);
     if (!layout) return;
-    const { a, b, lineA, lineB, points, d, text, textAngle } = layout;
+    const { a, b, lineA, lineB, points, d, span, text, textAngle } = layout;
 
     ctx.save();
     const color = preview || highlighted ? "#2563eb" : colorOverride || appearance.color;
     ctx.strokeStyle = color;
     ctx.fillStyle = color;
-    ctx.lineWidth = (highlighted ? 2 : 1.2) / viewport.scale;
+    ctx.lineWidth = dimensionStrokeWidth(appearance, highlighted) / viewport.scale;
     ctx.setLineDash(preview ? [5 / viewport.scale, 4 / viewport.scale] : []);
     ctx.beginPath();
     ctx.moveTo((lineA || a).x, (lineA || a).y);
@@ -9112,8 +9115,10 @@
     }
 
     ctx.setLineDash([]);
-    drawDimensionTerminator(a, d, appearance);
-    drawDimensionTerminator(b, { x: -d.x, y: -d.y }, appearance);
+    const outside = shouldPlaceDimensionTerminatorsOutside(span, label, appearance, dimension);
+    const reverseDirection = { x: -d.x, y: -d.y };
+    drawDimensionTerminator(a, outside ? reverseDirection : d, appearance);
+    drawDimensionTerminator(b, outside ? d : reverseDirection, appearance);
 
     drawDimensionLabel(label, text, textAngle, editState, appearance);
     ctx.restore();
@@ -9128,7 +9133,7 @@
     const color = preview || highlighted ? "#2563eb" : colorOverride || appearance.color;
     ctx.strokeStyle = color;
     ctx.fillStyle = color;
-    ctx.lineWidth = (highlighted ? 2 : 1.2) / viewport.scale;
+    ctx.lineWidth = dimensionStrokeWidth(appearance, highlighted) / viewport.scale;
     ctx.setLineDash(preview ? [5 / viewport.scale, 4 / viewport.scale] : []);
     const p1 = { x: vertex.x + Math.cos(start) * radius, y: vertex.y + Math.sin(start) * radius };
     const p2 = { x: vertex.x + Math.cos(end) * radius, y: vertex.y + Math.sin(end) * radius };
@@ -9139,12 +9144,17 @@
     ctx.moveTo(secondExtension.start.x, secondExtension.start.y);
     ctx.lineTo(secondExtension.end.x, secondExtension.end.y);
     ctx.stroke();
+    const outside = shouldPlaceDimensionTerminatorsOutside(Math.abs(signed) * radius, label, appearance, dimension);
+    const sweepDirection = signed < 0 ? -1 : 1;
+    const arcExtension = outside ? dimensionMillimetersToWorld(appearance.terminatorSize) / Math.max(radius, 1e-12) : 0;
     ctx.beginPath();
-    ctx.arc(vertex.x, vertex.y, radius, start, end, signed < 0);
+    ctx.arc(vertex.x, vertex.y, radius, start - sweepDirection * arcExtension, end + sweepDirection * arcExtension, signed < 0);
     ctx.stroke();
     ctx.setLineDash([]);
-    drawDimensionTerminator(p1, { x: Math.cos(start + (signed < 0 ? -Math.PI / 2 : Math.PI / 2)), y: Math.sin(start + (signed < 0 ? -Math.PI / 2 : Math.PI / 2)) }, appearance);
-    drawDimensionTerminator(p2, { x: Math.cos(end + (signed < 0 ? Math.PI / 2 : -Math.PI / 2)), y: Math.sin(end + (signed < 0 ? Math.PI / 2 : -Math.PI / 2)) }, appearance);
+    const firstDirection = { x: Math.cos(start + (signed < 0 ? -Math.PI / 2 : Math.PI / 2)), y: Math.sin(start + (signed < 0 ? -Math.PI / 2 : Math.PI / 2)) };
+    const secondDirection = { x: Math.cos(end + (signed < 0 ? Math.PI / 2 : -Math.PI / 2)), y: Math.sin(end + (signed < 0 ? Math.PI / 2 : -Math.PI / 2)) };
+    drawDimensionTerminator(p1, outside ? { x: -firstDirection.x, y: -firstDirection.y } : firstDirection, appearance);
+    drawDimensionTerminator(p2, outside ? { x: -secondDirection.x, y: -secondDirection.y } : secondDirection, appearance);
     drawDimensionLabel(label, text, textAngle, editState, appearance);
     ctx.restore();
   }
@@ -9179,6 +9189,79 @@
       height: dimensionMillimetersToWorld(resolved.dimensionTextHeight),
       gap: dimensionMillimetersToWorld(resolved.dimensionTextGap),
     };
+  }
+
+  function dimensionTextWidth(label, appearance = DEFAULT_DIMENSION_APPEARANCE) {
+    const resolved = normalizeDimensionAppearance(appearance, { partial: false });
+    return dimensionTextWidthFromResolved(label, resolved);
+  }
+
+  function dimensionTextWidthFromResolved(label, resolved, cacheOwner = null) {
+    const text = String(label ?? "");
+    const screenHeight = resolved.dimensionTextHeight * DIMENSION_SCREEN_PX_PER_MM;
+    const cached = cacheOwner && typeof cacheOwner === "object" ? dimensionTextWidthCache.get(cacheOwner) : null;
+    if (cached?.text === text && cached.screenHeight === screenHeight) return cached.screenWidth / viewport.scale;
+    ctx.save();
+    ctx.font = `${screenHeight / viewport.scale}px system-ui`;
+    const screenWidth = ctx.measureText(text).width * viewport.scale;
+    ctx.restore();
+    if (cacheOwner && typeof cacheOwner === "object") dimensionTextWidthCache.set(cacheOwner, { text, screenHeight, screenWidth });
+    return screenWidth / viewport.scale;
+  }
+
+  function shouldPlaceDimensionTerminatorsOutside(availableLength, label, appearance = DEFAULT_DIMENSION_APPEARANCE, cacheOwner = null) {
+    const terminatorType = appearance.terminatorType;
+    if (!["arrow", "filledArrow"].includes(terminatorType)) return false;
+    const normalizedAvailableLength = Math.max(0, Number(availableLength) || 0);
+    const cached = cacheOwner && typeof cacheOwner === "object" ? dimensionTextWidthCache.get(cacheOwner) : null;
+    if (cached?.label === label
+      && cached.availableLength === normalizedAvailableLength
+      && cached.viewportScale === viewport.scale
+      && cached.dimensionTextHeight === appearance.dimensionTextHeight
+      && cached.terminatorType === terminatorType) return cached.outside;
+    const availableScreenLength = normalizedAvailableLength * viewport.scale;
+    const text = String(label ?? "");
+    const screenHeight = appearance.dimensionTextHeight * DIMENSION_SCREEN_PX_PER_MM;
+    const screenWidth = cached?.text === text && cached.screenHeight === screenHeight
+      ? cached.screenWidth
+      : dimensionTextWidthFromResolved(text, appearance, cacheOwner) * viewport.scale;
+    const outside = availableScreenLength < screenWidth;
+    if (cacheOwner && typeof cacheOwner === "object") {
+      dimensionTextWidthCache.set(cacheOwner, {
+        label,
+        text,
+        screenHeight,
+        screenWidth,
+        availableLength: normalizedAvailableLength,
+        viewportScale: viewport.scale,
+        dimensionTextHeight: appearance.dimensionTextHeight,
+        terminatorType,
+        outside,
+      });
+    }
+    return outside;
+  }
+
+  function linearDimensionTerminatorDirections(direction, outside) {
+    const factor = outside ? -1 : 1;
+    const component = (value) => {
+      const result = value * factor;
+      return Object.is(result, -0) ? 0 : result;
+    };
+    const oppositeComponent = (value) => {
+      const result = -value * factor;
+      return Object.is(result, -0) ? 0 : result;
+    };
+    return {
+      first: { x: component(direction.x), y: component(direction.y) },
+      second: { x: oppositeComponent(direction.x), y: oppositeComponent(direction.y) },
+    };
+  }
+
+  function dimensionStrokeWidth(appearance = DEFAULT_DIMENSION_APPEARANCE, highlighted = false) {
+    const numeric = Number(appearance?.lineWidth);
+    const lineWidth = Number.isFinite(numeric) ? Math.max(0.5, Math.min(10, numeric)) : DEFAULT_DIMENSION_APPEARANCE.lineWidth;
+    return highlighted ? Math.max(2, lineWidth + 0.8) : lineWidth;
   }
 
   function drawDimensionLabel(label, text, angle = 0, editState = null, appearance = DEFAULT_DIMENSION_APPEARANCE) {
@@ -9285,6 +9368,7 @@
     return {
       a,
       b,
+      span: max - min,
       lineA,
       lineB,
       d,
@@ -12178,6 +12262,7 @@
     return `
       <div class="property-row"><label for="${idPrefix}Visible">${applicationText("表示", "Visible")}</label><select id="${idPrefix}Visible" data-dimension-display="visible">${booleanOptions("visible")}</select></div>
       <div class="property-row"><label for="${idPrefix}Color">${applicationText("色", "Color")}</label><div class="property-color-control"><input id="${idPrefix}Color" data-dimension-display="color" type="text" placeholder="${escapeHtml(allowInheritance ? inheritedLabel("color") : "")}" value="${escapeHtml(direct.color || "")}" /><button class="property-color-picker" data-appearance-palette-open data-current-color="${colorValue}" type="button" title="${applicationText("カラーパレット", "Color palette")}" aria-label="${applicationText("カラーパレット", "Color palette")}"><span class="property-color-picker-swatch" style="--swatch-color:${colorValue}" aria-hidden="true"></span></button></div></div>
+      <div class="property-row"><label for="${idPrefix}LineWidth">${applicationText("線幅", "Line width")}</label><input id="${idPrefix}LineWidth" data-dimension-display="lineWidth" type="number" min="0.5" max="10" step="0.1" placeholder="${escapeHtml(allowInheritance ? inheritedLabel("lineWidth") : "")}" value="${hasDirect("lineWidth") ? direct.lineWidth : ""}"></div>
       <div class="property-row"><label for="${idPrefix}Precision">${applicationText("精度", "Precision")}</label><select id="${idPrefix}Precision" data-dimension-display="precision">${precisionOptions}</select></div>
       <div class="property-row"><label for="${idPrefix}Prefix">${applicationText("接頭辞", "Prefix")}</label><input id="${idPrefix}Prefix" data-dimension-display="prefix" placeholder="${escapeHtml(allowInheritance ? inheritedLabel("prefix") : "")}" value="${escapeHtml(direct.prefix ?? "")}"></div>
       <div class="property-row"><label for="${idPrefix}Suffix">${applicationText("接尾辞", "Suffix")}</label><input id="${idPrefix}Suffix" data-dimension-display="suffix" placeholder="${escapeHtml(allowInheritance ? inheritedLabel("suffix") : "")}" value="${escapeHtml(direct.suffix ?? "")}"></div>
@@ -12291,6 +12376,7 @@
     return {
       visible: display.visible !== false,
       color: display.color || DEFAULT_DIMENSION_APPEARANCE.color,
+      lineWidth: display.lineWidth,
       precision: Number.isInteger(display.precision) ? Math.max(0, Math.min(10, display.precision)) : null,
       prefix: String(display.prefix || ""),
       suffix: String(display.suffix || ""),
@@ -17780,10 +17866,26 @@
             size: appearance.terminatorSize * DIMENSION_SCREEN_PX_PER_MM,
             openingAngle: appearance.terminatorType === "dot" ? null : Math.atan2(arrowHalfWidth, arrowLength) * 360 / Math.PI,
           },
+          lineWidth: dimensionStrokeWidth(appearance),
           text: {
             height: text.height * viewport.scale,
             gap: text.gap * viewport.scale,
           },
+        };
+      },
+      dimensionTerminatorFitForTest(availableScreenPixels, label = "100", terminatorType = "arrow") {
+        const appearance = {
+          ...normalizeDimensionAppearance(model.defaultDimensionAppearance, { partial: false }),
+          terminatorType,
+        };
+        const availableLength = Math.max(0, Number(availableScreenPixels) || 0) / viewport.scale;
+        const outside = shouldPlaceDimensionTerminatorsOutside(availableLength, label, appearance);
+        const directions = linearDimensionTerminatorDirections({ x: 1, y: 0 }, outside);
+        return {
+          outside,
+          textWidth: dimensionTextWidth(label, appearance) * viewport.scale,
+          firstDirection: directions.first,
+          secondDirection: directions.second,
         };
       },
       drawnDimensionColorsForTest() {

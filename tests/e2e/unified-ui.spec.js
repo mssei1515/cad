@@ -1165,6 +1165,7 @@ test("Document owns appearance defaults while only non-root Sketches expose comp
   expect(initialDefaults.defaultDimensionAppearance).toEqual({
     visible: true,
     color: "#64748b",
+    lineWidth: 1.2,
     precision: null,
     prefix: "",
     suffix: "",
@@ -1615,6 +1616,7 @@ test("Constraint dimensions expose defining geometry and inheritable appearance 
   await expect(page.locator("#documentDimensionAppearanceFields .dimension-appearance-group-title")).toHaveText(["寸法補助線", "端末記号", "寸法文字"]);
   await expect(page.locator('#documentDimensionAppearanceFields [data-dimension-display="extensionLines"], #documentDimensionAppearanceFields [data-dimension-display="arrows"]')).toHaveCount(0);
   await expect(page.locator("#documentDimensionExtensionLineOvershoot")).toHaveValue("1.5");
+  await expect(page.locator("#documentDimensionLineWidth")).toHaveValue("1.2");
   await expect(page.locator("#documentDimensionExtensionLineOriginGap")).toHaveValue("1.5");
   await expect(page.locator("#documentDimensionTerminatorType")).toHaveValue("arrow");
   await expect(page.locator("#documentDimensionTerminatorSize")).toHaveValue("4");
@@ -1628,6 +1630,7 @@ test("Constraint dimensions expose defining geometry and inheritable appearance 
   await page.locator("#documentDimensionColor").fill("#0e7490");
   await page.locator("#documentDimensionColor").blur();
   for (const [selector, value] of [
+    ["#documentDimensionLineWidth", "2.4"],
     ["#documentDimensionExtensionLineOvershoot", "2"],
     ["#documentDimensionExtensionLineOriginGap", "1.8"],
     ["#documentDimensionTerminatorSize", "3"],
@@ -1642,6 +1645,7 @@ test("Constraint dimensions expose defining geometry and inheritable appearance 
   expect(await page.evaluate(() => window.__cadTest.dimensionAppearanceStateForTest())).toEqual(expect.objectContaining({
     documentDefault: expect.objectContaining({
       color: "#0e7490",
+      lineWidth: 2.4,
       extensionLineOvershoot: 2,
       extensionLineOriginGap: 1.8,
       terminatorType: "arrow",
@@ -1686,6 +1690,9 @@ test("Constraint dimensions expose defining geometry and inheritable appearance 
   expect((await page.evaluate(() => window.__cadTest.dimensionAppearanceRenderMetricsForTest())).terminator).toEqual(expect.objectContaining({ type: "dot", openingAngle: null }));
   await properties.locator('[data-dimension-display="terminatorType"]').selectOption("filledArrow");
   await expect(properties.locator("[data-terminator-angle-row]")).toBeVisible();
+  const inheritedLineWidth = properties.locator('[data-dimension-display="lineWidth"]');
+  await expect(inheritedLineWidth).toHaveValue("");
+  await expect(inheritedLineWidth).toHaveAttribute("placeholder", /2\.4/);
   const originGapInput = properties.locator('[data-dimension-display="extensionLineOriginGap"]');
   await originGapInput.fill("0");
   await originGapInput.blur();
@@ -1693,6 +1700,7 @@ test("Constraint dimensions expose defining geometry and inheritable appearance 
   expect(zeroGapRenderMetrics.linearExtension.originGap).toBeCloseTo(0, 6);
   expect(zeroGapRenderMetrics.angleExtension.originGap).toBeCloseTo(0, 6);
   for (const [key, value] of [
+    ["lineWidth", "3.2"],
     ["extensionLineOvershoot", "3"],
     ["extensionLineOriginGap", "2.5"],
     ["terminatorSize", "4"],
@@ -1713,6 +1721,8 @@ test("Constraint dimensions expose defining geometry and inheritable appearance 
   expect(zoomedRenderMetrics.angleExtension.originGap).toBeCloseTo(renderMetrics.angleExtension.originGap, 6);
   expect(zoomedRenderMetrics.terminator.size).toBeCloseTo(renderMetrics.terminator.size, 6);
   expect(zoomedRenderMetrics.text.height).toBeCloseTo(renderMetrics.text.height, 6);
+  expect(zoomedRenderMetrics.lineWidth).toBeCloseTo(renderMetrics.lineWidth, 6);
+  expect(renderMetrics.lineWidth).toBeCloseTo(3.2, 6);
   expect(renderMetrics.linearExtension.originGap).toBeCloseTo(2.5 * 96 / 25.4, 6);
   expect(renderMetrics.linearExtension.overshoot).toBeCloseTo(3 * 96 / 25.4, 6);
   expect(renderMetrics.angleExtension.originGap).toBeCloseTo(2.5 * 96 / 25.4, 6);
@@ -1722,6 +1732,17 @@ test("Constraint dimensions expose defining geometry and inheritable appearance 
   expect(renderMetrics.terminator.openingAngle).toBeCloseTo(40, 6);
   expect(renderMetrics.text.height).toBeCloseTo(4 * 96 / 25.4, 6);
   expect(renderMetrics.text.gap).toBeCloseTo(1.5 * 96 / 25.4, 6);
+  const terminatorFit = await page.evaluate(() => {
+    const measured = window.__cadTest.dimensionTerminatorFitForTest(1000, "100");
+    return {
+      inside: measured,
+      outside: window.__cadTest.dimensionTerminatorFitForTest(Math.max(0, measured.textWidth - 1), "100"),
+      dot: window.__cadTest.dimensionTerminatorFitForTest(Math.max(0, measured.textWidth - 1), "100", "dot"),
+    };
+  });
+  expect(terminatorFit.inside).toEqual(expect.objectContaining({ outside: false, firstDirection: { x: 1, y: 0 }, secondDirection: { x: -1, y: 0 } }));
+  expect(terminatorFit.outside).toEqual(expect.objectContaining({ outside: true, firstDirection: { x: -1, y: 0 }, secondDirection: { x: 1, y: 0 } }));
+  expect(terminatorFit.dot.outside).toBe(false);
   await properties.locator('[data-dimension-display="color"] + [data-appearance-palette-open]').click();
   await page.locator('[data-palette-color="#7c3aed"]').first().click();
   expect(await page.evaluate(() => window.__cadTest.dimensionAppearanceStateForTest())).toEqual(expect.objectContaining({
@@ -1752,6 +1773,7 @@ test("Constraint dimensions expose defining geometry and inheritable appearance 
   expect(serialized.constraints[0].dimension.display).toEqual(expect.objectContaining({
     visible: false,
     color: "#7c3aed",
+    lineWidth: 3.2,
     precision: 3,
     prefix: "REF ",
     suffix: " mm",
