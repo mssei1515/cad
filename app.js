@@ -668,12 +668,18 @@
     const lineWidth = Number(source.lineWidth);
     return {
       visible: source.visible !== false,
-      patternType: "parallel",
+      patternType: ["parallel", "cross", "solid"].includes(source.patternType) ? source.patternType : DEFAULT_HATCH_APPEARANCE.patternType,
       angle: Number.isFinite(angle) ? Math.max(-3600, Math.min(3600, angle)) : DEFAULT_HATCH_APPEARANCE.angle,
       spacing: Number.isFinite(spacing) ? Math.max(0.25, Math.min(1000, spacing)) : DEFAULT_HATCH_APPEARANCE.spacing,
       color: typeof source.color === "string" && /^#[0-9a-fA-F]{6}$/.test(source.color) ? source.color.toLowerCase() : DEFAULT_HATCH_APPEARANCE.color,
       lineWidth: Number.isFinite(lineWidth) ? Math.max(0.5, Math.min(10, lineWidth)) : DEFAULT_HATCH_APPEARANCE.lineWidth,
     };
+  }
+
+  function hatchPatternTypeLabel(patternType) {
+    if (patternType === "cross") return applicationText("クロス", "Cross");
+    if (patternType === "solid") return applicationText("塗りつぶし", "Solid fill");
+    return applicationText("平行線", "Parallel");
   }
 
   function normalizeHatches(items, fallbackSketchId = null) {
@@ -705,7 +711,7 @@
     const appearance = value.appearance;
     if (!appearance || typeof appearance !== "object" || Array.isArray(appearance)) return false;
     return typeof appearance.visible === "boolean"
-      && appearance.patternType === "parallel"
+      && ["parallel", "cross", "solid"].includes(appearance.patternType)
       && Number.isFinite(Number(appearance.angle))
       && Number.isFinite(Number(appearance.spacing)) && Number(appearance.spacing) >= 0.25
       && typeof appearance.color === "string" && /^#[0-9a-fA-F]{6}$/.test(appearance.color)
@@ -8709,20 +8715,6 @@
     if (!resolved?.ok || !resolved.loops?.length || appearance.visible === false) return;
     const bounds = intersectBounds(resolvedLoopBounds(resolved), visibleWorldBounds());
     if (!bounds) return;
-    const angle = Number(appearance.angle) * Math.PI / 180;
-    const direction = { x: Math.cos(angle), y: Math.sin(angle) };
-    const normal = { x: -direction.y, y: direction.x };
-    const spacing = Math.max(0.25, Number(appearance.spacing) || DEFAULT_HATCH_APPEARANCE.spacing) * HATCH_SCREEN_PX_PER_MM / viewport.scale;
-    const corners = [
-      { x: bounds.x1, y: bounds.y1 }, { x: bounds.x2, y: bounds.y1 },
-      { x: bounds.x2, y: bounds.y2 }, { x: bounds.x1, y: bounds.y2 },
-    ];
-    const normalProjection = corners.map((point) => (point.x - origin.x) * normal.x + (point.y - origin.y) * normal.y);
-    const directionProjection = corners.map((point) => (point.x - origin.x) * direction.x + (point.y - origin.y) * direction.y);
-    const first = Math.floor(Math.min(...normalProjection) / spacing) - 1;
-    const last = Math.ceil(Math.max(...normalProjection) / spacing) + 1;
-    const minAlong = Math.min(...directionProjection) - spacing * 2;
-    const maxAlong = Math.max(...directionProjection) + spacing * 2;
     ctx.save();
     traceResolvedHatchPath(resolved);
     ctx.clip("evenodd");
@@ -8732,15 +8724,41 @@
       ctx.fill("evenodd");
     }
     ctx.globalAlpha = alpha;
-    ctx.strokeStyle = selected ? "#2563eb" : hovered || preview ? "#0ea5e9" : appearance.color;
+    const emphasisColor = selected ? "#2563eb" : hovered || preview ? "#0ea5e9" : appearance.color;
+    if (appearance.patternType === "solid") {
+      ctx.fillStyle = emphasisColor;
+      traceResolvedHatchPath(resolved);
+      ctx.fill("evenodd");
+      ctx.restore();
+      return;
+    }
+    const spacing = Math.max(0.25, Number(appearance.spacing) || DEFAULT_HATCH_APPEARANCE.spacing) * HATCH_SCREEN_PX_PER_MM / viewport.scale;
+    const corners = [
+      { x: bounds.x1, y: bounds.y1 }, { x: bounds.x2, y: bounds.y1 },
+      { x: bounds.x2, y: bounds.y2 }, { x: bounds.x1, y: bounds.y2 },
+    ];
+    const appendLineFamily = (angle) => {
+      const direction = { x: Math.cos(angle), y: Math.sin(angle) };
+      const normal = { x: -direction.y, y: direction.x };
+      const normalProjection = corners.map((point) => (point.x - origin.x) * normal.x + (point.y - origin.y) * normal.y);
+      const directionProjection = corners.map((point) => (point.x - origin.x) * direction.x + (point.y - origin.y) * direction.y);
+      const first = Math.floor(Math.min(...normalProjection) / spacing) - 1;
+      const last = Math.ceil(Math.max(...normalProjection) / spacing) + 1;
+      const minAlong = Math.min(...directionProjection) - spacing * 2;
+      const maxAlong = Math.max(...directionProjection) + spacing * 2;
+      for (let index = first; index <= last; index++) {
+        const offset = index * spacing;
+        const base = { x: origin.x + normal.x * offset, y: origin.y + normal.y * offset };
+        ctx.moveTo(base.x + direction.x * minAlong, base.y + direction.y * minAlong);
+        ctx.lineTo(base.x + direction.x * maxAlong, base.y + direction.y * maxAlong);
+      }
+    };
+    ctx.strokeStyle = emphasisColor;
     ctx.lineWidth = (selected || hovered ? Math.max(1.5, appearance.lineWidth) : appearance.lineWidth) / viewport.scale;
     ctx.beginPath();
-    for (let index = first; index <= last; index++) {
-      const offset = index * spacing;
-      const base = { x: origin.x + normal.x * offset, y: origin.y + normal.y * offset };
-      ctx.moveTo(base.x + direction.x * minAlong, base.y + direction.y * minAlong);
-      ctx.lineTo(base.x + direction.x * maxAlong, base.y + direction.y * maxAlong);
-    }
+    const angle = Number(appearance.angle) * Math.PI / 180;
+    appendLineFamily(angle);
+    if (appearance.patternType === "cross") appendLineFamily(angle + Math.PI / 2);
     ctx.stroke();
     ctx.restore();
   }
@@ -11264,7 +11282,7 @@
       data += ` data-id="${escapeHtml(entry.id)}"`;
     } else if (category === "hatch") {
       const resolved = resolvedHatchBoundary(entry);
-      icon = toolbarSvgMarkup("#toolHatch"); primary = entry.id; secondary = applicationText("平行線", "Parallel");
+      icon = toolbarSvgMarkup("#toolHatch"); primary = entry.id; secondary = hatchPatternTypeLabel(hatchAppearanceForDisplay(entry).patternType);
       if (!resolved.ok) badges += `<span class="badge constraint-reference-error-badge">${applicationText("境界エラー", "Boundary error")}</span>`;
       data += ` data-id="${escapeHtml(entry.id)}"`;
     } else if (category === "annotation") {
@@ -12373,13 +12391,14 @@
       const boundaryStatus = boundary.ok ? applicationText("有効", "Valid") : applicationText("無効", "Invalid");
       const color = colorPickerValue(appearance.color);
       const repair = boundary.ok ? "" : `<div class="property-row property-row-action"><span>${applicationText("理由", "Reason")}</span><span class="property-readonly">${escapeHtml(hatchRegionErrorText(boundary))}</span></div><button type="button" class="property-action-button" data-property-action="hatch-repair">${applicationText("境界を再指定", "Reselect boundary")}</button>`;
+      const linePattern = appearance.patternType !== "solid";
       const appearanceRows = `
-        ${propertyReadonlyRow("種類", "Type", applicationText("平行線", "Parallel"))}
+        <div class="property-row"><label>${applicationText("種類", "Type")}</label><select data-hatch-property="patternType"><option value="parallel" ${appearance.patternType === "parallel" ? "selected" : ""}>${applicationText("平行線", "Parallel")}</option><option value="cross" ${appearance.patternType === "cross" ? "selected" : ""}>${applicationText("クロス", "Cross")}</option><option value="solid" ${appearance.patternType === "solid" ? "selected" : ""}>${applicationText("塗りつぶし", "Solid fill")}</option></select></div>
         <div class="property-row"><label>${applicationText("表示", "Visible")}</label><input data-hatch-property="visible" type="checkbox" ${appearance.visible !== false ? "checked" : ""}></div>
-        <div class="property-row"><label>${applicationText("角度", "Angle")}</label><div class="property-input-with-unit"><input data-hatch-property="angle" type="number" step="1" value="${appearance.angle}"><span class="property-input-unit">°</span></div></div>
-        <div class="property-row"><label>${applicationText("間隔", "Spacing")}</label><div class="property-input-with-unit"><input data-hatch-property="spacing" type="number" min="0.25" max="1000" step="0.1" value="${appearance.spacing}"><span class="property-input-unit">mm</span></div></div>
+        ${linePattern ? `<div class="property-row"><label>${applicationText("角度", "Angle")}</label><div class="property-input-with-unit"><input data-hatch-property="angle" type="number" step="1" value="${appearance.angle}"><span class="property-input-unit">°</span></div></div>
+        <div class="property-row"><label>${applicationText("間隔", "Spacing")}</label><div class="property-input-with-unit"><input data-hatch-property="spacing" type="number" min="0.25" max="1000" step="0.1" value="${appearance.spacing}"><span class="property-input-unit">mm</span></div></div>` : ""}
         <div class="property-row"><label>${applicationText("色", "Color")}</label><div class="property-color-control"><input data-hatch-property="color" type="text" value="${escapeHtml(appearance.color)}"><button class="property-color-picker" data-appearance-palette-open data-current-color="${color}" type="button" title="${applicationText("カラーパレット", "Color palette")}" aria-label="${applicationText("カラーパレット", "Color palette")}"><span class="property-color-picker-swatch" style="--swatch-color:${color}" aria-hidden="true"></span></button></div></div>
-        <div class="property-row"><label>${applicationText("線幅", "Line width")}</label><input data-hatch-property="lineWidth" type="number" min="0.5" max="10" step="0.1" value="${appearance.lineWidth}"></div>`;
+        ${linePattern ? `<div class="property-row"><label>${applicationText("線幅", "Line width")}</label><input data-hatch-property="lineWidth" type="number" min="0.5" max="10" step="0.1" value="${appearance.lineWidth}"></div>` : ""}`;
       panel.innerHTML = `<h2 class="property-heading">${applicationText("ハッチング", "Hatching")}</h2><section class="property-section">${basicInformationHeading}${propertyReadonlyRow("種類", "Type", applicationText("ハッチング", "Hatching"))}${propertyReadonlyRow("ID", "ID", item.id)}${propertyReadonlyRow("所属スケッチ", "Owning sketch", `${sketchName(item.sketchId)} (${item.sketchId})`, { userContent: true })}${propertyReadonlyRow("境界状態", "Boundary status", boundaryStatus)}${repair}</section><section class="property-section"><h3>Appearance</h3>${appearanceRows}</section>`;
     } else if (target.kind === "block") {
       const definition = blockDefinitionById(item.definitionId);
@@ -12665,6 +12684,7 @@
       const raw = input.type === "checkbox" ? input.checked : input.value.trim();
       const next = { ...target.item.appearance };
       if (key === "visible") next.visible = Boolean(raw);
+      else if (key === "patternType") next.patternType = raw;
       else if (["angle", "spacing", "lineWidth"].includes(key)) next[key] = Number(raw);
       else if (key === "color") next.color = raw;
       target.item.appearance = normalizeHatchAppearance(next);
@@ -17452,6 +17472,32 @@
           serialized: serializeModel(),
         };
       },
+      resetForSolidHatchHoleTest() {
+        resetModelState();
+        viewport.scale = 1;
+        const corners = [
+          addPoint(0, 0, false, "endpoint"), addPoint(120, 0, false, "endpoint"),
+          addPoint(120, 80, false, "endpoint"), addPoint(0, 80, false, "endpoint"),
+        ];
+        addLine(corners[0], corners[1]);
+        addLine(corners[1], corners[2]);
+        addLine(corners[2], corners[3]);
+        addLine(corners[3], corners[0]);
+        addCircle(addPoint(60, 40, false, "center"), 20, false);
+        const face = findHatchFaceInIndex(createHatchRegionIndex(hatchPrimitivesForScope(model, DEFAULT_SKETCH_ID)), { x: 20, y: 40 });
+        model.hatches.push({ id: "H1", sketchId: DEFAULT_SKETCH_ID, seed: { x: 20, y: 40 }, boundaryLoops: face.boundaryLoops, appearance: { ...DEFAULT_HATCH_APPEARANCE, patternType: "solid", color: "#0f766e" } });
+        model.nextHatchIndex = 2;
+        fitSketchToViewport(activeSketchId(), 160);
+        resetHistory("solid hatch hole test");
+        updateUI();
+        draw();
+        const rect = canvas.getBoundingClientRect();
+        const clientPoint = (point) => {
+          const screen = worldToCanvasScreen(point);
+          return { x: rect.left + screen.x, y: rect.top + screen.y };
+        };
+        return { fillClient: clientPoint({ x: 20, y: 40 }), holeClient: clientPoint({ x: 65, y: 40 }) };
+      },
       resetForProjectedHatchTest() {
         resetModelState();
         const child = createEmptyBlockDefinition("Hatch Child");
@@ -17467,7 +17513,7 @@
           child.lines.push(line);
         });
         const face = findHatchFaceInIndex(createHatchRegionIndex(hatchPrimitivesForScope(child, DEFAULT_SKETCH_ID)), { x: 50, y: 30 });
-        child.hatches = [{ id: "H1", sketchId: DEFAULT_SKETCH_ID, seed: { x: 50, y: 30 }, boundaryLoops: face.boundaryLoops, appearance: { ...DEFAULT_HATCH_APPEARANCE } }];
+        child.hatches = [{ id: "H1", sketchId: DEFAULT_SKETCH_ID, seed: { x: 50, y: 30 }, boundaryLoops: face.boundaryLoops, appearance: { ...DEFAULT_HATCH_APPEARANCE, patternType: "cross" } }];
         child.nextHatchIndex = 2;
 
         const parent = createEmptyBlockDefinition("Hatch Parent");
@@ -17483,7 +17529,7 @@
         updateUI();
         draw();
         return {
-          projected: { id: projected.id, angle: projected.appearance.angle, color: projected.appearance.color, lineWidth: projected.appearance.lineWidth, valid: resolvedHatchBoundary(projected).ok },
+          projected: { id: projected.id, patternType: projected.appearance.patternType, angle: projected.appearance.angle, color: projected.appearance.color, lineWidth: projected.appearance.lineWidth, valid: resolvedHatchBoundary(projected).ok },
           ownerAtSeed: hitBlockInstance(projected.seed.x, projected.seed.y)?.id || null,
           client: { x: rect.left + screen.x, y: rect.top + screen.y },
           serialized: serializeModel(),
@@ -17491,7 +17537,7 @@
       },
       projectedHatchStateForTest() {
         const projected = allHatches().find((hatch) => hatch.blockProjection) || null;
-        return projected ? { id: projected.id, angle: projected.appearance.angle, color: projected.appearance.color, lineWidth: projected.appearance.lineWidth, valid: resolvedHatchBoundary(projected).ok, ownerId: projected.blockInstance?.id || null } : null;
+        return projected ? { id: projected.id, patternType: projected.appearance.patternType, angle: projected.appearance.angle, color: projected.appearance.color, lineWidth: projected.appearance.lineWidth, valid: resolvedHatchBoundary(projected).ok, ownerId: projected.blockInstance?.id || null } : null;
       },
       exerciseHatchTransferForTest() {
         const hatch = model.hatches[0];
