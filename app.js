@@ -9173,13 +9173,30 @@
     ctx.restore();
   }
 
+  function isArcRadiusDimensionTarget(target) {
+    return target?.kind === "radius" && target.primitive instanceof Arc;
+  }
+
+  function linearDimensionRenderPlan(target, layout, label, appearance, dimension) {
+    const arcRadius = isArcRadiusDimensionTarget(target);
+    const outside = shouldPlaceDimensionTerminatorsOutside(layout.span, label, appearance, dimension);
+    const directions = linearDimensionTerminatorDirections(layout.d, outside);
+    return {
+      lineStart: arcRadius ? layout.a : layout.lineA || layout.a,
+      lineEnd: arcRadius ? layout.b : layout.lineB || layout.b,
+      firstTerminator: arcRadius ? null : { point: layout.a, direction: directions.first },
+      secondTerminator: { point: layout.b, direction: directions.second },
+    };
+  }
+
   function drawDimension(target, dimension, label, preview = false, highlighted = false, editState = null, colorOverride = null, sketchId = activeSketchId()) {
     if (!target || !dimension) return;
     if (target.kind === "angle") return drawAngleDimension(target, dimension, label, preview, highlighted, editState, colorOverride, sketchId);
     const appearance = effectiveDimensionAppearance(dimension, sketchId);
     const layout = dimensionLayout(target, dimension, appearance);
     if (!layout) return;
-    const { a, b, lineA, lineB, points, d, span, text, textAngle } = layout;
+    const { points, text, textAngle } = layout;
+    const renderPlan = linearDimensionRenderPlan(target, layout, label, appearance, dimension);
 
     ctx.save();
     const color = preview || highlighted ? "#2563eb" : colorOverride || appearance.color;
@@ -9188,8 +9205,8 @@
     ctx.lineWidth = dimensionStrokeWidth(appearance, highlighted) / viewport.scale;
     ctx.setLineDash(preview ? [5 / viewport.scale, 4 / viewport.scale] : []);
     ctx.beginPath();
-    ctx.moveTo((lineA || a).x, (lineA || a).y);
-    ctx.lineTo((lineB || b).x, (lineB || b).y);
+    ctx.moveTo(renderPlan.lineStart.x, renderPlan.lineStart.y);
+    ctx.lineTo(renderPlan.lineEnd.x, renderPlan.lineEnd.y);
     ctx.stroke();
 
     for (const p of points) {
@@ -9201,10 +9218,10 @@
     }
 
     ctx.setLineDash([]);
-    const outside = shouldPlaceDimensionTerminatorsOutside(span, label, appearance, dimension);
-    const reverseDirection = { x: -d.x, y: -d.y };
-    drawDimensionTerminator(a, outside ? reverseDirection : d, appearance);
-    drawDimensionTerminator(b, outside ? d : reverseDirection, appearance);
+    if (renderPlan.firstTerminator) {
+      drawDimensionTerminator(renderPlan.firstTerminator.point, renderPlan.firstTerminator.direction, appearance);
+    }
+    drawDimensionTerminator(renderPlan.secondTerminator.point, renderPlan.secondTerminator.direction, appearance);
 
     drawDimensionLabel(label, text, textAngle, editState, appearance);
     ctx.restore();
@@ -9427,7 +9444,8 @@
       return {
         source,
         projection: t,
-        showExtension: shouldShowDimensionExtension(target, index, { source, onDimension, extensionDirection }),
+        showExtension: !isArcRadiusDimensionTarget(target)
+          && shouldShowDimensionExtension(target, index, { source, onDimension, extensionDirection }),
         extensionStart: {
           x: source.x + ux * visibleGap,
           y: source.y + uy * visibleGap,
@@ -17929,6 +17947,28 @@
               effective: structuredClone(dimensionDisplayState(item.dimension, item.sketchId, definition.sketches)),
             })),
           })),
+        };
+      },
+      arcRadiusDimensionRenderPlanForTest(terminatorType = "arrow") {
+        const center = new Point("P_ARC_RADIUS_TEST", 0, 0, false, "explicit");
+        const arc = new Arc("A_ARC_RADIUS_TEST", center, 30, 0, Math.PI / 2, false);
+        const target = { kind: "radius", primitive: arc, value: arc.radius() };
+        const dimension = dimensionFromAnchor(target, circlePointAtAngle(arc, Math.PI / 4));
+        dimension.labelOffsetU = arc.radius() / 2;
+        const appearance = {
+          ...normalizeDimensionAppearance(model.defaultDimensionAppearance, { partial: false }),
+          terminatorType,
+        };
+        const layout = dimensionLayout(target, dimension, appearance);
+        const plan = linearDimensionRenderPlan(target, layout, "R30", appearance, dimension);
+        return {
+          centerTerminatorVisible: Boolean(plan.firstTerminator),
+          arcTerminatorVisible: Boolean(plan.secondTerminator),
+          lineStartDistanceFromCenter: hypot2(plan.lineStart.x - center.x, plan.lineStart.y - center.y),
+          lineEndDistanceFromCenter: hypot2(plan.lineEnd.x - center.x, plan.lineEnd.y - center.y),
+          rawExtendedLineEndDistanceFromCenter: hypot2(layout.lineB.x - center.x, layout.lineB.y - center.y),
+          visibleExtensionCount: layout.points.filter((point) => point.showExtension !== false).length,
+          arcRadius: arc.radius(),
         };
       },
       dimensionAppearanceRenderMetricsForTest(index = 0) {

@@ -1733,6 +1733,21 @@ test("Block Instance Appearance Override applies to the whole instance", async (
   expect((await page.evaluate((id) => window.__cadTest.appearanceStateForTest("block", id), instanceId)).effective.color).toBe("#7c3aed");
 });
 
+test("arc radius dimensions omit the center terminator and stop at the arc", async ({ page }) => {
+  await page.goto(`${baseUrl}/index.html?test=1`);
+  await page.waitForFunction(() => window.__cadTest);
+
+  for (const terminatorType of ["arrow", "filledArrow", "dot"]) {
+    const plan = await page.evaluate((type) => window.__cadTest.arcRadiusDimensionRenderPlanForTest(type), terminatorType);
+    expect(plan.centerTerminatorVisible).toBe(false);
+    expect(plan.arcTerminatorVisible).toBe(true);
+    expect(plan.lineStartDistanceFromCenter).toBeCloseTo(0, 8);
+    expect(plan.lineEndDistanceFromCenter).toBeCloseTo(plan.arcRadius, 8);
+    expect(plan.rawExtendedLineEndDistanceFromCenter).toBeGreaterThan(plan.arcRadius);
+    expect(plan.visibleExtensionCount).toBe(0);
+  }
+});
+
 test("Constraint dimensions expose defining geometry and inheritable appearance without creating annotation dimensions", async ({ page }) => {
   await page.goto(`${baseUrl}/index.html?test=1`);
   await page.waitForFunction(() => window.__cadTest);
