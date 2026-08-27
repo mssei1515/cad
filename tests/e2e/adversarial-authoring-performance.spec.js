@@ -578,16 +578,19 @@ test("symmetry constraint mirrors two lines after selecting the axis first", asy
     axis: "LS_AXIS",
   });
   const points = new Map(committed.model.points.map((point) => [point.id, point]));
-  const lineConstraint = committed.authoring.lastConstraint;
-  const pairs = lineConstraint.reversed
-    ? [["LS_P1", "LS_P4"], ["LS_P2", "LS_P3"]]
-    : [["LS_P1", "LS_P3"], ["LS_P2", "LS_P4"]];
-  for (const [leftId, rightId] of pairs) {
-    const left = points.get(leftId);
-    const right = points.get(rightId);
-    expect(Math.abs(left.x + right.x)).toBeLessThan(1e-5);
-    expect(Math.abs(left.y - right.y)).toBeLessThan(1e-5);
-  }
+  const firstStart = points.get("LS_P1");
+  const firstEnd = points.get("LS_P2");
+  const secondStart = points.get("LS_P3");
+  const secondEnd = points.get("LS_P4");
+  const firstMidpoint = { x: (firstStart.x + firstEnd.x) / 2, y: (firstStart.y + firstEnd.y) / 2 };
+  const secondMidpoint = { x: (secondStart.x + secondEnd.x) / 2, y: (secondStart.y + secondEnd.y) / 2 };
+  expect(Math.abs(firstMidpoint.x + secondMidpoint.x)).toBeLessThan(1e-5);
+  expect(Math.abs(firstMidpoint.y - secondMidpoint.y)).toBeLessThan(1e-5);
+  const reflectedFirstDirection = { x: -(firstEnd.x - firstStart.x), y: firstEnd.y - firstStart.y };
+  const secondDirection = { x: secondEnd.x - secondStart.x, y: secondEnd.y - secondStart.y };
+  const directionCross = reflectedFirstDirection.x * secondDirection.y - reflectedFirstDirection.y * secondDirection.x;
+  const directionScale = Math.hypot(reflectedFirstDirection.x, reflectedFirstDirection.y) * Math.hypot(secondDirection.x, secondDirection.y);
+  expect(Math.abs(directionCross) / directionScale).toBeLessThan(1e-5);
   expect(committed.analysis.errorNorm).toBeLessThan(1e-5);
 
   const restored = await page.evaluate((model) => {
@@ -600,6 +603,59 @@ test("symmetry constraint mirrors two lines after selecting the axis first", asy
   }, committed.model);
   expect(restored.result.success).toBe(true);
   expect(restored.authoring.lastConstraint).toMatchObject({ type: "lineSymmetry", axis: "LS_AXIS" });
+  expect(restored.analysis.errorNorm).toBeLessThan(1e-5);
+});
+
+test("symmetry constraint mirrors arc centers and radii while leaving endpoints free", async ({ page }) => {
+  const data = fixtureMilestone(0);
+  data.points.push(
+    { id: "AS_A1", x: 0, y: -140, fixed: true, kind: "endpoint" },
+    { id: "AS_A2", x: 0, y: 140, fixed: true, kind: "endpoint" },
+    { id: "AS_C1", x: -75, y: 5, fixed: false, kind: "center" },
+    { id: "AS_C2", x: 65, y: 15, fixed: false, kind: "center" },
+  );
+  data.lines.push({ id: "AS_AXIS", p1: "AS_A1", p2: "AS_A2", construction: true });
+  data.arcs.push(
+    { id: "AS_ARC1", center: "AS_C1", radius: 30, startAngle: 0, endAngle: Math.PI / 2 },
+    { id: "AS_ARC2", center: "AS_C2", radius: 45, startAngle: Math.PI, endAngle: Math.PI * 1.5 },
+  );
+  await loadFixture(page, data, { x: 0, y: 0 }, 1);
+
+  await page.locator('[data-constraint="symmetry"]').click();
+  await clickWorld(page, { x: 0, y: 0 });
+  await clickWorld(page, { x: -75, y: 35 });
+  await clickWorld(page, { x: 65, y: -30 });
+
+  const committed = await page.evaluate(() => ({
+    authoring: window.__cadTest.authoringStateForTest(),
+    model: window.__cadTest.serializedModelForTest(),
+    analysis: window.__cadTest.constraintAnalysisForTest(),
+  }));
+  expect(committed.authoring.lastConstraint).toMatchObject({
+    type: "arcSymmetry",
+    arc1: "AS_ARC1",
+    arc2: "AS_ARC2",
+    axis: "AS_AXIS",
+  });
+  const centers = new Map(committed.model.points.map((point) => [point.id, point]));
+  const arcs = new Map(committed.model.arcs.map((arc) => [arc.id, arc]));
+  expect(Math.abs(centers.get("AS_C1").x + centers.get("AS_C2").x)).toBeLessThan(1e-5);
+  expect(Math.abs(centers.get("AS_C1").y - centers.get("AS_C2").y)).toBeLessThan(1e-5);
+  expect(Math.abs(arcs.get("AS_ARC1").radius - arcs.get("AS_ARC2").radius)).toBeLessThan(1e-5);
+  expect(arcs.get("AS_ARC1")).toMatchObject({ startAngle: 0, endAngle: Math.PI / 2 });
+  expect(arcs.get("AS_ARC2")).toMatchObject({ startAngle: Math.PI, endAngle: Math.PI * 1.5 });
+  expect(committed.analysis.errorNorm).toBeLessThan(1e-5);
+
+  const restored = await page.evaluate((model) => {
+    const result = window.__cadTest.loadDocumentFixtureForDragTest(model, "arc-symmetry-round-trip.json");
+    return {
+      result,
+      authoring: window.__cadTest.authoringStateForTest(),
+      analysis: window.__cadTest.constraintAnalysisForTest(),
+    };
+  }, committed.model);
+  expect(restored.result.success).toBe(true);
+  expect(restored.authoring.lastConstraint).toMatchObject({ type: "arcSymmetry", axis: "AS_AXIS" });
   expect(restored.analysis.errorNorm).toBeLessThan(1e-5);
 });
 

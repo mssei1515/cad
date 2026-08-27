@@ -86,6 +86,45 @@ test("representative persistent constraints have zero residual on canonical geom
   }
 });
 
+test("line symmetry constrains midpoint and direction without constraining length", () => {
+  const point = (id, x, y) => new geometry.Point(id, x, y);
+  const axis = new geometry.Line("AXIS", point("AX1", 0, -20), point("AX2", 0, 20));
+  const angle = Math.PI / 6;
+  const lineFromCenter = (id, centerX, centerY, directionAngle, length) => {
+    const dx = Math.cos(directionAngle) * length / 2;
+    const dy = Math.sin(directionAngle) * length / 2;
+    return new geometry.Line(id, point(`${id}A`, centerX - dx, centerY - dy), point(`${id}B`, centerX + dx, centerY + dy));
+  };
+  const first = lineFromCenter("L1", -5, 2, angle, 4);
+  const second = lineFromCenter("L2", 5, 2, Math.PI - angle, 11);
+  const constraint = new geometry.LineSymmetryConstraint(first, second, axis);
+
+  assert.ok(residualNorm(constraint.rawError()) < 1e-9);
+  assert.notEqual(first.length(), second.length());
+
+  second.p1.x += 1;
+  second.p2.x += 1;
+  assert.ok(residualNorm(constraint.rawError()) > 1e-3);
+});
+
+test("arc symmetry constrains center and radius without constraining endpoints", () => {
+  const point = (id, x, y) => new geometry.Point(id, x, y);
+  const axis = new geometry.Line("AXIS", point("AX1", 0, -20), point("AX2", 0, 20));
+  const first = new geometry.Arc("A1", point("C1", -6, 3), 8, 0.1, 1.2);
+  const second = new geometry.Arc("A2", point("C2", 6, 3), 8, 2.4, 5.7);
+  const constraint = new geometry.ArcSymmetryConstraint(first, second, axis);
+
+  assert.ok(residualNorm(constraint.rawError()) < 1e-9);
+  first.startAngle = -2;
+  first.endAngle = -0.4;
+  second.startAngle = 0.7;
+  second.endAngle = 2.8;
+  assert.ok(residualNorm(constraint.rawError()) < 1e-9);
+
+  second.radiusValue = 9;
+  assert.ok(residualNorm(constraint.rawError()) > 0.9);
+});
+
 test("solver satisfies distance and orientation while reporting no remaining freedom", () => {
   const p1 = new geometry.Point("P1", 0, 0, true);
   const p2 = new geometry.Point("P2", 8, 6, false);

@@ -33,6 +33,7 @@ function phase0DocumentFixture({ presentationRefOnSecondaryBlockSketch = false }
     disabled({ type: "pointVertical", p1: "P1", p2: "P3" }),
     disabled({ type: "symmetry", p1: "P1", p2: "P2", axis: "L2" }),
     disabled({ type: "lineSymmetry", line1: "L1", line2: "L3", axis: "L2", reversed: false }),
+    disabled({ type: "arcSymmetry", arc1: "A1", arc2: "A2", axis: "L2" }),
     disabled({ type: "parallel", line1: "L1", line2: "L3" }),
     disabled({ type: "perpendicular", line1: "L1", line2: "L2" }),
     disabled({ type: "collinear", line1: "L1", line2: "L3" }),

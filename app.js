@@ -85,6 +85,7 @@
     PointVerticalConstraint,
     SymmetryConstraint,
     LineSymmetryConstraint,
+    ArcSymmetryConstraint,
     ParallelConstraint,
     PerpendicularConstraint,
     CollinearConstraint,
@@ -356,6 +357,8 @@
   const CONSTRUCTION_EXTENSION_SCREEN_PX = 12;
   const CONSTRUCTION_GEOMETRY_ALPHA = 0.72;
   const DIMENSION_SCREEN_PX_PER_MM = 96 / 25.4;
+  const DIMENSION_TERMINATOR_FIT_MARGIN_FACTOR = 1;
+  const DIMENSION_OUTSIDE_SHAFT_LENGTH_FACTOR = 1.5;
   const HATCH_SCREEN_PX_PER_MM = 96 / 25.4;
   const DIMENSION_APPEARANCE_LENGTH_KEYS = ["extensionLineOvershoot", "extensionLineOriginGap", "terminatorSize", "dimensionTextHeight", "dimensionTextGap"];
   const DIMENSION_DISPLAY_PRECISION = 1e-6;
@@ -3026,6 +3029,7 @@
       constraint instanceof PointVerticalConstraint ||
       constraint instanceof SymmetryConstraint ||
       constraint instanceof LineSymmetryConstraint ||
+      constraint instanceof ArcSymmetryConstraint ||
       constraint instanceof ParallelConstraint ||
       constraint instanceof PerpendicularConstraint ||
       constraint instanceof CollinearConstraint ||
@@ -4696,6 +4700,12 @@
       constraintClass: LineSymmetryConstraint,
       serialize: (c) => ({ line1: constraintGeometryId(c.line1), line2: constraintGeometryId(c.line2), axis: constraintGeometryId(c.axis), reversed: c.reversed, enabled: c.enabled }),
       deserialize: (data, refs) => new LineSymmetryConstraint(refs.line(data.line1), refs.line(data.line2), refs.line(data.axis), typeof data.reversed === "boolean" ? data.reversed : null),
+    },
+    {
+      type: "arcSymmetry",
+      constraintClass: ArcSymmetryConstraint,
+      serialize: (c) => ({ arc1: constraintGeometryId(c.arc1), arc2: constraintGeometryId(c.arc2), axis: constraintGeometryId(c.axis), enabled: c.enabled }),
+      deserialize: (data, refs) => new ArcSymmetryConstraint(refs.primitive(data.arc1), refs.primitive(data.arc2), refs.line(data.axis)),
     },
     {
       type: "parallel",
@@ -7509,6 +7519,7 @@
     if (c instanceof LineSymmetryConstraint) {
       return c.line1.p1 === point || c.line1.p2 === point || c.line2.p1 === point || c.line2.p2 === point || c.axis.p1 === point || c.axis.p2 === point;
     }
+    if (c instanceof ArcSymmetryConstraint) return c.arc1.center === point || c.arc2.center === point || c.axis.p1 === point || c.axis.p2 === point;
     if (c instanceof ParallelConstraint || c instanceof PerpendicularConstraint) {
       return c.line1.p1 === point || c.line1.p2 === point || c.line2.p1 === point || c.line2.p2 === point;
     }
@@ -7531,6 +7542,7 @@
     }
     if (c instanceof SymmetryConstraint) return c.axis === line;
     if (c instanceof LineSymmetryConstraint) return c.line1 === line || c.line2 === line || c.axis === line;
+    if (c instanceof ArcSymmetryConstraint) return c.axis === line;
     if (c instanceof PointLineDistanceConstraint) return c.line === line;
     if (c instanceof LineLineDistanceConstraint) return c.line1 === line || c.line2 === line;
     if (c instanceof OffsetConstraint) return c.source === line || c.offset === line;
@@ -7545,6 +7557,7 @@
   }
 
   function constraintReferencesPrimitive(c, primitive) {
+    if (c instanceof ArcSymmetryConstraint) return c.arc1 === primitive || c.arc2 === primitive;
     if (c instanceof OffsetConstraint) return c.source === primitive || c.offset === primitive;
     if (c instanceof ArcEndpointCoincidentConstraint) return c.arc === primitive;
     if (c instanceof ArcEndpointArcEndpointCoincidentConstraint) return c.a === primitive || c.b === primitive;
@@ -7631,6 +7644,14 @@
         addNode(nodes, line.p1);
         addNode(nodes, line.p2);
       }
+    } else if (c instanceof ArcSymmetryConstraint) {
+      for (const arc of [c.arc1, c.arc2]) {
+        addNode(nodes, arc);
+        addNode(nodes, arc.center);
+      }
+      addNode(nodes, c.axis);
+      addNode(nodes, c.axis.p1);
+      addNode(nodes, c.axis.p2);
     } else if (c instanceof ParallelConstraint || c instanceof PerpendicularConstraint || c instanceof CollinearConstraint || c instanceof EqualLengthConstraint || c instanceof LineAngleConstraint) {
       for (const line of [c.line1, c.line2]) {
         addNode(nodes, line);
@@ -7673,6 +7694,8 @@
       ["line", "線ID", "Line ID"],
       ["line1", "1本目の線ID", "First line ID"],
       ["line2", "2本目の線ID", "Second line ID"],
+      ["arc1", "1つ目の円弧ID", "First arc ID"],
+      ["arc2", "2つ目の円弧ID", "Second arc ID"],
       ["source", "基準図形ID", "Source geometry ID"],
       ["offset", "オフセット図形ID", "Offset geometry ID"],
       ["arc", "円弧ID", "Arc ID"],
@@ -9181,11 +9204,25 @@
     const arcRadius = isArcRadiusDimensionTarget(target);
     const outside = shouldPlaceDimensionTerminatorsOutside(layout.span, label, appearance, dimension);
     const directions = linearDimensionTerminatorDirections(layout.d, outside);
+    const firstTerminator = arcRadius ? null : { point: layout.a, direction: directions.first };
+    const secondTerminator = { point: layout.b, direction: directions.second };
+    const shaftLength = dimensionMillimetersToWorld(appearance.terminatorSize * DIMENSION_OUTSIDE_SHAFT_LENGTH_FACTOR);
+    const shafts = outside && !arcRadius && ["arrow", "filledArrow"].includes(appearance.terminatorType)
+      ? [firstTerminator, secondTerminator].filter(Boolean).map((terminator) => ({
+        start: terminator.point,
+        end: {
+          x: terminator.point.x + terminator.direction.x * shaftLength,
+          y: terminator.point.y + terminator.direction.y * shaftLength,
+        },
+      }))
+      : [];
     return {
+      outside,
       lineStart: arcRadius ? layout.a : layout.lineA || layout.a,
       lineEnd: arcRadius ? layout.b : layout.lineB || layout.b,
-      firstTerminator: arcRadius ? null : { point: layout.a, direction: directions.first },
-      secondTerminator: { point: layout.b, direction: directions.second },
+      firstTerminator,
+      secondTerminator,
+      shafts,
     };
   }
 
@@ -9214,6 +9251,13 @@
       ctx.beginPath();
       ctx.moveTo(p.extensionStart.x, p.extensionStart.y);
       ctx.lineTo(p.extensionEnd.x, p.extensionEnd.y);
+      ctx.stroke();
+    }
+
+    for (const shaft of renderPlan.shafts) {
+      ctx.beginPath();
+      ctx.moveTo(shaft.start.x, shaft.start.y);
+      ctx.lineTo(shaft.end.x, shaft.end.y);
       ctx.stroke();
     }
 
@@ -9249,7 +9293,7 @@
     ctx.stroke();
     const outside = shouldPlaceDimensionTerminatorsOutside(Math.abs(signed) * radius, label, appearance, dimension);
     const sweepDirection = signed < 0 ? -1 : 1;
-    const arcExtension = outside ? dimensionMillimetersToWorld(appearance.terminatorSize) / Math.max(radius, 1e-12) : 0;
+    const arcExtension = outside ? dimensionMillimetersToWorld(appearance.terminatorSize * DIMENSION_OUTSIDE_SHAFT_LENGTH_FACTOR) / Math.max(radius, 1e-12) : 0;
     ctx.beginPath();
     ctx.arc(vertex.x, vertex.y, radius, start - sweepDirection * arcExtension, end + sweepDirection * arcExtension, signed < 0);
     ctx.stroke();
@@ -9321,14 +9365,16 @@
       && cached.availableLength === normalizedAvailableLength
       && cached.viewportScale === viewport.scale
       && cached.dimensionTextHeight === appearance.dimensionTextHeight
-      && cached.terminatorType === terminatorType) return cached.outside;
+      && cached.terminatorType === terminatorType
+      && cached.terminatorSize === appearance.terminatorSize) return cached.outside;
     const availableScreenLength = normalizedAvailableLength * viewport.scale;
     const text = String(label ?? "");
     const screenHeight = appearance.dimensionTextHeight * DIMENSION_SCREEN_PX_PER_MM;
     const screenWidth = cached?.text === text && cached.screenHeight === screenHeight
       ? cached.screenWidth
       : dimensionTextWidthFromResolved(text, appearance, cacheOwner) * viewport.scale;
-    const outside = availableScreenLength < screenWidth;
+    const fitMargin = appearance.terminatorSize * DIMENSION_SCREEN_PX_PER_MM * DIMENSION_TERMINATOR_FIT_MARGIN_FACTOR;
+    const outside = availableScreenLength < screenWidth + fitMargin;
     if (cacheOwner && typeof cacheOwner === "object") {
       dimensionTextWidthCache.set(cacheOwner, {
         label,
@@ -9339,6 +9385,7 @@
         viewportScale: viewport.scale,
         dimensionTextHeight: appearance.dimensionTextHeight,
         terminatorType,
+        terminatorSize: appearance.terminatorSize,
         outside,
       });
     }
@@ -10286,7 +10333,8 @@
     if (type === "symmetry") {
       const pointTargets = selectedPoints.length === 2 && selectedLines.length === 1;
       const lineTargets = selectedPoints.length === 0 && selectedLines.length === 3;
-      return primitives.length === 0 && (pointTargets || lineTargets) && selectedLines.every(lineHasDirection);
+      const arcTargets = selectedPoints.length === 0 && selectedLines.length === 1 && selectedCircles.length === 0 && selectedArcs.length === 2;
+      return ((primitives.length === 0 && (pointTargets || lineTargets)) || arcTargets) && selectedLines.every(lineHasDirection);
     }
     if (type === "collinear") return selectedLines.length === 2 && selectedLines.every(lineHasDirection);
     return false;
@@ -10330,9 +10378,9 @@
     if (type === "perpendicular") return applicationText("直交させる線を2本選択してください", "Select two lines to make perpendicular.");
     if (type === "symmetry") {
       if (constraintOperands.length === 0) return applicationText("最初に対称軸にする線を選択してください", "First select the symmetry-axis line.");
-      if (constraintOperands.length === 1) return applicationText("対称にする1つ目の点または線を選択してください", "Select the first point or line to mirror.");
-      const subjectKind = constraintOperands[1]?.kind === "line" ? "線" : "点";
-      return applicationLanguage === "en" ? `Select the second ${subjectKind === "線" ? "line" : "point"} to mirror.` : `対称にする2つ目の${subjectKind}を選択してください`;
+      if (constraintOperands.length === 1) return applicationText("対称にする1つ目の点、線、または円弧を選択してください", "Select the first point, line, or arc to mirror.");
+      const subjectKind = constraintOperands[1]?.kind === "line" ? applicationText("線", "line") : constraintOperands[1]?.kind === "primitive" ? applicationText("円弧", "arc") : applicationText("点", "point");
+      return applicationLanguage === "en" ? `Select the second ${subjectKind} to mirror.` : `対称にする2つ目の${subjectKind}を選択してください`;
     }
     return applicationLanguage === "en" ? `Select targets for ${constraintLabel(type)}.` : `${constraintLabel(type)} の対象を選択してください`;
   }
@@ -10341,8 +10389,8 @@
     if (applicationLanguage === "en") {
       if (type === "symmetry") {
         if (constraintOperands.length === 0) return "Select a line as the symmetry axis for the first target.";
-        if (constraintOperands.length === 1) return "Select a point or line to mirror for the second target.";
-        return `Select a ${constraintOperands[1]?.kind === "line" ? "line" : "point"} matching the second target type.`;
+        if (constraintOperands.length === 1) return "Select a point, line, or arc to mirror for the second target.";
+        return `Select a ${constraintOperands[1]?.kind === "line" ? "line" : constraintOperands[1]?.kind === "primitive" ? "arc" : "point"} matching the second target type.`;
       }
       const hints = {
         concentric: "Select two circles/arcs, or a point and a circle/arc, for this constraint.",
@@ -10371,8 +10419,8 @@
     }
     if (type === "symmetry") {
       if (constraintOperands.length === 0) return "最初の対象には対称軸にする線を選択してください";
-      if (constraintOperands.length === 1) return "2番目の対象には対称にする点または線を選択してください";
-      return `3番目の対象には2番目と同じ種類の${constraintOperands[1]?.kind === "line" ? "線" : "点"}を選択してください`;
+      if (constraintOperands.length === 1) return "2番目の対象には対称にする点、線、または円弧を選択してください";
+      return `3番目の対象には2番目と同じ種類の${constraintOperands[1]?.kind === "line" ? "線" : constraintOperands[1]?.kind === "primitive" ? "円弧" : "点"}を選択してください`;
     }
     if (type === "distance") return "寸法対象として点または線を選択してください";
     return "この拘束では選択できません";
@@ -10400,10 +10448,10 @@
       selectedLines = selectedLines.slice(0, 2);
       selectedArcEndpoint = null;
     } else if (type === "symmetry") {
-      selectedPoints = selectedPoints.slice(0, 2);
-      selectedLines = selectedPoints.length > 0 ? selectedLines.slice(0, 1) : selectedLines.slice(0, 3);
+      selectedPoints = selectedArcs.length > 0 ? [] : selectedPoints.slice(0, 2);
+      selectedLines = selectedPoints.length > 0 || selectedArcs.length > 0 ? selectedLines.slice(0, 1) : selectedLines.slice(0, 3);
       selectedCircles = [];
-      selectedArcs = [];
+      selectedArcs = selectedPoints.length === 0 && selectedLines.length === 1 ? selectedArcs.slice(0, 2) : [];
       selectedArcEndpoint = null;
     } else if (type === "collinear") {
       selectedPoints = [];
@@ -10562,8 +10610,10 @@
       if (constraintOperands.length === 0 && hitL) return makeConstraintOperand("line", { line: hitL });
       if (subjectKind === "point" && hitP) return makeConstraintOperand("point", { point: hitP });
       if (subjectKind === "line" && hitL) return makeConstraintOperand("line", { line: hitL });
+      if (subjectKind === "primitive" && hitA) return makeConstraintOperand("primitive", { primitive: hitA });
       if (!subjectKind && hitP) return makeConstraintOperand("point", { point: hitP });
       if (!subjectKind && hitL) return makeConstraintOperand("line", { line: hitL });
+      if (!subjectKind && hitA) return makeConstraintOperand("primitive", { primitive: hitA });
     }
     if (hitArcEnd && (type === "coincident" || type === "pointOnCircle")) return makeConstraintOperand("arc-endpoint", { arc: hitArcEnd.arc, endpoint: hitArcEnd.endpoint });
     if (hitP) return makeConstraintOperand("point", { point: hitP });
@@ -10586,7 +10636,7 @@
     if (type === "symmetry") {
       const step = constraintOperands.length;
       if (step === 0 && operand.kind !== "line") return { ok: false, error: invalidConstraintTargetHint(type) };
-      if (step > 0 && operand.kind !== "point" && operand.kind !== "line") return { ok: false, error: invalidConstraintTargetHint(type) };
+      if (step > 0 && operand.kind !== "point" && operand.kind !== "line" && !(operand.kind === "primitive" && operand.primitive instanceof Arc)) return { ok: false, error: invalidConstraintTargetHint(type) };
       if (operand.kind === "line" && !lineHasDirection(operand.line)) return { ok: false, error: step === 0 ? "対称軸の線が短すぎます" : "対称対象の線が短すぎます" };
       if (constraintOperands.some((existing) => sameConstraintOperand(existing, operand))) return { ok: false, error: "対称軸と2つの対象には異なる要素を選択してください" };
       if (step >= 2 && operand.kind !== constraintOperands[1].kind) return { ok: false, error: invalidConstraintTargetHint(type) };
@@ -12534,7 +12584,7 @@
       [/^点-線寸法/, "Point-line dimension"], [/^線-線寸法/, "Line-line dimension"], [/^オフセット寸法/, "Offset dimension"],
       [/^水平寸法/, "Horizontal dimension"], [/^垂直寸法/, "Vertical dimension"], [/^点-線一致/, "Point-line coincident"], [/^点-円周一致/, "Point on circumference"],
       [/^中点一致/, "Midpoint coincident"], [/^最小線長/, "Minimum line length"], [/^線固定/, "Fixed line"], [/^点水平/, "Point horizontal"], [/^点垂直/, "Point vertical"],
-      [/^線対称/, "Line symmetry"], [/^同一直線/, "Collinear"], [/^寸法/, "Dimension"], [/^角度/, "Angle"], [/^一致/, "Coincident"],
+      [/^円弧対称/, "Arc symmetry"], [/^線対称/, "Line symmetry"], [/^同一直線/, "Collinear"], [/^寸法/, "Dimension"], [/^角度/, "Angle"], [/^一致/, "Coincident"],
       [/^水平/, "Horizontal"], [/^垂直/, "Vertical"], [/^平行/, "Parallel"], [/^等寸/, "Equal"], [/^半径/, "Radius"], [/^直径/, "Diameter"],
       [/^同心/, "Concentric"], [/^接線/, "Tangent"], [/^対称/, "Symmetry"], [/^ドラッグ/, "Drag"],
     ];
@@ -13419,6 +13469,7 @@
     if (axisOperand.kind !== "line" || !axisOperand.line || first.kind !== second.kind) return null;
     if (first.kind === "point") return new SymmetryConstraint(first.point, second.point, axisOperand.line);
     if (first.kind === "line") return new LineSymmetryConstraint(first.line, second.line, axisOperand.line);
+    if (first.kind === "primitive" && first.primitive instanceof Arc && second.primitive instanceof Arc) return new ArcSymmetryConstraint(first.primitive, second.primitive, axisOperand.line);
     return null;
   }
 
@@ -13662,6 +13713,7 @@
     } else if (type === "symmetry") {
       if (selectedPoints.length === 2 && selectedLines.length === 1) constraint = new SymmetryConstraint(selectedPoints[0], selectedPoints[1], selectedLines[0]);
       else if (selectedPoints.length === 0 && selectedLines.length === 3) constraint = new LineSymmetryConstraint(selectedLines[1], selectedLines[2], selectedLines[0]);
+      else if (selectedPoints.length === 0 && selectedLines.length === 1 && selectedCircles.length === 0 && selectedArcs.length === 2) constraint = new ArcSymmetryConstraint(selectedArcs[0], selectedArcs[1], selectedLines[0]);
     } else if (type === "collinear") {
       constraint = new CollinearConstraint(selectedLines[0], selectedLines[1]);
     } else if (type === "equal") {
@@ -14835,6 +14887,7 @@
     if (c instanceof ParallelConstraint || c instanceof PerpendicularConstraint || c instanceof CollinearConstraint || c instanceof LineAngleConstraint) return true;
     if (c instanceof SymmetryConstraint && c.axis === line) return true;
     if (c instanceof LineSymmetryConstraint && c.axis === line) return true;
+    if (c instanceof ArcSymmetryConstraint && c.axis === line) return true;
     if (c instanceof PointOnLineConstraint || c instanceof PointOnLineMidpointConstraint || c instanceof ArcEndpointOnLineConstraint) return true;
     if (c instanceof PointLineDistanceConstraint || c instanceof LineLineDistanceConstraint || c instanceof LineCircleTangentConstraint) return true;
     return false;
@@ -18013,11 +18066,21 @@
           terminatorType,
         };
         const availableLength = Math.max(0, Number(availableScreenPixels) || 0) / viewport.scale;
-        const outside = shouldPlaceDimensionTerminatorsOutside(availableLength, label, appearance);
-        const directions = linearDimensionTerminatorDirections({ x: 1, y: 0 }, outside);
+        const layout = {
+          span: availableLength,
+          d: { x: 1, y: 0 },
+          a: { x: 0, y: 0 },
+          b: { x: availableLength, y: 0 },
+          lineA: { x: 0, y: 0 },
+          lineB: { x: availableLength, y: 0 },
+        };
+        const plan = linearDimensionRenderPlan({ kind: "point-point" }, layout, label, appearance, null);
+        const directions = linearDimensionTerminatorDirections({ x: 1, y: 0 }, plan.outside);
         return {
-          outside,
+          outside: plan.outside,
           textWidth: dimensionTextWidth(label, appearance) * viewport.scale,
+          fitMargin: appearance.terminatorSize * DIMENSION_SCREEN_PX_PER_MM * DIMENSION_TERMINATOR_FIT_MARGIN_FACTOR,
+          shaftLengths: plan.shafts.map((shaft) => hypot2(shaft.end.x - shaft.start.x, shaft.end.y - shaft.start.y) * viewport.scale),
           firstDirection: directions.first,
           secondDirection: directions.second,
         };

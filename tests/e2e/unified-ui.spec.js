@@ -1906,11 +1906,18 @@ test("Constraint dimensions expose defining geometry and inheritable appearance 
     const measured = window.__cadTest.dimensionTerminatorFitForTest(1000, "100");
     return {
       inside: measured,
+      earlyOutside: window.__cadTest.dimensionTerminatorFitForTest(measured.textWidth + measured.fitMargin - 1, "100"),
+      justFits: window.__cadTest.dimensionTerminatorFitForTest(measured.textWidth + measured.fitMargin + 1, "100"),
       outside: window.__cadTest.dimensionTerminatorFitForTest(Math.max(0, measured.textWidth - 1), "100"),
       dot: window.__cadTest.dimensionTerminatorFitForTest(Math.max(0, measured.textWidth - 1), "100", "dot"),
     };
   });
   expect(terminatorFit.inside).toEqual(expect.objectContaining({ outside: false, firstDirection: { x: 1, y: 0 }, secondDirection: { x: -1, y: 0 } }));
+  expect(terminatorFit.earlyOutside.outside).toBe(true);
+  expect(terminatorFit.earlyOutside.textWidth + terminatorFit.earlyOutside.fitMargin - 1).toBeGreaterThan(terminatorFit.earlyOutside.textWidth);
+  expect(terminatorFit.earlyOutside.shaftLengths).toHaveLength(2);
+  expect(terminatorFit.earlyOutside.shaftLengths[0]).toBeCloseTo(terminatorFit.earlyOutside.fitMargin * 1.5, 6);
+  expect(terminatorFit.justFits).toEqual(expect.objectContaining({ outside: false, shaftLengths: [] }));
   expect(terminatorFit.outside).toEqual(expect.objectContaining({ outside: true, firstDirection: { x: -1, y: 0 }, secondDirection: { x: 1, y: 0 } }));
   expect(terminatorFit.dot.outside).toBe(false);
   await properties.locator('[data-dimension-display="color"] + [data-appearance-palette-open]').click();

@@ -750,12 +750,51 @@
     }
 
     rawError() {
-      if (this.degenerateAtCreation) return [0, 0, 0, 0];
-      const line2Start = this.reversed ? this.line2.p2 : this.line2.p1;
-      const line2End = this.reversed ? this.line2.p1 : this.line2.p2;
+      const length1 = this.line1.length();
+      const length2 = this.line2.length();
+      if (this.degenerateAtCreation || this.axis.length() < MIN_ORIENTATION_LENGTH || length1 < MIN_ORIENTATION_LENGTH || length2 < MIN_ORIENTATION_LENGTH) return [0, 0, 0];
+      const midpoint1 = {
+        x: (this.line1.p1.x + this.line1.p2.x) / 2,
+        y: (this.line1.p1.y + this.line1.p2.y) / 2,
+      };
+      const midpoint2 = {
+        x: (this.line2.p1.x + this.line2.p2.x) / 2,
+        y: (this.line2.p1.y + this.line2.p2.y) / 2,
+      };
+      const reflectedDirectionPoint = reflectedPointAcrossLine({
+        x: midpoint1.x + this.line1.dx() / length1,
+        y: midpoint1.y + this.line1.dy() / length1,
+      }, this.axis);
+      const reflectedMidpoint = reflectedPointAcrossLine(midpoint1, this.axis);
+      const reflectedDirection = {
+        x: reflectedDirectionPoint.x - reflectedMidpoint.x,
+        y: reflectedDirectionPoint.y - reflectedMidpoint.y,
+      };
+      const line2Direction = {
+        x: this.line2.dx() / length2,
+        y: this.line2.dy() / length2,
+      };
       return [
-        ...pointPairSymmetryError(this.line1.p1, line2Start, this.axis, this.degenerateAtCreation),
-        ...pointPairSymmetryError(this.line1.p2, line2End, this.axis, this.degenerateAtCreation),
+        ...pointPairSymmetryError(midpoint1, midpoint2, this.axis, this.degenerateAtCreation),
+        reflectedDirection.x * line2Direction.y - reflectedDirection.y * line2Direction.x,
+      ];
+    }
+  }
+
+  class ArcSymmetryConstraint extends Constraint {
+    constructor(arc1, arc2, axis) {
+      super(`円弧対称 ${arc1.id}-${arc2.id} / ${axis.id}`, 1);
+      this.arc1 = arc1;
+      this.arc2 = arc2;
+      this.axis = axis;
+      this.degenerateAtCreation = axis.length() < MIN_ORIENTATION_LENGTH;
+    }
+
+    rawError() {
+      if (this.degenerateAtCreation) return [0, 0, 0];
+      return [
+        ...pointPairSymmetryError(this.arc1.center, this.arc2.center, this.axis, this.degenerateAtCreation),
+        this.arc1.radius() - this.arc2.radius(),
       ];
     }
   }
@@ -1544,6 +1583,7 @@
     PointVerticalConstraint,
     SymmetryConstraint,
     LineSymmetryConstraint,
+    ArcSymmetryConstraint,
     ParallelConstraint,
     PerpendicularConstraint,
     CollinearConstraint,

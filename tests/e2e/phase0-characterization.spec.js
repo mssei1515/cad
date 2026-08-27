@@ -16,6 +16,7 @@ const persistentConstraintTypes = [
   "arcEndpointFixed",
   "arcEndpointOnCircle",
   "arcEndpointOnLine",
+  "arcSymmetry",
   "circleCircleTangent",
   "coincident",
   "collinear",

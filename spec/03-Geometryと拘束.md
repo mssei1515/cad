@@ -137,6 +137,7 @@ UIで利用できる組み合わせを次に示す。
 | 直交 | `perpendicular` | 2 Line |
 | 対称 | `symmetry` | 対称軸 Line、2 Point |
 | 対称 | `lineSymmetry` | 対称軸 Line、2 Line |
+| 対称 | `arcSymmetry` | 対称軸 Line、2 Arc |
 | 等寸 | `equalLength` | 2 Line |
 | 等寸 | `equalRadius` | Circle/Arc 2つ |
 | 同心 | `concentric` | Point–Circle/Arc、または Circle/Arc 2つ |
@@ -147,6 +148,12 @@ UIで利用できる組み合わせを次に示す。
 | 固定 | `arcEndpointFixed` | Arc 端位置。内部的に利用する |
 
 `pointOnLineMidpoint` は保存・solve に対応する内部型だが、現在のツールバーに独立コマンドはない。
+
+対称拘束は対象の種類ごとに次の量だけを拘束する。
+
+- Point対称は、2 Pointの中点を対称軸上へ置き、2 Pointを結ぶ方向を対称軸へ直交させる。
+- Line対称は、2 Lineの中点位置と支持線方向を対称にする。Line長および各端点位置は対称拘束の対象にせず、それぞれ独立して変更できる。
+- Arc対称は、2 Arcの中心位置を対称にし、半径を一致させる。開始角・終了角および端点位置は対称拘束の対象にせず、それぞれ独立して変更できる。
 
 ## 5. 拘束追加のルール
 
