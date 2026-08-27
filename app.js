@@ -183,7 +183,7 @@
     ["連続線を終了しました", "Polyline creation finished."], ["選択・ドラッグモードに戻りました", "Returned to Select / Drag mode."], ["作図操作をキャンセルしました", "Drawing was canceled."],
     ["コピーする図形を選択してください", "Select geometry to copy."], ["貼り付ける図形がありません", "There is no geometry to paste."], ["貼り付け先のスケッチをアクティブにしてください", "Activate the destination sketch before pasting."],
     ["寸法線の位置をクリックしてください", "Click the dimension-line position."], ["寸法対象を選択してください。", "Select dimension targets."],
-    ["寸法値を入力中: 数値キーで編集、Enter/ダブルクリックで決定、Escでキャンセル", "Entering a dimension value: type a number, confirm with Enter/double-click, or cancel with Esc."],
+    ["寸法値を入力中: 数式は = から開始。Canvas寸法のクリックでParameter名を挿入できます", "Editing dimension: begin expressions with =. Click a canvas dimension to insert its parameter name."],
     ["オフセット距離を入力中: Enter/ダブルクリックで決定、Escでキャンセル", "Entering an offset distance: confirm with Enter/double-click, or cancel with Esc."],
     ["読み取り専用寸法の値は編集できません", "A read-only dimension value cannot be edited."], ["寸法値には0より大きい数値を入力してください", "Enter a dimension value greater than zero."],
     ["回転がロックされたブロックインスタンスです", "This block instance has locked rotation."], ["固定されたブロックインスタンスです", "This block instance is fixed."],
@@ -1014,6 +1014,36 @@
     return Number.isFinite(value) ? String(Number(value.toPrecision(15))) : "0";
   }
 
+  const DIRECT_NUMERIC_INPUT_PATTERN = /^[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?$/;
+
+  function isDirectNumericExpressionInput(value) {
+    return DIRECT_NUMERIC_INPUT_PATTERN.test(String(value ?? "").trim());
+  }
+
+  function expressionInputValue(expression) {
+    const value = String(expression ?? "").trim();
+    if (!value || isDirectNumericExpressionInput(value)) return value;
+    return value.startsWith("=") ? value : `=${value}`;
+  }
+
+  function expressionFromUserInput(value) {
+    const input = String(value ?? "").trim();
+    if (!input) throw Object.assign(new Error("Expression is empty"), { code: "EMPTY_EXPRESSION" });
+    if (isDirectNumericExpressionInput(input)) return input;
+    if (!input.startsWith("=")) throw Object.assign(new Error("Expressions must begin with '='"), { code: "EXPRESSION_PREFIX_REQUIRED" });
+    const expression = input.slice(1).trim();
+    if (!expression) throw Object.assign(new Error("Expression is empty"), { code: "EMPTY_EXPRESSION" });
+    return expression;
+  }
+
+  function rewriteExpressionInputIdentifiers(value, replacements) {
+    try {
+      return expressionInputValue(rewriteParameterIdentifiers(expressionFromUserInput(value), replacements));
+    } catch (_error) {
+      return value;
+    }
+  }
+
   function dimensionConstraintsInNamespace(namespace) {
     return (namespace?.constraints || []).filter(isDimensionConstraint);
   }
@@ -1072,6 +1102,7 @@
       DIVISION_BY_ZERO: applicationText("0で除算しています", "Division by zero"),
       NON_FINITE: applicationText("計算結果が有限値ではありません", "The result is not finite"),
       EMPTY_EXPRESSION: applicationText("値 / 数式が空です", "Value / Expression is empty"),
+      EXPRESSION_PREFIX_REQUIRED: applicationText("数式は先頭に = を入力してください", "Expressions must begin with ="),
     };
     return messages[error?.code] || error?.message || applicationText("Parameterを評価できません", "Could not evaluate parameters");
   }
@@ -9014,7 +9045,7 @@
     if (!invalid) {
       try {
         const value = pendingCommand.type === "distance-value"
-          ? evaluateDimensionExpressionDraft(pendingCommand.constraint || null, pendingCommand.buffer)
+          ? evaluateDimensionExpressionDraft(pendingCommand.constraint || null, expressionFromUserInput(pendingCommand.buffer))
           : Number(pendingCommand.buffer);
         invalid = !Number.isFinite(value) || value <= 0 || (pendingCommand.target?.kind === "angle" && value >= 180);
       } catch (_error) {
@@ -10945,7 +10976,7 @@
       referenceSketchId,
       sketchId,
     };
-    setHint("寸法値を入力中: 数値キーで編集、Enter/ダブルクリックで決定、Escでキャンセル");
+    setHint(applicationText("寸法値を入力中: 数式は = から開始。Canvas寸法のクリックでParameter名を挿入できます", "Editing dimension: begin expressions with =. Click a canvas dimension to insert its parameter name."));
     updateConstraintButtons();
     draw();
     focusDimensionValueInput();
@@ -11042,14 +11073,14 @@
       type: "distance-value",
       target,
       dimension: hit.constraint.dimension || hit.dimension || defaultDimensionForTarget(target),
-      buffer: hit.constraint.expression || numericDimensionExpression(hit.constraint),
+      buffer: expressionInputValue(hit.constraint.expression || numericDimensionExpression(hit.constraint)),
       editing: false,
       constraint: hit.constraint,
     };
     selectedDimensionConstraint = hit.constraint;
     selectedConstraint = null;
     dimensionDragSession = null;
-    setHint("寸法値を入力中: 数値キーで編集、Enter/ダブルクリックで決定、Escでキャンセル");
+    setHint(applicationText("寸法値を入力中: 数式は = から開始。Canvas寸法のクリックでParameter名を挿入できます", "Editing dimension: begin expressions with =. Click a canvas dimension to insert its parameter name."));
     draw();
     focusDimensionValueInput();
     return true;
@@ -11057,7 +11088,7 @@
 
   function updateDistanceBufferLabel() {
     if (!pendingCommand || !["distance-value", "offset-value"].includes(pendingCommand.type)) return;
-    setHint(pendingCommand.type === "offset-value" ? "オフセット距離を入力中: Enter/ダブルクリックで決定、Escでキャンセル" : "寸法値を入力中: 数値キーで編集、Enter/ダブルクリックで決定、Escでキャンセル");
+    setHint(pendingCommand.type === "offset-value" ? "オフセット距離を入力中: Enter/ダブルクリックで決定、Escでキャンセル" : applicationText("寸法値を入力中: 数式は = から開始。Canvas寸法のクリックでParameter名を挿入できます", "Editing dimension: begin expressions with =. Click a canvas dimension to insert its parameter name."));
     draw();
   }
 
@@ -11067,9 +11098,10 @@
 
   function submitDistanceValue() {
     if (!pendingCommand || pendingCommand.type !== "distance-value") return;
-    const expression = pendingCommand.buffer.trim();
+    let expression;
     let value;
     try {
+      expression = expressionFromUserInput(pendingCommand.buffer);
       value = evaluateDimensionExpressionDraft(pendingCommand.constraint || null, expression);
     } catch (error) {
       setHint(`${applicationText("寸法の値 / 数式を評価できません", "Could not evaluate the dimension Value / Expression")}: ${parameterErrorText(error)}`, "error");
@@ -12228,6 +12260,64 @@
     });
   }
 
+  function focusedExpressionInputContext() {
+    const input = document.activeElement;
+    if (!(input instanceof HTMLInputElement) || input.readOnly || input.disabled) return null;
+    if (input === dimensionValueInput && pendingCommand?.type === "distance-value") return { input, namespace: model };
+    if (input.matches('#propertiesPanel [data-property="constraint-expression"]')) return { input, namespace: model };
+    const parameterExpression = input.matches('[data-parameter-field="expression"], [data-dimension-field="expression"]');
+    if (parameterExpression && input.closest("#parametersDialog") && parameterDialogSession) {
+      return { input, namespace: parameterDialogSession.namespace };
+    }
+    return null;
+  }
+
+  function insertIdentifierIntoExpressionInput(input, identifier) {
+    let value = String(input.value ?? "");
+    let start = Number.isInteger(input.selectionStart) ? input.selectionStart : value.length;
+    let end = Number.isInteger(input.selectionEnd) ? input.selectionEnd : start;
+    if (!value.trimStart().startsWith("=")) {
+      value = `=${value}`;
+      start += 1;
+      end += 1;
+    } else if (value.startsWith("=")) {
+      start = Math.max(1, start);
+      end = Math.max(1, end);
+    }
+    const identifierCharacter = /[A-Za-z0-9_]/;
+    const leftPadding = start > 0 && identifierCharacter.test(value[start - 1]) ? " " : "";
+    const rightPadding = end < value.length && identifierCharacter.test(value[end]) ? " " : "";
+    const insertion = `${leftPadding}${identifier}${rightPadding}`;
+    input.value = `${value.slice(0, start)}${insertion}${value.slice(end)}`;
+    const caret = start + insertion.length;
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+    input.focus({ preventScroll: true });
+    input.setSelectionRange(caret, caret);
+  }
+
+  function insertClickedDimensionParameter(event, dimensionHit) {
+    const context = focusedExpressionInputContext();
+    if (!context || !dimensionHit?.constraint) return false;
+    if (context.namespace !== model) {
+      const message = applicationText("表示中のCanvasと異なる名前空間のため、この寸法は参照できません", "This dimension cannot be referenced because the canvas shows a different namespace.");
+      setParameterDialogError(message);
+      setHint(message, "error");
+      event.preventDefault();
+      event.stopPropagation();
+      return true;
+    }
+    ensureDimensionParameter(dimensionHit.constraint, model);
+    if (!dimensionHit.constraint.parameterName) return false;
+    event.preventDefault();
+    event.stopPropagation();
+    insertIdentifierIntoExpressionInput(context.input, dimensionHit.constraint.parameterName);
+    setParameterDialogError("");
+    setHint(applicationLanguage === "en"
+      ? `Inserted ${dimensionHit.constraint.parameterName}.`
+      : `${dimensionHit.constraint.parameterName} を挿入しました`);
+    return true;
+  }
+
   function sketchAppearanceLayers(sketch) {
     return sketch && !isRootSketch(sketch) ? [sketch] : [];
   }
@@ -12661,7 +12751,7 @@
       const parameterRows = dimension
         ? `<div class="property-row"><label>${applicationText("Parameter名", "Parameter name")}</label><input data-property="constraint-parameter-name" value="${escapeHtml(item.parameterName || "")}"></div>`
           + (!isReadOnlyDimension(item)
-            ? `<div class="property-row"><label>${applicationText("値 / 数式", "Value / Expression")}</label><input data-property="constraint-expression" value="${escapeHtml(item.expression || numericDimensionExpression(item))}"></div>`
+            ? `<div class="property-row"><label>${applicationText("値 / 数式", "Value / Expression")}</label><input data-property="constraint-expression" inputmode="text" value="${escapeHtml(expressionInputValue(item.expression || numericDimensionExpression(item)))}"></div>`
             : `<div class="property-row"><span>${applicationText("値 / 数式", "Value / Expression")}</span><span class="property-readonly">${applicationText("Geometryから測定", "Measured from geometry")}</span></div>`)
           + propertyReadonlyRow("評価値", "Evaluated value", Number.isFinite(value) ? formatDisplayNumber(value) : "—")
         : "";
@@ -12901,7 +12991,7 @@
     const snapshot = snapshotModelState();
     try {
       if (property === "constraint-parameter-name") commitDimensionParameterName(constraint, value);
-      else if (property === "constraint-expression") constraint.expression = String(value).trim();
+      else if (property === "constraint-expression") constraint.expression = expressionFromUserInput(value);
       const solved = stabilizeActiveParameterNamespace(constraintSketchId(constraint));
       if (!solved.success || solved.dependent?.success === false || solved.result.errorNorm > CONSTRAINT_ACCEPT_ERROR) {
         throw new Error(solved.result.reason || applicationText("拘束が成立しません", "Constraints could not be satisfied"));
@@ -15692,6 +15782,8 @@
     const blankAnnotationHit = hitAnnotationElement(p.x, p.y);
     const annotationTargetHit = hitAnnotationTarget(p.x, p.y);
 
+    if (hitD && insertClickedDimensionParameter(e, hitD)) return;
+
     if (mode === "hatch" || mode === "hatch-repair") {
       e.preventDefault();
       commitHatchAt(p);
@@ -16905,13 +16997,13 @@
       constraint,
       name: constraint.parameterName,
       committedName: constraint.parameterName,
-      expression: isReadOnlyDimension(constraint) ? "" : constraint.expression,
+      expression: isReadOnlyDimension(constraint) ? "" : expressionInputValue(constraint.expression),
       readOnly: isReadOnlyDimension(constraint),
     }));
     const session = {
       key: scope.key,
       namespace: scope.namespace,
-      parameters: scope.namespace.parameters.map((parameter) => ({ name: parameter.name, committedName: parameter.name, expression: parameter.expression, isNew: false })),
+      parameters: scope.namespace.parameters.map((parameter) => ({ name: parameter.name, committedName: parameter.name, expression: expressionInputValue(parameter.expression), isNew: false })),
       dimensions,
     };
     session.originalSignature = parameterDraftSignature(session);
@@ -16921,13 +17013,13 @@
   function parameterDraftEvaluation(session = parameterDialogSession) {
     validateParameterSymbolNames(session.parameters, session.dimensions);
     const inputValues = new Map();
-    const definitions = session.parameters.map((parameter) => ({ name: parameter.name, expression: parameter.expression, kind: "parameter" }));
+    const definitions = session.parameters.map((parameter) => ({ name: parameter.name, expression: expressionFromUserInput(parameter.expression), kind: "parameter" }));
     for (const dimension of session.dimensions) {
       if (dimension.readOnly) {
         const target = targetFromConstraint(dimension.constraint);
         inputValues.set(dimension.name, measuredDimensionValue(target, dimension.constraint.dimension));
       } else {
-        definitions.push({ name: dimension.name, expression: dimension.expression, kind: "dimension" });
+        definitions.push({ name: dimension.name, expression: expressionFromUserInput(dimension.expression), kind: "dimension" });
       }
     }
     return evaluateParameterDefinitions(definitions, inputValues);
@@ -16965,11 +17057,11 @@
     }
     const parameterRows = document.getElementById("parameterRows");
     if (parameterRows) parameterRows.innerHTML = session.parameters.length > 0
-      ? session.parameters.map((parameter, index) => `<tr><td><input data-parameter-row="${index}" data-parameter-field="name" value="${escapeHtml(parameter.name)}"></td><td><input data-parameter-row="${index}" data-parameter-field="expression" value="${escapeHtml(parameter.expression)}"></td><td class="parameter-value">${escapeHtml(formatDisplayNumber(evaluation?.values.get(parameter.name)))}</td><td class="parameter-delete-cell"><button class="compact-button" type="button" data-delete-parameter="${index}">${applicationText("削除", "Delete")}</button></td></tr>`).join("")
+      ? session.parameters.map((parameter, index) => `<tr><td><input data-parameter-row="${index}" data-parameter-field="name" value="${escapeHtml(parameter.name)}"></td><td><input data-parameter-row="${index}" data-parameter-field="expression" inputmode="text" value="${escapeHtml(parameter.expression)}"></td><td class="parameter-value">${escapeHtml(formatDisplayNumber(evaluation?.values.get(parameter.name)))}</td><td class="parameter-delete-cell"><button class="compact-button" type="button" data-delete-parameter="${index}">${applicationText("削除", "Delete")}</button></td></tr>`).join("")
       : `<tr><td colspan="4" class="parameter-source">${applicationText("Parameterはありません", "No parameters")}</td></tr>`;
     const dimensionRows = document.getElementById("parameterDimensionRows");
     if (dimensionRows) dimensionRows.innerHTML = session.dimensions.length > 0
-      ? session.dimensions.map((dimension, index) => `<tr><td><input data-dimension-row="${index}" data-dimension-field="name" value="${escapeHtml(dimension.name)}"></td><td class="parameter-source">${escapeHtml(parameterDimensionSource(dimension, session.namespace))}</td><td><input data-dimension-row="${index}" data-dimension-field="expression" value="${escapeHtml(dimension.readOnly ? applicationText("Geometryから測定", "Measured from geometry") : dimension.expression)}" ${dimension.readOnly ? "readonly" : ""}></td><td class="parameter-value">${escapeHtml(formatDisplayNumber(evaluation?.values.get(dimension.name)))}</td></tr>`).join("")
+      ? session.dimensions.map((dimension, index) => `<tr><td><input data-dimension-row="${index}" data-dimension-field="name" value="${escapeHtml(dimension.name)}"></td><td class="parameter-source">${escapeHtml(parameterDimensionSource(dimension, session.namespace))}</td><td><input data-dimension-row="${index}" data-dimension-field="expression" inputmode="text" value="${escapeHtml(dimension.readOnly ? applicationText("Geometryから測定", "Measured from geometry") : dimension.expression)}" ${dimension.readOnly ? "readonly" : ""}></td><td class="parameter-value">${escapeHtml(formatDisplayNumber(evaluation?.values.get(dimension.name)))}</td></tr>`).join("")
       : `<tr><td colspan="4" class="parameter-source">${applicationText("寸法はありません", "No dimensions")}</td></tr>`;
     setParameterDialogError(evaluationError ? parameterErrorText(evaluationError) : "");
     localizeApplicationUI(document.getElementById("parametersDialog"));
@@ -16978,8 +17070,8 @@
   function rewriteParameterDraftName(oldName, nextName) {
     if (!oldName || oldName === nextName) return;
     const replacements = new Map([[oldName, nextName]]);
-    for (const parameter of parameterDialogSession.parameters) parameter.expression = rewriteParameterIdentifiers(parameter.expression, replacements);
-    for (const dimension of parameterDialogSession.dimensions) if (!dimension.readOnly) dimension.expression = rewriteParameterIdentifiers(dimension.expression, replacements);
+    for (const parameter of parameterDialogSession.parameters) parameter.expression = rewriteExpressionInputIdentifiers(parameter.expression, replacements);
+    for (const dimension of parameterDialogSession.dimensions) if (!dimension.readOnly) dimension.expression = rewriteExpressionInputIdentifiers(dimension.expression, replacements);
   }
 
   function loadParameterDialogScope(key) {
@@ -17078,10 +17170,10 @@
     const documentSnapshot = blockEditSession ? null : historySnapshot();
     const localSnapshot = blockEditSession ? snapshotModelState() : null;
     try {
-      session.namespace.parameters = session.parameters.map((parameter) => ({ name: parameter.name.trim(), expression: parameter.expression.trim() }));
+      session.namespace.parameters = session.parameters.map((parameter) => ({ name: parameter.name.trim(), expression: expressionFromUserInput(parameter.expression) }));
       session.dimensions.forEach((dimension) => {
         dimension.constraint.parameterName = dimension.name.trim();
-        if (!dimension.readOnly) dimension.constraint.expression = dimension.expression.trim();
+        if (!dimension.readOnly) dimension.constraint.expression = expressionFromUserInput(dimension.expression);
       });
       ensureParameterNamespace(session.namespace);
       let result;
@@ -17234,7 +17326,7 @@
       ...parameterDialogSession.dimensions.filter((dimension) => !dimension.readOnly),
     ]) {
       try {
-        if (expressionDependencies(item.expression).has(parameter.name)) dependencies.push(item.name);
+        if (expressionDependencies(expressionFromUserInput(item.expression)).has(parameter.name)) dependencies.push(item.name);
       } catch (_error) {
         // The complete draft validation reports unrelated syntax errors.
       }
@@ -17260,6 +17352,15 @@
   document.getElementById("parametersCloseBtn")?.addEventListener("click", () => {
     if (!resolveDirtyParameterDialog()) return;
     document.getElementById("parametersDialog")?.close();
+  });
+  document.getElementById("parametersDialog")?.addEventListener("pointerdown", (event) => {
+    const dialog = event.currentTarget;
+    if (event.button !== 0 || event.target !== dialog) return;
+    const rect = canvas.getBoundingClientRect();
+    if (event.clientX < rect.left || event.clientX > rect.right || event.clientY < rect.top || event.clientY > rect.bottom) return;
+    const point = canvasPoint(event);
+    const hit = hitDimension(point.x, point.y);
+    if (hit) insertClickedDimensionParameter(event, hit);
   });
   document.getElementById("parametersDialog")?.addEventListener("cancel", (event) => {
     if (!resolveDirtyParameterDialog()) event.preventDefault();
@@ -20312,6 +20413,19 @@
         const target = targetFromConstraint(constraint);
         const layout = constraint && target ? dimensionLayout(target, constraint.dimension) : null;
         return layout?.text ? this.worldClientPositionForTest(layout.text) : null;
+      },
+      startDimensionExpressionEditForTest(index = 0) {
+        const constraint = model.constraints.filter(isDimensionConstraint)[index] || null;
+        return constraint ? startDimensionEditInput({ constraint, dimension: constraint.dimension }) : false;
+      },
+      selectDimensionForPropertiesForTest(index = 0) {
+        const constraint = model.constraints.filter(isDimensionConstraint)[index] || null;
+        if (!constraint) return false;
+        clearSelection();
+        selectedDimensionConstraint = constraint;
+        updateUI({ refreshAnalysis: false });
+        draw();
+        return true;
       },
       blockDefinitionUpdateCase() {
         const definition = model.blockDefinitions[0];

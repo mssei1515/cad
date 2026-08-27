@@ -158,9 +158,12 @@ test("document parameters, dimension formulas, rename propagation, and v13 persi
   await expect(page.locator("#parameterRows tr")).toHaveCount(2);
   await expect(page.locator("#parameterDimensionRows tr")).toHaveCount(2);
   await expect(page.locator('#parameterDimensionRows input[readonly]')).toHaveCount(1);
+  await expect(page.locator('[data-parameter-field="expression"]').first()).toHaveValue(`=${initial.measuredName} * 2`);
+  await expect(page.locator('#parameterDimensionRows input[data-dimension-field="expression"]:not([readonly])')).toHaveValue("=width / 2 + margin");
   const widthName = page.locator('[data-parameter-field="name"]').first();
   await widthName.fill("span");
   await widthName.press("Tab");
+  await expect(page.locator('#parameterDimensionRows input[data-dimension-field="expression"]:not([readonly])')).toHaveValue("=span / 2 + margin");
   await page.locator("#applyParametersBtn").click();
   await expect(page.locator("#parameterDialogError")).toBeHidden();
 
@@ -199,6 +202,70 @@ test("block parameter namespaces are independent and directly update definitions
   expect(state.instanceProjectionLengths[1]).toBeCloseTo(15, 5);
 });
 
+test("dimension expressions require equals and canvas dimension clicks insert parameter names", async ({ page }) => {
+  await page.goto(`${baseUrl}/index.html?test=1`);
+  await page.waitForFunction(() => window.__cadTest);
+  const initial = await page.evaluate(() => window.__cadTest.resetForParameterTest());
+  await page.evaluate(() => window.__cadTest.focusWorldForTest({ x: 50, y: 30 }, 2));
+  const positions = await page.evaluate(() => [
+    window.__cadTest.dimensionClientPositionForTest(0),
+    window.__cadTest.dimensionClientPositionForTest(1),
+  ]);
+
+  await page.evaluate(() => window.__cadTest.startDimensionExpressionEditForTest(0));
+  const input = page.locator("#dimensionValueInput");
+  await expect(input).toBeVisible();
+  await expect(input).toHaveValue("=width / 2 + margin");
+
+  await input.fill(`${initial.measuredName} * 2`);
+  await input.press("Enter");
+  await expect(input).toBeVisible();
+  await expect(page.locator("#hint")).toContainText("先頭に =");
+
+  await input.fill("=");
+  await page.mouse.click(positions[1].x, positions[1].y);
+  await expect(input).toBeVisible();
+  await expect(input).toBeFocused();
+  await expect(input).toHaveValue(`=${initial.measuredName}`);
+  await input.press("Enter");
+  await expect(input).toBeHidden();
+
+  const state = await page.evaluate(() => window.__cadTest.parameterStateForTest());
+  const driving = state.dimensions.find((dimension) => !dimension.readOnly);
+  expect(driving.expression).toBe(initial.measuredName);
+  expect(driving.target).toBeCloseTo(40, 5);
+});
+
+test("Properties and Parameter dialog expression fields accept canvas dimension references", async ({ page }) => {
+  await page.goto(`${baseUrl}/index.html?test=1`);
+  await page.waitForFunction(() => window.__cadTest);
+  const initial = await page.evaluate(() => window.__cadTest.resetForParameterTest());
+  await page.evaluate(() => window.__cadTest.focusWorldForTest({ x: 50, y: 30 }, 2));
+  await page.evaluate(() => window.__cadTest.selectDimensionForPropertiesForTest(0));
+  let measuredPosition = await page.evaluate(() => window.__cadTest.dimensionClientPositionForTest(1));
+
+  const propertyExpression = page.locator('#propertiesPanel [data-property="constraint-expression"]');
+  await expect(propertyExpression).toHaveValue("=width / 2 + margin");
+  await propertyExpression.fill("=");
+  await page.mouse.click(measuredPosition.x, measuredPosition.y);
+  await expect(propertyExpression).toBeFocused();
+  await expect(propertyExpression).toHaveValue(`=${initial.measuredName}`);
+
+  await page.reload();
+  await page.waitForFunction(() => window.__cadTest);
+  const next = await page.evaluate(() => window.__cadTest.resetForParameterTest());
+  await page.evaluate(() => window.__cadTest.focusWorldForTest({ x: 200, y: 30 }, 2));
+  measuredPosition = await page.evaluate(() => window.__cadTest.dimensionClientPositionForTest(1));
+  await openParameterDialog(page);
+  const dialogBox = await page.locator("#parametersDialog").boundingBox();
+  expect(measuredPosition.x).toBeLessThan(dialogBox.x);
+  const dialogExpression = page.locator('#parameterDimensionRows input[data-dimension-field="expression"]:not([readonly])');
+  await dialogExpression.fill("=");
+  await page.mouse.click(measuredPosition.x, measuredPosition.y);
+  await expect(dialogExpression).toBeFocused();
+  await expect(dialogExpression).toHaveValue(`=${next.measuredName}`);
+});
+
 test("invalid v12 parameter expressions reject loading without replacing the document", async ({ page }) => {
   await page.goto(`${baseUrl}/index.html?test=1`);
   await page.waitForFunction(() => window.__cadTest);
@@ -222,7 +289,7 @@ test("non-convergent reference feedback rolls back the complete parameter apply"
   expect(initial.length).toBeCloseTo(40, 5);
   await openParameterDialog(page);
   const drivingExpression = page.locator('#parameterDimensionRows input[data-dimension-field="expression"]:not([readonly])');
-  await drivingExpression.fill(`120 - ${initial.measuredName}`);
+  await drivingExpression.fill(`=120 - ${initial.measuredName}`);
   await drivingExpression.press("Tab");
   await page.locator("#applyParametersBtn").click();
   await expect(page.locator("#parameterDialogError")).toContainText("収束しません");

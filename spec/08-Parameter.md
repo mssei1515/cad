@@ -39,7 +39,9 @@ Block Parameterの適用はDefinition内部を再計算した後、親Definition
 
 File menuのParameter画面ではDocumentまたは各Block Definitionを選択し、ユーザーParameterと寸法symbolを一覧編集する。Block Editor中は編集中Definitionだけを編集できる。変更はstageされ、「適用」で名前空間全体を検証して1回のUndo単位として反映する。未適用の変更がある状態でscopeを切り替える、または画面を閉じる場合は適用／破棄／キャンセルを確認する。
 
-Propertiesでは拘束寸法と参照寸法の名前を変更できる。拘束寸法の数値または式を入力する欄は`値 / 数式`（英語`Value / Expression`）と表示し、参照寸法では同じ項目を読み取り専用で表示する。Canvas上の寸法入力も式を受け付け、無効な入力では画面を閉じず理由を表示する。Canvasの寸法ラベルは式やsymbol名を表示せず、prefix／suffixを含む評価後の数値表示を維持する。
+Propertiesでは拘束寸法と参照寸法の名前を変更できる。拘束寸法の数値または式を入力する欄は`値 / 数式`（英語`Value / Expression`）と表示し、参照寸法では同じ項目を読み取り専用で表示する。数値リテラルは`100`のように直接入力し、Parameter参照、演算子、括弧などを含む数式は`=width / 2`のように先頭へ`=`を付けて入力する。先頭の`=`はUI上の数式識別子であり、内部データモデルとJSONの`expression`には保存しない。Canvas上の寸法入力も同じ規則で式を受け付け、無効な入力や`=`のない数式では画面を閉じず理由を表示する。Canvasの寸法ラベルは式やsymbol名を表示せず、prefix／suffixを含む評価後の数値表示を維持する。
+
+Canvas寸法入力、Propertiesの寸法`値 / 数式`、または表示中Canvasと同じ名前空間を編集中のParameter画面で数式入力欄へfocusしている間は、Canvas上の既存寸法をクリックすると、その寸法の`parameterName`を現在のcaret位置または選択範囲へ挿入する。この操作は通常の寸法selection／dragを開始せず、入力欄のfocusを維持する。入力が数式形式でなければ先頭の`=`も自動付与する。別Block Definitionなど、表示中Canvasと異なる名前空間のParameter画面からはCanvas寸法を参照できない。
 
 Sketch TreeのConstraint分類は拘束寸法と参照寸法の両方を表示し、`d1: 寸法…`の形式でsymbol名を先頭へ置く。参照寸法には読み取り専用表示を付ける。
 
