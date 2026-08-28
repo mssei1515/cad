@@ -114,6 +114,7 @@
   const canvas = document.getElementById("canvas");
   const ctx = canvas.getContext("2d");
   const dimensionValueInput = document.getElementById("dimensionValueInput");
+  const canvasCommandCursorIndicator = document.getElementById("canvasCommandCursorIndicator");
   const canvasContextMenu = document.getElementById("canvasContextMenu");
   const sketchOverlay = document.getElementById("sketchOverlay");
   const sketchOverlayResizeHandle = document.getElementById("sketchOverlayResizeHandle");
@@ -326,6 +327,8 @@
   let pendingConstraintCommand = null;
   let constraintOperands = [];
   let lastPointerWorld = null;
+  let commandCursorScreen = null;
+  let commandCursorSource = null;
   let colorPaletteSession = null;
   let parameterDialogSession = null;
   const sketchAppearanceSectionOpenState = { general: false, construction: false, dimension: false };
@@ -11430,6 +11433,76 @@
     ctx.restore();
   }
 
+  function activeCommandToolbarButton() {
+    if (pendingCommand?.type?.startsWith("annotation-leader")) return document.getElementById("annotationLeaderBtn");
+    if (pendingCommand?.type === "annotation-text-place") return document.getElementById("annotationTextBtn");
+    if (pendingCommand?.type?.startsWith("distance")) return constraintButtons.find((button) => button.dataset.constraint === "distance") || null;
+    if (pendingCommand?.type === "fillet-radius-place") return document.getElementById("toolFillet");
+    if (pendingConstraintCommand?.type) return constraintButtons.find((button) => button.dataset.constraint === pendingConstraintCommand.type) || null;
+    if (splineEditSession) return document.getElementById("toolSpline");
+    const buttonByMode = {
+      point: "toolPoint",
+      line: "toolLine",
+      rectangle: "toolRectangle",
+      circle: "toolCircle",
+      arc: "toolArc",
+      spline: "toolSpline",
+      hatch: "toolHatch",
+      "hatch-repair": "toolHatch",
+      fillet: "toolFillet",
+      trim: "toolTrim",
+      offset: "toolOffset",
+      "block-place": "toolCreateBlock",
+    };
+    return buttonByMode[mode] ? document.getElementById(buttonByMode[mode]) : null;
+  }
+
+  function commandCursorSourceKey(button) {
+    if (!button) return "";
+    return button.id || (button.dataset.constraint ? `constraint:${button.dataset.constraint}` : "");
+  }
+
+  function hideCanvasCommandCursorIndicator({ clearPosition = false } = {}) {
+    if (clearPosition) commandCursorScreen = null;
+    commandCursorSource = null;
+    if (!canvasCommandCursorIndicator) return;
+    if (canvasCommandCursorIndicator.hidden && !canvasCommandCursorIndicator.hasChildNodes()) return;
+    canvasCommandCursorIndicator.hidden = true;
+    canvasCommandCursorIndicator.replaceChildren();
+    delete canvasCommandCursorIndicator.dataset.sourceCommand;
+  }
+
+  function updateCanvasCommandCursorIndicator(screenPoint = null) {
+    if (!canvasCommandCursorIndicator) return;
+    const button = activeCommandToolbarButton();
+    if (!button) {
+      commandCursorScreen = null;
+      return hideCanvasCommandCursorIndicator();
+    }
+    if (screenPoint) commandCursorScreen = { x: screenPoint.x, y: screenPoint.y };
+    const svg = button?.querySelector("svg");
+    if (!commandCursorScreen || !button || !svg) return hideCanvasCommandCursorIndicator();
+
+    const source = commandCursorSourceKey(button);
+    if (commandCursorSource !== source || !canvasCommandCursorIndicator.querySelector("svg")) {
+      canvasCommandCursorIndicator.replaceChildren(svg.cloneNode(true));
+      canvasCommandCursorIndicator.dataset.sourceCommand = source;
+      commandCursorSource = source;
+    }
+    const size = 24;
+    const gap = 13;
+    const edge = 4;
+    const canvasWidth = canvas.clientWidth;
+    const canvasHeight = canvas.clientHeight;
+    let left = commandCursorScreen.x + gap;
+    let top = commandCursorScreen.y + gap;
+    if (left + size > canvasWidth - edge) left = commandCursorScreen.x - gap - size;
+    if (top + size > canvasHeight - edge) top = commandCursorScreen.y - gap - size;
+    canvasCommandCursorIndicator.style.left = `${Math.max(edge, left)}px`;
+    canvasCommandCursorIndicator.style.top = `${Math.max(edge, top)}px`;
+    canvasCommandCursorIndicator.hidden = false;
+  }
+
   function updateToolbar() {
     const geometryMode = isGeometryMode();
     const constructionState = constructionToggleState(geometryMode);
@@ -11462,6 +11535,7 @@
       if (button) button.disabled = !geometryMode;
     }
     updateHistoryButtons();
+    updateCanvasCommandCursorIndicator();
   }
 
   function constructionToggleState(geometryMode = isGeometryMode()) {
@@ -17457,18 +17531,20 @@
   });
 
   canvas.addEventListener("pointermove", (e) => {
-    const coordinatePoint = screenToWorld(canvasScreenPoint(e));
+    const screenPoint = canvasScreenPoint(e);
+    updateCanvasCommandCursorIndicator(screenPoint);
+    const coordinatePoint = screenToWorld(screenPoint);
     const coordinateStatus = document.getElementById("statusCoordinates");
     if (coordinateStatus) coordinateStatus.textContent = `X ${formatDisplayNumber(coordinatePoint.x, 3)} / Y ${formatDisplayNumber(coordinatePoint.y, 3)}`;
     if (panSession) {
-      const p = canvasScreenPoint(e);
+      const p = screenPoint;
       viewport.x = panSession.startX + (p.x - panSession.startPointer.x);
       viewport.y = panSession.startY + (p.y - panSession.startPointer.y);
       draw();
       return;
     }
 
-    const p = canvasPoint(e);
+    const p = coordinatePoint;
     lastPointerWorld = p;
     if (mode === "hatch" || mode === "hatch-repair") {
       clearSnap();
@@ -18153,6 +18229,7 @@
   canvas.addEventListener("pointerup", endDrag);
   canvas.addEventListener("pointercancel", endDrag);
   canvas.addEventListener("pointerleave", () => {
+    hideCanvasCommandCursorIndicator({ clearPosition: true });
     if (dragSession || dimensionDragSession || annotationDragSession || selectionRectSession || panSession) return;
     clearCanvasHover();
     draw();

@@ -1107,6 +1107,61 @@ test("Cad2 files open, overwrite, save as, and cancel without errors", async ({ 
   });
 });
 
+test("active canvas commands show the matching toolbar icon beside the pointer", async ({ page }) => {
+  await page.goto(`${baseUrl}/index.html?test=1`);
+  await page.waitForFunction(() => window.__cadTest);
+  const canvasArea = await page.locator(".canvas-area").boundingBox();
+  const pointer = { x: canvasArea.x + canvasArea.width * 0.62, y: canvasArea.y + canvasArea.height * 0.54 };
+  const indicator = page.locator("#canvasCommandCursorIndicator");
+  const indicatorMatches = (sourceSelector) => page.evaluate((selector) => {
+    const badge = document.getElementById("canvasCommandCursorIndicator");
+    const source = document.querySelector(selector);
+    return {
+      matches: Boolean(badge?.querySelector("svg")?.isEqualNode(source?.querySelector("svg"))),
+      source: badge?.dataset.sourceCommand || null,
+      pointerEvents: badge ? getComputedStyle(badge).pointerEvents : null,
+    };
+  }, sourceSelector);
+
+  await page.mouse.move(pointer.x, pointer.y);
+  await expect(indicator).toBeHidden();
+
+  await page.locator("#toolLine").click();
+  await page.mouse.move(pointer.x, pointer.y);
+  await expect(indicator).toBeVisible();
+  expect(await indicatorMatches("#toolLine")).toEqual({ matches: true, source: "toolLine", pointerEvents: "none" });
+  let badgeBox = await indicator.boundingBox();
+  expect(badgeBox.x).toBeGreaterThan(pointer.x + 5);
+  expect(badgeBox.y).toBeGreaterThan(pointer.y + 5);
+
+  await page.locator("#toolSelect").click();
+  await page.mouse.move(pointer.x + 2, pointer.y + 2);
+  await expect(indicator).toBeHidden();
+
+  await page.locator('[data-constraint="parallel"]').click();
+  await page.mouse.move(pointer.x, pointer.y);
+  await expect(indicator).toBeVisible();
+  expect(await indicatorMatches('[data-constraint="parallel"]')).toEqual({ matches: true, source: "constraint:parallel", pointerEvents: "none" });
+  await page.keyboard.press("Escape");
+
+  await page.locator("#annotationTextBtn").click();
+  await page.mouse.move(pointer.x, pointer.y);
+  await expect(indicator).toBeVisible();
+  expect(await indicatorMatches("#annotationTextBtn")).toEqual({ matches: true, source: "annotationTextBtn", pointerEvents: "none" });
+
+  const edgePointer = { x: canvasArea.x + canvasArea.width - 3, y: canvasArea.y + canvasArea.height - 3 };
+  await page.mouse.move(edgePointer.x, edgePointer.y);
+  badgeBox = await indicator.boundingBox();
+  expect(badgeBox.x + badgeBox.width).toBeLessThanOrEqual(canvasArea.x + canvasArea.width - 3);
+  expect(badgeBox.y + badgeBox.height).toBeLessThanOrEqual(canvasArea.y + canvasArea.height - 3);
+  expect(badgeBox.x).toBeLessThan(edgePointer.x);
+  expect(badgeBox.y).toBeLessThan(edgePointer.y);
+
+  const toolbar = await page.locator(".command-toolbar").boundingBox();
+  await page.mouse.move(toolbar.x + 8, toolbar.y + 8);
+  await expect(indicator).toBeHidden();
+});
+
 test("Canvas context menu exposes common and object-specific operations", async ({ page }) => {
   await page.goto(`${baseUrl}/index.html?test=1`);
   await page.waitForFunction(() => window.__cadTest);
