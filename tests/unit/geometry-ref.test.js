@@ -53,7 +53,7 @@ test("projection ancestry distinguishes owner, nested instances, and local geome
 });
 
 test("invalid references return null and valid values are immutable", () => {
-  assert.equal(geometryRef.create("spline", ["S1"]), null);
+  assert.deepEqual(JSON.parse(JSON.stringify(geometryRef.create("spline", ["SP1"]))), { kind: "spline", path: ["SP1"] });
   assert.equal(geometryRef.create("line", []), null);
   assert.equal(geometryRef.create("line", ["BI1", "", "L1"]), null);
   assert.equal(geometryRef.parseId("line", ""), null);

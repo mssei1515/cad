@@ -8,10 +8,11 @@
 | Line | 共有 Point `p1`, `p2`, `construction` | 端点・線全体の移動、補助線切替 |
 | Circle | 中心 Point、`radiusValue`, `construction` | 中心移動、半径ドラッグ、補助切替 |
 | Arc | 中心 Point、半径、開始角、終了角、`construction` | 中心・半径・両端の編集、補助切替 |
+| Spline | 3個以上の共有fit Point、`closed`、`construction` | 曲線全体の移動、専用編集modeでfit pointを移動、開閉切替、補助切替 |
 
 すべての Geometry は作図可能な1つの Sketch に所属する。Block Projection は同じ型として選択・描画されるが、Definition と Instance から導出される読み取り専用 Geometry である。
 
-モデル長の下限は `1e-6` である。Line、Circle、Arc の作成、読込、拘束追加ではゼロ長または下限近傍への崩壊を防止・補正する。
+モデル長の下限は `1e-6` である。Line、Circle、Arc、Spline の作成、読込、拘束追加ではゼロ長または下限近傍への崩壊を防止・補正する。
 
 ### 共通数学契約
 
@@ -35,7 +36,7 @@ UI adapterとSolverが共有する副作用のない計算は`geometry_kernel.js
 
 ### 共通参照契約
 
-GeometryとBlock Projectionの参照は`GeometryRef { kind, path[] }`として扱う。kindは`point`、`line`、`circle`、`arc`のいずれかで、pathは1要素以上の文字列配列である。通常GeometryのIDは1要素、Projectionの階層は`@`で区切った複数要素として表す。
+GeometryとBlock Projectionの参照は`GeometryRef { kind, path[] }`として扱う。kindは`point`、`line`、`circle`、`arc`、`spline`のいずれかで、pathは1要素以上の文字列配列である。通常GeometryのIDは1要素、Projectionの階層は`@`で区切った複数要素として表す。
 
 Constraintの各Geometry参照fieldは保存形式上は従来どおりbare IDを使う。例えば入れ子Projectionを参照するLine拘束は`"line": "BI1@BI2@L1"`となり、kindを保存文字列へ追加しない。保存時はGeometryの型とIDから共通codecでcanonical IDを生成し、読込時はConstraint fieldが要求するkindとbare IDから共通resolverで実体を引く。
 
@@ -69,9 +70,13 @@ Constraintの各Geometry参照fieldは保存形式上は従来どおりbare ID�
 
 中心、開始点、終了点の順に3クリックして作る。向きを持つ開始角・終了角として保存する。
 
+### スプライン
+
+ToolbarまたはGeometry menuから開始し、3個以上のfit pointを順にclickして3次Splineを作る。Enterまたは最後の点のdouble clickで開Splineを確定し、3点以上を置いた後に先頭fit pointをclickすると閉Splineを確定する。Backspaceは確定前の最後のfit pointを取り消し、Escは未確定Spline全体を破棄する。通常選択では曲線だけを表示し、Propertiesの編集操作またはdouble clickでfit point編集modeへ入る。詳細は[スプライン](./10-スプライン.md)を参照する。
+
 ### 補助 Geometry
 
-補助切替は Line、Circle、Arc に適用する。選択中の対象があれば対象の `construction` を切り替え、対象がなければ今後作成する Geometry の既定値を切り替える。
+補助切替は Line、Circle、Arc、Spline に適用する。選択中の対象があれば対象の `construction` を切り替え、対象がなければ今後作成する Geometry の既定値を切り替える。
 
 通常GeometryはAppearanceで解決した色、線種、線幅、visibleを使用する。初期の基底線幅は2.0pxであり、各SketchのAppearanceはDocument既定を直接継承して所属Sketch自身の明示fieldだけを上書きする。補助GeometryではDocumentの補助線外観を基底とし、所属Sketch自身の補助線外観だけを適用する。DocumentとSketchのどちらでも一般外観は補助線外観へ継承しない。初期基底は一点鎖線、1px、通常時の不透明度72%とし、その後にGeometryの明示Appearanceを適用する。補助LineのendpointOverhangがtrueなら両端から画面上12pxずつ延長し、endpointMarkersがtrueなら元の両端へ点を描画する。Geometry自身または所属Block Instanceのhover／選択中も設定したはみ出しを維持する。Constraint Status ViewではendpointMarkersの値にかかわらず外観設定由来の端部の点を表示しないが、Canvasで直接hoverまたは選択した端点の操作マーカーは表示する。選択とhoverは一時的な強調を優先し、Space押下中は拘束状態色を優先する。
 
@@ -93,11 +98,11 @@ Circleは単独で選び、側と距離を入力して複製する。Line／Arc�
 
 ### ハッチング
 
-アクティブSketchの通常Line、Circle、Arcが作る閉領域内をclickして、境界へ関連付いたHatchを作る。外観は平行線、互いに直交するクロス、色塗りつぶしから選択する。補助Geometry、非アクティブSketch、Block Projectionは境界候補に含めない。未分割交差も内部の平面グラフで分割して面を検出し、内側の閉輪郭は穴として除外する。1clickごとに1つのUndo単位で確定し、Escまで連続作成する。詳細な境界追従と無効化は[ハッチング](./09-ハッチング.md)を参照する。
+アクティブSketchの通常Line、Circle、Arc、Splineが作る閉領域内をclickして、境界へ関連付いたHatchを作る。外観は平行線、互いに直交するクロス、色塗りつぶしから選択する。補助Geometry、非アクティブSketch、Block Projectionは境界候補に含めない。未分割交差も内部の平面グラフで分割して面を検出し、内側の閉輪郭は穴として除外する。1clickごとに1つのUndo単位で確定し、Escまで連続作成する。詳細な境界追従と無効化は[ハッチング](./09-ハッチング.md)を参照する。
 
 ## 3. 選択と編集
 
-- 単一クリック後のドラッグで Point、Line、Circle、Arc、Arc 端点を編集する。
+- 単一クリック後のドラッグで Point、Line、Circle、Arc、Arc 端点、Spline全体を編集する。Splineのfit pointは専用編集mode中だけ表示・dragする。
 - Arc本体のhover／選択では端点ハンドルを表示しない。Arc端点を直接hover、選択、ドラッグしている場合だけ対象端点の操作ハンドルを表示する。
 - Shift/Ctrl クリックで加算・解除選択する。
 - 左から右の矩形選択は完全包含、右から左は交差選択とする。
@@ -129,6 +134,7 @@ UIで利用できる組み合わせを次に示す。
 | 一致 | `coincident` | 2 Point |
 | 一致 | `pointOnLine` | Point–Line |
 | 一致 | `pointOnCircle` | Point–Circle/Arc |
+| 一致 | `pointOnSpline` | Point–Spline。曲線parameterもsolver変数として保持する |
 | 一致 | `arcEndpointCoincident` | Arc 端–Point |
 | 一致 | `arcEndpointArcEndpointCoincident` | 2 Arc 端 |
 | 一致 | `arcEndpointOnLine` | Arc 端–Line |
@@ -148,6 +154,8 @@ UIで利用できる組み合わせを次に示す。
 | 同心 | `concentric` | Point–Circle/Arc、または Circle/Arc 2つ |
 | 接線 | `lineCircleTangent` | Line–Circle/Arc |
 | 接線 | `circleCircleTangent` | Circle/Arc 2つ |
+| 接線 | `splineLineTangent` | 開Spline端点–Line。端点接線方向を一致させる |
+| 接線 | `splineSplineTangent` | 2つの開Spline端点。端点接線方向を一致させる |
 | 固定 | Point の `fixed` | 1つ以上の Point |
 | 固定 | `lineFixed` | Line の両端位置 |
 | 固定 | `arcEndpointFixed` | Arc 端位置。内部的に利用する |
@@ -169,6 +177,7 @@ UIで利用できる組み合わせを次に示す。
 5. 既存拘束と重複する寸法は、形状を変えない読み取り専用寸法として追加する。
 6. 単一 Block Instance 内の Projection だけを測る寸法も読み取り専用にする。Definition のサイズ変更は Block Editor で行う。
 7. 新規拘束によって十分長かった Line が下限近傍へ崩壊する場合は拒否する。
+8. Splineの接線拘束は開Splineの始点または終点だけに作成できる。端点接線拘束を持つSplineを閉Splineへ変更する操作は拒否する。
 
 ## 6. 拘束寸法と読み取り専用寸法
 
@@ -212,4 +221,4 @@ Geometry は解析結果により次の状態で描き分ける。
 
 Geometry の削除時は、共有 Point の利用状況を考慮して不要 Pointを整理し、対象を参照する拘束と拘束寸法を除去する。ただし削除後も残る式が削除対象の寸法symbolを参照する場合は、依存元の名前を表示して操作を拒否する。依存元も同時に削除する操作、または名前空間全体の削除は許可する。1回のユーザー操作は1つの履歴単位にする。
 
-Geometryを削除すると、そのGeometryを参照するConstraintとLeaderも同時に除去する。Hatchの境界Geometryは例外であり、Hatch Objectを残したまま境界エラーの無効状態にする。Sketch削除では所属Hatchも削除する。Sketch削除、Block Instance削除、Block Definition編集でも各Objectの参照ライフサイクルを適用する。
+Geometryを削除すると、そのGeometryを参照するConstraintとLeaderも同時に除去する。Splineを削除すると、そのSplineだけで使用されるfit pointも整理する。Hatchの境界Geometryは例外であり、Hatch Objectを残したまま境界エラーの無効状態にする。Sketch削除では所属Hatchも削除する。Sketch削除、Block Instance削除、Block Definition編集でも各Objectの参照ライフサイクルを適用する。

@@ -13,15 +13,16 @@
 7. [UI・操作・履歴](./07-UI・操作・履歴.md)
 8. [Parameter](./08-Parameter.md)
 9. [ハッチング](./09-ハッチング.md)
-10. [実装対応表とテスト](./90-実装対応表とテスト.md)
-11. [改善バックログ](./91-改善バックログ.md) — 仕様ではない技術課題
+10. [スプライン](./10-スプライン.md)
+11. [実装対応表とテスト](./90-実装対応表とテスト.md)
+12. [改善バックログ](./91-改善バックログ.md) — 仕様ではない技術課題
 
 ## 用語
 
 | 用語 | 意味 |
 | --- | --- |
 | Document | 1つの保存対象。Geometry、Constraint、Sketch、Block、Parameter、Appearance、Hatch、Annotationを持つ |
-| Geometry | Point、Line、Circle、Arc、およびBlock Projection |
+| Geometry | Point、Line、Circle、Arc、Spline、およびBlock Projection |
 | Constraint | Geometryの成立条件。寸法もConstraintに属する |
 | Parameter | 名前と数式を持ち、同じ名前空間の寸法と相互参照できるスカラー値 |
 | Appearance | visible、color、lineType、lineWidthと、補助Line用のendpointOverhang／endpointMarkersから成る表示属性 |

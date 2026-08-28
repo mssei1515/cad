@@ -781,6 +781,36 @@
     }
   }
 
+  class Spline {
+    constructor(id, fitPoints, closed = false, construction = false) {
+      this.id = id;
+      this.fitPoints = Array.isArray(fitPoints) ? fitPoints : [];
+      this.closed = Boolean(closed);
+      this.construction = Boolean(construction);
+      this.degree = 3;
+      this.definitionMode = "fit";
+      this.endCondition = "natural";
+      this._curveCacheKey = "";
+      this._curveCache = null;
+    }
+
+    curve() {
+      const cacheKey = `${this.closed ? 1 : 0}|${this.fitPoints.map((point) => `${point.x},${point.y}`).join("|")}`;
+      if (this._curveCache && this._curveCacheKey === cacheKey) return this._curveCache;
+      this._curveCacheKey = cacheKey;
+      this._curveCache = window.SplineGeometry?.build(this.fitPoints, { closed: this.closed }) || { valid: false, spans: [] };
+      return this._curveCache;
+    }
+
+    startPoint() {
+      return this.fitPoints[0] || null;
+    }
+
+    endPoint() {
+      return this.closed ? this.fitPoints[0] || null : this.fitPoints[this.fitPoints.length - 1] || null;
+    }
+  }
+
   function orientedGeometryEndpoint(item, reversed, endpoint) {
     const useStart = endpoint === "start";
     if (item instanceof Line) {
@@ -912,6 +942,57 @@
     rawError() {
       const p = arcEndpointPoint(this.arc, this.endpoint);
       return [p.x - this.targetX, p.y - this.targetY];
+    }
+  }
+
+  class PointOnSplineConstraint extends Constraint {
+    constructor(point, spline, parameter = 0) {
+      super(`点-スプライン一致 ${point.id}-${spline.id}`, 1);
+      this.point = point;
+      this.spline = spline;
+      this.parameter = Math.max(0, Math.min(1, Number(parameter) || 0));
+    }
+
+    rawError() {
+      const target = window.SplineGeometry?.evaluate(this.spline.curve(), this.parameter);
+      return target ? [this.point.x - target.x, this.point.y - target.y] : [1e6, 1e6];
+    }
+  }
+
+  class SplineLineTangentConstraint extends Constraint {
+    constructor(spline, endpoint, line) {
+      super(`スプライン-線接線 ${spline.id}.${endpoint}-${line.id}`, 1);
+      this.spline = spline;
+      this.endpoint = endpoint === "end" ? "end" : "start";
+      this.line = line;
+    }
+
+    rawError() {
+      const curve = this.spline.curve();
+      const tangent = window.SplineGeometry?.derivative(curve, this.endpoint === "end" ? 1 : 0);
+      const lineLength = this.line.length();
+      const tangentLength = tangent ? hypot2(tangent.x, tangent.y) : 0;
+      if (lineLength < MIN_ORIENTATION_LENGTH || tangentLength < MIN_ORIENTATION_LENGTH) return [1e6];
+      return [(tangent.x * this.line.dy() - tangent.y * this.line.dx()) / (tangentLength * lineLength)];
+    }
+  }
+
+  class SplineSplineTangentConstraint extends Constraint {
+    constructor(a, endpointA, b, endpointB) {
+      super(`スプライン接線 ${a.id}.${endpointA}-${b.id}.${endpointB}`, 1);
+      this.a = a;
+      this.endpointA = endpointA === "end" ? "end" : "start";
+      this.b = b;
+      this.endpointB = endpointB === "end" ? "end" : "start";
+    }
+
+    rawError() {
+      const first = window.SplineGeometry?.derivative(this.a.curve(), this.endpointA === "end" ? 1 : 0);
+      const second = window.SplineGeometry?.derivative(this.b.curve(), this.endpointB === "end" ? 1 : 0);
+      const firstLength = first ? hypot2(first.x, first.y) : 0;
+      const secondLength = second ? hypot2(second.x, second.y) : 0;
+      if (firstLength < MIN_ORIENTATION_LENGTH || secondLength < MIN_ORIENTATION_LENGTH) return [1e6];
+      return [(first.x * second.y - first.y * second.x) / (firstLength * secondLength)];
     }
   }
 
@@ -1132,6 +1213,11 @@
         vs.push({ object: instance, prop: "y", label: `${instance.id}.y` });
         if (!instance.rotationLocked) vs.push({ object: instance, prop: "rotation", label: `${instance.id}.rotation` });
       }
+      for (const constraint of this.model.constraints || []) {
+        if (constraint instanceof PointOnSplineConstraint && constraint.enabled !== false) {
+          vs.push({ object: constraint, prop: "parameter", label: `${constraint.point.id}-${constraint.spline.id}.t`, min: 0, max: 1 });
+        }
+      }
       return vs;
     }
 
@@ -1188,8 +1274,10 @@
         const orig = v.object[v.prop];
         const h = this.diffStep * Math.max(1, Math.abs(orig));
         v.object[v.prop] = Number.isFinite(v.min) ? Math.max(v.min, orig + h) : orig + h;
+        if (Number.isFinite(v.max)) v.object[v.prop] = Math.min(v.max, v.object[v.prop]);
         const plus = this.computeErrorVectorForConstraints(constraints);
         v.object[v.prop] = Number.isFinite(v.min) ? Math.max(v.min, orig - h) : orig - h;
+        if (Number.isFinite(v.max)) v.object[v.prop] = Math.min(v.max, v.object[v.prop]);
         const minus = this.computeErrorVectorForConstraints(constraints);
         v.object[v.prop] = orig;
         for (let i = 0; i < m; i++) J[i][j] = (plus[i] - minus[i]) / (2 * h);
@@ -1229,6 +1317,7 @@
       for (let i = 0; i < vars.length; i++) {
         vars[i].object[vars[i].prop] += dx[i];
         if (Number.isFinite(vars[i].min)) vars[i].object[vars[i].prop] = Math.max(vars[i].min, vars[i].object[vars[i].prop]);
+        if (Number.isFinite(vars[i].max)) vars[i].object[vars[i].prop] = Math.min(vars[i].max, vars[i].object[vars[i].prop]);
       }
     }
 
@@ -1661,6 +1750,7 @@
     Line,
     Circle,
     Arc,
+    Spline,
     Constraint,
     DistanceConstraint,
     PointAxisDistanceConstraint,
@@ -1701,6 +1791,9 @@
     DragConstraint,
     ParameterDragConstraint,
     ArcEndpointDragConstraint,
+    PointOnSplineConstraint,
+    SplineLineTangentConstraint,
+    SplineSplineTangentConstraint,
     ConstraintSolver,
   };
 })();

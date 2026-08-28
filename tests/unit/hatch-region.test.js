@@ -5,10 +5,12 @@ const test = require("node:test");
 const vm = require("node:vm");
 
 function loadEngine() {
-  const source = fs.readFileSync(path.resolve(__dirname, "../../hatch_region.js"), "utf8");
   const sandbox = { window: {} };
   vm.createContext(sandbox);
-  vm.runInContext(source, sandbox, { filename: "hatch_region.js" });
+  for (const fileName of ["spline_geometry.js", "hatch_region.js"]) {
+    const source = fs.readFileSync(path.resolve(__dirname, `../../${fileName}`), "utf8");
+    vm.runInContext(source, sandbox, { filename: fileName });
+  }
   return sandbox.window.HatchRegionEngine;
 }
 
@@ -16,6 +18,7 @@ const engine = loadEngine();
 const line = (id, x1, y1, x2, y2) => ({ kind: "line", id, p1: { x: x1, y: y1 }, p2: { x: x2, y: y2 } });
 const circle = (id, x, y, radius) => ({ kind: "circle", id, center: { x, y }, radius });
 const arc = (id, x, y, radius, startAngle, endAngle) => ({ kind: "arc", id, center: { x, y }, radius, startAngle, endAngle });
+const spline = (id, points, closed = false) => ({ kind: "spline", id, points, closed });
 const rectangle = (prefix, x1, y1, x2, y2) => [
   line(`${prefix}1`, x1, y1, x2, y1),
   line(`${prefix}2`, x2, y1, x2, y2),
@@ -59,6 +62,18 @@ test("supports closed regions composed of lines and arcs", () => {
   const result = engine.findFaceAtPoint(primitives, { x: 0, y: 10 });
   assert.equal(result.ok, true);
   assert.deepEqual(new Set(result.boundaryLoops[0].spans.map((span) => span.source.path[0])), new Set(["L1", "A1"]));
+});
+
+test("supports a closed cubic spline as an associative hatch boundary", () => {
+  const boundary = spline("SP1", [{ x: 0, y: 0 }, { x: 100, y: 0 }, { x: 100, y: 80 }, { x: 0, y: 80 }], true);
+  const result = engine.findFaceAtPoint([boundary], { x: 50, y: 40 });
+  assert.equal(result.ok, true);
+  assert.equal(result.boundaryLoops.length, 1);
+  assert.equal(result.boundaryLoops[0].spans[0].source.kind, "spline");
+  assert.equal(result.boundaryLoops[0].spans[0].fullLoop, true);
+  const rebuilt = engine.resolveBoundary(result.boundaryLoops, [boundary]);
+  assert.equal(rebuilt.ok, true);
+  assert.equal(engine.containsPoint(rebuilt, { x: 50, y: 40 }), true);
 });
 
 test("keeps tangent contacts from creating a false split face", () => {

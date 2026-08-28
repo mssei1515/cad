@@ -4,6 +4,7 @@
 
   const TWO_PI = Math.PI * 2;
   const DEFAULT_EPSILON = 1e-7;
+  const SplineGeometry = typeof window !== "undefined" ? window.SplineGeometry : null;
 
   function finitePoint(point) {
     return point && Number.isFinite(point.x) && Number.isFinite(point.y);
@@ -27,7 +28,8 @@
   }
 
   function primitiveKind(primitive) {
-    if (["line", "circle", "arc"].includes(primitive?.kind)) return primitive.kind;
+    if (["line", "circle", "arc", "spline"].includes(primitive?.kind)) return primitive.kind;
+    if (Array.isArray(primitive?.points) || Array.isArray(primitive?.fitPoints)) return "spline";
     if (primitive?.p1 && primitive?.p2) return "line";
     if (primitive?.center && Number.isFinite(primitive?.startAngle) && Number.isFinite(primitive?.endAngle)) return "arc";
     if (primitive?.center && Number.isFinite(primitiveRadius(primitive))) return "circle";
@@ -41,6 +43,12 @@
     if (kind === "line") {
       if (!finitePoint(source.p1) || !finitePoint(source.p2)) return null;
       return { kind, id, p1: clonePoint(source.p1), p2: clonePoint(source.p2), source };
+    }
+    if (kind === "spline") {
+      const points = (source.points || source.fitPoints || []).map(clonePoint);
+      const curve = source.curve?.valid ? source.curve : SplineGeometry?.build(points, { closed: Boolean(source.closed) });
+      if (!curve?.valid) return null;
+      return { kind, id, points, closed: Boolean(source.closed), curve, source };
     }
     const radius = primitiveRadius(source);
     if (!finitePoint(source.center) || !Number.isFinite(radius) || radius <= 0) return null;
@@ -75,6 +83,7 @@
         maxY: Math.max(primitive.p1.y, primitive.p2.y),
       };
     }
+    if (primitive.kind === "spline") return SplineGeometry.bounds(primitive.curve);
     return {
       minX: primitive.center.x - primitive.radius,
       minY: primitive.center.y - primitive.radius,
@@ -98,6 +107,7 @@
   }
 
   function pointAt(primitive, t) {
+    if (primitive.kind === "spline") return SplineGeometry.evaluate(primitive.curve, t);
     if (primitive.kind === "line") {
       return {
         x: primitive.p1.x + (primitive.p2.x - primitive.p1.x) * t,
@@ -114,6 +124,7 @@
   }
 
   function tangentAt(primitive, t) {
+    if (primitive.kind === "spline") return SplineGeometry.derivative(primitive.curve, t);
     if (primitive.kind === "line") return { x: primitive.p2.x - primitive.p1.x, y: primitive.p2.y - primitive.p1.y };
     const angle = primitive.kind === "circle"
       ? t * TWO_PI
@@ -123,6 +134,10 @@
   }
 
   function primitiveParam(primitive, point, tolerance = 1e-8) {
+    if (primitive.kind === "spline") {
+      const closest = SplineGeometry.closestPoint(primitive.curve, point, { samplesPerSpan: 32 });
+      return closest && closest.distance <= Math.max(tolerance * 16, DEFAULT_EPSILON) ? closest.t : null;
+    }
     if (primitive.kind === "line") {
       const dx = primitive.p2.x - primitive.p1.x;
       const dy = primitive.p2.y - primitive.p1.y;
@@ -210,6 +225,7 @@
   }
 
   function pairIntersections(a, b, epsilon) {
+    if (a.kind === "spline" || b.kind === "spline") return SplineGeometry.intersections(a, b, { tolerance: epsilon * 8 });
     if (a.kind === "line" && b.kind === "line") return lineLineIntersections(a, b, epsilon);
     if (a.kind === "line") return { points: lineCircularIntersections(a, b, epsilon), overlap: false };
     if (b.kind === "line") return { points: lineCircularIntersections(b, a, epsilon), overlap: false };
@@ -229,7 +245,7 @@
       if (Math.abs(t) <= epsilon) return { type: "endpoint", name: "p1" };
       if (Math.abs(t - 1) <= epsilon) return { type: "endpoint", name: "p2" };
     }
-    if (primitive.kind === "arc") {
+    if (primitive.kind === "arc" || (primitive.kind === "spline" && !primitive.closed)) {
       if (Math.abs(t) <= epsilon) return { type: "endpoint", name: "start" };
       if (Math.abs(t - 1) <= epsilon) return { type: "endpoint", name: "end" };
     }
@@ -267,6 +283,15 @@
   }
 
   function sampleSpan(primitive, startT, endT, reversed = false) {
+    if (primitive.kind === "spline") {
+      const points = SplineGeometry.flatten(primitive.curve, {
+        start: startT,
+        end: endT,
+        tolerance: Math.max(DEFAULT_EPSILON, geometryScale([primitive]) * 1e-4),
+      });
+      const sampled = points.map((entry) => entry.point);
+      return reversed ? sampled.reverse() : sampled;
+    }
     const delta = endT - startT;
     const sweep = primitive.kind === "line" ? 0 : Math.abs(delta * (primitive.kind === "circle" ? TWO_PI : primitive.endAngle - primitive.startAngle));
     const count = primitive.kind === "line" ? 1 : Math.max(2, Math.ceil(sweep / (Math.PI / 24)));
@@ -345,6 +370,7 @@
       end: edge.endAnchor ? JSON.parse(JSON.stringify(edge.endAnchor)) : null,
       reversed: Boolean(halfEdge.reversed),
       fullCircle: false,
+      fullLoop: false,
     };
   }
 
@@ -357,7 +383,7 @@
     const intersectionRecords = [];
     const overlaps = [];
     for (const primitive of primitives) {
-      if (primitive.kind !== "circle") {
+      if (primitive.kind !== "circle" && !(primitive.kind === "spline" && primitive.closed)) {
         markers.get(primitive).push({ t: 0, point: pointAt(primitive, 0) }, { t: 1, point: pointAt(primitive, 1) });
       }
     }
@@ -393,17 +419,18 @@
     const standaloneCycles = [];
     for (const primitive of primitives) {
       const list = markers.get(primitive).sort((a, b) => a.t - b.t);
-      if (primitive.kind === "circle" && list.length < 2) {
+      const closedPrimitive = primitive.kind === "circle" || (primitive.kind === "spline" && primitive.closed);
+      if (closedPrimitive && list.length < 2) {
         standaloneCycles.push({
           primitive,
           points: sampleSpan(primitive, 0, 1, false).slice(0, -1),
-          area: Math.PI * primitive.radius * primitive.radius,
-          fullCircle: true,
+          area: Math.abs(polygonArea(sampleSpan(primitive, 0, 1, false).slice(0, -1))),
+          fullLoop: true,
         });
         continue;
       }
       const intervals = [];
-      if (primitive.kind === "circle") {
+      if (closedPrimitive) {
         for (let index = 0; index < list.length; index++) {
           const start = list[index];
           const endBase = list[(index + 1) % list.length];
@@ -414,16 +441,16 @@
       }
       for (const interval of intervals) {
         if (interval.end.t - interval.start.t <= parameterEpsilon) continue;
-        const startPoint = pointAt(primitive, primitive.kind === "circle" ? interval.start.t % 1 : interval.start.t);
-        const endPoint = pointAt(primitive, primitive.kind === "circle" ? interval.end.t % 1 : interval.end.t);
+        const startPoint = pointAt(primitive, closedPrimitive ? interval.start.t % 1 : interval.start.t);
+        const endPoint = pointAt(primitive, closedPrimitive ? interval.end.t % 1 : interval.end.t);
         const edge = {
           primitive,
           startT: interval.start.t,
           endT: interval.end.t,
           start: vertexFor(vertices, startPoint, epsilon * 8),
           end: vertexFor(vertices, endPoint, epsilon * 8),
-          startAnchor: markerAnchor(primitive, primitive.kind === "circle" ? interval.start.t % 1 : interval.start.t, intersectionRecords, parameterEpsilon),
-          endAnchor: markerAnchor(primitive, primitive.kind === "circle" ? interval.end.t % 1 : interval.end.t, intersectionRecords, parameterEpsilon),
+          startAnchor: markerAnchor(primitive, closedPrimitive ? interval.start.t % 1 : interval.start.t, intersectionRecords, parameterEpsilon),
+          endAnchor: markerAnchor(primitive, closedPrimitive ? interval.end.t % 1 : interval.end.t, intersectionRecords, parameterEpsilon),
         };
         edges.push(edge);
       }
@@ -440,7 +467,8 @@
     }
     const outgoingAngle = (halfEdge) => {
       const t = halfEdge.reversed ? halfEdge.edge.endT : halfEdge.edge.startT;
-      const tangent = tangentAt(halfEdge.edge.primitive, halfEdge.edge.primitive.kind === "circle" ? ((t % 1) + 1) % 1 : t);
+      const closedPrimitive = halfEdge.edge.primitive.kind === "circle" || (halfEdge.edge.primitive.kind === "spline" && halfEdge.edge.primitive.closed);
+      const tangent = tangentAt(halfEdge.edge.primitive, closedPrimitive ? ((t % 1) + 1) % 1 : t);
       const x = halfEdge.reversed ? -tangent.x : tangent.x;
       const y = halfEdge.reversed ? -tangent.y : tangent.y;
       return Math.atan2(y, x);
@@ -467,9 +495,9 @@
       if (current !== start || sequence.length < 2) continue;
       const points = cyclePoints(sequence);
       const area = polygonArea(points);
-      if (points.length >= 3 && area > epsilon * epsilon * 8) cycles.push({ halfEdges: sequence, points, area, fullCircle: false });
+      if (points.length >= 3 && area > epsilon * epsilon * 8) cycles.push({ halfEdges: sequence, points, area, fullLoop: false });
     }
-    for (const standalone of standaloneCycles) cycles.push({ ...standalone, halfEdges: [], fullCircle: true });
+    for (const standalone of standaloneCycles) cycles.push({ ...standalone, halfEdges: [], fullLoop: true });
 
     for (let index = 0; index < cycles.length; index++) {
       const cycle = cycles[index];
@@ -488,17 +516,17 @@
   }
 
   function overlapAffectsCycle(overlap, cycle) {
-    const keys = new Set(cycle.fullCircle
+    const keys = new Set(cycle.fullLoop
       ? [`${cycle.primitive.kind}:${cycle.primitive.id}`]
       : cycle.halfEdges.map((halfEdge) => `${halfEdge.edge.primitive.kind}:${halfEdge.edge.primitive.id}`));
     return overlap.some((primitive) => keys.has(`${primitive.kind}:${primitive.id}`));
   }
 
   function serializeCycle(cycle, role) {
-    if (cycle.fullCircle) {
+    if (cycle.fullLoop) {
       return {
         role,
-        spans: [{ source: primitiveRef(cycle.primitive), start: null, end: null, reversed: false, fullCircle: true }],
+        spans: [{ source: primitiveRef(cycle.primitive), start: null, end: null, reversed: false, fullCircle: cycle.primitive.kind === "circle", fullLoop: true }],
       };
     }
     return { role, spans: cycle.halfEdges.map(serializeHalfEdge) };
@@ -556,16 +584,17 @@
       const spans = [];
       for (const rawSpan of loop.spans) {
         if (!rawSpan || !refKey(rawSpan.source)) return null;
-        const fullCircle = Boolean(rawSpan.fullCircle);
-        const start = fullCircle ? null : normalizeAnchor(rawSpan.start);
-        const end = fullCircle ? null : normalizeAnchor(rawSpan.end);
-        if (!fullCircle && (!start || !end)) return null;
+        const fullLoop = Boolean(rawSpan.fullLoop || rawSpan.fullCircle);
+        const start = fullLoop ? null : normalizeAnchor(rawSpan.start);
+        const end = fullLoop ? null : normalizeAnchor(rawSpan.end);
+        if (!fullLoop && (!start || !end)) return null;
         spans.push({
           source: { kind: rawSpan.source.kind, path: rawSpan.source.path.map(String) },
           start,
           end,
           reversed: Boolean(rawSpan.reversed),
-          fullCircle,
+          fullCircle: Boolean(rawSpan.fullCircle),
+          fullLoop,
         });
       }
       loops.push({ role, spans });
@@ -579,6 +608,8 @@
       if (source.kind === "line" && anchor.name === "p2") return 1;
       if (source.kind === "arc" && anchor.name === "start") return 0;
       if (source.kind === "arc" && anchor.name === "end") return 1;
+      if (source.kind === "spline" && !source.closed && anchor.name === "start") return 0;
+      if (source.kind === "spline" && !source.closed && anchor.name === "end") return 1;
       return null;
     }
     const other = primitiveMap.get(refKey(anchor.other));
@@ -606,17 +637,17 @@
       for (const span of loop.spans) {
         const primitive = primitiveMap.get(refKey(span.source));
         if (!primitive) return { ok: false, code: "missing-boundary", reason: `Boundary geometry ${refId(span.source)} is missing.` };
-        if (span.fullCircle) {
-          if (primitive.kind !== "circle") return { ok: false, code: "invalid-boundary", reason: "A full-circle boundary no longer resolves to a circle." };
+        if (span.fullLoop) {
+          if (primitive.kind !== "circle" && !(primitive.kind === "spline" && primitive.closed)) return { ok: false, code: "invalid-boundary", reason: "A full-loop boundary no longer resolves to a closed primitive." };
           const sampled = sampleSpan(primitive, 0, 1, span.reversed);
-          resolvedSpans.push({ primitive, startT: 0, endT: 1, reversed: span.reversed, fullCircle: true });
+          resolvedSpans.push({ primitive, startT: 0, endT: 1, reversed: span.reversed, fullCircle: primitive.kind === "circle", fullLoop: true });
           points.push(...sampled.slice(0, -1));
           continue;
         }
         let startT = resolveAnchor(primitive, span.start, primitiveMap, epsilon);
         let endT = resolveAnchor(primitive, span.end, primitiveMap, epsilon);
         if (startT == null || endT == null) return { ok: false, code: "changed-topology", reason: `Boundary geometry ${primitive.id} no longer has the stored connection.` };
-        if (primitive.kind === "circle" && endT <= startT + 1e-10) endT += 1;
+        if ((primitive.kind === "circle" || (primitive.kind === "spline" && primitive.closed)) && endT <= startT + 1e-10) endT += 1;
         if (endT - startT <= 1e-10) return { ok: false, code: "changed-topology", reason: `Boundary geometry ${primitive.id} has a collapsed span.` };
         const sampled = sampleSpan(primitive, startT, endT, span.reversed);
         if (points.length) {
@@ -627,7 +658,7 @@
           sampled.shift();
         }
         points.push(...sampled);
-        resolvedSpans.push({ primitive, startT, endT, reversed: span.reversed, fullCircle: false });
+        resolvedSpans.push({ primitive, startT, endT, reversed: span.reversed, fullCircle: false, fullLoop: false });
       }
       if (points.length < 3) return { ok: false, code: "invalid-boundary", reason: "The hatch boundary has too few points." };
       const first = points[0];
@@ -680,8 +711,8 @@
         };
         const start = rewriteAnchor(span.start);
         const end = rewriteAnchor(span.end);
-        if (!span.fullCircle && (!start || !end)) return null;
-        spans.push({ source, start, end, reversed: span.reversed, fullCircle: span.fullCircle });
+        if (!span.fullLoop && (!start || !end)) return null;
+        spans.push({ source, start, end, reversed: span.reversed, fullCircle: span.fullCircle, fullLoop: span.fullLoop });
       }
       result.push({ role: loop.role, spans });
     }

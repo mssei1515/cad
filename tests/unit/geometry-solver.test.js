@@ -7,7 +7,7 @@ const vm = require("node:vm");
 function loadGeometryRuntime() {
   const sandbox = { window: {} };
   vm.createContext(sandbox);
-  for (const fileName of ["geometry_kernel.js", "constraint_solver.js"]) {
+  for (const fileName of ["geometry_kernel.js", "spline_geometry.js", "constraint_solver.js"]) {
     const source = fs.readFileSync(path.resolve(__dirname, `../../${fileName}`), "utf8");
     vm.runInContext(source, sandbox, { filename: fileName });
   }
@@ -44,6 +44,25 @@ test("geometry primitives preserve their public measurement contract", () => {
   assert.equal(arc.startPoint().y, -3);
   assert.ok(Math.abs(arc.endPoint().x - 2) < 1e-12);
   assert.ok(Math.abs(arc.endPoint().y - 2) < 1e-12);
+});
+
+test("fit splines support point-on-curve and endpoint tangent constraints", () => {
+  const fitA = [new geometry.Point("P1", 0, 0), new geometry.Point("P2", 40, 0), new geometry.Point("P3", 80, 0)];
+  const fitB = [new geometry.Point("P4", 80, 0), new geometry.Point("P5", 120, 0), new geometry.Point("P6", 160, 0)];
+  const splineA = new geometry.Spline("SP1", fitA);
+  const splineB = new geometry.Spline("SP2", fitB);
+  const onCurve = runtime.SplineGeometry.evaluate(splineA.curve(), 0.35);
+  const point = new geometry.Point("P7", onCurve.x, onCurve.y);
+  const line = new geometry.Line("L1", new geometry.Point("P8", 0, 10), new geometry.Point("P9", 80, 10));
+  const pointConstraint = new geometry.PointOnSplineConstraint(point, splineA, 0.35);
+  const lineTangent = new geometry.SplineLineTangentConstraint(splineA, "start", line);
+  const splineTangent = new geometry.SplineSplineTangentConstraint(splineA, "end", splineB, "start");
+
+  assert.ok(residualNorm(pointConstraint.error()) < 1e-9);
+  assert.ok(residualNorm(lineTangent.error()) < 1e-9);
+  assert.ok(residualNorm(splineTangent.error()) < 1e-9);
+  const solver = new geometry.ConstraintSolver({ points: [...fitA, ...fitB, point, line.p1, line.p2], lines: [line], circles: [], arcs: [], constraints: [pointConstraint, lineTangent, splineTangent], blockInstances: [] });
+  assert.ok(solver.getVariables().some((variable) => variable.object === pointConstraint && variable.prop === "parameter" && variable.min === 0 && variable.max === 1));
 });
 
 test("representative persistent constraints have zero residual on canonical geometry", () => {

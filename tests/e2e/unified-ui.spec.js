@@ -134,7 +134,7 @@ async function openParameterDialog(page) {
   await expect(page.locator("#parametersDialog")).toBeVisible();
 }
 
-test("document parameters, dimension formulas, rename propagation, and v14 persistence work together", async ({ page }) => {
+test("document parameters, dimension formulas, rename propagation, and v15 persistence work together", async ({ page }) => {
   await page.goto(`${baseUrl}/index.html?test=1`);
   await page.waitForFunction(() => window.__cadTest);
   const initial = await page.evaluate(() => window.__cadTest.resetForParameterTest());
@@ -171,7 +171,7 @@ test("document parameters, dimension formulas, rename propagation, and v14 persi
   expect(state.valid).toBe(true);
   expect(state.parameters.map((item) => item.name)).toEqual(["span", "margin"]);
   expect(state.dimensions.find((item) => !item.readOnly).expression).toContain("span");
-  expect(state.serialized.version).toBe(14);
+  expect(state.serialized.version).toBe(15);
   expect(state.serialized.constraints.every((constraint) => !constraint.dimension || constraint.parameterName)).toBe(true);
 });
 
@@ -393,7 +393,7 @@ test("v10 annotations migrate by target or active sketch and invalid v11 ownersh
   const legacy = annotationSketchFixture(10);
   expect(await page.evaluate((data) => window.__cadTest.loadDocumentFixtureForDragTest(data, "annotation-v10.json"), legacy)).toEqual(expect.objectContaining({ success: true }));
   const migrated = await page.evaluate(() => window.__cadTest.serializedModelForTest());
-  expect(migrated.version).toBe(14);
+  expect(migrated.version).toBe(15);
   expect(migrated.annotations.find((annotation) => annotation.id === "AN1").sketchId).toBe("S2");
   expect(migrated.annotations.find((annotation) => annotation.id === "AN2").sketchId).toBe("S1");
 
@@ -546,7 +546,7 @@ test("geometry copy and paste crosses sketches with internal constraints and ste
 
   await page.keyboard.press("Control+C");
   let state = await page.evaluate(() => window.__cadTest.clipboardStateForTest());
-  expect(state.clipboard).toEqual({ pasteCount: 0, points: 5, lines: 1, circles: 1, arcs: 1, constraints: 4, blockInstances: 0 });
+  expect(state.clipboard).toEqual({ pasteCount: 0, points: 5, lines: 1, circles: 1, arcs: 1, splines: 0, constraints: 4, blockInstances: 0 });
 
   await page.click('.sketchActivateBtn[data-id="S2"]');
   await page.keyboard.press("Control+V");
@@ -620,7 +620,7 @@ test("block instances and their closed constraints can be copied across sketches
 
   await page.keyboard.press("Control+C");
   let state = await page.evaluate(() => window.__cadTest.clipboardStateForTest());
-  expect(state.clipboard).toEqual({ pasteCount: 0, points: 0, lines: 0, circles: 0, arcs: 0, constraints: 1, blockInstances: 1 });
+  expect(state.clipboard).toEqual({ pasteCount: 0, points: 0, lines: 0, circles: 0, arcs: 0, splines: 0, constraints: 1, blockInstances: 1 });
   await page.click('.sketchActivateBtn[data-id="S2"]');
   await page.keyboard.press("Control+V");
   state = await page.evaluate(() => window.__cadTest.clipboardStateForTest());
@@ -1028,7 +1028,7 @@ test("Cad2 files open, overwrite, save as, and cancel without errors", async ({ 
   expect(state.suggestedName).toBe("無題.cad2");
   expect(state.excludeAcceptAllOption).toBe(true);
   expect(state.accept).toEqual({ "application/json": [".cad2"] });
-  expect(state.saved.version).toBe(14);
+  expect(state.saved.version).toBe(15);
   expect(state.saved.documentName).toBe("無題");
   expect(state.fileState).toEqual({ hasHandle: true, handleName: "first-save.cad2" });
 
@@ -2054,7 +2054,7 @@ test("Constraint dimensions expose defining geometry and inheritable appearance 
   expect(serialized.annotations).toEqual([]);
   await page.evaluate((documentData) => window.__cadTest.loadDocumentFixtureForDragTest(documentData, "dimension-appearance.json"), serialized);
   const roundTrip = await page.evaluate(() => window.__cadTest.serializedModelForTest());
-  expect(roundTrip.version).toBe(14);
+  expect(roundTrip.version).toBe(15);
   expect(roundTrip.defaultDimensionAppearance).toEqual(serialized.defaultDimensionAppearance);
   expect(roundTrip.constraints[0].dimension.display).toEqual(serialized.constraints[0].dimension.display);
 
@@ -2087,7 +2087,7 @@ test("Constraint dimensions expose defining geometry and inheritable appearance 
   expect(migratedPixels.direct.terminatorSize).toBeCloseTo(18 * 25.4 / 96, 8);
   expect(migratedPixels.direct.terminatorType).toBeUndefined();
   const migratedSerialized = await page.evaluate(() => window.__cadTest.serializedModelForTest());
-  expect(migratedSerialized.version).toBe(14);
+  expect(migratedSerialized.version).toBe(15);
   expect(migratedSerialized.defaultDimensionAppearance).not.toHaveProperty("arrows");
   expect(migratedSerialized.defaultDimensionAppearance).not.toHaveProperty("extensionLines");
   expect(migratedSerialized.constraints[0].dimension.display).not.toHaveProperty("arrowheadLength");
@@ -2219,7 +2219,7 @@ test("inactive sketch geometry, blocks, and dimensions show identity without hov
     blockHovered: false,
   }));
   await page.mouse.click(points.line.x, points.line.y);
-  expect(await page.evaluate(() => window.__cadTest.selectedGeometryIdsForTest())).toEqual({ points: [], lines: [], circles: [], arcs: [], blockInstances: [] });
+  expect(await page.evaluate(() => window.__cadTest.selectedGeometryIdsForTest())).toEqual({ points: [], lines: [], circles: [], arcs: [], splines: [], blockInstances: [] });
 
   await page.mouse.move(points.block.x, points.block.y);
   expect(await page.evaluate(() => window.__cadTest.hoverIdentityStateForTest())).toEqual(expect.objectContaining({
@@ -2630,7 +2630,7 @@ test("offset tool builds an explicitly connected line chain with one editable di
   expect(state.offsetIds).toHaveLength(2);
   expect(state.resultJoins[0].end.x).toBeCloseTo(state.resultJoins[0].start.x, 6);
   expect(state.resultJoins[0].end.y).toBeCloseTo(state.resultJoins[0].start.y, 6);
-  expect(state.jsonVersion).toBe(14);
+  expect(state.jsonVersion).toBe(15);
   expect(state.serializedTypes).toBe(1);
 
   await page.keyboard.press("Control+z");
