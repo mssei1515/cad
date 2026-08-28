@@ -381,6 +381,7 @@
   const CONSTRUCTION_EXTENSION_SCREEN_PX = 12;
   const CONSTRUCTION_GEOMETRY_ALPHA = 0.72;
   const DIMENSION_SCREEN_PX_PER_MM = 96 / 25.4;
+  const ANNOTATION_SCREEN_PX_PER_MM = 96 / 25.4;
   const DIMENSION_TERMINATOR_FIT_MARGIN_FACTOR = 1;
   const DIMENSION_OUTSIDE_SHAFT_LENGTH_FACTOR = 1.5;
   const DIMENSION_ARROW_MITER_LIMIT = 10;
@@ -438,6 +439,18 @@
     spacing: 3,
     color: "#64748b",
     lineWidth: 1,
+  };
+  const DEFAULT_ANNOTATION_STYLE = {
+    color: "#111827",
+    textHeight: 13 / ANNOTATION_SCREEN_PX_PER_MM,
+    fontFamily: "sans-serif",
+    bold: false,
+    italic: false,
+    textAlign: "left",
+    lineWidth: 1.4,
+    lineType: "solid",
+    terminatorType: "filledArrow",
+    terminatorSize: 10 / ANNOTATION_SCREEN_PX_PER_MM,
   };
   const DIMENSION_APPEARANCE_NUMERIC_RULES = {
     lineWidth: { min: 0.5, max: 10 },
@@ -784,6 +797,44 @@
     };
   }
 
+  function normalizeAnnotationStyle(value) {
+    const source = value && typeof value === "object" && !Array.isArray(value) ? value : {};
+    const legacyFontSize = Number(source.fontSize);
+    const textHeight = Number(source.textHeight);
+    const lineWidth = Number(source.lineWidth);
+    const terminatorSize = Number(source.terminatorSize);
+    const fontFamily = ["sans-serif", "serif", "monospace"].includes(source.fontFamily)
+      ? source.fontFamily
+      : DEFAULT_ANNOTATION_STYLE.fontFamily;
+    const textAlign = ["left", "center", "right"].includes(source.textAlign)
+      ? source.textAlign
+      : DEFAULT_ANNOTATION_STYLE.textAlign;
+    const lineType = ["solid", "dashed", "dashdot", "dotted"].includes(source.lineType)
+      ? source.lineType
+      : DEFAULT_ANNOTATION_STYLE.lineType;
+    const terminatorType = ["arrow", "filledArrow", "dot", "none"].includes(source.terminatorType)
+      ? source.terminatorType
+      : DEFAULT_ANNOTATION_STYLE.terminatorType;
+    return {
+      color: typeof source.color === "string" && /^#[0-9a-fA-F]{6}$/.test(source.color)
+        ? source.color.toLowerCase()
+        : DEFAULT_ANNOTATION_STYLE.color,
+      textHeight: Number.isFinite(textHeight)
+        ? Math.max(0.5, Math.min(100, textHeight))
+        : Number.isFinite(legacyFontSize)
+          ? Math.max(0.5, Math.min(100, legacyFontSize / ANNOTATION_SCREEN_PX_PER_MM))
+          : DEFAULT_ANNOTATION_STYLE.textHeight,
+      fontFamily,
+      bold: source.bold === true || source.fontWeight === "bold" || Number(source.fontWeight) >= 600,
+      italic: source.italic === true || source.fontStyle === "italic",
+      textAlign,
+      lineWidth: Number.isFinite(lineWidth) ? Math.max(0.5, Math.min(10, lineWidth)) : DEFAULT_ANNOTATION_STYLE.lineWidth,
+      lineType,
+      terminatorType,
+      terminatorSize: Number.isFinite(terminatorSize) ? Math.max(0.1, Math.min(100, terminatorSize)) : DEFAULT_ANNOTATION_STYLE.terminatorSize,
+    };
+  }
+
   function normalizeAnnotations(items, fallbackSketchId = null) {
     if (!Array.isArray(items)) return [];
     return items.map((item, index) => {
@@ -798,7 +849,8 @@
         text: String(item.text || ""),
         x: Number.isFinite(Number(item.x)) ? Number(item.x) : 0,
         y: Number.isFinite(Number(item.y)) ? Number(item.y) : 0,
-        style: item.style && typeof item.style === "object" ? { ...item.style } : {},
+        rotation: Number.isFinite(Number(item.rotation)) ? Number(item.rotation) : 0,
+        style: normalizeAnnotationStyle(item.style),
       };
       if (type === "leader") {
         normalized.geometryRef = item.geometryRef && typeof item.geometryRef === "object" ? { ...item.geometryRef } : null;
@@ -807,7 +859,14 @@
           normalized[key] = point && Number.isFinite(Number(point.x)) && Number.isFinite(Number(point.y)) ? { x: Number(point.x), y: Number(point.y) } : null;
         }
       }
-      return normalized;
+      Object.assign(item, normalized);
+      if (type !== "leader") {
+        delete item.geometryRef;
+        delete item.start;
+        delete item.elbow;
+        delete item.end;
+      }
+      return item;
     }).filter(Boolean);
   }
 
@@ -1302,6 +1361,8 @@
       style: {},
       ...element,
     };
+    item.rotation = Number.isFinite(Number(item.rotation)) ? Number(item.rotation) : 0;
+    item.style = normalizeAnnotationStyle(item.style);
     model.annotations.push(item);
     updateUI();
     draw();
@@ -1317,7 +1378,8 @@
       text: element.text || "",
       x: Number(element.x) || 0,
       y: Number(element.y) || 0,
-      style: element.style && typeof element.style === "object" ? { ...element.style } : {},
+      rotation: Number(element.rotation) || 0,
+      style: normalizeAnnotationStyle(element.style),
     };
     if (element.type === "leader") {
       data.geometryRef = element.geometryRef && typeof element.geometryRef === "object" ? { ...element.geometryRef } : null;
@@ -1399,18 +1461,21 @@
 
   function annotationBounds(element) {
     if (!element) return null;
-    const fontSize = Math.max(6, Number(element.style?.fontSize) || 13);
+    const style = normalizeAnnotationStyle(element.style);
+    const fontSize = style.textHeight * ANNOTATION_SCREEN_PX_PER_MM;
     const textWidth = Math.max(28, String(element.text || "").length * fontSize * 0.62);
     const textHeight = fontSize + 10;
     const center = { x: Number(element.x) || 0, y: Number(element.y) || 0 };
     const rotation = Number(element.rotation) || 0;
     const cos = Math.cos(rotation);
     const sin = Math.sin(rotation);
+    const left = style.textAlign === "center" ? -textWidth / 2 : style.textAlign === "right" ? -textWidth : 0;
+    const right = left + textWidth;
     const textCorners = [
-      { x: -textWidth / 2, y: -textHeight / 2 },
-      { x: textWidth / 2, y: -textHeight / 2 },
-      { x: textWidth / 2, y: textHeight / 2 },
-      { x: -textWidth / 2, y: textHeight / 2 },
+      { x: left, y: -textHeight / 2 },
+      { x: right, y: -textHeight / 2 },
+      { x: right, y: textHeight / 2 },
+      { x: left, y: textHeight / 2 },
     ].map((point) => ({
       x: center.x + point.x * cos - point.y * sin,
       y: center.y + point.x * sin + point.y * cos,
@@ -2091,7 +2156,7 @@
       x: layout.text.x,
       y: layout.text.y,
       geometryRef: target.geometryRef,
-      style: { color: "#111827", fontSize: 13, lineWidth: 1.4 },
+      style: { ...DEFAULT_ANNOTATION_STYLE },
     });
     pendingCommand = null;
     setHint("引出線を追加しました");
@@ -2109,7 +2174,7 @@
       x: layout.text.x,
       y: layout.text.y,
       text: "注記",
-      style: { color: "#2563eb", fontSize: 13, lineWidth: 1.4 },
+      style: { ...DEFAULT_ANNOTATION_STYLE, color: "#2563eb" },
     }, true);
   }
 
@@ -2126,7 +2191,7 @@
     if (pendingCommand?.type !== "annotation-text-place") return false;
     const text = window.prompt("テキスト", "注記");
     if (text) {
-      pushAnnotation({ type: "text", text, x: pointer.x, y: pointer.y, style: { color: "#111827", fontSize: 13 } });
+      pushAnnotation({ type: "text", text, x: pointer.x, y: pointer.y, style: { ...DEFAULT_ANNOTATION_STYLE } });
       recordHistory("テキスト追加");
       setHint("テキストを追加しました");
     } else {
@@ -10846,11 +10911,34 @@
     }
   }
 
-  function drawAnnotationText(element) {
+  function annotationFontFamilyStack(fontFamily) {
+    if (fontFamily === "serif") return 'Georgia, "Times New Roman", serif';
+    if (fontFamily === "monospace") return 'ui-monospace, SFMono-Regular, Consolas, monospace';
+    return 'system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
+  }
+
+  function annotationTextScreenHeight(style) {
+    return normalizeAnnotationStyle(style).textHeight * ANNOTATION_SCREEN_PX_PER_MM;
+  }
+
+  function annotationTextWorldHeight(style) {
+    return annotationTextScreenHeight(style) / viewport.scale;
+  }
+
+  function annotationDisplayColor(element, style = normalizeAnnotationStyle(element?.style)) {
+    if (selectedAnnotations.includes(element)) return "#2563eb";
+    if (element === hoveredAnnotation) return "#0ea5e9";
+    return style.color;
+  }
+
+  function drawAnnotationText(element, colorOverride = null) {
+    const style = normalizeAnnotationStyle(element.style);
+    const fontSize = annotationTextWorldHeight(style);
+    const fontPrefix = `${style.italic ? "italic " : ""}${style.bold ? "700 " : ""}`;
     ctx.save();
-    ctx.font = `${Number(element.style?.fontSize || 13) / viewport.scale}px system-ui`;
-    ctx.fillStyle = selectedAnnotations.includes(element) ? "#2563eb" : element === hoveredAnnotation ? "#0ea5e9" : element.style?.color || "#111827";
-    ctx.textAlign = "left";
+    ctx.font = `${fontPrefix}${fontSize}px ${annotationFontFamilyStack(style.fontFamily)}`;
+    ctx.fillStyle = colorOverride || annotationDisplayColor(element, style);
+    ctx.textAlign = style.textAlign;
     ctx.textBaseline = "middle";
     ctx.translate(element.x, element.y);
     ctx.rotate(Number(element.rotation) || 0);
@@ -10858,16 +10946,33 @@
     ctx.restore();
   }
 
-  function drawAnnotationArrowhead(point, direction) {
-    const size = 10 / viewport.scale;
+  function drawAnnotationTerminator(point, direction, annotationStyle) {
+    const style = normalizeAnnotationStyle(annotationStyle);
+    if (style.terminatorType === "none") return;
+    const size = style.terminatorSize * ANNOTATION_SCREEN_PX_PER_MM / viewport.scale;
+    if (style.terminatorType === "dot") {
+      ctx.beginPath();
+      ctx.arc(point.x, point.y, size / 2, 0, Math.PI * 2);
+      ctx.fill();
+      return;
+    }
     const wing = size * Math.tan(27 * Math.PI / 360);
     const normal = { x: -direction.y, y: direction.x };
+    const wing1 = { x: point.x + direction.x * size + normal.x * wing, y: point.y + direction.y * size + normal.y * wing };
+    const wing2 = { x: point.x + direction.x * size - normal.x * wing, y: point.y + direction.y * size - normal.y * wing };
     ctx.beginPath();
-    ctx.moveTo(point.x, point.y);
-    ctx.lineTo(point.x + direction.x * size + normal.x * wing, point.y + direction.y * size + normal.y * wing);
-    ctx.lineTo(point.x + direction.x * size - normal.x * wing, point.y + direction.y * size - normal.y * wing);
-    ctx.closePath();
-    ctx.fill();
+    if (style.terminatorType === "arrow") {
+      ctx.moveTo(wing1.x, wing1.y);
+      ctx.lineTo(point.x, point.y);
+      ctx.lineTo(wing2.x, wing2.y);
+      ctx.stroke();
+    } else {
+      ctx.moveTo(point.x, point.y);
+      ctx.lineTo(wing1.x, wing1.y);
+      ctx.lineTo(wing2.x, wing2.y);
+      ctx.closePath();
+      ctx.fill();
+    }
   }
 
   function drawAnnotationLeader(element, preview = false) {
@@ -10879,11 +10984,12 @@
       y: element.end.y,
     };
     withCanvasState(() => {
-      const color = selectedAnnotations.includes(element) ? "#2563eb" : element === hoveredAnnotation ? "#0ea5e9" : element.style?.color || "#111827";
+      const style = normalizeAnnotationStyle(element.style);
+      const color = annotationDisplayColor(element, style);
       ctx.strokeStyle = color;
       ctx.fillStyle = color;
-      ctx.lineWidth = Number(element.style?.lineWidth || 1.4) / viewport.scale;
-      if (preview) ctx.setLineDash([5 / viewport.scale, 4 / viewport.scale]);
+      ctx.lineWidth = style.lineWidth / viewport.scale;
+      ctx.setLineDash(preview ? [5 / viewport.scale, 4 / viewport.scale] : appearanceLineDash(style.lineType));
       ctx.beginPath();
       ctx.moveTo(start.x, start.y);
       ctx.lineTo(elbow.x, elbow.y);
@@ -10893,17 +10999,18 @@
       const dx = elbow.x - start.x;
       const dy = elbow.y - start.y;
       const len = Math.max(1e-9, hypot2(dx, dy));
-      drawAnnotationArrowhead(start, { x: dx / len, y: dy / len });
-      if (element.text) drawAnnotationText(element);
+      drawAnnotationTerminator(start, { x: dx / len, y: dy / len }, style);
+      if (element.text) drawAnnotationText(element, color);
     });
   }
 
-  function textHitBox(text, x, y, fontSize = 13) {
+  function textHitBox(text, x, y, fontSize = 13, textAlign = "left") {
     const width = Math.max(28, String(text || "").length * fontSize * 0.62);
     const height = fontSize + 10;
+    const left = textAlign === "center" ? x - width / 2 : textAlign === "right" ? x - width : x;
     return {
-      left: x - width / 2,
-      right: x + width / 2,
+      left,
+      right: left + width,
       top: y - height / 2,
       bottom: y + height / 2,
     };
@@ -10919,8 +11026,9 @@
     const dy = y - (Number(element?.y) || 0);
     const localX = dx * Math.cos(rotation) - dy * Math.sin(rotation) + (Number(element?.x) || 0);
     const localY = dx * Math.sin(rotation) + dy * Math.cos(rotation) + (Number(element?.y) || 0);
-    const fontSize = Number(element?.style?.fontSize || 13) / viewport.scale;
-    return pointInExpandedBox(localX, localY, textHitBox(element?.text, element?.x, element?.y, fontSize), padding);
+    const style = normalizeAnnotationStyle(element?.style);
+    const fontSize = annotationTextWorldHeight(style);
+    return pointInExpandedBox(localX, localY, textHitBox(element?.text, element?.x, element?.y, fontSize, style.textAlign), padding);
   }
 
   function boxFromPoints(points) {
@@ -13965,6 +14073,49 @@
     return `<details class="property-section property-section-collapsible" data-property-section="${key}"${attributes}${open}><summary><h3>${applicationText(labelJa, labelEn)}</h3></summary><div class="property-section-content">${content}</div></details>`;
   }
 
+  function annotationAppearancePropertyRows(item) {
+    const style = normalizeAnnotationStyle(item.style);
+    const color = colorPickerValue(style.color);
+    const option = (value, label, selected) => `<option value="${value}" ${selected ? "selected" : ""}>${label}</option>`;
+    const fontOptions = [
+      option("sans-serif", applicationText("ゴシック体", "Sans serif"), style.fontFamily === "sans-serif"),
+      option("serif", applicationText("明朝体", "Serif"), style.fontFamily === "serif"),
+      option("monospace", applicationText("等幅", "Monospace"), style.fontFamily === "monospace"),
+    ].join("");
+    const alignOptions = [
+      option("left", applicationText("左揃え", "Left"), style.textAlign === "left"),
+      option("center", applicationText("中央揃え", "Center"), style.textAlign === "center"),
+      option("right", applicationText("右揃え", "Right"), style.textAlign === "right"),
+    ].join("");
+    const common = `
+      <div class="property-row"><label for="annotationVisible">${applicationText("表示", "Visible")}</label><input id="annotationVisible" data-property="annotation-visible" type="checkbox" ${item.visible !== false ? "checked" : ""}></div>
+      <div class="property-row"><label for="annotationColor">${applicationText("色", "Color")}</label><div class="property-color-control"><input id="annotationColor" data-annotation-style="color" type="text" value="${escapeHtml(style.color)}"><button class="property-color-picker" data-appearance-palette-open data-current-color="${color}" type="button" title="${applicationText("カラーパレット", "Color palette")}" aria-label="${applicationText("カラーパレット", "Color palette")}"><span class="property-color-picker-swatch" style="--swatch-color:${color}" aria-hidden="true"></span></button></div></div>
+      <div class="property-row"><label for="annotationTextHeight">${applicationText("文字高さ", "Text height")}</label><div class="property-input-with-unit"><input id="annotationTextHeight" data-annotation-style="textHeight" type="number" min="0.5" max="100" step="0.1" value="${formatDisplayNumber(style.textHeight, 3)}"><span class="property-input-unit" aria-hidden="true">mm</span></div></div>
+      <div class="property-row"><label for="annotationFontFamily">${applicationText("フォント", "Font")}</label><select id="annotationFontFamily" data-annotation-style="fontFamily">${fontOptions}</select></div>
+      <div class="property-row"><label for="annotationBold">${applicationText("太字", "Bold")}</label><input id="annotationBold" data-annotation-style="bold" type="checkbox" ${style.bold ? "checked" : ""}></div>
+      <div class="property-row"><label for="annotationItalic">${applicationText("斜体", "Italic")}</label><input id="annotationItalic" data-annotation-style="italic" type="checkbox" ${style.italic ? "checked" : ""}></div>
+      <div class="property-row"><label for="annotationTextAlign">${applicationText("横位置", "Horizontal alignment")}</label><select id="annotationTextAlign" data-annotation-style="textAlign">${alignOptions}</select></div>
+      <div class="property-row"><label for="annotationRotation">${applicationText("回転", "Rotation")}</label><div class="property-input-with-unit"><input id="annotationRotation" data-property="annotation-rotation" type="number" min="-3600" max="3600" step="1" value="${formatDisplayNumber((Number(item.rotation) || 0) * 180 / Math.PI, 3)}"><span class="property-input-unit" aria-hidden="true">°</span></div></div>`;
+    if (item.type !== "leader") return common;
+    const lineTypeOptions = [
+      option("solid", applicationText("実線", "Solid"), style.lineType === "solid"),
+      option("dashed", applicationText("破線", "Dashed"), style.lineType === "dashed"),
+      option("dashdot", applicationText("一点鎖線", "Dash-dot"), style.lineType === "dashdot"),
+      option("dotted", applicationText("点線", "Dotted"), style.lineType === "dotted"),
+    ].join("");
+    const terminatorOptions = [
+      option("arrow", applicationText("標準矢印", "Standard arrow"), style.terminatorType === "arrow"),
+      option("filledArrow", applicationText("塗りつぶし矢印", "Filled arrow"), style.terminatorType === "filledArrow"),
+      option("dot", applicationText("点", "Dot"), style.terminatorType === "dot"),
+      option("none", applicationText("なし", "None"), style.terminatorType === "none"),
+    ].join("");
+    return `${common}
+      <div class="property-row"><label for="annotationLineWidth">${applicationText("線幅", "Line width")}</label><input id="annotationLineWidth" data-annotation-style="lineWidth" type="number" min="0.5" max="10" step="0.1" value="${style.lineWidth}"></div>
+      <div class="property-row"><label for="annotationLineType">${applicationText("線種", "Line type")}</label><select id="annotationLineType" data-annotation-style="lineType">${lineTypeOptions}</select></div>
+      <div class="property-row"><label for="annotationTerminatorType">${applicationText("端末記号", "Terminator")}</label><select id="annotationTerminatorType" data-annotation-style="terminatorType">${terminatorOptions}</select></div>
+      <div class="property-row"><label for="annotationTerminatorSize">${applicationText("端末サイズ", "Terminator size")}</label><div class="property-input-with-unit"><input id="annotationTerminatorSize" data-annotation-style="terminatorSize" type="number" min="0.1" max="100" step="0.1" value="${formatDisplayNumber(style.terminatorSize, 3)}"><span class="property-input-unit" aria-hidden="true">mm</span></div></div>`;
+  }
+
   function updatePropertiesUI() {
     const panel = document.getElementById("propertiesPanel");
     if (!panel) return;
@@ -14030,7 +14181,11 @@
       panel.innerHTML = `<h2 class="property-heading">${escapeHtml(localizedConstraintName(item.name, { typeOnly: true }))}</h2><section class="property-section">${basicInformationHeading}<div class="property-row"><span>Type</span><span class="property-readonly">${escapeHtml(item.constructor.name)}</span></div>${definingGeometryRows}${parameterRows}</section>${dimension ? `<section class="property-section"><h3>Appearance</h3>${dimensionAppearancePropertyRows(dimension.display || {}, display)}</section>` : ""}`;
     } else if (target.kind === "annotation") {
       const annotationType = item.type === "leader" ? applicationText("引出線", "Leader") : applicationText("自由テキスト", "Free Text");
-      panel.innerHTML = `<h2 class="property-heading">${annotationType}</h2><section class="property-section">${basicInformationHeading}${propertyReadonlyRow("種類", "Type", annotationType)}${propertyReadonlyRow("ID", "ID", item.id)}${propertyReadonlyRow("所属スケッチ", "Owning sketch", `${sketchName(item.sketchId)} (${item.sketchId})`, { userContent: true })}<div class="property-row"><label>Visible</label><input data-property="annotation-visible" type="checkbox" ${item.visible !== false ? "checked" : ""}></div>${item.type === "text" ? `<div class="property-row"><label>Text</label><textarea data-property="annotation-text">${escapeHtml(item.text || "")}</textarea></div><div class="property-row"><label>Font size</label><input data-property="annotation-font-size" type="number" min="6" max="72" value="${Number(item.style?.fontSize || 13)}"></div>` : ""}<div class="property-row"><label>Color</label><input data-property="annotation-color" type="text" value="${escapeHtml(item.style?.color || "#111827")}"></div></section>`;
+      const information = propertyReadonlyRow("種類", "Type", annotationType)
+        + propertyReadonlyRow("ID", "ID", item.id)
+        + propertyReadonlyRow("所属スケッチ", "Owning sketch", `${sketchName(item.sketchId)} (${item.sketchId})`, { userContent: true });
+      const content = `<div class="property-row"><label for="annotationText">${applicationText("本文", "Text")}</label><textarea id="annotationText" data-property="annotation-text" data-user-content>${escapeHtml(item.text || "")}</textarea></div>`;
+      panel.innerHTML = `<h2 class="property-heading">${annotationType}</h2><section class="property-section">${basicInformationHeading}${information}</section><section class="property-section"><h3>${applicationText("内容", "Content")}</h3>${content}</section><section class="property-section"><h3>${applicationText("外観", "Appearance")}</h3>${annotationAppearancePropertyRows(item)}</section>`;
     } else if (target.kind === "blockPlacement") {
       const enabled = new Set(blockPlacementEnabledSketchIds);
       panel.innerHTML = `<h2 class="property-heading">${applicationText("ブロック配置", "Block placement")}</h2><section class="property-section">${basicInformationHeading}${propertyReadonlyRow("ブロック定義", "Block definition", item.name, { userContent: true })}<div class="property-option-group"><div class="property-option-group-title">${applicationText("回転モード", "Rotation mode")}</div><label class="property-option"><input type="radio" name="placementRotationMode" data-placement-rotation-mode="locked" ${blockPlacementRotationLocked ? "checked" : ""}><span>${applicationText("直交回転ロック", "Orthogonal rotation lock")}</span></label><label class="property-option"><input type="radio" name="placementRotationMode" data-placement-rotation-mode="free" ${blockPlacementRotationLocked ? "" : "checked"}><span>${applicationText("自由回転", "Free rotation")}</span></label></div><div class="property-option-group"><div class="property-option-group-title">${applicationText("配置するスケッチ", "Sketches to place")}</div>${blockDefinitionSketchRows(item).map(({ sketch, depth, count }) => `<label class="property-option property-sketch-option" style="--property-sketch-depth:${depth}"><input type="checkbox" data-placement-sketch-id="${escapeHtml(sketch.id)}" ${enabled.has(sketch.id) ? "checked" : ""}><span data-user-content>${escapeHtml(sketch.name)}</span><small>${count}</small></label>`).join("")}</div></section>`;
@@ -14083,6 +14238,16 @@
     for (const existingKey of ["visible", "color", "lineType", "lineWidth", "endpointOverhang", "endpointMarkers"]) if (next[existingKey] == null) delete target[existingKey];
   }
 
+  function applyAnnotationStyleValue(annotation, key, rawValue) {
+    if (!annotation) return false;
+    const next = { ...normalizeAnnotationStyle(annotation.style) };
+    if (["bold", "italic"].includes(key)) next[key] = Boolean(rawValue);
+    else if (["textHeight", "lineWidth", "terminatorSize"].includes(key)) next[key] = Number(rawValue);
+    else next[key] = rawValue;
+    annotation.style = normalizeAnnotationStyle(next);
+    return true;
+  }
+
   function applyDimensionAppearanceValue(owner, key, rawValue, { allowInheritance = true } = {}) {
     if (!owner) return false;
     const next = { ...normalizeDimensionAppearance(owner) };
@@ -14112,6 +14277,7 @@
   function appearanceOwnerForPropertiesTarget(target) {
     if (target.kind === "block") return (target.item.appearanceOverride ||= {});
     if (target.kind === "hatch") return (target.item.appearance ||= normalizeHatchAppearance());
+    if (target.kind === "annotation") return (target.item.style ||= normalizeAnnotationStyle());
     if (target.kind === "geometry" || target.kind === "sketch") return (target.item.appearance ||= {});
     return null;
   }
@@ -14166,6 +14332,9 @@
       if (target.kind === "constraint" && target.item.dimension) {
         owner = (target.item.dimension.display ||= {});
         historyLabel = "寸法外観変更";
+      } else if (target.kind === "annotation") {
+        owner = (target.item.style ||= normalizeAnnotationStyle());
+        historyLabel = "注記外観変更";
       } else {
         owner = appearanceOwnerForPropertiesTarget(target);
         historyLabel = target.kind === "block" ? "Appearance Override変更" : "Appearance変更";
@@ -14178,7 +14347,7 @@
       historyLabel,
       context,
       sourceButton: button,
-      sourceInput: button.closest(".property-color-control")?.querySelector('[data-appearance-key="color"], [data-dimension-display="color"], [data-hatch-property="color"]') || null,
+      sourceInput: button.closest(".property-color-control")?.querySelector('[data-appearance-key="color"], [data-dimension-display="color"], [data-hatch-property="color"], [data-annotation-style="color"]') || null,
     };
     const selected = colorPaletteSession.sourceInput?.value.trim() || button.dataset.currentColor || owner.color;
     renderColorPaletteDialog(selected);
@@ -14192,6 +14361,7 @@
     const { owner, target, historyLabel, context, sourceButton, sourceInput } = colorPaletteSession;
     if (target?.kind === "constraint" || context === "sketch-dimension" || context === "document-dimension") applyDimensionAppearanceValue(owner, "color", color, { allowInheritance: context !== "document-dimension" });
     else if (target?.kind === "hatch") Object.assign(owner, normalizeHatchAppearance({ ...owner, color }));
+    else if (target?.kind === "annotation") applyAnnotationStyleValue(target.item, "color", color);
     else applyAppearanceInput(owner, "color", color);
     if (target?.kind === "block") invalidateBlockProjectionCache(target.item.id);
     if (context === "document") model.defaultAppearance = normalizeAppearance(model.defaultAppearance, { partial: false });
@@ -14211,8 +14381,13 @@
 
   function handlePropertiesInput(event) {
     const input = event.target;
-    if (!input.matches('[data-dimension-display="prefix"], [data-dimension-display="suffix"]')) return;
     const target = selectedPropertiesTarget();
+    if (target.kind === "annotation" && input.dataset.property === "annotation-text") {
+      target.item.text = input.value;
+      draw();
+      return;
+    }
+    if (!input.matches('[data-dimension-display="prefix"], [data-dimension-display="suffix"]')) return;
     if (sketchDefaultAppearanceContext(input, target) === "dimension") {
       applyDimensionAppearanceValue((target.item.dimensionAppearance ||= {}), input.dataset.dimensionDisplay, input.value);
       draw();
@@ -14279,6 +14454,14 @@
   function handlePropertiesChange(event) {
     const target = selectedPropertiesTarget();
     const input = event.target;
+    if (target.kind === "annotation" && input.dataset.annotationStyle) {
+      const raw = input.type === "checkbox" ? input.checked : input.value.trim();
+      applyAnnotationStyleValue(target.item, input.dataset.annotationStyle, raw);
+      recordHistory("注記外観変更");
+      updateUI();
+      draw();
+      return;
+    }
     if (target.kind === "hatch" && input.dataset.hatchProperty) {
       const key = input.dataset.hatchProperty;
       const raw = input.type === "checkbox" ? input.checked : input.value.trim();
@@ -14391,8 +14574,7 @@
     } else if (target.kind === "annotation") {
       if (property === "annotation-visible") target.item.visible = input.checked;
       if (property === "annotation-text") target.item.text = input.value;
-      if (property === "annotation-font-size") target.item.style = { ...target.item.style, fontSize: Math.max(6, Math.min(72, Number(input.value) || 13)) };
-      if (property === "annotation-color") target.item.style = { ...target.item.style, color: input.value || "#111827" };
+      if (property === "annotation-rotation") target.item.rotation = Math.max(-3600, Math.min(3600, Number(input.value) || 0)) * Math.PI / 180;
       recordHistory("注記変更");
     }
     updateUI();
@@ -19425,7 +19607,7 @@
           x: leaderTarget.anchor.x + 55,
           y: leaderTarget.anchor.y - 28,
           text: "Spline",
-          style: { color: "#111827", fontSize: 13, lineWidth: 1.4 },
+          style: { ...DEFAULT_ANNOTATION_STYLE },
         } : null;
         if (annotation) model.annotations.push(annotation);
         clearSelection();
@@ -20553,9 +20735,9 @@
           elbow: { x: 56, y: 82 },
           end: { x: 112, y: 82 },
           geometryRef: leaderTarget.geometryRef,
-          style: { color: "#111827", fontSize: 13, lineWidth: 1.4 },
+          style: { ...DEFAULT_ANNOTATION_STYLE },
         });
-        pushAnnotation({ type: "text", text: "自由テキスト", x: -90, y: 80, style: { color: "#111827", fontSize: 13 } });
+        pushAnnotation({ type: "text", text: "自由テキスト", x: -90, y: 80, style: { ...DEFAULT_ANNOTATION_STYLE } });
         resizeCanvas({ centerWorld: { x: 20, y: 20 } });
         return this.annotationSnapshot();
       },
@@ -20834,6 +21016,20 @@
               }
             : null,
           text: textElement ? { world: { x: textElement.x, y: textElement.y }, viewport: toViewport(textElement) } : null,
+        };
+      },
+      annotationAppearanceStateForTest(type = "text", scale = null) {
+        const annotation = model.annotations.find((element) => element.type === type) || null;
+        if (scale != null) viewport.scale = clampZoom(Number(scale) || 1);
+        if (!annotation) return null;
+        const style = normalizeAnnotationStyle(annotation.style);
+        draw();
+        return {
+          style: structuredClone(style),
+          rotation: Number(annotation.rotation) || 0,
+          screenTextHeight: annotationTextWorldHeight(style) * viewport.scale,
+          screenTerminatorSize: style.terminatorSize * ANNOTATION_SCREEN_PX_PER_MM,
+          serialized: serializeAnnotation(annotation),
         };
       },
       annotationOwnershipStateForTest() {

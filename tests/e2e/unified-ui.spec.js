@@ -344,6 +344,82 @@ test("document annotations can be dragged on the unified canvas", async ({ page 
   expect(afterRedo.leader.world.y).toBeCloseTo(afterLeader.leader.world.y, 5);
 });
 
+test("annotation Properties edit complete appearance in approximate millimeters", async ({ page }) => {
+  await page.goto(`${baseUrl}/index.html?test=1`);
+  await page.waitForFunction(() => window.__cadTest);
+  const fixture = annotationSketchFixture(11);
+  expect(await page.evaluate((data) => window.__cadTest.loadDocumentFixtureForDragTest(data, "annotation-appearance.cad2"), fixture)).toEqual(expect.objectContaining({ success: true }));
+  await expandSketchTreeGroup(page, "annotation", "S1");
+
+  const textRow = page.locator('.sketch-object-row[data-object-kind="annotation"][data-id="AN1"]');
+  const textIconMatchesToolbar = await textRow.evaluate((row) => {
+    const normalize = (svg) => svg?.innerHTML.replace(/\s+/g, " ").trim();
+    return normalize(row.querySelector("svg")) === normalize(document.querySelector("#annotationTextBtn svg"));
+  });
+  expect(textIconMatchesToolbar).toBe(true);
+  await textRow.click();
+  await expect(page.locator("#propertiesPanel .property-section > h3")).toHaveText(["基本情報", "内容", "外観"]);
+  await expect(page.locator("#propertiesPanel")).toContainText("文字高さ");
+  await expect(page.locator("#propertiesPanel")).toContainText("横位置");
+
+  const migrated = await page.evaluate(() => window.__cadTest.annotationAppearanceStateForTest("text", 1));
+  expect(migrated.style.textHeight).toBeCloseTo(14 / (96 / 25.4), 8);
+  expect(migrated.serialized.style).not.toHaveProperty("fontSize");
+
+  await page.locator('[data-property="annotation-text"]').fill("Styled room note");
+  await page.locator('[data-property="annotation-text"]').press("Tab");
+  await page.locator('[data-annotation-style="textHeight"]').fill("6.5");
+  await page.locator('[data-annotation-style="textHeight"]').press("Tab");
+  await page.locator('[data-annotation-style="fontFamily"]').selectOption("serif");
+  await page.locator('[data-annotation-style="bold"]').check();
+  await page.locator('[data-annotation-style="italic"]').check();
+  await page.locator('[data-annotation-style="textAlign"]').selectOption("center");
+  await page.locator('[data-property="annotation-rotation"]').fill("25");
+  await page.locator('[data-property="annotation-rotation"]').press("Tab");
+  await page.locator("#propertiesPanel [data-appearance-palette-open]").click();
+  await page.locator('#defaultColorPalette [data-palette-color="#dc2626"]').click();
+  const textAtHalfZoom = await page.evaluate(() => window.__cadTest.annotationAppearanceStateForTest("text", 0.5));
+  const textAtFourZoom = await page.evaluate(() => window.__cadTest.annotationAppearanceStateForTest("text", 4));
+  expect(textAtFourZoom.style).toEqual(expect.objectContaining({
+    color: "#dc2626",
+    textHeight: 6.5,
+    fontFamily: "serif",
+    bold: true,
+    italic: true,
+    textAlign: "center",
+  }));
+  expect(textAtFourZoom.rotation).toBeCloseTo(25 * Math.PI / 180, 8);
+  expect(textAtFourZoom.screenTextHeight).toBeCloseTo(6.5 * (96 / 25.4), 8);
+  expect(textAtFourZoom.screenTextHeight).toBeCloseTo(textAtHalfZoom.screenTextHeight, 8);
+  expect(textAtFourZoom.serialized.text).toBe("Styled room note");
+
+  const leaderRow = page.locator('.sketch-object-row[data-object-kind="annotation"][data-id="AN2"]');
+  await leaderRow.click();
+  await expect(page.locator('[data-annotation-style="lineWidth"]')).toBeVisible();
+  await expect(page.locator('[data-annotation-style="terminatorType"]')).toBeVisible();
+  await page.locator('[data-property="annotation-text"]').fill("Styled leader");
+  await page.locator('[data-property="annotation-text"]').press("Tab");
+  await page.locator('[data-annotation-style="lineWidth"]').fill("2.4");
+  await page.locator('[data-annotation-style="lineWidth"]').press("Tab");
+  await page.locator('[data-annotation-style="lineType"]').selectOption("dashdot");
+  await page.locator('[data-annotation-style="terminatorType"]').selectOption("dot");
+  await page.locator('[data-annotation-style="terminatorSize"]').fill("4.2");
+  await page.locator('[data-annotation-style="terminatorSize"]').press("Tab");
+
+  const leader = await page.evaluate(() => window.__cadTest.annotationAppearanceStateForTest("leader", 2));
+  expect(leader.style).toEqual(expect.objectContaining({ lineWidth: 2.4, lineType: "dashdot", terminatorType: "dot", terminatorSize: 4.2 }));
+  expect(leader.serialized.text).toBe("Styled leader");
+  expect(leader.serialized.style).not.toHaveProperty("fontSize");
+
+  await openApplicationSettings(page);
+  await page.locator("#applicationLanguageSelect").selectOption("en");
+  await page.locator("#applicationSettingsDialog button[value=cancel]").first().click();
+  await expect(page.locator("#propertiesPanel .property-section > h3")).toHaveText(["Basic Information", "Content", "Appearance"]);
+  await expect(page.locator("#propertiesPanel")).toContainText("Text height");
+  await expect(page.locator("#propertiesPanel")).toContainText("Line type");
+  await expect(page.locator("#propertiesPanel")).toContainText("Terminator size");
+});
+
 test("Sketch Tree owns object groups, activates inactive rows, and copies annotations across sketches", async ({ page }) => {
   await page.goto(`${baseUrl}/index.html?test=1`);
   await page.waitForFunction(() => window.__cadTest);
