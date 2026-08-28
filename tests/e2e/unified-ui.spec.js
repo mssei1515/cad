@@ -1481,6 +1481,21 @@ test("Canvas context menu exposes common and object-specific operations", async 
   await page.mouse.click(blockPosition.center.x, blockPosition.center.y, { button: "right" });
   await menu.locator('[data-context-action="block-edit"]').click();
   await expect(page.locator("body")).toHaveClass(/block-editing/);
+  expect(await page.evaluate(() => {
+    const canvasStyle = getComputedStyle(document.querySelector(".canvas-area"));
+    const overlayStyle = getComputedStyle(document.querySelector(".block-editor-overlay"));
+    return {
+      canvasBackground: canvasStyle.backgroundColor,
+      overlayBackground: overlayStyle.backgroundColor,
+      overlayBorder: overlayStyle.borderTopColor,
+      overlayShadow: overlayStyle.boxShadow,
+    };
+  })).toEqual({
+    canvasBackground: "rgb(243, 247, 255)",
+    overlayBackground: "rgba(239, 246, 255, 0.95)",
+    overlayBorder: "rgb(147, 197, 253)",
+    overlayShadow: "rgba(30, 64, 175, 0.14) 0px 8px 24px 0px",
+  });
   await page.locator("#cancelBlockEditBtn").click();
   await expect(page.locator("body")).not.toHaveClass(/block-editing/);
 
@@ -1626,6 +1641,7 @@ test("Properties visually separates basic information and previews valid text an
     { background: "rgb(242, 248, 255)", border: "rgb(203, 223, 245)" },
   ]);
   await expect(page.locator(".properties-scroll")).toHaveCSS("background-color", "rgb(244, 247, 251)");
+  expect(await page.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue("--muted").trim())).toBe("#5f6f86");
 
   const historyBeforeInput = await page.evaluate(() => window.__cadTest.historyState().undoCount);
   const colorInput = page.locator('#propertiesPanel [data-appearance-key="color"]');

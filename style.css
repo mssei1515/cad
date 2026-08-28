@@ -8,7 +8,7 @@
   --properties-bg: #f4f7fb;
   --canvas: #fcfdff;
   --text: #1f2937;
-  --muted: #64748b;
+  --muted: #5f6f86;
   --accent: #2563eb;
   --accent-soft: #dbeafe;
   --danger: #dc2626;
@@ -176,11 +176,11 @@ button:disabled { opacity: .45; cursor: default; }
 .sketch-group-row .tree-segment, .sketch-object-row .tree-segment, .sketch-tree-summary .tree-segment { min-height: 20px; }
 .sketch-object-row .tree-segment { min-height: 22px; }
 .sketch-tree-summary .tree-segment { min-height: 22px; }
-.block-editor-overlay { position: absolute; top: 12px; right: 12px; z-index: 4; width: min(280px, calc(100% - 24px)); padding: 8px; border: 1px solid #c4b5fd; border-radius: 8px; background: rgba(245, 243, 255, .94); box-shadow: 0 8px 24px rgba(76, 29, 149, .14); }
+.block-editor-overlay { position: absolute; top: 12px; right: 12px; z-index: 4; width: min(280px, calc(100% - 24px)); padding: 8px; border: 1px solid #93c5fd; border-radius: 8px; background: rgba(239, 246, 255, .95); box-shadow: 0 8px 24px rgba(30, 64, 175, .14); }
 .block-editor-overlay .block-editor-name-input { width: 100%; margin: 6px 0; }
 .block-editor-overlay .block-editor-actions { justify-content: flex-end; padding: 0; }
 .dimension-value-input { position: absolute; z-index: 5; width: 100px; padding: 5px 7px; border: 2px solid var(--accent); border-radius: 4px; background: #fff; }
-body.block-editing .canvas-area { background: #f5f3ff; box-shadow: none; }
+body.block-editing .canvas-area { background: #f3f7ff; box-shadow: none; }
 
 .properties-scroll { padding: 7px; background: var(--properties-bg); }
 .properties-empty { color: var(--muted); font-size: 12px; line-height: 1.6; }
@@ -198,7 +198,7 @@ body.block-editing .canvas-area { background: #f5f3ff; box-shadow: none; }
 .property-row { display: grid; grid-template-columns: minmax(82px, 1fr) minmax(105px, 1.25fr); align-items: center; gap: 6px; min-height: 26px; font-size: 12px; line-height: 1.2; }
 .property-row input, .property-row select, .property-row textarea { width: 100%; min-width: 0; min-height: 25px; padding: 3px 5px; border: 1px solid var(--border-strong); border-radius: 3px; background: #fff; font-size: 12px; line-height: 1.2; }
 .property-input-with-unit { min-width: 0; display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 5px; }
-.property-input-unit { min-width: 18px; color: #64748b; font-size: 11px; }
+.property-input-unit { min-width: 18px; color: var(--muted); font-size: 11px; }
 .property-row input[type="checkbox"] { width: auto; min-height: 0; justify-self: start; }
 .property-row textarea { min-height: 48px; resize: vertical; }
 .property-option-group { margin-top: 7px; padding-top: 5px; border-top: 1px solid var(--border); }
