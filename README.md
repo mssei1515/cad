@@ -1,0 +1,62 @@
+# Cad2
+
+Cad2は、ブラウザ上で動作する開発中の2DパラメトリックCADです。
+Geometry、Constraint、Sketch階層、Block、Parameter、Hatch、Annotationを、1つのCanvas上で作成・編集できます。
+
+## 主な機能
+
+- Point、Line、Circle、Arc、Splineの作図と編集
+- 幾何拘束、拘束寸法、参照寸法
+- Document／Block DefinitionごとのParameterと数式
+- 階層化されたSketchとBlock Definition／Instance
+- 閉領域を追従する平行線、クロス、塗りつぶしHatch
+- 引出線と自由テキストによるAnnotation
+- Geometry、補助線、寸法、Hatch、AnnotationのAppearance設定
+- Undo／Redo、Copy／Cut／Paste
+- `.cad2`ファイルの開く、上書き保存、名前を付けて保存
+
+`.cad2`ファイルの内容にはJSONを使用しています。現行のデータ形式と機能の詳細は、[仕様書](./spec/README.md)を参照してください。
+
+## 起動方法
+
+Node.jsとnpmを用意し、リポジトリのルートで次を実行します。
+
+```sh
+npm install
+npm run serve
+```
+
+起動後、ブラウザで次のURLを開きます。
+
+```text
+http://127.0.0.1:8765/
+```
+
+ファイル操作にはFile System Access APIを使用するため、対応するブラウザが必要です。
+
+## テスト
+
+```sh
+npm run check
+npm run test:unit
+npm run test:e2e
+npm run test:all
+```
+
+E2EテストにはPlaywrightを使用します。
+
+## 免責事項
+
+Cad2は現在開発中であり、現状有姿（"as is"）で提供されます。動作、正確性、データの互換性、継続的な利用可能性、特定目的への適合性を含め、いかなる保証もありません。
+
+本ソフトウェアを利用する場合は、重要なデータを事前にバックアップし、作成された図面、寸法、計算結果などが目的に適合することを利用者自身で確認してください。本ソフトウェアの利用によって生じた損害、データの消失、利益の損失、その他の損失について、著作権者は責任を負いません。
+
+ブラウザ、OS、File System Access APIなどの実行環境によって、一部機能が利用できない場合があります。
+
+## License
+
+Copyright (c) 2026 Cad2. All rights reserved.
+
+個人、教育、評価、その他の非商用目的での利用を許可しています。また、Cad2を業務で使用して図面などの成果物を作成することは可能です。一方、ソフトウェアまたはソースコードの販売、商用再配布、他の商用製品・有料サービスへの組み込み、派生版の商用配布、および許可のない改変・再配布は認められていません。
+
+この説明は概要です。正式な利用条件は[LICENSE](./LICENSE)を確認してください。
