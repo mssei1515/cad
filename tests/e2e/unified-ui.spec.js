@@ -2036,7 +2036,7 @@ test("Block Instance Appearance Override applies to the whole instance", async (
   expect((await page.evaluate((id) => window.__cadTest.appearanceStateForTest("block", id), instanceId)).effective.color).toBe("#7c3aed");
 });
 
-test("arc radius dimensions omit the center terminator and stop at the arc", async ({ page }) => {
+test("arc radius dimensions omit the center terminator and extend for external labels and reversed arrows", async ({ page }) => {
   await page.goto(`${baseUrl}/index.html?test=1`);
   await page.waitForFunction(() => window.__cadTest);
 
@@ -2049,6 +2049,21 @@ test("arc radius dimensions omit the center terminator and stop at the arc", asy
     expect(plan.rawExtendedLineEndDistanceFromCenter).toBeGreaterThan(plan.arcRadius);
     expect(plan.visibleExtensionCount).toBe(0);
   }
+
+  const externalLabel = await page.evaluate(() => window.__cadTest.arcRadiusDimensionRenderPlanForTest("arrow", {
+    labelOffsetU: 30,
+  }));
+  expect(externalLabel.labelDistanceFromCenter).toBeGreaterThan(externalLabel.arcRadius);
+  expect(externalLabel.lineEndDistanceFromCenter).toBeGreaterThan(externalLabel.labelDistanceFromCenter);
+
+  const reversedArrow = await page.evaluate(() => window.__cadTest.arcRadiusDimensionRenderPlanForTest("arrow", {
+    label: "R123456789",
+    labelOffsetU: 0,
+  }));
+  expect(reversedArrow.terminatorsOutside).toBe(true);
+  expect(reversedArrow.shaftLengths).toHaveLength(1);
+  expect(reversedArrow.shaftLengths[0]).toBeCloseTo(reversedArrow.expectedShaftLength, 6);
+  expect(reversedArrow.shaftEndDistancesFromCenter[0]).toBeGreaterThan(reversedArrow.arcRadius);
 });
 
 test("open dimension arrow tips align without pushing reversed wings into their rear shafts", async ({ page }) => {

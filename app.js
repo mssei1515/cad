@@ -10584,7 +10584,7 @@
     const firstTerminator = arcRadius ? null : { point: layout.a, direction: directions.first };
     const secondTerminator = { point: layout.b, direction: directions.second };
     const shaftLength = dimensionMillimetersToWorld(appearance.terminatorSize * DIMENSION_OUTSIDE_SHAFT_LENGTH_FACTOR);
-    const shafts = outside && !arcRadius && ["arrow", "filledArrow"].includes(appearance.terminatorType)
+    const shafts = outside && ["arrow", "filledArrow"].includes(appearance.terminatorType)
       ? [firstTerminator, secondTerminator].filter(Boolean).map((terminator) => ({
         start: terminator.point,
         end: {
@@ -10593,10 +10593,15 @@
         },
       }))
       : [];
+    const labelProjectionFromStart = arcRadius
+      ? (layout.text.x - layout.a.x) * layout.d.x + (layout.text.y - layout.a.y) * layout.d.y
+      : 0;
+    const labelBeforeStart = arcRadius && labelProjectionFromStart < -1e-9;
+    const labelAfterEnd = arcRadius && labelProjectionFromStart > layout.span + 1e-9;
     return {
       outside,
-      lineStart: arcRadius ? layout.a : layout.lineA || layout.a,
-      lineEnd: arcRadius ? layout.b : layout.lineB || layout.b,
+      lineStart: arcRadius && !labelBeforeStart ? layout.a : layout.lineA || layout.a,
+      lineEnd: arcRadius && !labelAfterEnd ? layout.b : layout.lineB || layout.b,
       firstTerminator,
       secondTerminator,
       shafts,
@@ -20627,26 +20632,31 @@
           })),
         };
       },
-      arcRadiusDimensionRenderPlanForTest(terminatorType = "arrow") {
+      arcRadiusDimensionRenderPlanForTest(terminatorType = "arrow", options = {}) {
         const center = new Point("P_ARC_RADIUS_TEST", 0, 0, false, "explicit");
         const arc = new Arc("A_ARC_RADIUS_TEST", center, 30, 0, Math.PI / 2, false);
         const target = { kind: "radius", primitive: arc, value: arc.radius() };
         const dimension = dimensionFromAnchor(target, circlePointAtAngle(arc, Math.PI / 4));
-        dimension.labelOffsetU = arc.radius() / 2;
+        dimension.labelOffsetU = Number.isFinite(options.labelOffsetU) ? options.labelOffsetU : arc.radius() / 2;
         const appearance = {
           ...normalizeDimensionAppearance(model.defaultDimensionAppearance, { partial: false }),
           terminatorType,
         };
         const layout = dimensionLayout(target, dimension, appearance);
-        const plan = linearDimensionRenderPlan(target, layout, "R30", appearance, dimension);
+        const plan = linearDimensionRenderPlan(target, layout, options.label || "R30", appearance, dimension);
         return {
           centerTerminatorVisible: Boolean(plan.firstTerminator),
           arcTerminatorVisible: Boolean(plan.secondTerminator),
+          terminatorsOutside: plan.outside,
           lineStartDistanceFromCenter: hypot2(plan.lineStart.x - center.x, plan.lineStart.y - center.y),
           lineEndDistanceFromCenter: hypot2(plan.lineEnd.x - center.x, plan.lineEnd.y - center.y),
           rawExtendedLineEndDistanceFromCenter: hypot2(layout.lineB.x - center.x, layout.lineB.y - center.y),
+          labelDistanceFromCenter: hypot2(layout.text.x - center.x, layout.text.y - center.y),
+          shaftLengths: plan.shafts.map((shaft) => hypot2(shaft.end.x - shaft.start.x, shaft.end.y - shaft.start.y) * viewport.scale),
+          shaftEndDistancesFromCenter: plan.shafts.map((shaft) => hypot2(shaft.end.x - center.x, shaft.end.y - center.y)),
           visibleExtensionCount: layout.points.filter((point) => point.showExtension !== false).length,
           arcRadius: arc.radius(),
+          expectedShaftLength: appearance.terminatorSize * DIMENSION_SCREEN_PX_PER_MM * DIMENSION_OUTSIDE_SHAFT_LENGTH_FACTOR,
         };
       },
       dimensionAppearanceRenderMetricsForTest(index = 0) {
