@@ -20441,6 +20441,11 @@
   function installTestHooks() {
     if (!new URLSearchParams(window.location.search).has("test")) return;
     window.__cadTest = {
+      resetForResponsiveLineDragTest() {
+        sampleModel();
+        resetHistory("responsive line drag test");
+        return serializeModel();
+      },
       resetForSplineTest() {
         resetModelState();
         viewport.scale = 2;
@@ -23736,7 +23741,10 @@
   }
 
   installTestHooks();
-  sampleModel();
+  resetModelState();
+  updateUI();
+  draw();
+  log("空の新規Documentを作成しました");
   setApplicationLanguage(applicationLanguage, { persist: false, refresh: false });
   resizeCanvas();
   resetHistory("起動");

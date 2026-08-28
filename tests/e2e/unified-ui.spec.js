@@ -671,6 +671,30 @@ test("history buttons enable after normal canvas edits", async ({ page }) => {
   expect(afterRedo.undoDisabled).toBe(false);
 });
 
+test("startup opens an empty drawable document", async ({ page }) => {
+  await page.goto(`${baseUrl}/index.html?test=1`);
+  await page.waitForFunction(() => window.__cadTest);
+
+  const state = await page.evaluate(() => ({
+    document: window.__cadTest.serializedModelForTest(),
+    history: window.__cadTest.historyState(),
+    groupCount: document.querySelectorAll('.sketch-group-row[data-sketch-id="S1"]').length,
+    hint: document.getElementById("hint")?.textContent || "",
+  }));
+  expect(state.document.sketches).toEqual([
+    expect.objectContaining({ id: "ROOT", kind: "root" }),
+    expect.objectContaining({ id: "S1", kind: "sketch", parentSketchId: "ROOT" }),
+  ]);
+  expect(state.document.activeSketchId).toBe("S1");
+  for (const key of ["points", "lines", "circles", "arcs", "splines", "constraints", "parameters", "blockDefinitions", "blockInstances", "annotations", "hatches"]) {
+    expect(state.document[key], key).toEqual([]);
+  }
+  expect(state.history).toEqual(expect.objectContaining({ undoDisabled: true, redoDisabled: true }));
+  expect(state.groupCount).toBe(0);
+  expect(state.hint).toContain("Geometryを選択または作成します");
+  expect(state.hint).not.toContain("サンプル復元");
+});
+
 test("geometry copy and paste crosses sketches with internal constraints and stepped offsets", async ({ page }) => {
   await page.goto(`${baseUrl}/index.html?test=1`);
   await page.waitForFunction(() => window.__cadTest);
@@ -792,6 +816,7 @@ test("undo preserves construction drawing mode", async ({ page }) => {
 test("workspace integrates transparent compact Object groups into Sketch Tree and removes Explorer", async ({ page }) => {
   await page.goto(`${baseUrl}/index.html?test=1`);
   await page.waitForFunction(() => window.__cadTest);
+  await page.evaluate(() => window.__cadTest.resetForResponsiveLineDragTest());
 
   const layout = await page.evaluate(() => {
     const rect = (selector) => {
@@ -1350,6 +1375,7 @@ test("Canvas always uses a compact native cursor and commands add the matching f
 test("Canvas context menu exposes common and object-specific operations", async ({ page }) => {
   await page.goto(`${baseUrl}/index.html?test=1`);
   await page.waitForFunction(() => window.__cadTest);
+  await page.evaluate(() => window.__cadTest.resetForResponsiveLineDragTest());
   const menu = page.locator("#canvasContextMenu");
   const canvasArea = await page.locator(".canvas-area").boundingBox();
   const blank = { x: canvasArea.x + canvasArea.width - 18, y: canvasArea.y + canvasArea.height - 18 };
@@ -1528,6 +1554,7 @@ test("Overlapping Canvas objects can be previewed and selected from context cand
 test("Canvas selection updates Properties, Properties collapses, and narrow toolbar labels do not overlap", async ({ page }) => {
   await page.goto(`${baseUrl}/index.html?test=1`);
   await page.waitForFunction(() => window.__cadTest);
+  await page.evaluate(() => window.__cadTest.resetForResponsiveLineDragTest());
 
   const linePosition = await page.evaluate(() => window.__cadTest.geometryClientPositionForTest("line", "L1"));
   await page.mouse.click(linePosition.x, linePosition.y);
@@ -1587,6 +1614,7 @@ test("Canvas selection updates Properties, Properties collapses, and narrow tool
 test("Properties visually separates basic information and previews valid text and numeric input before one history commit", async ({ page }) => {
   await page.goto(`${baseUrl}/index.html?test=1`);
   await page.waitForFunction(() => window.__cadTest);
+  await page.evaluate(() => window.__cadTest.resetForResponsiveLineDragTest());
   await page.evaluate(() => window.__cadTest.selectGeometryIdsForTest({ lines: ["L1"] }));
 
   const sectionColors = await page.locator("#propertiesPanel > .property-section").evaluateAll((sections) => sections.map((section) => ({
@@ -1663,7 +1691,7 @@ test("application language defaults to Japanese and persists the full UI selecti
   await expect(page.locator("#exportBtn")).toHaveAttribute("aria-label", "Overwrite Save");
   await expect(page.locator("#activeSketchLabel")).toHaveText("Sketch Tree");
   await expect(page.locator(".properties .panel-title-label")).toHaveText("Properties");
-  await expect(page.locator("#hint")).toContainText("Fully constrained");
+  await expect(page.locator("#hint")).toContainText("Select or create geometry");
   await page.locator("#applicationSettingsDialog button[value=cancel]").first().click();
   await openDocumentSettings(page);
   await expect(page.locator("#documentSettingsDialog")).toContainText("Document Settings");
@@ -1730,13 +1758,14 @@ test("application language defaults to Japanese and persists the full UI selecti
   await expect(page.locator("#applicationLanguageSelect")).toHaveValue("en");
   await page.locator("#applicationLanguageSelect").selectOption("ja");
   await expect(page.locator(".app-menu > summary").first()).toHaveText("ファイル");
-  await expect(page.locator("#hint")).toContainText("完全拘束");
-  await expect(page.locator("#hint")).not.toContainText("Fully constrained");
+  await expect(page.locator("#hint")).toContainText("Geometryを選択または作成します");
+  await expect(page.locator("#hint")).not.toContainText("Select or create geometry");
 });
 
 test("Document owns appearance defaults while only non-root Sketches expose compact overrides", async ({ page }) => {
   await page.goto(`${baseUrl}/index.html?test=1`);
   await page.waitForFunction(() => window.__cadTest);
+  await page.evaluate(() => window.__cadTest.resetForResponsiveLineDragTest());
   const initialDefaults = await page.evaluate(() => window.__cadTest.serializedModelForTest());
   expect(initialDefaults.defaultAppearance).toEqual({ visible: true, color: "#111827", lineType: "solid", lineWidth: 2 });
   expect(initialDefaults.defaultConstructionAppearance).toEqual({
@@ -2062,10 +2091,11 @@ test("Appearance cascades, used file colors are selectable, and constraint statu
   expect(await page.evaluate(() => window.__cadTest.viewStateForTest())).toEqual(expect.objectContaining({ constraintStatus: false, mouseLatched: false, spaceHeld: false }));
 });
 
-test("startup sample L2 and L3 reuse the responsive P3 drag path while P1 stays fixed", async ({ page }) => {
+test("fixed rectangle fixture L2 and L3 reuse the responsive P3 drag path while P1 stays fixed", async ({ page }) => {
   const deltas = Array.from({ length: 10 }, (_, index) => [-(index + 1) * 4, (index + 1) * 3]);
   await page.goto(`${baseUrl}/index.html?test=1`);
   await page.waitForFunction(() => window.__cadTest);
+  await page.evaluate(() => window.__cadTest.resetForResponsiveLineDragTest());
   expect((await page.evaluate(() => window.__cadTest.authoringStateForTest())).fixedPointIds).toEqual(["P1"]);
   const pointResult = await page.evaluate(
     (dragDeltas) => window.__cadTest.geometryDragPathForTest({ kind: "point", id: "P3" }, dragDeltas),
@@ -2082,6 +2112,7 @@ test("startup sample L2 and L3 reuse the responsive P3 drag path while P1 stays 
   for (const id of ["L2", "L3"]) {
     await page.goto(`${baseUrl}/index.html?test=1`);
     await page.waitForFunction(() => window.__cadTest);
+    await page.evaluate(() => window.__cadTest.resetForResponsiveLineDragTest());
     const result = await page.evaluate(
       ({ lineId, dragDeltas }) => window.__cadTest.geometryDragPathForTest({ kind: "line", id: lineId }, dragDeltas),
       { lineId: id, dragDeltas: deltas },
@@ -2099,6 +2130,7 @@ test("startup sample L2 and L3 reuse the responsive P3 drag path while P1 stays 
   for (const id of ["L2", "L3"]) {
     await page.goto(`${baseUrl}/index.html?test=1`);
     await page.waitForFunction(() => window.__cadTest);
+    await page.evaluate(() => window.__cadTest.resetForResponsiveLineDragTest());
     const before = await page.evaluate((lineId) => ({
       line: window.__cadTest.geometryClientPositionForTest("line", lineId),
       p1: window.__cadTest.geometryClientPositionForTest("point", "P1"),
