@@ -1192,10 +1192,16 @@ test("active canvas commands show the matching toolbar icon beside the pointer",
   const indicatorMatches = (sourceSelector) => page.evaluate((selector) => {
     const badge = document.getElementById("canvasCommandCursorIndicator");
     const source = document.querySelector(selector);
+    const badgeStyle = badge ? getComputedStyle(badge) : null;
+    const toolbarStyle = getComputedStyle(document.querySelector(".command-toolbar"));
     return {
       matches: Boolean(badge?.querySelector("svg")?.isEqualNode(source?.querySelector("svg"))),
       source: badge?.dataset.sourceCommand || null,
-      pointerEvents: badge ? getComputedStyle(badge).pointerEvents : null,
+      pointerEvents: badgeStyle?.pointerEvents || null,
+      colorMatchesToolbar: badgeStyle?.color === toolbarStyle.color,
+      background: badgeStyle?.backgroundColor || null,
+      boxShadow: badgeStyle?.boxShadow || null,
+      transitionDuration: badgeStyle?.transitionDuration || null,
     };
   }, sourceSelector);
 
@@ -1205,10 +1211,33 @@ test("active canvas commands show the matching toolbar icon beside the pointer",
   await page.locator("#toolLine").click();
   await page.mouse.move(pointer.x, pointer.y);
   await expect(indicator).toBeVisible();
-  expect(await indicatorMatches("#toolLine")).toEqual({ matches: true, source: "toolLine", pointerEvents: "none" });
+  expect(await indicatorMatches("#toolLine")).toEqual({
+    matches: true,
+    source: "toolLine",
+    pointerEvents: "none",
+    colorMatchesToolbar: true,
+    background: "rgba(0, 0, 0, 0)",
+    boxShadow: "none",
+    transitionDuration: "0s",
+  });
   let badgeBox = await indicator.boundingBox();
+  expect(badgeBox.width).toBe(18);
+  expect(badgeBox.height).toBe(18);
   expect(badgeBox.x).toBeGreaterThan(pointer.x + 5);
   expect(badgeBox.y).toBeGreaterThan(pointer.y + 5);
+
+  const rapidPointer = { x: canvasArea.x + canvasArea.width * 0.77, y: canvasArea.y + canvasArea.height * 0.31 };
+  const immediatePosition = await page.evaluate(({ x, y }) => {
+    const canvas = document.getElementById("canvas");
+    const area = canvas.getBoundingClientRect();
+    canvas.dispatchEvent(new PointerEvent("pointerrawupdate", { clientX: x, clientY: y, bubbles: true }));
+    const indicator = document.getElementById("canvasCommandCursorIndicator");
+    return {
+      transform: indicator.style.transform,
+      expected: `translate3d(${x - area.left + 9}px, ${y - area.top + 9}px, 0px)`,
+    };
+  }, rapidPointer);
+  expect(immediatePosition.transform).toBe(immediatePosition.expected);
 
   await page.locator("#toolSelect").click();
   await page.mouse.move(pointer.x + 2, pointer.y + 2);
@@ -1217,13 +1246,15 @@ test("active canvas commands show the matching toolbar icon beside the pointer",
   await page.locator('[data-constraint="parallel"]').click();
   await page.mouse.move(pointer.x, pointer.y);
   await expect(indicator).toBeVisible();
-  expect(await indicatorMatches('[data-constraint="parallel"]')).toEqual({ matches: true, source: "constraint:parallel", pointerEvents: "none" });
+  expect((await indicatorMatches('[data-constraint="parallel"]')).matches).toBe(true);
+  expect((await indicatorMatches('[data-constraint="parallel"]')).source).toBe("constraint:parallel");
   await page.keyboard.press("Escape");
 
   await page.locator("#annotationTextBtn").click();
   await page.mouse.move(pointer.x, pointer.y);
   await expect(indicator).toBeVisible();
-  expect(await indicatorMatches("#annotationTextBtn")).toEqual({ matches: true, source: "annotationTextBtn", pointerEvents: "none" });
+  expect((await indicatorMatches("#annotationTextBtn")).matches).toBe(true);
+  expect((await indicatorMatches("#annotationTextBtn")).source).toBe("annotationTextBtn");
 
   const edgePointer = { x: canvasArea.x + canvasArea.width - 3, y: canvasArea.y + canvasArea.height - 3 };
   await page.mouse.move(edgePointer.x, edgePointer.y);

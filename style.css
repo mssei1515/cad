@@ -114,9 +114,9 @@ button:disabled { opacity: .45; cursor: default; }
 #canvas { display: block; width: 100%; height: 100%; cursor: default; }
 #canvas.is-dragging { cursor: default; }
 #canvas.is-panning { cursor: grabbing; }
-.canvas-command-cursor-indicator { position: absolute; z-index: 20; width: 24px; height: 24px; display: grid; place-items: center; padding: 3px; border: 1px solid rgba(59, 130, 246, .55); border-radius: 5px; color: #1d4ed8; background: rgba(255, 255, 255, .92); box-shadow: 0 2px 7px rgba(15, 23, 42, .18); pointer-events: none; }
+.canvas-command-cursor-indicator { position: absolute; top: 0; left: 0; z-index: 20; width: 18px; height: 18px; display: grid; place-items: center; border: 0; color: var(--text); background: transparent; box-shadow: none; pointer-events: none; transform: translate3d(0, 0, 0); transition: none; will-change: transform; contain: strict; }
 .canvas-command-cursor-indicator[hidden] { display: none; }
-.canvas-command-cursor-indicator svg { width: 17px; height: 17px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
+.canvas-command-cursor-indicator svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
 .canvas-context-menu { position: absolute; z-index: 30; min-width: 210px; max-width: min(280px, calc(100% - 8px)); padding: 4px; border: 1px solid #cbd5e1; border-radius: 6px; color: #1f2937; background: #fff; box-shadow: 0 10px 28px rgba(15, 23, 42, .2); }
 .canvas-context-menu button { width: 100%; min-height: 28px; display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 18px; padding: 4px 8px; border: 0; border-radius: 3px; background: transparent; font-size: 12px; text-align: left; white-space: nowrap; }
 .canvas-context-menu button:hover:not(:disabled), .canvas-context-menu button:focus-visible { color: #1e3a5f; background: #dbeafe; }

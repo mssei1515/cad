@@ -11599,8 +11599,8 @@
       canvasCommandCursorIndicator.dataset.sourceCommand = source;
       commandCursorSource = source;
     }
-    const size = 24;
-    const gap = 13;
+    const size = 18;
+    const gap = 9;
     const edge = 4;
     const canvasWidth = canvas.clientWidth;
     const canvasHeight = canvas.clientHeight;
@@ -11608,9 +11608,12 @@
     let top = commandCursorScreen.y + gap;
     if (left + size > canvasWidth - edge) left = commandCursorScreen.x - gap - size;
     if (top + size > canvasHeight - edge) top = commandCursorScreen.y - gap - size;
-    canvasCommandCursorIndicator.style.left = `${Math.max(edge, left)}px`;
-    canvasCommandCursorIndicator.style.top = `${Math.max(edge, top)}px`;
+    canvasCommandCursorIndicator.style.transform = `translate3d(${Math.max(edge, left)}px, ${Math.max(edge, top)}px, 0)`;
     canvasCommandCursorIndicator.hidden = false;
+  }
+
+  function updateCanvasCommandCursorIndicatorFromPointer(e) {
+    updateCanvasCommandCursorIndicator({ x: e.offsetX, y: e.offsetY });
   }
 
   function updateToolbar() {
@@ -18057,8 +18060,9 @@
     draw();
   });
 
+  canvas.addEventListener("pointerrawupdate", updateCanvasCommandCursorIndicatorFromPointer, { passive: true });
   canvas.addEventListener("pointermove", (e) => {
-    const screenPoint = canvasScreenPoint(e);
+    const screenPoint = { x: e.offsetX, y: e.offsetY };
     updateCanvasCommandCursorIndicator(screenPoint);
     const coordinatePoint = screenToWorld(screenPoint);
     const coordinateStatus = document.getElementById("statusCoordinates");
