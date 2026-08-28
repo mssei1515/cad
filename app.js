@@ -3205,6 +3205,7 @@
     splineFitPoints = [];
     splineCreationRollback = { pointLength: model.points.length, pointSeq };
     splineEditSession = null;
+    blankDoubleClickCandidate = null;
     pointerPreview = null;
     clearSelection();
     clearSnap();
@@ -3236,6 +3237,115 @@
     updateUI();
     draw();
     return true;
+  }
+
+  function finishSplineEditSession() {
+    if (!splineEditSession) return false;
+    splineEditSession = null;
+    setHint(applicationText("スプライン編集を終了しました", "Finished editing the spline."));
+    updateUI({ refreshAnalysis: false });
+    draw();
+    return true;
+  }
+
+  function restoreSplineFitPointMutation(snapshot) {
+    model.points = snapshot.points;
+    model.constraints = snapshot.constraints;
+    model.annotations = snapshot.annotations;
+    snapshot.spline.fitPoints = snapshot.fitPoints;
+    snapshot.spline._curveCache = null;
+    pointSeq = snapshot.pointSeq;
+    restoreModelState(snapshot.modelState);
+    clearSelection();
+    selectedSplines = [snapshot.spline];
+    splineEditSession = { spline: snapshot.spline };
+  }
+
+  function splineFitPointMutationSnapshot(spline) {
+    return {
+      spline,
+      fitPoints: spline.fitPoints.slice(),
+      points: model.points.slice(),
+      constraints: model.constraints.slice(),
+      annotations: model.annotations.slice(),
+      pointSeq,
+      modelState: snapshotModelState(),
+    };
+  }
+
+  function stabilizeSplineFitPointMutation(snapshot, historyLabel, successMessage, failureMessage) {
+    const curveValid = snapshot.spline.curve().valid;
+    const stabilized = curveValid ? stabilizeActiveParameterNamespace(elementSketchId(snapshot.spline)) : null;
+    if (!curveValid || !stabilized.success || stabilized.dependent?.success === false) {
+      restoreSplineFitPointMutation(snapshot);
+      setHint(failureMessage, "error");
+      updateUI();
+      draw();
+      return false;
+    }
+    constraintAnalysisState = null;
+    recordHistory(historyLabel);
+    setHint(successMessage);
+    updateUI();
+    draw();
+    return true;
+  }
+
+  function addSplineFitPointFromContext(spline, pointer) {
+    if (!splineEditSession || splineEditSession.spline !== spline || !model.splines.includes(spline)) return false;
+    const curve = spline.curve();
+    const closest = window.SplineGeometry.closestPoint(curve, pointer, { samplesPerSpan: 28 });
+    if (!closest?.point || !curve.valid) return false;
+    const spanIndex = curve.spans.findIndex((span, index) => closest.t < span.t1 - 1e-9 || index === curve.spans.length - 1);
+    if (spanIndex < 0) return false;
+    const snapshot = splineFitPointMutationSnapshot(spline);
+    const point = addPoint(closest.point.x, closest.point.y, false, "endpoint");
+    point.sketchId = elementSketchId(spline);
+    spline.fitPoints.splice(spanIndex + 1, 0, point);
+    spline._curveCache = null;
+    selectedPoints = [point];
+    selectedSplines = [];
+    return stabilizeSplineFitPointMutation(
+      snapshot,
+      "スプライン通過点追加",
+      applicationText(`${spline.id} に通過点 ${point.id} を追加しました`, `Added fit point ${point.id} to ${spline.id}.`),
+      applicationText("拘束を維持できないため通過点の追加を戻しました", "The fit point addition was restored because its constraints could not be maintained."),
+    );
+  }
+
+  function deleteSplineFitPointFromContext(spline, point) {
+    if (!splineEditSession || splineEditSession.spline !== spline || !spline.fitPoints.includes(point)) return false;
+    if (spline.fitPoints.length <= 3) {
+      setHint(applicationText("スプラインには3点以上の通過点が必要です", "A spline requires at least three fit points."), "error");
+      return false;
+    }
+    const usedOutsideSpline =
+      isPointUsedByLine(point) ||
+      isPointUsedByCircle(point) ||
+      isPointUsedByArc(point) ||
+      model.splines.some((item) => item !== spline && item.fitPoints.includes(point));
+    const removePoint = point.kind === "endpoint" && !usedOutsideSpline;
+    const constraintsToRemove = new Set(removePoint ? model.constraints.filter((constraint) => constraintReferencesPoint(constraint, point)) : []);
+    if (!guardDimensionSymbolDeletion(constraintsToRemove)) return false;
+    const snapshot = splineFitPointMutationSnapshot(spline);
+    spline.fitPoints = spline.fitPoints.filter((item) => item !== point);
+    spline._curveCache = null;
+    if (removePoint) {
+      model.points = model.points.filter((item) => item !== point);
+      model.constraints = model.constraints.filter((constraint) => !constraintsToRemove.has(constraint));
+      const removedIds = new Set([point.id]);
+      const removedKeys = new Set([geometryElementKey(point)].filter(Boolean));
+      model.annotations = model.annotations.filter((annotation) => !annotationReferencesRemovedGeometry(annotation, removedIds, removedKeys));
+      selectedAnnotations = selectedAnnotations.filter((annotation) => model.annotations.includes(annotation));
+    }
+    selectedPoints = [];
+    selectedSplines = [spline];
+    return stabilizeSplineFitPointMutation(
+      snapshot,
+      "スプライン通過点削除",
+      applicationText(`${spline.id} から通過点 ${point.id} を削除しました`, `Removed fit point ${point.id} from ${spline.id}.`),
+      applicationText("拘束を維持できないため通過点の削除を戻しました", "The fit point removal was restored because its constraints could not be maintained."),
+    );
   }
 
   function handleSplineClick(pointer) {
@@ -14146,7 +14256,7 @@
       const target = selectedPropertiesTarget();
       if (target.kind !== "geometry" || !(target.item instanceof Spline) || target.item.blockProjection) return false;
       splineEditSession = { spline: target.item };
-      setHint(applicationText(`${target.item.id} の通過点を編集します。Escで終了します`, `Editing fit points of ${target.item.id}. Press Esc to finish.`));
+      setHint(applicationText(`${target.item.id} の通過点を編集します。Escまたは空白のダブルクリックで終了します`, `Editing fit points of ${target.item.id}. Press Esc or double-click blank canvas to finish.`));
       draw();
       return true;
     }
@@ -16727,6 +16837,13 @@
       groups.push([{ action: "fit-visible", label: applicationText("表示中図形へフィット", "Fit Visible Geometry"), disabled: !visibleGeometryBounds() }]);
     } else {
       const specific = [];
+      const editingFitPoint = target.kind === "point" && Boolean(splineEditSession?.spline?.fitPoints.includes(target.item));
+      if (target.kind === "spline" && splineEditSession?.spline === target.item) {
+        specific.push({ action: "spline-fit-point-add", label: applicationText("通過点を追加", "Add Fit Point") });
+      }
+      if (editingFitPoint) {
+        specific.push({ action: "spline-fit-point-delete", label: applicationText("通過点を削除", "Delete Fit Point"), disabled: splineEditSession.spline.fitPoints.length <= 3, danger: true });
+      }
       if (target.kind === "dimension") {
         specific.push({ action: "dimension-edit", label: applicationText("値 / 数式を編集", "Edit Value / Expression"), disabled: isReadOnlyDimension(target.item) });
       }
@@ -16735,7 +16852,7 @@
         specific.push({ action: "block-rotation-toggle", label: target.item.rotationLocked ? applicationText("自由回転", "Free Rotation") : applicationText("直交回転ロック", "Lock Orthogonal Rotation"), disabled: Boolean(target.item.fixed) });
       }
       if (target.kind === "hatch") specific.push({ action: "hatch-repair", label: applicationText("境界を再指定", "Reselect Boundary") });
-      const fix = canvasContextFixState(target);
+      const fix = editingFitPoint ? null : canvasContextFixState(target);
       if (fix) specific.push({ action: "fix-toggle", label: fix.fixed ? applicationText("固定解除", "Unfix") : applicationText("固定", "Fix"), disabled: !fix.enabled });
       if (["line", "circle", "arc", "spline"].includes(target.kind)) {
         const primitives = selectedConstructionTogglePrimitives();
@@ -16744,7 +16861,7 @@
         if (target.kind !== "spline") specific.push({ action: "offset", label: applicationText("ここからオフセット", "Offset from Here"), disabled: primitives.length !== 1 });
         if (target.kind === "line") specific.push({ action: "fillet", label: applicationText("R面取り", "Fillet"), disabled: selectedLines.length !== 2 || selectedPoints.length + selectedCircles.length + selectedArcs.length + selectedSplines.length + selectedBlockInstances.length > 0 });
       }
-      if (["point", "line", "circle", "arc", "spline"].includes(target.kind)) {
+      if (!editingFitPoint && ["point", "line", "circle", "arc", "spline"].includes(target.kind)) {
         specific.push({ action: "add-leader", label: applicationText("引出線を追加", "Add Leader"), disabled: selectedGeometryItems().length !== 1 || selectedBlockInstances.length + selectedAnnotations.length > 0 });
       }
       if (["line", "circle", "arc", "spline", "hatch", "block", "annotation"].includes(target.kind)) {
@@ -16752,12 +16869,14 @@
         specific.push({ action: "create-block", label: applicationText("選択からブロック作成", "Create Block from Selection"), disabled: !canCreateBlock || !canCreateInActiveSketch() });
       }
       if (specific.length > 0) groups.push(specific);
-      const copyable = hasCopyableCanvasSelection();
-      groups.push([
-        { action: "cut", label: applicationText("切り取り", "Cut"), shortcut: "Ctrl+X", disabled: !copyable },
-        { action: "copy", label: applicationText("コピー", "Copy"), shortcut: "Ctrl+C", disabled: !copyable },
-        { action: "delete", label: applicationText("削除", "Delete"), shortcut: "Del", disabled: !hasSelection(), danger: true },
-      ]);
+      if (!editingFitPoint) {
+        const copyable = hasCopyableCanvasSelection();
+        groups.push([
+          { action: "cut", label: applicationText("切り取り", "Cut"), shortcut: "Ctrl+X", disabled: !copyable },
+          { action: "copy", label: applicationText("コピー", "Copy"), shortcut: "Ctrl+C", disabled: !copyable },
+          { action: "delete", label: applicationText("削除", "Delete"), shortcut: "Del", disabled: !hasSelection(), danger: true },
+        ]);
+      }
       groups.push([{ action: "show-properties", label: applicationText("プロパティを表示", "Show Properties") }]);
     }
     return groups.flatMap((group, groupIndex) => [
@@ -16843,6 +16962,8 @@
     else if (action === "block-rotation-toggle" && target?.item) setBlockInstanceRotationLocked(target.item, !target.item.rotationLocked);
     else if (action === "dimension-edit" && target?.hit) startDimensionEditInput(target.hit);
     else if (action === "hatch-repair" && target?.item) startHatchBoundaryRepair(target.item);
+    else if (action === "spline-fit-point-add" && target?.item && pointer) addSplineFitPointFromContext(target.item, pointer);
+    else if (action === "spline-fit-point-delete" && target?.item && splineEditSession?.spline) deleteSplineFitPointFromContext(splineEditSession.spline, target.item);
     else if (action === "fit-visible") {
       if (fitVisibleGeometryToViewport()) setHint(applicationText("表示中の図形全体が見えるように調整しました", "Fitted all visible geometry."));
       else setHint(applicationText("表示中の図形がありません", "There is no visible geometry."), "error");
@@ -17862,6 +17983,11 @@
   function handleBlankCanvasDoubleClick(pointer, hits = {}) {
     if (!isBlankDoubleClickTarget(hits)) return false;
     blankDoubleClickCandidate = null;
+    if (mode === "spline") {
+      finalizeSplineCreation(false);
+      return true;
+    }
+    if (splineEditSession) return finishSplineEditSession();
     if (pendingCommand?.type === "distance-value") {
       submitDistanceValue();
       return true;
@@ -18003,7 +18129,7 @@
       clearSelection();
       selectedSplines = [hitS];
       splineEditSession = { spline: hitS };
-      setHint(applicationText(`${hitS.id} の通過点を編集します。Escで終了します`, `Editing fit points of ${hitS.id}. Press Esc to finish.`));
+      setHint(applicationText(`${hitS.id} の通過点を編集します。Escまたは空白のダブルクリックで終了します`, `Editing fit points of ${hitS.id}. Press Esc or double-click blank canvas to finish.`));
       updateUI({ refreshAnalysis: false });
       draw();
       return;
@@ -18140,10 +18266,7 @@
     if (e.key === "Escape") {
       e.preventDefault();
       if (splineEditSession) {
-        splineEditSession = null;
-        setHint(applicationText("スプライン編集を終了しました", "Finished editing the spline."));
-        updateUI({ refreshAnalysis: false });
-        draw();
+        finishSplineEditSession();
         return;
       }
       if (mode === "block-place") {
