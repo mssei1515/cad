@@ -752,30 +752,23 @@
     rawError() {
       const length1 = this.line1.length();
       const length2 = this.line2.length();
-      if (this.degenerateAtCreation || this.axis.length() < MIN_ORIENTATION_LENGTH || length1 < MIN_ORIENTATION_LENGTH || length2 < MIN_ORIENTATION_LENGTH) return [0, 0, 0];
-      const midpoint1 = {
-        x: (this.line1.p1.x + this.line1.p2.x) / 2,
-        y: (this.line1.p1.y + this.line1.p2.y) / 2,
-      };
-      const midpoint2 = {
-        x: (this.line2.p1.x + this.line2.p2.x) / 2,
-        y: (this.line2.p1.y + this.line2.p2.y) / 2,
-      };
-      const reflectedDirectionPoint = reflectedPointAcrossLine({
-        x: midpoint1.x + this.line1.dx() / length1,
-        y: midpoint1.y + this.line1.dy() / length1,
-      }, this.axis);
-      const reflectedMidpoint = reflectedPointAcrossLine(midpoint1, this.axis);
+      if (this.degenerateAtCreation || this.axis.length() < MIN_ORIENTATION_LENGTH || length1 < MIN_ORIENTATION_LENGTH || length2 < MIN_ORIENTATION_LENGTH) return [0, 0];
+      const reflectedStart = reflectedPointAcrossLine(this.line1.p1, this.axis);
+      const reflectedEnd = reflectedPointAcrossLine(this.line1.p2, this.axis);
       const reflectedDirection = {
-        x: reflectedDirectionPoint.x - reflectedMidpoint.x,
-        y: reflectedDirectionPoint.y - reflectedMidpoint.y,
+        x: (reflectedEnd.x - reflectedStart.x) / length1,
+        y: (reflectedEnd.y - reflectedStart.y) / length1,
       };
       const line2Direction = {
         x: this.line2.dx() / length2,
         y: this.line2.dy() / length2,
       };
+      const fromReflectedSupport = {
+        x: this.line2.p1.x - reflectedStart.x,
+        y: this.line2.p1.y - reflectedStart.y,
+      };
       return [
-        ...pointPairSymmetryError(midpoint1, midpoint2, this.axis, this.degenerateAtCreation),
+        fromReflectedSupport.x * reflectedDirection.y - fromReflectedSupport.y * reflectedDirection.x,
         reflectedDirection.x * line2Direction.y - reflectedDirection.y * line2Direction.x,
       ];
     }

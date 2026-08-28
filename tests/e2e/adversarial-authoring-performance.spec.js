@@ -544,13 +544,13 @@ test("symmetry constraint mirrors two points and survives serialization", async 
   expect(restored.analysis.errorNorm).toBeLessThan(1e-5);
 });
 
-test("symmetry constraint mirrors two lines after selecting the axis first", async ({ page }) => {
+test("line symmetry mirrors support lines while either free endpoint can extend independently", async ({ page }) => {
   const data = fixtureMilestone(0);
   data.points.push(
     { id: "LS_A1", x: 0, y: -120, fixed: true, kind: "endpoint" },
     { id: "LS_A2", x: 0, y: 120, fixed: true, kind: "endpoint" },
-    { id: "LS_P1", x: -80, y: -70, fixed: false, kind: "endpoint" },
-    { id: "LS_P2", x: -45, y: 55, fixed: false, kind: "endpoint" },
+    { id: "LS_P1", x: -80, y: -70, fixed: true, kind: "endpoint" },
+    { id: "LS_P2", x: -45, y: 55, fixed: true, kind: "endpoint" },
     { id: "LS_P3", x: 70, y: -50, fixed: false, kind: "endpoint" },
     { id: "LS_P4", x: 65, y: 75, fixed: false, kind: "endpoint" },
   );
@@ -577,21 +577,58 @@ test("symmetry constraint mirrors two lines after selecting the axis first", asy
     line2: "LS_L2",
     axis: "LS_AXIS",
   });
-  const points = new Map(committed.model.points.map((point) => [point.id, point]));
-  const firstStart = points.get("LS_P1");
-  const firstEnd = points.get("LS_P2");
-  const secondStart = points.get("LS_P3");
-  const secondEnd = points.get("LS_P4");
-  const firstMidpoint = { x: (firstStart.x + firstEnd.x) / 2, y: (firstStart.y + firstEnd.y) / 2 };
-  const secondMidpoint = { x: (secondStart.x + secondEnd.x) / 2, y: (secondStart.y + secondEnd.y) / 2 };
-  expect(Math.abs(firstMidpoint.x + secondMidpoint.x)).toBeLessThan(1e-5);
-  expect(Math.abs(firstMidpoint.y - secondMidpoint.y)).toBeLessThan(1e-5);
-  const reflectedFirstDirection = { x: -(firstEnd.x - firstStart.x), y: firstEnd.y - firstStart.y };
-  const secondDirection = { x: secondEnd.x - secondStart.x, y: secondEnd.y - secondStart.y };
-  const directionCross = reflectedFirstDirection.x * secondDirection.y - reflectedFirstDirection.y * secondDirection.x;
-  const directionScale = Math.hypot(reflectedFirstDirection.x, reflectedFirstDirection.y) * Math.hypot(secondDirection.x, secondDirection.y);
-  expect(Math.abs(directionCross) / directionScale).toBeLessThan(1e-5);
+  const supportState = (model) => {
+    const points = new Map(model.points.map((point) => [point.id, point]));
+    const firstStart = points.get("LS_P1");
+    const firstEnd = points.get("LS_P2");
+    const secondStart = points.get("LS_P3");
+    const secondEnd = points.get("LS_P4");
+    const reflectedStart = { x: -firstStart.x, y: firstStart.y };
+    const reflectedDirection = { x: -(firstEnd.x - firstStart.x), y: firstEnd.y - firstStart.y };
+    const reflectedLength = Math.hypot(reflectedDirection.x, reflectedDirection.y);
+    const reflectedUnit = { x: reflectedDirection.x / reflectedLength, y: reflectedDirection.y / reflectedLength };
+    const secondDirection = { x: secondEnd.x - secondStart.x, y: secondEnd.y - secondStart.y };
+    const secondLength = Math.hypot(secondDirection.x, secondDirection.y);
+    return {
+      points,
+      positionError: Math.abs((secondStart.x - reflectedStart.x) * reflectedUnit.y - (secondStart.y - reflectedStart.y) * reflectedUnit.x),
+      directionError: Math.abs(reflectedDirection.x * secondDirection.y - reflectedDirection.y * secondDirection.x) / (reflectedLength * secondLength),
+      firstLength: Math.hypot(firstEnd.x - firstStart.x, firstEnd.y - firstStart.y),
+      secondLength,
+      secondUnit: { x: secondDirection.x / secondLength, y: secondDirection.y / secondLength },
+    };
+  };
+  const committedSupport = supportState(committed.model);
+  expect(committedSupport.positionError).toBeLessThan(1e-5);
+  expect(committedSupport.directionError).toBeLessThan(1e-5);
+  expect(Math.abs(committedSupport.firstLength - committedSupport.secondLength)).toBeGreaterThan(1);
   expect(committed.analysis.errorNorm).toBeLessThan(1e-5);
+
+  await page.keyboard.press("Escape");
+  const secondStartBefore = { ...committedSupport.points.get("LS_P3") };
+  const secondEndBefore = { ...committedSupport.points.get("LS_P4") };
+  const endpointClient = await page.evaluate(() => window.__cadTest.geometryClientPositionForTest("point", "LS_P4"));
+  await page.mouse.move(endpointClient.x, endpointClient.y);
+  await page.mouse.down();
+  await page.mouse.move(
+    endpointClient.x + committedSupport.secondUnit.x * 40,
+    endpointClient.y + committedSupport.secondUnit.y * 40,
+    { steps: 4 },
+  );
+  await page.mouse.up();
+  const dragged = await page.evaluate(() => ({
+    model: window.__cadTest.serializedModelForTest(),
+    analysis: window.__cadTest.constraintAnalysisForTest(),
+  }));
+  const draggedSupport = supportState(dragged.model);
+  const secondStartAfter = draggedSupport.points.get("LS_P3");
+  const secondEndAfter = draggedSupport.points.get("LS_P4");
+  expect(Math.hypot(secondStartAfter.x - secondStartBefore.x, secondStartAfter.y - secondStartBefore.y)).toBeLessThan(0.1);
+  expect(Math.hypot(secondEndAfter.x - secondEndBefore.x, secondEndAfter.y - secondEndBefore.y)).toBeGreaterThan(20);
+  expect(Math.abs(draggedSupport.secondLength - committedSupport.secondLength)).toBeGreaterThan(20);
+  expect(draggedSupport.positionError).toBeLessThan(1e-5);
+  expect(draggedSupport.directionError).toBeLessThan(1e-5);
+  expect(dragged.analysis.errorNorm).toBeLessThan(1e-5);
 
   const restored = await page.evaluate((model) => {
     const result = window.__cadTest.loadDocumentFixtureForDragTest(model, "line-symmetry-round-trip.json");
@@ -600,7 +637,7 @@ test("symmetry constraint mirrors two lines after selecting the axis first", asy
       authoring: window.__cadTest.authoringStateForTest(),
       analysis: window.__cadTest.constraintAnalysisForTest(),
     };
-  }, committed.model);
+  }, dragged.model);
   expect(restored.result.success).toBe(true);
   expect(restored.authoring.lastConstraint).toMatchObject({ type: "lineSymmetry", axis: "LS_AXIS" });
   expect(restored.analysis.errorNorm).toBeLessThan(1e-5);

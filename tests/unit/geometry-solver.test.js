@@ -164,24 +164,47 @@ test("offset chain constraint closes the final miter of a loop", () => {
   assert.ok(residualNorm(constraint.rawError()) < 1e-9, JSON.stringify(constraint.rawError()));
 });
 
-test("line symmetry constrains midpoint and direction without constraining length", () => {
-  const point = (id, x, y) => new geometry.Point(id, x, y);
-  const axis = new geometry.Line("AXIS", point("AX1", 0, -20), point("AX2", 0, 20));
-  const angle = Math.PI / 6;
-  const lineFromCenter = (id, centerX, centerY, directionAngle, length) => {
-    const dx = Math.cos(directionAngle) * length / 2;
-    const dy = Math.sin(directionAngle) * length / 2;
-    return new geometry.Line(id, point(`${id}A`, centerX - dx, centerY - dy), point(`${id}B`, centerX + dx, centerY + dy));
-  };
-  const first = lineFromCenter("L1", -5, 2, angle, 4);
-  const second = lineFromCenter("L2", 5, 2, Math.PI - angle, 11);
+test("line symmetry constrains mirrored support lines while both target endpoints remain independently movable", () => {
+  const point = (id, x, y, fixed = false) => new geometry.Point(id, x, y, fixed);
+  const axis = new geometry.Line("AXIS", point("AX1", 0, -20, true), point("AX2", 0, 20, true));
+  const first = new geometry.Line("L1", point("L1A", -7, -3, true), point("L1B", -3, 5, true));
+  const reflectedStart = { x: 7, y: -3 };
+  const reflectedDirection = { x: -4 / Math.sqrt(80), y: 8 / Math.sqrt(80) };
+  const supportPoint = (id, parameter) => point(
+    id,
+    reflectedStart.x + reflectedDirection.x * parameter,
+    reflectedStart.y + reflectedDirection.y * parameter,
+  );
+  const second = new geometry.Line("L2", supportPoint("L2A", 6), supportPoint("L2B", 25));
   const constraint = new geometry.LineSymmetryConstraint(first, second, axis);
+  const model = {
+    points: [axis.p1, axis.p2, first.p1, first.p2, second.p1, second.p2],
+    lines: [axis, first, second],
+    circles: [],
+    arcs: [],
+    blockInstances: [],
+    constraints: [constraint],
+  };
 
   assert.ok(residualNorm(constraint.rawError()) < 1e-9);
   assert.notEqual(first.length(), second.length());
+  const reflectedMidpoint = { x: 5, y: 1 };
+  const secondMidpoint = { x: (second.p1.x + second.p2.x) / 2, y: (second.p1.y + second.p2.y) / 2 };
+  assert.ok(Math.hypot(secondMidpoint.x - reflectedMidpoint.x, secondMidpoint.y - reflectedMidpoint.y) > 5);
+  assert.equal(new geometry.ConstraintSolver(model).analyzeConstraintState().freeVariableCount, 2);
 
-  second.p1.x += 1;
-  second.p2.x += 1;
+  const fixedEndpoint = { x: second.p1.x, y: second.p1.y };
+  const beforeLength = second.length();
+  second.p2.x += reflectedDirection.x * 7;
+  second.p2.y += reflectedDirection.y * 7;
+  assert.ok(residualNorm(constraint.rawError()) < 1e-9);
+  assert.deepEqual({ x: second.p1.x, y: second.p1.y }, fixedEndpoint);
+  assert.ok(Math.abs(second.length() - beforeLength - 7) < 1e-9);
+
+  second.p1.x += reflectedDirection.y;
+  second.p2.x += reflectedDirection.y;
+  second.p1.y -= reflectedDirection.x;
+  second.p2.y -= reflectedDirection.x;
   assert.ok(residualNorm(constraint.rawError()) > 1e-3);
 });
 
