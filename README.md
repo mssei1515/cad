@@ -26,34 +26,6 @@ Geometry、Constraint、Sketch階層、Block、Parameter、Hatch、Annotationを
 
 `.cad2`ファイルの内容にはJSONを使用しています。現行のデータ形式と機能の詳細は、[仕様書](./spec/README.md)を参照してください。
 
-## 起動方法
-
-Node.jsとnpmを用意し、リポジトリのルートで次を実行します。
-
-```sh
-npm install
-npm run serve
-```
-
-起動後、ブラウザで次のURLを開きます。
-
-```text
-http://127.0.0.1:8765/
-```
-
-ファイル操作にはFile System Access APIを使用するため、対応するブラウザが必要です。
-
-## テスト
-
-```sh
-npm run check
-npm run test:unit
-npm run test:e2e
-npm run test:all
-```
-
-E2EテストにはPlaywrightを使用します。
-
 ## 免責事項
 
 Cad2は現在開発中であり、現状有姿（"as is"）で提供されます。動作、正確性、データの互換性、継続的な利用可能性、特定目的への適合性を含め、いかなる保証もありません。
