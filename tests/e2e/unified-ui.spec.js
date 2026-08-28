@@ -1810,8 +1810,13 @@ test("Appearance cascades, used file colors are selectable, and constraint statu
     points: [
       { id: "P1", x: 0, y: 0, fixed: false, kind: "endpoint", sketchId: "S1", appearance: { color: "#f97316" } },
       { id: "P2", x: 100, y: 0, fixed: false, kind: "endpoint", sketchId: "S1", appearance: {} },
+      { id: "P3", x: 0, y: 30, fixed: false, kind: "endpoint", sketchId: "S1", appearance: {} },
+      { id: "P4", x: 100, y: 30, fixed: false, kind: "endpoint", sketchId: "S1", appearance: {} },
     ],
-    lines: [{ id: "L1", p1: "P1", p2: "P2", construction: false, sketchId: "S1", appearance: { lineWidth: 4 } }],
+    lines: [
+      { id: "L1", p1: "P1", p2: "P2", construction: false, sketchId: "S1", appearance: { lineWidth: 4 } },
+      { id: "L2", p1: "P3", p2: "P4", construction: true, sketchId: "S1", appearance: {} },
+    ],
     circles: [], arcs: [], constraints: [], blockDefinitions: [], blockInstances: [],
     annotations: [{ id: "AN1", type: "text", visible: true, text: "note", x: 0, y: 30, style: { color: "#0ea5e9" } }],
   };
@@ -1873,7 +1878,7 @@ test("Appearance cascades, used file colors are selectable, and constraint statu
   await page.locator("#propertyColor").fill("");
   await page.locator("#propertyColor").blur();
   const inheritedColorState = await page.evaluate(() => window.__cadTest.serializedModelForTest());
-  expect(inheritedColorState.lines).toHaveLength(1);
+  expect(inheritedColorState.lines).toHaveLength(2);
   expect(inheritedColorState.lines[0].appearance.color).toBeUndefined();
   await expect(page.locator(".property-color-picker")).toHaveAttribute("data-current-color", "#16a34a");
   await page.locator("#propertyColor").fill("#2563eb");
@@ -1900,10 +1905,10 @@ test("Appearance cascades, used file colors are selectable, and constraint statu
   await page.locator("#constraintStatusViewBtn").click();
   await expect(statusMenuInput).toBeChecked();
   expect(await page.evaluate(() => window.__cadTest.viewStateForTest())).toEqual(expect.objectContaining({ constraintStatus: true, mouseLatched: true, spaceHeld: false }));
-  expect(await page.evaluate(() => window.__cadTest.constraintStatusEndpointMarkerCountForTest())).toBe(0);
+  expect(await page.evaluate(() => window.__cadTest.constraintStatusEndpointMarkerCountForTest())).toBe(2);
   const endpointPosition = await page.evaluate(() => window.__cadTest.geometryClientPositionForTest("point", "P2"));
   await page.mouse.move(endpointPosition.x, endpointPosition.y);
-  expect(await page.evaluate(() => window.__cadTest.constraintStatusEndpointMarkerCountForTest())).toBe(1);
+  expect(await page.evaluate(() => window.__cadTest.constraintStatusEndpointMarkerCountForTest())).toBe(3);
   expect(await page.evaluate(() => window.__cadTest.pointDisplayStateForTest("P2"))).toEqual(expect.objectContaining({
     fill: "#eff6ff",
     stroke: "#3b82f6",
@@ -1911,11 +1916,11 @@ test("Appearance cascades, used file colors are selectable, and constraint statu
   }));
   const canvasBox = await page.locator("#canvas").boundingBox();
   await page.mouse.move(canvasBox.x + 20, canvasBox.y + canvasBox.height - 20);
-  expect(await page.evaluate(() => window.__cadTest.constraintStatusEndpointMarkerCountForTest())).toBe(0);
+  expect(await page.evaluate(() => window.__cadTest.constraintStatusEndpointMarkerCountForTest())).toBe(2);
   await page.mouse.click(endpointPosition.x, endpointPosition.y);
   await page.mouse.move(canvasBox.x + 20, canvasBox.y + canvasBox.height - 20);
   expect(await page.evaluate(() => window.__cadTest.selectedGeometryIdsForTest())).toEqual(expect.objectContaining({ points: ["P2"] }));
-  expect(await page.evaluate(() => window.__cadTest.constraintStatusEndpointMarkerCountForTest())).toBe(1);
+  expect(await page.evaluate(() => window.__cadTest.constraintStatusEndpointMarkerCountForTest())).toBe(3);
   expect(await page.evaluate(() => window.__cadTest.pointDisplayStateForTest("P2"))).toEqual(expect.objectContaining({
     fill: "#1d4ed8",
     stroke: "#1d4ed8",

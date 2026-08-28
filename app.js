@@ -10389,7 +10389,7 @@
       ctx.setLineDash([]);
       ctx.shadowBlur = 0;
 
-      if (construction && appearance.endpointMarkers !== false && !viewState.constraintStatus) {
+      if (construction && appearance.endpointMarkers !== false) {
         ctx.fillStyle = lineColor;
         const endpointRadius = 2.4 / viewport.scale;
         for (const p of [l.p1, l.p2]) {
