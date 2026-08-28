@@ -10678,6 +10678,7 @@
     const factors = {
       wing: Math.tan(halfAngle),
       tipInset: 1 / sine <= DIMENSION_ARROW_MITER_LIMIT ? 0.5 / sine : 0.5 * sine,
+      openInsetRatios: new Map(),
     };
     dimensionArrowheadFactorCache.set(angle, factors);
     return factors;
@@ -10700,13 +10701,57 @@
     return Math.max(0, Number(strokeWidth) || 0) * dimensionArrowheadFactors(arrowheadAngle).tipInset;
   }
 
+  function dimensionOpenArrowJoinProjection(strokeWidth, halfAngle) {
+    const sine = Math.max(1e-9, Math.sin(halfAngle));
+    const factor = 1 / sine <= DIMENSION_ARROW_MITER_LIMIT ? 0.5 / sine : 0.5 * sine;
+    return Math.max(0, Number(strokeWidth) || 0) * factor;
+  }
+
+  function dimensionOpenArrowPathTipInset(strokeWidth, nominalSize, wing) {
+    const width = Math.max(0, Number(strokeWidth) || 0);
+    const size = Math.max(0, Number(nominalSize) || 0);
+    const halfWidth = Math.max(1e-9, Number(wing) || 0);
+    const halfStroke = width / 2;
+    let inset = Math.min(size, dimensionOpenArrowTipInset(width, Math.atan2(halfWidth, Math.max(1e-9, size)) * 360 / Math.PI));
+    for (let iteration = 0; iteration < 4; iteration += 1) {
+      const shaft = Math.max(1e-9, size - inset);
+      const radius = Math.hypot(shaft, halfWidth);
+      const sine = Math.max(1e-9, halfWidth / radius);
+      const mitered = 1 / sine <= DIMENSION_ARROW_MITER_LIMIT;
+      const projection = mitered ? halfStroke / sine : halfStroke * sine;
+      const derivative = mitered
+        ? 1 + halfStroke * shaft / (halfWidth * radius)
+        : 1 - halfStroke * halfWidth * shaft / (radius * radius * radius);
+      const nextInset = Math.max(0, Math.min(size, inset - (inset - projection) / Math.max(1e-9, derivative)));
+      if (Math.abs(nextInset - inset) <= 1e-9) {
+        inset = nextInset;
+        break;
+      }
+      inset = nextInset;
+    }
+    return inset;
+  }
+
   function dimensionOpenArrowheadRenderPoints(point, direction, resolved, strokeWidth) {
     const factors = dimensionArrowheadFactors(resolved.arrowheadAngle);
-    const inset = Math.max(0, Number(strokeWidth) || 0) * factors.tipInset;
-    return dimensionArrowheadPointsFromResolved({
-      x: point.x + direction.x * inset,
-      y: point.y + direction.y * inset,
-    }, direction, resolved, factors);
+    const screenNominalSize = resolved.terminatorSize * DIMENSION_SCREEN_PX_PER_MM;
+    const screenStrokeWidth = Math.max(0, Number(strokeWidth) || 0) * viewport.scale;
+    const screenWing = screenNominalSize * factors.wing;
+    const strokeRatio = screenNominalSize > 0 ? screenStrokeWidth / screenNominalSize : 0;
+    let insetRatio = factors.openInsetRatios.get(strokeRatio);
+    if (insetRatio == null) {
+      insetRatio = dimensionOpenArrowPathTipInset(strokeRatio, 1, factors.wing);
+      factors.openInsetRatios.set(strokeRatio, insetRatio);
+    }
+    const nominalSize = screenNominalSize / viewport.scale;
+    const wing = screenWing / viewport.scale;
+    const inset = nominalSize * insetRatio;
+    const n = { x: -direction.y, y: direction.x };
+    return [
+      { x: point.x + direction.x * inset, y: point.y + direction.y * inset },
+      { x: point.x + direction.x * nominalSize + n.x * wing, y: point.y + direction.y * nominalSize + n.y * wing },
+      { x: point.x + direction.x * nominalSize - n.x * wing, y: point.y + direction.y * nominalSize - n.y * wing },
+    ];
   }
 
   function drawDimensionTerminator(point, direction, appearance = DEFAULT_DIMENSION_APPEARANCE) {
@@ -19728,7 +19773,7 @@
           secondDirection: directions.second,
         };
       },
-      dimensionArrowTipAlignmentForTest({ lineWidth = 1.2, arrowheadAngle = 30, highlighted = false, viewportScale = viewport.scale } = {}) {
+      dimensionArrowTipAlignmentForTest({ lineWidth = 1.2, arrowheadAngle = 30, highlighted = false, viewportScale = viewport.scale, outside = false } = {}) {
         const previousScale = viewport.scale;
         viewport.scale = Math.max(0.05, Number(viewportScale) || 1);
         try {
@@ -19739,12 +19784,27 @@
             arrowheadAngle,
           };
           const strokeWidth = dimensionStrokeWidth(appearance, highlighted) / viewport.scale;
-          const points = dimensionOpenArrowheadRenderPoints({ x: 0, y: 0 }, { x: 1, y: 0 }, appearance, strokeWidth);
-          const visualMiterApexX = points[0].x - dimensionOpenArrowTipInset(strokeWidth, arrowheadAngle);
+          const direction = outside ? { x: -1, y: 0 } : { x: 1, y: 0 };
+          const points = dimensionOpenArrowheadRenderPoints({ x: 0, y: 0 }, direction, appearance, strokeWidth);
+          const alongDirectionWorld = (point) => point.x * direction.x + point.y * direction.y;
+          const pathTipInsetWorld = alongDirectionWorld(points[0]);
+          const wingDistanceWorld = alongDirectionWorld(points[1]);
+          const wingHalfWidthWorld = Math.abs(points[1].x * -direction.y + points[1].y * direction.x);
+          const renderedHalfAngle = Math.atan2(wingHalfWidthWorld, Math.max(1e-9, wingDistanceWorld - pathTipInsetWorld));
+          const visualProjection = dimensionOpenArrowJoinProjection(strokeWidth, renderedHalfAngle);
+          const visualMiterApex = {
+            x: points[0].x - direction.x * visualProjection,
+            y: points[0].y - direction.y * visualProjection,
+          };
+          const alongDirection = (point) => alongDirectionWorld(point) * viewport.scale;
+          const shaftLength = appearance.terminatorSize * DIMENSION_SCREEN_PX_PER_MM * DIMENSION_OUTSIDE_SHAFT_LENGTH_FACTOR;
           return {
             strokeWidth: strokeWidth * viewport.scale,
-            pathTipInset: points[0].x * viewport.scale,
-            visualTipOffset: visualMiterApexX * viewport.scale,
+            pathTipInset: alongDirection(points[0]),
+            visualTipOffset: alongDirection(visualMiterApex),
+            wingDistance: alongDirection(points[1]),
+            nominalArrowSize: appearance.terminatorSize * DIMENSION_SCREEN_PX_PER_MM,
+            rearShaftLength: shaftLength - alongDirection(points[1]),
           };
         } finally {
           viewport.scale = previousScale;
