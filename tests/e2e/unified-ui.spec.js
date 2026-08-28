@@ -1304,13 +1304,13 @@ test("Canvas context menu exposes common and object-specific operations", async 
   await expect(page.locator("#togglePropertiesPanelBtn")).toHaveAttribute("aria-expanded", "true");
   await expect(page.locator("#propertiesPanel .property-heading")).toHaveText("線");
 
-  const fixedPointPosition = await page.evaluate(() => window.__cadTest.geometryClientPositionForTest("point", "P1"));
-  await page.mouse.click(fixedPointPosition.x, fixedPointPosition.y, { button: "right" });
+  const isolatedPoint = await page.evaluate((client) => window.__cadTest.addIsolatedFixedPointForContextTest(client), { x: blank.x - 70, y: blank.y });
+  await page.mouse.click(isolatedPoint.client.x, isolatedPoint.client.y, { button: "right" });
   await expect(menu.locator('[data-context-action="fix-toggle"] span')).toHaveText("固定解除");
   await menu.locator('[data-context-action="fix-toggle"]').click();
-  expect((await page.evaluate(() => window.__cadTest.serializedModelForTest())).points.find((point) => point.id === "P1").fixed).toBe(false);
+  expect((await page.evaluate((id) => window.__cadTest.serializedModelForTest().points.find((point) => point.id === id).fixed, isolatedPoint.id))).toBe(false);
   await page.keyboard.press("Control+z");
-  expect((await page.evaluate(() => window.__cadTest.serializedModelForTest())).points.find((point) => point.id === "P1").fixed).toBe(true);
+  expect((await page.evaluate((id) => window.__cadTest.serializedModelForTest().points.find((point) => point.id === id).fixed, isolatedPoint.id))).toBe(true);
 
   const dimensionPosition = await page.evaluate(() => window.__cadTest.dimensionClientPositionForTest(0));
   await page.mouse.click(dimensionPosition.x, dimensionPosition.y, { button: "right" });
@@ -1355,6 +1355,65 @@ test("Canvas context menu exposes common and object-specific operations", async 
   await page.mouse.click(blank.x, blank.y, { button: "right" });
   await expect(menu).toHaveAttribute("aria-label", "Canvas context menu");
   await expect(menu.locator('[data-context-action="fit-visible"] span')).toHaveText("Fit Visible Geometry");
+});
+
+test("Overlapping Canvas objects can be previewed and selected from context candidates", async ({ page }) => {
+  await page.goto(`${baseUrl}/index.html?test=1`);
+  await page.waitForFunction(() => window.__cadTest);
+  const fixture = await page.evaluate(() => window.__cadTest.resetForOverlappingContextSelectionTest());
+  const menu = page.locator("#canvasContextMenu");
+
+  await page.mouse.click(fixture.client.x, fixture.client.y, { button: "right" });
+  await expect(menu).toBeVisible();
+  await expect(menu).toHaveClass(/candidate-menu/);
+  await expect(menu.locator(".canvas-context-candidate-heading")).toContainText("選択候補");
+  const rows = menu.locator("[data-context-candidate-index]");
+  await expect(rows).toHaveCount(3);
+  await expect(rows.nth(0)).toContainText(`線${fixture.lineIds[1]}`);
+  await expect(rows.nth(2)).toContainText(`ブロック${fixture.blockId}`);
+  await expect(rows.nth(0).locator("svg")).toHaveAttribute("viewBox", await page.locator("#toolLine svg").getAttribute("viewBox"));
+  const openedState = await page.evaluate(() => window.__cadTest.canvasContextSelectionStateForTest());
+  expect(openedState.selected.lines).toEqual(fixture.lineIds);
+  expect(openedState.candidates.map(({ kind, id }) => ({ kind, id }))).toEqual([
+    { kind: "line", id: fixture.lineIds[1] },
+    { kind: "line", id: fixture.lineIds[0] },
+    { kind: "block", id: fixture.blockId },
+  ]);
+  expect(openedState.candidates.some(({ id }) => fixture.excludedIds.includes(id))).toBe(false);
+
+  await rows.nth(1).hover();
+  let state = await page.evaluate(() => window.__cadTest.canvasContextSelectionStateForTest());
+  expect(state.hovered).toBe(fixture.lineIds[0]);
+  expect(state.selected.lines).toEqual(fixture.lineIds);
+
+  await rows.nth(1).click();
+  await expect(menu).toBeHidden();
+  state = await page.evaluate(() => window.__cadTest.canvasContextSelectionStateForTest());
+  expect(state.selected.lines).toEqual([fixture.lineIds[0]]);
+  await expect(page.locator("#propertiesPanel .property-heading")).toHaveText("線");
+  await expect(page.locator("#propertiesPanel .property-section").first()).toContainText(`ID${fixture.lineIds[0]}`);
+  await expect(page.locator('.sketch-group-row[data-sketch-id="S1"][data-category="line"]')).toHaveClass(/has-active-descendant/);
+
+  await page.mouse.click(fixture.client.x, fixture.client.y, { button: "right" });
+  await page.keyboard.press("ArrowDown");
+  await page.keyboard.press("Enter");
+  await expect(menu).toBeHidden();
+  state = await page.evaluate(() => window.__cadTest.canvasContextSelectionStateForTest());
+  expect(state.selected.lines).toEqual([fixture.lineIds[0]]);
+
+  await page.mouse.click(fixture.client.x, fixture.client.y, { button: "right" });
+  await page.keyboard.press("Space");
+  await expect(menu).toBeHidden();
+  state = await page.evaluate(() => window.__cadTest.canvasContextSelectionStateForTest());
+  expect(state.selected.lines).toEqual([fixture.lineIds[1]]);
+
+  await openApplicationSettings(page);
+  await page.locator("#applicationLanguageSelect").selectOption("en");
+  await page.locator("#applicationSettingsDialog button[value=cancel]").first().click();
+  await page.mouse.click(fixture.client.x, fixture.client.y, { button: "right" });
+  await expect(menu.locator(".canvas-context-candidate-heading")).toContainText("Selection Candidates");
+  await expect(menu.locator("[data-context-candidate-index]").first()).toContainText(`Line${fixture.lineIds[1]}`);
+  await page.keyboard.press("Escape");
 });
 
 test("Canvas selection updates Properties, Properties collapses, and narrow toolbar labels do not overlap", async ({ page }) => {

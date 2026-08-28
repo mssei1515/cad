@@ -290,6 +290,8 @@
   let selectedHatches = [];
   let canvasContextTarget = null;
   let canvasContextPointer = null;
+  let canvasContextCandidates = [];
+  let canvasContextBaseHoverState = null;
   let hoveredAnnotation = null;
   let hoveredHatch = null;
   let hoveredSidebarItem = null;
@@ -17003,32 +17005,298 @@
     }
   }
 
-  function canvasContextTargetAt(pointer) {
-    const point = hitPoint(pointer.x, pointer.y);
-    if (point) return point.blockProjection ? { kind: "block", item: point.blockInstance } : { kind: "point", item: point };
-    const arcEndpoint = hitArcEndpoint(pointer.x, pointer.y);
-    if (arcEndpoint) return arcEndpoint.arc.blockProjection
-      ? { kind: "block", item: arcEndpoint.arc.blockInstance }
-      : { kind: "arc-endpoint", item: arcEndpoint.arc, endpoint: arcEndpoint.endpoint, hit: arcEndpoint };
-    const line = hitLine(pointer.x, pointer.y);
-    if (line) return line.blockProjection ? { kind: "block", item: line.blockInstance } : { kind: "line", item: line };
-    const circle = hitCircle(pointer.x, pointer.y);
-    if (circle) return circle.blockProjection ? { kind: "block", item: circle.blockInstance } : { kind: "circle", item: circle };
-    const arc = hitArc(pointer.x, pointer.y);
-    if (arc) return arc.blockProjection ? { kind: "block", item: arc.blockInstance } : { kind: "arc", item: arc };
-    const spline = hitSpline(pointer.x, pointer.y);
-    if (spline) return spline.blockProjection ? { kind: "block", item: spline.blockInstance } : { kind: "spline", item: spline };
-    const dimensionHit = hitDimension(pointer.x, pointer.y);
-    if (dimensionHit) return { kind: "dimension", item: dimensionHit.constraint, hit: dimensionHit };
-    const annotationHit = hitAnnotationElement(pointer.x, pointer.y);
-    if (annotationHit?.element?.blockProjection) return { kind: "block", item: annotationHit.element.blockInstance };
-    if (annotationHit?.element) return { kind: "annotation", item: annotationHit.element, hit: annotationHit };
-    const block = hitBlockInstance(pointer.x, pointer.y);
-    if (block) return { kind: "block", item: block };
-    const hatch = hitHatchAt(pointer.x, pointer.y);
-    if (hatch?.blockProjection) return { kind: "block", item: hatch.blockInstance };
-    if (hatch) return { kind: "hatch", item: hatch };
-    return { kind: "blank", item: null };
+  const CANVAS_CONTEXT_KIND_PRIORITY = Object.freeze({
+    point: 0,
+    "arc-endpoint": 1,
+    line: 2,
+    circle: 3,
+    arc: 4,
+    spline: 5,
+    dimension: 6,
+    annotation: 7,
+    block: 8,
+    hatch: 9,
+  });
+
+  function canvasContextPointIsSelectable(point) {
+    return isExplicitPoint(point) || ((isEndpointPoint(point) && isPointUsedByPrimitive(point) && (!isSplineOnlyFitPoint(point) || isEditableSplineFitPoint(point))) || isReferencePoint(point));
+  }
+
+  function canvasContextAnnotationHit(element, pointer) {
+    if (!element || element.visible === false) return null;
+    const threshold = 12 / viewport.scale;
+    if (element.type === "leader") {
+      const start = annotationLeaderAnchor(element);
+      if (!start || !element.end) return null;
+      const elbow = element.elbow || { x: (start.x + element.end.x) / 2, y: element.end.y };
+      const firstDistance = distancePointToSegmentPoints(pointer.x, pointer.y, start, elbow);
+      const secondDistance = distancePointToSegmentPoints(pointer.x, pointer.y, elbow, element.end);
+      const lineDistance = Math.min(firstDistance, secondDistance);
+      if (lineDistance <= threshold * 2.2) return { element, type: "leader", part: "line", distance: lineDistance };
+      if (pointInAnnotationTextBox(pointer.x, pointer.y, element, threshold)) return { element, type: "leader", part: "label", distance: 0 };
+      const labelDistance = hypot2(pointer.x - element.x, pointer.y - element.y);
+      if (labelDistance <= threshold * 3) return { element, type: "leader", part: "label", distance: labelDistance };
+      const leaderBox = boxFromPoints([start, elbow, element.end, { x: element.x, y: element.y }]);
+      if (leaderBox && pointInExpandedBox(pointer.x, pointer.y, leaderBox, threshold * 2.2)) {
+        return { element, type: "leader", part: "line", distance: Math.min(lineDistance, labelDistance) };
+      }
+      return null;
+    }
+    if (element.type === "text" && pointInAnnotationTextBox(pointer.x, pointer.y, element, threshold)) {
+      return { element, type: "text", part: "label", distance: 0 };
+    }
+    return null;
+  }
+
+  function canvasContextBlockHitDistance(instance, pointer) {
+    if (!instance || !isEditableSketchId(instance.sketchId) || !isVisibleSketchId(instance.sketchId)) return null;
+    const threshold = 8 / viewport.scale;
+    let distance = Infinity;
+    const bundle = blockProjectionBundle(instance);
+    for (const point of bundle.points) {
+      if (!isVisibleSketchElement(point)) continue;
+      const next = hypot2(point.x - pointer.x, point.y - pointer.y);
+      if (next <= threshold) distance = Math.min(distance, next);
+    }
+    for (const line of bundle.lines) {
+      if (!isVisibleSketchElement(line)) continue;
+      const next = distancePointToSegment(pointer.x, pointer.y, line);
+      if (next <= threshold) distance = Math.min(distance, next);
+    }
+    for (const circle of bundle.circles) {
+      if (!isVisibleSketchElement(circle)) continue;
+      const next = Math.abs(hypot2(pointer.x - circle.center.x, pointer.y - circle.center.y) - circle.radius());
+      if (next <= threshold) distance = Math.min(distance, next);
+    }
+    for (const arc of bundle.arcs) {
+      if (!isVisibleSketchElement(arc)) continue;
+      const next = Math.abs(hypot2(pointer.x - arc.center.x, pointer.y - arc.center.y) - arc.radius());
+      const angle = Math.atan2(pointer.y - arc.center.y, pointer.x - arc.center.x);
+      if (next <= threshold && angleOnSignedSweep(angle, arc.startAngle, arc.endAngle)) distance = Math.min(distance, next);
+    }
+    for (const spline of bundle.splines || []) {
+      if (!isVisibleSketchElement(spline)) continue;
+      const closest = window.SplineGeometry.closestPoint(spline.curve(), pointer, { samplesPerSpan: 28 });
+      if (closest?.distance <= threshold) distance = Math.min(distance, closest.distance);
+    }
+    for (const annotation of bundle.annotations || []) {
+      const hit = canvasContextAnnotationHit(annotation, pointer);
+      if (hit) distance = Math.min(distance, hit.distance);
+    }
+    for (const hatch of bundle.hatches || []) {
+      const resolved = resolvedHatchBoundary(hatch);
+      if (resolved.ok && hatchAppearanceForDisplay(hatch).visible !== false && hatchContainsPoint(resolved, pointer)) distance = 0;
+    }
+    return Number.isFinite(distance) ? distance : null;
+  }
+
+  function canvasContextCandidatesAt(pointer) {
+    const candidates = [];
+    const push = (target, distance, drawOrder) => {
+      candidates.push({
+        ...target,
+        contextDistance: Number(distance) || 0,
+        contextPriority: CANVAS_CONTEXT_KIND_PRIORITY[target.kind] ?? 99,
+        contextDrawOrder: Number(drawOrder) || 0,
+      });
+    };
+
+    const pointThreshold = 10 / viewport.scale;
+    model.points.forEach((point, index) => {
+      if (!isEditableSketchElement(point) || !isVisibleSketchElement(point) || !canvasContextPointIsSelectable(point)) return;
+      const distance = hypot2(point.x - pointer.x, point.y - pointer.y);
+      if (distance <= pointThreshold) push({ kind: "point", item: point }, distance, index);
+    });
+
+    model.arcs.forEach((arc, index) => {
+      if (!isEditableSketchElement(arc) || !isVisibleSketchElement(arc)) return;
+      for (const endpoint of ["start", "end"]) {
+        const point = arcEndpointPoint(arc, endpoint);
+        const distance = hypot2(point.x - pointer.x, point.y - pointer.y);
+        if (distance <= pointThreshold) push({ kind: "arc-endpoint", item: arc, endpoint, hit: { arc, endpoint, point } }, distance, index * 2 + (endpoint === "end" ? 1 : 0));
+      }
+    });
+
+    const geometryThreshold = 7 / viewport.scale;
+    model.lines.forEach((line, index) => {
+      if (!isEditableSketchElement(line) || !isVisibleSketchElement(line)) return;
+      const distance = distancePointToSegment(pointer.x, pointer.y, line);
+      if (distance <= geometryThreshold) push({ kind: "line", item: line }, distance, index);
+    });
+    model.circles.forEach((circle, index) => {
+      if (!isEditableSketchElement(circle) || !isVisibleSketchElement(circle)) return;
+      const distance = Math.abs(hypot2(pointer.x - circle.center.x, pointer.y - circle.center.y) - circle.radius());
+      if (distance <= geometryThreshold) push({ kind: "circle", item: circle }, distance, index);
+    });
+    model.arcs.forEach((arc, index) => {
+      if (!isEditableSketchElement(arc) || !isVisibleSketchElement(arc)) return;
+      const distance = Math.abs(hypot2(pointer.x - arc.center.x, pointer.y - arc.center.y) - arc.radius());
+      const angle = Math.atan2(pointer.y - arc.center.y, pointer.x - arc.center.x);
+      if (distance <= geometryThreshold && angleOnSignedSweep(angle, arc.startAngle, arc.endAngle)) push({ kind: "arc", item: arc }, distance, index);
+    });
+    model.splines.forEach((spline, index) => {
+      if (!isEditableSketchElement(spline) || !isVisibleSketchElement(spline)) return;
+      const closest = window.SplineGeometry.closestPoint(spline.curve(), pointer, { samplesPerSpan: 28 });
+      if (closest?.distance <= geometryThreshold) push({ kind: "spline", item: spline }, closest.distance, index);
+    });
+
+    const dimensionThreshold = 12 / viewport.scale;
+    model.constraints.forEach((constraint, index) => {
+      if (!isActiveSketchConstraint(constraint) || !isVisibleSketchId(constraintSketchId(constraint))) return;
+      const target = targetFromConstraint(constraint);
+      if (!target) return;
+      const dimension = constraint.dimension || defaultDimensionForTarget(target);
+      if (!viewState.constraintStatus && effectiveDimensionAppearance(dimension, constraintSketchId(constraint)).visible === false) return;
+      const layout = dimensionLayout(target, dimension);
+      if (!layout) return;
+      const labelDistance = hypot2(pointer.x - layout.text.x, pointer.y - layout.text.y);
+      const lineDistance = distancePointToSegmentPoints(pointer.x, pointer.y, layout.hitA, layout.hitB);
+      const labelHit = labelDistance <= dimensionThreshold * 2.2;
+      const lineHit = lineDistance <= dimensionThreshold * 1.4;
+      if (!labelHit && !lineHit) return;
+      const part = labelHit ? "label" : "line";
+      push({ kind: "dimension", item: constraint, hit: { constraint, target, dimension, part } }, Math.min(labelHit ? labelDistance : Infinity, lineHit ? lineDistance : Infinity), index);
+    });
+
+    model.annotations.forEach((annotation, index) => {
+      if (annotation.sketchId !== activeSketchId() || !isVisibleSketchId(annotation.sketchId)) return;
+      const hit = canvasContextAnnotationHit(annotation, pointer);
+      if (hit) push({ kind: "annotation", item: annotation, hit }, hit.distance, index);
+    });
+
+    model.blockInstances.forEach((block, index) => {
+      const distance = canvasContextBlockHitDistance(block, pointer);
+      if (distance != null) push({ kind: "block", item: block }, distance, index);
+    });
+
+    model.hatches.forEach((hatch, index) => {
+      if (hatch.sketchId !== activeSketchId() || !isVisibleSketchId(hatch.sketchId) || hatchAppearanceForDisplay(hatch).visible === false) return;
+      const resolved = resolvedHatchBoundary(hatch);
+      if (resolved.ok && hatchContainsPoint(resolved, pointer)) push({ kind: "hatch", item: hatch }, 0, index);
+    });
+
+    const sorted = candidates.sort((a, b) => {
+      const distanceDifference = a.contextDistance - b.contextDistance;
+      if (Math.abs(distanceDifference) > 1e-9) return distanceDifference;
+      if (a.contextPriority !== b.contextPriority) return a.contextPriority - b.contextPriority;
+      return b.contextDrawOrder - a.contextDrawOrder;
+    });
+    const editedFitPoint = sorted.find((target) => target.kind === "point" && splineEditSession?.spline?.fitPoints.includes(target.item));
+    return editedFitPoint ? [editedFitPoint] : sorted;
+  }
+
+  function canvasContextCandidatePresentation(target) {
+    const item = target.item;
+    if (target.kind === "point") return {
+      icon: toolbarSvgMarkup("#toolPoint"),
+      type: applicationText("点", "Point"),
+      id: item.id,
+      secondary: `X ${formatDisplayNumber(item.x)} / Y ${formatDisplayNumber(item.y)}`,
+    };
+    if (target.kind === "arc-endpoint") return {
+      icon: toolbarSvgMarkup("#toolArc"),
+      type: applicationText("円弧端点", "Arc Endpoint"),
+      id: item.id,
+      secondary: target.endpoint === "start" ? applicationText("始点", "Start") : applicationText("終点", "End"),
+    };
+    if (target.kind === "line") return {
+      icon: toolbarSvgMarkup("#toolLine"),
+      type: applicationText("線", "Line"),
+      id: item.id,
+      secondary: `${item.p1.id}–${item.p2.id}`,
+    };
+    if (target.kind === "circle" || target.kind === "arc") return {
+      icon: toolbarSvgMarkup(target.kind === "circle" ? "#toolCircle" : "#toolArc"),
+      type: target.kind === "circle" ? applicationText("円", "Circle") : applicationText("円弧", "Arc"),
+      id: item.id,
+      secondary: `${applicationText("中心", "Center")} ${item.center.id} / R ${formatDisplayNumber(item.radius())}`,
+    };
+    if (target.kind === "spline") return {
+      icon: toolbarSvgMarkup("#toolSpline"),
+      type: applicationText("スプライン", "Spline"),
+      id: item.id,
+      secondary: `${item.fitPoints.length} ${applicationText("通過点", "fit points")}`,
+    };
+    if (target.kind === "dimension") return {
+      icon: constraintToolbarIcon(item),
+      type: applicationText("寸法", "Dimension"),
+      id: item.parameterName || "—",
+      secondary: localizedConstraintName(item.name),
+    };
+    if (target.kind === "annotation") return {
+      icon: toolbarSvgMarkup(item.type === "leader" ? "#annotationLeaderBtn" : "#annotationTextBtn"),
+      type: item.type === "leader" ? applicationText("引出線", "Leader") : applicationText("自由テキスト", "Free Text"),
+      id: item.id,
+      secondary: String(item.text || "").slice(0, 40),
+    };
+    if (target.kind === "block") return {
+      icon: toolbarSvgMarkup("#toolCreateBlock"),
+      type: applicationText("ブロック", "Block"),
+      id: item.id,
+      secondary: blockDefinitionById(item.definitionId)?.name || item.definitionId,
+    };
+    return {
+      icon: toolbarSvgMarkup("#toolHatch"),
+      type: applicationText("ハッチング", "Hatch"),
+      id: item.id,
+      secondary: hatchPatternTypeLabel(hatchAppearanceForDisplay(item).patternType),
+    };
+  }
+
+  function captureCanvasHoverState() {
+    return {
+      point: hoveredPoint,
+      endpointPoint: hoveredEndpointPoint,
+      line: hoveredLine,
+      circle: hoveredCircle,
+      arc: hoveredArc,
+      spline: hoveredSpline,
+      block: hoveredBlockInstance,
+      arcEndpoint: hoveredArcEndpoint,
+      dimension: hoveredDimensionConstraint,
+      sketchIdentity: hoveredSketchIdentity,
+      annotation: hoveredAnnotation,
+      hatch: hoveredHatch,
+    };
+  }
+
+  function restoreCanvasHoverState(state) {
+    if (!state) return;
+    hoveredPoint = state.point;
+    hoveredEndpointPoint = state.endpointPoint;
+    hoveredLine = state.line;
+    hoveredCircle = state.circle;
+    hoveredArc = state.arc;
+    hoveredSpline = state.spline;
+    hoveredBlockInstance = state.block;
+    hoveredArcEndpoint = state.arcEndpoint;
+    hoveredDimensionConstraint = state.dimension;
+    hoveredSketchIdentity = state.sketchIdentity;
+    hoveredAnnotation = state.annotation;
+    hoveredHatch = state.hatch;
+  }
+
+  function previewCanvasContextCandidate(target = null) {
+    if (!canvasContextBaseHoverState) return;
+    if (!target) {
+      restoreCanvasHoverState(canvasContextBaseHoverState);
+      draw();
+      return;
+    }
+    clearCanvasHover();
+    if (target.kind === "point") {
+      hoveredPoint = target.item;
+      hoveredEndpointPoint = isEndpointPoint(target.item) ? target.item : null;
+    } else if (target.kind === "line") hoveredLine = target.item;
+    else if (target.kind === "circle") hoveredCircle = target.item;
+    else if (target.kind === "arc") hoveredArc = target.item;
+    else if (target.kind === "spline") hoveredSpline = target.item;
+    else if (target.kind === "arc-endpoint") hoveredArcEndpoint = { arc: target.item, endpoint: target.endpoint };
+    else if (target.kind === "dimension") hoveredDimensionConstraint = target.item;
+    else if (target.kind === "block") hoveredBlockInstance = target.item;
+    else if (target.kind === "annotation") hoveredAnnotation = target.item;
+    else if (target.kind === "hatch") hoveredHatch = target.item;
+    draw();
   }
 
   function canvasContextTargetIsSelected(target) {
@@ -17046,8 +17314,8 @@
     return false;
   }
 
-  function selectCanvasContextTarget(target) {
-    if (!target?.item || target.kind === "blank" || canvasContextTargetIsSelected(target)) return;
+  function selectCanvasContextTarget(target, { preserveSelectedSet = true } = {}) {
+    if (!target?.item || target.kind === "blank" || (preserveSelectedSet && canvasContextTargetIsSelected(target))) return;
     clearSelection();
     if (target.kind === "point") selectedPoints = [target.item];
     else if (target.kind === "line") selectedLines = [target.item];
@@ -17220,20 +17488,40 @@
     ]);
   }
 
-  function closeCanvasContextMenu() {
+  function closeCanvasContextMenu({ restoreHover = true } = {}) {
     if (!canvasContextMenu || canvasContextMenu.hidden) return false;
     canvasContextMenu.hidden = true;
     canvasContextMenu.innerHTML = "";
+    canvasContextMenu.classList.remove("candidate-menu");
+    if (canvasContextBaseHoverState) {
+      if (restoreHover) restoreCanvasHoverState(canvasContextBaseHoverState);
+      else clearCanvasHover();
+      draw();
+    }
     canvasContextTarget = null;
     canvasContextPointer = null;
+    canvasContextCandidates = [];
+    canvasContextBaseHoverState = null;
     return true;
   }
 
   function renderCanvasContextMenu(items) {
     if (!canvasContextMenu) return;
+    canvasContextMenu.classList.remove("candidate-menu");
     canvasContextMenu.innerHTML = items.map((item) => item.separator
       ? '<div class="canvas-context-menu-separator" role="separator"></div>'
       : `<button type="button" role="menuitem" data-context-action="${item.action}" class="${item.danger ? "danger" : ""}" ${item.disabled ? "disabled" : ""}><span>${escapeHtml(item.label)}</span>${item.shortcut ? `<kbd>${escapeHtml(item.shortcut)}</kbd>` : ""}</button>`).join("");
+  }
+
+  function renderCanvasContextCandidates(candidates) {
+    if (!canvasContextMenu) return;
+    canvasContextMenu.classList.add("candidate-menu");
+    const heading = applicationText("選択候補", "Selection Candidates");
+    canvasContextMenu.innerHTML = `<div class="canvas-context-candidate-heading" role="presentation">${escapeHtml(heading)}<span>${candidates.length}</span></div>${candidates.map((target, index) => {
+      const presentation = canvasContextCandidatePresentation(target);
+      const title = `${presentation.type} ${presentation.id}${presentation.secondary ? ` — ${presentation.secondary}` : ""}`;
+      return `<button type="button" role="menuitem" class="canvas-context-candidate" data-context-candidate-index="${index}" title="${escapeHtml(title)}">${presentation.icon}<span class="canvas-context-candidate-content"><span class="canvas-context-candidate-primary"><span>${escapeHtml(presentation.type)}</span><strong>${escapeHtml(presentation.id)}</strong></span><span class="canvas-context-candidate-secondary">${escapeHtml(presentation.secondary)}</span></span></button>`;
+    }).join("")}`;
   }
 
   function openCanvasContextMenu(event) {
@@ -17243,15 +17531,20 @@
     const pointer = canvasPoint(event);
     lastPointerWorld = pointer;
     const commandActive = hasCancellableCanvasCommand();
-    const target = commandActive ? { kind: "blank", item: null } : canvasContextTargetAt(pointer);
-    if (!commandActive && target.kind !== "blank") {
+    const candidates = commandActive ? [] : canvasContextCandidatesAt(pointer);
+    const multipleCandidates = candidates.length > 1;
+    const target = commandActive || multipleCandidates ? { kind: "blank", item: null } : candidates[0] || { kind: "blank", item: null };
+    if (!commandActive && !multipleCandidates && target.kind !== "blank") {
       selectCanvasContextTarget(target);
       updateUI({ refreshAnalysis: false });
       draw();
     }
     canvasContextTarget = target;
     canvasContextPointer = pointer;
-    renderCanvasContextMenu(canvasContextMenuItems(target, commandActive));
+    canvasContextCandidates = multipleCandidates ? candidates : [];
+    canvasContextBaseHoverState = multipleCandidates ? captureCanvasHoverState() : null;
+    if (multipleCandidates) renderCanvasContextCandidates(candidates);
+    else renderCanvasContextMenu(canvasContextMenuItems(target, commandActive));
     canvasContextMenu.setAttribute("aria-label", applicationText("キャンバスコンテキストメニュー", "Canvas context menu"));
     canvasContextMenu.hidden = false;
     canvasContextMenu.style.left = "0px";
@@ -17265,6 +17558,25 @@
       canvasContextMenu.style.top = `${top}px`;
     }
     canvasContextMenu.querySelector("button:not(:disabled)")?.focus({ preventScroll: true });
+  }
+
+  function selectCanvasContextCandidate(index) {
+    const target = canvasContextCandidates[index];
+    if (!target) return;
+    closeCanvasContextMenu({ restoreHover: false });
+    selectCanvasContextTarget(target, { preserveSelectedSet: false });
+    updateUI({ refreshAnalysis: false });
+    draw();
+  }
+
+  function focusedCanvasContextCandidate() {
+    const button = document.activeElement?.closest?.("[data-context-candidate-index]");
+    if (!button || !canvasContextMenu?.contains(button)) return null;
+    return canvasContextCandidates[Number(button.dataset.contextCandidateIndex)] || null;
+  }
+
+  function restoreFocusedCanvasContextCandidatePreview() {
+    previewCanvasContextCandidate(focusedCanvasContextCandidate());
   }
 
   function showSelectedObjectProperties() {
@@ -17307,15 +17619,48 @@
   }
 
   canvasContextMenu?.addEventListener("click", (event) => {
+    const candidateButton = event.target.closest("[data-context-candidate-index]");
+    if (candidateButton) {
+      selectCanvasContextCandidate(Number(candidateButton.dataset.contextCandidateIndex));
+      return;
+    }
     const button = event.target.closest("[data-context-action]");
     if (!button || button.disabled) return;
     executeCanvasContextAction(button.dataset.contextAction);
+  });
+  canvasContextMenu?.addEventListener("pointerover", (event) => {
+    const button = event.target.closest("[data-context-candidate-index]");
+    if (!button || button.contains(event.relatedTarget)) return;
+    button.focus({ preventScroll: true });
+    previewCanvasContextCandidate(canvasContextCandidates[Number(button.dataset.contextCandidateIndex)] || null);
+  });
+  canvasContextMenu?.addEventListener("pointerout", (event) => {
+    const button = event.target.closest("[data-context-candidate-index]");
+    if (!button || button.contains(event.relatedTarget)) return;
+    restoreFocusedCanvasContextCandidatePreview();
+  });
+  canvasContextMenu?.addEventListener("focusin", (event) => {
+    const button = event.target.closest("[data-context-candidate-index]");
+    if (button) previewCanvasContextCandidate(canvasContextCandidates[Number(button.dataset.contextCandidateIndex)] || null);
+  });
+  canvasContextMenu?.addEventListener("focusout", (event) => {
+    if (event.relatedTarget && canvasContextMenu.contains(event.relatedTarget)) return;
+    previewCanvasContextCandidate();
   });
   canvasContextMenu?.addEventListener("keydown", (event) => {
     if (event.key === "Escape") {
       event.preventDefault();
       event.stopPropagation();
       closeCanvasContextMenu();
+      return;
+    }
+    if (event.key === "Enter" || event.key === " " || event.key === "Spacebar") {
+      const candidateButton = document.activeElement?.closest?.("[data-context-candidate-index]");
+      if (candidateButton && canvasContextMenu.contains(candidateButton)) {
+        event.preventDefault();
+        event.stopPropagation();
+        selectCanvasContextCandidate(Number(candidateButton.dataset.contextCandidateIndex));
+      }
       return;
     }
     if (!['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key)) return;
@@ -20312,6 +20657,80 @@
           splines: selectedSplines.map((spline) => spline.id),
           blockInstances: selectedBlockInstances.map((instance) => instance.id),
         };
+      },
+      resetForOverlappingContextSelectionTest() {
+        resetModelState();
+        const first = addLine(addPoint(-70, 0, false, "endpoint"), addPoint(70, 0, false, "endpoint"));
+        const second = addLine(addPoint(-70, 0, false, "endpoint"), addPoint(70, 0, false, "endpoint"));
+        const hidden = addLine(addPoint(-70, 0, false, "endpoint"), addPoint(70, 0, false, "endpoint"));
+        hidden.appearance = { visible: false };
+        model.sketches.push({ id: "S2", name: "Inactive", parentSketchId: ROOT_SKETCH_ID, kind: "sketch", appearance: {} });
+        model.activeSketchId = "S2";
+        const inactive = addLine(addPoint(-70, 0, false, "endpoint"), addPoint(70, 0, false, "endpoint"));
+        model.activeSketchId = DEFAULT_SKETCH_ID;
+
+        const definition = createEmptyBlockDefinition("Overlapping Block");
+        for (let index = 0; index < 2; index += 1) {
+          const p1 = new Point(`BP${index * 2 + 1}`, -70, 0, false, "endpoint");
+          const p2 = new Point(`BP${index * 2 + 2}`, 70, 0, false, "endpoint");
+          p1.sketchId = DEFAULT_SKETCH_ID;
+          p2.sketchId = DEFAULT_SKETCH_ID;
+          const line = new Line(`BL${index + 1}`, p1, p2);
+          line.sketchId = DEFAULT_SKETCH_ID;
+          definition.points.push(p1, p2);
+          definition.lines.push(line);
+        }
+        model.blockDefinitions.push(definition);
+        const block = {
+          id: `BI${blockInstanceSeq++}`,
+          definitionId: definition.id,
+          sketchId: DEFAULT_SKETCH_ID,
+          x: 0,
+          y: 0,
+          rotation: 0,
+          fixed: false,
+          rotationLocked: false,
+          enabledSketchIds: [DEFAULT_SKETCH_ID],
+          appearanceOverride: {},
+        };
+        model.blockInstances.push(block);
+        invalidateBlockProjectionCache();
+        selectedLines = [first, second];
+        fitSketchToViewport(activeSketchId(), 220);
+        resetHistory("overlapping context selection test");
+        updateUI();
+        draw();
+        return {
+          client: this.worldClientPositionForTest({ x: 0, y: 0 }),
+          lineIds: [first.id, second.id],
+          blockId: block.id,
+          excludedIds: [hidden.id, inactive.id],
+        };
+      },
+      canvasContextSelectionStateForTest() {
+        const hover = hoveredPoint || hoveredEndpointPoint || hoveredLine || hoveredCircle || hoveredArc || hoveredSpline || hoveredDimensionConstraint || hoveredBlockInstance || hoveredAnnotation || hoveredHatch;
+        return {
+          menuOpen: Boolean(canvasContextMenu && !canvasContextMenu.hidden),
+          candidates: canvasContextCandidates.map((target) => {
+            const presentation = canvasContextCandidatePresentation(target);
+            return { kind: target.kind, id: presentation.id, type: presentation.type, secondary: presentation.secondary };
+          }),
+          hovered: hover?.id || hover?.parameterName || null,
+          hoveredArcEndpoint: hoveredArcEndpoint ? { id: hoveredArcEndpoint.arc.id, endpoint: hoveredArcEndpoint.endpoint } : null,
+          selected: this.selectedGeometryIdsForTest(),
+        };
+      },
+      addIsolatedFixedPointForContextTest(client) {
+        const rect = canvas.getBoundingClientRect();
+        const point = addPoint(
+          (Number(client?.x) - rect.left - viewport.x) / viewport.scale,
+          (Number(client?.y) - rect.top - viewport.y) / viewport.scale,
+          true,
+          "explicit",
+        );
+        updateUI();
+        draw();
+        return { id: point.id, client: this.worldClientPositionForTest(point) };
       },
       selectGeometryIdsForTest(ids = {}) {
         clearSelection();
