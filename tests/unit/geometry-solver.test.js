@@ -208,6 +208,47 @@ test("line symmetry constrains mirrored support lines while both target endpoint
   assert.ok(residualNorm(constraint.rawError()) > 1e-3);
 });
 
+test("parallel-line centerline follows the equidistant support line without constraining its endpoints", () => {
+  const point = (id, x, y, fixed = false) => new geometry.Point(id, x, y, fixed);
+  const top = new geometry.Line("L1", point("P1", -80, -30, true), point("P2", 80, -30, true));
+  const bottom = new geometry.Line("L2", point("P3", -80, 50, true), point("P4", 80, 50, true));
+  const center = new geometry.Line("CL", point("CP1", -25, 10), point("CP2", 60, 10), true);
+  const constraint = new geometry.ParallelLinesCenterlineConstraint(top, bottom, center);
+  const model = {
+    points: [top.p1, top.p2, bottom.p1, bottom.p2, center.p1, center.p2],
+    lines: [top, bottom, center], circles: [], arcs: [], blockInstances: [], constraints: [constraint],
+  };
+
+  assert.ok(residualNorm(constraint.rawError()) < 1e-9);
+  assert.equal(new geometry.ConstraintSolver(model).analyzeConstraintState().freeVariableCount, 2);
+
+  top.p2.x = 35;
+  assert.ok(residualNorm(constraint.rawError()) < 1e-9, "shortening a source along its support line must not move the centerline");
+  center.p1.x = -60;
+  assert.ok(residualNorm(constraint.rawError()) < 1e-9, "one centerline endpoint may extend independently");
+
+  bottom.p2.y += 5;
+  assert.ok(residualNorm(constraint.rawError()) > 1e-3, "non-parallel source supports must violate the relation");
+});
+
+test("point-pair centerline is a perpendicular bisector with independently movable endpoints", () => {
+  const p1 = new geometry.Point("P1", -30, 15, true);
+  const p2 = new geometry.Point("P2", 50, 15, true);
+  const center = new geometry.Line("CL", new geometry.Point("CP1", 10, -45), new geometry.Point("CP2", 10, 70), true);
+  const constraint = new geometry.PointPairCenterlineConstraint(p1, p2, center);
+  const model = {
+    points: [p1, p2, center.p1, center.p2], lines: [center], circles: [], arcs: [], blockInstances: [], constraints: [constraint],
+  };
+
+  assert.ok(residualNorm(constraint.rawError()) < 1e-9);
+  assert.equal(new geometry.ConstraintSolver(model).analyzeConstraintState().freeVariableCount, 2);
+  center.p2.y += 40;
+  assert.ok(residualNorm(constraint.rawError()) < 1e-9);
+  center.p1.x += 3;
+  center.p2.x += 3;
+  assert.ok(residualNorm(constraint.rawError()) > 1e-3);
+});
+
 test("arc symmetry constrains center and radius without constraining endpoints", () => {
   const point = (id, x, y) => new geometry.Point(id, x, y);
   const axis = new geometry.Line("AXIS", point("AX1", 0, -20), point("AX2", 0, 20));

@@ -14,7 +14,7 @@ async function createOpenSpline(page) {
   return fixture;
 }
 
-test("creates and edits a cubic fit-point spline and persists version 15", async ({ page }) => {
+test("creates and edits a cubic fit-point spline and persists version 16", async ({ page }) => {
   await createOpenSpline(page);
 
   let state = await page.evaluate(() => window.__cadTest.splineStateForTest());
@@ -29,7 +29,7 @@ test("creates and edits a cubic fit-point spline and persists version 15", async
     endCondition: "natural",
   }));
   expect(state.direct[0].fitPoints).toHaveLength(4);
-  expect(state.serialized.version).toBe(15);
+  expect(state.serialized.version).toBe(16);
   expect(state.propertiesText).toContain("スプライン");
   expect(state.propertiesText).toContain("通過点ID");
 
@@ -155,7 +155,7 @@ test("rebuilds the hatch preview cache after spline fit points move", async ({ p
   expect(state.afterMaxX).toBeGreaterThan(state.beforeMaxX + 50);
 });
 
-test("migrates version 14 without splines and rejects malformed version 15 spline data", async ({ page }) => {
+test("migrates version 14 without splines and rejects malformed current spline data", async ({ page }) => {
   await createOpenSpline(page);
   const current = await page.evaluate(() => window.__cadTest.splineStateForTest().serialized);
 

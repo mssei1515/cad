@@ -58,6 +58,12 @@ Constraintの各Geometry参照fieldは保存形式上は従来どおりbare ID�
 
 クリック列から Line を連続作成する。既存端点へスナップした場合は Point を共有できる。Shift を押したクリックでは前点から水平または垂直に近い方向へ固定し、対応する拘束を追加する。Esc で現在の連続作図を終了する。
 
+### 中心線
+
+Geometry menuまたはToolbarの中心線commandから、同じアクティブSketchにある平行な2本のLine、または2つのPointを基準に補助Lineを作る。対象をあらかじめ2つ選択してからcommandを開始する方法と、command開始後に1つずつ選択する方法を利用できる。基準確定後は中心線の両端点をCanvas上で順にclickし、各click位置を求めた支持直線へ投影して長さを決める。
+
+平行な2本のLineでは、両Lineを無限に延長した支持直線に平行かつ等距離な支持直線へ中心線を置く。2つのPointでは、2点を結ぶ線分の垂直二等分線を中心線の支持直線とする。どちらも中心線の支持位置と方向だけを拘束し、中心線の長さと両端点の支持直線方向位置は拘束しない。このため作成後も各端点を支持直線上で独立して移動できる。端点指定中は既存Geometryへ通常作図と同じスナップを行い、確定した端点へ一致、Point-on-Line、Point-on-CircleまたはPoint-on-Splineの該当拘束を追加する。中心線の支持条件とスナップ拘束が同時に成立しない場合は作成全体をロールバックする。中心線は`construction = true`で作成し、対応する保存型は`parallelLinesCenterline`と`pointPairCenterline`である。
+
 ### 矩形
 
 対角2点から4本の Line を作り、水平・垂直関係を付ける。幅・高さが下限未満にならないよう補正する。
@@ -156,11 +162,13 @@ UIで利用できる組み合わせを次に示す。
 | 接線 | `circleCircleTangent` | Circle/Arc 2つ |
 | 接線 | `splineLineTangent` | 開Spline端点–Line。端点接線方向を一致させる |
 | 接線 | `splineSplineTangent` | 2つの開Spline端点。端点接線方向を一致させる |
+| 中心線 | `parallelLinesCenterline` | 平行な2 Lineの等距離な支持直線と補助Line |
+| 中心線 | `pointPairCenterline` | 2 Pointの垂直二等分線と補助Line |
 | 固定 | Point の `fixed` | 1つ以上の Point |
 | 固定 | `lineFixed` | Line の両端位置 |
 | 固定 | `arcEndpointFixed` | Arc 端位置。内部的に利用する |
 
-`pointOnLineMidpoint` は保存・solve に対応する内部型だが、現在のツールバーに独立コマンドはない。
+Lineの中点を候補にするスナップと`pointOnLineMidpoint`拘束は使用しない。中心位置が必要な場合は中心線commandで意図を明示する。
 
 対称拘束は対象の種類ごとに次の量だけを拘束する。
 

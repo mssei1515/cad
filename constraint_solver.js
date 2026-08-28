@@ -355,17 +355,60 @@
     }
   }
 
-  class PointOnLineMidpointConstraint extends Constraint {
-    constructor(point, line) {
-      super(`中点一致 ${point.id}-${line.id}`, 1);
-      this.point = point;
-      this.line = line;
+  class ParallelLinesCenterlineConstraint extends Constraint {
+    constructor(line1, line2, centerline) {
+      super(`平行2線中心線 ${line1.id}-${line2.id} / ${centerline.id}`, 1);
+      this.line1 = line1;
+      this.line2 = line2;
+      this.centerline = centerline;
+      this.degenerateAtCreation = [line1, line2, centerline].some((line) => line.length() < MIN_ORIENTATION_LENGTH);
     }
 
     rawError() {
+      const length1 = this.line1.length();
+      const length2 = this.line2.length();
+      const centerLength = this.centerline.length();
+      if (this.degenerateAtCreation || Math.min(length1, length2, centerLength) < MIN_ORIENTATION_LENGTH) return [0, 0, 0];
+      const ux = this.line1.dx() / length1;
+      const uy = this.line1.dy() / length1;
+      const source2x = this.line2.dx() / length2;
+      const source2y = this.line2.dy() / length2;
+      const centerX = this.centerline.dx() / centerLength;
+      const centerY = this.centerline.dy() / centerLength;
+      const nx = -uy;
+      const ny = ux;
+      const offset1 = this.line1.p1.x * nx + this.line1.p1.y * ny;
+      const offset2 = this.line2.p1.x * nx + this.line2.p1.y * ny;
+      const centerOffset = this.centerline.p1.x * nx + this.centerline.p1.y * ny;
       return [
-        this.point.x - (this.line.p1.x + this.line.p2.x) / 2,
-        this.point.y - (this.line.p1.y + this.line.p2.y) / 2,
+        ux * source2y - uy * source2x,
+        ux * centerY - uy * centerX,
+        centerOffset - (offset1 + offset2) / 2,
+      ];
+    }
+  }
+
+  class PointPairCenterlineConstraint extends Constraint {
+    constructor(p1, p2, centerline) {
+      super(`2点中心線 ${p1.id}-${p2.id} / ${centerline.id}`, 1);
+      this.p1 = p1;
+      this.p2 = p2;
+      this.centerline = centerline;
+      this.degenerateAtCreation = hypot2(p2.x - p1.x, p2.y - p1.y) < MIN_ORIENTATION_LENGTH || centerline.length() < MIN_ORIENTATION_LENGTH;
+    }
+
+    rawError() {
+      const pairDx = this.p2.x - this.p1.x;
+      const pairDy = this.p2.y - this.p1.y;
+      const pairLength = hypot2(pairDx, pairDy);
+      const centerLength = this.centerline.length();
+      if (this.degenerateAtCreation || pairLength < MIN_ORIENTATION_LENGTH || centerLength < MIN_ORIENTATION_LENGTH) return [0, 0];
+      const centerDx = this.centerline.dx() / centerLength;
+      const centerDy = this.centerline.dy() / centerLength;
+      const midpoint = { x: (this.p1.x + this.p2.x) / 2, y: (this.p1.y + this.p2.y) / 2 };
+      return [
+        (pairDx * centerDx + pairDy * centerDy) / pairLength,
+        signedPointDirectedLineDistance(midpoint, this.centerline),
       ];
     }
   }
@@ -1758,7 +1801,8 @@
     ArcEndpointCoincidentConstraint,
     ArcEndpointArcEndpointCoincidentConstraint,
     PointOnLineConstraint,
-    PointOnLineMidpointConstraint,
+    ParallelLinesCenterlineConstraint,
+    PointPairCenterlineConstraint,
     ArcEndpointOnLineConstraint,
     ArcEndpointFixedConstraint,
     LineFixedConstraint,

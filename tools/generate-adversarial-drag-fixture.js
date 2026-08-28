@@ -221,10 +221,8 @@ constrainAxis(colB.p1Object, "x");
 addConstraint({ type: "collinear", line1: colA.id, line2: colB.id });
 constrainLength(colB);
 
-const midSupport = line("L_MID_SUPPORT", 800, -700, 1200, -500);
-constrainPlacedLine(midSupport, Math.atan2(200, 400));
-const midpointProbe = point("P_MIDPOINT_PROBE", 1000, -600, { kind: "explicit" });
-addConstraint({ type: "pointOnLineMidpoint", point: midpointProbe.id, line: midSupport.id });
+const centerSupport = line("L_CENTER_SUPPORT", 800, -700, 1200, -500, { construction: true });
+constrainPlacedLine(centerSupport, Math.atan2(200, 400));
 
 const offsetSource = line("L_OFFSET_SOURCE", 200, -650, 500, -450);
 constrainPlacedLine(offsetSource, Math.atan2(200, 300));

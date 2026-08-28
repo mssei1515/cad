@@ -146,11 +146,11 @@ test("adversarial mixed-scale fixture is completely constrained", async ({ page 
   expect(analysis.freeVariableCount).toBe(0);
   expect(duplicateLabels, `redundant constraints: ${JSON.stringify(duplicateLabels)}`).toEqual([]);
   expect(analysis).toEqual(expect.objectContaining({
-    pointCount: 109,
+    pointCount: 108,
     lineCount: 61,
     circleCount: 12,
     arcCount: 12,
-    constraintCount: 249,
+    constraintCount: 248,
   }));
 
   const linePosition = await page.evaluate(() => window.__cadTest.selectableLineClientPositionForTest());

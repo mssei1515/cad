@@ -79,7 +79,8 @@
     ArcEndpointCoincidentConstraint,
     ArcEndpointArcEndpointCoincidentConstraint,
     PointOnLineConstraint,
-    PointOnLineMidpointConstraint,
+    ParallelLinesCenterlineConstraint,
+    PointPairCenterlineConstraint,
     ArcEndpointOnLineConstraint,
     ArcEndpointFixedConstraint,
     LineFixedConstraint,
@@ -135,7 +136,7 @@
     ["保存", "Save"], ["名前を付けて保存", "Save As"], ["開く", "Open"], ["Parameter…", "Parameters…"], ["ドキュメント設定", "Document Settings"], ["アプリケーション設定", "Application Settings"],
     ["元に戻す", "Undo"], ["やり直す", "Redo"], ["削除", "Delete"], ["選択", "Select"], ["選択・ドラッグ", "Select / Drag"],
     ["ジオメトリ", "Geometry"], ["拘束", "Constraint"], ["注記", "Annotation"], ["ツールバー", "Toolbar"], ["メニューバー", "Menu bar"], ["表示ツール", "View"],
-    ["点", "Point"], ["線", "Line"], ["連続線", "Polyline"], ["矩形", "Rectangle"], ["円", "Circle"], ["円弧", "Arc"], ["スプライン", "Spline"],
+    ["点", "Point"], ["線", "Line"], ["連続線", "Polyline"], ["中心線", "Centerline"], ["矩形", "Rectangle"], ["円", "Circle"], ["円弧", "Arc"], ["スプライン", "Spline"],
     ["実線／補助線", "Normal / Construction"], ["トリム", "Trim"], ["R面取り", "Fillet"], ["フィレット", "Fillet"], ["オフセット", "Offset"], ["ハッチング", "Hatching"],
     ["寸法", "Dimension"], ["一致", "Coincident"], ["水平", "Horizontal"], ["垂直", "Vertical"], ["平行", "Parallel"], ["直角", "Perpendicular"],
     ["対称", "Symmetry"], ["同心", "Concentric"], ["等寸", "Equal"], ["接線", "Tangent"], ["固定／解除", "Fix / Unfix"], ["固定解除", "Unfix"],
@@ -304,6 +305,10 @@
   let blankDoubleClickCandidate = null;
   let suppressNextBlankDoubleClickEvent = false;
   let lineStartPoint = null;
+  let centerlineTargets = [];
+  let centerlineSupport = null;
+  let centerlineFirstPoint = null;
+  let centerlineFirstSnap = null;
   let pointStartRollback = null;
   let rectangleStartPoint = null;
   let lineStartRollback = null;
@@ -367,7 +372,7 @@
   let historyRestoring = false;
   let geometryClipboard = null;
   const HISTORY_LIMIT = 80;
-  const CURRENT_JSON_VERSION = 15;
+  const CURRENT_JSON_VERSION = 16;
   const SKETCH_TREE_MIN_WIDTH = 220;
   const SKETCH_TREE_MAX_WIDTH = 560;
   const SKETCH_TREE_KEYBOARD_RESIZE_STEP = 16;
@@ -380,6 +385,7 @@
   const MIN_ZOOM = 0.001;
   const MAX_ZOOM = 10000000;
   const CONSTRUCTION_EXTENSION_SCREEN_PX = 12;
+  const CENTERLINE_PARALLEL_TOLERANCE = 1e-5;
   const CONSTRUCTION_GEOMETRY_ALPHA = 0.72;
   const DIMENSION_SCREEN_PX_PER_MM = 96 / 25.4;
   const ANNOTATION_SCREEN_PX_PER_MM = 96 / 25.4;
@@ -3143,6 +3149,225 @@
     return l;
   }
 
+  function resetCenterlineCommandState() {
+    centerlineTargets = [];
+    centerlineSupport = null;
+    centerlineFirstPoint = null;
+    centerlineFirstSnap = null;
+  }
+
+  function parallelLineCenterlineSupport(line1, line2) {
+    if (![line1, line2].every((line) => line instanceof Line && lineHasDirection(line))) {
+      return { ok: false, reason: applicationText("中心線の基準線が短すぎます", "A centerline source is too short") };
+    }
+    const length1 = line1.length();
+    const length2 = line2.length();
+    const ux = line1.dx() / length1;
+    const uy = line1.dy() / length1;
+    const vx = line2.dx() / length2;
+    const vy = line2.dy() / length2;
+    if (Math.abs(ux * vy - uy * vx) > CENTERLINE_PARALLEL_TOLERANCE) {
+      return { ok: false, reason: applicationText("互いに平行な2本の線を選択してください", "Select two parallel lines") };
+    }
+    const nx = -uy;
+    const ny = ux;
+    const separation = (line2.p1.x - line1.p1.x) * nx + (line2.p1.y - line1.p1.y) * ny;
+    if (Math.abs(separation) < MIN_ORIENTATION_LENGTH) {
+      return { ok: false, reason: applicationText("異なる位置にある2本の平行線を選択してください", "Select two distinct parallel lines") };
+    }
+    return {
+      ok: true,
+      kind: "parallel-lines",
+      anchor: { x: line1.p1.x + nx * separation / 2, y: line1.p1.y + ny * separation / 2 },
+      ux,
+      uy,
+    };
+  }
+
+  function pointPairCenterlineSupport(p1, p2) {
+    if (!(p1 instanceof Point) || !(p2 instanceof Point) || p1 === p2) {
+      return { ok: false, reason: applicationText("異なる2点を選択してください", "Select two distinct points") };
+    }
+    const dx = p2.x - p1.x;
+    const dy = p2.y - p1.y;
+    const length = hypot2(dx, dy);
+    if (length < MIN_ORIENTATION_LENGTH) {
+      return { ok: false, reason: applicationText("2点が近すぎます", "The two points are too close") };
+    }
+    return {
+      ok: true,
+      kind: "point-pair",
+      anchor: { x: (p1.x + p2.x) / 2, y: (p1.y + p2.y) / 2 },
+      ux: -dy / length,
+      uy: dx / length,
+    };
+  }
+
+  function centerlineSupportForTargets(targets = centerlineTargets) {
+    if (targets.length !== 2) return null;
+    if (targets.every((item) => item instanceof Line)) return parallelLineCenterlineSupport(targets[0], targets[1]);
+    if (targets.every((item) => item instanceof Point)) return pointPairCenterlineSupport(targets[0], targets[1]);
+    return { ok: false, reason: applicationText("平行な2線、または2点を選択してください", "Select two parallel lines or two points") };
+  }
+
+  function projectPointToCenterlineSupport(point, support = centerlineSupport) {
+    if (!point || !support?.ok) return null;
+    const parameter = (point.x - support.anchor.x) * support.ux + (point.y - support.anchor.y) * support.uy;
+    return { x: support.anchor.x + support.ux * parameter, y: support.anchor.y + support.uy * parameter };
+  }
+
+  function prepareCenterlineEndpointPlacement(targets) {
+    if (!sameSketchElements(targets, activeSketchId())) {
+      setHint(applicationText("アクティブスケッチ内の対象を選択してください", "Select targets in the active sketch"), "error");
+      return false;
+    }
+    const support = centerlineSupportForTargets(targets);
+    if (!support?.ok) {
+      setHint(support?.reason || applicationText("中心線を作成できません", "Cannot create the centerline"), "error");
+      return false;
+    }
+    centerlineTargets = targets.slice();
+    centerlineSupport = support;
+    centerlineFirstPoint = null;
+    selectedPoints = targets.filter((item) => item instanceof Point);
+    selectedLines = targets.filter((item) => item instanceof Line);
+    selectedCircles = [];
+    selectedArcs = [];
+    selectedSplines = [];
+    setHint(applicationText("中心線の1つ目の端点をクリックしてください", "Click the first centerline endpoint"));
+    updateUI({ refreshAnalysis: false });
+    draw();
+    return true;
+  }
+
+  function startCenterlineCommand() {
+    cancelConstraintTargetCommand("");
+    cancelPendingCommand("");
+    if (!canCreateInActiveSketch()) return void rejectRootSketchCreation();
+    const preselected = selectedLines.length === 2 && selectedPoints.length === 0
+      ? selectedLines.slice()
+      : selectedPoints.length === 2 && selectedLines.length === 0
+        ? selectedPoints.slice()
+        : [];
+    resetCenterlineCommandState();
+    mode = "centerline";
+    pointerPreview = null;
+    clearSnap();
+    if (preselected.length === 2 && prepareCenterlineEndpointPlacement(preselected)) {
+      updateToolbar();
+      return;
+    }
+    clearSelection();
+    updateToolbar();
+    setHint(applicationText("平行な2線、または2点を順にクリックしてください", "Select two parallel lines or two points"));
+    updateUI({ refreshAnalysis: false });
+    draw();
+  }
+
+  function addCenterlineTarget(target) {
+    if (!target || !isActiveSketchElement(target)) {
+      setHint(applicationText("アクティブスケッチ内の対象を選択してください", "Select a target in the active sketch"), "error");
+      return false;
+    }
+    if (centerlineTargets.includes(target)) {
+      setHint(applicationText("別の対象を選択してください", "Select a different target"), "error");
+      return false;
+    }
+    if (centerlineTargets.length > 0 && (centerlineTargets[0] instanceof Line) !== (target instanceof Line)) {
+      setHint(applicationText("2本の線、または2つの点の同じ種類で選択してください", "Select two targets of the same type"), "error");
+      return false;
+    }
+    centerlineTargets.push(target);
+    selectedPoints = centerlineTargets.filter((item) => item instanceof Point);
+    selectedLines = centerlineTargets.filter((item) => item instanceof Line);
+    if (centerlineTargets.length === 2) {
+      if (prepareCenterlineEndpointPlacement(centerlineTargets)) return true;
+      centerlineTargets.pop();
+      selectedPoints = centerlineTargets.filter((item) => item instanceof Point);
+      selectedLines = centerlineTargets.filter((item) => item instanceof Line);
+      updateUI({ refreshAnalysis: false });
+      draw();
+      return false;
+    }
+    setHint(target instanceof Line
+      ? applicationText("2本目の平行線をクリックしてください", "Click the second parallel line")
+      : applicationText("2つ目の点をクリックしてください", "Click the second point"));
+    updateUI({ refreshAnalysis: false });
+    draw();
+    return true;
+  }
+
+  function commitCenterline(secondPoint, secondSnap = null) {
+    if (!centerlineSupport?.ok || centerlineTargets.length !== 2 || !centerlineFirstPoint || !secondPoint) return false;
+    if (hypot2(secondPoint.x - centerlineFirstPoint.x, secondPoint.y - centerlineFirstPoint.y) < MIN_LINE_LENGTH) {
+      setHint(applicationText("中心線の端点間隔を広げてください", "Place the centerline endpoints farther apart"), "error");
+      draw();
+      return false;
+    }
+    const pointLength = model.points.length;
+    const lineLength = model.lines.length;
+    const constraintLength = model.constraints.length;
+    const pointSeqBefore = pointSeq;
+    const lineSeqBefore = lineSeq;
+    const p1 = addPoint(centerlineFirstPoint.x, centerlineFirstPoint.y, false, "endpoint");
+    const p2 = addPoint(secondPoint.x, secondPoint.y, false, "endpoint");
+    const centerline = addLine(p1, p2, true);
+    addPointSnapConstraints(p1, centerlineFirstSnap);
+    addPointSnapConstraints(p2, secondSnap);
+    const constraint = centerlineSupport.kind === "parallel-lines"
+      ? new ParallelLinesCenterlineConstraint(centerlineTargets[0], centerlineTargets[1], centerline)
+      : new PointPairCenterlineConstraint(centerlineTargets[0], centerlineTargets[1], centerline);
+    const committed = centerline && commitNewConstraint("centerline", constraint);
+    if (!committed) {
+      model.points.length = pointLength;
+      model.lines.length = lineLength;
+      model.constraints.length = constraintLength;
+      pointSeq = pointSeqBefore;
+      lineSeq = lineSeqBefore;
+      constraintAnalysisState = null;
+      updateUI();
+      draw();
+      return false;
+    }
+    resetCenterlineCommandState();
+    mode = "select";
+    pointerPreview = null;
+    clearSnap();
+    selectedLines = [centerline];
+    updateUI();
+    setHint(applicationText(`中心線 ${centerline.id} を作成しました`, `Created centerline ${centerline.id}`));
+    draw();
+    return true;
+  }
+
+  function handleCenterlineClick(pointer, hitPointTarget, hitLineTarget) {
+    if (centerlineTargets.length < 2) {
+      const wantsLine = centerlineTargets[0] instanceof Line;
+      const wantsPoint = centerlineTargets[0] instanceof Point;
+      const target = wantsLine ? hitLineTarget : wantsPoint ? hitPointTarget : hitPointTarget || hitLineTarget;
+      if (!target) {
+        setHint(applicationText("平行な2線、または2点を選択してください", "Select two parallel lines or two points"), "error");
+        return;
+      }
+      addCenterlineTarget(target);
+      return;
+    }
+    const snapped = snapForDrawing(pointer);
+    const snap = activeSnap;
+    const projected = projectPointToCenterlineSupport(snapped);
+    if (!projected) return;
+    if (!centerlineFirstPoint) {
+      centerlineFirstPoint = projected;
+      centerlineFirstSnap = snap;
+      clearSnap();
+      pointerPreview = projected;
+      setHint(applicationText("中心線の2つ目の端点をクリックしてください", "Click the second centerline endpoint"));
+      draw();
+      return;
+    }
+    commitCenterline(projected, snap);
+  }
+
   function preferredDirectionFrom(start, p) {
     const dx = p.x - start.x;
     const dy = p.y - start.y;
@@ -3216,7 +3441,8 @@
       constraint instanceof PerpendicularConstraint ||
       constraint instanceof CollinearConstraint ||
       constraint instanceof PointOnLineConstraint ||
-      constraint instanceof PointOnLineMidpointConstraint ||
+      constraint instanceof ParallelLinesCenterlineConstraint ||
+      constraint instanceof PointPairCenterlineConstraint ||
       constraint instanceof ArcEndpointOnLineConstraint ||
       constraint instanceof LineCircleTangentConstraint
     );
@@ -5179,6 +5405,7 @@
     panSession = null;
     suppressNextBlankDoubleClickEvent = false;
     lineStartPoint = null;
+    resetCenterlineCommandState();
     pointStartRollback = null;
     lineCompletionRollback = null;
     rectangleStartPoint = null;
@@ -5431,10 +5658,16 @@
       deserialize: (data, refs) => new PointOnLineConstraint(refs.point(data.point), refs.line(data.line)),
     },
     {
-      type: "pointOnLineMidpoint",
-      constraintClass: PointOnLineMidpointConstraint,
-      serialize: (c) => ({ point: constraintGeometryId(c.point), line: constraintGeometryId(c.line), enabled: c.enabled }),
-      deserialize: (data, refs) => new PointOnLineMidpointConstraint(refs.point(data.point), refs.line(data.line)),
+      type: "parallelLinesCenterline",
+      constraintClass: ParallelLinesCenterlineConstraint,
+      serialize: (c) => ({ line1: constraintGeometryId(c.line1), line2: constraintGeometryId(c.line2), centerline: constraintGeometryId(c.centerline), enabled: c.enabled }),
+      deserialize: (data, refs) => new ParallelLinesCenterlineConstraint(refs.line(data.line1), refs.line(data.line2), refs.line(data.centerline)),
+    },
+    {
+      type: "pointPairCenterline",
+      constraintClass: PointPairCenterlineConstraint,
+      serialize: (c) => ({ p1: constraintGeometryId(c.p1), p2: constraintGeometryId(c.p2), centerline: constraintGeometryId(c.centerline), enabled: c.enabled }),
+      deserialize: (data, refs) => new PointPairCenterlineConstraint(refs.point(data.p1), refs.point(data.p2), refs.line(data.centerline)),
     },
     {
       type: "arcEndpointOnLine",
@@ -6293,7 +6526,12 @@
           annotation.sketchId = referenced?.sketchId || definition.activeSketchId;
         }
       }
-      definition.constraints = (meta.rawDefinition.constraints || []).map((rawConstraint) => {
+      definition.constraints = (meta.rawDefinition.constraints || [])
+        .filter((rawConstraint) => !(sourceVersion < 16 && rawConstraint?.type === "pointOnLineMidpoint"))
+        .map((rawConstraint) => {
+        if (sourceVersion >= 16 && rawConstraint?.type === "pointOnLineMidpoint") {
+          throw new Error(applicationText("廃止された中点拘束が含まれています", "The document contains a removed midpoint constraint"));
+        }
         let constraint = null;
         try {
           constraint = deserializeConstraint(rawConstraint, pointById, lineById, primitiveById, normalizeLoadedDimensionAppearance);
@@ -6309,7 +6547,7 @@
         constraint.reference = Boolean(rawConstraint.reference);
         constraint.referenceSketchId = rawConstraint.referenceSketchId == null ? null : meta.normalizeDefinitionSketchId(rawConstraint.referenceSketchId);
         return constraint;
-      }).filter(Boolean);
+        }).filter(Boolean);
       prepareLoadedParameterNamespace(definition, sourceVersion, `${applicationText("ブロック", "Block")} ${definition.name}`);
     }
     const loadedBlockInstances = (Array.isArray(data.blockInstances) ? data.blockInstances : [])
@@ -6481,6 +6719,7 @@
 
     const constraints = [];
     for (const c of data.constraints) {
+      if (sourceVersion < 16 && c?.type === "pointOnLineMidpoint") continue;
       const constraint = deserializeConstraint(c, pointById, lineById, primitiveById, normalizeLoadedDimensionAppearance);
       if (!constraint) throw new Error(`未対応の制約です: ${c.type}`);
       constraint.sketchId = normalizeSketchId(c.sketchId || constraintSketchId(constraint));
@@ -6745,6 +6984,7 @@
   }
 
   function exitLineMode() {
+    resetCenterlineCommandState();
     lineStartPoint = null;
     rectangleStartPoint = null;
     filletFirstLine = null;
@@ -6762,6 +7002,7 @@
   }
 
   function exitDrawMode() {
+    resetCenterlineCommandState();
     lineStartPoint = null;
     pointStartRollback = null;
     lineCompletionRollback = null;
@@ -6790,7 +7031,7 @@
   }
 
   function hasActiveDrawOperation() {
-    return Boolean(lineStartPoint || rectangleStartPoint || filletFirstLine || circleCenterPoint || arcCenterPoint || arcStartPoint || splineFitPoints.length || offsetSource || offsetChainEntries.length);
+    return Boolean(lineStartPoint || centerlineTargets.length || centerlineFirstPoint || rectangleStartPoint || filletFirstLine || circleCenterPoint || arcCenterPoint || arcStartPoint || splineFitPoints.length || offsetSource || offsetChainEntries.length);
   }
 
   function beginTransientLineStartRollback() {
@@ -6887,6 +7128,7 @@
   }
 
   function cancelActiveDrawOperation() {
+    resetCenterlineCommandState();
     rollbackTransientLineStart();
     clearTransientPointRollback();
     clearTransientLineCompletionRollback();
@@ -7502,7 +7744,6 @@
   }
 
   function makeSnapCandidate(source, x, y, label, priority, data = {}) {
-    if (data.line && priority === 1) data = { ...data, midpoint: true };
     const sketchTarget = data.point || data.line || data.primitive || data.arc || data.spline;
     if (sketchTarget && !isActiveSketchElement(sketchTarget)) label = `${label} / ${sketchName(elementSketchId(sketchTarget))}`;
     return {
@@ -7543,7 +7784,6 @@
     }
     for (const line of allGeometryLines()) {
       if (!isVisibleSketchElement(line)) continue;
-      addSnapCandidate(candidates, source, (line.p1.x + line.p2.x) / 2, (line.p1.y + line.p2.y) / 2, "中点", 1, { line });
       const closest = closestPointOnSegment(source.x, source.y, line);
       addSnapCandidate(candidates, source, closest.x, closest.y, "線上", 2, { line });
     }
@@ -7640,7 +7880,7 @@
     if (!snapCanCreateConstraint(snap)) return 0;
     const referenceSketchId = snapReferenceSketchId(snap);
     const options = referenceSketchId ? { referenceSketchId } : {};
-    const { point: snapPoint, line, midpoint, primitive, arc, spline, parameter, endpoint } = snap.data;
+    const { point: snapPoint, line, primitive, arc, spline, parameter, endpoint } = snap.data;
     let added = 0;
     if (snapPoint && snapPoint !== point) {
       added += addConstraintIfMissing(
@@ -7649,13 +7889,7 @@
         options,
       ) ? 1 : 0;
     }
-    if (line && midpoint) {
-      added += addConstraintIfMissing(
-        new PointOnLineMidpointConstraint(point, line),
-        (c) => c instanceof PointOnLineMidpointConstraint && c.point === point && c.line === line,
-        options,
-      ) ? 1 : 0;
-    } else if (line) {
+    if (line) {
       added += addConstraintIfMissing(
         new PointOnLineConstraint(point, line),
         (c) => c instanceof PointOnLineConstraint && c.point === point && c.line === line,
@@ -7697,7 +7931,7 @@
     if (!snapCanCreateConstraint(snap)) return 0;
     const referenceSketchId = snapReferenceSketchId(snap);
     const options = referenceSketchId ? { referenceSketchId } : {};
-    const { point, line, midpoint, primitive, arc: snapArc, endpoint } = snap.data;
+    const { point, line, primitive, arc: snapArc, endpoint } = snap.data;
     let added = 0;
     if (point) {
       added += addConstraintIfMissing(
@@ -7706,14 +7940,7 @@
         options,
       ) ? 1 : 0;
     }
-    if (line && midpoint) {
-      const ref = addPoint(snap.x, snap.y, false, "endpoint");
-      added += addPointSnapConstraints(ref, snap);
-      added += addConstraintIfMissing(
-        new ArcEndpointCoincidentConstraint(arc, endpointName, ref),
-        (c) => c instanceof ArcEndpointCoincidentConstraint && c.arc === arc && c.endpoint === endpointName && c.point === ref,
-      ) ? 1 : 0;
-    } else if (line) {
+    if (line) {
       added += addConstraintIfMissing(
         new ArcEndpointOnLineConstraint(arc, endpointName, line),
         (c) => c instanceof ArcEndpointOnLineConstraint && c.arc === arc && c.endpoint === endpointName && c.line === line,
@@ -8445,7 +8672,9 @@
     if (c instanceof ArcEndpointArcEndpointCoincidentConstraint) return c.a.center === point || c.b.center === point;
     if (c instanceof ArcEndpointFixedConstraint) return c.arc.center === point;
     if (c instanceof LineFixedConstraint) return c.line.p1 === point || c.line.p2 === point;
-    if (c instanceof PointOnLineConstraint || c instanceof PointOnLineMidpointConstraint) return c.point === point || c.line.p1 === point || c.line.p2 === point;
+    if (c instanceof PointOnLineConstraint) return c.point === point || c.line.p1 === point || c.line.p2 === point;
+    if (c instanceof ParallelLinesCenterlineConstraint) return [c.line1, c.line2, c.centerline].some((item) => item.p1 === point || item.p2 === point);
+    if (c instanceof PointPairCenterlineConstraint) return c.p1 === point || c.p2 === point || c.centerline.p1 === point || c.centerline.p2 === point;
     if (c instanceof ArcEndpointOnLineConstraint) return c.arc.center === point || c.line.p1 === point || c.line.p2 === point;
     if (c instanceof HorizontalConstraint || c instanceof VerticalConstraint) return c.line.p1 === point || c.line.p2 === point;
     if (c instanceof PointHorizontalConstraint || c instanceof PointVerticalConstraint) return c.p1 === point || c.p2 === point;
@@ -8483,7 +8712,9 @@
     if (c instanceof OffsetConstraint) return c.source === line || c.offset === line;
     if (c instanceof OffsetChainConstraint) return c.sources.includes(line) || c.offsets.includes(line);
     if (c instanceof LineFixedConstraint) return c.line === line;
-    if (c instanceof PointOnLineConstraint || c instanceof PointOnLineMidpointConstraint) return c.line === line;
+    if (c instanceof PointOnLineConstraint) return c.line === line;
+    if (c instanceof ParallelLinesCenterlineConstraint) return c.line1 === line || c.line2 === line || c.centerline === line;
+    if (c instanceof PointPairCenterlineConstraint) return c.centerline === line;
     if (c instanceof ArcEndpointOnLineConstraint) return c.line === line;
     if (c instanceof HorizontalConstraint || c instanceof VerticalConstraint) return c.line === line;
     if (c instanceof ParallelConstraint || c instanceof PerpendicularConstraint) return c.line1 === line || c.line2 === line;
@@ -8576,11 +8807,23 @@
         addNode(nodes, arc);
         addNode(nodes, arc.center);
       }
-    } else if (c instanceof PointOnLineConstraint || c instanceof PointOnLineMidpointConstraint) {
+    } else if (c instanceof PointOnLineConstraint) {
       addNode(nodes, c.point);
       addNode(nodes, c.line);
       addNode(nodes, c.line.p1);
       addNode(nodes, c.line.p2);
+    } else if (c instanceof ParallelLinesCenterlineConstraint) {
+      for (const line of [c.line1, c.line2, c.centerline]) {
+        addNode(nodes, line);
+        addNode(nodes, line.p1);
+        addNode(nodes, line.p2);
+      }
+    } else if (c instanceof PointPairCenterlineConstraint) {
+      addNode(nodes, c.p1);
+      addNode(nodes, c.p2);
+      addNode(nodes, c.centerline);
+      addNode(nodes, c.centerline.p1);
+      addNode(nodes, c.centerline.p2);
     } else if (c instanceof ArcEndpointOnLineConstraint) {
       addNode(nodes, c.arc);
       addNode(nodes, c.arc.center);
@@ -8665,6 +8908,7 @@
       ["line", "線ID", "Line ID"],
       ["line1", "1本目の線ID", "First line ID"],
       ["line2", "2本目の線ID", "Second line ID"],
+      ["centerline", "中心線ID", "Centerline ID"],
       ["arc1", "1つ目の円弧ID", "First arc ID"],
       ["arc2", "2つ目の円弧ID", "Second arc ID"],
       ["source", "基準図形ID", "Source geometry ID"],
@@ -10002,6 +10246,7 @@
     drawAnnotations();
     drawLeaderAnnotationCommandPreview();
     drawTemporaryLine();
+    drawCenterlinePreview();
     drawRectanglePreview();
     drawCirclePreview();
     drawArcPreview();
@@ -11461,6 +11706,33 @@
     return false;
   }
 
+  function drawCenterlinePreview() {
+    if (mode !== "centerline" || !centerlineSupport?.ok) return;
+    const preview = pointerPreview ? projectPointToCenterlineSupport(pointerPreview) : null;
+    withCanvasState(() => {
+      ctx.strokeStyle = "#2563eb";
+      ctx.fillStyle = "#2563eb";
+      ctx.lineWidth = 1.5 / viewport.scale;
+      ctx.setLineDash([7 / viewport.scale, 4 / viewport.scale, 1.5 / viewport.scale, 4 / viewport.scale]);
+      ctx.beginPath();
+      if (centerlineFirstPoint && preview) {
+        ctx.moveTo(centerlineFirstPoint.x, centerlineFirstPoint.y);
+        ctx.lineTo(preview.x, preview.y);
+      } else {
+        const halfLength = Math.max(canvas.clientWidth, canvas.clientHeight) * 0.75 / viewport.scale;
+        ctx.moveTo(centerlineSupport.anchor.x - centerlineSupport.ux * halfLength, centerlineSupport.anchor.y - centerlineSupport.uy * halfLength);
+        ctx.lineTo(centerlineSupport.anchor.x + centerlineSupport.ux * halfLength, centerlineSupport.anchor.y + centerlineSupport.uy * halfLength);
+      }
+      ctx.stroke();
+      ctx.setLineDash([]);
+      for (const point of [centerlineFirstPoint, preview].filter(Boolean)) {
+        ctx.beginPath();
+        ctx.arc(point.x, point.y, 3 / viewport.scale, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    });
+  }
+
   function shouldShowArcEndpointHandle(arc, endpoint) {
     if (sameArcEndpoint(hoveredArcEndpoint, { arc, endpoint }) || sameArcEndpoint(selectedArcEndpoint, { arc, endpoint })) return true;
     if (selectedArcEndpointPair?.some((item) => sameArcEndpoint(item, { arc, endpoint }))) return true;
@@ -11552,6 +11824,7 @@
     const buttonByMode = {
       point: "toolPoint",
       line: "toolLine",
+      centerline: "toolCenterline",
       rectangle: "toolRectangle",
       circle: "toolCircle",
       arc: "toolArc",
@@ -11608,6 +11881,7 @@
       toolSelect: geometryMode && mode === "select" && !pendingConstraintCommand && !pendingCommand,
       toolPoint: geometryMode && mode === "point",
       toolLine: geometryMode && mode === "line",
+      toolCenterline: geometryMode && mode === "centerline",
       toolConstructionLine: constructionState.active,
       toolRectangle: geometryMode && mode === "rectangle",
       toolCreateBlock: false,
@@ -11844,6 +12118,7 @@
 
   function startConstraintTargetCommand(type) {
     cancelPendingCommand("");
+    resetCenterlineCommandState();
     mode = "select";
     lineStartPoint = null;
     rectangleStartPoint = null;
@@ -11881,6 +12156,7 @@
   }
 
   function cancelConstraintTargetCommand(message = "拘束対象の選択をキャンセルしました") {
+    if (mode === "centerline") resetCenterlineCommandState();
     if (!pendingConstraintCommand) return;
     pendingConstraintCommand = null;
     constraintOperands = [];
@@ -12786,11 +13062,12 @@
 
   function constraintToolbarIcon(constraint, fixedPoint = false) {
     if (fixedPoint || constraint instanceof LineFixedConstraint || constraint instanceof ArcEndpointFixedConstraint) return toolbarSvgMarkup("#fixPointBtn");
+    if (constraint instanceof ParallelLinesCenterlineConstraint || constraint instanceof PointPairCenterlineConstraint) return toolbarSvgMarkup("#toolCenterline");
     if (isDimensionConstraint(constraint)) return toolbarSvgMarkup('[data-constraint="distance"]');
     const name = String(constraint?.name || "");
     const mappings = [
       [/水平/, "horizontal"], [/垂直/, "vertical"], [/平行/, "parallel"], [/直角/, "perpendicular"], [/対称/, "symmetry"],
-      [/同心/, "concentric"], [/等寸/, "equal"], [/接線/, "tangent"], [/一致|中点|円周/, "coincident"],
+      [/同心/, "concentric"], [/等寸/, "equal"], [/接線/, "tangent"], [/一致|円周/, "coincident"],
     ];
     const type = mappings.find(([pattern]) => pattern.test(name))?.[1] || "coincident";
     return toolbarSvgMarkup(`[data-constraint="${type}"]`);
@@ -12871,8 +13148,11 @@
       action = `<button data-id="${escapeHtml(entry.id)}" class="removePointBtn icon-delete-btn" title="${applicationText("削除", "Delete")}" aria-label="${applicationText("削除", "Delete")}">${deleteSvg}</button>`;
       data += ` data-id="${escapeHtml(entry.id)}"`;
     } else if (category === "line") {
-      icon = toolbarSvgMarkup("#toolLine"); primary = entry.id; secondary = `${entry.p1.id}–${entry.p2.id}`;
-      if (entry.construction) badges += `<span class="badge">${applicationText("補助", "Construction")}</span>`;
+      const isCenterline = model.constraints.some((constraint) =>
+        (constraint instanceof ParallelLinesCenterlineConstraint || constraint instanceof PointPairCenterlineConstraint) && constraint.centerline === entry);
+      icon = toolbarSvgMarkup(isCenterline ? "#toolCenterline" : "#toolLine"); primary = entry.id; secondary = `${entry.p1.id}–${entry.p2.id}`;
+      if (isCenterline) badges += `<span class="badge">${applicationText("中心線", "Centerline")}</span>`;
+      else if (entry.construction) badges += `<span class="badge">${applicationText("補助", "Construction")}</span>`;
       if (findLineFixedConstraint(entry)) badges += `<span class="badge">${applicationText("固定", "Fixed")}</span>`;
       action = `<button data-id="${escapeHtml(entry.id)}" class="removeLineBtn icon-delete-btn" title="${applicationText("削除", "Delete")}" aria-label="${applicationText("削除", "Delete")}">${deleteSvg}</button>`;
       data += ` data-id="${escapeHtml(entry.id)}"`;
@@ -14040,7 +14320,7 @@
       [/^円弧端点-円周一致/, "Arc endpoint on circumference"], [/^円弧端点-線一致/, "Arc endpoint on line"], [/^円弧端点一致/, "Arc endpoint coincident"],
       [/^点-線寸法/, "Point-line dimension"], [/^線-線寸法/, "Line-line dimension"], [/^チェーンオフセット寸法/, "Chain offset dimension"], [/^オフセット寸法/, "Offset dimension"],
       [/^水平寸法/, "Horizontal dimension"], [/^垂直寸法/, "Vertical dimension"], [/^点-線一致/, "Point-line coincident"], [/^点-円周一致/, "Point on circumference"],
-      [/^中点一致/, "Midpoint coincident"], [/^最小線長/, "Minimum line length"], [/^線固定/, "Fixed line"], [/^点水平/, "Point horizontal"], [/^点垂直/, "Point vertical"],
+      [/^平行2線中心線/, "Parallel-line centerline"], [/^2点中心線/, "Point-pair centerline"], [/^最小線長/, "Minimum line length"], [/^線固定/, "Fixed line"], [/^点水平/, "Point horizontal"], [/^点垂直/, "Point vertical"],
       [/^円弧対称/, "Arc symmetry"], [/^線対称/, "Line symmetry"], [/^同一直線/, "Collinear"], [/^寸法/, "Dimension"], [/^角度/, "Angle"], [/^一致/, "Coincident"],
       [/^水平/, "Horizontal"], [/^垂直/, "Vertical"], [/^平行/, "Parallel"], [/^等寸/, "Equal"], [/^半径/, "Radius"], [/^直径/, "Diameter"],
       [/^同心/, "Concentric"], [/^接線/, "Tangent"], [/^対称/, "Symmetry"], [/^ドラッグ/, "Drag"],
@@ -14594,7 +14874,7 @@
   function updateStatusUI() {
     const command = document.getElementById("statusCommand");
     const modeLabels = {
-      select: applicationText("選択", "Select"), point: applicationText("点", "Point"), line: applicationText("線", "Line"), rectangle: applicationText("矩形", "Rectangle"),
+      select: applicationText("選択", "Select"), point: applicationText("点", "Point"), line: applicationText("線", "Line"), centerline: applicationText("中心線", "Centerline"), rectangle: applicationText("矩形", "Rectangle"),
       circle: applicationText("円", "Circle"), arc: applicationText("円弧", "Arc"), spline: applicationText("スプライン", "Spline"), fillet: applicationText("R面取り", "Fillet"), trim: applicationText("トリム", "Trim"),
       offset: applicationText("オフセット", "Offset"), hatch: applicationText("ハッチング", "Hatching"), "hatch-repair": applicationText("境界を再指定", "Reselect boundary"), "block-place": applicationText("ブロック配置", "Block placement"),
     };
@@ -16547,7 +16827,7 @@
     if (c instanceof SymmetryConstraint && c.axis === line) return true;
     if (c instanceof LineSymmetryConstraint && c.axis === line) return true;
     if (c instanceof ArcSymmetryConstraint && c.axis === line) return true;
-    if (c instanceof PointOnLineConstraint || c instanceof PointOnLineMidpointConstraint || c instanceof ArcEndpointOnLineConstraint) return true;
+    if (c instanceof PointOnLineConstraint || c instanceof ParallelLinesCenterlineConstraint || c instanceof PointPairCenterlineConstraint || c instanceof ArcEndpointOnLineConstraint) return true;
     if (c instanceof PointLineDistanceConstraint || c instanceof LineLineDistanceConstraint || c instanceof LineCircleTangentConstraint) return true;
     return false;
   }
@@ -17836,7 +18116,7 @@
       return;
     }
 
-    if (["point", "line", "rectangle", "circle", "arc", "spline", "fillet", "trim", "offset", "block-place", "hatch", "hatch-repair"].includes(mode) && rejectRootSketchCreation()) {
+    if (["point", "line", "centerline", "rectangle", "circle", "arc", "spline", "fillet", "trim", "offset", "block-place", "hatch", "hatch-repair"].includes(mode) && rejectRootSketchCreation()) {
       e.preventDefault();
       return;
     }
@@ -17861,6 +18141,11 @@
 
     if (mode === "line") {
       handleLineClick(p, e.shiftKey);
+      return;
+    }
+
+    if (mode === "centerline") {
+      handleCenterlineClick(p, hitP, hitL);
       return;
     }
 
@@ -18170,7 +18455,7 @@
       return;
     }
 
-    if (["point", "line", "rectangle", "circle", "arc", "spline", "fillet", "trim", "offset", "block-place"].includes(mode) && !canCreateInActiveSketch()) {
+    if (["point", "line", "centerline", "rectangle", "circle", "arc", "spline", "fillet", "trim", "offset", "block-place"].includes(mode) && !canCreateInActiveSketch()) {
       clearSnap();
       pointerPreview = null;
       trimPreview = null;
@@ -18183,6 +18468,31 @@
       const rawPreview = lineStartPoint && e.shiftKey ? orthogonalPointFrom(lineStartPoint, p) : p;
       pointerPreview = snapForDrawing(rawPreview);
       draw();
+    }
+
+    if (mode === "centerline") {
+      clearSnap();
+      hoveredSketchIdentity = null;
+      pointerPreview = centerlineSupport?.ok ? projectPointToCenterlineSupport(snapForDrawing(p)) : p;
+      if (centerlineTargets.length < 2) {
+        clearSnap();
+        const wantsLine = centerlineTargets[0] instanceof Line;
+        const wantsPoint = centerlineTargets[0] instanceof Point;
+        hoveredPoint = wantsLine ? null : hitPoint(p.x, p.y);
+        hoveredEndpointPoint = hoveredPoint;
+        hoveredLine = wantsPoint || hoveredPoint ? null : hitLine(p.x, p.y);
+      } else {
+        hoveredPoint = null;
+        hoveredEndpointPoint = null;
+        hoveredLine = null;
+      }
+      hoveredCircle = null;
+      hoveredArc = null;
+      hoveredArcEndpoint = null;
+      hoveredSpline = null;
+      hoveredDimensionConstraint = null;
+      draw();
+      return;
     }
 
     if (mode === "rectangle" || mode === "circle" || mode === "arc" || mode === "spline") {
@@ -18646,7 +18956,7 @@
   }
 
   function isDrawToolMode() {
-    return mode === "line" || mode === "point" || mode === "rectangle" || mode === "fillet" || mode === "trim" || mode === "offset" || mode === "circle" || mode === "arc" || mode === "spline" || mode === "hatch" || mode === "hatch-repair";
+    return mode === "line" || mode === "centerline" || mode === "point" || mode === "rectangle" || mode === "fillet" || mode === "trim" || mode === "offset" || mode === "circle" || mode === "arc" || mode === "spline" || mode === "hatch" || mode === "hatch-repair";
   }
 
   function handleBlankCanvasDoubleClick(pointer, hits = {}) {
@@ -19585,6 +19895,8 @@
     setHint("端点位置をクリックして連続線を作成します。終了はEscです。");
     draw();
   });
+
+  document.getElementById("toolCenterline")?.addEventListener("click", startCenterlineCommand);
 
   document.getElementById("toolConstructionLine")?.addEventListener("click", () => {
     cancelConstraintTargetCommand("");
@@ -20822,6 +21134,11 @@
           width: geometryStrokeWidth(item, { hovered, appearance, construction: Boolean(item.construction) }),
         };
       },
+      snapLabelsAtWorldForTest(point) {
+        const source = { x: Number(point?.x) || 0, y: Number(point?.y) || 0 };
+        const threshold = 10 / viewport.scale;
+        return snapCandidates(source).filter((candidate) => candidate.distance <= threshold).map((candidate) => candidate.label);
+      },
       authoringStateForTest() {
         return {
           mode,
@@ -20833,6 +21150,9 @@
           pendingCommandPreview: pendingCommand?.type === "fillet-radius-place"
             ? pendingCommand.preview
             : null,
+          activeSnapLabel: activeSnap?.label || null,
+          centerlineTargetIds: centerlineTargets.map((item) => item.id),
+          centerlineFirstPoint: centerlineFirstPoint ? { ...centerlineFirstPoint } : null,
           pointCount: model.points.length,
           lineCount: model.lines.length,
           circleCount: model.circles.length,

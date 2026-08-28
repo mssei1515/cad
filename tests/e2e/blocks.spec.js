@@ -570,8 +570,8 @@ function externallyConstrainedBlockFixture() {
       { type: "vertical", line: "L35", enabled: true, sketchId: "S2" },
       { type: "equalLength", line1: "L32", line2: "L36", enabled: true, sketchId: "S2" },
       { type: "collinear", line1: "L34", line2: "BI1@L18", enabled: true, sketchId: "S2" },
-      { type: "pointOnLineMidpoint", point: "P51", line: "L32", enabled: true, sketchId: "S2" },
-      { type: "pointOnLineMidpoint", point: "P52", line: "L34", enabled: true, sketchId: "S2" },
+      { type: "pointOnLine", point: "P51", line: "L32", enabled: true, sketchId: "S2" },
+      { type: "pointOnLine", point: "P52", line: "L34", enabled: true, sketchId: "S2" },
     ],
   };
 }
@@ -671,7 +671,7 @@ test("creates, places, drags, edits, and reloads local-coordinate blocks", async
   expect(edited.lengths[1]).toBeCloseTo(edited.lengths[0], 6);
 
   const reloaded = await page.evaluate(() => window.__cadTest.reloadBlockState());
-  expect(reloaded).toEqual({ definitions: 1, instances: 2, projectionLines: 8, serializedVersion: 15 });
+  expect(reloaded).toEqual({ definitions: 1, instances: 2, projectionLines: 8, serializedVersion: 16 });
 
   await openBlockDefinitions(page);
   await page.click(".blockDeleteBtn");
@@ -1286,7 +1286,7 @@ test("legacy block data migrates into an internal Sketch-1 without changing proj
 
   const before = await page.evaluate(() => window.__cadTest.blockState());
   const migrated = await page.evaluate(() => window.__cadTest.reloadLegacyBlockState());
-  expect(migrated.version).toBe(15);
+  expect(migrated.version).toBe(16);
   expect(migrated.origin).toEqual({ x: 0, y: 0 });
   expect(migrated.sketches).toEqual([
     expect.objectContaining({ id: "ROOT", kind: "root" }),
