@@ -420,6 +420,69 @@ test("annotation Properties edit complete appearance in approximate millimeters"
   await expect(page.locator("#propertiesPanel")).toContainText("Terminator size");
 });
 
+test("multiple selection edits only changed common properties and supports dash-dot-dot lines", async ({ page }) => {
+  await page.goto(`${baseUrl}/index.html?test=1`);
+  await page.waitForFunction(() => window.__cadTest);
+  await page.evaluate(() => window.__cadTest.resetForMultiplePropertiesTest());
+
+  await expect(page.locator("#propertiesPanel .property-heading")).toContainText("2 個のオブジェクト");
+  await expect(page.locator('#propertiesPanel [data-bulk-property="color"]')).toHaveValue("");
+  await expect(page.locator('#propertiesPanel [data-bulk-property="color"]')).toHaveAttribute("placeholder", "混在");
+  await expect(page.locator('#propertiesPanel [data-bulk-property="lineType"] option:checked')).toHaveText("混在");
+  await expect(page.locator('#propertiesPanel [data-bulk-property="lineType"] option')).toHaveText(["混在", "実線", "破線", "一点鎖線", "二点鎖線", "点線"]);
+
+  await page.locator('#propertiesPanel [data-bulk-property="lineType"]').selectOption("dashdotdot");
+  await page.locator('#propertiesPanel [data-bulk-property="lineWidth"]').fill("2.5");
+  await page.locator('#propertiesPanel [data-bulk-property="lineWidth"]').press("Tab");
+  await page.locator('#propertiesPanel [data-bulk-property="construction"]').check();
+  await page.locator("#propertiesPanel [data-appearance-palette-open]").click();
+  await page.locator('#defaultColorPalette [data-palette-color="#7c3aed"]').click();
+
+  let state = await page.evaluate(() => window.__cadTest.multiplePropertiesStateForTest());
+  expect(state.targetKind).toBe("multiple");
+  expect(state.lines).toHaveLength(2);
+  for (const line of state.lines) {
+    expect(line.construction).toBe(true);
+    expect(line.appearance).toEqual(expect.objectContaining({ color: "#7c3aed", lineType: "dashdotdot", lineWidth: 2.5 }));
+    expect(line.appearance).not.toHaveProperty("visible");
+  }
+
+  await page.evaluate(() => window.__cadTest.resetForMultiplePropertiesTest(true));
+  await expect(page.locator("#fixPointBtn")).toHaveAttribute("aria-disabled", "true");
+  await expect(page.locator('#propertiesPanel [data-bulk-property="construction"]')).toHaveCount(0);
+  await expect(page.locator('#propertiesPanel [data-bulk-property="lineType"]')).toBeVisible();
+  await page.locator('#propertiesPanel [data-bulk-property="lineType"]').selectOption("dashdotdot");
+  state = await page.evaluate(() => window.__cadTest.multiplePropertiesStateForTest());
+  expect([...state.lines, ...state.circles].every((item) => item.appearance.lineType === "dashdotdot")).toBe(true);
+  expect(state.lines[0].appearance.color).toBe("#dc2626");
+  expect(state.circles[0].appearance.color).toBe("#16a34a");
+});
+
+test("fix toggle applies points and lines as one multiple-selection operation", async ({ page }) => {
+  await page.goto(`${baseUrl}/index.html?test=1`);
+  await page.waitForFunction(() => window.__cadTest);
+  const fixture = await page.evaluate(() => window.__cadTest.resetForMultipleFixedTest());
+  await expect(page.locator("#fixPointBtn")).toHaveAttribute("aria-disabled", "false");
+
+  await page.locator("#fixPointBtn").click();
+  let state = await page.evaluate(() => window.__cadTest.multipleFixedStateForTest());
+  expect(state.fixedPointIds).toEqual([fixture.pointId]);
+  expect(state.fixedLineIds).toEqual(fixture.lineIds);
+  expect(state.constraintCount).toBe(2);
+
+  await page.locator("#fixPointBtn").click();
+  state = await page.evaluate(() => window.__cadTest.multipleFixedStateForTest());
+  expect(state.fixedPointIds).toEqual([]);
+  expect(state.fixedLineIds).toEqual([]);
+  expect(state.constraintCount).toBe(0);
+
+  await page.keyboard.press("Control+z");
+  state = await page.evaluate(() => window.__cadTest.multipleFixedStateForTest());
+  expect(state.fixedPointIds).toEqual([fixture.pointId]);
+  expect(state.fixedLineIds).toEqual(fixture.lineIds);
+  expect(state.constraintCount).toBe(2);
+});
+
 test("Sketch Tree owns object groups, activates inactive rows, and copies annotations across sketches", async ({ page }) => {
   await page.goto(`${baseUrl}/index.html?test=1`);
   await page.waitForFunction(() => window.__cadTest);
@@ -1547,7 +1610,7 @@ test("application language defaults to Japanese and persists the full UI selecti
   await expect(page.locator("#documentSettingsDialog")).toContainText("Document Settings");
   await expect(page.locator("#documentSettingsDialog h3")).toHaveText(["General Appearance", "Construction Appearance", "Dimension Appearance"]);
   await expect(page.locator('#documentAppearanceFields select[data-appearance-key="visible"] option')).toHaveText(["Visible", "Hidden"]);
-  await expect(page.locator('#documentConstructionAppearanceFields select[data-appearance-key="lineType"] option')).toHaveText(["Solid", "Dashed", "Dash-dot", "Dotted"]);
+  await expect(page.locator('#documentConstructionAppearanceFields select[data-appearance-key="lineType"] option')).toHaveText(["Solid", "Dashed", "Dash-dot", "Dash-dot-dot", "Dotted"]);
   await expect(page.locator('#documentDimensionAppearanceFields select[data-dimension-display="visible"] option')).toHaveText(["Visible", "Hidden"]);
   await expect(page.locator("#documentDimensionAppearanceFields .dimension-appearance-group-title")).toHaveText(["Extension lines", "Terminators", "Dimension text"]);
   expect(await page.locator("#documentDimensionAppearanceFields .dimension-appearance-group").first().evaluate((element) => {
@@ -1584,7 +1647,7 @@ test("application language defaults to Japanese and persists the full UI selecti
   await selectSketch(page, "S1");
   await expect(page.locator("#propertiesPanel .property-section h3")).toContainText(["Basic Information", "General Line Appearance", "Construction Appearance", "Dimension Appearance"]);
   await expect(page.locator('#sketchConstructionPropertyVisible option')).toHaveText(["Default (Visible)", "Visible", "Hidden"]);
-  await expect(page.locator('#sketchConstructionPropertyLineType option')).toHaveText(["Default (Dash-dot)", "Solid", "Dashed", "Dash-dot", "Dotted"]);
+  await expect(page.locator('#sketchConstructionPropertyLineType option')).toHaveText(["Default (Dash-dot)", "Solid", "Dashed", "Dash-dot", "Dash-dot-dot", "Dotted"]);
   await expect(page.locator('#sketchDimensionVisible option')).toHaveText(["Default (Visible)", "Visible", "Hidden"]);
   await expect(page.locator("#sketchDimensionColor")).toHaveAttribute("placeholder", "Default (#64748b)");
   await expect(page.locator("#sketchDimensionPrefix")).toHaveAttribute("placeholder", "Default (Empty)");

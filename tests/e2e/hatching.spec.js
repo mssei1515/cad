@@ -36,7 +36,7 @@ test("creates associative hatching, exposes Tree and Properties, and persists ve
   expect(state.mode).toBe("hatch");
   expect(state.direct).toHaveLength(1);
   expect(state.direct[0]).toEqual(expect.objectContaining({ id: "H1", valid: true }));
-  expect(state.direct[0].appearance).toEqual({ visible: true, patternType: "parallel", angle: 45, spacing: 3, color: "#64748b", lineWidth: 1 });
+  expect(state.direct[0].appearance).toEqual({ visible: true, patternType: "parallel", angle: 45, spacing: 3, color: "#64748b", lineWidth: 1, opacity: 1 });
   expect(state.serialized.version).toBe(16);
   expect(state.serialized.hatches).toHaveLength(1);
   expect(state.propertiesText).toContain("ハッチング");
@@ -147,14 +147,23 @@ test("supports parallel, cross, and solid fill appearances", async ({ page }) =>
   await expect(page.locator('#propertiesPanel [data-hatch-property="angle"]')).toHaveCount(0);
   await expect(page.locator('#propertiesPanel [data-hatch-property="spacing"]')).toHaveCount(0);
   await expect(page.locator('#propertiesPanel [data-hatch-property="lineWidth"]')).toHaveCount(0);
+  await expect(page.locator('#propertiesPanel [data-hatch-property="opacity"]')).toBeVisible();
+  await page.locator('#propertiesPanel [data-hatch-property="opacity"]').fill("40");
+  await page.locator('#propertiesPanel [data-hatch-property="opacity"]').press("Tab");
   await expect(page.locator('#sketchList [data-object-kind="hatch"]')).toContainText("塗りつぶし");
   await page.mouse.click(canvas.x + canvas.width - 8, canvas.y + canvas.height - 8);
   const solid = await canvasInkAround(page, fixture.client);
   expect(solid.ink).toBeGreaterThan(cross.ink * 3);
-  expect(solid.center).toEqual([15, 118, 110, 255]);
+  expect(solid.center[0]).toBeGreaterThanOrEqual(14);
+  expect(solid.center[0]).toBeLessThanOrEqual(16);
+  expect(solid.center[1]).toBeGreaterThanOrEqual(117);
+  expect(solid.center[1]).toBeLessThanOrEqual(119);
+  expect(solid.center[2]).toBeGreaterThanOrEqual(109);
+  expect(solid.center[2]).toBeLessThanOrEqual(111);
+  expect(solid.center[3]).toBe(102);
 
   const state = await page.evaluate(() => window.__cadTest.hatchStateForTest());
-  expect(state.direct[0].appearance).toEqual(expect.objectContaining({ patternType: "solid", color: "#0f766e" }));
+  expect(state.direct[0].appearance).toEqual(expect.objectContaining({ patternType: "solid", color: "#0f766e", opacity: 0.4 }));
   expect(await page.evaluate((data) => window.__cadTest.loadDocumentFixtureForDragTest(data, "solid-hatch-v13.json"), state.serialized)).toEqual(expect.objectContaining({ success: true }));
   expect((await page.evaluate(() => window.__cadTest.hatchStateForTest())).direct[0].appearance.patternType).toBe("solid");
 
@@ -162,6 +171,15 @@ test("supports parallel, cross, and solid fill appearances", async ({ page }) =>
   invalid.hatches[0].appearance.patternType = "diagonal";
   expect(await page.evaluate((data) => window.__cadTest.loadDocumentFixtureForDragTest(data, "invalid-pattern-v13.json"), invalid)).toEqual(expect.objectContaining({ success: false }));
   expect((await page.evaluate(() => window.__cadTest.hatchStateForTest())).direct[0].appearance.patternType).toBe("solid");
+
+  const legacyOpacity = structuredClone(state.serialized);
+  delete legacyOpacity.hatches[0].appearance.opacity;
+  expect(await page.evaluate((data) => window.__cadTest.loadDocumentFixtureForDragTest(data, "legacy-opacity-v16.cad2"), legacyOpacity)).toEqual(expect.objectContaining({ success: true }));
+  expect((await page.evaluate(() => window.__cadTest.hatchStateForTest())).direct[0].appearance.opacity).toBe(1);
+
+  const invalidOpacity = structuredClone(state.serialized);
+  invalidOpacity.hatches[0].appearance.opacity = 1.2;
+  expect(await page.evaluate((data) => window.__cadTest.loadDocumentFixtureForDragTest(data, "invalid-opacity-v16.cad2"), invalidOpacity)).toEqual(expect.objectContaining({ success: false }));
 });
 
 test("solid fill keeps inner boundary loops transparent", async ({ page }) => {

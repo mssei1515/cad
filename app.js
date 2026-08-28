@@ -152,17 +152,16 @@
     ["既定の外観", "Default Appearance"], ["既定の補助線外観", "Default Construction Appearance"], ["既定の寸法外観", "Default Dimension Appearance"], ["一般外観", "General Appearance"], ["一般線外観", "General Line Appearance"], ["補助線外観", "Construction Appearance"], ["寸法外観", "Dimension Appearance"], ["基本情報", "Basic Information"], ["一般", "General"], ["言語", "Language"],
     ["アプリケーション全体の設定をドキュメント設定から分離して管理します。", "Application-wide settings are managed separately from document settings."],
     ["既定", "Default"], ["表示", "Visible"], ["非表示", "Hidden"], ["色", "Color"], ["線種", "Line type"], ["線幅", "Line width"],
-    ["実線", "Solid"], ["破線", "Dashed"], ["一点鎖線", "Dash-dot"], ["点線", "Dotted"], ["端部のはみ出し", "Endpoint overhang"], ["端部の点", "Endpoint points"], ["あり", "Enabled"], ["なし", "Disabled"], ["使用済みの色", "Colors used in this file"],
+    ["実線", "Solid"], ["破線", "Dashed"], ["一点鎖線", "Dash-dot"], ["二点鎖線", "Dash-dot-dot"], ["点線", "Dotted"], ["端部のはみ出し", "Endpoint overhang"], ["端部の点", "Endpoint points"], ["あり", "Enabled"], ["なし", "Disabled"], ["使用済みの色", "Colors used in this file"],
     ["標準色", "Standard colors"], ["このファイルで使用中の色", "Colors used in this file"], ["任意の色", "Custom color"], ["使用中の色はありません", "No colors are used yet"], ["適用", "Apply"], ["破棄", "Discard"], ["追加", "Add"],
     ["名前空間", "Namespace"], ["名前", "Name"], ["値 / 数式", "Value / Expression"], ["評価値", "Evaluated value"], ["種類／所属", "Type / owner"], ["Parameter名", "Parameter name"], ["読み取り専用", "Read-only"], ["Geometryから測定", "Measured from geometry"],
-    ["外観", "Appearance"], ["外観の上書き", "Appearance Override"], ["配置情報", "Placement"], ["定義", "Definition"], ["回転", "Rotation"],
+    ["外観", "Appearance"], ["外観の上書き", "Appearance Override"], ["配置情報", "Placement"], ["定義", "Definition"], ["回転", "Rotation"], ["不透明度", "Opacity"],
     ["長さ", "Length"], ["半径", "Radius"], ["補助線", "Construction"], ["種類", "Type"], ["値", "Value"],
     ["精度", "Precision"], ["接頭辞", "Prefix"], ["接尾辞", "Suffix"], ["端末記号", "Terminators"], ["標準矢印", "Standard arrow"], ["塗りつぶし矢印", "Filled arrow"], ["サイズ", "Size"], ["寸法補助線", "Extension lines"], ["寸法文字", "Dimension text"],
     ["突出量", "Overshoot"], ["起点すき間", "Origin gap"], ["開き角", "Opening angle"], ["高さ", "Height"], ["寸法線との間隔", "Gap from dimension line"],
     ["テキスト", "Text"], ["文字サイズ", "Font size"], ["アクティブ", "Active"], ["はい", "Yes"], ["いいえ", "No"],
     ["選択したオブジェクトのプロパティを表示します。", "Select an object to display its properties."],
-    ["複数選択の共通プロパティ編集は今回の対象外です。", "Editing shared properties for multiple selections is not supported."],
-    ["個のオブジェクト", "objects"], ["自動", "Auto"], ["中心", "Center"], ["角度", "Angle"], ["補助", "Construction"], ["固定", "Fixed"],
+    ["個のオブジェクト", "objects"], ["選択数", "Selected objects"], ["混在", "Mixed"], ["自動", "Auto"], ["中心", "Center"], ["角度", "Angle"], ["補助", "Construction"], ["固定", "Fixed"],
     ["完全拘束", "Fully constrained"], ["支持位置拘束", "Supported position"], ["未拘束", "Under-constrained"], ["矛盾", "Conflict"],
     ["参照エラー", "Reference error"], ["重複", "Duplicate"], ["拘束状態表示中", "Constraint status view"],
     ["Geometryを選択または作成します。Spaceで拘束状態を表示します。", "Select or create geometry. Hold Space to show constraint status."],
@@ -446,6 +445,7 @@
     spacing: 3,
     color: "#64748b",
     lineWidth: 1,
+    opacity: 1,
   };
   const DEFAULT_ANNOTATION_STYLE = {
     color: "#111827",
@@ -656,7 +656,7 @@
     const result = partial ? {} : { ...DEFAULT_APPEARANCE };
     if (Object.prototype.hasOwnProperty.call(source, "visible")) result.visible = source.visible !== false;
     if (typeof source.color === "string" && /^#[0-9a-fA-F]{6}$/.test(source.color)) result.color = source.color.toLowerCase();
-    if (["solid", "dashed", "dashdot", "dotted"].includes(source.lineType)) result.lineType = source.lineType;
+    if (["solid", "dashed", "dashdot", "dashdotdot", "dotted"].includes(source.lineType)) result.lineType = source.lineType;
     const lineWidth = Number(source.lineWidth ?? source.lineWidthPx);
     if (Number.isFinite(lineWidth)) result.lineWidth = Math.max(0.5, Math.min(10, lineWidth));
     if (Object.prototype.hasOwnProperty.call(source, "endpointOverhang")) result.endpointOverhang = source.endpointOverhang !== false;
@@ -721,6 +721,7 @@
     const spacing = Number(source.spacing);
     const angle = Number(source.angle);
     const lineWidth = Number(source.lineWidth);
+    const opacity = Number(source.opacity);
     return {
       visible: source.visible !== false,
       patternType: ["parallel", "cross", "solid"].includes(source.patternType) ? source.patternType : DEFAULT_HATCH_APPEARANCE.patternType,
@@ -728,6 +729,7 @@
       spacing: Number.isFinite(spacing) ? Math.max(0.25, Math.min(1000, spacing)) : DEFAULT_HATCH_APPEARANCE.spacing,
       color: typeof source.color === "string" && /^#[0-9a-fA-F]{6}$/.test(source.color) ? source.color.toLowerCase() : DEFAULT_HATCH_APPEARANCE.color,
       lineWidth: Number.isFinite(lineWidth) ? Math.max(0.5, Math.min(10, lineWidth)) : DEFAULT_HATCH_APPEARANCE.lineWidth,
+      opacity: Number.isFinite(opacity) ? Math.max(0, Math.min(1, opacity)) : DEFAULT_HATCH_APPEARANCE.opacity,
     };
   }
 
@@ -770,7 +772,9 @@
       && Number.isFinite(Number(appearance.angle))
       && Number.isFinite(Number(appearance.spacing)) && Number(appearance.spacing) >= 0.25
       && typeof appearance.color === "string" && /^#[0-9a-fA-F]{6}$/.test(appearance.color)
-      && Number.isFinite(Number(appearance.lineWidth)) && Number(appearance.lineWidth) >= 0.5;
+      && Number.isFinite(Number(appearance.lineWidth)) && Number(appearance.lineWidth) >= 0.5
+      && (!Object.prototype.hasOwnProperty.call(appearance, "opacity")
+        || Number.isFinite(Number(appearance.opacity)) && Number(appearance.opacity) >= 0 && Number(appearance.opacity) <= 1);
   }
 
   function validSerializedHatchList(items) {
@@ -816,7 +820,7 @@
     const textAlign = ["left", "center", "right"].includes(source.textAlign)
       ? source.textAlign
       : DEFAULT_ANNOTATION_STYLE.textAlign;
-    const lineType = ["solid", "dashed", "dashdot", "dotted"].includes(source.lineType)
+    const lineType = ["solid", "dashed", "dashdot", "dashdotdot", "dotted"].includes(source.lineType)
       ? source.lineType
       : DEFAULT_ANNOTATION_STYLE.lineType;
     const terminatorType = ["arrow", "filledArrow", "dot", "none"].includes(source.terminatorType)
@@ -1976,6 +1980,7 @@
   function appearanceLineDash(lineType) {
     if (lineType === "dashed") return [10 / viewport.scale, 6 / viewport.scale];
     if (lineType === "dashdot") return [12 / viewport.scale, 4 / viewport.scale, 2 / viewport.scale, 4 / viewport.scale];
+    if (lineType === "dashdotdot") return [12 / viewport.scale, 4 / viewport.scale, 2 / viewport.scale, 4 / viewport.scale, 2 / viewport.scale, 4 / viewport.scale];
     if (lineType === "dotted") return [2 / viewport.scale, 5 / viewport.scale];
     return [];
   }
@@ -10121,6 +10126,7 @@
     ctx.globalAlpha = alpha;
     const emphasisColor = selected ? "#2563eb" : hovered || preview ? "#0ea5e9" : appearance.color;
     if (appearance.patternType === "solid") {
+      ctx.globalAlpha = alpha * Math.max(0, Math.min(1, Number(appearance.opacity)));
       ctx.fillStyle = emphasisColor;
       traceResolvedHatchPath(resolved);
       ctx.fill("evenodd");
@@ -12809,6 +12815,24 @@
     return false;
   }
 
+  function selectedFixedBatchTargets() {
+    const points = selectedPoints.filter((item) => !item.blockProjection);
+    const lines = selectedLines.filter((item) => !item.blockProjection);
+    const supportedCount = points.length + lines.length;
+    const selectedCount = selectedPoints.length + selectedLines.length + selectedCircles.length + selectedArcs.length + selectedSplines.length
+      + selectedBlockInstances.length + selectedAnnotations.length + selectedHatches.length;
+    if (selectedArcEndpoint || supportedCount === 0 || supportedCount !== selectedCount) return null;
+    const sketchIds = new Set([...points, ...lines].map(elementSketchId));
+    if (sketchIds.size !== 1) return null;
+    const sketchId = [...sketchIds][0];
+    if (!isEditableSketchId(sketchId)) return null;
+    return { points, lines, sketchId };
+  }
+
+  function fixedBatchIsFullyFixed(batch) {
+    return Boolean(batch) && batch.points.every((point) => point.fixed) && batch.lines.every((line) => Boolean(findLineFixedConstraint(line)));
+  }
+
   function updateConstraintButtons() {
     if (!isGeometryMode()) {
       for (const btn of constraintButtons) {
@@ -12832,12 +12856,12 @@
     }
     const selectedProjectionItems = [...selectedPoints, ...selectedLines, ...selectedCircles, ...selectedArcs, ...selectedSplines].filter((item) => item?.blockProjection);
     const selectedProjectionInstances = [...new Set(selectedProjectionItems.map((item) => item.blockInstance))];
+    const fixedBatch = selectedFixedBatchTargets();
     const canToggleFixed =
-      selectedBlockInstances.length === 1 ||
+      (selectedBlockInstances.length === 1 && selectedGeometryItems().length === 0 && selectedAnnotations.length === 0 && selectedHatches.length === 0) ||
       (selectedProjectionItems.length > 0 && selectedProjectionInstances.length === 1 && selectedProjectionItems.length === selectedPoints.length + selectedLines.length + selectedCircles.length + selectedArcs.length + selectedSplines.length) ||
       Boolean(selectedArcEndpoint) ||
-      (selectedPoints.length >= 1 && selectedLines.length === 0 && selectedCircles.length === 0 && selectedArcs.length === 0 && selectedSplines.length === 0) ||
-      (selectedPoints.length === 0 && selectedLines.length === 1 && selectedCircles.length === 0 && selectedArcs.length === 0 && selectedSplines.length === 0);
+      Boolean(fixedBatch);
     fixPointBtn.setAttribute("aria-disabled", String(!canToggleFixed));
 
     const enabled = constraintButtons
@@ -14066,7 +14090,7 @@
     const inheritedValue = (key) => {
       if (key === "visible") return applicationText(effective.visible !== false ? "表示" : "非表示", effective.visible !== false ? "Visible" : "Hidden");
       if (key === "lineType") {
-        const labels = { solid: ["実線", "Solid"], dashed: ["破線", "Dashed"], dashdot: ["一点鎖線", "Dash-dot"], dotted: ["点線", "Dotted"] };
+        const labels = { solid: ["実線", "Solid"], dashed: ["破線", "Dashed"], dashdot: ["一点鎖線", "Dash-dot"], dashdotdot: ["二点鎖線", "Dash-dot-dot"], dotted: ["点線", "Dotted"] };
         const label = labels[effective.lineType] || [String(effective.lineType || ""), String(effective.lineType || "")];
         return applicationText(label[0], label[1]);
       }
@@ -14093,7 +14117,7 @@
       <div class="property-row"><label for="${idPrefix}Color">${applicationText("色", "Color")}</label><div class="property-color-control"><input id="${idPrefix}Color" data-appearance-key="color" type="text" placeholder="${escapeHtml(allowInheritance ? inheritedLabel("color") : "")}" value="${escapeHtml(direct.color || "")}" /><button class="property-color-picker" data-appearance-palette-open data-current-color="${colorValue}" type="button" title="${applicationText("カラーパレット", "Color palette")}" aria-label="${applicationText("カラーパレット", "Color palette")}"><span class="property-color-picker-swatch" style="--swatch-color:${colorValue}" aria-hidden="true"></span></button></div></div>
       <div class="property-row"><label for="${idPrefix}LineType">${applicationText("線種", "Line type")}</label><select id="${idPrefix}LineType" data-appearance-key="lineType">
         ${allowInheritance ? option("", inheritedLabel("lineType"), inherited("lineType")) : ""}
-        ${option("solid", applicationText("実線", "Solid"), direct.lineType === "solid" || !allowInheritance && effective.lineType === "solid")}${option("dashed", applicationText("破線", "Dashed"), direct.lineType === "dashed")}${option("dashdot", applicationText("一点鎖線", "Dash-dot"), direct.lineType === "dashdot")}${option("dotted", applicationText("点線", "Dotted"), direct.lineType === "dotted")}
+        ${option("solid", applicationText("実線", "Solid"), direct.lineType === "solid" || !allowInheritance && effective.lineType === "solid")}${option("dashed", applicationText("破線", "Dashed"), direct.lineType === "dashed")}${option("dashdot", applicationText("一点鎖線", "Dash-dot"), direct.lineType === "dashdot")}${option("dashdotdot", applicationText("二点鎖線", "Dash-dot-dot"), direct.lineType === "dashdotdot")}${option("dotted", applicationText("点線", "Dotted"), direct.lineType === "dotted")}
       </select></div>
       <div class="property-row"><label for="${idPrefix}LineWidth">${applicationText("線幅", "Line width")}</label><input id="${idPrefix}LineWidth" data-appearance-key="lineWidth" type="number" min="0.1" max="20" step="0.1" placeholder="${escapeHtml(allowInheritance ? inheritedLabel("lineWidth") : "")}" value="${direct.lineWidth ?? ""}" /></div>${endpointRows}`;
   }
@@ -14182,8 +14206,117 @@
     if (selectedBlockInstances.length === 1 && selectedGeometryItems().length === 0 && selectedAnnotations.length === 0 && selectedHatches.length === 0) return { kind: "block", item: selectedBlockInstances[0] };
     const geometry = selectedGeometryItems();
     if (geometry.length === 1 && selectedBlockInstances.length === 0 && selectedAnnotations.length === 0 && selectedHatches.length === 0) return { kind: "geometry", item: geometry[0] };
-    if (geometry.length + selectedBlockInstances.length + selectedAnnotations.length + selectedHatches.length > 1) return { kind: "multiple", count: geometry.length + selectedBlockInstances.length + selectedAnnotations.length + selectedHatches.length };
+    const multipleItems = [
+      ...geometry.map((item) => ({ kind: "geometry", item })),
+      ...selectedBlockInstances.map((item) => ({ kind: "block", item })),
+      ...selectedAnnotations.map((item) => ({ kind: "annotation", item })),
+      ...selectedHatches.map((item) => ({ kind: "hatch", item })),
+    ];
+    if (multipleItems.length > 1) return { kind: "multiple", count: multipleItems.length, items: multipleItems };
     return { kind: "sketch", item: sketchById(activeSketchId()) };
+  }
+
+  const MULTIPLE_PROPERTY_MIXED = Symbol("multiple-property-mixed");
+
+  function multiplePropertyTypeKey(target) {
+    if (target.kind === "geometry") return `${target.kind}:${target.item?.constructor?.name || "Geometry"}`;
+    if (target.kind === "annotation") return `${target.kind}:${target.item?.type || "annotation"}`;
+    return target.kind;
+  }
+
+  function multiplePropertySameType(target) {
+    return new Set((target.items || []).map(multiplePropertyTypeKey)).size === 1;
+  }
+
+  function blockPropertyAppearance(item) {
+    const bundle = blockProjectionBundle(item);
+    const projected = [...(bundle.points || []), ...(bundle.lines || []), ...(bundle.circles || []), ...(bundle.arcs || []), ...(bundle.splines || [])][0];
+    return projected
+      ? effectiveAppearanceForElement(projected)
+      : { ...normalizeAppearance(model.defaultAppearance, { partial: false }), ...normalizeAppearance(item.appearanceOverride) };
+  }
+
+  function multiplePropertyAppearance(target) {
+    if (target.kind === "geometry") return effectiveAppearanceForElement(target.item);
+    if (target.kind === "block") return blockPropertyAppearance(target.item);
+    if (target.kind === "hatch") return hatchAppearanceForDisplay(target.item);
+    if (target.kind === "annotation") return { ...normalizeAnnotationStyle(target.item.style), visible: target.item.visible !== false };
+    return {};
+  }
+
+  function multiplePropertySupports(target, key) {
+    if (key === "visible" || key === "color") return true;
+    if (key === "lineType") return target.kind === "geometry" || target.kind === "block" || (target.kind === "annotation" && target.item.type === "leader");
+    if (key === "lineWidth") return target.kind === "geometry" || target.kind === "block" || (target.kind === "hatch" && target.item.appearance?.patternType !== "solid") || (target.kind === "annotation" && target.item.type === "leader");
+    if (key === "construction") return target.kind === "geometry" && !(target.item instanceof Point);
+    if (key === "endpointOverhang" || key === "endpointMarkers") return target.kind === "geometry" && target.item instanceof Line && target.item.construction;
+    if (["patternType", "angle", "spacing", "opacity"].includes(key)) return target.kind === "hatch";
+    if (["textHeight", "fontFamily", "bold", "italic", "textAlign", "rotation"].includes(key)) return target.kind === "annotation";
+    if (["terminatorType", "terminatorSize"].includes(key)) return target.kind === "annotation" && target.item.type === "leader";
+    return false;
+  }
+
+  function multiplePropertyValue(target, key) {
+    const values = (target.items || []).map((entry) => {
+      if (key === "construction") return Boolean(entry.item.construction);
+      if (key === "rotation") return (Number(entry.item.rotation) || 0) * 180 / Math.PI;
+      const appearance = multiplePropertyAppearance(entry);
+      return key === "opacity" ? Number(appearance.opacity) * 100 : appearance[key];
+    });
+    if (values.length === 0) return MULTIPLE_PROPERTY_MIXED;
+    return values.every((value) => Object.is(value, values[0])) ? values[0] : MULTIPLE_PROPERTY_MIXED;
+  }
+
+  function multiplePropertiesRows(target) {
+    const items = target.items || [];
+    const sameType = multiplePropertySameType(target);
+    const allSupport = (key) => items.length > 0 && items.every((entry) => multiplePropertySupports(entry, key));
+    const value = (key) => multiplePropertyValue(target, key);
+    const mixedLabel = applicationText("混在", "Mixed");
+    const option = (optionValue, label, current) => `<option value="${optionValue}" ${current === optionValue ? "selected" : ""}>${label}</option>`;
+    const select = (key, options) => {
+      const current = value(key);
+      return `<select data-bulk-property="${key}">${current === MULTIPLE_PROPERTY_MIXED ? `<option value="" selected disabled>${mixedLabel}</option>` : ""}${options(current)}</select>`;
+    };
+    const textInput = (key, type = "text", attributes = "") => {
+      const current = value(key);
+      return `<input data-bulk-property="${key}" type="${type}" ${attributes} placeholder="${current === MULTIPLE_PROPERTY_MIXED ? mixedLabel : ""}" value="${current === MULTIPLE_PROPERTY_MIXED ? "" : escapeHtml(current)}">`;
+    };
+    const checkbox = (key) => {
+      const current = value(key);
+      return `<input data-bulk-property="${key}" type="checkbox" ${current === true ? "checked" : ""} ${current === MULTIPLE_PROPERTY_MIXED ? 'data-mixed="true"' : ""}>`;
+    };
+    const visibleRow = `<div class="property-row"><label>${applicationText("表示", "Visible")}</label>${select("visible", (current) => option("true", applicationText("表示", "Visible"), String(current)) + option("false", applicationText("非表示", "Hidden"), String(current)))}</div>`;
+    const commonColor = value("color");
+    const colorValue = colorPickerValue(commonColor === MULTIPLE_PROPERTY_MIXED ? multiplePropertyAppearance(items[0]).color : commonColor);
+    const colorRow = `<div class="property-row"><label>${applicationText("色", "Color")}</label><div class="property-color-control">${textInput("color")}<button class="property-color-picker" data-appearance-palette-open data-current-color="${colorValue}" type="button" title="${applicationText("カラーパレット", "Color palette")}" aria-label="${applicationText("カラーパレット", "Color palette")}"><span class="property-color-picker-swatch" style="--swatch-color:${colorValue}" aria-hidden="true"></span></button></div></div>`;
+    const lineTypeRow = !allSupport("lineType") ? "" : `<div class="property-row"><label>${applicationText("線種", "Line type")}</label>${select("lineType", (current) =>
+      option("solid", applicationText("実線", "Solid"), current) + option("dashed", applicationText("破線", "Dashed"), current) + option("dashdot", applicationText("一点鎖線", "Dash-dot"), current) + option("dashdotdot", applicationText("二点鎖線", "Dash-dot-dot"), current) + option("dotted", applicationText("点線", "Dotted"), current))}</div>`;
+    const lineWidthRow = !allSupport("lineWidth") ? "" : `<div class="property-row"><label>${applicationText("線幅", "Line width")}</label>${textInput("lineWidth", "number", 'min="0.1" max="20" step="0.1"')}</div>`;
+    let specificRows = "";
+    if (sameType && allSupport("construction")) {
+      specificRows += `<div class="property-row"><label>${applicationText("補助線", "Construction")}</label>${checkbox("construction")}</div>`;
+      if (allSupport("endpointOverhang")) specificRows += `<div class="property-row"><label>${applicationText("端部のはみ出し", "Endpoint overhang")}</label>${checkbox("endpointOverhang")}</div>`;
+      if (allSupport("endpointMarkers")) specificRows += `<div class="property-row"><label>${applicationText("端部の点", "Endpoint points")}</label>${checkbox("endpointMarkers")}</div>`;
+    }
+    if (sameType && allSupport("patternType")) {
+      const pattern = value("patternType");
+      specificRows = `<div class="property-row"><label>${applicationText("種類", "Type")}</label>${select("patternType", (current) => option("parallel", applicationText("平行線", "Parallel"), current) + option("cross", applicationText("クロス", "Cross"), current) + option("solid", applicationText("塗りつぶし", "Solid fill"), current))}</div>` + specificRows;
+      if (pattern !== "solid") {
+        specificRows += `<div class="property-row"><label>${applicationText("角度", "Angle")}</label><div class="property-input-with-unit">${textInput("angle", "number", 'step="1"')}<span class="property-input-unit">°</span></div></div>`;
+        specificRows += `<div class="property-row"><label>${applicationText("間隔", "Spacing")}</label><div class="property-input-with-unit">${textInput("spacing", "number", 'min="0.25" max="1000" step="0.1"')}<span class="property-input-unit">mm</span></div></div>`;
+      }
+      if (pattern === "solid") specificRows += `<div class="property-row"><label>${applicationText("不透明度", "Opacity")}</label><div class="property-input-with-unit">${textInput("opacity", "number", 'min="0" max="100" step="1"')}<span class="property-input-unit">%</span></div></div>`;
+    }
+    if (sameType && allSupport("textHeight")) {
+      specificRows += `<div class="property-row"><label>${applicationText("文字高さ", "Text height")}</label><div class="property-input-with-unit">${textInput("textHeight", "number", 'min="0.5" max="100" step="0.1"')}<span class="property-input-unit">mm</span></div></div>`;
+      specificRows += `<div class="property-row"><label>${applicationText("フォント", "Font")}</label>${select("fontFamily", (current) => option("sans-serif", applicationText("ゴシック体", "Sans serif"), current) + option("serif", applicationText("明朝体", "Serif"), current) + option("monospace", applicationText("等幅", "Monospace"), current))}</div>`;
+      specificRows += `<div class="property-row"><label>${applicationText("太字", "Bold")}</label>${checkbox("bold")}</div><div class="property-row"><label>${applicationText("斜体", "Italic")}</label>${checkbox("italic")}</div>`;
+      specificRows += `<div class="property-row"><label>${applicationText("横位置", "Horizontal alignment")}</label>${select("textAlign", (current) => option("left", applicationText("左揃え", "Left"), current) + option("center", applicationText("中央揃え", "Center"), current) + option("right", applicationText("右揃え", "Right"), current))}</div>`;
+      specificRows += `<div class="property-row"><label>${applicationText("回転", "Rotation")}</label><div class="property-input-with-unit">${textInput("rotation", "number", 'min="-3600" max="3600" step="1"')}<span class="property-input-unit">°</span></div></div>`;
+      if (allSupport("terminatorType")) specificRows += `<div class="property-row"><label>${applicationText("端末記号", "Terminator")}</label>${select("terminatorType", (current) => option("arrow", applicationText("標準矢印", "Standard arrow"), current) + option("filledArrow", applicationText("塗りつぶし矢印", "Filled arrow"), current) + option("dot", applicationText("点", "Dot"), current) + option("none", applicationText("なし", "None"), current))}</div><div class="property-row"><label>${applicationText("端末サイズ", "Terminator size")}</label><div class="property-input-with-unit">${textInput("terminatorSize", "number", 'min="0.1" max="100" step="0.1"')}<span class="property-input-unit">mm</span></div></div>`;
+    }
+    return `${specificRows}${visibleRow}${colorRow}${lineTypeRow}${lineWidthRow}`;
   }
 
   function geometryPropertyName(item) {
@@ -14376,6 +14509,7 @@
       option("solid", applicationText("実線", "Solid"), style.lineType === "solid"),
       option("dashed", applicationText("破線", "Dashed"), style.lineType === "dashed"),
       option("dashdot", applicationText("一点鎖線", "Dash-dot"), style.lineType === "dashdot"),
+      option("dashdotdot", applicationText("二点鎖線", "Dash-dot-dot"), style.lineType === "dashdotdot"),
       option("dotted", applicationText("点線", "Dotted"), style.lineType === "dotted"),
     ].join("");
     const terminatorOptions = [
@@ -14401,8 +14535,11 @@
       return;
     }
     if (target.kind === "multiple") {
-      panel.innerHTML = `<h2 class="property-heading">${target.count} ${applicationText("個のオブジェクト", "objects")}</h2><p class="properties-empty">複数選択の共通プロパティ編集は今回の対象外です。</p>`;
+      panel.innerHTML = `<h2 class="property-heading">${target.count} ${applicationText("個のオブジェクト", "objects")}</h2><section class="property-section"><h3>${applicationText("基本情報", "Basic Information")}</h3>${propertyReadonlyRow("選択数", "Selected objects", String(target.count))}</section><section class="property-section"><h3>${applicationText("外観", "Appearance")}</h3>${multiplePropertiesRows(target)}</section>`;
       localizeApplicationUI(panel);
+      for (const checkbox of panel.querySelectorAll('input[type="checkbox"][data-mixed="true"]')) checkbox.indeterminate = true;
+      panel.onchange = handlePropertiesChange;
+      panel.onclick = handlePropertiesClick;
       return;
     }
     const item = target.item;
@@ -14423,6 +14560,7 @@
         ${linePattern ? `<div class="property-row"><label>${applicationText("角度", "Angle")}</label><div class="property-input-with-unit"><input data-hatch-property="angle" type="number" step="1" value="${appearance.angle}"><span class="property-input-unit">°</span></div></div>
         <div class="property-row"><label>${applicationText("間隔", "Spacing")}</label><div class="property-input-with-unit"><input data-hatch-property="spacing" type="number" min="0.25" max="1000" step="0.1" value="${appearance.spacing}"><span class="property-input-unit">mm</span></div></div>` : ""}
         <div class="property-row"><label>${applicationText("色", "Color")}</label><div class="property-color-control"><input data-hatch-property="color" type="text" value="${escapeHtml(appearance.color)}"><button class="property-color-picker" data-appearance-palette-open data-current-color="${color}" type="button" title="${applicationText("カラーパレット", "Color palette")}" aria-label="${applicationText("カラーパレット", "Color palette")}"><span class="property-color-picker-swatch" style="--swatch-color:${color}" aria-hidden="true"></span></button></div></div>
+        ${appearance.patternType === "solid" ? `<div class="property-row"><label>${applicationText("不透明度", "Opacity")}</label><div class="property-input-with-unit"><input data-hatch-property="opacity" type="number" min="0" max="100" step="1" value="${formatDisplayNumber(appearance.opacity * 100, 2)}"><span class="property-input-unit">%</span></div></div>` : ""}
         ${linePattern ? `<div class="property-row"><label>${applicationText("線幅", "Line width")}</label><input data-hatch-property="lineWidth" type="number" min="0.5" max="10" step="0.1" value="${appearance.lineWidth}"></div>` : ""}`;
       panel.innerHTML = `<h2 class="property-heading">${applicationText("ハッチング", "Hatching")}</h2><section class="property-section">${basicInformationHeading}${propertyReadonlyRow("種類", "Type", applicationText("ハッチング", "Hatching"))}${propertyReadonlyRow("ID", "ID", item.id)}${propertyReadonlyRow("所属スケッチ", "Owning sketch", `${sketchName(item.sketchId)} (${item.sketchId})`, { userContent: true })}${propertyReadonlyRow("境界状態", "Boundary status", boundaryStatus)}${repair}</section><section class="property-section"><h3>Appearance</h3>${appearanceRows}</section>`;
     } else if (target.kind === "block") {
@@ -14523,6 +14661,39 @@
     return true;
   }
 
+  function applyMultipleProperty(target, key, rawValue) {
+    if (target?.kind !== "multiple" || !key) return false;
+    for (const entry of target.items || []) {
+      if (!multiplePropertySupports(entry, key)) continue;
+      if (key === "construction") {
+        entry.item.construction = Boolean(rawValue);
+        continue;
+      }
+      if (entry.kind === "annotation") {
+        if (key === "visible") entry.item.visible = rawValue === true || rawValue === "true";
+        else if (key === "rotation") entry.item.rotation = Math.max(-3600, Math.min(3600, Number(rawValue) || 0)) * Math.PI / 180;
+        else applyAnnotationStyleValue(entry.item, key, rawValue);
+        continue;
+      }
+      if (entry.kind === "hatch") {
+        const next = { ...entry.item.appearance };
+        if (key === "visible") next.visible = rawValue === true || rawValue === "true";
+        else if (["angle", "spacing", "lineWidth"].includes(key)) next[key] = Number(rawValue);
+        else if (key === "opacity") next.opacity = Number(rawValue) / 100;
+        else next[key] = rawValue;
+        entry.item.appearance = normalizeHatchAppearance(next);
+        continue;
+      }
+      const owner = entry.kind === "block" ? (entry.item.appearanceOverride ||= {}) : (entry.item.appearance ||= {});
+      applyAppearanceInput(owner, key, typeof rawValue === "boolean" ? String(rawValue) : String(rawValue));
+      if (entry.kind === "block") invalidateBlockProjectionCache(entry.item.id);
+    }
+    recordHistory("複数Objectプロパティ変更");
+    updateUI();
+    draw();
+    return true;
+  }
+
   function applyDimensionAppearanceValue(owner, key, rawValue, { allowInheritance = true } = {}) {
     if (!owner) return false;
     const next = { ...normalizeDimensionAppearance(owner) };
@@ -14604,7 +14775,11 @@
       historyLabel = "Sketch Default Dimension Appearance変更";
     } else {
       target = selectedPropertiesTarget();
-      if (target.kind === "constraint" && target.item.dimension) {
+      if (target.kind === "multiple") {
+        const color = multiplePropertyValue(target, "color");
+        owner = { color: color === MULTIPLE_PROPERTY_MIXED ? multiplePropertyAppearance(target.items[0]).color : color };
+        historyLabel = "複数Objectプロパティ変更";
+      } else if (target.kind === "constraint" && target.item.dimension) {
         owner = (target.item.dimension.display ||= {});
         historyLabel = "寸法外観変更";
       } else if (target.kind === "annotation") {
@@ -14622,7 +14797,7 @@
       historyLabel,
       context,
       sourceButton: button,
-      sourceInput: button.closest(".property-color-control")?.querySelector('[data-appearance-key="color"], [data-dimension-display="color"], [data-hatch-property="color"], [data-annotation-style="color"]') || null,
+      sourceInput: button.closest(".property-color-control")?.querySelector('[data-appearance-key="color"], [data-dimension-display="color"], [data-hatch-property="color"], [data-annotation-style="color"], [data-bulk-property="color"]') || null,
     };
     const selected = colorPaletteSession.sourceInput?.value.trim() || button.dataset.currentColor || owner.color;
     renderColorPaletteDialog(selected);
@@ -14634,6 +14809,12 @@
     if (!colorPaletteSession) return;
     const color = colorPickerValue(value);
     const { owner, target, historyLabel, context, sourceButton, sourceInput } = colorPaletteSession;
+    if (target?.kind === "multiple") {
+      document.getElementById("colorPaletteDialog")?.close();
+      colorPaletteSession = null;
+      applyMultipleProperty(target, "color", color);
+      return;
+    }
     if (target?.kind === "constraint" || context === "sketch-dimension" || context === "document-dimension") applyDimensionAppearanceValue(owner, "color", color, { allowInheritance: context !== "document-dimension" });
     else if (target?.kind === "hatch") Object.assign(owner, normalizeHatchAppearance({ ...owner, color }));
     else if (target?.kind === "annotation") applyAnnotationStyleValue(target.item, "color", color);
@@ -14729,6 +14910,11 @@
   function handlePropertiesChange(event) {
     const target = selectedPropertiesTarget();
     const input = event.target;
+    if (target.kind === "multiple" && input.dataset.bulkProperty) {
+      const raw = input.type === "checkbox" ? input.checked : input.value.trim();
+      applyMultipleProperty(target, input.dataset.bulkProperty, raw);
+      return;
+    }
     if (target.kind === "annotation" && input.dataset.annotationStyle) {
       const raw = input.type === "checkbox" ? input.checked : input.value.trim();
       applyAnnotationStyleValue(target.item, input.dataset.annotationStyle, raw);
@@ -14744,6 +14930,7 @@
       if (key === "visible") next.visible = Boolean(raw);
       else if (key === "patternType") next.patternType = raw;
       else if (["angle", "spacing", "lineWidth"].includes(key)) next[key] = Number(raw);
+      else if (key === "opacity") next.opacity = Number(raw) / 100;
       else if (key === "color") next.color = raw;
       target.item.appearance = normalizeHatchAppearance(next);
       recordHistory("ハッチング外観変更");
@@ -17679,12 +17866,16 @@
   }
 
   function canvasContextFixState(target) {
+    const batch = selectedFixedBatchTargets();
+    if (batch && ((target.kind === "point" && batch.points.includes(target.item)) || (target.kind === "line" && batch.lines.includes(target.item)))) {
+      return { enabled: true, fixed: fixedBatchIsFullyFixed(batch) };
+    }
     if (target.kind === "point") {
-      const enabled = selectedPoints.length > 0 && selectedLines.length + selectedCircles.length + selectedArcs.length + selectedSplines.length + selectedBlockInstances.length === 0 && !selectedArcEndpoint;
+      const enabled = selectedPoints.length > 0 && selectedLines.length + selectedCircles.length + selectedArcs.length + selectedSplines.length + selectedBlockInstances.length === 0 && selectedAnnotations.length + selectedHatches.length === 0 && !selectedArcEndpoint;
       return { enabled, fixed: enabled && selectedPoints.every((point) => point.fixed) };
     }
     if (target.kind === "line") {
-      const enabled = selectedLines.length === 1 && selectedPoints.length + selectedCircles.length + selectedArcs.length + selectedSplines.length + selectedBlockInstances.length === 0 && !selectedArcEndpoint;
+      const enabled = selectedLines.length === 1 && selectedPoints.length + selectedCircles.length + selectedArcs.length + selectedSplines.length + selectedBlockInstances.length === 0 && selectedAnnotations.length + selectedHatches.length === 0 && !selectedArcEndpoint;
       return { enabled, fixed: Boolean(findLineFixedConstraint(target.item)) };
     }
     if (target.kind === "arc-endpoint") {
@@ -20141,29 +20332,24 @@
       commitNewConstraint("fixed", new ArcEndpointFixedConstraint(arc, endpoint, p.x, p.y));
       return;
     }
-    if (selectedPoints.length === 0 && selectedLines.length === 1 && selectedCircles.length === 0 && selectedArcs.length === 0 && selectedSplines.length === 0) {
-      const line = selectedLines[0];
-      const existing = findLineFixedConstraint(line);
-      if (existing) {
-        deleteElements({ constraints: [existing] });
-        log(`${line.id} の固定を解除しました`);
-        return;
-      }
-      commitNewConstraint("fixed", new LineFixedConstraint(line));
-      return;
-    }
-    if (selectedPoints.length < 1 || selectedLines.length > 0 || selectedCircles.length > 0 || selectedArcs.length > 0 || selectedSplines.length > 0) return;
-    const points = [...selectedPoints];
-    const sketchId = elementSketchId(points[0]);
-    if (!points.every((point) => elementSketchId(point) === sketchId)) return;
+    const batch = selectedFixedBatchTargets();
+    if (!batch) return;
     const snapshot = snapshotModelState();
-    const nextFixed = !points.every((point) => point.fixed);
-    for (const point of points) point.fixed = nextFixed;
-    const solved = solveSketchAndDependents(sketchId, snapshot);
+    const nextFixed = !fixedBatchIsFullyFixed(batch);
+    for (const point of batch.points) point.fixed = nextFixed;
+    if (nextFixed) {
+      for (const line of batch.lines) if (!findLineFixedConstraint(line)) pushModelConstraint(new LineFixedConstraint(line), batch.sketchId);
+    } else {
+      const fixedConstraints = new Set(batch.lines.map(findLineFixedConstraint).filter(Boolean));
+      for (let index = model.constraints.length - 1; index >= 0; index--) {
+        if (fixedConstraints.has(model.constraints[index])) model.constraints.splice(index, 1);
+      }
+    }
+    const solved = solveSketchAndDependents(batch.sketchId, snapshot);
     const fixedResult = solved.result;
-    if (!solved.success || fixedResult.errorNorm > CONSTRAINT_ACCEPT_ERROR) {
+    if (!solved.success || solved.dependent?.success === false || fixedResult.errorNorm > CONSTRAINT_ACCEPT_ERROR) {
       restoreModelState(snapshot);
-      setHint(`子スケッチ内で固定状態を変更できません (error=${fixedResult.errorNorm.toExponential(3)})`, "error");
+      setHint(`${applicationText("選択対象の固定状態を変更できません", "The selected objects could not be fixed or unfixed")} (error=${fixedResult.errorNorm.toExponential(3)})`, "error");
       updateUI();
       draw();
       return;
@@ -20172,7 +20358,8 @@
     setHint(`固定状態変更: success=${fixedResult.success}, error=${fixedResult.errorNorm.toExponential(2)}, iter=${fixedResult.iterations}`);
     updateUI({ refreshAnalysis: false });
     draw();
-    log(`${points.map((point) => point.id).join(", ")} の固定状態を ${nextFixed} にしました\n自動solve: success=${fixedResult.success}`);
+    const ids = [...batch.points, ...batch.lines].map((item) => item.id);
+    log(`${ids.join(", ")} の固定状態を ${nextFixed} にしました\n自動solve: success=${fixedResult.success}`);
     recordHistory("固定状態変更");
     return;
   });
@@ -20925,6 +21112,64 @@
           item = instance ? [...blockProjectionBundle(instance).lines, ...blockProjectionBundle(instance).circles, ...blockProjectionBundle(instance).arcs, ...(blockProjectionBundle(instance).splines || [])][0] : null;
         }
         return item ? { direct: normalizeAppearance(item.appearance), effective: effectiveAppearanceForElement(item), visible: isVisibleSketchElement(item) } : null;
+      },
+      resetForMultiplePropertiesTest(mixedTypes = false) {
+        resetModelState();
+        clearSelection();
+        const lines = [
+          addLine(addPoint(-80, -20, false, "endpoint"), addPoint(-20, -20, false, "endpoint")),
+          addLine(addPoint(20, 20, false, "endpoint"), addPoint(80, 20, false, "endpoint")),
+        ];
+        lines[0].appearance = { color: "#dc2626", lineType: "solid", lineWidth: 1 };
+        lines[1].appearance = { color: "#2563eb", lineType: "dotted", lineWidth: 3 };
+        selectedLines = mixedTypes ? [lines[0]] : lines;
+        if (mixedTypes) {
+          const circle = addCircle(addPoint(0, 65, false, "endpoint"), 20);
+          circle.appearance = { color: "#16a34a", lineType: "dashed", lineWidth: 4 };
+          selectedCircles = [circle];
+        }
+        resetHistory("multiple properties test");
+        updateUI();
+        draw();
+        return { ids: lines.map((line) => line.id) };
+      },
+      multiplePropertiesStateForTest() {
+        return {
+          targetKind: selectedPropertiesTarget().kind,
+          lines: selectedLines.map((line) => ({ id: line.id, construction: line.construction, appearance: normalizeAppearance(line.appearance), effective: effectiveAppearanceForElement(line) })),
+          circles: selectedCircles.map((circle) => ({ id: circle.id, construction: circle.construction, appearance: normalizeAppearance(circle.appearance), effective: effectiveAppearanceForElement(circle) })),
+          propertiesText: document.getElementById("propertiesPanel")?.textContent || "",
+          history: this.historyState(),
+        };
+      },
+      resetForMultipleFixedTest() {
+        resetModelState();
+        model.sketches.push({ id: "S2", name: "Batch Fix", parentSketchId: ROOT_SKETCH_ID, kind: "sketch", appearance: {}, constructionAppearance: {}, dimensionAppearance: {} });
+        model.activeSketchId = "S2";
+        const p1 = addPoint(-60, -20, false, "endpoint");
+        const p2 = addPoint(-10, -20, false, "endpoint");
+        const p3 = addPoint(10, 20, false, "endpoint");
+        const p4 = addPoint(60, 20, false, "endpoint");
+        const point = addPoint(0, 70, false, "explicit");
+        const lines = [addLine(p1, p2), addLine(p3, p4)];
+        clearSelection();
+        selectedPoints = [point];
+        selectedLines = lines;
+        resetHistory("multiple fixed test");
+        updateUI();
+        draw();
+        return { pointId: point.id, lineIds: lines.map((line) => line.id) };
+      },
+      multipleFixedStateForTest() {
+        const sketchPoints = model.points.filter((point) => elementSketchId(point) === "S2");
+        const sketchLines = model.lines.filter((line) => elementSketchId(line) === "S2");
+        return {
+          fixedPointIds: sketchPoints.filter((point) => point.fixed).map((point) => point.id),
+          fixedLineIds: sketchLines.filter((line) => findLineFixedConstraint(line)).map((line) => line.id),
+          constraintCount: model.constraints.filter((constraint) => constraint instanceof LineFixedConstraint).length,
+          buttonDisabled: fixPointBtn.getAttribute("aria-disabled"),
+          history: this.historyState(),
+        };
       },
       viewStateForTest() {
         return {
