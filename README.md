@@ -3,6 +3,15 @@
 Cad2は、ブラウザ上で動作する開発中の2DパラメトリックCADです。
 Geometry、Constraint、Sketch階層、Block、Parameter、Hatch、Annotationを、1つのCanvas上で作成・編集できます。
 
+## ブラウザで試す
+
+インストールせずに、次のGitHub PagesからCad2を試すことができます。
+
+**[GitHub PagesでCad2を試す](https://mssei1515.github.io/cad/)**
+
+> [!WARNING]
+> Cad2は現在開発中です。予期しない動作やバグが残っており、保存データの破損・消失が発生する可能性があります。重要な作業へ使用する場合は、データをこまめに保存し、必ず別の場所にもバックアップしてください。
+
 ## 主な機能
 
 - Point、Line、Circle、Arc、Splineの作図と編集
