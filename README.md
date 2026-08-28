@@ -1,6 +1,8 @@
 # Cad2
 
-<img src="./assets/cad2-hero.png" alt="Cad2 Parametric 2D-CAD" width="640">
+<p align="center">
+  <img src="./assets/cad2-hero.png" alt="Cad2 Parametric 2D-CAD" width="640">
+</p>
 
 Cad2は、ブラウザ上で動作する開発中の2DパラメトリックCADです。
 Geometry、Constraint、Sketch階層、Block、Parameter、Hatch、Annotationを、1つのCanvas上で作成・編集できます。
