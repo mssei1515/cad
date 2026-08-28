@@ -55,6 +55,6 @@ Parameter、寸法、寸法を含むGeometry、Sketch、Block Instanceを削除�
 
 ## 7. 永続化
 
-JSON version 13では、version 10で導入したParameterの意味を維持し、`target`を評価済みcacheとして残して拘束寸法の`expression`を正式な入力値とする。Document、Block Definition、History、Block Editor draft、clipboardへParameter、寸法名、式、採番counterを保存する。
+JSON version 14では、version 10で導入したParameterの意味を維持し、`target`を評価済みcacheとして残して拘束寸法の`expression`を正式な入力値とする。チェーンオフセット寸法もチェーン全体で1つの寸法symbolと式を持つ。Document、Block Definition、History、Block Editor draft、clipboardへParameter、寸法名、式、採番counterを保存する。
 
 version 9以前の読込では名前空間ごとの寸法配列順に`d1`以降を付与し、拘束寸法の既存`target`を現在のUI単位による数値式へ変換する。参照寸法には名前だけを付与する。version 10以降の式または依存関係が不正な場合は読込全体を拒否し、現在のDocumentを維持する。

@@ -86,6 +86,65 @@ test("representative persistent constraints have zero residual on canonical geom
   }
 });
 
+test("offset chain constraint preserves distance, direction, and miter joins", () => {
+  const point = (id, x, y) => new geometry.Point(id, x, y);
+  const corner = point("P2", 100, 0);
+  const source1 = new geometry.Line("L1", point("P1", 0, 0), corner);
+  const source2 = new geometry.Line("L2", corner, point("P3", 100, 100));
+  const offset1 = new geometry.Line("L3", point("P4", 0, 10), point("P5", 90, 10));
+  const offset2 = new geometry.Line("L4", offset1.p2, point("P6", 90, 100));
+  const constraint = new geometry.OffsetChainConstraint(
+    [source1, source2],
+    [offset1, offset2],
+    10,
+    1,
+    [false, false],
+    false,
+    0,
+  );
+
+  assert.ok(residualNorm(constraint.rawError()) < 1e-9, JSON.stringify(constraint.rawError()));
+  offset2.p1.x += 2;
+  assert.ok(residualNorm(constraint.rawError()) > 1);
+});
+
+test("offset chain constraint supports a line and arc with an explicit traversal", () => {
+  const point = (id, x, y) => new geometry.Point(id, x, y);
+  const sourceLine = new geometry.Line("L1", point("P1", 0, 0), point("P2", 100, 0));
+  const sourceArc = new geometry.Arc("A1", point("P3", 100, 50), 50, -Math.PI / 2, 0);
+  const offsetLine = new geometry.Line("L2", point("P4", 0, 10), point("P5", 100, 10));
+  const offsetArc = new geometry.Arc("A2", point("P6", 100, 50), 40, -Math.PI / 2, 0);
+  const constraint = new geometry.OffsetChainConstraint(
+    [sourceLine, sourceArc],
+    [offsetLine, offsetArc],
+    10,
+    1,
+    [false, false],
+    false,
+    1,
+  );
+
+  assert.ok(residualNorm(constraint.rawError()) < 1e-9, JSON.stringify(constraint.rawError()));
+});
+
+test("offset chain constraint closes the final miter of a loop", () => {
+  const point = (id, x, y) => new geometry.Point(id, x, y);
+  const sourceCorners = [point("P1", 0, 0), point("P2", 100, 0), point("P3", 100, 100), point("P4", 0, 100)];
+  const resultCorners = [point("P5", 10, 10), point("P6", 90, 10), point("P7", 90, 90), point("P8", 10, 90)];
+  const lines = (prefix, points) => points.map((start, index) => new geometry.Line(`${prefix}${index + 1}`, start, points[(index + 1) % points.length]));
+  const constraint = new geometry.OffsetChainConstraint(
+    lines("S", sourceCorners),
+    lines("O", resultCorners),
+    10,
+    1,
+    [false, false, false, false],
+    true,
+    0,
+  );
+
+  assert.ok(residualNorm(constraint.rawError()) < 1e-9, JSON.stringify(constraint.rawError()));
+});
+
 test("line symmetry constrains midpoint and direction without constraining length", () => {
   const point = (id, x, y) => new geometry.Point(id, x, y);
   const axis = new geometry.Line("AXIS", point("AX1", 0, -20), point("AX2", 0, 20));

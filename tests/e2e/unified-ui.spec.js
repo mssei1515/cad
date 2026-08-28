@@ -134,7 +134,7 @@ async function openParameterDialog(page) {
   await expect(page.locator("#parametersDialog")).toBeVisible();
 }
 
-test("document parameters, dimension formulas, rename propagation, and v13 persistence work together", async ({ page }) => {
+test("document parameters, dimension formulas, rename propagation, and v14 persistence work together", async ({ page }) => {
   await page.goto(`${baseUrl}/index.html?test=1`);
   await page.waitForFunction(() => window.__cadTest);
   const initial = await page.evaluate(() => window.__cadTest.resetForParameterTest());
@@ -171,7 +171,7 @@ test("document parameters, dimension formulas, rename propagation, and v13 persi
   expect(state.valid).toBe(true);
   expect(state.parameters.map((item) => item.name)).toEqual(["span", "margin"]);
   expect(state.dimensions.find((item) => !item.readOnly).expression).toContain("span");
-  expect(state.serialized.version).toBe(13);
+  expect(state.serialized.version).toBe(14);
   expect(state.serialized.constraints.every((constraint) => !constraint.dimension || constraint.parameterName)).toBe(true);
 });
 
@@ -393,7 +393,7 @@ test("v10 annotations migrate by target or active sketch and invalid v11 ownersh
   const legacy = annotationSketchFixture(10);
   expect(await page.evaluate((data) => window.__cadTest.loadDocumentFixtureForDragTest(data, "annotation-v10.json"), legacy)).toEqual(expect.objectContaining({ success: true }));
   const migrated = await page.evaluate(() => window.__cadTest.serializedModelForTest());
-  expect(migrated.version).toBe(13);
+  expect(migrated.version).toBe(14);
   expect(migrated.annotations.find((annotation) => annotation.id === "AN1").sketchId).toBe("S2");
   expect(migrated.annotations.find((annotation) => annotation.id === "AN2").sketchId).toBe("S1");
 
@@ -1028,7 +1028,7 @@ test("Cad2 files open, overwrite, save as, and cancel without errors", async ({ 
   expect(state.suggestedName).toBe("無題.cad2");
   expect(state.excludeAcceptAllOption).toBe(true);
   expect(state.accept).toEqual({ "application/json": [".cad2"] });
-  expect(state.saved.version).toBe(13);
+  expect(state.saved.version).toBe(14);
   expect(state.saved.documentName).toBe("無題");
   expect(state.fileState).toEqual({ hasHandle: true, handleName: "first-save.cad2" });
 
@@ -2032,7 +2032,7 @@ test("Constraint dimensions expose defining geometry and inheritable appearance 
   expect(serialized.annotations).toEqual([]);
   await page.evaluate((documentData) => window.__cadTest.loadDocumentFixtureForDragTest(documentData, "dimension-appearance.json"), serialized);
   const roundTrip = await page.evaluate(() => window.__cadTest.serializedModelForTest());
-  expect(roundTrip.version).toBe(13);
+  expect(roundTrip.version).toBe(14);
   expect(roundTrip.defaultDimensionAppearance).toEqual(serialized.defaultDimensionAppearance);
   expect(roundTrip.constraints[0].dimension.display).toEqual(serialized.constraints[0].dimension.display);
 
@@ -2065,7 +2065,7 @@ test("Constraint dimensions expose defining geometry and inheritable appearance 
   expect(migratedPixels.direct.terminatorSize).toBeCloseTo(18 * 25.4 / 96, 8);
   expect(migratedPixels.direct.terminatorType).toBeUndefined();
   const migratedSerialized = await page.evaluate(() => window.__cadTest.serializedModelForTest());
-  expect(migratedSerialized.version).toBe(13);
+  expect(migratedSerialized.version).toBe(14);
   expect(migratedSerialized.defaultDimensionAppearance).not.toHaveProperty("arrows");
   expect(migratedSerialized.defaultDimensionAppearance).not.toHaveProperty("extensionLines");
   expect(migratedSerialized.constraints[0].dimension.display).not.toHaveProperty("arrowheadLength");
@@ -2570,6 +2570,87 @@ test("offset stays on the cursor side for direction-reversed constrained lines",
     expect(state.lineOffsetDeltas[0][points.expectedAxis]).toBeCloseTo(20, 5);
     expect(state.lineOffsetDeltas[0][points.expectedAxis === "x" ? "y" : "x"]).toBeCloseTo(0, 5);
   }
+});
+
+test("offset tool builds an explicitly connected line chain with one editable dimension", async ({ page }) => {
+  await page.goto(`${baseUrl}/index.html?test=1`);
+  await page.waitForFunction(() => window.__cadTest);
+  const points = await page.evaluate(() => window.__cadTest.resetForOffsetChainUi());
+
+  await page.click("#toolOffset");
+  await page.mouse.click(points.first.x, points.first.y);
+  expect((await page.evaluate(() => window.__cadTest.offsetChainUiState())).selectedCount).toBe(1);
+
+  await page.mouse.click(points.disconnected.x, points.disconnected.y);
+  let state = await page.evaluate(() => window.__cadTest.offsetChainUiState());
+  expect(state.selectedCount).toBe(1);
+  await expect(page.locator("#hint")).toContainText("明示的に接続");
+
+  await page.mouse.click(points.second.x, points.second.y);
+  state = await page.evaluate(() => window.__cadTest.offsetChainUiState());
+  expect(state.selectedCount).toBe(2);
+  expect(state.selectionCommitted).toBe(false);
+
+  await page.keyboard.press("Enter");
+  expect((await page.evaluate(() => window.__cadTest.offsetChainUiState())).selectionCommitted).toBe(true);
+  await page.mouse.click(points.side.x, points.side.y);
+  const input = page.locator("#dimensionValueInput");
+  await expect(input).toBeVisible();
+  await input.fill("15");
+  await input.press("Enter");
+
+  state = await page.evaluate(() => window.__cadTest.offsetChainUiState());
+  expect(state.lineCount).toBe(5);
+  expect(state.constraintCount).toBe(1);
+  expect(state.target).toBe(15);
+  expect(state.parameterName).toBe("d1");
+  expect(state.sourceIds).toEqual(points.sourceIds);
+  expect(state.offsetIds).toHaveLength(2);
+  expect(state.resultJoins[0].end.x).toBeCloseTo(state.resultJoins[0].start.x, 6);
+  expect(state.resultJoins[0].end.y).toBeCloseTo(state.resultJoins[0].start.y, 6);
+  expect(state.jsonVersion).toBe(14);
+  expect(state.serializedTypes).toBe(1);
+
+  await page.keyboard.press("Control+z");
+  let historyState = await page.evaluate(() => window.__cadTest.offsetChainUiState());
+  expect(historyState.lineCount).toBe(3);
+  expect(historyState.constraintCount).toBe(0);
+  await page.keyboard.press("Control+y");
+  historyState = await page.evaluate(() => window.__cadTest.offsetChainUiState());
+  expect(historyState.lineCount).toBe(5);
+  expect(historyState.constraintCount).toBe(1);
+
+  const restored = await page.evaluate(() => window.__cadTest.roundTripOffsetChainForTest());
+  expect(restored.count).toBe(1);
+  expect(restored.target).toBe(15);
+  expect(restored.sourceCount).toBe(2);
+  expect(restored.offsetCount).toBe(2);
+  expect(restored.reversed).toEqual([false, false]);
+
+  const edited = await page.evaluate(() => window.__cadTest.updateOffsetChainTargetForTest(22));
+  expect(edited.measured).toBeCloseTo(22, 6);
+  expect(edited.join.first.x).toBeCloseTo(edited.join.second.x, 6);
+  expect(edited.join.first.y).toBeCloseTo(edited.join.second.y, 6);
+  expect(await page.evaluate(() => window.__cadTest.canReselectOffsetResultChainForTest())).toEqual({ first: true, second: true, selectedCount: 2 });
+
+  const invalid = structuredClone(state.serialized);
+  invalid.constraints.find((item) => item.type === "offsetChainDimension").joinType = "round";
+  const rejected = await page.evaluate((data) => window.__cadTest.loadDocumentFixtureForDragTest(data, "invalid-offset-chain.cad2"), invalid);
+  expect(rejected.success).toBe(false);
+  const retained = await page.evaluate(() => window.__cadTest.offsetChainUiState());
+  expect(retained.constraintCount).toBe(1);
+  expect(retained.target).toBe(22);
+
+  const completeSelection = await page.evaluate((lineIds) => window.__cadTest.selectGeometryIdsForTest({ lines: lineIds }), [...state.sourceIds, ...state.offsetIds]);
+  expect(completeSelection.blockError).toBe(null);
+  expect(completeSelection.internalConstraintCount).toBe(1);
+  await page.keyboard.press("Control+c");
+  await page.keyboard.press("Control+v");
+  const copied = await page.evaluate(() => window.__cadTest.offsetChainUiState());
+  expect(copied.lineCount).toBe(9);
+  expect(copied.constraintCount).toBe(2);
+  expect(copied.serializedTypes).toBe(2);
+  expect(copied.parameterNames).toEqual(["d1", "d2"]);
 });
 
 test("sketch deletion removes its subtree and active sketch siblings remain visible", async ({ page }) => {

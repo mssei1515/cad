@@ -781,6 +781,107 @@
     }
   }
 
+  function orientedGeometryEndpoint(item, reversed, endpoint) {
+    const useStart = endpoint === "start";
+    if (item instanceof Line) {
+      if (useStart) return reversed ? item.p2 : item.p1;
+      return reversed ? item.p1 : item.p2;
+    }
+    return arcEndpointPoint(item, reversed === useStart ? "end" : "start");
+  }
+
+  function orientedGeometryLeftNormal(item, reversed, endpoint = "start") {
+    if (item instanceof Line) {
+      const start = orientedGeometryEndpoint(item, reversed, "start");
+      const end = orientedGeometryEndpoint(item, reversed, "end");
+      const dx = end.x - start.x;
+      const dy = end.y - start.y;
+      const length = hypot2(dx, dy);
+      if (length < MIN_ORIENTATION_LENGTH) return { x: 0, y: 1 };
+      return { x: -dy / length, y: dx / length };
+    }
+    const point = orientedGeometryEndpoint(item, reversed, endpoint);
+    const radius = Math.max(MIN_ORIENTATION_LENGTH, item.radius());
+    const radial = { x: (point.x - item.center.x) / radius, y: (point.y - item.center.y) / radius };
+    const sweep = (item.endAngle - item.startAngle) * (reversed ? -1 : 1);
+    const sweepSign = sweep < 0 ? -1 : 1;
+    return { x: -radial.x * sweepSign, y: -radial.y * sweepSign };
+  }
+
+  class OffsetChainConstraint extends Constraint {
+    constructor(sources, offsets, target, side = 1, sourceReversed = [], closed = false, dimensionSegmentIndex = 0) {
+      super(`チェーンオフセット寸法 ${sources?.map((item) => item?.id).filter(Boolean).join("-") || "?"} = ${target}`, 1);
+      this.sources = Array.isArray(sources) ? sources : [];
+      this.offsets = Array.isArray(offsets) ? offsets : [];
+      this.target = target;
+      this.side = Number(side) < 0 ? -1 : 1;
+      this.sourceReversed = this.sources.map((_, index) => Boolean(sourceReversed[index]));
+      this.closed = Boolean(closed);
+      this.joinType = "miter";
+      this.dimensionSegmentIndex = Math.max(0, Math.min(this.sources.length - 1, Number(dimensionSegmentIndex) || 0));
+    }
+
+    rawError() {
+      const errors = [];
+      if (this.sources.length === 0 || this.sources.length !== this.offsets.length) return [1e6];
+      const orientationScale = Math.max(10, Math.abs(Number(this.target)) || 0);
+      for (let index = 0; index < this.sources.length; index++) {
+        const source = this.sources[index];
+        const offset = this.offsets[index];
+        const reversed = this.sourceReversed[index];
+        if (source instanceof Line && offset instanceof Line) {
+          const sourceStart = orientedGeometryEndpoint(source, reversed, "start");
+          const sourceEnd = orientedGeometryEndpoint(source, reversed, "end");
+          const sourceLength = hypot2(sourceEnd.x - sourceStart.x, sourceEnd.y - sourceStart.y);
+          const offsetLength = offset.length();
+          if (sourceLength < MIN_ORIENTATION_LENGTH || offsetLength < MIN_ORIENTATION_LENGTH) {
+            errors.push(1e6);
+            continue;
+          }
+          const stx = (sourceEnd.x - sourceStart.x) / sourceLength;
+          const sty = (sourceEnd.y - sourceStart.y) / sourceLength;
+          const otx = offset.dx() / offsetLength;
+          const oty = offset.dy() / offsetLength;
+          const normal = { x: -sty, y: stx };
+          errors.push((otx - stx) * orientationScale, (oty - sty) * orientationScale);
+          errors.push((offset.p1.x - sourceStart.x) * normal.x + (offset.p1.y - sourceStart.y) * normal.y - this.side * this.target);
+        } else if (source instanceof Arc && offset instanceof Arc) {
+          const sweep = (source.endAngle - source.startAngle) * (reversed ? -1 : 1);
+          const sweepSign = sweep < 0 ? -1 : 1;
+          const expectedRadiusDelta = -sweepSign * this.side * this.target;
+          errors.push(
+            offset.center.x - source.center.x,
+            offset.center.y - source.center.y,
+            offset.radius() - source.radius() - expectedRadiusDelta,
+          );
+        } else {
+          errors.push(1e6);
+        }
+      }
+
+      const joinCount = this.closed ? this.offsets.length : this.offsets.length - 1;
+      for (let index = 0; index < joinCount; index++) {
+        const next = (index + 1) % this.offsets.length;
+        const end = orientedGeometryEndpoint(this.offsets[index], false, "end");
+        const start = orientedGeometryEndpoint(this.offsets[next], false, "start");
+        errors.push(end.x - start.x, end.y - start.y);
+      }
+
+      if (!this.closed) {
+        for (const [index, endpoint] of [[0, "start"], [this.sources.length - 1, "end"]]) {
+          const sourcePoint = orientedGeometryEndpoint(this.sources[index], this.sourceReversed[index], endpoint);
+          const normal = orientedGeometryLeftNormal(this.sources[index], this.sourceReversed[index], endpoint);
+          const resultPoint = orientedGeometryEndpoint(this.offsets[index], false, endpoint);
+          errors.push(
+            resultPoint.x - sourcePoint.x - normal.x * this.side * this.target,
+            resultPoint.y - sourcePoint.y - normal.y * this.side * this.target,
+          );
+        }
+      }
+      return errors;
+    }
+  }
+
   class ArcSymmetryConstraint extends Constraint {
     constructor(arc1, arc2, axis) {
       super(`円弧対称 ${arc1.id}-${arc2.id} / ${axis.id}`, 1);
@@ -1566,6 +1667,7 @@
     PointLineDistanceConstraint,
     LineLineDistanceConstraint,
     OffsetConstraint,
+    OffsetChainConstraint,
     LineAngleConstraint,
     signedPointLineDistance,
     signedPointDirectedLineDistance,

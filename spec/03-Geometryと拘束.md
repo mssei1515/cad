@@ -85,7 +85,11 @@ Line、Circle、Arc と他 Geometry の交点からクリック区間を除去�
 
 ### オフセット
 
-Line、Circle、Arc を選び、側と距離を入力して複製する。元と複製の間に `OffsetConstraint` を置くため、後から寸法として編集できる。
+Circleは単独で選び、側と距離を入力して複製する。Line／Arcは1要素の従来操作に加え、コマンド中に1本ずつ順番に追加して1つのチェーンとしてオフセットできる。チェーン選択はCanvas空白clickまたはEnterで確定し、空白clickの場合はその位置をそのまま側と概算距離にも使用する。
+
+チェーンの接続は座標の近さから推測せず、共有Point、`coincident`、`arcEndpointCoincident`、`arcEndpointArcEndpointCoincident`、または既存`offsetChainDimension`の結合で明示された同一Sketch内の端部だけを認める。開チェーンと閉チェーンを扱い、LineとArcを混在できる。角部は隣接するオフセット支持線／支持円を延長またはトリムしてマイター接続する。指定距離によるArc半径の崩壊、接続不能、結果の退化または自己交差がある場合は作成しない。
+
+単一要素には`OffsetConstraint`、2要素以上にはチェーン全体と1つの距離を保持する`OffsetChainConstraint`を置く。チェーン拘束は基準Geometry列、進行方向、結果Geometry列、開閉、側、マイター結合、寸法を代表するsegment indexを保持するため、元Geometryの変形および寸法編集後も全結果を再計算する。作成、距離変更、solveのいずれかが失敗した場合はチェーン全体を操作前へ戻し、1回の作成を1つのUndo単位にする。
 
 ### ハッチング
 
@@ -121,6 +125,7 @@ UIで利用できる組み合わせを次に示す。
 | 寸法 | `radiusDimension` | Circle/Arc 半径 |
 | 寸法 | `diameterDimension` | Circle 直径 |
 | オフセット | `offsetDimension` | 元とオフセット先の距離 |
+| オフセット | `offsetChainDimension` | 2本以上のLine／Arcチェーンとオフセット先の共通距離・マイター接続 |
 | 一致 | `coincident` | 2 Point |
 | 一致 | `pointOnLine` | Point–Line |
 | 一致 | `pointOnCircle` | Point–Circle/Arc |

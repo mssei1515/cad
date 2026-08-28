@@ -49,6 +49,8 @@
     rewriteBoundaryRefs: rewriteHatchBoundaryRefs,
   } = window.HatchRegionEngine;
 
+  const { build: buildOffsetChainGeometry } = window.OffsetChainEngine;
+
   const { create: createConstraintCodecRegistry } = window.ConstraintCodecRegistry;
   const {
     dependencies: expressionDependencies,
@@ -70,6 +72,7 @@
     PointLineDistanceConstraint,
     LineLineDistanceConstraint,
     OffsetConstraint,
+    OffsetChainConstraint,
     LineAngleConstraint,
     CoincidentConstraint,
     ArcEndpointCoincidentConstraint,
@@ -303,6 +306,8 @@
   let hatchPreview = null;
   let hatchRepairTarget = null;
   let offsetSource = null;
+  let offsetChainEntries = [];
+  let offsetChainSelectionCommitted = false;
   let pendingCommand = null;
   let pendingConstraintCommand = null;
   let constraintOperands = [];
@@ -342,7 +347,7 @@
   let historyRestoring = false;
   let geometryClipboard = null;
   const HISTORY_LIMIT = 80;
-  const CURRENT_JSON_VERSION = 13;
+  const CURRENT_JSON_VERSION = 14;
   const SKETCH_TREE_MIN_WIDTH = 220;
   const SKETCH_TREE_MAX_WIDTH = 560;
   const SKETCH_TREE_KEYBOARD_RESIZE_STEP = 16;
@@ -4279,6 +4284,181 @@
     return { distance: Math.abs(signed), sign: signed < 0 ? -1 : 1 };
   }
 
+  function offsetEndpointToken(geometry, endpoint) {
+    if (geometry instanceof Line) return endpoint === "start" ? geometry.p1 : geometry.p2;
+    return `${geometry.id}:${endpoint}`;
+  }
+
+  function offsetChainTopology() {
+    const parent = new Map();
+    const ensure = (item) => {
+      if (!parent.has(item)) parent.set(item, item);
+      return item;
+    };
+    const find = (item) => {
+      ensure(item);
+      let root = item;
+      while (parent.get(root) !== root) root = parent.get(root);
+      let current = item;
+      while (parent.get(current) !== current) {
+        const next = parent.get(current);
+        parent.set(current, root);
+        current = next;
+      }
+      return root;
+    };
+    const union = (first, second) => {
+      const a = find(first);
+      const b = find(second);
+      if (a !== b) parent.set(b, a);
+    };
+    for (const line of model.lines.filter((item) => elementSketchId(item) === activeSketchId())) {
+      ensure(line.p1);
+      ensure(line.p2);
+    }
+    for (const arc of model.arcs.filter((item) => elementSketchId(item) === activeSketchId())) {
+      ensure(offsetEndpointToken(arc, "start"));
+      ensure(offsetEndpointToken(arc, "end"));
+    }
+    for (const constraint of model.constraints) {
+      if (constraint.enabled === false || constraintSketchId(constraint) !== activeSketchId()) continue;
+      if (constraint instanceof CoincidentConstraint) union(constraint.p1, constraint.p2);
+      else if (constraint instanceof ArcEndpointCoincidentConstraint) union(offsetEndpointToken(constraint.arc, constraint.endpoint), constraint.point);
+      else if (constraint instanceof ArcEndpointArcEndpointCoincidentConstraint) {
+        union(offsetEndpointToken(constraint.a, constraint.endpointA), offsetEndpointToken(constraint.b, constraint.endpointB));
+      } else if (constraint instanceof OffsetChainConstraint) {
+        const joinCount = constraint.closed ? constraint.offsets.length : constraint.offsets.length - 1;
+        for (let index = 0; index < joinCount; index++) {
+          const next = (index + 1) % constraint.offsets.length;
+          union(offsetEndpointToken(constraint.offsets[index], "end"), offsetEndpointToken(constraint.offsets[next], "start"));
+        }
+      }
+    }
+    return { find };
+  }
+
+  function offsetChainEntryEndpoint(entry, endpoint, topology) {
+    const nativeEndpoint = entry.reversed
+      ? (endpoint === "start" ? "end" : "start")
+      : endpoint;
+    return topology.find(offsetEndpointToken(entry.geometry, nativeEndpoint));
+  }
+
+  function offsetChainIsClosed(entries = offsetChainEntries, topology = offsetChainTopology()) {
+    return entries.length > 1
+      && offsetChainEntryEndpoint(entries[0], "start", topology) === offsetChainEntryEndpoint(entries.at(-1), "end", topology);
+  }
+
+  function syncOffsetChainSelection() {
+    selectedPoints = [];
+    selectedCircles = offsetSource instanceof Circle ? [offsetSource] : [];
+    selectedLines = offsetChainEntries.map((entry) => entry.geometry).filter((item) => item instanceof Line);
+    selectedArcs = offsetChainEntries.map((entry) => entry.geometry).filter((item) => item instanceof Arc);
+    selectedBlockInstances = [];
+    selectedAnnotations = [];
+    selectedHatches = [];
+    selectedArcEndpoint = null;
+    selectedArcEndpointPair = null;
+    selectedDimensionConstraint = null;
+    selectedConstraint = null;
+  }
+
+  function addOffsetChainGeometry(geometry) {
+    if (!(geometry instanceof Line || geometry instanceof Arc) || geometry.blockProjection || elementSketchId(geometry) !== activeSketchId()) {
+      return { ok: false, code: "unsupported" };
+    }
+    if (offsetChainEntries.some((entry) => entry.geometry === geometry)) return { ok: false, code: "already-selected" };
+    if (offsetChainEntries.length === 0) {
+      offsetChainEntries = [{ geometry, reversed: false }];
+      offsetSource = geometry;
+      syncOffsetChainSelection();
+      return { ok: true };
+    }
+    const topology = offsetChainTopology();
+    if (offsetChainIsClosed(offsetChainEntries, topology)) return { ok: false, code: "closed-chain" };
+    const head = offsetChainEntryEndpoint(offsetChainEntries[0], "start", topology);
+    const tail = offsetChainEntryEndpoint(offsetChainEntries.at(-1), "end", topology);
+    const candidateStart = topology.find(offsetEndpointToken(geometry, "start"));
+    const candidateEnd = topology.find(offsetEndpointToken(geometry, "end"));
+    let placement = null;
+    if (candidateStart === tail && candidateEnd === head) placement = { position: "append", reversed: false };
+    else if (candidateEnd === tail && candidateStart === head) placement = { position: "append", reversed: true };
+    else if (candidateStart === tail) placement = { position: "append", reversed: false };
+    else if (candidateEnd === tail) placement = { position: "append", reversed: true };
+    else if (candidateEnd === head) placement = { position: "prepend", reversed: false };
+    else if (candidateStart === head) placement = { position: "prepend", reversed: true };
+    if (!placement) return { ok: false, code: "not-connected" };
+    const entry = { geometry, reversed: placement.reversed };
+    if (placement.position === "append") offsetChainEntries.push(entry);
+    else offsetChainEntries.unshift(entry);
+    offsetSource = offsetChainEntries[0].geometry;
+    syncOffsetChainSelection();
+    return { ok: true, closed: offsetChainIsClosed(offsetChainEntries, topology) };
+  }
+
+  function offsetChainEntryDistanceFromPointer(entry, pointer) {
+    const geometry = entry.geometry;
+    if (geometry instanceof Line) return distancePointToSegment(pointer.x, pointer.y, geometry);
+    const radialDistance = Math.abs(hypot2(pointer.x - geometry.center.x, pointer.y - geometry.center.y) - geometry.radius());
+    const angle = Math.atan2(pointer.y - geometry.center.y, pointer.x - geometry.center.x);
+    if (angleOnSignedSweep(angle, geometry.startAngle, geometry.endAngle)) return radialDistance;
+    return Math.min(
+      hypot2(pointer.x - geometry.startPoint().x, pointer.y - geometry.startPoint().y),
+      hypot2(pointer.x - geometry.endPoint().x, pointer.y - geometry.endPoint().y),
+    );
+  }
+
+  function offsetChainDistanceFromPointer(entries, pointer) {
+    const indexed = entries.map((entry, index) => ({ entry, index, proximity: offsetChainEntryDistanceFromPointer(entry, pointer) }));
+    const nearest = indexed.reduce((best, item) => !best || item.proximity < best.proximity ? item : best, null);
+    if (!nearest) return { distance: 0, side: 1, index: 0 };
+    const geometry = nearest.entry.geometry;
+    if (geometry instanceof Line) {
+      const nativeSigned = signedPointDirectedLineDistance(pointer, geometry);
+      const signed = nearest.entry.reversed ? -nativeSigned : nativeSigned;
+      return { distance: Math.abs(signed), side: signed < 0 ? -1 : 1, index: nearest.index };
+    }
+    const radialDelta = hypot2(pointer.x - geometry.center.x, pointer.y - geometry.center.y) - geometry.radius();
+    const traversalSweep = (geometry.endAngle - geometry.startAngle) * (nearest.entry.reversed ? -1 : 1);
+    const sweepSign = traversalSweep < 0 ? -1 : 1;
+    const side = -radialDelta * sweepSign < 0 ? -1 : 1;
+    return { distance: Math.abs(radialDelta), side, index: nearest.index };
+  }
+
+  function offsetChainErrorText(result) {
+    const messages = {
+      "empty-chain": ["オフセットするチェーンがありません", "There is no chain to offset"],
+      "invalid-distance": ["オフセット距離が正しくありません", "The offset distance is invalid"],
+      "invalid-segment": ["チェーンに無効な図形があります", "The chain contains invalid geometry"],
+      "collapsed-radius": ["指定距離では円弧の半径が成立しません", "An arc radius collapses at this offset distance"],
+      "missing-miter": ["角部をマイター接続できません", "A chain corner cannot be joined with a miter"],
+      "collapsed-segment": ["指定距離ではチェーンの一部が退化します", "Part of the chain collapses at this offset distance"],
+      "self-intersection": ["指定距離ではオフセット結果が自己交差します", "The offset result self-intersects at this distance"],
+    };
+    const pair = messages[result?.code];
+    return pair ? applicationText(pair[0], pair[1]) : applicationText("チェーンをオフセットできません", "The chain cannot be offset");
+  }
+
+  function offsetChainDraft(entries, distance, side, closed = offsetChainIsClosed(entries)) {
+    const result = buildOffsetChainGeometry(entries, { distance, side, closed, epsilon: MIN_ORIENTATION_LENGTH });
+    if (!result.ok) return result;
+    const geometries = result.geometries.map((geometry, index) => {
+      const source = entries[index].geometry;
+      if (geometry.kind === "line") {
+        return new Line("OFFSET", new Point("OP1", geometry.p1.x, geometry.p1.y, false, "endpoint"), new Point("OP2", geometry.p2.x, geometry.p2.y, false, "endpoint"), source.construction);
+      }
+      return new Arc("OFFSET", new Point("OC", geometry.center.x, geometry.center.y, false, "center"), geometry.radius, geometry.startAngle, geometry.endAngle, source.construction);
+    });
+    return { ...result, geometries };
+  }
+
+  function offsetPairSign(source, offset) {
+    const signed = source instanceof Line
+      ? signedPointDirectedLineDistance(offset.p1, source)
+      : offset.radius() - source.radius();
+    return signed < 0 ? -1 : 1;
+  }
+
   function offsetDraftGeometry(source, distance, sign) {
     if (!source || !Number.isFinite(distance) || distance <= 0) return null;
     if (source instanceof Line) {
@@ -4320,6 +4500,40 @@
       dimension: dimensionWithLabelAt(target, dimensionFromAnchor(target, pointer, { allowPointAxis: false }), pointer),
       buffer: formatDisplayNumber(distance),
       editing: false,
+    };
+    setHint("オフセット距離を入力してください。Enterまたはダブルクリックで決定します");
+    updateToolbar();
+    draw();
+    focusDimensionValueInput();
+    return true;
+  }
+
+  function startOffsetChainDistanceInput(entries, pointer) {
+    if (!Array.isArray(entries) || entries.length < 2 || !pointer) return false;
+    let measured = offsetChainDistanceFromPointer(entries, pointer);
+    if (measured.distance < MIN_ORIENTATION_LENGTH) measured = { ...measured, distance: Math.max(20 / viewport.scale, MIN_ORIENTATION_LENGTH * 10) };
+    const closed = offsetChainIsClosed(entries);
+    const draft = offsetChainDraft(entries, measured.distance, measured.side, closed);
+    if (!draft.ok) {
+      setHint(offsetChainErrorText(draft), "error");
+      return false;
+    }
+    const source = entries[measured.index].geometry;
+    const offset = draft.geometries[measured.index];
+    const target = offsetDimensionTarget(source, offset, measured.distance, offsetPairSign(source, offset));
+    pendingCommand = {
+      type: "offset-value",
+      source,
+      sign: target.sign,
+      pointer: { ...pointer },
+      target,
+      dimension: dimensionWithLabelAt(target, dimensionFromAnchor(target, pointer, { allowPointAxis: false }), pointer),
+      buffer: formatDisplayNumber(measured.distance),
+      editing: false,
+      chainEntries: entries.map((entry) => ({ ...entry })),
+      chainClosed: closed,
+      chainSide: measured.side,
+      dimensionSegmentIndex: measured.index,
     };
     setHint("オフセット距離を入力してください。Enterまたはダブルクリックで決定します");
     updateToolbar();
@@ -4376,19 +4590,105 @@
     return false;
   }
 
+  function createOffsetChainGeometry(entries, distance, side, pointer, closed, dimensionSegmentIndex = 0) {
+    const plan = offsetChainDraft(entries, distance, side, closed);
+    if (!plan.ok) {
+      setHint(offsetChainErrorText(plan), "error");
+      return false;
+    }
+    if (plan.geometries.some((geometry) => geometry instanceof Line
+      ? geometry.length() < MIN_LINE_LENGTH
+      : Math.abs(geometry.endAngle - geometry.startAngle) * geometry.radius() < MIN_ARC_LENGTH)) {
+      setHint(applicationText("指定距離ではチェーンの一部が短すぎます", "Part of the chain is too short at this distance"), "error");
+      return false;
+    }
+    const state = {
+      pointLength: model.points.length,
+      lineLength: model.lines.length,
+      circleLength: model.circles.length,
+      arcLength: model.arcs.length,
+      constraintLength: model.constraints.length,
+      pointSeq,
+      lineSeq,
+      circleSeq,
+      arcSeq,
+      nextDimensionParameterIndex: model.nextDimensionParameterIndex,
+    };
+    const offsets = [];
+    for (let index = 0; index < plan.geometries.length; index++) {
+      const draft = plan.geometries[index];
+      const source = entries[index].geometry;
+      let offset;
+      if (draft instanceof Line) {
+        const p1 = addPoint(draft.p1.x, draft.p1.y, false, "endpoint");
+        const p2 = addPoint(draft.p2.x, draft.p2.y, false, "endpoint");
+        offset = addLine(p1, p2, source.construction);
+      } else {
+        const center = addPoint(draft.center.x, draft.center.y, false, "center");
+        offset = addArc(center, draft.radius(), draft.startAngle, draft.endAngle, source.construction);
+      }
+      if (!offset) break;
+      offset.appearance = normalizeAppearance(source.appearance);
+      offsets.push(offset);
+    }
+    if (offsets.length !== entries.length) {
+      model.points.length = state.pointLength;
+      model.lines.length = state.lineLength;
+      model.arcs.length = state.arcLength;
+      pointSeq = state.pointSeq;
+      lineSeq = state.lineSeq;
+      arcSeq = state.arcSeq;
+      return false;
+    }
+    const index = Math.max(0, Math.min(entries.length - 1, Number(dimensionSegmentIndex) || 0));
+    const constraint = new OffsetChainConstraint(
+      entries.map((entry) => entry.geometry),
+      offsets,
+      distance,
+      side,
+      entries.map((entry) => entry.reversed),
+      closed,
+      index,
+    );
+    const target = offsetDimensionTarget(entries[index].geometry, offsets[index], distance, offsetPairSign(entries[index].geometry, offsets[index]));
+    constraint.dimension = dimensionWithLabelAt(target, dimensionFromAnchor(target, pointer, { allowPointAxis: false }), pointer);
+    const ok = commitNewConstraint("offset-chain", constraint);
+    if (ok) return true;
+
+    model.points.length = state.pointLength;
+    model.lines.length = state.lineLength;
+    model.circles.length = state.circleLength;
+    model.arcs.length = state.arcLength;
+    model.constraints.length = state.constraintLength;
+    pointSeq = state.pointSeq;
+    lineSeq = state.lineSeq;
+    circleSeq = state.circleSeq;
+    arcSeq = state.arcSeq;
+    model.nextDimensionParameterIndex = state.nextDimensionParameterIndex;
+    constraintAnalysisState = null;
+    updateUI();
+    draw();
+    return false;
+  }
+
   function submitOffsetValue() {
     if (pendingCommand?.type !== "offset-value") return false;
     const value = Number(pendingCommand.buffer);
-    const { source, sign, pointer } = pendingCommand;
-    if (!Number.isFinite(value) || value <= 0 || (!(source instanceof Line) && source.radius() + sign * value < MIN_ORIENTATION_LENGTH)) {
-      setHint("作成可能な0より大きいオフセット距離を入力してください", "error");
+    const { source, sign, pointer, chainEntries, chainClosed, chainSide, dimensionSegmentIndex } = pendingCommand;
+    const chainPlan = chainEntries?.length > 1 ? offsetChainDraft(chainEntries, value, chainSide, chainClosed) : null;
+    if (!Number.isFinite(value) || value <= 0 || chainPlan && !chainPlan.ok || (!chainPlan && !(source instanceof Line) && source.radius() + sign * value < MIN_ORIENTATION_LENGTH)) {
+      setHint(chainPlan && !chainPlan.ok ? offsetChainErrorText(chainPlan) : "作成可能な0より大きいオフセット距離を入力してください", "error");
       draw();
       return false;
     }
     pendingCommand = null;
     hideDimensionValueInput();
-    const ok = createOffsetGeometry(source, value, sign, pointer);
+    const ok = chainEntries?.length > 1
+      ? createOffsetChainGeometry(chainEntries, value, chainSide, pointer, chainClosed, dimensionSegmentIndex)
+      : createOffsetGeometry(source, value, sign, pointer);
     offsetSource = null;
+    offsetChainEntries = [];
+    offsetChainSelectionCommitted = false;
     pointerPreview = null;
     clearSelection();
     updateToolbar();
@@ -4489,6 +4789,8 @@
     arcStartPoint = null;
     pointerPreview = null;
     offsetSource = null;
+    offsetChainEntries = [];
+    offsetChainSelectionCommitted = false;
     pendingCommand = null;
     pendingConstraintCommand = null;
     constraintOperands = [];
@@ -4640,6 +4942,55 @@
         if (!source || !offset) throw new Error(`オフセット対象 ${data.source}/${data.offset} が見つかりません`);
         const savedSign = data.directionBasis === "endpoint" || data.directionBasis === "radial" ? Number(data.sign) || null : null;
         return new OffsetConstraint(source, offset, Number(data.target), savedSign);
+      },
+    },
+    {
+      type: "offsetChainDimension",
+      constraintClass: OffsetChainConstraint,
+      serialize: (c) => ({
+        sources: c.sources.map((geometry, index) => ({ geometry: constraintGeometryId(geometry), reversed: Boolean(c.sourceReversed[index]) })),
+        offsets: c.offsets.map(constraintGeometryId),
+        target: c.target,
+        side: c.side,
+        closed: Boolean(c.closed),
+        joinType: "miter",
+        dimensionSegmentIndex: c.dimensionSegmentIndex,
+        dimension: serializeDimension(c.dimension, targetFromConstraint(c)),
+        enabled: c.enabled,
+      }),
+      deserialize(data, refs) {
+        if (!Array.isArray(data.sources) || !Array.isArray(data.offsets) || data.sources.length < 2 || data.sources.length !== data.offsets.length) {
+          throw new Error("チェーンオフセットの参照数が不正です");
+        }
+        if (data.joinType !== "miter" || !Number.isFinite(Number(data.target)) || Number(data.target) <= 0 || ![-1, 1].includes(Number(data.side)) || typeof data.closed !== "boolean") {
+          throw new Error("チェーンオフセットの設定値が不正です");
+        }
+        if (data.sources.some((entry) => !entry || typeof entry.geometry !== "string" || typeof entry.reversed !== "boolean")
+          || data.offsets.some((id) => typeof id !== "string")
+          || new Set(data.sources.map((entry) => entry.geometry)).size !== data.sources.length
+          || new Set(data.offsets).size !== data.offsets.length
+          || !Number.isInteger(data.dimensionSegmentIndex)
+          || data.dimensionSegmentIndex < 0
+          || data.dimensionSegmentIndex >= data.sources.length) {
+          throw new Error("チェーンオフセットの順序情報が不正です");
+        }
+        const sources = data.sources.map((entry) => refs.lineOrPrimitive(entry?.geometry));
+        const offsets = data.offsets.map((id) => refs.lineOrPrimitive(id));
+        if (sources.some((item) => !(item instanceof Line || item instanceof Arc)) || offsets.some((item) => !(item instanceof Line || item instanceof Arc))) {
+          throw new Error("チェーンオフセットの線または円弧が見つかりません");
+        }
+        if (sources.some((source, index) => source.constructor !== offsets[index].constructor)) {
+          throw new Error("チェーンオフセットの対応する図形種別が一致しません");
+        }
+        return new OffsetChainConstraint(
+          sources,
+          offsets,
+          Number(data.target),
+          Number(data.side),
+          data.sources.map((entry) => Boolean(entry?.reversed)),
+          Boolean(data.closed),
+          data.dimensionSegmentIndex,
+        );
       },
     },
     {
@@ -5492,7 +5843,8 @@
         let constraint = null;
         try {
           constraint = deserializeConstraint(rawConstraint, pointById, lineById, primitiveById, normalizeLoadedDimensionAppearance);
-        } catch (_error) {
+        } catch (error) {
+          if (sourceVersion >= 14 && rawConstraint?.type === "offsetChainDimension") throw error;
           constraint = null;
         }
         if (!constraint) {
@@ -5924,6 +6276,8 @@
     pointerPreview = null;
     trimPreview = null;
     offsetSource = null;
+    offsetChainEntries = [];
+    offsetChainSelectionCommitted = false;
     clearSnap();
     mode = "select";
     updateToolbar();
@@ -5944,6 +6298,8 @@
     pointerPreview = null;
     trimPreview = null;
     offsetSource = null;
+    offsetChainEntries = [];
+    offsetChainSelectionCommitted = false;
     hatchPreview = null;
     hatchRepairTarget = null;
     clearSnap();
@@ -5955,7 +6311,7 @@
   }
 
   function hasActiveDrawOperation() {
-    return Boolean(lineStartPoint || rectangleStartPoint || filletFirstLine || circleCenterPoint || arcCenterPoint || arcStartPoint || offsetSource);
+    return Boolean(lineStartPoint || rectangleStartPoint || filletFirstLine || circleCenterPoint || arcCenterPoint || arcStartPoint || offsetSource || offsetChainEntries.length);
   }
 
   function beginTransientLineStartRollback() {
@@ -6064,6 +6420,8 @@
     pointerPreview = null;
     trimPreview = null;
     offsetSource = null;
+    offsetChainEntries = [];
+    offsetChainSelectionCommitted = false;
     hatchPreview = null;
     hatchRepairTarget = null;
     clearSnap();
@@ -7476,6 +7834,12 @@
     if (c instanceof PointLineDistanceConstraint) return { kind: "point-line", point: c.point, line: c.line, value: c.target };
     if (c instanceof LineLineDistanceConstraint) return { kind: "line-line", line1: c.line1, line2: c.line2, value: c.target };
     if (c instanceof OffsetConstraint) return { kind: "offset-distance", source: c.source, offset: c.offset, value: c.target, sign: c.sign };
+    if (c instanceof OffsetChainConstraint) {
+      const index = Math.max(0, Math.min(c.sources.length - 1, Number(c.dimensionSegmentIndex) || 0));
+      const source = c.sources[index];
+      const offset = c.offsets[index];
+      return { kind: "offset-distance", source, offset, value: c.target, sign: offsetPairSign(source, offset, c.side) };
+    }
     if (c instanceof LineAngleConstraint) return { kind: "angle", line1: c.line1, line2: c.line2, value: angleDegrees(c.target), signedValue: angleDimensionSweep({ line1: c.line1, line2: c.line2 }) };
     if (c instanceof RadiusConstraint) return { kind: "radius", primitive: c.primitive, value: c.target };
     if (c instanceof DiameterConstraint) return { kind: "diameter", primitive: c.primitive, value: c.target };
@@ -7489,6 +7853,7 @@
       constraint instanceof PointLineDistanceConstraint ||
       constraint instanceof LineLineDistanceConstraint ||
       constraint instanceof OffsetConstraint ||
+      constraint instanceof OffsetChainConstraint ||
       constraint instanceof LineAngleConstraint ||
       constraint instanceof RadiusConstraint ||
       constraint instanceof DiameterConstraint
@@ -7537,6 +7902,7 @@
       }
       return c.source.center === point || c.offset.center === point;
     }
+    if (c instanceof OffsetChainConstraint) return constraintGraphNodes(c).includes(point);
     if (c instanceof CoincidentConstraint) return c.p1 === point || c.p2 === point;
     if (c instanceof ArcEndpointCoincidentConstraint) return c.arc.center === point || c.point === point;
     if (c instanceof ArcEndpointArcEndpointCoincidentConstraint) return c.a.center === point || c.b.center === point;
@@ -7577,6 +7943,7 @@
     if (c instanceof PointLineDistanceConstraint) return c.line === line;
     if (c instanceof LineLineDistanceConstraint) return c.line1 === line || c.line2 === line;
     if (c instanceof OffsetConstraint) return c.source === line || c.offset === line;
+    if (c instanceof OffsetChainConstraint) return c.sources.includes(line) || c.offsets.includes(line);
     if (c instanceof LineFixedConstraint) return c.line === line;
     if (c instanceof PointOnLineConstraint || c instanceof PointOnLineMidpointConstraint) return c.line === line;
     if (c instanceof ArcEndpointOnLineConstraint) return c.line === line;
@@ -7590,6 +7957,7 @@
   function constraintReferencesPrimitive(c, primitive) {
     if (c instanceof ArcSymmetryConstraint) return c.arc1 === primitive || c.arc2 === primitive;
     if (c instanceof OffsetConstraint) return c.source === primitive || c.offset === primitive;
+    if (c instanceof OffsetChainConstraint) return c.sources.includes(primitive) || c.offsets.includes(primitive);
     if (c instanceof ArcEndpointCoincidentConstraint) return c.arc === primitive;
     if (c instanceof ArcEndpointArcEndpointCoincidentConstraint) return c.a === primitive || c.b === primitive;
     if (c instanceof ArcEndpointOnLineConstraint) return c.arc === primitive;
@@ -7627,6 +7995,16 @@
           addNode(nodes, item.p1);
           addNode(nodes, item.p2);
         } else {
+          addNode(nodes, item.center);
+        }
+      }
+    } else if (c instanceof OffsetChainConstraint) {
+      for (const item of [...c.sources, ...c.offsets]) {
+        addNode(nodes, item);
+        if (item instanceof Line) {
+          addNode(nodes, item.p1);
+          addNode(nodes, item.p2);
+        } else if (item instanceof Arc) {
           addNode(nodes, item.center);
         }
       }
@@ -7718,6 +8096,12 @@
 
   function constraintDefiningGeometryEntries(constraint) {
     if (!constraint) return [];
+    if (constraint instanceof OffsetChainConstraint) {
+      return [
+        ...constraint.sources.map((item, index) => ({ key: `source${index}`, labelJa: `基準図形${index + 1} ID`, labelEn: `Source geometry ${index + 1} ID`, item })),
+        ...constraint.offsets.map((item, index) => ({ key: `offset${index}`, labelJa: `オフセット図形${index + 1} ID`, labelEn: `Offset geometry ${index + 1} ID`, item })),
+      ];
+    }
     const roles = [
       ["p1", "1つ目の点ID", "First point ID"],
       ["p2", "2つ目の点ID", "Second point ID"],
@@ -10022,14 +10406,51 @@
   }
 
   function drawOffsetPreview() {
-    if (mode !== "offset" || !offsetSource) return;
+    if (mode !== "offset" || !(offsetSource || offsetChainEntries.length)) return;
+    if (!pendingCommand && offsetChainEntries.length > 0 && !offsetChainSelectionCommitted) return;
     const pointer = pendingCommand?.type === "offset-value" ? pendingCommand.pointer : pointerPreview;
     if (!pointer) return;
-    const measured = offsetDistanceFromPointer(offsetSource, pointer);
+    if (offsetChainEntries.length > 1) {
+      const measured = pendingCommand?.type === "offset-value"
+        ? { distance: Number(pendingCommand.buffer), side: pendingCommand.chainSide, index: pendingCommand.dimensionSegmentIndex }
+        : offsetChainDistanceFromPointer(offsetChainEntries, pointer);
+      const distance = Number.isFinite(measured.distance) && measured.distance > 0 ? measured.distance : MIN_ORIENTATION_LENGTH * 10;
+      const plan = offsetChainDraft(offsetChainEntries, distance, measured.side, offsetChainIsClosed(offsetChainEntries));
+      if (!plan.ok) return;
+      withCanvasState(() => {
+        ctx.strokeStyle = "#2563eb";
+        ctx.lineWidth = 2 / viewport.scale;
+        ctx.setLineDash([6 / viewport.scale, 5 / viewport.scale]);
+        for (const offset of plan.geometries) {
+          ctx.beginPath();
+          if (offset instanceof Line) {
+            ctx.moveTo(offset.p1.x, offset.p1.y);
+            ctx.lineTo(offset.p2.x, offset.p2.y);
+          } else {
+            ctx.arc(offset.center.x, offset.center.y, offset.radius(), offset.startAngle, offset.endAngle, offset.endAngle < offset.startAngle);
+          }
+          ctx.stroke();
+        }
+      });
+      const index = Math.max(0, Math.min(offsetChainEntries.length - 1, Number(measured.index) || 0));
+      const source = offsetChainEntries[index].geometry;
+      const offset = plan.geometries[index];
+      const target = offsetDimensionTarget(source, offset, distance, offsetPairSign(source, offset));
+      const dimension = dimensionWithLabelAt(target, dimensionFromAnchor(target, pointer, { allowPointAxis: false }), pointer);
+      if (pendingCommand?.type === "offset-value") {
+        pendingCommand.target = target;
+        pendingCommand.dimension = dimension;
+      }
+      drawDimension(target, dimension, formatDimensionLabel(distance), true);
+      return;
+    }
+    const source = offsetSource || offsetChainEntries[0]?.geometry;
+    if (!source) return;
+    const measured = offsetDistanceFromPointer(source, pointer);
     const sign = pendingCommand?.type === "offset-value" ? pendingCommand.sign : measured.sign;
     const inputValue = pendingCommand?.type === "offset-value" ? Number(pendingCommand.buffer) : measured.distance;
     const distance = Number.isFinite(inputValue) && inputValue > 0 ? inputValue : measured.distance;
-    const offset = offsetDraftGeometry(offsetSource, distance, sign);
+    const offset = offsetDraftGeometry(source, distance, sign);
     if (!offset) return;
 
     withCanvasState(() => {
@@ -10048,7 +10469,7 @@
       ctx.stroke();
     });
 
-    const target = offsetDimensionTarget(offsetSource, offset, distance, sign);
+    const target = offsetDimensionTarget(source, offset, distance, sign);
     const dimension = dimensionWithLabelAt(target, dimensionFromAnchor(target, pointer, { allowPointAxis: false }), pointer);
     if (pendingCommand?.type === "offset-value") {
       pendingCommand.target = target;
@@ -10932,6 +11353,8 @@
     if (!pendingCommand) return;
     if (pendingCommand.type === "offset-value") {
       offsetSource = null;
+      offsetChainEntries = [];
+      offsetChainSelectionCommitted = false;
       pointerPreview = null;
     }
     pendingCommand = null;
@@ -11252,6 +11675,9 @@
     arcStartPoint = null;
     pointerPreview = null;
     trimPreview = null;
+    offsetSource = null;
+    offsetChainEntries = [];
+    offsetChainSelectionCommitted = false;
     pendingCommand = null;
     pendingConstraintCommand = null;
     hoveredSketchIdentity = null;
@@ -12671,7 +13097,7 @@
     const value = String(name || applicationText("拘束", "Constraint"));
     const replacements = [
       [/^円弧端点-円周一致/, "Arc endpoint on circumference"], [/^円弧端点-線一致/, "Arc endpoint on line"], [/^円弧端点一致/, "Arc endpoint coincident"],
-      [/^点-線寸法/, "Point-line dimension"], [/^線-線寸法/, "Line-line dimension"], [/^オフセット寸法/, "Offset dimension"],
+      [/^点-線寸法/, "Point-line dimension"], [/^線-線寸法/, "Line-line dimension"], [/^チェーンオフセット寸法/, "Chain offset dimension"], [/^オフセット寸法/, "Offset dimension"],
       [/^水平寸法/, "Horizontal dimension"], [/^垂直寸法/, "Vertical dimension"], [/^点-線一致/, "Point-line coincident"], [/^点-円周一致/, "Point on circumference"],
       [/^中点一致/, "Midpoint coincident"], [/^最小線長/, "Minimum line length"], [/^線固定/, "Fixed line"], [/^点水平/, "Point horizontal"], [/^点垂直/, "Point vertical"],
       [/^円弧対称/, "Arc symmetry"], [/^線対称/, "Line symmetry"], [/^同一直線/, "Collinear"], [/^寸法/, "Dimension"], [/^角度/, "Angle"], [/^一致/, "Coincident"],
@@ -13224,6 +13650,32 @@
     }
   }
 
+  function preconditionOffsetChainConstraint(constraint) {
+    if (!(constraint instanceof OffsetChainConstraint)) return;
+    const plan = offsetChainDraft(
+      constraint.sources.map((geometry, index) => ({ geometry, reversed: Boolean(constraint.sourceReversed[index]) })),
+      constraint.target,
+      constraint.side,
+      constraint.closed,
+    );
+    if (!plan.ok || plan.geometries.length !== constraint.offsets.length) return;
+    plan.geometries.forEach((planned, index) => {
+      const offset = constraint.offsets[index];
+      if (planned instanceof Line && offset instanceof Line) {
+        offset.p1.x = planned.p1.x;
+        offset.p1.y = planned.p1.y;
+        offset.p2.x = planned.p2.x;
+        offset.p2.y = planned.p2.y;
+      } else if (planned instanceof Arc && offset instanceof Arc) {
+        offset.center.x = planned.center.x;
+        offset.center.y = planned.center.y;
+        offset.radiusValue = planned.radiusValue;
+        offset.startAngle = planned.startAngle;
+        offset.endAngle = planned.endAngle;
+      }
+    });
+  }
+
   function preconditionNewConstraint(constraint) {
     if (constraint instanceof ArcEndpointOnLineConstraint) {
       preconditionArcEndpointOnLineConstraint(constraint);
@@ -13233,6 +13685,8 @@
       preconditionArcEndpointArcEndpointCoincidentConstraint(constraint);
     } else if (constraint instanceof OffsetConstraint) {
       preconditionOffsetConstraint(constraint);
+    } else if (constraint instanceof OffsetChainConstraint) {
+      preconditionOffsetChainConstraint(constraint);
     }
   }
 
@@ -15955,23 +16409,58 @@
     }
 
     if (mode === "offset") {
-      if (!offsetSource) {
-        offsetSource = hitL || hitC || hitA;
-        if (!offsetSource) {
-          setHint("オフセットする線、円、円弧をクリックしてください", "error");
+      if (offsetSource instanceof Circle) {
+        startOffsetDistanceInput(offsetSource, p);
+        return;
+      }
+      if (offsetChainSelectionCommitted && offsetChainEntries.length > 0) {
+        if (offsetChainEntries.length === 1) startOffsetDistanceInput(offsetChainEntries[0].geometry, p);
+        else startOffsetChainDistanceInput(offsetChainEntries, p);
+        return;
+      }
+      const candidate = hitL || hitA;
+      if (candidate) {
+        const added = addOffsetChainGeometry(candidate);
+        if (!added.ok) {
+          const messages = {
+            "already-selected": ["その図形は既に選択されています", "That geometry is already selected."],
+            "not-connected": ["選択中チェーンの端部に明示的に接続された線または円弧を選択してください", "Select a line or arc explicitly connected to an end of the current chain."],
+            "closed-chain": ["閉じたチェーンには図形を追加できません", "No more geometry can be added to a closed chain."],
+          };
+          const message = messages[added.code] || ["この図形はチェーンへ追加できません", "This geometry cannot be added to the chain."];
+          setHint(applicationText(message[0], message[1]), "error");
+        } else {
+          pointerPreview = p;
+          const closedText = added.closed ? applicationText("（閉チェーン）", " (closed chain)") : "";
+          setHint(applicationText(
+            `${offsetChainEntries.length}個選択${closedText}。続けて線・円弧を選択するか、空白クリック／Enterでチェーンを確定してください`,
+            `${offsetChainEntries.length} selected${closedText}. Select another line/arc, or click blank canvas / press Enter to finish the chain.`,
+          ));
+          updateGeometrySelectionUI();
+          draw();
+        }
+        return;
+      }
+      if (hitC) {
+        if (offsetChainEntries.length > 0) {
+          setHint(applicationText("円は線・円弧のチェーンへ追加できません", "A circle cannot be added to a line/arc chain."), "error");
           return;
         }
-        selectedPoints = [];
-        selectedLines = offsetSource instanceof Line ? [offsetSource] : [];
-        selectedCircles = offsetSource instanceof Circle ? [offsetSource] : [];
-        selectedArcs = offsetSource instanceof Arc ? [offsetSource] : [];
+        offsetSource = hitC;
+        syncOffsetChainSelection();
         pointerPreview = p;
         setHint("オフセットする側と距離の目安をクリックしてください");
         updateGeometrySelectionUI();
         draw();
         return;
       }
-      startOffsetDistanceInput(offsetSource, p);
+      if (offsetChainEntries.length > 0) {
+        offsetChainSelectionCommitted = true;
+        if (offsetChainEntries.length === 1) startOffsetDistanceInput(offsetChainEntries[0].geometry, p);
+        else startOffsetChainDistanceInput(offsetChainEntries, p);
+        return;
+      }
+      setHint("オフセットする線、円、円弧をクリックしてください", "error");
       return;
     }
 
@@ -16250,8 +16739,8 @@
         draw();
         return;
       }
-      if (offsetSource) {
-        pointerPreview = p;
+      pointerPreview = p;
+      if (offsetSource instanceof Circle || offsetChainSelectionCommitted) {
         hoveredPoint = null;
         hoveredEndpointPoint = null;
         hoveredLine = offsetSource instanceof Line ? offsetSource : null;
@@ -16868,6 +17357,16 @@
     }
 
     if (handleDistanceKey(e)) return;
+
+    if (!textEditingTarget && e.key === "Enter" && mode === "offset" && !pendingCommand && offsetChainEntries.length > 0 && !offsetChainSelectionCommitted) {
+      e.preventDefault();
+      offsetChainSelectionCommitted = true;
+      pointerPreview = lastPointerWorld ? { ...lastPointerWorld } : pointerPreview;
+      setHint(applicationText("チェーンを確定しました。オフセットする側と距離の目安をクリックしてください", "Chain confirmed. Click the offset side and an approximate distance."));
+      updateToolbar();
+      draw();
+      return;
+    }
 
     if (!textEditingTarget && (e.key === "Delete" || e.key === "Backspace") && isGeometryMode() && deleteCurrentSelection()) {
       e.preventDefault();
@@ -17601,6 +18100,8 @@
     pointerPreview = null;
     trimPreview = null;
     offsetSource = null;
+    offsetChainEntries = [];
+    offsetChainSelectionCommitted = false;
     hoveredPoint = null;
     hoveredEndpointPoint = null;
     hoveredLine = null;
@@ -17628,12 +18129,23 @@
     arcStartPoint = null;
     pointerPreview = null;
     trimPreview = null;
+    offsetSource = null;
+    offsetChainEntries = [];
+    offsetChainSelectionCommitted = false;
     const selected = [...selectedLines, ...selectedCircles, ...selectedArcs];
-    offsetSource = selected.length === 1 ? selected[0] : null;
-    if (!offsetSource) clearSelection();
+    if (selected.length === 1 && selected[0] instanceof Circle) {
+      offsetSource = selected[0];
+    } else if (selected.length === 1 && (selected[0] instanceof Line || selected[0] instanceof Arc)) {
+      addOffsetChainGeometry(selected[0]);
+      offsetChainSelectionCommitted = true;
+    } else {
+      clearSelection();
+    }
     clearSnap();
     updateToolbar();
-    setHint(offsetSource ? "オフセットする側と距離の目安をクリックしてください" : "オフセットする線、円、円弧をクリックしてください");
+    setHint(offsetSource && (offsetSource instanceof Circle || offsetChainSelectionCommitted)
+      ? "オフセットする側と距離の目安をクリックしてください"
+      : applicationText("オフセットする線または円弧を順番にクリックしてください。円は単独で選択します", "Select connected lines or arcs in order. Select a circle by itself."));
     updateUI();
     draw();
   });
@@ -19591,6 +20103,100 @@
           side: screenPoint(horizontal ? { x: 0, y: 35 } : { x: 35, y: 0 }),
           expectedAxis: horizontal ? "y" : "x",
         };
+      },
+      resetForOffsetChainUi() {
+        resetModelState();
+        const p1 = addPoint(-80, -45, false, "endpoint");
+        const corner = addPoint(20, -45, false, "endpoint");
+        const p3 = addPoint(20, 55, false, "endpoint");
+        const line1 = addLine(p1, corner);
+        const line2 = addLine(corner, p3);
+        const disconnected = addLine(addPoint(75, -45, false, "endpoint"), addPoint(75, 35, false, "endpoint"));
+        fitAllGeometryToViewport(220);
+        resetHistory("offset chain test");
+        draw();
+        const rect = canvas.getBoundingClientRect();
+        const screenPoint = (point) => {
+          const screen = worldToCanvasScreen(point);
+          return { x: rect.left + screen.x, y: rect.top + screen.y };
+        };
+        return {
+          first: screenPoint({ x: -30, y: -45 }),
+          second: screenPoint({ x: 20, y: 5 }),
+          disconnected: screenPoint({ x: 75, y: -5 }),
+          side: screenPoint({ x: -30, y: -15 }),
+          sourceIds: [line1.id, line2.id],
+        };
+      },
+      offsetChainUiState() {
+        const constraints = model.constraints.filter((constraint) => constraint instanceof OffsetChainConstraint);
+        const serialized = serializeModel();
+        return {
+          selectedCount: offsetChainEntries.length,
+          selectionCommitted: offsetChainSelectionCommitted,
+          pendingType: pendingCommand?.type || null,
+          lineCount: model.lines.length,
+          constraintCount: constraints.length,
+          target: constraints[0]?.target ?? null,
+          parameterName: constraints[0]?.parameterName || null,
+          parameterNames: constraints.map((item) => item.parameterName || null),
+          sourceIds: constraints[0]?.sources.map((item) => item.id) || [],
+          offsetIds: constraints[0]?.offsets.map((item) => item.id) || [],
+          resultJoins: constraints[0]
+            ? constraints[0].offsets.slice(0, -1).map((item, index) => ({
+              end: item instanceof Line ? { x: item.p2.x, y: item.p2.y } : item.endPoint(),
+              start: constraints[0].offsets[index + 1] instanceof Line
+                ? { x: constraints[0].offsets[index + 1].p1.x, y: constraints[0].offsets[index + 1].p1.y }
+                : constraints[0].offsets[index + 1].startPoint(),
+            }))
+            : [],
+          jsonVersion: serialized.version,
+          serializedTypes: serialized.constraints.filter((item) => item.type === "offsetChainDimension").length,
+          serialized,
+        };
+      },
+      roundTripOffsetChainForTest() {
+        const saved = serializeModel();
+        const loaded = loadModelData(saved);
+        const constraint = model.constraints.find((item) => item instanceof OffsetChainConstraint);
+        return {
+          loaded,
+          count: model.constraints.filter((item) => item instanceof OffsetChainConstraint).length,
+          target: constraint?.target ?? null,
+          sourceCount: constraint?.sources.length ?? 0,
+          offsetCount: constraint?.offsets.length ?? 0,
+          reversed: constraint?.sourceReversed || [],
+        };
+      },
+      updateOffsetChainTargetForTest(value) {
+        const constraint = model.constraints.find((item) => item instanceof OffsetChainConstraint);
+        if (!constraint) return null;
+        constraint.target = Number(value);
+        constraint.expression = String(value);
+        preconditionNewConstraint(constraint);
+        const target = targetFromConstraint(constraint);
+        return {
+          measured: measuredConstraintTargetValue(constraint, target, constraint.dimension),
+          join: {
+            first: constraint.offsets[0] instanceof Line ? { x: constraint.offsets[0].p2.x, y: constraint.offsets[0].p2.y } : constraint.offsets[0].endPoint(),
+            second: constraint.offsets[1] instanceof Line ? { x: constraint.offsets[1].p1.x, y: constraint.offsets[1].p1.y } : constraint.offsets[1].startPoint(),
+          },
+        };
+      },
+      canReselectOffsetResultChainForTest() {
+        const constraint = model.constraints.find((item) => item instanceof OffsetChainConstraint);
+        if (!constraint) return null;
+        offsetSource = null;
+        offsetChainEntries = [];
+        offsetChainSelectionCommitted = false;
+        const first = addOffsetChainGeometry(constraint.offsets[0]);
+        const second = addOffsetChainGeometry(constraint.offsets[1]);
+        const result = { first: first.ok, second: second.ok, selectedCount: offsetChainEntries.length };
+        offsetSource = null;
+        offsetChainEntries = [];
+        offsetChainSelectionCommitted = false;
+        clearSelection();
+        return result;
       },
       resetForSketchDeletion() {
         resetModelState();
