@@ -342,6 +342,7 @@
   let hatchResolutionCache = new WeakMap();
   let hatchFaceCache = new Map();
   const dimensionTextWidthCache = new WeakMap();
+  const dimensionArrowheadFactorCache = new Map();
   let undoStack = [];
   let redoStack = [];
   let historyRestoring = false;
@@ -364,6 +365,7 @@
   const DIMENSION_SCREEN_PX_PER_MM = 96 / 25.4;
   const DIMENSION_TERMINATOR_FIT_MARGIN_FACTOR = 1;
   const DIMENSION_OUTSIDE_SHAFT_LENGTH_FACTOR = 1.5;
+  const DIMENSION_ARROW_MITER_LIMIT = 10;
   const HATCH_SCREEN_PX_PER_MM = 96 / 25.4;
   const DIMENSION_APPEARANCE_LENGTH_KEYS = ["extensionLineOvershoot", "extensionLineOriginGap", "terminatorSize", "dimensionTextHeight", "dimensionTextGap"];
   const DIMENSION_DISPLAY_PRECISION = 1e-6;
@@ -10055,16 +10057,44 @@
     return dimensionArrowheadPointsFromResolved(point, direction, resolved);
   }
 
-  function dimensionArrowheadPointsFromResolved(point, direction, resolved) {
+  function dimensionArrowheadFactors(arrowheadAngle) {
+    const angle = Math.max(1, Math.min(179, Number(arrowheadAngle) || 30));
+    const cached = dimensionArrowheadFactorCache.get(angle);
+    if (cached) return cached;
+    const halfAngle = angle * Math.PI / 360;
+    const sine = Math.max(1e-9, Math.sin(halfAngle));
+    const factors = {
+      wing: Math.tan(halfAngle),
+      tipInset: 1 / sine <= DIMENSION_ARROW_MITER_LIMIT ? 0.5 / sine : 0.5 * sine,
+    };
+    dimensionArrowheadFactorCache.set(angle, factors);
+    return factors;
+  }
+
+  function dimensionArrowheadPointsFromResolved(point, direction, resolved, factors = dimensionArrowheadFactors(resolved.arrowheadAngle)) {
     const size = dimensionMillimetersToWorld(resolved.terminatorSize);
-    const halfAngle = resolved.arrowheadAngle * Math.PI / 360;
-    const wing = size * Math.tan(halfAngle);
+    const wing = size * factors.wing;
     const n = { x: -direction.y, y: direction.x };
     return [
       { x: point.x, y: point.y },
       { x: point.x + direction.x * size + n.x * wing, y: point.y + direction.y * size + n.y * wing },
       { x: point.x + direction.x * size - n.x * wing, y: point.y + direction.y * size - n.y * wing },
     ];
+  }
+
+  function dimensionOpenArrowTipInset(strokeWidth, arrowheadAngle) {
+    // A miter join projects past the path vertex toward the visual arrow tip.
+    // Very acute joins are bevelled by Canvas once they exceed miterLimit.
+    return Math.max(0, Number(strokeWidth) || 0) * dimensionArrowheadFactors(arrowheadAngle).tipInset;
+  }
+
+  function dimensionOpenArrowheadRenderPoints(point, direction, resolved, strokeWidth) {
+    const factors = dimensionArrowheadFactors(resolved.arrowheadAngle);
+    const inset = Math.max(0, Number(strokeWidth) || 0) * factors.tipInset;
+    return dimensionArrowheadPointsFromResolved({
+      x: point.x + direction.x * inset,
+      y: point.y + direction.y * inset,
+    }, direction, resolved, factors);
   }
 
   function drawDimensionTerminator(point, direction, appearance = DEFAULT_DIMENSION_APPEARANCE) {
@@ -10077,7 +10107,10 @@
       ctx.fill();
       return;
     }
-    const [tip, firstWing, secondWing] = dimensionArrowheadPointsFromResolved(point, direction, resolved);
+    const arrowPoints = resolved.terminatorType === "arrow"
+      ? dimensionOpenArrowheadRenderPoints(point, direction, resolved, ctx.lineWidth)
+      : dimensionArrowheadPointsFromResolved(point, direction, resolved);
+    const [tip, firstWing, secondWing] = arrowPoints;
     ctx.beginPath();
     if (resolved.terminatorType === "filledArrow") {
       ctx.moveTo(tip.x, tip.y);
@@ -18697,6 +18730,28 @@
           firstDirection: directions.first,
           secondDirection: directions.second,
         };
+      },
+      dimensionArrowTipAlignmentForTest({ lineWidth = 1.2, arrowheadAngle = 30, highlighted = false, viewportScale = viewport.scale } = {}) {
+        const previousScale = viewport.scale;
+        viewport.scale = Math.max(0.05, Number(viewportScale) || 1);
+        try {
+          const appearance = {
+            ...normalizeDimensionAppearance(model.defaultDimensionAppearance, { partial: false }),
+            terminatorType: "arrow",
+            lineWidth,
+            arrowheadAngle,
+          };
+          const strokeWidth = dimensionStrokeWidth(appearance, highlighted) / viewport.scale;
+          const points = dimensionOpenArrowheadRenderPoints({ x: 0, y: 0 }, { x: 1, y: 0 }, appearance, strokeWidth);
+          const visualMiterApexX = points[0].x - dimensionOpenArrowTipInset(strokeWidth, arrowheadAngle);
+          return {
+            strokeWidth: strokeWidth * viewport.scale,
+            pathTipInset: points[0].x * viewport.scale,
+            visualTipOffset: visualMiterApexX * viewport.scale,
+          };
+        } finally {
+          viewport.scale = previousScale;
+        }
       },
       drawnDimensionColorsForTest() {
         const colors = [];

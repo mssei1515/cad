@@ -1815,6 +1815,28 @@ test("arc radius dimensions omit the center terminator and stop at the arc", asy
   }
 });
 
+test("open dimension arrow tips align with extension lines at every zoom and stroke width", async ({ page }) => {
+  await page.goto(`${baseUrl}/index.html?test=1`);
+  await page.waitForFunction(() => window.__cadTest);
+
+  for (const viewportScale of [0.5, 1, 4]) {
+    for (const highlighted of [false, true]) {
+      const alignment = await page.evaluate(
+        ({ scale, selected }) => window.__cadTest.dimensionArrowTipAlignmentForTest({
+          lineWidth: 3.2,
+          arrowheadAngle: 40,
+          highlighted: selected,
+          viewportScale: scale,
+        }),
+        { scale: viewportScale, selected: highlighted },
+      );
+      expect(alignment.pathTipInset).toBeGreaterThan(0);
+      expect(alignment.visualTipOffset).toBeCloseTo(0, 8);
+      expect(alignment.strokeWidth).toBeCloseTo(highlighted ? 4 : 3.2, 8);
+    }
+  }
+});
+
 test("Constraint dimensions expose defining geometry and inheritable appearance without creating annotation dimensions", async ({ page }) => {
   await page.goto(`${baseUrl}/index.html?test=1`);
   await page.waitForFunction(() => window.__cadTest);
