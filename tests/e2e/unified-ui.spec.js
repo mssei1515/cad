@@ -1597,6 +1597,7 @@ test("Properties visually separates basic information and previews valid text an
     { background: "rgb(248, 250, 252)", border: "rgb(216, 222, 232)" },
     { background: "rgb(242, 248, 255)", border: "rgb(203, 223, 245)" },
   ]);
+  await expect(page.locator(".properties-scroll")).toHaveCSS("background-color", "rgb(244, 247, 251)");
 
   const historyBeforeInput = await page.evaluate(() => window.__cadTest.historyState().undoCount);
   const colorInput = page.locator('#propertiesPanel [data-appearance-key="color"]');

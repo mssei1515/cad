@@ -1314,7 +1314,7 @@ test("new block editor supports cancel and independent internal sketch hierarchy
   })).toEqual({ background: "rgb(245, 243, 255)", boxShadow: "none" });
   const cancelled = await page.evaluate(() => window.__cadTest.cancelBlockEditor());
   expect(cancelled).toEqual({ editing: false, definitions: 0, instances: 0, lines: 4 });
-  await expect(page.locator(".canvas-area")).toHaveCSS("background-color", "rgb(255, 255, 255)");
+  await expect(page.locator(".canvas-area")).toHaveCSS("background-color", "rgb(252, 253, 255)");
 
   await page.evaluate(() => window.__cadTest.resetForEmptyBlockCreation());
   await openBlocksExplorer(page);
