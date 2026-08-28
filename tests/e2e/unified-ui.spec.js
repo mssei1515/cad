@@ -572,7 +572,7 @@ test("annotation-only blocks project nested text with transforms, overrides, bou
   expect(await page.evaluate((point) => {
     const target = document.elementFromPoint(point.x, point.y);
     return { id: target?.id || "", tag: target?.tagName || "", className: target?.className || "" };
-  }, projected.client)).toEqual({ id: "canvas", tag: "CANVAS", className: "" });
+  }, projected.client)).toEqual({ id: "canvas", tag: "CANVAS", className: "has-native-cursor" });
   await page.mouse.click(projected.client.x, projected.client.y);
   expect((await page.evaluate(() => window.__cadTest.blockState())).selectedInstanceIds).toEqual(["BI-root"]);
 });
@@ -799,7 +799,7 @@ test("workspace integrates transparent compact Object groups into Sketch Tree an
   expect(layout.menus).toEqual(["ファイル", "編集", "表示", "ジオメトリ", "ブロック", "拘束", "注記", "ヘルプ"]);
   expect(layout.toolIds).toEqual(expect.arrayContaining(["exportBtn", "importBtn", "undoBtn", "redoBtn", "deleteSelectionBtn", "toolSelect", "toolPoint", "toolLine", "toolCreateBlock", "annotationLeaderBtn", "annotationTextBtn"]));
   expect(layout.iconButtons.every((button) => button.text === "" && button.hasIcon && button.title && button.label)).toBe(true);
-  expect(layout.canvasCursor).toBe("default");
+  expect(layout.canvasCursor).toMatch(/^url\(/);
   expect(layout.gridControls).toBe(0);
   expect(layout.logo).toEqual({ count: 1, viewBox: "0 0 256 256", width: 30, backgroundCount: 0 });
   expect(layout.constraintStatusIcon).toEqual({
@@ -965,7 +965,7 @@ test("workspace integrates transparent compact Object groups into Sketch Tree an
     const cursor = getComputedStyle(canvas).cursor;
     canvas.classList.remove("is-dragging");
     return cursor;
-  })).toBe("default");
+  })).toMatch(/^url\(/);
 
   const fileMenu = page.locator(".app-menu").nth(0);
   const editMenu = page.locator(".app-menu").nth(1);
@@ -1183,90 +1183,99 @@ test("Cad2 files open, overwrite, save as, and cancel without errors", async ({ 
   });
 });
 
-test("active canvas commands show the matching toolbar icon beside the pointer", async ({ page }) => {
+test("Canvas always uses a compact native cursor and commands add the matching framed toolbar icon", async ({ page }) => {
   await page.goto(`${baseUrl}/index.html?test=1`);
   await page.waitForFunction(() => window.__cadTest);
   const canvasArea = await page.locator(".canvas-area").boundingBox();
   const pointer = { x: canvasArea.x + canvasArea.width * 0.62, y: canvasArea.y + canvasArea.height * 0.54 };
-  const indicator = page.locator("#canvasCommandCursorIndicator");
-  const indicatorMatches = (sourceSelector) => page.evaluate((selector) => {
-    const badge = document.getElementById("canvasCommandCursorIndicator");
-    const source = document.querySelector(selector);
-    const badgeStyle = badge ? getComputedStyle(badge) : null;
-    const toolbarStyle = getComputedStyle(document.querySelector(".command-toolbar"));
+  const cursorState = (sourceSelector = null) => page.evaluate((selector) => {
+    const canvas = document.getElementById("canvas");
+    const source = selector ? document.querySelector(selector) : null;
+    const value = canvas.style.getPropertyValue("--canvas-native-cursor");
+    const uri = value.match(/data:image\/svg\+xml,([^"']+)/)?.[1] || "";
+    const svg = uri ? decodeURIComponent(uri) : "";
+    const sourcePath = source?.querySelector("path")?.getAttribute("d") || "";
     return {
-      matches: Boolean(badge?.querySelector("svg")?.isEqualNode(source?.querySelector("svg"))),
-      source: badge?.dataset.sourceCommand || null,
-      pointerEvents: badgeStyle?.pointerEvents || null,
-      colorMatchesToolbar: badgeStyle?.color === toolbarStyle.color,
-      background: badgeStyle?.backgroundColor || null,
-      boxShadow: badgeStyle?.boxShadow || null,
-      transitionDuration: badgeStyle?.transitionDuration || null,
+      nativeActive: canvas.classList.contains("has-native-cursor"),
+      commandActive: Boolean(canvas.dataset.commandCursorSource),
+      source: canvas.dataset.commandCursorSource || null,
+      nativeCursor: getComputedStyle(canvas).cursor.startsWith("url("),
+      hotspot: value.endsWith(") 2 2, default"),
+      hasPointerArrow: svg.includes('fill="#fff" stroke="#0f172a"'),
+      hasCompactPointer: svg.includes('M1.5 1.5V17l3.8-3.9 2.9 6.8'),
+      hasThinPointerOutline: svg.includes('stroke-width=".8"'),
+      hasToolbarSurface: svg.includes('fill="#f8fafc" stroke="#c5cedb"'),
+      hasRoundedBadge: svg.includes('width="22" height="22" rx="4"'),
+      hasToolbarIconStyle: svg.includes('stroke="#1f2937" stroke-width="1.7"'),
+      matchesSource: Boolean(sourcePath && svg.includes(sourcePath)),
+      legacyIndicatorExists: Boolean(document.getElementById("canvasCommandCursorIndicator")),
     };
   }, sourceSelector);
 
   await page.mouse.move(pointer.x, pointer.y);
-  await expect(indicator).toBeHidden();
+  expect(await cursorState()).toEqual(expect.objectContaining({
+    nativeActive: true,
+    commandActive: false,
+    source: null,
+    nativeCursor: true,
+    hotspot: true,
+    hasPointerArrow: true,
+    hasCompactPointer: true,
+    hasThinPointerOutline: true,
+    hasToolbarSurface: false,
+  }));
 
   await page.locator("#toolLine").click();
-  await page.mouse.move(pointer.x, pointer.y);
-  await expect(indicator).toBeVisible();
-  expect(await indicatorMatches("#toolLine")).toEqual({
-    matches: true,
+  expect(await cursorState("#toolLine")).toEqual({
+    nativeActive: true,
+    commandActive: true,
     source: "toolLine",
-    pointerEvents: "none",
-    colorMatchesToolbar: true,
-    background: "rgba(0, 0, 0, 0)",
-    boxShadow: "none",
-    transitionDuration: "0s",
+    nativeCursor: true,
+    hotspot: true,
+    hasPointerArrow: true,
+    hasCompactPointer: true,
+    hasThinPointerOutline: true,
+    hasToolbarSurface: true,
+    hasRoundedBadge: true,
+    hasToolbarIconStyle: true,
+    matchesSource: true,
+    legacyIndicatorExists: false,
   });
-  let badgeBox = await indicator.boundingBox();
-  expect(badgeBox.width).toBe(18);
-  expect(badgeBox.height).toBe(18);
-  expect(badgeBox.x).toBeGreaterThan(pointer.x + 5);
-  expect(badgeBox.y).toBeGreaterThan(pointer.y + 5);
-
-  const rapidPointer = { x: canvasArea.x + canvasArea.width * 0.77, y: canvasArea.y + canvasArea.height * 0.31 };
-  const immediatePosition = await page.evaluate(({ x, y }) => {
+  expect(await page.evaluate(() => {
     const canvas = document.getElementById("canvas");
-    const area = canvas.getBoundingClientRect();
-    canvas.dispatchEvent(new PointerEvent("pointerrawupdate", { clientX: x, clientY: y, bubbles: true }));
-    const indicator = document.getElementById("canvasCommandCursorIndicator");
-    return {
-      transform: indicator.style.transform,
-      expected: `translate3d(${x - area.left + 9}px, ${y - area.top + 9}px, 0px)`,
-    };
-  }, rapidPointer);
-  expect(immediatePosition.transform).toBe(immediatePosition.expected);
+    canvas.classList.add("is-panning");
+    const cursor = getComputedStyle(canvas).cursor;
+    canvas.classList.remove("is-panning");
+    return cursor;
+  })).toMatch(/^url\(/);
 
   await page.locator("#toolSelect").click();
-  await page.mouse.move(pointer.x + 2, pointer.y + 2);
-  await expect(indicator).toBeHidden();
+  expect(await cursorState()).toEqual(expect.objectContaining({
+    nativeActive: true,
+    commandActive: false,
+    source: null,
+    nativeCursor: true,
+    hasCompactPointer: true,
+  }));
 
   await page.locator('[data-constraint="parallel"]').click();
-  await page.mouse.move(pointer.x, pointer.y);
-  await expect(indicator).toBeVisible();
-  expect((await indicatorMatches('[data-constraint="parallel"]')).matches).toBe(true);
-  expect((await indicatorMatches('[data-constraint="parallel"]')).source).toBe("constraint:parallel");
+  expect(await cursorState('[data-constraint="parallel"]')).toEqual(expect.objectContaining({
+    nativeActive: true,
+    commandActive: true,
+    source: "constraint:parallel",
+    nativeCursor: true,
+    matchesSource: true,
+  }));
   await page.keyboard.press("Escape");
 
   await page.locator("#annotationTextBtn").click();
-  await page.mouse.move(pointer.x, pointer.y);
-  await expect(indicator).toBeVisible();
-  expect((await indicatorMatches("#annotationTextBtn")).matches).toBe(true);
-  expect((await indicatorMatches("#annotationTextBtn")).source).toBe("annotationTextBtn");
-
-  const edgePointer = { x: canvasArea.x + canvasArea.width - 3, y: canvasArea.y + canvasArea.height - 3 };
-  await page.mouse.move(edgePointer.x, edgePointer.y);
-  badgeBox = await indicator.boundingBox();
-  expect(badgeBox.x + badgeBox.width).toBeLessThanOrEqual(canvasArea.x + canvasArea.width - 3);
-  expect(badgeBox.y + badgeBox.height).toBeLessThanOrEqual(canvasArea.y + canvasArea.height - 3);
-  expect(badgeBox.x).toBeLessThan(edgePointer.x);
-  expect(badgeBox.y).toBeLessThan(edgePointer.y);
-
-  const toolbar = await page.locator(".command-toolbar").boundingBox();
-  await page.mouse.move(toolbar.x + 8, toolbar.y + 8);
-  await expect(indicator).toBeHidden();
+  expect(await cursorState("#annotationTextBtn")).toEqual(expect.objectContaining({
+    nativeActive: true,
+    commandActive: true,
+    source: "annotationTextBtn",
+    nativeCursor: true,
+    matchesSource: true,
+  }));
 });
 
 test("Canvas context menu exposes common and object-specific operations", async ({ page }) => {

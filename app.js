@@ -114,7 +114,6 @@
   const canvas = document.getElementById("canvas");
   const ctx = canvas.getContext("2d");
   const dimensionValueInput = document.getElementById("dimensionValueInput");
-  const canvasCommandCursorIndicator = document.getElementById("canvasCommandCursorIndicator");
   const canvasContextMenu = document.getElementById("canvasContextMenu");
   const sketchOverlay = document.getElementById("sketchOverlay");
   const sketchOverlayResizeHandle = document.getElementById("sketchOverlayResizeHandle");
@@ -329,8 +328,8 @@
   let pendingConstraintCommand = null;
   let constraintOperands = [];
   let lastPointerWorld = null;
-  let commandCursorScreen = null;
   let commandCursorSource = null;
+  const commandCursorCache = new Map();
   let colorPaletteSession = null;
   let parameterDialogSession = null;
   const sketchAppearanceSectionOpenState = { general: false, construction: false, dimension: false };
@@ -11572,48 +11571,34 @@
     return button.id || (button.dataset.constraint ? `constraint:${button.dataset.constraint}` : "");
   }
 
-  function hideCanvasCommandCursorIndicator({ clearPosition = false } = {}) {
-    if (clearPosition) commandCursorScreen = null;
-    commandCursorSource = null;
-    if (!canvasCommandCursorIndicator) return;
-    if (canvasCommandCursorIndicator.hidden && !canvasCommandCursorIndicator.hasChildNodes()) return;
-    canvasCommandCursorIndicator.hidden = true;
-    canvasCommandCursorIndicator.replaceChildren();
-    delete canvasCommandCursorIndicator.dataset.sourceCommand;
+  function commandCursorValue(button, source) {
+    if (commandCursorCache.has(source)) return commandCursorCache.get(source);
+    const toolbarSvg = button?.querySelector("svg");
+    if (button && !toolbarSvg) return null;
+    const pointer = `<path d="M1.5 1.5V17l3.8-3.9 2.9 6.8 2.5-1.15-2.9-6.6h5.4L1.5 1.5Z" fill="#fff" stroke="#0f172a" stroke-width=".8" stroke-linejoin="round"/>`;
+    const badge = toolbarSvg
+      ? `<rect x="15" y="12" width="22" height="22" rx="4" fill="#f8fafc" stroke="#c5cedb"/><g transform="translate(17 14) scale(.75)" fill="none" stroke="#1f2937" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">${toolbarSvg.innerHTML}</g>`
+      : "";
+    const width = toolbarSvg ? 39 : 15;
+    const height = toolbarSvg ? 36 : 21;
+    const cursorSvg = `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">${pointer}${badge}</svg>`;
+    const cursorValue = `url("data:image/svg+xml,${encodeURIComponent(cursorSvg)}") 2 2, default`;
+    commandCursorCache.set(source, cursorValue);
+    return cursorValue;
   }
 
-  function updateCanvasCommandCursorIndicator(screenPoint = null) {
-    if (!canvasCommandCursorIndicator) return;
+  function updateCanvasCommandCursor() {
     const button = activeCommandToolbarButton();
-    if (!button) {
-      commandCursorScreen = null;
-      return hideCanvasCommandCursorIndicator();
-    }
-    if (screenPoint) commandCursorScreen = { x: screenPoint.x, y: screenPoint.y };
-    const svg = button?.querySelector("svg");
-    if (!commandCursorScreen || !button || !svg) return hideCanvasCommandCursorIndicator();
-
-    const source = commandCursorSourceKey(button);
-    if (commandCursorSource !== source || !canvasCommandCursorIndicator.querySelector("svg")) {
-      canvasCommandCursorIndicator.replaceChildren(svg.cloneNode(true));
-      canvasCommandCursorIndicator.dataset.sourceCommand = source;
+    const source = button ? commandCursorSourceKey(button) : "default";
+    const cursorValue = commandCursorValue(button, source);
+    if (!cursorValue) return;
+    if (commandCursorSource !== source) {
+      canvas.style.setProperty("--canvas-native-cursor", cursorValue);
+      if (button) canvas.dataset.commandCursorSource = source;
+      else delete canvas.dataset.commandCursorSource;
       commandCursorSource = source;
     }
-    const size = 18;
-    const gap = 9;
-    const edge = 4;
-    const canvasWidth = canvas.clientWidth;
-    const canvasHeight = canvas.clientHeight;
-    let left = commandCursorScreen.x + gap;
-    let top = commandCursorScreen.y + gap;
-    if (left + size > canvasWidth - edge) left = commandCursorScreen.x - gap - size;
-    if (top + size > canvasHeight - edge) top = commandCursorScreen.y - gap - size;
-    canvasCommandCursorIndicator.style.transform = `translate3d(${Math.max(edge, left)}px, ${Math.max(edge, top)}px, 0)`;
-    canvasCommandCursorIndicator.hidden = false;
-  }
-
-  function updateCanvasCommandCursorIndicatorFromPointer(e) {
-    updateCanvasCommandCursorIndicator({ x: e.offsetX, y: e.offsetY });
+    canvas.classList.add("has-native-cursor");
   }
 
   function updateToolbar() {
@@ -11648,7 +11633,7 @@
       if (button) button.disabled = !geometryMode;
     }
     updateHistoryButtons();
-    updateCanvasCommandCursorIndicator();
+    updateCanvasCommandCursor();
   }
 
   function constructionToggleState(geometryMode = isGeometryMode()) {
@@ -18060,10 +18045,8 @@
     draw();
   });
 
-  canvas.addEventListener("pointerrawupdate", updateCanvasCommandCursorIndicatorFromPointer, { passive: true });
   canvas.addEventListener("pointermove", (e) => {
     const screenPoint = { x: e.offsetX, y: e.offsetY };
-    updateCanvasCommandCursorIndicator(screenPoint);
     const coordinatePoint = screenToWorld(screenPoint);
     const coordinateStatus = document.getElementById("statusCoordinates");
     if (coordinateStatus) coordinateStatus.textContent = `X ${formatDisplayNumber(coordinatePoint.x, 3)} / Y ${formatDisplayNumber(coordinatePoint.y, 3)}`;
@@ -18760,7 +18743,6 @@
   canvas.addEventListener("pointerup", endDrag);
   canvas.addEventListener("pointercancel", endDrag);
   canvas.addEventListener("pointerleave", () => {
-    hideCanvasCommandCursorIndicator({ clearPosition: true });
     if (dragSession || dimensionDragSession || annotationDragSession || selectionRectSession || panSession) return;
     clearCanvasHover();
     draw();
