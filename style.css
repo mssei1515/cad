@@ -184,7 +184,8 @@ body.block-editing .canvas-area { background: #f5f3ff; box-shadow: none; }
 .properties-scroll { padding: 7px; background: #fff; }
 .properties-empty { color: var(--muted); font-size: 12px; line-height: 1.6; }
 .property-heading { margin: 0 0 6px; font-size: 14px; }
-.property-section { margin: 0 0 7px; padding: 6px; border: 1px solid var(--border); border-radius: 5px; background: var(--panel); }
+.property-section { margin: 0 0 7px; padding: 6px; border: 1px solid #cbdff5; border-radius: 5px; background: #f2f8ff; }
+#propertiesPanel > .property-heading + .property-section { border-color: var(--border); background: var(--panel); }
 .property-section > h3, .property-section > summary h3 { margin: 0 0 4px; color: #475569; font-size: 11px; text-transform: uppercase; letter-spacing: .04em; }
 .property-section-collapsible > summary { min-height: 18px; display: flex; align-items: center; gap: 6px; list-style: none; cursor: pointer; user-select: none; }
 .property-section-collapsible > summary::-webkit-details-marker { display: none; }

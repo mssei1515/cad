@@ -56,6 +56,7 @@ test("creates associative hatching, exposes Tree and Properties, and persists ve
   await expect(row).toContainText("H1");
   expect(await row.locator("svg path").count()).toBeGreaterThan(0);
   await row.click();
+  await expect(page.locator("#propertiesPanel .property-section > h3")).toHaveText(["基本情報", "ハッチング外観"]);
   await page.mouse.click(fixture.client.x, fixture.client.y, { button: "right" });
   await expect(page.locator('#canvasContextMenu [data-context-action="hatch-repair"]')).toBeVisible();
   await page.keyboard.press("Escape");

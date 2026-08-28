@@ -32,6 +32,7 @@ test("creates and edits a cubic fit-point spline and persists version 16", async
   expect(state.serialized.version).toBe(16);
   expect(state.propertiesText).toContain("スプライン");
   expect(state.propertiesText).toContain("通過点ID");
+  await expect(page.locator("#propertiesPanel .property-section > h3")).toHaveText(["基本情報", "スプラインの外観"]);
 
   await page.locator('.sketch-group-row[data-category="spline"]').click();
   const treeRow = page.locator('#sketchList [data-object-kind="spline"]');
