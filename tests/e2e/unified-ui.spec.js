@@ -1089,6 +1089,9 @@ test("Cad2 files open, overwrite, save as, and cancel without errors", async ({ 
   await page.goto(`${baseUrl}/index.html?test=1`);
   await page.waitForFunction(() => window.__cadTest);
 
+  await expect(page.locator('[data-menu-tool="exportBtn"]')).toContainText("上書き保存");
+  await expect(page.locator("#exportBtn")).toHaveAttribute("title", "上書き保存");
+  await expect(page.locator("#exportBtn")).toHaveAttribute("aria-label", "上書き保存");
   await expect(page.locator("#saveAsBtn")).toContainText("名前を付けて保存");
   await page.click("#exportBtn");
   await expect.poll(() => page.evaluate(() => window.__cad2FsMock.records[0]?.writeCount)).toBe(1);
@@ -1533,6 +1536,9 @@ test("application language defaults to Japanese and persists the full UI selecti
   await page.locator("#applicationLanguageSelect").selectOption("en");
   await expect(page.locator("html")).toHaveAttribute("lang", "en");
   await expect(page.locator(".app-menu > summary").first()).toHaveText("File");
+  await expect(page.locator('[data-menu-tool="exportBtn"]')).toContainText("Overwrite Save");
+  await expect(page.locator("#exportBtn")).toHaveAttribute("title", "Overwrite Save");
+  await expect(page.locator("#exportBtn")).toHaveAttribute("aria-label", "Overwrite Save");
   await expect(page.locator("#activeSketchLabel")).toHaveText("Sketch Tree");
   await expect(page.locator(".properties .panel-title-label")).toHaveText("Properties");
   await expect(page.locator("#hint")).toContainText("Fully constrained");

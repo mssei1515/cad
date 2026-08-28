@@ -133,7 +133,7 @@
   ];
   const UI_TRANSLATIONS = [
     ["ファイル", "File"], ["編集", "Edit"], ["ヘルプ", "Help"],
-    ["保存", "Save"], ["名前を付けて保存", "Save As"], ["開く", "Open"], ["Parameter…", "Parameters…"], ["ドキュメント設定", "Document Settings"], ["アプリケーション設定", "Application Settings"],
+    ["上書き保存", "Overwrite Save"], ["名前を付けて保存", "Save As"], ["開く", "Open"], ["Parameter…", "Parameters…"], ["ドキュメント設定", "Document Settings"], ["アプリケーション設定", "Application Settings"],
     ["元に戻す", "Undo"], ["やり直す", "Redo"], ["削除", "Delete"], ["選択", "Select"], ["選択・ドラッグ", "Select / Drag"],
     ["ジオメトリ", "Geometry"], ["拘束", "Constraint"], ["注記", "Annotation"], ["ツールバー", "Toolbar"], ["メニューバー", "Menu bar"], ["表示ツール", "View"],
     ["点", "Point"], ["線", "Line"], ["連続線", "Polyline"], ["中心線", "Centerline"], ["矩形", "Rectangle"], ["円", "Circle"], ["円弧", "Arc"], ["スプライン", "Spline"],
