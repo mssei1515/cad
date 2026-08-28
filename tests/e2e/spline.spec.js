@@ -70,7 +70,7 @@ test("creates and edits a cubic fit-point spline and persists version 15", async
   expect(state.selectedPointIds).toEqual([]);
 });
 
-test("finishes spline creation and editing with double-click and edits fit points from the context menu", async ({ page }) => {
+test("finishes spline creation without adding the double-click position and edits fit points from the context menu", async ({ page }) => {
   const fixture = await page.evaluate(() => window.__cadTest.resetForSplineTest());
   await page.locator("#toolSpline").click();
   for (const point of fixture.clients.slice(0, 3)) await page.mouse.click(point.x, point.y);
@@ -79,7 +79,9 @@ test("finishes spline creation and editing with double-click and edits fit point
   let state = await page.evaluate(() => window.__cadTest.splineStateForTest());
   expect(state.mode).toBe("select");
   expect(state.direct).toHaveLength(1);
-  expect(state.direct[0].fitPoints).toHaveLength(4);
+  expect(state.direct[0].fitPoints).toHaveLength(3);
+  expect(state.serialized.points).toHaveLength(3);
+  const initialFitPointIds = [...state.direct[0].fitPoints];
 
   await page.evaluate(() => window.__cadTest.selectGeometryIdsForTest({ splines: ["SP1"] }));
   await page.locator('[data-property-action="spline-edit"]').click();
@@ -95,8 +97,8 @@ test("finishes spline creation and editing with double-click and edits fit point
 
   state = await page.evaluate(() => window.__cadTest.splineStateForTest());
   expect(state.editSplineId).toBe("SP1");
-  expect(state.direct[0].fitPoints).toHaveLength(5);
-  const addedPointId = state.direct[0].fitPoints.find((id) => !state.serialized.points.slice(0, 4).some((point) => point.id === id));
+  expect(state.direct[0].fitPoints).toHaveLength(4);
+  const addedPointId = state.direct[0].fitPoints.find((id) => !initialFitPointIds.includes(id));
   expect(addedPointId).toBeTruthy();
 
   const addedPointClient = await page.evaluate((id) => window.__cadTest.geometryClientPositionForTest("point", id), addedPointId);
@@ -106,15 +108,8 @@ test("finishes spline creation and editing with double-click and edits fit point
 
   state = await page.evaluate(() => window.__cadTest.splineStateForTest());
   expect(state.editSplineId).toBe("SP1");
-  expect(state.direct[0].fitPoints).toHaveLength(4);
-  expect(state.serialized.points.some((point) => point.id === addedPointId)).toBe(false);
-
-  const removablePointId = state.direct[0].fitPoints[1];
-  const removablePointClient = await page.evaluate((id) => window.__cadTest.geometryClientPositionForTest("point", id), removablePointId);
-  await page.mouse.click(removablePointClient.x, removablePointClient.y, { button: "right" });
-  await page.locator('[data-context-action="spline-fit-point-delete"]').click();
-  state = await page.evaluate(() => window.__cadTest.splineStateForTest());
   expect(state.direct[0].fitPoints).toHaveLength(3);
+  expect(state.serialized.points.some((point) => point.id === addedPointId)).toBe(false);
 
   const requiredPointClient = await page.evaluate((id) => window.__cadTest.geometryClientPositionForTest("point", id), state.direct[0].fitPoints[0]);
   await page.mouse.click(requiredPointClient.x, requiredPointClient.y, { button: "right" });

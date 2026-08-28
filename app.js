@@ -173,7 +173,7 @@
     ["矩形の1つ目の角をクリックしてください。Escで選択モードに戻ります", "Click the first rectangle corner. Press Esc to return to selection mode."],
     ["円の中心をクリックしてください。Escで選択モードに戻ります", "Click the circle center. Press Esc to return to selection mode."],
     ["円弧の中心をクリックしてください。Escで選択モードに戻ります", "Click the arc center. Press Esc to return to selection mode."],
-    ["通過点をクリックしてください。Enterまたはダブルクリックで終了、始点クリックで閉じます", "Click fit points. Press Enter or double-click to finish, or click the start point to close."],
+    ["通過点をクリックしてください。Enterまたは空白のダブルクリックで終了（ダブルクリック位置は追加しません）、始点クリックで閉じます", "Click fit points. Press Enter or double-click blank canvas to finish without adding that position, or click the start point to close."],
     ["スプラインには3点以上の通過点が必要です", "A spline requires at least three fit points."],
     ["閉じる", "Closed"], ["通過点", "Fit points"], ["編集", "Edit"], ["スプライン編集", "Edit spline"],
     ["引出線を付ける図形をクリックしてください", "Click geometry to attach the leader."], ["引出線の文字位置をクリックしてください", "Click the leader text position."],
@@ -312,6 +312,7 @@
   let arcStartPoint = null;
   let splineFitPoints = [];
   let splineCreationRollback = null;
+  let splineLastClickAddition = null;
   let splineEditSession = null;
   let pointerPreview = null;
   let activeSnap = null;
@@ -3204,13 +3205,14 @@
     mode = "spline";
     splineFitPoints = [];
     splineCreationRollback = { pointLength: model.points.length, pointSeq };
+    splineLastClickAddition = null;
     splineEditSession = null;
     blankDoubleClickCandidate = null;
     pointerPreview = null;
     clearSelection();
     clearSnap();
     updateToolbar();
-    setHint("通過点をクリックしてください。Enterまたはダブルクリックで終了、始点クリックで閉じます");
+    setHint(applicationText("通過点をクリックしてください。Enterまたは空白のダブルクリックで終了（ダブルクリック位置は追加しません）、始点クリックで閉じます", "Click fit points. Press Enter or double-click blank canvas to finish without adding that position, or click the start point to close."));
     draw();
   }
 
@@ -3226,6 +3228,7 @@
     }
     splineCreationRollback = null;
     splineFitPoints = [];
+    splineLastClickAddition = null;
     pointerPreview = null;
     clearSnap();
     clearSelection();
@@ -3353,19 +3356,47 @@
     if (splineFitPoints.length >= 3 && hypot2(snapped.x - splineFitPoints[0].x, snapped.y - splineFitPoints[0].y) <= 10 / viewport.scale) {
       return finalizeSplineCreation(true);
     }
+    const pointLengthBefore = model.points.length;
     const point = endpointAt(snapped.x, snapped.y);
     if (splineFitPoints.at(-1) === point || (splineFitPoints.at(-1) && samePosition(splineFitPoints.at(-1), point))) {
       setHint(applicationText("前の通過点と異なる位置を指定してください", "Choose a position different from the previous fit point."), "error");
       return false;
     }
     splineFitPoints.push(point);
+    splineLastClickAddition = {
+      point,
+      created: model.points.length > pointLengthBefore,
+      time: performance.now(),
+      x: pointer.x,
+      y: pointer.y,
+    };
     pointerPreview = snapped;
     clearSnap();
     setHint(splineFitPoints.length >= 3
-      ? applicationText(`${splineFitPoints.length}点。Enter／ダブルクリックで開いたスプライン、始点クリックで閉じます`, `${splineFitPoints.length} points. Press Enter/double-click for an open spline, or click the start point to close.`)
+      ? applicationText(`${splineFitPoints.length}点。Enterまたは空白のダブルクリックで開いたスプラインを確定します（ダブルクリック位置は追加しません）`, `${splineFitPoints.length} points. Press Enter or double-click blank canvas to finish an open spline without adding that position.`)
       : applicationText(`${splineFitPoints.length}点。あと${3 - splineFitPoints.length}点指定してください`, `${splineFitPoints.length} points. Add ${3 - splineFitPoints.length} more.`));
     draw();
     return true;
+  }
+
+  function discardSplineDoubleClickFitPoint(pointer) {
+    const candidate = splineLastClickAddition;
+    splineLastClickAddition = null;
+    if (!candidate || splineFitPoints.at(-1) !== candidate.point) return false;
+    if (performance.now() - candidate.time > 650) return false;
+    if (hypot2(pointer.x - candidate.x, pointer.y - candidate.y) > 8 / viewport.scale) return false;
+    splineFitPoints.pop();
+    if (candidate.created && !isPointUsedByPrimitive(candidate.point)) {
+      model.points = model.points.filter((point) => point !== candidate.point);
+    }
+    return true;
+  }
+
+  function finalizeSplineFromDoubleClick(pointer) {
+    const discarded = discardSplineDoubleClickFitPoint(pointer);
+    const finalized = finalizeSplineCreation(false);
+    if (!finalized && discarded) draw();
+    return finalized;
   }
 
   function hatchRegionErrorText(result) {
@@ -5088,6 +5119,7 @@
     arcStartPoint = null;
     splineFitPoints = [];
     splineCreationRollback = null;
+    splineLastClickAddition = null;
     splineEditSession = null;
     pointerPreview = null;
     offsetSource = null;
@@ -6671,6 +6703,7 @@
     arcStartPoint = null;
     splineFitPoints = [];
     splineCreationRollback = null;
+    splineLastClickAddition = null;
     splineEditSession = null;
     pointerPreview = null;
     trimPreview = null;
@@ -6800,6 +6833,7 @@
     }
     splineFitPoints = [];
     splineCreationRollback = null;
+    splineLastClickAddition = null;
     splineEditSession = null;
     pointerPreview = null;
     trimPreview = null;
@@ -18029,7 +18063,7 @@
     if (!isBlankDoubleClickTarget(hits)) return false;
     blankDoubleClickCandidate = null;
     if (mode === "spline") {
-      finalizeSplineCreation(false);
+      finalizeSplineFromDoubleClick(pointer);
       return true;
     }
     if (splineEditSession) return finishSplineEditSession();
@@ -18140,7 +18174,7 @@
     const hitBlock = hitBlockInstance(p.x, p.y);
     if (mode === "spline") {
       e.preventDefault();
-      finalizeSplineCreation(false);
+      finalizeSplineFromDoubleClick(p);
       return;
     }
     if (pendingCommand?.type === "offset-value") {
@@ -18280,10 +18314,11 @@
     if (!textEditingTarget && mode === "spline" && e.key === "Backspace") {
       e.preventDefault();
       const removed = splineFitPoints.pop();
+      splineLastClickAddition = null;
       if (removed && splineCreationRollback && model.points.indexOf(removed) >= splineCreationRollback.pointLength && !isPointUsedByPrimitive(removed)) {
         model.points = model.points.filter((point) => point !== removed);
       }
-      setHint("通過点をクリックしてください。Enterまたはダブルクリックで終了、始点クリックで閉じます");
+      setHint(applicationText("通過点をクリックしてください。Enterまたは空白のダブルクリックで終了（ダブルクリック位置は追加しません）、始点クリックで閉じます", "Click fit points. Press Enter or double-click blank canvas to finish without adding that position, or click the start point to close."));
       draw();
       return;
     }
