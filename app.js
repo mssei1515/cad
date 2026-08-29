@@ -423,6 +423,7 @@
     under: "#f59e0b",
     conflict: "#dc2626",
   };
+  const SKETCH_PROJECTION_STATUS_COLOR = "#7c3aed";
   const INACTIVE_CONSTRAINT_STATUS_COLOR = "#cbd5e1";
   const DEFAULT_APPEARANCE = {
     visible: true,
@@ -1654,6 +1655,14 @@
 
   function isSketchProjectedGeometry(item) {
     return Boolean(sketchProjectionConstraintForTarget(item));
+  }
+
+  function isSketchProjectionStatusElement(item) {
+    if (isSketchProjectedGeometry(item)) return true;
+    if (!(item instanceof Point)) return false;
+    return sketchProjectionConstraints().some((constraint) =>
+      constraintIsOperational(constraint)
+      && sketchProjectionPointPairs(constraint).some(([, target]) => target === item));
   }
 
   function sketchProjectionPointPairs(constraint) {
@@ -3505,6 +3514,7 @@
     if (selected) return "#1d4ed8";
     if (hovered) return "#3b82f6";
     if (sketchHasSolveError(elementSketchId(item))) return SKETCH_SOLVE_ERROR_COLOR;
+    if (isSketchProjectionStatusElement(item)) return SKETCH_PROJECTION_STATUS_COLOR;
     const relation = sketchRelationOfElement(item);
     if (relation !== "active") return INACTIVE_CONSTRAINT_STATUS_COLOR;
     const status = constraintStatusOf(item);

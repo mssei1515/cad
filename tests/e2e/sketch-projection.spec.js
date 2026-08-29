@@ -29,7 +29,7 @@ function projectedTargetPointIds(target) {
   return target.fitPoints.map((point) => point.id);
 }
 
-test("projects every supported geometry kind with geometry-owned points, normal/status colors, clear icon, tree, properties, and v19 persistence", async ({ page }) => {
+test("projects every supported geometry kind with geometry-owned points, normal/purple status colors, clear icon, tree, properties, and v19 persistence", async ({ page }) => {
   const fixture = await createAllProjectionKinds(page);
   let state = await page.evaluate(() => window.__jot2dTest.sketchProjectionStateForTest());
 
@@ -42,7 +42,8 @@ test("projects every supported geometry kind with geometry-owned points, normal/
   state = await page.evaluate(() => window.__jot2dTest.sketchProjectionStateForTest());
   expect(state.constraints.every((item) => item.constraintStatus === "full")).toBe(true);
   expect(state.constraints.every((item) => item.displayColor === item.statusColor)).toBe(true);
-  expect(state.constraints.some((item) => item.displayColor !== item.appearanceColor)).toBe(true);
+  expect(state.constraints.every((item) => item.displayColor === "#7c3aed")).toBe(true);
+  expect(state.constraints.every((item) => item.displayColor !== item.appearanceColor)).toBe(true);
   await page.locator("#constraintStatusViewBtn").click();
   await expect(page.locator("#toolSketchProjection .projection-source")).toHaveCount(1);
   await expect(page.locator("#toolSketchProjection .projection-ray")).toHaveCount(3);
