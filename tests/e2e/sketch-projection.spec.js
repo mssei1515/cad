@@ -260,6 +260,51 @@ test("Escape cancels all staged sources without creating geometry", async ({ pag
   expect(state.serialized.lines.filter((line) => line.sketchId === "S3")).toHaveLength(0);
 });
 
+test("window- and crossing-selects projection sources and executes them from the context menu", async ({ page }) => {
+  const fixture = await page.evaluate(() => window.__jot2dTest.resetForSketchProjectionTest());
+  const drags = await page.evaluate(() => ({
+    crossing: {
+      start: window.__jot2dTest.worldClientPositionForTest({ x: -65, y: -60 }),
+      end: window.__jot2dTest.worldClientPositionForTest({ x: -75, y: -50 }),
+    },
+    window: {
+      start: window.__jot2dTest.worldClientPositionForTest({ x: -105, y: -65 }),
+      end: window.__jot2dTest.worldClientPositionForTest({ x: -30, y: -5 }),
+    },
+  }));
+  await page.locator("#toolSketchProjection").click();
+  await page.mouse.move(drags.crossing.start.x, drags.crossing.start.y);
+  await page.mouse.down();
+  await page.mouse.move(drags.crossing.end.x, drags.crossing.end.y, { steps: 5 });
+  await page.mouse.up();
+
+  let state = await page.evaluate(() => window.__jot2dTest.sketchProjectionStateForTest());
+  expect(state.stagedCount).toBe(1);
+  await page.keyboard.press("Escape");
+
+  await page.locator("#toolSketchProjection").click();
+  await page.mouse.move(drags.window.start.x, drags.window.start.y);
+  await page.mouse.down();
+  await page.mouse.move(drags.window.end.x, drags.window.end.y, { steps: 5 });
+  await page.mouse.up();
+
+  state = await page.evaluate(() => window.__jot2dTest.sketchProjectionStateForTest());
+  expect(state.stagedCount).toBe(2);
+
+  await page.mouse.click(drags.window.end.x, drags.window.end.y, { button: "right" });
+  const execute = page.locator('#canvasContextMenu [data-context-action="sketch-projection-commit"]');
+  await expect(execute).toBeVisible();
+  await expect(execute).toBeEnabled();
+  await expect(execute).toContainText("実行");
+  await execute.click();
+
+  state = await page.evaluate(() => window.__jot2dTest.sketchProjectionStateForTest());
+  expect(state.mode).toBe("select");
+  expect(state.stagedCount).toBe(0);
+  expect(state.constraints.map((item) => item.kind)).toEqual(["line", "line"]);
+  expect(state.constraints.map((item) => item.sourceId).sort()).toEqual([...fixture.ids.lines].sort());
+});
+
 test("skips duplicate sources and copies or blockizes projected results as independent geometry", async ({ page }) => {
   const fixture = await createAllProjectionKinds(page);
   await page.locator("#toolSketchProjection").click();

@@ -3661,12 +3661,15 @@
       && sketchProjectionSourceKey(constraint.source) === key);
   }
 
-  function sketchProjectionEntryFromOperand(operand) {
-    const item = operandElement(operand);
+  function sketchProjectionEntryFromItem(item) {
     const kind = geometryKindForItem(item);
     const sketchId = elementSketchId(item);
     if (!item || !kind || !isReferenceSourceSketchId(sketchId) || !isVisibleSketchElement(item)) return null;
     return { item, kind, sketchId, key: sketchProjectionSourceKey(item) };
+  }
+
+  function sketchProjectionEntryFromOperand(operand) {
+    return sketchProjectionEntryFromItem(operandElement(operand));
   }
 
   function projectedPointForCreation(sourcePoint, targetSketchId) {
@@ -3704,7 +3707,7 @@
     sketchProjectionSources = [];
     clearSnap();
     updateToolbar();
-    setHint(applicationText("投影する先祖SketchのGeometryを選択し、Enterで確定してください。Escでキャンセルします", "Select geometry from ancestor sketches, then press Enter to project it. Press Esc to cancel."));
+    setHint(applicationText("投影する先祖SketchのGeometryを複数選択し、Enterまたは右クリックメニューの「実行」で確定してください。Escでキャンセルします", "Select geometry from ancestor sketches, then confirm with Enter or Execute in the context menu. Press Esc to cancel."));
     updateUI({ refreshAnalysis: false });
     draw();
   }
@@ -3725,9 +3728,59 @@
       }
       sketchProjectionSources.push(entry);
     }
-    setHint(applicationText(`投影対象: ${sketchProjectionSources.length}件。Enterで確定、Escでキャンセル`, `Projection targets: ${sketchProjectionSources.length}. Press Enter to confirm or Esc to cancel.`));
+    setHint(applicationText(`投影対象: ${sketchProjectionSources.length}件。Enterまたは右クリックメニューの「実行」で確定、Escでキャンセル`, `Projection targets: ${sketchProjectionSources.length}. Confirm with Enter or Execute in the context menu; press Esc to cancel.`));
     draw();
     return true;
+  }
+
+  function sketchProjectionEntriesByRect(rect, crossing) {
+    const entries = [];
+    const append = (item) => {
+      const entry = sketchProjectionEntryFromItem(item);
+      if (entry) entries.push(entry);
+    };
+    for (const point of allGeometryPoints()) {
+      if (!isExplicitPoint(point) && !isReferencePoint(point)) continue;
+      if (pointInRect(point, rect)) append(point);
+    }
+    for (const line of allGeometryLines()) {
+      const selected = crossing ? lineIntersectsRect(line, rect) : bboxInRect(lineBBox(line), rect);
+      if (selected) append(line);
+    }
+    for (const circle of allGeometryCircles()) {
+      const box = primitiveBBox(circle);
+      const selected = crossing ? bboxIntersectsRect(box, rect) : bboxInRect(box, rect);
+      if (selected) append(circle);
+    }
+    for (const arc of allGeometryArcs()) {
+      const samples = arcSamplePoints(arc);
+      const selected = crossing ? samples.some((point) => pointInRect(point, rect)) : samples.every((point) => pointInRect(point, rect));
+      if (selected) append(arc);
+    }
+    for (const spline of allGeometrySplines()) {
+      const samples = window.SplineGeometry.flatten(spline.curve(), { tolerance: Math.max(0.1, 0.75 / viewport.scale) }).map((entry) => entry.point);
+      const selected = crossing ? samples.some((point) => pointInRect(point, rect)) : samples.every((point) => pointInRect(point, rect));
+      if (selected) append(spline);
+    }
+    return entries;
+  }
+
+  function addSketchProjectionSourcesByRect(rect, crossing) {
+    const stagedKeys = new Set(sketchProjectionSources.map((entry) => `${entry.kind}:${entry.key}`));
+    let added = 0;
+    for (const entry of sketchProjectionEntriesByRect(rect, crossing)) {
+      const key = `${entry.kind}:${entry.key}`;
+      if (stagedKeys.has(key) || sketchProjectionSourceIsCovered(entry.item)) continue;
+      sketchProjectionSources.push(entry);
+      stagedKeys.add(key);
+      added += 1;
+    }
+    setHint(applicationText(
+      `範囲選択で${added}件追加しました。投影対象: ${sketchProjectionSources.length}件。Enterまたは右クリックメニューの「実行」で確定、Escでキャンセル`,
+      `Added ${added} by area selection. Projection targets: ${sketchProjectionSources.length}. Confirm with Enter or Execute in the context menu; press Esc to cancel.`,
+    ));
+    draw();
+    return added;
   }
 
   function selectCreatedSketchProjectionTargets(targets) {
@@ -19206,6 +19259,9 @@
   function canvasContextMenuItems(target, commandActive = false) {
     const groups = [];
     if (commandActive) {
+      if (mode === "sketch-projection") {
+        groups.push([{ action: "sketch-projection-commit", label: applicationText("実行", "Execute"), shortcut: "Enter", disabled: sketchProjectionSources.length === 0 }]);
+      }
       groups.push([{ action: "cancel-command", label: applicationText("コマンドをキャンセル", "Cancel Command"), shortcut: "Esc" }]);
       groups.push([
         { action: "undo", label: applicationText("元に戻す", "Undo"), shortcut: "Ctrl+Z", disabled: Boolean(document.getElementById("undoBtn")?.disabled) },
@@ -19371,7 +19427,8 @@
     const target = canvasContextTarget;
     const pointer = canvasContextPointer;
     closeCanvasContextMenu();
-    if (action === "cancel-command") cancelCanvasCommandFromContextMenu();
+    if (action === "sketch-projection-commit") commitSketchProjectionCommand();
+    else if (action === "cancel-command") cancelCanvasCommandFromContextMenu();
     else if (action === "undo") undoHistory();
     else if (action === "redo") redoHistory();
     else if (action === "cut") copySelectionToClipboard({ cut: true });
@@ -19523,7 +19580,19 @@
 
     if (mode === "sketch-projection") {
       e.preventDefault();
-      toggleSketchProjectionSource(hitReferenceTarget(p.x, p.y));
+      const target = hitReferenceTarget(p.x, p.y);
+      if (target) {
+        toggleSketchProjectionSource(target);
+        return;
+      }
+      clearSnap();
+      selectionRectSession = {
+        kind: "sketch-projection",
+        pointerId: e.pointerId,
+        start: p,
+        current: p,
+      };
+      canvas.setPointerCapture(e.pointerId);
       return;
     }
 
@@ -20377,6 +20446,14 @@
       }
       const current = session.current || session.start;
       const moved = hypot2(current.x - session.start.x, current.y - session.start.y);
+      if (session.kind === "sketch-projection") {
+        if (moved > 3 / viewport.scale) {
+          addSketchProjectionSourcesByRect(rectFromPoints(session.start, current), current.x < session.start.x);
+        } else {
+          draw();
+        }
+        return;
+      }
       if (moved <= 3 / viewport.scale) {
         if (!session.additive) clearSelection();
       } else {

@@ -84,7 +84,7 @@ ToolbarまたはGeometry menuから開始し、3個以上のfit pointを順にcl
 
 ### スケッチ投影
 
-表示中の先祖SketchにあるPoint、Line、Circle、Arc、Spline、Block Projectionを通常GeometryとしてアクティブSketchへ作成し、`SketchProjectionConstraint`で元形状へ追従させる。clickで候補を追加／解除し、Enterで一括作成、Escで全候補を破棄する。同じ元Geometryの重複を作らない。投影Geometryは、同じ元Pointを参照していても、Point、Line端点、Circle／Arc中心、Spline通過PointをGeometry間で共有せず、それぞれ独立して所有する。詳細は[スケッチ投影](./12-スケッチ投影.md)を参照する。
+表示中の先祖SketchにあるPoint、Line、Circle、Arc、Spline、Block Projectionを通常GeometryとしてアクティブSketchへ作成し、`SketchProjectionConstraint`で元形状へ追従させる。clickまたはドラッグ範囲選択で候補を追加し、個別clickで解除する。Enterまたは右clickメニューの「実行」で一括作成、Escで全候補を破棄する。同じ元Geometryの重複を作らない。投影Geometryは、同じ元Pointを参照していても、Point、Line端点、Circle／Arc中心、Spline通過PointをGeometry間で共有せず、それぞれ独立して所有する。詳細は[スケッチ投影](./12-スケッチ投影.md)を参照する。
 
 ### 補助 Geometry
 
