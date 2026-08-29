@@ -95,7 +95,7 @@ test.afterAll(() => {
 test("legacy midpoint constraints are removed and midpoint snapping is no longer offered", async ({ page }) => {
   await openFixture(page);
   let serialized = await page.evaluate(() => window.__jot2dTest.serializedModelForTest());
-  expect(serialized.version).toBe(16);
+  expect(serialized.version).toBe(17);
   expect(serialized.constraints.some((constraint) => constraint.type === "pointOnLineMidpoint")).toBe(false);
 
   await page.click("#toolPoint");
@@ -116,7 +116,7 @@ test("legacy midpoint constraints are removed and midpoint snapping is no longer
     const invalidCurrent = structuredClone(migrated);
     invalidCurrent.documentName = "Rejected current midpoint";
     invalidCurrent.constraints.push(oldConstraint);
-    const invalidResult = window.__jot2dTest.loadDocumentFixtureForDragTest(invalidCurrent, "invalid-centerline-v16.jot2d");
+    const invalidResult = window.__jot2dTest.loadDocumentFixtureForDragTest(invalidCurrent, "invalid-centerline-v17.jot2d");
     const afterRejected = window.__jot2dTest.serializedModelForTest();
     const invalidBlock = structuredClone(migrated);
     invalidBlock.documentName = "Rejected block midpoint";
@@ -142,7 +142,7 @@ test("legacy midpoint constraints are removed and midpoint snapping is no longer
       circles: [], arcs: [], splines: [], annotations: [], hatches: [], nextHatchIndex: 1, blockInstances: [],
       constraints: [{ type: "pointOnLineMidpoint", point: "BP3", line: "BL1", enabled: true, sketchId: "S1" }],
     }];
-    const invalidBlockResult = window.__jot2dTest.loadDocumentFixtureForDragTest(invalidBlock, "invalid-block-centerline-v16.jot2d");
+    const invalidBlockResult = window.__jot2dTest.loadDocumentFixtureForDragTest(invalidBlock, "invalid-block-centerline-v17.jot2d");
     return { legacyResult, migrated, invalidResult, afterRejected, invalidBlockResult, afterBlockRejected: window.__jot2dTest.serializedModelForTest() };
   });
   expect(compatibility.legacyResult).toEqual(expect.objectContaining({ success: true }));

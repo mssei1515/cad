@@ -671,7 +671,7 @@ test("creates, places, drags, edits, and reloads local-coordinate blocks", async
   expect(edited.lengths[1]).toBeCloseTo(edited.lengths[0], 6);
 
   const reloaded = await page.evaluate(() => window.__jot2dTest.reloadBlockState());
-  expect(reloaded).toEqual({ definitions: 1, instances: 2, projectionLines: 8, serializedVersion: 16 });
+  expect(reloaded).toEqual({ definitions: 1, instances: 2, projectionLines: 8, serializedVersion: 17 });
 
   await openBlockDefinitions(page);
   await page.click(".blockDeleteBtn");
@@ -1286,7 +1286,7 @@ test("legacy block data migrates into an internal Sketch-1 without changing proj
 
   const before = await page.evaluate(() => window.__jot2dTest.blockState());
   const migrated = await page.evaluate(() => window.__jot2dTest.reloadLegacyBlockState());
-  expect(migrated.version).toBe(16);
+  expect(migrated.version).toBe(17);
   expect(migrated.origin).toEqual({ x: 0, y: 0 });
   expect(migrated.sketches).toEqual([
     expect.objectContaining({ id: "ROOT", kind: "root" }),
@@ -1311,7 +1311,7 @@ test("new block editor supports cancel and independent internal sketch hierarchy
   expect(await page.locator(".canvas-area").evaluate((element) => {
     const style = getComputedStyle(element);
     return { background: style.backgroundColor, boxShadow: style.boxShadow };
-  })).toEqual({ background: "rgb(245, 243, 255)", boxShadow: "none" });
+  })).toEqual({ background: "rgb(243, 247, 255)", boxShadow: "none" });
   const cancelled = await page.evaluate(() => window.__jot2dTest.cancelBlockEditor());
   expect(cancelled).toEqual({ editing: false, definitions: 0, instances: 0, lines: 4 });
   await expect(page.locator(".canvas-area")).toHaveCSS("background-color", "rgb(252, 253, 255)");

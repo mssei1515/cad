@@ -56,6 +56,8 @@
     dependencies: expressionDependencies,
     evaluate: evaluateParameterExpression,
     evaluateDefinitions: evaluateParameterDefinitions,
+    formatReference: formatParameterReference,
+    migrateLegacyExpression: migrateLegacyParameterExpression,
     validateIdentifier: validateParameterIdentifier,
     rewriteIdentifiers: rewriteParameterIdentifiers,
   } = window.ParameterEngine;
@@ -115,6 +117,7 @@
   const canvas = document.getElementById("canvas");
   const ctx = canvas.getContext("2d");
   const dimensionValueInput = document.getElementById("dimensionValueInput");
+  const dimensionValueInputShell = document.getElementById("dimensionValueInputShell");
   const canvasContextMenu = document.getElementById("canvasContextMenu");
   const sketchOverlay = document.getElementById("sketchOverlay");
   const sketchOverlayResizeHandle = document.getElementById("sketchOverlayResizeHandle");
@@ -192,7 +195,7 @@
     ["連続線を終了しました", "Polyline creation finished."], ["選択・ドラッグモードに戻りました", "Returned to Select / Drag mode."], ["作図操作をキャンセルしました", "Drawing was canceled."],
     ["コピーする図形を選択してください", "Select geometry to copy."], ["貼り付ける図形がありません", "There is no geometry to paste."], ["貼り付け先のスケッチをアクティブにしてください", "Activate the destination sketch before pasting."],
     ["寸法線の位置をクリックしてください", "Click the dimension-line position."], ["寸法対象を選択してください。", "Select dimension targets."],
-    ["寸法値を入力中: 数式は = から開始。Canvas寸法のクリックでParameter名を挿入できます", "Editing dimension: begin expressions with =. Click a canvas dimension to insert its parameter name."],
+    ["寸法値を入力中: 数式は = から開始し、Parameter参照はダブルクオーテーションで括ります。Canvas寸法のクリックで参照を挿入できます", "Editing dimension: begin expressions with = and enclose parameter references in double quotes. Click a canvas dimension to insert a reference."],
     ["オフセット距離を入力中: Enter/ダブルクリックで決定、Escでキャンセル", "Entering an offset distance: confirm with Enter/double-click, or cancel with Esc."],
     ["読み取り専用寸法の値は編集できません", "A read-only dimension value cannot be edited."], ["寸法値には0より大きい数値を入力してください", "Enter a dimension value greater than zero."],
     ["回転がロックされたブロックインスタンスです", "This block instance has locked rotation."], ["固定されたブロックインスタンスです", "This block instance is fixed."],
@@ -364,13 +367,14 @@
   let hatchResolutionCache = new WeakMap();
   let hatchFaceCache = new Map();
   const dimensionTextWidthCache = new WeakMap();
+  let dimensionExpressionMarkCapture = null;
   const dimensionArrowheadFactorCache = new Map();
   let undoStack = [];
   let redoStack = [];
   let historyRestoring = false;
   let geometryClipboard = null;
   const HISTORY_LIMIT = 80;
-  const CURRENT_JSON_VERSION = 16;
+  const CURRENT_JSON_VERSION = 17;
   const SKETCH_TREE_MIN_WIDTH = 220;
   const SKETCH_TREE_MAX_WIDTH = 560;
   const SKETCH_TREE_KEYBOARD_RESIZE_STEP = 16;
@@ -389,6 +393,8 @@
   const ANNOTATION_SCREEN_PX_PER_MM = 96 / 25.4;
   const DIMENSION_TERMINATOR_FIT_MARGIN_FACTOR = 1;
   const DIMENSION_OUTSIDE_SHAFT_LENGTH_FACTOR = 1.5;
+  const DIMENSION_EXPRESSION_MARK_WIDTH_FACTOR = 0.58;
+  const DIMENSION_EXPRESSION_MARK_GAP_FACTOR = 0.16;
   const DIMENSION_ARROW_MITER_LIMIT = 10;
   const HATCH_SCREEN_PX_PER_MM = 96 / 25.4;
   const DIMENSION_APPEARANCE_LENGTH_KEYS = ["extensionLineOvershoot", "extensionLineOriginGap", "terminatorSize", "dimensionTextHeight", "dimensionTextGap"];
@@ -1115,6 +1121,11 @@
     return DIRECT_NUMERIC_INPUT_PATTERN.test(String(value ?? "").trim());
   }
 
+  function dimensionUsesExpression(constraint) {
+    const expression = String(constraint?.expression ?? "").trim();
+    return Boolean(expression) && !isReadOnlyDimension(constraint) && !isDirectNumericExpressionInput(expression);
+  }
+
   function expressionInputValue(expression) {
     const value = String(expression ?? "").trim();
     if (!value || isDirectNumericExpressionInput(value)) return value;
@@ -1129,6 +1140,80 @@
     const expression = input.slice(1).trim();
     if (!expression) throw Object.assign(new Error("Expression is empty"), { code: "EMPTY_EXPRESSION" });
     return expression;
+  }
+
+  function expressionReferenceNamesForInput(input) {
+    if (input?.closest("#parametersDialog") && parameterDialogSession) {
+      return new Set([
+        ...parameterDialogSession.parameters.map((parameter) => String(parameter.name || "")),
+        ...parameterDialogSession.dimensions.map((dimension) => String(dimension.name || "")),
+      ]);
+    }
+    return new Set([
+      ...(model.parameters || []).map((parameter) => String(parameter.name || "")),
+      ...dimensionConstraintsInNamespace(model).map((constraint) => String(constraint.parameterName || "")),
+    ]);
+  }
+
+  function expressionHighlightMarkup(input) {
+    const value = String(input?.value ?? "");
+    if (!value.trimStart().startsWith("=")) return escapeHtml(value);
+    const names = expressionReferenceNamesForInput(input);
+    const pattern = /"([A-Za-z_][A-Za-z0-9_]*)"/g;
+    let result = "";
+    let cursor = 0;
+    for (const match of value.matchAll(pattern)) {
+      result += escapeHtml(value.slice(cursor, match.index));
+      const token = match[0];
+      result += names.has(match[1])
+        ? `<span class="expression-reference-token">${escapeHtml(token)}</span>`
+        : escapeHtml(token);
+      cursor = match.index + token.length;
+    }
+    return result + escapeHtml(value.slice(cursor));
+  }
+
+  function syncExpressionInputHighlight(input) {
+    if (!(input instanceof HTMLInputElement)) return;
+    const shell = input.closest(".expression-input-shell");
+    const text = shell?.querySelector(".expression-input-highlight-text");
+    if (!text) return;
+    text.innerHTML = expressionHighlightMarkup(input) || "&#8203;";
+    text.style.transform = `translateX(${-input.scrollLeft}px)`;
+  }
+
+  function installExpressionInputHighlight(input) {
+    if (!(input instanceof HTMLInputElement) || input.readOnly) return;
+    let shell = input.closest(".expression-input-shell");
+    if (!shell) {
+      shell = document.createElement("span");
+      shell.className = "expression-input-shell";
+      const highlight = document.createElement("span");
+      highlight.className = "expression-input-highlight";
+      highlight.setAttribute("aria-hidden", "true");
+      const text = document.createElement("span");
+      text.className = "expression-input-highlight-text";
+      highlight.append(text);
+      input.before(shell);
+      shell.append(highlight, input);
+    }
+    input.classList.add("expression-input-source");
+    if (input.dataset.expressionHighlightInstalled !== "true") {
+      input.dataset.expressionHighlightInstalled = "true";
+      input.addEventListener("input", () => syncExpressionInputHighlight(input));
+      input.addEventListener("scroll", () => syncExpressionInputHighlight(input));
+    }
+    syncExpressionInputHighlight(input);
+  }
+
+  function installExpressionInputHighlights(root = document) {
+    const selector = '#dimensionValueInput, #propertiesPanel [data-property="constraint-expression"], [data-parameter-field="expression"], [data-dimension-field="expression"]:not([readonly])';
+    if (root instanceof HTMLInputElement && root.matches(selector)) installExpressionInputHighlight(root);
+    for (const input of root.querySelectorAll?.(selector) || []) installExpressionInputHighlight(input);
+  }
+
+  function refreshExpressionInputHighlights(root = document) {
+    for (const input of root.querySelectorAll?.(".expression-input-source") || []) syncExpressionInputHighlight(input);
   }
 
   function rewriteExpressionInputIdentifiers(value, replacements) {
@@ -1198,6 +1283,8 @@
       NON_FINITE: applicationText("計算結果が有限値ではありません", "The result is not finite"),
       EMPTY_EXPRESSION: applicationText("値 / 数式が空です", "Value / Expression is empty"),
       EXPRESSION_PREFIX_REQUIRED: applicationText("数式は先頭に = を入力してください", "Expressions must begin with ="),
+      REFERENCE_QUOTES_REQUIRED: applicationText(`Parameter参照${name}はダブルクオーテーションで括ってください`, `Parameter reference${name} must be enclosed in double quotes`),
+      UNTERMINATED_REFERENCE: applicationText("Parameter参照のダブルクオーテーションが閉じていません", "The parameter reference has an unterminated double quote"),
     };
     return messages[error?.code] || error?.message || applicationText("Parameterを評価できません", "Could not evaluate parameters");
   }
@@ -6144,7 +6231,7 @@
     return true;
   }
 
-  function deserializeConstraint(data, pointById, lineById, primitiveById, dimensionAppearanceLoader = normalizeDimensionAppearance) {
+  function deserializeConstraint(data, pointById, lineById, primitiveById, dimensionAppearanceLoader = normalizeDimensionAppearance, expressionLoader = (value) => String(value)) {
     const resolveStoredGeometry = (kind, storedId) => resolveGeometryRefValue(
       parseGeometryRefId(kind, String(storedId)),
       (resolvedKind, canonicalId) => {
@@ -6189,7 +6276,7 @@
       if (constraint.readOnlyDimension) constraint.enabled = false;
       if (isDimensionConstraint(constraint)) {
         constraint.parameterName = typeof data.parameterName === "string" ? data.parameterName : null;
-        if (!constraint.readOnlyDimension && typeof data.expression === "string") constraint.expression = data.expression;
+        if (!constraint.readOnlyDimension && typeof data.expression === "string") constraint.expression = expressionLoader(data.expression);
       }
       if (data.dimension && Number.isFinite(Number(data.dimension.x)) && Number.isFinite(Number(data.dimension.y))) {
         constraint.dimension = {
@@ -6224,6 +6311,9 @@
     }
     lastLoadBlockConstraintRepairMessage = "";
     const sourceVersion = Number(data.version) || 1;
+    const normalizeLoadedExpression = (value) => sourceVersion < 17
+      ? migrateLegacyParameterExpression(String(value ?? ""))
+      : String(value ?? "");
     if (sourceVersion >= 15 && !Array.isArray(data.splines)) throw new Error(applicationText("スプライン配列がありません", "The spline array is missing"));
     const normalizeLoadedDimensionAppearance = (value, options = {}) => loadedDimensionAppearance(value, sourceVersion, options);
     const loadedDocumentName = effectiveDocumentNameFromValue(options.documentNameOverride || data.documentName || options.documentNameFallback || DEFAULT_DOCUMENT_NAME);
@@ -6378,7 +6468,7 @@
         origin: { x: Number(rawDefinition.origin?.x) || 0, y: Number(rawDefinition.origin?.y) || 0 },
         sketches: definitionSketches,
         activeSketchId: normalizeDefinitionSketchId(rawDefinition.activeSketchId),
-        parameters: Array.isArray(rawDefinition.parameters) ? rawDefinition.parameters.map((parameter) => ({ name: String(parameter?.name || ""), expression: String(parameter?.expression ?? "") })) : [],
+        parameters: Array.isArray(rawDefinition.parameters) ? rawDefinition.parameters.map((parameter) => ({ name: String(parameter?.name || ""), expression: normalizeLoadedExpression(parameter?.expression) })) : [],
         nextDimensionParameterIndex: Number(rawDefinition.nextDimensionParameterIndex) || 1,
         points,
         lines,
@@ -6538,7 +6628,7 @@
         }
         let constraint = null;
         try {
-          constraint = deserializeConstraint(rawConstraint, pointById, lineById, primitiveById, normalizeLoadedDimensionAppearance);
+          constraint = deserializeConstraint(rawConstraint, pointById, lineById, primitiveById, normalizeLoadedDimensionAppearance, normalizeLoadedExpression);
         } catch (error) {
           if (sourceVersion >= 14 && rawConstraint?.type === "offsetChainDimension") throw error;
           constraint = null;
@@ -6724,7 +6814,7 @@
     const constraints = [];
     for (const c of data.constraints) {
       if (sourceVersion < 16 && c?.type === "pointOnLineMidpoint") continue;
-      const constraint = deserializeConstraint(c, pointById, lineById, primitiveById, normalizeLoadedDimensionAppearance);
+      const constraint = deserializeConstraint(c, pointById, lineById, primitiveById, normalizeLoadedDimensionAppearance, normalizeLoadedExpression);
       if (!constraint) throw new Error(`未対応の制約です: ${c.type}`);
       constraint.sketchId = normalizeSketchId(c.sketchId || constraintSketchId(constraint));
       constraint.reference = Boolean(c.reference);
@@ -6734,7 +6824,7 @@
 
     const loadedRootNamespace = {
       constraints,
-      parameters: Array.isArray(data.parameters) ? data.parameters.map((parameter) => ({ name: String(parameter?.name || ""), expression: String(parameter?.expression ?? "") })) : [],
+      parameters: Array.isArray(data.parameters) ? data.parameters.map((parameter) => ({ name: String(parameter?.name || ""), expression: normalizeLoadedExpression(parameter?.expression) })) : [],
       nextDimensionParameterIndex: Number(data.nextDimensionParameterIndex) || 1,
     };
     prepareLoadedParameterNamespace(loadedRootNamespace, sourceVersion, applicationText("Document", "Document"));
@@ -10274,6 +10364,7 @@
 
   function hideDimensionValueInput() {
     if (!dimensionValueInput) return;
+    if (dimensionValueInputShell) dimensionValueInputShell.hidden = true;
     dimensionValueInput.hidden = true;
     dimensionValueInput.classList.remove("is-invalid");
   }
@@ -10299,12 +10390,14 @@
     const appearance = effectiveDimensionAppearance(pendingCommand.dimension, pendingCommand.constraint ? constraintSketchId(pendingCommand.constraint) : activeSketchId());
     const labelGap = appearance.dimensionTextGap;
     const labelOffset = dimensionTextOffset(angle, labelGap);
+    const inputHost = dimensionValueInputShell || dimensionValueInput;
+    inputHost.hidden = false;
     dimensionValueInput.hidden = false;
-    dimensionValueInput.style.left = `${screen.x + labelOffset.x}px`;
-    dimensionValueInput.style.top = `${screen.y + labelOffset.y}px`;
-    dimensionValueInput.style.setProperty("--dimension-text-angle", `${angle}rad`);
-    dimensionValueInput.style.fontSize = `${Math.max(8, appearance.dimensionTextHeight * DIMENSION_SCREEN_PX_PER_MM)}px`;
-    dimensionValueInput.style.width = `${Math.max(132, Math.min(280, pendingCommand.buffer.length * 9 + 34))}px`;
+    inputHost.style.left = `${screen.x + labelOffset.x}px`;
+    inputHost.style.top = `${screen.y + labelOffset.y}px`;
+    inputHost.style.setProperty("--dimension-text-angle", `${angle}rad`);
+    inputHost.style.fontSize = `${Math.max(8, appearance.dimensionTextHeight * DIMENSION_SCREEN_PX_PER_MM)}px`;
+    inputHost.style.width = `${Math.max(132, Math.min(280, pendingCommand.buffer.length * 9 + 34))}px`;
     if (dimensionValueInput.value !== pendingCommand.buffer) dimensionValueInput.value = pendingCommand.buffer;
     let invalid = pendingCommand.buffer === "";
     if (!invalid) {
@@ -10318,6 +10411,7 @@
       }
     }
     dimensionValueInput.classList.toggle("is-invalid", invalid);
+    syncExpressionInputHighlight(dimensionValueInput);
   }
 
   function focusDimensionValueInput() {
@@ -10582,9 +10676,9 @@
     });
   }
 
-  function linearDimensionRenderPlan(target, layout, label, appearance, dimension) {
+  function linearDimensionRenderPlan(target, layout, label, appearance, dimension, expressionMark = false) {
     const arcRadius = isArcRadiusDimensionTarget(target);
-    const outside = shouldPlaceDimensionTerminatorsOutside(layout.span, label, appearance, dimension);
+    const outside = shouldPlaceDimensionTerminatorsOutside(layout.span, label, appearance, dimension, expressionMark);
     const directions = linearDimensionTerminatorDirections(layout.d, outside);
     const firstTerminator = arcRadius ? null : { point: layout.a, direction: directions.first };
     const secondTerminator = { point: layout.b, direction: directions.second };
@@ -10613,14 +10707,14 @@
     };
   }
 
-  function drawDimension(target, dimension, label, preview = false, highlighted = false, editState = null, colorOverride = null, sketchId = activeSketchId()) {
+  function drawDimension(target, dimension, label, preview = false, highlighted = false, editState = null, colorOverride = null, sketchId = activeSketchId(), expressionMark = false) {
     if (!target || !dimension) return;
-    if (target.kind === "angle") return drawAngleDimension(target, dimension, label, preview, highlighted, editState, colorOverride, sketchId);
+    if (target.kind === "angle") return drawAngleDimension(target, dimension, label, preview, highlighted, editState, colorOverride, sketchId, expressionMark);
     const appearance = effectiveDimensionAppearance(dimension, sketchId);
     const layout = dimensionLayout(target, dimension, appearance);
     if (!layout) return;
     const { points, text, textAngle } = layout;
-    const renderPlan = linearDimensionRenderPlan(target, layout, label, appearance, dimension);
+    const renderPlan = linearDimensionRenderPlan(target, layout, label, appearance, dimension, expressionMark);
 
     ctx.save();
     const color = preview || highlighted ? "#2563eb" : colorOverride || appearance.color;
@@ -10654,11 +10748,11 @@
     }
     drawDimensionTerminator(renderPlan.secondTerminator.point, renderPlan.secondTerminator.direction, appearance);
 
-    drawDimensionLabel(label, text, textAngle, editState, appearance);
+    drawDimensionLabel(label, text, textAngle, editState, appearance, expressionMark);
     ctx.restore();
   }
 
-  function drawAngleDimension(target, dimension, label, preview = false, highlighted = false, editState = null, colorOverride = null, sketchId = activeSketchId()) {
+  function drawAngleDimension(target, dimension, label, preview = false, highlighted = false, editState = null, colorOverride = null, sketchId = activeSketchId(), expressionMark = false) {
     const layout = angleDimensionLayout(target, dimension);
     if (!layout) return;
     const { vertex, radius, start, end, signed, text, textAngle } = layout;
@@ -10678,7 +10772,7 @@
     ctx.moveTo(secondExtension.start.x, secondExtension.start.y);
     ctx.lineTo(secondExtension.end.x, secondExtension.end.y);
     ctx.stroke();
-    const outside = shouldPlaceDimensionTerminatorsOutside(Math.abs(signed) * radius, label, appearance, dimension);
+    const outside = shouldPlaceDimensionTerminatorsOutside(Math.abs(signed) * radius, label, appearance, dimension, expressionMark);
     const sweepDirection = signed < 0 ? -1 : 1;
     const arcExtension = outside ? dimensionMillimetersToWorld(appearance.terminatorSize * DIMENSION_OUTSIDE_SHAFT_LENGTH_FACTOR) / Math.max(radius, 1e-12) : 0;
     ctx.beginPath();
@@ -10689,7 +10783,7 @@
     const secondDirection = { x: Math.cos(end + (signed < 0 ? Math.PI / 2 : -Math.PI / 2)), y: Math.sin(end + (signed < 0 ? Math.PI / 2 : -Math.PI / 2)) };
     drawDimensionTerminator(p1, outside ? { x: -firstDirection.x, y: -firstDirection.y } : firstDirection, appearance);
     drawDimensionTerminator(p2, outside ? { x: -secondDirection.x, y: -secondDirection.y } : secondDirection, appearance);
-    drawDimensionLabel(label, text, textAngle, editState, appearance);
+    drawDimensionLabel(label, text, textAngle, editState, appearance, expressionMark);
     ctx.restore();
   }
 
@@ -10725,25 +10819,29 @@
     };
   }
 
-  function dimensionTextWidth(label, appearance = DEFAULT_DIMENSION_APPEARANCE) {
+  function dimensionTextWidth(label, appearance = DEFAULT_DIMENSION_APPEARANCE, expressionMark = false) {
     const resolved = normalizeDimensionAppearance(appearance, { partial: false });
-    return dimensionTextWidthFromResolved(label, resolved);
+    return dimensionTextWidthFromResolved(label, resolved, null, expressionMark);
   }
 
-  function dimensionTextWidthFromResolved(label, resolved, cacheOwner = null) {
+  function dimensionTextWidthFromResolved(label, resolved, cacheOwner = null, expressionMark = false) {
     const text = String(label ?? "");
     const screenHeight = resolved.dimensionTextHeight * DIMENSION_SCREEN_PX_PER_MM;
     const cached = cacheOwner && typeof cacheOwner === "object" ? dimensionTextWidthCache.get(cacheOwner) : null;
-    if (cached?.text === text && cached.screenHeight === screenHeight) return cached.screenWidth / viewport.scale;
+    if (cached?.text === text && cached.screenHeight === screenHeight && cached.expressionMark === expressionMark) return cached.screenWidth / viewport.scale;
     ctx.save();
     ctx.font = `${screenHeight / viewport.scale}px system-ui`;
-    const screenWidth = ctx.measureText(text).width * viewport.scale;
+    const textScreenWidth = ctx.measureText(text).width * viewport.scale;
     ctx.restore();
-    if (cacheOwner && typeof cacheOwner === "object") dimensionTextWidthCache.set(cacheOwner, { text, screenHeight, screenWidth });
+    const markScreenWidth = expressionMark
+      ? screenHeight * (DIMENSION_EXPRESSION_MARK_WIDTH_FACTOR + DIMENSION_EXPRESSION_MARK_GAP_FACTOR)
+      : 0;
+    const screenWidth = textScreenWidth + markScreenWidth;
+    if (cacheOwner && typeof cacheOwner === "object") dimensionTextWidthCache.set(cacheOwner, { text, screenHeight, screenWidth, expressionMark });
     return screenWidth / viewport.scale;
   }
 
-  function shouldPlaceDimensionTerminatorsOutside(availableLength, label, appearance = DEFAULT_DIMENSION_APPEARANCE, cacheOwner = null) {
+  function shouldPlaceDimensionTerminatorsOutside(availableLength, label, appearance = DEFAULT_DIMENSION_APPEARANCE, cacheOwner = null, expressionMark = false) {
     const terminatorType = appearance.terminatorType;
     if (!["arrow", "filledArrow"].includes(terminatorType)) return false;
     const normalizedAvailableLength = Math.max(0, Number(availableLength) || 0);
@@ -10753,13 +10851,14 @@
       && cached.viewportScale === viewport.scale
       && cached.dimensionTextHeight === appearance.dimensionTextHeight
       && cached.terminatorType === terminatorType
-      && cached.terminatorSize === appearance.terminatorSize) return cached.outside;
+      && cached.terminatorSize === appearance.terminatorSize
+      && cached.expressionMark === expressionMark) return cached.outside;
     const availableScreenLength = normalizedAvailableLength * viewport.scale;
     const text = String(label ?? "");
     const screenHeight = appearance.dimensionTextHeight * DIMENSION_SCREEN_PX_PER_MM;
-    const screenWidth = cached?.text === text && cached.screenHeight === screenHeight
+    const screenWidth = cached?.text === text && cached.screenHeight === screenHeight && cached.expressionMark === expressionMark
       ? cached.screenWidth
-      : dimensionTextWidthFromResolved(text, appearance, cacheOwner) * viewport.scale;
+      : dimensionTextWidthFromResolved(text, appearance, cacheOwner, expressionMark) * viewport.scale;
     const fitMargin = appearance.terminatorSize * DIMENSION_SCREEN_PX_PER_MM * DIMENSION_TERMINATOR_FIT_MARGIN_FACTOR;
     const outside = availableScreenLength < screenWidth + fitMargin;
     if (cacheOwner && typeof cacheOwner === "object") {
@@ -10773,6 +10872,7 @@
         dimensionTextHeight: appearance.dimensionTextHeight,
         terminatorType,
         terminatorSize: appearance.terminatorSize,
+        expressionMark,
         outside,
       });
     }
@@ -10801,7 +10901,29 @@
     return highlighted ? Math.max(2, lineWidth + 0.8) : lineWidth;
   }
 
-  function drawDimensionLabel(label, text, angle = 0, editState = null, appearance = DEFAULT_DIMENSION_APPEARANCE) {
+  function drawDimensionExpressionMark(centerX, baselineY, height) {
+    const width = height * DIMENSION_EXPRESSION_MARK_WIDTH_FACTOR;
+    const centerY = baselineY - height * 0.48;
+    const points = [
+      { x: centerX + width * 0.08, y: centerY - height * 0.43 },
+      { x: centerX - width * 0.38, y: centerY + height * 0.03 },
+      { x: centerX - width * 0.03, y: centerY + height * 0.03 },
+      { x: centerX - width * 0.25, y: centerY + height * 0.43 },
+      { x: centerX + width * 0.4, y: centerY - height * 0.1 },
+      { x: centerX + width * 0.07, y: centerY - height * 0.1 },
+    ];
+
+    ctx.save();
+    ctx.beginPath();
+    ctx.moveTo(points[0].x, points[0].y);
+    for (const point of points.slice(1)) ctx.lineTo(point.x, point.y);
+    ctx.closePath();
+    ctx.fill();
+    ctx.restore();
+    if (dimensionExpressionMarkCapture) dimensionExpressionMarkCapture({ pointCount: points.length, filled: true });
+  }
+
+  function drawDimensionLabel(label, text, angle = 0, editState = null, appearance = DEFAULT_DIMENSION_APPEARANCE, expressionMark = false) {
     if (editState?.hidden) return;
     if (editState) {
       drawDimensionEditLabel(label, text, angle, editState, appearance);
@@ -10813,7 +10935,15 @@
       ctx.font = `${metrics.height}px system-ui`;
       ctx.textAlign = "center";
       ctx.textBaseline = "bottom";
-      ctx.fillText(label, 0, -metrics.gap);
+      if (expressionMark) {
+        const textWidth = ctx.measureText(label).width;
+        const markWidth = metrics.height * DIMENSION_EXPRESSION_MARK_WIDTH_FACTOR;
+        const markGap = metrics.height * DIMENSION_EXPRESSION_MARK_GAP_FACTOR;
+        ctx.fillText(label, (markWidth + markGap) / 2, -metrics.gap);
+        drawDimensionExpressionMark(-(textWidth + markGap) / 2, -metrics.gap, metrics.height);
+      } else {
+        ctx.fillText(label, 0, -metrics.gap);
+      }
       ctx.restore();
     }
   }
@@ -11154,7 +11284,7 @@
       const editing = pendingCommand?.type === "distance-value" && pendingCommand.constraint === c;
       const colorOverride = viewState.constraintStatus && !isActiveSketchConstraint(c) ? INACTIVE_CONSTRAINT_STATUS_COLOR : null;
       ctx.save();
-      drawDimension(target, dimension, label, false, highlighted || editing, editing ? { hidden: true } : null, colorOverride, sketchId);
+      drawDimension(target, dimension, label, false, highlighted || editing, editing ? { hidden: true } : null, colorOverride, sketchId, dimensionUsesExpression(c));
       ctx.restore();
     }
   }
@@ -12591,7 +12721,7 @@
       referenceSketchId,
       sketchId,
     };
-    setHint(applicationText("寸法値を入力中: 数式は = から開始。Canvas寸法のクリックでParameter名を挿入できます", "Editing dimension: begin expressions with =. Click a canvas dimension to insert its parameter name."));
+    setHint(applicationText("寸法値を入力中: 数式は = から開始し、Parameter参照はダブルクオーテーションで括ります。Canvas寸法のクリックで参照を挿入できます", "Editing dimension: begin expressions with = and enclose parameter references in double quotes. Click a canvas dimension to insert a reference."));
     updateConstraintButtons();
     draw();
     focusDimensionValueInput();
@@ -12695,7 +12825,7 @@
     selectedDimensionConstraint = hit.constraint;
     selectedConstraint = null;
     dimensionDragSession = null;
-    setHint(applicationText("寸法値を入力中: 数式は = から開始。Canvas寸法のクリックでParameter名を挿入できます", "Editing dimension: begin expressions with =. Click a canvas dimension to insert its parameter name."));
+    setHint(applicationText("寸法値を入力中: 数式は = から開始し、Parameter参照はダブルクオーテーションで括ります。Canvas寸法のクリックで参照を挿入できます", "Editing dimension: begin expressions with = and enclose parameter references in double quotes. Click a canvas dimension to insert a reference."));
     draw();
     focusDimensionValueInput();
     return true;
@@ -12703,7 +12833,7 @@
 
   function updateDistanceBufferLabel() {
     if (!pendingCommand || !["distance-value", "offset-value"].includes(pendingCommand.type)) return;
-    setHint(pendingCommand.type === "offset-value" ? "オフセット距離を入力中: Enter/ダブルクリックで決定、Escでキャンセル" : applicationText("寸法値を入力中: 数式は = から開始。Canvas寸法のクリックでParameter名を挿入できます", "Editing dimension: begin expressions with =. Click a canvas dimension to insert its parameter name."));
+    setHint(pendingCommand.type === "offset-value" ? "オフセット距離を入力中: Enter/ダブルクリックで決定、Escでキャンセル" : applicationText("寸法値を入力中: 数式は = から開始し、Parameter参照はダブルクオーテーションで括ります。Canvas寸法のクリックで参照を挿入できます", "Editing dimension: begin expressions with = and enclose parameter references in double quotes. Click a canvas dimension to insert a reference."));
     draw();
   }
 
@@ -13953,7 +14083,7 @@
     const identifierCharacter = /[A-Za-z0-9_]/;
     const leftPadding = start > 0 && identifierCharacter.test(value[start - 1]) ? " " : "";
     const rightPadding = end < value.length && identifierCharacter.test(value[end]) ? " " : "";
-    const insertion = `${leftPadding}${identifier}${rightPadding}`;
+    const insertion = `${leftPadding}${formatParameterReference(identifier)}${rightPadding}`;
     input.value = `${value.slice(0, start)}${insertion}${value.slice(end)}`;
     const caret = start + insertion.length;
     input.dispatchEvent(new Event("input", { bubbles: true }));
@@ -14638,6 +14768,7 @@
     }
 
     localizeApplicationUI(panel);
+    installExpressionInputHighlights(panel);
     for (const section of panel.querySelectorAll(".property-section-collapsible[data-property-section]")) {
       section.querySelector("summary")?.addEventListener("click", () => {
         sketchAppearanceSectionOpenState[section.dataset.propertySection] = !section.open;
@@ -19696,6 +19827,7 @@
       : `<tr><td colspan="4" class="parameter-source">${applicationText("寸法はありません", "No dimensions")}</td></tr>`;
     setParameterDialogError(evaluationError ? parameterErrorText(evaluationError) : "");
     localizeApplicationUI(document.getElementById("parametersDialog"));
+    installExpressionInputHighlights(document.getElementById("parametersDialog"));
   }
 
   function rewriteParameterDraftName(oldName, nextName) {
@@ -19933,6 +20065,7 @@
       const row = parameterDialogSession.dimensions[Number(input.dataset.dimensionRow)];
       if (row && !(row.readOnly && input.dataset.dimensionField === "expression")) row[input.dataset.dimensionField] = input.value;
     }
+    refreshExpressionInputHighlights(event.currentTarget);
   });
   document.getElementById("parametersForm")?.addEventListener("change", (event) => {
     if (!parameterDialogSession) return;
@@ -20953,7 +21086,7 @@
           },
         };
       },
-      dimensionTerminatorFitForTest(availableScreenPixels, label = "100", terminatorType = "arrow") {
+      dimensionTerminatorFitForTest(availableScreenPixels, label = "100", terminatorType = "arrow", expressionMark = false) {
         const appearance = {
           ...normalizeDimensionAppearance(model.defaultDimensionAppearance, { partial: false }),
           terminatorType,
@@ -20967,11 +21100,11 @@
           lineA: { x: 0, y: 0 },
           lineB: { x: availableLength, y: 0 },
         };
-        const plan = linearDimensionRenderPlan({ kind: "point-point" }, layout, label, appearance, null);
+        const plan = linearDimensionRenderPlan({ kind: "point-point" }, layout, label, appearance, null, expressionMark);
         const directions = linearDimensionTerminatorDirections({ x: 1, y: 0 }, plan.outside);
         return {
           outside: plan.outside,
-          textWidth: dimensionTextWidth(label, appearance) * viewport.scale,
+          textWidth: dimensionTextWidth(label, appearance, expressionMark) * viewport.scale,
           fitMargin: appearance.terminatorSize * DIMENSION_SCREEN_PX_PER_MM * DIMENSION_TERMINATOR_FIT_MARGIN_FACTOR,
           shaftLengths: plan.shafts.map((shaft) => hypot2(shaft.end.x - shaft.start.x, shaft.end.y - shaft.start.y) * viewport.scale),
           firstDirection: directions.first,
@@ -21056,10 +21189,10 @@
         measured.enabled = false;
         pushModelConstraint(measured);
         model.parameters = [
-          { name: "width", expression: `${measured.parameterName} * 2` },
+          { name: "width", expression: `${formatParameterReference(measured.parameterName)} * 2` },
           { name: "margin", expression: "10" },
         ];
-        driven.expression = "width / 2 + margin";
+        driven.expression = '"width" / 2 + "margin"';
         const definition = createEmptyBlockDefinition("Param Block");
         const bp1 = new Point("BP1", 0, 0, true, "endpoint");
         const bp2 = new Point("BP2", 25, 0, false, "endpoint");
@@ -21077,7 +21210,7 @@
         definition.constraints.push(blockHorizontal, blockDimension);
         definition.parameters = [{ name: "width", expression: "25" }];
         ensureParameterNamespace(definition);
-        blockDimension.expression = "width";
+        blockDimension.expression = '"width"';
         model.blockDefinitions.push(definition);
         model.blockInstances.push({ id: `BI${blockInstanceSeq++}`, definitionId: definition.id, sketchId: DEFAULT_SKETCH_ID, x: 180, y: 0, rotation: 0, fixed: false, rotationLocked: true, enabledSketchIds: [DEFAULT_SKETCH_ID], appearanceOverride: {} });
         const otherDefinition = createEmptyBlockDefinition("Other Param Block");
@@ -21097,7 +21230,7 @@
         otherDefinition.constraints.push(otherHorizontal, otherDimension);
         otherDefinition.parameters = [{ name: "width", expression: "15" }];
         ensureParameterNamespace(otherDefinition);
-        otherDimension.expression = "width";
+        otherDimension.expression = '"width"';
         model.blockDefinitions.push(otherDefinition);
         model.blockInstances.push({ id: `BI${blockInstanceSeq++}`, definitionId: otherDefinition.id, sketchId: DEFAULT_SKETCH_ID, x: 260, y: 0, rotation: 0, fixed: false, rotationLocked: true, enabledSketchIds: [DEFAULT_SKETCH_ID], appearanceOverride: {} });
         invalidateBlockProjectionCache();
@@ -23497,6 +23630,16 @@
         }
         return labels;
       },
+      drawnDimensionExpressionMarksForTest() {
+        const marks = [];
+        dimensionExpressionMarkCapture = (mark) => marks.push(mark);
+        try {
+          drawDimensions();
+        } finally {
+          dimensionExpressionMarkCapture = null;
+        }
+        return marks;
+      },
       dimensionClientPositionForTest(index = 0) {
         const constraint = model.constraints.filter(isDimensionConstraint)[index] || null;
         const target = targetFromConstraint(constraint);
@@ -23740,6 +23883,7 @@
   }
 
   installTestHooks();
+  installExpressionInputHighlights(document);
   resetModelState();
   updateUI();
   draw();

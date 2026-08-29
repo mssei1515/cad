@@ -179,7 +179,15 @@ button:disabled { opacity: .45; cursor: default; }
 .block-editor-overlay { position: absolute; top: 12px; right: 12px; z-index: 4; width: min(280px, calc(100% - 24px)); padding: 8px; border: 1px solid #93c5fd; border-radius: 8px; background: rgba(239, 246, 255, .95); box-shadow: 0 8px 24px rgba(30, 64, 175, .14); }
 .block-editor-overlay .block-editor-name-input { width: 100%; margin: 6px 0; }
 .block-editor-overlay .block-editor-actions { justify-content: flex-end; padding: 0; }
-.dimension-value-input { position: absolute; z-index: 5; width: 100px; padding: 5px 7px; border: 2px solid var(--accent); border-radius: 4px; background: #fff; }
+.expression-input-shell { position: relative; display: block; width: 100%; min-width: 0; background: #fff; }
+.expression-input-highlight { position: absolute; z-index: 0; inset: 0; overflow: hidden; color: var(--text); background: #fff; white-space: pre; pointer-events: none; }
+.expression-input-highlight-text { display: inline-block; min-width: max-content; transform: translateX(var(--expression-scroll-x, 0)); }
+.expression-reference-token { color: var(--accent); font-weight: 650; }
+.expression-input-shell > .expression-input-source { position: relative; z-index: 1; background: transparent; color: transparent; caret-color: var(--text); -webkit-text-fill-color: transparent; }
+.expression-input-shell:has(.is-invalid) > .expression-input-highlight { background: #fff7f7; }
+.dimension-value-input-shell { position: absolute; z-index: 5; width: 100px; border-radius: 4px; }
+.dimension-value-input { display: block; width: 100%; padding: 5px 7px; border: 2px solid var(--accent); border-radius: 4px; background: transparent; }
+.dimension-value-input-shell > .expression-input-highlight { padding: 5px 7px; border: 2px solid transparent; border-radius: 4px; font-size: inherit; }
 body.block-editing .canvas-area { background: #f3f7ff; box-shadow: none; }
 
 .properties-scroll { padding: 7px; background: var(--properties-bg); }
@@ -197,6 +205,7 @@ body.block-editing .canvas-area { background: #f3f7ff; box-shadow: none; }
 .property-section-collapsible[open] > summary { margin-bottom: 4px; }
 .property-row { display: grid; grid-template-columns: minmax(82px, 1fr) minmax(105px, 1.25fr); align-items: center; gap: 6px; min-height: 26px; font-size: 12px; line-height: 1.2; }
 .property-row input, .property-row select, .property-row textarea { width: 100%; min-width: 0; min-height: 25px; padding: 3px 5px; border: 1px solid var(--border-strong); border-radius: 3px; background: #fff; font-size: 12px; line-height: 1.2; }
+.property-row .expression-input-highlight { min-height: 25px; padding: 3px 5px; border: 1px solid transparent; font-size: 12px; line-height: 1.2; }
 .property-input-with-unit { min-width: 0; display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 5px; }
 .property-input-unit { min-width: 18px; color: var(--muted); font-size: 11px; }
 .property-row input[type="checkbox"] { width: auto; min-height: 0; justify-self: start; }
@@ -261,6 +270,7 @@ button.property-color-swatch:hover:not(:disabled), button.property-color-swatch:
 .parameter-table th:nth-child(3) { width: 31%; }
 .parameter-table th:last-child { width: 20%; }
 .parameter-table input { width: 100%; min-width: 90px; padding: 5px 6px; border: 1px solid var(--border-strong); border-radius: 3px; background: #fff; }
+.parameter-table .expression-input-highlight { padding: 5px 6px; border: 1px solid transparent; }
 .parameter-table input[readonly] { color: var(--muted); background: var(--panel); }
 .parameter-table .parameter-value { color: #334155; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
 .parameter-table .parameter-source { color: var(--muted); overflow-wrap: anywhere; }

@@ -24,7 +24,7 @@ async function canvasInkAround(page, client, radius = 50) {
   }, { clientPoint: client, cropRadius: radius });
 }
 
-test("creates associative hatching, exposes Tree and Properties, and persists version 16", async ({ page }) => {
+test("creates associative hatching, exposes Tree and Properties, and persists version 17", async ({ page }) => {
   const fixture = await page.evaluate(() => window.__jot2dTest.resetForHatchTest());
   await page.locator("#toolHatch").click();
   await expect(page.locator("#statusCommand")).toHaveText("ハッチング");
@@ -37,7 +37,7 @@ test("creates associative hatching, exposes Tree and Properties, and persists ve
   expect(state.direct).toHaveLength(1);
   expect(state.direct[0]).toEqual(expect.objectContaining({ id: "H1", valid: true }));
   expect(state.direct[0].appearance).toEqual({ visible: true, patternType: "parallel", angle: 45, spacing: 3, color: "#64748b", lineWidth: 1, opacity: 1 });
-  expect(state.serialized.version).toBe(16);
+  expect(state.serialized.version).toBe(17);
   expect(state.serialized.hatches).toHaveLength(1);
   expect(state.propertiesText).toContain("ハッチング");
   expect(state.propertiesText).toContain("境界状態");
@@ -175,12 +175,12 @@ test("supports parallel, cross, and solid fill appearances", async ({ page }) =>
 
   const legacyOpacity = structuredClone(state.serialized);
   delete legacyOpacity.hatches[0].appearance.opacity;
-  expect(await page.evaluate((data) => window.__jot2dTest.loadDocumentFixtureForDragTest(data, "legacy-opacity-v16.jot2d"), legacyOpacity)).toEqual(expect.objectContaining({ success: true }));
+  expect(await page.evaluate((data) => window.__jot2dTest.loadDocumentFixtureForDragTest(data, "legacy-opacity-v17.jot2d"), legacyOpacity)).toEqual(expect.objectContaining({ success: true }));
   expect((await page.evaluate(() => window.__jot2dTest.hatchStateForTest())).direct[0].appearance.opacity).toBe(1);
 
   const invalidOpacity = structuredClone(state.serialized);
   invalidOpacity.hatches[0].appearance.opacity = 1.2;
-  expect(await page.evaluate((data) => window.__jot2dTest.loadDocumentFixtureForDragTest(data, "invalid-opacity-v16.jot2d"), invalidOpacity)).toEqual(expect.objectContaining({ success: false }));
+  expect(await page.evaluate((data) => window.__jot2dTest.loadDocumentFixtureForDragTest(data, "invalid-opacity-v17.jot2d"), invalidOpacity)).toEqual(expect.objectContaining({ success: false }));
 });
 
 test("solid fill keeps inner boundary loops transparent", async ({ page }) => {

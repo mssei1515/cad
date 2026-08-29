@@ -14,7 +14,15 @@
     }
   }
 
-  function tokenize(source) {
+  function formatReference(name) {
+    const value = String(name ?? "");
+    if (!IDENTIFIER_PATTERN.test(value)) {
+      throw new ParameterExpressionError("INVALID_IDENTIFIER", `Invalid identifier '${value}'`, { identifier: value });
+    }
+    return `"${value}"`;
+  }
+
+  function tokenizeExpression(source, options = {}) {
     const text = String(source ?? "");
     const tokens = [];
     let index = 0;
@@ -33,9 +41,23 @@
         index += number[0].length;
         continue;
       }
+      if (text[index] === '"') {
+        const closing = text.indexOf('"', index + 1);
+        if (closing < 0) throw new ParameterExpressionError("UNTERMINATED_REFERENCE", `Unterminated quoted reference at ${index}`, { index });
+        const name = text.slice(index + 1, closing);
+        if (!IDENTIFIER_PATTERN.test(name)) {
+          throw new ParameterExpressionError("INVALID_IDENTIFIER", `Invalid identifier '${name}'`, { identifier: name, index });
+        }
+        tokens.push({ type: "identifier", text: text.slice(index, closing + 1), name, start: index, end: closing + 1 });
+        index = closing + 1;
+        continue;
+      }
       const identifier = /^[A-Za-z_][A-Za-z0-9_]*/.exec(rest);
       if (identifier) {
-        tokens.push({ type: "identifier", text: identifier[0], start: index, end: index + identifier[0].length });
+        if (!options.allowUnquotedIdentifiers) {
+          throw new ParameterExpressionError("REFERENCE_QUOTES_REQUIRED", `Reference '${identifier[0]}' must be enclosed in double quotes`, { identifier: identifier[0], index });
+        }
+        tokens.push({ type: "identifier", text: identifier[0], name: identifier[0], start: index, end: index + identifier[0].length });
         index += identifier[0].length;
         continue;
       }
@@ -49,6 +71,10 @@
     }
     tokens.push({ type: "eof", text: "", start: index, end: index });
     return tokens;
+  }
+
+  function tokenize(source) {
+    return tokenizeExpression(source);
   }
 
   function parse(source) {
@@ -65,7 +91,7 @@
       }
       if (token.type === "identifier") {
         consume();
-        return { type: "identifier", name: token.text };
+        return { type: "identifier", name: token.name };
       }
       if (token.type === "paren" && token.text === "(") {
         consume();
@@ -76,7 +102,7 @@
         consume();
         return node;
       }
-      throw new ParameterExpressionError("EXPECTED_VALUE", `Expected a number, identifier, or '(' at ${token.start}`, { index: token.start });
+      throw new ParameterExpressionError("EXPECTED_VALUE", `Expected a number, quoted reference, or '(' at ${token.start}`, { index: token.start });
     }
 
     function unary() {
@@ -219,7 +245,20 @@
     let cursor = 0;
     for (const token of tokens) {
       result += text.slice(cursor, token.start);
-      result += token.type === "identifier" && mapping.has(token.text) ? mapping.get(token.text) : token.text;
+      result += token.type === "identifier" && mapping.has(token.name) ? formatReference(mapping.get(token.name)) : token.text;
+      cursor = token.end;
+    }
+    return result + text.slice(cursor);
+  }
+
+  function migrateLegacyExpression(source) {
+    const text = String(source ?? "");
+    const tokens = tokenizeExpression(text, { allowUnquotedIdentifiers: true }).filter((token) => token.type !== "eof");
+    let result = "";
+    let cursor = 0;
+    for (const token of tokens) {
+      result += text.slice(cursor, token.start);
+      result += token.type === "identifier" ? formatReference(token.name) : token.text;
       cursor = token.end;
     }
     return result + text.slice(cursor);
@@ -234,6 +273,8 @@
     dependencies,
     evaluate,
     evaluateDefinitions,
+    formatReference,
+    migrateLegacyExpression,
     validateIdentifier,
     rewriteIdentifiers,
   });

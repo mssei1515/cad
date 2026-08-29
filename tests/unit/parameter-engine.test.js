@@ -25,8 +25,8 @@ test("evaluates a case-sensitive dependency graph", () => {
   const result = engine.evaluateDefinitions([
     { name: "width", expression: "100" },
     { name: "Width", expression: "20" },
-    { name: "height", expression: "width / 2 + Width" },
-    { name: "d1", expression: "height + measured", kind: "dimension" },
+    { name: "height", expression: '"width" / 2 + "Width"' },
+    { name: "d1", expression: '"height" + "measured"', kind: "dimension" },
   ], new Map([["measured", 5]]));
   assert.equal(result.values.get("width"), 100);
   assert.equal(result.values.get("height"), 70);
@@ -38,9 +38,9 @@ test("rejects invalid names, reserved parameter names, duplicates, unknowns, and
   assert.throws(() => engine.validateIdentifier("d12"), (error) => error.code === "RESERVED_IDENTIFIER");
   assert.equal(engine.validateIdentifier("d12", { dimension: true }), "d12");
   assert.throws(() => engine.evaluateDefinitions([{ name: "a", expression: "1" }, { name: "a", expression: "2" }]), (error) => error.code === "DUPLICATE_IDENTIFIER");
-  assert.throws(() => engine.evaluateDefinitions([{ name: "a", expression: "missing" }]), (error) => error.code === "UNKNOWN_IDENTIFIER");
-  assert.throws(() => engine.evaluateDefinitions([{ name: "a", expression: "a + 1" }]), (error) => error.code === "CYCLE");
-  assert.throws(() => engine.evaluateDefinitions([{ name: "a", expression: "b" }, { name: "b", expression: "a" }]), (error) => error.code === "CYCLE");
+  assert.throws(() => engine.evaluateDefinitions([{ name: "a", expression: '"missing"' }]), (error) => error.code === "UNKNOWN_IDENTIFIER");
+  assert.throws(() => engine.evaluateDefinitions([{ name: "a", expression: '"a" + 1' }]), (error) => error.code === "CYCLE");
+  assert.throws(() => engine.evaluateDefinitions([{ name: "a", expression: '"b"' }, { name: "b", expression: '"a"' }]), (error) => error.code === "CYCLE");
   assert.throws(() => engine.evaluate("1 / 0"), (error) => error.code === "DIVISION_BY_ZERO");
 });
 
@@ -49,8 +49,16 @@ test("rejects empty, malformed, and non-finite expressions", () => {
   assert.throws(() => engine.evaluate("(1 + 2"), (error) => error.code === "EXPECTED_PAREN");
   assert.throws(() => engine.evaluate("1 + * 2"), (error) => error.code === "EXPECTED_VALUE");
   assert.throws(() => engine.evaluate("1e999"), (error) => error.code === "NON_FINITE");
+  assert.throws(() => engine.evaluate("width + 1"), (error) => error.code === "REFERENCE_QUOTES_REQUIRED" && error.identifier === "width");
+  assert.throws(() => engine.evaluate('"width + 1'), (error) => error.code === "UNTERMINATED_REFERENCE");
+  assert.throws(() => engine.evaluate('"1width" + 1'), (error) => error.code === "INVALID_IDENTIFIER");
 });
 
 test("rewrites identifier tokens without changing substrings or whitespace", () => {
-  assert.equal(engine.rewriteIdentifiers("width + width2 + ( width )", { width: "span" }), "span + width2 + ( span )");
+  assert.equal(engine.rewriteIdentifiers('"width" + "width2" + ( "width" )', { width: "span" }), '"span" + "width2" + ( "span" )');
+});
+
+test("migrates legacy unquoted references without changing numbers, operators, or existing quotes", () => {
+  assert.equal(engine.migrateLegacyExpression('width / 2 + Width + "d1" + 1e2'), '"width" / 2 + "Width" + "d1" + 1e2');
+  assert.equal(engine.formatReference("width"), '"width"');
 });

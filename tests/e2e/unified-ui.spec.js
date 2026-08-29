@@ -134,7 +134,7 @@ async function openParameterDialog(page) {
   await expect(page.locator("#parametersDialog")).toBeVisible();
 }
 
-test("document parameters, dimension formulas, rename propagation, and v16 persistence work together", async ({ page }) => {
+test("document parameters, quoted dimension formulas, rename propagation, and v17 persistence work together", async ({ page }) => {
   await page.goto(`${baseUrl}/index.html?test=1`);
   await page.waitForFunction(() => window.__jot2dTest);
   const initial = await page.evaluate(() => window.__jot2dTest.resetForParameterTest());
@@ -148,7 +148,7 @@ test("document parameters, dimension formulas, rename propagation, and v16 persi
     parameters: [],
     name: "d1",
     expression: "50",
-    sourceExpression: "width / 2 + margin",
+    sourceExpression: '"width" / 2 + "margin"',
   });
 
   await openParameterDialog(page);
@@ -158,12 +158,15 @@ test("document parameters, dimension formulas, rename propagation, and v16 persi
   await expect(page.locator("#parameterRows tr")).toHaveCount(2);
   await expect(page.locator("#parameterDimensionRows tr")).toHaveCount(2);
   await expect(page.locator('#parameterDimensionRows input[readonly]')).toHaveCount(1);
-  await expect(page.locator('[data-parameter-field="expression"]').first()).toHaveValue(`=${initial.measuredName} * 2`);
-  await expect(page.locator('#parameterDimensionRows input[data-dimension-field="expression"]:not([readonly])')).toHaveValue("=width / 2 + margin");
+  await expect(page.locator('[data-parameter-field="expression"]').first()).toHaveValue(`="${initial.measuredName}" * 2`);
+  await expect(page.locator('#parameterDimensionRows input[data-dimension-field="expression"]:not([readonly])')).toHaveValue('="width" / 2 + "margin"');
+  await expect(page.locator("#parameterRows .expression-reference-token")).toHaveText([`"${initial.measuredName}"`]);
+  await expect(page.locator("#parameterDimensionRows .expression-reference-token")).toHaveText(['"width"', '"margin"']);
+  await expect(page.locator("#parameterDimensionRows .expression-reference-token").first()).toHaveCSS("color", "rgb(37, 99, 235)");
   const widthName = page.locator('[data-parameter-field="name"]').first();
   await widthName.fill("span");
   await widthName.press("Tab");
-  await expect(page.locator('#parameterDimensionRows input[data-dimension-field="expression"]:not([readonly])')).toHaveValue("=span / 2 + margin");
+  await expect(page.locator('#parameterDimensionRows input[data-dimension-field="expression"]:not([readonly])')).toHaveValue('="span" / 2 + "margin"');
   await page.locator("#applyParametersBtn").click();
   await expect(page.locator("#parameterDialogError")).toBeHidden();
 
@@ -171,7 +174,7 @@ test("document parameters, dimension formulas, rename propagation, and v16 persi
   expect(state.valid).toBe(true);
   expect(state.parameters.map((item) => item.name)).toEqual(["span", "margin"]);
   expect(state.dimensions.find((item) => !item.readOnly).expression).toContain("span");
-  expect(state.serialized.version).toBe(16);
+  expect(state.serialized.version).toBe(17);
   expect(state.serialized.constraints.every((constraint) => !constraint.dimension || constraint.parameterName)).toBe(true);
 });
 
@@ -202,6 +205,30 @@ test("block parameter namespaces are independent and directly update definitions
   expect(state.instanceProjectionLengths[1]).toBeCloseTo(15, 5);
 });
 
+test("formula-driven dimensions use the lightning canvas mark without changing numeric labels", async ({ page }) => {
+  await page.goto(`${baseUrl}/index.html?test=1`);
+  await page.waitForFunction(() => window.__jot2dTest);
+  await page.evaluate(() => window.__jot2dTest.resetForParameterTest());
+
+  expect(await page.evaluate(() => window.__jot2dTest.drawnDimensionExpressionMarksForTest())).toEqual([
+    { pointCount: 6, filled: true },
+  ]);
+  expect(await page.evaluate(() => window.__jot2dTest.drawnDimensionLabelsForTest())).toEqual(["50", "(40)"]);
+  const fit = await page.evaluate(() => {
+    const plain = window.__jot2dTest.dimensionTerminatorFitForTest(1000, "50");
+    const available = plain.textWidth + plain.fitMargin + 1;
+    return {
+      plain,
+      marked: window.__jot2dTest.dimensionTerminatorFitForTest(available, "50", "arrow", true),
+    };
+  });
+  expect(fit.marked.textWidth).toBeGreaterThan(fit.plain.textWidth);
+  expect(fit.marked.outside).toBe(true);
+
+  await page.evaluate(() => window.__jot2dTest.resetForParameterFeedbackTest());
+  expect(await page.evaluate(() => window.__jot2dTest.drawnDimensionExpressionMarksForTest())).toEqual([]);
+});
+
 test("dimension expressions require equals and canvas dimension clicks insert parameter names", async ({ page }) => {
   await page.goto(`${baseUrl}/index.html?test=1`);
   await page.waitForFunction(() => window.__jot2dTest);
@@ -215,24 +242,30 @@ test("dimension expressions require equals and canvas dimension clicks insert pa
   await page.evaluate(() => window.__jot2dTest.startDimensionExpressionEditForTest(0));
   const input = page.locator("#dimensionValueInput");
   await expect(input).toBeVisible();
-  await expect(input).toHaveValue("=width / 2 + margin");
+  await expect(input).toHaveValue('="width" / 2 + "margin"');
+  await expect(page.locator("#dimensionValueInputShell .expression-reference-token")).toHaveText(['"width"', '"margin"']);
 
   await input.fill(`${initial.measuredName} * 2`);
   await input.press("Enter");
   await expect(input).toBeVisible();
   await expect(page.locator("#hint")).toContainText("先頭に =");
 
+  await input.fill(`=${initial.measuredName} * 2`);
+  await input.press("Enter");
+  await expect(input).toBeVisible();
+  await expect(page.locator("#hint")).toContainText("ダブルクオーテーション");
+
   await input.fill("=");
   await page.mouse.click(positions[1].x, positions[1].y);
   await expect(input).toBeVisible();
   await expect(input).toBeFocused();
-  await expect(input).toHaveValue(`=${initial.measuredName}`);
+  await expect(input).toHaveValue(`="${initial.measuredName}"`);
   await input.press("Enter");
   await expect(input).toBeHidden();
 
   const state = await page.evaluate(() => window.__jot2dTest.parameterStateForTest());
   const driving = state.dimensions.find((dimension) => !dimension.readOnly);
-  expect(driving.expression).toBe(initial.measuredName);
+  expect(driving.expression).toBe(`"${initial.measuredName}"`);
   expect(driving.target).toBeCloseTo(40, 5);
 });
 
@@ -245,11 +278,12 @@ test("Properties and Parameter dialog expression fields accept canvas dimension 
   let measuredPosition = await page.evaluate(() => window.__jot2dTest.dimensionClientPositionForTest(1));
 
   const propertyExpression = page.locator('#propertiesPanel [data-property="constraint-expression"]');
-  await expect(propertyExpression).toHaveValue("=width / 2 + margin");
+  await expect(propertyExpression).toHaveValue('="width" / 2 + "margin"');
+  await expect(page.locator("#propertiesPanel .expression-reference-token")).toHaveText(['"width"', '"margin"']);
   await propertyExpression.fill("=");
   await page.mouse.click(measuredPosition.x, measuredPosition.y);
   await expect(propertyExpression).toBeFocused();
-  await expect(propertyExpression).toHaveValue(`=${initial.measuredName}`);
+  await expect(propertyExpression).toHaveValue(`="${initial.measuredName}"`);
 
   await page.reload();
   await page.waitForFunction(() => window.__jot2dTest);
@@ -263,22 +297,51 @@ test("Properties and Parameter dialog expression fields accept canvas dimension 
   await dialogExpression.fill("=");
   await page.mouse.click(measuredPosition.x, measuredPosition.y);
   await expect(dialogExpression).toBeFocused();
-  await expect(dialogExpression).toHaveValue(`=${next.measuredName}`);
+  await expect(dialogExpression).toHaveValue(`="${next.measuredName}"`);
 });
 
-test("invalid v12 parameter expressions reject loading without replacing the document", async ({ page }) => {
+test("v16 formulas migrate to quoted references and current unquoted references are rejected atomically", async ({ page }) => {
+  await page.goto(`${baseUrl}/index.html?test=1`);
+  await page.waitForFunction(() => window.__jot2dTest);
+  await page.evaluate(() => window.__jot2dTest.resetForParameterTest());
+  const before = await page.evaluate(() => window.__jot2dTest.serializedModelForTest());
+  const legacy = structuredClone(before);
+  legacy.version = 16;
+  const removeReferenceQuotes = (scope) => {
+    for (const parameter of scope.parameters || []) parameter.expression = parameter.expression.replaceAll('"', "");
+    for (const constraint of scope.constraints || []) if (constraint.expression) constraint.expression = constraint.expression.replaceAll('"', "");
+  };
+  removeReferenceQuotes(legacy);
+  for (const definition of legacy.blockDefinitions || []) removeReferenceQuotes(definition);
+  const migrated = await page.evaluate((data) => window.__jot2dTest.loadDocumentFixtureForDragTest(data, "legacy-v16-formulas.jot2d"), legacy);
+  expect(migrated.success).toBe(true);
+  const migratedState = await page.evaluate(() => window.__jot2dTest.serializedModelForTest());
+  expect(migratedState.version).toBe(17);
+  expect(migratedState.parameters[0].expression).toMatch(/^"d\d+" \* 2$/);
+  expect(migratedState.constraints.find((constraint) => constraint.expression?.includes("width"))?.expression).toBe('"width" / 2 + "margin"');
+
+  const invalid = structuredClone(migratedState);
+  invalid.parameters[0].expression = invalid.parameters[0].expression.replaceAll('"', "");
+  const result = await page.evaluate((data) => window.__jot2dTest.loadDocumentFixtureForDragTest(data, "invalid-v17-unquoted-formula.jot2d"), invalid);
+  expect(result.success).toBe(false);
+  expect(result.error).toContain("ダブルクオーテーション");
+  const after = await page.evaluate(() => window.__jot2dTest.serializedModelForTest());
+  expect(after.parameters).toEqual(migratedState.parameters);
+  expect(after.constraints.map((constraint) => constraint.expression)).toEqual(migratedState.constraints.map((constraint) => constraint.expression));
+});
+
+test("unknown quoted parameter expressions reject loading without replacing the document", async ({ page }) => {
   await page.goto(`${baseUrl}/index.html?test=1`);
   await page.waitForFunction(() => window.__jot2dTest);
   await page.evaluate(() => window.__jot2dTest.resetForParameterTest());
   const before = await page.evaluate(() => window.__jot2dTest.serializedModelForTest());
   const invalid = structuredClone(before);
-  invalid.parameters[0].expression = "missing + 1";
-  const result = await page.evaluate((data) => window.__jot2dTest.loadDocumentFixtureForDragTest(data, "invalid-v12.json"), invalid);
+  invalid.parameters[0].expression = '"missing" + 1';
+  const result = await page.evaluate((data) => window.__jot2dTest.loadDocumentFixtureForDragTest(data, "invalid-v17-unknown-formula.jot2d"), invalid);
   expect(result.success).toBe(false);
   expect(result.error).toContain("未定義");
   const after = await page.evaluate(() => window.__jot2dTest.serializedModelForTest());
   expect(after.parameters).toEqual(before.parameters);
-  expect(after.constraints.map((constraint) => constraint.expression)).toEqual(before.constraints.map((constraint) => constraint.expression));
 });
 
 test("non-convergent reference feedback rolls back the complete parameter apply", async ({ page }) => {
@@ -289,7 +352,7 @@ test("non-convergent reference feedback rolls back the complete parameter apply"
   expect(initial.length).toBeCloseTo(40, 5);
   await openParameterDialog(page);
   const drivingExpression = page.locator('#parameterDimensionRows input[data-dimension-field="expression"]:not([readonly])');
-  await drivingExpression.fill(`=120 - ${initial.measuredName}`);
+  await drivingExpression.fill(`=120 - "${initial.measuredName}"`);
   await drivingExpression.press("Tab");
   await page.locator("#applyParametersBtn").click();
   await expect(page.locator("#parameterDialogError")).toContainText("収束しません");
@@ -534,7 +597,7 @@ test("v10 annotations migrate by target or active sketch and invalid v11 ownersh
   const legacy = annotationSketchFixture(10);
   expect(await page.evaluate((data) => window.__jot2dTest.loadDocumentFixtureForDragTest(data, "annotation-v10.json"), legacy)).toEqual(expect.objectContaining({ success: true }));
   const migrated = await page.evaluate(() => window.__jot2dTest.serializedModelForTest());
-  expect(migrated.version).toBe(16);
+  expect(migrated.version).toBe(17);
   expect(migrated.annotations.find((annotation) => annotation.id === "AN1").sketchId).toBe("S2");
   expect(migrated.annotations.find((annotation) => annotation.id === "AN2").sketchId).toBe("S1");
 
@@ -1201,7 +1264,7 @@ test("Jot2D files open, overwrite, save as, and cancel without errors", async ({
   expect(state.suggestedName).toBe("無題.jot2d");
   expect(state.excludeAcceptAllOption).toBe(true);
   expect(state.accept).toEqual({ "application/json": [".jot2d"] });
-  expect(state.saved.version).toBe(16);
+  expect(state.saved.version).toBe(17);
   expect(state.saved.documentName).toBe("無題");
   expect(state.fileState).toEqual({ hasHandle: true, handleName: "first-save.jot2d" });
 
@@ -2488,7 +2551,7 @@ test("Constraint dimensions expose defining geometry and inheritable appearance 
   expect(serialized.annotations).toEqual([]);
   await page.evaluate((documentData) => window.__jot2dTest.loadDocumentFixtureForDragTest(documentData, "dimension-appearance.json"), serialized);
   const roundTrip = await page.evaluate(() => window.__jot2dTest.serializedModelForTest());
-  expect(roundTrip.version).toBe(16);
+  expect(roundTrip.version).toBe(17);
   expect(roundTrip.defaultDimensionAppearance).toEqual(serialized.defaultDimensionAppearance);
   expect(roundTrip.constraints[0].dimension.display).toEqual(serialized.constraints[0].dimension.display);
 
@@ -2521,7 +2584,7 @@ test("Constraint dimensions expose defining geometry and inheritable appearance 
   expect(migratedPixels.direct.terminatorSize).toBeCloseTo(18 * 25.4 / 96, 8);
   expect(migratedPixels.direct.terminatorType).toBeUndefined();
   const migratedSerialized = await page.evaluate(() => window.__jot2dTest.serializedModelForTest());
-  expect(migratedSerialized.version).toBe(16);
+  expect(migratedSerialized.version).toBe(17);
   expect(migratedSerialized.defaultDimensionAppearance).not.toHaveProperty("arrows");
   expect(migratedSerialized.defaultDimensionAppearance).not.toHaveProperty("extensionLines");
   expect(migratedSerialized.constraints[0].dimension.display).not.toHaveProperty("arrowheadLength");
@@ -3064,7 +3127,7 @@ test("offset tool builds an explicitly connected line chain with one editable di
   expect(state.offsetIds).toHaveLength(2);
   expect(state.resultJoins[0].end.x).toBeCloseTo(state.resultJoins[0].start.x, 6);
   expect(state.resultJoins[0].end.y).toBeCloseTo(state.resultJoins[0].start.y, 6);
-  expect(state.jsonVersion).toBe(16);
+  expect(state.jsonVersion).toBe(17);
   expect(state.serializedTypes).toBe(1);
 
   await page.keyboard.press("Control+z");
