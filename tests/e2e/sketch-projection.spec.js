@@ -22,14 +22,24 @@ async function createAllProjectionKinds(page) {
   return fixture;
 }
 
-test("projects every supported geometry kind with shared points, teal appearance, tree, properties, and v19 persistence", async ({ page }) => {
+test("projects every supported geometry kind with shared points, normal/status colors, clear icon, tree, properties, and v19 persistence", async ({ page }) => {
   const fixture = await createAllProjectionKinds(page);
   let state = await page.evaluate(() => window.__jot2dTest.sketchProjectionStateForTest());
 
   expect(state.mode).toBe("select");
   expect(state.constraints.map((item) => item.kind).sort()).toEqual(["arc", "circle", "line", "line", "point", "spline"]);
   expect(state.constraints.every((item) => item.sketchId === fixture.targetSketchId && item.referenceSketchId === fixture.sourceSketchId)).toBe(true);
-  expect(state.constraints.every((item) => item.color === "#0F766E")).toBe(true);
+  expect(state.constraints.every((item) => item.displayColor === item.appearanceColor)).toBe(true);
+  expect(state.constraints.every((item) => item.displayColor !== "#0F766E")).toBe(true);
+  await page.locator("#constraintStatusViewBtn").click();
+  state = await page.evaluate(() => window.__jot2dTest.sketchProjectionStateForTest());
+  expect(state.constraints.every((item) => item.constraintStatus === "full")).toBe(true);
+  expect(state.constraints.every((item) => item.displayColor === item.statusColor)).toBe(true);
+  expect(state.constraints.some((item) => item.displayColor !== item.appearanceColor)).toBe(true);
+  await page.locator("#constraintStatusViewBtn").click();
+  await expect(page.locator("#toolSketchProjection .projection-source")).toHaveCount(1);
+  await expect(page.locator("#toolSketchProjection .projection-ray")).toHaveCount(3);
+  await expect(page.locator("#toolSketchProjection .projection-target")).toHaveCount(1);
   const targetLines = state.constraints.filter((item) => item.kind === "line").map((item) => item.target);
   expect(targetLines[0].p2).toBe(targetLines[1].p1);
 
@@ -107,39 +117,97 @@ test("propagates source changes through a projection chain", async ({ page }) =>
   });
 });
 
-test("direct drag unlinks affected targets in one undo unit and manual removal leaves geometry", async ({ page }) => {
+test("blocks direct drag without changing shape or history, while manual removal leaves geometry", async ({ page }) => {
   await createAllProjectionKinds(page);
   const selected = await page.evaluate(() => window.__jot2dTest.selectSketchProjectionTargetForTest("line"));
   const before = await page.evaluate(() => window.__jot2dTest.sketchProjectionStateForTest());
+  const beforeLine = before.constraints.find((item) => item.targetId === selected.targetId);
   await page.mouse.move(selected.client.x, selected.client.y);
   await page.mouse.down();
   await page.mouse.move(selected.client.x + 34, selected.client.y + 18, { steps: 4 });
   await page.mouse.up();
 
   let after = await page.evaluate(() => window.__jot2dTest.sketchProjectionStateForTest());
-  expect(after.constraints.length).toBeLessThan(before.constraints.length);
-  expect(after.serialized.lines.filter((line) => line.sketchId === "S3")).toHaveLength(2);
-
-  await page.keyboard.press("Control+z");
-  after = await page.evaluate(() => window.__jot2dTest.sketchProjectionStateForTest());
   expect(after.constraints).toHaveLength(6);
-  await page.keyboard.press("Control+y");
-  after = await page.evaluate(() => window.__jot2dTest.sketchProjectionStateForTest());
-  expect(after.constraints.length).toBeLessThan(6);
+  expect(after.constraints.find((item) => item.targetId === selected.targetId).target).toEqual(beforeLine.target);
+  expect(after.history).toEqual(before.history);
+  expect(after.serialized.lines.filter((line) => line.sketchId === "S3")).toHaveLength(2);
+  await expect(page.locator("#hint")).toContainText("投影拘束を削除してから形状を編集してください");
 
   await page.evaluate(() => window.__jot2dTest.removeFirstSketchProjectionConstraintForTest());
   const manual = await page.evaluate(() => window.__jot2dTest.sketchProjectionStateForTest());
+  expect(manual.constraints).toHaveLength(5);
   expect(manual.serialized.lines.filter((line) => line.sketchId === "S3")).toHaveLength(2);
 });
 
-test("individual appearance editing unlinks only the edited projected geometry", async ({ page }) => {
+test("keeps projection links and source tracking when appearance is edited locally", async ({ page }) => {
   await createAllProjectionKinds(page);
   const result = await page.evaluate(() => window.__jot2dTest.setSketchProjectionAppearanceForTest("line"));
   expect(result.changed).toBe(true);
   expect(result.before).toBe(6);
-  expect(result.state.constraints).toHaveLength(5);
-  expect(result.state.constraints.filter((link) => link.kind === "line")).toHaveLength(1);
+  expect(result.state.constraints).toHaveLength(6);
+  expect(result.state.constraints.filter((link) => link.kind === "line")).toHaveLength(2);
+  expect(result.state.constraints.find((link) => link.targetId === result.targetId).appearanceColor).toBe("#8b5cf6");
   expect(result.state.serialized.lines.filter((line) => line.sketchId === "S3")).toHaveLength(2);
+
+  const moved = await page.evaluate(() => window.__jot2dTest.moveSketchProjectionSourcesForTest(17, -9, { changeShape: false }));
+  const linked = moved.state.constraints.find((item) => item.targetId === result.targetId);
+  expect(linked.appearanceColor).toBe("#8b5cf6");
+  linked.target.points.forEach((point, index) => {
+    expect(point.x).toBeCloseTo(linked.source.points[index].x, 8);
+    expect(point.y).toBeCloseTo(linked.source.points[index].y, 8);
+  });
+});
+
+test("blocks normal/construction changes while keeping the projection link", async ({ page }) => {
+  await createAllProjectionKinds(page);
+  const selected = await page.evaluate(() => window.__jot2dTest.selectSketchProjectionTargetForTest("line"));
+  const before = await page.evaluate(() => window.__jot2dTest.sketchProjectionStateForTest());
+  const beforeLine = before.constraints.find((item) => item.targetId === selected.targetId);
+  await page.locator("#toolConstructionLine").click();
+  const after = await page.evaluate(() => window.__jot2dTest.sketchProjectionStateForTest());
+  expect(after.constraints).toHaveLength(6);
+  expect(after.constraints.find((item) => item.targetId === selected.targetId).target.construction).toBe(beforeLine.target.construction);
+  expect(after.history).toEqual(before.history);
+  await expect(page.locator("#hint")).toContainText("投影拘束を削除してから形状を編集してください");
+});
+
+test("rejects fixed, trim, fillet, and spline topology edits while linked", async ({ page }) => {
+  await createAllProjectionKinds(page);
+  await page.evaluate(() => window.__jot2dTest.selectSketchProjectionTargetForTest("line"));
+  let before = await page.evaluate(() => window.__jot2dTest.sketchProjectionStateForTest());
+  await page.locator("#fixPointBtn").click();
+  let after = await page.evaluate(() => window.__jot2dTest.sketchProjectionStateForTest());
+  expect(after.constraints).toHaveLength(6);
+  expect(after.history).toEqual(before.history);
+
+  let fixture = await createAllProjectionKinds(page);
+  before = await page.evaluate(() => window.__jot2dTest.sketchProjectionStateForTest());
+  await page.locator("#toolTrim").click();
+  await page.mouse.click(fixture.clients.line1.x, fixture.clients.line1.y);
+  after = await page.evaluate(() => window.__jot2dTest.sketchProjectionStateForTest());
+  expect(after.constraints).toHaveLength(6);
+  expect(after.history).toEqual(before.history);
+
+  fixture = await createAllProjectionKinds(page);
+  before = await page.evaluate(() => window.__jot2dTest.sketchProjectionStateForTest());
+  await page.locator("#toolFillet").click();
+  await page.mouse.click(fixture.clients.line1.x, fixture.clients.line1.y);
+  await page.mouse.click(fixture.clients.line2.x, fixture.clients.line2.y);
+  after = await page.evaluate(() => window.__jot2dTest.sketchProjectionStateForTest());
+  expect(after.constraints).toHaveLength(6);
+  expect(after.history).toEqual(before.history);
+
+  await createAllProjectionKinds(page);
+  const spline = await page.evaluate(() => window.__jot2dTest.selectSketchProjectionTargetForTest("spline"));
+  before = await page.evaluate(() => window.__jot2dTest.sketchProjectionStateForTest());
+  expect(spline).toBeTruthy();
+  await page.locator('#propertiesPanel [data-property="spline-closed"]').click();
+  after = await page.evaluate(() => window.__jot2dTest.sketchProjectionStateForTest());
+  expect(after.constraints).toHaveLength(6);
+  expect(after.constraints.find((item) => item.targetId === spline.targetId).target.closed).toBe(false);
+  expect(after.history).toEqual(before.history);
+  await expect(page.locator("#hint")).toContainText("投影拘束を削除してから形状を編集してください");
 });
 
 test("Escape cancels all staged sources without creating geometry", async ({ page }) => {
