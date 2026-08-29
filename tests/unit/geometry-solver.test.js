@@ -46,6 +46,35 @@ test("geometry primitives preserve their public measurement contract", () => {
   assert.ok(Math.abs(arc.endPoint().y - 2) < 1e-12);
 });
 
+test("sketch projection constraints preserve point, line, circle, arc, and spline geometry", () => {
+  const point = (id, x, y) => new geometry.Point(id, x, y);
+  const sourcePoint = point("SP", 4, -2);
+  const targetPoint = point("TP", 4, -2);
+  const sourceLine = new geometry.Line("SL", point("SL1", 0, 0), point("SL2", 20, 5));
+  const targetLine = new geometry.Line("TL", point("TL1", 0, 0), point("TL2", 20, 5));
+  const sourceCircle = new geometry.Circle("SC", point("SC0", 3, 7), 12);
+  const targetCircle = new geometry.Circle("TC", point("TC0", 3, 7), 12);
+  const sourceArc = new geometry.Arc("SA", point("SA0", -5, 8), 9, -0.4, 1.2);
+  const targetArc = new geometry.Arc("TA", point("TA0", -5, 8), 9, -0.4, 1.2);
+  const sourceSpline = new geometry.Spline("SS", [point("SS1", 0, 0), point("SS2", 20, 10), point("SS3", 40, -5), point("SS4", 60, 4)], true);
+  const targetSpline = new geometry.Spline("TS", [point("TS1", 0, 0), point("TS2", 20, 10), point("TS3", 40, -5), point("TS4", 60, 4)], true);
+  const cases = [
+    new geometry.SketchProjectionConstraint("point", sourcePoint, targetPoint),
+    new geometry.SketchProjectionConstraint("line", sourceLine, targetLine),
+    new geometry.SketchProjectionConstraint("circle", sourceCircle, targetCircle),
+    new geometry.SketchProjectionConstraint("arc", sourceArc, targetArc),
+    new geometry.SketchProjectionConstraint("spline", sourceSpline, targetSpline),
+  ];
+
+  for (const constraint of cases) assert.ok(residualNorm(constraint.rawError()) < 1e-9, constraint.kind);
+  targetArc.endAngle += 0.1;
+  assert.ok(residualNorm(cases[3].rawError()) > 0.09);
+  targetSpline.fitPoints[2].y += 2;
+  assert.ok(residualNorm(cases[4].rawError()) > 1.9);
+  targetSpline.closed = false;
+  assert.deepEqual(Array.from(cases[4].rawError()), [1e6]);
+});
+
 test("fit splines support point-on-curve and endpoint tangent constraints", () => {
   const fitA = [new geometry.Point("P1", 0, 0), new geometry.Point("P2", 40, 0), new geometry.Point("P3", 80, 0)];
   const fitB = [new geometry.Point("P4", 80, 0), new geometry.Point("P5", 120, 0), new geometry.Point("P6", 160, 0)];

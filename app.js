@@ -108,6 +108,7 @@
     PointOnSplineConstraint,
     SplineLineTangentConstraint,
     SplineSplineTangentConstraint,
+    SketchProjectionConstraint,
     DragConstraint,
     ParameterDragConstraint,
     ArcEndpointDragConstraint,
@@ -139,7 +140,7 @@
     ["上書き保存", "Overwrite Save"], ["名前を付けて保存", "Save As"], ["開く", "Open"], ["Parameter…", "Parameters…"], ["ドキュメント設定", "Document Settings"], ["アプリケーション設定", "Application Settings"],
     ["元に戻す", "Undo"], ["やり直す", "Redo"], ["削除", "Delete"], ["選択", "Select"], ["選択・ドラッグ", "Select / Drag"],
     ["ジオメトリ", "Geometry"], ["拘束", "Constraint"], ["注記", "Annotation"], ["ツールバー", "Toolbar"], ["メニューバー", "Menu bar"], ["表示ツール", "View"],
-    ["点", "Point"], ["線", "Line"], ["連続線", "Polyline"], ["中心線", "Centerline"], ["矩形", "Rectangle"], ["円", "Circle"], ["円弧", "Arc"], ["スプライン", "Spline"],
+    ["点", "Point"], ["線", "Line"], ["連続線", "Polyline"], ["中心線", "Centerline"], ["矩形", "Rectangle"], ["円", "Circle"], ["円弧", "Arc"], ["スプライン", "Spline"], ["スケッチ投影", "Sketch Projection"], ["投影", "Projected"],
     ["実線／補助線", "Normal / Construction"], ["トリム", "Trim"], ["R面取り", "Fillet"], ["フィレット", "Fillet"], ["オフセット", "Offset"], ["ハッチング", "Hatching"],
     ["寸法", "Dimension"], ["一致", "Coincident"], ["水平", "Horizontal"], ["垂直", "Vertical"], ["平行", "Parallel"], ["直角", "Perpendicular"],
     ["対称", "Symmetry"], ["同心", "Concentric"], ["等寸", "Equal"], ["接線", "Tangent"], ["固定／解除", "Fix / Unfix"], ["固定解除", "Unfix"],
@@ -325,6 +326,7 @@
   let splineCreationRollback = null;
   let splineLastClickAddition = null;
   let splineEditSession = null;
+  let sketchProjectionSources = [];
   let pointerPreview = null;
   let activeSnap = null;
   let trimPreview = null;
@@ -381,7 +383,8 @@
   let historyRestoring = false;
   let geometryClipboard = null;
   const HISTORY_LIMIT = 80;
-  const CURRENT_JSON_VERSION = 18;
+  const CURRENT_JSON_VERSION = 19;
+  const SKETCH_PROJECTION_COLOR = "#0F766E";
   const REFERENCE_IMAGE_MAX_SIDE_PX = 3000;
   const SKETCH_TREE_MIN_WIDTH = 220;
   const SKETCH_TREE_MAX_WIDTH = 560;
@@ -1615,6 +1618,169 @@
     return resolveGeometryRef(parseGeometryRefKey(key));
   }
 
+  function sketchProjectionConstraints() {
+    return model.constraints.filter((constraint) => constraint instanceof SketchProjectionConstraint);
+  }
+
+  let sketchProjectionTargetCacheConstraints = null;
+  let sketchProjectionTargetCacheLength = -1;
+  let sketchProjectionTargetCache = new Map();
+
+  function sketchProjectionTargetConstraintMap() {
+    if (sketchProjectionTargetCacheConstraints === model.constraints && sketchProjectionTargetCacheLength === model.constraints.length) {
+      return sketchProjectionTargetCache;
+    }
+    const next = new Map();
+    for (const constraint of model.constraints) {
+      if (!(constraint instanceof SketchProjectionConstraint) || !constraint.target) continue;
+      const entries = next.get(constraint.target) || [];
+      entries.push(constraint);
+      next.set(constraint.target, entries);
+    }
+    sketchProjectionTargetCacheConstraints = model.constraints;
+    sketchProjectionTargetCacheLength = model.constraints.length;
+    sketchProjectionTargetCache = next;
+    return next;
+  }
+
+  function sketchProjectionConstraintForTarget(item, { operationalOnly = true } = {}) {
+    return (sketchProjectionTargetConstraintMap().get(item) || []).find((constraint) =>
+      !operationalOnly || constraintIsOperational(constraint)) || null;
+  }
+
+  function sketchProjectionConstraintsForTarget(item, { operationalOnly = true } = {}) {
+    return (sketchProjectionTargetConstraintMap().get(item) || []).filter((constraint) =>
+      !operationalOnly || constraintIsOperational(constraint));
+  }
+
+  function isSketchProjectedGeometry(item) {
+    return Boolean(sketchProjectionConstraintForTarget(item));
+  }
+
+  function sketchProjectionPointPairs(constraint) {
+    if (!(constraint instanceof SketchProjectionConstraint) || !constraint.source || !constraint.target) return [];
+    if (constraint.kind === "point") return [[constraint.source, constraint.target]];
+    if (constraint.kind === "line") return [[constraint.source.p1, constraint.target.p1], [constraint.source.p2, constraint.target.p2]];
+    if (constraint.kind === "circle" || constraint.kind === "arc") return [[constraint.source.center, constraint.target.center]];
+    if (constraint.kind === "spline") {
+      return constraint.source.fitPoints.slice(0, constraint.target.fitPoints.length).map((point, index) => [point, constraint.target.fitPoints[index]]);
+    }
+    return [];
+  }
+
+  function addPointToSketch(x, y, sketchId, kind = "endpoint") {
+    const point = new Point(`P${pointSeq++}`, x, y, false, kind);
+    point.sketchId = sketchId;
+    model.points.push(point);
+    return point;
+  }
+
+  function projectedTargetPointForSource(sourcePoint, targetSketchId, excluding = null) {
+    if (!sourcePoint) return null;
+    for (const constraint of sketchProjectionConstraints()) {
+      if (constraint === excluding || !constraintIsOperational(constraint) || constraintSketchId(constraint) !== targetSketchId) continue;
+      const pair = sketchProjectionPointPairs(constraint).find(([source]) => source === sourcePoint || String(source?.id) === String(sourcePoint.id));
+      if (pair?.[1]) return pair[1];
+    }
+    return null;
+  }
+
+  function pointHasNonProjectionUse(point, excludingConstraint = null) {
+    if (!point) return false;
+    if (model.lines.some((line) => line.p1 === point || line.p2 === point)) return true;
+    if (model.circles.some((circle) => circle.center === point)) return true;
+    if (model.arcs.some((arc) => arc.center === point)) return true;
+    if (model.splines.some((spline) => spline.fitPoints.includes(point))) return true;
+    if (model.constraints.some((constraint) => constraint !== excludingConstraint && constraintReferencesPoint(constraint, point))) return true;
+    return model.annotations.some((annotation) => annotation?.type === "leader" && resolveGeometryRef(annotation.geometryRef) === point);
+  }
+
+  function synchronizeSketchProjectionConstraint(constraint) {
+    if (!(constraint instanceof SketchProjectionConstraint) || !constraint.source || !constraint.target) return false;
+    const reboundSource = resolveGeometryRef(geometryRefForItem(constraint.source));
+    if (reboundSource) constraint.source = reboundSource;
+    if (geometryKindForItem(constraint.source) !== constraint.kind || geometryKindForItem(constraint.target) !== constraint.kind) return false;
+    let changed = false;
+    if (["line", "circle", "arc", "spline"].includes(constraint.kind) && constraint.target.construction !== Boolean(constraint.source.construction)) {
+      constraint.target.construction = Boolean(constraint.source.construction);
+      changed = true;
+    }
+    if (constraint.kind !== "spline") return changed;
+
+    const sourceIdsBefore = Array.isArray(constraint.sourcePointIds) ? constraint.sourcePointIds : [];
+    const oldTargetPoints = constraint.target.fitPoints.slice();
+    const oldBySourceId = new Map(sourceIdsBefore.map((id, index) => [String(id), oldTargetPoints[index]]).filter((entry) => entry[1]));
+    const targetSketchId = constraintSketchId(constraint);
+    const nextTargetPoints = constraint.source.fitPoints.map((sourcePoint) =>
+      oldBySourceId.get(String(sourcePoint.id))
+      || projectedTargetPointForSource(sourcePoint, targetSketchId, constraint)
+      || addPointToSketch(sourcePoint.x, sourcePoint.y, targetSketchId, "endpoint"));
+    if (nextTargetPoints.length !== oldTargetPoints.length || nextTargetPoints.some((point, index) => point !== oldTargetPoints[index])) {
+      constraint.target.fitPoints = nextTargetPoints;
+      constraint.target._curveCache = null;
+      changed = true;
+    }
+    if (constraint.target.closed !== Boolean(constraint.source.closed)) {
+      constraint.target.closed = Boolean(constraint.source.closed);
+      constraint.target._curveCache = null;
+      changed = true;
+    }
+    constraint.sourcePointIds = constraint.source.fitPoints.map((point) => String(point.id));
+    for (const point of oldTargetPoints) {
+      if (nextTargetPoints.includes(point) || point.kind !== "endpoint" || pointHasNonProjectionUse(point, constraint)) continue;
+      model.points = model.points.filter((item) => item !== point);
+      changed = true;
+    }
+    return changed;
+  }
+
+  function synchronizeSketchProjectionMetadata(sketchId = null) {
+    let changed = false;
+    for (const constraint of sketchProjectionConstraints()) {
+      if (!constraintIsOperational(constraint) || sketchId && constraintSketchId(constraint) !== sketchId) continue;
+      changed = synchronizeSketchProjectionConstraint(constraint) || changed;
+    }
+    return changed;
+  }
+
+  function sketchProjectionTargetNodes(target) {
+    const nodes = new Set([target]);
+    if (target instanceof Line) {
+      nodes.add(target.p1).add(target.p2);
+    } else if (target instanceof Circle || target instanceof Arc) {
+      nodes.add(target.center);
+    } else if (target instanceof Spline) {
+      for (const point of target.fitPoints) nodes.add(point);
+    }
+    return nodes;
+  }
+
+  function detachSketchProjectionConstraintsForItems(items, { includeSharedNodes = true } = {}) {
+    const directTargets = new Set(items || []);
+    const touched = new Set();
+    for (const item of items || []) for (const node of sketchProjectionTargetNodes(item)) touched.add(node);
+    const detached = model.constraints
+      .map((constraint, index) => ({ constraint, index }))
+      .filter(({ constraint }) => constraint instanceof SketchProjectionConstraint && (includeSharedNodes
+        ? [...sketchProjectionTargetNodes(constraint.target)].some((node) => touched.has(node))
+        : directTargets.has(constraint.target)));
+    if (detached.length === 0) return [];
+    const removing = new Set(detached.map((entry) => entry.constraint));
+    model.constraints = model.constraints.filter((constraint) => !removing.has(constraint));
+    invalidReferenceConstraints = new Map([...invalidReferenceConstraints].filter(([constraint]) => !removing.has(constraint)));
+    constraintAnalysisState = null;
+    return detached;
+  }
+
+  function restoreDetachedSketchProjectionConstraints(detached) {
+    for (const entry of [...(detached || [])].sort((a, b) => a.index - b.index)) {
+      const index = Math.max(0, Math.min(model.constraints.length, entry.index));
+      model.constraints.splice(index, 0, entry.constraint);
+    }
+    refreshReferenceConstraintValidity();
+    constraintAnalysisState = null;
+  }
+
   function blockDefinitionById(id) {
     return model.blockDefinitions.find((definition) => definition.id === id) || null;
   }
@@ -2249,6 +2415,7 @@
     } else {
       result = { ...result, ...normalizeAppearance(item?.appearance) };
     }
+    if (isSketchProjectedGeometry(item)) result.color = SKETCH_PROJECTION_COLOR;
     return result;
   }
 
@@ -2276,6 +2443,7 @@
   function setAppearanceForSelection(patch) {
     const target = appearanceSelectionTarget();
     if (!target) return false;
+    if (target.kind === "geometry") detachSketchProjectionConstraintsForItems([target.item], { includeSharedNodes: false });
     target.item[target.key] = normalizeAppearance({ ...target.item[target.key], ...patch });
     if (target.kind === "blockInstance") invalidateBlockProjectionCache(target.item.id);
     updatePropertiesUI();
@@ -2870,6 +3038,7 @@
 
   function isConstraintOperandSelected(item, options = {}) {
     if (!item) return false;
+    if (mode === "sketch-projection" && sketchProjectionSources.some((entry) => entry.item === item)) return true;
     if (options.arcEndpoint) {
       return constraintOperands.some((operand) => operand.kind === "arc-endpoint" && sameArcEndpoint(operand, options.arcEndpoint));
     }
@@ -3429,6 +3598,179 @@
     return l;
   }
 
+  function sketchProjectionSourceKey(item) {
+    return geometryElementKey(item);
+  }
+
+  function sketchProjectionSourcePoints(item) {
+    if (item instanceof Point) return [item];
+    if (item instanceof Line) return [item.p1, item.p2];
+    if (item instanceof Circle || item instanceof Arc) return [item.center];
+    if (item instanceof Spline) return item.fitPoints.slice();
+    return [];
+  }
+
+  function sketchProjectionSourceIsCovered(item, targetSketchId = activeSketchId()) {
+    if (!item) return false;
+    if (item instanceof Point) {
+      return sketchProjectionConstraints().some((constraint) =>
+        constraintIsOperational(constraint)
+        && constraintSketchId(constraint) === targetSketchId
+        && sketchProjectionPointPairs(constraint).some(([source]) => source === item || String(source?.id) === String(item.id)));
+    }
+    const key = sketchProjectionSourceKey(item);
+    return sketchProjectionConstraints().some((constraint) =>
+      constraintIsOperational(constraint)
+      && constraintSketchId(constraint) === targetSketchId
+      && constraint.kind === geometryKindForItem(item)
+      && sketchProjectionSourceKey(constraint.source) === key);
+  }
+
+  function sketchProjectionEntryFromOperand(operand) {
+    const item = operandElement(operand);
+    const kind = geometryKindForItem(item);
+    const sketchId = elementSketchId(item);
+    if (!item || !kind || !isReferenceSourceSketchId(sketchId) || !isVisibleSketchElement(item)) return null;
+    return { item, kind, sketchId, key: sketchProjectionSourceKey(item) };
+  }
+
+  function projectedPointForCreation(sourcePoint, targetSketchId, pointMap) {
+    if (pointMap.has(sourcePoint)) return pointMap.get(sourcePoint);
+    const existing = projectedTargetPointForSource(sourcePoint, targetSketchId);
+    const target = existing || addPointToSketch(sourcePoint.x, sourcePoint.y, targetSketchId, sourcePoint.kind || "endpoint");
+    pointMap.set(sourcePoint, target);
+    return target;
+  }
+
+  function createSketchProjectionTarget(entry, targetSketchId, pointMap) {
+    const source = entry.item;
+    if (entry.kind === "point") return projectedPointForCreation(source, targetSketchId, pointMap);
+    if (entry.kind === "line") {
+      return addLine(
+        projectedPointForCreation(source.p1, targetSketchId, pointMap),
+        projectedPointForCreation(source.p2, targetSketchId, pointMap),
+        source.construction,
+      );
+    }
+    if (entry.kind === "circle") {
+      return addCircle(projectedPointForCreation(source.center, targetSketchId, pointMap), source.radius(), source.construction);
+    }
+    if (entry.kind === "arc") {
+      return addArc(projectedPointForCreation(source.center, targetSketchId, pointMap), source.radius(), source.startAngle, source.endAngle, source.construction);
+    }
+    if (entry.kind === "spline") {
+      return addSpline(source.fitPoints.map((point) => projectedPointForCreation(point, targetSketchId, pointMap)), source.closed, source.construction);
+    }
+    return null;
+  }
+
+  function startSketchProjectionCommand() {
+    cancelConstraintTargetCommand("");
+    cancelPendingCommand("");
+    if (!canCreateInActiveSketch()) return void rejectRootSketchCreation();
+    clearSelection();
+    mode = "sketch-projection";
+    sketchProjectionSources = [];
+    clearSnap();
+    updateToolbar();
+    setHint(applicationText("投影する先祖SketchのGeometryを選択し、Enterで確定してください。Escでキャンセルします", "Select geometry from ancestor sketches, then press Enter to project it. Press Esc to cancel."));
+    updateUI({ refreshAnalysis: false });
+    draw();
+  }
+
+  function toggleSketchProjectionSource(operand) {
+    const entry = sketchProjectionEntryFromOperand(operand);
+    if (!entry) {
+      setHint(applicationText("表示中の先祖SketchにあるGeometryを選択してください", "Select visible geometry from an ancestor sketch."), "error");
+      return false;
+    }
+    const selectedIndex = sketchProjectionSources.findIndex((item) => item.kind === entry.kind && item.key === entry.key);
+    if (selectedIndex >= 0) {
+      sketchProjectionSources.splice(selectedIndex, 1);
+    } else {
+      if (sketchProjectionSourceIsCovered(entry.item)) {
+        setHint(applicationText(`${entry.item.id} は既に投影されています`, `${entry.item.id} is already projected.`), "error");
+        return false;
+      }
+      sketchProjectionSources.push(entry);
+    }
+    setHint(applicationText(`投影対象: ${sketchProjectionSources.length}件。Enterで確定、Escでキャンセル`, `Projection targets: ${sketchProjectionSources.length}. Press Enter to confirm or Esc to cancel.`));
+    draw();
+    return true;
+  }
+
+  function selectCreatedSketchProjectionTargets(targets) {
+    clearSelection();
+    selectedPoints = targets.filter((item) => item instanceof Point);
+    selectedLines = targets.filter((item) => item instanceof Line);
+    selectedCircles = targets.filter((item) => item instanceof Circle);
+    selectedArcs = targets.filter((item) => item instanceof Arc);
+    selectedSplines = targets.filter((item) => item instanceof Spline);
+  }
+
+  function commitSketchProjectionCommand() {
+    if (mode !== "sketch-projection") return false;
+    const candidates = sketchProjectionSources.filter((entry) => !sketchProjectionSourceIsCovered(entry.item));
+    const constituentPoints = new Set(candidates.filter((entry) => entry.kind !== "point").flatMap((entry) => sketchProjectionSourcePoints(entry.item)));
+    const entries = candidates.filter((entry) => entry.kind !== "point" || !constituentPoints.has(entry.item));
+    if (entries.length === 0) {
+      setHint(applicationText("投影するGeometryを1つ以上選択してください", "Select at least one geometry to project."), "error");
+      return false;
+    }
+    const state = {
+      pointLength: model.points.length,
+      lineLength: model.lines.length,
+      circleLength: model.circles.length,
+      arcLength: model.arcs.length,
+      splineLength: model.splines.length,
+      constraintLength: model.constraints.length,
+      pointSeq, lineSeq, circleSeq, arcSeq, splineSeq,
+    };
+    const targetSketchId = activeSketchId();
+    const pointMap = new Map();
+    const targets = [];
+    try {
+      for (const entry of entries) {
+        const target = createSketchProjectionTarget(entry, targetSketchId, pointMap);
+        if (!target) throw new Error(`${entry.item.id} を投影できません`);
+        const constraint = new SketchProjectionConstraint(entry.kind, entry.item, target);
+        markReferenceConstraint(constraint, entry.sketchId, targetSketchId);
+        pushModelConstraint(constraint, targetSketchId);
+        targets.push(target);
+      }
+      synchronizeSketchProjectionMetadata(targetSketchId);
+      const solved = solveSketchAndDependents(targetSketchId);
+      if (!solved.success || solved.dependent?.success === false) throw new Error(solved.result?.reason || applicationText("投影拘束を解けません", "The projection constraints could not be solved."));
+    } catch (error) {
+      model.points.length = state.pointLength;
+      model.lines.length = state.lineLength;
+      model.circles.length = state.circleLength;
+      model.arcs.length = state.arcLength;
+      model.splines.length = state.splineLength;
+      model.constraints.length = state.constraintLength;
+      pointSeq = state.pointSeq;
+      lineSeq = state.lineSeq;
+      circleSeq = state.circleSeq;
+      arcSeq = state.arcSeq;
+      splineSeq = state.splineSeq;
+      solveSketchAndDependents(targetSketchId);
+      setHint(error.message || applicationText("スケッチ投影に失敗しました", "Sketch projection failed."), "error");
+      updateUI();
+      draw();
+      return false;
+    }
+    mode = "select";
+    sketchProjectionSources = [];
+    selectCreatedSketchProjectionTargets(targets);
+    refreshConstraintAnalysis();
+    updateToolbar();
+    updateUI({ refreshAnalysis: false });
+    draw();
+    setHint(applicationText(`${targets.length}件のGeometryを投影しました`, `Projected ${targets.length} geometry item(s).`));
+    recordHistory("スケッチ投影");
+    return true;
+  }
+
   function resetCenterlineCommandState() {
     centerlineTargets = [];
     centerlineSupport = null;
@@ -3779,6 +4121,7 @@
     if (!canCreateInActiveSketch()) return void rejectRootSketchCreation();
     mode = "spline";
     splineFitPoints = [];
+    sketchProjectionSources = [];
     splineCreationRollback = { pointLength: model.points.length, pointSeq };
     splineLastClickAddition = null;
     splineEditSession = null;
@@ -3803,6 +4146,7 @@
     }
     splineCreationRollback = null;
     splineFitPoints = [];
+    sketchProjectionSources = [];
     splineLastClickAddition = null;
     pointerPreview = null;
     clearSnap();
@@ -3877,6 +4221,7 @@
     const spanIndex = curve.spans.findIndex((span, index) => closest.t < span.t1 - 1e-9 || index === curve.spans.length - 1);
     if (spanIndex < 0) return false;
     const snapshot = splineFitPointMutationSnapshot(spline);
+    detachSketchProjectionConstraintsForItems([spline]);
     const point = addPoint(closest.point.x, closest.point.y, false, "endpoint");
     point.sketchId = elementSketchId(spline);
     spline.fitPoints.splice(spanIndex + 1, 0, point);
@@ -3906,6 +4251,7 @@
     const constraintsToRemove = new Set(removePoint ? model.constraints.filter((constraint) => constraintReferencesPoint(constraint, point)) : []);
     if (!guardDimensionSymbolDeletion(constraintsToRemove)) return false;
     const snapshot = splineFitPointMutationSnapshot(spline);
+    detachSketchProjectionConstraintsForItems([spline, point]);
     spline.fitPoints = spline.fitPoints.filter((item) => item !== point);
     spline._curveCache = null;
     if (removePoint) {
@@ -5640,6 +5986,51 @@
     };
   }
 
+  function snapshotGeometryMutationState() {
+    return {
+      modelState: snapshotModelState(),
+      points: model.points.slice(),
+      lines: model.lines.slice(),
+      circles: model.circles.slice(),
+      arcs: model.arcs.slice(),
+      splines: model.splines.slice(),
+      annotations: model.annotations.slice(),
+      lineState: model.lines.map((line) => ({ line, p1: line.p1, p2: line.p2, construction: line.construction })),
+      splineState: model.splines.map((spline) => ({ spline, fitPoints: spline.fitPoints.slice(), closed: spline.closed, construction: spline.construction })),
+      pointSeq,
+      lineSeq,
+      circleSeq,
+      arcSeq,
+      splineSeq,
+    };
+  }
+
+  function restoreGeometryMutationState(snapshot) {
+    model.points = snapshot.points;
+    model.lines = snapshot.lines;
+    model.circles = snapshot.circles;
+    model.arcs = snapshot.arcs;
+    model.splines = snapshot.splines;
+    model.annotations = snapshot.annotations;
+    for (const entry of snapshot.lineState) {
+      entry.line.p1 = entry.p1;
+      entry.line.p2 = entry.p2;
+      entry.line.construction = entry.construction;
+    }
+    for (const entry of snapshot.splineState) {
+      entry.spline.fitPoints = entry.fitPoints;
+      entry.spline.closed = entry.closed;
+      entry.spline.construction = entry.construction;
+      entry.spline._curveCache = null;
+    }
+    pointSeq = snapshot.pointSeq;
+    lineSeq = snapshot.lineSeq;
+    circleSeq = snapshot.circleSeq;
+    arcSeq = snapshot.arcSeq;
+    splineSeq = snapshot.splineSeq;
+    restoreModelState(snapshot.modelState);
+  }
+
   function restoreModelState(snapshot) {
     for (const p of snapshot.points) {
       p.point.x = p.x;
@@ -5660,7 +6051,7 @@
       entry.instance.rotationLocked = Boolean(entry.rotationLocked);
     }
     invalidateBlockProjectionCache();
-    model.constraints.length = snapshot.constraintLength;
+    model.constraints = (snapshot.constraints || []).map((entry) => entry.constraint);
     for (const entry of snapshot.constraints || []) {
       entry.constraint.target = entry.target;
       entry.constraint.parameterName = entry.parameterName;
@@ -5712,6 +6103,7 @@
     arcCenterPoint = null;
     arcStartPoint = null;
     splineFitPoints = [];
+    sketchProjectionSources = [];
     splineCreationRollback = null;
     splineLastClickAddition = null;
     splineEditSession = null;
@@ -5973,6 +6365,12 @@
       constraintClass: PointPairCenterlineConstraint,
       serialize: (c) => ({ p1: constraintGeometryId(c.p1), p2: constraintGeometryId(c.p2), centerline: constraintGeometryId(c.centerline), enabled: c.enabled }),
       deserialize: (data, refs) => new PointPairCenterlineConstraint(refs.point(data.p1), refs.point(data.p2), refs.line(data.centerline)),
+    },
+    {
+      type: "sketchProjection",
+      constraintClass: SketchProjectionConstraint,
+      serialize: (c) => ({ kind: c.kind, source: constraintGeometryId(c.source), target: constraintGeometryId(c.target), enabled: c.enabled }),
+      deserialize: (data, refs) => new SketchProjectionConstraint(data.kind, refs.geometry(data.kind, data.source), refs.geometry(data.kind, data.target)),
     },
     {
       type: "arcEndpointOnLine",
@@ -6486,9 +6884,14 @@
       if (!value) throw new Error(`スプライン ${id} が見つかりません`);
       return value;
     };
+    const geometry = (kind, id) => {
+      const value = resolveStoredGeometry(String(kind || ""), id);
+      if (!value) throw new Error(`Geometry ${kind}:${id} が見つかりません`);
+      return value;
+    };
     const pointOrPrimitive = (id) => resolveStoredGeometry("point", id) || primitive(id);
     const lineOrPrimitive = (id) => resolveStoredGeometry("line", id) || primitiveValue(id);
-    const constraint = constraintCodecs.deserialize(data, { point, line, primitive, spline, pointOrPrimitive, lineOrPrimitive });
+    const constraint = constraintCodecs.deserialize(data, { point, line, primitive, spline, geometry, pointOrPrimitive, lineOrPrimitive });
 
     if (constraint) {
       constraint.enabled = data.enabled !== false;
@@ -6850,7 +7253,7 @@
         }
       }
       definition.constraints = (meta.rawDefinition.constraints || [])
-        .filter((rawConstraint) => !(sourceVersion < 16 && rawConstraint?.type === "pointOnLineMidpoint"))
+        .filter((rawConstraint) => !(sourceVersion < 16 && rawConstraint?.type === "pointOnLineMidpoint") && !(sourceVersion < 19 && rawConstraint?.type === "sketchProjection"))
         .map((rawConstraint) => {
         if (sourceVersion >= 16 && rawConstraint?.type === "pointOnLineMidpoint") {
           throw new Error(applicationText("廃止された中点拘束が含まれています", "The document contains a removed midpoint constraint"));
@@ -7049,6 +7452,7 @@
     const constraints = [];
     for (const c of data.constraints) {
       if (sourceVersion < 16 && c?.type === "pointOnLineMidpoint") continue;
+      if (sourceVersion < 19 && c?.type === "sketchProjection") continue;
       const constraint = deserializeConstraint(c, pointById, lineById, primitiveById, normalizeLoadedDimensionAppearance, normalizeLoadedExpression);
       if (!constraint) throw new Error(`未対応の制約です: ${c.type}`);
       constraint.sketchId = normalizeSketchId(c.sketchId || constraintSketchId(constraint));
@@ -7431,6 +7835,7 @@
     splineCreationRollback = null;
     splineLastClickAddition = null;
     splineEditSession = null;
+    sketchProjectionSources = [];
     pointerPreview = null;
     trimPreview = null;
     offsetSource = null;
@@ -7562,6 +7967,7 @@
     splineCreationRollback = null;
     splineLastClickAddition = null;
     splineEditSession = null;
+    sketchProjectionSources = [];
     pointerPreview = null;
     trimPreview = null;
     offsetSource = null;
@@ -9110,6 +9516,7 @@
   }
 
   function constraintReferencesPoint(c, point) {
+    if (c instanceof SketchProjectionConstraint) return constraintGraphNodes(c).includes(point);
     if (c instanceof PointOnSplineConstraint) return c.point === point || c.spline.fitPoints.includes(point);
     if (c instanceof SplineLineTangentConstraint) return c.spline.fitPoints.includes(point) || c.line.p1 === point || c.line.p2 === point;
     if (c instanceof SplineSplineTangentConstraint) return c.a.fitPoints.includes(point) || c.b.fitPoints.includes(point);
@@ -9153,6 +9560,7 @@
   }
 
   function constraintReferencesLine(c, line) {
+    if (c instanceof SketchProjectionConstraint) return c.source === line || c.target === line;
     if (c instanceof SplineLineTangentConstraint) return c.line === line;
     if (c instanceof DistanceConstraint || c instanceof PointAxisDistanceConstraint) {
       return (c.p1 === line.p1 && c.p2 === line.p2) || (c.p1 === line.p2 && c.p2 === line.p1);
@@ -9180,6 +9588,7 @@
   }
 
   function constraintReferencesPrimitive(c, primitive) {
+    if (c instanceof SketchProjectionConstraint) return c.source === primitive || c.target === primitive;
     if (c instanceof PointOnSplineConstraint) return c.spline === primitive;
     if (c instanceof SplineLineTangentConstraint) return c.spline === primitive;
     if (c instanceof SplineSplineTangentConstraint) return c.a === primitive || c.b === primitive;
@@ -9202,7 +9611,19 @@
 
   function constraintGraphNodes(c) {
     const nodes = new Set();
-    if (c instanceof PointOnSplineConstraint) {
+    if (c instanceof SketchProjectionConstraint) {
+      for (const item of [c.source, c.target]) {
+        addNode(nodes, item);
+        if (item instanceof Line) {
+          addNode(nodes, item.p1);
+          addNode(nodes, item.p2);
+        } else if (item instanceof Circle || item instanceof Arc) {
+          addNode(nodes, item.center);
+        } else if (item instanceof Spline) {
+          for (const point of item.fitPoints) addNode(nodes, point);
+        }
+      }
+    } else if (c instanceof PointOnSplineConstraint) {
       addNode(nodes, c.point);
       addNode(nodes, c.spline);
       for (const point of c.spline.fitPoints) addNode(nodes, point);
@@ -9368,6 +9789,7 @@
       ["arc1", "1つ目の円弧ID", "First arc ID"],
       ["arc2", "2つ目の円弧ID", "Second arc ID"],
       ["source", "基準図形ID", "Source geometry ID"],
+      ["target", "投影先図形ID", "Target geometry ID"],
       ["offset", "オフセット図形ID", "Offset geometry ID"],
       ["arc", "円弧ID", "Arc ID"],
       ["primitive", "図形ID", "Geometry ID"],
@@ -9540,6 +9962,7 @@
 
   function solveActiveSketch(extra = []) {
     const sketchId = activeSketchId();
+    synchronizeSketchProjectionMetadata(sketchId);
     return solver.solveSubset({
       variables: sketchSolveVariables(sketchId),
       constraints: sketchSolveConstraints(sketchId),
@@ -9549,6 +9972,7 @@
   }
 
   function solveSketchById(sketchId, extra = []) {
+    synchronizeSketchProjectionMetadata(sketchId);
     return solver.solveSubset({
       variables: sketchSolveVariables(sketchId),
       constraints: sketchSolveConstraints(sketchId),
@@ -9869,7 +10293,8 @@
       });
       const removedIds = new Set(projectionItems.map((item) => item.id));
       const removedKeys = new Set(projectionItems.map(geometryElementKey));
-      const removedConstraints = new Set(model.constraints.filter((constraint) => constraintGraphNodes(constraint).some((node) => instances.includes(node) || projectionItems.includes(node))));
+      const removedConstraints = new Set(model.constraints.filter((constraint) => constraintGraphNodes(constraint).some((node) =>
+        instances.includes(node) || projectionItems.includes(node) || removedKeys.has(geometryElementKey(node)))));
       if (!guardDimensionSymbolDeletion(removedConstraints)) return false;
       model.constraints = model.constraints.filter((constraint) => !removedConstraints.has(constraint));
       model.annotations = model.annotations.filter((annotation) => !annotationReferencesRemovedGeometry(annotation, removedIds, removedKeys));
@@ -9957,6 +10382,7 @@
     }
 
     const constraints = model.constraints.map((constraint) => {
+      if (constraint instanceof SketchProjectionConstraint) return null;
       if (constraint instanceof LineFixedConstraint || constraint instanceof ArcEndpointFixedConstraint) return null;
       const nodes = constraintGraphNodes(constraint);
       if (nodes.length === 0 || !nodes.every((node) => selectedNodes.has(node) || Boolean(node?.blockProjection && selectedBlockProjectionIds.has(node.id)))) return null;
@@ -12417,6 +12843,7 @@
       circle: "toolCircle",
       arc: "toolArc",
       spline: "toolSpline",
+      "sketch-projection": "toolSketchProjection",
       hatch: "toolHatch",
       "hatch-repair": "toolHatch",
       fillet: "toolFillet",
@@ -12479,6 +12906,7 @@
       toolCircle: geometryMode && mode === "circle",
       toolArc: geometryMode && mode === "arc",
       toolSpline: geometryMode && mode === "spline",
+      toolSketchProjection: geometryMode && mode === "sketch-projection",
       toolHatch: geometryMode && (mode === "hatch" || mode === "hatch-repair"),
       annotationLeaderBtn: Boolean(pendingCommand?.type?.startsWith("annotation-leader")),
       annotationTextBtn: pendingCommand?.type === "annotation-text-place",
@@ -13470,6 +13898,7 @@
     offsetChainSelectionCommitted = false;
     pendingCommand = null;
     pendingConstraintCommand = null;
+    sketchProjectionSources = [];
     hoveredSketchIdentity = null;
     lastPointerWorld = null;
     hideDimensionValueInput();
@@ -13579,8 +14008,14 @@
     const sketch = sketchById(sketchId);
     if (!sketch || isRootSketch(sketch)) return false;
 
-    const sketchIds = new Set([sketch.id, ...descendantSketchIds(sketch.id)]);
+    const descendants = descendantSketchIds(sketch.id);
+    const preserveDescendants = model.constraints.some((constraint) =>
+      constraint instanceof SketchProjectionConstraint
+      && constraint.referenceSketchId === sketch.id
+      && descendants.includes(constraintSketchId(constraint)));
+    const sketchIds = new Set(preserveDescendants ? [sketch.id] : [sketch.id, ...descendants]);
     const externalReferences = model.constraints.filter((constraint) => {
+      if (constraint instanceof SketchProjectionConstraint) return false;
       if (!constraint.reference || !sketchIds.has(constraint.referenceSketchId)) return false;
       return !sketchIds.has(constraintSketchId(constraint));
     });
@@ -13602,7 +14037,10 @@
       return [...bundle.points, ...bundle.lines, ...bundle.circles, ...bundle.arcs, ...(bundle.splines || [])];
     });
     const geometryCount = [...model.points, ...model.lines, ...model.circles, ...model.arcs, ...model.splines].filter((item) => sketchIds.has(elementSketchId(item))).length + blockProjectionItemsToRemove.length;
-    if (confirmFirst && !window.confirm(`${sketch.name} と配下のスケッチを削除します。\n図形 ${geometryCount} 件も削除されます。`)) return false;
+    const confirmation = preserveDescendants
+      ? `${sketch.name} を削除します。配下のスケッチは親へ移動し、投影結果は通常Geometryとして残します。\n図形 ${geometryCount} 件も削除されます。`
+      : `${sketch.name} と配下のスケッチを削除します。\n図形 ${geometryCount} 件も削除されます。`;
+    if (confirmFirst && !window.confirm(confirmation)) return false;
 
     const pointSet = new Set(model.points.filter((point) => sketchIds.has(elementSketchId(point))));
     const lineSet = new Set(model.lines.filter((line) => sketchIds.has(elementSketchId(line)) || pointSet.has(line.p1) || pointSet.has(line.p2)));
@@ -13615,7 +14053,7 @@
     const removedConstraints = new Set(model.constraints.filter((constraint) =>
       sketchIds.has(constraintSketchId(constraint))
       || sketchIds.has(constraint.referenceSketchId)
-      || constraintGraphNodes(constraint).some((node) => removedItems.includes(node)),
+      || constraintGraphNodes(constraint).some((node) => removedItems.includes(node) || removedKeys.has(geometryElementKey(node))),
     ));
     if (!guardDimensionSymbolDeletion(removedConstraints)) return false;
 
@@ -13633,6 +14071,9 @@
     model.referenceImages = model.referenceImages.filter((image) => !sketchIds.has(image.sketchId));
 
     const fallbackId = sketch.parentSketchId && !sketchIds.has(sketch.parentSketchId) ? sketch.parentSketchId : ROOT_SKETCH_ID;
+    if (preserveDescendants) {
+      for (const child of model.sketches) if (child.parentSketchId === sketch.id && !sketchIds.has(child.id)) child.parentSketchId = fallbackId;
+    }
     model.sketches = model.sketches.filter((item) => !sketchIds.has(item.id));
     if (sketchIds.has(model.activeSketchId)) model.activeSketchId = sketchById(fallbackId)?.id || ROOT_SKETCH_ID;
     for (const id of sketchIds) sketchSolveStates.delete(id);
@@ -13671,6 +14112,7 @@
 
   function constraintToolbarIcon(constraint, fixedPoint = false) {
     if (fixedPoint || constraint instanceof LineFixedConstraint || constraint instanceof ArcEndpointFixedConstraint) return toolbarSvgMarkup("#fixPointBtn");
+    if (constraint instanceof SketchProjectionConstraint) return toolbarSvgMarkup("#toolSketchProjection");
     if (constraint instanceof ParallelLinesCenterlineConstraint || constraint instanceof PointPairCenterlineConstraint) return toolbarSvgMarkup("#toolCenterline");
     if (isDimensionConstraint(constraint)) return toolbarSvgMarkup('[data-constraint="distance"]');
     const name = String(constraint?.name || "");
@@ -13757,6 +14199,7 @@
     if (category === "point") {
       icon = toolbarSvgMarkup("#toolPoint"); primary = entry.id; secondary = `X ${formatDisplayNumber(entry.x)} / Y ${formatDisplayNumber(entry.y)}`;
       if (entry.fixed) badges += `<span class="badge">${applicationText("固定", "Fixed")}</span>`;
+      if (isSketchProjectedGeometry(entry)) badges += `<span class="badge">${applicationText("投影", "Projected")}</span>`;
       action = `<button data-id="${escapeHtml(entry.id)}" class="removePointBtn icon-delete-btn" title="${applicationText("削除", "Delete")}" aria-label="${applicationText("削除", "Delete")}">${deleteSvg}</button>`;
       data += ` data-id="${escapeHtml(entry.id)}"`;
     } else if (category === "line") {
@@ -13766,16 +14209,19 @@
       if (isCenterline) badges += `<span class="badge">${applicationText("中心線", "Centerline")}</span>`;
       else if (entry.construction) badges += `<span class="badge">${applicationText("補助", "Construction")}</span>`;
       if (findLineFixedConstraint(entry)) badges += `<span class="badge">${applicationText("固定", "Fixed")}</span>`;
+      if (isSketchProjectedGeometry(entry)) badges += `<span class="badge">${applicationText("投影", "Projected")}</span>`;
       action = `<button data-id="${escapeHtml(entry.id)}" class="removeLineBtn icon-delete-btn" title="${applicationText("削除", "Delete")}" aria-label="${applicationText("削除", "Delete")}">${deleteSvg}</button>`;
       data += ` data-id="${escapeHtml(entry.id)}"`;
     } else if (category === "circle" || category === "arc") {
       icon = toolbarSvgMarkup(category === "circle" ? "#toolCircle" : "#toolArc"); primary = entry.id; secondary = `${applicationText("中心", "Center")} ${entry.center.id} / R ${formatDisplayNumber(entry.radius())}`;
       if (entry.construction) badges += `<span class="badge">${applicationText("補助", "Construction")}</span>`;
+      if (isSketchProjectedGeometry(entry)) badges += `<span class="badge">${applicationText("投影", "Projected")}</span>`;
       action = `<button data-id="${escapeHtml(entry.id)}" class="${category === "circle" ? "removeCircleBtn" : "removeArcBtn"} icon-delete-btn" title="${applicationText("削除", "Delete")}" aria-label="${applicationText("削除", "Delete")}">${deleteSvg}</button>`;
       data += ` data-id="${escapeHtml(entry.id)}"`;
     } else if (category === "spline") {
       icon = toolbarSvgMarkup("#toolSpline"); primary = entry.id; secondary = `${entry.fitPoints.length} ${applicationText("通過点", "fit points")}${entry.closed ? ` / ${applicationText("閉じる", "Closed")}` : ""}`;
       if (entry.construction) badges += `<span class="badge">${applicationText("補助", "Construction")}</span>`;
+      if (isSketchProjectedGeometry(entry)) badges += `<span class="badge">${applicationText("投影", "Projected")}</span>`;
       action = `<button data-id="${escapeHtml(entry.id)}" class="removeSplineBtn icon-delete-btn" title="${applicationText("削除", "Delete")}" aria-label="${applicationText("削除", "Delete")}">${deleteSvg}</button>`;
       data += ` data-id="${escapeHtml(entry.id)}"`;
     } else if (category === "block") {
@@ -13802,8 +14248,13 @@
       data += ` data-fixed-point-id="${escapeHtml(entry.point.id)}"`;
     } else {
       const constraint = entry.constraint;
-      icon = constraintToolbarIcon(constraint); primary = isDimensionConstraint(constraint) ? constraint.parameterName || "—" : localizedConstraintName(constraint.name);
-      secondary = isDimensionConstraint(constraint) ? localizedConstraintName(constraint.name) : "";
+      icon = constraintToolbarIcon(constraint);
+      primary = constraint instanceof SketchProjectionConstraint
+        ? applicationText("スケッチ投影", "Sketch Projection")
+        : isDimensionConstraint(constraint) ? constraint.parameterName || "—" : localizedConstraintName(constraint.name);
+      secondary = constraint instanceof SketchProjectionConstraint
+        ? `${constraintGeometryId(constraint.source) || "—"} → ${constraintGeometryId(constraint.target) || "—"}`
+        : isDimensionConstraint(constraint) ? localizedConstraintName(constraint.name) : "";
       if (isReadOnlyDimension(constraint)) badges += `<span class="badge">${applicationText("読み取り専用", "Read-only")}</span>`;
       if (constraintIsRedundant(constraint)) badges += `<span class="badge">${applicationText("重複", "Duplicate")}</span>`;
       if (referenceConstraintErrorInfo(constraint)) badges += `<span class="badge constraint-reference-error-badge">${applicationText("参照エラー", "Reference error")}</span>`;
@@ -14947,6 +15398,11 @@
             ? applicationText("円弧", "Arc")
             : applicationText("スプライン", "Spline");
     let rows = propertyReadonlyRow("種類", "Type", type) + propertyReadonlyRow("ID", "ID", item.id);
+    const projection = sketchProjectionConstraintForTarget(item);
+    if (projection) {
+      rows += propertyReadonlyRow("参照元スケッチ", "Source sketch", `${sketchName(projection.referenceSketchId)} (${projection.referenceSketchId})`, { userContent: true });
+      rows += propertyReadonlyRow("参照元Geometry ID", "Source geometry ID", constraintGeometryId(projection.source) || "—");
+    }
     if (item instanceof Point) {
       rows += propertyReadonlyRow("X座標", "X coordinate", formatDisplayNumber(item.x));
       rows += propertyReadonlyRow("Y座標", "Y coordinate", formatDisplayNumber(item.y));
@@ -15215,7 +15671,13 @@
       const definingGeometryRows = dimension
         ? dimensionGeometryPropertyRows(targetValue)
         : constraintDefiningGeometryPropertyRows(item);
-      panel.innerHTML = `<h2 class="property-heading">${escapeHtml(localizedConstraintName(item.name, { typeOnly: true }))}</h2><section class="property-section">${basicInformationHeading}<div class="property-row"><span>Type</span><span class="property-readonly">${escapeHtml(item.constructor.name)}</span></div>${definingGeometryRows}${parameterRows}</section>${dimension ? `<section class="property-section"><h3>${applicationText("寸法外観", "Dimension Appearance")}</h3>${dimensionAppearancePropertyRows(dimension.display || {}, display)}</section>` : ""}`;
+      const projectionRows = item instanceof SketchProjectionConstraint
+        ? propertyReadonlyRow("参照元スケッチ", "Source sketch", `${sketchName(item.referenceSketchId)} (${item.referenceSketchId})`, { userContent: true })
+        : "";
+      const heading = item instanceof SketchProjectionConstraint
+        ? applicationText("スケッチ投影", "Sketch Projection")
+        : localizedConstraintName(item.name, { typeOnly: true });
+      panel.innerHTML = `<h2 class="property-heading">${escapeHtml(heading)}</h2><section class="property-section">${basicInformationHeading}<div class="property-row"><span>Type</span><span class="property-readonly">${escapeHtml(item.constructor.name)}</span></div>${projectionRows}${definingGeometryRows}${parameterRows}</section>${dimension ? `<section class="property-section"><h3>${applicationText("寸法外観", "Dimension Appearance")}</h3>${dimensionAppearancePropertyRows(dimension.display || {}, display)}</section>` : ""}`;
     } else if (target.kind === "annotation") {
       const annotationType = item.type === "leader" ? applicationText("引出線", "Leader") : applicationText("自由テキスト", "Free Text");
       const information = propertyReadonlyRow("種類", "Type", annotationType)
@@ -15291,6 +15753,7 @@
 
   function applyMultipleProperty(target, key, rawValue, { commit = true } = {}) {
     if (target?.kind !== "multiple" || !key) return false;
+    detachSketchProjectionConstraintsForItems((target.items || []).filter((entry) => entry.kind === "geometry").map((entry) => entry.item), { includeSharedNodes: false });
     for (const entry of target.items || []) {
       if (!multiplePropertySupports(entry, key)) continue;
       if (key === "construction") {
@@ -15316,6 +15779,7 @@
       applyAppearanceInput(owner, key, typeof rawValue === "boolean" ? String(rawValue) : String(rawValue));
       if (entry.kind === "block") invalidateBlockProjectionCache(entry.item.id);
     }
+    if (key === "construction") synchronizeSketchProjectionMetadata();
     if (commit) {
       recordHistory("複数Objectプロパティ変更");
       updateUI();
@@ -15696,6 +16160,7 @@
       return;
     }
     if (input.dataset.appearanceKey) {
+      if (target.kind === "geometry") detachSketchProjectionConstraintsForItems([target.item], { includeSharedNodes: false });
       const owner = appearanceOwnerForPropertiesTarget(target);
       applyAppearanceInput(owner, input.dataset.appearanceKey, input.value.trim());
       if (target.kind === "block") invalidateBlockProjectionCache(target.item.id);
@@ -15728,7 +16193,9 @@
       return;
     }
     if (target.kind === "geometry" && property === "construction") {
+      detachSketchProjectionConstraintsForItems([target.item], { includeSharedNodes: false });
       target.item.construction = input.checked;
+      synchronizeSketchProjectionMetadata();
       recordHistory("補助線変更");
     } else if (target.kind === "geometry" && target.item instanceof Spline && property === "spline-closed") {
       if (input.checked && model.constraints.some((constraint) => (constraint instanceof SplineLineTangentConstraint && constraint.spline === target.item) || (constraint instanceof SplineSplineTangentConstraint && (constraint.a === target.item || constraint.b === target.item)))) {
@@ -15738,12 +16205,14 @@
       }
       const snapshot = snapshotModelState();
       const previousClosed = target.item.closed;
+      const detachedProjectionConstraints = detachSketchProjectionConstraintsForItems([target.item]);
       target.item.closed = input.checked;
       target.item._curveCache = null;
       if (!target.item.curve().valid) {
         target.item.closed = previousClosed;
         target.item._curveCache = null;
         input.checked = previousClosed;
+        restoreDetachedSketchProjectionConstraints(detachedProjectionConstraints);
         setHint(applicationText("この通過点配置では開閉状態を変更できません", "The spline cannot change its open/closed state with these fit points."), "error");
         return;
       }
@@ -16725,6 +17194,24 @@
     session.fullDragState = solver.clone(solver.getVariables());
     session.parameterDragSnapshot = snapshotModelState();
     return session;
+  }
+
+  function detachSketchProjectionConstraintsForDrag(session) {
+    if (!session || session.projectionDetachStarted) return [];
+    session.projectionDetachStarted = true;
+    const touched = [
+      ...(session.item && !model.blockInstances.includes(session.item) ? [session.item] : []),
+      ...(session.points || []).map((entry) => entry.point),
+    ].filter(Boolean);
+    const detached = detachSketchProjectionConstraintsForItems(touched);
+    session.detachedProjectionConstraints = detached;
+    if (detached.length === 0) return detached;
+    const parameterDragSnapshot = session.parameterDragSnapshot;
+    const fullDragState = session.fullDragState;
+    attachLocalSolveContext(session);
+    session.parameterDragSnapshot = parameterDragSnapshot;
+    session.fullDragState = fullDragState;
+    return detached;
   }
 
   function selectedDragPoints() {
@@ -17937,13 +18424,27 @@
       draw();
       return false;
     }
+    const snapshot = snapshotGeometryMutationState();
     if (preview.kind === "line") executeLineTrim(preview);
     else if (preview.kind === "arc") executeArcTrim(preview);
     else executeCircleTrim(preview);
     trimPreview = null;
     clearSelection();
-    const result = solveAndRefresh("トリム");
+    const solved = stabilizeActiveParameterNamespace(activeSketchId());
+    const result = solved.result;
+    if (!solved.success || solved.dependent?.success === false || result.errorNorm > CONSTRAINT_ACCEPT_ERROR) {
+      restoreGeometryMutationState(snapshot);
+      setHint(`${applicationText("拘束を維持できないためトリムを戻しました", "The trim was restored because its constraints could not be maintained.")} (error=${result.errorNorm.toExponential(3)})`, "error");
+      updateUI();
+      draw();
+      return false;
+    }
+    constraintAnalysisState = null;
+    refreshConstraintAnalysis();
     setHint(`トリムしました (error=${result.errorNorm.toExponential(2)})`);
+    updateUI({ refreshAnalysis: false });
+    draw();
+    recordHistory("トリム");
     return true;
   }
 
@@ -18080,15 +18581,32 @@
     const { line1, line2 } = pendingCommand;
     pendingCommand = null;
     hideDimensionValueInput();
+    const snapshot = snapshotGeometryMutationState();
+    detachSketchProjectionConstraintsForItems([line1, line2]);
     const result = createFillet(line1, line2, preview.radius);
     if (!result.ok) {
+      restoreGeometryMutationState(snapshot);
       setHint(result.reason, "error");
+      updateUI();
       draw();
       return true;
     }
     clearSelection();
     filletFirstLine = null;
-    solveAndRefresh("R面取り追加");
+    const stabilized = stabilizeActiveParameterNamespace(activeSketchId());
+    if (!stabilized.success || stabilized.dependent?.success === false || stabilized.result.errorNorm > CONSTRAINT_ACCEPT_ERROR) {
+      restoreGeometryMutationState(snapshot);
+      setHint(`${applicationText("拘束を維持できないためR面取りを戻しました", "The fillet was restored because its constraints could not be maintained.")} (error=${stabilized.result.errorNorm.toExponential(3)})`, "error");
+      updateUI();
+      draw();
+      return true;
+    }
+    constraintAnalysisState = null;
+    refreshConstraintAnalysis();
+    setHint(`${applicationText("R面取りを追加しました", "Fillet added")} (error=${stabilized.result.errorNorm.toExponential(2)})`);
+    updateUI({ refreshAnalysis: false });
+    draw();
+    recordHistory("R面取り追加");
     return true;
   }
 
@@ -18939,6 +19457,12 @@
       return;
     }
 
+    if (mode === "sketch-projection") {
+      e.preventDefault();
+      toggleSketchProjectionSource(hitReferenceTarget(p.x, p.y));
+      return;
+    }
+
     const blankDoubleClickHits = { hitP, hitL, hitC, hitArcEnd, hitA, hitS, hitD, hitBlock, hatchHit, referenceImageHit, inactiveHit, annotationHit: blankAnnotationHit };
     if (isRepeatedBlankDoubleClick(e, blankDoubleClickHits) && handleBlankCanvasDoubleClick(p, blankDoubleClickHits)) {
       suppressNextBlankDoubleClickEvent = true;
@@ -19108,6 +19632,23 @@
 
     if (mode === "spline") {
       handleSplineClick(p);
+      return;
+    }
+
+    if (mode === "sketch-projection") {
+      clearSnap();
+      const target = hitReferenceTarget(p.x, p.y);
+      hoveredPoint = target?.kind === "point" ? target.point : null;
+      hoveredEndpointPoint = null;
+      hoveredLine = target?.kind === "line" ? target.line : null;
+      hoveredCircle = target?.kind === "primitive" && target.primitive instanceof Circle ? target.primitive : null;
+      hoveredArc = target?.kind === "primitive" && target.primitive instanceof Arc ? target.primitive : null;
+      hoveredSpline = target?.kind === "spline" ? target.spline : null;
+      hoveredArcEndpoint = null;
+      hoveredDimensionConstraint = null;
+      hoveredBlockInstance = null;
+      hoveredSketchIdentity = target ? { id: operandElement(target)?.id, sketchId: target.sketchId, item: operandElement(target), kind: geometryKindForItem(operandElement(target)) } : null;
+      draw();
       return;
     }
 
@@ -19664,6 +20205,7 @@
     if (!dragSession) return;
     const pointerDistance = hypot2(p.x - dragSession.startPointer.x, p.y - dragSession.startPointer.y);
     if (!dragSession.previewMoved && pointerDistance <= 3 / viewport.scale) return;
+    detachSketchProjectionConstraintsForDrag(dragSession);
     dragSession.previewMoved = true;
     const result = dragResultForSession(dragSession, p);
     const error = result.errorNorm;
@@ -19937,7 +20479,7 @@
   }
 
   function isDrawToolMode() {
-    return mode === "line" || mode === "centerline" || mode === "point" || mode === "rectangle" || mode === "fillet" || mode === "trim" || mode === "offset" || mode === "circle" || mode === "arc" || mode === "spline" || mode === "hatch" || mode === "hatch-repair";
+    return mode === "line" || mode === "centerline" || mode === "point" || mode === "rectangle" || mode === "fillet" || mode === "trim" || mode === "offset" || mode === "circle" || mode === "arc" || mode === "spline" || mode === "sketch-projection" || mode === "hatch" || mode === "hatch-repair";
   }
 
   function handleBlankCanvasDoubleClick(pointer, hits = {}) {
@@ -20192,6 +20734,12 @@
       return;
     }
 
+    if (!textEditingTarget && mode === "sketch-projection" && e.key === "Enter") {
+      e.preventDefault();
+      commitSketchProjectionCommand();
+      return;
+    }
+
     if (!textEditingTarget && mode === "spline" && e.key === "Backspace") {
       e.preventDefault();
       const removed = splineFitPoints.pop();
@@ -20226,6 +20774,21 @@
 
     if (e.key === "Escape") {
       e.preventDefault();
+      if (mode === "sketch-projection") {
+        sketchProjectionSources = [];
+        mode = "select";
+        hoveredPoint = null;
+        hoveredLine = null;
+        hoveredCircle = null;
+        hoveredArc = null;
+        hoveredSpline = null;
+        hoveredSketchIdentity = null;
+        updateToolbar();
+        setHint(applicationText("スケッチ投影をキャンセルしました", "Sketch projection was canceled."));
+        updateUI({ refreshAnalysis: false });
+        draw();
+        return;
+      }
       if (referenceImageCalibrationSession) {
         cancelReferenceImageCalibration();
         return;
@@ -20885,13 +21448,16 @@
   });
 
   document.getElementById("toolCenterline")?.addEventListener("click", startCenterlineCommand);
+  document.getElementById("toolSketchProjection")?.addEventListener("click", startSketchProjectionCommand);
 
   document.getElementById("toolConstructionLine")?.addEventListener("click", () => {
     cancelConstraintTargetCommand("");
     const primitives = selectedConstructionTogglePrimitives();
     if (primitives.length > 0) {
       const next = !primitives.every((item) => item.construction);
+      detachSketchProjectionConstraintsForItems(primitives, { includeSharedNodes: false });
       for (const item of primitives) item.construction = next;
+      synchronizeSketchProjectionMetadata();
       setHint(next ? "選択図形を補助作図にしました" : "選択図形を通常作図にしました");
       clearSelection();
       updateUI();
@@ -21128,12 +21694,19 @@
         return;
       }
       const p = arcEndpointPoint(arc, endpoint);
-      commitNewConstraint("fixed", new ArcEndpointFixedConstraint(arc, endpoint, p.x, p.y));
+      const snapshot = snapshotModelState();
+      detachSketchProjectionConstraintsForItems([arc]);
+      if (!commitNewConstraint("fixed", new ArcEndpointFixedConstraint(arc, endpoint, p.x, p.y))) {
+        restoreModelState(snapshot);
+        updateUI();
+        draw();
+      }
       return;
     }
     const batch = selectedFixedBatchTargets();
     if (!batch) return;
     const snapshot = snapshotModelState();
+    detachSketchProjectionConstraintsForItems([...batch.points, ...batch.lines]);
     const nextFixed = !fixedBatchIsFullyFixed(batch);
     for (const point of batch.points) point.fixed = nextFixed;
     if (nextFixed) {
@@ -21602,6 +22175,304 @@
       },
       serializedModelForTest() {
         return structuredClone(serializeModel());
+      },
+      resetForSketchProjectionTest() {
+        resetModelState();
+        const sourceSketchId = DEFAULT_SKETCH_ID;
+        model.activeSketchId = sourceSketchId;
+        const explicitPoint = addPoint(-105, 65, false, "explicit");
+        const shared = addPoint(-40, -55, false, "endpoint");
+        const line1 = addLine(addPoint(-95, -55, false, "endpoint"), shared, false);
+        const line2 = addLine(shared, addPoint(-40, -15, false, "endpoint"), true);
+        const circle = addCircle(addPoint(0, 48, false, "endpoint"), 18, false);
+        const arc = addArc(addPoint(62, 48, false, "endpoint"), 19, -0.2, 1.35, true);
+        const spline = addSpline([
+          addPoint(-5, -8, false, "endpoint"),
+          addPoint(28, -32, false, "endpoint"),
+          addPoint(65, -8, false, "endpoint"),
+          addPoint(98, -30, false, "endpoint"),
+        ], false, false);
+        const targetSketch = { id: "S3", name: "Projection Target", parentSketchId: sourceSketchId, kind: "sketch", appearance: {}, constructionAppearance: {}, dimensionAppearance: {}, visible: true };
+        model.sketches.push(targetSketch);
+        model.activeSketchId = targetSketch.id;
+        this.focusWorldForTest({ x: 0, y: 0 }, 2.2);
+        resetHistory("sketch projection test");
+        updateUI();
+        draw();
+        const client = (point) => this.worldClientPositionForTest(point);
+        const splinePoint = window.SplineGeometry.evaluate(spline.curve(), 0.5);
+        return {
+          sourceSketchId,
+          targetSketchId: targetSketch.id,
+          ids: { point: explicitPoint.id, lines: [line1.id, line2.id], circle: circle.id, arc: arc.id, spline: spline.id },
+          clients: {
+            point: client(explicitPoint),
+            line1: client({ x: (line1.p1.x + line1.p2.x) / 2, y: (line1.p1.y + line1.p2.y) / 2 }),
+            line2: client({ x: (line2.p1.x + line2.p2.x) / 2, y: (line2.p1.y + line2.p2.y) / 2 }),
+            circle: client({ x: circle.center.x + circle.radius(), y: circle.center.y }),
+            arc: client({ x: arc.center.x + arc.radius() * Math.cos(0.6), y: arc.center.y + arc.radius() * Math.sin(0.6) }),
+            spline: client(splinePoint),
+          },
+        };
+      },
+      sketchProjectionEligibilityForTest() {
+        resetModelState();
+        const addSketch = (id, parentSketchId) => model.sketches.push({ id, name: id, parentSketchId, kind: "sketch", appearance: {}, constructionAppearance: {}, dimensionAppearance: {}, visible: true });
+        const makeLine = (id, sketchId, y, appearance = {}) => {
+          const p1 = addPointToSketch(-20, y, sketchId, "endpoint");
+          const p2 = addPointToSketch(20, y, sketchId, "endpoint");
+          const line = new Line(id, p1, p2, false);
+          line.sketchId = sketchId;
+          line.appearance = appearance;
+          model.lines.push(line);
+          return line;
+        };
+        addSketch("S3", DEFAULT_SKETCH_ID);
+        addSketch("S4", DEFAULT_SKETCH_ID);
+        addSketch("S5", "S3");
+        const ancestor = makeLine("EL1", DEFAULT_SKETCH_ID, -30);
+        const hiddenAncestor = makeLine("EL2", DEFAULT_SKETCH_ID, -20, { visible: false });
+        const self = makeLine("EL3", "S3", -10);
+        const sibling = makeLine("EL4", "S4", 0);
+        const child = makeLine("EL5", "S5", 10);
+        const root = makeLine("EL6", ROOT_SKETCH_ID, 20);
+        model.activeSketchId = "S3";
+        const eligible = (line) => Boolean(sketchProjectionEntryFromOperand({ kind: "line", line, sketchId: line.sketchId }));
+        return {
+          ancestor: eligible(ancestor),
+          hiddenAncestor: eligible(hiddenAncestor),
+          self: eligible(self),
+          sibling: eligible(sibling),
+          child: eligible(child),
+          root: eligible(root),
+        };
+      },
+      resetForSketchProjectionBlockEditorTest() {
+        resetModelState();
+        const draft = createEmptyBlockDefinition("Projection Block");
+        openBlockDefinitionEditor(draft, { isNew: true });
+        model.activeSketchId = DEFAULT_SKETCH_ID;
+        const line = addLine(addPoint(-45, 0, false, "endpoint"), addPoint(45, 0, false, "endpoint"), false);
+        model.sketches.push({ id: "S3", name: "Projected Detail", parentSketchId: DEFAULT_SKETCH_ID, kind: "sketch", appearance: {}, constructionAppearance: {}, dimensionAppearance: {}, visible: true });
+        model.activeSketchId = "S3";
+        this.focusWorldForTest({ x: 0, y: 0 }, 3);
+        resetBlockEditorHistory();
+        updateUI();
+        draw();
+        return { client: this.worldClientPositionForTest({ x: 0, y: 0 }), lineId: line.id };
+      },
+      completeSketchProjectionBlockEditorForTest() {
+        completeBlockDefinitionEdit();
+        return { completed: !blockEditSession, serialized: structuredClone(serializeModel()) };
+      },
+      resetForBlockProjectionSketchProjectionTest() {
+        resetModelState();
+        const definition = createEmptyBlockDefinition("Source Block");
+        const p1 = new Point("BP1", -30, 0, false, "endpoint");
+        const p2 = new Point("BP2", 30, 0, false, "endpoint");
+        p1.sketchId = DEFAULT_SKETCH_ID;
+        p2.sketchId = DEFAULT_SKETCH_ID;
+        const line = new Line("BL1", p1, p2, false);
+        line.sketchId = DEFAULT_SKETCH_ID;
+        definition.points.push(p1, p2);
+        definition.lines.push(line);
+        definition.revision += 1;
+        model.blockDefinitions.push(definition);
+        const instance = { id: `BI${blockInstanceSeq++}`, definitionId: definition.id, sketchId: DEFAULT_SKETCH_ID, x: -10, y: 15, rotation: 0, fixed: false, rotationLocked: false, enabledSketchIds: [DEFAULT_SKETCH_ID], appearanceOverride: {} };
+        model.blockInstances.push(instance);
+        model.sketches.push({ id: "S3", name: "Block Projection Target", parentSketchId: DEFAULT_SKETCH_ID, kind: "sketch", appearance: {}, constructionAppearance: {}, dimensionAppearance: {}, visible: true });
+        model.activeSketchId = "S3";
+        invalidateBlockProjectionCache();
+        const projected = blockProjectionBundle(instance).lines[0];
+        this.focusWorldForTest({ x: -10, y: 15 }, 3);
+        resetHistory("block projection sketch projection test");
+        updateUI();
+        draw();
+        return { instanceId: instance.id, client: this.worldClientPositionForTest({ x: (projected.p1.x + projected.p2.x) / 2, y: (projected.p1.y + projected.p2.y) / 2 }) };
+      },
+      moveBlockProjectionSketchProjectionSourceForTest() {
+        const instance = model.blockInstances[0];
+        if (!instance) return null;
+        instance.x += 38;
+        instance.y -= 11;
+        instance.rotation += Math.PI / 2;
+        invalidateBlockProjectionCache(instance.id);
+        const solved = solveSketchAndDependents(DEFAULT_SKETCH_ID);
+        updateUI();
+        draw();
+        return { success: solved.success && solved.dependent?.success !== false, state: this.sketchProjectionStateForTest() };
+      },
+      deleteBlockProjectionSketchProjectionSourceForTest() {
+        clearSelection();
+        selectedBlockInstances = model.blockInstances.slice(0, 1);
+        const deleted = deleteCurrentSelection();
+        return { deleted, state: this.sketchProjectionStateForTest() };
+      },
+      sketchProjectionStateForTest() {
+        const constraints = sketchProjectionConstraints();
+        const geometryState = (item) => {
+          if (item instanceof Point) return { id: item.id, kind: "point", x: item.x, y: item.y };
+          if (item instanceof Line) return { id: item.id, kind: "line", p1: item.p1.id, p2: item.p2.id, points: [{ x: item.p1.x, y: item.p1.y }, { x: item.p2.x, y: item.p2.y }], construction: Boolean(item.construction) };
+          if (item instanceof Circle) return { id: item.id, kind: "circle", center: { id: item.center.id, x: item.center.x, y: item.center.y }, radius: item.radius(), construction: Boolean(item.construction) };
+          if (item instanceof Arc) return { id: item.id, kind: "arc", center: { id: item.center.id, x: item.center.x, y: item.center.y }, radius: item.radius(), startAngle: item.startAngle, endAngle: item.endAngle, construction: Boolean(item.construction) };
+          return { id: item.id, kind: "spline", fitPoints: item.fitPoints.map((point) => ({ id: point.id, x: point.x, y: point.y })), closed: Boolean(item.closed), construction: Boolean(item.construction) };
+        };
+        return {
+          mode,
+          stagedCount: sketchProjectionSources.length,
+          constraints: constraints.map((constraint) => ({
+            kind: constraint.kind,
+            source: geometryState(constraint.source),
+            target: geometryState(constraint.target),
+            sourceId: constraintGeometryId(constraint.source),
+            targetId: constraintGeometryId(constraint.target),
+            sketchId: constraintSketchId(constraint),
+            referenceSketchId: constraint.referenceSketchId,
+            color: effectiveAppearanceForElement(constraint.target).color,
+          })),
+          serialized: structuredClone(serializeModel()),
+          history: this.historyState(),
+          sketches: model.sketches.map((sketch) => ({ id: sketch.id, parentSketchId: sketch.parentSketchId })),
+          treeText: document.getElementById("sketchList")?.textContent || "",
+          propertiesText: document.getElementById("propertiesPanel")?.textContent || "",
+        };
+      },
+      moveSketchProjectionSourcesForTest(dx = 12, dy = 7, { changeShape = true, changeSplineStructure = false } = {}) {
+        const sourceSketchId = DEFAULT_SKETCH_ID;
+        for (const point of model.points.filter((item) => elementSketchId(item) === sourceSketchId)) {
+          point.x += Number(dx) || 0;
+          point.y += Number(dy) || 0;
+        }
+        if (changeShape) {
+          const circle = model.circles.find((item) => elementSketchId(item) === sourceSketchId);
+          const arc = model.arcs.find((item) => elementSketchId(item) === sourceSketchId);
+          if (circle) circle.radiusValue += 3;
+          if (arc) {
+            arc.radiusValue += 2;
+            arc.startAngle += 0.15;
+            arc.endAngle += 0.25;
+          }
+        }
+        if (changeSplineStructure) {
+          const spline = model.splines.find((item) => elementSketchId(item) === sourceSketchId);
+          if (spline) {
+            const a = spline.fitPoints[1];
+            const b = spline.fitPoints[2];
+            const point = addPointToSketch((a.x + b.x) / 2, (a.y + b.y) / 2 + 9, sourceSketchId, "endpoint");
+            spline.fitPoints.splice(2, 0, point);
+            spline.closed = true;
+            spline._curveCache = null;
+          }
+        }
+        const solved = solveSketchAndDependents(sourceSketchId);
+        updateUI();
+        draw();
+        return { success: solved.success && solved.dependent?.success !== false, state: this.sketchProjectionStateForTest() };
+      },
+      createSketchProjectionChainForTest() {
+        const upstream = sketchProjectionConstraints().find((constraint) => constraint.kind === "line" && constraintSketchId(constraint) === "S3");
+        if (!upstream) return null;
+        if (!model.sketches.some((sketch) => sketch.id === "S4")) {
+          model.sketches.push({ id: "S4", name: "Projection Chain", parentSketchId: "S3", kind: "sketch", appearance: {}, constructionAppearance: {}, dimensionAppearance: {}, visible: true });
+        }
+        model.activeSketchId = "S4";
+        const entry = { item: upstream.target, kind: "line", sketchId: "S3", key: sketchProjectionSourceKey(upstream.target) };
+        const target = createSketchProjectionTarget(entry, "S4", new Map());
+        const constraint = new SketchProjectionConstraint("line", upstream.target, target);
+        markReferenceConstraint(constraint, "S3", "S4");
+        pushModelConstraint(constraint, "S4");
+        synchronizeSketchProjectionMetadata("S4");
+        const solved = solveSketchAndDependents("S3");
+        updateUI();
+        draw();
+        return { success: solved.success && solved.dependent?.success !== false, state: this.sketchProjectionStateForTest() };
+      },
+      selectSketchProjectionTargetForTest(kind = "line") {
+        const constraint = sketchProjectionConstraints().find((item) => item.kind === kind) || null;
+        if (!constraint) return null;
+        clearSelection();
+        if (constraint.target instanceof Point) selectedPoints = [constraint.target];
+        else if (constraint.target instanceof Line) selectedLines = [constraint.target];
+        else if (constraint.target instanceof Circle) selectedCircles = [constraint.target];
+        else if (constraint.target instanceof Arc) selectedArcs = [constraint.target];
+        else if (constraint.target instanceof Spline) selectedSplines = [constraint.target];
+        updateUI();
+        draw();
+        const state = this.sketchProjectionStateForTest();
+        const point = constraint.target instanceof Point
+          ? constraint.target
+          : constraint.target instanceof Line
+            ? { x: (constraint.target.p1.x + constraint.target.p2.x) / 2, y: (constraint.target.p1.y + constraint.target.p2.y) / 2 }
+            : constraint.target.center || constraint.target.fitPoints[1];
+        return { targetId: constraintGeometryId(constraint.target), client: this.worldClientPositionForTest(point), propertiesText: state.propertiesText };
+      },
+      removeFirstSketchProjectionConstraintForTest() {
+        const constraint = sketchProjectionConstraints()[0];
+        if (!constraint) return false;
+        return deleteElements({ constraints: [constraint] });
+      },
+      setSketchProjectionAppearanceForTest(kind = "line") {
+        const selected = this.selectSketchProjectionTargetForTest(kind);
+        if (!selected) return null;
+        const before = sketchProjectionConstraints().length;
+        const changed = setAppearanceForSelection({ color: "#8B5CF6" });
+        return { changed, before, state: this.sketchProjectionStateForTest() };
+      },
+      deleteSketchProjectionSourceGeometryForTest(kind = "line") {
+        const constraint = sketchProjectionConstraints().find((item) => item.kind === kind) || null;
+        if (!constraint) return false;
+        const source = constraint.source;
+        if (source instanceof Point) return deleteElements({ points: [source] });
+        if (source instanceof Line) return deleteElements({ lines: [source] });
+        if (source instanceof Circle) return deleteElements({ circles: [source] });
+        if (source instanceof Arc) return deleteElements({ arcs: [source] });
+        return deleteElements({ splines: [source] });
+      },
+      deleteSketchProjectionTargetGeometryForTest(kind = "line") {
+        const selected = this.selectSketchProjectionTargetForTest(kind);
+        if (!selected) return null;
+        const deleted = deleteCurrentSelection();
+        return { deleted, state: this.sketchProjectionStateForTest() };
+      },
+      deleteSketchProjectionSourceSketchForTest() {
+        const deleted = deleteSketch(DEFAULT_SKETCH_ID, false);
+        return { deleted, state: this.sketchProjectionStateForTest() };
+      },
+      copySketchProjectionTargetForTest(kind = "circle") {
+        const selected = this.selectSketchProjectionTargetForTest(kind);
+        if (!selected) return null;
+        const before = sketchProjectionConstraints().length;
+        const copied = copySelectionToClipboard();
+        const pasted = copied ? pasteGeometryClipboard() : false;
+        return {
+          copied,
+          pasted: Boolean(pasted),
+          before,
+          after: sketchProjectionConstraints().length,
+          clipboardProjectionCount: (geometryClipboard?.constraints || []).filter((constraint) => constraint.type === "sketchProjection").length,
+          state: this.sketchProjectionStateForTest(),
+        };
+      },
+      blockizeSketchProjectionTargetForTest(kind = "spline") {
+        const selected = this.selectSketchProjectionTargetForTest(kind);
+        if (!selected) return null;
+        const selection = blockSelectionGeometry();
+        if (selection.error) return { error: selection.error };
+        const definition = createBlockDefinitionFromSelection(selection, blockSelectionBoundsCenter(selection), "Projected Geometry Block");
+        return {
+          error: null,
+          projectionConstraintCount: definition.constraints.filter((constraint) => constraint instanceof SketchProjectionConstraint).length,
+          geometryCount: definition.lines.length + definition.circles.length + definition.arcs.length + definition.splines.length,
+          externalProjectionCount: selection.externalConstraints.filter((constraint) => constraint instanceof SketchProjectionConstraint).length,
+        };
+      },
+      reloadSketchProjectionForTest(version = CURRENT_JSON_VERSION) {
+        const data = structuredClone(serializeModel());
+        data.version = Number(version);
+        loadModelData(data);
+        updateUI();
+        draw();
+        return this.sketchProjectionStateForTest();
       },
       referenceImageStateForTest() {
         return {

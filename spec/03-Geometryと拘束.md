@@ -82,6 +82,10 @@ Geometry menuまたはToolbarの中心線commandから、同じアクティブSk
 
 ToolbarまたはGeometry menuから開始し、3個以上のfit pointを順にclickして3次Splineを作る。Enterまたは最後の点のdouble clickで開Splineを確定し、3点以上を置いた後に先頭fit pointをclickすると閉Splineを確定する。Backspaceは確定前の最後のfit pointを取り消し、Escは未確定Spline全体を破棄する。通常選択では曲線だけを表示し、Propertiesの編集操作またはdouble clickでfit point編集modeへ入る。詳細は[スプライン](./10-スプライン.md)を参照する。
 
+### スケッチ投影
+
+表示中の先祖SketchにあるPoint、Line、Circle、Arc、Spline、Block Projectionを通常GeometryとしてアクティブSketchへ作成し、`SketchProjectionConstraint`で元形状へ追従させる。clickで候補を追加／解除し、Enterで一括作成、Escで全候補を破棄する。同じ元Geometryの重複を作らず、同じ元Pointは投影実行をまたいで投影先Pointを共有する。詳細は[スケッチ投影](./12-スケッチ投影.md)を参照する。
+
 ### 補助 Geometry
 
 補助切替は Line、Circle、Arc、Spline に適用する。選択中の対象があれば対象の `construction` を切り替え、対象がなければ今後作成する Geometry の既定値を切り替える。
@@ -121,6 +125,7 @@ Circleは単独で選び、側と距離を入力して複製する。Line／Arc�
 - 同じParameter名前空間へ寸法をコピーすると新しい`dN`を付与し、同時にコピーした寸法間の参照だけを新しい名前へトークン単位で書き換える。
 - 別のParameter名前空間へコピーすると、拘束寸法式をコピー時点の評価値による数値式へ固定して新しい`dN`を付与する。
 - HatchのCopy／Cut／PasteとBlock化は参照する全境界Geometryの同時選択を必須とし、不足時は操作全体を拒否する。Pasteでは境界GeometryRefを新IDへ書き換える。
+- スケッチ投影の結果は通常Geometryとしてsnap、拘束、寸法、Hatch、Leader、Offsetに使用できる。Copy／PasteとBlock化では投影拘束を除外する。投影先の直接drag、trim、fillet、Spline編集、固定、補助切替、Appearance変更では、影響する投影拘束を同じUndo単位で自動解除する。
 
 ドラッグ中は選択に関係する拘束連結成分だけを優先して local solve し、必要な場合に全 Sketch solve へフォールバックする。Parameterの参照寸法feedbackはドラッグ中に反復せず、Pointer-upで最終精度のsolveとParameter再評価を行う。式エラー、拘束矛盾、非収束時はドラッグ開始前へ戻す。
 
@@ -232,3 +237,5 @@ Geometry は解析結果により次の状態で描き分ける。
 Geometry の削除時は、共有 Point の利用状況を考慮して不要 Pointを整理し、対象を参照する拘束と拘束寸法を除去する。ただし削除後も残る式が削除対象の寸法symbolを参照する場合は、依存元の名前を表示して操作を拒否する。依存元も同時に削除する操作、または名前空間全体の削除は許可する。1回のユーザー操作は1つの履歴単位にする。
 
 Geometryを削除すると、そのGeometryを参照するConstraintとLeaderも同時に除去する。Splineを削除すると、そのSplineだけで使用されるfit pointも整理する。Hatchの境界Geometryは例外であり、Hatch Objectを残したまま境界エラーの無効状態にする。Sketch削除では所属Hatchも削除する。Sketch削除、Block Instance削除、Block Definition編集でも各Objectの参照ライフサイクルを適用する。
+
+スケッチ投影では元Geometryまたは元Block Instanceの削除時に投影拘束だけを除去して投影先を残し、投影先Geometryの削除時には対応する投影拘束も除去する。

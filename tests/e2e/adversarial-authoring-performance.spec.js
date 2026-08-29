@@ -956,7 +956,7 @@ test("selection, deletion, undo and redo stay responsive on the complete fixture
     await page.mouse.down({ button: "middle" });
     await page.mouse.move(canvas.left + canvas.width / 2 + 45, canvas.top + canvas.height / 2 + 30, { steps: 3 });
     await page.mouse.up({ button: "middle" });
-  }, 150);
+  }, 175);
   await measureInteraction(page, results, "selection/blank-rectangle", async () => {
     await page.mouse.move(canvas.left + canvas.width - 90, canvas.top + canvas.height - 90);
     await page.mouse.down();

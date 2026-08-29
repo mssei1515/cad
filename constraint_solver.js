@@ -388,6 +388,55 @@
     }
   }
 
+  class SketchProjectionConstraint extends Constraint {
+    constructor(kind, source, target) {
+      super(`スケッチ投影 ${source?.id || "?"} → ${target?.id || "?"}`, 1);
+      this.kind = String(kind || "");
+      this.source = source;
+      this.target = target;
+      this.sourcePointIds = this.kind === "spline" ? (source?.fitPoints || []).map((point) => String(point.id)) : [];
+    }
+
+    rawError() {
+      const source = this.source;
+      const target = this.target;
+      if (!source || !target) return [1e6];
+      if (this.kind === "point") return [target.x - source.x, target.y - source.y];
+      if (this.kind === "line") {
+        return [
+          target.p1.x - source.p1.x,
+          target.p1.y - source.p1.y,
+          target.p2.x - source.p2.x,
+          target.p2.y - source.p2.y,
+        ];
+      }
+      if (this.kind === "circle") {
+        return [
+          target.center.x - source.center.x,
+          target.center.y - source.center.y,
+          target.radius() - source.radius(),
+        ];
+      }
+      if (this.kind === "arc") {
+        return [
+          target.center.x - source.center.x,
+          target.center.y - source.center.y,
+          target.radius() - source.radius(),
+          normalizeAngleSigned(target.startAngle - source.startAngle),
+          normalizeAngleSigned(target.endAngle - source.endAngle),
+        ];
+      }
+      if (this.kind === "spline") {
+        if (Boolean(target.closed) !== Boolean(source.closed) || target.fitPoints.length !== source.fitPoints.length) return [1e6];
+        return target.fitPoints.flatMap((point, index) => [
+          point.x - source.fitPoints[index].x,
+          point.y - source.fitPoints[index].y,
+        ]);
+      }
+      return [1e6];
+    }
+  }
+
   class PointPairCenterlineConstraint extends Constraint {
     constructor(p1, p2, centerline) {
       super(`2点中心線 ${p1.id}-${p2.id} / ${centerline.id}`, 1);
@@ -1788,6 +1837,7 @@
     Arc,
     Spline,
     Constraint,
+    SketchProjectionConstraint,
     DistanceConstraint,
     PointAxisDistanceConstraint,
     PointLineDistanceConstraint,

@@ -110,7 +110,7 @@ test("imports, fits, edits, calibrates, persists, and restores a reference image
   expect(state.images[0]).toEqual(expect.objectContaining({ locked: true, visible: false }));
 
   const serialized = await page.evaluate(() => window.__jot2dTest.serializedModelForTest());
-  expect(serialized.version).toBe(18);
+  expect(serialized.version).toBe(19);
   expect(serialized.referenceImages[0].dataUrl).toMatch(/^data:image\/png;base64,/);
   const loaded = await page.evaluate((data) => window.__jot2dTest.loadDocumentFixtureForDragTest(data, "reference-image.jot2d"), serialized);
   expect(loaded.success).toBe(true);
@@ -143,6 +143,6 @@ test("supports JPEG and WebP, downsizes large images, migrates version 17, and s
   const migrated = await page.evaluate((data) => window.__jot2dTest.loadDocumentFixtureForDragTest(data, "legacy-v17.jot2d"), legacy);
   expect(migrated.success).toBe(true);
   serialized = await page.evaluate(() => window.__jot2dTest.serializedModelForTest());
-  expect(serialized.version).toBe(18);
+  expect(serialized.version).toBe(19);
   expect(serialized.referenceImages).toEqual([]);
 });
