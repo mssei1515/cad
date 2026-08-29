@@ -24,7 +24,7 @@ async function canvasInkAround(page, client, radius = 50) {
   }, { clientPoint: client, cropRadius: radius });
 }
 
-test("creates associative hatching, exposes Tree and Properties, and persists version 17", async ({ page }) => {
+test("creates associative hatching, exposes Tree and Properties, and persists version 18", async ({ page }) => {
   const fixture = await page.evaluate(() => window.__jot2dTest.resetForHatchTest());
   await page.locator("#toolHatch").click();
   await expect(page.locator("#statusCommand")).toHaveText("ハッチング");
@@ -37,7 +37,7 @@ test("creates associative hatching, exposes Tree and Properties, and persists ve
   expect(state.direct).toHaveLength(1);
   expect(state.direct[0]).toEqual(expect.objectContaining({ id: "H1", valid: true }));
   expect(state.direct[0].appearance).toEqual({ visible: true, patternType: "parallel", angle: 45, spacing: 3, color: "#64748b", lineWidth: 1, opacity: 1 });
-  expect(state.serialized.version).toBe(17);
+  expect(state.serialized.version).toBe(18);
   expect(state.serialized.hatches).toHaveLength(1);
   expect(state.propertiesText).toContain("ハッチング");
   expect(state.propertiesText).toContain("境界状態");

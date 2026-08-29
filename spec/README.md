@@ -14,20 +14,22 @@
 8. [Parameter](./08-Parameter.md)
 9. [ハッチング](./09-ハッチング.md)
 10. [スプライン](./10-スプライン.md)
-11. [実装対応表とテスト](./90-実装対応表とテスト.md)
-12. [改善バックログ](./91-改善バックログ.md) — 仕様ではない技術課題
+11. [参照画像](./11-参照画像.md)
+12. [実装対応表とテスト](./90-実装対応表とテスト.md)
+13. [改善バックログ](./91-改善バックログ.md) — 仕様ではない技術課題
 
 ## 用語
 
 | 用語 | 意味 |
 | --- | --- |
-| Document | 1つの保存対象。Geometry、Constraint、Sketch、Block、Parameter、Appearance、Hatch、Annotationを持つ |
+| Document | 1つの保存対象。Geometry、Constraint、Sketch、Block、Parameter、Appearance、Hatch、Annotation、Reference Imageを持つ |
 | Geometry | Point、Line、Circle、Arc、Spline、およびBlock Projection |
 | Constraint | Geometryの成立条件。寸法もConstraintに属する |
 | Parameter | 名前と数式を持ち、同じ名前空間の寸法と相互参照できるスカラー値 |
 | Appearance | visible、color、lineType、lineWidthと、補助Line用のendpointOverhang／endpointMarkersから成る表示属性 |
 | Hatch | 既存Geometryで囲まれた閉領域へ関連付けられ、境界変形へ追従する線パターンまたは色塗りつぶし |
 | Sketch所属Annotation | Geometryを変更しない引出線または自由テキスト |
+| Reference Image | Geometry背面で手動トレースに使う、Sketch所属の埋め込み画像 |
 | Interaction State | 選択、作図、拘束入力、注記配置など現在の操作状態 |
 | View State | Geometry ID、Space押下中の拘束状態表示など一時的な表示状態 |
 

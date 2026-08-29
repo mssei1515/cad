@@ -134,7 +134,7 @@ async function openParameterDialog(page) {
   await expect(page.locator("#parametersDialog")).toBeVisible();
 }
 
-test("document parameters, quoted dimension formulas, rename propagation, and v17 persistence work together", async ({ page }) => {
+test("document parameters, quoted dimension formulas, rename propagation, and v18 persistence work together", async ({ page }) => {
   await page.goto(`${baseUrl}/index.html?test=1`);
   await page.waitForFunction(() => window.__jot2dTest);
   const initial = await page.evaluate(() => window.__jot2dTest.resetForParameterTest());
@@ -174,7 +174,7 @@ test("document parameters, quoted dimension formulas, rename propagation, and v1
   expect(state.valid).toBe(true);
   expect(state.parameters.map((item) => item.name)).toEqual(["span", "margin"]);
   expect(state.dimensions.find((item) => !item.readOnly).expression).toContain("span");
-  expect(state.serialized.version).toBe(17);
+  expect(state.serialized.version).toBe(18);
   expect(state.serialized.constraints.every((constraint) => !constraint.dimension || constraint.parameterName)).toBe(true);
 });
 
@@ -316,13 +316,13 @@ test("v16 formulas migrate to quoted references and current unquoted references 
   const migrated = await page.evaluate((data) => window.__jot2dTest.loadDocumentFixtureForDragTest(data, "legacy-v16-formulas.jot2d"), legacy);
   expect(migrated.success).toBe(true);
   const migratedState = await page.evaluate(() => window.__jot2dTest.serializedModelForTest());
-  expect(migratedState.version).toBe(17);
+  expect(migratedState.version).toBe(18);
   expect(migratedState.parameters[0].expression).toMatch(/^"d\d+" \* 2$/);
   expect(migratedState.constraints.find((constraint) => constraint.expression?.includes("width"))?.expression).toBe('"width" / 2 + "margin"');
 
   const invalid = structuredClone(migratedState);
   invalid.parameters[0].expression = invalid.parameters[0].expression.replaceAll('"', "");
-  const result = await page.evaluate((data) => window.__jot2dTest.loadDocumentFixtureForDragTest(data, "invalid-v17-unquoted-formula.jot2d"), invalid);
+  const result = await page.evaluate((data) => window.__jot2dTest.loadDocumentFixtureForDragTest(data, "invalid-v18-unquoted-formula.jot2d"), invalid);
   expect(result.success).toBe(false);
   expect(result.error).toContain("ダブルクオーテーション");
   const after = await page.evaluate(() => window.__jot2dTest.serializedModelForTest());
@@ -337,7 +337,7 @@ test("unknown quoted parameter expressions reject loading without replacing the 
   const before = await page.evaluate(() => window.__jot2dTest.serializedModelForTest());
   const invalid = structuredClone(before);
   invalid.parameters[0].expression = '"missing" + 1';
-  const result = await page.evaluate((data) => window.__jot2dTest.loadDocumentFixtureForDragTest(data, "invalid-v17-unknown-formula.jot2d"), invalid);
+  const result = await page.evaluate((data) => window.__jot2dTest.loadDocumentFixtureForDragTest(data, "invalid-v18-unknown-formula.jot2d"), invalid);
   expect(result.success).toBe(false);
   expect(result.error).toContain("未定義");
   const after = await page.evaluate(() => window.__jot2dTest.serializedModelForTest());
@@ -597,7 +597,7 @@ test("v10 annotations migrate by target or active sketch and invalid v11 ownersh
   const legacy = annotationSketchFixture(10);
   expect(await page.evaluate((data) => window.__jot2dTest.loadDocumentFixtureForDragTest(data, "annotation-v10.json"), legacy)).toEqual(expect.objectContaining({ success: true }));
   const migrated = await page.evaluate(() => window.__jot2dTest.serializedModelForTest());
-  expect(migrated.version).toBe(17);
+  expect(migrated.version).toBe(18);
   expect(migrated.annotations.find((annotation) => annotation.id === "AN1").sketchId).toBe("S2");
   expect(migrated.annotations.find((annotation) => annotation.id === "AN2").sketchId).toBe("S1");
 
@@ -1264,7 +1264,7 @@ test("Jot2D files open, overwrite, save as, and cancel without errors", async ({
   expect(state.suggestedName).toBe("無題.jot2d");
   expect(state.excludeAcceptAllOption).toBe(true);
   expect(state.accept).toEqual({ "application/json": [".jot2d"] });
-  expect(state.saved.version).toBe(17);
+  expect(state.saved.version).toBe(18);
   expect(state.saved.documentName).toBe("無題");
   expect(state.fileState).toEqual({ hasHandle: true, handleName: "first-save.jot2d" });
 
@@ -2551,7 +2551,7 @@ test("Constraint dimensions expose defining geometry and inheritable appearance 
   expect(serialized.annotations).toEqual([]);
   await page.evaluate((documentData) => window.__jot2dTest.loadDocumentFixtureForDragTest(documentData, "dimension-appearance.json"), serialized);
   const roundTrip = await page.evaluate(() => window.__jot2dTest.serializedModelForTest());
-  expect(roundTrip.version).toBe(17);
+  expect(roundTrip.version).toBe(18);
   expect(roundTrip.defaultDimensionAppearance).toEqual(serialized.defaultDimensionAppearance);
   expect(roundTrip.constraints[0].dimension.display).toEqual(serialized.constraints[0].dimension.display);
 
@@ -2584,7 +2584,7 @@ test("Constraint dimensions expose defining geometry and inheritable appearance 
   expect(migratedPixels.direct.terminatorSize).toBeCloseTo(18 * 25.4 / 96, 8);
   expect(migratedPixels.direct.terminatorType).toBeUndefined();
   const migratedSerialized = await page.evaluate(() => window.__jot2dTest.serializedModelForTest());
-  expect(migratedSerialized.version).toBe(17);
+  expect(migratedSerialized.version).toBe(18);
   expect(migratedSerialized.defaultDimensionAppearance).not.toHaveProperty("arrows");
   expect(migratedSerialized.defaultDimensionAppearance).not.toHaveProperty("extensionLines");
   expect(migratedSerialized.constraints[0].dimension.display).not.toHaveProperty("arrowheadLength");
@@ -3127,7 +3127,7 @@ test("offset tool builds an explicitly connected line chain with one editable di
   expect(state.offsetIds).toHaveLength(2);
   expect(state.resultJoins[0].end.x).toBeCloseTo(state.resultJoins[0].start.x, 6);
   expect(state.resultJoins[0].end.y).toBeCloseTo(state.resultJoins[0].start.y, 6);
-  expect(state.jsonVersion).toBe(17);
+  expect(state.jsonVersion).toBe(18);
   expect(state.serializedTypes).toBe(1);
 
   await page.keyboard.press("Control+z");

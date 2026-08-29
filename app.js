@@ -143,7 +143,7 @@
     ["実線／補助線", "Normal / Construction"], ["トリム", "Trim"], ["R面取り", "Fillet"], ["フィレット", "Fillet"], ["オフセット", "Offset"], ["ハッチング", "Hatching"],
     ["寸法", "Dimension"], ["一致", "Coincident"], ["水平", "Horizontal"], ["垂直", "Vertical"], ["平行", "Parallel"], ["直角", "Perpendicular"],
     ["対称", "Symmetry"], ["同心", "Concentric"], ["等寸", "Equal"], ["接線", "Tangent"], ["固定／解除", "Fix / Unfix"], ["固定解除", "Unfix"],
-    ["引出線", "Leader"], ["自由テキスト", "Free Text"], ["拘束状態表示", "Constraint Status View"],
+    ["引出線", "Leader"], ["自由テキスト", "Free Text"], ["画像を読み込み", "Import Image"], ["画像", "Image"], ["参照画像", "Reference Image"], ["位置ロック", "Position lock"], ["2点から縮尺を設定", "Calibrate scale from two points"], ["幅", "Width"], ["拘束状態表示", "Constraint Status View"],
     ["拘束状態表示を切り替え（Space長押しでも一時表示）", "Toggle constraint status view (hold Space for temporary view)"],
     ["拘束ツールはツールバーから選択します", "Select constraint tools from the toolbar"],
     ["プロパティ", "Properties"], ["スケッチ", "Sketch"], ["スケッチツリー", "Sketch Tree"],
@@ -249,6 +249,7 @@
     activeSketchId: DEFAULT_SKETCH_ID,
     annotations: [],
     hatches: [],
+    referenceImages: [],
     nextHatchIndex: 1,
     points: [],
     lines: [],
@@ -289,12 +290,14 @@
   let selectedConstraint = null;
   let selectedAnnotations = [];
   let selectedHatches = [];
+  let selectedReferenceImages = [];
   let canvasContextTarget = null;
   let canvasContextPointer = null;
   let canvasContextCandidates = [];
   let canvasContextBaseHoverState = null;
   let hoveredAnnotation = null;
   let hoveredHatch = null;
+  let hoveredReferenceImage = null;
   let hoveredSidebarItem = null;
   let constraintAnalysisState = null;
   let constraintRedundancyState = { constraints: new Map(), sketches: new Map(), count: 0 };
@@ -353,6 +356,7 @@
   let sketchSeq = 2;
   let annotationSeq = 1;
   let hatchSeq = 1;
+  let referenceImageSeq = 1;
   let blockDefinitionSeq = 1;
   let blockInstanceSeq = 1;
   let blockElementSeq = 1;
@@ -366,6 +370,9 @@
   let blockProjectionCache = new Map();
   let hatchResolutionCache = new WeakMap();
   let hatchFaceCache = new Map();
+  const referenceImageCache = new Map();
+  let referenceImageDragSession = null;
+  let referenceImageCalibrationSession = null;
   const dimensionTextWidthCache = new WeakMap();
   let dimensionExpressionMarkCapture = null;
   const dimensionArrowheadFactorCache = new Map();
@@ -374,7 +381,8 @@
   let historyRestoring = false;
   let geometryClipboard = null;
   const HISTORY_LIMIT = 80;
-  const CURRENT_JSON_VERSION = 17;
+  const CURRENT_JSON_VERSION = 18;
+  const REFERENCE_IMAGE_MAX_SIDE_PX = 3000;
   const SKETCH_TREE_MIN_WIDTH = 220;
   const SKETCH_TREE_MAX_WIDTH = 560;
   const SKETCH_TREE_KEYBOARD_RESIZE_STEP = 16;
@@ -886,6 +894,87 @@
     }).filter(Boolean);
   }
 
+  function referenceImageMimeType(value) {
+    const mimeType = String(value || "").toLowerCase();
+    return ["image/png", "image/jpeg", "image/webp"].includes(mimeType) ? mimeType : null;
+  }
+
+  function validReferenceImageDataUrl(value, mimeType = null) {
+    const match = /^data:(image\/(?:png|jpeg|webp));base64,[a-z0-9+/=]+$/i.exec(String(value || ""));
+    return Boolean(match && (!mimeType || match[1].toLowerCase() === mimeType));
+  }
+
+  function normalizeReferenceImages(items, fallbackSketchId = null) {
+    if (!Array.isArray(items)) return [];
+    return items.map((item, index) => {
+      if (!item || typeof item !== "object") return null;
+      const mimeType = referenceImageMimeType(item.mimeType);
+      const pixelWidth = Math.round(Number(item.pixelWidth));
+      const pixelHeight = Math.round(Number(item.pixelHeight));
+      const scale = Number(item.scale);
+      if (!mimeType || !validReferenceImageDataUrl(item.dataUrl, mimeType)
+        || !Number.isInteger(pixelWidth) || pixelWidth < 1 || pixelWidth > REFERENCE_IMAGE_MAX_SIDE_PX
+        || !Number.isInteger(pixelHeight) || pixelHeight < 1 || pixelHeight > REFERENCE_IMAGE_MAX_SIDE_PX
+        || !Number.isFinite(scale) || scale <= 0) return null;
+      const normalized = {
+        id: String(item.id || `IMG${index + 1}`),
+        name: String(item.name || `Image-${index + 1}`),
+        sketchId: item.sketchId == null ? fallbackSketchId : String(item.sketchId),
+        mimeType,
+        dataUrl: String(item.dataUrl),
+        pixelWidth,
+        pixelHeight,
+        x: Number.isFinite(Number(item.x)) ? Number(item.x) : 0,
+        y: Number.isFinite(Number(item.y)) ? Number(item.y) : 0,
+        scale,
+        rotation: Number.isFinite(Number(item.rotation)) ? Number(item.rotation) : 0,
+        opacity: Math.max(0, Math.min(1, Number.isFinite(Number(item.opacity)) ? Number(item.opacity) : 0.5)),
+        visible: item.visible !== false,
+        locked: Boolean(item.locked),
+      };
+      Object.assign(item, normalized);
+      return item;
+    }).filter(Boolean);
+  }
+
+  function serializeReferenceImage(item) {
+    return {
+      id: item.id,
+      name: item.name,
+      sketchId: item.sketchId,
+      mimeType: item.mimeType,
+      dataUrl: item.dataUrl,
+      pixelWidth: item.pixelWidth,
+      pixelHeight: item.pixelHeight,
+      x: item.x,
+      y: item.y,
+      scale: item.scale,
+      rotation: item.rotation,
+      opacity: item.opacity,
+      visible: item.visible !== false,
+      locked: Boolean(item.locked),
+    };
+  }
+
+  function validSerializedReferenceImageList(items) {
+    return Array.isArray(items) && items.every((item) => {
+      const mimeType = referenceImageMimeType(item?.mimeType);
+      return item && typeof item === "object"
+        && typeof item.id === "string" && item.id.length > 0
+        && typeof item.name === "string"
+        && typeof item.sketchId === "string"
+        && Boolean(mimeType) && validReferenceImageDataUrl(item.dataUrl, mimeType)
+        && Number.isInteger(item.pixelWidth) && item.pixelWidth >= 1 && item.pixelWidth <= REFERENCE_IMAGE_MAX_SIDE_PX
+        && Number.isInteger(item.pixelHeight) && item.pixelHeight >= 1 && item.pixelHeight <= REFERENCE_IMAGE_MAX_SIDE_PX
+        && Number.isFinite(item.x) && Number.isFinite(item.y)
+        && Number.isFinite(item.scale) && item.scale > 0
+        && Number.isFinite(item.rotation)
+        && Number.isFinite(item.opacity) && item.opacity >= 0 && item.opacity <= 1
+        && typeof item.visible === "boolean"
+        && typeof item.locked === "boolean";
+    });
+  }
+
   function ensureSketchState() {
     if (!Array.isArray(model.sketches)) model.sketches = [];
     let root = model.sketches.find((sketch) => sketch.kind === "root" || sketch.id === ROOT_SKETCH_ID);
@@ -946,6 +1035,7 @@
     const fallbackSketchId = model.sketches.find((sketch) => !isRootSketch(sketch))?.id || DEFAULT_SKETCH_ID;
     model.annotations = normalizeAnnotations(model.annotations, fallbackSketchId);
     model.hatches = normalizeHatches(model.hatches, fallbackSketchId);
+    model.referenceImages = normalizeReferenceImages(model.referenceImages, fallbackSketchId);
     for (const item of [...model.points, ...model.lines, ...model.circles, ...model.arcs, ...model.splines]) item.appearance = normalizeAppearance(item.appearance);
   }
 
@@ -1018,6 +1108,7 @@
       definition.splines = Array.isArray(definition.splines) ? definition.splines : [];
       definition.annotations = normalizeAnnotations(definition.annotations, fallbackSketchId);
       definition.hatches = normalizeHatches(definition.hatches, fallbackSketchId);
+      definition.referenceImages = normalizeReferenceImages(definition.referenceImages, fallbackSketchId);
       definition.nextHatchIndex = Math.max(nextSeq(definition.hatches, "H"), Number(definition.nextHatchIndex) || 1);
       definition.blockInstances = Array.isArray(definition.blockInstances) ? definition.blockInstances : [];
       definition.constraints = Array.isArray(definition.constraints) ? definition.constraints : [];
@@ -2029,6 +2120,104 @@
       if (resolved.ok && hatchContainsPoint(resolved, point)) return hatch;
     }
     return null;
+  }
+
+  function hitReferenceImageAt(x, y, { activeOnly = true } = {}) {
+    const point = { x, y };
+    for (let index = model.referenceImages.length - 1; index >= 0; index -= 1) {
+      const item = model.referenceImages[index];
+      if (item.visible === false || !isVisibleSketchId(item.sketchId)) continue;
+      if (activeOnly && item.sketchId !== activeSketchId()) continue;
+      const local = referenceImageWorldToLocal(item, point);
+      if (Math.abs(local.x) <= item.pixelWidth / 2 && Math.abs(local.y) <= item.pixelHeight / 2) return item;
+    }
+    return null;
+  }
+
+  function beginReferenceImageDrag(event, item, pointer) {
+    clearSelection();
+    selectedReferenceImages = [item];
+    if (item.locked) {
+      setHint(applicationText("位置がロックされた画像です", "This image position is locked"));
+      updateUI({ refreshAnalysis: false });
+      draw();
+      return;
+    }
+    referenceImageDragSession = { item, pointerId: event.pointerId, startPointer: pointer, startX: item.x, startY: item.y, moved: false };
+    canvas.classList.add("is-dragging");
+    canvas.setPointerCapture(event.pointerId);
+    setHint(applicationText("画像を移動中", "Moving image"));
+    updateUI({ refreshAnalysis: false });
+    draw();
+  }
+
+  function updateReferenceImageDrag(pointer) {
+    const session = referenceImageDragSession;
+    if (!session) return;
+    const dx = pointer.x - session.startPointer.x;
+    const dy = pointer.y - session.startPointer.y;
+    if (!session.moved && hypot2(dx, dy) <= 3 / viewport.scale) return;
+    session.moved = true;
+    session.item.x = session.startX + dx;
+    session.item.y = session.startY + dy;
+    draw();
+  }
+
+  function startReferenceImageCalibration(item) {
+    if (!item || item.locked || item.visible === false) return false;
+    referenceImageCalibrationSession = { item, localPoints: [], worldPoints: [] };
+    clearSnap();
+    setHint(applicationText("画像上の1点目をクリックしてください", "Click the first point on the image"));
+    draw();
+    return true;
+  }
+
+  function cancelReferenceImageCalibration(message = applicationText("縮尺設定をキャンセルしました", "Scale calibration canceled")) {
+    if (!referenceImageCalibrationSession) return false;
+    referenceImageCalibrationSession = null;
+    setHint(message);
+    draw();
+    return true;
+  }
+
+  function handleReferenceImageCalibrationClick(pointer) {
+    const session = referenceImageCalibrationSession;
+    if (!session) return false;
+    const hit = hitReferenceImageAt(pointer.x, pointer.y);
+    if (hit !== session.item) {
+      setHint(applicationText("選択中の画像内をクリックしてください", "Click inside the selected image"), "error");
+      return true;
+    }
+    session.localPoints.push(referenceImageWorldToLocal(session.item, pointer));
+    session.worldPoints.push({ x: pointer.x, y: pointer.y });
+    if (session.localPoints.length === 1) {
+      setHint(applicationText("画像上の2点目をクリックしてください", "Click the second point on the image"));
+      draw();
+      return true;
+    }
+    const pixelDistance = hypot2(session.localPoints[1].x - session.localPoints[0].x, session.localPoints[1].y - session.localPoints[0].y);
+    const currentDistance = pixelDistance * session.item.scale;
+    const raw = window.prompt(applicationText("2点間の実寸を入力してください (mm)", "Enter the real distance between the points (mm)"), formatDisplayNumber(currentDistance, 6));
+    if (raw == null) return cancelReferenceImageCalibration();
+    const realDistance = Number(raw);
+    if (!Number.isFinite(realDistance) || realDistance <= 0 || pixelDistance <= 0) {
+      setHint(applicationText("0より大きい実寸を入力してください", "Enter a real distance greater than zero"), "error");
+      session.localPoints = [];
+      session.worldPoints = [];
+      return true;
+    }
+    const firstWorld = session.worldPoints[0];
+    const firstLocal = session.localPoints[0];
+    session.item.scale = realDistance / pixelDistance;
+    const projectedFirst = referenceImageLocalToWorld({ ...session.item, x: 0, y: 0 }, firstLocal);
+    session.item.x = firstWorld.x - projectedFirst.x;
+    session.item.y = firstWorld.y - projectedFirst.y;
+    referenceImageCalibrationSession = null;
+    recordHistory("画像縮尺設定");
+    setHint(applicationText("画像の縮尺を設定しました", "Image scale calibrated"));
+    updateUI({ refreshAnalysis: false });
+    draw();
+    return true;
   }
 
   function allGeometryPrimitives() {
@@ -4101,14 +4290,14 @@
       sketchId: DEFAULT_SKETCH_ID,
       seed: { x: source.seed.x - origin.x, y: source.seed.y - origin.y },
     }));
-    const definition = { id: `B${blockDefinitionSeq++}`, name, parentDefinitionId: null, origin: { x: 0, y: 0 }, ...sketchState, points, lines, circles, arcs, splines, annotations, hatches, nextHatchIndex: Math.max(1, nextSeq(hatches, "H")), blockInstances, constraints, parameters: [], nextDimensionParameterIndex: 1, revision: 1 };
+    const definition = { id: `B${blockDefinitionSeq++}`, name, parentDefinitionId: null, origin: { x: 0, y: 0 }, ...sketchState, points, lines, circles, arcs, splines, annotations, hatches, referenceImages: [], nextHatchIndex: Math.max(1, nextSeq(hatches, "H")), blockInstances, constraints, parameters: [], nextDimensionParameterIndex: 1, revision: 1 };
     ensureParameterNamespace(definition);
     return definition;
   }
 
   function createEmptyBlockDefinition(name) {
     const sketchState = createBlockSketchState();
-    return { id: `B${blockDefinitionSeq++}`, name, parentDefinitionId: null, origin: { x: 0, y: 0 }, ...sketchState, points: [], lines: [], circles: [], arcs: [], splines: [], annotations: [], hatches: [], nextHatchIndex: 1, blockInstances: [], constraints: [], parameters: [], nextDimensionParameterIndex: 1, revision: 1 };
+    return { id: `B${blockDefinitionSeq++}`, name, parentDefinitionId: null, origin: { x: 0, y: 0 }, ...sketchState, points: [], lines: [], circles: [], arcs: [], splines: [], annotations: [], hatches: [], referenceImages: [], nextHatchIndex: 1, blockInstances: [], constraints: [], parameters: [], nextDimensionParameterIndex: 1, revision: 1 };
   }
 
   function cloneBlockDefinition(definition) {
@@ -4170,6 +4359,7 @@
       splines,
       annotations: normalizeAnnotations(definition.annotations, definition.activeSketchId).map((annotation) => serializeAnnotation(annotation)),
       hatches: normalizeHatches(definition.hatches, definition.activeSketchId).map(serializeHatch),
+      referenceImages: normalizeReferenceImages(definition.referenceImages, definition.activeSketchId).map(serializeReferenceImage),
       nextHatchIndex: Math.max(nextSeq(definition.hatches || [], "H"), Number(definition.nextHatchIndex) || 1),
       blockInstances,
       constraints,
@@ -4272,6 +4462,7 @@
     session.draft.splines = model.splines;
     session.draft.annotations = model.annotations;
     session.draft.hatches = model.hatches;
+    session.draft.referenceImages = model.referenceImages;
     session.draft.nextHatchIndex = Math.max(hatchSeq, Number(model.nextHatchIndex) || 1);
     session.draft.blockInstances = model.blockInstances;
     session.draft.constraints = model.constraints;
@@ -4392,6 +4583,7 @@
       splines: model.splines,
       annotations: model.annotations,
       hatches: model.hatches,
+      referenceImages: model.referenceImages,
       nextHatchIndex: model.nextHatchIndex,
       constraints: model.constraints,
       parameters: model.parameters,
@@ -4504,6 +4696,7 @@
       splines: model.splines,
       annotations: model.annotations,
       hatches: model.hatches,
+      referenceImages: model.referenceImages,
       nextHatchIndex: model.nextHatchIndex,
       constraints: model.constraints,
       parameters: model.parameters,
@@ -4540,6 +4733,7 @@
     model.splines = draft.splines || [];
     model.annotations = draft.annotations || [];
     model.hatches = draft.hatches || [];
+    model.referenceImages = draft.referenceImages || [];
     model.nextHatchIndex = Math.max(nextSeq(model.hatches, "H"), Number(draft.nextHatchIndex) || 1);
     model.constraints = draft.constraints;
     model.parameters = draft.parameters || [];
@@ -4551,11 +4745,12 @@
     sketchSeq = Math.max(sketchSeq, nextSeq(draft.sketches || [], "S"));
     annotationSeq = Math.max(annotationSeq, nextSeq(draft.annotations || [], "AN"));
     hatchSeq = Math.max(hatchSeq, model.nextHatchIndex, nextSeq(draft.hatches || [], "H"));
+    referenceImageSeq = Math.max(referenceImageSeq, nextSeq(draft.referenceImages || [], "IMG"));
     resetBlockEditorHistory();
     clearSelection();
     mode = "select";
     document.body.classList.add("block-editing");
-    if (draft.lines.length + draft.circles.length + draft.arcs.length + (draft.splines?.length || 0) + (draft.annotations?.length || 0) + (draft.hatches?.length || 0) + model.blockInstances.length > 0) fitAllGeometryToViewport();
+    if (draft.lines.length + draft.circles.length + draft.arcs.length + (draft.splines?.length || 0) + (draft.annotations?.length || 0) + (draft.hatches?.length || 0) + (draft.referenceImages?.length || 0) + model.blockInstances.length > 0) fitAllGeometryToViewport();
     else {
       const rect = canvas.getBoundingClientRect();
       viewport.scale = 1;
@@ -4631,6 +4826,10 @@
     for (const hatch of definition.hatches || []) {
       hatch.seed.x += dx;
       hatch.seed.y += dy;
+    }
+    for (const image of definition.referenceImages || []) {
+      image.x += dx;
+      image.y += dy;
     }
   }
 
@@ -4728,6 +4927,7 @@
     target.splines = splines;
     target.annotations = normalizeAnnotations(draft.annotations, draft.activeSketchId).map((annotation) => serializeAnnotation(annotation));
     target.hatches = normalizeHatches(draft.hatches, draft.activeSketchId).map(serializeHatch);
+    target.referenceImages = normalizeReferenceImages(draft.referenceImages, draft.activeSketchId).map(serializeReferenceImage);
     target.nextHatchIndex = Math.max(hatchSeq, Number(draft.nextHatchIndex) || 1, nextSeq(target.hatches, "H"));
     target.blockInstances = blockInstances;
     target.constraints = constraints;
@@ -4746,6 +4946,7 @@
     model.splines = original.splines || [];
     model.annotations = original.annotations || [];
     model.hatches = original.hatches || [];
+    model.referenceImages = original.referenceImages || [];
     model.nextHatchIndex = Math.max(nextSeq(model.hatches, "H"), Number(original.nextHatchIndex) || 1);
     model.constraints = original.constraints;
     model.parameters = original.parameters || [];
@@ -4790,6 +4991,7 @@
     draft.splines = model.splines;
     draft.annotations = model.annotations;
     draft.hatches = model.hatches;
+    draft.referenceImages = model.referenceImages;
     draft.nextHatchIndex = Math.max(hatchSeq, Number(model.nextHatchIndex) || 1);
     draft.blockInstances = model.blockInstances;
     draft.constraints = model.constraints;
@@ -5070,6 +5272,7 @@
     selectedBlockInstances = [];
     selectedAnnotations = [];
     selectedHatches = [];
+    selectedReferenceImages = [];
     selectedArcEndpoint = null;
     selectedArcEndpointPair = null;
     selectedDimensionConstraint = null;
@@ -5486,6 +5689,8 @@
     model.blockDefinitions.length = 0;
     model.blockInstances.length = 0;
     model.hatches.length = 0;
+    model.referenceImages.length = 0;
+    referenceImageCache.clear();
     invalidateBlockProjectionCache();
     sketchSolveStates.clear();
     invalidReferenceConstraints.clear();
@@ -5493,6 +5698,8 @@
     clearSelection();
     dragSession = null;
     dimensionDragSession = null;
+    referenceImageDragSession = null;
+    referenceImageCalibrationSession = null;
     panSession = null;
     suppressNextBlankDoubleClickEvent = false;
     lineStartPoint = null;
@@ -5535,10 +5742,12 @@
     selectedConstraint = null;
     selectedAnnotations = [];
     selectedHatches = [];
+    selectedReferenceImages = [];
     selectedSplines = [];
     selectedBlockInstances = [];
     hoveredBlockInstance = null;
     hoveredHatch = null;
+    hoveredReferenceImage = null;
     pointSeq = 1;
     lineSeq = 1;
     circleSeq = 1;
@@ -5547,6 +5756,7 @@
     sketchSeq = 2;
     annotationSeq = 1;
     hatchSeq = 1;
+    referenceImageSeq = 1;
     blockDefinitionSeq = 1;
     blockInstanceSeq = 1;
     blockElementSeq = 1;
@@ -5565,6 +5775,7 @@
     model.defaultDimensionAppearance = { ...DEFAULT_DIMENSION_APPEARANCE };
     model.annotations = [];
     model.hatches = [];
+    model.referenceImages = [];
     model.nextHatchIndex = 1;
     hatchPreview = null;
     hatchRepairTarget = null;
@@ -5572,6 +5783,8 @@
     hatchFaceCache = new Map();
     sketchTreeGroupOpenState.clear();
     annotationDragSession = null;
+    referenceImageDragSession = null;
+    referenceImageCalibrationSession = null;
   }
 
   function nextSeq(items, prefix) {
@@ -5589,11 +5802,12 @@
     arcSeq = Math.max(arcSeq, nextSeq(source?.arcs || [], "A"));
     splineSeq = Math.max(splineSeq, nextSeq(source?.splines || [], "SP"));
     hatchSeq = Math.max(hatchSeq, nextSeq(source?.hatches || [], "H"));
+    referenceImageSeq = Math.max(referenceImageSeq, nextSeq(source?.referenceImages || [], "IMG"));
   }
 
   function duplicateBlockElementId(definition) {
     const seen = new Set();
-    for (const item of [...(definition?.points || []), ...(definition?.lines || []), ...(definition?.circles || []), ...(definition?.arcs || []), ...(definition?.splines || []), ...(definition?.hatches || []), ...(definition?.blockInstances || [])]) {
+    for (const item of [...(definition?.points || []), ...(definition?.lines || []), ...(definition?.circles || []), ...(definition?.arcs || []), ...(definition?.splines || []), ...(definition?.hatches || []), ...(definition?.referenceImages || []), ...(definition?.blockInstances || [])]) {
       const id = String(item?.id || "");
       if (seen.has(id)) return id;
       seen.add(id);
@@ -5937,6 +6151,7 @@
       activeSketchId: activeSketchId(),
       annotations: normalizeAnnotations(model.annotations).map(serializeAnnotation),
       hatches: normalizeHatches(model.hatches).map(serializeHatch),
+      referenceImages: normalizeReferenceImages(model.referenceImages).map(serializeReferenceImage),
       nextHatchIndex: Math.max(hatchSeq, Number(model.nextHatchIndex) || 1),
       parameters: model.parameters.map((parameter) => ({ name: parameter.name, expression: parameter.expression })),
       nextDimensionParameterIndex: model.nextDimensionParameterIndex,
@@ -5965,6 +6180,7 @@
         splines: (definition.splines || []).map((spline) => ({ id: spline.id, definitionMode: "fit", degree: 3, fitPoints: spline.fitPoints.map((point) => point.id), closed: Boolean(spline.closed), endCondition: "natural", construction: Boolean(spline.construction), sketchId: spline.sketchId, appearance: normalizeAppearance(spline.appearance) })),
         annotations: normalizeAnnotations(definition.annotations, definition.activeSketchId).map(serializeAnnotation),
         hatches: normalizeHatches(definition.hatches, definition.activeSketchId).map(serializeHatch),
+        referenceImages: normalizeReferenceImages(definition.referenceImages, definition.activeSketchId).map(serializeReferenceImage),
         nextHatchIndex: Math.max(nextSeq(definition.hatches || [], "H"), Number(definition.nextHatchIndex) || 1),
         blockInstances: (definition.blockInstances || []).map((instance) => ({
           id: instance.id,
@@ -6038,6 +6254,7 @@
       splines: model.splines,
       annotations: model.annotations,
       hatches: model.hatches,
+      referenceImages: model.referenceImages,
       nextHatchIndex: model.nextHatchIndex,
       blockInstances: model.blockInstances,
       constraints: model.constraints,
@@ -6065,6 +6282,7 @@
       splines: (definition.splines || []).map((spline) => ({ id: spline.id, definitionMode: "fit", degree: 3, fitPoints: spline.fitPoints.map((point) => point.id), closed: Boolean(spline.closed), endCondition: "natural", construction: Boolean(spline.construction), sketchId: spline.sketchId })),
       annotations: normalizeAnnotations(definition.annotations, definition.activeSketchId).map(serializeAnnotation),
       hatches: normalizeHatches(definition.hatches, definition.activeSketchId).map(serializeHatch),
+      referenceImages: normalizeReferenceImages(definition.referenceImages, definition.activeSketchId).map(serializeReferenceImage),
       nextHatchIndex: Math.max(nextSeq(definition.hatches || [], "H"), Number(definition.nextHatchIndex) || 1),
       blockInstances: (definition.blockInstances || []).map((instance) => ({
         id: instance.id,
@@ -6181,6 +6399,7 @@
       model.splines = restored.splines || [];
       model.annotations = restored.annotations || [];
       model.hatches = restored.hatches || [];
+      model.referenceImages = restored.referenceImages || [];
       model.nextHatchIndex = Math.max(nextSeq(model.hatches, "H"), Number(restored.nextHatchIndex) || 1);
       model.constraints = restored.constraints;
       model.parameters = restored.parameters || [];
@@ -6192,6 +6411,7 @@
       sketchSeq = Math.max(sketchSeq, nextSeq(restored.sketches || [], "S"));
       annotationSeq = Math.max(annotationSeq, nextSeq(restored.annotations || [], "AN"));
       hatchSeq = Math.max(hatchSeq, model.nextHatchIndex, nextSeq(restored.hatches || [], "H"));
+      referenceImageSeq = Math.max(referenceImageSeq, nextSeq(restored.referenceImages || [], "IMG"));
       invalidateBlockProjectionCache();
       clearInteractionForSketchChange();
       solveAndRefresh(label);
@@ -6315,6 +6535,7 @@
       ? migrateLegacyParameterExpression(String(value ?? ""))
       : String(value ?? "");
     if (sourceVersion >= 15 && !Array.isArray(data.splines)) throw new Error(applicationText("スプライン配列がありません", "The spline array is missing"));
+    if (sourceVersion >= 18 && !validSerializedReferenceImageList(data.referenceImages)) throw new Error(applicationText("参照画像の形式が正しくありません", "Invalid reference image data"));
     const normalizeLoadedDimensionAppearance = (value, options = {}) => loadedDimensionAppearance(value, sourceVersion, options);
     const loadedDocumentName = effectiveDocumentNameFromValue(options.documentNameOverride || data.documentName || options.documentNameFallback || DEFAULT_DOCUMENT_NAME);
     const preservedSketchTreeGroups = options.preserveSketchTreeGroups ? new Map(sketchTreeGroupOpenState) : null;
@@ -6367,6 +6588,7 @@
     const loadedBlockDefinitionMeta = new Map();
     for (const rawDefinition of Array.isArray(data.blockDefinitions) ? data.blockDefinitions : []) {
       if (sourceVersion >= 15 && !Array.isArray(rawDefinition.splines)) throw new Error(`ブロック ${rawDefinition.id}: ${applicationText("スプライン配列がありません", "the spline array is missing")}`);
+      if (sourceVersion >= 18 && !validSerializedReferenceImageList(rawDefinition.referenceImages)) throw new Error(`ブロック ${rawDefinition.id}: ${applicationText("参照画像の形式が正しくありません", "invalid reference image data")}`);
       let definitionSketches = Array.isArray(rawDefinition.sketches) && rawDefinition.sketches.length > 0
         ? rawDefinition.sketches.map((sketch, index) => ({
             id: String(sketch.id || `S${index + 1}`),
@@ -6493,6 +6715,13 @@
           const normalized = normalizeHatches(rawHatches, normalizeDefinitionSketchId(rawDefinition.activeSketchId));
           if (normalized.length !== rawHatches.length) throw new Error(`${applicationText("ブロックハッチングの形式が正しくありません", "Invalid block hatch data")}`);
           return normalized;
+        })(),
+        referenceImages: (() => {
+          if (sourceVersion < 18) return [];
+          const rawImages = rawDefinition.referenceImages;
+          const invalidOwner = rawImages.find((image) => image?.sketchId === ROOT_SKETCH_ID || !definitionSketchIds.has(String(image?.sketchId || "")));
+          if (invalidOwner) throw new Error(`${applicationText("ブロック参照画像", "Block reference image")} ${invalidOwner?.id || "?"}: ${applicationText("所属Sketchが正しくありません", "invalid owning sketch")}`);
+          return normalizeReferenceImages(rawImages, normalizeDefinitionSketchId(rawDefinition.activeSketchId));
         })(),
         nextHatchIndex: Math.max(1, Number(rawDefinition.nextHatchIndex) || 1),
         blockInstances: [],
@@ -6671,6 +6900,7 @@
     const rawLoadedAnnotations = Array.isArray(data.annotations) ? data.annotations : [];
     if (sourceVersion >= 13 && (!validSerializedHatchList(data.hatches) || !Number.isInteger(Number(data.nextHatchIndex)) || Number(data.nextHatchIndex) < 1)) throw new Error(applicationText("ハッチングの形式または採番値が正しくありません", "Invalid hatch data or sequence"));
     const rawLoadedHatches = sourceVersion >= 13 ? data.hatches : [];
+    const rawLoadedReferenceImages = sourceVersion >= 18 ? data.referenceImages : [];
 
     const pointById = new Map();
     const points = [];
@@ -6790,6 +7020,11 @@
     }
     const loadedHatches = normalizeHatches(rawLoadedHatches, loadedAnnotationFallback);
     if (sourceVersion >= 13 && loadedHatches.length !== rawLoadedHatches.length) throw new Error(applicationText("ハッチングの形式が正しくありません", "Invalid hatch data"));
+    if (sourceVersion >= 18) {
+      const invalidImageOwner = rawLoadedReferenceImages.find((image) => image?.sketchId === ROOT_SKETCH_ID || !loadedSketchIds.has(String(image?.sketchId || "")));
+      if (invalidImageOwner) throw new Error(`${applicationText("参照画像", "Reference image")} ${invalidImageOwner?.id || "?"}: ${applicationText("所属Sketchが正しくありません", "invalid owning sketch")}`);
+    }
+    const loadedReferenceImages = normalizeReferenceImages(rawLoadedReferenceImages, loadedAnnotationFallback);
     const resolveLoadedGeometryRef = (ref) => resolveGeometryRefValue(ref, (kind, canonicalId) => {
       if (kind === "point") return pointById.get(canonicalId) || null;
       if (kind === "line") return lineById.get(canonicalId) || null;
@@ -6849,6 +7084,7 @@
     model.defaultDimensionAppearance = normalizeLoadedDimensionAppearance(data.defaultDimensionAppearance, { partial: false });
     model.annotations = loadedAnnotations;
     model.hatches = loadedHatches;
+    model.referenceImages = loadedReferenceImages;
     model.nextHatchIndex = Math.max(nextSeq(loadedHatches, "H"), Number(data.nextHatchIndex) || 1);
     model.blockDefinitions = loadedBlockDefinitions;
     model.blockInstances = loadedBlockInstances;
@@ -6881,6 +7117,7 @@
       arcs: [...model.arcs, ...model.blockDefinitions.flatMap((definition) => definition.arcs)],
       splines: [...model.splines, ...model.blockDefinitions.flatMap((definition) => definition.splines || [])],
       hatches: [...model.hatches, ...model.blockDefinitions.flatMap((definition) => definition.hatches || [])],
+      referenceImages: [...model.referenceImages, ...model.blockDefinitions.flatMap((definition) => definition.referenceImages || [])],
     });
     sketchSeq = Math.max(
       nextSeq(model.sketches, "S"),
@@ -6888,6 +7125,7 @@
     );
     annotationSeq = Math.max(nextSeq(model.annotations, "AN"), ...model.blockDefinitions.map((definition) => nextSeq(definition.annotations || [], "AN")));
     hatchSeq = Math.max(model.nextHatchIndex, nextSeq(model.hatches, "H"), ...model.blockDefinitions.map((definition) => Math.max(Number(definition.nextHatchIndex) || 1, nextSeq(definition.hatches || [], "H"))));
+    referenceImageSeq = Math.max(nextSeq(model.referenceImages, "IMG"), ...model.blockDefinitions.map((definition) => nextSeq(definition.referenceImages || [], "IMG")));
     blockDefinitionSeq = nextSeq(model.blockDefinitions, "B");
     blockInstanceSeq = nextSeq([...model.blockInstances, ...model.blockDefinitions.flatMap((definition) => definition.blockInstances || [])], "BI");
     blockElementSeq = Math.max(1, ...model.blockDefinitions.flatMap((definition) => [...definition.points, ...definition.lines, ...definition.circles, ...definition.arcs, ...(definition.splines || [])].map((element) => Number(/^(?:P|L|C|A|SP)(\d+)$/.exec(element.id || "")?.[1]) + 1 || 1)));
@@ -7035,6 +7273,88 @@
     }
   }
 
+  function readFileAsDataUrl(file) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.addEventListener("load", () => resolve(String(reader.result)));
+      reader.addEventListener("error", () => reject(reader.error || new Error(applicationText("画像を読み込めません", "The image could not be read"))));
+      reader.readAsDataURL(file);
+    });
+  }
+
+  function decodeImageDataUrl(dataUrl) {
+    return new Promise((resolve, reject) => {
+      const image = new Image();
+      image.addEventListener("load", () => resolve(image), { once: true });
+      image.addEventListener("error", () => reject(new Error(applicationText("画像をデコードできません", "The image could not be decoded"))), { once: true });
+      image.src = dataUrl;
+    });
+  }
+
+  async function preparedReferenceImageData(file) {
+    const extension = String(file?.name || "").split(".").pop()?.toLowerCase();
+    const fallbackMimeType = extension === "png" ? "image/png" : ["jpg", "jpeg"].includes(extension) ? "image/jpeg" : extension === "webp" ? "image/webp" : null;
+    const mimeType = referenceImageMimeType(file?.type) || fallbackMimeType;
+    if (!mimeType) throw new Error(applicationText("PNG、JPEG、WebP画像を選択してください", "Select a PNG, JPEG, or WebP image"));
+    const readDataUrl = await readFileAsDataUrl(file);
+    const dataSeparatorIndex = readDataUrl.indexOf(",");
+    if (dataSeparatorIndex < 0) throw new Error(applicationText("画像データの形式が正しくありません", "Invalid image data"));
+    const originalDataUrl = `data:${mimeType};base64,${readDataUrl.slice(dataSeparatorIndex + 1)}`;
+    const decoded = await decodeImageDataUrl(originalDataUrl);
+    const ratio = Math.min(1, REFERENCE_IMAGE_MAX_SIDE_PX / Math.max(decoded.naturalWidth, decoded.naturalHeight));
+    if (ratio >= 1) return { dataUrl: originalDataUrl, mimeType, pixelWidth: decoded.naturalWidth, pixelHeight: decoded.naturalHeight, resized: false };
+    const pixelWidth = Math.max(1, Math.round(decoded.naturalWidth * ratio));
+    const pixelHeight = Math.max(1, Math.round(decoded.naturalHeight * ratio));
+    const resizeCanvas = document.createElement("canvas");
+    resizeCanvas.width = pixelWidth;
+    resizeCanvas.height = pixelHeight;
+    resizeCanvas.getContext("2d").drawImage(decoded, 0, 0, pixelWidth, pixelHeight);
+    return { dataUrl: resizeCanvas.toDataURL(mimeType, 0.92), mimeType, pixelWidth, pixelHeight, resized: true };
+  }
+
+  async function importReferenceImageFile(file) {
+    if (!file) return false;
+    if (!canCreateInActiveSketch()) {
+      setHint(applicationText("画像を所属させる子スケッチをアクティブにしてください", "Activate a child sketch for the image"), "error");
+      return false;
+    }
+    try {
+      const prepared = await preparedReferenceImageData(file);
+      const rect = canvas.getBoundingClientRect();
+      const screenScale = Math.min(Math.max(80, rect.width * 0.68) / prepared.pixelWidth, Math.max(80, rect.height * 0.68) / prepared.pixelHeight);
+      const center = screenToWorld({ x: rect.width / 2, y: rect.height / 2 });
+      const item = {
+        id: `IMG${referenceImageSeq++}`,
+        name: String(file.name || "Image").replace(/\.[^.]+$/, "") || "Image",
+        sketchId: activeSketchId(),
+        mimeType: prepared.mimeType,
+        dataUrl: prepared.dataUrl,
+        pixelWidth: prepared.pixelWidth,
+        pixelHeight: prepared.pixelHeight,
+        x: center.x,
+        y: center.y,
+        scale: screenScale / viewport.scale,
+        rotation: 0,
+        opacity: 0.5,
+        visible: true,
+        locked: false,
+      };
+      model.referenceImages.push(item);
+      clearSelection();
+      selectedReferenceImages = [item];
+      updateUI({ refreshAnalysis: false });
+      draw();
+      recordHistory("画像読み込み");
+      setHint(prepared.resized
+        ? applicationText(`画像を読み込み、長辺${REFERENCE_IMAGE_MAX_SIDE_PX}px以下に縮小しました`, `Image loaded and resized to at most ${REFERENCE_IMAGE_MAX_SIDE_PX}px on the long side`)
+        : applicationText("画像を読み込みました", "Image loaded"));
+      return true;
+    } catch (error) {
+      setHint(applicationText(`画像の読み込みに失敗しました: ${error.message}`, `Failed to load image: ${error.message}`), "error");
+      return false;
+    }
+  }
+
   function pointAt(x, y) {
     return hitAnyPoint(x, y) || addPoint(x, y);
   }
@@ -7064,12 +7384,14 @@
     selectedConstraint = null;
     selectedAnnotations = [];
     selectedHatches = [];
+    selectedReferenceImages = [];
     constraintOperands = [];
     hoveredSketchIdentity = null;
     hoveredBlockInstance = null;
     hoveredSidebarItem = null;
     hoveredAnnotation = null;
     hoveredHatch = null;
+    hoveredReferenceImage = null;
     hoveredSpline = null;
   }
 
@@ -7524,6 +7846,43 @@
     };
   }
 
+  function referenceImageLocalToWorld(image, point) {
+    const cos = Math.cos(image.rotation);
+    const sin = Math.sin(image.rotation);
+    const x = point.x * image.scale;
+    const y = point.y * image.scale;
+    return { x: image.x + x * cos - y * sin, y: image.y + x * sin + y * cos };
+  }
+
+  function referenceImageWorldToLocal(image, point) {
+    const cos = Math.cos(image.rotation);
+    const sin = Math.sin(image.rotation);
+    const dx = point.x - image.x;
+    const dy = point.y - image.y;
+    return { x: (dx * cos + dy * sin) / image.scale, y: (-dx * sin + dy * cos) / image.scale };
+  }
+
+  function referenceImageCorners(image) {
+    const halfWidth = image.pixelWidth / 2;
+    const halfHeight = image.pixelHeight / 2;
+    return [
+      referenceImageLocalToWorld(image, { x: -halfWidth, y: -halfHeight }),
+      referenceImageLocalToWorld(image, { x: halfWidth, y: -halfHeight }),
+      referenceImageLocalToWorld(image, { x: halfWidth, y: halfHeight }),
+      referenceImageLocalToWorld(image, { x: -halfWidth, y: halfHeight }),
+    ];
+  }
+
+  function referenceImageBounds(image) {
+    const corners = referenceImageCorners(image);
+    return {
+      x1: Math.min(...corners.map((point) => point.x)),
+      y1: Math.min(...corners.map((point) => point.y)),
+      x2: Math.max(...corners.map((point) => point.x)),
+      y2: Math.max(...corners.map((point) => point.y)),
+    };
+  }
+
   function sketchGeometryBounds(sketchId = activeSketchId()) {
     let bounds = null;
     for (const line of allGeometryLines()) {
@@ -7543,6 +7902,7 @@
     }
     for (const annotation of allAnnotations()) if (annotation.sketchId === sketchId) bounds = mergeBounds(bounds, annotationBounds(annotation));
     for (const hatch of allHatches()) if (hatch.sketchId === sketchId) bounds = mergeBounds(bounds, resolvedLoopBounds(resolvedHatchBoundary(hatch)));
+    for (const image of model.referenceImages) if (image.sketchId === sketchId) bounds = mergeBounds(bounds, referenceImageBounds(image));
     return bounds;
   }
 
@@ -7555,6 +7915,7 @@
     for (const point of allGeometryPoints()) bounds = mergeBounds(bounds, { x1: point.x, y1: point.y, x2: point.x, y2: point.y });
     for (const annotation of allAnnotations()) bounds = mergeBounds(bounds, annotationBounds(annotation));
     for (const hatch of allHatches()) bounds = mergeBounds(bounds, resolvedLoopBounds(resolvedHatchBoundary(hatch)));
+    for (const image of model.referenceImages) bounds = mergeBounds(bounds, referenceImageBounds(image));
     return bounds;
   }
 
@@ -7581,6 +7942,7 @@
     }
     for (const annotation of allAnnotations()) if (annotation.visible !== false && isVisibleSketchId(annotation.sketchId)) bounds = mergeBounds(bounds, annotationBounds(annotation));
     for (const hatch of allHatches()) if (hatchAppearanceForDisplay(hatch).visible !== false && isVisibleSketchId(hatch.sketchId)) bounds = mergeBounds(bounds, resolvedLoopBounds(resolvedHatchBoundary(hatch)));
+    for (const image of model.referenceImages) if (image.visible !== false && isVisibleSketchId(image.sketchId)) bounds = mergeBounds(bounds, referenceImageBounds(image));
     return bounds;
   }
 
@@ -9484,6 +9846,7 @@
   function deleteCurrentSelection() {
     const annotationsToDelete = selectedAnnotations.filter((annotation) => model.annotations.includes(annotation));
     const hatchesToDelete = selectedHatches.filter((hatch) => model.hatches.includes(hatch));
+    const referenceImagesToDelete = selectedReferenceImages.filter((image) => model.referenceImages.includes(image));
     if (annotationsToDelete.length > 0) {
       model.annotations = model.annotations.filter((item) => !annotationsToDelete.includes(item));
       selectedAnnotations = [];
@@ -9491,6 +9854,11 @@
     if (hatchesToDelete.length > 0) {
       model.hatches = model.hatches.filter((item) => !hatchesToDelete.includes(item));
       selectedHatches = [];
+    }
+    if (referenceImagesToDelete.length > 0) {
+      model.referenceImages = model.referenceImages.filter((item) => !referenceImagesToDelete.includes(item));
+      if (referenceImageCalibrationSession && referenceImagesToDelete.includes(referenceImageCalibrationSession.item)) referenceImageCalibrationSession = null;
+      selectedReferenceImages = [];
     }
     let deletedBlockCount = 0;
     if (selectedBlockInstances.length > 0) {
@@ -9513,15 +9881,15 @@
     const constraints = [...new Set([selectedDimensionConstraint, effectiveSelectedConstraint()].filter(Boolean))];
     const deletedGeometry = deleteElements({ points: selectedPoints, lines: selectedLines, circles: selectedCircles, arcs: selectedArcs, splines: selectedSplines, constraints });
     if (deletedGeometry) return true;
-    if (deletedBlockCount === 0 && annotationsToDelete.length === 0 && hatchesToDelete.length === 0) return false;
+    if (deletedBlockCount === 0 && annotationsToDelete.length === 0 && hatchesToDelete.length === 0 && referenceImagesToDelete.length === 0) return false;
     clearSelection();
     if (deletedBlockCount > 0) solveAndRefresh("ブロック削除");
     else {
       updateUI();
       draw();
-      recordHistory(hatchesToDelete.length ? "ハッチング削除" : "注記削除");
+      recordHistory(referenceImagesToDelete.length ? "画像削除" : hatchesToDelete.length ? "ハッチング削除" : "注記削除");
     }
-    setHint(applicationText(`削除しました: ブロック${deletedBlockCount} / ハッチング${hatchesToDelete.length} / 注記${annotationsToDelete.length}`, `Deleted: blocks ${deletedBlockCount} / hatches ${hatchesToDelete.length} / annotations ${annotationsToDelete.length}`));
+    setHint(applicationText(`削除しました: ブロック${deletedBlockCount} / 画像${referenceImagesToDelete.length} / ハッチング${hatchesToDelete.length} / 注記${annotationsToDelete.length}`, `Deleted: blocks ${deletedBlockCount} / images ${referenceImagesToDelete.length} / hatches ${hatchesToDelete.length} / annotations ${annotationsToDelete.length}`));
     return true;
   }
 
@@ -10049,6 +10417,7 @@
     const nextBlocks = additive ? [...selectedBlockInstances] : [];
     const nextAnnotations = additive ? [...selectedAnnotations] : [];
     const nextHatches = additive ? [...selectedHatches] : [];
+    const nextReferenceImages = additive ? [...selectedReferenceImages] : [];
 
     for (const p of model.points) {
       if (!selectableSketchElement(p)) continue;
@@ -10109,6 +10478,12 @@
       const selected = crossing ? bboxIntersectsRect(box, rect) : bboxInRect(box, rect);
       if (selected) addUnique(nextHatches, hatch);
     }
+    for (const image of model.referenceImages) {
+      if (image.sketchId !== activeSketchId() || image.visible === false || !isVisibleSketchId(image.sketchId)) continue;
+      const box = referenceImageBounds(image);
+      const selected = crossing ? bboxIntersectsRect(box, rect) : bboxInRect(box, rect);
+      if (selected) addUnique(nextReferenceImages, image);
+    }
 
     selectedPoints = nextPoints;
     selectedLines = nextLines;
@@ -10118,6 +10493,7 @@
     selectedBlockInstances = nextBlocks;
     selectedAnnotations = nextAnnotations;
     selectedHatches = nextHatches;
+    selectedReferenceImages = nextReferenceImages;
     selectedArcEndpoint = null;
     selectedArcEndpointPair = null;
     selectedDimensionConstraint = null;
@@ -10266,6 +10642,76 @@
     }
   }
 
+  function cachedReferenceImage(item) {
+    let image = referenceImageCache.get(item.dataUrl);
+    if (image) return image;
+    image = new Image();
+    image.addEventListener("load", draw, { once: true });
+    image.src = item.dataUrl;
+    referenceImageCache.set(item.dataUrl, image);
+    return image;
+  }
+
+  function drawReferenceImages() {
+    for (const item of model.referenceImages) {
+      if (item.visible === false || !isVisibleSketchId(item.sketchId)) continue;
+      const image = cachedReferenceImage(item);
+      if (!image.complete || image.naturalWidth < 1) continue;
+      withCanvasState(() => {
+        ctx.translate(item.x, item.y);
+        ctx.rotate(item.rotation);
+        ctx.scale(item.scale, item.scale);
+        ctx.globalAlpha = item.opacity;
+        ctx.drawImage(image, -item.pixelWidth / 2, -item.pixelHeight / 2, item.pixelWidth, item.pixelHeight);
+      });
+    }
+  }
+
+  function drawReferenceImageOverlays() {
+    const item = selectedReferenceImages.length === 1 ? selectedReferenceImages[0] : hoveredReferenceImage;
+    if (item && item.visible !== false && item.sketchId === activeSketchId()) {
+      const corners = referenceImageCorners(item);
+      withCanvasState(() => {
+        ctx.strokeStyle = selectedReferenceImages.includes(item) ? "#2563eb" : "#0ea5e9";
+        ctx.lineWidth = 1.5 / viewport.scale;
+        ctx.setLineDash([5 / viewport.scale, 4 / viewport.scale]);
+        ctx.beginPath();
+        ctx.moveTo(corners[0].x, corners[0].y);
+        for (let index = 1; index < corners.length; index += 1) ctx.lineTo(corners[index].x, corners[index].y);
+        ctx.closePath();
+        ctx.stroke();
+        if (item.locked) {
+          ctx.setLineDash([]);
+          ctx.fillStyle = "#2563eb";
+          ctx.font = `${14 / viewport.scale}px sans-serif`;
+          ctx.textAlign = "center";
+          ctx.textBaseline = "middle";
+          ctx.fillText("🔒", item.x, item.y);
+        }
+      });
+    }
+    if (referenceImageCalibrationSession) {
+      const points = referenceImageCalibrationSession.worldPoints || [];
+      withCanvasState(() => {
+        ctx.strokeStyle = "#f97316";
+        ctx.fillStyle = "#fff7ed";
+        ctx.lineWidth = 2 / viewport.scale;
+        if (points.length > 1) {
+          ctx.beginPath();
+          ctx.moveTo(points[0].x, points[0].y);
+          ctx.lineTo(points[1].x, points[1].y);
+          ctx.stroke();
+        }
+        for (const point of points) {
+          ctx.beginPath();
+          ctx.arc(point.x, point.y, 5 / viewport.scale, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.stroke();
+        }
+      });
+    }
+  }
+
   function drawBlockPlacementPreview() {
     if (mode !== "block-place" || !blockPlacementDefinitionId || !pointerPreview) return;
     const definition = blockDefinitionById(blockPlacementDefinitionId);
@@ -10330,6 +10776,7 @@
     ctx.translate(viewport.x, viewport.y);
     ctx.scale(viewport.scale, viewport.scale);
     resetCanvasStrokeState();
+    drawReferenceImages();
     drawHatches();
     drawLines();
     drawCircles();
@@ -10353,6 +10800,7 @@
     drawArcEndpointHandles();
     drawSplineEditHandles();
     drawPoints();
+    drawReferenceImageOverlays();
     drawSketchIdentityLabel();
     drawSelectionRect();
     resetCanvasStrokeState();
@@ -12949,7 +13397,7 @@
     const lines = selectedLines.filter((item) => !item.blockProjection);
     const supportedCount = points.length + lines.length;
     const selectedCount = selectedPoints.length + selectedLines.length + selectedCircles.length + selectedArcs.length + selectedSplines.length
-      + selectedBlockInstances.length + selectedAnnotations.length + selectedHatches.length;
+      + selectedBlockInstances.length + selectedAnnotations.length + selectedHatches.length + selectedReferenceImages.length;
     if (selectedArcEndpoint || supportedCount === 0 || supportedCount !== selectedCount) return null;
     const sketchIds = new Set([...points, ...lines].map(elementSketchId));
     if (sketchIds.size !== 1) return null;
@@ -12987,7 +13435,7 @@
     const selectedProjectionInstances = [...new Set(selectedProjectionItems.map((item) => item.blockInstance))];
     const fixedBatch = selectedFixedBatchTargets();
     const canToggleFixed =
-      (selectedBlockInstances.length === 1 && selectedGeometryItems().length === 0 && selectedAnnotations.length === 0 && selectedHatches.length === 0) ||
+      (selectedBlockInstances.length === 1 && selectedGeometryItems().length === 0 && selectedAnnotations.length === 0 && selectedHatches.length === 0 && selectedReferenceImages.length === 0) ||
       (selectedProjectionItems.length > 0 && selectedProjectionInstances.length === 1 && selectedProjectionItems.length === selectedPoints.length + selectedLines.length + selectedCircles.length + selectedArcs.length + selectedSplines.length) ||
       Boolean(selectedArcEndpoint) ||
       Boolean(fixedBatch);
@@ -13006,6 +13454,8 @@
     clearSelection();
     dragSession = null;
     dimensionDragSession = null;
+    referenceImageDragSession = null;
+    referenceImageCalibrationSession = null;
     selectionRectSession = null;
     lineStartPoint = null;
     rectangleStartPoint = null;
@@ -13180,6 +13630,7 @@
 
     model.annotations = model.annotations.filter((annotation) => !sketchIds.has(annotation.sketchId) && !annotationReferencesRemovedGeometry(annotation, removedIds, removedKeys));
     model.hatches = model.hatches.filter((hatch) => !sketchIds.has(hatch.sketchId));
+    model.referenceImages = model.referenceImages.filter((image) => !sketchIds.has(image.sketchId));
 
     const fallbackId = sketch.parentSketchId && !sketchIds.has(sketch.parentSketchId) ? sketch.parentSketchId : ROOT_SKETCH_ID;
     model.sketches = model.sketches.filter((item) => !sketchIds.has(item.id));
@@ -13232,7 +13683,7 @@
   }
 
   function sketchTreeObjectIndex() {
-    const index = new Map(model.sketches.map((sketch) => [sketch.id, { point: [], line: [], circle: [], arc: [], spline: [], hatch: [], block: [], constraint: [], annotation: [] }]));
+    const index = new Map(model.sketches.map((sketch) => [sketch.id, { point: [], line: [], circle: [], arc: [], spline: [], hatch: [], image: [], block: [], constraint: [], annotation: [] }]));
     const group = (sketchId, category) => index.get(sketchId)?.[category];
     for (const point of model.points) if ((isExplicitPoint(point) || isPointUsedByLine(point)) && group(elementSketchId(point), "point")) group(elementSketchId(point), "point").push(point);
     for (const line of model.lines) group(elementSketchId(line), "line")?.push(line);
@@ -13240,6 +13691,7 @@
     for (const arc of model.arcs) group(elementSketchId(arc), "arc")?.push(arc);
     for (const spline of model.splines) group(elementSketchId(spline), "spline")?.push(spline);
     for (const hatch of model.hatches) group(hatch.sketchId, "hatch")?.push(hatch);
+    for (const image of model.referenceImages) group(image.sketchId, "image")?.push(image);
     for (const block of model.blockInstances) group(block.sketchId, "block")?.push(block);
     model.constraints.forEach((constraint, modelIndex) => group(constraintSketchId(constraint), "constraint")?.push({ kind: "constraint", constraint, modelIndex }));
     for (const point of model.points.filter((item) => item.fixed)) group(elementSketchId(point), "constraint")?.push({ kind: "fixed-point", point });
@@ -13278,6 +13730,7 @@
 
   function sketchTreeObjectSelected(category, entry) {
     if (category === "hatch") return selectedHatches.includes(entry);
+    if (category === "image") return selectedReferenceImages.includes(entry);
     if (category === "block") return selectedBlockInstances.includes(entry);
     if (category === "annotation") return selectedAnnotations.includes(entry);
     if (category === "constraint") return entry.kind === "fixed-point" ? selectedPoints.includes(entry.point) : constraintSelectedInCanvas(entry.constraint);
@@ -13286,6 +13739,7 @@
 
   function sketchTreeObjectHovered(category, entry) {
     if (category === "hatch") return hoveredHatch === entry;
+    if (category === "image") return hoveredReferenceImage === entry;
     if (category === "block") return hoveredBlockInstance === entry;
     if (category === "annotation") return hoveredAnnotation === entry;
     const item = category === "constraint" ? (entry.kind === "fixed-point" ? entry.point : entry.constraint) : entry;
@@ -13332,6 +13786,11 @@
       const resolved = resolvedHatchBoundary(entry);
       icon = toolbarSvgMarkup("#toolHatch"); primary = entry.id; secondary = hatchPatternTypeLabel(hatchAppearanceForDisplay(entry).patternType);
       if (!resolved.ok) badges += `<span class="badge constraint-reference-error-badge">${applicationText("境界エラー", "Boundary error")}</span>`;
+      data += ` data-id="${escapeHtml(entry.id)}"`;
+    } else if (category === "image") {
+      icon = toolbarSvgMarkup("#importReferenceImageBtn"); primary = entry.name; secondary = `${entry.pixelWidth} × ${entry.pixelHeight}px`;
+      if (entry.visible === false) badges += `<span class="badge">${applicationText("非表示", "Hidden")}</span>`;
+      if (entry.locked) badges += `<span class="badge">${applicationText("固定", "Locked")}</span>`;
       data += ` data-id="${escapeHtml(entry.id)}"`;
     } else if (category === "annotation") {
       icon = toolbarSvgMarkup(entry.type === "leader" ? "#annotationLeaderBtn" : "#annotationTextBtn"); primary = entry.id;
@@ -13433,11 +13892,11 @@
     }
     const categoryDefinitions = [
       ["point", applicationText("点", "Point")], ["line", applicationText("線", "Line")], ["circle", applicationText("円", "Circle")],
-      ["arc", applicationText("円弧", "Arc")], ["spline", applicationText("スプライン", "Spline")], ["hatch", applicationText("ハッチング", "Hatching")], ["block", applicationText("ブロック", "Block")], ["constraint", applicationText("拘束", "Constraint")], ["annotation", applicationText("注記", "Annotation")],
+      ["arc", applicationText("円弧", "Arc")], ["spline", applicationText("スプライン", "Spline")], ["hatch", applicationText("ハッチング", "Hatching")], ["image", applicationText("画像", "Image")], ["block", applicationText("ブロック", "Block")], ["constraint", applicationText("拘束", "Constraint")], ["annotation", applicationText("注記", "Annotation")],
     ];
     const html = [];
     const renderSketch = (sketch, depth, ancestorHasNext, isLast) => {
-      const groups = objectIndex.get(sketch.id) || { point: [], line: [], circle: [], arc: [], spline: [], hatch: [], block: [], constraint: [], annotation: [] };
+      const groups = objectIndex.get(sketch.id) || { point: [], line: [], circle: [], arc: [], spline: [], hatch: [], image: [], block: [], constraint: [], annotation: [] };
       const nonEmptyCategories = isRootSketch(sketch) ? [] : categoryDefinitions.filter(([category]) => groups[category].length > 0);
       const childSketches = children.get(sketch.id) || [];
       const hasChildren = nonEmptyCategories.length + childSketches.length > 0;
@@ -13487,6 +13946,7 @@
       hoveredBlockInstance = null;
       hoveredAnnotation = null;
       hoveredHatch = null;
+      hoveredReferenceImage = null;
       draw();
     };
   }
@@ -13508,6 +13968,9 @@
     } else if (category === "hatch") {
       const item = model.hatches.find((hatch) => hatch.id === row.dataset.id);
       if (item) additive ? toggleSidebarSelectionById(selectedHatches, item) : selectedHatches.push(item);
+    } else if (category === "image") {
+      const item = model.referenceImages.find((image) => image.id === row.dataset.id);
+      if (item) additive ? toggleSidebarSelectionById(selectedReferenceImages, item) : selectedReferenceImages.push(item);
     } else if (category === "block") {
       const item = model.blockInstances.find((block) => block.id === row.dataset.id);
       if (item) additive ? toggleBlockInstanceSelection(item) : selectedBlockInstances.push(item);
@@ -13565,6 +14028,7 @@
       const category = objectRow.dataset.objectKind;
       if (category === "block") hoveredBlockInstance = model.blockInstances.find((item) => item.id === objectRow.dataset.id) || null;
       else if (category === "hatch") hoveredHatch = model.hatches.find((item) => item.id === objectRow.dataset.id) || null;
+      else if (category === "image") hoveredReferenceImage = model.referenceImages.find((item) => item.id === objectRow.dataset.id) || null;
       else if (category === "annotation") hoveredAnnotation = model.annotations.find((item) => item.id === objectRow.dataset.id) || null;
       else if (objectRow.dataset.fixedPointId) {
         const point = model.points.find((item) => item.id === objectRow.dataset.fixedPointId);
@@ -13593,6 +14057,7 @@
       hoveredBlockInstance = null;
       hoveredAnnotation = null;
       hoveredHatch = null;
+      hoveredReferenceImage = null;
       draw();
     }
     const sketchRow = event.target.closest(".sketch-item");
@@ -14330,11 +14795,12 @@
     if (mode === "block-place" && blockPlacementDefinitionId) return { kind: "blockPlacement", item: blockDefinitionById(blockPlacementDefinitionId) };
     const constraint = selectedDimensionConstraint || effectiveSelectedConstraint();
     if (constraint) return { kind: "constraint", item: constraint };
-    if (selectedHatches.length === 1 && selectedAnnotations.length === 0 && selectedBlockInstances.length === 0 && selectedGeometryItems().length === 0) return { kind: "hatch", item: selectedHatches[0] };
-    if (selectedAnnotations.length === 1 && selectedHatches.length === 0 && selectedBlockInstances.length === 0 && selectedGeometryItems().length === 0) return { kind: "annotation", item: selectedAnnotations[0] };
-    if (selectedBlockInstances.length === 1 && selectedGeometryItems().length === 0 && selectedAnnotations.length === 0 && selectedHatches.length === 0) return { kind: "block", item: selectedBlockInstances[0] };
+    if (selectedReferenceImages.length === 1 && selectedHatches.length === 0 && selectedAnnotations.length === 0 && selectedBlockInstances.length === 0 && selectedGeometryItems().length === 0) return { kind: "referenceImage", item: selectedReferenceImages[0] };
+    if (selectedHatches.length === 1 && selectedReferenceImages.length === 0 && selectedAnnotations.length === 0 && selectedBlockInstances.length === 0 && selectedGeometryItems().length === 0) return { kind: "hatch", item: selectedHatches[0] };
+    if (selectedAnnotations.length === 1 && selectedReferenceImages.length === 0 && selectedHatches.length === 0 && selectedBlockInstances.length === 0 && selectedGeometryItems().length === 0) return { kind: "annotation", item: selectedAnnotations[0] };
+    if (selectedBlockInstances.length === 1 && selectedReferenceImages.length === 0 && selectedGeometryItems().length === 0 && selectedAnnotations.length === 0 && selectedHatches.length === 0) return { kind: "block", item: selectedBlockInstances[0] };
     const geometry = selectedGeometryItems();
-    if (geometry.length === 1 && selectedBlockInstances.length === 0 && selectedAnnotations.length === 0 && selectedHatches.length === 0) return { kind: "geometry", item: geometry[0] };
+    if (geometry.length === 1 && selectedReferenceImages.length === 0 && selectedBlockInstances.length === 0 && selectedAnnotations.length === 0 && selectedHatches.length === 0) return { kind: "geometry", item: geometry[0] };
     const multipleItems = [
       ...geometry.map((item) => ({ kind: "geometry", item })),
       ...selectedBlockInstances.map((item) => ({ kind: "block", item })),
@@ -14686,6 +15152,25 @@
     if (target.kind === "geometry") {
       const effective = effectiveAppearanceForElement(item);
       panel.innerHTML = `<h2 class="property-heading">${escapeHtml(geometryPropertyName(item))}</h2><section class="property-section">${basicInformationHeading}${geometryPropertyRows(item)}</section><section class="property-section"><h3>${geometryAppearanceSectionName(item)}</h3>${appearancePropertyRows(item.appearance, effective, { constructionEndpoints: item instanceof Line && item.construction })}</section>`;
+    } else if (target.kind === "referenceImage") {
+      const locked = item.locked ? "disabled" : "";
+      const width = item.pixelWidth * item.scale;
+      const height = item.pixelHeight * item.scale;
+      panel.innerHTML = `<h2 class="property-heading">${applicationText("画像", "Image")}</h2><section class="property-section">${basicInformationHeading}
+        ${propertyReadonlyRow("種類", "Type", applicationText("参照画像", "Reference image"))}
+        ${propertyReadonlyRow("ID", "ID", item.id)}
+        ${propertyReadonlyRow("所属スケッチ", "Owning sketch", `${sketchName(item.sketchId)} (${item.sketchId})`, { userContent: true })}
+        <div class="property-row"><label>${applicationText("名前", "Name")}</label><input data-reference-image-property="name" value="${escapeHtml(item.name)}"></div>
+        <div class="property-row"><label>${applicationText("X座標", "X coordinate")}</label><div class="property-input-with-unit"><input data-reference-image-property="x" type="number" step="0.1" value="${formatDisplayNumber(item.x, 6)}" ${locked}><span class="property-input-unit">mm</span></div></div>
+        <div class="property-row"><label>${applicationText("Y座標", "Y coordinate")}</label><div class="property-input-with-unit"><input data-reference-image-property="y" type="number" step="0.1" value="${formatDisplayNumber(item.y, 6)}" ${locked}><span class="property-input-unit">mm</span></div></div>
+        <div class="property-row"><label>${applicationText("幅", "Width")}</label><div class="property-input-with-unit"><input data-reference-image-property="width" type="number" min="0.000001" step="0.1" value="${formatDisplayNumber(width, 6)}" ${locked}><span class="property-input-unit">mm</span></div></div>
+        <div class="property-row"><span>${applicationText("高さ", "Height")}</span><span class="property-readonly">${formatDisplayNumber(height, 6)} mm</span></div>
+        <div class="property-row"><label>${applicationText("回転", "Rotation")}</label><div class="property-input-with-unit"><input data-reference-image-property="rotation" type="number" step="1" value="${formatDisplayNumber(item.rotation * 180 / Math.PI, 6)}" ${locked}><span class="property-input-unit">°</span></div></div>
+        <div class="property-row"><label>${applicationText("不透明度", "Opacity")}</label><div class="property-input-with-unit"><input data-reference-image-property="opacity" type="number" min="0" max="100" step="1" value="${formatDisplayNumber(item.opacity * 100, 2)}"><span class="property-input-unit">%</span></div></div>
+        <div class="property-row"><label>${applicationText("表示", "Visible")}</label><input data-reference-image-property="visible" type="checkbox" ${item.visible !== false ? "checked" : ""}></div>
+        <div class="property-row"><label>${applicationText("位置ロック", "Position lock")}</label><input data-reference-image-property="locked" type="checkbox" ${item.locked ? "checked" : ""}></div>
+        <button type="button" class="property-action-button" data-property-action="reference-image-calibrate" ${item.locked || item.visible === false ? "disabled" : ""}>${applicationText("2点から縮尺を設定", "Calibrate scale from two points")}</button>
+      </section>`;
     } else if (target.kind === "hatch") {
       const appearance = hatchAppearanceForDisplay(item);
       const boundary = resolvedHatchBoundary(item);
@@ -14993,12 +15478,48 @@
     draw();
   }
 
+  function applyReferenceImageProperty(item, key, rawValue) {
+    if (!item || !key) return false;
+    if (key === "name") item.name = String(rawValue || "").trim() || item.name;
+    else if (key === "visible") item.visible = Boolean(rawValue);
+    else if (key === "locked") item.locked = Boolean(rawValue);
+    else if (key === "opacity") {
+      const value = Number(rawValue);
+      if (!Number.isFinite(value)) return false;
+      item.opacity = Math.max(0, Math.min(1, value / 100));
+    }
+    else if (item.locked) return false;
+    else if (key === "x" || key === "y") {
+      const value = Number(rawValue);
+      if (!Number.isFinite(value)) return false;
+      item[key] = value;
+    } else if (key === "width") {
+      const value = Number(rawValue);
+      if (!Number.isFinite(value) || value <= 0) return false;
+      item.scale = value / item.pixelWidth;
+    } else if (key === "rotation") {
+      const value = Number(rawValue);
+      if (!Number.isFinite(value)) return false;
+      item.rotation = value * Math.PI / 180;
+    }
+    else return false;
+    return true;
+  }
+
   function handlePropertiesInput(event) {
     const input = event.target;
     const target = selectedPropertiesTarget();
     const isTextInput = input instanceof HTMLTextAreaElement
       || input instanceof HTMLInputElement && ["text", "number"].includes(input.type);
     if (!isTextInput) return;
+    if (target.kind === "referenceImage" && input.dataset.referenceImageProperty) {
+      const raw = input.value;
+      if (input.type !== "number" || raw !== "" && input.validity.valid && Number.isFinite(Number(raw))) {
+        applyReferenceImageProperty(target.item, input.dataset.referenceImageProperty, raw);
+        draw();
+      }
+      return;
+    }
     if (target.kind === "annotation" && input.dataset.property === "annotation-text") {
       target.item.text = input.value;
       draw();
@@ -15069,6 +15590,7 @@
     hoveredBlockInstance = null;
     hoveredAnnotation = null;
     hoveredHatch = null;
+    hoveredReferenceImage = null;
   }
 
   function commitDimensionParameterName(constraint, requestedName) {
@@ -15113,6 +15635,15 @@
   function handlePropertiesChange(event) {
     const target = selectedPropertiesTarget();
     const input = event.target;
+    if (target.kind === "referenceImage" && input.dataset.referenceImageProperty) {
+      const raw = input.type === "checkbox" ? input.checked : input.value;
+      if (applyReferenceImageProperty(target.item, input.dataset.referenceImageProperty, raw)) {
+        recordHistory("画像プロパティ変更");
+        updateUI({ refreshAnalysis: false });
+        draw();
+      }
+      return;
+    }
     if (target.kind === "multiple" && input.dataset.bulkProperty) {
       const raw = input.type === "checkbox" ? input.checked : input.value.trim();
       applyMultipleProperty(target, input.dataset.bulkProperty, raw);
@@ -15242,6 +15773,10 @@
 
   function handlePropertiesClick(event) {
     const action = event.target.closest("[data-property-action]")?.dataset.propertyAction;
+    if (action === "reference-image-calibrate") {
+      const target = selectedPropertiesTarget();
+      return target.kind === "referenceImage" ? startReferenceImageCalibration(target.item) : false;
+    }
     if (action === "hatch-repair") {
       const target = selectedPropertiesTarget();
       return target.kind === "hatch" ? startHatchBoundaryRepair(target.item) : false;
@@ -16202,7 +16737,7 @@
   }
 
   function selectedElementCount() {
-    return selectedPoints.length + selectedLines.length + selectedCircles.length + selectedArcs.length + selectedSplines.length + selectedBlockInstances.length + selectedAnnotations.length + selectedHatches.length + (selectedArcEndpoint ? 1 : 0);
+    return selectedPoints.length + selectedLines.length + selectedCircles.length + selectedArcs.length + selectedSplines.length + selectedBlockInstances.length + selectedAnnotations.length + selectedHatches.length + selectedReferenceImages.length + (selectedArcEndpoint ? 1 : 0);
   }
 
   function hitIsSelected(hitP, hitL, hitC, hitA, hitArcEnd) {
@@ -16220,6 +16755,7 @@
     selectedBlockInstances = [];
     selectedAnnotations = [];
     selectedHatches = [];
+    selectedReferenceImages = [];
     selectedPoints = hitP ? [hitP] : [];
     selectedLines = hitL ? [hitL] : [];
     selectedCircles = hitC ? [hitC] : [];
@@ -16627,6 +17163,7 @@
       selectedBlockInstances = [];
       selectedAnnotations = [];
       selectedHatches = [];
+      selectedReferenceImages = [];
       selectedSplines = [];
     }
     if (!preserveMixedSelection && hitP) {
@@ -18371,6 +18908,7 @@
     const hitA = hitArc(p.x, p.y);
     const hitS = hitSpline(p.x, p.y);
     const hatchHit = hitHatchAt(p.x, p.y);
+    const referenceImageHit = hitReferenceImageAt(p.x, p.y);
     const hitD = hitDimension(p.x, p.y);
     const hitBlockHandle = hitBlockRotationHandle(p.x, p.y);
     const hitBlock = hitBlockHandle || hitBlockInstance(p.x, p.y);
@@ -18395,7 +18933,13 @@
       return;
     }
 
-    const blankDoubleClickHits = { hitP, hitL, hitC, hitArcEnd, hitA, hitS, hitD, hitBlock, hatchHit, inactiveHit, annotationHit: blankAnnotationHit };
+    if (referenceImageCalibrationSession) {
+      e.preventDefault();
+      handleReferenceImageCalibrationClick(p);
+      return;
+    }
+
+    const blankDoubleClickHits = { hitP, hitL, hitC, hitArcEnd, hitA, hitS, hitD, hitBlock, hatchHit, referenceImageHit, inactiveHit, annotationHit: blankAnnotationHit };
     if (isRepeatedBlankDoubleClick(e, blankDoubleClickHits) && handleBlankCanvasDoubleClick(p, blankDoubleClickHits)) {
       suppressNextBlankDoubleClickEvent = true;
       e.preventDefault();
@@ -18707,6 +19251,13 @@
         if (multiSelect) toggleSidebarSelectionById(selectedHatches, hatchHit);
         else selectedHatches = [hatchHit];
       }
+    } else if (referenceImageHit) {
+      if (multiSelect) {
+        toggleSidebarSelectionById(selectedReferenceImages, referenceImageHit);
+      } else {
+        beginReferenceImageDrag(e, referenceImageHit, p);
+        return;
+      }
     } else {
       selectionRectSession = {
         pointerId: e.pointerId,
@@ -18757,6 +19308,19 @@
     if (annotationDragSession) {
       clearSnap();
       updateAnnotationDrag(p);
+      return;
+    }
+
+    if (referenceImageDragSession) {
+      clearSnap();
+      updateReferenceImageDrag(p);
+      return;
+    }
+
+    if (referenceImageCalibrationSession) {
+      clearSnap();
+      clearCanvasHover();
+      draw();
       return;
     }
 
@@ -19062,6 +19626,9 @@
       const rawHatchHover = nextAnnotationHover ? null : hitHatchAt(p.x, p.y);
       if (!nextBlockHover && rawHatchHover?.blockProjection) nextBlockHover = rawHatchHover.blockInstance;
       const nextHatchHover = rawHatchHover?.blockProjection ? null : rawHatchHover;
+      const nextReferenceImageHover = nextHover || nextPointHover || nextLineHover || nextCircleHover || nextArcEndpointHover || nextArcHover || nextSplineHover || nextBlockHover || nextAnnotationHover || rawHatchHover
+        ? null
+        : hitReferenceImageAt(p.x, p.y);
       if (
         nextPointHover !== hoveredPoint ||
         nextEndpointHover !== hoveredEndpointPoint ||
@@ -19074,7 +19641,8 @@
         nextSketchIdentity?.item !== hoveredSketchIdentity?.item ||
         Boolean(nextSketchIdentity) || nextBlockHover !== hoveredBlockInstance ||
         nextAnnotationHover !== hoveredAnnotation ||
-        nextHatchHover !== hoveredHatch
+        nextHatchHover !== hoveredHatch ||
+        nextReferenceImageHover !== hoveredReferenceImage
       ) {
         hoveredPoint = nextPointHover;
         hoveredEndpointPoint = nextEndpointHover;
@@ -19088,6 +19656,7 @@
         hoveredBlockInstance = nextBlockHover;
         hoveredAnnotation = nextAnnotationHover;
         hoveredHatch = nextHatchHover;
+        hoveredReferenceImage = nextReferenceImageHover;
         draw();
       }
     }
@@ -19126,6 +19695,22 @@
         // Pointer capture may already be released by the browser.
       }
       setHint("画面移動を終了しました");
+      return;
+    }
+
+    if (referenceImageDragSession) {
+      const session = referenceImageDragSession;
+      referenceImageDragSession = null;
+      canvas.classList.remove("is-dragging");
+      try {
+        canvas.releasePointerCapture(e.pointerId);
+      } catch (_) {
+        // Pointer capture may already be released by the browser.
+      }
+      setHint(session.moved ? applicationText("画像の位置を更新しました", "Image position updated") : applicationText("画像を選択しました", "Image selected"));
+      updateUI({ refreshAnalysis: false });
+      draw();
+      if (session.moved) recordHistory("画像移動");
       return;
     }
 
@@ -19224,6 +19809,7 @@
       draw();
       return;
     }
+
     if (session.item && model.blockInstances.includes(session.item)) invalidateBlockProjectionCache(session.item.id);
     const stabilized = stabilizeActiveParameterNamespace(session.sketchId || activeSketchId());
     if (!stabilized.success || stabilized.dependent?.success === false || stabilized.result.errorNorm > CONSTRAINT_ACCEPT_ERROR) {
@@ -19254,6 +19840,7 @@
       Boolean(selectedDimensionConstraint) ||
       selectedAnnotations.length > 0 ||
       selectedHatches.length > 0 ||
+      selectedReferenceImages.length > 0 ||
       Boolean(effectiveSelectedConstraint());
   }
 
@@ -19267,6 +19854,7 @@
       !hits.hitD &&
       !hits.hitBlock &&
       !hits.hatchHit &&
+      !hits.referenceImageHit &&
       !hits.annotationHit &&
       !hits.inactiveHit;
   }
@@ -19638,6 +20226,10 @@
 
     if (e.key === "Escape") {
       e.preventDefault();
+      if (referenceImageCalibrationSession) {
+        cancelReferenceImageCalibration();
+        return;
+      }
       if (splineEditSession) {
         finishSplineEditSession();
         return;
@@ -19685,6 +20277,7 @@
         selectedDimensionConstraint ||
         selectedAnnotations.length > 0 ||
         selectedHatches.length > 0 ||
+        selectedReferenceImages.length > 0 ||
         effectiveSelectedConstraint()
       ) {
         clearSelection();
@@ -20456,6 +21049,13 @@
   document.getElementById("exportBtn").addEventListener("click", () => void saveJot2DFile());
   document.getElementById("saveAsBtn")?.addEventListener("click", () => void saveJot2DFileAs());
   document.getElementById("importBtn").addEventListener("click", () => void openJot2DFile());
+  document.getElementById("importReferenceImageBtn")?.addEventListener("click", () => document.getElementById("referenceImageFileInput")?.click());
+  document.getElementById("referenceImageFileInput")?.addEventListener("change", (event) => {
+    const input = event.currentTarget;
+    const file = input.files?.[0] || null;
+    input.value = "";
+    void importReferenceImageFile(file);
+  });
   document.getElementById("addSketchBtn")?.addEventListener("click", () => createSketch("sibling"));
   document.getElementById("addChildSketchBtn")?.addEventListener("click", () => createSketch("child"));
 
@@ -21001,6 +21601,39 @@
         };
       },
       serializedModelForTest() {
+        return structuredClone(serializeModel());
+      },
+      referenceImageStateForTest() {
+        return {
+          selectedIds: selectedReferenceImages.map((item) => item.id),
+          images: model.referenceImages.map(serializeReferenceImage),
+          liveBlockImages: blockEditSession ? (liveBlockEditorDefinition().referenceImages || []).map(serializeReferenceImage) : [],
+          calibrationPointCount: referenceImageCalibrationSession?.localPoints?.length || 0,
+          dragging: Boolean(referenceImageDragSession),
+          history: this.historyState(),
+          viewport: { ...viewport },
+        };
+      },
+      async importReferenceImageDataForTest(dataUrl, name = "image.png", type = "image/png") {
+        const blob = await (await fetch(dataUrl)).blob();
+        return importReferenceImageFile(new File([blob], name, { type }));
+      },
+      openReferenceImageBlockEditorForTest(options = {}) {
+        if (!options.preserveDocument) resetModelState();
+        const draft = createEmptyBlockDefinition("Image Block");
+        const p1 = new Point("P1", -20, 0, false, "endpoint");
+        const p2 = new Point("P2", 20, 0, false, "endpoint");
+        p1.sketchId = DEFAULT_SKETCH_ID;
+        p2.sketchId = DEFAULT_SKETCH_ID;
+        const line = new Line("L1", p1, p2, false);
+        line.sketchId = DEFAULT_SKETCH_ID;
+        draft.points.push(p1, p2);
+        draft.lines.push(line);
+        openBlockDefinitionEditor(draft, { isNew: true });
+        return true;
+      },
+      completeReferenceImageBlockEditorForTest() {
+        completeBlockDefinitionEdit();
         return structuredClone(serializeModel());
       },
       dimensionAppearanceStateForTest(index = 0) {
