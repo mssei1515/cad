@@ -1677,11 +1677,45 @@
   function projectedTargetPointForSource(sourcePoint, targetSketchId, excluding = null) {
     if (!sourcePoint) return null;
     for (const constraint of sketchProjectionConstraints()) {
-      if (constraint === excluding || !constraintIsOperational(constraint) || constraintSketchId(constraint) !== targetSketchId) continue;
+      if (constraint === excluding || constraint.kind === "line" || !constraintIsOperational(constraint) || constraintSketchId(constraint) !== targetSketchId) continue;
       const pair = sketchProjectionPointPairs(constraint).find(([source]) => source === sourcePoint || String(source?.id) === String(sourcePoint.id));
       if (pair?.[1]) return pair[1];
     }
     return null;
+  }
+
+  function separateSharedSketchProjectionLineEndpoints(namespace) {
+    const points = Array.isArray(namespace?.points) ? namespace.points : [];
+    const constraints = Array.isArray(namespace?.constraints) ? namespace.constraints : [];
+    const claimed = new Set();
+    const processedTargets = new Set();
+    const pointIds = new Set(points.map((point) => String(point.id)));
+    let nextPointIndex = nextSeq(points, "P");
+    const cloneEndpoint = (point) => {
+      let id = `P${nextPointIndex++}`;
+      while (pointIds.has(id)) id = `P${nextPointIndex++}`;
+      pointIds.add(id);
+      const clone = new Point(id, point.x, point.y, Boolean(point.fixed), point.kind || "endpoint");
+      clone.sketchId = point.sketchId;
+      const appearance = normalizeAppearance(point.appearance);
+      if (Object.keys(appearance).length > 0) clone.appearance = appearance;
+      points.push(clone);
+      return clone;
+    };
+    let separated = 0;
+    for (const constraint of constraints) {
+      if (!(constraint instanceof SketchProjectionConstraint) || constraint.kind !== "line" || !(constraint.target instanceof Line) || processedTargets.has(constraint.target)) continue;
+      processedTargets.add(constraint.target);
+      for (const key of ["p1", "p2"]) {
+        const endpoint = constraint.target[key];
+        if (claimed.has(endpoint)) {
+          constraint.target[key] = cloneEndpoint(endpoint);
+          separated += 1;
+        }
+        claimed.add(constraint.target[key]);
+      }
+    }
+    return separated;
   }
 
   function pointHasNonProjectionUse(point, excludingConstraint = null) {
@@ -3612,6 +3646,7 @@
     if (item instanceof Point) {
       return sketchProjectionConstraints().some((constraint) =>
         constraintIsOperational(constraint)
+        && constraint.kind !== "line"
         && constraintSketchId(constraint) === targetSketchId
         && sketchProjectionPointPairs(constraint).some(([source]) => source === item || String(source?.id) === String(item.id)));
     }
@@ -3644,8 +3679,8 @@
     if (entry.kind === "point") return projectedPointForCreation(source, targetSketchId, pointMap);
     if (entry.kind === "line") {
       return addLine(
-        projectedPointForCreation(source.p1, targetSketchId, pointMap),
-        projectedPointForCreation(source.p2, targetSketchId, pointMap),
+        addPointToSketch(source.p1.x, source.p1.y, targetSketchId, source.p1.kind || "endpoint"),
+        addPointToSketch(source.p2.x, source.p2.y, targetSketchId, source.p2.kind || "endpoint"),
         source.construction,
       );
     }
@@ -7277,6 +7312,7 @@
         constraint.referenceSketchId = rawConstraint.referenceSketchId == null ? null : meta.normalizeDefinitionSketchId(rawConstraint.referenceSketchId);
         return constraint;
         }).filter(Boolean);
+      separateSharedSketchProjectionLineEndpoints(definition);
       prepareLoadedParameterNamespace(definition, sourceVersion, `${applicationText("ブロック", "Block")} ${definition.name}`);
     }
     const loadedBlockInstances = (Array.isArray(data.blockInstances) ? data.blockInstances : [])
@@ -7469,6 +7505,7 @@
       parameters: Array.isArray(data.parameters) ? data.parameters.map((parameter) => ({ name: String(parameter?.name || ""), expression: normalizeLoadedExpression(parameter?.expression) })) : [],
       nextDimensionParameterIndex: Number(data.nextDimensionParameterIndex) || 1,
     };
+    separateSharedSketchProjectionLineEndpoints({ points, constraints });
     prepareLoadedParameterNamespace(loadedRootNamespace, sourceVersion, applicationText("Document", "Document"));
 
     const retainedPoints = points.filter((p) => {
@@ -22268,6 +22305,56 @@
           },
         };
       },
+      resetForSketchProjectionRectangleTest({ reloadSharedVersion19 = false } = {}) {
+        resetModelState();
+        const sourceSketchId = DEFAULT_SKETCH_ID;
+        const corners = [
+          addPoint(-60, -40, false, "endpoint"),
+          addPoint(60, -40, false, "endpoint"),
+          addPoint(60, 40, false, "endpoint"),
+          addPoint(-60, 40, false, "endpoint"),
+        ];
+        const sourceLines = corners.map((point, index) => addLine(point, corners[(index + 1) % corners.length], false));
+        const targetSketchId = "S3";
+        model.sketches.push({ id: targetSketchId, name: "Projection Target", parentSketchId: sourceSketchId, kind: "sketch", appearance: {}, constructionAppearance: {}, dimensionAppearance: {}, visible: true });
+        model.activeSketchId = targetSketchId;
+        const pointMap = new Map();
+        for (const source of sourceLines) {
+          const target = createSketchProjectionTarget({ item: source, kind: "line", sketchId: sourceSketchId }, targetSketchId, pointMap);
+          const constraint = new SketchProjectionConstraint("line", source, target);
+          markReferenceConstraint(constraint, sourceSketchId, targetSketchId);
+          pushModelConstraint(constraint, targetSketchId);
+        }
+        synchronizeSketchProjectionMetadata(targetSketchId);
+        solveSketchAndDependents(sourceSketchId);
+        if (reloadSharedVersion19) {
+          const data = structuredClone(serializeModel());
+          const linesById = new Map(data.lines.map((line) => [String(line.id), line]));
+          const targetPointBySourcePoint = new Map();
+          const orphanedTargetPointIds = new Set();
+          for (const link of data.constraints.filter((constraint) => constraint.type === "sketchProjection" && constraint.kind === "line")) {
+            const source = linesById.get(String(link.source));
+            const target = linesById.get(String(link.target));
+            if (!source || !target) continue;
+            for (const key of ["p1", "p2"]) {
+              const sourcePointId = String(source[key]);
+              const existingTargetPointId = targetPointBySourcePoint.get(sourcePointId);
+              if (existingTargetPointId) {
+                orphanedTargetPointIds.add(String(target[key]));
+                target[key] = existingTargetPointId;
+              } else {
+                targetPointBySourcePoint.set(sourcePointId, String(target[key]));
+              }
+            }
+          }
+          data.points = data.points.filter((point) => !orphanedTargetPointIds.has(String(point.id)));
+          loadModelData(data);
+        }
+        resetHistory("sketch projection rectangle test");
+        updateUI();
+        draw();
+        return this.sketchProjectionStateForTest();
+      },
       sketchProjectionEligibilityForTest() {
         resetModelState();
         const addSketch = (id, parentSketchId) => model.sketches.push({ id, name: id, parentSketchId, kind: "sketch", appearance: {}, constructionAppearance: {}, dimensionAppearance: {}, visible: true });
@@ -22385,6 +22472,7 @@
             displayColor: geometryDisplayColor(constraint.target, effectiveAppearanceForElement(constraint.target)),
             constraintStatus: constraintStatusOf(constraint.target),
             statusColor: constraintStatusColor(constraint.target),
+            redundant: constraintIsRedundant(constraint),
           })),
           serialized: structuredClone(serializeModel()),
           history: this.historyState(),

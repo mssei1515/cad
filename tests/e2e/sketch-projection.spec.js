@@ -22,7 +22,7 @@ async function createAllProjectionKinds(page) {
   return fixture;
 }
 
-test("projects every supported geometry kind with shared points, normal/status colors, clear icon, tree, properties, and v19 persistence", async ({ page }) => {
+test("projects every supported geometry kind with independent line endpoints, normal/status colors, clear icon, tree, properties, and v19 persistence", async ({ page }) => {
   const fixture = await createAllProjectionKinds(page);
   let state = await page.evaluate(() => window.__jot2dTest.sketchProjectionStateForTest());
 
@@ -41,7 +41,8 @@ test("projects every supported geometry kind with shared points, normal/status c
   await expect(page.locator("#toolSketchProjection .projection-ray")).toHaveCount(3);
   await expect(page.locator("#toolSketchProjection .projection-target")).toHaveCount(1);
   const targetLines = state.constraints.filter((item) => item.kind === "line").map((item) => item.target);
-  expect(targetLines[0].p2).toBe(targetLines[1].p1);
+  expect(new Set(targetLines.flatMap((line) => [line.p1, line.p2])).size).toBe(4);
+  expect(state.constraints.filter((item) => item.kind === "line").every((item) => item.redundant === false)).toBe(true);
 
   const serializedLinks = state.serialized.constraints.filter((item) => item.type === "sketchProjection");
   expect(state.serialized.version).toBe(19);
@@ -61,6 +62,21 @@ test("projects every supported geometry kind with shared points, normal/status c
   state = await page.evaluate(() => window.__jot2dTest.reloadSketchProjectionForTest(19));
   expect(state.constraints).toHaveLength(6);
   expect(state.serialized.constraints.filter((item) => item.type === "sketchProjection")).toHaveLength(6);
+});
+
+test("keeps four projected rectangle lines independent and separates shared v19 endpoints on load", async ({ page }) => {
+  let state = await page.evaluate(() => window.__jot2dTest.resetForSketchProjectionRectangleTest());
+  let targetLines = state.constraints.map((item) => item.target);
+  expect(targetLines).toHaveLength(4);
+  expect(new Set(targetLines.flatMap((line) => [line.p1, line.p2])).size).toBe(8);
+  expect(state.serialized.points.filter((point) => point.sketchId === "S3")).toHaveLength(8);
+  expect(state.constraints.every((item) => item.redundant === false)).toBe(true);
+
+  state = await page.evaluate(() => window.__jot2dTest.resetForSketchProjectionRectangleTest({ reloadSharedVersion19: true }));
+  targetLines = state.constraints.map((item) => item.target);
+  expect(new Set(targetLines.flatMap((line) => [line.p1, line.p2])).size).toBe(8);
+  expect(state.serialized.points.filter((point) => point.sketchId === "S3")).toHaveLength(8);
+  expect(state.constraints.every((item) => item.redundant === false)).toBe(true);
 });
 
 test("tracks source shape and spline topology, then treats v18 projection links as absent", async ({ page }) => {
