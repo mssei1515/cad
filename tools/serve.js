@@ -50,7 +50,7 @@ const server = http.createServer((req, res) => {
 });
 
 server.listen(port, host, () => {
-  console.log(`Cad2 test server: http://${host}:${port}/`);
+  console.log(`Jot2D test server: http://${host}:${port}/`);
 });
 
 function shutdown() {

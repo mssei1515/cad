@@ -5,7 +5,7 @@ const http = require("http");
 const path = require("path");
 
 const host = "127.0.0.1";
-const port = Number(process.env.CAD2_E2E_PORT || 8765) + 7;
+const port = Number(process.env.JOT2D_E2E_PORT || 8765) + 7;
 const baseUrl = `http://${host}:${port}`;
 const fixturePath = path.resolve(__dirname, "../../test-data/意地悪ドラッグ完全拘束.json");
 const fixture = JSON.parse(fs.readFileSync(fixturePath, "utf8"));
@@ -183,9 +183,9 @@ function latencySummary(results, traces = []) {
 async function loadFixture(page, data, center = sandboxCenter, scale = 1) {
   const loaded = await page.evaluate(
     ({ fixtureData, fixtureName, focus, focusScale }) => {
-      const result = window.__cadTest.loadDocumentFixtureForDragTest(fixtureData, fixtureName);
-      const viewport = window.__cadTest.focusWorldForTest(focus, focusScale);
-      return { result, viewport, state: window.__cadTest.authoringStateForTest() };
+      const result = window.__jot2dTest.loadDocumentFixtureForDragTest(fixtureData, fixtureName);
+      const viewport = window.__jot2dTest.focusWorldForTest(focus, focusScale);
+      return { result, viewport, state: window.__jot2dTest.authoringStateForTest() };
     },
     { fixtureData: data, fixtureName: "authoring-performance.json", focus: center, focusScale: scale },
   );
@@ -194,7 +194,7 @@ async function loadFixture(page, data, center = sandboxCenter, scale = 1) {
 }
 
 async function clientPosition(page, world) {
-  return page.evaluate((point) => window.__cadTest.worldClientPositionForTest(point), world);
+  return page.evaluate((point) => window.__jot2dTest.worldClientPositionForTest(point), world);
 }
 
 async function clickWorld(page, world) {
@@ -226,7 +226,7 @@ test.afterAll(() => {
 
 test.beforeEach(async ({ page }) => {
   await page.goto(`${baseUrl}/index.html?test=1`);
-  await page.waitForFunction(() => window.__cadTest);
+  await page.waitForFunction(() => window.__jot2dTest);
 });
 
 test("all drawing and constraint commands stay responsive as the sketch grows", async ({ page }) => {
@@ -302,7 +302,7 @@ test("every geometry creation click stays responsive at full fixture complexity"
         350,
       );
     }
-    const after = await page.evaluate(() => window.__cadTest.authoringStateForTest());
+    const after = await page.evaluate(() => window.__jot2dTest.authoringStateForTest());
     for (const [key, delta] of Object.entries(creation.delta)) {
       expect(after[key], `${creation.name}/${key}`).toBe(before[key] + delta);
     }
@@ -488,7 +488,7 @@ test("constraint target clicks and commits stay responsive at full fixture compl
         index === sandbox.targets.length - 1 ? 350 : 300,
       );
     }
-    const after = await page.evaluate(() => window.__cadTest.authoringStateForTest());
+    const after = await page.evaluate(() => window.__jot2dTest.authoringStateForTest());
     expect(after.constraintCount, constraintCase.name).toBe(beforeCount + 1);
     traces.push({ name: constraintCase.name, ...after.lastPerformance });
   }
@@ -509,15 +509,15 @@ test("symmetry constraint mirrors two points and survives serialization", async 
 
   await page.locator('[data-constraint="symmetry"]').click();
   await clickWorld(page, { x: 0, y: 0 });
-  const axisSelection = await page.evaluate(() => window.__cadTest.selectedGeometryIdsForTest());
+  const axisSelection = await page.evaluate(() => window.__jot2dTest.selectedGeometryIdsForTest());
   expect(axisSelection).toMatchObject({ points: [], lines: ["SYM_AXIS"] });
   await clickWorld(page, { x: -50, y: -30 });
   await clickWorld(page, { x: 60, y: 80 });
 
   const committed = await page.evaluate(() => ({
-    authoring: window.__cadTest.authoringStateForTest(),
-    model: window.__cadTest.serializedModelForTest(),
-    analysis: window.__cadTest.constraintAnalysisForTest(),
+    authoring: window.__jot2dTest.authoringStateForTest(),
+    model: window.__jot2dTest.serializedModelForTest(),
+    analysis: window.__jot2dTest.constraintAnalysisForTest(),
   }));
   expect(committed.authoring.lastConstraint).toMatchObject({
     type: "symmetry",
@@ -532,11 +532,11 @@ test("symmetry constraint mirrors two points and survives serialization", async 
   expect(committed.analysis.errorNorm).toBeLessThan(1e-5);
 
   const restored = await page.evaluate((model) => {
-    const result = window.__cadTest.loadDocumentFixtureForDragTest(model, "symmetry-round-trip.json");
+    const result = window.__jot2dTest.loadDocumentFixtureForDragTest(model, "symmetry-round-trip.json");
     return {
       result,
-      authoring: window.__cadTest.authoringStateForTest(),
-      analysis: window.__cadTest.constraintAnalysisForTest(),
+      authoring: window.__jot2dTest.authoringStateForTest(),
+      analysis: window.__jot2dTest.constraintAnalysisForTest(),
     };
   }, committed.model);
   expect(restored.result.success).toBe(true);
@@ -567,9 +567,9 @@ test("line symmetry mirrors support lines while either free endpoint can extend 
   await clickWorld(page, { x: 67.5, y: 12.5 });
 
   const committed = await page.evaluate(() => ({
-    authoring: window.__cadTest.authoringStateForTest(),
-    model: window.__cadTest.serializedModelForTest(),
-    analysis: window.__cadTest.constraintAnalysisForTest(),
+    authoring: window.__jot2dTest.authoringStateForTest(),
+    model: window.__jot2dTest.serializedModelForTest(),
+    analysis: window.__jot2dTest.constraintAnalysisForTest(),
   }));
   expect(committed.authoring.lastConstraint).toMatchObject({
     type: "lineSymmetry",
@@ -607,7 +607,7 @@ test("line symmetry mirrors support lines while either free endpoint can extend 
   await page.keyboard.press("Escape");
   const secondStartBefore = { ...committedSupport.points.get("LS_P3") };
   const secondEndBefore = { ...committedSupport.points.get("LS_P4") };
-  const endpointClient = await page.evaluate(() => window.__cadTest.geometryClientPositionForTest("point", "LS_P4"));
+  const endpointClient = await page.evaluate(() => window.__jot2dTest.geometryClientPositionForTest("point", "LS_P4"));
   await page.mouse.move(endpointClient.x, endpointClient.y);
   await page.mouse.down();
   await page.mouse.move(
@@ -617,8 +617,8 @@ test("line symmetry mirrors support lines while either free endpoint can extend 
   );
   await page.mouse.up();
   const dragged = await page.evaluate(() => ({
-    model: window.__cadTest.serializedModelForTest(),
-    analysis: window.__cadTest.constraintAnalysisForTest(),
+    model: window.__jot2dTest.serializedModelForTest(),
+    analysis: window.__jot2dTest.constraintAnalysisForTest(),
   }));
   const draggedSupport = supportState(dragged.model);
   const secondStartAfter = draggedSupport.points.get("LS_P3");
@@ -631,11 +631,11 @@ test("line symmetry mirrors support lines while either free endpoint can extend 
   expect(dragged.analysis.errorNorm).toBeLessThan(1e-5);
 
   const restored = await page.evaluate((model) => {
-    const result = window.__cadTest.loadDocumentFixtureForDragTest(model, "line-symmetry-round-trip.json");
+    const result = window.__jot2dTest.loadDocumentFixtureForDragTest(model, "line-symmetry-round-trip.json");
     return {
       result,
-      authoring: window.__cadTest.authoringStateForTest(),
-      analysis: window.__cadTest.constraintAnalysisForTest(),
+      authoring: window.__jot2dTest.authoringStateForTest(),
+      analysis: window.__jot2dTest.constraintAnalysisForTest(),
     };
   }, dragged.model);
   expect(restored.result.success).toBe(true);
@@ -664,9 +664,9 @@ test("symmetry constraint mirrors arc centers and radii while leaving endpoints 
   await clickWorld(page, { x: 65, y: -30 });
 
   const committed = await page.evaluate(() => ({
-    authoring: window.__cadTest.authoringStateForTest(),
-    model: window.__cadTest.serializedModelForTest(),
-    analysis: window.__cadTest.constraintAnalysisForTest(),
+    authoring: window.__jot2dTest.authoringStateForTest(),
+    model: window.__jot2dTest.serializedModelForTest(),
+    analysis: window.__jot2dTest.constraintAnalysisForTest(),
   }));
   expect(committed.authoring.lastConstraint).toMatchObject({
     type: "arcSymmetry",
@@ -684,11 +684,11 @@ test("symmetry constraint mirrors arc centers and radii while leaving endpoints 
   expect(committed.analysis.errorNorm).toBeLessThan(1e-5);
 
   const restored = await page.evaluate((model) => {
-    const result = window.__cadTest.loadDocumentFixtureForDragTest(model, "arc-symmetry-round-trip.json");
+    const result = window.__jot2dTest.loadDocumentFixtureForDragTest(model, "arc-symmetry-round-trip.json");
     return {
       result,
-      authoring: window.__cadTest.authoringStateForTest(),
-      analysis: window.__cadTest.constraintAnalysisForTest(),
+      authoring: window.__jot2dTest.authoringStateForTest(),
+      analysis: window.__jot2dTest.constraintAnalysisForTest(),
     };
   }, committed.model);
   expect(restored.result.success).toBe(true);
@@ -763,7 +763,7 @@ test("distance, diameter, radius and angle input phases stay responsive", async 
     await expect(input).toBeVisible();
     await input.fill(dimensionCase.value);
     await measureInteraction(page, results, `${dimensionCase.name}/submit`, () => input.press("Enter"), 350);
-    const after = await page.evaluate(() => window.__cadTest.authoringStateForTest());
+    const after = await page.evaluate(() => window.__jot2dTest.authoringStateForTest());
     expect(after.constraintCount, dimensionCase.name).toBe(beforeCount + 1);
     expect(after.lastConstraint?.type, dimensionCase.name).toBe(target.expectedType);
     traces.push({ name: dimensionCase.name, ...after.lastPerformance });
@@ -810,7 +810,7 @@ test("bug-prone connected angle and tangency constraints can be restored through
     const operands = connectedCase.operands(constraint, data);
     const center = operands.reduce((sum, point) => ({ x: sum.x + point.x / operands.length, y: sum.y + point.y / operands.length }), { x: 0, y: 0 });
     const loaded = await loadFixture(page, data, center, 1);
-    const hits = await page.evaluate((points) => points.map((point) => window.__cadTest.hitGeometryAtWorldForTest(point)), operands);
+    const hits = await page.evaluate((points) => points.map((point) => window.__jot2dTest.hitGeometryAtWorldForTest(point)), operands);
     expect(hits.every((hit) => hit.point || hit.line || hit.circle || hit.arc || hit.arcEndpoint), `${connectedCase.name}: ${JSON.stringify({ operands, hits })}`).toBe(true);
     const clientPositions = await Promise.all(operands.map((operand) => clientPosition(page, operand)));
     const clientElements = await page.evaluate((positions) => positions.map((position) => {
@@ -823,20 +823,20 @@ test("bug-prone connected angle and tangency constraints can be restored through
       await measureInteraction(page, results, `${connectedCase.name}/operand-${index + 1}`, () => clickWorld(page, operands[index]), index === operands.length - 1 && !connectedCase.dimensionValue ? 350 : 300);
     }
     if (connectedCase.dimensionValue) {
-      const placementState = await page.evaluate(() => window.__cadTest.authoringStateForTest());
+      const placementState = await page.evaluate(() => window.__jot2dTest.authoringStateForTest());
       const anchor = placementState.pendingPlacementPoint || { x: center.x + 70, y: center.y + 70 };
       await measureInteraction(page, results, `${connectedCase.name}/place`, () => clickWorld(page, anchor), 250);
       const input = page.locator("#dimensionValueInput");
       await expect(input).toBeVisible();
-      const placedState = await page.evaluate(() => window.__cadTest.authoringStateForTest());
+      const placedState = await page.evaluate(() => window.__jot2dTest.authoringStateForTest());
       expect(placedState.pendingCommandType, `${connectedCase.name}: ${JSON.stringify(placedState)}`).toBe("distance-value");
       expect(placedState.constraintCount, `${connectedCase.name}: ${JSON.stringify(placedState)}`).toBe(loaded.state.constraintCount);
       await input.fill(connectedCase.dimensionValue(constraint));
       await measureInteraction(page, results, `${connectedCase.name}/submit`, () => input.press("Enter"), 350);
     }
-    const state = await page.evaluate(() => window.__cadTest.authoringStateForTest());
+    const state = await page.evaluate(() => window.__jot2dTest.authoringStateForTest());
     expect(state.constraintCount, `${connectedCase.name}: ${JSON.stringify(state)}`).toBe(loaded.state.constraintCount + 1);
-    const analysis = await page.evaluate(() => window.__cadTest.constraintAnalysisForTest());
+    const analysis = await page.evaluate(() => window.__jot2dTest.constraintAnalysisForTest());
     expect(analysis.stable, `${connectedCase.name}: ${JSON.stringify({ state, analysis })}`).toBe(true);
     expect(analysis.errorNorm, `${connectedCase.name}: ${JSON.stringify(analysis)}`).toBeLessThan(1e-4);
     expect(analysis.freeVariableCount, connectedCase.name).toBe(0);
@@ -855,7 +855,7 @@ test("construction, fixed, trim, fillet and offset operations stay responsive", 
   await measureInteraction(page, results, "construction/line-command", () => page.locator("#toolLine").click(), 250);
   await measureInteraction(page, results, "construction/line-start", () => clickWorld(page, { x: x - 90, y: -80 }), 300);
   await measureInteraction(page, results, "construction/line-end", () => clickWorld(page, { x: x + 90, y: -20 }), 350);
-  let state = await page.evaluate(() => window.__cadTest.authoringStateForTest());
+  let state = await page.evaluate(() => window.__jot2dTest.authoringStateForTest());
   expect(state.lastLine?.construction).toBe(true);
   await pressEscape(page);
 
@@ -866,7 +866,7 @@ test("construction, fixed, trim, fillet and offset operations stay responsive", 
   await loadFixture(page, fixedSandbox.data);
   await measureInteraction(page, results, "fixed/select-point", () => clickWorld(page, fixedSandbox.targets.click), 150);
   await measureInteraction(page, results, "fixed/apply", () => page.locator("#fixPointBtn").click(), 350);
-  state = await page.evaluate(() => window.__cadTest.authoringStateForTest());
+  state = await page.evaluate(() => window.__jot2dTest.authoringStateForTest());
   expect(state.fixedPointIds).toContain(fixedSandbox.targets.id);
 
   const trimSandbox = sandboxFixture(({ point, line }) => {
@@ -878,7 +878,7 @@ test("construction, fixed, trim, fillet and offset operations stay responsive", 
   const trimLoaded = await loadFixture(page, trimSandbox.data);
   await measureInteraction(page, results, "trim/command", () => page.locator("#toolTrim").click(), 250);
   await measureInteraction(page, results, "trim/execute", () => clickWorld(page, trimSandbox.targets.click), 350);
-  state = await page.evaluate(() => window.__cadTest.authoringStateForTest());
+  state = await page.evaluate(() => window.__jot2dTest.authoringStateForTest());
   expect(state.lineCount).not.toBe(trimLoaded.state.lineCount);
   await pressEscape(page);
 
@@ -891,21 +891,21 @@ test("construction, fixed, trim, fillet and offset operations stay responsive", 
   const filletLoaded = await loadFixture(page, filletSandbox.data);
   await measureInteraction(page, results, "fillet/command", () => page.locator("#toolFillet").click(), 250);
   await measureInteraction(page, results, "fillet/first-line", () => clickWorld(page, filletSandbox.targets.first), 300);
-  const filletFirstState = await page.evaluate(() => window.__cadTest.authoringStateForTest());
+  const filletFirstState = await page.evaluate(() => window.__jot2dTest.authoringStateForTest());
   expect(filletFirstState.mode).toBe("fillet");
   expect(filletFirstState.selected.lines).toHaveLength(1);
   await measureInteraction(page, results, "fillet/second-line", () => clickWorld(page, filletSandbox.targets.second), 300);
-  const filletSecondState = await page.evaluate(() => window.__cadTest.authoringStateForTest());
+  const filletSecondState = await page.evaluate(() => window.__jot2dTest.authoringStateForTest());
   expect(filletSecondState.pendingCommandType).toBe("fillet-radius-place");
   expect(filletSecondState.pendingCommandPreview?.ok, JSON.stringify(filletSecondState.pendingCommandPreview)).toBe(true);
   expect(filletSecondState.pendingCommandPreview.maximumRadius).toBeLessThan(30);
   let input = page.locator("#dimensionValueInput");
   await expect(input).toBeHidden();
   await measureInteraction(page, results, "fillet/radius-preview", () => moveWorld(page, filletSandbox.targets.radius), 300);
-  const filletPreviewState = await page.evaluate(() => window.__cadTest.authoringStateForTest());
+  const filletPreviewState = await page.evaluate(() => window.__jot2dTest.authoringStateForTest());
   expect(filletPreviewState.pendingCommandPreview?.radius).toBeCloseTo(Math.hypot(6, 6), 5);
   await measureInteraction(page, results, "fillet/submit-radius", () => clickWorld(page, filletSandbox.targets.radius), 350);
-  state = await page.evaluate(() => window.__cadTest.authoringStateForTest());
+  state = await page.evaluate(() => window.__jot2dTest.authoringStateForTest());
   expect(state.arcCount).toBe(filletLoaded.state.arcCount + 1);
   await pressEscape(page);
 
@@ -921,7 +921,7 @@ test("construction, fixed, trim, fillet and offset operations stay responsive", 
   await expect(input).toBeVisible();
   await input.fill("40");
   await measureInteraction(page, results, "offset/submit-distance", () => input.press("Enter"), 350);
-  state = await page.evaluate(() => window.__cadTest.authoringStateForTest());
+  state = await page.evaluate(() => window.__jot2dTest.authoringStateForTest());
   expect(state.lineCount).toBe(offsetLoaded.state.lineCount + 1);
 
   console.log(JSON.stringify({ kind: "editing-authoring-latency", ...latencySummary(results) }));
@@ -931,7 +931,7 @@ test("selection, deletion, undo and redo stay responsive on the complete fixture
   test.setTimeout(120000);
   const results = [];
   const loaded = await loadFixture(page, fixture, { x: 0, y: 0 }, 0.25);
-  const selectable = await page.evaluate(() => window.__cadTest.selectableLineClientPositionForTest());
+  const selectable = await page.evaluate(() => window.__jot2dTest.selectableLineClientPositionForTest());
   expect(selectable).not.toBeNull();
 
   await measureInteraction(page, results, "selection/line-pointerdown-up", () => page.mouse.click(selectable.x, selectable.y), 150);
@@ -988,7 +988,7 @@ test("point, line, circle, arc, endpoint and additive selection stay responsive"
 
   for (const kind of ["point", "line", "circle", "arc", "endpoint"]) {
     await measureInteraction(page, results, `selection/${kind}`, () => clickWorld(page, sandbox.targets[kind].click), 150);
-    const selected = await page.evaluate(() => window.__cadTest.selectedGeometryIdsForTest());
+    const selected = await page.evaluate(() => window.__jot2dTest.selectedGeometryIdsForTest());
     if (kind === "point") expect(selected.points).toEqual([sandbox.targets.point.id]);
     if (kind === "line") expect(selected.lines).toEqual([sandbox.targets.line.id]);
     if (kind === "circle") expect(selected.circles).toEqual([sandbox.targets.circle.id]);
@@ -999,7 +999,7 @@ test("point, line, circle, arc, endpoint and additive selection stay responsive"
   await measureInteraction(page, results, "selection/add-line", () => clickWorld(page, sandbox.targets.line.click), 150);
   await measureInteraction(page, results, "selection/add-circle", () => clickWorld(page, sandbox.targets.circle.click), 150);
   await page.keyboard.up("Shift");
-  const additive = await page.evaluate(() => window.__cadTest.selectedGeometryIdsForTest());
+  const additive = await page.evaluate(() => window.__jot2dTest.selectedGeometryIdsForTest());
   expect(additive.lines).toEqual([sandbox.targets.line.id]);
   expect(additive.circles).toEqual([sandbox.targets.circle.id]);
 

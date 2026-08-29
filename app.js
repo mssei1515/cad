@@ -118,7 +118,7 @@
   const canvasContextMenu = document.getElementById("canvasContextMenu");
   const sketchOverlay = document.getElementById("sketchOverlay");
   const sketchOverlayResizeHandle = document.getElementById("sketchOverlayResizeHandle");
-  const APPLICATION_LANGUAGE_STORAGE_KEY = "cad2.application.language";
+  const APPLICATION_LANGUAGE_STORAGE_KEY = "jot2d.application.language";
   const DEFAULT_COLOR_PALETTE = [
     "#000000", "#111827", "#374151", "#64748b", "#94a3b8", "#cbd5e1", "#ffffff",
     "#fca5a5", "#dc2626", "#991b1b",
@@ -167,7 +167,7 @@
     ["Geometryを選択または作成します。Spaceで拘束状態を表示します。", "Select or create geometry. Hold Space to show constraint status."],
     ["プロパティを最小化", "Collapse Properties"], ["プロパティを展開", "Expand Properties"],
     ["カラーパレット", "Color palette"], ["ジオメトリID", "Geometry ID"], ["日本語", "Japanese"], ["英語", "English"],
-    ["小さいサイズでも見やすい、Cad2のシンプルなロゴ", "A simple Cad2 logo designed to remain clear at small sizes"],
+    ["小さいサイズでも見やすい、Jot2Dのシンプルなロゴ", "A simple Jot2D logo designed to remain clear at small sizes"],
     ["通常表示", "Normal view"], ["選択・ドラッグできます。Shift/Ctrlクリックで複数選択できます。", "Select and drag geometry. Use Shift/Ctrl-click for multiple selection."],
     ["キャンバスをクリックして点を追加します。", "Click the canvas to add a point."], ["端点位置をクリックして連続線を作成します。終了はEscです。", "Click endpoint positions to create connected lines. Press Esc to finish."],
     ["矩形の1つ目の角をクリックしてください。Escで選択モードに戻ります", "Click the first rectangle corner. Press Esc to return to selection mode."],
@@ -229,8 +229,8 @@
   })();
   document.documentElement.lang = applicationLanguage;
   const DEFAULT_DOCUMENT_NAME = "無題";
-  const CAD2_FILE_EXTENSION = ".cad2";
-  const CAD2_FILE_MIME_TYPE = "application/json";
+  const JOT2D_FILE_EXTENSION = ".jot2d";
+  const JOT2D_FILE_MIME_TYPE = "application/json";
   const ROOT_SKETCH_ID = "ROOT";
   const ROOT_SKETCH_NAME = "Root Sketch";
   const DEFAULT_SKETCH_ID = "S1";
@@ -634,7 +634,7 @@
   }
 
   function safeDownloadBaseName(name) {
-    return effectiveDocumentNameFromValue(name).replace(/[<>:"/\\|?*\x00-\x1F]/g, "_").replace(/[. ]+$/g, "").trim() || "cad-model";
+    return effectiveDocumentNameFromValue(name).replace(/[<>:"/\\|?*\x00-\x1F]/g, "_").replace(/[. ]+$/g, "").trim() || "jot2d-model";
   }
 
   function effectiveDocumentNameFromValue(value) {
@@ -644,7 +644,7 @@
 
   function updateDocumentNameUI() {
     const displayName = effectiveDocumentName();
-    document.title = `${displayName} - Cad2`;
+    document.title = `${displayName} - Jot2D`;
   }
 
   function escapeHtml(value) {
@@ -6806,10 +6806,10 @@
     ensureBlockState();
   }
 
-  function cad2FilePickerTypes() {
+  function jot2dFilePickerTypes() {
     return [{
-      description: applicationText("Cad2ドキュメント", "Cad2 document"),
-      accept: { [CAD2_FILE_MIME_TYPE]: [CAD2_FILE_EXTENSION] },
+      description: applicationText("Jot2Dドキュメント", "Jot2D document"),
+      accept: { [JOT2D_FILE_MIME_TYPE]: [JOT2D_FILE_EXTENSION] },
     }];
   }
 
@@ -6832,17 +6832,17 @@
     return false;
   }
 
-  function serializedCad2FileData() {
+  function serializedJot2DFileData() {
     return JSON.stringify(serializeModel(), null, 2);
   }
 
-  async function writeCad2File(handle) {
+  async function writeJot2DFile(handle) {
     const writable = await handle.createWritable();
-    await writable.write(serializedCad2FileData());
+    await writable.write(serializedJot2DFileData());
     await writable.close();
   }
 
-  async function saveCad2File({ saveAs = false } = {}) {
+  async function saveJot2DFile({ saveAs = false } = {}) {
     if (blockEditSession) {
       setHint("ブロック定義編集を終了してから保存してください", "error");
       return false;
@@ -6852,12 +6852,12 @@
     try {
       if (!handle) {
         handle = await window.showSaveFilePicker({
-          suggestedName: `${safeDownloadBaseName(model.documentName)}${CAD2_FILE_EXTENSION}`,
-          types: cad2FilePickerTypes(),
+          suggestedName: `${safeDownloadBaseName(model.documentName)}${JOT2D_FILE_EXTENSION}`,
+          types: jot2dFilePickerTypes(),
           excludeAcceptAllOption: true,
         });
       }
-      await writeCad2File(handle);
+      await writeJot2DFile(handle);
       currentFileHandle = handle;
       const message = applicationText(`保存しました: ${handle.name}`, `Saved: ${handle.name}`);
       setHint(message);
@@ -6875,8 +6875,8 @@
     }
   }
 
-  function saveCad2FileAs() {
-    return saveCad2File({ saveAs: true });
+  function saveJot2DFileAs() {
+    return saveJot2DFile({ saveAs: true });
   }
 
   function importFileData(file) {
@@ -6913,7 +6913,7 @@
     });
   }
 
-  async function openCad2File() {
+  async function openJot2DFile() {
     if (blockEditSession) {
       setHint("ブロック定義編集を終了してから読み込んでください", "error");
       return false;
@@ -6921,7 +6921,7 @@
     if (!ensureFileSystemAccess("showOpenFilePicker", "ファイルを開く操作", "open files")) return false;
     try {
       const [handle] = await window.showOpenFilePicker({
-        types: cad2FilePickerTypes(),
+        types: jot2dFilePickerTypes(),
         excludeAcceptAllOption: true,
         multiple: false,
       });
@@ -19444,8 +19444,8 @@
     if (commandKey && key === "s") {
       e.preventDefault();
       if (e.repeat) return;
-      if (e.shiftKey) void saveCad2FileAs();
-      else void saveCad2File();
+      if (e.shiftKey) void saveJot2DFileAs();
+      else void saveJot2DFile();
       return;
     }
     if (commandKey && isGeometryMode() && !textEditingTarget && ["c", "x", "v"].includes(key)) {
@@ -20321,9 +20321,9 @@
 
   document.getElementById("toolSpline")?.addEventListener("click", beginSplineCreation);
 
-  document.getElementById("exportBtn").addEventListener("click", () => void saveCad2File());
-  document.getElementById("saveAsBtn")?.addEventListener("click", () => void saveCad2FileAs());
-  document.getElementById("importBtn").addEventListener("click", () => void openCad2File());
+  document.getElementById("exportBtn").addEventListener("click", () => void saveJot2DFile());
+  document.getElementById("saveAsBtn")?.addEventListener("click", () => void saveJot2DFileAs());
+  document.getElementById("importBtn").addEventListener("click", () => void openJot2DFile());
   document.getElementById("addSketchBtn")?.addEventListener("click", () => createSketch("sibling"));
   document.getElementById("addChildSketchBtn")?.addEventListener("click", () => createSketch("child"));
 
@@ -20440,7 +20440,7 @@
 
   function installTestHooks() {
     if (!new URLSearchParams(window.location.search).has("test")) return;
-    window.__cadTest = {
+    window.__jot2dTest = {
       resetForResponsiveLineDragTest() {
         sampleModel();
         resetHistory("responsive line drag test");

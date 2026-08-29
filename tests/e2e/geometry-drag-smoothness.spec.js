@@ -5,7 +5,7 @@ const http = require("http");
 const path = require("path");
 
 const host = "127.0.0.1";
-const port = Number(process.env.CAD2_E2E_PORT || 8765) + 4;
+const port = Number(process.env.JOT2D_E2E_PORT || 8765) + 4;
 const baseUrl = `http://${host}:${port}`;
 const sourceFixture = JSON.parse(fs.readFileSync(path.resolve(__dirname, "../../test-data/テスト図形.json"), "utf8"));
 let serverProcess = null;
@@ -321,7 +321,7 @@ test.afterAll(() => {
 test("keeps additional point, line, circle, arc, and endpoint drags smooth", async ({ page }) => {
   test.setTimeout(600000);
   await page.goto(`${baseUrl}/index.html?test=1`);
-  await page.waitForFunction(() => window.__cadTest);
+  await page.waitForFunction(() => window.__jot2dTest);
   const summaries = [];
   const selectedVariants = process.env.CAD_GEOMETRY_VARIANT
     ? variants.filter((variant) => variant.name === process.env.CAD_GEOMETRY_VARIANT)
@@ -340,11 +340,11 @@ test("keeps additional point, line, circle, arc, and endpoint drags smooth", asy
     let worstPath = null;
     for (const dragPath of selectedDragPaths) {
       await page.evaluate(
-        ({ data, fileName }) => window.__cadTest.importDocumentNameFixture(data, fileName),
+        ({ data, fileName }) => window.__jot2dTest.importDocumentNameFixture(data, fileName),
         { data: fixture, fileName: `${variant.name}.json` },
       );
       const result = await page.evaluate(
-        ({ descriptor, deltas }) => window.__cadTest.geometryDragPathForTest(descriptor, deltas),
+        ({ descriptor, deltas }) => window.__jot2dTest.geometryDragPathForTest(descriptor, deltas),
         { descriptor: variant.descriptor, deltas: dragPath.deltas },
       );
       if (!result?.sessionAvailable) {
@@ -412,18 +412,18 @@ test("keeps additional point, line, circle, arc, and endpoint drags smooth", asy
 test("moves arcs by their centers when an indirectly constrained radius has no drag freedom", async ({ page }) => {
   test.setTimeout(120000);
   await page.goto(`${baseUrl}/index.html?test=1`);
-  await page.waitForFunction(() => window.__cadTest);
+  await page.waitForFunction(() => window.__jot2dTest);
   const fixture = fixtureWithoutConstraints([
     { type: "pointAxisDistance", p1: "P27", p2: "P46", axis: "x" },
   ]);
 
   for (const id of ["A1", "A2", "A5", "A6"]) {
     await page.evaluate(
-      ({ data, fileName }) => window.__cadTest.loadDocumentFixtureForDragTest(data, fileName),
+      ({ data, fileName }) => window.__jot2dTest.loadDocumentFixtureForDragTest(data, fileName),
       { data: fixture, fileName: `indirect-radius-${id}.json` },
     );
     const result = await page.evaluate(
-      ({ target, deltas }) => window.__cadTest.geometryDragPathForTest(target, deltas),
+      ({ target, deltas }) => window.__jot2dTest.geometryDragPathForTest(target, deltas),
       { target: { kind: "arc", id }, deltas: [[10, 0], [20, 0]] },
     );
     const centerMovement = pointDistance(result.startState.center, result.previews.at(-1).state.center);

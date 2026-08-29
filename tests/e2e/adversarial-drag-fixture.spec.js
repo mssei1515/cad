@@ -5,7 +5,7 @@ const http = require("http");
 const path = require("path");
 
 const host = "127.0.0.1";
-const port = Number(process.env.CAD2_E2E_PORT || 8765) + 6;
+const port = Number(process.env.JOT2D_E2E_PORT || 8765) + 6;
 const baseUrl = `http://${host}:${port}`;
 const fixture = JSON.parse(fs.readFileSync(path.resolve(__dirname, "../../test-data/意地悪ドラッグ完全拘束.json"), "utf8"));
 let serverProcess = null;
@@ -136,9 +136,9 @@ test("adversarial mixed-scale fixture is completely constrained", async ({ page 
   });
 
   await page.goto(`${baseUrl}/index.html?test=1`);
-  await page.waitForFunction(() => window.__cadTest);
-  const imported = await page.evaluate((data) => window.__cadTest.importDocumentNameFixture(data, "意地悪ドラッグ完全拘束.json"), fixture);
-  const analysis = await page.evaluate(() => window.__cadTest.constraintAnalysisForTest());
+  await page.waitForFunction(() => window.__jot2dTest);
+  const imported = await page.evaluate((data) => window.__jot2dTest.importDocumentNameFixture(data, "意地悪ドラッグ完全拘束.json"), fixture);
+  const analysis = await page.evaluate(() => window.__jot2dTest.constraintAnalysisForTest());
   const duplicateLabels = await page.locator(".constraint-item.duplicate").allTextContents();
 
   expect(analysis.stable, `constraint analysis: ${JSON.stringify(analysis)}`).toBe(true);
@@ -153,11 +153,11 @@ test("adversarial mixed-scale fixture is completely constrained", async ({ page 
     constraintCount: 248,
   }));
 
-  const linePosition = await page.evaluate(() => window.__cadTest.selectableLineClientPositionForTest());
+  const linePosition = await page.evaluate(() => window.__jot2dTest.selectableLineClientPositionForTest());
   const selectionStartedAt = Date.now();
   await page.mouse.click(linePosition.x, linePosition.y);
   const selectionElapsedMs = Date.now() - selectionStartedAt;
-  const selectedGeometryIds = await page.evaluate(() => window.__cadTest.selectedGeometryIdsForTest());
+  const selectedGeometryIds = await page.evaluate(() => window.__jot2dTest.selectedGeometryIdsForTest());
   console.log(JSON.stringify({ importElapsedMs: imported.elapsedMs, selectionElapsedMs, linePosition, selectedGeometryIds }));
   expect(imported.elapsedMs).toBeLessThan(500);
   expect(selectionElapsedMs).toBeLessThan(200);
@@ -167,7 +167,7 @@ test("adversarial mixed-scale fixture is completely constrained", async ({ page 
 test("recommended removals expose smooth draggable degrees of freedom", async ({ page }) => {
   test.setTimeout(600000);
   await page.goto(`${baseUrl}/index.html?test=1`);
-  await page.waitForFunction(() => window.__cadTest);
+  await page.waitForFunction(() => window.__jot2dTest);
   const summaries = [];
   const selectedCaseNames = new Set((process.env.CAD_ADVERSARIAL_CASE || "").split(",").map((name) => name.trim()).filter(Boolean));
   const selectedCases = selectedCaseNames.size > 0
@@ -180,10 +180,10 @@ test("recommended removals expose smooth draggable degrees of freedom", async ({
   for (const testCase of selectedCases) {
     const reducedFixture = fixtureWithoutConstraints(testCase.removed);
     await page.evaluate(
-      ({ data, fileName }) => window.__cadTest.loadDocumentFixtureForDragTest(data, fileName),
+      ({ data, fileName }) => window.__jot2dTest.loadDocumentFixtureForDragTest(data, fileName),
       { data: reducedFixture, fileName: `${testCase.name}.json` },
     );
-    const analysis = await page.evaluate(() => window.__cadTest.constraintAnalysisForTest());
+    const analysis = await page.evaluate(() => window.__jot2dTest.constraintAnalysisForTest());
     expect(analysis.stable, testCase.name).toBe(true);
     expect(analysis.errorNorm, testCase.name).toBeLessThan(1e-4);
     expect(analysis.freeVariableCount, testCase.name).toBeGreaterThan(0);
@@ -194,11 +194,11 @@ test("recommended removals expose smooth draggable degrees of freedom", async ({
     for (const descriptor of testCase.drags) {
       for (const dragPath of selectedPaths) {
         await page.evaluate(
-          ({ data, fileName }) => window.__cadTest.loadDocumentFixtureForDragTest(data, fileName),
+          ({ data, fileName }) => window.__jot2dTest.loadDocumentFixtureForDragTest(data, fileName),
           { data: reducedFixture, fileName: `${testCase.name}-${dragPath.name}.json` },
         );
         const result = await page.evaluate(
-          ({ target, deltas }) => window.__cadTest.geometryDragPathForTest(target, deltas),
+          ({ target, deltas }) => window.__jot2dTest.geometryDragPathForTest(target, deltas),
           { target: descriptor, deltas: dragPath.deltas },
         );
         const label = `${testCase.name}/${descriptor.kind}:${descriptor.id}/${dragPath.name}`;

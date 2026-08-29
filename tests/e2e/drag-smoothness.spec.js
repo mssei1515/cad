@@ -5,7 +5,7 @@ const http = require("http");
 const path = require("path");
 
 const host = "127.0.0.1";
-const port = Number(process.env.CAD2_E2E_PORT || 8765) + 2;
+const port = Number(process.env.JOT2D_E2E_PORT || 8765) + 2;
 const baseUrl = `http://${host}:${port}`;
 const sourceFixture = JSON.parse(fs.readFileSync(path.resolve(__dirname, "../../test-data/テスト図形.json"), "utf8"));
 let serverProcess = null;
@@ -177,11 +177,11 @@ test.afterAll(() => {
 
 async function runPathCase(page, fixture, variant, caseName, deltas) {
   await page.evaluate(
-    ({ fixture: data, fileName }) => window.__cadTest.importDocumentNameFixture(data, fileName),
+    ({ fixture: data, fileName }) => window.__jot2dTest.importDocumentNameFixture(data, fileName),
     { fixture, fileName: `${variant.name}.json` },
   );
   const result = await page.evaluate(
-    ({ pointId, pathDeltas }) => window.__cadTest.guidedPointDragPathForTest(pointId, pathDeltas),
+    ({ pointId, pathDeltas }) => window.__jot2dTest.guidedPointDragPathForTest(pointId, pathDeltas),
     { pointId: variant.pointId, pathDeltas: deltas },
   );
   expect(result, caseName).not.toBeNull();
@@ -250,7 +250,7 @@ for (const variant of variants) {
   test(`keeps ${variant.name} smooth across constraint, motion, speed, size, and direction patterns`, async ({ page }) => {
     test.setTimeout(120000);
     await page.goto(`${baseUrl}/index.html?test=1`);
-    await page.waitForFunction(() => window.__cadTest);
+    await page.waitForFunction(() => window.__jot2dTest);
 
     const summaries = [];
     const fixture = fixtureWithoutConstraints(variant.removed);

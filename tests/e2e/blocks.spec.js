@@ -4,7 +4,7 @@ const http = require("http");
 const path = require("path");
 
 const host = "127.0.0.1";
-const port = Number(process.env.CAD2_E2E_PORT || 8765) + 1;
+const port = Number(process.env.JOT2D_E2E_PORT || 8765) + 1;
 const baseUrl = `http://${host}:${port}`;
 let serverProcess = null;
 
@@ -609,18 +609,18 @@ test.afterAll(() => {
 
 test("creates, places, drags, edits, and reloads local-coordinate blocks", async ({ page }) => {
   await page.goto(`${baseUrl}/index.html?test=1`);
-  await page.waitForFunction(() => window.__cadTest);
+  await page.waitForFunction(() => window.__jot2dTest);
 
-  const setup = await page.evaluate(() => window.__cadTest.resetForBlockCreationUi());
+  const setup = await page.evaluate(() => window.__jot2dTest.resetForBlockCreationUi());
   await openBlocksExplorer(page);
   await page.click("#toolCreateBlock");
   await expect(page.locator("body")).toHaveClass(/block-editing/);
   await expect(page.locator("#blockEditorNameInput")).toBeVisible();
   await page.fill("#blockEditorNameInput", "Frame Block");
-  expect(await page.evaluate(() => window.__cadTest.blockEditorState())).toEqual(expect.objectContaining({ editing: true, isNew: true, hostLineCount: 4, editorLineCount: 4 }));
+  expect(await page.evaluate(() => window.__jot2dTest.blockEditorState())).toEqual(expect.objectContaining({ editing: true, isNew: true, hostLineCount: 4, editorLineCount: 4 }));
   await page.click("#completeBlockEditBtn");
 
-  let state = await page.evaluate(() => window.__cadTest.blockState());
+  let state = await page.evaluate(() => window.__jot2dTest.blockState());
   expect(state.definitions).toEqual([
     expect.objectContaining({ name: "Frame Block", points: 4, lines: 4, constraints: 4, activeSketchId: "S1", origin: { x: 0, y: 0 } }),
   ]);
@@ -632,62 +632,62 @@ test("creates, places, drags, edits, and reloads local-coordinate blocks", async
   expect(state.serialized.points).toHaveLength(0);
   expect(state.serialized.lines).toHaveLength(0);
 
-  const interaction = await page.evaluate(() => window.__cadTest.blockInteractionPoints());
+  const interaction = await page.evaluate(() => window.__jot2dTest.blockInteractionPoints());
   expect(interaction.handle).toBeNull();
   const before = state.instances[0];
   await page.mouse.move(interaction.center.x, interaction.center.y);
   await page.mouse.down();
   await page.mouse.move(interaction.center.x + 70, interaction.center.y + 35, { steps: 4 });
   await page.mouse.up();
-  state = await page.evaluate(() => window.__cadTest.blockState());
+  state = await page.evaluate(() => window.__jot2dTest.blockState());
   expect(state.instances[0].x).toBeCloseTo(before.x + 70 / interaction.scale, 3);
   expect(state.instances[0].y).toBeCloseTo(before.y + 35 / interaction.scale, 3);
   expect(state.instances[0].rotation).toBeCloseTo(before.rotation, 8);
-  expect((await page.evaluate(() => window.__cadTest.blockInteractionPoints())).handle).toBeNull();
+  expect((await page.evaluate(() => window.__jot2dTest.blockInteractionPoints())).handle).toBeNull();
 
   const canvas = await page.locator("#canvas").boundingBox();
   await openBlockDefinitions(page);
   await page.click(".blockPlaceBtn");
   await page.mouse.click(canvas.x + canvas.width * 0.72, canvas.y + canvas.height * 0.58);
   await page.mouse.click(canvas.x + canvas.width * 0.8, canvas.y + canvas.height * 0.58);
-  state = await page.evaluate(() => window.__cadTest.blockState());
+  state = await page.evaluate(() => window.__jot2dTest.blockState());
   expect(state.instances).toHaveLength(2);
   expect(state.instances[1].rotation).toBeCloseTo(0, 6);
 
-  const external = await page.evaluate(() => window.__cadTest.blockExternalConstraintCase());
+  const external = await page.evaluate(() => window.__jot2dTest.blockExternalConstraintCase());
   expect(external.success).toBe(true);
   expect(external.errorNorm).toBeLessThan(1e-5);
   expect(external.projectedError).toBeLessThan(1e-5);
   expect(external.localAfter).toEqual(external.localBefore);
 
-  const readOnly = await page.evaluate(() => window.__cadTest.blockReadOnlyDimensionCase());
+  const readOnly = await page.evaluate(() => window.__jot2dTest.blockReadOnlyDimensionCase());
   expect(readOnly).toEqual(expect.objectContaining({ created: true, readOnly: true, enabled: false }));
 
-  const edited = await page.evaluate(() => window.__cadTest.blockDefinitionUpdateCase());
+  const edited = await page.evaluate(() => window.__jot2dTest.blockDefinitionUpdateCase());
   expect(edited.editing).toBe(false);
   expect(edited.revision).toBeGreaterThan(1);
   expect(edited.lengths).toHaveLength(2);
   expect(edited.lengths[0]).toBeGreaterThan(edited.before);
   expect(edited.lengths[1]).toBeCloseTo(edited.lengths[0], 6);
 
-  const reloaded = await page.evaluate(() => window.__cadTest.reloadBlockState());
+  const reloaded = await page.evaluate(() => window.__jot2dTest.reloadBlockState());
   expect(reloaded).toEqual({ definitions: 1, instances: 2, projectionLines: 8, serializedVersion: 16 });
 
   await openBlockDefinitions(page);
   await page.click(".blockDeleteBtn");
-  expect((await page.evaluate(() => window.__cadTest.blockState())).definitions).toHaveLength(1);
+  expect((await page.evaluate(() => window.__jot2dTest.blockState())).definitions).toHaveLength(1);
   await page.screenshot({ path: "test-results/block-instances.png", fullPage: true });
 });
 
 test("block placement defaults to persistent orthogonal rotation lock and can use free rotation", async ({ page }) => {
   await page.goto(`${baseUrl}/index.html?test=1`);
-  await page.waitForFunction(() => window.__cadTest);
-  await page.evaluate(() => window.__cadTest.resetForBlockCreationUi());
+  await page.waitForFunction(() => window.__jot2dTest);
+  await page.evaluate(() => window.__jot2dTest.resetForBlockCreationUi());
   await openBlocksExplorer(page);
   await page.click("#toolCreateBlock");
   await page.click("#completeBlockEditBtn");
 
-  let state = await page.evaluate(() => window.__cadTest.blockState());
+  let state = await page.evaluate(() => window.__jot2dTest.blockState());
   expect(state.instances[0].rotationLocked).toBe(true);
   const canvas = await page.locator("#canvas").boundingBox();
 
@@ -705,24 +705,24 @@ test("block placement defaults to persistent orthogonal rotation lock and can us
     const center = { x: canvas.x + canvas.width * (0.56 + index * 0.04), y: canvas.y + canvas.height * 0.48 };
     await page.mouse.click(center.x, center.y);
     await page.mouse.click(center.x + item.dx, center.y + item.dy);
-    state = await page.evaluate(() => window.__cadTest.blockState());
+    state = await page.evaluate(() => window.__jot2dTest.blockState());
     expect(state.instances[index + 1].rotationLocked).toBe(true);
     expect(state.instances[index + 1].rotation).toBeCloseTo(item.expected, 8);
   }
   const locked = state.instances[2];
   expect(locked.rotationLocked).toBe(true);
   expect(locked.rotation).toBeCloseTo(Math.PI / 2, 8);
-  let lockState = await page.evaluate((id) => window.__cadTest.blockRotationLockStateForTest(id), locked.id);
+  let lockState = await page.evaluate((id) => window.__jot2dTest.blockRotationLockStateForTest(id), locked.id);
   expect(lockState.solverVariables).toEqual(["x", "y"]);
   expect(lockState.translationSessionAvailable).toBe(true);
   expect(lockState.rotationSessionAvailable).toBe(false);
 
-  const interaction = await page.evaluate((id) => window.__cadTest.blockInteractionPoints(id), locked.id);
+  const interaction = await page.evaluate((id) => window.__jot2dTest.blockInteractionPoints(id), locked.id);
   await page.mouse.move(interaction.center.x, interaction.center.y);
   await page.mouse.down();
   await page.mouse.move(interaction.center.x + 52, interaction.center.y + 24, { steps: 2 });
   await page.mouse.up();
-  lockState = await page.evaluate((id) => window.__cadTest.blockRotationLockStateForTest(id), locked.id);
+  lockState = await page.evaluate((id) => window.__jot2dTest.blockRotationLockStateForTest(id), locked.id);
   expect(lockState.x).not.toBeCloseTo(locked.x, 6);
   expect(lockState.rotation).toBeCloseTo(locked.rotation, 8);
 
@@ -733,27 +733,27 @@ test("block placement defaults to persistent orthogonal rotation lock and can us
   const freeCenter = { x: canvas.x + canvas.width * 0.7, y: canvas.y + canvas.height * 0.64 };
   await page.mouse.click(freeCenter.x, freeCenter.y);
   await page.mouse.click(freeCenter.x + 90, freeCenter.y + 42);
-  state = await page.evaluate(() => window.__cadTest.blockState());
+  state = await page.evaluate(() => window.__jot2dTest.blockState());
   const free = state.instances[5];
   expect(free.rotationLocked).toBe(false);
   expect(Math.abs(free.rotation / (Math.PI / 2) - Math.round(free.rotation / (Math.PI / 2)))).toBeGreaterThan(0.1);
 
   await page.click("#undoBtn");
-  expect((await page.evaluate(() => window.__cadTest.blockState())).instances).toHaveLength(5);
+  expect((await page.evaluate(() => window.__jot2dTest.blockState())).instances).toHaveLength(5);
   await page.click("#redoBtn");
-  state = await page.evaluate(() => window.__cadTest.blockState());
+  state = await page.evaluate(() => window.__jot2dTest.blockState());
   expect(state.instances[5]).toEqual(expect.objectContaining({ rotationLocked: false }));
-  await page.evaluate(() => window.__cadTest.reloadBlockState());
-  state = await page.evaluate(() => window.__cadTest.blockState());
+  await page.evaluate(() => window.__jot2dTest.reloadBlockState());
+  state = await page.evaluate(() => window.__jot2dTest.blockState());
   expect(state.instances.slice(1, 5).every((instance) => instance.rotationLocked)).toBe(true);
   expect(state.instances[5].rotationLocked).toBe(false);
 });
 
 test("selected blocks can change rotation mode and reject an unsatisfied orthogonal snap", async ({ page }) => {
   await page.goto(`${baseUrl}/index.html?test=1`);
-  await page.waitForFunction(() => window.__cadTest);
-  await page.evaluate((fixture) => window.__cadTest.importDocumentNameFixture(fixture, "rotation-lock.json"), rotationLockFixture());
-  await page.evaluate(() => window.__cadTest.selectGeometryIdsForTest({ blockInstances: ["BI1"] }));
+  await page.waitForFunction(() => window.__jot2dTest);
+  await page.evaluate((fixture) => window.__jot2dTest.importDocumentNameFixture(fixture, "rotation-lock.json"), rotationLockFixture());
+  await page.evaluate(() => window.__jot2dTest.selectGeometryIdsForTest({ blockInstances: ["BI1"] }));
   await openBlocksExplorer(page);
   await expect(page.locator('#propertiesPanel input[data-block-rotation-mode="free"]')).toBeChecked();
   await expect(page.locator("#propertiesPanel .property-heading")).toHaveText("ブロック");
@@ -768,9 +768,9 @@ test("selected blocks can change rotation mode and reject an unsatisfied orthogo
   await expect(page.locator('#propertiesPanel input[data-property="block-rotation"]')).toHaveCount(0);
   await expect(page.locator('#propertiesPanel select[data-property="block-orthogonal-rotation"]')).toHaveCount(0);
   await expect(page.locator("#blockSketchConfig")).toHaveCount(0);
-  const before = await page.evaluate(() => window.__cadTest.blockRotationLockStateForTest("BI1"));
+  const before = await page.evaluate(() => window.__jot2dTest.blockRotationLockStateForTest("BI1"));
   await page.click('#propertiesPanel input[data-block-rotation-mode="locked"]');
-  let after = await page.evaluate(() => window.__cadTest.blockRotationLockStateForTest("BI1"));
+  let after = await page.evaluate(() => window.__jot2dTest.blockRotationLockStateForTest("BI1"));
   expect(after.rotationLocked).toBe(true);
   expect(after.rotation).toBeCloseTo(0, 8);
   expect(after.displayCenter.x).toBeCloseTo(before.displayCenter.x, 8);
@@ -780,47 +780,47 @@ test("selected blocks can change rotation mode and reject an unsatisfied orthogo
   await expect(page.locator('#propertiesPanel select[data-property="block-orthogonal-rotation"]')).toHaveValue("0");
 
   await page.click("#undoBtn");
-  let restored = await page.evaluate(() => window.__cadTest.blockRotationLockStateForTest("BI1"));
+  let restored = await page.evaluate(() => window.__jot2dTest.blockRotationLockStateForTest("BI1"));
   expect(restored.rotationLocked).toBe(false);
   expect(restored.rotation).toBeCloseTo(Math.PI / 6, 8);
   await page.click("#redoBtn");
-  restored = await page.evaluate(() => window.__cadTest.blockRotationLockStateForTest("BI1"));
+  restored = await page.evaluate(() => window.__jot2dTest.blockRotationLockStateForTest("BI1"));
   expect(restored.rotationLocked).toBe(true);
   expect(restored.rotation).toBeCloseTo(0, 8);
-  await page.evaluate(() => window.__cadTest.selectGeometryIdsForTest({ blockInstances: ["BI1"] }));
+  await page.evaluate(() => window.__jot2dTest.selectGeometryIdsForTest({ blockInstances: ["BI1"] }));
 
-  const angleBefore = await page.evaluate(() => window.__cadTest.blockRotationLockStateForTest("BI1"));
+  const angleBefore = await page.evaluate(() => window.__jot2dTest.blockRotationLockStateForTest("BI1"));
   await page.locator('#propertiesPanel select[data-property="block-orthogonal-rotation"]').selectOption("90");
-  let angleChanged = await page.evaluate(() => window.__cadTest.blockRotationLockStateForTest("BI1"));
+  let angleChanged = await page.evaluate(() => window.__jot2dTest.blockRotationLockStateForTest("BI1"));
   expect(angleChanged.rotationLocked).toBe(true);
   expect(angleChanged.rotation).toBeCloseTo(Math.PI / 2, 8);
   expect(angleChanged.displayCenter.x).toBeCloseTo(angleBefore.displayCenter.x, 8);
   expect(angleChanged.displayCenter.y).toBeCloseTo(angleBefore.displayCenter.y, 8);
   await page.click("#undoBtn");
-  angleChanged = await page.evaluate(() => window.__cadTest.blockRotationLockStateForTest("BI1"));
+  angleChanged = await page.evaluate(() => window.__jot2dTest.blockRotationLockStateForTest("BI1"));
   expect(angleChanged.rotation).toBeCloseTo(0, 8);
   await page.click("#redoBtn");
-  angleChanged = await page.evaluate(() => window.__cadTest.blockRotationLockStateForTest("BI1"));
+  angleChanged = await page.evaluate(() => window.__jot2dTest.blockRotationLockStateForTest("BI1"));
   expect(angleChanged.rotation).toBeCloseTo(Math.PI / 2, 8);
-  await page.evaluate(() => window.__cadTest.selectGeometryIdsForTest({ blockInstances: ["BI1"] }));
+  await page.evaluate(() => window.__jot2dTest.selectGeometryIdsForTest({ blockInstances: ["BI1"] }));
 
   await page.click('#propertiesPanel input[data-block-rotation-mode="free"]');
-  after = await page.evaluate(() => window.__cadTest.blockRotationLockStateForTest("BI1"));
+  after = await page.evaluate(() => window.__jot2dTest.blockRotationLockStateForTest("BI1"));
   expect(after.rotationLocked).toBe(false);
   expect(after.rotation).toBeCloseTo(Math.PI / 2, 8);
   expect(after.solverVariables).toEqual(["rotation", "x", "y"]);
 
-  await page.evaluate((fixture) => window.__cadTest.importDocumentNameFixture(fixture, "fixed-rotation-lock.json"), rotationLockFixture({ fixed: true, rotation: 0, rotationLocked: true }));
-  await page.evaluate(() => window.__cadTest.selectGeometryIdsForTest({ blockInstances: ["BI1"] }));
+  await page.evaluate((fixture) => window.__jot2dTest.importDocumentNameFixture(fixture, "fixed-rotation-lock.json"), rotationLockFixture({ fixed: true, rotation: 0, rotationLocked: true }));
+  await page.evaluate(() => window.__jot2dTest.selectGeometryIdsForTest({ blockInstances: ["BI1"] }));
   await expect(page.locator('#propertiesPanel input[data-block-rotation-mode="locked"]')).toBeDisabled();
   await expect(page.locator('#propertiesPanel input[data-block-rotation-mode="free"]')).toBeDisabled();
   await expect(page.locator('#propertiesPanel select[data-property="block-orthogonal-rotation"]')).toBeDisabled();
 
-  await page.evaluate((fixture) => window.__cadTest.importDocumentNameFixture(fixture, "constrained-rotation-lock.json"), rotationLockFixture({ constrained: true }));
-  await page.evaluate(() => window.__cadTest.selectGeometryIdsForTest({ blockInstances: ["BI1"] }));
-  const constrainedBefore = await page.evaluate(() => window.__cadTest.blockRotationLockStateForTest("BI1"));
+  await page.evaluate((fixture) => window.__jot2dTest.importDocumentNameFixture(fixture, "constrained-rotation-lock.json"), rotationLockFixture({ constrained: true }));
+  await page.evaluate(() => window.__jot2dTest.selectGeometryIdsForTest({ blockInstances: ["BI1"] }));
+  const constrainedBefore = await page.evaluate(() => window.__jot2dTest.blockRotationLockStateForTest("BI1"));
   await page.click('#propertiesPanel input[data-block-rotation-mode="locked"]');
-  const rejected = await page.evaluate(() => window.__cadTest.blockRotationLockStateForTest("BI1"));
+  const rejected = await page.evaluate(() => window.__jot2dTest.blockRotationLockStateForTest("BI1"));
   expect(rejected.rotationLocked).toBe(false);
   expect(rejected.rotation).toBeCloseTo(constrainedBefore.rotation, 8);
   expect(rejected.x).toBeCloseTo(constrainedBefore.x, 8);
@@ -828,11 +828,11 @@ test("selected blocks can change rotation mode and reject an unsatisfied orthogo
   await expect(page.locator("#hint")).toContainText("直交回転ロックを適用できません");
   await expect(page.locator('#propertiesPanel input[data-block-rotation-mode="free"]')).toBeChecked();
 
-  await page.evaluate((fixture) => window.__cadTest.importDocumentNameFixture(fixture, "constrained-orthogonal-angle.json"), rotationLockFixture({ constrained: true, rotation: 0, rotationLocked: true }));
-  await page.evaluate(() => window.__cadTest.selectGeometryIdsForTest({ blockInstances: ["BI1"] }));
-  const angleRejectedBefore = await page.evaluate(() => window.__cadTest.blockRotationLockStateForTest("BI1"));
+  await page.evaluate((fixture) => window.__jot2dTest.importDocumentNameFixture(fixture, "constrained-orthogonal-angle.json"), rotationLockFixture({ constrained: true, rotation: 0, rotationLocked: true }));
+  await page.evaluate(() => window.__jot2dTest.selectGeometryIdsForTest({ blockInstances: ["BI1"] }));
+  const angleRejectedBefore = await page.evaluate(() => window.__jot2dTest.blockRotationLockStateForTest("BI1"));
   await page.locator('#propertiesPanel select[data-property="block-orthogonal-rotation"]').selectOption("90");
-  const angleRejected = await page.evaluate(() => window.__cadTest.blockRotationLockStateForTest("BI1"));
+  const angleRejected = await page.evaluate(() => window.__jot2dTest.blockRotationLockStateForTest("BI1"));
   expect(angleRejected.rotation).toBeCloseTo(angleRejectedBefore.rotation, 8);
   expect(angleRejected.x).toBeCloseTo(angleRejectedBefore.x, 8);
   expect(angleRejected.y).toBeCloseTo(angleRejectedBefore.y, 8);
@@ -842,17 +842,17 @@ test("selected blocks can change rotation mode and reject an unsatisfied orthogo
 
 test("block placement and selected-block settings stay in Properties", async ({ page }) => {
   await page.goto(`${baseUrl}/index.html?test=1`);
-  await page.waitForFunction(() => window.__cadTest);
-  await page.evaluate(() => window.__cadTest.resetForBlockCreationUi());
+  await page.waitForFunction(() => window.__jot2dTest);
+  await page.evaluate(() => window.__jot2dTest.resetForBlockCreationUi());
   await openBlocksExplorer(page);
   await page.click("#toolCreateBlock");
   await page.click("#completeBlockEditBtn");
 
-  const instanceId = (await page.evaluate(() => window.__cadTest.blockState())).instances[0].id;
+  const instanceId = (await page.evaluate(() => window.__jot2dTest.blockState())).instances[0].id;
   await expect(page.locator("#blockSketchConfig")).toHaveCount(0);
   await expect(page.locator('#propertiesPanel input[data-block-rotation-mode="locked"]')).toBeVisible();
   await expect(page.locator("#propertiesPanel input[data-block-sketch-id]")).toHaveCount(1);
-  await page.evaluate(() => window.__cadTest.selectGeometryIdsForTest({}));
+  await page.evaluate(() => window.__jot2dTest.selectGeometryIdsForTest({}));
   await expect(page.locator("#blockSketchConfig")).toHaveCount(0);
   await expect(page.locator("#propertiesPanel input[data-block-rotation-mode]")).toHaveCount(0);
 
@@ -868,94 +868,94 @@ test("block placement and selected-block settings stay in Properties", async ({ 
   await expect(page.locator("#togglePropertiesPanelBtn")).toHaveAttribute("aria-expanded", "false");
   await page.click("#togglePropertiesPanelBtn");
 
-  await page.evaluate((id) => window.__cadTest.selectGeometryIdsForTest({ blockInstances: [id] }), instanceId);
+  await page.evaluate((id) => window.__jot2dTest.selectGeometryIdsForTest({ blockInstances: [id] }), instanceId);
   await expect(page.locator("#blockSketchConfig")).toHaveCount(0);
   await expect(page.locator("#propertiesPanel input[data-block-sketch-id]")).toHaveCount(1);
-  await page.evaluate(() => window.__cadTest.selectGeometryIdsForTest({}));
+  await page.evaluate(() => window.__jot2dTest.selectGeometryIdsForTest({}));
   await expect(page.locator("#blockSketchConfig")).toHaveCount(0);
   await expect(page.locator("#propertiesPanel input[data-block-sketch-id]")).toHaveCount(0);
 });
 
 test("selecting a block highlights only constraints that directly reference its projections", async ({ page }) => {
   await page.goto(`${baseUrl}/index.html?test=1`);
-  await page.waitForFunction(() => window.__cadTest);
-  await page.evaluate((fixture) => window.__cadTest.importDocumentNameFixture(fixture, "block-related-constraint.json"), blockPointOnLineFixture({ subjectY: -50, includeConstraint: true }));
+  await page.waitForFunction(() => window.__jot2dTest);
+  await page.evaluate((fixture) => window.__jot2dTest.importDocumentNameFixture(fixture, "block-related-constraint.json"), blockPointOnLineFixture({ subjectY: -50, includeConstraint: true }));
   await expandSketchTreeGroup(page, "constraint");
 
-  await page.evaluate(() => window.__cadTest.selectGeometryIdsForTest({ blockInstances: ["BI2"] }));
+  await page.evaluate(() => window.__jot2dTest.selectGeometryIdsForTest({ blockInstances: ["BI2"] }));
   await expect(page.locator('.sketch-object-row[data-object-kind="constraint"][data-constraint-index]')).toHaveClass(/sidebar-related/);
-  await page.evaluate(() => window.__cadTest.selectGeometryIdsForTest({}));
+  await page.evaluate(() => window.__jot2dTest.selectGeometryIdsForTest({}));
   await expect(page.locator('.sketch-object-row[data-object-kind="constraint"][data-constraint-index]')).not.toHaveClass(/sidebar-related/);
 });
 
 test("selected block instances highlight their definitions in the block window", async ({ page }) => {
   await page.goto(`${baseUrl}/index.html?test=1`);
-  await page.waitForFunction(() => window.__cadTest);
-  await page.evaluate((fixture) => window.__cadTest.importDocumentNameFixture(fixture, "block-list-selection.json"), blockPointOnLineFixture({ subjectY: -200 }));
+  await page.waitForFunction(() => window.__jot2dTest);
+  await page.evaluate((fixture) => window.__jot2dTest.importDocumentNameFixture(fixture, "block-list-selection.json"), blockPointOnLineFixture({ subjectY: -200 }));
   await openBlockDefinitions(page);
 
-  await page.evaluate(() => window.__cadTest.selectGeometryIdsForTest({ blockInstances: ["BI2"] }));
+  await page.evaluate(() => window.__jot2dTest.selectGeometryIdsForTest({ blockInstances: ["BI2"] }));
   await expect(page.locator('.block-item[data-id="B2"]')).toHaveClass(/block-selected/);
   await expect(page.locator('.block-item[data-id="B2"]')).toHaveAttribute("aria-selected", "true");
   await expect(page.locator('.block-item[data-id="B1"]')).not.toHaveClass(/block-selected/);
 
-  await page.evaluate(() => window.__cadTest.selectGeometryIdsForTest({ blockInstances: ["BI1", "BI2"] }));
+  await page.evaluate(() => window.__jot2dTest.selectGeometryIdsForTest({ blockInstances: ["BI1", "BI2"] }));
   await expect(page.locator(".block-item.block-selected")).toHaveCount(2);
-  await page.evaluate(() => window.__cadTest.selectGeometryIdsForTest({}));
+  await page.evaluate(() => window.__jot2dTest.selectGeometryIdsForTest({}));
   await expect(page.locator(".block-item.block-selected")).toHaveCount(0);
 });
 
 test("shift and ctrl clicks toggle block multiselection without moving instances", async ({ page }) => {
   await page.goto(`${baseUrl}/index.html?test=1`);
-  await page.waitForFunction(() => window.__cadTest);
-  await page.evaluate((fixture) => window.__cadTest.importDocumentNameFixture(fixture, "block-multiselect.json"), blockPointOnLineFixture({ subjectY: -200 }));
-  const before = (await page.evaluate(() => window.__cadTest.blockState())).instances;
-  const first = await page.evaluate(() => window.__cadTest.blockInteractionPoints("BI1"));
-  const second = await page.evaluate(() => window.__cadTest.blockInteractionPoints("BI2"));
+  await page.waitForFunction(() => window.__jot2dTest);
+  await page.evaluate((fixture) => window.__jot2dTest.importDocumentNameFixture(fixture, "block-multiselect.json"), blockPointOnLineFixture({ subjectY: -200 }));
+  const before = (await page.evaluate(() => window.__jot2dTest.blockState())).instances;
+  const first = await page.evaluate(() => window.__jot2dTest.blockInteractionPoints("BI1"));
+  const second = await page.evaluate(() => window.__jot2dTest.blockInteractionPoints("BI2"));
 
   await page.keyboard.down("Shift");
   await page.mouse.click(first.center.x, first.center.y);
   await page.mouse.click(second.center.x, second.center.y);
   await page.keyboard.up("Shift");
-  expect((await page.evaluate(() => window.__cadTest.blockState())).selectedInstanceIds.sort()).toEqual(["BI1", "BI2"]);
+  expect((await page.evaluate(() => window.__jot2dTest.blockState())).selectedInstanceIds.sort()).toEqual(["BI1", "BI2"]);
   await expect(page.locator("#blockSketchConfig")).toHaveCount(0);
 
   await page.keyboard.down("Control");
   await page.mouse.click(first.center.x, first.center.y);
   await page.keyboard.up("Control");
-  const toggled = await page.evaluate(() => window.__cadTest.blockState());
+  const toggled = await page.evaluate(() => window.__jot2dTest.blockState());
   expect(toggled.selectedInstanceIds).toEqual(["BI2"]);
   expect(toggled.instances).toEqual(before);
 
-  await page.evaluate(() => window.__cadTest.selectGeometryIdsForTest({}));
+  await page.evaluate(() => window.__jot2dTest.selectGeometryIdsForTest({}));
   const canvas = await page.locator("#canvas").boundingBox();
   await page.mouse.move(canvas.x + canvas.width - 8, canvas.y + canvas.height - 8);
   await page.mouse.down();
   await page.mouse.move(canvas.x + 8, canvas.y + 8, { steps: 4 });
   await page.mouse.up();
-  expect((await page.evaluate(() => window.__cadTest.blockState())).selectedInstanceIds.sort()).toEqual(["BI1", "BI2"]);
+  expect((await page.evaluate(() => window.__jot2dTest.blockState())).selectedInstanceIds.sort()).toEqual(["BI1", "BI2"]);
 });
 
 test("selected block definitions move under a new parent without changing ids or placement", async ({ page }) => {
   await page.goto(`${baseUrl}/index.html?test=1`);
-  await page.waitForFunction(() => window.__cadTest);
+  await page.waitForFunction(() => window.__jot2dTest);
   const fixture = blockPointOnLineFixture({ subjectY: -50, includeConstraint: true });
   fixture.points = [
     { id: "P100", x: -20, y: 100, fixed: false, kind: "endpoint", sketchId: "S1" },
     { id: "P101", x: 20, y: 100, fixed: false, kind: "endpoint", sketchId: "S1" },
   ];
   fixture.lines = [{ id: "L100", p1: "P100", p2: "P101", construction: false, sketchId: "S1" }];
-  await page.evaluate((data) => window.__cadTest.importDocumentNameFixture(data, "block-parent-compose.json"), fixture);
-  const before = (await page.evaluate(() => window.__cadTest.blockState())).instances;
-  await page.evaluate(() => window.__cadTest.selectGeometryIdsForTest({ lines: ["L100"], blockInstances: ["BI1", "BI2"] }));
+  await page.evaluate((data) => window.__jot2dTest.importDocumentNameFixture(data, "block-parent-compose.json"), fixture);
+  const before = (await page.evaluate(() => window.__jot2dTest.blockState())).instances;
+  await page.evaluate(() => window.__jot2dTest.selectGeometryIdsForTest({ lines: ["L100"], blockInstances: ["BI1", "BI2"] }));
   await openBlocksExplorer(page);
   await page.click("#toolCreateBlock");
-  const editor = await page.evaluate(() => window.__cadTest.blockEditorState());
+  const editor = await page.evaluate(() => window.__jot2dTest.blockEditorState());
   expect(editor).toEqual(expect.objectContaining({ depth: 1 }));
   expect(editor.editorBlockInstances).toHaveLength(2);
   await page.click("#completeBlockEditBtn");
 
-  let state = await page.evaluate(() => window.__cadTest.blockState());
+  let state = await page.evaluate(() => window.__jot2dTest.blockState());
   expect(state.definitions).toHaveLength(3);
   expect(state.instances).toHaveLength(1);
   const parent = state.definitions.find((definition) => definition.id === state.instances[0].definitionId);
@@ -977,49 +977,49 @@ test("selected block definitions move under a new parent without changing ids or
   }
 
   await page.click("#undoBtn");
-  state = await page.evaluate(() => window.__cadTest.blockState());
+  state = await page.evaluate(() => window.__jot2dTest.blockState());
   expect(state.definitions).toHaveLength(2);
   expect(state.definitions.every((definition) => definition.parentDefinitionId === null)).toBe(true);
   expect(state.instances.map((instance) => instance.id).sort()).toEqual(["BI1", "BI2"]);
   await page.click("#redoBtn");
-  state = await page.evaluate(() => window.__cadTest.blockState());
+  state = await page.evaluate(() => window.__jot2dTest.blockState());
   expect(state.definitions.find((definition) => definition.id === "B1").parentDefinitionId).toBe(state.instances[0].definitionId);
-  await page.evaluate(() => window.__cadTest.reloadBlockState());
-  state = await page.evaluate(() => window.__cadTest.blockState());
+  await page.evaluate(() => window.__jot2dTest.reloadBlockState());
+  state = await page.evaluate(() => window.__jot2dTest.blockState());
   expect(state.definitions.find((definition) => definition.id === "B2").parentDefinitionId).toBe(state.instances[0].definitionId);
   expect(state.projectionLineIds.some((id) => id.split("@").length === 2)).toBe(true);
   expect(state.projectionLineIds.filter((id) => id.split("@").length === 3)).toHaveLength(2);
   const composedInstanceId = state.instances[0].id;
   const composedDefinitionId = state.instances[0].definitionId;
-  await page.evaluate((id) => window.__cadTest.selectGeometryIdsForTest({ blockInstances: [id] }), composedInstanceId);
+  await page.evaluate((id) => window.__jot2dTest.selectGeometryIdsForTest({ blockInstances: [id] }), composedInstanceId);
   await page.keyboard.press("Control+c");
   await page.keyboard.press("Control+v");
-  state = await page.evaluate(() => window.__cadTest.blockState());
+  state = await page.evaluate(() => window.__jot2dTest.blockState());
   expect(state.instances).toHaveLength(2);
   expect(state.instances.every((instance) => instance.definitionId === composedDefinitionId)).toBe(true);
 });
 
 test("parent creation rejects a block definition that still has unselected instances", async ({ page }) => {
   await page.goto(`${baseUrl}/index.html?test=1`);
-  await page.waitForFunction(() => window.__cadTest);
+  await page.waitForFunction(() => window.__jot2dTest);
   const fixture = constrainedBlockGridFixture();
-  await page.evaluate((data) => window.__cadTest.importDocumentNameFixture(data, "shared-block-parent.json"), fixture);
-  const before = await page.evaluate(() => window.__cadTest.blockState());
-  await page.evaluate(() => window.__cadTest.selectGeometryIdsForTest({ blockInstances: ["BI10"] }));
+  await page.evaluate((data) => window.__jot2dTest.importDocumentNameFixture(data, "shared-block-parent.json"), fixture);
+  const before = await page.evaluate(() => window.__jot2dTest.blockState());
+  await page.evaluate(() => window.__jot2dTest.selectGeometryIdsForTest({ blockInstances: ["BI10"] }));
   await openBlocksExplorer(page);
   await page.click("#toolCreateBlock");
   await expect(page.locator("#hint")).toContainText("対象インスタンスをすべて選択してください");
-  expect(await page.evaluate(() => window.__cadTest.blockEditorState())).toEqual(expect.objectContaining({ editing: false }));
-  const rejected = await page.evaluate(() => window.__cadTest.blockState());
+  expect(await page.evaluate(() => window.__jot2dTest.blockEditorState())).toEqual(expect.objectContaining({ editing: false }));
+  const rejected = await page.evaluate(() => window.__jot2dTest.blockState());
   expect(rejected.definitions).toEqual(before.definitions);
   expect(rejected.instances).toEqual(before.instances);
 
   const allInstanceIds = before.instances.map((instance) => instance.id);
-  await page.evaluate((blockInstances) => window.__cadTest.selectGeometryIdsForTest({ blockInstances }), allInstanceIds);
+  await page.evaluate((blockInstances) => window.__jot2dTest.selectGeometryIdsForTest({ blockInstances }), allInstanceIds);
   await openBlocksExplorer(page);
   await page.click("#toolCreateBlock");
   await page.click("#completeBlockEditBtn");
-  const completed = await page.evaluate(() => window.__cadTest.blockState());
+  const completed = await page.evaluate(() => window.__jot2dTest.blockState());
   expect(completed.definitions).toHaveLength(2);
   expect(completed.instances).toHaveLength(1);
   const parent = completed.definitions.find((definition) => definition.id === completed.instances[0].definitionId);
@@ -1031,14 +1031,14 @@ test("parent creation rejects a block definition that still has unselected insta
 
 test("wrapping selected blocks removes constraints that reference blocks left outside", async ({ page }) => {
   await page.goto(`${baseUrl}/index.html?test=1`);
-  await page.waitForFunction(() => window.__cadTest);
-  await page.evaluate((fixture) => window.__cadTest.importDocumentNameFixture(fixture, "block-parent-external-constraint.json"), blockPointOnLineFixture({ subjectY: -50, includeConstraint: true }));
-  await page.evaluate(() => window.__cadTest.selectGeometryIdsForTest({ blockInstances: ["BI2"] }));
+  await page.waitForFunction(() => window.__jot2dTest);
+  await page.evaluate((fixture) => window.__jot2dTest.importDocumentNameFixture(fixture, "block-parent-external-constraint.json"), blockPointOnLineFixture({ subjectY: -50, includeConstraint: true }));
+  await page.evaluate(() => window.__jot2dTest.selectGeometryIdsForTest({ blockInstances: ["BI2"] }));
   await openBlocksExplorer(page);
   await page.click("#toolCreateBlock");
   await page.click("#completeBlockEditBtn");
 
-  const state = await page.evaluate(() => window.__cadTest.blockState());
+  const state = await page.evaluate(() => window.__jot2dTest.blockState());
   expect(state.instances.map((instance) => instance.id)).toContain("BI1");
   expect(state.instances).toHaveLength(2);
   expect(state.serialized.constraints).toHaveLength(0);
@@ -1052,22 +1052,22 @@ test("wrapping selected blocks removes constraints that reference blocks left ou
 
 test("canceling parent creation restores moved definitions after nested child edits", async ({ page }) => {
   await page.goto(`${baseUrl}/index.html?test=1`);
-  await page.waitForFunction(() => window.__cadTest);
-  await page.evaluate((fixture) => window.__cadTest.importDocumentNameFixture(fixture, "block-parent-cancel.json"), blockPointOnLineFixture({ subjectY: -200 }));
-  const before = await page.evaluate(() => window.__cadTest.blockState());
-  await page.evaluate(() => window.__cadTest.selectGeometryIdsForTest({ blockInstances: ["BI1", "BI2"] }));
+  await page.waitForFunction(() => window.__jot2dTest);
+  await page.evaluate((fixture) => window.__jot2dTest.importDocumentNameFixture(fixture, "block-parent-cancel.json"), blockPointOnLineFixture({ subjectY: -200 }));
+  const before = await page.evaluate(() => window.__jot2dTest.blockState());
+  await page.evaluate(() => window.__jot2dTest.selectGeometryIdsForTest({ blockInstances: ["BI1", "BI2"] }));
   await openBlocksExplorer(page);
   await page.click("#toolCreateBlock");
-  expect(await page.evaluate(() => window.__cadTest.blockEditorState())).toEqual(expect.objectContaining({ depth: 1, hostBlockInstanceCount: 2 }));
+  expect(await page.evaluate(() => window.__jot2dTest.blockEditorState())).toEqual(expect.objectContaining({ depth: 1, hostBlockInstanceCount: 2 }));
   await openBlockDefinitions(page);
   await page.click('.block-item[data-id="B1"] .blockEditBtn');
   await page.locator("#blockEditorNameInput").fill("Edited staged child");
   await page.click("#completeBlockEditBtn");
-  expect(await page.evaluate(() => window.__cadTest.blockEditorState())).toEqual(expect.objectContaining({ depth: 1, hostBlockInstanceCount: 2 }));
-  expect((await page.evaluate(() => window.__cadTest.blockState())).definitions.find((definition) => definition.id === "B1").name).toBe("Edited staged child");
+  expect(await page.evaluate(() => window.__jot2dTest.blockEditorState())).toEqual(expect.objectContaining({ depth: 1, hostBlockInstanceCount: 2 }));
+  expect((await page.evaluate(() => window.__jot2dTest.blockState())).definitions.find((definition) => definition.id === "B1").name).toBe("Edited staged child");
   await page.click("#cancelBlockEditBtn");
 
-  const restored = await page.evaluate(() => window.__cadTest.blockState());
+  const restored = await page.evaluate(() => window.__jot2dTest.blockState());
   expect(restored.definitions).toEqual(before.definitions);
   expect(restored.instances).toEqual(before.instances);
   expect(restored.definitions.every((definition) => definition.parentDefinitionId === null)).toBe(true);
@@ -1075,20 +1075,20 @@ test("canceling parent creation restores moved definitions after nested child ed
 
 test("block editor can wrap existing child blocks and rolls ownership back with its parent edit", async ({ page }) => {
   await page.goto(`${baseUrl}/index.html?test=1`);
-  await page.waitForFunction(() => window.__cadTest);
-  await page.evaluate((fixture) => window.__cadTest.importDocumentNameFixture(fixture, "nested-child-parent.json"), nestedComposableBlocksFixture());
-  expect((await page.evaluate(() => window.__cadTest.blockState())).definitions.find((definition) => definition.id === "B2").blockInstances.map((instance) => instance.id).sort()).toEqual(["BI1", "BI2"]);
+  await page.waitForFunction(() => window.__jot2dTest);
+  await page.evaluate((fixture) => window.__jot2dTest.importDocumentNameFixture(fixture, "nested-child-parent.json"), nestedComposableBlocksFixture());
+  expect((await page.evaluate(() => window.__jot2dTest.blockState())).definitions.find((definition) => definition.id === "B2").blockInstances.map((instance) => instance.id).sort()).toEqual(["BI1", "BI2"]);
 
   await openBlockDefinitions(page);
   await page.click('.block-item[data-id="B2"] .blockEditBtn');
-  await page.evaluate(() => window.__cadTest.selectGeometryIdsForTest({ blockInstances: ["BI1", "BI2"] }));
+  await page.evaluate(() => window.__jot2dTest.selectGeometryIdsForTest({ blockInstances: ["BI1", "BI2"] }));
   await openBlocksExplorer(page);
   await page.click("#toolCreateBlock");
   await page.click("#completeBlockEditBtn");
-  const parentEditor = await page.evaluate(() => window.__cadTest.blockEditorState());
+  const parentEditor = await page.evaluate(() => window.__jot2dTest.blockEditorState());
   expect(parentEditor).toEqual(expect.objectContaining({ depth: 1 }));
   await page.click("#cancelBlockEditBtn");
-  let state = await page.evaluate(() => window.__cadTest.blockState());
+  let state = await page.evaluate(() => window.__jot2dTest.blockState());
   expect(state.definitions).toHaveLength(3);
   expect(state.definitions.find((definition) => definition.id === "B1").parentDefinitionId).toBe("B2");
   expect(state.definitions.find((definition) => definition.id === "B3").parentDefinitionId).toBe("B2");
@@ -1096,12 +1096,12 @@ test("block editor can wrap existing child blocks and rolls ownership back with 
 
   await openBlockDefinitions(page);
   await page.click('.block-item[data-id="B2"] .blockEditBtn');
-  await page.evaluate(() => window.__cadTest.selectGeometryIdsForTest({ blockInstances: ["BI1", "BI2"] }));
+  await page.evaluate(() => window.__jot2dTest.selectGeometryIdsForTest({ blockInstances: ["BI1", "BI2"] }));
   await openBlocksExplorer(page);
   await page.click("#toolCreateBlock");
   await page.click("#completeBlockEditBtn");
   await page.click("#completeBlockEditBtn");
-  state = await page.evaluate(() => window.__cadTest.blockState());
+  state = await page.evaluate(() => window.__jot2dTest.blockState());
   const room = state.definitions.find((definition) => definition.id === "B2");
   const parent = state.definitions.find((definition) => definition.parentDefinitionId === "B2");
   expect(state.definitions).toHaveLength(4);
@@ -1114,11 +1114,11 @@ test("block editor can wrap existing child blocks and rolls ownership back with 
 
 test("constrained block grids track a single pointer move without diluting drag distance", async ({ page }) => {
   await page.goto(`${baseUrl}/index.html?test=1`);
-  await page.waitForFunction(() => window.__cadTest);
-  await page.evaluate((fixture) => window.__cadTest.importDocumentNameFixture(fixture, "constrained-block-grid.json"), constrainedBlockGridFixture());
+  await page.waitForFunction(() => window.__jot2dTest);
+  await page.evaluate((fixture) => window.__jot2dTest.importDocumentNameFixture(fixture, "constrained-block-grid.json"), constrainedBlockGridFixture());
 
-  const interaction = await page.evaluate(() => window.__cadTest.blockInteractionPoints());
-  const before = await page.evaluate(() => window.__cadTest.blockState().instances);
+  const interaction = await page.evaluate(() => window.__jot2dTest.blockInteractionPoints());
+  const before = await page.evaluate(() => window.__jot2dTest.blockState().instances);
   const screenDx = 80;
   const screenDy = 40;
   const expectedDx = screenDx / interaction.scale;
@@ -1129,7 +1129,7 @@ test("constrained block grids track a single pointer move without diluting drag 
   await page.mouse.move(interaction.center.x + screenDx, interaction.center.y + screenDy, { steps: 1 });
   await page.mouse.up();
 
-  const after = await page.evaluate(() => window.__cadTest.blockState().instances);
+  const after = await page.evaluate(() => window.__jot2dTest.blockState().instances);
   expect(after).toHaveLength(6);
   for (let i = 0; i < after.length; i++) {
     expect(after[i].x - before[i].x).toBeCloseTo(expectedDx, 3);
@@ -1137,45 +1137,45 @@ test("constrained block grids track a single pointer move without diluting drag 
     expect(after[i].rotation).toBeCloseTo(before[i].rotation, 8);
   }
 
-  await page.evaluate((fixture) => window.__cadTest.importDocumentNameFixture(fixture, "fixed-block-grid.json"), constrainedBlockGridFixture({ fixed: true }));
-  const fixedInteraction = await page.evaluate(() => window.__cadTest.blockInteractionPoints());
-  const fixedBefore = await page.evaluate(() => window.__cadTest.blockState().instances);
+  await page.evaluate((fixture) => window.__jot2dTest.importDocumentNameFixture(fixture, "fixed-block-grid.json"), constrainedBlockGridFixture({ fixed: true }));
+  const fixedInteraction = await page.evaluate(() => window.__jot2dTest.blockInteractionPoints());
+  const fixedBefore = await page.evaluate(() => window.__jot2dTest.blockState().instances);
   await page.mouse.move(fixedInteraction.center.x, fixedInteraction.center.y);
   await page.mouse.down();
   await page.mouse.move(fixedInteraction.center.x + screenDx, fixedInteraction.center.y + screenDy, { steps: 1 });
   await page.mouse.up();
-  expect(await page.evaluate(() => window.__cadTest.blockState().instances)).toEqual(fixedBefore);
+  expect(await page.evaluate(() => window.__jot2dTest.blockState().instances)).toEqual(fixedBefore);
 });
 
 test("a block point-on-line constraint keeps the subject block under-constrained", async ({ page }) => {
   await page.goto(`${baseUrl}/index.html?test=1`);
-  await page.waitForFunction(() => window.__cadTest);
-  await page.evaluate((fixture) => window.__cadTest.importDocumentNameFixture(fixture, "block-point-on-line.json"), blockPointOnLineFixture({ subjectY: -40 }));
+  await page.waitForFunction(() => window.__jot2dTest);
+  await page.evaluate((fixture) => window.__jot2dTest.importDocumentNameFixture(fixture, "block-point-on-line.json"), blockPointOnLineFixture({ subjectY: -40 }));
 
-  const added = await page.evaluate(() => window.__cadTest.addBlockPointOnLineConstraintForTest("BI2", "P3", "BI1", "L1"));
+  const added = await page.evaluate(() => window.__jot2dTest.addBlockPointOnLineConstraintForTest("BI2", "P3", "BI1", "L1"));
   expect(added.committed).toBe(true);
   expect(added.analysis).toEqual(expect.objectContaining({ stable: true, rank: 1, variableCount: 3, freeVariableCount: 2 }));
   expect(added.status.projections).not.toHaveLength(0);
   expect(added.status.projections.every((projection) => projection.status === "under")).toBe(true);
 
-  await page.evaluate((fixture) => window.__cadTest.loadDocumentFixtureForDragTest(fixture, "block-point-on-line-reload.json"), added.serialized);
-  expect(await page.evaluate(() => window.__cadTest.constraintAnalysisForTest())).toEqual(expect.objectContaining({ stable: true, freeVariableCount: 2 }));
+  await page.evaluate((fixture) => window.__jot2dTest.loadDocumentFixtureForDragTest(fixture, "block-point-on-line-reload.json"), added.serialized);
+  expect(await page.evaluate(() => window.__jot2dTest.constraintAnalysisForTest())).toEqual(expect.objectContaining({ stable: true, freeVariableCount: 2 }));
 
-  const interaction = await page.evaluate(() => window.__cadTest.blockInteractionPoints("BI2"));
+  const interaction = await page.evaluate(() => window.__jot2dTest.blockInteractionPoints("BI2"));
   await page.mouse.move(interaction.center.x, interaction.center.y);
   await page.mouse.down();
   await page.mouse.move(interaction.center.x + 80, interaction.center.y + 40, { steps: 3 });
   await page.mouse.up();
   const afterDrag = await page.evaluate(() => ({
-    analysis: window.__cadTest.constraintAnalysisForTest(),
-    status: window.__cadTest.blockConstraintStatusForTest("BI2"),
+    analysis: window.__jot2dTest.constraintAnalysisForTest(),
+    status: window.__jot2dTest.blockConstraintStatusForTest("BI2"),
   }));
   expect(afterDrag.analysis).toEqual(expect.objectContaining({ stable: true, freeVariableCount: 2 }));
   expect(afterDrag.status.projections.every((projection) => projection.status === "under")).toBe(true);
 
   await expandSketchTreeGroup(page, "constraint");
   await page.hover('.sketch-object-row[data-object-kind="constraint"][data-constraint-index="0"]');
-  expect(await page.evaluate(() => window.__cadTest.currentSidebarHoveredGeometryKeys())).toEqual([
+  expect(await page.evaluate(() => window.__jot2dTest.currentSidebarHoveredGeometryKeys())).toEqual([
     "line:BI1@L1",
     "point:BI2@P3",
   ]);
@@ -1185,21 +1185,21 @@ test("a block point-on-line constraint keeps the subject block under-constrained
     "線IDBI1@L1",
   ]));
   await page.mouse.move(5, 5);
-  expect(await page.evaluate(() => window.__cadTest.currentSidebarHoveredGeometryKeys())).toEqual([]);
+  expect(await page.evaluate(() => window.__jot2dTest.currentSidebarHoveredGeometryKeys())).toEqual([]);
 });
 
 test("unstable block constraints are conflicts, and failed additions roll back cleanly", async ({ page }) => {
   await page.goto(`${baseUrl}/index.html?test=1`);
-  await page.waitForFunction(() => window.__cadTest);
-  await page.evaluate((fixture) => window.__cadTest.loadDocumentFixtureForDragTest(fixture, "unstable-block-point-on-line.json"), blockPointOnLineFixture({ subjectY: 60, includeConstraint: true }));
+  await page.waitForFunction(() => window.__jot2dTest);
+  await page.evaluate((fixture) => window.__jot2dTest.loadDocumentFixtureForDragTest(fixture, "unstable-block-point-on-line.json"), blockPointOnLineFixture({ subjectY: 60, includeConstraint: true }));
 
-  const unstable = await page.evaluate(() => window.__cadTest.blockConstraintStatusForTest("BI2"));
+  const unstable = await page.evaluate(() => window.__jot2dTest.blockConstraintStatusForTest("BI2"));
   expect(unstable.stable).toBe(false);
   expect(unstable.projections).not.toHaveLength(0);
   expect(unstable.projections.every((projection) => projection.status === "conflict")).toBe(true);
 
-  await page.evaluate((fixture) => window.__cadTest.loadDocumentFixtureForDragTest(fixture, "fixed-block-point-on-line.json"), blockPointOnLineFixture({ subjectY: 60, subjectFixed: true }));
-  const rejected = await page.evaluate(() => window.__cadTest.addBlockPointOnLineConstraintForTest("BI2", "P3", "BI1", "L1"));
+  await page.evaluate((fixture) => window.__jot2dTest.loadDocumentFixtureForDragTest(fixture, "fixed-block-point-on-line.json"), blockPointOnLineFixture({ subjectY: 60, subjectFixed: true }));
+  const rejected = await page.evaluate(() => window.__jot2dTest.addBlockPointOnLineConstraintForTest("BI2", "P3", "BI1", "L1"));
   expect(rejected.committed).toBe(false);
   expect(rejected.serialized.constraints).toHaveLength(0);
   expect(rejected.analysis.stable).toBe(true);
@@ -1207,10 +1207,10 @@ test("unstable block constraints are conflicts, and failed additions roll back c
 
 test("guided point drags keep the free target axis responsive and solve exactly on release", async ({ page }) => {
   await page.goto(`${baseUrl}/index.html?test=1`);
-  await page.waitForFunction(() => window.__cadTest);
-  await page.evaluate((fixture) => window.__cadTest.importDocumentNameFixture(fixture, "guided-point-drag.json"), guidedPointDragFixture());
+  await page.waitForFunction(() => window.__jot2dTest);
+  await page.evaluate((fixture) => window.__jot2dTest.importDocumentNameFixture(fixture, "guided-point-drag.json"), guidedPointDragFixture());
 
-  const result = await page.evaluate(() => window.__cadTest.guidedPointDragForTest("P26", 25, 12));
+  const result = await page.evaluate(() => window.__jot2dTest.guidedPointDragForTest("P26", 25, 12));
   expect(result.targetConstraintCount).toBe(1);
   expect(result.preview.success).toBe(true);
   expect(result.preview.iterations).toBeLessThan(8);
@@ -1223,8 +1223,8 @@ test("guided point drags keep the free target axis responsive and solve exactly 
   expect(result.final.point.x).toBeCloseTo(result.target.x, 4);
   expect(Math.hypot(result.final.point.x, result.final.point.y)).toBeCloseTo(100, 4);
 
-  await page.evaluate((fixture) => window.__cadTest.importDocumentNameFixture(fixture, "guided-curved-point-drag.json"), guidedPointDragFixture({ x: 60, y: 80 }));
-  const curved = await page.evaluate(() => window.__cadTest.guidedPointDragForTest("P26", 40, 0));
+  await page.evaluate((fixture) => window.__jot2dTest.importDocumentNameFixture(fixture, "guided-curved-point-drag.json"), guidedPointDragFixture({ x: 60, y: 80 }));
+  const curved = await page.evaluate(() => window.__jot2dTest.guidedPointDragForTest("P26", 40, 0));
   expect(curved.targetConstraintCount).toBe(1);
   expect(curved.preview.success).toBe(true);
   expect(curved.preview.iterations).toBeLessThan(8);
@@ -1236,8 +1236,8 @@ test("guided point drags keep the free target axis responsive and solve exactly 
   expect(curved.final.point.y).toBeLessThan(80);
   expect(Math.hypot(curved.final.point.x, curved.final.point.y)).toBeCloseTo(100, 4);
 
-  await page.evaluate((fixture) => window.__cadTest.importDocumentNameFixture(fixture, "guided-continuous-point-drag.json"), guidedPointDragFixture({ x: 60, y: 80 }));
-  const continuous = await page.evaluate(() => window.__cadTest.guidedPointDragPathForTest(
+  await page.evaluate((fixture) => window.__jot2dTest.importDocumentNameFixture(fixture, "guided-continuous-point-drag.json"), guidedPointDragFixture({ x: 60, y: 80 }));
+  const continuous = await page.evaluate(() => window.__jot2dTest.guidedPointDragPathForTest(
     "P26",
     Array.from({ length: 10 }, (_, index) => [(index + 1) * 4, 0]),
   ));
@@ -1256,8 +1256,8 @@ test("guided point drags keep the free target axis responsive and solve exactly 
 
 test("block placement escape commits zero rotation after choosing the display center", async ({ page }) => {
   await page.goto(`${baseUrl}/index.html?test=1`);
-  await page.waitForFunction(() => window.__cadTest);
-  const setup = await page.evaluate(() => window.__cadTest.resetForBlockCreationUi());
+  await page.waitForFunction(() => window.__jot2dTest);
+  const setup = await page.evaluate(() => window.__jot2dTest.resetForBlockCreationUi());
   await openBlocksExplorer(page);
   await page.click("#toolCreateBlock");
   await page.fill("#blockEditorNameInput", "Esc Block");
@@ -1269,7 +1269,7 @@ test("block placement escape commits zero rotation after choosing the display ce
   await page.mouse.click(canvas.x + canvas.width * 0.75, canvas.y + canvas.height * 0.7);
   await page.keyboard.press("Escape");
 
-  const state = await page.evaluate(() => window.__cadTest.blockState());
+  const state = await page.evaluate(() => window.__jot2dTest.blockState());
   expect(state.instances).toHaveLength(2);
   expect(state.instances[1].rotation).toBeCloseTo(0, 8);
   expect(state.instances[1].rotationLocked).toBe(true);
@@ -1278,14 +1278,14 @@ test("block placement escape commits zero rotation after choosing the display ce
 
 test("legacy block data migrates into an internal Sketch-1 without changing projection ids", async ({ page }) => {
   await page.goto(`${baseUrl}/index.html?test=1`);
-  await page.waitForFunction(() => window.__cadTest);
-  await page.evaluate(() => window.__cadTest.resetForBlockCreationUi());
+  await page.waitForFunction(() => window.__jot2dTest);
+  await page.evaluate(() => window.__jot2dTest.resetForBlockCreationUi());
   await openBlocksExplorer(page);
   await page.click("#toolCreateBlock");
   await page.click("#completeBlockEditBtn");
 
-  const before = await page.evaluate(() => window.__cadTest.blockState());
-  const migrated = await page.evaluate(() => window.__cadTest.reloadLegacyBlockState());
+  const before = await page.evaluate(() => window.__jot2dTest.blockState());
+  const migrated = await page.evaluate(() => window.__jot2dTest.reloadLegacyBlockState());
   expect(migrated.version).toBe(16);
   expect(migrated.origin).toEqual({ x: 0, y: 0 });
   expect(migrated.sketches).toEqual([
@@ -1300,9 +1300,9 @@ test("legacy block data migrates into an internal Sketch-1 without changing proj
 
 test("new block editor supports cancel and independent internal sketch hierarchy", async ({ page }) => {
   await page.goto(`${baseUrl}/index.html?test=1`);
-  await page.waitForFunction(() => window.__cadTest);
+  await page.waitForFunction(() => window.__jot2dTest);
 
-  await page.evaluate(() => window.__cadTest.resetForBlockCreationUi());
+  await page.evaluate(() => window.__jot2dTest.resetForBlockCreationUi());
   await openBlocksExplorer(page);
   await page.click("#toolCreateBlock");
   await expect(page.locator("#sketchOverlay")).toBeVisible();
@@ -1312,57 +1312,57 @@ test("new block editor supports cancel and independent internal sketch hierarchy
     const style = getComputedStyle(element);
     return { background: style.backgroundColor, boxShadow: style.boxShadow };
   })).toEqual({ background: "rgb(245, 243, 255)", boxShadow: "none" });
-  const cancelled = await page.evaluate(() => window.__cadTest.cancelBlockEditor());
+  const cancelled = await page.evaluate(() => window.__jot2dTest.cancelBlockEditor());
   expect(cancelled).toEqual({ editing: false, definitions: 0, instances: 0, lines: 4 });
   await expect(page.locator(".canvas-area")).toHaveCSS("background-color", "rgb(252, 253, 255)");
 
-  await page.evaluate(() => window.__cadTest.resetForEmptyBlockCreation());
+  await page.evaluate(() => window.__jot2dTest.resetForEmptyBlockCreation());
   await openBlocksExplorer(page);
   await page.click("#toolCreateBlock");
-  const initialEditor = await page.evaluate(() => window.__cadTest.blockEditorState());
+  const initialEditor = await page.evaluate(() => window.__jot2dTest.blockEditorState());
   expect(initialEditor.sketches).toEqual([
     expect.objectContaining({ id: "ROOT", kind: "root" }),
     expect.objectContaining({ id: "S1", parentSketchId: "ROOT" }),
   ]);
-  const child = await page.evaluate(() => window.__cadTest.addBlockEditorChildGeometry());
+  const child = await page.evaluate(() => window.__jot2dTest.addBlockEditorChildGeometry());
   expect(child.sketches).toContainEqual(expect.objectContaining({ id: child.sketchId, parentSketchId: "S1" }));
   await page.fill("#blockEditorNameInput", "Internal Sketch Block");
-  const completed = await page.evaluate(() => window.__cadTest.completeBlockEditor());
+  const completed = await page.evaluate(() => window.__jot2dTest.completeBlockEditor());
   expect(completed).toEqual({ editing: false, definitions: 1, instances: 0 });
-  const state = await page.evaluate(() => window.__cadTest.blockState());
+  const state = await page.evaluate(() => window.__jot2dTest.blockState());
   expect(state.definitions[0].sketches).toHaveLength(3);
 });
 
 test("block editor undo and redo use an independent local history", async ({ page }) => {
   await page.goto(`${baseUrl}/index.html?test=1`);
-  await page.waitForFunction(() => window.__cadTest);
+  await page.waitForFunction(() => window.__jot2dTest);
 
-  await page.evaluate(() => window.__cadTest.resetForEmptyBlockCreation());
+  await page.evaluate(() => window.__jot2dTest.resetForEmptyBlockCreation());
   await openBlocksExplorer(page);
   await page.click("#toolCreateBlock");
-  expect(await page.evaluate(() => window.__cadTest.historyState())).toEqual(expect.objectContaining({
+  expect(await page.evaluate(() => window.__jot2dTest.historyState())).toEqual(expect.objectContaining({
     blockEditing: true,
     undoCount: 1,
     redoCount: 0,
     undoDisabled: true,
   }));
 
-  await page.evaluate(() => window.__cadTest.addBlockEditorChildGeometry());
-  expect(await page.evaluate(() => window.__cadTest.historyState())).toEqual(expect.objectContaining({
+  await page.evaluate(() => window.__jot2dTest.addBlockEditorChildGeometry());
+  expect(await page.evaluate(() => window.__jot2dTest.historyState())).toEqual(expect.objectContaining({
     undoCount: 3,
     redoCount: 0,
     undoDisabled: false,
   }));
 
   await page.click("#undoBtn");
-  expect(await page.evaluate(() => window.__cadTest.blockEditorState())).toEqual(expect.objectContaining({ editorLineCount: 0 }));
-  expect((await page.evaluate(() => window.__cadTest.blockEditorState())).sketches).toHaveLength(3);
+  expect(await page.evaluate(() => window.__jot2dTest.blockEditorState())).toEqual(expect.objectContaining({ editorLineCount: 0 }));
+  expect((await page.evaluate(() => window.__jot2dTest.blockEditorState())).sketches).toHaveLength(3);
 
   await page.click("#undoBtn");
-  const initial = await page.evaluate(() => window.__cadTest.blockEditorState());
+  const initial = await page.evaluate(() => window.__jot2dTest.blockEditorState());
   expect(initial.sketches).toHaveLength(2);
   expect(initial.activeSketchId).toBe("S1");
-  expect(await page.evaluate(() => window.__cadTest.historyState())).toEqual(expect.objectContaining({
+  expect(await page.evaluate(() => window.__jot2dTest.historyState())).toEqual(expect.objectContaining({
     undoCount: 1,
     redoCount: 2,
     undoDisabled: true,
@@ -1371,15 +1371,15 @@ test("block editor undo and redo use an independent local history", async ({ pag
 
   await page.click("#redoBtn");
   await page.click("#redoBtn");
-  const restored = await page.evaluate(() => window.__cadTest.blockEditorState());
+  const restored = await page.evaluate(() => window.__jot2dTest.blockEditorState());
   expect(restored.sketches).toHaveLength(3);
   expect(restored.editorLineCount).toBe(1);
 });
 
 test("block editor can place existing blocks and create nested blocks that survive reload", async ({ page }) => {
   await page.goto(`${baseUrl}/index.html?test=1`);
-  await page.waitForFunction(() => window.__cadTest);
-  await page.evaluate((fixture) => window.__cadTest.importDocumentNameFixture(fixture, "nested-block-editing.json"), nestedBlockEditingFixture());
+  await page.waitForFunction(() => window.__jot2dTest);
+  await page.evaluate((fixture) => window.__jot2dTest.importDocumentNameFixture(fixture, "nested-block-editing.json"), nestedBlockEditingFixture());
 
   await openBlockDefinitions(page);
   await expect(page.locator('.block-item[data-id="B2"]')).toHaveCount(1);
@@ -1392,31 +1392,31 @@ test("block editor can place existing blocks and create nested blocks that survi
 
   await openBlockDefinitions(page);
   await page.click('.block-item[data-id="B1"] .blockPlaceBtn');
-  const placed = await page.evaluate(() => window.__cadTest.commitBlockPlacementForTest({ x: 20, y: 10 }, Math.PI / 2));
+  const placed = await page.evaluate(() => window.__jot2dTest.commitBlockPlacementForTest({ x: 20, y: 10 }, Math.PI / 2));
   expect(placed).toEqual(expect.objectContaining({ definitionId: "B1", rotation: Math.PI / 2, rotationLocked: true }));
-  const nestedConstraint = await page.evaluate(() => window.__cadTest.constrainFirstNestedBlockLineForTest("vertical"));
+  const nestedConstraint = await page.evaluate(() => window.__jot2dTest.constrainFirstNestedBlockLineForTest("vertical"));
   expect(nestedConstraint.success).toBe(true);
   expect(nestedConstraint.errorNorm).toBeLessThan(1e-5);
   expect(nestedConstraint.line).toBe(`${placed.id}@L1`);
-  let editor = await page.evaluate(() => window.__cadTest.blockEditorState());
+  let editor = await page.evaluate(() => window.__jot2dTest.blockEditorState());
   expect(editor.depth).toBe(1);
   expect(editor.editorBlockInstances).toHaveLength(1);
 
-  await page.evaluate(() => window.__cadTest.selectGeometryIdsForTest({ lines: ["L10"] }));
+  await page.evaluate(() => window.__jot2dTest.selectGeometryIdsForTest({ lines: ["L10"] }));
   await openBlocksExplorer(page);
   await page.click("#toolCreateBlock");
-  editor = await page.evaluate(() => window.__cadTest.blockEditorState());
+  editor = await page.evaluate(() => window.__jot2dTest.blockEditorState());
   expect(editor).toEqual(expect.objectContaining({ editing: true, isNew: true, depth: 2, editorLineCount: 1 }));
   await expect(page.locator("#blockList .block-item[data-id]")).toHaveCount(0);
 
   await page.click("#completeBlockEditBtn");
-  editor = await page.evaluate(() => window.__cadTest.blockEditorState());
+  editor = await page.evaluate(() => window.__jot2dTest.blockEditorState());
   expect(editor.depth).toBe(1);
   expect(editor.editorLineCount).toBe(0);
   expect(editor.editorBlockInstances).toHaveLength(2);
 
   await page.click("#completeBlockEditBtn");
-  let state = await page.evaluate(() => window.__cadTest.blockState());
+  let state = await page.evaluate(() => window.__jot2dTest.blockState());
   expect(state.definitions).toHaveLength(3);
   const room = state.definitions.find((definition) => definition.id === "B2");
   expect(room.lines).toBe(0);
@@ -1431,8 +1431,8 @@ test("block editor can place existing blocks and create nested blocks that survi
     `BI100@${room.blockInstances.find((instance) => instance.definitionId === "B3").id}@L10`,
   ].sort());
 
-  await page.evaluate(() => window.__cadTest.reloadBlockState());
-  state = await page.evaluate(() => window.__cadTest.blockState());
+  await page.evaluate(() => window.__jot2dTest.reloadBlockState());
+  state = await page.evaluate(() => window.__jot2dTest.blockState());
   const reloadedRoom = state.definitions.find((definition) => definition.id === "B2");
   expect(reloadedRoom.blockInstances).toHaveLength(2);
   expect(reloadedRoom.constraints).toBe(1);
@@ -1440,12 +1440,12 @@ test("block editor can place existing blocks and create nested blocks that survi
   expect(state.projectionLineIds).toHaveLength(2);
   expect(state.projectionLineIds.every((id) => id.startsWith("BI100@BI") && id.split("@").length === 3)).toBe(true);
 
-  await page.evaluate(() => window.__cadTest.selectGeometryIdsForTest({ blockInstances: ["BI100"] }));
+  await page.evaluate(() => window.__jot2dTest.selectGeometryIdsForTest({ blockInstances: ["BI100"] }));
   await openBlocksExplorer(page);
   await page.click("#toolCreateBlock");
-  expect(await page.evaluate(() => window.__cadTest.blockEditorState())).toEqual(expect.objectContaining({ depth: 1, editorLineCount: 0 }));
+  expect(await page.evaluate(() => window.__jot2dTest.blockEditorState())).toEqual(expect.objectContaining({ depth: 1, editorLineCount: 0 }));
   await page.click("#completeBlockEditBtn");
-  state = await page.evaluate(() => window.__cadTest.blockState());
+  state = await page.evaluate(() => window.__jot2dTest.blockState());
   expect(state.definitions).toHaveLength(4);
   expect(state.instances).toHaveLength(1);
   const wrapper = state.definitions.find((definition) => definition.id === state.instances[0].definitionId);
@@ -1459,56 +1459,56 @@ test("block editor can place existing blocks and create nested blocks that survi
   expect(state.projectionLineIds).toHaveLength(2);
   expect(state.projectionLineIds.every((id) => id.split("@").length === 4)).toBe(true);
 
-  await page.evaluate(() => window.__cadTest.reloadBlockState());
-  state = await page.evaluate(() => window.__cadTest.blockState());
+  await page.evaluate(() => window.__jot2dTest.reloadBlockState());
+  state = await page.evaluate(() => window.__jot2dTest.blockState());
   expect(state.projectionLineIds).toHaveLength(2);
   expect(state.projectionLineIds.every((id) => id.split("@").length === 4)).toBe(true);
 });
 
 test("root constraints can reload nested block projection ids", async ({ page }) => {
   await page.goto(`${baseUrl}/index.html?test=1`);
-  await page.waitForFunction(() => window.__cadTest);
+  await page.waitForFunction(() => window.__jot2dTest);
 
   const imported = await page.evaluate(
-    (fixture) => window.__cadTest.importDocumentNameFixture(fixture, "nested-root-constraint.json"),
+    (fixture) => window.__jot2dTest.importDocumentNameFixture(fixture, "nested-root-constraint.json"),
     nestedRootConstraintFixture(),
   );
   expect(imported.success).toBe(true);
 
-  let state = await page.evaluate(() => window.__cadTest.blockState());
+  let state = await page.evaluate(() => window.__jot2dTest.blockState());
   expect(state.projectionLineIds).toContain("BI100@BI19@L1");
   expect(state.serialized.constraints).toEqual([
     expect.objectContaining({ type: "horizontal", line: "BI100@BI19@L1" }),
   ]);
 
-  expect(await page.evaluate(() => window.__cadTest.reloadBlockState())).toEqual(expect.objectContaining({ projectionLines: 2 }));
-  state = await page.evaluate(() => window.__cadTest.blockState());
+  expect(await page.evaluate(() => window.__jot2dTest.reloadBlockState())).toEqual(expect.objectContaining({ projectionLines: 2 }));
+  state = await page.evaluate(() => window.__jot2dTest.blockState());
   expect(state.projectionLineIds).toContain("BI100@BI19@L1");
   expect(state.serialized.constraints).toHaveLength(1);
 });
 
 test("loading removes stale nested block constraints and keeps the parent editable", async ({ page }) => {
   await page.goto(`${baseUrl}/index.html?test=1`);
-  await page.waitForFunction(() => window.__cadTest);
+  await page.waitForFunction(() => window.__jot2dTest);
 
   const imported = await page.evaluate(
-    (fixture) => window.__cadTest.importDocumentNameFixture(fixture, "stale-nested-constraint.json"),
+    (fixture) => window.__jot2dTest.importDocumentNameFixture(fixture, "stale-nested-constraint.json"),
     nestedConstraintCleanupFixture({ stale: true }),
   );
   expect(imported.success).toBe(true);
   await expect(page.locator("#hint")).toContainText("ブロック内部拘束を1件解除しました");
-  expect((await page.evaluate(() => window.__cadTest.blockState())).definitions.find((definition) => definition.id === "B2").constraints).toBe(0);
+  expect((await page.evaluate(() => window.__jot2dTest.blockState())).definitions.find((definition) => definition.id === "B2").constraints).toBe(0);
 
   await openBlockDefinitions(page);
   await page.click('.block-item[data-id="B2"] .blockEditBtn');
-  expect(await page.evaluate(() => window.__cadTest.blockEditorState())).toEqual(expect.objectContaining({ depth: 1 }));
+  expect(await page.evaluate(() => window.__jot2dTest.blockEditorState())).toEqual(expect.objectContaining({ depth: 1 }));
 });
 
 test("deleting child geometry removes parent constraints without interrupting nested editing", async ({ page }) => {
   await page.goto(`${baseUrl}/index.html?test=1`);
-  await page.waitForFunction(() => window.__cadTest);
+  await page.waitForFunction(() => window.__jot2dTest);
   await page.evaluate(
-    (fixture) => window.__cadTest.importDocumentNameFixture(fixture, "nested-constraint-cleanup.json"),
+    (fixture) => window.__jot2dTest.importDocumentNameFixture(fixture, "nested-constraint-cleanup.json"),
     nestedConstraintCleanupFixture(),
   );
 
@@ -1516,20 +1516,20 @@ test("deleting child geometry removes parent constraints without interrupting ne
   await page.click('.block-item[data-id="B2"] .blockEditBtn');
   await openBlockDefinitions(page);
   await page.click('.block-item[data-id="B1"] .blockEditBtn');
-  await page.evaluate(() => window.__cadTest.selectGeometryIdsForTest({ lines: ["L1"] }));
+  await page.evaluate(() => window.__jot2dTest.selectGeometryIdsForTest({ lines: ["L1"] }));
   await page.click("#deleteSelectionBtn");
   await page.click("#completeBlockEditBtn");
 
-  expect(await page.evaluate(() => window.__cadTest.blockEditorState())).toEqual(expect.objectContaining({ depth: 1 }));
-  const state = await page.evaluate(() => window.__cadTest.blockState());
+  expect(await page.evaluate(() => window.__jot2dTest.blockEditorState())).toEqual(expect.objectContaining({ depth: 1 }));
+  const state = await page.evaluate(() => window.__jot2dTest.blockState());
   expect(state.definitions.find((definition) => definition.id === "B1").lines).toBe(1);
   expect(state.definitions.find((definition) => definition.id === "B2").constraints).toBe(0);
 });
 
 test("block definition window uses scoped actions and keeps sketch choices visible with many children", async ({ page }) => {
   await page.goto(`${baseUrl}/index.html?test=1`);
-  await page.waitForFunction(() => window.__cadTest);
-  await page.evaluate((fixture) => window.__cadTest.importDocumentNameFixture(fixture, "many-nested-blocks.json"), manyNestedBlockDefinitionsFixture());
+  await page.waitForFunction(() => window.__jot2dTest);
+  await page.evaluate((fixture) => window.__jot2dTest.importDocumentNameFixture(fixture, "many-nested-blocks.json"), manyNestedBlockDefinitionsFixture());
 
   await openBlockDefinitions(page);
   await expect(page.locator('.block-item[data-id="B2"]')).toHaveCount(1);
@@ -1561,11 +1561,11 @@ test("block definition window uses scoped actions and keeps sketch choices visib
 
   await openBlockDefinitions(page);
   await page.click('.block-item[data-id="B1"] .blockEditBtn');
-  expect(await page.evaluate(() => window.__cadTest.blockEditorState())).toEqual(expect.objectContaining({ depth: 2 }));
+  expect(await page.evaluate(() => window.__jot2dTest.blockEditorState())).toEqual(expect.objectContaining({ depth: 2 }));
   await page.locator("#blockEditorNameInput").fill("Leaf edited");
   await page.click("#completeBlockEditBtn");
-  expect(await page.evaluate(() => window.__cadTest.blockEditorState())).toEqual(expect.objectContaining({ depth: 1 }));
-  expect((await page.evaluate(() => window.__cadTest.blockState())).definitions.find((definition) => definition.id === "B1").name).toBe("Leaf edited");
+  expect(await page.evaluate(() => window.__jot2dTest.blockEditorState())).toEqual(expect.objectContaining({ depth: 1 }));
+  expect((await page.evaluate(() => window.__jot2dTest.blockState())).definitions.find((definition) => definition.id === "B1").name).toBe("Leaf edited");
 
   page.once("dialog", (dialog) => dialog.accept("Leaf renamed"));
   await openBlockDefinitions(page);
@@ -1577,33 +1577,33 @@ test("block definition window uses scoped actions and keeps sketch choices visib
   await expect(page.locator('.block-item[data-id="B24"]')).toHaveCount(0);
   await page.locator("#blockDefinitionsDialog button[value=cancel]").first().click();
   await page.click("#cancelBlockEditBtn");
-  const state = await page.evaluate(() => window.__cadTest.blockState());
+  const state = await page.evaluate(() => window.__jot2dTest.blockState());
   expect(state.definitions.find((definition) => definition.id === "B1").name).toBe("Leaf renamed");
   expect(state.definitions.some((definition) => definition.id === "B24")).toBe(false);
 });
 
 test("canceling nested block creation restores the containing block and removes abandoned definitions", async ({ page }) => {
   await page.goto(`${baseUrl}/index.html?test=1`);
-  await page.waitForFunction(() => window.__cadTest);
-  await page.evaluate((fixture) => window.__cadTest.importDocumentNameFixture(fixture, "nested-block-cancel.json"), nestedBlockEditingFixture());
+  await page.waitForFunction(() => window.__jot2dTest);
+  await page.evaluate((fixture) => window.__jot2dTest.importDocumentNameFixture(fixture, "nested-block-cancel.json"), nestedBlockEditingFixture());
 
   await openBlockDefinitions(page);
   await page.click('.block-item[data-id="B2"] .blockEditBtn');
-  await page.evaluate(() => window.__cadTest.selectGeometryIdsForTest({ lines: ["L10"] }));
+  await page.evaluate(() => window.__jot2dTest.selectGeometryIdsForTest({ lines: ["L10"] }));
   await openBlocksExplorer(page);
   await page.click("#toolCreateBlock");
-  expect(await page.evaluate(() => window.__cadTest.blockEditorState())).toEqual(expect.objectContaining({ depth: 2, editorLineCount: 1 }));
+  expect(await page.evaluate(() => window.__jot2dTest.blockEditorState())).toEqual(expect.objectContaining({ depth: 2, editorLineCount: 1 }));
   await page.click("#cancelBlockEditBtn");
-  expect(await page.evaluate(() => window.__cadTest.blockEditorState())).toEqual(expect.objectContaining({ depth: 1, editorLineCount: 1 }));
-  expect((await page.evaluate(() => window.__cadTest.blockState())).definitions).toHaveLength(2);
+  expect(await page.evaluate(() => window.__jot2dTest.blockEditorState())).toEqual(expect.objectContaining({ depth: 1, editorLineCount: 1 }));
+  expect((await page.evaluate(() => window.__jot2dTest.blockState())).definitions).toHaveLength(2);
 
-  await page.evaluate(() => window.__cadTest.selectGeometryIdsForTest({ lines: ["L10"] }));
+  await page.evaluate(() => window.__jot2dTest.selectGeometryIdsForTest({ lines: ["L10"] }));
   await openBlocksExplorer(page);
   await page.click("#toolCreateBlock");
   await page.click("#completeBlockEditBtn");
-  expect((await page.evaluate(() => window.__cadTest.blockState())).definitions).toHaveLength(3);
+  expect((await page.evaluate(() => window.__jot2dTest.blockState())).definitions).toHaveLength(3);
   await page.click("#cancelBlockEditBtn");
-  const state = await page.evaluate(() => window.__cadTest.blockState());
+  const state = await page.evaluate(() => window.__jot2dTest.blockState());
   expect(state.definitions).toHaveLength(2);
   expect(state.definitions.find((definition) => definition.id === "B2").lines).toBe(1);
   expect(state.instances).toEqual([expect.objectContaining({ id: "BI100", definitionId: "B2" })]);
@@ -1611,12 +1611,12 @@ test("canceling nested block creation restores the containing block and removes 
 
 test("long constrained lines in the block editor follow sparse pointer moves without lag", async ({ page }) => {
   await page.goto(`${baseUrl}/index.html?test=1`);
-  await page.waitForFunction(() => window.__cadTest);
-  await page.evaluate((fixture) => window.__cadTest.importDocumentNameFixture(fixture, "sparse-block-line.json"), sparseBlockEditorLineDragFixture());
+  await page.waitForFunction(() => window.__jot2dTest);
+  await page.evaluate((fixture) => window.__jot2dTest.importDocumentNameFixture(fixture, "sparse-block-line.json"), sparseBlockEditorLineDragFixture());
   await openBlockDefinitions(page);
   await page.click('.block-item[data-id="B1"] .blockEditBtn');
 
-  const result = await page.evaluate(() => window.__cadTest.geometryDragPathForTest(
+  const result = await page.evaluate(() => window.__jot2dTest.geometryDragPathForTest(
     { kind: "line", id: "L60" },
     [[160, 0], [-80, 0]],
   ));
@@ -1631,16 +1631,16 @@ test("long constrained lines in the block editor follow sparse pointer moves wit
 
 test("existing dimension lines remain draggable while the dimension command is active", async ({ page }) => {
   await page.goto(`${baseUrl}/index.html?test=1`);
-  await page.waitForFunction(() => window.__cadTest);
+  await page.waitForFunction(() => window.__jot2dTest);
 
-  const setup = await page.evaluate(() => window.__cadTest.resetForDimensionCommandLineDrag());
+  const setup = await page.evaluate(() => window.__jot2dTest.resetForDimensionCommandLineDrag());
   await page.mouse.move(setup.point.x, setup.point.y);
   await page.mouse.down();
-  expect(await page.evaluate(() => window.__cadTest.dimensionCommandLineDragState())).toEqual(expect.objectContaining({ dragging: true }));
+  expect(await page.evaluate(() => window.__jot2dTest.dimensionCommandLineDragState())).toEqual(expect.objectContaining({ dragging: true }));
   await page.mouse.move(setup.point.x, setup.point.y + 36, { steps: 3 });
   await page.mouse.up();
 
-  const state = await page.evaluate(() => window.__cadTest.dimensionCommandLineDragState());
+  const state = await page.evaluate(() => window.__jot2dTest.dimensionCommandLineDragState());
   expect(state.dragging).toBe(false);
   expect(state.pendingConstraintType).toBe("distance");
   expect(state.pendingCommandType).toBe("distance-place");
@@ -1650,16 +1650,16 @@ test("existing dimension lines remain draggable while the dimension command is a
 
 test("a first block projection line stays pending so a second line can be dimensioned", async ({ page }) => {
   await page.goto(`${baseUrl}/index.html?test=1`);
-  await page.waitForFunction(() => window.__cadTest);
+  await page.waitForFunction(() => window.__jot2dTest);
   await page.evaluate(
-    (fixture) => window.__cadTest.importDocumentNameFixture(fixture, "nested-block-dimension.json"),
+    (fixture) => window.__jot2dTest.importDocumentNameFixture(fixture, "nested-block-dimension.json"),
     nestedConstraintCleanupFixture(),
   );
   await openBlockDefinitions(page);
   await page.click('.block-item[data-id="B2"] .blockEditBtn');
 
   const targets = await page.evaluate(() => {
-    const first = window.__cadTest.blockInteractionPoints("BI19");
+    const first = window.__jot2dTest.blockInteractionPoints("BI19");
     return {
       first: first.center,
       second: { x: first.center.x, y: first.center.y + 20 * first.scale },
@@ -1667,24 +1667,24 @@ test("a first block projection line stays pending so a second line can be dimens
   });
   await page.click('[data-constraint="distance"]');
   await page.mouse.move(targets.first.x, targets.first.y);
-  expect(await page.evaluate(() => window.__cadTest.blockProjectionHoverState())).toEqual(expect.objectContaining({
+  expect(await page.evaluate(() => window.__jot2dTest.blockProjectionHoverState())).toEqual(expect.objectContaining({
     command: "distance",
     lineId: "BI19@L1",
   }));
 
   await page.mouse.click(targets.first.x, targets.first.y);
-  expect(await page.evaluate(() => window.__cadTest.authoringStateForTest())).toEqual(expect.objectContaining({
+  expect(await page.evaluate(() => window.__jot2dTest.authoringStateForTest())).toEqual(expect.objectContaining({
     pendingConstraintType: "distance",
     pendingCommandType: "distance-place",
   }));
 
   await page.mouse.move(targets.second.x, targets.second.y);
-  expect(await page.evaluate(() => window.__cadTest.blockProjectionHoverState())).toEqual(expect.objectContaining({
+  expect(await page.evaluate(() => window.__jot2dTest.blockProjectionHoverState())).toEqual(expect.objectContaining({
     command: "distance",
     lineId: "BI19@L2",
   }));
   await page.mouse.click(targets.second.x, targets.second.y);
-  expect(await page.evaluate(() => window.__cadTest.authoringStateForTest())).toEqual(expect.objectContaining({
+  expect(await page.evaluate(() => window.__jot2dTest.authoringStateForTest())).toEqual(expect.objectContaining({
     pendingConstraintType: "distance",
     pendingCommandType: "distance-place",
   }));
@@ -1692,43 +1692,43 @@ test("a first block projection line stays pending so a second line can be dimens
 
 test("hovering a block highlights its projection without showing every geometry id", async ({ page }) => {
   await page.goto(`${baseUrl}/index.html?test=1`);
-  await page.waitForFunction(() => window.__cadTest);
+  await page.waitForFunction(() => window.__jot2dTest);
 
-  await page.evaluate(() => window.__cadTest.resetForBlockCreationUi());
+  await page.evaluate(() => window.__jot2dTest.resetForBlockCreationUi());
   await openBlocksExplorer(page);
   await page.click("#toolCreateBlock");
   await page.click("#completeBlockEditBtn");
   await page.keyboard.press("Escape");
-  expect((await page.evaluate(() => window.__cadTest.blockState())).selectedInstanceIds).toEqual([]);
-  const interaction = await page.evaluate(() => window.__cadTest.blockInteractionPoints());
+  expect((await page.evaluate(() => window.__jot2dTest.blockState())).selectedInstanceIds).toEqual([]);
+  const interaction = await page.evaluate(() => window.__jot2dTest.blockInteractionPoints());
   const labelPoint = { x: interaction.center.x + 20, y: interaction.center.y - 9 };
   const labelBefore = await canvasPatch(page, labelPoint, 5);
 
   await page.mouse.move(interaction.center.x, interaction.center.y);
-  expect(await page.evaluate(() => window.__cadTest.blockProjectionHoverState())).toEqual(expect.objectContaining({
+  expect(await page.evaluate(() => window.__jot2dTest.blockProjectionHoverState())).toEqual(expect.objectContaining({
     blockInstanceId: "BI1",
   }));
   const labelAfter = await canvasPatch(page, labelPoint, 5);
   expect(labelAfter).toEqual(labelBefore);
 
-  await page.evaluate(() => window.__cadTest.selectGeometryIdsForTest({ blockInstances: ["BI1"] }));
-  expect(await page.evaluate(() => window.__cadTest.drawnGeometryIdLabelsForTest())).toEqual([]);
+  await page.evaluate(() => window.__jot2dTest.selectGeometryIdsForTest({ blockInstances: ["BI1"] }));
+  expect(await page.evaluate(() => window.__jot2dTest.drawnGeometryIdLabelsForTest())).toEqual([]);
 });
 
 test("block projection endpoints visibly highlight during constraint commands", async ({ page }) => {
   await page.goto(`${baseUrl}/index.html?test=1`);
-  await page.waitForFunction(() => window.__cadTest);
+  await page.waitForFunction(() => window.__jot2dTest);
 
-  await page.evaluate(() => window.__cadTest.resetForBlockCreationUi());
+  await page.evaluate(() => window.__jot2dTest.resetForBlockCreationUi());
   await openBlocksExplorer(page);
   await page.click("#toolCreateBlock");
   await page.click("#completeBlockEditBtn");
-  const endpoint = await page.evaluate(() => window.__cadTest.blockProjectionEndpointForTest());
+  const endpoint = await page.evaluate(() => window.__jot2dTest.blockProjectionEndpointForTest());
   const before = await canvasPatch(page, endpoint);
 
   await page.click('[data-constraint="coincident"]');
   await page.mouse.move(endpoint.x, endpoint.y);
-  const hover = await page.evaluate(() => window.__cadTest.blockProjectionHoverState());
+  const hover = await page.evaluate(() => window.__jot2dTest.blockProjectionHoverState());
   expect(hover).toEqual(expect.objectContaining({
     command: "coincident",
     pointId: endpoint.id,
@@ -1741,24 +1741,24 @@ test("block projection endpoints visibly highlight during constraint commands", 
 
 test("reloaded block editing reserves existing internal geometry and sketch ids", async ({ page }) => {
   await page.goto(`${baseUrl}/index.html?test=1`);
-  await page.waitForFunction(() => window.__cadTest);
+  await page.waitForFunction(() => window.__jot2dTest);
 
-  await page.evaluate(() => window.__cadTest.resetForBlockCreationUi());
+  await page.evaluate(() => window.__jot2dTest.resetForBlockCreationUi());
   await openBlocksExplorer(page);
   await page.click("#toolCreateBlock");
   await page.click("#completeBlockEditBtn");
-  const beforeReload = await page.evaluate(() => window.__cadTest.blockState());
+  const beforeReload = await page.evaluate(() => window.__jot2dTest.blockState());
   const originalDefinition = beforeReload.serialized.blockDefinitions[0];
   expect(originalDefinition.points).toHaveLength(4);
   expect(originalDefinition.lines).toHaveLength(4);
 
-  await page.evaluate(() => window.__cadTest.reloadBlockState());
+  await page.evaluate(() => window.__jot2dTest.reloadBlockState());
   await openBlockDefinitions(page);
   await page.dblclick(".block-item[data-id]");
-  const child = await page.evaluate(() => window.__cadTest.addBlockEditorChildGeometry());
+  const child = await page.evaluate(() => window.__jot2dTest.addBlockEditorChildGeometry());
   await page.click("#completeBlockEditBtn");
 
-  const completed = await page.evaluate(() => window.__cadTest.blockState());
+  const completed = await page.evaluate(() => window.__jot2dTest.blockState());
   const definition = completed.serialized.blockDefinitions[0];
   const pointIds = definition.points.map((item) => item.id);
   const lineIds = definition.lines.map((item) => item.id);
@@ -1774,17 +1774,17 @@ test("reloaded block editing reserves existing internal geometry and sketch ids"
 
 test("placement and existing instances keep independent enabled internal sketches", async ({ page }) => {
   await page.goto(`${baseUrl}/index.html?test=1`);
-  await page.waitForFunction(() => window.__cadTest);
-  await page.evaluate(() => window.__cadTest.resetForBlockCreationUi());
+  await page.waitForFunction(() => window.__jot2dTest);
+  await page.evaluate(() => window.__jot2dTest.resetForBlockCreationUi());
   await openBlocksExplorer(page);
   await page.click("#toolCreateBlock");
   await page.click("#completeBlockEditBtn");
 
   await openBlockDefinitions(page);
   await page.dblclick(".block-item[data-id]");
-  const child = await page.evaluate(() => window.__cadTest.addBlockEditorChildGeometry());
+  const child = await page.evaluate(() => window.__jot2dTest.addBlockEditorChildGeometry());
   await page.click("#completeBlockEditBtn");
-  let state = await page.evaluate(() => window.__cadTest.blockState());
+  let state = await page.evaluate(() => window.__jot2dTest.blockState());
   expect(state.instances[0].enabledSketchIds).toEqual(["S1"]);
 
   await openBlockDefinitions(page);
@@ -1795,36 +1795,36 @@ test("placement and existing instances keep independent enabled internal sketche
   const canvas = await page.locator("#canvas").boundingBox();
   await page.mouse.click(canvas.x + canvas.width * 0.72, canvas.y + canvas.height * 0.65);
   await page.mouse.click(canvas.x + canvas.width * 0.8, canvas.y + canvas.height * 0.65);
-  state = await page.evaluate(() => window.__cadTest.blockState());
+  state = await page.evaluate(() => window.__jot2dTest.blockState());
   expect(state.instances[1].enabledSketchIds).toEqual([child.sketchId]);
   expect(state.projectionLineIds).toHaveLength(5);
 
-  await page.evaluate((id) => window.__cadTest.selectGeometryIdsForTest({ blockInstances: [id] }), state.instances[0].id);
+  await page.evaluate((id) => window.__jot2dTest.selectGeometryIdsForTest({ blockInstances: [id] }), state.instances[0].id);
   await expect(page.locator("#blockSketchConfig")).toHaveCount(0);
   await page.locator(`#propertiesPanel input[data-block-sketch-id="${child.sketchId}"]`).check();
-  state = await page.evaluate(() => window.__cadTest.blockState());
+  state = await page.evaluate(() => window.__jot2dTest.blockState());
   expect(state.instances[0].enabledSketchIds.sort()).toEqual(["S1", child.sketchId].sort());
   expect(state.instances[1].enabledSketchIds).toEqual([child.sketchId]);
 });
 
 test("disabling a block sketch automatically removes related constraints and reports it", async ({ page }) => {
   await page.goto(`${baseUrl}/index.html?test=1`);
-  await page.waitForFunction(() => window.__cadTest);
+  await page.waitForFunction(() => window.__jot2dTest);
   await page.evaluate(
-    (fixture) => window.__cadTest.importDocumentNameFixture(fixture, "block-sketch-constraint-removal.json"),
+    (fixture) => window.__jot2dTest.importDocumentNameFixture(fixture, "block-sketch-constraint-removal.json"),
     blockSketchDisableConstraintFixture(),
   );
 
-  expect(await page.evaluate(() => window.__cadTest.setFirstBlockInstanceSketches(["S10"]))).toBe(true);
+  expect(await page.evaluate(() => window.__jot2dTest.setFirstBlockInstanceSketches(["S10"]))).toBe(true);
   await expect(page.locator("#hint")).toContainText("関連拘束を2件、自動解除しました");
 
-  let state = await page.evaluate(() => window.__cadTest.blockState());
+  let state = await page.evaluate(() => window.__jot2dTest.blockState());
   expect(state.instances[0].enabledSketchIds).toEqual(["S10"]);
   expect(state.projectionLineIds).toEqual(["BI1@L10"]);
   expect(state.serialized.constraints).toHaveLength(0);
 
   await page.click("#undoBtn");
-  state = await page.evaluate(() => window.__cadTest.blockState());
+  state = await page.evaluate(() => window.__jot2dTest.blockState());
   expect(state.instances[0].enabledSketchIds).toEqual(["S1", "S10"]);
   expect(state.projectionLineIds.sort()).toEqual(["BI1@L1", "BI1@L10"].sort());
   expect(state.serialized.constraints).toHaveLength(2);
@@ -1832,8 +1832,8 @@ test("disabling a block sketch automatically removes related constraints and rep
 
 test("block creation rejects shared boundaries and annotation references without mutation", async ({ page }) => {
   await page.goto(`${baseUrl}/index.html?test=1`);
-  await page.waitForFunction(() => window.__cadTest);
-  const result = await page.evaluate(() => window.__cadTest.blockCreationRejectionCases());
+  await page.waitForFunction(() => window.__jot2dTest);
+  const result = await page.evaluate(() => window.__jot2dTest.blockCreationRejectionCases());
   expect(result.sharedPointError).toContain("非選択図形と共有");
   expect(result.sharedCounts).toEqual({ definitions: 0, instances: 0, lines: 2 });
   expect(result.annotationError).toContain("注記");
@@ -1842,10 +1842,10 @@ test("block creation rejects shared boundaries and annotation references without
 
 test("block creation keeps internal constraints and removes every external constraint", async ({ page }) => {
   await page.goto(`${baseUrl}/index.html?test=1`);
-  await page.waitForFunction(() => window.__cadTest);
-  await page.evaluate((fixture) => window.__cadTest.importDocumentNameFixture(fixture, "external-constraint-block.json"), externallyConstrainedBlockFixture());
+  await page.waitForFunction(() => window.__jot2dTest);
+  await page.evaluate((fixture) => window.__jot2dTest.importDocumentNameFixture(fixture, "external-constraint-block.json"), externallyConstrainedBlockFixture());
 
-  const selection = await page.evaluate(() => window.__cadTest.selectGeometryIdsForTest({ lines: ["L32", "L33", "L34", "L35", "L46"] }));
+  const selection = await page.evaluate(() => window.__jot2dTest.selectGeometryIdsForTest({ lines: ["L32", "L33", "L34", "L35", "L46"] }));
   expect(selection.blockError).toBeNull();
   expect(selection.internalConstraintCount).toBe(6);
   expect(selection.externalConstraintCount).toBe(3);
@@ -1856,7 +1856,7 @@ test("block creation keeps internal constraints and removes every external const
   await page.click("#completeBlockEditBtn");
   await expect(page.locator("#hint")).toContainText("外部拘束3件を解除しました");
 
-  const state = await page.evaluate(() => window.__cadTest.blockState());
+  const state = await page.evaluate(() => window.__jot2dTest.blockState());
   expect(state.definitions).toHaveLength(2);
   expect(state.instances).toHaveLength(2);
   expect(state.serialized.lines.map((line) => line.id).sort()).toEqual(["L10", "L36"]);
