@@ -894,7 +894,7 @@ test("workspace integrates transparent compact Object groups into Sketch Tree an
   expect(layout.iconButtons.every((button) => button.text === "" && button.hasIcon && button.title && button.label)).toBe(true);
   expect(layout.canvasCursor).toMatch(/^url\(/);
   expect(layout.gridControls).toBe(0);
-  expect(layout.logo).toEqual({ count: 1, source: "./assets/jot2d-logo.png", width: 108, height: 28, naturalWidth: 2178, naturalHeight: 722, objectFit: "cover" });
+  expect(layout.logo).toEqual({ count: 1, source: "./assets/jot2d-logo.svg", width: 108, height: 28, naturalWidth: 2048, naturalHeight: 678, objectFit: "cover" });
   expect(layout.constraintStatusIcon).toEqual({
     eyeCount: 2,
     swatches: ["rgb(17, 24, 39)", "rgb(15, 118, 110)", "rgb(245, 158, 11)", "rgb(220, 38, 38)"],
