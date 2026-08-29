@@ -22,7 +22,14 @@ async function createAllProjectionKinds(page) {
   return fixture;
 }
 
-test("projects every supported geometry kind with independent line endpoints, normal/status colors, clear icon, tree, properties, and v19 persistence", async ({ page }) => {
+function projectedTargetPointIds(target) {
+  if (target.kind === "point") return [target.id];
+  if (target.kind === "line") return [target.p1, target.p2];
+  if (target.kind === "circle" || target.kind === "arc") return [target.center.id];
+  return target.fitPoints.map((point) => point.id);
+}
+
+test("projects every supported geometry kind with geometry-owned points, normal/status colors, clear icon, tree, properties, and v19 persistence", async ({ page }) => {
   const fixture = await createAllProjectionKinds(page);
   let state = await page.evaluate(() => window.__jot2dTest.sketchProjectionStateForTest());
 
@@ -42,6 +49,8 @@ test("projects every supported geometry kind with independent line endpoints, no
   await expect(page.locator("#toolSketchProjection .projection-target")).toHaveCount(1);
   const targetLines = state.constraints.filter((item) => item.kind === "line").map((item) => item.target);
   expect(new Set(targetLines.flatMap((line) => [line.p1, line.p2])).size).toBe(4);
+  const targetPointIds = state.constraints.flatMap((item) => projectedTargetPointIds(item.target));
+  expect(new Set(targetPointIds).size).toBe(targetPointIds.length);
   expect(state.constraints.filter((item) => item.kind === "line").every((item) => item.redundant === false)).toBe(true);
 
   const serializedLinks = state.serialized.constraints.filter((item) => item.type === "sketchProjection");
@@ -77,6 +86,18 @@ test("keeps four projected rectangle lines independent and separates shared v19 
   expect(new Set(targetLines.flatMap((line) => [line.p1, line.p2])).size).toBe(8);
   expect(state.serialized.points.filter((point) => point.sketchId === "S3")).toHaveLength(8);
   expect(state.constraints.every((item) => item.redundant === false)).toBe(true);
+});
+
+test("keeps points independent across projection kinds and separates cross-kind sharing on load", async ({ page }) => {
+  for (const reloadSharedVersion19 of [false, true]) {
+    const state = await page.evaluate((reload) => window.__jot2dTest.resetForSketchProjectionSharedKindsTest({ reloadSharedVersion19: reload }), reloadSharedVersion19);
+    const targetPointIds = state.constraints.flatMap((item) => projectedTargetPointIds(item.target));
+    expect(state.constraints.map((item) => item.kind).sort()).toEqual(["arc", "circle", "line", "point", "spline"]);
+    expect(targetPointIds).toHaveLength(8);
+    expect(new Set(targetPointIds).size).toBe(8);
+    expect(state.serialized.points.filter((point) => point.sketchId === "S3")).toHaveLength(8);
+    expect(state.constraints.every((item) => item.redundant === false)).toBe(true);
+  }
 });
 
 test("tracks source shape and spline topology, then treats v18 projection links as absent", async ({ page }) => {

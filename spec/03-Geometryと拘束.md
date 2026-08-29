@@ -84,7 +84,7 @@ ToolbarまたはGeometry menuから開始し、3個以上のfit pointを順にcl
 
 ### スケッチ投影
 
-表示中の先祖SketchにあるPoint、Line、Circle、Arc、Spline、Block Projectionを通常GeometryとしてアクティブSketchへ作成し、`SketchProjectionConstraint`で元形状へ追従させる。clickで候補を追加／解除し、Enterで一括作成、Escで全候補を破棄する。同じ元Geometryの重複を作らない。投影Lineは隣接Lineと端点を共有せず、Point、Circle／Arc中心、Spline通過Pointだけが同じ元Pointに対する投影先Pointを共有する。詳細は[スケッチ投影](./12-スケッチ投影.md)を参照する。
+表示中の先祖SketchにあるPoint、Line、Circle、Arc、Spline、Block Projectionを通常GeometryとしてアクティブSketchへ作成し、`SketchProjectionConstraint`で元形状へ追従させる。clickで候補を追加／解除し、Enterで一括作成、Escで全候補を破棄する。同じ元Geometryの重複を作らない。投影Geometryは、同じ元Pointを参照していても、Point、Line端点、Circle／Arc中心、Spline通過PointをGeometry間で共有せず、それぞれ独立して所有する。詳細は[スケッチ投影](./12-スケッチ投影.md)を参照する。
 
 ### 補助 Geometry
 
@@ -125,7 +125,7 @@ Circleは単独で選び、側と距離を入力して複製する。Line／Arc�
 - 同じParameter名前空間へ寸法をコピーすると新しい`dN`を付与し、同時にコピーした寸法間の参照だけを新しい名前へトークン単位で書き換える。
 - 別のParameter名前空間へコピーすると、拘束寸法式をコピー時点の評価値による数値式へ固定して新しい`dN`を付与する。
 - HatchのCopy／Cut／PasteとBlock化は参照する全境界Geometryの同時選択を必須とし、不足時は操作全体を拒否する。Pasteでは境界GeometryRefを新IDへ書き換える。
-- スケッチ投影の結果は通常Geometryとしてsnap、拘束、寸法、Hatch、Leader、Offsetに使用できる。Copy／PasteとBlock化では投影拘束を除外する。有効な投影拘束がある間は、投影先本体、そのLineに所属する独立端点、および中心・Spline通過Pointのdrag、trim、fillet、Spline形状編集、固定、通常／補助作図切替を拒否し、自動解除は行わない。Appearanceは投影対象外であるためリンクを維持したまま編集できる。
+- スケッチ投影の結果は通常Geometryとしてsnap、拘束、寸法、Hatch、Leader、Offsetに使用できる。Copy／PasteとBlock化では投影拘束を除外する。有効な投影拘束がある間は、投影先本体と、そのGeometryが独立して所有するLine端点、中心、Spline通過Pointのdrag、trim、fillet、Spline形状編集、固定、通常／補助作図切替を拒否し、自動解除は行わない。Appearanceは投影対象外であるためリンクを維持したまま編集できる。
 
 ドラッグ中は選択に関係する拘束連結成分だけを優先して local solve し、必要な場合に全 Sketch solve へフォールバックする。Parameterの参照寸法feedbackはドラッグ中に反復せず、Pointer-upで最終精度のsolveとParameter再評価を行う。式エラー、拘束矛盾、非収束時はドラッグ開始前へ戻す。
 
