@@ -1,8 +1,6 @@
-# Jot2D
-
-<p align="center">
+<h1 align="center">
   <img src="./assets/jot2d-hero.png" alt="Jot2D Parametric 2D-CAD" width="640">
-</p>
+</h1>
 
 Jot2Dは、ブラウザ上で動作する開発中の2DパラメトリックCADです。
 Geometry、Constraint、Sketch階層、Block、Parameter、Hatch、Annotationを、1つのCanvas上で作成・編集できます。
