@@ -842,10 +842,13 @@ test("workspace integrates transparent compact Object groups into Sketch Tree an
       canvasCursor: getComputedStyle(document.querySelector("#canvas")).cursor,
       gridControls: document.querySelectorAll("#viewGridInput").length,
       logo: {
-        count: document.querySelectorAll(".app-logo-svg").length,
-        viewBox: document.querySelector(".app-logo-svg")?.getAttribute("viewBox"),
-        width: document.querySelector(".app-logo-svg")?.getBoundingClientRect().width,
-        backgroundCount: document.querySelectorAll(".app-logo-svg > rect").length,
+        count: document.querySelectorAll(".app-logo").length,
+        source: document.querySelector(".app-logo")?.getAttribute("src"),
+        width: document.querySelector(".app-logo")?.getBoundingClientRect().width,
+        height: document.querySelector(".app-logo")?.getBoundingClientRect().height,
+        naturalWidth: document.querySelector(".app-logo")?.naturalWidth,
+        naturalHeight: document.querySelector(".app-logo")?.naturalHeight,
+        objectFit: getComputedStyle(document.querySelector(".app-logo")).objectFit,
       },
       constraintStatusIcon: {
         eyeCount: document.querySelectorAll("#constraintStatusViewBtn .constraint-status-eye").length,
@@ -891,7 +894,7 @@ test("workspace integrates transparent compact Object groups into Sketch Tree an
   expect(layout.iconButtons.every((button) => button.text === "" && button.hasIcon && button.title && button.label)).toBe(true);
   expect(layout.canvasCursor).toMatch(/^url\(/);
   expect(layout.gridControls).toBe(0);
-  expect(layout.logo).toEqual({ count: 1, viewBox: "0 0 256 256", width: 30, backgroundCount: 0 });
+  expect(layout.logo).toEqual({ count: 1, source: "./assets/jot2d-logo.png", width: 108, height: 28, naturalWidth: 2178, naturalHeight: 722, objectFit: "cover" });
   expect(layout.constraintStatusIcon).toEqual({
     eyeCount: 2,
     swatches: ["rgb(17, 24, 39)", "rgb(15, 118, 110)", "rgb(245, 158, 11)", "rgb(220, 38, 38)"],
@@ -1083,13 +1086,13 @@ test("workspace integrates transparent compact Object groups into Sketch Tree an
   expect(menuHoverElapsed).toBeLessThan(50);
   await expect(page.locator(".app-menu[open]")).toHaveCount(1);
   expect(await page.evaluate(() => document.activeElement?.textContent?.trim())).toBe("編集");
-  await page.locator(".app-logo-svg").click();
+  await page.locator(".app-logo").click();
   await expect(page.locator(".app-menu[open]")).toHaveCount(0);
   await fileMenu.locator("summary").click();
   await geometryMenu.locator("summary").click();
   await expect(fileMenu).not.toHaveAttribute("open", "");
   await expect(geometryMenu).toHaveAttribute("open", "");
-  await page.locator(".app-logo-svg").click();
+  await page.locator(".app-logo").click();
   await page.evaluate(() => window.__jot2dTest.selectGeometryIdsForTest({ lines: ["L1"] }));
   await expect(page.locator("#propertiesPanel .property-section > h3")).toHaveText(["基本情報", "線の外観"]);
   await fileMenu.locator("summary").click();
