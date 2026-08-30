@@ -2323,7 +2323,14 @@ test("a line connected to a line-circle dimension follows sparse pointer jumps w
     (fixture) => window.__jot2dTest.importDocumentNameFixture(fixture, "sparse-line-circle-drag.jot2d"),
     lineCircleSparseLineDragFixture(),
   );
-  const deltas = [[150, 0], [-150, 0], [0, 150], [0, -150]];
+  const deltas = [
+    [150, 0],
+    [-150, 0],
+    [0, 150],
+    [0, -150],
+    [200, 120],
+    [400, 240],
+  ];
   const result = await page.evaluate(
     (dragDeltas) => window.__jot2dTest.geometryDragPathForTest({ kind: "line", id: "L2" }, dragDeltas),
     deltas,
@@ -2335,10 +2342,12 @@ test("a line connected to a line-circle dimension follows sparse pointer jumps w
     expect(preview.success, `step ${index + 1}`).toBe(true);
     expect(preview.blocked, `step ${index + 1}`).not.toBe(true);
     expect(preview.fallback, `step ${index + 1}`).not.toBe(true);
+    expect(preview.exactSparseLine, `step ${index + 1}`).toBe(true);
+    expect(preview.guidedSubstepCount, `step ${index + 1}`).toBe(0);
     expect(preview.state.midpoint.x - result.startState.midpoint.x, `step ${index + 1}/x`).toBeCloseTo(deltas[index][0], 4);
     expect(preview.state.midpoint.y - result.startState.midpoint.y, `step ${index + 1}/y`).toBeCloseTo(deltas[index][1], 4);
   }
-  expect(Math.max(...result.previews.map((preview) => preview.elapsedMs))).toBeLessThan(100);
+  expect(Math.max(...result.previews.map((preview) => preview.elapsedMs))).toBeLessThan(25);
   expect(result.final.success).toBe(true);
   expect(result.final.baseErrorNorm).toBeLessThan(1e-5);
 });

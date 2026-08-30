@@ -17822,8 +17822,10 @@
     let localAcceptError = CONSTRAINT_ACCEPT_ERROR;
     let guidedRetryCount = 0;
     // A missed animation frame can collapse a long line translation into one
-    // nonlinear solve. Replay that translation as bounded local steps so the
-    // constraint-manifold backtracking cannot dilute the pointer movement.
+    // nonlinear solve. Give an exact whole-sketch solve a larger iteration
+    // budget first; this is substantially cheaper than replaying dozens of
+    // local steps when it converges. Keep bounded substeps as the robust
+    // fallback so manifold backtracking cannot dilute the pointer movement.
     if (
       session?.kind === "line"
       && session.points.length > 1
@@ -17831,6 +17833,23 @@
       && session.local.fixedPointCount === 0
       && targetStep.norm > 50
     ) {
+      const fullVariables = sketchSolveVariables(session.sketchId);
+      const fullAttemptState = solver.clone(fullVariables);
+      const exactResult = withDragStepNorm(
+        stepNorm,
+        () => withSolverMaxIterations(100, fullSolve),
+      );
+      if (exactResult.success && exactResult.errorNorm <= CONSTRAINT_ACCEPT_ERROR) {
+        exactResult.local = false;
+        exactResult.guided = false;
+        exactResult.exactSparseLine = true;
+        exactResult.guidedRetryCount = 0;
+        session.finalDragConstraints = fallbackExtra;
+        commitGuidedTargetStep(session, targetStep);
+        session.lastGuidedPreviewError = exactResult.errorNorm;
+        return exactResult;
+      }
+      solver.restore(fullAttemptState);
       const substepCount = Math.min(
         SPARSE_LINE_DRAG_MAX_SUBSTEPS,
         Math.ceil(targetStep.norm / SPARSE_LINE_DRAG_SUBSTEP_NORM),
@@ -23941,6 +23960,8 @@
             variableCount: result.variableCount,
             constraintCount: result.constraintCount,
             guidedRetryCount: result.guidedRetryCount,
+            exactSparseLine: Boolean(result.exactSparseLine),
+            guidedSubstepCount: result.guidedSubstepCount || 0,
             reason: result.reason,
             local: result.local,
             guided: result.guided,
