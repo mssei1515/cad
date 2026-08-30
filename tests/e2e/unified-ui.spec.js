@@ -958,7 +958,8 @@ test("workspace integrates transparent compact Object groups into Sketch Tree an
   await page.goto(`${baseUrl}/index.html?test=1`);
   await page.waitForFunction(() => window.__jot2dTest);
   await page.evaluate(() => window.__jot2dTest.resetForResponsiveLineDragTest());
-  await expect(sketchTreeSketch(page, "ROOT")).toHaveAttribute("aria-expanded", "true");
+  await expect(sketchTreeSketch(page, "ROOT")).not.toHaveAttribute("aria-expanded", /.+/);
+  await expect(sketchTreeSketch(page, "ROOT").locator(".sketchExpandBtn")).toHaveCount(0);
   await expect(sketchTreeSketch(page, "S1")).toHaveAttribute("aria-expanded", "false");
   await expect(page.locator('.sketch-group-row[data-sketch-id="S1"]')).toHaveCount(0);
   await expandSketchTreeSketch(page, "S1");
@@ -1139,6 +1140,28 @@ test("workspace integrates transparent compact Object groups into Sketch Tree an
     return normalize(document.querySelector('.sketch-object-row[data-object-kind="line"] svg')) === normalize(document.querySelector("#toolLine svg"));
   });
   expect(lineIconMatchesToolbar).toBe(true);
+  await page.mouse.move(800, 680);
+  const treeChevrons = await page.evaluate(() => {
+    const measure = (selector) => {
+      const element = document.querySelector(selector);
+      return {
+        text: element.textContent,
+        areaWidth: element.getBoundingClientRect().width,
+        fontSize: getComputedStyle(element).fontSize,
+        color: getComputedStyle(element).color,
+      };
+    };
+    return {
+      sketch: measure('.sketch-item[data-id="S1"] .sketch-expand-chevron'),
+      group: measure('.sketch-group-row[data-category="line"] .sketch-group-chevron'),
+      empty: measure('.sketch-item[data-id="ROOT"] .sketch-expand-spacer'),
+    };
+  });
+  expect(treeChevrons).toEqual({
+    sketch: { text: "▼", areaWidth: 8, fontSize: "7px", color: "rgb(148, 163, 184)" },
+    group: { text: "▼", areaWidth: 12, fontSize: "7px", color: "rgb(148, 163, 184)" },
+    empty: { text: "▼", areaWidth: 8, fontSize: "7px", color: "rgb(203, 213, 225)" },
+  });
   const constraintGroup = await expandSketchTreeGroup(page, "constraint");
   await expect(constraintGroup).toHaveAttribute("aria-expanded", "true");
   await expect(page.locator(".sketch-tree-summary")).toHaveCount(1);
@@ -1161,6 +1184,13 @@ test("workspace integrates transparent compact Object groups into Sketch Tree an
     title: "完全拘束: 1 / 支持位置拘束: 0 / 未拘束: 7 / 矛盾: 0",
     background: "rgba(0, 0, 0, 0)",
   });
+  const terminalBranchOverruns = await page.evaluate(() => [...document.querySelectorAll("#sketchList .tree-segment.elbow")].map((elbow) => {
+    const vertical = getComputedStyle(elbow, "::before");
+    const horizontal = getComputedStyle(elbow, "::after");
+    return Number((parseFloat(vertical.top) + parseFloat(vertical.height) - parseFloat(horizontal.top)).toFixed(4));
+  }));
+  expect(terminalBranchOverruns.length).toBeGreaterThan(0);
+  expect(terminalBranchOverruns.every((overrun) => overrun === 0)).toBe(true);
 
   expect(await page.evaluate(() => window.__jot2dTest.documentNameState())).toEqual({
     modelName: "無題",
@@ -3522,13 +3552,20 @@ test("non-active sketches are visible unless individually hidden", async ({ page
   expect(setup.relationLabels).toEqual({ S9: "参照不可", S11: "参照不可（子孫）" });
   expect(setup.relationColors).toEqual({ S9: "#64748b", S11: "#b91c1c" });
   expect(setup.visible).toEqual({ S10: true, S2: true, S3: true, S4: true, S9: true, S11: true });
-  expect(setup.rowClasses).toEqual({ S2: true, S3: false, S4: false, S9: true, S11: false });
+  expect(setup.rowClasses).toEqual({ S2: true, S3: true, S4: true, S9: true, S11: true });
   expect(setup.rowBackgrounds.S2).toBe("rgba(0, 0, 0, 0)");
   expect(setup.rowBackgrounds.S9).toBe("rgba(0, 0, 0, 0)");
   await expect(sketchTreeSketch(page, "S2")).toHaveAttribute("aria-expanded", "false");
-  await expandSketchTreeSketch(page, "S2");
   await expect(sketchTreeSketch(page, "S3")).toBeVisible();
-  await expect(sketchTreeSketch(page, "S4")).toHaveCount(0);
+  await expect(sketchTreeSketch(page, "S4")).toBeVisible();
+  await expect(page.locator('.sketch-group-row[data-sketch-id="S2"]')).toHaveCount(0);
+  await expandSketchTreeSketch(page, "S2");
+  await expect(page.locator('.sketch-group-row[data-sketch-id="S2"]')).not.toHaveCount(0);
+  await sketchTreeSketch(page, "S2").locator(".sketchExpandBtn").click();
+  await expect(sketchTreeSketch(page, "S2")).toHaveAttribute("aria-expanded", "false");
+  await expect(page.locator('.sketch-group-row[data-sketch-id="S2"]')).toHaveCount(0);
+  await expect(sketchTreeSketch(page, "S3")).toBeVisible();
+  await expect(sketchTreeSketch(page, "S4")).toBeVisible();
 
   await page.click('.sketchVisibilityBtn[data-id="S2"]');
   let state = await page.evaluate(() => window.__jot2dTest.siblingSubtreeVisibilityState());
