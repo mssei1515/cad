@@ -202,6 +202,20 @@
 
 ---
 
+## 実行コミット情報ファイル
+
+`file:///C:/dev/cad/index.html`から起動したJot2Dでも実行中のGit情報を表示できるように、repository直下の`runtime-version.js`を使用する。
+
+- `runtime-version.js`は`npm run write:runtime-version`で現在のbranch、commit ID、working treeの変更有無から生成する。
+- このファイルは生成物としてGit管理外に置き、手作業で編集したりcommitへ含めたりしない。
+- 作業開始時のcheckout後、およびcommit・merge・branch切替によって`HEAD`が変わった後に再生成する。
+- 変更タスクでは、最終commitの完了後かつ完了報告前に必ず再生成し、Help menuが最終commitを示す状態にする。
+- commit後にtracked fileを変更した場合は、working treeの「変更あり」表示を一致させるため再生成する。
+- `file:` URLで旧版のJavaScriptやcommit情報がブラウザキャッシュから再利用されないよう、`index.html`のscript読込には起動ごとに異なるqueryを付与する状態を維持する。
+- HTTP serverは`runtime-version.js`と同じ形式の情報を動的に返すため、生成物をGit管理へ追加しない。
+
+---
+
 ## 9. Commit
 
 変更タスクが正常に完了したら、必ず Git にコミットすること。

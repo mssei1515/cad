@@ -1,6 +1,7 @@
 const http = require("http");
 const fs = require("fs");
 const path = require("path");
+const { readRuntimeVersion, runtimeVersionSource } = require("./runtime-version");
 
 const root = path.resolve(__dirname, "..");
 function optionValue(name, fallback) {
@@ -23,6 +24,16 @@ const contentTypes = {
   ".svg": "image/svg+xml",
 };
 
+function sendRuntimeVersion(res) {
+  const body = runtimeVersionSource(readRuntimeVersion(root));
+  res.writeHead(200, {
+    "Content-Type": "application/javascript; charset=utf-8",
+    "Cache-Control": "no-store",
+    "Content-Length": Buffer.byteLength(body),
+  });
+  res.end(body);
+}
+
 function resolveRequestPath(url) {
   const parsed = new URL(url, `http://${host}:${port}`);
   const pathname = decodeURIComponent(parsed.pathname === "/" ? "/index.html" : parsed.pathname);
@@ -32,6 +43,11 @@ function resolveRequestPath(url) {
 }
 
 const server = http.createServer((req, res) => {
+  const requestUrl = new URL(req.url || "/", `http://${host}:${port}`);
+  if (requestUrl.pathname === "/runtime-version.js") {
+    sendRuntimeVersion(res);
+    return;
+  }
   const filePath = resolveRequestPath(req.url || "/");
   if (!filePath) {
     res.writeHead(403);

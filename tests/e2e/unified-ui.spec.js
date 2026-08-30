@@ -1,7 +1,8 @@
 const { test, expect } = require("./test-fixture");
-const { spawn } = require("child_process");
+const { execFileSync, spawn } = require("child_process");
 const http = require("http");
 const path = require("path");
+const { pathToFileURL } = require("url");
 
 const host = "127.0.0.1";
 const port = Number(process.env.JOT2D_E2E_PORT || 8765);
@@ -98,6 +99,60 @@ function annotationSketchFixture(version = 11) {
     circles: [],
     arcs: [],
     constraints: [],
+  };
+}
+
+function lineCircleSparseLineDragFixture() {
+  return {
+    version: 19,
+    documentName: "Sparse line-circle drag",
+    defaultAppearance: { visible: true, color: "#111827", lineType: "solid", lineWidth: 2 },
+    defaultConstructionAppearance: { visible: true, color: "#64748b", lineType: "dashdot", lineWidth: 1, endpointOverhang: true, endpointMarkers: true },
+    defaultDimensionAppearance: { visible: true, color: "#64748b", lineWidth: 1.2, precision: null, prefix: "", suffix: "", terminatorType: "arrow", extensionLineOvershoot: 1.5, extensionLineOriginGap: 1.5, terminatorSize: 4, arrowheadAngle: 30, dimensionTextHeight: 5, dimensionTextGap: 0 },
+    sketches: [
+      { id: "ROOT", name: "Root Sketch", parentSketchId: null, kind: "root", appearance: {}, constructionAppearance: {}, dimensionAppearance: {} },
+      { id: "S1", name: "Sketch-1", parentSketchId: "ROOT", kind: "sketch", appearance: {}, constructionAppearance: {}, dimensionAppearance: {} },
+    ],
+    activeSketchId: "S1",
+    annotations: [],
+    hatches: [],
+    referenceImages: [],
+    nextHatchIndex: 1,
+    parameters: [],
+    nextDimensionParameterIndex: 2,
+    blockDefinitions: [],
+    blockInstances: [],
+    points: [
+      { id: "P1", x: 445.5111234529177, y: 71.62929184733785, fixed: false, kind: "endpoint", sketchId: "S1", appearance: {} },
+      { id: "P2", x: 507.8082294656379, y: 252.12644132938127, fixed: false, kind: "endpoint", sketchId: "S1", appearance: {} },
+      { id: "P3", x: 734.1721849964379, y: 229.77125698251248, fixed: false, kind: "endpoint", sketchId: "S1", appearance: {} },
+      { id: "P4", x: 740.7999877929688, y: 371.8000183105469, fixed: false, kind: "endpoint", sketchId: "S1", appearance: {} },
+      { id: "P5", x: 558.9779847656711, y: 138.98486973223496, fixed: false, kind: "endpoint", sketchId: "S1", appearance: {} },
+    ],
+    lines: [
+      { id: "L1", p1: "P1", p2: "P2", construction: false, sketchId: "S1", appearance: {} },
+      { id: "L2", p1: "P2", p2: "P3", construction: false, sketchId: "S1", appearance: {} },
+      { id: "L3", p1: "P3", p2: "P4", construction: false, sketchId: "S1", appearance: {} },
+    ],
+    circles: [
+      { id: "C1", center: "P5", radius: 28.374645423870362, construction: false, sketchId: "S1", appearance: {} },
+    ],
+    arcs: [],
+    splines: [],
+    constraints: [
+      {
+        type: "lineCircleDistance",
+        line: "L1",
+        circle: "C1",
+        target: 85.28294700183547,
+        sign: -1,
+        dimension: { x: 556.5684888634365, y: 221.17850435059586, offsetU: 13.547646871331722, offsetN: 76.91000256931403, labelOffsetU: 13.547646871331784, axis: null, display: null },
+        enabled: true,
+        parameterName: "d1",
+        expression: "85.28294700183547",
+        sketchId: "S1",
+      },
+    ],
   };
 }
 
@@ -1370,6 +1425,84 @@ test("Jot2D files open, overwrite, save as, and cancel without errors", async ({
   });
 });
 
+test("Help menu identifies the running Git commit", async ({ page }) => {
+  const repositoryRoot = path.resolve(__dirname, "../..");
+  const commit = execFileSync("git", ["rev-parse", "HEAD"], { cwd: repositoryRoot, encoding: "utf8" }).trim();
+  const branch = execFileSync("git", ["branch", "--show-current"], { cwd: repositoryRoot, encoding: "utf8" }).trim() || "HEAD";
+
+  await page.goto(`${baseUrl}/index.html?test=1`);
+  await page.locator("#helpMenu > summary").click();
+
+  const runtimeCommit = page.locator("#runtimeCommit");
+  await expect(runtimeCommit).toHaveAttribute("data-state", "available");
+  await expect(runtimeCommit).toContainText(`${branch}@${commit.slice(0, 12)}`);
+  await expect(runtimeCommit).toHaveAttribute("title", `${branch}@${commit}`);
+});
+
+test("file URL Help menu reads the generated Git commit file", async ({ page }) => {
+  const repositoryRoot = path.resolve(__dirname, "../..");
+  execFileSync(process.execPath, ["tools/write-runtime-version.js"], { cwd: repositoryRoot });
+  const commit = execFileSync("git", ["rev-parse", "HEAD"], { cwd: repositoryRoot, encoding: "utf8" }).trim();
+  const branch = execFileSync("git", ["branch", "--show-current"], { cwd: repositoryRoot, encoding: "utf8" }).trim() || "HEAD";
+
+  const indexUrl = pathToFileURL(path.join(repositoryRoot, "index.html"));
+  indexUrl.searchParams.set("test", "1");
+  await page.goto(indexUrl.href);
+  await page.locator("#helpMenu > summary").click();
+
+  const runtimeCommit = page.locator("#runtimeCommit");
+  await expect(runtimeCommit).toHaveAttribute("data-state", "available");
+  await expect(runtimeCommit).toContainText(`${branch}@${commit.slice(0, 12)}`);
+  await expect(runtimeCommit).toHaveAttribute("title", `${branch}@${commit}`);
+
+  const loadedScripts = await page.locator("script[src]").evaluateAll((scripts) =>
+    scripts.map((script) => new URL(script.src).searchParams.get("load")),
+  );
+  expect(loadedScripts).toHaveLength(10);
+  expect(loadedScripts.every((loadId) => loadId && loadId === loadedScripts[0])).toBe(true);
+});
+
+test("HTML file picker compatibility route opens a Jot2D document without a native handle", async ({ page }) => {
+  await page.addInitScript(() => {
+    window.__nativeOpenCalled = false;
+    Object.defineProperty(window, "showOpenFilePicker", {
+      configurable: true,
+      value: async () => {
+        window.__nativeOpenCalled = true;
+        throw new Error("The native picker must not be used in compatibility mode");
+      },
+    });
+  });
+  await page.goto(`${baseUrl}/index.html?test=1&filePicker=input`);
+  await page.waitForFunction(() => window.__jot2dTest);
+
+  const chooserPromise = page.waitForEvent("filechooser");
+  await page.click("#importBtn");
+  const chooser = await chooserPromise;
+  await chooser.setFiles({
+    name: "browser-open.jot2d",
+    mimeType: "application/json",
+    buffer: Buffer.from(JSON.stringify(lineCircleSparseLineDragFixture())),
+  });
+
+  await expect.poll(() => page.title()).toBe("browser-open - Jot2D");
+  await expect(page.locator("#hint")).toHaveText("ファイルを開きました: browser-open.jot2d");
+  expect(await page.evaluate(() => ({
+    nativeOpenCalled: window.__nativeOpenCalled,
+    fileState: window.__jot2dTest.fileSystemAccessStateForTest(),
+    nameState: window.__jot2dTest.documentNameState(),
+  }))).toEqual({
+    nativeOpenCalled: false,
+    fileState: { hasHandle: false, handleName: null },
+    nameState: {
+      modelName: "browser-open",
+      displayName: "browser-open",
+      serializedName: "browser-open",
+      title: "browser-open - Jot2D",
+    },
+  });
+});
+
 test("Canvas always uses a compact native cursor and commands add the matching framed toolbar icon", async ({ page }) => {
   await page.goto(`${baseUrl}/index.html?test=1`);
   await page.waitForFunction(() => window.__jot2dTest);
@@ -2260,6 +2393,48 @@ test("fixed rectangle fixture L2 and L3 reuse the responsive P3 drag path while 
   }
   expect(pointerResults[0].x).toBeCloseTo(pointerResults[1].x, 4);
   expect(pointerResults[0].y).toBeCloseTo(pointerResults[1].y, 4);
+});
+
+test("lines connected to a line-circle dimension follow repeated sparse reversals without lag", async ({ page }) => {
+  await page.goto(`${baseUrl}/index.html?test=1`);
+  await page.waitForFunction(() => window.__jot2dTest);
+  const deltas = [
+    [150, 0],
+    [-150, 0],
+    [0, 150],
+    [0, -150],
+    [200, 120],
+    [400, 240],
+    ...Array.from({ length: 24 }, (_, index) => [index % 2 === 0 ? -300 : 300, 0]),
+  ];
+  for (const lineId of ["L1", "L2", "L3"]) {
+    await page.evaluate(
+      ({ fixture, fileName }) => window.__jot2dTest.importDocumentNameFixture(fixture, fileName),
+      { fixture: lineCircleSparseLineDragFixture(), fileName: `${lineId}-repeated-line-drag.jot2d` },
+    );
+    const result = await page.evaluate(
+      ({ id, dragDeltas }) => window.__jot2dTest.geometryDragPathForTest({ kind: "line", id }, dragDeltas),
+      { id: lineId, dragDeltas: deltas },
+    );
+
+    expect(result.sessionAvailable, lineId).toBe(true);
+    expect(result.previews, lineId).toHaveLength(deltas.length);
+    for (const [index, preview] of result.previews.entries()) {
+      const stepLabel = `${lineId}/step ${index + 1}`;
+      expect(preview.success, stepLabel).toBe(true);
+      expect(preview.blocked, stepLabel).not.toBe(true);
+      expect(preview.fallback, stepLabel).not.toBe(true);
+      expect(preview.pinnedLineTargets, stepLabel).toBe(true);
+      expect(preview.exactSparseLine, stepLabel).toBe(false);
+      expect(preview.guidedSubstepCount, stepLabel).toBe(0);
+      expect(preview.iterations, stepLabel).toBeLessThan(10);
+      expect(preview.state.midpoint.x - result.startState.midpoint.x, `${stepLabel}/x`).toBeCloseTo(deltas[index][0], 4);
+      expect(preview.state.midpoint.y - result.startState.midpoint.y, `${stepLabel}/y`).toBeCloseTo(deltas[index][1], 4);
+    }
+    expect(Math.max(...result.previews.map((preview) => preview.elapsedMs)), lineId).toBeLessThan(10);
+    expect(result.final.success, lineId).toBe(true);
+    expect(result.final.baseErrorNorm, lineId).toBeLessThan(1e-5);
+  }
 });
 
 test("arc body selection and hover do not highlight endpoints", async ({ page }) => {

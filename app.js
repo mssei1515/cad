@@ -424,6 +424,8 @@
   const PARAMETER_STABILIZATION_RELATIVE_TOLERANCE = 1e-7;
   const DRAG_PREVIEW_ERROR_SCREEN_PX = 0.1;
   const DRAG_PREVIEW_MAX_MODEL_ERROR = 0.125;
+  const SPARSE_LINE_DRAG_SUBSTEP_NORM = 4;
+  const SPARSE_LINE_DRAG_MAX_SUBSTEPS = 128;
   const MIN_LINE_LENGTH = Math.max(MIN_ORIENTATION_LENGTH, solver.minLineLength || 12);
   const MIN_ARC_LENGTH = MIN_LINE_LENGTH;
   const CONSTRAINT_STATUS_COLORS = {
@@ -496,12 +498,50 @@
   const SKETCH_SOLVE_ERROR_COLOR = "#dc2626";
   let lastLoadLineRepairMessage = "";
   let lastLoadBlockConstraintRepairMessage = "";
+  let runtimeVersionState = { status: "unavailable" };
 
   const constraintButtons = Array.from(document.querySelectorAll("[data-constraint]"));
   const fixPointBtn = document.getElementById("fixPointBtn");
 
   function applicationText(ja, en) {
     return applicationLanguage === "en" ? en : ja;
+  }
+
+  function renderRuntimeVersion() {
+    const target = document.getElementById("runtimeCommit");
+    if (!target) return;
+    if (runtimeVersionState.status === "loading") {
+      target.textContent = applicationText("取得中…", "Loading…");
+      target.dataset.state = "loading";
+      target.removeAttribute("title");
+      return;
+    }
+    if (runtimeVersionState.status !== "available") {
+      target.textContent = applicationText("取得できません", "Unavailable");
+      target.dataset.state = "unavailable";
+      target.removeAttribute("title");
+      return;
+    }
+    const { branch, commit, shortCommit, dirty } = runtimeVersionState;
+    target.textContent = `${branch}@${shortCommit}${dirty ? applicationText("（変更あり）", " (dirty)") : ""}`;
+    target.dataset.state = "available";
+    target.title = `${branch}@${commit}`;
+  }
+
+  function loadRuntimeVersion() {
+    const value = window.__JOT2D_RUNTIME_VERSION__;
+    if (value?.available && /^[0-9a-f]{40}$/i.test(value.commit) && /^[0-9a-f]{7,40}$/i.test(value.shortCommit)) {
+      runtimeVersionState = {
+        status: "available",
+        branch: String(value.branch || "HEAD"),
+        commit: value.commit,
+        shortCommit: value.shortCommit,
+        dirty: Boolean(value.dirty),
+      };
+    } else {
+      runtimeVersionState = { status: "unavailable" };
+    }
+    renderRuntimeVersion();
   }
 
   function translatedExactText(value) {
@@ -596,6 +636,7 @@
     }
     if (refresh) updateUI({ refreshAnalysis: false });
     localizeApplicationUI();
+    renderRuntimeVersion();
     const hint = document.getElementById("hint");
     if (hint?.dataset.hintSource) hint.textContent = translatedHintText(hint.dataset.hintSource);
   }
@@ -7801,11 +7842,26 @@
     });
   }
 
+  function htmlDocumentFilePickerRequested() {
+    return new URLSearchParams(window.location.search).get("filePicker") === "input";
+  }
+
+  function requestDocumentFileInput() {
+    const input = document.getElementById("documentFileInput");
+    if (!input) {
+      setHint(applicationText("互換ファイル入力を開始できません", "The compatible file input is unavailable"), "error");
+      return false;
+    }
+    input.click();
+    return true;
+  }
+
   async function openJot2DFile() {
     if (blockEditSession) {
       setHint("ブロック定義編集を終了してから読み込んでください", "error");
       return false;
     }
+    if (htmlDocumentFilePickerRequested()) return requestDocumentFileInput();
     if (!ensureFileSystemAccess("showOpenFilePicker", "ファイルを開く操作", "open files")) return false;
     try {
       const [handle] = await window.showOpenFilePicker({
@@ -17790,6 +17846,40 @@
     return result;
   }
 
+  function solvePinnedLineTargets(session, targets, stepNorm) {
+    if (
+      session?.kind !== "line"
+      || session.lineDragPoint
+      || !session.local
+      || session.local.constraints.length !== 1
+      || !(session.local.constraints[0] instanceof LineCircleDistanceConstraint)
+      || targets.length < 2
+      || targets.some((target) => !target.point || !Number.isFinite(target.x) || !Number.isFinite(target.y))
+    ) return null;
+    const targetPoints = new Set(targets.map((target) => target.point));
+    const remainingVariables = session.local.variables.filter((variable) => !targetPoints.has(variable.object));
+    if (remainingVariables.length === session.local.variables.length) return null;
+    const state = solver.clone(session.local.variables);
+    for (const target of targets) {
+      target.point.x = target.x;
+      target.point.y = target.y;
+    }
+    const result = withDragStepNorm(stepNorm, () => solver.solveSubset({
+      variables: remainingVariables,
+      constraints: session.local.constraints,
+      lines: session.local.lines,
+    }));
+    if (!Number.isFinite(result.errorNorm) || result.errorNorm > CONSTRAINT_ACCEPT_ERROR) {
+      solver.restore(state);
+      return null;
+    }
+    result.success = true;
+    result.local = true;
+    result.guided = false;
+    result.pinnedLineTargets = true;
+    return result;
+  }
+
   function solveGuidedDragWithFallback(session, targets, fallbackExtra, fullSolve, restoreState = null) {
     const targetStep = guidedTargetStepForSession(session, targets);
     const stepNorm = Math.max(dragStepNormForTargets(targets), dragStepNormForExtra(fallbackExtra));
@@ -17815,10 +17905,102 @@
         constraintCount: 0,
       };
     }
+    const pinnedLineResult = solvePinnedLineTargets(session, targets, stepNorm);
+    if (pinnedLineResult) {
+      pinnedLineResult.targetStepNorm = targetStep.norm;
+      pinnedLineResult.targetConstraints = fallbackExtra;
+      pinnedLineResult.guidedRetryCount = 0;
+      session.finalDragConstraints = fallbackExtra;
+      commitGuidedTargetStep(session, targetStep);
+      session.lastGuidedPreviewError = pinnedLineResult.errorNorm;
+      return pinnedLineResult;
+    }
     const guidedAttemptState = restoreState || solver.clone(session.local?.variables || solver.getVariables());
     let localResult = null;
     let localAcceptError = CONSTRAINT_ACCEPT_ERROR;
     let guidedRetryCount = 0;
+    // A missed animation frame can collapse a long line translation into one
+    // nonlinear solve. Give an exact whole-sketch solve a larger iteration
+    // budget first; this is substantially cheaper than replaying dozens of
+    // local steps when it converges. Keep bounded substeps as the robust
+    // fallback so manifold backtracking cannot dilute the pointer movement.
+    if (
+      session?.kind === "line"
+      && session.points.length > 1
+      && !session.lineDragPoint
+      && session.local.fixedPointCount === 0
+      && targetStep.norm > 50
+    ) {
+      const fullVariables = sketchSolveVariables(session.sketchId);
+      const fullAttemptState = solver.clone(fullVariables);
+      const exactResult = withDragStepNorm(
+        stepNorm,
+        () => withSolverMaxIterations(100, fullSolve),
+      );
+      if (exactResult.success && exactResult.errorNorm <= CONSTRAINT_ACCEPT_ERROR) {
+        exactResult.local = false;
+        exactResult.guided = false;
+        exactResult.exactSparseLine = true;
+        exactResult.guidedRetryCount = 0;
+        session.finalDragConstraints = fallbackExtra;
+        commitGuidedTargetStep(session, targetStep);
+        session.lastGuidedPreviewError = exactResult.errorNorm;
+        return exactResult;
+      }
+      solver.restore(fullAttemptState);
+      const substepCount = Math.min(
+        SPARSE_LINE_DRAG_MAX_SUBSTEPS,
+        Math.ceil(targetStep.norm / SPARSE_LINE_DRAG_SUBSTEP_NORM),
+      );
+      const starts = targets.map((target) => ({ x: target.point.x, y: target.point.y }));
+      const previousActiveTargetVariables = session.guidedTargetVariables || [];
+      let totalIterations = 0;
+      let totalProjectedNorm = 0;
+      let completed = true;
+      for (let index = 1; index <= substepCount; index += 1) {
+        const progress = index / substepCount;
+        const substepTargets = targets.map((target, targetIndex) => {
+          const start = starts[targetIndex];
+          return {
+            ...target,
+            x: start.x + (target.x - start.x) * progress,
+            y: start.y + (target.y - start.y) * progress,
+          };
+        });
+        localResult = withDragStepNorm(stepNorm, () =>
+          solveLocalGuidedDrag(session, substepTargets, targetStep.norm / substepCount));
+        localAcceptError = Number.isFinite(localResult?.acceptError) ? localResult.acceptError : CONSTRAINT_ACCEPT_ERROR;
+        const acceptable = localResult
+          && Number.isFinite(localResult.errorNorm)
+          && localResult.errorNorm <= localAcceptError;
+        if (!acceptable) {
+          completed = false;
+          break;
+        }
+        if (!localResult.success) {
+          localResult.success = true;
+          localResult.approximate = true;
+          localResult.reason = "プレビュー許容誤差内";
+        }
+        totalIterations += localResult.iterations || 0;
+        totalProjectedNorm += localResult.projectedNorm || 0;
+        session.guidedTargetVariables = localResult.activeTargetVariables || session.guidedTargetVariables || [];
+      }
+      if (completed && localResult?.success) {
+        localResult.iterations = totalIterations;
+        localResult.projectedNorm = totalProjectedNorm;
+        localResult.targetStepNorm = targetStep.norm;
+        localResult.guidedSubstepCount = substepCount;
+        localResult.guidedRetryCount = 0;
+        session.finalDragConstraints = localResult.targetConstraints || [];
+        commitGuidedTargetStep(session, targetStep);
+        session.lastGuidedPreviewError = localResult.errorNorm;
+        return localResult;
+      }
+      solver.restore(guidedAttemptState);
+      session.guidedTargetVariables = previousActiveTargetVariables;
+      localResult = null;
+    }
     // A sparse pointer stream can deliver a very large reversal in one event.
     // Lines translate linearly and should follow that event exactly. For more
     // nonlinear point/arc drags, start with a shorter manifold step to avoid an
@@ -22050,6 +22232,18 @@
   document.getElementById("exportBtn").addEventListener("click", () => void saveJot2DFile());
   document.getElementById("saveAsBtn")?.addEventListener("click", () => void saveJot2DFileAs());
   document.getElementById("importBtn").addEventListener("click", () => void openJot2DFile());
+  document.getElementById("documentFileInput")?.addEventListener("change", async (event) => {
+    const input = event.currentTarget;
+    const file = input.files?.[0] || null;
+    input.value = "";
+    if (!file) return;
+    const opened = await importFileData(file);
+    if (!opened) return;
+    currentFileHandle = null;
+    const message = applicationText(`ファイルを開きました: ${file.name}`, `Opened: ${file.name}`);
+    setHint(message);
+    log(message);
+  });
   document.getElementById("importReferenceImageBtn")?.addEventListener("click", () => document.getElementById("referenceImageFileInput")?.click());
   document.getElementById("referenceImageFileInput")?.addEventListener("change", (event) => {
     const input = event.currentTarget;
@@ -23876,6 +24070,9 @@
             variableCount: result.variableCount,
             constraintCount: result.constraintCount,
             guidedRetryCount: result.guidedRetryCount,
+            pinnedLineTargets: Boolean(result.pinnedLineTargets),
+            exactSparseLine: Boolean(result.exactSparseLine),
+            guidedSubstepCount: result.guidedSubstepCount || 0,
             reason: result.reason,
             local: result.local,
             guided: result.guided,
@@ -26042,6 +26239,7 @@
   draw();
   log("空の新規Documentを作成しました");
   setApplicationLanguage(applicationLanguage, { persist: false, refresh: false });
+  loadRuntimeVersion();
   resizeCanvas();
   if (typeof ResizeObserver === "function") {
     canvasResizeObserver = new ResizeObserver(([entry]) => {

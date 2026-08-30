@@ -127,7 +127,7 @@ Circleは単独で選び、側と距離を入力して複製する。Line／Arc�
 - HatchのCopy／Cut／PasteとBlock化は参照する全境界Geometryの同時選択を必須とし、不足時は操作全体を拒否する。Pasteでは境界GeometryRefを新IDへ書き換える。
 - スケッチ投影の結果は通常Geometryとしてsnap、拘束、寸法、Hatch、Leader、Offsetに使用できる。Copy／PasteとBlock化では投影拘束を除外する。有効な投影拘束がある間は、投影先本体と、そのGeometryが独立して所有するLine端点、中心、Spline通過Pointのdrag、trim、fillet、Spline形状編集、固定、通常／補助作図切替を拒否し、自動解除は行わない。Appearanceは投影対象外であるためリンクを維持したまま編集できる。
 
-ドラッグ中は選択に関係する拘束連結成分だけを優先して local solve し、必要な場合に全 Sketch solve へフォールバックする。Parameterの参照寸法feedbackはドラッグ中に反復せず、Pointer-upで最終精度のsolveとParameter再評価を行う。式エラー、拘束矛盾、非収束時はドラッグ開始前へ戻す。
+ドラッグ中は選択に関係する拘束連結成分だけを優先して local solve し、必要な場合に全 Sketch solve へフォールバックする。Line–Circle中心距離寸法だけで拘束された連結成分内のLine本体を移動する場合は、ドラッグ対象Lineの両端をPointer位置へ固定し、残りの変数だけをlocal solveする。これにより、Lineの両端は反復計算による追従遅れを生じさせず、Circle中心距離は残りのGeometry移動で維持する。それ以外のLineのドラッグでフレーム間のPointer移動が大きい場合は、反復上限を拡張した全Sketch solveでPointer位置への一括追従を先に試みる。これが収束しない場合のみ、1回のpreview内で移動経路を有限個の小区間に分けて順にsolveし、非線形拘束があってもPointer位置への追従量を維持する。Parameterの参照寸法feedbackはドラッグ中に反復せず、Pointer-upで最終精度のsolveとParameter再評価を行う。式エラー、拘束矛盾、非収束時はドラッグ開始前へ戻す。
 
 ## 4. 拘束コマンド
 
