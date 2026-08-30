@@ -17846,6 +17846,40 @@
     return result;
   }
 
+  function solvePinnedLineTargets(session, targets, stepNorm) {
+    if (
+      session?.kind !== "line"
+      || session.lineDragPoint
+      || !session.local
+      || session.local.constraints.length !== 1
+      || !(session.local.constraints[0] instanceof LineCircleDistanceConstraint)
+      || targets.length < 2
+      || targets.some((target) => !target.point || !Number.isFinite(target.x) || !Number.isFinite(target.y))
+    ) return null;
+    const targetPoints = new Set(targets.map((target) => target.point));
+    const remainingVariables = session.local.variables.filter((variable) => !targetPoints.has(variable.object));
+    if (remainingVariables.length === session.local.variables.length) return null;
+    const state = solver.clone(session.local.variables);
+    for (const target of targets) {
+      target.point.x = target.x;
+      target.point.y = target.y;
+    }
+    const result = withDragStepNorm(stepNorm, () => solver.solveSubset({
+      variables: remainingVariables,
+      constraints: session.local.constraints,
+      lines: session.local.lines,
+    }));
+    if (!Number.isFinite(result.errorNorm) || result.errorNorm > CONSTRAINT_ACCEPT_ERROR) {
+      solver.restore(state);
+      return null;
+    }
+    result.success = true;
+    result.local = true;
+    result.guided = false;
+    result.pinnedLineTargets = true;
+    return result;
+  }
+
   function solveGuidedDragWithFallback(session, targets, fallbackExtra, fullSolve, restoreState = null) {
     const targetStep = guidedTargetStepForSession(session, targets);
     const stepNorm = Math.max(dragStepNormForTargets(targets), dragStepNormForExtra(fallbackExtra));
@@ -17870,6 +17904,16 @@
         variableCount: session.local.variables.length,
         constraintCount: 0,
       };
+    }
+    const pinnedLineResult = solvePinnedLineTargets(session, targets, stepNorm);
+    if (pinnedLineResult) {
+      pinnedLineResult.targetStepNorm = targetStep.norm;
+      pinnedLineResult.targetConstraints = fallbackExtra;
+      pinnedLineResult.guidedRetryCount = 0;
+      session.finalDragConstraints = fallbackExtra;
+      commitGuidedTargetStep(session, targetStep);
+      session.lastGuidedPreviewError = pinnedLineResult.errorNorm;
+      return pinnedLineResult;
     }
     const guidedAttemptState = restoreState || solver.clone(session.local?.variables || solver.getVariables());
     let localResult = null;
@@ -24026,6 +24070,7 @@
             variableCount: result.variableCount,
             constraintCount: result.constraintCount,
             guidedRetryCount: result.guidedRetryCount,
+            pinnedLineTargets: Boolean(result.pinnedLineTargets),
             exactSparseLine: Boolean(result.exactSparseLine),
             guidedSubstepCount: result.guidedSubstepCount || 0,
             reason: result.reason,

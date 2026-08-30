@@ -1454,6 +1454,12 @@ test("file URL Help menu reads the generated Git commit file", async ({ page }) 
   await expect(runtimeCommit).toHaveAttribute("data-state", "available");
   await expect(runtimeCommit).toContainText(`${branch}@${commit.slice(0, 12)}`);
   await expect(runtimeCommit).toHaveAttribute("title", `${branch}@${commit}`);
+
+  const loadedScripts = await page.locator("script[src]").evaluateAll((scripts) =>
+    scripts.map((script) => new URL(script.src).searchParams.get("load")),
+  );
+  expect(loadedScripts).toHaveLength(10);
+  expect(loadedScripts.every((loadId) => loadId && loadId === loadedScripts[0])).toBe(true);
 });
 
 test("HTML file picker compatibility route opens a Jot2D document without a native handle", async ({ page }) => {
@@ -2389,13 +2395,9 @@ test("fixed rectangle fixture L2 and L3 reuse the responsive P3 drag path while 
   expect(pointerResults[0].y).toBeCloseTo(pointerResults[1].y, 4);
 });
 
-test("a line connected to a line-circle dimension follows sparse pointer jumps without lag", async ({ page }) => {
+test("lines connected to a line-circle dimension follow repeated sparse reversals without lag", async ({ page }) => {
   await page.goto(`${baseUrl}/index.html?test=1`);
   await page.waitForFunction(() => window.__jot2dTest);
-  await page.evaluate(
-    (fixture) => window.__jot2dTest.importDocumentNameFixture(fixture, "sparse-line-circle-drag.jot2d"),
-    lineCircleSparseLineDragFixture(),
-  );
   const deltas = [
     [150, 0],
     [-150, 0],
@@ -2403,26 +2405,36 @@ test("a line connected to a line-circle dimension follows sparse pointer jumps w
     [0, -150],
     [200, 120],
     [400, 240],
+    ...Array.from({ length: 24 }, (_, index) => [index % 2 === 0 ? -300 : 300, 0]),
   ];
-  const result = await page.evaluate(
-    (dragDeltas) => window.__jot2dTest.geometryDragPathForTest({ kind: "line", id: "L2" }, dragDeltas),
-    deltas,
-  );
+  for (const lineId of ["L1", "L2", "L3"]) {
+    await page.evaluate(
+      ({ fixture, fileName }) => window.__jot2dTest.importDocumentNameFixture(fixture, fileName),
+      { fixture: lineCircleSparseLineDragFixture(), fileName: `${lineId}-repeated-line-drag.jot2d` },
+    );
+    const result = await page.evaluate(
+      ({ id, dragDeltas }) => window.__jot2dTest.geometryDragPathForTest({ kind: "line", id }, dragDeltas),
+      { id: lineId, dragDeltas: deltas },
+    );
 
-  expect(result.sessionAvailable).toBe(true);
-  expect(result.previews).toHaveLength(deltas.length);
-  for (const [index, preview] of result.previews.entries()) {
-    expect(preview.success, `step ${index + 1}`).toBe(true);
-    expect(preview.blocked, `step ${index + 1}`).not.toBe(true);
-    expect(preview.fallback, `step ${index + 1}`).not.toBe(true);
-    expect(preview.exactSparseLine, `step ${index + 1}`).toBe(true);
-    expect(preview.guidedSubstepCount, `step ${index + 1}`).toBe(0);
-    expect(preview.state.midpoint.x - result.startState.midpoint.x, `step ${index + 1}/x`).toBeCloseTo(deltas[index][0], 4);
-    expect(preview.state.midpoint.y - result.startState.midpoint.y, `step ${index + 1}/y`).toBeCloseTo(deltas[index][1], 4);
+    expect(result.sessionAvailable, lineId).toBe(true);
+    expect(result.previews, lineId).toHaveLength(deltas.length);
+    for (const [index, preview] of result.previews.entries()) {
+      const stepLabel = `${lineId}/step ${index + 1}`;
+      expect(preview.success, stepLabel).toBe(true);
+      expect(preview.blocked, stepLabel).not.toBe(true);
+      expect(preview.fallback, stepLabel).not.toBe(true);
+      expect(preview.pinnedLineTargets, stepLabel).toBe(true);
+      expect(preview.exactSparseLine, stepLabel).toBe(false);
+      expect(preview.guidedSubstepCount, stepLabel).toBe(0);
+      expect(preview.iterations, stepLabel).toBeLessThan(10);
+      expect(preview.state.midpoint.x - result.startState.midpoint.x, `${stepLabel}/x`).toBeCloseTo(deltas[index][0], 4);
+      expect(preview.state.midpoint.y - result.startState.midpoint.y, `${stepLabel}/y`).toBeCloseTo(deltas[index][1], 4);
+    }
+    expect(Math.max(...result.previews.map((preview) => preview.elapsedMs)), lineId).toBeLessThan(10);
+    expect(result.final.success, lineId).toBe(true);
+    expect(result.final.baseErrorNorm, lineId).toBeLessThan(1e-5);
   }
-  expect(Math.max(...result.previews.map((preview) => preview.elapsedMs))).toBeLessThan(25);
-  expect(result.final.success).toBe(true);
-  expect(result.final.baseErrorNorm).toBeLessThan(1e-5);
 });
 
 test("arc body selection and hover do not highlight endpoints", async ({ page }) => {
