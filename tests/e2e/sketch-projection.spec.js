@@ -45,9 +45,12 @@ test("projects every supported geometry kind with geometry-owned points, normal/
   expect(state.constraints.every((item) => item.displayColor === "#7c3aed")).toBe(true);
   expect(state.constraints.every((item) => item.displayColor !== item.appearanceColor)).toBe(true);
   await page.locator("#constraintStatusViewBtn").click();
-  await expect(page.locator("#toolSketchProjection .projection-source")).toHaveCount(1);
-  await expect(page.locator("#toolSketchProjection .projection-ray")).toHaveCount(3);
-  await expect(page.locator("#toolSketchProjection .projection-target")).toHaveCount(1);
+  const projectionIcon = page.locator("#toolSketchProjection svg");
+  await expect(projectionIcon.locator("title")).toHaveText("投影拘束");
+  await expect(projectionIcon.locator(".projection-source")).toHaveAttribute("d", "M2 3H8V7H16V3H22");
+  await expect(projectionIcon.locator(".projection-source")).toHaveAttribute("stroke-dasharray", "2.5 2.5");
+  await expect(projectionIcon.locator(".projection-ray")).toHaveAttribute("d", "M5 9.5V14M3 12L5 14L7 12M12 9.5V14M10 12L12 14L14 12M19 9.5V14M17 12L19 14L21 12");
+  await expect(projectionIcon.locator(".projection-target")).toHaveAttribute("d", "M2 17H8V21H16V17H22");
   const targetLines = state.constraints.filter((item) => item.kind === "line").map((item) => item.target);
   expect(new Set(targetLines.flatMap((line) => [line.p1, line.p2])).size).toBe(4);
   const targetPointIds = state.constraints.flatMap((item) => projectedTargetPointIds(item.target));
