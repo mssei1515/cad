@@ -1424,6 +1424,47 @@ test("Jot2D files open, overwrite, save as, and cancel without errors", async ({
   });
 });
 
+test("HTML file picker compatibility route opens a Jot2D document without a native handle", async ({ page }) => {
+  await page.addInitScript(() => {
+    window.__nativeOpenCalled = false;
+    Object.defineProperty(window, "showOpenFilePicker", {
+      configurable: true,
+      value: async () => {
+        window.__nativeOpenCalled = true;
+        throw new Error("The native picker must not be used in compatibility mode");
+      },
+    });
+  });
+  await page.goto(`${baseUrl}/index.html?test=1&filePicker=input`);
+  await page.waitForFunction(() => window.__jot2dTest);
+
+  const chooserPromise = page.waitForEvent("filechooser");
+  await page.click("#importBtn");
+  const chooser = await chooserPromise;
+  await chooser.setFiles({
+    name: "browser-open.jot2d",
+    mimeType: "application/json",
+    buffer: Buffer.from(JSON.stringify(lineCircleSparseLineDragFixture())),
+  });
+
+  await expect.poll(() => page.title()).toBe("browser-open - Jot2D");
+  await expect(page.locator("#hint")).toHaveText("ファイルを開きました: browser-open.jot2d");
+  expect(await page.evaluate(() => ({
+    nativeOpenCalled: window.__nativeOpenCalled,
+    fileState: window.__jot2dTest.fileSystemAccessStateForTest(),
+    nameState: window.__jot2dTest.documentNameState(),
+  }))).toEqual({
+    nativeOpenCalled: false,
+    fileState: { hasHandle: false, handleName: null },
+    nameState: {
+      modelName: "browser-open",
+      displayName: "browser-open",
+      serializedName: "browser-open",
+      title: "browser-open - Jot2D",
+    },
+  });
+});
+
 test("Canvas always uses a compact native cursor and commands add the matching framed toolbar icon", async ({ page }) => {
   await page.goto(`${baseUrl}/index.html?test=1`);
   await page.waitForFunction(() => window.__jot2dTest);

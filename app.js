@@ -7803,11 +7803,26 @@
     });
   }
 
+  function htmlDocumentFilePickerRequested() {
+    return new URLSearchParams(window.location.search).get("filePicker") === "input";
+  }
+
+  function requestDocumentFileInput() {
+    const input = document.getElementById("documentFileInput");
+    if (!input) {
+      setHint(applicationText("互換ファイル入力を開始できません", "The compatible file input is unavailable"), "error");
+      return false;
+    }
+    input.click();
+    return true;
+  }
+
   async function openJot2DFile() {
     if (blockEditSession) {
       setHint("ブロック定義編集を終了してから読み込んでください", "error");
       return false;
     }
+    if (htmlDocumentFilePickerRequested()) return requestDocumentFileInput();
     if (!ensureFileSystemAccess("showOpenFilePicker", "ファイルを開く操作", "open files")) return false;
     try {
       const [handle] = await window.showOpenFilePicker({
@@ -22134,6 +22149,18 @@
   document.getElementById("exportBtn").addEventListener("click", () => void saveJot2DFile());
   document.getElementById("saveAsBtn")?.addEventListener("click", () => void saveJot2DFileAs());
   document.getElementById("importBtn").addEventListener("click", () => void openJot2DFile());
+  document.getElementById("documentFileInput")?.addEventListener("change", async (event) => {
+    const input = event.currentTarget;
+    const file = input.files?.[0] || null;
+    input.value = "";
+    if (!file) return;
+    const opened = await importFileData(file);
+    if (!opened) return;
+    currentFileHandle = null;
+    const message = applicationText(`ファイルを開きました: ${file.name}`, `Opened: ${file.name}`);
+    setHint(message);
+    log(message);
+  });
   document.getElementById("importReferenceImageBtn")?.addEventListener("click", () => document.getElementById("referenceImageFileInput")?.click());
   document.getElementById("referenceImageFileInput")?.addEventListener("change", (event) => {
     const input = event.currentTarget;
