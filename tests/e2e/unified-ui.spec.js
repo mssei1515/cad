@@ -101,6 +101,60 @@ function annotationSketchFixture(version = 11) {
   };
 }
 
+function lineCircleSparseLineDragFixture() {
+  return {
+    version: 19,
+    documentName: "Sparse line-circle drag",
+    defaultAppearance: { visible: true, color: "#111827", lineType: "solid", lineWidth: 2 },
+    defaultConstructionAppearance: { visible: true, color: "#64748b", lineType: "dashdot", lineWidth: 1, endpointOverhang: true, endpointMarkers: true },
+    defaultDimensionAppearance: { visible: true, color: "#64748b", lineWidth: 1.2, precision: null, prefix: "", suffix: "", terminatorType: "arrow", extensionLineOvershoot: 1.5, extensionLineOriginGap: 1.5, terminatorSize: 4, arrowheadAngle: 30, dimensionTextHeight: 5, dimensionTextGap: 0 },
+    sketches: [
+      { id: "ROOT", name: "Root Sketch", parentSketchId: null, kind: "root", appearance: {}, constructionAppearance: {}, dimensionAppearance: {} },
+      { id: "S1", name: "Sketch-1", parentSketchId: "ROOT", kind: "sketch", appearance: {}, constructionAppearance: {}, dimensionAppearance: {} },
+    ],
+    activeSketchId: "S1",
+    annotations: [],
+    hatches: [],
+    referenceImages: [],
+    nextHatchIndex: 1,
+    parameters: [],
+    nextDimensionParameterIndex: 2,
+    blockDefinitions: [],
+    blockInstances: [],
+    points: [
+      { id: "P1", x: 445.5111234529177, y: 71.62929184733785, fixed: false, kind: "endpoint", sketchId: "S1", appearance: {} },
+      { id: "P2", x: 507.8082294656379, y: 252.12644132938127, fixed: false, kind: "endpoint", sketchId: "S1", appearance: {} },
+      { id: "P3", x: 734.1721849964379, y: 229.77125698251248, fixed: false, kind: "endpoint", sketchId: "S1", appearance: {} },
+      { id: "P4", x: 740.7999877929688, y: 371.8000183105469, fixed: false, kind: "endpoint", sketchId: "S1", appearance: {} },
+      { id: "P5", x: 558.9779847656711, y: 138.98486973223496, fixed: false, kind: "endpoint", sketchId: "S1", appearance: {} },
+    ],
+    lines: [
+      { id: "L1", p1: "P1", p2: "P2", construction: false, sketchId: "S1", appearance: {} },
+      { id: "L2", p1: "P2", p2: "P3", construction: false, sketchId: "S1", appearance: {} },
+      { id: "L3", p1: "P3", p2: "P4", construction: false, sketchId: "S1", appearance: {} },
+    ],
+    circles: [
+      { id: "C1", center: "P5", radius: 28.374645423870362, construction: false, sketchId: "S1", appearance: {} },
+    ],
+    arcs: [],
+    splines: [],
+    constraints: [
+      {
+        type: "lineCircleDistance",
+        line: "L1",
+        circle: "C1",
+        target: 85.28294700183547,
+        sign: -1,
+        dimension: { x: 556.5684888634365, y: 221.17850435059586, offsetU: 13.547646871331722, offsetN: 76.91000256931403, labelOffsetU: 13.547646871331784, axis: null, display: null },
+        enabled: true,
+        parameterName: "d1",
+        expression: "85.28294700183547",
+        sketchId: "S1",
+      },
+    ],
+  };
+}
+
 function waitForServer(url, timeoutMs = 10000) {
   const startedAt = Date.now();
   return new Promise((resolve, reject) => {
@@ -2260,6 +2314,33 @@ test("fixed rectangle fixture L2 and L3 reuse the responsive P3 drag path while 
   }
   expect(pointerResults[0].x).toBeCloseTo(pointerResults[1].x, 4);
   expect(pointerResults[0].y).toBeCloseTo(pointerResults[1].y, 4);
+});
+
+test("a line connected to a line-circle dimension follows sparse pointer jumps without lag", async ({ page }) => {
+  await page.goto(`${baseUrl}/index.html?test=1`);
+  await page.waitForFunction(() => window.__jot2dTest);
+  await page.evaluate(
+    (fixture) => window.__jot2dTest.importDocumentNameFixture(fixture, "sparse-line-circle-drag.jot2d"),
+    lineCircleSparseLineDragFixture(),
+  );
+  const deltas = [[150, 0], [-150, 0], [0, 150], [0, -150]];
+  const result = await page.evaluate(
+    (dragDeltas) => window.__jot2dTest.geometryDragPathForTest({ kind: "line", id: "L2" }, dragDeltas),
+    deltas,
+  );
+
+  expect(result.sessionAvailable).toBe(true);
+  expect(result.previews).toHaveLength(deltas.length);
+  for (const [index, preview] of result.previews.entries()) {
+    expect(preview.success, `step ${index + 1}`).toBe(true);
+    expect(preview.blocked, `step ${index + 1}`).not.toBe(true);
+    expect(preview.fallback, `step ${index + 1}`).not.toBe(true);
+    expect(preview.state.midpoint.x - result.startState.midpoint.x, `step ${index + 1}/x`).toBeCloseTo(deltas[index][0], 4);
+    expect(preview.state.midpoint.y - result.startState.midpoint.y, `step ${index + 1}/y`).toBeCloseTo(deltas[index][1], 4);
+  }
+  expect(Math.max(...result.previews.map((preview) => preview.elapsedMs))).toBeLessThan(100);
+  expect(result.final.success).toBe(true);
+  expect(result.final.baseErrorNorm).toBeLessThan(1e-5);
 });
 
 test("arc body selection and hover do not highlight endpoints", async ({ page }) => {

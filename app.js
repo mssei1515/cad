@@ -424,6 +424,8 @@
   const PARAMETER_STABILIZATION_RELATIVE_TOLERANCE = 1e-7;
   const DRAG_PREVIEW_ERROR_SCREEN_PX = 0.1;
   const DRAG_PREVIEW_MAX_MODEL_ERROR = 0.125;
+  const SPARSE_LINE_DRAG_SUBSTEP_NORM = 4;
+  const SPARSE_LINE_DRAG_MAX_SUBSTEPS = 128;
   const MIN_LINE_LENGTH = Math.max(MIN_ORIENTATION_LENGTH, solver.minLineLength || 12);
   const MIN_ARC_LENGTH = MIN_LINE_LENGTH;
   const CONSTRAINT_STATUS_COLORS = {
@@ -17819,6 +17821,69 @@
     let localResult = null;
     let localAcceptError = CONSTRAINT_ACCEPT_ERROR;
     let guidedRetryCount = 0;
+    // A missed animation frame can collapse a long line translation into one
+    // nonlinear solve. Replay that translation as bounded local steps so the
+    // constraint-manifold backtracking cannot dilute the pointer movement.
+    if (
+      session?.kind === "line"
+      && session.points.length > 1
+      && !session.lineDragPoint
+      && session.local.fixedPointCount === 0
+      && targetStep.norm > 50
+    ) {
+      const substepCount = Math.min(
+        SPARSE_LINE_DRAG_MAX_SUBSTEPS,
+        Math.ceil(targetStep.norm / SPARSE_LINE_DRAG_SUBSTEP_NORM),
+      );
+      const starts = targets.map((target) => ({ x: target.point.x, y: target.point.y }));
+      const previousActiveTargetVariables = session.guidedTargetVariables || [];
+      let totalIterations = 0;
+      let totalProjectedNorm = 0;
+      let completed = true;
+      for (let index = 1; index <= substepCount; index += 1) {
+        const progress = index / substepCount;
+        const substepTargets = targets.map((target, targetIndex) => {
+          const start = starts[targetIndex];
+          return {
+            ...target,
+            x: start.x + (target.x - start.x) * progress,
+            y: start.y + (target.y - start.y) * progress,
+          };
+        });
+        localResult = withDragStepNorm(stepNorm, () =>
+          solveLocalGuidedDrag(session, substepTargets, targetStep.norm / substepCount));
+        localAcceptError = Number.isFinite(localResult?.acceptError) ? localResult.acceptError : CONSTRAINT_ACCEPT_ERROR;
+        const acceptable = localResult
+          && Number.isFinite(localResult.errorNorm)
+          && localResult.errorNorm <= localAcceptError;
+        if (!acceptable) {
+          completed = false;
+          break;
+        }
+        if (!localResult.success) {
+          localResult.success = true;
+          localResult.approximate = true;
+          localResult.reason = "プレビュー許容誤差内";
+        }
+        totalIterations += localResult.iterations || 0;
+        totalProjectedNorm += localResult.projectedNorm || 0;
+        session.guidedTargetVariables = localResult.activeTargetVariables || session.guidedTargetVariables || [];
+      }
+      if (completed && localResult?.success) {
+        localResult.iterations = totalIterations;
+        localResult.projectedNorm = totalProjectedNorm;
+        localResult.targetStepNorm = targetStep.norm;
+        localResult.guidedSubstepCount = substepCount;
+        localResult.guidedRetryCount = 0;
+        session.finalDragConstraints = localResult.targetConstraints || [];
+        commitGuidedTargetStep(session, targetStep);
+        session.lastGuidedPreviewError = localResult.errorNorm;
+        return localResult;
+      }
+      solver.restore(guidedAttemptState);
+      session.guidedTargetVariables = previousActiveTargetVariables;
+      localResult = null;
+    }
     // A sparse pointer stream can deliver a very large reversal in one event.
     // Lines translate linearly and should follow that event exactly. For more
     // nonlinear point/arc drags, start with a shorter manifold step to avoid an
