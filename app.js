@@ -303,6 +303,7 @@
   let constraintAnalysisState = null;
   let constraintRedundancyState = { constraints: new Map(), sketches: new Map(), count: 0 };
   let lastAuthoringPerformance = null;
+  let interactionFrameStats = null;
   let sketchSolveStates = new Map();
   let invalidReferenceConstraints = new Map();
   let panSession = null;
@@ -370,6 +371,7 @@
   let blockPlacementPropertiesWasCollapsed = null;
   let blockEditSession = null;
   let blockProjectionCache = new Map();
+  let geometryReadCache = null;
   let hatchResolutionCache = new WeakMap();
   let hatchFaceCache = new Map();
   const referenceImageCache = new Map();
@@ -391,6 +393,10 @@
   const CLIPBOARD_PASTE_OFFSET_SCREEN_PX = 24;
   const BLOCK_ORTHOGONAL_ROTATION_STEP = Math.PI / 2;
   const viewport = { x: 0, y: 0, scale: 1 };
+  const canvasRenderMetrics = { width: 0, height: 0, dpr: 1 };
+  let canvasResizeObserver = null;
+  let pendingCanvasPointerMove = null;
+  let canvasPointerMoveFrame = null;
   const viewState = { constraintStatus: false, geometryIds: false };
   let constraintStatusMouseLatched = false;
   let constraintStatusSpaceHeld = false;
@@ -2265,38 +2271,58 @@
     else blockProjectionCache.clear();
   }
 
+  function withGeometryReadCache(callback) {
+    if (geometryReadCache) return callback();
+    geometryReadCache = { values: new Map(), appearances: new WeakMap() };
+    try {
+      return callback();
+    } finally {
+      geometryReadCache = null;
+    }
+  }
+
+  function cachedGeometryRead(key, create) {
+    if (!geometryReadCache) return create();
+    if (!geometryReadCache.values.has(key)) geometryReadCache.values.set(key, create());
+    return geometryReadCache.values.get(key);
+  }
+
   function blockProjectionBundles() {
-    ensureBlockState();
-    return model.blockInstances.map(blockProjectionBundle);
+    return cachedGeometryRead("blockProjectionBundles", () => {
+      ensureBlockState();
+      return model.blockInstances.map(blockProjectionBundle);
+    });
   }
 
   function allGeometryPoints() {
-    return [...model.points, ...blockProjectionBundles().flatMap((bundle) => bundle.points)];
+    return cachedGeometryRead("allGeometryPoints", () => [...model.points, ...blockProjectionBundles().flatMap((bundle) => bundle.points)]);
   }
 
   function allGeometryLines() {
-    return [...model.lines, ...blockProjectionBundles().flatMap((bundle) => bundle.lines)];
+    return cachedGeometryRead("allGeometryLines", () => [...model.lines, ...blockProjectionBundles().flatMap((bundle) => bundle.lines)]);
   }
 
   function allGeometryCircles() {
-    return [...model.circles, ...blockProjectionBundles().flatMap((bundle) => bundle.circles)];
+    return cachedGeometryRead("allGeometryCircles", () => [...model.circles, ...blockProjectionBundles().flatMap((bundle) => bundle.circles)]);
   }
 
   function allGeometryArcs() {
-    return [...model.arcs, ...blockProjectionBundles().flatMap((bundle) => bundle.arcs)];
+    return cachedGeometryRead("allGeometryArcs", () => [...model.arcs, ...blockProjectionBundles().flatMap((bundle) => bundle.arcs)]);
   }
 
   function allGeometrySplines() {
-    return [...model.splines, ...blockProjectionBundles().flatMap((bundle) => bundle.splines || [])];
+    return cachedGeometryRead("allGeometrySplines", () => [...model.splines, ...blockProjectionBundles().flatMap((bundle) => bundle.splines || [])]);
   }
 
   function allAnnotations() {
-    return [...model.annotations, ...blockProjectionBundles().flatMap((bundle) => bundle.annotations || [])];
+    return cachedGeometryRead("allAnnotations", () => [...model.annotations, ...blockProjectionBundles().flatMap((bundle) => bundle.annotations || [])]);
   }
 
   function allHatches() {
-    if (model.hatches.length === 0 && !model.blockDefinitions.some((definition) => (definition.hatches?.length || 0) > 0)) return [];
-    return [...model.hatches, ...blockProjectionBundles().flatMap((bundle) => bundle.hatches || [])];
+    return cachedGeometryRead("allHatches", () => {
+      if (model.hatches.length === 0 && !model.blockDefinitions.some((definition) => (definition.hatches?.length || 0) > 0)) return [];
+      return [...model.hatches, ...blockProjectionBundles().flatMap((bundle) => bundle.hatches || [])];
+    });
   }
 
   function hatchBoundaryFingerprint(hatch, scope = model) {
@@ -2454,6 +2480,8 @@
   }
 
   function effectiveAppearanceForElement(item) {
+    const cached = item && geometryReadCache?.appearances.get(item);
+    if (cached) return cached;
     const construction = (item instanceof Line || item instanceof Circle || item instanceof Arc || item instanceof Spline) && item.construction;
     let result = construction
       ? { ...normalizeConstructionAppearance(model.defaultConstructionAppearance, { partial: false }) }
@@ -2468,6 +2496,7 @@
     } else {
       result = { ...result, ...normalizeAppearance(item?.appearance) };
     }
+    if (item && geometryReadCache) geometryReadCache.appearances.set(item, result);
     return result;
   }
 
@@ -5862,6 +5891,7 @@
     };
     setHint("オフセット距離を入力してください。Enterまたはダブルクリックで決定します");
     updateToolbar();
+    syncDimensionValueInput();
     draw();
     focusDimensionValueInput();
     return true;
@@ -5896,6 +5926,7 @@
     };
     setHint("オフセット距離を入力してください。Enterまたはダブルクリックで決定します");
     updateToolbar();
+    syncDimensionValueInput();
     draw();
     focusDimensionValueInput();
     return true;
@@ -6163,6 +6194,7 @@
   }
 
   function resetModelState() {
+    flushScheduledCanvasPointerMove({ discard: true });
     mode = "select";
     lastAuthoringPerformance = null;
     model.documentName = DEFAULT_DOCUMENT_NAME;
@@ -8104,18 +8136,35 @@
     log("サンプルを復元しました");
   }
 
+  function syncCanvasBitmapSize(width = null, height = null) {
+    if (!Number.isFinite(width) || !Number.isFinite(height)) {
+      const rect = canvas.getBoundingClientRect();
+      width = rect.width;
+      height = rect.height;
+    }
+    const dpr = window.devicePixelRatio || 1;
+    const bitmapWidth = Math.max(1, Math.floor(width * dpr));
+    const bitmapHeight = Math.max(1, Math.floor(height * dpr));
+    const changed = canvas.width !== bitmapWidth || canvas.height !== bitmapHeight || canvasRenderMetrics.dpr !== dpr;
+    canvasRenderMetrics.width = width;
+    canvasRenderMetrics.height = height;
+    canvasRenderMetrics.dpr = dpr;
+    if (canvas.width !== bitmapWidth) canvas.width = bitmapWidth;
+    if (canvas.height !== bitmapHeight) canvas.height = bitmapHeight;
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    return changed;
+  }
+
   function resizeCanvas(options = {}) {
     const rect = canvas.getBoundingClientRect();
-    const dpr = window.devicePixelRatio || 1;
-    canvas.width = Math.max(1, Math.floor(rect.width * dpr));
-    canvas.height = Math.max(1, Math.floor(rect.height * dpr));
-    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    syncCanvasBitmapSize(rect.width, rect.height);
     if (options.centerWorld && rect.width > 0 && rect.height > 0) {
       viewport.x = rect.width / 2 - options.centerWorld.x * viewport.scale;
       viewport.y = rect.height / 2 - options.centerWorld.y * viewport.scale;
     }
     applySketchTreeWidth();
     draw();
+    if (pendingCommand && ["distance-value", "offset-value"].includes(pendingCommand.type)) syncDimensionValueInput();
   }
 
   function restoreBlockPlacementPropertiesPanel() {
@@ -11283,16 +11332,13 @@
   }
 
   function draw() {
-    const r = canvas.getBoundingClientRect();
-    const w = r.width;
-    const h = r.height;
-    const dpr = window.devicePixelRatio || 1;
-    const bitmapWidth = Math.max(1, Math.floor(w * dpr));
-    const bitmapHeight = Math.max(1, Math.floor(h * dpr));
-    if (canvas.width !== bitmapWidth || canvas.height !== bitmapHeight) {
-      canvas.width = bitmapWidth;
-      canvas.height = bitmapHeight;
-    }
+    return withGeometryReadCache(drawCanvas);
+  }
+
+  function drawCanvas() {
+    if (canvasRenderMetrics.width <= 0 || canvasRenderMetrics.height <= 0) syncCanvasBitmapSize();
+    const dpr = canvasRenderMetrics.dpr;
+    if (interactionFrameStats) interactionFrameStats.canvasDraws += 1;
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     resetCanvasStrokeState();
     ctx.clearRect(0, 0, canvas.width, canvas.height);
@@ -11332,15 +11378,13 @@
     resetCanvasStrokeState();
     ctx.restore();
     resetCanvasStrokeState();
-    syncDimensionValueInput();
-    updateSidebarSelectionRowClasses();
   }
 
   function hideDimensionValueInput() {
     if (!dimensionValueInput) return;
-    if (dimensionValueInputShell) dimensionValueInputShell.hidden = true;
-    dimensionValueInput.hidden = true;
-    dimensionValueInput.classList.remove("is-invalid");
+    if (dimensionValueInputShell?.hidden === false) dimensionValueInputShell.hidden = true;
+    if (dimensionValueInput.hidden === false) dimensionValueInput.hidden = true;
+    if (dimensionValueInput.classList.contains("is-invalid")) dimensionValueInput.classList.remove("is-invalid");
   }
 
   function dimensionInputLayoutForPendingCommand() {
@@ -13699,6 +13743,7 @@
     };
     setHint(applicationText("寸法値を入力中: 数式は = から開始し、Parameter参照はダブルクオーテーションで括ります。Canvas寸法のクリックで参照を挿入できます", "Editing dimension: begin expressions with = and enclose parameter references in double quotes. Click a canvas dimension to insert a reference."));
     updateConstraintButtons();
+    syncDimensionValueInput();
     draw();
     focusDimensionValueInput();
   }
@@ -13810,6 +13855,7 @@
   function updateDistanceBufferLabel() {
     if (!pendingCommand || !["distance-value", "offset-value"].includes(pendingCommand.type)) return;
     setHint(pendingCommand.type === "offset-value" ? "オフセット距離を入力中: Enter/ダブルクリックで決定、Escでキャンセル" : applicationText("寸法値を入力中: 数式は = から開始し、Parameter参照はダブルクオーテーションで括ります。Canvas寸法のクリックで参照を挿入できます", "Editing dimension: begin expressions with = and enclose parameter references in double quotes. Click a canvas dimension to insert a reference."));
+    syncDimensionValueInput();
     draw();
   }
 
@@ -14764,6 +14810,7 @@
     if (document.getElementById("blockDefinitionsDialog")?.open) updateBlockUI();
     updateSketchTreeSelectionState();
     updatePropertiesUI();
+    updateSidebarSelectionRowClasses();
   }
 
   function selectSidebarGeometryItem(item) {
@@ -16406,6 +16453,8 @@
     updateStatusUI();
     updateConstraintButtons();
     localizeApplicationUI();
+    updateSidebarSelectionRowClasses();
+    syncDimensionValueInput();
   }
 
   function supportLineBasis(line) {
@@ -19529,6 +19578,7 @@
   window.addEventListener("blur", closeCanvasContextMenu);
 
   canvas.addEventListener("pointerdown", (e) => {
+    flushScheduledCanvasPointerMove();
     if (e.button === 2) {
       e.preventDefault();
       return;
@@ -19958,11 +20008,12 @@
     draw();
   });
 
-  canvas.addEventListener("pointermove", (e) => {
+  function processCanvasPointerMove(e) {
     const screenPoint = { x: e.offsetX, y: e.offsetY };
     const coordinatePoint = screenToWorld(screenPoint);
     const coordinateStatus = document.getElementById("statusCoordinates");
-    if (coordinateStatus) coordinateStatus.textContent = `X ${formatDisplayNumber(coordinatePoint.x, 3)} / Y ${formatDisplayNumber(coordinatePoint.y, 3)}`;
+    const coordinateText = `X ${formatDisplayNumber(coordinatePoint.x, 3)} / Y ${formatDisplayNumber(coordinatePoint.y, 3)}`;
+    if (coordinateStatus && coordinateStatus.textContent !== coordinateText) coordinateStatus.textContent = coordinateText;
     if (panSession) {
       const p = screenPoint;
       viewport.x = panSession.startX + (p.x - panSession.startPointer.x);
@@ -20373,9 +20424,55 @@
     setHint(`${dragLabel(dragSession)}中: ${scope}, error=${error.toExponential(2)}, iter=${result.iterations}${fallback}${dependentText}${dependentErrorText}`, dependentResult.success ? "normal" : "error");
     if (!dependentResult.success) updateUI();
     draw();
-  });
+  }
+
+  function processScheduledCanvasPointerMove({ animationFrame = false, synchronousFlush = false } = {}) {
+    if (!pendingCanvasPointerMove) return false;
+    const pointer = pendingCanvasPointerMove;
+    pendingCanvasPointerMove = null;
+    if (interactionFrameStats) {
+      interactionFrameStats.processedMoves += 1;
+      if (animationFrame) interactionFrameStats.animationFrames += 1;
+      if (synchronousFlush) interactionFrameStats.synchronousFlushes += 1;
+    }
+    withGeometryReadCache(() => processCanvasPointerMove(pointer));
+    if (pendingCommand && ["distance-value", "offset-value"].includes(pendingCommand.type)) syncDimensionValueInput();
+    return true;
+  }
+
+  function scheduleCanvasPointerMove(e) {
+    if (interactionFrameStats) interactionFrameStats.receivedMoves += 1;
+    if (pendingCanvasPointerMove) {
+      if (interactionFrameStats) interactionFrameStats.coalescedMoves += 1;
+      pendingCanvasPointerMove.offsetX = e.offsetX;
+      pendingCanvasPointerMove.offsetY = e.offsetY;
+      pendingCanvasPointerMove.shiftKey = e.shiftKey;
+    } else {
+      pendingCanvasPointerMove = { offsetX: e.offsetX, offsetY: e.offsetY, shiftKey: e.shiftKey };
+    }
+    if (canvasPointerMoveFrame != null) return;
+    canvasPointerMoveFrame = requestAnimationFrame(() => {
+      canvasPointerMoveFrame = null;
+      processScheduledCanvasPointerMove({ animationFrame: true });
+    });
+  }
+
+  function flushScheduledCanvasPointerMove({ discard = false } = {}) {
+    if (canvasPointerMoveFrame != null) {
+      cancelAnimationFrame(canvasPointerMoveFrame);
+      canvasPointerMoveFrame = null;
+    }
+    if (discard) {
+      pendingCanvasPointerMove = null;
+      return false;
+    }
+    return processScheduledCanvasPointerMove({ synchronousFlush: true });
+  }
+
+  canvas.addEventListener("pointermove", scheduleCanvasPointerMove);
 
   function endDrag(e) {
+    flushScheduledCanvasPointerMove();
     if (panSession) {
       panSession = null;
       canvas.classList.remove("is-panning");
@@ -20738,10 +20835,12 @@
   canvas.addEventListener("pointercancel", endDrag);
   canvas.addEventListener("pointerleave", () => {
     if (dragSession || dimensionDragSession || annotationDragSession || selectionRectSession || panSession) return;
+    flushScheduledCanvasPointerMove({ discard: true });
     clearCanvasHover();
     draw();
   });
   canvas.addEventListener("dblclick", (e) => {
+    flushScheduledCanvasPointerMove();
     if (suppressNextBlankDoubleClickEvent) {
       suppressNextBlankDoubleClickEvent = false;
       e.preventDefault();
@@ -20834,6 +20933,7 @@
     "wheel",
     (e) => {
       e.preventDefault();
+      flushScheduledCanvasPointerMove();
       closeCanvasContextMenu();
       const screen = canvasScreenPoint(e);
       const world = screenToWorld(screen);
@@ -20843,6 +20943,7 @@
       viewport.y = screen.y - world.y * viewport.scale;
       setHint(`表示倍率: ${formatZoom(viewport.scale)}`);
       draw();
+      if (pendingCommand && ["distance-value", "offset-value"].includes(pendingCommand.type)) syncDimensionValueInput();
     },
     { passive: false },
   );
@@ -21919,6 +22020,23 @@
   function installTestHooks() {
     if (!new URLSearchParams(window.location.search).has("test")) return;
     window.__jot2dTest = {
+      resetInteractionFrameStatsForTest() {
+        flushScheduledCanvasPointerMove();
+        interactionFrameStats = {
+          receivedMoves: 0,
+          processedMoves: 0,
+          coalescedMoves: 0,
+          animationFrames: 0,
+          synchronousFlushes: 0,
+          canvasDraws: 0,
+        };
+        return { ...interactionFrameStats };
+      },
+      interactionFrameStatsForTest() {
+        return interactionFrameStats
+          ? { ...interactionFrameStats, pendingMove: Boolean(pendingCanvasPointerMove), frameScheduled: canvasPointerMoveFrame != null }
+          : null;
+      },
       resetForResponsiveLineDragTest() {
         sampleModel();
         resetHistory("responsive line drag test");
@@ -25670,5 +25788,13 @@
   log("空の新規Documentを作成しました");
   setApplicationLanguage(applicationLanguage, { persist: false, refresh: false });
   resizeCanvas();
+  if (typeof ResizeObserver === "function") {
+    canvasResizeObserver = new ResizeObserver(([entry]) => {
+      if (!entry || !syncCanvasBitmapSize(entry.contentRect.width, entry.contentRect.height)) return;
+      draw();
+      if (pendingCommand && ["distance-value", "offset-value"].includes(pendingCommand.type)) syncDimensionValueInput();
+    });
+    canvasResizeObserver.observe(canvas);
+  }
   resetHistory("起動");
 })();

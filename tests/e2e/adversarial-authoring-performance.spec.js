@@ -155,6 +155,38 @@ async function settleAfterPaint(page) {
   await page.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))));
 }
 
+async function dispatchPointerBurst(page, start, end, { count = 240, buttons = 1, pointerId = 1 } = {}) {
+  return page.evaluate(({ startPoint, endPoint, eventCount, eventButtons, eventPointerId }) => {
+    const canvas = document.querySelector("#canvas");
+    const startedAt = performance.now();
+    for (let index = 1; index <= eventCount; index += 1) {
+      const ratio = index / eventCount;
+      canvas.dispatchEvent(new PointerEvent("pointermove", {
+        bubbles: true,
+        clientX: startPoint.x + (endPoint.x - startPoint.x) * ratio,
+        clientY: startPoint.y + (endPoint.y - startPoint.y) * ratio,
+        pointerId: eventPointerId,
+        pointerType: "mouse",
+        isPrimary: true,
+        buttons: eventButtons,
+      }));
+    }
+    return performance.now() - startedAt;
+  }, { startPoint: start, endPoint: end, eventCount: count, eventButtons: buttons, eventPointerId: pointerId });
+}
+
+async function runPointerBurstDrag(page, start, end, { button = "left", buttons = 1, count = 240 } = {}) {
+  await page.mouse.move(start.x, start.y);
+  await settleAfterPaint(page);
+  await page.mouse.down({ button });
+  await page.evaluate(() => window.__jot2dTest.resetInteractionFrameStatsForTest());
+  const dispatchMs = await dispatchPointerBurst(page, start, end, { count, buttons });
+  await settleAfterPaint(page);
+  const stats = await page.evaluate(() => window.__jot2dTest.interactionFrameStatsForTest());
+  await page.mouse.up({ button });
+  return { dispatchMs, stats };
+}
+
 async function measureInteraction(page, results, label, action, limitMs) {
   const startedAt = Date.now();
   await action();
@@ -965,6 +997,53 @@ test("selection, deletion, undo and redo stay responsive on the complete fixture
   }, 250);
 
   console.log(JSON.stringify({ kind: "selection-edit-view-latency", ...latencySummary(results) }));
+});
+
+test("high-density geometry, dimension and pan drags coalesce to one animation frame", async ({ page }) => {
+  const eventCount = 240;
+  const expectCoalescedFrame = (result, label) => {
+    expect(result.dispatchMs, `${label}/dispatch: ${result.dispatchMs.toFixed(1)}ms`).toBeLessThan(200);
+    expect(result.stats, label).toMatchObject({
+      receivedMoves: eventCount,
+      processedMoves: 1,
+      coalescedMoves: eventCount - 1,
+      animationFrames: 1,
+      synchronousFlushes: 0,
+      canvasDraws: 1,
+      pendingMove: false,
+      frameScheduled: false,
+    });
+  };
+
+  await page.evaluate(() => window.__jot2dTest.resetForResponsiveLineDragTest());
+  await settleAfterPaint(page);
+  const lineStart = await page.evaluate(() => window.__jot2dTest.geometryClientPositionForTest("line", "L2"));
+  const lineEnd = { x: lineStart.x - 70, y: lineStart.y + 45 };
+  const lineResult = await runPointerBurstDrag(page, lineStart, lineEnd, { count: eventCount });
+  expectCoalescedFrame(lineResult, "geometry");
+  const lineAfter = await page.evaluate(() => window.__jot2dTest.geometryClientPositionForTest("line", "L2"));
+  expect(Math.hypot(lineAfter.x - lineStart.x, lineAfter.y - lineStart.y)).toBeGreaterThan(10);
+
+  await page.evaluate(() => window.__jot2dTest.resetForResponsiveLineDragTest());
+  await settleAfterPaint(page);
+  const dimensionStart = await page.evaluate(() => window.__jot2dTest.dimensionClientPositionForTest(0));
+  const dimensionEnd = { x: dimensionStart.x + 80, y: dimensionStart.y + 55 };
+  const dimensionResult = await runPointerBurstDrag(page, dimensionStart, dimensionEnd, { count: eventCount });
+  expectCoalescedFrame(dimensionResult, "dimension");
+  const dimensionAfter = await page.evaluate(() => window.__jot2dTest.dimensionClientPositionForTest(0));
+  expect(Math.hypot(dimensionAfter.x - dimensionStart.x, dimensionAfter.y - dimensionStart.y)).toBeGreaterThan(20);
+
+  await page.evaluate(() => window.__jot2dTest.resetForResponsiveLineDragTest());
+  await settleAfterPaint(page);
+  const canvas = await page.locator("#canvas").boundingBox();
+  const panStart = { x: canvas.x + canvas.width * 0.55, y: canvas.y + canvas.height * 0.55 };
+  const panEnd = { x: panStart.x + 75, y: panStart.y + 50 };
+  const geometryBeforePan = await page.evaluate(() => window.__jot2dTest.geometryClientPositionForTest("line", "L1"));
+  const panResult = await runPointerBurstDrag(page, panStart, panEnd, { button: "middle", buttons: 4, count: eventCount });
+  expectCoalescedFrame(panResult, "pan");
+  const geometryAfterPan = await page.evaluate(() => window.__jot2dTest.geometryClientPositionForTest("line", "L1"));
+  expect(geometryAfterPan.x - geometryBeforePan.x).toBeCloseTo(75, 4);
+  expect(geometryAfterPan.y - geometryBeforePan.y).toBeCloseTo(50, 4);
 });
 
 test("point, line, circle, arc, endpoint and additive selection stay responsive", async ({ page }) => {
