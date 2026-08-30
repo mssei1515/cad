@@ -1,7 +1,7 @@
 const http = require("http");
 const fs = require("fs");
 const path = require("path");
-const { execFileSync } = require("child_process");
+const { readRuntimeVersion, runtimeVersionSource } = require("./runtime-version");
 
 const root = path.resolve(__dirname, "..");
 function optionValue(name, fallback) {
@@ -24,35 +24,10 @@ const contentTypes = {
   ".svg": "image/svg+xml",
 };
 
-function gitOutput(args) {
-  return execFileSync("git", args, {
-    cwd: root,
-    encoding: "utf8",
-    stdio: ["ignore", "pipe", "ignore"],
-    windowsHide: true,
-  }).trim();
-}
-
-function runtimeVersion() {
-  try {
-    const commit = gitOutput(["rev-parse", "HEAD"]);
-    if (!/^[0-9a-f]{40}$/i.test(commit)) throw new Error("Invalid Git commit");
-    return {
-      available: true,
-      branch: gitOutput(["branch", "--show-current"]) || "HEAD",
-      commit,
-      shortCommit: commit.slice(0, 12),
-      dirty: gitOutput(["status", "--porcelain"]).length > 0,
-    };
-  } catch (_error) {
-    return { available: false };
-  }
-}
-
 function sendRuntimeVersion(res) {
-  const body = JSON.stringify(runtimeVersion());
+  const body = runtimeVersionSource(readRuntimeVersion(root));
   res.writeHead(200, {
-    "Content-Type": "application/json; charset=utf-8",
+    "Content-Type": "application/javascript; charset=utf-8",
     "Cache-Control": "no-store",
     "Content-Length": Buffer.byteLength(body),
   });
@@ -69,7 +44,7 @@ function resolveRequestPath(url) {
 
 const server = http.createServer((req, res) => {
   const requestUrl = new URL(req.url || "/", `http://${host}:${port}`);
-  if (requestUrl.pathname === "/__jot2d_version") {
+  if (requestUrl.pathname === "/runtime-version.js") {
     sendRuntimeVersion(res);
     return;
   }

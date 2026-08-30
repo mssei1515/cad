@@ -2,6 +2,7 @@ const { test, expect } = require("./test-fixture");
 const { execFileSync, spawn } = require("child_process");
 const http = require("http");
 const path = require("path");
+const { pathToFileURL } = require("url");
 
 const host = "127.0.0.1";
 const port = Number(process.env.JOT2D_E2E_PORT || 8765);
@@ -1430,6 +1431,23 @@ test("Help menu identifies the running Git commit", async ({ page }) => {
   const branch = execFileSync("git", ["branch", "--show-current"], { cwd: repositoryRoot, encoding: "utf8" }).trim() || "HEAD";
 
   await page.goto(`${baseUrl}/index.html?test=1`);
+  await page.locator("#helpMenu > summary").click();
+
+  const runtimeCommit = page.locator("#runtimeCommit");
+  await expect(runtimeCommit).toHaveAttribute("data-state", "available");
+  await expect(runtimeCommit).toContainText(`${branch}@${commit.slice(0, 12)}`);
+  await expect(runtimeCommit).toHaveAttribute("title", `${branch}@${commit}`);
+});
+
+test("file URL Help menu reads the generated Git commit file", async ({ page }) => {
+  const repositoryRoot = path.resolve(__dirname, "../..");
+  execFileSync(process.execPath, ["tools/write-runtime-version.js"], { cwd: repositoryRoot });
+  const commit = execFileSync("git", ["rev-parse", "HEAD"], { cwd: repositoryRoot, encoding: "utf8" }).trim();
+  const branch = execFileSync("git", ["branch", "--show-current"], { cwd: repositoryRoot, encoding: "utf8" }).trim() || "HEAD";
+
+  const indexUrl = pathToFileURL(path.join(repositoryRoot, "index.html"));
+  indexUrl.searchParams.set("test", "1");
+  await page.goto(indexUrl.href);
   await page.locator("#helpMenu > summary").click();
 
   const runtimeCommit = page.locator("#runtimeCommit");

@@ -498,7 +498,7 @@
   const SKETCH_SOLVE_ERROR_COLOR = "#dc2626";
   let lastLoadLineRepairMessage = "";
   let lastLoadBlockConstraintRepairMessage = "";
-  let runtimeVersionState = { status: "loading" };
+  let runtimeVersionState = { status: "unavailable" };
 
   const constraintButtons = Array.from(document.querySelectorAll("[data-constraint]"));
   const fixPointBtn = document.getElementById("fixPointBtn");
@@ -528,14 +528,9 @@
     target.title = `${branch}@${commit}`;
   }
 
-  async function loadRuntimeVersion() {
-    try {
-      const response = await fetch("/__jot2d_version", { cache: "no-store" });
-      if (!response.ok) throw new Error(`Runtime version request failed: ${response.status}`);
-      const value = await response.json();
-      if (!value?.available || !/^[0-9a-f]{40}$/i.test(value.commit) || !/^[0-9a-f]{7,40}$/i.test(value.shortCommit)) {
-        throw new Error("Runtime version is unavailable");
-      }
+  function loadRuntimeVersion() {
+    const value = window.__JOT2D_RUNTIME_VERSION__;
+    if (value?.available && /^[0-9a-f]{40}$/i.test(value.commit) && /^[0-9a-f]{7,40}$/i.test(value.shortCommit)) {
       runtimeVersionState = {
         status: "available",
         branch: String(value.branch || "HEAD"),
@@ -543,7 +538,7 @@
         shortCommit: value.shortCommit,
         dirty: Boolean(value.dirty),
       };
-    } catch (_error) {
+    } else {
       runtimeVersionState = { status: "unavailable" };
     }
     renderRuntimeVersion();
