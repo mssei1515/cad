@@ -5,6 +5,14 @@ test.beforeEach(async ({ page }) => {
   await page.waitForFunction(() => Boolean(window.__jot2dTest));
 });
 
+async function expandSketchTreeGroup(page, category, sketchId = "S1") {
+  const sketch = page.locator(`.sketch-item[data-id="${sketchId}"]`);
+  if ((await sketch.getAttribute("aria-expanded")) !== "true") await sketch.locator(".sketchExpandBtn").click();
+  const group = page.locator(`.sketch-group-row[data-sketch-id="${sketchId}"][data-category="${category}"]`);
+  if ((await group.getAttribute("aria-expanded")) !== "true") await group.click();
+  return group;
+}
+
 async function canvasInkAround(page, client, radius = 50) {
   return page.evaluate(({ clientPoint, cropRadius }) => {
     const canvas = document.getElementById("canvas");
@@ -50,7 +58,7 @@ test("creates associative hatching, exposes Tree and Properties, and persists ve
   expect((await page.evaluate(() => window.__jot2dTest.hatchStateForTest())).direct).toHaveLength(0);
   await page.keyboard.press("Control+y");
   expect((await page.evaluate(() => window.__jot2dTest.hatchStateForTest())).direct[0]).toEqual(expect.objectContaining({ id: "H1", valid: true }));
-  await page.locator('.sketch-group-row[data-category="hatch"]').click();
+  await expandSketchTreeGroup(page, "hatch");
   const row = page.locator('#sketchList [data-object-kind="hatch"]');
   await expect(row).toHaveCount(1);
   await expect(row).toContainText("H1");
@@ -134,7 +142,7 @@ test("supports parallel, cross, and solid fill appearances", async ({ page }) =>
   expect((await page.evaluate(() => window.__jot2dTest.hatchStateForTest())).direct[0].appearance.patternType).toBe("cross");
   await expect(page.locator('#propertiesPanel [data-hatch-property="angle"]')).toBeVisible();
   await expect(page.locator('#propertiesPanel [data-hatch-property="spacing"]')).toBeVisible();
-  await page.locator('.sketch-group-row[data-category="hatch"]').click();
+  await expandSketchTreeGroup(page, "hatch");
   await expect(page.locator('#sketchList [data-object-kind="hatch"]')).toContainText("クロス");
   await page.mouse.click(canvas.x + canvas.width - 8, canvas.y + canvas.height - 8);
   const cross = await canvasInkAround(page, fixture.client);

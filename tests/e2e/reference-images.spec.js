@@ -5,6 +5,14 @@ test.beforeEach(async ({ page }) => {
   await page.waitForFunction(() => Boolean(window.__jot2dTest));
 });
 
+async function expandSketchTreeGroup(page, category, sketchId = "S1") {
+  const sketch = page.locator(`.sketch-item[data-id="${sketchId}"]`);
+  if ((await sketch.getAttribute("aria-expanded")) !== "true") await sketch.locator(".sketchExpandBtn").click();
+  const group = page.locator(`.sketch-group-row[data-sketch-id="${sketchId}"][data-category="${category}"]`);
+  if ((await group.getAttribute("aria-expanded")) !== "true") await group.click();
+  return group;
+}
+
 async function canvasImageDataUrl(page, mimeType, width, height) {
   return page.evaluate(({ type, pixelWidth, pixelHeight }) => {
     const canvas = document.createElement("canvas");
@@ -52,7 +60,7 @@ test("imports, fits, edits, calibrates, persists, and restores a reference image
   await page.keyboard.press("Control+y");
   expect((await page.evaluate(() => window.__jot2dTest.referenceImageStateForTest())).images).toHaveLength(1);
 
-  await page.locator('.sketch-group-row[data-category="image"]').click();
+  await expandSketchTreeGroup(page, "image");
   await page.locator('#sketchList [data-object-kind="image"]').click();
   await expect(page.locator('#propertiesPanel [data-reference-image-property="name"]')).toHaveValue("trace");
 
