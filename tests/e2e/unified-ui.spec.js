@@ -1158,9 +1158,9 @@ test("workspace integrates transparent compact Object groups into Sketch Tree an
     };
   });
   expect(treeChevrons).toEqual({
-    sketch: { text: "▼", areaWidth: 8, fontSize: "7px", color: "rgb(148, 163, 184)" },
+    sketch: { text: "▼", areaWidth: 10, fontSize: "7px", color: "rgb(148, 163, 184)" },
     group: { text: "▼", areaWidth: 12, fontSize: "7px", color: "rgb(148, 163, 184)" },
-    empty: { text: "▼", areaWidth: 8, fontSize: "7px", color: "rgb(203, 213, 225)" },
+    empty: { text: "▼", areaWidth: 10, fontSize: "7px", color: "rgb(203, 213, 225)" },
   });
   const constraintGroup = await expandSketchTreeGroup(page, "constraint");
   await expect(constraintGroup).toHaveAttribute("aria-expanded", "true");

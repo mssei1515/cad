@@ -89,10 +89,10 @@ button:disabled { opacity: .45; cursor: default; }
 .item.selected, .block-item.selected, .geometry-list-row.selected, .constraint-list-row.selected { background: var(--accent-soft); }
 .item > span:first-child { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .badge { display: inline-block; margin-left: 4px; padding: 1px 4px; border-radius: 8px; background: #e2e8f0; color: #475569; font-size: 9px; }
-.sketch-item { position: relative; display: grid; grid-template-columns: auto 8px minmax(0, 1fr) auto auto auto auto; gap: 0; align-items: center; min-height: 18px; padding: 0; border: 0; border-radius: 0; border-color: transparent; line-height: 1; cursor: pointer; }
+.sketch-item { position: relative; display: grid; grid-template-columns: auto 10px minmax(0, 1fr) auto auto auto auto; gap: 0; align-items: center; min-height: 18px; padding: 0; border: 0; border-radius: 0; border-color: transparent; line-height: 1; cursor: pointer; }
 .sketch-item.active { background: var(--accent-soft); }
 .sketch-item.solve-error, .item.reference-error { box-shadow: inset 3px 0 var(--danger); }
-.sketchActivateBtn { min-width: 0; display: flex; align-items: center; gap: 3px; padding: 1px 4px 1px 2px; border: 0; border-radius: 0; background: transparent; color: #111827; font-size: 12px; text-align: left; overflow: hidden; white-space: nowrap; }
+.sketchActivateBtn { min-width: 0; display: flex; align-items: center; gap: 3px; padding: 1px 4px 1px 0; border: 0; border-radius: 0; background: transparent; color: #111827; font-size: 12px; text-align: left; overflow: hidden; white-space: nowrap; }
 .sketch-row-icon { width: 13px; height: 13px; flex: 0 0 13px; fill: none; stroke: #2563eb; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
 .sketch-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .sketch-badges { white-space: nowrap; }
@@ -101,11 +101,11 @@ button:disabled { opacity: .45; cursor: default; }
 .tree-segment.pipe::before, .tree-segment.tee::before, .tree-segment.elbow::before { position: absolute; top: -1px; bottom: -1px; left: var(--tree-line-x); width: 0; border-left: var(--tree-line-width) solid var(--tree-line-color); content: ""; }
 .tree-segment.elbow::before { bottom: auto; height: calc(var(--tree-mid-y) + 1px); }
 .tree-segment.tee::after, .tree-segment.elbow::after { position: absolute; top: var(--tree-mid-y); left: var(--tree-line-x); right: 0; height: 0; border-top: var(--tree-line-width) solid var(--tree-line-color); content: ""; }
-.sketchExpandBtn, .sketch-expand-spacer { width: 8px; height: 19px; display: grid; place-items: center; padding: 0; }
+.sketchExpandBtn, .sketch-expand-spacer { width: 10px; height: 19px; display: grid; place-items: center; padding: 0; }
 .sketchExpandBtn { border: 0; border-radius: 0; color: #94a3b8; background: transparent; font-size: 7px; line-height: 1; }
 .sketchExpandBtn:hover, .sketchExpandBtn:focus-visible { color: #64748b; background: rgba(226, 232, 240, .68); }
 .sketch-expand-chevron, .sketch-group-chevron { display: grid; place-items: center; color: #94a3b8; font-size: 7px; line-height: 1; }
-.sketch-expand-chevron { width: 8px; }
+.sketch-expand-chevron { width: 10px; }
 .sketch-expand-chevron { height: 19px; }
 .sketch-expand-spacer { color: #cbd5e1; font-size: 7px; line-height: 1; }
 .icon-small-btn, .icon-delete-btn, .removeConstraintBtn { width: 25px; height: 24px; padding: 3px; flex: 0 0 auto; }
