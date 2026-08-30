@@ -2795,6 +2795,107 @@ test("a line length dimension advances by clicking its placement after the line"
   }));
 });
 
+test("a line and circle create a center-to-line dimension in either click order", async ({ page }) => {
+  await page.goto(`${baseUrl}/index.html?test=1`);
+  await page.waitForFunction(() => window.__jot2dTest);
+
+  for (const order of [["line", "circle1"], ["circle1", "line"]]) {
+    const points = await page.evaluate(() => window.__jot2dTest.resetForLineCircleAndRadiusDifferenceDimensions());
+    await page.click('[data-constraint="distance"]');
+    await page.mouse.click(points[order[0]].x, points[order[0]].y);
+    await page.mouse.click(points[order[1]].x, points[order[1]].y);
+
+    expect(await page.evaluate(() => window.__jot2dTest.lineCircleAndRadiusDifferenceState())).toEqual(expect.objectContaining({
+      pendingCommandType: "distance-place",
+      previewTargetKind: "line-circle",
+      operandKinds: order[0] === "line" ? ["line", "primitive"] : ["primitive", "line"],
+      constraints: [],
+    }));
+
+    await page.mouse.click(points.lineCirclePlacement.x, points.lineCirclePlacement.y);
+    const input = page.locator("#dimensionValueInput");
+    await expect(input).toBeVisible();
+    await input.fill("165");
+    await input.press("Enter");
+
+    const state = await page.evaluate(() => window.__jot2dTest.lineCircleAndRadiusDifferenceState());
+    expect(state.constraints).toEqual([expect.objectContaining({
+      type: "lineCircleDistance",
+      line: points.ids.line,
+      circle: points.ids.circle1,
+      target: 165,
+    })]);
+    expect(state.geometry[0]).toEqual(expect.objectContaining({
+      type: "lineCircleDistance",
+      target: 165,
+    }));
+    expect(state.geometry[0].centerDistance).toBeCloseTo(165, 5);
+    expect(state.geometry[0].error).toBeLessThan(1e-5);
+
+    const restored = await page.evaluate((serialized) =>
+      window.__jot2dTest.loadDocumentFixtureForDragTest(serialized, "line-circle-roundtrip.jot2d"), state.serialized);
+    expect(restored.success).toBe(true);
+    expect((await page.evaluate(() => window.__jot2dTest.lineCircleAndRadiusDifferenceState())).constraints).toEqual([
+      expect.objectContaining({ type: "lineCircleDistance", target: 165 }),
+    ]);
+  }
+});
+
+test("concentric circle and arc pairs create radius-difference dimensions that preserve concentricity", async ({ page }) => {
+  await page.goto(`${baseUrl}/index.html?test=1`);
+  await page.waitForFunction(() => window.__jot2dTest);
+
+  const cases = [
+    { first: "circle1", second: "circle2", firstId: "circle1", secondId: "circle2" },
+    { first: "circle1", second: "arc1", firstId: "circle1", secondId: "arc1" },
+    { first: "arc1", second: "arc2", firstId: "arc1", secondId: "arc2" },
+  ];
+  for (const pair of cases) {
+    const points = await page.evaluate(() => window.__jot2dTest.resetForLineCircleAndRadiusDifferenceDimensions());
+    await page.click('[data-constraint="distance"]');
+    await page.mouse.click(points[pair.first].x, points[pair.first].y);
+    await page.mouse.click(points[pair.second].x, points[pair.second].y);
+
+    expect(await page.evaluate(() => window.__jot2dTest.lineCircleAndRadiusDifferenceState())).toEqual(expect.objectContaining({
+      pendingCommandType: "distance-place",
+      previewTargetKind: "radius-difference",
+      operandKinds: ["primitive", "primitive"],
+      constraints: [],
+    }));
+
+    await page.mouse.click(points.radiusDifferencePlacement.x, points.radiusDifferencePlacement.y);
+    const input = page.locator("#dimensionValueInput");
+    await expect(input).toBeVisible();
+    await input.fill("40");
+    await input.press("Enter");
+
+    const state = await page.evaluate(() => window.__jot2dTest.lineCircleAndRadiusDifferenceState());
+    expect(state.constraints).toEqual([expect.objectContaining({
+      type: "concentricRadiusDifferenceDimension",
+      a: points.ids[pair.firstId],
+      b: points.ids[pair.secondId],
+      target: 40,
+    })]);
+    expect(state.geometry[0].centerDistance).toBeLessThan(1e-5);
+    expect(state.geometry[0].radiusDifference).toBeCloseTo(40, 5);
+    expect(state.geometry[0].error).toBeLessThan(1e-5);
+
+    const restored = await page.evaluate((serialized) =>
+      window.__jot2dTest.loadDocumentFixtureForDragTest(serialized, "radius-difference-roundtrip.jot2d"), state.serialized);
+    expect(restored.success).toBe(true);
+    expect((await page.evaluate(() => window.__jot2dTest.lineCircleAndRadiusDifferenceState())).constraints).toEqual([
+      expect.objectContaining({ type: "concentricRadiusDifferenceDimension", target: 40 }),
+    ]);
+
+    const perturbed = await page.evaluate(() => window.__jot2dTest.perturbRadiusDifferenceDimensionForTest());
+    expect(perturbed.success).toBe(true);
+    expect(perturbed.before.centerDistance).toBeGreaterThan(10);
+    expect(perturbed.after.centerDistance).toBeLessThan(1e-5);
+    expect(perturbed.after.radiusDifference).toBeCloseTo(40, 5);
+    expect(perturbed.after.error).toBeLessThan(1e-5);
+  }
+});
+
 test("unified canvas exposes dimensions from every visible sketch", async ({ page }) => {
   await page.goto(`${baseUrl}/index.html?test=1`);
   await page.waitForFunction(() => window.__jot2dTest);
