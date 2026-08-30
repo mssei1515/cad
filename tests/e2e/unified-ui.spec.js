@@ -1,5 +1,5 @@
 const { test, expect } = require("./test-fixture");
-const { spawn } = require("child_process");
+const { execFileSync, spawn } = require("child_process");
 const http = require("http");
 const path = require("path");
 
@@ -1422,6 +1422,20 @@ test("Jot2D files open, overwrite, save as, and cancel without errors", async ({
       title: "opened-design - Jot2D",
     },
   });
+});
+
+test("Help menu identifies the running Git commit", async ({ page }) => {
+  const repositoryRoot = path.resolve(__dirname, "../..");
+  const commit = execFileSync("git", ["rev-parse", "HEAD"], { cwd: repositoryRoot, encoding: "utf8" }).trim();
+  const branch = execFileSync("git", ["branch", "--show-current"], { cwd: repositoryRoot, encoding: "utf8" }).trim() || "HEAD";
+
+  await page.goto(`${baseUrl}/index.html?test=1`);
+  await page.locator("#helpMenu > summary").click();
+
+  const runtimeCommit = page.locator("#runtimeCommit");
+  await expect(runtimeCommit).toHaveAttribute("data-state", "available");
+  await expect(runtimeCommit).toContainText(`${branch}@${commit.slice(0, 12)}`);
+  await expect(runtimeCommit).toHaveAttribute("title", `${branch}@${commit}`);
 });
 
 test("HTML file picker compatibility route opens a Jot2D document without a native handle", async ({ page }) => {

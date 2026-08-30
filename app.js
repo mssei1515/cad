@@ -498,12 +498,55 @@
   const SKETCH_SOLVE_ERROR_COLOR = "#dc2626";
   let lastLoadLineRepairMessage = "";
   let lastLoadBlockConstraintRepairMessage = "";
+  let runtimeVersionState = { status: "loading" };
 
   const constraintButtons = Array.from(document.querySelectorAll("[data-constraint]"));
   const fixPointBtn = document.getElementById("fixPointBtn");
 
   function applicationText(ja, en) {
     return applicationLanguage === "en" ? en : ja;
+  }
+
+  function renderRuntimeVersion() {
+    const target = document.getElementById("runtimeCommit");
+    if (!target) return;
+    if (runtimeVersionState.status === "loading") {
+      target.textContent = applicationText("取得中…", "Loading…");
+      target.dataset.state = "loading";
+      target.removeAttribute("title");
+      return;
+    }
+    if (runtimeVersionState.status !== "available") {
+      target.textContent = applicationText("取得できません", "Unavailable");
+      target.dataset.state = "unavailable";
+      target.removeAttribute("title");
+      return;
+    }
+    const { branch, commit, shortCommit, dirty } = runtimeVersionState;
+    target.textContent = `${branch}@${shortCommit}${dirty ? applicationText("（変更あり）", " (dirty)") : ""}`;
+    target.dataset.state = "available";
+    target.title = `${branch}@${commit}`;
+  }
+
+  async function loadRuntimeVersion() {
+    try {
+      const response = await fetch("/__jot2d_version", { cache: "no-store" });
+      if (!response.ok) throw new Error(`Runtime version request failed: ${response.status}`);
+      const value = await response.json();
+      if (!value?.available || !/^[0-9a-f]{40}$/i.test(value.commit) || !/^[0-9a-f]{7,40}$/i.test(value.shortCommit)) {
+        throw new Error("Runtime version is unavailable");
+      }
+      runtimeVersionState = {
+        status: "available",
+        branch: String(value.branch || "HEAD"),
+        commit: value.commit,
+        shortCommit: value.shortCommit,
+        dirty: Boolean(value.dirty),
+      };
+    } catch (_error) {
+      runtimeVersionState = { status: "unavailable" };
+    }
+    renderRuntimeVersion();
   }
 
   function translatedExactText(value) {
@@ -598,6 +641,7 @@
     }
     if (refresh) updateUI({ refreshAnalysis: false });
     localizeApplicationUI();
+    renderRuntimeVersion();
     const hint = document.getElementById("hint");
     if (hint?.dataset.hintSource) hint.textContent = translatedHintText(hint.dataset.hintSource);
   }
@@ -26155,6 +26199,7 @@
   draw();
   log("空の新規Documentを作成しました");
   setApplicationLanguage(applicationLanguage, { persist: false, refresh: false });
+  loadRuntimeVersion();
   resizeCanvas();
   if (typeof ResizeObserver === "function") {
     canvasResizeObserver = new ResizeObserver(([entry]) => {

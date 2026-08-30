@@ -1,6 +1,7 @@
 const http = require("http");
 const fs = require("fs");
 const path = require("path");
+const { execFileSync } = require("child_process");
 
 const root = path.resolve(__dirname, "..");
 function optionValue(name, fallback) {
@@ -23,6 +24,41 @@ const contentTypes = {
   ".svg": "image/svg+xml",
 };
 
+function gitOutput(args) {
+  return execFileSync("git", args, {
+    cwd: root,
+    encoding: "utf8",
+    stdio: ["ignore", "pipe", "ignore"],
+    windowsHide: true,
+  }).trim();
+}
+
+function runtimeVersion() {
+  try {
+    const commit = gitOutput(["rev-parse", "HEAD"]);
+    if (!/^[0-9a-f]{40}$/i.test(commit)) throw new Error("Invalid Git commit");
+    return {
+      available: true,
+      branch: gitOutput(["branch", "--show-current"]) || "HEAD",
+      commit,
+      shortCommit: commit.slice(0, 12),
+      dirty: gitOutput(["status", "--porcelain"]).length > 0,
+    };
+  } catch (_error) {
+    return { available: false };
+  }
+}
+
+function sendRuntimeVersion(res) {
+  const body = JSON.stringify(runtimeVersion());
+  res.writeHead(200, {
+    "Content-Type": "application/json; charset=utf-8",
+    "Cache-Control": "no-store",
+    "Content-Length": Buffer.byteLength(body),
+  });
+  res.end(body);
+}
+
 function resolveRequestPath(url) {
   const parsed = new URL(url, `http://${host}:${port}`);
   const pathname = decodeURIComponent(parsed.pathname === "/" ? "/index.html" : parsed.pathname);
@@ -32,6 +68,11 @@ function resolveRequestPath(url) {
 }
 
 const server = http.createServer((req, res) => {
+  const requestUrl = new URL(req.url || "/", `http://${host}:${port}`);
+  if (requestUrl.pathname === "/__jot2d_version") {
+    sendRuntimeVersion(res);
+    return;
+  }
   const filePath = resolveRequestPath(req.url || "/");
   if (!filePath) {
     res.writeHead(403);

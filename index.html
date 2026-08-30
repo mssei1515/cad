@@ -47,7 +47,10 @@
           <button type="button" data-menu-tool="annotationTextBtn">自由テキスト</button>
           <button type="button" data-menu-tool="importReferenceImageBtn">画像を読み込み</button>
         </div></details>
-        <details class="app-menu"><summary>ヘルプ</summary><div class="menu-popover"><span class="menu-note">Jot2D unified canvas</span></div></details>
+        <details id="helpMenu" class="app-menu"><summary>ヘルプ</summary><div class="menu-popover help-menu-popover">
+          <span class="menu-note">Jot2D unified canvas</span>
+          <span class="runtime-version"><span data-i18n-ja="実行中コミット" data-i18n-en="Running commit">実行中コミット</span><code id="runtimeCommit" data-user-content aria-live="polite">取得中…</code></span>
+        </div></details>
       </nav>
     </header>
 
