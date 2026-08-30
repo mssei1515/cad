@@ -5,6 +5,14 @@ test.beforeEach(async ({ page }) => {
   await page.waitForFunction(() => Boolean(window.__jot2dTest));
 });
 
+async function expandSketchTreeGroup(page, category, sketchId = "S1") {
+  const sketch = page.locator(`.sketch-item[data-id="${sketchId}"]`);
+  if ((await sketch.getAttribute("aria-expanded")) !== "true") await sketch.locator(".sketchExpandBtn").click();
+  const group = page.locator(`.sketch-group-row[data-sketch-id="${sketchId}"][data-category="${category}"]`);
+  if ((await group.getAttribute("aria-expanded")) !== "true") await group.click();
+  return group;
+}
+
 async function createOpenSpline(page) {
   const fixture = await page.evaluate(() => window.__jot2dTest.resetForSplineTest());
   await page.locator("#toolSpline").click();
@@ -34,7 +42,7 @@ test("creates and edits a cubic fit-point spline and persists version 19", async
   expect(state.propertiesText).toContain("通過点ID");
   await expect(page.locator("#propertiesPanel .property-section > h3")).toHaveText(["基本情報", "スプラインの外観"]);
 
-  await page.locator('.sketch-group-row[data-category="spline"]').click();
+  await expandSketchTreeGroup(page, "spline");
   const treeRow = page.locator('#sketchList [data-object-kind="spline"]');
   await expect(treeRow).toHaveCount(1);
   await expect(treeRow).toContainText("SP1");

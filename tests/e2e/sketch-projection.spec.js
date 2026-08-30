@@ -5,6 +5,14 @@ test.beforeEach(async ({ page }) => {
   await page.waitForFunction(() => Boolean(window.__jot2dTest));
 });
 
+async function expandSketchTreeGroup(page, category, sketchId = "S1") {
+  const sketch = page.locator(`.sketch-item[data-id="${sketchId}"]`);
+  if ((await sketch.getAttribute("aria-expanded")) !== "true") await sketch.locator(".sketchExpandBtn").click();
+  const group = page.locator(`.sketch-group-row[data-sketch-id="${sketchId}"][data-category="${category}"]`);
+  if ((await group.getAttribute("aria-expanded")) !== "true") await group.click();
+  return group;
+}
+
 test("accepts only visible ancestor geometry as a projection source", async ({ page }) => {
   const eligibility = await page.evaluate(() => window.__jot2dTest.sketchProjectionEligibilityForTest());
   expect(eligibility).toEqual({ ancestor: true, hiddenAncestor: false, self: false, sibling: false, child: false, root: false });
@@ -67,9 +75,9 @@ test("projects every supported geometry kind with geometry-owned points, normal/
   expect(selected.propertiesText).toContain(fixture.sourceSketchId);
   expect(selected.propertiesText).toContain("参照元Geometry ID");
 
-  await page.locator('.sketch-group-row[data-sketch-id="S3"][data-category="line"]').click();
+  await expandSketchTreeGroup(page, "line", "S3");
   await expect(page.locator('#sketchList [data-object-kind="line"] .badge', { hasText: "投影" })).toHaveCount(2);
-  await page.locator('.sketch-group-row[data-sketch-id="S3"][data-category="constraint"]').click();
+  await expandSketchTreeGroup(page, "constraint", "S3");
   await expect(page.locator('#sketchList [data-object-kind="constraint"]', { hasText: "スケッチ投影" })).toHaveCount(6);
 
   state = await page.evaluate(() => window.__jot2dTest.reloadSketchProjectionForTest(19));

@@ -74,6 +74,8 @@
     PointAxisDistanceConstraint,
     PointLineDistanceConstraint,
     LineLineDistanceConstraint,
+    LineCircleDistanceConstraint,
+    ConcentricRadiusDifferenceConstraint,
     OffsetConstraint,
     OffsetChainConstraint,
     LineAngleConstraint,
@@ -303,6 +305,7 @@
   let constraintAnalysisState = null;
   let constraintRedundancyState = { constraints: new Map(), sketches: new Map(), count: 0 };
   let lastAuthoringPerformance = null;
+  let interactionFrameStats = null;
   let sketchSolveStates = new Map();
   let invalidReferenceConstraints = new Map();
   let panSession = null;
@@ -344,6 +347,7 @@
   let colorPaletteSession = null;
   let parameterDialogSession = null;
   const sketchAppearanceSectionOpenState = { general: false, construction: false, dimension: false };
+  const sketchTreeSketchOpenState = new Map();
   const sketchTreeGroupOpenState = new Map();
   let sketchTreeWidth = 320;
   let sketchTreeResizeSession = null;
@@ -370,6 +374,7 @@
   let blockPlacementPropertiesWasCollapsed = null;
   let blockEditSession = null;
   let blockProjectionCache = new Map();
+  let geometryReadCache = null;
   let hatchResolutionCache = new WeakMap();
   let hatchFaceCache = new Map();
   const referenceImageCache = new Map();
@@ -391,6 +396,10 @@
   const CLIPBOARD_PASTE_OFFSET_SCREEN_PX = 24;
   const BLOCK_ORTHOGONAL_ROTATION_STEP = Math.PI / 2;
   const viewport = { x: 0, y: 0, scale: 1 };
+  const canvasRenderMetrics = { width: 0, height: 0, dpr: 1 };
+  let canvasResizeObserver = null;
+  let pendingCanvasPointerMove = null;
+  let canvasPointerMoveFrame = null;
   const viewState = { constraintStatus: false, geometryIds: false };
   let constraintStatusMouseLatched = false;
   let constraintStatusSpaceHeld = false;
@@ -2265,38 +2274,58 @@
     else blockProjectionCache.clear();
   }
 
+  function withGeometryReadCache(callback) {
+    if (geometryReadCache) return callback();
+    geometryReadCache = { values: new Map(), appearances: new WeakMap() };
+    try {
+      return callback();
+    } finally {
+      geometryReadCache = null;
+    }
+  }
+
+  function cachedGeometryRead(key, create) {
+    if (!geometryReadCache) return create();
+    if (!geometryReadCache.values.has(key)) geometryReadCache.values.set(key, create());
+    return geometryReadCache.values.get(key);
+  }
+
   function blockProjectionBundles() {
-    ensureBlockState();
-    return model.blockInstances.map(blockProjectionBundle);
+    return cachedGeometryRead("blockProjectionBundles", () => {
+      ensureBlockState();
+      return model.blockInstances.map(blockProjectionBundle);
+    });
   }
 
   function allGeometryPoints() {
-    return [...model.points, ...blockProjectionBundles().flatMap((bundle) => bundle.points)];
+    return cachedGeometryRead("allGeometryPoints", () => [...model.points, ...blockProjectionBundles().flatMap((bundle) => bundle.points)]);
   }
 
   function allGeometryLines() {
-    return [...model.lines, ...blockProjectionBundles().flatMap((bundle) => bundle.lines)];
+    return cachedGeometryRead("allGeometryLines", () => [...model.lines, ...blockProjectionBundles().flatMap((bundle) => bundle.lines)]);
   }
 
   function allGeometryCircles() {
-    return [...model.circles, ...blockProjectionBundles().flatMap((bundle) => bundle.circles)];
+    return cachedGeometryRead("allGeometryCircles", () => [...model.circles, ...blockProjectionBundles().flatMap((bundle) => bundle.circles)]);
   }
 
   function allGeometryArcs() {
-    return [...model.arcs, ...blockProjectionBundles().flatMap((bundle) => bundle.arcs)];
+    return cachedGeometryRead("allGeometryArcs", () => [...model.arcs, ...blockProjectionBundles().flatMap((bundle) => bundle.arcs)]);
   }
 
   function allGeometrySplines() {
-    return [...model.splines, ...blockProjectionBundles().flatMap((bundle) => bundle.splines || [])];
+    return cachedGeometryRead("allGeometrySplines", () => [...model.splines, ...blockProjectionBundles().flatMap((bundle) => bundle.splines || [])]);
   }
 
   function allAnnotations() {
-    return [...model.annotations, ...blockProjectionBundles().flatMap((bundle) => bundle.annotations || [])];
+    return cachedGeometryRead("allAnnotations", () => [...model.annotations, ...blockProjectionBundles().flatMap((bundle) => bundle.annotations || [])]);
   }
 
   function allHatches() {
-    if (model.hatches.length === 0 && !model.blockDefinitions.some((definition) => (definition.hatches?.length || 0) > 0)) return [];
-    return [...model.hatches, ...blockProjectionBundles().flatMap((bundle) => bundle.hatches || [])];
+    return cachedGeometryRead("allHatches", () => {
+      if (model.hatches.length === 0 && !model.blockDefinitions.some((definition) => (definition.hatches?.length || 0) > 0)) return [];
+      return [...model.hatches, ...blockProjectionBundles().flatMap((bundle) => bundle.hatches || [])];
+    });
   }
 
   function hatchBoundaryFingerprint(hatch, scope = model) {
@@ -2454,6 +2483,8 @@
   }
 
   function effectiveAppearanceForElement(item) {
+    const cached = item && geometryReadCache?.appearances.get(item);
+    if (cached) return cached;
     const construction = (item instanceof Line || item instanceof Circle || item instanceof Arc || item instanceof Spline) && item.construction;
     let result = construction
       ? { ...normalizeConstructionAppearance(model.defaultConstructionAppearance, { partial: false }) }
@@ -2468,6 +2499,7 @@
     } else {
       result = { ...result, ...normalizeAppearance(item?.appearance) };
     }
+    if (item && geometryReadCache) geometryReadCache.appearances.set(item, result);
     return result;
   }
 
@@ -5862,6 +5894,7 @@
     };
     setHint("オフセット距離を入力してください。Enterまたはダブルクリックで決定します");
     updateToolbar();
+    syncDimensionValueInput();
     draw();
     focusDimensionValueInput();
     return true;
@@ -5896,6 +5929,7 @@
     };
     setHint("オフセット距離を入力してください。Enterまたはダブルクリックで決定します");
     updateToolbar();
+    syncDimensionValueInput();
     draw();
     focusDimensionValueInput();
     return true;
@@ -6163,6 +6197,7 @@
   }
 
   function resetModelState() {
+    flushScheduledCanvasPointerMove({ discard: true });
     mode = "select";
     lastAuthoringPerformance = null;
     model.documentName = DEFAULT_DOCUMENT_NAME;
@@ -6270,6 +6305,7 @@
     hatchRepairTarget = null;
     hatchResolutionCache = new WeakMap();
     hatchFaceCache = new Map();
+    sketchTreeSketchOpenState.clear();
     sketchTreeGroupOpenState.clear();
     annotationDragSession = null;
     referenceImageDragSession = null;
@@ -6359,6 +6395,22 @@
       constraintClass: LineLineDistanceConstraint,
       serialize: (c) => ({ line1: constraintGeometryId(c.line1), line2: constraintGeometryId(c.line2), target: c.target, sign: c.sign, dimension: serializeDimension(c.dimension, targetFromConstraint(c)), enabled: c.enabled }),
       deserialize: (data, refs) => new LineLineDistanceConstraint(refs.line(data.line1), refs.line(data.line2), Number(data.target), Number(data.sign) || null),
+    },
+    {
+      type: "lineCircleDistance",
+      constraintClass: LineCircleDistanceConstraint,
+      serialize: (c) => ({ line: constraintGeometryId(c.line), circle: constraintGeometryId(c.circle), target: c.target, sign: c.sign, dimension: serializeDimension(c.dimension, targetFromConstraint(c)), enabled: c.enabled }),
+      deserialize(data, refs) {
+        const circle = refs.primitive(data.circle);
+        if (!(circle instanceof Circle)) throw new Error(`線-円中心寸法の円 ${data.circle} が見つかりません`);
+        return new LineCircleDistanceConstraint(refs.line(data.line), circle, Number(data.target), Number(data.sign) || null);
+      },
+    },
+    {
+      type: "concentricRadiusDifferenceDimension",
+      constraintClass: ConcentricRadiusDifferenceConstraint,
+      serialize: (c) => ({ a: constraintGeometryId(c.a), b: constraintGeometryId(c.b), target: c.target, sign: c.sign, dimension: serializeDimension(c.dimension, targetFromConstraint(c)), enabled: c.enabled }),
+      deserialize: (data, refs) => new ConcentricRadiusDifferenceConstraint(refs.primitive(data.a), refs.primitive(data.b), Number(data.target), Number(data.sign) || null),
     },
     {
       type: "offsetDimension",
@@ -6869,7 +6921,7 @@
     const documentNameBeforeRestore = model.documentName;
     historyRestoring = true;
     try {
-      loadModelData(JSON.parse(snapshot), { documentNameFallback: documentNameBeforeRestore, preserveSketchTreeGroups: true });
+      loadModelData(JSON.parse(snapshot), { documentNameFallback: documentNameBeforeRestore, preserveSketchTreeState: true });
       model.documentName = documentNameBeforeRestore;
       constructionLineMode = constructionModeBeforeRestore;
       clearInteractionForSketchChange();
@@ -7038,7 +7090,8 @@
     if (sourceVersion >= 18 && !validSerializedReferenceImageList(data.referenceImages)) throw new Error(applicationText("参照画像の形式が正しくありません", "Invalid reference image data"));
     const normalizeLoadedDimensionAppearance = (value, options = {}) => loadedDimensionAppearance(value, sourceVersion, options);
     const loadedDocumentName = effectiveDocumentNameFromValue(options.documentNameOverride || data.documentName || options.documentNameFallback || DEFAULT_DOCUMENT_NAME);
-    const preservedSketchTreeGroups = options.preserveSketchTreeGroups ? new Map(sketchTreeGroupOpenState) : null;
+    const preservedSketchTreeSketches = options.preserveSketchTreeState ? new Map(sketchTreeSketchOpenState) : null;
+    const preservedSketchTreeGroups = options.preserveSketchTreeState ? new Map(sketchTreeGroupOpenState) : null;
 
     let loadedSketches =
       Array.isArray(data.sketches) && data.sketches.length > 0
@@ -7574,6 +7627,10 @@
     });
 
     resetModelState();
+    if (preservedSketchTreeSketches) {
+      sketchTreeSketchOpenState.clear();
+      for (const [key, value] of preservedSketchTreeSketches) sketchTreeSketchOpenState.set(key, value);
+    }
     if (preservedSketchTreeGroups) {
       sketchTreeGroupOpenState.clear();
       for (const [key, value] of preservedSketchTreeGroups) sketchTreeGroupOpenState.set(key, value);
@@ -7582,6 +7639,7 @@
     model.sketches.length = 0;
     model.sketches.push(...loadedSketches);
     model.activeSketchId = normalizeSketchId(data.activeSketchId);
+    if (!preservedSketchTreeSketches) revealSketchInTree(model.activeSketchId);
     model.defaultAppearance = normalizeAppearance(data.defaultAppearance, { partial: false });
     model.defaultConstructionAppearance = normalizeConstructionAppearance(data.defaultConstructionAppearance, { partial: false });
     model.defaultDimensionAppearance = normalizeLoadedDimensionAppearance(data.defaultDimensionAppearance, { partial: false });
@@ -8104,18 +8162,35 @@
     log("サンプルを復元しました");
   }
 
+  function syncCanvasBitmapSize(width = null, height = null) {
+    if (!Number.isFinite(width) || !Number.isFinite(height)) {
+      const rect = canvas.getBoundingClientRect();
+      width = rect.width;
+      height = rect.height;
+    }
+    const dpr = window.devicePixelRatio || 1;
+    const bitmapWidth = Math.max(1, Math.floor(width * dpr));
+    const bitmapHeight = Math.max(1, Math.floor(height * dpr));
+    const changed = canvas.width !== bitmapWidth || canvas.height !== bitmapHeight || canvasRenderMetrics.dpr !== dpr;
+    canvasRenderMetrics.width = width;
+    canvasRenderMetrics.height = height;
+    canvasRenderMetrics.dpr = dpr;
+    if (canvas.width !== bitmapWidth) canvas.width = bitmapWidth;
+    if (canvas.height !== bitmapHeight) canvas.height = bitmapHeight;
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    return changed;
+  }
+
   function resizeCanvas(options = {}) {
     const rect = canvas.getBoundingClientRect();
-    const dpr = window.devicePixelRatio || 1;
-    canvas.width = Math.max(1, Math.floor(rect.width * dpr));
-    canvas.height = Math.max(1, Math.floor(rect.height * dpr));
-    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    syncCanvasBitmapSize(rect.width, rect.height);
     if (options.centerWorld && rect.width > 0 && rect.height > 0) {
       viewport.x = rect.width / 2 - options.centerWorld.x * viewport.scale;
       viewport.y = rect.height / 2 - options.centerWorld.y * viewport.scale;
     }
     applySketchTreeWidth();
     draw();
+    if (pendingCommand && ["distance-value", "offset-value"].includes(pendingCommand.type)) syncDimensionValueInput();
   }
 
   function restoreBlockPlacementPropertiesPanel() {
@@ -8560,6 +8635,8 @@
     if (target.kind === "line-length") return target.line.length();
     if (target.kind === "point-line") return Math.abs(signedPointLineDistance(target.point, target.line));
     if (target.kind === "line-line") return Math.abs(signedPointLineDistance(target.line1.p1, target.line2));
+    if (target.kind === "line-circle") return Math.abs(signedPointLineDistance(target.circle.center, target.line));
+    if (target.kind === "radius-difference") return Math.abs(target.b.radius() - target.a.radius());
     if (target.kind === "radius") return target.primitive.radius();
     if (target.kind === "diameter") return target.primitive.radius() * 2;
     if (target.kind === "offset-distance") {
@@ -9082,6 +9159,21 @@
     };
   }
 
+  function primitivesAreConcentric(a, b) {
+    return Boolean(a && b) && hypot2(a.center.x - b.center.x, a.center.y - b.center.y) <= CONSTRAINT_ACCEPT_ERROR;
+  }
+
+  function lineCircleDistanceTarget(line, circle) {
+    if (!lineHasDirection(line)) return { kind: "invalid", reason: "線-円中心寸法の対象線が短すぎます" };
+    if (!(circle instanceof Circle)) return { kind: "invalid", reason: "線との中心距離寸法は円だけを対象にできます" };
+    return { kind: "line-circle", line, circle, value: Math.abs(signedPointLineDistance(circle.center, line)) };
+  }
+
+  function concentricRadiusDifferenceTarget(a, b, dimensionAnchor = null) {
+    if (!primitivesAreConcentric(a, b)) return { kind: "invalid", reason: "半径差寸法は同心の円または円弧だけを対象にできます" };
+    return { kind: "radius-difference", a, b, value: Math.abs(b.radius() - a.radius()), dimensionAnchor };
+  }
+
   function distanceTargetFromSelection() {
     const primitives = selectedPrimitives();
     if (selectedPoints.length === 0 && selectedLines.length === 0 && primitives.length === 1) {
@@ -9089,21 +9181,27 @@
       if (primitive instanceof Circle) return { kind: "diameter", primitive, value: primitive.radius() * 2 };
       return { kind: "radius", primitive, value: primitive.radius() };
     }
-    if (selectedPoints.length === 2 && selectedLines.length === 0) {
+    if (selectedPoints.length === 0 && selectedLines.length === 0 && primitives.length === 2) {
+      return concentricRadiusDifferenceTarget(primitives[0], primitives[1]);
+    }
+    if (selectedPoints.length === 0 && selectedLines.length === 1 && primitives.length === 1) {
+      return lineCircleDistanceTarget(selectedLines[0], primitives[0]);
+    }
+    if (selectedPoints.length === 2 && selectedLines.length === 0 && primitives.length === 0) {
       const [p1, p2] = selectedPoints;
       return { kind: "point-point", p1, p2, value: hypot2(p2.x - p1.x, p2.y - p1.y) };
     }
-    if (selectedPoints.length === 0 && selectedLines.length === 1) {
+    if (selectedPoints.length === 0 && selectedLines.length === 1 && primitives.length === 0) {
       const [line] = selectedLines;
       return { kind: "line-length", line, p1: line.p1, p2: line.p2, value: line.length() };
     }
-    if (selectedPoints.length === 1 && selectedLines.length === 1) {
+    if (selectedPoints.length === 1 && selectedLines.length === 1 && primitives.length === 0) {
       const [point] = selectedPoints;
       const [line] = selectedLines;
       if (!lineHasDirection(line)) return { kind: "invalid", reason: "寸法対象の線が短すぎます" };
       return { kind: "point-line", point, line, value: Math.abs(signedPointLineDistance(point, line)) };
     }
-    if (selectedPoints.length === 0 && selectedLines.length === 2) {
+    if (selectedPoints.length === 0 && selectedLines.length === 2 && primitives.length === 0) {
       const [line1, line2] = selectedLines;
       if (!lineHasDirection(line1) || !lineHasDirection(line2)) return { kind: "invalid", reason: "線-線寸法の対象線が短すぎます" };
       if (!linesAreParallel(line1, line2)) {
@@ -9157,7 +9255,7 @@
         if (distancePointToSegment(x, y, line) <= threshold) return makeConstraintOperand("line", { line });
       }
       for (const circle of bundle.circles.slice().reverse()) {
-        if (Math.abs(hypot2(x - circle.center.x, y - circle.center.y) - circle.radius()) <= threshold) return makeConstraintOperand("primitive", { primitive: circle });
+        if (Math.abs(hypot2(x - circle.center.x, y - circle.center.y) - circle.radius()) <= threshold) return makeConstraintOperand("primitive", { primitive: circle, hitPoint: circlePointAtPointer({ x, y }, circle) });
       }
       for (const arc of bundle.arcs.slice().reverse()) {
         for (const endpoint of ["start", "end"]) {
@@ -9165,7 +9263,7 @@
           if (hypot2(point.x - x, point.y - y) <= pointThreshold) return makeConstraintOperand("arc-endpoint", { arc, endpoint });
         }
         const angle = Math.atan2(y - arc.center.y, x - arc.center.x);
-        if (Math.abs(hypot2(x - arc.center.x, y - arc.center.y) - arc.radius()) <= threshold && angleOnSignedSweep(angle, arc.startAngle, arc.endAngle)) return makeConstraintOperand("primitive", { primitive: arc });
+        if (Math.abs(hypot2(x - arc.center.x, y - arc.center.y) - arc.radius()) <= threshold && angleOnSignedSweep(angle, arc.startAngle, arc.endAngle)) return makeConstraintOperand("primitive", { primitive: arc, hitPoint: circlePointAtPointer({ x, y }, arc) });
       }
       for (const spline of (bundle.splines || []).slice().reverse()) {
         const closest = window.SplineGeometry.closestPoint(spline.curve(), { x, y }, { samplesPerSpan: 28 });
@@ -9178,11 +9276,19 @@
   function distanceTargetFromOperands(operands) {
     const points = operands.filter((operand) => operand.kind === "point").map((operand) => operand.point);
     const lines = operands.filter((operand) => operand.kind === "line").map((operand) => operand.line);
-    const primitives = operands.filter((operand) => operand.kind === "primitive").map((operand) => operand.primitive);
+    const primitiveOperands = operands.filter((operand) => operand.kind === "primitive");
+    const primitives = primitiveOperands.map((operand) => operand.primitive);
     if (points.length === 0 && lines.length === 0 && primitives.length === 1) {
       const [primitive] = primitives;
       if (primitive instanceof Circle) return { kind: "diameter", primitive, value: primitive.radius() * 2 };
       return { kind: "radius", primitive, value: primitive.radius() };
+    }
+    if (points.length === 0 && lines.length === 0 && primitives.length === 2) {
+      const dimensionAnchor = primitiveOperands.at(-1)?.hitPoint || primitiveOperands[0]?.hitPoint || null;
+      return concentricRadiusDifferenceTarget(primitives[0], primitives[1], dimensionAnchor);
+    }
+    if (points.length === 0 && lines.length === 1 && primitives.length === 1) {
+      return lineCircleDistanceTarget(lines[0], primitives[0]);
     }
     if (points.length === 2 && lines.length === 0 && primitives.length === 0) {
       const [p1, p2] = points;
@@ -9237,6 +9343,17 @@
       if (len > 1e-12) return { x: dx / len, y: dy / len };
       return { x: 1, y: 0 };
     }
+    if (target.kind === "radius-difference") {
+      const defaultPrimitive = target.b instanceof Arc ? target.b : target.a instanceof Arc ? target.a : target.b;
+      const defaultAngle = defaultPrimitive instanceof Arc ? (defaultPrimitive.startAngle + defaultPrimitive.endAngle) / 2 : 0;
+      const anchor = target.dimensionAnchor || circlePointAtAngle(defaultPrimitive, defaultAngle);
+      const center = target.a.center;
+      const dx = anchor.x - center.x;
+      const dy = anchor.y - center.y;
+      const len = hypot2(dx, dy);
+      if (len > 1e-12) return { x: dx / len, y: dy / len };
+      return { x: 1, y: 0 };
+    }
     if (target.kind === "point-point" || target.kind === "line-length") {
       if (target.dimensionAxis === "x") return { x: 1, y: 0 };
       if (target.dimensionAxis === "y") return { x: 0, y: 1 };
@@ -9246,6 +9363,14 @@
       const projection = projectPointToLine(target.point, target.line);
       const dx = target.point.x - projection.x;
       const dy = target.point.y - projection.y;
+      const len = hypot2(dx, dy);
+      if (len > 1e-12) return { x: dx / len, y: dy / len };
+      return lineNormal(target.line);
+    }
+    if (target.kind === "line-circle") {
+      const projection = projectPointToLine(target.circle.center, target.line);
+      const dx = target.circle.center.x - projection.x;
+      const dy = target.circle.center.y - projection.y;
       const len = hypot2(dx, dy);
       if (len > 1e-12) return { x: dx / len, y: dy / len };
       return lineNormal(target.line);
@@ -9295,8 +9420,16 @@
         { x: target.primitive.center.x + dir.x * target.primitive.radius(), y: target.primitive.center.y + dir.y * target.primitive.radius() },
       ];
     }
+    if (target.kind === "radius-difference") {
+      const dir = targetDirection({ ...target, dimensionAnchor: anchor || target.dimensionAnchor });
+      return [
+        { x: target.a.center.x + dir.x * target.a.radius(), y: target.a.center.y + dir.y * target.a.radius() },
+        { x: target.b.center.x + dir.x * target.b.radius(), y: target.b.center.y + dir.y * target.b.radius() },
+      ];
+    }
     if (target.kind === "point-point" || target.kind === "line-length") return [target.p1, target.p2];
     if (target.kind === "point-line") return [target.point, projectPointToSegmentPoint(anchor || target.point, target.line)];
+    if (target.kind === "line-circle") return [target.circle.center, projectPointToSegmentPoint(anchor || target.circle.center, target.line)];
     if (target.kind === "line-line") {
       return [nearestLineEndpoint(target.line1, anchor), nearestLineEndpoint(target.line2, anchor)];
     }
@@ -9447,7 +9580,7 @@
     }
     const anchor = dimensionAnchor(target, dimension);
     const basisTarget = { ...target, dimensionAxis: storedDimensionAxis(target, dimension) };
-    const radial = target.kind === "radius" || target.kind === "diameter" || (target.kind === "offset-distance" && !(target.source instanceof Line));
+    const radial = target.kind === "radius" || target.kind === "diameter" || target.kind === "radius-difference" || (target.kind === "offset-distance" && !(target.source instanceof Line));
     const d = radial ? targetDirection({ ...basisTarget, dimensionAnchor: anchor }) : targetDirection(basisTarget);
     const points = targetPointsForDimension(target, anchor);
     if (points.length < 2) return dimension;
@@ -9490,7 +9623,7 @@
 
   function dimensionAnchor(target, dimension) {
     if (!dimension) return defaultDimensionForTarget(target);
-    if (target.kind === "radius" || target.kind === "diameter" || (target.kind === "offset-distance" && !(target.source instanceof Line))) {
+    if (target.kind === "radius" || target.kind === "diameter" || target.kind === "radius-difference" || (target.kind === "offset-distance" && !(target.source instanceof Line))) {
       if (Number.isFinite(dimension.x) && Number.isFinite(dimension.y)) return { x: dimension.x, y: dimension.y };
     }
     if (target.kind === "angle") {
@@ -9555,6 +9688,8 @@
     if (c instanceof PointAxisDistanceConstraint) return { kind: "point-point", p1: c.p1, p2: c.p2, value: c.target, dimensionAxis: c.axis };
     if (c instanceof PointLineDistanceConstraint) return { kind: "point-line", point: c.point, line: c.line, value: c.target };
     if (c instanceof LineLineDistanceConstraint) return { kind: "line-line", line1: c.line1, line2: c.line2, value: c.target };
+    if (c instanceof LineCircleDistanceConstraint) return { kind: "line-circle", line: c.line, circle: c.circle, value: c.target };
+    if (c instanceof ConcentricRadiusDifferenceConstraint) return { kind: "radius-difference", a: c.a, b: c.b, value: c.target };
     if (c instanceof OffsetConstraint) return { kind: "offset-distance", source: c.source, offset: c.offset, value: c.target, sign: c.sign };
     if (c instanceof OffsetChainConstraint) {
       const index = Math.max(0, Math.min(c.sources.length - 1, Number(c.dimensionSegmentIndex) || 0));
@@ -9574,6 +9709,8 @@
       constraint instanceof PointAxisDistanceConstraint ||
       constraint instanceof PointLineDistanceConstraint ||
       constraint instanceof LineLineDistanceConstraint ||
+      constraint instanceof LineCircleDistanceConstraint ||
+      constraint instanceof ConcentricRadiusDifferenceConstraint ||
       constraint instanceof OffsetConstraint ||
       constraint instanceof OffsetChainConstraint ||
       constraint instanceof LineAngleConstraint ||
@@ -9622,6 +9759,8 @@
     if (c instanceof DistanceConstraint || c instanceof PointAxisDistanceConstraint) return c.p1 === point || c.p2 === point;
     if (c instanceof PointLineDistanceConstraint) return c.point === point || c.line.p1 === point || c.line.p2 === point;
     if (c instanceof LineLineDistanceConstraint) return c.line1.p1 === point || c.line1.p2 === point || c.line2.p1 === point || c.line2.p2 === point;
+    if (c instanceof LineCircleDistanceConstraint) return c.line.p1 === point || c.line.p2 === point || c.circle.center === point;
+    if (c instanceof ConcentricRadiusDifferenceConstraint) return c.a.center === point || c.b.center === point;
     if (c instanceof OffsetConstraint) {
       if (c.source instanceof Line && c.offset instanceof Line) {
         return c.source.p1 === point || c.source.p2 === point || c.offset.p1 === point || c.offset.p2 === point;
@@ -9672,6 +9811,7 @@
     if (c instanceof ArcSymmetryConstraint) return c.axis === line;
     if (c instanceof PointLineDistanceConstraint) return c.line === line;
     if (c instanceof LineLineDistanceConstraint) return c.line1 === line || c.line2 === line;
+    if (c instanceof LineCircleDistanceConstraint) return c.line === line;
     if (c instanceof OffsetConstraint) return c.source === line || c.offset === line;
     if (c instanceof OffsetChainConstraint) return c.sources.includes(line) || c.offsets.includes(line);
     if (c instanceof LineFixedConstraint) return c.line === line;
@@ -9699,8 +9839,9 @@
     if (c instanceof ArcEndpointOnLineConstraint) return c.arc === primitive;
     if (c instanceof ArcEndpointFixedConstraint) return c.arc === primitive;
     if (c instanceof RadiusConstraint || c instanceof DiameterConstraint || c instanceof PointOnCircleConstraint || c instanceof LineCircleTangentConstraint) return c.primitive === primitive;
+    if (c instanceof LineCircleDistanceConstraint) return c.circle === primitive;
     if (c instanceof ArcEndpointOnCircleConstraint) return c.arc === primitive || c.primitive === primitive;
-    if (c instanceof ConcentricConstraint || c instanceof EqualRadiusConstraint || c instanceof CircleCircleTangentConstraint) return c.a === primitive || c.b === primitive;
+    if (c instanceof ConcentricConstraint || c instanceof EqualRadiusConstraint || c instanceof CircleCircleTangentConstraint || c instanceof ConcentricRadiusDifferenceConstraint) return c.a === primitive || c.b === primitive;
     return false;
   }
 
@@ -9750,6 +9891,17 @@
         addNode(nodes, line);
         addNode(nodes, line.p1);
         addNode(nodes, line.p2);
+      }
+    } else if (c instanceof LineCircleDistanceConstraint) {
+      addNode(nodes, c.line);
+      addNode(nodes, c.line.p1);
+      addNode(nodes, c.line.p2);
+      addNode(nodes, c.circle);
+      addNode(nodes, c.circle.center);
+    } else if (c instanceof ConcentricRadiusDifferenceConstraint) {
+      for (const primitive of [c.a, c.b]) {
+        addNode(nodes, primitive);
+        addNode(nodes, primitive.center);
       }
     } else if (c instanceof OffsetConstraint) {
       for (const item of [c.source, c.offset]) {
@@ -9882,6 +10034,7 @@
       ["p2", "2つ目の点ID", "Second point ID"],
       ["point", "点ID", "Point ID"],
       ["line", "線ID", "Line ID"],
+      ["circle", "円ID", "Circle ID"],
       ["line1", "1本目の線ID", "First line ID"],
       ["line2", "2本目の線ID", "Second line ID"],
       ["centerline", "中心線ID", "Centerline ID"],
@@ -11283,16 +11436,13 @@
   }
 
   function draw() {
-    const r = canvas.getBoundingClientRect();
-    const w = r.width;
-    const h = r.height;
-    const dpr = window.devicePixelRatio || 1;
-    const bitmapWidth = Math.max(1, Math.floor(w * dpr));
-    const bitmapHeight = Math.max(1, Math.floor(h * dpr));
-    if (canvas.width !== bitmapWidth || canvas.height !== bitmapHeight) {
-      canvas.width = bitmapWidth;
-      canvas.height = bitmapHeight;
-    }
+    return withGeometryReadCache(drawCanvas);
+  }
+
+  function drawCanvas() {
+    if (canvasRenderMetrics.width <= 0 || canvasRenderMetrics.height <= 0) syncCanvasBitmapSize();
+    const dpr = canvasRenderMetrics.dpr;
+    if (interactionFrameStats) interactionFrameStats.canvasDraws += 1;
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     resetCanvasStrokeState();
     ctx.clearRect(0, 0, canvas.width, canvas.height);
@@ -11332,15 +11482,13 @@
     resetCanvasStrokeState();
     ctx.restore();
     resetCanvasStrokeState();
-    syncDimensionValueInput();
-    updateSidebarSelectionRowClasses();
   }
 
   function hideDimensionValueInput() {
     if (!dimensionValueInput) return;
-    if (dimensionValueInputShell) dimensionValueInputShell.hidden = true;
-    dimensionValueInput.hidden = true;
-    dimensionValueInput.classList.remove("is-invalid");
+    if (dimensionValueInputShell?.hidden === false) dimensionValueInputShell.hidden = true;
+    if (dimensionValueInput.hidden === false) dimensionValueInput.hidden = true;
+    if (dimensionValueInput.classList.contains("is-invalid")) dimensionValueInput.classList.remove("is-invalid");
   }
 
   function dimensionInputLayoutForPendingCommand() {
@@ -11962,7 +12110,7 @@
     appearance = normalizeDimensionAppearance(appearance, { partial: false });
     const anchor = dimensionAnchor(target, dimension);
     const basisTarget = { ...target, dimensionAxis: storedDimensionAxis(target, dimension) };
-    const radial = target.kind === "radius" || target.kind === "diameter" || (target.kind === "offset-distance" && !(target.source instanceof Line));
+    const radial = target.kind === "radius" || target.kind === "diameter" || target.kind === "radius-difference" || (target.kind === "offset-distance" && !(target.source instanceof Line));
     const d = radial ? targetDirection({ ...basisTarget, dimensionAnchor: anchor }) : targetDirection(basisTarget);
     const points = targetPointsForDimension(target, anchor);
     if (points.length < 2) return null;
@@ -12046,6 +12194,7 @@
 
   function dimensionSourceLine(target, index, source = null, extensionDirection = null) {
     if (target.kind === "point-line" && index === 1) return target.line;
+    if (target.kind === "line-circle" && index === 1) return target.line;
     if (target.kind === "line-line") return index === 0 ? target.line1 : target.line2;
     if (target.kind === "line-length") return target.line;
     if (target.kind === "offset-distance" && target.source instanceof Line) return index === 0 ? target.source : target.offset;
@@ -13102,7 +13251,10 @@
   function constraintTargetHint(type) {
     if (type === "distance") {
       if (constraintOperands.length === 1 && constraintOperands[0]?.kind === "line") {
-        return applicationText("2本目の線を選ぶと線間・角度寸法、空白をクリックすると線長寸法になります。Enterまたは同じ線のダブルクリックでも線長を確定できます。", "Select a second line for a line-to-line or angle dimension, or click empty space for a line-length dimension. Enter or double-clicking the same line also confirms line length.");
+        return applicationText("2本目の線を選ぶと線間・角度寸法、円を選ぶと円中心距離寸法、空白をクリックすると線長寸法になります。Enterまたは同じ線のダブルクリックでも線長を確定できます。", "Select a second line for a line-to-line or angle dimension, a circle for a center-to-line dimension, or click empty space for a line-length dimension. Enter or double-clicking the same line also confirms line length.");
+      }
+      if (constraintOperands.length === 1 && constraintOperands[0]?.kind === "primitive") {
+        return applicationText("円の場合は線を選ぶと円中心距離寸法、円または円弧では同心の円／円弧を選ぶと半径差寸法になります。空白をクリックすると単独の半径／直径寸法になります。", "After a circle, select a line for a center-to-line dimension. After a circle or arc, select a concentric circle/arc for a radius-difference dimension. Click empty space for the primitive's radius/diameter dimension.");
       }
       return applicationText("寸法対象を選択してください。", "Select dimension targets.");
     }
@@ -13141,7 +13293,7 @@
         coincident: "Select points, lines, circles, arcs, or splines supported by this constraint.",
         collinear: "Select two lines for this constraint.", equal: "Select two lines or two circles/arcs for this constraint.",
         horizontal: "Select one line or two points for this constraint.", vertical: "Select one line or two points for this constraint.",
-        parallel: "Select lines for this constraint.", perpendicular: "Select lines for this constraint.", distance: "Select a point or line as a dimension target.",
+        parallel: "Select lines for this constraint.", perpendicular: "Select lines for this constraint.", distance: "Select points, lines, circles, or arcs as dimension targets.",
       };
       return hints[type] || "The current selection cannot be used for this constraint.";
     }
@@ -13163,7 +13315,7 @@
       if (constraintOperands.length === 1) return "2番目の対象には対称にする点、線、または円弧を選択してください";
       return `3番目の対象には2番目と同じ種類の${constraintOperands[1]?.kind === "line" ? "線" : constraintOperands[1]?.kind === "primitive" ? "円弧" : "点"}を選択してください`;
     }
-    if (type === "distance") return "寸法対象として点または線を選択してください";
+    if (type === "distance") return "寸法対象として点、線、円または円弧を選択してください";
     return "この拘束では選択できません";
   }
 
@@ -13222,12 +13374,16 @@
     } else if (type === "distance") {
       selectedPoints = selectedPoints.slice(0, 2);
       selectedLines = selectedLines.slice(0, 2);
-      trimPrimitives(1);
+      trimPrimitives(2);
       if (selectedPoints.length > 0 && selectedLines.length > 0) {
         selectedPoints = selectedPoints.slice(0, 1);
         selectedLines = selectedLines.slice(0, 1);
         selectedCircles = [];
         selectedArcs = [];
+      } else if (selectedLines.length > 0 && selectedPrimitives().length > 0) {
+        selectedPoints = [];
+        selectedLines = selectedLines.slice(0, 1);
+        trimPrimitives(1);
       }
     }
   }
@@ -13362,7 +13518,10 @@
     if (hitArcEnd && (type === "coincident" || type === "pointOnCircle")) return makeConstraintOperand("arc-endpoint", { arc: hitArcEnd.arc, endpoint: hitArcEnd.endpoint });
     if (hitP) return makeConstraintOperand("point", { point: hitP });
     if (hitL) return makeConstraintOperand("line", { line: hitL });
-    if (hitC || hitA) return makeConstraintOperand("primitive", { primitive: hitC || hitA });
+    if (hitC || hitA) {
+      const primitive = hitC || hitA;
+      return makeConstraintOperand("primitive", { primitive, hitPoint: circlePointAtPointer(pointer, primitive) });
+    }
     if (hitS) {
       const closest = window.SplineGeometry.closestPoint(hitS.curve(), pointer, { samplesPerSpan: 28 });
       const parameter = closest?.t ?? 0;
@@ -13374,7 +13533,7 @@
   }
 
   function constraintOperandLimit(type, operands) {
-    if (type === "distance") return operands.some((operand) => operand.kind === "primitive") ? 1 : 2;
+    if (type === "distance") return 2;
     if (type === "horizontal" || type === "vertical") return operands.some((operand) => operand.kind === "point") ? 2 : 1;
     if (type === "symmetry") return 3;
     return 2;
@@ -13404,8 +13563,6 @@
     if (type === "distance" && operand.kind === "arc-endpoint") return { ok: false, error: invalidConstraintTargetHint(type) };
 
     let next = constraintOperands.filter((existing) => !sameConstraintOperand(existing, operand));
-    if (type === "distance" && operand.kind === "primitive") next = [];
-    if (type === "distance" && next.some((existing) => existing.kind === "primitive")) next = [];
     next.push(operand);
     const limit = constraintOperandLimit(type, next);
     if (next.length > limit) next = next.slice(next.length - limit);
@@ -13699,13 +13856,21 @@
     };
     setHint(applicationText("寸法値を入力中: 数式は = から開始し、Parameter参照はダブルクオーテーションで括ります。Canvas寸法のクリックで参照を挿入できます", "Editing dimension: begin expressions with = and enclose parameter references in double quotes. Click a canvas dimension to insert a reference."));
     updateConstraintButtons();
+    syncDimensionValueInput();
     draw();
     focusDimensionValueInput();
   }
 
   function retargetDistancePlaceWithOperand(pointer, hits = {}) {
-    if (pendingCommand?.type !== "distance-place" || pendingCommand.target.kind !== "line-length") return false;
-    const baseOperands = pendingCommand.operands?.length ? pendingCommand.operands : [{ kind: "line", line: pendingCommand.target.line, element: pendingCommand.target.line, sketchId: elementSketchId(pendingCommand.target.line), relation: "active" }];
+    if (pendingCommand?.type !== "distance-place" || !["line-length", "radius", "diameter"].includes(pendingCommand.target.kind)) return false;
+    let baseOperands = pendingCommand.operands?.length ? pendingCommand.operands : [];
+    if (baseOperands.length === 0 && pendingCommand.target.kind === "line-length") {
+      baseOperands = [makeConstraintOperand("line", { line: pendingCommand.target.line })];
+    } else if (baseOperands.length === 0 && (pendingCommand.target.kind === "radius" || pendingCommand.target.kind === "diameter")) {
+      baseOperands = [makeConstraintOperand("primitive", { primitive: pendingCommand.target.primitive })];
+    }
+    baseOperands = baseOperands.filter(Boolean);
+    if (baseOperands.length !== 1) return false;
     const operand = hitConstraintOperand(pointer, "distance", hits);
     if (!operand || sameConstraintOperand(baseOperands[0], operand)) return false;
     const resolution = resolveConstraintIntent("distance", [baseOperands[0], operand]);
@@ -13730,51 +13895,31 @@
     hoveredDimensionConstraint = null;
   }
 
-  function updatePendingLineLengthHover(pointer) {
-    if (pendingCommand?.type !== "distance-place" || pendingCommand.target.kind !== "line-length") {
+  function updatePendingDistanceRetargetHover(pointer) {
+    if (pendingCommand?.type !== "distance-place" || !["line-length", "radius", "diameter"].includes(pendingCommand.target.kind)) {
       hoveredPoint = null;
       hoveredEndpointPoint = null;
       hoveredLine = null;
+      hoveredCircle = null;
+      hoveredArc = null;
       return false;
     }
-    const baseLine = pendingCommand.target.line;
-    const blockOperand = hitBlockProjectionOperand(pointer.x, pointer.y);
-    const blockTarget = blockOperand && operandElement(blockOperand) !== baseLine ? referenceTargetFromOperand(blockOperand) : null;
-    if (blockTarget) {
-      const changed =
-        (blockTarget.kind === "point" ? blockTarget.point : null) !== hoveredPoint ||
-        (blockTarget.kind === "line" ? blockTarget.line : null) !== hoveredLine ||
-        (blockTarget.primitive instanceof Circle ? blockTarget.primitive : null) !== hoveredCircle ||
-        (blockTarget.primitive instanceof Arc ? blockTarget.primitive : null) !== hoveredArc ||
-        hoveredArcEndpoint ||
-        hoveredDimensionConstraint;
-      applyReferenceHoverTarget(blockTarget);
-      hoveredBlockInstance = null;
-      return changed;
-    }
-    const referenceTarget = hitReferenceTarget(pointer.x, pointer.y);
-    if (referenceTarget) {
-      const changed =
-        (referenceTarget.kind === "point" ? referenceTarget.point : null) !== hoveredPoint ||
-        (referenceTarget.kind === "line" ? referenceTarget.line : null) !== hoveredLine ||
-        (referenceTarget.primitive instanceof Circle ? referenceTarget.primitive : null) !== hoveredCircle ||
-        (referenceTarget.primitive instanceof Arc ? referenceTarget.primitive : null) !== hoveredArc ||
-        hoveredDimensionConstraint;
-      applyReferenceHoverTarget(referenceTarget);
-      return changed;
-    }
-    const nextEndpointHover = hitEndpointPoint(pointer.x, pointer.y);
-    const nextPointHover = nextEndpointHover || hitExplicitPoint(pointer.x, pointer.y);
-    const candidateLine = nextPointHover ? null : hitLine(pointer.x, pointer.y);
-    const nextLineHover = candidateLine && candidateLine !== baseLine && lineHasDirection(baseLine) && lineHasDirection(candidateLine) ? candidateLine : null;
-    const changed = nextPointHover !== hoveredPoint || nextEndpointHover !== hoveredEndpointPoint || nextLineHover !== hoveredLine || hoveredCircle || hoveredArc || hoveredArcEndpoint || hoveredDimensionConstraint;
-    hoveredPoint = nextPointHover;
-    hoveredEndpointPoint = nextEndpointHover;
-    hoveredLine = nextLineHover;
-    hoveredCircle = null;
+    const baseOperands = (pendingCommand.operands || []).filter(Boolean);
+    const operand = baseOperands.length === 1 ? hitConstraintOperand(pointer, "distance") : null;
+    const resolution = operand && !sameConstraintOperand(baseOperands[0], operand)
+      ? resolveConstraintIntent("distance", [baseOperands[0], operand])
+      : null;
+    const target = resolution?.target && resolution.target.kind !== "invalid" ? referenceTargetFromOperand(operand) : null;
+    const changed =
+      (target?.kind === "point" ? target.point : null) !== hoveredPoint ||
+      (target?.kind === "line" ? target.line : null) !== hoveredLine ||
+      (target?.primitive instanceof Circle ? target.primitive : null) !== hoveredCircle ||
+      (target?.primitive instanceof Arc ? target.primitive : null) !== hoveredArc ||
+      hoveredArcEndpoint ||
+      hoveredDimensionConstraint;
+    applyReferenceHoverTarget(target);
     hoveredArcEndpoint = null;
-    hoveredArc = null;
-    hoveredDimensionConstraint = null;
+    hoveredBlockInstance = null;
     return changed;
   }
 
@@ -13810,6 +13955,7 @@
   function updateDistanceBufferLabel() {
     if (!pendingCommand || !["distance-value", "offset-value"].includes(pendingCommand.type)) return;
     setHint(pendingCommand.type === "offset-value" ? "オフセット距離を入力中: Enter/ダブルクリックで決定、Escでキャンセル" : applicationText("寸法値を入力中: 数式は = から開始し、Parameter参照はダブルクオーテーションで括ります。Canvas寸法のクリックで参照を挿入できます", "Editing dimension: begin expressions with = and enclose parameter references in double quotes. Click a canvas dimension to insert a reference."));
+    syncDimensionValueInput();
     draw();
   }
 
@@ -14042,6 +14188,7 @@
     const sketch = { id: `S${sketchSeq++}`, name: nextSketchName(parentSketchId), parentSketchId, kind: "sketch", appearance: {}, constructionAppearance: {}, dimensionAppearance: {} };
     model.sketches.push(sketch);
     model.activeSketchId = sketch.id;
+    revealSketchInTree(sketch.id);
     clearInteractionForSketchChange();
     setHint(parentSketchId ? `編集中: ${sketch.name} / 親: ${sketchName(parentSketchId)}` : `編集中: ${sketch.name}`);
     updateUI();
@@ -14057,6 +14204,7 @@
     sketch.appearance = { ...normalizeAppearance(sketch.appearance), visible: true };
     sketch.visible = true;
     model.activeSketchId = sketchId;
+    revealSketchInTree(sketchId);
     clearInteractionForSketchChange();
     setHint(`編集中: ${sketchName(sketchId)}`);
     updateUI();
@@ -14193,12 +14341,35 @@
     return blockEditSession?.draft?.id ? `block:${blockEditSession.draft.id}` : "document";
   }
 
+  function sketchTreeSketchKey(sketchId) {
+    return `${sketchTreeScopeKey()}|${sketchId}`;
+  }
+
+  function sketchTreeSketchIsOpen(sketch) {
+    const key = sketchTreeSketchKey(sketch.id);
+    return sketchTreeSketchOpenState.has(key)
+      ? sketchTreeSketchOpenState.get(key) === true
+      : isRootSketch(sketch);
+  }
+
+  function revealSketchInTree(sketchId) {
+    let sketch = sketchById(sketchId);
+    const visited = new Set();
+    while (sketch?.parentSketchId && !visited.has(sketch.id)) {
+      visited.add(sketch.id);
+      const parent = sketchById(sketch.parentSketchId);
+      if (!parent) break;
+      sketchTreeSketchOpenState.set(sketchTreeSketchKey(parent.id), true);
+      sketch = parent;
+    }
+  }
+
   function sketchTreeGroupKey(sketchId, category) {
     return `${sketchTreeScopeKey()}|${sketchId}|${category}`;
   }
 
   function sketchTreeGutter(segments) {
-    return segments.length ? `<span class="sketch-tree-gutter" style="--tree-segment-count:${segments.length}" aria-hidden="true">${segments.map((segment) => `<span class="tree-segment ${segment}"></span>`).join("")}</span>` : "";
+    return `<span class="sketch-tree-gutter" style="--tree-segment-count:${segments.length}" aria-hidden="true">${segments.map((segment) => `<span class="tree-segment ${segment}"></span>`).join("")}</span>`;
   }
 
   function sketchTreeSketchIcon() {
@@ -14451,6 +14622,7 @@
       const nonEmptyCategories = isRootSketch(sketch) ? [] : categoryDefinitions.filter(([category]) => groups[category].length > 0);
       const childSketches = children.get(sketch.id) || [];
       const hasChildren = nonEmptyCategories.length + childSketches.length > 0;
+      const open = hasChildren && sketchTreeSketchIsOpen(sketch);
       const segments = depth === 0 && isRootSketch(sketch) ? [] : [...ancestorHasNext.map((hasNext) => hasNext ? "pipe" : "blank"), isLast ? "elbow" : "tee"];
       const isActive = sketch.id === activeSketchId();
       const isRoot = isRootSketch(sketch);
@@ -14460,7 +14632,12 @@
       const duplicateCount = constraintDuplicateCountForSketch(sketch.id);
       const count = Object.values(groups).reduce((sum, items) => sum + items.length, 0);
       const visibilityButton = isRoot ? "" : `<button class="sketchVisibilityBtn icon-small-btn ${visibilityEnabled ? "visible-on" : "visible-off"}" data-id="${sketch.id}" title="${visibilityEnabled ? applicationText("非表示にする", "Hide") : applicationText("表示する", "Show")}" aria-pressed="${visibilityEnabled}" ${isActive ? "disabled" : ""}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2.5 12s3.5-6 9.5-6 9.5 6 9.5 6-3.5 6-9.5 6-9.5-6-9.5-6Z"/><circle cx="12" cy="12" r="2.6"/>${visibilityEnabled ? "" : '<path class="visibility-slash" d="M4 4l16 16"/>'}</svg></button>`;
-      html.push(`<div class="item sketch-item ${isActive ? "active" : ""} ${visibilityEnabled ? "visible" : ""} ${solveError ? "solve-error" : ""} ${referenceErrorCount ? "reference-error" : ""} ${hasChildren ? "has-children" : ""}" data-id="${escapeHtml(sketch.id)}" style="--sketch-depth:${depth}">${sketchTreeGutter(segments)}<button class="sketchActivateBtn" data-id="${escapeHtml(sketch.id)}" ${isActive ? "disabled" : ""}>${sketchTreeSketchIcon()}<span class="sketch-name">${escapeHtml(sketch.name)}</span></button><span class="sketch-badges">${solveError ? '<span class="badge">!</span>' : ""}${referenceErrorCount ? `<span class="badge sketch-reference-error-badge">${applicationText("参照", "Ref")}!${referenceErrorCount}</span>` : ""}${duplicateCount ? `<span class="badge">${applicationText("重複", "Duplicate")}${duplicateCount}</span>` : ""}<span class="badge">${count}</span></span>${visibilityButton}${isRoot ? "" : `<button class="sketchRenameBtn icon-small-btn" data-id="${escapeHtml(sketch.id)}" title="${applicationText("名前変更", "Rename")}">Aa</button><button class="sketchDeleteBtn icon-small-btn" data-id="${escapeHtml(sketch.id)}" title="${applicationText("スケッチ削除", "Delete sketch")}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3M7 7l1 13h8l1-13"/></svg></button>`}</div>`);
+      const expandButton = hasChildren
+        ? `<button class="sketchExpandBtn" type="button" data-id="${escapeHtml(sketch.id)}" title="${applicationText(open ? "折りたたむ" : "展開する", open ? "Collapse" : "Expand")}" aria-label="${applicationText(open ? `${sketch.name}を折りたたむ` : `${sketch.name}を展開する`, `${open ? "Collapse" : "Expand"} ${sketch.name}`)}" aria-expanded="${open}"><span class="sketch-expand-chevron" aria-hidden="true">▶</span></button>`
+        : '<span class="sketch-expand-spacer" aria-hidden="true"></span>';
+      const expandedAttribute = hasChildren ? ` aria-expanded="${open}"` : "";
+      html.push(`<div class="item sketch-item ${isActive ? "active" : ""} ${visibilityEnabled ? "visible" : ""} ${solveError ? "solve-error" : ""} ${referenceErrorCount ? "reference-error" : ""} ${hasChildren ? "has-children" : ""} ${open ? "open" : ""}" data-id="${escapeHtml(sketch.id)}" style="--sketch-depth:${depth}"${expandedAttribute}>${sketchTreeGutter(segments)}${expandButton}<button class="sketchActivateBtn" data-id="${escapeHtml(sketch.id)}" ${isActive ? "disabled" : ""}>${sketchTreeSketchIcon()}<span class="sketch-name">${escapeHtml(sketch.name)}</span></button><span class="sketch-badges">${solveError ? '<span class="badge">!</span>' : ""}${referenceErrorCount ? `<span class="badge sketch-reference-error-badge">${applicationText("参照", "Ref")}!${referenceErrorCount}</span>` : ""}${duplicateCount ? `<span class="badge">${applicationText("重複", "Duplicate")}${duplicateCount}</span>` : ""}<span class="badge">${count}</span></span>${visibilityButton}${isRoot ? "" : `<button class="sketchRenameBtn icon-small-btn" data-id="${escapeHtml(sketch.id)}" title="${applicationText("名前変更", "Rename")}">Aa</button><button class="sketchDeleteBtn icon-small-btn" data-id="${escapeHtml(sketch.id)}" title="${applicationText("スケッチ削除", "Delete sketch")}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3M7 7l1 13h8l1-13"/></svg></button>`}</div>`);
+      if (!open) return;
       const entries = [...nonEmptyCategories.map(([category, label]) => ({ type: "category", category, label })), ...childSketches.map((child) => ({ type: "sketch", sketch: child }))];
       entries.forEach((entry, entryIndex) => {
         const entryLast = entryIndex === entries.length - 1;
@@ -14553,6 +14730,12 @@
       return;
     }
     const action = event.target.closest("button");
+    if (action?.classList.contains("sketchExpandBtn")) {
+      const key = sketchTreeSketchKey(action.dataset.id);
+      sketchTreeSketchOpenState.set(key, action.getAttribute("aria-expanded") !== "true");
+      updateSketchUI();
+      return;
+    }
     if (action?.classList.contains("sketchVisibilityBtn")) return void toggleSketchVisibility(action.dataset.id);
     if (action?.classList.contains("sketchRenameBtn")) return void renameSketch(action.dataset.id);
     if (action?.classList.contains("sketchDeleteBtn")) return void deleteSketch(action.dataset.id);
@@ -14764,6 +14947,7 @@
     if (document.getElementById("blockDefinitionsDialog")?.open) updateBlockUI();
     updateSketchTreeSelectionState();
     updatePropertiesUI();
+    updateSidebarSelectionRowClasses();
   }
 
   function selectSidebarGeometryItem(item) {
@@ -15592,6 +15776,14 @@
       return propertyReadonlyRow("点ID", "Point ID", geometryId(target.point))
         + propertyReadonlyRow("線ID", "Line ID", geometryId(target.line));
     }
+    if (target.kind === "line-circle") {
+      return propertyReadonlyRow("線ID", "Line ID", geometryId(target.line))
+        + propertyReadonlyRow("円ID", "Circle ID", geometryId(target.circle));
+    }
+    if (target.kind === "radius-difference") {
+      return propertyReadonlyRow("1つ目の図形ID", "First geometry ID", geometryId(target.a))
+        + propertyReadonlyRow("2つ目の図形ID", "Second geometry ID", geometryId(target.b));
+    }
     if (target.kind === "line-line" || target.kind === "angle") {
       return propertyReadonlyRow("1本目の線ID", "First line ID", geometryId(target.line1))
         + propertyReadonlyRow("2本目の線ID", "Second line ID", geometryId(target.line2));
@@ -15616,7 +15808,7 @@
     const value = String(name || applicationText("拘束", "Constraint"));
     const replacements = [
       [/^円弧端点-円周一致/, "Arc endpoint on circumference"], [/^円弧端点-線一致/, "Arc endpoint on line"], [/^円弧端点一致/, "Arc endpoint coincident"],
-      [/^点-線寸法/, "Point-line dimension"], [/^線-線寸法/, "Line-line dimension"], [/^チェーンオフセット寸法/, "Chain offset dimension"], [/^オフセット寸法/, "Offset dimension"],
+      [/^点-線寸法/, "Point-line dimension"], [/^線-線寸法/, "Line-line dimension"], [/^線-円中心寸法/, "Line-circle center dimension"], [/^同心半径差寸法/, "Concentric radius-difference dimension"], [/^チェーンオフセット寸法/, "Chain offset dimension"], [/^オフセット寸法/, "Offset dimension"],
       [/^水平寸法/, "Horizontal dimension"], [/^垂直寸法/, "Vertical dimension"], [/^点-線一致/, "Point-line coincident"], [/^点-円周一致/, "Point on circumference"],
       [/^平行2線中心線/, "Parallel-line centerline"], [/^2点中心線/, "Point-pair centerline"], [/^最小線長/, "Minimum line length"], [/^線固定/, "Fixed line"], [/^点水平/, "Point horizontal"], [/^点垂直/, "Point vertical"],
       [/^円弧対称/, "Arc symmetry"], [/^線対称/, "Line symmetry"], [/^同一直線/, "Collinear"], [/^寸法/, "Dimension"], [/^角度/, "Angle"], [/^一致/, "Coincident"],
@@ -16406,6 +16598,8 @@
     updateStatusUI();
     updateConstraintButtons();
     localizeApplicationUI();
+    updateSidebarSelectionRowClasses();
+    syncDimensionValueInput();
   }
 
   function supportLineBasis(line) {
@@ -16791,6 +16985,15 @@
     if (subject.kind === "line" && referenceTarget.kind === "point") {
       return { kind: "point-line", point: referenceTarget.point, line: subject.line, value: Math.abs(signedPointLineDistance(referenceTarget.point, subject.line)) };
     }
+    if (subject.kind === "line" && referenceTarget.kind === "primitive") {
+      return lineCircleDistanceTarget(subject.line, referenceTarget.primitive);
+    }
+    if (subject.kind === "primitive" && referenceTarget.kind === "line") {
+      return lineCircleDistanceTarget(referenceTarget.line, subject.primitive);
+    }
+    if (subject.kind === "primitive" && referenceTarget.kind === "primitive") {
+      return concentricRadiusDifferenceTarget(subject.primitive, referenceTarget.primitive);
+    }
     if (subject.kind === "line" && referenceTarget.kind === "line") {
       if (!lineHasDirection(subject.line) || !lineHasDirection(referenceTarget.line)) return { kind: "invalid", reason: "寸法対象の線が短すぎます" };
       if (!linesAreParallel(subject.line, referenceTarget.line)) {
@@ -16810,6 +17013,8 @@
     }
     if (target.kind === "point-line") return Math.abs(signedPointLineDistance(target.point, target.line));
     if (target.kind === "line-line") return Math.abs(signedPointLineDistance(target.line1.p1, target.line2));
+    if (target.kind === "line-circle") return Math.abs(signedPointLineDistance(target.circle.center, target.line));
+    if (target.kind === "radius-difference") return Math.abs(target.b.radius() - target.a.radius());
     if (target.kind === "line-length") return target.line.length();
     if (target.kind === "angle") return angleDegrees(Math.abs(angleDimensionSweep(target)));
     if (target.kind === "radius") return target.primitive.radius();
@@ -17007,11 +17212,14 @@
     };
     updateConstraintButtons();
     updateToolbar();
+    const awaitingSecondOperand = (resolution.operands || []).length === 1;
     setHint(
       resolution.referenceSketchId
         ? "参照寸法線の位置をクリックしてください"
-        : resolution.target.kind === "line-length"
-          ? "仮寸法の位置をマウスで調整し、空白をクリックして線長寸法を確定してください。2本目の線を選ぶと線間・角度寸法になります。"
+        : awaitingSecondOperand && resolution.target.kind === "line-length"
+          ? "仮寸法の位置をマウスで調整し、空白をクリックして線長寸法を確定してください。2本目の線で線間・角度寸法、円で円中心距離寸法になります。"
+          : awaitingSecondOperand && (resolution.target.kind === "radius" || resolution.target.kind === "diameter")
+            ? "仮寸法の位置をマウスで調整し、空白をクリックして単独寸法を確定してください。線で円中心距離寸法、同心の円または円弧で半径差寸法になります。"
           : "寸法線の位置をクリックしてください",
     );
     draw();
@@ -17051,6 +17259,10 @@
         return null;
       }
       constraint = new LineLineDistanceConstraint(target.line1, target.line2, value);
+    } else if (target.kind === "line-circle") {
+      constraint = new LineCircleDistanceConstraint(target.line, target.circle, value);
+    } else if (target.kind === "radius-difference") {
+      constraint = new ConcentricRadiusDifferenceConstraint(target.a, target.b, value);
     } else if (target.kind === "angle") {
       constraint = new LineAngleConstraint(target.line1, target.line2, (value * Math.PI) / 180, dimension?.angleStartFlip || 0, dimension?.angleEndFlip || 0);
     } else if (target.kind === "radius") {
@@ -17069,6 +17281,10 @@
       ? [target.p1, target.p2]
       : target.kind === "point-line"
         ? [target.point, target.line]
+        : target.kind === "line-circle"
+          ? [target.line, target.circle]
+          : target.kind === "radius-difference"
+            ? [target.a, target.b]
         : target.kind === "line-line" || target.kind === "angle"
           ? [target.line1, target.line2]
           : target.kind === "line-length"
@@ -18360,7 +18576,7 @@
     if (c instanceof LineSymmetryConstraint && c.axis === line) return true;
     if (c instanceof ArcSymmetryConstraint && c.axis === line) return true;
     if (c instanceof PointOnLineConstraint || c instanceof ParallelLinesCenterlineConstraint || c instanceof PointPairCenterlineConstraint || c instanceof ArcEndpointOnLineConstraint) return true;
-    if (c instanceof PointLineDistanceConstraint || c instanceof LineLineDistanceConstraint || c instanceof LineCircleTangentConstraint) return true;
+    if (c instanceof PointLineDistanceConstraint || c instanceof LineLineDistanceConstraint || c instanceof LineCircleDistanceConstraint || c instanceof LineCircleTangentConstraint) return true;
     return false;
   }
 
@@ -19529,6 +19745,7 @@
   window.addEventListener("blur", closeCanvasContextMenu);
 
   canvas.addEventListener("pointerdown", (e) => {
+    flushScheduledCanvasPointerMove();
     if (e.button === 2) {
       e.preventDefault();
       return;
@@ -19958,11 +20175,12 @@
     draw();
   });
 
-  canvas.addEventListener("pointermove", (e) => {
+  function processCanvasPointerMove(e) {
     const screenPoint = { x: e.offsetX, y: e.offsetY };
     const coordinatePoint = screenToWorld(screenPoint);
     const coordinateStatus = document.getElementById("statusCoordinates");
-    if (coordinateStatus) coordinateStatus.textContent = `X ${formatDisplayNumber(coordinatePoint.x, 3)} / Y ${formatDisplayNumber(coordinatePoint.y, 3)}`;
+    const coordinateText = `X ${formatDisplayNumber(coordinatePoint.x, 3)} / Y ${formatDisplayNumber(coordinatePoint.y, 3)}`;
+    if (coordinateStatus && coordinateStatus.textContent !== coordinateText) coordinateStatus.textContent = coordinateText;
     if (panSession) {
       const p = screenPoint;
       viewport.x = panSession.startX + (p.x - panSession.startPointer.x);
@@ -20156,7 +20374,7 @@
       hoveredSketchIdentity = hitSketchIdentityElement(p.x, p.y, { allowInactiveGeometry: true });
       pendingCommand.pointer = p;
       pendingCommand.dimension = null;
-      updatePendingLineLengthHover(p);
+      updatePendingDistanceRetargetHover(p);
       if (hitD) {
         hoveredPoint = null;
         hoveredEndpointPoint = null;
@@ -20373,9 +20591,55 @@
     setHint(`${dragLabel(dragSession)}中: ${scope}, error=${error.toExponential(2)}, iter=${result.iterations}${fallback}${dependentText}${dependentErrorText}`, dependentResult.success ? "normal" : "error");
     if (!dependentResult.success) updateUI();
     draw();
-  });
+  }
+
+  function processScheduledCanvasPointerMove({ animationFrame = false, synchronousFlush = false } = {}) {
+    if (!pendingCanvasPointerMove) return false;
+    const pointer = pendingCanvasPointerMove;
+    pendingCanvasPointerMove = null;
+    if (interactionFrameStats) {
+      interactionFrameStats.processedMoves += 1;
+      if (animationFrame) interactionFrameStats.animationFrames += 1;
+      if (synchronousFlush) interactionFrameStats.synchronousFlushes += 1;
+    }
+    withGeometryReadCache(() => processCanvasPointerMove(pointer));
+    if (pendingCommand && ["distance-value", "offset-value"].includes(pendingCommand.type)) syncDimensionValueInput();
+    return true;
+  }
+
+  function scheduleCanvasPointerMove(e) {
+    if (interactionFrameStats) interactionFrameStats.receivedMoves += 1;
+    if (pendingCanvasPointerMove) {
+      if (interactionFrameStats) interactionFrameStats.coalescedMoves += 1;
+      pendingCanvasPointerMove.offsetX = e.offsetX;
+      pendingCanvasPointerMove.offsetY = e.offsetY;
+      pendingCanvasPointerMove.shiftKey = e.shiftKey;
+    } else {
+      pendingCanvasPointerMove = { offsetX: e.offsetX, offsetY: e.offsetY, shiftKey: e.shiftKey };
+    }
+    if (canvasPointerMoveFrame != null) return;
+    canvasPointerMoveFrame = requestAnimationFrame(() => {
+      canvasPointerMoveFrame = null;
+      processScheduledCanvasPointerMove({ animationFrame: true });
+    });
+  }
+
+  function flushScheduledCanvasPointerMove({ discard = false } = {}) {
+    if (canvasPointerMoveFrame != null) {
+      cancelAnimationFrame(canvasPointerMoveFrame);
+      canvasPointerMoveFrame = null;
+    }
+    if (discard) {
+      pendingCanvasPointerMove = null;
+      return false;
+    }
+    return processScheduledCanvasPointerMove({ synchronousFlush: true });
+  }
+
+  canvas.addEventListener("pointermove", scheduleCanvasPointerMove);
 
   function endDrag(e) {
+    flushScheduledCanvasPointerMove();
     if (panSession) {
       panSession = null;
       canvas.classList.remove("is-panning");
@@ -20738,10 +21002,12 @@
   canvas.addEventListener("pointercancel", endDrag);
   canvas.addEventListener("pointerleave", () => {
     if (dragSession || dimensionDragSession || annotationDragSession || selectionRectSession || panSession) return;
+    flushScheduledCanvasPointerMove({ discard: true });
     clearCanvasHover();
     draw();
   });
   canvas.addEventListener("dblclick", (e) => {
+    flushScheduledCanvasPointerMove();
     if (suppressNextBlankDoubleClickEvent) {
       suppressNextBlankDoubleClickEvent = false;
       e.preventDefault();
@@ -20834,6 +21100,7 @@
     "wheel",
     (e) => {
       e.preventDefault();
+      flushScheduledCanvasPointerMove();
       closeCanvasContextMenu();
       const screen = canvasScreenPoint(e);
       const world = screenToWorld(screen);
@@ -20843,6 +21110,7 @@
       viewport.y = screen.y - world.y * viewport.scale;
       setHint(`表示倍率: ${formatZoom(viewport.scale)}`);
       draw();
+      if (pendingCommand && ["distance-value", "offset-value"].includes(pendingCommand.type)) syncDimensionValueInput();
     },
     { passive: false },
   );
@@ -21919,6 +22187,23 @@
   function installTestHooks() {
     if (!new URLSearchParams(window.location.search).has("test")) return;
     window.__jot2dTest = {
+      resetInteractionFrameStatsForTest() {
+        flushScheduledCanvasPointerMove();
+        interactionFrameStats = {
+          receivedMoves: 0,
+          processedMoves: 0,
+          coalescedMoves: 0,
+          animationFrames: 0,
+          synchronousFlushes: 0,
+          canvasDraws: 0,
+        };
+        return { ...interactionFrameStats };
+      },
+      interactionFrameStatsForTest() {
+        return interactionFrameStats
+          ? { ...interactionFrameStats, pendingMove: Boolean(pendingCanvasPointerMove), frameScheduled: canvasPointerMoveFrame != null }
+          : null;
+      },
       resetForResponsiveLineDragTest() {
         sampleModel();
         resetHistory("responsive line drag test");
@@ -22368,6 +22653,7 @@
         const targetSketch = { id: "S3", name: "Projection Target", parentSketchId: sourceSketchId, kind: "sketch", appearance: {}, constructionAppearance: {}, dimensionAppearance: {}, visible: true };
         model.sketches.push(targetSketch);
         model.activeSketchId = targetSketch.id;
+        revealSketchInTree(targetSketch.id);
         this.focusWorldForTest({ x: 0, y: 0 }, 2.2);
         resetHistory("sketch projection test");
         updateUI();
@@ -24860,6 +25146,7 @@
         model.activeSketchId = DEFAULT_SKETCH_ID;
         refreshReferenceConstraintValidity();
         fitAllGeometryToViewport(190);
+        revealSketchInTree(model.activeSketchId);
         updateUI();
         draw();
         const rect = canvas.getBoundingClientRect();
@@ -25178,6 +25465,92 @@
           line: clientPoint({ x: 0, y: 0 }),
           placement: clientPoint({ x: 0, y: -50 }),
           lineId: line.id,
+        };
+      },
+      resetForLineCircleAndRadiusDifferenceDimensions() {
+        resetModelState();
+        const line = addLine(addPoint(-130, 150, true, "endpoint"), addPoint(130, 150, true, "endpoint"));
+        const circle1 = addCircle(addPoint(0, 0, false, "center"), 30);
+        const circle2 = addCircle(addPoint(0, 0, false, "center"), 55);
+        const arc1 = addArc(addPoint(0, 0, false, "center"), 80, -Math.PI / 3, Math.PI / 3);
+        const arc2 = addArc(addPoint(0, 0, false, "center"), 105, -Math.PI / 3, Math.PI / 3);
+        fitAllGeometryToViewport(230);
+        updateUI();
+        draw();
+        const rect = canvas.getBoundingClientRect();
+        const clientPoint = (point) => {
+          const screen = worldToCanvasScreen(point);
+          return { x: rect.left + screen.x, y: rect.top + screen.y };
+        };
+        return {
+          line: clientPoint({ x: 0, y: 150 }),
+          circle1: clientPoint({ x: -30, y: 0 }),
+          circle2: clientPoint({ x: -55, y: 0 }),
+          arc1: clientPoint({ x: 80, y: 0 }),
+          arc2: clientPoint({ x: 105, y: 0 }),
+          lineCirclePlacement: clientPoint({ x: 60, y: 75 }),
+          radiusDifferencePlacement: clientPoint({ x: 70, y: -75 }),
+          ids: {
+            line: line.id,
+            circle1: circle1.id,
+            circle2: circle2.id,
+            arc1: arc1.id,
+            arc2: arc2.id,
+          },
+        };
+      },
+      lineCircleAndRadiusDifferenceState() {
+        const serialized = serializeModel();
+        const constraints = model.constraints.filter((constraint) =>
+          constraint instanceof LineCircleDistanceConstraint || constraint instanceof ConcentricRadiusDifferenceConstraint);
+        return {
+          pendingCommandType: pendingCommand?.type || null,
+          previewTargetKind: pendingCommand?.target?.kind || null,
+          operandKinds: constraintOperands.map((operand) => operand.kind),
+          constraints: serialized.constraints.filter((constraint) =>
+            constraint.type === "lineCircleDistance" || constraint.type === "concentricRadiusDifferenceDimension"),
+          geometry: constraints.map((constraint) => {
+            if (constraint instanceof LineCircleDistanceConstraint) {
+              return {
+                type: "lineCircleDistance",
+                centerDistance: Math.abs(signedPointLineDistance(constraint.circle.center, constraint.line)),
+                target: constraint.target,
+                error: vectorNorm([constraint.rawError()].flat()),
+              };
+            }
+            return {
+              type: "concentricRadiusDifferenceDimension",
+              centerDistance: hypot2(constraint.a.center.x - constraint.b.center.x, constraint.a.center.y - constraint.b.center.y),
+              radiusDifference: Math.abs(constraint.b.radius() - constraint.a.radius()),
+              target: constraint.target,
+              error: vectorNorm(constraint.rawError()),
+            };
+          }),
+          serialized,
+        };
+      },
+      perturbRadiusDifferenceDimensionForTest() {
+        const constraint = model.constraints.find((item) => item instanceof ConcentricRadiusDifferenceConstraint);
+        if (!constraint) return null;
+        constraint.b.center.x += 17;
+        constraint.b.center.y -= 11;
+        constraint.b.radiusValue += 9;
+        const before = {
+          centerDistance: hypot2(constraint.a.center.x - constraint.b.center.x, constraint.a.center.y - constraint.b.center.y),
+          radiusDifference: Math.abs(constraint.b.radius() - constraint.a.radius()),
+        };
+        const result = solveSketchAndDependents(activeSketchId(), snapshotModelState());
+        refreshConstraintAnalysis();
+        updateUI();
+        draw();
+        return {
+          success: result.success,
+          before,
+          after: {
+            centerDistance: hypot2(constraint.a.center.x - constraint.b.center.x, constraint.a.center.y - constraint.b.center.y),
+            radiusDifference: Math.abs(constraint.b.radius() - constraint.a.radius()),
+            error: vectorNorm(constraint.rawError()),
+          },
         };
       },
       lineLengthClickPlacementState() {
@@ -25670,5 +26043,13 @@
   log("空の新規Documentを作成しました");
   setApplicationLanguage(applicationLanguage, { persist: false, refresh: false });
   resizeCanvas();
+  if (typeof ResizeObserver === "function") {
+    canvasResizeObserver = new ResizeObserver(([entry]) => {
+      if (!entry || !syncCanvasBitmapSize(entry.contentRect.width, entry.contentRect.height)) return;
+      draw();
+      if (pendingCommand && ["distance-value", "offset-value"].includes(pendingCommand.type)) syncDimensionValueInput();
+    });
+    canvasResizeObserver.observe(canvas);
+  }
   resetHistory("起動");
 })();

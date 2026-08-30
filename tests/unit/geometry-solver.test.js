@@ -109,6 +109,7 @@ test("representative persistent constraints have zero residual on canonical geom
   const circleCenter = fixed("PC", 0, 0);
   const circle = new geometry.Circle("C1", circleCenter, 5);
   const sameCircle = new geometry.Circle("C2", circleCenter, 5);
+  const largerCircle = new geometry.Circle("C4", circleCenter, 8);
   const tangentLine = new geometry.Line("LT", fixed("PT1", -5, 5), fixed("PT2", 5, 5));
   const externalCircle = new geometry.Circle("C3", fixed("PC3", 10, 0), 5);
 
@@ -124,6 +125,8 @@ test("representative persistent constraints have zero residual on canonical geom
     new geometry.ConcentricConstraint(circle, sameCircle),
     new geometry.EqualRadiusConstraint(circle, sameCircle),
     new geometry.PointOnCircleConstraint(fixed("POC", 5, 0), circle),
+    new geometry.LineCircleDistanceConstraint(tangentLine, circle, 5),
+    new geometry.ConcentricRadiusDifferenceConstraint(circle, largerCircle, 3),
     new geometry.LineCircleTangentConstraint(tangentLine, circle, -1),
     new geometry.CircleCircleTangentConstraint(circle, externalCircle, "external"),
     new geometry.SymmetryConstraint(left, right, symmetryAxis),
@@ -132,6 +135,55 @@ test("representative persistent constraints have zero residual on canonical geom
   for (const constraint of cases) {
     assert.ok(residualNorm(constraint.rawError()) < 1e-9, `${constraint.constructor.name} residual was ${JSON.stringify(constraint.rawError())}`);
   }
+});
+
+test("line-circle dimension constrains the circle center to the line support", () => {
+  const line = new geometry.Line(
+    "L1",
+    new geometry.Point("P1", -40, 10, true),
+    new geometry.Point("P2", 40, 10, true),
+  );
+  const center = new geometry.Point("P3", 8, 43);
+  const circle = new geometry.Circle("C1", center, 12);
+  const constraint = new geometry.LineCircleDistanceConstraint(line, circle, 25);
+  const solver = new geometry.ConstraintSolver({
+    points: [line.p1, line.p2, center],
+    lines: [line],
+    circles: [circle],
+    arcs: [],
+    blockInstances: [],
+    constraints: [constraint],
+  });
+
+  const result = solver.solve();
+
+  assert.equal(result.success, true, result.reason);
+  assert.ok(result.errorNorm < 1e-6);
+  assert.ok(Math.abs(Math.abs(geometry.signedPointLineDistance(center, line)) - 25) < 1e-6);
+  assert.equal(circle.radius(), 12);
+});
+
+test("concentric radius-difference dimension supports circles and arcs while preserving concentricity", () => {
+  const centerA = new geometry.Point("P1", -3, 4, true);
+  const centerB = new geometry.Point("P2", 11, -8);
+  const circle = new geometry.Circle("C1", centerA, 18);
+  const arc = new geometry.Arc("A1", centerB, 46, -0.8, 1.4);
+  const constraint = new geometry.ConcentricRadiusDifferenceConstraint(circle, arc, 12);
+  const solver = new geometry.ConstraintSolver({
+    points: [centerA, centerB],
+    lines: [],
+    circles: [circle],
+    arcs: [arc],
+    blockInstances: [],
+    constraints: [new geometry.RadiusConstraint(circle, 18), constraint],
+  });
+
+  const result = solver.solve();
+
+  assert.equal(result.success, true, result.reason);
+  assert.ok(result.errorNorm < 1e-6);
+  assert.ok(Math.hypot(centerA.x - centerB.x, centerA.y - centerB.y) < 1e-6);
+  assert.ok(Math.abs(Math.abs(arc.radius() - circle.radius()) - 12) < 1e-6);
 });
 
 test("offset chain constraint preserves distance, direction, and miter joins", () => {

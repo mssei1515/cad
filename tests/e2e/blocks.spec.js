@@ -25,6 +25,8 @@ function sketchTreeGroup(page, category, sketchId = "S1") {
 }
 
 async function expandSketchTreeGroup(page, category, sketchId = "S1") {
+  const sketch = page.locator(`.sketch-item[data-id="${sketchId}"]`);
+  if ((await sketch.getAttribute("aria-expanded")) !== "true") await sketch.locator(".sketchExpandBtn").click();
   const group = sketchTreeGroup(page, category, sketchId);
   if ((await group.getAttribute("aria-expanded")) !== "true") await group.click();
   return group;
