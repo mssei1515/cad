@@ -979,7 +979,11 @@ test("workspace integrates transparent compact Object groups into Sketch Tree an
       menus: [...document.querySelectorAll(".app-menu > summary")].map((item) => item.textContent.trim()),
       toolIds: [...document.querySelectorAll(".command-toolbar button")].map((item) => item.id).filter(Boolean),
       iconButtons: [...document.querySelectorAll(".command-toolbar button")].map((item) => ({
-        text: item.textContent.trim(),
+        text: [...item.childNodes]
+          .filter((node) => node.nodeType === Node.TEXT_NODE)
+          .map((node) => node.textContent || "")
+          .join("")
+          .trim(),
         hasIcon: Boolean(item.querySelector(":scope > svg")),
         title: item.getAttribute("title"),
         label: item.getAttribute("aria-label"),
