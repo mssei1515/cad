@@ -12,7 +12,18 @@ function sketchTreeGroup(page, category, sketchId = "S1") {
   return page.locator(`.sketch-group-row[data-sketch-id="${sketchId}"][data-category="${category}"]`);
 }
 
+function sketchTreeSketch(page, sketchId = "S1") {
+  return page.locator(`.sketch-item[data-id="${sketchId}"]`);
+}
+
+async function expandSketchTreeSketch(page, sketchId = "S1") {
+  const sketch = sketchTreeSketch(page, sketchId);
+  if ((await sketch.getAttribute("aria-expanded")) !== "true") await sketch.locator(".sketchExpandBtn").click();
+  return sketch;
+}
+
 async function expandSketchTreeGroup(page, category, sketchId = "S1") {
+  await expandSketchTreeSketch(page, sketchId);
   const group = sketchTreeGroup(page, category, sketchId);
   if ((await group.getAttribute("aria-expanded")) !== "true") await group.click();
   return group;
@@ -554,6 +565,9 @@ test("Sketch Tree owns object groups, activates inactive rows, and copies annota
   const fixture = annotationSketchFixture();
   expect(await page.evaluate((data) => window.__jot2dTest.loadDocumentFixtureForDragTest(data, "annotation-tree.json"), fixture)).toEqual(expect.objectContaining({ success: true }));
 
+  await expect(sketchTreeSketch(page, "S1")).toHaveAttribute("aria-expanded", "false");
+  await expect(page.locator('.sketch-group-row[data-sketch-id="S1"]')).toHaveCount(0);
+  await expandSketchTreeSketch(page, "S1");
   expect(await page.locator('.sketch-group-row[data-sketch-id="S1"]').evaluateAll((rows) => rows.map((row) => row.dataset.category))).toEqual(["point", "line", "annotation"]);
   await expect(page.locator('.sketch-group-row[data-sketch-id="S1"]')).toHaveCount(3);
   await expect(page.locator('.sketch-object-row[data-sketch-id="S1"]')).toHaveCount(0);
@@ -568,6 +582,12 @@ test("Sketch Tree owns object groups, activates inactive rows, and copies annota
   expect((await page.evaluate(() => window.__jot2dTest.serializedModelForTest())).activeSketchId).toBe("S1");
   expect((await page.evaluate(() => window.__jot2dTest.selectedGeometryIdsForTest())).lines).toEqual(["L1"]);
   await expect(page.locator("#propertiesPanel")).toContainText("L1");
+
+  await sketchTreeSketch(page, "S1").locator(".sketchExpandBtn").click();
+  await expect(sketchTreeSketch(page, "S1")).toHaveAttribute("aria-expanded", "false");
+  await expect(page.locator('.sketch-group-row[data-sketch-id="S1"]')).toHaveCount(0);
+  await expandSketchTreeSketch(page, "S1");
+  await expect(sketchTreeGroup(page, "line", "S1")).toHaveAttribute("aria-expanded", "true");
 
   await sketchTreeGroup(page, "line", "S1").click();
   await expect(sketchTreeGroup(page, "line", "S1")).toHaveClass(/has-active-descendant/);
@@ -587,6 +607,9 @@ test("Sketch Tree owns object groups, activates inactive rows, and copies annota
 
   await expect(sketchTreeGroup(page, "line", "S1")).toHaveAttribute("aria-expanded", "true");
   expect(await page.evaluate((data) => window.__jot2dTest.loadDocumentFixtureForDragTest(data, "annotation-tree-reload.json"), pasted)).toEqual(expect.objectContaining({ success: true }));
+  await expect(sketchTreeSketch(page, "S1")).toHaveAttribute("aria-expanded", "false");
+  await expect(page.locator('.sketch-group-row[data-sketch-id="S1"]')).toHaveCount(0);
+  await expandSketchTreeSketch(page, "S1");
   await expect(sketchTreeGroup(page, "line", "S1")).toHaveAttribute("aria-expanded", "false");
   await expect(page.locator('.sketch-object-row[data-sketch-id="S1"]')).toHaveCount(0);
 });
@@ -880,6 +903,10 @@ test("workspace integrates transparent compact Object groups into Sketch Tree an
   await page.goto(`${baseUrl}/index.html?test=1`);
   await page.waitForFunction(() => window.__jot2dTest);
   await page.evaluate(() => window.__jot2dTest.resetForResponsiveLineDragTest());
+  await expect(sketchTreeSketch(page, "ROOT")).toHaveAttribute("aria-expanded", "true");
+  await expect(sketchTreeSketch(page, "S1")).toHaveAttribute("aria-expanded", "false");
+  await expect(page.locator('.sketch-group-row[data-sketch-id="S1"]')).toHaveCount(0);
+  await expandSketchTreeSketch(page, "S1");
 
   const layout = await page.evaluate(() => {
     const rect = (selector) => {
@@ -1608,6 +1635,7 @@ test("Overlapping Canvas objects can be previewed and selected from context cand
   expect(state.selected.lines).toEqual([fixture.lineIds[0]]);
   await expect(page.locator("#propertiesPanel .property-heading")).toHaveText("線");
   await expect(page.locator("#propertiesPanel .property-section").first()).toContainText(`ID${fixture.lineIds[0]}`);
+  await expandSketchTreeSketch(page, "S1");
   await expect(page.locator('.sketch-group-row[data-sketch-id="S1"][data-category="line"]')).toHaveClass(/has-active-descendant/);
 
   await page.mouse.click(fixture.client.x, fixture.client.y, { button: "right" });
@@ -3315,9 +3343,13 @@ test("non-active sketches are visible unless individually hidden", async ({ page
   expect(setup.relationLabels).toEqual({ S9: "参照不可", S11: "参照不可（子孫）" });
   expect(setup.relationColors).toEqual({ S9: "#64748b", S11: "#b91c1c" });
   expect(setup.visible).toEqual({ S10: true, S2: true, S3: true, S4: true, S9: true, S11: true });
-  expect(setup.rowClasses).toEqual({ S2: true, S3: true, S4: true, S9: true, S11: true });
+  expect(setup.rowClasses).toEqual({ S2: true, S3: false, S4: false, S9: true, S11: false });
   expect(setup.rowBackgrounds.S2).toBe("rgba(0, 0, 0, 0)");
   expect(setup.rowBackgrounds.S9).toBe("rgba(0, 0, 0, 0)");
+  await expect(sketchTreeSketch(page, "S2")).toHaveAttribute("aria-expanded", "false");
+  await expandSketchTreeSketch(page, "S2");
+  await expect(sketchTreeSketch(page, "S3")).toBeVisible();
+  await expect(sketchTreeSketch(page, "S4")).toHaveCount(0);
 
   await page.click('.sketchVisibilityBtn[data-id="S2"]');
   let state = await page.evaluate(() => window.__jot2dTest.siblingSubtreeVisibilityState());

@@ -974,6 +974,9 @@ test("selection, deletion, undo and redo stay responsive on the complete fixture
   await expect(page.locator("#sketchOverlay")).toBeVisible();
   await expect(page.locator(".explorer, [data-explorer-tab]")).toHaveCount(0);
   await expect(page.locator(".sketch-object-row")).toHaveCount(0);
+  const sketch = page.locator('.sketch-item[data-id="S1"]');
+  await expect(sketch).toHaveAttribute("aria-expanded", "false");
+  await measureInteraction(page, results, "sketch-tree/sketch-expand", () => sketch.locator(".sketchExpandBtn").click(), 250);
   const groups = page.locator('.sketch-group-row[data-sketch-id="S1"]');
   const groupCount = await groups.count();
   for (let index = 0; index < Math.min(groupCount, 5); index += 1) {
