@@ -139,6 +139,8 @@ UIで利用できる組み合わせを次に示す。
 | 寸法 | `pointAxisDistance` | Point–Point の水平／垂直距離 |
 | 寸法 | `pointLineDistance` | Point–Line 距離 |
 | 寸法 | `lineLineDistance` | 平行 Line 間距離 |
+| 寸法 | `lineCircleDistance` | Line の無限支持線–Circle 中心距離 |
+| 寸法 | `concentricRadiusDifferenceDimension` | 同心の Circle/Arc 2つの半径差と中心一致 |
 | 寸法 | `lineAngle` | 2 Line の角度 |
 | 寸法 | `radiusDimension` | Circle/Arc 半径 |
 | 寸法 | `diameterDimension` | Circle 直径 |
@@ -176,6 +178,10 @@ UIで利用できる組み合わせを次に示す。
 | 固定 | `arcEndpointFixed` | Arc 端位置。内部的に利用する |
 
 Lineの中点を候補にするスナップと`pointOnLineMidpoint`拘束は使用しない。中心位置が必要な場合は中心線commandで意図を明示する。
+
+Line–Circleの中心距離寸法は、Line本体とCircle円周をどちらの順でclickしても作成できる。測定対象は有限線分までの最短距離や円周までのすき間ではなく、Lineを両方向へ無限に延長した支持線からCircle中心までの垂直距離である。LineとArcの組み合わせには適用しない。
+
+同心半径差寸法は、中心が一致しているCircle／Arcの円周または円弧を2つclickして作成する。Circle–Circle、Circle–Arc、Arc–Arcの全組み合わせを許可し、入力値は2つの半径の差の絶対値とする。作成時の大小関係を保持したまま半径差を拘束し、同じ拘束の中心X差・中心Y差を0にすることで同心関係も維持する。対象が同心と判定できない場合は作成せず、理由をHintへ表示する。
 
 対称拘束は対象の種類ごとに次の量だけを拘束する。
 

@@ -241,6 +241,42 @@
     }
   }
 
+  class LineCircleDistanceConstraint extends Constraint {
+    constructor(line, circle, target, sign = null) {
+      super(`線-円中心寸法 ${line.id}-${circle.id} = ${target}`, 1);
+      this.line = line;
+      this.circle = circle;
+      this.target = target;
+      const current = signedPointLineDistance(circle.center, line);
+      this.sign = sign || (current < 0 ? -1 : 1);
+    }
+
+    rawError() {
+      return signedPointLineDistance(this.circle.center, this.line) * this.sign - this.target;
+    }
+  }
+
+  class ConcentricRadiusDifferenceConstraint extends Constraint {
+    constructor(a, b, target, sign = null) {
+      super(`同心半径差寸法 ${a.id}-${b.id} = ${target}`, 1);
+      this.a = a;
+      this.b = b;
+      this.target = target;
+      const current = radiusOf(b) - radiusOf(a);
+      this.sign = sign || (current < 0 ? -1 : 1);
+    }
+
+    rawError() {
+      const a = centerOf(this.a);
+      const b = centerOf(this.b);
+      return [
+        a.x - b.x,
+        a.y - b.y,
+        (radiusOf(this.b) - radiusOf(this.a)) * this.sign - this.target,
+      ];
+    }
+  }
+
   class OffsetConstraint extends Constraint {
     constructor(source, offset, target, sign = null) {
       super(`オフセット寸法 ${source.id}-${offset.id} = ${target}`, 1);
@@ -1842,6 +1878,8 @@
     PointAxisDistanceConstraint,
     PointLineDistanceConstraint,
     LineLineDistanceConstraint,
+    LineCircleDistanceConstraint,
+    ConcentricRadiusDifferenceConstraint,
     OffsetConstraint,
     OffsetChainConstraint,
     LineAngleConstraint,
