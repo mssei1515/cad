@@ -125,6 +125,7 @@
   const sketchOverlay = document.getElementById("sketchOverlay");
   const sketchOverlayResizeHandle = document.getElementById("sketchOverlayResizeHandle");
   const APPLICATION_LANGUAGE_STORAGE_KEY = "jot2d.application.language";
+  const APPLICATION_THEME_STORAGE_KEY = "jot2d.application.theme";
   const DEFAULT_COLOR_PALETTE = [
     "#000000", "#111827", "#374151", "#64748b", "#94a3b8", "#cbd5e1", "#ffffff",
     "#fca5a5", "#dc2626", "#991b1b",
@@ -155,7 +156,7 @@
     ["ブロック作成", "Create Block"], ["作成", "Create"], ["キャンセル", "Cancel"], ["完了", "Done"], ["閉じる", "Close"], ["子＋", "Child +"],
     ["名前変更", "Rename"], ["スケッチ削除", "Delete Sketch"], ["ブロック名", "Block name"], ["配置", "Place"], ["非表示にする", "Hide"], ["表示する", "Show"],
     ["キャンバス", "Canvas"], ["ステータスバー", "Status Bar"], ["寸法値", "Dimension value"],
-    ["既定の外観", "Default Appearance"], ["既定の補助線外観", "Default Construction Appearance"], ["既定の寸法外観", "Default Dimension Appearance"], ["一般外観", "General Appearance"], ["補助線外観", "Construction Appearance"], ["寸法外観", "Dimension Appearance"], ["基本情報", "Basic Information"], ["一般", "General"], ["言語", "Language"],
+    ["既定の外観", "Default Appearance"], ["既定の補助線外観", "Default Construction Appearance"], ["既定の寸法外観", "Default Dimension Appearance"], ["一般外観", "General Appearance"], ["補助線外観", "Construction Appearance"], ["寸法外観", "Dimension Appearance"], ["基本情報", "Basic Information"], ["一般", "General"], ["言語", "Language"], ["表示テーマ", "Theme"], ["ライト", "Light"], ["ダーク", "Dark"],
     ["アプリケーション全体の設定をドキュメント設定から分離して管理します。", "Application-wide settings are managed separately from document settings."],
     ["既定", "Default"], ["表示", "Visible"], ["非表示", "Hidden"], ["色", "Color"], ["線種", "Line type"], ["線幅", "Line width"],
     ["実線", "Solid"], ["破線", "Dashed"], ["一点鎖線", "Dash-dot"], ["二点鎖線", "Dash-dot-dot"], ["点線", "Dotted"], ["端部のはみ出し", "Endpoint overhang"], ["端部の点", "Endpoint points"], ["あり", "Enabled"], ["なし", "Disabled"], ["使用済みの色", "Colors used in this file"],
@@ -232,7 +233,15 @@
       return "ja";
     }
   })();
+  let applicationTheme = (() => {
+    try {
+      return localStorage.getItem(APPLICATION_THEME_STORAGE_KEY) === "dark" ? "dark" : "light";
+    } catch (_error) {
+      return document.documentElement.dataset.theme === "dark" ? "dark" : "light";
+    }
+  })();
   document.documentElement.lang = applicationLanguage;
+  document.documentElement.dataset.theme = applicationTheme;
   const DEFAULT_DOCUMENT_NAME = "無題";
   const JOT2D_FILE_EXTENSION = ".jot2d";
   const JOT2D_FILE_MIME_TYPE = "application/json";
@@ -622,6 +631,8 @@
     }
     const select = document.getElementById("applicationLanguageSelect");
     if (select) select.value = applicationLanguage;
+    const themeSelect = document.getElementById("applicationThemeSelect");
+    if (themeSelect) themeSelect.value = applicationTheme;
   }
 
   function setApplicationLanguage(language, { persist = true, refresh = true } = {}) {
@@ -639,6 +650,21 @@
     renderRuntimeVersion();
     const hint = document.getElementById("hint");
     if (hint?.dataset.hintSource) hint.textContent = translatedHintText(hint.dataset.hintSource);
+  }
+
+  function setApplicationTheme(theme, { persist = true, redraw = true } = {}) {
+    applicationTheme = theme === "dark" ? "dark" : "light";
+    document.documentElement.dataset.theme = applicationTheme;
+    const select = document.getElementById("applicationThemeSelect");
+    if (select) select.value = applicationTheme;
+    if (persist) {
+      try {
+        localStorage.setItem(APPLICATION_THEME_STORAGE_KEY, applicationTheme);
+      } catch (_error) {
+        // The setting remains active for this session when storage is unavailable.
+      }
+    }
+    if (redraw) draw();
   }
 
   for (const btn of document.querySelectorAll("button[aria-label]")) {
@@ -3602,10 +3628,45 @@
     return 0;
   }
 
+  function canvasColorChannels(value) {
+    const match = String(value || "").trim().match(/^#([0-9a-f]{3}|[0-9a-f]{6})$/i);
+    if (!match) return null;
+    const hex = match[1].length === 3 ? [...match[1]].map((part) => part.repeat(2)).join("") : match[1];
+    return [0, 2, 4].map((offset) => Number.parseInt(hex.slice(offset, offset + 2), 16));
+  }
+
+  function canvasColorLuminance(channels) {
+    const linear = channels.map((channel) => {
+      const value = channel / 255;
+      return value <= 0.04045 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4;
+    });
+    return linear[0] * 0.2126 + linear[1] * 0.7152 + linear[2] * 0.0722;
+  }
+
+  function canvasColorContrast(first, second) {
+    const light = Math.max(canvasColorLuminance(first), canvasColorLuminance(second));
+    const dark = Math.min(canvasColorLuminance(first), canvasColorLuminance(second));
+    return (light + 0.05) / (dark + 0.05);
+  }
+
+  function canvasThemeColor(value) {
+    if (applicationTheme !== "dark") return value;
+    const channels = canvasColorChannels(value);
+    if (!channels) return value;
+    const background = [15, 23, 42];
+    if (canvasColorContrast(channels, background) >= 4.5) return value;
+    for (let mix = 0.08; mix <= 1.001; mix += 0.08) {
+      const adjusted = channels.map((channel) => Math.round(channel + (255 - channel) * Math.min(1, mix)));
+      if (canvasColorContrast(adjusted, background) < 4.5) continue;
+      return `#${adjusted.map((channel) => channel.toString(16).padStart(2, "0")).join("")}`;
+    }
+    return "#ffffff";
+  }
+
   function geometryDisplayColor(item, appearance, selected = false, hovered = false) {
-    if (selected) return "#1d4ed8";
-    if (hovered) return "#3b82f6";
-    return viewState.constraintStatus ? constraintStatusColor(item) : appearance.color;
+    if (selected) return canvasThemeColor("#1d4ed8");
+    if (hovered) return canvasThemeColor("#3b82f6");
+    return canvasThemeColor(viewState.constraintStatus ? constraintStatusColor(item) : appearance.color);
   }
 
   function geometryStrokeWidth(item, { auxiliaryHighlighted = false, selected = false, hovered = false, appearance = null, construction = false } = {}) {
@@ -11411,7 +11472,7 @@
       ctx.fill("evenodd");
     }
     ctx.globalAlpha = alpha;
-    const emphasisColor = selected ? "#2563eb" : hovered || preview ? "#0ea5e9" : appearance.color;
+    const emphasisColor = canvasThemeColor(selected ? "#2563eb" : hovered || preview ? "#0ea5e9" : appearance.color);
     if (appearance.patternType === "solid") {
       ctx.globalAlpha = alpha * Math.max(0, Math.min(1, Number(appearance.opacity)));
       ctx.fillStyle = emphasisColor;
@@ -11766,7 +11827,7 @@
       if (viewState.geometryIds || geometrySelected || sidebarHovered || canvasHovered || relatedHighlighted) {
         const mx = (l.p1.x + l.p2.x) / 2;
         const my = (l.p1.y + l.p2.y) / 2;
-        ctx.fillStyle = "#2563eb";
+        ctx.fillStyle = canvasThemeColor("#2563eb");
         ctx.font = `${12 / viewport.scale}px system-ui`;
         ctx.fillText(l.id, mx + 4 / viewport.scale, my - 4 / viewport.scale);
       }
@@ -11804,7 +11865,7 @@
       ctx.setLineDash([]);
       ctx.shadowBlur = 0;
       if (viewState.geometryIds || geometrySelected || sidebarHovered || canvasHovered || relatedHighlighted) {
-        ctx.fillStyle = "#2563eb";
+        ctx.fillStyle = canvasThemeColor("#2563eb");
         ctx.font = `${12 / viewport.scale}px system-ui`;
         ctx.fillText(c.id, c.center.x + c.radius() + 4 / viewport.scale, c.center.y - 4 / viewport.scale);
       }
@@ -11843,7 +11904,7 @@
       ctx.shadowBlur = 0;
       if (viewState.geometryIds || geometrySelected || sidebarHovered || canvasHovered || relatedHighlighted) {
         const mid = a.startAngle + arcSweep(a) / 2;
-        ctx.fillStyle = "#2563eb";
+        ctx.fillStyle = canvasThemeColor("#2563eb");
         ctx.font = `${12 / viewport.scale}px system-ui`;
         ctx.fillText(a.id, a.center.x + Math.cos(mid) * a.radius(), a.center.y + Math.sin(mid) * a.radius());
       }
@@ -11885,7 +11946,7 @@
       if (viewState.geometryIds || (active && selectedSplines.includes(spline)) || hovered) {
         const point = window.SplineGeometry.evaluate(spline.curve(), 0.5);
         if (point) {
-          ctx.fillStyle = "#2563eb";
+          ctx.fillStyle = canvasThemeColor("#2563eb");
           ctx.font = `${12 / viewport.scale}px system-ui`;
           ctx.fillText(spline.id, point.x + 4 / viewport.scale, point.y - 4 / viewport.scale);
         }
@@ -11982,7 +12043,7 @@
     const renderPlan = linearDimensionRenderPlan(target, layout, label, appearance, dimension, expressionMark);
 
     ctx.save();
-    const color = preview || highlighted ? "#2563eb" : colorOverride || appearance.color;
+    const color = canvasThemeColor(preview || highlighted ? "#2563eb" : colorOverride || appearance.color);
     ctx.strokeStyle = color;
     ctx.fillStyle = color;
     ctx.lineWidth = dimensionStrokeWidth(appearance, highlighted) / viewport.scale;
@@ -12037,7 +12098,7 @@
     const { vertex, radius, start, end, signed, text, textAngle } = layout;
     ctx.save();
     const appearance = effectiveDimensionAppearance(dimension, sketchId);
-    const color = preview || highlighted ? "#2563eb" : colorOverride || appearance.color;
+    const color = canvasThemeColor(preview || highlighted ? "#2563eb" : colorOverride || appearance.color);
     ctx.strokeStyle = color;
     ctx.fillStyle = color;
     ctx.lineWidth = dimensionStrokeWidth(appearance, highlighted) / viewport.scale;
@@ -12634,9 +12695,9 @@
   }
 
   function annotationDisplayColor(element, style = normalizeAnnotationStyle(element?.style)) {
-    if (selectedAnnotations.includes(element)) return "#2563eb";
-    if (element === hoveredAnnotation) return "#0ea5e9";
-    return style.color;
+    if (selectedAnnotations.includes(element)) return canvasThemeColor("#2563eb");
+    if (element === hoveredAnnotation) return canvasThemeColor("#0ea5e9");
+    return canvasThemeColor(style.color);
   }
 
   function drawAnnotationText(element, colorOverride = null) {
@@ -13216,7 +13277,7 @@
         ctx.arc(p.x, p.y, (selected ? 7 : 5) / viewport.scale, 0, Math.PI * 2);
         ctx.fillStyle = fixed ? "#fee2e2" : selected ? "#2563eb" : hovered ? "#eff6ff" : "#fff";
         ctx.fill();
-        ctx.strokeStyle = fixed ? "#dc2626" : selected || hovered ? "#2563eb" : "#111827";
+        ctx.strokeStyle = canvasThemeColor(fixed ? "#dc2626" : selected || hovered ? "#2563eb" : "#111827");
         ctx.lineWidth = 2 / viewport.scale;
         ctx.stroke();
       }
@@ -13262,7 +13323,7 @@
       ctx.shadowBlur = 0;
       ctx.setLineDash([]);
       if (viewState.geometryIds || sel || sidebarHovered || canvasHovered || dragging || relatedHighlighted) {
-        ctx.fillStyle = hovered || endpoint ? "#2563eb" : "#111827";
+        ctx.fillStyle = canvasThemeColor(hovered || endpoint ? "#2563eb" : "#111827");
         ctx.font = `${12 / viewport.scale}px system-ui`;
         ctx.fillText(p.id, p.x + 8 / viewport.scale, p.y - 8 / viewport.scale);
       }
@@ -22194,11 +22255,16 @@
   document.getElementById("applicationSettingsBtn")?.addEventListener("click", () => {
     const select = document.getElementById("applicationLanguageSelect");
     if (select) select.value = applicationLanguage;
+    const themeSelect = document.getElementById("applicationThemeSelect");
+    if (themeSelect) themeSelect.value = applicationTheme;
     document.getElementById("applicationSettingsDialog")?.showModal();
   });
   document.getElementById("applicationLanguageSelect")?.addEventListener("change", (event) => {
     setApplicationLanguage(event.target.value);
     draw();
+  });
+  document.getElementById("applicationThemeSelect")?.addEventListener("change", (event) => {
+    setApplicationTheme(event.target.value);
   });
   document.getElementById("openBlockDefinitionsBtn")?.addEventListener("click", () => {
     updateBlockUI();
@@ -22592,6 +22658,23 @@
   function installTestHooks() {
     if (!new URLSearchParams(window.location.search).has("test")) return;
     window.__jot2dTest = {
+      applicationThemeStateForTest() {
+        return {
+          theme: applicationTheme,
+          stored: (() => {
+            try {
+              return localStorage.getItem(APPLICATION_THEME_STORAGE_KEY);
+            } catch (_error) {
+              return null;
+            }
+          })(),
+          defaultGeometryColor: DEFAULT_APPEARANCE.color,
+          displayedDefaultGeometryColor: canvasThemeColor(DEFAULT_APPEARANCE.color),
+          displayedDefaultGeometryContrast: applicationTheme === "dark"
+            ? canvasColorContrast(canvasColorChannels(canvasThemeColor(DEFAULT_APPEARANCE.color)), [15, 23, 42])
+            : null,
+        };
+      },
       resetInteractionFrameStatsForTest() {
         flushScheduledCanvasPointerMove();
         interactionFrameStats = {
@@ -26536,6 +26619,7 @@
   draw();
   log("空の新規Documentを作成しました");
   setApplicationLanguage(applicationLanguage, { persist: false, refresh: false });
+  setApplicationTheme(applicationTheme, { persist: false, redraw: false });
   loadRuntimeVersion();
   resizeCanvas();
   if (typeof ResizeObserver === "function") {
