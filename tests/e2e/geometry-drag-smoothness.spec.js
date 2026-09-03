@@ -40,6 +40,45 @@ function fixtureWithoutConstraints(selectors) {
   return fixture;
 }
 
+function fixedCircleChordFixture() {
+  const fixture = structuredClone(sourceFixture);
+  const radius = 15;
+  const verticalX = 4.3193311321738;
+  const verticalY = Math.sqrt(radius ** 2 - verticalX ** 2);
+  const horizontalY = -2.5440002430195;
+  const horizontalX = Math.sqrt(radius ** 2 - horizontalY ** 2);
+  fixture.points = [
+    { id: "P1", x: 0, y: 0, fixed: true, kind: "endpoint" },
+    { id: "P3", x: verticalX, y: -verticalY, fixed: false, kind: "endpoint" },
+    { id: "P4", x: verticalX, y: verticalY, fixed: false, kind: "endpoint" },
+    { id: "P5", x: -horizontalX, y: horizontalY, fixed: false, kind: "endpoint" },
+    { id: "P6", x: horizontalX, y: horizontalY, fixed: false, kind: "endpoint" },
+  ];
+  fixture.lines = [
+    { id: "L1", p1: "P3", p2: "P4", construction: false },
+    { id: "L2", p1: "P5", p2: "P6", construction: false },
+  ];
+  fixture.circles = [{ id: "C1", center: "P1", radius, construction: false }];
+  fixture.arcs = [];
+  fixture.splines = [];
+  fixture.constraints = [
+    { type: "diameterDimension", primitive: "C1", target: radius * 2, enabled: true },
+    { type: "pointOnCircle", point: "P3", primitive: "C1", enabled: true },
+    { type: "pointOnCircle", point: "P4", primitive: "C1", enabled: true },
+    { type: "vertical", line: "L1", enabled: true },
+    { type: "pointOnCircle", point: "P5", primitive: "C1", enabled: true },
+    { type: "pointOnCircle", point: "P6", primitive: "C1", enabled: true },
+    { type: "horizontal", line: "L2", enabled: true },
+  ];
+  fixture.annotations = [];
+  fixture.hatches = [];
+  fixture.referenceImages = [];
+  fixture.parameters = [];
+  fixture.blockDefinitions = [];
+  fixture.blockInstances = [];
+  return fixture;
+}
+
 function pointDistance(a, b) {
   return Math.hypot((b?.x ?? 0) - (a?.x ?? 0), (b?.y ?? 0) - (a?.y ?? 0));
 }
@@ -407,6 +446,36 @@ test("keeps additional point, line, circle, arc, and endpoint drags smooth", asy
   console.log(JSON.stringify(summaries));
   expect(summaries).toHaveLength(selectedVariants.length);
   expect(summaries.flatMap((summary) => summary.failures.map((failure) => `${summary.name}: ${failure}`))).toEqual([]);
+});
+
+test("tracks line drags when independent chords share a fixed circle", async ({ page }) => {
+  await page.goto(`${baseUrl}/index.html?test=1`);
+  await page.waitForFunction(() => window.__jot2dTest);
+  const fixture = fixedCircleChordFixture();
+  const cases = [
+    { id: "L1", deltas: Array.from({ length: 8 }, (_, index) => [0.75 * (index + 1), 0]), axis: "x" },
+    { id: "L2", deltas: Array.from({ length: 8 }, (_, index) => [0, 0.75 * (index + 1)]), axis: "y" },
+  ];
+
+  for (const dragCase of cases) {
+    await page.evaluate(
+      ({ data, fileName }) => window.__jot2dTest.loadDocumentFixtureForDragTest(data, fileName),
+      { data: fixture, fileName: `fixed-circle-chord-${dragCase.id}.json` },
+    );
+    await page.evaluate(() => window.__jot2dTest.focusWorldForTest({ x: 0, y: 0 }, 13.5));
+    const result = await page.evaluate(
+      ({ id, deltas }) => window.__jot2dTest.geometryDragPathForTest({ kind: "line", id }, deltas),
+      dragCase,
+    );
+    const start = result.startState.midpoint[dragCase.axis];
+    const end = result.previews.at(-1).state.midpoint[dragCase.axis];
+
+    expect(result.sessionAvailable, dragCase.id).toBe(true);
+    expect(end - start, dragCase.id).toBeGreaterThan(4.2);
+    expect(result.previews.every((preview) => preview.success && !preview.blocked), dragCase.id).toBe(true);
+    expect(result.final.success, dragCase.id).toBe(true);
+    expect(result.final.baseErrorNorm, dragCase.id).toBeLessThan(1e-4);
+  }
 });
 
 test("moves arcs by their centers when an indirectly constrained radius has no drag freedom", async ({ page }) => {
