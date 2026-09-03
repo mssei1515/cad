@@ -101,6 +101,56 @@ test("creates associative hatching, exposes Tree and Properties, and persists ve
   expect((await page.evaluate(() => window.__jot2dTest.hatchStateForTest())).direct).toHaveLength(0);
 });
 
+test("hatches an annular sector whose circular boundaries are split into adjacent arcs", async ({ page }) => {
+  const fixture = await page.evaluate(() => window.__jot2dTest.resetForHatchTest());
+  const center = { x: 60, y: 40 };
+  const innerRadius = 20;
+  const outerRadius = 30;
+  const startAngle = 0.25;
+  const joinAngle = 0.8;
+  const endAngle = 1.35;
+  const radialPoint = (radius, angle) => ({ x: center.x + Math.cos(angle) * radius, y: center.y + Math.sin(angle) * radius });
+  const innerStart = radialPoint(innerRadius, startAngle);
+  const outerStart = radialPoint(outerRadius, startAngle);
+  const innerEnd = radialPoint(innerRadius, endAngle);
+  const outerEnd = radialPoint(outerRadius, endAngle);
+  fixture.serialized.points = [
+    { id: "P1", ...center, fixed: false, kind: "center", sketchId: "S1", appearance: {} },
+    { id: "P2", ...innerStart, fixed: false, kind: "endpoint", sketchId: "S1", appearance: {} },
+    { id: "P3", ...outerStart, fixed: false, kind: "endpoint", sketchId: "S1", appearance: {} },
+    { id: "P4", ...innerEnd, fixed: false, kind: "endpoint", sketchId: "S1", appearance: {} },
+    { id: "P5", ...outerEnd, fixed: false, kind: "endpoint", sketchId: "S1", appearance: {} },
+  ];
+  fixture.serialized.lines = [
+    { id: "L1", p1: "P2", p2: "P3", construction: false, sketchId: "S1", appearance: {} },
+    { id: "L2", p1: "P4", p2: "P5", construction: false, sketchId: "S1", appearance: {} },
+  ];
+  fixture.serialized.circles = [];
+  fixture.serialized.arcs = [
+    { id: "A1", center: "P1", radius: innerRadius, startAngle, endAngle: joinAngle, construction: false, sketchId: "S1", appearance: {} },
+    { id: "A2", center: "P1", radius: innerRadius, startAngle: joinAngle, endAngle, construction: false, sketchId: "S1", appearance: {} },
+    { id: "A3", center: "P1", radius: outerRadius, startAngle, endAngle: joinAngle, construction: false, sketchId: "S1", appearance: {} },
+    { id: "A4", center: "P1", radius: outerRadius, startAngle: joinAngle, endAngle, construction: false, sketchId: "S1", appearance: {} },
+  ];
+  fixture.serialized.splines = [];
+  fixture.serialized.constraints = [];
+  fixture.serialized.hatches = [];
+  fixture.serialized.nextHatchIndex = 1;
+
+  expect(await page.evaluate((data) => window.__jot2dTest.loadDocumentFixtureForDragTest(data, "split-arc-sector.jot2d"), fixture.serialized)).toEqual(expect.objectContaining({ success: true }));
+  const seed = radialPoint((innerRadius + outerRadius) / 2, joinAngle);
+  const client = await page.evaluate((point) => window.__jot2dTest.worldClientPositionForTest(point), seed);
+  await page.locator("#toolHatch").click();
+  await page.mouse.move(client.x, client.y);
+  await expect.poll(() => page.evaluate(() => window.__jot2dTest.hatchStateForTest().preview)).toEqual({ ok: true, code: null });
+  await page.mouse.click(client.x, client.y);
+
+  const state = await page.evaluate(() => window.__jot2dTest.hatchStateForTest());
+  expect(state.direct).toHaveLength(1);
+  expect(state.direct[0]).toEqual(expect.objectContaining({ id: "H1", valid: true }));
+  expect(new Set(state.direct[0].boundaryLoops[0].spans.map((span) => span.source.path[0]))).toEqual(new Set(["L1", "L2", "A1", "A2", "A3", "A4"]));
+});
+
 test("invalid boundaries remain as repairable hatch objects", async ({ page }) => {
   const fixture = await page.evaluate(() => window.__jot2dTest.resetForHatchTest());
   await page.locator("#toolHatch").click();

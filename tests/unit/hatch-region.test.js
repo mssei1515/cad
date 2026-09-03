@@ -64,6 +64,46 @@ test("supports closed regions composed of lines and arcs", () => {
   assert.deepEqual(new Set(result.boundaryLoops[0].spans.map((span) => span.source.path[0])), new Set(["L1", "A1"]));
 });
 
+test("joins adjacent same-support arcs into an annular-sector boundary", () => {
+  const innerRadius = 20;
+  const outerRadius = 30;
+  const startAngle = 0.25;
+  const joinAngle = 0.8;
+  const endAngle = 1.35;
+  const radialPoint = (radius, angle) => ({ x: Math.cos(angle) * radius, y: Math.sin(angle) * radius });
+  const innerStart = radialPoint(innerRadius, startAngle);
+  const outerStart = radialPoint(outerRadius, startAngle);
+  const innerEnd = radialPoint(innerRadius, endAngle);
+  const outerEnd = radialPoint(outerRadius, endAngle);
+  const primitives = [
+    line("L1", innerStart.x, innerStart.y, outerStart.x, outerStart.y),
+    line("L2", innerEnd.x, innerEnd.y, outerEnd.x, outerEnd.y),
+    arc("A1", 0, 0, innerRadius, startAngle, joinAngle),
+    arc("A2", 0, 0, innerRadius, joinAngle, endAngle),
+    arc("A3", 0, 0, outerRadius, startAngle, joinAngle),
+    arc("A4", 0, 0, outerRadius, joinAngle, endAngle),
+  ];
+  const seed = radialPoint((innerRadius + outerRadius) / 2, joinAngle);
+  const result = engine.findFaceAtPoint(primitives, seed);
+  assert.equal(result.ok, true);
+  assert.deepEqual(
+    new Set(result.boundaryLoops[0].spans.map((span) => span.source.path[0])),
+    new Set(["L1", "L2", "A1", "A2", "A3", "A4"]),
+  );
+  assert.equal(engine.resolveBoundary(result.boundaryLoops, primitives).ok, true);
+});
+
+test("rejects genuinely overlapping same-support arcs", () => {
+  const primitives = [
+    line("L1", -30, 0, 30, 0),
+    arc("A1", 0, 0, 30, 0, Math.PI * 0.75),
+    arc("A2", 0, 0, 30, Math.PI * 0.5, Math.PI),
+  ];
+  const result = engine.findFaceAtPoint(primitives, { x: 0, y: 10 });
+  assert.equal(result.ok, false);
+  assert.equal(result.code, "overlapping-boundary");
+});
+
 test("supports a closed cubic spline as an associative hatch boundary", () => {
   const boundary = spline("SP1", [{ x: 0, y: 0 }, { x: 100, y: 0 }, { x: 100, y: 80 }, { x: 0, y: 80 }], true);
   const result = engine.findFaceAtPoint([boundary], { x: 50, y: 40 });
