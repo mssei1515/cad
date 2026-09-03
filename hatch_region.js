@@ -202,11 +202,46 @@
       .filter((point) => primitiveParam(line, point, epsilon) != null && primitiveParam(circular, point, epsilon) != null);
   }
 
+  function arcCoverageIntervals(arc) {
+    const sweep = arc.endAngle - arc.startAngle;
+    const length = Math.min(TWO_PI, Math.abs(sweep));
+    if (length >= TWO_PI) return [[0, TWO_PI]];
+    const start = normalizeAngle(sweep >= 0 ? arc.startAngle : arc.endAngle);
+    const end = start + length;
+    if (end <= TWO_PI) return [[start, end]];
+    return [[start, TWO_PI], [0, end - TWO_PI]];
+  }
+
+  function coincidentArcIntersections(a, b, epsilon) {
+    const angularEpsilon = Math.max(1e-12, epsilon / Math.max(1, Math.min(a.radius, b.radius)));
+    const intervalsA = arcCoverageIntervals(a);
+    const intervalsB = arcCoverageIntervals(b);
+    const overlap = intervalsA.some(([startA, endA]) => intervalsB.some(([startB, endB]) => (
+      Math.min(endA, endB) - Math.max(startA, startB) > angularEpsilon
+    )));
+    if (overlap) return { points: [], overlap: true };
+
+    const contacts = [];
+    const endpointsA = [pointAt(a, 0), pointAt(a, 1)];
+    const endpointsB = [pointAt(b, 0), pointAt(b, 1)];
+    for (const endpointA of endpointsA) {
+      for (const endpointB of endpointsB) {
+        if (Math.hypot(endpointA.x - endpointB.x, endpointA.y - endpointB.y) <= epsilon * 4) {
+          contacts.push({ x: (endpointA.x + endpointB.x) / 2, y: (endpointA.y + endpointB.y) / 2 });
+        }
+      }
+    }
+    return { points: dedupePoints(contacts, epsilon * 4), overlap: false };
+  }
+
   function circularIntersections(a, b, epsilon) {
     const dx = b.center.x - a.center.x;
     const dy = b.center.y - a.center.y;
     const distance = Math.hypot(dx, dy);
-    if (distance <= epsilon && Math.abs(a.radius - b.radius) <= epsilon) return { points: [], overlap: true };
+    if (distance <= epsilon && Math.abs(a.radius - b.radius) <= epsilon) {
+      if (a.kind === "arc" && b.kind === "arc") return coincidentArcIntersections(a, b, epsilon);
+      return { points: [], overlap: true };
+    }
     if (distance <= epsilon || distance > a.radius + b.radius + epsilon || distance < Math.abs(a.radius - b.radius) - epsilon) return { points: [], overlap: false };
     const along = (a.radius * a.radius - b.radius * b.radius + distance * distance) / (2 * distance);
     const heightSquared = a.radius * a.radius - along * along;
