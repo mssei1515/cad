@@ -2526,6 +2526,7 @@ test("arc radius dimensions omit the center terminator and extend for external l
     expect(plan.lineEndDistanceFromCenter).toBeCloseTo(plan.arcRadius, 8);
     expect(plan.rawExtendedLineEndDistanceFromCenter).toBeGreaterThan(plan.arcRadius);
     expect(plan.visibleExtensionCount).toBe(0);
+    expect(plan.arcExtensionVisible).toBe(false);
   }
 
   const externalLabel = await page.evaluate(() => window.__jot2dTest.arcRadiusDimensionRenderPlanForTest("arrow", {
@@ -2542,6 +2543,22 @@ test("arc radius dimensions omit the center terminator and extend for external l
   expect(reversedArrow.shaftLengths).toHaveLength(1);
   expect(reversedArrow.shaftLengths[0]).toBeCloseTo(reversedArrow.expectedShaftLength, 6);
   expect(reversedArrow.shaftEndDistancesFromCenter[0]).toBeGreaterThan(reversedArrow.arcRadius);
+
+  const beforeArc = await page.evaluate(() => window.__jot2dTest.arcRadiusDimensionRenderPlanForTest("arrow", {
+    dimensionAngle: -Math.PI / 4,
+  }));
+  expect(beforeArc.arcExtensionVisible).toBe(true);
+  expect(beforeArc.arcExtensionSourceEndpoint).toBe("start");
+  expect(beforeArc.arcExtensionOriginGap).toBeCloseTo(beforeArc.expectedExtensionOriginGap, 8);
+  expect(beforeArc.arcExtensionOvershoot).toBeCloseTo(beforeArc.expectedExtensionOvershoot, 8);
+
+  const afterArc = await page.evaluate(() => window.__jot2dTest.arcRadiusDimensionRenderPlanForTest("arrow", {
+    dimensionAngle: Math.PI * 3 / 4,
+  }));
+  expect(afterArc.arcExtensionVisible).toBe(true);
+  expect(afterArc.arcExtensionSourceEndpoint).toBe("end");
+  expect(afterArc.arcExtensionOriginGap).toBeCloseTo(afterArc.expectedExtensionOriginGap, 8);
+  expect(afterArc.arcExtensionOvershoot).toBeCloseTo(afterArc.expectedExtensionOvershoot, 8);
 });
 
 test("open dimension arrow tips align without pushing reversed wings into their rear shafts", async ({ page }) => {
@@ -3781,4 +3798,52 @@ test("middle line trim transfers right-side point constraints to the new segment
   expect(result.rightConstraintOnRightLine).toBe(true);
   expect(result.leftLineEnd).toEqual({ x: 40, y: 0 });
   expect(result.rightLineStart).toEqual({ x: 60, y: 0 });
+});
+
+test("trim interval boundaries ignore construction lines, circles, and arcs", async ({ page }) => {
+  await page.goto(`${baseUrl}/index.html?test=1`);
+  await page.waitForFunction(() => window.__jot2dTest);
+
+  const result = await page.evaluate(() => window.__jot2dTest.trimConstructionBoundaryCase());
+  expect(result.lineBoundaryXs).toEqual([-100, -60, 60, 100]);
+  expect(result.lineIntervalXs).toEqual([-60, 60]);
+  expect(result.arcBoundaryParameters).toHaveLength(3);
+  expect(result.arcBoundaryParameters[0]).toBeCloseTo(0, 8);
+  expect(result.arcBoundaryParameters[1]).toBeCloseTo(0.5, 8);
+  expect(result.arcBoundaryParameters[2]).toBeCloseTo(1, 8);
+  expect(result.arcIntervalParameters[0]).toBeCloseTo(0, 8);
+  expect(result.arcIntervalParameters[1]).toBeCloseTo(0.5, 8);
+  expect(result.circleBoundaryParameters).toHaveLength(2);
+  expect(result.circleBoundaryParameters[0]).toBeCloseTo(0.25, 8);
+  expect(result.circleBoundaryParameters[1]).toBeCloseTo(0.75, 8);
+  expect(result.circleIntervalParameters[0]).toBeCloseTo(0.75, 8);
+  expect(result.circleIntervalParameters[1]).toBeCloseTo(0.25, 8);
+});
+
+test("circle trim transfers its diameter dimension only when one arc remains", async ({ page }) => {
+  await page.goto(`${baseUrl}/index.html?test=1`);
+  await page.waitForFunction(() => window.__jot2dTest);
+
+  const singleArc = await page.evaluate(() => window.__jot2dTest.trimCircleDiameterDimensionCase(2));
+  expect(singleArc).toEqual({
+    arcCount: 1,
+    diameterCount: 1,
+    retainedSameConstraint: true,
+    primitiveId: "A1",
+    target: 100,
+    parameterName: "d1",
+    expression: "100",
+    dimension: {
+      x: 70,
+      y: 0,
+      labelOffsetU: 8,
+      display: { color: "#7c3aed", prefix: "Ø" },
+    },
+  });
+
+  const multipleArcs = await page.evaluate(() => window.__jot2dTest.trimCircleDiameterDimensionCase(3));
+  expect(multipleArcs.arcCount).toBe(2);
+  expect(multipleArcs.diameterCount).toBe(0);
+  expect(multipleArcs.retainedSameConstraint).toBe(false);
+  expect(multipleArcs.primitiveId).toBeNull();
 });

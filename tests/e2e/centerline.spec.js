@@ -48,6 +48,8 @@ function centerlineFixture() {
       { id: "P9", x: -75, y: 30, fixed: true, kind: "endpoint", sketchId: "S1" },
       { id: "P10", x: 65, y: -30, fixed: true, kind: "endpoint", sketchId: "S1" },
       { id: "P11", x: 65, y: 30, fixed: true, kind: "endpoint", sketchId: "S1" },
+      { id: "P12", x: 150, y: 110, fixed: true, kind: "center", sketchId: "S1" },
+      { id: "P13", x: 150, y: 180, fixed: true, kind: "center", sketchId: "S1" },
     ],
     lines: [
       { id: "L1", p1: "P1", p2: "P2", construction: false, sketchId: "S1" },
@@ -55,7 +57,10 @@ function centerlineFixture() {
       { id: "L3", p1: "P8", p2: "P9", construction: false, sketchId: "S1" },
       { id: "L4", p1: "P10", p2: "P11", construction: false, sketchId: "S1" },
     ],
-    circles: [],
+    circles: [
+      { id: "C1", center: "P12", radius: 30, construction: false, sketchId: "S1" },
+      { id: "C2", center: "P13", radius: 20, construction: false, sketchId: "S1" },
+    ],
     arcs: [],
     constraints: [
       { type: "pointOnLineMidpoint", point: "P5", line: "L1", enabled: true, sketchId: "S1" },
@@ -204,4 +209,78 @@ test("centerline command creates a mouse-sized perpendicular bisector from two p
   expect(points.get(centerline.p1).x).toBeCloseTo(0, 6);
   expect(points.get(centerline.p2).x).toBeCloseTo(0, 6);
   expect(Math.abs(points.get(centerline.p2).y - points.get(centerline.p1).y)).toBeGreaterThan(100);
+});
+
+test("circle center cross command creates two constrained construction lines as one undoable operation", async ({ page }) => {
+  await openFixture(page);
+  await expect(page.locator("#toolCircleCenterCross")).toBeVisible();
+  await expect(page.locator("#toolCircleCenterCross svg circle")).toHaveAttribute("r", "7");
+  await page.click("#toolCircleCenterCross");
+  expect((await page.evaluate(() => window.__jot2dTest.authoringStateForTest())).mode).toBe("circle-center-cross");
+  await clickWorld(page, { x: 180, y: 110 });
+
+  const state = await page.evaluate(() => ({
+    authoring: window.__jot2dTest.authoringStateForTest(),
+    model: window.__jot2dTest.serializedModelForTest(),
+  }));
+  expect(state.authoring.mode).toBe("select");
+  expect(state.authoring.selected.lines).toHaveLength(2);
+  const createdLineIds = state.authoring.selected.lines;
+  const createdLines = state.model.lines.filter((line) => createdLineIds.includes(line.id));
+  expect(createdLines).toHaveLength(2);
+  expect(createdLines.every((line) => line.construction)).toBe(true);
+
+  const points = new Map(state.model.points.map((point) => [point.id, point]));
+  const vertical = createdLines.find((line) => Math.abs(points.get(line.p1).x - points.get(line.p2).x) < 1e-6);
+  const horizontal = createdLines.find((line) => Math.abs(points.get(line.p1).y - points.get(line.p2).y) < 1e-6);
+  expect(vertical).toBeTruthy();
+  expect(horizontal).toBeTruthy();
+  for (const line of createdLines) {
+    for (const endpointId of [line.p1, line.p2]) {
+      const endpoint = points.get(endpointId);
+      expect(Math.hypot(endpoint.x - 150, endpoint.y - 110)).toBeCloseTo(30, 6);
+      expect(state.model.constraints).toContainEqual(expect.objectContaining({ type: "pointOnCircle", point: endpointId, primitive: "C1" }));
+    }
+    expect(state.model.constraints).toContainEqual(expect.objectContaining({ type: "pointOnLine", point: "P12", line: line.id }));
+  }
+  expect(state.model.constraints).toContainEqual(expect.objectContaining({ type: "vertical", line: vertical.id }));
+  expect(state.model.constraints).toContainEqual(expect.objectContaining({ type: "horizontal", line: horizontal.id }));
+  expect(state.model.constraints).toHaveLength(8);
+
+  await page.click("#undoBtn");
+  let afterHistory = await page.evaluate(() => window.__jot2dTest.serializedModelForTest());
+  expect(afterHistory.lines.filter((line) => createdLineIds.includes(line.id))).toHaveLength(0);
+  expect(afterHistory.constraints).toHaveLength(0);
+  await page.click("#redoBtn");
+  afterHistory = await page.evaluate(() => window.__jot2dTest.serializedModelForTest());
+  expect(afterHistory.lines.filter((line) => createdLineIds.includes(line.id))).toHaveLength(2);
+  expect(afterHistory.constraints).toHaveLength(8);
+
+  expect(await page.evaluate((data) => window.__jot2dTest.loadDocumentFixtureForDragTest(data, "circle-center-cross-roundtrip.jot2d"), state.model)).toEqual(expect.objectContaining({ success: true }));
+  expect((await page.evaluate(() => window.__jot2dTest.serializedModelForTest())).constraints).toHaveLength(8);
+});
+
+test("circle center cross command accepts multiple preselected circles as one operation", async ({ page }) => {
+  await openFixture(page);
+  await page.evaluate(() => window.__jot2dTest.selectGeometryIdsForTest({ circles: ["C1", "C2"] }));
+  await page.click("#toolCircleCenterCross");
+
+  const state = await page.evaluate(() => ({
+    authoring: window.__jot2dTest.authoringStateForTest(),
+    model: window.__jot2dTest.serializedModelForTest(),
+  }));
+  expect(state.authoring.mode).toBe("select");
+  expect(state.authoring.selected.lines).toHaveLength(4);
+  expect(state.model.constraints).toHaveLength(16);
+  expect(state.model.constraints.filter((constraint) => constraint.type === "pointOnCircle" && constraint.primitive === "C1")).toHaveLength(4);
+  expect(state.model.constraints.filter((constraint) => constraint.type === "pointOnCircle" && constraint.primitive === "C2")).toHaveLength(4);
+
+  const createdLineIds = state.authoring.selected.lines;
+  await page.click("#undoBtn");
+  let afterHistory = await page.evaluate(() => window.__jot2dTest.serializedModelForTest());
+  expect(afterHistory.lines.filter((line) => createdLineIds.includes(line.id))).toHaveLength(0);
+  await page.click("#redoBtn");
+  afterHistory = await page.evaluate(() => window.__jot2dTest.serializedModelForTest());
+  expect(afterHistory.lines.filter((line) => createdLineIds.includes(line.id))).toHaveLength(4);
+  expect(afterHistory.constraints).toHaveLength(16);
 });

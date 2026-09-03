@@ -142,7 +142,7 @@
     ["上書き保存", "Overwrite Save"], ["名前を付けて保存", "Save As"], ["開く", "Open"], ["Parameter…", "Parameters…"], ["ドキュメント設定", "Document Settings"], ["アプリケーション設定", "Application Settings"],
     ["元に戻す", "Undo"], ["やり直す", "Redo"], ["削除", "Delete"], ["選択", "Select"], ["選択・ドラッグ", "Select / Drag"],
     ["ジオメトリ", "Geometry"], ["拘束", "Constraint"], ["注記", "Annotation"], ["ツールバー", "Toolbar"], ["メニューバー", "Menu bar"], ["表示ツール", "View"],
-    ["点", "Point"], ["線", "Line"], ["連続線", "Polyline"], ["中心線", "Centerline"], ["矩形", "Rectangle"], ["円", "Circle"], ["円弧", "Arc"], ["スプライン", "Spline"], ["スケッチ投影", "Sketch Projection"], ["投影", "Projected"],
+    ["点", "Point"], ["線", "Line"], ["連続線", "Polyline"], ["中心線", "Centerline"], ["円中心十字線", "Circle Center Cross"], ["矩形", "Rectangle"], ["円", "Circle"], ["円弧", "Arc"], ["スプライン", "Spline"], ["スケッチ投影", "Sketch Projection"], ["投影", "Projected"],
     ["実線／補助線", "Normal / Construction"], ["トリム", "Trim"], ["R面取り", "Fillet"], ["フィレット", "Fillet"], ["オフセット", "Offset"], ["ハッチング", "Hatching"],
     ["寸法", "Dimension"], ["一致", "Coincident"], ["水平", "Horizontal"], ["垂直", "Vertical"], ["平行", "Parallel"], ["直角", "Perpendicular"],
     ["対称", "Symmetry"], ["同心", "Concentric"], ["等寸", "Equal"], ["接線", "Tangent"], ["固定／解除", "Fix / Unfix"], ["固定解除", "Unfix"],
@@ -4152,6 +4152,94 @@
       return;
     }
     commitCenterline(projected, snap);
+  }
+
+  function createCircleCenterCrosses(circles) {
+    const targets = [...new Set(Array.isArray(circles) ? circles : [])];
+    if (targets.length === 0 || !targets.every((circle) => circle instanceof Circle && isActiveSketchElement(circle))) {
+      setHint(applicationText("アクティブスケッチ内の円を選択してください", "Select circles in the active sketch"), "error");
+      return false;
+    }
+    const invalidCircle = targets.find((circle) => !Number.isFinite(circle.radius()) || circle.radius() < MIN_ORIENTATION_LENGTH);
+    if (invalidCircle) {
+      setHint(applicationText(`円 ${invalidCircle.id} が小さすぎるため十字補助線を作成できません`, `Circle ${invalidCircle.id} is too small to create centerlines`), "error");
+      return false;
+    }
+
+    const sketchId = activeSketchId();
+    const snapshot = snapshotGeometryMutationState();
+    const createdLines = [];
+    for (const circle of targets) {
+      const radius = circle.radius();
+      const vertical = addLine(
+        addPoint(circle.center.x, circle.center.y - radius, false, "endpoint"),
+        addPoint(circle.center.x, circle.center.y + radius, false, "endpoint"),
+        true,
+      );
+      const horizontal = addLine(
+        addPoint(circle.center.x - radius, circle.center.y, false, "endpoint"),
+        addPoint(circle.center.x + radius, circle.center.y, false, "endpoint"),
+        true,
+      );
+      createdLines.push(vertical, horizontal);
+      for (const constraint of [
+        new PointOnLineConstraint(circle.center, vertical),
+        new VerticalConstraint(vertical),
+        new PointOnCircleConstraint(vertical.p1, circle),
+        new PointOnCircleConstraint(vertical.p2, circle),
+        new PointOnLineConstraint(circle.center, horizontal),
+        new HorizontalConstraint(horizontal),
+        new PointOnCircleConstraint(horizontal.p1, circle),
+        new PointOnCircleConstraint(horizontal.p2, circle),
+      ]) pushModelConstraint(constraint, sketchId);
+    }
+
+    const solved = solveSketchAndDependents(sketchId);
+    if (!solved.success || solved.dependent?.success === false || !resultIsAccepted(solved.result)) {
+      const reason = solved.result?.reason || applicationText("拘束を解けません", "The constraints could not be solved");
+      restoreGeometryMutationState(snapshot);
+      solveSketchAndDependents(sketchId);
+      constraintAnalysisState = null;
+      setHint(`${applicationText("円中心十字線を作成できません", "Could not create the circle center cross")}: ${reason}`, "error");
+      updateUI();
+      draw();
+      return false;
+    }
+
+    mode = "select";
+    pointerPreview = null;
+    clearSnap();
+    clearSelection();
+    selectedLines = createdLines;
+    constraintAnalysisState = null;
+    updateUI();
+    draw();
+    setHint(applicationText(`${targets.length}個の円に十字補助線を作成しました`, `Created centerlines for ${targets.length} circle(s)`));
+    recordHistory("円中心十字線");
+    return true;
+  }
+
+  function startCircleCenterCrossCommand() {
+    cancelConstraintTargetCommand("");
+    cancelPendingCommand("");
+    if (!canCreateInActiveSketch()) return void rejectRootSketchCreation();
+    const preselected = selectedCircles.length > 0 && selectedElementCount() === selectedCircles.length ? selectedCircles.slice() : [];
+    if (preselected.length > 0 && createCircleCenterCrosses(preselected)) return;
+    clearSelection();
+    mode = "circle-center-cross";
+    pointerPreview = null;
+    clearSnap();
+    updateUI({ refreshAnalysis: false });
+    draw();
+    setHint(applicationText("十字補助線を入れる円をクリックしてください", "Click the circle to add centerlines"));
+  }
+
+  function handleCircleCenterCrossClick(circle) {
+    if (!circle) {
+      setHint(applicationText("円をクリックしてください", "Click a circle"), "error");
+      return false;
+    }
+    return createCircleCenterCrosses([circle]);
   }
 
   function preferredDirectionFrom(start, p) {
@@ -11904,6 +11992,20 @@
     ctx.lineTo(renderPlan.lineEnd.x, renderPlan.lineEnd.y);
     ctx.stroke();
 
+    const arcExtension = arcRadiusDimensionExtensionSegment(target, layout, appearance);
+    if (arcExtension) {
+      ctx.beginPath();
+      ctx.arc(
+        arcExtension.center.x,
+        arcExtension.center.y,
+        arcExtension.radius,
+        arcExtension.startAngle,
+        arcExtension.endAngle,
+        arcExtension.counterclockwise,
+      );
+      ctx.stroke();
+    }
+
     for (const p of points) {
       if (p.showExtension === false) continue;
       ctx.beginPath();
@@ -12222,6 +12324,48 @@
       text: { x: anchor.x + d.x * textProjection, y: anchor.y + d.y * textProjection },
       hitA: { x: lineA.x - d.x * tick, y: lineA.y - d.y * tick },
       hitB: { x: lineB.x + d.x * tick, y: lineB.y + d.y * tick },
+    };
+  }
+
+  function arcRadiusDimensionExtensionSegment(target, layout, appearance = DEFAULT_DIMENSION_APPEARANCE) {
+    if (!isArcRadiusDimensionTarget(target) || !layout?.b) return null;
+    const arc = target.primitive;
+    const radius = arc.radius();
+    if (!Number.isFinite(radius) || radius <= 1e-12) return null;
+    const dimensionAngle = Math.atan2(layout.b.y - arc.center.y, layout.b.x - arc.center.x);
+    if (angleOnSignedSweep(dimensionAngle, arc.startAngle, arc.endAngle)) return null;
+
+    const candidates = [
+      { endpoint: "start", sourceAngle: arc.startAngle },
+      { endpoint: "end", sourceAngle: arc.endAngle },
+    ].map((candidate) => {
+      const intersectionAngle = shortestAngleFrom(candidate.sourceAngle, dimensionAngle);
+      return {
+        ...candidate,
+        intersectionAngle,
+        delta: intersectionAngle - candidate.sourceAngle,
+      };
+    });
+    const nearest = candidates.reduce((best, candidate) => (
+      !best || Math.abs(candidate.delta) < Math.abs(best.delta) ? candidate : best
+    ), null);
+    if (!nearest || Math.abs(nearest.delta) <= 1e-12) return null;
+
+    const resolved = normalizeDimensionAppearance(appearance, { partial: false });
+    const pathLength = Math.abs(nearest.delta) * radius;
+    const gap = dimensionMillimetersToWorld(resolved.extensionLineOriginGap);
+    const overshoot = dimensionMillimetersToWorld(resolved.extensionLineOvershoot);
+    const visibleGap = Math.min(gap, Math.max(0, pathLength - 2 / viewport.scale));
+    const direction = nearest.delta < 0 ? -1 : 1;
+    return {
+      center: arc.center,
+      radius,
+      sourceEndpoint: nearest.endpoint,
+      sourceAngle: nearest.sourceAngle,
+      intersectionAngle: nearest.intersectionAngle,
+      startAngle: nearest.sourceAngle + direction * visibleGap / radius,
+      endAngle: nearest.intersectionAngle + direction * overshoot / radius,
+      counterclockwise: direction < 0,
     };
   }
 
@@ -13143,6 +13287,7 @@
       point: "toolPoint",
       line: "toolLine",
       centerline: "toolCenterline",
+      "circle-center-cross": "toolCircleCenterCross",
       rectangle: "toolRectangle",
       circle: "toolCircle",
       arc: "toolArc",
@@ -13201,6 +13346,7 @@
       toolPoint: geometryMode && mode === "point",
       toolLine: geometryMode && mode === "line",
       toolCenterline: geometryMode && mode === "centerline",
+      toolCircleCenterCross: geometryMode && mode === "circle-center-cross",
       toolConstructionLine: constructionState.active,
       toolRectangle: geometryMode && mode === "rectangle",
       toolCreateBlock: false,
@@ -16621,7 +16767,7 @@
   function updateStatusUI() {
     const command = document.getElementById("statusCommand");
     const modeLabels = {
-      select: applicationText("選択", "Select"), point: applicationText("点", "Point"), line: applicationText("線", "Line"), centerline: applicationText("中心線", "Centerline"), rectangle: applicationText("矩形", "Rectangle"),
+      select: applicationText("選択", "Select"), point: applicationText("点", "Point"), line: applicationText("線", "Line"), centerline: applicationText("中心線", "Centerline"), "circle-center-cross": applicationText("円中心十字線", "Circle Center Cross"), rectangle: applicationText("矩形", "Rectangle"),
       circle: applicationText("円", "Circle"), arc: applicationText("円弧", "Arc"), spline: applicationText("スプライン", "Spline"), fillet: applicationText("R面取り", "Fillet"), trim: applicationText("トリム", "Trim"),
       offset: applicationText("オフセット", "Offset"), hatch: applicationText("ハッチング", "Hatching"), "hatch-repair": applicationText("境界を再指定", "Reselect boundary"), "block-place": applicationText("ブロック配置", "Block placement"),
     };
@@ -18473,16 +18619,20 @@
     return t * Math.PI * 2;
   }
 
+  function isTrimBoundaryGeometry(item) {
+    return isActiveSketchElement(item) && !item.construction;
+  }
+
   function lineTrimBoundaries(line) {
     const boundaries = [{ t: 0, point: line.p1 }, { t: 1, point: line.p2 }];
     for (const other of model.lines) {
-      if (!isActiveSketchElement(other)) continue;
+      if (!isTrimBoundaryGeometry(other)) continue;
       if (other === line) continue;
       const b = lineLineBoundary(line, other);
       if (b) addUniqueBoundary(boundaries, b);
     }
-    for (const circle of model.circles) if (isActiveSketchElement(circle)) for (const b of lineCircleBoundaries(line, circle)) addUniqueBoundary(boundaries, b);
-    for (const arc of model.arcs) if (isActiveSketchElement(arc)) for (const b of lineCircleBoundaries(line, arc, true)) addUniqueBoundary(boundaries, b);
+    for (const circle of model.circles) if (isTrimBoundaryGeometry(circle)) for (const b of lineCircleBoundaries(line, circle)) addUniqueBoundary(boundaries, b);
+    for (const arc of model.arcs) if (isTrimBoundaryGeometry(arc)) for (const b of lineCircleBoundaries(line, arc, true)) addUniqueBoundary(boundaries, b);
     return boundaries.sort((a, b) => a.t - b.t);
   }
 
@@ -18492,10 +18642,10 @@
       const t = arcParamOnSweep(arc, Math.atan2(point.y - arc.center.y, point.x - arc.center.x));
       if (t !== null) addUniqueBoundary(boundaries, { t, point, source });
     };
-    for (const line of model.lines) if (isActiveSketchElement(line)) for (const b of lineCircleBoundaries(line, arc, true)) addPointBoundary(b.point, { line });
-    for (const circle of model.circles) if (isActiveSketchElement(circle)) for (const point of circleCirclePoints(arc, circle)) addPointBoundary(point, { primitive: circle });
+    for (const line of model.lines) if (isTrimBoundaryGeometry(line)) for (const b of lineCircleBoundaries(line, arc, true)) addPointBoundary(b.point, { line });
+    for (const circle of model.circles) if (isTrimBoundaryGeometry(circle)) for (const point of circleCirclePoints(arc, circle)) addPointBoundary(point, { primitive: circle });
     for (const other of model.arcs) {
-      if (!isActiveSketchElement(other)) continue;
+      if (!isTrimBoundaryGeometry(other)) continue;
       if (other === arc) continue;
       for (const point of circleCirclePoints(arc, other)) {
         if (angleOnSignedSweep(Math.atan2(point.y - other.center.y, point.x - other.center.x), other.startAngle, other.endAngle)) addPointBoundary(point, { arc: other });
@@ -18510,14 +18660,14 @@
       const angle = Math.atan2(point.y - circle.center.y, point.x - circle.center.x);
       addUniqueBoundary(boundaries, { t: circleParam(circle, angle), angle, point, source });
     };
-    for (const line of model.lines) if (isActiveSketchElement(line)) for (const b of lineCircleBoundaries(line, circle)) addPointBoundary(b.point, { line });
+    for (const line of model.lines) if (isTrimBoundaryGeometry(line)) for (const b of lineCircleBoundaries(line, circle)) addPointBoundary(b.point, { line });
     for (const other of model.circles) {
-      if (!isActiveSketchElement(other)) continue;
+      if (!isTrimBoundaryGeometry(other)) continue;
       if (other === circle) continue;
       for (const point of circleCirclePoints(circle, other)) addPointBoundary(point, { primitive: other });
     }
     for (const arc of model.arcs) {
-      if (!isActiveSketchElement(arc)) continue;
+      if (!isTrimBoundaryGeometry(arc)) continue;
       for (const point of circleCirclePoints(circle, arc)) {
         if (angleOnSignedSweep(Math.atan2(point.y - arc.center.y, point.x - arc.center.x), arc.startAngle, arc.endAngle)) addPointBoundary(point, { arc });
       }
@@ -18774,7 +18924,9 @@
     model.constraints = model.constraints.filter((c) => {
       if (item instanceof Line && constraintReferencesLine(c, item)) return options.preserveLineSupport && shouldPreserveTrimmedLineConstraint(c, item);
       if (item instanceof Arc && constraintReferencesPrimitive(c, item)) return false;
-      if (item instanceof Circle && constraintReferencesPrimitive(c, item)) return false;
+      if (item instanceof Circle && constraintReferencesPrimitive(c, item)) {
+        return Boolean(options.preserveDiameterDimensions && c instanceof DiameterConstraint && c.primitive === item);
+      }
       return true;
     });
   }
@@ -18940,7 +19092,8 @@
       removeTrimmedItem(circle);
       return;
     }
-    cleanupTrimConstraints(circle);
+    const diameterDimensions = model.constraints.filter((constraint) => constraint instanceof DiameterConstraint && constraint.primitive === circle);
+    cleanupTrimConstraints(circle, { preserveDiameterDimensions: true });
     const kept = [];
     const boundaries = preview.boundaries || [];
     for (let i = 0; i < boundaries.length; i++) {
@@ -18959,6 +19112,14 @@
       }
     }
     model.circles = model.circles.filter((item) => item !== circle);
+    if (kept.length === 1) {
+      for (const constraint of diameterDimensions) {
+        constraint.primitive = kept[0];
+        constraint.name = new DiameterConstraint(kept[0], constraint.target).name;
+      }
+    } else if (diameterDimensions.length > 0) {
+      model.constraints = model.constraints.filter((constraint) => !diameterDimensions.includes(constraint));
+    }
     if (kept.length === 0) model.points = model.points.filter((p) => p !== circle.center || isPointUsedByPrimitive(p));
   }
 
@@ -20147,7 +20308,7 @@
       return;
     }
 
-    if (["point", "line", "centerline", "rectangle", "circle", "arc", "spline", "fillet", "trim", "offset", "block-place", "hatch", "hatch-repair"].includes(mode) && rejectRootSketchCreation()) {
+    if (["point", "line", "centerline", "circle-center-cross", "rectangle", "circle", "arc", "spline", "fillet", "trim", "offset", "block-place", "hatch", "hatch-repair"].includes(mode) && rejectRootSketchCreation()) {
       e.preventDefault();
       return;
     }
@@ -20177,6 +20338,11 @@
 
     if (mode === "centerline") {
       handleCenterlineClick(p, hitP, hitL);
+      return;
+    }
+
+    if (mode === "circle-center-cross") {
+      handleCircleCenterCrossClick(hitC);
       return;
     }
 
@@ -20524,7 +20690,7 @@
       return;
     }
 
-    if (["point", "line", "centerline", "rectangle", "circle", "arc", "spline", "fillet", "trim", "offset", "block-place"].includes(mode) && !canCreateInActiveSketch()) {
+    if (["point", "line", "centerline", "circle-center-cross", "rectangle", "circle", "arc", "spline", "fillet", "trim", "offset", "block-place"].includes(mode) && !canCreateInActiveSketch()) {
       clearSnap();
       pointerPreview = null;
       trimPreview = null;
@@ -20556,6 +20722,22 @@
         hoveredLine = null;
       }
       hoveredCircle = null;
+      hoveredArc = null;
+      hoveredArcEndpoint = null;
+      hoveredSpline = null;
+      hoveredDimensionConstraint = null;
+      draw();
+      return;
+    }
+
+    if (mode === "circle-center-cross") {
+      clearSnap();
+      hoveredSketchIdentity = null;
+      pointerPreview = p;
+      hoveredPoint = null;
+      hoveredEndpointPoint = null;
+      hoveredLine = null;
+      hoveredCircle = hitCircle(p.x, p.y);
       hoveredArc = null;
       hoveredArcEndpoint = null;
       hoveredSpline = null;
@@ -21114,7 +21296,7 @@
   }
 
   function isDrawToolMode() {
-    return mode === "line" || mode === "centerline" || mode === "point" || mode === "rectangle" || mode === "fillet" || mode === "trim" || mode === "offset" || mode === "circle" || mode === "arc" || mode === "spline" || mode === "sketch-projection" || mode === "hatch" || mode === "hatch-repair";
+    return mode === "line" || mode === "centerline" || mode === "circle-center-cross" || mode === "point" || mode === "rectangle" || mode === "fillet" || mode === "trim" || mode === "offset" || mode === "circle" || mode === "arc" || mode === "spline" || mode === "sketch-projection" || mode === "hatch" || mode === "hatch-repair";
   }
 
   function handleBlankCanvasDoubleClick(pointer, hits = {}) {
@@ -22087,6 +22269,7 @@
   });
 
   document.getElementById("toolCenterline")?.addEventListener("click", startCenterlineCommand);
+  document.getElementById("toolCircleCenterCross")?.addEventListener("click", startCircleCenterCrossCommand);
   document.getElementById("toolSketchProjection")?.addEventListener("click", startSketchProjectionCommand);
 
   document.getElementById("toolConstructionLine")?.addEventListener("click", () => {
@@ -23314,7 +23497,8 @@
         const center = new Point("P_ARC_RADIUS_TEST", 0, 0, false, "explicit");
         const arc = new Arc("A_ARC_RADIUS_TEST", center, 30, 0, Math.PI / 2, false);
         const target = { kind: "radius", primitive: arc, value: arc.radius() };
-        const dimension = dimensionFromAnchor(target, circlePointAtAngle(arc, Math.PI / 4));
+        const dimensionAngle = Number.isFinite(options.dimensionAngle) ? options.dimensionAngle : Math.PI / 4;
+        const dimension = dimensionFromAnchor(target, circlePointAtAngle(arc, dimensionAngle));
         dimension.labelOffsetU = Number.isFinite(options.labelOffsetU) ? options.labelOffsetU : arc.radius() / 2;
         const appearance = {
           ...normalizeDimensionAppearance(model.defaultDimensionAppearance, { partial: false }),
@@ -23322,6 +23506,7 @@
         };
         const layout = dimensionLayout(target, dimension, appearance);
         const plan = linearDimensionRenderPlan(target, layout, options.label || "R30", appearance, dimension);
+        const arcExtension = arcRadiusDimensionExtensionSegment(target, layout, appearance);
         return {
           centerTerminatorVisible: Boolean(plan.firstTerminator),
           arcTerminatorVisible: Boolean(plan.secondTerminator),
@@ -23333,8 +23518,18 @@
           shaftLengths: plan.shafts.map((shaft) => hypot2(shaft.end.x - shaft.start.x, shaft.end.y - shaft.start.y) * viewport.scale),
           shaftEndDistancesFromCenter: plan.shafts.map((shaft) => hypot2(shaft.end.x - center.x, shaft.end.y - center.y)),
           visibleExtensionCount: layout.points.filter((point) => point.showExtension !== false).length,
+          arcExtensionVisible: Boolean(arcExtension),
+          arcExtensionSourceEndpoint: arcExtension?.sourceEndpoint || null,
+          arcExtensionOriginGap: arcExtension
+            ? Math.abs(arcExtension.startAngle - arcExtension.sourceAngle) * arcExtension.radius * viewport.scale
+            : null,
+          arcExtensionOvershoot: arcExtension
+            ? Math.abs(arcExtension.endAngle - arcExtension.intersectionAngle) * arcExtension.radius * viewport.scale
+            : null,
           arcRadius: arc.radius(),
           expectedShaftLength: appearance.terminatorSize * DIMENSION_SCREEN_PX_PER_MM * DIMENSION_OUTSIDE_SHAFT_LENGTH_FACTOR,
+          expectedExtensionOriginGap: appearance.extensionLineOriginGap * DIMENSION_SCREEN_PX_PER_MM,
+          expectedExtensionOvershoot: appearance.extensionLineOvershoot * DIMENSION_SCREEN_PX_PER_MM,
         };
       },
       dimensionAppearanceRenderMetricsForTest(index = 0) {
@@ -24470,6 +24665,82 @@
           rightConstraintOnRightLine: rightConstraint.line === rightLine,
           leftLineEnd: { x: line.p2.x, y: line.p2.y },
           rightLineStart: rightLine ? { x: rightLine.p1.x, y: rightLine.p1.y } : null,
+        };
+      },
+      trimConstructionBoundaryCase() {
+        resetModelState();
+        const point = (x, y) => addPoint(x, y, false, "endpoint");
+        const line = (x1, y1, x2, y2, construction = false) => addLine(point(x1, y1), point(x2, y2), construction);
+
+        const lineTarget = line(-100, 0, 100, 0);
+        line(-60, -120, -60, 120);
+        line(60, -120, 60, 120);
+        line(0, -120, 0, 120, true);
+        addCircle(point(0, 0), 30, true);
+        addArc(point(0, 0), 45, 0, Math.PI, true);
+
+        const arcTarget = addArc(point(0, 400), 100, 0, Math.PI);
+        line(0, 350, 0, 550);
+        line(50, 350, 50, 550, true);
+        addCircle(point(50, 400), 100, true);
+        addArc(point(-50, 400), 100, 0, Math.PI, true);
+
+        const circleTarget = addCircle(point(0, 800), 100);
+        line(0, 650, 0, 950);
+        line(50, 650, 50, 950, true);
+        addCircle(point(50, 800), 100, true);
+        addArc(point(-50, 800), 100, 0, Math.PI, true);
+
+        const lineBoundaries = lineTrimBoundaries(lineTarget);
+        const linePreview = trimPreviewForLine(lineTarget, { x: 0, y: 0 });
+        const arcBoundaries = arcTrimBoundaries(arcTarget);
+        const arcPreview = trimPreviewForArc(arcTarget, circlePointAtAngle(arcTarget, Math.PI / 4));
+        const circleBoundaries = circleTrimBoundaries(circleTarget);
+        const circlePreview = trimPreviewForCircle(circleTarget, circlePointAtAngle(circleTarget, 0));
+        return {
+          lineBoundaryXs: lineBoundaries.map((boundary) => boundary.point.x),
+          lineIntervalXs: [linePreview?.interval?.left?.point?.x, linePreview?.interval?.right?.point?.x],
+          arcBoundaryParameters: arcBoundaries.map((boundary) => boundary.t),
+          arcIntervalParameters: [arcPreview?.interval?.left?.t, arcPreview?.interval?.right?.t],
+          circleBoundaryParameters: circleBoundaries.map((boundary) => boundary.t),
+          circleIntervalParameters: [circlePreview?.interval?.left?.t, circlePreview?.interval?.right?.t],
+        };
+      },
+      trimCircleDiameterDimensionCase(boundaryCount = 2) {
+        resetModelState();
+        const circle = addCircle(addPoint(0, 0, false, "center"), 50);
+        const diameter = pushModelConstraint(new DiameterConstraint(circle, 100));
+        diameter.dimension = {
+          x: 70,
+          y: 0,
+          labelOffsetU: 8,
+          display: { color: "#7c3aed", prefix: "Ø" },
+        };
+        const count = Math.max(2, Math.floor(Number(boundaryCount) || 2));
+        const boundaries = Array.from({ length: count }, (_, index) => {
+          const t = index / count;
+          const angle = angleAtCircleParam(t);
+          return { t, angle, point: circlePointAtAngle(circle, angle), source: {} };
+        });
+        executeCircleTrim({
+          kind: "circle",
+          item: circle,
+          interval: {
+            left: { ...boundaries[0], angle: angleAtCircleParam(boundaries[0].t) },
+            right: { ...boundaries[1], angle: angleAtCircleParam(boundaries[1].t) },
+          },
+          boundaries,
+        });
+        const retained = model.constraints.find((constraint) => constraint instanceof DiameterConstraint);
+        return {
+          arcCount: model.arcs.length,
+          diameterCount: model.constraints.filter((constraint) => constraint instanceof DiameterConstraint).length,
+          retainedSameConstraint: retained === diameter,
+          primitiveId: retained?.primitive?.id || null,
+          target: retained?.target ?? null,
+          parameterName: retained?.parameterName || null,
+          expression: retained?.expression || null,
+          dimension: retained?.dimension || null,
         };
       },
       annotationSnapshot() {
