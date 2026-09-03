@@ -2039,6 +2039,69 @@ test("application language defaults to Japanese and persists the full UI selecti
   await expect(page.locator("#hint")).not.toContainText("Select or create geometry");
 });
 
+test("application theme switches the full UI to dark mode, preserves the menu bar, and persists", async ({ page }) => {
+  await page.goto(`${baseUrl}/index.html?test=1`);
+  await page.waitForFunction(() => window.__jot2dTest);
+  await expect(page.locator("html")).toHaveAttribute("data-theme", "light");
+  expect(await page.evaluate(() => window.__jot2dTest.applicationThemeStateForTest())).toEqual({
+    theme: "light",
+    stored: null,
+    defaultGeometryColor: "#111827",
+    displayedDefaultGeometryColor: "#111827",
+    displayedDefaultGeometryContrast: null,
+  });
+
+  await openApplicationSettings(page);
+  await expect(page.locator("#applicationThemeSelect")).toHaveValue("light");
+  await page.locator("#applicationThemeSelect").selectOption("dark");
+  await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
+  const darkTheme = await page.evaluate(() => {
+    const color = (selector, property = "backgroundColor") => getComputedStyle(document.querySelector(selector))[property];
+    return {
+      menu: color(".menu-bar"),
+      toolbar: color(".command-toolbar"),
+      canvas: color(".canvas-area"),
+      properties: color(".properties"),
+      status: color(".status-bar"),
+      dialog: color("#applicationSettingsDialog"),
+      select: color("#applicationThemeSelect"),
+      text: color("body", "color"),
+      state: window.__jot2dTest.applicationThemeStateForTest(),
+    };
+  });
+  expect(darkTheme).toEqual({
+    menu: "rgb(30, 58, 95)",
+    toolbar: "rgb(17, 24, 39)",
+    canvas: "rgb(15, 23, 42)",
+    properties: "rgb(11, 18, 32)",
+    status: "rgb(11, 18, 32)",
+    dialog: "rgb(17, 24, 39)",
+    select: "rgb(24, 34, 53)",
+    text: "rgb(229, 237, 247)",
+    state: expect.objectContaining({
+      theme: "dark",
+      stored: "dark",
+      defaultGeometryColor: "#111827",
+    }),
+  });
+  expect(darkTheme.state.displayedDefaultGeometryColor).not.toBe(darkTheme.state.defaultGeometryColor);
+  expect(darkTheme.state.displayedDefaultGeometryContrast).toBeGreaterThanOrEqual(4.5);
+  expect((await page.evaluate(() => window.__jot2dTest.serializedModelForTest())).defaultAppearance.color).toBe("#111827");
+
+  await page.locator("#applicationLanguageSelect").selectOption("en");
+  await expect(page.locator('label[for="applicationThemeSelect"]')).toHaveText("Theme");
+  await expect(page.locator("#applicationThemeSelect option")).toHaveText(["Light", "Dark"]);
+  await page.locator("#applicationSettingsDialog button[value=cancel]").first().click();
+  await page.reload();
+  await page.waitForFunction(() => window.__jot2dTest);
+  await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
+  await expect(page.locator(".menu-bar")).toHaveCSS("background-color", "rgb(30, 58, 95)");
+  await openApplicationSettings(page);
+  await expect(page.locator("#applicationThemeSelect")).toHaveValue("dark");
+  await page.locator("#applicationThemeSelect").selectOption("light");
+  await expect(page.locator("html")).toHaveAttribute("data-theme", "light");
+});
+
 test("Document owns appearance defaults while only non-root Sketches expose compact overrides", async ({ page }) => {
   await page.goto(`${baseUrl}/index.html?test=1`);
   await page.waitForFunction(() => window.__jot2dTest);
