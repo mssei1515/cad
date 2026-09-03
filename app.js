@@ -17528,6 +17528,41 @@
     return seeds;
   }
 
+  function pointCoordinateFreedomRank(analysis, pointEntries, tolerance = 1e-8) {
+    const basis = analysis?.nullspaceBasis || [];
+    if (basis.length === 0) return 0;
+    const orthonormalRows = [];
+    for (const entry of pointEntries || []) {
+      const indices = analysis.variableIndex.get(entry.point) || {};
+      for (const prop of ["x", "y"]) {
+        const index = indices[prop];
+        if (!Number.isInteger(index)) continue;
+        const residual = basis.map((vector) => vector[index] || 0);
+        for (const row of orthonormalRows) {
+          const projection = residual.reduce((sum, value, rowIndex) => sum + value * row[rowIndex], 0);
+          for (let rowIndex = 0; rowIndex < residual.length; rowIndex += 1) residual[rowIndex] -= projection * row[rowIndex];
+        }
+        const norm = vectorNorm(residual);
+        if (norm <= tolerance) continue;
+        orthonormalRows.push(residual.map((value) => value / norm));
+      }
+    }
+    return orthonormalRows.length;
+  }
+
+  function linePointsShareFixedCircularSupport(session, analysis) {
+    const supportsByPoint = (session?.points || []).map((entry) => new Set(
+      (session.local?.constraints || [])
+        .filter((constraint) => constraint instanceof PointOnCircleConstraint && constraint.point === entry.point)
+        .map((constraint) => constraint.primitive),
+    ));
+    if (supportsByPoint.length < 2 || supportsByPoint.some((supports) => supports.size === 0)) return false;
+    return [...supportsByPoint[0]].some((primitive) =>
+      supportsByPoint.every((supports) => supports.has(primitive))
+      && !pointHasConstraintFreedom(primitive.center, analysis)
+      && !objectHasConstraintFreedom(primitive, "radiusValue", analysis));
+  }
+
   function attachLocalSolveContext(session) {
     if (!session) return session;
     const projectionTouched = [
@@ -17546,16 +17581,22 @@
       .filter((p) => session.local.component.has(p) && !p.fixed && !pointLockedByLineFixed(p))
       .map((point) => ({ point, startX: point.x, startY: point.y }));
     session.local.fixedPointCount = model.points.filter((p) => session.local.component.has(p) && (p.fixed || pointLockedByLineFixed(p))).length;
-    // In an anchored component with one remaining DOF, translating both
-    // endpoints asks that DOF to satisfy redundant drag targets. Use the most
-    // active endpoint so line dragging follows its responsive point-drag path.
+    // In an anchored one-DOF component, translating both endpoints asks that
+    // DOF to satisfy redundant drag targets. A fixed circle may also connect
+    // independent chords into a larger graph; in that case, count only the
+    // motion visible at this chord's endpoints. Keep the broader component
+    // rule for other line topologies because a single target can destabilize
+    // nonlinear tangent systems during a sparse pointer reversal.
     if (session.kind === "line" && session.points.length > 1 && session.local.fixedPointCount > 0) {
       const analysis = solver.analyzeConstraintState({
         variables: session.local.variables,
         constraints: session.local.constraints,
         lines: session.local.lines,
       });
-      if (analysis.stable && analysis.freeVariableCount === 1) {
+      const fixedCircularChord = analysis.stable
+        && linePointsShareFixedCircularSupport(session, analysis)
+        && pointCoordinateFreedomRank(analysis, session.points) === 1;
+      if (analysis.stable && (analysis.freeVariableCount === 1 || fixedCircularChord)) {
         const fixedPoints = model.points.filter((point) =>
           session.local.component.has(point) && (point.fixed || pointLockedByLineFixed(point)));
         const pointActivity = (entry) => {
