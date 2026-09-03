@@ -66,6 +66,8 @@ Geometry menuまたはToolbarの中心線commandから、同じアクティブSk
 
 平行な2本のLineでは、両Lineを無限に延長した支持直線に平行かつ等距離な支持直線へ中心線を置く。2つのPointでは、2点を結ぶ線分の垂直二等分線を中心線の支持直線とする。どちらも中心線の支持位置と方向だけを拘束し、中心線の長さと両端点の支持直線方向位置は拘束しない。このため作成後も各端点を支持直線上で独立して移動できる。端点指定中は既存Geometryへ通常作図と同じスナップを行い、確定した端点へ一致、Point-on-Line、Point-on-CircleまたはPoint-on-Splineの該当拘束を追加する。中心線の支持条件とスナップ拘束が同時に成立しない場合は作成全体をロールバックする。中心線は`construction = true`で作成し、対応する保存型は`parallelLinesCenterline`と`pointPairCenterline`である。
 
+Geometry menuまたはToolbarの円中心十字線commandは、同じアクティブSketchにあるCircleを対象に、各円の上下端を結ぶ垂直な補助Lineと左右端を結ぶ水平な補助Lineを一括作成する。Circleをあらかじめ1つ以上選択してcommandを実行する方法と、command開始後に1つのCircleをclickする方法を利用できる。各LineにはCircle中心PointのPoint-on-Line拘束、水平または垂直拘束、および両端PointのPoint-on-Circle拘束を追加する。事前選択した全Circle分のLineと拘束は1回のUndo/Redoで扱い、いずれかの拘束を成立させられない場合は作成全体をロールバックする。専用の保存型は追加せず、既存の`pointOnLine`、`horizontal`、`vertical`、`pointOnCircle`を使用する。
+
 ### 矩形
 
 対角2点から4本の Line を作り、水平・垂直関係を付ける。幅・高さが下限未満にならないよう補正する。
@@ -98,7 +100,7 @@ ToolbarまたはGeometry menuから開始し、3個以上のfit pointを順にcl
 
 ### トリム
 
-Line、Circle、Arc と他 Geometry の交点からクリック区間を除去する。Line の中間区間を除く場合は分割し、保持側の Point 拘束を新しい Line へ移送する。対象を参照する成立不能な拘束は整理する。
+Line、Circle、Arc と同じアクティブSketch内の通常Geometryとの交点からクリック区間を除去する。補助Line／Circle／Arcとの交点は区間境界に使用しない。補助Geometry自身はトリム対象にでき、通常Geometryとの交点で区間を判定する。Line の中間区間を除く場合は分割し、保持側の Point 拘束を新しい Line へ移送する。直径寸法を持つCircleのトリム結果が1本のArcになる場合は、寸法の値・数式・Parameter名・配置・外観を保ったままそのArcへ直径寸法を移送する。トリム後に複数のArcが残る場合は、移送先を選ばず元の直径寸法を削除する。その他の対象を参照する成立不能な拘束は整理する。
 
 ### オフセット
 
@@ -143,7 +145,7 @@ UIで利用できる組み合わせを次に示す。
 | 寸法 | `concentricRadiusDifferenceDimension` | 同心の Circle/Arc 2つの半径差と中心一致 |
 | 寸法 | `lineAngle` | 2 Line の角度 |
 | 寸法 | `radiusDimension` | Circle/Arc 半径 |
-| 寸法 | `diameterDimension` | Circle 直径 |
+| 寸法 | `diameterDimension` | Circle 直径。Circleのトリム結果が1本のArcの場合はそのArcへ移送 |
 | オフセット | `offsetDimension` | 元とオフセット先の距離 |
 | オフセット | `offsetChainDimension` | 2本以上のLine／Arcチェーンとオフセット先の共通距離・マイター接続 |
 | 一致 | `coincident` | 2 Point |
