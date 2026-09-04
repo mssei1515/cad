@@ -200,6 +200,43 @@ async function openParameterDialog(page) {
   await expect(page.locator("#parametersDialog")).toBeVisible();
 }
 
+test("point command double-click exit does not seed the next point dimension", async ({ page }) => {
+  await page.goto(`${baseUrl}/index.html?test=1`);
+  await page.waitForFunction(() => window.__jot2dTest);
+  await page.evaluate(() => window.__jot2dTest.focusWorldForTest({ x: 0, y: 0 }, 3));
+  const positions = await page.evaluate(() => ({
+    first: window.__jot2dTest.worldClientPositionForTest({ x: -50, y: 0 }),
+    second: window.__jot2dTest.worldClientPositionForTest({ x: 50, y: 0 }),
+    exit: window.__jot2dTest.worldClientPositionForTest({ x: 0, y: 50 }),
+  }));
+
+  await page.locator("#toolPoint").click();
+  await page.mouse.click(positions.first.x, positions.first.y);
+  await page.mouse.click(positions.second.x, positions.second.y);
+  await page.mouse.dblclick(positions.exit.x, positions.exit.y);
+
+  const afterExit = await page.evaluate(() => window.__jot2dTest.authoringStateForTest());
+  expect(afterExit).toEqual(expect.objectContaining({
+    mode: "select",
+    pointCount: 2,
+    selected: expect.objectContaining({ points: [] }),
+  }));
+
+  await page.locator('[data-constraint="distance"]').click();
+  await page.mouse.click(positions.first.x, positions.first.y);
+  const afterFirstPoint = await page.evaluate(() => window.__jot2dTest.authoringStateForTest());
+  expect(afterFirstPoint).toEqual(expect.objectContaining({
+    pendingConstraintType: "distance",
+    pendingCommandType: null,
+  }));
+
+  await page.mouse.click(positions.second.x, positions.second.y);
+  expect(await page.evaluate(() => window.__jot2dTest.authoringStateForTest())).toEqual(expect.objectContaining({
+    pendingConstraintType: "distance",
+    pendingCommandType: "distance-place",
+  }));
+});
+
 test("three-point arc uses two endpoints and a circumference point while preserving the center-based arc tool", async ({ page }) => {
   await page.goto(`${baseUrl}/index.html?test=1`);
   await page.waitForFunction(() => window.__jot2dTest);
