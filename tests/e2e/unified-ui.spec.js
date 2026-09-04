@@ -200,6 +200,83 @@ async function openParameterDialog(page) {
   await expect(page.locator("#parametersDialog")).toBeVisible();
 }
 
+test("three-point arc uses two endpoints and a circumference point while preserving the center-based arc tool", async ({ page }) => {
+  await page.goto(`${baseUrl}/index.html?test=1`);
+  await page.waitForFunction(() => window.__jot2dTest);
+  await page.evaluate(() => window.__jot2dTest.focusWorldForTest({ x: 0, y: 0 }, 2));
+  const positions = await page.evaluate(() => ({
+    cancelStart: window.__jot2dTest.worldClientPositionForTest({ x: -70, y: 20 }),
+    start: window.__jot2dTest.worldClientPositionForTest({ x: -50, y: 0 }),
+    end: window.__jot2dTest.worldClientPositionForTest({ x: 50, y: 0 }),
+    collinear: window.__jot2dTest.worldClientPositionForTest({ x: 0, y: 0 }),
+    through: window.__jot2dTest.worldClientPositionForTest({ x: 0, y: -50 }),
+  }));
+
+  await page.locator("#toolThreePointArc").click();
+  await expect(page.locator("#hint")).toHaveText("3点円弧の始点をクリックしてください。Escで選択モードに戻ります");
+  await page.mouse.click(positions.cancelStart.x, positions.cancelStart.y);
+  await expect(page.locator("#hint")).toHaveText("3点円弧の終点をクリックしてください。Escで作図をキャンセルします");
+  await page.keyboard.press("Escape");
+  await expect(page.locator("#hint")).toHaveText("作図操作をキャンセルしました");
+  expect((await page.evaluate(() => window.__jot2dTest.serializedModelForTest())).arcs).toHaveLength(0);
+  await page.mouse.click(positions.start.x, positions.start.y);
+  await expect(page.locator("#hint")).toHaveText("3点円弧の終点をクリックしてください。Escで作図をキャンセルします");
+  await page.mouse.click(positions.end.x, positions.end.y);
+  await expect(page.locator("#hint")).toHaveText("円弧が通過する円周上の点をクリックしてください。Escで作図をキャンセルします");
+  await page.mouse.click(positions.collinear.x, positions.collinear.y);
+  await expect(page.locator("#hint")).toHaveText("3点が同一直線上にならない位置をクリックしてください");
+  expect((await page.evaluate(() => window.__jot2dTest.serializedModelForTest())).arcs).toHaveLength(0);
+  await page.mouse.move(positions.through.x, positions.through.y);
+  await page.mouse.click(positions.through.x, positions.through.y);
+
+  const state = await page.evaluate(() => window.__jot2dTest.serializedModelForTest());
+  expect(state.arcs).toHaveLength(1);
+  expect(state.points).toHaveLength(1);
+  const arc = state.arcs[0];
+  const center = state.points.find((point) => point.id === arc.center);
+  expect(center.x).toBeCloseTo(0, 8);
+  expect(center.y).toBeCloseTo(0, 8);
+  expect(arc.radius).toBeCloseTo(50, 8);
+  expect(center.x + Math.cos(arc.startAngle) * arc.radius).toBeCloseTo(-50, 8);
+  expect(center.y + Math.sin(arc.startAngle) * arc.radius).toBeCloseTo(0, 8);
+  expect(center.x + Math.cos(arc.endAngle) * arc.radius).toBeCloseTo(50, 8);
+  expect(center.y + Math.sin(arc.endAngle) * arc.radius).toBeCloseTo(0, 8);
+  expect(arc.endAngle - arc.startAngle).toBeCloseTo(Math.PI, 8);
+
+  await page.locator("#toolArc").click();
+  await expect(page.locator("#hint")).toHaveText("円弧の中心をクリックしてください。Escで選択モードに戻ります");
+});
+
+test("three-point arc keeps endpoint and circumference point snaps as constraints", async ({ page }) => {
+  await page.goto(`${baseUrl}/index.html?test=1`);
+  await page.waitForFunction(() => window.__jot2dTest);
+  await page.evaluate(() => window.__jot2dTest.focusWorldForTest({ x: 0, y: 0 }, 2));
+  const positions = await page.evaluate(() => [
+    window.__jot2dTest.worldClientPositionForTest({ x: -50, y: 0 }),
+    window.__jot2dTest.worldClientPositionForTest({ x: 50, y: 0 }),
+    window.__jot2dTest.worldClientPositionForTest({ x: 0, y: -50 }),
+  ]);
+
+  await page.locator("#toolPoint").click();
+  for (const position of positions) await page.mouse.click(position.x, position.y);
+  const pointIds = (await page.evaluate(() => window.__jot2dTest.serializedModelForTest())).points.map((point) => point.id);
+
+  await page.locator("#toolThreePointArc").click();
+  for (const position of positions) await page.mouse.click(position.x, position.y);
+  const state = await page.evaluate(() => window.__jot2dTest.serializedModelForTest());
+  expect(state.arcs).toHaveLength(1);
+  expect(state.points).toHaveLength(4);
+  const arc = state.arcs[0];
+  const endpointConstraints = state.constraints.filter((constraint) => constraint.type === "arcEndpointCoincident" && constraint.arc === arc.id);
+  expect(endpointConstraints.map((constraint) => constraint.endpoint).sort()).toEqual(["end", "start"]);
+  expect(endpointConstraints.map((constraint) => constraint.point).sort()).toEqual(pointIds.slice(0, 2).sort());
+  expect(state.constraints).toContainEqual(expect.objectContaining({
+    type: "pointOnCircle",
+    point: pointIds[2],
+    primitive: arc.id,
+  }));
+});
+
 test("document parameters, quoted dimension formulas, rename propagation, and v19 persistence work together", async ({ page }) => {
   await page.goto(`${baseUrl}/index.html?test=1`);
   await page.waitForFunction(() => window.__jot2dTest);

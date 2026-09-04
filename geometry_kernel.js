@@ -41,6 +41,48 @@
     return start + difference;
   }
 
+  function threePointArcGeometry(start, end, through, epsilon = MIN_ORIENTATION_LENGTH) {
+    if (!start || !end || !through) return null;
+    const values = [start.x, start.y, end.x, end.y, through.x, through.y].map(Number);
+    if (values.some((value) => !Number.isFinite(value))) return null;
+
+    const [ax, ay, bx, by, cx, cy] = values;
+    const abx = bx - ax;
+    const aby = by - ay;
+    const acx = cx - ax;
+    const acy = cy - ay;
+    const bcx = cx - bx;
+    const bcy = cy - by;
+    const minimum = Math.max(0, Number(epsilon) || 0);
+    const minimumSquared = minimum * minimum;
+    const abSquared = abx * abx + aby * aby;
+    const acSquared = acx * acx + acy * acy;
+    const bcSquared = bcx * bcx + bcy * bcy;
+    if (abSquared <= minimumSquared || acSquared <= minimumSquared || bcSquared <= minimumSquared) return null;
+
+    const cross = abx * acy - aby * acx;
+    const scale = Math.sqrt(Math.max(abSquared, acSquared, bcSquared));
+    if (Math.abs(cross) <= minimum * scale) return null;
+
+    const determinant = cross * 2;
+    const center = {
+      x: ax + (acy * abSquared - aby * acSquared) / determinant,
+      y: ay + (abx * acSquared - acx * abSquared) / determinant,
+    };
+    const radius = Math.hypot(center.x - ax, center.y - ay);
+    if (!Number.isFinite(center.x) || !Number.isFinite(center.y) || !Number.isFinite(radius) || radius <= minimum) return null;
+
+    const startAngle = Math.atan2(ay - center.y, ax - center.x);
+    const rawEndAngle = Math.atan2(by - center.y, bx - center.x);
+    const throughAngle = Math.atan2(cy - center.y, cx - center.x);
+    const counterclockwiseSweep = normalizeAnglePositive(rawEndAngle - startAngle);
+    const throughCounterclockwise = normalizeAnglePositive(throughAngle - startAngle);
+    const endAngle = throughCounterclockwise < counterclockwiseSweep
+      ? startAngle + counterclockwiseSweep
+      : startAngle - (TWO_PI - counterclockwiseSweep);
+    return { center, radius, startAngle, endAngle };
+  }
+
   function angleOnSignedSweep(angle, start, end) {
     const sweep = end - start;
     if (Math.abs(sweep) >= TWO_PI) return true;
@@ -207,6 +249,7 @@
     arcSweep,
     unwrapAngleNear,
     shortestAngleFrom,
+    threePointArcGeometry,
     angleOnSignedSweep,
     arcParamOnSweep,
     angleAtArcParam,
