@@ -151,7 +151,7 @@ test.afterAll(() => {
   if (serverProcess) serverProcess.kill();
 });
 
-test("complete documents normalize to stable v19 unified-canvas data", async ({ page }) => {
+test("complete documents normalize to stable v20 unified-canvas data", async ({ page }) => {
   await openTestApp(page);
   const first = await importFixture(page);
   const reload = await page.evaluate(
@@ -166,10 +166,63 @@ test("complete documents normalize to stable v19 unified-canvas data", async ({ 
   expect(first.blockDefinitions.map((definition) => definition.id)).toEqual(["B1", "B2"]);
   expect(first.blockDefinitions.find((definition) => definition.id === "B1").parentDefinitionId).toBe("B2");
   expect(first.blockInstances[0].enabledSketchIds).toEqual(["S1", "S2"]);
-  expect(first.version).toBe(19);
+  expect(first.version).toBe(20);
   expect(first).not.toHaveProperty("presentationSheets");
   expect(first).not.toHaveProperty("activePresentationSheetId");
   expect(first.annotations).toEqual([]);
+});
+
+test("document length units persist as millimeters and legacy v19 data migrates without rescaling", async ({ page }) => {
+  await openTestApp(page);
+  const current = await importFixture(page);
+  expect(current.units).toEqual({ length: "mm" });
+
+  const legacy = structuredClone(current);
+  legacy.version = 19;
+  delete legacy.units;
+  const firstPointBefore = { x: legacy.points[0].x, y: legacy.points[0].y };
+  expect(await page.evaluate(
+    ({ data, fileName }) => window.__jot2dTest.loadDocumentFixtureForDragTest(data, fileName),
+    { data: legacy, fileName: "legacy-v19-without-units.jot2d" },
+  )).toEqual(expect.objectContaining({ success: true }));
+
+  const migrated = await page.evaluate(() => window.__jot2dTest.serializedModelForTest());
+  expect(migrated.version).toBe(20);
+  expect(migrated.units).toEqual({ length: "mm" });
+  expect(migrated.points[0]).toEqual(expect.objectContaining(firstPointBefore));
+
+  const missingUnits = structuredClone(migrated);
+  delete missingUnits.units;
+  expect(await page.evaluate(
+    ({ data, fileName }) => window.__jot2dTest.loadDocumentFixtureForDragTest(data, fileName),
+    { data: missingUnits, fileName: "invalid-v20-missing-units.jot2d" },
+  )).toEqual(expect.objectContaining({ success: false }));
+
+  const unsupportedUnits = structuredClone(migrated);
+  unsupportedUnits.units = { length: "in" };
+  expect(await page.evaluate(
+    ({ data, fileName }) => window.__jot2dTest.loadDocumentFixtureForDragTest(data, fileName),
+    { data: unsupportedUnits, fileName: "invalid-v20-inch-units.jot2d" },
+  )).toEqual(expect.objectContaining({ success: false }));
+  expect(exactPersistedDocument(await page.evaluate(() => window.__jot2dTest.serializedModelForTest()))).toEqual(exactPersistedDocument(migrated));
+});
+
+test("100 percent display zoom maps 25.4 millimeters to 96 CSS pixels", async ({ page }) => {
+  await openTestApp(page);
+  const state = await page.evaluate(() => {
+    const initial = window.__jot2dTest.displayZoomStateForTest();
+    const atHundred = window.__jot2dTest.displayZoomStateForTest(1);
+    const start = window.__jot2dTest.worldClientPositionForTest({ x: 0, y: 0 });
+    const end = window.__jot2dTest.worldClientPositionForTest({ x: 25.4, y: 0 });
+    const atHalf = window.__jot2dTest.displayZoomStateForTest(0.5);
+    return { initial, atHundred, atHalf, screenDistance: end.x - start.x };
+  });
+
+  expect(state.initial).toEqual(expect.objectContaining({ units: { length: "mm" }, zoomRatio: 1, formatted: "100%" }));
+  expect(state.atHundred.cssPixelsPerMillimeter).toBeCloseTo(96 / 25.4, 10);
+  expect(state.atHundred.viewportScale).toBeCloseTo(96 / 25.4, 10);
+  expect(state.screenDistance).toBeCloseTo(96, 8);
+  expect(state.atHalf).toEqual(expect.objectContaining({ zoomRatio: 0.5, formatted: "50.0%" }));
 });
 
 test("constraint commit accepts a stalled solver result within the application tolerance", async ({ page }) => {
@@ -214,11 +267,11 @@ test("complete documents are byte-shape stable apart from savedAt", async ({ pag
   expect(exactPersistedDocument(second)).toEqual(exactPersistedDocument(first));
 });
 
-test("legacy v1 documents normalize to stable v19 data and reserve new ids", async ({ page }) => {
+test("legacy v1 documents normalize to stable v20 data and reserve new ids", async ({ page }) => {
   await openTestApp(page);
   const legacy = JSON.parse(fs.readFileSync(path.resolve(__dirname, "../../test-data/テスト図形.json"), "utf8"));
   const first = await importFixture(page, legacy, "legacy-v1.json");
-  expect(first.version).toBe(19);
+  expect(first.version).toBe(20);
   expect(first.sketches).toEqual(expect.arrayContaining([
     expect.objectContaining({ id: "ROOT", kind: "root" }),
     expect.objectContaining({ id: "S1", parentSketchId: "ROOT" }),
