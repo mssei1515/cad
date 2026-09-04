@@ -3175,6 +3175,7 @@ test("dashed previews do not leak canvas stroke state", async ({ page }) => {
   expect(result).toEqual({
     line: [],
     rectangle: [],
+    slot: [],
     circle: [],
     arc: [],
     offset: [],
@@ -3781,4 +3782,92 @@ test("middle line trim transfers right-side point constraints to the new segment
   expect(result.rightConstraintOnRightLine).toBe(true);
   expect(result.leftLineEnd).toEqual({ x: 40, y: 0 });
   expect(result.rightLineStart).toEqual({ x: 60, y: 0 });
+});
+
+test("slot command creates two tangent lines and two semicircular arcs", async ({ page }) => {
+  await page.goto(`${baseUrl}/index.html?test=1`);
+  await page.waitForFunction(() => window.__jot2dTest);
+  await page.evaluate(() => window.__jot2dTest.focusWorldForTest({ x: 0, y: 0 }, 3));
+  const client = async (point) => page.evaluate((value) => window.__jot2dTest.worldClientPositionForTest(value), point);
+  const first = await client({ x: -50, y: 0 });
+  const second = await client({ x: 50, y: 0 });
+  const width = await client({ x: 0, y: 20 });
+
+  await page.locator("#toolSlot").click();
+  await page.mouse.click(first.x, first.y);
+  await page.keyboard.press("Escape");
+  expect(await page.evaluate(() => window.__jot2dTest.authoringStateForTest())).toEqual(expect.objectContaining({ mode: "slot", pointCount: 0, lineCount: 0, arcCount: 0 }));
+
+  await page.waitForTimeout(500);
+  await page.mouse.click(first.x, first.y);
+  await page.waitForTimeout(500);
+  await page.mouse.click(first.x, first.y);
+  await expect(page.locator("#hint")).toContainText("1つ目の中心から離れた位置");
+  await page.mouse.click(second.x, second.y);
+  const centerline = await client({ x: 0, y: 0 });
+  await page.mouse.click(centerline.x, centerline.y);
+  await expect(page.locator("#hint")).toContainText("中心線から離れた幅位置");
+  await page.mouse.click(width.x, width.y);
+  await expect(page.locator("#hint")).not.toHaveClass(/error/);
+  await expect(page.locator("#hint")).not.toContainText("重複拘束");
+
+  const data = await page.evaluate(() => window.__jot2dTest.serializedModelForTest());
+  expect(data.points).toHaveLength(6);
+  expect(data.lines).toHaveLength(2);
+  expect(data.arcs).toHaveLength(2);
+  expect(data.circles).toHaveLength(0);
+  const points = new Map(data.points.map((point) => [point.id, point]));
+  const centers = data.arcs.map((arc) => points.get(arc.center));
+  expect(centers.map((point) => point.x).sort((a, b) => a - b)).toEqual([-50, 50]);
+  expect(centers.every((point) => Math.abs(point.y) < 1e-6)).toBe(true);
+  expect(data.arcs.every((arc) => Math.abs(arc.radius - 20) < 1e-6)).toBe(true);
+  expect(data.arcs.every((arc) => Math.abs(Math.abs(arc.endAngle - arc.startAngle) - Math.PI) < 1e-8)).toBe(true);
+  expect(data.lines.every((line) => Math.abs(points.get(line.p1).y - points.get(line.p2).y) < 1e-6)).toBe(true);
+  expect(data.lines.map((line) => Math.round(points.get(line.p1).y)).sort((a, b) => a - b)).toEqual([-20, 20]);
+  const types = data.constraints.map((constraint) => constraint.type);
+  expect(types.filter((type) => type === "arcEndpointCoincident")).toHaveLength(4);
+  expect(types.filter((type) => type === "lineCircleTangent")).toHaveLength(4);
+  expect(types.filter((type) => type === "equalRadius")).toHaveLength(1);
+
+  const moved = await page.evaluate((pointId) => window.__jot2dTest.guidedPointDragForTest(pointId, -12, 9), centers[0].id);
+  expect(moved.final.success).toBe(true);
+  expect(moved.final.baseErrorNorm).toBeLessThan(1e-4);
+  const movedData = await page.evaluate(() => window.__jot2dTest.serializedModelForTest());
+  const movedPoints = new Map(movedData.points.map((point) => [point.id, point]));
+  const movedLines = new Map(movedData.lines.map((line) => [line.id, line]));
+  const movedArcs = new Map(movedData.arcs.map((arc) => [arc.id, arc]));
+  for (const constraint of movedData.constraints.filter((item) => item.type === "lineCircleTangent")) {
+    const line = movedLines.get(constraint.line);
+    const arc = movedArcs.get(constraint.primitive);
+    const p1 = movedPoints.get(line.p1);
+    const p2 = movedPoints.get(line.p2);
+    const center = movedPoints.get(arc.center);
+    const dx = p2.x - p1.x;
+    const dy = p2.y - p1.y;
+    const distance = Math.abs(((center.x - p1.x) * -dy + (center.y - p1.y) * dx) / Math.hypot(dx, dy));
+    expect(Math.abs(distance - arc.radius)).toBeLessThan(1e-4);
+  }
+});
+
+test("slot command keeps center and width-point snaps as constraints", async ({ page }) => {
+  await page.goto(`${baseUrl}/index.html?test=1`);
+  await page.waitForFunction(() => window.__jot2dTest);
+  await page.evaluate(() => window.__jot2dTest.focusWorldForTest({ x: 0, y: 0 }, 3));
+  const worldPoints = [{ x: -60, y: 0 }, { x: 60, y: 0 }, { x: 0, y: 25 }];
+  const clients = await page.evaluate((points) => points.map((point) => window.__jot2dTest.worldClientPositionForTest(point)), worldPoints);
+  await page.locator("#toolPoint").click();
+  for (const point of clients) await page.mouse.click(point.x, point.y);
+
+  await page.locator("#toolSlot").click();
+  for (const point of clients) await page.mouse.click(point.x, point.y);
+
+  const data = await page.evaluate(() => window.__jot2dTest.serializedModelForTest());
+  expect(data.lines).toHaveLength(2);
+  expect(data.arcs).toHaveLength(2);
+  const centerIds = new Set(data.arcs.map((arc) => arc.center));
+  const centerCoincidences = data.constraints.filter((constraint) => constraint.type === "coincident" && (centerIds.has(constraint.p1) || centerIds.has(constraint.p2)));
+  expect(centerCoincidences).toHaveLength(2);
+  const widthPointConstraint = data.constraints.find((constraint) => constraint.type === "pointOnLine" && constraint.point === data.points[2].id);
+  expect(widthPointConstraint).toBeTruthy();
+  expect(data.lines.some((line) => line.id === widthPointConstraint.line)).toBe(true);
 });
