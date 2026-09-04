@@ -37,7 +37,7 @@ function projectedTargetPointIds(target) {
   return target.fitPoints.map((point) => point.id);
 }
 
-test("projects every supported geometry kind with geometry-owned points, normal/purple status colors, clear icon, tree, properties, and v19 persistence", async ({ page }) => {
+test("projects every supported geometry kind with geometry-owned points, normal/purple status colors, clear icon, tree, properties, and v20 persistence", async ({ page }) => {
   const fixture = await createAllProjectionKinds(page);
   let state = await page.evaluate(() => window.__jot2dTest.sketchProjectionStateForTest());
 
@@ -66,7 +66,7 @@ test("projects every supported geometry kind with geometry-owned points, normal/
   expect(state.constraints.filter((item) => item.kind === "line").every((item) => item.redundant === false)).toBe(true);
 
   const serializedLinks = state.serialized.constraints.filter((item) => item.type === "sketchProjection");
-  expect(state.serialized.version).toBe(19);
+  expect(state.serialized.version).toBe(20);
   expect(serializedLinks).toHaveLength(6);
   expect(serializedLinks.every((item) => item.enabled === true && item.reference === true && item.source && item.target)).toBe(true);
 
@@ -146,7 +146,7 @@ test("tracks source shape and spline topology, then treats v18 projection links 
 
   const legacy = await page.evaluate(() => window.__jot2dTest.reloadSketchProjectionForTest(18));
   expect(legacy.constraints).toHaveLength(0);
-  expect(legacy.serialized.version).toBe(19);
+  expect(legacy.serialized.version).toBe(20);
   expect(legacy.serialized.lines.filter((line) => line.sketchId === "S3")).toHaveLength(2);
 });
 
