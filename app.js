@@ -14929,8 +14929,9 @@
     if (objectRow) return void activateSketchTreeObject(objectRow, event.ctrlKey || event.shiftKey);
     const sketchRow = event.target.closest(".sketch-item");
     if (sketchRow) {
+      const wasActive = sketchRow.dataset.id === activeSketchId();
       setActiveSketch(sketchRow.dataset.id);
-      if (sketchRow.classList.contains("has-groups")) {
+      if (wasActive && sketchRow.classList.contains("has-groups")) {
         const key = sketchTreeSketchKey(sketchRow.dataset.id);
         sketchTreeSketchOpenState.set(key, sketchRow.getAttribute("aria-expanded") !== "true");
         updateSketchUI();
