@@ -311,6 +311,88 @@ test("arc angle unwrapping and shortest branches preserve signed boundaries", ()
   assert.ok(Math.abs(kernel.shortestAngleFrom(twoPi * 2, Math.PI / 2) - (twoPi * 2 + Math.PI / 2)) < 1e-12);
 });
 
+test("three-point arc geometry chooses the directed sweep that contains the through point", () => {
+  const upper = kernel.threePointArcGeometry(
+    { x: -5, y: 0 },
+    { x: 5, y: 0 },
+    { x: 0, y: -5 },
+  );
+  assert.ok(upper);
+  assert.ok(Math.abs(upper.center.x) < 1e-12);
+  assert.ok(Math.abs(upper.center.y) < 1e-12);
+  assert.ok(Math.abs(upper.radius - 5) < 1e-12);
+  assert.ok(upper.endAngle > upper.startAngle);
+  assert.equal(kernel.angleOnSignedSweep(-Math.PI / 2, upper.startAngle, upper.endAngle), true);
+
+  const major = kernel.threePointArcGeometry(
+    { x: -5, y: 0 },
+    { x: 5, y: 0 },
+    { x: 0, y: -10 },
+  );
+  assert.ok(major);
+  assert.ok(major.endAngle > major.startAngle);
+  assert.ok(major.endAngle - major.startAngle > Math.PI);
+  const throughAngle = Math.atan2(-10 - major.center.y, -major.center.x);
+  assert.equal(kernel.angleOnSignedSweep(throughAngle, major.startAngle, major.endAngle), true);
+
+  const reversed = kernel.threePointArcGeometry(
+    { x: 5, y: 0 },
+    { x: -5, y: 0 },
+    { x: 0, y: -5 },
+  );
+  assert.ok(reversed);
+  assert.ok(reversed.endAngle < reversed.startAngle);
+  assert.equal(kernel.angleOnSignedSweep(-Math.PI / 2, reversed.startAngle, reversed.endAngle), true);
+});
+
+test("three-point arc geometry rejects coincident, collinear, and non-finite input", () => {
+  assert.equal(kernel.threePointArcGeometry({ x: 0, y: 0 }, { x: 0, y: 0 }, { x: 0, y: 1 }), null);
+  assert.equal(kernel.threePointArcGeometry({ x: 0, y: 0 }, { x: 2, y: 0 }, { x: 1, y: 0 }), null);
+  assert.equal(kernel.threePointArcGeometry({ x: 0, y: 0 }, { x: 2, y: 0 }, { x: 1, y: 1e-10 }, 1e-9), null);
+  assert.equal(kernel.threePointArcGeometry({ x: 0, y: 0 }, { x: 2, y: 0 }, { x: NaN, y: 1 }), null);
+});
+
+test("slot geometry uses two semicircle centers and a width-side point", () => {
+  const geometry = kernel.slotGeometry({ x: 0, y: 0 }, { x: 100, y: 0 }, { x: 35, y: 20 });
+  assert.equal(geometry.centerDistance, 100);
+  assert.equal(geometry.radius, 20);
+  assert.equal(geometry.side, 1);
+  assert.equal(geometry.sideStart.x, 0);
+  assert.equal(geometry.sideStart.y, 20);
+  assert.equal(geometry.sideEnd.x, 100);
+  assert.equal(geometry.sideEnd.y, 20);
+  assert.equal(geometry.oppositeEnd.x, 100);
+  assert.equal(geometry.oppositeEnd.y, -20);
+  assert.equal(geometry.oppositeStart.x, 0);
+  assert.equal(geometry.oppositeStart.y, -20);
+  assert.ok(Math.abs(geometry.endArc.endAngle - geometry.endArc.startAngle + Math.PI) < 1e-12);
+  assert.ok(Math.abs(geometry.startArc.endAngle - geometry.startArc.startAngle + Math.PI) < 1e-12);
+});
+
+test("slot geometry reverses semicircle direction when width is picked on the other side", () => {
+  const geometry = kernel.slotGeometry({ x: 10, y: 5 }, { x: 110, y: 5 }, { x: 60, y: -10 });
+  assert.equal(geometry.radius, 15);
+  assert.equal(geometry.side, -1);
+  assert.equal(geometry.sideStart.x, 10);
+  assert.equal(geometry.sideStart.y, -10);
+  assert.equal(geometry.sideEnd.x, 110);
+  assert.equal(geometry.sideEnd.y, -10);
+  assert.ok(Math.abs(geometry.endArc.endAngle - geometry.endArc.startAngle - Math.PI) < 1e-12);
+  assert.ok(Math.abs(geometry.startArc.endAngle - geometry.startArc.startAngle - Math.PI) < 1e-12);
+});
+
+test("slot geometry preserves perpendicular radius for rotated slots and rejects degenerate input", () => {
+  const geometry = kernel.slotGeometry({ x: 2, y: 3 }, { x: 5, y: 7 }, { x: -2, y: 6 });
+  assert.ok(geometry);
+  assert.equal(geometry.centerDistance, 5);
+  assert.ok(Math.abs(geometry.radius - 5) < 1e-12);
+  assert.ok(Math.abs(Math.hypot(geometry.sideStart.x - 2, geometry.sideStart.y - 3) - 5) < 1e-12);
+  assert.equal(kernel.slotGeometry({ x: 0, y: 0 }, { x: 0, y: 0 }, { x: 0, y: 10 }), null);
+  assert.equal(kernel.slotGeometry({ x: 0, y: 0 }, { x: 10, y: 0 }, { x: 5, y: 0 }), null);
+  assert.equal(kernel.slotGeometry({ x: 0, y: 0 }, { x: 10, y: 0 }, { x: Number.NaN, y: 2 }), null);
+  assert.equal(kernel.slotGeometry({ x: 0, y: 0 }, { x: 1e-10, y: 0 }, { x: 0, y: 1 }, 1e-9), null);
+});
+
 test("signed arc sweep membership and parameters preserve direction and degeneracy", () => {
   const twoPi = Math.PI * 2;
   assert.equal(kernel.angleOnSignedSweep(0, Math.PI * 1.5, Math.PI * 2.5), true);
