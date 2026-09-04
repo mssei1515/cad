@@ -56,6 +56,8 @@ Constraintの各Geometry参照fieldは保存形式上は従来どおりbare ID�
 
 1クリックで explicit Point を作る。スナップ先があれば同じ座標に配置し、同一 Sketch 内で必要な一致拘束等を追加する。別 Sketch へのスナップは位置だけを利用し、通常拘束を自動追加しない。
 
+空白位置のdouble clickで点作図commandを終了する。終了判定のためにdouble clickの1回目で一時作成されたPointは、Geometry、履歴およびSelectionから破棄し、後続の拘束・寸法commandの対象に含めない。
+
 ### 連続線
 
 クリック列から Line を連続作成する。既存端点へスナップした場合は Point を共有できる。Shift を押したクリックでは前点から水平または垂直に近い方向へ固定し、対応する拘束を追加する。Esc で現在の連続作図を終了する。
