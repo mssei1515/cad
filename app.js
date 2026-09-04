@@ -262,8 +262,10 @@
   const ROOT_SKETCH_NAME = "Root Sketch";
   const DEFAULT_SKETCH_ID = "S1";
   const DEFAULT_SKETCH_NAME = "Sketch-1";
+  const DEFAULT_DOCUMENT_UNITS = Object.freeze({ length: "mm" });
   const model = {
     documentName: DEFAULT_DOCUMENT_NAME,
+    units: { ...DEFAULT_DOCUMENT_UNITS },
     defaultAppearance: null,
     defaultConstructionAppearance: null,
     defaultDimensionAppearance: null,
@@ -421,14 +423,17 @@
   let historyRestoring = false;
   let geometryClipboard = null;
   const HISTORY_LIMIT = 80;
-  const CURRENT_JSON_VERSION = 19;
+  const CURRENT_JSON_VERSION = 20;
+  const CSS_PIXELS_PER_INCH = 96;
+  const MILLIMETERS_PER_INCH = 25.4;
+  const CSS_PX_PER_MM = CSS_PIXELS_PER_INCH / MILLIMETERS_PER_INCH;
   const REFERENCE_IMAGE_MAX_SIDE_PX = 3000;
   const SKETCH_TREE_MIN_WIDTH = 220;
   const SKETCH_TREE_MAX_WIDTH = 560;
   const SKETCH_TREE_KEYBOARD_RESIZE_STEP = 16;
   const CLIPBOARD_PASTE_OFFSET_SCREEN_PX = 24;
   const BLOCK_ORTHOGONAL_ROTATION_STEP = Math.PI / 2;
-  const viewport = { x: 0, y: 0, scale: 1 };
+  const viewport = { x: 0, y: 0, scale: CSS_PX_PER_MM };
   const canvasRenderMetrics = { width: 0, height: 0, dpr: 1 };
   let canvasResizeObserver = null;
   let pendingCanvasPointerMove = null;
@@ -436,19 +441,19 @@
   const viewState = { constraintStatus: false, geometryIds: false };
   let constraintStatusMouseLatched = false;
   let constraintStatusSpaceHeld = false;
-  const MIN_ZOOM = 0.001;
-  const MAX_ZOOM = 10000000;
+  const MIN_ZOOM = CSS_PX_PER_MM * 0.001;
+  const MAX_ZOOM = CSS_PX_PER_MM * 10000000;
   const CONSTRUCTION_EXTENSION_SCREEN_PX = 12;
   const CENTERLINE_PARALLEL_TOLERANCE = 1e-5;
   const CONSTRUCTION_GEOMETRY_ALPHA = 0.72;
-  const DIMENSION_SCREEN_PX_PER_MM = 96 / 25.4;
-  const ANNOTATION_SCREEN_PX_PER_MM = 96 / 25.4;
+  const DIMENSION_SCREEN_PX_PER_MM = CSS_PX_PER_MM;
+  const ANNOTATION_SCREEN_PX_PER_MM = CSS_PX_PER_MM;
   const DIMENSION_TERMINATOR_FIT_MARGIN_FACTOR = 1;
   const DIMENSION_OUTSIDE_SHAFT_LENGTH_FACTOR = 1.5;
   const DIMENSION_EXPRESSION_MARK_WIDTH_FACTOR = 0.58;
   const DIMENSION_EXPRESSION_MARK_GAP_FACTOR = 0.16;
   const DIMENSION_ARROW_MITER_LIMIT = 10;
-  const HATCH_SCREEN_PX_PER_MM = 96 / 25.4;
+  const HATCH_SCREEN_PX_PER_MM = CSS_PX_PER_MM;
   const DIMENSION_APPEARANCE_LENGTH_KEYS = ["extensionLineOvershoot", "extensionLineOriginGap", "terminatorSize", "dimensionTextHeight", "dimensionTextGap"];
   const DIMENSION_DISPLAY_PRECISION = 1e-6;
   const MEASURED_DIMENSION_SNAP_TOLERANCE = 1e-5;
@@ -1291,6 +1296,7 @@
   }
 
   function ensureModelState() {
+    model.units = { ...DEFAULT_DOCUMENT_UNITS };
     ensureSketchState();
     ensureAppearanceState();
     ensureBlockState();
@@ -5459,7 +5465,7 @@
     if (draft.lines.length + draft.circles.length + draft.arcs.length + (draft.splines?.length || 0) + (draft.annotations?.length || 0) + (draft.hatches?.length || 0) + (draft.referenceImages?.length || 0) + model.blockInstances.length > 0) fitAllGeometryToViewport();
     else {
       const rect = canvas.getBoundingClientRect();
-      viewport.scale = 1;
+      viewport.scale = CSS_PX_PER_MM;
       viewport.x = rect.width / 2;
       viewport.y = rect.height / 2;
     }
@@ -6432,6 +6438,7 @@
     mode = "select";
     lastAuthoringPerformance = null;
     model.documentName = DEFAULT_DOCUMENT_NAME;
+    model.units = { ...DEFAULT_DOCUMENT_UNITS };
     model.points.length = 0;
     model.lines.length = 0;
     model.circles.length = 0;
@@ -6914,6 +6921,7 @@
       version: CURRENT_JSON_VERSION,
       savedAt: new Date().toISOString(),
       documentName: effectiveDocumentName(),
+      units: { ...model.units },
       defaultAppearance: normalizeAppearance(model.defaultAppearance, { partial: false }),
       defaultConstructionAppearance: normalizeConstructionAppearance(model.defaultConstructionAppearance, { partial: false }),
       defaultDimensionAppearance: normalizeDimensionAppearance(model.defaultDimensionAppearance, { partial: false }),
@@ -7314,6 +7322,10 @@
     }
     lastLoadBlockConstraintRepairMessage = "";
     const sourceVersion = Number(data.version) || 1;
+    if (sourceVersion >= 20 && (!data.units || typeof data.units !== "object" || Array.isArray(data.units) || data.units.length !== "mm")) {
+      throw new Error(applicationText("Documentの長さ単位が正しくありません", "Invalid document length unit"));
+    }
+    const loadedUnits = { ...DEFAULT_DOCUMENT_UNITS };
     const normalizeLoadedExpression = (value) => sourceVersion < 17
       ? migrateLegacyParameterExpression(String(value ?? ""))
       : String(value ?? "");
@@ -7867,6 +7879,7 @@
       for (const [key, value] of preservedSketchTreeGroups) sketchTreeGroupOpenState.set(key, value);
     }
     model.documentName = loadedDocumentName;
+    model.units = loadedUnits;
     model.sketches.length = 0;
     model.sketches.push(...loadedSketches);
     model.activeSketchId = normalizeSketchId(data.activeSketchId);
@@ -8476,7 +8489,7 @@
   }
 
   function formatZoom(scale) {
-    const percent = scale * 100;
+    const percent = scale / CSS_PX_PER_MM * 100;
     if (percent >= 1000000) return `${(percent / 1000000).toFixed(2)}M%`;
     if (percent >= 10000) return `${(percent / 1000).toFixed(1)}k%`;
     if (percent >= 1000) return `${percent.toFixed(0)}%`;
@@ -23012,6 +23025,8 @@
       },
       resetForResponsiveLineDragTest() {
         sampleModel();
+        fitAllGeometryToViewport(160);
+        draw();
         resetHistory("responsive line drag test");
         return serializeModel();
       },
@@ -23224,10 +23239,11 @@
         const instance = { id: "BI1", definitionId: parent.id, sketchId: DEFAULT_SKETCH_ID, x: 240, y: 180, rotation: Math.PI / 2, fixed: false, rotationLocked: false, enabledSketchIds: [DEFAULT_SKETCH_ID], appearanceOverride: { color: "#db2777", lineWidth: 3, visible: true } };
         model.blockInstances.push(instance);
         invalidateBlockProjectionCache();
+        updateUI();
+        fitAllGeometryToViewport(160);
         const projected = blockProjectionBundle(instance).hatches[0];
         const rect = canvas.getBoundingClientRect();
         const screen = worldToCanvasScreen(projected.seed);
-        updateUI();
         draw();
         return {
           projected: { id: projected.id, patternType: projected.appearance.patternType, angle: projected.appearance.angle, color: projected.appearance.color, lineWidth: projected.appearance.lineWidth, valid: resolvedHatchBoundary(projected).ok },
@@ -24405,6 +24421,16 @@
           scale: viewport.scale,
           center: currentCanvasCenterWorld(),
           canvas: { left: rect.left, top: rect.top, width: rect.width, height: rect.height },
+        };
+      },
+      displayZoomStateForTest(zoomRatio = null) {
+        if (zoomRatio != null) viewport.scale = clampZoom(Number(zoomRatio) * CSS_PX_PER_MM);
+        return {
+          units: { ...model.units },
+          zoomRatio: viewport.scale / CSS_PX_PER_MM,
+          formatted: formatZoom(viewport.scale),
+          cssPixelsPerMillimeter: CSS_PX_PER_MM,
+          viewportScale: viewport.scale,
         };
       },
       worldClientPositionForTest(point) {

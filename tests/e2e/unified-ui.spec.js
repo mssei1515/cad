@@ -104,7 +104,8 @@ function annotationSketchFixture(version = 11) {
 
 function lineCircleSparseLineDragFixture() {
   return {
-    version: 19,
+    version: 20,
+    units: { length: "mm" },
     documentName: "Sparse line-circle drag",
     defaultAppearance: { visible: true, color: "#111827", lineType: "solid", lineWidth: 2 },
     defaultConstructionAppearance: { visible: true, color: "#64748b", lineType: "dashdot", lineWidth: 1, endpointOverhang: true, endpointMarkers: true },
@@ -314,7 +315,7 @@ test("three-point arc keeps endpoint and circumference point snaps as constraint
   }));
 });
 
-test("document parameters, quoted dimension formulas, rename propagation, and v19 persistence work together", async ({ page }) => {
+test("document parameters, quoted dimension formulas, rename propagation, and v20 persistence work together", async ({ page }) => {
   await page.goto(`${baseUrl}/index.html?test=1`);
   await page.waitForFunction(() => window.__jot2dTest);
   const initial = await page.evaluate(() => window.__jot2dTest.resetForParameterTest());
@@ -354,7 +355,7 @@ test("document parameters, quoted dimension formulas, rename propagation, and v1
   expect(state.valid).toBe(true);
   expect(state.parameters.map((item) => item.name)).toEqual(["span", "margin"]);
   expect(state.dimensions.find((item) => !item.readOnly).expression).toContain("span");
-  expect(state.serialized.version).toBe(19);
+  expect(state.serialized.version).toBe(20);
   expect(state.serialized.constraints.every((constraint) => !constraint.dimension || constraint.parameterName)).toBe(true);
 });
 
@@ -496,7 +497,7 @@ test("v16 formulas migrate to quoted references and current unquoted references 
   const migrated = await page.evaluate((data) => window.__jot2dTest.loadDocumentFixtureForDragTest(data, "legacy-v16-formulas.jot2d"), legacy);
   expect(migrated.success).toBe(true);
   const migratedState = await page.evaluate(() => window.__jot2dTest.serializedModelForTest());
-  expect(migratedState.version).toBe(19);
+  expect(migratedState.version).toBe(20);
   expect(migratedState.parameters[0].expression).toMatch(/^"d\d+" \* 2$/);
   expect(migratedState.constraints.find((constraint) => constraint.expression?.includes("width"))?.expression).toBe('"width" / 2 + "margin"');
 
@@ -547,6 +548,7 @@ test("document annotations can be dragged on the unified canvas", async ({ page 
   await page.goto(`${baseUrl}/index.html?test=1`);
   await page.waitForFunction(() => window.__jot2dTest);
   await page.evaluate(() => window.__jot2dTest.resetForAnnotationDrag());
+  const displayZoom = await page.evaluate(() => window.__jot2dTest.displayZoomStateForTest());
 
   const beforeText = await page.evaluate(() => window.__jot2dTest.annotationSnapshot());
   await page.mouse.move(beforeText.text.viewport.x, beforeText.text.viewport.y);
@@ -555,7 +557,7 @@ test("document annotations can be dragged on the unified canvas", async ({ page 
   await page.mouse.up();
 
   const afterText = await page.evaluate(() => window.__jot2dTest.annotationSnapshot());
-  expect(afterText.text.world.y).toBeGreaterThan(beforeText.text.world.y + 20);
+  expect(afterText.text.world.y - beforeText.text.world.y).toBeCloseTo(70 / displayZoom.viewportScale, 5);
 
   const beforeLeader = afterText;
   await page.mouse.move(beforeLeader.leader.viewport.x, beforeLeader.leader.viewport.y);
@@ -564,8 +566,8 @@ test("document annotations can be dragged on the unified canvas", async ({ page 
   await page.mouse.up();
 
   const afterLeader = await page.evaluate(() => window.__jot2dTest.annotationSnapshot());
-  expect(afterLeader.leader.world.x).toBeGreaterThan(beforeLeader.leader.world.x + 20);
-  expect(afterLeader.leader.world.y).toBeLessThan(beforeLeader.leader.world.y - 10);
+  expect(afterLeader.leader.world.x - beforeLeader.leader.world.x).toBeCloseTo(70 / displayZoom.viewportScale, 5);
+  expect(afterLeader.leader.world.y - beforeLeader.leader.world.y).toBeCloseTo(-35 / displayZoom.viewportScale, 5);
   await expect(page.locator("#propertiesPanel .property-heading")).toHaveText("引出線");
   await expect(page.locator("#propertiesPanel .property-section h3").first()).toHaveText("基本情報");
   const annotationRows = await page.locator("#propertiesPanel .property-section").first().locator(".property-row").allTextContents();
@@ -818,7 +820,7 @@ test("v10 annotations migrate by target or active sketch and invalid v11 ownersh
   const legacy = annotationSketchFixture(10);
   expect(await page.evaluate((data) => window.__jot2dTest.loadDocumentFixtureForDragTest(data, "annotation-v10.json"), legacy)).toEqual(expect.objectContaining({ success: true }));
   const migrated = await page.evaluate(() => window.__jot2dTest.serializedModelForTest());
-  expect(migrated.version).toBe(19);
+  expect(migrated.version).toBe(20);
   expect(migrated.annotations.find((annotation) => annotation.id === "AN1").sketchId).toBe("S2");
   expect(migrated.annotations.find((annotation) => annotation.id === "AN2").sketchId).toBe("S1");
 
@@ -1523,7 +1525,7 @@ test("Jot2D files open, overwrite, save as, and cancel without errors", async ({
   expect(state.suggestedName).toBe("無題.jot2d");
   expect(state.excludeAcceptAllOption).toBe(true);
   expect(state.accept).toEqual({ "application/json": [".jot2d"] });
-  expect(state.saved.version).toBe(19);
+  expect(state.saved.version).toBe(20);
   expect(state.saved.documentName).toBe("無題");
   expect(state.fileState).toEqual({ hasHandle: true, handleName: "first-save.jot2d" });
 
@@ -1842,7 +1844,7 @@ test("Canvas context menu exposes common and object-specific operations", async 
   await expect(page.locator("#togglePropertiesPanelBtn")).toHaveAttribute("aria-expanded", "true");
   await expect(page.locator("#propertiesPanel .property-heading")).toHaveText("線");
 
-  const isolatedPoint = await page.evaluate((client) => window.__jot2dTest.addIsolatedFixedPointForContextTest(client), { x: blank.x - 70, y: blank.y });
+  const isolatedPoint = await page.evaluate((client) => window.__jot2dTest.addIsolatedFixedPointForContextTest(client), { x: canvasArea.x + 70, y: blank.y });
   await page.mouse.click(isolatedPoint.client.x, isolatedPoint.client.y, { button: "right" });
   await expect(menu.locator('[data-context-action="fix-toggle"] span')).toHaveText("固定解除");
   await menu.locator('[data-context-action="fix-toggle"]').click();
@@ -3011,7 +3013,7 @@ test("Constraint dimensions expose defining geometry and inheritable appearance 
   expect(serialized.annotations).toEqual([]);
   await page.evaluate((documentData) => window.__jot2dTest.loadDocumentFixtureForDragTest(documentData, "dimension-appearance.json"), serialized);
   const roundTrip = await page.evaluate(() => window.__jot2dTest.serializedModelForTest());
-  expect(roundTrip.version).toBe(19);
+  expect(roundTrip.version).toBe(20);
   expect(roundTrip.defaultDimensionAppearance).toEqual(serialized.defaultDimensionAppearance);
   expect(roundTrip.constraints[0].dimension.display).toEqual(serialized.constraints[0].dimension.display);
 
@@ -3044,7 +3046,7 @@ test("Constraint dimensions expose defining geometry and inheritable appearance 
   expect(migratedPixels.direct.terminatorSize).toBeCloseTo(18 * 25.4 / 96, 8);
   expect(migratedPixels.direct.terminatorType).toBeUndefined();
   const migratedSerialized = await page.evaluate(() => window.__jot2dTest.serializedModelForTest());
-  expect(migratedSerialized.version).toBe(19);
+  expect(migratedSerialized.version).toBe(20);
   expect(migratedSerialized.defaultDimensionAppearance).not.toHaveProperty("arrows");
   expect(migratedSerialized.defaultDimensionAppearance).not.toHaveProperty("extensionLines");
   expect(migratedSerialized.constraints[0].dimension.display).not.toHaveProperty("arrowheadLength");
@@ -3689,7 +3691,7 @@ test("offset tool builds an explicitly connected line chain with one editable di
   expect(state.offsetIds).toHaveLength(2);
   expect(state.resultJoins[0].end.x).toBeCloseTo(state.resultJoins[0].start.x, 6);
   expect(state.resultJoins[0].end.y).toBeCloseTo(state.resultJoins[0].start.y, 6);
-  expect(state.jsonVersion).toBe(19);
+  expect(state.jsonVersion).toBe(20);
   expect(state.serializedTypes).toBe(1);
 
   await page.keyboard.press("Control+z");

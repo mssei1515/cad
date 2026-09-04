@@ -22,7 +22,7 @@ async function createOpenSpline(page) {
   return fixture;
 }
 
-test("creates and edits a cubic fit-point spline and persists version 19", async ({ page }) => {
+test("creates and edits a cubic fit-point spline and persists version 20", async ({ page }) => {
   await createOpenSpline(page);
 
   let state = await page.evaluate(() => window.__jot2dTest.splineStateForTest());
@@ -37,7 +37,7 @@ test("creates and edits a cubic fit-point spline and persists version 19", async
     endCondition: "natural",
   }));
   expect(state.direct[0].fitPoints).toHaveLength(4);
-  expect(state.serialized.version).toBe(19);
+  expect(state.serialized.version).toBe(20);
   expect(state.propertiesText).toContain("スプライン");
   expect(state.propertiesText).toContain("通過点ID");
   await expect(page.locator("#propertiesPanel .property-section > h3")).toHaveText(["基本情報", "スプラインの外観"]);
