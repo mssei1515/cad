@@ -746,7 +746,7 @@ test("Sketch Tree owns object groups, activates inactive rows, and copies annota
   await expect(page.locator('.sketch-object-row[data-sketch-id="S1"]')).toHaveCount(0);
 });
 
-test("sketch row clicks activate and toggle its object groups", async ({ page }) => {
+test("inactive sketch row clicks activate first and toggle on the next click", async ({ page }) => {
   await page.goto(`${baseUrl}/index.html?test=1`);
   await page.waitForFunction(() => window.__jot2dTest);
   const fixture = annotationSketchFixture();
@@ -756,8 +756,12 @@ test("sketch row clicks activate and toggle its object groups", async ({ page })
   await expect(sketch).toHaveAttribute("aria-expanded", "false");
   await sketch.locator(".sketchActivateBtn").click();
   expect((await page.evaluate(() => window.__jot2dTest.serializedModelForTest())).activeSketchId).toBe("S1");
-  await expect(sketch).toHaveAttribute("aria-expanded", "true");
+  await expect(sketch).toHaveAttribute("aria-expanded", "false");
   await expect(sketch.locator(".sketchActivateBtn")).toHaveAttribute("aria-current", "true");
+  await expect(page.locator('.sketch-group-row[data-sketch-id="S1"]')).toHaveCount(0);
+
+  await sketch.locator(".sketchActivateBtn").click();
+  await expect(sketch).toHaveAttribute("aria-expanded", "true");
   await expect(page.locator('.sketch-group-row[data-sketch-id="S1"]')).toHaveCount(3);
 
   await sketch.locator(".sketch-badges").click();
