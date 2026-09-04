@@ -83,6 +83,42 @@
     return { center, radius, startAngle, endAngle };
   }
 
+  function slotGeometry(firstCenter, secondCenter, widthPoint, epsilon = MIN_ORIENTATION_LENGTH) {
+    const values = [firstCenter?.x, firstCenter?.y, secondCenter?.x, secondCenter?.y, widthPoint?.x, widthPoint?.y];
+    if (!values.every(Number.isFinite)) return null;
+    const dx = secondCenter.x - firstCenter.x;
+    const dy = secondCenter.y - firstCenter.y;
+    const centerDistance = Math.hypot(dx, dy);
+    if (centerDistance < epsilon) return null;
+    const ux = dx / centerDistance;
+    const uy = dy / centerDistance;
+    const baseNormal = { x: -uy, y: ux };
+    const signedRadius = (widthPoint.x - firstCenter.x) * baseNormal.x + (widthPoint.y - firstCenter.y) * baseNormal.y;
+    const radius = Math.abs(signedRadius);
+    if (radius < epsilon) return null;
+    const side = signedRadius < 0 ? -1 : 1;
+    const normal = { x: baseNormal.x * side, y: baseNormal.y * side };
+    const sideStart = { x: firstCenter.x + normal.x * radius, y: firstCenter.y + normal.y * radius };
+    const sideEnd = { x: secondCenter.x + normal.x * radius, y: secondCenter.y + normal.y * radius };
+    const oppositeEnd = { x: secondCenter.x - normal.x * radius, y: secondCenter.y - normal.y * radius };
+    const oppositeStart = { x: firstCenter.x - normal.x * radius, y: firstCenter.y - normal.y * radius };
+    const normalAngle = Math.atan2(normal.y, normal.x);
+    const sweep = -side * Math.PI;
+    return {
+      firstCenter: { x: firstCenter.x, y: firstCenter.y },
+      secondCenter: { x: secondCenter.x, y: secondCenter.y },
+      centerDistance,
+      radius,
+      side,
+      sideStart,
+      sideEnd,
+      oppositeEnd,
+      oppositeStart,
+      endArc: { startAngle: normalAngle, endAngle: normalAngle + sweep },
+      startArc: { startAngle: normalAngle + Math.PI, endAngle: normalAngle + Math.PI + sweep },
+    };
+  }
+
   function angleOnSignedSweep(angle, start, end) {
     const sweep = end - start;
     if (Math.abs(sweep) >= TWO_PI) return true;
@@ -250,6 +286,7 @@
     unwrapAngleNear,
     shortestAngleFrom,
     threePointArcGeometry,
+    slotGeometry,
     angleOnSignedSweep,
     arcParamOnSweep,
     angleAtArcParam,

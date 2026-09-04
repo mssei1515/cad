@@ -20,6 +20,7 @@ const drawingToolIds = [
   "toolCircle",
   "toolArc",
   "toolThreePointArc",
+  "toolSlot",
   "toolConstructionLine",
   "toolRectangle",
   "toolTrim",
@@ -325,6 +326,12 @@ test("every geometry creation click stays responsive at full fixture complexity"
       tool: "toolRectangle",
       clicks: [{ x: x - 100, y: -70 }, { x: x + 100, y: 70 }],
       delta: { pointCount: 4, lineCount: 4, circleCount: 0, arcCount: 0 },
+    },
+    {
+      name: "slot",
+      tool: "toolSlot",
+      clicks: [{ x: x - 100, y: 0 }, { x: x + 100, y: 0 }, { x, y: 55 }],
+      delta: { pointCount: 6, lineCount: 2, circleCount: 0, arcCount: 2 },
     },
   ];
 

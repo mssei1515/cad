@@ -11,6 +11,7 @@
     unwrapAngleNear,
     shortestAngleFrom,
     threePointArcGeometry,
+    slotGeometry,
     angleOnSignedSweep,
     arcParamOnSweep,
     angleAtArcParam,
@@ -143,7 +144,7 @@
     ["上書き保存", "Overwrite Save"], ["名前を付けて保存", "Save As"], ["開く", "Open"], ["Parameter…", "Parameters…"], ["ドキュメント設定", "Document Settings"], ["アプリケーション設定", "Application Settings"],
     ["元に戻す", "Undo"], ["やり直す", "Redo"], ["削除", "Delete"], ["選択", "Select"], ["選択・ドラッグ", "Select / Drag"],
     ["ジオメトリ", "Geometry"], ["拘束", "Constraint"], ["注記", "Annotation"], ["ツールバー", "Toolbar"], ["メニューバー", "Menu bar"], ["表示ツール", "View"],
-    ["点", "Point"], ["線", "Line"], ["連続線", "Polyline"], ["中心線", "Centerline"], ["矩形", "Rectangle"], ["円", "Circle"], ["円弧", "Arc"], ["3点円弧", "Three-point Arc"], ["スプライン", "Spline"], ["スケッチ投影", "Sketch Projection"], ["投影", "Projected"],
+    ["点", "Point"], ["線", "Line"], ["連続線", "Polyline"], ["中心線", "Centerline"], ["矩形", "Rectangle"], ["長穴", "Slot"], ["円", "Circle"], ["円弧", "Arc"], ["3点円弧", "Three-point Arc"], ["スプライン", "Spline"], ["スケッチ投影", "Sketch Projection"], ["投影", "Projected"],
     ["実線／補助線", "Normal / Construction"], ["トリム", "Trim"], ["R面取り", "Fillet"], ["フィレット", "Fillet"], ["オフセット", "Offset"], ["ハッチング", "Hatching"],
     ["寸法", "Dimension"], ["一致", "Coincident"], ["水平", "Horizontal"], ["垂直", "Vertical"], ["平行", "Parallel"], ["直角", "Perpendicular"],
     ["対称", "Symmetry"], ["同心", "Concentric"], ["等寸", "Equal"], ["接線", "Tangent"], ["固定／解除", "Fix / Unfix"], ["固定解除", "Unfix"],
@@ -177,6 +178,12 @@
     ["通常表示", "Normal view"], ["選択・ドラッグできます。Shift/Ctrlクリックで複数選択できます。", "Select and drag geometry. Use Shift/Ctrl-click for multiple selection."],
     ["キャンバスをクリックして点を追加します。", "Click the canvas to add a point."], ["端点位置をクリックして連続線を作成します。終了はEscです。", "Click endpoint positions to create connected lines. Press Esc to finish."],
     ["矩形の1つ目の角をクリックしてください。Escで選択モードに戻ります", "Click the first rectangle corner. Press Esc to return to selection mode."],
+    ["長穴の1つ目の半円中心をクリックしてください。Escで選択モードに戻ります", "Click the first semicircle center of the slot. Press Esc to return to selection mode."],
+    ["長穴の2つ目の半円中心をクリックしてください。Escで作図をキャンセルします", "Click the second semicircle center of the slot. Press Esc to cancel drawing."],
+    ["1つ目の中心から離れた位置をクリックしてください", "Click a position away from the first center."],
+    ["長穴の幅位置をクリックしてください。Escで作図をキャンセルします", "Click a point that defines the slot width. Press Esc to cancel drawing."],
+    ["中心線から離れた幅位置をクリックしてください", "Click a width position away from the centerline."],
+    ["拘束を維持できないため長穴の作成を戻しました", "The slot was restored because its constraints could not be maintained."],
     ["円の中心をクリックしてください。Escで選択モードに戻ります", "Click the circle center. Press Esc to return to selection mode."],
     ["円弧の中心をクリックしてください。Escで選択モードに戻ります", "Click the arc center. Press Esc to return to selection mode."],
     ["3点円弧の始点をクリックしてください。Escで選択モードに戻ります", "Click the three-point arc start point. Press Esc to return to selection mode."],
@@ -325,6 +332,8 @@
   let centerlineFirstSnap = null;
   let pointStartRollback = null;
   let rectangleStartPoint = null;
+  let slotFirstCenter = null;
+  let slotSecondCenter = null;
   let lineStartRollback = null;
   let lineCompletionRollback = null;
   let filletFirstLine = null;
@@ -581,6 +590,7 @@
         .replace(/^Sample restored:/, "サンプル復元:")
         .replace(/^Constraint added:/, "拘束追加:")
         .replace(/^Reference constraint added:/, "参照拘束追加:")
+        .replace(/^Slot added:/, "長穴追加:")
         .replace(/^Fixed state updated:/, "固定状態変更:")
         .replace(/^Dimension value updated:/, "寸法値更新:")
         .replace(/Fully constrained:/g, "完全拘束:")
@@ -595,6 +605,7 @@
       .replace(/^サンプル復元:/, "Sample restored:")
       .replace(/^拘束追加:/, "Constraint added:")
       .replace(/^参照拘束追加:/, "Reference constraint added:")
+      .replace(/^長穴追加:/, "Slot added:")
       .replace(/^固定状態変更:/, "Fixed state updated:")
       .replace(/^寸法値更新:/, "Dimension value updated:")
       .replace(/完全拘束:/g, "Fully constrained:")
@@ -3249,6 +3260,21 @@
     return model.constraints.filter((constraint) => constraintIsOperational(constraint) && constraintSketchId(constraint) === sketchId);
   }
 
+  function shouldRetainConnectedLineArcTangency(constraint, constraints) {
+    // Endpoint tangency can have zero first-order rank while still preserving the nonlinear shape.
+    if (!(constraint instanceof LineCircleTangentConstraint) || !(constraint.primitive instanceof Arc)) return false;
+    const firstEquivalent = constraints.find((item) =>
+      item instanceof LineCircleTangentConstraint &&
+      item.line === constraint.line &&
+      item.primitive === constraint.primitive &&
+      item.sign === constraint.sign);
+    if (firstEquivalent !== constraint) return false;
+    return constraints.some((item) =>
+      item instanceof ArcEndpointCoincidentConstraint &&
+      item.arc === constraint.primitive &&
+      (item.point === constraint.line.p1 || item.point === constraint.line.p2));
+  }
+
   function redundantConstraintInfo(constraint, sketchId = constraintSketchId(constraint)) {
     if (!constraint || constraint.enabled === false) return { redundant: false };
     const constraints = constraintsForRedundancy(sketchId);
@@ -3262,7 +3288,7 @@
     const contribution = redundancy.byConstraint.get(constraint);
     if (!redundancy.stable || !contribution) return { redundant: false, unstable: true, redundancy };
     return {
-      redundant: contribution.redundant,
+      redundant: contribution.redundant && !shouldRetainConnectedLineArcTangency(constraint, constraints),
       rankBefore: contribution.rankBefore,
       rankAfter: contribution.rankAfter,
       redundancy,
@@ -3285,7 +3311,7 @@
       let sketchCount = 0;
       for (const constraint of constraints) {
         const contribution = redundancy.byConstraint.get(constraint);
-        if (!redundancy.stable || !contribution?.redundant) continue;
+        if (!redundancy.stable || !contribution?.redundant || shouldRetainConnectedLineArcTangency(constraint, constraints)) continue;
         const info = { redundant: true, sketchId, rankBefore: contribution.rankBefore, rankAfter: contribution.rankAfter };
         byConstraint.set(constraint, info);
         sketchCount += 1;
@@ -6286,6 +6312,7 @@
     pointStartRollback = null;
     lineCompletionRollback = null;
     rectangleStartPoint = null;
+    resetSlotCommandState();
     filletFirstLine = null;
     circleCenterPoint = null;
     resetArcCommandState();
@@ -8033,6 +8060,7 @@
     resetCenterlineCommandState();
     lineStartPoint = null;
     rectangleStartPoint = null;
+    resetSlotCommandState();
     filletFirstLine = null;
     pointerPreview = null;
     trimPreview = null;
@@ -8053,6 +8081,7 @@
     pointStartRollback = null;
     lineCompletionRollback = null;
     rectangleStartPoint = null;
+    resetSlotCommandState();
     filletFirstLine = null;
     circleCenterPoint = null;
     resetArcCommandState();
@@ -8077,7 +8106,12 @@
   }
 
   function hasActiveDrawOperation() {
-    return Boolean(lineStartPoint || centerlineTargets.length || centerlineFirstPoint || rectangleStartPoint || filletFirstLine || circleCenterPoint || arcCenterPoint || arcStartPoint || threePointArcStart || threePointArcEnd || splineFitPoints.length || offsetSource || offsetChainEntries.length);
+    return Boolean(lineStartPoint || centerlineTargets.length || centerlineFirstPoint || rectangleStartPoint || slotFirstCenter || slotSecondCenter || filletFirstLine || circleCenterPoint || arcCenterPoint || arcStartPoint || threePointArcStart || threePointArcEnd || splineFitPoints.length || offsetSource || offsetChainEntries.length);
+  }
+
+  function resetSlotCommandState() {
+    slotFirstCenter = null;
+    slotSecondCenter = null;
   }
 
   function beginTransientLineStartRollback() {
@@ -8180,6 +8214,7 @@
     clearTransientLineCompletionRollback();
     lineStartPoint = null;
     rectangleStartPoint = null;
+    resetSlotCommandState();
     filletFirstLine = null;
     circleCenterPoint = null;
     resetArcCommandState();
@@ -9112,6 +9147,35 @@
         ) ? 1 : 0;
       }
     }
+    return added;
+  }
+
+  function addLineBoundarySnapConstraints(targetLine, snap) {
+    if (!targetLine || !snap?.data) return 0;
+    if (!snapCanCreateConstraint(snap)) return 0;
+    const referenceSketchId = snapReferenceSketchId(snap);
+    const options = referenceSketchId ? { referenceSketchId } : {};
+    const { point, arc, endpoint } = snap.data;
+    if (point) {
+      return addConstraintIfMissing(
+        new PointOnLineConstraint(point, targetLine),
+        (c) => c instanceof PointOnLineConstraint && c.point === point && c.line === targetLine,
+        options,
+      ) ? 1 : 0;
+    }
+    if (arc && endpoint) {
+      return addConstraintIfMissing(
+        new ArcEndpointOnLineConstraint(arc, endpoint, targetLine),
+        (c) => c instanceof ArcEndpointOnLineConstraint && c.arc === arc && c.endpoint === endpoint && c.line === targetLine,
+        options,
+      ) ? 1 : 0;
+    }
+    const ref = addPoint(snap.x, snap.y, false, "endpoint");
+    let added = addPointSnapConstraints(ref, snap);
+    added += addConstraintIfMissing(
+      new PointOnLineConstraint(ref, targetLine),
+      (c) => c instanceof PointOnLineConstraint && c.point === ref && c.line === targetLine,
+    ) ? 1 : 0;
     return added;
   }
 
@@ -11532,6 +11596,7 @@
     drawTemporaryLine();
     drawCenterlinePreview();
     drawRectanglePreview();
+    drawSlotPreview();
     drawCirclePreview();
     drawArcPreview();
     drawThreePointArcPreview();
@@ -12781,6 +12846,40 @@
     });
   }
 
+  function drawSlotPreview() {
+    if (mode !== "slot" || !slotFirstCenter) return;
+    drawConstructionPoint(slotFirstCenter);
+    if (!slotSecondCenter) {
+      if (!pointerPreview || hypot2(pointerPreview.x - slotFirstCenter.x, pointerPreview.y - slotFirstCenter.y) < MIN_LINE_LENGTH) return;
+      withCanvasState(() => {
+        ctx.strokeStyle = "#2563eb";
+        ctx.lineWidth = 2 / viewport.scale;
+        ctx.setLineDash([6 / viewport.scale, 5 / viewport.scale]);
+        ctx.beginPath();
+        ctx.moveTo(slotFirstCenter.x, slotFirstCenter.y);
+        ctx.lineTo(pointerPreview.x, pointerPreview.y);
+        ctx.stroke();
+      });
+      return;
+    }
+    drawConstructionPoint(slotSecondCenter);
+    if (!pointerPreview) return;
+    const geometry = slotGeometry(slotFirstCenter, slotSecondCenter, pointerPreview, MIN_ARC_LENGTH);
+    if (!geometry) return;
+    withCanvasState(() => {
+      ctx.strokeStyle = "#2563eb";
+      ctx.lineWidth = 2 / viewport.scale;
+      ctx.setLineDash([6 / viewport.scale, 5 / viewport.scale]);
+      ctx.beginPath();
+      ctx.moveTo(geometry.sideStart.x, geometry.sideStart.y);
+      ctx.lineTo(geometry.sideEnd.x, geometry.sideEnd.y);
+      ctx.arc(geometry.secondCenter.x, geometry.secondCenter.y, geometry.radius, geometry.endArc.startAngle, geometry.endArc.endAngle, geometry.endArc.endAngle < geometry.endArc.startAngle);
+      ctx.lineTo(geometry.oppositeStart.x, geometry.oppositeStart.y);
+      ctx.arc(geometry.firstCenter.x, geometry.firstCenter.y, geometry.radius, geometry.startArc.startAngle, geometry.startArc.endAngle, geometry.startArc.endAngle < geometry.startArc.startAngle);
+      ctx.stroke();
+    });
+  }
+
   function drawCirclePreview() {
     if (mode !== "circle" || !circleCenterPoint || !pointerPreview) return;
     const radius = hypot2(pointerPreview.x - circleCenterPoint.x, pointerPreview.y - circleCenterPoint.y);
@@ -13175,6 +13274,7 @@
       line: "toolLine",
       centerline: "toolCenterline",
       rectangle: "toolRectangle",
+      slot: "toolSlot",
       circle: "toolCircle",
       arc: "toolArc",
       "three-point-arc": "toolThreePointArc",
@@ -13235,6 +13335,7 @@
       toolCenterline: geometryMode && mode === "centerline",
       toolConstructionLine: constructionState.active,
       toolRectangle: geometryMode && mode === "rectangle",
+      toolSlot: geometryMode && mode === "slot",
       toolCreateBlock: false,
       toolFillet: geometryMode && mode === "fillet",
       toolTrim: geometryMode && mode === "trim",
@@ -13479,6 +13580,7 @@
   function startConstraintTargetCommand(type) {
     cancelPendingCommand("");
     resetCenterlineCommandState();
+    resetSlotCommandState();
     mode = "select";
     lineStartPoint = null;
     rectangleStartPoint = null;
@@ -13516,6 +13618,7 @@
 
   function cancelConstraintTargetCommand(message = "拘束対象の選択をキャンセルしました") {
     if (mode === "centerline") resetCenterlineCommandState();
+    if (mode === "slot") resetSlotCommandState();
     if (!pendingConstraintCommand) return;
     pendingConstraintCommand = null;
     constraintOperands = [];
@@ -16651,7 +16754,7 @@
     const command = document.getElementById("statusCommand");
     const modeLabels = {
       select: applicationText("選択", "Select"), point: applicationText("点", "Point"), line: applicationText("線", "Line"), centerline: applicationText("中心線", "Centerline"), rectangle: applicationText("矩形", "Rectangle"),
-      circle: applicationText("円", "Circle"), arc: applicationText("円弧", "Arc"), "three-point-arc": applicationText("3点円弧", "Three-point Arc"), spline: applicationText("スプライン", "Spline"), fillet: applicationText("R面取り", "Fillet"), trim: applicationText("トリム", "Trim"),
+      slot: applicationText("長穴", "Slot"), circle: applicationText("円", "Circle"), arc: applicationText("円弧", "Arc"), "three-point-arc": applicationText("3点円弧", "Three-point Arc"), spline: applicationText("スプライン", "Spline"), fillet: applicationText("R面取り", "Fillet"), trim: applicationText("トリム", "Trim"),
       offset: applicationText("オフセット", "Offset"), hatch: applicationText("ハッチング", "Hatching"), "hatch-repair": applicationText("境界を再指定", "Reselect boundary"), "block-place": applicationText("ブロック配置", "Block placement"),
     };
     if (command) command.textContent = pendingCommand?.type?.startsWith("annotation-") ? applicationText("注記", "Annotation") : pendingConstraintCommand ? applicationText("拘束", "Constraint") : modeLabels[mode] || mode;
@@ -18425,6 +18528,100 @@
     clearSelection();
     const result = solveAndRefresh("矩形追加");
     log(`矩形を追加しました\n自動solve: success=${result.success}`);
+  }
+
+  function addSlotShapeConstraints(sideLine, oppositeLine, endArc, startArc) {
+    const endpointConstraints = [
+      [endArc, "start", sideLine.p2],
+      [endArc, "end", oppositeLine.p1],
+      [startArc, "start", oppositeLine.p2],
+      [startArc, "end", sideLine.p1],
+    ];
+    for (const [arc, endpoint, point] of endpointConstraints) {
+      addConstraintIfMissing(
+        new ArcEndpointCoincidentConstraint(arc, endpoint, point),
+        (c) => c instanceof ArcEndpointCoincidentConstraint && c.arc === arc && c.endpoint === endpoint && c.point === point,
+      );
+    }
+    for (const line of [sideLine, oppositeLine]) {
+      for (const arc of [endArc, startArc]) {
+        addConstraintIfMissing(
+          new LineCircleTangentConstraint(line, arc),
+          (c) => c instanceof LineCircleTangentConstraint && c.line === line && c.primitive === arc,
+        );
+      }
+    }
+    addConstraintIfMissing(
+      new EqualRadiusConstraint(endArc, startArc),
+      (c) => c instanceof EqualRadiusConstraint && ((c.a === endArc && c.b === startArc) || (c.a === startArc && c.b === endArc)),
+    );
+  }
+
+  function handleSlotClick(p) {
+    p = snapForDrawing(p);
+    const snap = activeSnap;
+    pointerPreview = p;
+    if (!slotFirstCenter) {
+      slotFirstCenter = { x: p.x, y: p.y, snap };
+      clearSelection();
+      setHint("長穴の2つ目の半円中心をクリックしてください。Escで作図をキャンセルします");
+      updateUI();
+      draw();
+      return;
+    }
+    if (!slotSecondCenter) {
+      if (hypot2(p.x - slotFirstCenter.x, p.y - slotFirstCenter.y) < MIN_LINE_LENGTH) {
+        setHint("1つ目の中心から離れた位置をクリックしてください", "error");
+        draw();
+        return;
+      }
+      slotSecondCenter = { x: p.x, y: p.y, snap };
+      setHint("長穴の幅位置をクリックしてください。Escで作図をキャンセルします");
+      updateUI();
+      draw();
+      return;
+    }
+
+    const geometry = slotGeometry(slotFirstCenter, slotSecondCenter, p, MIN_ARC_LENGTH);
+    if (!geometry) {
+      setHint("中心線から離れた幅位置をクリックしてください", "error");
+      draw();
+      return;
+    }
+
+    const snapshot = snapshotGeometryMutationState();
+    const firstCenter = addPoint(geometry.firstCenter.x, geometry.firstCenter.y, false, "center");
+    const secondCenter = addPoint(geometry.secondCenter.x, geometry.secondCenter.y, false, "center");
+    const sideStart = addPoint(geometry.sideStart.x, geometry.sideStart.y, false, "endpoint");
+    const sideEnd = addPoint(geometry.sideEnd.x, geometry.sideEnd.y, false, "endpoint");
+    const oppositeEnd = addPoint(geometry.oppositeEnd.x, geometry.oppositeEnd.y, false, "endpoint");
+    const oppositeStart = addPoint(geometry.oppositeStart.x, geometry.oppositeStart.y, false, "endpoint");
+    const sideLine = addLine(sideStart, sideEnd);
+    const oppositeLine = addLine(oppositeEnd, oppositeStart);
+    const endArc = addArc(secondCenter, geometry.radius, geometry.endArc.startAngle, geometry.endArc.endAngle);
+    const startArc = addArc(firstCenter, geometry.radius, geometry.startArc.startAngle, geometry.startArc.endAngle);
+    if (!sideLine || !oppositeLine || !endArc || !startArc) {
+      restoreGeometryMutationState(snapshot);
+      setHint("中心線から離れた幅位置をクリックしてください", "error");
+      draw();
+      return;
+    }
+
+    addSlotShapeConstraints(sideLine, oppositeLine, endArc, startArc);
+    addPointSnapConstraints(firstCenter, slotFirstCenter.snap);
+    addPointSnapConstraints(secondCenter, slotSecondCenter.snap);
+    addLineBoundarySnapConstraints(sideLine, snap);
+    resetSlotCommandState();
+    pointerPreview = null;
+    clearSnap();
+    clearSelection();
+    const result = solveAndRefresh("長穴追加");
+    if (!result.success) {
+      restoreGeometryMutationState(snapshot);
+      setHint("拘束を維持できないため長穴の作成を戻しました", "error");
+      updateUI();
+      draw();
+    }
   }
 
   function pointOnLineAt(line, t) {
@@ -20226,7 +20423,7 @@
       return;
     }
 
-    if (["point", "line", "centerline", "rectangle", "circle", "arc", "three-point-arc", "spline", "fillet", "trim", "offset", "block-place", "hatch", "hatch-repair"].includes(mode) && rejectRootSketchCreation()) {
+    if (["point", "line", "centerline", "rectangle", "slot", "circle", "arc", "three-point-arc", "spline", "fillet", "trim", "offset", "block-place", "hatch", "hatch-repair"].includes(mode) && rejectRootSketchCreation()) {
       e.preventDefault();
       return;
     }
@@ -20261,6 +20458,11 @@
 
     if (mode === "rectangle") {
       handleRectangleClick(p);
+      return;
+    }
+
+    if (mode === "slot") {
+      handleSlotClick(p);
       return;
     }
 
@@ -20608,7 +20810,7 @@
       return;
     }
 
-    if (["point", "line", "centerline", "rectangle", "circle", "arc", "three-point-arc", "spline", "fillet", "trim", "offset", "block-place"].includes(mode) && !canCreateInActiveSketch()) {
+    if (["point", "line", "centerline", "rectangle", "slot", "circle", "arc", "three-point-arc", "spline", "fillet", "trim", "offset", "block-place"].includes(mode) && !canCreateInActiveSketch()) {
       clearSnap();
       pointerPreview = null;
       trimPreview = null;
@@ -20648,7 +20850,7 @@
       return;
     }
 
-    if (mode === "rectangle" || mode === "circle" || mode === "arc" || mode === "three-point-arc" || mode === "spline") {
+    if (mode === "rectangle" || mode === "slot" || mode === "circle" || mode === "arc" || mode === "three-point-arc" || mode === "spline") {
       hoveredSketchIdentity = null;
       pointerPreview = snapForDrawing(p);
       draw();
@@ -21198,7 +21400,7 @@
   }
 
   function isDrawToolMode() {
-    return mode === "line" || mode === "centerline" || mode === "point" || mode === "rectangle" || mode === "fillet" || mode === "trim" || mode === "offset" || mode === "circle" || mode === "arc" || mode === "three-point-arc" || mode === "spline" || mode === "sketch-projection" || mode === "hatch" || mode === "hatch-repair";
+    return mode === "line" || mode === "centerline" || mode === "point" || mode === "rectangle" || mode === "slot" || mode === "fillet" || mode === "trim" || mode === "offset" || mode === "circle" || mode === "arc" || mode === "three-point-arc" || mode === "spline" || mode === "sketch-projection" || mode === "hatch" || mode === "hatch-repair";
   }
 
   function handleBlankCanvasDoubleClick(pointer, hits = {}) {
@@ -22217,6 +22419,23 @@
     clearSnap();
     updateToolbar();
     setHint("矩形の1つ目の角をクリックしてください。Escで選択モードに戻ります");
+    draw();
+  });
+
+  document.getElementById("toolSlot")?.addEventListener("click", () => {
+    cancelConstraintTargetCommand("");
+    mode = "slot";
+    lineStartPoint = null;
+    rectangleStartPoint = null;
+    resetSlotCommandState();
+    filletFirstLine = null;
+    circleCenterPoint = null;
+    arcCenterPoint = null;
+    arcStartPoint = null;
+    pointerPreview = null;
+    clearSnap();
+    updateToolbar();
+    setHint("長穴の1つ目の半円中心をクリックしてください。Escで選択モードに戻ります");
     draw();
   });
 
@@ -24801,6 +25020,12 @@
           rectangleStartPoint = { x: 0, y: 0 };
           pointerPreview = { x: 80, y: 45 };
         }, drawRectanglePreview);
+        capture("slot", () => {
+          mode = "slot";
+          slotFirstCenter = { x: 0, y: 0 };
+          slotSecondCenter = { x: 80, y: 0 };
+          pointerPreview = { x: 40, y: 20 };
+        }, drawSlotPreview);
         capture("circle", () => {
           mode = "circle";
           circleCenterPoint = addPoint(0, 0, true, "center");
