@@ -31,7 +31,7 @@
 | Hatch | 既存Geometryで囲まれた閉領域へ関連付けられ、境界変形へ追従する線パターンまたは色塗りつぶし |
 | Sketch所属Annotation | Geometryを変更しない引出線または自由テキスト |
 | Reference Image | Geometry背面で手動トレースに使う、Sketch所属の埋め込み画像 |
-| Sketch Projection | 先祖SketchのGeometryを通常Geometryとして子Sketchへ関連投影する機能 |
+| 派生Geometry Instance | 既存Geometryを仮想出力として投影、ミラー、直線パターン複写する機能 |
 | Interaction State | 選択、作図、拘束入力、注記配置など現在の操作状態 |
 | View State | Geometry ID、Space押下中の拘束状態表示など一時的な表示状態 |
 

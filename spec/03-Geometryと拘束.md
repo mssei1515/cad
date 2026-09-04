@@ -98,7 +98,7 @@ ToolbarまたはGeometry menuから開始し、3個以上のfit pointを順にcl
 
 ### スケッチ投影
 
-表示中の先祖SketchにあるPoint、Line、Circle、Arc、Spline、Block Projectionを通常GeometryとしてアクティブSketchへ作成し、`SketchProjectionConstraint`で元形状へ追従させる。clickまたはドラッグ範囲選択で候補を追加し、個別clickで解除する。Enterまたは右clickメニューの「実行」で一括作成、Escで全候補を破棄する。同じ元Geometryの重複を作らない。投影Geometryは、同じ元Pointを参照していても、Point、Line端点、Circle／Arc中心、Spline通過PointをGeometry間で共有せず、それぞれ独立して所有する。詳細は[スケッチ投影](./12-スケッチ投影.md)を参照する。
+表示中の先祖SketchにあるPoint、Line、Circle、Arc、Spline、Block Projectionを参照し、アクティブSketchへ1個の`sketchProjection`派生Instanceとして投影する。clickまたはドラッグ範囲選択で候補を追加し、個別clickで解除する。Enterまたは右clickメニューの「実行」で一括作成、Escで全候補を破棄する。同じ元Geometryの重複を作らない。出力は通常Geometry配列へ追加せず、元のPoint共有関係を保つ読取専用の仮想Geometryとする。詳細は[派生Geometryインスタンス](./12-スケッチ投影.md)を参照する。
 
 ### 補助 Geometry
 
@@ -139,7 +139,7 @@ Circleは単独で選び、側と距離を入力して複製する。Line／Arc�
 - 同じParameter名前空間へ寸法をコピーすると新しい`dN`を付与し、同時にコピーした寸法間の参照だけを新しい名前へトークン単位で書き換える。
 - 別のParameter名前空間へコピーすると、拘束寸法式をコピー時点の評価値による数値式へ固定して新しい`dN`を付与する。
 - HatchのCopy／Cut／PasteとBlock化は参照する全境界Geometryの同時選択を必須とし、不足時は操作全体を拒否する。Pasteでは境界GeometryRefを新IDへ書き換える。
-- スケッチ投影の結果は通常Geometryとしてsnap、拘束、寸法、Hatch、Leader、Offsetに使用できる。Copy／PasteとBlock化では投影拘束を除外する。有効な投影拘束がある間は、投影先本体と、そのGeometryが独立して所有するLine端点、中心、Spline通過Pointのdrag、trim、fillet、Spline形状編集、固定、通常／補助作図切替を拒否し、自動解除は行わない。Appearanceは投影対象外であるためリンクを維持したまま編集できる。
+- 派生Instanceの生成Geometryはsnap、拘束、寸法、Hatch、Leaderに使用できるが読み取り専用である。通常選択はInstance単位、拘束・寸法コマンドでは生成Geometry単位とする。生成Geometryのdrag、trim、fillet、Spline形状編集、固定、通常／補助作図切替を拒否する。AppearanceはInstanceの上書きとして編集できる。
 
 ドラッグ中は選択に関係する拘束連結成分だけを優先して local solve し、必要な場合に全 Sketch solve へフォールバックする。Line–Circle中心距離寸法だけで拘束された連結成分内のLine本体を移動する場合は、ドラッグ対象Lineの両端をPointer位置へ固定し、残りの変数だけをlocal solveする。これにより、Lineの両端は反復計算による追従遅れを生じさせず、Circle中心距離は残りのGeometry移動で維持する。それ以外のLineのドラッグでフレーム間のPointer移動が大きい場合は、反復上限を拡張した全Sketch solveでPointer位置への一括追従を先に試みる。これが収束しない場合のみ、1回のpreview内で移動経路を有限個の小区間に分けて順にsolveし、非線形拘束があってもPointer位置への追従量を維持する。Parameterの参照寸法feedbackはドラッグ中に反復せず、Pointer-upで最終精度のsolveとParameter再評価を行う。式エラー、拘束矛盾、非収束時はドラッグ開始前へ戻す。
 
@@ -258,4 +258,4 @@ Geometry の削除時は、共有 Point の利用状況を考慮して不要 Poi
 
 Geometryを削除すると、そのGeometryを参照するConstraintとLeaderも同時に除去する。Splineを削除すると、そのSplineだけで使用されるfit pointも整理する。Hatchの境界Geometryは例外であり、Hatch Objectを残したまま境界エラーの無効状態にする。Sketch削除では所属Hatchも削除する。Sketch削除、Block Instance削除、Block Definition編集でも各Objectの参照ライフサイクルを適用する。
 
-スケッチ投影では元Geometryまたは元Block Instanceの削除時に投影拘束だけを除去して投影先を残し、投影先Geometryの削除時には対応する投影拘束も除去する。
+派生Instanceが参照する元Geometry、Block Instance、ミラー軸、パターン方向または上流Instanceの削除は拒否する。依存Instanceを先に削除しなければならず、通常Geometryへ独立化する操作は設けない。
