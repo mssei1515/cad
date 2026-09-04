@@ -10,6 +10,7 @@
     arcSweep,
     unwrapAngleNear,
     shortestAngleFrom,
+    threePointArcGeometry,
     angleOnSignedSweep,
     arcParamOnSweep,
     angleAtArcParam,
@@ -142,7 +143,7 @@
     ["上書き保存", "Overwrite Save"], ["名前を付けて保存", "Save As"], ["開く", "Open"], ["Parameter…", "Parameters…"], ["ドキュメント設定", "Document Settings"], ["アプリケーション設定", "Application Settings"],
     ["元に戻す", "Undo"], ["やり直す", "Redo"], ["削除", "Delete"], ["選択", "Select"], ["選択・ドラッグ", "Select / Drag"],
     ["ジオメトリ", "Geometry"], ["拘束", "Constraint"], ["注記", "Annotation"], ["ツールバー", "Toolbar"], ["メニューバー", "Menu bar"], ["表示ツール", "View"],
-    ["点", "Point"], ["線", "Line"], ["連続線", "Polyline"], ["中心線", "Centerline"], ["矩形", "Rectangle"], ["円", "Circle"], ["円弧", "Arc"], ["スプライン", "Spline"], ["スケッチ投影", "Sketch Projection"], ["投影", "Projected"],
+    ["点", "Point"], ["線", "Line"], ["連続線", "Polyline"], ["中心線", "Centerline"], ["矩形", "Rectangle"], ["円", "Circle"], ["円弧", "Arc"], ["3点円弧", "Three-point Arc"], ["スプライン", "Spline"], ["スケッチ投影", "Sketch Projection"], ["投影", "Projected"],
     ["実線／補助線", "Normal / Construction"], ["トリム", "Trim"], ["R面取り", "Fillet"], ["フィレット", "Fillet"], ["オフセット", "Offset"], ["ハッチング", "Hatching"],
     ["寸法", "Dimension"], ["一致", "Coincident"], ["水平", "Horizontal"], ["垂直", "Vertical"], ["平行", "Parallel"], ["直角", "Perpendicular"],
     ["対称", "Symmetry"], ["同心", "Concentric"], ["等寸", "Equal"], ["接線", "Tangent"], ["固定／解除", "Fix / Unfix"], ["固定解除", "Unfix"],
@@ -178,6 +179,11 @@
     ["矩形の1つ目の角をクリックしてください。Escで選択モードに戻ります", "Click the first rectangle corner. Press Esc to return to selection mode."],
     ["円の中心をクリックしてください。Escで選択モードに戻ります", "Click the circle center. Press Esc to return to selection mode."],
     ["円弧の中心をクリックしてください。Escで選択モードに戻ります", "Click the arc center. Press Esc to return to selection mode."],
+    ["3点円弧の始点をクリックしてください。Escで選択モードに戻ります", "Click the three-point arc start point. Press Esc to return to selection mode."],
+    ["3点円弧の終点をクリックしてください。Escで作図をキャンセルします", "Click the three-point arc end point. Press Esc to cancel this drawing."],
+    ["円弧が通過する円周上の点をクリックしてください。Escで作図をキャンセルします", "Click a circumference point for the arc to pass through. Press Esc to cancel this drawing."],
+    ["始点から離れた終点をクリックしてください", "Click an end point away from the start point."],
+    ["3点が同一直線上にならない位置をクリックしてください", "Click a position that is not collinear with the two endpoints."],
     ["通過点をクリックしてください。Enterまたは空白のダブルクリックで終了（ダブルクリック位置は追加しません）、始点クリックで閉じます", "Click fit points. Press Enter or double-click blank canvas to finish without adding that position, or click the start point to close."],
     ["スプラインには3点以上の通過点が必要です", "A spline requires at least three fit points."],
     ["閉じる", "Closed"], ["通過点", "Fit points"], ["編集", "Edit"], ["スプライン編集", "Edit spline"],
@@ -325,6 +331,8 @@
   let circleCenterPoint = null;
   let arcCenterPoint = null;
   let arcStartPoint = null;
+  let threePointArcStart = null;
+  let threePointArcEnd = null;
   let splineFitPoints = [];
   let splineCreationRollback = null;
   let splineLastClickAddition = null;
@@ -333,6 +341,13 @@
   let pointerPreview = null;
   let activeSnap = null;
   let trimPreview = null;
+
+  function resetArcCommandState() {
+    arcCenterPoint = null;
+    arcStartPoint = null;
+    threePointArcStart = null;
+    threePointArcEnd = null;
+  }
   let hatchPreview = null;
   let hatchRepairTarget = null;
   let offsetSource = null;
@@ -6273,8 +6288,7 @@
     rectangleStartPoint = null;
     filletFirstLine = null;
     circleCenterPoint = null;
-    arcCenterPoint = null;
-    arcStartPoint = null;
+    resetArcCommandState();
     splineFitPoints = [];
     sketchProjectionSources = [];
     splineCreationRollback = null;
@@ -8041,8 +8055,7 @@
     rectangleStartPoint = null;
     filletFirstLine = null;
     circleCenterPoint = null;
-    arcCenterPoint = null;
-    arcStartPoint = null;
+    resetArcCommandState();
     splineFitPoints = [];
     splineCreationRollback = null;
     splineLastClickAddition = null;
@@ -8064,7 +8077,7 @@
   }
 
   function hasActiveDrawOperation() {
-    return Boolean(lineStartPoint || centerlineTargets.length || centerlineFirstPoint || rectangleStartPoint || filletFirstLine || circleCenterPoint || arcCenterPoint || arcStartPoint || splineFitPoints.length || offsetSource || offsetChainEntries.length);
+    return Boolean(lineStartPoint || centerlineTargets.length || centerlineFirstPoint || rectangleStartPoint || filletFirstLine || circleCenterPoint || arcCenterPoint || arcStartPoint || threePointArcStart || threePointArcEnd || splineFitPoints.length || offsetSource || offsetChainEntries.length);
   }
 
   function beginTransientLineStartRollback() {
@@ -8169,8 +8182,7 @@
     rectangleStartPoint = null;
     filletFirstLine = null;
     circleCenterPoint = null;
-    arcCenterPoint = null;
-    arcStartPoint = null;
+    resetArcCommandState();
     if (splineCreationRollback) {
       model.points.length = splineCreationRollback.pointLength;
       pointSeq = splineCreationRollback.pointSeq;
@@ -9066,8 +9078,8 @@
     return added;
   }
 
-  function addCircleBoundarySnapConstraints(circle, snap) {
-    if (!circle || !snap?.data) return 0;
+  function addCircularBoundarySnapConstraints(targetPrimitive, snap) {
+    if (!targetPrimitive || !snap?.data) return 0;
     if (!snapCanCreateConstraint(snap)) return 0;
     const referenceSketchId = snapReferenceSketchId(snap);
     const options = referenceSketchId ? { referenceSketchId } : {};
@@ -9075,24 +9087,24 @@
     let added = 0;
     if (point) {
       added += addConstraintIfMissing(
-        new PointOnCircleConstraint(point, circle),
-        (c) => c instanceof PointOnCircleConstraint && c.point === point && c.primitive === circle,
+        new PointOnCircleConstraint(point, targetPrimitive),
+        (c) => c instanceof PointOnCircleConstraint && c.point === point && c.primitive === targetPrimitive,
         options,
       ) ? 1 : 0;
     } else if (arc && endpoint) {
       added += addConstraintIfMissing(
-        new ArcEndpointOnCircleConstraint(arc, endpoint, circle),
-        (c) => c instanceof ArcEndpointOnCircleConstraint && c.arc === arc && c.endpoint === endpoint && c.primitive === circle,
+        new ArcEndpointOnCircleConstraint(arc, endpoint, targetPrimitive),
+        (c) => c instanceof ArcEndpointOnCircleConstraint && c.arc === arc && c.endpoint === endpoint && c.primitive === targetPrimitive,
         options,
       ) ? 1 : 0;
     } else {
       const ref = addPoint(snap.x, snap.y, false, "endpoint");
       added += addPointSnapConstraints(ref, snap);
       added += addConstraintIfMissing(
-        new PointOnCircleConstraint(ref, circle),
-        (c) => c instanceof PointOnCircleConstraint && c.point === ref && c.primitive === circle,
+        new PointOnCircleConstraint(ref, targetPrimitive),
+        (c) => c instanceof PointOnCircleConstraint && c.point === ref && c.primitive === targetPrimitive,
       ) ? 1 : 0;
-      if (primitive && primitive !== circle) {
+      if (primitive && primitive !== targetPrimitive) {
         added += addConstraintIfMissing(
           new PointOnCircleConstraint(ref, primitive),
           (c) => c instanceof PointOnCircleConstraint && c.point === ref && c.primitive === primitive,
@@ -10537,8 +10549,7 @@
     pendingConstraintCommand = null;
     lineStartPoint = null;
     circleCenterPoint = null;
-    arcCenterPoint = null;
-    arcStartPoint = null;
+    resetArcCommandState();
     pointerPreview = null;
     mode = "select";
 
@@ -11523,6 +11534,7 @@
     drawRectanglePreview();
     drawCirclePreview();
     drawArcPreview();
+    drawThreePointArcPreview();
     drawSplinePreview();
     drawBlockPlacementPreview();
     drawOffsetPreview();
@@ -12804,6 +12816,25 @@
     drawConstructionPoint(arcCenterPoint);
   }
 
+  function drawThreePointArcPreview() {
+    if (mode !== "three-point-arc" || !threePointArcStart) return;
+    drawConstructionPoint(threePointArcStart);
+    if (!threePointArcEnd) return;
+    drawConstructionPoint(threePointArcEnd);
+    if (!pointerPreview) return;
+    const geometry = threePointArcGeometry(threePointArcStart, threePointArcEnd, pointerPreview, MIN_ARC_LENGTH);
+    if (!geometry) return;
+    withCanvasState(() => {
+      ctx.strokeStyle = "#2563eb";
+      ctx.lineWidth = 2 / viewport.scale;
+      ctx.setLineDash([6 / viewport.scale, 5 / viewport.scale]);
+      ctx.beginPath();
+      ctx.arc(geometry.center.x, geometry.center.y, geometry.radius, geometry.startAngle, geometry.endAngle, geometry.endAngle < geometry.startAngle);
+      ctx.stroke();
+    });
+    drawConstructionPoint(geometry.center);
+  }
+
   function drawOffsetPreview() {
     if (mode !== "offset" || !(offsetSource || offsetChainEntries.length)) return;
     if (!pendingCommand && offsetChainEntries.length > 0 && !offsetChainSelectionCommitted) return;
@@ -13146,6 +13177,7 @@
       rectangle: "toolRectangle",
       circle: "toolCircle",
       arc: "toolArc",
+      "three-point-arc": "toolThreePointArc",
       spline: "toolSpline",
       "sketch-projection": "toolSketchProjection",
       hatch: "toolHatch",
@@ -13209,6 +13241,7 @@
       toolOffset: geometryMode && mode === "offset",
       toolCircle: geometryMode && mode === "circle",
       toolArc: geometryMode && mode === "arc",
+      toolThreePointArc: geometryMode && mode === "three-point-arc",
       toolSpline: geometryMode && mode === "spline",
       toolSketchProjection: geometryMode && mode === "sketch-projection",
       toolHatch: geometryMode && (mode === "hatch" || mode === "hatch-repair"),
@@ -13451,8 +13484,7 @@
     rectangleStartPoint = null;
     filletFirstLine = null;
     circleCenterPoint = null;
-    arcCenterPoint = null;
-    arcStartPoint = null;
+    resetArcCommandState();
     pointerPreview = null;
     trimPreview = null;
     updateToolbar();
@@ -13818,8 +13850,7 @@
     rectangleStartPoint = null;
     filletFirstLine = null;
     circleCenterPoint = null;
-    arcCenterPoint = null;
-    arcStartPoint = null;
+    resetArcCommandState();
     pointerPreview = null;
     trimPreview = null;
     pendingConstraintCommand = { type: "distance" };
@@ -13847,8 +13878,7 @@
     rectangleStartPoint = null;
     filletFirstLine = null;
     circleCenterPoint = null;
-    arcCenterPoint = null;
-    arcStartPoint = null;
+    resetArcCommandState();
     pointerPreview = null;
     trimPreview = null;
     pendingConstraintCommand = { type: "distance" };
@@ -14190,8 +14220,7 @@
     rectangleStartPoint = null;
     filletFirstLine = null;
     circleCenterPoint = null;
-    arcCenterPoint = null;
-    arcStartPoint = null;
+    resetArcCommandState();
     pointerPreview = null;
     trimPreview = null;
     offsetSource = null;
@@ -16622,7 +16651,7 @@
     const command = document.getElementById("statusCommand");
     const modeLabels = {
       select: applicationText("選択", "Select"), point: applicationText("点", "Point"), line: applicationText("線", "Line"), centerline: applicationText("中心線", "Centerline"), rectangle: applicationText("矩形", "Rectangle"),
-      circle: applicationText("円", "Circle"), arc: applicationText("円弧", "Arc"), spline: applicationText("スプライン", "Spline"), fillet: applicationText("R面取り", "Fillet"), trim: applicationText("トリム", "Trim"),
+      circle: applicationText("円", "Circle"), arc: applicationText("円弧", "Arc"), "three-point-arc": applicationText("3点円弧", "Three-point Arc"), spline: applicationText("スプライン", "Spline"), fillet: applicationText("R面取り", "Fillet"), trim: applicationText("トリム", "Trim"),
       offset: applicationText("オフセット", "Offset"), hatch: applicationText("ハッチング", "Hatching"), "hatch-repair": applicationText("境界を再指定", "Reselect boundary"), "block-place": applicationText("ブロック配置", "Block placement"),
     };
     if (command) command.textContent = pendingCommand?.type?.startsWith("annotation-") ? applicationText("注記", "Annotation") : pendingConstraintCommand ? applicationText("拘束", "Constraint") : modeLabels[mode] || mode;
@@ -19205,7 +19234,7 @@
     }
     const circle = addCircle(circleCenterPoint, hypot2(p.x - circleCenterPoint.x, p.y - circleCenterPoint.y));
     if (circle) {
-      addCircleBoundarySnapConstraints(circle, snap);
+      addCircularBoundarySnapConstraints(circle, snap);
       selectedPoints = [];
       selectedLines = [];
       selectedCircles = [circle];
@@ -19261,13 +19290,63 @@
       selectedLines = [];
       selectedCircles = [];
       selectedArcs = [arc];
-      arcCenterPoint = null;
-      arcStartPoint = null;
+      resetArcCommandState();
       pointerPreview = null;
       clearSnap();
       clearSelection();
       solveAndRefresh("円弧追加");
     }
+  }
+
+  function handleThreePointArcClick(p) {
+    p = snapForDrawing(p);
+    const snap = activeSnap;
+    pointerPreview = p;
+    if (!threePointArcStart) {
+      threePointArcStart = { x: p.x, y: p.y, snap };
+      clearSelection();
+      setHint("3点円弧の終点をクリックしてください。Escで作図をキャンセルします");
+      updateUI();
+      draw();
+      return;
+    }
+    if (!threePointArcEnd) {
+      if (hypot2(p.x - threePointArcStart.x, p.y - threePointArcStart.y) < MIN_ARC_LENGTH) {
+        setHint("始点から離れた終点をクリックしてください", "error");
+        draw();
+        return;
+      }
+      threePointArcEnd = { x: p.x, y: p.y, snap };
+      setHint("円弧が通過する円周上の点をクリックしてください。Escで作図をキャンセルします");
+      updateUI();
+      draw();
+      return;
+    }
+
+    const geometry = threePointArcGeometry(threePointArcStart, threePointArcEnd, p, MIN_ARC_LENGTH);
+    if (!geometry) {
+      setHint("3点が同一直線上にならない位置をクリックしてください", "error");
+      draw();
+      return;
+    }
+    const centerPointSeq = pointSeq;
+    const center = addPoint(geometry.center.x, geometry.center.y, false, "center");
+    const arc = addArc(center, geometry.radius, geometry.startAngle, geometry.endAngle);
+    if (!arc) {
+      model.points = model.points.filter((point) => point !== center);
+      pointSeq = centerPointSeq;
+      setHint("3点が同一直線上にならない位置をクリックしてください", "error");
+      draw();
+      return;
+    }
+    addArcEndpointSnapConstraints(arc, "start", threePointArcStart.snap);
+    addArcEndpointSnapConstraints(arc, "end", threePointArcEnd.snap);
+    addCircularBoundarySnapConstraints(arc, snap);
+    resetArcCommandState();
+    pointerPreview = null;
+    clearSnap();
+    clearSelection();
+    solveAndRefresh("3点円弧追加");
   }
 
   const CANVAS_CONTEXT_KIND_PRIORITY = Object.freeze({
@@ -20147,7 +20226,7 @@
       return;
     }
 
-    if (["point", "line", "centerline", "rectangle", "circle", "arc", "spline", "fillet", "trim", "offset", "block-place", "hatch", "hatch-repair"].includes(mode) && rejectRootSketchCreation()) {
+    if (["point", "line", "centerline", "rectangle", "circle", "arc", "three-point-arc", "spline", "fillet", "trim", "offset", "block-place", "hatch", "hatch-repair"].includes(mode) && rejectRootSketchCreation()) {
       e.preventDefault();
       return;
     }
@@ -20197,6 +20276,11 @@
 
     if (mode === "arc") {
       handleArcClick(p);
+      return;
+    }
+
+    if (mode === "three-point-arc") {
+      handleThreePointArcClick(p);
       return;
     }
 
@@ -20524,7 +20608,7 @@
       return;
     }
 
-    if (["point", "line", "centerline", "rectangle", "circle", "arc", "spline", "fillet", "trim", "offset", "block-place"].includes(mode) && !canCreateInActiveSketch()) {
+    if (["point", "line", "centerline", "rectangle", "circle", "arc", "three-point-arc", "spline", "fillet", "trim", "offset", "block-place"].includes(mode) && !canCreateInActiveSketch()) {
       clearSnap();
       pointerPreview = null;
       trimPreview = null;
@@ -20564,7 +20648,7 @@
       return;
     }
 
-    if (mode === "rectangle" || mode === "circle" || mode === "arc" || mode === "spline") {
+    if (mode === "rectangle" || mode === "circle" || mode === "arc" || mode === "three-point-arc" || mode === "spline") {
       hoveredSketchIdentity = null;
       pointerPreview = snapForDrawing(p);
       draw();
@@ -21114,7 +21198,7 @@
   }
 
   function isDrawToolMode() {
-    return mode === "line" || mode === "centerline" || mode === "point" || mode === "rectangle" || mode === "fillet" || mode === "trim" || mode === "offset" || mode === "circle" || mode === "arc" || mode === "spline" || mode === "sketch-projection" || mode === "hatch" || mode === "hatch-repair";
+    return mode === "line" || mode === "centerline" || mode === "point" || mode === "rectangle" || mode === "fillet" || mode === "trim" || mode === "offset" || mode === "circle" || mode === "arc" || mode === "three-point-arc" || mode === "spline" || mode === "sketch-projection" || mode === "hatch" || mode === "hatch-repair";
   }
 
   function handleBlankCanvasDoubleClick(pointer, hits = {}) {
@@ -22045,8 +22129,7 @@
     rectangleStartPoint = null;
     filletFirstLine = null;
     circleCenterPoint = null;
-    arcCenterPoint = null;
-    arcStartPoint = null;
+    resetArcCommandState();
     pointerPreview = null;
     clearSnap();
     updateToolbar();
@@ -22061,8 +22144,7 @@
     rectangleStartPoint = null;
     filletFirstLine = null;
     circleCenterPoint = null;
-    arcCenterPoint = null;
-    arcStartPoint = null;
+    resetArcCommandState();
     pointerPreview = null;
     clearSnap();
     updateToolbar();
@@ -22077,8 +22159,7 @@
     rectangleStartPoint = null;
     filletFirstLine = null;
     circleCenterPoint = null;
-    arcCenterPoint = null;
-    arcStartPoint = null;
+    resetArcCommandState();
     pointerPreview = null;
     clearSnap();
     updateToolbar();
@@ -22116,8 +22197,7 @@
     rectangleStartPoint = null;
     filletFirstLine = null;
     circleCenterPoint = null;
-    arcCenterPoint = null;
-    arcStartPoint = null;
+    resetArcCommandState();
     pointerPreview = null;
     clearSnap();
     updateToolbar();
@@ -22132,8 +22212,7 @@
     rectangleStartPoint = null;
     filletFirstLine = null;
     circleCenterPoint = null;
-    arcCenterPoint = null;
-    arcStartPoint = null;
+    resetArcCommandState();
     pointerPreview = null;
     clearSnap();
     updateToolbar();
@@ -22152,8 +22231,7 @@
     rectangleStartPoint = null;
     filletFirstLine = null;
     circleCenterPoint = null;
-    arcCenterPoint = null;
-    arcStartPoint = null;
+    resetArcCommandState();
     pointerPreview = null;
     clearSnap();
     updateToolbar();
@@ -22168,8 +22246,7 @@
     rectangleStartPoint = null;
     filletFirstLine = null;
     circleCenterPoint = null;
-    arcCenterPoint = null;
-    arcStartPoint = null;
+    resetArcCommandState();
     pointerPreview = null;
     trimPreview = null;
     offsetSource = null;
@@ -22198,8 +22275,7 @@
     rectangleStartPoint = null;
     filletFirstLine = null;
     circleCenterPoint = null;
-    arcCenterPoint = null;
-    arcStartPoint = null;
+    resetArcCommandState();
     pointerPreview = null;
     trimPreview = null;
     offsetSource = null;
@@ -22230,8 +22306,7 @@
     rectangleStartPoint = null;
     filletFirstLine = null;
     circleCenterPoint = null;
-    arcCenterPoint = null;
-    arcStartPoint = null;
+    resetArcCommandState();
     pointerPreview = null;
     clearSnap();
     updateToolbar();
@@ -22246,12 +22321,26 @@
     rectangleStartPoint = null;
     filletFirstLine = null;
     circleCenterPoint = null;
-    arcCenterPoint = null;
-    arcStartPoint = null;
+    resetArcCommandState();
     pointerPreview = null;
     clearSnap();
     updateToolbar();
     setHint("円弧の中心をクリックしてください。Escで選択モードに戻ります");
+    draw();
+  });
+
+  document.getElementById("toolThreePointArc")?.addEventListener("click", () => {
+    cancelConstraintTargetCommand("");
+    mode = "three-point-arc";
+    lineStartPoint = null;
+    rectangleStartPoint = null;
+    filletFirstLine = null;
+    circleCenterPoint = null;
+    resetArcCommandState();
+    pointerPreview = null;
+    clearSnap();
+    updateToolbar();
+    setHint("3点円弧の始点をクリックしてください。Escで選択モードに戻ります");
     draw();
   });
 

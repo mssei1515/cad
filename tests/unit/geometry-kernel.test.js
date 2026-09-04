@@ -311,6 +311,47 @@ test("arc angle unwrapping and shortest branches preserve signed boundaries", ()
   assert.ok(Math.abs(kernel.shortestAngleFrom(twoPi * 2, Math.PI / 2) - (twoPi * 2 + Math.PI / 2)) < 1e-12);
 });
 
+test("three-point arc geometry chooses the directed sweep that contains the through point", () => {
+  const upper = kernel.threePointArcGeometry(
+    { x: -5, y: 0 },
+    { x: 5, y: 0 },
+    { x: 0, y: -5 },
+  );
+  assert.ok(upper);
+  assert.ok(Math.abs(upper.center.x) < 1e-12);
+  assert.ok(Math.abs(upper.center.y) < 1e-12);
+  assert.ok(Math.abs(upper.radius - 5) < 1e-12);
+  assert.ok(upper.endAngle > upper.startAngle);
+  assert.equal(kernel.angleOnSignedSweep(-Math.PI / 2, upper.startAngle, upper.endAngle), true);
+
+  const major = kernel.threePointArcGeometry(
+    { x: -5, y: 0 },
+    { x: 5, y: 0 },
+    { x: 0, y: -10 },
+  );
+  assert.ok(major);
+  assert.ok(major.endAngle > major.startAngle);
+  assert.ok(major.endAngle - major.startAngle > Math.PI);
+  const throughAngle = Math.atan2(-10 - major.center.y, -major.center.x);
+  assert.equal(kernel.angleOnSignedSweep(throughAngle, major.startAngle, major.endAngle), true);
+
+  const reversed = kernel.threePointArcGeometry(
+    { x: 5, y: 0 },
+    { x: -5, y: 0 },
+    { x: 0, y: -5 },
+  );
+  assert.ok(reversed);
+  assert.ok(reversed.endAngle < reversed.startAngle);
+  assert.equal(kernel.angleOnSignedSweep(-Math.PI / 2, reversed.startAngle, reversed.endAngle), true);
+});
+
+test("three-point arc geometry rejects coincident, collinear, and non-finite input", () => {
+  assert.equal(kernel.threePointArcGeometry({ x: 0, y: 0 }, { x: 0, y: 0 }, { x: 0, y: 1 }), null);
+  assert.equal(kernel.threePointArcGeometry({ x: 0, y: 0 }, { x: 2, y: 0 }, { x: 1, y: 0 }), null);
+  assert.equal(kernel.threePointArcGeometry({ x: 0, y: 0 }, { x: 2, y: 0 }, { x: 1, y: 1e-10 }, 1e-9), null);
+  assert.equal(kernel.threePointArcGeometry({ x: 0, y: 0 }, { x: 2, y: 0 }, { x: NaN, y: 1 }), null);
+});
+
 test("signed arc sweep membership and parameters preserve direction and degeneracy", () => {
   const twoPi = Math.PI * 2;
   assert.equal(kernel.angleOnSignedSweep(0, Math.PI * 1.5, Math.PI * 2.5), true);
