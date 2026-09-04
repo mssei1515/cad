@@ -5,9 +5,10 @@ test.beforeEach(async ({ page }) => {
   await page.waitForFunction(() => Boolean(window.__jot2dTest));
 });
 
-test("projection, mirror, and linear pattern are persisted as read-only derived instances", async ({ page }) => {
+test("projection, mirror, and linear pattern are persisted as derived instances", async ({ page }) => {
   await page.evaluate(() => window.__jot2dTest.resetForDerivedInstanceTest());
   await page.locator('.sketch-item[data-id="S2"] .sketchExpandBtn').click();
+  await expect(page.locator('.sketch-group-row[data-sketch-id="S2"][data-category="instance"]')).toContainText("派生インスタンス");
   await page.locator('.sketch-group-row[data-sketch-id="S2"][data-category="instance"]').click();
   const state = await page.evaluate(() => window.__jot2dTest.derivedInstanceStateForTest());
 
@@ -18,10 +19,93 @@ test("projection, mirror, and linear pattern are persisted as read-only derived 
   expect(state.instances.every((item) => item.valid)).toBe(true);
   expect(state.instances.find((item) => item.type === "pattern").lines).toHaveLength(3);
   expect(state.instances.find((item) => item.type === "mirror").lines[0].p1.x).toBe(40);
-  expect(state.instances.flatMap((item) => [...item.lines, ...item.circles, ...item.arcs]).every((item) => item.color === "#7c3aed")).toBe(true);
+  expect(state.instances.flatMap((item) => [...item.lines, ...item.circles, ...item.arcs]).every((item) => item.color === "#111827")).toBe(true);
   expect(state.instances.find((item) => item.type === "mirror").arcs[0].sweep).toBeCloseTo(-0.5, 8);
   expect(state.hatchValidity).toEqual([true]);
   expect(state.treeCount).toBe(3);
+});
+
+test("dragging derived geometry inverse-updates the original source through instance chains", async ({ page }) => {
+  let state = await page.evaluate(() => window.__jot2dTest.resetForDerivedInstanceTest());
+  await page.evaluate(() => window.__jot2dTest.focusWorldForTest({ x: 0, y: 0 }, 2.5));
+  let mirrorCircle = state.instances.find((item) => item.id === "MI1").circles[0];
+  let start = await page.evaluate((point) => window.__jot2dTest.worldClientPositionForTest(point), mirrorCircle.center);
+  let end = await page.evaluate((point) => window.__jot2dTest.worldClientPositionForTest(point), { x: mirrorCircle.center.x + 6, y: mirrorCircle.center.y + 4 });
+  await page.mouse.move(start.x, start.y);
+  await page.mouse.down();
+  await page.mouse.move(end.x, end.y, { steps: 4 });
+  await page.mouse.up();
+
+  state = await page.evaluate(() => window.__jot2dTest.derivedInstanceStateForTest());
+  const sourceCircle = state.serialized.circles.find((item) => item.id === "C1");
+  const sourceCenter = state.serialized.points.find((item) => item.id === sourceCircle.center);
+  expect(sourceCenter.x).toBeCloseTo(-31, 6);
+  expect(sourceCenter.y).toBeCloseTo(-16, 6);
+  const projectedCenter = state.instances.find((item) => item.id === "SPI1").circles[0].center;
+  const mirroredCenter = state.instances.find((item) => item.id === "MI1").circles[0].center;
+  expect(projectedCenter.x).toBeCloseTo(-31, 6);
+  expect(projectedCenter.y).toBeCloseTo(-16, 6);
+  expect(mirroredCenter.x).toBeCloseTo(31, 6);
+  expect(mirroredCenter.y).toBeCloseTo(-16, 6);
+
+  state = await page.evaluate(() => window.__jot2dTest.resetForDerivedInstanceTest());
+  await page.evaluate(() => window.__jot2dTest.focusWorldForTest({ x: 0, y: 0 }, 2.5));
+  mirrorCircle = state.instances.find((item) => item.id === "MI1").circles[0];
+  start = await page.evaluate((point) => window.__jot2dTest.worldClientPositionForTest(point), { x: mirrorCircle.center.x + mirrorCircle.radius, y: mirrorCircle.center.y });
+  end = await page.evaluate((point) => window.__jot2dTest.worldClientPositionForTest(point), { x: mirrorCircle.center.x + mirrorCircle.radius + 5, y: mirrorCircle.center.y });
+  await page.mouse.move(start.x, start.y);
+  await page.mouse.down();
+  await page.mouse.move(end.x, end.y, { steps: 4 });
+  await page.mouse.up();
+
+  state = await page.evaluate(() => window.__jot2dTest.derivedInstanceStateForTest());
+  expect(state.serialized.circles.find((item) => item.id === "C1").radius).toBeCloseTo(13, 6);
+  expect(state.instances.find((item) => item.id === "SPI1").circles[0].radius).toBeCloseTo(13, 6);
+  expect(state.instances.find((item) => item.id === "MI1").circles[0].radius).toBeCloseTo(13, 6);
+
+  state = await page.evaluate(() => window.__jot2dTest.resetForDerivedInstanceTest());
+  await page.evaluate(() => window.__jot2dTest.focusWorldForTest({ x: 0, y: 0 }, 2.5));
+  const patternedLine = state.instances.find((item) => item.id === "PI1").lines[0];
+  const patternedMidpoint = { x: (patternedLine.p1.x + patternedLine.p2.x) / 2, y: (patternedLine.p1.y + patternedLine.p2.y) / 2 };
+  start = await page.evaluate((point) => window.__jot2dTest.worldClientPositionForTest(point), patternedMidpoint);
+  end = await page.evaluate((point) => window.__jot2dTest.worldClientPositionForTest(point), { x: patternedMidpoint.x + 5, y: patternedMidpoint.y - 4 });
+  await page.mouse.move(start.x, start.y);
+  await page.mouse.down();
+  await page.mouse.move(end.x, end.y, { steps: 4 });
+  await page.mouse.up();
+
+  state = await page.evaluate(() => window.__jot2dTest.derivedInstanceStateForTest());
+  const sourceLine = state.serialized.lines.find((item) => item.id === "L1");
+  const sourceP1 = state.serialized.points.find((item) => item.id === sourceLine.p1);
+  const sourceP2 = state.serialized.points.find((item) => item.id === sourceLine.p2);
+  expect(sourceP1.x).toBeCloseTo(-35, 6);
+  expect(sourceP1.y).toBeCloseTo(6, 6);
+  expect(sourceP2.x).toBeCloseTo(-5, 6);
+  expect(sourceP2.y).toBeCloseTo(26, 6);
+  const movedPattern = state.instances.find((item) => item.id === "PI1").lines[0];
+  expect(movedPattern.p1.x).toBeCloseTo(-20, 6);
+  expect(movedPattern.p1.y).toBeCloseTo(6, 6);
+
+  state = await page.evaluate(() => window.__jot2dTest.resetForDerivedInstanceTest());
+  await page.evaluate(() => window.__jot2dTest.focusWorldForTest({ x: 0, y: 0 }, 2.5));
+  const mirroredArc = state.instances.find((item) => item.id === "MI1").arcs[0];
+  const arcCenter = { x: 55, y: -25 };
+  start = await page.evaluate((point) => window.__jot2dTest.worldClientPositionForTest(point), {
+    x: arcCenter.x + 9 * Math.cos(mirroredArc.startAngle),
+    y: arcCenter.y + 9 * Math.sin(mirroredArc.startAngle),
+  });
+  end = await page.evaluate((point) => window.__jot2dTest.worldClientPositionForTest(point), {
+    x: arcCenter.x + 9 * Math.cos(0.5),
+    y: arcCenter.y + 9 * Math.sin(0.5),
+  });
+  await page.mouse.move(start.x, start.y);
+  await page.mouse.down();
+  await page.mouse.move(end.x, end.y, { steps: 4 });
+  await page.mouse.up();
+
+  state = await page.evaluate(() => window.__jot2dTest.derivedInstanceStateForTest());
+  expect(state.serialized.arcs.find((item) => item.id === "A1").startAngle).toBeCloseTo(Math.PI - 0.5, 6);
+  expect(state.instances.find((item) => item.id === "MI1").arcs[0].startAngle).toBeCloseTo(0.5, 6);
 });
 
 test("projection, mirror, and pattern toolbar commands create grouped instances", async ({ page }) => {

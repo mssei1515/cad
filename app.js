@@ -144,7 +144,7 @@
     ["上書き保存", "Overwrite Save"], ["名前を付けて保存", "Save As"], ["開く", "Open"], ["Parameter…", "Parameters…"], ["ドキュメント設定", "Document Settings"], ["アプリケーション設定", "Application Settings"],
     ["元に戻す", "Undo"], ["やり直す", "Redo"], ["削除", "Delete"], ["選択", "Select"], ["選択・ドラッグ", "Select / Drag"],
     ["ジオメトリ", "Geometry"], ["拘束", "Constraint"], ["注記", "Annotation"], ["ツールバー", "Toolbar"], ["メニューバー", "Menu bar"], ["表示ツール", "View"],
-    ["点", "Point"], ["線", "Line"], ["連続線", "Polyline"], ["中心線", "Centerline"], ["矩形", "Rectangle"], ["長穴", "Slot"], ["円", "Circle"], ["円弧", "Arc"], ["3点円弧", "Three-point Arc"], ["スプライン", "Spline"], ["スケッチ投影", "Sketch Projection"], ["ミラー", "Mirror"], ["直線パターン", "Linear Pattern"], ["インスタンス", "Instance"], ["投影", "Projected"],
+    ["点", "Point"], ["線", "Line"], ["連続線", "Polyline"], ["中心線", "Centerline"], ["矩形", "Rectangle"], ["長穴", "Slot"], ["円", "Circle"], ["円弧", "Arc"], ["3点円弧", "Three-point Arc"], ["スプライン", "Spline"], ["スケッチ投影", "Sketch Projection"], ["ミラー", "Mirror"], ["直線パターン", "Linear Pattern"], ["派生インスタンス", "Derived Instance"], ["投影", "Projected"],
     ["実線／補助線", "Normal / Construction"], ["トリム", "Trim"], ["R面取り", "Fillet"], ["フィレット", "Fillet"], ["オフセット", "Offset"], ["ハッチング", "Hatching"],
     ["寸法", "Dimension"], ["一致", "Coincident"], ["水平", "Horizontal"], ["垂直", "Vertical"], ["平行", "Parallel"], ["直角", "Perpendicular"],
     ["対称", "Symmetry"], ["同心", "Concentric"], ["等寸", "Equal"], ["接線", "Tangent"], ["固定／解除", "Fix / Unfix"], ["固定解除", "Unfix"],
@@ -470,7 +470,6 @@
     under: "#f59e0b",
     conflict: "#dc2626",
   };
-  const SKETCH_PROJECTION_STATUS_COLOR = "#7c3aed";
   const INACTIVE_CONSTRAINT_STATUS_COLOR = "#cbd5e1";
   const DEFAULT_APPEARANCE = {
     visible: true,
@@ -1748,14 +1747,6 @@
     return Boolean(sketchProjectionConstraintForTarget(item));
   }
 
-  function isSketchProjectionStatusElement(item) {
-    if (isSketchProjectedGeometry(item)) return true;
-    if (!(item instanceof Point)) return false;
-    return sketchProjectionConstraints().some((constraint) =>
-      constraintIsOperational(constraint)
-      && sketchProjectionPointPairs(constraint).some(([, target]) => target === item));
-  }
-
   function sketchProjectionPointPairs(constraint) {
     if (!(constraint instanceof SketchProjectionConstraint) || !constraint.source || !constraint.target) return [];
     if (constraint.kind === "point") return [[constraint.source, constraint.target]];
@@ -2507,7 +2498,6 @@
     const occurrences = instance.type === "pattern"
       ? Array.from({ length: Math.max(0, instance.copies) }, (_, index) => index + 1)
       : [0];
-    const directionLength = direction?.length?.() || 0;
     const transform = (point, occurrence) => {
       if (instance.type === "mirror") {
         const dx = axis.p2.x - axis.p1.x;
@@ -2518,9 +2508,22 @@
         return { x: 2 * (axis.p1.x + t * dx) - point.x, y: 2 * (axis.p1.y + t * dy) - point.y };
       }
       if (instance.type === "pattern") {
+        const directionLength = direction?.length?.() || 0;
+        if (directionLength < MIN_ORIENTATION_LENGTH) return { x: point.x, y: point.y };
         const sign = instance.reversed ? -1 : 1;
         const scale = sign * instance.spacing * occurrence / directionLength;
         return { x: point.x + direction.dx() * scale, y: point.y + direction.dy() * scale };
+      }
+      return { x: point.x, y: point.y };
+    };
+    const inverseTransform = (point, occurrence) => {
+      if (instance.type === "mirror") return transform(point, occurrence);
+      if (instance.type === "pattern") {
+        const directionLength = direction?.length?.() || 0;
+        if (directionLength < MIN_ORIENTATION_LENGTH) return { x: point.x, y: point.y };
+        const sign = instance.reversed ? -1 : 1;
+        const scale = sign * instance.spacing * occurrence / directionLength;
+        return { x: point.x - direction.dx() * scale, y: point.y - direction.dy() * scale };
       }
       return { x: point.x, y: point.y };
     };
@@ -2546,6 +2549,7 @@
         point.derivedInstance = instance;
         point.sourceElement = sourcePoint;
         point.occurrenceIndex = occurrence;
+        point.derivedInversePoint = (value) => inverseTransform(value, occurrence);
         mappedPoints.set(sourcePoint, point);
         outputs.points.push(point);
       }
@@ -2577,6 +2581,7 @@
         output.sourceElement = item;
         output.sourceRef = sourceRefByItem.get(item);
         output.occurrenceIndex = occurrence;
+        output.derivedInversePoint = (value) => inverseTransform(value, occurrence);
         const kind = geometryKindForItem(output);
         if (kind && kind !== "point") outputs[`${kind}s`].push(output);
       }
@@ -3932,7 +3937,6 @@
     if (selected) return "#1d4ed8";
     if (hovered) return "#3b82f6";
     if (sketchHasSolveError(elementSketchId(item))) return SKETCH_SOLVE_ERROR_COLOR;
-    if (item?.derivedProjection || isSketchProjectionStatusElement(item)) return SKETCH_PROJECTION_STATUS_COLOR;
     const relation = sketchRelationOfElement(item);
     if (relation !== "active") return INACTIVE_CONSTRAINT_STATUS_COLOR;
     const status = constraintStatusOf(item);
@@ -9880,6 +9884,38 @@
     return null;
   }
 
+  function hitDerivedGeometryForDrag(x, y) {
+    const threshold = 7 / viewport.scale;
+    const pointThreshold = 10 / viewport.scale;
+    for (const bundle of geometryInstanceBundles().slice().reverse()) {
+      if (!isEditableSketchId(bundle.instance.sketchId) || !isVisibleSketchId(bundle.instance.sketchId)) continue;
+      for (const point of bundle.points.slice().reverse()) {
+        if (hypot2(point.x - x, point.y - y) <= pointThreshold) return { kind: "point", item: point, instance: bundle.instance };
+      }
+      for (const arc of bundle.arcs.slice().reverse()) {
+        for (const endpoint of ["end", "start"]) {
+          const point = arcEndpointPoint(arc, endpoint);
+          if (hypot2(point.x - x, point.y - y) <= pointThreshold) return { kind: "arc-endpoint", item: arc, endpoint, instance: bundle.instance };
+        }
+      }
+      for (const line of bundle.lines.slice().reverse()) {
+        if (distancePointToSegment(x, y, line) <= threshold) return { kind: "line", item: line, instance: bundle.instance };
+      }
+      for (const circle of bundle.circles.slice().reverse()) {
+        if (Math.abs(hypot2(x - circle.center.x, y - circle.center.y) - circle.radius()) <= threshold) return { kind: "circle", item: circle, instance: bundle.instance };
+      }
+      for (const arc of bundle.arcs.slice().reverse()) {
+        const angle = Math.atan2(y - arc.center.y, x - arc.center.x);
+        if (Math.abs(hypot2(x - arc.center.x, y - arc.center.y) - arc.radius()) <= threshold && angleOnSignedSweep(angle, arc.startAngle, arc.endAngle)) return { kind: "arc", item: arc, instance: bundle.instance };
+      }
+      for (const spline of bundle.splines.slice().reverse()) {
+        const closest = window.SplineGeometry.closestPoint(spline.curve(), { x, y }, { samplesPerSpan: 28 });
+        if (closest?.distance <= threshold) return { kind: "spline", item: spline, instance: bundle.instance };
+      }
+    }
+    return null;
+  }
+
   function hitDerivedProjectionOperand(x, y) {
     const threshold = 8 / viewport.scale;
     const pointThreshold = 10 / viewport.scale;
@@ -10951,12 +10987,22 @@
     refreshReferenceConstraintValidity();
     const results = [];
     const dependentsBySource = new Map();
+    const addDependency = (sourceSketchId, dependentSketchId) => {
+      if (!sourceSketchId || !dependentSketchId || sourceSketchId === dependentSketchId) return;
+      if (!dependentsBySource.has(sourceSketchId)) dependentsBySource.set(sourceSketchId, new Set());
+      dependentsBySource.get(sourceSketchId).add(dependentSketchId);
+    };
     for (const constraint of model.constraints) {
       if (!constraintIsOperational(constraint) || !constraint.reference || !constraint.referenceSketchId) continue;
       const dependentSketchId = constraintSketchId(constraint);
-      if (!dependentSketchId || dependentSketchId === constraint.referenceSketchId) continue;
-      if (!dependentsBySource.has(constraint.referenceSketchId)) dependentsBySource.set(constraint.referenceSketchId, new Set());
-      dependentsBySource.get(constraint.referenceSketchId).add(dependentSketchId);
+      addDependency(constraint.referenceSketchId, dependentSketchId);
+    }
+    for (const bundle of geometryInstanceBundles()) {
+      if (!bundle.valid) continue;
+      const outputs = [...bundle.points, ...bundle.lines, ...bundle.circles, ...bundle.arcs, ...bundle.splines];
+      for (const source of new Set(outputs.map((item) => item.sourceElement).filter(Boolean))) {
+        addDependency(elementSketchId(source), bundle.instance.sketchId);
+      }
     }
 
     const affected = new Set([rootSketchId]);
@@ -15401,7 +15447,7 @@
     }
     const categoryDefinitions = [
       ["point", applicationText("点", "Point")], ["line", applicationText("線", "Line")], ["circle", applicationText("円", "Circle")],
-      ["arc", applicationText("円弧", "Arc")], ["spline", applicationText("スプライン", "Spline")], ["hatch", applicationText("ハッチング", "Hatching")], ["image", applicationText("画像", "Image")], ["block", applicationText("ブロック", "Block")], ["instance", applicationText("インスタンス", "Instance")], ["constraint", applicationText("拘束", "Constraint")], ["annotation", applicationText("注記", "Annotation")],
+      ["arc", applicationText("円弧", "Arc")], ["spline", applicationText("スプライン", "Spline")], ["hatch", applicationText("ハッチング", "Hatching")], ["image", applicationText("画像", "Image")], ["block", applicationText("ブロック", "Block")], ["instance", applicationText("派生インスタンス", "Derived Instance")], ["constraint", applicationText("拘束", "Constraint")], ["annotation", applicationText("注記", "Annotation")],
     ];
     const html = [];
     const renderSketch = (sketch, depth, ancestorHasNext, isLast) => {
@@ -18312,6 +18358,61 @@
     return { kind, sketchId, item, startPointer: pointer, points };
   }
 
+  function resolveDerivedDragSource(hit, pointer) {
+    let item = hit?.item || null;
+    const inverseTransforms = [];
+    const visited = new Set();
+    while (item?.derivedProjection) {
+      if (visited.has(item) || !item.sourceElement || typeof item.derivedInversePoint !== "function") return null;
+      visited.add(item);
+      inverseTransforms.push(item.derivedInversePoint);
+      item = item.sourceElement;
+    }
+    if (!item || inverseTransforms.length === 0) return null;
+    const mapPointer = (value) => inverseTransforms.reduce((current, inverse) => inverse(current), { x: value.x, y: value.y });
+    return { item, mapPointer, pointer: mapPointer(pointer) };
+  }
+
+  function beginDerivedGeometryDrag(e, hit, pointer) {
+    const resolved = resolveDerivedDragSource(hit, pointer);
+    clearSelection();
+    selectedGeometryInstances = hit?.instance ? [hit.instance] : [];
+    if (!resolved) {
+      setHint(applicationText("派生インスタンスの参照元を解決できません", "The derived instance source could not be resolved."), "error");
+      updateGeometrySelectionUI();
+      draw();
+      return;
+    }
+
+    let source = resolved.item;
+    let kind = hit.kind;
+    let dragItem = source;
+    if (source.blockProjection) {
+      source = source.blockInstance;
+      kind = "block";
+      dragItem = source;
+    } else if (kind === "arc-endpoint") {
+      dragItem = { arc: source, endpoint: hit.endpoint };
+    }
+    dragSession = buildDragSession(kind, dragItem, resolved.pointer);
+    if (!dragSession) {
+      setHint(applicationText("参照元が固定されているためドラッグできません", "The source is fixed and cannot be dragged."), "error");
+      updateGeometrySelectionUI();
+      draw();
+      return;
+    }
+    dragSession.displayStartPointer = pointer;
+    dragSession.pointerMap = resolved.mapPointer;
+    dragSession.derivedInstance = hit.instance;
+    dragSession.derivedSource = resolved.item;
+    attachLocalSolveContext(dragSession);
+    canvas.classList.add("is-dragging");
+    canvas.setPointerCapture(e.pointerId);
+    setHint(applicationText(`${dragLabel(dragSession)}中: 参照元へ反映しながら拘束をsolveしています`, `${dragLabel(dragSession)}: solving constraints while updating the source`));
+    updateUI({ refreshAnalysis: false });
+    draw();
+  }
+
   function dragSessionSeeds(session) {
     const seeds = [];
     if (!session) return seeds;
@@ -20927,14 +21028,16 @@
     const hitD = hitDimension(p.x, p.y);
     const hitBlockHandle = hitBlockRotationHandle(p.x, p.y);
     const hitBlock = hitBlockHandle || hitBlockInstance(p.x, p.y);
-    const hitDerivedInstance = hitGeometryInstance(p.x, p.y);
+    const hitDerivedGeometry = hitDerivedGeometryForDrag(p.x, p.y);
+    const hitDerivedInstance = hitDerivedGeometry?.instance || hitGeometryInstance(p.x, p.y);
     const directGeometryHit = Boolean(
       (hitP && !hitP.blockProjection) ||
       (hitArcEnd && !hitArcEnd.arc.blockProjection) ||
       (hitL && !hitL.blockProjection) ||
       (hitC && !hitC.blockProjection) ||
       (hitA && !hitA.blockProjection)
-      || (hitS && !hitS.blockProjection)
+      || (hitS && !hitS.blockProjection) ||
+      hitDerivedGeometry
     );
     hoveredSketchIdentity = hitSketchIdentityElement(p.x, p.y, { allowInactiveGeometry: true });
     const inactiveHit = null;
@@ -20986,7 +21089,7 @@
       return;
     }
 
-    const blankDoubleClickHits = { hitP, hitL, hitC, hitArcEnd, hitA, hitS, hitD, hitBlock, hatchHit, referenceImageHit, inactiveHit, annotationHit: blankAnnotationHit };
+    const blankDoubleClickHits = { hitP, hitL, hitC, hitArcEnd, hitA, hitS, hitD, hitBlock, hitDerivedInstance, hatchHit, referenceImageHit, inactiveHit, annotationHit: blankAnnotationHit };
     if (isRepeatedBlankDoubleClick(e, blankDoubleClickHits) && handleBlankCanvasDoubleClick(p, blankDoubleClickHits)) {
       suppressNextBlankDoubleClickEvent = true;
       e.preventDefault();
@@ -21254,7 +21357,18 @@
 
     const multiSelect = e.shiftKey || e.ctrlKey;
 
-    if (hitDerivedInstance && !directGeometryHit) {
+    if (hitDerivedGeometry) {
+      if (multiSelect) {
+        if (!selectedGeometryInstances.includes(hitDerivedGeometry.instance)) selectedGeometryInstances.push(hitDerivedGeometry.instance);
+        else selectedGeometryInstances = selectedGeometryInstances.filter((instance) => instance !== hitDerivedGeometry.instance);
+        selectedDimensionConstraint = null;
+        selectedConstraint = null;
+        updateGeometrySelectionUI();
+        draw();
+      } else {
+        beginDerivedGeometryDrag(e, hitDerivedGeometry, p);
+      }
+    } else if (hitDerivedInstance && !directGeometryHit) {
       if (!multiSelect) clearSelection();
       const index = selectedGeometryInstances.indexOf(hitDerivedInstance);
       if (multiSelect && index >= 0) selectedGeometryInstances.splice(index, 1);
@@ -21749,7 +21863,8 @@
     }
 
     if (!dragSession) return;
-    const pointerDistance = hypot2(p.x - dragSession.startPointer.x, p.y - dragSession.startPointer.y);
+    const displayStartPointer = dragSession.displayStartPointer || dragSession.startPointer;
+    const pointerDistance = hypot2(p.x - displayStartPointer.x, p.y - displayStartPointer.y);
     if (!dragSession.previewMoved && pointerDistance <= 3 / viewport.scale) return;
     if (dragSession.projectionShapeLocked) {
       dragSession.projectionDragAttempted = true;
@@ -21758,7 +21873,8 @@
       return;
     }
     dragSession.previewMoved = true;
-    const result = dragResultForSession(dragSession, p);
+    const dragPointer = dragSession.pointerMap ? dragSession.pointerMap(p) : p;
+    const result = dragResultForSession(dragSession, dragPointer);
     const error = result.errorNorm;
     if (result.blocked) {
       setHint(result.reason, "error");
@@ -22006,6 +22122,7 @@
       !hits.hitS &&
       !hits.hitD &&
       !hits.hitBlock &&
+      !hits.hitDerivedInstance &&
       !hits.hatchHit &&
       !hits.referenceImageHit &&
       !hits.annotationHit &&
