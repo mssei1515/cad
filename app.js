@@ -15016,7 +15016,7 @@
         ? `<button class="sketchExpandBtn" type="button" data-id="${escapeHtml(sketch.id)}" title="${applicationText(open ? "図形と拘束を折りたたむ" : "図形と拘束を展開する", open ? "Collapse objects and constraints" : "Expand objects and constraints")}" aria-label="${applicationText(open ? `${sketch.name}の図形と拘束を折りたたむ` : `${sketch.name}の図形と拘束を展開する`, `${open ? "Collapse" : "Expand"} objects and constraints in ${sketch.name}`)}" aria-expanded="${open}"><span class="sketch-expand-chevron" aria-hidden="true">${open ? "▼" : "▶"}</span></button>`
         : '<span class="sketch-expand-spacer" aria-hidden="true">▼</span>';
       const expandedAttribute = hasGroups ? ` aria-expanded="${open}"` : "";
-      html.push(`<div class="item sketch-item ${isActive ? "active" : ""} ${visibilityEnabled ? "visible" : ""} ${solveError ? "solve-error" : ""} ${referenceErrorCount ? "reference-error" : ""} ${hasGroups ? "has-groups" : ""} ${open ? "open" : ""}" data-id="${escapeHtml(sketch.id)}" style="--sketch-depth:${depth}"${expandedAttribute}>${sketchTreeGutter(segments)}${expandButton}<button class="sketchActivateBtn" data-id="${escapeHtml(sketch.id)}" ${isActive ? "disabled" : ""}>${sketchTreeSketchIcon()}<span class="sketch-name">${escapeHtml(sketch.name)}</span></button><span class="sketch-badges">${solveError ? '<span class="badge">!</span>' : ""}${referenceErrorCount ? `<span class="badge sketch-reference-error-badge">${applicationText("参照", "Ref")}!${referenceErrorCount}</span>` : ""}${duplicateCount ? `<span class="badge">${applicationText("重複", "Duplicate")}${duplicateCount}</span>` : ""}<span class="badge">${count}</span></span>${visibilityButton}${isRoot ? "" : `<button class="sketchRenameBtn icon-small-btn" data-id="${escapeHtml(sketch.id)}" title="${applicationText("名前変更", "Rename")}">Aa</button><button class="sketchDeleteBtn icon-small-btn" data-id="${escapeHtml(sketch.id)}" title="${applicationText("スケッチ削除", "Delete sketch")}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3M7 7l1 13h8l1-13"/></svg></button>`}</div>`);
+      html.push(`<div class="item sketch-item ${isActive ? "active" : ""} ${visibilityEnabled ? "visible" : ""} ${solveError ? "solve-error" : ""} ${referenceErrorCount ? "reference-error" : ""} ${hasGroups ? "has-groups" : ""} ${open ? "open" : ""}" data-id="${escapeHtml(sketch.id)}" style="--sketch-depth:${depth}"${expandedAttribute}>${sketchTreeGutter(segments)}${expandButton}<button class="sketchActivateBtn" data-id="${escapeHtml(sketch.id)}" aria-current="${isActive}">${sketchTreeSketchIcon()}<span class="sketch-name">${escapeHtml(sketch.name)}</span></button><span class="sketch-badges">${solveError ? '<span class="badge">!</span>' : ""}${referenceErrorCount ? `<span class="badge sketch-reference-error-badge">${applicationText("参照", "Ref")}!${referenceErrorCount}</span>` : ""}${duplicateCount ? `<span class="badge">${applicationText("重複", "Duplicate")}${duplicateCount}</span>` : ""}<span class="badge">${count}</span></span>${visibilityButton}${isRoot ? "" : `<button class="sketchRenameBtn icon-small-btn" data-id="${escapeHtml(sketch.id)}" title="${applicationText("名前変更", "Rename")}">Aa</button><button class="sketchDeleteBtn icon-small-btn" data-id="${escapeHtml(sketch.id)}" title="${applicationText("スケッチ削除", "Delete sketch")}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3M7 7l1 13h8l1-13"/></svg></button>`}</div>`);
       const entries = [
         ...(open ? nonEmptyCategories.map(([category, label]) => ({ type: "category", category, label })) : []),
         ...childSketches.map((child) => ({ type: "sketch", sketch: child })),
@@ -15135,7 +15135,14 @@
     const objectRow = event.target.closest(".sketch-object-row");
     if (objectRow) return void activateSketchTreeObject(objectRow, event.ctrlKey || event.shiftKey);
     const sketchRow = event.target.closest(".sketch-item");
-    if (sketchRow) setActiveSketch(sketchRow.dataset.id);
+    if (sketchRow) {
+      setActiveSketch(sketchRow.dataset.id);
+      if (sketchRow.classList.contains("has-groups")) {
+        const key = sketchTreeSketchKey(sketchRow.dataset.id);
+        sketchTreeSketchOpenState.set(key, sketchRow.getAttribute("aria-expanded") !== "true");
+        updateSketchUI();
+      }
+    }
   }
 
   function handleSketchTreePointerOver(event) {
