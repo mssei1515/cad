@@ -8184,6 +8184,8 @@
     const transientSnapshot = historySnapshot();
     model.points.length = pointStartRollback.pointLength;
     model.constraints.length = pointStartRollback.constraintLength;
+    const retainedPoints = new Set(model.points);
+    selectedPoints = selectedPoints.filter((point) => retainedPoints.has(point));
     pointSeq = pointStartRollback.pointSeq;
     constraintAnalysisState = null;
     pointStartRollback = null;
