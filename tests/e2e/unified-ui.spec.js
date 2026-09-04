@@ -746,6 +746,31 @@ test("Sketch Tree owns object groups, activates inactive rows, and copies annota
   await expect(page.locator('.sketch-object-row[data-sketch-id="S1"]')).toHaveCount(0);
 });
 
+test("sketch row clicks activate and toggle its object groups", async ({ page }) => {
+  await page.goto(`${baseUrl}/index.html?test=1`);
+  await page.waitForFunction(() => window.__jot2dTest);
+  const fixture = annotationSketchFixture();
+  expect(await page.evaluate((data) => window.__jot2dTest.loadDocumentFixtureForDragTest(data, "sketch-row-toggle.json"), fixture)).toEqual(expect.objectContaining({ success: true }));
+
+  const sketch = sketchTreeSketch(page, "S1");
+  await expect(sketch).toHaveAttribute("aria-expanded", "false");
+  await sketch.locator(".sketchActivateBtn").click();
+  expect((await page.evaluate(() => window.__jot2dTest.serializedModelForTest())).activeSketchId).toBe("S1");
+  await expect(sketch).toHaveAttribute("aria-expanded", "true");
+  await expect(sketch.locator(".sketchActivateBtn")).toHaveAttribute("aria-current", "true");
+  await expect(page.locator('.sketch-group-row[data-sketch-id="S1"]')).toHaveCount(3);
+
+  await sketch.locator(".sketch-badges").click();
+  await expect(sketch).toHaveAttribute("aria-expanded", "false");
+  await expect(page.locator('.sketch-group-row[data-sketch-id="S1"]')).toHaveCount(0);
+
+  await sketch.locator(".sketchActivateBtn").click();
+  await expect(sketch).toHaveAttribute("aria-expanded", "true");
+  await sketch.locator(".sketchExpandBtn").click();
+  await expect(sketch).toHaveAttribute("aria-expanded", "false");
+  expect((await page.evaluate(() => window.__jot2dTest.serializedModelForTest())).activeSketchId).toBe("S1");
+});
+
 test("v10 annotations migrate by target or active sketch and invalid v11 ownership is atomic", async ({ page }) => {
   await page.goto(`${baseUrl}/index.html?test=1`);
   await page.waitForFunction(() => window.__jot2dTest);
