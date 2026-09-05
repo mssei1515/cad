@@ -1635,10 +1635,17 @@ test("file URL Help menu reads the generated Git commit file", async ({ page }) 
   await expect(runtimeCommit).toHaveAttribute("title", `${branch}@${commit}`);
 
   const loadedScripts = await page.locator("script[src]").evaluateAll((scripts) =>
-    scripts.map((script) => new URL(script.src).searchParams.get("load")),
+    scripts.map((script) => {
+      const url = new URL(script.src);
+      return { name: url.pathname.split("/").at(-1), loadId: url.searchParams.get("load") };
+    }),
   );
-  expect(loadedScripts).toHaveLength(10);
-  expect(loadedScripts.every((loadId) => loadId && loadId === loadedScripts[0])).toBe(true);
+  expect(loadedScripts.map((script) => script.name)).toEqual(expect.arrayContaining([
+    "runtime-version.js", "edit_history.js", "interaction_profiler.js", "app.js",
+  ]));
+  expect(loadedScripts.every(({ loadId }) => loadId && loadId === loadedScripts[0].loadId)).toBe(true);
+  expect(await page.evaluate(() => [typeof window.EditHistory.record, typeof window.InteractionProfiler.create]))
+    .toEqual(["function", "function"]);
 });
 
 test("HTML file picker compatibility route opens a Jot2D document without a native handle", async ({ page }) => {
