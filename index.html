@@ -56,7 +56,6 @@
 
     <nav class="command-toolbar" aria-label="ツールバー">
       <div class="tool-group" aria-label="ファイル">
-        <span class="tool-group-label">File</span>
         <button id="exportBtn" class="tool-button" type="button" title="上書き保存" aria-label="上書き保存"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 20h14V8l-4-4H5v16z"/><path d="M8 20v-6h8v6M8 4v5h7"/></svg></button>
         <button id="importBtn" class="tool-button" type="button" title="開く" aria-label="開く"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 20h14V8l-4-4H5v16z"/><path d="M12 17V9M8 13l4 4 4-4"/></svg></button>
       </div>
@@ -67,11 +66,9 @@
       </div>
       <div class="tool-group" aria-label="選択"><button id="toolSelect" class="tool-button active" type="button" title="選択・ドラッグ" aria-label="選択・ドラッグ"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 3l14 9-7 2-3 7L5 3z"/></svg></button></div>
       <div class="tool-group" aria-label="表示ツール">
-        <span class="tool-group-label" data-i18n-ja="表示" data-i18n-en="View">View</span>
         <button id="constraintStatusViewBtn" class="tool-button" type="button" title="拘束状態表示を切り替え（Space長押しでも一時表示）" aria-label="拘束状態表示" aria-pressed="false"><svg class="constraint-status-icon" viewBox="0 0 24 24" aria-hidden="true"><path class="constraint-status-eye" d="M3 10.5s3.2-5 9-5 9 5 9 5-3.2 5-9 5-9-5-9-5Z"/><circle class="constraint-status-eye" cx="12" cy="10.5" r="2.3"/><path class="constraint-status-swatch status-full" d="M3 19h3"/><path class="constraint-status-swatch status-support" d="M8 19h3"/><path class="constraint-status-swatch status-under" d="M13 19h3"/><path class="constraint-status-swatch status-conflict" d="M18 19h3"/></svg></button>
       </div>
       <div class="tool-group" aria-label="Geometry">
-        <span class="tool-group-label">Geometry</span>
         <button id="toolPoint" class="tool-button" type="button" title="点" aria-label="点"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3.5"/><path d="M12 3v3M12 18v3M3 12h3M18 12h3"/></svg></button>
         <button id="toolLine" class="tool-button" type="button" title="連続線" aria-label="連続線"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 18L19 6"/><circle cx="5" cy="18" r="2"/><circle cx="19" cy="6" r="2"/></svg></button>
         <button id="toolCenterline" class="tool-button" type="button" title="中心線" aria-label="中心線"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 5v14M18 5v14"/><path d="M12 3v5m0 2v4m0 2v5"/></svg></button>
@@ -91,11 +88,9 @@
         <button id="toolOffset" class="tool-button" type="button" title="オフセット" aria-label="オフセット"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 17L15 7"/><path d="M9 21L19 11"/><path d="M15 17h4M17 15l2 2-2 2"/></svg></button>
       </div>
       <div class="tool-group" aria-label="Block">
-        <span class="tool-group-label">Block</span>
         <button id="toolCreateBlock" class="tool-button" type="button" title="ブロック作成" aria-label="ブロック作成"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="5" width="10" height="10"/><path d="M9 9h10v10H9z"/><path d="M17 3v4M15 5h4"/></svg></button>
       </div>
       <div class="tool-group constraint-toolbar-group" aria-label="Constraint">
-        <span class="tool-group-label">Constraint</span>
         <button type="button" data-constraint="distance" data-label="寸法" title="寸法" aria-label="寸法"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14"/><path d="M8 9l-3 3 3 3M16 9l3 3-3 3"/></svg></button>
         <button type="button" data-constraint="coincident" data-label="一致" title="一致" aria-label="一致"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10" cy="12" r="4"/><circle cx="14" cy="12" r="4"/></svg></button>
         <button type="button" data-constraint="horizontal" data-label="水平" title="水平" aria-label="水平"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14"/></svg></button>
@@ -109,7 +104,6 @@
         <button id="fixPointBtn" type="button" data-label="固定／解除" title="固定／解除" aria-label="固定／解除"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 11V8a5 5 0 0 1 10 0v3"/><rect x="6" y="11" width="12" height="9" rx="2"/></svg></button>
       </div>
       <div class="tool-group" aria-label="Annotation">
-        <span class="tool-group-label">Annotation</span>
         <button id="annotationLeaderBtn" class="tool-button" type="button" title="引出線" aria-label="引出線"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 18l7-7 4 4h4"/><path d="M5 18l1-4 3 3-4 1"/></svg></button>
         <button id="annotationTextBtn" class="tool-button" type="button" title="自由テキスト" aria-label="自由テキスト"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="4.5" width="17" height="15" rx="1.5"/><path d="M6.5 16l2.6-7h1.8l2.6 7M7.6 13h4.8M15 9h3M15 12h3M15 15h3"/></svg></button>
         <button id="importReferenceImageBtn" class="tool-button" type="button" title="画像を読み込み" aria-label="画像を読み込み"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="5" width="17" height="14" rx="1.5"/><circle cx="9" cy="10" r="1.8"/><path d="M5.5 17l4.5-4 3 2.5 2.5-3 3 4.5"/></svg></button>
