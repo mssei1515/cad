@@ -25,11 +25,7 @@ Definition は `origin`、内部 Sketch、Geometry、Constraint、Annotation、H
 
 DefinitionのParameter名前空間からDocumentまたは別Definitionのsymbolは参照できない。
 
-変換は次のとおりで、倍率と鏡像はない。
-
-```text
-world = rotate(local, rotation) + (x, y)
-```
+座標変換は[Blockの配置とsolve変数](../calculation/拘束と依存更新.md#5-blockの配置とsolve変数)に従う。
 
 新規空 Definition は編集完了時に全有効 Geometry の外接範囲中心をローカル `(0, 0)` へ移す。既存 Definition の編集では原点を再計算しない。
 
@@ -54,11 +50,7 @@ Projection AnnotationのIDは`BI1/AN1`、入れ子では`BI1/BI2/AN1`とする�
 
 Hatchの輪郭、seed、pattern原点、angleへInstance変換を合成し、Block回転とともに平行線・クロスpatternも回転する。色塗りつぶしは同じ変換済み輪郭へ描画する。
 
-内部では`GeometryRef { kind, path[] }`を使う。kindは`point`、`line`、`circle`、`arc`、`spline`のいずれかで、通常Geometryのpathは`["L1"]`、入れ子Projectionは`["BI1", "BI2", "L1"]`となる。
-
-値とpathは不変であり、空path、不明kind、空のpath要素は有効な参照ではない。ancestor Instanceは末尾のGeometry IDを除くpath、owner InstanceはProjection pathの先頭、local elementは末尾として取得する。
-
-保存時はpathを`@`で連結するため、従来どおり`BI1@BI2@L1`となる。Constraintの保存fieldも同じcodecで生成・解決するが、保存文字列にはkindを追加せず従来のbare IDを維持する。Leaderはkind付きGeometryRefを使い、同じresolver契約でProjectionを解決する。
+参照の値・path・保存と解決は[GeometryRefとConstraint参照](../data/保存形式.md#13-geometryrefとconstraint参照)に従う。
 
 ## 4. 選択 Geometry からの作成
 
@@ -152,11 +144,11 @@ Instance ごとに `enabledSketchIds` を持ち、配置後も変更できる。
 
 ## 12. Constraint と solve
 
-外部 Constraint の対象選択中は Instance 全体ではなく Projection Geometry を選ぶ。solve 変数は Instance の `x`, `y` と、自由回転時の `rotation` だけである。
+外部 Constraint の対象選択中は Instance 全体ではなく Projection Geometry を選ぶ。solve変数は[計算契約](../calculation/拘束と依存更新.md#5-blockの配置とsolve変数)に従う。
 
 同一 Instance 内だけで完結する長さ、距離、半径、直径、角度寸法は読み取り専用になる。Definition Geometry のサイズを変えるには Block Editor を使う。
 
-Definition 内部は通常 Sketch と同じく内部 Sketch ごとに solve する。Block Parameterの評価と反映順序は[Parameter](../08-Parameter.md)の「評価とsolve」に従う。
+内部Sketchのsolveと依存更新は[計算契約](../calculation/拘束と依存更新.md#5-blockの配置とsolve変数)に従う。
 
 失敗時の復元範囲と履歴は[編集の確定と失敗](../contracts/編集と履歴.md)に従う。Block Parameter適用にはTX-04、Parameter以外のDefinition編集による外部拘束エラーにはTX-05を適用する。
 

@@ -6,7 +6,7 @@
 
 ## 文書一覧
 
-7領域で案内する。基本概念・共通契約・機能別操作・UI・データと互換性は新構成へ移行済み。計算契約と検証対応は、既存の文書・見出しも参照する。
+7領域で案内する。基本概念・共通契約・機能別操作・UI・データと互換性は新構成へ移行済み。計算契約も新構成へ移行済み。検証対応は既存文書を参照する。
 
 | 領域 | 現在の正式文書・参照先 |
 | --- | --- |
@@ -15,7 +15,7 @@
 | 機能別操作 | [作図・形状編集](./operations/作図と形状編集.md)、[拘束・寸法](./operations/拘束と寸法.md)、[Sketch](./operations/Sketch.md)、[Block](./operations/Block.md)、[Parameter](./operations/Parameter.md)、[Hatch](./operations/Hatch.md)、[Spline](./operations/Spline.md)、[参照画像](./operations/参照画像.md)、[派生Instance](./operations/派生Instance.md)、[注記](./operations/注記.md)、[ファイル操作](./operations/ファイル操作.md) |
 | UI | [画面構成](./ui/画面構成.md)、[入力と操作状態](./ui/入力と操作状態.md)、[表示とビュー操作](./ui/表示とビュー操作.md) |
 | データと互換性 | [保存構造](data/保存形式.md)、[読込・移行](data/読込と互換性.md#1-読込と互換性) |
-| 計算契約 | [Geometry・拘束計算](./03-Geometryと拘束.md)、[参照solve](./04-スケッチ.md#9-参照-solve)、[Blockの拘束](operations/Block.md#12-constraint-と-solve)、[式評価](./08-Parameter.md)、[閉領域](./09-ハッチング.md#3-閉領域と境界追従)、[Spline補間](./10-スプライン.md#1-形状と補間) |
+| 計算契約 | [幾何計算](./calculation/幾何計算.md)、[拘束と依存更新](./calculation/拘束と依存更新.md)、[式評価](./calculation/式評価.md) |
 | 検証対応 | [保証対応と検証方法](./90-実装対応表とテスト.md) |
 
 ## 用語

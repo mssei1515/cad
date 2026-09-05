@@ -33,3 +33,14 @@
 | Constraint Dimension | `app.js`、`constraint_solver.js` | `geometry-solver.test.js`、`unified-ui.spec.js` |
 | Document／Canvas／UI | `app.js`、`index.html`、`style.css` | `unified-ui.spec.js`、`phase0-characterization.spec.js` |
 | Block | `app.js` | `blocks.spec.js` |
+
+## 3. 計算と編集policyの現在の配置
+
+- `geometry_kernel.js`: UI adapterとSolverが共有する副作用のない数学関数。角度範囲・符号付き距離・縮退境界は[幾何計算](../../spec/calculation/幾何計算.md)に従う。
+- `app.js`: Arcモデルを補正する`normalizeArcSweep`、ほぼ一周判定を含む`arcEndpointDragValue`、dragのtarget選択・preview・確定、Sketch依存更新、Block配置、Parameter feedbackを扱う。
+- `constraint_solver.js`: 数値Jacobian、減衰付き最小二乗法、拘束残差・自由度の解析。
+- `hatch_region.js`: 副作用のない交点・AABB候補絞り込み・平面グラフ・half-edge面探索・点包含・境界の保存復元。
+- `parameter_engine.js`: 式のparserと依存評価。Geometry再測定を伴う確定処理とは分離している。
+- `constraint_codec_registry.js`: 永続Constraint型のclass、保存type、serialize、deserializeは単一registryで対応付ける。参照列挙、表示名、未登録型のユーザー向け拒否policyは永続codecとは別の責務として保持する。
+
+この配置は現在の実装対応であり、将来のモジュール構成を拘束する仕様ではない。
