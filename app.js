@@ -3428,7 +3428,7 @@
   }
 
   function constraintTargetsAreActive(constraint) {
-    return sameSketchElements(constraintGraphNodes(constraint), activeSketchId());
+    return sameSketchElements(constraintGraphNodes(constraint, { includeIntrinsicDependencies: false }), activeSketchId());
   }
 
   function constraintReferencesSketch(constraint, sketchId) {
@@ -3945,6 +3945,7 @@
   }
 
   function constraintStatusOf(item) {
+    if (item?.derivedInstance?.type === "sketchProjection") return "full";
     if (!constraintAnalysisState) refreshConstraintAnalysis();
     let current = item;
     const visited = new Set();
@@ -10565,7 +10566,7 @@
     if (value) nodes.add(value);
   }
 
-  function constraintGraphNodes(c) {
+  function constraintGraphNodes(c, options = {}) {
     const nodes = new Set();
     if (c instanceof SketchProjectionConstraint) {
       for (const item of [c.source, c.target]) {
@@ -10731,11 +10732,13 @@
         addNode(nodes, item.center || item);
       }
     }
-    for (const node of [...nodes]) {
-      if (node?.blockInstance) addNode(nodes, node.blockInstance);
-      if (node?.derivedInstance) {
-        addNode(nodes, node.derivedInstance);
-        for (const ref of geometryInstanceDependencyRefs(node.derivedInstance)) addNode(nodes, resolveGeometryRef(ref));
+    if (options.includeIntrinsicDependencies !== false) {
+      for (const node of [...nodes]) {
+        if (node?.blockInstance) addNode(nodes, node.blockInstance);
+        if (node?.derivedInstance) {
+          addNode(nodes, node.derivedInstance);
+          for (const ref of geometryInstanceDependencyRefs(node.derivedInstance)) addNode(nodes, resolveGeometryRef(ref));
+        }
       }
     }
     return [...nodes];
@@ -18384,15 +18387,17 @@
     let item = hit?.item || null;
     const inverseTransforms = [];
     const visited = new Set();
+    let crossesSketchProjection = false;
     while (item?.derivedProjection) {
       if (visited.has(item) || !item.sourceElement || typeof item.derivedInversePoint !== "function") return null;
       visited.add(item);
+      if (item.derivedInstance?.type === "sketchProjection") crossesSketchProjection = true;
       inverseTransforms.push(item.derivedInversePoint);
       item = item.sourceElement;
     }
     if (!item || inverseTransforms.length === 0) return null;
     const mapPointer = (value) => inverseTransforms.reduce((current, inverse) => inverse(current), { x: value.x, y: value.y });
-    return { item, mapPointer, pointer: mapPointer(pointer) };
+    return { item, mapPointer, pointer: mapPointer(pointer), crossesSketchProjection };
   }
 
   function beginDerivedGeometryDrag(e, hit, pointer) {
@@ -18401,6 +18406,12 @@
     selectedGeometryInstances = hit?.instance ? [hit.instance] : [];
     if (!resolved) {
       setHint(applicationText("派生インスタンスの参照元を解決できません", "The derived instance source could not be resolved."), "error");
+      updateGeometrySelectionUI();
+      draw();
+      return;
+    }
+    if (resolved.crossesSketchProjection) {
+      setHint(applicationText("スケッチ投影は先祖スケッチの参照元を変更するためドラッグできません", "Sketch projections cannot be dragged because that would modify source geometry in an ancestor sketch."), "error");
       updateGeometrySelectionUI();
       draw();
       return;
