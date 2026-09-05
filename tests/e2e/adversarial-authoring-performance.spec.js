@@ -1,16 +1,10 @@
-const { test, expect } = require("./test-fixture");
-const { spawn } = require("child_process");
+const { test, expect, openTestDocument } = require("./test-fixture");
 const fs = require("fs");
-const http = require("http");
 const path = require("path");
 
-const host = "127.0.0.1";
-const port = Number(process.env.JOT2D_E2E_PORT || 8765) + 7;
-const baseUrl = `http://${host}:${port}`;
 const fixturePath = path.resolve(__dirname, "../../test-data/意地悪ドラッグ完全拘束.json");
 const fixture = JSON.parse(fs.readFileSync(fixturePath, "utf8"));
 const sandboxCenter = { x: 4000, y: 0 };
-let serverProcess = null;
 let sandboxSequence = 1;
 
 const drawingToolIds = [
@@ -40,23 +34,6 @@ const constraintToolTypes = [
   "equal",
   "tangent",
 ];
-
-function waitForServer(url, timeoutMs = 10000) {
-  const startedAt = Date.now();
-  return new Promise((resolve, reject) => {
-    const check = () => {
-      const request = http.get(url, (response) => {
-        response.resume();
-        resolve();
-      });
-      request.on("error", () => {
-        if (Date.now() - startedAt > timeoutMs) reject(new Error(`Timed out waiting for ${url}`));
-        else setTimeout(check, 100);
-      });
-    };
-    check();
-  });
-}
 
 function referencedGeometryIds(value, allIds) {
   return Object.values(value).filter((entry) => typeof entry === "string" && allIds.has(entry));
@@ -182,11 +159,13 @@ async function runPointerBurstDrag(page, start, end, { button = "left", buttons 
   await settleAfterPaint(page);
   await page.mouse.down({ button });
   await page.evaluate(() => window.__jot2dTest.resetInteractionFrameStatsForTest());
+  await page.evaluate(() => window.__jot2dTest.startInteractionProfileForTest());
   const dispatchMs = await dispatchPointerBurst(page, start, end, { count, buttons });
   await settleAfterPaint(page);
   const stats = await page.evaluate(() => window.__jot2dTest.interactionFrameStatsForTest());
   await page.mouse.up({ button });
-  return { dispatchMs, stats };
+  const profile = await page.evaluate(() => window.__jot2dTest.stopInteractionProfileForTest());
+  return { dispatchMs, stats, profile };
 }
 
 async function measureInteraction(page, results, label, action, limitMs) {
@@ -214,14 +193,14 @@ function latencySummary(results, traces = []) {
   };
 }
 
-async function loadFixture(page, data, center = sandboxCenter, scale = 1) {
+async function loadFixture(page, data, center = sandboxCenter, scale = 1, resetLoadedHistory = false) {
   const loaded = await page.evaluate(
-    ({ fixtureData, fixtureName, focus, focusScale }) => {
-      const result = window.__jot2dTest.loadDocumentFixtureForDragTest(fixtureData, fixtureName);
+    ({ fixtureData, fixtureName, focus, focusScale, resetLoadedHistory }) => {
+      const result = window.__jot2dTest.loadDocumentFixtureForDragTest(fixtureData, fixtureName, { resetLoadedHistory });
       const viewport = window.__jot2dTest.focusWorldForTest(focus, focusScale);
       return { result, viewport, state: window.__jot2dTest.authoringStateForTest() };
     },
-    { fixtureData: data, fixtureName: "authoring-performance.json", focus: center, focusScale: scale },
+    { fixtureData: data, fixtureName: "authoring-performance.json", focus: center, focusScale: scale, resetLoadedHistory },
   );
   expect(loaded.result.success).toBe(true);
   return loaded;
@@ -246,21 +225,8 @@ async function pressEscape(page) {
   await settleAfterPaint(page);
 }
 
-test.beforeAll(async () => {
-  serverProcess = spawn(process.execPath, ["tools/serve.js", "--host", host, "--port", String(port)], {
-    cwd: path.resolve(__dirname, "../.."),
-    stdio: "ignore",
-  });
-  await waitForServer(`${baseUrl}/index.html`);
-});
-
-test.afterAll(() => {
-  if (serverProcess) serverProcess.kill();
-});
-
 test.beforeEach(async ({ page }) => {
-  await page.goto(`${baseUrl}/index.html?test=1`);
-  await page.waitForFunction(() => window.__jot2dTest);
+  await openTestDocument(page);
 });
 
 test("all drawing and constraint commands stay responsive as the sketch grows", async ({ page }) => {
@@ -516,8 +482,13 @@ test("constraint target clicks and commits stay responsive at full fixture compl
 
   for (const constraintCase of cases) {
     const sandbox = sandboxFixture(constraintCase.build);
-    const loaded = await loadFixture(page, sandbox.data);
+    const loaded = await loadFixture(page, sandbox.data, sandboxCenter, 1, true);
     const beforeCount = loaded.state.constraintCount;
+    const snapshot = () => page.evaluate(() => {
+      const model = window.__jot2dTest.serializedModelForTest();
+      delete model.savedAt;
+      return { model, history: window.__jot2dTest.historyState() };
+    });
     await measureInteraction(
       page,
       results,
@@ -525,6 +496,7 @@ test("constraint target clicks and commits stay responsive at full fixture compl
       () => page.locator(`[data-constraint="${constraintCase.type}"]`).click(),
       250,
     );
+    const before = await snapshot();
     for (let index = 0; index < sandbox.targets.length; index += 1) {
       await measureInteraction(
         page,
@@ -533,10 +505,25 @@ test("constraint target clicks and commits stay responsive at full fixture compl
         () => clickWorld(page, sandbox.targets[index]),
         index === sandbox.targets.length - 1 ? 350 : 300,
       );
+      if (index < sandbox.targets.length - 1) {
+        expect(await snapshot(), constraintCase.name + "/pending").toEqual(before);
+        const pending = await page.evaluate(() => window.__jot2dTest.authoringStateForTest());
+        expect(pending.pendingConstraintType, constraintCase.name).toBe(constraintCase.type);
+        expect(Object.values(pending.selected).flat().filter(Boolean).length, constraintCase.name).toBeGreaterThan(0);
+      }
     }
     const after = await page.evaluate(() => window.__jot2dTest.authoringStateForTest());
     expect(after.constraintCount, constraintCase.name).toBe(beforeCount + 1);
     traces.push({ name: constraintCase.name, ...after.lastPerformance });
+    if (sandbox.targets.length > 1) {
+      await loadFixture(page, sandbox.data, sandboxCenter, 1, true);
+      await page.locator('[data-constraint="' + constraintCase.type + '"]').click();
+      const cancelBefore = await snapshot();
+      await clickWorld(page, sandbox.targets[0]);
+      await pressEscape(page);
+      expect(await snapshot(), constraintCase.name + "/cancel").toEqual(cancelBefore);
+      expect((await page.evaluate(() => window.__jot2dTest.authoringStateForTest())).pendingConstraintType).toBeNull();
+    }
   }
 
   console.log(JSON.stringify({ kind: "constraint-authoring-latency", ...latencySummary(results, traces) }));
@@ -1020,6 +1007,18 @@ test("high-density geometry, dimension and pan drags coalesce to one animation f
   const eventCount = 240;
   const expectCoalescedFrame = (result, label) => {
     expect(result.dispatchMs, `${label}/dispatch: ${result.dispatchMs.toFixed(1)}ms`).toBeLessThan(200);
+    expect(result.profile.preview.samples, label).toBe(1);
+    expect(result.profile.preview.work.draw.calls, label).toBe(1);
+    expect(result.profile.commit.samples, label).toBe(1);
+    for (const phase of Object.values(result.profile)) {
+      const measured = Object.values(phase.work).reduce((sum, entry) => sum + entry.selfMs, phase.otherMs);
+      expect(measured, label).toBeCloseTo(phase.totalMs, 4);
+      for (const entry of Object.values(phase.work)) {
+        expect(entry.selfMs, label).toBeGreaterThanOrEqual(0);
+        expect(entry.calls, label).toBeGreaterThan(0);
+      }
+    }
+    console.log(JSON.stringify({ kind: "interaction-profile", label, profile: result.profile }));
     expect(result.stats, label).toMatchObject({
       receivedMoves: eventCount,
       processedMoves: 1,
@@ -1043,12 +1042,31 @@ test("high-density geometry, dimension and pan drags coalesce to one animation f
 
   await page.evaluate(() => window.__jot2dTest.resetForResponsiveLineDragTest());
   await settleAfterPaint(page);
+  const dimensionSnapshot = () => page.evaluate(() => {
+    const data = window.__jot2dTest.serializedModelForTest();
+    delete data.savedAt;
+    return data;
+  });
+  const modelBeforeDimension = await dimensionSnapshot();
   const dimensionStart = await page.evaluate(() => window.__jot2dTest.dimensionClientPositionForTest(0));
   const dimensionEnd = { x: dimensionStart.x + 80, y: dimensionStart.y + 55 };
   const dimensionResult = await runPointerBurstDrag(page, dimensionStart, dimensionEnd, { count: eventCount });
   expectCoalescedFrame(dimensionResult, "dimension");
+  expect(dimensionResult.profile.commit.work.analysis).toBeUndefined();
+  expect(dimensionResult.profile.commit.work.tree).toBeUndefined();
+  await expect(page.locator('#propertiesPanel [data-property="constraint-expression"]')).toBeVisible();
   const dimensionAfter = await page.evaluate(() => window.__jot2dTest.dimensionClientPositionForTest(0));
   expect(Math.hypot(dimensionAfter.x - dimensionStart.x, dimensionAfter.y - dimensionStart.y)).toBeGreaterThan(20);
+  const modelAfterDimension = await dimensionSnapshot();
+  const withoutDimensionLayout = (data) => ({
+    ...data,
+    constraints: data.constraints.map(({ dimension, ...constraint }) => constraint),
+  });
+  expect(withoutDimensionLayout(modelAfterDimension)).toEqual(withoutDimensionLayout(modelBeforeDimension));
+  await page.click("#undoBtn");
+  expect(await dimensionSnapshot()).toEqual(modelBeforeDimension);
+  await page.click("#redoBtn");
+  expect(await dimensionSnapshot()).toEqual(modelAfterDimension);
 
   await page.evaluate(() => window.__jot2dTest.resetForResponsiveLineDragTest());
   await settleAfterPaint(page);

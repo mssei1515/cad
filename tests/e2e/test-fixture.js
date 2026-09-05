@@ -1,25 +1,11 @@
 const playwright = require("@playwright/test");
 
 const EXPECTED_CONSOLE_ERRORS = new Set([]);
-const EXPECTED_CONSTRAINT_SELECTION_PAGE_ERRORS = new Set([
-  "Cannot read properties of undefined (reading 'id')",
-  "Cannot read properties of undefined (reading 'center')",
-]);
-
-function isExpectedPageError(error) {
-  if (!EXPECTED_CONSTRAINT_SELECTION_PAGE_ERRORS.has(error.message)) return false;
-  const stack = error.stack || "";
-  return stack.includes("constraintFromSelection")
-    && stack.includes("normalConstraintFromOperands")
-    && stack.includes("handleConstraintOperandClick");
-}
-
 const test = playwright.test.extend({
   page: async ({ page }, use) => {
     const runtimeErrors = [];
 
     page.on("pageerror", (error) => {
-      if (isExpectedPageError(error)) return;
       runtimeErrors.push(`pageerror: ${error.stack || error.message}`);
     });
     page.on("console", (message) => {
@@ -40,4 +26,9 @@ const test = playwright.test.extend({
   },
 });
 
-module.exports = { test, expect: playwright.expect };
+async function openTestDocument(page) {
+  await page.goto("/index.html?test=1");
+  await page.waitForFunction(() => window.__jot2dTest);
+}
+
+module.exports = { test, expect: playwright.expect, openTestDocument };

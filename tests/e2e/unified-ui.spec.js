@@ -1,13 +1,7 @@
-const { test, expect } = require("./test-fixture");
-const { execFileSync, spawn } = require("child_process");
-const http = require("http");
+const { test, expect, openTestDocument } = require("./test-fixture");
+const { execFileSync } = require("child_process");
 const path = require("path");
 const { pathToFileURL } = require("url");
-
-const host = "127.0.0.1";
-const port = Number(process.env.JOT2D_E2E_PORT || 8765);
-const baseUrl = `http://${host}:${port}`;
-let serverProcess = null;
 
 function sketchTreeGroup(page, category, sketchId = "S1") {
   return page.locator(`.sketch-group-row[data-sketch-id="${sketchId}"][data-category="${category}"]`);
@@ -157,44 +151,6 @@ function lineCircleSparseLineDragFixture() {
   };
 }
 
-function waitForServer(url, timeoutMs = 10000) {
-  const startedAt = Date.now();
-  return new Promise((resolve, reject) => {
-    const check = () => {
-      const request = http.get(url, (response) => {
-        response.resume();
-        resolve();
-      });
-      request.on("error", () => {
-        if (Date.now() - startedAt > timeoutMs) {
-          reject(new Error(`Timed out waiting for ${url}`));
-          return;
-        }
-        setTimeout(check, 100);
-      });
-    };
-    check();
-  });
-}
-
-test.beforeAll(async () => {
-  try {
-    await waitForServer(`${baseUrl}/index.html`, 300);
-    return;
-  } catch (_) {
-    // Start our local static server below.
-  }
-  serverProcess = spawn(process.execPath, ["tools/serve.js", "--host", host, "--port", String(port)], {
-    cwd: path.resolve(__dirname, "../.."),
-    stdio: "ignore",
-  });
-  await waitForServer(`${baseUrl}/index.html`);
-});
-
-test.afterAll(() => {
-  if (serverProcess) serverProcess.kill();
-});
-
 async function openParameterDialog(page) {
   await page.locator(".app-menu > summary").first().click();
   await page.locator("#parametersBtn").click();
@@ -202,8 +158,7 @@ async function openParameterDialog(page) {
 }
 
 test("point command double-click exit does not seed the next point dimension", async ({ page }) => {
-  await page.goto(`${baseUrl}/index.html?test=1`);
-  await page.waitForFunction(() => window.__jot2dTest);
+  await openTestDocument(page);
   await page.evaluate(() => window.__jot2dTest.focusWorldForTest({ x: 0, y: 0 }, 3));
   const positions = await page.evaluate(() => ({
     first: window.__jot2dTest.worldClientPositionForTest({ x: -50, y: 0 }),
@@ -239,8 +194,7 @@ test("point command double-click exit does not seed the next point dimension", a
 });
 
 test("three-point arc uses two endpoints and a circumference point while preserving the center-based arc tool", async ({ page }) => {
-  await page.goto(`${baseUrl}/index.html?test=1`);
-  await page.waitForFunction(() => window.__jot2dTest);
+  await openTestDocument(page);
   await page.evaluate(() => window.__jot2dTest.focusWorldForTest({ x: 0, y: 0 }, 2));
   const positions = await page.evaluate(() => ({
     cancelStart: window.__jot2dTest.worldClientPositionForTest({ x: -70, y: 20 }),
@@ -286,8 +240,7 @@ test("three-point arc uses two endpoints and a circumference point while preserv
 });
 
 test("three-point arc keeps endpoint and circumference point snaps as constraints", async ({ page }) => {
-  await page.goto(`${baseUrl}/index.html?test=1`);
-  await page.waitForFunction(() => window.__jot2dTest);
+  await openTestDocument(page);
   await page.evaluate(() => window.__jot2dTest.focusWorldForTest({ x: 0, y: 0 }, 2));
   const positions = await page.evaluate(() => [
     window.__jot2dTest.worldClientPositionForTest({ x: -50, y: 0 }),
@@ -316,8 +269,7 @@ test("three-point arc keeps endpoint and circumference point snaps as constraint
 });
 
 test("document parameters, quoted dimension formulas, rename propagation, and current persistence work together", async ({ page }) => {
-  await page.goto(`${baseUrl}/index.html?test=1`);
-  await page.waitForFunction(() => window.__jot2dTest);
+  await openTestDocument(page);
   const initial = await page.evaluate(() => window.__jot2dTest.resetForParameterTest());
   expect(initial.success).toBe(true);
   expect(initial.length).toBeCloseTo(50, 5);
@@ -360,8 +312,7 @@ test("document parameters, quoted dimension formulas, rename propagation, and cu
 });
 
 test("block parameter namespaces are independent and directly update definitions", async ({ page }) => {
-  await page.goto(`${baseUrl}/index.html?test=1`);
-  await page.waitForFunction(() => window.__jot2dTest);
+  await openTestDocument(page);
   await page.evaluate(() => window.__jot2dTest.resetForParameterTest());
   await openParameterDialog(page);
   const scope = page.locator("#parameterScopeSelect");
@@ -387,8 +338,7 @@ test("block parameter namespaces are independent and directly update definitions
 });
 
 test("formula-driven dimensions use the lightning canvas mark without changing numeric labels", async ({ page }) => {
-  await page.goto(`${baseUrl}/index.html?test=1`);
-  await page.waitForFunction(() => window.__jot2dTest);
+  await openTestDocument(page);
   await page.evaluate(() => window.__jot2dTest.resetForParameterTest());
 
   expect(await page.evaluate(() => window.__jot2dTest.drawnDimensionExpressionMarksForTest())).toEqual([
@@ -411,8 +361,7 @@ test("formula-driven dimensions use the lightning canvas mark without changing n
 });
 
 test("dimension expressions require equals and canvas dimension clicks insert parameter names", async ({ page }) => {
-  await page.goto(`${baseUrl}/index.html?test=1`);
-  await page.waitForFunction(() => window.__jot2dTest);
+  await openTestDocument(page);
   const initial = await page.evaluate(() => window.__jot2dTest.resetForParameterTest());
   await page.evaluate(() => window.__jot2dTest.focusWorldForTest({ x: 50, y: 30 }, 2));
   const positions = await page.evaluate(() => [
@@ -451,8 +400,7 @@ test("dimension expressions require equals and canvas dimension clicks insert pa
 });
 
 test("Properties and Parameter dialog expression fields accept canvas dimension references", async ({ page }) => {
-  await page.goto(`${baseUrl}/index.html?test=1`);
-  await page.waitForFunction(() => window.__jot2dTest);
+  await openTestDocument(page);
   const initial = await page.evaluate(() => window.__jot2dTest.resetForParameterTest());
   await page.evaluate(() => window.__jot2dTest.focusWorldForTest({ x: 50, y: 30 }, 2));
   await page.evaluate(() => window.__jot2dTest.selectDimensionForPropertiesForTest(0));
@@ -482,8 +430,7 @@ test("Properties and Parameter dialog expression fields accept canvas dimension 
 });
 
 test("v16 formulas migrate to quoted references and current unquoted references are rejected atomically", async ({ page }) => {
-  await page.goto(`${baseUrl}/index.html?test=1`);
-  await page.waitForFunction(() => window.__jot2dTest);
+  await openTestDocument(page);
   await page.evaluate(() => window.__jot2dTest.resetForParameterTest());
   const before = await page.evaluate(() => window.__jot2dTest.serializedModelForTest());
   const legacy = structuredClone(before);
@@ -512,8 +459,7 @@ test("v16 formulas migrate to quoted references and current unquoted references 
 });
 
 test("unknown quoted parameter expressions reject loading without replacing the document", async ({ page }) => {
-  await page.goto(`${baseUrl}/index.html?test=1`);
-  await page.waitForFunction(() => window.__jot2dTest);
+  await openTestDocument(page);
   await page.evaluate(() => window.__jot2dTest.resetForParameterTest());
   const before = await page.evaluate(() => window.__jot2dTest.serializedModelForTest());
   const invalid = structuredClone(before);
@@ -526,8 +472,7 @@ test("unknown quoted parameter expressions reject loading without replacing the 
 });
 
 test("non-convergent reference feedback rolls back the complete parameter apply", async ({ page }) => {
-  await page.goto(`${baseUrl}/index.html?test=1`);
-  await page.waitForFunction(() => window.__jot2dTest);
+  await openTestDocument(page);
   const initial = await page.evaluate(() => window.__jot2dTest.resetForParameterFeedbackTest());
   expect(initial.success).toBe(true);
   expect(initial.length).toBeCloseTo(40, 5);
@@ -545,8 +490,7 @@ test("non-convergent reference feedback rolls back the complete parameter apply"
 });
 
 test("document annotations can be dragged on the unified canvas", async ({ page }) => {
-  await page.goto(`${baseUrl}/index.html?test=1`);
-  await page.waitForFunction(() => window.__jot2dTest);
+  await openTestDocument(page);
   await page.evaluate(() => window.__jot2dTest.resetForAnnotationDrag());
   const displayZoom = await page.evaluate(() => window.__jot2dTest.displayZoomStateForTest());
 
@@ -590,8 +534,7 @@ test("document annotations can be dragged on the unified canvas", async ({ page 
 });
 
 test("annotation Properties edit complete appearance in approximate millimeters", async ({ page }) => {
-  await page.goto(`${baseUrl}/index.html?test=1`);
-  await page.waitForFunction(() => window.__jot2dTest);
+  await openTestDocument(page);
   const fixture = annotationSketchFixture(11);
   expect(await page.evaluate((data) => window.__jot2dTest.loadDocumentFixtureForDragTest(data, "annotation-appearance.jot2d"), fixture)).toEqual(expect.objectContaining({ success: true }));
   await expandSketchTreeGroup(page, "annotation", "S1");
@@ -667,8 +610,7 @@ test("annotation Properties edit complete appearance in approximate millimeters"
 });
 
 test("multiple selection edits only changed common properties and supports dash-dot-dot lines", async ({ page }) => {
-  await page.goto(`${baseUrl}/index.html?test=1`);
-  await page.waitForFunction(() => window.__jot2dTest);
+  await openTestDocument(page);
   await page.evaluate(() => window.__jot2dTest.resetForMultiplePropertiesTest());
 
   await expect(page.locator("#propertiesPanel .property-heading")).toContainText("2 個のオブジェクト");
@@ -706,8 +648,7 @@ test("multiple selection edits only changed common properties and supports dash-
 });
 
 test("fix toggle applies points and lines as one multiple-selection operation", async ({ page }) => {
-  await page.goto(`${baseUrl}/index.html?test=1`);
-  await page.waitForFunction(() => window.__jot2dTest);
+  await openTestDocument(page);
   const fixture = await page.evaluate(() => window.__jot2dTest.resetForMultipleFixedTest());
   await expect(page.locator("#fixPointBtn")).toHaveAttribute("aria-disabled", "false");
 
@@ -731,8 +672,7 @@ test("fix toggle applies points and lines as one multiple-selection operation", 
 });
 
 test("Sketch Tree owns object groups, activates inactive rows, and copies annotations across sketches", async ({ page }) => {
-  await page.goto(`${baseUrl}/index.html?test=1`);
-  await page.waitForFunction(() => window.__jot2dTest);
+  await openTestDocument(page);
   const fixture = annotationSketchFixture();
   expect(await page.evaluate((data) => window.__jot2dTest.loadDocumentFixtureForDragTest(data, "annotation-tree.json"), fixture)).toEqual(expect.objectContaining({ success: true }));
 
@@ -786,8 +726,7 @@ test("Sketch Tree owns object groups, activates inactive rows, and copies annota
 });
 
 test("inactive sketch row clicks activate first and toggle on the next click", async ({ page }) => {
-  await page.goto(`${baseUrl}/index.html?test=1`);
-  await page.waitForFunction(() => window.__jot2dTest);
+  await openTestDocument(page);
   const fixture = annotationSketchFixture();
   expect(await page.evaluate((data) => window.__jot2dTest.loadDocumentFixtureForDragTest(data, "sketch-row-toggle.json"), fixture)).toEqual(expect.objectContaining({ success: true }));
 
@@ -815,8 +754,7 @@ test("inactive sketch row clicks activate first and toggle on the next click", a
 });
 
 test("v10 annotations migrate by target or active sketch and invalid v11 ownership is atomic", async ({ page }) => {
-  await page.goto(`${baseUrl}/index.html?test=1`);
-  await page.waitForFunction(() => window.__jot2dTest);
+  await openTestDocument(page);
   const legacy = annotationSketchFixture(10);
   expect(await page.evaluate((data) => window.__jot2dTest.loadDocumentFixtureForDragTest(data, "annotation-v10.json"), legacy)).toEqual(expect.objectContaining({ success: true }));
   const migrated = await page.evaluate(() => window.__jot2dTest.serializedModelForTest());
@@ -835,8 +773,7 @@ test("v10 annotations migrate by target or active sketch and invalid v11 ownersh
 });
 
 test("annotation-only blocks project nested text with transforms, overrides, bounds, and block hit selection", async ({ page }) => {
-  await page.goto(`${baseUrl}/index.html?test=1`);
-  await page.waitForFunction(() => window.__jot2dTest);
+  await openTestDocument(page);
   const fixture = annotationSketchFixture();
   fixture.activeSketchId = "S1";
   fixture.annotations = [fixture.annotations[0]];
@@ -929,8 +866,7 @@ test("annotation-only blocks project nested text with transforms, overrides, bou
 });
 
 test("history buttons enable after normal canvas edits", async ({ page }) => {
-  await page.goto(`${baseUrl}/index.html?test=1`);
-  await page.waitForFunction(() => window.__jot2dTest);
+  await openTestDocument(page);
 
   const initial = await page.evaluate(() => window.__jot2dTest.historyState());
   expect(initial.undoDisabled).toBe(true);
@@ -958,8 +894,7 @@ test("history buttons enable after normal canvas edits", async ({ page }) => {
 });
 
 test("startup opens an empty drawable document", async ({ page }) => {
-  await page.goto(`${baseUrl}/index.html?test=1`);
-  await page.waitForFunction(() => window.__jot2dTest);
+  await openTestDocument(page);
 
   const state = await page.evaluate(() => ({
     document: window.__jot2dTest.serializedModelForTest(),
@@ -982,8 +917,7 @@ test("startup opens an empty drawable document", async ({ page }) => {
 });
 
 test("geometry copy and paste crosses sketches with internal constraints and stepped offsets", async ({ page }) => {
-  await page.goto(`${baseUrl}/index.html?test=1`);
-  await page.waitForFunction(() => window.__jot2dTest);
+  await openTestDocument(page);
   const initial = await page.evaluate(() => window.__jot2dTest.resetForGeometryClipboardTest());
 
   expect(initial.geometryBySketch.S1.points).toHaveLength(6);
@@ -1032,8 +966,7 @@ test("geometry copy and paste crosses sketches with internal constraints and ste
 });
 
 test("cut uses one undo step and keeps a pasteable cross-sketch payload", async ({ page }) => {
-  await page.goto(`${baseUrl}/index.html?test=1`);
-  await page.waitForFunction(() => window.__jot2dTest);
+  await openTestDocument(page);
   await page.evaluate(() => window.__jot2dTest.resetForGeometryClipboardTest());
 
   await page.keyboard.press("Control+X");
@@ -1065,8 +998,7 @@ test("cut uses one undo step and keeps a pasteable cross-sketch payload", async 
 });
 
 test("block instances and their closed constraints can be copied across sketches", async ({ page }) => {
-  await page.goto(`${baseUrl}/index.html?test=1`);
-  await page.waitForFunction(() => window.__jot2dTest);
+  await openTestDocument(page);
   await page.evaluate(() => window.__jot2dTest.resetForBlockClipboardTest());
 
   await page.keyboard.press("Control+C");
@@ -1088,7 +1020,7 @@ test("block instances and their closed constraints can be copied across sketches
 });
 
 test("undo preserves construction drawing mode", async ({ page }) => {
-  await page.goto(`${baseUrl}/index.html?test=1`);
+  await page.goto(`/index.html?test=1`);
   await page.click("#toolConstructionLine");
   await page.mouse.click(460, 410);
   await page.mouse.click(540, 450);
@@ -1100,8 +1032,7 @@ test("undo preserves construction drawing mode", async ({ page }) => {
 });
 
 test("workspace integrates transparent compact Object groups into Sketch Tree and removes Explorer", async ({ page }) => {
-  await page.goto(`${baseUrl}/index.html?test=1`);
-  await page.waitForFunction(() => window.__jot2dTest);
+  await openTestDocument(page);
   await page.evaluate(() => window.__jot2dTest.resetForResponsiveLineDragTest());
   await expect(sketchTreeSketch(page, "ROOT")).not.toHaveAttribute("aria-expanded", /.+/);
   await expect(sketchTreeSketch(page, "ROOT").locator(".sketchExpandBtn")).toHaveCount(0);
@@ -1504,8 +1435,7 @@ test("Jot2D files open, overwrite, save as, and cancel without errors", async ({
       },
     });
   });
-  await page.goto(`${baseUrl}/index.html?test=1`);
-  await page.waitForFunction(() => window.__jot2dTest);
+  await openTestDocument(page);
 
   await expect(page.locator('[data-menu-tool="exportBtn"]')).toContainText("上書き保存");
   await expect(page.locator("#exportBtn")).toHaveAttribute("title", "上書き保存");
@@ -1609,7 +1539,7 @@ test("Help menu identifies the running Git commit", async ({ page }) => {
   const commit = execFileSync("git", ["rev-parse", "HEAD"], { cwd: repositoryRoot, encoding: "utf8" }).trim();
   const branch = execFileSync("git", ["branch", "--show-current"], { cwd: repositoryRoot, encoding: "utf8" }).trim() || "HEAD";
 
-  await page.goto(`${baseUrl}/index.html?test=1`);
+  await page.goto(`/index.html?test=1`);
   await page.locator("#helpMenu > summary").click();
 
   const runtimeCommit = page.locator("#runtimeCommit");
@@ -1635,10 +1565,17 @@ test("file URL Help menu reads the generated Git commit file", async ({ page }) 
   await expect(runtimeCommit).toHaveAttribute("title", `${branch}@${commit}`);
 
   const loadedScripts = await page.locator("script[src]").evaluateAll((scripts) =>
-    scripts.map((script) => new URL(script.src).searchParams.get("load")),
+    scripts.map((script) => {
+      const url = new URL(script.src);
+      return { name: url.pathname.split("/").at(-1), loadId: url.searchParams.get("load") };
+    }),
   );
-  expect(loadedScripts).toHaveLength(10);
-  expect(loadedScripts.every((loadId) => loadId && loadId === loadedScripts[0])).toBe(true);
+  expect(loadedScripts.map((script) => script.name)).toEqual(expect.arrayContaining([
+    "runtime-version.js", "edit_history.js", "interaction_profiler.js", "app.js",
+  ]));
+  expect(loadedScripts.every(({ loadId }) => loadId && loadId === loadedScripts[0].loadId)).toBe(true);
+  expect(await page.evaluate(() => [typeof window.EditHistory.record, typeof window.InteractionProfiler.create]))
+    .toEqual(["function", "function"]);
 });
 
 test("HTML file picker compatibility route opens a Jot2D document without a native handle", async ({ page }) => {
@@ -1652,7 +1589,7 @@ test("HTML file picker compatibility route opens a Jot2D document without a nati
       },
     });
   });
-  await page.goto(`${baseUrl}/index.html?test=1&filePicker=input`);
+  await page.goto(`/index.html?test=1&filePicker=input`);
   await page.waitForFunction(() => window.__jot2dTest);
 
   const chooserPromise = page.waitForEvent("filechooser");
@@ -1683,8 +1620,7 @@ test("HTML file picker compatibility route opens a Jot2D document without a nati
 });
 
 test("Canvas always uses a compact native cursor and commands add the matching framed toolbar icon", async ({ page }) => {
-  await page.goto(`${baseUrl}/index.html?test=1`);
-  await page.waitForFunction(() => window.__jot2dTest);
+  await openTestDocument(page);
   const canvasArea = await page.locator(".canvas-area").boundingBox();
   const pointer = { x: canvasArea.x + canvasArea.width * 0.62, y: canvasArea.y + canvasArea.height * 0.54 };
   const cursorState = (sourceSelector = null) => page.evaluate((selector) => {
@@ -1778,8 +1714,7 @@ test("Canvas always uses a compact native cursor and commands add the matching f
 });
 
 test("Canvas context menu exposes common and object-specific operations", async ({ page }) => {
-  await page.goto(`${baseUrl}/index.html?test=1`);
-  await page.waitForFunction(() => window.__jot2dTest);
+  await openTestDocument(page);
   await page.evaluate(() => window.__jot2dTest.resetForResponsiveLineDragTest());
   const menu = page.locator("#canvasContextMenu");
   const canvasArea = await page.locator(".canvas-area").boundingBox();
@@ -1913,8 +1848,7 @@ test("Canvas context menu exposes common and object-specific operations", async 
 });
 
 test("Overlapping Canvas objects can be previewed and selected from context candidates", async ({ page }) => {
-  await page.goto(`${baseUrl}/index.html?test=1`);
-  await page.waitForFunction(() => window.__jot2dTest);
+  await openTestDocument(page);
   const fixture = await page.evaluate(() => window.__jot2dTest.resetForOverlappingContextSelectionTest());
   const menu = page.locator("#canvasContextMenu");
 
@@ -1973,8 +1907,7 @@ test("Overlapping Canvas objects can be previewed and selected from context cand
 });
 
 test("Canvas selection updates Properties, Properties collapses, and the label-free toolbar does not overlap", async ({ page }) => {
-  await page.goto(`${baseUrl}/index.html?test=1`);
-  await page.waitForFunction(() => window.__jot2dTest);
+  await openTestDocument(page);
   await page.evaluate(() => window.__jot2dTest.resetForResponsiveLineDragTest());
 
   const linePosition = await page.evaluate(() => window.__jot2dTest.geometryClientPositionForTest("line", "L1"));
@@ -2034,8 +1967,7 @@ test("Canvas selection updates Properties, Properties collapses, and the label-f
 });
 
 test("Properties visually separates basic information and previews valid text and numeric input before one history commit", async ({ page }) => {
-  await page.goto(`${baseUrl}/index.html?test=1`);
-  await page.waitForFunction(() => window.__jot2dTest);
+  await openTestDocument(page);
   await page.evaluate(() => window.__jot2dTest.resetForResponsiveLineDragTest());
   await page.evaluate(() => window.__jot2dTest.selectGeometryIdsForTest({ lines: ["L1"] }));
 
@@ -2092,8 +2024,7 @@ test("Properties visually separates basic information and previews valid text an
 });
 
 test("application language defaults to Japanese and persists the full UI selection", async ({ page }) => {
-  await page.goto(`${baseUrl}/index.html?test=1`);
-  await page.waitForFunction(() => window.__jot2dTest);
+  await openTestDocument(page);
   await expect(page.locator("html")).toHaveAttribute("lang", "ja");
   await expect(page.locator(".app-menu > summary").first()).toHaveText("ファイル");
   await expect(page.locator("#activeSketchLabel")).toHaveText("スケッチツリー");
@@ -2186,8 +2117,7 @@ test("application language defaults to Japanese and persists the full UI selecti
 });
 
 test("application theme switches the full UI to dark mode, preserves the menu bar, and persists", async ({ page }) => {
-  await page.goto(`${baseUrl}/index.html?test=1`);
-  await page.waitForFunction(() => window.__jot2dTest);
+  await openTestDocument(page);
   await expect(page.locator("html")).toHaveAttribute("data-theme", "light");
   expect(await page.evaluate(() => window.__jot2dTest.applicationThemeStateForTest())).toEqual({
     theme: "light",
@@ -2249,8 +2179,7 @@ test("application theme switches the full UI to dark mode, preserves the menu ba
 });
 
 test("Document owns appearance defaults while only non-root Sketches expose compact overrides", async ({ page }) => {
-  await page.goto(`${baseUrl}/index.html?test=1`);
-  await page.waitForFunction(() => window.__jot2dTest);
+  await openTestDocument(page);
   await page.evaluate(() => window.__jot2dTest.resetForResponsiveLineDragTest());
   const initialDefaults = await page.evaluate(() => window.__jot2dTest.serializedModelForTest());
   expect(initialDefaults.defaultAppearance).toEqual({ visible: true, color: "#111827", lineType: "solid", lineWidth: 2 });
@@ -2348,8 +2277,7 @@ test("Document owns appearance defaults while only non-root Sketches expose comp
 });
 
 test("nested Sketches inherit independent Document appearance defaults instead of general or parent Sketch appearance", async ({ page }) => {
-  await page.goto(`${baseUrl}/index.html?test=1`);
-  await page.waitForFunction(() => window.__jot2dTest);
+  await openTestDocument(page);
   const fixture = {
     version: 10,
     documentName: "document-appearance-inheritance",
@@ -2400,8 +2328,7 @@ test("nested Sketches inherit independent Document appearance defaults instead o
 });
 
 test("legacy Root Sketch appearance moves to Document defaults on load", async ({ page }) => {
-  await page.goto(`${baseUrl}/index.html?test=1`);
-  await page.waitForFunction(() => window.__jot2dTest);
+  await openTestDocument(page);
   const fixture = {
     version: 10,
     documentName: "root-appearance-migration",
@@ -2433,8 +2360,7 @@ test("legacy Root Sketch appearance moves to Document defaults on load", async (
 });
 
 test("Appearance cascades, used file colors are selectable, and constraint status supports mouse and Space", async ({ page }) => {
-  await page.goto(`${baseUrl}/index.html?test=1`);
-  await page.waitForFunction(() => window.__jot2dTest);
+  await openTestDocument(page);
   const fixture = {
     version: 9,
     documentName: "appearance-cascade",
@@ -2579,8 +2505,7 @@ test("Appearance cascades, used file colors are selectable, and constraint statu
 
 test("fixed rectangle fixture L2 and L3 reuse the responsive P3 drag path while P1 stays fixed", async ({ page }) => {
   const deltas = Array.from({ length: 10 }, (_, index) => [-(index + 1) * 4, (index + 1) * 3]);
-  await page.goto(`${baseUrl}/index.html?test=1`);
-  await page.waitForFunction(() => window.__jot2dTest);
+  await openTestDocument(page);
   await page.evaluate(() => window.__jot2dTest.resetForResponsiveLineDragTest());
   expect((await page.evaluate(() => window.__jot2dTest.authoringStateForTest())).fixedPointIds).toEqual(["P1"]);
   const pointResult = await page.evaluate(
@@ -2596,8 +2521,7 @@ test("fixed rectangle fixture L2 and L3 reuse the responsive P3 drag path while 
   expect(pointMovement).toBeGreaterThan(10);
 
   for (const id of ["L2", "L3"]) {
-    await page.goto(`${baseUrl}/index.html?test=1`);
-    await page.waitForFunction(() => window.__jot2dTest);
+    await openTestDocument(page);
     await page.evaluate(() => window.__jot2dTest.resetForResponsiveLineDragTest());
     const result = await page.evaluate(
       ({ lineId, dragDeltas }) => window.__jot2dTest.geometryDragPathForTest({ kind: "line", id: lineId }, dragDeltas),
@@ -2614,8 +2538,7 @@ test("fixed rectangle fixture L2 and L3 reuse the responsive P3 drag path while 
 
   const pointerResults = [];
   for (const id of ["L2", "L3"]) {
-    await page.goto(`${baseUrl}/index.html?test=1`);
-    await page.waitForFunction(() => window.__jot2dTest);
+    await openTestDocument(page);
     await page.evaluate(() => window.__jot2dTest.resetForResponsiveLineDragTest());
     const before = await page.evaluate((lineId) => ({
       line: window.__jot2dTest.geometryClientPositionForTest("line", lineId),
@@ -2639,8 +2562,7 @@ test("fixed rectangle fixture L2 and L3 reuse the responsive P3 drag path while 
 });
 
 test("lines connected to a line-circle dimension follow repeated sparse reversals without lag", async ({ page }) => {
-  await page.goto(`${baseUrl}/index.html?test=1`);
-  await page.waitForFunction(() => window.__jot2dTest);
+  await openTestDocument(page);
   const deltas = [
     [150, 0],
     [-150, 0],
@@ -2681,8 +2603,7 @@ test("lines connected to a line-circle dimension follow repeated sparse reversal
 });
 
 test("arc body selection and hover do not highlight endpoints", async ({ page }) => {
-  await page.goto(`${baseUrl}/index.html?test=1`);
-  await page.waitForFunction(() => window.__jot2dTest);
+  await openTestDocument(page);
   const fixture = {
     version: 9,
     documentName: "arc-endpoint-display",
@@ -2711,8 +2632,7 @@ test("arc body selection and hover do not highlight endpoints", async ({ page })
 });
 
 test("Block Instance Appearance Override applies to the whole instance", async ({ page }) => {
-  await page.goto(`${baseUrl}/index.html?test=1`);
-  await page.waitForFunction(() => window.__jot2dTest);
+  await openTestDocument(page);
   const initial = await page.evaluate(() => window.__jot2dTest.resetForBlockClipboardTest());
   const instanceId = initial.geometryBySketch.S1.blockInstances[0].id;
   await expect(page.locator("#propertiesPanel")).toContainText("ブロック外観の上書き");
@@ -2723,9 +2643,54 @@ test("Block Instance Appearance Override applies to the whole instance", async (
   expect((await page.evaluate((id) => window.__jot2dTest.appearanceStateForTest("block", id), instanceId)).effective.color).toBe("#7c3aed");
 });
 
+test("Block projection appearance preserves host, definition, geometry, and instance precedence", async ({ page }) => {
+  await openTestDocument(page);
+  await page.evaluate(() => window.__jot2dTest.resetForBlockClipboardTest());
+  const baseline = await page.evaluate(() => window.__jot2dTest.serializedModelForTest());
+
+  for (const construction of [false, true]) {
+    const data = structuredClone(baseline);
+    const instance = data.blockInstances[0];
+    const definition = data.blockDefinitions.find((item) => item.id === instance.definitionId);
+    const line = definition.lines[0];
+    line.construction = construction;
+    const hostSketch = data.sketches.find((sketch) => sketch.id === instance.sketchId);
+    const definitionSketch = definition.sketches.find((sketch) => sketch.id === line.sketchId);
+    const channel = construction ? "constructionAppearance" : "appearance";
+    const otherChannel = construction ? "appearance" : "constructionAppearance";
+    data.defaultAppearance = { ...data.defaultAppearance, color: "#1f2937", lineWidth: 2.75 };
+    data.defaultConstructionAppearance = { ...data.defaultConstructionAppearance, color: "#1f2937", lineWidth: 2.75 };
+    hostSketch[channel] = {};
+    definitionSketch[channel] = {};
+    hostSketch[otherChannel] = { color: "#e11d48", lineWidth: 9 };
+    definitionSketch[otherChannel] = { color: "#e11d48", lineWidth: 9 };
+    line.appearance = {};
+    instance.appearanceOverride = {};
+
+    const layers = [
+      { name: "Document", owner: null, color: "#1f2937" },
+      { name: "host Sketch", owner: hostSketch[channel], color: "#2563eb" },
+      { name: "Definition Sketch", owner: definitionSketch[channel], color: "#16a34a" },
+      { name: "Geometry", owner: line.appearance, color: "#d97706" },
+      { name: "Instance", owner: instance.appearanceOverride, color: "#9333ea" },
+    ];
+    for (const { name, owner, color } of layers) {
+      await test.step(`APP-03: ${construction ? "construction" : "normal"} ${name}`, async () => {
+        if (owner) owner.color = color;
+        const loaded = await page.evaluate((fixture) =>
+          window.__jot2dTest.loadDocumentFixtureForDragTest(fixture, "block-appearance.jot2d"), data);
+        expect(loaded.success).toBe(true);
+        const appearance = await page.evaluate((id) => window.__jot2dTest.appearanceStateForTest("block", id), instance.id);
+        expect(appearance.effective).toEqual(expect.objectContaining({ color, lineWidth: 2.75 }));
+        const saved = await page.evaluate(() => window.__jot2dTest.serializedModelForTest());
+        expect(saved.blockDefinitions.find((item) => item.id === definition.id).lines[0].appearance).toEqual(line.appearance);
+      });
+    }
+  }
+});
+
 test("arc radius dimensions omit the center terminator and extend for external labels and reversed arrows", async ({ page }) => {
-  await page.goto(`${baseUrl}/index.html?test=1`);
-  await page.waitForFunction(() => window.__jot2dTest);
+  await openTestDocument(page);
 
   for (const terminatorType of ["arrow", "filledArrow", "dot"]) {
     const plan = await page.evaluate((type) => window.__jot2dTest.arcRadiusDimensionRenderPlanForTest(type), terminatorType);
@@ -2771,8 +2736,7 @@ test("arc radius dimensions omit the center terminator and extend for external l
 });
 
 test("open dimension arrow tips align without pushing reversed wings into their rear shafts", async ({ page }) => {
-  await page.goto(`${baseUrl}/index.html?test=1`);
-  await page.waitForFunction(() => window.__jot2dTest);
+  await openTestDocument(page);
 
   for (const viewportScale of [0.5, 1, 4]) {
     for (const highlighted of [false, true]) {
@@ -2798,8 +2762,7 @@ test("open dimension arrow tips align without pushing reversed wings into their 
 });
 
 test("Constraint dimensions expose defining geometry and inheritable appearance without creating annotation dimensions", async ({ page }) => {
-  await page.goto(`${baseUrl}/index.html?test=1`);
-  await page.waitForFunction(() => window.__jot2dTest);
+  await openTestDocument(page);
   await page.evaluate(() => window.__jot2dTest.resetForReadOnlyDuplicateDimension());
   await expandSketchTreeGroup(page, "constraint");
   await page.locator('.sketch-object-row[data-object-kind="constraint"]').first().click();
@@ -3062,8 +3025,7 @@ test("Constraint dimensions expose defining geometry and inheritable appearance 
 });
 
 test("Sketch and Object rows use the same emphasis as canvas hover without tree Geometry IDs", async ({ page }) => {
-  await page.goto(`${baseUrl}/index.html?test=1`);
-  await page.waitForFunction(() => window.__jot2dTest);
+  await openTestDocument(page);
   const ids = await page.evaluate(() => window.__jot2dTest.resetForSidebarInspection());
   await page.mouse.move(ids.lineMid.x, ids.lineMid.y);
   const canvasHover = await page.evaluate((lineId) => window.__jot2dTest.hoverDisplayStateForTest("line", lineId), ids.line);
@@ -3082,8 +3044,7 @@ test("Sketch and Object rows use the same emphasis as canvas hover without tree 
 });
 
 test("Root Sketch tree hover highlights geometry and blocks in every descendant sketch", async ({ page }) => {
-  await page.goto(`${baseUrl}/index.html?test=1`);
-  await page.waitForFunction(() => window.__jot2dTest);
+  await openTestDocument(page);
   const ids = await page.evaluate(() => window.__jot2dTest.resetForRootSketchTreeHoverTest());
 
   await page.locator(`.sketch-item[data-id="${ids.rootSketchId}"]`).hover();
@@ -3104,8 +3065,7 @@ test("Root Sketch tree hover highlights geometry and blocks in every descendant 
 });
 
 test("Sketch tree block hover matches canvas block hover without Block Projection point markers", async ({ page }) => {
-  await page.goto(`${baseUrl}/index.html?test=1`);
-  await page.waitForFunction(() => window.__jot2dTest);
+  await openTestDocument(page);
   const ids = await page.evaluate(() => window.__jot2dTest.resetForSketchTreeBlockHoverTest());
   expect(ids.projectedExplicitPointIds).toHaveLength(4);
 
@@ -3124,8 +3084,7 @@ test("Sketch tree block hover matches canvas block hover without Block Projectio
 });
 
 test("fixed explicit points show red emphasis and the fixed label only while hovered or selected", async ({ page }) => {
-  await page.goto(`${baseUrl}/index.html?test=1`);
-  await page.waitForFunction(() => window.__jot2dTest);
+  await openTestDocument(page);
   const fixture = await page.evaluate(() => window.__jot2dTest.resetForFixedPointDisplayTest());
 
   expect(await page.evaluate((id) => window.__jot2dTest.pointDisplayStateForTest(id), fixture.pointId)).toEqual(expect.objectContaining({
@@ -3151,8 +3110,7 @@ test("fixed explicit points show red emphasis and the fixed label only while hov
 });
 
 test("inactive sketch geometry, blocks, and dimensions show identity without hover emphasis or selection", async ({ page }) => {
-  await page.goto(`${baseUrl}/index.html?test=1`);
-  await page.waitForFunction(() => window.__jot2dTest);
+  await openTestDocument(page);
   const points = await page.evaluate(() => window.__jot2dTest.resetForInactiveDimensionAndBlockHover());
   expect(points.relation).toBe("参照可");
 
@@ -3199,8 +3157,7 @@ test("inactive sketch geometry, blocks, and dimensions show identity without hov
 });
 
 test("duplicate dimensions become read-only reference dimensions", async ({ page }) => {
-  await page.goto(`${baseUrl}/index.html?test=1`);
-  await page.waitForFunction(() => window.__jot2dTest);
+  await openTestDocument(page);
 
   const result = await page.evaluate(() => window.__jot2dTest.resetForReadOnlyDuplicateDimension());
   expect(result.first).toBe(true);
@@ -3214,8 +3171,7 @@ test("duplicate dimensions become read-only reference dimensions", async ({ page
 });
 
 test("read-only dimensions skip the numeric value input", async ({ page }) => {
-  await page.goto(`${baseUrl}/index.html?test=1`);
-  await page.waitForFunction(() => window.__jot2dTest);
+  await openTestDocument(page);
 
   const result = await page.evaluate(() => window.__jot2dTest.resetForReadOnlyDimensionPlacement());
   expect(result.pendingType).toBe(null);
@@ -3225,8 +3181,7 @@ test("read-only dimensions skip the numeric value input", async ({ page }) => {
 });
 
 test("a line length dimension advances by clicking its placement after the line", async ({ page }) => {
-  await page.goto(`${baseUrl}/index.html?test=1`);
-  await page.waitForFunction(() => window.__jot2dTest);
+  await openTestDocument(page);
 
   const points = await page.evaluate(() => window.__jot2dTest.resetForLineLengthClickPlacement());
   await page.click('[data-constraint="distance"]');
@@ -3259,8 +3214,7 @@ test("a line length dimension advances by clicking its placement after the line"
 });
 
 test("a line and circle create a center-to-line dimension in either click order", async ({ page }) => {
-  await page.goto(`${baseUrl}/index.html?test=1`);
-  await page.waitForFunction(() => window.__jot2dTest);
+  await openTestDocument(page);
 
   for (const order of [["line", "circle1"], ["circle1", "line"]]) {
     const points = await page.evaluate(() => window.__jot2dTest.resetForLineCircleAndRadiusDifferenceDimensions());
@@ -3305,8 +3259,7 @@ test("a line and circle create a center-to-line dimension in either click order"
 });
 
 test("concentric circle and arc pairs create radius-difference dimensions that preserve concentricity", async ({ page }) => {
-  await page.goto(`${baseUrl}/index.html?test=1`);
-  await page.waitForFunction(() => window.__jot2dTest);
+  await openTestDocument(page);
 
   const cases = [
     { first: "circle1", second: "circle2", firstId: "circle1", secondId: "circle2" },
@@ -3360,8 +3313,7 @@ test("concentric circle and arc pairs create radius-difference dimensions that p
 });
 
 test("unified canvas exposes dimensions from every visible sketch", async ({ page }) => {
-  await page.goto(`${baseUrl}/index.html?test=1`);
-  await page.waitForFunction(() => window.__jot2dTest);
+  await openTestDocument(page);
   const result = await page.evaluate(() => window.__jot2dTest.resetForActiveSketchDimensionVisibility());
   expect(result.dimensionSketchIds).toEqual(["S1", "S2"]);
   expect(result.drawnDimensionSketchIds).toEqual(["S1", "S2"]);
@@ -3374,7 +3326,7 @@ test("unified canvas exposes dimensions from every visible sketch", async ({ pag
 });
 
 test("all geometry fit includes figures from every sketch", async ({ page }) => {
-  await page.goto(`${baseUrl}/index.html?test=1`);
+  await page.goto(`/index.html?test=1`);
   const result = await page.evaluate(() => window.__jot2dTest.resetForAllGeometryFit());
   expect(result.screen.left).toBeGreaterThanOrEqual(90);
   expect(result.screen.right).toBeLessThanOrEqual(result.canvas.width - 90);
@@ -3383,7 +3335,7 @@ test("all geometry fit includes figures from every sketch", async ({ page }) => 
 });
 
 test("middle mouse double click fits visible geometry", async ({ page }) => {
-  await page.goto(`${baseUrl}/index.html?test=1`);
+  await page.goto(`/index.html?test=1`);
   const setup = await page.evaluate(() => window.__jot2dTest.resetForMiddleButtonFit());
   await page.mouse.click(setup.click.x, setup.click.y, { button: "middle" });
   await page.mouse.click(setup.click.x, setup.click.y, { button: "middle" });
@@ -3396,7 +3348,7 @@ test("middle mouse double click fits visible geometry", async ({ page }) => {
 });
 
 test("dashed previews do not leak canvas stroke state", async ({ page }) => {
-  await page.goto(`${baseUrl}/index.html?test=1`);
+  await page.goto(`/index.html?test=1`);
   const result = await page.evaluate(() => window.__jot2dTest.canvasDashIsolationCases());
   expect(result).toEqual({
     line: [],
@@ -3415,8 +3367,7 @@ test("dashed previews do not leak canvas stroke state", async ({ page }) => {
 });
 
 test("unified canvas uses normal and construction appearance widths", async ({ page }) => {
-  await page.goto(`${baseUrl}/index.html?test=1`);
-  await page.waitForFunction(() => window.__jot2dTest);
+  await openTestDocument(page);
 
   expect(await page.evaluate(() => window.__jot2dTest.geometryStrokeStyleCasesForTest())).toEqual({
     activeNormal: 2,
@@ -3430,8 +3381,7 @@ test("unified canvas uses normal and construction appearance widths", async ({ p
 });
 
 test("construction line endpoint overhang remains while geometry or its block is hovered", async ({ page }) => {
-  await page.goto(`${baseUrl}/index.html?test=1`);
-  await page.waitForFunction(() => window.__jot2dTest);
+  await openTestDocument(page);
 
   expect(await page.evaluate(() => window.__jot2dTest.constructionLineHoverDisplayCasesForTest())).toEqual({
     direct: 12,
@@ -3440,8 +3390,7 @@ test("construction line endpoint overhang remains while geometry or its block is
 });
 
 test("construction line endpoint appearance inherits Document defaults and supports Sketch and line overrides", async ({ page }) => {
-  await page.goto(`${baseUrl}/index.html?test=1`);
-  await page.waitForFunction(() => window.__jot2dTest);
+  await openTestDocument(page);
   const fixture = {
     version: 9,
     documentName: "construction-appearance",
@@ -3468,6 +3417,15 @@ test("construction line endpoint appearance inherits Document defaults and suppo
     overhangPx: 12,
     endpointMarkerCount: 2,
   });
+
+  await page.keyboard.down("Space");
+  expect(await page.evaluate(() => window.__jot2dTest.constructionLineRenderingForTest("L1"))).toEqual(expect.objectContaining({
+    endpointMarkerCount: 2,
+  }));
+  expect(await page.evaluate(() => window.__jot2dTest.viewStateForTest())).toEqual(expect.objectContaining({
+    constraintStatus: true, spaceHeld: true,
+  }));
+  await page.keyboard.up("Space");
 
   await page.locator("#propertyEndpointOverhang").selectOption("false");
   await page.locator("#propertyEndpointMarkers").selectOption("false");
@@ -3532,7 +3490,7 @@ test("construction line endpoint appearance inherits Document defaults and suppo
 });
 
 test("Sketch Tree groups list and synchronize Geometry and Constraint objects", async ({ page }) => {
-  await page.goto(`${baseUrl}/index.html?test=1`);
+  await page.goto(`/index.html?test=1`);
   const ids = await page.evaluate(() => window.__jot2dTest.resetForSidebarInspection());
   await expandSketchTreeGroup(page, "point");
   await expect(page.locator('.sketch-object-row[data-object-kind="point"]')).toHaveCount(2);
@@ -3580,8 +3538,7 @@ test("Sketch Tree groups list and synchronize Geometry and Constraint objects", 
 });
 
 test("constraint rows highlight only directly related selected geometry", async ({ page }) => {
-  await page.goto(`${baseUrl}/index.html?test=1`);
-  await page.waitForFunction(() => window.__jot2dTest);
+  await openTestDocument(page);
   const ids = await page.evaluate(() => window.__jot2dTest.resetForSidebarInspection());
   await expandSketchTreeGroup(page, "constraint");
   const constraintRow = page.locator('.sketch-object-row[data-object-kind="constraint"][data-constraint-index]');
@@ -3594,8 +3551,7 @@ test("constraint rows highlight only directly related selected geometry", async 
 });
 
 test("line circle and arc offsets keep editable dimensional relationships", async ({ page }) => {
-  await page.goto(`${baseUrl}/index.html?test=1`);
-  await page.waitForFunction(() => window.__jot2dTest);
+  await openTestDocument(page);
 
   const result = await page.evaluate(() => window.__jot2dTest.resetForOffsetConstraints());
   expect(result.created).toEqual([true, true, true]);
@@ -3611,8 +3567,7 @@ test("line circle and arc offsets keep editable dimensional relationships", asyn
 });
 
 test("offset tool collects a distance and creates a constrained copy", async ({ page }) => {
-  await page.goto(`${baseUrl}/index.html?test=1`);
-  await page.waitForFunction(() => window.__jot2dTest);
+  await openTestDocument(page);
   const points = await page.evaluate(() => window.__jot2dTest.resetForOffsetUi());
 
   await page.click("#toolOffset");
@@ -3637,8 +3592,7 @@ test("offset tool collects a distance and creates a constrained copy", async ({ 
 });
 
 test("offset stays on the cursor side for direction-reversed constrained lines", async ({ page }) => {
-  await page.goto(`${baseUrl}/index.html?test=1`);
-  await page.waitForFunction(() => window.__jot2dTest);
+  await openTestDocument(page);
   for (const directionCase of ["vertical", "horizontal"]) {
     const points = await page.evaluate((value) => window.__jot2dTest.resetForOffsetDirection(value), directionCase);
     await page.click("#toolOffset");
@@ -3657,8 +3611,7 @@ test("offset stays on the cursor side for direction-reversed constrained lines",
 });
 
 test("offset tool builds an explicitly connected line chain with one editable dimension", async ({ page }) => {
-  await page.goto(`${baseUrl}/index.html?test=1`);
-  await page.waitForFunction(() => window.__jot2dTest);
+  await openTestDocument(page);
   const points = await page.evaluate(() => window.__jot2dTest.resetForOffsetChainUi());
 
   await page.click("#toolOffset");
@@ -3738,8 +3691,7 @@ test("offset tool builds an explicitly connected line chain with one editable di
 });
 
 test("sketch deletion removes its subtree and active sketch siblings remain visible", async ({ page }) => {
-  await page.goto(`${baseUrl}/index.html?test=1`);
-  await page.waitForFunction(() => window.__jot2dTest);
+  await openTestDocument(page);
 
   const sibling = await page.evaluate(() => window.__jot2dTest.resetForSiblingVisibility());
   expect(sibling.visible).toBe(true);
@@ -3757,8 +3709,7 @@ test("sketch deletion removes its subtree and active sketch siblings remain visi
 });
 
 test("non-active sketch visibility can be toggled and is persisted", async ({ page }) => {
-  await page.goto(`${baseUrl}/index.html?test=1`);
-  await page.waitForFunction(() => window.__jot2dTest);
+  await openTestDocument(page);
 
   await page.evaluate(() => window.__jot2dTest.resetForSiblingVisibility());
   await page.click('.sketchVisibilityBtn[data-id="S2"]');
@@ -3771,8 +3722,7 @@ test("non-active sketch visibility can be toggled and is persisted", async ({ pa
 });
 
 test("non-active sketches are visible unless individually hidden", async ({ page }) => {
-  await page.goto(`${baseUrl}/index.html?test=1`);
-  await page.waitForFunction(() => window.__jot2dTest);
+  await openTestDocument(page);
 
   const setup = await page.evaluate(() => window.__jot2dTest.resetForSiblingSubtreeReference());
   expect(setup.relations).toEqual({ S10: "reference", S2: "inactive", S3: "inactive", S4: "inactive", S9: "inactive", S11: "descendant" });
@@ -3816,8 +3766,7 @@ test("non-active sketches are visible unless individually hidden", async ({ page
 });
 
 test("blank canvas click clears a selected dimension without leaving the constraint command", async ({ page }) => {
-  await page.goto(`${baseUrl}/index.html?test=1`);
-  await page.waitForFunction(() => window.__jot2dTest);
+  await openTestDocument(page);
 
   const points = await page.evaluate(() => window.__jot2dTest.resetForConstraintDimensionSelection());
   expect(await page.evaluate(() => window.__jot2dTest.constraintDimensionSelectionState())).toEqual({ selected: true, command: "parallel" });
@@ -3826,8 +3775,7 @@ test("blank canvas click clears a selected dimension without leaving the constra
 });
 
 test("lines and arcs with fixed support geometry use the support constraint color", async ({ page }) => {
-  await page.goto(`${baseUrl}/index.html?test=1`);
-  await page.waitForFunction(() => window.__jot2dTest);
+  await openTestDocument(page);
   const state = await page.evaluate(() => window.__jot2dTest.resetForSupportConstraintStatus());
 
   expect(state.supportLine).toEqual({ status: "support", color: "#0f766e" });
@@ -3839,8 +3787,7 @@ test("lines and arcs with fixed support geometry use the support constraint colo
 });
 
 test("ancestor point and active line can receive a coincidence constraint in either role", async ({ page }) => {
-  await page.goto(`${baseUrl}/index.html?test=1`);
-  await page.waitForFunction(() => window.__jot2dTest);
+  await openTestDocument(page);
 
   let points = await page.evaluate(() => window.__jot2dTest.resetForReferencePointLineCoincidence());
   await page.click('[data-constraint="coincident"]');
@@ -3864,8 +3811,7 @@ test("ancestor point and active line can receive a coincidence constraint in eit
 });
 
 test("sibling geometry is visible but cannot be referenced", async ({ page }) => {
-  await page.goto(`${baseUrl}/index.html?test=1`);
-  await page.waitForFunction(() => window.__jot2dTest);
+  await openTestDocument(page);
 
   const points = await page.evaluate(() => window.__jot2dTest.resetForSiblingPointLineReference());
   await page.click('[data-constraint="coincident"]');
@@ -3877,8 +3823,7 @@ test("sibling geometry is visible but cannot be referenced", async ({ page }) =>
 });
 
 test("sibling descendants and unrelated sketches cannot be referenced", async ({ page }) => {
-  await page.goto(`${baseUrl}/index.html?test=1`);
-  await page.waitForFunction(() => window.__jot2dTest);
+  await openTestDocument(page);
 
   const points = await page.evaluate(() => window.__jot2dTest.resetForSiblingSubtreeReference());
   await page.click('[data-constraint="coincident"]');
@@ -3904,8 +3849,7 @@ test("sibling descendants and unrelated sketches cannot be referenced", async ({
 });
 
 test("reference dependents solve in topological order and out-of-scope loaded references are disabled", async ({ page }) => {
-  await page.goto(`${baseUrl}/index.html?test=1`);
-  await page.waitForFunction(() => window.__jot2dTest);
+  await openTestDocument(page);
 
   const order = await page.evaluate(() => window.__jot2dTest.referenceDependencyOrderCase());
   expect(order.order).toEqual(["S1", "S5"]);
@@ -3920,8 +3864,7 @@ test("reference dependents solve in topological order and out-of-scope loaded re
 });
 
 test("point-point rectangle dimensions keep extension lines visible on both pull sides", async ({ page }) => {
-  await page.goto(`${baseUrl}/index.html?test=1`);
-  await page.waitForFunction(() => window.__jot2dTest);
+  await openTestDocument(page);
 
   const result = await page.evaluate(() => window.__jot2dTest.pointPointRectangleDimensionExtensionVisibilityCases());
   expect(result.top).toEqual([true, true]);
@@ -3931,8 +3874,7 @@ test("point-point rectangle dimensions keep extension lines visible on both pull
 });
 
 test("dimension labels hide values below the supported display precision", async ({ page }) => {
-  await page.goto(`${baseUrl}/index.html?test=1`);
-  await page.waitForFunction(() => window.__jot2dTest);
+  await openTestDocument(page);
 
   const result = await page.evaluate(() => window.__jot2dTest.dimensionDisplayPrecisionCases());
   expect(result.integerTrailingZero).toBe("140");
@@ -3947,8 +3889,7 @@ test("dimension labels hide values below the supported display precision", async
 });
 
 test("dimension labels follow JIS reading directions in every quadrant", async ({ page }) => {
-  await page.goto(`${baseUrl}/index.html?test=1`);
-  await page.waitForFunction(() => window.__jot2dTest);
+  await openTestDocument(page);
 
   const result = await page.evaluate(() => window.__jot2dTest.dimensionTextAngleCases());
   expect(result.zero.angle).toBeCloseTo(0, 8);
@@ -3979,8 +3920,7 @@ test("dimension labels follow JIS reading directions in every quadrant", async (
 });
 
 test("angle dimension labels follow geometry and dimension-line movement", async ({ page }) => {
-  await page.goto(`${baseUrl}/index.html?test=1`);
-  await page.waitForFunction(() => window.__jot2dTest);
+  await openTestDocument(page);
 
   const result = await page.evaluate(() => window.__jot2dTest.angleDimensionLabelFollowCase());
   expect(result.migratedLegacyCoordinates).toBe(true);
@@ -3999,8 +3939,7 @@ test("angle dimension labels follow geometry and dimension-line movement", async
 });
 
 test("middle line trim transfers right-side point constraints to the new segment", async ({ page }) => {
-  await page.goto(`${baseUrl}/index.html?test=1`);
-  await page.waitForFunction(() => window.__jot2dTest);
+  await openTestDocument(page);
 
   const result = await page.evaluate(() => window.__jot2dTest.resetForTrimConstraintTransfer());
   expect(result.lineCount).toBe(2);
@@ -4011,8 +3950,7 @@ test("middle line trim transfers right-side point constraints to the new segment
 });
 
 test("trim interval boundaries ignore construction lines, circles, and arcs", async ({ page }) => {
-  await page.goto(`${baseUrl}/index.html?test=1`);
-  await page.waitForFunction(() => window.__jot2dTest);
+  await openTestDocument(page);
 
   const result = await page.evaluate(() => window.__jot2dTest.trimConstructionBoundaryCase());
   expect(result.lineBoundaryXs).toEqual([-100, -60, 60, 100]);
@@ -4031,8 +3969,7 @@ test("trim interval boundaries ignore construction lines, circles, and arcs", as
 });
 
 test("circle trim transfers its diameter dimension only when one arc remains", async ({ page }) => {
-  await page.goto(`${baseUrl}/index.html?test=1`);
-  await page.waitForFunction(() => window.__jot2dTest);
+  await openTestDocument(page);
 
   const singleArc = await page.evaluate(() => window.__jot2dTest.trimCircleDiameterDimensionCase(2));
   expect(singleArc).toEqual({
@@ -4059,8 +3996,7 @@ test("circle trim transfers its diameter dimension only when one arc remains", a
 });
 
 test("slot command creates two tangent lines and two semicircular arcs", async ({ page }) => {
-  await page.goto(`${baseUrl}/index.html?test=1`);
-  await page.waitForFunction(() => window.__jot2dTest);
+  await openTestDocument(page);
   await page.evaluate(() => window.__jot2dTest.focusWorldForTest({ x: 0, y: 0 }, 3));
   const client = async (point) => page.evaluate((value) => window.__jot2dTest.worldClientPositionForTest(value), point);
   const first = await client({ x: -50, y: 0 });
@@ -4124,8 +4060,7 @@ test("slot command creates two tangent lines and two semicircular arcs", async (
 });
 
 test("slot command keeps center and width-point snaps as constraints", async ({ page }) => {
-  await page.goto(`${baseUrl}/index.html?test=1`);
-  await page.waitForFunction(() => window.__jot2dTest);
+  await openTestDocument(page);
   await page.evaluate(() => window.__jot2dTest.focusWorldForTest({ x: 0, y: 0 }, 3));
   const worldPoints = [{ x: -60, y: 0 }, { x: 60, y: 0 }, { x: 0, y: 25 }];
   const clients = await page.evaluate((points) => points.map((point) => window.__jot2dTest.worldClientPositionForTest(point)), worldPoints);

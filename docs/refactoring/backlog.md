@@ -1,6 +1,8 @@
 # 改善バックログ
 
-この文書は製品仕様ではなく、現行仕様を変えずに行える技術改善候補を記録する。
+この文書は製品仕様ではなく、現行仕様を変えずに行える技術改善候補を記録する。候補の記載は実装方式の採用を意味しない。着手時は[進め方](./README.md)と[判断事項](./decisions.md)を照合し、仕様変更が必要ならユーザーへ確認する。
+
+具体的な実施順と進捗は[実行計画](./README.md)で管理する。以下の優先度は候補の分類であり、実行計画の順序を上書きしない。
 
 ## P0
 
@@ -25,6 +27,8 @@ Line、Circle、Arc、Spline、Pointで重複しているAppearance、selection�
 ### UI差分更新
 
 Sketch TreeとPropertiesのDOM全再生成をID keyed差分更新へ置き換え、大規模Documentでのselection latencyを安定させる。
+
+R3では角度以外の寸法確定で不要な解析・Tree全再生成を除去した。追測では寸法確定17.7ms中16.7msがProperties再生成であり、時間短縮は未確認。次の調査ではDOM生成・localization・式入力highlightと同期layoutの内訳を分け、選択変更・値変更・focus／scrollの保持を確認して更新範囲を決める。
 
 ### Test hook分離
 

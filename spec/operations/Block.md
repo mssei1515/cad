@@ -1,4 +1,6 @@
-# ブロック
+# Blockの操作
+
+対象の所属・編集可否は[共通契約](../contracts/所属と編集可否.md)、確定・失敗・履歴は[編集と履歴](../contracts/編集と履歴.md)に従う。以下に操作固有の条件を示す。
 
 ## 1. 概念
 
@@ -19,13 +21,11 @@ Block Projection
 
 ## 2. Definition と Instance
 
-Definition は `origin`、内部 Sketch、Geometry、Constraint、Annotation、Hatch、編集用Reference Image、子 Block Instance、Definition固有のParameterと寸法採番counterを持つ。Instance は `definitionId`、配置先 `sketchId`、`x`、`y`、`rotation`、固定、回転ロック、有効内部 Sketch を持つ。DefinitionのParameter名前空間からDocumentまたは別Definitionのsymbolは参照できない。
+Definition は `origin`、内部 Sketch、Geometry、Constraint、Annotation、Hatch、編集用Reference Image、子 Block Instance、Definition固有のParameterと寸法採番counterを持つ。Instance は `definitionId`、配置先 `sketchId`、`x`、`y`、`rotation`、固定、回転ロック、有効内部 Sketch を持つ。
 
-変換は次のとおりで、倍率と鏡像はない。
+DefinitionのParameter名前空間からDocumentまたは別Definitionのsymbolは参照できない。
 
-```text
-world = rotate(local, rotation) + (x, y)
-```
+座標変換は[Blockの配置とsolve変数](../calculation/拘束と依存更新.md#5-blockの配置とsolve変数)に従う。
 
 新規空 Definition は編集完了時に全有効 Geometry の外接範囲中心をローカル `(0, 0)` へ移す。既存 Definition の編集では原点を再計算しない。
 
@@ -42,11 +42,15 @@ Projection は座標を保存せず、Definition、Instance 変換、`enabledSke
 - 参照 ID は最上位 Instance ID から内部経路を `@` で連結する。
 - Definition の `revision`、配置先 Sketch、有効 Sketch 集合をキーに Projection をキャッシュする。
 
-Projection AnnotationのIDは`BI1/AN1`、入れ子では`BI1/BI2/AN1`とする。Projection HatchのIDは`BI1/H1`、入れ子では`BI1/BI2/H1`とする。配置先Canvasで投影Annotationまたは投影Hatchをclickした場合は単体でなく最上位Block Instance全体を選択し、内部Object自体の編集はBlock Editor内だけで行う。Projection AnnotationとHatchはBlock bounds、fit、配置中心、配置preview、hit testへ含める。Hatchの輪郭、seed、pattern原点、angleへInstance変換を合成し、Block回転とともに平行線・クロスpatternも回転する。色塗りつぶしは同じ変換済み輪郭へ描画する。
+Projection Geometryの外観継承は[外観](../contracts/外観.md)のAPP-03に従う。配置先SketchとDefinition内Sketchの外観を区別し、Instance Overrideを最後に適用する。
 
-内部では`GeometryRef { kind, path[] }`を使う。kindは`point`、`line`、`circle`、`arc`、`spline`のいずれかで、通常Geometryのpathは`["L1"]`、入れ子Projectionは`["BI1", "BI2", "L1"]`となる。値とpathは不変であり、空path、不明kind、空のpath要素は有効な参照ではない。ancestor Instanceは末尾のGeometry IDを除くpath、owner InstanceはProjection pathの先頭、local elementは末尾として取得する。
+Projection AnnotationのIDは`BI1/AN1`、入れ子では`BI1/BI2/AN1`とする。Projection HatchのIDは`BI1/H1`、入れ子では`BI1/BI2/H1`とする。
 
-保存時はpathを`@`で連結するため、従来どおり`BI1@BI2@L1`となる。Constraintの保存fieldも同じcodecで生成・解決するが、保存文字列にはkindを追加せず従来のbare IDを維持する。Leaderはkind付きGeometryRefを使い、同じresolver契約でProjectionを解決する。
+配置先Canvasで投影Annotationまたは投影Hatchをclickした場合は単体でなく最上位Block Instance全体を選択し、内部Object自体の編集はBlock Editor内だけで行う。Projection AnnotationとHatchはBlock bounds、fit、配置中心、配置preview、hit testへ含める。
+
+Hatchの輪郭、seed、pattern原点、angleへInstance変換を合成し、Block回転とともに平行線・クロスpatternも回転する。色塗りつぶしは同じ変換済み輪郭へ描画する。
+
+参照の値・path・保存と解決は[GeometryRefとConstraint参照](../data/保存形式.md#13-geometryrefとconstraint参照)に従う。
 
 ## 4. 選択 Geometry からの作成
 
@@ -136,16 +140,17 @@ Instance ごとに `enabledSketchIds` を持ち、配置後も変更できる。
 - `x`, `y`, `rotation` は変更しない。
 - 図形を持つ有効 Sketch が0件になる変更を拒否する。
 - Definition 編集で追加した内部 Sketch は既存 Instance へ自動追加しない。
-- 無効化されるProjectionをLeaderが参照していれば拒否する。
-- 無効化される Projection を外部 Constraint や寸法が参照していれば、現在はその Constraint を自動解除して通知する。
+- 無効化されるProjectionへの参照は[Blockの構成変更](Block.md#16-blockの構成変更)に従って扱う。
 
 ## 12. Constraint と solve
 
-外部 Constraint の対象選択中は Instance 全体ではなく Projection Geometry を選ぶ。solve 変数は Instance の `x`, `y` と、自由回転時の `rotation` だけである。
+外部 Constraint の対象選択中は Instance 全体ではなく Projection Geometry を選ぶ。solve変数は[計算契約](../calculation/拘束と依存更新.md#5-blockの配置とsolve変数)に従う。
 
 同一 Instance 内だけで完結する長さ、距離、半径、直径、角度寸法は読み取り専用になる。Definition Geometry のサイズを変えるには Block Editor を使う。
 
-Definition 内部は通常 Sketch と同じく内部 Sketch ごとに solve する。Block Parameterの適用ではDefinitionを再計算し、親Definition、全InstanceのProjection、Document拘束の順に反映する。Parameterの評価または影響先のsolveが失敗した場合は、Parameter適用前のDefinition、Instance、Documentを一括復元して履歴へ追加しない。Parameter以外のDefinition編集が外部配置先の拘束を壊した場合は従来どおりDefinition更新自体は戻さず、影響を受けるSketchをエラー状態にする。
+内部Sketchのsolveと依存更新は[計算契約](../calculation/拘束と依存更新.md#5-blockの配置とsolve変数)に従う。
+
+失敗時の復元範囲と履歴は[編集の確定と失敗](../contracts/編集と履歴.md)に従う。Block Parameter適用にはTX-04、Parameter以外のDefinition編集による外部拘束エラーにはTX-05を適用する。
 
 ## 13. Definition 編集完了
 
@@ -157,16 +162,12 @@ Definition 内部は通常 Sketch と同じく内部 Sketch ごとに solve す�
 
 使用中 Instance の `enabledSketchIds` がすべて無効になる場合は完了を拒否する。
 
-子 Definition の編集で Projection が削除された場合、親 Definition の該当内部 Constraint を解除して編集を継続する。旧版などで参照先を失った内部 Constraint が保存データに残っている場合も、読み込み時にその Constraint を解除し、解除件数を通知する。
+子Definition編集によるProjection削除の扱いは[Blockの構成変更](Block.md#16-blockの構成変更)に従う。参照先を失った内部Constraintが保存データに残る場合の読込は、[データモデルと永続化](../data/読込と互換性.md)のLOAD-03に従う。
 
 ## 14. 削除と互換性
 
-- 使用中 Definition は削除できない。
-- 親 Definition を削除すると、その所有下の子孫 Definition も削除する。
-- Instance削除ではProjectionを参照する外部ConstraintとLeaderを整理する。
-- Block InstanceのProjectionを派生Instanceが参照している場合、そのBlock Instanceの削除を拒否し、依存する派生Instanceの先行削除を求める。
-- 旧 Definition に内部 Sketch がなければ `Root Sketch -> Sketch-1` へ移行する。
-- 旧 Projection ID は `instanceId@elementId` として維持する。
+- Definition・Instanceの削除可否と参照整理は[削除と参照](../contracts/削除と参照.md)に従う。
+- 旧内部SketchとProjection IDの互換性は[読込と互換性](../data/読込と互換性.md#2-field欠落と旧外観の補完)に従う。
 
 ## 15. 未実装
 
@@ -175,3 +176,14 @@ Definition 内部は通常 Sketch と同じく内部 Sketch ごとに solve す�
 - 鏡像変換
 - 通常 Geometry への分解
 - Definition 原点の手動編集
+
+## 16. Blockの構成変更
+
+| 操作 | 参照が失われる対象 | 結果 |
+| --- | --- | --- |
+| 有効内部Sketchの切替 | 無効化されるProjectionを参照するLeader | 変更を拒否する |
+| 有効内部Sketchの切替 | 無効化されるProjectionを参照する外部Constraint・寸法 | 関連拘束を自動解除し通知する。寸法symbolの依存が残る場合はDEL-01に従い拒否する |
+| 子Definition編集でProjectionを削除 | 親Definition内の該当Constraint | 拘束を解除して編集を継続する |
+| Definition削除 | 所有下の子孫Definition | 親とともに削除する。使用中DefinitionはDEL-04に従い拒否する |
+
+有効内部Sketchがなくなる変更の拒否、Definition編集完了時の参照整理など、構成変更固有の成立条件は[ブロック](Block.md)に従う。内部Sketchの無効化はSketch自体の削除とは区別する。

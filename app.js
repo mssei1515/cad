@@ -332,6 +332,8 @@
   let constraintAnalysisState = null;
   let constraintRedundancyState = { constraints: new Map(), sketches: new Map(), count: 0 };
   let lastAuthoringPerformance = null;
+  const interactionProfiler = window.InteractionProfiler.create();
+  const { work: profileInteractionWork, phase: profileInteractionPhase } = interactionProfiler;
   let interactionFrameStats = null;
   let sketchSolveStates = new Map();
   let invalidReferenceConstraints = new Map();
@@ -743,6 +745,11 @@
   }
 
   function setHint(msg, kind = "normal") {
+    if (!interactionProfiler.active) return setHintUnprofiled(msg, kind);
+    return profileInteractionWork("ui", () => setHintUnprofiled(msg, kind));
+  }
+
+  function setHintUnprofiled(msg, kind = "normal") {
     const el = document.getElementById("hint");
     el.dataset.hintSource = String(msg);
     el.textContent = translatedHintText(msg);
@@ -2502,8 +2509,9 @@
   }
 
   function cachedGeometryRead(key, create) {
-    if (!geometryReadCache) return create();
-    if (!geometryReadCache.values.has(key)) geometryReadCache.values.set(key, create());
+    const read = interactionProfiler.active ? () => profileInteractionWork("geometryReads", create) : create;
+    if (!geometryReadCache) return read();
+    if (!geometryReadCache.values.has(key)) geometryReadCache.values.set(key, read());
     return geometryReadCache.values.get(key);
   }
 
@@ -3601,30 +3609,46 @@
     return constraintOperands.some((operand) => operandElement(operand) === item);
   }
 
-  function syncSelectionFromConstraintOperands() {
-    selectedPoints = [];
-    selectedLines = [];
-    selectedCircles = [];
-    selectedArcs = [];
-    selectedSplines = [];
-    selectedBlockInstances = [];
-    selectedGeometryInstances = [];
-    selectedArcEndpoint = null;
-    selectedArcEndpointPair = null;
-    for (const operand of constraintOperands) {
-      if (operand.kind === "point" && !selectedPoints.includes(operand.point)) selectedPoints.push(operand.point);
-      else if (operand.kind === "line" && !selectedLines.includes(operand.line)) selectedLines.push(operand.line);
+  function constraintTargetsFromOperands(operands) {
+    const points = [];
+    const lines = [];
+    const circles = [];
+    const arcs = [];
+    const splines = [];
+    let arcEndpoint = null;
+    let arcEndpointPair = null;
+    for (const operand of operands) {
+      if (operand.kind === "point" && !points.includes(operand.point)) points.push(operand.point);
+      else if (operand.kind === "line" && !lines.includes(operand.line)) lines.push(operand.line);
       else if (operand.kind === "primitive") {
-        if (operand.primitive instanceof Circle && !selectedCircles.includes(operand.primitive)) selectedCircles.push(operand.primitive);
-        if (operand.primitive instanceof Arc && !selectedArcs.includes(operand.primitive)) selectedArcs.push(operand.primitive);
+        if (operand.primitive instanceof Circle && !circles.includes(operand.primitive)) circles.push(operand.primitive);
+        if (operand.primitive instanceof Arc && !arcs.includes(operand.primitive)) arcs.push(operand.primitive);
       } else if (operand.kind === "spline") {
-        if (!selectedSplines.includes(operand.spline)) selectedSplines.push(operand.spline);
+        if (!splines.includes(operand.spline)) splines.push(operand.spline);
       } else if (operand.kind === "arc-endpoint") {
-        if (selectedArcEndpoint && !sameArcEndpoint(selectedArcEndpoint, operand)) selectedArcEndpointPair = [selectedArcEndpoint, operand];
-        selectedArcEndpoint = { arc: operand.arc, endpoint: operand.endpoint };
-        if (!selectedArcs.includes(operand.arc)) selectedArcs.push(operand.arc);
+        if (arcEndpoint && !sameArcEndpoint(arcEndpoint, operand)) arcEndpointPair = [arcEndpoint, operand];
+        arcEndpoint = { arc: operand.arc, endpoint: operand.endpoint };
+        if (!arcs.includes(operand.arc)) arcs.push(operand.arc);
       }
     }
+    return { points, lines, circles, arcs, splines, arcEndpoint, arcEndpointPair };
+  }
+
+  function currentConstraintTargets() {
+    return { points: selectedPoints, lines: selectedLines, circles: selectedCircles, arcs: selectedArcs, splines: selectedSplines, arcEndpointPair: selectedArcEndpointPair, arcEndpoint: selectedArcEndpoint };
+  }
+
+  function syncSelectionFromConstraintOperands() {
+    const targets = constraintTargetsFromOperands(constraintOperands);
+    selectedPoints = targets.points;
+    selectedLines = targets.lines;
+    selectedCircles = targets.circles;
+    selectedArcs = targets.arcs;
+    selectedSplines = targets.splines;
+    selectedArcEndpointPair = targets.arcEndpointPair;
+    selectedArcEndpoint = targets.arcEndpoint;
+    selectedBlockInstances = [];
+    selectedGeometryInstances = [];
   }
 
   function constraintOperandsFromSelection() {
@@ -3836,6 +3860,11 @@
   }
 
   function stabilizeActiveParameterNamespace(sketchId = activeSketchId(), options = {}) {
+    if (!interactionProfiler.active) return stabilizeActiveParameterNamespaceUnprofiled(sketchId, options);
+    return profileInteractionWork("parameters", () => stabilizeActiveParameterNamespaceUnprofiled(sketchId, options));
+  }
+
+  function stabilizeActiveParameterNamespaceUnprofiled(sketchId = activeSketchId(), options = {}) {
     let previous;
     try {
       ensureParameterNamespace(currentParameterNamespace());
@@ -3960,6 +3989,11 @@
   }
 
   function refreshConstraintAnalysis(options = {}) {
+    if (!interactionProfiler.active) return refreshConstraintAnalysisUnprofiled(options);
+    return profileInteractionWork("analysis", () => refreshConstraintAnalysisUnprofiled(options));
+  }
+
+  function refreshConstraintAnalysisUnprofiled(options = {}) {
     refreshReferenceConstraintValidity();
     const rootSketchId = activeSketchId();
     const sketchIdSet = new Set([rootSketchId, ...descendantSketchIds(rootSketchId)]);
@@ -7590,26 +7624,36 @@
     updateHistoryButtons();
   }
 
-  function recordBlockEditorHistory(label) {
-    if (!blockEditSession) return;
-    const snapshot = captureBlockEditorHistorySnapshot();
-    const undo = blockEditSession.historyUndo;
-    if (undo[undo.length - 1]?.signature === snapshot.signature) {
-      updateHistoryButtons();
-      return;
-    }
-    undo.push(snapshot);
-    if (undo.length > HISTORY_LIMIT) undo.shift();
-    blockEditSession.historyRedo = [];
-    updateHistoryButtons();
-    log(`ブロック編集履歴に追加しました: ${label}`);
+  function activeEditHistory() {
+    const session = blockEditSession;
+    if (session) return {
+      undo: session.historyUndo,
+      redo: session.historyRedo,
+      capture: captureBlockEditorHistorySnapshot,
+      signature: (snapshot) => snapshot?.signature,
+      clearRedo: () => { session.historyRedo = []; },
+      restore: restoreBlockEditorHistorySnapshot,
+      recordLabel: "ブロック編集履歴に追加しました",
+      undoLabel: "ブロック編集を戻す",
+      redoLabel: "ブロック編集を進む",
+    };
+    return {
+      undo: undoStack,
+      redo: redoStack,
+      capture: historySnapshot,
+      signature: (snapshot) => snapshot,
+      clearRedo: () => { redoStack = []; },
+      restore: (snapshot, label) => { restoreHistorySnapshot(snapshot, label); return true; },
+      recordLabel: "履歴に追加しました",
+      undoLabel: "戻る",
+      redoLabel: "進む",
+    };
   }
 
   function updateHistoryButtons() {
     const undoBtn = document.getElementById("undoBtn");
     const redoBtn = document.getElementById("redoBtn");
-    const activeUndo = blockEditSession ? blockEditSession.historyUndo : undoStack;
-    const activeRedo = blockEditSession ? blockEditSession.historyRedo : redoStack;
+    const { undo: activeUndo, redo: activeRedo } = activeEditHistory();
     if (undoBtn) undoBtn.disabled = activeUndo.length <= 1;
     if (redoBtn) redoBtn.disabled = activeRedo.length === 0;
   }
@@ -7622,21 +7666,16 @@
   }
 
   function recordHistory(label = "変更") {
+    if (!interactionProfiler.active) return recordHistoryUnprofiled(label);
+    return profileInteractionWork("history", () => recordHistoryUnprofiled(label));
+  }
+
+  function recordHistoryUnprofiled(label = "変更") {
     if (historyRestoring) return;
-    if (blockEditSession) {
-      recordBlockEditorHistory(label);
-      return;
-    }
-    const snapshot = historySnapshot();
-    if (undoStack[undoStack.length - 1] === snapshot) {
-      updateHistoryButtons();
-      return;
-    }
-    undoStack.push(snapshot);
-    if (undoStack.length > HISTORY_LIMIT) undoStack.shift();
-    redoStack = [];
+    const history = activeEditHistory();
+    const recorded = window.EditHistory.record(history, HISTORY_LIMIT);
     updateHistoryButtons();
-    log(`履歴に追加しました: ${label}`);
+    if (recorded) log(`${history.recordLabel}: ${label}`);
   }
 
   function restoreHistorySnapshot(snapshot, label) {
@@ -7695,31 +7734,11 @@
   }
 
   function undoHistory() {
-    if (blockEditSession) {
-      if (blockEditSession.historyUndo.length <= 1) return false;
-      const current = blockEditSession.historyUndo.pop();
-      blockEditSession.historyRedo.push(current);
-      return restoreBlockEditorHistorySnapshot(blockEditSession.historyUndo[blockEditSession.historyUndo.length - 1], "ブロック編集を戻す");
-    }
-    if (undoStack.length <= 1) return false;
-    const current = undoStack.pop();
-    redoStack.push(current);
-    restoreHistorySnapshot(undoStack[undoStack.length - 1], "戻る");
-    return true;
+    return window.EditHistory.undo(activeEditHistory());
   }
 
   function redoHistory() {
-    if (blockEditSession) {
-      if (blockEditSession.historyRedo.length === 0) return false;
-      const snapshot = blockEditSession.historyRedo.pop();
-      blockEditSession.historyUndo.push(snapshot);
-      return restoreBlockEditorHistorySnapshot(snapshot, "ブロック編集を進む");
-    }
-    if (redoStack.length === 0) return false;
-    const snapshot = redoStack.pop();
-    undoStack.push(snapshot);
-    restoreHistorySnapshot(snapshot, "進む");
-    return true;
+    return window.EditHistory.redo(activeEditHistory());
   }
 
   function deserializeConstraint(data, pointById, lineById, primitiveById, dimensionAppearanceLoader = normalizeDimensionAppearance, expressionLoader = (value) => String(value)) {
@@ -7778,8 +7797,8 @@
         constraint.dimension = {
           x: Number(data.dimension.x),
           y: Number(data.dimension.y),
-          offsetU: Number.isFinite(Number(data.dimension.offsetU)) ? Number(data.dimension.offsetU) : NaN,
-          offsetN: Number.isFinite(Number(data.dimension.offsetN)) ? Number(data.dimension.offsetN) : NaN,
+          offsetU: data.dimension.offsetU != null && Number.isFinite(Number(data.dimension.offsetU)) ? Number(data.dimension.offsetU) : NaN,
+          offsetN: data.dimension.offsetN != null && Number.isFinite(Number(data.dimension.offsetN)) ? Number(data.dimension.offsetN) : NaN,
           labelOffsetU: Number.isFinite(Number(data.dimension.labelOffsetU)) ? Number(data.dimension.labelOffsetU) : 0,
           labelX: Number.isFinite(Number(data.dimension.labelX)) ? Number(data.dimension.labelX) : NaN,
           labelY: Number.isFinite(Number(data.dimension.labelY)) ? Number(data.dimension.labelY) : NaN,
@@ -10081,34 +10100,38 @@
   }
 
   function distanceTargetFromSelection() {
-    const primitives = selectedPrimitives();
-    if (selectedPoints.length === 0 && selectedLines.length === 0 && primitives.length === 1) {
+    return distanceTargetFromTargets(currentConstraintTargets());
+  }
+
+  function distanceTargetFromTargets({ points, lines, circles, arcs }) {
+    const primitives = [...circles, ...arcs];
+    if (points.length === 0 && lines.length === 0 && primitives.length === 1) {
       const [primitive] = primitives;
       if (primitive instanceof Circle) return { kind: "diameter", primitive, value: primitive.radius() * 2 };
       return { kind: "radius", primitive, value: primitive.radius() };
     }
-    if (selectedPoints.length === 0 && selectedLines.length === 0 && primitives.length === 2) {
+    if (points.length === 0 && lines.length === 0 && primitives.length === 2) {
       return concentricRadiusDifferenceTarget(primitives[0], primitives[1]);
     }
-    if (selectedPoints.length === 0 && selectedLines.length === 1 && primitives.length === 1) {
-      return lineCircleDistanceTarget(selectedLines[0], primitives[0]);
+    if (points.length === 0 && lines.length === 1 && primitives.length === 1) {
+      return lineCircleDistanceTarget(lines[0], primitives[0]);
     }
-    if (selectedPoints.length === 2 && selectedLines.length === 0 && primitives.length === 0) {
-      const [p1, p2] = selectedPoints;
+    if (points.length === 2 && lines.length === 0 && primitives.length === 0) {
+      const [p1, p2] = points;
       return { kind: "point-point", p1, p2, value: hypot2(p2.x - p1.x, p2.y - p1.y) };
     }
-    if (selectedPoints.length === 0 && selectedLines.length === 1 && primitives.length === 0) {
-      const [line] = selectedLines;
+    if (points.length === 0 && lines.length === 1 && primitives.length === 0) {
+      const [line] = lines;
       return { kind: "line-length", line, p1: line.p1, p2: line.p2, value: line.length() };
     }
-    if (selectedPoints.length === 1 && selectedLines.length === 1 && primitives.length === 0) {
-      const [point] = selectedPoints;
-      const [line] = selectedLines;
+    if (points.length === 1 && lines.length === 1 && primitives.length === 0) {
+      const [point] = points;
+      const [line] = lines;
       if (!lineHasDirection(line)) return { kind: "invalid", reason: "寸法対象の線が短すぎます" };
       return { kind: "point-line", point, line, value: Math.abs(signedPointLineDistance(point, line)) };
     }
-    if (selectedPoints.length === 0 && selectedLines.length === 2 && primitives.length === 0) {
-      const [line1, line2] = selectedLines;
+    if (points.length === 0 && lines.length === 2 && primitives.length === 0) {
+      const [line1, line2] = lines;
       if (!lineHasDirection(line1) || !lineHasDirection(line2)) return { kind: "invalid", reason: "線-線寸法の対象線が短すぎます" };
       if (!linesAreParallel(line1, line2)) {
         const signedValue = angleDimensionSweep({ line1, line2 });
@@ -11228,6 +11251,11 @@
   }
 
   function solveFinalDragSession(session) {
+    if (!interactionProfiler.active) return solveFinalDragSessionUnprofiled(session);
+    return profileInteractionWork("solve", () => solveFinalDragSessionUnprofiled(session));
+  }
+
+  function solveFinalDragSessionUnprofiled(session) {
     if (session?.projectionShapeLocked) return sketchProjectionBlockedDragResult();
     const extra = session?.finalDragConstraints || [];
     if (session?.lastGuidedPreviewError > CONSTRAINT_ACCEPT_ERROR) {
@@ -11267,6 +11295,11 @@
   }
 
   function solveReferenceDependentSketches(rootSketchId) {
+    if (!interactionProfiler.active) return solveReferenceDependentSketchesUnprofiled(rootSketchId);
+    return profileInteractionWork("dependencies", () => solveReferenceDependentSketchesUnprofiled(rootSketchId));
+  }
+
+  function solveReferenceDependentSketchesUnprofiled(rootSketchId) {
     refreshReferenceConstraintValidity();
     const results = [];
     const dependentsBySource = new Map();
@@ -12612,6 +12645,11 @@
   }
 
   function draw() {
+    if (!interactionProfiler.active) return drawUnprofiled();
+    return profileInteractionWork("draw", () => drawUnprofiled());
+  }
+
+  function drawUnprofiled() {
     return withGeometryReadCache(drawCanvas);
   }
 
@@ -14507,34 +14545,43 @@
       const resolution = resolveConstraintIntent(type, constraintOperands);
       return Boolean(resolution && !resolution.error && (resolution.constraint || resolution.target || resolution.action));
     }
-    const primitives = selectedPrimitives();
-    const selectedItems = [...selectedPoints, ...selectedLines, ...primitives, ...selectedSplines, selectedArcEndpoint?.arc, ...(selectedArcEndpointPair || []).map((item) => item.arc)].filter(Boolean);
-    if (!sameSketchElements(selectedItems, activeSketchId())) return false;
-    const coincidentPrimitives = selectedArcEndpoint ? primitives.filter((p) => p !== selectedArcEndpoint.arc) : primitives;
+    return canApplyConstraintToSelection(type);
+  }
+
+  function canApplyConstraintToSelection(type) {
+    return canApplyConstraintToTargets(type, currentConstraintTargets(), activeSketchId());
+  }
+
+  function canApplyConstraintToTargets(type, targets, sketchId) {
+    const { points, lines, circles, arcs, splines, arcEndpoint, arcEndpointPair } = targets;
+    const primitives = [...circles, ...arcs];
+    const selectedItems = [...points, ...lines, ...primitives, ...splines, arcEndpoint?.arc, ...(arcEndpointPair || []).map((item) => item.arc)].filter(Boolean);
+    if (!sameSketchElements(selectedItems, sketchId)) return false;
+    const coincidentPrimitives = arcEndpoint ? primitives.filter((p) => p !== arcEndpoint.arc) : primitives;
     if (type === "distance") {
-      const target = distanceTargetFromSelection();
+      const target = distanceTargetFromTargets(targets);
       return Boolean(target && target.kind !== "invalid");
     }
-    if (type === "concentric") return (selectedPoints.length === 1 && selectedLines.length === 0 && primitives.length === 1) || (selectedPoints.length === 0 && selectedLines.length === 0 && primitives.length === 2);
-    if (type === "equal") return (selectedLines.length === 2 && selectedPoints.length === 0 && primitives.length === 0) || (selectedPoints.length === 0 && selectedLines.length === 0 && primitives.length === 2);
-    if (type === "equalRadius") return selectedPoints.length === 0 && selectedLines.length === 0 && primitives.length === 2;
-    if (type === "pointOnCircle") return selectedPoints.length === 1 && selectedLines.length === 0 && primitives.length === 1;
-    if (type === "tangent") return (selectedPoints.length === 0 && selectedLines.length === 1 && (primitives.length === 1 || selectedSplines.length === 1) && primitives.length + selectedSplines.length === 1) || (selectedPoints.length === 0 && selectedLines.length === 0 && ((primitives.length === 2 && selectedSplines.length === 0) || (primitives.length === 0 && selectedSplines.length === 2)));
+    if (type === "concentric") return (points.length === 1 && lines.length === 0 && primitives.length === 1) || (points.length === 0 && lines.length === 0 && primitives.length === 2);
+    if (type === "equal") return (lines.length === 2 && points.length === 0 && primitives.length === 0) || (points.length === 0 && lines.length === 0 && primitives.length === 2);
+    if (type === "equalRadius") return points.length === 0 && lines.length === 0 && primitives.length === 2;
+    if (type === "pointOnCircle") return points.length === 1 && lines.length === 0 && primitives.length === 1;
+    if (type === "tangent") return (points.length === 0 && lines.length === 1 && (primitives.length === 1 || splines.length === 1) && primitives.length + splines.length === 1) || (points.length === 0 && lines.length === 0 && ((primitives.length === 2 && splines.length === 0) || (primitives.length === 0 && splines.length === 2)));
     if (type === "coincident") {
-      if (selectedArcEndpointPair?.length === 2) return true;
-      if ((selectedPoints.length === 2 && selectedLines.length === 0) || (selectedPoints.length === 0 && selectedLines.length === 2 && selectedLines.every(lineHasDirection)) || (selectedPoints.length === 1 && selectedLines.length === 1) || (selectedPoints.length === 1 && selectedLines.length === 0 && coincidentPrimitives.length === 1)) return true;
-      if (selectedPoints.length === 1 && selectedLines.length === 0 && selectedSplines.length === 1 && primitives.length === 0) return true;
-      return Boolean(selectedArcEndpoint && ((selectedPoints.length === 1 && selectedLines.length === 0 && coincidentPrimitives.length === 0) || (selectedPoints.length === 0 && selectedLines.length === 1 && coincidentPrimitives.length === 0) || (selectedPoints.length === 0 && selectedLines.length === 0 && coincidentPrimitives.length === 1)));
+      if (arcEndpointPair?.length === 2) return true;
+      if ((points.length === 2 && lines.length === 0) || (points.length === 0 && lines.length === 2 && lines.every(lineHasDirection)) || (points.length === 1 && lines.length === 1) || (points.length === 1 && lines.length === 0 && coincidentPrimitives.length === 1)) return true;
+      if (points.length === 1 && lines.length === 0 && splines.length === 1 && primitives.length === 0) return true;
+      return Boolean(arcEndpoint && ((points.length === 1 && lines.length === 0 && coincidentPrimitives.length === 0) || (points.length === 0 && lines.length === 1 && coincidentPrimitives.length === 0) || (points.length === 0 && lines.length === 0 && coincidentPrimitives.length === 1)));
     }
-    if (type === "horizontal" || type === "vertical") return (selectedLines.length === 1 && selectedPoints.length === 0 && lineHasDirection(selectedLines[0])) || (selectedPoints.length === 2 && selectedLines.length === 0);
-    if (type === "parallel" || type === "perpendicular") return selectedLines.length === 2 && selectedLines.every(lineHasDirection);
+    if (type === "horizontal" || type === "vertical") return (lines.length === 1 && points.length === 0 && lineHasDirection(lines[0])) || (points.length === 2 && lines.length === 0);
+    if (type === "parallel" || type === "perpendicular") return lines.length === 2 && lines.every(lineHasDirection);
     if (type === "symmetry") {
-      const pointTargets = selectedPoints.length === 2 && selectedLines.length === 1;
-      const lineTargets = selectedPoints.length === 0 && selectedLines.length === 3;
-      const arcTargets = selectedPoints.length === 0 && selectedLines.length === 1 && selectedCircles.length === 0 && selectedArcs.length === 2;
-      return ((primitives.length === 0 && (pointTargets || lineTargets)) || arcTargets) && selectedLines.every(lineHasDirection);
+      const pointTargets = points.length === 2 && lines.length === 1;
+      const lineTargets = points.length === 0 && lines.length === 3;
+      const arcTargets = points.length === 0 && lines.length === 1 && circles.length === 0 && arcs.length === 2;
+      return ((primitives.length === 0 && (pointTargets || lineTargets)) || arcTargets) && lines.every(lineHasDirection);
     }
-    if (type === "collinear") return selectedLines.length === 2 && selectedLines.every(lineHasDirection);
+    if (type === "collinear") return lines.length === 2 && lines.every(lineHasDirection);
     return false;
   }
 
@@ -15910,6 +15957,11 @@
   applySketchTreeWidth();
 
   function updateSketchUI() {
+    if (!interactionProfiler.active) return updateSketchUIUnprofiled();
+    return profileInteractionWork("tree", updateSketchUIUnprofiled);
+  }
+
+  function updateSketchUIUnprofiled() {
     ensureSketchState();
     const activeLabel = document.getElementById("activeSketchLabel");
     if (activeLabel) activeLabel.textContent = applicationText("スケッチツリー", "Sketch Tree");
@@ -16270,6 +16322,11 @@
   }
 
   function updateGeometrySelectionUI() {
+    if (!interactionProfiler.active) return updateGeometrySelectionUIUnprofiled();
+    return profileInteractionWork("ui", updateGeometrySelectionUIUnprofiled);
+  }
+
+  function updateGeometrySelectionUIUnprofiled() {
     updateToolbar();
     updateConstraintButtons();
     if (document.getElementById("blockDefinitionsDialog")?.open) updateBlockUI();
@@ -17210,6 +17267,11 @@
   }
 
   function updatePropertiesUI() {
+    if (!interactionProfiler.active) return updatePropertiesUIUnprofiled();
+    return profileInteractionWork("properties", updatePropertiesUIUnprofiled);
+  }
+
+  function updatePropertiesUIUnprofiled() {
     const panel = document.getElementById("propertiesPanel");
     if (!panel) return;
     const target = selectedPropertiesTarget();
@@ -17949,6 +18011,11 @@
   }
 
   function updateUI({ refreshAnalysis = true } = {}) {
+    if (!interactionProfiler.active) return updateUIUnprofiled({ refreshAnalysis });
+    return profileInteractionWork("ui", () => updateUIUnprofiled({ refreshAnalysis }));
+  }
+
+  function updateUIUnprofiled({ refreshAnalysis = true } = {}) {
     ensureParameterNamespace(currentParameterNamespace());
     if (refreshAnalysis) refreshConstraintAnalysis();
     updateDocumentNameUI();
@@ -18424,26 +18491,7 @@
 
   function normalConstraintFromOperands(type, operands) {
     if (type === "symmetry") return symmetryConstraintFromOperands(operands);
-    const previous = {
-      points: selectedPoints,
-      lines: selectedLines,
-      circles: selectedCircles,
-      arcs: selectedArcs,
-      splines: selectedSplines,
-      arcEndpoint: selectedArcEndpoint,
-      arcEndpointPair: selectedArcEndpointPair,
-    };
-    constraintOperands = operands.slice();
-    syncSelectionFromConstraintOperands();
-    const constraint = constraintFromSelection(type);
-    selectedPoints = previous.points;
-    selectedLines = previous.lines;
-    selectedCircles = previous.circles;
-    selectedArcs = previous.arcs;
-    selectedSplines = previous.splines;
-    selectedArcEndpoint = previous.arcEndpoint;
-    selectedArcEndpointPair = previous.arcEndpointPair;
-    return constraint;
+    return constraintFromTargets(type, constraintTargetsFromOperands(operands), activeSketchId());
   }
 
   function symmetryConstraintFromOperands(operands) {
@@ -18677,54 +18725,60 @@
   }
 
   function constraintFromSelection(type) {
+    return constraintFromTargets(type, currentConstraintTargets(), activeSketchId());
+  }
+
+  function constraintFromTargets(type, targets, sketchId) {
+    if (!canApplyConstraintToTargets(type, targets, sketchId)) return null;
+    const { points, lines, circles, arcs, arcEndpoint, arcEndpointPair } = targets;
     let constraint = null;
-    const allPrimitives = selectedPrimitives();
-    const primitives = type === "coincident" && selectedArcEndpoint ? allPrimitives.filter((p) => p !== selectedArcEndpoint.arc) : allPrimitives;
+    const allPrimitives = [...circles, ...arcs];
+    const primitives = type === "coincident" && arcEndpoint ? allPrimitives.filter((p) => p !== arcEndpoint.arc) : allPrimitives;
     if (type === "coincident") {
-      const endpointPair = selectedArcEndpointPair;
+      const endpointPair = arcEndpointPair;
       if (endpointPair?.length === 2) {
         constraint = new ArcEndpointArcEndpointCoincidentConstraint(endpointPair[0].arc, endpointPair[0].endpoint, endpointPair[1].arc, endpointPair[1].endpoint);
-      } else if (selectedArcEndpoint && selectedPoints.length === 1) {
-        constraint = new ArcEndpointCoincidentConstraint(selectedArcEndpoint.arc, selectedArcEndpoint.endpoint, selectedPoints[0]);
-      } else if (selectedArcEndpoint && selectedLines.length === 1) {
-        constraint = new ArcEndpointOnLineConstraint(selectedArcEndpoint.arc, selectedArcEndpoint.endpoint, selectedLines[0]);
-      } else if (selectedArcEndpoint && primitives.length === 1) {
-        constraint = new ArcEndpointOnCircleConstraint(selectedArcEndpoint.arc, selectedArcEndpoint.endpoint, primitives[0]);
-      } else if (selectedPoints.length === 1 && selectedLines.length === 1) {
-        constraint = new PointOnLineConstraint(selectedPoints[0], selectedLines[0]);
-      } else if (selectedPoints.length === 1 && primitives.length === 1) {
-        constraint = new PointOnCircleConstraint(selectedPoints[0], primitives[0]);
-      } else if (selectedPoints.length === 0 && selectedLines.length === 2) {
-        constraint = new CollinearConstraint(selectedLines[0], selectedLines[1]);
+      } else if (arcEndpoint && points.length === 1) {
+        constraint = new ArcEndpointCoincidentConstraint(arcEndpoint.arc, arcEndpoint.endpoint, points[0]);
+      } else if (arcEndpoint && lines.length === 1) {
+        constraint = new ArcEndpointOnLineConstraint(arcEndpoint.arc, arcEndpoint.endpoint, lines[0]);
+      } else if (arcEndpoint && primitives.length === 1) {
+        constraint = new ArcEndpointOnCircleConstraint(arcEndpoint.arc, arcEndpoint.endpoint, primitives[0]);
+      } else if (points.length === 1 && lines.length === 1) {
+        constraint = new PointOnLineConstraint(points[0], lines[0]);
+      } else if (points.length === 1 && primitives.length === 1) {
+        constraint = new PointOnCircleConstraint(points[0], primitives[0]);
+      } else if (points.length === 0 && lines.length === 2) {
+        constraint = new CollinearConstraint(lines[0], lines[1]);
       } else {
-        constraint = new CoincidentConstraint(selectedPoints[0], selectedPoints[1]);
+        constraint = new CoincidentConstraint(points[0], points[1]);
       }
     } else if (type === "horizontal") {
-      constraint = selectedPoints.length === 2 ? new PointHorizontalConstraint(selectedPoints[0], selectedPoints[1]) : new HorizontalConstraint(selectedLines[0]);
+      constraint = points.length === 2 ? new PointHorizontalConstraint(points[0], points[1]) : new HorizontalConstraint(lines[0]);
     } else if (type === "vertical") {
-      constraint = selectedPoints.length === 2 ? new PointVerticalConstraint(selectedPoints[0], selectedPoints[1]) : new VerticalConstraint(selectedLines[0]);
+      constraint = points.length === 2 ? new PointVerticalConstraint(points[0], points[1]) : new VerticalConstraint(lines[0]);
     } else if (type === "parallel") {
-      constraint = new ParallelConstraint(selectedLines[0], selectedLines[1]);
+      constraint = new ParallelConstraint(lines[0], lines[1]);
     } else if (type === "perpendicular") {
-      constraint = new PerpendicularConstraint(selectedLines[0], selectedLines[1]);
+      constraint = new PerpendicularConstraint(lines[0], lines[1]);
     } else if (type === "symmetry") {
-      if (selectedPoints.length === 2 && selectedLines.length === 1) constraint = new SymmetryConstraint(selectedPoints[0], selectedPoints[1], selectedLines[0]);
-      else if (selectedPoints.length === 0 && selectedLines.length === 3) constraint = new LineSymmetryConstraint(selectedLines[1], selectedLines[2], selectedLines[0]);
-      else if (selectedPoints.length === 0 && selectedLines.length === 1 && selectedCircles.length === 0 && selectedArcs.length === 2) constraint = new ArcSymmetryConstraint(selectedArcs[0], selectedArcs[1], selectedLines[0]);
+      if (points.length === 2 && lines.length === 1) constraint = new SymmetryConstraint(points[0], points[1], lines[0]);
+      else if (points.length === 0 && lines.length === 3) constraint = new LineSymmetryConstraint(lines[1], lines[2], lines[0]);
+      else if (points.length === 0 && lines.length === 1 && circles.length === 0 && arcs.length === 2) constraint = new ArcSymmetryConstraint(arcs[0], arcs[1], lines[0]);
     } else if (type === "collinear") {
-      constraint = new CollinearConstraint(selectedLines[0], selectedLines[1]);
+      constraint = new CollinearConstraint(lines[0], lines[1]);
     } else if (type === "equal") {
-      if (selectedLines.length === 2) constraint = new EqualLengthConstraint(selectedLines[0], selectedLines[1]);
+      if (lines.length === 2) constraint = new EqualLengthConstraint(lines[0], lines[1]);
       else constraint = new EqualRadiusConstraint(primitives[0], primitives[1]);
     } else if (type === "concentric") {
-      constraint = new ConcentricConstraint(selectedPoints[0] || primitives[0], primitives[selectedPoints.length === 1 ? 0 : 1]);
+      constraint = new ConcentricConstraint(points[0] || primitives[0], primitives[points.length === 1 ? 0 : 1]);
     } else if (type === "equalRadius") {
       constraint = new EqualRadiusConstraint(primitives[0], primitives[1]);
     } else if (type === "pointOnCircle") {
-      constraint = new PointOnCircleConstraint(selectedPoints[0], primitives[0]);
+      constraint = new PointOnCircleConstraint(points[0], primitives[0]);
     } else if (type === "tangent") {
       solver.syncLineOrientationHints?.();
-      if (selectedLines.length === 1) constraint = new LineCircleTangentConstraint(selectedLines[0], primitives[0]);
+      if (lines.length === 1) constraint = new LineCircleTangentConstraint(lines[0], primitives[0]);
       else constraint = new CircleCircleTangentConstraint(primitives[0], primitives[1]);
     }
     return constraint;
@@ -19484,6 +19538,11 @@
   }
 
   function dragResultForSession(session, pointer) {
+    if (!interactionProfiler.active) return dragResultForSessionUnprofiled(session, pointer);
+    return profileInteractionWork("solve", () => dragResultForSessionUnprofiled(session, pointer));
+  }
+
+  function dragResultForSessionUnprofiled(session, pointer) {
     if (session?.projectionShapeLocked) return sketchProjectionBlockedDragResult();
     let result;
     const dragVars = session?.local?.variables || solver.getVariables();
@@ -22549,8 +22608,10 @@
       if (animationFrame) interactionFrameStats.animationFrames += 1;
       if (synchronousFlush) interactionFrameStats.synchronousFlushes += 1;
     }
-    withGeometryReadCache(() => processCanvasPointerMove(pointer));
-    if (pendingCommand && ["distance-value", "offset-value"].includes(pendingCommand.type)) syncDimensionValueInput();
+    profileInteractionPhase("preview", () => {
+      withGeometryReadCache(() => processCanvasPointerMove(pointer));
+      if (pendingCommand && ["distance-value", "offset-value"].includes(pendingCommand.type)) syncDimensionValueInput();
+    });
     return true;
   }
 
@@ -22587,6 +22648,10 @@
 
   function endDrag(e) {
     flushScheduledCanvasPointerMove();
+    return profileInteractionPhase("commit", () => finishPointerInteraction(e));
+  }
+
+  function finishPointerInteraction(e) {
     if (panSession) {
       panSession = null;
       canvas.classList.remove("is-panning");
@@ -22651,7 +22716,12 @@
         return;
       }
       setHint("寸法線の位置を更新しました");
-      updateUI();
+      // Angle placement can change the constraint target; other dimensions only change layout.
+      if (session.target.kind === "angle") updateUI();
+      else {
+        updateGeometrySelectionUI();
+        syncDimensionValueInput();
+      }
       draw();
       recordHistory("寸法線移動");
       return;
@@ -22687,7 +22757,8 @@
     }
 
     if (!dragSession) {
-      recordHistory("操作");
+      // The first Line endpoint is provisional until a segment is completed.
+      if (!lineStartRollback) recordHistory("操作");
       return;
     }
     const session = dragSession;
@@ -24204,6 +24275,13 @@
             : null,
         };
       },
+      startInteractionProfileForTest() {
+        flushScheduledCanvasPointerMove();
+        interactionProfiler.start();
+      },
+      stopInteractionProfileForTest() {
+        return interactionProfiler.stop();
+      },
       resetInteractionFrameStatsForTest() {
         flushScheduledCanvasPointerMove();
         interactionFrameStats = {
@@ -25668,9 +25746,10 @@
           title: document.title,
         };
       },
-      loadDocumentFixtureForDragTest(data, fileName = "drag-fixture.json") {
+      loadDocumentFixtureForDragTest(data, fileName = "drag-fixture.json", { resetLoadedHistory = false } = {}) {
         try {
           loadModelData(structuredClone(data), { documentNameOverride: fileNameStem(fileName) });
+          if (resetLoadedHistory) resetHistory("fixture load");
           updateUI();
           draw();
           return { success: true, constraintCount: model.constraints.length };
@@ -25761,6 +25840,33 @@
         updateUI();
         draw();
         return { id: point.id, client: this.worldClientPositionForTest(point) };
+      },
+      constraintInputStateForTest() {
+        return {
+          selected: this.selectedGeometryIdsForTest(),
+          geometryInstances: selectedGeometryInstances.map((item) => item.id),
+          arcEndpoint: selectedArcEndpoint ? { arc: selectedArcEndpoint.arc.id, endpoint: selectedArcEndpoint.endpoint } : null,
+          arcEndpointPair: selectedArcEndpointPair?.map((item) => ({ arc: item.arc.id, endpoint: item.endpoint })) || null,
+          operands: constraintOperands.map((item) => ({ kind: item.kind, id: operandElement(item)?.id, endpoint: item.endpoint })),
+          pendingType: pendingConstraintCommand?.type || null,
+        };
+      },
+      resolveConstraintIntentForTest(type, inputs) {
+        const operands = inputs.map(({ kind, id, endpoint, parameter }) => {
+          const items = kind === "point" ? model.points : kind === "line" ? model.lines
+            : kind === "spline" ? model.splines : kind === "arc-endpoint" ? model.arcs : [...model.circles, ...model.arcs];
+          const element = items.find((item) => item.id === id);
+          if (!element) throw new Error(`Missing test operand: ${id}`);
+          const key = kind === "arc-endpoint" ? "arc" : kind;
+          return makeConstraintOperand(kind, { [key]: element, endpoint, parameter });
+        });
+        const resolution = resolveConstraintIntent(type, operands);
+        return resolution ? {
+          action: resolution.action || null,
+          error: resolution.error || null,
+          constraint: resolution.constraint ? serializeConstraint(resolution.constraint) : null,
+          targetKind: resolution.target?.kind || null,
+        } : null;
       },
       selectGeometryIdsForTest(ids = {}) {
         clearSelection();

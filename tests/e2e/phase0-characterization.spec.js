@@ -1,14 +1,7 @@
-const { test, expect } = require("./test-fixture");
-const { spawn } = require("child_process");
+const { test, expect, openTestDocument } = require("./test-fixture");
 const fs = require("fs");
-const http = require("http");
 const path = require("path");
 const { phase0DocumentFixture } = require("../fixtures/phase0-document");
-
-const host = "127.0.0.1";
-const port = Number(process.env.JOT2D_E2E_PORT || 8765) + 6;
-const baseUrl = `http://${host}:${port}`;
-let serverProcess = null;
 
 const persistentConstraintTypes = [
   "arcEndpointArcEndpointCoincident",
@@ -45,38 +38,9 @@ const persistentConstraintTypes = [
   "vertical",
 ];
 
-function waitForServer(url, timeoutMs = 10000) {
-  const startedAt = Date.now();
-  return new Promise((resolve, reject) => {
-    const check = () => {
-      const request = http.get(url, (response) => {
-        response.resume();
-        resolve();
-      });
-      request.on("error", () => {
-        if (Date.now() - startedAt > timeoutMs) {
-          reject(new Error(`Timed out waiting for ${url}`));
-          return;
-        }
-        setTimeout(check, 100);
-      });
-    };
-    check();
-  });
-}
-
 function semanticDocument(data) {
   const clone = structuredClone(data);
   delete clone.savedAt;
-  const normalizeAngleDimensions = (constraints = []) => {
-    for (const constraint of constraints) {
-      if (constraint.type !== "lineAngle" || !constraint.dimension) continue;
-      delete constraint.dimension.offsetU;
-      delete constraint.dimension.offsetN;
-    }
-  };
-  normalizeAngleDimensions(clone.constraints);
-  for (const definition of clone.blockDefinitions || []) normalizeAngleDimensions(definition.constraints);
   return clone;
 }
 
@@ -107,11 +71,6 @@ function references(value, expected) {
   return false;
 }
 
-async function openTestApp(page) {
-  await page.goto(`${baseUrl}/index.html?test=1`);
-  await page.waitForFunction(() => window.__jot2dTest);
-}
-
 async function openBlockDefinitions(page) {
   const dialog = page.locator("#blockDefinitionsDialog");
   if (!(await dialog.isVisible())) {
@@ -133,26 +92,8 @@ async function importFixture(page, fixture = phase0DocumentFixture(), name = "ph
   return page.evaluate(() => window.__jot2dTest.serializedModelForTest());
 }
 
-test.beforeAll(async () => {
-  try {
-    await waitForServer(`${baseUrl}/index.html`, 300);
-    return;
-  } catch (_) {
-    // Start our local static server below.
-  }
-  serverProcess = spawn(process.execPath, ["tools/serve.js", "--host", host, "--port", String(port)], {
-    cwd: path.resolve(__dirname, "../.."),
-    stdio: "ignore",
-  });
-  await waitForServer(`${baseUrl}/index.html`);
-});
-
-test.afterAll(() => {
-  if (serverProcess) serverProcess.kill();
-});
-
 test("complete documents normalize to stable current unified-canvas data", async ({ page }) => {
-  await openTestApp(page);
+  await openTestDocument(page);
   const first = await importFixture(page);
   const reload = await page.evaluate(
     ({ data, fileName }) => window.__jot2dTest.loadDocumentFixtureForDragTest(data, fileName),
@@ -173,7 +114,7 @@ test("complete documents normalize to stable current unified-canvas data", async
 });
 
 test("document length units persist as millimeters and legacy v19 data migrates without rescaling", async ({ page }) => {
-  await openTestApp(page);
+  await openTestDocument(page);
   const current = await importFixture(page);
   expect(current.units).toEqual({ length: "mm" });
 
@@ -208,7 +149,7 @@ test("document length units persist as millimeters and legacy v19 data migrates 
 });
 
 test("100 percent display zoom maps 25.4 millimeters to 96 CSS pixels", async ({ page }) => {
-  await openTestApp(page);
+  await openTestDocument(page);
   const state = await page.evaluate(() => {
     const initial = window.__jot2dTest.displayZoomStateForTest();
     const atHundred = window.__jot2dTest.displayZoomStateForTest(1);
@@ -226,7 +167,7 @@ test("100 percent display zoom maps 25.4 millimeters to 96 CSS pixels", async ({
 });
 
 test("constraint commit accepts a stalled solver result within the application tolerance", async ({ page }) => {
-  await openTestApp(page);
+  await openTestDocument(page);
 
   const accepted = await page.evaluate(() => window.__jot2dTest.commitConstraintWithForcedSolveResultForTest({
     success: false,
@@ -254,9 +195,45 @@ test("constraint commit accepts a stalled solver result within the application t
   }));
 });
 
+test("constraint resolution preserves unrelated selection, pending input, document and history", async ({ page }) => {
+  await openTestDocument(page);
+  await importFixture(page);
+  await page.evaluate(() => window.__jot2dTest.selectGeometryIdsForTest({ points: ["P4"], blockInstances: ["BI1"] }));
+  const before = await page.evaluate(() => ({
+    input: window.__jot2dTest.constraintInputStateForTest(),
+    document: window.__jot2dTest.serializedModelForTest(),
+    history: window.__jot2dTest.historyState(),
+  }));
+  expect(before.input.selected.points).toEqual(["P4"]);
+  expect(before.input.selected.blockInstances).toEqual(["BI1"]);
+  const point = (id) => ({ kind: "point", id });
+  const line = (id) => ({ kind: "line", id });
+  const primitive = (id) => ({ kind: "primitive", id });
+  const endpoint = (id, endpoint) => ({ kind: "arc-endpoint", id, endpoint });
+  const cases = [
+    { type: "coincident", inputs: [point("P1")], expected: null },
+    { type: "coincident", inputs: [point("P1"), line("L1")], constraint: { type: "pointOnLine", point: "P1", line: "L1" } },
+    { type: "coincident", inputs: [endpoint("A1", "end"), endpoint("A2", "start")], constraint: { type: "arcEndpointArcEndpointCoincident", a: "A1", endpointA: "end", b: "A2", endpointB: "start" } },
+    { type: "horizontal", inputs: [line("L2")], constraint: { type: "horizontal", line: "L2" } },
+    { type: "equalRadius", inputs: [primitive("A1"), primitive("C1")], constraint: { type: "equalRadius", a: "C1", b: "A1" } },
+    { type: "symmetry", inputs: [line("L2"), point("P2"), point("P4")], constraint: { type: "symmetry", p1: "P2", p2: "P4", axis: "L2" } },
+    { type: "tangent", inputs: [line("L1"), primitive("C1")], constraint: { type: "lineCircleTangent", line: "L1", primitive: "C1" } },
+    { type: "distance", inputs: [line("L1"), line("L2")], expected: { action: "place-dimension", targetKind: "angle" } },
+    { type: "parallel", inputs: [line("L1"), line("LS2")], expected: { error: expect.any(String) } },
+  ];
+  for (const scenario of cases) {
+    const result = await page.evaluate(({ type, inputs }) => window.__jot2dTest.resolveConstraintIntentForTest(type, inputs), { type: scenario.type, inputs: scenario.inputs });
+    if (scenario.constraint) expect(result).toMatchObject({ action: "commit", constraint: scenario.constraint });
+    else if (scenario.expected === null) expect(result).toBeNull();
+    else expect(result).toMatchObject(scenario.expected);
+    expect(await page.evaluate(() => window.__jot2dTest.constraintInputStateForTest())).toEqual(before.input);
+    expect(await page.evaluate(() => window.__jot2dTest.historyState())).toEqual(before.history);
+    expect(exactPersistedDocument(await page.evaluate(() => window.__jot2dTest.serializedModelForTest()))).toEqual(exactPersistedDocument(before.document));
+  }
+});
+
 test("complete documents are byte-shape stable apart from savedAt", async ({ page }) => {
-  test.fail(true, "Known Phase 0 gap: angle dimensions serialize unused linear offsets as null, then reload them as zero");
-  await openTestApp(page);
+  await openTestDocument(page);
   const first = await importFixture(page);
   const reload = await page.evaluate(
     ({ data, fileName }) => window.__jot2dTest.loadDocumentFixtureForDragTest(data, fileName),
@@ -268,7 +245,7 @@ test("complete documents are byte-shape stable apart from savedAt", async ({ pag
 });
 
 test("legacy v1 documents normalize to stable current data and reserve new ids", async ({ page }) => {
-  await openTestApp(page);
+  await openTestDocument(page);
   const legacy = JSON.parse(fs.readFileSync(path.resolve(__dirname, "../../test-data/テスト図形.json"), "utf8"));
   const first = await importFixture(page, legacy, "legacy-v1.json");
   expect(first.version).toBe(22);
@@ -296,7 +273,7 @@ test("legacy v1 documents normalize to stable current data and reserve new ids",
 });
 
 test("direct geometry deletion removes constraints and undo restores the document", async ({ page }) => {
-  await openTestApp(page);
+  await openTestDocument(page);
   const before = await importFixture(page);
   const historyBefore = await page.evaluate(() => window.__jot2dTest.historyState());
 
@@ -316,7 +293,7 @@ test("direct geometry deletion removes constraints and undo restores the documen
 });
 
 test("legacy Presentation payload is discarded on import", async ({ page }) => {
-  await openTestApp(page);
+  await openTestDocument(page);
   const normalized = await importFixture(page);
   expect(normalized).not.toHaveProperty("presentationSheets");
   expect(normalized).not.toHaveProperty("activePresentationSheetId");
@@ -324,7 +301,7 @@ test("legacy Presentation payload is discarded on import", async ({ page }) => {
 });
 
 test("sketch subtree deletion cleans geometry, constraints, and annotations and restores on undo", async ({ page }) => {
-  await openTestApp(page);
+  await openTestDocument(page);
   const before = await importFixture(page);
   const historyBefore = await page.evaluate(() => window.__jot2dTest.historyState());
 
@@ -349,7 +326,7 @@ test("sketch subtree deletion cleans geometry, constraints, and annotations and 
 });
 
 test("block instance and definition deletion clean projection references", async ({ page }) => {
-  await openTestApp(page);
+  await openTestDocument(page);
   const beforeInstanceDelete = await importFixture(page);
   await page.evaluate(() => window.__jot2dTest.selectGeometryIdsForTest({ blockInstances: ["BI1"] }));
   page.once("dialog", (dialog) => dialog.accept());
@@ -377,7 +354,7 @@ test("block instance and definition deletion clean projection references", async
 });
 
 test("block sketch disabling removes constraints and ignores discarded legacy Presentation references", async ({ page }) => {
-  await openTestApp(page);
+  await openTestDocument(page);
   const before = await importFixture(page);
   expect(await page.evaluate(() => window.__jot2dTest.setFirstBlockInstanceSketches(["S1"]))).toBe(true);
   const disabled = await page.evaluate(() => window.__jot2dTest.serializedModelForTest());
@@ -393,7 +370,7 @@ test("block sketch disabling removes constraints and ignores discarded legacy Pr
 });
 
 test("selection, hit testing, viewport changes, and canceled commands do not mutate model data", async ({ page }) => {
-  await openTestApp(page);
+  await openTestDocument(page);
   const before = await importFixture(page);
   const historyBefore = await page.evaluate(() => window.__jot2dTest.historyState());
 
@@ -422,20 +399,41 @@ test("selection, hit testing, viewport changes, and canceled commands do not mut
   expect(semanticDocument(await page.evaluate(() => window.__jot2dTest.serializedModelForTest()))).toEqual(semanticDocument(before));
 });
 
-test("canceling an in-progress line does not add a history entry", async ({ page }) => {
-  test.fail(true, "Known Phase 0 gap: line-start rollback restores the model but leaves an extra history entry");
-  await openTestApp(page);
-  await importFixture(page);
+test("canceling an in-progress line preserves history and redo", async ({ page }) => {
+  await openTestDocument(page);
+  const before = await importFixture(page);
   const historyBefore = await page.evaluate(() => window.__jot2dTest.historyState());
   const viewport = await page.evaluate(() => window.__jot2dTest.focusWorldForTest({ x: 900, y: 900 }, 1));
+  const x = viewport.canvas.left + viewport.canvas.width / 2;
+  const y = viewport.canvas.top + viewport.canvas.height / 2;
   await page.click("#toolLine");
-  await page.mouse.click(viewport.canvas.left + viewport.canvas.width / 2, viewport.canvas.top + viewport.canvas.height / 2);
+  await page.mouse.click(x, y);
+  expect(await page.evaluate(() => window.__jot2dTest.historyState())).toEqual(historyBefore);
   await page.keyboard.press("Escape");
   expect(await page.evaluate(() => window.__jot2dTest.historyState())).toEqual(historyBefore);
+  expect(exactPersistedDocument(await page.evaluate(() => window.__jot2dTest.serializedModelForTest()))).toEqual(exactPersistedDocument(before));
+
+  await page.click("#toolLine");
+  await page.mouse.click(x - 100, y);
+  await page.mouse.click(x + 100, y + 50);
+  await page.keyboard.press("Escape");
+  const completed = await page.evaluate(() => window.__jot2dTest.serializedModelForTest());
+  expect(completed.lines).toHaveLength(before.lines.length + 1);
+  expect(await page.evaluate(() => window.__jot2dTest.historyState())).toEqual({ ...historyBefore, undoCount: historyBefore.undoCount + 1 });
+  await page.click("#undoBtn");
+  expect(exactPersistedDocument(await page.evaluate(() => window.__jot2dTest.serializedModelForTest()))).toEqual(exactPersistedDocument(before));
+  const afterUndo = await page.evaluate(() => window.__jot2dTest.historyState());
+  await page.click("#toolLine");
+  await page.mouse.click(x, y);
+  await page.keyboard.press("Escape");
+  expect(await page.evaluate(() => window.__jot2dTest.historyState())).toEqual(afterUndo);
+  expect(exactPersistedDocument(await page.evaluate(() => window.__jot2dTest.serializedModelForTest()))).toEqual(exactPersistedDocument(before));
+  await page.click("#redoBtn");
+  expect(exactPersistedDocument(await page.evaluate(() => window.__jot2dTest.serializedModelForTest()))).toEqual(exactPersistedDocument(completed));
 });
 
 test("history uses one transaction per edit, restores exact state, and clears redo after a branch", async ({ page }) => {
-  await openTestApp(page);
+  await openTestDocument(page);
   const before = await importFixture(page);
   const baselineHistory = await page.evaluate(() => window.__jot2dTest.historyState());
   const viewport = await page.evaluate(() => window.__jot2dTest.focusWorldForTest({ x: 900, y: 900 }, 1));
@@ -461,7 +459,7 @@ test("history uses one transaction per edit, restores exact state, and clears re
 });
 
 test("block editor history is isolated and cancel or root undo restores exact document state", async ({ page }) => {
-  await openTestApp(page);
+  await openTestDocument(page);
   const before = await importFixture(page);
   const baselineHistory = await page.evaluate(() => window.__jot2dTest.historyState());
 
@@ -490,7 +488,7 @@ test("block editor history is isolated and cancel or root undo restores exact do
 });
 
 test("document annotation edits never modify geometry or solve state", async ({ page }) => {
-  await openTestApp(page);
+  await openTestDocument(page);
   await page.evaluate(() => window.__jot2dTest.resetForAnnotationDrag());
   const before = await page.evaluate(() => window.__jot2dTest.serializedModelForTest());
   const analysisBefore = await page.evaluate(() => window.__jot2dTest.constraintAnalysisForTest());
@@ -510,26 +508,26 @@ test("document annotation edits never modify geometry or solve state", async ({ 
 });
 
 test("visual regression: geometry and constraint states", async ({ page }) => {
-  await openTestApp(page);
+  await openTestDocument(page);
   await page.evaluate(() => window.__jot2dTest.resetForSupportConstraintStatus());
   await expect(page.locator("#canvas")).toHaveScreenshot("phase0-geometry-constraints.png", { animations: "disabled", maxDiffPixelRatio: 0.002 });
 });
 
 test("visual regression: nested block projections", async ({ page }) => {
-  await openTestApp(page);
+  await openTestDocument(page);
   await importFixture(page);
   await page.evaluate(() => window.__jot2dTest.focusWorldForTest({ x: 0, y: 170 }, 2.2));
   await expect(page.locator("#canvas")).toHaveScreenshot("phase0-nested-block.png", { animations: "disabled", maxDiffPixelRatio: 0.002 });
 });
 
 test("visual regression: unified document annotations", async ({ page }) => {
-  await openTestApp(page);
+  await openTestDocument(page);
   await page.evaluate(() => window.__jot2dTest.resetForAnnotationDrag());
   await expect(page.locator("#canvas")).toHaveScreenshot("phase0-annotations.png", { animations: "disabled", maxDiffPixelRatio: 0.002 });
 });
 
 test("visual regression: block editor", async ({ page }) => {
-  await openTestApp(page);
+  await openTestDocument(page);
   await page.evaluate(() => window.__jot2dTest.resetForBlockCreationUi());
   await openBlocksExplorer(page);
   await page.click("#toolCreateBlock");

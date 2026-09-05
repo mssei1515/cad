@@ -1,31 +1,8 @@
-const { test, expect } = require("./test-fixture");
-const { spawn } = require("child_process");
+const { test, expect, openTestDocument } = require("./test-fixture");
 const fs = require("fs");
-const http = require("http");
 const path = require("path");
 
-const host = "127.0.0.1";
-const port = Number(process.env.JOT2D_E2E_PORT || 8765) + 6;
-const baseUrl = `http://${host}:${port}`;
 const fixture = JSON.parse(fs.readFileSync(path.resolve(__dirname, "../../test-data/意地悪ドラッグ完全拘束.json"), "utf8"));
-let serverProcess = null;
-
-function waitForServer(url, timeoutMs = 10000) {
-  const startedAt = Date.now();
-  return new Promise((resolve, reject) => {
-    const check = () => {
-      const request = http.get(url, (response) => {
-        response.resume();
-        resolve();
-      });
-      request.on("error", () => {
-        if (Date.now() - startedAt > timeoutMs) reject(new Error(`Timed out waiting for ${url}`));
-        else setTimeout(check, 100);
-      });
-    };
-    check();
-  });
-}
 
 function matchesConstraint(constraint, selector) {
   return Object.entries(selector).every(([key, value]) => constraint[key] === value);
@@ -91,18 +68,6 @@ const dragPaths = [
   { name: "jump-reverse", deltas: [[80, 0], [-80, 0], [0, 80], [0, -80], [0, 0]] },
 ];
 
-test.beforeAll(async () => {
-  serverProcess = spawn(process.execPath, ["tools/serve.js", "--host", host, "--port", String(port)], {
-    cwd: path.resolve(__dirname, "../.."),
-    stdio: "ignore",
-  });
-  await waitForServer(`${baseUrl}/index.html`);
-});
-
-test.afterAll(() => {
-  if (serverProcess) serverProcess.kill();
-});
-
 test("adversarial mixed-scale fixture is completely constrained", async ({ page }) => {
   test.setTimeout(120000);
   const fixedPointIds = fixture.points.filter((point) => point.fixed).map((point) => point.id);
@@ -135,8 +100,7 @@ test("adversarial mixed-scale fixture is completely constrained", async ({ page 
     lineAngles: lineAngles.length,
   });
 
-  await page.goto(`${baseUrl}/index.html?test=1`);
-  await page.waitForFunction(() => window.__jot2dTest);
+  await openTestDocument(page);
   const imported = await page.evaluate((data) => window.__jot2dTest.importDocumentNameFixture(data, "意地悪ドラッグ完全拘束.json"), fixture);
   const analysis = await page.evaluate(() => window.__jot2dTest.constraintAnalysisForTest());
   const duplicateLabels = await page.locator(".constraint-item.duplicate").allTextContents();
@@ -166,8 +130,7 @@ test("adversarial mixed-scale fixture is completely constrained", async ({ page 
 
 test("recommended removals expose smooth draggable degrees of freedom", async ({ page }) => {
   test.setTimeout(600000);
-  await page.goto(`${baseUrl}/index.html?test=1`);
-  await page.waitForFunction(() => window.__jot2dTest);
+  await openTestDocument(page);
   const summaries = [];
   const selectedCaseNames = new Set((process.env.CAD_ADVERSARIAL_CASE || "").split(",").map((name) => name.trim()).filter(Boolean));
   const selectedCases = selectedCaseNames.size > 0

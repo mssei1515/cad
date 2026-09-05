@@ -1,29 +1,4 @@
-const { test, expect } = require("./test-fixture");
-const { spawn } = require("child_process");
-const http = require("http");
-const path = require("path");
-
-const host = "127.0.0.1";
-const port = Number(process.env.JOT2D_E2E_PORT || 8765) + 9;
-const baseUrl = `http://${host}:${port}`;
-let serverProcess = null;
-
-function waitForServer(url, timeoutMs = 10000) {
-  const startedAt = Date.now();
-  return new Promise((resolve, reject) => {
-    const check = () => {
-      const request = http.get(url, (response) => {
-        response.resume();
-        resolve();
-      });
-      request.on("error", () => {
-        if (Date.now() - startedAt > timeoutMs) reject(new Error(`Timed out waiting for ${url}`));
-        else setTimeout(check, 100);
-      });
-    };
-    check();
-  });
-}
+const { test, expect, openTestDocument } = require("./test-fixture");
 
 function centerlineFixture() {
   return {
@@ -69,8 +44,7 @@ function centerlineFixture() {
 }
 
 async function openFixture(page) {
-  await page.goto(`${baseUrl}/index.html?test=1`);
-  await page.waitForFunction(() => window.__jot2dTest);
+  await openTestDocument(page);
   const loaded = await page.evaluate((fixture) => {
     const result = window.__jot2dTest.loadDocumentFixtureForDragTest(fixture, "centerline-v8.json");
     const viewport = window.__jot2dTest.focusWorldForTest({ x: 0, y: 35 }, 2);
@@ -84,18 +58,6 @@ async function clickWorld(page, point) {
   const client = await page.evaluate((value) => window.__jot2dTest.worldClientPositionForTest(value), point);
   await page.mouse.click(client.x, client.y);
 }
-
-test.beforeAll(async () => {
-  serverProcess = spawn(process.execPath, ["tools/serve.js", "--host", host, "--port", String(port)], {
-    cwd: path.resolve(__dirname, "../.."),
-    stdio: "ignore",
-  });
-  await waitForServer(`${baseUrl}/index.html`);
-});
-
-test.afterAll(() => {
-  if (serverProcess) serverProcess.kill();
-});
 
 test("legacy midpoint constraints are removed and midpoint snapping is no longer offered", async ({ page }) => {
   await openFixture(page);
