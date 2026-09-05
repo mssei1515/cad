@@ -90,6 +90,7 @@
     ArcEndpointOnLineConstraint,
     ArcEndpointFixedConstraint,
     LineFixedConstraint,
+    GeometryFixedConstraint,
     HorizontalConstraint,
     VerticalConstraint,
     PointHorizontalConstraint,
@@ -5348,6 +5349,7 @@
       for (const key of ["x", "labelX"]) if (Number.isFinite(Number(data.dimension[key]))) data.dimension[key] = Number(data.dimension[key]) - origin.x;
       for (const key of ["y", "labelY"]) if (Number.isFinite(Number(data.dimension[key]))) data.dimension[key] = Number(data.dimension[key]) - origin.y;
     }
+    translateFixedConstraintValues(data, -origin.x, -origin.y);
     const cloned = deserializeConstraint(data, pointById, lineById, primitiveById);
     if (!cloned) throw new Error("内部拘束を複製できません");
     cloned.sketchId = constraint.sketchId || DEFAULT_SKETCH_ID;
@@ -6022,6 +6024,15 @@
       point.y += dy;
     }
     for (const constraint of definition.constraints) {
+      if (constraint instanceof GeometryFixedConstraint || constraint instanceof ArcEndpointFixedConstraint) {
+        constraint.x += dx;
+        constraint.y += dy;
+      } else if (constraint instanceof LineFixedConstraint) {
+        constraint.p1x += dx;
+        constraint.p2x += dx;
+        constraint.p1y += dy;
+        constraint.p2y += dy;
+      }
       const dimension = constraint.dimension;
       if (!dimension) continue;
       for (const key of ["x", "labelX"]) if (Number.isFinite(Number(dimension[key]))) dimension[key] = Number(dimension[key]) + dx;
@@ -7312,6 +7323,16 @@
       constraintClass: LineFixedConstraint,
       serialize: (c) => ({ line: constraintGeometryId(c.line), p1x: c.p1x, p1y: c.p1y, p2x: c.p2x, p2y: c.p2y, enabled: c.enabled }),
       deserialize: (data, refs) => new LineFixedConstraint(refs.line(data.line), Number(data.p1x), Number(data.p1y), Number(data.p2x), Number(data.p2y)),
+    },
+    {
+      type: "geometryFixed",
+      constraintClass: GeometryFixedConstraint,
+      serialize: (c) => ({ kind: c.kind, geometry: constraintGeometryId(c.geometry), x: c.x, y: c.y, ...(c.kind !== "point" ? { radius: c.radius } : {}), ...(c.kind === "arc" ? { startAngle: c.startAngle, endAngle: c.endAngle } : {}), enabled: c.enabled }),
+      deserialize: (data, refs) => {
+        const fields = ["x", "y", ...(data.kind !== "point" ? ["radius"] : []), ...(data.kind === "arc" ? ["startAngle", "endAngle"] : [])];
+        if (!["point", "circle", "arc"].includes(data.kind) || fields.some((key) => typeof data[key] !== "number" || !Number.isFinite(data[key])) || (data.kind !== "point" && data.radius <= 0)) throw new Error("Invalid fixed geometry");
+        return new GeometryFixedConstraint(refs.geometry(data.kind, data.geometry), data);
+      },
     },
     {
       type: "horizontal",
@@ -9573,7 +9594,7 @@
 
   function sketchHasFixedGeometry(sketchId = activeSketchId()) {
     if (model.points.some((point) => elementSketchId(point) === sketchId && point.fixed)) return true;
-    return model.constraints.some((constraint) => constraintSketchId(constraint) === sketchId && constraint instanceof LineFixedConstraint);
+    return model.constraints.some((constraint) => constraintSketchId(constraint) === sketchId && (constraint instanceof LineFixedConstraint || constraint instanceof GeometryFixedConstraint));
   }
 
   function scaleSketchForFirstDimension(sketchId, target, targetValue, dimension) {
@@ -9643,11 +9664,11 @@
   }
 
   function findArcEndpointFixedConstraint(arc, endpoint) {
-    return model.constraints.find((c) => c.enabled !== false && c instanceof ArcEndpointFixedConstraint && c.arc === arc && c.endpoint === endpoint);
+    return model.constraints.find((c) => c.enabled !== false && c instanceof ArcEndpointFixedConstraint && sameConstraintDisplayElement(c.arc, arc) && c.endpoint === endpoint);
   }
 
   function findLineFixedConstraint(line) {
-    return model.constraints.find((c) => c.enabled !== false && c instanceof LineFixedConstraint && c.line === line);
+    return model.constraints.find((c) => c.enabled !== false && c instanceof LineFixedConstraint && sameConstraintDisplayElement(c.line, line));
   }
 
   function pointLockedByLineFixed(point) {
@@ -10775,6 +10796,7 @@
   }
 
   function constraintReferencesPoint(c, point) {
+    if (c instanceof GeometryFixedConstraint) return c.geometry === point || c.geometry.center === point;
     if (c instanceof SketchProjectionConstraint) return constraintGraphNodes(c).includes(point);
     if (c instanceof PointOnSplineConstraint) return c.point === point || c.spline.fitPoints.includes(point);
     if (c instanceof SplineLineTangentConstraint) return c.spline.fitPoints.includes(point) || c.line.p1 === point || c.line.p2 === point;
@@ -10850,6 +10872,7 @@
   }
 
   function constraintReferencesPrimitive(c, primitive) {
+    if (c instanceof GeometryFixedConstraint) return c.geometry === primitive;
     if (c instanceof SketchProjectionConstraint) return c.source === primitive || c.target === primitive;
     if (c instanceof PointOnSplineConstraint) return c.spline === primitive;
     if (c instanceof SplineLineTangentConstraint) return c.spline === primitive;
@@ -10874,7 +10897,10 @@
 
   function constraintGraphNodes(c, options = {}) {
     const nodes = new Set();
-    if (c instanceof SketchProjectionConstraint) {
+    if (c instanceof GeometryFixedConstraint) {
+      addNode(nodes, c.geometry);
+      if (c.geometry.center) addNode(nodes, c.geometry.center);
+    } else if (c instanceof SketchProjectionConstraint) {
       for (const item of [c.source, c.target]) {
         addNode(nodes, item);
         if (item instanceof Line) {
@@ -11074,6 +11100,7 @@
       ["offset", "オフセット図形ID", "Offset geometry ID"],
       ["arc", "円弧ID", "Arc ID"],
       ["primitive", "図形ID", "Geometry ID"],
+      ["geometry", "図形ID", "Geometry ID"],
       ["spline", "スプラインID", "Spline ID"],
       ["a", "1つ目の図形ID", "First geometry ID"],
       ["b", "2つ目の図形ID", "Second geometry ID"],
@@ -11735,7 +11762,7 @@
 
     const constraints = model.constraints.map((constraint) => {
       if (constraint instanceof SketchProjectionConstraint) return null;
-      if (constraint instanceof LineFixedConstraint || constraint instanceof ArcEndpointFixedConstraint) return null;
+      if (constraint instanceof LineFixedConstraint || constraint instanceof ArcEndpointFixedConstraint || constraint instanceof GeometryFixedConstraint) return null;
       const nodes = constraintGraphNodes(constraint);
       if (nodes.length === 0 || !nodes.every((node) => selectedNodes.has(node) || Boolean(node?.blockProjection && selectedBlockProjectionIds.has(node.id)))) return null;
       return decorateSerializedConstraint(serializeConstraint(constraint), constraint);
@@ -11819,20 +11846,25 @@
     return value;
   }
 
+  function translateFixedConstraintValues(data, dx, dy) {
+    if (data.type === "arcEndpointFixed" || data.type === "geometryFixed") {
+      data.x += dx;
+      data.y += dy;
+    } else if (data.type === "lineFixed") {
+      data.p1x += dx;
+      data.p2x += dx;
+      data.p1y += dy;
+      data.p2y += dy;
+    }
+  }
+
   function translatedClipboardConstraintData(source, idMap, dx, dy) {
     const data = remapClipboardValue(source, idMap);
     if (data.dimension) {
       for (const key of ["x", "labelX"]) if (Number.isFinite(Number(data.dimension[key]))) data.dimension[key] = Number(data.dimension[key]) + dx;
       for (const key of ["y", "labelY"]) if (Number.isFinite(Number(data.dimension[key]))) data.dimension[key] = Number(data.dimension[key]) + dy;
     }
-    if (data.type === "arcEndpointFixed") {
-      if (Number.isFinite(Number(data.x))) data.x = Number(data.x) + dx;
-      if (Number.isFinite(Number(data.y))) data.y = Number(data.y) + dy;
-    }
-    if (data.type === "lineFixed") {
-      for (const key of ["p1x", "p2x"]) if (Number.isFinite(Number(data[key]))) data[key] = Number(data[key]) + dx;
-      for (const key of ["p1y", "p2y"]) if (Number.isFinite(Number(data[key]))) data[key] = Number(data[key]) + dy;
-    }
+    translateFixedConstraintValues(data, dx, dy);
     delete data.reference;
     delete data.referenceSketchId;
     return data;
@@ -14631,7 +14663,7 @@
   }
 
   function constraintTargetHint(type) {
-    if (type === "fixed") return applicationText("固定／解除する点、線、円弧端点、またはブロックを選択してください。Escで終了します。", "Select a point, line, arc endpoint, or block to fix/unfix. Press Esc to finish.");
+    if (type === "fixed") return applicationText("固定／解除する点、線、円、円弧、円弧端点を選択してください。ブロック内も図形単位で固定します。Escで終了します。", "Select a point, line, circle, arc, or arc endpoint to fix/unfix. Geometry inside blocks is fixed individually. Press Esc to finish.");
     if (type === "distance") {
       if (constraintOperands.length === 1 && constraintOperands[0]?.kind === "line") {
         return applicationText("2本目の線を選ぶと線間・角度寸法、円を選ぶと円中心距離寸法、空白をクリックすると線長寸法になります。Enterまたは同じ線のダブルクリックでも線長を確定できます。", "Select a second line for a line-to-line or angle dimension, a circle for a center-to-line dimension, or click empty space for a line-length dimension. Enter or double-clicking the same line also confirms line length.");
@@ -14958,19 +14990,17 @@
   function handleConstraintOperandClick(pointer, type, hits = {}) {
     const operand = hitConstraintOperand(pointer, type, hits);
     if (type === "fixed") {
-      const supported = operand && (operand.element?.blockInstance || ["point", "line", "arc-endpoint"].includes(operand.kind));
-      if (!supported || operand.relation !== "active") {
+      const supported = operand && (["point", "line", "arc-endpoint"].includes(operand.kind) || (operand.kind === "primitive" && (operand.primitive instanceof Circle || operand.primitive instanceof Arc)));
+      if (!supported || operand.relation !== "active" || operand.element?.derivedProjection) {
         setHint(constraintTargetHint(type), "error");
         return true;
       }
       clearSelection();
-      if (operand.element?.blockInstance) selectedBlockInstances = [operand.element.blockInstance];
-      else {
-        constraintOperands = [operand];
-        syncSelectionFromConstraintOperands();
-      }
+      constraintOperands = [operand];
+      syncSelectionFromConstraintOperands();
       const command = pendingConstraintCommand;
-      if (toggleSelectedFixed()) clearSelection();
+      const individualGeometry = operand.element?.blockProjection || operand.kind === "primitive";
+      if (individualGeometry ? toggleGeometryFixedOperand(operand) : toggleSelectedFixed()) clearSelection();
       pendingConstraintCommand = command;
       updateGeometrySelectionUI();
       updateToolbar();
@@ -15783,7 +15813,7 @@
   }
 
   function constraintToolbarIcon(constraint, fixedPoint = false) {
-    if (fixedPoint || constraint instanceof LineFixedConstraint || constraint instanceof ArcEndpointFixedConstraint) return toolbarSvgMarkup("#fixPointBtn");
+    if (fixedPoint || constraint instanceof LineFixedConstraint || constraint instanceof ArcEndpointFixedConstraint || constraint instanceof GeometryFixedConstraint) return toolbarSvgMarkup("#fixPointBtn");
     if (constraint instanceof SketchProjectionConstraint) return toolbarSvgMarkup("#toolSketchProjection");
     if (constraint instanceof ParallelLinesCenterlineConstraint || constraint instanceof PointPairCenterlineConstraint) return toolbarSvgMarkup("#toolCenterline");
     if (isDimensionConstraint(constraint)) return toolbarSvgMarkup('[data-constraint="distance"]');
@@ -24226,6 +24256,26 @@
         startConstraintTargetCommand(type);
       }
     });
+  }
+
+  function toggleGeometryFixedOperand(operand) {
+    const geometry = operand.element;
+    if (!guardSketchProjectionShapeEdit([geometry], { action: applicationText("固定", "Fix") })) return false;
+    let existing;
+    let constraint;
+    if (operand.kind === "line") {
+      existing = findLineFixedConstraint(geometry);
+      constraint = existing || new LineFixedConstraint(geometry);
+    } else if (operand.kind === "arc-endpoint") {
+      existing = findArcEndpointFixedConstraint(geometry, operand.endpoint);
+      const position = arcEndpointPoint(geometry, operand.endpoint);
+      constraint = existing || new ArcEndpointFixedConstraint(geometry, operand.endpoint, position.x, position.y);
+    } else {
+      existing = model.constraints.find((item) => item.enabled !== false && item instanceof GeometryFixedConstraint && sameConstraintDisplayElement(item.geometry, geometry));
+      constraint = existing || new GeometryFixedConstraint(geometry);
+    }
+    if (existing) return deleteElements({ constraints: [existing] });
+    return commitNewConstraint("fixed", constraint);
   }
 
   function toggleSelectedFixed() {

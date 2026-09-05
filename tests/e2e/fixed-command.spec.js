@@ -71,7 +71,7 @@ test("unsupported targets and cancellation do not change geometry or history", a
   const history = await page.evaluate(() => window.__jot2dTest.historyState());
   const button = page.locator("#fixPointBtn");
   await button.click();
-  for (const [x, y] of [[100, 80], [100, -60], [0, -90]]) await clickWorld(page, x, y);
+  for (const [x, y] of [[100, -60], [0, -90]]) await clickWorld(page, x, y);
   await expect(button).toHaveAttribute("aria-pressed", "true");
   expect(await saved(page)).toEqual(before);
   expect(await page.evaluate(() => window.__jot2dTest.historyState())).toEqual(history);
@@ -83,7 +83,21 @@ test("unsupported targets and cancellation do not change geometry or history", a
   expect(await saved(page)).toEqual(before);
 });
 
-test("fixed command fixes the owning block when a projected line is clicked", async ({ page }) => {
+test("fixed command fixes ordinary circles and arcs including radius and arc angles", async ({ page }) => {
+  await loadFixture(page);
+  await page.click("#fixPointBtn");
+  await clickWorld(page, 100, 80);
+  await clickWorld(page, -100 + 20 / Math.sqrt(2), 60 + 20 / Math.sqrt(2));
+  expect((await saved(page)).constraints).toEqual([
+    expect.objectContaining({ type: "geometryFixed", kind: "circle", geometry: "C1", x: 100, y: 60, radius: 20 }),
+    expect.objectContaining({ type: "geometryFixed", kind: "arc", geometry: "A1", x: -100, y: 60, radius: 20, startAngle: 0, endAngle: Math.PI / 2 }),
+  ]);
+  await clickWorld(page, 100, 80);
+  await clickWorld(page, -100 + 20 / Math.sqrt(2), 60 + 20 / Math.sqrt(2));
+  expect((await saved(page)).constraints).toHaveLength(0);
+});
+
+test("fixed command fixes individual geometry in a rotation-locked block", async ({ page }) => {
   await openTestDocument(page);
   await page.evaluate(() => window.__jot2dTest.resetForBlockCreationUi());
   await page.click("#toolCreateBlock");
@@ -99,10 +113,13 @@ test("fixed command fixes the owning block when a projected line is clicked", as
   const y = instance.y + (a.y + b.y) / 2;
   await page.locator("#fixPointBtn").click();
   await clickWorld(page, x, y);
-  expect((await saved(page)).blockInstances[0].fixed).toBe(true);
+  expect((await saved(page)).blockInstances[0]).toMatchObject({ fixed: false, rotationLocked: true });
+  expect((await saved(page)).constraints).toEqual([expect.objectContaining({ type: "lineFixed" })]);
   await clickWorld(page, x, y);
   expect((await saved(page)).blockInstances[0].fixed).toBe(false);
+  expect((await saved(page)).constraints).toHaveLength(0);
   await clickWorld(page, instance.x + a.x, instance.y + a.y);
-  expect((await saved(page)).blockInstances[0].fixed).toBe(true);
+  expect((await saved(page)).blockInstances[0]).toMatchObject({ fixed: false, rotationLocked: true });
+  expect((await saved(page)).constraints).toEqual([expect.objectContaining({ type: "geometryFixed", kind: "point" })]);
   expect((await saved(page)).blockDefinitions[0].points).toEqual(definition.points);
 });

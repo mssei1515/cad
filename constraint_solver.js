@@ -526,6 +526,33 @@
     }
   }
 
+  class GeometryFixedConstraint extends Constraint {
+    constructor(geometry, values = null) {
+      super(`図形固定 ${geometry.id}`, 1);
+      this.geometry = geometry;
+      this.kind = geometry instanceof Arc ? "arc" : geometry instanceof Circle ? "circle" : "point";
+      const center = this.kind === "point" ? geometry : geometry.center;
+      this.x = values ? values.x : center.x;
+      this.y = values ? values.y : center.y;
+      if (this.kind !== "point") this.radius = values ? values.radius : geometry.radius();
+      if (this.kind === "arc") {
+        this.startAngle = values ? values.startAngle : geometry.startAngle;
+        this.endAngle = values ? values.endAngle : geometry.endAngle;
+      }
+    }
+
+    rawError() {
+      const center = this.kind === "point" ? this.geometry : this.geometry.center;
+      const error = [center.x - this.x, center.y - this.y];
+      if (this.kind !== "point") error.push(this.geometry.radius() - this.radius);
+      if (this.kind === "arc") {
+        error.push(normalizeAngleSigned(this.geometry.startAngle - this.startAngle) * this.radius);
+        error.push(normalizeAngleSigned(this.geometry.endAngle - this.endAngle) * this.radius);
+      }
+      return error;
+    }
+  }
+
   class LineFixedConstraint extends Constraint {
     constructor(line, p1x = line.p1.x, p1y = line.p1.y, p2x = line.p2.x, p2y = line.p2.y) {
       super(`線固定 ${line.id}`, 1);
@@ -1905,6 +1932,7 @@
     ArcEndpointOnLineConstraint,
     ArcEndpointFixedConstraint,
     LineFixedConstraint,
+    GeometryFixedConstraint,
     HorizontalConstraint,
     VerticalConstraint,
     PointHorizontalConstraint,
