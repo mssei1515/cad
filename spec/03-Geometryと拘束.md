@@ -159,7 +159,7 @@ Lineのドラッグは、拘束構成とPointer移動量に応じて次のよう
 
 ### ドラッグの確定と失敗
 
-Pointer-upでの最終検証と失敗時の復元は、[編集の確定と失敗](./13-編集の確定と失敗.md)のTX-02および「Geometryドラッグの確定」に従う。
+Pointer-upでの最終検証と失敗時の復元は、[編集の確定と失敗](contracts/編集と履歴.md)のTX-02および「Geometryドラッグの確定」に従う。
 
 ## 4. 拘束コマンド
 
@@ -261,7 +261,7 @@ Documentは`units: { length: "mm" }`を持ち、Geometry座標、半径、長さ
 
 ### Parameterを含む確定操作
 
-評価手順、反復上限、収束判定は[Parameter](./08-Parameter.md)の「評価とsolve」に従う。失敗時の復元と履歴は[編集の確定と失敗](./13-編集の確定と失敗.md)のTX-01に従う。
+評価手順、反復上限、収束判定は[Parameter](./08-Parameter.md)の「評価とsolve」に従う。失敗時の復元と履歴は[編集の確定と失敗](contracts/編集と履歴.md)のTX-01に従う。
 
 ### 拘束状態の表示
 
@@ -276,8 +276,8 @@ Geometry は解析結果により次の状態で描き分ける。
 
 ### 参照元変更の影響
 
-依存Sketchのsolve失敗時の扱いは、[編集の確定と失敗](./13-編集の確定と失敗.md)の操作別の復元範囲に従う。一般の参照更新と、ドラッグ・Parameter適用の操作全体の確定を区別する。
+依存Sketchのsolve失敗時の扱いは、[編集の確定と失敗](contracts/編集と履歴.md)の操作別の復元範囲に従う。一般の参照更新と、ドラッグ・Parameter適用の操作全体の確定を区別する。
 
 ## 9. Geometry の削除
 
-削除可否、Constraint・Leader・Hatchの扱い、共有Pointの整理、履歴は[削除と参照](./14-削除と参照.md)に従う。Geometryの削除と、所属Sketch全体の削除を区別する。
+削除可否、Constraint・Leader・Hatchの扱い、共有Pointの整理、履歴は[削除と参照](contracts/削除と参照.md)に従う。Geometryの削除と、所属Sketch全体の削除を区別する。

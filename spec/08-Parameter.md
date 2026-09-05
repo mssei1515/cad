@@ -31,9 +31,9 @@ Document全体と各Block Definitionは、互いに独立したParameter名前�
 4. 拘束をsolveする。
 5. 参照寸法を再測定して収束を確認する。
 
-各参照値の相対変化が`1e-7 × max(1, |value|)`以内でsolverも成功した場合に収束とする。ドラッグ中はこのfeedback反復を行わず、pointer-upで実行する。失敗時の復元と履歴は[編集の確定と失敗](./13-編集の確定と失敗.md)のTX-01／02に従う。
+各参照値の相対変化が`1e-7 × max(1, |value|)`以内でsolverも成功した場合に収束とする。ドラッグ中はこのfeedback反復を行わず、pointer-upで実行する。失敗時の復元と履歴は[編集の確定と失敗](contracts/編集と履歴.md)のTX-01／02に従う。
 
-Block Parameterの適用はDefinition内部を再計算した後、親Definition、全Instance Projection、Document拘束へ順に反映する。失敗時の復元と履歴は[編集の確定と失敗](./13-編集の確定と失敗.md)のTX-04に従う。
+Block Parameterの適用はDefinition内部を再計算した後、親Definition、全Instance Projection、Document拘束へ順に反映する。失敗時の復元と履歴は[編集の確定と失敗](contracts/編集と履歴.md)のTX-04に従う。
 
 ## 5. 編集
 
@@ -47,7 +47,7 @@ Sketch TreeのConstraint分類は拘束寸法と参照寸法の両方を表示�
 
 ## 6. 削除・コピー・Block化
 
-削除後も残る式からのsymbol参照は、[削除と参照](./14-削除と参照.md)のDEL-01に従って検査する。Geometry等の削除に伴って寸法を除去する場合も同じ規則を適用する。
+削除後も残る式からのsymbol参照は、[削除と参照](contracts/削除と参照.md)のDEL-01に従って検査する。Geometry等の削除に伴って寸法を除去する場合も同じ規則を適用する。
 
 同じ名前空間へ寸法をコピーした場合は新しい`dN`を付与し、同時にコピーした寸法間の参照だけを新名称へ書き換える。別の名前空間へのコピーでは拘束寸法式を現在の評価値による数値式へ変換する。
 
