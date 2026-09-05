@@ -24,6 +24,6 @@
 
 ## 開発資料
 
-[移行計画と進捗](../docs/refactoring/migration-plan.md)、[実装対応表](../docs/refactoring/implementation-map.md)、[改善バックログ](../docs/refactoring/backlog.md)は開発資料として扱う。草案・改善候補・将来の実装方式は正式仕様ではない。
+[リファクタリングの進め方](../docs/refactoring/README.md)、[実装対応表](../docs/refactoring/implementation-map.md)、[改善バックログ](../docs/refactoring/backlog.md)は開発資料として扱う。草案・改善候補・将来の実装方式は正式仕様ではない。
 
-旧番号付き文書は、従来のパス・見出しを維持する移動案内として残す。現在の仕様を読む際は上表の正本を使用する。
+現在の仕様は上表の正本を使用する。過去の文書はGit履歴で確認できる。
