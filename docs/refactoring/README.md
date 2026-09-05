@@ -9,9 +9,9 @@
 | 更新日 | 2026-09-05 |
 | 準備 | 完了：仕様の7領域への整理、不要文書の削除、拘束選択・保存往復・線取消履歴の修正 |
 | 基準 | developの統合commit：b0a0000。構文チェック・単体68件・E2E203件成功済みのコードと一致 |
-| 計画 | R1〜R3完了。R4作業中、R5未着手 |
-| 作業ブランチ | codex/history-profiler-modules（R3統合後のdevelopから作成） |
-| 次の作業 | R4-4：全体検証とdevelop統合 |
+| 計画 | R1〜R4完了。R5未着手 |
+| 作業ブランチ | codex/e2e-fixture-refactoring（R4統合後のdevelopから作成） |
+| 次の作業 | R5-1：E2Eのserver・fixture・保証の重複を棚卸し |
 | ユーザー確認待ち | なし |
 | 未取得の情報 | 実際に拘束エラー・ドラッグ遅延が起きた図面、操作、実行環境。既存仕様を維持する整理は進行可能 |
 
@@ -24,7 +24,7 @@
 | R1 | 拘束生成をSelectionから分離 | 完了 | 対象を明示的に渡して判定・生成できる。生成のための一時的なSelection書換えを除去し、事前選択・逐次選択・途中取消の既存挙動を維持する |
 | R2 | 編集の確定・取消・履歴を整理 | 完了 | 開始・preview・確定・復元の責務を分離。共通部分と操作固有部分を区別し、TX-01〜05とDocument／Block Editorの履歴を維持する |
 | R3 | ドラッグの処理別測定と改善 | 完了 | solve・依存更新・描画・UI更新の時間と実行回数を同条件で比較できる。測定で特定した箇所を改善し、拘束精度・固定対象・追従量を維持する。改善対象が特定できなければ測定結果と残課題を明示する |
-| R4 | 責務ごとのモジュール分離 | 作業中 | R1〜R3で境界が明確になった処理から移動。入出力・依存方向を説明でき、分離対象の旧経路と重複処理を除去する。file起動・HTTP起動、保存形式・GeometryRefを維持する |
+| R4 | 責務ごとのモジュール分離 | 完了 | R1〜R3で境界が明確になった処理から移動。入出力・依存方向を説明でき、分離対象の旧経路と重複処理を除去する。file起動・HTTP起動、保存形式・GeometryRefを維持する |
 | R5 | E2Eの削ぎ落としと共通化 | 未着手 | 下位層へ移した組合せ検証が同じ不具合を検出できることを確認する。E2Eに操作・連携の代表ケースを残し、重複を削除。fixture・サーバー起動を整理し、保証対応を更新する |
 
 R4でapp.js全体を一度に分割しない。具体的な抽出対象は先行段階の結果から決め、この表を更新する。R5ではテスト件数の減少自体を目標にしない。
@@ -89,7 +89,7 @@ Windows x64、Node v24.11.1、Playwright Chromium revision 1223、1 worker。res
 | R4-1 | 履歴stack操作と計測集計の入出力・副作用・依存方向を確定 | 完了 | 実装対応表にapp側adapterと抽出先の責務を記載 |
 | R4-2 | 履歴の比較・追加・Undo／Redo移動と同期計測をmoduleへ抽出 | 完了 | app.jsの旧実装を除去。既存のscript読込方式でfile／HTTP両対応 |
 | R4-3 | moduleの境界検証と既存UI回帰を実行 | 完了 | 履歴上限・同一状態・分岐・scope独立性、計測の入れ子・無効時・例外時を確認 |
-| R4-4 | 仕様・実装対応・保証対応を照合し、全体検証・統合 | 作業中 | 保存往復・GeometryRef・file／HTTP起動と全体検証成功、Commit・Push・develop統合 |
+| R4-4 | 仕様・実装対応・保証対応を照合し、全体検証・統合 | 完了 | 実装43b1134、develop統合6c6a2eb。検証済みtreeとの一致確認、Push済み |
 
 ## R5の作業一覧
 
@@ -122,7 +122,7 @@ Windows x64、Node v24.11.1、Playwright Chromium revision 1223、1 worker。res
 | R1 | npm run test:all成功：構文チェック、単体68件、E2E204件（5.5分）。expected failure・skipなし | 生成時の状態不変を検証する1件を追加。file／HTTP起動を含む。実装99798a8、develop統合458035a。統合前後のtree一致を確認 |
 | R2 | npm run test:all成功：構文チェック、単体68件、E2E204件（6.1分）。expected failure・skipなし | Block local履歴の取消・分岐・Document独立性を既存テストへ追加。実装b2ad1aa、develop統合e623ee7。統合前後のtree一致を確認 |
 | R3 | npm run test:all成功：構文チェック、単体68件、E2E204件（5.7分）。expected failure・skipなし | 寸法移動・履歴往復と計測集計を既存E2Eへ追加。file／HTTP起動を含む。実装a6e3a4a、develop統合c9df7a0。統合前後のtree一致を確認 |
-| R4 | npm run check・test:unit成功（76件）。test:e2eは203件成功＋file起動の固定script数チェック1件失敗（5.8分）。対象moduleとload queryを確認するテストへ修正し、該当1件の再実行成功 | 計204件確認済み、expected failure・skipなし。製品コードの追加修正なし。統合commitは統合後に記録 |
+| R4 | npm run check・test:unit成功（76件）。test:e2eは203件成功＋file起動の固定script数チェック1件失敗（5.8分）。対象moduleとload queryを確認するテストへ修正し、該当1件の再実行成功 | 計204件確認済み、expected failure・skipなし。製品コードの追加修正なし。実装43b1134、develop統合6c6a2eb。統合前後のtree一致を確認 |
 | R5 | 未実施 | 完了時にコマンド、結果、対象commit、比較条件を追記する |
 
 R1の測定条件はWindows x64、Node v24.11.1、Playwright Chromium revision 1223、1 worker、既存fixtureと既存閾値。全複雑度fixtureの拘束入力48操作は最大94ms（commandの上限250ms／対象clickの上限350ms）、最大solve 3ms。ドラッグsuiteも既存の精度・追従・時間条件を通過した。これは同環境での回帰確認であり、実図面の遅延解消や有意な高速化を示す比較ではない。
