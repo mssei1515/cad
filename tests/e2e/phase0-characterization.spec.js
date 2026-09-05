@@ -151,7 +151,7 @@ test.afterAll(() => {
   if (serverProcess) serverProcess.kill();
 });
 
-test("complete documents normalize to stable v20 unified-canvas data", async ({ page }) => {
+test("complete documents normalize to stable current unified-canvas data", async ({ page }) => {
   await openTestApp(page);
   const first = await importFixture(page);
   const reload = await page.evaluate(
@@ -166,7 +166,7 @@ test("complete documents normalize to stable v20 unified-canvas data", async ({ 
   expect(first.blockDefinitions.map((definition) => definition.id)).toEqual(["B1", "B2"]);
   expect(first.blockDefinitions.find((definition) => definition.id === "B1").parentDefinitionId).toBe("B2");
   expect(first.blockInstances[0].enabledSketchIds).toEqual(["S1", "S2"]);
-  expect(first.version).toBe(20);
+  expect(first.version).toBe(21);
   expect(first).not.toHaveProperty("presentationSheets");
   expect(first).not.toHaveProperty("activePresentationSheetId");
   expect(first.annotations).toEqual([]);
@@ -187,7 +187,7 @@ test("document length units persist as millimeters and legacy v19 data migrates 
   )).toEqual(expect.objectContaining({ success: true }));
 
   const migrated = await page.evaluate(() => window.__jot2dTest.serializedModelForTest());
-  expect(migrated.version).toBe(20);
+  expect(migrated.version).toBe(21);
   expect(migrated.units).toEqual({ length: "mm" });
   expect(migrated.points[0]).toEqual(expect.objectContaining(firstPointBefore));
 
@@ -267,11 +267,11 @@ test("complete documents are byte-shape stable apart from savedAt", async ({ pag
   expect(exactPersistedDocument(second)).toEqual(exactPersistedDocument(first));
 });
 
-test("legacy v1 documents normalize to stable v20 data and reserve new ids", async ({ page }) => {
+test("legacy v1 documents normalize to stable current data and reserve new ids", async ({ page }) => {
   await openTestApp(page);
   const legacy = JSON.parse(fs.readFileSync(path.resolve(__dirname, "../../test-data/テスト図形.json"), "utf8"));
   const first = await importFixture(page, legacy, "legacy-v1.json");
-  expect(first.version).toBe(20);
+  expect(first.version).toBe(21);
   expect(first.sketches).toEqual(expect.arrayContaining([
     expect.objectContaining({ id: "ROOT", kind: "root" }),
     expect.objectContaining({ id: "S1", parentSketchId: "ROOT" }),
