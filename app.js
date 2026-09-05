@@ -3864,7 +3864,23 @@
   function refreshConstraintAnalysis(options = {}) {
     refreshReferenceConstraintValidity();
     const rootSketchId = activeSketchId();
-    const sketchIds = [rootSketchId, ...descendantSketchIds(rootSketchId)];
+    const sketchIdSet = new Set([rootSketchId, ...descendantSketchIds(rootSketchId)]);
+    const derivedBundles = geometryInstanceBundles().filter((bundle) => bundle.valid);
+    let sourceSketchAdded = true;
+    while (sourceSketchAdded) {
+      sourceSketchAdded = false;
+      for (const bundle of derivedBundles) {
+        if (!sketchIdSet.has(bundle.instance.sketchId)) continue;
+        const outputs = [...bundle.points, ...bundle.lines, ...bundle.circles, ...bundle.arcs, ...bundle.splines];
+        for (const source of outputs.map((item) => item.sourceElement).filter(Boolean)) {
+          const sourceSketchId = elementSketchId(source);
+          if (!sourceSketchId || sketchIdSet.has(sourceSketchId)) continue;
+          sketchIdSet.add(sourceSketchId);
+          sourceSketchAdded = true;
+        }
+      }
+    }
+    const sketchIds = [...sketchIdSet];
     const analyses = new Map();
     const statuses = new Map();
     const items = [];
@@ -3930,7 +3946,13 @@
 
   function constraintStatusOf(item) {
     if (!constraintAnalysisState) refreshConstraintAnalysis();
-    return constraintAnalysisState?.statuses.get(item) || "full";
+    let current = item;
+    const visited = new Set();
+    while (current?.derivedProjection && current.sourceElement && !visited.has(current)) {
+      visited.add(current);
+      current = current.sourceElement;
+    }
+    return constraintAnalysisState?.statuses.get(current) || "full";
   }
 
   function constraintStatusColor(item, selected = false, hovered = false) {
@@ -21075,12 +21097,6 @@
       canvas.setPointerCapture(e.pointerId);
       return;
     }
-    for (const instance of selectedGeometryInstances) {
-      elements.add(instance);
-      const bundle = geometryInstanceBundle(instance);
-      for (const item of [...bundle.points, ...bundle.lines, ...bundle.circles, ...bundle.arcs, ...bundle.splines]) elements.add(item);
-    }
-
     if (mode === "mirror-axis" || mode === "pattern-direction") {
       e.preventDefault();
       const operand = hitDerivedProjectionOperand(p.x, p.y) || hitBlockProjectionOperand(p.x, p.y) || (hitL ? makeConstraintOperand("line", { line: hitL }) : null);
