@@ -19,10 +19,29 @@ test("projection, mirror, and linear pattern are persisted as derived instances"
   expect(state.instances.every((item) => item.valid)).toBe(true);
   expect(state.instances.find((item) => item.type === "pattern").lines).toHaveLength(3);
   expect(state.instances.find((item) => item.type === "mirror").lines[0].p1.x).toBe(40);
-  expect(state.instances.flatMap((item) => [...item.lines, ...item.circles, ...item.arcs]).every((item) => item.color === "#111827")).toBe(true);
+  expect(state.instances.flatMap((item) => [...item.lines, ...item.circles, ...item.arcs]).every((item) => item.color === "#f59e0b")).toBe(true);
   expect(state.instances.find((item) => item.type === "mirror").arcs[0].sweep).toBeCloseTo(-0.5, 8);
   expect(state.hatchValidity).toEqual([true]);
   expect(state.treeCount).toBe(3);
+
+  const fixedSource = structuredClone(state.serialized);
+  const sourceLine = fixedSource.lines.find((item) => item.id === "L1");
+  for (const point of fixedSource.points.filter((item) => item.id === sourceLine.p1 || item.id === sourceLine.p2)) point.fixed = true;
+  const fixedState = await page.evaluate((data) => window.__jot2dTest.loadModelForDerivedInstanceTest(data), fixedSource);
+  expect(fixedState.instances.flatMap((item) => item.lines).every((item) => item.color === "#111827")).toBe(true);
+});
+
+test("a single blank canvas click clears a derived instance selection", async ({ page }) => {
+  await page.evaluate(() => window.__jot2dTest.resetForDerivedInstanceTest());
+  await page.evaluate(() => window.__jot2dTest.focusWorldForTest({ x: 0, y: 0 }, 2.5));
+  await page.locator('.sketch-item[data-id="S2"] .sketchExpandBtn').click();
+  await page.locator('.sketch-group-row[data-sketch-id="S2"][data-category="instance"]').click();
+  await page.locator('.sketch-object-row[data-object-kind="instance"][data-id="PI1"]').click();
+  expect((await page.evaluate(() => window.__jot2dTest.derivedInstanceStateForTest())).selectedIds).toEqual(["PI1"]);
+
+  const blank = await page.evaluate(() => window.__jot2dTest.worldClientPositionForTest({ x: 100, y: 75 }));
+  await page.mouse.click(blank.x, blank.y);
+  expect((await page.evaluate(() => window.__jot2dTest.derivedInstanceStateForTest())).selectedIds).toEqual([]);
 });
 
 test("dragging derived geometry inverse-updates the original source through instance chains", async ({ page }) => {
