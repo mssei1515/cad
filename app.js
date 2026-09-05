@@ -14507,6 +14507,10 @@
       const resolution = resolveConstraintIntent(type, constraintOperands);
       return Boolean(resolution && !resolution.error && (resolution.constraint || resolution.target || resolution.action));
     }
+    return canApplyConstraintToSelection(type);
+  }
+
+  function canApplyConstraintToSelection(type) {
     const primitives = selectedPrimitives();
     const selectedItems = [...selectedPoints, ...selectedLines, ...primitives, ...selectedSplines, selectedArcEndpoint?.arc, ...(selectedArcEndpointPair || []).map((item) => item.arc)].filter(Boolean);
     if (!sameSketchElements(selectedItems, activeSketchId())) return false;
@@ -18435,15 +18439,17 @@
     };
     constraintOperands = operands.slice();
     syncSelectionFromConstraintOperands();
-    const constraint = constraintFromSelection(type);
-    selectedPoints = previous.points;
-    selectedLines = previous.lines;
-    selectedCircles = previous.circles;
-    selectedArcs = previous.arcs;
-    selectedSplines = previous.splines;
-    selectedArcEndpoint = previous.arcEndpoint;
-    selectedArcEndpointPair = previous.arcEndpointPair;
-    return constraint;
+    try {
+      return constraintFromSelection(type);
+    } finally {
+      selectedPoints = previous.points;
+      selectedLines = previous.lines;
+      selectedCircles = previous.circles;
+      selectedArcs = previous.arcs;
+      selectedSplines = previous.splines;
+      selectedArcEndpoint = previous.arcEndpoint;
+      selectedArcEndpointPair = previous.arcEndpointPair;
+    }
   }
 
   function symmetryConstraintFromOperands(operands) {
@@ -18677,6 +18683,7 @@
   }
 
   function constraintFromSelection(type) {
+    if (!canApplyConstraintToSelection(type)) return null;
     let constraint = null;
     const allPrimitives = selectedPrimitives();
     const primitives = type === "coincident" && selectedArcEndpoint ? allPrimitives.filter((p) => p !== selectedArcEndpoint.arc) : allPrimitives;
@@ -25668,9 +25675,10 @@
           title: document.title,
         };
       },
-      loadDocumentFixtureForDragTest(data, fileName = "drag-fixture.json") {
+      loadDocumentFixtureForDragTest(data, fileName = "drag-fixture.json", { resetLoadedHistory = false } = {}) {
         try {
           loadModelData(structuredClone(data), { documentNameOverride: fileNameStem(fileName) });
+          if (resetLoadedHistory) resetHistory("fixture load");
           updateUI();
           draw();
           return { success: true, constraintCount: model.constraints.length };

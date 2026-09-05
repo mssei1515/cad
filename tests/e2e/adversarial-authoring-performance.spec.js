@@ -214,14 +214,14 @@ function latencySummary(results, traces = []) {
   };
 }
 
-async function loadFixture(page, data, center = sandboxCenter, scale = 1) {
+async function loadFixture(page, data, center = sandboxCenter, scale = 1, resetLoadedHistory = false) {
   const loaded = await page.evaluate(
-    ({ fixtureData, fixtureName, focus, focusScale }) => {
-      const result = window.__jot2dTest.loadDocumentFixtureForDragTest(fixtureData, fixtureName);
+    ({ fixtureData, fixtureName, focus, focusScale, resetLoadedHistory }) => {
+      const result = window.__jot2dTest.loadDocumentFixtureForDragTest(fixtureData, fixtureName, { resetLoadedHistory });
       const viewport = window.__jot2dTest.focusWorldForTest(focus, focusScale);
       return { result, viewport, state: window.__jot2dTest.authoringStateForTest() };
     },
-    { fixtureData: data, fixtureName: "authoring-performance.json", focus: center, focusScale: scale },
+    { fixtureData: data, fixtureName: "authoring-performance.json", focus: center, focusScale: scale, resetLoadedHistory },
   );
   expect(loaded.result.success).toBe(true);
   return loaded;
@@ -516,8 +516,13 @@ test("constraint target clicks and commits stay responsive at full fixture compl
 
   for (const constraintCase of cases) {
     const sandbox = sandboxFixture(constraintCase.build);
-    const loaded = await loadFixture(page, sandbox.data);
+    const loaded = await loadFixture(page, sandbox.data, sandboxCenter, 1, true);
     const beforeCount = loaded.state.constraintCount;
+    const snapshot = () => page.evaluate(() => {
+      const model = window.__jot2dTest.serializedModelForTest();
+      delete model.savedAt;
+      return { model, history: window.__jot2dTest.historyState() };
+    });
     await measureInteraction(
       page,
       results,
@@ -525,6 +530,7 @@ test("constraint target clicks and commits stay responsive at full fixture compl
       () => page.locator(`[data-constraint="${constraintCase.type}"]`).click(),
       250,
     );
+    const before = await snapshot();
     for (let index = 0; index < sandbox.targets.length; index += 1) {
       await measureInteraction(
         page,
@@ -533,10 +539,25 @@ test("constraint target clicks and commits stay responsive at full fixture compl
         () => clickWorld(page, sandbox.targets[index]),
         index === sandbox.targets.length - 1 ? 350 : 300,
       );
+      if (index < sandbox.targets.length - 1) {
+        expect(await snapshot(), constraintCase.name + "/pending").toEqual(before);
+        const pending = await page.evaluate(() => window.__jot2dTest.authoringStateForTest());
+        expect(pending.pendingConstraintType, constraintCase.name).toBe(constraintCase.type);
+        expect(Object.values(pending.selected).flat().filter(Boolean).length, constraintCase.name).toBeGreaterThan(0);
+      }
     }
     const after = await page.evaluate(() => window.__jot2dTest.authoringStateForTest());
     expect(after.constraintCount, constraintCase.name).toBe(beforeCount + 1);
     traces.push({ name: constraintCase.name, ...after.lastPerformance });
+    if (sandbox.targets.length > 1) {
+      await loadFixture(page, sandbox.data, sandboxCenter, 1, true);
+      await page.locator('[data-constraint="' + constraintCase.type + '"]').click();
+      const cancelBefore = await snapshot();
+      await clickWorld(page, sandbox.targets[0]);
+      await pressEscape(page);
+      expect(await snapshot(), constraintCase.name + "/cancel").toEqual(cancelBefore);
+      expect((await page.evaluate(() => window.__jot2dTest.authoringStateForTest())).pendingConstraintType).toBeNull();
+    }
   }
 
   console.log(JSON.stringify({ kind: "constraint-authoring-latency", ...latencySummary(results, traces) }));

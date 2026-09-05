@@ -48,4 +48,6 @@
 
 ## 4. 検証の共通fixture
 
-`tests/e2e/test-fixture.js`はbrowser実行時エラーを共通収集する。拘束選択経路の特定エラー除外があり、保証の制限は[保証対応](../../spec/verification/保証対応.md#4-保証の限界と未確認事項)を参照する。除外の存在と製品の許容挙動は区別する。
+`tests/e2e/test-fixture.js`はbrowser実行時エラーを共通収集する。拘束選択経路を含め、pageerrorを除外せず検出する。保証の範囲は[保証対応](../../spec/verification/保証対応.md)を参照する。
+
+`app.js`の`canApplyConstraintToSelection`は事前選択と生成前の組合せ判定を共用する。`normalConstraintFromOperands`は一時Selectionをfinallyで復元する。テスト用の直接読込は通常のファイル操作と異なり履歴を初期化しないため、履歴を比較するケースは`resetLoadedHistory`を明示して読込状態を基準にする。
