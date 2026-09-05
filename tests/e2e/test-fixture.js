@@ -26,4 +26,9 @@ const test = playwright.test.extend({
   },
 });
 
-module.exports = { test, expect: playwright.expect };
+async function openTestDocument(page) {
+  await page.goto("/index.html?test=1");
+  await page.waitForFunction(() => window.__jot2dTest);
+}
+
+module.exports = { test, expect: playwright.expect, openTestDocument };

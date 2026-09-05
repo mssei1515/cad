@@ -1,34 +1,8 @@
-const { test, expect } = require("./test-fixture");
-const { spawn } = require("child_process");
+const { test, expect, openTestDocument } = require("./test-fixture");
 const fs = require("fs");
-const http = require("http");
 const path = require("path");
 
-const host = "127.0.0.1";
-const port = Number(process.env.JOT2D_E2E_PORT || 8765) + 2;
-const baseUrl = `http://${host}:${port}`;
 const sourceFixture = JSON.parse(fs.readFileSync(path.resolve(__dirname, "../../test-data/テスト図形.json"), "utf8"));
-let serverProcess = null;
-
-function waitForServer(url, timeoutMs = 10000) {
-  const startedAt = Date.now();
-  return new Promise((resolve, reject) => {
-    const check = () => {
-      const request = http.get(url, (response) => {
-        response.resume();
-        resolve();
-      });
-      request.on("error", () => {
-        if (Date.now() - startedAt > timeoutMs) {
-          reject(new Error(`Timed out waiting for ${url}`));
-          return;
-        }
-        setTimeout(check, 100);
-      });
-    };
-    check();
-  });
-}
 
 function matchesConstraint(constraint, selector) {
   return Object.entries(selector).every(([key, value]) => constraint[key] === value);
@@ -157,24 +131,6 @@ const variants = [
   },
 ];
 
-test.beforeAll(async () => {
-  try {
-    await waitForServer(`${baseUrl}/index.html`, 300);
-    return;
-  } catch (_) {
-    // Start our local static server below.
-  }
-  serverProcess = spawn(process.execPath, ["tools/serve.js", "--host", host, "--port", String(port)], {
-    cwd: path.resolve(__dirname, "../.."),
-    stdio: "ignore",
-  });
-  await waitForServer(`${baseUrl}/index.html`);
-});
-
-test.afterAll(() => {
-  if (serverProcess) serverProcess.kill();
-});
-
 async function runPathCase(page, fixture, variant, caseName, deltas) {
   await page.evaluate(
     ({ fixture: data, fileName }) => window.__jot2dTest.importDocumentNameFixture(data, fileName),
@@ -249,8 +205,7 @@ function expectStraightMovement(variant, profile, direction, summary) {
 for (const variant of variants) {
   test(`keeps ${variant.name} smooth across constraint, motion, speed, size, and direction patterns`, async ({ page }) => {
     test.setTimeout(120000);
-    await page.goto(`${baseUrl}/index.html?test=1`);
-    await page.waitForFunction(() => window.__jot2dTest);
+    await openTestDocument(page);
 
     const summaries = [];
     const fixture = fixtureWithoutConstraints(variant.removed);
