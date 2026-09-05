@@ -1189,7 +1189,7 @@ test("workspace integrates transparent compact Object groups into Sketch Tree an
   expect(layout.iconButtons.every((button) => button.text === "" && button.hasIcon && button.title && button.label)).toBe(true);
   expect(layout.canvasCursor).toMatch(/^url\(/);
   expect(layout.gridControls).toBe(0);
-  expect(layout.logo).toEqual({ count: 1, source: "./assets/jot2d-logo.svg", width: 108, height: 28, naturalWidth: 2048, naturalHeight: 678, objectFit: "cover" });
+  expect(layout.logo).toEqual({ count: 1, source: "./assets/jot2d-logo.svg", width: 108, height: 24, naturalWidth: 1022, naturalHeight: 254, objectFit: "contain" });
   expect(layout.constraintStatusIcon).toEqual({
     eyeCount: 2,
     swatches: ["rgb(17, 24, 39)", "rgb(15, 118, 110)", "rgb(245, 158, 11)", "rgb(220, 38, 38)"],
@@ -1972,7 +1972,7 @@ test("Overlapping Canvas objects can be previewed and selected from context cand
   await page.keyboard.press("Escape");
 });
 
-test("Canvas selection updates Properties, Properties collapses, and narrow toolbar labels do not overlap", async ({ page }) => {
+test("Canvas selection updates Properties, Properties collapses, and the label-free toolbar does not overlap", async ({ page }) => {
   await page.goto(`${baseUrl}/index.html?test=1`);
   await page.waitForFunction(() => window.__jot2dTest);
   await page.evaluate(() => window.__jot2dTest.resetForResponsiveLineDragTest());
@@ -2004,7 +2004,8 @@ test("Canvas selection updates Properties, Properties collapses, and narrow tool
     properties: document.querySelector(".properties").getBoundingClientRect().width,
   }));
   expect(restored.properties).toBeCloseTo(initial.properties, 0);
-  await expect(page.locator(".tool-group-label").first()).toBeVisible();
+  await expect(page.locator(".tool-group-label")).toHaveCount(0);
+  expect(await page.locator(".tool-group").evaluateAll((groups) => groups.every((group) => Boolean(group.getAttribute("aria-label"))))).toBe(true);
 
   for (const width of [1260, 1200, 800]) {
     await page.setViewportSize({ width, height: 700 });
@@ -2023,12 +2024,12 @@ test("Canvas selection updates Properties, Properties collapses, and narrow tool
         return buttons.some((button) => intersects(rect, button.getBoundingClientRect()));
       });
       return {
-        labelsHidden: labels.every((label) => getComputedStyle(label).display === "none"),
+        labelCount: labels.length,
         labelOverlaps,
         menuOverlaps,
       };
     });
-    expect(narrowToolbar).toEqual({ labelsHidden: true, labelOverlaps: false, menuOverlaps: false });
+    expect(narrowToolbar).toEqual({ labelCount: 0, labelOverlaps: false, menuOverlaps: false });
   }
 });
 
