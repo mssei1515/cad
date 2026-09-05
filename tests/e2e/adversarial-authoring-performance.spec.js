@@ -1,16 +1,10 @@
-const { test, expect } = require("./test-fixture");
-const { spawn } = require("child_process");
+const { test, expect, openTestDocument } = require("./test-fixture");
 const fs = require("fs");
-const http = require("http");
 const path = require("path");
 
-const host = "127.0.0.1";
-const port = Number(process.env.JOT2D_E2E_PORT || 8765) + 7;
-const baseUrl = `http://${host}:${port}`;
 const fixturePath = path.resolve(__dirname, "../../test-data/意地悪ドラッグ完全拘束.json");
 const fixture = JSON.parse(fs.readFileSync(fixturePath, "utf8"));
 const sandboxCenter = { x: 4000, y: 0 };
-let serverProcess = null;
 let sandboxSequence = 1;
 
 const drawingToolIds = [
@@ -40,23 +34,6 @@ const constraintToolTypes = [
   "equal",
   "tangent",
 ];
-
-function waitForServer(url, timeoutMs = 10000) {
-  const startedAt = Date.now();
-  return new Promise((resolve, reject) => {
-    const check = () => {
-      const request = http.get(url, (response) => {
-        response.resume();
-        resolve();
-      });
-      request.on("error", () => {
-        if (Date.now() - startedAt > timeoutMs) reject(new Error(`Timed out waiting for ${url}`));
-        else setTimeout(check, 100);
-      });
-    };
-    check();
-  });
-}
 
 function referencedGeometryIds(value, allIds) {
   return Object.values(value).filter((entry) => typeof entry === "string" && allIds.has(entry));
@@ -248,21 +225,8 @@ async function pressEscape(page) {
   await settleAfterPaint(page);
 }
 
-test.beforeAll(async () => {
-  serverProcess = spawn(process.execPath, ["tools/serve.js", "--host", host, "--port", String(port)], {
-    cwd: path.resolve(__dirname, "../.."),
-    stdio: "ignore",
-  });
-  await waitForServer(`${baseUrl}/index.html`);
-});
-
-test.afterAll(() => {
-  if (serverProcess) serverProcess.kill();
-});
-
 test.beforeEach(async ({ page }) => {
-  await page.goto(`${baseUrl}/index.html?test=1`);
-  await page.waitForFunction(() => window.__jot2dTest);
+  await openTestDocument(page);
 });
 
 test("all drawing and constraint commands stay responsive as the sketch grows", async ({ page }) => {

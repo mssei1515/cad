@@ -1,12 +1,4 @@
-const { test, expect } = require("./test-fixture");
-const { spawn } = require("child_process");
-const http = require("http");
-const path = require("path");
-
-const host = "127.0.0.1";
-const port = Number(process.env.JOT2D_E2E_PORT || 8765) + 1;
-const baseUrl = `http://${host}:${port}`;
-let serverProcess = null;
+const { test, expect, openTestDocument } = require("./test-fixture");
 
 async function openBlockDefinitions(page) {
   const dialog = page.locator("#blockDefinitionsDialog");
@@ -30,26 +22,6 @@ async function expandSketchTreeGroup(page, category, sketchId = "S1") {
   const group = sketchTreeGroup(page, category, sketchId);
   if ((await group.getAttribute("aria-expanded")) !== "true") await group.click();
   return group;
-}
-
-function waitForServer(url, timeoutMs = 10000) {
-  const startedAt = Date.now();
-  return new Promise((resolve, reject) => {
-    const check = () => {
-      const request = http.get(url, (response) => {
-        response.resume();
-        resolve();
-      });
-      request.on("error", () => {
-        if (Date.now() - startedAt > timeoutMs) {
-          reject(new Error(`Timed out waiting for ${url}`));
-          return;
-        }
-        setTimeout(check, 100);
-      });
-    };
-    check();
-  });
 }
 
 function constrainedBlockGridFixture({ fixed = false } = {}) {
@@ -591,27 +563,8 @@ async function canvasPatch(page, point, radius = 9) {
   }, { point, radius });
 }
 
-test.beforeAll(async () => {
-  try {
-    await waitForServer(`${baseUrl}/index.html`, 300);
-    return;
-  } catch (_) {
-    // Start our local static server below.
-  }
-  serverProcess = spawn(process.execPath, ["tools/serve.js", "--host", host, "--port", String(port)], {
-    cwd: path.resolve(__dirname, "../.."),
-    stdio: "ignore",
-  });
-  await waitForServer(`${baseUrl}/index.html`);
-});
-
-test.afterAll(() => {
-  if (serverProcess) serverProcess.kill();
-});
-
 test("creates, places, drags, edits, and reloads local-coordinate blocks", async ({ page }) => {
-  await page.goto(`${baseUrl}/index.html?test=1`);
-  await page.waitForFunction(() => window.__jot2dTest);
+  await openTestDocument(page);
 
   const setup = await page.evaluate(() => window.__jot2dTest.resetForBlockCreationUi());
   await openBlocksExplorer(page);
@@ -682,8 +635,7 @@ test("creates, places, drags, edits, and reloads local-coordinate blocks", async
 });
 
 test("block placement defaults to persistent orthogonal rotation lock and can use free rotation", async ({ page }) => {
-  await page.goto(`${baseUrl}/index.html?test=1`);
-  await page.waitForFunction(() => window.__jot2dTest);
+  await openTestDocument(page);
   await page.evaluate(() => window.__jot2dTest.resetForBlockCreationUi());
   await openBlocksExplorer(page);
   await page.click("#toolCreateBlock");
@@ -752,8 +704,7 @@ test("block placement defaults to persistent orthogonal rotation lock and can us
 });
 
 test("selected blocks can change rotation mode and reject an unsatisfied orthogonal snap", async ({ page }) => {
-  await page.goto(`${baseUrl}/index.html?test=1`);
-  await page.waitForFunction(() => window.__jot2dTest);
+  await openTestDocument(page);
   await page.evaluate((fixture) => window.__jot2dTest.importDocumentNameFixture(fixture, "rotation-lock.json"), rotationLockFixture());
   await page.evaluate(() => window.__jot2dTest.selectGeometryIdsForTest({ blockInstances: ["BI1"] }));
   await openBlocksExplorer(page);
@@ -843,8 +794,7 @@ test("selected blocks can change rotation mode and reject an unsatisfied orthogo
 });
 
 test("block placement and selected-block settings stay in Properties", async ({ page }) => {
-  await page.goto(`${baseUrl}/index.html?test=1`);
-  await page.waitForFunction(() => window.__jot2dTest);
+  await openTestDocument(page);
   await page.evaluate(() => window.__jot2dTest.resetForBlockCreationUi());
   await openBlocksExplorer(page);
   await page.click("#toolCreateBlock");
@@ -879,8 +829,7 @@ test("block placement and selected-block settings stay in Properties", async ({ 
 });
 
 test("selecting a block highlights only constraints that directly reference its projections", async ({ page }) => {
-  await page.goto(`${baseUrl}/index.html?test=1`);
-  await page.waitForFunction(() => window.__jot2dTest);
+  await openTestDocument(page);
   await page.evaluate((fixture) => window.__jot2dTest.importDocumentNameFixture(fixture, "block-related-constraint.json"), blockPointOnLineFixture({ subjectY: -50, includeConstraint: true }));
   await expandSketchTreeGroup(page, "constraint");
 
@@ -891,8 +840,7 @@ test("selecting a block highlights only constraints that directly reference its 
 });
 
 test("selected block instances highlight their definitions in the block window", async ({ page }) => {
-  await page.goto(`${baseUrl}/index.html?test=1`);
-  await page.waitForFunction(() => window.__jot2dTest);
+  await openTestDocument(page);
   await page.evaluate((fixture) => window.__jot2dTest.importDocumentNameFixture(fixture, "block-list-selection.json"), blockPointOnLineFixture({ subjectY: -200 }));
   await openBlockDefinitions(page);
 
@@ -908,8 +856,7 @@ test("selected block instances highlight their definitions in the block window",
 });
 
 test("shift and ctrl clicks toggle block multiselection without moving instances", async ({ page }) => {
-  await page.goto(`${baseUrl}/index.html?test=1`);
-  await page.waitForFunction(() => window.__jot2dTest);
+  await openTestDocument(page);
   await page.evaluate((fixture) => window.__jot2dTest.importDocumentNameFixture(fixture, "block-multiselect.json"), blockPointOnLineFixture({ subjectY: -200 }));
   const before = (await page.evaluate(() => window.__jot2dTest.blockState())).instances;
   const first = await page.evaluate(() => window.__jot2dTest.blockInteractionPoints("BI1"));
@@ -939,8 +886,7 @@ test("shift and ctrl clicks toggle block multiselection without moving instances
 });
 
 test("selected block definitions move under a new parent without changing ids or placement", async ({ page }) => {
-  await page.goto(`${baseUrl}/index.html?test=1`);
-  await page.waitForFunction(() => window.__jot2dTest);
+  await openTestDocument(page);
   const fixture = blockPointOnLineFixture({ subjectY: -50, includeConstraint: true });
   fixture.points = [
     { id: "P100", x: -20, y: 100, fixed: false, kind: "endpoint", sketchId: "S1" },
@@ -1002,8 +948,7 @@ test("selected block definitions move under a new parent without changing ids or
 });
 
 test("parent creation rejects a block definition that still has unselected instances", async ({ page }) => {
-  await page.goto(`${baseUrl}/index.html?test=1`);
-  await page.waitForFunction(() => window.__jot2dTest);
+  await openTestDocument(page);
   const fixture = constrainedBlockGridFixture();
   await page.evaluate((data) => window.__jot2dTest.importDocumentNameFixture(data, "shared-block-parent.json"), fixture);
   const before = await page.evaluate(() => window.__jot2dTest.blockState());
@@ -1032,8 +977,7 @@ test("parent creation rejects a block definition that still has unselected insta
 });
 
 test("wrapping selected blocks removes constraints that reference blocks left outside", async ({ page }) => {
-  await page.goto(`${baseUrl}/index.html?test=1`);
-  await page.waitForFunction(() => window.__jot2dTest);
+  await openTestDocument(page);
   await page.evaluate((fixture) => window.__jot2dTest.importDocumentNameFixture(fixture, "block-parent-external-constraint.json"), blockPointOnLineFixture({ subjectY: -50, includeConstraint: true }));
   await page.evaluate(() => window.__jot2dTest.selectGeometryIdsForTest({ blockInstances: ["BI2"] }));
   await openBlocksExplorer(page);
@@ -1053,8 +997,7 @@ test("wrapping selected blocks removes constraints that reference blocks left ou
 });
 
 test("canceling parent creation restores moved definitions after nested child edits", async ({ page }) => {
-  await page.goto(`${baseUrl}/index.html?test=1`);
-  await page.waitForFunction(() => window.__jot2dTest);
+  await openTestDocument(page);
   await page.evaluate((fixture) => window.__jot2dTest.importDocumentNameFixture(fixture, "block-parent-cancel.json"), blockPointOnLineFixture({ subjectY: -200 }));
   const before = await page.evaluate(() => window.__jot2dTest.blockState());
   await page.evaluate(() => window.__jot2dTest.selectGeometryIdsForTest({ blockInstances: ["BI1", "BI2"] }));
@@ -1076,8 +1019,7 @@ test("canceling parent creation restores moved definitions after nested child ed
 });
 
 test("block editor can wrap existing child blocks and rolls ownership back with its parent edit", async ({ page }) => {
-  await page.goto(`${baseUrl}/index.html?test=1`);
-  await page.waitForFunction(() => window.__jot2dTest);
+  await openTestDocument(page);
   await page.evaluate((fixture) => window.__jot2dTest.importDocumentNameFixture(fixture, "nested-child-parent.json"), nestedComposableBlocksFixture());
   expect((await page.evaluate(() => window.__jot2dTest.blockState())).definitions.find((definition) => definition.id === "B2").blockInstances.map((instance) => instance.id).sort()).toEqual(["BI1", "BI2"]);
 
@@ -1115,8 +1057,7 @@ test("block editor can wrap existing child blocks and rolls ownership back with 
 });
 
 test("constrained block grids track a single pointer move without diluting drag distance", async ({ page }) => {
-  await page.goto(`${baseUrl}/index.html?test=1`);
-  await page.waitForFunction(() => window.__jot2dTest);
+  await openTestDocument(page);
   await page.evaluate((fixture) => window.__jot2dTest.importDocumentNameFixture(fixture, "constrained-block-grid.json"), constrainedBlockGridFixture());
 
   const interaction = await page.evaluate(() => window.__jot2dTest.blockInteractionPoints());
@@ -1150,8 +1091,7 @@ test("constrained block grids track a single pointer move without diluting drag 
 });
 
 test("a block point-on-line constraint keeps the subject block under-constrained", async ({ page }) => {
-  await page.goto(`${baseUrl}/index.html?test=1`);
-  await page.waitForFunction(() => window.__jot2dTest);
+  await openTestDocument(page);
   await page.evaluate((fixture) => window.__jot2dTest.importDocumentNameFixture(fixture, "block-point-on-line.json"), blockPointOnLineFixture({ subjectY: -40 }));
 
   const added = await page.evaluate(() => window.__jot2dTest.addBlockPointOnLineConstraintForTest("BI2", "P3", "BI1", "L1"));
@@ -1191,8 +1131,7 @@ test("a block point-on-line constraint keeps the subject block under-constrained
 });
 
 test("unstable block constraints are conflicts, and failed additions roll back cleanly", async ({ page }) => {
-  await page.goto(`${baseUrl}/index.html?test=1`);
-  await page.waitForFunction(() => window.__jot2dTest);
+  await openTestDocument(page);
   await page.evaluate((fixture) => window.__jot2dTest.loadDocumentFixtureForDragTest(fixture, "unstable-block-point-on-line.json"), blockPointOnLineFixture({ subjectY: 60, includeConstraint: true }));
 
   const unstable = await page.evaluate(() => window.__jot2dTest.blockConstraintStatusForTest("BI2"));
@@ -1208,8 +1147,7 @@ test("unstable block constraints are conflicts, and failed additions roll back c
 });
 
 test("guided point drags keep the free target axis responsive and solve exactly on release", async ({ page }) => {
-  await page.goto(`${baseUrl}/index.html?test=1`);
-  await page.waitForFunction(() => window.__jot2dTest);
+  await openTestDocument(page);
   await page.evaluate((fixture) => window.__jot2dTest.importDocumentNameFixture(fixture, "guided-point-drag.json"), guidedPointDragFixture());
 
   const result = await page.evaluate(() => window.__jot2dTest.guidedPointDragForTest("P26", 25, 12));
@@ -1257,8 +1195,7 @@ test("guided point drags keep the free target axis responsive and solve exactly 
 });
 
 test("block placement escape commits zero rotation after choosing the display center", async ({ page }) => {
-  await page.goto(`${baseUrl}/index.html?test=1`);
-  await page.waitForFunction(() => window.__jot2dTest);
+  await openTestDocument(page);
   const setup = await page.evaluate(() => window.__jot2dTest.resetForBlockCreationUi());
   await openBlocksExplorer(page);
   await page.click("#toolCreateBlock");
@@ -1279,8 +1216,7 @@ test("block placement escape commits zero rotation after choosing the display ce
 });
 
 test("legacy block data migrates into an internal Sketch-1 without changing projection ids", async ({ page }) => {
-  await page.goto(`${baseUrl}/index.html?test=1`);
-  await page.waitForFunction(() => window.__jot2dTest);
+  await openTestDocument(page);
   await page.evaluate(() => window.__jot2dTest.resetForBlockCreationUi());
   await openBlocksExplorer(page);
   await page.click("#toolCreateBlock");
@@ -1301,8 +1237,7 @@ test("legacy block data migrates into an internal Sketch-1 without changing proj
 });
 
 test("new block editor supports cancel and independent internal sketch hierarchy", async ({ page }) => {
-  await page.goto(`${baseUrl}/index.html?test=1`);
-  await page.waitForFunction(() => window.__jot2dTest);
+  await openTestDocument(page);
 
   await page.evaluate(() => window.__jot2dTest.resetForBlockCreationUi());
   await openBlocksExplorer(page);
@@ -1336,8 +1271,7 @@ test("new block editor supports cancel and independent internal sketch hierarchy
 });
 
 test("block editor undo and redo use an independent local history", async ({ page }) => {
-  await page.goto(`${baseUrl}/index.html?test=1`);
-  await page.waitForFunction(() => window.__jot2dTest);
+  await openTestDocument(page);
 
   await page.evaluate(() => window.__jot2dTest.resetForEmptyBlockCreation());
   await openBlocksExplorer(page);
@@ -1402,8 +1336,7 @@ test("block editor undo and redo use an independent local history", async ({ pag
 });
 
 test("block editor can place existing blocks and create nested blocks that survive reload", async ({ page }) => {
-  await page.goto(`${baseUrl}/index.html?test=1`);
-  await page.waitForFunction(() => window.__jot2dTest);
+  await openTestDocument(page);
   await page.evaluate((fixture) => window.__jot2dTest.importDocumentNameFixture(fixture, "nested-block-editing.json"), nestedBlockEditingFixture());
 
   await openBlockDefinitions(page);
@@ -1491,8 +1424,7 @@ test("block editor can place existing blocks and create nested blocks that survi
 });
 
 test("root constraints can reload nested block projection ids", async ({ page }) => {
-  await page.goto(`${baseUrl}/index.html?test=1`);
-  await page.waitForFunction(() => window.__jot2dTest);
+  await openTestDocument(page);
 
   const imported = await page.evaluate(
     (fixture) => window.__jot2dTest.importDocumentNameFixture(fixture, "nested-root-constraint.json"),
@@ -1513,8 +1445,7 @@ test("root constraints can reload nested block projection ids", async ({ page })
 });
 
 test("loading removes stale nested block constraints and keeps the parent editable", async ({ page }) => {
-  await page.goto(`${baseUrl}/index.html?test=1`);
-  await page.waitForFunction(() => window.__jot2dTest);
+  await openTestDocument(page);
 
   const imported = await page.evaluate(
     (fixture) => window.__jot2dTest.importDocumentNameFixture(fixture, "stale-nested-constraint.json"),
@@ -1530,8 +1461,7 @@ test("loading removes stale nested block constraints and keeps the parent editab
 });
 
 test("deleting child geometry removes parent constraints without interrupting nested editing", async ({ page }) => {
-  await page.goto(`${baseUrl}/index.html?test=1`);
-  await page.waitForFunction(() => window.__jot2dTest);
+  await openTestDocument(page);
   await page.evaluate(
     (fixture) => window.__jot2dTest.importDocumentNameFixture(fixture, "nested-constraint-cleanup.json"),
     nestedConstraintCleanupFixture(),
@@ -1552,8 +1482,7 @@ test("deleting child geometry removes parent constraints without interrupting ne
 });
 
 test("block definition window uses scoped actions and keeps sketch choices visible with many children", async ({ page }) => {
-  await page.goto(`${baseUrl}/index.html?test=1`);
-  await page.waitForFunction(() => window.__jot2dTest);
+  await openTestDocument(page);
   await page.evaluate((fixture) => window.__jot2dTest.importDocumentNameFixture(fixture, "many-nested-blocks.json"), manyNestedBlockDefinitionsFixture());
 
   await openBlockDefinitions(page);
@@ -1608,8 +1537,7 @@ test("block definition window uses scoped actions and keeps sketch choices visib
 });
 
 test("canceling nested block creation restores the containing block and removes abandoned definitions", async ({ page }) => {
-  await page.goto(`${baseUrl}/index.html?test=1`);
-  await page.waitForFunction(() => window.__jot2dTest);
+  await openTestDocument(page);
   await page.evaluate((fixture) => window.__jot2dTest.importDocumentNameFixture(fixture, "nested-block-cancel.json"), nestedBlockEditingFixture());
 
   await openBlockDefinitions(page);
@@ -1635,8 +1563,7 @@ test("canceling nested block creation restores the containing block and removes 
 });
 
 test("long constrained lines in the block editor follow sparse pointer moves without lag", async ({ page }) => {
-  await page.goto(`${baseUrl}/index.html?test=1`);
-  await page.waitForFunction(() => window.__jot2dTest);
+  await openTestDocument(page);
   await page.evaluate((fixture) => window.__jot2dTest.importDocumentNameFixture(fixture, "sparse-block-line.json"), sparseBlockEditorLineDragFixture());
   await openBlockDefinitions(page);
   await page.click('.block-item[data-id="B1"] .blockEditBtn');
@@ -1655,8 +1582,7 @@ test("long constrained lines in the block editor follow sparse pointer moves wit
 });
 
 test("existing dimension lines remain draggable while the dimension command is active", async ({ page }) => {
-  await page.goto(`${baseUrl}/index.html?test=1`);
-  await page.waitForFunction(() => window.__jot2dTest);
+  await openTestDocument(page);
 
   const setup = await page.evaluate(() => window.__jot2dTest.resetForDimensionCommandLineDrag());
   await page.mouse.move(setup.point.x, setup.point.y);
@@ -1674,8 +1600,7 @@ test("existing dimension lines remain draggable while the dimension command is a
 });
 
 test("a first block projection line stays pending so a second line can be dimensioned", async ({ page }) => {
-  await page.goto(`${baseUrl}/index.html?test=1`);
-  await page.waitForFunction(() => window.__jot2dTest);
+  await openTestDocument(page);
   await page.evaluate(
     (fixture) => window.__jot2dTest.importDocumentNameFixture(fixture, "nested-block-dimension.json"),
     nestedConstraintCleanupFixture(),
@@ -1716,8 +1641,7 @@ test("a first block projection line stays pending so a second line can be dimens
 });
 
 test("hovering a block highlights its projection without showing every geometry id", async ({ page }) => {
-  await page.goto(`${baseUrl}/index.html?test=1`);
-  await page.waitForFunction(() => window.__jot2dTest);
+  await openTestDocument(page);
 
   await page.evaluate(() => window.__jot2dTest.resetForBlockCreationUi());
   await openBlocksExplorer(page);
@@ -1741,8 +1665,7 @@ test("hovering a block highlights its projection without showing every geometry 
 });
 
 test("block projection endpoints visibly highlight during constraint commands", async ({ page }) => {
-  await page.goto(`${baseUrl}/index.html?test=1`);
-  await page.waitForFunction(() => window.__jot2dTest);
+  await openTestDocument(page);
 
   await page.evaluate(() => window.__jot2dTest.resetForBlockCreationUi());
   await openBlocksExplorer(page);
@@ -1765,8 +1688,7 @@ test("block projection endpoints visibly highlight during constraint commands", 
 });
 
 test("reloaded block editing reserves existing internal geometry and sketch ids", async ({ page }) => {
-  await page.goto(`${baseUrl}/index.html?test=1`);
-  await page.waitForFunction(() => window.__jot2dTest);
+  await openTestDocument(page);
 
   await page.evaluate(() => window.__jot2dTest.resetForBlockCreationUi());
   await openBlocksExplorer(page);
@@ -1798,8 +1720,7 @@ test("reloaded block editing reserves existing internal geometry and sketch ids"
 });
 
 test("placement and existing instances keep independent enabled internal sketches", async ({ page }) => {
-  await page.goto(`${baseUrl}/index.html?test=1`);
-  await page.waitForFunction(() => window.__jot2dTest);
+  await openTestDocument(page);
   await page.evaluate(() => window.__jot2dTest.resetForBlockCreationUi());
   await openBlocksExplorer(page);
   await page.click("#toolCreateBlock");
@@ -1833,8 +1754,7 @@ test("placement and existing instances keep independent enabled internal sketche
 });
 
 test("disabling a block sketch automatically removes related constraints and reports it", async ({ page }) => {
-  await page.goto(`${baseUrl}/index.html?test=1`);
-  await page.waitForFunction(() => window.__jot2dTest);
+  await openTestDocument(page);
   await page.evaluate(
     (fixture) => window.__jot2dTest.importDocumentNameFixture(fixture, "block-sketch-constraint-removal.json"),
     blockSketchDisableConstraintFixture(),
@@ -1856,8 +1776,7 @@ test("disabling a block sketch automatically removes related constraints and rep
 });
 
 test("block creation rejects shared boundaries and annotation references without mutation", async ({ page }) => {
-  await page.goto(`${baseUrl}/index.html?test=1`);
-  await page.waitForFunction(() => window.__jot2dTest);
+  await openTestDocument(page);
   const result = await page.evaluate(() => window.__jot2dTest.blockCreationRejectionCases());
   expect(result.sharedPointError).toContain("非選択図形と共有");
   expect(result.sharedCounts).toEqual({ definitions: 0, instances: 0, lines: 2 });
@@ -1866,8 +1785,7 @@ test("block creation rejects shared boundaries and annotation references without
 });
 
 test("block creation keeps internal constraints and removes every external constraint", async ({ page }) => {
-  await page.goto(`${baseUrl}/index.html?test=1`);
-  await page.waitForFunction(() => window.__jot2dTest);
+  await openTestDocument(page);
   await page.evaluate((fixture) => window.__jot2dTest.importDocumentNameFixture(fixture, "external-constraint-block.json"), externallyConstrainedBlockFixture());
 
   const selection = await page.evaluate(() => window.__jot2dTest.selectGeometryIdsForTest({ lines: ["L32", "L33", "L34", "L35", "L46"] }));

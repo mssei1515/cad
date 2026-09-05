@@ -1,31 +1,8 @@
-const { test, expect } = require("./test-fixture");
-const { spawn } = require("child_process");
+const { test, expect, openTestDocument } = require("./test-fixture");
 const fs = require("fs");
-const http = require("http");
 const path = require("path");
 
-const host = "127.0.0.1";
-const port = Number(process.env.JOT2D_E2E_PORT || 8765) + 4;
-const baseUrl = `http://${host}:${port}`;
 const sourceFixture = JSON.parse(fs.readFileSync(path.resolve(__dirname, "../../test-data/テスト図形.json"), "utf8"));
-let serverProcess = null;
-
-function waitForServer(url, timeoutMs = 10000) {
-  const startedAt = Date.now();
-  return new Promise((resolve, reject) => {
-    const check = () => {
-      const request = http.get(url, (response) => {
-        response.resume();
-        resolve();
-      });
-      request.on("error", () => {
-        if (Date.now() - startedAt > timeoutMs) reject(new Error(`Timed out waiting for ${url}`));
-        else setTimeout(check, 100);
-      });
-    };
-    check();
-  });
-}
 
 function matchesConstraint(constraint, selector) {
   return Object.entries(selector).every(([key, value]) => constraint[key] === value);
@@ -345,22 +322,9 @@ const variants = [
   },
 ];
 
-test.beforeAll(async () => {
-  serverProcess = spawn(process.execPath, ["tools/serve.js", "--host", host, "--port", String(port)], {
-    cwd: path.resolve(__dirname, "../.."),
-    stdio: "ignore",
-  });
-  await waitForServer(`${baseUrl}/index.html`);
-});
-
-test.afterAll(() => {
-  if (serverProcess) serverProcess.kill();
-});
-
 test("keeps additional point, line, circle, arc, and endpoint drags smooth", async ({ page }) => {
   test.setTimeout(600000);
-  await page.goto(`${baseUrl}/index.html?test=1`);
-  await page.waitForFunction(() => window.__jot2dTest);
+  await openTestDocument(page);
   const summaries = [];
   const selectedVariants = process.env.CAD_GEOMETRY_VARIANT
     ? variants.filter((variant) => variant.name === process.env.CAD_GEOMETRY_VARIANT)
@@ -449,8 +413,7 @@ test("keeps additional point, line, circle, arc, and endpoint drags smooth", asy
 });
 
 test("tracks line drags when independent chords share a fixed circle", async ({ page }) => {
-  await page.goto(`${baseUrl}/index.html?test=1`);
-  await page.waitForFunction(() => window.__jot2dTest);
+  await openTestDocument(page);
   const fixture = fixedCircleChordFixture();
   const cases = [
     { id: "L1", deltas: Array.from({ length: 8 }, (_, index) => [0.75 * (index + 1), 0]), axis: "x" },
@@ -480,8 +443,7 @@ test("tracks line drags when independent chords share a fixed circle", async ({ 
 
 test("moves arcs by their centers when an indirectly constrained radius has no drag freedom", async ({ page }) => {
   test.setTimeout(120000);
-  await page.goto(`${baseUrl}/index.html?test=1`);
-  await page.waitForFunction(() => window.__jot2dTest);
+  await openTestDocument(page);
   const fixture = fixtureWithoutConstraints([
     { type: "pointAxisDistance", p1: "P27", p2: "P46", axis: "x" },
   ]);
