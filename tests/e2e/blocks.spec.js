@@ -1376,6 +1376,29 @@ test("block editor undo and redo use an independent local history", async ({ pag
   const restored = await page.evaluate(() => window.__jot2dTest.blockEditorState());
   expect(restored.sketches).toHaveLength(3);
   expect(restored.editorLineCount).toBe(1);
+
+  await page.click("#undoBtn");
+  const beforeBranch = await page.evaluate(() => window.__jot2dTest.historyState());
+  const viewport = await page.evaluate(() => window.__jot2dTest.focusWorldForTest({ x: 900, y: 900 }, 1));
+  const x = viewport.canvas.left + viewport.canvas.width / 2;
+  const y = viewport.canvas.top + viewport.canvas.height / 2;
+  await page.click("#toolLine");
+  await page.mouse.click(x, y);
+  await page.keyboard.press("Escape");
+  expect(await page.evaluate(() => window.__jot2dTest.historyState())).toEqual(beforeBranch);
+  await page.click("#toolPoint");
+  await page.mouse.click(x + 100, y);
+  expect(await page.evaluate(() => window.__jot2dTest.historyState())).toEqual(expect.objectContaining({
+    blockEditing: true, undoCount: beforeBranch.undoCount + 1, redoCount: 0, redoDisabled: true,
+  }));
+  await page.click("#undoBtn");
+  expect(await page.evaluate(() => window.__jot2dTest.historyState())).toEqual(expect.objectContaining({
+    blockEditing: true, undoCount: beforeBranch.undoCount, redoCount: 1,
+  }));
+  await page.evaluate(() => window.__jot2dTest.cancelBlockEditor());
+  expect(await page.evaluate(() => window.__jot2dTest.historyState())).toEqual(expect.objectContaining({
+    blockEditing: false, undoCount: 1, redoCount: 0,
+  }));
 });
 
 test("block editor can place existing blocks and create nested blocks that survive reload", async ({ page }) => {
