@@ -100,7 +100,7 @@ test.afterAll(() => {
 test("legacy midpoint constraints are removed and midpoint snapping is no longer offered", async ({ page }) => {
   await openFixture(page);
   let serialized = await page.evaluate(() => window.__jot2dTest.serializedModelForTest());
-  expect(serialized.version).toBe(21);
+  expect(serialized.version).toBe(22);
   expect(serialized.constraints.some((constraint) => constraint.type === "pointOnLineMidpoint")).toBe(false);
 
   await page.click("#toolPoint");

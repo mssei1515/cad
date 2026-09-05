@@ -37,7 +37,7 @@ test("creates and edits a cubic fit-point spline and persists the current versio
     endCondition: "natural",
   }));
   expect(state.direct[0].fitPoints).toHaveLength(4);
-  expect(state.serialized.version).toBe(21);
+  expect(state.serialized.version).toBe(22);
   expect(state.propertiesText).toContain("スプライン");
   expect(state.propertiesText).toContain("通過点ID");
   await expect(page.locator("#propertiesPanel .property-section > h3")).toHaveText(["基本情報", "スプラインの外観"]);
