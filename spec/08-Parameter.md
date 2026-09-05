@@ -55,6 +55,4 @@ Sketch TreeのConstraint分類は拘束寸法と参照寸法の両方を表示�
 
 ## 7. 永続化
 
-JSON version 17では、version 10で導入したParameterの意味を維持し、`target`を評価済みcacheとして残して拘束寸法の`expression`を正式な入力値とする。式内のParameterと寸法symbol参照はダブルクオーテーションを含む引用形式で保存する。チェーンオフセット寸法もチェーン全体で1つの寸法symbolと式を持つ。Document、Block Definition、History、Block Editor draft、clipboardへParameter、寸法名、式、採番counterを保存する。
-
-version 16以前の読込では、式にある引用されていない有効な識別子をダブルクオーテーションで括る形式へ自動移行する。既に引用されている参照、数値、科学表記、演算子、括弧は維持する。version 9以前ではさらに名前空間ごとの寸法配列順に`d1`以降を付与し、拘束寸法の既存`target`を現在のUI単位による数値式へ変換する。参照寸法には名前だけを付与する。移行後またはversion 17以降の式や依存関係が不正な場合は読込全体を拒否し、現在のDocumentを維持する。
+式の正式な入力値・評価cache・採番値・Clipboard等の保持範囲は[保存形式](./data/保存形式.md)に従う。引用形式への移行、旧寸法名の付与、不正な式・依存関係の拒否は[読込と互換性](./data/読込と互換性.md)に従う。
