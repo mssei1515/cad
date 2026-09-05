@@ -60,6 +60,8 @@ ToolbarまたはBlock menuのBlock作成commandを、対象選択がある状態
 
 選択内容の拘束寸法式は作成時点の評価値による数値式へ固定し、新しいDefinition内で新規`dN`を付与する。Document ParameterはDefinitionへ複製しない。
 
+選択 Geometry から作成したBlockをEditorで「完了」すると、draftの検証後、元Objectを置換する前に回転設定の確認ダイアログを表示する。「回転ロックして作成」（初期フォーカス）は新規Instanceの`rotationLocked = true`、「自由回転で作成」は`false`で作成する。「キャンセル」、×、Escはdraftを保持してEditorへ戻り、作成を確定しない。選択結果は作成と同じUndo/Redo単位に含め、保存・再読込でも保持する。空Definitionの作成完了や既存Definitionの編集完了ではこの確認を表示しない。Definitionの通常配置時の回転設定は従来どおり配置Propertiesで指定する。
+
 次は作成を拒否する。
 
 - 選択 Point を非選択 Geometry と共有している。

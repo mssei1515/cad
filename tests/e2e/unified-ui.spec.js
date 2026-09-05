@@ -1,4 +1,4 @@
-const { test, expect, openTestDocument } = require("./test-fixture");
+const { test, expect, openTestDocument, completeBlockEdit } = require("./test-fixture");
 const { execFileSync } = require("child_process");
 const path = require("path");
 const { pathToFileURL } = require("url");
@@ -782,7 +782,7 @@ test("annotation-only blocks project nested text with transforms, overrides, bou
   await page.locator('.sketch-object-row[data-object-kind="annotation"][data-id="AN1"]').click();
   await page.locator("#toolCreateBlock").click();
   await expect(page.locator("body")).toHaveClass(/block-editing/);
-  await page.locator("#completeBlockEditBtn").click();
+  await completeBlockEdit(page);
   const created = await page.evaluate(() => window.__jot2dTest.blockState());
   expect(created.serialized.annotations).toHaveLength(0);
   expect(created.serialized.blockDefinitions).toHaveLength(1);

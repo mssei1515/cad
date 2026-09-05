@@ -6195,8 +6195,12 @@
     }
   }
 
-  function completeBlockDefinitionEdit() {
+  const choiceDialog = window.ChoiceDialog.create(document.getElementById("choiceDialog"));
+  let blockCompletionChoicePending = false;
+
+  function completeBlockDefinitionEdit(options = {}) {
     if (!blockEditSession) return;
+    if (blockCompletionChoicePending) return;
     const session = blockEditSession;
     const { draft, sourceDefinition, originalElementIds, creationSelection } = session;
     draft.points = model.points;
@@ -6219,6 +6223,27 @@
     if (!validation.success) {
       setHint(validation.reason, "error");
       draw();
+      return;
+    }
+    if (session.isNew && creationSelection && typeof options.rotationLocked !== "boolean") {
+      blockCompletionChoicePending = true;
+      choiceDialog.show({
+        title: applicationText("ブロックの回転設定", "Block Rotation"),
+        message: applicationText("作成するブロックの回転方法を選択してください。\n回転ロックは向きを固定します。\n自由回転は、一致拘束した点などを支点に回転できます。", "Choose how the new block rotates.\nRotation lock holds its orientation. Free rotation allows it to rotate around a point constrained by coincidence, for example."),
+        choices: [
+          { value: true, label: applicationText("回転ロックして作成", "Create with Rotation Lock") },
+          { value: false, label: applicationText("自由回転で作成", "Create with Free Rotation") },
+        ],
+        defaultValue: true,
+        cancelLabel: applicationText("キャンセル", "Cancel"),
+        closeLabel: applicationText("閉じる", "Close"),
+      }).then((rotationLocked) => {
+        blockCompletionChoicePending = false;
+        if (rotationLocked !== null && blockEditSession === session) completeBlockDefinitionEdit({ rotationLocked });
+      }, () => {
+        blockCompletionChoicePending = false;
+        setHint(applicationText("別の確認ダイアログを閉じてから、もう一度完了してください", "Close the other confirmation dialog, then try completing the block again."), "error");
+      });
       return;
     }
     if (session.isNew && !creationSelection) {
@@ -6251,7 +6276,7 @@
       model.blockDefinitions.push(definition);
       if (creationSelection) {
         const enabledSketchIds = blockDefinitionGeometrySketchIds(definition);
-        createdInstance = { id: `BI${blockInstanceSeq++}`, definitionId: definition.id, sketchId: model.activeSketchId, x: session.replacementCenter.x, y: session.replacementCenter.y, rotation: 0, fixed: false, rotationLocked: true, enabledSketchIds, appearanceOverride: {} };
+        createdInstance = { id: `BI${blockInstanceSeq++}`, definitionId: definition.id, sketchId: model.activeSketchId, x: session.replacementCenter.x, y: session.replacementCenter.y, rotation: 0, fixed: false, rotationLocked: options.rotationLocked, enabledSketchIds, appearanceOverride: {} };
         model.blockInstances.push(createdInstance);
         blockCreationExternalConstraints = creationSelection.externalConstraints || [];
         model.constraints = model.constraints.filter((constraint) => !creationSelection.constraints.includes(constraint) && !blockCreationExternalConstraints.includes(constraint));
@@ -25093,7 +25118,7 @@
         return { client: this.worldClientPositionForTest({ x: 0, y: 0 }), lineId: line.id };
       },
       completeSketchProjectionBlockEditorForTest() {
-        completeBlockDefinitionEdit();
+        completeBlockDefinitionEdit({ rotationLocked: true });
         return { completed: !blockEditSession, serialized: structuredClone(serializeModel()) };
       },
       resetForBlockProjectionSketchProjectionTest() {
@@ -25339,7 +25364,7 @@
         return true;
       },
       completeReferenceImageBlockEditorForTest() {
-        completeBlockDefinitionEdit();
+        completeBlockDefinitionEdit({ rotationLocked: true });
         return structuredClone(serializeModel());
       },
       dimensionAppearanceStateForTest(index = 0) {
@@ -28226,7 +28251,7 @@
         enterBlockDefinitionEdit(definition.id);
         const editableLine = blockEditSession.draft.lines[0];
         editableLine.p2.x += 40;
-        completeBlockDefinitionEdit();
+        completeBlockDefinitionEdit({ rotationLocked: true });
         const lengths = model.blockInstances.map((instance) => blockProjectionBundle(instance).lines[0].length());
         return { before, lengths, revision: definition.revision, editing: Boolean(blockEditSession) };
       },
@@ -28360,7 +28385,7 @@
         return { editing: Boolean(blockEditSession), definitions: model.blockDefinitions.length, instances: model.blockInstances.length, lines: model.lines.length };
       },
       completeBlockEditor() {
-        completeBlockDefinitionEdit();
+        completeBlockDefinitionEdit({ rotationLocked: true });
         return { editing: Boolean(blockEditSession), definitions: model.blockDefinitions.length, instances: model.blockInstances.length };
       },
       setFirstBlockInstanceSketches(ids) {
