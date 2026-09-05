@@ -245,6 +245,43 @@ test("constraint commit accepts a stalled solver result within the application t
   }));
 });
 
+test("constraint resolution preserves unrelated selection, pending input, document and history", async ({ page }) => {
+  await openTestApp(page);
+  await importFixture(page);
+  await page.evaluate(() => window.__jot2dTest.selectGeometryIdsForTest({ points: ["P4"], blockInstances: ["BI1"] }));
+  const before = await page.evaluate(() => ({
+    input: window.__jot2dTest.constraintInputStateForTest(),
+    document: window.__jot2dTest.serializedModelForTest(),
+    history: window.__jot2dTest.historyState(),
+  }));
+  expect(before.input.selected.points).toEqual(["P4"]);
+  expect(before.input.selected.blockInstances).toEqual(["BI1"]);
+  const point = (id) => ({ kind: "point", id });
+  const line = (id) => ({ kind: "line", id });
+  const primitive = (id) => ({ kind: "primitive", id });
+  const endpoint = (id, endpoint) => ({ kind: "arc-endpoint", id, endpoint });
+  const cases = [
+    { type: "coincident", inputs: [point("P1")], expected: null },
+    { type: "coincident", inputs: [point("P1"), line("L1")], constraint: { type: "pointOnLine", point: "P1", line: "L1" } },
+    { type: "coincident", inputs: [endpoint("A1", "end"), endpoint("A2", "start")], constraint: { type: "arcEndpointArcEndpointCoincident", a: "A1", endpointA: "end", b: "A2", endpointB: "start" } },
+    { type: "horizontal", inputs: [line("L2")], constraint: { type: "horizontal", line: "L2" } },
+    { type: "equalRadius", inputs: [primitive("A1"), primitive("C1")], constraint: { type: "equalRadius", a: "C1", b: "A1" } },
+    { type: "symmetry", inputs: [line("L2"), point("P2"), point("P4")], constraint: { type: "symmetry", p1: "P2", p2: "P4", axis: "L2" } },
+    { type: "tangent", inputs: [line("L1"), primitive("C1")], constraint: { type: "lineCircleTangent", line: "L1", primitive: "C1" } },
+    { type: "distance", inputs: [line("L1"), line("L2")], expected: { action: "place-dimension", targetKind: "angle" } },
+    { type: "parallel", inputs: [line("L1"), line("LS2")], expected: { error: expect.any(String) } },
+  ];
+  for (const scenario of cases) {
+    const result = await page.evaluate(({ type, inputs }) => window.__jot2dTest.resolveConstraintIntentForTest(type, inputs), { type: scenario.type, inputs: scenario.inputs });
+    if (scenario.constraint) expect(result).toMatchObject({ action: "commit", constraint: scenario.constraint });
+    else if (scenario.expected === null) expect(result).toBeNull();
+    else expect(result).toMatchObject(scenario.expected);
+    expect(await page.evaluate(() => window.__jot2dTest.constraintInputStateForTest())).toEqual(before.input);
+    expect(await page.evaluate(() => window.__jot2dTest.historyState())).toEqual(before.history);
+    expect(exactPersistedDocument(await page.evaluate(() => window.__jot2dTest.serializedModelForTest()))).toEqual(exactPersistedDocument(before.document));
+  }
+});
+
 test("complete documents are byte-shape stable apart from savedAt", async ({ page }) => {
   await openTestApp(page);
   const first = await importFixture(page);
