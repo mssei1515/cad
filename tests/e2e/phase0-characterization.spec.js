@@ -68,15 +68,6 @@ function waitForServer(url, timeoutMs = 10000) {
 function semanticDocument(data) {
   const clone = structuredClone(data);
   delete clone.savedAt;
-  const normalizeAngleDimensions = (constraints = []) => {
-    for (const constraint of constraints) {
-      if (constraint.type !== "lineAngle" || !constraint.dimension) continue;
-      delete constraint.dimension.offsetU;
-      delete constraint.dimension.offsetN;
-    }
-  };
-  normalizeAngleDimensions(clone.constraints);
-  for (const definition of clone.blockDefinitions || []) normalizeAngleDimensions(definition.constraints);
   return clone;
 }
 
@@ -255,7 +246,6 @@ test("constraint commit accepts a stalled solver result within the application t
 });
 
 test("complete documents are byte-shape stable apart from savedAt", async ({ page }) => {
-  test.fail(true, "Known Phase 0 gap: angle dimensions serialize unused linear offsets as null, then reload them as zero");
   await openTestApp(page);
   const first = await importFixture(page);
   const reload = await page.evaluate(
@@ -422,16 +412,37 @@ test("selection, hit testing, viewport changes, and canceled commands do not mut
   expect(semanticDocument(await page.evaluate(() => window.__jot2dTest.serializedModelForTest()))).toEqual(semanticDocument(before));
 });
 
-test("canceling an in-progress line does not add a history entry", async ({ page }) => {
-  test.fail(true, "Known Phase 0 gap: line-start rollback restores the model but leaves an extra history entry");
+test("canceling an in-progress line preserves history and redo", async ({ page }) => {
   await openTestApp(page);
-  await importFixture(page);
+  const before = await importFixture(page);
   const historyBefore = await page.evaluate(() => window.__jot2dTest.historyState());
   const viewport = await page.evaluate(() => window.__jot2dTest.focusWorldForTest({ x: 900, y: 900 }, 1));
+  const x = viewport.canvas.left + viewport.canvas.width / 2;
+  const y = viewport.canvas.top + viewport.canvas.height / 2;
   await page.click("#toolLine");
-  await page.mouse.click(viewport.canvas.left + viewport.canvas.width / 2, viewport.canvas.top + viewport.canvas.height / 2);
+  await page.mouse.click(x, y);
+  expect(await page.evaluate(() => window.__jot2dTest.historyState())).toEqual(historyBefore);
   await page.keyboard.press("Escape");
   expect(await page.evaluate(() => window.__jot2dTest.historyState())).toEqual(historyBefore);
+  expect(exactPersistedDocument(await page.evaluate(() => window.__jot2dTest.serializedModelForTest()))).toEqual(exactPersistedDocument(before));
+
+  await page.click("#toolLine");
+  await page.mouse.click(x - 100, y);
+  await page.mouse.click(x + 100, y + 50);
+  await page.keyboard.press("Escape");
+  const completed = await page.evaluate(() => window.__jot2dTest.serializedModelForTest());
+  expect(completed.lines).toHaveLength(before.lines.length + 1);
+  expect(await page.evaluate(() => window.__jot2dTest.historyState())).toEqual({ ...historyBefore, undoCount: historyBefore.undoCount + 1 });
+  await page.click("#undoBtn");
+  expect(exactPersistedDocument(await page.evaluate(() => window.__jot2dTest.serializedModelForTest()))).toEqual(exactPersistedDocument(before));
+  const afterUndo = await page.evaluate(() => window.__jot2dTest.historyState());
+  await page.click("#toolLine");
+  await page.mouse.click(x, y);
+  await page.keyboard.press("Escape");
+  expect(await page.evaluate(() => window.__jot2dTest.historyState())).toEqual(afterUndo);
+  expect(exactPersistedDocument(await page.evaluate(() => window.__jot2dTest.serializedModelForTest()))).toEqual(exactPersistedDocument(before));
+  await page.click("#redoBtn");
+  expect(exactPersistedDocument(await page.evaluate(() => window.__jot2dTest.serializedModelForTest()))).toEqual(exactPersistedDocument(completed));
 });
 
 test("history uses one transaction per edit, restores exact state, and clears redo after a branch", async ({ page }) => {

@@ -7778,8 +7778,8 @@
         constraint.dimension = {
           x: Number(data.dimension.x),
           y: Number(data.dimension.y),
-          offsetU: Number.isFinite(Number(data.dimension.offsetU)) ? Number(data.dimension.offsetU) : NaN,
-          offsetN: Number.isFinite(Number(data.dimension.offsetN)) ? Number(data.dimension.offsetN) : NaN,
+          offsetU: data.dimension.offsetU != null && Number.isFinite(Number(data.dimension.offsetU)) ? Number(data.dimension.offsetU) : NaN,
+          offsetN: data.dimension.offsetN != null && Number.isFinite(Number(data.dimension.offsetN)) ? Number(data.dimension.offsetN) : NaN,
           labelOffsetU: Number.isFinite(Number(data.dimension.labelOffsetU)) ? Number(data.dimension.labelOffsetU) : 0,
           labelX: Number.isFinite(Number(data.dimension.labelX)) ? Number(data.dimension.labelX) : NaN,
           labelY: Number.isFinite(Number(data.dimension.labelY)) ? Number(data.dimension.labelY) : NaN,
@@ -22694,7 +22694,8 @@
     }
 
     if (!dragSession) {
-      recordHistory("操作");
+      // The first Line endpoint is provisional until a segment is completed.
+      if (!lineStartRollback) recordHistory("操作");
       return;
     }
     const session = dragSession;
