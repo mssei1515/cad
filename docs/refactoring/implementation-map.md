@@ -86,3 +86,20 @@ R1の照合では新しい製品仕様判断は不要。操作途中のDocument�
 R2では履歴の操作手順を共通化した。activeEditHistoryが現在のscopeのundo／redo、snapshot作成、比較signature、復元処理、表示labelを束ねる。recordHistoryが同一状態の除外・上限・Redo破棄を、undoHistory／redoHistoryがstack間の移動を共用する。履歴buttonも同じscopeを参照する。
 
 DocumentのhistorySnapshotとBlock EditorのcaptureBlockEditorHistorySnapshot、各復元関数、初期化処理は別々に保持する。共通処理はrollback範囲を決めず、失敗した操作を自動的に確定しない。TX-01〜05、snapshot形式、復元時の処理順は変更しない。操作別のsnapshotを一律のtransactionへ置き換える作業は今回の対象外。
+
+## 7. ドラッグの計測と更新境界
+
+| 経路・区分 | 現在の関数 | 計測範囲 |
+| --- | --- | --- |
+| preview | processScheduledCanvasPointerMove | 最新pointerの反映、Geometry読出しcache scope、必要な寸法入力同期 |
+| commit | endDrag → finishPointerInteraction | 最後の未処理previewをflushした後の確定。flushはpreviewとして別計上 |
+| solve | dragResultForSession／solveFinalDragSession | 準備・fallbackを含むdrag solver呼出し単位。内部の反復回数ではない |
+| dependencies | solveReferenceDependentSketches | 参照依存先の再評価・solve |
+| parameters／analysis | stabilizeActiveParameterNamespace／refreshConstraintAnalysis | Parameter安定化（内部のsolveを含む）／拘束解析 |
+| draw／geometryReads | draw／cachedGeometryRead | Canvas描画の同期処理／cache missまたはcacheなしの実生成 |
+| ui／tree／properties | updateUI・updateGeometrySelectionUI・setHint／updateSketchUI／updatePropertiesUI | UI更新をTree全再生成とPropertiesに分ける。Tree選択class変更はuiに含む |
+| history | recordHistory | snapshot作成・比較・履歴追加 |
+
+profileInteractionPhaseとprofileInteractionWorkは明示的に有効化した同期scopeだけを集計する。workのselfMsは入れ子の計測時間を除き、scope内の残りをotherMsとする。Parameterや依存更新内のsolveをsolve区分へ再加算しない。呼出し回数は各関数の粒度であり、ui呼出しの中にtree／propertiesの呼出しが含まれる。
+
+角度以外の寸法確定はupdateGeometrySelectionUIとsyncDimensionValueInputを使用する。Properties・選択表示・履歴は保持し、形状不変の操作で拘束解析とTree全再生成を省く。角度寸法のsyncAngleConstraintFromDimensionはtargetを変更し得るためupdateUIを維持する。
