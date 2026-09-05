@@ -430,7 +430,7 @@
   let historyRestoring = false;
   let geometryClipboard = null;
   const HISTORY_LIMIT = 80;
-  const CURRENT_JSON_VERSION = 21;
+  const CURRENT_JSON_VERSION = 22;
   const CSS_PIXELS_PER_INCH = 96;
   const MILLIMETERS_PER_INCH = 25.4;
   const CSS_PX_PER_MM = CSS_PIXELS_PER_INCH / MILLIMETERS_PER_INCH;
@@ -461,6 +461,7 @@
   const DIMENSION_EXPRESSION_MARK_GAP_FACTOR = 0.16;
   const DIMENSION_ARROW_MITER_LIMIT = 10;
   const HATCH_SCREEN_PX_PER_MM = CSS_PX_PER_MM;
+  const HATCH_BOUNDARY_HIT_MARGIN_SCREEN_PX = 1;
   const DIMENSION_APPEARANCE_LENGTH_KEYS = ["extensionLineOvershoot", "extensionLineOriginGap", "terminatorSize", "dimensionTextHeight", "dimensionTextGap"];
   const DIMENSION_DISPLAY_PRECISION = 1e-6;
   const MEASURED_DIMENSION_SNAP_TOLERANCE = 1e-5;
@@ -880,6 +881,7 @@
       const normalized = {
         id: String(item.id || `H${index + 1}`),
         sketchId: item.sketchId == null ? fallbackSketchId : String(item.sketchId),
+        drawingOrder: normalizedDrawingOrder(item.drawingOrder),
         seed,
         boundaryLoops,
         appearance: normalizeHatchAppearance(item.appearance),
@@ -896,7 +898,8 @@
     if (!Array.isArray(value.boundaryLoops) || value.boundaryLoops.length === 0 || !normalizeHatchBoundaryLoops(value.boundaryLoops)) return false;
     const appearance = value.appearance;
     if (!appearance || typeof appearance !== "object" || Array.isArray(appearance)) return false;
-    return typeof appearance.visible === "boolean"
+    return (value.drawingOrder == null || normalizedDrawingOrder(value.drawingOrder) != null)
+      && typeof appearance.visible === "boolean"
       && ["parallel", "cross", "solid"].includes(appearance.patternType)
       && Number.isFinite(Number(appearance.angle))
       && Number.isFinite(Number(appearance.spacing)) && Number(appearance.spacing) >= 0.25
@@ -914,6 +917,7 @@
     return {
       id: String(hatch.id),
       sketchId: String(hatch.sketchId),
+      drawingOrder: normalizedDrawingOrder(hatch.drawingOrder) ?? 0,
       seed: { x: Number(hatch.seed?.x) || 0, y: Number(hatch.seed?.y) || 0 },
       boundaryLoops: normalizeHatchBoundaryLoops(hatch.boundaryLoops),
       appearance: normalizeHatchAppearance(hatch.appearance),
@@ -1124,6 +1128,62 @@
     }
   }
 
+  function normalizedDrawingOrder(value) {
+    return Number.isInteger(value) && value >= 0 ? value : null;
+  }
+
+  function drawingOrderItemsForScope(scope = model, sketchId = null) {
+    const items = [
+      ...(scope?.hatches || []),
+      ...(scope?.lines || []),
+      ...(scope?.circles || []),
+      ...(scope?.arcs || []),
+      ...(scope?.splines || []),
+      ...(scope?.blockInstances || []),
+      ...(scope?.geometryInstances || []),
+    ].filter(Boolean);
+    return sketchId == null ? items : items.filter((item) => String(item.sketchId) === String(sketchId));
+  }
+
+  function ensureDrawingOrderState(scope = model) {
+    const items = drawingOrderItemsForScope(scope);
+    const indexByItem = new Map(items.map((item, index) => [item, index]));
+    const bySketch = new Map();
+    for (const item of items) {
+      const sketchId = String(item.sketchId || "");
+      if (!bySketch.has(sketchId)) bySketch.set(sketchId, []);
+      bySketch.get(sketchId).push(item);
+    }
+    for (const sketchItems of bySketch.values()) {
+      const seenOrders = new Set();
+      let maxOrder = -1;
+      let alreadyNormalized = true;
+      for (const item of sketchItems) {
+        const order = normalizedDrawingOrder(item.drawingOrder);
+        if (order == null || seenOrders.has(order)) {
+          alreadyNormalized = false;
+          break;
+        }
+        seenOrders.add(order);
+        maxOrder = Math.max(maxOrder, order);
+      }
+      if (alreadyNormalized && maxOrder === sketchItems.length - 1) continue;
+      const existing = sketchItems.filter((item) => normalizedDrawingOrder(item.drawingOrder) != null);
+      const missing = sketchItems.filter((item) => normalizedDrawingOrder(item.drawingOrder) == null);
+      const ordered = existing.length === 0
+        ? sketchItems
+        : [
+            ...missing.filter((item) => (scope?.hatches || []).includes(item)),
+            ...existing.sort((a, b) => normalizedDrawingOrder(a.drawingOrder) - normalizedDrawingOrder(b.drawingOrder) || indexByItem.get(a) - indexByItem.get(b)),
+            ...missing.filter((item) => !(scope?.hatches || []).includes(item)),
+          ];
+      ordered.forEach((item, index) => {
+        item.drawingOrder = index;
+      });
+    }
+    return scope;
+  }
+
   function ensureAppearanceState() {
     model.defaultAppearance = normalizeAppearance(model.defaultAppearance, { partial: false });
     model.defaultConstructionAppearance = normalizeConstructionAppearance(model.defaultConstructionAppearance, { partial: false });
@@ -1266,6 +1326,7 @@
           instance.rotation = Number(instance.rotation) || 0;
           instance.fixed = Boolean(instance.fixed);
           instance.rotationLocked = Boolean(instance.rotationLocked);
+          instance.drawingOrder = normalizedDrawingOrder(instance.drawingOrder);
           instance.appearanceOverride = normalizeAppearance(instance.appearanceOverride);
           const nestedDefinition = model.blockDefinitions.find((item) => item.id === instance.definitionId);
           const nestedDrawableIds = blockDefinitionDrawableSketchIds(nestedDefinition);
@@ -1293,6 +1354,7 @@
       instance.rotation = Number(instance.rotation) || 0;
       instance.fixed = Boolean(instance.fixed);
       instance.rotationLocked = Boolean(instance.rotationLocked);
+      instance.drawingOrder = normalizedDrawingOrder(instance.drawingOrder);
       instance.appearanceOverride = normalizeAppearance(instance.appearanceOverride);
       const definition = model.blockDefinitions.find((item) => item.id === instance.definitionId);
       const drawableIds = blockDefinitionDrawableSketchIds(definition);
@@ -1308,6 +1370,8 @@
     ensureSketchState();
     ensureAppearanceState();
     ensureBlockState();
+    ensureDrawingOrderState(model);
+    for (const definition of model.blockDefinitions) ensureDrawingOrderState(definition);
     ensureParameterNamespace(model);
   }
 
@@ -2469,6 +2533,7 @@
       id: String(raw?.id || `${prefix}${index + 1}`),
       type,
       sketchId: normalizeSketch(raw?.sketchId),
+      drawingOrder: normalizedDrawingOrder(raw?.drawingOrder),
       sources,
       appearanceOverride: normalizeAppearance(raw?.appearanceOverride),
     };
@@ -2494,6 +2559,7 @@
       id: instance.id,
       type: instance.type,
       sketchId: instance.sketchId,
+      drawingOrder: normalizedDrawingOrder(instance.drawingOrder) ?? 0,
       sources: instance.sources.map((ref) => ({ kind: ref.kind, path: [...ref.path] })),
       appearanceOverride: normalizeAppearance(instance.appearanceOverride),
     };
@@ -2506,6 +2572,12 @@
     }
     if (instance.legacyOutput) data.legacyOutput = { ...instance.legacyOutput, pointIds: [...(instance.legacyOutput.pointIds || [])] };
     return data;
+  }
+
+  function geometryInstanceTypeLabel(type) {
+    if (type === "mirror") return applicationText("ミラー", "Mirror");
+    if (type === "pattern") return applicationText("直線パターン", "Linear Pattern");
+    return applicationText("スケッチ投影", "Sketch Projection");
   }
 
   function emptyGeometryInstanceBundle(instance, reason = "") {
@@ -2758,10 +2830,10 @@
       if (!activeOnly) return true;
       return hatch.sketchId === activeSketchId();
     });
-    for (let index = candidates.length - 1; index >= 0; index--) {
-      const hatch = candidates[index];
+    candidates.sort((a, b) => (normalizedDrawingOrder(drawingOrderOwner(b).drawingOrder) ?? 0) - (normalizedDrawingOrder(drawingOrderOwner(a).drawingOrder) ?? 0));
+    for (const hatch of candidates) {
       const resolved = resolvedHatchBoundary(hatch);
-      if (resolved.ok && hatchContainsPoint(resolved, point)) return hatch;
+      if (hatchContainsSelectablePoint(hatch, resolved, point)) return hatch;
     }
     return null;
   }
@@ -5289,6 +5361,7 @@
       id: instance.id,
       definitionId: instance.definitionId,
       sketchId: instance.sketchId,
+      drawingOrder: normalizedDrawingOrder(instance.drawingOrder),
       x: Number(instance.x) - (Number(offset.x) || 0),
       y: Number(instance.y) - (Number(offset.y) || 0),
       rotation: Number(instance.rotation) || 0,
@@ -5313,6 +5386,7 @@
     const lines = selection.lines.map((source) => {
       const line = new Line(source.id, pointById.get(source.p1.id), pointById.get(source.p2.id), source.construction);
       line.sketchId = DEFAULT_SKETCH_ID;
+      line.drawingOrder = normalizedDrawingOrder(source.drawingOrder);
       line.appearance = normalizeAppearance(source.appearance);
       lineById.set(line.id, line);
       return line;
@@ -5321,6 +5395,7 @@
     const circles = selection.circles.map((source) => {
       const circle = new Circle(source.id, pointById.get(source.center.id), source.radius(), source.construction);
       circle.sketchId = DEFAULT_SKETCH_ID;
+      circle.drawingOrder = normalizedDrawingOrder(source.drawingOrder);
       circle.appearance = normalizeAppearance(source.appearance);
       primitiveById.set(circle.id, circle);
       return circle;
@@ -5328,6 +5403,7 @@
     const arcs = selection.arcs.map((source) => {
       const arc = new Arc(source.id, pointById.get(source.center.id), source.radius(), source.startAngle, source.endAngle, source.construction);
       arc.sketchId = DEFAULT_SKETCH_ID;
+      arc.drawingOrder = normalizedDrawingOrder(source.drawingOrder);
       arc.appearance = normalizeAppearance(source.appearance);
       primitiveById.set(arc.id, arc);
       return arc;
@@ -5335,6 +5411,7 @@
     const splines = (selection.splines || []).map((source) => {
       const spline = new Spline(source.id, source.fitPoints.map((point) => pointById.get(point.id)), source.closed, source.construction);
       spline.sketchId = DEFAULT_SKETCH_ID;
+      spline.drawingOrder = normalizedDrawingOrder(source.drawingOrder);
       spline.appearance = normalizeAppearance(source.appearance);
       primitiveById.set(spline.id, spline);
       return spline;
@@ -5394,6 +5471,7 @@
     const lines = definition.lines.map((source) => {
       const line = new Line(source.id, pointById.get(source.p1.id), pointById.get(source.p2.id), source.construction);
       line.sketchId = source.sketchId;
+      line.drawingOrder = normalizedDrawingOrder(source.drawingOrder);
       line.appearance = normalizeAppearance(source.appearance);
       lineById.set(line.id, line);
       return line;
@@ -5402,6 +5480,7 @@
     const circles = definition.circles.map((source) => {
       const circle = new Circle(source.id, pointById.get(source.center.id), source.radius(), source.construction);
       circle.sketchId = source.sketchId;
+      circle.drawingOrder = normalizedDrawingOrder(source.drawingOrder);
       circle.appearance = normalizeAppearance(source.appearance);
       primitiveById.set(circle.id, circle);
       return circle;
@@ -5409,6 +5488,7 @@
     const arcs = definition.arcs.map((source) => {
       const arc = new Arc(source.id, pointById.get(source.center.id), source.radius(), source.startAngle, source.endAngle, source.construction);
       arc.sketchId = source.sketchId;
+      arc.drawingOrder = normalizedDrawingOrder(source.drawingOrder);
       arc.appearance = normalizeAppearance(source.appearance);
       primitiveById.set(arc.id, arc);
       return arc;
@@ -5416,6 +5496,7 @@
     const splines = (definition.splines || []).map((source) => {
       const spline = new Spline(source.id, source.fitPoints.map((point) => pointById.get(point.id)), source.closed, source.construction);
       spline.sketchId = source.sketchId;
+      spline.drawingOrder = normalizedDrawingOrder(source.drawingOrder);
       spline.appearance = normalizeAppearance(source.appearance);
       primitiveById.set(spline.id, spline);
       return spline;
@@ -7356,10 +7437,10 @@
         parameters: (definition.parameters || []).map((parameter) => ({ name: parameter.name, expression: parameter.expression })),
         nextDimensionParameterIndex: Math.max(1, Number(definition.nextDimensionParameterIndex) || 1),
         points: definition.points.map((point) => ({ id: point.id, x: point.x, y: point.y, fixed: point.fixed, kind: point.kind || "endpoint", sketchId: point.sketchId, appearance: normalizeAppearance(point.appearance) })),
-        lines: definition.lines.map((line) => ({ id: line.id, p1: line.p1.id, p2: line.p2.id, construction: Boolean(line.construction), sketchId: line.sketchId, appearance: normalizeAppearance(line.appearance) })),
-        circles: definition.circles.map((circle) => ({ id: circle.id, center: circle.center.id, radius: circle.radius(), construction: Boolean(circle.construction), sketchId: circle.sketchId, appearance: normalizeAppearance(circle.appearance) })),
-        arcs: definition.arcs.map((arc) => ({ id: arc.id, center: arc.center.id, radius: arc.radius(), startAngle: arc.startAngle, endAngle: arc.endAngle, construction: Boolean(arc.construction), sketchId: arc.sketchId, appearance: normalizeAppearance(arc.appearance) })),
-        splines: (definition.splines || []).map((spline) => ({ id: spline.id, definitionMode: "fit", degree: 3, fitPoints: spline.fitPoints.map((point) => point.id), closed: Boolean(spline.closed), endCondition: "natural", construction: Boolean(spline.construction), sketchId: spline.sketchId, appearance: normalizeAppearance(spline.appearance) })),
+        lines: definition.lines.map((line) => ({ id: line.id, p1: line.p1.id, p2: line.p2.id, construction: Boolean(line.construction), sketchId: line.sketchId, drawingOrder: normalizedDrawingOrder(line.drawingOrder) ?? 0, appearance: normalizeAppearance(line.appearance) })),
+        circles: definition.circles.map((circle) => ({ id: circle.id, center: circle.center.id, radius: circle.radius(), construction: Boolean(circle.construction), sketchId: circle.sketchId, drawingOrder: normalizedDrawingOrder(circle.drawingOrder) ?? 0, appearance: normalizeAppearance(circle.appearance) })),
+        arcs: definition.arcs.map((arc) => ({ id: arc.id, center: arc.center.id, radius: arc.radius(), startAngle: arc.startAngle, endAngle: arc.endAngle, construction: Boolean(arc.construction), sketchId: arc.sketchId, drawingOrder: normalizedDrawingOrder(arc.drawingOrder) ?? 0, appearance: normalizeAppearance(arc.appearance) })),
+        splines: (definition.splines || []).map((spline) => ({ id: spline.id, definitionMode: "fit", degree: 3, fitPoints: spline.fitPoints.map((point) => point.id), closed: Boolean(spline.closed), endCondition: "natural", construction: Boolean(spline.construction), sketchId: spline.sketchId, drawingOrder: normalizedDrawingOrder(spline.drawingOrder) ?? 0, appearance: normalizeAppearance(spline.appearance) })),
         annotations: normalizeAnnotations(definition.annotations, definition.activeSketchId).map(serializeAnnotation),
         hatches: normalizeHatches(definition.hatches, definition.activeSketchId).map(serializeHatch),
         referenceImages: normalizeReferenceImages(definition.referenceImages, definition.activeSketchId).map(serializeReferenceImage),
@@ -7368,6 +7449,7 @@
           id: instance.id,
           definitionId: instance.definitionId,
           sketchId: instance.sketchId,
+          drawingOrder: normalizedDrawingOrder(instance.drawingOrder) ?? 0,
           x: instance.x,
           y: instance.y,
           rotation: instance.rotation,
@@ -7392,6 +7474,7 @@
         id: instance.id,
         definitionId: instance.definitionId,
         sketchId: instance.sketchId,
+        drawingOrder: normalizedDrawingOrder(instance.drawingOrder) ?? 0,
         x: instance.x,
         y: instance.y,
         rotation: instance.rotation,
@@ -7402,10 +7485,10 @@
       })),
       geometryInstances: model.geometryInstances.map(serializeGeometryInstance),
       points: model.points.map((p) => ({ id: p.id, x: p.x, y: p.y, fixed: p.fixed, kind: p.kind || (isPointUsedByPrimitive(p) ? "endpoint" : "explicit"), sketchId: elementSketchId(p), appearance: normalizeAppearance(p.appearance) })),
-      lines: model.lines.map((l) => ({ id: l.id, p1: l.p1.id, p2: l.p2.id, construction: Boolean(l.construction), sketchId: elementSketchId(l), appearance: normalizeAppearance(l.appearance) })),
-      circles: model.circles.map((c) => ({ id: c.id, center: c.center.id, radius: c.radius(), construction: Boolean(c.construction), sketchId: elementSketchId(c), appearance: normalizeAppearance(c.appearance) })),
-      arcs: model.arcs.map((a) => ({ id: a.id, center: a.center.id, radius: a.radius(), startAngle: a.startAngle, endAngle: a.endAngle, construction: Boolean(a.construction), sketchId: elementSketchId(a), appearance: normalizeAppearance(a.appearance) })),
-      splines: model.splines.map((spline) => ({ id: spline.id, definitionMode: "fit", degree: 3, fitPoints: spline.fitPoints.map((point) => point.id), closed: Boolean(spline.closed), endCondition: "natural", construction: Boolean(spline.construction), sketchId: elementSketchId(spline), appearance: normalizeAppearance(spline.appearance) })),
+      lines: model.lines.map((l) => ({ id: l.id, p1: l.p1.id, p2: l.p2.id, construction: Boolean(l.construction), sketchId: elementSketchId(l), drawingOrder: normalizedDrawingOrder(l.drawingOrder) ?? 0, appearance: normalizeAppearance(l.appearance) })),
+      circles: model.circles.map((c) => ({ id: c.id, center: c.center.id, radius: c.radius(), construction: Boolean(c.construction), sketchId: elementSketchId(c), drawingOrder: normalizedDrawingOrder(c.drawingOrder) ?? 0, appearance: normalizeAppearance(c.appearance) })),
+      arcs: model.arcs.map((a) => ({ id: a.id, center: a.center.id, radius: a.radius(), startAngle: a.startAngle, endAngle: a.endAngle, construction: Boolean(a.construction), sketchId: elementSketchId(a), drawingOrder: normalizedDrawingOrder(a.drawingOrder) ?? 0, appearance: normalizeAppearance(a.appearance) })),
+      splines: model.splines.map((spline) => ({ id: spline.id, definitionMode: "fit", degree: 3, fitPoints: spline.fitPoints.map((point) => point.id), closed: Boolean(spline.closed), endCondition: "natural", construction: Boolean(spline.construction), sketchId: elementSketchId(spline), drawingOrder: normalizedDrawingOrder(spline.drawingOrder) ?? 0, appearance: normalizeAppearance(spline.appearance) })),
       constraints: model.constraints
         .map((constraint) => {
           const data = decorateSerializedConstraint(serializeConstraint(constraint), constraint);
@@ -7461,10 +7544,10 @@
       parameters: (definition.parameters || []).map((parameter) => ({ name: parameter.name, expression: parameter.expression })),
       nextDimensionParameterIndex: Math.max(1, Number(definition.nextDimensionParameterIndex) || 1),
       points: definition.points.map((point) => ({ id: point.id, x: point.x, y: point.y, fixed: point.fixed, kind: point.kind, sketchId: point.sketchId })),
-      lines: definition.lines.map((line) => ({ id: line.id, p1: line.p1.id, p2: line.p2.id, construction: Boolean(line.construction), sketchId: line.sketchId })),
-      circles: definition.circles.map((circle) => ({ id: circle.id, center: circle.center.id, radius: circle.radius(), construction: Boolean(circle.construction), sketchId: circle.sketchId })),
-      arcs: definition.arcs.map((arc) => ({ id: arc.id, center: arc.center.id, radius: arc.radius(), startAngle: arc.startAngle, endAngle: arc.endAngle, construction: Boolean(arc.construction), sketchId: arc.sketchId })),
-      splines: (definition.splines || []).map((spline) => ({ id: spline.id, definitionMode: "fit", degree: 3, fitPoints: spline.fitPoints.map((point) => point.id), closed: Boolean(spline.closed), endCondition: "natural", construction: Boolean(spline.construction), sketchId: spline.sketchId })),
+      lines: definition.lines.map((line) => ({ id: line.id, p1: line.p1.id, p2: line.p2.id, construction: Boolean(line.construction), sketchId: line.sketchId, drawingOrder: normalizedDrawingOrder(line.drawingOrder) ?? 0 })),
+      circles: definition.circles.map((circle) => ({ id: circle.id, center: circle.center.id, radius: circle.radius(), construction: Boolean(circle.construction), sketchId: circle.sketchId, drawingOrder: normalizedDrawingOrder(circle.drawingOrder) ?? 0 })),
+      arcs: definition.arcs.map((arc) => ({ id: arc.id, center: arc.center.id, radius: arc.radius(), startAngle: arc.startAngle, endAngle: arc.endAngle, construction: Boolean(arc.construction), sketchId: arc.sketchId, drawingOrder: normalizedDrawingOrder(arc.drawingOrder) ?? 0 })),
+      splines: (definition.splines || []).map((spline) => ({ id: spline.id, definitionMode: "fit", degree: 3, fitPoints: spline.fitPoints.map((point) => point.id), closed: Boolean(spline.closed), endCondition: "natural", construction: Boolean(spline.construction), sketchId: spline.sketchId, drawingOrder: normalizedDrawingOrder(spline.drawingOrder) ?? 0 })),
       annotations: normalizeAnnotations(definition.annotations, definition.activeSketchId).map(serializeAnnotation),
       hatches: normalizeHatches(definition.hatches, definition.activeSketchId).map(serializeHatch),
       referenceImages: normalizeReferenceImages(definition.referenceImages, definition.activeSketchId).map(serializeReferenceImage),
@@ -7473,6 +7556,7 @@
         id: instance.id,
         definitionId: instance.definitionId,
         sketchId: instance.sketchId,
+        drawingOrder: normalizedDrawingOrder(instance.drawingOrder) ?? 0,
         x: instance.x,
         y: instance.y,
         rotation: instance.rotation,
@@ -7927,6 +8011,7 @@
         if (!p1 || !p2) throw new Error(`ブロック ${rawDefinition.id} の線端点が見つかりません`);
         const line = new Line(String(rawLine.id), p1, p2, Boolean(rawLine.construction));
         line.sketchId = normalizeDefinitionSketchId(rawLine.sketchId || p1.sketchId || p2.sketchId);
+        line.drawingOrder = normalizedDrawingOrder(rawLine.drawingOrder);
         line.appearance = normalizeAppearance(rawLine.appearance);
         lineById.set(line.id, line);
         return line;
@@ -7937,6 +8022,7 @@
         if (!center) throw new Error(`ブロック ${rawDefinition.id} の円中心が見つかりません`);
         const circle = new Circle(String(rawCircle.id), center, Number(rawCircle.radius), Boolean(rawCircle.construction));
         circle.sketchId = normalizeDefinitionSketchId(rawCircle.sketchId || center.sketchId);
+        circle.drawingOrder = normalizedDrawingOrder(rawCircle.drawingOrder);
         circle.appearance = normalizeAppearance(rawCircle.appearance);
         primitiveById.set(circle.id, circle);
         return circle;
@@ -7946,6 +8032,7 @@
         if (!center) throw new Error(`ブロック ${rawDefinition.id} の円弧中心が見つかりません`);
         const arc = new Arc(String(rawArc.id), center, Number(rawArc.radius), Number(rawArc.startAngle), Number(rawArc.endAngle), Boolean(rawArc.construction));
         arc.sketchId = normalizeDefinitionSketchId(rawArc.sketchId || center.sketchId);
+        arc.drawingOrder = normalizedDrawingOrder(rawArc.drawingOrder);
         arc.appearance = normalizeAppearance(rawArc.appearance);
         primitiveById.set(arc.id, arc);
         return arc;
@@ -7959,6 +8046,7 @@
         const spline = new Spline(String(rawSpline.id), fitPoints, Boolean(rawSpline.closed), Boolean(rawSpline.construction));
         if (!spline.curve().valid) throw new Error(`ブロック ${rawDefinition.id} のスプライン ${rawSpline.id} を構築できません`);
         spline.sketchId = normalizeDefinitionSketchId(rawSpline.sketchId || fitPoints[0]?.sketchId);
+        spline.drawingOrder = normalizedDrawingOrder(rawSpline.drawingOrder);
         if (sourceVersion >= 15 && fitPoints.some((point) => String(point.sketchId) !== String(spline.sketchId))) throw new Error(`ブロック ${rawDefinition.id} のスプライン ${rawSpline.id} の通過点が別のスケッチに所属しています`);
         spline.appearance = normalizeAppearance(rawSpline.appearance);
         primitiveById.set(spline.id, spline);
@@ -8043,6 +8131,7 @@
             id: String(instance.id || `BI${index + 1}`),
             definitionId: String(instance.definitionId),
             sketchId: meta.normalizeDefinitionSketchId(instance.sketchId),
+            drawingOrder: normalizedDrawingOrder(instance.drawingOrder),
             x: Number(instance.x) || 0,
             y: Number(instance.y) || 0,
             rotation: Number(instance.rotation) || 0,
@@ -8168,6 +8257,7 @@
         id: String(instance.id || `BI${index + 1}`),
         definitionId: String(instance.definitionId),
         sketchId: normalizeSketchId(instance.sketchId),
+        drawingOrder: normalizedDrawingOrder(instance.drawingOrder),
         x: Number(instance.x) || 0,
         y: Number(instance.y) || 0,
         rotation: Number(instance.rotation) || 0,
@@ -8212,6 +8302,7 @@
       if (!p1 || !p2) throw new Error(`線 ${l.id} の端点が見つかりません`);
       const line = new Line(String(l.id), p1, p2, Boolean(l.construction));
       line.sketchId = normalizeSketchId(l.sketchId || p1.sketchId || p2.sketchId);
+      line.drawingOrder = normalizedDrawingOrder(l.drawingOrder);
       const appearance = normalizeAppearance(l.appearance);
       if (Object.keys(appearance).length > 0) line.appearance = appearance;
       if (!hasPointKind) {
@@ -8237,6 +8328,7 @@
       if (!Number.isFinite(radius) || radius < MIN_ORIENTATION_LENGTH) throw new Error(`円 ${c.id} の半径が正しくありません`);
       const circle = new Circle(String(c.id), center, radius, Boolean(c.construction));
       circle.sketchId = normalizeSketchId(c.sketchId || center.sketchId);
+      circle.drawingOrder = normalizedDrawingOrder(c.drawingOrder);
       const appearance = normalizeAppearance(c.appearance);
       if (Object.keys(appearance).length > 0) circle.appearance = appearance;
       circles.push(circle);
@@ -8265,6 +8357,7 @@
       if (!Number.isFinite(radius) || radius < MIN_ORIENTATION_LENGTH || !Number.isFinite(startAngle) || !Number.isFinite(endAngle)) throw new Error(`円弧 ${a.id} の形状が正しくありません`);
       const arc = new Arc(String(a.id), center, radius, startAngle, endAngle, Boolean(a.construction));
       arc.sketchId = normalizeSketchId(a.sketchId || center.sketchId);
+      arc.drawingOrder = normalizedDrawingOrder(a.drawingOrder);
       const appearance = normalizeAppearance(a.appearance);
       if (Object.keys(appearance).length > 0) arc.appearance = appearance;
       arcs.push(arc);
@@ -8280,6 +8373,7 @@
       const spline = new Spline(String(rawSpline.id), fitPoints, Boolean(rawSpline.closed), Boolean(rawSpline.construction));
       if (!spline.curve().valid) throw new Error(`スプライン ${rawSpline.id} を構築できません`);
       spline.sketchId = normalizeSketchId(rawSpline.sketchId || fitPoints[0]?.sketchId);
+      spline.drawingOrder = normalizedDrawingOrder(rawSpline.drawingOrder);
       if (sourceVersion >= 15 && fitPoints.some((point) => String(point.sketchId) !== String(spline.sketchId))) throw new Error(`スプライン ${rawSpline.id} の通過点が別のスケッチに所属しています`);
       const appearance = normalizeAppearance(rawSpline.appearance);
       if (Object.keys(appearance).length > 0) spline.appearance = appearance;
@@ -8367,6 +8461,17 @@
       return constraints.some((constraint) => constraintReferencesPoint(constraint, p));
     });
 
+    for (const definition of loadedBlockDefinitions) ensureDrawingOrderState(definition);
+    ensureDrawingOrderState({
+      hatches: loadedHatches,
+      lines,
+      circles,
+      arcs,
+      splines,
+      blockInstances: loadedBlockInstances,
+      geometryInstances: loadedGeometryInstances,
+    });
+
     resetModelState();
     if (preservedSketchTreeSketches) {
       sketchTreeSketchOpenState.clear();
@@ -8437,6 +8542,8 @@
     blockElementSeq = Math.max(1, ...model.blockDefinitions.flatMap((definition) => [...definition.points, ...definition.lines, ...definition.circles, ...definition.arcs, ...(definition.splines || [])].map((element) => Number(/^(?:P|L|C|A|SP)(\d+)$/.exec(element.id || "")?.[1]) + 1 || 1)));
     ensureAppearanceState();
     ensureBlockState();
+    ensureDrawingOrderState(model);
+    for (const definition of model.blockDefinitions) ensureDrawingOrderState(definition);
   }
 
   function jot2dFilePickerTypes() {
@@ -9505,8 +9612,8 @@
 
   function hitLine(x, y) {
     const threshold = 7 / viewport.scale;
-    for (let i = model.lines.length - 1; i >= 0; i--) {
-      const l = model.lines[i];
+    const lines = model.lines.slice().sort((a, b) => (normalizedDrawingOrder(b.drawingOrder) ?? 0) - (normalizedDrawingOrder(a.drawingOrder) ?? 0));
+    for (const l of lines) {
       if (!isEditableSketchElement(l)) continue;
       if (distancePointToSegment(x, y, l) <= threshold) return l;
     }
@@ -9515,8 +9622,8 @@
 
   function hitCircle(x, y) {
     const threshold = 7 / viewport.scale;
-    for (let i = model.circles.length - 1; i >= 0; i--) {
-      const c = model.circles[i];
+    const circles = model.circles.slice().sort((a, b) => (normalizedDrawingOrder(b.drawingOrder) ?? 0) - (normalizedDrawingOrder(a.drawingOrder) ?? 0));
+    for (const c of circles) {
       if (!isEditableSketchElement(c)) continue;
       const d = hypot2(x - c.center.x, y - c.center.y);
       if (Math.abs(d - c.radius()) <= threshold) return c;
@@ -9526,8 +9633,8 @@
 
   function hitArc(x, y) {
     const threshold = 7 / viewport.scale;
-    for (let i = model.arcs.length - 1; i >= 0; i--) {
-      const a = model.arcs[i];
+    const arcs = model.arcs.slice().sort((a, b) => (normalizedDrawingOrder(b.drawingOrder) ?? 0) - (normalizedDrawingOrder(a.drawingOrder) ?? 0));
+    for (const a of arcs) {
       if (!isEditableSketchElement(a)) continue;
       const radius = a.radius();
       const d = hypot2(x - a.center.x, y - a.center.y);
@@ -10014,8 +10121,8 @@
 
   function hitBlockInstance(x, y, editableOnly = true) {
     const threshold = 8 / viewport.scale;
-    for (let i = model.blockInstances.length - 1; i >= 0; i--) {
-      const instance = model.blockInstances[i];
+    const instances = model.blockInstances.slice().sort((a, b) => (normalizedDrawingOrder(b.drawingOrder) ?? 0) - (normalizedDrawingOrder(a.drawingOrder) ?? 0));
+    for (const instance of instances) {
       if (editableOnly && !isEditableSketchId(instance.sketchId)) continue;
       if (!isVisibleSketchId(instance.sketchId)) continue;
       const bundle = blockProjectionBundle(instance);
@@ -10030,7 +10137,7 @@
       })) return instance;
       if ((bundle.hatches || []).some((hatch) => {
         const resolved = resolvedHatchBoundary(hatch);
-        return resolved.ok && hatchAppearanceForDisplay(hatch).visible !== false && hatchContainsPoint(resolved, { x, y });
+        return resolved.ok && hatchAppearanceForDisplay(hatch).visible !== false && hatchContainsSelectablePoint(hatch, resolved, { x, y });
       })) return instance;
     }
     return null;
@@ -10049,7 +10156,8 @@
   }
 
   function hitGeometryInstance(x, y, editableOnly = true) {
-    for (const bundle of geometryInstanceBundles().slice().reverse()) {
+    const bundles = geometryInstanceBundles().slice().sort((a, b) => (normalizedDrawingOrder(b.instance.drawingOrder) ?? 0) - (normalizedDrawingOrder(a.instance.drawingOrder) ?? 0));
+    for (const bundle of bundles) {
       if (editableOnly && !isEditableSketchId(bundle.instance.sketchId)) continue;
       if (isVisibleSketchId(bundle.instance.sketchId) && geometryBundleHit(bundle, x, y)) return bundle.instance;
     }
@@ -10059,7 +10167,8 @@
   function hitDerivedGeometryForDrag(x, y) {
     const threshold = 7 / viewport.scale;
     const pointThreshold = 10 / viewport.scale;
-    for (const bundle of geometryInstanceBundles().slice().reverse()) {
+    const bundles = geometryInstanceBundles().slice().sort((a, b) => (normalizedDrawingOrder(b.instance.drawingOrder) ?? 0) - (normalizedDrawingOrder(a.instance.drawingOrder) ?? 0));
+    for (const bundle of bundles) {
       if (!isEditableSketchId(bundle.instance.sketchId) || !isVisibleSketchId(bundle.instance.sketchId)) continue;
       for (const point of bundle.points.slice().reverse()) {
         if (hypot2(point.x - x, point.y - y) <= pointThreshold) return { kind: "point", item: point, instance: bundle.instance };
@@ -12111,15 +12220,16 @@
     selectedConstraint = null;
   }
 
-  function resetCanvasStrokeState() {
-    ctx.setLineDash([]);
-    ctx.lineDashOffset = 0;
-    ctx.shadowBlur = 0;
-    ctx.shadowColor = "transparent";
-    ctx.globalAlpha = 1;
-    ctx.lineCap = "butt";
-    ctx.lineJoin = "miter";
-    ctx.lineWidth = 1;
+  function resetCanvasStrokeState(targetContext = ctx) {
+    targetContext.setLineDash([]);
+    targetContext.lineDashOffset = 0;
+    targetContext.shadowBlur = 0;
+    targetContext.shadowColor = "transparent";
+    targetContext.globalAlpha = 1;
+    targetContext.globalCompositeOperation = "source-over";
+    targetContext.lineCap = "butt";
+    targetContext.lineJoin = "miter";
+    targetContext.lineWidth = 1;
   }
 
   function withCanvasState(drawFn) {
@@ -12177,36 +12287,75 @@
     return result.x1 <= result.x2 && result.y1 <= result.y2 ? result : null;
   }
 
-  function traceResolvedHatchPath(resolved) {
-    ctx.beginPath();
+  function traceResolvedHatchPath(resolved, targetContext = ctx) {
+    targetContext.beginPath();
     for (const loop of resolved?.loops || []) {
       if (!loop.points?.length) continue;
-      ctx.moveTo(loop.points[0].x, loop.points[0].y);
-      for (let index = 1; index < loop.points.length; index++) ctx.lineTo(loop.points[index].x, loop.points[index].y);
-      ctx.closePath();
+      targetContext.moveTo(loop.points[0].x, loop.points[0].y);
+      for (let index = 1; index < loop.points.length; index++) targetContext.lineTo(loop.points[index].x, loop.points[index].y);
+      targetContext.closePath();
     }
   }
 
-  function drawResolvedHatch(resolved, appearance, origin = { x: 0, y: 0 }, { selected = false, hovered = false, preview = false, alpha = 1 } = {}) {
+  function hatchBoundaryGeometryItems(hatch) {
+    const refIds = new Set(hatchBoundaryGeometryRefs(hatch?.boundaryLoops).map((ref) => `${ref.kind}:${geometryRefId(ref)}`));
+    if (refIds.size === 0) return [];
+    const geometry = [...allGeometryLines(), ...allGeometryCircles(), ...allGeometryArcs(), ...allGeometrySplines()];
+    return geometry.filter((item) => {
+      if (hatch?.blockProjection) {
+        if (item.blockInstance !== hatch.blockInstance) return false;
+        const local = item.localElement || item.sourceElement;
+        return local && refIds.has(`${geometryKindForItem(local)}:${local.id}`);
+      }
+      return refIds.has(`${geometryKindForItem(item)}:${item.id}`);
+    });
+  }
+
+  function hatchBoundaryHitExclusionScreenPx(hatch) {
+    const widths = hatchBoundaryGeometryItems(hatch).map((item) => Number(effectiveAppearanceForElement(item).lineWidth)).filter(Number.isFinite);
+    const boundaryLineWidth = widths.length > 0 ? Math.max(...widths) : Number(model.defaultAppearance?.lineWidth) || DEFAULT_APPEARANCE.lineWidth;
+    return Math.max(0.5, boundaryLineWidth / 2) + HATCH_BOUNDARY_HIT_MARGIN_SCREEN_PX;
+  }
+
+  function resolvedHatchBoundaryDistance(resolved, point) {
+    let distance = Infinity;
+    for (const loop of resolved?.loops || []) {
+      const points = loop.points || [];
+      for (let index = 0; index < points.length; index += 1) {
+        const p1 = points[index];
+        const p2 = points[(index + 1) % points.length];
+        distance = Math.min(distance, distancePointToSegmentPoints(point.x, point.y, p1, p2));
+      }
+    }
+    return distance;
+  }
+
+  function hatchContainsSelectablePoint(hatch, resolved, point) {
+    return Boolean(resolved?.ok)
+      && hatchContainsPoint(resolved, point)
+      && resolvedHatchBoundaryDistance(resolved, point) > hatchBoundaryHitExclusionScreenPx(hatch) / viewport.scale;
+  }
+
+  function drawResolvedHatchContent(targetContext, resolved, appearance, origin, { selected = false, hovered = false, preview = false, alpha = 1 } = {}) {
     if (!resolved?.ok || !resolved.loops?.length || appearance.visible === false) return;
     const bounds = intersectBounds(resolvedLoopBounds(resolved), visibleWorldBounds());
     if (!bounds) return;
-    ctx.save();
-    traceResolvedHatchPath(resolved);
-    ctx.clip("evenodd");
+    targetContext.save();
+    traceResolvedHatchPath(resolved, targetContext);
+    targetContext.clip("evenodd");
     if (preview) {
-      ctx.fillStyle = "rgba(14, 165, 233, 0.10)";
-      traceResolvedHatchPath(resolved);
-      ctx.fill("evenodd");
+      targetContext.fillStyle = "rgba(14, 165, 233, 0.10)";
+      traceResolvedHatchPath(resolved, targetContext);
+      targetContext.fill("evenodd");
     }
-    ctx.globalAlpha = alpha;
+    targetContext.globalAlpha = alpha;
     const emphasisColor = canvasThemeColor(selected ? "#2563eb" : hovered || preview ? "#0ea5e9" : appearance.color);
     if (appearance.patternType === "solid") {
-      ctx.globalAlpha = alpha * Math.max(0, Math.min(1, Number(appearance.opacity)));
-      ctx.fillStyle = emphasisColor;
-      traceResolvedHatchPath(resolved);
-      ctx.fill("evenodd");
-      ctx.restore();
+      targetContext.globalAlpha = alpha * Math.max(0, Math.min(1, Number(appearance.opacity)));
+      targetContext.fillStyle = emphasisColor;
+      traceResolvedHatchPath(resolved, targetContext);
+      targetContext.fill("evenodd");
+      targetContext.restore();
       return;
     }
     const spacing = Math.max(0.25, Number(appearance.spacing) || DEFAULT_HATCH_APPEARANCE.spacing) * HATCH_SCREEN_PX_PER_MM / viewport.scale;
@@ -12226,30 +12375,125 @@
       for (let index = first; index <= last; index++) {
         const offset = index * spacing;
         const base = { x: origin.x + normal.x * offset, y: origin.y + normal.y * offset };
-        ctx.moveTo(base.x + direction.x * minAlong, base.y + direction.y * minAlong);
-        ctx.lineTo(base.x + direction.x * maxAlong, base.y + direction.y * maxAlong);
+        targetContext.moveTo(base.x + direction.x * minAlong, base.y + direction.y * minAlong);
+        targetContext.lineTo(base.x + direction.x * maxAlong, base.y + direction.y * maxAlong);
       }
     };
-    ctx.strokeStyle = emphasisColor;
-    ctx.lineWidth = (selected || hovered ? Math.max(1.5, appearance.lineWidth) : appearance.lineWidth) / viewport.scale;
-    ctx.beginPath();
+    targetContext.strokeStyle = emphasisColor;
+    targetContext.lineWidth = (selected || hovered ? Math.max(1.5, appearance.lineWidth) : appearance.lineWidth) / viewport.scale;
+    targetContext.beginPath();
     const angle = Number(appearance.angle) * Math.PI / 180;
     appendLineFamily(angle);
     if (appearance.patternType === "cross") appendLineFamily(angle + Math.PI / 2);
-    ctx.stroke();
-    ctx.restore();
+    targetContext.stroke();
+    targetContext.restore();
   }
 
-  function drawHatches() {
-    for (const hatch of allHatches()) {
+  function drawResolvedHatch(resolved, appearance, origin = { x: 0, y: 0 }, { hatch = null, selected = false, hovered = false, preview = false, alpha = 1 } = {}) {
+    drawResolvedHatchContent(ctx, resolved, appearance, origin, { selected, hovered, preview, alpha });
+    if (!preview && hatch) drawHatchBoundaryOverlay(hatch);
+  }
+
+  function drawHatchBoundaryOverlay(hatch) {
+    const items = hatchBoundaryGeometryItems(hatch);
+    drawLines(items.filter((item) => item instanceof Line));
+    drawCircles(items.filter((item) => item instanceof Circle));
+    drawArcs(items.filter((item) => item instanceof Arc));
+    drawSplines(items.filter((item) => item instanceof Spline));
+  }
+
+  function drawHatches(items = null, { includePreview = true } = {}) {
+    for (const hatch of items || allHatches()) {
       if (!isVisibleSketchId(hatch.sketchId)) continue;
       const appearance = hatchAppearanceForDisplay(hatch);
       const selected = hatch.blockProjection ? selectedBlockInstances.includes(hatch.blockInstance) : hatch.sketchId === activeSketchId() && selectedHatches.includes(hatch);
       const hovered = hatch.blockProjection ? hoveredBlockInstance === hatch.blockInstance : hatch.sketchId === activeSketchId() && hoveredHatch === hatch;
-      drawResolvedHatch(resolvedHatchBoundary(hatch), appearance, hatchPatternOrigin(hatch), { selected, hovered, alpha: sketchAlpha(hatch) });
+      drawResolvedHatch(resolvedHatchBoundary(hatch), appearance, hatchPatternOrigin(hatch), { hatch, selected, hovered, alpha: sketchAlpha(hatch) });
     }
-    if (["hatch", "hatch-repair"].includes(mode) && hatchPreview?.result?.ok) {
+    if (includePreview && ["hatch", "hatch-repair"].includes(mode) && hatchPreview?.result?.ok) {
       drawResolvedHatch({ ...hatchPreview.result.resolved, ok: true }, DEFAULT_HATCH_APPEARANCE, { x: 0, y: 0 }, { preview: true });
+    }
+  }
+
+  const DRAWING_STACK_KIND_ORDER = Object.freeze({ hatch: 0, line: 1, circle: 2, arc: 3, spline: 4 });
+
+  function drawingOrderOwner(item) {
+    return item?.blockInstance || item?.derivedInstance || item;
+  }
+
+  function drawingOrderInternalValue(item, kind) {
+    if (!item?.blockProjection && !item?.derivedProjection) return 0;
+    const local = item.localElement || item.sourceElement;
+    return normalizedDrawingOrder(local?.drawingOrder) ?? DRAWING_STACK_KIND_ORDER[kind] ?? 0;
+  }
+
+  function drawingStackEntries() {
+    const entries = [];
+    const append = (kind, items, visible) => {
+      for (const item of items) {
+        if (!visible(item)) continue;
+        entries.push({ kind, item, owner: drawingOrderOwner(item), insertionIndex: entries.length });
+      }
+    };
+    append("hatch", allHatches(), (item) => isVisibleSketchId(item.sketchId) && hatchAppearanceForDisplay(item).visible !== false);
+    append("line", allGeometryLines(), isVisibleSketchElement);
+    append("circle", allGeometryCircles(), isVisibleSketchElement);
+    append("arc", allGeometryArcs(), isVisibleSketchElement);
+    append("spline", allGeometrySplines(), isVisibleSketchElement);
+    const sketchIndex = new Map(model.sketches.map((sketch, index) => [String(sketch.id), index]));
+    const activeId = String(activeSketchId());
+    for (const entry of entries) {
+      const sketchId = String(entry.owner.sketchId);
+      entry.sketchOrder = sketchId === activeId ? model.sketches.length : sketchIndex.get(sketchId) ?? -1;
+      entry.ownerOrder = normalizedDrawingOrder(entry.owner.drawingOrder) ?? 0;
+      entry.internalOrder = drawingOrderInternalValue(entry.item, entry.kind);
+      entry.kindOrder = DRAWING_STACK_KIND_ORDER[entry.kind];
+    }
+    return entries.sort((a, b) => {
+      const sketchDifference = a.sketchOrder - b.sketchOrder;
+      if (sketchDifference !== 0) return sketchDifference;
+      const orderDifference = a.ownerOrder - b.ownerOrder;
+      if (orderDifference !== 0) return orderDifference;
+      const internalDifference = a.internalOrder - b.internalOrder;
+      if (internalDifference !== 0) return internalDifference;
+      const kindDifference = a.kindOrder - b.kindOrder;
+      return kindDifference || a.insertionIndex - b.insertionIndex;
+    });
+  }
+
+  function drawDrawingStack() {
+    ensureDrawingOrderState(model);
+    if (model.blockInstances.length === 0 && model.geometryInstances.length === 0) {
+      const collectionOrdered = [
+        ...model.hatches,
+        ...model.lines,
+        ...model.circles,
+        ...model.arcs,
+        ...model.splines,
+      ].filter((item) => isVisibleSketchId(item.sketchId) && (item instanceof Line || item instanceof Circle || item instanceof Arc || item instanceof Spline ? isVisibleSketchElement(item) : hatchAppearanceForDisplay(item).visible !== false));
+      const visibleSketchIds = new Set(collectionOrdered.map((item) => String(item.sketchId)));
+      const alreadyInCollectionOrder = collectionOrdered.every((item, index) => index === 0 || item.drawingOrder > collectionOrdered[index - 1].drawingOrder);
+      if (visibleSketchIds.size <= 1 && alreadyInCollectionOrder) {
+        drawHatches(model.hatches, { includePreview: false });
+        drawLines(model.lines);
+        drawCircles(model.circles);
+        drawArcs(model.arcs);
+        drawSplines(model.splines);
+        return;
+      }
+    }
+    const entries = drawingStackEntries();
+    for (let start = 0; start < entries.length;) {
+      const kind = entries[start].kind;
+      let end = start + 1;
+      while (end < entries.length && entries[end].kind === kind) end += 1;
+      const items = entries.slice(start, end).map((entry) => entry.item);
+      if (kind === "hatch") drawHatches(items, { includePreview: false });
+      else if (kind === "line") drawLines(items);
+      else if (kind === "circle") drawCircles(items);
+      else if (kind === "arc") drawArcs(items);
+      else if (kind === "spline") drawSplines(items);
+      start = end;
     }
   }
 
@@ -12385,11 +12629,8 @@
     ctx.scale(viewport.scale, viewport.scale);
     resetCanvasStrokeState();
     drawReferenceImages();
-    drawHatches();
-    drawLines();
-    drawCircles();
-    drawArcs();
-    drawSplines();
+    drawHatches([], { includePreview: true });
+    drawDrawingStack();
     drawBlockInstanceHandles();
     drawDimensions();
     drawDimensionPreview();
@@ -12520,9 +12761,10 @@
     return Boolean((item?.blockInstance && hoveredBlockInstance === item.blockInstance) || (item?.derivedInstance && hoveredGeometryInstance === item.derivedInstance));
   }
 
-  function drawLines() {
+  function drawLines(items = null) {
     ctx.save();
-    for (const l of drawOrderBySketch(allGeometryLines())) {
+    const lines = items ? items.filter(isVisibleSketchElement) : drawOrderBySketch(allGeometryLines());
+    for (const l of lines) {
       const appearance = effectiveAppearanceForElement(l);
       const active = isEditableSketchElement(l);
       const refSelected = isPendingReferenceTarget(l) || isConstraintOperandSelected(l);
@@ -12575,10 +12817,11 @@
     ctx.restore();
   }
 
-  function drawCircles() {
+  function drawCircles(items = null) {
     ctx.save();
     ctx.lineCap = "round";
-    for (const c of drawOrderBySketch(allGeometryCircles())) {
+    const circles = items ? items.filter(isVisibleSketchElement) : drawOrderBySketch(allGeometryCircles());
+    for (const c of circles) {
       const appearance = effectiveAppearanceForElement(c);
       const active = isEditableSketchElement(c);
       const refSelected = isPendingReferenceTarget(c) || isConstraintOperandSelected(c);
@@ -12613,10 +12856,11 @@
     ctx.restore();
   }
 
-  function drawArcs() {
+  function drawArcs(items = null) {
     ctx.save();
     ctx.lineCap = "round";
-    for (const a of drawOrderBySketch(allGeometryArcs())) {
+    const arcs = items ? items.filter(isVisibleSketchElement) : drawOrderBySketch(allGeometryArcs());
+    for (const a of arcs) {
       const appearance = effectiveAppearanceForElement(a);
       const active = isEditableSketchElement(a);
       const refSelected = isPendingReferenceTarget(a) || isConstraintOperandSelected(a);
@@ -12666,11 +12910,12 @@
     return samples;
   }
 
-  function drawSplines() {
+  function drawSplines(items = null) {
     ctx.save();
     ctx.lineCap = "round";
     ctx.lineJoin = "round";
-    for (const spline of drawOrderBySketch(allGeometrySplines())) {
+    const splines = items ? items.filter(isVisibleSketchElement) : drawOrderBySketch(allGeometrySplines());
+    for (const spline of splines) {
       const appearance = effectiveAppearanceForElement(spline);
       const active = isEditableSketchElement(spline);
       const selected = (active && selectedSplines.includes(spline)) || isConstraintOperandSelected(spline) || ownerInstanceSelected(spline);
@@ -16342,8 +16587,8 @@
 
   function hitSpline(x, y) {
     const threshold = 7 / viewport.scale;
-    for (let index = model.splines.length - 1; index >= 0; index -= 1) {
-      const spline = model.splines[index];
+    const splines = model.splines.slice().sort((a, b) => (normalizedDrawingOrder(b.drawingOrder) ?? 0) - (normalizedDrawingOrder(a.drawingOrder) ?? 0));
+    for (const spline of splines) {
       if (!isEditableSketchElement(spline)) continue;
       const closest = window.SplineGeometry.closestPoint(spline.curve(), { x, y }, { samplesPerSpan: 28 });
       if (closest && closest.distance <= threshold) return spline;
@@ -20575,7 +20820,8 @@
     dimension: 6,
     annotation: 7,
     block: 8,
-    hatch: 9,
+    "geometry-instance": 9,
+    hatch: 10,
   });
 
   function canvasContextPointIsSelectable(point) {
@@ -20645,7 +20891,36 @@
     }
     for (const hatch of bundle.hatches || []) {
       const resolved = resolvedHatchBoundary(hatch);
-      if (resolved.ok && hatchAppearanceForDisplay(hatch).visible !== false && hatchContainsPoint(resolved, pointer)) distance = 0;
+      if (resolved.ok && hatchAppearanceForDisplay(hatch).visible !== false && hatchContainsSelectablePoint(hatch, resolved, pointer)) distance = 0;
+    }
+    return Number.isFinite(distance) ? distance : null;
+  }
+
+  function canvasContextGeometryInstanceHitDistance(instance, pointer) {
+    if (!instance || !isEditableSketchId(instance.sketchId) || !isVisibleSketchId(instance.sketchId)) return null;
+    const threshold = 8 / viewport.scale;
+    let distance = Infinity;
+    const bundle = geometryInstanceBundle(instance);
+    for (const point of bundle.points) {
+      const next = hypot2(point.x - pointer.x, point.y - pointer.y);
+      if (next <= threshold) distance = Math.min(distance, next);
+    }
+    for (const line of bundle.lines) {
+      const next = distancePointToSegment(pointer.x, pointer.y, line);
+      if (next <= threshold) distance = Math.min(distance, next);
+    }
+    for (const circle of bundle.circles) {
+      const next = Math.abs(hypot2(pointer.x - circle.center.x, pointer.y - circle.center.y) - circle.radius());
+      if (next <= threshold) distance = Math.min(distance, next);
+    }
+    for (const arc of bundle.arcs) {
+      const next = Math.abs(hypot2(pointer.x - arc.center.x, pointer.y - arc.center.y) - arc.radius());
+      const angle = Math.atan2(pointer.y - arc.center.y, pointer.x - arc.center.x);
+      if (next <= threshold && angleOnSignedSweep(angle, arc.startAngle, arc.endAngle)) distance = Math.min(distance, next);
+    }
+    for (const spline of bundle.splines || []) {
+      const closest = window.SplineGeometry.closestPoint(spline.curve(), pointer, { samplesPerSpan: 28 });
+      if (closest?.distance <= threshold) distance = Math.min(distance, closest.distance);
     }
     return Number.isFinite(distance) ? distance : null;
   }
@@ -20681,23 +20956,23 @@
     model.lines.forEach((line, index) => {
       if (!isEditableSketchElement(line) || !isVisibleSketchElement(line)) return;
       const distance = distancePointToSegment(pointer.x, pointer.y, line);
-      if (distance <= geometryThreshold) push({ kind: "line", item: line }, distance, index);
+      if (distance <= geometryThreshold) push({ kind: "line", item: line }, distance, normalizedDrawingOrder(line.drawingOrder) ?? index);
     });
     model.circles.forEach((circle, index) => {
       if (!isEditableSketchElement(circle) || !isVisibleSketchElement(circle)) return;
       const distance = Math.abs(hypot2(pointer.x - circle.center.x, pointer.y - circle.center.y) - circle.radius());
-      if (distance <= geometryThreshold) push({ kind: "circle", item: circle }, distance, index);
+      if (distance <= geometryThreshold) push({ kind: "circle", item: circle }, distance, normalizedDrawingOrder(circle.drawingOrder) ?? index);
     });
     model.arcs.forEach((arc, index) => {
       if (!isEditableSketchElement(arc) || !isVisibleSketchElement(arc)) return;
       const distance = Math.abs(hypot2(pointer.x - arc.center.x, pointer.y - arc.center.y) - arc.radius());
       const angle = Math.atan2(pointer.y - arc.center.y, pointer.x - arc.center.x);
-      if (distance <= geometryThreshold && angleOnSignedSweep(angle, arc.startAngle, arc.endAngle)) push({ kind: "arc", item: arc }, distance, index);
+      if (distance <= geometryThreshold && angleOnSignedSweep(angle, arc.startAngle, arc.endAngle)) push({ kind: "arc", item: arc }, distance, normalizedDrawingOrder(arc.drawingOrder) ?? index);
     });
     model.splines.forEach((spline, index) => {
       if (!isEditableSketchElement(spline) || !isVisibleSketchElement(spline)) return;
       const closest = window.SplineGeometry.closestPoint(spline.curve(), pointer, { samplesPerSpan: 28 });
-      if (closest?.distance <= geometryThreshold) push({ kind: "spline", item: spline }, closest.distance, index);
+      if (closest?.distance <= geometryThreshold) push({ kind: "spline", item: spline }, closest.distance, normalizedDrawingOrder(spline.drawingOrder) ?? index);
     });
 
     const dimensionThreshold = 12 / viewport.scale;
@@ -20726,13 +21001,18 @@
 
     model.blockInstances.forEach((block, index) => {
       const distance = canvasContextBlockHitDistance(block, pointer);
-      if (distance != null) push({ kind: "block", item: block }, distance, index);
+      if (distance != null) push({ kind: "block", item: block }, distance, normalizedDrawingOrder(block.drawingOrder) ?? index);
+    });
+
+    model.geometryInstances.forEach((instance, index) => {
+      const distance = canvasContextGeometryInstanceHitDistance(instance, pointer);
+      if (distance != null) push({ kind: "geometry-instance", item: instance }, distance, normalizedDrawingOrder(instance.drawingOrder) ?? index);
     });
 
     model.hatches.forEach((hatch, index) => {
       if (hatch.sketchId !== activeSketchId() || !isVisibleSketchId(hatch.sketchId) || hatchAppearanceForDisplay(hatch).visible === false) return;
       const resolved = resolvedHatchBoundary(hatch);
-      if (resolved.ok && hatchContainsPoint(resolved, pointer)) push({ kind: "hatch", item: hatch }, 0, index);
+      if (hatchContainsSelectablePoint(hatch, resolved, pointer)) push({ kind: "hatch", item: hatch }, 0, normalizedDrawingOrder(hatch.drawingOrder) ?? index);
     });
 
     const sorted = candidates.sort((a, b) => {
@@ -20795,6 +21075,12 @@
       id: item.id,
       secondary: blockDefinitionById(item.definitionId)?.name || item.definitionId,
     };
+    if (target.kind === "geometry-instance") return {
+      icon: toolbarSvgMarkup(target.item.type === "mirror" ? "#toolMirror" : target.item.type === "pattern" ? "#toolPattern" : "#toolSketchProjection"),
+      type: applicationText("派生インスタンス", "Derived Instance"),
+      id: item.id,
+      secondary: geometryInstanceTypeLabel(item.type),
+    };
     return {
       icon: toolbarSvgMarkup("#toolHatch"),
       type: applicationText("ハッチング", "Hatch"),
@@ -20812,6 +21098,7 @@
       arc: hoveredArc,
       spline: hoveredSpline,
       block: hoveredBlockInstance,
+      geometryInstance: hoveredGeometryInstance,
       arcEndpoint: hoveredArcEndpoint,
       dimension: hoveredDimensionConstraint,
       sketchIdentity: hoveredSketchIdentity,
@@ -20829,6 +21116,7 @@
     hoveredArc = state.arc;
     hoveredSpline = state.spline;
     hoveredBlockInstance = state.block;
+    hoveredGeometryInstance = state.geometryInstance;
     hoveredArcEndpoint = state.arcEndpoint;
     hoveredDimensionConstraint = state.dimension;
     hoveredSketchIdentity = state.sketchIdentity;
@@ -20854,6 +21142,7 @@
     else if (target.kind === "arc-endpoint") hoveredArcEndpoint = { arc: target.item, endpoint: target.endpoint };
     else if (target.kind === "dimension") hoveredDimensionConstraint = target.item;
     else if (target.kind === "block") hoveredBlockInstance = target.item;
+    else if (target.kind === "geometry-instance") hoveredGeometryInstance = target.item;
     else if (target.kind === "annotation") hoveredAnnotation = target.item;
     else if (target.kind === "hatch") hoveredHatch = target.item;
     draw();
@@ -20868,6 +21157,7 @@
     if (target.kind === "spline") return selectedSplines.includes(target.item);
     if (target.kind === "arc-endpoint") return sameArcEndpoint(selectedArcEndpoint, { arc: target.item, endpoint: target.endpoint });
     if (target.kind === "block") return selectedBlockInstances.includes(target.item);
+    if (target.kind === "geometry-instance") return selectedGeometryInstances.includes(target.item);
     if (target.kind === "annotation") return selectedAnnotations.includes(target.item);
     if (target.kind === "hatch") return selectedHatches.includes(target.item);
     if (target.kind === "dimension") return selectedDimensionConstraint === target.item || effectiveSelectedConstraint() === target.item;
@@ -20886,6 +21176,7 @@
       selectedArcs = [target.item];
       selectedArcEndpoint = { arc: target.item, endpoint: target.endpoint };
     } else if (target.kind === "block") selectedBlockInstances = [target.item];
+    else if (target.kind === "geometry-instance") selectedGeometryInstances = [target.item];
     else if (target.kind === "annotation") selectedAnnotations = [target.item];
     else if (target.kind === "hatch") selectedHatches = [target.item];
     else if (target.kind === "dimension") selectedDimensionConstraint = target.item;
@@ -20965,6 +21256,70 @@
     });
   }
 
+  function selectedDrawingOrderOwners() {
+    ensureDrawingOrderState(model);
+    const candidates = [
+      ...selectedLines,
+      ...selectedCircles,
+      ...selectedArcs,
+      ...selectedSplines,
+      ...selectedHatches,
+      ...selectedBlockInstances,
+      ...selectedGeometryInstances,
+    ].map(drawingOrderOwner);
+    const valid = new Set(drawingOrderItemsForScope(model, activeSketchId()));
+    return [...new Set(candidates)].filter((item) => valid.has(item));
+  }
+
+  function topmostDrawingOrderOwner(items) {
+    ensureDrawingOrderState(model);
+    const valid = new Set(drawingOrderItemsForScope(model, activeSketchId()));
+    return [...new Set((items || []).filter(Boolean).map(drawingOrderOwner))]
+      .filter((item) => valid.has(item))
+      .sort((a, b) => normalizedDrawingOrder(b.drawingOrder) - normalizedDrawingOrder(a.drawingOrder))[0] || null;
+  }
+
+  function drawingOrderCommandState() {
+    const selected = new Set(selectedDrawingOrderOwners());
+    const ordered = drawingOrderItemsForScope(model, activeSketchId())
+      .slice()
+      .sort((a, b) => normalizedDrawingOrder(a.drawingOrder) - normalizedDrawingOrder(b.drawingOrder));
+    return {
+      count: selected.size,
+      canForward: ordered.some((item, index) => selected.has(item) && ordered.slice(index + 1).some((next) => !selected.has(next))),
+      canBackward: ordered.some((item, index) => selected.has(item) && ordered.slice(0, index).some((previous) => !selected.has(previous))),
+    };
+  }
+
+  function reorderSelectedDrawingObjects(action) {
+    const selected = new Set(selectedDrawingOrderOwners());
+    if (selected.size === 0) return false;
+    const ordered = drawingOrderItemsForScope(model, activeSketchId())
+      .slice()
+      .sort((a, b) => normalizedDrawingOrder(a.drawingOrder) - normalizedDrawingOrder(b.drawingOrder));
+    if (action === "drawing-front") {
+      ordered.splice(0, ordered.length, ...ordered.filter((item) => !selected.has(item)), ...ordered.filter((item) => selected.has(item)));
+    } else if (action === "drawing-back") {
+      ordered.splice(0, ordered.length, ...ordered.filter((item) => selected.has(item)), ...ordered.filter((item) => !selected.has(item)));
+    } else if (action === "drawing-forward") {
+      for (let index = ordered.length - 2; index >= 0; index -= 1) {
+        if (selected.has(ordered[index]) && !selected.has(ordered[index + 1])) [ordered[index], ordered[index + 1]] = [ordered[index + 1], ordered[index]];
+      }
+    } else if (action === "drawing-backward") {
+      for (let index = 1; index < ordered.length; index += 1) {
+        if (selected.has(ordered[index]) && !selected.has(ordered[index - 1])) [ordered[index], ordered[index - 1]] = [ordered[index - 1], ordered[index]];
+      }
+    } else return false;
+    ordered.forEach((item, index) => {
+      item.drawingOrder = index;
+    });
+    updateUI({ refreshAnalysis: false });
+    draw();
+    recordHistory(applicationText("重なり順変更", "Drawing order changed"));
+    setHint(applicationText("同じSketch内の重なり順を変更しました", "Changed drawing order within the active sketch."));
+    return true;
+  }
+
   function canvasContextFixState(target) {
     const batch = selectedFixedBatchTargets();
     if (batch && ((target.kind === "point" && batch.points.includes(target.item)) || (target.kind === "line" && batch.lines.includes(target.item)))) {
@@ -21039,6 +21394,15 @@
         specific.push({ action: "create-block", label: applicationText("選択からブロック作成", "Create Block from Selection"), disabled: !canCreateBlock || !canCreateInActiveSketch() });
       }
       if (specific.length > 0) groups.push(specific);
+      if (["line", "circle", "arc", "spline", "hatch", "block", "geometry-instance"].includes(target.kind)) {
+        const orderState = drawingOrderCommandState();
+        groups.push([
+          { action: "drawing-front", label: applicationText("最前面へ", "Bring to Front"), disabled: !orderState.canForward },
+          { action: "drawing-forward", label: applicationText("1つ前面へ", "Bring Forward"), disabled: !orderState.canForward },
+          { action: "drawing-backward", label: applicationText("1つ背面へ", "Send Backward"), disabled: !orderState.canBackward },
+          { action: "drawing-back", label: applicationText("最背面へ", "Send to Back"), disabled: !orderState.canBackward },
+        ]);
+      }
       if (!editingFitPoint) {
         const copyable = hasCopyableCanvasSelection();
         groups.push([
@@ -21177,6 +21541,7 @@
     else if (action === "block-rotation-toggle" && target?.item) setBlockInstanceRotationLocked(target.item, !target.item.rotationLocked);
     else if (action === "dimension-edit" && target?.hit) startDimensionEditInput(target.hit);
     else if (action === "hatch-repair" && target?.item) startHatchBoundaryRepair(target.item);
+    else if (["drawing-front", "drawing-forward", "drawing-backward", "drawing-back"].includes(action)) reorderSelectedDrawingObjects(action);
     else if (action === "spline-fit-point-add" && target?.item && pointer) addSplineFitPointFromContext(target.item, pointer);
     else if (action === "spline-fit-point-delete" && target?.item && splineEditSession?.spline) deleteSplineFitPointFromContext(splineEditSession.spline, target.item);
     else if (action === "fit-visible") {
@@ -21610,8 +21975,19 @@
     }
 
     const multiSelect = e.shiftKey || e.ctrlKey;
+    const topDrawingOwner = topmostDrawingOrderOwner([
+      hitDerivedGeometry?.instance,
+      hitDerivedInstance,
+      hitBlock,
+      hitL,
+      hitC,
+      hitA,
+      hitS,
+      hatchHit,
+    ]);
+    const drawingHitIsTop = (item) => Boolean(item && drawingOrderOwner(item) === topDrawingOwner);
 
-    if (hitDerivedGeometry) {
+    if (hitDerivedGeometry && drawingHitIsTop(hitDerivedGeometry.instance)) {
       if (multiSelect) {
         if (!selectedGeometryInstances.includes(hitDerivedGeometry.instance)) selectedGeometryInstances.push(hitDerivedGeometry.instance);
         else selectedGeometryInstances = selectedGeometryInstances.filter((instance) => instance !== hitDerivedGeometry.instance);
@@ -21622,7 +21998,7 @@
       } else {
         beginDerivedGeometryDrag(e, hitDerivedGeometry, p);
       }
-    } else if (hitDerivedInstance && !directGeometryHit) {
+    } else if (hitDerivedInstance && drawingHitIsTop(hitDerivedInstance)) {
       if (!multiSelect) clearSelection();
       const index = selectedGeometryInstances.indexOf(hitDerivedInstance);
       if (multiSelect && index >= 0) selectedGeometryInstances.splice(index, 1);
@@ -21632,7 +22008,7 @@
       setHint(applicationText(`派生インスタンス ${hitDerivedInstance.id} を選択`, `Selected derived instance ${hitDerivedInstance.id}`));
       updateGeometrySelectionUI();
       draw();
-    } else if (hitBlock && !directGeometryHit) {
+    } else if (hitBlock && !hitP && !hitArcEnd && drawingHitIsTop(hitBlock)) {
       if (multiSelect) {
         selectedDimensionConstraint = null;
         selectedConstraint = null;
@@ -21663,19 +22039,19 @@
       } else {
         beginDrag(e, null, null, null, null, hitArcEnd, p);
       }
-    } else if (hitL) {
+    } else if (hitL && drawingHitIsTop(hitL)) {
       selectedDimensionConstraint = null;
       if (multiSelect) toggleLineSelection(hitL);
       else beginDrag(e, null, hitL, null, null, null, p);
-    } else if (hitC) {
+    } else if (hitC && drawingHitIsTop(hitC)) {
       selectedDimensionConstraint = null;
       if (multiSelect) toggleCircleSelection(hitC);
       else beginDrag(e, null, null, hitC, null, null, p);
-    } else if (hitA) {
+    } else if (hitA && drawingHitIsTop(hitA)) {
       selectedDimensionConstraint = null;
       if (multiSelect) toggleArcSelection(hitA);
       else beginDrag(e, null, null, null, hitA, null, p);
-    } else if (hitS) {
+    } else if (hitS && drawingHitIsTop(hitS)) {
       selectedDimensionConstraint = null;
       if (multiSelect) toggleSplineSelection(hitS);
       else {
@@ -21693,7 +22069,7 @@
           setHint(`${dragLabel(dragSession)}中: 拘束を保ちながら自動solveしています`);
         }
       }
-    } else if (hatchHit) {
+    } else if (hatchHit && drawingHitIsTop(hatchHit)) {
       if (hatchHit.blockProjection) {
         if (!multiSelect) clearSelection();
         if (multiSelect) toggleBlockInstanceSelection(hatchHit.blockInstance);
@@ -24009,6 +24385,111 @@
           boundaryClient: { x: rect.left + boundaryScreen.x, y: rect.top + boundaryScreen.y },
           serialized: serializeModel(),
         };
+      },
+      resetForDrawingOrderTest() {
+        resetModelState();
+        viewport.scale = 3;
+        const corners = [
+          addPoint(0, 0, false, "endpoint"), addPoint(120, 0, false, "endpoint"),
+          addPoint(120, 80, false, "endpoint"), addPoint(0, 80, false, "endpoint"),
+        ];
+        const boundaryLines = [[0, 1], [1, 2], [2, 3], [3, 0]].map(([first, second]) => {
+          const line = addLine(corners[first], corners[second]);
+          line.appearance = { color: "#008000", lineWidth: 4 };
+          return line;
+        });
+        const face = findHatchFaceInIndex(createHatchRegionIndex(hatchPrimitivesForScope(model, DEFAULT_SKETCH_ID)), { x: 60, y: 40 });
+        const crossLine = addLine(addPoint(20, 40, false, "endpoint"), addPoint(100, 40, false, "endpoint"));
+        crossLine.appearance = { color: "#ff0000", lineWidth: 4 };
+        const hatch = {
+          id: "H1",
+          sketchId: DEFAULT_SKETCH_ID,
+          drawingOrder: null,
+          seed: { x: 60, y: 25 },
+          boundaryLoops: face.boundaryLoops,
+          appearance: { ...DEFAULT_HATCH_APPEARANCE, patternType: "solid", color: "#0000ff", opacity: 1 },
+        };
+        model.hatches.push(hatch);
+        model.nextHatchIndex = 2;
+
+        const definition = createEmptyBlockDefinition("Drawing Order Block");
+        const bp1 = new Point("BP1", 20, 62, false, "endpoint");
+        const bp2 = new Point("BP2", 45, 62, false, "endpoint");
+        bp1.sketchId = DEFAULT_SKETCH_ID;
+        bp2.sketchId = DEFAULT_SKETCH_ID;
+        const blockLine = new Line("BL1", bp1, bp2);
+        blockLine.sketchId = DEFAULT_SKETCH_ID;
+        definition.points.push(bp1, bp2);
+        definition.lines.push(blockLine);
+        model.blockDefinitions.push(definition);
+        const block = { id: "BI1", definitionId: definition.id, sketchId: DEFAULT_SKETCH_ID, x: 0, y: 0, rotation: 0, fixed: false, rotationLocked: false, enabledSketchIds: [DEFAULT_SKETCH_ID], appearanceOverride: {} };
+        model.blockInstances.push(block);
+        const derived = normalizeGeometryInstance({ id: "MI1", type: "mirror", sketchId: DEFAULT_SKETCH_ID, sources: [geometryRefForItem(crossLine)], axis: geometryRefForItem(boundaryLines[3]), appearanceOverride: {} });
+        model.geometryInstances.push(derived);
+
+        model.sketches.push({ id: "S2", name: "Other Sketch", parentSketchId: ROOT_SKETCH_ID, kind: "sketch", appearance: {}, constructionAppearance: {}, dimensionAppearance: {}, visible: true });
+        model.activeSketchId = "S2";
+        const otherLine = addLine(addPoint(15, 65, false, "endpoint"), addPoint(105, 65, false, "endpoint"));
+        model.activeSketchId = DEFAULT_SKETCH_ID;
+        ensureDrawingOrderState(model);
+        invalidateBlockProjectionCache();
+        fitSketchToViewport(DEFAULT_SKETCH_ID, 160);
+        resetHistory("drawing order test");
+        updateUI();
+        draw();
+        const rect = canvas.getBoundingClientRect();
+        const client = (point) => {
+          const screen = worldToCanvasScreen(point);
+          return { x: rect.left + screen.x, y: rect.top + screen.y };
+        };
+        return {
+          hatchClient: client({ x: 60, y: 25 }),
+          centerClient: client({ x: 60, y: 40 }),
+          boundaryClient: client({ x: 60, y: 0 }),
+          insideBoundaryClient: client({ x: 60, y: 3 }),
+          crossLineId: crossLine.id,
+          otherLineId: otherLine.id,
+          serialized: serializeModel(),
+        };
+      },
+      drawingOrderStateForTest() {
+        ensureDrawingOrderState(model);
+        const kindFor = (item) => model.hatches.includes(item) ? "hatch"
+          : model.lines.includes(item) ? "line"
+          : model.circles.includes(item) ? "circle"
+          : model.arcs.includes(item) ? "arc"
+          : model.splines.includes(item) ? "spline"
+          : model.blockInstances.includes(item) ? "block"
+          : "geometry-instance";
+        const bySketch = Object.fromEntries(model.sketches.filter((sketch) => !isRootSketch(sketch)).map((sketch) => [sketch.id,
+          drawingOrderItemsForScope(model, sketch.id)
+            .slice()
+            .sort((a, b) => a.drawingOrder - b.drawingOrder)
+            .map((item) => ({ kind: kindFor(item), id: item.id, drawingOrder: item.drawingOrder })),
+        ]));
+        const firstHatch = model.hatches[0] || null;
+        const resolved = firstHatch ? resolvedHatchBoundary(firstHatch) : null;
+        return {
+          bySketch,
+          serialized: structuredClone(serializeModel()),
+          hatchBoundaryHitExclusionScreenPx: firstHatch ? hatchBoundaryHitExclusionScreenPx(firstHatch) : null,
+          hatchSelectableAtBoundary: firstHatch && resolved ? hatchContainsSelectablePoint(firstHatch, resolved, { x: 60, y: 0 }) : null,
+          history: this.historyState(),
+        };
+      },
+      selectDrawingOrderObjectForTest(kind, id) {
+        clearSelection();
+        if (kind === "line") selectedLines = model.lines.filter((item) => item.id === id);
+        else if (kind === "hatch") selectedHatches = model.hatches.filter((item) => item.id === id);
+        else if (kind === "block") selectedBlockInstances = model.blockInstances.filter((item) => item.id === id);
+        else if (kind === "geometry-instance") selectedGeometryInstances = model.geometryInstances.filter((item) => item.id === id);
+        updateUI({ refreshAnalysis: false });
+        draw();
+        return this.drawingOrderStateForTest();
+      },
+      reorderDrawingOrderForTest(action) {
+        reorderSelectedDrawingObjects(action);
+        return this.drawingOrderStateForTest();
       },
       resetForSolidHatchHoleTest() {
         resetModelState();
