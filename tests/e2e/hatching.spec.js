@@ -156,7 +156,10 @@ test("invalid boundaries remain as repairable hatch objects", async ({ page }) =
   await page.locator("#toolHatch").click();
   await page.mouse.click(fixture.client.x, fixture.client.y);
   await page.keyboard.press("Escape");
-  await page.evaluate(() => window.__jot2dTest.breakFirstHatchBoundaryForTest());
+  await page.evaluate(() => window.__jot2dTest.selectGeometryIdsForTest({ lines: ["L1"] }));
+  await page.keyboard.press("Delete");
+  await expandSketchTreeGroup(page, "hatch");
+  await page.locator('#sketchList [data-object-kind="hatch"]').click();
 
   let state = await page.evaluate(() => window.__jot2dTest.hatchStateForTest());
   expect(state.direct[0].valid).toBe(false);

@@ -106,7 +106,7 @@ ToolbarまたはGeometry menuから開始し、3個以上のfit pointを順にcl
 
 補助切替は Line、Circle、Arc、Spline に適用する。選択中の対象があれば対象の `construction` を切り替え、対象がなければ今後作成する Geometry の既定値を切り替える。
 
-通常GeometryはAppearanceで解決した色、線種、線幅、visibleを使用する。線種は実線、破線、一点鎖線、二点鎖線、点線から選択する。初期の基底線幅は2.0pxであり、各SketchのAppearanceはDocument既定を直接継承して所属Sketch自身の明示fieldだけを上書きする。補助GeometryではDocumentの補助線外観を基底とし、所属Sketch自身の補助線外観だけを適用する。DocumentとSketchのどちらでも一般外観は補助線外観へ継承しない。初期基底は一点鎖線、1px、通常時の不透明度72%とし、その後にGeometryの明示Appearanceを適用する。ダークテーマでは保存したAppearanceを変更せず、Canvas描画時だけ[UI・操作・履歴](./07-UI・操作・履歴.md)のcontrast補正を適用する。補助LineのendpointOverhangがtrueなら両端から画面上12pxずつ延長し、endpointMarkersがtrueなら元の両端へ点を描画する。Geometry自身または所属Block Instanceのhover／選択中も設定したはみ出しを維持する。Constraint Status Viewでも、補助LineはendpointMarkersの設定に従って外観設定由来の端部の点を表示する。通常Lineの端点操作マーカーはCanvasで直接hoverまたは選択した端点だけに表示する。選択とhoverは一時的な強調を優先し、Space押下中は拘束状態色を優先する。
+通常／補助Geometryの外観継承、初期値、補助Lineの端部表示は[表示と注記](./06-表示と注記.md)の「Appearanceの継承」に従う。通常Lineの端点操作markerはCanvasで直接hoverまたは選択した端点だけに表示する。選択とhoverは一時的な強調を優先し、Constraint Status Viewでは拘束状態色を優先する。
 
 ### R面取り
 
@@ -280,8 +280,4 @@ Geometry は解析結果により次の状態で描き分ける。
 
 ## 9. Geometry の削除
 
-Geometry の削除時は、共有 Point の利用状況を考慮して不要 Pointを整理し、対象を参照する拘束と拘束寸法を除去する。ただし削除後も残る式が削除対象の寸法symbolを参照する場合は、依存元の名前を表示して操作を拒否する。依存元も同時に削除する操作、または名前空間全体の削除は許可する。1回のユーザー操作は1つの履歴単位にする。
-
-Geometryを削除すると、そのGeometryを参照するConstraintとLeaderも同時に除去する。Splineを削除すると、そのSplineだけで使用されるfit pointも整理する。Hatchの境界Geometryは例外であり、Hatch Objectを残したまま境界エラーの無効状態にする。Sketch削除では所属Hatchも削除する。Sketch削除、Block Instance削除、Block Definition編集でも各Objectの参照ライフサイクルを適用する。
-
-派生Instanceが参照する元Geometry、Block Instance、ミラー軸、パターン方向または上流Instanceの削除は拒否する。依存Instanceを先に削除しなければならず、通常Geometryへ独立化する操作は設けない。
+削除可否、Constraint・Leader・Hatchの扱い、共有Pointの整理、履歴は[削除と参照](./14-削除と参照.md)に従う。Geometryの削除と、所属Sketch全体の削除を区別する。
