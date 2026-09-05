@@ -182,11 +182,13 @@ async function runPointerBurstDrag(page, start, end, { button = "left", buttons 
   await settleAfterPaint(page);
   await page.mouse.down({ button });
   await page.evaluate(() => window.__jot2dTest.resetInteractionFrameStatsForTest());
+  await page.evaluate(() => window.__jot2dTest.startInteractionProfileForTest());
   const dispatchMs = await dispatchPointerBurst(page, start, end, { count, buttons });
   await settleAfterPaint(page);
   const stats = await page.evaluate(() => window.__jot2dTest.interactionFrameStatsForTest());
   await page.mouse.up({ button });
-  return { dispatchMs, stats };
+  const profile = await page.evaluate(() => window.__jot2dTest.stopInteractionProfileForTest());
+  return { dispatchMs, stats, profile };
 }
 
 async function measureInteraction(page, results, label, action, limitMs) {
@@ -1041,6 +1043,18 @@ test("high-density geometry, dimension and pan drags coalesce to one animation f
   const eventCount = 240;
   const expectCoalescedFrame = (result, label) => {
     expect(result.dispatchMs, `${label}/dispatch: ${result.dispatchMs.toFixed(1)}ms`).toBeLessThan(200);
+    expect(result.profile.preview.samples, label).toBe(1);
+    expect(result.profile.preview.work.draw.calls, label).toBe(1);
+    expect(result.profile.commit.samples, label).toBe(1);
+    for (const phase of Object.values(result.profile)) {
+      const measured = Object.values(phase.work).reduce((sum, entry) => sum + entry.selfMs, phase.otherMs);
+      expect(measured, label).toBeCloseTo(phase.totalMs, 4);
+      for (const entry of Object.values(phase.work)) {
+        expect(entry.selfMs, label).toBeGreaterThanOrEqual(0);
+        expect(entry.calls, label).toBeGreaterThan(0);
+      }
+    }
+    console.log(JSON.stringify({ kind: "interaction-profile", label, profile: result.profile }));
     expect(result.stats, label).toMatchObject({
       receivedMoves: eventCount,
       processedMoves: 1,
@@ -1064,12 +1078,31 @@ test("high-density geometry, dimension and pan drags coalesce to one animation f
 
   await page.evaluate(() => window.__jot2dTest.resetForResponsiveLineDragTest());
   await settleAfterPaint(page);
+  const dimensionSnapshot = () => page.evaluate(() => {
+    const data = window.__jot2dTest.serializedModelForTest();
+    delete data.savedAt;
+    return data;
+  });
+  const modelBeforeDimension = await dimensionSnapshot();
   const dimensionStart = await page.evaluate(() => window.__jot2dTest.dimensionClientPositionForTest(0));
   const dimensionEnd = { x: dimensionStart.x + 80, y: dimensionStart.y + 55 };
   const dimensionResult = await runPointerBurstDrag(page, dimensionStart, dimensionEnd, { count: eventCount });
   expectCoalescedFrame(dimensionResult, "dimension");
+  expect(dimensionResult.profile.commit.work.analysis).toBeUndefined();
+  expect(dimensionResult.profile.commit.work.tree).toBeUndefined();
+  await expect(page.locator('#propertiesPanel [data-property="constraint-expression"]')).toBeVisible();
   const dimensionAfter = await page.evaluate(() => window.__jot2dTest.dimensionClientPositionForTest(0));
   expect(Math.hypot(dimensionAfter.x - dimensionStart.x, dimensionAfter.y - dimensionStart.y)).toBeGreaterThan(20);
+  const modelAfterDimension = await dimensionSnapshot();
+  const withoutDimensionLayout = (data) => ({
+    ...data,
+    constraints: data.constraints.map(({ dimension, ...constraint }) => constraint),
+  });
+  expect(withoutDimensionLayout(modelAfterDimension)).toEqual(withoutDimensionLayout(modelBeforeDimension));
+  await page.click("#undoBtn");
+  expect(await dimensionSnapshot()).toEqual(modelBeforeDimension);
+  await page.click("#redoBtn");
+  expect(await dimensionSnapshot()).toEqual(modelAfterDimension);
 
   await page.evaluate(() => window.__jot2dTest.resetForResponsiveLineDragTest());
   await settleAfterPaint(page);

@@ -28,6 +28,8 @@ Line、Circle、Arc、Spline、Pointで重複しているAppearance、selection�
 
 Sketch TreeとPropertiesのDOM全再生成をID keyed差分更新へ置き換え、大規模Documentでのselection latencyを安定させる。
 
+R3では角度以外の寸法確定で不要な解析・Tree全再生成を除去した。追測では寸法確定17.7ms中16.7msがProperties再生成であり、時間短縮は未確認。次の調査ではDOM生成・localization・式入力highlightと同期layoutの内訳を分け、選択変更・値変更・focus／scrollの保持を確認して更新範囲を決める。
+
 ### Test hook分離
 
 E2E fixture生成と検査hookをproduction bundleから分離し、`?test=1`時だけ読み込むmoduleにする。

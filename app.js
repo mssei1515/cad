@@ -332,6 +332,8 @@
   let constraintAnalysisState = null;
   let constraintRedundancyState = { constraints: new Map(), sketches: new Map(), count: 0 };
   let lastAuthoringPerformance = null;
+  let interactionProfile = null;
+  let interactionProfileFrame = null;
   let interactionFrameStats = null;
   let sketchSolveStates = new Map();
   let invalidReferenceConstraints = new Map();
@@ -743,6 +745,11 @@
   }
 
   function setHint(msg, kind = "normal") {
+    if (!interactionProfileFrame) return setHintUnprofiled(msg, kind);
+    return profileInteractionWork("ui", () => setHintUnprofiled(msg, kind));
+  }
+
+  function setHintUnprofiled(msg, kind = "normal") {
     const el = document.getElementById("hint");
     el.dataset.hintSource = String(msg);
     el.textContent = translatedHintText(msg);
@@ -2502,8 +2509,9 @@
   }
 
   function cachedGeometryRead(key, create) {
-    if (!geometryReadCache) return create();
-    if (!geometryReadCache.values.has(key)) geometryReadCache.values.set(key, create());
+    const read = interactionProfileFrame ? () => profileInteractionWork("geometryReads", create) : create;
+    if (!geometryReadCache) return read();
+    if (!geometryReadCache.values.has(key)) geometryReadCache.values.set(key, read());
     return geometryReadCache.values.get(key);
   }
 
@@ -3852,6 +3860,11 @@
   }
 
   function stabilizeActiveParameterNamespace(sketchId = activeSketchId(), options = {}) {
+    if (!interactionProfileFrame) return stabilizeActiveParameterNamespaceUnprofiled(sketchId, options);
+    return profileInteractionWork("parameters", () => stabilizeActiveParameterNamespaceUnprofiled(sketchId, options));
+  }
+
+  function stabilizeActiveParameterNamespaceUnprofiled(sketchId = activeSketchId(), options = {}) {
     let previous;
     try {
       ensureParameterNamespace(currentParameterNamespace());
@@ -3976,6 +3989,11 @@
   }
 
   function refreshConstraintAnalysis(options = {}) {
+    if (!interactionProfileFrame) return refreshConstraintAnalysisUnprofiled(options);
+    return profileInteractionWork("analysis", () => refreshConstraintAnalysisUnprofiled(options));
+  }
+
+  function refreshConstraintAnalysisUnprofiled(options = {}) {
     refreshReferenceConstraintValidity();
     const rootSketchId = activeSketchId();
     const sketchIdSet = new Set([rootSketchId, ...descendantSketchIds(rootSketchId)]);
@@ -7648,6 +7666,11 @@
   }
 
   function recordHistory(label = "変更") {
+    if (!interactionProfileFrame) return recordHistoryUnprofiled(label);
+    return profileInteractionWork("history", () => recordHistoryUnprofiled(label));
+  }
+
+  function recordHistoryUnprofiled(label = "変更") {
     if (historyRestoring) return;
     const history = activeEditHistory();
     const snapshot = history.capture();
@@ -11242,6 +11265,11 @@
   }
 
   function solveFinalDragSession(session) {
+    if (!interactionProfileFrame) return solveFinalDragSessionUnprofiled(session);
+    return profileInteractionWork("solve", () => solveFinalDragSessionUnprofiled(session));
+  }
+
+  function solveFinalDragSessionUnprofiled(session) {
     if (session?.projectionShapeLocked) return sketchProjectionBlockedDragResult();
     const extra = session?.finalDragConstraints || [];
     if (session?.lastGuidedPreviewError > CONSTRAINT_ACCEPT_ERROR) {
@@ -11281,6 +11309,11 @@
   }
 
   function solveReferenceDependentSketches(rootSketchId) {
+    if (!interactionProfileFrame) return solveReferenceDependentSketchesUnprofiled(rootSketchId);
+    return profileInteractionWork("dependencies", () => solveReferenceDependentSketchesUnprofiled(rootSketchId));
+  }
+
+  function solveReferenceDependentSketchesUnprofiled(rootSketchId) {
     refreshReferenceConstraintValidity();
     const results = [];
     const dependentsBySource = new Map();
@@ -12626,6 +12659,11 @@
   }
 
   function draw() {
+    if (!interactionProfileFrame) return drawUnprofiled();
+    return profileInteractionWork("draw", () => drawUnprofiled());
+  }
+
+  function drawUnprofiled() {
     return withGeometryReadCache(drawCanvas);
   }
 
@@ -15933,6 +15971,11 @@
   applySketchTreeWidth();
 
   function updateSketchUI() {
+    if (!interactionProfileFrame) return updateSketchUIUnprofiled();
+    return profileInteractionWork("tree", updateSketchUIUnprofiled);
+  }
+
+  function updateSketchUIUnprofiled() {
     ensureSketchState();
     const activeLabel = document.getElementById("activeSketchLabel");
     if (activeLabel) activeLabel.textContent = applicationText("スケッチツリー", "Sketch Tree");
@@ -16293,6 +16336,11 @@
   }
 
   function updateGeometrySelectionUI() {
+    if (!interactionProfileFrame) return updateGeometrySelectionUIUnprofiled();
+    return profileInteractionWork("ui", updateGeometrySelectionUIUnprofiled);
+  }
+
+  function updateGeometrySelectionUIUnprofiled() {
     updateToolbar();
     updateConstraintButtons();
     if (document.getElementById("blockDefinitionsDialog")?.open) updateBlockUI();
@@ -17233,6 +17281,11 @@
   }
 
   function updatePropertiesUI() {
+    if (!interactionProfileFrame) return updatePropertiesUIUnprofiled();
+    return profileInteractionWork("properties", updatePropertiesUIUnprofiled);
+  }
+
+  function updatePropertiesUIUnprofiled() {
     const panel = document.getElementById("propertiesPanel");
     if (!panel) return;
     const target = selectedPropertiesTarget();
@@ -17972,6 +18025,11 @@
   }
 
   function updateUI({ refreshAnalysis = true } = {}) {
+    if (!interactionProfileFrame) return updateUIUnprofiled({ refreshAnalysis });
+    return profileInteractionWork("ui", () => updateUIUnprofiled({ refreshAnalysis }));
+  }
+
+  function updateUIUnprofiled({ refreshAnalysis = true } = {}) {
     ensureParameterNamespace(currentParameterNamespace());
     if (refreshAnalysis) refreshConstraintAnalysis();
     updateDocumentNameUI();
@@ -19494,6 +19552,11 @@
   }
 
   function dragResultForSession(session, pointer) {
+    if (!interactionProfileFrame) return dragResultForSessionUnprofiled(session, pointer);
+    return profileInteractionWork("solve", () => dragResultForSessionUnprofiled(session, pointer));
+  }
+
+  function dragResultForSessionUnprofiled(session, pointer) {
     if (session?.projectionShapeLocked) return sketchProjectionBlockedDragResult();
     let result;
     const dragVars = session?.local?.variables || solver.getVariables();
@@ -22550,6 +22613,51 @@
     draw();
   }
 
+  // Test-enabled synchronous timings. Subtract nested work to avoid counting it twice.
+  function profileInteractionWork(category, callback) {
+    const parent = interactionProfileFrame;
+    if (!parent) return callback();
+    const frame = { sample: parent.sample, childMs: 0 };
+    const startedAt = performance.now();
+    interactionProfileFrame = frame;
+    try {
+      return callback();
+    } finally {
+      const elapsedMs = performance.now() - startedAt;
+      const entry = frame.sample.work[category] ||= { calls: 0, selfMs: 0 };
+      entry.calls += 1;
+      entry.selfMs += Math.max(0, elapsedMs - frame.childMs);
+      parent.childMs += elapsedMs;
+      interactionProfileFrame = parent;
+    }
+  }
+
+  function profileInteractionPhase(phase, callback) {
+    if (!interactionProfile) return callback();
+    const sample = { work: {} };
+    const parent = interactionProfileFrame;
+    const frame = { sample, childMs: 0 };
+    const startedAt = performance.now();
+    interactionProfileFrame = frame;
+    try {
+      return callback();
+    } finally {
+      const elapsedMs = performance.now() - startedAt;
+      const total = interactionProfile[phase] ||= { samples: 0, totalMs: 0, maxMs: 0, otherMs: 0, work: {} };
+      total.samples += 1;
+      total.totalMs += elapsedMs;
+      total.maxMs = Math.max(total.maxMs, elapsedMs);
+      total.otherMs += Math.max(0, elapsedMs - frame.childMs);
+      for (const [category, entry] of Object.entries(sample.work)) {
+        const aggregate = total.work[category] ||= { calls: 0, selfMs: 0 };
+        aggregate.calls += entry.calls;
+        aggregate.selfMs += entry.selfMs;
+      }
+      if (parent) parent.childMs += elapsedMs;
+      interactionProfileFrame = parent;
+    }
+  }
+
   function processScheduledCanvasPointerMove({ animationFrame = false, synchronousFlush = false } = {}) {
     if (!pendingCanvasPointerMove) return false;
     const pointer = pendingCanvasPointerMove;
@@ -22559,8 +22667,10 @@
       if (animationFrame) interactionFrameStats.animationFrames += 1;
       if (synchronousFlush) interactionFrameStats.synchronousFlushes += 1;
     }
-    withGeometryReadCache(() => processCanvasPointerMove(pointer));
-    if (pendingCommand && ["distance-value", "offset-value"].includes(pendingCommand.type)) syncDimensionValueInput();
+    profileInteractionPhase("preview", () => {
+      withGeometryReadCache(() => processCanvasPointerMove(pointer));
+      if (pendingCommand && ["distance-value", "offset-value"].includes(pendingCommand.type)) syncDimensionValueInput();
+    });
     return true;
   }
 
@@ -22597,6 +22707,10 @@
 
   function endDrag(e) {
     flushScheduledCanvasPointerMove();
+    return profileInteractionPhase("commit", () => finishPointerInteraction(e));
+  }
+
+  function finishPointerInteraction(e) {
     if (panSession) {
       panSession = null;
       canvas.classList.remove("is-panning");
@@ -22661,7 +22775,12 @@
         return;
       }
       setHint("寸法線の位置を更新しました");
-      updateUI();
+      // Angle placement can change the constraint target; other dimensions only change layout.
+      if (session.target.kind === "angle") updateUI();
+      else {
+        updateGeometrySelectionUI();
+        syncDimensionValueInput();
+      }
       draw();
       recordHistory("寸法線移動");
       return;
@@ -24214,6 +24333,15 @@
             ? canvasColorContrast(canvasColorChannels(canvasThemeColor(DEFAULT_APPEARANCE.color)), [15, 23, 42])
             : null,
         };
+      },
+      startInteractionProfileForTest() {
+        flushScheduledCanvasPointerMove();
+        interactionProfile = {};
+      },
+      stopInteractionProfileForTest() {
+        const result = interactionProfile;
+        interactionProfile = null;
+        return result;
       },
       resetInteractionFrameStatsForTest() {
         flushScheduledCanvasPointerMove();
