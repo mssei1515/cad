@@ -96,7 +96,7 @@ Geometry menuまたはToolbarの長穴commandから、1つ目の半円中心、2
 
 ### スプライン
 
-ToolbarまたはGeometry menuから開始し、3個以上のfit pointを順にclickして3次Splineを作る。Enterまたは最後の点のdouble clickで開Splineを確定し、3点以上を置いた後に先頭fit pointをclickすると閉Splineを確定する。Backspaceは確定前の最後のfit pointを取り消し、Escは未確定Spline全体を破棄する。通常選択では曲線だけを表示し、Propertiesの編集操作またはdouble clickでfit point編集modeへ入る。詳細は[スプライン](./10-スプライン.md)を参照する。
+ToolbarまたはGeometry menuから開始し、3個以上のfit pointを順にclickして3次Splineを作る。確定・取消・fit point編集の操作は[スプライン](./10-スプライン.md)の「作成と編集」に従う。
 
 ### スケッチ投影
 

@@ -168,17 +168,32 @@ test("migrates version 14 without splines and rejects malformed current spline d
   await createOpenSpline(page);
   const current = await page.evaluate(() => window.__jot2dTest.splineStateForTest().serialized);
 
-  const malformed = structuredClone(current);
-  malformed.splines[0].degree = 4;
-  expect(await page.evaluate((data) => window.__jot2dTest.loadDocumentFixtureForDragTest(data, "malformed-spline.jot2d"), malformed)).toEqual(expect.objectContaining({ success: false }));
-  expect((await page.evaluate(() => window.__jot2dTest.splineStateForTest())).direct).toHaveLength(1);
-
-  const crossSketch = structuredClone(current);
-  const sourceSketch = crossSketch.sketches.find((sketch) => sketch.kind !== "root");
-  crossSketch.sketches.push({ ...sourceSketch, id: "S2", name: "Sketch-2" });
-  crossSketch.points.find((point) => point.id === crossSketch.splines[0].fitPoints[0]).sketchId = "S2";
-  expect(await page.evaluate((data) => window.__jot2dTest.loadDocumentFixtureForDragTest(data, "cross-sketch-spline.jot2d"), crossSketch)).toEqual(expect.objectContaining({ success: false }));
-  expect((await page.evaluate(() => window.__jot2dTest.splineStateForTest())).direct).toHaveLength(1);
+  const documentContent = ({ savedAt, ...document }) => document;
+  const invalidCases = [
+    { name: "missing-array", mutate: (data) => { delete data.splines; } },
+    { name: "unsupported-degree", mutate: (data) => { data.splines[0].degree = 4; } },
+    { name: "missing-fit-point", mutate: (data) => { data.splines[0].fitPoints[0] = "missing-point"; } },
+    {
+      name: "cross-sketch-fit-point",
+      mutate: (data) => {
+        const sourceSketch = data.sketches.find((sketch) => sketch.kind !== "root");
+        data.sketches.push({ ...sourceSketch, id: "S2", name: "Sketch-2" });
+        data.points.find((point) => point.id === data.splines[0].fitPoints[0]).sketchId = "S2";
+      },
+    },
+  ];
+  for (const { name, mutate } of invalidCases) {
+    await test.step(`LOAD-01: ${name} preserves the complete document`, async () => {
+      const malformed = structuredClone(current);
+      mutate(malformed);
+      const result = await page.evaluate(({ data, fileName }) =>
+        window.__jot2dTest.loadDocumentFixtureForDragTest(data, fileName),
+      { data: malformed, fileName: `${name}.jot2d` });
+      expect(result).toEqual(expect.objectContaining({ success: false }));
+      const after = await page.evaluate(() => window.__jot2dTest.splineStateForTest().serialized);
+      expect(documentContent(after)).toEqual(documentContent(current));
+    });
+  }
 
   const legacy = structuredClone(current);
   legacy.version = 14;
