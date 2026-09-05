@@ -1,38 +1,29 @@
 # Jot2D 仕様書
 
-このディレクトリは Jot2D の現在の正式仕様を記録する。履歴や将来構想ではなく、実装と一致する現行仕様を正とする。
+このディレクトリはJot2Dの現在の正式仕様を記録する。履歴や将来構想ではなく、実装と一致する現行仕様を正とする。
+
+まず[基本概念](./concepts/基本概念.md)で用語とObjectの関係を確認し、変更対象の共通契約・機能別操作を読む。保存や計算に関わる変更では対応する領域も確認し、最後に検証対応を参照する。
 
 ## 文書一覧
 
-1. [全体像](./01-全体像.md)
-2. [データモデルと永続化](./02-データモデルと永続化.md)
-3. [Geometryと拘束](./03-Geometryと拘束.md)
-4. [スケッチ](./04-スケッチ.md)
-5. [ブロック](./05-ブロック.md)
-6. [表示と注記](./06-表示と注記.md)
-7. [UI・操作・履歴](./07-UI・操作・履歴.md)
-8. [Parameter](./08-Parameter.md)
-9. [ハッチング](./09-ハッチング.md)
-10. [スプライン](./10-スプライン.md)
-11. [参照画像](./11-参照画像.md)
-12. [スケッチ投影](./12-スケッチ投影.md)
-13. [実装対応表とテスト](./90-実装対応表とテスト.md)
-14. [改善バックログ](./91-改善バックログ.md) — 仕様ではない技術課題
+7領域で案内する。各領域の正本は以下の文書に集約している。
+
+| 領域 | 現在の正式文書・参照先 |
+| --- | --- |
+| 基本概念 | [製品モデル・用語・状態](./concepts/基本概念.md) |
+| 共通契約 | [所属・編集可否](contracts/所属と編集可否.md#1-所属と座標系)、[編集と履歴](contracts/編集と履歴.md)、[削除と参照](contracts/削除と参照.md)、[外観](contracts/外観.md#1-appearanceの継承) |
+| 機能別操作 | [作図・形状編集](./operations/作図と形状編集.md)、[拘束・寸法](./operations/拘束と寸法.md)、[Sketch](./operations/Sketch.md)、[Block](./operations/Block.md)、[Parameter](./operations/Parameter.md)、[Hatch](./operations/Hatch.md)、[Spline](./operations/Spline.md)、[参照画像](./operations/参照画像.md)、[派生Instance](./operations/派生Instance.md)、[注記](./operations/注記.md)、[ファイル操作](./operations/ファイル操作.md) |
+| UI | [画面構成](./ui/画面構成.md)、[入力と操作状態](./ui/入力と操作状態.md)、[表示とビュー操作](./ui/表示とビュー操作.md) |
+| データと互換性 | [保存構造](data/保存形式.md)、[読込・移行](data/読込と互換性.md#1-読込と互換性) |
+| 計算契約 | [幾何計算](./calculation/幾何計算.md)、[拘束と依存更新](./calculation/拘束と依存更新.md)、[式評価](./calculation/式評価.md) |
+| 検証対応 | [保証対応](verification/保証対応.md)、[検証方法](verification/検証方法.md) |
 
 ## 用語
 
-| 用語 | 意味 |
-| --- | --- |
-| Document | 1つの保存対象。Geometry、Constraint、Sketch、Block、Parameter、Appearance、Hatch、Annotation、Reference Imageを持つ |
-| Geometry | Point、Line、Circle、Arc、Spline、およびBlock Projection |
-| Constraint | Geometryの成立条件。寸法もConstraintに属する |
-| Parameter | 名前と数式を持ち、同じ名前空間の寸法と相互参照できるスカラー値 |
-| Appearance | visible、color、lineType、lineWidthと、補助Line用のendpointOverhang／endpointMarkersから成る表示属性 |
-| Hatch | 既存Geometryで囲まれた閉領域へ関連付けられ、境界変形へ追従する線パターンまたは色塗りつぶし |
-| Sketch所属Annotation | Geometryを変更しない引出線または自由テキスト |
-| Reference Image | Geometry背面で手動トレースに使う、Sketch所属の埋め込み画像 |
-| 派生Geometry Instance | 既存Geometryを仮想出力として投影、ミラー、直線パターン複写する機能 |
-| Interaction State | 選択、作図、拘束入力、注記配置など現在の操作状態 |
-| View State | Geometry ID、Space押下中の拘束状態表示など一時的な表示状態 |
+用語の正本は[基本概念の用語と役割](./concepts/基本概念.md#2-用語と役割)。この見出しは従来の参照先を保つために残す。
 
-Jot2Dには表示用の別モードやSheetは存在しない。作図、拘束、表示属性、注記は同じCanvas上で扱う。
+## 開発資料
+
+[リファクタリングの進め方](../docs/refactoring/README.md)、[実装対応表](../docs/refactoring/implementation-map.md)、[改善バックログ](../docs/refactoring/backlog.md)は開発資料として扱う。草案・改善候補・将来の実装方式は正式仕様ではない。
+
+現在の仕様は上表の正本を使用する。過去の文書はGit履歴で確認できる。

@@ -1,0 +1,71 @@
+# 派生Instanceの操作
+
+対象の所属・編集可否は[共通契約](../contracts/所属と編集可否.md)、確定・失敗・履歴は[編集と履歴](../contracts/編集と履歴.md)に従う。以下に操作固有の条件を示す。
+
+## 1. 共通モデル
+
+スケッチ投影、ミラー、直線パターンは、通常Geometryを複製せず、参照元から表示Geometryを動的に生成する「派生Geometryインスタンス」とする。Document直下とBlock Definitionは`geometryInstances[]`を持つ。生成されたPoint／Line／Circle／Arc／Splineは保存配列、solverの自由度、Sketch Treeの個別Geometry分類には含めない。
+
+派生Geometryの座標値は参照元から動的に生成し、派生側へ独立した座標を保存しない。通常の選択モードでclickするとインスタンス全体を選択する。
+
+同一Sketch内で完結するミラー／直線パターンの生成Geometryは、その生成Geometryに対応する参照元を逆変換して通常Geometryと同じ移動・形状変更を行える。スケッチ投影および投影を経由する派生chainは、子Sketchから先祖Sketchを変更しないためドラッグできない。
+
+拘束・寸法コマンドでは生成Geometryを個別の参照対象として選択できる。スケッチ投影の生成Geometryは所属する子Sketch内の通常Geometryと通常拘束でき、先祖Sketchの参照元はその拘束から変更されない読取専用入力とする。
+
+生成Geometryはsnap、通常拘束、寸法、Hatch境界、Leaderの参照対象にできる。
+
+ミラーと直線パターンは同じ所属Sketch内の通常Geometry、Block Projection、別の派生インスタンスの生成Geometryを参照できる。スケッチ投影は生成先の先祖Sketchにある同種の対象を参照できる。参照グラフは非循環でなければならず、読込時に参照切れ、Sketch範囲違反または循環があれば拒否する。元Geometryの共有Pointは同一出現内でも共有し、元の接続トポロジーを維持する。
+
+## 2. 種類
+
+### 2.1 スケッチ投影インスタンス
+
+表示中の先祖SketchにあるPoint、Line、Circle、Arc、SplineまたはBlock Projectionを、アクティブSketchのworld XYへ恒等変換で投影する。複数候補をclickまたは範囲選択し、Enterまたは右clickメニューの「実行」で1個のインスタンスを作る。
+
+自己、子孫、兄弟、Root、非表示Geometryは対象外とし、同じ参照元を同じSketchへ重複投影しない。生成Geometryは子Sketch内の通常Geometryとの通常拘束を含む参照対象として利用できるが、先祖Sketchの参照元を変更するドラッグは行えない。
+
+### 2.2 ミラーインスタンス
+
+同じアクティブSketch内で先に選択したGeometry群を、次にclickしたLineの支持直線を対称軸として1組ミラーコピーする。対称軸の位置・方向が変わると生成Geometryも追従する。
+
+### 2.3 直線パターンインスタンス
+
+同じアクティブSketch内で先に選択したGeometry群を、次にclickしたLineの向きへ一定間隔で複数コピーする。`copies`は元Geometryを含まないコピー数、`spacing`はmm単位の正数、`reversed`はLine方向の反転である。方向Lineの回転へ追従する。Propertiesから間隔、コピー数、反転を編集する。
+
+## 3. 保存形式
+
+Instanceの保存fieldと生成IDは[保存形式](../data/保存形式.md#11-派生geometry-instance)、旧SketchProjectionConstraintからの移行は[読込と互換性](../data/読込と互換性.md)に従う。
+
+## 4. 表示・外観・Tree
+
+通常表示の外観は[外観](../contracts/外観.md)のAPP-04に従う。Constraint Status Viewでは所属Sketchとの関係とsolve errorを通常Geometryと同じ順で評価したうえで、スケッチ投影Instanceの生成Geometryを完全拘束扱いの黒色とする。ミラー／直線パターンの生成Geometryは、最終的な参照元Geometryの完全・支持・未拘束・矛盾状態を継承して色を決める。派生Geometry自体はDOF集計には加えない。
+
+Sketch Treeには「派生インスタンス」分類を設け、インスタンスを1 rowとして表示する。生成Geometryは個別rowにしない。Propertiesは種類、ID、参照元、状態、Appearance Overrideを表示し、直線パターンでは設定値も表示する。
+
+## 5. 編集と削除
+
+同一Sketch内で完結するミラー／直線パターンの生成Geometryは、各派生変換の逆変換を順に適用し、最終的な参照元Geometryの通常ドラッグとして処理する。ミラーでは対称軸を使った逆反射、直線パターンでは対象出現の移動量を差し引いた座標を参照元へ渡す。
+
+派生インスタンスを多段に参照している場合も、最終的な通常Geometryまで逆変換を連鎖する。ただし、chain内にスケッチ投影が含まれる場合は、最終参照元が先祖Sketchにあるためドラッグ全体を拒否する。
+
+許可されたドラッグでは参照元の拘束を通常ドラッグと同じようにsolveし、固定済みの参照元は変更しない。最終的な参照元が同一Sketch上のBlock Projectionの場合は、そのBlock Projectionを所有するBlock Instanceを通常のブロックドラッグと同じように移動する。
+
+PointおよびLineのドラッグは参照元の位置を、CircleおよびArcの円周ドラッグは参照元の半径または拘束時の中心位置を、Arc端点のドラッグは参照元の対応する端点角度を、Splineのドラッグは参照元の通過点を変更する。変更後は参照元を利用する全派生インスタンスが追従する。通常／補助作図属性やSpline構造など、ドラッグ以外の生成Geometry固有属性は派生側から直接編集しない。
+
+参照元と上流インスタンスの削除可否、独立化を設けない規則は[削除と参照](../contracts/削除と参照.md)のDEL-02に従う。
+
+インスタンス削除時のConstraint・Leaderの整理は[削除と参照](../contracts/削除と参照.md)のDEL-05に従う。選択、hover、View Stateは保存しないが、インスタンス本体と設定はDocument Undo／RedoおよびBlock Editor local履歴へ含める。
+
+## 6. 派生Instanceの入力と選択
+
+スケッチ投影コマンドでは、表示中かつアクティブSketchの先祖に属するPoint、Line、Circle、Arc、Spline、Block Projectionをclickして追加／解除する。自己、子孫、兄弟、別branch、Root、非表示Geometryは選択できない。
+
+Enterで選択中の元Geometryから1個の投影Instanceを作って選択modeへ戻り、Escでは作成せず全候補を破棄する。同じ元Geometryの重複投影は行わない。
+
+ミラーと直線パターンは同じSketchで複写元を先に選択し、ToolbarまたはGeometry menuから開始して軸／方向Lineをclickする。パターンは間隔と元を除くコピー数を入力し、Propertiesで間隔、コピー数、方向反転を編集できる。
+
+通常選択で生成Geometryをclickすると派生Instance全体を選択する。同一Sketch内で完結するミラー／直線パターンは、生成Geometryをドラッグすると派生変換を逆変換して参照元Geometryを通常Geometryと同じ規則で移動・形状変更する。
+
+スケッチ投影および投影を経由する派生chainのドラッグは、子Sketchから先祖Sketchを変更しないため拒否する。拘束・寸法コマンド中は生成Geometryを個別対象とする。
+
+Constraint Status Viewではスケッチ投影Instanceの生成Geometryを完全拘束扱いの黒色とし、ミラー／直線パターンは生成Geometryごとに最終的な参照元Geometryの完全・支持・未拘束・矛盾状態を継承して通常Geometryと同じ色へ対応させる。

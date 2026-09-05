@@ -2723,6 +2723,53 @@ test("Block Instance Appearance Override applies to the whole instance", async (
   expect((await page.evaluate((id) => window.__jot2dTest.appearanceStateForTest("block", id), instanceId)).effective.color).toBe("#7c3aed");
 });
 
+test("Block projection appearance preserves host, definition, geometry, and instance precedence", async ({ page }) => {
+  await page.goto(`${baseUrl}/index.html?test=1`);
+  await page.waitForFunction(() => window.__jot2dTest);
+  await page.evaluate(() => window.__jot2dTest.resetForBlockClipboardTest());
+  const baseline = await page.evaluate(() => window.__jot2dTest.serializedModelForTest());
+
+  for (const construction of [false, true]) {
+    const data = structuredClone(baseline);
+    const instance = data.blockInstances[0];
+    const definition = data.blockDefinitions.find((item) => item.id === instance.definitionId);
+    const line = definition.lines[0];
+    line.construction = construction;
+    const hostSketch = data.sketches.find((sketch) => sketch.id === instance.sketchId);
+    const definitionSketch = definition.sketches.find((sketch) => sketch.id === line.sketchId);
+    const channel = construction ? "constructionAppearance" : "appearance";
+    const otherChannel = construction ? "appearance" : "constructionAppearance";
+    data.defaultAppearance = { ...data.defaultAppearance, color: "#1f2937", lineWidth: 2.75 };
+    data.defaultConstructionAppearance = { ...data.defaultConstructionAppearance, color: "#1f2937", lineWidth: 2.75 };
+    hostSketch[channel] = {};
+    definitionSketch[channel] = {};
+    hostSketch[otherChannel] = { color: "#e11d48", lineWidth: 9 };
+    definitionSketch[otherChannel] = { color: "#e11d48", lineWidth: 9 };
+    line.appearance = {};
+    instance.appearanceOverride = {};
+
+    const layers = [
+      { name: "Document", owner: null, color: "#1f2937" },
+      { name: "host Sketch", owner: hostSketch[channel], color: "#2563eb" },
+      { name: "Definition Sketch", owner: definitionSketch[channel], color: "#16a34a" },
+      { name: "Geometry", owner: line.appearance, color: "#d97706" },
+      { name: "Instance", owner: instance.appearanceOverride, color: "#9333ea" },
+    ];
+    for (const { name, owner, color } of layers) {
+      await test.step(`APP-03: ${construction ? "construction" : "normal"} ${name}`, async () => {
+        if (owner) owner.color = color;
+        const loaded = await page.evaluate((fixture) =>
+          window.__jot2dTest.loadDocumentFixtureForDragTest(fixture, "block-appearance.jot2d"), data);
+        expect(loaded.success).toBe(true);
+        const appearance = await page.evaluate((id) => window.__jot2dTest.appearanceStateForTest("block", id), instance.id);
+        expect(appearance.effective).toEqual(expect.objectContaining({ color, lineWidth: 2.75 }));
+        const saved = await page.evaluate(() => window.__jot2dTest.serializedModelForTest());
+        expect(saved.blockDefinitions.find((item) => item.id === definition.id).lines[0].appearance).toEqual(line.appearance);
+      });
+    }
+  }
+});
+
 test("arc radius dimensions omit the center terminator and extend for external labels and reversed arrows", async ({ page }) => {
   await page.goto(`${baseUrl}/index.html?test=1`);
   await page.waitForFunction(() => window.__jot2dTest);
@@ -3468,6 +3515,15 @@ test("construction line endpoint appearance inherits Document defaults and suppo
     overhangPx: 12,
     endpointMarkerCount: 2,
   });
+
+  await page.keyboard.down("Space");
+  expect(await page.evaluate(() => window.__jot2dTest.constructionLineRenderingForTest("L1"))).toEqual(expect.objectContaining({
+    endpointMarkerCount: 2,
+  }));
+  expect(await page.evaluate(() => window.__jot2dTest.viewStateForTest())).toEqual(expect.objectContaining({
+    constraintStatus: true, spaceHeld: true,
+  }));
+  await page.keyboard.up("Space");
 
   await page.locator("#propertyEndpointOverhang").selectOption("false");
   await page.locator("#propertyEndpointMarkers").selectOption("false");

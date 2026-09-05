@@ -156,12 +156,29 @@ test("invalid boundaries remain as repairable hatch objects", async ({ page }) =
   await page.locator("#toolHatch").click();
   await page.mouse.click(fixture.client.x, fixture.client.y);
   await page.keyboard.press("Escape");
-  await page.evaluate(() => window.__jot2dTest.breakFirstHatchBoundaryForTest());
+  await page.evaluate(() => window.__jot2dTest.selectGeometryIdsForTest({ lines: ["L1"] }));
+  await page.keyboard.press("Delete");
+  await expandSketchTreeGroup(page, "hatch");
+  await page.locator('#sketchList [data-object-kind="hatch"]').click();
 
   let state = await page.evaluate(() => window.__jot2dTest.hatchStateForTest());
   expect(state.direct[0].valid).toBe(false);
   expect(state.propertiesText).toContain("無効");
   await expect(page.locator('[data-property-action="hatch-repair"]')).toBeVisible();
+
+  await test.step("LOAD-04: a missing boundary survives save and reload", async () => {
+    const savedHatches = state.serialized.hatches;
+    const result = await page.evaluate((data) =>
+      window.__jot2dTest.loadDocumentFixtureForDragTest(data, "missing-hatch-boundary.jot2d"), state.serialized);
+    expect(result.success).toBe(true);
+    state = await page.evaluate(() => window.__jot2dTest.hatchStateForTest());
+    expect(state.serialized.hatches).toEqual(savedHatches);
+    expect(state.direct).toHaveLength(1);
+    expect(state.direct[0].valid).toBe(false);
+    await expandSketchTreeGroup(page, "hatch");
+    await page.locator('#sketchList [data-object-kind="hatch"]').click();
+    await expect(page.locator('[data-property-action="hatch-repair"]')).toBeVisible();
+  });
 
   const replacement = await page.evaluate(() => window.__jot2dTest.restoreClosedBoundaryForHatchTest());
   await page.locator('[data-property-action="hatch-repair"]').click();
