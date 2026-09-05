@@ -14439,6 +14439,7 @@
   }
 
   function activeCommandToolbarButton() {
+    if (pendingConstraintCommand?.type === "fixed") return fixPointBtn;
     if (pendingCommand?.type?.startsWith("annotation-leader")) return document.getElementById("annotationLeaderBtn");
     if (pendingCommand?.type === "annotation-text-place") return document.getElementById("annotationTextBtn");
     if (pendingCommand?.type?.startsWith("distance")) return constraintButtons.find((button) => button.dataset.constraint === "distance") || null;
@@ -14624,11 +14625,13 @@
   }
 
   function constraintLabel(type) {
+    if (type === "fixed") return applicationText("固定", "Fix");
     const btn = constraintButtons.find((b) => b.dataset.constraint === type);
     return btn?.dataset.label || btn?.title || type;
   }
 
   function constraintTargetHint(type) {
+    if (type === "fixed") return applicationText("固定／解除する点、線、円弧端点、またはブロックを選択してください。Escで終了します。", "Select a point, line, arc endpoint, or block to fix/unfix. Press Esc to finish.");
     if (type === "distance") {
       if (constraintOperands.length === 1 && constraintOperands[0]?.kind === "line") {
         return applicationText("2本目の線を選ぶと線間・角度寸法、円を選ぶと円中心距離寸法、空白をクリックすると線長寸法になります。Enterまたは同じ線のダブルクリックでも線長を確定できます。", "Select a second line for a line-to-line or angle dimension, a circle for a center-to-line dimension, or click empty space for a line-length dimension. Enter or double-clicking the same line also confirms line length.");
@@ -14816,7 +14819,7 @@
     if (message) setHint(message);
     updateConstraintButtons();
     updateToolbar();
-    if (document.activeElement instanceof HTMLElement && document.activeElement.matches("[data-constraint]")) {
+    if (document.activeElement instanceof HTMLElement && document.activeElement.matches("[data-constraint], #fixPointBtn")) {
       document.activeElement.blur();
     }
     draw();
@@ -14896,7 +14899,7 @@
       if (!subjectKind && hitL) return makeConstraintOperand("line", { line: hitL });
       if (!subjectKind && hitA) return makeConstraintOperand("primitive", { primitive: hitA });
     }
-    if (hitArcEnd && (type === "coincident" || type === "pointOnCircle")) return makeConstraintOperand("arc-endpoint", { arc: hitArcEnd.arc, endpoint: hitArcEnd.endpoint });
+    if (hitArcEnd && (type === "coincident" || type === "pointOnCircle" || type === "fixed")) return makeConstraintOperand("arc-endpoint", { arc: hitArcEnd.arc, endpoint: hitArcEnd.endpoint });
     if (hitP) return makeConstraintOperand("point", { point: hitP });
     if (hitL) return makeConstraintOperand("line", { line: hitL });
     if (hitC || hitA) {
@@ -14954,6 +14957,27 @@
 
   function handleConstraintOperandClick(pointer, type, hits = {}) {
     const operand = hitConstraintOperand(pointer, type, hits);
+    if (type === "fixed") {
+      const supported = operand && (operand.element?.blockInstance || ["point", "line", "arc-endpoint"].includes(operand.kind));
+      if (!supported || operand.relation !== "active") {
+        setHint(constraintTargetHint(type), "error");
+        return true;
+      }
+      clearSelection();
+      if (operand.element?.blockInstance) selectedBlockInstances = [operand.element.blockInstance];
+      else {
+        constraintOperands = [operand];
+        syncSelectionFromConstraintOperands();
+      }
+      const command = pendingConstraintCommand;
+      if (toggleSelectedFixed()) clearSelection();
+      pendingConstraintCommand = command;
+      updateGeometrySelectionUI();
+      updateToolbar();
+      updateConstraintButtons();
+      draw();
+      return true;
+    }
     if (!operand && type === "distance") {
       const resolution = resolveConstraintIntent(type, constraintOperands);
       if (resolution?.action === "place-dimension" && resolution.target?.kind === "line-length") {
@@ -15471,6 +15495,8 @@
         btn.setAttribute("aria-pressed", "false");
       }
       fixPointBtn?.setAttribute("aria-disabled", "true");
+      fixPointBtn?.setAttribute("aria-pressed", "false");
+      fixPointBtn?.classList.remove("active");
       return;
     }
     if (pendingCommand?.type?.startsWith("distance")) {
@@ -15492,7 +15518,10 @@
       (selectedProjectionItems.length > 0 && selectedProjectionInstances.length === 1 && selectedProjectionItems.length === selectedPoints.length + selectedLines.length + selectedCircles.length + selectedArcs.length + selectedSplines.length) ||
       Boolean(selectedArcEndpoint) ||
       Boolean(fixedBatch);
-    fixPointBtn.setAttribute("aria-disabled", String(!canToggleFixed));
+    const fixedCommandActive = pendingConstraintCommand?.type === "fixed";
+    fixPointBtn.setAttribute("aria-disabled", String(!canToggleFixed && hasSelection() && !fixedCommandActive));
+    fixPointBtn.classList.toggle("active", fixedCommandActive);
+    fixPointBtn.setAttribute("aria-pressed", String(fixedCommandActive));
 
     const enabled = constraintButtons
       .filter((btn) => btn.getAttribute("aria-disabled") !== "true")
@@ -24199,7 +24228,7 @@
     });
   }
 
-  fixPointBtn.addEventListener("click", () => {
+  function toggleSelectedFixed() {
     const projectedSelection = [...selectedPoints, ...selectedLines, ...selectedCircles, ...selectedArcs, ...selectedSplines].filter((item) => item?.blockProjection);
     const projectedInstances = [...new Set(projectedSelection.map((item) => item.blockInstance))];
     const instance = selectedBlockInstances.length === 1
@@ -24214,7 +24243,7 @@
       updateUI();
       draw();
       recordHistory("ブロック固定切替");
-      return;
+      return true;
     }
     if (selectedArcEndpoint) {
       const { arc, endpoint } = selectedArcEndpoint;
@@ -24222,26 +24251,27 @@
       if (existing) {
         deleteElements({ constraints: [existing] });
         log(`${arc.id}.${endpoint} の固定を解除しました`);
-        return;
+        return true;
       }
       const p = arcEndpointPoint(arc, endpoint);
       if (!guardSketchProjectionShapeEdit([arc], { action: applicationText("固定", "Fix") })) {
         draw();
-        return;
+        return false;
       }
       const snapshot = snapshotModelState();
       if (!commitNewConstraint("fixed", new ArcEndpointFixedConstraint(arc, endpoint, p.x, p.y))) {
         restoreModelState(snapshot);
         updateUI();
         draw();
+        return false;
       }
-      return;
+      return true;
     }
     const batch = selectedFixedBatchTargets();
-    if (!batch) return;
+    if (!batch) return false;
     if (!guardSketchProjectionShapeEdit([...batch.points, ...batch.lines], { action: applicationText("固定", "Fix") })) {
       draw();
-      return;
+      return false;
     }
     const snapshot = snapshotModelState();
     const nextFixed = !fixedBatchIsFullyFixed(batch);
@@ -24261,7 +24291,7 @@
       setHint(`${applicationText("選択対象の固定状態を変更できません", "The selected objects could not be fixed or unfixed")} (error=${fixedResult.errorNorm.toExponential(3)})`, "error");
       updateUI();
       draw();
-      return;
+      return false;
     }
     refreshConstraintAnalysis();
     setHint(`固定状態変更: success=${fixedResult.success}, error=${fixedResult.errorNorm.toExponential(2)}, iter=${fixedResult.iterations}`);
@@ -24270,7 +24300,18 @@
     const ids = [...batch.points, ...batch.lines].map((item) => item.id);
     log(`${ids.join(", ")} の固定状態を ${nextFixed} にしました\n自動solve: success=${fixedResult.success}`);
     recordHistory("固定状態変更");
-    return;
+    return true;
+  }
+
+  fixPointBtn.addEventListener("click", () => {
+    if (!isGeometryMode()) return;
+    if (pendingConstraintCommand?.type === "fixed") {
+      cancelConstraintTargetCommand();
+    } else if (!hasSelection()) {
+      startConstraintTargetCommand("fixed");
+    } else {
+      toggleSelectedFixed();
+    }
   });
 
   document.getElementById("toolHatch")?.addEventListener("click", startHatchCreation);
