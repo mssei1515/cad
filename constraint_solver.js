@@ -1483,6 +1483,17 @@
         const { A, b } = this.buildAugmentedSystem(J, F, lambda);
         let dx = LinearAlgebra.solveLeastSquaresQR(A, b);
         dx = this.limitStep(dx);
+        // Arc endpoint equations are periodic. A large angular Newton step
+        // can jump whole turns near a tangent and leave an invalid arc sweep
+        // even when the endpoint residual converges. Keep each linearization
+        // local in angle as well as in model distance.
+        let angleScale = 1;
+        for (let i = 0; i < vars.length; i++) {
+          if (vars[i].prop === "startAngle" || vars[i].prop === "endAngle") {
+            angleScale = Math.min(angleScale, (Math.PI / 2) / Math.max(Math.abs(dx[i]), 1e-12));
+          }
+        }
+        if (angleScale < 1) dx = dx.map((value) => value * angleScale);
         this.applyDelta(vars, dx);
 
         const trialF = this.computeErrorVectorForConstraints(constraints);
