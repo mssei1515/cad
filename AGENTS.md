@@ -189,6 +189,14 @@
 
 `develop` → 動作確認・テスト → `main` にマージ
 
+### `main` と `develop` の同期
+
+- 通常開発中は、`main`が`develop`の祖先である状態を維持する。正式リリース直後は、両ブランチが同じcommitを指す状態まで同期する。
+- 変更タスクの開始前および正式リリース前に、remoteの`main`と`develop`を取得し、`git merge-base --is-ancestor main develop`が成功することを確認する。成功しない場合は新しい変更や`develop`から`main`へのマージを開始せず、先に`main`の変更を`develop`へ統合し、必要な検証とPushを完了する。
+- `develop`を`main`へマージして`main`をPushした後は、直ちに`develop`へ戻り、`git merge --ff-only main`でリリースmerge commitを取り込んで`develop`もPushする。最後にlocal／remoteの`main`と`develop`のcommit IDがそれぞれ一致すること、および`main`が`develop`の祖先であることを確認する。
+- `--ff-only`による同期に失敗した場合は、force push、rebaseまたはresetで共有履歴を書き換えない。remote更新や分岐原因を調査し、`main`から`develop`への通常merge、競合解消、全体検証、Commit、Pushを行ってから次の開発へ進む。
+- 機能変更や修正を`main`だけへ残してはならない。ユーザーの明示的な指示によって緊急修正を`main`へ直接反映した場合も、次の変更タスクを始める前に同じ変更を`develop`へ統合し、検証してPushする。
+
 作業用ブランチの終了：
 
 - `feature/*`、`fix/*` などの作業用ブランチは、マージと必要な検証が完了し、役目を終えた時点でローカルブランチとリモートブランチの両方を削除する。
