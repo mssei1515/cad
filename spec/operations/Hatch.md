@@ -60,7 +60,7 @@ Block Definition内ハッチングをProjection bundleへ含める。Projection 
 
 作成previewの平面グラフはSketchとGeometry状態ごとにcacheし、pointer位置だけが変わる間は再利用する。保存済み境界の解決結果も参照Geometry状態ごとにcacheする。閉じたSketch Tree分類ではObject rowを生成しない。
 
-閉領域の計算・境界追従は[Hatchの計算規則](../calculation/幾何計算.md#4-閉領域)、検証は[既存の保証](../09-ハッチング.md#8-検証)を参照する。
+閉領域の計算・境界追従は[Hatchの計算規則](../calculation/幾何計算.md#4-閉領域)、検証は[既存の保証](../verification/保証対応.md#hatch)を参照する。
 
 ## 7. 境界追従と修復
 

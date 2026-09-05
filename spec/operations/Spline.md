@@ -70,4 +70,4 @@ Block Definitionは`splines[]`を保持し、Instance Projectionではfit point�
 
 Splineの保存fieldは[保存形式](../data/保存形式.md#3-geometry)、不正データの拒否と旧版配列の補完は[読込と互換性](../data/読込と互換性.md)に従う。History・draft・Clipboardの保持範囲も[保存形式](../data/保存形式.md#12-編集中データとclipboard)を参照する。
 
-補間条件は[Splineの計算規則](../calculation/幾何計算.md#3-splineの補間)、検証は[既存の保証](../10-スプライン.md#8-検証)を参照する。
+補間条件は[Splineの計算規則](../calculation/幾何計算.md#3-splineの補間)、検証は[既存の保証](../verification/保証対応.md#spline)を参照する。
