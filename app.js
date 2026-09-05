@@ -332,8 +332,8 @@
   let constraintAnalysisState = null;
   let constraintRedundancyState = { constraints: new Map(), sketches: new Map(), count: 0 };
   let lastAuthoringPerformance = null;
-  let interactionProfile = null;
-  let interactionProfileFrame = null;
+  const interactionProfiler = window.InteractionProfiler.create();
+  const { work: profileInteractionWork, phase: profileInteractionPhase } = interactionProfiler;
   let interactionFrameStats = null;
   let sketchSolveStates = new Map();
   let invalidReferenceConstraints = new Map();
@@ -745,7 +745,7 @@
   }
 
   function setHint(msg, kind = "normal") {
-    if (!interactionProfileFrame) return setHintUnprofiled(msg, kind);
+    if (!interactionProfiler.active) return setHintUnprofiled(msg, kind);
     return profileInteractionWork("ui", () => setHintUnprofiled(msg, kind));
   }
 
@@ -2509,7 +2509,7 @@
   }
 
   function cachedGeometryRead(key, create) {
-    const read = interactionProfileFrame ? () => profileInteractionWork("geometryReads", create) : create;
+    const read = interactionProfiler.active ? () => profileInteractionWork("geometryReads", create) : create;
     if (!geometryReadCache) return read();
     if (!geometryReadCache.values.has(key)) geometryReadCache.values.set(key, read());
     return geometryReadCache.values.get(key);
@@ -3860,7 +3860,7 @@
   }
 
   function stabilizeActiveParameterNamespace(sketchId = activeSketchId(), options = {}) {
-    if (!interactionProfileFrame) return stabilizeActiveParameterNamespaceUnprofiled(sketchId, options);
+    if (!interactionProfiler.active) return stabilizeActiveParameterNamespaceUnprofiled(sketchId, options);
     return profileInteractionWork("parameters", () => stabilizeActiveParameterNamespaceUnprofiled(sketchId, options));
   }
 
@@ -3989,7 +3989,7 @@
   }
 
   function refreshConstraintAnalysis(options = {}) {
-    if (!interactionProfileFrame) return refreshConstraintAnalysisUnprofiled(options);
+    if (!interactionProfiler.active) return refreshConstraintAnalysisUnprofiled(options);
     return profileInteractionWork("analysis", () => refreshConstraintAnalysisUnprofiled(options));
   }
 
@@ -7666,23 +7666,16 @@
   }
 
   function recordHistory(label = "変更") {
-    if (!interactionProfileFrame) return recordHistoryUnprofiled(label);
+    if (!interactionProfiler.active) return recordHistoryUnprofiled(label);
     return profileInteractionWork("history", () => recordHistoryUnprofiled(label));
   }
 
   function recordHistoryUnprofiled(label = "変更") {
     if (historyRestoring) return;
     const history = activeEditHistory();
-    const snapshot = history.capture();
-    if (history.signature(history.undo.at(-1)) === history.signature(snapshot)) {
-      updateHistoryButtons();
-      return;
-    }
-    history.undo.push(snapshot);
-    if (history.undo.length > HISTORY_LIMIT) history.undo.shift();
-    history.clearRedo();
+    const recorded = window.EditHistory.record(history, HISTORY_LIMIT);
     updateHistoryButtons();
-    log(`${history.recordLabel}: ${label}`);
+    if (recorded) log(`${history.recordLabel}: ${label}`);
   }
 
   function restoreHistorySnapshot(snapshot, label) {
@@ -7741,18 +7734,11 @@
   }
 
   function undoHistory() {
-    const history = activeEditHistory();
-    if (history.undo.length <= 1) return false;
-    history.redo.push(history.undo.pop());
-    return history.restore(history.undo.at(-1), history.undoLabel);
+    return window.EditHistory.undo(activeEditHistory());
   }
 
   function redoHistory() {
-    const history = activeEditHistory();
-    if (history.redo.length === 0) return false;
-    const snapshot = history.redo.pop();
-    history.undo.push(snapshot);
-    return history.restore(snapshot, history.redoLabel);
+    return window.EditHistory.redo(activeEditHistory());
   }
 
   function deserializeConstraint(data, pointById, lineById, primitiveById, dimensionAppearanceLoader = normalizeDimensionAppearance, expressionLoader = (value) => String(value)) {
@@ -11265,7 +11251,7 @@
   }
 
   function solveFinalDragSession(session) {
-    if (!interactionProfileFrame) return solveFinalDragSessionUnprofiled(session);
+    if (!interactionProfiler.active) return solveFinalDragSessionUnprofiled(session);
     return profileInteractionWork("solve", () => solveFinalDragSessionUnprofiled(session));
   }
 
@@ -11309,7 +11295,7 @@
   }
 
   function solveReferenceDependentSketches(rootSketchId) {
-    if (!interactionProfileFrame) return solveReferenceDependentSketchesUnprofiled(rootSketchId);
+    if (!interactionProfiler.active) return solveReferenceDependentSketchesUnprofiled(rootSketchId);
     return profileInteractionWork("dependencies", () => solveReferenceDependentSketchesUnprofiled(rootSketchId));
   }
 
@@ -12659,7 +12645,7 @@
   }
 
   function draw() {
-    if (!interactionProfileFrame) return drawUnprofiled();
+    if (!interactionProfiler.active) return drawUnprofiled();
     return profileInteractionWork("draw", () => drawUnprofiled());
   }
 
@@ -15971,7 +15957,7 @@
   applySketchTreeWidth();
 
   function updateSketchUI() {
-    if (!interactionProfileFrame) return updateSketchUIUnprofiled();
+    if (!interactionProfiler.active) return updateSketchUIUnprofiled();
     return profileInteractionWork("tree", updateSketchUIUnprofiled);
   }
 
@@ -16336,7 +16322,7 @@
   }
 
   function updateGeometrySelectionUI() {
-    if (!interactionProfileFrame) return updateGeometrySelectionUIUnprofiled();
+    if (!interactionProfiler.active) return updateGeometrySelectionUIUnprofiled();
     return profileInteractionWork("ui", updateGeometrySelectionUIUnprofiled);
   }
 
@@ -17281,7 +17267,7 @@
   }
 
   function updatePropertiesUI() {
-    if (!interactionProfileFrame) return updatePropertiesUIUnprofiled();
+    if (!interactionProfiler.active) return updatePropertiesUIUnprofiled();
     return profileInteractionWork("properties", updatePropertiesUIUnprofiled);
   }
 
@@ -18025,7 +18011,7 @@
   }
 
   function updateUI({ refreshAnalysis = true } = {}) {
-    if (!interactionProfileFrame) return updateUIUnprofiled({ refreshAnalysis });
+    if (!interactionProfiler.active) return updateUIUnprofiled({ refreshAnalysis });
     return profileInteractionWork("ui", () => updateUIUnprofiled({ refreshAnalysis }));
   }
 
@@ -19552,7 +19538,7 @@
   }
 
   function dragResultForSession(session, pointer) {
-    if (!interactionProfileFrame) return dragResultForSessionUnprofiled(session, pointer);
+    if (!interactionProfiler.active) return dragResultForSessionUnprofiled(session, pointer);
     return profileInteractionWork("solve", () => dragResultForSessionUnprofiled(session, pointer));
   }
 
@@ -22613,51 +22599,6 @@
     draw();
   }
 
-  // Test-enabled synchronous timings. Subtract nested work to avoid counting it twice.
-  function profileInteractionWork(category, callback) {
-    const parent = interactionProfileFrame;
-    if (!parent) return callback();
-    const frame = { sample: parent.sample, childMs: 0 };
-    const startedAt = performance.now();
-    interactionProfileFrame = frame;
-    try {
-      return callback();
-    } finally {
-      const elapsedMs = performance.now() - startedAt;
-      const entry = frame.sample.work[category] ||= { calls: 0, selfMs: 0 };
-      entry.calls += 1;
-      entry.selfMs += Math.max(0, elapsedMs - frame.childMs);
-      parent.childMs += elapsedMs;
-      interactionProfileFrame = parent;
-    }
-  }
-
-  function profileInteractionPhase(phase, callback) {
-    if (!interactionProfile) return callback();
-    const sample = { work: {} };
-    const parent = interactionProfileFrame;
-    const frame = { sample, childMs: 0 };
-    const startedAt = performance.now();
-    interactionProfileFrame = frame;
-    try {
-      return callback();
-    } finally {
-      const elapsedMs = performance.now() - startedAt;
-      const total = interactionProfile[phase] ||= { samples: 0, totalMs: 0, maxMs: 0, otherMs: 0, work: {} };
-      total.samples += 1;
-      total.totalMs += elapsedMs;
-      total.maxMs = Math.max(total.maxMs, elapsedMs);
-      total.otherMs += Math.max(0, elapsedMs - frame.childMs);
-      for (const [category, entry] of Object.entries(sample.work)) {
-        const aggregate = total.work[category] ||= { calls: 0, selfMs: 0 };
-        aggregate.calls += entry.calls;
-        aggregate.selfMs += entry.selfMs;
-      }
-      if (parent) parent.childMs += elapsedMs;
-      interactionProfileFrame = parent;
-    }
-  }
-
   function processScheduledCanvasPointerMove({ animationFrame = false, synchronousFlush = false } = {}) {
     if (!pendingCanvasPointerMove) return false;
     const pointer = pendingCanvasPointerMove;
@@ -24336,12 +24277,10 @@
       },
       startInteractionProfileForTest() {
         flushScheduledCanvasPointerMove();
-        interactionProfile = {};
+        interactionProfiler.start();
       },
       stopInteractionProfileForTest() {
-        const result = interactionProfile;
-        interactionProfile = null;
-        return result;
+        return interactionProfiler.stop();
       },
       resetInteractionFrameStatsForTest() {
         flushScheduledCanvasPointerMove();
