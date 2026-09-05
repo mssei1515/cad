@@ -2,7 +2,7 @@
 
 現行仕様の見出しを、[移行計画](./migration-plan.md)のファイルIDへ対応付ける。IDの列は予定先であり、移動済みを意味しない。正式仕様は各「現行文書」から読む。
 
-内容整理とファイル移動を別に記録する。M1～M3で移動済みの行には実在する参照先を記載した。移動案内として残した旧見出しも追跡対象に含む。複数IDは本文を分割する予定先を示し、同文の複写先ではない。小見出しのない段落は直前の見出しに含める。移動時は段落の振り分けを照合し、実在する移動先・見出しへのリンクと残範囲を記録する。削除時は集約先または承認された廃止理由を残す。
+内容整理とファイル移動を別に記録する。M1～M4で移動済みの行には実在する参照先を記載した。移動案内として残した旧見出しも追跡対象に含む。複数IDは本文を分割する予定先を示し、同文の複写先ではない。小見出しのない段落は直前の見出しに含める。移動時は段落の振り分けを照合し、実在する移動先・見出しへのリンクと残範囲を記録する。削除時は集約先または承認された廃止理由を残す。
 
 ## 01-全体像
 
@@ -14,8 +14,8 @@
 | --- | --- | --- | --- |
 | 1. 製品モデル | [基本概念 §1](../../spec/concepts/基本概念.md#1-製品モデル)へ集約。旧参照先を保持 | CON | M1移行済み |
 | 2. 主要責務 | [基本概念 §2](../../spec/concepts/基本概念.md#2-用語と役割)へ集約。旧参照先を保持 | CON | M1移行済み |
-| 3. 表示の原則 | 未整理・現行内容を保持 | APP・VIEW | 移動予定 |
-| 4. UI領域 | 未整理・現行内容を保持 | UI | 移動予定 |
+| 3. 表示の原則 | [表示とビュー操作](../../spec/ui/表示とビュー操作.md)へ参照を集約 | APP・VIEW | M4移行済み |
+| 4. UI領域 | [画面構成](../../spec/ui/画面構成.md)へ参照を集約 | UI | M4移行済み |
 | 5. 保存互換 | [正本](../../spec/operations/ファイル操作.md)へ集約。互換性は読込文書を参照 | FILE・LOAD | M3移行済み |
 | 6. 実装構成 | [実装対応表 §1](./implementation-map.md#1-実装ファイルの責務)へ集約。旧参照先を保持 | IMPL | M1移行済み |
 
@@ -57,35 +57,35 @@
 | 1. Geometry 要素 | 未整理・現行内容を保持 | CON・MATH・OWN | 移動予定 |
 | 共通数学契約 | 未整理・現行内容を保持 | MATH・IMPL | 移動予定 |
 | 共通参照契約 | 未整理・現行内容を保持 | OWN・DATA・IMPL | 移動予定 |
-| 2. 作図コマンド | 未整理・現行内容を保持 | GEO | 移動予定 |
-| 点 | 未整理・現行内容を保持 | GEO | 移動予定 |
-| 連続線 | 未整理・現行内容を保持 | GEO | 移動予定 |
-| 中心線 | 未整理・現行内容を保持 | GEO・MATH | 移動予定 |
-| 矩形 | 未整理・現行内容を保持 | GEO | 移動予定 |
-| 長穴 | 未整理・現行内容を保持 | GEO・MATH | 移動予定 |
-| 円 | 未整理・現行内容を保持 | GEO | 移動予定 |
-| 円弧 | 未整理・現行内容を保持 | GEO | 移動予定 |
-| 3点円弧 | 未整理・現行内容を保持 | GEO・MATH | 移動予定 |
-| スプライン | 未整理・現行内容を保持 | GEO・SPL | 移動予定 |
-| スケッチ投影 | 未整理・現行内容を保持 | GEO・DER | 移動予定 |
-| 補助 Geometry | 切替操作は保持。外観・初期値・端部設定は[06](../../spec/06-表示と注記.md)へ集約 | GEO・APP | 移動予定 |
-| R面取り | 未整理・現行内容を保持 | GEO・MATH | 移動予定 |
-| トリム | 未整理・現行内容を保持 | GEO・MATH | 移動予定 |
-| オフセット | 未整理・現行内容を保持 | GEO・MATH | 移動予定 |
-| ハッチング | 未整理・現行内容を保持 | GEO・HAT | 移動予定 |
-| 3. 選択と編集 | 未整理・現行内容を保持 | INPUT・SOLVE・TX | 移動予定 |
+| 2. 作図コマンド | [正本](../../spec/operations/作図と形状編集.md#1-作図と形状編集)へ移動。 | GEO | M4移行済み |
+| 点 | [正本](../../spec/operations/作図と形状編集.md#点)へ移動。 | GEO | M4移行済み |
+| 連続線 | [正本](../../spec/operations/作図と形状編集.md#連続線)へ移動。 | GEO | M4移行済み |
+| 中心線 | [正本](../../spec/operations/作図と形状編集.md#中心線)へ移動。 | GEO | M4移行済み |
+| 矩形 | [正本](../../spec/operations/作図と形状編集.md#矩形)へ移動。 | GEO | M4移行済み |
+| 長穴 | [正本](../../spec/operations/作図と形状編集.md#長穴)へ移動。 | GEO | M4移行済み |
+| 円 | [正本](../../spec/operations/作図と形状編集.md#円)へ移動。 | GEO | M4移行済み |
+| 円弧 | [正本](../../spec/operations/作図と形状編集.md#円弧)へ移動。 | GEO | M4移行済み |
+| 3点円弧 | [正本](../../spec/operations/作図と形状編集.md#3点円弧)へ移動。 | GEO | M4移行済み |
+| スプライン | [正本](../../spec/operations/作図と形状編集.md#スプライン)へ移動。 | GEO | M4移行済み |
+| スケッチ投影 | [正本](../../spec/operations/作図と形状編集.md#スケッチ投影)へ移動。 | GEO | M4移行済み |
+| 補助 Geometry | [正本](../../spec/operations/作図と形状編集.md#補助-geometry)へ移動。 | GEO | M4移行済み |
+| R面取り | [正本](../../spec/operations/作図と形状編集.md#r面取り)へ移動。 | GEO | M4移行済み |
+| トリム | [正本](../../spec/operations/作図と形状編集.md#トリム)へ移動。 | GEO | M4移行済み |
+| オフセット | [正本](../../spec/operations/作図と形状編集.md#オフセット)へ移動。 | GEO | M4移行済み |
+| ハッチング | [正本](../../spec/operations/作図と形状編集.md#ハッチング)へ移動。 | GEO | M4移行済み |
+| 3. 選択と編集 | [正本](../../spec/ui/入力と操作状態.md#3-geometryの選択と編集)へ移動。計算の小節はM5まで旧章に保持。 | INPUT | M4移行済み |
 | ドラッグ中の計算 | 現行章内で構造化済み | SOLVE | 移動予定 |
 | ドラッグの確定と失敗 | [13](../../spec/13-編集の確定と失敗.md)へ集約・現行章には参照を保持 | TX | 移動予定 |
-| 4. 拘束コマンド | 未整理・現行内容を保持 | CST | 移動予定 |
-| 5. 拘束追加のルール | 未整理・現行内容を保持 | CST・SOLVE | 移動予定 |
-| 6. 拘束寸法と読み取り専用寸法 | 未整理・現行内容を保持 | CST | 移動予定 |
-| 7. 数値表示 | 未整理・現行内容を保持 | VIEW | 移動予定 |
+| 4. 拘束コマンド | [正本](../../spec/operations/拘束と寸法.md#1-拘束コマンド)へ移動。 | CST | M4移行済み |
+| 5. 拘束追加のルール | [正本](../../spec/operations/拘束と寸法.md#2-拘束追加のルール)へ移動。 | CST | M4移行済み |
+| 6. 拘束寸法と読み取り専用寸法 | [正本](../../spec/operations/拘束と寸法.md#3-拘束寸法と読み取り専用寸法)へ移動。 | CST | M4移行済み |
+| 7. 数値表示 | [正本](../../spec/ui/表示とビュー操作.md#5-数値表示)へ移動。 | VIEW | M4移行済み |
 | 8. solve と状態表示 | 収束・受入れ等を構造化済み。計算と表示の分離は未実施 | SOLVE・VIEW | 移動予定 |
 | 収束と受入れ | 現行章内で構造化済み | SOLVE | 移動予定 |
 | Parameterを含む確定操作 | 手順を[08](../../spec/08-Parameter.md)、復元を[13](../../spec/13-編集の確定と失敗.md)へ集約 | EVAL・TX | 移動予定 |
 | 拘束状態の表示 | 現行章内で構造化済み | VIEW | 移動予定 |
 | 参照元変更の影響 | [13](../../spec/13-編集の確定と失敗.md)へ集約・操作全体復元との範囲を明記 | SOLVE・TX | 移動予定 |
-| 9. Geometry の削除 | [14](../../spec/14-削除と参照.md)へ集約し参照を保持 | GEO・DEL | 移動予定 |
+| 9. Geometry の削除 | [正本](../../spec/operations/作図と形状編集.md#2-geometryの削除)へ移動。 | GEO | M4移行済み |
 
 ## 04-スケッチ
 
@@ -95,17 +95,17 @@
 
 | 現行見出し | 内容の整理状況 | 移行先ID | 再配置 |
 | --- | --- | --- | --- |
-| 1. 目的と基本構造 | 未整理・現行内容を保持 | CON・OWN | 移動予定 |
+| 1. 目的と基本構造 | [正本](../../spec/operations/Sketch.md#1-目的と基本構造)へ移動。 | SK | M4移行済み |
 | 2. 所属と座標系 | [正本](../../spec/contracts/所属と編集可否.md#1-所属と座標系)へ集約。旧見出しは案内として保持 | OWN | M2移行済み |
 | 3. アクティブ Sketch | [正本](../../spec/contracts/所属と編集可否.md#2-アクティブsketchと編集対象)へ集約。旧見出しは案内として保持 | OWN | M2移行済み |
-| 4. 作成、名前、階層 | 未整理・現行内容を保持 | SK | 移動予定 |
-| 5. Appearanceと表示状態 | Sketch UIと状態は保持。継承は[06](../../spec/06-表示と注記.md)を参照 | SK・APP | 移動予定 |
+| 4. 作成、名前、階層 | [正本](../../spec/operations/Sketch.md#2-作成名前階層)へ移動。Treeの詳細はUIへ集約。 | SK | M4移行済み |
+| 5. Appearanceと表示状態 | [正本](../../spec/operations/Sketch.md#3-appearanceと表示状態)へ移動。 | SK | M4移行済み |
 | 6. スナップ | [正本](../../spec/contracts/所属と編集可否.md#3-sketchをまたぐスナップ)へ集約。旧見出しは案内として保持 | OWN | M2移行済み |
 | 7. 通常拘束 | [正本](../../spec/contracts/所属と編集可否.md#4-通常拘束の範囲)へ集約。旧見出しは案内として保持 | OWN | M2移行済み |
 | 8. 参照拘束 | [正本](../../spec/contracts/所属と編集可否.md#5-先祖参照の範囲)へ集約。旧見出しは案内として保持 | OWN | M2移行済み |
 | 9. 参照 solve | solve順序を保持。読込時の無効状態は[02](../../spec/02-データモデルと永続化.md)のLOAD-02を参照 | SOLVE・LOAD | 移動予定 |
-| 10. Sketch 削除 | [正本](../../spec/operations/Sketch.md#1-sketchの削除範囲)へ集約。旧見出しは案内として保持 | SK・DEL | M2移行済み |
-| 11. Block Definition 内部 Sketch | 未整理・現行内容を保持 | SK・BLK | 移動予定 |
+| 10. Sketch 削除 | [正本](../../spec/operations/Sketch.md#5-sketchの削除範囲)へ集約。旧見出しは案内として保持 | SK・DEL | M2移行済み |
+| 11. Block Definition 内部 Sketch | [正本](../../spec/operations/Sketch.md#4-block-definition-内部-sketch)へ移動。 | SK | M4移行済み |
 
 ## 05-ブロック
 
@@ -115,21 +115,21 @@
 
 | 現行見出し | 内容の整理状況 | 移行先ID | 再配置 |
 | --- | --- | --- | --- |
-| 1. 概念 | 未整理・現行内容を保持 | CON | 移動予定 |
-| 2. Definition と Instance | 未整理・現行内容を保持 | BLK・DATA | 移動予定 |
-| 3. Projection | 未整理・現行内容を保持 | BLK・APP・OWN | 移動予定 |
-| 4. 選択 Geometry からの作成 | 未整理・現行内容を保持 | BLK | 移動予定 |
-| 5. 空 Definition の作成 | 未整理・現行内容を保持 | BLK | 移動予定 |
-| 6. Definition管理画面 | 未整理・現行内容を保持 | BLK | 移動予定 |
-| 7. Block Editor | 未整理・現行内容を保持 | BLK・TX | 移動予定 |
-| 8. 入れ子 Block | 未整理・現行内容を保持 | BLK | 移動予定 |
-| 9. 配置 | 未整理・現行内容を保持 | BLK | 移動予定 |
-| 10. Instance 編集 | 未整理・現行内容を保持 | BLK | 移動予定 |
-| 11. 有効内部 Sketch | 設定と有効件数は保持。参照消失の扱いは[14](../../spec/14-削除と参照.md)へ集約 | BLK・DEL | 移動予定 |
-| 12. Constraint と solve | 形状自由度の規則は保持。評価手順は[08](../../spec/08-Parameter.md)、復元は[13](../../spec/13-編集の確定と失敗.md)へ集約 | BLK・OWN・SOLVE・EVAL・TX | 移動予定 |
-| 13. Definition 編集完了 | 未整理・現行内容を保持 | BLK・TX | 移動予定 |
-| 14. 削除と互換性 | 互換性は保持。削除可否・参照整理は[14](../../spec/14-削除と参照.md)を参照 | BLK・DEL・LOAD | 移動予定 |
-| 15. 未実装 | 未整理・現行内容を保持 | BLK・BACK | 移動予定 |
+| 1. 概念 | [正本](../../spec/operations/Block.md#1-概念)へ移動。 | BLK | M4移行済み |
+| 2. Definition と Instance | [正本](../../spec/operations/Block.md#2-definition-と-instance)へ移動。 | BLK | M4移行済み |
+| 3. Projection | [正本](../../spec/operations/Block.md#3-projection)へ移動。 | BLK | M4移行済み |
+| 4. 選択 Geometry からの作成 | [正本](../../spec/operations/Block.md#4-選択-geometry-からの作成)へ移動。 | BLK | M4移行済み |
+| 5. 空 Definition の作成 | [正本](../../spec/operations/Block.md#5-空-definition-の作成)へ移動。 | BLK | M4移行済み |
+| 6. Definition管理画面 | [正本](../../spec/operations/Block.md#6-definition管理画面)へ移動。 | BLK | M4移行済み |
+| 7. Block Editor | [正本](../../spec/operations/Block.md#7-block-editor)へ移動。 | BLK | M4移行済み |
+| 8. 入れ子 Block | [正本](../../spec/operations/Block.md#8-入れ子-block)へ移動。 | BLK | M4移行済み |
+| 9. 配置 | [正本](../../spec/operations/Block.md#9-配置)へ移動。 | BLK | M4移行済み |
+| 10. Instance 編集 | [正本](../../spec/operations/Block.md#10-instance-編集)へ移動。 | BLK | M4移行済み |
+| 11. 有効内部 Sketch | [正本](../../spec/operations/Block.md#11-有効内部-sketch)へ移動。 | BLK | M4移行済み |
+| 12. Constraint と solve | [正本](../../spec/operations/Block.md#12-constraint-と-solve)へ移動。 | BLK | M4移行済み |
+| 13. Definition 編集完了 | [正本](../../spec/operations/Block.md#13-definition-編集完了)へ移動。 | BLK | M4移行済み |
+| 14. 削除と互換性 | [正本](../../spec/operations/Block.md#14-削除と互換性)へ移動。 | BLK | M4移行済み |
+| 15. 未実装 | [正本](../../spec/operations/Block.md#15-未実装)へ移動。 | BLK | M4移行済み |
 
 ## 06-表示と注記
 
@@ -139,21 +139,21 @@
 
 | 現行見出し | 内容の整理状況 | 移行先ID | 再配置 |
 | --- | --- | --- | --- |
-| 1. 単一Canvas | 未整理・現行内容を保持 | VIEW | 移動予定 |
-| 1.1 モデル単位と表示倍率 | 未整理・現行内容を保持 | VIEW | 移動予定 |
+| 1. 単一Canvas | [正本](../../spec/ui/表示とビュー操作.md#2-単一canvas)へ移動。 | VIEW | M4移行済み |
+| 1.1 モデル単位と表示倍率 | [正本](../../spec/ui/表示とビュー操作.md#11-モデル単位と表示倍率)へ移動。 | VIEW | M4移行済み |
 | 2. Appearanceの継承 | [正本](../../spec/contracts/外観.md)へ集約。旧見出しは案内として保持 | APP | M2移行済み |
 | 解決する順序 | [正本](../../spec/contracts/外観.md)へ集約。旧見出しは案内として保持 | APP | M2移行済み |
 | 初期値と補助Lineの端部 | [正本](../../spec/contracts/外観.md)へ集約。旧見出しは案内として保持 | APP | M2移行済み |
 | テーマと一時的な強調 | [正本](../../spec/contracts/外観.md)へ集約。旧見出しは案内として保持 | APP | M2移行済み |
 | 3. visible | [正本](../../spec/contracts/外観.md)へ集約。旧見出しは案内として保持 | APP | M2移行済み |
-| 4. Constraint Status View | 未整理・現行内容を保持 | VIEW | 移動予定 |
-| 5. Constraint Dimension | 未整理・現行内容を保持 | CST・APP | 移動予定 |
-| 6. Annotation | 未整理・現行内容を保持 | ANN | 移動予定 |
-| Leader | 未整理・現行内容を保持 | ANN | 移動予定 |
-| Free Text | 未整理・現行内容を保持 | ANN | 移動予定 |
-| 7. Hatch表示 | 未整理・現行内容を保持 | HAT | 移動予定 |
-| 8. Reference Image表示 | 未整理・現行内容を保持 | IMG | 移動予定 |
-| 9. View State | 未整理・現行内容を保持 | VIEW・TX | 移動予定 |
+| 4. Constraint Status View | [正本](../../spec/ui/表示とビュー操作.md#3-constraint-status-view)へ移動。 | VIEW | M4移行済み |
+| 5. Constraint Dimension | [正本](../../spec/operations/拘束と寸法.md#4-寸法の表示と配置)へ移動。 | CST | M4移行済み |
+| 6. Annotation | [正本](../../spec/operations/注記.md#1-annotation)へ移動。 | ANN | M4移行済み |
+| Leader | [正本](../../spec/operations/注記.md#leader)へ移動。 | ANN | M4移行済み |
+| Free Text | [正本](../../spec/operations/注記.md#free-text)へ移動。 | ANN | M4移行済み |
+| 7. Hatch表示 | [正本](../../spec/operations/Hatch.md#1-hatchの表示と重なり順)へ移動。 | HAT | M4移行済み |
+| 8. Reference Image表示 | [正本](../../spec/operations/参照画像.md#1-画像の表示)へ移動。 | IMG | M4移行済み |
+| 9. View State | [正本](../../spec/ui/表示とビュー操作.md#4-view-state)へ移動。 | VIEW | M4移行済み |
 
 ## 07-UI・操作・履歴
 
@@ -163,18 +163,18 @@
 
 | 現行見出し | 内容の整理状況 | 移行先ID | 再配置 |
 | --- | --- | --- | --- |
-| 1. 固定レイアウト | 未整理・現行内容を保持 | UI | 移動予定 |
-| 1.1 配色 | 未整理・現行内容を保持 | UI・APP | 移動予定 |
-| 2. Menu Bar | [ファイル操作](../../spec/operations/ファイル操作.md)を分離。menu・画面設定は旧章に保持 | UI・FILE | M3一部移行 |
-| 3. Toolbar | 未整理・現行内容を保持 | UI | 移動予定 |
-| 4. Sketch Tree | 未整理・現行内容を保持 | UI | 移動予定 |
-| 5. Properties | 未整理・現行内容を保持 | UI | 移動予定 |
-| 6. Parameter画面 | 未整理・現行内容を保持 | UI・PAR | 移動予定 |
-| 7. Selectionと操作状態 | 未整理・現行内容を保持 | INPUT・SOLVE | 移動予定 |
-| Canvas右クリックメニュー | 未整理・現行内容を保持 | INPUT | 移動予定 |
-| 8. Status Bar | 未整理・現行内容を保持 | UI | 移動予定 |
-| 9. Shortcut | 未整理・現行内容を保持 | INPUT | 移動予定 |
-| 10. View操作 | 未整理・現行内容を保持 | VIEW・INPUT | 移動予定 |
+| 1. 固定レイアウト | [正本](../../spec/ui/画面構成.md#1-固定レイアウト)へ移動。 | UI | M4移行済み |
+| 1.1 配色 | [正本](../../spec/ui/画面構成.md#11-配色)へ移動。 | UI | M4移行済み |
+| 2. Menu Bar | [正本](../../spec/ui/画面構成.md#2-menu-bar)へ移動。 | UI | M4移行済み |
+| 3. Toolbar | [正本](../../spec/ui/画面構成.md#3-toolbar)へ移動。 | UI | M4移行済み |
+| 4. Sketch Tree | [正本](../../spec/ui/画面構成.md#4-sketch-tree)へ移動。 | UI | M4移行済み |
+| 5. Properties | [正本](../../spec/ui/画面構成.md#5-properties)へ移動。 | UI | M4移行済み |
+| 6. Parameter画面 | [正本](../../spec/operations/Parameter.md#1-parameter画面)へ移動。 | PAR | M4移行済み |
+| 7. Selectionと操作状態 | [正本](../../spec/ui/入力と操作状態.md#1-selectionと操作状態)へ移動。 | INPUT | M4移行済み |
+| Canvas右クリックメニュー | [正本](../../spec/ui/入力と操作状態.md#canvas右クリックメニュー)へ移動。 | INPUT | M4移行済み |
+| 8. Status Bar | [正本](../../spec/ui/画面構成.md#6-status-bar)へ移動。 | UI | M4移行済み |
+| 9. Shortcut | [正本](../../spec/ui/入力と操作状態.md#2-shortcut)へ移動。 | INPUT | M4移行済み |
+| 10. View操作 | [正本](../../spec/ui/表示とビュー操作.md#1-ビュー操作とpointer処理)へ移動。 | VIEW | M4移行済み |
 | 11. History | [正本](../../spec/contracts/編集と履歴.md)へ集約。旧見出しは案内として保持 | TX | M2移行済み |
 
 ## 08-Parameter
@@ -189,9 +189,9 @@
 | 2. 識別子と採番 | 未整理・現行内容を保持 | EVAL・DATA | 移動予定 |
 | 3. 式 | 未整理・現行内容を保持 | EVAL | 移動予定 |
 | 4. 評価とsolve | 評価手順の正本として保持。復元は[13](../../spec/13-編集の確定と失敗.md)へ集約 | EVAL・SOLVE・TX | 移動予定 |
-| 5. 編集 | 未整理・現行内容を保持 | PAR | 移動予定 |
-| 6. 削除・コピー・Block化 | コピーとBlock化は保持。symbol削除条件は[14](../../spec/14-削除と参照.md)のDEL-01を参照 | PAR・DEL | 移動予定 |
-| 7. 永続化 | [正本](../../spec/data/保存形式.md#12-編集中データとclipboard)へ集約。互換性は読込文書を参照 | DATA・LOAD | M3移行済み |
+| 5. 編集 | [正本](../../spec/operations/Parameter.md#2-編集)へ移動。 | PAR | M4移行済み |
+| 6. 削除・コピー・Block化 | [正本](../../spec/operations/Parameter.md#3-削除コピーblock化)へ移動。 | PAR | M4移行済み |
+| 7. 永続化 | [正本](../../spec/operations/Parameter.md#4-永続化)へ移動。 | PAR | M4移行済み |
 
 ## 09-ハッチング
 
@@ -201,13 +201,13 @@
 
 | 現行見出し | 内容の整理状況 | 移行先ID | 再配置 |
 | --- | --- | --- | --- |
-| 1. 基本仕様 | 未整理・現行内容を保持 | HAT | 移動予定 |
+| 1. 基本仕様 | [正本](../../spec/operations/Hatch.md#2-基本仕様)へ移動。 | HAT | M4移行済み |
 | 2. データモデル | [正本](../../spec/data/保存形式.md#8-hatch)へ集約。互換性は読込文書を参照 | DATA | M3移行済み |
-| 3. 閉領域と境界追従 | 未整理・現行内容を保持 | MATH・HAT | 移動予定 |
-| 4. 描画と選択 | 未整理・現行内容を保持 | HAT | 移動予定 |
-| 5. 削除、コピー、Block化 | コピーとBlock化は保持。境界・所属削除の違いは[14](../../spec/14-削除と参照.md)へ集約 | HAT・DEL | 移動予定 |
-| 6. Block Projection | 未整理・現行内容を保持 | HAT・BLK | 移動予定 |
-| 7. JSON互換性と性能 | [読込](../../spec/data/読込と互換性.md)へ集約。性能記述は旧章に保持 | LOAD・COV | M3一部移行 |
+| 3. 閉領域と境界追従 | 操作上の追従・無効化・再指定は[Hatch](../../spec/operations/Hatch.md)へ移動。数学的な計算は旧章に保持 | MATH・HAT | M4一部移行 |
+| 4. 描画と選択 | [正本](../../spec/operations/Hatch.md#3-描画と選択)へ移動。 | HAT | M4移行済み |
+| 5. 削除、コピー、Block化 | [正本](../../spec/operations/Hatch.md#4-削除コピーblock化)へ移動。 | HAT | M4移行済み |
+| 6. Block Projection | [正本](../../spec/operations/Hatch.md#5-block-projection)へ移動。 | HAT | M4移行済み |
+| 7. JSON互換性と性能 | [正本](../../spec/operations/Hatch.md#6-json互換性と性能)へ移動。 | HAT | M4移行済み |
 | 8. 検証 | 未整理・現行内容を保持 | COV | 移動予定 |
 
 ## 10-スプライン
@@ -219,15 +219,15 @@
 | 現行見出し | 内容の整理状況 | 移行先ID | 再配置 |
 | --- | --- | --- | --- |
 | 1. 形状と補間 | 未整理・現行内容を保持 | MATH | 移動予定 |
-| 2. 作成と編集 | 未整理・現行内容を保持 | SPL | 移動予定 |
-| 作成 | 確定・取消操作を表へ整理。03の詳細再掲を除去 | SPL | 移動予定 |
-| fit point編集mode | 編集開始・終了、右click操作、失敗時復元を保持・構造化 | SPL | 移動予定 |
-| Propertiesと派生Spline | 既存の編集可否を保持 | SPL | 移動予定 |
-| 3. Selection、Sketch Tree、Annotation | 未整理・現行内容を保持 | SPL | 移動予定 |
-| 4. 拘束 | 未整理・現行内容を保持 | SPL・CST | 移動予定 |
-| 5. HatchとGeometry操作 | 未整理・現行内容を保持 | SPL・HAT・GEO | 移動予定 |
-| 6. Copy、Block、Projection | 未整理・現行内容を保持 | SPL・BLK・DER | 移動予定 |
-| 7. JSONと互換性 | [正本](../../spec/data/保存形式.md#3-geometry)へ集約。互換性は読込文書を参照 | DATA・LOAD | M3移行済み |
+| 2. 作成と編集 | [正本](../../spec/operations/Spline.md#1-作成と編集)へ移動。 | SPL | M4移行済み |
+| 作成 | [正本](../../spec/operations/Spline.md#作成)へ移動。 | SPL | M4移行済み |
+| fit point編集mode | [正本](../../spec/operations/Spline.md#fit-point編集mode)へ移動。 | SPL | M4移行済み |
+| Propertiesと派生Spline | [正本](../../spec/operations/Spline.md#propertiesと派生spline)へ移動。 | SPL | M4移行済み |
+| 3. Selection、Sketch Tree、Annotation | [正本](../../spec/operations/Spline.md#2-selectionsketch-treeannotation)へ移動。 | SPL | M4移行済み |
+| 4. 拘束 | [正本](../../spec/operations/Spline.md#3-拘束)へ移動。 | SPL | M4移行済み |
+| 5. HatchとGeometry操作 | [正本](../../spec/operations/Spline.md#4-hatchとgeometry操作)へ移動。 | SPL | M4移行済み |
+| 6. Copy、Block、Projection | [正本](../../spec/operations/Spline.md#5-copyblockprojection)へ移動。 | SPL | M4移行済み |
+| 7. JSONと互換性 | [正本](../../spec/operations/Spline.md#6-jsonと互換性)へ移動。 | SPL | M4移行済み |
 | 8. 検証 | 未整理・現行内容を保持 | COV | 移動予定 |
 
 ## 11-参照画像
@@ -238,10 +238,10 @@
 
 | 現行見出し | 内容の整理状況 | 移行先ID | 再配置 |
 | --- | --- | --- | --- |
-| 1. 目的と範囲 | 未整理・現行内容を保持 | IMG | 移動予定 |
-| 2. 読み込み | 未整理・現行内容を保持 | IMG | 移動予定 |
-| 3. 表示と操作 | 未整理・現行内容を保持 | IMG | 移動予定 |
-| 4. 永続化 | [保存形式](../../spec/data/保存形式.md#9-reference-image)・[読込](../../spec/data/読込と互換性.md#reference-image)へ集約。操作ごとの履歴対象は旧章に保持 | DATA・LOAD | M3一部移行 |
+| 1. 目的と範囲 | [正本](../../spec/operations/参照画像.md#2-目的と範囲)へ移動。 | IMG | M4移行済み |
+| 2. 読み込み | [正本](../../spec/operations/参照画像.md#3-読み込み)へ移動。 | IMG | M4移行済み |
+| 3. 表示と操作 | [正本](../../spec/operations/参照画像.md#4-表示と操作)へ移動。 | IMG | M4移行済み |
+| 4. 永続化 | [正本](../../spec/operations/参照画像.md#5-永続化)へ移動。 | IMG | M4移行済み |
 | 5. テスト | 未整理・現行内容を保持 | COV | 移動予定 |
 
 ## 12-スケッチ投影
@@ -252,14 +252,14 @@
 
 | 現行見出し | 内容の整理状況 | 移行先ID | 再配置 |
 | --- | --- | --- | --- |
-| 1. 共通モデル | 未整理・現行内容を保持 | CON・DER・OWN | 移動予定 |
-| 2. 種類 | 未整理・現行内容を保持 | DER | 移動予定 |
-| 2.1 スケッチ投影インスタンス | 未整理・現行内容を保持 | DER | 移動予定 |
-| 2.2 ミラーインスタンス | 未整理・現行内容を保持 | DER | 移動予定 |
-| 2.3 直線パターンインスタンス | 未整理・現行内容を保持 | DER | 移動予定 |
-| 3. 保存形式 | [正本](../../spec/data/保存形式.md#11-派生geometry-instance)へ集約。互換性は読込文書を参照 | DATA・LOAD | M3移行済み |
-| 4. 表示・外観・Tree | 状態色とTreeは保持。外観経路は[06](../../spec/06-表示と注記.md)のAPP-04を参照 | DER・APP・VIEW・UI | 移動予定 |
-| 5. 編集と削除 | dragと履歴は保持。削除可否と参照整理は[14](../../spec/14-削除と参照.md)へ集約 | DER・OWN・DEL・TX | 移動予定 |
+| 1. 共通モデル | [正本](../../spec/operations/派生Instance.md#1-共通モデル)へ移動。 | DER | M4移行済み |
+| 2. 種類 | [正本](../../spec/operations/派生Instance.md#2-種類)へ移動。 | DER | M4移行済み |
+| 2.1 スケッチ投影インスタンス | [正本](../../spec/operations/派生Instance.md#21-スケッチ投影インスタンス)へ移動。 | DER | M4移行済み |
+| 2.2 ミラーインスタンス | [正本](../../spec/operations/派生Instance.md#22-ミラーインスタンス)へ移動。 | DER | M4移行済み |
+| 2.3 直線パターンインスタンス | [正本](../../spec/operations/派生Instance.md#23-直線パターンインスタンス)へ移動。 | DER | M4移行済み |
+| 3. 保存形式 | [正本](../../spec/operations/派生Instance.md#3-保存形式)へ移動。 | DER | M4移行済み |
+| 4. 表示・外観・Tree | [正本](../../spec/operations/派生Instance.md#4-表示外観tree)へ移動。 | DER | M4移行済み |
+| 5. 編集と削除 | [正本](../../spec/operations/派生Instance.md#5-編集と削除)へ移動。 | DER | M4移行済み |
 
 ## 13-編集の確定と失敗
 
@@ -284,8 +284,8 @@
 | --- | --- | --- | --- |
 | 1. 削除を拒否する参照 | [正本](../../spec/contracts/削除と参照.md)へ集約。旧見出しは案内として保持 | DEL | M2移行済み |
 | 2. 削除が成立した場合の参照整理 | [正本](../../spec/contracts/削除と参照.md)へ集約。旧見出しは案内として保持 | DEL | M2移行済み |
-| 3. Sketchの削除範囲 | [正本](../../spec/operations/Sketch.md#1-sketchの削除範囲)へ集約。旧見出しは案内として保持 | SK・DEL | M2移行済み |
-| 4. Blockの構成変更 | [正本](../../spec/operations/Block.md#1-blockの構成変更)へ集約。旧見出しは案内として保持 | BLK・DEL | M2移行済み |
+| 3. Sketchの削除範囲 | [正本](../../spec/operations/Sketch.md#5-sketchの削除範囲)へ集約。旧見出しは案内として保持 | SK・DEL | M2移行済み |
+| 4. Blockの構成変更 | [正本](../../spec/operations/Block.md#16-blockの構成変更)へ集約。旧見出しは案内として保持 | BLK・DEL | M2移行済み |
 
 ## 90-実装対応表とテスト
 
@@ -301,6 +301,7 @@
 | 削除と外観 | DEL・APPの代表ケースとテストの対応を追加 | COV | 移動予定 |
 | 所属・編集可否と履歴 | M2の新しい正本と既存E2Eの代表保証を対応付け | COV | 移動予定 |
 | ファイル操作と保存形式 | M3の正本と既存E2Eの代表保証を対応付け | COV | 移動予定 |
+| 機能別操作とUI | M4の正本と既存suiteを対応付け | COV | 移動予定 |
 | 3. 検証コマンド | 未整理・現行内容を保持 | RUN | 移動予定 |
 | 4. Visual baseline | 未整理・現行内容を保持 | RUN | 移動予定 |
 | 5. 完了判定 | 未整理・現行内容を保持 | RUN | 移動予定 |
@@ -397,22 +398,6 @@ M1で作成した用語と製品モデルの正本。旧01・READMEからの移�
 | テーマと一時的な強調 | M2で集約。固有操作の残りはM4で整理 | APP | M2移行済み |
 | 2. visible | M2で集約。固有操作の残りはM4で整理 | APP | M2移行済み |
 
-## operations/Sketch
-
-[現行文書](../../spec/operations/Sketch.md)
-
-| 現行見出し | 内容の整理状況 | 移行先ID | 再配置 |
-| --- | --- | --- | --- |
-| 1. Sketchの削除範囲 | M2で集約。固有操作の残りはM4で整理 | SK | M2移行済み |
-
-## operations/Block
-
-[現行文書](../../spec/operations/Block.md)
-
-| 現行見出し | 内容の整理状況 | 移行先ID | 再配置 |
-| --- | --- | --- | --- |
-| 1. Blockの構成変更 | M2で集約。固有操作の残りはM4で整理 | BLK | M2移行済み |
-
 ## data/保存形式
 
 [現行文書](../../spec/data/保存形式.md)
@@ -460,3 +445,218 @@ M1で作成した用語と製品モデルの正本。旧01・READMEからの移�
 | 1. 開く・保存・保存先 | M3で集約 | FILE | M3移行済み |
 | 2. 保存先ハンドルの保持範囲 | M3で集約 | FILE | M3移行済み |
 | 3. 操作の入口 | M3で集約 | FILE | M3移行済み |
+
+## operations/作図と形状編集
+
+[現行文書](../../spec/operations/作図と形状編集.md)
+
+計算条件の詳細分離はM5、保証対応の集約はM6で続ける。
+
+| 現行見出し | 内容の整理状況 | 移行先ID | 再配置 |
+| --- | --- | --- | --- |
+| 1. 作図と形状編集 | M4で操作・UIへ集約 | GEO | M4移行済み |
+| 点 | M4で操作・UIへ集約 | GEO | M4移行済み |
+| 連続線 | M4で操作・UIへ集約 | GEO | M4移行済み |
+| 中心線 | M4で操作・UIへ集約 | GEO | M4移行済み |
+| 矩形 | M4で操作・UIへ集約 | GEO | M4移行済み |
+| 長穴 | M4で操作・UIへ集約 | GEO | M4移行済み |
+| 円 | M4で操作・UIへ集約 | GEO | M4移行済み |
+| 円弧 | M4で操作・UIへ集約 | GEO | M4移行済み |
+| 3点円弧 | M4で操作・UIへ集約 | GEO | M4移行済み |
+| スプライン | M4で操作・UIへ集約 | GEO | M4移行済み |
+| スケッチ投影 | M4で操作・UIへ集約 | GEO | M4移行済み |
+| 補助 Geometry | M4で操作・UIへ集約 | GEO | M4移行済み |
+| R面取り | M4で操作・UIへ集約 | GEO | M4移行済み |
+| トリム | M4で操作・UIへ集約 | GEO | M4移行済み |
+| オフセット | M4で操作・UIへ集約 | GEO | M4移行済み |
+| ハッチング | M4で操作・UIへ集約 | GEO | M4移行済み |
+| 2. Geometryの削除 | M4で操作・UIへ集約 | GEO | M4移行済み |
+| 3. Offsetのチェーン選択 | M4で操作・UIへ集約 | GEO | M4移行済み |
+
+## operations/拘束と寸法
+
+[現行文書](../../spec/operations/拘束と寸法.md)
+
+計算条件の詳細分離はM5、保証対応の集約はM6で続ける。
+
+| 現行見出し | 内容の整理状況 | 移行先ID | 再配置 |
+| --- | --- | --- | --- |
+| 1. 拘束コマンド | M4で操作・UIへ集約 | CST | M4移行済み |
+| 2. 拘束追加のルール | M4で操作・UIへ集約 | CST | M4移行済み |
+| 3. 拘束寸法と読み取り専用寸法 | M4で操作・UIへ集約 | CST | M4移行済み |
+| 4. 寸法の表示と配置 | M4で操作・UIへ集約 | CST | M4移行済み |
+| 5. 寸法コマンドの入力 | M4で操作・UIへ集約 | CST | M4移行済み |
+
+## operations/Sketch
+
+[現行文書](../../spec/operations/Sketch.md)
+
+計算条件の詳細分離はM5、保証対応の集約はM6で続ける。
+
+| 現行見出し | 内容の整理状況 | 移行先ID | 再配置 |
+| --- | --- | --- | --- |
+| 1. 目的と基本構造 | M4で操作・UIへ集約 | SK | M4移行済み |
+| 2. 作成、名前、階層 | M4で操作・UIへ集約 | SK | M4移行済み |
+| 3. Appearanceと表示状態 | M4で操作・UIへ集約 | SK | M4移行済み |
+| 4. Block Definition 内部 Sketch | M4で操作・UIへ集約 | SK | M4移行済み |
+| 5. Sketchの削除範囲 | M4で操作・UIへ集約 | SK | M4移行済み |
+
+## operations/Block
+
+[現行文書](../../spec/operations/Block.md)
+
+計算条件の詳細分離はM5、保証対応の集約はM6で続ける。
+
+| 現行見出し | 内容の整理状況 | 移行先ID | 再配置 |
+| --- | --- | --- | --- |
+| 1. 概念 | M4で操作・UIへ集約 | BLK | M4移行済み |
+| 2. Definition と Instance | M4で操作・UIへ集約 | BLK | M4移行済み |
+| 3. Projection | M4で操作・UIへ集約 | BLK | M4移行済み |
+| 4. 選択 Geometry からの作成 | M4で操作・UIへ集約 | BLK | M4移行済み |
+| 5. 空 Definition の作成 | M4で操作・UIへ集約 | BLK | M4移行済み |
+| 6. Definition管理画面 | M4で操作・UIへ集約 | BLK | M4移行済み |
+| 7. Block Editor | M4で操作・UIへ集約 | BLK | M4移行済み |
+| 8. 入れ子 Block | M4で操作・UIへ集約 | BLK | M4移行済み |
+| 9. 配置 | M4で操作・UIへ集約 | BLK | M4移行済み |
+| 10. Instance 編集 | M4で操作・UIへ集約 | BLK | M4移行済み |
+| 11. 有効内部 Sketch | M4で操作・UIへ集約 | BLK | M4移行済み |
+| 12. Constraint と solve | M4で操作・UIへ集約 | BLK | M4移行済み |
+| 13. Definition 編集完了 | M4で操作・UIへ集約 | BLK | M4移行済み |
+| 14. 削除と互換性 | M4で操作・UIへ集約 | BLK | M4移行済み |
+| 15. 未実装 | M4で操作・UIへ集約 | BLK | M4移行済み |
+| 16. Blockの構成変更 | M4で操作・UIへ集約 | BLK | M4移行済み |
+
+## operations/Parameter
+
+[現行文書](../../spec/operations/Parameter.md)
+
+計算条件の詳細分離はM5、保証対応の集約はM6で続ける。
+
+| 現行見出し | 内容の整理状況 | 移行先ID | 再配置 |
+| --- | --- | --- | --- |
+| 1. Parameter画面 | M4で操作・UIへ集約 | PAR | M4移行済み |
+| 2. 編集 | M4で操作・UIへ集約 | PAR | M4移行済み |
+| 3. 削除・コピー・Block化 | M4で操作・UIへ集約 | PAR | M4移行済み |
+| 4. 永続化 | M4で操作・UIへ集約 | PAR | M4移行済み |
+
+## operations/Hatch
+
+[現行文書](../../spec/operations/Hatch.md)
+
+計算条件の詳細分離はM5、保証対応の集約はM6で続ける。
+
+| 現行見出し | 内容の整理状況 | 移行先ID | 再配置 |
+| --- | --- | --- | --- |
+| 1. Hatchの表示と重なり順 | M4で操作・UIへ集約 | HAT | M4移行済み |
+| 2. 基本仕様 | M4で操作・UIへ集約 | HAT | M4移行済み |
+| 3. 描画と選択 | M4で操作・UIへ集約 | HAT | M4移行済み |
+| 4. 削除、コピー、Block化 | M4で操作・UIへ集約 | HAT | M4移行済み |
+| 5. Block Projection | M4で操作・UIへ集約 | HAT | M4移行済み |
+| 6. JSON互換性と性能 | M4で操作・UIへ集約 | HAT | M4移行済み |
+| 7. 境界追従と修復 | M4で操作・UIへ集約 | HAT | M4移行済み |
+
+## operations/Spline
+
+[現行文書](../../spec/operations/Spline.md)
+
+計算条件の詳細分離はM5、保証対応の集約はM6で続ける。
+
+| 現行見出し | 内容の整理状況 | 移行先ID | 再配置 |
+| --- | --- | --- | --- |
+| 1. 作成と編集 | M4で操作・UIへ集約 | SPL | M4移行済み |
+| 作成 | M4で操作・UIへ集約 | SPL | M4移行済み |
+| fit point編集mode | M4で操作・UIへ集約 | SPL | M4移行済み |
+| Propertiesと派生Spline | M4で操作・UIへ集約 | SPL | M4移行済み |
+| 2. Selection、Sketch Tree、Annotation | M4で操作・UIへ集約 | SPL | M4移行済み |
+| 3. 拘束 | M4で操作・UIへ集約 | SPL | M4移行済み |
+| 4. HatchとGeometry操作 | M4で操作・UIへ集約 | SPL | M4移行済み |
+| 5. Copy、Block、Projection | M4で操作・UIへ集約 | SPL | M4移行済み |
+| 6. JSONと互換性 | M4で操作・UIへ集約 | SPL | M4移行済み |
+
+## operations/参照画像
+
+[現行文書](../../spec/operations/参照画像.md)
+
+計算条件の詳細分離はM5、保証対応の集約はM6で続ける。
+
+| 現行見出し | 内容の整理状況 | 移行先ID | 再配置 |
+| --- | --- | --- | --- |
+| 1. 画像の表示 | M4で操作・UIへ集約 | IMG | M4移行済み |
+| 2. 目的と範囲 | M4で操作・UIへ集約 | IMG | M4移行済み |
+| 3. 読み込み | M4で操作・UIへ集約 | IMG | M4移行済み |
+| 4. 表示と操作 | M4で操作・UIへ集約 | IMG | M4移行済み |
+| 5. 永続化 | M4で操作・UIへ集約 | IMG | M4移行済み |
+
+## operations/派生Instance
+
+[現行文書](../../spec/operations/派生Instance.md)
+
+計算条件の詳細分離はM5、保証対応の集約はM6で続ける。
+
+| 現行見出し | 内容の整理状況 | 移行先ID | 再配置 |
+| --- | --- | --- | --- |
+| 1. 共通モデル | M4で操作・UIへ集約 | DER | M4移行済み |
+| 2. 種類 | M4で操作・UIへ集約 | DER | M4移行済み |
+| 2.1 スケッチ投影インスタンス | M4で操作・UIへ集約 | DER | M4移行済み |
+| 2.2 ミラーインスタンス | M4で操作・UIへ集約 | DER | M4移行済み |
+| 2.3 直線パターンインスタンス | M4で操作・UIへ集約 | DER | M4移行済み |
+| 3. 保存形式 | M4で操作・UIへ集約 | DER | M4移行済み |
+| 4. 表示・外観・Tree | M4で操作・UIへ集約 | DER | M4移行済み |
+| 5. 編集と削除 | M4で操作・UIへ集約 | DER | M4移行済み |
+| 6. 派生Instanceの入力と選択 | M4で操作・UIへ集約 | DER | M4移行済み |
+
+## operations/注記
+
+[現行文書](../../spec/operations/注記.md)
+
+計算条件の詳細分離はM5、保証対応の集約はM6で続ける。
+
+| 現行見出し | 内容の整理状況 | 移行先ID | 再配置 |
+| --- | --- | --- | --- |
+| 1. Annotation | M4で操作・UIへ集約 | ANN | M4移行済み |
+| Leader | M4で操作・UIへ集約 | ANN | M4移行済み |
+| Free Text | M4で操作・UIへ集約 | ANN | M4移行済み |
+
+## ui/画面構成
+
+[現行文書](../../spec/ui/画面構成.md)
+
+計算条件の詳細分離はM5、保証対応の集約はM6で続ける。
+
+| 現行見出し | 内容の整理状況 | 移行先ID | 再配置 |
+| --- | --- | --- | --- |
+| 1. 固定レイアウト | M4で操作・UIへ集約 | UI | M4移行済み |
+| 1.1 配色 | M4で操作・UIへ集約 | UI | M4移行済み |
+| 2. Menu Bar | M4で操作・UIへ集約 | UI | M4移行済み |
+| 3. Toolbar | M4で操作・UIへ集約 | UI | M4移行済み |
+| 4. Sketch Tree | M4で操作・UIへ集約 | UI | M4移行済み |
+| 5. Properties | M4で操作・UIへ集約 | UI | M4移行済み |
+| 6. Status Bar | M4で操作・UIへ集約 | UI | M4移行済み |
+
+## ui/入力と操作状態
+
+[現行文書](../../spec/ui/入力と操作状態.md)
+
+計算条件の詳細分離はM5、保証対応の集約はM6で続ける。
+
+| 現行見出し | 内容の整理状況 | 移行先ID | 再配置 |
+| --- | --- | --- | --- |
+| 1. Selectionと操作状態 | M4で操作・UIへ集約 | INPUT | M4移行済み |
+| Canvas右クリックメニュー | M4で操作・UIへ集約 | INPUT | M4移行済み |
+| 2. Shortcut | M4で操作・UIへ集約 | INPUT | M4移行済み |
+| 3. Geometryの選択と編集 | M4で操作・UIへ集約 | INPUT | M4移行済み |
+
+## ui/表示とビュー操作
+
+[現行文書](../../spec/ui/表示とビュー操作.md)
+
+計算条件の詳細分離はM5、保証対応の集約はM6で続ける。
+
+| 現行見出し | 内容の整理状況 | 移行先ID | 再配置 |
+| --- | --- | --- | --- |
+| 1. ビュー操作とpointer処理 | M4で操作・UIへ集約 | VIEW | M4移行済み |
+| 2. 単一Canvas | M4で操作・UIへ集約 | VIEW | M4移行済み |
+| 1.1 モデル単位と表示倍率 | M4で操作・UIへ集約 | VIEW | M4移行済み |
+| 3. Constraint Status View | M4で操作・UIへ集約 | VIEW | M4移行済み |
+| 4. View State | M4で操作・UIへ集約 | VIEW | M4移行済み |
+| 5. 数値表示 | M4で操作・UIへ集約 | VIEW | M4移行済み |

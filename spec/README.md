@@ -6,16 +6,16 @@
 
 ## 文書一覧
 
-7領域で案内する。基本概念・共通契約・データと互換性・ファイル操作は新構成へ移行済みで、他の領域は移行済み部分と既存の文書・見出しへ直接リンクする。同じ文書が複数領域に現れるのは、本文の分離がまだ完了していないためである。
+7領域で案内する。基本概念・共通契約・機能別操作・UI・データと互換性は新構成へ移行済み。計算契約と検証対応は、既存の文書・見出しも参照する。
 
 | 領域 | 現在の正式文書・参照先 |
 | --- | --- |
 | 基本概念 | [製品モデル・用語・状態](./concepts/基本概念.md) |
 | 共通契約 | [所属・編集可否](contracts/所属と編集可否.md#1-所属と座標系)、[編集と履歴](contracts/編集と履歴.md)、[削除と参照](contracts/削除と参照.md)、[外観](contracts/外観.md#1-appearanceの継承) |
-| 機能別操作 | [作図・拘束・形状編集](./03-Geometryと拘束.md)、[Sketch](./04-スケッチ.md)・[削除手順](./operations/Sketch.md)、[Block](./05-ブロック.md)・[構成変更](./operations/Block.md)、[寸法・注記](./06-表示と注記.md)、[Parameter](./08-Parameter.md)、[Hatch](./09-ハッチング.md)、[Spline](./10-スプライン.md)、[参照画像](./11-参照画像.md)、[派生Instance](./12-スケッチ投影.md)、[ファイル操作](./operations/ファイル操作.md) |
-| UI | [画面・入力・操作状態](./07-UI・操作・履歴.md)、[表示・View State](./06-表示と注記.md) |
+| 機能別操作 | [作図・形状編集](./operations/作図と形状編集.md)、[拘束・寸法](./operations/拘束と寸法.md)、[Sketch](./operations/Sketch.md)、[Block](./operations/Block.md)、[Parameter](./operations/Parameter.md)、[Hatch](./operations/Hatch.md)、[Spline](./operations/Spline.md)、[参照画像](./operations/参照画像.md)、[派生Instance](./operations/派生Instance.md)、[注記](./operations/注記.md)、[ファイル操作](./operations/ファイル操作.md) |
+| UI | [画面構成](./ui/画面構成.md)、[入力と操作状態](./ui/入力と操作状態.md)、[表示とビュー操作](./ui/表示とビュー操作.md) |
 | データと互換性 | [保存構造](data/保存形式.md)、[読込・移行](data/読込と互換性.md#1-読込と互換性) |
-| 計算契約 | [Geometry・拘束計算](./03-Geometryと拘束.md)、[参照solve](./04-スケッチ.md#9-参照-solve)、[Blockの拘束](./05-ブロック.md#12-constraint-と-solve)、[式評価](./08-Parameter.md)、[閉領域](./09-ハッチング.md#3-閉領域と境界追従)、[Spline補間](./10-スプライン.md#1-形状と補間) |
+| 計算契約 | [Geometry・拘束計算](./03-Geometryと拘束.md)、[参照solve](./04-スケッチ.md#9-参照-solve)、[Blockの拘束](operations/Block.md#12-constraint-と-solve)、[式評価](./08-Parameter.md)、[閉領域](./09-ハッチング.md#3-閉領域と境界追従)、[Spline補間](./10-スプライン.md#1-形状と補間) |
 | 検証対応 | [保証対応と検証方法](./90-実装対応表とテスト.md) |
 
 ## 用語
@@ -26,4 +26,4 @@
 
 [移行計画と進捗](../docs/refactoring/migration-plan.md)、[実装対応表](../docs/refactoring/implementation-map.md)、[改善バックログ](../docs/refactoring/backlog.md)は開発資料として扱う。草案・改善候補・将来の実装方式は正式仕様ではない。
 
-旧[全体像](./01-全体像.md)には未移行の表示・UI概要と移動案内を残している。
+旧[全体像](./01-全体像.md)には従来の見出しからの移動案内を残している。

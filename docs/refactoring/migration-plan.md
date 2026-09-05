@@ -4,23 +4,23 @@
 
 7領域の目次を、今後の仕様整理に使う構成として採用する。以下のファイル構成を移行先とし、領域ごとに順次再配置する。これは文書の編集計画であり、新しい製品挙動や内部モデルの決定ではない。現時点の正式仕様は[spec/README](../../spec/README.md)から読む。
 
-現在は「仕様整理」の途中にある。共通規則の一部を正式化し、代表ケースの回帰テストを補強した。M1～M3の移行を完了し、基本概念・共通契約に加えて保存形式・読込互換性・ファイル操作を新構成へ分離した。本番コードの責務分離と性能比較は未実施。
+現在は「仕様整理」の途中にある。共通規則の一部を正式化し、代表ケースの回帰テストを補強した。M1～M4の再配置を完了した。機能別操作とUIを新構成へ移し、残る計算規則と検証対応をM5・M6で整理する。本番コードの責務分離と性能比較は未実施。
 
 | 領域 | 内容の整理状況 | 現在の正式仕様 | 再配置前の残作業 |
 | --- | --- | --- | --- |
-| 基本概念 | M1移行済み | [基本概念](../../spec/concepts/基本概念.md) | 各機能に残る概念段落は、M2・M4で固有条件を分離し正本への参照にする |
-| 共通契約 | M2移行済み | [所属と編集可否](../../spec/contracts/所属と編集可否.md)、[編集と履歴](../../spec/contracts/編集と履歴.md)、[削除と参照](../../spec/contracts/削除と参照.md)、[外観](../../spec/contracts/外観.md) | UI・各機能に残る固有条件との重複はM4で整理 |
-| 機能別操作 | 一部整理済み | 03～12、14 | Spline等の整理を他機能へ適用。操作ごとの前提・成功・取消・失敗・例外を明示 |
-| UI | 未整理 | 07、03・04・06等 | レイアウト、入力状態、表示を分け、機能の結果とUI入口の重複を除く |
-| データと互換性 | M3移行済み | [保存形式](../../spec/data/保存形式.md)、[読込と互換性](../../spec/data/読込と互換性.md) | 計算・UIの説明に残る保存への言及はM4・M5で参照を整理 |
-| 計算契約 | 一部構造化済み | 03、04、08～10、12 | 数式・残差・閾値・依存順序と操作手順を分離。実装配置を開発資料へ移す |
+| 基本概念 | M1移行済み | [基本概念](../../spec/concepts/基本概念.md) | 機能ごとの前提と固有条件は各操作文書に保持する |
+| 共通契約 | M2移行済み | [所属と編集可否](../../spec/contracts/所属と編集可否.md)、[編集と履歴](../../spec/contracts/編集と履歴.md)、[削除と参照](../../spec/contracts/削除と参照.md)、[外観](../../spec/contracts/外観.md) | 操作・UIから共通契約へ参照。計算に混在する条件はM5で整理 |
+| 機能別操作 | M4再配置済み | [操作の入口](../../spec/README.md) | 操作に混在する計算条件はM5で分離。共通の取消挙動は新設しない |
+| UI | M4再配置済み | [画面構成](../../spec/ui/画面構成.md)、[入力](../../spec/ui/入力と操作状態.md)、[表示](../../spec/ui/表示とビュー操作.md) | 入力内のドラッグ計算・target選択はM5で分離 |
+| データと互換性 | M3移行済み | [保存形式](../../spec/data/保存形式.md)、[読込と互換性](../../spec/data/読込と互換性.md) | 計算の説明に残る保存への言及はM5で参照を整理 |
+| 計算契約 | 一部構造化済み | 03、04、08～10、12 | 旧03・04・08・09・10に残る計算と、新しい操作・UI文書内の数式・target選択・Block配置条件を分離 |
 | 検証対応 | 代表ケースを追加済み | 90、09～11の検証 | 長文の保証一覧を規則・テスト・保証範囲へ対応付け、未検証項目を明示 |
 
 「採用済み」は現行規則の集約・正式化を指し、領域全体の完成や全組合せの検証を意味しない。ファイル移動の進捗とは別に管理する。
 
 ## 2. 移行先のファイル構成
 
-パスはリポジトリ直下からの相対パス。未作成の移行先はコード表記、作成済みの移行先はリンクで示す。Sketch・Blockの操作文書はM2で削除・構成変更部分のみ作成し、残りをM4で移す。IDはこの計画と[見出し別台帳](./spec-inventory.md)の対応用であり、製品の仕様IDではない。TX・DEL・APP・LOADの既存IDは移動後も維持する。
+パスはリポジトリ直下からの相対パス。未作成の移行先はコード表記、作成済みの移行先はリンクで示す。Sketch・Blockの操作文書はM2で削除・構成変更部分を作成し、M4で残りの操作を移した。IDはこの計画と[見出し別台帳](./spec-inventory.md)の対応用であり、製品の仕様IDではない。TX・DEL・APP・LOADの既存IDは移動後も維持する。
 
 | ID | 移行先 | 本文を置く内容 |
 | --- | --- | --- |
@@ -30,20 +30,20 @@
 | TX | [spec/contracts/編集と履歴.md](../../spec/contracts/編集と履歴.md) | 操作の確定、失敗時の復元範囲、履歴の対象と単位 |
 | DEL | [spec/contracts/削除と参照.md](../../spec/contracts/削除と参照.md) | 削除拒否、関連Object除去、無効状態保持の共通条件 |
 | APP | [spec/contracts/外観.md](../../spec/contracts/外観.md) | 外観の解決順序、既定値、可視性、テーマ補正・強調の優先関係 |
-| GEO | `spec/operations/作図と形状編集.md` | 基本作図、補助Geometry、面取り・トリム・オフセット、Geometry削除 |
-| CST | `spec/operations/拘束と寸法.md` | 拘束入力、追加・編集条件、寸法操作、参照寸法 |
+| GEO | [spec/operations/作図と形状編集.md](../../spec/operations/作図と形状編集.md) | 基本作図、補助Geometry、面取り・トリム・オフセット、Geometry削除 |
+| CST | [spec/operations/拘束と寸法.md](../../spec/operations/拘束と寸法.md) | 拘束入力、追加・編集条件、寸法操作、参照寸法 |
 | SK | [spec/operations/Sketch.md](../../spec/operations/Sketch.md) | 作成・active化・名前・階層・削除操作、内部Sketchの固有条件 |
 | BLK | [spec/operations/Block.md](../../spec/operations/Block.md) | Definition作成・管理・編集・配置、Instance・入れ子・有効内部Sketchの操作 |
-| PAR | `spec/operations/Parameter.md` | 名前・式の入力、適用、名称変更、コピー・Block化 |
-| HAT | `spec/operations/Hatch.md` | 作成・表示・選択・修復・コピー・Block投影の固有条件 |
-| SPL | `spec/operations/Spline.md` | 作成・fit point編集・選択・拘束・他機能との固有の関係 |
-| IMG | `spec/operations/参照画像.md` | 読込・配置・表示・縮尺設定・編集制限 |
-| DER | `spec/operations/派生Instance.md` | 投影・ミラー・パターンの生成、追従、編集・削除の固有条件 |
-| ANN | `spec/operations/注記.md` | Leader・Free Textの作成、編集、追従、表示 |
+| PAR | [spec/operations/Parameter.md](../../spec/operations/Parameter.md) | 名前・式の入力、適用、名称変更、コピー・Block化 |
+| HAT | [spec/operations/Hatch.md](../../spec/operations/Hatch.md) | 作成・表示・選択・修復・コピー・Block投影の固有条件 |
+| SPL | [spec/operations/Spline.md](../../spec/operations/Spline.md) | 作成・fit point編集・選択・拘束・他機能との固有の関係 |
+| IMG | [spec/operations/参照画像.md](../../spec/operations/参照画像.md) | 読込・配置・表示・縮尺設定・編集制限 |
+| DER | [spec/operations/派生Instance.md](../../spec/operations/派生Instance.md) | 投影・ミラー・パターンの生成、追従、編集・削除の固有条件 |
+| ANN | [spec/operations/注記.md](../../spec/operations/注記.md) | Leader・Free Textの作成、編集、追従、表示 |
 | FILE | [spec/operations/ファイル操作.md](../../spec/operations/ファイル操作.md) | 新規・開く・上書き・名前付き保存、保存先・取消の扱い |
-| UI | `spec/ui/画面構成.md` | Menu、Toolbar、Tree、Properties、各画面、言語・配色、通知 |
-| INPUT | `spec/ui/入力と操作状態.md` | 選択・hover、コマンド状態、キー・pointer処理、ドラッグの入力処理 |
-| VIEW | `spec/ui/表示とビュー操作.md` | 単一Canvas、表示倍率・pan・zoom、状態表示、View State、数値表示 |
+| UI | [spec/ui/画面構成.md](../../spec/ui/画面構成.md) | Menu、Toolbar、Tree、Properties、各画面、言語・配色、通知 |
+| INPUT | [spec/ui/入力と操作状態.md](../../spec/ui/入力と操作状態.md) | 選択・hover、コマンド状態、キー・pointer処理、ドラッグの入力処理 |
+| VIEW | [spec/ui/表示とビュー操作.md](../../spec/ui/表示とビュー操作.md) | 単一Canvas、表示倍率・pan・zoom、状態表示、View State、数値表示 |
 | DATA | [spec/data/保存形式.md](../../spec/data/保存形式.md) | 現行schema、field、ID・採番値、保存対象 |
 | LOAD | [spec/data/読込と互換性.md](../../spec/data/読込と互換性.md) | 読込検証・拒否・無効状態保持、旧版移行、保存往復 |
 | MATH | `spec/calculation/幾何計算.md` | 幾何定義、補間・交点・閉領域・offset・縮退の計算条件 |
@@ -64,10 +64,10 @@
 
 | 順序 | 対象 | 次に行う作業 | 完了条件 | 現在 |
 | --- | --- | --- | --- | --- |
-| M1 | INDEX・CON・IMPL・BACK | 入口と基本概念を作り、実装配置・改善予定を開発資料へ移す | 用語の正本が一つになり、旧01・91・READMEと90の該当部分を追跡できる | 完了。旧01の表示・UI・保存概要はM3・M4まで保持 |
+| M1 | INDEX・CON・IMPL・BACK | 入口と基本概念を作り、実装配置・改善予定を開発資料へ移す | 用語の正本が一つになり、旧01・91・READMEと90の該当部分を追跡できる | 完了。旧01は移動案内として保持 |
 | M2 | OWN・TX・DEL・APP | 採用済み契約を移動し、所属・編集可否・履歴を照合して集約。14の操作手順はSK・BLKへ分ける | 操作別の差異を維持し、共通条件と固有例外のリンクが通る | 完了。TX・DEL・APPを保持し、所属と履歴を集約。操作手順を分離 |
 | M3 | DATA・LOAD・FILE | schema・互換性・ファイル操作を分け、各機能の保存記述を統合 | field・version・拒否条件・取消時の保持対象に欠落がない | 完了。保存field・互換性・ファイル操作を分離し、機能別章を参照へ変更 |
-| M4 | 残る機能別操作・UI | 03～12の操作とUIの重複を整理し、各機能の一連の操作を構造化 | 前提・成功・取消・失敗・履歴と共通契約の参照を追える | 一部整理済み／再配置待ち |
+| M4 | 残る機能別操作・UI | 03～12の操作とUIの重複を整理し、各機能の一連の操作を構造化 | 前提・成功・取消・失敗・履歴と共通契約の参照を追える | 完了。機能別操作10文書とUI3文書へ再配置。Treeの重複を集約 |
 | M5 | MATH・SOLVE・EVAL | 計算と操作の記述を分離し、呼出し配置をIMPLへ移す | 数値境界・縮退・依存順序を維持し、実装分離に必要な契約を読める | 一部構造化済み／再配置待ち |
 | M6 | COV・RUN・移行仕上げ | 各工程で更新した保証対応を総点検し、旧文書の案内を整理 | 全台帳行に実在する移動先か削除理由があり、リンク切れ・規則の二重管理がない | 代表ケース対応済み／再配置待ち |
 
