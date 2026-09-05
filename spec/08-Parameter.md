@@ -31,9 +31,9 @@ Document全体と各Block Definitionは、互いに独立したParameter名前�
 4. 拘束をsolveする。
 5. 参照寸法を再測定して収束を確認する。
 
-各参照値の相対変化が`1e-7 × max(1, |value|)`以内でsolverも成功した場合に収束とする。ドラッグ中はこのfeedback反復を行わず、pointer-upで実行する。式エラー、拘束矛盾、非収束では操作全体を開始前へ戻し、履歴へ追加しない。
+各参照値の相対変化が`1e-7 × max(1, |value|)`以内でsolverも成功した場合に収束とする。ドラッグ中はこのfeedback反復を行わず、pointer-upで実行する。失敗時の復元と履歴は[編集の確定と失敗](./13-編集の確定と失敗.md)のTX-01／02に従う。
 
-Block Parameterの適用はDefinition内部を再計算した後、親Definition、全Instance Projection、Document拘束へ順に反映する。途中で失敗した場合は関係するDefinition、Instance、Documentを適用前へ戻す。
+Block Parameterの適用はDefinition内部を再計算した後、親Definition、全Instance Projection、Document拘束へ順に反映する。失敗時の復元と履歴は[編集の確定と失敗](./13-編集の確定と失敗.md)のTX-04に従う。
 
 ## 5. 編集
 
