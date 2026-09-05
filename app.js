@@ -7606,26 +7606,36 @@
     updateHistoryButtons();
   }
 
-  function recordBlockEditorHistory(label) {
-    if (!blockEditSession) return;
-    const snapshot = captureBlockEditorHistorySnapshot();
-    const undo = blockEditSession.historyUndo;
-    if (undo[undo.length - 1]?.signature === snapshot.signature) {
-      updateHistoryButtons();
-      return;
-    }
-    undo.push(snapshot);
-    if (undo.length > HISTORY_LIMIT) undo.shift();
-    blockEditSession.historyRedo = [];
-    updateHistoryButtons();
-    log(`ブロック編集履歴に追加しました: ${label}`);
+  function activeEditHistory() {
+    const session = blockEditSession;
+    if (session) return {
+      undo: session.historyUndo,
+      redo: session.historyRedo,
+      capture: captureBlockEditorHistorySnapshot,
+      signature: (snapshot) => snapshot?.signature,
+      clearRedo: () => { session.historyRedo = []; },
+      restore: restoreBlockEditorHistorySnapshot,
+      recordLabel: "ブロック編集履歴に追加しました",
+      undoLabel: "ブロック編集を戻す",
+      redoLabel: "ブロック編集を進む",
+    };
+    return {
+      undo: undoStack,
+      redo: redoStack,
+      capture: historySnapshot,
+      signature: (snapshot) => snapshot,
+      clearRedo: () => { redoStack = []; },
+      restore: (snapshot, label) => { restoreHistorySnapshot(snapshot, label); return true; },
+      recordLabel: "履歴に追加しました",
+      undoLabel: "戻る",
+      redoLabel: "進む",
+    };
   }
 
   function updateHistoryButtons() {
     const undoBtn = document.getElementById("undoBtn");
     const redoBtn = document.getElementById("redoBtn");
-    const activeUndo = blockEditSession ? blockEditSession.historyUndo : undoStack;
-    const activeRedo = blockEditSession ? blockEditSession.historyRedo : redoStack;
+    const { undo: activeUndo, redo: activeRedo } = activeEditHistory();
     if (undoBtn) undoBtn.disabled = activeUndo.length <= 1;
     if (redoBtn) redoBtn.disabled = activeRedo.length === 0;
   }
@@ -7639,20 +7649,17 @@
 
   function recordHistory(label = "変更") {
     if (historyRestoring) return;
-    if (blockEditSession) {
-      recordBlockEditorHistory(label);
-      return;
-    }
-    const snapshot = historySnapshot();
-    if (undoStack[undoStack.length - 1] === snapshot) {
+    const history = activeEditHistory();
+    const snapshot = history.capture();
+    if (history.signature(history.undo.at(-1)) === history.signature(snapshot)) {
       updateHistoryButtons();
       return;
     }
-    undoStack.push(snapshot);
-    if (undoStack.length > HISTORY_LIMIT) undoStack.shift();
-    redoStack = [];
+    history.undo.push(snapshot);
+    if (history.undo.length > HISTORY_LIMIT) history.undo.shift();
+    history.clearRedo();
     updateHistoryButtons();
-    log(`履歴に追加しました: ${label}`);
+    log(`${history.recordLabel}: ${label}`);
   }
 
   function restoreHistorySnapshot(snapshot, label) {
@@ -7711,31 +7718,18 @@
   }
 
   function undoHistory() {
-    if (blockEditSession) {
-      if (blockEditSession.historyUndo.length <= 1) return false;
-      const current = blockEditSession.historyUndo.pop();
-      blockEditSession.historyRedo.push(current);
-      return restoreBlockEditorHistorySnapshot(blockEditSession.historyUndo[blockEditSession.historyUndo.length - 1], "ブロック編集を戻す");
-    }
-    if (undoStack.length <= 1) return false;
-    const current = undoStack.pop();
-    redoStack.push(current);
-    restoreHistorySnapshot(undoStack[undoStack.length - 1], "戻る");
-    return true;
+    const history = activeEditHistory();
+    if (history.undo.length <= 1) return false;
+    history.redo.push(history.undo.pop());
+    return history.restore(history.undo.at(-1), history.undoLabel);
   }
 
   function redoHistory() {
-    if (blockEditSession) {
-      if (blockEditSession.historyRedo.length === 0) return false;
-      const snapshot = blockEditSession.historyRedo.pop();
-      blockEditSession.historyUndo.push(snapshot);
-      return restoreBlockEditorHistorySnapshot(snapshot, "ブロック編集を進む");
-    }
-    if (redoStack.length === 0) return false;
-    const snapshot = redoStack.pop();
-    undoStack.push(snapshot);
-    restoreHistorySnapshot(snapshot, "進む");
-    return true;
+    const history = activeEditHistory();
+    if (history.redo.length === 0) return false;
+    const snapshot = history.redo.pop();
+    history.undo.push(snapshot);
+    return history.restore(snapshot, history.redoLabel);
   }
 
   function deserializeConstraint(data, pointById, lineById, primitiveById, dimensionAppearanceLoader = normalizeDimensionAppearance, expressionLoader = (value) => String(value)) {
