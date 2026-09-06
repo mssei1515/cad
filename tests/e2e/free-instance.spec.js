@@ -3,7 +3,8 @@ const { test, expect, openTestDocument, completeBlockEdit } = require("./test-fi
 async function state(page) { return page.evaluate(() => window.__jot2dTest.derivedInstanceStateForTest()); }
 async function client(page, point) { return page.evaluate((p) => window.__jot2dTest.worldClientPositionForTest(p), point); }
 async function clickWorld(page, point) { const p = await client(page, point); await page.mouse.click(p.x, p.y); }
-async function drag(page, a, b) {
+async function drag(page, a, b, whole = false) {
+  if (!whole && !(await state(page)).selectedIds.length) await clickWorld(page, a);
   const start = await client(page, a), end = await client(page, b);
   await page.mouse.move(start.x, start.y); await page.mouse.down();
   await page.mouse.move(end.x, end.y, { steps: 8 }); await page.mouse.up();
@@ -28,6 +29,67 @@ async function selectTree(page, id, sketchId) {
   if (!await row.isVisible()) await group.click();
   await row.click();
 }
+
+for (const type of ["mirror", "pattern"]) {
+  for (const fixed of [false, true]) {
+    test(`${type} first drag preserves source and relation with ${fixed ? "fixed" : "free"} control line`, async ({ page }) => {
+      const data = await fixture(page, 0);
+      const sketchId = data.activeSketchId;
+      data.points.push(...[{ id: "P5", x: 0, y: -40 }, { id: "P6", x: 0, y: 40 }].map((p) => ({ ...p, fixed, kind: "endpoint", sketchId })));
+      data.lines.push({ id: "L5", p1: "P5", p2: "P6", construction: true, sketchId });
+      data.constraints.push(type === "mirror"
+        ? { type: "vertical", line: "L5", enabled: true, sketchId }
+        : { type: "distance", p1: "P5", p2: "P6", target: 80, parameterName: "D1", expression: "80", enabled: true, sketchId });
+      const instance = { id: type === "mirror" ? "MI1" : "PI1", type, sketchId,
+        sources: data.lines.slice(0, 4).map((line) => ({ kind: "line", path: [line.id] })),
+        ...(type === "mirror" ? { axis: { kind: "line", path: ["L5"] } } : { direction: { kind: "line", path: ["L5"] }, spacing: 60, copies: 2, reversed: false }) };
+      data.geometryInstances = [instance];
+      const loaded = await page.evaluate((d) => window.__jot2dTest.loadDocumentFixtureForDragTest(d, "relation.jot2d", { resetLoadedHistory: true }), data);
+      expect(loaded.success, loaded.error).toBe(true);
+      const before = await state(page);
+      const edge = before.instances[0].lines[1];
+      const start = { x: (edge.p1.x + edge.p2.x) / 2, y: (edge.p1.y + edge.p2.y) / 2 };
+      await drag(page, start, { x: start.x + 8, y: start.y }, true);
+      const after = await state(page);
+      expect(after.selectedIds).toEqual([instance.id]);
+      expect(after.selectedGeometry).toBeNull();
+      expect(after.serialized.points.slice(0, 4)).toEqual(before.serialized.points.slice(0, 4));
+      expect(after.serialized.geometryInstances).toEqual(before.serialized.geometryInstances);
+      if (fixed) expect(after.serialized.points).toEqual(before.serialized.points);
+      else {
+        expect(after.instances[0].lines[1].p1.x).toBeGreaterThan(edge.p1.x + 4);
+        expect(after.serialized.points.slice(4)).not.toEqual(before.serialized.points.slice(4));
+        expect((await page.evaluate(() => window.__jot2dTest.constraintAnalysisForTest())).errorNorm).toBeLessThan(1e-4);
+        await page.click("#undoBtn");
+        expect((await state(page)).serialized.points).toEqual(before.serialized.points);
+        await page.click("#redoBtn");
+        expect((await state(page)).serialized.points).toEqual(after.serialized.points);
+      }
+    });
+  }
+}
+
+test("selection descends within an instance, resets for another instance and tree", async ({ page }) => {
+  const data = await fixture(page);
+  await clickWorld(page, { x: 40, y: 0 });
+  expect((await state(page)).selectedGeometry).toBeNull();
+  await clickWorld(page, { x: 40, y: 0 });
+  expect((await state(page)).selectedGeometry).toMatchObject({ instanceId: "FI1", id: "FI1@L2" });
+  await clickWorld(page, { x: 20, y: -20 });
+  expect((await state(page)).selectedGeometry).toMatchObject({ id: "FI1@L1" });
+  await clickWorld(page, { x: 105, y: 0 });
+  expect((await state(page)).selectedIds).toEqual(["FI2"]);
+  expect((await state(page)).selectedGeometry).toBeNull();
+  await clickWorld(page, { x: 105, y: 0 });
+  expect((await state(page)).selectedGeometry).toMatchObject({ id: "FI2@L2" });
+  await selectTree(page, "FI2", data.activeSketchId);
+  expect((await state(page)).selectedGeometry).toBeNull();
+  await clickWorld(page, { x: -90, y: 70 });
+  expect((await state(page)).selectedIds).toEqual([]);
+  const p = await client(page, { x: 40, y: 0 });
+  await page.mouse.dblclick(p.x, p.y);
+  expect((await state(page)).selectedGeometry).toMatchObject({ id: "FI1@L2" });
+});
 
 test("free placement command previews rotation and reflection, cancels and round trips", async ({ page }) => {
   await fixture(page, 0);
@@ -55,7 +117,7 @@ test("free placement command previews rotation and reflection, cancels and round
   expect((await state(page)).instances).toHaveLength(1);
 });
 
-test("canvas drag changes the shared rectangle; tree drag moves only the placement", async ({ page }) => {
+test("second click edits shared shape; first drag moves placement; tree selects whole", async ({ page }) => {
   const data = await fixture(page);
   await drag(page, { x: 40, y: 0 }, { x: 50, y: 0 });
   let current = await state(page);
@@ -65,7 +127,9 @@ test("canvas drag changes the shared rectangle; tree drag moves only the placeme
   const source = current.serialized.points;
   const other = current.serialized.geometryInstances[1];
   await selectTree(page, "FI1", data.activeSketchId);
-  await drag(page, { x: 25, y: -20 }, { x: 33, y: -30 });
+  expect((await state(page)).selectedGeometry).toBeNull();
+  await clickWorld(page, { x: -90, y: 70 });
+  await drag(page, { x: 25, y: -20 }, { x: 33, y: -30 }, true);
   current = await state(page);
   expect(current.serialized.points).toEqual(source);
   expect(current.serialized.geometryInstances[0].x).toBeCloseTo(8, 3);
@@ -116,7 +180,7 @@ test("dimension added on a derived edge constrains shared height and permits wid
   expect(afterConflict.serialized.points[2].y - afterConflict.serialized.points[1].y).toBeCloseTo(50, 3);
 });
 
-test("placement constraints stop tree dragging and reject incompatible property rotations", async ({ page }) => {
+test("placement constraints stop whole-instance dragging and reject incompatible property rotations", async ({ page }) => {
   const data = await fixture(page, 1);
   data.points.forEach((p) => { p.fixed = true; });
   let current = await page.evaluate((d) => window.__jot2dTest.loadModelForDerivedInstanceTest(d), data);
@@ -131,8 +195,7 @@ test("placement constraints stop tree dragging and reject incompatible property 
   current = await state(page);
   expect(current.instances[0].lines.every((line) => line.color === "#111827")).toBe(true);
   const before = current.serialized;
-  await selectTree(page, "FI1", data.activeSketchId);
-  await drag(page, { x: 40, y: 0 }, { x: 50, y: 8 });
+  await drag(page, { x: 40, y: 0 }, { x: 50, y: 8 }, true);
   expect((await state(page)).serialized.points).toEqual(before.points);
   expect((await state(page)).serialized.geometryInstances).toEqual(before.geometryInstances);
   const rotation = page.locator('[data-free-instance-property="rotation"]');

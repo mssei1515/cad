@@ -303,7 +303,7 @@
   let selectedSplines = [];
   let selectedBlockInstances = [];
   let selectedGeometryInstances = [];
-  const treeSelectedGeometryInstances = new Set();
+  let selectedInstanceGeometry = null;
   let freeInstancePlacement = null;
   let dragSession = null;
   let dimensionDragSession = null;
@@ -3677,6 +3677,7 @@
     selectedArcEndpoint = targets.arcEndpoint;
     selectedBlockInstances = [];
     selectedGeometryInstances = [];
+    selectedInstanceGeometry = null;
   }
 
   function constraintOperandsFromSelection() {
@@ -4582,7 +4583,7 @@
   function freeInstancePropertyRows(item) {
     const placementRows = item === freeInstancePlacement ? "" : propertyReadonlyRow("X座標", "X coordinate", formatDisplayNumber(item.x))
       + propertyReadonlyRow("Y座標", "Y coordinate", formatDisplayNumber(item.y))
-      + propertyReadonlyRow("ドラッグ操作", "Drag action", treeSelectedGeometryInstances.has(item) ? applicationText("全体移動", "Move instance") : applicationText("共有形状の編集", "Edit shared shape"));
+      + propertyReadonlyRow("ドラッグ操作", "Drag action", selectedInstanceGeometry?.instanceId !== item.id ? applicationText("全体移動", "Move instance") : applicationText("共有形状の編集", "Edit shared shape"));
     return placementRows + `<div class="property-row"><label>${applicationText("角度", "Angle")} (°)</label><input data-free-instance-property="rotation" type="number" step="1" value="${formatDisplayNumber(item.rotation * 180 / Math.PI)}"></div>`
       + [ ["mirrorX", "左右反転", "Reflect left/right"], ["mirrorY", "上下反転", "Reflect up/down"] ].map(([key, ja, en]) => `<div class="property-row"><label>${applicationText(ja, en)}</label><input data-free-instance-property="${key}" type="checkbox" ${item[key] ? "checked" : ""}></div>`).join("");
   }
@@ -4595,7 +4596,7 @@
     if (instance === freeInstancePlacement) return true;
     // A property edit specifies the transform; solving must not silently undo it
     // or deform the shared source to make an impossible placement succeed.
-    const sources = freeInstanceSourceObjects(instance);
+    const sources = geometryInstanceSourceObjects(instance);
     const variables = sketchSolveVariables(instance.sketchId).filter((v) => !sources.has(v.object) && v.object !== instance);
     const result = solver.solveSubset({ variables, constraints: sketchSolveConstraints(instance.sketchId), lines: sketchSolveLines(instance.sketchId) });
     if (!result.success || result.errorNorm > CONSTRAINT_ACCEPT_ERROR) {
@@ -7194,6 +7195,7 @@
     selectedBlockInstances = [];
     selectedGeometryInstances = [];
     hoveredBlockInstance = null;
+    selectedInstanceGeometry = null;
     hoveredGeometryInstance = null;
     hoveredHatch = null;
     hoveredReferenceImage = null;
@@ -9011,7 +9013,7 @@
   }
 
   function clearSelection() {
-    treeSelectedGeometryInstances.clear();
+    selectedInstanceGeometry = null;
     selectedPoints = [];
     selectedLines = [];
     selectedCircles = [];
@@ -11814,6 +11816,7 @@
       model.annotations = model.annotations.filter((annotation) => !annotationReferencesRemovedGeometry(annotation, removedIds, removedKeys));
       model.geometryInstances = model.geometryInstances.filter((instance) => !instances.includes(instance));
       selectedGeometryInstances = [];
+      selectedInstanceGeometry = null;
       deletedInstanceCount = instances.length;
     }
     let deletedBlockCount = 0;
@@ -12374,7 +12377,7 @@
   }
 
   function selectByRect(rect, crossing, additive = false) {
-    treeSelectedGeometryInstances.clear();
+    selectedInstanceGeometry = null;
     const nextPoints = additive ? [...selectedPoints] : [];
     const nextLines = additive ? [...selectedLines] : [];
     const nextCircles = additive ? [...selectedCircles] : [];
@@ -13030,11 +13033,17 @@
   }
 
   function ownerInstanceSelected(item) {
+    if (item?.derivedInstance && selectedGeometryInstances.includes(item.derivedInstance)) {
+      return selectedInstanceGeometry?.instanceId === item.derivedInstance.id
+        ? selectedInstanceGeometry.id === item.id
+        : !(item instanceof Point) || Boolean(item.sourceRef);
+    }
     if (item instanceof Point) return false;
     return Boolean((item?.blockInstance && selectedBlockInstances.includes(item.blockInstance)) || (item?.derivedInstance && selectedGeometryInstances.includes(item.derivedInstance)));
   }
 
   function ownerInstanceHovered(item) {
+    if (item?.derivedInstance && selectedInstanceGeometry?.instanceId === item.derivedInstance.id) return false;
     if (item instanceof Point) return false;
     return Boolean((item?.blockInstance && hoveredBlockInstance === item.blockInstance) || (item?.derivedInstance && hoveredGeometryInstance === item.derivedInstance));
   }
@@ -14622,7 +14631,7 @@
       const dragging = dragSession?.kind === "point" && dragSession.points.some((target) => target.point === p);
       const primitiveCenter = shouldShowPrimitiveCenter(p);
       const fixedByLine = pointLockedByLineFixed(p);
-      const fixedHighlighted = (p.fixed || fixedByLine) && (sel || hovered);
+      const fixedHighlighted = (!p.derivedProjection && p.fixed || fixedByLine) && (sel || hovered);
       const reference = isReferencePoint(p);
       if (!viewState.constraintStatus && (p.blockProjection || p.derivedProjection) && !sel && !hovered && !dragging && !primitiveCenter && !auxiliaryHighlighted) continue;
       if (!viewState.constraintStatus && reference && !sel && !hovered && !dragging && !auxiliaryHighlighted) continue;
@@ -14644,7 +14653,7 @@
         ctx.fillText(p.id, p.x + 8 / viewport.scale, p.y - 8 / viewport.scale);
       }
 
-      if (p.fixed && (sel || hovered)) {
+      if (p.fixed && !p.derivedProjection && (sel || hovered)) {
         ctx.fillStyle = "#dc2626";
         ctx.font = `${12 / viewport.scale}px system-ui`;
         ctx.fillText(applicationText("固定", "Fixed"), p.x + 8 / viewport.scale, p.y + 8 / viewport.scale);
@@ -16342,8 +16351,7 @@
       if (item) {
         if (additive && selectedGeometryInstances.includes(item)) selectedGeometryInstances = selectedGeometryInstances.filter((entry) => entry !== item);
         else if (!selectedGeometryInstances.includes(item)) selectedGeometryInstances.push(item);
-        if (selectedGeometryInstances.includes(item)) treeSelectedGeometryInstances.add(item);
-        else treeSelectedGeometryInstances.delete(item);
+        selectedInstanceGeometry = null;
       }
     } else if (category === "annotation") {
       const item = model.annotations.find((annotation) => annotation.id === row.dataset.id);
@@ -19190,22 +19198,41 @@
   }
 
   function beginDerivedGeometryDrag(e, hit, pointer) {
-    if (hit.instance.type === "free" && treeSelectedGeometryInstances.has(hit.instance) && selectedGeometryInstances.includes(hit.instance)) {
+    if (["free", "mirror", "pattern"].includes(hit.instance.type) && !selectedGeometryInstances.includes(hit.instance)) {
       const instance = hit.instance;
-      const sources = freeInstanceSourceObjects(instance);
+      const sources = geometryInstanceSourceObjects(instance);
+      clearSelection();
+      selectedGeometryInstances = [instance];
       dragSession = { kind: "free-instance", mode: "block", item: instance, sketchId: instance.sketchId,
         startPointer: pointer, startX: instance.x, startY: instance.y,
         variableAllowed: (v) => !sources.has(v.object) && !(v.object === instance && v.prop === "rotation") };
+      if (instance.type !== "free") {
+        const item = hit.item;
+        let anchor = item instanceof Point ? item : item.center || geometryInstanceSourcePoints(item)[0];
+        if (item instanceof Line) {
+          const dx = item.p2.x - item.p1.x, dy = item.p2.y - item.p1.y;
+          const t = Math.max(0, Math.min(1, ((pointer.x - item.p1.x) * dx + (pointer.y - item.p1.y) * dy) / Math.max(dx * dx + dy * dy, 1e-20)));
+          anchor = { get x() { return item.p1.x + t * (item.p2.x - item.p1.x); },
+            get y() { return item.p1.y + t * (item.p2.y - item.p1.y); } };
+        }
+        if (!anchor) return;
+        Object.assign(dragSession, { kind: "derived-instance", mode: "derived-placement", anchor,
+          startAnchor: { x: anchor.x, y: anchor.y } });
+      }
       attachLocalSolveContext(dragSession);
       canvas.classList.add("is-dragging");
       canvas.setPointerCapture(e.pointerId);
       setHint(applicationText("インスタンス全体を移動中", "Moving the whole instance"));
+      updateGeometrySelectionUI();
       draw();
       return;
     }
     const resolved = resolveDerivedDragSource(hit, pointer);
     clearSelection();
     selectedGeometryInstances = hit?.instance ? [hit.instance] : [];
+    if (hit.instance.type !== "sketchProjection") {
+      selectedInstanceGeometry = { instanceId: hit.instance.id, id: hit.item.id, kind: hit.kind, endpoint: hit.endpoint };
+    }
     if (!resolved) {
       setHint(applicationText("派生インスタンスの参照元を解決できません", "The derived instance source could not be resolved."), "error");
       updateGeometrySelectionUI();
@@ -19264,7 +19291,7 @@
     return seeds;
   }
 
-  function freeInstanceSourceObjects(instance) {
+  function geometryInstanceSourceObjects(instance) {
     const seen = new Set();
     const visit = (item) => {
       if (!item || seen.has(item)) return;
@@ -19408,7 +19435,7 @@
   }
 
   function selectHitOnly(hitP, hitL, hitC, hitA, hitArcEnd) {
-    treeSelectedGeometryInstances.clear();
+    selectedInstanceGeometry = null;
     selectedDimensionConstraint = null;
     selectedConstraint = null;
     selectedBlockInstances = [];
@@ -19866,6 +19893,15 @@
     let result;
     const dragVars = session?.local?.variables || solver.getVariables();
     const dragState = solver.clone(dragVars);
+    if (session.mode === "derived-placement") {
+      const targets = solver.observablePointDragTargets({ ...session.local, point: session.anchor,
+        errorTolerance: DRAG_PREVIEW_MAX_MODEL_ERROR,
+        x: session.startAnchor.x + pointer.x - session.startPointer.x,
+        y: session.startAnchor.y + pointer.y - session.startPointer.y });
+      const extra = parameterDragConstraintsFromTargets(targets);
+      const retry = () => solveGuidedDragWithFallback(session, targets, extra, () => solveDragSketch(session, extra), dragState);
+      return finalizeDragResult(retry(), dragState, session, extra, retry);
+    }
     if (session.mode === "block" || session.mode === "block-rotation") {
       const targets = session.mode === "block"
         ? [
@@ -19935,7 +19971,7 @@
   }
 
   function dragLabel(session) {
-    if (session.kind === "free-instance") return applicationText("インスタンス移動", "Instance move");
+    if (session.kind === "free-instance" || session.kind === "derived-instance") return applicationText("インスタンス移動", "Instance move");
     if (session.mode === "block") return applicationText("ブロック移動", "Block move");
     if (session.mode === "block-rotation") return applicationText("ブロック回転", "Block rotation");
     if (session.kind === "selection") return applicationText("選択移動", "Selection move");
@@ -22372,7 +22408,7 @@
 
     if (hitDerivedGeometry && drawingHitIsTop(hitDerivedGeometry.instance)) {
       if (multiSelect) {
-        treeSelectedGeometryInstances.clear();
+        selectedInstanceGeometry = null;
         if (!selectedGeometryInstances.includes(hitDerivedGeometry.instance)) selectedGeometryInstances.push(hitDerivedGeometry.instance);
         else selectedGeometryInstances = selectedGeometryInstances.filter((instance) => instance !== hitDerivedGeometry.instance);
         selectedDimensionConstraint = null;
@@ -23364,6 +23400,11 @@
       return;
     }
     const p = canvasPoint(e);
+    if (mode === "select" && !pendingCommand && !pendingConstraintCommand
+      && selectedInstanceGeometry && hitDerivedGeometryForDrag(p.x, p.y)?.instance.id === selectedInstanceGeometry.instanceId) {
+      e.preventDefault();
+      return;
+    }
     const hitL = hitLine(p.x, p.y);
     const hitP = hitPoint(p.x, p.y);
     const hitC = hitCircle(p.x, p.y);
@@ -25267,6 +25308,7 @@
             };
           }),
           selectedIds: selectedGeometryInstances.map((instance) => instance.id),
+          selectedGeometry: selectedInstanceGeometry ? { ...selectedInstanceGeometry } : null,
           hatchValidity: model.hatches.map((hatch) => resolvedHatchBoundary(hatch).ok),
           treeCount: document.querySelectorAll('#sketchList [data-object-kind="instance"]').length,
           propertiesText: document.getElementById("propertiesPanel")?.textContent || "",

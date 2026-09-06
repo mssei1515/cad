@@ -1698,6 +1698,30 @@
       return targetMask.map((_, index) => selectedSet.has(index));
     }
 
+    observablePointDragTargets({ variables = [], constraints = [], lines = [], point, x, y, errorTolerance = 1e-4 } = {}) {
+      if (!point || variables.length === 0) return [];
+      const analysis = this.analyzeConstraintState({ variables, constraints, lines, errorTolerance });
+      if (!analysis.stable || analysis.nullspaceBasis.length === 0) return [];
+      const target = new DragConstraint(point, x, y);
+      target.weight = 1;
+      const errors = this.computeErrorVectorForConstraints([target]);
+      const jacobian = this.computeJacobianForConstraints(variables, errors, [target]);
+      const scales = variables.map((v) => this.variableMotionScale(v));
+      const basis = LinearAlgebra.orthonormalizeVectors(analysis.nullspaceBasis.map((v) => v.map((value, i) => value * scales[i])))
+        .map((v) => v.map((value, i) => value / scales[i]));
+      const matrix = jacobian.map((row) => basis.map((v) => row.reduce((sum, value, i) => sum + value * v[i], 0)));
+      // Minimum physical motion resolves invisible motions (e.g. sliding a mirror
+      // axis along itself) without inventing extra placement degrees of freedom.
+      const regularization = 1e-6;
+      for (let i = 0; i < basis.length; i++) matrix.push(basis.map((_, j) => i === j ? regularization : 0));
+      const coefficients = LinearAlgebra.solveLeastSquaresQR(matrix, [...errors.map((v) => -v), ...basis.map(() => 0)]);
+      return variables.flatMap((v, i) => {
+        if (Math.hypot(...jacobian.map((row) => row[i])) < 1e-10) return [];
+        const delta = basis.reduce((sum, vector, j) => sum + vector[i] * coefficients[j], 0);
+        return Number.isFinite(delta) ? [{ object: v.object, prop: v.prop, value: v.object[v.prop] + delta, min: v.min }] : [];
+      });
+    }
+
     solveSubsetGuided({ variables = [], constraints = [], targets = [], lines = [], errorTolerance = 1e-4, activeTargetVariables = [], targetStepNorm = null } = {}) {
       this.syncLineOrientationHints([], constraints);
       const activeConstraints = this.constraintsWithLineMinimums(constraints, [], lines);
