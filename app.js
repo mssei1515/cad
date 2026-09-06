@@ -142,6 +142,7 @@
     "#f9a8d4", "#db2777", "#9d174d",
   ];
   const UI_TRANSLATIONS = [
+    ["自由配置インスタンス", "Free Instance"],
     ["ファイル", "File"], ["編集", "Edit"], ["ヘルプ", "Help"],
     ["上書き保存", "Overwrite Save"], ["名前を付けて保存", "Save As"], ["開く", "Open"], ["Parameter…", "Parameters…"], ["ドキュメント設定", "Document Settings"], ["アプリケーション設定", "Application Settings"],
     ["元に戻す", "Undo"], ["やり直す", "Redo"], ["削除", "Delete"], ["選択", "Select"], ["選択・ドラッグ", "Select / Drag"],
@@ -302,6 +303,8 @@
   let selectedSplines = [];
   let selectedBlockInstances = [];
   let selectedGeometryInstances = [];
+  const treeSelectedGeometryInstances = new Set();
+  let freeInstancePlacement = null;
   let dragSession = null;
   let dimensionDragSession = null;
   let annotationDragSession = null;
@@ -410,6 +413,7 @@
   let sketchProjectionInstanceSeq = 1;
   let mirrorInstanceSeq = 1;
   let patternInstanceSeq = 1;
+  let freeInstanceSeq = 1;
   let blockElementSeq = 1;
   let lastMiddleAuxClick = null;
   let blockPlacementDefinitionId = null;
@@ -2533,8 +2537,8 @@
   }
 
   function normalizeGeometryInstance(raw, normalizeSketch = (value) => String(value || activeSketchId()), index = 0) {
-    const type = raw?.type === "mirror" || raw?.type === "pattern" ? raw.type : "sketchProjection";
-    const prefix = type === "mirror" ? "MI" : type === "pattern" ? "PI" : "SPI";
+    const type = ["mirror", "pattern", "free"].includes(raw?.type) ? raw.type : "sketchProjection";
+    const prefix = type === "free" ? "FI" : type === "mirror" ? "MI" : type === "pattern" ? "PI" : "SPI";
     const sources = (Array.isArray(raw?.sources) ? raw.sources : [])
       .map((entry) => normalizeGeometryInstanceRef(entry))
       .filter(Boolean);
@@ -2546,6 +2550,11 @@
       sources,
       appearanceOverride: normalizeAppearance(raw?.appearanceOverride),
     };
+    if (type === "free") Object.assign(instance, {
+      x: Number(raw?.x ?? 0), y: Number(raw?.y ?? 0), rotation: Number(raw?.rotation ?? 0),
+      origin: { x: Number(raw?.origin?.x ?? 0), y: Number(raw?.origin?.y ?? 0) },
+      mirrorX: Boolean(raw?.mirrorX), mirrorY: Boolean(raw?.mirrorY),
+    });
     if (type === "mirror") instance.axis = normalizeGeometryInstanceRef(raw?.axis, "line");
     if (type === "pattern") {
       instance.direction = normalizeGeometryInstanceRef(raw?.direction, "line");
@@ -2572,6 +2581,10 @@
       sources: instance.sources.map((ref) => ({ kind: ref.kind, path: [...ref.path] })),
       appearanceOverride: normalizeAppearance(instance.appearanceOverride),
     };
+    if (instance.type === "free") Object.assign(data, {
+      x: instance.x, y: instance.y, rotation: instance.rotation, origin: { ...instance.origin },
+      mirrorX: instance.mirrorX, mirrorY: instance.mirrorY,
+    });
     if (instance.type === "mirror") data.axis = instance.axis ? { kind: "line", path: [...instance.axis.path] } : null;
     if (instance.type === "pattern") {
       data.direction = instance.direction ? { kind: "line", path: [...instance.direction.path] } : null;
@@ -2584,6 +2597,7 @@
   }
 
   function geometryInstanceTypeLabel(type) {
+    if (type === "free") return applicationText("自由配置インスタンス", "Free Instance");
     if (type === "mirror") return applicationText("ミラー", "Mirror");
     if (type === "pattern") return applicationText("直線パターン", "Linear Pattern");
     return applicationText("スケッチ投影", "Sketch Projection");
@@ -2606,6 +2620,12 @@
       ? Array.from({ length: Math.max(0, instance.copies) }, (_, index) => index + 1)
       : [0];
     const transform = (point, occurrence) => {
+      if (instance.type === "free") {
+        const x = (point.x - instance.origin.x) * (instance.mirrorX ? -1 : 1);
+        const y = (point.y - instance.origin.y) * (instance.mirrorY ? -1 : 1);
+        const c = Math.cos(instance.rotation), s = Math.sin(instance.rotation);
+        return { x: instance.x + c * x - s * y, y: instance.y + s * x + c * y };
+      }
       if (instance.type === "mirror") {
         const dx = axis.p2.x - axis.p1.x;
         const dy = axis.p2.y - axis.p1.y;
@@ -2624,6 +2644,12 @@
       return { x: point.x, y: point.y };
     };
     const inverseTransform = (point, occurrence) => {
+      if (instance.type === "free") {
+        const x = point.x - instance.x, y = point.y - instance.y;
+        const c = Math.cos(instance.rotation), s = Math.sin(instance.rotation);
+        return { x: instance.origin.x + (c * x + s * y) * (instance.mirrorX ? -1 : 1),
+          y: instance.origin.y + (-s * x + c * y) * (instance.mirrorY ? -1 : 1) };
+      }
       if (instance.type === "mirror") return transform(point, occurrence);
       if (instance.type === "pattern") {
         const directionLength = direction?.length?.() || 0;
@@ -2677,7 +2703,7 @@
           };
           Object.defineProperties(output, {
             startAngle: { configurable: true, enumerable: true, get: transformedStartAngle },
-            endAngle: { configurable: true, enumerable: true, get: () => transformedStartAngle() + (instance.type === "mirror" ? -1 : 1) * arcSweep(item) },
+            endAngle: { configurable: true, enumerable: true, get: () => transformedStartAngle() + (instance.type === "mirror" || (instance.type === "free" && instance.mirrorX !== instance.mirrorY) ? -1 : 1) * arcSweep(item) },
           });
         } else if (item instanceof Spline) output = new Spline(outputId, item.fitPoints.map((point) => mappedPoints.get(point)), item.closed, item.construction);
         if (!output) continue;
@@ -2735,6 +2761,7 @@
           ? [...resolvedSources.map(({ item }) => item), axis]
           : instance.type === "pattern"
           ? [...resolvedSources.map(({ item }) => item), direction]
+          : instance.type === "free" ? resolvedSources.map(({ item }) => item)
           : [];
         if (localReferences.some((item) => elementSketchId(item) !== instance.sketchId)) {
           results.push(emptyGeometryInstanceBundle(instance, applicationText("参照先Sketchが一致しません", "Referenced geometry belongs to another sketch")));
@@ -3886,7 +3913,7 @@
       let solved = null;
       const dependentResults = [];
       for (const requestedSketchId of [...new Set(requestedSketchIds)]) {
-        const item = solveSketchAndDependents(requestedSketchId);
+        const item = solveSketchAndDependents(requestedSketchId, null, options.variableAllowed);
         solved ||= item;
         dependentResults.push(...(item.dependent?.results || []));
         if (!item.success || item.dependent?.success === false) return item;
@@ -4082,11 +4109,50 @@
     if (!constraintAnalysisState) refreshConstraintAnalysis();
     let current = item;
     const visited = new Set();
+    let hasFreePlacement = false;
     while (current?.derivedProjection && current.sourceElement && !visited.has(current)) {
       visited.add(current);
+      if (current.derivedInstance?.type === "free") hasFreePlacement = true;
       current = current.sourceElement;
     }
+    if (hasFreePlacement) {
+      if (!constraintAnalysisState.statuses.has(item)) {
+        constraintAnalysisState.statuses.set(item, classifyFreeInstanceGeometry(item, constraintAnalysisState.analyses.get(elementSketchId(item))));
+      }
+      return constraintAnalysisState.statuses.get(item);
+    }
     return constraintAnalysisState?.statuses.get(current) || "full";
+  }
+
+  function classifyFreeInstanceGeometry(item, analysis) {
+    if (!analysis?.stable) return "conflict";
+    const sample = () => {
+      const values = geometryInstanceSourcePoints(item).flatMap((p) => [p.x, p.y]);
+      if (item instanceof Circle || item instanceof Arc) values.push(item.radius());
+      if (item instanceof Arc) values.push(item.startPoint().x, item.startPoint().y, item.endPoint().x, item.endPoint().y);
+      return values;
+    };
+    const baseline = sample();
+    const derivatives = analysis.variables.map((v) => {
+      const old = v.object[v.prop];
+      const step = 1e-6 * Math.max(1, Math.abs(old));
+      try {
+        v.object[v.prop] = old + step;
+        return sample().map((value, index) => (value - baseline[index]) / step);
+      } finally { v.object[v.prop] = old; }
+    });
+    let hasMotion = false;
+    for (const basis of analysis.nullspaceBasis) {
+      const motion = baseline.map((_, i) => derivatives.reduce((sum, column, j) => sum + column[i] * basis[j], 0));
+      const tolerance = 1e-5 * Math.max(1, vectorNorm(basis));
+      if (vectorNorm(motion) <= tolerance) continue;
+      hasMotion = true;
+      if (!(item instanceof Line)) return "under";
+      const length = Math.max(item.length(), MIN_LINE_LENGTH);
+      const nx = -item.dy() / length, ny = item.dx() / length;
+      if (Math.abs(nx * motion[0] + ny * motion[1]) > tolerance || Math.abs(nx * motion[2] + ny * motion[3]) > tolerance) return "under";
+    }
+    return hasMotion ? "support" : "full";
   }
 
   function constraintStatusColor(item, selected = false, hovered = false) {
@@ -4472,12 +4538,80 @@
     }
     geometryInstanceCommandSources = sources.map(geometryRefForItem).filter(Boolean);
     clearSelection();
+    if (type === "free") {
+      freeInstancePlacement = normalizeGeometryInstance({ id: `FI${freeInstanceSeq}`, type: "free", sources: geometryInstanceCommandSources, sketchId: activeSketchId() });
+      mode = "free-instance-origin";
+      updateToolbar();
+      updateUI({ refreshAnalysis: false });
+      setHint(applicationText("配置基準点をクリックしてください。Escでキャンセルします", "Click the source anchor. Press Esc to cancel."));
+      draw();
+      return;
+    }
     mode = type === "mirror" ? "mirror-axis" : "pattern-direction";
     updateToolbar();
     setHint(type === "mirror"
       ? applicationText("対称軸にする線をクリックしてください。Escでキャンセルします", "Click the mirror axis line. Press Esc to cancel.")
       : applicationText("配列方向にする線をクリックしてください。Escでキャンセルします", "Click the pattern direction line. Press Esc to cancel."));
     draw();
+  }
+
+  function placeFreeInstance(pointer) {
+    if (!freeInstancePlacement) return;
+    if (mode === "free-instance-origin") {
+      freeInstancePlacement.origin = { x: pointer.x, y: pointer.y };
+      mode = "free-instance-place";
+      setHint(applicationText("配置先をクリックしてください。回転と鏡像はPropertiesで設定できます", "Click the destination. Set rotation and reflection in Properties."));
+      updateUI({ refreshAnalysis: false });
+    } else {
+      Object.assign(freeInstancePlacement, { x: pointer.x, y: pointer.y, id: `FI${freeInstanceSeq++}` });
+      const instance = freeInstancePlacement;
+      model.geometryInstances.push(instance);
+      freeInstancePlacement = null;
+      geometryInstanceCommandSources = [];
+      mode = "select";
+      clearSelection();
+      selectedGeometryInstances = [instance];
+      recordHistory("自由配置インスタンス追加");
+      updateUI();
+      setHint(applicationText("自由配置インスタンスを作成しました", "Free instance created"));
+    }
+    updateToolbar();
+    draw();
+  }
+
+  function freeInstancePropertyRows(item) {
+    const placementRows = item === freeInstancePlacement ? "" : propertyReadonlyRow("X座標", "X coordinate", formatDisplayNumber(item.x))
+      + propertyReadonlyRow("Y座標", "Y coordinate", formatDisplayNumber(item.y))
+      + propertyReadonlyRow("ドラッグ操作", "Drag action", treeSelectedGeometryInstances.has(item) ? applicationText("全体移動", "Move instance") : applicationText("共有形状の編集", "Edit shared shape"));
+    return placementRows + `<div class="property-row"><label>${applicationText("角度", "Angle")} (°)</label><input data-free-instance-property="rotation" type="number" step="1" value="${formatDisplayNumber(item.rotation * 180 / Math.PI)}"></div>`
+      + [ ["mirrorX", "左右反転", "Reflect left/right"], ["mirrorY", "上下反転", "Reflect up/down"] ].map(([key, ja, en]) => `<div class="property-row"><label>${applicationText(ja, en)}</label><input data-free-instance-property="${key}" type="checkbox" ${item[key] ? "checked" : ""}></div>`).join("");
+  }
+
+  function changeFreeInstanceProperty(instance, key, value) {
+    if (!["rotation", "mirrorX", "mirrorY"].includes(key)) return false;
+    if (key === "rotation" && (String(value).trim() === "" || !Number.isFinite(Number(value)))) return false;
+    const snapshot = snapshotModelState();
+    instance[key] = key === "rotation" ? Number(value) * Math.PI / 180 : Boolean(value);
+    if (instance === freeInstancePlacement) return true;
+    // A property edit specifies the transform; solving must not silently undo it
+    // or deform the shared source to make an impossible placement succeed.
+    const sources = freeInstanceSourceObjects(instance);
+    const variables = sketchSolveVariables(instance.sketchId).filter((v) => !sources.has(v.object) && v.object !== instance);
+    const result = solver.solveSubset({ variables, constraints: sketchSolveConstraints(instance.sketchId), lines: sketchSolveLines(instance.sketchId) });
+    if (!result.success || result.errorNorm > CONSTRAINT_ACCEPT_ERROR) {
+      restoreModelState(snapshot);
+      setHint(applicationText("拘束が成立しないため配置の変更を戻しました", "Placement change was restored because constraints could not be satisfied."), "error");
+      return false;
+    }
+    const stabilized = stabilizeActiveParameterNamespace(instance.sketchId, { variableAllowed: (v) => !sources.has(v.object) && v.object !== instance });
+    if (!stabilized.success || stabilized.dependent?.success === false) {
+      restoreModelState(snapshot);
+      clearSketchSolveState(instance.sketchId);
+      setHint(applicationText("拘束が成立しないため配置の変更を戻しました", "Placement change was restored because constraints could not be satisfied."), "error");
+      return false;
+    }
+    recordHistory("自由配置インスタンス設定変更");
+    return true;
   }
 
   function commitGeometryInstanceReference(line) {
@@ -6042,6 +6176,13 @@
       instance.x += dx;
       instance.y += dy;
     }
+    for (const instance of definition.geometryInstances || []) {
+      if (instance.type !== "free") continue;
+      instance.x += dx;
+      instance.y += dy;
+      instance.origin.x += dx;
+      instance.origin.y += dy;
+    }
     for (const annotation of definition.annotations || []) {
       annotation.x += dx;
       annotation.y += dy;
@@ -6880,6 +7021,7 @@
         fixed: instance.fixed,
         rotationLocked: instance.rotationLocked,
       })),
+      freeInstances: model.geometryInstances.filter((instance) => instance.type === "free").map((instance) => ({ instance, x: instance.x, y: instance.y, rotation: instance.rotation, mirrorX: instance.mirrorX, mirrorY: instance.mirrorY })),
       constraintLength: model.constraints.length,
       constraints: model.constraints.map((constraint) => ({
         constraint,
@@ -6940,6 +7082,7 @@
   }
 
   function restoreModelState(snapshot) {
+    for (const { instance, ...values } of snapshot.freeInstances || []) Object.assign(instance, values);
     for (const p of snapshot.points) {
       p.point.x = p.x;
       p.point.y = p.y;
@@ -7068,6 +7211,7 @@
     sketchProjectionInstanceSeq = 1;
     mirrorInstanceSeq = 1;
     patternInstanceSeq = 1;
+    freeInstanceSeq = 1;
     blockElementSeq = 1;
     blockPlacementDefinitionId = null;
     blockPlacementAnchor = null;
@@ -7913,7 +8057,7 @@
   function serializedGeometryInstanceListError(instances) {
     if (!Array.isArray(instances)) return applicationText("配列ではありません", "is not an array");
     const ids = new Set();
-    const supportedTypes = new Set(["sketchProjection", "mirror", "pattern"]);
+    const supportedTypes = new Set(["sketchProjection", "mirror", "pattern", "free"]);
     for (const raw of instances) {
       if (!raw || typeof raw !== "object" || Array.isArray(raw)) return applicationText("要素の形式が正しくありません", "contains an invalid entry");
       const id = typeof raw.id === "string" ? raw.id.trim() : "";
@@ -7921,6 +8065,7 @@
       if (ids.has(id)) return applicationText(`ID ${id} が重複しています`, `contains duplicate ID ${id}`);
       ids.add(id);
       if (!supportedTypes.has(raw.type)) return applicationText(`種類 ${String(raw.type || "")} は未対応です`, `contains unsupported type ${String(raw.type || "")}`);
+      if (raw.type === "free" && (![raw.x, raw.y, raw.rotation, raw.origin?.x, raw.origin?.y].every((v) => typeof v === "number" && Number.isFinite(v)) || typeof raw.mirrorX !== "boolean" || typeof raw.mirrorY !== "boolean")) return applicationText(`${id} の配置設定が正しくありません`, `${id} has invalid placement settings`);
       if (!Array.isArray(raw.sources) || raw.sources.length === 0 || raw.sources.some((ref) => !normalizeGeometryInstanceRef(ref))) {
         return applicationText(`${id} の複写元が正しくありません`, `${id} has invalid source geometry`);
       }
@@ -8602,6 +8747,7 @@
     blockDefinitionSeq = nextSeq(model.blockDefinitions, "B");
     blockInstanceSeq = nextSeq([...model.blockInstances, ...model.blockDefinitions.flatMap((definition) => definition.blockInstances || [])], "BI");
     sketchProjectionInstanceSeq = nextSeq([...model.geometryInstances, ...model.blockDefinitions.flatMap((definition) => definition.geometryInstances || [])], "SPI");
+    freeInstanceSeq = nextSeq([...model.geometryInstances, ...model.blockDefinitions.flatMap((definition) => definition.geometryInstances || [])], "FI");
     mirrorInstanceSeq = nextSeq([...model.geometryInstances, ...model.blockDefinitions.flatMap((definition) => definition.geometryInstances || [])], "MI");
     patternInstanceSeq = nextSeq([...model.geometryInstances, ...model.blockDefinitions.flatMap((definition) => definition.geometryInstances || [])], "PI");
     blockElementSeq = Math.max(1, ...model.blockDefinitions.flatMap((definition) => [...definition.points, ...definition.lines, ...definition.circles, ...definition.arcs, ...(definition.splines || [])].map((element) => Number(/^(?:P|L|C|A|SP)(\d+)$/.exec(element.id || "")?.[1]) + 1 || 1)));
@@ -8865,6 +9011,7 @@
   }
 
   function clearSelection() {
+    treeSelectedGeometryInstances.clear();
     selectedPoints = [];
     selectedLines = [];
     selectedCircles = [];
@@ -11204,6 +11351,10 @@
 
   function localSolveVariables(component, sketchId = activeSketchId()) {
     const vars = [];
+    for (const instance of model.geometryInstances) {
+      if (instance.type !== "free" || instance.sketchId !== sketchId || !component.has(instance)) continue;
+      for (const prop of ["x", "y", "rotation"]) vars.push({ object: instance, prop, label: `${instance.id}.${prop}` });
+    }
     for (const p of model.points) {
       if (!isVisibleSketchElement(p)) continue;
       if (component.has(p) && elementSketchId(p) === sketchId && !p.fixed) {
@@ -11244,6 +11395,10 @@
 
   function sketchSolveVariables(sketchId = activeSketchId()) {
     const vars = [];
+    for (const instance of model.geometryInstances) {
+      if (instance.type !== "free" || instance.sketchId !== sketchId) continue;
+      for (const prop of ["x", "y", "rotation"]) vars.push({ object: instance, prop, label: `${instance.id}.${prop}` });
+    }
     for (const p of model.points) {
       if (elementSketchId(p) === sketchId && !p.fixed) {
         vars.push({ object: p, prop: "x", label: `${p.id}.x` });
@@ -11288,10 +11443,10 @@
     });
   }
 
-  function solveSketchById(sketchId, extra = []) {
+  function solveSketchById(sketchId, extra = [], variableAllowed = null) {
     synchronizeSketchProjectionMetadata(sketchId);
     return solver.solveSubset({
-      variables: sketchSolveVariables(sketchId),
+      variables: variableAllowed ? sketchSolveVariables(sketchId).filter(variableAllowed) : sketchSolveVariables(sketchId),
       constraints: sketchSolveConstraints(sketchId),
       lines: sketchSolveLines(sketchId),
       extra,
@@ -11299,7 +11454,7 @@
   }
 
   function solveDragSketch(session, extra = []) {
-    return solveSketchById(session?.sketchId || activeSketchId(), extra);
+    return solveSketchById(session?.sketchId || activeSketchId(), extra, session?.variableAllowed);
   }
 
   function solveFinalDragSession(session) {
@@ -11429,10 +11584,10 @@
     return { success: !failed, sketchId: failed?.sketchId || null, result: failed?.result || null, results };
   }
 
-  function solveSketchAndDependents(sketchId = activeSketchId(), rollbackState = null) {
+  function solveSketchAndDependents(sketchId = activeSketchId(), rollbackState = null, variableAllowed = null) {
     refreshReferenceConstraintValidity();
     clearSketchSolveState(sketchId);
-    const result = solveSketchById(sketchId);
+    const result = solveSketchById(sketchId, [], variableAllowed);
     normalizeArcSweeps();
     if (!resultIsAccepted(result)) {
       if (rollbackState) {
@@ -12219,6 +12374,7 @@
   }
 
   function selectByRect(rect, crossing, additive = false) {
+    treeSelectedGeometryInstances.clear();
     const nextPoints = additive ? [...selectedPoints] : [];
     const nextLines = additive ? [...selectedLines] : [];
     const nextCircles = additive ? [...selectedCircles] : [];
@@ -12701,6 +12857,32 @@
     });
   }
 
+  function drawFreeInstancePreview() {
+    if (mode !== "free-instance-place" || !freeInstancePlacement || !pointerPreview) return;
+    Object.assign(freeInstancePlacement, { x: pointerPreview.x, y: pointerPreview.y });
+    const sources = freeInstancePlacement.sources.map((ref) => ({ ref, item: resolveGeometryRef(ref) }));
+    if (sources.some(({ item }) => !item)) return;
+    const bundle = createGeometryInstanceBundle(freeInstancePlacement, sources, null, null);
+    withCanvasState(() => {
+      ctx.strokeStyle = "#2563eb";
+      ctx.lineWidth = 2 / viewport.scale;
+      ctx.setLineDash([6 / viewport.scale, 5 / viewport.scale]);
+      for (const line of bundle.lines) {
+        ctx.beginPath(); ctx.moveTo(line.p1.x, line.p1.y); ctx.lineTo(line.p2.x, line.p2.y); ctx.stroke();
+      }
+      for (const circle of bundle.circles) {
+        ctx.beginPath(); ctx.arc(circle.center.x, circle.center.y, circle.radius(), 0, Math.PI * 2); ctx.stroke();
+      }
+      for (const arc of bundle.arcs) {
+        ctx.beginPath(); ctx.arc(arc.center.x, arc.center.y, arc.radius(), arc.startAngle, arc.endAngle, arc.endAngle < arc.startAngle); ctx.stroke();
+      }
+      for (const spline of bundle.splines) { traceSplinePath(spline); ctx.stroke(); }
+      for (const point of bundle.points) {
+        ctx.beginPath(); ctx.arc(point.x, point.y, 3 / viewport.scale, 0, Math.PI * 2); ctx.stroke();
+      }
+    });
+  }
+
   function draw() {
     if (!interactionProfiler.active) return drawUnprofiled();
     return profileInteractionWork("draw", () => drawUnprofiled());
@@ -12740,6 +12922,7 @@
     drawThreePointArcPreview();
     drawSplinePreview();
     drawBlockPlacementPreview();
+    drawFreeInstancePreview();
     drawOffsetPreview();
     drawTrimPreview();
     drawSnapMarker();
@@ -14490,6 +14673,8 @@
       "three-point-arc": "toolThreePointArc",
       spline: "toolSpline",
       "sketch-projection": "toolSketchProjection",
+      "free-instance-origin": "toolFreeInstance",
+      "free-instance-place": "toolFreeInstance",
       "mirror-axis": "toolMirror",
       "pattern-direction": "toolPattern",
       hatch: "toolHatch",
@@ -14558,6 +14743,7 @@
       toolThreePointArc: geometryMode && mode === "three-point-arc",
       toolSpline: geometryMode && mode === "spline",
       toolSketchProjection: geometryMode && mode === "sketch-projection",
+      toolFreeInstance: geometryMode && mode.startsWith("free-instance-"),
       toolMirror: geometryMode && mode === "mirror-axis",
       toolPattern: geometryMode && mode === "pattern-direction",
       toolHatch: geometryMode && (mode === "hatch" || mode === "hatch-repair"),
@@ -15238,6 +15424,7 @@
   }
 
   function cancelPendingCommand(message = "コマンドをキャンセルしました") {
+    freeInstancePlacement = null;
     if (!pendingCommand) return;
     if (pendingCommand.type === "offset-value") {
       offsetSource = null;
@@ -15934,9 +16121,9 @@
       if (entry.fixed) badges += `<span class="badge">${applicationText("固定", "Fixed")}</span>`;
       data += ` data-id="${escapeHtml(entry.id)}"`;
     } else if (category === "instance") {
-      icon = toolbarSvgMarkup(entry.type === "mirror" ? "#toolMirror" : entry.type === "pattern" ? "#toolPattern" : "#toolSketchProjection");
+      icon = toolbarSvgMarkup(entry.type === "free" ? "#toolFreeInstance" : entry.type === "mirror" ? "#toolMirror" : entry.type === "pattern" ? "#toolPattern" : "#toolSketchProjection");
       primary = entry.id;
-      secondary = entry.type === "mirror" ? applicationText("ミラー", "Mirror") : entry.type === "pattern" ? applicationText(`直線パターン ${entry.copies}個`, `Linear Pattern ${entry.copies} copies`) : applicationText("スケッチ投影", "Sketch Projection");
+      secondary = entry.type === "pattern" ? applicationText(`直線パターン ${entry.copies}個`, `Linear Pattern ${entry.copies} copies`) : geometryInstanceTypeLabel(entry.type);
       const bundle = geometryInstanceBundle(entry);
       if (!bundle.valid) badges += `<span class="badge constraint-reference-error-badge">${applicationText("参照エラー", "Reference error")}</span>`;
       data += ` data-id="${escapeHtml(entry.id)}"`;
@@ -16155,6 +16342,8 @@
       if (item) {
         if (additive && selectedGeometryInstances.includes(item)) selectedGeometryInstances = selectedGeometryInstances.filter((entry) => entry !== item);
         else if (!selectedGeometryInstances.includes(item)) selectedGeometryInstances.push(item);
+        if (selectedGeometryInstances.includes(item)) treeSelectedGeometryInstances.add(item);
+        else treeSelectedGeometryInstances.delete(item);
       }
     } else if (category === "annotation") {
       const item = model.annotations.find((annotation) => annotation.id === row.dataset.id);
@@ -16998,6 +17187,7 @@
   }
 
   function selectedPropertiesTarget() {
+    if (freeInstancePlacement) return { kind: "geometryInstance", item: freeInstancePlacement };
     if (mode === "block-place" && blockPlacementDefinitionId) return { kind: "blockPlacement", item: blockDefinitionById(blockPlacementDefinitionId) };
     const constraint = selectedDimensionConstraint || effectiveSelectedConstraint();
     if (constraint) return { kind: "constraint", item: constraint };
@@ -17425,12 +17615,12 @@
         + blockRotationPropertyRow(item);
       panel.innerHTML = `<h2 class="property-heading">${applicationText("ブロック", "Block")}</h2><section class="property-section">${basicInformationHeading}${rows}${blockPropertiesConfiguration(item, definition)}</section><section class="property-section"><h3>${applicationText("ブロック外観の上書き", "Block Appearance Override")}</h3>${appearancePropertyRows(item.appearanceOverride, effective)}</section>`;
     } else if (target.kind === "geometryInstance") {
-      const bundle = geometryInstanceBundle(item);
+      const bundle = item === freeInstancePlacement ? { ...emptyGeometryInstanceBundle(item), valid: true } : geometryInstanceBundle(item);
       const first = [...bundle.lines, ...bundle.circles, ...bundle.arcs, ...bundle.splines, ...bundle.points][0];
       const effective = first ? effectiveAppearanceForElement(first) : normalizeAppearance(model.defaultAppearance, { partial: false });
-      const typeLabel = item.type === "mirror" ? applicationText("ミラー", "Mirror") : item.type === "pattern" ? applicationText("直線パターン", "Linear Pattern") : applicationText("スケッチ投影", "Sketch Projection");
+      const typeLabel = geometryInstanceTypeLabel(item.type);
       const refs = item.sources.map((ref) => `${ref.kind}:${geometryRefId(ref)}`).join(", ");
-      const settings = item.type === "pattern" ? `<div class="property-row"><label>${applicationText("間隔", "Spacing")}</label><div class="property-input-with-unit"><input data-geometry-instance-property="spacing" type="number" min="0.000001" step="0.1" value="${item.spacing}"><span class="property-input-unit">mm</span></div></div><div class="property-row"><label>${applicationText("コピー数", "Copies")}</label><input data-geometry-instance-property="copies" type="number" min="1" max="1000" step="1" value="${item.copies}"></div><div class="property-row"><label>${applicationText("反転", "Reverse")}</label><input data-geometry-instance-property="reversed" type="checkbox" ${item.reversed ? "checked" : ""}></div>` : "";
+      const settings = item.type === "free" ? freeInstancePropertyRows(item) : item.type === "pattern" ? `<div class="property-row"><label>${applicationText("間隔", "Spacing")}</label><div class="property-input-with-unit"><input data-geometry-instance-property="spacing" type="number" min="0.000001" step="0.1" value="${item.spacing}"><span class="property-input-unit">mm</span></div></div><div class="property-row"><label>${applicationText("コピー数", "Copies")}</label><input data-geometry-instance-property="copies" type="number" min="1" max="1000" step="1" value="${item.copies}"></div><div class="property-row"><label>${applicationText("反転", "Reverse")}</label><input data-geometry-instance-property="reversed" type="checkbox" ${item.reversed ? "checked" : ""}></div>` : "";
       panel.innerHTML = `<h2 class="property-heading">${typeLabel}</h2><section class="property-section">${basicInformationHeading}${propertyReadonlyRow("種類", "Type", typeLabel)}${propertyReadonlyRow("ID", "ID", item.id)}${propertyReadonlyRow("複写元", "Sources", refs, { userContent: true })}${propertyReadonlyRow("状態", "Status", bundle.valid ? applicationText("有効", "Valid") : bundle.reason, { userContent: !bundle.valid })}${settings}</section><section class="property-section"><h3>${applicationText("外観の上書き", "Appearance Override")}</h3>${appearancePropertyRows(item.appearanceOverride, effective)}</section>`;
     } else if (target.kind === "constraint") {
       const dimension = item.dimension;
@@ -17758,6 +17948,7 @@
   }
 
   function handlePropertiesInput(event) {
+    if (event.target.dataset.freeInstanceProperty) return;
     const input = event.target;
     const target = selectedPropertiesTarget();
     const isTextInput = input instanceof HTMLTextAreaElement
@@ -17893,6 +18084,12 @@
   function handlePropertiesChange(event) {
     const target = selectedPropertiesTarget();
     const input = event.target;
+    if (target.kind === "geometryInstance" && input.dataset.freeInstanceProperty) {
+      changeFreeInstanceProperty(target.item, input.dataset.freeInstanceProperty, input.type === "checkbox" ? input.checked : input.value);
+      updateUI();
+      draw();
+      return;
+    }
     if (target.kind === "geometryInstance" && input.dataset.geometryInstanceProperty) {
       const key = input.dataset.geometryInstanceProperty;
       if (key === "reversed") target.item.reversed = input.checked;
@@ -18085,6 +18282,8 @@
   function updateStatusUI() {
     const command = document.getElementById("statusCommand");
     const modeLabels = {
+      "free-instance-origin": applicationText("配置基準点", "Placement anchor"),
+      "free-instance-place": applicationText("インスタンス配置", "Instance placement"),
       select: applicationText("選択", "Select"), point: applicationText("点", "Point"), line: applicationText("線", "Line"), centerline: applicationText("中心線", "Centerline"), "circle-center-cross": applicationText("円中心十字線", "Circle Center Cross"), rectangle: applicationText("矩形", "Rectangle"),
       slot: applicationText("長穴", "Slot"), circle: applicationText("円", "Circle"), arc: applicationText("円弧", "Arc"), "three-point-arc": applicationText("3点円弧", "Three-point Arc"), spline: applicationText("スプライン", "Spline"), fillet: applicationText("R面取り", "Fillet"), trim: applicationText("トリム", "Trim"),
       offset: applicationText("オフセット", "Offset"), hatch: applicationText("ハッチング", "Hatching"), "hatch-repair": applicationText("境界を再指定", "Reselect boundary"), "block-place": applicationText("ブロック配置", "Block placement"),
@@ -18991,6 +19190,19 @@
   }
 
   function beginDerivedGeometryDrag(e, hit, pointer) {
+    if (hit.instance.type === "free" && treeSelectedGeometryInstances.has(hit.instance) && selectedGeometryInstances.includes(hit.instance)) {
+      const instance = hit.instance;
+      const sources = freeInstanceSourceObjects(instance);
+      dragSession = { kind: "free-instance", mode: "block", item: instance, sketchId: instance.sketchId,
+        startPointer: pointer, startX: instance.x, startY: instance.y,
+        variableAllowed: (v) => !sources.has(v.object) && !(v.object === instance && v.prop === "rotation") };
+      attachLocalSolveContext(dragSession);
+      canvas.classList.add("is-dragging");
+      canvas.setPointerCapture(e.pointerId);
+      setHint(applicationText("インスタンス全体を移動中", "Moving the whole instance"));
+      draw();
+      return;
+    }
     const resolved = resolveDerivedDragSource(hit, pointer);
     clearSelection();
     selectedGeometryInstances = hit?.instance ? [hit.instance] : [];
@@ -19028,6 +19240,11 @@
     dragSession.pointerMap = resolved.mapPointer;
     dragSession.derivedInstance = hit.instance;
     dragSession.derivedSource = resolved.item;
+    const placements = new Set();
+    for (let node = hit.item; node?.derivedProjection; node = node.sourceElement) {
+      if (node.derivedInstance?.type === "free") placements.add(node.derivedInstance);
+    }
+    if (placements.size) dragSession.variableAllowed = (v) => !placements.has(v.object);
     attachLocalSolveContext(dragSession);
     canvas.classList.add("is-dragging");
     canvas.setPointerCapture(e.pointerId);
@@ -19045,6 +19262,22 @@
     }
     for (const p of session.points || []) seeds.push(p.point);
     return seeds;
+  }
+
+  function freeInstanceSourceObjects(instance) {
+    const seen = new Set();
+    const visit = (item) => {
+      if (!item || seen.has(item)) return;
+      seen.add(item);
+      for (const point of geometryInstanceSourcePoints(item)) if (point !== item) visit(point);
+      if (item.blockInstance) seen.add(item.blockInstance);
+      if (item.derivedInstance) {
+        seen.add(item.derivedInstance);
+        for (const ref of geometryInstanceDependencyRefs(item.derivedInstance)) visit(resolveGeometryRef(ref));
+      }
+    };
+    for (const ref of instance.sources) visit(resolveGeometryRef(ref));
+    return seen;
   }
 
   function pointCoordinateFreedomRank(analysis, pointEntries, tolerance = 1e-8) {
@@ -19090,6 +19323,7 @@
     ].filter(Boolean);
     session.projectionShapeLocked = sketchProjectionConstraintsAffectingItems(projectionTouched).length > 0;
     session.local = localSolveContextFromSeeds(dragSessionSeeds(session), session.sketchId);
+    if (session.variableAllowed) session.local.variables = session.local.variables.filter(session.variableAllowed);
     if ((session.kind === "block" || session.kind === "block-rotation") && session.item && !session.item.fixed) {
       const existing = new Set(session.local.variables.filter((variable) => variable.object === session.item).map((variable) => variable.prop));
       if (!existing.has("x")) session.local.variables.push({ object: session.item, prop: "x", label: `${session.item.id}.x` });
@@ -19174,6 +19408,7 @@
   }
 
   function selectHitOnly(hitP, hitL, hitC, hitA, hitArcEnd) {
+    treeSelectedGeometryInstances.clear();
     selectedDimensionConstraint = null;
     selectedConstraint = null;
     selectedBlockInstances = [];
@@ -19700,6 +19935,7 @@
   }
 
   function dragLabel(session) {
+    if (session.kind === "free-instance") return applicationText("インスタンス移動", "Instance move");
     if (session.mode === "block") return applicationText("ブロック移動", "Block move");
     if (session.mode === "block-rotation") return applicationText("ブロック回転", "Block rotation");
     if (session.kind === "selection") return applicationText("選択移動", "Selection move");
@@ -21219,7 +21455,7 @@
       secondary: blockDefinitionById(item.definitionId)?.name || item.definitionId,
     };
     if (target.kind === "geometry-instance") return {
-      icon: toolbarSvgMarkup(target.item.type === "mirror" ? "#toolMirror" : target.item.type === "pattern" ? "#toolPattern" : "#toolSketchProjection"),
+      icon: toolbarSvgMarkup(target.item.type === "free" ? "#toolFreeInstance" : target.item.type === "mirror" ? "#toolMirror" : target.item.type === "pattern" ? "#toolPattern" : "#toolSketchProjection"),
       type: applicationText("派生インスタンス", "Derived Instance"),
       id: item.id,
       secondary: geometryInstanceTypeLabel(item.type),
@@ -21838,6 +22074,10 @@
       canvas.setPointerCapture(e.pointerId);
       return;
     }
+    if (mode.startsWith("free-instance-")) {
+      placeFreeInstance(snapForDrawing(p));
+      return;
+    }
     if (mode === "mirror-axis" || mode === "pattern-direction") {
       e.preventDefault();
       const operand = hitDerivedProjectionOperand(p.x, p.y) || hitBlockProjectionOperand(p.x, p.y) || (hitL ? makeConstraintOperand("line", { line: hitL }) : null);
@@ -22132,6 +22372,7 @@
 
     if (hitDerivedGeometry && drawingHitIsTop(hitDerivedGeometry.instance)) {
       if (multiSelect) {
+        treeSelectedGeometryInstances.clear();
         if (!selectedGeometryInstances.includes(hitDerivedGeometry.instance)) selectedGeometryInstances.push(hitDerivedGeometry.instance);
         else selectedGeometryInstances = selectedGeometryInstances.filter((instance) => instance !== hitDerivedGeometry.instance);
         selectedDimensionConstraint = null;
@@ -22261,6 +22502,11 @@
 
     const p = coordinatePoint;
     lastPointerWorld = p;
+    if (mode.startsWith("free-instance-")) {
+      pointerPreview = snapForDrawing(p);
+      draw();
+      return;
+    }
     if (mode === "hatch" || mode === "hatch-repair") {
       clearSnap();
       clearCanvasHover();
@@ -22880,7 +23126,7 @@
     }
 
     if (session.item && model.blockInstances.includes(session.item)) invalidateBlockProjectionCache(session.item.id);
-    const stabilized = stabilizeActiveParameterNamespace(session.sketchId || activeSketchId());
+    const stabilized = stabilizeActiveParameterNamespace(session.sketchId || activeSketchId(), { variableAllowed: session.variableAllowed });
     if (!stabilized.success || stabilized.dependent?.success === false || stabilized.result.errorNorm > CONSTRAINT_ACCEPT_ERROR) {
       if (session.parameterDragSnapshot) restoreModelState(session.parameterDragSnapshot);
       clearSketchSolveState(session.sketchId || activeSketchId());
@@ -23307,6 +23553,15 @@
 
     if (e.key === "Escape") {
       e.preventDefault();
+      if (mode.startsWith("free-instance-")) {
+        freeInstancePlacement = null;
+        geometryInstanceCommandSources = [];
+        mode = "select";
+        updateUI({ refreshAnalysis: false });
+        updateToolbar();
+        draw();
+        return;
+      }
       if (mode === "mirror-axis" || mode === "pattern-direction") {
         geometryInstanceCommandSources = [];
         mode = "select";
@@ -23994,6 +24249,7 @@
   document.getElementById("toolCenterline")?.addEventListener("click", startCenterlineCommand);
   document.getElementById("toolCircleCenterCross")?.addEventListener("click", startCircleCenterCrossCommand);
   document.getElementById("toolSketchProjection")?.addEventListener("click", startSketchProjectionCommand);
+  document.getElementById("toolFreeInstance")?.addEventListener("click", () => startGeometryInstanceCommand("free"));
   document.getElementById("toolMirror")?.addEventListener("click", () => startGeometryInstanceCommand("mirror"));
   document.getElementById("toolPattern")?.addEventListener("click", () => startGeometryInstanceCommand("pattern"));
 

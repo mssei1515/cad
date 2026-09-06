@@ -1361,6 +1361,10 @@
         vs.push({ object: instance, prop: "y", label: `${instance.id}.y` });
         if (!instance.rotationLocked) vs.push({ object: instance, prop: "rotation", label: `${instance.id}.rotation` });
       }
+      for (const instance of this.model.geometryInstances || []) {
+        if (instance.type !== "free") continue;
+        for (const prop of ["x", "y", "rotation"]) vs.push({ object: instance, prop, label: `${instance.id}.${prop}` });
+      }
       for (const constraint of this.model.constraints || []) {
         if (constraint instanceof PointOnSplineConstraint && constraint.enabled !== false) {
           vs.push({ object: constraint, prop: "parameter", label: `${constraint.point.id}-${constraint.spline.id}.t`, min: 0, max: 1 });
