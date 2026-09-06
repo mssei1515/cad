@@ -91,8 +91,10 @@ test("selection descends within an instance, resets for another instance and tre
   expect((await state(page)).selectedGeometry).toMatchObject({ id: "FI1@L2" });
 });
 
-test("free placement command previews rotation and reflection, cancels and round trips", async ({ page }) => {
+test("synchronized instance command previews rotation and reflection, cancels and round trips", async ({ page }) => {
   await fixture(page, 0);
+  await expect(page.locator("#toolFreeInstance")).toHaveAttribute("aria-label", "同期インスタンス");
+  await expect(page.locator('[data-menu-tool="toolFreeInstance"]')).toHaveText("同期インスタンス");
   await page.evaluate(() => window.__jot2dTest.selectGeometryIdsForTest({ lines: ["L1", "L2", "L3", "L4"] }));
   await page.click("#toolFreeInstance");
   await clickWorld(page, { x: -70, y: -20 });

@@ -142,7 +142,7 @@
     "#f9a8d4", "#db2777", "#9d174d",
   ];
   const UI_TRANSLATIONS = [
-    ["自由配置インスタンス", "Free Instance"],
+    ["同期インスタンス", "Synchronized Instance"],
     ["ファイル", "File"], ["編集", "Edit"], ["ヘルプ", "Help"],
     ["上書き保存", "Overwrite Save"], ["名前を付けて保存", "Save As"], ["開く", "Open"], ["Parameter…", "Parameters…"], ["ドキュメント設定", "Document Settings"], ["アプリケーション設定", "Application Settings"],
     ["元に戻す", "Undo"], ["やり直す", "Redo"], ["削除", "Delete"], ["選択", "Select"], ["選択・ドラッグ", "Select / Drag"],
@@ -2597,7 +2597,7 @@
   }
 
   function geometryInstanceTypeLabel(type) {
-    if (type === "free") return applicationText("自由配置インスタンス", "Free Instance");
+    if (type === "free") return applicationText("同期インスタンス", "Synchronized Instance");
     if (type === "mirror") return applicationText("ミラー", "Mirror");
     if (type === "pattern") return applicationText("直線パターン", "Linear Pattern");
     return applicationText("スケッチ投影", "Sketch Projection");
@@ -4572,9 +4572,9 @@
       mode = "select";
       clearSelection();
       selectedGeometryInstances = [instance];
-      recordHistory("自由配置インスタンス追加");
+      recordHistory("同期インスタンス追加");
       updateUI();
-      setHint(applicationText("自由配置インスタンスを作成しました", "Free instance created"));
+      setHint(applicationText("同期インスタンスを作成しました", "Synchronized instance created"));
     }
     updateToolbar();
     draw();
@@ -4611,7 +4611,7 @@
       setHint(applicationText("拘束が成立しないため配置の変更を戻しました", "Placement change was restored because constraints could not be satisfied."), "error");
       return false;
     }
-    recordHistory("自由配置インスタンス設定変更");
+    recordHistory("同期インスタンス設定変更");
     return true;
   }
 
