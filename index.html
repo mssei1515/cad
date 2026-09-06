@@ -42,7 +42,7 @@
         <details class="app-menu"><summary>Geometry</summary><div class="menu-popover menu-command-list">
           <button type="button" data-menu-tool="toolPoint">点</button><button type="button" data-menu-tool="toolLine">線</button><button type="button" data-menu-tool="toolCenterline">中心線</button><button type="button" data-menu-tool="toolCircleCenterCross">円中心十字線</button>
           <button type="button" data-menu-tool="toolRectangle">矩形</button><button type="button" data-menu-tool="toolSlot">長穴</button><button type="button" data-menu-tool="toolCircle">円</button>
-          <button type="button" data-menu-tool="toolArc">円弧</button><button type="button" data-menu-tool="toolThreePointArc">3点円弧</button><button type="button" data-menu-tool="toolSpline">スプライン</button><button type="button" data-menu-tool="toolSketchProjection">スケッチ投影</button><button type="button" data-menu-tool="toolMirror">ミラー</button><button type="button" data-menu-tool="toolPattern">直線パターン</button><button type="button" data-menu-tool="toolTrim">トリム</button>
+          <button type="button" data-menu-tool="toolArc">円弧</button><button type="button" data-menu-tool="toolThreePointArc">3点円弧</button><button type="button" data-menu-tool="toolSpline">スプライン</button><button type="button" data-menu-tool="toolSketchProjection">スケッチ投影</button><button type="button" data-menu-tool="toolFreeInstance">同期インスタンス</button><button type="button" data-menu-tool="toolMirror">ミラー</button><button type="button" data-menu-tool="toolPattern">直線パターン</button><button type="button" data-menu-tool="toolTrim">トリム</button>
           <button type="button" data-menu-tool="toolHatch">ハッチング</button>
           <button type="button" data-menu-tool="toolFillet">フィレット</button><button type="button" data-menu-tool="toolOffset">オフセット</button>
         </div></details>
@@ -89,6 +89,7 @@
         <button id="toolThreePointArc" class="tool-button" type="button" title="3点円弧" aria-label="3点円弧"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 17a9 9 0 0 1 16 0"/><circle cx="4" cy="17" r="1.6"/><circle cx="12" cy="8" r="1.6"/><circle cx="20" cy="17" r="1.6"/></svg></button>
         <button id="toolSpline" class="tool-button" type="button" title="スプライン" aria-label="スプライン"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 17c3-10 6-10 8-5s5 5 8-5"/><circle cx="4" cy="17" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="20" cy="7" r="1.5"/></svg></button>
         <button id="toolSketchProjection" class="tool-button" type="button" title="スケッチ投影" aria-label="スケッチ投影"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" aria-hidden="true"><title>スケッチ投影</title><path class="projection-source" d="M2 3H8V7H16V3H22" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="2.5 2.5"/><path class="projection-ray" d="M5 9.5V14M3 12L5 14L7 12M12 9.5V14M10 12L12 14L14 12M19 9.5V14M17 12L19 14L21 12" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><path class="projection-target" d="M2 17H8V21H16V17H22" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+        <button id="toolFreeInstance" class="tool-button" type="button" title="同期インスタンス" aria-label="同期インスタンス"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" aria-hidden="true"><rect x="3" y="3" width="10" height="8" stroke="currentColor" stroke-width="1.7"/><path d="M11 14L18 11L22 19L15 22Z" stroke="currentColor" stroke-width="1.7"/><path d="M6 14V18H10" stroke="currentColor" stroke-width="1.5"/></svg></button>
         <button id="toolMirror" class="tool-button" type="button" title="ミラー" aria-label="ミラー"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 2V22" stroke="currentColor" stroke-width="1.6" stroke-dasharray="2 2"/><path d="M9 5L3 8V16L9 19V5ZM15 5L21 8V16L15 19V5Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg></button>
         <button id="toolPattern" class="tool-button" type="button" title="直線パターン" aria-label="直線パターン"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" aria-hidden="true"><rect x="2" y="8" width="4" height="8" stroke="currentColor" stroke-width="1.7"/><rect x="10" y="8" width="4" height="8" stroke="currentColor" stroke-width="1.7"/><rect x="18" y="8" width="4" height="8" stroke="currentColor" stroke-width="1.7"/><path d="M6 5H18M16 3L18 5L16 7" stroke="currentColor" stroke-width="1.5"/></svg></button>
         <button id="toolHatch" class="tool-button" type="button" title="ハッチング" aria-label="ハッチング"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4.5" y="5" width="15" height="14" rx="1"/><path d="M5 15l9-9M6 19L19 6M11 19l8-8M5 10l4-4"/></svg></button>
@@ -148,6 +149,8 @@
   <dialog id="blockDefinitionsDialog" class="settings-dialog block-definitions-dialog"><form method="dialog"><header><strong>ブロック定義</strong><button value="cancel">×</button></header><section><div id="blockList" class="block-definition-list"></div></section><footer><button value="cancel">閉じる</button></footer></form></dialog>
   <dialog id="colorPaletteDialog" class="settings-dialog color-palette-dialog"><form method="dialog"><header><strong>カラーパレット</strong><button value="cancel">×</button></header><section><h3>標準色</h3><div id="defaultColorPalette" class="color-palette-grid"></div><h3>このファイルで使用中の色</h3><div id="usedColorPalette" class="color-palette-grid"></div><div class="settings-row color-custom-row"><label for="customColorPicker">任意の色</label><input id="customColorPicker" type="color" value="#111827" /></div></section><footer><button value="cancel">キャンセル</button><button id="applyCustomColorBtn" class="primary" type="button">適用</button></footer></form></dialog>
 
+  <dialog id="choiceDialog" class="settings-dialog choice-dialog" aria-labelledby="choiceDialogTitle" aria-describedby="choiceDialogMessage"><form method="dialog"><header><strong id="choiceDialogTitle" data-choice-title></strong><button type="button" data-choice-close>×</button></header><section><p id="choiceDialogMessage" data-choice-message></p></section><footer data-choice-actions></footer></form></dialog>
+
   <script>
     (() => {
       const loadId = Date.now().toString(36);
@@ -163,6 +166,7 @@
         "constraint_solver.js",
         "edit_history.js",
         "interaction_profiler.js",
+        "choice_dialog.js",
         "app.js",
       ];
       document.write(sources.map((source) => `<script src="./${source}?load=${loadId}"><\/script>`).join(""));

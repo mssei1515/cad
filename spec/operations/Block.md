@@ -60,6 +60,8 @@ ToolbarまたはBlock menuのBlock作成commandを、対象選択がある状態
 
 選択内容の拘束寸法式は作成時点の評価値による数値式へ固定し、新しいDefinition内で新規`dN`を付与する。Document ParameterはDefinitionへ複製しない。
 
+選択 Geometry から作成したBlockをEditorで「完了」すると、draftの検証後、元Objectを置換する前に回転設定の確認ダイアログを表示する。「回転ロックして作成」（初期フォーカス）は新規Instanceの`rotationLocked = true`、「自由回転で作成」は`false`で作成する。「キャンセル」、×、Escはdraftを保持してEditorへ戻り、作成を確定しない。選択結果は作成と同じUndo/Redo単位に含め、保存・再読込でも保持する。空Definitionの作成完了や既存Definitionの編集完了ではこの確認を表示しない。Definitionの通常配置時の回転設定は従来どおり配置Propertiesで指定する。
+
 次は作成を拒否する。
 
 - 選択 Point を非選択 Geometry と共有している。
@@ -125,6 +127,7 @@ Block Editor はCanvasを太枠で囲まず、通常画面の白とは異なる�
 - ドラッグは `x`, `y` を変更する。
 - 回転ハンドルは外接範囲中心を固定したまま `rotation` と補正 `x`, `y` を変更する。
 - `fixed` は `x`, `y`, `rotation` の3自由度を固定する。
+- 固定コマンド開始後に内部Geometryを選ぶと、配置先SketchへそのGeometryだけの固定拘束を追加／解除する。Pointは位置、Lineは両端位置、Circleは中心と半径、Arc本体は中心・半径・両端角度、Arc端点はその端点位置を固定する。Instance全体の`fixed`と回転ロック、Definitionは変更しない。自由回転中のPoint固定では、その点を支点とする回転自由度が残る。
 - 直交回転ロック中は `rotation` を solve 変数に含めない。
 - 自由回転から直交ロックへ戻すと最寄り90°へ合わせ、既存拘束が成立しなければ変更をロールバックする。
 - Propertiesから直交角度を変更するときは表示中心を維持して回転し、既存拘束が成立しなければ変更全体をロールバックして履歴へ追加しない。全固定中は角度選択を無効にする。

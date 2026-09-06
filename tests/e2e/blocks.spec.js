@@ -1,4 +1,4 @@
-const { test, expect, openTestDocument } = require("./test-fixture");
+const { test, expect, openTestDocument, completeBlockEdit } = require("./test-fixture");
 
 async function openBlockDefinitions(page) {
   const dialog = page.locator("#blockDefinitionsDialog");
@@ -573,7 +573,7 @@ test("creates, places, drags, edits, and reloads local-coordinate blocks", async
   await expect(page.locator("#blockEditorNameInput")).toBeVisible();
   await page.fill("#blockEditorNameInput", "Frame Block");
   expect(await page.evaluate(() => window.__jot2dTest.blockEditorState())).toEqual(expect.objectContaining({ editing: true, isNew: true, hostLineCount: 4, editorLineCount: 4 }));
-  await page.click("#completeBlockEditBtn");
+  await completeBlockEdit(page);
 
   let state = await page.evaluate(() => window.__jot2dTest.blockState());
   expect(state.definitions).toEqual([
@@ -639,7 +639,7 @@ test("block placement defaults to persistent orthogonal rotation lock and can us
   await page.evaluate(() => window.__jot2dTest.resetForBlockCreationUi());
   await openBlocksExplorer(page);
   await page.click("#toolCreateBlock");
-  await page.click("#completeBlockEditBtn");
+  await completeBlockEdit(page);
 
   let state = await page.evaluate(() => window.__jot2dTest.blockState());
   expect(state.instances[0].rotationLocked).toBe(true);
@@ -798,7 +798,7 @@ test("block placement and selected-block settings stay in Properties", async ({ 
   await page.evaluate(() => window.__jot2dTest.resetForBlockCreationUi());
   await openBlocksExplorer(page);
   await page.click("#toolCreateBlock");
-  await page.click("#completeBlockEditBtn");
+  await completeBlockEdit(page);
 
   const instanceId = (await page.evaluate(() => window.__jot2dTest.blockState())).instances[0].id;
   await expect(page.locator("#blockSketchConfig")).toHaveCount(0);
@@ -901,7 +901,7 @@ test("selected block definitions move under a new parent without changing ids or
   const editor = await page.evaluate(() => window.__jot2dTest.blockEditorState());
   expect(editor).toEqual(expect.objectContaining({ depth: 1 }));
   expect(editor.editorBlockInstances).toHaveLength(2);
-  await page.click("#completeBlockEditBtn");
+  await completeBlockEdit(page);
 
   let state = await page.evaluate(() => window.__jot2dTest.blockState());
   expect(state.definitions).toHaveLength(3);
@@ -965,7 +965,7 @@ test("parent creation rejects a block definition that still has unselected insta
   await page.evaluate((blockInstances) => window.__jot2dTest.selectGeometryIdsForTest({ blockInstances }), allInstanceIds);
   await openBlocksExplorer(page);
   await page.click("#toolCreateBlock");
-  await page.click("#completeBlockEditBtn");
+  await completeBlockEdit(page);
   const completed = await page.evaluate(() => window.__jot2dTest.blockState());
   expect(completed.definitions).toHaveLength(2);
   expect(completed.instances).toHaveLength(1);
@@ -982,7 +982,7 @@ test("wrapping selected blocks removes constraints that reference blocks left ou
   await page.evaluate(() => window.__jot2dTest.selectGeometryIdsForTest({ blockInstances: ["BI2"] }));
   await openBlocksExplorer(page);
   await page.click("#toolCreateBlock");
-  await page.click("#completeBlockEditBtn");
+  await completeBlockEdit(page);
 
   const state = await page.evaluate(() => window.__jot2dTest.blockState());
   expect(state.instances.map((instance) => instance.id)).toContain("BI1");
@@ -1007,7 +1007,7 @@ test("canceling parent creation restores moved definitions after nested child ed
   await openBlockDefinitions(page);
   await page.click('.block-item[data-id="B1"] .blockEditBtn');
   await page.locator("#blockEditorNameInput").fill("Edited staged child");
-  await page.click("#completeBlockEditBtn");
+  await completeBlockEdit(page);
   expect(await page.evaluate(() => window.__jot2dTest.blockEditorState())).toEqual(expect.objectContaining({ depth: 1, hostBlockInstanceCount: 2 }));
   expect((await page.evaluate(() => window.__jot2dTest.blockState())).definitions.find((definition) => definition.id === "B1").name).toBe("Edited staged child");
   await page.click("#cancelBlockEditBtn");
@@ -1028,7 +1028,7 @@ test("block editor can wrap existing child blocks and rolls ownership back with 
   await page.evaluate(() => window.__jot2dTest.selectGeometryIdsForTest({ blockInstances: ["BI1", "BI2"] }));
   await openBlocksExplorer(page);
   await page.click("#toolCreateBlock");
-  await page.click("#completeBlockEditBtn");
+  await completeBlockEdit(page);
   const parentEditor = await page.evaluate(() => window.__jot2dTest.blockEditorState());
   expect(parentEditor).toEqual(expect.objectContaining({ depth: 1 }));
   await page.click("#cancelBlockEditBtn");
@@ -1043,8 +1043,8 @@ test("block editor can wrap existing child blocks and rolls ownership back with 
   await page.evaluate(() => window.__jot2dTest.selectGeometryIdsForTest({ blockInstances: ["BI1", "BI2"] }));
   await openBlocksExplorer(page);
   await page.click("#toolCreateBlock");
-  await page.click("#completeBlockEditBtn");
-  await page.click("#completeBlockEditBtn");
+  await completeBlockEdit(page);
+  await completeBlockEdit(page);
   state = await page.evaluate(() => window.__jot2dTest.blockState());
   const room = state.definitions.find((definition) => definition.id === "B2");
   const parent = state.definitions.find((definition) => definition.parentDefinitionId === "B2");
@@ -1200,7 +1200,7 @@ test("block placement escape commits zero rotation after choosing the display ce
   await openBlocksExplorer(page);
   await page.click("#toolCreateBlock");
   await page.fill("#blockEditorNameInput", "Esc Block");
-  await page.click("#completeBlockEditBtn");
+  await completeBlockEdit(page);
 
   const canvas = await page.locator("#canvas").boundingBox();
   await openBlockDefinitions(page);
@@ -1220,7 +1220,7 @@ test("legacy block data migrates into an internal Sketch-1 without changing proj
   await page.evaluate(() => window.__jot2dTest.resetForBlockCreationUi());
   await openBlocksExplorer(page);
   await page.click("#toolCreateBlock");
-  await page.click("#completeBlockEditBtn");
+  await completeBlockEdit(page);
 
   const before = await page.evaluate(() => window.__jot2dTest.blockState());
   const migrated = await page.evaluate(() => window.__jot2dTest.reloadLegacyBlockState());
@@ -1367,13 +1367,13 @@ test("block editor can place existing blocks and create nested blocks that survi
   expect(editor).toEqual(expect.objectContaining({ editing: true, isNew: true, depth: 2, editorLineCount: 1 }));
   await expect(page.locator("#blockList .block-item[data-id]")).toHaveCount(0);
 
-  await page.click("#completeBlockEditBtn");
+  await completeBlockEdit(page);
   editor = await page.evaluate(() => window.__jot2dTest.blockEditorState());
   expect(editor.depth).toBe(1);
   expect(editor.editorLineCount).toBe(0);
   expect(editor.editorBlockInstances).toHaveLength(2);
 
-  await page.click("#completeBlockEditBtn");
+  await completeBlockEdit(page);
   let state = await page.evaluate(() => window.__jot2dTest.blockState());
   expect(state.definitions).toHaveLength(3);
   const room = state.definitions.find((definition) => definition.id === "B2");
@@ -1402,7 +1402,7 @@ test("block editor can place existing blocks and create nested blocks that survi
   await openBlocksExplorer(page);
   await page.click("#toolCreateBlock");
   expect(await page.evaluate(() => window.__jot2dTest.blockEditorState())).toEqual(expect.objectContaining({ depth: 1, editorLineCount: 0 }));
-  await page.click("#completeBlockEditBtn");
+  await completeBlockEdit(page);
   state = await page.evaluate(() => window.__jot2dTest.blockState());
   expect(state.definitions).toHaveLength(4);
   expect(state.instances).toHaveLength(1);
@@ -1473,7 +1473,7 @@ test("deleting child geometry removes parent constraints without interrupting ne
   await page.click('.block-item[data-id="B1"] .blockEditBtn');
   await page.evaluate(() => window.__jot2dTest.selectGeometryIdsForTest({ lines: ["L1"] }));
   await page.click("#deleteSelectionBtn");
-  await page.click("#completeBlockEditBtn");
+  await completeBlockEdit(page);
 
   expect(await page.evaluate(() => window.__jot2dTest.blockEditorState())).toEqual(expect.objectContaining({ depth: 1 }));
   const state = await page.evaluate(() => window.__jot2dTest.blockState());
@@ -1517,7 +1517,7 @@ test("block definition window uses scoped actions and keeps sketch choices visib
   await page.click('.block-item[data-id="B1"] .blockEditBtn');
   expect(await page.evaluate(() => window.__jot2dTest.blockEditorState())).toEqual(expect.objectContaining({ depth: 2 }));
   await page.locator("#blockEditorNameInput").fill("Leaf edited");
-  await page.click("#completeBlockEditBtn");
+  await completeBlockEdit(page);
   expect(await page.evaluate(() => window.__jot2dTest.blockEditorState())).toEqual(expect.objectContaining({ depth: 1 }));
   expect((await page.evaluate(() => window.__jot2dTest.blockState())).definitions.find((definition) => definition.id === "B1").name).toBe("Leaf edited");
 
@@ -1553,7 +1553,7 @@ test("canceling nested block creation restores the containing block and removes 
   await page.evaluate(() => window.__jot2dTest.selectGeometryIdsForTest({ lines: ["L10"] }));
   await openBlocksExplorer(page);
   await page.click("#toolCreateBlock");
-  await page.click("#completeBlockEditBtn");
+  await completeBlockEdit(page);
   expect((await page.evaluate(() => window.__jot2dTest.blockState())).definitions).toHaveLength(3);
   await page.click("#cancelBlockEditBtn");
   const state = await page.evaluate(() => window.__jot2dTest.blockState());
@@ -1646,7 +1646,7 @@ test("hovering a block highlights its projection without showing every geometry 
   await page.evaluate(() => window.__jot2dTest.resetForBlockCreationUi());
   await openBlocksExplorer(page);
   await page.click("#toolCreateBlock");
-  await page.click("#completeBlockEditBtn");
+  await completeBlockEdit(page);
   await page.keyboard.press("Escape");
   expect((await page.evaluate(() => window.__jot2dTest.blockState())).selectedInstanceIds).toEqual([]);
   const interaction = await page.evaluate(() => window.__jot2dTest.blockInteractionPoints());
@@ -1670,7 +1670,7 @@ test("block projection endpoints visibly highlight during constraint commands", 
   await page.evaluate(() => window.__jot2dTest.resetForBlockCreationUi());
   await openBlocksExplorer(page);
   await page.click("#toolCreateBlock");
-  await page.click("#completeBlockEditBtn");
+  await completeBlockEdit(page);
   const endpoint = await page.evaluate(() => window.__jot2dTest.blockProjectionEndpointForTest());
   const before = await canvasPatch(page, endpoint);
 
@@ -1693,7 +1693,7 @@ test("reloaded block editing reserves existing internal geometry and sketch ids"
   await page.evaluate(() => window.__jot2dTest.resetForBlockCreationUi());
   await openBlocksExplorer(page);
   await page.click("#toolCreateBlock");
-  await page.click("#completeBlockEditBtn");
+  await completeBlockEdit(page);
   const beforeReload = await page.evaluate(() => window.__jot2dTest.blockState());
   const originalDefinition = beforeReload.serialized.blockDefinitions[0];
   expect(originalDefinition.points).toHaveLength(4);
@@ -1703,7 +1703,7 @@ test("reloaded block editing reserves existing internal geometry and sketch ids"
   await openBlockDefinitions(page);
   await page.dblclick(".block-item[data-id]");
   const child = await page.evaluate(() => window.__jot2dTest.addBlockEditorChildGeometry());
-  await page.click("#completeBlockEditBtn");
+  await completeBlockEdit(page);
 
   const completed = await page.evaluate(() => window.__jot2dTest.blockState());
   const definition = completed.serialized.blockDefinitions[0];
@@ -1724,12 +1724,12 @@ test("placement and existing instances keep independent enabled internal sketche
   await page.evaluate(() => window.__jot2dTest.resetForBlockCreationUi());
   await openBlocksExplorer(page);
   await page.click("#toolCreateBlock");
-  await page.click("#completeBlockEditBtn");
+  await completeBlockEdit(page);
 
   await openBlockDefinitions(page);
   await page.dblclick(".block-item[data-id]");
   const child = await page.evaluate(() => window.__jot2dTest.addBlockEditorChildGeometry());
-  await page.click("#completeBlockEditBtn");
+  await completeBlockEdit(page);
   let state = await page.evaluate(() => window.__jot2dTest.blockState());
   expect(state.instances[0].enabledSketchIds).toEqual(["S1"]);
 
@@ -1796,7 +1796,7 @@ test("block creation keeps internal constraints and removes every external const
   await openBlocksExplorer(page);
   await page.click("#toolCreateBlock");
   await expect(page.locator("#hint")).toContainText("選択外につながる拘束3件は完了時に解除されます");
-  await page.click("#completeBlockEditBtn");
+  await completeBlockEdit(page);
   await expect(page.locator("#hint")).toContainText("外部拘束3件を解除しました");
 
   const state = await page.evaluate(() => window.__jot2dTest.blockState());

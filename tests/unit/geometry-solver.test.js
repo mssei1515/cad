@@ -23,6 +23,52 @@ const runtime = loadGeometryRuntime();
 const geometry = runtime.GeometrySolver;
 const kernel = runtime.GeometryKernel;
 
+test("observable drag maps output motion to constrained real variables without changing the model", () => {
+  const p1 = new geometry.Point("P1", 0, 0);
+  const p2 = new geometry.Point("P2", 0, 40);
+  const line = new geometry.Line("L1", p1, p2);
+  const constraint = new geometry.VerticalConstraint(line);
+  const model = { points: [p1, p2], lines: [line], circles: [], arcs: [], blockInstances: [], constraints: [constraint] };
+  const solver = new geometry.ConstraintSolver(model);
+  const variables = solver.getVariables();
+  const point = { get x() { return p1.x + p2.x; }, get y() { return 0; } };
+  const targets = solver.observablePointDragTargets({ variables, constraints: model.constraints, lines: [line], point, x: 10, y: 8 });
+  assert.equal(p1.x, 0);
+  assert.equal(p2.x, 0);
+  assert.ok(targets.length > 0);
+  const result = solver.solveSubsetGuided({ variables, constraints: model.constraints, lines: [line], targets });
+  assert.equal(result.success, true);
+  assert.ok(Math.abs(point.x - 10) < 1e-5);
+  assert.ok(Math.abs(p1.x - p2.x) < 1e-6);
+  assert.equal(p1.y, 0);
+  assert.equal(p2.y, 40);
+  assert.equal(solver.observablePointDragTargets({ variables: [], point, x: 30, y: 8 }).length, 0);
+});
+
+test("fixed circular geometry restores center, radius and arc angles after perturbation", () => {
+  for (const kind of ["circle", "arc"]) {
+    const center = new geometry.Point("P1", 12, -8);
+    const primitive = kind === "circle"
+      ? new geometry.Circle("C1", center, 30)
+      : new geometry.Arc("A1", center, 30, -0.4, 1.2);
+    const fixed = new geometry.GeometryFixedConstraint(primitive);
+    const solver = new geometry.ConstraintSolver({ points: [center], lines: [], circles: kind === "circle" ? [primitive] : [], arcs: kind === "arc" ? [primitive] : [], constraints: [fixed], blockInstances: [] });
+    center.x += 7;
+    center.y -= 4;
+    primitive.radiusValue += 6;
+    if (kind === "arc") {
+      primitive.startAngle += 2 * Math.PI + 0.2;
+      primitive.endAngle -= 2 * Math.PI + 0.3;
+    }
+    solver.solve();
+    assert.ok(residualNorm(fixed.rawError()) < 1e-5);
+    assert.ok(Math.abs(center.x - 12) < 1e-5);
+    assert.ok(Math.abs(center.y + 8) < 1e-5);
+    assert.ok(Math.abs(primitive.radius() - 30) < 1e-5);
+    assert.equal(solver.analyzeConstraintState().freeVariableCount, 0);
+  }
+});
+
 test("legacy solver math exports alias the shared geometry kernel", () => {
   assert.equal(geometry.MIN_ORIENTATION_LENGTH, kernel.MIN_ORIENTATION_LENGTH);
   assert.equal(geometry.signedPointLineDistance, kernel.signedPointLineDistance);

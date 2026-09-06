@@ -31,4 +31,10 @@ async function openTestDocument(page) {
   await page.waitForFunction(() => window.__jot2dTest);
 }
 
-module.exports = { test, expect: playwright.expect, openTestDocument };
+async function completeBlockEdit(page) {
+  await page.click("#completeBlockEditBtn");
+  const dialog = page.locator("#choiceDialog");
+  if (await dialog.isVisible()) await dialog.locator('[data-choice-value="true"]').click();
+}
+
+module.exports = { test, expect: playwright.expect, openTestDocument, completeBlockEdit };

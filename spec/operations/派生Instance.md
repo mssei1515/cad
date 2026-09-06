@@ -4,11 +4,11 @@
 
 ## 1. 共通モデル
 
-スケッチ投影、ミラー、直線パターンは、通常Geometryを複製せず、参照元から表示Geometryを動的に生成する「派生Geometryインスタンス」とする。Document直下とBlock Definitionは`geometryInstances[]`を持つ。生成されたPoint／Line／Circle／Arc／Splineは保存配列、solverの自由度、Sketch Treeの個別Geometry分類には含めない。
+スケッチ投影、ミラー、直線パターン、同期インスタンスは、通常Geometryを複製せず、参照元から表示Geometryを動的に生成する「派生Geometryインスタンス」とする。Document直下とBlock Definitionは`geometryInstances[]`を持つ。生成されたPoint／Line／Circle／Arc／Splineは保存配列、solverの自由度、Sketch Treeの個別Geometry分類には含めない。同期インスタンス自身は位置と回転の3自由度を持つ。
 
-派生Geometryの座標値は参照元から動的に生成し、派生側へ独立した座標を保存しない。通常の選択モードでclickするとインスタンス全体を選択する。
+派生Geometryの座標値は参照元から動的に生成し、派生側へ独立した座標を保存しない。通常の選択モードでは、6の段階選択に従って全体または内部Geometryを選択する。
 
-同一Sketch内で完結するミラー／直線パターンの生成Geometryは、その生成Geometryに対応する参照元を逆変換して通常Geometryと同じ移動・形状変更を行える。スケッチ投影および投影を経由する派生chainは、子Sketchから先祖Sketchを変更しないためドラッグできない。
+同一Sketch内で完結するミラー／直線パターンの生成Geometryは、その生成Geometryに対応する参照元を逆変換して通常Geometryと同じ移動・形状変更を行える。スケッチ投影および投影を経由する派生chainは、子Sketchから先祖Sketchを変更しないため形状ドラッグできない。同期インスタンス自身の配置操作は2.4に従う。
 
 拘束・寸法コマンドでは生成Geometryを個別の参照対象として選択できる。スケッチ投影の生成Geometryは所属する子Sketch内の通常Geometryと通常拘束でき、先祖Sketchの参照元はその拘束から変更されない読取専用入力とする。
 
@@ -32,21 +32,41 @@
 
 同じアクティブSketch内で先に選択したGeometry群を、次にclickしたLineの向きへ一定間隔で複数コピーする。`copies`は元Geometryを含まないコピー数、`spacing`はmm単位の正数、`reversed`はLine方向の反転である。方向Lineの回転へ追従する。Propertiesから間隔、コピー数、反転を編集する。
 
+### 2.4 同期インスタンス
+
+同じアクティブSketchのGeometry群を先に選択し、ToolbarまたはGeometry menuの「同期インスタンス」を実行する。通常Geometry、Block Projection、同一Sketchの派生Geometryを参照でき、共有Pointと非循環の参照関係を維持する。
+
+1. 参照元の配置基準点をクリックする。この座標を`origin`として保持する。
+2. 配置先のプレビューを表示し、Propertiesから角度（度）、左右反転、上下反転を指定する。反転は回転前のローカル座標軸で行う。
+3. 配置先をクリックして1個のInstanceを確定する。基準点と配置先には既存の作図スナップを使用する。Escは作成途中のInstanceを破棄する。
+
+拡大縮小は設けない。参照元を残し、形状を共有する。派生側の形状編集・寸法拘束は元形状と、それを参照する他のInstanceにも反映する。配置、回転、鏡像はInstanceごとに保持する。
+
+Canvasの段階選択は6に従う。全体移動では共有形状と回転を維持して、そのInstanceの位置を動かす。内部Geometryのドラッグでは配置変換を維持したうえで、逆変換した参照元の通常ドラッグとして形状を編集する。
+
+配置後も角度と鏡像はPropertiesで変更する。位置X／Yと現在のドラッグ操作（共有形状の編集／全体移動）は読取専用で表示する。共有形状を維持して既存拘束を検証し、成立しなければ変更を戻して履歴を追加しない。インタラクティブな回転ハンドルは設けない。
+
+拘束・寸法コマンドでは生成Geometryを個別に指定する。同じSketchの参照元形状とInstanceの位置・回転を同時にsolveする。例えば派生矩形の辺に長さ寸法を付けると共有形状の高さを規定できる。異なるInstanceから相反する寸法を与えることはできず、通常の拘束失敗と同じrollbackを行う。完全拘束の配置は全体ドラッグで移動しない。
+
+スケッチ投影を経由するchainの形状ドラッグは引き続き禁止する。同期インスタンス自身の全体移動は先祖形状を変更しないため許可する。Block Projectionを元にした場合は既存のBlock編集規則を維持し、Definition内部を外部から変形しない。
+
+Constraint Status Viewでは同期インスタンスを経由した生成Geometryの実際の座標・半径・端点の可動性を、共有形状と配置の拘束Jacobianのnullspaceから評価する。参照元が固定されていても配置が自由なら完全拘束とはしない。Lineの支持線を変えない移動は支持位置拘束として表示する。生成Geometryを重複してDOFへ加えない。
+
 ## 3. 保存形式
 
 Instanceの保存fieldと生成IDは[保存形式](../data/保存形式.md#11-派生geometry-instance)、旧SketchProjectionConstraintからの移行は[読込と互換性](../data/読込と互換性.md)に従う。
 
 ## 4. 表示・外観・Tree
 
-通常表示の外観は[外観](../contracts/外観.md)のAPP-04に従う。Constraint Status Viewでは所属Sketchとの関係とsolve errorを通常Geometryと同じ順で評価したうえで、スケッチ投影Instanceの生成Geometryを完全拘束扱いの黒色とする。ミラー／直線パターンの生成Geometryは、最終的な参照元Geometryの完全・支持・未拘束・矛盾状態を継承して色を決める。派生Geometry自体はDOF集計には加えない。
+通常表示の外観は[外観](../contracts/外観.md)のAPP-04に従う。Constraint Status Viewでは所属Sketchとの関係とsolve errorを通常Geometryと同じ順で評価したうえで、スケッチ投影Instanceの生成Geometryを完全拘束扱いの黒色とする。同期インスタンスを経由しないミラー／直線パターンの生成Geometryは、最終的な参照元Geometryの完全・支持・未拘束・矛盾状態を継承して色を決める。同期インスタンスを経由する場合は2.4の可動性評価を使う。派生Geometry自体はDOF集計には加えない。
 
-Sketch Treeには「派生インスタンス」分類を設け、インスタンスを1 rowとして表示する。生成Geometryは個別rowにしない。Propertiesは種類、ID、参照元、状態、Appearance Overrideを表示し、直線パターンでは設定値も表示する。
+Sketch Treeには「派生インスタンス」分類を設け、インスタンスを1 rowとして表示する。生成Geometryは個別rowにしない。Propertiesは種類、ID、参照元、状態、Appearance Overrideを表示し、直線パターンでは配列設定、同期インスタンスでは角度と鏡像設定も表示する。
 
 ## 5. 編集と削除
 
 同一Sketch内で完結するミラー／直線パターンの生成Geometryは、各派生変換の逆変換を順に適用し、最終的な参照元Geometryの通常ドラッグとして処理する。ミラーでは対称軸を使った逆反射、直線パターンでは対象出現の移動量を差し引いた座標を参照元へ渡す。
 
-派生インスタンスを多段に参照している場合も、最終的な通常Geometryまで逆変換を連鎖する。ただし、chain内にスケッチ投影が含まれる場合は、最終参照元が先祖Sketchにあるためドラッグ全体を拒否する。
+派生インスタンスを多段に参照している場合も、最終的な通常Geometryまで逆変換を連鎖する。ただし、chain内にスケッチ投影が含まれる場合は、最終参照元が先祖Sketchにあるため形状ドラッグ全体を拒否する。同期インスタンス自身の配置操作は2.4に従う。
 
 許可されたドラッグでは参照元の拘束を通常ドラッグと同じようにsolveし、固定済みの参照元は変更しない。最終的な参照元が同一Sketch上のBlock Projectionの場合は、そのBlock Projectionを所有するBlock Instanceを通常のブロックドラッグと同じように移動する。
 
@@ -64,8 +84,19 @@ Enterで選択中の元Geometryから1個の投影Instanceを作って選択mode
 
 ミラーと直線パターンは同じSketchで複写元を先に選択し、ToolbarまたはGeometry menuから開始して軸／方向Lineをclickする。パターンは間隔と元を除くコピー数を入力し、Propertiesで間隔、コピー数、方向反転を編集できる。
 
-通常選択で生成Geometryをclickすると派生Instance全体を選択する。同一Sketch内で完結するミラー／直線パターンは、生成Geometryをドラッグすると派生変換を逆変換して参照元Geometryを通常Geometryと同じ規則で移動・形状変更する。
+同期インスタンス・ミラー・直線パターンは、通常選択で次の段階選択を共通に使用する。click回数はダブルクリックの時間間隔ではなく、現在の選択状態で判定する。
 
-スケッチ投影および投影を経由する派生chainのドラッグは、子Sketchから先祖Sketchを変更しないため拒否する。拘束・寸法コマンド中は生成Geometryを個別対象とする。
+1. 未選択のInstance上で押すとInstance全体を選択し、そのままドラッグすると全体移動する。
+2. 全体選択済みの同じInstance上で押しても、押下時点では全体選択を維持する。そのままドラッグした場合は全体移動する。ドラッグせずにボタンを離してclickを完了した場合にだけ、押下位置の内部Geometryを選択する。その後のドラッグで共有形状を編集する。clickとdragの判別は既存の画面上3pxの移動閾値を使用する。
+3. 内部選択中は同じInstance内のGeometryを続けて選択・編集できる。別Instanceを押すと、そのInstanceの全体選択から始める。空白clickは選択解除する。
+4. Sketch TreeのInstance行は全体選択へ戻す。その後のCanvasドラッグは全体移動し、同じInstanceをドラッグせずclickして初めて内部選択へ進む。Shift／Ctrlの追加選択は従来どおりInstance単位とする。
 
-Constraint Status Viewではスケッチ投影Instanceの生成Geometryを完全拘束扱いの黒色とし、ミラー／直線パターンは生成Geometryごとに最終的な参照元Geometryの完全・支持・未拘束・矛盾状態を継承して通常Geometryと同じ色へ対応させる。
+全体選択では構成図形をまとめて、内部選択では対象Geometryだけを選択表示する。選択状態は保存・履歴の対象外とし、Undo／Redo、読込、Sketch切替で解除する。回転・鏡像は引き続きPropertiesで指定する。
+
+全体移動は共有形状と参照関係を維持する。同期インスタンスは位置だけを動かす。ミラーは対称軸、直線パターンは方向Lineに残された自由度を使い、必要ならその拘束でつながったGeometryも間接的に動かす。軸や方向の参照、間隔、コピー数、反転設定は変えない。参照元Geometryとその上流変換は固定入力として扱い、移動対象自身の軸・方向Lineが参照元と共有される部分も動かさない。固定・拘束によって移動できなければその自由度では動かず、既存の関係を解除したり独立した座標を追加したりしない。直線パターンは全出現が同じ方向に追従し、個別の出現だけを切り離さない。
+
+内部Geometryのドラッグでは派生変換を逆変換し、最終的な参照元Geometryを通常Geometryと同じ規則で移動・形状変更する。スケッチ投影はこの段階選択・全体移動の対象外とする。
+
+スケッチ投影および投影を経由する派生chainの形状ドラッグは、子Sketchから先祖Sketchを変更しないため拒否する。拘束・寸法コマンド中は生成Geometryを個別対象とする。
+
+Constraint Status Viewではスケッチ投影Instanceの生成Geometryを完全拘束扱いの黒色とし、同期インスタンスを経由しないミラー／直線パターンは生成Geometryごとに最終的な参照元Geometryの完全・支持・未拘束・矛盾状態を継承して通常Geometryと同じ色へ対応させる。同期インスタンスを経由する場合は2.4の可動性評価を使う。

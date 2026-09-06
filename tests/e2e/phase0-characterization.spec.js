@@ -1,4 +1,4 @@
-const { test, expect, openTestDocument } = require("./test-fixture");
+const { test, expect, openTestDocument, completeBlockEdit } = require("./test-fixture");
 const fs = require("fs");
 const path = require("path");
 const { phase0DocumentFixture } = require("../fixtures/phase0-document");
@@ -345,7 +345,7 @@ test("block instance and definition deletion clean projection references", async
   expect(linePoint).not.toBeNull();
   await page.mouse.click(linePoint.x, linePoint.y);
   await page.click("#deleteSelectionBtn");
-  await page.click("#completeBlockEditBtn");
+  await completeBlockEdit(page);
   const afterDefinitionEdit = await page.evaluate(() => window.__jot2dTest.serializedModelForTest());
   expect(afterDefinitionEdit.blockDefinitions.find((definition) => definition.id === "B2").lines.map((line) => line.id)).toEqual(["LB20"]);
   expect(afterDefinitionEdit).not.toHaveProperty("presentationSheets");

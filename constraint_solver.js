@@ -526,6 +526,33 @@
     }
   }
 
+  class GeometryFixedConstraint extends Constraint {
+    constructor(geometry, values = null) {
+      super(`図形固定 ${geometry.id}`, 1);
+      this.geometry = geometry;
+      this.kind = geometry instanceof Arc ? "arc" : geometry instanceof Circle ? "circle" : "point";
+      const center = this.kind === "point" ? geometry : geometry.center;
+      this.x = values ? values.x : center.x;
+      this.y = values ? values.y : center.y;
+      if (this.kind !== "point") this.radius = values ? values.radius : geometry.radius();
+      if (this.kind === "arc") {
+        this.startAngle = values ? values.startAngle : geometry.startAngle;
+        this.endAngle = values ? values.endAngle : geometry.endAngle;
+      }
+    }
+
+    rawError() {
+      const center = this.kind === "point" ? this.geometry : this.geometry.center;
+      const error = [center.x - this.x, center.y - this.y];
+      if (this.kind !== "point") error.push(this.geometry.radius() - this.radius);
+      if (this.kind === "arc") {
+        error.push(normalizeAngleSigned(this.geometry.startAngle - this.startAngle) * this.radius);
+        error.push(normalizeAngleSigned(this.geometry.endAngle - this.endAngle) * this.radius);
+      }
+      return error;
+    }
+  }
+
   class LineFixedConstraint extends Constraint {
     constructor(line, p1x = line.p1.x, p1y = line.p1.y, p2x = line.p2.x, p2y = line.p2.y) {
       super(`線固定 ${line.id}`, 1);
@@ -1334,6 +1361,10 @@
         vs.push({ object: instance, prop: "y", label: `${instance.id}.y` });
         if (!instance.rotationLocked) vs.push({ object: instance, prop: "rotation", label: `${instance.id}.rotation` });
       }
+      for (const instance of this.model.geometryInstances || []) {
+        if (instance.type !== "free") continue;
+        for (const prop of ["x", "y", "rotation"]) vs.push({ object: instance, prop, label: `${instance.id}.${prop}` });
+      }
       for (const constraint of this.model.constraints || []) {
         if (constraint instanceof PointOnSplineConstraint && constraint.enabled !== false) {
           vs.push({ object: constraint, prop: "parameter", label: `${constraint.point.id}-${constraint.spline.id}.t`, min: 0, max: 1 });
@@ -1483,6 +1514,17 @@
         const { A, b } = this.buildAugmentedSystem(J, F, lambda);
         let dx = LinearAlgebra.solveLeastSquaresQR(A, b);
         dx = this.limitStep(dx);
+        // Arc endpoint equations are periodic. A large angular Newton step
+        // can jump whole turns near a tangent and leave an invalid arc sweep
+        // even when the endpoint residual converges. Keep each linearization
+        // local in angle as well as in model distance.
+        let angleScale = 1;
+        for (let i = 0; i < vars.length; i++) {
+          if (vars[i].prop === "startAngle" || vars[i].prop === "endAngle") {
+            angleScale = Math.min(angleScale, (Math.PI / 2) / Math.max(Math.abs(dx[i]), 1e-12));
+          }
+        }
+        if (angleScale < 1) dx = dx.map((value) => value * angleScale);
         this.applyDelta(vars, dx);
 
         const trialF = this.computeErrorVectorForConstraints(constraints);
@@ -1654,6 +1696,30 @@
 
       const selectedSet = new Set(selected);
       return targetMask.map((_, index) => selectedSet.has(index));
+    }
+
+    observablePointDragTargets({ variables = [], constraints = [], lines = [], point, x, y, errorTolerance = 1e-4 } = {}) {
+      if (!point || variables.length === 0) return [];
+      const analysis = this.analyzeConstraintState({ variables, constraints, lines, errorTolerance });
+      if (!analysis.stable || analysis.nullspaceBasis.length === 0) return [];
+      const target = new DragConstraint(point, x, y);
+      target.weight = 1;
+      const errors = this.computeErrorVectorForConstraints([target]);
+      const jacobian = this.computeJacobianForConstraints(variables, errors, [target]);
+      const scales = variables.map((v) => this.variableMotionScale(v));
+      const basis = LinearAlgebra.orthonormalizeVectors(analysis.nullspaceBasis.map((v) => v.map((value, i) => value * scales[i])))
+        .map((v) => v.map((value, i) => value / scales[i]));
+      const matrix = jacobian.map((row) => basis.map((v) => row.reduce((sum, value, i) => sum + value * v[i], 0)));
+      // Minimum physical motion resolves invisible motions (e.g. sliding a mirror
+      // axis along itself) without inventing extra placement degrees of freedom.
+      const regularization = 1e-6;
+      for (let i = 0; i < basis.length; i++) matrix.push(basis.map((_, j) => i === j ? regularization : 0));
+      const coefficients = LinearAlgebra.solveLeastSquaresQR(matrix, [...errors.map((v) => -v), ...basis.map(() => 0)]);
+      return variables.flatMap((v, i) => {
+        if (Math.hypot(...jacobian.map((row) => row[i])) < 1e-10) return [];
+        const delta = basis.reduce((sum, vector, j) => sum + vector[i] * coefficients[j], 0);
+        return Number.isFinite(delta) ? [{ object: v.object, prop: v.prop, value: v.object[v.prop] + delta, min: v.min }] : [];
+      });
     }
 
     solveSubsetGuided({ variables = [], constraints = [], targets = [], lines = [], errorTolerance = 1e-4, activeTargetVariables = [], targetStepNorm = null } = {}) {
@@ -1894,6 +1960,7 @@
     ArcEndpointOnLineConstraint,
     ArcEndpointFixedConstraint,
     LineFixedConstraint,
+    GeometryFixedConstraint,
     HorizontalConstraint,
     VerticalConstraint,
     PointHorizontalConstraint,
