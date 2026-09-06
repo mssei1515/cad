@@ -5,6 +5,7 @@ async function client(page, point) { return page.evaluate((p) => window.__jot2dT
 async function clickWorld(page, point) { const p = await client(page, point); await page.mouse.click(p.x, p.y); }
 async function drag(page, a, b, whole = false) {
   if (!whole && !(await state(page)).selectedIds.length) await clickWorld(page, a);
+  if (!whole && !(await state(page)).selectedGeometry) await clickWorld(page, a);
   const start = await client(page, a), end = await client(page, b);
   await page.mouse.move(start.x, start.y); await page.mouse.down();
   await page.mouse.move(end.x, end.y, { steps: 8 }); await page.mouse.up();
@@ -49,6 +50,7 @@ for (const type of ["mirror", "pattern"]) {
       const before = await state(page);
       const edge = before.instances[0].lines[1];
       const start = { x: (edge.p1.x + edge.p2.x) / 2, y: (edge.p1.y + edge.p2.y) / 2 };
+      await clickWorld(page, start);
       await drag(page, start, { x: start.x + 8, y: start.y }, true);
       const after = await state(page);
       expect(after.selectedIds).toEqual([instance.id]);
@@ -89,6 +91,32 @@ test("selection descends within an instance, resets for another instance and tre
   const p = await client(page, { x: 40, y: 0 });
   await page.mouse.dblclick(p.x, p.y);
   expect((await state(page)).selectedGeometry).toMatchObject({ id: "FI1@L2" });
+});
+
+test("whole selection survives subsequent drags until an explicit internal click completes", async ({ page }) => {
+  const data = await fixture(page, 1);
+  const before = await state(page);
+  await clickWorld(page, { x: 40, y: 0 });
+  await drag(page, { x: 40, y: 0 }, { x: 48, y: 0 }, true);
+  let current = await state(page);
+  expect(current.selectedGeometry).toBeNull();
+  expect(current.serialized.points).toEqual(before.serialized.points);
+  expect(current.serialized.geometryInstances[0].x).toBeCloseTo(8, 3);
+  await drag(page, { x: 48, y: 0 }, { x: 54, y: 0 }, true);
+  expect((await state(page)).selectedGeometry).toBeNull();
+  const p = await client(page, { x: 54, y: 0 });
+  await page.mouse.move(p.x, p.y); await page.mouse.down();
+  expect((await state(page)).selectedGeometry).toBeNull();
+  await page.mouse.up();
+  expect((await state(page)).selectedGeometry).toMatchObject({ id: "FI1@L2" });
+  await drag(page, { x: 54, y: 0 }, { x: 60, y: 0 }, true);
+  current = await state(page);
+  expect(current.serialized.geometryInstances[0].x).toBeCloseTo(14, 3);
+  expect(current.serialized.points[1].x).toBeCloseTo(-24, 3);
+  await selectTree(page, "FI1", data.activeSketchId);
+  await drag(page, { x: 60, y: 0 }, { x: 66, y: 0 }, true);
+  expect((await state(page)).serialized.points).toEqual(current.serialized.points);
+  expect((await state(page)).selectedGeometry).toBeNull();
 });
 
 test("synchronized instance command previews rotation and reflection, cancels and round trips", async ({ page }) => {

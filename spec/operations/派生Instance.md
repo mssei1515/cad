@@ -87,9 +87,9 @@ Enterで選択中の元Geometryから1個の投影Instanceを作って選択mode
 同期インスタンス・ミラー・直線パターンは、通常選択で次の段階選択を共通に使用する。click回数はダブルクリックの時間間隔ではなく、現在の選択状態で判定する。
 
 1. 未選択のInstance上で押すとInstance全体を選択し、そのままドラッグすると全体移動する。
-2. 全体選択済みの同じInstanceをもう一度押すと、ポインタ位置の内部Geometryを選択し、そのままドラッグすると共有形状を編集する。
+2. 全体選択済みの同じInstance上で押しても、押下時点では全体選択を維持する。そのままドラッグした場合は全体移動する。ドラッグせずにボタンを離してclickを完了した場合にだけ、押下位置の内部Geometryを選択する。その後のドラッグで共有形状を編集する。clickとdragの判別は既存の画面上3pxの移動閾値を使用する。
 3. 内部選択中は同じInstance内のGeometryを続けて選択・編集できる。別Instanceを押すと、そのInstanceの全体選択から始める。空白clickは選択解除する。
-4. Sketch TreeのInstance行は全体選択へ戻す。その後に同じInstanceをCanvasで押すと内部選択へ進む。Shift／Ctrlの追加選択は従来どおりInstance単位とする。
+4. Sketch TreeのInstance行は全体選択へ戻す。その後のCanvasドラッグは全体移動し、同じInstanceをドラッグせずclickして初めて内部選択へ進む。Shift／Ctrlの追加選択は従来どおりInstance単位とする。
 
 全体選択では構成図形をまとめて、内部選択では対象Geometryだけを選択表示する。選択状態は保存・履歴の対象外とし、Undo／Redo、読込、Sketch切替で解除する。回転・鏡像は引き続きPropertiesで指定する。
 

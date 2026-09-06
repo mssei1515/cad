@@ -19198,13 +19198,16 @@
   }
 
   function beginDerivedGeometryDrag(e, hit, pointer) {
-    if (["free", "mirror", "pattern"].includes(hit.instance.type) && !selectedGeometryInstances.includes(hit.instance)) {
+    const wholeSelected = selectedGeometryInstances.includes(hit.instance) && selectedInstanceGeometry?.instanceId !== hit.instance.id;
+    if (["free", "mirror", "pattern"].includes(hit.instance.type)
+      && (!selectedGeometryInstances.includes(hit.instance) || wholeSelected)) {
       const instance = hit.instance;
       const sources = geometryInstanceSourceObjects(instance);
       clearSelection();
       selectedGeometryInstances = [instance];
       dragSession = { kind: "free-instance", mode: "block", item: instance, sketchId: instance.sketchId,
         startPointer: pointer, startX: instance.x, startY: instance.y,
+        clickGeometrySelection: wholeSelected ? { instanceId: instance.id, id: hit.item.id, kind: hit.kind, endpoint: hit.endpoint } : null,
         variableAllowed: (v) => !sources.has(v.object) && !(v.object === instance && v.prop === "rotation") };
       if (instance.type !== "free") {
         const item = hit.item;
@@ -23142,6 +23145,10 @@
       return;
     }
     if (!session.previewMoved) {
+      if (session.clickGeometrySelection && e.type !== "pointercancel") {
+        selectedInstanceGeometry = session.clickGeometrySelection;
+        updateGeometrySelectionUI();
+      }
       setHint("図形を選択しました");
       draw();
       return;

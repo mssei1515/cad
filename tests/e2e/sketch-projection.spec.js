@@ -101,6 +101,7 @@ test("sketch projection geometry cannot drag ancestor sources directly or throug
   start = await page.evaluate((point) => window.__jot2dTest.worldClientPositionForTest(point), mirrorCircle.center);
   end = await page.evaluate((point) => window.__jot2dTest.worldClientPositionForTest(point), { x: mirrorCircle.center.x + 5, y: mirrorCircle.center.y - 3 });
   await page.mouse.click(start.x, start.y);
+  await page.mouse.click(start.x, start.y);
   await page.mouse.move(start.x, start.y);
   await page.mouse.down();
   await page.mouse.move(end.x, end.y, { steps: 4 });
@@ -122,6 +123,7 @@ test("same-sketch mirror and pattern geometry inverse-update their original sour
   const patternedMidpoint = { x: (patternedLine.p1.x + patternedLine.p2.x) / 2, y: (patternedLine.p1.y + patternedLine.p2.y) / 2 };
   let start = await page.evaluate((point) => window.__jot2dTest.worldClientPositionForTest(point), patternedMidpoint);
   let end = await page.evaluate((point) => window.__jot2dTest.worldClientPositionForTest(point), { x: patternedMidpoint.x + 5, y: patternedMidpoint.y - 4 });
+  await page.mouse.click(start.x, start.y);
   await page.mouse.click(start.x, start.y);
   await page.mouse.move(start.x, start.y);
   await page.mouse.down();
@@ -152,6 +154,7 @@ test("same-sketch mirror and pattern geometry inverse-update their original sour
     x: arcCenter.x + 9 * Math.cos(0.5),
     y: arcCenter.y + 9 * Math.sin(0.5),
   });
+  await page.mouse.click(start.x, start.y);
   await page.mouse.click(start.x, start.y);
   await page.mouse.move(start.x, start.y);
   await page.mouse.down();
