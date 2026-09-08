@@ -358,6 +358,11 @@
   let centerlineFirstSnap = null;
   let pointStartRollback = null;
   let rectangleStartPoint = null;
+  const numericDrawingInputs = {
+    rectangle: { x: "0", y: "0", width: "", height: "", fixed: false, repeat: false },
+    circle: { x: "0", y: "0", diameter: "", fixed: false, repeat: false },
+  };
+  let numericDrawingPanelMode = null;
   let slotFirstCenter = null;
   let slotSecondCenter = null;
   let lineStartRollback = null;
@@ -9305,6 +9310,7 @@
   }
 
   function cancelActiveDrawOperation() {
+    blankDoubleClickCandidate = null;
     resetCenterlineCommandState();
     rollbackTransientLineStart();
     clearTransientPointRollback();
@@ -14345,12 +14351,16 @@
   }
 
   function drawRectanglePreview() {
-    if (mode !== "rectangle" || !rectangleStartPoint || !pointerPreview) return;
+    if (mode !== "rectangle" || !pointerPreview) return;
+    const values = numericDrawingInputs.rectangle.repeat ? numericDrawingValues("rectangle") : null;
+    const start = values ? pointerPreview : rectangleStartPoint;
+    if (!start) return;
+    drawConstructionPoint(start);
     withCanvasState(() => {
       ctx.strokeStyle = "#2563eb";
       ctx.lineWidth = 2 / viewport.scale;
       ctx.setLineDash([6 / viewport.scale, 5 / viewport.scale]);
-      ctx.strokeRect(rectangleStartPoint.x, rectangleStartPoint.y, pointerPreview.x - rectangleStartPoint.x, pointerPreview.y - rectangleStartPoint.y);
+      ctx.strokeRect(start.x, start.y, values ? values.width : pointerPreview.x - start.x, values ? values.height : pointerPreview.y - start.y);
     });
   }
 
@@ -14389,14 +14399,18 @@
   }
 
   function drawCirclePreview() {
-    if (mode !== "circle" || !circleCenterPoint || !pointerPreview) return;
-    const radius = hypot2(pointerPreview.x - circleCenterPoint.x, pointerPreview.y - circleCenterPoint.y);
+    if (mode !== "circle" || !pointerPreview) return;
+    const values = numericDrawingInputs.circle.repeat ? numericDrawingValues("circle") : null;
+    const center = values ? pointerPreview : circleCenterPoint;
+    if (!center) return;
+    drawConstructionPoint(center);
+    const radius = values ? values.diameter / 2 : hypot2(pointerPreview.x - center.x, pointerPreview.y - center.y);
     withCanvasState(() => {
       ctx.strokeStyle = "#2563eb";
       ctx.lineWidth = 2 / viewport.scale;
       ctx.setLineDash([6 / viewport.scale, 5 / viewport.scale]);
       ctx.beginPath();
-      ctx.arc(circleCenterPoint.x, circleCenterPoint.y, radius, 0, Math.PI * 2);
+      ctx.arc(center.x, center.y, radius, 0, Math.PI * 2);
       ctx.stroke();
     });
   }
@@ -14880,6 +14894,12 @@
     }
     updateHistoryButtons();
     updateCanvasCommandCursor();
+    const drawingPanelMode = numericDrawingMode();
+    if (drawingPanelMode !== numericDrawingPanelMode) {
+      blankDoubleClickCandidate = null;
+      numericDrawingPanelMode = drawingPanelMode;
+      updatePropertiesUI();
+    }
   }
 
   function constructionToggleState(geometryMode = isGeometryMode()) {
@@ -17656,6 +17676,101 @@
       <div class="property-row"><label for="annotationTerminatorSize">${applicationText("端末サイズ", "Terminator size")}</label><div class="property-input-with-unit"><input id="annotationTerminatorSize" data-annotation-style="terminatorSize" type="number" min="0.1" max="100" step="0.1" value="${formatDisplayNumber(style.terminatorSize, 3)}"><span class="property-input-unit" aria-hidden="true">mm</span></div></div>`;
   }
 
+  function numericDrawingMode() {
+    return (mode === "rectangle" || mode === "circle") && !pendingCommand && !pendingConstraintCommand ? mode : null;
+  }
+
+  function numericDrawingValues(kind = mode) {
+    const input = numericDrawingInputs[kind];
+    if (!input) return null;
+    const keys = kind === "rectangle" ? ["x", "y", "width", "height"] : ["x", "y", "diameter"];
+    if (keys.some((key) => String(input[key]).trim() === "" || !Number.isFinite(Number(input[key])))) return null;
+    const values = Object.fromEntries(keys.map((key) => [key, Number(input[key])]));
+    if (kind === "rectangle" && (values.width < MIN_LINE_LENGTH || values.height < MIN_LINE_LENGTH
+      || !Number.isFinite(values.x + values.width) || !Number.isFinite(values.y + values.height)
+      || values.x + values.width === values.x || values.y + values.height === values.y)) return null;
+    if (kind === "circle" && (values.diameter / 2 < MIN_ORIENTATION_LENGTH
+      || !Number.isFinite(values.x + values.diameter) || !Number.isFinite(values.y + values.diameter)
+      || values.x + values.diameter / 2 === values.x || values.y + values.diameter / 2 === values.y)) return null;
+    return { ...values, fixed: input.fixed, repeat: input.repeat };
+  }
+
+  function renderNumericDrawingPanel(panel) {
+    const kind = mode;
+    const input = numericDrawingInputs[kind];
+    const rectangle = kind === "rectangle";
+    const field = (key, ja, en) => `<div class="property-row"><label for="draw-${key}">${applicationText(ja, en)}</label><div class="property-input-with-unit"><input id="draw-${key}" name="${key}" data-draw-field="${key}" type="number" step="any" value="${escapeHtml(input[key])}" required><span class="property-input-unit">mm</span></div></div>`;
+    panel.innerHTML = `<h2 class="property-heading">${applicationText(rectangle ? "矩形の作図" : "円の作図", rectangle ? "Draw rectangle" : "Draw circle")}</h2>
+      <p class="properties-empty">${applicationText("Canvasで指定するか、座標と寸法を入力して作成します。", "Pick on the canvas, or enter coordinates and dimensions.")}</p>
+      <form id="numericDrawingForm" novalidate>
+        <section class="property-section"><h3>${applicationText(rectangle ? "最初の角" : "中心", rectangle ? "First corner" : "Center")}</h3>
+          ${field("x", "X座標", "X coordinate")}${field("y", "Y座標", "Y coordinate")}
+          <div class="property-row"><label for="draw-fixed">${applicationText("位置を固定", "Fix position")}</label><input id="draw-fixed" data-draw-field="fixed" type="checkbox" ${input.fixed ? "checked" : ""}></div>
+        </section>
+        <section class="property-section"><h3>${applicationText("作成寸法", "Dimensions")}</h3>
+          ${rectangle ? field("width", "幅", "Width") + field("height", "高さ", "Height") : field("diameter", "直径", "Diameter")}
+          <p class="properties-empty">${applicationText(rectangle ? "右・下（+X / +Y）へ作成し、幅・高さの拘束寸法を付けます。" : "直径の拘束寸法を付けます。", rectangle ? "Creates toward +X / +Y with width and height dimensions." : "Adds a driving diameter dimension.")}</p>
+          <label class="drawing-repeat-option"><input id="draw-repeat" data-draw-field="repeat" type="checkbox" ${input.repeat ? "checked" : ""}>${applicationText("同じ寸法で連続配置", "Place repeatedly with these sizes")}</label>
+          <p class="properties-empty">${applicationText("連続配置ではCanvasを1クリックするたびに作成します。各形状の寸法は独立しています。", "In repeat mode, each canvas click creates a shape. Each shape has independent dimensions.")}</p>
+        </section>
+        <p id="drawingInputError" class="drawing-input-error" role="alert" hidden></p>
+        <div class="drawing-input-actions"><button id="createNumericShapeBtn" type="submit" class="primary">${applicationText("数値で作成", "Create from values")}</button><button id="finishNumericDrawingBtn" type="button">${applicationText("終了", "Finish")}</button></div>
+      </form>`;
+    panel.oninput = null;
+    panel.onchange = null;
+    panel.onclick = null;
+    const form = panel.querySelector("form");
+    form.addEventListener("input", (event) => {
+      const field = event.target.dataset.drawField;
+      if (!field) return;
+      input[field] = event.target.type === "checkbox" ? event.target.checked : event.target.value;
+      panel.querySelector("#drawingInputError").hidden = true;
+      draw();
+    });
+    form.addEventListener("keydown", (event) => {
+      if (event.key === "Escape" || ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "s")) return;
+      // Keep field editing (including native Undo and Space) out of canvas shortcuts.
+      event.stopPropagation();
+    });
+    form.addEventListener("submit", (event) => {
+      event.preventDefault();
+      if (submitNumericDrawing()) {
+        const xInput = document.getElementById("draw-x");
+        xInput?.focus();
+        xInput?.select();
+      }
+    });
+    panel.querySelector("#finishNumericDrawingBtn").addEventListener("click", () => {
+      if (hasActiveDrawOperation()) cancelActiveDrawOperation();
+      exitDrawMode();
+    });
+    localizeApplicationUI(panel);
+  }
+
+  function setNumericDrawingAnchor(point) {
+    const input = numericDrawingInputs[mode];
+    input.x = formatDisplayNumber(point.x, 6);
+    input.y = formatDisplayNumber(point.y, 6);
+  }
+
+  function submitNumericDrawing(anchor = null) {
+    if (!numericDrawingMode() || rejectRootSketchCreation()) return false;
+    const values = numericDrawingValues();
+    if (!values) {
+      const message = applicationText("有限の座標と、0より大きい有効な寸法を入力してください。", "Enter finite coordinates and valid dimensions greater than zero.");
+      const error = document.getElementById("drawingInputError");
+      if (error) { error.textContent = message; error.hidden = false; }
+      setHint(message, "error");
+      return false;
+    }
+    const pendingAnchor = mode === "rectangle" ? rectangleStartPoint : circleCenterPoint;
+    const point = anchor || (samePosition(values, pendingAnchor, 1e-6) ? pendingAnchor : { x: values.x, y: values.y });
+    const created = mode === "rectangle"
+      ? createRectangleGeometry(point, { x: point.x + values.width, y: point.y + values.height }, { numeric: true, fixed: values.fixed })
+      : createCircleGeometry(point, values.diameter / 2, { numeric: true, fixed: values.fixed });
+    return created;
+  }
+
   function updatePropertiesUI() {
     if (!interactionProfiler.active) return updatePropertiesUIUnprofiled();
     return profileInteractionWork("properties", updatePropertiesUIUnprofiled);
@@ -17664,6 +17779,10 @@
   function updatePropertiesUIUnprofiled() {
     const panel = document.getElementById("propertiesPanel");
     if (!panel) return;
+    if (numericDrawingMode()) {
+      renderNumericDrawingPanel(panel);
+      return;
+    }
     const target = selectedPropertiesTarget();
     if (!target.item && target.kind !== "multiple") {
       panel.innerHTML = '<p class="properties-empty">選択したオブジェクトのプロパティを表示します。</p>';
@@ -20261,17 +20380,66 @@
     }
   }
 
+  function finishCreatedGeometry(snapshot, label) {
+    const solved = stabilizeActiveParameterNamespace(activeSketchId());
+    if (!solved.success) {
+      restoreGeometryMutationState(snapshot);
+      updateUI();
+      setHint(applicationText("拘束を維持できないため作成を戻しました", "Creation rolled back because constraints could not be maintained."), "error");
+      draw();
+      return false;
+    }
+    rectangleStartPoint = null;
+    circleCenterPoint = null;
+    pointerPreview = null;
+    clearSnap();
+    clearSelection();
+    recordHistory(label);
+    updateUI();
+    setHint(applicationText("作成しました。続けて配置できます", "Created. Continue placing shapes."));
+    draw();
+    return true;
+  }
+
+  function createRectangleGeometry(start, end, { numeric = false, fixed = false, snap = null } = {}) {
+    const snapshot = snapshotGeometryMutationState();
+    const p1 = numeric ? addPoint(start.x, start.y, fixed, "endpoint") : endpointAt(start.x, start.y);
+    addPointSnapConstraints(p1, start.snap);
+    const p2 = addPoint(end.x, start.y, false, "endpoint");
+    const p3 = addPoint(end.x, end.y, false, "endpoint");
+    const p4 = addPoint(start.x, end.y, false, "endpoint");
+    addPointSnapConstraints(p3, snap);
+    const lines = [addLine(p1, p2), addLine(p2, p3), addLine(p3, p4), addLine(p4, p1)];
+    if (lines.some((line) => !line)) { restoreGeometryMutationState(snapshot); return false; }
+    lines.forEach((line, index) => pushModelConstraint(index % 2 ? new VerticalConstraint(line) : new HorizontalConstraint(line)));
+    if (numeric) {
+      const offset = 24 / viewport.scale;
+      for (const [a, b, label] of [
+        [p1, p2, { x: (p1.x + p2.x) / 2, y: p1.y - offset }],
+        [p2, p3, { x: p2.x + offset, y: (p2.y + p3.y) / 2 }],
+      ]) {
+        const constraint = new DistanceConstraint(a, b, hypot2(b.x - a.x, b.y - a.y));
+        pushModelConstraint(constraint);
+        const target = targetFromConstraint(constraint);
+        constraint.dimension = dimensionWithLabelAt(target, dimensionFromAnchor(target, label, { allowPointAxis: false }), label);
+      }
+    }
+    return finishCreatedGeometry(snapshot, "矩形追加");
+  }
+
   function handleRectangleClick(p) {
     p = snapForDrawing(p);
     let snap = activeSnap;
     pointerPreview = p;
+    if (numericDrawingInputs.rectangle.repeat) {
+      setNumericDrawingAnchor(p);
+      submitNumericDrawing({ ...p, snap });
+      return;
+    }
     if (!rectangleStartPoint) {
-      rectangleStartPoint = endpointAt(p.x, p.y);
-      addPointSnapConstraints(rectangleStartPoint, snap);
-      selectedPoints = [rectangleStartPoint];
-      selectedLines = [];
-      selectedCircles = [];
-      selectedArcs = [];
+      rectangleStartPoint = { ...p, snap };
+      setNumericDrawingAnchor(p);
+      clearSelection();
       setHint("対角の角をクリックすると矩形を作成します。Escで選択モードに戻ります");
       updateUI();
       draw();
@@ -20283,26 +20451,7 @@
     if (Math.abs(rx) < MIN_LINE_LENGTH) p = { ...p, x: rectangleStartPoint.x + (rx < 0 ? -MIN_LINE_LENGTH : MIN_LINE_LENGTH) };
     if (Math.abs(ry) < MIN_LINE_LENGTH) p = { ...p, y: rectangleStartPoint.y + (ry < 0 ? -MIN_LINE_LENGTH : MIN_LINE_LENGTH) };
     if (snap && !samePosition(p, snap)) snap = null;
-    const p1 = rectangleStartPoint;
-    const p2 = addPoint(p.x, p1.y, false, "endpoint");
-    const p3 = addPoint(p.x, p.y, false, "endpoint");
-    const p4 = addPoint(p1.x, p.y, false, "endpoint");
-    addPointSnapConstraints(p3, snap);
-    const lines = [addLine(p1, p2), addLine(p2, p3), addLine(p3, p4), addLine(p4, p1)].filter(Boolean);
-    if (lines[0]) pushModelConstraint(new HorizontalConstraint(lines[0]));
-    if (lines[1]) pushModelConstraint(new VerticalConstraint(lines[1]));
-    if (lines[2]) pushModelConstraint(new HorizontalConstraint(lines[2]));
-    if (lines[3]) pushModelConstraint(new VerticalConstraint(lines[3]));
-    selectedPoints = [];
-    selectedLines = lines;
-    selectedCircles = [];
-    selectedArcs = [];
-    rectangleStartPoint = null;
-    pointerPreview = null;
-    clearSnap();
-    clearSelection();
-    const result = solveAndRefresh("矩形追加");
-    log(`矩形を追加しました\n自動solve: success=${result.success}`);
+    createRectangleGeometry(rectangleStartPoint, p, { snap });
   }
 
   function addSlotShapeConstraints(sideLine, oppositeLine, endArc, startArc) {
@@ -21202,36 +21351,44 @@
     if (startFilletRadiusPlacement(filletFirstLine, line, pointer)) filletFirstLine = null;
   }
 
+  function createCircleGeometry(start, radius, { numeric = false, fixed = false, snap = null } = {}) {
+    if (!Number.isFinite(radius) || radius < MIN_ORIENTATION_LENGTH) return false;
+    const snapshot = snapshotGeometryMutationState();
+    const center = numeric ? addPoint(start.x, start.y, fixed, "endpoint") : endpointAt(start.x, start.y);
+    addPointSnapConstraints(center, start.snap);
+    const circle = addCircle(center, radius);
+    if (!circle) { restoreGeometryMutationState(snapshot); return false; }
+    addCircularBoundarySnapConstraints(circle, snap);
+    if (numeric) {
+      const constraint = pushModelConstraint(new DiameterConstraint(circle, radius * 2));
+      const target = targetFromConstraint(constraint);
+      const reach = radius + 24 / viewport.scale;
+      const label = { x: center.x + reach / Math.SQRT2, y: center.y - reach / Math.SQRT2 };
+      constraint.dimension = dimensionWithLabelAt(target, dimensionFromAnchor(target, label, { allowPointAxis: false }), label);
+      constraint.dimension.display = { ...constraint.dimension.display, prefix: "Ø" };
+    }
+    return finishCreatedGeometry(snapshot, "円追加");
+  }
+
   function handleCircleClick(p) {
     p = snapForDrawing(p);
     const snap = activeSnap;
     pointerPreview = p;
+    if (numericDrawingInputs.circle.repeat) {
+      setNumericDrawingAnchor(p);
+      submitNumericDrawing({ ...p, snap });
+      return;
+    }
     if (!circleCenterPoint) {
-      const center = endpointAt(p.x, p.y);
-      addPointSnapConstraints(center, snap);
-      circleCenterPoint = center;
-      selectedPoints = [center];
-      selectedLines = [];
-      selectedCircles = [];
-      selectedArcs = [];
+      circleCenterPoint = { ...p, snap };
+      setNumericDrawingAnchor(p);
+      clearSelection();
       setHint("半径位置をクリックすると円を作成します。Escで選択モードに戻ります");
       updateUI();
       draw();
       return;
     }
-    const circle = addCircle(circleCenterPoint, hypot2(p.x - circleCenterPoint.x, p.y - circleCenterPoint.y));
-    if (circle) {
-      addCircularBoundarySnapConstraints(circle, snap);
-      selectedPoints = [];
-      selectedLines = [];
-      selectedCircles = [circle];
-      selectedArcs = [];
-      circleCenterPoint = null;
-      pointerPreview = null;
-      clearSnap();
-      clearSelection();
-      solveAndRefresh("円追加");
-    }
+    createCircleGeometry(circleCenterPoint, hypot2(p.x - circleCenterPoint.x, p.y - circleCenterPoint.y), { snap });
   }
 
   function handleArcClick(p) {
