@@ -419,7 +419,7 @@ test("canceling an in-progress line preserves history and redo", async ({ page }
   await page.keyboard.press("Escape");
   const completed = await page.evaluate(() => window.__jot2dTest.serializedModelForTest());
   expect(completed.lines).toHaveLength(before.lines.length + 1);
-  expect(await page.evaluate(() => window.__jot2dTest.historyState())).toEqual({ ...historyBefore, undoCount: historyBefore.undoCount + 1 });
+  expect(await page.evaluate(() => window.__jot2dTest.historyState())).toEqual({ ...historyBefore, undoCount: historyBefore.undoCount + 1, undoDisabled: false });
   await page.click("#undoBtn");
   expect(exactPersistedDocument(await page.evaluate(() => window.__jot2dTest.serializedModelForTest()))).toEqual(exactPersistedDocument(before));
   const afterUndo = await page.evaluate(() => window.__jot2dTest.historyState());

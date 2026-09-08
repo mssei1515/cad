@@ -1272,7 +1272,7 @@ test("workspace integrates transparent compact Object groups into Sketch Tree an
     modelName: "無題",
     displayName: "無題",
     serializedName: "無題",
-    title: "無題 - Jot2D",
+    title: "● 無題 - Jot2D",
   });
 
   const sketchTree = await page.evaluate(() => {

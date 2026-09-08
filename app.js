@@ -296,6 +296,12 @@
 
   let mode = "select";
   let currentFileHandle = null;
+  let savedDocumentSignature = null;
+  let fileOperationPending = false;
+  let fileSavePending = false;
+  let fileCheckpointKind = "new";
+  let lastFileStatusSnapshot = null;
+  let lastFileStatusSignature = null;
   let selectedPoints = [];
   let selectedLines = [];
   let selectedCircles = [];
@@ -786,7 +792,65 @@
 
   function updateDocumentNameUI() {
     const displayName = effectiveDocumentName();
-    document.title = `${displayName} - Jot2D`;
+    const dirty = hasUnsavedDocumentChanges();
+    document.title = `${dirty ? "● " : ""}${displayName} - Jot2D`;
+    const status = document.getElementById("documentSaveStatus");
+    if (status) {
+      const label = fileSavePending ? applicationText("保存中…", "Saving…")
+        : blockEditSession ? applicationText("ブロック編集中", "Editing block")
+        : dirty ? applicationText("未保存の変更", "Unsaved changes")
+        : fileCheckpointKind === "new" ? applicationText("新規ドキュメント", "New document")
+        : fileCheckpointKind === "download" ? applicationText("ダウンロード開始済み", "Download started")
+        : applicationText("保存済み", "Saved");
+      const text = `${displayName} · ${label}`;
+      if (status.textContent !== text) status.textContent = text;
+      status.title = currentFileHandle ? `${text}\n${currentFileHandle.name}` : text;
+      status.dataset.dirty = String(dirty);
+    }
+  }
+
+  // Compare document content, excluding save timestamps and the active editing scope.
+  function documentContentSignature(data) {
+    const { savedAt, activeSketchId, documentName, ...content } = data;
+    content.blockDefinitions = (content.blockDefinitions || []).map(({ activeSketchId, ...definition }) => definition);
+    return JSON.stringify({ ...content, documentName });
+  }
+
+  function hasUnsavedDocumentChanges() {
+    if (savedDocumentSignature === null) return false;
+    if (blockEditSession) return true;
+    const snapshot = undoStack.at(-1);
+    if (!snapshot) return false;
+    if (snapshot !== lastFileStatusSnapshot) {
+      lastFileStatusSnapshot = snapshot;
+      lastFileStatusSignature = documentContentSignature({ ...JSON.parse(snapshot), documentName: effectiveDocumentName() });
+    }
+    return lastFileStatusSignature !== savedDocumentSignature;
+  }
+
+  function markDocumentFileCheckpoint(kind, data = serializeModel()) {
+    savedDocumentSignature = documentContentSignature(data);
+    fileCheckpointKind = kind;
+    lastFileStatusSnapshot = null;
+    updateDocumentNameUI();
+  }
+
+  async function confirmDocumentReplacement() {
+    if (!blockEditSession && documentContentSignature(serializeModel()) === savedDocumentSignature) return true;
+    const choice = await choiceDialog.show({
+      title: applicationText("未保存の変更があります", "Unsaved changes"),
+      message: applicationText("別のファイルを開く前に、現在の図面を保存しますか？", "Save the current drawing before opening another file?"),
+      choices: [
+        { value: "save", label: applicationText("保存して開く", "Save and open") },
+        { value: "discard", label: applicationText("保存せずに開く", "Open without saving") },
+      ],
+      defaultValue: "save",
+      cancelLabel: applicationText("キャンセル", "Cancel"),
+      closeLabel: applicationText("閉じる", "Close"),
+    });
+    if (choice === "save") return await saveJot2DFile({ replacingDocument: true })
+      && !blockEditSession && documentContentSignature(serializeModel()) === savedDocumentSignature;
+    return choice === "discard";
   }
 
   function escapeHtml(value) {
@@ -7848,6 +7912,7 @@
     const { undo: activeUndo, redo: activeRedo } = activeEditHistory();
     if (undoBtn) undoBtn.disabled = activeUndo.length <= 1;
     if (redoBtn) redoBtn.disabled = activeRedo.length === 0;
+    updateDocumentNameUI();
   }
 
   function resetHistory(label = "initial") {
@@ -8774,45 +8839,66 @@
     return error?.name === "AbortError";
   }
 
-  function ensureFileSystemAccess(method, actionJa, actionEn) {
-    if (fileSystemAccessSupported(method)) return true;
-    const message = applicationText(
-      `このブラウザでは${actionJa}に必要なFile System Access APIを使用できません`,
-      `The File System Access API required to ${actionEn} is not available in this browser.`,
-    );
-    setHint(message, "error");
-    log(message);
-    return false;
-  }
-
   function serializedJot2DFileData() {
     return JSON.stringify(serializeModel(), null, 2);
   }
 
-  async function writeJot2DFile(handle) {
+  async function writeJot2DFile(handle, content) {
     const writable = await handle.createWritable();
-    await writable.write(serializedJot2DFileData());
-    await writable.close();
+    try {
+      await writable.write(content);
+      await writable.close();
+    } catch (error) {
+      try { await writable.abort?.(); } catch (_abortError) { /* Keep the original write error. */ }
+      throw error;
+    }
   }
 
-  async function saveJot2DFile({ saveAs = false } = {}) {
+  function downloadJot2DFile(content, name) {
+    const url = URL.createObjectURL(new Blob([content], { type: JOT2D_FILE_MIME_TYPE }));
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = name;
+    document.body.append(link);
+    try { link.click(); } finally {
+      link.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 60000);
+    }
+  }
+
+  async function saveJot2DFile({ saveAs = false, replacingDocument = false } = {}) {
+    if (fileSavePending || (fileOperationPending && !replacingDocument)) return false;
     if (blockEditSession) {
       setHint("ブロック定義編集を終了してから保存してください", "error");
       return false;
     }
-    if (!ensureFileSystemAccess("showSaveFilePicker", "保存", "save files")) return false;
     let handle = saveAs ? null : currentFileHandle;
+    fileSavePending = true;
+    updateDocumentNameUI();
     try {
-      if (!handle) {
+      const nativeSave = handle || fileSystemAccessSupported("showSaveFilePicker");
+      if (!handle && nativeSave) {
         handle = await window.showSaveFilePicker({
           suggestedName: `${safeDownloadBaseName(model.documentName)}${JOT2D_FILE_EXTENSION}`,
           types: jot2dFilePickerTypes(),
           excludeAcceptAllOption: true,
         });
       }
-      await writeJot2DFile(handle);
-      currentFileHandle = handle;
-      const message = applicationText(`保存しました: ${handle.name}`, `Saved: ${handle.name}`);
+      if (blockEditSession) {
+        setHint("ブロック定義編集を終了してから保存してください", "error");
+        return false;
+      }
+      const content = serializedJot2DFileData();
+      const name = handle?.name || `${safeDownloadBaseName(model.documentName)}${JOT2D_FILE_EXTENSION}`;
+      if (handle) {
+        await writeJot2DFile(handle, content);
+        currentFileHandle = handle;
+      } else {
+        downloadJot2DFile(content, name);
+      }
+      markDocumentFileCheckpoint(handle ? "saved" : "download", JSON.parse(content));
+      const message = handle ? applicationText(`保存しました: ${name}`, `Saved: ${name}`)
+        : applicationText(`ダウンロードを開始しました: ${name}`, `Download started: ${name}`);
       setHint(message);
       log(message);
       return true;
@@ -8825,6 +8911,9 @@
       setHint(message, "error");
       log(message);
       return false;
+    } finally {
+      fileSavePending = false;
+      updateDocumentNameUI();
     }
   }
 
@@ -8832,7 +8921,7 @@
     return saveJot2DFile({ saveAs: true });
   }
 
-  function importFileData(file) {
+  function importFileData(file, { expectedContentSignature = null } = {}) {
     if (!file) return Promise.resolve(false);
     if (blockEditSession) {
       setHint("ブロック定義編集を終了してから読み込んでください", "error");
@@ -8843,8 +8932,20 @@
       const reader = new FileReader();
       reader.addEventListener("load", () => {
         try {
+          if (blockEditSession) {
+            setHint("ブロック定義編集を終了してから読み込んでください", "error");
+            resolve(false);
+            return;
+          }
+          if (expectedContentSignature !== null && documentContentSignature(serializeModel()) !== expectedContentSignature) {
+            setHint(applicationText("読込待機中に図面が変更されたため、ファイルを開く操作を中止しました", "Opening was canceled because the drawing changed while the file was being read."));
+            resolve(false);
+            return;
+          }
           loadModelData(JSON.parse(String(reader.result)), { documentNameOverride: fileNameStem(file.name) });
           solveAndRefresh("ファイル読み込み");
+          resetHistory("ファイル読み込み");
+          markDocumentFileCheckpoint("saved");
           updateDocumentNameUI();
           fitAllGeometryToViewport();
           draw();
@@ -8881,12 +8982,13 @@
   }
 
   async function openJot2DFile() {
+    if (fileOperationPending || fileSavePending) return false;
     if (blockEditSession) {
       setHint("ブロック定義編集を終了してから読み込んでください", "error");
       return false;
     }
-    if (htmlDocumentFilePickerRequested()) return requestDocumentFileInput();
-    if (!ensureFileSystemAccess("showOpenFilePicker", "ファイルを開く操作", "open files")) return false;
+    if (htmlDocumentFilePickerRequested() || !fileSystemAccessSupported("showOpenFilePicker")) return requestDocumentFileInput();
+    fileOperationPending = true;
     try {
       const [handle] = await window.showOpenFilePicker({
         types: jot2dFilePickerTypes(),
@@ -8894,10 +8996,14 @@
         multiple: false,
       });
       if (!handle) return false;
+      if (!await confirmDocumentReplacement()) return false;
+      const expectedContentSignature = documentContentSignature(serializeModel());
+      // Re-read after saving: the chosen file may be the current save target.
       const file = await handle.getFile();
-      const opened = await importFileData(file);
+      const opened = await importFileData(file, { expectedContentSignature });
       if (!opened) return false;
       currentFileHandle = handle;
+      updateDocumentNameUI();
       const message = applicationText(`ファイルを開きました: ${file.name}`, `Opened: ${file.name}`);
       setHint(message);
       log(message);
@@ -8911,6 +9017,8 @@
       setHint(message, "error");
       log(message);
       return false;
+    } finally {
+      fileOperationPending = false;
     }
   }
 
@@ -24501,13 +24609,22 @@
     const input = event.currentTarget;
     const file = input.files?.[0] || null;
     input.value = "";
-    if (!file) return;
-    const opened = await importFileData(file);
-    if (!opened) return;
-    currentFileHandle = null;
-    const message = applicationText(`ファイルを開きました: ${file.name}`, `Opened: ${file.name}`);
-    setHint(message);
-    log(message);
+    if (!file || fileOperationPending || fileSavePending) return;
+    fileOperationPending = true;
+    try {
+      if (!await confirmDocumentReplacement()) return;
+      const opened = await importFileData(file, { expectedContentSignature: documentContentSignature(serializeModel()) });
+      if (!opened) return;
+      currentFileHandle = null;
+      updateDocumentNameUI();
+      const message = applicationText(`ファイルを開きました: ${file.name}`, `Opened: ${file.name}`);
+      setHint(message);
+      log(message);
+    } catch (error) {
+      setHint(applicationText(`ファイル読み込みに失敗しました: ${error.message}`, `Failed to open the file: ${error.message}`), "error");
+    } finally {
+      fileOperationPending = false;
+    }
   });
   document.getElementById("importReferenceImageBtn")?.addEventListener("click", () => document.getElementById("referenceImageFileInput")?.click());
   document.getElementById("referenceImageFileInput")?.addEventListener("change", (event) => {
@@ -28882,4 +28999,12 @@
     canvasResizeObserver.observe(canvas);
   }
   resetHistory("起動");
+  markDocumentFileCheckpoint("new");
+  window.addEventListener("beforeunload", (event) => {
+    const dirty = blockEditSession || fileSavePending
+      || documentContentSignature(serializeModel()) !== savedDocumentSignature;
+    if (!dirty) return;
+    event.preventDefault();
+    event.returnValue = "";
+  });
 })();
