@@ -4023,7 +4023,7 @@
   }
 
   function lineSupportHasConstraintFreedom(line, analysis) {
-    const normal = lineSupportNormal(line);
+    const normal = analysis.lineNormals?.get(line) || lineSupportNormal(line);
     for (const basis of analysis.nullspaceBasis || []) {
       const norm = Math.max(1, Math.sqrt(basis.reduce((sum, value) => sum + value * value, 0)));
       const p1Normal = normal.x * variableDeltaInBasis(line.p1, "x", basis, analysis) + normal.y * variableDeltaInBasis(line.p1, "y", basis, analysis);
@@ -8779,8 +8779,8 @@
     model.circles.push(...circles);
     model.arcs.push(...arcs);
     model.splines.push(...splines);
-    normalizeArcSweeps(model.arcs);
     model.constraints.push(...constraints);
+    normalizeArcSweeps(model.arcs);
     model.parameters = loadedRootNamespace.parameters;
     model.nextDimensionParameterIndex = loadedRootNamespace.nextDimensionParameterIndex;
     refreshReferenceConstraintValidity();
@@ -9895,6 +9895,15 @@
   }
 
   function normalizeArcSweep(arc) {
+    // A display minimum must not overwrite endpoints that participate in the
+    // solved constraint system (notably small fillets).
+    if (model.constraints.some((c) => c.enabled !== false && (
+      (c.arc === arc && typeof c.endpoint === "string")
+      || (c.a === arc && typeof c.endpointA === "string")
+      || (c.b === arc && typeof c.endpointB === "string")
+      || (c instanceof GeometryFixedConstraint && c.geometry === arc)
+      || (c instanceof OffsetChainConstraint && (c.sources.includes(arc) || c.offsets.includes(arc)))
+    ))) return false;
     const twoPi = Math.PI * 2;
     const sweep = arcSweep(arc);
     if (Math.abs(sweep) >= twoPi - 1e-9) {
@@ -19277,6 +19286,7 @@
         item: item.arc,
         endpoint: item.endpoint,
         startPointer: pointer,
+        startEndpoint: arcEndpointPoint(item.arc, item.endpoint),
       };
     }
 
@@ -19440,19 +19450,6 @@
     return orthonormalRows.length;
   }
 
-  function linePointsShareFixedCircularSupport(session, analysis) {
-    const supportsByPoint = (session?.points || []).map((entry) => new Set(
-      (session.local?.constraints || [])
-        .filter((constraint) => constraint instanceof PointOnCircleConstraint && constraint.point === entry.point)
-        .map((constraint) => constraint.primitive),
-    ));
-    if (supportsByPoint.length < 2 || supportsByPoint.some((supports) => supports.size === 0)) return false;
-    return [...supportsByPoint[0]].some((primitive) =>
-      supportsByPoint.every((supports) => supports.has(primitive))
-      && !pointHasConstraintFreedom(primitive.center, analysis)
-      && !objectHasConstraintFreedom(primitive, "radiusValue", analysis));
-  }
-
   function attachLocalSolveContext(session) {
     if (!session) return session;
     const projectionTouched = [
@@ -19472,22 +19469,41 @@
       .filter((p) => session.local.component.has(p) && !p.fixed && !pointLockedByLineFixed(p))
       .map((point) => ({ point, startX: point.x, startY: point.y }));
     session.local.fixedPointCount = model.points.filter((p) => session.local.component.has(p) && (p.fixed || pointLockedByLineFixed(p))).length;
-    // In an anchored one-DOF component, translating both endpoints asks that
-    // DOF to satisfy redundant drag targets. A fixed circle may also connect
-    // independent chords into a larger graph; in that case, count only the
-    // motion visible at this chord's endpoints. Keep the broader component
-    // rule for other line topologies because a single target can destabilize
-    // nonlinear tangent systems during a sparse pointer reversal.
-    if (session.kind === "line" && session.points.length > 1 && session.local.fixedPointCount > 0) {
+    // Count motion visible at the dragged line, rather than unrelated freedom
+    // elsewhere in its component. One visible DOF needs one representative
+    // point even when another attached arc has an independent free endpoint.
+    if (session.kind === "line") {
       const analysis = solver.analyzeConstraintState({
         variables: session.local.variables,
         constraints: session.local.constraints,
         lines: session.local.lines,
       });
-      const fixedCircularChord = analysis.stable
-        && linePointsShareFixedCircularSupport(session, analysis)
-        && pointCoordinateFreedomRank(analysis, session.points) === 1;
-      if (analysis.stable && (analysis.freeVariableCount === 1 || fixedCircularChord)) {
+      const line = session.item;
+      const visibleBasis = [];
+      for (const basis of analysis.nullspaceBasis) {
+        const residual = [line.p1, line.p2].flatMap((point) => ["x", "y"].map((prop) => variableDeltaInBasis(point, prop, basis, analysis)));
+        for (let pass = 0; pass < 2; pass++) for (const previous of visibleBasis) {
+          const factor = residual.reduce((sum, value, i) => sum + value * previous[i], 0);
+          for (let i = 0; i < residual.length; i++) residual[i] -= factor * previous[i];
+        }
+        const norm = vectorNorm(residual);
+        if (norm > 1e-8) visibleBasis.push(residual.map((value) => value / norm));
+      }
+      const freeTranslation = [[1, 0, 1, 0], [0, 1, 0, 1]].every((translation) => {
+        const residual = [...translation];
+        for (const basis of visibleBasis) {
+          const factor = translation.reduce((sum, value, i) => sum + value * basis[i], 0);
+          for (let i = 0; i < residual.length; i++) residual[i] -= factor * basis[i];
+        }
+        return vectorNorm(residual) < 1e-7;
+      });
+      const normal = analysis.lineNormals?.get(line) || lineSupportNormal(line);
+      session.translationReference = analysis.stable && (freeTranslation || !analysis.nullspaceBasis.some((basis) => {
+        const dx = variableDeltaInBasis(line.p2, "x", basis, analysis) - variableDeltaInBasis(line.p1, "x", basis, analysis);
+        const dy = variableDeltaInBasis(line.p2, "y", basis, analysis) - variableDeltaInBasis(line.p1, "y", basis, analysis);
+        return Math.abs(normal.x * dx + normal.y * dy) > 1e-7 * Math.max(1, Math.hypot(...basis));
+      }));
+      if (session.points.length > 1 && session.local.fixedPointCount > 0 && analysis.stable && pointCoordinateFreedomRank(analysis, session.points) === 1) {
         const fixedPoints = model.points.filter((point) =>
           session.local.component.has(point) && (point.fixed || pointLockedByLineFixed(point)));
         const pointActivity = (entry) => {
@@ -19580,6 +19596,7 @@
         // and can amplify a one-pixel cursor step into a large radius jump.
         value: hypot2(pointer.x - session.startCenterX, pointer.y - session.startCenterY),
         min: MIN_ORIENTATION_LENGTH,
+        radialPointer: pointer,
       },
     ];
   }
@@ -19616,6 +19633,8 @@
         object: session.item,
         prop,
         value,
+        endpointPointer: { x: (session.startEndpoint || session.startPointer).x + pointer.x - session.startPointer.x,
+          y: (session.startEndpoint || session.startPointer).y + pointer.y - session.startPointer.y },
       },
     ];
   }
@@ -19702,6 +19721,8 @@
         targets,
         errorTolerance,
         activeTargetVariables: session.guidedTargetVariables || [],
+        referenceState: session.kind === "line" ? session.fullDragState || [] : [],
+        preserveTranslation: Boolean(session.translationReference),
         targetStepNorm,
       }),
     );
@@ -19802,6 +19823,7 @@
 
   function solveGuidedDragWithFallback(session, targets, fallbackExtra, fullSolve, restoreState = null) {
     const targetStep = guidedTargetStepForSession(session, targets);
+    for (const target of targets) target.guidedStepNorm = targetStep.norm;
     const stepNorm = Math.max(dragStepNormForTargets(targets), dragStepNormForExtra(fallbackExtra));
     if (session?.local && session.local.constraints.length === 0) {
       for (const target of targets) {
@@ -19838,6 +19860,10 @@
     const guidedAttemptState = restoreState || solver.clone(session.local?.variables || solver.getVariables());
     let localResult = null;
     let localAcceptError = CONSTRAINT_ACCEPT_ERROR;
+    const acceptablePreview = (result) => result
+      && Number.isFinite(result.errorNorm)
+      && result.errorNorm <= localAcceptError
+      && vectorNorm(solver.computeErrorVectorForConstraints(session.local.constraints)) <= CONSTRAINT_ACCEPT_ERROR;
     let guidedRetryCount = 0;
     // A missed animation frame can collapse a long line translation into one
     // nonlinear solve. Give an exact whole-sketch solve a larger iteration
@@ -19851,6 +19877,16 @@
       && session.local.fixedPointCount === 0
       && targetStep.norm > 50
     ) {
+      const guidedResult = withDragStepNorm(stepNorm, () => solveLocalGuidedDrag(session, targets, targetStep.norm));
+      if (guidedResult?.success && guidedResult.errorNorm <= CONSTRAINT_ACCEPT_ERROR
+        && targets.every((target) => hypot2(target.point.x - target.x, target.point.y - target.y) <= CONSTRAINT_ACCEPT_ERROR)) {
+        session.finalDragConstraints = guidedResult.targetConstraints || [];
+        session.guidedTargetVariables = guidedResult.activeTargetVariables || [];
+        session.lastGuidedPreviewError = guidedResult.errorNorm;
+        commitGuidedTargetStep(session, targetStep);
+        return guidedResult;
+      }
+      solver.restore(guidedAttemptState);
       const fullVariables = sketchSolveVariables(session.sketchId);
       const fullAttemptState = solver.clone(fullVariables);
       const exactResult = withDragStepNorm(
@@ -19890,9 +19926,7 @@
         localResult = withDragStepNorm(stepNorm, () =>
           solveLocalGuidedDrag(session, substepTargets, targetStep.norm / substepCount));
         localAcceptError = Number.isFinite(localResult?.acceptError) ? localResult.acceptError : CONSTRAINT_ACCEPT_ERROR;
-        const acceptable = localResult
-          && Number.isFinite(localResult.errorNorm)
-          && localResult.errorNorm <= localAcceptError;
+        const acceptable = acceptablePreview(localResult);
         if (!acceptable) {
           completed = false;
           break;
@@ -19926,7 +19960,7 @@
     // nonlinear point/arc drags, start with a shorter manifold step to avoid an
     // expensive, often singular full-step solve.
     const canShortenSparseStep = session?.mode !== "block" && session?.mode !== "block-rotation";
-    const shouldTryExactSparseStep = session?.kind === "line";
+    const shouldTryExactSparseStep = session?.kind === "line" || targets.some((target) => target.point);
     const guidedScales = canShortenSparseStep && targetStep.norm > 50
       ? (shouldTryExactSparseStep ? [1, 0.25, 0.125, 0.0625] : [0.25, 0.125, 0.0625])
       : [1, 0.5, 0.25, 0.125, 0.0625];
@@ -19934,9 +19968,7 @@
       if (scale < 1) solver.restore(guidedAttemptState);
       localResult = withDragStepNorm(stepNorm, () => solveLocalGuidedDrag(session, targets, targetStep.norm * scale));
       localAcceptError = Number.isFinite(localResult?.acceptError) ? localResult.acceptError : CONSTRAINT_ACCEPT_ERROR;
-      const locallyAcceptable = localResult
-        && Number.isFinite(localResult.errorNorm)
-        && localResult.errorNorm <= localAcceptError;
+      const locallyAcceptable = acceptablePreview(localResult);
       if (locallyAcceptable) {
         // The nonlinear correction can exhaust its strict iteration budget
         // after already reaching the looser, screen-space preview tolerance.
@@ -19951,7 +19983,7 @@
       }
       guidedRetryCount += 1;
     }
-    if (localResult && localResult.success && localResult.errorNorm <= localAcceptError) {
+    if (localResult?.success && acceptablePreview(localResult)) {
       localResult.guidedRetryCount = guidedRetryCount;
       session.finalDragConstraints = localResult.targetConstraints || [];
       session.guidedTargetVariables = localResult.activeTargetVariables || [];
@@ -26660,6 +26692,7 @@
         const kind = descriptor?.kind;
         const id = descriptor?.id;
         const endpoint = descriptor?.endpoint === "end" ? "end" : "start";
+        const fraction = Number.isFinite(descriptor?.fraction) ? Math.max(0, Math.min(1, descriptor.fraction)) : 0.5;
         let item = null;
         let sessionItem = null;
         let startPointer = null;
@@ -26670,7 +26703,7 @@
         } else if (kind === "line") {
           item = model.lines.find((candidate) => candidate.id === id);
           sessionItem = item;
-          if (item) startPointer = { x: (item.p1.x + item.p2.x) / 2, y: (item.p1.y + item.p2.y) / 2 };
+          if (item) startPointer = { x: item.p1.x + fraction * (item.p2.x - item.p1.x), y: item.p1.y + fraction * (item.p2.y - item.p1.y) };
         } else if (kind === "circle") {
           item = model.circles.find((candidate) => candidate.id === id);
           sessionItem = item;
@@ -26679,7 +26712,7 @@
           item = model.arcs.find((candidate) => candidate.id === id);
           sessionItem = item;
           if (item) {
-            const angle = (item.startAngle + item.endAngle) / 2;
+            const angle = item.startAngle + fraction * (item.endAngle - item.startAngle);
             startPointer = { x: item.center.x + item.radius() * Math.cos(angle), y: item.center.y + item.radius() * Math.sin(angle) };
           }
         } else if (kind === "arc-endpoint") {
@@ -26738,6 +26771,7 @@
             constraintCount: result.constraintCount,
             guidedRetryCount: result.guidedRetryCount,
             pinnedLineTargets: Boolean(result.pinnedLineTargets),
+            radialObjective: Boolean(result.radialObjective),
             exactSparseLine: Boolean(result.exactSparseLine),
             guidedSubstepCount: result.guidedSubstepCount || 0,
             reason: result.reason,
@@ -26746,6 +26780,7 @@
             fallback: result.fallback,
             localErrorNorm: result.localErrorNorm,
             state: snapshot(),
+            constraintState: descriptor.inspectConstraints ? this.constraintStatusesForTest() : undefined,
           });
         }
         const finalResult = solveFinalDragSession(session);
@@ -26753,6 +26788,7 @@
         const baseErrorNorm = vectorNorm(solver.computeErrorVectorForConstraints(sketchSolveConstraints(session.sketchId)));
         return {
           sessionAvailable: true,
+          representativePointId: session.lineDragPoint?.point.id || null,
           startPointer,
           startState,
           previews,
@@ -26764,6 +26800,16 @@
             reason: finalResult.reason,
             state: snapshot(),
           },
+        };
+      },
+      constraintStatusesForTest() {
+        const state = refreshConstraintAnalysis();
+        return {
+          stable: state.analysis.stable,
+          errorNorm: state.analysis.errorNorm,
+          freeDof: state.analysis.freeVariableCount,
+          items: [...state.statuses].filter(([item]) => elementSketchId(item) === activeSketchId())
+            .map(([item, status]) => ({ id: item.id, status })),
         };
       },
       constraintAnalysisForTest() {

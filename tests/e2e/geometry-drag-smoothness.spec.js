@@ -327,11 +327,13 @@ test("keeps additional point, line, circle, arc, and endpoint drags smooth", asy
   await openTestDocument(page);
   const summaries = [];
   const selectedVariants = process.env.CAD_GEOMETRY_VARIANT
-    ? variants.filter((variant) => variant.name === process.env.CAD_GEOMETRY_VARIANT)
+    ? variants.filter((variant) => process.env.CAD_GEOMETRY_VARIANT.split(",").includes(variant.name))
     : variants;
   const selectedDragPaths = process.env.CAD_GEOMETRY_PATH
     ? dragPaths.filter((dragPath) => dragPath.name === process.env.CAD_GEOMETRY_PATH)
     : dragPaths;
+  expect(selectedVariants.length).toBeGreaterThan(0);
+  expect(selectedDragPaths.length).toBeGreaterThan(0);
   for (const variant of selectedVariants) {
     const fixture = fixtureWithoutConstraints(variant.removed);
     const failures = [];
@@ -359,7 +361,13 @@ test("keeps additional point, line, circle, arc, and endpoint drags smooth", asy
       let previousDelta = [0, 0];
       for (let index = 0; index < result.previews.length; index += 1) {
         const preview = result.previews[index];
-        const movement = geometryStateDistance(variant.descriptor, states[index], states[index + 1]);
+        // A constrained center can follow its radius. In that case a large
+        // parameter change may be needed for a small visible circle movement.
+        // Measure the surface displacement at the pointer, not the radius.
+        const surfaceError = (state) => Math.hypot(preview.target.x - state.center.x, preview.target.y - state.center.y) - state.radius;
+        const movement = preview.radialObjective
+          ? Math.abs(surfaceError(states[index]) - surfaceError(states[index + 1]))
+          : geometryStateDistance(variant.descriptor, states[index], states[index + 1]);
         const delta = dragPath.deltas[index];
         const cursorStep = Math.hypot(delta[0] - previousDelta[0], delta[1] - previousDelta[1]);
         const jumpRatio = movement / Math.max(cursorStep, 0.25);

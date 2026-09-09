@@ -13,9 +13,9 @@
   }
 
   function normalizeAngleSigned(angle) {
-    let normalized = angle;
-    while (normalized > Math.PI) normalized -= Math.PI * 2;
-    while (normalized <= -Math.PI) normalized += Math.PI * 2;
+    let normalized = angle % TWO_PI;
+    if (normalized > Math.PI) normalized -= TWO_PI;
+    if (normalized <= -Math.PI) normalized += TWO_PI;
     return normalized;
   }
 

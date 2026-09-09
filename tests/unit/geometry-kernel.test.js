@@ -446,3 +446,13 @@ test("arc parameter conversion and sampling preserve signed interpolation", () =
   assert.ok(Math.abs(startOnly[0].x - samples[0].x) < 1e-12);
   assert.ok(Math.abs(startOnly[0].y - samples[0].y) < 1e-12);
 });
+
+test("signed angle normalization remains bounded for huge and nonfinite inputs", () => {
+  for (const angle of [286832.72524370963, -286832.72524370963, 1e100, -1e100]) {
+    const normalized = kernel.normalizeAngleSigned(angle);
+    assert.ok(normalized > -Math.PI && normalized <= Math.PI);
+  }
+  assert.equal(Number.isNaN(kernel.normalizeAngleSigned(Infinity)), true);
+  assert.equal(Number.isNaN(kernel.normalizeAngleSigned(-Infinity)), true);
+  assert.equal(Number.isNaN(kernel.normalizeAngleSigned(NaN)), true);
+});

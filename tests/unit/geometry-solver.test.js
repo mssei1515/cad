@@ -421,3 +421,208 @@ test("solver satisfies distance and orientation while reporting no remaining fre
   assert.equal(analysis.stable, true);
   assert.equal(analysis.freeVariableCount, 0);
 });
+
+test("contact tangency keeps the same freedom across radius, angle turns and equation ordering", () => {
+  for (const radius of [1e-6, 0.1, 20, 6600]) for (const turns of [0, 45000, -45000]) for (const perturbation of [0, 1e-6, -1e-6]) {
+    const angle = Math.PI + turns * 2 * Math.PI + perturbation;
+    const p = new geometry.Point("contact", 0, 0, true);
+    const a = new geometry.Point("a", 0, -100, true);
+    const b = new geometry.Point("b", 0, 100, true);
+    const line = new geometry.Line("line", a, b);
+    const center = new geometry.Point("center", -radius * Math.cos(angle), -radius * Math.sin(angle));
+    const arc = new geometry.Arc("arc", center, radius, angle, angle + 1);
+    const constraints = [new geometry.ArcEndpointCoincidentConstraint(arc, "start", p),
+      new geometry.PointOnLineConstraint(p, line), new geometry.LineCircleTangentConstraint(line, arc, -1)];
+    const model = { points: [p, a, b, center], lines: [line], circles: [], arcs: [arc], constraints };
+    const solver = new geometry.ConstraintSolver(model);
+    for (const reverse of [false, true]) {
+      const variables = solver.getVariables();
+      const ordered = [...constraints];
+      if (reverse) { variables.reverse(); ordered.reverse(); }
+      const state = solver.analyzeConstraintState({ variables, constraints: ordered, lines: [line] });
+      assert.equal(state.stable, true);
+      assert.equal(state.freeVariableCount, 2, `radius=${radius} turns=${turns} perturbation=${perturbation} reverse=${reverse}`);
+      assert.equal(state.variableFreedom.get(arc).radiusValue, true);
+      assert.equal(state.variableFreedom.get(arc).endAngle, true);
+    }
+  }
+});
+
+test("a tangent contact is inferred from coincidence topology, never proximity", () => {
+  const p = new geometry.Point("p", 0, 0, true);
+  const q = new geometry.Point("q", 0, 0);
+  const end = new geometry.Point("end", 0, 50, true);
+  const line = new geometry.Line("line", p, end);
+  const center = new geometry.Point("center", 20, 0);
+  const arc = new geometry.Arc("arc", center, 20, Math.PI, 1);
+  const tangent = new geometry.LineCircleTangentConstraint(line, arc, -1);
+  const coincidence = new geometry.CoincidentConstraint(q, p);
+  const endpoint = new geometry.ArcEndpointCoincidentConstraint(arc, "start", q);
+  const solver = new geometry.ConstraintSolver({ points: [p, q, end, center], lines: [line], circles: [], arcs: [arc], constraints: [tangent, endpoint] });
+  assert.equal(solver.getConstraints()[0], tangent);
+  solver.model.constraints.push(coincidence);
+  assert.equal(solver.getConstraints()[0].sourceConstraint, tangent);
+  coincidence.enabled = false;
+  assert.equal(solver.getConstraints()[0], tangent);
+});
+
+test("bounded finite differences use the actual interval and restore the variables", () => {
+  const p = new geometry.Point("p", 0, 0, true);
+  const arc = new geometry.Arc("arc", p, 1e-6, 0, 1);
+  const solver = new geometry.ConstraintSolver({ points: [p], lines: [], circles: [], arcs: [arc], constraints: [] });
+  const constraint = new geometry.RadiusConstraint(arc, 1e-6);
+  const vars = solver.getVariables();
+  const matrix = solver.computeJacobianForConstraints(vars, [constraint.error()], [constraint]);
+  assert.ok(Math.abs(matrix[0][0] - 1) < 1e-10);
+  assert.equal(arc.radius(), 1e-6);
+});
+
+test("nonfinite residuals cannot be classified as a stable constrained model", () => {
+  const p = new geometry.Point("p", 0, 0);
+  const constraint = new geometry.Constraint("invalid", 1);
+  constraint.rawError = () => NaN;
+  const solver = new geometry.ConstraintSolver({ points: [p], lines: [], circles: [], arcs: [], constraints: [constraint] });
+  assert.equal(solver.analyzeConstraintState().stable, false);
+});
+
+test("a point constrained to a tangent line and circle has no phantom sliding freedom", () => {
+  for (const offset of [0, 1e-5, -1e-5]) {
+    const center = new geometry.Point('center', 0, 20, true);
+    const p1 = new geometry.Point('p1', -100, 0, true), p2 = new geometry.Point('p2', 100, 0, true);
+    const point = new geometry.Point('contact', offset, 0);
+    const line = new geometry.Line('line', p1, p2);
+    const circle = new geometry.Circle('circle', center, 20);
+    const constraints = [new geometry.RadiusConstraint(circle, 20), new geometry.LineCircleTangentConstraint(line, circle, 1),
+      new geometry.PointOnLineConstraint(point, line), new geometry.PointOnCircleConstraint(point, circle)];
+    const solver = new geometry.ConstraintSolver({ points: [center, p1, p2, point], lines: [line], circles: [circle], arcs: [], constraints });
+    const analysis = solver.analyzeConstraintState();
+    assert.equal(analysis.stable, true);
+    assert.equal(analysis.freeVariableCount, 0);
+    assert.equal(analysis.variableFreedom.get(point).x, false);
+    assert.equal(solver.constraintRankState({ variables: solver.getVariables(), constraints }).rank, analysis.rank);
+    assert.equal(solver.constraintRedundancyState({ variables: solver.getVariables(), constraints }).rank, analysis.rank);
+  }
+});
+
+test("an arc endpoint on a tangent circle preserves exactly the rotation and free endpoint freedoms", () => {
+  for (const perturbation of [0, 1e-6, -1e-6]) for (const mode of ['external', 'internal']) {
+    const fixed = new geometry.Point('fixed', 0, 0, true);
+    const circle = new geometry.Circle('circle', fixed, 20);
+    const center = new geometry.Point('center', mode === 'external' ? 30 : 10, 0);
+    const arc = new geometry.Arc('arc', center, 10, (mode === 'external' ? Math.PI : 0) + perturbation, 1);
+    const constraints = [new geometry.RadiusConstraint(circle, 20), new geometry.RadiusConstraint(arc, 10),
+      new geometry.CircleCircleTangentConstraint(circle, arc, mode), new geometry.ArcEndpointOnCircleConstraint(arc, 'start', circle)];
+    const solver = new geometry.ConstraintSolver({ points: [fixed, center], lines: [], circles: [circle], arcs: [arc], constraints });
+    const before = solver.clone(solver.getVariables());
+    const analysis = solver.analyzeConstraintState();
+    assert.equal(analysis.stable, true);
+    assert.equal(analysis.freeVariableCount, 2, `${mode}/${perturbation}`);
+    for (const entry of before) assert.equal(entry.object[entry.prop], entry.value, 'analysis must not edit geometry');
+  }
+});
+
+test("the bounded drag predictor can move a coupled point without asking a minimum-radius arc to shrink", () => {
+  const point = new geometry.Point('point', 0, 0);
+  const center = new geometry.Point('center', 0, 1e-6);
+  const arc = new geometry.Arc('arc', center, 1e-6, -Math.PI / 2, 0);
+  const constraint = new geometry.ArcEndpointCoincidentConstraint(arc, 'start', point);
+  const solver = new geometry.ConstraintSolver({ points: [point, center], lines: [], circles: [], arcs: [arc], constraints: [constraint] });
+  solver.maxStepNorm = 200;
+  for (const y of [10, -10, 0, 40, -40, 0]) {
+    const result = solver.solveSubsetGuided({ variables: solver.getVariables(), constraints: [constraint], targets: [{ point, x: 0, y }] });
+    assert.equal(result.success, true);
+    assert.ok(Math.abs(point.y - y) < 1e-4, `${point.y} should follow ${y}`);
+    assert.ok(arc.radius() >= 1e-6);
+    assert.ok(residualNorm(constraint.error()) < 1e-4);
+  }
+});
+
+test("contact Jacobians retain the moving tangent line dependencies", () => {
+  const a = new geometry.Point("a", -10, 0), b = new geometry.Point("b", 10, 0);
+  const center = new geometry.Point("center", 0, 5, true), point = new geometry.Point("point", 0, 0);
+  const line = new geometry.Line("line", a, b), circle = new geometry.Circle("circle", center, 5);
+  const constraints = [new geometry.PointOnLineConstraint(point, line), new geometry.PointOnCircleConstraint(point, circle),
+    new geometry.LineCircleTangentConstraint(line, circle, 1)];
+  const solver = new geometry.ConstraintSolver({ points: [a, b, center, point], lines: [line], circles: [circle], arcs: [], constraints });
+  const contact = solver.getConstraints().find((c) => c.sourceConstraint === constraints[1]);
+  const dense = new geometry.Constraint("dense reference", 1);
+  dense.rawError = () => contact.rawError();
+  const variables = solver.getVariables();
+  const sparseJacobian = solver.computeJacobianForConstraints(variables, [contact.error()], [contact]);
+  const denseJacobian = solver.computeJacobianForConstraints(variables, [dense.error()], [dense]);
+  for (let i = 0; i < variables.length; i++) assert.ok(Math.abs(sparseJacobian[0][i] - denseJacobian[0][i]) < 1e-8);
+  assert.ok(Math.abs(sparseJacobian[0][variables.findIndex((v) => v.object === b && v.prop === "y")]) > 0.1);
+});
+
+test("offset joins inherit explicit source tangency without a phantom endpoint degree of freedom", () => {
+  for (const perturbation of [0, 1e-6, -1e-6]) {
+    const ca = new geometry.Point('ca', 0, 0, true), cb = new geometry.Point('cb', 0, 40, true);
+    const a = new geometry.Arc('a', ca, 20, 0, Math.PI / 2), b = new geometry.Arc('b', cb, 20, 3 * Math.PI / 2, Math.PI);
+    const oa = new geometry.Arc('oa', ca, 10, 0, Math.PI / 2 + perturbation), ob = new geometry.Arc('ob', cb, 30, 3 * Math.PI / 2, Math.PI);
+    const tangent = new geometry.CircleCircleTangentConstraint(a, b, 'external');
+    const contact = new geometry.ArcEndpointArcEndpointCoincidentConstraint(a, 'end', b, 'start');
+    const offset = new geometry.OffsetChainConstraint([a, b], [oa, ob], 10);
+    const solver = new geometry.ConstraintSolver({ points: [ca, cb], lines: [], circles: [], arcs: [a, b, oa, ob], constraints: [tangent, contact, offset] });
+    const variables = [{ object: oa, prop: 'endAngle' }, { object: ob, prop: 'startAngle' }];
+    const rank = solver.constraintRankState({ variables, constraints: [tangent, contact, offset] });
+    assert.equal(rank.rank, 2);
+    tangent.enabled = false;
+    assert.equal(solver.getConstraints().find((c) => c.sourceConstraint === offset), undefined);
+  }
+});
+
+test("physical angle scaling lets a circle drag leave endpoint tangencies without locking", () => {
+  const left = new geometry.Point('left', -100, 20, true), right = new geometry.Point('right', 100, 20, true);
+  const support = new geometry.Line('support', left, right);
+  const fixedCenter = new geometry.Point('fixedCenter', 60, 0, true), center = new geometry.Point('center', 20, 0);
+  const circle = new geometry.Circle('circle', fixedCenter, 20), arc = new geometry.Arc('arc', center, 20, 0, Math.PI / 2);
+  const constraints = [new geometry.RadiusConstraint(circle, 20), new geometry.ArcEndpointOnCircleConstraint(arc, 'start', circle),
+    new geometry.ArcEndpointOnLineConstraint(arc, 'end', support)];
+  const solver = new geometry.ConstraintSolver({ points: [left, right, fixedCenter, center], lines: [support], circles: [circle], arcs: [arc], constraints });
+  solver.maxStepNorm = 200;
+  const pointer = { x: 20 + 20 / Math.sqrt(2) + 10, y: 20 / Math.sqrt(2) };
+  const result = solver.solveSubsetGuided({ variables: solver.getVariables(), constraints, lines: [support],
+    targets: [{ object: arc, prop: 'radiusValue', value: Math.hypot(pointer.x - 20, pointer.y), radialPointer: pointer }] });
+  assert.equal(result.success, true);
+  assert.ok(Math.abs(Math.hypot(pointer.x - center.x, pointer.y - center.y) - arc.radius()) < 1e-4);
+  assert.ok(residualNorm(solver.computeErrorVectorForConstraints(constraints)) < 1e-4);
+});
+
+
+test("equal concentric internally tangent circles do not pin an arbitrary arc endpoint angle", () => {
+  const center = new geometry.Point('center', 0, 0, true);
+  const arc = new geometry.Arc('arc', center, 10, 0.7, 1.9);
+  const circle = new geometry.Circle('circle', center, 10);
+  const constraints = [new geometry.RadiusConstraint(arc, 10), new geometry.RadiusConstraint(circle, 10),
+    new geometry.CircleCircleTangentConstraint(arc, circle, 'internal'), new geometry.ArcEndpointOnCircleConstraint(arc, 'start', circle)];
+  const solver = new geometry.ConstraintSolver({points: [center], lines: [], circles: [circle], arcs: [arc], constraints});
+  assert.equal(solver.analyzeConstraintState().freeVariableCount, 2);
+  assert.equal(arc.startAngle, 0.7);
+  assert.ok(residualNorm(solver.computeErrorVectorForConstraints(solver.getConstraints())) < 1e-8);
+});
+
+test("offset contact regularization retains an inconsistent positional join", () => {
+  const ca = new geometry.Point('ca', 0, 0, true), cb = new geometry.Point('cb', 0, 40, true);
+  const a = new geometry.Arc('a', ca, 20, 0, Math.PI / 2), b = new geometry.Arc('b', cb, 20, 3 * Math.PI / 2, 2 * Math.PI);
+  const oa = new geometry.Arc('oa', ca, 10, 0, Math.PI / 2), ob = new geometry.Arc('ob', cb, 10, 3 * Math.PI / 2, 2 * Math.PI);
+  const constraints = [new geometry.CircleCircleTangentConstraint(a, b, 'external'),
+    new geometry.ArcEndpointArcEndpointCoincidentConstraint(a, 'end', b, 'start'), new geometry.OffsetChainConstraint([a, b], [oa, ob], 10)];
+  const solver = new geometry.ConstraintSolver({points: [ca, cb], lines: [], circles: [], arcs: [a, b, oa, ob], constraints});
+  const result = solver.solveSubset({variables: [], constraints});
+  assert.equal(result.success, false);
+  assert.ok(result.errorNorm >= 20);
+});
+
+
+test("a radius prediction crossing zero does not remove a reachable point direction", () => {
+  const center = new geometry.Point('center', -20, 0, true), point = new geometry.Point('point', 0, 0);
+  const arc = new geometry.Arc('arc', center, 20, 0, Math.PI);
+  const constraints = [new geometry.ArcEndpointCoincidentConstraint(arc, 'start', point)];
+  const solver = new geometry.ConstraintSolver({points: [center, point], lines: [], circles: [], arcs: [arc], constraints});
+  solver.maxStepNorm = 200;
+  const result = solver.solveSubsetGuided({variables: solver.getVariables(), constraints, targets: [{point, x: -30, y: 10}]});
+  assert.equal(result.success, true);
+  assert.ok(Math.hypot(point.x + 30, point.y - 10) < 1e-4);
+  assert.ok(Math.abs(arc.radius() - Math.sqrt(200)) < 1e-4);
+  assert.ok(residualNorm(solver.computeErrorVectorForConstraints(constraints)) < 1e-4);
+});

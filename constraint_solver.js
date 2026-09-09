@@ -18,10 +18,7 @@
   const GUIDED_DRAG_MULTI_TARGET_MOTION_FACTOR = 2;
   const GUIDED_DRAG_ACTIVITY_TOLERANCE = 1e-4;
   const GUIDED_DRAG_FAST_TARGET_STEP = 10;
-  const GUIDED_DRAG_FAST_MULTI_TARGET_TOLERANCE = 5e-2;
-  // Direct point coordinates stay precise during previews; curved multi-part
-  // motion uses the relaxed preview tolerance above and is solved exactly on
-  // pointer-up.
+  // Preview correction stays below the constraint-status error threshold.
   const GUIDED_DRAG_SMALL_ERROR_TOLERANCE = 1e-5;
 
   function hypot2(x, y) {
@@ -908,19 +905,18 @@
       const length1 = this.line1.length();
       const length2 = this.line2.length();
       if (this.degenerateAtCreation || this.axis.length() < MIN_ORIENTATION_LENGTH || length1 < MIN_ORIENTATION_LENGTH || length2 < MIN_ORIENTATION_LENGTH) return [0, 0];
-      const reflectedStart = reflectedPointAcrossLine(this.line1.p1, this.axis);
-      const reflectedEnd = reflectedPointAcrossLine(this.line1.p2, this.axis);
-      const reflectedDirection = {
-        x: (reflectedEnd.x - reflectedStart.x) / length1,
-        y: (reflectedEnd.y - reflectedStart.y) / length1,
-      };
-      const line2Direction = {
-        x: this.line2.dx() / length2,
-        y: this.line2.dy() / length2,
-      };
+      // Reflect local displacement vectors. Subtracting reflected world
+      // coordinates amplifies roundoff and invents rank in redundant symmetry.
+      const axisLength = this.axis.length();
+      const nx = -this.axis.dy() / axisLength, ny = this.axis.dx() / axisLength;
+      const ux = this.line1.dx() / length1, uy = this.line1.dy() / length1;
+      const normalDirection = ux * nx + uy * ny;
+      const reflectedDirection = { x: ux - 2 * normalDirection * nx, y: uy - 2 * normalDirection * ny };
+      const line2Direction = { x: this.line2.dx() / length2, y: this.line2.dy() / length2 };
+      const normalPosition = (this.line1.p1.x - this.axis.p1.x) * nx + (this.line1.p1.y - this.axis.p1.y) * ny;
       const fromReflectedSupport = {
-        x: this.line2.p1.x - reflectedStart.x,
-        y: this.line2.p1.y - reflectedStart.y,
+        x: this.line2.p1.x - this.line1.p1.x + 2 * normalPosition * nx,
+        y: this.line2.p1.y - this.line1.p1.y + 2 * normalPosition * ny,
       };
       return [
         fromReflectedSupport.x * reflectedDirection.y - fromReflectedSupport.y * reflectedDirection.x,
@@ -1161,8 +1157,8 @@
         if (R[i][i] > 1e-14) {
           for (let r = 0; r < m; r++) Q[r][i] = V[i][r] / R[i][i];
         }
+        const qi = LinearAlgebra.getColumn(Q, i);
         for (let j = i + 1; j < n; j++) {
-          const qi = LinearAlgebra.getColumn(Q, i);
           R[i][j] = dot(qi, V[j]);
           for (let r = 0; r < m; r++) V[j][r] -= R[i][j] * qi[r];
         }
@@ -1198,35 +1194,87 @@
       return LinearAlgebra.backSubstitution(R, y);
     }
 
+    static solveDampedLeastSquares(J, errors, lambda) {
+      const n = J[0].length;
+      const matrix = Array.from({ length: n }, () => new Float64Array(n));
+      const rhs = new Float64Array(n);
+      for (let i = 0; i < n; i++) matrix[i][i] = lambda;
+      for (let r = 0; r < J.length; r++) {
+        const row = J[r];
+        const columns = [];
+        for (let i = 0; i < n; i++) if (row[i] !== 0) columns.push(i);
+        for (let a = 0; a < columns.length; a++) {
+          const i = columns[a];
+          rhs[i] -= row[i] * errors[r];
+          for (let b = 0; b <= a; b++) {
+            const j = columns[b];
+            matrix[i][j] += row[i] * row[j];
+          }
+        }
+      }
+      const diagonal = matrix.map((row, index) => row[index]);
+      for (let i = 0; i < n; i++) {
+        for (let j = 0; j <= i; j++) {
+          let value = matrix[i][j];
+          for (let k = 0; k < j; k++) value -= matrix[i][k] * matrix[j][k];
+          if (i === j) {
+            // Squaring an ill-conditioned Jacobian may lose positive
+            // definiteness. In that case retain the QR path below.
+            if (!(value > diagonal[i] * 1e-12)) return null;
+            matrix[i][j] = Math.sqrt(value);
+          } else matrix[i][j] = value / matrix[j][j];
+        }
+      }
+      const solution = Array(n).fill(0);
+      for (let i = 0; i < n; i++) {
+        let value = rhs[i];
+        for (let j = 0; j < i; j++) value -= matrix[i][j] * solution[j];
+        solution[i] = value / matrix[i][i];
+      }
+      for (let i = n - 1; i >= 0; i--) {
+        let value = solution[i];
+        for (let j = i + 1; j < n; j++) value -= matrix[j][i] * solution[j];
+        solution[i] = value / matrix[i][i];
+      }
+      return solution.every(Number.isFinite) ? solution : null;
+    }
+
     static reducedRowEchelon(A, tolerance = 1e-9) {
-      const rows = A.map((row) => [...row]);
+      const rows = A.map((row) => {
+        const scale = Math.max(1, Math.hypot(...row));
+        return row.map((value) => value / scale);
+      });
       const m = rows.length;
       const n = rows[0]?.length || 0;
-      const maxAbs = rows.reduce((best, row) => Math.max(best, ...row.map((v) => Math.abs(v))), 0);
-      const eps = tolerance * Math.max(1, maxAbs);
-      const pivotCols = [];
-      let r = 0;
-
-      for (let c = 0; c < n && r < m; c++) {
-        let pivot = r;
-        for (let i = r + 1; i < m; i++) {
-          if (Math.abs(rows[i][c]) > Math.abs(rows[pivot][c])) pivot = i;
+      const order = Array.from({ length: n }, (_, index) => index);
+      let rank = 0;
+      for (let r = 0; r < m && r < n; r++) {
+        let pivotRow = -1, pivotCol = -1, largest = tolerance;
+        for (let i = r; i < m; i++) for (let j = r; j < n; j++) {
+          if (Math.abs(rows[i][j]) > largest) {
+            largest = Math.abs(rows[i][j]); pivotRow = i; pivotCol = j;
+          }
         }
-        if (Math.abs(rows[pivot][c]) <= eps) continue;
-        [rows[r], rows[pivot]] = [rows[pivot], rows[r]];
-        const v = rows[r][c];
-        for (let j = c; j < n; j++) rows[r][j] /= v;
+        if (pivotRow < 0) break;
+        [rows[r], rows[pivotRow]] = [rows[pivotRow], rows[r]];
+        [order[r], order[pivotCol]] = [order[pivotCol], order[r]];
+        for (let i = 0; i < m; i++) [rows[i][r], rows[i][pivotCol]] = [rows[i][pivotCol], rows[i][r]];
+        const value = rows[r][r];
+        for (let j = r; j < n; j++) rows[r][j] /= value;
         for (let i = 0; i < m; i++) {
           if (i === r) continue;
-          const f = rows[i][c];
-          if (Math.abs(f) <= eps) continue;
-          for (let j = c; j < n; j++) rows[i][j] -= f * rows[r][j];
+          const factor = rows[i][r];
+          for (let j = r + 1; j < n; j++) rows[i][j] -= factor * rows[r][j];
+          rows[i][r] = 0;
         }
-        pivotCols.push(c);
-        r++;
+        rank++;
       }
-
-      return { rows, pivotCols, rank: pivotCols.length };
+      const restored = rows.map((row) => {
+        const result = Array(n);
+        for (let j = 0; j < n; j++) result[order[j]] = row[j];
+        return result;
+      });
+      return { rows: restored, pivotCols: order.slice(0, rank), rank };
     }
 
     static nullspaceActivity(A, tolerance = 1e-9, activityTolerance = 1e-7) {
@@ -1396,7 +1444,108 @@
 
     constraintsWithLineMinimums(constraints = [], extra = [], lines = []) {
       const lineMinimums = (lines || []).map((line) => new LineMinimumLengthConstraint(line, this.minLineLength));
-      return [...constraints, ...lineMinimums, ...extra].filter((c) => c.enabled);
+      return this.regularizeContactTangencies([...constraints, ...lineMinimums, ...extra].filter((c) => c.enabled));
+    }
+
+    regularizeContactTangencies(constraints) {
+      // At an explicitly shared contact, distance tangency is a squared-angle
+      // equation. Its derivative vanishes at the solution and falsely locks
+      // motion just off it. Use the equivalent contact direction instead.
+      const parents = new Map();
+      const endpoints = new Map();
+      const root = (node) => {
+        if (!parents.has(node)) parents.set(node, node);
+        if (parents.get(node) !== node) parents.set(node, root(parents.get(node)));
+        return parents.get(node);
+      };
+      const endpoint = (arc, end) => {
+        if (!endpoints.has(arc)) endpoints.set(arc, { start: {}, end: {} });
+        return endpoints.get(arc)[end];
+      };
+      const join = (a, b) => parents.set(root(a), root(b));
+      for (const c of constraints) {
+        if (c instanceof CoincidentConstraint) join(c.p1, c.p2);
+        if (c instanceof ArcEndpointCoincidentConstraint) join(endpoint(c.arc, c.endpoint), c.point);
+        if (c instanceof ArcEndpointArcEndpointCoincidentConstraint) join(endpoint(c.a, c.endpointA), endpoint(c.b, c.endpointB));
+      }
+      const onLines = new Map();
+      const onLine = (line, point) => {
+        if (!onLines.has(line)) onLines.set(line, new Set([root(line.p1), root(line.p2)]));
+        onLines.get(line).add(root(point));
+      };
+      for (const c of constraints) {
+        if (c instanceof PointOnLineConstraint) onLine(c.line, c.point);
+        if (c instanceof ArcEndpointOnLineConstraint) onLine(c.line, endpoint(c.arc, c.endpoint));
+      }
+      return constraints.map((c) => {
+        let error = null;
+        let contactLine = null;
+        if (c instanceof OffsetChainConstraint) {
+          const joins = [];
+          const count = c.closed ? c.sources.length : c.sources.length - 1;
+          for (let i = 0; i < count; i++) {
+            const next = (i + 1) % c.sources.length;
+            const a = c.sources[i], b = c.sources[next];
+            if (!(a instanceof Arc && b instanceof Arc && c.offsets[i] instanceof Arc && c.offsets[next] instanceof Arc)) continue;
+            const endA = c.sourceReversed[i] ? "start" : "end";
+            const endB = c.sourceReversed[next] ? "end" : "start";
+            const tangent = constraints.some((other) => other instanceof CircleCircleTangentConstraint
+              && ((other.a === a && other.b === b) || (other.a === b && other.b === a)));
+            if (tangent && root(endpoint(a, endA)) === root(endpoint(b, endB))) joins.push({ i, next, endA, endB });
+          }
+          if (joins.length) error = () => {
+            const errors = c.rawError();
+            // Offset joins of explicitly tangent source arcs have a unique
+            // contact. Position coincidence alone loses one derivative there.
+            for (const { i, next, endA, endB } of joins) {
+              errors.push(
+                normalizeAngleSigned(c.offsets[i].endAngle - c.sources[i][endA === "start" ? "startAngle" : "endAngle"]) * Math.max(1, c.offsets[i].radius()),
+                normalizeAngleSigned(c.offsets[next].startAngle - c.sources[next][endB === "start" ? "startAngle" : "endAngle"]) * Math.max(1, c.offsets[next].radius()),
+              );
+            }
+            return errors;
+          };
+        } else if (c instanceof ArcEndpointOnCircleConstraint) {
+          const tangent = constraints.find((other) => other instanceof CircleCircleTangentConstraint
+            && ((other.a === c.arc && other.b === c.primitive) || (other.b === c.arc && other.a === c.primitive)));
+          if (tangent && !(tangent.mode === "internal" && hypot2(c.primitive.center.x - c.arc.center.x, c.primitive.center.y - c.arc.center.y) < MIN_MODEL_LENGTH)) error = () => {
+            const direction = Math.atan2(c.primitive.center.y - c.arc.center.y, c.primitive.center.x - c.arc.center.x);
+            const flip = tangent.mode === "internal" && c.arc.radius() < c.primitive.radius() ? Math.PI : 0;
+            return normalizeAngleSigned(c.arc[c.endpoint === "start" ? "startAngle" : "endAngle"] - direction - flip) * Math.max(1, c.arc.radius());
+          };
+        } else if (c instanceof PointOnCircleConstraint) {
+          const tangent = constraints.find((other) => other instanceof LineCircleTangentConstraint && other.primitive === c.primitive
+            && (onLines.get(other.line) || new Set([root(other.line.p1), root(other.line.p2)])).has(root(c.point)));
+          if (tangent) contactLine = tangent.line;
+          if (tangent) error = () => {
+            const line = tangent.line;
+            const angle = line.orientationHint === "horizontal" ? 0 : line.orientationHint === "vertical" ? Math.PI / 2 : Math.atan2(line.dy(), line.dx());
+            return (c.point.x - c.primitive.center.x) * Math.cos(angle) + (c.point.y - c.primitive.center.y) * Math.sin(angle);
+          };
+        } else if (c instanceof LineCircleTangentConstraint && endpoints.has(c.primitive)) {
+          const contacts = onLines.get(c.line) || new Set([root(c.line.p1), root(c.line.p2)]);
+          const end = ["start", "end"].find((key) => contacts.has(root(endpoint(c.primitive, key))));
+          if (end) error = () => {
+            const direction = c.line.orientationHint === "horizontal" ? 0
+              : c.line.orientationHint === "vertical" ? Math.PI / 2 : Math.atan2(c.line.dy(), c.line.dx());
+            const angle = c.primitive[end === "start" ? "startAngle" : "endAngle"];
+            return normalizeAngleSigned(angle - direction + c.sign * Math.PI / 2) * Math.max(1, c.primitive.radius());
+          };
+        } else if (c instanceof CircleCircleTangentConstraint && endpoints.has(c.a) && endpoints.has(c.b)) {
+          for (const a of ["start", "end"]) for (const b of ["start", "end"]) {
+            if (root(endpoint(c.a, a)) !== root(endpoint(c.b, b))) continue;
+            error = () => normalizeAngleSigned(c.a[a === "start" ? "startAngle" : "endAngle"]
+              - c.b[b === "start" ? "startAngle" : "endAngle"] - (c.mode === "external" ? Math.PI : 0))
+              * Math.max(1, Math.min(c.a.radius(), c.b.radius()));
+          }
+        }
+        if (!error) return c;
+        const contact = new Constraint(c.name, c.weight);
+        contact.rawError = error;
+        contact.sourceConstraint = c;
+        contact.contactLine = contactLine;
+        return contact;
+      });
     }
 
     computeErrorVector(extra = []) {
@@ -1421,18 +1570,64 @@
       const m = baseErrors.length;
       const n = vars.length;
       const J = Array.from({ length: m }, () => Array(n).fill(0));
+      const knownTypes = new Set(Object.values(window.GeometrySolver));
+      const ranges = [];
+      let offset = 0;
+      for (const constraint of constraints) {
+        const value = constraint.error();
+        const count = Array.isArray(value) ? value.length : 1;
+        const source = constraint.sourceConstraint || constraint;
+        const objects = new Set();
+        let dynamic = !knownTypes.has(source.constructor) || source.constructor === Constraint;
+        const visit = (object) => {
+          if (!object || typeof object !== "object" || objects.has(object)) return;
+          objects.add(object);
+          for (const descriptor of Object.values(Object.getOwnPropertyDescriptors(object))) {
+            if (descriptor.get) dynamic = true;
+            else visit(descriptor.value);
+          }
+        };
+        visit(source);
+        visit(constraint.contactLine);
+        ranges.push({ constraint, offset, count, objects, dynamic });
+        offset += count;
+      }
       for (let j = 0; j < n; j++) {
         const v = vars[j];
+        const affected = ranges.filter((range) => range.dynamic || range.objects.has(v.object));
+        const affectedConstraints = affected.map((range) => range.constraint);
         const orig = v.object[v.prop];
-        const h = this.diffStep * Math.max(1, Math.abs(orig));
+        const angular = v.prop === "startAngle" || v.prop === "endAngle" || v.prop === "rotation";
+        // The fourth-order angular difference uses a wider interval to avoid
+        // cancellation in small tangent arcs without scaling with turn count.
+        const h = angular ? Math.pow(this.diffStep, 2 / 3) : this.diffStep * Math.max(1, Math.abs(orig));
         v.object[v.prop] = Number.isFinite(v.min) ? Math.max(v.min, orig + h) : orig + h;
         if (Number.isFinite(v.max)) v.object[v.prop] = Math.min(v.max, v.object[v.prop]);
-        const plus = this.computeErrorVectorForConstraints(constraints);
+        const plusValue = v.object[v.prop];
+        const plus = this.computeErrorVectorForConstraints(affectedConstraints);
         v.object[v.prop] = Number.isFinite(v.min) ? Math.max(v.min, orig - h) : orig - h;
         if (Number.isFinite(v.max)) v.object[v.prop] = Math.min(v.max, v.object[v.prop]);
-        const minus = this.computeErrorVectorForConstraints(constraints);
+        const minusValue = v.object[v.prop];
+        const minus = this.computeErrorVectorForConstraints(affectedConstraints);
+        let halfPlus = null, halfMinus = null, halfInterval = 0;
+        if ((!Number.isFinite(v.min) || orig - h >= v.min) && (!Number.isFinite(v.max) || orig + h <= v.max)) {
+          v.object[v.prop] = orig + h / 2;
+          const halfPlusValue = v.object[v.prop];
+          halfPlus = this.computeErrorVectorForConstraints(affectedConstraints);
+          v.object[v.prop] = orig - h / 2;
+          halfInterval = halfPlusValue - v.object[v.prop];
+          halfMinus = this.computeErrorVectorForConstraints(affectedConstraints);
+        }
         v.object[v.prop] = orig;
-        for (let i = 0; i < m; i++) J[i][j] = (plus[i] - minus[i]) / (2 * h);
+        const interval = plusValue - minusValue;
+        let row = 0;
+        for (const range of affected) for (let i = 0; i < range.count; i++, row++) {
+          const derivative = interval === 0 ? 0 : (plus[row] - minus[row]) / interval;
+          const ratio = interval / halfInterval;
+          J[range.offset + i][j] = halfPlus && halfInterval > 0 && ratio > 1
+            ? (ratio * ratio * (halfPlus[row] - halfMinus[row]) / halfInterval - derivative) / (ratio * ratio - 1)
+            : derivative;
+        }
       }
       return J;
     }
@@ -1490,8 +1685,15 @@
       return 1;
     }
 
-    solveCore(vars, constraints, tolerance = this.tolerance) {
-      let lambda = this.initialLambda;
+    constraintActivity(variables, jacobian, rankTolerance = 1e-8, activityTolerance = 1e-7) {
+      const scales = variables.map((variable) => this.variableMotionScale(variable));
+      const activity = LinearAlgebra.nullspaceActivity(
+        jacobian.map((row) => row.map((value, index) => value / scales[index])), rankTolerance, activityTolerance);
+      return { ...activity, basis: activity.basis.map((vector) => vector.map((value, index) => value / scales[index])) };
+    }
+
+    solveCore(vars, constraints, tolerance = this.tolerance, maxStepNorm = this.maxStepNorm, initialLambda = this.initialLambda, maxIterations = this.maxIterations) {
+      let lambda = initialLambda;
       let F = this.computeErrorVectorForConstraints(constraints);
       let errorNorm = vectorNorm(F);
       if (F.length === 0) {
@@ -1506,14 +1708,19 @@
         };
       }
 
-      for (let iter = 0; iter < this.maxIterations; iter++) {
+      for (let iter = 0; iter < maxIterations; iter++) {
         if (errorNorm < tolerance) return { success: true, errorNorm, iterations: iter, reason: "収束しました" };
 
         const state = this.clone(vars);
-        const J = this.computeJacobianForConstraints(vars, F, constraints);
-        const { A, b } = this.buildAugmentedSystem(J, F, lambda);
-        let dx = LinearAlgebra.solveLeastSquaresQR(A, b);
-        dx = this.limitStep(dx);
+        const motionScales = vars.map((variable) => this.variableMotionScale(variable));
+        const J = this.computeJacobianForConstraints(vars, F, constraints)
+          .map((row) => row.map((value, index) => value / motionScales[index]));
+        let dx = LinearAlgebra.solveDampedLeastSquares(J, F, lambda);
+        if (!dx) {
+          const { A, b } = this.buildAugmentedSystem(J, F, lambda);
+          dx = LinearAlgebra.solveLeastSquaresQR(A, b);
+        }
+        dx = this.limitStep(dx, maxStepNorm).map((value, index) => value / motionScales[index]);
         // Arc endpoint equations are periodic. A large angular Newton step
         // can jump whole turns near a tangent and leave an invalid arc sweep
         // even when the endpoint residual converges. Keep each linearization
@@ -1541,7 +1748,7 @@
         if (lambda >= this.maxLambda) return { success: false, errorNorm, iterations: iter + 1, reason: "lambda上限" };
       }
 
-      return { success: false, errorNorm, iterations: this.maxIterations, reason: "最大反復" };
+      return { success: false, errorNorm, iterations: maxIterations, reason: "最大反復" };
     }
 
     solve(extra = []) {
@@ -1561,23 +1768,26 @@
 
     constraintRankState({ variables = [], constraints = [], errorTolerance = 1e-4, rankTolerance = 1e-8 } = {}) {
       this.syncLineOrientationHints([], constraints);
-      const activeConstraints = (constraints || []).filter((c) => c.enabled !== false);
+      const originalConstraints = (constraints || []).filter((c) => c.enabled !== false);
+      const activeConstraints = this.regularizeContactTangencies(originalConstraints);
       const F = this.computeErrorVectorForConstraints(activeConstraints);
-      const errorNorm = vectorNorm(F);
-      if (errorNorm > errorTolerance) {
+      const errorNorm = vectorNorm(this.computeErrorVectorForConstraints(originalConstraints));
+      if (!Number.isFinite(errorNorm) || errorNorm > errorTolerance) {
         return { stable: false, errorNorm, rank: 0, rowCount: F.length, variableCount: variables.length };
       }
       if (F.length === 0 || variables.length === 0) {
         return { stable: true, errorNorm, rank: 0, rowCount: F.length, variableCount: variables.length };
       }
       const J = this.computeJacobianForConstraints(variables, F, activeConstraints);
-      const { rank } = LinearAlgebra.reducedRowEchelon(J, rankTolerance);
+      const scales = variables.map((v) => this.variableMotionScale(v));
+      const { rank } = LinearAlgebra.reducedRowEchelon(J.map((row) => row.map((value, i) => value / scales[i])), rankTolerance);
       return { stable: true, errorNorm, rank, rowCount: F.length, variableCount: variables.length };
     }
 
     constraintRedundancyState({ variables = [], constraints = [], errorTolerance = 1e-4, rankTolerance = 1e-8 } = {}) {
       this.syncLineOrientationHints([], constraints);
-      const activeConstraints = (constraints || []).filter((constraint) => constraint.enabled !== false);
+      const originalConstraints = (constraints || []).filter((constraint) => constraint.enabled !== false);
+      const activeConstraints = this.regularizeContactTangencies(originalConstraints);
       const errors = [];
       const rowRanges = [];
       for (const constraint of activeConstraints) {
@@ -1585,17 +1795,17 @@
         const values = Array.isArray(value) ? value : [value];
         const start = errors.length;
         errors.push(...values);
-        rowRanges.push({ constraint, start, end: errors.length });
+        rowRanges.push({ constraint: constraint.sourceConstraint || constraint, start, end: errors.length });
       }
-      const errorNorm = vectorNorm(errors);
-      if (errorNorm > errorTolerance) {
+      const errorNorm = vectorNorm(this.computeErrorVectorForConstraints(originalConstraints));
+      if (!Number.isFinite(errorNorm) || errorNorm > errorTolerance) {
         return { stable: false, errorNorm, rank: 0, byConstraint: new Map() };
       }
       if (errors.length === 0) {
         return { stable: true, errorNorm, rank: 0, byConstraint: new Map() };
       }
       if (variables.length === 0) {
-        const byConstraint = new Map(activeConstraints.map((constraint) => [constraint, {
+        const byConstraint = new Map(originalConstraints.map((constraint) => [constraint, {
           redundant: true,
           rankBefore: 0,
           rankAfter: 0,
@@ -1608,23 +1818,19 @@
       // rebuilt the entire Jacobian for every prefix of the constraint list.
       const jacobian = this.computeJacobianForConstraints(variables, errors, activeConstraints);
       const basis = [];
-      const pivots = [];
+      const scales = variables.map((v) => this.variableMotionScale(v));
       const addIndependentRow = (source) => {
-        const row = [...source];
-        for (let index = 0; index < basis.length; index += 1) {
-          const pivot = pivots[index];
-          const factor = row[pivot];
-          if (Math.abs(factor) <= rankTolerance) continue;
-          for (let column = pivot; column < row.length; column += 1) row[column] -= factor * basis[index][column];
+        const row = source.map((value, index) => value / scales[index]);
+        const norm = Math.max(1, vectorNorm(row));
+        for (let column = 0; column < row.length; column++) row[column] /= norm;
+        for (let pass = 0; pass < 2; pass++) for (const vector of basis) {
+          let factor = 0;
+          for (const [column, value] of vector) factor += row[column] * value;
+          if (factor !== 0) for (const [column, value] of vector) row[column] -= factor * value;
         }
-        const pivot = row.findIndex((value) => Math.abs(value) > rankTolerance);
-        if (pivot < 0) return false;
-        const scale = row[pivot];
-        for (let column = pivot; column < row.length; column += 1) row[column] /= scale;
-        let insertAt = pivots.findIndex((value) => value > pivot);
-        if (insertAt < 0) insertAt = pivots.length;
-        pivots.splice(insertAt, 0, pivot);
-        basis.splice(insertAt, 0, row);
+        const length = vectorNorm(row);
+        if (length <= rankTolerance) return false;
+        basis.push(row.flatMap((value, column) => value === 0 ? [] : [[column, value / length]]));
         return true;
       };
 
@@ -1722,16 +1928,125 @@
       });
     }
 
-    solveSubsetGuided({ variables = [], constraints = [], targets = [], lines = [], errorTolerance = 1e-4, activeTargetVariables = [], targetStepNorm = null } = {}) {
+    solveSubsetGuided({ variables = [], constraints = [], targets = [], lines = [], errorTolerance = 1e-4, activeTargetVariables = [], targetStepNorm = null, referenceState = [], preserveTranslation = true } = {}) {
+      const previousState = this.clone(variables);
+      const pointerStepNorm = targetStepNorm;
+      const referenceRetryFraction = targets[0]?.guidedStepNorm > 0 && Number.isFinite(targetStepNorm)
+        ? Math.min(1, targetStepNorm / targets[0].guidedStepNorm) : 1;
+      const referenceChart = referenceState.length > 0 && targets.length > 0 && targets.every((target) => target.point);
+      if (referenceChart) {
+        this.restore(referenceState.filter((entry) => variables.some((v) => v.object === entry.object && v.prop === entry.prop)));
+        targetStepNorm = vectorNorm(this.variableTargetDelta(variables, targets)) * referenceRetryFraction;
+      }
+      const requestedDisplacement = this.variableTargetDelta(variables, targets);
       this.syncLineOrientationHints([], constraints);
       const activeConstraints = this.constraintsWithLineMinimums(constraints, [], lines);
-      const baseErrors = this.computeErrorVectorForConstraints(activeConstraints);
+      let baseErrors = this.computeErrorVectorForConstraints(activeConstraints);
+      if (vectorNorm(baseErrors) > Math.min(errorTolerance, this.tolerance)) {
+        this.solveCore(variables, activeConstraints, Math.min(errorTolerance, this.tolerance));
+        baseErrors = this.computeErrorVectorForConstraints(activeConstraints);
+      }
       const startingErrorNorm = vectorNorm(baseErrors);
       const J = this.computeJacobianForConstraints(variables, baseErrors, activeConstraints);
       const desired = this.variableTargetDelta(variables, targets);
       const targetMask = this.variableTargetMask(variables, targets);
-      const activity = LinearAlgebra.nullspaceActivity(J, 1e-8, GUIDED_DRAG_ACTIVITY_TOLERANCE);
-      const basis = activity.basis;
+      if (referenceChart && preserveTranslation) {
+        const movingAxes = new Set(variables.filter((v, i) => targetMask[i] && Math.abs(requestedDisplacement[i]) > 1e-10).map((v) => v.prop));
+        for (let i = 0; i < targetMask.length; i++) targetMask[i] &&= movingAxes.has(variables[i].prop);
+      }
+      let activity = this.constraintActivity(variables, J, 1e-8, GUIDED_DRAG_ACTIVITY_TOLERANCE);
+      let basis = activity.basis;
+      const motionScales = variables.map((variable) => this.variableMotionScale(variable));
+      let physicalBasis = basis.map((vector) => vector.map((value, index) => value * motionScales[index]));
+      let radialObjective = false;
+      let radialSensitivity = 1;
+      const radialPointers = new Map();
+      let endpointObjective = false;
+      for (const target of targets) {
+        if (!target.endpointPointer) continue;
+        const index = variables.findIndex((v) => v.object === target.object && v.prop === target.prop);
+        if (index < 0 || !activity.active[index]) continue;
+        const direction = LinearAlgebra.projectOntoBasis(variables.map((_, i) => i === index ? motionScales[i] : 0),
+          physicalBasis, variables.map((_, i) => i === index ? 1 : GUIDED_DRAG_BACKGROUND_WEIGHT))
+          .map((value, i) => value / motionScales[i]);
+        const component = (object, prop) => direction[variables.findIndex((v) => v.object === object && v.prop === prop)] || 0;
+        const cx = component(target.object.center, "x"), cy = component(target.object.center, "y");
+        const radius = component(target.object, "radiusValue");
+        if (Math.hypot(cx, cy, radius) < 1e-7) continue;
+        const angle = target.object[target.prop], r = target.object.radius();
+        const cos = Math.cos(angle), sin = Math.sin(angle);
+        const vx = cx + radius * cos - r * sin * direction[index];
+        const vy = cy + radius * sin + r * cos * direction[index];
+        const dx = target.endpointPointer.x - target.object.center.x - r * cos;
+        const dy = target.endpointPointer.y - target.object.center.y - r * sin;
+        const delta = (dx * vx + dy * vy) * direction[index] / Math.max(1e-12, vx * vx + vy * vy);
+        desired[index] = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, delta));
+        endpointObjective = true;
+      }
+      for (const target of targets) {
+        if (!target.radialPointer || target.prop !== "radiusValue") continue;
+        const index = variables.findIndex((v) => v.object === target.object && v.prop === target.prop);
+        if (index < 0 || !activity.active[index]) continue;
+        const dx = target.radialPointer.x - target.object.center.x;
+        const dy = target.radialPointer.y - target.object.center.y;
+        const distance = Math.hypot(dx, dy);
+        const fraction = target.guidedStepNorm > 0 && Number.isFinite(targetStepNorm)
+          ? Math.min(1, targetStepNorm / target.guidedStepNorm) : 1;
+        const requestedDistance = target.object.radius() + (distance - target.object.radius()) * fraction;
+        radialPointers.set(target, { x: target.object.center.x + dx * requestedDistance / Math.max(distance, MIN_MODEL_LENGTH),
+          y: target.object.center.y + dy * requestedDistance / Math.max(distance, MIN_MODEL_LENGTH) });
+        const gradient = variables.map((v, i) => {
+          if (v.object === target.object && v.prop === "radiusValue") return -1 / motionScales[i];
+          if (v.object === target.object.center && v.prop === "x") return -dx / Math.max(distance, MIN_MODEL_LENGTH) / motionScales[i];
+          if (v.object === target.object.center && v.prop === "y") return -dy / Math.max(distance, MIN_MODEL_LENGTH) / motionScales[i];
+          return 0;
+        });
+        // Drive the visible circumference through every available center and
+        // radius freedom. A radius-only chart can walk into a tangent boundary
+        // even though another center motion reaches the pointer immediately.
+        const direction = LinearAlgebra.projectOntoBasis(gradient, physicalBasis);
+        const derivative = dot(gradient, direction);
+        const factor = derivative > 1e-14 ? -(requestedDistance - target.object.radius()) / derivative : 0;
+        const delta = direction.map((value, i) => value * factor / motionScales[i]);
+        const radiusDelta = delta[index];
+        const boundScale = radiusDelta < -target.object.radius() * 0.5 ? -target.object.radius() * 0.5 / radiusDelta
+          : radiusDelta > target.object.radius() ? target.object.radius() / radiusDelta : 1;
+        for (let i = 0; i < desired.length; i++) desired[i] = delta[i] * boundScale;
+        radialSensitivity = Math.min(radialSensitivity, Math.sqrt(Math.max(0, derivative)));
+        radialObjective = true;
+      }
+      const boundedColumns = new Set();
+      const feasibleJacobian = [...J];
+      for (let pass = 0; pass < variables.length; pass++) {
+        const candidate = LinearAlgebra.projectOntoBasis(desired.map((value, i) => value * motionScales[i]),
+          physicalBasis, targetMask.map((targeted) => targeted ? 1 : GUIDED_DRAG_BACKGROUND_WEIGHT));
+        const candidates = variables.flatMap((v, i) => {
+          if (boundedColumns.has(i)) return [];
+          const value = v.object[v.prop];
+          const atBoundary = (Number.isFinite(v.min) && value <= v.min + this.tolerance && candidate[i] < -this.tolerance)
+            || (Number.isFinite(v.max) && value >= v.max - this.tolerance && candidate[i] > this.tolerance);
+          const crossesBoundary = !targetMask[i] && ((Number.isFinite(v.min) && candidate[i] < (v.min - value) * motionScales[i] - this.tolerance)
+            || (Number.isFinite(v.max) && candidate[i] > (v.max - value) * motionScales[i] + this.tolerance));
+          return atBoundary || crossesBoundary ? [{index: i, atBoundary}] : [];
+        });
+        let added = false;
+        for (const {index, atBoundary} of candidates) {
+          const row = variables.map((_, i) => i === index ? 1 : 0);
+          const nextActivity = this.constraintActivity(variables, [...feasibleJacobian, row], 1e-8, GUIDED_DRAG_ACTIVITY_TOLERANCE);
+          // A nearly collapsed auxiliary arc may be held at its radius while
+          // the dragged coordinates retain all their motion. Do not remove a
+          // still-reachable target direction before the boundary is reached.
+          const targetRank = (state) => this.independentTargetMask(variables, targetMask, desired, state).filter(Boolean).length;
+          if (!atBoundary && targetRank(nextActivity) < targetRank(activity)) continue;
+          boundedColumns.add(index);
+          feasibleJacobian.push(row);
+          activity = nextActivity;
+          added = true;
+        }
+        if (!added) break;
+        basis = activity.basis;
+        physicalBasis = basis.map((vector) => vector.map((value, index) => value * motionScales[index]));
+      }
       const activeTargetMask = this.independentTargetMask(variables, targetMask, desired, activity, activeTargetVariables);
       const projectionTargetMask = targetMask.map((targeted, index) => targeted && activity.active[index]);
       const targetActivity = targetMask.map((targeted, index) => targeted
@@ -1759,10 +2074,7 @@
           activeTargetVariables: [],
         };
       }
-      const motionScales = variables.map((variable) => this.variableMotionScale(variable));
       const physicalDesired = desired.map((value, index) => value * motionScales[index]);
-      const physicalBasis = basis.map((basisVector) =>
-        basisVector.map((value, index) => value * motionScales[index]));
       const weights = projectionTargetMask.map((targeted) => targeted ? 1 : GUIDED_DRAG_BACKGROUND_WEIGHT);
       const physicalProjected = LinearAlgebra.projectOntoBasis(physicalDesired, physicalBasis, weights);
       const componentScale = Math.sqrt(Math.max(1, variables.length / Math.max(1, targetVariableCount)));
@@ -1771,15 +2083,25 @@
       // several variables, so scale with its size, but always keep that motion
       // proportional to the actual cursor request.
       const requestedTargetNorm = vectorNorm(physicalDesired);
-      const boundedTargetNorm = Number.isFinite(targetStepNorm) && targetStepNorm > 0
+      const boundedTargetNorm = !radialObjective && Number.isFinite(targetStepNorm) && targetStepNorm > 0
         ? Math.min(requestedTargetNorm, targetStepNorm)
         : requestedTargetNorm;
       const motionFactor = targetVariableCount === 1
         ? GUIDED_DRAG_SINGLE_TARGET_MOTION_FACTOR
         : GUIDED_DRAG_MULTI_TARGET_MOTION_FACTOR;
       const cursorScaledMaxNorm = boundedTargetNorm * componentScale * motionFactor;
-      const guidedMaxNorm = Math.min(this.maxStepNorm * componentScale, cursorScaledMaxNorm);
+      const directPointChart = targets.every((target) => target.point) && (targetVariableCount === 1 || targets.length > 1);
+      const retryFraction = referenceChart ? referenceRetryFraction : targets[0]?.guidedStepNorm > 0 && Number.isFinite(targetStepNorm)
+        ? Math.min(1, targetStepNorm / targets[0].guidedStepNorm) : 1;
+      const guidedMaxNorm = radialObjective ? cursorScaledMaxNorm : directPointChart
+        ? (referenceChart && preserveTranslation ? vectorNorm(physicalProjected) * retryFraction
+          : Math.min(vectorNorm(physicalProjected) * retryFraction, cursorScaledMaxNorm))
+        : Math.min(this.maxStepNorm * componentScale, cursorScaledMaxNorm);
       let limitedPhysical = this.limitStep(physicalProjected, guidedMaxNorm);
+      if (targets.every((target) => target.point) && !(referenceChart && preserveTranslation)) {
+        const visibleMotion = vectorNorm(limitedPhysical.filter((_, i) => targetMask[i]));
+        if (visibleMotion > boundedTargetNorm && visibleMotion > 0) limitedPhysical = limitedPhysical.map((value) => value * boundedTargetNorm / visibleMotion);
+      }
       let limited = limitedPhysical.map((value, index) => value / motionScales[index]);
       const relativeErrorLimit = Math.min(startingErrorNorm * 1.1 + 1e-9, errorTolerance * 2);
       const acceptProjectedError = Math.max(this.tolerance, errorTolerance, relativeErrorLimit);
@@ -1789,7 +2111,7 @@
       const preserveDirectPointTarget = directPointTargetVariables.length > 0
         && directPointTargetVariables.every((variable) => variable.prop === "x" || variable.prop === "y")
         && targets.length === requestedPointTargets.length
-        && new Set(requestedPointTargets).size === 1;
+        && requestedPointTargets.length > 0;
       const requestedParameterTargets = targets.filter((target) => target.object).map((target) => target.object);
       const preserveDirectBlockTarget = Boolean(requestedParameterTargets.length === targets.length
         && new Set(requestedParameterTargets).size === 1
@@ -1807,22 +2129,28 @@
         this.applyDelta(variables, limited);
         projectedErrors = this.computeErrorVectorForConstraints(activeConstraints);
         projectedErrorNorm = vectorNorm(projectedErrors);
-        if (preserveDirectTarget || projectedErrorNorm <= acceptProjectedError * 2 || projectionScale <= 1 / 32) break;
+        if (targetVariableCount === 1 || preserveDirectTarget || projectedErrorNorm <= acceptProjectedError * 2 || projectionScale <= 1 / 32) break;
         projectionScale *= 0.5;
         limitedPhysical = limitedPhysical.map((value) => value * 0.5);
         limited = limited.map((value) => value * 0.5);
       }
       const projectedTargetValues = variables.map((variable) => variable.object[variable.prop]);
-      const holdSingleTargetDuringPreview = targetVariableCount === 1 && (
-        preserveDirectPointTarget
+      const holdSingleTargetDuringPreview = preserveDirectPointTarget || targetVariableCount === 1 && (
+        radialObjective || endpointObjective || preserveDirectPointTarget
         || !Number.isFinite(targetStepNorm)
         || targetStepNorm < GUIDED_DRAG_FAST_TARGET_STEP
       );
-      const previewTargetConstraints = holdSingleTargetDuringPreview
+      const previewTargetConstraints = radialObjective ? targets.filter((target) => target.radialPointer).map((target) => {
+        const constraint = new Constraint("円周ドラッグ", 1);
+        const pointer = radialPointers.get(target) || target.radialPointer;
+        constraint.rawError = () => Math.hypot(pointer.x - target.object.center.x, pointer.y - target.object.center.y) - target.object.radius();
+        return constraint;
+      }) : holdSingleTargetDuringPreview
         ? variables
             .map((variable, index) => {
               if (!activeTargetMask[index]) return null;
-              const constraint = new ParameterDragConstraint(variable.object, variable.prop, projectedTargetValues[index], variable.min);
+              const targetValue = referenceChart && preserveTranslation && requestedPointTargets.length > 1 ? projectionState[index].value + desired[index] * retryFraction : projectedTargetValues[index];
+              const constraint = new ParameterDragConstraint(variable.object, variable.prop, targetValue, variable.min);
               constraint.weight = GUIDED_DRAG_TARGET_CONSTRAINT_WEIGHT;
               return constraint;
             })
@@ -1831,14 +2159,49 @@
       const previewTargetErrors = this.computeErrorVectorForConstraints(previewTargetConstraints);
       const previewTargetErrorNorm = vectorNorm(previewTargetErrors);
       const previewErrorNorm = vectorNorm([...projectedErrors, ...previewTargetErrors]);
-      const previewSolveTolerance = targetVariableCount === 1 && preserveDirectPointTarget
-        ? GUIDED_DRAG_SMALL_ERROR_TOLERANCE
-        : GUIDED_DRAG_FAST_MULTI_TARGET_TOLERANCE;
+      const previewSolveTolerance = GUIDED_DRAG_SMALL_ERROR_TOLERANCE;
       const solveTolerance = Math.min(acceptProjectedError, previewSolveTolerance);
-      const result =
+      let result =
         previewErrorNorm <= solveTolerance
           ? { success: true, errorNorm: previewErrorNorm, iterations: 0, reason: "投影移動" }
-          : this.solveCore(variables, [...activeConstraints, ...previewTargetConstraints], solveTolerance);
+          : this.solveCore(variables, [...activeConstraints, ...previewTargetConstraints], solveTolerance,
+            radialObjective || directPointChart ? Math.max(this.maxStepNorm, vectorNorm(limited)) : this.maxStepNorm,
+            radialObjective ? this.initialLambda * Math.max(1e-8, radialSensitivity ** 2) : this.initialLambda,
+            Math.min(preserveDirectPointTarget ? 32 : 16, this.maxIterations));
+      if ((radialObjective || preserveDirectPointTarget) && (!result.success || result.errorNorm > errorTolerance)) {
+        // A pointer can pass a turning point of the reachable circumference.
+        // Correct a bounded predictor onto the model surface and accept it only
+        // if it improves the visible distance; never trade a constraint for an
+        // unreachable drag equality or jump to another branch via full solve.
+        this.restore(previousState);
+        const pointerError = () => radialObjective
+          ? vectorNorm(targets.filter((t) => t.radialPointer).map((t) =>
+            Math.hypot(t.radialPointer.x - t.object.center.x, t.radialPointer.y - t.object.center.y) - t.object.radius()))
+          : vectorNorm(targets.filter((t) => t.point).flatMap((t) => [t.point.x - t.x, t.point.y - t.y]));
+        const beforePointerError = pointerError();
+        const predictor = limitedPhysical.map((value, i) => value + (projectionState[i].value - previousState[i].value) * motionScales[i]);
+        const boundaryStep = this.limitStep(predictor, Math.max(Number(pointerStepNorm) || beforePointerError, this.tolerance));
+        this.applyDelta(variables, boundaryStep.map((value, i) => value / motionScales[i]));
+        const corrected = this.solveCore(variables, activeConstraints, this.tolerance, this.maxStepNorm, this.initialLambda, 12);
+        if (corrected.errorNorm <= this.tolerance && pointerError() < beforePointerError) {
+          result = { ...corrected, success: true, reason: "拘束を維持して追従" };
+        } else {
+          this.restore(previousState);
+          result = { success: true, errorNorm: vectorNorm(this.computeErrorVectorForConstraints(activeConstraints)), iterations: 0, reason: "拘束を維持（前回位置）" };
+        }
+      }
+      if (referenceChart && !preserveTranslation && Number.isFinite(pointerStepNorm) && pointerStepNorm > 0) {
+        const previousValue = (point, prop) => previousState.find((entry) => entry.object === point && entry.prop === prop)?.value ?? point[prop];
+        const movement = Math.max(...targets.map((target) => hypot2(target.point.x - previousValue(target.point, "x"), target.point.y - previousValue(target.point, "y"))));
+        if (movement > pointerStepNorm * GUIDED_DRAG_MULTI_TARGET_MOTION_FACTOR) {
+          // A rotating line can leave the useful neighborhood of its initial
+          // tangent chart. Continue from the last valid shape before it jumps.
+          this.restore(previousState);
+          const continued = this.solveSubsetGuided({variables, constraints, targets, lines, errorTolerance, activeTargetVariables, targetStepNorm: pointerStepNorm});
+          continued.iterations += result.iterations || 0;
+          return continued;
+        }
+      }
       // The preview solve is deliberately free to make the smallest normal
       // correction back onto the constraint manifold. Pin the coordinates it
       // actually reached for mouse-up; pinning the pre-solve projection during
@@ -1853,6 +2216,7 @@
         .filter(Boolean);
       result.local = true;
       result.guided = true;
+      result.radialObjective = radialObjective;
       result.variableCount = variables.length;
       result.constraintCount = activeConstraints.length;
       result.freeDof = basis.length;
@@ -1892,9 +2256,29 @@
         ? this.constraintsWithLineMinimums(options.constraints || [], options.extra || [], options.lines || [])
         : this.getConstraints(options.extra || []);
       const F = this.computeErrorVectorForConstraints(constraints);
-      const errorNorm = vectorNorm(F);
-      const unstable = errorNorm > errorTolerance;
-      const J = unstable || vars.length === 0 ? [] : this.computeJacobianForConstraints(vars, F, constraints);
+      const errorNorm = vectorNorm(this.computeErrorVectorForConstraints(hasSubset
+        ? (options.constraints || []).filter((c) => c.enabled) : this.model.constraints.filter((c) => c.enabled)));
+      const unstable = !Number.isFinite(errorNorm) || errorNorm > errorTolerance;
+      let J = [];
+      const lineNormals = new Map();
+      if (!unstable && vars.length > 0) {
+        // Accepted legacy contact residuals may hide a much larger angular
+        // error. Analyze the nearby constraint surface without changing the
+        // document, rather than treating that error as an extra degree of lock.
+        const state = this.clone(vars);
+        try {
+          const analysisTolerance = Math.min(this.tolerance, rankTolerance * 0.1);
+          if (vectorNorm(F) > analysisTolerance) {
+            const corrected = this.solveCore(vars, constraints, analysisTolerance, this.maxStepNorm, Math.min(this.initialLambda, rankTolerance), 8);
+            if (corrected.errorNorm > errorTolerance) this.restore(state);
+          }
+          const errors = this.computeErrorVectorForConstraints(constraints);
+          J = this.computeJacobianForConstraints(vars, errors, constraints);
+          for (const line of options.lines || this.model.lines || []) lineNormals.set(line, window.GeometryKernel.lineSupportNormal(line));
+        } finally {
+          this.restore(state);
+        }
+      }
       const activity = unstable
         ? { active: Array(vars.length).fill(false), rank: 0, freeColumns: [], basis: [] }
         : F.length === 0
@@ -1908,7 +2292,7 @@
                 return vector;
               }),
             }
-          : LinearAlgebra.nullspaceActivity(J, rankTolerance, activityTolerance);
+          : this.constraintActivity(vars, J, rankTolerance, activityTolerance);
       const variableFreedom = new Map();
       const variableIndex = new Map();
       for (let i = 0; i < vars.length; i++) {
@@ -1925,6 +2309,7 @@
         variableFreedom,
         variableIndex,
         nullspaceBasis: activity.basis || [],
+        lineNormals,
       };
     }
   }
