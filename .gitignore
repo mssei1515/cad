@@ -1,4 +1,4 @@
-test-data/*
+test-data/
 node_modules/
 playwright-report/
 test-results/
