@@ -92,6 +92,24 @@ test("geometry primitives preserve their public measurement contract", () => {
   assert.ok(Math.abs(arc.endPoint().y - 2) < 1e-12);
 });
 
+test("arc endpoint horizontal and vertical constraints solve endpoint positions", () => {
+  const aCenter = new geometry.Point("CA", 0, 0, true);
+  const bCenter = new geometry.Point("CB", 20, 0, true);
+  const a = new geometry.Arc("A1", aCenter, 10, 0, Math.PI / 2);
+  const b = new geometry.Arc("A2", bCenter, 10, 0.25, Math.PI / 2);
+  const horizontal = new geometry.ArcEndpointHorizontalConstraint(a, "start", b, "start");
+  const solver = new geometry.ConstraintSolver({ points: [aCenter, bCenter], lines: [], circles: [], arcs: [a, b], constraints: [horizontal], blockInstances: [] });
+
+  assert.notEqual(horizontal.rawError(), 0);
+  assert.equal(solver.solve().success, true);
+  assert.ok(Math.abs(a.startPoint().y - b.startPoint().y) < 1e-6);
+
+  const vertical = new geometry.ArcEndpointVerticalConstraint(a, "end", b, "end");
+  const verticalSolver = new geometry.ConstraintSolver({ points: [aCenter, bCenter], lines: [], circles: [], arcs: [a, b], constraints: [vertical], blockInstances: [] });
+  assert.equal(verticalSolver.solve().success, true);
+  assert.ok(Math.abs(a.endPoint().x - b.endPoint().x) < 1e-6);
+});
+
 test("sketch projection constraints preserve point, line, circle, arc, and spline geometry", () => {
   const point = (id, x, y) => new geometry.Point(id, x, y);
   const sourcePoint = point("SP", 4, -2);

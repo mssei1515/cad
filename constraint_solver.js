@@ -826,6 +826,38 @@
     }
   }
 
+  class ArcEndpointHorizontalConstraint extends Constraint {
+    constructor(a, endpointA, b, endpointB) {
+      super(`円弧端点水平 ${a.id}.${endpointA}-${b.id}.${endpointB}`, 1);
+      this.a = a;
+      this.endpointA = endpointA === "end" ? "end" : "start";
+      this.b = b;
+      this.endpointB = endpointB === "end" ? "end" : "start";
+    }
+
+    rawError() {
+      const a = arcEndpointPoint(this.a, this.endpointA);
+      const b = arcEndpointPoint(this.b, this.endpointB);
+      return b.y - a.y;
+    }
+  }
+
+  class ArcEndpointVerticalConstraint extends Constraint {
+    constructor(a, endpointA, b, endpointB) {
+      super(`円弧端点垂直 ${a.id}.${endpointA}-${b.id}.${endpointB}`, 1);
+      this.a = a;
+      this.endpointA = endpointA === "end" ? "end" : "start";
+      this.b = b;
+      this.endpointB = endpointB === "end" ? "end" : "start";
+    }
+
+    rawError() {
+      const a = arcEndpointPoint(this.a, this.endpointA);
+      const b = arcEndpointPoint(this.b, this.endpointB);
+      return b.x - a.x;
+    }
+  }
+
   class SymmetryConstraint extends Constraint {
     constructor(p1, p2, axis) {
       super(`対称 ${p1.id}-${p2.id} / ${axis.id}`, 1);
@@ -2350,6 +2382,8 @@
     VerticalConstraint,
     PointHorizontalConstraint,
     PointVerticalConstraint,
+    ArcEndpointHorizontalConstraint,
+    ArcEndpointVerticalConstraint,
     SymmetryConstraint,
     LineSymmetryConstraint,
     ArcSymmetryConstraint,

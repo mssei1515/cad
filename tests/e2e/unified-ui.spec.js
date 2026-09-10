@@ -1906,6 +1906,37 @@ test("Overlapping Canvas objects can be previewed and selected from context cand
   await page.keyboard.press("Escape");
 });
 
+test("Arc endpoints can be selected as horizontal constraint operands from context candidates", async ({ page }) => {
+  await openTestDocument(page);
+  const fixture = await page.evaluate(() => window.__jot2dTest.resetForArcEndpointConstraintSelectionTest());
+  const menu = page.locator("#canvasContextMenu");
+
+  await page.mouse.click(fixture.first.x, fixture.first.y);
+  expect((await page.evaluate(() => window.__jot2dTest.selectedGeometryIdsForTest())).points).toEqual([fixture.lineStartId]);
+
+  await page.mouse.click(fixture.first.x + 140, fixture.first.y + 80);
+  await page.locator('[data-constraint="horizontal"]').click();
+  await page.mouse.click(fixture.first.x, fixture.first.y, { button: "right" });
+  await expect(menu).toHaveClass(/candidate-menu/);
+  await menu.locator("[data-context-candidate-index]").filter({ hasText: `円弧端点${fixture.firstArcId}` }).click();
+  expect((await page.evaluate(() => window.__jot2dTest.constraintInputStateForTest())).operands).toEqual([
+    { kind: "arc-endpoint", id: fixture.firstArcId, endpoint: "start" },
+  ]);
+
+  await page.mouse.click(fixture.second.x, fixture.second.y, { button: "right" });
+  await expect(menu).toHaveClass(/candidate-menu/);
+  await menu.locator("[data-context-candidate-index]").filter({ hasText: `円弧端点${fixture.secondArcId}` }).click();
+
+  const state = await page.evaluate(() => window.__jot2dTest.serializedModelForTest());
+  expect(state.constraints).toContainEqual(expect.objectContaining({
+    type: "arcEndpointHorizontal",
+    a: fixture.firstArcId,
+    endpointA: "start",
+    b: fixture.secondArcId,
+    endpointB: "start",
+  }));
+});
+
 test("Canvas selection updates Properties, Properties collapses, and the label-free toolbar does not overlap", async ({ page }) => {
   await openTestDocument(page);
   await page.evaluate(() => window.__jot2dTest.resetForResponsiveLineDragTest());

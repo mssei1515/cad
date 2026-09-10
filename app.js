@@ -95,6 +95,8 @@
     VerticalConstraint,
     PointHorizontalConstraint,
     PointVerticalConstraint,
+    ArcEndpointHorizontalConstraint,
+    ArcEndpointVerticalConstraint,
     SymmetryConstraint,
     LineSymmetryConstraint,
     ArcSymmetryConstraint,
@@ -3709,8 +3711,12 @@
     const splines = [];
     let arcEndpoint = null;
     let arcEndpointPair = null;
+    const axisPointOperands = [];
     for (const operand of operands) {
-      if (operand.kind === "point" && !points.includes(operand.point)) points.push(operand.point);
+      if (operand.kind === "point" && !points.includes(operand.point)) {
+        points.push(operand.point);
+        axisPointOperands.push(operand);
+      }
       else if (operand.kind === "line" && !lines.includes(operand.line)) lines.push(operand.line);
       else if (operand.kind === "primitive") {
         if (operand.primitive instanceof Circle && !circles.includes(operand.primitive)) circles.push(operand.primitive);
@@ -3720,14 +3726,20 @@
       } else if (operand.kind === "arc-endpoint") {
         if (arcEndpoint && !sameArcEndpoint(arcEndpoint, operand)) arcEndpointPair = [arcEndpoint, operand];
         arcEndpoint = { arc: operand.arc, endpoint: operand.endpoint };
+        axisPointOperands.push(operand);
         if (!arcs.includes(operand.arc)) arcs.push(operand.arc);
       }
     }
-    return { points, lines, circles, arcs, splines, arcEndpoint, arcEndpointPair };
+    return { points, lines, circles, arcs, splines, arcEndpoint, arcEndpointPair, axisPointPair: axisPointOperands.length === 2 ? axisPointOperands : null };
   }
 
   function currentConstraintTargets() {
-    return { points: selectedPoints, lines: selectedLines, circles: selectedCircles, arcs: selectedArcs, splines: selectedSplines, arcEndpointPair: selectedArcEndpointPair, arcEndpoint: selectedArcEndpoint };
+    const axisPointPair = selectedArcEndpointPair?.length === 2
+      ? selectedArcEndpointPair.map((item) => ({ kind: "arc-endpoint", arc: item.arc, endpoint: item.endpoint }))
+      : selectedArcEndpoint
+        ? [{ kind: "arc-endpoint", arc: selectedArcEndpoint.arc, endpoint: selectedArcEndpoint.endpoint }, ...selectedPoints.map((point) => ({ kind: "point", point }))].slice(0, 2)
+        : selectedPoints.map((point) => ({ kind: "point", point })).slice(0, 2);
+    return { points: selectedPoints, lines: selectedLines, circles: selectedCircles, arcs: selectedArcs, splines: selectedSplines, arcEndpointPair: selectedArcEndpointPair, arcEndpoint: selectedArcEndpoint, axisPointPair: axisPointPair.length === 2 ? axisPointPair : null };
   }
 
   function syncSelectionFromConstraintOperands() {
@@ -7569,6 +7581,18 @@
       deserialize: (data, refs) => new PointVerticalConstraint(refs.point(data.p1), refs.point(data.p2)),
     },
     {
+      type: "arcEndpointHorizontal",
+      constraintClass: ArcEndpointHorizontalConstraint,
+      serialize: (c) => ({ a: constraintGeometryId(c.a), endpointA: c.endpointA, b: constraintGeometryId(c.b), endpointB: c.endpointB, enabled: c.enabled }),
+      deserialize: (data, refs) => new ArcEndpointHorizontalConstraint(refs.primitive(data.a), data.endpointA === "end" ? "end" : "start", refs.primitive(data.b), data.endpointB === "end" ? "end" : "start"),
+    },
+    {
+      type: "arcEndpointVertical",
+      constraintClass: ArcEndpointVerticalConstraint,
+      serialize: (c) => ({ a: constraintGeometryId(c.a), endpointA: c.endpointA, b: constraintGeometryId(c.b), endpointB: c.endpointB, enabled: c.enabled }),
+      deserialize: (data, refs) => new ArcEndpointVerticalConstraint(refs.primitive(data.a), data.endpointA === "end" ? "end" : "start", refs.primitive(data.b), data.endpointB === "end" ? "end" : "start"),
+    },
+    {
       type: "symmetry",
       constraintClass: SymmetryConstraint,
       serialize: (c) => ({ p1: constraintGeometryId(c.p1), p2: constraintGeometryId(c.p2), axis: constraintGeometryId(c.axis), enabled: c.enabled }),
@@ -11088,6 +11112,7 @@
     if (c instanceof ParallelLinesCenterlineConstraint) return [c.line1, c.line2, c.centerline].some((item) => item.p1 === point || item.p2 === point);
     if (c instanceof PointPairCenterlineConstraint) return c.p1 === point || c.p2 === point || c.centerline.p1 === point || c.centerline.p2 === point;
     if (c instanceof ArcEndpointOnLineConstraint) return c.arc.center === point || c.line.p1 === point || c.line.p2 === point;
+    if (c instanceof ArcEndpointHorizontalConstraint || c instanceof ArcEndpointVerticalConstraint) return c.a.center === point || c.b.center === point;
     if (c instanceof HorizontalConstraint || c instanceof VerticalConstraint) return c.line.p1 === point || c.line.p2 === point;
     if (c instanceof PointHorizontalConstraint || c instanceof PointVerticalConstraint) return c.p1 === point || c.p2 === point;
     if (c instanceof SymmetryConstraint) return c.p1 === point || c.p2 === point || c.axis.p1 === point || c.axis.p2 === point;
@@ -11149,6 +11174,7 @@
     if (c instanceof ArcEndpointCoincidentConstraint) return c.arc === primitive;
     if (c instanceof ArcEndpointArcEndpointCoincidentConstraint) return c.a === primitive || c.b === primitive;
     if (c instanceof ArcEndpointOnLineConstraint) return c.arc === primitive;
+    if (c instanceof ArcEndpointHorizontalConstraint || c instanceof ArcEndpointVerticalConstraint) return c.a === primitive || c.b === primitive;
     if (c instanceof ArcEndpointFixedConstraint) return c.arc === primitive;
     if (c instanceof RadiusConstraint || c instanceof DiameterConstraint || c instanceof PointOnCircleConstraint || c instanceof LineCircleTangentConstraint) return c.primitive === primitive;
     if (c instanceof LineCircleDistanceConstraint) return c.circle === primitive;
@@ -11273,6 +11299,11 @@
       addNode(nodes, c.line);
       addNode(nodes, c.line.p1);
       addNode(nodes, c.line.p2);
+    } else if (c instanceof ArcEndpointHorizontalConstraint || c instanceof ArcEndpointVerticalConstraint) {
+      for (const arc of [c.a, c.b]) {
+        addNode(nodes, arc);
+        addNode(nodes, arc.center);
+      }
     } else if (c instanceof ArcEndpointFixedConstraint) {
       addNode(nodes, c.arc);
       addNode(nodes, c.arc.center);
@@ -14923,7 +14954,7 @@
   }
 
   function canApplyConstraintToTargets(type, targets, sketchId) {
-    const { points, lines, circles, arcs, splines, arcEndpoint, arcEndpointPair } = targets;
+    const { points, lines, circles, arcs, splines, arcEndpoint, arcEndpointPair, axisPointPair } = targets;
     const primitives = [...circles, ...arcs];
     const selectedItems = [...points, ...lines, ...primitives, ...splines, arcEndpoint?.arc, ...(arcEndpointPair || []).map((item) => item.arc)].filter(Boolean);
     if (!sameSketchElements(selectedItems, sketchId)) return false;
@@ -14943,7 +14974,7 @@
       if (points.length === 1 && lines.length === 0 && splines.length === 1 && primitives.length === 0) return true;
       return Boolean(arcEndpoint && ((points.length === 1 && lines.length === 0 && coincidentPrimitives.length === 0) || (points.length === 0 && lines.length === 1 && coincidentPrimitives.length === 0) || (points.length === 0 && lines.length === 0 && coincidentPrimitives.length === 1)));
     }
-    if (type === "horizontal" || type === "vertical") return (lines.length === 1 && points.length === 0 && lineHasDirection(lines[0])) || (points.length === 2 && lines.length === 0);
+    if (type === "horizontal" || type === "vertical") return (lines.length === 1 && points.length === 0 && !axisPointPair && lineHasDirection(lines[0])) || (axisPointPair?.length === 2 && axisPointPair.every((operand) => operand.kind === axisPointPair[0].kind) && lines.length === 0);
     if (type === "parallel" || type === "perpendicular") return lines.length === 2 && lines.every(lineHasDirection);
     if (type === "symmetry") {
       const pointTargets = points.length === 2 && lines.length === 1;
@@ -15243,7 +15274,7 @@
       if (!subjectKind && hitL) return makeConstraintOperand("line", { line: hitL });
       if (!subjectKind && hitA) return makeConstraintOperand("primitive", { primitive: hitA });
     }
-    if (hitArcEnd && (type === "coincident" || type === "pointOnCircle" || type === "fixed")) return makeConstraintOperand("arc-endpoint", { arc: hitArcEnd.arc, endpoint: hitArcEnd.endpoint });
+    if (hitArcEnd && (type === "coincident" || type === "pointOnCircle" || type === "fixed" || type === "horizontal" || type === "vertical")) return makeConstraintOperand("arc-endpoint", { arc: hitArcEnd.arc, endpoint: hitArcEnd.endpoint });
     if (hitP) return makeConstraintOperand("point", { point: hitP });
     if (hitL) return makeConstraintOperand("line", { line: hitL });
     if (hitC || hitA) {
@@ -15262,7 +15293,7 @@
 
   function constraintOperandLimit(type, operands) {
     if (type === "distance") return 2;
-    if (type === "horizontal" || type === "vertical") return operands.some((operand) => operand.kind === "point") ? 2 : 1;
+    if (type === "horizontal" || type === "vertical") return operands.some((operand) => operand.kind === "point" || operand.kind === "arc-endpoint") ? 2 : 1;
     if (type === "symmetry") return 3;
     return 2;
   }
@@ -15283,7 +15314,7 @@
     }
     if ((type === "parallel" || type === "perpendicular" || type === "collinear") && operand.kind !== "line") return { ok: false, error: invalidConstraintTargetHint(type) };
     if ((type === "parallel" || type === "perpendicular" || type === "collinear") && !lineHasDirection(operand.line)) return { ok: false, error: "向き拘束の対象線が短すぎます" };
-    if ((type === "horizontal" || type === "vertical") && operand.kind !== "line" && operand.kind !== "point") return { ok: false, error: invalidConstraintTargetHint(type) };
+    if ((type === "horizontal" || type === "vertical") && operand.kind !== "line" && operand.kind !== "point" && operand.kind !== "arc-endpoint") return { ok: false, error: invalidConstraintTargetHint(type) };
     if (type === "tangent" && operand.kind !== "line" && operand.kind !== "primitive" && operand.kind !== "spline") return { ok: false, error: invalidConstraintTargetHint(type) };
     if (operand.kind === "spline" && type !== "coincident" && type !== "tangent") return { ok: false, error: invalidConstraintTargetHint(type) };
     if ((type === "equal" || type === "equalRadius" || type === "concentric") && operand.kind !== "line" && operand.kind !== "primitive" && operand.kind !== "point") return { ok: false, error: invalidConstraintTargetHint(type) };
@@ -19138,7 +19169,7 @@
 
   function constraintFromTargets(type, targets, sketchId) {
     if (!canApplyConstraintToTargets(type, targets, sketchId)) return null;
-    const { points, lines, circles, arcs, arcEndpoint, arcEndpointPair } = targets;
+    const { points, lines, circles, arcs, arcEndpoint, arcEndpointPair, axisPointPair } = targets;
     let constraint = null;
     const allPrimitives = [...circles, ...arcs];
     const primitives = type === "coincident" && arcEndpoint ? allPrimitives.filter((p) => p !== arcEndpoint.arc) : allPrimitives;
@@ -19162,9 +19193,29 @@
         constraint = new CoincidentConstraint(points[0], points[1]);
       }
     } else if (type === "horizontal") {
-      constraint = points.length === 2 ? new PointHorizontalConstraint(points[0], points[1]) : new HorizontalConstraint(lines[0]);
+      if (axisPointPair?.length === 2) {
+        const [first, second] = axisPointPair;
+        constraint = first.kind === "point" && second.kind === "point"
+          ? new PointHorizontalConstraint(first.point, second.point)
+          : new ArcEndpointHorizontalConstraint(
+            first.kind === "arc-endpoint" ? first.arc : second.arc,
+            first.kind === "arc-endpoint" ? first.endpoint : second.endpoint,
+            first.kind === "arc-endpoint" ? second.arc : first.arc,
+            first.kind === "arc-endpoint" ? second.endpoint : first.endpoint,
+          );
+      } else constraint = new HorizontalConstraint(lines[0]);
     } else if (type === "vertical") {
-      constraint = points.length === 2 ? new PointVerticalConstraint(points[0], points[1]) : new VerticalConstraint(lines[0]);
+      if (axisPointPair?.length === 2) {
+        const [first, second] = axisPointPair;
+        constraint = first.kind === "point" && second.kind === "point"
+          ? new PointVerticalConstraint(first.point, second.point)
+          : new ArcEndpointVerticalConstraint(
+            first.kind === "arc-endpoint" ? first.arc : second.arc,
+            first.kind === "arc-endpoint" ? first.endpoint : second.endpoint,
+            first.kind === "arc-endpoint" ? second.arc : first.arc,
+            first.kind === "arc-endpoint" ? second.endpoint : first.endpoint,
+          );
+      } else constraint = new VerticalConstraint(lines[0]);
     } else if (type === "parallel") {
       constraint = new ParallelConstraint(lines[0], lines[1]);
     } else if (type === "perpendicular") {
@@ -21740,6 +21791,19 @@
     else if (target.kind === "dimension") selectedDimensionConstraint = target.item;
   }
 
+  function constraintHitsFromCanvasContextTarget(target) {
+    return {
+      hitP: target?.kind === "point" ? target.item : null,
+      hitL: target?.kind === "line" ? target.item : null,
+      hitC: target?.kind === "circle" ? target.item : null,
+      hitA: target?.kind === "arc" ? target.item : null,
+      hitS: target?.kind === "spline" ? target.item : null,
+      hitArcEnd: target?.kind === "arc-endpoint"
+        ? target.hit || { arc: target.item, endpoint: target.endpoint, point: arcEndpointPoint(target.item, target.endpoint) }
+        : null,
+    };
+  }
+
   function hasCancellableCanvasCommand() {
     return mode === "block-place" || Boolean(pendingCommand) || Boolean(pendingConstraintCommand) || hasActiveDrawOperation() || isDrawToolMode();
   }
@@ -22020,8 +22084,10 @@
     const pointer = canvasPoint(event);
     lastPointerWorld = pointer;
     const commandActive = hasCancellableCanvasCommand();
-    const candidates = commandActive ? [] : canvasContextCandidatesAt(pointer);
+    const constraintCommandActive = Boolean(pendingConstraintCommand);
+    const candidates = commandActive && !constraintCommandActive ? [] : canvasContextCandidatesAt(pointer);
     const multipleCandidates = candidates.length > 1;
+    const showCandidates = constraintCommandActive ? candidates.length > 0 : multipleCandidates;
     const target = commandActive || multipleCandidates ? { kind: "blank", item: null } : candidates[0] || { kind: "blank", item: null };
     if (!commandActive && !multipleCandidates && target.kind !== "blank") {
       selectCanvasContextTarget(target);
@@ -22030,9 +22096,9 @@
     }
     canvasContextTarget = target;
     canvasContextPointer = pointer;
-    canvasContextCandidates = multipleCandidates ? candidates : [];
-    canvasContextBaseHoverState = multipleCandidates ? captureCanvasHoverState() : null;
-    if (multipleCandidates) renderCanvasContextCandidates(candidates);
+    canvasContextCandidates = showCandidates ? candidates : [];
+    canvasContextBaseHoverState = showCandidates ? captureCanvasHoverState() : null;
+    if (showCandidates) renderCanvasContextCandidates(candidates);
     else renderCanvasContextMenu(canvasContextMenuItems(target, commandActive));
     canvasContextMenu.setAttribute("aria-label", applicationText("キャンバスコンテキストメニュー", "Canvas context menu"));
     canvasContextMenu.hidden = false;
@@ -22052,7 +22118,13 @@
   function selectCanvasContextCandidate(index) {
     const target = canvasContextCandidates[index];
     if (!target) return;
+    const pointer = canvasContextPointer;
+    const commandType = pendingConstraintCommand?.type;
     closeCanvasContextMenu({ restoreHover: false });
+    if (commandType) {
+      handleConstraintOperandClick(pointer || { x: 0, y: 0 }, commandType, constraintHitsFromCanvasContextTarget(target));
+      return;
+    }
     selectCanvasContextTarget(target, { preserveSelectedSet: false });
     updateUI({ refreshAnalysis: false });
     draw();
@@ -26384,6 +26456,25 @@
           lineIds: [first.id, second.id],
           blockId: block.id,
           excludedIds: [hidden.id, inactive.id],
+        };
+      },
+      resetForArcEndpointConstraintSelectionTest() {
+        resetModelState();
+        const lineStart = addPoint(0, 0, false, "endpoint");
+        const lineEnd = addPoint(60, 0, false, "endpoint");
+        addLine(lineStart, lineEnd);
+        const first = addArc(addPoint(0, 20, false, "center"), 20, -Math.PI / 2, 0);
+        const second = addArc(addPoint(60, 20, false, "center"), 20, -Math.PI / 2, 0);
+        fitSketchToViewport(activeSketchId(), 180);
+        resetHistory("arc endpoint constraint selection test");
+        updateUI();
+        draw();
+        return {
+          first: this.worldClientPositionForTest(arcEndpointPoint(first, "start")),
+          second: this.worldClientPositionForTest(arcEndpointPoint(second, "start")),
+          firstArcId: first.id,
+          secondArcId: second.id,
+          lineStartId: lineStart.id,
         };
       },
       canvasContextSelectionStateForTest() {
