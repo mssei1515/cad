@@ -1,6 +1,9 @@
 /* Application composition, editing commands, Canvas UI and event handling. */
 (function () {
   "use strict";
+  const { referenceImageMimeType, validReferenceImageDataUrl, normalizeReferenceImages, serializeReferenceImage, validSerializedReferenceImageList, REFERENCE_IMAGE_MAX_SIDE_PX } = window.ReferenceImageData;
+  const { normalizeHatches, validSerializedHatch, validSerializedHatchList, serializeHatch } = window.HatchData;
+  const { normalizeAnnotations, serializeAnnotation } = window.AnnotationData;
 
   const {
     CSS_PX_PER_MM, DEFAULT_APPEARANCE, DEFAULT_CONSTRUCTION_APPEARANCE,
@@ -453,7 +456,6 @@
   let geometryClipboard = null;
   const HISTORY_LIMIT = 80;
   const CURRENT_JSON_VERSION = 22;
-  const REFERENCE_IMAGE_MAX_SIDE_PX = 3000;
   const SKETCH_TREE_MIN_WIDTH = 220;
   const SKETCH_TREE_MAX_WIDTH = 560;
   const SKETCH_TREE_KEYBOARD_RESIZE_STEP = 16;
@@ -775,61 +777,6 @@
     return applicationText("平行線", "Parallel");
   }
 
-  function normalizeHatches(items, fallbackSketchId = null) {
-    if (!Array.isArray(items)) return [];
-    return items.map((item, index) => {
-      if (!item || typeof item !== "object") return null;
-      const boundaryLoops = normalizeHatchBoundaryLoops(item.boundaryLoops);
-      if (!boundaryLoops) return null;
-      const seed = item.seed && Number.isFinite(Number(item.seed.x)) && Number.isFinite(Number(item.seed.y))
-        ? { x: Number(item.seed.x), y: Number(item.seed.y) }
-        : { x: 0, y: 0 };
-      const normalized = {
-        id: String(item.id || `H${index + 1}`),
-        sketchId: item.sketchId == null ? fallbackSketchId : String(item.sketchId),
-        drawingOrder: normalizedDrawingOrder(item.drawingOrder),
-        seed,
-        boundaryLoops,
-        appearance: normalizeHatchAppearance(item.appearance),
-      };
-      Object.assign(item, normalized);
-      return item;
-    }).filter(Boolean);
-  }
-
-  function validSerializedHatch(value) {
-    if (!value || typeof value !== "object" || Array.isArray(value)) return false;
-    if (typeof value.id !== "string" || !value.id.trim() || typeof value.sketchId !== "string" || !value.sketchId.trim()) return false;
-    if (!value.seed || !Number.isFinite(Number(value.seed.x)) || !Number.isFinite(Number(value.seed.y))) return false;
-    if (!Array.isArray(value.boundaryLoops) || value.boundaryLoops.length === 0 || !normalizeHatchBoundaryLoops(value.boundaryLoops)) return false;
-    const appearance = value.appearance;
-    if (!appearance || typeof appearance !== "object" || Array.isArray(appearance)) return false;
-    return (value.drawingOrder == null || normalizedDrawingOrder(value.drawingOrder) != null)
-      && typeof appearance.visible === "boolean"
-      && ["parallel", "cross", "solid"].includes(appearance.patternType)
-      && Number.isFinite(Number(appearance.angle))
-      && Number.isFinite(Number(appearance.spacing)) && Number(appearance.spacing) >= 0.25
-      && typeof appearance.color === "string" && /^#[0-9a-fA-F]{6}$/.test(appearance.color)
-      && Number.isFinite(Number(appearance.lineWidth)) && Number(appearance.lineWidth) >= 0.5
-      && (!Object.prototype.hasOwnProperty.call(appearance, "opacity")
-        || Number.isFinite(Number(appearance.opacity)) && Number(appearance.opacity) >= 0 && Number(appearance.opacity) <= 1);
-  }
-
-  function validSerializedHatchList(items) {
-    return Array.isArray(items) && items.every(validSerializedHatch) && new Set(items.map((item) => item.id)).size === items.length;
-  }
-
-  function serializeHatch(hatch) {
-    return {
-      id: String(hatch.id),
-      sketchId: String(hatch.sketchId),
-      drawingOrder: normalizedDrawingOrder(hatch.drawingOrder) ?? 0,
-      seed: { x: Number(hatch.seed?.x) || 0, y: Number(hatch.seed?.y) || 0 },
-      boundaryLoops: normalizeHatchBoundaryLoops(hatch.boundaryLoops),
-      appearance: normalizeHatchAppearance(hatch.appearance),
-    };
-  }
-
   function normalizedSketchCopy(sketch) {
     return {
       ...sketch,
@@ -843,122 +790,6 @@
     const sketch = sketches.find((item) => item.id === sketchId) || sketches.find((item) => isRootSketch(item)) || null;
     return resolveDimensionAppearance(model.defaultDimensionAppearance,
       sketch && !isRootSketch(sketch) ? sketch.dimensionAppearance : null, dimension?.display);
-  }
-
-  function normalizeAnnotations(items, fallbackSketchId = null) {
-    if (!Array.isArray(items)) return [];
-    return items.map((item, index) => {
-      if (!item || typeof item !== "object") return null;
-      const type = item.type === "text" ? "text" : item.type === "leader" ? "leader" : null;
-      if (!type) return null;
-      const normalized = {
-        id: String(item.id || `AN${index + 1}`),
-        type,
-        sketchId: item.sketchId == null ? fallbackSketchId : String(item.sketchId),
-        visible: item.visible !== false,
-        text: String(item.text || ""),
-        x: Number.isFinite(Number(item.x)) ? Number(item.x) : 0,
-        y: Number.isFinite(Number(item.y)) ? Number(item.y) : 0,
-        rotation: Number.isFinite(Number(item.rotation)) ? Number(item.rotation) : 0,
-        style: normalizeAnnotationStyle(item.style),
-      };
-      if (type === "leader") {
-        normalized.geometryRef = item.geometryRef && typeof item.geometryRef === "object" ? { ...item.geometryRef } : null;
-        for (const key of ["start", "elbow", "end"]) {
-          const point = item[key];
-          normalized[key] = point && Number.isFinite(Number(point.x)) && Number.isFinite(Number(point.y)) ? { x: Number(point.x), y: Number(point.y) } : null;
-        }
-      }
-      Object.assign(item, normalized);
-      if (type !== "leader") {
-        delete item.geometryRef;
-        delete item.start;
-        delete item.elbow;
-        delete item.end;
-      }
-      return item;
-    }).filter(Boolean);
-  }
-
-  function referenceImageMimeType(value) {
-    const mimeType = String(value || "").toLowerCase();
-    return ["image/png", "image/jpeg", "image/webp"].includes(mimeType) ? mimeType : null;
-  }
-
-  function validReferenceImageDataUrl(value, mimeType = null) {
-    const match = /^data:(image\/(?:png|jpeg|webp));base64,[a-z0-9+/=]+$/i.exec(String(value || ""));
-    return Boolean(match && (!mimeType || match[1].toLowerCase() === mimeType));
-  }
-
-  function normalizeReferenceImages(items, fallbackSketchId = null) {
-    if (!Array.isArray(items)) return [];
-    return items.map((item, index) => {
-      if (!item || typeof item !== "object") return null;
-      const mimeType = referenceImageMimeType(item.mimeType);
-      const pixelWidth = Math.round(Number(item.pixelWidth));
-      const pixelHeight = Math.round(Number(item.pixelHeight));
-      const scale = Number(item.scale);
-      if (!mimeType || !validReferenceImageDataUrl(item.dataUrl, mimeType)
-        || !Number.isInteger(pixelWidth) || pixelWidth < 1 || pixelWidth > REFERENCE_IMAGE_MAX_SIDE_PX
-        || !Number.isInteger(pixelHeight) || pixelHeight < 1 || pixelHeight > REFERENCE_IMAGE_MAX_SIDE_PX
-        || !Number.isFinite(scale) || scale <= 0) return null;
-      const normalized = {
-        id: String(item.id || `IMG${index + 1}`),
-        name: String(item.name || `Image-${index + 1}`),
-        sketchId: item.sketchId == null ? fallbackSketchId : String(item.sketchId),
-        mimeType,
-        dataUrl: String(item.dataUrl),
-        pixelWidth,
-        pixelHeight,
-        x: Number.isFinite(Number(item.x)) ? Number(item.x) : 0,
-        y: Number.isFinite(Number(item.y)) ? Number(item.y) : 0,
-        scale,
-        rotation: Number.isFinite(Number(item.rotation)) ? Number(item.rotation) : 0,
-        opacity: Math.max(0, Math.min(1, Number.isFinite(Number(item.opacity)) ? Number(item.opacity) : 0.5)),
-        visible: item.visible !== false,
-        locked: Boolean(item.locked),
-      };
-      Object.assign(item, normalized);
-      return item;
-    }).filter(Boolean);
-  }
-
-  function serializeReferenceImage(item) {
-    return {
-      id: item.id,
-      name: item.name,
-      sketchId: item.sketchId,
-      mimeType: item.mimeType,
-      dataUrl: item.dataUrl,
-      pixelWidth: item.pixelWidth,
-      pixelHeight: item.pixelHeight,
-      x: item.x,
-      y: item.y,
-      scale: item.scale,
-      rotation: item.rotation,
-      opacity: item.opacity,
-      visible: item.visible !== false,
-      locked: Boolean(item.locked),
-    };
-  }
-
-  function validSerializedReferenceImageList(items) {
-    return Array.isArray(items) && items.every((item) => {
-      const mimeType = referenceImageMimeType(item?.mimeType);
-      return item && typeof item === "object"
-        && typeof item.id === "string" && item.id.length > 0
-        && typeof item.name === "string"
-        && typeof item.sketchId === "string"
-        && Boolean(mimeType) && validReferenceImageDataUrl(item.dataUrl, mimeType)
-        && Number.isInteger(item.pixelWidth) && item.pixelWidth >= 1 && item.pixelWidth <= REFERENCE_IMAGE_MAX_SIDE_PX
-        && Number.isInteger(item.pixelHeight) && item.pixelHeight >= 1 && item.pixelHeight <= REFERENCE_IMAGE_MAX_SIDE_PX
-        && Number.isFinite(item.x) && Number.isFinite(item.y)
-        && Number.isFinite(item.scale) && item.scale > 0
-        && Number.isFinite(item.rotation)
-        && Number.isFinite(item.opacity) && item.opacity >= 0 && item.opacity <= 1
-        && typeof item.visible === "boolean"
-        && typeof item.locked === "boolean";
-    });
   }
 
   function ensureSketchState() {
@@ -1519,27 +1350,6 @@
     updateUI();
     draw();
     return item;
-  }
-
-  function serializeAnnotation(element) {
-    const data = {
-      id: element.id,
-      type: element.type,
-      sketchId: element.sketchId,
-      visible: element.visible !== false,
-      text: element.text || "",
-      x: Number(element.x) || 0,
-      y: Number(element.y) || 0,
-      rotation: Number(element.rotation) || 0,
-      style: normalizeAnnotationStyle(element.style),
-    };
-    if (element.type === "leader") {
-      data.geometryRef = element.geometryRef && typeof element.geometryRef === "object" ? { ...element.geometryRef } : null;
-      data.start = element.start;
-      data.elbow = element.elbow;
-      data.end = element.end;
-    }
-    return data;
   }
 
   function geometryKindForItem(item) {
