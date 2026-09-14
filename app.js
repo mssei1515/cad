@@ -1,6 +1,23 @@
-/* app.js: Canvas UI and event handling */
+/* Application composition, editing commands, Canvas UI and event handling. */
 (function () {
   "use strict";
+
+  const {
+    CSS_PX_PER_MM, DEFAULT_APPEARANCE, DEFAULT_CONSTRUCTION_APPEARANCE,
+    DEFAULT_DIMENSION_APPEARANCE, DEFAULT_HATCH_APPEARANCE, DEFAULT_ANNOTATION_STYLE,
+    DIMENSION_APPEARANCE_LENGTH_KEYS, DIMENSION_APPEARANCE_NUMERIC_RULES,
+    normalizeAppearance, normalizeConstructionAppearance, normalizeDimensionAppearance,
+    loadedDimensionAppearance, normalizeHatchAppearance, normalizeAnnotationStyle,
+    resolveGeometryAppearance, resolveDimensionAppearance,
+  } = window.Appearance;
+  const {
+    normalizedDrawingOrder, drawingOrderItemsForScope, ensureDrawingOrderState, drawingOrderOwner,
+  } = window.DrawingOrder;
+  const {
+    DEFAULT_DOCUMENT_NAME, JOT2D_FILE_EXTENSION, JOT2D_FILE_MIME_TYPE,
+    sanitizeDocumentNameValue, fileNameStem, safeDownloadBaseName,
+    effectiveDocumentNameFromValue, documentContentSignature, writeJot2DFile,
+  } = window.DocumentFiles;
 
   const {
     MIN_ORIENTATION_LENGTH,
@@ -259,9 +276,6 @@
   })();
   document.documentElement.lang = applicationLanguage;
   document.documentElement.dataset.theme = applicationTheme;
-  const DEFAULT_DOCUMENT_NAME = "無題";
-  const JOT2D_FILE_EXTENSION = ".jot2d";
-  const JOT2D_FILE_MIME_TYPE = "application/json";
   const ROOT_SKETCH_ID = "ROOT";
   const ROOT_SKETCH_NAME = "Root Sketch";
   const DEFAULT_SKETCH_ID = "S1";
@@ -296,14 +310,9 @@
   };
   const solver = new ConstraintSolver(model);
 
+  const fileSession = window.DocumentFiles.create();
+
   let mode = "select";
-  let currentFileHandle = null;
-  let savedDocumentSignature = null;
-  let fileOperationPending = false;
-  let fileSavePending = false;
-  let fileCheckpointKind = "new";
-  let lastFileStatusSnapshot = null;
-  let lastFileStatusSignature = null;
   let selectedPoints = [];
   let selectedLines = [];
   let selectedCircles = [];
@@ -447,9 +456,6 @@
   let geometryClipboard = null;
   const HISTORY_LIMIT = 80;
   const CURRENT_JSON_VERSION = 22;
-  const CSS_PIXELS_PER_INCH = 96;
-  const MILLIMETERS_PER_INCH = 25.4;
-  const CSS_PX_PER_MM = CSS_PIXELS_PER_INCH / MILLIMETERS_PER_INCH;
   const REFERENCE_IMAGE_MAX_SIDE_PX = 3000;
   const SKETCH_TREE_MIN_WIDTH = 220;
   const SKETCH_TREE_MAX_WIDTH = 560;
@@ -478,7 +484,6 @@
   const DIMENSION_ARROW_MITER_LIMIT = 10;
   const HATCH_SCREEN_PX_PER_MM = CSS_PX_PER_MM;
   const HATCH_BOUNDARY_HIT_MARGIN_SCREEN_PX = 1;
-  const DIMENSION_APPEARANCE_LENGTH_KEYS = ["extensionLineOvershoot", "extensionLineOriginGap", "terminatorSize", "dimensionTextHeight", "dimensionTextGap"];
   const DIMENSION_DISPLAY_PRECISION = 1e-6;
   const MEASURED_DIMENSION_SNAP_TOLERANCE = 1e-5;
   const CONSTRAINT_ACCEPT_ERROR = 1e-4;
@@ -497,65 +502,6 @@
     conflict: "#dc2626",
   };
   const INACTIVE_CONSTRAINT_STATUS_COLOR = "#cbd5e1";
-  const DEFAULT_APPEARANCE = {
-    visible: true,
-    color: "#111827",
-    lineType: "solid",
-    lineWidth: 2,
-  };
-  const DEFAULT_CONSTRUCTION_APPEARANCE = {
-    visible: true,
-    color: "#64748b",
-    lineType: "dashdot",
-    lineWidth: 1,
-    endpointOverhang: true,
-    endpointMarkers: true,
-  };
-  const DEFAULT_DIMENSION_APPEARANCE = {
-    visible: true,
-    color: "#64748b",
-    lineWidth: 1.2,
-    precision: null,
-    prefix: "",
-    suffix: "",
-    terminatorType: "arrow",
-    extensionLineOvershoot: 1.5,
-    extensionLineOriginGap: 1.5,
-    terminatorSize: 4,
-    arrowheadAngle: 30,
-    dimensionTextHeight: 5,
-    dimensionTextGap: 0,
-  };
-  const DEFAULT_HATCH_APPEARANCE = {
-    visible: true,
-    patternType: "parallel",
-    angle: 45,
-    spacing: 3,
-    color: "#64748b",
-    lineWidth: 1,
-    opacity: 1,
-  };
-  const DEFAULT_ANNOTATION_STYLE = {
-    color: "#111827",
-    textHeight: 13 / ANNOTATION_SCREEN_PX_PER_MM,
-    fontFamily: "sans-serif",
-    bold: false,
-    italic: false,
-    textAlign: "left",
-    lineWidth: 1.4,
-    lineType: "solid",
-    terminatorType: "filledArrow",
-    terminatorSize: 10 / ANNOTATION_SCREEN_PX_PER_MM,
-  };
-  const DIMENSION_APPEARANCE_NUMERIC_RULES = {
-    lineWidth: { min: 0.5, max: 10 },
-    extensionLineOvershoot: { min: 0, max: 1000 },
-    extensionLineOriginGap: { min: 0, max: 1000 },
-    terminatorSize: { min: 0.1, max: 1000 },
-    arrowheadAngle: { min: 1, max: 179 },
-    dimensionTextHeight: { min: 0.1, max: 1000 },
-    dimensionTextGap: { min: 0, max: 1000 },
-  };
   const SKETCH_SOLVE_ERROR_COLOR = "#dc2626";
   let lastLoadLineRepairMessage = "";
   let lastLoadBlockConstraintRepairMessage = "";
@@ -770,27 +716,8 @@
     el.classList.toggle("error", kind === "error");
   }
 
-  function sanitizeDocumentNameValue(value) {
-    return String(value ?? "").replace(/[\r\n\t]+/g, " ");
-  }
-
   function effectiveDocumentName() {
-    const name = sanitizeDocumentNameValue(model.documentName).trim();
-    return name || DEFAULT_DOCUMENT_NAME;
-  }
-
-  function fileNameStem(fileName) {
-    const name = sanitizeDocumentNameValue(fileName).trim();
-    return name.replace(/\.[^.\\/]+$/, "") || DEFAULT_DOCUMENT_NAME;
-  }
-
-  function safeDownloadBaseName(name) {
-    return effectiveDocumentNameFromValue(name).replace(/[<>:"/\\|?*\x00-\x1F]/g, "_").replace(/[. ]+$/g, "").trim() || "jot2d-model";
-  }
-
-  function effectiveDocumentNameFromValue(value) {
-    const name = sanitizeDocumentNameValue(value).trim();
-    return name || DEFAULT_DOCUMENT_NAME;
+    return effectiveDocumentNameFromValue(model.documentName);
   }
 
   function updateDocumentNameUI() {
@@ -799,47 +726,32 @@
     document.title = `${dirty ? "● " : ""}${displayName} - Jot2D`;
     const status = document.getElementById("documentSaveStatus");
     if (status) {
-      const label = fileSavePending ? applicationText("保存中…", "Saving…")
+      const label = fileSession.savePending ? applicationText("保存中…", "Saving…")
         : blockEditSession ? applicationText("ブロック編集中", "Editing block")
         : dirty ? applicationText("未保存の変更", "Unsaved changes")
-        : fileCheckpointKind === "new" ? applicationText("新規ドキュメント", "New document")
-        : fileCheckpointKind === "download" ? applicationText("ダウンロード開始済み", "Download started")
+        : fileSession.checkpointKind === "new" ? applicationText("新規ドキュメント", "New document")
+        : fileSession.checkpointKind === "download" ? applicationText("ダウンロード開始済み", "Download started")
         : applicationText("保存済み", "Saved");
       const text = `${displayName} · ${label}`;
       if (status.textContent !== text) status.textContent = text;
-      status.title = currentFileHandle ? `${text}\n${currentFileHandle.name}` : text;
+      status.title = fileSession.handle ? `${text}\n${fileSession.handle.name}` : text;
       status.dataset.dirty = String(dirty);
     }
   }
 
-  // Compare document content, excluding save timestamps and the active editing scope.
-  function documentContentSignature(data) {
-    const { savedAt, activeSketchId, documentName, ...content } = data;
-    content.blockDefinitions = (content.blockDefinitions || []).map(({ activeSketchId, ...definition }) => definition);
-    return JSON.stringify({ ...content, documentName });
-  }
-
   function hasUnsavedDocumentChanges() {
-    if (savedDocumentSignature === null) return false;
-    if (blockEditSession) return true;
-    const snapshot = undoStack.at(-1);
-    if (!snapshot) return false;
-    if (snapshot !== lastFileStatusSnapshot) {
-      lastFileStatusSnapshot = snapshot;
-      lastFileStatusSignature = documentContentSignature({ ...JSON.parse(snapshot), documentName: effectiveDocumentName() });
-    }
-    return lastFileStatusSignature !== savedDocumentSignature;
+    return fileSession.hasUnsavedChanges({
+      snapshot: undoStack.at(-1), documentName: effectiveDocumentName(), editingBlock: Boolean(blockEditSession),
+    });
   }
 
   function markDocumentFileCheckpoint(kind, data = serializeModel()) {
-    savedDocumentSignature = documentContentSignature(data);
-    fileCheckpointKind = kind;
-    lastFileStatusSnapshot = null;
+    fileSession.markCheckpoint(kind, data);
     updateDocumentNameUI();
   }
 
   async function confirmDocumentReplacement() {
-    if (!blockEditSession && documentContentSignature(serializeModel()) === savedDocumentSignature) return true;
+    if (!blockEditSession && fileSession.matchesCheckpoint(serializeModel())) return true;
     const choice = await choiceDialog.show({
       title: applicationText("未保存の変更があります", "Unsaved changes"),
       message: applicationText("別のファイルを開く前に、現在の図面を保存しますか？", "Save the current drawing before opening another file?"),
@@ -852,94 +764,12 @@
       closeLabel: applicationText("閉じる", "Close"),
     });
     if (choice === "save") return await saveJot2DFile({ replacingDocument: true })
-      && !blockEditSession && documentContentSignature(serializeModel()) === savedDocumentSignature;
+      && !blockEditSession && fileSession.matchesCheckpoint(serializeModel());
     return choice === "discard";
   }
 
   function escapeHtml(value) {
     return String(value ?? "").replace(/[&<>"']/g, (ch) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[ch]);
-  }
-
-  function normalizeAppearance(value, { partial = true } = {}) {
-    const source = value && typeof value === "object" && !Array.isArray(value) ? value : {};
-    const result = partial ? {} : { ...DEFAULT_APPEARANCE };
-    if (Object.prototype.hasOwnProperty.call(source, "visible")) result.visible = source.visible !== false;
-    if (typeof source.color === "string" && /^#[0-9a-fA-F]{6}$/.test(source.color)) result.color = source.color.toLowerCase();
-    if (["solid", "dashed", "dashdot", "dashdotdot", "dotted"].includes(source.lineType)) result.lineType = source.lineType;
-    const lineWidth = Number(source.lineWidth ?? source.lineWidthPx);
-    if (Number.isFinite(lineWidth)) result.lineWidth = Math.max(0.5, Math.min(10, lineWidth));
-    if (Object.prototype.hasOwnProperty.call(source, "endpointOverhang")) result.endpointOverhang = source.endpointOverhang !== false;
-    if (Object.prototype.hasOwnProperty.call(source, "endpointMarkers")) result.endpointMarkers = source.endpointMarkers !== false;
-    return result;
-  }
-
-  function normalizeConstructionAppearance(value, { partial = true } = {}) {
-    return { ...(partial ? {} : DEFAULT_CONSTRUCTION_APPEARANCE), ...normalizeAppearance(value) };
-  }
-
-  function normalizeDimensionAppearance(value, { partial = true } = {}) {
-    const source = value && typeof value === "object" && !Array.isArray(value) ? value : {};
-    const result = partial ? {} : { ...DEFAULT_DIMENSION_APPEARANCE };
-    if (Object.prototype.hasOwnProperty.call(source, "visible")) result.visible = source.visible !== false;
-    if (typeof source.color === "string" && /^#[0-9a-fA-F]{6}$/.test(source.color)) result.color = source.color.toLowerCase();
-    if (Object.prototype.hasOwnProperty.call(source, "precision")) {
-      const precision = Number(source.precision);
-      result.precision = source.precision == null || source.precision === "" || !Number.isFinite(precision)
-        ? null
-        : Math.max(0, Math.min(10, Math.round(precision)));
-    }
-    if (Object.prototype.hasOwnProperty.call(source, "prefix")) result.prefix = String(source.prefix || "");
-    if (Object.prototype.hasOwnProperty.call(source, "suffix")) result.suffix = String(source.suffix || "");
-    if (Object.prototype.hasOwnProperty.call(source, "toleranceUpper")) {
-      const tolerance = Number(source.toleranceUpper);
-      result.toleranceUpper = source.toleranceUpper == null || source.toleranceUpper === "" || !Number.isFinite(tolerance) ? null : tolerance;
-    }
-    if (Object.prototype.hasOwnProperty.call(source, "toleranceLower")) {
-      const tolerance = Number(source.toleranceLower);
-      result.toleranceLower = source.toleranceLower == null || source.toleranceLower === "" || !Number.isFinite(tolerance) ? null : tolerance;
-    }
-    if (["arrow", "filledArrow", "dot"].includes(source.terminatorType)) result.terminatorType = source.terminatorType;
-    for (const [key, rule] of Object.entries(DIMENSION_APPEARANCE_NUMERIC_RULES)) {
-      if (!Object.prototype.hasOwnProperty.call(source, key)) continue;
-      if (source[key] == null || source[key] === "") continue;
-      const numeric = Number(source[key]);
-      if (Number.isFinite(numeric)) result[key] = Math.max(rule.min, Math.min(rule.max, numeric));
-    }
-    return result;
-  }
-
-  function loadedDimensionAppearance(value, sourceVersion, options = {}) {
-    const source = value && typeof value === "object" && !Array.isArray(value) ? { ...value } : {};
-    if (!Object.prototype.hasOwnProperty.call(source, "terminatorSize") && Object.prototype.hasOwnProperty.call(source, "arrowheadLength")) {
-      source.terminatorSize = source.arrowheadLength;
-    }
-    if (sourceVersion < 12) {
-      for (const key of DIMENSION_APPEARANCE_LENGTH_KEYS) {
-        const numeric = Number(source[key]);
-        if (Number.isFinite(numeric)) source[key] = numeric / DIMENSION_SCREEN_PX_PER_MM;
-      }
-    }
-    delete source.arrows;
-    delete source.extensionLines;
-    delete source.arrowheadLength;
-    return normalizeDimensionAppearance(source, options);
-  }
-
-  function normalizeHatchAppearance(value) {
-    const source = value && typeof value === "object" && !Array.isArray(value) ? value : {};
-    const spacing = Number(source.spacing);
-    const angle = Number(source.angle);
-    const lineWidth = Number(source.lineWidth);
-    const opacity = Number(source.opacity);
-    return {
-      visible: source.visible !== false,
-      patternType: ["parallel", "cross", "solid"].includes(source.patternType) ? source.patternType : DEFAULT_HATCH_APPEARANCE.patternType,
-      angle: Number.isFinite(angle) ? Math.max(-3600, Math.min(3600, angle)) : DEFAULT_HATCH_APPEARANCE.angle,
-      spacing: Number.isFinite(spacing) ? Math.max(0.25, Math.min(1000, spacing)) : DEFAULT_HATCH_APPEARANCE.spacing,
-      color: typeof source.color === "string" && /^#[0-9a-fA-F]{6}$/.test(source.color) ? source.color.toLowerCase() : DEFAULT_HATCH_APPEARANCE.color,
-      lineWidth: Number.isFinite(lineWidth) ? Math.max(0.5, Math.min(10, lineWidth)) : DEFAULT_HATCH_APPEARANCE.lineWidth,
-      opacity: Number.isFinite(opacity) ? Math.max(0, Math.min(1, opacity)) : DEFAULT_HATCH_APPEARANCE.opacity,
-    };
   }
 
   function hatchPatternTypeLabel(patternType) {
@@ -1014,48 +844,8 @@
 
   function effectiveDimensionAppearance(dimension, sketchId = activeSketchId(), sketches = model.sketches) {
     const sketch = sketches.find((item) => item.id === sketchId) || sketches.find((item) => isRootSketch(item)) || null;
-    return {
-      ...effectiveDimensionAppearanceForSketch(sketch, sketches),
-      ...normalizeDimensionAppearance(dimension?.display),
-    };
-  }
-
-  function normalizeAnnotationStyle(value) {
-    const source = value && typeof value === "object" && !Array.isArray(value) ? value : {};
-    const legacyFontSize = Number(source.fontSize);
-    const textHeight = Number(source.textHeight);
-    const lineWidth = Number(source.lineWidth);
-    const terminatorSize = Number(source.terminatorSize);
-    const fontFamily = ["sans-serif", "serif", "monospace"].includes(source.fontFamily)
-      ? source.fontFamily
-      : DEFAULT_ANNOTATION_STYLE.fontFamily;
-    const textAlign = ["left", "center", "right"].includes(source.textAlign)
-      ? source.textAlign
-      : DEFAULT_ANNOTATION_STYLE.textAlign;
-    const lineType = ["solid", "dashed", "dashdot", "dashdotdot", "dotted"].includes(source.lineType)
-      ? source.lineType
-      : DEFAULT_ANNOTATION_STYLE.lineType;
-    const terminatorType = ["arrow", "filledArrow", "dot", "none"].includes(source.terminatorType)
-      ? source.terminatorType
-      : DEFAULT_ANNOTATION_STYLE.terminatorType;
-    return {
-      color: typeof source.color === "string" && /^#[0-9a-fA-F]{6}$/.test(source.color)
-        ? source.color.toLowerCase()
-        : DEFAULT_ANNOTATION_STYLE.color,
-      textHeight: Number.isFinite(textHeight)
-        ? Math.max(0.5, Math.min(100, textHeight))
-        : Number.isFinite(legacyFontSize)
-          ? Math.max(0.5, Math.min(100, legacyFontSize / ANNOTATION_SCREEN_PX_PER_MM))
-          : DEFAULT_ANNOTATION_STYLE.textHeight,
-      fontFamily,
-      bold: source.bold === true || source.fontWeight === "bold" || Number(source.fontWeight) >= 600,
-      italic: source.italic === true || source.fontStyle === "italic",
-      textAlign,
-      lineWidth: Number.isFinite(lineWidth) ? Math.max(0.5, Math.min(10, lineWidth)) : DEFAULT_ANNOTATION_STYLE.lineWidth,
-      lineType,
-      terminatorType,
-      terminatorSize: Number.isFinite(terminatorSize) ? Math.max(0.1, Math.min(100, terminatorSize)) : DEFAULT_ANNOTATION_STYLE.terminatorSize,
-    };
+    return resolveDimensionAppearance(model.defaultDimensionAppearance,
+      sketch && !isRootSketch(sketch) ? sketch.dimensionAppearance : null, dimension?.display);
   }
 
   function normalizeAnnotations(items, fallbackSketchId = null) {
@@ -1205,62 +995,6 @@
     if (!model.activeSketchId || !model.sketches.some((sketch) => sketch.id === model.activeSketchId)) {
       model.activeSketchId = ROOT_SKETCH_ID;
     }
-  }
-
-  function normalizedDrawingOrder(value) {
-    return Number.isInteger(value) && value >= 0 ? value : null;
-  }
-
-  function drawingOrderItemsForScope(scope = model, sketchId = null) {
-    const items = [
-      ...(scope?.hatches || []),
-      ...(scope?.lines || []),
-      ...(scope?.circles || []),
-      ...(scope?.arcs || []),
-      ...(scope?.splines || []),
-      ...(scope?.blockInstances || []),
-      ...(scope?.geometryInstances || []),
-    ].filter(Boolean);
-    return sketchId == null ? items : items.filter((item) => String(item.sketchId) === String(sketchId));
-  }
-
-  function ensureDrawingOrderState(scope = model) {
-    const items = drawingOrderItemsForScope(scope);
-    const indexByItem = new Map(items.map((item, index) => [item, index]));
-    const bySketch = new Map();
-    for (const item of items) {
-      const sketchId = String(item.sketchId || "");
-      if (!bySketch.has(sketchId)) bySketch.set(sketchId, []);
-      bySketch.get(sketchId).push(item);
-    }
-    for (const sketchItems of bySketch.values()) {
-      const seenOrders = new Set();
-      let maxOrder = -1;
-      let alreadyNormalized = true;
-      for (const item of sketchItems) {
-        const order = normalizedDrawingOrder(item.drawingOrder);
-        if (order == null || seenOrders.has(order)) {
-          alreadyNormalized = false;
-          break;
-        }
-        seenOrders.add(order);
-        maxOrder = Math.max(maxOrder, order);
-      }
-      if (alreadyNormalized && maxOrder === sketchItems.length - 1) continue;
-      const existing = sketchItems.filter((item) => normalizedDrawingOrder(item.drawingOrder) != null);
-      const missing = sketchItems.filter((item) => normalizedDrawingOrder(item.drawingOrder) == null);
-      const ordered = existing.length === 0
-        ? sketchItems
-        : [
-            ...missing.filter((item) => (scope?.hatches || []).includes(item)),
-            ...existing.sort((a, b) => normalizedDrawingOrder(a.drawingOrder) - normalizedDrawingOrder(b.drawingOrder) || indexByItem.get(a) - indexByItem.get(b)),
-            ...missing.filter((item) => !(scope?.hatches || []).includes(item)),
-          ];
-      ordered.forEach((item, index) => {
-        item.drawingOrder = index;
-      });
-    }
-    return scope;
   }
 
   function ensureAppearanceState() {
@@ -3057,21 +2791,18 @@
     const cached = item && geometryReadCache?.appearances.get(item);
     if (cached) return cached;
     const construction = (item instanceof Line || item instanceof Circle || item instanceof Arc || item instanceof Spline) && item.construction;
-    let result = construction
-      ? { ...normalizeConstructionAppearance(model.defaultConstructionAppearance, { partial: false }) }
-      : { ...normalizeAppearance(model.defaultAppearance, { partial: false }) };
     const outerSketch = sketchById(elementSketchId(item));
-    if (outerSketch) result = cascadeSketchGeometryAppearance(outerSketch, model.sketches, result, construction);
-    if (item?.derivedProjection) {
-      result = { ...result, ...normalizeAppearance(item.derivedInstance?.appearanceOverride) };
-    } else if (item?.blockProjection) {
-      const definitionSketch = item.blockDefinition?.sketches?.find((sketch) => sketch.id === item.localElement?.sketchId);
-      if (definitionSketch) result = cascadeSketchGeometryAppearance(definitionSketch, item.blockDefinition.sketches, result, construction);
-      result = { ...result, ...normalizeAppearance(item.localElement?.appearance) };
-      for (const override of item.blockAppearanceOverrides || [item.blockInstance?.appearanceOverride]) result = { ...result, ...normalizeAppearance(override) };
-    } else {
-      result = { ...result, ...normalizeAppearance(item?.appearance) };
-    }
+    const definitionSketch = item?.blockProjection && !item?.derivedProjection
+      ? item.blockDefinition?.sketches?.find((sketch) => sketch.id === item.localElement?.sketchId) : null;
+    const result = resolveGeometryAppearance({
+      defaults: construction ? model.defaultConstructionAppearance : model.defaultAppearance,
+      construction,
+      sketchAppearance: sketchGeometryAppearanceLayer(outerSketch, construction),
+      definitionSketchAppearance: sketchGeometryAppearanceLayer(definitionSketch, construction),
+      elementAppearance: item?.derivedProjection ? null : item?.blockProjection ? item.localElement?.appearance : item?.appearance,
+      overrides: item?.derivedProjection ? [item.derivedInstance?.appearanceOverride]
+        : item?.blockProjection ? item.blockAppearanceOverrides || [item.blockInstance?.appearanceOverride] : [],
+    });
     if (item && geometryReadCache) geometryReadCache.appearances.set(item, result);
     return result;
   }
@@ -9001,17 +8732,6 @@
     return JSON.stringify(serializeModel(), null, 2);
   }
 
-  async function writeJot2DFile(handle, content) {
-    const writable = await handle.createWritable();
-    try {
-      await writable.write(content);
-      await writable.close();
-    } catch (error) {
-      try { await writable.abort?.(); } catch (_abortError) { /* Keep the original write error. */ }
-      throw error;
-    }
-  }
-
   function downloadJot2DFile(content, name) {
     const url = URL.createObjectURL(new Blob([content], { type: JOT2D_FILE_MIME_TYPE }));
     const link = document.createElement("a");
@@ -9025,13 +8745,13 @@
   }
 
   async function saveJot2DFile({ saveAs = false, replacingDocument = false } = {}) {
-    if (fileSavePending || (fileOperationPending && !replacingDocument)) return false;
+    if (!fileSession.canSave({ replacingDocument })) return false;
     if (blockEditSession) {
       setHint("ブロック定義編集を終了してから保存してください", "error");
       return false;
     }
-    let handle = saveAs ? null : currentFileHandle;
-    fileSavePending = true;
+    let handle = saveAs ? null : fileSession.handle;
+    fileSession.beginSave({ replacingDocument });
     updateDocumentNameUI();
     try {
       const nativeSave = handle || fileSystemAccessSupported("showSaveFilePicker");
@@ -9050,7 +8770,7 @@
       const name = handle?.name || `${safeDownloadBaseName(model.documentName)}${JOT2D_FILE_EXTENSION}`;
       if (handle) {
         await writeJot2DFile(handle, content);
-        currentFileHandle = handle;
+        fileSession.setHandle(handle);
       } else {
         downloadJot2DFile(content, name);
       }
@@ -9070,7 +8790,7 @@
       log(message);
       return false;
     } finally {
-      fileSavePending = false;
+      fileSession.finishSave();
       updateDocumentNameUI();
     }
   }
@@ -9140,13 +8860,13 @@
   }
 
   async function openJot2DFile() {
-    if (fileOperationPending || fileSavePending) return false;
+    if (fileSession.busy) return false;
     if (blockEditSession) {
       setHint("ブロック定義編集を終了してから読み込んでください", "error");
       return false;
     }
     if (htmlDocumentFilePickerRequested() || !fileSystemAccessSupported("showOpenFilePicker")) return requestDocumentFileInput();
-    fileOperationPending = true;
+    if (!fileSession.beginOpen()) return false;
     try {
       const [handle] = await window.showOpenFilePicker({
         types: jot2dFilePickerTypes(),
@@ -9160,7 +8880,7 @@
       const file = await handle.getFile();
       const opened = await importFileData(file, { expectedContentSignature });
       if (!opened) return false;
-      currentFileHandle = handle;
+      fileSession.setHandle(handle);
       updateDocumentNameUI();
       const message = applicationText(`ファイルを開きました: ${file.name}`, `Opened: ${file.name}`);
       setHint(message);
@@ -9176,7 +8896,7 @@
       log(message);
       return false;
     } finally {
-      fileOperationPending = false;
+      fileSession.finishOpen();
     }
   }
 
@@ -12948,10 +12668,6 @@
   }
 
   const DRAWING_STACK_KIND_ORDER = Object.freeze({ hatch: 0, line: 1, circle: 2, arc: 3, spline: 4 });
-
-  function drawingOrderOwner(item) {
-    return item?.blockInstance || item?.derivedInstance || item;
-  }
 
   function drawingOrderInternalValue(item, kind) {
     if (!item?.blockProjection && !item?.derivedProjection) return 0;
@@ -17262,43 +16978,27 @@
     return true;
   }
 
-  function sketchAppearanceLayers(sketch) {
-    return sketch && !isRootSketch(sketch) ? [sketch] : [];
+  function sketchGeometryAppearanceLayer(sketch, construction = false) {
+    if (!sketch || isRootSketch(sketch)) return null;
+    return construction ? sketch.constructionAppearance : sketch.appearance;
   }
 
-  function cascadeSketchAppearance(sketch, sketches, base) {
-    let result = { ...base };
-    const chain = sketchAppearanceLayers(sketch);
-    for (const item of chain) result = { ...result, ...normalizeAppearance(item.appearance) };
-    return result;
+  function effectiveConstructionAppearanceForSketch(sketch) {
+    return resolveGeometryAppearance({
+      defaults: model.defaultConstructionAppearance, construction: true,
+      sketchAppearance: sketchGeometryAppearanceLayer(sketch, true),
+    });
   }
 
-  function cascadeSketchGeometryAppearance(sketch, sketches, base, construction = false) {
-    let result = { ...base };
-    for (const item of sketchAppearanceLayers(sketch)) {
-      result = construction
-        ? { ...result, ...normalizeConstructionAppearance(item.constructionAppearance) }
-        : { ...result, ...normalizeAppearance(item.appearance) };
-    }
-    return result;
-  }
-
-  function effectiveConstructionAppearanceForSketch(sketch, sketches = model.sketches) {
-    const base = normalizeConstructionAppearance(model.defaultConstructionAppearance, { partial: false });
-    return sketch ? cascadeSketchGeometryAppearance(sketch, sketches, base, true) : base;
-  }
-
-  function effectiveDimensionAppearanceForSketch(sketch, sketches = model.sketches) {
-    let result = normalizeDimensionAppearance(model.defaultDimensionAppearance, { partial: false });
-    if (!sketch) return result;
-    for (const item of sketchAppearanceLayers(sketch)) {
-      result = { ...result, ...normalizeDimensionAppearance(item.dimensionAppearance) };
-    }
-    return result;
+  function effectiveDimensionAppearanceForSketch(sketch) {
+    return resolveDimensionAppearance(model.defaultDimensionAppearance,
+      sketch && !isRootSketch(sketch) ? sketch.dimensionAppearance : null);
   }
 
   function effectiveAppearanceForSketch(sketch) {
-    return cascadeSketchAppearance(sketch, model.sketches, normalizeAppearance(model.defaultAppearance, { partial: false }));
+    return resolveGeometryAppearance({
+      defaults: model.defaultAppearance, sketchAppearance: sketchGeometryAppearanceLayer(sketch),
+    });
   }
 
   function defaultAppearanceLabel() {
@@ -22014,63 +21714,23 @@
     });
   }
 
-  function selectedDrawingOrderOwners() {
-    ensureDrawingOrderState(model);
-    const candidates = [
-      ...selectedLines,
-      ...selectedCircles,
-      ...selectedArcs,
-      ...selectedSplines,
-      ...selectedHatches,
-      ...selectedBlockInstances,
-      ...selectedGeometryInstances,
-    ].map(drawingOrderOwner);
-    const valid = new Set(drawingOrderItemsForScope(model, activeSketchId()));
-    return [...new Set(candidates)].filter((item) => valid.has(item));
+  function selectedDrawingOrderCandidates() {
+    return [
+      ...selectedLines, ...selectedCircles, ...selectedArcs, ...selectedSplines,
+      ...selectedHatches, ...selectedBlockInstances, ...selectedGeometryInstances,
+    ];
   }
 
   function topmostDrawingOrderOwner(items) {
-    ensureDrawingOrderState(model);
-    const valid = new Set(drawingOrderItemsForScope(model, activeSketchId()));
-    return [...new Set((items || []).filter(Boolean).map(drawingOrderOwner))]
-      .filter((item) => valid.has(item))
-      .sort((a, b) => normalizedDrawingOrder(b.drawingOrder) - normalizedDrawingOrder(a.drawingOrder))[0] || null;
+    return window.DrawingOrder.topmostOwner(model, activeSketchId(), items);
   }
 
   function drawingOrderCommandState() {
-    const selected = new Set(selectedDrawingOrderOwners());
-    const ordered = drawingOrderItemsForScope(model, activeSketchId())
-      .slice()
-      .sort((a, b) => normalizedDrawingOrder(a.drawingOrder) - normalizedDrawingOrder(b.drawingOrder));
-    return {
-      count: selected.size,
-      canForward: ordered.some((item, index) => selected.has(item) && ordered.slice(index + 1).some((next) => !selected.has(next))),
-      canBackward: ordered.some((item, index) => selected.has(item) && ordered.slice(0, index).some((previous) => !selected.has(previous))),
-    };
+    return window.DrawingOrder.commandState(model, activeSketchId(), selectedDrawingOrderCandidates());
   }
 
   function reorderSelectedDrawingObjects(action) {
-    const selected = new Set(selectedDrawingOrderOwners());
-    if (selected.size === 0) return false;
-    const ordered = drawingOrderItemsForScope(model, activeSketchId())
-      .slice()
-      .sort((a, b) => normalizedDrawingOrder(a.drawingOrder) - normalizedDrawingOrder(b.drawingOrder));
-    if (action === "drawing-front") {
-      ordered.splice(0, ordered.length, ...ordered.filter((item) => !selected.has(item)), ...ordered.filter((item) => selected.has(item)));
-    } else if (action === "drawing-back") {
-      ordered.splice(0, ordered.length, ...ordered.filter((item) => selected.has(item)), ...ordered.filter((item) => !selected.has(item)));
-    } else if (action === "drawing-forward") {
-      for (let index = ordered.length - 2; index >= 0; index -= 1) {
-        if (selected.has(ordered[index]) && !selected.has(ordered[index + 1])) [ordered[index], ordered[index + 1]] = [ordered[index + 1], ordered[index]];
-      }
-    } else if (action === "drawing-backward") {
-      for (let index = 1; index < ordered.length; index += 1) {
-        if (selected.has(ordered[index]) && !selected.has(ordered[index - 1])) [ordered[index], ordered[index - 1]] = [ordered[index - 1], ordered[index]];
-      }
-    } else return false;
-    ordered.forEach((item, index) => {
-      item.drawingOrder = index;
-    });
+    if (!window.DrawingOrder.reorder(model, activeSketchId(), selectedDrawingOrderCandidates(), action)) return false;
     updateUI({ refreshAnalysis: false });
     draw();
     recordHistory(applicationText("重なり順変更", "Drawing order changed"));
@@ -24863,13 +24523,12 @@
     const input = event.currentTarget;
     const file = input.files?.[0] || null;
     input.value = "";
-    if (!file || fileOperationPending || fileSavePending) return;
-    fileOperationPending = true;
+    if (!file || !fileSession.beginOpen()) return;
     try {
       if (!await confirmDocumentReplacement()) return;
       const opened = await importFileData(file, { expectedContentSignature: documentContentSignature(serializeModel()) });
       if (!opened) return;
-      currentFileHandle = null;
+      fileSession.setHandle(null);
       updateDocumentNameUI();
       const message = applicationText(`ファイルを開きました: ${file.name}`, `Opened: ${file.name}`);
       setHint(message);
@@ -24877,7 +24536,7 @@
     } catch (error) {
       setHint(applicationText(`ファイル読み込みに失敗しました: ${error.message}`, `Failed to open the file: ${error.message}`), "error");
     } finally {
-      fileOperationPending = false;
+      fileSession.finishOpen();
     }
   });
   document.getElementById("importReferenceImageBtn")?.addEventListener("click", () => document.getElementById("referenceImageFileInput")?.click());
@@ -25621,8 +25280,8 @@
       },
       fileSystemAccessStateForTest() {
         return {
-          hasHandle: Boolean(currentFileHandle),
-          handleName: currentFileHandle?.name || null,
+          hasHandle: Boolean(fileSession.handle),
+          handleName: fileSession.handle?.name || null,
         };
       },
       serializedModelForTest() {
@@ -29288,8 +28947,8 @@
   resetHistory("起動");
   markDocumentFileCheckpoint("new");
   window.addEventListener("beforeunload", (event) => {
-    const dirty = blockEditSession || fileSavePending
-      || documentContentSignature(serializeModel()) !== savedDocumentSignature;
+    const dirty = blockEditSession || fileSession.savePending
+      || !fileSession.matchesCheckpoint(serializeModel());
     if (!dirty) return;
     event.preventDefault();
     event.returnValue = "";

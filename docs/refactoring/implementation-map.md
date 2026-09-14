@@ -6,7 +6,10 @@
 
 - `index.html`: 固定ワークスペースとコマンドUI
 - `style.css`: レイアウトと状態表現
-- `app.js`: Document状態、描画、入力、保存、履歴、Block、Appearance、Annotation、Reference Image
+- `app.js`: moduleの組合せ、Documentと操作状態、描画、入力、保存読込の進行、履歴adapter、Block、Annotation、Reference Image
+- `src/document/appearance.js`: 外観の初期値・正規化・旧形式変換と明示layerの解決
+- `src/document/drawing_order.js`: scopeとSketchを明示した描画順補完・候補の所有者解決・操作可否・順序変更
+- `src/persistence/document_files.js`: ファイル名、内容signature、保存session状態・排他、handleへの書込み
 - `parameter_engine.js`: Parameter式の字句解析、構文解析、依存評価、識別子検証と名称書換え
 - `constraint_solver.js`: GeometryとConstraintのsolver
 - `geometry_ref.js`: 直接GeometryとBlock Projectionの参照codec
@@ -25,7 +28,9 @@
 | Constraint codec | `constraint_codec_registry.js` | `constraint-codec-registry.test.js` |
 | Parameter式 | `parameter_engine.js` | `parameter-engine.test.js` |
 | Hatch region | `hatch_region.js` | `hatch-region.test.js`、`hatching.spec.js` |
-| Sketch内描画順 | `app.js` | `drawing-order.spec.js` |
+| Appearance値・継承 | `src/document/appearance.js`、`app.js`の所属adapter | `appearance.test.js`、`unified-ui.spec.js`、`blocks.spec.js` |
+| Sketch内描画順 | `src/document/drawing_order.js`、`app.js`の操作・描画adapter | `drawing-order.test.js`、`drawing-order.spec.js` |
+| 保存session | `src/persistence/document_files.js`、`app.js`の保存読込adapter | `document-files.test.js`、`file-safety.spec.js` |
 | Reference Image | `app.js`、`index.html` | `reference-images.spec.js` |
 | 派生Geometry Instance | `app.js`、`index.html` | `sketch-projection.spec.js` |
 | Offset chain | `offset_chain.js` | `offset-chain.test.js`、`geometry-solver.test.js`、`unified-ui.spec.js` |
@@ -44,6 +49,8 @@
 - `constraint_codec_registry.js`: 永続Constraint型のclass、保存type、serialize、deserializeは単一registryで対応付ける。参照列挙、表示名、未登録型のユーザー向け拒否policyは永続codecとは別の責務として保持する。
 
 この配置は現在の実装対応であり、将来のモジュール構成を拘束する仕様ではない。
+
+現在の抽出済みmoduleの契約とフォルダ配置は[モジュール構成](../../spec/architecture/モジュール構成.md)、全体の責務分析と分離範囲は[app.jsの責務分析](./app-responsibilities.md)を参照する。
 
 
 ## 4. 検証の共通fixture
