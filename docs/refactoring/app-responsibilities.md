@@ -58,6 +58,20 @@ tools/                      server・生成など開発補助
 
 分類はファイルの大きさでなく責務に従う。`src/document/`はモデル値の規則、`src/persistence/`は外部保存とsessionの境界とする。既存の計算moduleを一括移動する必要はなく、今回変更しないmoduleのroot配置は維持する。新たなbuild／bundle工程を追加せず、通常scriptと明示的な読込順を使う。
 
+## 2026-09-15の継続分析
+
+開始点は`5825453`、`app.js`は28,956行。前回の値・保存sessionの分離後も、永続Constraintの定義、Document／BlockのGeometry復元、Sketch階層の補完と走査は同じclosureに集中している。
+
+今回の境界は次の順に整理する。
+
+1. 永続Constraint：registryのdispatchと具体的な保存仕様を分け、参照Mapと旧形式変換を明示入力にする。寸法の画面配置を確定する処理はappのadapterに残す。
+2. Geometry復元：DocumentとBlockのローカルGeometry配列・参照Mapを、現Documentを変更しない復元処理として分離する。旧Point kindや半径の互換処理、エラー文言のscope差を保持する。
+3. Sketch階層：Root補完、親子走査、順序と参照元の判定をDocumentの規則へ集める。操作可否、選択、Solver実行はこの境界に含めない。
+4. Documentの補助要素と保存snapshot：正規化・保存する値をDOMや編集状態から切り離し、同じ形式を通常DocumentとBlockで再利用する。
+5. フォルダ構成：これらの所有者が明確になった後に、既存moduleも責務別の`src/`配下へ揃え、script読込・単体検証・開発tool・仕様書の参照を一緒に更新する。
+
+巨大なcontextやmodel取得callbackで旧closureを再現しない。moduleには対象scopeまたは値と、責務の境界に必要な小さなadapterだけを渡す。移行処理と編集時正規化は適用条件が異なるため、共通化によって旧形式の受理範囲を変えない。
+
 ## 残る範囲
 
 `app.js`はまだCanvas renderer、DOM panel、Document Loader、Block・Sketch・Selection、command群とE2E hookを持つ。これらを独立させるには、scopeの取得・変更、Projectionの参照解決、操作ごとのsnapshot／確定の境界をさらに整理する必要がある。今回のmoduleへそれらの状態を流し込まない。次の段階でも、独立した入力・出力を定められる単位から検証を伴って進める。
