@@ -1621,7 +1621,13 @@
         };
         visit(source);
         visit(constraint.contactLine);
-        ranges.push({ constraint, offset, count, objects, dynamic });
+        let featureLength = Infinity;
+        for (const object of objects) {
+          const length = object instanceof Line ? object.length()
+            : object instanceof Circle || object instanceof Arc ? object.radius() : Infinity;
+          if (length > MIN_ORIENTATION_LENGTH) featureLength = Math.min(featureLength, length);
+        }
+        ranges.push({ constraint, offset, count, objects, dynamic, featureLength });
         offset += count;
       }
       for (let j = 0; j < n; j++) {
@@ -1632,7 +1638,13 @@
         const angular = v.prop === "startAngle" || v.prop === "endAngle" || v.prop === "rotation";
         // The fourth-order angular difference uses a wider interval to avoid
         // cancellation in small tangent arcs without scaling with turn count.
-        const h = angular ? Math.pow(this.diffStep, 2 / 3) : this.diffStep * Math.max(1, Math.abs(orig));
+        let h = angular ? Math.pow(this.diffStep, 2 / 3) : this.diffStep * Math.max(1, Math.abs(orig));
+        if (!angular) {
+          const featureLength = Math.min(...affected.map((range) => range.featureLength));
+          // Coordinate magnitude is not a geometric scale: a tiny shoulder
+          // far from the origin must not be crossed by a difference sample.
+          h = Math.min(h, Math.max(Number.EPSILON * Math.max(1, Math.abs(orig)) * 16, featureLength * 1e-3));
+        }
         v.object[v.prop] = Number.isFinite(v.min) ? Math.max(v.min, orig + h) : orig + h;
         if (Number.isFinite(v.max)) v.object[v.prop] = Math.min(v.max, v.object[v.prop]);
         const plusValue = v.object[v.prop];
@@ -1725,6 +1737,22 @@
     }
 
     solveCore(vars, constraints, tolerance = this.tolerance, maxStepNorm = this.maxStepNorm, initialLambda = this.initialLambda, maxIterations = this.maxIterations) {
+      // The stored unsigned angle has two mirrored solutions. Keep the side
+      // selected by the starting geometry throughout this solve.
+      constraints = constraints.map((constraint) => {
+        if (!(constraint instanceof LineAngleConstraint)) return constraint;
+        const signedAngle = () => {
+          const a = constraint.line1, b = constraint.line2;
+          const flip = constraint.startFlip === constraint.endFlip ? 1 : -1;
+          return Math.atan2((a.dx() * b.dy() - a.dy() * b.dx()) * flip,
+            (a.dx() * b.dx() + a.dy() * b.dy()) * flip);
+        };
+        const sign = signedAngle() < 0 ? -1 : 1;
+        const directed = new Constraint(constraint.name, constraint.weight);
+        directed.sourceConstraint = constraint;
+        directed.rawError = () => normalizeAngleSigned(signedAngle() - sign * constraint.target);
+        return directed;
+      });
       let lambda = initialLambda;
       let F = this.computeErrorVectorForConstraints(constraints);
       let errorNorm = vectorNorm(F);

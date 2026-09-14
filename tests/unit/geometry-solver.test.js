@@ -23,6 +23,42 @@ const runtime = loadGeometryRuntime();
 const geometry = runtime.GeometrySolver;
 const kernel = runtime.GeometryKernel;
 
+test("line angle solves keep the original side while changing angle and length", () => {
+  for (const side of [-1, 1]) for (const flip of [0, 1]) {
+    const origin = new geometry.Point("O", 0, 0, true);
+    const axisEnd = new geometry.Point("X", 10, 0, true);
+    const initial = side * Math.PI / 6 + flip * Math.PI;
+    const end = new geometry.Point("P", 10 * Math.cos(initial), 10 * Math.sin(initial));
+    const axis = new geometry.Line("axis", origin, axisEnd);
+    const line = new geometry.Line("line", origin, end);
+    const angle = new geometry.LineAngleConstraint(axis, line, Math.PI * 5 / 6, 0, flip);
+    const length = new geometry.DistanceConstraint(origin, end, 2);
+    const solver = new geometry.ConstraintSolver({ points: [origin, axisEnd, end], lines: [axis, line], circles: [], arcs: [], constraints: [angle, length] });
+    const result = solver.solve();
+    assert.equal(result.success, true);
+    assert.ok(Math.abs(line.length() - 2) < 1e-6);
+    const directed = Math.atan2(end.y * (flip ? -1 : 1), end.x * (flip ? -1 : 1));
+    assert.ok(Math.abs(directed - side * angle.target) < 1e-6);
+    assert.equal(angle.startFlip, 0);
+    assert.equal(angle.endFlip, flip);
+  }
+});
+
+test("angle differentiation resolves a tiny line away from the origin", () => {
+  const origin = new geometry.Point("O", 100, 100, true);
+  const axisEnd = new geometry.Point("X", 110, 100, true);
+  const end = new geometry.Point("P", 100 + 1e-4 * Math.cos(Math.PI / 6), 100 + 1e-4 * Math.sin(Math.PI / 6));
+  const axis = new geometry.Line("axis", origin, axisEnd);
+  const line = new geometry.Line("line", origin, end);
+  const angle = new geometry.LineAngleConstraint(axis, line, Math.PI / 6);
+  const solver = new geometry.ConstraintSolver({ points: [origin, axisEnd, end], lines: [axis, line], circles: [], arcs: [], constraints: [angle] });
+  const jacobian = solver.computeJacobianForConstraints(solver.getVariables(), [angle.error()], [angle])[0];
+  const expected = [-line.dy() / line.length() ** 2, line.dx() / line.length() ** 2];
+  expected.forEach((value, index) => assert.ok(Math.abs(jacobian[index] / value - 1) < 1e-5));
+  assert.equal(end.x, 100 + 1e-4 * Math.cos(Math.PI / 6));
+  assert.equal(end.y, 100 + 1e-4 * Math.sin(Math.PI / 6));
+});
+
 test("observable drag maps output motion to constrained real variables without changing the model", () => {
   const p1 = new geometry.Point("P1", 0, 0);
   const p2 = new geometry.Point("P2", 0, 40);
