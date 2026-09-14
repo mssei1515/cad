@@ -2180,9 +2180,12 @@
       const directPointChart = targets.every((target) => target.point) && (targetVariableCount === 1 || targets.length > 1);
       const retryFraction = referenceChart ? referenceRetryFraction : targets[0]?.guidedStepNorm > 0 && Number.isFinite(targetStepNorm)
         ? Math.min(1, targetStepNorm / targets[0].guidedStepNorm) : 1;
+      // A point coordinate can require much larger motion elsewhere in the
+      // component. Bound its visible step below, while allowing the connected
+      // variables the normal solver step budget to preserve that coordinate.
       const guidedMaxNorm = radialObjective ? cursorScaledMaxNorm : directPointChart
         ? (referenceChart && preserveTranslation ? vectorNorm(physicalProjected) * retryFraction
-          : Math.min(vectorNorm(physicalProjected) * retryFraction, cursorScaledMaxNorm))
+          : Math.min(vectorNorm(physicalProjected) * retryFraction, this.maxStepNorm * componentScale))
         : Math.min(this.maxStepNorm * componentScale, cursorScaledMaxNorm);
       let limitedPhysical = this.limitStep(physicalProjected, guidedMaxNorm);
       if (targets.every((target) => target.point) && !(referenceChart && preserveTranslation)) {

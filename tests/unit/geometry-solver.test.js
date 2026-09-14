@@ -653,6 +653,25 @@ test("line-arc offset contacts retain endpoint rank in either chain direction", 
   }
 });
 
+test("a directly dragged point follows its movable axis when connected geometry moves farther", () => {
+  const point = new geometry.Point('point', 0, 0), remote = new geometry.Point('remote', 0, 0);
+  const coupling = new geometry.Constraint('coupled displacement', 1);
+  coupling.rawError = () => [point.x, remote.y, remote.x - 40 * point.y];
+  const constraints = [coupling];
+  const solver = new geometry.ConstraintSolver({ points: [point, remote], lines: [], circles: [], arcs: [], constraints });
+  let previousY = 0;
+  for (const y of [0.1, 0.2, 0, -0.1, 0]) {
+    const step = Math.hypot(0.1, y - previousY);
+    const result = solver.solveSubsetGuided({ variables: solver.getVariables(), constraints,
+      targets: [{ point, x: 0.1, y }], targetStepNorm: step });
+    assert.equal(result.success, true);
+    assert.ok(Math.abs(point.y - y) < 1e-4, `requested ${y}, reached ${point.y}`);
+    assert.ok(residualNorm(coupling.error()) < 1e-4);
+    assert.ok(Math.abs(point.x) < 1e-8);
+    previousY = y;
+  }
+});
+
 test("physical angle scaling lets a circle drag leave endpoint tangencies without locking", () => {
   const left = new geometry.Point('left', -100, 20, true), right = new geometry.Point('right', 100, 20, true);
   const support = new geometry.Line('support', left, right);
