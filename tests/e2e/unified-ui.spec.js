@@ -2565,6 +2565,7 @@ test("fixed rectangle fixture L2 and L3 reuse the responsive P3 drag path while 
     const lineFinal = result.previews.at(-1).state;
     const draggedP3 = id === "L2" ? lineFinal.p2 : lineFinal.p1;
     expect(result.sessionAvailable, id).toBe(true);
+    expect(result.representativePointId, id).toBe("P3");
     expect(result.previews.every((preview) => preview.success && !preview.blocked), id).toBe(true);
     expect(draggedP3.x, id).toBeCloseTo(pointFinal.x, 5);
     expect(draggedP3.y, id).toBeCloseTo(pointFinal.y, 5);
