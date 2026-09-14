@@ -276,10 +276,7 @@
   })();
   document.documentElement.lang = applicationLanguage;
   document.documentElement.dataset.theme = applicationTheme;
-  const ROOT_SKETCH_ID = "ROOT";
-  const ROOT_SKETCH_NAME = "Root Sketch";
-  const DEFAULT_SKETCH_ID = "S1";
-  const DEFAULT_SKETCH_NAME = "Sketch-1";
+  const { ROOT_SKETCH_ID, ROOT_SKETCH_NAME, DEFAULT_SKETCH_ID, DEFAULT_SKETCH_NAME } = window.SketchHierarchy;
   const DEFAULT_DOCUMENT_UNITS = Object.freeze({ length: "mm" });
   const model = {
     documentName: DEFAULT_DOCUMENT_NAME,
@@ -965,36 +962,7 @@
   }
 
   function ensureSketchState() {
-    if (!Array.isArray(model.sketches)) model.sketches = [];
-    let root = model.sketches.find((sketch) => sketch.kind === "root" || sketch.id === ROOT_SKETCH_ID);
-    if (!root) {
-      root = { id: ROOT_SKETCH_ID, name: ROOT_SKETCH_NAME, parentSketchId: null, kind: "root", appearance: {} };
-      model.sketches.unshift(root);
-    }
-    model.sketches = [root, ...model.sketches.filter((sketch) => sketch !== root && sketch.kind !== "root" && sketch.id !== ROOT_SKETCH_ID)];
-    root.id = ROOT_SKETCH_ID;
-    root.name = root.name || ROOT_SKETCH_NAME;
-    root.parentSketchId = null;
-    root.kind = "root";
-    root.appearance = normalizeAppearance(root.appearance);
-    root.constructionAppearance = normalizeConstructionAppearance(root.constructionAppearance);
-    root.dimensionAppearance = normalizeDimensionAppearance(root.dimensionAppearance);
-    root.visible = true;
-    const ids = new Set(model.sketches.map((sketch) => sketch.id));
-    for (const sketch of model.sketches) {
-      if (sketch === root) continue;
-      sketch.kind = "sketch";
-      sketch.appearance = normalizeAppearance(sketch.appearance || (sketch.visible === false ? { visible: false } : {}));
-      sketch.constructionAppearance = normalizeConstructionAppearance(sketch.constructionAppearance);
-      sketch.dimensionAppearance = normalizeDimensionAppearance(sketch.dimensionAppearance);
-      sketch.visible = sketch.appearance.visible !== false;
-      if (!Object.prototype.hasOwnProperty.call(sketch, "parentSketchId")) sketch.parentSketchId = null;
-      if (sketch.parentSketchId === sketch.id || !ids.has(sketch.parentSketchId)) sketch.parentSketchId = ROOT_SKETCH_ID;
-      if (sketch.parentSketchId == null) sketch.parentSketchId = ROOT_SKETCH_ID;
-    }
-    if (!model.activeSketchId || !model.sketches.some((sketch) => sketch.id === model.activeSketchId)) {
-      model.activeSketchId = ROOT_SKETCH_ID;
-    }
+    window.SketchHierarchy.ensure(model);
   }
 
   function ensureAppearanceState() {
@@ -3088,56 +3056,37 @@
 
   function sketchById(sketchId) {
     ensureSketchState();
-    return model.sketches.find((sketch) => sketch.id === sketchId) || null;
+    return window.SketchHierarchy.sketchById(model.sketches, sketchId);
   }
 
   function parentSketchOf(sketch) {
-    return sketch?.parentSketchId ? sketchById(sketch.parentSketchId) : null;
+    ensureSketchState();
+    return window.SketchHierarchy.parentSketchOf(model.sketches, sketch);
   }
 
   function childSketchesOf(sketchId) {
     ensureSketchState();
-    return model.sketches.filter((sketch) => sketch.parentSketchId === sketchId);
+    return window.SketchHierarchy.childSketchesOf(model.sketches, sketchId);
   }
 
   function descendantSketchIds(sketchId) {
-    const result = [];
-    const visit = (id) => {
-      for (const child of childSketchesOf(id)) {
-        result.push(child.id);
-        visit(child.id);
-      }
-    };
-    visit(sketchId);
-    return result;
+    ensureSketchState();
+    return window.SketchHierarchy.descendantSketchIds(model.sketches, sketchId);
   }
 
   function ancestorSketchIds(sketchId) {
-    const result = [];
-    const visited = new Set([sketchId]);
-    let current = sketchById(sketchId);
-    while (current?.parentSketchId && !visited.has(current.parentSketchId)) {
-      const parent = sketchById(current.parentSketchId);
-      if (!parent) break;
-      visited.add(parent.id);
-      if (isDrawableSketch(parent)) result.push(parent.id);
-      current = parent;
-    }
-    return result;
+    ensureSketchState();
+    return window.SketchHierarchy.ancestorSketchIds(model.sketches, sketchId);
   }
 
   function isReferenceSourceSketchId(referenceSketchId, subjectSketchId = activeSketchId()) {
-    if (!referenceSketchId || !subjectSketchId) return false;
-    if (!isDrawableSketch(referenceSketchId)) return false;
-    if (referenceSketchId === subjectSketchId) return false;
-    return ancestorSketchIds(subjectSketchId).includes(referenceSketchId);
+    ensureSketchState();
+    return window.SketchHierarchy.isReferenceSourceSketchId(model.sketches, referenceSketchId, subjectSketchId);
   }
 
   function referenceSourceSketchIds(subjectSketchId = activeSketchId()) {
     ensureSketchState();
-    return model.sketches
-      .filter((sketch) => isReferenceSourceSketchId(sketch.id, subjectSketchId))
-      .map((sketch) => sketch.id);
+    return window.SketchHierarchy.referenceSourceSketchIds(model.sketches, subjectSketchId);
   }
 
   function constraintIsOperational(constraint) {
@@ -3203,73 +3152,23 @@
   }
 
   function sketchDepth(sketch) {
-    let depth = 0;
-    const visited = new Set();
-    let current = sketch;
-    while (current?.parentSketchId && !visited.has(current.id)) {
-      visited.add(current.id);
-      current = sketchById(current.parentSketchId);
-      if (current) depth++;
-    }
-    return depth;
+    ensureSketchState();
+    return window.SketchHierarchy.sketchDepth(model.sketches, sketch);
   }
 
   function wouldCreateSketchCycle(sketchId, parentSketchId) {
-    let current = sketchById(parentSketchId);
-    const visited = new Set([sketchId]);
-    while (current) {
-      if (visited.has(current.id)) return true;
-      visited.add(current.id);
-      current = parentSketchOf(current);
-    }
-    return false;
+    ensureSketchState();
+    return window.SketchHierarchy.wouldCreateSketchCycle(model.sketches, sketchId, parentSketchId);
   }
 
   function orderedSketches() {
     ensureSketchState();
-    const byParent = new Map();
-    for (const sketch of model.sketches) {
-      const key = sketch.parentSketchId || "";
-      if (!byParent.has(key)) byParent.set(key, []);
-      byParent.get(key).push(sketch);
-    }
-    const ordered = [];
-    const visit = (parentId) => {
-      for (const sketch of byParent.get(parentId || "") || []) {
-        ordered.push(sketch);
-        visit(sketch.id);
-      }
-    };
-    visit("");
-    for (const sketch of model.sketches) {
-      if (!ordered.includes(sketch)) ordered.push(sketch);
-    }
-    return ordered;
+    return window.SketchHierarchy.orderedSketches(model.sketches);
   }
 
   function sketchTreeRows() {
     ensureSketchState();
-    const byParent = new Map();
-    for (const sketch of model.sketches) {
-      const key = sketch.parentSketchId || "";
-      if (!byParent.has(key)) byParent.set(key, []);
-      byParent.get(key).push(sketch);
-    }
-    const rows = [];
-    const visit = (parentId, depth, ancestorHasNext) => {
-      const children = byParent.get(parentId || "") || [];
-      children.forEach((sketch, index) => {
-        const isLast = index === children.length - 1;
-        const segments = depth === 0 && isRootSketch(sketch) ? [] : [...ancestorHasNext.map((hasNext) => (hasNext ? "pipe" : "blank")), isLast ? "elbow" : "tee"];
-        rows.push({ sketch, depth, isLast, hasChildren: childSketchesOf(sketch.id).length > 0, segments });
-        visit(sketch.id, depth + 1, [...ancestorHasNext, !isLast]);
-      });
-    };
-    visit("", 0, []);
-    for (const sketch of model.sketches) {
-      if (!rows.some((row) => row.sketch === sketch)) rows.push({ sketch, depth: 0, isLast: true, hasChildren: false, segments: ["elbow"] });
-    }
-    return rows;
+    return window.SketchHierarchy.sketchTreeRows(model.sketches);
   }
 
   function activeSketchId() {
@@ -7674,49 +7573,9 @@
     const preservedSketchTreeSketches = options.preserveSketchTreeState ? new Map(sketchTreeSketchOpenState) : null;
     const preservedSketchTreeGroups = options.preserveSketchTreeState ? new Map(sketchTreeGroupOpenState) : null;
 
-    let loadedSketches =
-      Array.isArray(data.sketches) && data.sketches.length > 0
-        ? data.sketches.map((sketch, index) => ({
-            id: String(sketch.id || `S${index + 1}`),
-            name: String(sketch.name || sketch.id || `Sketch-${index + 1}`),
-            parentSketchId: sketch.parentSketchId == null ? null : String(sketch.parentSketchId),
-            kind: sketch.kind === "root" || sketch.id === ROOT_SKETCH_ID ? "root" : "sketch",
-            appearance: normalizeAppearance(sketch.appearance || (sketch.visible === false ? { visible: false } : {})),
-            constructionAppearance: normalizeConstructionAppearance(sketch.constructionAppearance),
-            dimensionAppearance: normalizeLoadedDimensionAppearance(sketch.dimensionAppearance),
-          }))
-        : [{ id: DEFAULT_SKETCH_ID, name: DEFAULT_SKETCH_NAME, parentSketchId: ROOT_SKETCH_ID, kind: "sketch", appearance: {} }];
-    let loadedRoot = loadedSketches.find((sketch) => sketch.kind === "root" || sketch.id === ROOT_SKETCH_ID);
-    if (!loadedRoot) loadedRoot = { id: ROOT_SKETCH_ID, name: ROOT_SKETCH_NAME, parentSketchId: null, kind: "root", appearance: {} };
-    loadedSketches = [loadedRoot, ...loadedSketches.filter((sketch) => sketch !== loadedRoot && sketch.kind !== "root" && sketch.id !== ROOT_SKETCH_ID)];
-    loadedRoot.id = ROOT_SKETCH_ID;
-    loadedRoot.name = loadedRoot.name || ROOT_SKETCH_NAME;
-    loadedRoot.parentSketchId = null;
-    loadedRoot.kind = "root";
-    loadedRoot.appearance = normalizeAppearance(loadedRoot.appearance);
-    loadedRoot.constructionAppearance = normalizeConstructionAppearance(loadedRoot.constructionAppearance);
-    loadedRoot.dimensionAppearance = normalizeDimensionAppearance(loadedRoot.dimensionAppearance);
-    loadedRoot.visible = true;
-    if (!loadedSketches.some((sketch) => sketch.kind !== "root")) {
-      loadedSketches.push({ id: DEFAULT_SKETCH_ID, name: DEFAULT_SKETCH_NAME, parentSketchId: ROOT_SKETCH_ID, kind: "sketch", appearance: {} });
-    }
-    const loadedSketchIds = new Set(loadedSketches.map((sketch) => sketch.id));
-    for (const sketch of loadedSketches) {
-      if (sketch.kind === "root") continue;
-      sketch.kind = "sketch";
-      sketch.appearance = normalizeAppearance(sketch.appearance);
-      sketch.constructionAppearance = normalizeConstructionAppearance(sketch.constructionAppearance);
-      sketch.dimensionAppearance = normalizeDimensionAppearance(sketch.dimensionAppearance);
-      sketch.visible = sketch.appearance.visible !== false;
-      if (sketch.parentSketchId === sketch.id || !loadedSketchIds.has(sketch.parentSketchId)) sketch.parentSketchId = ROOT_SKETCH_ID;
-      if (sketch.parentSketchId == null) sketch.parentSketchId = ROOT_SKETCH_ID;
-    }
-    const fallbackSketchId = loadedSketches.find((sketch) => sketch.kind !== "root")?.id || DEFAULT_SKETCH_ID;
-    const normalizeSketchId = (sketchId) => {
-      const id = sketchId == null ? fallbackSketchId : String(sketchId);
-      if (id === ROOT_SKETCH_ID) return fallbackSketchId;
-      return loadedSketchIds.has(id) ? id : fallbackSketchId;
-    };
+    const { sketches: loadedSketches, ids: loadedSketchIds, normalizeId: normalizeSketchId } = window.SketchHierarchy.decode(data.sketches, {
+      dimensionAppearanceLoader: normalizeLoadedDimensionAppearance,
+    });
 
     const loadedBlockDefinitions = [];
     const loadedBlockDefinitionMeta = new Map();
@@ -7726,48 +7585,9 @@
       if (sourceVersion >= 21 && !Array.isArray(rawDefinition.geometryInstances)) throw new Error(`ブロック ${rawDefinition.id}: ${applicationText("派生インスタンス配列がありません", "the derived instance array is missing")}`);
       const definitionGeometryInstanceError = serializedGeometryInstanceListError(rawDefinition.geometryInstances || []);
       if (definitionGeometryInstanceError) throw new Error(`ブロック ${rawDefinition.id}: ${applicationText("派生インスタンス", "derived instances")} ${definitionGeometryInstanceError}`);
-      let definitionSketches = Array.isArray(rawDefinition.sketches) && rawDefinition.sketches.length > 0
-        ? rawDefinition.sketches.map((sketch, index) => ({
-            id: String(sketch.id || `S${index + 1}`),
-            name: String(sketch.name || sketch.id || `Sketch-${index + 1}`),
-            parentSketchId: sketch.parentSketchId == null ? null : String(sketch.parentSketchId),
-            kind: sketch.kind === "root" || sketch.id === ROOT_SKETCH_ID ? "root" : "sketch",
-            appearance: normalizeAppearance(sketch.appearance || (sketch.visible === false ? { visible: false } : {})),
-            constructionAppearance: normalizeConstructionAppearance(sketch.constructionAppearance),
-            dimensionAppearance: normalizeLoadedDimensionAppearance(sketch.dimensionAppearance),
-          }))
-        : [
-            { id: ROOT_SKETCH_ID, name: ROOT_SKETCH_NAME, parentSketchId: null, kind: "root", appearance: {} },
-            { id: DEFAULT_SKETCH_ID, name: DEFAULT_SKETCH_NAME, parentSketchId: ROOT_SKETCH_ID, kind: "sketch", appearance: {} },
-          ];
-      let definitionRoot = definitionSketches.find((sketch) => sketch.kind === "root" || sketch.id === ROOT_SKETCH_ID);
-      if (!definitionRoot) definitionRoot = { id: ROOT_SKETCH_ID, name: ROOT_SKETCH_NAME, parentSketchId: null, kind: "root", appearance: {} };
-      definitionSketches = [definitionRoot, ...definitionSketches.filter((sketch) => sketch !== definitionRoot && sketch.kind !== "root" && sketch.id !== ROOT_SKETCH_ID)];
-      definitionRoot.id = ROOT_SKETCH_ID;
-      definitionRoot.name = ROOT_SKETCH_NAME;
-      definitionRoot.parentSketchId = null;
-      definitionRoot.kind = "root";
-      definitionRoot.appearance = normalizeAppearance(definitionRoot.appearance);
-      definitionRoot.constructionAppearance = normalizeConstructionAppearance(definitionRoot.constructionAppearance);
-      definitionRoot.dimensionAppearance = normalizeDimensionAppearance(definitionRoot.dimensionAppearance);
-      definitionRoot.visible = true;
-      if (!definitionSketches.some((sketch) => sketch.kind !== "root")) definitionSketches.push({ id: DEFAULT_SKETCH_ID, name: DEFAULT_SKETCH_NAME, parentSketchId: ROOT_SKETCH_ID, kind: "sketch", appearance: {} });
-      const definitionSketchIds = new Set(definitionSketches.map((sketch) => sketch.id));
-      const definitionFallbackSketchId = definitionSketches.find((sketch) => sketch.kind !== "root")?.id || DEFAULT_SKETCH_ID;
-      for (const sketch of definitionSketches) {
-        if (sketch.kind === "root") continue;
-        sketch.kind = "sketch";
-        sketch.appearance = normalizeAppearance(sketch.appearance);
-        sketch.constructionAppearance = normalizeConstructionAppearance(sketch.constructionAppearance);
-        sketch.dimensionAppearance = normalizeDimensionAppearance(sketch.dimensionAppearance);
-        sketch.visible = sketch.appearance.visible !== false;
-        sketch.parentSketchId = sketch.parentSketchId == null ? ROOT_SKETCH_ID : String(sketch.parentSketchId);
-        if (sketch.parentSketchId === sketch.id || !definitionSketchIds.has(sketch.parentSketchId)) sketch.parentSketchId = ROOT_SKETCH_ID;
-      }
-      const normalizeDefinitionSketchId = (sketchId) => {
-        const id = sketchId == null ? definitionFallbackSketchId : String(sketchId);
-        return id !== ROOT_SKETCH_ID && definitionSketchIds.has(id) ? id : definitionFallbackSketchId;
-      };
+      const { sketches: definitionSketches, ids: definitionSketchIds, normalizeId: normalizeDefinitionSketchId } = window.SketchHierarchy.decode(rawDefinition.sketches, {
+        dimensionAppearanceLoader: normalizeLoadedDimensionAppearance, definition: true,
+      });
       const { points, lines, circles, arcs, splines } = window.GeometryPersistence.decodeBlock(rawDefinition, {
         sourceVersion, normalizeSketchId: normalizeDefinitionSketchId,
       });
