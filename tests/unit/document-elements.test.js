@@ -5,7 +5,7 @@ const vm = require("node:vm");
 const test = require("node:test");
 const sandbox = { window: {} };
 vm.createContext(sandbox);
-for (const file of ["spline_geometry.js", "hatch_region.js", "src/document/appearance.js", "src/document/drawing_order.js", "src/document/annotations.js", "src/document/hatches.js", "src/document/reference_images.js"]) {
+for (const file of ["src/geometry/spline_geometry.js", "src/geometry/hatch_region.js", "src/document/appearance.js", "src/document/drawing_order.js", "src/document/annotations.js", "src/document/hatches.js", "src/document/reference_images.js"]) {
   vm.runInContext(fs.readFileSync(path.resolve(__dirname, "../..", file), "utf8"), sandbox, { filename: file });
 }
 const { AnnotationData, HatchData, ReferenceImageData } = sandbox.window;

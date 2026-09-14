@@ -1,4 +1,4 @@
-/* constraint_solver.js: 2D geometry constraint solver core */
+/* src/solver/constraint_solver.js: 2D geometry constraint solver core */
 (function () {
   "use strict";
 

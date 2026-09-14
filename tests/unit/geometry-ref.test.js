@@ -5,10 +5,10 @@ const test = require("node:test");
 const vm = require("node:vm");
 
 function loadGeometryRef() {
-  const source = fs.readFileSync(path.resolve(__dirname, "../../geometry_ref.js"), "utf8");
+  const source = fs.readFileSync(path.resolve(__dirname, "../../src/geometry/geometry_ref.js"), "utf8");
   const sandbox = { window: {} };
   vm.createContext(sandbox);
-  vm.runInContext(source, sandbox, { filename: "geometry_ref.js" });
+  vm.runInContext(source, sandbox, { filename: "src/geometry/geometry_ref.js" });
   return sandbox.window.GeometryRef;
 }
 

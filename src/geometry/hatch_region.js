@@ -1,4 +1,4 @@
-/* hatch_region.js: Closed-region detection and associative boundary resolution. */
+/* src/geometry/hatch_region.js: Closed-region detection and associative boundary resolution. */
 (function () {
   "use strict";
 

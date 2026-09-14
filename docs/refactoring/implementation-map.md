@@ -10,43 +10,56 @@
 - `src/document/appearance.js`: 外観の初期値・正規化・旧形式変換と明示layerの解決
 - `src/document/drawing_order.js`: scopeとSketchを明示した描画順補完・候補の所有者解決・操作可否・順序変更
 - `src/persistence/document_files.js`: ファイル名、内容signature、保存session状態・排他、handleへの書込み
-- `parameter_engine.js`: Parameter式の字句解析、構文解析、依存評価、識別子検証と名称書換え
-- `constraint_solver.js`: GeometryとConstraintのsolver
-- `geometry_ref.js`: 直接GeometryとBlock Projectionの参照codec
-- `spline_geometry.js`: Splineの補間、評価、微分、最近点、flatten、交点計算
-- `hatch_region.js`: 閉領域の交点計算、平面グラフ、面探索、境界復元
-- `offset_chain.js`: Line／Arcチェーンの支持曲線オフセット、マイター接続、退化・自己交差検出
-- `constraint_codec_registry.js`: Constraint永続化dispatch
+- `src/document/sketch_hierarchy.js`: Root補完、階層走査・参照元判定・ツリー行、読込時の階層復元
+- `src/document/annotations.js`、`src/document/hatches.js`、`src/document/reference_images.js`: 各補助要素の値の正規化、保存fieldと保存値検証
+- `src/persistence/constraints.js`: 具体的なConstraint保存形式、scopeごとの参照復元、寸法metadataの復元
+- `src/persistence/geometry.js`: Document／BlockのローカルGeometry復元と参照Map
+- `src/persistence/document_snapshot.js`: DocumentとBlockで共有する保存field writer、派生Instance保存値
+- `src/editing/edit_history.js`: 履歴stack操作
+- `src/diagnostics/interaction_profiler.js`: 同期処理の時間・実行回数計測
+- `src/ui/choice_dialog.js`: 共通選択dialog
+- `src/parameters/parameter_engine.js`: Parameter式の字句解析、構文解析、依存評価、識別子検証と名称書換え
+- `src/solver/constraint_solver.js`: GeometryとConstraintのsolver
+- `src/geometry/geometry_ref.js`: 直接GeometryとBlock Projectionの参照codec
+- `src/geometry/spline_geometry.js`: Splineの補間、評価、微分、最近点、flatten、交点計算
+- `src/geometry/hatch_region.js`: 閉領域の交点計算、平面グラフ、面探索、境界復元
+- `src/geometry/offset_chain.js`: Line／Arcチェーンの支持曲線オフセット、マイター接続、退化・自己交差検出
+- `src/persistence/constraint_codec_registry.js`: Constraint永続化dispatch
 
 ## 2. 領域とテスト
 
 | 領域 | 実装 | 主なテスト |
 | --- | --- | --- |
-| Geometry kernel | `geometry_kernel.js` | `geometry-kernel.test.js` |
-| Spline kernel | `spline_geometry.js` | `spline-geometry.test.js`、`spline.spec.js` |
-| GeometryRef | `geometry_ref.js` | `geometry-ref.test.js` |
-| Constraint codec | `constraint_codec_registry.js` | `constraint-codec-registry.test.js` |
-| Parameter式 | `parameter_engine.js` | `parameter-engine.test.js` |
-| Hatch region | `hatch_region.js` | `hatch-region.test.js`、`hatching.spec.js` |
+| Geometry kernel | `src/geometry/geometry_kernel.js` | `geometry-kernel.test.js` |
+| Spline kernel | `src/geometry/spline_geometry.js` | `spline-geometry.test.js`、`spline.spec.js` |
+| GeometryRef | `src/geometry/geometry_ref.js` | `geometry-ref.test.js` |
+| Constraint codec | `src/persistence/constraint_codec_registry.js` | `constraint-codec-registry.test.js` |
+| Parameter式 | `src/parameters/parameter_engine.js` | `parameter-engine.test.js` |
+| Hatch region | `src/geometry/hatch_region.js` | `hatch-region.test.js`、`hatching.spec.js` |
 | Appearance値・継承 | `src/document/appearance.js`、`app.js`の所属adapter | `appearance.test.js`、`unified-ui.spec.js`、`blocks.spec.js` |
 | Sketch内描画順 | `src/document/drawing_order.js`、`app.js`の操作・描画adapter | `drawing-order.test.js`、`drawing-order.spec.js` |
 | 保存session | `src/persistence/document_files.js`、`app.js`の保存読込adapter | `document-files.test.js`、`file-safety.spec.js` |
-| Reference Image | `app.js`、`index.html` | `reference-images.spec.js` |
+| Constraint永続形式 | `src/persistence/constraints.js` | `constraint-persistence.test.js`、`phase0-characterization.spec.js` |
+| Geometry復元 | `src/persistence/geometry.js` | `geometry-persistence.test.js`、`spline.spec.js`、`blocks.spec.js` |
+| Sketch階層 | `src/document/sketch_hierarchy.js` | `sketch-hierarchy.test.js`、`unified-ui.spec.js`、`sketch-projection.spec.js` |
+| 補助要素の値 | `src/document/annotations.js`、`hatches.js`、`reference_images.js` | `document-elements.test.js`、`hatching.spec.js`、`reference-images.spec.js` |
+| 保存snapshot | `src/persistence/document_snapshot.js` | `document-snapshot.test.js`、`phase0-characterization.spec.js`、`file-safety.spec.js` |
+| Reference Image操作・描画 | `app.js`、`index.html` | `reference-images.spec.js` |
 | 派生Geometry Instance | `app.js`、`index.html` | `sketch-projection.spec.js` |
-| Offset chain | `offset_chain.js` | `offset-chain.test.js`、`geometry-solver.test.js`、`unified-ui.spec.js` |
-| Solver | `constraint_solver.js` | `geometry-solver.test.js`、drag E2E |
-| Constraint Dimension | `app.js`、`constraint_solver.js` | `geometry-solver.test.js`、`unified-ui.spec.js` |
+| Offset chain | `src/geometry/offset_chain.js` | `offset-chain.test.js`、`geometry-solver.test.js`、`unified-ui.spec.js` |
+| Solver | `src/solver/constraint_solver.js` | `geometry-solver.test.js`、drag E2E |
+| Constraint Dimension | `app.js`、`src/solver/constraint_solver.js` | `geometry-solver.test.js`、`unified-ui.spec.js` |
 | Document／Canvas／UI | `app.js`、`index.html`、`style.css` | `unified-ui.spec.js`、`phase0-characterization.spec.js` |
 | Block | `app.js` | `blocks.spec.js` |
 
 ## 3. 計算と編集policyの現在の配置
 
-- `geometry_kernel.js`: UI adapterとSolverが共有する副作用のない数学関数。角度範囲・符号付き距離・縮退境界は[幾何計算](../../spec/calculation/幾何計算.md)に従う。
+- `src/geometry/geometry_kernel.js`: UI adapterとSolverが共有する副作用のない数学関数。角度範囲・符号付き距離・縮退境界は[幾何計算](../../spec/calculation/幾何計算.md)に従う。
 - `app.js`: Arcモデルを補正する`normalizeArcSweep`、ほぼ一周判定を含む`arcEndpointDragValue`、dragのtarget選択・preview・確定、Sketch依存更新、Block配置、Parameter feedbackを扱う。
-- `constraint_solver.js`: 数値Jacobian、減衰付き最小二乗法、拘束残差・自由度の解析。
-- `hatch_region.js`: 副作用のない交点・AABB候補絞り込み・平面グラフ・half-edge面探索・点包含・境界の保存復元。
-- `parameter_engine.js`: 式のparserと依存評価。Geometry再測定を伴う確定処理とは分離している。
-- `constraint_codec_registry.js`: 永続Constraint型のclass、保存type、serialize、deserializeは単一registryで対応付ける。参照列挙、表示名、未登録型のユーザー向け拒否policyは永続codecとは別の責務として保持する。
+- `src/solver/constraint_solver.js`: 数値Jacobian、減衰付き最小二乗法、拘束残差・自由度の解析。
+- `src/geometry/hatch_region.js`: 副作用のない交点・AABB候補絞り込み・平面グラフ・half-edge面探索・点包含・境界の保存復元。
+- `src/parameters/parameter_engine.js`: 式のparserと依存評価。Geometry再測定を伴う確定処理とは分離している。
+- `src/persistence/constraint_codec_registry.js`: 永続Constraint型のclass、保存type、serialize、deserializeは単一registryで対応付ける。参照列挙、表示名、未登録型のユーザー向け拒否policyは永続codecとは別の責務として保持する。
 
 この配置は現在の実装対応であり、将来のモジュール構成を拘束する仕様ではない。
 
@@ -94,7 +107,7 @@ R1の照合では新しい製品仕様判断は不要。操作途中のDocument�
 | 作図取消 | Line・Point等の専用rollbackで配列長・採番・一時作成物を保持 | 最初のLine端点は仮入力。double clickで作った一時物の破棄など、固有の履歴調整を維持 |
 | Undo／Redo | Documentは保存形式、Block EditorはcloneしたDefinitionとsignature | 復元中はhistoryRestoringで再記録を抑止。各scopeの復元後にInteractionを解消し、solve・表示更新 |
 
-activeEditHistoryが現在のscopeのundo／redo、snapshot作成、比較signature、復元処理、表示labelを束ねる。recordHistoryとundoHistory／redoHistoryはedit_history.jsへ比較・追加・stack間移動を委譲する。履歴buttonも同じscopeを参照する。
+activeEditHistoryが現在のscopeのundo／redo、snapshot作成、比較signature、復元処理、表示labelを束ねる。recordHistoryとundoHistory／redoHistoryはsrc/editing/edit_history.jsへ比較・追加・stack間移動を委譲する。履歴buttonも同じscopeを参照する。
 
 DocumentのhistorySnapshotとBlock EditorのcaptureBlockEditorHistorySnapshot、各復元関数、初期化処理は別々に保持する。共通処理はrollback範囲を決めず、失敗した操作を自動的に確定しない。TX-01〜05、snapshot形式、復元時の処理順は変更しない。操作別のsnapshotを一律のtransactionへ置き換える作業は今回の対象外。
 
@@ -111,7 +124,7 @@ DocumentのhistorySnapshotとBlock EditorのcaptureBlockEditorHistorySnapshot、
 | ui／tree／properties | updateUI・updateGeometrySelectionUI・setHint／updateSketchUI／updatePropertiesUI | UI更新をTree全再生成とPropertiesに分ける。Tree選択class変更はuiに含む |
 | history | recordHistory | snapshot作成・比較・履歴追加 |
 
-profileInteractionPhaseとprofileInteractionWorkはinteraction_profiler.jsのphase／workへの参照であり、明示的に有効化した同期scopeだけを集計する。workのselfMsは入れ子の計測時間を除き、scope内の残りをotherMsとする。Parameterや依存更新内のsolveをsolve区分へ再加算しない。呼出し回数は各関数の粒度であり、ui呼出しの中にtree／propertiesの呼出しが含まれる。
+profileInteractionPhaseとprofileInteractionWorkはsrc/diagnostics/interaction_profiler.jsのphase／workへの参照であり、明示的に有効化した同期scopeだけを集計する。workのselfMsは入れ子の計測時間を除き、scope内の残りをotherMsとする。Parameterや依存更新内のsolveをsolve区分へ再加算しない。呼出し回数は各関数の粒度であり、ui呼出しの中にtree／propertiesの呼出しが含まれる。
 
 角度以外の寸法確定はupdateGeometrySelectionUIとsyncDimensionValueInputを使用する。Properties・選択表示・履歴は保持し、形状不変の操作で拘束解析とTree全再生成を省く。角度寸法のsyncAngleConstraintFromDimensionはtargetを変更し得るためupdateUIを維持する。
 
@@ -119,9 +132,9 @@ profileInteractionPhaseとprofileInteractionWorkはinteraction_profiler.jsのpha
 
 | 配置 | 入出力と責務 | 依存・副作用 |
 | --- | --- | --- |
-| edit_history.js | record(history, limit)は追加の有無、undo／redo(history)は復元結果を返す | 渡されたstackを更新し、capture・signature・clearRedo・restoreを呼ぶ。DOM・model・solverは参照しない |
+| src/editing/edit_history.js | record(history, limit)は追加の有無、undo／redo(history)は復元結果を返す | 渡されたstackを更新し、capture・signature・clearRedo・restoreを呼ぶ。DOM・model・solverは参照しない |
 | app.jsの履歴adapter | activeEditHistory、snapshot作成・復元、historyRestoring、button・log | Document／Block固有のscopeと復元順を保持。復元中の記録抑止もapp側で行う |
-| interaction_profiler.js | create(now)で独立した計測器を作り、start／stop、phase／work、activeを提供 | clockと同期callbackだけに依存。集計状態は計測器ごとに保持し、DOM・modelを参照しない |
+| src/diagnostics/interaction_profiler.js | create(now)で独立した計測器を作り、start／stop、phase／work、activeを提供 | clockと同期callbackだけに依存。集計状態は計測器ごとに保持し、DOM・modelを参照しない |
 | app.jsの計測adapter | 計測する関数と区分、pointer flush、test hook | 実行経路を決め、moduleへ集計を委譲する。通常時は無効 |
 
 履歴は既存どおりstackを移動してからrestoreを呼び、戻り値と例外をそのまま伝える。module側で自動rollbackを追加しない。初期化やsnapshot形式、TX-01〜05はapp側の既存実装を維持する。

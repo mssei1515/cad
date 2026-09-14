@@ -1,4 +1,4 @@
-/* geometry_kernel.js: Pure geometry math shared by solver and UI adapters. */
+/* src/geometry/geometry_kernel.js: Pure geometry math shared by solver and UI adapters. */
 (function () {
   "use strict";
 

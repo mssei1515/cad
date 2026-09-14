@@ -5,7 +5,7 @@ const test = require("node:test");
 const vm = require("node:vm");
 
 const sandbox = { window: {} };
-vm.runInNewContext(fs.readFileSync(path.resolve(__dirname, "../../edit_history.js"), "utf8"), sandbox);
+vm.runInNewContext(fs.readFileSync(path.resolve(__dirname, "../../src/editing/edit_history.js"), "utf8"), sandbox);
 const historyOps = sandbox.window.EditHistory;
 
 function scope(initial, signature = (value) => value) {

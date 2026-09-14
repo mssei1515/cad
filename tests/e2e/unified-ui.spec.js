@@ -1567,19 +1567,33 @@ test("file URL Help menu reads the generated Git commit file", async ({ page }) 
   const loadedScripts = await page.locator("script[src]").evaluateAll((scripts) =>
     scripts.map((script) => {
       const url = new URL(script.src);
-      return { name: url.pathname.split("/").at(-1), loadId: url.searchParams.get("load") };
+      return { path: url.pathname, loadId: url.searchParams.get("load") };
     }),
   );
-  expect(loadedScripts.map((script) => script.name)).toEqual(expect.arrayContaining([
-    "runtime-version.js", "edit_history.js", "interaction_profiler.js", "app.js",
-    "appearance.js", "drawing_order.js", "document_files.js",
-  ]));
+  const expectedPaths = [
+    "runtime-version.js", "app.js",
+    "src/geometry/geometry_kernel.js", "src/geometry/geometry_ref.js", "src/geometry/spline_geometry.js",
+    "src/geometry/hatch_region.js", "src/geometry/offset_chain.js", "src/solver/constraint_solver.js",
+    "src/parameters/parameter_engine.js", "src/editing/edit_history.js", "src/diagnostics/interaction_profiler.js", "src/ui/choice_dialog.js",
+    "src/document/appearance.js", "src/document/drawing_order.js", "src/document/sketch_hierarchy.js",
+    "src/document/annotations.js", "src/document/hatches.js", "src/document/reference_images.js",
+    "src/persistence/constraint_codec_registry.js", "src/persistence/constraints.js", "src/persistence/geometry.js",
+    "src/persistence/document_files.js", "src/persistence/document_snapshot.js",
+  ];
+  expect(loadedScripts).toHaveLength(expectedPaths.length);
+  for (const expectedPath of expectedPaths) {
+    expect(loadedScripts.some((script) => script.path.endsWith(`/${expectedPath}`))).toBe(true);
+  }
   expect(loadedScripts.every(({ loadId }) => loadId && loadId === loadedScripts[0].loadId)).toBe(true);
   expect(await page.evaluate(() => [
     typeof window.EditHistory.record, typeof window.InteractionProfiler.create,
     typeof window.Appearance.resolveGeometryAppearance, typeof window.DrawingOrder.reorder,
     typeof window.DocumentFiles.create,
-  ])).toEqual(["function", "function", "function", "function", "function"]);
+    typeof window.ConstraintPersistence.create, typeof window.GeometryPersistence.decodeDocument,
+    typeof window.SketchHierarchy.decode, typeof window.AnnotationData.normalizeAnnotations,
+    typeof window.HatchData.validSerializedHatchList, typeof window.ReferenceImageData.validSerializedReferenceImageList,
+    typeof window.DocumentSnapshot.create,
+  ])).toEqual(Array(12).fill("function"));
 });
 
 test("HTML file picker compatibility route opens a Jot2D document without a native handle", async ({ page }) => {

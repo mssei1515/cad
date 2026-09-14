@@ -1,4 +1,4 @@
-/* geometry_ref.js: Pure, immutable references to direct and projected geometry. */
+/* src/geometry/geometry_ref.js: Pure, immutable references to direct and projected geometry. */
 (function () {
   "use strict";
 

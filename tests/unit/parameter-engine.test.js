@@ -5,10 +5,10 @@ const test = require("node:test");
 const vm = require("node:vm");
 
 function loadParameterEngine() {
-  const source = fs.readFileSync(path.resolve(__dirname, "../../parameter_engine.js"), "utf8");
+  const source = fs.readFileSync(path.resolve(__dirname, "../../src/parameters/parameter_engine.js"), "utf8");
   const sandbox = { window: {} };
   vm.createContext(sandbox);
-  vm.runInContext(source, sandbox, { filename: "parameter_engine.js" });
+  vm.runInContext(source, sandbox, { filename: "src/parameters/parameter_engine.js" });
   return sandbox.window.ParameterEngine;
 }
 

@@ -6,7 +6,7 @@ const test = require("node:test");
 
 const sandbox = { window: {} };
 vm.createContext(sandbox);
-for (const file of ["geometry_kernel.js", "spline_geometry.js", "constraint_solver.js", "src/document/appearance.js", "src/document/drawing_order.js", "src/persistence/geometry.js"]) {
+for (const file of ["src/geometry/geometry_kernel.js", "src/geometry/spline_geometry.js", "src/solver/constraint_solver.js", "src/document/appearance.js", "src/document/drawing_order.js", "src/persistence/geometry.js"]) {
   vm.runInContext(fs.readFileSync(path.resolve(__dirname, "../..", file), "utf8"), sandbox, { filename: file });
 }
 const codec = sandbox.window.GeometryPersistence;

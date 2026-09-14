@@ -1,4 +1,4 @@
-/* offset_chain.js: Pure ordered Line/Arc chain offset geometry. */
+/* src/geometry/offset_chain.js: Pure ordered Line/Arc chain offset geometry. */
 (function () {
   "use strict";
 

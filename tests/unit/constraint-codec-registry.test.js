@@ -5,10 +5,10 @@ const test = require("node:test");
 const vm = require("node:vm");
 
 function loadConstraintCodecRegistry() {
-  const source = fs.readFileSync(path.resolve(__dirname, "../../constraint_codec_registry.js"), "utf8");
+  const source = fs.readFileSync(path.resolve(__dirname, "../../src/persistence/constraint_codec_registry.js"), "utf8");
   const sandbox = { window: {} };
   vm.createContext(sandbox);
-  vm.runInContext(source, sandbox, { filename: "constraint_codec_registry.js" });
+  vm.runInContext(source, sandbox, { filename: "src/persistence/constraint_codec_registry.js" });
   return sandbox.window.ConstraintCodecRegistry;
 }
 

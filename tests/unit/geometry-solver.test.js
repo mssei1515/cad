@@ -7,7 +7,7 @@ const vm = require("node:vm");
 function loadGeometryRuntime() {
   const sandbox = { window: {} };
   vm.createContext(sandbox);
-  for (const fileName of ["geometry_kernel.js", "spline_geometry.js", "constraint_solver.js"]) {
+  for (const fileName of ["src/geometry/geometry_kernel.js", "src/geometry/spline_geometry.js", "src/solver/constraint_solver.js"]) {
     const source = fs.readFileSync(path.resolve(__dirname, `../../${fileName}`), "utf8");
     vm.runInContext(source, sandbox, { filename: fileName });
   }

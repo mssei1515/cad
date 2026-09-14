@@ -21,10 +21,10 @@
 
 ## 既存moduleとの役割分担
 
-- `geometry_kernel.js`、`geometry_ref.js`、`spline_geometry.js`、`hatch_region.js`、`offset_chain.js`は幾何計算・参照・領域探索の再利用単位。編集可否やSelectionは所有しない。
-- `constraint_solver.js`はGeometry／Constraint classと数値solve・解析を持つ。操作の確定／取消、Sketch依存更新は`app.js`側。
-- `parameter_engine.js`は式解析と依存評価、`constraint_codec_registry.js`は永続Constraint codec。Document全体の検証・復元は`app.js`側。
-- `edit_history.js`はstack操作、`interaction_profiler.js`は同期計測、`choice_dialog.js`は共通dialog。編集scope、snapshot形式、計測対象、確認する時機は呼出し側に残る。
+- `src/geometry/geometry_kernel.js`、`src/geometry/geometry_ref.js`、`src/geometry/spline_geometry.js`、`src/geometry/hatch_region.js`、`src/geometry/offset_chain.js`は幾何計算・参照・領域探索の再利用単位。編集可否やSelectionは所有しない。
+- `src/solver/constraint_solver.js`はGeometry／Constraint classと数値solve・解析を持つ。操作の確定／取消、Sketch依存更新は`app.js`側。
+- `src/parameters/parameter_engine.js`は式解析と依存評価、`src/persistence/constraint_codec_registry.js`は永続Constraint codec。Document全体の検証・復元は`app.js`側。
+- `src/editing/edit_history.js`はstack操作、`src/diagnostics/interaction_profiler.js`は同期計測、`src/ui/choice_dialog.js`は共通dialog。編集scope、snapshot形式、計測対象、確認する時機は呼出し側に残る。
 
 ## 分離した範囲と理由
 
@@ -33,6 +33,11 @@
 | 外観値・継承 | `src/document/appearance.js` | 既存の規則を値の入出力にする。appは所属とProjectionのlayerを選び、moduleはlayerを解決する。Solver class・DOM・modelを参照せず単体検証できる |
 | Sketch内の描画順 | `src/document/drawing_order.js` | Document／Definition、Sketch ID、候補を引数にする。順序補完と4操作が同じ所有者解決を使う。Selectionや履歴をmoduleへ渡さない |
 | 保存session | `src/persistence/document_files.js` | 7個の散在した保存状態をsession内部へ集約する。開始・終了・checkpoint更新をAPIに限定し、保存済み内容と履歴／現在の内容の比較を区別する |
+| Constraint永続形式 | `src/persistence/constraints.js` | 汎用dispatchから具体的な型とfieldを分離。参照Mapと旧形式変換は読込ごとに渡す |
+| Geometry復元 | `src/persistence/geometry.js` | 現Documentへ部分適用しないローカルGeometryとMapを生成。RootとBlockの旧形式の違いは専用入口で維持 |
+| Sketch階層 | `src/document/sketch_hierarchy.js` | 同じ階層規則を親子走査・表示行・読込補完で使用。scopeを明示し、操作やConstraint graphを渡さない |
+| 補助要素のデータ | `src/document/annotations.js`、`hatches.js`、`reference_images.js` | 正規化・保存field・値検証を各要素の所有者へ集める。既存Objectの同一性を維持し、描画cacheやSelectionと分離 |
+| Document snapshot | `src/persistence/document_snapshot.js` | Document／Blockのfield writerを共用。所属とConstraint配置のread adapter、時刻・名前・採番値だけを明示入力にする |
 
 各段階で既存の操作・保存形式を維持し、最後に`app.js`のadapterを接続する。moduleは自分の責務に必要な入力だけを受け取り、`app.js`を参照しない。
 
@@ -45,8 +50,22 @@ src/
   document/
     appearance.js           外観値とlayer解決
     drawing_order.js        Sketch内の順序
+    sketch_hierarchy.js     Root補完と階層・参照元・ツリー行
+    annotations.js          注記の値と保存field
+    hatches.js              Hatchの値・検証・保存field
+    reference_images.js     参照画像の値・検証・保存field
   persistence/
     document_files.js       ファイル名・保存session・handle書込み
+    constraint_codec_registry.js  型のdispatch
+    constraints.js          具体的なConstraint永続形式
+    geometry.js             ローカルGeometryの復元
+    document_snapshot.js    Document／Blockの保存snapshot
+  geometry/                 幾何kernel・参照・Spline・Hatch領域・Offset
+  solver/                   Geometry／Constraint classと数値solve
+  parameters/               式解析と依存評価
+  editing/                  履歴stack
+  diagnostics/              処理時間の計測
+  ui/                       共通選択dialog
 tests/
   unit/                     DOMなしの責務別検証
   e2e/                      操作・連携・互換性・Canvas検証
@@ -56,7 +75,7 @@ docs/refactoring/           分析・実装対応・今後の候補
 tools/                      server・生成など開発補助
 ```
 
-分類はファイルの大きさでなく責務に従う。`src/document/`はモデル値の規則、`src/persistence/`は外部保存とsessionの境界とする。既存の計算moduleを一括移動する必要はなく、今回変更しないmoduleのroot配置は維持する。新たなbuild／bundle工程を追加せず、通常scriptと明示的な読込順を使う。
+分類はファイルの大きさでなく責務に従う。`src/document/`はモデル値の規則、`src/persistence/`は外部保存とsessionの境界とする。既存の計算・補助moduleも同じ分類に揃え、移動は責務分離とは別のcommitにする。新たなbuild／bundle工程を追加せず、通常scriptと明示的な読込順を使う。
 
 ## 2026-09-15の継続分析
 
