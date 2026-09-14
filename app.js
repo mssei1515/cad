@@ -2151,29 +2151,7 @@
     return instance;
   }
 
-  function serializeGeometryInstance(instance) {
-    const data = {
-      id: instance.id,
-      type: instance.type,
-      sketchId: instance.sketchId,
-      drawingOrder: normalizedDrawingOrder(instance.drawingOrder) ?? 0,
-      sources: instance.sources.map((ref) => ({ kind: ref.kind, path: [...ref.path] })),
-      appearanceOverride: normalizeAppearance(instance.appearanceOverride),
-    };
-    if (instance.type === "free") Object.assign(data, {
-      x: instance.x, y: instance.y, rotation: instance.rotation, origin: { ...instance.origin },
-      mirrorX: instance.mirrorX, mirrorY: instance.mirrorY,
-    });
-    if (instance.type === "mirror") data.axis = instance.axis ? { kind: "line", path: [...instance.axis.path] } : null;
-    if (instance.type === "pattern") {
-      data.direction = instance.direction ? { kind: "line", path: [...instance.direction.path] } : null;
-      data.spacing = instance.spacing;
-      data.copies = instance.copies;
-      data.reversed = Boolean(instance.reversed);
-    }
-    if (instance.legacyOutput) data.legacyOutput = { ...instance.legacyOutput, pointIds: [...(instance.legacyOutput.pointIds || [])] };
-    return data;
-  }
+  const { serializeGeometryInstance } = window.DocumentSnapshot;
 
   function geometryInstanceTypeLabel(type) {
     if (type === "free") return applicationText("同期インスタンス", "Synchronized Instance");
@@ -6961,115 +6939,29 @@
     return constraintCodecs.serialize(c);
   }
 
+  const documentSnapshot = window.DocumentSnapshot.create({
+    geometryMetadata: (item) => ({
+      sketchId: elementSketchId(item),
+      kind: item instanceof Point ? item.kind || (isPointUsedByPrimitive(item) ? "endpoint" : "explicit") : undefined,
+    }),
+    constraintData: (constraint, scope) => {
+      const data = decorateSerializedConstraint(serializeConstraint(constraint), constraint);
+      if (!data) return null;
+      data.sketchId = scope === model ? constraintSketchId(constraint) : constraint.sketchId;
+      if (constraint.reference) {
+        data.reference = true;
+        data.referenceSketchId = constraint.referenceSketchId || null;
+      }
+      return data;
+    },
+  });
+
   function serializeModel() {
     ensureModelState();
-    return {
-      version: CURRENT_JSON_VERSION,
-      savedAt: new Date().toISOString(),
-      documentName: effectiveDocumentName(),
-      units: { ...model.units },
-      defaultAppearance: normalizeAppearance(model.defaultAppearance, { partial: false }),
-      defaultConstructionAppearance: normalizeConstructionAppearance(model.defaultConstructionAppearance, { partial: false }),
-      defaultDimensionAppearance: normalizeDimensionAppearance(model.defaultDimensionAppearance, { partial: false }),
-      sketches: model.sketches.map((sketch) => ({
-        id: sketch.id,
-        name: sketch.name,
-        parentSketchId: sketch.parentSketchId || null,
-        kind: isRootSketch(sketch) ? "root" : "sketch",
-        appearance: normalizeAppearance(sketch.appearance),
-        constructionAppearance: normalizeConstructionAppearance(sketch.constructionAppearance),
-        dimensionAppearance: normalizeDimensionAppearance(sketch.dimensionAppearance),
-      })),
-      activeSketchId: activeSketchId(),
-      annotations: normalizeAnnotations(model.annotations).map(serializeAnnotation),
-      hatches: normalizeHatches(model.hatches).map(serializeHatch),
-      referenceImages: normalizeReferenceImages(model.referenceImages).map(serializeReferenceImage),
-      nextHatchIndex: Math.max(hatchSeq, Number(model.nextHatchIndex) || 1),
-      parameters: model.parameters.map((parameter) => ({ name: parameter.name, expression: parameter.expression })),
-      nextDimensionParameterIndex: model.nextDimensionParameterIndex,
-      blockDefinitions: model.blockDefinitions.map((definition) => ({
-        id: definition.id,
-        name: definition.name,
-        parentDefinitionId: definition.parentDefinitionId || null,
-        revision: Number(definition.revision) || 0,
-        origin: { x: Number(definition.origin?.x) || 0, y: Number(definition.origin?.y) || 0 },
-        sketches: definition.sketches.map((sketch) => ({
-          id: sketch.id,
-          name: sketch.name,
-          parentSketchId: sketch.parentSketchId || null,
-          kind: sketch.kind === "root" ? "root" : "sketch",
-          appearance: normalizeAppearance(sketch.appearance),
-          constructionAppearance: normalizeConstructionAppearance(sketch.constructionAppearance),
-          dimensionAppearance: normalizeDimensionAppearance(sketch.dimensionAppearance),
-        })),
-        activeSketchId: definition.activeSketchId,
-        parameters: (definition.parameters || []).map((parameter) => ({ name: parameter.name, expression: parameter.expression })),
-        nextDimensionParameterIndex: Math.max(1, Number(definition.nextDimensionParameterIndex) || 1),
-        points: definition.points.map((point) => ({ id: point.id, x: point.x, y: point.y, fixed: point.fixed, kind: point.kind || "endpoint", sketchId: point.sketchId, appearance: normalizeAppearance(point.appearance) })),
-        lines: definition.lines.map((line) => ({ id: line.id, p1: line.p1.id, p2: line.p2.id, construction: Boolean(line.construction), sketchId: line.sketchId, drawingOrder: normalizedDrawingOrder(line.drawingOrder) ?? 0, appearance: normalizeAppearance(line.appearance) })),
-        circles: definition.circles.map((circle) => ({ id: circle.id, center: circle.center.id, radius: circle.radius(), construction: Boolean(circle.construction), sketchId: circle.sketchId, drawingOrder: normalizedDrawingOrder(circle.drawingOrder) ?? 0, appearance: normalizeAppearance(circle.appearance) })),
-        arcs: definition.arcs.map((arc) => ({ id: arc.id, center: arc.center.id, radius: arc.radius(), startAngle: arc.startAngle, endAngle: arc.endAngle, construction: Boolean(arc.construction), sketchId: arc.sketchId, drawingOrder: normalizedDrawingOrder(arc.drawingOrder) ?? 0, appearance: normalizeAppearance(arc.appearance) })),
-        splines: (definition.splines || []).map((spline) => ({ id: spline.id, definitionMode: "fit", degree: 3, fitPoints: spline.fitPoints.map((point) => point.id), closed: Boolean(spline.closed), endCondition: "natural", construction: Boolean(spline.construction), sketchId: spline.sketchId, drawingOrder: normalizedDrawingOrder(spline.drawingOrder) ?? 0, appearance: normalizeAppearance(spline.appearance) })),
-        annotations: normalizeAnnotations(definition.annotations, definition.activeSketchId).map(serializeAnnotation),
-        hatches: normalizeHatches(definition.hatches, definition.activeSketchId).map(serializeHatch),
-        referenceImages: normalizeReferenceImages(definition.referenceImages, definition.activeSketchId).map(serializeReferenceImage),
-        nextHatchIndex: Math.max(nextSeq(definition.hatches || [], "H"), Number(definition.nextHatchIndex) || 1),
-        blockInstances: (definition.blockInstances || []).map((instance) => ({
-          id: instance.id,
-          definitionId: instance.definitionId,
-          sketchId: instance.sketchId,
-          drawingOrder: normalizedDrawingOrder(instance.drawingOrder) ?? 0,
-          x: instance.x,
-          y: instance.y,
-          rotation: instance.rotation,
-          fixed: Boolean(instance.fixed),
-          rotationLocked: Boolean(instance.rotationLocked),
-          enabledSketchIds: Array.isArray(instance.enabledSketchIds) ? instance.enabledSketchIds.slice() : [],
-          appearanceOverride: normalizeAppearance(instance.appearanceOverride),
-        })),
-        geometryInstances: (definition.geometryInstances || []).map(serializeGeometryInstance),
-        constraints: definition.constraints.map((constraint) => {
-          const data = decorateSerializedConstraint(serializeConstraint(constraint), constraint);
-          if (!data) return null;
-          data.sketchId = constraint.sketchId;
-          if (constraint.reference) {
-            data.reference = true;
-            data.referenceSketchId = constraint.referenceSketchId || null;
-          }
-          return data;
-        }).filter(Boolean),
-      })),
-      blockInstances: model.blockInstances.map((instance) => ({
-        id: instance.id,
-        definitionId: instance.definitionId,
-        sketchId: instance.sketchId,
-        drawingOrder: normalizedDrawingOrder(instance.drawingOrder) ?? 0,
-        x: instance.x,
-        y: instance.y,
-        rotation: instance.rotation,
-        fixed: Boolean(instance.fixed),
-        rotationLocked: Boolean(instance.rotationLocked),
-        enabledSketchIds: Array.isArray(instance.enabledSketchIds) ? instance.enabledSketchIds.slice() : [],
-        appearanceOverride: normalizeAppearance(instance.appearanceOverride),
-      })),
-      geometryInstances: model.geometryInstances.map(serializeGeometryInstance),
-      points: model.points.map((p) => ({ id: p.id, x: p.x, y: p.y, fixed: p.fixed, kind: p.kind || (isPointUsedByPrimitive(p) ? "endpoint" : "explicit"), sketchId: elementSketchId(p), appearance: normalizeAppearance(p.appearance) })),
-      lines: model.lines.map((l) => ({ id: l.id, p1: l.p1.id, p2: l.p2.id, construction: Boolean(l.construction), sketchId: elementSketchId(l), drawingOrder: normalizedDrawingOrder(l.drawingOrder) ?? 0, appearance: normalizeAppearance(l.appearance) })),
-      circles: model.circles.map((c) => ({ id: c.id, center: c.center.id, radius: c.radius(), construction: Boolean(c.construction), sketchId: elementSketchId(c), drawingOrder: normalizedDrawingOrder(c.drawingOrder) ?? 0, appearance: normalizeAppearance(c.appearance) })),
-      arcs: model.arcs.map((a) => ({ id: a.id, center: a.center.id, radius: a.radius(), startAngle: a.startAngle, endAngle: a.endAngle, construction: Boolean(a.construction), sketchId: elementSketchId(a), drawingOrder: normalizedDrawingOrder(a.drawingOrder) ?? 0, appearance: normalizeAppearance(a.appearance) })),
-      splines: model.splines.map((spline) => ({ id: spline.id, definitionMode: "fit", degree: 3, fitPoints: spline.fitPoints.map((point) => point.id), closed: Boolean(spline.closed), endCondition: "natural", construction: Boolean(spline.construction), sketchId: elementSketchId(spline), drawingOrder: normalizedDrawingOrder(spline.drawingOrder) ?? 0, appearance: normalizeAppearance(spline.appearance) })),
-      constraints: model.constraints
-        .map((constraint) => {
-          const data = decorateSerializedConstraint(serializeConstraint(constraint), constraint);
-          if (data) data.sketchId = constraintSketchId(constraint);
-          if (data && constraint.reference) {
-            data.reference = true;
-            data.referenceSketchId = constraint.referenceSketchId || null;
-          }
-          return data;
-        })
-        .filter(Boolean),
-    };
+    return documentSnapshot.serialize(model, {
+      version: CURRENT_JSON_VERSION, savedAt: new Date().toISOString(),
+      documentName: effectiveDocumentName(), nextHatchIndex: hatchSeq,
+    });
   }
 
   function historySnapshot() {
