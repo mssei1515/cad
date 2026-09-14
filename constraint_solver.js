@@ -1887,7 +1887,20 @@
       // Compute the finite-difference Jacobian once, then incrementally extend
       // a row-echelon basis in constraint order. The previous implementation
       // rebuilt the entire Jacobian for every prefix of the constraint list.
-      const jacobian = this.computeJacobianForConstraints(variables, errors, activeConstraints);
+      let jacobian;
+      const state = this.clone(variables);
+      try {
+        // As in DOF analysis, remove accepted contact residuals before testing
+        // row independence: their angular error can falsely lock a free length.
+        const analysisTolerance = Math.min(this.tolerance, rankTolerance * 0.1);
+        if (vectorNorm(errors) > analysisTolerance) {
+          const corrected = this.solveCore(variables, activeConstraints, analysisTolerance, this.maxStepNorm, Math.min(this.initialLambda, rankTolerance), 8);
+          if (!Number.isFinite(corrected.errorNorm) || corrected.errorNorm > errorTolerance) this.restore(state);
+        }
+        jacobian = this.computeJacobianForConstraints(variables, this.computeErrorVectorForConstraints(activeConstraints), activeConstraints);
+      } finally {
+        this.restore(state);
+      }
       const basis = [];
       const scales = variables.map((v) => this.variableMotionScale(v));
       const addIndependentRow = (source) => {
