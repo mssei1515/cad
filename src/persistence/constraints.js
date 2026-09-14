@@ -1,7 +1,22 @@
 /* Persistent constraint formats and scoped reference restoration. */
 (function () {
   "use strict";
-  const { Arc, ArcEndpointArcEndpointCoincidentConstraint, ArcEndpointCoincidentConstraint, ArcEndpointFixedConstraint, ArcEndpointHorizontalConstraint, ArcEndpointOnCircleConstraint, ArcEndpointOnLineConstraint, ArcEndpointVerticalConstraint, ArcSymmetryConstraint, Circle, CircleCircleTangentConstraint, CoincidentConstraint, CollinearConstraint, ConcentricConstraint, ConcentricRadiusDifferenceConstraint, DiameterConstraint, DistanceConstraint, EqualLengthConstraint, EqualRadiusConstraint, GeometryFixedConstraint, HorizontalConstraint, Line, LineAngleConstraint, LineCircleDistanceConstraint, LineCircleTangentConstraint, LineFixedConstraint, LineLineDistanceConstraint, LineSymmetryConstraint, OffsetChainConstraint, OffsetConstraint, ParallelConstraint, ParallelLinesCenterlineConstraint, PerpendicularConstraint, PointAxisDistanceConstraint, PointHorizontalConstraint, PointLineDistanceConstraint, PointOnCircleConstraint, PointOnLineConstraint, PointOnSplineConstraint, PointPairCenterlineConstraint, PointVerticalConstraint, RadiusConstraint, SketchProjectionConstraint, Spline, SplineLineTangentConstraint, SplineSplineTangentConstraint, SymmetryConstraint, VerticalConstraint } = window.GeometrySolver;
+  const {
+    Arc, Circle, Line, Spline,
+    ArcEndpointArcEndpointCoincidentConstraint, ArcEndpointCoincidentConstraint,
+    ArcEndpointFixedConstraint, ArcEndpointHorizontalConstraint, ArcEndpointOnCircleConstraint,
+    ArcEndpointOnLineConstraint, ArcEndpointVerticalConstraint, ArcSymmetryConstraint,
+    CircleCircleTangentConstraint, CoincidentConstraint, CollinearConstraint, ConcentricConstraint,
+    ConcentricRadiusDifferenceConstraint, DiameterConstraint, DistanceConstraint,
+    EqualLengthConstraint, EqualRadiusConstraint, GeometryFixedConstraint, HorizontalConstraint,
+    LineAngleConstraint, LineCircleDistanceConstraint, LineCircleTangentConstraint, LineFixedConstraint,
+    LineLineDistanceConstraint, LineSymmetryConstraint, OffsetChainConstraint, OffsetConstraint,
+    ParallelConstraint, ParallelLinesCenterlineConstraint, PerpendicularConstraint,
+    PointAxisDistanceConstraint, PointHorizontalConstraint, PointLineDistanceConstraint,
+    PointOnCircleConstraint, PointOnLineConstraint, PointOnSplineConstraint,
+    PointPairCenterlineConstraint, PointVerticalConstraint, RadiusConstraint, SketchProjectionConstraint,
+    SplineLineTangentConstraint, SplineSplineTangentConstraint, SymmetryConstraint, VerticalConstraint,
+  } = window.GeometrySolver;
   const { parseId: parseGeometryRefId, resolve: resolveGeometryRefValue } = window.GeometryRef;
   const { normalizeDimensionAppearance } = window.Appearance;
 
@@ -390,7 +405,7 @@
       const pointOrPrimitive = (id) => resolveStoredGeometry("point", id) || primitive(id);
       const lineOrPrimitive = (id) => resolveStoredGeometry("line", id) || primitiveValue(id);
       const constraint = constraintCodecs.deserialize(data, { point, line, primitive, spline, geometry, pointOrPrimitive, lineOrPrimitive });
-  
+
       if (constraint) {
         constraint.enabled = data.enabled !== false;
         constraint.readOnlyDimension = Boolean(data.readOnlyDimension);

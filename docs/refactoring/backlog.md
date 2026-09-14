@@ -8,11 +8,11 @@
 
 ### app.jsの責務分割
 
-Document adapter、Geometry command、Constraint command、Block service、Parameter service、Appearance resolver、Hatch、Annotation、Reference Image、派生Geometry Instance、Canvas renderer、DOM panel、test fixtureを段階的にmoduleへ分ける。分割中もversion 22 schemaと既存GeometryRefを維持する。
+Document adapter、Geometry command、Constraint command、Block service、Parameter service、Hatch・Annotation・Reference Imageの操作／描画、派生Geometry Instance、Canvas renderer、DOM panel、test fixtureを段階的にmoduleへ分ける。外観値、Sketch階層、補助要素の値、保存snapshot、Constraint永続形式、ローカルGeometry復元は分離済み。分割中もversion 22 schemaと既存GeometryRefを維持する。
 
 ### Loaderの段階化
 
-parse、legacy normalization、ID予約、Block graph検証、Constraint hydration、Annotation hydrationを分離し、旧表示専用fieldを破棄する境界を明示する。
+ローカルGeometry復元、Constraint codec、Sketch階層の読込補完は独立した入力・出力へ分離済み。残るparse、version別の検証順序、ID予約、Block graph検証、Projection参照Mapの組立て、Document置換を段階化する。復元途中のローカル値と実行中のDocumentを区別し、旧表示専用fieldを破棄する境界を維持する。
 
 ### 参照cleanupの集約
 

@@ -6,12 +6,12 @@
 
 | 項目 | 状態 |
 | --- | --- |
-| 更新日 | 2026-09-14 |
+| 更新日 | 2026-09-15 |
 | 準備 | 完了：仕様の7領域への整理、不要文書の削除、拘束選択・保存往復・線取消履歴の修正 |
-| 基準 | developの統合commit：b0a0000。構文チェック・単体68件・E2E203件成功済みのコードと一致 |
+| 基準 | 今回の開始点はdevelopの5825453。前回までの単体120件とE2E303件の検証結果は下記参照 |
 | 計画 | R1〜R5の限定した対象は統合済み。継続の責務分離は下記参照 |
-| 継続の責務分離 | 完了：外観、Sketch内描画順、保存sessionを`src/document/`と`src/persistence/`に分離。単体120件と全E2E303件を修正後の再検証まで含めて確認 |
-| 次の候補 | Document Loader、Canvas／DOM、Block・Sketchの編集scope。今回の分離範囲と残る依存は[責務分析](./app-responsibilities.md)を参照 |
+| 継続の責務分離 | 完了：Constraint永続形式、ローカルGeometry復元、Sketch階層、補助要素の値、保存snapshotを分離。既存moduleを責務別folderへ整理。構文チェック・単体137件・E2E303件成功 |
+| 次の候補 | Document Loaderのgraph検証・置換、Canvas／DOM、Block・Sketchの編集scope。今回の分離範囲と残る依存は[責務分析](./app-responsibilities.md)を参照 |
 | ユーザー確認待ち | なし |
 | 未取得の情報 | 実際に拘束エラー・ドラッグ遅延が起きた図面、操作、実行環境。既存仕様を維持する整理は進行可能 |
 
@@ -115,6 +115,23 @@ R4の単体検証とE2Eを照合し、履歴集計の計算とDocument復元・U
 「完了」は成果物・必要な検証・Commit・Pushが揃った状態とする。段階の完了にはdevelopへの統合も含む。検証未実施・失敗・確認待ちを完了へ含めない。予定を変更するときは対象と理由を更新し、日々の詳細ログを別文書に増やさない。
 
 ## 検証結果
+
+### 2026-09-15のDocument境界とフォルダ整理
+
+開始点`5825453`から次の6段階に分け、各段階の関連検証後にcommit・Pushした。原因調査では責務分離と配置変更を区別して比較できる。`app.js`は28,956行から27,917行になった。新規の可変global状態やbuild工程は追加していない。
+
+| Commit | 対象 | 段階ごとの検証 |
+| --- | --- | --- |
+| `f7c1c10` | Constraintの具体的な永続形式とscopeごとの参照復元 | 新規単体4件、保存・Block・基本互換性E2E68件成功 |
+| `6f8216f` | Document／BlockのローカルGeometry復元 | 新規単体5件、Spline・Block・基本互換性E2E63件成功 |
+| `cb6bc64` | Sketch階層の補完・走査・参照元・表示行 | 新規単体3件、Sketch・Block・UI E2E138件成功 |
+| `1e8f805` | Annotation・Hatch・Reference Imageの値と保存field | 新規単体3件、Hatch・画像・基本互換性E2E30件成功 |
+| `311081f` | Document／Blockの保存snapshotの共通field writer | 新規単体2件、保存・履歴・Block・派生Instance E2E79件成功 |
+| `1795d7c` | 既存moduleを責務別の`src/`へ配置 | 構文チェック、単体137件、全scriptを確認するfile起動E2E1件成功 |
+
+配置変更では11モジュールの実装が先頭コメントを除いて一致すること、文書の相対リンク303箇所が解決できることを確認した。Sketch読込の統合は、分離前の実装とDocument／Block計46ケースで補完結果と所属ID変換が一致した。
+
+最終の`npm run test:all`は終了コード0で成功。構文チェック、単体137件、E2E303件（18.6分）がすべて通常の成功で、失敗・expected failure・skipはない。航空機図面の1,872 preview、オフセットの10,296 preview、連動線分の往復・細かな連続入力も成功した。保存version 22、旧形式fixture、性能・精度の閾値、visual baselineは変更していない。実行環境はWindows／Node v24.11.1／Playwright Chromium、1 worker。全体検証中に行った製品コードの最終調整はConstraint moduleのimport整形と空白除去だけで、整形後の構文とConstraint永続化の単体検証も確認した。
 
 ### 2026-09-14の責務分離と回帰修正
 
