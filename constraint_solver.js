@@ -1518,22 +1518,25 @@
           for (let i = 0; i < count; i++) {
             const next = (i + 1) % c.sources.length;
             const a = c.sources[i], b = c.sources[next];
-            if (!(a instanceof Arc && b instanceof Arc && c.offsets[i] instanceof Arc && c.offsets[next] instanceof Arc)) continue;
             const endA = c.sourceReversed[i] ? "start" : "end";
             const endB = c.sourceReversed[next] ? "end" : "start";
+            const contact = (item, end) => item instanceof Arc ? endpoint(item, end)
+              : item instanceof Line ? item[end === "start" ? "p1" : "p2"] : null;
             const tangent = constraints.some((other) => other instanceof CircleCircleTangentConstraint
-              && ((other.a === a && other.b === b) || (other.a === b && other.b === a)));
-            if (tangent && root(endpoint(a, endA)) === root(endpoint(b, endB))) joins.push({ i, next, endA, endB });
+              ? ((other.a === a && other.b === b) || (other.a === b && other.b === a))
+              : other instanceof LineCircleTangentConstraint
+                && ((other.line === a && other.primitive === b) || (other.line === b && other.primitive === a)));
+            if (!tangent || root(contact(a, endA)) !== root(contact(b, endB))) continue;
+            if (a instanceof Arc && c.offsets[i] instanceof Arc) joins.push({ index: i, sourceEnd: endA, offsetEnd: "endAngle" });
+            if (b instanceof Arc && c.offsets[next] instanceof Arc) joins.push({ index: next, sourceEnd: endB, offsetEnd: "startAngle" });
           }
           if (joins.length) error = () => {
             const errors = c.rawError();
-            // Offset joins of explicitly tangent source arcs have a unique
+            // Offset joins of explicitly tangent source geometry have a unique
             // contact. Position coincidence alone loses one derivative there.
-            for (const { i, next, endA, endB } of joins) {
-              errors.push(
-                normalizeAngleSigned(c.offsets[i].endAngle - c.sources[i][endA === "start" ? "startAngle" : "endAngle"]) * Math.max(1, c.offsets[i].radius()),
-                normalizeAngleSigned(c.offsets[next].startAngle - c.sources[next][endB === "start" ? "startAngle" : "endAngle"]) * Math.max(1, c.offsets[next].radius()),
-              );
+            for (const { index, sourceEnd, offsetEnd } of joins) {
+              errors.push(normalizeAngleSigned(c.offsets[index][offsetEnd]
+                - c.sources[index][sourceEnd === "start" ? "startAngle" : "endAngle"]) * Math.max(1, c.offsets[index].radius()));
             }
             return errors;
           };

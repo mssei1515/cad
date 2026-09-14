@@ -625,6 +625,34 @@ test("offset joins inherit explicit source tangency without a phantom endpoint d
   }
 });
 
+test("line-arc offset contacts retain endpoint rank in either chain direction", () => {
+  for (const reverse of [false, true]) for (const perturbation of [0, 1e-6, -1e-6]) {
+    const start = new geometry.Point('start', -20, 0, true), contact = new geometry.Point('contact', 0, 0, true);
+    const center = new geometry.Point('center', 0, 10, true);
+    const line = new geometry.Line('line', start, contact), arc = new geometry.Arc('arc', center, 10, -Math.PI / 2, 0);
+    const moving = new geometry.Point('moving', perturbation * 8, 2);
+    const offsetLine = new geometry.Line('offsetLine', new geometry.Point('offsetStart', -20, 2, true), moving);
+    const offsetArc = new geometry.Arc('offsetArc', center, 8, -Math.PI / 2 + perturbation, 0);
+    if (reverse) {
+      [offsetLine.p1, offsetLine.p2] = [offsetLine.p2, offsetLine.p1];
+      [offsetArc.startAngle, offsetArc.endAngle] = [offsetArc.endAngle, offsetArc.startAngle];
+    }
+    const tangent = new geometry.LineCircleTangentConstraint(line, arc, 1);
+    const coincidence = new geometry.ArcEndpointCoincidentConstraint(arc, 'start', contact);
+    const offset = new geometry.OffsetChainConstraint(reverse ? [arc, line] : [line, arc],
+      reverse ? [offsetArc, offsetLine] : [offsetLine, offsetArc], 2, reverse ? -1 : 1, [reverse, reverse]);
+    const constraints = [tangent, coincidence, offset];
+    const solver = new geometry.ConstraintSolver({ points: [start, contact, center, moving], lines: [line, offsetLine], circles: [], arcs: [arc, offsetArc], constraints });
+    const variables = [{ object: moving, prop: 'x' }, { object: offsetArc, prop: reverse ? 'endAngle' : 'startAngle' }];
+    assert.equal(solver.constraintRankState({ variables, constraints }).rank, 2);
+    tangent.enabled = false;
+    assert.equal(solver.getConstraints().find((c) => c.sourceConstraint === offset), undefined);
+    tangent.enabled = true;
+    coincidence.enabled = false;
+    assert.equal(solver.getConstraints().find((c) => c.sourceConstraint === offset), undefined);
+  }
+});
+
 test("physical angle scaling lets a circle drag leave endpoint tangencies without locking", () => {
   const left = new geometry.Point('left', -100, 20, true), right = new geometry.Point('right', 100, 20, true);
   const support = new geometry.Line('support', left, right);
