@@ -18774,7 +18774,6 @@
     }
     const performanceTrace = { kind: "constraint", type, startedAt: performance.now() };
     const snapshot = snapshotModelState();
-    const initiallySatisfied = constraintIsSatisfied(constraint);
     performanceTrace.snapshotMs = performance.now() - performanceTrace.startedAt;
     const solveStepNorm = solveStepNormForConstraint(constraint);
     pushModelConstraint(constraint);
@@ -18795,7 +18794,7 @@
     performanceTrace.fullFallback = Boolean(result.fullFallback);
     const collapse = findLineCollapseAfterConstraint(constraint, snapshot, constraintSketchId(constraint));
     const redundancyStartedAt = performance.now();
-    const duplicate = initiallySatisfied && solved.success && result.errorNorm <= CONSTRAINT_ACCEPT_ERROR && !collapse ? redundantConstraintInfo(constraint, constraintSketchId(constraint)) : null;
+    const duplicate = solved.success && result.errorNorm <= CONSTRAINT_ACCEPT_ERROR && !collapse ? redundantConstraintInfo(constraint, constraintSketchId(constraint)) : null;
     performanceTrace.redundancyMs = performance.now() - redundancyStartedAt;
     if (!solved.success || result.errorNorm > CONSTRAINT_ACCEPT_ERROR || collapse || duplicate?.redundant) {
       if (duplicate?.redundant && isDimensionConstraint(constraint)) {
@@ -18842,14 +18841,6 @@
     return constraint;
   }
 
-  function constraintIsSatisfied(constraint) {
-    const error = constraint.error();
-    const norm = vectorNorm(Array.isArray(error) ? error : [error]);
-    // A new condition that moves the geometry is not a duplicate merely because
-    // its Jacobian becomes dependent at the solution of a nonlinear system.
-    return Number.isFinite(norm) && norm <= CONSTRAINT_ACCEPT_ERROR;
-  }
-
   function commitReferenceConstraint(type, constraint, referenceSketchId, sketchId = activeSketchId()) {
     if (!constraint || !isReferenceSourceSketchId(referenceSketchId, sketchId)) {
       const msg = descendantSketchIds(sketchId).includes(referenceSketchId) ? "子孫スケッチは参照できません" : "先祖スケッチのみ参照できます";
@@ -18865,14 +18856,13 @@
     }
     const snapshot = snapshotModelState();
     markReferenceConstraint(constraint, referenceSketchId, sketchId);
-    const initiallySatisfied = constraintIsSatisfied(constraint);
     const solveStepNorm = solveStepNormForConstraint(constraint);
     pushModelConstraint(constraint, sketchId);
     preconditionNewConstraint(constraint);
     const solved = withTemporarySolveStepNorm(solveStepNorm, () => solveConstraintComponentAndDependents(constraint, snapshot));
     const result = solved.result;
     const collapse = findLineCollapseAfterConstraint(constraint, snapshot, sketchId);
-    const duplicate = initiallySatisfied && solved.success && result.errorNorm <= CONSTRAINT_ACCEPT_ERROR && !collapse ? redundantConstraintInfo(constraint, sketchId) : null;
+    const duplicate = solved.success && result.errorNorm <= CONSTRAINT_ACCEPT_ERROR && !collapse ? redundantConstraintInfo(constraint, sketchId) : null;
     if (!solved.success || result.errorNorm > CONSTRAINT_ACCEPT_ERROR || collapse || duplicate?.redundant) {
       if (duplicate?.redundant && isDimensionConstraint(constraint)) {
         restoreModelState(snapshot);
