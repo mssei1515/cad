@@ -1766,8 +1766,19 @@
         if (angleScale < 1) dx = dx.map((value) => value * angleScale);
         this.applyDelta(vars, dx);
 
-        const trialF = this.computeErrorVectorForConstraints(constraints);
-        const trialNorm = vectorNorm(trialF);
+        let trialF = this.computeErrorVectorForConstraints(constraints);
+        let trialNorm = vectorNorm(trialF);
+        // Keep the coupled Newton direction when its full step leaves the
+        // local constraint branch (for example, collapsing a short tangent
+        // line). Increasing damping alone can steer subsequent steps into
+        // that singularity instead of following the shrinking geometry.
+        for (let backtrack = 0; !(trialNorm < errorNorm) && backtrack < 8; backtrack++) {
+          this.restore(state);
+          dx = dx.map((value) => value * 0.5);
+          this.applyDelta(vars, dx);
+          trialF = this.computeErrorVectorForConstraints(constraints);
+          trialNorm = vectorNorm(trialF);
+        }
         if (trialNorm < errorNorm) {
           F = trialF;
           errorNorm = trialNorm;
