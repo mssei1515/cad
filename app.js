@@ -19608,7 +19608,7 @@
         targets,
         errorTolerance,
         activeTargetVariables: session.guidedTargetVariables || [],
-        referenceState: session.kind === "line" && !session.lineDragPoint ? session.fullDragState || [] : [],
+        referenceState: session.kind === "line" && (!session.lineDragPoint || session.translationReference) ? session.fullDragState || [] : [],
         preserveTranslation: Boolean(session.translationReference),
         targetStepNorm,
       }),
