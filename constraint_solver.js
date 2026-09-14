@@ -2165,10 +2165,9 @@
       const weights = projectionTargetMask.map((targeted) => targeted ? 1 : GUIDED_DRAG_BACKGROUND_WEIGHT);
       const physicalProjected = LinearAlgebra.projectOntoBasis(physicalDesired, physicalBasis, weights);
       const componentScale = Math.sqrt(Math.max(1, variables.length / Math.max(1, targetVariableCount)));
-      // Near-singular null-space directions can turn a tiny pointer movement into
-      // enormous changes in remote geometry. A rigid component legitimately moves
-      // several variables, so scale with its size, but always keep that motion
-      // proportional to the actual cursor request.
+      // Parameter and circumference predictors can amplify near-singular
+      // directions. Scale their cursor budget with the component size; direct
+      // point coordinates use a separate visible-motion bound below.
       const requestedTargetNorm = vectorNorm(physicalDesired);
       const boundedTargetNorm = !radialObjective && Number.isFinite(targetStepNorm) && targetStepNorm > 0
         ? Math.min(requestedTargetNorm, targetStepNorm)
