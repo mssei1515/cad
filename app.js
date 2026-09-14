@@ -376,6 +376,7 @@
   let splineEditSession = null;
   let sketchProjectionSources = [];
   let geometryInstanceCommandSources = [];
+  let instanceSourceEdit = null;
   let pointerPreview = null;
   let activeSnap = null;
   let trimPreview = null;
@@ -2729,7 +2730,7 @@
     const sourceRefByItem = new Map(resolvedSources.map(({ ref, item }) => [item, ref]));
     const pointRef = (point) => geometryRefForItem(point) || parseGeometryRefId("point", point.id);
     const outputs = { instance, valid: true, reason: "", points: [], lines: [], circles: [], arcs: [], splines: [] };
-    const legacy = instance.legacyOutput && resolvedSources.length === 1 && occurrences.length === 1 ? instance.legacyOutput : null;
+    const legacy = instance.legacyOutput && occurrences.length === 1 ? instance.legacyOutput : null;
     for (const occurrence of occurrences) {
       const mappedPoints = new Map();
       const allSourcePoints = [];
@@ -2753,7 +2754,7 @@
         outputs.points.push(point);
       }
       for (const { ref, item } of resolvedSources) {
-        const outputId = legacy?.id || [instance.id, ...(instance.type === "pattern" ? [String(occurrence)] : []), ...ref.path].join("@");
+        const outputId = (item === resolvedSources[0]?.item && legacy?.id) || [instance.id, ...(instance.type === "pattern" ? [String(occurrence)] : []), ...ref.path].join("@");
         let output = null;
         if (item instanceof Point) output = mappedPoints.get(item);
         else if (item instanceof Line) output = new Line(outputId, mappedPoints.get(item.p1), mappedPoints.get(item.p2), item.construction);
@@ -3696,6 +3697,7 @@
 
   function isConstraintOperandSelected(item, options = {}) {
     if (!item) return false;
+    if (mode === "instance-sources" && instanceSourceEdit?.sources.some((ref) => geometryRefsEqual(ref, geometryRefForItem(item)))) return true;
     if (mode === "sketch-projection" && sketchProjectionSources.some((entry) => entry.item === item)) return true;
     if (options.arcEndpoint) {
       return constraintOperands.some((operand) => operand.kind === "arc-endpoint" && sameArcEndpoint(operand, options.arcEndpoint));
@@ -4651,6 +4653,88 @@
       for (const point of bundle.points) if (point.sourceElement instanceof Point && point.sourceElement.kind === "explicit") items.push(point);
     }
     return [...new Set(items)].filter((item) => elementSketchId(item) === activeSketchId() && geometryRefForItem(item));
+  }
+
+  function startInstanceSourceEdit(instance) {
+    if (!model.geometryInstances.includes(instance) || instance.sketchId !== activeSketchId()) return false;
+    exitDrawMode();
+    cancelConstraintTargetCommand("");
+    cancelPendingCommand("");
+    clearSelection();
+    instanceSourceEdit = { instance, sources: [...instance.sources] };
+    mode = "instance-sources";
+    updateToolbar();
+    updateUI({ refreshAnalysis: false });
+    setHint(applicationText("対象図形をクリックして追加・解除。Enterで確定、Escで取消", "Click source geometry to add or remove it. Enter confirms; Esc cancels."));
+    draw();
+  }
+
+  function toggleInstanceSource(item) {
+    const edit = instanceSourceEdit;
+    if (!edit || !item) return;
+    // Clicking an output of this instance edits its corresponding source.
+    if (item.derivedInstance === edit.instance) item = item.sourceElement;
+    const ref = geometryRefForItem(item);
+    if (!ref || !isVisibleSketchElement(item)) return;
+    const index = edit.sources.findIndex((source) => geometryRefsEqual(source, ref));
+    if (index >= 0) edit.sources.splice(index, 1);
+    else {
+      const eligible = edit.instance.type === "sketchProjection"
+        ? sketchProjectionEntryFromItem(item) && (edit.instance.sources.some((source) => geometryRefsEqual(source, ref)) || !sketchProjectionSourceIsCovered(item, edit.instance.sketchId))
+        : elementSketchId(item) === edit.instance.sketchId;
+      if (!eligible) return;
+      const candidate = { ...edit.instance, sources: [...edit.sources, ref] };
+      const scope = { ...model, geometryInstances: model.geometryInstances.map((entry) => entry === edit.instance ? candidate : entry) };
+      const bundle = geometryInstanceBundlesForScope(scope, blockProjectionBundles()).find((entry) => entry.instance === candidate);
+      if (!bundle?.valid) return void setHint(bundle?.reason || applicationText("参照が無効です", "Invalid reference"), "error");
+      edit.sources.push(ref);
+    }
+    updatePropertiesUI();
+    draw();
+  }
+
+  function finishInstanceSourceEdit(commit) {
+    const edit = instanceSourceEdit;
+    if (!edit || mode !== "instance-sources") return false;
+    const instance = edit.instance;
+    if (commit) {
+      if (!edit.sources.length) return void setHint(applicationText("対象図形を1件以上選択してください", "Select at least one source."), "error");
+      // Keep retained sources in their original order, including the source
+      // associated with a migrated projection's legacy output IDs.
+      const sources = [...instance.sources.filter((ref) => edit.sources.some((entry) => geometryRefsEqual(ref, entry))),
+        ...edit.sources.filter((ref) => !instance.sources.some((entry) => geometryRefsEqual(ref, entry)))];
+      const candidate = { ...instance, sources };
+      if (!geometryRefsEqual(sources[0], instance.sources[0])) delete candidate.legacyOutput;
+      const scope = { ...model, geometryInstances: model.geometryInstances.map((entry) => entry === instance ? candidate : entry) };
+      const bundles = geometryInstanceBundlesForScope(scope, blockProjectionBundles());
+      const invalid = bundles.find((bundle) => !bundle.valid);
+      if (invalid) return void setHint(`${invalid.instance.id}: ${invalid.reason}`, "error");
+      const items = (bundle) => [...bundle.points, ...bundle.lines, ...bundle.circles, ...bundle.arcs, ...bundle.splines];
+      const nextKeys = new Set(items(bundles.find((bundle) => bundle.instance === candidate)).map(geometryElementKey));
+      const removed = items(geometryInstanceBundle(instance)).filter((item) => !nextKeys.has(geometryElementKey(item)));
+      const removedKeys = new Set(removed.map(geometryElementKey));
+      const removedIds = new Set(removed.map((item) => item.id));
+      const constraints = new Set(model.constraints.filter((constraint) => constraintGraphNodes(constraint).some((node) => removedKeys.has(geometryElementKey(node)))));
+      if (!guardDimensionSymbolDeletion(constraints)) return false;
+      const changed = instance.sources.length !== edit.sources.length || instance.sources.some((ref) => !edit.sources.some((entry) => geometryRefsEqual(ref, entry)));
+      if (changed) {
+        instance.sources = sources;
+        if (!candidate.legacyOutput) delete instance.legacyOutput;
+        model.constraints = model.constraints.filter((constraint) => !constraints.has(constraint));
+        model.annotations = model.annotations.filter((annotation) => !annotationReferencesRemovedGeometry(annotation, removedIds, removedKeys));
+        clearSketchSolveState(instance.sketchId);
+        recordHistory("派生インスタンス対象図形変更");
+      }
+    }
+    instanceSourceEdit = null;
+    mode = "select";
+    clearSelection();
+    selectedGeometryInstances = [instance];
+    updateToolbar();
+    updateUI();
+    setHint(commit ? applicationText("対象図形を更新しました", "Source geometry updated.") : applicationText("対象図形の編集を取り消しました", "Source editing canceled."));
+    draw();
+    return true;
   }
 
   function startGeometryInstanceCommand(type) {
@@ -7285,6 +7369,7 @@
     splineFitPoints = [];
     sketchProjectionSources = [];
     geometryInstanceCommandSources = [];
+    instanceSourceEdit = null;
     splineCreationRollback = null;
     splineLastClickAddition = null;
     splineEditSession = null;
@@ -9244,6 +9329,7 @@
   }
 
   function exitDrawMode() {
+    instanceSourceEdit = null;
     resetCenterlineCommandState();
     lineStartPoint = null;
     pointStartRollback = null;
@@ -15974,6 +16060,7 @@
     pendingConstraintCommand = null;
     sketchProjectionSources = [];
     geometryInstanceCommandSources = [];
+    instanceSourceEdit = null;
     hoveredSketchIdentity = null;
     lastPointerWorld = null;
     hideDimensionValueInput();
@@ -17390,6 +17477,7 @@
   }
 
   function selectedPropertiesTarget() {
+    if (mode === "instance-sources" && instanceSourceEdit) return { kind: "geometryInstance", item: instanceSourceEdit.instance };
     if (freeInstancePlacement) return { kind: "geometryInstance", item: freeInstancePlacement };
     if (mode === "block-place" && blockPlacementDefinitionId) return { kind: "blockPlacement", item: blockDefinitionById(blockPlacementDefinitionId) };
     const constraint = selectedDimensionConstraint || effectiveSelectedConstraint();
@@ -17822,9 +17910,9 @@
       const first = [...bundle.lines, ...bundle.circles, ...bundle.arcs, ...bundle.splines, ...bundle.points][0];
       const effective = first ? effectiveAppearanceForElement(first) : normalizeAppearance(model.defaultAppearance, { partial: false });
       const typeLabel = geometryInstanceTypeLabel(item.type);
-      const refs = item.sources.map((ref) => `${ref.kind}:${geometryRefId(ref)}`).join(", ");
+      const refs = (mode === "instance-sources" && instanceSourceEdit?.instance === item ? instanceSourceEdit.sources : item.sources).map((ref) => `${ref.kind}:${geometryRefId(ref)}`).join(", ");
       const settings = item.type === "free" ? freeInstancePropertyRows(item) : item.type === "pattern" ? `<div class="property-row"><label>${applicationText("間隔", "Spacing")}</label><div class="property-input-with-unit"><input data-geometry-instance-property="spacing" type="number" min="0.000001" step="0.1" value="${item.spacing}"><span class="property-input-unit">mm</span></div></div><div class="property-row"><label>${applicationText("コピー数", "Copies")}</label><input data-geometry-instance-property="copies" type="number" min="1" max="1000" step="1" value="${item.copies}"></div><div class="property-row"><label>${applicationText("反転", "Reverse")}</label><input data-geometry-instance-property="reversed" type="checkbox" ${item.reversed ? "checked" : ""}></div>` : "";
-      panel.innerHTML = `<h2 class="property-heading">${typeLabel}</h2><section class="property-section">${basicInformationHeading}${propertyReadonlyRow("種類", "Type", typeLabel)}${propertyReadonlyRow("ID", "ID", item.id)}${propertyReadonlyRow("複写元", "Sources", refs, { userContent: true })}${propertyReadonlyRow("状態", "Status", bundle.valid ? applicationText("有効", "Valid") : bundle.reason, { userContent: !bundle.valid })}${settings}</section><section class="property-section"><h3>${applicationText("外観の上書き", "Appearance Override")}</h3>${appearancePropertyRows(item.appearanceOverride, effective)}</section>`;
+      panel.innerHTML = `<h2 class="property-heading">${typeLabel}</h2><section class="property-section">${basicInformationHeading}${propertyReadonlyRow("種類", "Type", typeLabel)}${propertyReadonlyRow("ID", "ID", item.id)}${propertyReadonlyRow("複写元", "Sources", refs, { userContent: true })}${propertyReadonlyRow("状態", "Status", bundle.valid ? applicationText("有効", "Valid") : bundle.reason, { userContent: !bundle.valid })}${settings}${model.geometryInstances.includes(item) && item.sketchId === activeSketchId() ? `<button data-property-action="instance-sources" ${mode === "instance-sources" ? "disabled" : ""}>${applicationText("対象図形を編集", "Edit source geometry")}</button>` : ""}</section><section class="property-section"><h3>${applicationText("外観の上書き", "Appearance Override")}</h3>${appearancePropertyRows(item.appearanceOverride, effective)}</section>`;
     } else if (target.kind === "constraint") {
       const dimension = item.dimension;
       const targetValue = targetFromConstraint(item);
@@ -18460,6 +18548,7 @@
 
   function handlePropertiesClick(event) {
     const action = event.target.closest("[data-property-action]")?.dataset.propertyAction;
+    if (action === "instance-sources") return startInstanceSourceEdit(selectedPropertiesTarget().item);
     if (action === "reference-image-calibrate") {
       const target = selectedPropertiesTarget();
       return target.kind === "referenceImage" ? startReferenceImageCalibration(target.item) : false;
@@ -22355,6 +22444,14 @@
       return;
     }
 
+    if (mode === "instance-sources") {
+      e.preventDefault();
+      const operand = instanceSourceEdit.instance.type === "sketchProjection"
+        ? hitReferenceTarget(p.x, p.y)
+        : hitDerivedProjectionOperand(p.x, p.y) || hitBlockProjectionOperand(p.x, p.y);
+      toggleInstanceSource(operand ? operandElement(operand) : hitP || hitL || hitC || hitA || hitS);
+      return;
+    }
     if (mode === "sketch-projection") {
       e.preventDefault();
       const target = hitReferenceTarget(p.x, p.y);
@@ -23556,7 +23653,7 @@
   }
 
   function isDrawToolMode() {
-    return mode === "line" || mode === "centerline" || mode === "circle-center-cross" || mode === "point" || mode === "rectangle" || mode === "slot" || mode === "fillet" || mode === "trim" || mode === "offset" || mode === "circle" || mode === "arc" || mode === "three-point-arc" || mode === "spline" || mode === "sketch-projection" || mode === "hatch" || mode === "hatch-repair";
+    return mode === "instance-sources" || mode === "line" || mode === "centerline" || mode === "circle-center-cross" || mode === "point" || mode === "rectangle" || mode === "slot" || mode === "fillet" || mode === "trim" || mode === "offset" || mode === "circle" || mode === "arc" || mode === "three-point-arc" || mode === "spline" || mode === "sketch-projection" || mode === "hatch" || mode === "hatch-repair";
   }
 
   function handleBlankCanvasDoubleClick(pointer, hits = {}) {
@@ -23813,6 +23910,12 @@
     }
 
     if (handleDistanceKey(e)) return;
+
+    if (!textEditingTarget && mode === "instance-sources" && ["Enter", "Escape"].includes(e.key)) {
+      e.preventDefault();
+      finishInstanceSourceEdit(e.key === "Enter");
+      return;
+    }
 
     if (!textEditingTarget && mode === "spline" && e.key === "Enter") {
       e.preventDefault();

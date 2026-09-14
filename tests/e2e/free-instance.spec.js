@@ -31,6 +31,116 @@ async function selectTree(page, id, sketchId) {
   await row.click();
 }
 
+test("instance sources can be removed, added, canceled and undone from Properties", async ({ page }) => {
+  const data = await fixture(page, 1);
+  const original = (await state(page)).serialized.geometryInstances[0];
+  await selectTree(page, "FI1", data.activeSketchId);
+  await page.click('[data-property-action="instance-sources"]');
+  await clickWorld(page, { x: -50, y: -20 });
+  expect((await state(page)).serialized.geometryInstances[0].sources).toHaveLength(4);
+  await page.keyboard.press("Escape");
+  expect((await state(page)).serialized.geometryInstances[0].sources).toHaveLength(4);
+  await page.click('[data-property-action="instance-sources"]');
+  await clickWorld(page, { x: -50, y: -20 });
+  await page.keyboard.press("Enter");
+  const removed = (await state(page)).serialized.geometryInstances[0];
+  expect(removed.sources.map((ref) => ref.path[0])).toEqual(["L2", "L3", "L4"]);
+  expect({ ...removed, sources: original.sources }).toEqual(original);
+  await page.click("#undoBtn");
+  expect((await state(page)).serialized.geometryInstances[0].sources).toHaveLength(4);
+  await page.click("#redoBtn");
+  expect((await state(page)).serialized.geometryInstances[0].sources).toHaveLength(3);
+  await selectTree(page, "FI1", data.activeSketchId);
+  await page.click('[data-property-action="instance-sources"]');
+  await clickWorld(page, { x: -50, y: -20 });
+  await page.keyboard.press("Enter");
+  expect((await state(page)).serialized.geometryInstances[0].sources).toHaveLength(4);
+  const saved = (await state(page)).serialized;
+  expect(await page.evaluate((d) => window.__jot2dTest.loadDocumentFixtureForDragTest(d, "edited.jot2d"), saved)).toMatchObject({ success: true });
+  expect((await state(page)).serialized.geometryInstances[0].sources).toHaveLength(4);
+});
+
+for (const type of ["mirror", "pattern", "sketchProjection"]) {
+  test(`${type} sources can be edited without changing instance settings`, async ({ page }) => {
+    const data = await fixture(page, 0);
+    const sketchId = data.activeSketchId;
+    let targetSketchId = sketchId;
+    if (type === "sketchProjection") {
+      targetSketchId = "S2";
+      data.sketches.push({ ...data.sketches.find((sketch) => sketch.id === sketchId), id: targetSketchId, parentSketchId: sketchId, name: "Target" });
+      data.activeSketchId = targetSketchId;
+    }
+    data.geometryInstances = [{ id: "GI1", type, sketchId: targetSketchId, sources: [{ kind: "line", path: ["L1"] }, { kind: "line", path: ["L2"] }],
+      ...(type === "mirror" ? { axis: { kind: "line", path: ["L4"] } } : type === "pattern" ? { direction: { kind: "line", path: ["L4"] }, spacing: 70, copies: 2, reversed: true } : {}) }];
+    expect(await page.evaluate((d) => window.__jot2dTest.loadDocumentFixtureForDragTest(d, "sources.jot2d", { resetLoadedHistory: true }), data)).toMatchObject({ success: true });
+    const before = (await state(page)).serialized.geometryInstances[0];
+    await selectTree(page, "GI1", targetSketchId);
+    await page.click('[data-property-action="instance-sources"]');
+    await clickWorld(page, { x: -50, y: -20 });
+    await clickWorld(page, { x: -50, y: 20 });
+    await page.keyboard.press("Enter");
+    const after = (await state(page)).serialized.geometryInstances[0];
+    expect(after.sources.map((ref) => ref.path[0])).toEqual(["L2", "L3"]);
+    expect({ ...after, sources: before.sources }).toEqual(before);
+    expect((await state(page)).instances[0].valid).toBe(true);
+  });
+}
+
+test("source editing rejects empty instances and broken downstream references", async ({ page }) => {
+  const data = await fixture(page, 2);
+  data.geometryInstances[0].sources = [{ kind: "line", path: ["L1"] }];
+  data.geometryInstances[1].sources = [{ kind: "line", path: ["FI1", "L1"] }];
+  expect(await page.evaluate((d) => window.__jot2dTest.loadDocumentFixtureForDragTest(d, "chain.jot2d", { resetLoadedHistory: true }), data)).toMatchObject({ success: true });
+  await selectTree(page, "FI1", data.activeSketchId);
+  await page.click('[data-property-action="instance-sources"]');
+  await clickWorld(page, { x: -50, y: -20 });
+  await page.keyboard.press("Enter");
+  expect((await state(page)).serialized.geometryInstances[0].sources).toEqual(data.geometryInstances[0].sources);
+  await clickWorld(page, { x: -50, y: 20 });
+  await page.keyboard.press("Enter");
+  expect((await state(page)).serialized.geometryInstances[0].sources).toEqual(data.geometryInstances[0].sources);
+  expect((await state(page)).instances.every((instance) => instance.valid)).toBe(true);
+  await page.keyboard.press("Escape");
+});
+
+test("removing a source cleans its output constraints and retains shared-point constraints", async ({ page }) => {
+  const data = await fixture(page, 1);
+  data.points.push({ id: "P5", x: 0, y: -20, fixed: true, kind: "explicit", sketchId: data.activeSketchId });
+  data.constraints.push(
+    { type: "horizontal", line: "FI1@L1", enabled: true, sketchId: data.activeSketchId },
+    { type: "coincident", p1: "FI1@P1", p2: "P5", enabled: true, sketchId: data.activeSketchId },
+  );
+  expect(await page.evaluate((d) => window.__jot2dTest.loadDocumentFixtureForDragTest(d, "references.jot2d", { resetLoadedHistory: true }), data)).toMatchObject({ success: true });
+  await selectTree(page, "FI1", data.activeSketchId);
+  await page.click('[data-property-action="instance-sources"]');
+  // The output itself can also be clicked to remove its source.
+  await clickWorld(page, { x: 20, y: -20 });
+  await page.keyboard.press("Enter");
+  const after = (await state(page)).serialized;
+  expect(after.geometryInstances[0].sources).toHaveLength(3);
+  expect(after.constraints).toHaveLength(5);
+  expect(after.constraints.at(-1).type).toBe("coincident");
+  expect(await page.evaluate((d) => window.__jot2dTest.loadDocumentFixtureForDragTest(d, "references.jot2d"), after)).toMatchObject({ success: true });
+});
+
+test("adding sources to a migrated projection preserves existing output IDs and constraints", async ({ page }) => {
+  const data = await fixture(page, 0);
+  data.sketches.push({ ...data.sketches.find((sketch) => sketch.id === data.activeSketchId), id: "S2", parentSketchId: data.activeSketchId, name: "Target" });
+  data.activeSketchId = "S2";
+  data.geometryInstances = [{ id: "SPI1", type: "sketchProjection", sketchId: "S2", sources: [{ kind: "line", path: ["L1"] }], legacyOutput: { kind: "line", id: "L99", pointIds: ["P99", "P100"] } }];
+  data.constraints.push({ type: "horizontal", line: "L99", enabled: true, sketchId: "S2" });
+  expect(await page.evaluate((d) => window.__jot2dTest.loadDocumentFixtureForDragTest(d, "legacy-sources.jot2d", { resetLoadedHistory: true }), data)).toMatchObject({ success: true });
+  await selectTree(page, "SPI1", "S2");
+  await page.click('[data-property-action="instance-sources"]');
+  await clickWorld(page, { x: -50, y: 20 });
+  await page.keyboard.press("Enter");
+  const after = await state(page);
+  expect(after.instances[0].lines.map((line) => line.id)).toEqual(["L99", "SPI1@L3"]);
+  expect(after.instances[0].points.map((point) => point.id)).toEqual(["P99", "P100", "SPI1@P3", "SPI1@P4"]);
+  expect(after.serialized.constraints).toHaveLength(5);
+  expect(await page.evaluate((d) => window.__jot2dTest.loadDocumentFixtureForDragTest(d, "legacy-sources.jot2d"), after.serialized)).toMatchObject({ success: true });
+});
+
 for (const type of ["mirror", "pattern"]) {
   for (const fixed of [false, true]) {
     test(`${type} first drag preserves source and relation with ${fixed ? "fixed" : "free"} control line`, async ({ page }) => {
@@ -313,8 +423,17 @@ test("free instances in a block definition retain edits and local undo through r
   await page.click("#undoBtn");
   expect((await state(page)).serialized.geometryInstances[0].rotation).toBe(0);
   await page.click("#redoBtn");
+  await selectTree(page, "FI1", data.activeSketchId);
+  await page.click('[data-property-action="instance-sources"]');
+  await clickWorld(page, { x: -50, y: -20 });
+  await page.keyboard.press("Enter");
+  expect((await state(page)).serialized.geometryInstances[0].sources).toHaveLength(3);
+  await page.click("#undoBtn");
+  expect((await state(page)).serialized.geometryInstances[0].sources).toHaveLength(4);
+  await page.click("#redoBtn");
   await completeBlockEdit(page);
   const saved = (await state(page)).serialized;
   expect(saved.blockDefinitions[0].geometryInstances[0].rotation).toBeCloseTo(-25 * Math.PI / 180, 8);
+  expect(saved.blockDefinitions[0].geometryInstances[0].sources).toHaveLength(3);
   expect(await page.evaluate((d) => window.__jot2dTest.loadDocumentFixtureForDragTest(d), saved)).toMatchObject({ success: true });
 });
