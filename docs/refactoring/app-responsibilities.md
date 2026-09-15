@@ -62,10 +62,11 @@ src/
     document_snapshot.js    Document／Blockの保存snapshot
   geometry/                 幾何kernel・参照・Spline・Hatch領域・Offset
   solver/                   Geometry／Constraint classと数値solve
-  parameters/               式解析と依存評価
-  editing/                  履歴stack
+  constraints/              拘束の参照判定・依存Nodeの列挙・寸法の対象と測定
+  parameters/               式解析・名前空間の補完と採番・寸法を含む依存評価
+  editing/                  履歴stack・Documentと編集scope・Sketch context・Selection
   diagnostics/              処理時間の計測
-  ui/                       共通選択dialog
+  ui/                       共通選択dialog・言語／テーマ設定とUI翻訳
 tests/
   unit/                     DOMなしの責務別検証
   e2e/                      操作・連携・互換性・Canvas検証
@@ -93,4 +94,8 @@ tools/                      server・生成など開発補助
 
 ## 残る範囲
 
-`app.js`はまだCanvas renderer、DOM panel、Document Loader、Block・Sketch・Selection、command群とE2E hookを持つ。これらを独立させるには、scopeの取得・変更、Projectionの参照解決、操作ごとのsnapshot／確定の境界をさらに整理する必要がある。今回のmoduleへそれらの状態を流し込まない。次の段階でも、独立した入力・出力を定められる単位から検証を伴って進める。
+`app.js`はまだCanvas renderer、DOM panel、Document Loader、Block・Sketchの操作、Selectionを更新するcommand群とE2E hookを持つ。Documentと編集scopeの所有者は`src/editing/workspace.js`、Selectionの状態と選択規則は`src/editing/selection.js`へ分離した。残りを独立させるには、Projectionの参照解決、操作ごとのsnapshot／確定の境界をさらに整理する必要がある。分離済みmoduleへそれらの状態を流し込まない。
+
+派生InstanceのGeometry読取りviewとscope内の参照解決は`src/geometry/instance_projection.js`へ分離した。Geometryの型・canonical参照・bundleのMap登録は`src/geometry/objects.js`で共通化する。Block Projectionの生成と永続cacheは`src/geometry/block_projection.js`、Definitionの検索と有効Sketch判定は`src/document/block_catalog.js`が担当する。描画／pointer処理中だけ共有するGeometry read cacheと展開結果の一覧化は後続で読出しserviceへまとめる対象とする。
+
+数百行の起動・接続用appへ移行する実現性、代償、段階と進捗は[composition rootへの移行](./composition-root.md)に記録する。

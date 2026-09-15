@@ -20,21 +20,7 @@
   const { parseId: parseGeometryRefId, resolve: resolveGeometryRefValue } = window.GeometryRef;
   const { normalizeDimensionAppearance } = window.Appearance;
 
-  function isDimensionConstraint(constraint) {
-    return (
-      constraint instanceof DistanceConstraint ||
-      constraint instanceof PointAxisDistanceConstraint ||
-      constraint instanceof PointLineDistanceConstraint ||
-      constraint instanceof LineLineDistanceConstraint ||
-      constraint instanceof LineCircleDistanceConstraint ||
-      constraint instanceof ConcentricRadiusDifferenceConstraint ||
-      constraint instanceof OffsetConstraint ||
-      constraint instanceof OffsetChainConstraint ||
-      constraint instanceof LineAngleConstraint ||
-      constraint instanceof RadiusConstraint ||
-      constraint instanceof DiameterConstraint
-    );
-  }
+  const { isDimensionConstraint } = window.DimensionQueries;
 
   // Geometry IDs and dimension placement belong to the caller's display scope.
   function create({ geometryId, dimensionData }) {

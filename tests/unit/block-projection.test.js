@@ -1,0 +1,130 @@
+const assert = require("node:assert/strict");
+const fs = require("node:fs");
+const path = require("node:path");
+const vm = require("node:vm");
+const test = require("node:test");
+const root = path.resolve(__dirname, "../..");
+const sandbox = { window: {} };
+vm.createContext(sandbox);
+const sources = vm.runInNewContext(fs.readFileSync(path.join(root, "index.html"), "utf8").match(/const sources = (\[[\s\S]*?\]);/)[1]);
+for (const file of sources.filter(source => source.startsWith("src/"))) vm.runInContext(fs.readFileSync(path.join(root, file), "utf8"), sandbox, { filename: file });
+const { Point, Line } = sandbox.window.GeometrySolver;
+const near = (actual, expected) => assert.ok(Math.abs(actual - expected) < 1e-10, `${actual} != ${expected}`);
+const point = (id, x, y) => Object.assign(new Point(id, x, y), { sketchId: "S1" });
+function definition(id) {
+  const a = point("P1", 1, 0), b = point("P2", 4, 0);
+  const line = Object.assign(new Line("L1", a, b), { sketchId: "S1" });
+  return { id, revision: 1, sketches: [{ id: "ROOT", kind: "root" }, { id: "S1" }, { id: "S2" }], points: [a, b], lines: [line], circles: [], arcs: [], splines: [], annotations: [], hatches: [], blockInstances: [], geometryInstances: [] };
+}
+const instance = (id, definitionId, fields = {}) => ({ id, definitionId, sketchId: "S1", x: 10, y: 20, rotation: 0, ...fields });
+function services(definitions) {
+  const catalog = sandbox.window.BlockCatalog.create({ definitions });
+  const derived = sandbox.window.InstanceProjection.create({ elementSketchId: item => item.sketchId, applicationText: (_ja, en) => en });
+  const hatchPrimitivesFromElements = elements => elements.filter(item => item instanceof Line).map(item => ({ kind: "line", id: item.id, p1: item.p1, p2: item.p2 }));
+  const projection = sandbox.window.BlockProjection.create({ blockCatalog: catalog, ...derived, hatchPrimitivesFromElements, hatchPrimitivesForScope: scope => hatchPrimitivesFromElements(scope.lines) });
+  return { catalog, projection };
+}
+
+test("catalog follows registry replacement and preserves enabled-sketch fallback through nested definitions", () => {
+  const leaf = definition("B1"), parent = definition("B2");
+  parent.lines = []; parent.points = [];
+  parent.blockInstances = [instance("BI1", "B1", { sketchId: "S2" })];
+  let registry = [leaf, parent];
+  const { catalog } = services(() => registry);
+  assert.deepEqual(Array.from(catalog.blockDefinitionDrawableSketchIds(parent)), ["S1", "S2"]);
+  assert.deepEqual(Array.from(catalog.blockDefinitionGeometrySketchIds(parent)), ["S2"]);
+  assert.deepEqual(Array.from(catalog.blockInstanceEnabledSketchSet(instance("BI2", "B2", { enabledSketchIds: ["missing"] }))), ["S2"]);
+  registry = [definition("B1")];
+  assert.equal(catalog.blockDefinitionById("B1"), registry[0]);
+  assert.equal(catalog.blockDefinitionById("B2"), null);
+});
+
+test("projection cache preserves live point reads and refreshes only on its existing invalidation inputs", () => {
+  const source = definition("B1");
+  const { projection } = services(() => [source]);
+  const block = instance("BI1", source.id);
+  const first = projection.blockProjectionBundle(block);
+  assert.equal(projection.blockProjectionBundle(block), first);
+  block.x = 30; source.points[0].x = 2;
+  assert.equal(first.lines[0].p1.x, 32);
+  assert.equal(projection.blockProjectionBundle(block), first);
+  source.revision += 1;
+  const revised = projection.blockProjectionBundle(block);
+  assert.notEqual(revised, first);
+  block.sketchId = "S2";
+  const relocated = projection.blockProjectionBundle(block);
+  assert.notEqual(relocated, revised);
+  assert.equal(relocated.lines[0].sketchId, "S2");
+  block.enabledSketchIds = ["S2"];
+  assert.equal(projection.blockProjectionBundle(block).lines.length, 0);
+  assert.equal(projection.blockAllProjectionBundle(block).lines.length, 1);
+  const beforeInvalidation = projection.blockProjectionBundle(block);
+  const other = instance("BI2", source.id);
+  const otherBundle = projection.blockProjectionBundle(other);
+  projection.invalidateBlockProjectionCache(block.id);
+  assert.notEqual(projection.blockProjectionBundle(block), beforeInvalidation);
+  assert.equal(projection.blockProjectionBundle(other), otherBundle);
+  const beforeClear = projection.blockProjectionBundle(block);
+  projection.invalidateBlockProjectionCache();
+  assert.notEqual(projection.blockProjectionBundle(block), beforeClear);
+});
+
+test("nested transforms retain canonical paths, local object identity and the outer owner", () => {
+  const leaf = definition("leaf"), parent = definition("parent");
+  parent.points = []; parent.lines = [];
+  const nested = instance("child", "leaf", { x: 5, y: 0 });
+  parent.blockInstances = [nested];
+  const { projection } = services(() => [parent, leaf]);
+  const outer = instance("outer", "parent", { rotation: Math.PI / 2 });
+  const bundle = projection.blockProjectionBundle(outer);
+  const line = bundle.lines[0];
+  assert.equal(line.id, "outer@child@L1");
+  assert.equal(line.blockInstance, outer);
+  assert.equal(line.blockDefinition, leaf);
+  assert.equal(line.localElement, leaf.lines[0]);
+  assert.equal(bundle.pointByLocalId.get("child@P1"), line.p1);
+  near(line.p1.x, 10); near(line.p1.y, 26);
+  nested.x = 7;
+  near(line.p1.y, 28);
+});
+
+test("temporary loader resolvers and derived instances use the supplied definition graph", () => {
+  const stored = definition("child"), loaded = definition("child"), parent = definition("parent");
+  stored.points[0].x = 100;
+  parent.points = []; parent.lines = [];
+  parent.blockInstances = [instance("nested", "child", { x: 0, y: 0 })];
+  parent.geometryInstances = [{ id: "FI1", type: "free", sketchId: "S1", sources: [sandbox.window.GeometryRef.parseId("line", "nested@L1")], x: 5, y: 0, rotation: 0, origin: { x: 0, y: 0 }, mirrorX: false, mirrorY: false }];
+  const { projection } = services(() => [parent, stored]);
+  const bundle = projection.createBlockProjectionBundle(instance("outer", "parent", { x: 0, y: 0 }), parent, null, { definitionResolver: id => id === "child" ? loaded : parent });
+  const direct = bundle.lines.find(line => line.id === "outer@nested@L1");
+  const derived = bundle.lines.find(line => line.id === "outer@FI1@nested@L1");
+  assert.equal(direct.p1.x, 1);
+  assert.equal(derived.p1.x, 6);
+  assert.equal(stored.points[0].x, 100);
+});
+
+test("missing and cyclic definitions terminate without leaking a prior cached bundle", () => {
+  const source = definition("B1");
+  source.blockInstances.push(instance("self", "B1"));
+  let registry = [source];
+  const { projection } = services(() => registry);
+  const block = instance("BI1", "B1");
+  assert.equal(projection.blockProjectionBundle(block).lines.length, 1);
+  registry = [];
+  assert.equal(projection.blockProjectionBundle(block).lines.length, 0);
+  assert.equal(projection.blockAllProjectionBundle(block).points.length, 0);
+});
+
+test("annotation projection preserves geometry references, transforms and outer appearance overrides", () => {
+  const source = definition("B1");
+  source.annotations = [{ id: "AN1", type: "text", sketchId: "S1", text: "Note", x: 2, y: 3, rotation: 0, style: { color: "#112233" }, geometryRef: sandbox.window.GeometryRef.parseId("line", "L1") }];
+  const { projection } = services(() => [source]);
+  const block = instance("BI1", "B1", { rotation: Math.PI / 2, appearanceOverride: { color: "#ff0000" } });
+  const projected = projection.blockProjectionBundle(block).annotations[0];
+  assert.equal(projected.id, "BI1/AN1");
+  assert.deepEqual(Array.from(projected.geometryRef.path), ["BI1", "L1"]);
+  near(projected.x, 7); near(projected.y, 22); near(projected.rotation, Math.PI / 2);
+  assert.equal(projected.style.color, "#ff0000");
+  assert.equal(source.annotations[0].style.color, "#112233");
+  assert.equal(projected.localElement, source.annotations[0]);
+});

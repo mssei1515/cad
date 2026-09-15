@@ -76,8 +76,8 @@
   const localGeometryMetadata = (item) => ({ sketchId: item.sketchId, kind: "endpoint" });
 
   function create({ geometryMetadata, constraintData }) {
-    function constraints(scope) {
-      return scope.constraints.map((constraint) => constraintData(constraint, scope)).filter(Boolean);
+    function constraints(scope, isDocumentScope) {
+      return scope.constraints.map((constraint) => constraintData(constraint, scope, isDocumentScope)).filter(Boolean);
     }
 
     function serializeDefinition(definition) {
@@ -98,7 +98,7 @@
         }, 0) + 1, Number(definition.nextHatchIndex) || 1),
         blockInstances: (definition.blockInstances || []).map(serializeBlockInstance),
         geometryInstances: (definition.geometryInstances || []).map(serializeGeometryInstance),
-        constraints: constraints(definition),
+        constraints: constraints(definition, false),
       };
     }
 
@@ -117,7 +117,7 @@
         blockDefinitions: scope.blockDefinitions.map(serializeDefinition),
         blockInstances: scope.blockInstances.map(serializeBlockInstance),
         geometryInstances: scope.geometryInstances.map(serializeGeometryInstance),
-        ...serializeGeometry(scope, geometryMetadata), constraints: constraints(scope),
+        ...serializeGeometry(scope, geometryMetadata), constraints: constraints(scope, true),
       };
     }
     return Object.freeze({ serialize });
