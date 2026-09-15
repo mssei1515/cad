@@ -5,7 +5,7 @@ const test = require("node:test");
 const vm = require("node:vm");
 
 const sandbox = { window: {} };
-vm.runInNewContext(fs.readFileSync(path.resolve(__dirname, "../../interaction_profiler.js"), "utf8"), sandbox);
+vm.runInNewContext(fs.readFileSync(path.resolve(__dirname, "../../src/diagnostics/interaction_profiler.js"), "utf8"), sandbox);
 const { create } = sandbox.window.InteractionProfiler;
 const plain = (value) => JSON.parse(JSON.stringify(value));
 

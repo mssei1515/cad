@@ -1567,15 +1567,33 @@ test("file URL Help menu reads the generated Git commit file", async ({ page }) 
   const loadedScripts = await page.locator("script[src]").evaluateAll((scripts) =>
     scripts.map((script) => {
       const url = new URL(script.src);
-      return { name: url.pathname.split("/").at(-1), loadId: url.searchParams.get("load") };
+      return { path: url.pathname, loadId: url.searchParams.get("load") };
     }),
   );
-  expect(loadedScripts.map((script) => script.name)).toEqual(expect.arrayContaining([
-    "runtime-version.js", "edit_history.js", "interaction_profiler.js", "app.js",
-  ]));
+  const expectedPaths = [
+    "runtime-version.js", "app.js",
+    "src/geometry/geometry_kernel.js", "src/geometry/geometry_ref.js", "src/geometry/spline_geometry.js",
+    "src/geometry/hatch_region.js", "src/geometry/offset_chain.js", "src/solver/constraint_solver.js", "src/constraints/references.js", "src/geometry/objects.js", "src/geometry/instance_projection.js",
+    "src/parameters/parameter_engine.js", "src/editing/edit_history.js", "src/editing/workspace.js", "src/editing/sketch_context.js", "src/editing/selection.js", "src/diagnostics/interaction_profiler.js", "src/ui/choice_dialog.js", "src/ui/application_settings.js",
+    "src/document/appearance.js", "src/document/drawing_order.js", "src/document/sketch_hierarchy.js",
+    "src/document/annotations.js", "src/document/hatches.js", "src/document/reference_images.js", "src/document/block_catalog.js", "src/geometry/block_projection.js",
+    "src/persistence/constraint_codec_registry.js", "src/persistence/constraints.js", "src/constraints/dimension_queries.js", "src/parameters/namespace.js", "src/persistence/geometry.js",
+    "src/persistence/document_files.js", "src/persistence/document_snapshot.js",
+  ];
+  expect(loadedScripts).toHaveLength(expectedPaths.length);
+  for (const expectedPath of expectedPaths) {
+    expect(loadedScripts.some((script) => script.path.endsWith(`/${expectedPath}`))).toBe(true);
+  }
   expect(loadedScripts.every(({ loadId }) => loadId && loadId === loadedScripts[0].loadId)).toBe(true);
-  expect(await page.evaluate(() => [typeof window.EditHistory.record, typeof window.InteractionProfiler.create]))
-    .toEqual(["function", "function"]);
+  expect(await page.evaluate(() => [
+    typeof window.EditHistory.record, typeof window.InteractionProfiler.create,
+    typeof window.Appearance.resolveGeometryAppearance, typeof window.DrawingOrder.reorder,
+    typeof window.DocumentFiles.create,
+    typeof window.ConstraintPersistence.create, typeof window.GeometryPersistence.decodeDocument,
+    typeof window.SketchHierarchy.decode, typeof window.AnnotationData.normalizeAnnotations,
+    typeof window.HatchData.validSerializedHatchList, typeof window.ReferenceImageData.validSerializedReferenceImageList,
+    typeof window.DocumentSnapshot.create,
+  ])).toEqual(Array(12).fill("function"));
 });
 
 test("HTML file picker compatibility route opens a Jot2D document without a native handle", async ({ page }) => {
@@ -1904,6 +1922,37 @@ test("Overlapping Canvas objects can be previewed and selected from context cand
   await expect(menu.locator(".canvas-context-candidate-heading")).toContainText("Selection Candidates");
   await expect(menu.locator("[data-context-candidate-index]").first()).toContainText(`Line${fixture.lineIds[1]}`);
   await page.keyboard.press("Escape");
+});
+
+test("Arc endpoints can be selected as horizontal constraint operands from context candidates", async ({ page }) => {
+  await openTestDocument(page);
+  const fixture = await page.evaluate(() => window.__jot2dTest.resetForArcEndpointConstraintSelectionTest());
+  const menu = page.locator("#canvasContextMenu");
+
+  await page.mouse.click(fixture.first.x, fixture.first.y);
+  expect((await page.evaluate(() => window.__jot2dTest.selectedGeometryIdsForTest())).points).toEqual([fixture.lineStartId]);
+
+  await page.mouse.click(fixture.first.x + 140, fixture.first.y + 80);
+  await page.locator('[data-constraint="horizontal"]').click();
+  await page.mouse.click(fixture.first.x, fixture.first.y, { button: "right" });
+  await expect(menu).toHaveClass(/candidate-menu/);
+  await menu.locator("[data-context-candidate-index]").filter({ hasText: `円弧端点${fixture.firstArcId}` }).click();
+  expect((await page.evaluate(() => window.__jot2dTest.constraintInputStateForTest())).operands).toEqual([
+    { kind: "arc-endpoint", id: fixture.firstArcId, endpoint: "start" },
+  ]);
+
+  await page.mouse.click(fixture.second.x, fixture.second.y, { button: "right" });
+  await expect(menu).toHaveClass(/candidate-menu/);
+  await menu.locator("[data-context-candidate-index]").filter({ hasText: `円弧端点${fixture.secondArcId}` }).click();
+
+  const state = await page.evaluate(() => window.__jot2dTest.serializedModelForTest());
+  expect(state.constraints).toContainEqual(expect.objectContaining({
+    type: "arcEndpointHorizontal",
+    a: fixture.firstArcId,
+    endpointA: "start",
+    b: fixture.secondArcId,
+    endpointB: "start",
+  }));
 });
 
 test("Canvas selection updates Properties, Properties collapses, and the label-free toolbar does not overlap", async ({ page }) => {
@@ -2530,6 +2579,7 @@ test("fixed rectangle fixture L2 and L3 reuse the responsive P3 drag path while 
     const lineFinal = result.previews.at(-1).state;
     const draggedP3 = id === "L2" ? lineFinal.p2 : lineFinal.p1;
     expect(result.sessionAvailable, id).toBe(true);
+    expect(result.representativePointId, id).toBe("P3");
     expect(result.previews.every((preview) => preview.success && !preview.blocked), id).toBe(true);
     expect(draggedP3.x, id).toBeCloseTo(pointFinal.x, 5);
     expect(draggedP3.y, id).toBeCloseTo(pointFinal.y, 5);

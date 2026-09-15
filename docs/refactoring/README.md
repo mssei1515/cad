@@ -6,12 +6,12 @@
 
 | 項目 | 状態 |
 | --- | --- |
-| 更新日 | 2026-09-05 |
+| 更新日 | 2026-09-15 |
 | 準備 | 完了：仕様の7領域への整理、不要文書の削除、拘束選択・保存往復・線取消履歴の修正 |
-| 基準 | developの統合commit：b0a0000。構文チェック・単体68件・E2E203件成功済みのコードと一致 |
-| 計画 | R1〜R5完了。各段階の限定した対象を統合済み |
-| 作業ブランチ | develop（R5統合済み。役目を終えた作業ブランチは削除済み） |
-| 次の作業 | この計画は完了。継続候補はProperties更新の負荷調査と実図面の不具合再現 |
+| 基準 | 今回の開始点はdevelopの5825453。前回までの単体120件とE2E303件の検証結果は下記参照 |
+| 計画 | R1〜R5の限定した対象は統合済み。継続の責務分離は下記参照 |
+| 継続の責務分離 | 完了：Constraint永続形式、ローカルGeometry復元、Sketch階層、補助要素の値、保存snapshotを分離。既存moduleを責務別folderへ整理。構文チェック・単体137件・E2E303件成功 |
+| 次の候補 | Document Loaderのgraph検証・置換、Canvas／DOM、Block・Sketchの編集scope。今回の分離範囲と残る依存は[責務分析](./app-responsibilities.md)を参照 |
 | ユーザー確認待ち | なし |
 | 未取得の情報 | 実際に拘束エラー・ドラッグ遅延が起きた図面、操作、実行環境。既存仕様を維持する整理は進行可能 |
 
@@ -116,6 +116,43 @@ R4の単体検証とE2Eを照合し、履歴集計の計算とDocument復元・U
 
 ## 検証結果
 
+### 2026-09-15のDocument境界とフォルダ整理
+
+開始点`5825453`から次の6段階に分け、各段階の関連検証後にcommit・Pushした。原因調査では責務分離と配置変更を区別して比較できる。`app.js`は28,956行から27,917行になった。新規の可変global状態やbuild工程は追加していない。
+
+| Commit | 対象 | 段階ごとの検証 |
+| --- | --- | --- |
+| `f7c1c10` | Constraintの具体的な永続形式とscopeごとの参照復元 | 新規単体4件、保存・Block・基本互換性E2E68件成功 |
+| `6f8216f` | Document／BlockのローカルGeometry復元 | 新規単体5件、Spline・Block・基本互換性E2E63件成功 |
+| `cb6bc64` | Sketch階層の補完・走査・参照元・表示行 | 新規単体3件、Sketch・Block・UI E2E138件成功 |
+| `1e8f805` | Annotation・Hatch・Reference Imageの値と保存field | 新規単体3件、Hatch・画像・基本互換性E2E30件成功 |
+| `311081f` | Document／Blockの保存snapshotの共通field writer | 新規単体2件、保存・履歴・Block・派生Instance E2E79件成功 |
+| `1795d7c` | 既存moduleを責務別の`src/`へ配置 | 構文チェック、単体137件、全scriptを確認するfile起動E2E1件成功 |
+
+配置変更では11モジュールの実装が先頭コメントを除いて一致すること、文書の相対リンク303箇所が解決できることを確認した。Sketch読込の統合は、分離前の実装とDocument／Block計46ケースで補完結果と所属ID変換が一致した。
+
+最終の`npm run test:all`は終了コード0で成功。構文チェック、単体137件、E2E303件（18.6分）がすべて通常の成功で、失敗・expected failure・skipはない。航空機図面の1,872 preview、オフセットの10,296 preview、連動線分の往復・細かな連続入力も成功した。保存version 22、旧形式fixture、性能・精度の閾値、visual baselineは変更していない。実行環境はWindows／Node v24.11.1／Playwright Chromium、1 worker。全体検証中に行った製品コードの最終調整はConstraint moduleのimport整形と空白除去だけで、整形後の構文とConstraint永続化の単体検証も確認した。
+
+### 2026-09-14の責務分離と回帰修正
+
+比較基準は`d74c7ac`。`app.js`は29,297行から28,956行になった。UI・保存version 22は維持し、外観・描画順・保存sessionを分離した。原因の切り分けに使えるよう、責務分離と既存Solver不具合の修正は別commitとして保持する。
+
+| commit | 境界 | 検証 |
+| --- | --- | --- |
+| `4277ece` | 外観、描画順、保存sessionの責務分離 | 構文・単体118件成功。全E2Eは300件成功・既存ドラッグ回帰3件失敗。offset自由度と固定矩形は比較基準のworktreeでも同じ失敗を再現 |
+| `27f3301` | 接線でつながるLine／Arcのオフセット接点 | 正逆方向の単体検証を追加。offset全10,296 previewで自由度・拘束状態を保持 |
+| `5ef2d8a` | Lineの代表端点をPointと同じ経路でドラッグ | 固定矩形のL2／L3がP3と同じ位置に到達する既存E2E成功 |
+| `549a60e` | 直接Point targetの可動座標と周辺変数の移動上限 | 40倍の連動変位を持つ単体回帰を追加。aircraft A2の再現経路で追従誤差が既存閾値内 |
+| `56387ba` | 代表端点の継続計算を回転するLineへ限定 | 水平Lineの往復・連続入力で検出された回帰を修正。向きが固定されたLineと独立に平行移動できるLineは従来の開始時基準を維持 |
+
+構文チェックと単体120件は成功。Solver修正後の全体E2Eは300件成功・3件失敗（19.5分）で、航空機図面の1,872 previewはすべて成功した。失敗は代表端点の基準変更による水平Lineの往復・連続入力2件と、パンの性能測定1件（178ms、既存上限175ms）。前者は`56387ba`で修正し、関連113件が成功（5.8分）。性能測定は閾値を変えず単独で3回とも成功（8.9秒）。構文チェックと単体120件も最後に再実行して成功した。全303件を修正後の再検証まで含めて確認済みで、未解決の失敗・expected failure・skipはない。全体コマンドの初回から全件成功したという意味ではない。
+
+再検証は`constraint-drag-regressions.spec.js`、`unified-ui.spec.js`、`geometry-drag-smoothness.spec.js`、`drag-smoothness.spec.js`を対象とし、直前に成功済みの3ケース（aircraft、offset、collapsed filletの大規模反復）だけを対象選択で除外した。そのうちLineドラッグを含むoffsetとcollapsed filletも最終コードで別途再実行し、計14,040 previewを含む2件が成功（2.4分）。パンの再測定は`adversarial-authoring-performance.spec.js`の該当ケースを`--repeat-each=3`で実行。環境はWindows x64、Node v24.11.1、Playwright 1.60.0／Chromium revision 1223、1 worker。変更文書8件のローカルリンク127件と`git diff --check`も確認した。
+
+今回の全E2Eでは、Git管理外の`test-data/テスト図形.json`と`test-data/意地悪ドラッグ完全拘束.json`が未配置だったため、削除commit `e413409`の親にある同名fixtureを内容変更なしで復元して使用した。これらは引き続きGit管理外で、baselineと変更後で同じデータを使う。性能・精度の閾値、visual baseline、expected failure／skip指定は変更していない。
+
+### 過去の段階
+
 | 対象 | 結果 | 根拠・制限 |
 | --- | --- | --- |
 | 開始時の基準 | 構文チェック成功、単体68件成功、E2E203件成功 | d2c682bで実行。b0a0000との差は開発READMEのみでコード・テストの一致を確認済み |
@@ -135,6 +172,7 @@ R2も同じWindows／Node／Chromium・1 worker・既存fixture／閾値で実�
 
 | 資料 | 用途 |
 | --- | --- |
+| [app.jsの責務分析](./app-responsibilities.md) | 全体の責務、集中する状態、段階的な分離範囲とフォルダ構造 |
 | [判断事項](./decisions.md) | 承認済みの方針と未解決事項。確認待ちの判断内容もここへ集約 |
 | [実装対応表](./implementation-map.md) | 現在のファイル・関数・依存関係の配置 |
 | [改善バックログ](./backlog.md) | この実行計画にまだ組み込んでいない候補。実施順はこの計画を優先 |

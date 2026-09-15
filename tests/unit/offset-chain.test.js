@@ -5,10 +5,10 @@ const test = require("node:test");
 const vm = require("node:vm");
 
 function loadEngine() {
-  const source = fs.readFileSync(path.resolve(__dirname, "../../offset_chain.js"), "utf8");
+  const source = fs.readFileSync(path.resolve(__dirname, "../../src/geometry/offset_chain.js"), "utf8");
   const sandbox = { window: {} };
   vm.createContext(sandbox);
-  vm.runInContext(source, sandbox, { filename: "offset_chain.js" });
+  vm.runInContext(source, sandbox, { filename: "src/geometry/offset_chain.js" });
   return sandbox.window.OffsetChainEngine;
 }
 

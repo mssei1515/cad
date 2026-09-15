@@ -1,0 +1,1888 @@
+{
+  "version": 22,
+  "savedAt": "2026-09-12T01:48:02.513Z",
+  "documentName": "おネジ長さがなぜか読み取り",
+  "units": {
+    "length": "mm"
+  },
+  "defaultAppearance": {
+    "visible": true,
+    "color": "#111827",
+    "lineType": "solid",
+    "lineWidth": 2
+  },
+  "defaultConstructionAppearance": {
+    "visible": true,
+    "color": "#64748b",
+    "lineType": "dashdot",
+    "lineWidth": 1,
+    "endpointOverhang": true,
+    "endpointMarkers": true
+  },
+  "defaultDimensionAppearance": {
+    "visible": true,
+    "color": "#64748b",
+    "lineWidth": 1.2,
+    "precision": null,
+    "prefix": "",
+    "suffix": "",
+    "terminatorType": "arrow",
+    "extensionLineOvershoot": 1.5,
+    "extensionLineOriginGap": 1.5,
+    "terminatorSize": 4,
+    "arrowheadAngle": 30,
+    "dimensionTextHeight": 5,
+    "dimensionTextGap": 0
+  },
+  "sketches": [
+    {
+      "id": "ROOT",
+      "name": "Root Sketch",
+      "parentSketchId": null,
+      "kind": "root",
+      "appearance": {},
+      "constructionAppearance": {},
+      "dimensionAppearance": {}
+    },
+    {
+      "id": "S1",
+      "name": "Sketch-1",
+      "parentSketchId": "ROOT",
+      "kind": "sketch",
+      "appearance": {},
+      "constructionAppearance": {},
+      "dimensionAppearance": {}
+    }
+  ],
+  "activeSketchId": "S1",
+  "annotations": [],
+  "hatches": [],
+  "referenceImages": [],
+  "nextHatchIndex": 1,
+  "parameters": [],
+  "nextDimensionParameterIndex": 22,
+  "blockDefinitions": [],
+  "blockInstances": [],
+  "geometryInstances": [],
+  "points": [
+    {
+      "id": "P3",
+      "x": 194.9789833412133,
+      "y": 105.0493094724599,
+      "fixed": false,
+      "kind": "endpoint",
+      "sketchId": "S1",
+      "appearance": {}
+    },
+    {
+      "id": "P4",
+      "x": 178.97898333922365,
+      "y": 105.04930947235296,
+      "fixed": false,
+      "kind": "endpoint",
+      "sketchId": "S1",
+      "appearance": {}
+    },
+    {
+      "id": "P5",
+      "x": 182.97898327137358,
+      "y": 105.04930947240646,
+      "fixed": false,
+      "kind": "endpoint",
+      "sketchId": "S1",
+      "appearance": {}
+    },
+    {
+      "id": "P6",
+      "x": 190.97898326908566,
+      "y": 105.04930947240646,
+      "fixed": false,
+      "kind": "endpoint",
+      "sketchId": "S1",
+      "appearance": {}
+    },
+    {
+      "id": "P10",
+      "x": 186.97898325870025,
+      "y": 125.0493094723945,
+      "fixed": false,
+      "kind": "endpoint",
+      "sketchId": "S1",
+      "appearance": {}
+    },
+    {
+      "id": "P11",
+      "x": 186.97898332981052,
+      "y": 100.24930947274709,
+      "fixed": false,
+      "kind": "endpoint",
+      "sketchId": "S1",
+      "appearance": {}
+    },
+    {
+      "id": "P12",
+      "x": 186.97898331651265,
+      "y": 105.0493094721142,
+      "fixed": true,
+      "kind": "explicit",
+      "sketchId": "S1",
+      "appearance": {
+        "visible": false
+      }
+    },
+    {
+      "id": "P13",
+      "x": 186.97898325493355,
+      "y": 81.04930947244237,
+      "fixed": false,
+      "kind": "endpoint",
+      "sketchId": "S1",
+      "appearance": {}
+    },
+    {
+      "id": "P15",
+      "x": 186.97898326178984,
+      "y": 73.04930938979979,
+      "fixed": false,
+      "kind": "endpoint",
+      "sketchId": "S1",
+      "appearance": {}
+    },
+    {
+      "id": "P16",
+      "x": 186.9789832489028,
+      "y": 89.04930955508499,
+      "fixed": false,
+      "kind": "endpoint",
+      "sketchId": "S1",
+      "appearance": {}
+    },
+    {
+      "id": "P17",
+      "x": 178.97898317228928,
+      "y": 81.04930947240592,
+      "fixed": false,
+      "kind": "endpoint",
+      "sketchId": "S1",
+      "appearance": {}
+    },
+    {
+      "id": "P18",
+      "x": 194.97898333757448,
+      "y": 81.04930947247988,
+      "fixed": false,
+      "kind": "endpoint",
+      "sketchId": "S1",
+      "appearance": {}
+    },
+    {
+      "id": "P19",
+      "x": 183.6652747271069,
+      "y": 73.0493093897985,
+      "fixed": false,
+      "kind": "endpoint",
+      "sketchId": "S1",
+      "appearance": {}
+    },
+    {
+      "id": "P20",
+      "x": 190.29269178358436,
+      "y": 73.04930938979815,
+      "fixed": false,
+      "kind": "endpoint",
+      "sketchId": "S1",
+      "appearance": {}
+    },
+    {
+      "id": "P21",
+      "x": 194.97898333580207,
+      "y": 77.73560093289332,
+      "fixed": false,
+      "kind": "endpoint",
+      "sketchId": "S1",
+      "appearance": {}
+    },
+    {
+      "id": "P22",
+      "x": 194.9789833398052,
+      "y": 84.36301799682403,
+      "fixed": false,
+      "kind": "endpoint",
+      "sketchId": "S1",
+      "appearance": {}
+    },
+    {
+      "id": "P23",
+      "x": 190.29269179152934,
+      "y": 89.04930955579313,
+      "fixed": false,
+      "kind": "endpoint",
+      "sketchId": "S1",
+      "appearance": {}
+    },
+    {
+      "id": "P24",
+      "x": 183.6652747187177,
+      "y": 89.0493095556359,
+      "fixed": false,
+      "kind": "endpoint",
+      "sketchId": "S1",
+      "appearance": {}
+    },
+    {
+      "id": "P25",
+      "x": 178.9789831722872,
+      "y": 84.36301800210514,
+      "fixed": false,
+      "kind": "endpoint",
+      "sketchId": "S1",
+      "appearance": {}
+    },
+    {
+      "id": "P26",
+      "x": 178.97898317228731,
+      "y": 77.73560093383887,
+      "fixed": false,
+      "kind": "endpoint",
+      "sketchId": "S1",
+      "appearance": {}
+    },
+    {
+      "id": "P27",
+      "x": 183.665274718715,
+      "y": 100.24930947274709,
+      "fixed": false,
+      "kind": "endpoint",
+      "sketchId": "S1",
+      "appearance": {}
+    },
+    {
+      "id": "P28",
+      "x": 183.6652747178311,
+      "y": 105.04930947240648,
+      "fixed": false,
+      "kind": "endpoint",
+      "sketchId": "S1",
+      "appearance": {}
+    },
+    {
+      "id": "P29",
+      "x": 190.29269179152868,
+      "y": 100.24930947274709,
+      "fixed": false,
+      "kind": "endpoint",
+      "sketchId": "S1",
+      "appearance": {}
+    },
+    {
+      "id": "P30",
+      "x": 191.0277870615993,
+      "y": 105.04930947240643,
+      "fixed": false,
+      "kind": "endpoint",
+      "sketchId": "S1",
+      "appearance": {}
+    },
+    {
+      "id": "P31",
+      "x": 187.34653093386117,
+      "y": 112.24930947687588,
+      "fixed": false,
+      "kind": "endpoint",
+      "sketchId": "S1",
+      "appearance": {}
+    },
+    {
+      "id": "P32",
+      "x": 187.34653093380902,
+      "y": 100.24930947274709,
+      "fixed": false,
+      "kind": "endpoint",
+      "sketchId": "S1",
+      "appearance": {}
+    },
+    {
+      "id": "P33",
+      "x": 193.00338522913074,
+      "y": 103.91138980438488,
+      "fixed": false,
+      "kind": "endpoint",
+      "sketchId": "S1",
+      "appearance": {}
+    },
+    {
+      "id": "P34",
+      "x": 193.00338522907984,
+      "y": 100.24930947274709,
+      "fixed": false,
+      "kind": "endpoint",
+      "sketchId": "S1",
+      "appearance": {}
+    },
+    {
+      "id": "P35",
+      "x": 181.3221290647958,
+      "y": 105.28309753366192,
+      "fixed": false,
+      "kind": "endpoint",
+      "sketchId": "S1",
+      "appearance": {}
+    },
+    {
+      "id": "P36",
+      "x": 181.32212906479572,
+      "y": 100.24930947274709,
+      "fixed": false,
+      "kind": "endpoint",
+      "sketchId": "S1",
+      "appearance": {}
+    },
+    {
+      "id": "P37",
+      "x": 178.97898333734284,
+      "y": 100.82339560274815,
+      "fixed": false,
+      "kind": "endpoint",
+      "sketchId": "S1",
+      "appearance": {}
+    },
+    {
+      "id": "P38",
+      "x": 179.9733297094858,
+      "y": 100.24930947279368,
+      "fixed": false,
+      "kind": "endpoint",
+      "sketchId": "S1",
+      "appearance": {}
+    },
+    {
+      "id": "P39",
+      "x": 193.98463681530296,
+      "y": 100.24930947278852,
+      "fixed": false,
+      "kind": "endpoint",
+      "sketchId": "S1",
+      "appearance": {}
+    },
+    {
+      "id": "P40",
+      "x": 194.97898333941404,
+      "y": 100.8233957407163,
+      "fixed": false,
+      "kind": "endpoint",
+      "sketchId": "S1",
+      "appearance": {}
+    },
+    {
+      "id": "P41",
+      "x": 193.9846368159836,
+      "y": 100.24930947312606,
+      "fixed": false,
+      "kind": "endpoint",
+      "sketchId": "S1",
+      "appearance": {}
+    },
+    {
+      "id": "P42",
+      "x": 194.97898333762802,
+      "y": 100.82339573966848,
+      "fixed": false,
+      "kind": "endpoint",
+      "sketchId": "S1",
+      "appearance": {}
+    },
+    {
+      "id": "P43",
+      "x": 178.97898333544208,
+      "y": 100.82339560382394,
+      "fixed": false,
+      "kind": "endpoint",
+      "sketchId": "S1",
+      "appearance": {}
+    },
+    {
+      "id": "P44",
+      "x": 179.97332971011545,
+      "y": 100.24930947236805,
+      "fixed": false,
+      "kind": "endpoint",
+      "sketchId": "S1",
+      "appearance": {}
+    },
+    {
+      "id": "P45",
+      "x": 183.66527471783365,
+      "y": 100.82791058387586,
+      "fixed": false,
+      "kind": "endpoint",
+      "sketchId": "S1",
+      "appearance": {}
+    },
+    {
+      "id": "P46",
+      "x": 191.02778706159663,
+      "y": 100.82791055539533,
+      "fixed": false,
+      "kind": "endpoint",
+      "sketchId": "S1",
+      "appearance": {}
+    },
+    {
+      "id": "P47",
+      "x": 182.97898326908253,
+      "y": 111.71597613906563,
+      "fixed": false,
+      "kind": "endpoint",
+      "sketchId": "S1",
+      "appearance": {}
+    },
+    {
+      "id": "P48",
+      "x": 190.97898326945977,
+      "y": 111.71597613909772,
+      "fixed": false,
+      "kind": "endpoint",
+      "sketchId": "S1",
+      "appearance": {}
+    },
+    {
+      "id": "P49",
+      "x": 182.97898327247827,
+      "y": 124.24930949268396,
+      "fixed": false,
+      "kind": "endpoint",
+      "sketchId": "S1",
+      "appearance": {}
+    },
+    {
+      "id": "P50",
+      "x": 190.97898327285307,
+      "y": 124.24930949607842,
+      "fixed": false,
+      "kind": "endpoint",
+      "sketchId": "S1",
+      "appearance": {}
+    },
+    {
+      "id": "P51",
+      "x": 182.97898326908222,
+      "y": 110.33033548587082,
+      "fixed": false,
+      "kind": "endpoint",
+      "sketchId": "S1",
+      "appearance": {}
+    },
+    {
+      "id": "P52",
+      "x": 183.77898327174063,
+      "y": 111.71597613726264,
+      "fixed": false,
+      "kind": "endpoint",
+      "sketchId": "S1",
+      "appearance": {}
+    },
+    {
+      "id": "P53",
+      "x": 183.7789832618251,
+      "y": 125.0493094820333,
+      "fixed": false,
+      "kind": "endpoint",
+      "sketchId": "S1",
+      "appearance": {}
+    },
+    {
+      "id": "P54",
+      "x": 190.9789832694542,
+      "y": 110.33033561112798,
+      "fixed": false,
+      "kind": "endpoint",
+      "sketchId": "S1",
+      "appearance": {}
+    },
+    {
+      "id": "P55",
+      "x": 190.17898331564174,
+      "y": 111.71597614090376,
+      "fixed": false,
+      "kind": "endpoint",
+      "sketchId": "S1",
+      "appearance": {}
+    },
+    {
+      "id": "P56",
+      "x": 190.17898330568693,
+      "y": 125.04930946275812,
+      "fixed": false,
+      "kind": "endpoint",
+      "sketchId": "S1",
+      "appearance": {}
+    },
+    {
+      "id": "P57",
+      "x": 183.77898326678152,
+      "y": 125.04930947237705,
+      "fixed": false,
+      "kind": "endpoint",
+      "sketchId": "S1",
+      "appearance": {}
+    },
+    {
+      "id": "P58",
+      "x": 182.9789832667941,
+      "y": 124.24930949438179,
+      "fixed": false,
+      "kind": "endpoint",
+      "sketchId": "S1",
+      "appearance": {}
+    },
+    {
+      "id": "P59",
+      "x": 190.17898331066417,
+      "y": 125.04930947241195,
+      "fixed": false,
+      "kind": "endpoint",
+      "sketchId": "S1",
+      "appearance": {}
+    },
+    {
+      "id": "P60",
+      "x": 190.97898326983648,
+      "y": 124.2493094943818,
+      "fixed": false,
+      "kind": "endpoint",
+      "sketchId": "S1",
+      "appearance": {}
+    }
+  ],
+  "lines": [
+    {
+      "id": "L1",
+      "p1": "P44",
+      "p2": "P41",
+      "construction": false,
+      "sketchId": "S1",
+      "drawingOrder": 0,
+      "appearance": {}
+    },
+    {
+      "id": "L2",
+      "p1": "P42",
+      "p2": "P3",
+      "construction": false,
+      "sketchId": "S1",
+      "drawingOrder": 1,
+      "appearance": {}
+    },
+    {
+      "id": "L3",
+      "p1": "P3",
+      "p2": "P4",
+      "construction": false,
+      "sketchId": "S1",
+      "drawingOrder": 2,
+      "appearance": {}
+    },
+    {
+      "id": "L4",
+      "p1": "P4",
+      "p2": "P43",
+      "construction": false,
+      "sketchId": "S1",
+      "drawingOrder": 3,
+      "appearance": {}
+    },
+    {
+      "id": "L5",
+      "p1": "P5",
+      "p2": "P6",
+      "construction": false,
+      "sketchId": "S1",
+      "drawingOrder": 4,
+      "appearance": {}
+    },
+    {
+      "id": "L6",
+      "p1": "P6",
+      "p2": "P60",
+      "construction": false,
+      "sketchId": "S1",
+      "drawingOrder": 5,
+      "appearance": {}
+    },
+    {
+      "id": "L7",
+      "p1": "P59",
+      "p2": "P57",
+      "construction": false,
+      "sketchId": "S1",
+      "drawingOrder": 6,
+      "appearance": {}
+    },
+    {
+      "id": "L8",
+      "p1": "P58",
+      "p2": "P5",
+      "construction": false,
+      "sketchId": "S1",
+      "drawingOrder": 7,
+      "appearance": {}
+    },
+    {
+      "id": "L9",
+      "p1": "P10",
+      "p2": "P11",
+      "construction": true,
+      "sketchId": "S1",
+      "drawingOrder": 8,
+      "appearance": {}
+    },
+    {
+      "id": "L10",
+      "p1": "P15",
+      "p2": "P16",
+      "construction": true,
+      "sketchId": "S1",
+      "drawingOrder": 10,
+      "appearance": {}
+    },
+    {
+      "id": "L11",
+      "p1": "P17",
+      "p2": "P18",
+      "construction": true,
+      "sketchId": "S1",
+      "drawingOrder": 11,
+      "appearance": {}
+    },
+    {
+      "id": "L12",
+      "p1": "P19",
+      "p2": "P20",
+      "construction": false,
+      "sketchId": "S1",
+      "drawingOrder": 12,
+      "appearance": {}
+    },
+    {
+      "id": "L13",
+      "p1": "P20",
+      "p2": "P21",
+      "construction": false,
+      "sketchId": "S1",
+      "drawingOrder": 13,
+      "appearance": {}
+    },
+    {
+      "id": "L14",
+      "p1": "P21",
+      "p2": "P22",
+      "construction": false,
+      "sketchId": "S1",
+      "drawingOrder": 14,
+      "appearance": {}
+    },
+    {
+      "id": "L15",
+      "p1": "P22",
+      "p2": "P23",
+      "construction": false,
+      "sketchId": "S1",
+      "drawingOrder": 15,
+      "appearance": {}
+    },
+    {
+      "id": "L16",
+      "p1": "P23",
+      "p2": "P24",
+      "construction": false,
+      "sketchId": "S1",
+      "drawingOrder": 16,
+      "appearance": {}
+    },
+    {
+      "id": "L17",
+      "p1": "P24",
+      "p2": "P25",
+      "construction": false,
+      "sketchId": "S1",
+      "drawingOrder": 17,
+      "appearance": {}
+    },
+    {
+      "id": "L18",
+      "p1": "P25",
+      "p2": "P26",
+      "construction": false,
+      "sketchId": "S1",
+      "drawingOrder": 18,
+      "appearance": {}
+    },
+    {
+      "id": "L19",
+      "p1": "P26",
+      "p2": "P19",
+      "construction": false,
+      "sketchId": "S1",
+      "drawingOrder": 19,
+      "appearance": {}
+    },
+    {
+      "id": "L20",
+      "p1": "P45",
+      "p2": "P28",
+      "construction": false,
+      "sketchId": "S1",
+      "drawingOrder": 20,
+      "appearance": {}
+    },
+    {
+      "id": "L21",
+      "p1": "P46",
+      "p2": "P30",
+      "construction": false,
+      "sketchId": "S1",
+      "drawingOrder": 21,
+      "appearance": {}
+    },
+    {
+      "id": "L22",
+      "p1": "P37",
+      "p2": "P38",
+      "construction": false,
+      "sketchId": "S1",
+      "drawingOrder": 25,
+      "appearance": {}
+    },
+    {
+      "id": "L23",
+      "p1": "P39",
+      "p2": "P40",
+      "construction": false,
+      "sketchId": "S1",
+      "drawingOrder": 26,
+      "appearance": {}
+    },
+    {
+      "id": "L24",
+      "p1": "P47",
+      "p2": "P48",
+      "construction": false,
+      "sketchId": "S1",
+      "drawingOrder": 27,
+      "appearance": {}
+    },
+    {
+      "id": "L25",
+      "p1": "P49",
+      "p2": "P50",
+      "construction": false,
+      "sketchId": "S1",
+      "drawingOrder": 28,
+      "appearance": {}
+    },
+    {
+      "id": "L26",
+      "p1": "P51",
+      "p2": "P52",
+      "construction": false,
+      "sketchId": "S1",
+      "drawingOrder": 29,
+      "appearance": {
+        "lineWidth": 1
+      }
+    },
+    {
+      "id": "L27",
+      "p1": "P52",
+      "p2": "P53",
+      "construction": false,
+      "sketchId": "S1",
+      "drawingOrder": 30,
+      "appearance": {
+        "lineWidth": 1
+      }
+    },
+    {
+      "id": "L28",
+      "p1": "P53",
+      "p2": "P49",
+      "construction": false,
+      "sketchId": "S1",
+      "drawingOrder": 31,
+      "appearance": {}
+    },
+    {
+      "id": "L29",
+      "p1": "P54",
+      "p2": "P55",
+      "construction": false,
+      "sketchId": "S1",
+      "drawingOrder": 32,
+      "appearance": {
+        "lineWidth": 1
+      }
+    },
+    {
+      "id": "L30",
+      "p1": "P55",
+      "p2": "P56",
+      "construction": false,
+      "sketchId": "S1",
+      "drawingOrder": 33,
+      "appearance": {
+        "lineWidth": 1
+      }
+    },
+    {
+      "id": "L31",
+      "p1": "P56",
+      "p2": "P50",
+      "construction": false,
+      "sketchId": "S1",
+      "drawingOrder": 34,
+      "appearance": {}
+    }
+  ],
+  "circles": [
+    {
+      "id": "C1",
+      "center": "P13",
+      "radius": 8.000000082640351,
+      "construction": false,
+      "sketchId": "S1",
+      "drawingOrder": 9,
+      "appearance": {}
+    }
+  ],
+  "arcs": [
+    {
+      "id": "A1",
+      "center": "P31",
+      "radius": 11.999999999815952,
+      "startAngle": -1.8825952862847772,
+      "endAngle": -1.2589973750947903,
+      "construction": false,
+      "sketchId": "S1",
+      "drawingOrder": 22,
+      "appearance": {}
+    },
+    {
+      "id": "A2",
+      "center": "P33",
+      "radius": 3.662080332738421,
+      "startAngle": -2.140608943020615,
+      "endAngle": -1.0009837238490276,
+      "construction": false,
+      "sketchId": "S1",
+      "drawingOrder": 23,
+      "appearance": {}
+    },
+    {
+      "id": "A3",
+      "center": "P35",
+      "radius": 5.033788064016253,
+      "startAngle": -1.0866154197245979,
+      "endAngle": -2.054977247142871,
+      "construction": false,
+      "sketchId": "S1",
+      "drawingOrder": 24,
+      "appearance": {}
+    }
+  ],
+  "splines": [],
+  "constraints": [
+    {
+      "type": "horizontal",
+      "line": "L1",
+      "enabled": true,
+      "sketchId": "S1"
+    },
+    {
+      "type": "vertical",
+      "line": "L2",
+      "enabled": true,
+      "sketchId": "S1"
+    },
+    {
+      "type": "horizontal",
+      "line": "L3",
+      "enabled": true,
+      "sketchId": "S1"
+    },
+    {
+      "type": "vertical",
+      "line": "L4",
+      "enabled": true,
+      "sketchId": "S1"
+    },
+    {
+      "type": "pointOnLine",
+      "point": "P5",
+      "line": "L3",
+      "enabled": true,
+      "sketchId": "S1"
+    },
+    {
+      "type": "horizontal",
+      "line": "L5",
+      "enabled": true,
+      "sketchId": "S1"
+    },
+    {
+      "type": "vertical",
+      "line": "L6",
+      "enabled": true,
+      "sketchId": "S1"
+    },
+    {
+      "type": "horizontal",
+      "line": "L7",
+      "enabled": true,
+      "sketchId": "S1"
+    },
+    {
+      "type": "vertical",
+      "line": "L8",
+      "enabled": true,
+      "sketchId": "S1"
+    },
+    {
+      "type": "pointOnLine",
+      "point": "P10",
+      "line": "L7",
+      "enabled": true,
+      "sketchId": "S1"
+    },
+    {
+      "type": "pointOnLine",
+      "point": "P11",
+      "line": "L1",
+      "enabled": true,
+      "sketchId": "S1"
+    },
+    {
+      "type": "parallelLinesCenterline",
+      "line1": "L8",
+      "line2": "L6",
+      "centerline": "L9",
+      "enabled": true,
+      "sketchId": "S1"
+    },
+    {
+      "type": "lineLineDistance",
+      "line1": "L8",
+      "line2": "L6",
+      "target": 8,
+      "sign": -1,
+      "dimension": {
+        "x": 186.313889427465,
+        "y": 132.58430027190266,
+        "offsetU": 0.6650938411762384,
+        "offsetN": -17.934990788482533,
+        "labelOffsetU": -0.012382401080932581,
+        "axis": null,
+        "display": {
+          "prefix": "M"
+        }
+      },
+      "enabled": true,
+      "parameterName": "d1",
+      "expression": "8",
+      "sketchId": "S1"
+    },
+    {
+      "type": "lineLineDistance",
+      "line1": "L1",
+      "line2": "L3",
+      "target": 4.8,
+      "sign": 1,
+      "dimension": {
+        "x": 198.3384534686281,
+        "y": 102.45082269707243,
+        "offsetU": 0.198486775414174,
+        "offsetN": 10.862296942962391,
+        "labelOffsetU": 1.0368353473246104,
+        "axis": null,
+        "display": {
+          "visible": false
+        }
+      },
+      "enabled": true,
+      "parameterName": "d2",
+      "expression": "\"d1\"*3/5",
+      "sketchId": "S1"
+    },
+    {
+      "type": "pointOnLine",
+      "point": "P12",
+      "line": "L3",
+      "enabled": true,
+      "sketchId": "S1"
+    },
+    {
+      "type": "pointOnLine",
+      "point": "P12",
+      "line": "L9",
+      "enabled": true,
+      "sketchId": "S1"
+    },
+    {
+      "type": "lineLineDistance",
+      "line1": "L3",
+      "line2": "L7",
+      "target": 20,
+      "sign": 1,
+      "dimension": {
+        "x": 199.1818905406446,
+        "y": 114.96524451357439,
+        "offsetU": 0.0840649588975382,
+        "offsetN": 6.602907214705411,
+        "labelOffsetU": 0.6034390317285743,
+        "axis": null,
+        "display": null
+      },
+      "enabled": true,
+      "parameterName": "d4",
+      "expression": "20",
+      "sketchId": "S1"
+    },
+    {
+      "type": "pointOnLine",
+      "point": "P13",
+      "line": "L10",
+      "enabled": true,
+      "sketchId": "S1"
+    },
+    {
+      "type": "vertical",
+      "line": "L10",
+      "enabled": true,
+      "sketchId": "S1"
+    },
+    {
+      "type": "pointOnCircle",
+      "point": "P15",
+      "primitive": "C1",
+      "enabled": true,
+      "sketchId": "S1"
+    },
+    {
+      "type": "pointOnCircle",
+      "point": "P16",
+      "primitive": "C1",
+      "enabled": true,
+      "sketchId": "S1"
+    },
+    {
+      "type": "pointOnLine",
+      "point": "P13",
+      "line": "L11",
+      "enabled": true,
+      "sketchId": "S1"
+    },
+    {
+      "type": "horizontal",
+      "line": "L11",
+      "enabled": true,
+      "sketchId": "S1"
+    },
+    {
+      "type": "pointOnCircle",
+      "point": "P17",
+      "primitive": "C1",
+      "enabled": true,
+      "sketchId": "S1"
+    },
+    {
+      "type": "pointOnCircle",
+      "point": "P18",
+      "primitive": "C1",
+      "enabled": true,
+      "sketchId": "S1"
+    },
+    {
+      "type": "collinear",
+      "line1": "L10",
+      "line2": "L9",
+      "enabled": true,
+      "sketchId": "S1"
+    },
+    {
+      "type": "lineLineDistance",
+      "line1": "L3",
+      "line2": "L11",
+      "target": 24,
+      "sign": -1,
+      "dimension": {
+        "x": 203.98944549816537,
+        "y": 91.77308888783914,
+        "offsetU": -1.276220584672401,
+        "offsetN": -17.01046224140816,
+        "labelOffsetU": -1.7172940429566352,
+        "axis": null,
+        "display": {
+          "visible": false
+        }
+      },
+      "enabled": true,
+      "parameterName": "d5",
+      "expression": "\"d1\"*3",
+      "sketchId": "S1"
+    },
+    {
+      "type": "horizontal",
+      "line": "L12",
+      "enabled": true,
+      "sketchId": "S1"
+    },
+    {
+      "type": "vertical",
+      "line": "L14",
+      "enabled": true,
+      "sketchId": "S1"
+    },
+    {
+      "type": "horizontal",
+      "line": "L16",
+      "enabled": true,
+      "sketchId": "S1"
+    },
+    {
+      "type": "vertical",
+      "line": "L18",
+      "enabled": true,
+      "sketchId": "S1"
+    },
+    {
+      "type": "lineCircleTangent",
+      "line": "L12",
+      "primitive": "C1",
+      "sign": 1,
+      "enabled": true,
+      "sketchId": "S1"
+    },
+    {
+      "type": "lineCircleTangent",
+      "line": "L13",
+      "primitive": "C1",
+      "sign": 1,
+      "enabled": true,
+      "sketchId": "S1"
+    },
+    {
+      "type": "lineCircleTangent",
+      "line": "L14",
+      "primitive": "C1",
+      "sign": 1,
+      "enabled": true,
+      "sketchId": "S1"
+    },
+    {
+      "type": "lineCircleTangent",
+      "line": "L15",
+      "primitive": "C1",
+      "sign": 1,
+      "enabled": true,
+      "sketchId": "S1"
+    },
+    {
+      "type": "lineCircleTangent",
+      "line": "L16",
+      "primitive": "C1",
+      "sign": -1,
+      "enabled": true,
+      "sketchId": "S1"
+    },
+    {
+      "type": "lineCircleTangent",
+      "line": "L17",
+      "primitive": "C1",
+      "sign": 1,
+      "enabled": true,
+      "sketchId": "S1"
+    },
+    {
+      "type": "lineCircleTangent",
+      "line": "L18",
+      "primitive": "C1",
+      "sign": -1,
+      "enabled": true,
+      "sketchId": "S1"
+    },
+    {
+      "type": "lineCircleTangent",
+      "line": "L19",
+      "primitive": "C1",
+      "sign": 1,
+      "enabled": true,
+      "sketchId": "S1"
+    },
+    {
+      "type": "equalLength",
+      "line1": "L13",
+      "line2": "L14",
+      "enabled": true,
+      "sketchId": "S1"
+    },
+    {
+      "type": "equalLength",
+      "line1": "L15",
+      "line2": "L16",
+      "enabled": true,
+      "sketchId": "S1"
+    },
+    {
+      "type": "collinear",
+      "line1": "L14",
+      "line2": "L2",
+      "enabled": true,
+      "sketchId": "S1"
+    },
+    {
+      "type": "symmetry",
+      "p1": "P19",
+      "p2": "P20",
+      "axis": "L10",
+      "enabled": true,
+      "sketchId": "S1"
+    },
+    {
+      "type": "symmetry",
+      "p1": "P24",
+      "p2": "P23",
+      "axis": "L10",
+      "enabled": true,
+      "sketchId": "S1"
+    },
+    {
+      "type": "pointOnLine",
+      "point": "P27",
+      "line": "L1",
+      "enabled": true,
+      "sketchId": "S1"
+    },
+    {
+      "type": "pointOnLine",
+      "point": "P28",
+      "line": "L5",
+      "enabled": true,
+      "sketchId": "S1"
+    },
+    {
+      "type": "vertical",
+      "line": "L20",
+      "enabled": true,
+      "sketchId": "S1"
+    },
+    {
+      "type": "pointOnLine",
+      "point": "P29",
+      "line": "L1",
+      "enabled": true,
+      "sketchId": "S1"
+    },
+    {
+      "type": "pointOnLine",
+      "point": "P30",
+      "line": "L3",
+      "enabled": true,
+      "sketchId": "S1"
+    },
+    {
+      "type": "vertical",
+      "line": "L21",
+      "enabled": true,
+      "sketchId": "S1"
+    },
+    {
+      "type": "pointVertical",
+      "p1": "P24",
+      "p2": "P27",
+      "enabled": true,
+      "sketchId": "S1"
+    },
+    {
+      "type": "pointVertical",
+      "p1": "P23",
+      "p2": "P29",
+      "enabled": true,
+      "sketchId": "S1"
+    },
+    {
+      "type": "arcEndpointOnLine",
+      "arc": "A1",
+      "endpoint": "start",
+      "line": "L20",
+      "enabled": true,
+      "sketchId": "S1"
+    },
+    {
+      "type": "arcEndpointOnLine",
+      "arc": "A1",
+      "endpoint": "end",
+      "line": "L21",
+      "enabled": true,
+      "sketchId": "S1"
+    },
+    {
+      "type": "pointOnLine",
+      "point": "P32",
+      "line": "L1",
+      "enabled": true,
+      "sketchId": "S1"
+    },
+    {
+      "type": "pointOnCircle",
+      "point": "P32",
+      "primitive": "A1",
+      "enabled": true,
+      "sketchId": "S1"
+    },
+    {
+      "type": "arcEndpointArcEndpointCoincident",
+      "a": "A2",
+      "endpointA": "start",
+      "b": "A1",
+      "endpointB": "end",
+      "enabled": true,
+      "sketchId": "S1"
+    },
+    {
+      "type": "arcEndpointOnLine",
+      "arc": "A2",
+      "endpoint": "end",
+      "line": "L2",
+      "enabled": true,
+      "sketchId": "S1"
+    },
+    {
+      "type": "pointOnLine",
+      "point": "P34",
+      "line": "L1",
+      "enabled": true,
+      "sketchId": "S1"
+    },
+    {
+      "type": "pointOnCircle",
+      "point": "P34",
+      "primitive": "A2",
+      "enabled": true,
+      "sketchId": "S1"
+    },
+    {
+      "type": "arcEndpointArcEndpointCoincident",
+      "a": "A3",
+      "endpointA": "start",
+      "b": "A1",
+      "endpointB": "start",
+      "enabled": true,
+      "sketchId": "S1"
+    },
+    {
+      "type": "arcEndpointOnLine",
+      "arc": "A3",
+      "endpoint": "end",
+      "line": "L4",
+      "enabled": true,
+      "sketchId": "S1"
+    },
+    {
+      "type": "pointOnLine",
+      "point": "P36",
+      "line": "L1",
+      "enabled": true,
+      "sketchId": "S1"
+    },
+    {
+      "type": "pointOnCircle",
+      "point": "P36",
+      "primitive": "A3",
+      "enabled": true,
+      "sketchId": "S1"
+    },
+    {
+      "type": "lineCircleTangent",
+      "line": "L1",
+      "primitive": "A3",
+      "sign": 1,
+      "enabled": true,
+      "sketchId": "S1"
+    },
+    {
+      "type": "lineCircleTangent",
+      "line": "L1",
+      "primitive": "A1",
+      "sign": 1,
+      "enabled": true,
+      "sketchId": "S1"
+    },
+    {
+      "type": "lineCircleTangent",
+      "line": "L1",
+      "primitive": "A2",
+      "sign": 1,
+      "enabled": true,
+      "sketchId": "S1"
+    },
+    {
+      "type": "arcEndpointHorizontal",
+      "a": "A3",
+      "endpointA": "end",
+      "b": "A3",
+      "endpointB": "start",
+      "enabled": true,
+      "sketchId": "S1"
+    },
+    {
+      "type": "arcEndpointHorizontal",
+      "a": "A3",
+      "endpointA": "start",
+      "b": "A2",
+      "endpointB": "start",
+      "enabled": true,
+      "sketchId": "S1"
+    },
+    {
+      "type": "arcEndpointHorizontal",
+      "a": "A2",
+      "endpointA": "start",
+      "b": "A2",
+      "endpointB": "end",
+      "enabled": true,
+      "sketchId": "S1"
+    },
+    {
+      "type": "radiusDimension",
+      "primitive": "A1",
+      "target": 12,
+      "dimension": {
+        "x": 188.8368559324566,
+        "y": 101.26661516366522,
+        "offsetU": 1.2042337539447108,
+        "offsetN": 1.85787257818472,
+        "labelOffsetU": 1.5633846454290259,
+        "axis": null,
+        "display": {
+          "visible": false
+        }
+      },
+      "enabled": true,
+      "parameterName": "d6",
+      "expression": "\"d1\"*1.5",
+      "sketchId": "S1"
+    },
+    {
+      "type": "pointOnLine",
+      "point": "P37",
+      "line": "L4",
+      "enabled": true,
+      "sketchId": "S1"
+    },
+    {
+      "type": "pointOnLine",
+      "point": "P38",
+      "line": "L1",
+      "enabled": true,
+      "sketchId": "S1"
+    },
+    {
+      "type": "pointOnLine",
+      "point": "P39",
+      "line": "L1",
+      "enabled": true,
+      "sketchId": "S1"
+    },
+    {
+      "type": "pointOnLine",
+      "point": "P40",
+      "line": "L2",
+      "enabled": true,
+      "sketchId": "S1"
+    },
+    {
+      "type": "pointOnLine",
+      "point": "P41",
+      "line": "L23",
+      "enabled": true,
+      "sketchId": "S1"
+    },
+    {
+      "type": "pointOnLine",
+      "point": "P42",
+      "line": "L23",
+      "enabled": true,
+      "sketchId": "S1"
+    },
+    {
+      "type": "pointOnLine",
+      "point": "P43",
+      "line": "L22",
+      "enabled": true,
+      "sketchId": "S1"
+    },
+    {
+      "type": "pointOnLine",
+      "point": "P44",
+      "line": "L22",
+      "enabled": true,
+      "sketchId": "S1"
+    },
+    {
+      "type": "lineLineDistance",
+      "line1": "L4",
+      "line2": "L2",
+      "target": 16,
+      "sign": -1,
+      "dimension": {
+        "x": 186.42594352375556,
+        "y": 97.07285606116592,
+        "offsetU": 0.5530398096956683,
+        "offsetN": 5.863496545314007,
+        "labelOffsetU": -0.7766329740555875,
+        "axis": null,
+        "display": {
+          "visible": false
+        }
+      },
+      "enabled": true,
+      "parameterName": "d7",
+      "expression": "\"d1\"*2",
+      "sketchId": "S1"
+    },
+    {
+      "type": "lineSymmetry",
+      "line1": "L4",
+      "line2": "L2",
+      "axis": "L9",
+      "reversed": true,
+      "enabled": true,
+      "sketchId": "S1"
+    },
+    {
+      "type": "lineCircleTangent",
+      "line": "L22",
+      "primitive": "A3",
+      "sign": 1,
+      "enabled": true,
+      "sketchId": "S1"
+    },
+    {
+      "type": "lineCircleTangent",
+      "line": "L23",
+      "primitive": "A2",
+      "sign": 1,
+      "enabled": true,
+      "sketchId": "S1"
+    },
+    {
+      "type": "lineAngle",
+      "line1": "L1",
+      "line2": "L22",
+      "target": 0.5235987755982988,
+      "startFlip": 1,
+      "endFlip": 1,
+      "dimension": {
+        "x": 177.7636102930372,
+        "y": 100.84140199164214,
+        "offsetU": null,
+        "offsetN": null,
+        "labelOffsetU": 0,
+        "axis": null,
+        "display": {
+          "visible": false
+        },
+        "angleStartFlip": 1,
+        "angleEndFlip": 1,
+        "angleRadius": 2.2876698743633304,
+        "angleLabelOffsetR": -0.014963151656878733,
+        "angleLabelOffsetT": 0.26122328884399587,
+        "angleLabelPlacementVersion": 2
+      },
+      "enabled": true,
+      "parameterName": "d8",
+      "expression": "30",
+      "sketchId": "S1"
+    },
+    {
+      "type": "lineSymmetry",
+      "line1": "L22",
+      "line2": "L23",
+      "axis": "L9",
+      "reversed": true,
+      "enabled": true,
+      "sketchId": "S1"
+    },
+    {
+      "type": "pointOnCircle",
+      "point": "P45",
+      "primitive": "A1",
+      "enabled": true,
+      "sketchId": "S1"
+    },
+    {
+      "type": "pointOnCircle",
+      "point": "P46",
+      "primitive": "A1",
+      "enabled": true,
+      "sketchId": "S1"
+    },
+    {
+      "type": "pointOnLine",
+      "point": "P24",
+      "line": "L20",
+      "enabled": true,
+      "sketchId": "S1"
+    },
+    {
+      "type": "pointOnLine",
+      "point": "P47",
+      "line": "L8",
+      "enabled": true,
+      "sketchId": "S1"
+    },
+    {
+      "type": "pointOnLine",
+      "point": "P48",
+      "line": "L6",
+      "enabled": true,
+      "sketchId": "S1"
+    },
+    {
+      "type": "horizontal",
+      "line": "L24",
+      "enabled": true,
+      "sketchId": "S1"
+    },
+    {
+      "type": "pointOnLine",
+      "point": "P49",
+      "line": "L8",
+      "enabled": true,
+      "sketchId": "S1"
+    },
+    {
+      "type": "pointOnLine",
+      "point": "P50",
+      "line": "L6",
+      "enabled": true,
+      "sketchId": "S1"
+    },
+    {
+      "type": "horizontal",
+      "line": "L25",
+      "enabled": true,
+      "sketchId": "S1"
+    },
+    {
+      "type": "pointOnLine",
+      "point": "P51",
+      "line": "L8",
+      "enabled": true,
+      "sketchId": "S1"
+    },
+    {
+      "type": "pointOnLine",
+      "point": "P52",
+      "line": "L24",
+      "enabled": true,
+      "sketchId": "S1"
+    },
+    {
+      "type": "pointOnLine",
+      "point": "P53",
+      "line": "L7",
+      "enabled": true,
+      "sketchId": "S1"
+    },
+    {
+      "type": "vertical",
+      "line": "L27",
+      "enabled": true,
+      "sketchId": "S1"
+    },
+    {
+      "type": "pointOnLine",
+      "point": "P54",
+      "line": "L6",
+      "enabled": true,
+      "sketchId": "S1"
+    },
+    {
+      "type": "pointOnLine",
+      "point": "P55",
+      "line": "L24",
+      "enabled": true,
+      "sketchId": "S1"
+    },
+    {
+      "type": "pointOnLine",
+      "point": "P56",
+      "line": "L7",
+      "enabled": true,
+      "sketchId": "S1"
+    },
+    {
+      "type": "vertical",
+      "line": "L30",
+      "enabled": true,
+      "sketchId": "S1"
+    },
+    {
+      "type": "lineSymmetry",
+      "line1": "L27",
+      "line2": "L30",
+      "axis": "L9",
+      "reversed": false,
+      "enabled": true,
+      "sketchId": "S1"
+    },
+    {
+      "type": "lineSymmetry",
+      "line1": "L26",
+      "line2": "L29",
+      "axis": "L9",
+      "reversed": false,
+      "enabled": true,
+      "sketchId": "S1"
+    },
+    {
+      "type": "lineSymmetry",
+      "line1": "L28",
+      "line2": "L31",
+      "axis": "L9",
+      "reversed": false,
+      "enabled": true,
+      "sketchId": "S1"
+    },
+    {
+      "type": "pointOnLine",
+      "point": "P57",
+      "line": "L27",
+      "enabled": true,
+      "sketchId": "S1"
+    },
+    {
+      "type": "pointOnLine",
+      "point": "P58",
+      "line": "L25",
+      "enabled": true,
+      "sketchId": "S1"
+    },
+    {
+      "type": "pointOnLine",
+      "point": "P59",
+      "line": "L30",
+      "enabled": true,
+      "sketchId": "S1"
+    },
+    {
+      "type": "pointOnLine",
+      "point": "P60",
+      "line": "L25",
+      "enabled": true,
+      "sketchId": "S1"
+    },
+    {
+      "type": "lineAngle",
+      "line1": "L28",
+      "line2": "L7",
+      "target": 0.7853981633974483,
+      "startFlip": 0,
+      "endFlip": 0,
+      "dimension": {
+        "x": 181.98106391999784,
+        "y": 124.30458690093168,
+        "offsetU": null,
+        "offsetN": null,
+        "labelOffsetU": 0,
+        "axis": null,
+        "display": {
+          "visible": false
+        },
+        "angleStartFlip": 0,
+        "angleEndFlip": 0,
+        "angleRadius": 1.946053861900084,
+        "angleLabelOffsetR": -0.05569741675294432,
+        "angleLabelOffsetT": -0.4622533328239783,
+        "angleLabelPlacementVersion": 2
+      },
+      "enabled": true,
+      "parameterName": "d10",
+      "expression": "45",
+      "sketchId": "S1"
+    },
+    {
+      "type": "lineLineDistance",
+      "line1": "L27",
+      "line2": "L8",
+      "target": 0.8,
+      "sign": 1,
+      "dimension": {
+        "x": 182.270494281167,
+        "y": 114.89857343799693,
+        "offsetU": -1.1084889888359348,
+        "offsetN": -3.0840693775608914,
+        "labelOffsetU": -2.437914213923913,
+        "axis": null,
+        "display": {
+          "visible": false
+        }
+      },
+      "enabled": true,
+      "parameterName": "d11",
+      "expression": "\"d1\"/10",
+      "sketchId": "S1"
+    },
+    {
+      "type": "lineAngle",
+      "line1": "L26",
+      "line2": "L8",
+      "target": 0.5235987755982988,
+      "startFlip": 0,
+      "endFlip": 1,
+      "dimension": {
+        "x": 184.414215391373,
+        "y": 115.6866946898592,
+        "offsetU": null,
+        "offsetN": null,
+        "labelOffsetU": 0,
+        "axis": null,
+        "display": {
+          "visible": false
+        },
+        "angleStartFlip": 0,
+        "angleEndFlip": 1,
+        "angleRadius": 5.545311095410941,
+        "angleLabelOffsetR": -0.3996178983580655,
+        "angleLabelOffsetT": -2.066958312760891,
+        "angleLabelPlacementVersion": 2
+      },
+      "enabled": true,
+      "parameterName": "d19",
+      "expression": "30",
+      "sketchId": "S1"
+    },
+    {
+      "type": "lineLineDistance",
+      "line1": "L24",
+      "line2": "L7",
+      "target": 13.333333333333334,
+      "sign": 1,
+      "dimension": {
+        "x": 198.0726373879411,
+        "y": 116.18567215967745,
+        "offsetU": 2.1969706461239973,
+        "offsetN": 11.493654098055796,
+        "labelOffsetU": 2.1969706461235354,
+        "axis": null,
+        "display": {
+          "visible": false
+        }
+      },
+      "enabled": true,
+      "parameterName": "d21",
+      "expression": "\"d4\"*2/3",
+      "sketchId": "S1"
+    }
+  ]
+}

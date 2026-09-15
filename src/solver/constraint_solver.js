@@ -1,4 +1,4 @@
-/* constraint_solver.js: 2D geometry constraint solver core */
+/* src/solver/constraint_solver.js: 2D geometry constraint solver core */
 (function () {
   "use strict";
 
@@ -826,6 +826,38 @@
     }
   }
 
+  class ArcEndpointHorizontalConstraint extends Constraint {
+    constructor(a, endpointA, b, endpointB) {
+      super(`円弧端点水平 ${a.id}.${endpointA}-${b.id}.${endpointB}`, 1);
+      this.a = a;
+      this.endpointA = endpointA === "end" ? "end" : "start";
+      this.b = b;
+      this.endpointB = endpointB === "end" ? "end" : "start";
+    }
+
+    rawError() {
+      const a = arcEndpointPoint(this.a, this.endpointA);
+      const b = arcEndpointPoint(this.b, this.endpointB);
+      return b.y - a.y;
+    }
+  }
+
+  class ArcEndpointVerticalConstraint extends Constraint {
+    constructor(a, endpointA, b, endpointB) {
+      super(`円弧端点垂直 ${a.id}.${endpointA}-${b.id}.${endpointB}`, 1);
+      this.a = a;
+      this.endpointA = endpointA === "end" ? "end" : "start";
+      this.b = b;
+      this.endpointB = endpointB === "end" ? "end" : "start";
+    }
+
+    rawError() {
+      const a = arcEndpointPoint(this.a, this.endpointA);
+      const b = arcEndpointPoint(this.b, this.endpointB);
+      return b.x - a.x;
+    }
+  }
+
   class SymmetryConstraint extends Constraint {
     constructor(p1, p2, axis) {
       super(`対称 ${p1.id}-${p2.id} / ${axis.id}`, 1);
@@ -1486,22 +1518,25 @@
           for (let i = 0; i < count; i++) {
             const next = (i + 1) % c.sources.length;
             const a = c.sources[i], b = c.sources[next];
-            if (!(a instanceof Arc && b instanceof Arc && c.offsets[i] instanceof Arc && c.offsets[next] instanceof Arc)) continue;
             const endA = c.sourceReversed[i] ? "start" : "end";
             const endB = c.sourceReversed[next] ? "end" : "start";
+            const contact = (item, end) => item instanceof Arc ? endpoint(item, end)
+              : item instanceof Line ? item[end === "start" ? "p1" : "p2"] : null;
             const tangent = constraints.some((other) => other instanceof CircleCircleTangentConstraint
-              && ((other.a === a && other.b === b) || (other.a === b && other.b === a)));
-            if (tangent && root(endpoint(a, endA)) === root(endpoint(b, endB))) joins.push({ i, next, endA, endB });
+              ? ((other.a === a && other.b === b) || (other.a === b && other.b === a))
+              : other instanceof LineCircleTangentConstraint
+                && ((other.line === a && other.primitive === b) || (other.line === b && other.primitive === a)));
+            if (!tangent || root(contact(a, endA)) !== root(contact(b, endB))) continue;
+            if (a instanceof Arc && c.offsets[i] instanceof Arc) joins.push({ index: i, sourceEnd: endA, offsetEnd: "endAngle" });
+            if (b instanceof Arc && c.offsets[next] instanceof Arc) joins.push({ index: next, sourceEnd: endB, offsetEnd: "startAngle" });
           }
           if (joins.length) error = () => {
             const errors = c.rawError();
-            // Offset joins of explicitly tangent source arcs have a unique
+            // Offset joins of explicitly tangent source geometry have a unique
             // contact. Position coincidence alone loses one derivative there.
-            for (const { i, next, endA, endB } of joins) {
-              errors.push(
-                normalizeAngleSigned(c.offsets[i].endAngle - c.sources[i][endA === "start" ? "startAngle" : "endAngle"]) * Math.max(1, c.offsets[i].radius()),
-                normalizeAngleSigned(c.offsets[next].startAngle - c.sources[next][endB === "start" ? "startAngle" : "endAngle"]) * Math.max(1, c.offsets[next].radius()),
-              );
+            for (const { index, sourceEnd, offsetEnd } of joins) {
+              errors.push(normalizeAngleSigned(c.offsets[index][offsetEnd]
+                - c.sources[index][sourceEnd === "start" ? "startAngle" : "endAngle"]) * Math.max(1, c.offsets[index].radius()));
             }
             return errors;
           };
@@ -1589,7 +1624,13 @@
         };
         visit(source);
         visit(constraint.contactLine);
-        ranges.push({ constraint, offset, count, objects, dynamic });
+        let featureLength = Infinity;
+        for (const object of objects) {
+          const length = object instanceof Line ? object.length()
+            : object instanceof Circle || object instanceof Arc ? object.radius() : Infinity;
+          if (length > MIN_ORIENTATION_LENGTH) featureLength = Math.min(featureLength, length);
+        }
+        ranges.push({ constraint, offset, count, objects, dynamic, featureLength });
         offset += count;
       }
       for (let j = 0; j < n; j++) {
@@ -1600,7 +1641,13 @@
         const angular = v.prop === "startAngle" || v.prop === "endAngle" || v.prop === "rotation";
         // The fourth-order angular difference uses a wider interval to avoid
         // cancellation in small tangent arcs without scaling with turn count.
-        const h = angular ? Math.pow(this.diffStep, 2 / 3) : this.diffStep * Math.max(1, Math.abs(orig));
+        let h = angular ? Math.pow(this.diffStep, 2 / 3) : this.diffStep * Math.max(1, Math.abs(orig));
+        if (!angular) {
+          const featureLength = Math.min(...affected.map((range) => range.featureLength));
+          // Coordinate magnitude is not a geometric scale: a tiny shoulder
+          // far from the origin must not be crossed by a difference sample.
+          h = Math.min(h, Math.max(Number.EPSILON * Math.max(1, Math.abs(orig)) * 16, featureLength * 1e-3));
+        }
         v.object[v.prop] = Number.isFinite(v.min) ? Math.max(v.min, orig + h) : orig + h;
         if (Number.isFinite(v.max)) v.object[v.prop] = Math.min(v.max, v.object[v.prop]);
         const plusValue = v.object[v.prop];
@@ -1693,6 +1740,22 @@
     }
 
     solveCore(vars, constraints, tolerance = this.tolerance, maxStepNorm = this.maxStepNorm, initialLambda = this.initialLambda, maxIterations = this.maxIterations) {
+      // The stored unsigned angle has two mirrored solutions. Keep the side
+      // selected by the starting geometry throughout this solve.
+      constraints = constraints.map((constraint) => {
+        if (!(constraint instanceof LineAngleConstraint)) return constraint;
+        const signedAngle = () => {
+          const a = constraint.line1, b = constraint.line2;
+          const flip = constraint.startFlip === constraint.endFlip ? 1 : -1;
+          return Math.atan2((a.dx() * b.dy() - a.dy() * b.dx()) * flip,
+            (a.dx() * b.dx() + a.dy() * b.dy()) * flip);
+        };
+        const sign = signedAngle() < 0 ? -1 : 1;
+        const directed = new Constraint(constraint.name, constraint.weight);
+        directed.sourceConstraint = constraint;
+        directed.rawError = () => normalizeAngleSigned(signedAngle() - sign * constraint.target);
+        return directed;
+      });
       let lambda = initialLambda;
       let F = this.computeErrorVectorForConstraints(constraints);
       let errorNorm = vectorNorm(F);
@@ -1734,8 +1797,19 @@
         if (angleScale < 1) dx = dx.map((value) => value * angleScale);
         this.applyDelta(vars, dx);
 
-        const trialF = this.computeErrorVectorForConstraints(constraints);
-        const trialNorm = vectorNorm(trialF);
+        let trialF = this.computeErrorVectorForConstraints(constraints);
+        let trialNorm = vectorNorm(trialF);
+        // Keep the coupled Newton direction when its full step leaves the
+        // local constraint branch (for example, collapsing a short tangent
+        // line). Increasing damping alone can steer subsequent steps into
+        // that singularity instead of following the shrinking geometry.
+        for (let backtrack = 0; !(trialNorm < errorNorm) && backtrack < 8; backtrack++) {
+          this.restore(state);
+          dx = dx.map((value) => value * 0.5);
+          this.applyDelta(vars, dx);
+          trialF = this.computeErrorVectorForConstraints(constraints);
+          trialNorm = vectorNorm(trialF);
+        }
         if (trialNorm < errorNorm) {
           F = trialF;
           errorNorm = trialNorm;
@@ -1816,7 +1890,20 @@
       // Compute the finite-difference Jacobian once, then incrementally extend
       // a row-echelon basis in constraint order. The previous implementation
       // rebuilt the entire Jacobian for every prefix of the constraint list.
-      const jacobian = this.computeJacobianForConstraints(variables, errors, activeConstraints);
+      let jacobian;
+      const state = this.clone(variables);
+      try {
+        // As in DOF analysis, remove accepted contact residuals before testing
+        // row independence: their angular error can falsely lock a free length.
+        const analysisTolerance = Math.min(this.tolerance, rankTolerance * 0.1);
+        if (vectorNorm(errors) > analysisTolerance) {
+          const corrected = this.solveCore(variables, activeConstraints, analysisTolerance, this.maxStepNorm, Math.min(this.initialLambda, rankTolerance), 8);
+          if (!Number.isFinite(corrected.errorNorm) || corrected.errorNorm > errorTolerance) this.restore(state);
+        }
+        jacobian = this.computeJacobianForConstraints(variables, this.computeErrorVectorForConstraints(activeConstraints), activeConstraints);
+      } finally {
+        this.restore(state);
+      }
       const basis = [];
       const scales = variables.map((v) => this.variableMotionScale(v));
       const addIndependentRow = (source) => {
@@ -2078,10 +2165,9 @@
       const weights = projectionTargetMask.map((targeted) => targeted ? 1 : GUIDED_DRAG_BACKGROUND_WEIGHT);
       const physicalProjected = LinearAlgebra.projectOntoBasis(physicalDesired, physicalBasis, weights);
       const componentScale = Math.sqrt(Math.max(1, variables.length / Math.max(1, targetVariableCount)));
-      // Near-singular null-space directions can turn a tiny pointer movement into
-      // enormous changes in remote geometry. A rigid component legitimately moves
-      // several variables, so scale with its size, but always keep that motion
-      // proportional to the actual cursor request.
+      // Parameter and circumference predictors can amplify near-singular
+      // directions. Scale their cursor budget with the component size; direct
+      // point coordinates use a separate visible-motion bound below.
       const requestedTargetNorm = vectorNorm(physicalDesired);
       const boundedTargetNorm = !radialObjective && Number.isFinite(targetStepNorm) && targetStepNorm > 0
         ? Math.min(requestedTargetNorm, targetStepNorm)
@@ -2093,9 +2179,12 @@
       const directPointChart = targets.every((target) => target.point) && (targetVariableCount === 1 || targets.length > 1);
       const retryFraction = referenceChart ? referenceRetryFraction : targets[0]?.guidedStepNorm > 0 && Number.isFinite(targetStepNorm)
         ? Math.min(1, targetStepNorm / targets[0].guidedStepNorm) : 1;
+      // A point coordinate can require much larger motion elsewhere in the
+      // component. Bound its visible step below, while allowing the connected
+      // variables the normal solver step budget to preserve that coordinate.
       const guidedMaxNorm = radialObjective ? cursorScaledMaxNorm : directPointChart
         ? (referenceChart && preserveTranslation ? vectorNorm(physicalProjected) * retryFraction
-          : Math.min(vectorNorm(physicalProjected) * retryFraction, cursorScaledMaxNorm))
+          : Math.min(vectorNorm(physicalProjected) * retryFraction, this.maxStepNorm * componentScale))
         : Math.min(this.maxStepNorm * componentScale, cursorScaledMaxNorm);
       let limitedPhysical = this.limitStep(physicalProjected, guidedMaxNorm);
       if (targets.every((target) => target.point) && !(referenceChart && preserveTranslation)) {
@@ -2350,6 +2439,8 @@
     VerticalConstraint,
     PointHorizontalConstraint,
     PointVerticalConstraint,
+    ArcEndpointHorizontalConstraint,
+    ArcEndpointVerticalConstraint,
     SymmetryConstraint,
     LineSymmetryConstraint,
     ArcSymmetryConstraint,

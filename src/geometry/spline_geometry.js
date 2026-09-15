@@ -1,4 +1,4 @@
-/* spline_geometry.js: Pure cubic interpolating-spline geometry helpers. */
+/* src/geometry/spline_geometry.js: Pure cubic interpolating-spline geometry helpers. */
 (function () {
   "use strict";
 

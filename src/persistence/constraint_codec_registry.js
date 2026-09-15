@@ -1,4 +1,4 @@
-/* constraint_codec_registry.js: Immutable class/type dispatch for persistent constraint codecs. */
+/* src/persistence/constraint_codec_registry.js: Immutable class/type dispatch for persistent constraint codecs. */
 (function () {
   "use strict";
 

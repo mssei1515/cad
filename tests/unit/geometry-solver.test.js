@@ -7,7 +7,7 @@ const vm = require("node:vm");
 function loadGeometryRuntime() {
   const sandbox = { window: {} };
   vm.createContext(sandbox);
-  for (const fileName of ["geometry_kernel.js", "spline_geometry.js", "constraint_solver.js"]) {
+  for (const fileName of ["src/geometry/geometry_kernel.js", "src/geometry/spline_geometry.js", "src/solver/constraint_solver.js"]) {
     const source = fs.readFileSync(path.resolve(__dirname, `../../${fileName}`), "utf8");
     vm.runInContext(source, sandbox, { filename: fileName });
   }
@@ -22,6 +22,42 @@ function residualNorm(value) {
 const runtime = loadGeometryRuntime();
 const geometry = runtime.GeometrySolver;
 const kernel = runtime.GeometryKernel;
+
+test("line angle solves keep the original side while changing angle and length", () => {
+  for (const side of [-1, 1]) for (const flip of [0, 1]) {
+    const origin = new geometry.Point("O", 0, 0, true);
+    const axisEnd = new geometry.Point("X", 10, 0, true);
+    const initial = side * Math.PI / 6 + flip * Math.PI;
+    const end = new geometry.Point("P", 10 * Math.cos(initial), 10 * Math.sin(initial));
+    const axis = new geometry.Line("axis", origin, axisEnd);
+    const line = new geometry.Line("line", origin, end);
+    const angle = new geometry.LineAngleConstraint(axis, line, Math.PI * 5 / 6, 0, flip);
+    const length = new geometry.DistanceConstraint(origin, end, 2);
+    const solver = new geometry.ConstraintSolver({ points: [origin, axisEnd, end], lines: [axis, line], circles: [], arcs: [], constraints: [angle, length] });
+    const result = solver.solve();
+    assert.equal(result.success, true);
+    assert.ok(Math.abs(line.length() - 2) < 1e-6);
+    const directed = Math.atan2(end.y * (flip ? -1 : 1), end.x * (flip ? -1 : 1));
+    assert.ok(Math.abs(directed - side * angle.target) < 1e-6);
+    assert.equal(angle.startFlip, 0);
+    assert.equal(angle.endFlip, flip);
+  }
+});
+
+test("angle differentiation resolves a tiny line away from the origin", () => {
+  const origin = new geometry.Point("O", 100, 100, true);
+  const axisEnd = new geometry.Point("X", 110, 100, true);
+  const end = new geometry.Point("P", 100 + 1e-4 * Math.cos(Math.PI / 6), 100 + 1e-4 * Math.sin(Math.PI / 6));
+  const axis = new geometry.Line("axis", origin, axisEnd);
+  const line = new geometry.Line("line", origin, end);
+  const angle = new geometry.LineAngleConstraint(axis, line, Math.PI / 6);
+  const solver = new geometry.ConstraintSolver({ points: [origin, axisEnd, end], lines: [axis, line], circles: [], arcs: [], constraints: [angle] });
+  const jacobian = solver.computeJacobianForConstraints(solver.getVariables(), [angle.error()], [angle])[0];
+  const expected = [-line.dy() / line.length() ** 2, line.dx() / line.length() ** 2];
+  expected.forEach((value, index) => assert.ok(Math.abs(jacobian[index] / value - 1) < 1e-5));
+  assert.equal(end.x, 100 + 1e-4 * Math.cos(Math.PI / 6));
+  assert.equal(end.y, 100 + 1e-4 * Math.sin(Math.PI / 6));
+});
 
 test("observable drag maps output motion to constrained real variables without changing the model", () => {
   const p1 = new geometry.Point("P1", 0, 0);
@@ -90,6 +126,24 @@ test("geometry primitives preserve their public measurement contract", () => {
   assert.equal(arc.startPoint().y, -3);
   assert.ok(Math.abs(arc.endPoint().x - 2) < 1e-12);
   assert.ok(Math.abs(arc.endPoint().y - 2) < 1e-12);
+});
+
+test("arc endpoint horizontal and vertical constraints solve endpoint positions", () => {
+  const aCenter = new geometry.Point("CA", 0, 0, true);
+  const bCenter = new geometry.Point("CB", 20, 0, true);
+  const a = new geometry.Arc("A1", aCenter, 10, 0, Math.PI / 2);
+  const b = new geometry.Arc("A2", bCenter, 10, 0.25, Math.PI / 2);
+  const horizontal = new geometry.ArcEndpointHorizontalConstraint(a, "start", b, "start");
+  const solver = new geometry.ConstraintSolver({ points: [aCenter, bCenter], lines: [], circles: [], arcs: [a, b], constraints: [horizontal], blockInstances: [] });
+
+  assert.notEqual(horizontal.rawError(), 0);
+  assert.equal(solver.solve().success, true);
+  assert.ok(Math.abs(a.startPoint().y - b.startPoint().y) < 1e-6);
+
+  const vertical = new geometry.ArcEndpointVerticalConstraint(a, "end", b, "end");
+  const verticalSolver = new geometry.ConstraintSolver({ points: [aCenter, bCenter], lines: [], circles: [], arcs: [a, b], constraints: [vertical], blockInstances: [] });
+  assert.equal(verticalSolver.solve().success, true);
+  assert.ok(Math.abs(a.endPoint().x - b.endPoint().x) < 1e-6);
 });
 
 test("sketch projection constraints preserve point, line, circle, arc, and spline geometry", () => {
@@ -568,6 +622,53 @@ test("offset joins inherit explicit source tangency without a phantom endpoint d
     assert.equal(rank.rank, 2);
     tangent.enabled = false;
     assert.equal(solver.getConstraints().find((c) => c.sourceConstraint === offset), undefined);
+  }
+});
+
+test("line-arc offset contacts retain endpoint rank in either chain direction", () => {
+  for (const reverse of [false, true]) for (const perturbation of [0, 1e-6, -1e-6]) {
+    const start = new geometry.Point('start', -20, 0, true), contact = new geometry.Point('contact', 0, 0, true);
+    const center = new geometry.Point('center', 0, 10, true);
+    const line = new geometry.Line('line', start, contact), arc = new geometry.Arc('arc', center, 10, -Math.PI / 2, 0);
+    const moving = new geometry.Point('moving', perturbation * 8, 2);
+    const offsetLine = new geometry.Line('offsetLine', new geometry.Point('offsetStart', -20, 2, true), moving);
+    const offsetArc = new geometry.Arc('offsetArc', center, 8, -Math.PI / 2 + perturbation, 0);
+    if (reverse) {
+      [offsetLine.p1, offsetLine.p2] = [offsetLine.p2, offsetLine.p1];
+      [offsetArc.startAngle, offsetArc.endAngle] = [offsetArc.endAngle, offsetArc.startAngle];
+    }
+    const tangent = new geometry.LineCircleTangentConstraint(line, arc, 1);
+    const coincidence = new geometry.ArcEndpointCoincidentConstraint(arc, 'start', contact);
+    const offset = new geometry.OffsetChainConstraint(reverse ? [arc, line] : [line, arc],
+      reverse ? [offsetArc, offsetLine] : [offsetLine, offsetArc], 2, reverse ? -1 : 1, [reverse, reverse]);
+    const constraints = [tangent, coincidence, offset];
+    const solver = new geometry.ConstraintSolver({ points: [start, contact, center, moving], lines: [line, offsetLine], circles: [], arcs: [arc, offsetArc], constraints });
+    const variables = [{ object: moving, prop: 'x' }, { object: offsetArc, prop: reverse ? 'endAngle' : 'startAngle' }];
+    assert.equal(solver.constraintRankState({ variables, constraints }).rank, 2);
+    tangent.enabled = false;
+    assert.equal(solver.getConstraints().find((c) => c.sourceConstraint === offset), undefined);
+    tangent.enabled = true;
+    coincidence.enabled = false;
+    assert.equal(solver.getConstraints().find((c) => c.sourceConstraint === offset), undefined);
+  }
+});
+
+test("a directly dragged point follows its movable axis when connected geometry moves farther", () => {
+  const point = new geometry.Point('point', 0, 0), remote = new geometry.Point('remote', 0, 0);
+  const coupling = new geometry.Constraint('coupled displacement', 1);
+  coupling.rawError = () => [point.x, remote.y, remote.x - 40 * point.y];
+  const constraints = [coupling];
+  const solver = new geometry.ConstraintSolver({ points: [point, remote], lines: [], circles: [], arcs: [], constraints });
+  let previousY = 0;
+  for (const y of [0.1, 0.2, 0, -0.1, 0]) {
+    const step = Math.hypot(0.1, y - previousY);
+    const result = solver.solveSubsetGuided({ variables: solver.getVariables(), constraints,
+      targets: [{ point, x: 0.1, y }], targetStepNorm: step });
+    assert.equal(result.success, true);
+    assert.ok(Math.abs(point.y - y) < 1e-4, `requested ${y}, reached ${point.y}`);
+    assert.ok(residualNorm(coupling.error()) < 1e-4);
+    assert.ok(Math.abs(point.x) < 1e-8);
+    previousY = y;
   }
 });
 

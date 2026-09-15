@@ -1,4 +1,4 @@
-/* parameter_engine.js: Safe scalar expression parsing and namespace evaluation. */
+/* src/parameters/parameter_engine.js: Safe scalar expression parsing and namespace evaluation. */
 (function () {
   "use strict";
 
