@@ -24,8 +24,8 @@ test("snapshot shares field writers while preserving local scope metadata and al
   const seen = [];
   const serializer = snapshot.create({
     geometryMetadata: (item) => ({ sketchId: "resolved", kind: "explicit" }),
-    constraintData: (constraint, owner) => {
-      seen.push(owner);
+    constraintData: (constraint, owner, isDocumentScope) => {
+      seen.push([owner, isDocumentScope]);
       return constraint.id === "unsupported" ? null : { type: "fixedPoint", p: "P1", sketchId: owner.activeSketchId };
     },
   });
@@ -40,7 +40,7 @@ test("snapshot shares field writers while preserving local scope metadata and al
   assert.equal(data.blockDefinitions[0].nextHatchIndex, 9);
   assert.equal(data.constraints.length, 1);
   assert.equal(data.blockDefinitions[0].constraints.length, 1);
-  assert.deepEqual(seen, [definition, doc, doc]);
+  assert.deepEqual(seen, [[definition, false], [doc, true], [doc, true]]);
   assert.equal("evaluatedValue" in data.parameters[0], false);
   data.points[0].x = 100;
   data.units.length = "changed";

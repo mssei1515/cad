@@ -281,7 +281,7 @@
   document.documentElement.dataset.theme = applicationTheme;
   const { ROOT_SKETCH_ID, ROOT_SKETCH_NAME, DEFAULT_SKETCH_ID, DEFAULT_SKETCH_NAME } = window.SketchHierarchy;
   const DEFAULT_DOCUMENT_UNITS = Object.freeze({ length: "mm" });
-  const model = {
+  const documentModel = {
     documentName: DEFAULT_DOCUMENT_NAME,
     units: { ...DEFAULT_DOCUMENT_UNITS },
     defaultAppearance: null,
@@ -308,7 +308,18 @@
     blockInstances: [],
     geometryInstances: [],
   };
+  const workspace = window.EditingWorkspace.create(documentModel);
+  let model = workspace.current();
   const solver = new ConstraintSolver(model);
+
+  // Temporary binding for legacy commands; new services receive explicit scopes.
+  function activateEditingScope(scope) {
+    model = workspace.activate(scope);
+    solver.model = model;
+    geometryReadCache = null;
+    invalidateBlockProjectionCache();
+    return model;
+  }
 
   const fileSession = window.DocumentFiles.create();
 
@@ -716,7 +727,7 @@
   }
 
   function effectiveDocumentName() {
-    return effectiveDocumentNameFromValue(model.documentName);
+    return effectiveDocumentNameFromValue(documentModel.documentName);
   }
 
   function updateDocumentNameUI() {
@@ -788,7 +799,7 @@
 
   function effectiveDimensionAppearance(dimension, sketchId = activeSketchId(), sketches = model.sketches) {
     const sketch = sketches.find((item) => item.id === sketchId) || sketches.find((item) => isRootSketch(item)) || null;
-    return resolveDimensionAppearance(model.defaultDimensionAppearance,
+    return resolveDimensionAppearance(documentModel.defaultDimensionAppearance,
       sketch && !isRootSketch(sketch) ? sketch.dimensionAppearance : null, dimension?.display);
   }
 
@@ -797,9 +808,9 @@
   }
 
   function ensureAppearanceState() {
-    model.defaultAppearance = normalizeAppearance(model.defaultAppearance, { partial: false });
-    model.defaultConstructionAppearance = normalizeConstructionAppearance(model.defaultConstructionAppearance, { partial: false });
-    model.defaultDimensionAppearance = normalizeDimensionAppearance(model.defaultDimensionAppearance, { partial: false });
+    documentModel.defaultAppearance = normalizeAppearance(documentModel.defaultAppearance, { partial: false });
+    documentModel.defaultConstructionAppearance = normalizeConstructionAppearance(documentModel.defaultConstructionAppearance, { partial: false });
+    documentModel.defaultDimensionAppearance = normalizeDimensionAppearance(documentModel.defaultDimensionAppearance, { partial: false });
     const root = model.sketches.find((sketch) => isRootSketch(sketch));
     if (root) {
       const legacyAppearance = normalizeAppearance(root.appearance);
@@ -812,9 +823,9 @@
           sketch.dimensionAppearance = { ...legacyDimensionAppearance, ...normalizeDimensionAppearance(sketch.dimensionAppearance) };
         }
       } else {
-        model.defaultAppearance = { ...model.defaultAppearance, ...legacyAppearance };
-        model.defaultConstructionAppearance = { ...model.defaultConstructionAppearance, ...legacyConstructionAppearance };
-        model.defaultDimensionAppearance = { ...model.defaultDimensionAppearance, ...legacyDimensionAppearance };
+        documentModel.defaultAppearance = { ...documentModel.defaultAppearance, ...legacyAppearance };
+        documentModel.defaultConstructionAppearance = { ...documentModel.defaultConstructionAppearance, ...legacyConstructionAppearance };
+        documentModel.defaultDimensionAppearance = { ...documentModel.defaultDimensionAppearance, ...legacyDimensionAppearance };
       }
       root.appearance = {};
       root.constructionAppearance = {};
@@ -828,11 +839,11 @@
   }
 
   function ensureBlockState() {
-    if (!Array.isArray(model.blockDefinitions)) model.blockDefinitions = [];
+    if (!Array.isArray(documentModel.blockDefinitions)) documentModel.blockDefinitions = [];
     if (!Array.isArray(model.blockInstances)) model.blockInstances = [];
     if (!Array.isArray(model.geometryInstances)) model.geometryInstances = [];
     const definitionIds = new Set();
-    model.blockDefinitions = model.blockDefinitions.filter(Boolean).map((definition, index) => {
+    documentModel.blockDefinitions = documentModel.blockDefinitions.filter(Boolean).map((definition, index) => {
       let id = String(definition.id || `B${index + 1}`);
       while (definitionIds.has(id)) id = `B${index + 1}-${definitionIds.size + 1}`;
       definitionIds.add(id);
@@ -911,7 +922,7 @@
       return definition;
     });
     const containingDefinitionIds = new Map();
-    for (const definition of model.blockDefinitions) {
+    for (const definition of documentModel.blockDefinitions) {
       for (const instance of definition.blockInstances || []) {
         const childId = String(instance?.definitionId || "");
         if (!definitionIds.has(childId)) continue;
@@ -919,16 +930,16 @@
         containingDefinitionIds.get(childId).add(definition.id);
       }
     }
-    for (const definition of model.blockDefinitions) {
+    for (const definition of documentModel.blockDefinitions) {
       const inferredParents = [...(containingDefinitionIds.get(definition.id) || [])];
       if (!definition.parentDefinitionId && inferredParents.length === 1) definition.parentDefinitionId = inferredParents[0];
       if (definition.parentDefinitionId === definition.id) definition.parentDefinitionId = null;
     }
-    for (const definition of model.blockDefinitions) {
+    for (const definition of documentModel.blockDefinitions) {
       const drawableSketchIds = blockDefinitionDrawableSketchIds(definition);
       const fallbackSketchId = drawableSketchIds[0] || DEFAULT_SKETCH_ID;
       definition.blockInstances = definition.blockInstances
-        .filter((instance) => instance && definitionIds.has(String(instance.definitionId)) && model.blockDefinitions.find((item) => item.id === String(instance.definitionId))?.parentDefinitionId === definition.id)
+        .filter((instance) => instance && definitionIds.has(String(instance.definitionId)) && documentModel.blockDefinitions.find((item) => item.id === String(instance.definitionId))?.parentDefinitionId === definition.id)
         .map((instance, index) => {
           instance.id = String(instance.id || `BI${index + 1}`);
           instance.definitionId = String(instance.definitionId);
@@ -940,7 +951,7 @@
           instance.rotationLocked = Boolean(instance.rotationLocked);
           instance.drawingOrder = normalizedDrawingOrder(instance.drawingOrder);
           instance.appearanceOverride = normalizeAppearance(instance.appearanceOverride);
-          const nestedDefinition = model.blockDefinitions.find((item) => item.id === instance.definitionId);
+          const nestedDefinition = documentModel.blockDefinitions.find((item) => item.id === instance.definitionId);
           const nestedDrawableIds = blockDefinitionDrawableSketchIds(nestedDefinition);
           const requested = Array.isArray(instance.enabledSketchIds) ? instance.enabledSketchIds.map(String) : nestedDrawableIds;
           instance.enabledSketchIds = [...new Set(requested.filter((id) => nestedDrawableIds.includes(id)))];
@@ -952,7 +963,7 @@
     const activeContainerDefinitionId = blockEditSession?.draft?.id || null;
     model.blockInstances = model.blockInstances.filter((instance) => {
       if (!instance || !definitionIds.has(String(instance.definitionId))) return false;
-      const instanceDefinition = model.blockDefinitions.find((definition) => definition.id === String(instance.definitionId));
+      const instanceDefinition = documentModel.blockDefinitions.find((definition) => definition.id === String(instance.definitionId));
       return (instanceDefinition?.parentDefinitionId || null) === activeContainerDefinitionId;
     }).map((instance, index) => {
       let id = String(instance.id || `BI${index + 1}`);
@@ -968,7 +979,7 @@
       instance.rotationLocked = Boolean(instance.rotationLocked);
       instance.drawingOrder = normalizedDrawingOrder(instance.drawingOrder);
       instance.appearanceOverride = normalizeAppearance(instance.appearanceOverride);
-      const definition = model.blockDefinitions.find((item) => item.id === instance.definitionId);
+      const definition = documentModel.blockDefinitions.find((item) => item.id === instance.definitionId);
       const drawableIds = blockDefinitionDrawableSketchIds(definition);
       const requested = Array.isArray(instance.enabledSketchIds) ? instance.enabledSketchIds.map(String) : drawableIds;
       instance.enabledSketchIds = [...new Set(requested.filter((id) => drawableIds.includes(id)))];
@@ -978,12 +989,12 @@
   }
 
   function ensureModelState() {
-    model.units = { ...DEFAULT_DOCUMENT_UNITS };
+    documentModel.units = { ...DEFAULT_DOCUMENT_UNITS };
     ensureSketchState();
     ensureAppearanceState();
     ensureBlockState();
     ensureDrawingOrderState(model);
-    for (const definition of model.blockDefinitions) ensureDrawingOrderState(definition);
+    for (const definition of documentModel.blockDefinitions) ensureDrawingOrderState(definition);
     ensureParameterNamespace(model);
   }
 
@@ -1598,7 +1609,7 @@
   }
 
   function blockDefinitionById(id) {
-    return model.blockDefinitions.find((definition) => definition.id === id) || null;
+    return documentModel.blockDefinitions.find((definition) => definition.id === id) || null;
   }
 
   function blockDefinitionDrawableSketchIds(definition) {
@@ -2384,7 +2395,7 @@
 
   function allHatches() {
     return cachedGeometryRead("allHatches", () => {
-      if (model.hatches.length === 0 && !model.blockDefinitions.some((definition) => (definition.hatches?.length || 0) > 0)) return [];
+      if (model.hatches.length === 0 && !documentModel.blockDefinitions.some((definition) => (definition.hatches?.length || 0) > 0)) return [];
       return [...model.hatches, ...blockProjectionBundles().flatMap((bundle) => bundle.hatches || [])];
     });
   }
@@ -2551,7 +2562,7 @@
     const definitionSketch = item?.blockProjection && !item?.derivedProjection
       ? item.blockDefinition?.sketches?.find((sketch) => sketch.id === item.localElement?.sketchId) : null;
     const result = resolveGeometryAppearance({
-      defaults: construction ? model.defaultConstructionAppearance : model.defaultAppearance,
+      defaults: construction ? documentModel.defaultConstructionAppearance : documentModel.defaultAppearance,
       construction,
       sketchAppearance: sketchGeometryAppearanceLayer(outerSketch, construction),
       definitionSketchAppearance: sketchGeometryAppearanceLayer(definitionSketch, construction),
@@ -5375,7 +5386,7 @@
   }
 
   function rebuildStoredBlockDefinitionConstraints() {
-    return model.blockDefinitions.reduce((removed, definition) => removed + rebuildBlockDefinitionConstraintObjects(definition), 0);
+    return documentModel.blockDefinitions.reduce((removed, definition) => removed + rebuildBlockDefinitionConstraintObjects(definition), 0);
   }
 
   function blockDefinitionOwnedSubtreeIds(rootDefinitionIds) {
@@ -5383,7 +5394,7 @@
     let changed = true;
     while (changed) {
       changed = false;
-      for (const definition of model.blockDefinitions) {
+      for (const definition of documentModel.blockDefinitions) {
         if (!definition.parentDefinitionId || !ids.has(definition.parentDefinitionId) || ids.has(definition.id)) continue;
         ids.add(definition.id);
         changed = true;
@@ -5412,15 +5423,15 @@
     const subtreeIds = blockDefinitionOwnedSubtreeIds(rootDefinitionIds);
     const rollbackEntries = new Map();
     const stagedDefinitions = new Map();
-    for (let index = 0; index < model.blockDefinitions.length; index += 1) {
-      const definition = model.blockDefinitions[index];
+    for (let index = 0; index < documentModel.blockDefinitions.length; index += 1) {
+      const definition = documentModel.blockDefinitions[index];
       if (!subtreeIds.has(definition.id)) continue;
       rollbackEntries.set(definition.id, { definition, index });
       const staged = cloneBlockDefinition(definition);
       if (rootIdSet.has(staged.id)) staged.parentDefinitionId = draft.id;
       stagedDefinitions.set(staged.id, staged);
     }
-    model.blockDefinitions = model.blockDefinitions.map((definition) => stagedDefinitions.get(definition.id) || definition);
+    documentModel.blockDefinitions = documentModel.blockDefinitions.map((definition) => stagedDefinitions.get(definition.id) || definition);
     for (const definition of stagedDefinitions.values()) rebuildBlockDefinitionConstraintObjects(definition);
     rebuildBlockDefinitionConstraintObjects(draft);
     invalidateBlockProjectionCache();
@@ -5466,7 +5477,7 @@
 
   function blockDefinitionsInCurrentScope() {
     const parentDefinitionId = currentBlockDefinitionScopeId();
-    return model.blockDefinitions.filter((definition) => (definition.parentDefinitionId || null) === parentDefinitionId);
+    return documentModel.blockDefinitions.filter((definition) => (definition.parentDefinitionId || null) === parentDefinitionId);
   }
 
   function blockDefinitionScopeError(definitionId) {
@@ -5495,15 +5506,15 @@
     const instances = new Set(model.blockInstances);
     for (const session of blockEditorSessionChain()) {
       for (const instance of session.draft?.blockInstances || []) instances.add(instance);
-      for (const instance of session.original?.blockInstances || []) instances.add(instance);
+      for (const instance of session.original?.values.blockInstances || []) instances.add(instance);
     }
-    for (const definition of model.blockDefinitions) for (const instance of definition.blockInstances || []) instances.add(instance);
+    for (const definition of documentModel.blockDefinitions) for (const instance of definition.blockInstances || []) instances.add(instance);
     return [...instances];
   }
 
   function storedBlockInstancesReferencing(definitionId, hostInstances = null) {
     const instances = hostInstances
-      ? [...hostInstances, ...model.blockDefinitions.flatMap((definition) => definition.blockInstances || [])]
+      ? [...hostInstances, ...documentModel.blockDefinitions.flatMap((definition) => definition.blockInstances || [])]
       : blockInstancesInEditingScope();
     return [...new Set(instances)].filter((instance) => instance.definitionId === definitionId);
   }
@@ -5550,25 +5561,7 @@
     if (!isGeometryMode() || !canCreateInActiveSketch()) return;
     const definitionsDialog = document.getElementById("blockDefinitionsDialog");
     if (definitionsDialog?.open) definitionsDialog.close();
-    const creationHost = {
-      points: model.points,
-      lines: model.lines,
-      circles: model.circles,
-      arcs: model.arcs,
-      splines: model.splines,
-      annotations: model.annotations,
-      hatches: model.hatches,
-      referenceImages: model.referenceImages,
-      nextHatchIndex: model.nextHatchIndex,
-      constraints: model.constraints,
-      parameters: model.parameters,
-      nextDimensionParameterIndex: model.nextDimensionParameterIndex,
-      blockInstances: model.blockInstances,
-      geometryInstances: model.geometryInstances,
-      sketches: model.sketches,
-      activeSketchId: model.activeSketchId,
-      viewport: { ...viewport },
-    };
+    const creationHost = { ...workspace.capture(), viewport: { ...viewport } };
     const defaultName = `Block-${blockDefinitionSeq}`;
     const hasGeometrySelection = selectedLines.length + selectedCircles.length + selectedArcs.length + selectedSplines.length + selectedAnnotations.length + selectedHatches.length > 0;
     let selection = null;
@@ -5664,24 +5657,7 @@
     const parentSession = blockEditSession;
     if (parentSession) syncBlockEditorDraft(parentSession);
     const originalProjectionItems = blockProjectionBundles().flatMap((bundle) => [...bundle.points, ...bundle.lines, ...bundle.circles, ...bundle.arcs, ...(bundle.splines || [])]);
-    const original = options.originalHost || {
-      points: model.points,
-      lines: model.lines,
-      circles: model.circles,
-      arcs: model.arcs,
-      splines: model.splines,
-      annotations: model.annotations,
-      hatches: model.hatches,
-      referenceImages: model.referenceImages,
-      nextHatchIndex: model.nextHatchIndex,
-      constraints: model.constraints,
-      parameters: model.parameters,
-      nextDimensionParameterIndex: model.nextDimensionParameterIndex,
-      blockInstances: model.blockInstances,
-      sketches: model.sketches,
-      activeSketchId: model.activeSketchId,
-      viewport: { ...viewport },
-    };
+    const original = options.originalHost || { ...workspace.capture(), viewport: { ...viewport } };
     const sourceDefinition = options.sourceDefinition || null;
     const sourceDefinitionSnapshot = sourceDefinition ? cloneBlockDefinition(sourceDefinition) : null;
     const originalElementIds = new Set(sourceDefinition ? [...sourceDefinition.points, ...sourceDefinition.lines, ...sourceDefinition.circles, ...sourceDefinition.arcs, ...(sourceDefinition.splines || [])].map((item) => item.id) : []);
@@ -5702,22 +5678,7 @@
       historyUndo: [],
       historyRedo: [],
     };
-    model.points = draft.points;
-    model.lines = draft.lines;
-    model.circles = draft.circles;
-    model.arcs = draft.arcs;
-    model.splines = draft.splines || [];
-    model.annotations = draft.annotations || [];
-    model.hatches = draft.hatches || [];
-    model.referenceImages = draft.referenceImages || [];
-    model.nextHatchIndex = Math.max(nextSeq(model.hatches, "H"), Number(draft.nextHatchIndex) || 1);
-    model.constraints = draft.constraints;
-    model.parameters = draft.parameters || [];
-    model.nextDimensionParameterIndex = Math.max(1, Number(draft.nextDimensionParameterIndex) || 1);
-    model.blockInstances = draft.blockInstances || [];
-    model.geometryInstances = draft.geometryInstances || [];
-    model.sketches = draft.sketches;
-    model.activeSketchId = draft.activeSketchId;
+    activateEditingScope(draft);
     reserveGeometryElementSequences(draft);
     sketchSeq = Math.max(sketchSeq, nextSeq(draft.sketches || [], "S"));
     annotationSeq = Math.max(annotationSeq, nextSeq(draft.annotations || [], "AN"));
@@ -5933,22 +5894,7 @@
 
   function restoreBlockEditorHost(session) {
     const { original } = session;
-    model.points = original.points;
-    model.lines = original.lines;
-    model.circles = original.circles;
-    model.arcs = original.arcs;
-    model.splines = original.splines || [];
-    model.annotations = original.annotations || [];
-    model.hatches = original.hatches || [];
-    model.referenceImages = original.referenceImages || [];
-    model.nextHatchIndex = Math.max(nextSeq(model.hatches, "H"), Number(original.nextHatchIndex) || 1);
-    model.constraints = original.constraints;
-    model.parameters = original.parameters || [];
-    model.nextDimensionParameterIndex = Math.max(1, Number(original.nextDimensionParameterIndex) || 1);
-    model.blockInstances = original.blockInstances;
-    model.geometryInstances = original.geometryInstances || [];
-    model.sketches = original.sketches;
-    model.activeSketchId = original.activeSketchId;
+    activateEditingScope(workspace.restore(original));
     Object.assign(viewport, original.viewport);
     blockEditSession = session.parentSession || null;
     document.body.classList.toggle("block-editing", Boolean(blockEditSession));
@@ -5965,9 +5911,9 @@
   function restoreBlockDefinitionRollbacks(session) {
     const entries = [...(session?.definitionRollbackEntries?.values() || [])].sort((a, b) => a.index - b.index);
     for (const entry of entries) {
-      const existingIndex = model.blockDefinitions.findIndex((definition) => definition.id === entry.definition.id);
-      if (existingIndex >= 0) model.blockDefinitions[existingIndex] = entry.definition;
-      else model.blockDefinitions.splice(Math.min(entry.index, model.blockDefinitions.length), 0, entry.definition);
+      const existingIndex = documentModel.blockDefinitions.findIndex((definition) => definition.id === entry.definition.id);
+      if (existingIndex >= 0) documentModel.blockDefinitions[existingIndex] = entry.definition;
+      else documentModel.blockDefinitions.splice(Math.min(entry.index, documentModel.blockDefinitions.length), 0, entry.definition);
     }
     if (entries.length > 0) {
       rebuildStoredBlockDefinitionConstraints();
@@ -6032,7 +5978,7 @@
       draft.origin = { x: 0, y: 0 };
     }
     if (sourceDefinition) {
-      for (const instance of storedBlockInstancesReferencing(sourceDefinition.id, session.original.blockInstances)) {
+      for (const instance of storedBlockInstancesReferencing(sourceDefinition.id, session.original.values.blockInstances)) {
         const remaining = instance.enabledSketchIds.filter((id) => blockDefinitionGeometrySketchIds(draft).includes(id));
         if (remaining.length === 0) {
           setHint(`${instance.id} の有効スケッチが空になるため編集を完了できません`, "error");
@@ -6053,7 +5999,7 @@
       if (removedStoredConstraints > 0) log(`削除された入れ子図形を参照する内部拘束を${removedStoredConstraints}件解除しました`);
     } else {
       definition.revision = 1;
-      model.blockDefinitions.push(definition);
+      documentModel.blockDefinitions.push(definition);
       if (creationSelection) {
         const enabledSketchIds = blockDefinitionGeometrySketchIds(definition);
         createdInstance = { id: `BI${blockInstanceSeq++}`, definitionId: definition.id, sketchId: model.activeSketchId, x: session.replacementCenter.x, y: session.replacementCenter.y, rotation: 0, fixed: false, rotationLocked: options.rotationLocked, enabledSketchIds, appearanceOverride: {} };
@@ -6131,7 +6077,7 @@
     const session = blockEditSession;
     restoreBlockEditorHost(session);
     if (session.transientDefinitionIds.size > 0) {
-      model.blockDefinitions = model.blockDefinitions.filter((definition) => !session.transientDefinitionIds.has(definition.id));
+      documentModel.blockDefinitions = documentModel.blockDefinitions.filter((definition) => !session.transientDefinitionIds.has(definition.id));
     }
     restoreBlockDefinitionRollbacks(session);
     if (session.sourceDefinition && session.sourceDefinitionSnapshot) {
@@ -6193,14 +6139,14 @@
     let changed = true;
     while (changed) {
       changed = false;
-      for (const item of model.blockDefinitions) {
+      for (const item of documentModel.blockDefinitions) {
         if (item.parentDefinitionId && removedDefinitionIds.has(item.parentDefinitionId) && !removedDefinitionIds.has(item.id)) {
           removedDefinitionIds.add(item.id);
           changed = true;
         }
       }
     }
-    model.blockDefinitions = model.blockDefinitions.filter((item) => !removedDefinitionIds.has(item.id));
+    documentModel.blockDefinitions = documentModel.blockDefinitions.filter((item) => !removedDefinitionIds.has(item.id));
     for (const session of blockEditorSessionChain()) {
       for (const removedId of removedDefinitionIds) session.transientDefinitionIds?.delete(removedId);
     }
@@ -6745,11 +6691,12 @@
   }
 
   function resetModelState() {
+    activateEditingScope(documentModel);
     flushScheduledCanvasPointerMove({ discard: true });
     mode = "select";
     lastAuthoringPerformance = null;
-    model.documentName = DEFAULT_DOCUMENT_NAME;
-    model.units = { ...DEFAULT_DOCUMENT_UNITS };
+    documentModel.documentName = DEFAULT_DOCUMENT_NAME;
+    documentModel.units = { ...DEFAULT_DOCUMENT_UNITS };
     model.points.length = 0;
     model.lines.length = 0;
     model.circles.length = 0;
@@ -6758,7 +6705,7 @@
     model.constraints.length = 0;
     model.parameters = [];
     model.nextDimensionParameterIndex = 1;
-    model.blockDefinitions.length = 0;
+    documentModel.blockDefinitions.length = 0;
     model.blockInstances.length = 0;
     model.geometryInstances.length = 0;
     model.hatches.length = 0;
@@ -6853,9 +6800,9 @@
     model.sketches.push({ id: ROOT_SKETCH_ID, name: ROOT_SKETCH_NAME, parentSketchId: null, kind: "root", appearance: {}, constructionAppearance: {}, dimensionAppearance: {} });
     model.sketches.push({ id: DEFAULT_SKETCH_ID, name: DEFAULT_SKETCH_NAME, parentSketchId: ROOT_SKETCH_ID, kind: "sketch", appearance: {}, constructionAppearance: {}, dimensionAppearance: {} });
     model.activeSketchId = DEFAULT_SKETCH_ID;
-    model.defaultAppearance = { ...DEFAULT_APPEARANCE };
-    model.defaultConstructionAppearance = { ...DEFAULT_CONSTRUCTION_APPEARANCE };
-    model.defaultDimensionAppearance = { ...DEFAULT_DIMENSION_APPEARANCE };
+    documentModel.defaultAppearance = { ...DEFAULT_APPEARANCE };
+    documentModel.defaultConstructionAppearance = { ...DEFAULT_CONSTRUCTION_APPEARANCE };
+    documentModel.defaultDimensionAppearance = { ...DEFAULT_DIMENSION_APPEARANCE };
     model.annotations = [];
     model.hatches = [];
     model.referenceImages = [];
@@ -6944,10 +6891,10 @@
       sketchId: elementSketchId(item),
       kind: item instanceof Point ? item.kind || (isPointUsedByPrimitive(item) ? "endpoint" : "explicit") : undefined,
     }),
-    constraintData: (constraint, scope) => {
+    constraintData: (constraint, scope, isDocumentScope) => {
       const data = decorateSerializedConstraint(serializeConstraint(constraint), constraint);
       if (!data) return null;
-      data.sketchId = scope === model ? constraintSketchId(constraint) : constraint.sketchId;
+      data.sketchId = isDocumentScope ? constraintSketchId(constraint) : constraint.sketchId;
       if (constraint.reference) {
         data.reference = true;
         data.referenceSketchId = constraint.referenceSketchId || null;
@@ -6958,7 +6905,7 @@
 
   function serializeModel() {
     ensureModelState();
-    return documentSnapshot.serialize(model, {
+    return documentSnapshot.serialize(workspace.snapshotSource(), {
       version: CURRENT_JSON_VERSION, savedAt: new Date().toISOString(),
       documentName: effectiveDocumentName(), nextHatchIndex: hatchSeq,
     });
@@ -7108,11 +7055,11 @@
 
   function restoreHistorySnapshot(snapshot, label) {
     const constructionModeBeforeRestore = constructionLineMode;
-    const documentNameBeforeRestore = model.documentName;
+    const documentNameBeforeRestore = documentModel.documentName;
     historyRestoring = true;
     try {
       loadModelData(JSON.parse(snapshot), { documentNameFallback: documentNameBeforeRestore, preserveSketchTreeState: true });
-      model.documentName = documentNameBeforeRestore;
+      documentModel.documentName = documentNameBeforeRestore;
       constructionLineMode = constructionModeBeforeRestore;
       clearInteractionForSketchChange();
       solveAndRefresh(label);
@@ -7129,22 +7076,7 @@
     try {
       const restored = cloneBlockDefinition(snapshot.definition);
       blockEditSession.draft = restored;
-      model.points = restored.points;
-      model.lines = restored.lines;
-      model.circles = restored.circles;
-      model.arcs = restored.arcs;
-      model.splines = restored.splines || [];
-      model.annotations = restored.annotations || [];
-      model.hatches = restored.hatches || [];
-      model.referenceImages = restored.referenceImages || [];
-      model.nextHatchIndex = Math.max(nextSeq(model.hatches, "H"), Number(restored.nextHatchIndex) || 1);
-      model.constraints = restored.constraints;
-      model.parameters = restored.parameters || [];
-      model.nextDimensionParameterIndex = Math.max(1, Number(restored.nextDimensionParameterIndex) || 1);
-      model.blockInstances = restored.blockInstances || [];
-      model.geometryInstances = restored.geometryInstances || [];
-      model.sketches = restored.sketches;
-      model.activeSketchId = restored.activeSketchId;
+      activateEditingScope(restored);
       reserveGeometryElementSequences(restored);
       sketchSeq = Math.max(sketchSeq, nextSeq(restored.sketches || [], "S"));
       annotationSeq = Math.max(annotationSeq, nextSeq(restored.annotations || [], "AN"));
@@ -7622,19 +7554,19 @@
       sketchTreeGroupOpenState.clear();
       for (const [key, value] of preservedSketchTreeGroups) sketchTreeGroupOpenState.set(key, value);
     }
-    model.documentName = loadedDocumentName;
-    model.units = loadedUnits;
+    documentModel.documentName = loadedDocumentName;
+    documentModel.units = loadedUnits;
     model.sketches.length = 0;
     model.sketches.push(...loadedSketches);
     model.activeSketchId = normalizeSketchId(data.activeSketchId);
-    model.defaultAppearance = normalizeAppearance(data.defaultAppearance, { partial: false });
-    model.defaultConstructionAppearance = normalizeConstructionAppearance(data.defaultConstructionAppearance, { partial: false });
-    model.defaultDimensionAppearance = normalizeLoadedDimensionAppearance(data.defaultDimensionAppearance, { partial: false });
+    documentModel.defaultAppearance = normalizeAppearance(data.defaultAppearance, { partial: false });
+    documentModel.defaultConstructionAppearance = normalizeConstructionAppearance(data.defaultConstructionAppearance, { partial: false });
+    documentModel.defaultDimensionAppearance = normalizeLoadedDimensionAppearance(data.defaultDimensionAppearance, { partial: false });
     model.annotations = loadedAnnotations;
     model.hatches = loadedHatches;
     model.referenceImages = loadedReferenceImages;
     model.nextHatchIndex = Math.max(nextSeq(loadedHatches, "H"), Number(data.nextHatchIndex) || 1);
-    model.blockDefinitions = loadedBlockDefinitions;
+    documentModel.blockDefinitions = loadedBlockDefinitions;
     model.blockInstances = loadedBlockInstances;
     model.geometryInstances = loadedGeometryInstances;
     invalidateBlockProjectionCache();
@@ -7660,32 +7592,32 @@
     if (lastLoadBlockConstraintRepairMessage) log(lastLoadBlockConstraintRepairMessage);
     ensureDimensionDefaults();
     reserveGeometryElementSequences({
-      points: [...model.points, ...model.blockDefinitions.flatMap((definition) => definition.points)],
-      lines: [...model.lines, ...model.blockDefinitions.flatMap((definition) => definition.lines)],
-      circles: [...model.circles, ...model.blockDefinitions.flatMap((definition) => definition.circles)],
-      arcs: [...model.arcs, ...model.blockDefinitions.flatMap((definition) => definition.arcs)],
-      splines: [...model.splines, ...model.blockDefinitions.flatMap((definition) => definition.splines || [])],
-      hatches: [...model.hatches, ...model.blockDefinitions.flatMap((definition) => definition.hatches || [])],
-      referenceImages: [...model.referenceImages, ...model.blockDefinitions.flatMap((definition) => definition.referenceImages || [])],
+      points: [...model.points, ...documentModel.blockDefinitions.flatMap((definition) => definition.points)],
+      lines: [...model.lines, ...documentModel.blockDefinitions.flatMap((definition) => definition.lines)],
+      circles: [...model.circles, ...documentModel.blockDefinitions.flatMap((definition) => definition.circles)],
+      arcs: [...model.arcs, ...documentModel.blockDefinitions.flatMap((definition) => definition.arcs)],
+      splines: [...model.splines, ...documentModel.blockDefinitions.flatMap((definition) => definition.splines || [])],
+      hatches: [...model.hatches, ...documentModel.blockDefinitions.flatMap((definition) => definition.hatches || [])],
+      referenceImages: [...model.referenceImages, ...documentModel.blockDefinitions.flatMap((definition) => definition.referenceImages || [])],
     });
     sketchSeq = Math.max(
       nextSeq(model.sketches, "S"),
-      ...model.blockDefinitions.map((definition) => nextSeq(definition.sketches || [], "S")),
+      ...documentModel.blockDefinitions.map((definition) => nextSeq(definition.sketches || [], "S")),
     );
-    annotationSeq = Math.max(nextSeq(model.annotations, "AN"), ...model.blockDefinitions.map((definition) => nextSeq(definition.annotations || [], "AN")));
-    hatchSeq = Math.max(model.nextHatchIndex, nextSeq(model.hatches, "H"), ...model.blockDefinitions.map((definition) => Math.max(Number(definition.nextHatchIndex) || 1, nextSeq(definition.hatches || [], "H"))));
-    referenceImageSeq = Math.max(nextSeq(model.referenceImages, "IMG"), ...model.blockDefinitions.map((definition) => nextSeq(definition.referenceImages || [], "IMG")));
-    blockDefinitionSeq = nextSeq(model.blockDefinitions, "B");
-    blockInstanceSeq = nextSeq([...model.blockInstances, ...model.blockDefinitions.flatMap((definition) => definition.blockInstances || [])], "BI");
-    sketchProjectionInstanceSeq = nextSeq([...model.geometryInstances, ...model.blockDefinitions.flatMap((definition) => definition.geometryInstances || [])], "SPI");
-    freeInstanceSeq = nextSeq([...model.geometryInstances, ...model.blockDefinitions.flatMap((definition) => definition.geometryInstances || [])], "FI");
-    mirrorInstanceSeq = nextSeq([...model.geometryInstances, ...model.blockDefinitions.flatMap((definition) => definition.geometryInstances || [])], "MI");
-    patternInstanceSeq = nextSeq([...model.geometryInstances, ...model.blockDefinitions.flatMap((definition) => definition.geometryInstances || [])], "PI");
-    blockElementSeq = Math.max(1, ...model.blockDefinitions.flatMap((definition) => [...definition.points, ...definition.lines, ...definition.circles, ...definition.arcs, ...(definition.splines || [])].map((element) => Number(/^(?:P|L|C|A|SP)(\d+)$/.exec(element.id || "")?.[1]) + 1 || 1)));
+    annotationSeq = Math.max(nextSeq(model.annotations, "AN"), ...documentModel.blockDefinitions.map((definition) => nextSeq(definition.annotations || [], "AN")));
+    hatchSeq = Math.max(model.nextHatchIndex, nextSeq(model.hatches, "H"), ...documentModel.blockDefinitions.map((definition) => Math.max(Number(definition.nextHatchIndex) || 1, nextSeq(definition.hatches || [], "H"))));
+    referenceImageSeq = Math.max(nextSeq(model.referenceImages, "IMG"), ...documentModel.blockDefinitions.map((definition) => nextSeq(definition.referenceImages || [], "IMG")));
+    blockDefinitionSeq = nextSeq(documentModel.blockDefinitions, "B");
+    blockInstanceSeq = nextSeq([...model.blockInstances, ...documentModel.blockDefinitions.flatMap((definition) => definition.blockInstances || [])], "BI");
+    sketchProjectionInstanceSeq = nextSeq([...model.geometryInstances, ...documentModel.blockDefinitions.flatMap((definition) => definition.geometryInstances || [])], "SPI");
+    freeInstanceSeq = nextSeq([...model.geometryInstances, ...documentModel.blockDefinitions.flatMap((definition) => definition.geometryInstances || [])], "FI");
+    mirrorInstanceSeq = nextSeq([...model.geometryInstances, ...documentModel.blockDefinitions.flatMap((definition) => definition.geometryInstances || [])], "MI");
+    patternInstanceSeq = nextSeq([...model.geometryInstances, ...documentModel.blockDefinitions.flatMap((definition) => definition.geometryInstances || [])], "PI");
+    blockElementSeq = Math.max(1, ...documentModel.blockDefinitions.flatMap((definition) => [...definition.points, ...definition.lines, ...definition.circles, ...definition.arcs, ...(definition.splines || [])].map((element) => Number(/^(?:P|L|C|A|SP)(\d+)$/.exec(element.id || "")?.[1]) + 1 || 1)));
     ensureAppearanceState();
     ensureBlockState();
     ensureDrawingOrderState(model);
-    for (const definition of model.blockDefinitions) ensureDrawingOrderState(definition);
+    for (const definition of documentModel.blockDefinitions) ensureDrawingOrderState(definition);
   }
 
   function jot2dFilePickerTypes() {
@@ -7732,7 +7664,7 @@
       const nativeSave = handle || fileSystemAccessSupported("showSaveFilePicker");
       if (!handle && nativeSave) {
         handle = await window.showSaveFilePicker({
-          suggestedName: `${safeDownloadBaseName(model.documentName)}${JOT2D_FILE_EXTENSION}`,
+          suggestedName: `${safeDownloadBaseName(documentModel.documentName)}${JOT2D_FILE_EXTENSION}`,
           types: jot2dFilePickerTypes(),
           excludeAcceptAllOption: true,
         });
@@ -7742,7 +7674,7 @@
         return false;
       }
       const content = serializedJot2DFileData();
-      const name = handle?.name || `${safeDownloadBaseName(model.documentName)}${JOT2D_FILE_EXTENSION}`;
+      const name = handle?.name || `${safeDownloadBaseName(documentModel.documentName)}${JOT2D_FILE_EXTENSION}`;
       if (handle) {
         await writeJot2DFile(handle, content);
         fileSession.setHandle(handle);
@@ -11526,7 +11458,7 @@
 
   function hatchBoundaryHitExclusionScreenPx(hatch) {
     const widths = hatchBoundaryGeometryItems(hatch).map((item) => Number(effectiveAppearanceForElement(item).lineWidth)).filter(Number.isFinite);
-    const boundaryLineWidth = widths.length > 0 ? Math.max(...widths) : Number(model.defaultAppearance?.lineWidth) || DEFAULT_APPEARANCE.lineWidth;
+    const boundaryLineWidth = widths.length > 0 ? Math.max(...widths) : Number(documentModel.defaultAppearance?.lineWidth) || DEFAULT_APPEARANCE.lineWidth;
     return Math.max(0.5, boundaryLineWidth / 2) + HATCH_BOUNDARY_HIT_MARGIN_SCREEN_PX;
   }
 
@@ -15946,19 +15878,19 @@
 
   function effectiveConstructionAppearanceForSketch(sketch) {
     return resolveGeometryAppearance({
-      defaults: model.defaultConstructionAppearance, construction: true,
+      defaults: documentModel.defaultConstructionAppearance, construction: true,
       sketchAppearance: sketchGeometryAppearanceLayer(sketch, true),
     });
   }
 
   function effectiveDimensionAppearanceForSketch(sketch) {
-    return resolveDimensionAppearance(model.defaultDimensionAppearance,
+    return resolveDimensionAppearance(documentModel.defaultDimensionAppearance,
       sketch && !isRootSketch(sketch) ? sketch.dimensionAppearance : null);
   }
 
   function effectiveAppearanceForSketch(sketch) {
     return resolveGeometryAppearance({
-      defaults: model.defaultAppearance, sketchAppearance: sketchGeometryAppearanceLayer(sketch),
+      defaults: documentModel.defaultAppearance, sketchAppearance: sketchGeometryAppearanceLayer(sketch),
     });
   }
 
@@ -15985,9 +15917,9 @@
       colors.push(normalized);
     };
     const addAppearance = (appearance) => add(appearance?.color);
-    addAppearance(model.defaultAppearance);
-    addAppearance(model.defaultConstructionAppearance);
-    addAppearance(model.defaultDimensionAppearance);
+    addAppearance(documentModel.defaultAppearance);
+    addAppearance(documentModel.defaultConstructionAppearance);
+    addAppearance(documentModel.defaultDimensionAppearance);
     for (const sketch of model.sketches) {
       addAppearance(sketch.appearance);
       addAppearance(sketch.constructionAppearance);
@@ -15999,7 +15931,7 @@
     for (const constraint of model.constraints) addAppearance(constraint.dimension?.display);
     for (const hatch of model.hatches) addAppearance(hatch.appearance);
     for (const annotation of model.annotations) add(annotation.style?.color);
-    for (const definition of model.blockDefinitions) {
+    for (const definition of documentModel.blockDefinitions) {
       for (const hatch of definition.hatches || []) addAppearance(hatch.appearance);
       for (const sketch of definition.sketches || []) {
         addAppearance(sketch.appearance);
@@ -16178,7 +16110,7 @@
     const projected = [...(bundle.points || []), ...(bundle.lines || []), ...(bundle.circles || []), ...(bundle.arcs || []), ...(bundle.splines || [])][0];
     return projected
       ? effectiveAppearanceForElement(projected)
-      : { ...normalizeAppearance(model.defaultAppearance, { partial: false }), ...normalizeAppearance(item.appearanceOverride) };
+      : { ...normalizeAppearance(documentModel.defaultAppearance, { partial: false }), ...normalizeAppearance(item.appearanceOverride) };
   }
 
   function multiplePropertyAppearance(target) {
@@ -16557,7 +16489,7 @@
       panel.innerHTML = `<h2 class="property-heading">${applicationText("ハッチング", "Hatching")}</h2><section class="property-section">${basicInformationHeading}${propertyReadonlyRow("種類", "Type", applicationText("ハッチング", "Hatching"))}${propertyReadonlyRow("ID", "ID", item.id)}${propertyReadonlyRow("所属スケッチ", "Owning sketch", `${sketchName(item.sketchId)} (${item.sketchId})`, { userContent: true })}${propertyReadonlyRow("境界状態", "Boundary status", boundaryStatus)}${repair}</section><section class="property-section"><h3>${applicationText("ハッチング外観", "Hatching Appearance")}</h3>${appearanceRows}</section>`;
     } else if (target.kind === "block") {
       const definition = blockDefinitionById(item.definitionId);
-      const effective = blockProjectionBundle(item).lines[0] ? effectiveAppearanceForElement(blockProjectionBundle(item).lines[0]) : normalizeAppearance(model.defaultAppearance, { partial: false });
+      const effective = blockProjectionBundle(item).lines[0] ? effectiveAppearanceForElement(blockProjectionBundle(item).lines[0]) : normalizeAppearance(documentModel.defaultAppearance, { partial: false });
       const definitionLabel = definition ? `${definition.name} (${definition.id})` : item.definitionId;
       const rows = propertyReadonlyRow("種類", "Type", applicationText("ブロック", "Block"))
         + propertyReadonlyRow("ID", "ID", item.id)
@@ -16569,7 +16501,7 @@
     } else if (target.kind === "geometryInstance") {
       const bundle = item === freeInstancePlacement ? { ...emptyGeometryInstanceBundle(item), valid: true } : geometryInstanceBundle(item);
       const first = [...bundle.lines, ...bundle.circles, ...bundle.arcs, ...bundle.splines, ...bundle.points][0];
-      const effective = first ? effectiveAppearanceForElement(first) : normalizeAppearance(model.defaultAppearance, { partial: false });
+      const effective = first ? effectiveAppearanceForElement(first) : normalizeAppearance(documentModel.defaultAppearance, { partial: false });
       const typeLabel = geometryInstanceTypeLabel(item.type);
       const refs = (mode === "instance-sources" && instanceSourceEdit?.instance === item ? instanceSourceEdit.sources : item.sources).map((ref) => `${ref.kind}:${geometryRefId(ref)}`).join(", ");
       const settings = item.type === "free" ? freeInstancePropertyRows(item) : item.type === "pattern" ? `<div class="property-row"><label>${applicationText("間隔", "Spacing")}</label><div class="property-input-with-unit"><input data-geometry-instance-property="spacing" type="number" min="0.000001" step="0.1" value="${item.spacing}"><span class="property-input-unit">mm</span></div></div><div class="property-row"><label>${applicationText("コピー数", "Copies")}</label><input data-geometry-instance-property="copies" type="number" min="1" max="1000" step="1" value="${item.copies}"></div><div class="property-row"><label>${applicationText("反転", "Reverse")}</label><input data-geometry-instance-property="reversed" type="checkbox" ${item.reversed ? "checked" : ""}></div>` : "";
@@ -16793,13 +16725,13 @@
     let owner = null;
     let historyLabel = "Appearance変更";
     if (context === "document") {
-      owner = model.defaultAppearance;
+      owner = documentModel.defaultAppearance;
       historyLabel = "Document Default Appearance変更";
     } else if (context === "document-construction") {
-      owner = model.defaultConstructionAppearance;
+      owner = documentModel.defaultConstructionAppearance;
       historyLabel = "Document Default Construction Appearance変更";
     } else if (context === "document-dimension") {
-      owner = model.defaultDimensionAppearance;
+      owner = documentModel.defaultDimensionAppearance;
       historyLabel = "Document Default Dimension Appearance変更";
     } else if (context === "sketch-construction") {
       target = selectedPropertiesTarget();
@@ -16856,9 +16788,9 @@
     else if (target?.kind === "annotation") applyAnnotationStyleValue(target.item, "color", color);
     else applyAppearanceInput(owner, "color", color);
     if (target?.kind === "block") invalidateBlockProjectionCache(target.item.id);
-    if (context === "document") model.defaultAppearance = normalizeAppearance(model.defaultAppearance, { partial: false });
-    if (context === "document-construction") model.defaultConstructionAppearance = normalizeConstructionAppearance(model.defaultConstructionAppearance, { partial: false });
-    if (context === "document-dimension") model.defaultDimensionAppearance = normalizeDimensionAppearance(model.defaultDimensionAppearance, { partial: false });
+    if (context === "document") documentModel.defaultAppearance = normalizeAppearance(documentModel.defaultAppearance, { partial: false });
+    if (context === "document-construction") documentModel.defaultConstructionAppearance = normalizeConstructionAppearance(documentModel.defaultConstructionAppearance, { partial: false });
+    if (context === "document-dimension") documentModel.defaultDimensionAppearance = normalizeDimensionAppearance(documentModel.defaultDimensionAppearance, { partial: false });
     if (sourceInput) sourceInput.value = color;
     if (sourceButton) {
       sourceButton.dataset.currentColor = color;
@@ -22717,7 +22649,7 @@
     if (blockEditSession) return [{ key: `block:${blockEditSession.draft.id}`, label: `${applicationText("ブロック", "Block")}: ${blockEditSession.draft.name}`, namespace: model }];
     return [
       { key: "document", label: "Document", namespace: model },
-      ...model.blockDefinitions.map((definition) => ({ key: `block:${definition.id}`, label: `${applicationText("ブロック", "Block")}: ${definition.name}`, namespace: definition })),
+      ...documentModel.blockDefinitions.map((definition) => ({ key: `block:${definition.id}`, label: `${applicationText("ブロック", "Block")}: ${definition.name}`, namespace: definition })),
     ];
   }
 
@@ -22830,46 +22762,13 @@
   }
 
   function withStoredDefinitionAsModel(definition, callback) {
-    const saved = {
-      points: model.points, lines: model.lines, circles: model.circles, arcs: model.arcs, splines: model.splines,
-      annotations: model.annotations,
-      hatches: model.hatches,
-      nextHatchIndex: model.nextHatchIndex,
-      constraints: model.constraints, parameters: model.parameters, nextDimensionParameterIndex: model.nextDimensionParameterIndex,
-      blockInstances: model.blockInstances, sketches: model.sketches, activeSketchId: model.activeSketchId,
-    };
-    model.points = definition.points;
-    model.lines = definition.lines;
-    model.circles = definition.circles;
-    model.arcs = definition.arcs;
-    model.splines = definition.splines || [];
-    model.annotations = definition.annotations || [];
-    model.hatches = definition.hatches || [];
-    model.nextHatchIndex = Math.max(nextSeq(model.hatches, "H"), Number(definition.nextHatchIndex) || 1);
-    model.constraints = definition.constraints;
-    model.parameters = definition.parameters;
-    model.nextDimensionParameterIndex = definition.nextDimensionParameterIndex;
-    model.blockInstances = definition.blockInstances || [];
-    model.sketches = definition.sketches;
-    model.activeSketchId = definition.activeSketchId;
+    const previousScope = model;
+    activateEditingScope(definition);
     try {
       return callback();
     } finally {
-      definition.points = model.points;
-      definition.lines = model.lines;
-      definition.circles = model.circles;
-      definition.arcs = model.arcs;
-      definition.splines = model.splines;
-      definition.annotations = model.annotations;
-      definition.hatches = model.hatches;
-      definition.nextHatchIndex = Math.max(hatchSeq, Number(model.nextHatchIndex) || 1);
-      definition.constraints = model.constraints;
-      definition.parameters = model.parameters;
-      definition.nextDimensionParameterIndex = model.nextDimensionParameterIndex;
-      definition.blockInstances = model.blockInstances;
-      definition.sketches = model.sketches;
-      definition.activeSketchId = model.activeSketchId;
-      Object.assign(model, saved);
+      definition.nextHatchIndex = Math.max(hatchSeq, Number(definition.nextHatchIndex) || 1);
+      activateEditingScope(previousScope);
     }
   }
 
@@ -22943,7 +22842,7 @@
       return true;
     } catch (error) {
       if (blockEditSession && localSnapshot) restoreModelState(localSnapshot);
-      else if (documentSnapshot) loadModelData(JSON.parse(documentSnapshot), { documentNameFallback: model.documentName });
+      else if (documentSnapshot) loadModelData(JSON.parse(documentSnapshot), { documentNameFallback: documentModel.documentName });
       const scopeKey = session.key;
       loadParameterDialogScope(scopeKey);
       setParameterDialogError(parameterErrorText(error));
@@ -23121,14 +23020,14 @@
   document.getElementById("documentSettingsBtn")?.addEventListener("click", () => {
     const fields = document.getElementById("documentAppearanceFields");
     if (fields) {
-      const appearance = normalizeAppearance(model.defaultAppearance, { partial: false });
+      const appearance = normalizeAppearance(documentModel.defaultAppearance, { partial: false });
       fields.innerHTML = appearancePropertyRows(appearance, appearance, { allowInheritance: false, idPrefix: "documentProperty" });
       localizeApplicationUI(fields);
       fields.onchange = (event) => {
         const input = event.target;
         if (!input.dataset.appearanceKey) return;
-        applyAppearanceInput(model.defaultAppearance, input.dataset.appearanceKey, input.value.trim());
-        model.defaultAppearance = normalizeAppearance(model.defaultAppearance, { partial: false });
+        applyAppearanceInput(documentModel.defaultAppearance, input.dataset.appearanceKey, input.value.trim());
+        documentModel.defaultAppearance = normalizeAppearance(documentModel.defaultAppearance, { partial: false });
         recordHistory("Document Default Appearance変更");
         updateUI();
         draw();
@@ -23140,15 +23039,15 @@
     }
     const constructionFields = document.getElementById("documentConstructionAppearanceFields");
     if (constructionFields) {
-      const appearance = normalizeConstructionAppearance(model.defaultConstructionAppearance, { partial: false });
-      const effective = { ...normalizeAppearance(model.defaultAppearance, { partial: false }), ...appearance };
+      const appearance = normalizeConstructionAppearance(documentModel.defaultConstructionAppearance, { partial: false });
+      const effective = { ...normalizeAppearance(documentModel.defaultAppearance, { partial: false }), ...appearance };
       constructionFields.innerHTML = appearancePropertyRows(appearance, effective, { allowInheritance: false, constructionEndpoints: true, idPrefix: "documentConstructionProperty" });
       localizeApplicationUI(constructionFields);
       constructionFields.onchange = (event) => {
         const input = event.target;
         if (!input.dataset.appearanceKey) return;
-        applyAppearanceInput(model.defaultConstructionAppearance, input.dataset.appearanceKey, input.value.trim());
-        model.defaultConstructionAppearance = normalizeConstructionAppearance(model.defaultConstructionAppearance, { partial: false });
+        applyAppearanceInput(documentModel.defaultConstructionAppearance, input.dataset.appearanceKey, input.value.trim());
+        documentModel.defaultConstructionAppearance = normalizeConstructionAppearance(documentModel.defaultConstructionAppearance, { partial: false });
         recordHistory("Document Default Construction Appearance変更");
         updateUI();
         draw();
@@ -23160,7 +23059,7 @@
     }
     const dimensionFields = document.getElementById("documentDimensionAppearanceFields");
     if (dimensionFields) {
-      const appearance = normalizeDimensionAppearance(model.defaultDimensionAppearance, { partial: false });
+      const appearance = normalizeDimensionAppearance(documentModel.defaultDimensionAppearance, { partial: false });
       dimensionFields.innerHTML = dimensionAppearancePropertyRows(appearance, appearance, { allowInheritance: false, idPrefix: "documentDimension" });
       localizeApplicationUI(dimensionFields);
       updateDimensionTerminatorAngleVisibility(dimensionFields);
@@ -23168,8 +23067,8 @@
         if (!input.dataset.dimensionDisplay) return;
         const key = input.dataset.dimensionDisplay;
         const rawValue = ["prefix", "suffix"].includes(key) ? input.value : input.value.trim();
-        applyDimensionAppearanceValue(model.defaultDimensionAppearance, key, rawValue, { allowInheritance: false });
-        model.defaultDimensionAppearance = normalizeDimensionAppearance(model.defaultDimensionAppearance, { partial: false });
+        applyDimensionAppearanceValue(documentModel.defaultDimensionAppearance, key, rawValue, { allowInheritance: false });
+        documentModel.defaultDimensionAppearance = normalizeDimensionAppearance(documentModel.defaultDimensionAppearance, { partial: false });
         if (history) recordHistory("Document Default Dimension Appearance変更");
         draw();
       };
@@ -23802,7 +23701,7 @@
         selectedAnnotations = sourceAnnotation ? [sourceAnnotation] : [];
         const selection = blockSelectionGeometry();
         const definition = selection.error ? null : createBlockDefinitionFromSelection(selection, blockSelectionBoundsCenter(selection), "Spline Transfer");
-        if (definition) model.blockDefinitions.push(definition);
+        if (definition) documentModel.blockDefinitions.push(definition);
         const instance = definition ? {
           id: `BI${blockInstanceSeq++}`,
           definitionId: definition.id,
@@ -23910,7 +23809,7 @@
         blockLine.sketchId = DEFAULT_SKETCH_ID;
         definition.points.push(bp1, bp2);
         definition.lines.push(blockLine);
-        model.blockDefinitions.push(definition);
+        documentModel.blockDefinitions.push(definition);
         const block = { id: "BI1", definitionId: definition.id, sketchId: DEFAULT_SKETCH_ID, x: 0, y: 0, rotation: 0, fixed: false, rotationLocked: false, enabledSketchIds: [DEFAULT_SKETCH_ID], appearanceOverride: {} };
         model.blockInstances.push(block);
         const derived = normalizeGeometryInstance({ id: "MI1", type: "mirror", sketchId: DEFAULT_SKETCH_ID, sources: [geometryRefForItem(crossLine)], axis: geometryRefForItem(boundaryLines[3]), appearanceOverride: {} });
@@ -24027,7 +23926,7 @@
         const parent = createEmptyBlockDefinition("Hatch Parent");
         child.parentDefinitionId = parent.id;
         parent.blockInstances.push({ id: "BI_INNER", definitionId: child.id, sketchId: DEFAULT_SKETCH_ID, x: 20, y: 10, rotation: Math.PI / 6, fixed: false, rotationLocked: false, enabledSketchIds: [DEFAULT_SKETCH_ID], appearanceOverride: {} });
-        model.blockDefinitions.push(child, parent);
+        documentModel.blockDefinitions.push(child, parent);
         const instance = { id: "BI1", definitionId: parent.id, sketchId: DEFAULT_SKETCH_ID, x: 240, y: 180, rotation: Math.PI / 2, fixed: false, rotationLocked: false, enabledSketchIds: [DEFAULT_SKETCH_ID], appearanceOverride: { color: "#db2777", lineWidth: 3, visible: true } };
         model.blockInstances.push(instance);
         invalidateBlockProjectionCache();
@@ -24190,7 +24089,7 @@
         definition.points.push(bp1, bp2);
         definition.lines.push(blockLine);
         definition.constraints.push(Object.assign(new HorizontalConstraint(blockLine), { sketchId: DEFAULT_SKETCH_ID }));
-        model.blockDefinitions.push(definition);
+        documentModel.blockDefinitions.push(definition);
         const instance = { id: `BI${blockInstanceSeq++}`, definitionId: definition.id, sketchId: DEFAULT_SKETCH_ID, x: 10, y: 20, rotation: 0, fixed: true, rotationLocked: true, enabledSketchIds: [DEFAULT_SKETCH_ID] };
         model.blockInstances.push(instance);
         invalidateBlockProjectionCache();
@@ -24233,7 +24132,7 @@
       },
       documentNameState() {
         return {
-          modelName: model.documentName,
+          modelName: documentModel.documentName,
           displayName: effectiveDocumentName(),
           serializedName: serializeModel().documentName,
           title: document.title,
@@ -24520,7 +24419,7 @@
         definition.points.push(p1, p2);
         definition.lines.push(line);
         definition.revision += 1;
-        model.blockDefinitions.push(definition);
+        documentModel.blockDefinitions.push(definition);
         const instance = { id: `BI${blockInstanceSeq++}`, definitionId: definition.id, sketchId: DEFAULT_SKETCH_ID, x: -10, y: 15, rotation: 0, fixed: false, rotationLocked: false, enabledSketchIds: [DEFAULT_SKETCH_ID], appearanceOverride: {} };
         model.blockInstances.push(instance);
         model.sketches.push({ id: "S3", name: "Block Projection Target", parentSketchId: DEFAULT_SKETCH_ID, kind: "sketch", appearance: {}, constructionAppearance: {}, dimensionAppearance: {}, visible: true });
@@ -24759,12 +24658,12 @@
         const sketchId = constraint ? constraintSketchId(constraint) : activeSketchId();
         const sketch = model.sketches.find((item) => item.id === sketchId) || null;
         return {
-          documentDefault: structuredClone(normalizeDimensionAppearance(model.defaultDimensionAppearance, { partial: false })),
+          documentDefault: structuredClone(normalizeDimensionAppearance(documentModel.defaultDimensionAppearance, { partial: false })),
           sketchDirect: structuredClone(normalizeDimensionAppearance(sketch?.dimensionAppearance)),
           sketchEffective: structuredClone(effectiveDimensionAppearanceForSketch(sketch)),
           direct: structuredClone(normalizeDimensionAppearance(constraint?.dimension?.display)),
           effective: constraint ? structuredClone(dimensionDisplayState(constraint.dimension, sketchId)) : null,
-          blockDefinitions: model.blockDefinitions.map((definition) => ({
+          blockDefinitions: documentModel.blockDefinitions.map((definition) => ({
             id: definition.id,
             dimensions: (definition.constraints || []).filter(isDimensionConstraint).map((item) => ({
               sketchDirect: structuredClone(normalizeDimensionAppearance(definition.sketches.find((sketchItem) => sketchItem.id === item.sketchId)?.dimensionAppearance)),
@@ -24782,7 +24681,7 @@
         const dimension = dimensionFromAnchor(target, circlePointAtAngle(arc, dimensionAngle));
         dimension.labelOffsetU = Number.isFinite(options.labelOffsetU) ? options.labelOffsetU : arc.radius() / 2;
         const appearance = {
-          ...normalizeDimensionAppearance(model.defaultDimensionAppearance, { partial: false }),
+          ...normalizeDimensionAppearance(documentModel.defaultDimensionAppearance, { partial: false }),
           terminatorType,
         };
         const layout = dimensionLayout(target, dimension, appearance);
@@ -24851,7 +24750,7 @@
       },
       dimensionTerminatorFitForTest(availableScreenPixels, label = "100", terminatorType = "arrow", expressionMark = false) {
         const appearance = {
-          ...normalizeDimensionAppearance(model.defaultDimensionAppearance, { partial: false }),
+          ...normalizeDimensionAppearance(documentModel.defaultDimensionAppearance, { partial: false }),
           terminatorType,
         };
         const availableLength = Math.max(0, Number(availableScreenPixels) || 0) / viewport.scale;
@@ -24879,7 +24778,7 @@
         viewport.scale = Math.max(0.05, Number(viewportScale) || 1);
         try {
           const appearance = {
-            ...normalizeDimensionAppearance(model.defaultDimensionAppearance, { partial: false }),
+            ...normalizeDimensionAppearance(documentModel.defaultDimensionAppearance, { partial: false }),
             terminatorType: "arrow",
             lineWidth,
             arrowheadAngle,
@@ -24974,7 +24873,7 @@
         definition.parameters = [{ name: "width", expression: "25" }];
         ensureParameterNamespace(definition);
         blockDimension.expression = '"width"';
-        model.blockDefinitions.push(definition);
+        documentModel.blockDefinitions.push(definition);
         model.blockInstances.push({ id: `BI${blockInstanceSeq++}`, definitionId: definition.id, sketchId: DEFAULT_SKETCH_ID, x: 180, y: 0, rotation: 0, fixed: false, rotationLocked: true, enabledSketchIds: [DEFAULT_SKETCH_ID], appearanceOverride: {} });
         const otherDefinition = createEmptyBlockDefinition("Other Param Block");
         const op1 = new Point("BP1", 0, 0, true, "endpoint");
@@ -24994,7 +24893,7 @@
         otherDefinition.parameters = [{ name: "width", expression: "15" }];
         ensureParameterNamespace(otherDefinition);
         otherDimension.expression = '"width"';
-        model.blockDefinitions.push(otherDefinition);
+        documentModel.blockDefinitions.push(otherDefinition);
         model.blockInstances.push({ id: `BI${blockInstanceSeq++}`, definitionId: otherDefinition.id, sketchId: DEFAULT_SKETCH_ID, x: 260, y: 0, rotation: 0, fixed: false, rotationLocked: true, enabledSketchIds: [DEFAULT_SKETCH_ID], appearanceOverride: {} });
         invalidateBlockProjectionCache();
         const result = stabilizeActiveParameterNamespace(activeSketchId(), { allSketches: [activeSketchId()] });
@@ -25036,7 +24935,7 @@
             value: constraint.evaluatedParameterValue,
             target: dimensionExpressionValue(constraint),
           })),
-          blockNamespaces: model.blockDefinitions.map((definition) => ({
+          blockNamespaces: documentModel.blockDefinitions.map((definition) => ({
             id: definition.id,
             parameters: definition.parameters.map((parameter) => ({ name: parameter.name, expression: parameter.expression })),
             dimensions: dimensionConstraintsInNamespace(definition).map((constraint) => ({ name: constraint.parameterName, expression: constraint.expression, target: dimensionExpressionValue(constraint) })),
@@ -25152,7 +25051,7 @@
         return {
           success,
           elapsedMs: performance.now() - startedAt,
-          modelName: model.documentName,
+          modelName: documentModel.documentName,
           displayName: effectiveDocumentName(),
           serializedName: serializeModel().documentName,
           title: document.title,
@@ -25201,7 +25100,7 @@
           definition.points.push(p1, p2);
           definition.lines.push(line);
         }
-        model.blockDefinitions.push(definition);
+        documentModel.blockDefinitions.push(definition);
         const block = {
           id: `BI${blockInstanceSeq++}`,
           definitionId: definition.id,
@@ -25337,7 +25236,7 @@
       displayZoomStateForTest(zoomRatio = null) {
         if (zoomRatio != null) viewport.scale = clampZoom(Number(zoomRatio) * CSS_PX_PER_MM);
         return {
-          units: { ...model.units },
+          units: { ...documentModel.units },
           zoomRatio: viewport.scale / CSS_PX_PER_MM,
           formatted: formatZoom(viewport.scale),
           cssPixelsPerMillimeter: CSS_PX_PER_MM,
@@ -26321,7 +26220,7 @@
           line.sketchId = DEFAULT_SKETCH_ID;
           definition.points.push(p1, p2);
           definition.lines.push(line);
-          model.blockDefinitions.push(definition);
+          documentModel.blockDefinitions.push(definition);
           return definition;
         };
 
@@ -26454,7 +26353,7 @@
         blockLine.sketchId = DEFAULT_SKETCH_ID;
         definition.points.push(bp1, bp2);
         definition.lines.push(blockLine);
-        model.blockDefinitions.push(definition);
+        documentModel.blockDefinitions.push(definition);
         const instance = {
           id: `BI${blockInstanceSeq++}`,
           definitionId: definition.id,
@@ -26519,7 +26418,7 @@
         });
         definition.points.push(lineP1, lineP2, ...explicitPoints);
         definition.lines.push(blockLine);
-        model.blockDefinitions.push(definition);
+        documentModel.blockDefinitions.push(definition);
         const instance = {
           id: `BI${blockInstanceSeq++}`,
           definitionId: definition.id,
@@ -26800,7 +26699,7 @@
         blockLine.sketchId = sourceSketchId;
         definition.points.push(bp1, bp2);
         definition.lines.push(blockLine);
-        model.blockDefinitions.push(definition);
+        documentModel.blockDefinitions.push(definition);
         const instance = {
           id: `BI${blockInstanceSeq++}`,
           definitionId: definition.id,
@@ -26907,7 +26806,7 @@
         localLine.sketchId = DEFAULT_SKETCH_ID;
         definition.points.push(p1, p2);
         definition.lines.push(localLine);
-        model.blockDefinitions.push(definition);
+        documentModel.blockDefinitions.push(definition);
         const instance = {
           id: "BI-HOVER",
           definitionId: definition.id,
@@ -27263,7 +27162,7 @@
         resetModelState();
         updateUI();
         draw();
-        return { definitions: model.blockDefinitions.length, lines: model.lines.length };
+        return { definitions: documentModel.blockDefinitions.length, lines: model.lines.length };
       },
       resetForDimensionCommandLineDrag() {
         resetModelState();
@@ -27431,7 +27330,7 @@
       blockState() {
         const bundles = blockProjectionBundles();
         return {
-          definitions: model.blockDefinitions.map((definition) => ({
+          definitions: documentModel.blockDefinitions.map((definition) => ({
             id: definition.id,
             name: definition.name,
             parentDefinitionId: definition.parentDefinitionId || null,
@@ -27665,7 +27564,7 @@
         return true;
       },
       blockDefinitionUpdateCase() {
-        const definition = model.blockDefinitions[0];
+        const definition = documentModel.blockDefinitions[0];
         if (!definition || model.blockInstances.length === 0) return null;
         const before = blockProjectionBundle(model.blockInstances[0]).lines[0].length();
         enterBlockDefinitionEdit(definition.id);
@@ -27720,7 +27619,7 @@
         updateUI();
         draw();
         return {
-          definitions: model.blockDefinitions.length,
+          definitions: documentModel.blockDefinitions.length,
           instances: model.blockInstances.length,
           projectionLines: allGeometryLines().filter((line) => line.blockProjection).length,
           serializedVersion: serializeModel().version,
@@ -27745,7 +27644,7 @@
         loadModelData(data);
         updateUI();
         draw();
-        const definition = model.blockDefinitions[0];
+        const definition = documentModel.blockDefinitions[0];
         const instance = model.blockInstances[0];
         return {
           version: serializeModel().version,
@@ -27765,8 +27664,8 @@
           name: blockEditSession?.draft?.name || null,
           sketches: model.sketches.map((sketch) => ({ id: sketch.id, name: sketch.name, parentSketchId: sketch.parentSketchId, kind: sketch.kind })),
           activeSketchId: model.activeSketchId,
-          hostLineCount: blockEditSession?.original?.lines?.length || 0,
-          hostBlockInstanceCount: blockEditSession?.original?.blockInstances?.length || 0,
+          hostLineCount: blockEditSession?.original?.values.lines?.length || 0,
+          hostBlockInstanceCount: blockEditSession?.original?.values.blockInstances?.length || 0,
           editorLineCount: model.lines.length,
           editorBlockInstances: model.blockInstances.map((instance) => ({ id: instance.id, definitionId: instance.definitionId, x: instance.x, y: instance.y, rotation: instance.rotation, rotationLocked: Boolean(instance.rotationLocked) })),
         };
@@ -27802,11 +27701,11 @@
       },
       cancelBlockEditor() {
         cancelBlockDefinitionEdit();
-        return { editing: Boolean(blockEditSession), definitions: model.blockDefinitions.length, instances: model.blockInstances.length, lines: model.lines.length };
+        return { editing: Boolean(blockEditSession), definitions: documentModel.blockDefinitions.length, instances: model.blockInstances.length, lines: model.lines.length };
       },
       completeBlockEditor() {
         completeBlockDefinitionEdit({ rotationLocked: true });
-        return { editing: Boolean(blockEditSession), definitions: model.blockDefinitions.length, instances: model.blockInstances.length };
+        return { editing: Boolean(blockEditSession), definitions: documentModel.blockDefinitions.length, instances: model.blockInstances.length };
       },
       setFirstBlockInstanceSketches(ids) {
         const instance = model.blockInstances[0];
@@ -27822,7 +27721,7 @@
         addLine(p2, p3);
         selectedLines = [selectedLine];
         const sharedPointError = blockSelectionGeometry().error || null;
-        const sharedCounts = { definitions: model.blockDefinitions.length, instances: model.blockInstances.length, lines: model.lines.length };
+        const sharedCounts = { definitions: documentModel.blockDefinitions.length, instances: model.blockInstances.length, lines: model.lines.length };
 
         resetModelState();
         const line = addLine(addPoint(0, 0, false, "endpoint"), addPoint(60, 0, false, "endpoint"));
@@ -27842,7 +27741,7 @@
           sharedPointError,
           sharedCounts,
           annotationError,
-          annotationCounts: { definitions: model.blockDefinitions.length, instances: model.blockInstances.length, lines: model.lines.length },
+          annotationCounts: { definitions: documentModel.blockDefinitions.length, instances: model.blockInstances.length, lines: model.lines.length },
         };
       },
       sidebarHighlightIds() {

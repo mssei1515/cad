@@ -1574,7 +1574,7 @@ test("file URL Help menu reads the generated Git commit file", async ({ page }) 
     "runtime-version.js", "app.js",
     "src/geometry/geometry_kernel.js", "src/geometry/geometry_ref.js", "src/geometry/spline_geometry.js",
     "src/geometry/hatch_region.js", "src/geometry/offset_chain.js", "src/solver/constraint_solver.js",
-    "src/parameters/parameter_engine.js", "src/editing/edit_history.js", "src/diagnostics/interaction_profiler.js", "src/ui/choice_dialog.js",
+    "src/parameters/parameter_engine.js", "src/editing/edit_history.js", "src/editing/workspace.js", "src/diagnostics/interaction_profiler.js", "src/ui/choice_dialog.js",
     "src/document/appearance.js", "src/document/drawing_order.js", "src/document/sketch_hierarchy.js",
     "src/document/annotations.js", "src/document/hatches.js", "src/document/reference_images.js",
     "src/persistence/constraint_codec_registry.js", "src/persistence/constraints.js", "src/persistence/geometry.js",

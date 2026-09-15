@@ -31,6 +31,31 @@ async function selectTree(page, id, sketchId) {
   await row.click();
 }
 
+test("Document and Block instances with identical IDs remain independent through cancel, commit and reload", async ({ page }) => {
+  const data = await fixture(page, 1);
+  const definition = { id: "B1", name: "Local rectangle", parentDefinitionId: null, revision: 1, origin: { x: 0, y: 0 }, blockInstances: [] };
+  for (const key of ["sketches", "activeSketchId", "points", "lines", "circles", "arcs", "splines", "constraints", "geometryInstances", "parameters", "annotations", "hatches", "referenceImages", "nextHatchIndex", "nextDimensionParameterIndex"]) definition[key] = structuredClone(data[key]);
+  data.blockDefinitions = [definition];
+  expect(await page.evaluate((d) => window.__jot2dTest.loadDocumentFixtureForDragTest(d, "scopes.jot2d", { resetLoadedHistory: true }), data)).toMatchObject({ success: true });
+  const originalRoot = (await state(page)).serialized.geometryInstances;
+  for (const cancel of [true, false]) {
+    await page.locator(".app-menu > summary").filter({ hasText: /^(?:ブロック|Block)$/ }).click();
+    await page.click("#openBlockDefinitionsBtn");
+    await page.click('.block-item[data-id="B1"] .blockEditBtn');
+    await selectTree(page, "FI1", data.activeSketchId);
+    const rotation = page.locator('[data-free-instance-property="rotation"]');
+    await rotation.fill("25"); await rotation.press("Tab");
+    if (cancel) await page.click("#cancelBlockEditBtn");
+    else await completeBlockEdit(page);
+    const saved = (await state(page)).serialized;
+    expect(saved.geometryInstances).toEqual(originalRoot);
+    expect(saved.blockDefinitions[0].geometryInstances[0].rotation).toBeCloseTo(cancel ? 0 : 25 * Math.PI / 180, 8);
+  }
+  const saved = (await state(page)).serialized;
+  expect(await page.evaluate((d) => window.__jot2dTest.loadDocumentFixtureForDragTest(d), saved)).toMatchObject({ success: true });
+  expect((await state(page)).serialized.geometryInstances).toEqual(originalRoot);
+});
+
 test("instance sources can be removed, added, canceled and undone from Properties", async ({ page }) => {
   const data = await fixture(page, 1);
   const original = (await state(page)).serialized.geometryInstances[0];
