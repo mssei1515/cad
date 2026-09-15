@@ -63,7 +63,7 @@ src/
   geometry/                 幾何kernel・参照・Spline・Hatch領域・Offset
   solver/                   Geometry／Constraint classと数値solve
   parameters/               式解析と依存評価
-  editing/                  履歴stack
+  editing/                  履歴stack・Documentと編集scope・Selection
   diagnostics/              処理時間の計測
   ui/                       共通選択dialog
 tests/
@@ -93,4 +93,6 @@ tools/                      server・生成など開発補助
 
 ## 残る範囲
 
-`app.js`はまだCanvas renderer、DOM panel、Document Loader、Block・Sketch・Selection、command群とE2E hookを持つ。これらを独立させるには、scopeの取得・変更、Projectionの参照解決、操作ごとのsnapshot／確定の境界をさらに整理する必要がある。今回のmoduleへそれらの状態を流し込まない。次の段階でも、独立した入力・出力を定められる単位から検証を伴って進める。
+`app.js`はまだCanvas renderer、DOM panel、Document Loader、Block・Sketchの操作、Selectionを更新するcommand群とE2E hookを持つ。Documentと編集scopeの所有者は`src/editing/workspace.js`、Selectionの状態と選択規則は`src/editing/selection.js`へ分離した。残りを独立させるには、Projectionの参照解決、操作ごとのsnapshot／確定の境界をさらに整理する必要がある。分離済みmoduleへそれらの状態を流し込まない。
+
+数百行の起動・接続用appへ移行する実現性、代償、段階と進捗は[composition rootへの移行](./composition-root.md)に記録する。
