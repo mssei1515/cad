@@ -147,6 +147,13 @@
     constraintGraphNodes, geometryInstanceDependencyRefs,
   } = window.ConstraintReferences.create({ resolveGeometryRef: (ref) => resolveGeometryRef(ref) });
 
+  const {
+    targetFromConstraint, offsetPairSign, angleDegrees,
+    angleDimensionSweep, signedAngleBetweenLines, measuredDimensionValue,
+    angleDimensionAngles, angleDimensionCandidate, geometryTargetValue,
+    isReadOnlyDimension,
+  } = window.DimensionQueries;
+
   const canvas = document.getElementById("canvas");
   const ctx = canvas.getContext("2d");
   const dimensionValueInput = document.getElementById("dimensionValueInput");
@@ -203,6 +210,15 @@
     geometryInstances: [],
   };
   const workspace = window.EditingWorkspace.create(documentModel);
+  const currentParameterNamespace = workspace.current;
+  const {
+    dimensionExpressionValue, numericDimensionExpression, isDirectNumericExpressionInput,
+    dimensionUsesExpression, expressionInputValue, expressionFromUserInput,
+    rewriteExpressionInputIdentifiers, dimensionConstraintsInNamespace, allocateDimensionParameterName,
+    ensureDimensionParameter, ensureParameterNamespace, parameterErrorText,
+    referenceDimensionValues, validateParameterSymbolNames, evaluateParameterNamespace,
+    validateParameterNamespace, prepareLoadedParameterNamespace, parameterDependents,
+  } = window.ParameterNamespace.create({ currentParameterNamespace, applicationText });
   const {
     ensureSketchState, isRootSketch, isDrawableSketch,
     firstDrawableSketchId, sketchName, sketchById,
@@ -779,47 +795,6 @@
     ensureParameterNamespace(model);
   }
 
-  function currentParameterNamespace() {
-    return model;
-  }
-
-  function dimensionExpressionValue(constraint) {
-    const target = targetFromConstraint(constraint);
-    return target?.kind === "angle" ? angleDegrees(constraint.target) : Number(constraint.target);
-  }
-
-  function numericDimensionExpression(constraint) {
-    const value = dimensionExpressionValue(constraint);
-    return Number.isFinite(value) ? String(Number(value.toPrecision(15))) : "0";
-  }
-
-  const DIRECT_NUMERIC_INPUT_PATTERN = /^[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?$/;
-
-  function isDirectNumericExpressionInput(value) {
-    return DIRECT_NUMERIC_INPUT_PATTERN.test(String(value ?? "").trim());
-  }
-
-  function dimensionUsesExpression(constraint) {
-    const expression = String(constraint?.expression ?? "").trim();
-    return Boolean(expression) && !isReadOnlyDimension(constraint) && !isDirectNumericExpressionInput(expression);
-  }
-
-  function expressionInputValue(expression) {
-    const value = String(expression ?? "").trim();
-    if (!value || isDirectNumericExpressionInput(value)) return value;
-    return value.startsWith("=") ? value : `=${value}`;
-  }
-
-  function expressionFromUserInput(value) {
-    const input = String(value ?? "").trim();
-    if (!input) throw Object.assign(new Error("Expression is empty"), { code: "EMPTY_EXPRESSION" });
-    if (isDirectNumericExpressionInput(input)) return input;
-    if (!input.startsWith("=")) throw Object.assign(new Error("Expressions must begin with '='"), { code: "EXPRESSION_PREFIX_REQUIRED" });
-    const expression = input.slice(1).trim();
-    if (!expression) throw Object.assign(new Error("Expression is empty"), { code: "EMPTY_EXPRESSION" });
-    return expression;
-  }
-
   function expressionReferenceNamesForInput(input) {
     if (input?.closest("#parametersDialog") && parameterDialogSession) {
       return new Set([
@@ -892,186 +867,6 @@
 
   function refreshExpressionInputHighlights(root = document) {
     for (const input of root.querySelectorAll?.(".expression-input-source") || []) syncExpressionInputHighlight(input);
-  }
-
-  function rewriteExpressionInputIdentifiers(value, replacements) {
-    try {
-      return expressionInputValue(rewriteParameterIdentifiers(expressionFromUserInput(value), replacements));
-    } catch (_error) {
-      return value;
-    }
-  }
-
-  function dimensionConstraintsInNamespace(namespace) {
-    return (namespace?.constraints || []).filter(isDimensionConstraint);
-  }
-
-  function allocateDimensionParameterName(namespace) {
-    ensureParameterNamespace(namespace, { assignDimensions: false });
-    const used = new Set([
-      ...(namespace.parameters || []).map((parameter) => String(parameter.name)),
-      ...dimensionConstraintsInNamespace(namespace).map((constraint) => String(constraint.parameterName || "")),
-    ]);
-    let index = Math.max(1, Number(namespace.nextDimensionParameterIndex) || 1);
-    while (used.has(`d${index}`)) index += 1;
-    namespace.nextDimensionParameterIndex = index + 1;
-    return `d${index}`;
-  }
-
-  function ensureDimensionParameter(constraint, namespace = currentParameterNamespace()) {
-    if (!isDimensionConstraint(constraint)) return constraint;
-    if (!constraint.parameterName) constraint.parameterName = allocateDimensionParameterName(namespace);
-    const autoMatch = /^d(\d+)$/.exec(String(constraint.parameterName));
-    if (autoMatch) namespace.nextDimensionParameterIndex = Math.max(Number(namespace.nextDimensionParameterIndex) || 1, Number(autoMatch[1]) + 1);
-    if (isReadOnlyDimension(constraint)) {
-      delete constraint.expression;
-    } else if (typeof constraint.expression !== "string" || !constraint.expression.trim()) {
-      constraint.expression = numericDimensionExpression(constraint);
-    }
-    return constraint;
-  }
-
-  function ensureParameterNamespace(namespace, options = {}) {
-    if (!namespace) return namespace;
-    namespace.parameters = Array.isArray(namespace.parameters) ? namespace.parameters : [];
-    for (let index = 0; index < namespace.parameters.length; index += 1) {
-      const parameter = namespace.parameters[index];
-      if (!parameter || typeof parameter !== "object") namespace.parameters[index] = { name: "", expression: "" };
-      else {
-        parameter.name = String(parameter.name || "");
-        parameter.expression = String(parameter.expression ?? "");
-      }
-    }
-    namespace.nextDimensionParameterIndex = Math.max(1, Number(namespace.nextDimensionParameterIndex) || 1);
-    if (options.assignDimensions !== false) {
-      for (const constraint of dimensionConstraintsInNamespace(namespace)) ensureDimensionParameter(constraint, namespace);
-    }
-    return namespace;
-  }
-
-  function parameterErrorText(error) {
-    const name = error?.identifier ? ` ${error.identifier}` : "";
-    const messages = {
-      INVALID_IDENTIFIER: applicationText(`名前${name}は使用できません`, `Name${name} is invalid`),
-      RESERVED_IDENTIFIER: applicationText(`名前${name}は寸法用に予約されています`, `Name${name} is reserved for dimensions`),
-      DUPLICATE_IDENTIFIER: applicationText(`名前${name}が重複しています`, `Name${name} is duplicated`),
-      UNKNOWN_IDENTIFIER: applicationText(`未定義の名前${name}があります`, `Unknown name${name}`),
-      CYCLE: applicationText("Parameterに循環参照があります", "Parameters contain a circular dependency"),
-      DIVISION_BY_ZERO: applicationText("0で除算しています", "Division by zero"),
-      NON_FINITE: applicationText("計算結果が有限値ではありません", "The result is not finite"),
-      EMPTY_EXPRESSION: applicationText("値 / 数式が空です", "Value / Expression is empty"),
-      EXPRESSION_PREFIX_REQUIRED: applicationText("数式は先頭に = を入力してください", "Expressions must begin with ="),
-      REFERENCE_QUOTES_REQUIRED: applicationText(`Parameter参照${name}はダブルクオーテーションで括ってください`, `Parameter reference${name} must be enclosed in double quotes`),
-      UNTERMINATED_REFERENCE: applicationText("Parameter参照のダブルクオーテーションが閉じていません", "The parameter reference has an unterminated double quote"),
-    };
-    return messages[error?.code] || error?.message || applicationText("Parameterを評価できません", "Could not evaluate parameters");
-  }
-
-  function referenceDimensionValues(namespace) {
-    const values = new Map();
-    for (const constraint of dimensionConstraintsInNamespace(namespace)) {
-      if (!isReadOnlyDimension(constraint)) continue;
-      const target = targetFromConstraint(constraint);
-      const measured = target ? measuredDimensionValue(target, constraint.dimension) : NaN;
-      if (!Number.isFinite(measured)) throw new Error(`${constraint.parameterName}: ${applicationText("参照寸法を測定できません", "Reference dimension could not be measured")}`);
-      values.set(constraint.parameterName, measured);
-      constraint.target = target?.kind === "angle" ? (measured * Math.PI) / 180 : measured;
-      constraint.evaluatedParameterValue = measured;
-    }
-    return values;
-  }
-
-  function validateParameterSymbolNames(parameters, dimensions) {
-    const seen = new Set();
-    for (const parameter of parameters || []) {
-      const name = validateParameterIdentifier(parameter.name);
-      if (seen.has(name)) throw Object.assign(new Error(`Duplicate identifier '${name}'`), { code: "DUPLICATE_IDENTIFIER", identifier: name });
-      seen.add(name);
-    }
-    for (const dimension of dimensions || []) {
-      const name = validateParameterIdentifier(dimension.parameterName != null ? dimension.parameterName : dimension.name, { dimension: true });
-      if (seen.has(name)) throw Object.assign(new Error(`Duplicate identifier '${name}'`), { code: "DUPLICATE_IDENTIFIER", identifier: name });
-      seen.add(name);
-    }
-  }
-
-  function evaluateParameterNamespace(namespace, options = {}) {
-    ensureParameterNamespace(namespace);
-    validateParameterSymbolNames(namespace.parameters, dimensionConstraintsInNamespace(namespace));
-    const inputs = options.referenceValues || referenceDimensionValues(namespace);
-    const definitions = [
-      ...namespace.parameters.map((parameter) => ({ ...parameter, kind: "parameter" })),
-      ...dimensionConstraintsInNamespace(namespace)
-        .filter((constraint) => !isReadOnlyDimension(constraint))
-        .map((constraint) => ({ name: constraint.parameterName, expression: constraint.expression, kind: "dimension", constraint })),
-    ];
-    const evaluated = evaluateParameterDefinitions(definitions, inputs);
-    for (const parameter of namespace.parameters) parameter.evaluatedValue = evaluated.values.get(parameter.name);
-    for (const constraint of dimensionConstraintsInNamespace(namespace)) {
-      const value = evaluated.values.get(constraint.parameterName);
-      if (!Number.isFinite(value)) throw new Error(`${constraint.parameterName}: ${applicationText("値を計算できません", "Value could not be evaluated")}`);
-      const target = targetFromConstraint(constraint);
-      if (!isReadOnlyDimension(constraint)) {
-        const max = target?.kind === "angle" ? 180 : Infinity;
-        if (value <= 0 || value >= max) throw new Error(`${constraint.parameterName}: ${applicationText("寸法値の範囲が正しくありません", "Dimension value is out of range")}`);
-        constraint.target = target?.kind === "angle" ? (value * Math.PI) / 180 : value;
-      }
-      constraint.evaluatedParameterValue = value;
-    }
-    namespace.parameterValues = evaluated.values;
-    namespace.parameterDependencies = evaluated.dependencies;
-    return evaluated;
-  }
-
-  function validateParameterNamespace(namespace) {
-    try {
-      return { success: true, evaluation: evaluateParameterNamespace(namespace) };
-    } catch (error) {
-      return { success: false, error, reason: parameterErrorText(error) };
-    }
-  }
-
-  function prepareLoadedParameterNamespace(namespace, sourceVersion, label) {
-    if (sourceVersion >= 10) {
-      if (!Array.isArray(namespace.parameters) || !Number.isInteger(Number(namespace.nextDimensionParameterIndex)) || Number(namespace.nextDimensionParameterIndex) < 1) {
-        throw new Error(`${label}: ${applicationText("Parameter名前空間の形式が正しくありません", "The parameter namespace is invalid")}`);
-      }
-      for (const constraint of dimensionConstraintsInNamespace(namespace)) {
-        if (typeof constraint.parameterName !== "string" || !constraint.parameterName) {
-          throw new Error(`${label}: ${applicationText("寸法のParameter名がありません", "A dimension parameter name is missing")}`);
-        }
-        if (!isReadOnlyDimension(constraint) && (typeof constraint.expression !== "string" || !constraint.expression.trim())) {
-          throw new Error(`${label}/${constraint.parameterName}: ${applicationText("寸法の値 / 数式がありません", "The dimension has no Value / Expression")}`);
-        }
-      }
-    }
-    ensureParameterNamespace(namespace);
-    const validation = validateParameterNamespace(namespace);
-    if (!validation.success) throw new Error(`${label}: ${validation.reason}`);
-    return namespace;
-  }
-
-  function parameterDependents(namespace, names, removedConstraints = new Set()) {
-    ensureParameterNamespace(namespace);
-    const removedNames = new Set(names);
-    const dependents = [];
-    const formulas = [
-      ...namespace.parameters.map((parameter) => ({ name: parameter.name, expression: parameter.expression })),
-      ...dimensionConstraintsInNamespace(namespace)
-        .filter((constraint) => !isReadOnlyDimension(constraint) && !removedConstraints.has(constraint))
-        .map((constraint) => ({ name: constraint.parameterName, expression: constraint.expression })),
-    ];
-    for (const item of formulas) {
-      if (removedNames.has(item.name)) continue;
-      let dependencies;
-      try {
-        dependencies = expressionDependencies(item.expression);
-      } catch (_error) {
-        continue;
-      }
-      if ([...dependencies].some((name) => removedNames.has(name))) dependents.push(item.name);
-    }
-    return [...new Set(dependents)];
   }
 
   function guardDimensionSymbolDeletion(constraints, namespace = currentParameterNamespace()) {
@@ -5904,13 +5699,6 @@
     return { ...result, geometries };
   }
 
-  function offsetPairSign(source, offset) {
-    const signed = source instanceof Line
-      ? signedPointDirectedLineDistance(offset.p1, source)
-      : offset.radius() - source.radius();
-    return signed < 0 ? -1 : 1;
-  }
-
   function offsetDraftGeometry(source, distance, sign) {
     if (!source || !Number.isFinite(distance) || distance <= 0) return null;
     if (source instanceof Line) {
@@ -8639,67 +8427,12 @@
     return Math.abs(a.x * b.y - a.y * b.x) < 1e-3;
   }
 
-  function signedAngleBetweenLines(line1, line2) {
-    return normalizeAngleSigned(lineAngle(line2) - lineAngle(line1));
-  }
-
   function axisAngleBetweenLines(line1, line2) {
     if (!lineHasDirection(line1) || !lineHasDirection(line2)) return 0;
     const a = lineUnit(line1);
     const b = lineUnit(line2);
     const dot = a.x * b.x + a.y * b.y;
     return Math.acos(Math.max(-1, Math.min(1, dot)));
-  }
-
-  function angleDimensionSweep(target) {
-    return signedAngleBetweenLines(target.line1, target.line2);
-  }
-
-  function angleDimensionCandidate(target, startFlip = 0, endFlip = 0) {
-    const start = lineAngle(target.line1) + (startFlip ? Math.PI : 0);
-    const endAngle = lineAngle(target.line2) + (endFlip ? Math.PI : 0);
-    const signed = normalizeAngleSigned(endAngle - start);
-    if (Math.abs(signed) < 1e-9 || Math.abs(Math.abs(signed) - Math.PI) < 1e-9) return null;
-    return { start, end: start + signed, signed, mid: start + signed / 2, startFlip, endFlip };
-  }
-
-  function angleDimensionAngles(target, anchor = null, dimension = null) {
-    if (dimension && Number.isInteger(dimension.angleStartFlip) && Number.isInteger(dimension.angleEndFlip)) {
-      const stored = angleDimensionCandidate(target, dimension.angleStartFlip, dimension.angleEndFlip);
-      if (stored) return stored;
-    }
-    const fallbackSigned = angleDimensionSweep(target);
-    const baseStart = lineAngle(target.line1);
-    const fallback = {
-      start: baseStart,
-      end: baseStart + fallbackSigned,
-      signed: fallbackSigned,
-      mid: baseStart + fallbackSigned / 2,
-      startFlip: 0,
-      endFlip: fallbackSigned === signedAngleBetweenLines(target.line1, target.line2) ? 0 : 1,
-    };
-    if (!anchor) return fallback;
-    const vertex = lineIntersection(target.line1, target.line2);
-    if (!vertex) return fallback;
-    const anchorAngle = Math.atan2(anchor.y - vertex.y, anchor.x - vertex.x);
-    let best = fallback;
-    let bestScore = Infinity;
-    for (const startFlip of [0, 1]) {
-      for (const endFlip of [0, 1]) {
-        const candidate = angleDimensionCandidate(target, startFlip, endFlip);
-        if (!candidate) continue;
-        const score = Math.abs(normalizeAngleSigned(candidate.mid - anchorAngle));
-        if (score < bestScore) {
-          bestScore = score;
-          best = candidate;
-        }
-      }
-    }
-    return best;
-  }
-
-  function angleDegrees(radians) {
-    return Math.abs((radians * 180) / Math.PI);
   }
 
   function primitiveId(primitive) {
@@ -9312,38 +9045,6 @@
     applyDefaultCircleDimensionLabelOffset(target, dimension);
     if (defaultAxis) dimension.axis = defaultAxis;
     return dimension;
-  }
-
-  function targetFromConstraint(c) {
-    if (c instanceof DistanceConstraint) return { kind: "point-point", p1: c.p1, p2: c.p2, value: c.target };
-    if (c instanceof PointAxisDistanceConstraint) return { kind: "point-point", p1: c.p1, p2: c.p2, value: c.target, dimensionAxis: c.axis };
-    if (c instanceof PointLineDistanceConstraint) return { kind: "point-line", point: c.point, line: c.line, value: c.target };
-    if (c instanceof LineLineDistanceConstraint) return { kind: "line-line", line1: c.line1, line2: c.line2, value: c.target };
-    if (c instanceof LineCircleDistanceConstraint) return { kind: "line-circle", line: c.line, circle: c.circle, value: c.target };
-    if (c instanceof ConcentricRadiusDifferenceConstraint) return { kind: "radius-difference", a: c.a, b: c.b, value: c.target };
-    if (c instanceof OffsetConstraint) return { kind: "offset-distance", source: c.source, offset: c.offset, value: c.target, sign: c.sign };
-    if (c instanceof OffsetChainConstraint) {
-      const index = Math.max(0, Math.min(c.sources.length - 1, Number(c.dimensionSegmentIndex) || 0));
-      const source = c.sources[index];
-      const offset = c.offsets[index];
-      return { kind: "offset-distance", source, offset, value: c.target, sign: offsetPairSign(source, offset, c.side) };
-    }
-    if (c instanceof LineAngleConstraint) return { kind: "angle", line1: c.line1, line2: c.line2, value: angleDegrees(c.target), signedValue: angleDimensionSweep({ line1: c.line1, line2: c.line2 }) };
-    if (c instanceof RadiusConstraint) return { kind: "radius", primitive: c.primitive, value: c.target };
-    if (c instanceof DiameterConstraint) return { kind: "diameter", primitive: c.primitive, value: c.target };
-    return null;
-  }
-
-  function isReadOnlyDimension(constraint) {
-    return Boolean(constraint?.readOnlyDimension);
-  }
-
-  function measuredDimensionValue(target, dimension = null) {
-    if (!target) return NaN;
-    if (target.kind === "angle") {
-      return angleDegrees(angleDimensionAngles(target, null, dimension).signed);
-    }
-    return geometryTargetValue(target);
   }
 
   function measuredConstraintTargetValue(constraint, target = targetFromConstraint(constraint), dimension = constraint?.dimension) {
@@ -16689,28 +16390,6 @@
       return { kind: "line-line", line1: subject.line, line2: referenceTarget.line, value: Math.abs(signedPointLineDistance(referenceTarget.line.p1, subject.line)) };
     }
     return null;
-  }
-
-  function geometryTargetValue(target) {
-    if (!target) return NaN;
-    if (target.kind === "point-point") {
-      if (target.dimensionAxis === "x") return Math.abs(target.p2.x - target.p1.x);
-      if (target.dimensionAxis === "y") return Math.abs(target.p2.y - target.p1.y);
-      return hypot2(target.p2.x - target.p1.x, target.p2.y - target.p1.y);
-    }
-    if (target.kind === "point-line") return Math.abs(signedPointLineDistance(target.point, target.line));
-    if (target.kind === "line-line") return Math.abs(signedPointLineDistance(target.line1.p1, target.line2));
-    if (target.kind === "line-circle") return Math.abs(signedPointLineDistance(target.circle.center, target.line));
-    if (target.kind === "radius-difference") return Math.abs(target.b.radius() - target.a.radius());
-    if (target.kind === "line-length") return target.line.length();
-    if (target.kind === "angle") return angleDegrees(Math.abs(angleDimensionSweep(target)));
-    if (target.kind === "radius") return target.primitive.radius();
-    if (target.kind === "diameter") return target.primitive.radius() * 2;
-    if (target.kind === "offset-distance") {
-      if (target.source instanceof Line) return Math.abs(signedPointLineDistance(target.offset.p1, target.source));
-      return Math.abs(target.offset.radius() - target.source.radius());
-    }
-    return target.value;
   }
 
   function splitConstraintOperands(operands) {
