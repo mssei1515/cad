@@ -64,7 +64,7 @@ src/
   solver/                   Geometry／Constraint classと数値solve
   constraints/              拘束の参照判定・依存Nodeの列挙
   parameters/               式解析と依存評価
-  editing/                  履歴stack・Documentと編集scope・Selection
+  editing/                  履歴stack・Documentと編集scope・Sketch context・Selection
   diagnostics/              処理時間の計測
   ui/                       共通選択dialog・言語／テーマ設定とUI翻訳
 tests/

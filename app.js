@@ -203,6 +203,18 @@
     geometryInstances: [],
   };
   const workspace = window.EditingWorkspace.create(documentModel);
+  const {
+    ensureSketchState, isRootSketch, isDrawableSketch,
+    firstDrawableSketchId, sketchName, sketchById,
+    orderedSketches, childSketchesOf, descendantSketchIds,
+    ancestorSketchIds, isReferenceSourceSketchId, referenceSourceSketchIds,
+    activeSketch, activeSketchId, assignSketchId,
+    elementSketchId, sameSketchElements, isEditableSketchId,
+    sketchRelationToActive, constraintSketchId, isActiveSketchConstraint,
+    constraintTargetsAreActive, constraintReferencesSketch, wouldCreateSketchCycle,
+    sketchTreeRows, isActiveSketchElement, isEditableSketchElement,
+    sketchRelationOfElement,
+  } = window.SketchContext.create({ currentScope: workspace.current, constraintGraphNodes });
   let model = workspace.current();
   const solver = new ConstraintSolver(model);
 
@@ -569,10 +581,6 @@
     const sketch = sketches.find((item) => item.id === sketchId) || sketches.find((item) => isRootSketch(item)) || null;
     return resolveDimensionAppearance(documentModel.defaultDimensionAppearance,
       sketch && !isRootSketch(sketch) ? sketch.dimensionAppearance : null, dimension?.display);
-  }
-
-  function ensureSketchState() {
-    window.SketchHierarchy.ensure(model);
   }
 
   function ensureAppearanceState() {
@@ -2537,16 +2545,6 @@
     return true;
   }
 
-  function isRootSketch(sketchOrId) {
-    const sketch = typeof sketchOrId === "string" ? sketchById(sketchOrId) : sketchOrId;
-    return sketch?.kind === "root" || sketch?.id === ROOT_SKETCH_ID;
-  }
-
-  function isDrawableSketch(sketchOrId) {
-    const sketch = typeof sketchOrId === "string" ? sketchById(sketchOrId) : sketchOrId;
-    return Boolean(sketch && !isRootSketch(sketch));
-  }
-
   function canCreateInActiveSketch() {
     return isGeometryMode() && isDrawableSketch(activeSketchId());
   }
@@ -2560,54 +2558,9 @@
     return true;
   }
 
-  function firstDrawableSketchId() {
-    ensureSketchState();
-    return model.sketches.find((sketch) => sketch.kind !== "root")?.id || DEFAULT_SKETCH_ID;
-  }
-
-  function activeSketch() {
-    ensureSketchState();
-    return model.sketches.find((sketch) => sketch.id === model.activeSketchId) || model.sketches.find((sketch) => isRootSketch(sketch)) || model.sketches[0];
-  }
-
-  function sketchName(sketchId) {
-    ensureSketchState();
-    return model.sketches.find((sketch) => sketch.id === sketchId)?.name || sketchId || DEFAULT_SKETCH_NAME;
-  }
-
-  function sketchById(sketchId) {
-    ensureSketchState();
-    return window.SketchHierarchy.sketchById(model.sketches, sketchId);
-  }
-
   function parentSketchOf(sketch) {
     ensureSketchState();
     return window.SketchHierarchy.parentSketchOf(model.sketches, sketch);
-  }
-
-  function childSketchesOf(sketchId) {
-    ensureSketchState();
-    return window.SketchHierarchy.childSketchesOf(model.sketches, sketchId);
-  }
-
-  function descendantSketchIds(sketchId) {
-    ensureSketchState();
-    return window.SketchHierarchy.descendantSketchIds(model.sketches, sketchId);
-  }
-
-  function ancestorSketchIds(sketchId) {
-    ensureSketchState();
-    return window.SketchHierarchy.ancestorSketchIds(model.sketches, sketchId);
-  }
-
-  function isReferenceSourceSketchId(referenceSketchId, subjectSketchId = activeSketchId()) {
-    ensureSketchState();
-    return window.SketchHierarchy.isReferenceSourceSketchId(model.sketches, referenceSketchId, subjectSketchId);
-  }
-
-  function referenceSourceSketchIds(subjectSketchId = activeSketchId()) {
-    ensureSketchState();
-    return window.SketchHierarchy.referenceSourceSketchIds(model.sketches, subjectSketchId);
   }
 
   function constraintIsOperational(constraint) {
@@ -2677,54 +2630,6 @@
     return window.SketchHierarchy.sketchDepth(model.sketches, sketch);
   }
 
-  function wouldCreateSketchCycle(sketchId, parentSketchId) {
-    ensureSketchState();
-    return window.SketchHierarchy.wouldCreateSketchCycle(model.sketches, sketchId, parentSketchId);
-  }
-
-  function orderedSketches() {
-    ensureSketchState();
-    return window.SketchHierarchy.orderedSketches(model.sketches);
-  }
-
-  function sketchTreeRows() {
-    ensureSketchState();
-    return window.SketchHierarchy.sketchTreeRows(model.sketches);
-  }
-
-  function activeSketchId() {
-    return activeSketch().id;
-  }
-
-  function assignSketchId(item, sketchId = activeSketchId()) {
-    const targetSketchId = isDrawableSketch(sketchId) ? sketchId : firstDrawableSketchId();
-    if (item) item.sketchId = targetSketchId || activeSketchId();
-    return item;
-  }
-
-  function elementSketchId(item) {
-    ensureSketchState();
-    if (!item) return activeSketchId();
-    if (item.sketchId) return item.sketchId;
-    if (item instanceof Line) return item.p1?.sketchId || item.p2?.sketchId || activeSketchId();
-    if (item instanceof Circle || item instanceof Arc) return item.center?.sketchId || activeSketchId();
-    if (item instanceof Spline) return item.fitPoints.find((point) => point?.sketchId)?.sketchId || activeSketchId();
-    return activeSketchId();
-  }
-
-  function isActiveSketchElement(item) {
-    return elementSketchId(item) === activeSketchId();
-  }
-
-  function isEditableSketchId(sketchId) {
-    const id = sketchId || activeSketchId();
-    return id === activeSketchId();
-  }
-
-  function isEditableSketchElement(item) {
-    return isEditableSketchId(elementSketchId(item));
-  }
-
   function isVisibleSketchId(sketchId) {
     const id = sketchId || activeSketchId();
     if (viewState.constraintStatus) return true;
@@ -2738,30 +2643,6 @@
     return viewState.constraintStatus || (isVisibleSketchId(elementSketchId(item)) && effectiveAppearanceForElement(item).visible !== false);
   }
 
-  function sketchRelationToActive(sketchId) {
-    const id = sketchId || activeSketchId();
-    if (id === activeSketchId()) return "active";
-    if (descendantSketchIds(activeSketchId()).includes(id)) return "descendant";
-    if (isReferenceSourceSketchId(id)) return "reference";
-    return "inactive";
-  }
-
-  function sketchRelationOfElement(item) {
-    return sketchRelationToActive(elementSketchId(item));
-  }
-
-  function constraintSketchId(constraint) {
-    ensureSketchState();
-    if (!constraint) return activeSketchId();
-    if (constraint.sketchId) return constraint.sketchId;
-    const ids = [...new Set(constraintGraphNodes(constraint).map(elementSketchId).filter(Boolean))];
-    return ids.length === 1 ? ids[0] : activeSketchId();
-  }
-
-  function isActiveSketchConstraint(constraint) {
-    return constraintSketchId(constraint) === activeSketchId();
-  }
-
   function assignConstraintSketchId(constraint, sketchId = activeSketchId()) {
     const targetSketchId = isDrawableSketch(sketchId) ? sketchId : firstDrawableSketchId();
     if (constraint) constraint.sketchId = targetSketchId || activeSketchId();
@@ -2773,18 +2654,6 @@
     model.constraints.push(constraint);
     ensureDimensionParameter(constraint, currentParameterNamespace());
     return constraint;
-  }
-
-  function sameSketchElements(items, sketchId = activeSketchId()) {
-    return items.filter(Boolean).every((item) => elementSketchId(item) === sketchId);
-  }
-
-  function constraintTargetsAreActive(constraint) {
-    return sameSketchElements(constraintGraphNodes(constraint, { includeIntrinsicDependencies: false }), activeSketchId());
-  }
-
-  function constraintReferencesSketch(constraint, sketchId) {
-    return constraintGraphNodes(constraint).some((node) => elementSketchId(node) === sketchId);
   }
 
   function operandElement(operand) {
