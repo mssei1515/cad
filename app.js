@@ -361,11 +361,16 @@
   const dimensionTextWidthCache = new WeakMap();
   let dimensionExpressionMarkCapture = null;
   const dimensionArrowheadFactorCache = new Map();
-  let undoStack = [];
-  let redoStack = [];
   let historyRestoring = false;
   let geometryClipboard = null;
   const HISTORY_LIMIT = 80;
+  const documentHistory = window.EditHistory.create({
+    capture: historySnapshot,
+    signature: (snapshot) => snapshot,
+    restore: (snapshot, label) => { restoreHistorySnapshot(snapshot, label); return true; },
+    limit: HISTORY_LIMIT,
+    recordLabel: "履歴に追加しました", undoLabel: "戻る", redoLabel: "進む",
+  });
   const CURRENT_JSON_VERSION = 22;
   const SKETCH_TREE_MIN_WIDTH = 220;
   const SKETCH_TREE_MAX_WIDTH = 560;
@@ -531,7 +536,7 @@
 
   function hasUnsavedDocumentChanges() {
     return fileSession.hasUnsavedChanges({
-      snapshot: undoStack.at(-1), documentName: effectiveDocumentName(), editingBlock: Boolean(blockEditSession),
+      snapshot: documentHistory.currentSnapshot, documentName: effectiveDocumentName(), editingBlock: Boolean(blockEditSession),
     });
   }
 
@@ -5240,8 +5245,7 @@
       definitionRollbackEntries: new Map(options.definitionRollbackEntries || []),
       originalProjectionIds: new Set(originalProjectionItems.map((item) => item.id)),
       originalProjectionKeys: new Set(originalProjectionItems.map(geometryElementKey)),
-      historyUndo: [],
-      historyRedo: [],
+      history: createBlockEditHistory(),
     };
     activateEditingScope(draft);
     reserveGeometryElementSequences(draft);
@@ -6558,49 +6562,37 @@
 
   function resetBlockEditorHistory() {
     if (!blockEditSession) return;
-    blockEditSession.historyUndo = [captureBlockEditorHistorySnapshot()];
-    blockEditSession.historyRedo = [];
+    blockEditSession.history.reset();
     updateHistoryButtons();
   }
 
-  function activeEditHistory() {
-    const session = blockEditSession;
-    if (session) return {
-      undo: session.historyUndo,
-      redo: session.historyRedo,
+  function createBlockEditHistory() {
+    return window.EditHistory.create({
       capture: captureBlockEditorHistorySnapshot,
       signature: (snapshot) => snapshot?.signature,
-      clearRedo: () => { session.historyRedo = []; },
       restore: restoreBlockEditorHistorySnapshot,
+      limit: HISTORY_LIMIT,
       recordLabel: "ブロック編集履歴に追加しました",
       undoLabel: "ブロック編集を戻す",
       redoLabel: "ブロック編集を進む",
-    };
-    return {
-      undo: undoStack,
-      redo: redoStack,
-      capture: historySnapshot,
-      signature: (snapshot) => snapshot,
-      clearRedo: () => { redoStack = []; },
-      restore: (snapshot, label) => { restoreHistorySnapshot(snapshot, label); return true; },
-      recordLabel: "履歴に追加しました",
-      undoLabel: "戻る",
-      redoLabel: "進む",
-    };
+    });
+  }
+
+  function activeEditHistory() {
+    return blockEditSession?.history || documentHistory;
   }
 
   function updateHistoryButtons() {
     const undoBtn = document.getElementById("undoBtn");
     const redoBtn = document.getElementById("redoBtn");
-    const { undo: activeUndo, redo: activeRedo } = activeEditHistory();
-    if (undoBtn) undoBtn.disabled = activeUndo.length <= 1;
-    if (redoBtn) redoBtn.disabled = activeRedo.length === 0;
+    const history = activeEditHistory();
+    if (undoBtn) undoBtn.disabled = history.undoCount <= 1;
+    if (redoBtn) redoBtn.disabled = history.redoCount === 0;
     updateDocumentNameUI();
   }
 
   function resetHistory(label = "initial") {
-    undoStack = [historySnapshot()];
-    redoStack = [];
+    documentHistory.reset();
     updateHistoryButtons();
     log(`履歴を初期化しました: ${label}`);
   }
@@ -6613,7 +6605,7 @@
   function recordHistoryUnprofiled(label = "変更") {
     if (historyRestoring) return;
     const history = activeEditHistory();
-    const recorded = window.EditHistory.record(history, HISTORY_LIMIT);
+    const recorded = history.record();
     updateHistoryButtons();
     if (recorded) log(`${history.recordLabel}: ${label}`);
   }
@@ -6659,11 +6651,11 @@
   }
 
   function undoHistory() {
-    return window.EditHistory.undo(activeEditHistory());
+    return activeEditHistory().undo();
   }
 
   function redoHistory() {
-    return window.EditHistory.redo(activeEditHistory());
+    return activeEditHistory().redo();
   }
 
   function deserializeConstraint(...args) {
@@ -7589,9 +7581,7 @@
     constraintAnalysisState = null;
     lineCompletionRollback = null;
     lineStartRollback = null;
-    if (!historyRestoring && undoStack.length > 1 && undoStack[undoStack.length - 1] === transientSnapshot) {
-      undoStack.pop();
-      redoStack = [];
+    if (!historyRestoring && documentHistory.discardLatest(transientSnapshot)) {
       updateHistoryButtons();
     }
     return true;
@@ -7621,9 +7611,7 @@
     pointSeq = pointStartRollback.pointSeq;
     constraintAnalysisState = null;
     pointStartRollback = null;
-    if (!historyRestoring && undoStack.length > 1 && undoStack[undoStack.length - 1] === transientSnapshot) {
-      undoStack.pop();
-      redoStack = [];
+    if (!historyRestoring && documentHistory.discardLatest(transientSnapshot)) {
       updateHistoryButtons();
     }
     return true;
@@ -25143,11 +25131,10 @@
           : null;
       },
       historyState() {
-        const activeUndo = blockEditSession ? blockEditSession.historyUndo : undoStack;
-        const activeRedo = blockEditSession ? blockEditSession.historyRedo : redoStack;
+        const history = activeEditHistory();
         return {
-          undoCount: activeUndo.length,
-          redoCount: activeRedo.length,
+          undoCount: history.undoCount,
+          redoCount: history.redoCount,
           blockEditing: Boolean(blockEditSession),
           undoDisabled: document.getElementById("undoBtn")?.disabled,
           redoDisabled: document.getElementById("redoBtn")?.disabled,

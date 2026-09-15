@@ -1,4 +1,4 @@
-/* Shared stack operations. Snapshot and restoration policies belong to the caller. */
+/* Independent history stacks. Snapshot and restoration policies belong to the caller. */
 (function () {
   "use strict";
 
@@ -24,5 +24,36 @@
     return history.restore(snapshot, history.redoLabel);
   }
 
-  window.EditHistory = Object.freeze({ record, undo, redo });
+  function create({ capture, signature, restore, limit, recordLabel, undoLabel, redoLabel }) {
+    let undoSnapshots = [];
+    let redoSnapshots = [];
+    function protocol() {
+      return {
+        undo: undoSnapshots, redo: redoSnapshots, capture, signature, restore,
+        clearRedo: () => { redoSnapshots = []; }, undoLabel, redoLabel,
+      };
+    }
+    function reset() {
+      undoSnapshots = [capture()];
+      redoSnapshots = [];
+    }
+    // A canceled transient operation may remove only its own committed snapshot.
+    function discardLatest(expectedSnapshot) {
+      if (undoSnapshots.length <= 1 || undoSnapshots.at(-1) !== expectedSnapshot) return false;
+      undoSnapshots.pop();
+      redoSnapshots = [];
+      return true;
+    }
+    return Object.freeze({
+      record: () => record(protocol(), limit),
+      undo: () => undo(protocol()),
+      redo: () => redo(protocol()),
+      reset, discardLatest, recordLabel,
+      get currentSnapshot() { return undoSnapshots.at(-1); },
+      get undoCount() { return undoSnapshots.length; },
+      get redoCount() { return redoSnapshots.length; },
+    });
+  }
+
+  window.EditHistory = Object.freeze({ create, record, undo, redo });
 })();

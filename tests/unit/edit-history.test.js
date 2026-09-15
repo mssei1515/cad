@@ -82,3 +82,62 @@ test("restore callbacks observe the already moved stacks and retain their return
   assert.deepEqual(history.undo, ["a", "b"]);
   assert.deepEqual(history.redo, []);
 });
+
+test("owned history instances isolate Document and Block stacks without exposing mutable arrays", () => {
+  let documentValue = "document", blockValue = { signature: "block" };
+  const document = historyOps.create({ capture: () => documentValue, signature: value => value, restore: value => { documentValue = value; return true; }, limit: 3 });
+  const block = historyOps.create({ capture: () => blockValue, signature: value => value?.signature, restore: value => { blockValue = value; return true; }, limit: 3 });
+  document.reset();
+  block.reset();
+  blockValue = { signature: "edited" };
+  block.record();
+  block.undo();
+  assert.equal(block.redoCount, 1);
+  assert.equal(block.record(), false);
+  assert.equal(block.redoCount, 1);
+  block.redo();
+  assert.equal(blockValue.signature, "edited");
+  assert.equal(document.undoCount, 1);
+  assert.equal(document.redoCount, 0);
+  assert.equal(document.currentSnapshot, "document");
+  assert.equal("undoSnapshots" in block, false);
+});
+
+test("owned histories enforce limits and discard only the matching transient snapshot", () => {
+  let value = "a";
+  const history = historyOps.create({ capture: () => value, signature: item => item, restore: item => { value = item; return true; }, limit: 3 });
+  history.reset();
+  assert.equal(history.discardLatest("a"), false);
+  for (value of ["b", "c", "d"]) history.record();
+  assert.equal(history.undoCount, 3);
+  history.undo();
+  assert.equal(history.redoCount, 1);
+  assert.equal(history.discardLatest("not-current"), false);
+  assert.equal(history.redoCount, 1);
+  assert.equal(history.discardLatest("c"), true);
+  assert.equal(history.currentSnapshot, "b");
+  assert.equal(history.redoCount, 0);
+  assert.equal(history.undo(), false);
+});
+
+test("owned history restoration preserves the existing stack transition and error contract", () => {
+  let value = "a";
+  const failure = Error("restore failed");
+  const history = historyOps.create({
+    capture: () => value, signature: item => item, limit: 3, undoLabel: "undo", redoLabel: "redo",
+    restore: (snapshot, label) => {
+      assert.equal(history.currentSnapshot, snapshot);
+      if (label === "redo") throw failure;
+      assert.equal(history.undoCount, 1);
+      assert.equal(history.redoCount, 1);
+      return false;
+    },
+  });
+  history.reset();
+  value = "b";
+  history.record();
+  assert.equal(history.undo(), false);
+  assert.throws(() => history.redo(), error => error === failure);
+  assert.equal(history.undoCount, 2);
+  assert.equal(history.redoCount, 0);
+});
