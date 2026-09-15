@@ -304,8 +304,24 @@ test("offset chain constraint preserves distance, direction, and miter joins", (
   );
 
   assert.ok(residualNorm(constraint.rawError()) < 1e-9, JSON.stringify(constraint.rawError()));
+  offset1.p1.x = -25;
+  offset2.p2.y = 140;
+  assert.ok(residualNorm(constraint.rawError()) < 1e-9, "open chain endpoints may extend along their supports");
   offset2.p1.x += 2;
   assert.ok(residualNorm(constraint.rawError()) > 1);
+});
+
+test("single line offset constraint is a support constraint", () => {
+  const source = new geometry.Line("L1", new geometry.Point("P1", 0, 0, true), new geometry.Point("P2", 100, 0, true));
+  const offset = new geometry.Line("L2", new geometry.Point("P3", 0, 10), new geometry.Point("P4", 100, 10));
+  const constraint = new geometry.OffsetConstraint(source, offset, 10, 1);
+
+  assert.ok(residualNorm(constraint.rawError()) < 1e-9);
+  offset.p1.x = -25;
+  offset.p2.x = 140;
+  assert.ok(residualNorm(constraint.rawError()) < 1e-9);
+  offset.p2.y = 11;
+  assert.ok(residualNorm(constraint.rawError()) > 1e-3);
 });
 
 test("offset chain constraint supports a line and arc with an explicit traversal", () => {
