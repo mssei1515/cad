@@ -65,7 +65,7 @@ src/
   parameters/               式解析と依存評価
   editing/                  履歴stack・Documentと編集scope・Selection
   diagnostics/              処理時間の計測
-  ui/                       共通選択dialog
+  ui/                       共通選択dialog・言語／テーマ設定とUI翻訳
 tests/
   unit/                     DOMなしの責務別検証
   e2e/                      操作・連携・互換性・Canvas検証
