@@ -13,6 +13,22 @@
     lineIntersection, signedPointLineDistance,
   } = window.GeometryKernel;
 
+  function isDimensionConstraint(constraint) {
+    return (
+      constraint instanceof DistanceConstraint ||
+      constraint instanceof PointAxisDistanceConstraint ||
+      constraint instanceof PointLineDistanceConstraint ||
+      constraint instanceof LineLineDistanceConstraint ||
+      constraint instanceof LineCircleDistanceConstraint ||
+      constraint instanceof ConcentricRadiusDifferenceConstraint ||
+      constraint instanceof OffsetConstraint ||
+      constraint instanceof OffsetChainConstraint ||
+      constraint instanceof LineAngleConstraint ||
+      constraint instanceof RadiusConstraint ||
+      constraint instanceof DiameterConstraint
+    );
+  }
+
   function targetFromConstraint(c) {
     if (c instanceof DistanceConstraint) return { kind: "point-point", p1: c.p1, p2: c.p2, value: c.target };
     if (c instanceof PointAxisDistanceConstraint) return { kind: "point-point", p1: c.p1, p2: c.p2, value: c.target, dimensionAxis: c.axis };
@@ -133,6 +149,6 @@
     targetFromConstraint, offsetPairSign, angleDegrees,
     angleDimensionSweep, signedAngleBetweenLines, measuredDimensionValue,
     angleDimensionAngles, angleDimensionCandidate, geometryTargetValue,
-    isReadOnlyDimension,
+    isReadOnlyDimension, isDimensionConstraint,
   });
 })();

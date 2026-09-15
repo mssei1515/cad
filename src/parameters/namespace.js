@@ -1,8 +1,7 @@
 /* Parameter namespace normalization, dimension symbols and expression evaluation. */
 (function () {
   "use strict";
-  const { isDimensionConstraint } = window.ConstraintPersistence;
-  const { targetFromConstraint, measuredDimensionValue, isReadOnlyDimension, angleDegrees } = window.DimensionQueries;
+  const { isDimensionConstraint, targetFromConstraint, measuredDimensionValue, isReadOnlyDimension, angleDegrees } = window.DimensionQueries;
   const {
     dependencies: expressionDependencies, evaluateDefinitions: evaluateParameterDefinitions,
     validateIdentifier: validateParameterIdentifier, rewriteIdentifiers: rewriteParameterIdentifiers,

@@ -7,8 +7,8 @@ const test = require("node:test");
 const root = path.resolve(__dirname, "../..");
 const sandbox = { window: {} };
 vm.createContext(sandbox);
-const sources = vm.runInNewContext(fs.readFileSync(path.join(root, "index.html"), "utf8").match(/const sources = (\[[\s\S]*?\]);/)[1]);
-for (const file of sources.filter(source => source.startsWith("src/"))) {
+// Namespace evaluation must initialize without persistence or UI modules.
+for (const file of ["src/geometry/geometry_kernel.js", "src/geometry/spline_geometry.js", "src/solver/constraint_solver.js", "src/parameters/parameter_engine.js", "src/constraints/dimension_queries.js", "src/parameters/namespace.js"]) {
   vm.runInContext(fs.readFileSync(path.join(root, file), "utf8"), sandbox, { filename: file });
 }
 const { Point, Line, DistanceConstraint, PointAxisDistanceConstraint, LineAngleConstraint } = sandbox.window.GeometrySolver;

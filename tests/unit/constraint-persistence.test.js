@@ -7,7 +7,7 @@ const { phase0DocumentFixture } = require("../fixtures/phase0-document");
 
 const sandbox = { window: {} };
 vm.createContext(sandbox);
-for (const file of ["src/geometry/geometry_kernel.js", "src/geometry/geometry_ref.js", "src/geometry/spline_geometry.js", "src/solver/constraint_solver.js", "src/persistence/constraint_codec_registry.js", "src/document/appearance.js", "src/persistence/constraints.js"]) {
+for (const file of ["src/geometry/geometry_kernel.js", "src/geometry/geometry_ref.js", "src/geometry/spline_geometry.js", "src/solver/constraint_solver.js", "src/persistence/constraint_codec_registry.js", "src/document/appearance.js", "src/constraints/dimension_queries.js", "src/persistence/constraints.js"]) {
   vm.runInContext(fs.readFileSync(path.resolve(__dirname, "../..", file), "utf8"), sandbox, { filename: file });
 }
 const geometry = sandbox.window.GeometrySolver;

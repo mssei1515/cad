@@ -73,7 +73,6 @@
 
   const { build: buildOffsetChainGeometry } = window.OffsetChainEngine;
 
-  const { isDimensionConstraint } = window.ConstraintPersistence;
   const {
     dependencies: expressionDependencies,
     evaluate: evaluateParameterExpression,
@@ -151,7 +150,7 @@
     targetFromConstraint, offsetPairSign, angleDegrees,
     angleDimensionSweep, signedAngleBetweenLines, measuredDimensionValue,
     angleDimensionAngles, angleDimensionCandidate, geometryTargetValue,
-    isReadOnlyDimension,
+    isReadOnlyDimension, isDimensionConstraint,
   } = window.DimensionQueries;
 
   const canvas = document.getElementById("canvas");
