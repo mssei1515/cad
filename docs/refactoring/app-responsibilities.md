@@ -62,6 +62,7 @@ src/
     document_snapshot.js    Document／Blockの保存snapshot
   geometry/                 幾何kernel・参照・Spline・Hatch領域・Offset
   solver/                   Geometry／Constraint classと数値solve
+  constraints/              拘束の参照判定・依存Nodeの列挙
   parameters/               式解析と依存評価
   editing/                  履歴stack・Documentと編集scope・Selection
   diagnostics/              処理時間の計測
