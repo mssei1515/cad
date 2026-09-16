@@ -8166,10 +8166,6 @@
   function targetDirection(target) {
     if (target.kind === "offset-distance") {
       if (target.source instanceof Line && target.offset instanceof Line) {
-        const dx = target.offset.p1.x - target.source.p1.x;
-        const dy = target.offset.p1.y - target.source.p1.y;
-        const len = hypot2(dx, dy);
-        if (len > 1e-12) return { x: dx / len, y: dy / len };
         const normal = lineNormal(target.source);
         return { x: normal.x * (target.sign || 1), y: normal.y * (target.sign || 1) };
       }
@@ -11600,7 +11596,6 @@
 
   function drawOffsetPreview() {
     if (mode !== "offset" || !(offsetSource || offsetChainEntries.length)) return;
-    if (!pendingCommand && offsetChainEntries.length > 0 && !offsetChainSelectionCommitted) return;
     const pointer = pendingCommand?.type === "offset-value" ? pendingCommand.pointer : pointerPreview;
     if (!pointer) return;
     if (offsetChainEntries.length > 1) {

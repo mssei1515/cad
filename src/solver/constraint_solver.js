@@ -293,16 +293,16 @@
       if (this.source instanceof Line && this.offset instanceof Line) {
         const sx = this.source.dx();
         const sy = this.source.dy();
-        const len = hypot2(sx, sy);
-        const tx = len > MIN_ORIENTATION_LENGTH ? sx / len : 1;
-        const ty = len > MIN_ORIENTATION_LENGTH ? sy / len : 0;
-        const dx = this.offset.p1.x - this.source.p1.x;
-        const dy = this.offset.p1.y - this.source.p1.y;
+        const sourceLength = hypot2(sx, sy);
+        const offsetX = this.offset.dx();
+        const offsetY = this.offset.dy();
+        const offsetLength = hypot2(offsetX, offsetY);
+        const parallel = sourceLength < MIN_ORIENTATION_LENGTH || offsetLength < MIN_ORIENTATION_LENGTH
+          ? 0
+          : ((sx * offsetY - sy * offsetX) / (sourceLength * offsetLength)) * Math.max(this.target, 1);
         return [
-          this.offset.dx() - sx,
-          this.offset.dy() - sy,
-          dx * tx + dy * ty,
           signedPointDirectedLineDistance(this.offset.p1, this.source) * this.sign - this.target,
+          parallel,
         ];
       }
 
@@ -1073,17 +1073,6 @@
         errors.push(end.x - start.x, end.y - start.y);
       }
 
-      if (!this.closed) {
-        for (const [index, endpoint] of [[0, "start"], [this.sources.length - 1, "end"]]) {
-          const sourcePoint = orientedGeometryEndpoint(this.sources[index], this.sourceReversed[index], endpoint);
-          const normal = orientedGeometryLeftNormal(this.sources[index], this.sourceReversed[index], endpoint);
-          const resultPoint = orientedGeometryEndpoint(this.offsets[index], false, endpoint);
-          errors.push(
-            resultPoint.x - sourcePoint.x - normal.x * this.side * this.target,
-            resultPoint.y - sourcePoint.y - normal.y * this.side * this.target,
-          );
-        }
-      }
       return errors;
     }
   }
