@@ -157,6 +157,37 @@ async function openParameterDialog(page) {
   await expect(page.locator("#parametersDialog")).toBeVisible();
 }
 
+test("constraint commands remain reachable from the menu on narrow screens", async ({ page }) => {
+  await page.setViewportSize({ width: 800, height: 900 });
+  await openTestDocument(page);
+
+  const fileMenu = page.locator(".app-menu > summary").filter({ hasText: /^(?:ファイル|File)$/ });
+  await fileMenu.click();
+  const filePopover = page.locator(".app-menu[open] .menu-popover");
+  await expect(filePopover).toBeVisible();
+  const filePopoverPosition = await filePopover.evaluate((element) => {
+    const popover = element.getBoundingClientRect();
+    const menuBar = document.querySelector(".menu-bar").getBoundingClientRect();
+    const button = element.querySelector("button");
+    const buttonRect = button.getBoundingClientRect();
+    const hit = document.elementFromPoint(buttonRect.left + 4, buttonRect.top + 4);
+    return {
+      popoverTop: popover.top,
+      menuBarBottom: menuBar.bottom,
+      buttonHit: hit === button || button.contains(hit),
+    };
+  });
+  expect(filePopoverPosition.popoverTop).toBeLessThanOrEqual(filePopoverPosition.menuBarBottom + 1);
+  expect(filePopoverPosition.buttonHit).toBe(true);
+  await page.keyboard.press("Escape");
+
+  await page.locator(".app-menu > summary").filter({ hasText: /^(?:拘束|Constraint)$/ }).click();
+  const constraintMenu = page.locator(".app-menu[open] .constraint-menu");
+  await expect(constraintMenu.locator("[data-menu-constraint]")).toHaveCount(11);
+  await expect(page.locator(".app-menu > summary").filter({ hasText: /^(?:注記|Annotation)$/ })).toBeVisible();
+  await expect(page.locator("#helpMenu > summary")).toBeVisible();
+});
+
 test("point command double-click exit does not seed the next point dimension", async ({ page }) => {
   await openTestDocument(page);
   await page.evaluate(() => window.__jot2dTest.focusWorldForTest({ x: 0, y: 0 }, 3));

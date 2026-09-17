@@ -180,7 +180,7 @@ test("constraint commit accepts a stalled solver result within the application t
     constraintCount: 1,
     hintIsError: false,
   }));
-  expect(accepted.hint).toContain("success=true");
+  expect(accepted.hint).toContain("拘束を追加しました");
 
   const rejected = await page.evaluate(() => window.__jot2dTest.commitConstraintWithForcedSolveResultForTest({
     success: false,

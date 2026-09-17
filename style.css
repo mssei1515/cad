@@ -138,8 +138,9 @@ button:disabled { opacity: .45; cursor: default; }
 .document-save-status { margin-left: auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; color: #dbeafe; }
 .document-save-status[data-dirty="true"] { color: #fde68a; }
 .app-logo { display: block; width: 108px; height: 24px; flex: 0 0 auto; object-fit: contain; object-position: center; opacity: .98; user-select: none; }
-.app-menus { display: flex; align-items: stretch; height: 100%; }
-.app-menu { position: relative; }
+.app-menus { min-width: 0; flex: 1 1 auto; display: flex; align-items: stretch; height: 100%; overflow-x: auto; overflow-y: hidden; }
+.menu-bar.menu-open .app-menus { overflow: visible; }
+.app-menu { position: relative; flex: 0 0 auto; }
 .app-menu > summary { list-style: none; height: 100%; display: flex; align-items: center; padding: 0 10px; font-size: 13px; cursor: pointer; }
 .app-menu > summary::-webkit-details-marker { display: none; }
 .app-menu[open] > summary, .app-menu > summary:hover { background: #2a527e; }
@@ -147,6 +148,7 @@ button:disabled { opacity: .45; cursor: default; }
 .menu-popover { position: absolute; z-index: 1; top: calc(100% - 1px); left: 0; min-width: 210px; padding: 6px; display: grid; gap: 3px; color: var(--text); background: var(--context-bg); border: 1px solid var(--border); border-radius: 0 0 6px 6px; box-shadow: 0 10px 24px var(--menu-shadow); }
 .menu-popover button, .menu-popover label, .menu-note { min-height: 30px; padding: 6px 9px; border: 0; border-radius: 3px; background: transparent; text-align: left; white-space: nowrap; }
 .menu-popover button:hover, .menu-popover label:hover { background: var(--accent-soft); }
+.menu-popover button.active { color: var(--accent); font-weight: 700; background: var(--accent-soft); }
 .menu-popover button { display: flex; justify-content: space-between; }
 .menu-popover label { display: flex; align-items: center; gap: 7px; cursor: pointer; }
 .menu-popover label input { margin: 0; }
@@ -410,5 +412,4 @@ html[data-theme="dark"] .settings-dialog::backdrop { background: rgba(2, 6, 23, 
 
 @media (max-width: 1000px) {
   :root { --properties-w: 250px; }
-  .app-menus .app-menu:nth-last-child(-n+2) { display: none; }
 }
