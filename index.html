@@ -40,17 +40,19 @@
           <label><input id="viewConstraintStatusInput" type="checkbox" /> <span>拘束状態表示</span><kbd>Space</kbd></label>
         </div></details>
         <details class="app-menu"><summary>Geometry</summary><div class="menu-popover menu-command-list">
-          <button type="button" data-menu-tool="toolPoint">点</button><button type="button" data-menu-tool="toolLine">線</button><button type="button" data-menu-tool="toolCenterline">中心線</button><button type="button" data-menu-tool="toolCircleCenterCross">円中心十字線</button>
+          <button type="button" data-menu-tool="toolPoint">点</button><button type="button" data-menu-tool="toolLine">連続線</button><button type="button" data-menu-tool="toolCenterline">中心線</button><button type="button" data-menu-tool="toolCircleCenterCross">円中心十字線</button>
           <button type="button" data-menu-tool="toolRectangle">矩形</button><button type="button" data-menu-tool="toolSlot">長穴</button><button type="button" data-menu-tool="toolCircle">円</button>
           <button type="button" data-menu-tool="toolArc">円弧</button><button type="button" data-menu-tool="toolThreePointArc">3点円弧</button><button type="button" data-menu-tool="toolSpline">スプライン</button><button type="button" data-menu-tool="toolSketchProjection">スケッチ投影</button><button type="button" data-menu-tool="toolFreeInstance">同期インスタンス</button><button type="button" data-menu-tool="toolMirror">ミラー</button><button type="button" data-menu-tool="toolPattern">直線パターン</button><button type="button" data-menu-tool="toolTrim">トリム</button>
           <button type="button" data-menu-tool="toolHatch">ハッチング</button>
-          <button type="button" data-menu-tool="toolFillet">フィレット</button><button type="button" data-menu-tool="toolOffset">オフセット</button>
+          <button type="button" data-menu-tool="toolFillet">R面取り</button><button type="button" data-menu-tool="toolOffset">オフセット</button>
         </div></details>
         <details class="app-menu"><summary>ブロック</summary><div class="menu-popover">
           <button type="button" data-menu-tool="toolCreateBlock">ブロック作成</button>
           <button id="openBlockDefinitionsBtn" type="button">ブロック定義</button>
         </div></details>
-        <details class="app-menu"><summary>Constraint</summary><div class="menu-popover"><span class="menu-note">拘束ツールはツールバーから選択します</span></div></details>
+        <details class="app-menu"><summary>Constraint</summary><div class="menu-popover menu-command-list constraint-menu">
+          <button type="button" data-menu-constraint="distance">寸法</button><button type="button" data-menu-constraint="coincident">一致</button><button type="button" data-menu-constraint="horizontal">水平</button><button type="button" data-menu-constraint="vertical">垂直</button><button type="button" data-menu-constraint="parallel">平行</button><button type="button" data-menu-constraint="perpendicular">直角</button><button type="button" data-menu-constraint="symmetry">対称</button><button type="button" data-menu-constraint="concentric">同心</button><button type="button" data-menu-constraint="equal">等寸</button><button type="button" data-menu-constraint="tangent">接線</button><button type="button" data-menu-constraint="fixed">固定／解除</button>
+        </div></details>
         <details class="app-menu"><summary>Annotation</summary><div class="menu-popover">
           <button type="button" data-menu-tool="annotationLeaderBtn">引出線</button>
           <button type="button" data-menu-tool="annotationTextBtn">自由テキスト</button>
