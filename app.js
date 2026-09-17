@@ -445,6 +445,7 @@
   let runtimeVersionState = { status: "unavailable" };
 
   const constraintButtons = Array.from(document.querySelectorAll("[data-constraint]"));
+  const constraintMenuButtons = Array.from(document.querySelectorAll("[data-menu-constraint]"));
   const fixPointBtn = document.getElementById("fixPointBtn");
 
   function renderRuntimeVersion() {
@@ -531,6 +532,39 @@
     el.dataset.hintSource = String(msg);
     el.textContent = translatedHintText(msg);
     el.classList.toggle("error", kind === "error");
+  }
+
+  function solveOperationLabel(label) {
+    const labels = {
+      "点追加": ["点の追加", "Point creation"],
+      "線追加": ["連続線の追加", "Polyline creation"],
+      "矩形追加": ["矩形の追加", "Rectangle creation"],
+      "長穴追加": ["長穴の追加", "Slot creation"],
+      "円追加": ["円の追加", "Circle creation"],
+      "円弧追加": ["円弧の追加", "Arc creation"],
+      "3点円弧追加": ["3点円弧の追加", "Three-point arc creation"],
+      "スプライン追加": ["スプラインの追加", "Spline creation"],
+      "ブロック配置": ["ブロック配置", "Block placement"],
+      "インスタンス削除": ["インスタンス削除", "Instance deletion"],
+      "貼り付け": ["貼り付け", "Paste"],
+      "ファイル読み込み": ["ファイル読み込み", "File load"],
+      "サンプル復元": ["サンプル復元", "Sample restore"],
+    };
+    const pair = labels[String(label)];
+    return applicationText(pair?.[0] || String(label), pair?.[1] || String(label));
+  }
+
+  function setSolveResultHint(label, solved, analysis, dependent) {
+    const hasDependentError = dependent?.success === false;
+    const hasDuplicateConstraints = (constraintRedundancyState?.count || 0) > 0;
+    const stable = Boolean(solved?.success && analysis?.analysis?.stable && !hasDependentError && !hasDuplicateConstraints);
+    const operation = solveOperationLabel(label);
+    const message = stable
+      ? applicationText(`${operation}が完了しました`, `${operation} completed`)
+      : solved?.success
+        ? applicationText(`${operation}が完了しました。拘束状態を確認してください`, `${operation} completed. Check the constraint status`)
+        : applicationText(`${operation}を完了できませんでした。拘束や形状を確認してください`, `${operation} could not be completed. Check the constraints and geometry`);
+    setHint(message, stable ? "normal" : "error");
   }
 
   function effectiveDocumentName() {
@@ -2240,11 +2274,7 @@
     const solved = stabilizeActiveParameterNamespace(activeSketchId());
     const result = solved.result;
     const analysis = refreshConstraintAnalysis();
-    const hasDependentError = solved.dependent?.success === false;
-    const hasDuplicateConstraints = (constraintRedundancyState?.count || 0) > 0;
-    const statusKind = solved.success && analysis.analysis.stable && !hasDependentError && !hasDuplicateConstraints ? "normal" : "error";
-    const dependentText = solved.dependent?.results?.length > 0 ? `, dependent=${solved.dependent.results.length}` : "";
-    setHint(`${label}: success=${solved.success}, error=${result.errorNorm.toExponential(2)}, iter=${result.iterations}${dependentText}${dependentErrorSummary(solved.dependent)} / ${constraintSummaryText()}`, statusKind);
+    setSolveResultHint(label, solved, analysis, solved.dependent);
     updateUI({ refreshAnalysis: false });
     draw();
     if (solved.success && !historyRestoring) recordHistory(label);
@@ -9092,7 +9122,8 @@
     updateUI();
     draw();
     const msg = `削除しました: 点${pointSet.size} / 線${lineSet.size} / 円${circleSet.size} / 円弧${arcSet.size} / スプライン${splineSet.size} / 拘束${constraintSet.size}`;
-    setHint(`${msg} (error=${result.errorNorm.toExponential(2)}) / ${constraintSummaryText()}`, result.success && constraintAnalysisState?.analysis?.stable ? "normal" : "error");
+    const stable = result.success && constraintAnalysisState?.analysis?.stable;
+    setHint(stable ? msg : `${msg}。拘束状態を確認してください`, stable ? "normal" : "error");
     log(`${msg}\n自動solve: success=${result.success}, error=${result.errorNorm.toExponential(3)}`);
     recordHistory("削除");
     return true;
@@ -12798,12 +12829,12 @@
       const result = solved.result;
       if (!solved.success || solved.dependent?.success === false || result.errorNorm > CONSTRAINT_ACCEPT_ERROR) {
         restoreModelState(snapshot);
-        setHint(`${applicationText("寸法の値 / 数式を更新できません", "Could not update the dimension Value / Expression")}: ${result.reason || `error=${result.errorNorm.toExponential(3)}`}`, "error");
+        setHint(`${applicationText("寸法の値 / 数式を更新できません", "Could not update the dimension Value / Expression")}: ${result.reason || applicationText("拘束や形状を確認してください", "Check the constraints and geometry")}`, "error");
         syncDimensionValueInput();
       } else {
         pendingCommand = null;
         hideDimensionValueInput();
-        setHint(`寸法値更新: success=${result.success}, error=${result.errorNorm.toExponential(2)}, iter=${result.iterations}`);
+        setHint(applicationText("寸法値を更新しました", "Dimension value updated"));
         recordHistory("寸法値変更");
       }
       updateUI();
@@ -12890,6 +12921,11 @@
   function updateConstraintButtons() {
     if (!isGeometryMode()) {
       for (const btn of constraintButtons) {
+        btn.classList.remove("active");
+        btn.setAttribute("aria-disabled", "true");
+        btn.setAttribute("aria-pressed", "false");
+      }
+      for (const btn of constraintMenuButtons) {
         btn.classList.remove("active");
         btn.setAttribute("aria-disabled", "true");
         btn.setAttribute("aria-pressed", "false");
@@ -15688,7 +15724,7 @@
     updateUI({ refreshAnalysis: false });
     draw();
     performanceTrace.uiMs = performance.now() - uiStartedAt;
-    setHint(`拘束追加: success=${solved.success}, error=${result.errorNorm.toExponential(2)}, iter=${result.iterations} / ${constraintSummaryText()}`);
+    setHint(applicationText("拘束を追加しました", "Constraint added"));
     log(`拘束を追加しました: ${type}\n自動solve: success=${solved.success}, error=${result.errorNorm.toExponential(3)}`);
     recordHistory(`拘束追加: ${type}`);
     performanceTrace.totalMs = performance.now() - performanceTrace.startedAt;
@@ -15750,7 +15786,7 @@
     refreshConstraintAnalysis({ redundancyBySketch });
     updateUI({ refreshAnalysis: false });
     draw();
-    setHint(`参照拘束追加: ${sketchName(referenceSketchId)} を参照 / success=${result.success}, error=${result.errorNorm.toExponential(2)}`);
+    setHint(applicationText(`参照拘束を追加しました: ${sketchName(referenceSketchId)} を参照`, `Reference constraint added: referencing ${sketchName(referenceSketchId)}`));
     log(`参照拘束を追加しました: ${type}\n自動solve: success=${result.success}, error=${result.errorNorm.toExponential(3)}`);
     recordHistory(`参照拘束追加: ${type}`);
     return true;
@@ -18060,14 +18096,14 @@
     const result = solved.result;
     if (!solved.success || solved.dependent?.success === false || result.errorNorm > CONSTRAINT_ACCEPT_ERROR) {
       restoreGeometryMutationState(snapshot);
-      setHint(`${applicationText("拘束を維持できないためトリムを戻しました", "The trim was restored because its constraints could not be maintained.")} (error=${result.errorNorm.toExponential(3)})`, "error");
+      setHint(applicationText("拘束を維持できないためトリムを戻しました。拘束状態を確認してください", "The trim was restored because its constraints could not be maintained. Check the constraint status."), "error");
       updateUI();
       draw();
       return false;
     }
     constraintAnalysisState = null;
     refreshConstraintAnalysis();
-    setHint(`トリムしました (error=${result.errorNorm.toExponential(2)})`);
+    setHint(applicationText("トリムしました", "Trim completed"));
     updateUI({ refreshAnalysis: false });
     draw();
     recordHistory("トリム");
@@ -18225,14 +18261,14 @@
     const stabilized = stabilizeActiveParameterNamespace(activeSketchId());
     if (!stabilized.success || stabilized.dependent?.success === false || stabilized.result.errorNorm > CONSTRAINT_ACCEPT_ERROR) {
       restoreGeometryMutationState(snapshot);
-      setHint(`${applicationText("拘束を維持できないためR面取りを戻しました", "The fillet was restored because its constraints could not be maintained.")} (error=${stabilized.result.errorNorm.toExponential(3)})`, "error");
+      setHint(applicationText("拘束を維持できないためR面取りを戻しました。拘束状態を確認してください", "The fillet was restored because its constraints could not be maintained. Check the constraint status."), "error");
       updateUI();
       draw();
       return true;
     }
     constraintAnalysisState = null;
     refreshConstraintAnalysis();
-    setHint(`${applicationText("R面取りを追加しました", "Fillet added")} (error=${stabilized.result.errorNorm.toExponential(2)})`);
+    setHint(applicationText("R面取りを追加しました", "Fillet added"));
     updateUI({ refreshAnalysis: false });
     draw();
     recordHistory("R面取り追加");
@@ -20106,21 +20142,16 @@
     dragSession.previewMoved = true;
     const dragPointer = dragSession.pointerMap ? dragSession.pointerMap(p) : p;
     const result = dragResultForSession(dragSession, dragPointer);
-    const error = result.errorNorm;
     if (result.blocked) {
       setHint(result.reason, "error");
       updateUI({ refreshAnalysis: false });
       draw();
       return;
     }
-    const scope = result.local
-      ? `${result.guided ? "guided local" : "local"} vars=${result.variableCount}, constraints=${result.constraintCount}${Number.isFinite(result.freeDof) ? `, dof=${result.freeDof}` : ""}`
-      : "global";
-    const fallback = result.fallback ? ` fallback from local error=${result.localErrorNorm?.toExponential(2)}` : "";
     const dependentResult = solveReferenceDependentSketches(dragSession.sketchId || activeSketchId());
-    const dependentText = dependentResult.results.length > 0 ? `, dependent=${dependentResult.results.length}` : "";
-    const dependentErrorText = dependentErrorSummary(dependentResult);
-    setHint(`${dragLabel(dragSession)}中: ${scope}, error=${error.toExponential(2)}, iter=${result.iterations}${fallback}${dependentText}${dependentErrorText}`, dependentResult.success ? "normal" : "error");
+    setHint(dependentResult.success
+      ? applicationText("ドラッグ中: 拘束を保ちながら調整しています", "Dragging: maintaining constraints")
+      : applicationText("ドラッグ中: 参照先の拘束を確認してください", "Dragging: check the referenced constraints"), dependentResult.success ? "normal" : "error");
     if (!dependentResult.success) updateUI();
     draw();
   }
@@ -20319,7 +20350,7 @@
       clearSketchSolveState(session.sketchId || activeSketchId());
       setHint(invalidSpline
         ? applicationText(`${invalidSpline.id} の通過点が重なり、スプラインが成立しないため移動を戻しました`, `${invalidSpline.id} was restored because overlapping fit points made the spline invalid.`)
-        : `${completedLabel}完了時の全体solveに失敗しました (error=${result.errorNorm.toExponential(3)})`, "error");
+        : applicationText(`${completedLabel}完了時に拘束を解決できないため移動を戻しました`, `${completedLabel} was restored because its constraints could not be resolved.`), "error");
       updateUI();
       draw();
       return;
@@ -20337,8 +20368,10 @@
     }
     const dependentResult = stabilized.dependent;
     const analysis = refreshConstraintAnalysis();
-    const dependentErrorText = dependentErrorSummary(dependentResult);
-    setHint(`${completedLabel}完了: success=${result.success}, error=${result.errorNorm.toExponential(2)}, iter=${result.iterations}${dependentErrorText} / ${constraintSummaryText()}`, analysis.analysis.stable && dependentResult.success ? "normal" : "error");
+    const stable = analysis.analysis.stable && dependentResult.success;
+    setHint(stable
+      ? applicationText(`${completedLabel}を完了しました`, `${completedLabel} completed`)
+      : applicationText(`${completedLabel}を完了しました。拘束状態を確認してください`, `${completedLabel} completed. Check the constraint status`), stable ? "normal" : "error");
     updateUI({ refreshAnalysis: false });
     draw();
     recordHistory(`${completedLabel}ドラッグ`);
@@ -21100,6 +21133,7 @@
   }
 
   const appMenus = Array.from(document.querySelectorAll(".app-menu"));
+  const appMenuBar = document.querySelector(".menu-bar");
   let appMenuHoverTimer = null;
   function cancelAppMenuHoverSwitch() {
     if (appMenuHoverTimer == null) return;
@@ -21111,6 +21145,7 @@
     for (const menu of appMenus) {
       if (menu !== except) menu.removeAttribute("open");
     }
+    appMenuBar?.classList.toggle("menu-open", appMenus.some((menu) => menu.open));
   }
   for (const menu of appMenus) {
     const summary = menu.querySelector(":scope > summary");
@@ -21131,6 +21166,7 @@
     summary?.addEventListener("pointerdown", cancelAppMenuHoverSwitch);
     menu.addEventListener("toggle", () => {
       if (menu.open) closeAppMenus(menu);
+      else appMenuBar?.classList.toggle("menu-open", appMenus.some((item) => item.open));
     });
   }
   document.addEventListener("pointerdown", (event) => {
@@ -21670,6 +21706,16 @@
       }
     });
   }
+  for (const btn of constraintMenuButtons) {
+    btn.addEventListener("click", () => {
+      const type = btn.dataset.menuConstraint;
+      const target = type === "fixed"
+        ? fixPointBtn
+        : constraintButtons.find((candidate) => candidate.dataset.constraint === type);
+      target?.click();
+      btn.closest("details")?.removeAttribute("open");
+    });
+  }
 
   function toggleGeometryFixedOperand(operand) {
     const geometry = operand.element;
@@ -21751,13 +21797,13 @@
     const fixedResult = solved.result;
     if (!solved.success || solved.dependent?.success === false || fixedResult.errorNorm > CONSTRAINT_ACCEPT_ERROR) {
       restoreModelState(snapshot);
-      setHint(`${applicationText("選択対象の固定状態を変更できません", "The selected objects could not be fixed or unfixed")} (error=${fixedResult.errorNorm.toExponential(3)})`, "error");
+      setHint(applicationText("選択対象の固定状態を変更できません。拘束や形状を確認してください", "The selected objects could not be fixed or unfixed. Check the constraints and geometry."), "error");
       updateUI();
       draw();
       return false;
     }
     refreshConstraintAnalysis();
-    setHint(`固定状態変更: success=${fixedResult.success}, error=${fixedResult.errorNorm.toExponential(2)}, iter=${fixedResult.iterations}`);
+    setHint(applicationText("固定状態を変更しました", "Fixed state updated"));
     updateUI({ refreshAnalysis: false });
     draw();
     const ids = [...batch.points, ...batch.lines].map((item) => item.id);
