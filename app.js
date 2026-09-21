@@ -221,12 +221,18 @@
     validateParameterNamespace, prepareLoadedParameterNamespace, parameterDependents,
   } = parameterNamespace;
   const parameterDraft = window.ParameterDialogDraft.create({ namespace: parameterNamespace });
-  const { isDirty: parameterDialogIsDirty, evaluate: parameterDraftEvaluation } = parameterDraft;
   const parameterDialogView = window.ParameterDialogView.create({
     document, applicationText, escapeHtml, formatDisplayNumber, parameterErrorText,
     localizeApplicationUI, installExpressionInputHighlights, defaultSketchId: DEFAULT_SKETCH_ID,
   });
   const { setError: setParameterDialogError } = parameterDialogView;
+  const parameterDialogController = window.ParameterDialogController.create({
+    document, window, draft: parameterDraft, view: parameterDialogView,
+    scopes: parameterScopeOptions, scopeLocked: () => Boolean(blockEditSession),
+    apply: applyParameterDialogDraft, applicationText, language: () => applicationSettings.language,
+    refreshExpressionInputHighlights, pickDimension: pickParameterDialogDimension,
+  });
+  const { loadScope: loadParameterDialogScope } = parameterDialogController;
   const {
     ensureSketchState, isRootSketch, isDrawableSketch,
     firstDrawableSketchId, sketchName, sketchById,
@@ -17609,32 +17615,6 @@
     ];
   }
 
-  function parameterScopeForKey(key) {
-    return parameterScopeOptions().find((option) => option.key === key) || parameterScopeOptions()[0] || null;
-  }
-
-  function renderParameterDialog() {
-    const session = parameterDraft.current;
-    if (!session) return;
-    let evaluation = null;
-    let evaluationError = null;
-    try {
-      evaluation = parameterDraftEvaluation(session);
-    } catch (error) {
-      evaluationError = error;
-    }
-    parameterDialogView.render({ session, scopes: parameterScopeOptions(),
-      scopeLocked: Boolean(blockEditSession), evaluation, evaluationError });
-  }
-
-  function loadParameterDialogScope(key) {
-    const scope = parameterScopeForKey(key);
-    if (!scope) return false;
-    parameterDraft.open(scope);
-    renderParameterDialog();
-    return true;
-  }
-
   function withStoredDefinitionAsModel(definition, callback) {
     const previousScope = model;
     activateEditingScope(definition);
@@ -17727,18 +17707,12 @@
     }
   }
 
-  function resolveDirtyParameterDialog() {
-    if (!parameterDialogIsDirty()) return true;
-    if (window.confirm(applicationText("未適用の変更を適用しますか？", "Apply the pending changes?"))) return applyParameterDialogDraft();
-    return window.confirm(applicationText("未適用の変更を破棄しますか？", "Discard the pending changes?"));
-  }
-
-  function openParametersDialog() {
-    const options = parameterScopeOptions();
-    if (options.length === 0) return;
-    loadParameterDialogScope(options[0].key);
-    const dialog = document.getElementById("parametersDialog");
-    if (dialog && !dialog.open) dialog.showModal();
+  function pickParameterDialogDimension(event) {
+    const rect = canvas.getBoundingClientRect();
+    if (event.clientX < rect.left || event.clientX > rect.right || event.clientY < rect.top || event.clientY > rect.bottom) return;
+    const point = canvasPoint(event);
+    const hit = hitDimension(point.x, point.y);
+    if (hit) insertClickedDimensionParameter(event, hit);
   }
 
   const applicationMenus = window.ApplicationMenus.create({ document, window, activateTool: id => document.getElementById(id)?.click() });
@@ -17748,63 +17722,7 @@
     const workspace = document.querySelector(".workspace");
     setPropertiesPanelCollapsed(!workspace?.classList.contains("properties-collapsed"));
   });
-  document.getElementById("parametersBtn")?.addEventListener("click", openParametersDialog);
-  document.getElementById("parameterScopeSelect")?.addEventListener("change", (event) => {
-    const previousKey = parameterDraft.current?.key;
-    if (!resolveDirtyParameterDialog()) {
-      event.target.value = previousKey;
-      return;
-    }
-    loadParameterDialogScope(event.target.value);
-  });
-  document.getElementById("parametersForm")?.addEventListener("input", (event) => {
-    if (!parameterDraft.current) return;
-    const input = event.target;
-    parameterDraft.updateInput(input.dataset, input.value);
-    refreshExpressionInputHighlights(event.currentTarget);
-  });
-  document.getElementById("parametersForm")?.addEventListener("change", (event) => {
-    if (!parameterDraft.current) return;
-    const input = event.target;
-    parameterDraft.commitName(input.dataset);
-    if (input.id !== "parameterScopeSelect") renderParameterDialog();
-  });
-  document.getElementById("parametersForm")?.addEventListener("click", (event) => {
-    const deleteButton = event.target.closest("[data-delete-parameter]");
-    if (!deleteButton || !parameterDraft.current) return;
-    const index = Number(deleteButton.dataset.deleteParameter);
-    const result = parameterDraft.remove(index);
-    if (!result) return;
-    if (!result.removed) {
-      setParameterDialogError(applicationSettings.language === "en" ? `${result.name} is referenced by ${result.dependencies.join(", ")}` : `${result.name} は ${result.dependencies.join("、")} から参照されています`);
-      return;
-    }
-    renderParameterDialog();
-  });
-  document.getElementById("addParameterBtn")?.addEventListener("click", () => {
-    if (parameterDraft.add()) renderParameterDialog();
-  });
-  document.getElementById("applyParametersBtn")?.addEventListener("click", applyParameterDialogDraft);
-  document.getElementById("discardParametersBtn")?.addEventListener("click", () => loadParameterDialogScope(parameterDraft.current?.key));
-  document.getElementById("parametersCloseBtn")?.addEventListener("click", () => {
-    if (!resolveDirtyParameterDialog()) return;
-    document.getElementById("parametersDialog")?.close();
-  });
-  document.getElementById("parametersDialog")?.addEventListener("pointerdown", (event) => {
-    const dialog = event.currentTarget;
-    if (event.button !== 0 || event.target !== dialog) return;
-    const rect = canvas.getBoundingClientRect();
-    if (event.clientX < rect.left || event.clientX > rect.right || event.clientY < rect.top || event.clientY > rect.bottom) return;
-    const point = canvasPoint(event);
-    const hit = hitDimension(point.x, point.y);
-    if (hit) insertClickedDimensionParameter(event, hit);
-  });
-  document.getElementById("parametersDialog")?.addEventListener("cancel", (event) => {
-    if (!resolveDirtyParameterDialog()) event.preventDefault();
-  });
-  document.getElementById("parametersDialog")?.addEventListener("close", () => {
-    parameterDraft.close();
-  });
+  parameterDialogController.start();
   document.getElementById("documentSettingsBtn")?.addEventListener("click", () => {
     const fields = document.getElementById("documentAppearanceFields");
     if (fields) {
