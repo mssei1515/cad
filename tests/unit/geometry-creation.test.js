@@ -72,3 +72,13 @@ test('arc minimum normalization preserves enabled endpoint, fixed and offset con
   state.scope = scope(); const full = new Arc('full', center, 10, 0, 2 * Math.PI);
   assert.equal(creation.normalizeArcSweep(full), true); assert.equal(full.endAngle, 0);
 });
+test('batch minimum-shape repair uses the current scope and reports changes and failures', () => {
+  const { creation, state } = fixture();
+  const free = new Line('free', new Point('p1', 0, 0), new Point('p2', 0, 0));
+  const fixed = new Line('fixed', new Point('p3', 0, 0, true), new Point('p4', 0, 0, true));
+  state.scope.lines = [free, fixed];
+  assert.deepEqual(plain(creation.enforceMinimumLineLengths()), { changed: 1, failed: 1 });
+  state.scope = scope(); state.scope.arcs = [new Arc('a', new Point('p5', 0, 0), 10, 0, 0.01)];
+  assert.deepEqual(plain(creation.enforceMinimumLineLengths()), { changed: 0, failed: 0 });
+  assert.equal(creation.normalizeArcSweeps(), 1); assert.equal(creation.normalizeArcSweeps(), 0);
+});

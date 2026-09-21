@@ -100,7 +100,26 @@
       return false;
     }
 
-    return Object.freeze({ addPoint, addPointToSketch, addLine, addCircle, addArc, addSpline, ensureLineMinimumLength, normalizeArcSweep });
+    function enforceMinimumLineLengths(lines = currentScope().lines) {
+      let changed = 0;
+      let failed = 0;
+      for (const line of lines) {
+        const result = ensureLineMinimumLength(line);
+        if (result.changed) changed += 1;
+        if (result.failed) failed += 1;
+      }
+      return { changed, failed };
+    }
+
+    function normalizeArcSweeps(arcs = currentScope().arcs) {
+      let changed = 0;
+      for (const arc of arcs) {
+        if (normalizeArcSweep(arc)) changed += 1;
+      }
+      return changed;
+    }
+
+    return Object.freeze({ addPoint, addPointToSketch, addLine, addCircle, addArc, addSpline, ensureLineMinimumLength, normalizeArcSweep, enforceMinimumLineLengths, normalizeArcSweeps });
   }
   window.GeometryCreation = Object.freeze({ create });
 })();
