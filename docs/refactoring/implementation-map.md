@@ -182,3 +182,7 @@ index.htmlは既存の通常script読込列で両moduleをapp.jsより先に読�
 ### Hatchの描画
 
 `HatchRenderer`は解決済み輪郭へのclip・pattern線・solid塗りを担当する。境界検索や操作状態を注入せず、呼出し側が描画入力を決める。輪郭boundsは`HatchRegionEngine`へ集約し、fitとBlock boundsからも利用する。
+
+### 寸法のCanvas描画
+
+`DimensionRenderer`は直線／角度寸法のCanvas命令とラベル・編集枠・終端記号・数式マークを所有する。`DimensionMetrics`は共有instanceとして接続する。appの描画adapterは外観・layout・描画計画を準備して渡し、rendererにSketchや拘束対象の検索をさせない。寸法配置と移動／編集操作は後続の整理対象。
