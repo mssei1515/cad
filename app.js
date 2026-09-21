@@ -306,10 +306,6 @@
   let blankDoubleClickCandidate = null;
   let suppressNextBlankDoubleClickEvent = false;
   let lineStartPoint = null;
-  let centerlineTargets = [];
-  let centerlineSupport = null;
-  let centerlineFirstPoint = null;
-  let centerlineFirstSnap = null;
   let pointStartRollback = null;
   let rectangleStartPoint = null;
   let lineStartRollback = null;
@@ -486,6 +482,15 @@
     invalidateAnalysis: () => { constraintAnalysisState = null; },
   });
   const { captureValues: snapshotModelState, restoreValues: restoreModelState, captureGeometry: snapshotGeometryMutationState, restoreGeometry: restoreGeometryMutationState } = editingCheckpoint;
+  const centerlinePlans = window.CenterlineGeometry.create({ applicationText, parallelTolerance: CENTERLINE_PARALLEL_TOLERANCE });
+  const centerlineConstruction = window.CenterlineConstruction.create({ currentScope: workspace.current, geometry: geometryCreation, ids: geometryIds, addPointSnapConstraints, commitNewConstraint });
+  const centerlineCommand = window.CenterlineCommand.create({
+    plans: centerlinePlans, construction: centerlineConstruction, selection: canvasSelection, sameSketchElements, activeSketchId, isActiveSketchElement, applicationText, minLineLength: MIN_LINE_LENGTH,
+    snapForDrawing: pointer => ({ point: snapForDrawing(pointer), snap: activeSnap }), clearSnap,
+    setPointerPreview: value => { pointerPreview = value; }, setMode: value => { mode = value; },
+    invalidateAnalysis: () => { constraintAnalysisState = null; }, setHint, updateUI, draw,
+  });
+  const { reset: resetCenterlineCommandState, prepare: prepareCenterlineEndpointPlacement, click: handleCenterlineClick, projectPointToCenterlineSupport } = centerlineCommand;
   const circularConstruction = window.CircularConstruction.create({
     endpointAt, addPoint, addCircle, addArc, addPointSnapConstraints, addArcEndpointSnapConstraints, addCircularBoundarySnapConstraints,
     currentScope: workspace.current, sequences: geometryIds,
@@ -3116,97 +3121,6 @@
     return true;
   }
 
-  function resetCenterlineCommandState() {
-    centerlineTargets = [];
-    centerlineSupport = null;
-    centerlineFirstPoint = null;
-    centerlineFirstSnap = null;
-  }
-
-  function parallelLineCenterlineSupport(line1, line2) {
-    if (![line1, line2].every((line) => line instanceof Line && lineHasDirection(line))) {
-      return { ok: false, reason: applicationText("中心線の基準線が短すぎます", "A centerline source is too short") };
-    }
-    const length1 = line1.length();
-    const length2 = line2.length();
-    const ux = line1.dx() / length1;
-    const uy = line1.dy() / length1;
-    const vx = line2.dx() / length2;
-    const vy = line2.dy() / length2;
-    if (Math.abs(ux * vy - uy * vx) > CENTERLINE_PARALLEL_TOLERANCE) {
-      return { ok: false, reason: applicationText("互いに平行な2本の線を選択してください", "Select two parallel lines") };
-    }
-    const nx = -uy;
-    const ny = ux;
-    const separation = (line2.p1.x - line1.p1.x) * nx + (line2.p1.y - line1.p1.y) * ny;
-    if (Math.abs(separation) < MIN_ORIENTATION_LENGTH) {
-      return { ok: false, reason: applicationText("異なる位置にある2本の平行線を選択してください", "Select two distinct parallel lines") };
-    }
-    return {
-      ok: true,
-      kind: "parallel-lines",
-      anchor: { x: line1.p1.x + nx * separation / 2, y: line1.p1.y + ny * separation / 2 },
-      ux,
-      uy,
-    };
-  }
-
-  function pointPairCenterlineSupport(p1, p2) {
-    if (!(p1 instanceof Point) || !(p2 instanceof Point) || p1 === p2) {
-      return { ok: false, reason: applicationText("異なる2点を選択してください", "Select two distinct points") };
-    }
-    const dx = p2.x - p1.x;
-    const dy = p2.y - p1.y;
-    const length = hypot2(dx, dy);
-    if (length < MIN_ORIENTATION_LENGTH) {
-      return { ok: false, reason: applicationText("2点が近すぎます", "The two points are too close") };
-    }
-    return {
-      ok: true,
-      kind: "point-pair",
-      anchor: { x: (p1.x + p2.x) / 2, y: (p1.y + p2.y) / 2 },
-      ux: -dy / length,
-      uy: dx / length,
-    };
-  }
-
-  function centerlineSupportForTargets(targets = centerlineTargets) {
-    if (targets.length !== 2) return null;
-    if (targets.every((item) => item instanceof Line)) return parallelLineCenterlineSupport(targets[0], targets[1]);
-    if (targets.every((item) => item instanceof Point)) return pointPairCenterlineSupport(targets[0], targets[1]);
-    return { ok: false, reason: applicationText("平行な2線、または2点を選択してください", "Select two parallel lines or two points") };
-  }
-
-  function projectPointToCenterlineSupport(point, support = centerlineSupport) {
-    if (!point || !support?.ok) return null;
-    const parameter = (point.x - support.anchor.x) * support.ux + (point.y - support.anchor.y) * support.uy;
-    return { x: support.anchor.x + support.ux * parameter, y: support.anchor.y + support.uy * parameter };
-  }
-
-  function prepareCenterlineEndpointPlacement(targets) {
-    if (!sameSketchElements(targets, activeSketchId())) {
-      setHint(applicationText("アクティブスケッチ内の対象を選択してください", "Select targets in the active sketch"), "error");
-      return false;
-    }
-    const support = centerlineSupportForTargets(targets);
-    if (!support?.ok) {
-      setHint(support?.reason || applicationText("中心線を作成できません", "Cannot create the centerline"), "error");
-      return false;
-    }
-    centerlineTargets = targets.slice();
-    centerlineSupport = support;
-    centerlineFirstPoint = null;
-    canvasSelection.set("points", targets.filter((item) => item instanceof Point));
-    canvasSelection.set("lines", targets.filter((item) => item instanceof Line));
-    canvasSelection.set("circles", []);
-    canvasSelection.set("arcs", []);
-    canvasSelection.set("splines", []);
-    setHint(applicationText("中心線の1つ目の端点をクリックしてください", "Click the first centerline endpoint"));
-    updateUI({ refreshAnalysis: false });
-    draw();
-    return true;
-  }
-
   function startCenterlineCommand() {
     cancelConstraintTargetCommand("");
     cancelPendingCommand("");
@@ -3229,110 +3143,6 @@
     setHint(applicationText("平行な2線、または2点を順にクリックしてください", "Select two parallel lines or two points"));
     updateUI({ refreshAnalysis: false });
     draw();
-  }
-
-  function addCenterlineTarget(target) {
-    if (!target || !isActiveSketchElement(target)) {
-      setHint(applicationText("アクティブスケッチ内の対象を選択してください", "Select a target in the active sketch"), "error");
-      return false;
-    }
-    if (centerlineTargets.includes(target)) {
-      setHint(applicationText("別の対象を選択してください", "Select a different target"), "error");
-      return false;
-    }
-    if (centerlineTargets.length > 0 && (centerlineTargets[0] instanceof Line) !== (target instanceof Line)) {
-      setHint(applicationText("2本の線、または2つの点の同じ種類で選択してください", "Select two targets of the same type"), "error");
-      return false;
-    }
-    centerlineTargets.push(target);
-    canvasSelection.set("points", centerlineTargets.filter((item) => item instanceof Point));
-    canvasSelection.set("lines", centerlineTargets.filter((item) => item instanceof Line));
-    if (centerlineTargets.length === 2) {
-      if (prepareCenterlineEndpointPlacement(centerlineTargets)) return true;
-      centerlineTargets.pop();
-      canvasSelection.set("points", centerlineTargets.filter((item) => item instanceof Point));
-      canvasSelection.set("lines", centerlineTargets.filter((item) => item instanceof Line));
-      updateUI({ refreshAnalysis: false });
-      draw();
-      return false;
-    }
-    setHint(target instanceof Line
-      ? applicationText("2本目の平行線をクリックしてください", "Click the second parallel line")
-      : applicationText("2つ目の点をクリックしてください", "Click the second point"));
-    updateUI({ refreshAnalysis: false });
-    draw();
-    return true;
-  }
-
-  function commitCenterline(secondPoint, secondSnap = null) {
-    if (!centerlineSupport?.ok || centerlineTargets.length !== 2 || !centerlineFirstPoint || !secondPoint) return false;
-    if (hypot2(secondPoint.x - centerlineFirstPoint.x, secondPoint.y - centerlineFirstPoint.y) < MIN_LINE_LENGTH) {
-      setHint(applicationText("中心線の端点間隔を広げてください", "Place the centerline endpoints farther apart"), "error");
-      draw();
-      return false;
-    }
-    const pointLength = model.points.length;
-    const lineLength = model.lines.length;
-    const constraintLength = model.constraints.length;
-    const pointSeqBefore = geometryIds.peek("point");
-    const lineSeqBefore = geometryIds.peek("line");
-    const p1 = addPoint(centerlineFirstPoint.x, centerlineFirstPoint.y, false, "endpoint");
-    const p2 = addPoint(secondPoint.x, secondPoint.y, false, "endpoint");
-    const centerline = addLine(p1, p2, true);
-    addPointSnapConstraints(p1, centerlineFirstSnap);
-    addPointSnapConstraints(p2, secondSnap);
-    const constraint = centerlineSupport.kind === "parallel-lines"
-      ? new ParallelLinesCenterlineConstraint(centerlineTargets[0], centerlineTargets[1], centerline)
-      : new PointPairCenterlineConstraint(centerlineTargets[0], centerlineTargets[1], centerline);
-    const committed = centerline && commitNewConstraint("centerline", constraint);
-    if (!committed) {
-      model.points.length = pointLength;
-      model.lines.length = lineLength;
-      model.constraints.length = constraintLength;
-      geometryIds.restore({ pointSeq: pointSeqBefore });
-      geometryIds.restore({ lineSeq: lineSeqBefore });
-      constraintAnalysisState = null;
-      updateUI();
-      draw();
-      return false;
-    }
-    resetCenterlineCommandState();
-    mode = "select";
-    pointerPreview = null;
-    clearSnap();
-    canvasSelection.set("lines", [centerline]);
-    updateUI();
-    setHint(applicationText(`中心線 ${centerline.id} を作成しました`, `Created centerline ${centerline.id}`));
-    draw();
-    return true;
-  }
-
-  function handleCenterlineClick(pointer, hitPointTarget, hitLineTarget) {
-    if (centerlineTargets.length < 2) {
-      const wantsLine = centerlineTargets[0] instanceof Line;
-      const wantsPoint = centerlineTargets[0] instanceof Point;
-      const target = wantsLine ? hitLineTarget : wantsPoint ? hitPointTarget : hitPointTarget || hitLineTarget;
-      if (!target) {
-        setHint(applicationText("平行な2線、または2点を選択してください", "Select two parallel lines or two points"), "error");
-        return;
-      }
-      addCenterlineTarget(target);
-      return;
-    }
-    const snapped = snapForDrawing(pointer);
-    const snap = activeSnap;
-    const projected = projectPointToCenterlineSupport(snapped);
-    if (!projected) return;
-    if (!centerlineFirstPoint) {
-      centerlineFirstPoint = projected;
-      centerlineFirstSnap = snap;
-      clearSnap();
-      pointerPreview = projected;
-      setHint(applicationText("中心線の2つ目の端点をクリックしてください", "Click the second centerline endpoint"));
-      draw();
-      return;
-    }
-    commitCenterline(projected, snap);
   }
 
   function createCircleCenterCrosses(circles) {
@@ -6590,7 +6400,7 @@
   }
 
   function hasActiveDrawOperation() {
-    return Boolean(lineStartPoint || centerlineTargets.length || centerlineFirstPoint || rectangleStartPoint || slotCommand.firstCenter || slotCommand.secondCenter || filletFirstLine || circularCommands.circleCenterPoint || circularCommands.arcCenterPoint || circularCommands.arcStartPoint || circularCommands.threePointArcStart || circularCommands.threePointArcEnd || splineFitPoints.length || offsetSource || offsetChainEntries.length);
+    return Boolean(lineStartPoint || centerlineCommand.targets.length || centerlineCommand.firstPoint || rectangleStartPoint || slotCommand.firstCenter || slotCommand.secondCenter || filletFirstLine || circularCommands.circleCenterPoint || circularCommands.arcCenterPoint || circularCommands.arcStartPoint || circularCommands.threePointArcStart || circularCommands.threePointArcEnd || splineFitPoints.length || offsetSource || offsetChainEntries.length);
   }
 
 
@@ -9949,7 +9759,7 @@
   }
 
   function drawCenterlinePreview() {
-    if (mode !== "centerline" || !centerlineSupport?.ok) return;
+    if (mode !== "centerline" || !centerlineCommand.support?.ok) return;
     const preview = pointerPreview ? projectPointToCenterlineSupport(pointerPreview) : null;
     withCanvasState(() => {
       ctx.strokeStyle = "#2563eb";
@@ -9957,17 +9767,17 @@
       ctx.lineWidth = 1.5 / viewport.scale;
       ctx.setLineDash([7 / viewport.scale, 4 / viewport.scale, 1.5 / viewport.scale, 4 / viewport.scale]);
       ctx.beginPath();
-      if (centerlineFirstPoint && preview) {
-        ctx.moveTo(centerlineFirstPoint.x, centerlineFirstPoint.y);
+      if (centerlineCommand.firstPoint && preview) {
+        ctx.moveTo(centerlineCommand.firstPoint.x, centerlineCommand.firstPoint.y);
         ctx.lineTo(preview.x, preview.y);
       } else {
         const halfLength = Math.max(canvas.clientWidth, canvas.clientHeight) * 0.75 / viewport.scale;
-        ctx.moveTo(centerlineSupport.anchor.x - centerlineSupport.ux * halfLength, centerlineSupport.anchor.y - centerlineSupport.uy * halfLength);
-        ctx.lineTo(centerlineSupport.anchor.x + centerlineSupport.ux * halfLength, centerlineSupport.anchor.y + centerlineSupport.uy * halfLength);
+        ctx.moveTo(centerlineCommand.support.anchor.x - centerlineCommand.support.ux * halfLength, centerlineCommand.support.anchor.y - centerlineCommand.support.uy * halfLength);
+        ctx.lineTo(centerlineCommand.support.anchor.x + centerlineCommand.support.ux * halfLength, centerlineCommand.support.anchor.y + centerlineCommand.support.uy * halfLength);
       }
       ctx.stroke();
       ctx.setLineDash([]);
-      for (const point of [centerlineFirstPoint, preview].filter(Boolean)) {
+      for (const point of [centerlineCommand.firstPoint, preview].filter(Boolean)) {
         ctx.beginPath();
         ctx.arc(point.x, point.y, 3 / viewport.scale, 0, Math.PI * 2);
         ctx.fill();
@@ -17026,11 +16836,11 @@
     if (mode === "centerline") {
       clearSnap();
       hoveredSketchIdentity = null;
-      pointerPreview = centerlineSupport?.ok ? projectPointToCenterlineSupport(snapForDrawing(p)) : p;
-      if (centerlineTargets.length < 2) {
+      pointerPreview = centerlineCommand.support?.ok ? projectPointToCenterlineSupport(snapForDrawing(p)) : p;
+      if (centerlineCommand.targets.length < 2) {
         clearSnap();
-        const wantsLine = centerlineTargets[0] instanceof Line;
-        const wantsPoint = centerlineTargets[0] instanceof Point;
+        const wantsLine = centerlineCommand.targets[0] instanceof Line;
+        const wantsPoint = centerlineCommand.targets[0] instanceof Point;
         hoveredPoint = wantsLine ? null : hitPoint(p.x, p.y);
         hoveredEndpointPoint = hoveredPoint;
         hoveredLine = wantsPoint || hoveredPoint ? null : hitLine(p.x, p.y);
@@ -20733,8 +20543,8 @@
             ? pendingCommand.preview
             : null,
           activeSnapLabel: activeSnap?.label || null,
-          centerlineTargetIds: centerlineTargets.map((item) => item.id),
-          centerlineFirstPoint: centerlineFirstPoint ? { ...centerlineFirstPoint } : null,
+          centerlineTargetIds: centerlineCommand.targets.map((item) => item.id),
+          centerlineFirstPoint: centerlineCommand.firstPoint ? { ...centerlineCommand.firstPoint } : null,
           pointCount: model.points.length,
           lineCount: model.lines.length,
           circleCount: model.circles.length,
