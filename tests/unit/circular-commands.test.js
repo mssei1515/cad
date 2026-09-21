@@ -16,7 +16,7 @@ function create() {
     addPointSnapConstraints(point, snap) { state.snaps.push(["center", point, snap]); },
     addArcEndpointSnapConstraints(arc, endpoint, snap) { state.snaps.push([endpoint, arc, snap]); },
     addCircularBoundarySnapConstraints(primitive, snap) { state.snaps.push(["boundary", primitive, snap]); },
-    currentScope: () => state.model, readPointSequence: () => state.pointSeq, restorePointSequence: value => { state.pointSeq = value; },
+    currentScope: () => state.model, sequences: { snapshot: () => ({ pointSeq: state.pointSeq }), restore: value => { state.pointSeq = value.pointSeq; } },
   });
   const commands = sandbox.window.CircularCommands.create({ construction, minArcLength: 1,
     selection: { set(key, values) { state.selected[key] = Array.from(values); } },

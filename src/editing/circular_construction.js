@@ -3,7 +3,7 @@
   "use strict";
   const { hypot2 } = window.GeometrySolver;
   const { shortestAngleFrom } = window.GeometryKernel;
-  function create({ endpointAt, addPoint, addCircle, addArc, addPointSnapConstraints, addArcEndpointSnapConstraints, addCircularBoundarySnapConstraints, currentScope, readPointSequence, restorePointSequence }) {
+  function create({ endpointAt, addPoint, addCircle, addArc, addPointSnapConstraints, addArcEndpointSnapConstraints, addCircularBoundarySnapConstraints, currentScope, sequences }) {
     function beginCenter(point, snap) {
       const center = endpointAt(point.x, point.y);
       addPointSnapConstraints(center, snap);
@@ -23,13 +23,13 @@
       return arc;
     }
     function createThreePointArc(geometry, startSnap, endSnap, boundarySnap) {
-      const centerPointSeq = readPointSequence();
+      const centerSequence = sequences.snapshot(["point"]);
       const center = addPoint(geometry.center.x, geometry.center.y, false, "center");
       const arc = addArc(center, geometry.radius, geometry.startAngle, geometry.endAngle);
       if (!arc) {
         const scope = currentScope();
         scope.points = scope.points.filter(point => point !== center);
-        restorePointSequence(centerPointSeq);
+        sequences.restore(centerSequence);
         return null;
       }
       addArcEndpointSnapConstraints(arc, "start", startSnap);

@@ -346,11 +346,8 @@
   let hoveredSketchIdentity = null;
   let hoveredSketchTreeId = null;
   let constructionLineMode = false;
-  let pointSeq = 1;
-  let lineSeq = 1;
-  let circleSeq = 1;
-  let arcSeq = 1;
-  let splineSeq = 1;
+  const geometryIds = window.GeometryIds.create();
+  const { nextSeq } = window.GeometryIds;
   let sketchSeq = 2;
   let annotationSeq = 1;
   let hatchSeq = 1;
@@ -464,9 +461,14 @@
     painters: { hatch: items => drawHatches(items, { includePreview: false }), line: drawLines, circle: drawCircles, arc: drawArcs, spline: drawSplines },
   });
   const MIN_ARC_LENGTH = MIN_LINE_LENGTH;
+  const geometryCreation = window.GeometryCreation.create({
+    currentScope: workspace.current, ids: geometryIds, assignSketchId, currentConstruction: () => constructionLineMode,
+    minLineLength: MIN_LINE_LENGTH, minArcLength: MIN_ARC_LENGTH,
+  });
+  const { addPoint, addPointToSketch, addLine, addCircle, addArc, addSpline, ensureLineMinimumLength, normalizeArcSweep } = geometryCreation;
   const circularConstruction = window.CircularConstruction.create({
     endpointAt, addPoint, addCircle, addArc, addPointSnapConstraints, addArcEndpointSnapConstraints, addCircularBoundarySnapConstraints,
-    currentScope: workspace.current, readPointSequence: () => pointSeq, restorePointSequence: value => { pointSeq = value; },
+    currentScope: workspace.current, sequences: geometryIds,
   });
   const circularCommands = window.CircularCommands.create({
     construction: circularConstruction, selection: canvasSelection, minArcLength: MIN_ARC_LENGTH,
@@ -1094,12 +1096,6 @@
     return [];
   }
 
-  function addPointToSketch(x, y, sketchId, kind = "endpoint") {
-    const point = new Point(`P${pointSeq++}`, x, y, false, kind);
-    point.sketchId = sketchId;
-    model.points.push(point);
-    return point;
-  }
 
   function separateSharedSketchProjectionTargetPoints(namespace) {
     const points = Array.isArray(namespace?.points) ? namespace.points : [];
@@ -2693,21 +2689,7 @@
     if (changed) draw();
   }
 
-  function addPoint(x, y, fixed = false, kind = "explicit") {
-    const p = new Point(`P${pointSeq++}`, x, y, fixed, kind);
-    assignSketchId(p);
-    model.points.push(p);
-    return p;
-  }
 
-  function addLine(p1, p2, construction = constructionLineMode) {
-    if (p1 === p2) return null;
-    const l = new Line(`L${lineSeq++}`, p1, p2, construction);
-    assignSketchId(l);
-    ensureLineMinimumLength(l);
-    model.lines.push(l);
-    return l;
-  }
 
   function sketchProjectionSourceKey(item) {
     return geometryElementKey(item);
@@ -3272,8 +3254,8 @@
     const pointLength = model.points.length;
     const lineLength = model.lines.length;
     const constraintLength = model.constraints.length;
-    const pointSeqBefore = pointSeq;
-    const lineSeqBefore = lineSeq;
+    const pointSeqBefore = geometryIds.peek("point");
+    const lineSeqBefore = geometryIds.peek("line");
     const p1 = addPoint(centerlineFirstPoint.x, centerlineFirstPoint.y, false, "endpoint");
     const p2 = addPoint(secondPoint.x, secondPoint.y, false, "endpoint");
     const centerline = addLine(p1, p2, true);
@@ -3287,8 +3269,8 @@
       model.points.length = pointLength;
       model.lines.length = lineLength;
       model.constraints.length = constraintLength;
-      pointSeq = pointSeqBefore;
-      lineSeq = lineSeqBefore;
+      geometryIds.restore({ pointSeq: pointSeqBefore });
+      geometryIds.restore({ lineSeq: lineSeqBefore });
       constraintAnalysisState = null;
       updateUI();
       draw();
@@ -3439,27 +3421,6 @@
     return { x: start.x + dir.x * MIN_LINE_LENGTH, y: start.y + dir.y * MIN_LINE_LENGTH };
   }
 
-  function ensureLineMinimumLength(line, preferred = null) {
-    if (!line) return { changed: false, failed: false };
-    const dx = line.p2.x - line.p1.x;
-    const dy = line.p2.y - line.p1.y;
-    const len = hypot2(dx, dy);
-    if (len >= MIN_LINE_LENGTH) return { changed: false, failed: false };
-    const fallback = preferred || (len > 1e-9 ? { x: dx / len, y: dy / len } : { x: 1, y: 0 });
-    const dirLen = hypot2(fallback.x, fallback.y);
-    const dir = dirLen > 1e-9 ? { x: fallback.x / dirLen, y: fallback.y / dirLen } : { x: 1, y: 0 };
-    if (!line.p2.fixed) {
-      line.p2.x = line.p1.x + dir.x * MIN_LINE_LENGTH;
-      line.p2.y = line.p1.y + dir.y * MIN_LINE_LENGTH;
-      return { changed: true, failed: false };
-    }
-    if (!line.p1.fixed) {
-      line.p1.x = line.p2.x - dir.x * MIN_LINE_LENGTH;
-      line.p1.y = line.p2.y - dir.y * MIN_LINE_LENGTH;
-      return { changed: true, failed: false };
-    }
-    return { changed: false, failed: true };
-  }
 
   function enforceMinimumLineLengths(lines = model.lines) {
     let changed = 0;
@@ -3518,33 +3479,8 @@
     return null;
   }
 
-  function addCircle(center, radiusValue, construction = constructionLineMode) {
-    if (!center || !Number.isFinite(radiusValue) || radiusValue < MIN_ORIENTATION_LENGTH) return null;
-    const c = new Circle(`C${circleSeq++}`, center, radiusValue, construction);
-    assignSketchId(c);
-    model.circles.push(c);
-    return c;
-  }
 
-  function addArc(center, radiusValue, startAngle, endAngle, construction = constructionLineMode) {
-    if (!center || !Number.isFinite(radiusValue) || radiusValue < MIN_ORIENTATION_LENGTH) return null;
-    if (!Number.isFinite(startAngle) || !Number.isFinite(endAngle)) return null;
-    const a = new Arc(`A${arcSeq++}`, center, radiusValue, startAngle, endAngle, construction);
-    assignSketchId(a);
-    normalizeArcSweep(a);
-    model.arcs.push(a);
-    return a;
-  }
 
-  function addSpline(fitPoints, closed = false, construction = constructionLineMode) {
-    const uniquePointCount = new Set((fitPoints || []).filter(Boolean)).size;
-    if (uniquePointCount < 3) return null;
-    const spline = new Spline(`SP${splineSeq++}`, fitPoints, closed, construction);
-    assignSketchId(spline);
-    if (!spline.curve().valid) return null;
-    model.splines.push(spline);
-    return spline;
-  }
 
   function beginSplineCreation() {
     cancelConstraintTargetCommand("");
@@ -3553,7 +3489,7 @@
     mode = "spline";
     splineFitPoints = [];
     sketchProjectionSources = [];
-    splineCreationRollback = { pointLength: model.points.length, pointSeq };
+    splineCreationRollback = { pointLength: model.points.length, pointSeq: geometryIds.peek("point") };
     splineLastClickAddition = null;
     splineEditSession = null;
     blankDoubleClickCandidate = null;
@@ -3607,7 +3543,7 @@
     model.annotations = snapshot.annotations;
     snapshot.spline.fitPoints = snapshot.fitPoints;
     snapshot.spline._curveCache = null;
-    pointSeq = snapshot.pointSeq;
+    geometryIds.restore({ pointSeq: snapshot.pointSeq });
     restoreModelState(snapshot.modelState);
     clearSelection();
     canvasSelection.set("splines", [snapshot.spline]);
@@ -3621,7 +3557,7 @@
       points: model.points.slice(),
       constraints: model.constraints.slice(),
       annotations: model.annotations.slice(),
-      pointSeq,
+      pointSeq: geometryIds.peek("point"),
       modelState: snapshotModelState(),
     };
   }
@@ -5240,10 +5176,10 @@
       lineLength: model.lines.length,
       circleLength: model.circles.length,
       arcLength: model.arcs.length,
-      pointSeq,
-      lineSeq,
-      circleSeq,
-      arcSeq,
+      pointSeq: geometryIds.peek("point"),
+      lineSeq: geometryIds.peek("line"),
+      circleSeq: geometryIds.peek("circle"),
+      arcSeq: geometryIds.peek("arc"),
     };
     let offset = null;
     if (source instanceof Line) {
@@ -5272,10 +5208,10 @@
     model.lines.length = state.lineLength;
     model.circles.length = state.circleLength;
     model.arcs.length = state.arcLength;
-    pointSeq = state.pointSeq;
-    lineSeq = state.lineSeq;
-    circleSeq = state.circleSeq;
-    arcSeq = state.arcSeq;
+    geometryIds.restore({ pointSeq: state.pointSeq });
+    geometryIds.restore({ lineSeq: state.lineSeq });
+    geometryIds.restore({ circleSeq: state.circleSeq });
+    geometryIds.restore({ arcSeq: state.arcSeq });
     constraintAnalysisState = null;
     updateUI();
     draw();
@@ -5300,10 +5236,10 @@
       circleLength: model.circles.length,
       arcLength: model.arcs.length,
       constraintLength: model.constraints.length,
-      pointSeq,
-      lineSeq,
-      circleSeq,
-      arcSeq,
+      pointSeq: geometryIds.peek("point"),
+      lineSeq: geometryIds.peek("line"),
+      circleSeq: geometryIds.peek("circle"),
+      arcSeq: geometryIds.peek("arc"),
       nextDimensionParameterIndex: model.nextDimensionParameterIndex,
     };
     const offsets = [];
@@ -5327,9 +5263,9 @@
       model.points.length = state.pointLength;
       model.lines.length = state.lineLength;
       model.arcs.length = state.arcLength;
-      pointSeq = state.pointSeq;
-      lineSeq = state.lineSeq;
-      arcSeq = state.arcSeq;
+      geometryIds.restore({ pointSeq: state.pointSeq });
+      geometryIds.restore({ lineSeq: state.lineSeq });
+      geometryIds.restore({ arcSeq: state.arcSeq });
       return false;
     }
     const index = Math.max(0, Math.min(entries.length - 1, Number(dimensionSegmentIndex) || 0));
@@ -5352,10 +5288,10 @@
     model.circles.length = state.circleLength;
     model.arcs.length = state.arcLength;
     model.constraints.length = state.constraintLength;
-    pointSeq = state.pointSeq;
-    lineSeq = state.lineSeq;
-    circleSeq = state.circleSeq;
-    arcSeq = state.arcSeq;
+    geometryIds.restore({ pointSeq: state.pointSeq });
+    geometryIds.restore({ lineSeq: state.lineSeq });
+    geometryIds.restore({ circleSeq: state.circleSeq });
+    geometryIds.restore({ arcSeq: state.arcSeq });
     model.nextDimensionParameterIndex = state.nextDimensionParameterIndex;
     constraintAnalysisState = null;
     updateUI();
@@ -5428,11 +5364,7 @@
       annotations: model.annotations.slice(),
       lineState: model.lines.map((line) => ({ line, p1: line.p1, p2: line.p2, construction: line.construction })),
       splineState: model.splines.map((spline) => ({ spline, fitPoints: spline.fitPoints.slice(), closed: spline.closed, construction: spline.construction })),
-      pointSeq,
-      lineSeq,
-      circleSeq,
-      arcSeq,
-      splineSeq,
+      ...geometryIds.snapshot(),
     };
   }
 
@@ -5454,11 +5386,7 @@
       entry.spline.construction = entry.construction;
       entry.spline._curveCache = null;
     }
-    pointSeq = snapshot.pointSeq;
-    lineSeq = snapshot.lineSeq;
-    circleSeq = snapshot.circleSeq;
-    arcSeq = snapshot.arcSeq;
-    splineSeq = snapshot.splineSeq;
+    geometryIds.restore(snapshot);
     restoreModelState(snapshot.modelState);
   }
 
@@ -5581,11 +5509,7 @@
     hoveredGeometryInstance = null;
     hoveredHatch = null;
     hoveredReferenceImage = null;
-    pointSeq = 1;
-    lineSeq = 1;
-    circleSeq = 1;
-    arcSeq = 1;
-    splineSeq = 1;
+    geometryIds.reset();
     sketchSeq = 2;
     annotationSeq = 1;
     hatchSeq = 1;
@@ -5625,20 +5549,9 @@
     referenceImageCalibrationSession = null;
   }
 
-  function nextSeq(items, prefix) {
-    const max = items.reduce((n, item) => {
-      const match = String(item.id).match(new RegExp(`^${prefix}(\\d+)$`));
-      return match ? Math.max(n, Number(match[1])) : n;
-    }, 0);
-    return max + 1;
-  }
 
   function reserveGeometryElementSequences(source) {
-    pointSeq = Math.max(pointSeq, nextSeq(source?.points || [], "P"));
-    lineSeq = Math.max(lineSeq, nextSeq(source?.lines || [], "L"));
-    circleSeq = Math.max(circleSeq, nextSeq(source?.circles || [], "C"));
-    arcSeq = Math.max(arcSeq, nextSeq(source?.arcs || [], "A"));
-    splineSeq = Math.max(splineSeq, nextSeq(source?.splines || [], "SP"));
+    geometryIds.reserve(source);
     hatchSeq = Math.max(hatchSeq, nextSeq(source?.hatches || [], "H"));
     referenceImageSeq = Math.max(referenceImageSeq, nextSeq(source?.referenceImages || [], "IMG"));
   }
@@ -6776,7 +6689,7 @@
     lineStartRollback = {
       pointLength: model.points.length,
       constraintLength: model.constraints.length,
-      pointSeq,
+      pointSeq: geometryIds.peek("point"),
       lineLength: model.lines.length,
     };
   }
@@ -6790,8 +6703,8 @@
       pointLength: model.points.length,
       constraintLength: model.constraints.length,
       lineLength: model.lines.length,
-      pointSeq,
-      lineSeq,
+      pointSeq: geometryIds.peek("point"),
+      lineSeq: geometryIds.peek("line"),
       completedEndpoint: null,
       completedLine: null,
       startRollback: lineStartRollback ? { ...lineStartRollback } : null,
@@ -6810,8 +6723,8 @@
     model.points.length = target.pointLength;
     model.lines.length = target.lineLength ?? lineCompletionRollback.lineLength;
     model.constraints.length = target.constraintLength;
-    pointSeq = target.pointSeq;
-    lineSeq = lineCompletionRollback.lineSeq;
+    geometryIds.restore({ pointSeq: target.pointSeq });
+    geometryIds.restore({ lineSeq: lineCompletionRollback.lineSeq });
     constraintAnalysisState = null;
     lineCompletionRollback = null;
     lineStartRollback = null;
@@ -6825,7 +6738,7 @@
     pointStartRollback = {
       pointLength: model.points.length,
       constraintLength: model.constraints.length,
-      pointSeq,
+      pointSeq: geometryIds.peek("point"),
       createdPoint: null,
       createdAt: performance.now(),
     };
@@ -6842,7 +6755,7 @@
     model.constraints.length = pointStartRollback.constraintLength;
     const retainedPoints = new Set(model.points);
     canvasSelection.set("points", canvasSelection.points.filter((point) => retainedPoints.has(point)));
-    pointSeq = pointStartRollback.pointSeq;
+    geometryIds.restore({ pointSeq: pointStartRollback.pointSeq });
     constraintAnalysisState = null;
     pointStartRollback = null;
     if (!historyRestoring && documentHistory.discardLatest(transientSnapshot)) {
@@ -6856,7 +6769,7 @@
     if (model.lines.length === lineStartRollback.lineLength) {
       model.points.length = lineStartRollback.pointLength;
       model.constraints.length = lineStartRollback.constraintLength;
-      pointSeq = lineStartRollback.pointSeq;
+      geometryIds.restore({ pointSeq: lineStartRollback.pointSeq });
       constraintAnalysisState = null;
     }
     lineStartRollback = null;
@@ -6876,7 +6789,7 @@
     resetArcCommandState();
     if (splineCreationRollback) {
       model.points.length = splineCreationRollback.pointLength;
-      pointSeq = splineCreationRollback.pointSeq;
+      geometryIds.restore({ pointSeq: splineCreationRollback.pointSeq });
     }
     splineFitPoints = [];
     splineCreationRollback = null;
@@ -7380,28 +7293,6 @@
     return value;
   }
 
-  function normalizeArcSweep(arc) {
-    // A display minimum must not overwrite endpoints that participate in the
-    // solved constraint system (notably small fillets).
-    if (model.constraints.some((c) => c.enabled !== false && (
-      (c.arc === arc && typeof c.endpoint === "string")
-      || (c.a === arc && typeof c.endpointA === "string")
-      || (c.b === arc && typeof c.endpointB === "string")
-      || (c instanceof GeometryFixedConstraint && c.geometry === arc)
-      || (c instanceof OffsetChainConstraint && (c.sources.includes(arc) || c.offsets.includes(arc)))
-    ))) return false;
-    const twoPi = Math.PI * 2;
-    const sweep = arcSweep(arc);
-    if (Math.abs(sweep) >= twoPi - 1e-9) {
-      arc.endAngle = arc.startAngle;
-      return true;
-    }
-    if (Math.abs(sweep) > 0 && Math.abs(sweep) * arc.radius() < MIN_ARC_LENGTH) {
-      arc.endAngle = arc.startAngle;
-      return true;
-    }
-    return false;
-  }
 
   function normalizeArcSweeps(arcs = model.arcs) {
     let changed = 0;
@@ -8827,7 +8718,7 @@
       annotations: model.annotations.length,
       hatches: model.hatches.length,
     };
-    const initialSequences = { pointSeq, lineSeq, circleSeq, arcSeq, splineSeq, annotationSeq, hatchSeq, nextHatchIndex: model.nextHatchIndex, blockInstanceSeq, nextDimensionParameterIndex: model.nextDimensionParameterIndex };
+    const initialSequences = { ...geometryIds.snapshot(), annotationSeq, hatchSeq, nextHatchIndex: model.nextHatchIndex, blockInstanceSeq, nextDimensionParameterIndex: model.nextDimensionParameterIndex };
 
     try {
       const idMap = new Map();
@@ -8835,7 +8726,7 @@
       const lineById = new Map();
       const primitiveById = new Map();
       for (const source of payload.points) {
-        const point = new Point(`P${pointSeq++}`, source.x + dx, source.y + dy, source.fixed, source.kind === "endpoint" ? "endpoint" : "explicit");
+        const point = new Point(geometryIds.allocate("point"), source.x + dx, source.y + dy, source.fixed, source.kind === "endpoint" ? "endpoint" : "explicit");
         point.sketchId = targetSketchId;
         point.appearance = normalizeAppearance(source.appearance);
         model.points.push(point);
@@ -8843,7 +8734,7 @@
         pointById.set(point.id, point);
       }
       for (const source of payload.lines) {
-        const line = new Line(`L${lineSeq++}`, pointById.get(idMap.get(source.p1)), pointById.get(idMap.get(source.p2)), source.construction);
+        const line = new Line(geometryIds.allocate("line"), pointById.get(idMap.get(source.p1)), pointById.get(idMap.get(source.p2)), source.construction);
         line.sketchId = targetSketchId;
         line.appearance = normalizeAppearance(source.appearance);
         ensureLineMinimumLength(line);
@@ -8852,7 +8743,7 @@
         lineById.set(line.id, line);
       }
       for (const source of payload.circles) {
-        const circle = new Circle(`C${circleSeq++}`, pointById.get(idMap.get(source.center)), source.radius, source.construction);
+        const circle = new Circle(geometryIds.allocate("circle"), pointById.get(idMap.get(source.center)), source.radius, source.construction);
         circle.sketchId = targetSketchId;
         circle.appearance = normalizeAppearance(source.appearance);
         model.circles.push(circle);
@@ -8860,7 +8751,7 @@
         primitiveById.set(circle.id, circle);
       }
       for (const source of payload.arcs) {
-        const arc = new Arc(`A${arcSeq++}`, pointById.get(idMap.get(source.center)), source.radius, source.startAngle, source.endAngle, source.construction);
+        const arc = new Arc(geometryIds.allocate("arc"), pointById.get(idMap.get(source.center)), source.radius, source.startAngle, source.endAngle, source.construction);
         arc.sketchId = targetSketchId;
         arc.appearance = normalizeAppearance(source.appearance);
         normalizeArcSweep(arc);
@@ -8871,7 +8762,7 @@
       for (const source of payload.splines || []) {
         const fitPoints = source.fitPoints.map((id) => pointById.get(idMap.get(id)));
         if (fitPoints.some((point) => !point)) throw new Error(`スプライン ${source.id} の通過点を複製できません`);
-        const spline = new Spline(`SP${splineSeq++}`, fitPoints, source.closed, source.construction);
+        const spline = new Spline(geometryIds.allocate("spline"), fitPoints, source.closed, source.construction);
         spline.sketchId = targetSketchId;
         spline.appearance = normalizeAppearance(source.appearance);
         model.splines.push(spline);
@@ -8987,11 +8878,7 @@
       model.blockInstances.length = initialLengths.blockInstances;
       model.annotations.length = initialLengths.annotations;
       model.hatches.length = initialLengths.hatches;
-      pointSeq = initialSequences.pointSeq;
-      lineSeq = initialSequences.lineSeq;
-      circleSeq = initialSequences.circleSeq;
-      arcSeq = initialSequences.arcSeq;
-      splineSeq = initialSequences.splineSeq;
+      geometryIds.restore(initialSequences);
       blockInstanceSeq = initialSequences.blockInstanceSeq;
       annotationSeq = initialSequences.annotationSeq;
       hatchSeq = initialSequences.hatchSeq;
