@@ -311,8 +311,6 @@
   let centerlineFirstSnap = null;
   let pointStartRollback = null;
   let rectangleStartPoint = null;
-  let slotFirstCenter = null;
-  let slotSecondCenter = null;
   let lineStartRollback = null;
   let lineCompletionRollback = null;
   let filletFirstLine = null;
@@ -477,6 +475,19 @@
     painters: { hatch: items => drawHatches(items, { includePreview: false }), line: drawLines, circle: drawCircles, arc: drawArcs, spline: drawSplines },
   });
   const MIN_ARC_LENGTH = MIN_LINE_LENGTH;
+  const slotConstruction = window.SlotConstruction.create({
+    addPoint, addLine, addArc, addConstraintIfMissing, addPointSnapConstraints, addLineBoundarySnapConstraints,
+    snapshotGeometryMutationState, restoreGeometryMutationState, solveAndRefresh,
+  });
+  const slotCommand = window.SlotCommand.create({
+    construction: slotConstruction, minLineLength: MIN_LINE_LENGTH, minArcLength: MIN_ARC_LENGTH,
+    setPointerPreview: point => { pointerPreview = point; }, clearSnap, clearSelection, setHint, updateUI, draw,
+  });
+  const { reset: resetSlotCommandState } = slotCommand;
+  function handleSlotClick(point) {
+    const snapped = snapForDrawing(point);
+    slotCommand.click(snapped, activeSnap);
+  }
   const CONSTRAINT_STATUS_COLORS = {
     full: "#111827",
     support: "#0f766e",
@@ -6756,13 +6767,9 @@
   }
 
   function hasActiveDrawOperation() {
-    return Boolean(lineStartPoint || centerlineTargets.length || centerlineFirstPoint || rectangleStartPoint || slotFirstCenter || slotSecondCenter || filletFirstLine || circleCenterPoint || arcCenterPoint || arcStartPoint || threePointArcStart || threePointArcEnd || splineFitPoints.length || offsetSource || offsetChainEntries.length);
+    return Boolean(lineStartPoint || centerlineTargets.length || centerlineFirstPoint || rectangleStartPoint || slotCommand.firstCenter || slotCommand.secondCenter || filletFirstLine || circleCenterPoint || arcCenterPoint || arcStartPoint || threePointArcStart || threePointArcEnd || splineFitPoints.length || offsetSource || offsetChainEntries.length);
   }
 
-  function resetSlotCommandState() {
-    slotFirstCenter = null;
-    slotSecondCenter = null;
-  }
 
   function beginTransientLineStartRollback() {
     lineStartRollback = {
@@ -9846,24 +9853,24 @@
   }
 
   function drawSlotPreview() {
-    if (mode !== "slot" || !slotFirstCenter) return;
-    drawConstructionPoint(slotFirstCenter);
-    if (!slotSecondCenter) {
-      if (!pointerPreview || hypot2(pointerPreview.x - slotFirstCenter.x, pointerPreview.y - slotFirstCenter.y) < MIN_LINE_LENGTH) return;
+    if (mode !== "slot" || !slotCommand.firstCenter) return;
+    drawConstructionPoint(slotCommand.firstCenter);
+    if (!slotCommand.secondCenter) {
+      if (!pointerPreview || hypot2(pointerPreview.x - slotCommand.firstCenter.x, pointerPreview.y - slotCommand.firstCenter.y) < MIN_LINE_LENGTH) return;
       withCanvasState(() => {
         ctx.strokeStyle = "#2563eb";
         ctx.lineWidth = 2 / viewport.scale;
         ctx.setLineDash([6 / viewport.scale, 5 / viewport.scale]);
         ctx.beginPath();
-        ctx.moveTo(slotFirstCenter.x, slotFirstCenter.y);
+        ctx.moveTo(slotCommand.firstCenter.x, slotCommand.firstCenter.y);
         ctx.lineTo(pointerPreview.x, pointerPreview.y);
         ctx.stroke();
       });
       return;
     }
-    drawConstructionPoint(slotSecondCenter);
+    drawConstructionPoint(slotCommand.secondCenter);
     if (!pointerPreview) return;
-    const geometry = slotGeometry(slotFirstCenter, slotSecondCenter, pointerPreview, MIN_ARC_LENGTH);
+    const geometry = slotGeometry(slotCommand.firstCenter, slotCommand.secondCenter, pointerPreview, MIN_ARC_LENGTH);
     if (!geometry) return;
     withCanvasState(() => {
       ctx.strokeStyle = "#2563eb";
@@ -15487,99 +15494,7 @@
     log(`矩形を追加しました\n自動solve: success=${result.success}`);
   }
 
-  function addSlotShapeConstraints(sideLine, oppositeLine, endArc, startArc) {
-    const endpointConstraints = [
-      [endArc, "start", sideLine.p2],
-      [endArc, "end", oppositeLine.p1],
-      [startArc, "start", oppositeLine.p2],
-      [startArc, "end", sideLine.p1],
-    ];
-    for (const [arc, endpoint, point] of endpointConstraints) {
-      addConstraintIfMissing(
-        new ArcEndpointCoincidentConstraint(arc, endpoint, point),
-        (c) => c instanceof ArcEndpointCoincidentConstraint && c.arc === arc && c.endpoint === endpoint && c.point === point,
-      );
-    }
-    for (const line of [sideLine, oppositeLine]) {
-      for (const arc of [endArc, startArc]) {
-        addConstraintIfMissing(
-          new LineCircleTangentConstraint(line, arc),
-          (c) => c instanceof LineCircleTangentConstraint && c.line === line && c.primitive === arc,
-        );
-      }
-    }
-    addConstraintIfMissing(
-      new EqualRadiusConstraint(endArc, startArc),
-      (c) => c instanceof EqualRadiusConstraint && ((c.a === endArc && c.b === startArc) || (c.a === startArc && c.b === endArc)),
-    );
-  }
 
-  function handleSlotClick(p) {
-    p = snapForDrawing(p);
-    const snap = activeSnap;
-    pointerPreview = p;
-    if (!slotFirstCenter) {
-      slotFirstCenter = { x: p.x, y: p.y, snap };
-      clearSelection();
-      setHint("長穴の2つ目の半円中心をクリックしてください。Escで作図をキャンセルします");
-      updateUI();
-      draw();
-      return;
-    }
-    if (!slotSecondCenter) {
-      if (hypot2(p.x - slotFirstCenter.x, p.y - slotFirstCenter.y) < MIN_LINE_LENGTH) {
-        setHint("1つ目の中心から離れた位置をクリックしてください", "error");
-        draw();
-        return;
-      }
-      slotSecondCenter = { x: p.x, y: p.y, snap };
-      setHint("長穴の幅位置をクリックしてください。Escで作図をキャンセルします");
-      updateUI();
-      draw();
-      return;
-    }
-
-    const geometry = slotGeometry(slotFirstCenter, slotSecondCenter, p, MIN_ARC_LENGTH);
-    if (!geometry) {
-      setHint("中心線から離れた幅位置をクリックしてください", "error");
-      draw();
-      return;
-    }
-
-    const snapshot = snapshotGeometryMutationState();
-    const firstCenter = addPoint(geometry.firstCenter.x, geometry.firstCenter.y, false, "center");
-    const secondCenter = addPoint(geometry.secondCenter.x, geometry.secondCenter.y, false, "center");
-    const sideStart = addPoint(geometry.sideStart.x, geometry.sideStart.y, false, "endpoint");
-    const sideEnd = addPoint(geometry.sideEnd.x, geometry.sideEnd.y, false, "endpoint");
-    const oppositeEnd = addPoint(geometry.oppositeEnd.x, geometry.oppositeEnd.y, false, "endpoint");
-    const oppositeStart = addPoint(geometry.oppositeStart.x, geometry.oppositeStart.y, false, "endpoint");
-    const sideLine = addLine(sideStart, sideEnd);
-    const oppositeLine = addLine(oppositeEnd, oppositeStart);
-    const endArc = addArc(secondCenter, geometry.radius, geometry.endArc.startAngle, geometry.endArc.endAngle);
-    const startArc = addArc(firstCenter, geometry.radius, geometry.startArc.startAngle, geometry.startArc.endAngle);
-    if (!sideLine || !oppositeLine || !endArc || !startArc) {
-      restoreGeometryMutationState(snapshot);
-      setHint("中心線から離れた幅位置をクリックしてください", "error");
-      draw();
-      return;
-    }
-
-    addSlotShapeConstraints(sideLine, oppositeLine, endArc, startArc);
-    addPointSnapConstraints(firstCenter, slotFirstCenter.snap);
-    addPointSnapConstraints(secondCenter, slotSecondCenter.snap);
-    addLineBoundarySnapConstraints(sideLine, snap);
-    resetSlotCommandState();
-    pointerPreview = null;
-    clearSnap();
-    clearSelection();
-    const result = solveAndRefresh("長穴追加");
-    if (!result.success) {
-      restoreGeometryMutationState(snapshot);
-      setHint("拘束を維持できないため長穴の作成を戻しました", "error");
-      updateUI();
-      draw();
-    }
-  }
 
   function pointOnLineAt(line, t) {
     return { x: line.p1.x + (line.p2.x - line.p1.x) * t, y: line.p1.y + (line.p2.y - line.p1.y) * t };
@@ -22580,8 +22495,8 @@
         }, drawRectanglePreview);
         capture("slot", () => {
           mode = "slot";
-          slotFirstCenter = { x: 0, y: 0 };
-          slotSecondCenter = { x: 80, y: 0 };
+          slotCommand.click({ x: 0, y: 0 }, null);
+          slotCommand.click({ x: 80, y: 0 }, null);
           pointerPreview = { x: 40, y: 20 };
         }, drawSlotPreview);
         capture("circle", () => {

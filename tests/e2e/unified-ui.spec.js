@@ -1605,7 +1605,7 @@ test("file URL Help menu reads the generated Git commit file", async ({ page }) 
     "runtime-version.js", "app.js",
     "src/geometry/geometry_kernel.js", "src/geometry/geometry_ref.js", "src/geometry/spline_geometry.js",
     "src/geometry/hatch_region.js", "src/geometry/offset_chain.js", "src/solver/constraint_solver.js", "src/constraints/references.js", "src/geometry/objects.js", "src/geometry/instance_projection.js",
-    "src/parameters/parameter_engine.js", "src/editing/edit_history.js", "src/editing/workspace.js", "src/editing/sketch_context.js", "src/editing/selection.js", "src/diagnostics/interaction_profiler.js", "src/ui/choice_dialog.js", "src/ui/application_settings.js",
+    "src/parameters/parameter_engine.js", "src/editing/edit_history.js", "src/editing/workspace.js", "src/editing/sketch_context.js", "src/editing/selection.js", "src/editing/slot_construction.js", "src/commands/slot_command.js", "src/diagnostics/interaction_profiler.js", "src/ui/choice_dialog.js", "src/ui/application_settings.js",
     "src/document/appearance.js", "src/document/drawing_order.js", "src/document/sketch_hierarchy.js",
     "src/document/annotations.js", "src/document/hatches.js", "src/document/reference_images.js", "src/document/block_catalog.js", "src/geometry/block_projection.js", "src/geometry/read_model.js", "src/rendering/viewport.js", "src/rendering/canvas_surface.js", "src/rendering/dimension_metrics.js", "src/rendering/dimension_placement.js", "src/rendering/dimension_layout.js", "src/rendering/dimension_renderer.js", "src/rendering/geometry_renderer.js", "src/rendering/hatch_renderer.js", "src/rendering/drawing_stack.js", "src/rendering/annotation_renderer.js", "src/rendering/reference_image_renderer.js",
     "src/persistence/constraint_codec_registry.js", "src/persistence/constraints.js", "src/constraints/dimension_queries.js", "src/constraints/candidates.js", "src/parameters/namespace.js", "src/persistence/geometry.js",
@@ -4160,4 +4160,31 @@ test("slot command keeps center and width-point snaps as constraints", async ({ 
   const widthPointConstraint = data.constraints.find((constraint) => constraint.type === "pointOnLine" && constraint.point === data.points[2].id);
   expect(widthPointConstraint).toBeTruthy();
   expect(data.lines.some((line) => line.id === widthPointConstraint.line)).toBe(true);
+});
+
+test("slot creation stays one undo step and cancellation leaves completed geometry intact", async ({ page }) => {
+  await openTestDocument(page);
+  await page.evaluate(() => window.__jot2dTest.focusWorldForTest({ x: 0, y: 0 }, 3));
+  const clients = await page.evaluate(() => [{ x: -50, y: 0 }, { x: 50, y: 0 }, { x: 0, y: 20 }, { x: -35, y: 55 }, { x: 35, y: 55 }].map(point => window.__jot2dTest.worldClientPositionForTest(point)));
+  await page.locator("#toolSlot").click();
+  for (const point of clients.slice(0, 3)) await page.mouse.click(point.x, point.y);
+  const completed = await page.evaluate(() => window.__jot2dTest.serializedModelForTest());
+  // The existing document decoder normalizes circle/arc center points to endpoint kind.
+  const restored = { ...completed, points: completed.points.map(point => ({ ...point, kind: point.kind === "center" ? "endpoint" : point.kind })) };
+  expect(completed.lines).toHaveLength(2); expect(completed.arcs).toHaveLength(2);
+  await page.locator("#undoBtn").click();
+  const undone = await page.evaluate(() => window.__jot2dTest.serializedModelForTest());
+  expect(undone.points).toHaveLength(0); expect(undone.lines).toHaveLength(0); expect(undone.arcs).toHaveLength(0); expect(undone.constraints).toHaveLength(0);
+  await page.locator("#redoBtn").click();
+  const redone = await page.evaluate(() => window.__jot2dTest.serializedModelForTest());
+  for (const key of ["points", "lines", "arcs", "constraints"]) expect(redone[key]).toEqual(restored[key]);
+  await page.locator("#toolSlot").click();
+  for (const point of clients.slice(3)) await page.mouse.click(point.x, point.y);
+  await page.keyboard.press("Escape");
+  expect(await page.evaluate(() => window.__jot2dTest.authoringStateForTest())).toEqual(expect.objectContaining({ mode: "slot", pointCount: 6, lineCount: 2, arcCount: 2 }));
+  await page.keyboard.press("Escape");
+  expect(await page.evaluate(() => window.__jot2dTest.authoringStateForTest())).toEqual(expect.objectContaining({ mode: "select" }));
+  expect(await page.evaluate(data => window.__jot2dTest.loadDocumentFixtureForDragTest(data, "slot-roundtrip.jot2d"), completed)).toEqual(expect.objectContaining({ success: true }));
+  const reloaded = await page.evaluate(() => window.__jot2dTest.serializedModelForTest());
+  for (const key of ["points", "lines", "arcs", "constraints"]) expect(reloaded[key]).toEqual(restored[key]);
 });
