@@ -5547,44 +5547,11 @@
     const { definitions: loadedBlockDefinitions, metadata: loadedBlockDefinitionMeta } = blockDefinitionPersistence.decode(data.blockDefinitions, {
       sourceVersion, normalizeLoadedExpression, normalizeLoadedDimensionAppearance,
     });
-    const loadedDefinitionIds = new Set(loadedBlockDefinitions.map((definition) => definition.id));
-    const loadedDefinitionById = (definitionId) => loadedBlockDefinitions.find((definition) => definition.id === definitionId) || null;
-    const loadedDefinitionHasGeometry = (definition, visiting = new Set()) => {
-      if (!definition || visiting.has(definition.id)) return false;
-      if (definition.lines.length + definition.circles.length + definition.arcs.length + definition.splines.length + definition.hatches.length + definition.annotations.length > 0) return true;
-      const next = new Set(visiting).add(definition.id);
-      return definition.blockInstances.some((instance) => loadedDefinitionHasGeometry(loadedDefinitionById(instance.definitionId), next));
-    };
-    const loadedDefinitionGeometrySketchIds = (definition) => {
-      if (!definition) return [];
-      const ids = new Set([...definition.lines, ...definition.circles, ...definition.arcs, ...definition.splines, ...definition.hatches, ...definition.annotations].map((item) => String(item.sketchId)));
-      for (const instance of definition.blockInstances) if (loadedDefinitionHasGeometry(loadedDefinitionById(instance.definitionId))) ids.add(String(instance.sketchId));
-      return blockDefinitionDrawableSketchIds(definition).filter((id) => ids.has(id));
-    };
-    for (const definition of loadedBlockDefinitions) {
-      const meta = loadedBlockDefinitionMeta.get(definition.id);
-      definition.blockInstances = (meta.rawDefinition.blockInstances || [])
-        .filter((instance) => loadedDefinitionIds.has(String(instance.definitionId)))
-        .map((instance, index) => {
-          const nestedDefinition = loadedDefinitionById(String(instance.definitionId));
-          const drawableIds = blockDefinitionDrawableSketchIds(nestedDefinition);
-          const enabled = Array.isArray(instance.enabledSketchIds) ? instance.enabledSketchIds.map(String).filter((id) => drawableIds.includes(id)) : drawableIds;
-          return {
-            id: String(instance.id || `BI${index + 1}`),
-            definitionId: String(instance.definitionId),
-            sketchId: meta.normalizeDefinitionSketchId(instance.sketchId),
-            drawingOrder: normalizedDrawingOrder(instance.drawingOrder),
-            x: Number(instance.x) || 0,
-            y: Number(instance.y) || 0,
-            rotation: Number(instance.rotation) || 0,
-            fixed: Boolean(instance.fixed),
-            rotationLocked: Boolean(instance.rotationLocked),
-            enabledSketchIds: [...new Set(enabled.length > 0 ? enabled : drawableIds)],
-            appearanceOverride: normalizeAppearance(instance.appearanceOverride),
-          };
-        });
-      definition.geometryInstances = (meta.rawDefinition.geometryInstances || []).map((instance, index) => normalizeGeometryInstance(instance, meta.normalizeDefinitionSketchId, index));
-    }
+    const loadedBlockInstancesCodec = window.BlockInstancePersistence.create({
+      definitions: loadedBlockDefinitions, metadata: loadedBlockDefinitionMeta, normalizeGeometryInstance,
+    });
+    const loadedDefinitionById = loadedBlockInstancesCodec.definitionById;
+    loadedBlockInstancesCodec.connectDefinitions();
     window.BlockOwnershipPersistence.restore(loadedBlockDefinitions, id => loadedBlockDefinitionMeta.get(id).rawDefinition);
     let repairedBlockConstraintCount = 0;
     for (const definition of loadedBlockDefinitions) {
@@ -5655,31 +5622,7 @@
       separateSharedSketchProjectionTargetPoints(definition);
       prepareLoadedParameterNamespace(definition, sourceVersion, `${applicationText("ブロック", "Block")} ${definition.name}`);
     }
-    const loadedBlockInstances = (Array.isArray(data.blockInstances) ? data.blockInstances : [])
-      .filter((instance) => loadedDefinitionIds.has(String(instance.definitionId)))
-      .map((instance, index) => ({
-        id: String(instance.id || `BI${index + 1}`),
-        definitionId: String(instance.definitionId),
-        sketchId: normalizeSketchId(instance.sketchId),
-        drawingOrder: normalizedDrawingOrder(instance.drawingOrder),
-        x: Number(instance.x) || 0,
-        y: Number(instance.y) || 0,
-        rotation: Number(instance.rotation) || 0,
-        fixed: Boolean(instance.fixed),
-        rotationLocked: Boolean(instance.rotationLocked),
-        enabledSketchIds: Array.isArray(instance.enabledSketchIds) ? instance.enabledSketchIds.map(String) : null,
-        appearanceOverride: normalizeAppearance(instance.appearanceOverride),
-      }));
-    for (const instance of loadedBlockInstances) {
-      const definition = loadedDefinitionById(instance.definitionId);
-      if (definition?.parentDefinitionId) throw new Error(`子ブロック ${definition.name} は親ブロック内でのみ使用できます`);
-    }
-    for (const instance of loadedBlockInstances) {
-      const definition = loadedBlockDefinitions.find((item) => item.id === instance.definitionId);
-      const drawableIds = blockDefinitionDrawableSketchIds(definition);
-      const enabled = Array.isArray(instance.enabledSketchIds) ? instance.enabledSketchIds.filter((id) => drawableIds.includes(id)) : drawableIds;
-      instance.enabledSketchIds = enabled.length > 0 ? [...new Set(enabled)] : loadedDefinitionGeometrySketchIds(definition);
-    }
+    const loadedBlockInstances = loadedBlockInstancesCodec.decodeDocument(data.blockInstances, normalizeSketchId);
     const loadedGeometryInstances = (data.geometryInstances || []).map((instance, index) => normalizeGeometryInstance(instance, normalizeSketchId, index));
     const rawLoadedAnnotations = Array.isArray(data.annotations) ? data.annotations : [];
     if (sourceVersion >= 13 && (!validSerializedHatchList(data.hatches) || !Number.isInteger(Number(data.nextHatchIndex)) || Number(data.nextHatchIndex) < 1)) throw new Error(applicationText("ハッチングの形式または採番値が正しくありません", "Invalid hatch data or sequence"));
