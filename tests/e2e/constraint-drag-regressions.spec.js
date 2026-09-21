@@ -16,14 +16,14 @@ async function load(page, data) {
 async function drag(page, descriptor, path) {
   return page.evaluate(({ descriptor, path }) => window.__jot2dTest.geometryDragPathForTest({ ...descriptor, inspectConstraints: true }, path), { descriptor, path });
 }
-function verify(result, initial, label, failures) {
+function verify(result, initial, label, failures, expectedItemsByPreview = new Map()) {
   if (!result?.sessionAvailable || !result.final?.success) { failures.push(`${label}: unavailable or final failure`); return; }
   if (result.final.baseErrorNorm > 1e-4) failures.push(`${label}: final residual ${result.final.baseErrorNorm}`);
   for (const [index, preview] of result.previews.entries()) {
     if (!preview.success || preview.blocked || !Number.isFinite(preview.errorNorm) || preview.errorNorm > preview.acceptError + 1e-9 || preview.constraintState.errorNorm > 1e-4) failures.push(`${label}#${index}: preview residual ${preview.errorNorm}`);
     if (!preview.constraintState.stable || preview.constraintState.freeDof !== initial.freeDof) failures.push(`${label}#${index}: unstable rank ${preview.constraintState.freeDof}/${initial.freeDof}`);
     const statuses = new Map(preview.constraintState.items.map((item) => [item.id, item.status]));
-    for (const item of initial.items) if (statuses.get(item.id) !== item.status) failures.push(`${label}#${index}: ${item.id} ${item.status}->${statuses.get(item.id)}`);
+    for (const item of expectedItemsByPreview.get(index) || initial.items) if (statuses.get(item.id) !== item.status) failures.push(`${label}#${index}: ${item.id} ${item.status}->${statuses.get(item.id)}`);
   }
 }
 
@@ -51,7 +51,7 @@ test('collapsed fillets follow every line at three grab positions through repeat
   expect(failures.length, JSON.stringify(failures.slice(0, 30))).toBe(0);
 });
 
-test('tangent offset chains keep their degrees of freedom and colors across multiple geometry drags', async ({ page }) => {
+test('tangent offset chains preserve global freedom and report local status at the singular pose', async ({ page }) => {
   test.setTimeout(600000);
   await openTestDocument(page);
   const failures = [];
@@ -64,7 +64,23 @@ test('tangent offset chains keep their degrees of freedom and colors across mult
   for (const descriptor of descriptors.filter((item) => !process.env.CAD_REGRESSION_TARGET || `${item.kind}:${item.id}:${item.endpoint || ""}` === process.env.CAD_REGRESSION_TARGET)) for (const [directionIndex, direction] of directions.entries()) for (const fast of [false, true]) {
     const initial = await load(page, offsets);
     const result = await drag(page, descriptor, repeatedPath(direction, fast, fast ? 10 : 2));
-    verify(result, initial, `${descriptor.kind}/${descriptor.id}/${descriptor.endpoint}/${directionIndex}/${fast}`, failures);
+    const expectedItemsByPreview = new Map();
+    if (descriptor.kind === 'arc-endpoint' && descriptor.id === 'A3' && descriptor.endpoint === 'start' && directionIndex === 4 && !fast) {
+      // This deterministic path reaches the leftmost A3 endpoint on its second
+      // sample. Local first-order freedom of P12 vanishes there even though
+      // the mechanism retains seven DOF. All other samples keep their colors.
+      const singular = result.previews[1].state;
+      expect(initial.freeDof).toBe(7);
+      expect(initial.items.find(item => item.id === 'P12').status).toBe('under');
+      expect(initial.items.find(item => item.id === 'L5').status).toBe('under');
+      expect(singular.radius).toBeGreaterThan(0);
+      expect((singular.start.x - singular.center.x) / singular.radius).toBeCloseTo(-1, 7);
+      expect(Math.abs((singular.start.y - singular.center.y) / singular.radius)).toBeLessThan(1e-7);
+      expectedItemsByPreview.set(1, initial.items.map(item => ({ ...item,
+        status: item.id === 'P12' ? 'full' : item.id === 'L5' ? 'support' : item.status,
+      })));
+    }
+    verify(result, initial, `${descriptor.kind}/${descriptor.id}/${descriptor.endpoint}/${directionIndex}/${fast}`, failures, expectedItemsByPreview);
     for (const preview of result.previews) { maximumMs = Math.max(maximumMs, preview.elapsedMs); previews++; }
   }
   expect(previews).toBeGreaterThan(0);
