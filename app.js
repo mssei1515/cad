@@ -12946,6 +12946,17 @@
       btn.classList.toggle("active", active);
       btn.setAttribute("aria-pressed", String(active));
     }
+    for (const btn of constraintMenuButtons) {
+      const type = btn.dataset.menuConstraint;
+      const source = type === "fixed"
+        ? fixPointBtn
+        : constraintButtons.find((candidate) => candidate.dataset.constraint === type);
+      const disabled = source?.getAttribute("aria-disabled") === "true";
+      const active = source?.getAttribute("aria-pressed") === "true";
+      btn.classList.toggle("active", active);
+      btn.setAttribute("aria-disabled", String(disabled));
+      btn.setAttribute("aria-pressed", String(active));
+    }
     const selectedProjectionItems = [...canvasSelection.points, ...canvasSelection.lines, ...canvasSelection.circles, ...canvasSelection.arcs, ...canvasSelection.splines].filter((item) => item?.blockProjection);
     const selectedProjectionInstances = [...new Set(selectedProjectionItems.map((item) => item.blockInstance))];
     const fixedBatch = selectedFixedBatchTargets();
