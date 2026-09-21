@@ -405,7 +405,6 @@
   const SKETCH_TREE_KEYBOARD_RESIZE_STEP = 16;
   const CLIPBOARD_PASTE_OFFSET_SCREEN_PX = 24;
   const BLOCK_ORTHOGONAL_ROTATION_STEP = Math.PI / 2;
-  const viewport = { x: 0, y: 0, scale: CSS_PX_PER_MM };
   const canvasRenderMetrics = { width: 0, height: 0, dpr: 1 };
   let canvasResizeObserver = null;
   let pendingCanvasPointerMove = null;
@@ -415,6 +414,7 @@
   let constraintStatusSpaceHeld = false;
   const MIN_ZOOM = CSS_PX_PER_MM * 0.001;
   const MAX_ZOOM = CSS_PX_PER_MM * 10000000;
+
   const CONSTRUCTION_EXTENSION_SCREEN_PX = 12;
   const CENTERLINE_PARALLEL_TOLERANCE = 1e-5;
   const CONSTRUCTION_GEOMETRY_ALPHA = 0.72;
@@ -442,6 +442,11 @@
   const SPARSE_LINE_DRAG_SUBSTEP_NORM = 4;
   const SPARSE_LINE_DRAG_MAX_SUBSTEPS = 128;
   const MIN_LINE_LENGTH = Math.max(MIN_ORIENTATION_LENGTH, solver.minLineLength || 12);
+  const viewport = window.CanvasViewport.create({
+    canvasRect: () => canvas.getBoundingClientRect(), initialScale: CSS_PX_PER_MM,
+    minZoom: MIN_ZOOM, maxZoom: MAX_ZOOM, minLength: MIN_LINE_LENGTH,
+  });
+  const { currentCanvasCenterWorld, clampZoom, formatZoom, canvasScreenPoint, screenToWorld, worldToCanvasScreen, canvasPoint, fitBoundsToViewport, screenBoxForBounds, visibleWorldBounds } = viewport;
   const MIN_ARC_LENGTH = MIN_LINE_LENGTH;
   const CONSTRAINT_STATUS_COLORS = {
     full: "#111827",
@@ -4338,7 +4343,7 @@
     if (!isGeometryMode() || !canCreateInActiveSketch()) return;
     const definitionsDialog = document.getElementById("blockDefinitionsDialog");
     if (definitionsDialog?.open) definitionsDialog.close();
-    const creationHost = { ...workspace.capture(), viewport: { ...viewport } };
+    const creationHost = { ...workspace.capture(), viewport: viewport.snapshot() };
     const defaultName = `Block-${blockDefinitionSeq}`;
     const hasGeometrySelection = canvasSelection.lines.length + canvasSelection.circles.length + canvasSelection.arcs.length + canvasSelection.splines.length + canvasSelection.annotations.length + canvasSelection.hatches.length > 0;
     let selection = null;
@@ -4434,7 +4439,7 @@
     const parentSession = blockEditSession;
     if (parentSession) syncBlockEditorDraft(parentSession);
     const originalProjectionItems = blockProjectionBundles().flatMap((bundle) => [...bundle.points, ...bundle.lines, ...bundle.circles, ...bundle.arcs, ...(bundle.splines || [])]);
-    const original = options.originalHost || { ...workspace.capture(), viewport: { ...viewport } };
+    const original = options.originalHost || { ...workspace.capture(), viewport: viewport.snapshot() };
     const sourceDefinition = options.sourceDefinition || null;
     const sourceDefinitionSnapshot = sourceDefinition ? cloneBlockDefinition(sourceDefinition) : null;
     const originalElementIds = new Set(sourceDefinition ? [...sourceDefinition.points, ...sourceDefinition.lines, ...sourceDefinition.circles, ...sourceDefinition.arcs, ...(sourceDefinition.splines || [])].map((item) => item.id) : []);
@@ -4467,9 +4472,9 @@
     if (draft.lines.length + draft.circles.length + draft.arcs.length + (draft.splines?.length || 0) + (draft.annotations?.length || 0) + (draft.hatches?.length || 0) + (draft.referenceImages?.length || 0) + model.blockInstances.length > 0) fitAllGeometryToViewport();
     else {
       const rect = canvas.getBoundingClientRect();
-      viewport.scale = CSS_PX_PER_MM;
-      viewport.x = rect.width / 2;
-      viewport.y = rect.height / 2;
+      viewport.update({ scale: CSS_PX_PER_MM });
+      viewport.update({ x: rect.width / 2 });
+      viewport.update({ y: rect.height / 2 });
     }
     const externalConstraintCount = blockEditSession.creationSelection?.externalConstraints?.length || 0;
     setHint(
@@ -4671,7 +4676,7 @@
   function restoreBlockEditorHost(session) {
     const { original } = session;
     activateEditingScope(workspace.restore(original));
-    Object.assign(viewport, original.viewport);
+    viewport.update(original.viewport);
     blockEditSession = session.parentSession || null;
     document.body.classList.toggle("block-editing", Boolean(blockEditSession));
   }
@@ -6909,8 +6914,8 @@
     const rect = canvas.getBoundingClientRect();
     syncCanvasBitmapSize(rect.width, rect.height);
     if (options.centerWorld && rect.width > 0 && rect.height > 0) {
-      viewport.x = rect.width / 2 - options.centerWorld.x * viewport.scale;
-      viewport.y = rect.height / 2 - options.centerWorld.y * viewport.scale;
+      viewport.update({ x: rect.width / 2 - options.centerWorld.x * viewport.scale });
+      viewport.update({ y: rect.height / 2 - options.centerWorld.y * viewport.scale });
     }
     applySketchTreeWidth();
     draw();
@@ -6936,25 +6941,11 @@
     resizeCanvas({ centerWorld });
   }
 
-  function currentCanvasCenterWorld() {
-    const rect = canvas.getBoundingClientRect();
-    if (rect.width <= 0 || rect.height <= 0) return null;
-    return screenToWorld({ x: rect.width / 2, y: rect.height / 2 });
-  }
 
-  function clampZoom(scale) {
-    return Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, scale));
-  }
 
-  function formatZoom(scale) {
-    const percent = scale / CSS_PX_PER_MM * 100;
-    if (percent >= 1000000) return `${(percent / 1000000).toFixed(2)}M%`;
-    if (percent >= 10000) return `${(percent / 1000).toFixed(1)}k%`;
-    if (percent >= 1000) return `${percent.toFixed(0)}%`;
-    if (percent >= 100) return `${percent.toFixed(0)}%`;
-    if (percent >= 1) return `${percent.toFixed(1)}%`;
-    return `${percent.toFixed(2)}%`;
-  }
+
+
+
 
   function formatDisplayNumber(value, maxFractionDigits = 10, snapTolerance = DIMENSION_DISPLAY_PRECISION) {
     const n = Number(value);
@@ -6987,28 +6978,13 @@
     return `${formatDisplayNumber(value, 10, MEASURED_DIMENSION_SNAP_TOLERANCE)}${suffix}`;
   }
 
-  function canvasScreenPoint(e) {
-    const r = canvas.getBoundingClientRect();
-    return { x: e.clientX - r.left, y: e.clientY - r.top };
-  }
 
-  function screenToWorld(p) {
-    return {
-      x: (p.x - viewport.x) / viewport.scale,
-      y: (p.y - viewport.y) / viewport.scale,
-    };
-  }
 
-  function worldToCanvasScreen(p) {
-    return {
-      x: p.x * viewport.scale + viewport.x,
-      y: p.y * viewport.scale + viewport.y,
-    };
-  }
 
-  function canvasPoint(e) {
-    return screenToWorld(canvasScreenPoint(e));
-  }
+
+
+
+
 
   function isPointUsedByLine(point, lines = model.lines) {
     return lines.some((line) => line.p1 === point || line.p2 === point);
@@ -7250,22 +7226,7 @@
     return bounds;
   }
 
-  function fitBoundsToViewport(bounds, paddingPx = 96) {
-    if (!bounds) return false;
-    const rect = canvas.getBoundingClientRect();
-    if (rect.width <= 0 || rect.height <= 0) return false;
-    const width = Math.max(bounds.x2 - bounds.x1, MIN_LINE_LENGTH);
-    const height = Math.max(bounds.y2 - bounds.y1, MIN_LINE_LENGTH);
-    const availableWidth = Math.max(80, rect.width - paddingPx * 2);
-    const availableHeight = Math.max(80, rect.height - paddingPx * 2);
-    const nextScale = clampZoom(Math.min(availableWidth / width, availableHeight / height));
-    const centerX = (bounds.x1 + bounds.x2) / 2;
-    const centerY = (bounds.y1 + bounds.y2) / 2;
-    viewport.scale = nextScale;
-    viewport.x = rect.width / 2 - centerX * viewport.scale;
-    viewport.y = rect.height / 2 - centerY * viewport.scale;
-    return true;
-  }
+
 
   function fitSketchToViewport(sketchId = activeSketchId(), paddingPx = 96) {
     return fitBoundsToViewport(sketchGeometryBounds(sketchId), paddingPx);
@@ -7279,17 +7240,7 @@
     return fitBoundsToViewport(visibleGeometryBounds(), paddingPx);
   }
 
-  function screenBoxForBounds(bounds) {
-    if (!bounds) return null;
-    const p1 = worldToCanvasScreen({ x: bounds.x1, y: bounds.y1 });
-    const p2 = worldToCanvasScreen({ x: bounds.x2, y: bounds.y2 });
-    return {
-      left: Math.min(p1.x, p2.x),
-      right: Math.max(p1.x, p2.x),
-      top: Math.min(p1.y, p2.y),
-      bottom: Math.max(p1.y, p2.y),
-    };
-  }
+
 
   function captureSketchScreenFootprint(sketchId = activeSketchId()) {
     const bounds = sketchGeometryBounds(sketchId);
@@ -7320,9 +7271,9 @@
     const nextScale = clampZoom(Math.min(...scaleCandidates));
     const centerX = (bounds.x1 + bounds.x2) / 2;
     const centerY = (bounds.y1 + bounds.y2) / 2;
-    viewport.scale = nextScale;
-    viewport.x = footprint.center.x - centerX * viewport.scale;
-    viewport.y = footprint.center.y - centerY * viewport.scale;
+    viewport.update({ scale: nextScale });
+    viewport.update({ x: footprint.center.x - centerX * viewport.scale });
+    viewport.update({ y: footprint.center.y - centerY * viewport.scale });
     return true;
   }
 
@@ -9598,15 +9549,7 @@
     return bounds ? { x1: bounds.minX, y1: bounds.minY, x2: bounds.maxX, y2: bounds.maxY } : null;
   }
 
-  function visibleWorldBounds() {
-    const rect = canvas.getBoundingClientRect();
-    return {
-      x1: -viewport.x / viewport.scale,
-      y1: -viewport.y / viewport.scale,
-      x2: (rect.width - viewport.x) / viewport.scale,
-      y2: (rect.height - viewport.y) / viewport.scale,
-    };
-  }
+
 
   function intersectBounds(a, b) {
     if (!a || !b) return null;
@@ -19287,8 +19230,8 @@
     if (coordinateStatus && coordinateStatus.textContent !== coordinateText) coordinateStatus.textContent = coordinateText;
     if (panSession) {
       const p = screenPoint;
-      viewport.x = panSession.startX + (p.x - panSession.startPointer.x);
-      viewport.y = panSession.startY + (p.y - panSession.startPointer.y);
+      viewport.update({ x: panSession.startX + (p.x - panSession.startPointer.x) });
+      viewport.update({ y: panSession.startY + (p.y - panSession.startPointer.y) });
       draw();
       return;
     }
@@ -20238,9 +20181,9 @@
       const screen = canvasScreenPoint(e);
       const world = screenToWorld(screen);
       const nextScale = clampZoom(viewport.scale * Math.exp(-e.deltaY * 0.001));
-      viewport.scale = nextScale;
-      viewport.x = screen.x - world.x * viewport.scale;
-      viewport.y = screen.y - world.y * viewport.scale;
+      viewport.update({ scale: nextScale });
+      viewport.update({ x: screen.x - world.x * viewport.scale });
+      viewport.update({ y: screen.y - world.y * viewport.scale });
       setHint(`表示倍率: ${formatZoom(viewport.scale)}`);
       draw();
       if (pendingCommand && ["distance-value", "offset-value"].includes(pendingCommand.type)) syncDimensionValueInput();
@@ -21438,7 +21381,7 @@
       },
       resetForSplineTest() {
         resetModelState();
-        viewport.scale = 2;
+        viewport.update({ scale: 2 });
         resizeCanvas({ centerWorld: { x: 0, y: 0 } });
         resetHistory("spline test");
         updateUI();
@@ -21572,7 +21515,7 @@
       },
       resetForHatchTest() {
         resetModelState();
-        viewport.scale = 1;
+        viewport.update({ scale: 1 });
         const points = [
           addPoint(0, 0, false, "endpoint"), addPoint(120, 0, false, "endpoint"),
           addPoint(120, 80, false, "endpoint"), addPoint(0, 80, false, "endpoint"),
@@ -21596,7 +21539,7 @@
       },
       resetForDrawingOrderTest() {
         resetModelState();
-        viewport.scale = 3;
+        viewport.update({ scale: 3 });
         const corners = [
           addPoint(0, 0, false, "endpoint"), addPoint(120, 0, false, "endpoint"),
           addPoint(120, 80, false, "endpoint"), addPoint(0, 80, false, "endpoint"),
@@ -21701,7 +21644,7 @@
       },
       resetForSolidHatchHoleTest() {
         resetModelState();
-        viewport.scale = 1;
+        viewport.update({ scale: 1 });
         const corners = [
           addPoint(0, 0, false, "endpoint"), addPoint(120, 0, false, "endpoint"),
           addPoint(120, 80, false, "endpoint"), addPoint(0, 80, false, "endpoint"),
@@ -21812,7 +21755,7 @@
         };
       },
       setViewportScaleForHatchTest(scale) {
-        viewport.scale = Math.max(0.01, Number(scale) || 1);
+        viewport.update({ scale: Math.max(0.01, Number(scale) || 1) });
         draw();
         return model.hatches[0] ? model.hatches[0].appearance.spacing * HATCH_SCREEN_PX_PER_MM / viewport.scale : null;
       },
@@ -21865,7 +21808,7 @@
       resetForGeometryClipboardTest() {
         resetModelState();
         geometryClipboard = null;
-        viewport.scale = 1;
+        viewport.update({ scale: 1 });
         model.sketches.push({ id: "S2", name: "Sketch-2", parentSketchId: ROOT_SKETCH_ID, kind: "sketch", visible: true });
         const p1 = addPoint(-120, -30, true, "endpoint");
         const p2 = addPoint(-20, -30, false, "endpoint");
@@ -21897,7 +21840,7 @@
       resetForBlockClipboardTest() {
         resetModelState();
         geometryClipboard = null;
-        viewport.scale = 1;
+        viewport.update({ scale: 1 });
         model.sketches.push({ id: "S2", name: "Sketch-2", parentSketchId: ROOT_SKETCH_ID, kind: "sketch", visible: true });
         const definition = createEmptyBlockDefinition("Clipboard Block");
         const bp1 = new Point("BP1", 0, 0, false, "endpoint");
@@ -22448,7 +22391,7 @@
           calibrationPointCount: referenceImageCalibrationSession?.localPoints?.length || 0,
           dragging: Boolean(referenceImageDragSession),
           history: this.historyState(),
-          viewport: { ...viewport },
+          viewport: viewport.snapshot(),
         };
       },
       async importReferenceImageDataForTest(dataUrl, name = "image.png", type = "image/png") {
@@ -22595,7 +22538,7 @@
       },
       dimensionArrowTipAlignmentForTest({ lineWidth = 1.2, arrowheadAngle = 30, highlighted = false, viewportScale = viewport.scale, outside = false } = {}) {
         const previousScale = viewport.scale;
-        viewport.scale = Math.max(0.05, Number(viewportScale) || 1);
+        viewport.update({ scale: Math.max(0.05, Number(viewportScale) || 1) });
         try {
           const appearance = {
             ...normalizeDimensionAppearance(documentModel.defaultDimensionAppearance, { partial: false }),
@@ -22627,7 +22570,7 @@
             rearShaftLength: shaftLength - alongDirection(points[1]),
           };
         } finally {
-          viewport.scale = previousScale;
+          viewport.update({ scale: previousScale });
         }
       },
       drawnDimensionColorsForTest() {
@@ -23043,7 +22986,7 @@
         };
       },
       focusWorldForTest(center, scale = 1) {
-        viewport.scale = clampZoom(Number(scale) || 1);
+        viewport.update({ scale: clampZoom(Number(scale) || 1) });
         resizeCanvas({ centerWorld: { x: Number(center?.x) || 0, y: Number(center?.y) || 0 } });
         draw();
         const rect = canvas.getBoundingClientRect();
@@ -23054,7 +22997,7 @@
         };
       },
       displayZoomStateForTest(zoomRatio = null) {
-        if (zoomRatio != null) viewport.scale = clampZoom(Number(zoomRatio) * CSS_PX_PER_MM);
+        if (zoomRatio != null) viewport.update({ scale: clampZoom(Number(zoomRatio) * CSS_PX_PER_MM) });
         return {
           units: { ...documentModel.units },
           zoomRatio: viewport.scale / CSS_PX_PER_MM,
@@ -23836,7 +23779,7 @@
       },
       annotationAppearanceStateForTest(type = "text", scale = null) {
         const annotation = model.annotations.find((element) => element.type === type) || null;
-        if (scale != null) viewport.scale = clampZoom(Number(scale) || 1);
+        if (scale != null) viewport.update({ scale: clampZoom(Number(scale) || 1) });
         if (!annotation) return null;
         const style = normalizeAnnotationStyle(annotation.style);
         draw();
@@ -23968,9 +23911,9 @@
         const p3 = addPoint(45000, 30000, false, "endpoint");
         const p4 = addPoint(50000, 30000, false, "endpoint");
         addLine(p3, p4);
-        viewport.scale = 10;
-        viewport.x = -100000;
-        viewport.y = 50000;
+        viewport.update({ scale: 10 });
+        viewport.update({ x: -100000 });
+        viewport.update({ y: 50000 });
         fitAllGeometryToViewport();
         const bounds = allGeometryBounds();
         const screen = screenBoxForBounds(bounds);
@@ -23990,9 +23933,9 @@
         model.activeSketchId = hiddenSketchId;
         addLine(addPoint(10000, 0, true, "endpoint"), addPoint(10100, 0, true, "endpoint"));
         model.activeSketchId = previousActive;
-        viewport.scale = 0.02;
-        viewport.x = 10;
-        viewport.y = 10;
+        viewport.update({ scale: 0.02 });
+        viewport.update({ x: 10 });
+        viewport.update({ y: 10 });
         updateUI();
         draw();
         const rect = canvas.getBoundingClientRect();
@@ -24014,9 +23957,9 @@
         const results = {};
         const resetForCase = () => {
           resetModelState();
-          viewport.scale = 1;
-          viewport.x = 0;
-          viewport.y = 0;
+          viewport.update({ scale: 1 });
+          viewport.update({ x: 0 });
+          viewport.update({ y: 0 });
           pointerPreview = null;
           trimPreview = null;
           selectionRectSession = null;
@@ -24204,7 +24147,7 @@
       },
       resetForFixedPointDisplayTest() {
         resetModelState();
-        viewport.scale = 1;
+        viewport.update({ scale: 1 });
         const point = addPoint(0, 0, true, "explicit");
         updateUI();
         fitAllGeometryToViewport(220);
@@ -24218,7 +24161,7 @@
       },
       resetForSketchTreeBlockHoverTest() {
         resetModelState();
-        viewport.scale = 1;
+        viewport.update({ scale: 1 });
         const definition = createEmptyBlockDefinition("Tree Hover Block");
         const lineP1 = new Point("BP1", -80, 0, false, "endpoint");
         const lineP2 = new Point("BP2", 80, 0, false, "endpoint");
@@ -24538,7 +24481,7 @@
         model.sketches.push({ id: activeChildId, name: "Sketch-2", parentSketchId: sourceSketchId, kind: "sketch", visible: true, appearance: {} });
         model.activeSketchId = activeChildId;
         fitAllGeometryToViewport(180);
-        viewport.x += 80;
+        viewport.update({ x: viewport.x + (80) });
         updateUI();
         draw();
         const layout = dimensionLayout(targetFromConstraint(dimensionConstraint), dimensionConstraint.dimension);
@@ -24608,14 +24551,14 @@
         };
 
         resetModelState();
-        viewport.scale = 2;
+        viewport.update({ scale: 2 });
         const line = addLine(addPoint(-40, 0, false, "endpoint"), addPoint(40, 0, false, "endpoint"), true);
         const direct = captureOverhang(line, () => {
           hoveredLine = line;
         });
 
         resetModelState();
-        viewport.scale = 2;
+        viewport.update({ scale: 2 });
         const definition = createEmptyBlockDefinition("Block-Construction-Hover");
         const p1 = new Point("BP1", -40, 0, false, "endpoint");
         const p2 = new Point("BP2", 40, 0, false, "endpoint");
