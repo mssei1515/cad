@@ -170,3 +170,7 @@ index.htmlは既存の通常script読込列で両moduleをapp.jsより先に読�
 ### 描画順とbatch
 
 `DrawingStack`（`src/rendering/drawing_stack.js`）が描画順の組み立てと高速経路、painter呼出しを所有する。appは現在scope・Geometry読出し・可視性・描画先を接続する。永続化するdrawingOrderの規則は従来の`DrawingOrder`に残る。
+
+### 注記と参照画像の描画
+
+`AnnotationRenderer`は注記文字・引出線・終端記号、`ReferenceImageRenderer`は参照画像のURL cache・画像本体・選択枠・較正markerを所有する。appは対象の可視性や操作状態を判断し、描画入力と参照点解決を接続する。
