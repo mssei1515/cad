@@ -75,7 +75,6 @@
   const { build: buildOffsetChainGeometry } = window.OffsetChainEngine;
 
   const {
-    dependencies: expressionDependencies,
     evaluate: evaluateParameterExpression,
     evaluateDefinitions: evaluateParameterDefinitions,
     formatReference: formatParameterReference,
@@ -212,14 +211,17 @@
   };
   const workspace = window.EditingWorkspace.create(documentModel);
   const currentParameterNamespace = workspace.current;
+  const parameterNamespace = window.ParameterNamespace.create({ currentParameterNamespace, applicationText });
   const {
     dimensionExpressionValue, numericDimensionExpression, isDirectNumericExpressionInput,
     dimensionUsesExpression, expressionInputValue, expressionFromUserInput,
-    rewriteExpressionInputIdentifiers, dimensionConstraintsInNamespace, allocateDimensionParameterName,
+    dimensionConstraintsInNamespace, allocateDimensionParameterName,
     ensureDimensionParameter, ensureParameterNamespace, parameterErrorText,
     referenceDimensionValues, validateParameterSymbolNames, evaluateParameterNamespace,
     validateParameterNamespace, prepareLoadedParameterNamespace, parameterDependents,
-  } = window.ParameterNamespace.create({ currentParameterNamespace, applicationText });
+  } = parameterNamespace;
+  const parameterDraft = window.ParameterDialogDraft.create({ namespace: parameterNamespace });
+  const { isDirty: parameterDialogIsDirty, evaluate: parameterDraftEvaluation } = parameterDraft;
   const {
     ensureSketchState, isRootSketch, isDrawableSketch,
     firstDrawableSketchId, sketchName, sketchById,
@@ -333,7 +335,6 @@
   let commandCursorSource = null;
   const commandCursorCache = new Map();
   let colorPaletteSession = null;
-  let parameterDialogSession = null;
   const sketchAppearanceSectionOpenState = { general: false, construction: false, dimension: false };
   const sketchTreeSketchOpenState = new Map();
   const sketchTreeGroupOpenState = new Map();
@@ -927,10 +928,10 @@
   }
 
   function expressionReferenceNamesForInput(input) {
-    if (input?.closest("#parametersDialog") && parameterDialogSession) {
+    if (input?.closest("#parametersDialog") && parameterDraft.current) {
       return new Set([
-        ...parameterDialogSession.parameters.map((parameter) => String(parameter.name || "")),
-        ...parameterDialogSession.dimensions.map((dimension) => String(dimension.name || "")),
+        ...parameterDraft.current.parameters.map((parameter) => String(parameter.name || "")),
+        ...parameterDraft.current.dimensions.map((dimension) => String(dimension.name || "")),
       ]);
     }
     return new Set([
@@ -11735,8 +11736,8 @@
     if (input === dimensionValueInput && pendingCommand?.type === "distance-value") return { input, namespace: model };
     if (input.matches('#propertiesPanel [data-property="constraint-expression"]')) return { input, namespace: model };
     const parameterExpression = input.matches('[data-parameter-field="expression"], [data-dimension-field="expression"]');
-    if (parameterExpression && input.closest("#parametersDialog") && parameterDialogSession) {
-      return { input, namespace: parameterDialogSession.namespace };
+    if (parameterExpression && input.closest("#parametersDialog") && parameterDraft.current) {
+      return { input, namespace: parameterDraft.current.namespace };
     }
     return null;
   }
@@ -17607,52 +17608,6 @@
     return parameterScopeOptions().find((option) => option.key === key) || parameterScopeOptions()[0] || null;
   }
 
-  function parameterDraftSignature(session = parameterDialogSession) {
-    if (!session) return "";
-    return JSON.stringify({
-      parameters: session.parameters.map(({ name, expression }) => ({ name, expression })),
-      dimensions: session.dimensions.map(({ name, expression, readOnly }) => ({ name, expression: readOnly ? null : expression, readOnly })),
-    });
-  }
-
-  function parameterDialogIsDirty() {
-    return Boolean(parameterDialogSession && parameterDraftSignature() !== parameterDialogSession.originalSignature);
-  }
-
-  function createParameterDialogSession(scope) {
-    ensureParameterNamespace(scope.namespace);
-    const dimensions = dimensionConstraintsInNamespace(scope.namespace).map((constraint) => ({
-      constraint,
-      name: constraint.parameterName,
-      committedName: constraint.parameterName,
-      expression: isReadOnlyDimension(constraint) ? "" : expressionInputValue(constraint.expression),
-      readOnly: isReadOnlyDimension(constraint),
-    }));
-    const session = {
-      key: scope.key,
-      namespace: scope.namespace,
-      parameters: scope.namespace.parameters.map((parameter) => ({ name: parameter.name, committedName: parameter.name, expression: expressionInputValue(parameter.expression), isNew: false })),
-      dimensions,
-    };
-    session.originalSignature = parameterDraftSignature(session);
-    return session;
-  }
-
-  function parameterDraftEvaluation(session = parameterDialogSession) {
-    validateParameterSymbolNames(session.parameters, session.dimensions);
-    const inputValues = new Map();
-    const definitions = session.parameters.map((parameter) => ({ name: parameter.name, expression: expressionFromUserInput(parameter.expression), kind: "parameter" }));
-    for (const dimension of session.dimensions) {
-      if (dimension.readOnly) {
-        const target = targetFromConstraint(dimension.constraint);
-        inputValues.set(dimension.name, measuredDimensionValue(target, dimension.constraint.dimension));
-      } else {
-        definitions.push({ name: dimension.name, expression: expressionFromUserInput(dimension.expression), kind: "dimension" });
-      }
-    }
-    return evaluateParameterDefinitions(definitions, inputValues);
-  }
-
   function setParameterDialogError(message = "") {
     const error = document.getElementById("parameterDialogError");
     if (!error) return;
@@ -17669,7 +17624,7 @@
   }
 
   function renderParameterDialog() {
-    const session = parameterDialogSession;
+    const session = parameterDraft.current;
     if (!session) return;
     const scopeSelect = document.getElementById("parameterScopeSelect");
     if (scopeSelect) {
@@ -17696,17 +17651,10 @@
     installExpressionInputHighlights(document.getElementById("parametersDialog"));
   }
 
-  function rewriteParameterDraftName(oldName, nextName) {
-    if (!oldName || oldName === nextName) return;
-    const replacements = new Map([[oldName, nextName]]);
-    for (const parameter of parameterDialogSession.parameters) parameter.expression = rewriteExpressionInputIdentifiers(parameter.expression, replacements);
-    for (const dimension of parameterDialogSession.dimensions) if (!dimension.readOnly) dimension.expression = rewriteExpressionInputIdentifiers(dimension.expression, replacements);
-  }
-
   function loadParameterDialogScope(key) {
     const scope = parameterScopeForKey(key);
     if (!scope) return false;
-    parameterDialogSession = createParameterDialogSession(scope);
+    parameterDraft.open(scope);
     renderParameterDialog();
     return true;
   }
@@ -17763,7 +17711,7 @@
   }
 
   function applyParameterDialogDraft() {
-    const session = parameterDialogSession;
+    const session = parameterDraft.current;
     if (!session) return false;
     const documentSnapshot = blockEditSession ? null : historySnapshot();
     const localSnapshot = blockEditSession ? snapshotModelState() : null;
@@ -17826,7 +17774,7 @@
   });
   document.getElementById("parametersBtn")?.addEventListener("click", openParametersDialog);
   document.getElementById("parameterScopeSelect")?.addEventListener("change", (event) => {
-    const previousKey = parameterDialogSession?.key;
+    const previousKey = parameterDraft.current?.key;
     if (!resolveDirtyParameterDialog()) {
       event.target.value = previousKey;
       return;
@@ -17834,66 +17782,34 @@
     loadParameterDialogScope(event.target.value);
   });
   document.getElementById("parametersForm")?.addEventListener("input", (event) => {
-    if (!parameterDialogSession) return;
+    if (!parameterDraft.current) return;
     const input = event.target;
-    if (input.dataset.parameterRow != null) {
-      const row = parameterDialogSession.parameters[Number(input.dataset.parameterRow)];
-      if (row) row[input.dataset.parameterField] = input.value;
-    }
-    if (input.dataset.dimensionRow != null) {
-      const row = parameterDialogSession.dimensions[Number(input.dataset.dimensionRow)];
-      if (row && !(row.readOnly && input.dataset.dimensionField === "expression")) row[input.dataset.dimensionField] = input.value;
-    }
+    parameterDraft.updateInput(input.dataset, input.value);
     refreshExpressionInputHighlights(event.currentTarget);
   });
   document.getElementById("parametersForm")?.addEventListener("change", (event) => {
-    if (!parameterDialogSession) return;
+    if (!parameterDraft.current) return;
     const input = event.target;
-    let row = null;
-    if (input.dataset.parameterRow != null) row = parameterDialogSession.parameters[Number(input.dataset.parameterRow)];
-    if (input.dataset.dimensionRow != null) row = parameterDialogSession.dimensions[Number(input.dataset.dimensionRow)];
-    const isName = input.dataset.parameterField === "name" || input.dataset.dimensionField === "name";
-    if (row && isName) {
-      rewriteParameterDraftName(row.committedName, row.name);
-      row.committedName = row.name;
-    }
+    parameterDraft.commitName(input.dataset);
     if (input.id !== "parameterScopeSelect") renderParameterDialog();
   });
   document.getElementById("parametersForm")?.addEventListener("click", (event) => {
     const deleteButton = event.target.closest("[data-delete-parameter]");
-    if (!deleteButton || !parameterDialogSession) return;
+    if (!deleteButton || !parameterDraft.current) return;
     const index = Number(deleteButton.dataset.deleteParameter);
-    const parameter = parameterDialogSession.parameters[index];
-    if (!parameter) return;
-    const dependencies = [];
-    for (const item of [
-      ...parameterDialogSession.parameters.filter((_, itemIndex) => itemIndex !== index),
-      ...parameterDialogSession.dimensions.filter((dimension) => !dimension.readOnly),
-    ]) {
-      try {
-        if (expressionDependencies(expressionFromUserInput(item.expression)).has(parameter.name)) dependencies.push(item.name);
-      } catch (_error) {
-        // The complete draft validation reports unrelated syntax errors.
-      }
-    }
-    if (dependencies.length > 0) {
-      setParameterDialogError(applicationSettings.language === "en" ? `${parameter.name} is referenced by ${dependencies.join(", ")}` : `${parameter.name} は ${dependencies.join("、")} から参照されています`);
+    const result = parameterDraft.remove(index);
+    if (!result) return;
+    if (!result.removed) {
+      setParameterDialogError(applicationSettings.language === "en" ? `${result.name} is referenced by ${result.dependencies.join(", ")}` : `${result.name} は ${result.dependencies.join("、")} から参照されています`);
       return;
     }
-    parameterDialogSession.parameters.splice(index, 1);
     renderParameterDialog();
   });
   document.getElementById("addParameterBtn")?.addEventListener("click", () => {
-    if (!parameterDialogSession) return;
-    const used = new Set([...parameterDialogSession.parameters.map((item) => item.name), ...parameterDialogSession.dimensions.map((item) => item.name)]);
-    let index = 1;
-    while (used.has(`parameter${index}`)) index += 1;
-    const name = `parameter${index}`;
-    parameterDialogSession.parameters.push({ name, committedName: name, expression: "0", isNew: true });
-    renderParameterDialog();
+    if (parameterDraft.add()) renderParameterDialog();
   });
   document.getElementById("applyParametersBtn")?.addEventListener("click", applyParameterDialogDraft);
-  document.getElementById("discardParametersBtn")?.addEventListener("click", () => loadParameterDialogScope(parameterDialogSession?.key));
+  document.getElementById("discardParametersBtn")?.addEventListener("click", () => loadParameterDialogScope(parameterDraft.current?.key));
   document.getElementById("parametersCloseBtn")?.addEventListener("click", () => {
     if (!resolveDirtyParameterDialog()) return;
     document.getElementById("parametersDialog")?.close();
@@ -17911,7 +17827,7 @@
     if (!resolveDirtyParameterDialog()) event.preventDefault();
   });
   document.getElementById("parametersDialog")?.addEventListener("close", () => {
-    parameterDialogSession = null;
+    parameterDraft.close();
   });
   document.getElementById("documentSettingsBtn")?.addEventListener("click", () => {
     const fields = document.getElementById("documentAppearanceFields");
