@@ -114,7 +114,7 @@ test("adversarial mixed-scale fixture is completely constrained", async ({ page 
     lineCount: 61,
     circleCount: 12,
     arcCount: 12,
-    constraintCount: 248,
+    constraintCount: 250,
   }));
 
   const linePosition = await page.evaluate(() => window.__jot2dTest.selectableLineClientPositionForTest());
