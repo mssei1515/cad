@@ -501,6 +501,10 @@
     invalidateAnalysis: () => { constraintAnalysisState = null; },
   });
   const { captureValues: snapshotModelState, restoreValues: restoreModelState, captureGeometry: snapshotGeometryMutationState, restoreGeometry: restoreGeometryMutationState } = editingCheckpoint;
+  const constraintRebinding = window.ConstraintRebinding.create({
+    catalog: blockCatalog, projections: blockProjections, geometryInstanceBundlesForScope,
+    serializeConstraint, decorateSerializedConstraint, deserializeConstraint, applicationText,
+  });
   const blockParameterPropagation = window.BlockParameterPropagation.create({
     catalog: blockCatalog, invalidateProjection: invalidateBlockProjectionCache, applicationText,
     definitions: { rebuild: rebuildBlockDefinitionConstraintObjects, stabilize: stabilizeStoredBlockDefinition },
@@ -3957,39 +3961,7 @@
   }
 
   function rebuildBlockDefinitionConstraintObjects(definition) {
-    const pointById = new Map(definition.points.map((point) => [point.id, point]));
-    const lineById = new Map(definition.lines.map((line) => [line.id, line]));
-    const primitiveById = new Map([...definition.circles, ...definition.arcs, ...(definition.splines || [])].map((primitive) => [primitive.id, primitive]));
-    const nestedBundles = [];
-    for (const instance of definition.blockInstances || []) {
-      const nestedDefinition = blockDefinitionById(instance.definitionId);
-      if (!nestedDefinition) continue;
-      const bundle = createBlockProjectionBundle(instance, nestedDefinition);
-      nestedBundles.push(bundle);
-      addGeometryBundleToMaps(bundle, pointById, lineById, primitiveById);
-    }
-    for (const bundle of geometryInstanceBundlesForScope(definition, nestedBundles)) addGeometryBundleToMaps(bundle, pointById, lineById, primitiveById);
-    let removed = 0;
-    const constraints = [];
-    for (const source of definition.constraints || []) {
-      const data = decorateSerializedConstraint(serializeConstraint(source), source);
-      let constraint = null;
-      try {
-        constraint = data ? deserializeConstraint(data, pointById, lineById, primitiveById) : null;
-      } catch (_error) {
-        constraint = null;
-      }
-      if (!constraint) {
-        removed += 1;
-        continue;
-      }
-      constraint.sketchId = source.sketchId;
-      constraint.reference = Boolean(source.reference);
-      constraint.referenceSketchId = source.referenceSketchId || null;
-      constraints.push(constraint);
-    }
-    definition.constraints = constraints;
-    return removed;
+    return constraintRebinding.rebuildDefinition(definition);
   }
 
   function rebuildStoredBlockDefinitionConstraints() {
@@ -17649,19 +17621,7 @@
   }
 
   function rebuildRootConstraintObjects() {
-    const pointById = new Map(model.points.map((point) => [point.id, point]));
-    const lineById = new Map(model.lines.map((line) => [line.id, line]));
-    const primitiveById = new Map([...model.circles, ...model.arcs, ...model.splines].map((primitive) => [primitive.id, primitive]));
-    for (const bundle of blockProjectionBundles()) addGeometryBundleToMaps(bundle, pointById, lineById, primitiveById);
-    model.constraints = model.constraints.map((source) => {
-      const data = decorateSerializedConstraint(serializeConstraint(source), source);
-      const constraint = data ? deserializeConstraint(data, pointById, lineById, primitiveById) : null;
-      if (!constraint) throw new Error(applicationText("Document拘束を再構築できません", "Document constraints could not be rebuilt"));
-      constraint.sketchId = source.sketchId;
-      constraint.reference = Boolean(source.reference);
-      constraint.referenceSketchId = source.referenceSketchId || null;
-      return constraint;
-    });
+    constraintRebinding.rebuildDocument(model, blockProjectionBundles());
     clearSelection();
   }
 
