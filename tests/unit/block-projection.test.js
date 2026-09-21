@@ -39,6 +39,21 @@ test("catalog follows registry replacement and preserves enabled-sketch fallback
   assert.equal(catalog.blockDefinitionById("B2"), null);
 });
 
+test("a sketch containing only a derived projection can be the sole enabled block sketch", () => {
+  const source = definition("B1");
+  source.sketches[1].parentSketchId = "ROOT";
+  source.sketches[2].parentSketchId = "S1";
+  source.geometryInstances = [{ id: "SPI1", type: "sketchProjection", sketchId: "S2", sources: [{ kind: "line", path: ["L1"] }], appearanceOverride: {} }];
+  const { catalog, projection } = services(() => [source]);
+  assert.equal(catalog.blockDefinitionHasGeometry(source), true);
+  assert.deepEqual(Array.from(catalog.blockDefinitionGeometrySketchIds(source)), ["S1", "S2"]);
+  const block = instance("BI1", source.id, { enabledSketchIds: ["S2"] });
+  assert.deepEqual(Array.from(catalog.blockInstanceEnabledSketchSet(block)), ["S2"]);
+  const bundle = projection.blockProjectionBundle(block);
+  assert.equal(bundle.lines.length, 1);
+  assert.equal(bundle.lines[0].id, "BI1@SPI1@L1");
+});
+
 test("projection cache preserves live point reads and refreshes only on its existing invalidation inputs", () => {
   const source = definition("B1");
   const { projection } = services(() => [source]);

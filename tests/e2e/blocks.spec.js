@@ -1753,6 +1753,54 @@ test("placement and existing instances keep independent enabled internal sketche
   expect(state.instances[1].enabledSketchIds).toEqual([child.sketchId]);
 });
 
+test("a block can display only an internal sketch projection", async ({ page }) => {
+  await openTestDocument(page);
+  const sourceSketch = { id: "S1", name: "Source", parentSketchId: "ROOT", kind: "sketch", visible: true };
+  const frontSketch = { id: "S2", name: "Front", parentSketchId: "S1", kind: "sketch", visible: true };
+  const fixture = {
+    version: 8,
+    documentName: "Projected block sketch",
+    sketches: [{ id: "ROOT", name: "Root Sketch", parentSketchId: null, kind: "root", visible: true }, sourceSketch],
+    activeSketchId: "S1",
+    blockDefinitions: [{
+      id: "B1", name: "Dishwasher", revision: 1, origin: { x: 0, y: 0 },
+      sketches: [{ id: "ROOT", name: "Root Sketch", parentSketchId: null, kind: "root", visible: true }, sourceSketch, frontSketch],
+      activeSketchId: "S2",
+      points: [
+        { id: "P1", x: 10, y: 0, fixed: false, kind: "endpoint", sketchId: "S1" },
+        { id: "P2", x: 30, y: 0, fixed: false, kind: "endpoint", sketchId: "S1" },
+      ],
+      lines: [{ id: "L1", p1: "P1", p2: "P2", construction: false, sketchId: "S1" }],
+      circles: [], arcs: [], constraints: [],
+      geometryInstances: [{ id: "SPI1", type: "sketchProjection", sketchId: "S2", sources: [{ kind: "line", path: ["L1"] }], appearanceOverride: {} }],
+    }],
+    blockInstances: [{ id: "BI1", definitionId: "B1", sketchId: "S1", x: 0, y: 0, rotation: 0, fixed: false, enabledSketchIds: ["S1", "S2"] }],
+    points: [], lines: [], circles: [], arcs: [], constraints: [],
+  };
+  await page.evaluate((data) => window.__jot2dTest.importDocumentNameFixture(data, "projected-block.json"), fixture);
+  await page.evaluate(() => window.__jot2dTest.selectGeometryIdsForTest({ blockInstances: ["BI1"] }));
+  await expect(page.locator('#propertiesPanel input[data-block-sketch-id="S2"]')).toBeChecked();
+  await expect(page.locator('#propertiesPanel .property-sketch-option').filter({ hasText: "Front" })).toContainText("1");
+  await page.locator('#propertiesPanel input[data-block-sketch-id="S1"]').uncheck();
+  let state = await page.evaluate(() => window.__jot2dTest.blockState());
+  expect(state.instances[0].enabledSketchIds).toEqual(["S2"]);
+  expect(state.projectionLineIds).toEqual(["BI1@SPI1@L1"]);
+
+  await openBlockDefinitions(page);
+  await page.click('.blockPlaceBtn[data-id="B1"]');
+  await page.locator('#propertiesPanel input[data-placement-sketch-id="S1"]').uncheck();
+  const canvas = await page.locator("#canvas").boundingBox();
+  const placementPoint = { x: canvas.x + canvas.width * 0.65, y: canvas.y + canvas.height * 0.55 };
+  await page.mouse.click(placementPoint.x, placementPoint.y);
+  await page.keyboard.press("Escape");
+  state = await page.evaluate(() => window.__jot2dTest.blockState());
+  expect(state.instances[1].enabledSketchIds).toEqual(["S2"]);
+  expect(state.projectionLineIds).toContain("BI2@SPI1@L1");
+  const pivot = await page.evaluate(() => window.__jot2dTest.blockInteractionPoints("BI2").pivot);
+  expect(pivot.x).toBeCloseTo(placementPoint.x, 1);
+  expect(pivot.y).toBeCloseTo(placementPoint.y, 1);
+});
+
 test("disabling a block sketch automatically removes related constraints and reports it", async ({ page }) => {
   await openTestDocument(page);
   await page.evaluate(
