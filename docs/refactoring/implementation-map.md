@@ -162,3 +162,7 @@ index.htmlは既存の通常script読込列で両moduleをapp.jsより先に読�
 ### 寸法描画の計測とcache
 
 文字幅計測・矢印形状と関連cacheは`src/rendering/dimension_metrics.js`。`ctx`とviewportを接続する。配置計算・編集ラベル・描画順はappに残り、後続で描画moduleへ移す。
+
+### 基本図形の描画
+
+`GeometryRenderer`が線・円・円弧・SplineのCanvas命令を所有する。appの`geometryPaintState()`が操作状態から表示値を作り、4つの薄い描画adapterが可視性と描画順を適用してrendererへ渡す。表示判定の所有者の分離は後続で行う。

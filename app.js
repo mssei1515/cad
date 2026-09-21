@@ -442,6 +442,8 @@
   const { currentCanvasCenterWorld, clampZoom, formatZoom, canvasScreenPoint, screenToWorld, worldToCanvasScreen, canvasPoint, fitBoundsToViewport, screenBoxForBounds, visibleWorldBounds } = viewport;
   const { DIMENSION_SCREEN_PX_PER_MM, DIMENSION_TERMINATOR_FIT_MARGIN_FACTOR, DIMENSION_EXPRESSION_MARK_WIDTH_FACTOR, DIMENSION_EXPRESSION_MARK_GAP_FACTOR, DIMENSION_ARROW_MITER_LIMIT } = window.DimensionMetrics;
   const { dimensionMillimetersToWorld, dimensionTextDrawingMetrics, dimensionTextWidth, shouldPlaceDimensionTerminatorsOutside, linearDimensionTerminatorDirections, dimensionStrokeWidth, dimensionArrowheadPoints, dimensionArrowheadPointsFromResolved, dimensionOpenArrowJoinProjection, dimensionOpenArrowheadRenderPoints } = window.DimensionMetrics.create({ ctx, viewport });
+  const geometryRenderer = window.GeometryRenderer.create({ ctx, viewport, paintState: geometryPaintState, appearanceLineDash, lineDisplaySegment, canvasThemeColor });
+  const { traceSplinePath } = geometryRenderer;
   const MIN_ARC_LENGTH = MIN_LINE_LENGTH;
   const CONSTRAINT_STATUS_COLORS = {
     full: "#111827",
@@ -10060,183 +10062,47 @@
     return Boolean((item?.blockInstance && hoveredBlockInstance === item.blockInstance) || (item?.derivedInstance && hoveredGeometryInstance === item.derivedInstance));
   }
 
-  function drawLines(items = null) {
-    ctx.save();
-    const lines = items ? items.filter(isVisibleSketchElement) : drawOrderBySketch(allGeometryLines());
-    for (const l of lines) {
-      const appearance = effectiveAppearanceForElement(l);
-      const active = isEditableSketchElement(l);
-      const refSelected = isPendingReferenceTarget(l) || isConstraintOperandSelected(l);
-      const treeHovered = isSidebarHighlightedElement(l);
-      const sidebarHovered = isSidebarHoveredElement(l);
-      const relatedHighlighted = isSelectedConstraintRelatedElement(l);
-      const auxiliaryHighlighted = relatedHighlighted;
-      const blockSelected = ownerInstanceSelected(l);
-      const geometrySelected = (active && canvasSelection.lines.includes(l)) || refSelected;
-      const sel = blockSelected || geometrySelected;
-      const canvasHovered = (active || isReferenceHoverElement(l)) && hoveredLine === l;
-      const directlyHovered = treeHovered || sidebarHovered || canvasHovered;
-      const hovered = directlyHovered || ownerInstanceHovered(l);
-      const construction = Boolean(l.construction);
-      ctx.globalAlpha = sketchAlpha(l) * (construction && !sel && !hovered && !auxiliaryHighlighted ? CONSTRUCTION_GEOMETRY_ALPHA : 1);
-      const lineColor = auxiliaryHighlighted ? "#0ea5e9" : geometryDisplayColor(l, appearance, sel, hovered);
-      ctx.strokeStyle = lineColor;
-      ctx.lineWidth = geometryStrokeWidth(l, { auxiliaryHighlighted, selected: sel, hovered, appearance, construction }) / viewport.scale;
-      ctx.lineCap = "round";
-      ctx.lineJoin = "round";
-      ctx.setLineDash(appearanceLineDash(appearance.lineType));
-      ctx.shadowColor = sel || auxiliaryHighlighted ? "rgba(14, 165, 233, 0.45)" : "transparent";
-      ctx.shadowBlur = sel || auxiliaryHighlighted ? 8 / viewport.scale : 0;
-      const drawSegment = lineDisplaySegment(l, appearance);
-      ctx.beginPath();
-      ctx.moveTo(drawSegment.p1.x, drawSegment.p1.y);
-      ctx.lineTo(drawSegment.p2.x, drawSegment.p2.y);
-      ctx.stroke();
-      ctx.setLineDash([]);
-      ctx.shadowBlur = 0;
-
-      if (construction && appearance.endpointMarkers !== false) {
-        ctx.fillStyle = lineColor;
-        const endpointRadius = 2.4 / viewport.scale;
-        for (const p of [l.p1, l.p2]) {
-          ctx.beginPath();
-          ctx.arc(p.x, p.y, endpointRadius, 0, Math.PI * 2);
-          ctx.fill();
-        }
-      }
-
-      if (viewState.geometryIds || geometrySelected || sidebarHovered || canvasHovered || relatedHighlighted) {
-        const mx = (l.p1.x + l.p2.x) / 2;
-        const my = (l.p1.y + l.p2.y) / 2;
-        ctx.fillStyle = canvasThemeColor("#2563eb");
-        ctx.font = `${12 / viewport.scale}px system-ui`;
-        ctx.fillText(l.id, mx + 4 / viewport.scale, my - 4 / viewport.scale);
-      }
-    }
-    ctx.restore();
-  }
-
-  function drawCircles(items = null) {
-    ctx.save();
-    ctx.lineCap = "round";
-    const circles = items ? items.filter(isVisibleSketchElement) : drawOrderBySketch(allGeometryCircles());
-    for (const c of circles) {
-      const appearance = effectiveAppearanceForElement(c);
-      const active = isEditableSketchElement(c);
-      const refSelected = isPendingReferenceTarget(c) || isConstraintOperandSelected(c);
-      const treeHovered = isSidebarHighlightedElement(c);
-      const sidebarHovered = isSidebarHoveredElement(c);
-      const relatedHighlighted = isSelectedConstraintRelatedElement(c);
-      const auxiliaryHighlighted = relatedHighlighted;
-      const blockSelected = ownerInstanceSelected(c);
-      const geometrySelected = (active && canvasSelection.circles.includes(c)) || refSelected;
-      const sel = blockSelected || geometrySelected;
-      const canvasHovered = (active || isReferenceHoverElement(c)) && hoveredCircle === c;
-      const directlyHovered = treeHovered || sidebarHovered || canvasHovered;
-      const hovered = directlyHovered || ownerInstanceHovered(c);
-      const construction = Boolean(c.construction) && !sel && !hovered;
-      ctx.globalAlpha = sketchAlpha(c) * (construction && !auxiliaryHighlighted ? CONSTRUCTION_GEOMETRY_ALPHA : 1);
-      ctx.strokeStyle = auxiliaryHighlighted ? "#0ea5e9" : geometryDisplayColor(c, appearance, sel, hovered);
-      ctx.lineWidth = geometryStrokeWidth(c, { auxiliaryHighlighted, selected: sel, hovered, appearance, construction }) / viewport.scale;
-      ctx.setLineDash(appearanceLineDash(appearance.lineType));
-      ctx.shadowColor = sel || auxiliaryHighlighted ? "rgba(14, 165, 233, 0.45)" : "transparent";
-      ctx.shadowBlur = sel || auxiliaryHighlighted ? 8 / viewport.scale : 0;
-      ctx.beginPath();
-      ctx.arc(c.center.x, c.center.y, c.radius(), 0, Math.PI * 2);
-      ctx.stroke();
-      ctx.setLineDash([]);
-      ctx.shadowBlur = 0;
-      if (viewState.geometryIds || geometrySelected || sidebarHovered || canvasHovered || relatedHighlighted) {
-        ctx.fillStyle = canvasThemeColor("#2563eb");
-        ctx.font = `${12 / viewport.scale}px system-ui`;
-        ctx.fillText(c.id, c.center.x + c.radius() + 4 / viewport.scale, c.center.y - 4 / viewport.scale);
-      }
-    }
-    ctx.restore();
-  }
-
-  function drawArcs(items = null) {
-    ctx.save();
-    ctx.lineCap = "round";
-    const arcs = items ? items.filter(isVisibleSketchElement) : drawOrderBySketch(allGeometryArcs());
-    for (const a of arcs) {
-      const appearance = effectiveAppearanceForElement(a);
-      const active = isEditableSketchElement(a);
-      const refSelected = isPendingReferenceTarget(a) || isConstraintOperandSelected(a);
-      const treeHovered = isSidebarHighlightedElement(a);
-      const sidebarHovered = isSidebarHoveredElement(a);
-      const relatedHighlighted = isSelectedConstraintRelatedElement(a);
-      const auxiliaryHighlighted = relatedHighlighted;
-      const blockSelected = ownerInstanceSelected(a);
-      const geometrySelected = (active && canvasSelection.arcs.includes(a)) || refSelected;
-      const sel = blockSelected || geometrySelected;
-      const canvasHovered = (active || isReferenceHoverElement(a)) && hoveredArc === a;
-      const directlyHovered = treeHovered || sidebarHovered || canvasHovered;
-      const hovered = directlyHovered || ownerInstanceHovered(a);
-      const construction = Boolean(a.construction) && !sel && !hovered;
-      ctx.globalAlpha = sketchAlpha(a) * (construction && !auxiliaryHighlighted ? CONSTRUCTION_GEOMETRY_ALPHA : 1);
-      ctx.strokeStyle = auxiliaryHighlighted ? "#0ea5e9" : geometryDisplayColor(a, appearance, sel, hovered);
-      ctx.lineWidth = geometryStrokeWidth(a, { auxiliaryHighlighted, selected: sel, hovered, appearance, construction }) / viewport.scale;
-      ctx.setLineDash(appearanceLineDash(appearance.lineType));
-      ctx.shadowColor = sel || auxiliaryHighlighted ? "rgba(14, 165, 233, 0.45)" : "transparent";
-      ctx.shadowBlur = sel || auxiliaryHighlighted ? 8 / viewport.scale : 0;
-      ctx.beginPath();
-      ctx.arc(a.center.x, a.center.y, a.radius(), a.startAngle, a.endAngle, a.endAngle < a.startAngle);
-      ctx.stroke();
-      ctx.setLineDash([]);
-      ctx.shadowBlur = 0;
-      if (viewState.geometryIds || geometrySelected || sidebarHovered || canvasHovered || relatedHighlighted) {
-        const mid = a.startAngle + arcSweep(a) / 2;
-        ctx.fillStyle = canvasThemeColor("#2563eb");
-        ctx.font = `${12 / viewport.scale}px system-ui`;
-        ctx.fillText(a.id, a.center.x + Math.cos(mid) * a.radius(), a.center.y + Math.sin(mid) * a.radius());
-      }
-    }
-    ctx.restore();
-  }
-
   function isArcRadiusDimensionTarget(target) {
     return target?.kind === "radius" && target.primitive instanceof Arc;
   }
 
-  function traceSplinePath(spline) {
-    const samples = window.SplineGeometry.flatten(spline.curve(), { tolerance: Math.max(0.05, 0.45 / viewport.scale) });
-    ctx.beginPath();
-    if (!samples.length) return samples;
-    ctx.moveTo(samples[0].point.x, samples[0].point.y);
-    for (let index = 1; index < samples.length; index += 1) ctx.lineTo(samples[index].point.x, samples[index].point.y);
-    if (spline.closed) ctx.closePath();
-    return samples;
+  function geometryPaintState(item, kind) {
+    const appearance = effectiveAppearanceForElement(item);
+    const active = isEditableSketchElement(item);
+    const ownSelected = active && canvasSelection[kind].includes(item);
+    const geometrySelected = ownSelected || isConstraintOperandSelected(item) || (kind !== "splines" && isPendingReferenceTarget(item));
+    const selected = ownerInstanceSelected(item) || geometrySelected;
+    const treeHovered = isSidebarHighlightedElement(item);
+    const sidebarHovered = isSidebarHoveredElement(item);
+    const hoverItem = { lines: hoveredLine, circles: hoveredCircle, arcs: hoveredArc, splines: hoveredSpline }[kind];
+    const canvasHovered = (active || isReferenceHoverElement(item)) && hoverItem === item;
+    const hovered = treeHovered || sidebarHovered || canvasHovered || ownerInstanceHovered(item);
+    const relatedHighlighted = isSelectedConstraintRelatedElement(item);
+    const construction = kind === "splines" ? item.construction : kind === "lines" ? Boolean(item.construction) : Boolean(item.construction) && !selected && !hovered;
+    const dimmed = kind === "splines" ? construction && !selected && !hovered : construction && !selected && !hovered && !relatedHighlighted;
+    return {
+      appearance, construction, sel: selected, selected, hovered, auxiliaryHighlighted: relatedHighlighted, relatedHighlighted,
+      alpha: sketchAlpha(item) * (dimmed ? CONSTRUCTION_GEOMETRY_ALPHA : 1),
+      color: relatedHighlighted ? "#0ea5e9" : geometryDisplayColor(item, appearance, selected, hovered),
+      strokeWidth: geometryStrokeWidth(item, { auxiliaryHighlighted: relatedHighlighted, selected, hovered, appearance, construction }),
+      showId: viewState.geometryIds || (kind === "splines" ? ownSelected || hovered : geometrySelected || sidebarHovered || canvasHovered || relatedHighlighted),
+    };
+  }
+
+  function drawLines(items = null) {
+    geometryRenderer.drawLines(items ? items.filter(isVisibleSketchElement) : drawOrderBySketch(allGeometryLines()));
+  }
+
+  function drawCircles(items = null) {
+    geometryRenderer.drawCircles(items ? items.filter(isVisibleSketchElement) : drawOrderBySketch(allGeometryCircles()));
+  }
+
+  function drawArcs(items = null) {
+    geometryRenderer.drawArcs(items ? items.filter(isVisibleSketchElement) : drawOrderBySketch(allGeometryArcs()));
   }
 
   function drawSplines(items = null) {
-    ctx.save();
-    ctx.lineCap = "round";
-    ctx.lineJoin = "round";
-    const splines = items ? items.filter(isVisibleSketchElement) : drawOrderBySketch(allGeometrySplines());
-    for (const spline of splines) {
-      const appearance = effectiveAppearanceForElement(spline);
-      const active = isEditableSketchElement(spline);
-      const selected = (active && canvasSelection.splines.includes(spline)) || isConstraintOperandSelected(spline) || ownerInstanceSelected(spline);
-      const hovered = ((active || isReferenceHoverElement(spline)) && hoveredSpline === spline) || isSidebarHighlightedElement(spline) || isSidebarHoveredElement(spline) || ownerInstanceHovered(spline);
-      const relatedHighlighted = isSelectedConstraintRelatedElement(spline);
-      ctx.globalAlpha = sketchAlpha(spline) * (spline.construction && !selected && !hovered ? CONSTRUCTION_GEOMETRY_ALPHA : 1);
-      ctx.strokeStyle = relatedHighlighted ? "#0ea5e9" : geometryDisplayColor(spline, appearance, selected, hovered);
-      ctx.lineWidth = geometryStrokeWidth(spline, { auxiliaryHighlighted: relatedHighlighted, selected, hovered, appearance, construction: spline.construction }) / viewport.scale;
-      ctx.setLineDash(appearanceLineDash(appearance.lineType));
-      traceSplinePath(spline);
-      ctx.stroke();
-      ctx.setLineDash([]);
-      if (viewState.geometryIds || (active && canvasSelection.splines.includes(spline)) || hovered) {
-        const point = window.SplineGeometry.evaluate(spline.curve(), 0.5);
-        if (point) {
-          ctx.fillStyle = canvasThemeColor("#2563eb");
-          ctx.font = `${12 / viewport.scale}px system-ui`;
-          ctx.fillText(spline.id, point.x + 4 / viewport.scale, point.y - 4 / viewport.scale);
-        }
-      }
-    }
-    ctx.restore();
+    geometryRenderer.drawSplines(items ? items.filter(isVisibleSketchElement) : drawOrderBySketch(allGeometrySplines()));
   }
 
   function drawSplinePreview() {
