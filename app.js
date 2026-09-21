@@ -403,8 +403,8 @@
   const SKETCH_TREE_KEYBOARD_RESIZE_STEP = 16;
   const CLIPBOARD_PASTE_OFFSET_SCREEN_PX = 24;
   const BLOCK_ORTHOGONAL_ROTATION_STEP = Math.PI / 2;
-  const canvasRenderMetrics = { width: 0, height: 0, dpr: 1 };
-  let canvasResizeObserver = null;
+
+
   let pendingCanvasPointerMove = null;
   let canvasPointerMoveFrame = null;
   const viewState = { constraintStatus: false, geometryIds: false };
@@ -440,6 +440,14 @@
     minZoom: MIN_ZOOM, maxZoom: MAX_ZOOM, minLength: MIN_LINE_LENGTH,
   });
   const { currentCanvasCenterWorld, clampZoom, formatZoom, canvasScreenPoint, screenToWorld, worldToCanvasScreen, canvasPoint, fitBoundsToViewport, screenBoxForBounds, visibleWorldBounds } = viewport;
+  const canvasSurface = window.CanvasSurface.create({
+    canvas, ctx, viewport, readPixelRatio: () => window.devicePixelRatio || 1, ResizeObserverClass: window.ResizeObserver,
+    onResize: () => {
+      draw();
+      if (pendingCommand && ["distance-value", "offset-value"].includes(pendingCommand.type)) syncDimensionValueInput();
+    },
+  });
+  const { syncCanvasBitmapSize, resetCanvasStrokeState, withCanvasState, appearanceLineDash } = canvasSurface;
   const { DIMENSION_SCREEN_PX_PER_MM, DIMENSION_TERMINATOR_FIT_MARGIN_FACTOR, DIMENSION_EXPRESSION_MARK_WIDTH_FACTOR, DIMENSION_EXPRESSION_MARK_GAP_FACTOR, DIMENSION_ARROW_MITER_LIMIT } = window.DimensionMetrics;
   const { dimensionMillimetersToWorld, dimensionTextDrawingMetrics, dimensionTextWidth, shouldPlaceDimensionTerminatorsOutside, linearDimensionTerminatorDirections, dimensionStrokeWidth, dimensionArrowheadPoints, dimensionArrowheadPointsFromResolved, dimensionOpenArrowJoinProjection, dimensionOpenArrowheadRenderPoints } = window.DimensionMetrics.create({ ctx, viewport });
   const geometryRenderer = window.GeometryRenderer.create({ ctx, viewport, paintState: geometryPaintState, appearanceLineDash, lineDisplaySegment, canvasThemeColor });
@@ -1612,14 +1620,6 @@
     });
     geometryReads.cacheAppearance(item, result);
     return result;
-  }
-
-  function appearanceLineDash(lineType) {
-    if (lineType === "dashed") return [10 / viewport.scale, 6 / viewport.scale];
-    if (lineType === "dashdot") return [12 / viewport.scale, 4 / viewport.scale, 2 / viewport.scale, 4 / viewport.scale];
-    if (lineType === "dashdotdot") return [12 / viewport.scale, 4 / viewport.scale, 2 / viewport.scale, 4 / viewport.scale, 2 / viewport.scale, 4 / viewport.scale];
-    if (lineType === "dotted") return [2 / viewport.scale, 5 / viewport.scale];
-    return [];
   }
 
   function setAppearanceForSelection(patch) {
@@ -6897,25 +6897,6 @@
     log("サンプルを復元しました");
   }
 
-  function syncCanvasBitmapSize(width = null, height = null) {
-    if (!Number.isFinite(width) || !Number.isFinite(height)) {
-      const rect = canvas.getBoundingClientRect();
-      width = rect.width;
-      height = rect.height;
-    }
-    const dpr = window.devicePixelRatio || 1;
-    const bitmapWidth = Math.max(1, Math.floor(width * dpr));
-    const bitmapHeight = Math.max(1, Math.floor(height * dpr));
-    const changed = canvas.width !== bitmapWidth || canvas.height !== bitmapHeight || canvasRenderMetrics.dpr !== dpr;
-    canvasRenderMetrics.width = width;
-    canvasRenderMetrics.height = height;
-    canvasRenderMetrics.dpr = dpr;
-    if (canvas.width !== bitmapWidth) canvas.width = bitmapWidth;
-    if (canvas.height !== bitmapHeight) canvas.height = bitmapHeight;
-    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    return changed;
-  }
-
   function resizeCanvas(options = {}) {
     const rect = canvas.getBoundingClientRect();
     syncCanvasBitmapSize(rect.width, rect.height);
@@ -9504,29 +9485,6 @@
     canvasSelection.set("constraint", null);
   }
 
-  function resetCanvasStrokeState(targetContext = ctx) {
-    targetContext.setLineDash([]);
-    targetContext.lineDashOffset = 0;
-    targetContext.shadowBlur = 0;
-    targetContext.shadowColor = "transparent";
-    targetContext.globalAlpha = 1;
-    targetContext.globalCompositeOperation = "source-over";
-    targetContext.lineCap = "butt";
-    targetContext.lineJoin = "miter";
-    targetContext.lineWidth = 1;
-  }
-
-  function withCanvasState(drawFn) {
-    ctx.save();
-    try {
-      resetCanvasStrokeState();
-      drawFn();
-    } finally {
-      ctx.restore();
-      resetCanvasStrokeState();
-    }
-  }
-
   function drawBlockInstanceHandles() {
     resetCanvasStrokeState();
   }
@@ -9788,8 +9746,8 @@
   }
 
   function drawCanvas() {
-    if (canvasRenderMetrics.width <= 0 || canvasRenderMetrics.height <= 0) syncCanvasBitmapSize();
-    const dpr = canvasRenderMetrics.dpr;
+    if (canvasSurface.width <= 0 || canvasSurface.height <= 0) syncCanvasBitmapSize();
+    const dpr = canvasSurface.dpr;
     if (interactionFrameStats) interactionFrameStats.canvasDraws += 1;
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     resetCanvasStrokeState();
@@ -25026,14 +24984,7 @@
   setApplicationTheme(applicationSettings.theme, { persist: false, redraw: false });
   loadRuntimeVersion();
   resizeCanvas();
-  if (typeof ResizeObserver === "function") {
-    canvasResizeObserver = new ResizeObserver(([entry]) => {
-      if (!entry || !syncCanvasBitmapSize(entry.contentRect.width, entry.contentRect.height)) return;
-      draw();
-      if (pendingCommand && ["distance-value", "offset-value"].includes(pendingCommand.type)) syncDimensionValueInput();
-    });
-    canvasResizeObserver.observe(canvas);
-  }
+  canvasSurface.start();
   resetHistory("起動");
   markDocumentFileCheckpoint("new");
   window.addEventListener("beforeunload", (event) => {

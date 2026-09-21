@@ -174,3 +174,7 @@ index.htmlは既存の通常script読込列で両moduleをapp.jsより先に読�
 ### 注記と参照画像の描画
 
 `AnnotationRenderer`は注記文字・引出線・終端記号、`ReferenceImageRenderer`は参照画像のURL cache・画像本体・選択枠・較正markerを所有する。appは対象の可視性や操作状態を判断し、描画入力と参照点解決を接続する。
+
+### Canvas surface
+
+`CanvasSurface`がbitmap寸法・DPR・ResizeObserver・stroke状態保護とdashを所有する。appはresize後の再描画／入力UI更新を接続する。`CanvasViewport`はworld座標と表示原点・倍率を引き続き所有し、bitmap状態と分ける。
