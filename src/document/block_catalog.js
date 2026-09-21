@@ -13,14 +13,14 @@
 
     function blockDefinitionHasGeometry(definition, visiting = new Set()) {
       if (!definition || visiting.has(definition.id)) return false;
-      if ((definition.lines?.length || 0) + (definition.circles?.length || 0) + (definition.arcs?.length || 0) + (definition.splines?.length || 0) + (definition.hatches?.length || 0) + (definition.annotations?.length || 0) > 0) return true;
+      if ((definition.lines?.length || 0) + (definition.circles?.length || 0) + (definition.arcs?.length || 0) + (definition.splines?.length || 0) + (definition.hatches?.length || 0) + (definition.annotations?.length || 0) + (definition.geometryInstances?.length || 0) > 0) return true;
       const nextVisiting = new Set(visiting).add(definition.id);
       return (definition.blockInstances || []).some((instance) => blockDefinitionHasGeometry(blockDefinitionById(instance.definitionId), nextVisiting));
     }
 
     function blockDefinitionGeometrySketchIds(definition, visiting = new Set()) {
       if (!definition || visiting.has(definition.id)) return [];
-      const ids = new Set([...(definition.lines || []), ...(definition.circles || []), ...(definition.arcs || []), ...(definition.splines || []), ...(definition.hatches || []), ...(definition.annotations || [])].map((item) => String(item.sketchId || DEFAULT_SKETCH_ID)));
+      const ids = new Set([...(definition.lines || []), ...(definition.circles || []), ...(definition.arcs || []), ...(definition.splines || []), ...(definition.hatches || []), ...(definition.annotations || []), ...(definition.geometryInstances || [])].map((item) => String(item.sketchId || DEFAULT_SKETCH_ID)));
       const nextVisiting = new Set(visiting).add(definition.id);
       for (const instance of definition.blockInstances || []) {
         if (blockDefinitionHasGeometry(blockDefinitionById(instance.definitionId), nextVisiting)) ids.add(String(instance.sketchId || DEFAULT_SKETCH_ID));

@@ -1411,6 +1411,31 @@
         { x: nestedBounds.maxX, y: nestedBounds.maxY },
       ]) points.push(blockWorldPoint(instance, localPoint));
     }
+    if ((definition.geometryInstances || []).length > 0) {
+      const nestedBundles = (definition.blockInstances || []).map((instance) => {
+        const nestedDefinition = blockDefinitionById(instance.definitionId);
+        return nestedDefinition ? createBlockProjectionBundle(instance, nestedDefinition) : emptyGeometryInstanceBundle(instance);
+      });
+      for (const bundle of geometryInstanceBundlesForScope(definition, nestedBundles)) {
+        if (!bundle.valid || !enabled.has(String(bundle.instance.sketchId))) continue;
+        points.push(...bundle.points);
+        for (const circle of bundle.circles) {
+          points.push({ x: circle.center.x - circle.radius(), y: circle.center.y - circle.radius() }, { x: circle.center.x + circle.radius(), y: circle.center.y + circle.radius() });
+        }
+        for (const arc of bundle.arcs) {
+          const samples = [arc.startAngle, arc.endAngle, 0, Math.PI / 2, Math.PI, Math.PI * 1.5];
+          for (const angle of samples) {
+            if (angle === arc.startAngle || angle === arc.endAngle || angleOnSignedSweep(angle, arc.startAngle, arc.endAngle)) {
+              points.push({ x: arc.center.x + Math.cos(angle) * arc.radius(), y: arc.center.y + Math.sin(angle) * arc.radius() });
+            }
+          }
+        }
+        for (const spline of bundle.splines || []) {
+          const bounds = splineBBox(spline);
+          if (bounds) points.push({ x: bounds.x1, y: bounds.y1 }, { x: bounds.x2, y: bounds.y2 });
+        }
+      }
+    }
     if (points.length === 0) return null;
     const xs = points.map((point) => point.x);
     const ys = points.map((point) => point.y);
@@ -11277,7 +11302,7 @@
     const visit = (parentId, depth) => {
       for (const sketch of children.get(parentId) || []) {
         if (sketch.kind === "root") continue;
-        const count = [...definition.lines, ...definition.circles, ...definition.arcs, ...(definition.splines || []), ...(definition.annotations || []), ...(definition.blockInstances || [])].filter((item) => item.sketchId === sketch.id).length;
+        const count = [...definition.lines, ...definition.circles, ...definition.arcs, ...(definition.splines || []), ...(definition.annotations || []), ...(definition.hatches || []), ...(definition.blockInstances || []), ...(definition.geometryInstances || [])].filter((item) => item.sketchId === sketch.id).length;
         rows.push({ sketch, depth, count });
         visit(sketch.id, depth + 1);
       }
