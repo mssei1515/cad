@@ -178,3 +178,7 @@ index.htmlは既存の通常script読込列で両moduleをapp.jsより先に読�
 ### Canvas surface
 
 `CanvasSurface`がbitmap寸法・DPR・ResizeObserver・stroke状態保護とdashを所有する。appはresize後の再描画／入力UI更新を接続する。`CanvasViewport`はworld座標と表示原点・倍率を引き続き所有し、bitmap状態と分ける。
+
+### Hatchの描画
+
+`HatchRenderer`は解決済み輪郭へのclip・pattern線・solid塗りを担当する。境界検索や操作状態を注入せず、呼出し側が描画入力を決める。輪郭boundsは`HatchRegionEngine`へ集約し、fitとBlock boundsからも利用する。

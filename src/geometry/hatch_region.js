@@ -754,7 +754,19 @@
     return result;
   }
 
+  function resolvedLoopBounds(resolved) {
+    const points = resolved?.loops?.flatMap((loop) => loop.points || []) || [];
+    if (!points.length) return null;
+    return {
+      x1: Math.min(...points.map((point) => point.x)),
+      y1: Math.min(...points.map((point) => point.y)),
+      x2: Math.max(...points.map((point) => point.x)),
+      y2: Math.max(...points.map((point) => point.y)),
+    };
+  }
+
   window.HatchRegionEngine = Object.freeze({
+    resolvedLoopBounds,
     findFaceAtPoint,
     createRegionIndex,
     findFaceInIndex,
