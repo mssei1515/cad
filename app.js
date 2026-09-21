@@ -383,7 +383,7 @@
   let blockEditSession = null;
   let hatchResolutionCache = new WeakMap();
   let hatchFaceCache = new Map();
-  const referenceImageCache = new Map();
+
   let referenceImageDragSession = null;
   let referenceImageCalibrationSession = null;
   let dimensionExpressionMarkCapture = null;
@@ -444,6 +444,9 @@
   const { dimensionMillimetersToWorld, dimensionTextDrawingMetrics, dimensionTextWidth, shouldPlaceDimensionTerminatorsOutside, linearDimensionTerminatorDirections, dimensionStrokeWidth, dimensionArrowheadPoints, dimensionArrowheadPointsFromResolved, dimensionOpenArrowJoinProjection, dimensionOpenArrowheadRenderPoints } = window.DimensionMetrics.create({ ctx, viewport });
   const geometryRenderer = window.GeometryRenderer.create({ ctx, viewport, paintState: geometryPaintState, appearanceLineDash, lineDisplaySegment, canvasThemeColor });
   const { traceSplinePath } = geometryRenderer;
+  const referenceImageRenderer = window.ReferenceImageRenderer.create({
+    ctx, viewport, withCanvasState, createImage: () => new Image(), onImageLoad: draw, referenceImageCorners,
+  });
   const { drawingStackEntries, drawDrawingStack } = window.DrawingStack.create({
     currentScope: workspace.current, activeSketchId, geometryReads,
     isVisibleSketchId, isVisibleSketchElement, hatchAppearanceForDisplay,
@@ -5486,7 +5489,7 @@
     model.geometryInstances.length = 0;
     model.hatches.length = 0;
     model.referenceImages.length = 0;
-    referenceImageCache.clear();
+    referenceImageRenderer.clear();
     invalidateBlockProjectionCache();
     sketchSolveStates.clear();
     invalidReferenceConstraints.clear();
@@ -9689,74 +9692,19 @@
 
 
 
-  function cachedReferenceImage(item) {
-    let image = referenceImageCache.get(item.dataUrl);
-    if (image) return image;
-    image = new Image();
-    image.addEventListener("load", draw, { once: true });
-    image.src = item.dataUrl;
-    referenceImageCache.set(item.dataUrl, image);
-    return image;
-  }
+
 
   function drawReferenceImages() {
-    for (const item of model.referenceImages) {
-      if (item.visible === false || !isVisibleSketchId(item.sketchId)) continue;
-      const image = cachedReferenceImage(item);
-      if (!image.complete || image.naturalWidth < 1) continue;
-      withCanvasState(() => {
-        ctx.translate(item.x, item.y);
-        ctx.rotate(item.rotation);
-        ctx.scale(item.scale, item.scale);
-        ctx.globalAlpha = item.opacity;
-        ctx.drawImage(image, -item.pixelWidth / 2, -item.pixelHeight / 2, item.pixelWidth, item.pixelHeight);
-      });
-    }
+    referenceImageRenderer.drawImages(model.referenceImages.filter(item => item.visible !== false && isVisibleSketchId(item.sketchId)));
   }
 
   function drawReferenceImageOverlays() {
     const item = canvasSelection.referenceImages.length === 1 ? canvasSelection.referenceImages[0] : hoveredReferenceImage;
-    if (item && item.visible !== false && item.sketchId === activeSketchId()) {
-      const corners = referenceImageCorners(item);
-      withCanvasState(() => {
-        ctx.strokeStyle = canvasSelection.referenceImages.includes(item) ? "#2563eb" : "#0ea5e9";
-        ctx.lineWidth = 1.5 / viewport.scale;
-        ctx.setLineDash([5 / viewport.scale, 4 / viewport.scale]);
-        ctx.beginPath();
-        ctx.moveTo(corners[0].x, corners[0].y);
-        for (let index = 1; index < corners.length; index += 1) ctx.lineTo(corners[index].x, corners[index].y);
-        ctx.closePath();
-        ctx.stroke();
-        if (item.locked) {
-          ctx.setLineDash([]);
-          ctx.fillStyle = "#2563eb";
-          ctx.font = `${14 / viewport.scale}px sans-serif`;
-          ctx.textAlign = "center";
-          ctx.textBaseline = "middle";
-          ctx.fillText("🔒", item.x, item.y);
-        }
-      });
-    }
-    if (referenceImageCalibrationSession) {
-      const points = referenceImageCalibrationSession.worldPoints || [];
-      withCanvasState(() => {
-        ctx.strokeStyle = "#f97316";
-        ctx.fillStyle = "#fff7ed";
-        ctx.lineWidth = 2 / viewport.scale;
-        if (points.length > 1) {
-          ctx.beginPath();
-          ctx.moveTo(points[0].x, points[0].y);
-          ctx.lineTo(points[1].x, points[1].y);
-          ctx.stroke();
-        }
-        for (const point of points) {
-          ctx.beginPath();
-          ctx.arc(point.x, point.y, 5 / viewport.scale, 0, Math.PI * 2);
-          ctx.fill();
-          ctx.stroke();
-        }
-      });
-    }
+    referenceImageRenderer.drawOverlays(
+      item && item.visible !== false && item.sketchId === activeSketchId() ? item : null,
+      canvasSelection.referenceImages.includes(item),
+      referenceImageCalibrationSession ? referenceImageCalibrationSession.worldPoints || [] : null,
+    );
   }
 
   function drawBlockPlacementPreview() {
