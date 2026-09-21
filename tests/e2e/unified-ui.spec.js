@@ -1608,7 +1608,7 @@ test("file URL Help menu reads the generated Git commit file", async ({ page }) 
     "src/parameters/parameter_engine.js", "src/editing/edit_history.js", "src/editing/workspace.js", "src/editing/sketch_context.js", "src/editing/selection.js", "src/diagnostics/interaction_profiler.js", "src/ui/choice_dialog.js", "src/ui/application_settings.js",
     "src/document/appearance.js", "src/document/drawing_order.js", "src/document/sketch_hierarchy.js",
     "src/document/annotations.js", "src/document/hatches.js", "src/document/reference_images.js", "src/document/block_catalog.js", "src/geometry/block_projection.js", "src/geometry/read_model.js",
-    "src/persistence/constraint_codec_registry.js", "src/persistence/constraints.js", "src/constraints/dimension_queries.js", "src/parameters/namespace.js", "src/persistence/geometry.js",
+    "src/persistence/constraint_codec_registry.js", "src/persistence/constraints.js", "src/constraints/dimension_queries.js", "src/constraints/candidates.js", "src/parameters/namespace.js", "src/persistence/geometry.js",
     "src/persistence/document_files.js", "src/persistence/document_snapshot.js",
   ];
   expect(loadedScripts).toHaveLength(expectedPaths.length);
