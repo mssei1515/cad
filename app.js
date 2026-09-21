@@ -17817,66 +17817,9 @@
     if (dialog && !dialog.open) dialog.showModal();
   }
 
-  const appMenus = Array.from(document.querySelectorAll(".app-menu"));
-  const appMenuBar = document.querySelector(".menu-bar");
-  let appMenuHoverTimer = null;
-  function cancelAppMenuHoverSwitch() {
-    if (appMenuHoverTimer == null) return;
-    window.clearTimeout(appMenuHoverTimer);
-    appMenuHoverTimer = null;
-  }
-  function closeAppMenus(except = null) {
-    cancelAppMenuHoverSwitch();
-    for (const menu of appMenus) {
-      if (menu !== except) menu.removeAttribute("open");
-    }
-    appMenuBar?.classList.toggle("menu-open", appMenus.some((menu) => menu.open));
-  }
-  for (const menu of appMenus) {
-    const summary = menu.querySelector(":scope > summary");
-    summary?.addEventListener("click", () => closeAppMenus(menu));
-    summary?.addEventListener("pointerenter", (event) => {
-      if (event.pointerType === "touch") return;
-      if (!appMenus.some((item) => item !== menu && item.open)) return;
-      cancelAppMenuHoverSwitch();
-      appMenuHoverTimer = window.setTimeout(() => {
-        appMenuHoverTimer = null;
-        if (!appMenus.some((item) => item !== menu && item.open)) return;
-        closeAppMenus(menu);
-        menu.setAttribute("open", "");
-        summary.focus({ preventScroll: true });
-      }, 16);
-    });
-    summary?.addEventListener("pointerleave", cancelAppMenuHoverSwitch);
-    summary?.addEventListener("pointerdown", cancelAppMenuHoverSwitch);
-    menu.addEventListener("toggle", () => {
-      if (menu.open) closeAppMenus(menu);
-      else appMenuBar?.classList.toggle("menu-open", appMenus.some((item) => item.open));
-    });
-  }
-  document.addEventListener("pointerdown", (event) => {
-    if (!event.target.closest(".app-menus")) closeAppMenus();
-  });
-  document.addEventListener("keydown", (event) => {
-    if (event.key !== "Escape") return;
-    const openMenu = appMenus.find((menu) => menu.open);
-    if (!openMenu) return;
-    event.preventDefault();
-    event.stopPropagation();
-    closeAppMenus();
-    openMenu.querySelector(":scope > summary")?.focus();
-  });
-  window.addEventListener("blur", () => closeAppMenus());
-  for (const button of document.querySelectorAll("[data-menu-tool]")) {
-    button.addEventListener("click", () => {
-      document.getElementById(button.dataset.menuTool)?.click();
-      button.closest("details")?.removeAttribute("open");
-    });
-  }
-  document.querySelector(".app-menus")?.addEventListener("click", (event) => {
-    const button = event.target.closest("button");
-    button?.closest("details")?.removeAttribute("open");
-  });
+  const applicationMenus = window.ApplicationMenus.create({ document, window, activateTool: id => document.getElementById(id)?.click() });
+  const { close: closeAppMenus } = applicationMenus;
+  applicationMenus.start();
   document.getElementById("togglePropertiesPanelBtn")?.addEventListener("click", () => {
     const workspace = document.querySelector(".workspace");
     setPropertiesPanelCollapsed(!workspace?.classList.contains("properties-collapsed"));
