@@ -501,6 +501,12 @@
     invalidateAnalysis: () => { constraintAnalysisState = null; },
   });
   const { captureValues: snapshotModelState, restoreValues: restoreModelState, captureGeometry: snapshotGeometryMutationState, restoreGeometry: restoreGeometryMutationState } = editingCheckpoint;
+  const blockParameterPropagation = window.BlockParameterPropagation.create({
+    catalog: blockCatalog, invalidateProjection: invalidateBlockProjectionCache, applicationText,
+    definitions: { rebuild: rebuildBlockDefinitionConstraintObjects, stabilize: stabilizeStoredBlockDefinition },
+    document: { rebuild: rebuildRootConstraintObjects, stabilize: () =>
+      stabilizeActiveParameterNamespace(activeSketchId(), { allSketches: model.sketches.filter(sketch => !isRootSketch(sketch)).map(sketch => sketch.id) }) },
+  });
   const parameterApplication = window.ParameterApplication.create({
     namespace: parameterNamespace, currentScope: workspace.current, acceptError: CONSTRAINT_ACCEPT_ERROR, applicationText,
     capture: () => ({ document: blockEditSession ? null : historySnapshot(), local: blockEditSession ? snapshotModelState() : null }),
@@ -511,7 +517,7 @@
     stabilize: namespace => namespace === model
       ? stabilizeActiveParameterNamespace(activeSketchId(), { allSketches: model.sketches.filter(sketch => !isRootSketch(sketch)).map(sketch => sketch.id) })
       : stabilizeStoredBlockDefinition(namespace),
-    propagate: propagateBlockParameterChange,
+    propagate: blockParameterPropagation.propagate,
   });
   const centerlinePlans = window.CenterlineGeometry.create({ applicationText, parallelTolerance: CENTERLINE_PARALLEL_TOLERANCE });
   const centerlineConstruction = window.CenterlineConstruction.create({ currentScope: workspace.current, geometry: geometryCreation, ids: geometryIds, addPointSnapConstraints, commitNewConstraint });
@@ -17657,25 +17663,6 @@
       return constraint;
     });
     clearSelection();
-  }
-
-  function propagateBlockParameterChange(definition) {
-    definition.revision = (Number(definition.revision) || 0) + 1;
-    invalidateBlockProjectionCache();
-    let parentId = definition.parentDefinitionId || null;
-    while (parentId) {
-      const parent = blockDefinitionById(parentId);
-      if (!parent) throw new Error(applicationText("親Block Definitionが見つかりません", "Parent block definition was not found"));
-      rebuildBlockDefinitionConstraintObjects(parent);
-      const result = stabilizeStoredBlockDefinition(parent);
-      if (!result.success || result.dependent?.success === false) throw new Error(result.result.reason || applicationText("親Blockの拘束が成立しません", "Parent block constraints could not be satisfied"));
-      parent.revision = (Number(parent.revision) || 0) + 1;
-      parentId = parent.parentDefinitionId || null;
-      invalidateBlockProjectionCache();
-    }
-    rebuildRootConstraintObjects();
-    const rootResult = stabilizeActiveParameterNamespace(activeSketchId(), { allSketches: model.sketches.filter((sketch) => !isRootSketch(sketch)).map((sketch) => sketch.id) });
-    if (!rootResult.success || rootResult.dependent?.success === false) throw new Error(rootResult.result.reason || applicationText("Document拘束が成立しません", "Document constraints could not be satisfied"));
   }
 
   function applyParameterDialogDraft() {
