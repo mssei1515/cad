@@ -231,7 +231,8 @@
     sketchRelationOfElement,
   } = window.SketchContext.create({ currentScope: workspace.current, constraintGraphNodes });
   const { geometryKindForItem, geometryRefForItem, addGeometryBundleToMaps } = window.GeometryObjects;
-  const { emptyGeometryInstanceBundle, geometryInstanceSourcePoints, createGeometryInstanceBundle, geometryInstanceBundlesForScope } = window.InstanceProjection.create({ elementSketchId, applicationText });
+  const instanceProjections = window.InstanceProjection.create({ elementSketchId, applicationText });
+  const { emptyGeometryInstanceBundle, geometryInstanceSourcePoints, createGeometryInstanceBundle, geometryInstanceBundlesForScope } = instanceProjections;
   const blockCatalog = window.BlockCatalog.create({ definitions: () => documentModel.blockDefinitions });
   const { blockDefinitionById, blockDefinitionDrawableSketchIds, blockDefinitionHasGeometry, blockDefinitionGeometrySketchIds, blockInstanceEnabledSketchSet } = blockCatalog;
   const blockProjections = window.BlockProjection.create({
@@ -245,7 +246,7 @@
   function activateEditingScope(scope) {
     model = workspace.activate(scope);
     solver.model = model;
-    geometryReadCache = null;
+    geometryReads.clearReadCache();
     invalidateBlockProjectionCache();
     return model;
   }
@@ -289,6 +290,12 @@
   let lastAuthoringPerformance = null;
   const interactionProfiler = window.InteractionProfiler.create();
   const { work: profileInteractionWork, phase: profileInteractionPhase } = interactionProfiler;
+  const geometryReads = window.GeometryReadModel.create({
+    currentScope: workspace.current, prepareBlocks: ensureBlockState, blockProjections, instanceProjections,
+    hasBlockHatches: blockCatalog.hasHatches,
+    profileRead: read => interactionProfiler.active ? profileInteractionWork("geometryReads", read) : read(),
+  });
+  const { withGeometryReadCache, blockProjectionBundles, geometryInstanceBundles, geometryInstanceBundle, allGeometryPoints, allGeometryLines, allGeometryCircles, allGeometryArcs, allGeometrySplines, allAnnotations, allHatches, allGeometryPrimitives, resolveGeometryRef, geometryElementFromKey } = geometryReads;
   let interactionFrameStats = null;
   let sketchSolveStates = new Map();
   let invalidReferenceConstraints = new Map();
@@ -374,7 +381,6 @@
   let blockPlacementRotationLocked = true;
   let blockPlacementPropertiesWasCollapsed = null;
   let blockEditSession = null;
-  let geometryReadCache = null;
   let hatchResolutionCache = new WeakMap();
   let hatchFaceCache = new Map();
   const referenceImageCache = new Map();
@@ -983,23 +989,8 @@
     return geometryRefId(geometryRefForItem(item));
   }
 
-  function resolveGeometryRef(ref) {
-    return resolveGeometryRefValue(ref, (kind, canonicalId) => {
-      if (kind === "point") return allGeometryPoints().find((item) => item.id === canonicalId);
-      if (kind === "line") return allGeometryLines().find((item) => item.id === canonicalId);
-      if (kind === "circle") return allGeometryCircles().find((item) => item.id === canonicalId);
-      if (kind === "arc") return allGeometryArcs().find((item) => item.id === canonicalId);
-      if (kind === "spline") return allGeometrySplines().find((item) => item.id === canonicalId);
-      return null;
-    });
-  }
-
   function geometryElementKey(item) {
     return geometryRefKey(geometryRefForItem(item)) || "";
-  }
-
-  function geometryElementFromKey(key) {
-    return resolveGeometryRef(parseGeometryRefKey(key));
   }
 
   function sketchProjectionConstraints() {
@@ -1383,30 +1374,6 @@
     return hatchPrimitivesFromElements(elements, sketchId, { visibleOnly });
   }
 
-  function withGeometryReadCache(callback) {
-    if (geometryReadCache) return callback();
-    geometryReadCache = { values: new Map(), appearances: new WeakMap() };
-    try {
-      return callback();
-    } finally {
-      geometryReadCache = null;
-    }
-  }
-
-  function cachedGeometryRead(key, create) {
-    const read = interactionProfiler.active ? () => profileInteractionWork("geometryReads", create) : create;
-    if (!geometryReadCache) return read();
-    if (!geometryReadCache.values.has(key)) geometryReadCache.values.set(key, read());
-    return geometryReadCache.values.get(key);
-  }
-
-  function blockProjectionBundles() {
-    return cachedGeometryRead("blockProjectionBundles", () => {
-      ensureBlockState();
-      return model.blockInstances.map(blockProjectionBundle);
-    });
-  }
-
   function normalizeGeometryInstanceRef(value, expectedKind = null) {
     const ref = value?.kind && Array.isArray(value.path)
       ? createGeometryRef(value.kind, value.path)
@@ -1459,45 +1426,6 @@
     if (type === "mirror") return applicationText("ミラー", "Mirror");
     if (type === "pattern") return applicationText("直線パターン", "Linear Pattern");
     return applicationText("スケッチ投影", "Sketch Projection");
-  }
-
-  function geometryInstanceBundles() {
-    return cachedGeometryRead("geometryInstanceBundles", () => geometryInstanceBundlesForScope(model, blockProjectionBundles()));
-  }
-
-  function geometryInstanceBundle(instance) {
-    return geometryInstanceBundles().find((bundle) => bundle.instance === instance) || emptyGeometryInstanceBundle(instance);
-  }
-
-  function allGeometryPoints() {
-    return cachedGeometryRead("allGeometryPoints", () => [...model.points, ...blockProjectionBundles().flatMap((bundle) => bundle.points), ...geometryInstanceBundles().flatMap((bundle) => bundle.points)]);
-  }
-
-  function allGeometryLines() {
-    return cachedGeometryRead("allGeometryLines", () => [...model.lines, ...blockProjectionBundles().flatMap((bundle) => bundle.lines), ...geometryInstanceBundles().flatMap((bundle) => bundle.lines)]);
-  }
-
-  function allGeometryCircles() {
-    return cachedGeometryRead("allGeometryCircles", () => [...model.circles, ...blockProjectionBundles().flatMap((bundle) => bundle.circles), ...geometryInstanceBundles().flatMap((bundle) => bundle.circles)]);
-  }
-
-  function allGeometryArcs() {
-    return cachedGeometryRead("allGeometryArcs", () => [...model.arcs, ...blockProjectionBundles().flatMap((bundle) => bundle.arcs), ...geometryInstanceBundles().flatMap((bundle) => bundle.arcs)]);
-  }
-
-  function allGeometrySplines() {
-    return cachedGeometryRead("allGeometrySplines", () => [...model.splines, ...blockProjectionBundles().flatMap((bundle) => bundle.splines || []), ...geometryInstanceBundles().flatMap((bundle) => bundle.splines || [])]);
-  }
-
-  function allAnnotations() {
-    return cachedGeometryRead("allAnnotations", () => [...model.annotations, ...blockProjectionBundles().flatMap((bundle) => bundle.annotations || [])]);
-  }
-
-  function allHatches() {
-    return cachedGeometryRead("allHatches", () => {
-      if (model.hatches.length === 0 && !documentModel.blockDefinitions.some((definition) => (definition.hatches?.length || 0) > 0)) return [];
-      return [...model.hatches, ...blockProjectionBundles().flatMap((bundle) => bundle.hatches || [])];
-    });
   }
 
   function hatchBoundaryFingerprint(hatch, scope = model) {
@@ -1640,10 +1568,6 @@
     return true;
   }
 
-  function allGeometryPrimitives() {
-    return [...allGeometryCircles(), ...allGeometryArcs()];
-  }
-
   function decorateSerializedConstraint(data, constraint) {
     if (!data || !constraint) return data;
     if (constraint.readOnlyDimension) data.readOnlyDimension = true;
@@ -1655,7 +1579,7 @@
   }
 
   function effectiveAppearanceForElement(item) {
-    const cached = item && geometryReadCache?.appearances.get(item);
+    const cached = geometryReads.readAppearance(item);
     if (cached) return cached;
     const construction = (item instanceof Line || item instanceof Circle || item instanceof Arc || item instanceof Spline) && item.construction;
     const outerSketch = sketchById(elementSketchId(item));
@@ -1670,7 +1594,7 @@
       overrides: item?.derivedProjection ? [item.derivedInstance?.appearanceOverride]
         : item?.blockProjection ? item.blockAppearanceOverrides || [item.blockInstance?.appearanceOverride] : [],
     });
-    if (item && geometryReadCache) geometryReadCache.appearances.set(item, result);
+    geometryReads.cacheAppearance(item, result);
     return result;
   }
 

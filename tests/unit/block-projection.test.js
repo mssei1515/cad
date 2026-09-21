@@ -37,6 +37,9 @@ test("catalog follows registry replacement and preserves enabled-sketch fallback
   registry = [definition("B1")];
   assert.equal(catalog.blockDefinitionById("B1"), registry[0]);
   assert.equal(catalog.blockDefinitionById("B2"), null);
+  assert.equal(catalog.hasHatches(), false);
+  registry[0].hatches.push({ id: "H1" });
+  assert.equal(catalog.hasHatches(), true);
 });
 
 test("projection cache preserves live point reads and refreshes only on its existing invalidation inputs", () => {

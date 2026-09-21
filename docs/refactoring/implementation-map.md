@@ -21,6 +21,11 @@
 - `src/parameters/parameter_engine.js`: Parameter式の字句解析、構文解析、依存評価、識別子検証と名称書換え
 - `src/solver/constraint_solver.js`: GeometryとConstraintのsolver
 - `src/geometry/geometry_ref.js`: 直接GeometryとBlock Projectionの参照codec
+- `src/geometry/objects.js`: Geometryの型、canonical参照、bundleのMap登録
+- `src/document/block_catalog.js`: 現在のDefinition registry検索と有効Sketchの判定
+- `src/geometry/block_projection.js`: 入れ子BlockのGeometry・Annotation・Hatch投影と永続cache
+- `src/geometry/instance_projection.js`: 派生InstanceのGeometry読取りviewとscope内の依存解決
+- `src/geometry/read_model.js`: 現在scopeと投影を合わせた一覧・参照解決、同期読出し中のGeometry／外観cache
 - `src/geometry/spline_geometry.js`: Splineの補間、評価、微分、最近点、flatten、交点計算
 - `src/geometry/hatch_region.js`: 閉領域の交点計算、平面グラフ、面探索、境界復元
 - `src/geometry/offset_chain.js`: Line／Arcチェーンの支持曲線オフセット、マイター接続、退化・自己交差検出
@@ -45,12 +50,13 @@
 | 補助要素の値 | `src/document/annotations.js`、`hatches.js`、`reference_images.js` | `document-elements.test.js`、`hatching.spec.js`、`reference-images.spec.js` |
 | 保存snapshot | `src/persistence/document_snapshot.js` | `document-snapshot.test.js`、`phase0-characterization.spec.js`、`file-safety.spec.js` |
 | Reference Image操作・描画 | `app.js`、`index.html` | `reference-images.spec.js` |
-| 派生Geometry Instance | `app.js`、`index.html` | `sketch-projection.spec.js` |
+| Geometry読出し | `src/geometry/read_model.js`、`src/geometry/objects.js` | `geometry-read-model.test.js`、drag・描画E2E |
+| 派生Geometry Instance | `src/geometry/instance_projection.js`、`app.js`の操作adapter | `instance-projection.test.js`、`sketch-projection.spec.js`、`free-instance.spec.js` |
 | Offset chain | `src/geometry/offset_chain.js` | `offset-chain.test.js`、`geometry-solver.test.js`、`unified-ui.spec.js` |
 | Solver | `src/solver/constraint_solver.js` | `geometry-solver.test.js`、drag E2E |
 | Constraint Dimension | `app.js`、`src/solver/constraint_solver.js` | `geometry-solver.test.js`、`unified-ui.spec.js` |
 | Document／Canvas／UI | `app.js`、`index.html`、`style.css` | `unified-ui.spec.js`、`phase0-characterization.spec.js` |
-| Block | `app.js` | `blocks.spec.js` |
+| Block | `src/document/block_catalog.js`、`src/geometry/block_projection.js`、`app.js`の操作adapter | `block-projection.test.js`、`blocks.spec.js` |
 
 ## 3. 計算と編集policyの現在の配置
 

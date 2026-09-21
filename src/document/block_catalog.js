@@ -35,7 +35,11 @@
       return new Set(enabled.length > 0 ? enabled : blockDefinitionGeometrySketchIds(definition));
     }
 
-    return Object.freeze({ blockDefinitionById, blockDefinitionDrawableSketchIds, blockDefinitionHasGeometry, blockDefinitionGeometrySketchIds, blockInstanceEnabledSketchSet });
+    function hasHatches() {
+      return definitions().some(definition => (definition.hatches?.length || 0) > 0);
+    }
+
+    return Object.freeze({ hasHatches, blockDefinitionById, blockDefinitionDrawableSketchIds, blockDefinitionHasGeometry, blockDefinitionGeometrySketchIds, blockInstanceEnabledSketchSet });
   }
   window.BlockCatalog = Object.freeze({ create });
 })();
