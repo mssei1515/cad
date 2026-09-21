@@ -501,6 +501,18 @@
     invalidateAnalysis: () => { constraintAnalysisState = null; },
   });
   const { captureValues: snapshotModelState, restoreValues: restoreModelState, captureGeometry: snapshotGeometryMutationState, restoreGeometry: restoreGeometryMutationState } = editingCheckpoint;
+  const parameterApplication = window.ParameterApplication.create({
+    namespace: parameterNamespace, currentScope: workspace.current, acceptError: CONSTRAINT_ACCEPT_ERROR, applicationText,
+    capture: () => ({ document: blockEditSession ? null : historySnapshot(), local: blockEditSession ? snapshotModelState() : null }),
+    restore: checkpoint => {
+      if (blockEditSession && checkpoint.local) restoreModelState(checkpoint.local);
+      else if (checkpoint.document) loadModelData(JSON.parse(checkpoint.document), { documentNameFallback: documentModel.documentName });
+    },
+    stabilize: namespace => namespace === model
+      ? stabilizeActiveParameterNamespace(activeSketchId(), { allSketches: model.sketches.filter(sketch => !isRootSketch(sketch)).map(sketch => sketch.id) })
+      : stabilizeStoredBlockDefinition(namespace),
+    propagate: propagateBlockParameterChange,
+  });
   const centerlinePlans = window.CenterlineGeometry.create({ applicationText, parallelTolerance: CENTERLINE_PARALLEL_TOLERANCE });
   const centerlineConstruction = window.CenterlineConstruction.create({ currentScope: workspace.current, geometry: geometryCreation, ids: geometryIds, addPointSnapConstraints, commitNewConstraint });
   const centerlineCommand = window.CenterlineCommand.create({
@@ -17669,42 +17681,23 @@
   function applyParameterDialogDraft() {
     const session = parameterDraft.current;
     if (!session) return false;
-    const documentSnapshot = blockEditSession ? null : historySnapshot();
-    const localSnapshot = blockEditSession ? snapshotModelState() : null;
-    try {
-      session.namespace.parameters = session.parameters.map((parameter) => ({ name: parameter.name.trim(), expression: expressionFromUserInput(parameter.expression) }));
-      session.dimensions.forEach((dimension) => {
-        dimension.constraint.parameterName = dimension.name.trim();
-        if (!dimension.readOnly) dimension.constraint.expression = expressionFromUserInput(dimension.expression);
-      });
-      ensureParameterNamespace(session.namespace);
-      let result;
-      if (session.namespace === model) {
-        result = stabilizeActiveParameterNamespace(activeSketchId(), { allSketches: model.sketches.filter((sketch) => !isRootSketch(sketch)).map((sketch) => sketch.id) });
-      } else {
-        result = stabilizeStoredBlockDefinition(session.namespace);
-      }
-      if (!result.success || result.dependent?.success === false || result.result.errorNorm > CONSTRAINT_ACCEPT_ERROR) {
-        throw new Error(result.result.reason || applicationText("拘束が成立しません", "Constraints could not be satisfied"));
-      }
-      if (session.namespace !== model) propagateBlockParameterChange(session.namespace);
+    const outcome = parameterApplication.apply(session, () => {
       recordHistory("Parameter変更");
       setHint(applicationText("Parameterを適用しました", "Parameters applied"));
       loadParameterDialogScope(session.key);
       updateUI();
       draw();
-      return true;
-    } catch (error) {
-      if (blockEditSession && localSnapshot) restoreModelState(localSnapshot);
-      else if (documentSnapshot) loadModelData(JSON.parse(documentSnapshot), { documentNameFallback: documentModel.documentName });
+    });
+    if (!outcome.success) {
+      const { error } = outcome;
       const scopeKey = session.key;
       loadParameterDialogScope(scopeKey);
       setParameterDialogError(parameterErrorText(error));
       setHint(parameterErrorText(error), "error");
       updateUI();
       draw();
-      return false;
     }
+    return outcome.success;
   }
 
   function pickParameterDialogDimension(event) {
