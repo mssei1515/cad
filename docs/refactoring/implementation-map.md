@@ -186,3 +186,7 @@ index.htmlは既存の通常script読込列で両moduleをapp.jsより先に読�
 ### 寸法のCanvas描画
 
 `DimensionRenderer`は直線／角度寸法のCanvas命令とラベル・編集枠・終端記号・数式マークを所有する。`DimensionMetrics`は共有instanceとして接続する。appの描画adapterは外観・layout・描画計画を準備して渡し、rendererにSketchや拘束対象の検索をさせない。寸法配置と移動／編集操作は後続の整理対象。
+
+### 寸法配置とlayout
+
+`DimensionPlacement`（`src/rendering/dimension_placement.js`）は方向・anchor・相対配置・ラベル位置を担当し、Documentを参照しない。`DimensionLayout`（`src/rendering/dimension_layout.js`）は補助線・hit領域・文字方向・描画計画を担当し、現在scopeの線一覧だけをread portで取得する。appには外観継承を解決するadapterと描画先への接続を残す。既存の角度ラベル補完による寸法更新は明示して維持し、操作側への移行時も更新順序を保つ。

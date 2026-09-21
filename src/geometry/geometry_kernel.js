@@ -277,7 +277,15 @@
     return { x: projectionX * 2 - point.x, y: projectionY * 2 - point.y };
   }
 
+  function circlePointAtAngle(primitive, angle) {
+    return {
+      x: primitive.center.x + Math.cos(angle) * primitive.radius(),
+      y: primitive.center.y + Math.sin(angle) * primitive.radius(),
+    };
+  }
+
   window.GeometryKernel = Object.freeze({
+    circlePointAtAngle,
     MIN_ORIENTATION_LENGTH,
     normalizeAnglePositive,
     normalizeAngleSigned,
