@@ -314,11 +314,6 @@
   let lineStartRollback = null;
   let lineCompletionRollback = null;
   let filletFirstLine = null;
-  let circleCenterPoint = null;
-  let arcCenterPoint = null;
-  let arcStartPoint = null;
-  let threePointArcStart = null;
-  let threePointArcEnd = null;
   let splineFitPoints = [];
   let splineCreationRollback = null;
   let splineLastClickAddition = null;
@@ -330,12 +325,6 @@
   let activeSnap = null;
   let trimPreview = null;
 
-  function resetArcCommandState() {
-    arcCenterPoint = null;
-    arcStartPoint = null;
-    threePointArcStart = null;
-    threePointArcEnd = null;
-  }
   let hatchPreview = null;
   let hatchRepairTarget = null;
   let offsetSource = null;
@@ -475,6 +464,18 @@
     painters: { hatch: items => drawHatches(items, { includePreview: false }), line: drawLines, circle: drawCircles, arc: drawArcs, spline: drawSplines },
   });
   const MIN_ARC_LENGTH = MIN_LINE_LENGTH;
+  const circularConstruction = window.CircularConstruction.create({
+    endpointAt, addPoint, addCircle, addArc, addPointSnapConstraints, addArcEndpointSnapConstraints, addCircularBoundarySnapConstraints,
+    currentScope: workspace.current, readPointSequence: () => pointSeq, restorePointSequence: value => { pointSeq = value; },
+  });
+  const circularCommands = window.CircularCommands.create({
+    construction: circularConstruction, selection: canvasSelection, minArcLength: MIN_ARC_LENGTH,
+    setPointerPreview: point => { pointerPreview = point; }, clearSnap, clearSelection, setHint, updateUI, draw, solveAndRefresh,
+  });
+  const { resetArcs: resetArcCommandState } = circularCommands;
+  function handleCircleClick(point) { const snapped = snapForDrawing(point); circularCommands.clickCircle(snapped, activeSnap); }
+  function handleArcClick(point) { const snapped = snapForDrawing(point); circularCommands.clickArc(snapped, activeSnap); }
+  function handleThreePointArcClick(point) { const snapped = snapForDrawing(point); circularCommands.clickThreePointArc(snapped, activeSnap); }
   const slotConstruction = window.SlotConstruction.create({
     addPoint, addLine, addArc, addConstraintIfMissing, addPointSnapConstraints, addLineBoundarySnapConstraints,
     snapshotGeometryMutationState, restoreGeometryMutationState, solveAndRefresh,
@@ -5535,7 +5536,7 @@
     rectangleStartPoint = null;
     resetSlotCommandState();
     filletFirstLine = null;
-    circleCenterPoint = null;
+    circularCommands.resetCircle();
     resetArcCommandState();
     splineFitPoints = [];
     sketchProjectionSources = [];
@@ -6744,7 +6745,7 @@
     rectangleStartPoint = null;
     resetSlotCommandState();
     filletFirstLine = null;
-    circleCenterPoint = null;
+    circularCommands.resetCircle();
     resetArcCommandState();
     splineFitPoints = [];
     splineCreationRollback = null;
@@ -6767,7 +6768,7 @@
   }
 
   function hasActiveDrawOperation() {
-    return Boolean(lineStartPoint || centerlineTargets.length || centerlineFirstPoint || rectangleStartPoint || slotCommand.firstCenter || slotCommand.secondCenter || filletFirstLine || circleCenterPoint || arcCenterPoint || arcStartPoint || threePointArcStart || threePointArcEnd || splineFitPoints.length || offsetSource || offsetChainEntries.length);
+    return Boolean(lineStartPoint || centerlineTargets.length || centerlineFirstPoint || rectangleStartPoint || slotCommand.firstCenter || slotCommand.secondCenter || filletFirstLine || circularCommands.circleCenterPoint || circularCommands.arcCenterPoint || circularCommands.arcStartPoint || circularCommands.threePointArcStart || circularCommands.threePointArcEnd || splineFitPoints.length || offsetSource || offsetChainEntries.length);
   }
 
 
@@ -6871,7 +6872,7 @@
     rectangleStartPoint = null;
     resetSlotCommandState();
     filletFirstLine = null;
-    circleCenterPoint = null;
+    circularCommands.resetCircle();
     resetArcCommandState();
     if (splineCreationRollback) {
       model.points.length = splineCreationRollback.pointLength;
@@ -8482,7 +8483,7 @@
     pendingCommand = null;
     pendingConstraintCommand = null;
     lineStartPoint = null;
-    circleCenterPoint = null;
+    circularCommands.resetCircle();
     resetArcCommandState();
     pointerPreview = null;
     mode = "select";
@@ -9887,47 +9888,47 @@
   }
 
   function drawCirclePreview() {
-    if (mode !== "circle" || !circleCenterPoint || !pointerPreview) return;
-    const radius = hypot2(pointerPreview.x - circleCenterPoint.x, pointerPreview.y - circleCenterPoint.y);
+    if (mode !== "circle" || !circularCommands.circleCenterPoint || !pointerPreview) return;
+    const radius = hypot2(pointerPreview.x - circularCommands.circleCenterPoint.x, pointerPreview.y - circularCommands.circleCenterPoint.y);
     withCanvasState(() => {
       ctx.strokeStyle = "#2563eb";
       ctx.lineWidth = 2 / viewport.scale;
       ctx.setLineDash([6 / viewport.scale, 5 / viewport.scale]);
       ctx.beginPath();
-      ctx.arc(circleCenterPoint.x, circleCenterPoint.y, radius, 0, Math.PI * 2);
+      ctx.arc(circularCommands.circleCenterPoint.x, circularCommands.circleCenterPoint.y, radius, 0, Math.PI * 2);
       ctx.stroke();
     });
   }
 
   function drawArcPreview() {
-    if (mode !== "arc" || !arcCenterPoint) return;
-    if (!arcStartPoint) {
-      drawConstructionPoint(arcCenterPoint);
+    if (mode !== "arc" || !circularCommands.arcCenterPoint) return;
+    if (!circularCommands.arcStartPoint) {
+      drawConstructionPoint(circularCommands.arcCenterPoint);
       return;
     }
     if (!pointerPreview) return;
     const angles = {
-      start: arcStartPoint.startAngle,
-      end: shortestAngleFrom(arcStartPoint.startAngle, Math.atan2(pointerPreview.y - arcCenterPoint.y, pointerPreview.x - arcCenterPoint.x)),
+      start: circularCommands.arcStartPoint.startAngle,
+      end: shortestAngleFrom(circularCommands.arcStartPoint.startAngle, Math.atan2(pointerPreview.y - circularCommands.arcCenterPoint.y, pointerPreview.x - circularCommands.arcCenterPoint.x)),
     };
     withCanvasState(() => {
       ctx.strokeStyle = "#2563eb";
       ctx.lineWidth = 2 / viewport.scale;
       ctx.setLineDash([6 / viewport.scale, 5 / viewport.scale]);
       ctx.beginPath();
-      ctx.arc(arcCenterPoint.x, arcCenterPoint.y, arcStartPoint.radius, angles.start, angles.end, angles.end < angles.start);
+      ctx.arc(circularCommands.arcCenterPoint.x, circularCommands.arcCenterPoint.y, circularCommands.arcStartPoint.radius, angles.start, angles.end, angles.end < angles.start);
       ctx.stroke();
     });
-    drawConstructionPoint(arcCenterPoint);
+    drawConstructionPoint(circularCommands.arcCenterPoint);
   }
 
   function drawThreePointArcPreview() {
-    if (mode !== "three-point-arc" || !threePointArcStart) return;
-    drawConstructionPoint(threePointArcStart);
-    if (!threePointArcEnd) return;
-    drawConstructionPoint(threePointArcEnd);
+    if (mode !== "three-point-arc" || !circularCommands.threePointArcStart) return;
+    drawConstructionPoint(circularCommands.threePointArcStart);
+    if (!circularCommands.threePointArcEnd) return;
+    drawConstructionPoint(circularCommands.threePointArcEnd);
     if (!pointerPreview) return;
-    const geometry = threePointArcGeometry(threePointArcStart, threePointArcEnd, pointerPreview, MIN_ARC_LENGTH);
+    const geometry = threePointArcGeometry(circularCommands.threePointArcStart, circularCommands.threePointArcEnd, pointerPreview, MIN_ARC_LENGTH);
     if (!geometry) return;
     withCanvasState(() => {
       ctx.strokeStyle = "#2563eb";
@@ -10504,7 +10505,7 @@
     lineStartPoint = null;
     rectangleStartPoint = null;
     filletFirstLine = null;
-    circleCenterPoint = null;
+    circularCommands.resetCircle();
     resetArcCommandState();
     pointerPreview = null;
     trimPreview = null;
@@ -10881,7 +10882,7 @@
     lineStartPoint = null;
     rectangleStartPoint = null;
     filletFirstLine = null;
-    circleCenterPoint = null;
+    circularCommands.resetCircle();
     resetArcCommandState();
     pointerPreview = null;
     trimPreview = null;
@@ -10909,7 +10910,7 @@
     lineStartPoint = null;
     rectangleStartPoint = null;
     filletFirstLine = null;
-    circleCenterPoint = null;
+    circularCommands.resetCircle();
     resetArcCommandState();
     pointerPreview = null;
     trimPreview = null;
@@ -11271,7 +11272,7 @@
     lineStartPoint = null;
     rectangleStartPoint = null;
     filletFirstLine = null;
-    circleCenterPoint = null;
+    circularCommands.resetCircle();
     resetArcCommandState();
     pointerPreview = null;
     trimPreview = null;
@@ -16299,139 +16300,8 @@
     if (startFilletRadiusPlacement(filletFirstLine, line, pointer)) filletFirstLine = null;
   }
 
-  function handleCircleClick(p) {
-    p = snapForDrawing(p);
-    const snap = activeSnap;
-    pointerPreview = p;
-    if (!circleCenterPoint) {
-      const center = endpointAt(p.x, p.y);
-      addPointSnapConstraints(center, snap);
-      circleCenterPoint = center;
-      canvasSelection.set("points", [center]);
-      canvasSelection.set("lines", []);
-      canvasSelection.set("circles", []);
-      canvasSelection.set("arcs", []);
-      setHint("半径位置をクリックすると円を作成します。Escで選択モードに戻ります");
-      updateUI();
-      draw();
-      return;
-    }
-    const circle = addCircle(circleCenterPoint, hypot2(p.x - circleCenterPoint.x, p.y - circleCenterPoint.y));
-    if (circle) {
-      addCircularBoundarySnapConstraints(circle, snap);
-      canvasSelection.set("points", []);
-      canvasSelection.set("lines", []);
-      canvasSelection.set("circles", [circle]);
-      canvasSelection.set("arcs", []);
-      circleCenterPoint = null;
-      pointerPreview = null;
-      clearSnap();
-      clearSelection();
-      solveAndRefresh("円追加");
-    }
-  }
 
-  function handleArcClick(p) {
-    p = snapForDrawing(p);
-    const snap = activeSnap;
-    pointerPreview = p;
-    if (!arcCenterPoint) {
-      const center = endpointAt(p.x, p.y);
-      addPointSnapConstraints(center, snap);
-      arcCenterPoint = center;
-      canvasSelection.set("points", [center]);
-      canvasSelection.set("lines", []);
-      canvasSelection.set("circles", []);
-      canvasSelection.set("arcs", []);
-      setHint("円弧の始点をクリックしてください。Escで選択モードに戻ります");
-      updateUI();
-      draw();
-      return;
-    }
-    if (!arcStartPoint) {
-      const radius = hypot2(p.x - arcCenterPoint.x, p.y - arcCenterPoint.y);
-      if (radius < MIN_ORIENTATION_LENGTH) {
-        setHint("中心から離れた位置をクリックしてください", "error");
-        draw();
-        return;
-      }
-      arcStartPoint = {
-        radius,
-        startAngle: Math.atan2(p.y - arcCenterPoint.y, p.x - arcCenterPoint.x),
-        snap,
-      };
-      canvasSelection.set("points", [arcCenterPoint]);
-      setHint("円弧の終点をクリックすると円弧を作成します。Escで選択モードに戻ります");
-      updateUI();
-      draw();
-      return;
-    }
-    const arc = addArc(arcCenterPoint, arcStartPoint.radius, arcStartPoint.startAngle, shortestAngleFrom(arcStartPoint.startAngle, Math.atan2(p.y - arcCenterPoint.y, p.x - arcCenterPoint.x)));
-    if (arc) {
-      addArcEndpointSnapConstraints(arc, "start", arcStartPoint.snap);
-      addArcEndpointSnapConstraints(arc, "end", snap);
-      canvasSelection.set("points", []);
-      canvasSelection.set("lines", []);
-      canvasSelection.set("circles", []);
-      canvasSelection.set("arcs", [arc]);
-      resetArcCommandState();
-      pointerPreview = null;
-      clearSnap();
-      clearSelection();
-      solveAndRefresh("円弧追加");
-    }
-  }
 
-  function handleThreePointArcClick(p) {
-    p = snapForDrawing(p);
-    const snap = activeSnap;
-    pointerPreview = p;
-    if (!threePointArcStart) {
-      threePointArcStart = { x: p.x, y: p.y, snap };
-      clearSelection();
-      setHint("3点円弧の終点をクリックしてください。Escで作図をキャンセルします");
-      updateUI();
-      draw();
-      return;
-    }
-    if (!threePointArcEnd) {
-      if (hypot2(p.x - threePointArcStart.x, p.y - threePointArcStart.y) < MIN_ARC_LENGTH) {
-        setHint("始点から離れた終点をクリックしてください", "error");
-        draw();
-        return;
-      }
-      threePointArcEnd = { x: p.x, y: p.y, snap };
-      setHint("円弧が通過する円周上の点をクリックしてください。Escで作図をキャンセルします");
-      updateUI();
-      draw();
-      return;
-    }
-
-    const geometry = threePointArcGeometry(threePointArcStart, threePointArcEnd, p, MIN_ARC_LENGTH);
-    if (!geometry) {
-      setHint("3点が同一直線上にならない位置をクリックしてください", "error");
-      draw();
-      return;
-    }
-    const centerPointSeq = pointSeq;
-    const center = addPoint(geometry.center.x, geometry.center.y, false, "center");
-    const arc = addArc(center, geometry.radius, geometry.startAngle, geometry.endAngle);
-    if (!arc) {
-      model.points = model.points.filter((point) => point !== center);
-      pointSeq = centerPointSeq;
-      setHint("3点が同一直線上にならない位置をクリックしてください", "error");
-      draw();
-      return;
-    }
-    addArcEndpointSnapConstraints(arc, "start", threePointArcStart.snap);
-    addArcEndpointSnapConstraints(arc, "end", threePointArcEnd.snap);
-    addCircularBoundarySnapConstraints(arc, snap);
-    resetArcCommandState();
-    pointerPreview = null;
-    clearSnap();
-    clearSelection();
-    solveAndRefresh("3点円弧追加");
-  }
 
   const CANVAS_CONTEXT_KIND_PRIORITY = Object.freeze({
     point: 0,
@@ -19393,7 +19263,7 @@
     lineStartPoint = null;
     rectangleStartPoint = null;
     filletFirstLine = null;
-    circleCenterPoint = null;
+    circularCommands.resetCircle();
     resetArcCommandState();
     pointerPreview = null;
     clearSnap();
@@ -19408,7 +19278,7 @@
     lineStartPoint = null;
     rectangleStartPoint = null;
     filletFirstLine = null;
-    circleCenterPoint = null;
+    circularCommands.resetCircle();
     resetArcCommandState();
     pointerPreview = null;
     clearSnap();
@@ -19423,7 +19293,7 @@
     lineStartPoint = null;
     rectangleStartPoint = null;
     filletFirstLine = null;
-    circleCenterPoint = null;
+    circularCommands.resetCircle();
     resetArcCommandState();
     pointerPreview = null;
     clearSnap();
@@ -19465,7 +19335,7 @@
     lineStartPoint = null;
     rectangleStartPoint = null;
     filletFirstLine = null;
-    circleCenterPoint = null;
+    circularCommands.resetCircle();
     resetArcCommandState();
     pointerPreview = null;
     clearSnap();
@@ -19480,7 +19350,7 @@
     lineStartPoint = null;
     rectangleStartPoint = null;
     filletFirstLine = null;
-    circleCenterPoint = null;
+    circularCommands.resetCircle();
     resetArcCommandState();
     pointerPreview = null;
     clearSnap();
@@ -19496,9 +19366,8 @@
     rectangleStartPoint = null;
     resetSlotCommandState();
     filletFirstLine = null;
-    circleCenterPoint = null;
-    arcCenterPoint = null;
-    arcStartPoint = null;
+    circularCommands.resetCircle();
+    circularCommands.resetCenterArc();
     pointerPreview = null;
     clearSnap();
     updateToolbar();
@@ -19516,7 +19385,7 @@
     lineStartPoint = null;
     rectangleStartPoint = null;
     filletFirstLine = null;
-    circleCenterPoint = null;
+    circularCommands.resetCircle();
     resetArcCommandState();
     pointerPreview = null;
     clearSnap();
@@ -19531,7 +19400,7 @@
     lineStartPoint = null;
     rectangleStartPoint = null;
     filletFirstLine = null;
-    circleCenterPoint = null;
+    circularCommands.resetCircle();
     resetArcCommandState();
     pointerPreview = null;
     trimPreview = null;
@@ -19560,7 +19429,7 @@
     lineStartPoint = null;
     rectangleStartPoint = null;
     filletFirstLine = null;
-    circleCenterPoint = null;
+    circularCommands.resetCircle();
     resetArcCommandState();
     pointerPreview = null;
     trimPreview = null;
@@ -19591,7 +19460,7 @@
     lineStartPoint = null;
     rectangleStartPoint = null;
     filletFirstLine = null;
-    circleCenterPoint = null;
+    circularCommands.resetCircle();
     resetArcCommandState();
     pointerPreview = null;
     clearSnap();
@@ -19606,7 +19475,7 @@
     lineStartPoint = null;
     rectangleStartPoint = null;
     filletFirstLine = null;
-    circleCenterPoint = null;
+    circularCommands.resetCircle();
     resetArcCommandState();
     pointerPreview = null;
     clearSnap();
@@ -19621,7 +19490,7 @@
     lineStartPoint = null;
     rectangleStartPoint = null;
     filletFirstLine = null;
-    circleCenterPoint = null;
+    circularCommands.resetCircle();
     resetArcCommandState();
     pointerPreview = null;
     clearSnap();
@@ -22501,13 +22370,15 @@
         }, drawSlotPreview);
         capture("circle", () => {
           mode = "circle";
-          circleCenterPoint = addPoint(0, 0, true, "center");
+          circularCommands.clickCircle({ x: 0, y: 0 }, null);
+          Object.assign(circularCommands.circleCenterPoint, { fixed: true, kind: "center" });
           pointerPreview = { x: 35, y: 0 };
         }, drawCirclePreview);
         capture("arc", () => {
           mode = "arc";
-          arcCenterPoint = addPoint(0, 0, true, "center");
-          arcStartPoint = { radius: 35, startAngle: 0 };
+          circularCommands.clickArc({ x: 0, y: 0 }, null);
+          Object.assign(circularCommands.arcCenterPoint, { fixed: true, kind: "center" });
+          circularCommands.clickArc({ x: 35, y: 0 }, null);
           pointerPreview = { x: 0, y: 35 };
         }, drawArcPreview);
         capture("offset", () => {
