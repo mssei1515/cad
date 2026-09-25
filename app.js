@@ -180,34 +180,8 @@
   const { applicationText, translatedExactText, translatedHintText, localizeApplicationUI,
     setApplicationLanguage, setApplicationTheme } = applicationSettings;
   const { ROOT_SKETCH_ID, ROOT_SKETCH_NAME, DEFAULT_SKETCH_ID, DEFAULT_SKETCH_NAME } = window.SketchHierarchy;
-  const DEFAULT_DOCUMENT_UNITS = Object.freeze({ length: "mm" });
-  const documentModel = {
-    documentName: DEFAULT_DOCUMENT_NAME,
-    units: { ...DEFAULT_DOCUMENT_UNITS },
-    defaultAppearance: null,
-    defaultConstructionAppearance: null,
-    defaultDimensionAppearance: null,
-    sketches: [
-      { id: ROOT_SKETCH_ID, name: ROOT_SKETCH_NAME, parentSketchId: null, kind: "root", appearance: {}, constructionAppearance: {}, dimensionAppearance: {} },
-      { id: DEFAULT_SKETCH_ID, name: DEFAULT_SKETCH_NAME, parentSketchId: ROOT_SKETCH_ID, kind: "sketch", appearance: {}, constructionAppearance: {}, dimensionAppearance: {} },
-    ],
-    activeSketchId: DEFAULT_SKETCH_ID,
-    annotations: [],
-    hatches: [],
-    referenceImages: [],
-    nextHatchIndex: 1,
-    points: [],
-    lines: [],
-    circles: [],
-    arcs: [],
-    splines: [],
-    constraints: [],
-    parameters: [],
-    nextDimensionParameterIndex: 1,
-    blockDefinitions: [],
-    blockInstances: [],
-    geometryInstances: [],
-  };
+  const { DEFAULT_DOCUMENT_UNITS } = window.DocumentState;
+  const documentModel = window.DocumentState.create();
   const workspace = window.EditingWorkspace.create(documentModel);
   const currentParameterNamespace = workspace.current;
   const parameterNamespace = window.ParameterNamespace.create({ currentParameterNamespace, applicationText });
@@ -5161,21 +5135,7 @@
     flushScheduledCanvasPointerMove({ discard: true });
     mode = "select";
     lastAuthoringPerformance = null;
-    documentModel.documentName = DEFAULT_DOCUMENT_NAME;
-    documentModel.units = { ...DEFAULT_DOCUMENT_UNITS };
-    model.points.length = 0;
-    model.lines.length = 0;
-    model.circles.length = 0;
-    model.arcs.length = 0;
-    model.splines.length = 0;
-    model.constraints.length = 0;
-    model.parameters = [];
-    model.nextDimensionParameterIndex = 1;
-    documentModel.blockDefinitions.length = 0;
-    model.blockInstances.length = 0;
-    model.geometryInstances.length = 0;
-    model.hatches.length = 0;
-    model.referenceImages.length = 0;
+    window.DocumentState.clearContent(documentModel);
     referenceImageRenderer.clear();
     invalidateBlockProjectionCache();
     sketchSolveStates.clear();
@@ -5258,17 +5218,7 @@
     blockPlacementRotationLocked = true;
     blockPlacementPropertiesWasCollapsed = null;
     blockEditSession = null;
-    model.sketches.length = 0;
-    model.sketches.push({ id: ROOT_SKETCH_ID, name: ROOT_SKETCH_NAME, parentSketchId: null, kind: "root", appearance: {}, constructionAppearance: {}, dimensionAppearance: {} });
-    model.sketches.push({ id: DEFAULT_SKETCH_ID, name: DEFAULT_SKETCH_NAME, parentSketchId: ROOT_SKETCH_ID, kind: "sketch", appearance: {}, constructionAppearance: {}, dimensionAppearance: {} });
-    model.activeSketchId = DEFAULT_SKETCH_ID;
-    documentModel.defaultAppearance = { ...DEFAULT_APPEARANCE };
-    documentModel.defaultConstructionAppearance = { ...DEFAULT_CONSTRUCTION_APPEARANCE };
-    documentModel.defaultDimensionAppearance = { ...DEFAULT_DIMENSION_APPEARANCE };
-    model.annotations = [];
-    model.hatches = [];
-    model.referenceImages = [];
-    model.nextHatchIndex = 1;
+    window.DocumentState.resetDefaults(documentModel);
     hatchPreview = null;
     hatchRepairTarget = null;
     hatchResolutionCache = new WeakMap();

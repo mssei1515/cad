@@ -4,6 +4,8 @@
 
 ## 現在の再開地点（2026-09-25）
 
+Document生成・内容消去・既定Sketchと表示設定の復元を`DocumentState`へ分離。編集scopeをDocumentへ戻し、内容消去→操作取消／cache破棄／採番リセット→既定値復元の順序を維持した。構文167件・単体360件が成功。関連E2E162件中161件が成功し、file URLテストの固定読込一覧へ新規3moduleを追加した後、残り1件も再実行成功。app.jsは21,930行。次は操作状態の所有者を分離し、resetModelStateの操作取消を各所有者へ委譲する。全体目標と全体E2Eは未完了。
+
 続いてDocument読込の候補生成とモデル反映を`DocumentLoading`へ分離した。読込codec間の接続・版別検査・移行はdecode、リセット後のデータ反映はinstallが担当し、Sketchツリー復元・履歴・修復通知はapp側に残した。配列参照・拘束参照とcache無効化／円弧正規化の順序を保持。構文165件・単体357件・保存互換／Block／ファイル安全性／派生Instance／Sketch投影のE2E102件が成功。app.jsは21,980行。次はDocumentリセットと編集操作状態のリセットの境界を整理する。全体目標と全体E2Eは未完了。
 
 継続指示により再開。`codex/composition-root-next`で読込後の採番復元を`DocumentSequences`へ分離した。入力を変更せず、Documentと全Definitionから予約対象と次番号を返す。Windowsのコマンド長制限に達した構文チェックは、対象161件を維持して新規2件を追加し、`tools/check-syntax.js`へ移した。構文163件・単体352件・Block／保存互換のE2E58件が成功。app.jsは22,056行で、数百行化の目標は未完了。次は読込候補の最終反映とUI復元の境界を整理する。

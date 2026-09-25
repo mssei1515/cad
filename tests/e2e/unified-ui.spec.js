@@ -1609,7 +1609,7 @@ test("file URL Help menu reads the generated Git commit file", async ({ page }) 
     "src/document/appearance.js", "src/document/drawing_order.js", "src/document/sketch_hierarchy.js",
     "src/document/annotations.js", "src/document/hatches.js", "src/document/reference_images.js", "src/document/block_catalog.js", "src/geometry/block_projection.js", "src/geometry/read_model.js", "src/rendering/viewport.js", "src/rendering/canvas_surface.js", "src/rendering/dimension_metrics.js", "src/rendering/dimension_placement.js", "src/rendering/dimension_layout.js", "src/rendering/dimension_renderer.js", "src/rendering/geometry_renderer.js", "src/rendering/hatch_renderer.js", "src/rendering/drawing_stack.js", "src/rendering/annotation_renderer.js", "src/rendering/reference_image_renderer.js",
     "src/persistence/constraint_codec_registry.js", "src/persistence/constraints.js", "src/constraints/dimension_queries.js", "src/constraints/candidates.js", "src/parameters/namespace.js", "src/persistence/geometry.js", "src/persistence/geometry_instances.js", "src/persistence/block_definitions.js", "src/persistence/block_instances.js", "src/persistence/block_connections.js", "src/persistence/document_geometry.js",
-    "src/persistence/document_files.js", "src/persistence/document_snapshot.js",
+    "src/persistence/document_files.js", "src/persistence/document_snapshot.js", "src/persistence/document_sequences.js", "src/persistence/document_loading.js", "src/document/state.js",
   ];
   expect(loadedScripts).toHaveLength(expectedPaths.length);
   for (const expectedPath of expectedPaths) {
