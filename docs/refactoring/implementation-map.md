@@ -261,3 +261,5 @@ index.htmlは既存の通常script読込列で両moduleをapp.jsより先に読�
 - `DimensionInputView`（`src/ui/dimension_input_view.js`）: 寸法入力欄の配置・表示・非表示・検証結果の反映とfocus予約。寸法レイアウトと式評価は呼出し側で行い、DOMへコマンド状態を持ち込まない。
 
 - `DimensionInputController`（`src/ui/dimension_input_controller.js`）: 入力待ち状態を読取り、寸法レイアウト・所有Sketchの表示設定・入力検証をviewへ接続する。コマンドの更新や確定は所有しない。
+
+- `DimensionValueCommand`（`src/commands/dimension_value_command.js`）: 寸法値・式の確定、既存寸法の更新と失敗時復元、初回寸法追加後の表示範囲復元。入力イベントとDOMを所有しない。

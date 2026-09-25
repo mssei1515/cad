@@ -2,6 +2,8 @@
 const { spawnSync } = require("node:child_process");
 const path = require("node:path");
 const files = [
+  "src/commands/dimension_value_command.js",
+  "tests/unit/dimension-value-command.test.js",
   "src/ui/dimension_input_controller.js",
   "tests/unit/dimension-input-controller.test.js",
   "src/ui/dimension_input_view.js",
