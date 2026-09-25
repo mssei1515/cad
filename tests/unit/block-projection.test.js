@@ -25,6 +25,76 @@ function services(definitions) {
   return { catalog, projection };
 }
 
+test("rigid projection Jacobians match dense evaluation through nested and derived geometry", () => {
+  const { Constraint, ConstraintSolver, CoincidentConstraint, PointOnLineConstraint } = sandbox.window.GeometrySolver;
+  const child = definition("child"), parent = definition("parent");
+  parent.points = []; parent.lines = [];
+  parent.blockInstances = [instance("nested", "child", { x: 3, y: 4, rotation: 0.2 })];
+  parent.geometryInstances = [{ id: "MI1", type: "mirror", sketchId: "S1",
+    sources: [{ kind: "line", path: ["nested", "L1"] }], axis: { kind: "line", path: ["nested", "L1"] } }];
+  const { projection } = services(() => [parent, child]);
+  const outer = instance("outer", "parent", { rotation: 0.4 });
+  const free = point("free", 12, 25), unrelated = point("unrelated", 100, 200);
+  const variables = [outer, free, unrelated].flatMap(object => ["x", "y"].map(prop => ({ object, prop })));
+  variables.push({ object: outer, prop: "rotation" });
+  const solver = new ConstraintSolver({ points: [free, unrelated], lines: [], circles: [], arcs: [], constraints: [] });
+  const check = () => {
+    const bundle = projection.blockProjectionBundle(outer);
+    assert.equal(bundle.lines.length, 2);
+    for (const line of bundle.lines) for (const constraint of [new CoincidentConstraint(line.p1, free), new PointOnLineConstraint(free, line)]) {
+      const dense = new Constraint("dense reference", 1);
+      dense.rawError = () => constraint.rawError();
+      const errors = solver.computeErrorVectorForConstraints([constraint]);
+      const actual = solver.computeJacobianForConstraints(variables, errors, [constraint]);
+      const expected = solver.computeJacobianForConstraints(variables, errors, [dense]);
+      actual.forEach((row, i) => row.forEach((value, j) => {
+        assert.ok(Math.abs(value - expected[i][j]) < 1e-6, `${line.id} row ${i} column ${j}: ${value} != ${expected[i][j]}`);
+      }));
+      assert.ok(actual.some(row => Math.abs(row[6]) > 0.1), "outer rotation must participate");
+    }
+  };
+  check();
+  child.points[0].x += 2;
+  parent.revision += 1;
+  projection.invalidateBlockProjectionCache();
+  check();
+});
+
+test("external differentiation neither scans definition contents nor evaluates unrelated variables", () => {
+  const { ConstraintSolver, CoincidentConstraint } = sandbox.window.GeometrySolver;
+  const source = definition("B1");
+  const { projection } = services(() => [source]);
+  const block = instance("BI1", source.id);
+  const projected = projection.blockProjectionBundle(block).points[0];
+  // A definition can contain arbitrarily many objects. Visiting even this
+  // sentinel while differentiating an external constraint is a regression.
+  source.constraints = new Proxy([], { ownKeys() { throw Error("external solve traversed the definition"); } });
+  const fixed = point("fixed", projected.x, projected.y);
+  const constraint = new CoincidentConstraint(projected, fixed);
+  let calls = 0;
+  const raw = constraint.rawError.bind(constraint);
+  constraint.rawError = () => { calls++; return raw(); };
+  const solver = new ConstraintSolver({ points: [], lines: [], circles: [], arcs: [], constraints: [] });
+  const vars = ["x", "y", "rotation"].map(prop => ({ object: block, prop }));
+  const errors = solver.computeErrorVectorForConstraints([constraint]);
+  calls = 0;
+  const first = solver.computeJacobianForConstraints(vars, errors, [constraint]);
+  const baselineCalls = calls;
+  const unrelated = Array.from({ length: 100 }, (_, i) => ({ object: point(`U${i}`, i, i), prop: "x" }));
+  calls = 0;
+  const expanded = solver.computeJacobianForConstraints([...vars, ...unrelated], errors, [constraint]);
+  assert.equal(calls, baselineCalls);
+  expanded.forEach((row, i) => {
+    assert.deepEqual(Array.from(row.slice(0, 3)), Array.from(first[i]));
+    assert.ok(row.slice(3).every(value => value === 0));
+  });
+  fixed.x += 6;
+  fixed.y -= 2;
+  const result = solver.solveSubset({ variables: vars, constraints: [constraint] });
+  assert.equal(result.success, true);
+  assert.ok(Math.hypot(projected.x - fixed.x, projected.y - fixed.y) < 1e-4);
+});
+
 test("catalog follows registry replacement and preserves enabled-sketch fallback through nested definitions", () => {
   const leaf = definition("B1"), parent = definition("B2");
   parent.lines = []; parent.points = [];

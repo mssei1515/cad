@@ -1606,6 +1606,15 @@
         const visit = (object) => {
           if (!object || typeof object !== "object" || objects.has(object)) return;
           objects.add(object);
+          // Block projections are rigid in the placement scope. Their live
+          // getters depend on the outer instance, not on definition geometry
+          // as solve variables. Do not traverse definition/appearance metadata.
+          // Other dynamic views (including synchronized instances) retain the
+          // conservative fallback below because their source can also move.
+          if (object.blockProjection && object.blockInstance) {
+            objects.add(object.blockInstance);
+            return;
+          }
           for (const descriptor of Object.values(Object.getOwnPropertyDescriptors(object))) {
             if (descriptor.get) dynamic = true;
             else visit(descriptor.value);
