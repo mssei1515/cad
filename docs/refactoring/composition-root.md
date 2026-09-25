@@ -4,6 +4,8 @@
 
 ## 現在の再開地点（2026-09-25）
 
+Blockの有効Sketch変更と影響検査をBlockConfigurationCommandへ分離。投影差分から拘束／注記参照を確認し、拒否時の無変更、許可時の関連拘束と選択解除、cache・履歴・更新の順序を保持した。hover解除はappの所有者へのコールバック。構文233件・単体461件・Block／統合UI／保存互換E2E151件が成功。app.jsは18,719行。次はBlock UIの内容生成・イベント接続、またはドラッグsessionの所有者を整理する。全体目標と全体E2Eは未完了。
+
 Free Instanceの回転／反転とBlockの回転ロック／直交角度変更をInstanceTransformCommandへ分離した。Freeは共有元と指定InstanceをSolver変数から除外し、Blockは表示中心を保持する。各経路の局所／従属解、復元、解析・UI更新、履歴の違いを維持し、PropertiesとBlock UIが共用する。構文231件・単体458件・Block固定／Block／Free Instance／統合UI／保存互換E2E181件が成功。app.jsは18,761行。次はBlock構成変更の影響照会と確定処理、または残るドラッグsessionの所有者を整理する。全体目標と全体E2Eは未完了。
 
 Free／Mirror／Patternの作成をGeometryInstanceCommandへ分離し、参照元候補と配置途中Instanceの所有者を集約。開始・配置・軸／方向確定・previewを同じcommandに接続し、Propertiesはpending、変換編集はisPlacing、取消は各破棄APIを使用する。Freeの確定時採番とPattern入力取消時の候補維持を保持した。構文229件・単体454件・Free Instance／統合UI／保存互換E2E136件が成功。app.jsは18,861行。次はFree Instanceの変換編集と共有元を動かさないSolver transaction、および残る描画／ドラッグsessionの所有者を整理する。全体目標と全体E2Eは未完了。

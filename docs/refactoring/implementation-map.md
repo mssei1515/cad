@@ -310,3 +310,5 @@ index.htmlは既存の通常script読込列で両moduleをapp.jsより先に読�
 - `GeometryInstanceCommand`（`src/commands/geometry_instance_command.js`）: Free／Mirror／Pattern作成の参照元候補・配置Instance、開始／確定／preview。Propertiesと変換編集はpending／isPlacing、各取消経路はclearPlacement／clearSources／resetを使う。
 
 - `InstanceTransformCommand`（`src/commands/instance_transform_command.js`）: Freeの共有元を固定した回転・反転、Blockの表示中心を保つ直交回転とロック変更。各経路のSolver・復元・履歴・通知を調整し、DOMを受け取らない。
+
+- `BlockConfigurationCommand`（`src/commands/block_configuration_command.js`）: 有効Sketch変更の投影差分、拘束・注記参照の検査、削除保護、関連選択解除、cache・履歴・更新。hover解除は所有者へのコールバックを利用する。
