@@ -64,7 +64,7 @@
 
 残る主要な領域は以下。順番や個数は固定しない。
 
-- Block選択候補の照会（作業中）、拘束複製と履歴adapter。下書き生成・確定・定義操作・依存照会は分離済みで、残る接続の整理を行う。
+- Block拘束複製と履歴adapter。選択候補照会は分離済み。下書き生成・確定・定義操作・依存照会は分離済みで、残る接続の整理を行う。
 - 拘束操作・Selection編集・コピー／削除・Sketch編集の調整。
 - ドラッグsession、hover／hit判定、Canvasとキーボードの入力振分け、共通モード遷移。
 - Annotation／Reference Image／Hatch等の残る操作状態と編集処理。
@@ -103,19 +103,13 @@
 
 ## 8. 再開地点（2026-09-25）
 
-### 最新の引継ぎ：未コミットの候補照会分離あり
+### 最新の確定区切り
 
-最後の確定・Push済み実装は`27993b2`（BlockDefinitionCommand）。その後、`src/editing/block_selection_query.js`へ選択候補の検証と境界中心の照会を分離する作業が未コミットで残っている。以下の既存ファイルの変更と新規ファイルは今回のリファクタリング作業であり、無関係なユーザー変更として破棄しない。
+BlockSelectionQueryへBlock作成候補の検証と配置中心照会を分離。現在scopeを都度取得し、共有点・注記・ハッチ境界と内部／外部拘束を照会する。2関数の本体一致を確認した。依存の明示で旧未定義constraintLabelForList参照が起動時エラーとなることをE2Eで検出し、既存localizedConstraintNameへ接続して修正。構文247件・単体499件・Block／統合UI／保存互換E2E151件が成功。app.jsは17,726行。次はcloneConstraintForBlockのappへの逆依存とBlock履歴adapterを整理する。全体目標と全体E2Eは未完了。
 
-- `app.js`、`index.html`、`package.json`、`tools/check-syntax.js`、`tests/e2e/unified-ui.spec.js`
-- 新規`src/editing/block_selection_query.js`、`tests/unit/block-selection-query.test.js`
+作業branchは`codex/composition-root-next`。実行中のテストはない。今回の候補照会分離と仕様・読込一覧・単体テストを同じコミットに含める。前の引継ぎに記録した未コミット差分は今回の区切りで解消する。次回はGit状態を確認してから拘束複製の責務を調べる。
 
-`BlockSelectionQuery`は`read`と`center`を公開し、現在scopeを呼出しごとに取得する。選択の支持点補完、内部／外部拘束の分類、非選択図形との点共有、注記参照、ハッチ境界の整合を照会し、モデルを変更しない。投影ノードはObject同一性に加えて投影IDで比較する既存規則を維持する。
-
-この未コミット差分について構文247件・単体499件が成功済み。テストprocessは終了確認済み。関連E2Eはまだ実行していないため、挙動確認済み・分離完了とは扱わない。次回は差分レビュー、関連E2E151件、正式なモジュール構成仕様とimplementation-mapの更新、Commit／Pushを先に済ませる。失敗時は原因を調べ、期待値を緩めて通さない。この引継ぎ文書だけのコミットに実装途中の差分を含めない。
-
-以下は最後の確定済み区切りの記録であり、上記の未コミット作業が優先する。
-
+以下は直前の確定済み区切りの記録である。
 
 この文書と同じコミットでBlockDefinitionCommandへ作成・編集開始／取消・定義名変更／削除を集約し、BlockViewへ一覧dialog閉鎖と編集classを移した（直前の実装コミットは`47c8b07`）。作業branchは`codex/composition-root-next`。app.jsは17,805行。構文245件・単体494件・Block／統合UI／保存互換E2E151件が成功し、実行中のテストはない。全体E2Eとリファクタリング全体は未完了。
 

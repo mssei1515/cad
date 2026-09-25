@@ -114,7 +114,7 @@ const files = [
   "tests/unit/document-elements.test.js",
   "src/persistence/document_snapshot.js",
   "tests/unit/document-snapshot.test.js",
-  "src/editing/workspace.js", "src/editing/block_editor_session.js", "src/editing/block_editing_queries.js", "tests/unit/block-editing-queries.test.js", "src/editing/block_definition_editing.js", "tests/unit/block-definition-editing.test.js", "tests/unit/block-editor-session.test.js",
+  "src/editing/workspace.js", "src/editing/block_editor_session.js", "src/editing/block_editing_queries.js", "src/editing/block_selection_query.js", "tests/unit/block-selection-query.test.js", "tests/unit/block-editing-queries.test.js", "src/editing/block_definition_editing.js", "tests/unit/block-definition-editing.test.js", "tests/unit/block-editor-session.test.js",
   "tests/unit/editing-workspace.test.js",
   "src/editing/selection.js",
   "tests/unit/selection.test.js",

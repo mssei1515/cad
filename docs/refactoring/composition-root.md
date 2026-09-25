@@ -6,6 +6,8 @@
 
 ## 現在の再開地点（2026-09-25）
 
+BlockSelectionQueryへBlock作成候補の検証と配置中心照会を分離。現在scopeを都度取得し、共有点・注記・ハッチ境界と内部／外部拘束を照会する。2関数の本体一致を確認した。依存の明示で旧未定義constraintLabelForList参照が起動時エラーとなることをE2Eで検出し、既存localizedConstraintNameへ接続して修正。構文247件・単体499件・Block／統合UI／保存互換E2E151件が成功。app.jsは17,726行。次はcloneConstraintForBlockのappへの逆依存とBlock履歴adapterを整理する。全体目標と全体E2Eは未完了。
+
 BlockDefinitionCommandへ作成・編集開始／取消・定義名変更／削除と親host復帰の調整を集約。Session／DefinitionEditing／EditingQueries／Catalogへ委譲し、BlockViewが一覧dialog閉鎖と編集classを担当する。空編集viewportの調整と履歴resetはappの明示adapterとして残る。構文245件・単体494件・Block／統合UI／保存互換E2E151件が成功。app.jsは17,805行。次はBlock候補の選択検証と境界中心の照会、拘束複製と残るBlock履歴adapterを整理する。全体目標と全体E2Eは未完了。
 
 選択からのBlock下書き生成と空定義生成を既存BlockDefinitionEditingへ、所有子孫の仮移動と復元記録生成を既存BlockEditorSession.stageChildrenへ統合。新しいmoduleは追加していない。座標変換・寸法式の数値固定と採番時点、全registry差替え後の拘束再接続を維持。4関数の本体比較、構文243件・単体487件・Block／統合UI／保存互換E2E151件が成功。app.jsは17,917行。次はBlock作成・編集開始／取消・定義操作の進行と、選択からのBlock候補照会を整理する。全体目標と全体E2Eは未完了。

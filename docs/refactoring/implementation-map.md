@@ -16,6 +16,7 @@
 - `src/persistence/geometry.js`: Document／BlockのローカルGeometry復元と参照Map
 - `src/persistence/document_snapshot.js`: DocumentとBlockで共有する保存field writer、派生Instance保存値
 - `src/editing/block_definition_editing.js`: Block定義の複製・座標移動・選択からの下書き生成・Object同一性を維持するdraft反映
+- `src/editing/block_selection_query.js`: Block作成候補の参照整合・内部／外部拘束分類と配置中心の読取り
 - `src/editing/block_editing_queries.js`: 編集範囲・編集中定義・参照Instance・draftを優先する依存循環の読取り
 - `src/editing/block_editor_session.js`: Block編集session連鎖、draft同期・差替え、親scope復帰、子定義の仮移動・復元記録引継ぎと取消
 - `src/editing/edit_history.js`: 履歴stack操作
