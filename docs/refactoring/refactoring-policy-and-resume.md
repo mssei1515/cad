@@ -105,6 +105,10 @@
 
 ### 最新の確定区切り
 
+BlockHistorySnapshotへBlock履歴の復元用コピーとsignature生成を分離。session・DOM・履歴stackへの依存を持たず、定義とclone／拘束codecから生成する。旧signature関数の本体一致、コピーの独立性、参照metadata・採番値と差分判定を検証。構文248件・単体503件・Block／統合UI／保存互換E2E151件が成功。app.jsは17,652行。次はDocument／Block共通の履歴復元中状態と復元・UI通知の所有者を整理する。全体目標と全体E2Eは未完了。
+
+直前の拘束複製統合は`d486f1f`で確定済み。実行中のテストはない。以下は直前の記録である。
+
 ConstraintRebindingへBlock拘束の複製と保存済み固定座標の移動を統合。BlockDefinitionEditingへcloneForBlockを直接渡し、appの複製実装への逆依存を除去。クリップボードも同じ固定座標移動を利用する。寸法表示位置・参照metadata・復元不能時の拒否を維持。構文247件・単体501件・Block／統合UI／保存互換E2E151件が成功。app.jsは17,697行。次はBlock履歴snapshotの生成・復元とUI通知の境界を整理する。全体目標と全体E2Eは未完了。
 
 直前のBlockSelectionQuery分離は`bbc64ec`で確定済み。実行中のテストはない。以下は直前の記録である。

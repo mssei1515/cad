@@ -120,3 +120,35 @@ test('failed selection conversion does not allocate a definition id and empty dr
   assert.equal(second.sketches[1].appearance.color, undefined);
   assert.equal(first.constraints.length, 0); assert.equal(first.nextDimensionParameterIndex, 1);
 });
+
+
+test('Block history snapshots retain detached restoration geometry and a stable value signature', () => {
+  const { editing } = service();
+  const snapshots = sandbox.window.BlockHistorySnapshot.create({ cloneDefinition: editing.clone,
+    serializeConstraint: constraint => ({ type: 'test', point: constraint.point.id }),
+    decorateSerializedConstraint: data => data });
+  const original = fixture(), first = snapshots.capture(original);
+  assert.notEqual(first.definition, original); assert.notEqual(first.definition.points[0], original.points[0]);
+  assert.equal(first.definition.constraints[0].point, first.definition.points[0]);
+  assert.equal(snapshots.capture(original).signature, first.signature);
+  original.revision += 1; original.points[0].temporaryCache = { ignored: true };
+  assert.equal(snapshots.capture(original).signature, first.signature);
+  original.points[0].x = 99;
+  assert.notEqual(snapshots.capture(original).signature, first.signature);
+  assert.equal(first.definition.points[0].x, 1);
+  first.definition.points[0].x = -1;
+  assert.equal(original.points[0].x, 99);
+});
+
+test('Block history signature preserves reference metadata and normalized allocation counters', () => {
+  const original = fixture(); original.parentDefinitionId = 'parent'; original.nextHatchIndex = 8;
+  original.constraints = [{ sketchId: 'S2', reference: true, referenceSketchId: 'S3' }, { unsupported: true }];
+  const snapshots = sandbox.window.BlockHistorySnapshot.create({ cloneDefinition: source => source,
+    serializeConstraint: source => source.unsupported ? null : { type: 'distance' },
+    decorateSerializedConstraint: data => data && ({ ...data, parameterName: 'd1', expression: '25' }) });
+  const data = JSON.parse(snapshots.capture(original).signature);
+  assert.equal(data.parentDefinitionId, 'parent'); assert.equal(data.nextHatchIndex, 8);
+  assert.equal(data.nextDimensionParameterIndex, 2); assert.equal(data.constraints.length, 1);
+  assert.deepEqual(data.constraints[0], { type: 'distance', parameterName: 'd1', expression: '25', sketchId: 'S2', reference: true, referenceSketchId: 'S3' });
+  assert.equal(data.lines[0].p1, 'P1'); assert.equal(data.splines[0].definitionMode, 'fit');
+});
