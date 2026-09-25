@@ -290,7 +290,6 @@
   let selectionRectSession = null;
   let blankDoubleClickCandidate = null;
   let suppressNextBlankDoubleClickEvent = false;
-  let filletFirstLine = null;
   let splineEditSession = null;
   let sketchProjectionSources = [];
   let geometryInstanceCommandSources = [];
@@ -500,6 +499,16 @@
     invalidateAnalysis: () => { constraintAnalysisState = null; },
   });
   const { captureValues: snapshotModelState, restoreValues: restoreModelState, captureGeometry: snapshotGeometryMutationState, restoreGeometry: restoreGeometryMutationState } = editingCheckpoint;
+  const filletCommand = window.FilletCommand.create({
+    getPending: () => pendingCommand, setPending: value => { pendingCommand = value; },
+    guardSketchProjectionShapeEdit, filletGeometryBasis, filletGeometryFromPointer, hideDimensionValueInput,
+    snapshotGeometryMutationState, restoreGeometryMutationState, createFillet, clearSelection, selection: canvasSelection,
+    stabilize: () => stabilizeActiveParameterNamespace(activeSketchId()), acceptError: CONSTRAINT_ACCEPT_ERROR,
+    invalidateAnalysis: () => { constraintAnalysisState = null; }, refreshConstraintAnalysis,
+    applicationText, setHint, updateUI, updateGeometrySelectionUI, draw, recordHistory,
+  });
+  const { start: startFilletRadiusPlacement, update: updateFilletRadiusPlacement,
+    submit: submitFilletRadiusPlacement, click: handleFilletClick } = filletCommand;
   const geometryInstancePersistence = window.GeometryInstancePersistence.create({ applicationText });
   const blockDefinitionPersistence = window.BlockDefinitionPersistence.create({ applicationText, serializedGeometryInstanceListError });
   const blockConnectionsPersistence = window.BlockConnectionsPersistence.create({
@@ -5084,7 +5093,7 @@
     clearTransientLineCompletionRollback();
     rectangleCommand.reset();
     resetSlotCommandState();
-    filletFirstLine = null;
+    filletCommand.reset();
     circularCommands.resetCircle();
     resetArcCommandState();
     splineDraft.reset();
@@ -5770,7 +5779,7 @@
     lineCommand.reset();
     rectangleCommand.reset();
     resetSlotCommandState();
-    filletFirstLine = null;
+    filletCommand.reset();
     pointerPreview = null;
     trimPreview = null;
     offsetSource = null;
@@ -5792,7 +5801,7 @@
     clearTransientLineCompletionRollback();
     rectangleCommand.reset();
     resetSlotCommandState();
-    filletFirstLine = null;
+    filletCommand.reset();
     circularCommands.resetCircle();
     resetArcCommandState();
     splineDraft.reset();
@@ -5814,7 +5823,7 @@
   }
 
   function hasActiveDrawOperation() {
-    return Boolean(lineCommand.startPoint || centerlineCommand.targets.length || centerlineCommand.firstPoint || rectangleCommand.startPoint || slotCommand.firstCenter || slotCommand.secondCenter || filletFirstLine || circularCommands.circleCenterPoint || circularCommands.arcCenterPoint || circularCommands.arcStartPoint || circularCommands.threePointArcStart || circularCommands.threePointArcEnd || splineDraft.points.length || offsetSource || offsetChainEntries.length);
+    return Boolean(lineCommand.startPoint || centerlineCommand.targets.length || centerlineCommand.firstPoint || rectangleCommand.startPoint || slotCommand.firstCenter || slotCommand.secondCenter || filletCommand.firstLine || circularCommands.circleCenterPoint || circularCommands.arcCenterPoint || circularCommands.arcStartPoint || circularCommands.threePointArcStart || circularCommands.threePointArcEnd || splineDraft.points.length || offsetSource || offsetChainEntries.length);
   }
 
 
@@ -5826,7 +5835,7 @@
     lineCommand.reset();
     rectangleCommand.reset();
     resetSlotCommandState();
-    filletFirstLine = null;
+    filletCommand.reset();
     circularCommands.resetCircle();
     resetArcCommandState();
     splineDraft.cancel();
@@ -9145,7 +9154,7 @@
     mode = "select";
     lineCommand.reset();
     rectangleCommand.reset();
-    filletFirstLine = null;
+    filletCommand.reset();
     circularCommands.resetCircle();
     resetArcCommandState();
     pointerPreview = null;
@@ -9522,7 +9531,7 @@
     mode = "select";
     lineCommand.reset();
     rectangleCommand.reset();
-    filletFirstLine = null;
+    filletCommand.reset();
     circularCommands.resetCircle();
     resetArcCommandState();
     pointerPreview = null;
@@ -9550,7 +9559,7 @@
     mode = "select";
     lineCommand.reset();
     rectangleCommand.reset();
-    filletFirstLine = null;
+    filletCommand.reset();
     circularCommands.resetCircle();
     resetArcCommandState();
     pointerPreview = null;
@@ -9912,7 +9921,7 @@
     selectionRectSession = null;
     lineCommand.reset();
     rectangleCommand.reset();
-    filletFirstLine = null;
+    filletCommand.reset();
     circularCommands.resetCircle();
     resetArcCommandState();
     pointerPreview = null;
@@ -14227,103 +14236,6 @@
     return true;
   }
 
-  function startFilletRadiusPlacement(line1, line2, pointer = null) {
-    if (!guardSketchProjectionShapeEdit([line1, line2], { action: applicationText("R面取り", "Fillet") })) {
-      draw();
-      return false;
-    }
-    const basis = filletGeometryBasis(line1, line2);
-    if (!basis.ok) {
-      setHint(basis.reason, "error");
-      draw();
-      return false;
-    }
-    pendingCommand = {
-      type: "fillet-radius-place",
-      line1,
-      line2,
-      pointer: pointer ? { x: pointer.x, y: pointer.y } : null,
-      preview: filletGeometryFromPointer(line1, line2, pointer),
-    };
-    hideDimensionValueInput();
-    setHint("マウスを動かしてR寸法を決め、クリックで確定してください。Escでキャンセルします");
-    draw();
-    return true;
-  }
-
-  function updateFilletRadiusPlacement(pointer) {
-    if (pendingCommand?.type !== "fillet-radius-place") return false;
-    pendingCommand.pointer = { x: pointer.x, y: pointer.y };
-    pendingCommand.preview = filletGeometryFromPointer(pendingCommand.line1, pendingCommand.line2, pointer);
-    return true;
-  }
-
-  function submitFilletRadiusPlacement(pointer) {
-    if (pendingCommand?.type !== "fillet-radius-place") return false;
-    updateFilletRadiusPlacement(pointer);
-    const preview = pendingCommand.preview;
-    if (!preview.ok) {
-      setHint(preview.reason, "error");
-      draw();
-      return true;
-    }
-    const { line1, line2 } = pendingCommand;
-    pendingCommand = null;
-    hideDimensionValueInput();
-    const snapshot = snapshotGeometryMutationState();
-    const result = createFillet(line1, line2, preview.radius);
-    if (!result.ok) {
-      restoreGeometryMutationState(snapshot);
-      setHint(result.reason, "error");
-      updateUI();
-      draw();
-      return true;
-    }
-    clearSelection();
-    filletFirstLine = null;
-    const stabilized = stabilizeActiveParameterNamespace(activeSketchId());
-    if (!stabilized.success || stabilized.dependent?.success === false || stabilized.result.errorNorm > CONSTRAINT_ACCEPT_ERROR) {
-      restoreGeometryMutationState(snapshot);
-      setHint(applicationText("拘束を維持できないためR面取りを戻しました。拘束状態を確認してください", "The fillet was restored because its constraints could not be maintained. Check the constraint status."), "error");
-      updateUI();
-      draw();
-      return true;
-    }
-    constraintAnalysisState = null;
-    refreshConstraintAnalysis();
-    setHint(applicationText("R面取りを追加しました", "Fillet added"));
-    updateUI({ refreshAnalysis: false });
-    draw();
-    recordHistory("R面取り追加");
-    return true;
-  }
-
-  function handleFilletClick(line, pointer) {
-    if (!line) {
-      setHint("R面取りする線をクリックしてください", "error");
-      return;
-    }
-    if (!filletFirstLine) {
-      filletFirstLine = line;
-      canvasSelection.set("lines", [line]);
-      canvasSelection.set("points", []);
-      canvasSelection.set("circles", []);
-      canvasSelection.set("arcs", []);
-      setHint("接続する2本目の線をクリックしてください");
-      updateGeometrySelectionUI();
-      draw();
-      return;
-    }
-    if (filletFirstLine === line) {
-      setHint("別の接続線をクリックしてください", "error");
-      return;
-    }
-    if (startFilletRadiusPlacement(filletFirstLine, line, pointer)) filletFirstLine = null;
-  }
-
-
-
-
   const CANVAS_CONTEXT_KIND_PRIORITY = Object.freeze({
     point: 0,
     "arc-endpoint": 1,
@@ -16905,7 +16817,7 @@
     mode = "select";
     lineCommand.reset();
     rectangleCommand.reset();
-    filletFirstLine = null;
+    filletCommand.reset();
     circularCommands.resetCircle();
     resetArcCommandState();
     pointerPreview = null;
@@ -16920,7 +16832,7 @@
     mode = "point";
     lineCommand.reset();
     rectangleCommand.reset();
-    filletFirstLine = null;
+    filletCommand.reset();
     circularCommands.resetCircle();
     resetArcCommandState();
     pointerPreview = null;
@@ -16935,7 +16847,7 @@
     mode = "line";
     lineCommand.reset();
     rectangleCommand.reset();
-    filletFirstLine = null;
+    filletCommand.reset();
     circularCommands.resetCircle();
     resetArcCommandState();
     pointerPreview = null;
@@ -16977,7 +16889,7 @@
     constructionLineMode = !constructionLineMode;
     lineCommand.reset();
     rectangleCommand.reset();
-    filletFirstLine = null;
+    filletCommand.reset();
     circularCommands.resetCircle();
     resetArcCommandState();
     pointerPreview = null;
@@ -16992,7 +16904,7 @@
     mode = "rectangle";
     lineCommand.reset();
     rectangleCommand.reset();
-    filletFirstLine = null;
+    filletCommand.reset();
     circularCommands.resetCircle();
     resetArcCommandState();
     pointerPreview = null;
@@ -17008,7 +16920,7 @@
     lineCommand.reset();
     rectangleCommand.reset();
     resetSlotCommandState();
-    filletFirstLine = null;
+    filletCommand.reset();
     circularCommands.resetCircle();
     circularCommands.resetCenterArc();
     pointerPreview = null;
@@ -17021,13 +16933,13 @@
   document.getElementById("toolFillet")?.addEventListener("click", () => {
     cancelConstraintTargetCommand("");
     if (canvasSelection.lines.length === 2) {
-      if (startFilletRadiusPlacement(canvasSelection.lines[0], canvasSelection.lines[1], lastPointerWorld)) filletFirstLine = null;
+      if (startFilletRadiusPlacement(canvasSelection.lines[0], canvasSelection.lines[1], lastPointerWorld)) filletCommand.reset();
       return;
     }
     mode = "fillet";
     lineCommand.reset();
     rectangleCommand.reset();
-    filletFirstLine = null;
+    filletCommand.reset();
     circularCommands.resetCircle();
     resetArcCommandState();
     pointerPreview = null;
@@ -17042,7 +16954,7 @@
     mode = "trim";
     lineCommand.reset();
     rectangleCommand.reset();
-    filletFirstLine = null;
+    filletCommand.reset();
     circularCommands.resetCircle();
     resetArcCommandState();
     pointerPreview = null;
@@ -17071,7 +16983,7 @@
     mode = "offset";
     lineCommand.reset();
     rectangleCommand.reset();
-    filletFirstLine = null;
+    filletCommand.reset();
     circularCommands.resetCircle();
     resetArcCommandState();
     pointerPreview = null;
@@ -17102,7 +17014,7 @@
     mode = "circle";
     lineCommand.reset();
     rectangleCommand.reset();
-    filletFirstLine = null;
+    filletCommand.reset();
     circularCommands.resetCircle();
     resetArcCommandState();
     pointerPreview = null;
@@ -17117,7 +17029,7 @@
     mode = "arc";
     lineCommand.reset();
     rectangleCommand.reset();
-    filletFirstLine = null;
+    filletCommand.reset();
     circularCommands.resetCircle();
     resetArcCommandState();
     pointerPreview = null;
@@ -17132,7 +17044,7 @@
     mode = "three-point-arc";
     lineCommand.reset();
     rectangleCommand.reset();
-    filletFirstLine = null;
+    filletCommand.reset();
     circularCommands.resetCircle();
     resetArcCommandState();
     pointerPreview = null;
