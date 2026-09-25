@@ -189,7 +189,7 @@
   const { setError: setParameterDialogError } = parameterDialogView;
   const parameterDialogController = window.ParameterDialogController.create({
     document, window, draft: parameterDraft, view: parameterDialogView,
-    scopes: parameterScopeOptions, scopeLocked: () => Boolean(blockEditSession),
+    scopes: parameterScopeOptions, scopeLocked: () => Boolean(blockEditor.current),
     apply: applyParameterDialogDraft, applicationText, language: () => applicationSettings.language,
     refreshExpressionInputHighlights, pickDimension: pickParameterDialogDimension,
   });
@@ -317,7 +317,20 @@
   let patternInstanceSeq = 1;
   let freeInstanceSeq = 1;
   let blockElementSeq = 1;
-  let blockEditSession = null;
+  const blockEditor = window.BlockEditorSession.create({
+    currentScope: workspace.current, documentModel, hatchSequence: () => hatchSeq,
+    normalizedSketchCopy, activeSketchId, blockProjectionBundles, geometryElementKey,
+    captureHost: () => ({ ...workspace.capture(), viewport: viewport.snapshot() }),
+    restoreHostState: (original) => {
+      activateEditingScope(workspace.restore(original));
+      viewport.update(original.viewport);
+    },
+    activateScope: activateEditingScope, reserveScopeSequences: reserveBlockEditorSequences,
+    cloneBlockDefinition, createHistory: createBlockEditHistory, mergeBlockDefinitionDraft,
+    rebuildStoredBlockDefinitionConstraints, invalidateBlockProjectionCache,
+  });
+  const { sync: syncBlockEditorDraft, live: liveBlockEditorDefinition, chain: blockEditorSessionChain,
+    scopeId: currentBlockDefinitionScopeId } = blockEditor;
   let hatchResolutionCache = new WeakMap();
   let hatchFaceCache = new Map();
 
@@ -619,9 +632,9 @@
   });
   const parameterApplication = window.ParameterApplication.create({
     namespace: parameterNamespace, currentScope: workspace.current, acceptError: CONSTRAINT_ACCEPT_ERROR, applicationText,
-    capture: () => ({ document: blockEditSession ? null : historySnapshot(), local: blockEditSession ? snapshotModelState() : null }),
+    capture: () => ({ document: blockEditor.current ? null : historySnapshot(), local: blockEditor.current ? snapshotModelState() : null }),
     restore: checkpoint => {
-      if (blockEditSession && checkpoint.local) restoreModelState(checkpoint.local);
+      if (blockEditor.current && checkpoint.local) restoreModelState(checkpoint.local);
       else if (checkpoint.document) loadModelData(JSON.parse(checkpoint.document), { documentNameFallback: documentModel.documentName });
     },
     stabilize: namespace => namespace === model
@@ -810,7 +823,7 @@
     const status = document.getElementById("documentSaveStatus");
     if (status) {
       const label = fileSession.savePending ? applicationText("保存中…", "Saving…")
-        : blockEditSession ? applicationText("ブロック編集中", "Editing block")
+        : blockEditor.current ? applicationText("ブロック編集中", "Editing block")
         : dirty ? applicationText("未保存の変更", "Unsaved changes")
         : fileSession.checkpointKind === "new" ? applicationText("新規ドキュメント", "New document")
         : fileSession.checkpointKind === "download" ? applicationText("ダウンロード開始済み", "Download started")
@@ -824,7 +837,7 @@
 
   function hasUnsavedDocumentChanges() {
     return fileSession.hasUnsavedChanges({
-      snapshot: documentHistory.currentSnapshot, documentName: effectiveDocumentName(), editingBlock: Boolean(blockEditSession),
+      snapshot: documentHistory.currentSnapshot, documentName: effectiveDocumentName(), editingBlock: Boolean(blockEditor.current),
     });
   }
 
@@ -834,7 +847,7 @@
   }
 
   async function confirmDocumentReplacement() {
-    if (!blockEditSession && fileSession.matchesCheckpoint(serializeModel())) return true;
+    if (!blockEditor.current && fileSession.matchesCheckpoint(serializeModel())) return true;
     const choice = await choiceDialog.show({
       title: applicationText("未保存の変更があります", "Unsaved changes"),
       message: applicationText("別のファイルを開く前に、現在の図面を保存しますか？", "Save the current drawing before opening another file?"),
@@ -847,7 +860,7 @@
       closeLabel: applicationText("閉じる", "Close"),
     });
     if (choice === "save") return await saveJot2DFile({ replacingDocument: true })
-      && !blockEditSession && fileSession.matchesCheckpoint(serializeModel());
+      && !blockEditor.current && fileSession.matchesCheckpoint(serializeModel());
     return choice === "discard";
   }
 
@@ -885,7 +898,7 @@
       const legacyAppearance = normalizeAppearance(root.appearance);
       const legacyConstructionAppearance = normalizeConstructionAppearance(root.constructionAppearance);
       const legacyDimensionAppearance = normalizeDimensionAppearance(root.dimensionAppearance);
-      if (blockEditSession) {
+      if (blockEditor.current) {
         for (const sketch of model.sketches.filter((item) => !isRootSketch(item))) {
           sketch.appearance = { ...legacyAppearance, ...normalizeAppearance(sketch.appearance) };
           sketch.constructionAppearance = { ...legacyConstructionAppearance, ...normalizeConstructionAppearance(sketch.constructionAppearance) };
@@ -1029,7 +1042,7 @@
         });
     }
     const instanceIds = new Set();
-    const activeContainerDefinitionId = blockEditSession?.draft?.id || null;
+    const activeContainerDefinitionId = blockEditor.current?.draft?.id || null;
     model.blockInstances = model.blockInstances.filter((instance) => {
       if (!instance || !definitionIds.has(String(instance.definitionId))) return false;
       const instanceDefinition = documentModel.blockDefinitions.find((definition) => definition.id === String(instance.definitionId));
@@ -3784,43 +3797,6 @@
     return rollbackEntries;
   }
 
-  function syncBlockEditorDraft(session = blockEditSession) {
-    if (!session) return null;
-    session.draft.points = model.points;
-    session.draft.lines = model.lines;
-    session.draft.circles = model.circles;
-    session.draft.arcs = model.arcs;
-    session.draft.splines = model.splines;
-    session.draft.annotations = model.annotations;
-    session.draft.hatches = model.hatches;
-    session.draft.referenceImages = model.referenceImages;
-    session.draft.nextHatchIndex = Math.max(hatchSeq, Number(model.nextHatchIndex) || 1);
-    session.draft.blockInstances = model.blockInstances;
-    session.draft.geometryInstances = model.geometryInstances;
-    session.draft.constraints = model.constraints;
-    session.draft.parameters = model.parameters;
-    session.draft.nextDimensionParameterIndex = model.nextDimensionParameterIndex;
-    session.draft.sketches = model.sketches.map(normalizedSketchCopy);
-    session.draft.activeSketchId = activeSketchId();
-    return session.draft;
-  }
-
-  function blockEditorSessionChain() {
-    const sessions = [];
-    for (let session = blockEditSession; session; session = session.parentSession) sessions.push(session);
-    return sessions;
-  }
-
-  function blockDefinitionIsTransientInEditor(definitionId) {
-    return blockEditorSessionChain().some((session) =>
-      session.transientDefinitionIds?.has(definitionId) || session.definitionRollbackEntries?.has(definitionId),
-    );
-  }
-
-  function currentBlockDefinitionScopeId() {
-    return blockEditSession?.draft?.id || null;
-  }
-
   function blockDefinitionsInCurrentScope() {
     const parentDefinitionId = currentBlockDefinitionScopeId();
     return documentModel.blockDefinitions.filter((definition) => (definition.parentDefinitionId || null) === parentDefinitionId);
@@ -3894,7 +3870,7 @@
   }
 
   function nestedBlockPlacementError(definitionId) {
-    if (!blockEditSession) return null;
+    if (!blockEditor.current) return null;
     for (const session of blockEditorSessionChain()) {
       if (blockDefinitionDependsOn(definitionId, session.draft.id)) {
         return `${session.draft.name} を循環参照するため、このブロックは配置できません`;
@@ -3935,37 +3911,17 @@
 
 
 
-  function openBlockDefinitionEditor(draft, options = {}) {
-    if (!draft) return;
-    const parentSession = blockEditSession;
-    if (parentSession) syncBlockEditorDraft(parentSession);
-    const originalProjectionItems = blockProjectionBundles().flatMap((bundle) => [...bundle.points, ...bundle.lines, ...bundle.circles, ...bundle.arcs, ...(bundle.splines || [])]);
-    const original = options.originalHost || { ...workspace.capture(), viewport: viewport.snapshot() };
-    const sourceDefinition = options.sourceDefinition || null;
-    const sourceDefinitionSnapshot = sourceDefinition ? cloneBlockDefinition(sourceDefinition) : null;
-    const originalElementIds = new Set(sourceDefinition ? [...sourceDefinition.points, ...sourceDefinition.lines, ...sourceDefinition.circles, ...sourceDefinition.arcs, ...(sourceDefinition.splines || [])].map((item) => item.id) : []);
-    blockEditSession = {
-      draft,
-      parentSession,
-      sourceDefinition,
-      sourceDefinitionSnapshot,
-      original,
-      originalElementIds,
-      isNew: Boolean(options.isNew),
-      creationSelection: options.creationSelection || null,
-      replacementCenter: options.replacementCenter || null,
-      transientDefinitionIds: new Set(options.initialTransientDefinitionIds || []),
-      definitionRollbackEntries: new Map(options.definitionRollbackEntries || []),
-      originalProjectionIds: new Set(originalProjectionItems.map((item) => item.id)),
-      originalProjectionKeys: new Set(originalProjectionItems.map(geometryElementKey)),
-      history: createBlockEditHistory(),
-    };
-    activateEditingScope(draft);
+  function reserveBlockEditorSequences(draft) {
     reserveGeometryElementSequences(draft);
     sketchSeq = Math.max(sketchSeq, nextSeq(draft.sketches || [], "S"));
     annotationSeq = Math.max(annotationSeq, nextSeq(draft.annotations || [], "AN"));
     hatchSeq = Math.max(hatchSeq, model.nextHatchIndex, nextSeq(draft.hatches || [], "H"));
     referenceImageSeq = Math.max(referenceImageSeq, nextSeq(draft.referenceImages || [], "IMG"));
+  }
+
+  function openBlockDefinitionEditor(draft, options = {}) {
+    if (!draft) return;
+    blockEditor.open(draft, options);
     resetBlockEditorHistory();
     clearSelection();
     mode = "select";
@@ -3977,7 +3933,7 @@
       viewport.update({ x: rect.width / 2 });
       viewport.update({ y: rect.height / 2 });
     }
-    const externalConstraintCount = blockEditSession.creationSelection?.externalConstraints?.length || 0;
+    const externalConstraintCount = blockEditor.current.creationSelection?.externalConstraints?.length || 0;
     setHint(
       externalConstraintCount > 0
         ? `ブロックエディタ: ${draft.name} / 選択外につながる拘束${externalConstraintCount}件は完了時に解除されます`
@@ -4175,58 +4131,19 @@
   }
 
   function restoreBlockEditorHost(session) {
-    const { original } = session;
-    activateEditingScope(workspace.restore(original));
-    viewport.update(original.viewport);
-    blockEditSession = session.parentSession || null;
-    document.body.classList.toggle("block-editing", Boolean(blockEditSession));
-  }
-
-  function propagateBlockDefinitionRollbacks(targetSession, sourceSession) {
-    if (!targetSession || !sourceSession?.definitionRollbackEntries) return;
-    if (!targetSession.definitionRollbackEntries) targetSession.definitionRollbackEntries = new Map();
-    for (const [definitionId, entry] of sourceSession.definitionRollbackEntries) {
-      if (!targetSession.definitionRollbackEntries.has(definitionId)) targetSession.definitionRollbackEntries.set(definitionId, entry);
-    }
-  }
-
-  function restoreBlockDefinitionRollbacks(session) {
-    const entries = [...(session?.definitionRollbackEntries?.values() || [])].sort((a, b) => a.index - b.index);
-    for (const entry of entries) {
-      const existingIndex = documentModel.blockDefinitions.findIndex((definition) => definition.id === entry.definition.id);
-      if (existingIndex >= 0) documentModel.blockDefinitions[existingIndex] = entry.definition;
-      else documentModel.blockDefinitions.splice(Math.min(entry.index, documentModel.blockDefinitions.length), 0, entry.definition);
-    }
-    if (entries.length > 0) {
-      rebuildStoredBlockDefinitionConstraints();
-      invalidateBlockProjectionCache();
-    }
+    blockEditor.restoreHost(session);
+    document.body.classList.toggle("block-editing", Boolean(blockEditor.current));
   }
 
   const choiceDialog = window.ChoiceDialog.create(document.getElementById("choiceDialog"));
   let blockCompletionChoicePending = false;
 
   function completeBlockDefinitionEdit(options = {}) {
-    if (!blockEditSession) return;
+    if (!blockEditor.current) return;
     if (blockCompletionChoicePending) return;
-    const session = blockEditSession;
+    const session = blockEditor.current;
     const { draft, sourceDefinition, originalElementIds, creationSelection } = session;
-    draft.points = model.points;
-    draft.lines = model.lines;
-    draft.circles = model.circles;
-    draft.arcs = model.arcs;
-    draft.splines = model.splines;
-    draft.annotations = model.annotations;
-    draft.hatches = model.hatches;
-    draft.referenceImages = model.referenceImages;
-    draft.nextHatchIndex = Math.max(hatchSeq, Number(model.nextHatchIndex) || 1);
-    draft.blockInstances = model.blockInstances;
-    draft.geometryInstances = model.geometryInstances;
-    draft.constraints = model.constraints;
-    draft.parameters = model.parameters;
-    draft.nextDimensionParameterIndex = model.nextDimensionParameterIndex;
-    draft.sketches = model.sketches.map(normalizedSketchCopy);
-    draft.activeSketchId = activeSketchId();
+    syncBlockEditorDraft(session);
     const validation = validateBlockDraft(draft);
     if (!validation.success) {
       setHint(validation.reason, "error");
@@ -4247,7 +4164,7 @@
         closeLabel: applicationText("閉じる", "Close"),
       }).then((rotationLocked) => {
         blockCompletionChoicePending = false;
-        if (rotationLocked !== null && blockEditSession === session) completeBlockDefinitionEdit({ rotationLocked });
+        if (rotationLocked !== null && blockEditor.current === session) completeBlockDefinitionEdit({ rotationLocked });
       }, () => {
         blockCompletionChoicePending = false;
         setHint(applicationText("別の確認ダイアログを閉じてから、もう一度完了してください", "Close the other confirmation dialog, then try completing the block again."), "error");
@@ -4298,14 +4215,7 @@
         model.blockInstances = model.blockInstances.filter((instance) => !(creationSelection.blockInstances || []).includes(instance));
       }
     }
-    if (blockEditSession) {
-      propagateBlockDefinitionRollbacks(blockEditSession, session);
-      const definitionIdsToKeepTransactional = new Set(session.transientDefinitionIds);
-      if (!sourceDefinition) definitionIdsToKeepTransactional.add(definition.id);
-      if (!sourceDefinition || blockDefinitionIsTransientInEditor(sourceDefinition.id)) {
-        for (const definitionId of definitionIdsToKeepTransactional) blockEditSession.transientDefinitionIds.add(definitionId);
-      }
-    }
+    blockEditor.adoptChildChanges(session, definition.id, Boolean(sourceDefinition));
     const currentElementIds = new Set([...definition.points, ...definition.lines, ...definition.circles, ...definition.arcs, ...(definition.splines || [])].map((item) => item.id));
     const removedLocalIds = new Set([...originalElementIds].filter((id) => !currentElementIds.has(id)));
     if (removedLocalIds.size > 0) {
@@ -4355,19 +4265,10 @@
   }
 
   function cancelBlockDefinitionEdit() {
-    if (!blockEditSession) return;
-    const session = blockEditSession;
+    if (!blockEditor.current) return;
+    const session = blockEditor.current;
     restoreBlockEditorHost(session);
-    if (session.transientDefinitionIds.size > 0) {
-      documentModel.blockDefinitions = documentModel.blockDefinitions.filter((definition) => !session.transientDefinitionIds.has(definition.id));
-    }
-    restoreBlockDefinitionRollbacks(session);
-    if (session.sourceDefinition && session.sourceDefinitionSnapshot) {
-      const revision = session.sourceDefinitionSnapshot.revision;
-      mergeBlockDefinitionDraft(session.sourceDefinition, session.sourceDefinitionSnapshot);
-      session.sourceDefinition.revision = revision;
-    }
-    invalidateBlockProjectionCache();
+    blockEditor.rollback(session);
     clearSelection();
     mode = "select";
     setHint(session.sourceDefinition ? "ブロック定義編集をキャンセルしました" : "ブロック作成をキャンセルしました");
@@ -4429,9 +4330,7 @@
       }
     }
     documentModel.blockDefinitions = documentModel.blockDefinitions.filter((item) => !removedDefinitionIds.has(item.id));
-    for (const session of blockEditorSessionChain()) {
-      for (const removedId of removedDefinitionIds) session.transientDefinitionIds?.delete(removedId);
-    }
+    blockEditor.forgetDefinitions(removedDefinitionIds);
     invalidateBlockProjectionCache();
     updateBlockUI();
     draw();
@@ -4545,7 +4444,7 @@
     freeInstanceSeq = 1;
     blockElementSeq = 1;
     blockPlacementCommand.reset();
-    blockEditSession = null;
+    blockEditor.reset();
     window.DocumentState.resetDefaults(documentModel);
     hatchPreview = null;
     hatchRepairTarget = null;
@@ -4646,29 +4545,6 @@
     return JSON.stringify(data);
   }
 
-  function liveBlockEditorDefinition() {
-    if (!blockEditSession) return null;
-    return {
-      ...blockEditSession.draft,
-      points: model.points,
-      lines: model.lines,
-      circles: model.circles,
-      arcs: model.arcs,
-      splines: model.splines,
-      annotations: model.annotations,
-      hatches: model.hatches,
-      referenceImages: model.referenceImages,
-      nextHatchIndex: model.nextHatchIndex,
-      blockInstances: model.blockInstances,
-      geometryInstances: model.geometryInstances,
-      constraints: model.constraints,
-      parameters: model.parameters,
-      nextDimensionParameterIndex: model.nextDimensionParameterIndex,
-      sketches: model.sketches,
-      activeSketchId: activeSketchId(),
-    };
-  }
-
   function blockEditorHistoryData(definition) {
     return {
       id: definition.id,
@@ -4720,8 +4596,8 @@
   }
 
   function resetBlockEditorHistory() {
-    if (!blockEditSession) return;
-    blockEditSession.history.reset();
+    if (!blockEditor.current) return;
+    blockEditor.current.history.reset();
     updateHistoryButtons();
   }
 
@@ -4738,7 +4614,7 @@
   }
 
   function activeEditHistory() {
-    return blockEditSession?.history || documentHistory;
+    return blockEditor.current?.history || documentHistory;
   }
 
   function updateHistoryButtons() {
@@ -4787,17 +4663,11 @@
   }
 
   function restoreBlockEditorHistorySnapshot(snapshot, label) {
-    if (!blockEditSession || !snapshot?.definition) return false;
+    if (!blockEditor.current || !snapshot?.definition) return false;
     historyRestoring = true;
     try {
       const restored = cloneBlockDefinition(snapshot.definition);
-      blockEditSession.draft = restored;
-      activateEditingScope(restored);
-      reserveGeometryElementSequences(restored);
-      sketchSeq = Math.max(sketchSeq, nextSeq(restored.sketches || [], "S"));
-      annotationSeq = Math.max(annotationSeq, nextSeq(restored.annotations || [], "AN"));
-      hatchSeq = Math.max(hatchSeq, model.nextHatchIndex, nextSeq(restored.hatches || [], "H"));
-      referenceImageSeq = Math.max(referenceImageSeq, nextSeq(restored.referenceImages || [], "IMG"));
+      blockEditor.replaceDraft(restored);
       invalidateBlockProjectionCache();
       clearInteractionForSketchChange();
       solveAndRefresh(label);
@@ -4892,7 +4762,7 @@
 
   async function saveJot2DFile({ saveAs = false, replacingDocument = false } = {}) {
     if (!fileSession.canSave({ replacingDocument })) return false;
-    if (blockEditSession) {
+    if (blockEditor.current) {
       setHint("ブロック定義編集を終了してから保存してください", "error");
       return false;
     }
@@ -4908,7 +4778,7 @@
           excludeAcceptAllOption: true,
         });
       }
-      if (blockEditSession) {
+      if (blockEditor.current) {
         setHint("ブロック定義編集を終了してから保存してください", "error");
         return false;
       }
@@ -4947,7 +4817,7 @@
 
   function importFileData(file, { expectedContentSignature = null } = {}) {
     if (!file) return Promise.resolve(false);
-    if (blockEditSession) {
+    if (blockEditor.current) {
       setHint("ブロック定義編集を終了してから読み込んでください", "error");
       return Promise.resolve(false);
     }
@@ -4956,7 +4826,7 @@
       const reader = new FileReader();
       reader.addEventListener("load", () => {
         try {
-          if (blockEditSession) {
+          if (blockEditor.current) {
             setHint("ブロック定義編集を終了してから読み込んでください", "error");
             resolve(false);
             return;
@@ -5007,7 +4877,7 @@
 
   async function openJot2DFile() {
     if (fileSession.busy) return false;
-    if (blockEditSession) {
+    if (blockEditor.current) {
       setHint("ブロック定義編集を終了してから読み込んでください", "error");
       return false;
     }
@@ -9243,7 +9113,7 @@
   });
   const sketchTreeView = window.SketchTreeView.create({
     document, sketchOverlay, sketchOverlayResizeHandle,
-    getScopeKey: () => blockEditSession?.draft?.id ? `block:${blockEditSession.draft.id}` : "document",
+    getScopeKey: () => blockEditor.current?.draft?.id ? `block:${blockEditor.current.draft.id}` : "document",
     currentScope: () => model, ensureSketchState, isRootSketch, activeSketchId, applicationText, escapeHtml,
     objects: sketchTreeObjects,
     sketchHasSolveError, referenceConstraintErrorCountForSketch, constraintDuplicateCountForSketch,
@@ -9376,17 +9246,13 @@
 
   const blockView = window.BlockView.create({
     document, escapeHtml,
-    readEditing: () => blockEditSession ? { name: blockEditSession.draft.name } : null,
+    readEditing: () => blockEditor.current ? { name: blockEditor.current.draft.name } : null,
     blockDefinitionsInCurrentScope, blockDefinitionUsageCount,
     selectedDefinitionIds: () => canvasSelection.blockInstances.map((instance) => instance.definitionId),
     startBlockPlacement, enterBlockDefinitionEdit, renameBlockDefinition, deleteBlockDefinition,
     completeBlockDefinitionEdit, cancelBlockDefinitionEdit,
-    changeName: (value) => {
-      if (!blockEditSession) return false;
-      blockEditSession.draft.name = value || blockEditSession.draft.name;
-      return true;
-    },
-    commitName: () => { if (blockEditSession) recordHistory("ブロック名変更"); },
+    changeName: blockEditor.rename,
+    commitName: () => { if (blockEditor.current) recordHistory("ブロック名変更"); },
     refresh: updateBlockUI, localizeApplicationUI,
   });
 
@@ -13860,7 +13726,7 @@
     draw();
   });
   function parameterScopeOptions() {
-    if (blockEditSession) return [{ key: `block:${blockEditSession.draft.id}`, label: `${applicationText("ブロック", "Block")}: ${blockEditSession.draft.name}`, namespace: model }];
+    if (blockEditor.current) return [{ key: `block:${blockEditor.current.draft.id}`, label: `${applicationText("ブロック", "Block")}: ${blockEditor.current.draft.name}`, namespace: model }];
     return [
       { key: "document", label: "Document", namespace: model },
       ...documentModel.blockDefinitions.map((definition) => ({ key: `block:${definition.id}`, label: `${applicationText("ブロック", "Block")}: ${definition.name}`, namespace: definition })),
@@ -15272,7 +15138,7 @@
       },
       completeSketchProjectionBlockEditorForTest() {
         completeBlockDefinitionEdit({ rotationLocked: true });
-        return { completed: !blockEditSession, serialized: structuredClone(serializeModel()) };
+        return { completed: !blockEditor.current, serialized: structuredClone(serializeModel()) };
       },
       resetForBlockProjectionSketchProjectionTest() {
         resetModelState();
@@ -15491,7 +15357,7 @@
         return {
           selectedIds: canvasSelection.referenceImages.map((item) => item.id),
           images: model.referenceImages.map(serializeReferenceImage),
-          liveBlockImages: blockEditSession ? (liveBlockEditorDefinition().referenceImages || []).map(serializeReferenceImage) : [],
+          liveBlockImages: blockEditor.current ? (liveBlockEditorDefinition().referenceImages || []).map(serializeReferenceImage) : [],
           calibrationPointCount: referenceImageCalibrationSession?.localPoints?.length || 0,
           dragging: Boolean(referenceImageDragSession),
           history: this.historyState(),
@@ -16946,7 +16812,7 @@
         return {
           undoCount: history.undoCount,
           redoCount: history.redoCount,
-          blockEditing: Boolean(blockEditSession),
+          blockEditing: Boolean(blockEditor.current),
           undoDisabled: document.getElementById("undoBtn")?.disabled,
           redoDisabled: document.getElementById("redoBtn")?.disabled,
           constructionLineMode,
@@ -18432,11 +18298,11 @@
         if (!definition || model.blockInstances.length === 0) return null;
         const before = blockProjectionBundle(model.blockInstances[0]).lines[0].length();
         enterBlockDefinitionEdit(definition.id);
-        const editableLine = blockEditSession.draft.lines[0];
+        const editableLine = blockEditor.current.draft.lines[0];
         editableLine.p2.x += 40;
         completeBlockDefinitionEdit({ rotationLocked: true });
         const lengths = model.blockInstances.map((instance) => blockProjectionBundle(instance).lines[0].length());
-        return { before, lengths, revision: definition.revision, editing: Boolean(blockEditSession) };
+        return { before, lengths, revision: definition.revision, editing: Boolean(blockEditor.current) };
       },
       blockReadOnlyDimensionCase() {
         const instance = model.blockInstances[0];
@@ -18522,14 +18388,14 @@
       },
       blockEditorState() {
         return {
-          editing: Boolean(blockEditSession),
+          editing: Boolean(blockEditor.current),
           depth: blockEditorSessionChain().length,
-          isNew: Boolean(blockEditSession?.isNew),
-          name: blockEditSession?.draft?.name || null,
+          isNew: Boolean(blockEditor.current?.isNew),
+          name: blockEditor.current?.draft?.name || null,
           sketches: model.sketches.map((sketch) => ({ id: sketch.id, name: sketch.name, parentSketchId: sketch.parentSketchId, kind: sketch.kind })),
           activeSketchId: model.activeSketchId,
-          hostLineCount: blockEditSession?.original?.values.lines?.length || 0,
-          hostBlockInstanceCount: blockEditSession?.original?.values.blockInstances?.length || 0,
+          hostLineCount: blockEditor.current?.original?.values.lines?.length || 0,
+          hostBlockInstanceCount: blockEditor.current?.original?.values.blockInstances?.length || 0,
           editorLineCount: model.lines.length,
           editorBlockInstances: model.blockInstances.map((instance) => ({ id: instance.id, definitionId: instance.definitionId, x: instance.x, y: instance.y, rotation: instance.rotation, rotationLocked: Boolean(instance.rotationLocked) })),
         };
@@ -18554,7 +18420,7 @@
         return { success: result.success, errorNorm: result.errorNorm, line: serializeConstraint(constraint).line };
       },
       addBlockEditorChildGeometry() {
-        if (!blockEditSession) return null;
+        if (!blockEditor.current) return null;
         createSketch("child");
         const sketchId = activeSketchId();
         addLine(addPoint(-20, 50, false, "endpoint"), addPoint(20, 50, false, "endpoint"));
@@ -18565,11 +18431,11 @@
       },
       cancelBlockEditor() {
         cancelBlockDefinitionEdit();
-        return { editing: Boolean(blockEditSession), definitions: documentModel.blockDefinitions.length, instances: model.blockInstances.length, lines: model.lines.length };
+        return { editing: Boolean(blockEditor.current), definitions: documentModel.blockDefinitions.length, instances: model.blockInstances.length, lines: model.lines.length };
       },
       completeBlockEditor() {
         completeBlockDefinitionEdit({ rotationLocked: true });
-        return { editing: Boolean(blockEditSession), definitions: documentModel.blockDefinitions.length, instances: model.blockInstances.length };
+        return { editing: Boolean(blockEditor.current), definitions: documentModel.blockDefinitions.length, instances: model.blockInstances.length };
       },
       setFirstBlockInstanceSketches(ids) {
         const instance = model.blockInstances[0];
@@ -18664,7 +18530,7 @@
   resetHistory("起動");
   markDocumentFileCheckpoint("new");
   window.addEventListener("beforeunload", (event) => {
-    const dirty = blockEditSession || fileSession.savePending
+    const dirty = blockEditor.current || fileSession.savePending
       || !fileSession.matchesCheckpoint(serializeModel());
     if (!dirty) return;
     event.preventDefault();
