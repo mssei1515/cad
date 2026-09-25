@@ -56,7 +56,8 @@
 
 - `be80e08`: Block一覧と編集パネルの表示・イベント接続。
 - `6c08102`: 親子Blockの編集sessionと復元情報の所有者。
-- その次の作業はBlockDefinitionEditingへの複製・座標移動・定義反映の分離。最新の確定状況と検証結果は下の「再開地点」を参照する。
+- `a70e9d0`: BlockDefinitionEditingへの複製・座標移動・定義反映の分離。
+- BlockCompletionCommandへの検証・確認待ち・確定処理の分離。最新の確定状況と検証結果は下の「再開地点」を参照する。
 
 残る主要な領域は以下。順番や個数は固定しない。
 
@@ -99,7 +100,7 @@
 
 ## 8. 再開地点（2026-09-25）
 
-直近の実装コミットは`a70e9d0`（Block定義の複製・座標移動・同一性を維持する反映の分離）。作業branchは`codex/composition-root-next`。この文書のコミットがその後に続く。app.jsは18,297行。構文239件・単体471件・Block／統合UI／保存互換E2E151件が成功し、実行中のテストはない。全体E2Eとリファクタリング全体は未完了。
+この文書と同じコミットでBlockCompletionCommandへ下書き検証・確認待ち・確定処理を分離した（直前の方針文書コミットは`b93e2da`）。作業branchは`codex/composition-root-next`。app.jsは18,164行。構文241件・単体477件・Block／統合UI／保存互換E2E151件が成功し、実行中のテストはない。全体E2Eとリファクタリング全体は未完了。
 
 今回の検証コマンド：
 
@@ -109,14 +110,16 @@ npm run test:unit
 npm run test:e2e -- tests/e2e/blocks.spec.js tests/e2e/unified-ui.spec.js tests/e2e/phase0-characterization.spec.js
 ```
 
-`src/editing/block_definition_editing.js`はclone／cloneInstance／translate／applyを公開し、`BlockEditorSession`と既存Block操作から共用する。移動した4関数は採番値の取得を明示したqueryに置き換えた以外、本体の一致も確認した。次の具体的な対象はappに残る`validateBlockDraft`と`completeBlockDefinitionEdit`。前者は構造・参照・Solverの検証、後者は回転設定確認・定義反映・関連拘束整理・求解・履歴を調整している。まず依存を読み直し、今回作った編集処理とsession APIを利用して、確定操作の所有者を整理する。
+`BlockDefinitionEditing`は定義のclone／translate／apply、`BlockEditorSession`は親子sessionと復元情報、`BlockCompletionCommand`は検証・確認待ち・確定操作を所有する。確認中の重複要求、取消・拒否、別sessionへの遅延回答、内部不正の拒否、選択置換、参照削除、TX-05の配置先エラーを検証した。
+
+次はappに残るBlockの階層／依存照会と、選択からの作成・編集開始／取消・定義削除を調べる。`blockEditorSessionChain`と`blockDefinitionById`を併用する照会群、`startBlockCreation`、`openBlockDefinitionEditor`、`cancelBlockDefinitionEdit`、`deleteBlockDefinition`が入口。既存のSession／DefinitionEditing／Completionを再利用し、機能単位のまとまりを保つ。
 
 再開時は次の順で確認する。
 
 1. この文書とAGENTS.mdを読み、`git status --short`・`git branch --show-current`・`git log -5 --oneline`を確認する。記載の件数やHEADより現在のGitとコードを優先する。
 2. `composition-root.md`先頭の最新記録と`spec/architecture/モジュール構成.md`を読む。古い経過記録は当時の状態として扱う。
 3. 未コミット変更があれば先に内容と所属を確認する。検証中と記録されている場合はprocessの実在を確認し、残っていなければ必要な検証を実行する。
-4. 現在のBlockDefinitionEditing区切りが完了していれば、Block下書きの検証と確定commandの依存を調べ、session管理とは別の責務として整理する。
+4. 上記の最新区切りが完了していれば、残るBlock照会と作成・開始／取消・削除の依存を調べ、既存の所有者を利用して整理する。
 5. 一つのまとまりを実装・検証・Commit・Pushし、この再開地点を更新する。全体目標は途中成果へ縮小しない。
 
 ### 再開時に渡す指示の例
