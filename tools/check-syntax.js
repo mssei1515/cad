@@ -2,6 +2,8 @@
 const { spawnSync } = require("node:child_process");
 const path = require("node:path");
 const files = [
+  "src/persistence/document_loading.js",
+  "tests/unit/document-loading.test.js",
   "src/geometry/geometry_kernel.js",
   "src/geometry/geometry_ref.js",
   "src/geometry/spline_geometry.js",

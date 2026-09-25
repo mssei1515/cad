@@ -1,7 +1,7 @@
 /* Application composition, editing commands, Canvas UI and event handling. */
 (function () {
   "use strict";
-  const { referenceImageMimeType, validReferenceImageDataUrl, normalizeReferenceImages, serializeReferenceImage, validSerializedReferenceImageList, REFERENCE_IMAGE_MAX_SIDE_PX } = window.ReferenceImageData;
+  const { referenceImageMimeType, validReferenceImageDataUrl, normalizeReferenceImages, serializeReferenceImage, REFERENCE_IMAGE_MAX_SIDE_PX } = window.ReferenceImageData;
   const { normalizeHatches, validSerializedHatch, validSerializedHatchList, serializeHatch } = window.HatchData;
   const { normalizeAnnotations, serializeAnnotation } = window.AnnotationData;
 
@@ -10,7 +10,7 @@
     DEFAULT_DIMENSION_APPEARANCE, DEFAULT_HATCH_APPEARANCE, DEFAULT_ANNOTATION_STYLE,
     DIMENSION_APPEARANCE_LENGTH_KEYS, DIMENSION_APPEARANCE_NUMERIC_RULES,
     normalizeAppearance, normalizeConstructionAppearance, normalizeDimensionAppearance,
-    loadedDimensionAppearance, normalizeHatchAppearance, normalizeAnnotationStyle,
+    normalizeHatchAppearance, normalizeAnnotationStyle,
     resolveGeometryAppearance, resolveDimensionAppearance,
   } = window.Appearance;
   const {
@@ -78,7 +78,6 @@
     evaluate: evaluateParameterExpression,
     evaluateDefinitions: evaluateParameterDefinitions,
     formatReference: formatParameterReference,
-    migrateLegacyExpression: migrateLegacyParameterExpression,
     validateIdentifier: validateParameterIdentifier,
     rewriteIdentifiers: rewriteParameterIdentifiers,
   } = window.ParameterEngine;
@@ -511,6 +510,11 @@
     createBlockProjectionBundle, geometryInstanceBundlesForScope, elementSketchId, deserializeConstraint, constraintSketchId,
     separateSharedSketchProjectionTargetPoints, prepareLoadedParameterNamespace,
     isPointUsedByLine, isPointUsedByCircle, isPointUsedByArc, constraintReferencesPoint, applicationText,
+  });
+  const documentLoading = window.DocumentLoading.create({
+    blockDefinitionPersistence, blockConnectionsPersistence, documentGeometryPersistence, geometryInstancePersistence,
+    serializedGeometryInstanceListError, normalizeGeometryInstance, defaultUnits: DEFAULT_DOCUMENT_UNITS,
+    applicationText, invalidateProjection: invalidateBlockProjectionCache, normalizeArcSweeps,
   });
   const constraintRebinding = window.ConstraintRebinding.create({
     catalog: blockCatalog, projections: blockProjections, geometryInstanceBundlesForScope,
@@ -5540,10 +5544,6 @@
     return constraintCodecs.deserialize(...args);
   }
 
-  function migrateLegacySketchProjectionNamespace(namespace, sourceVersion) {
-    return geometryInstancePersistence.migrateLegacy(namespace, sourceVersion);
-  }
-
   function serializedGeometryInstanceListError(instances) {
     return geometryInstancePersistence.listError(instances);
   }
@@ -5553,62 +5553,10 @@
       throw new Error("保存データの形式が正しくありません");
     }
     lastLoadBlockConstraintRepairMessage = "";
-    const sourceVersion = Number(data.version) || 1;
-    data = structuredClone(data);
-    migrateLegacySketchProjectionNamespace(data, sourceVersion);
-    for (const definition of Array.isArray(data.blockDefinitions) ? data.blockDefinitions : []) migrateLegacySketchProjectionNamespace(definition, sourceVersion);
-    if (sourceVersion >= 20 && (!data.units || typeof data.units !== "object" || Array.isArray(data.units) || data.units.length !== "mm")) {
-      throw new Error(applicationText("Documentの長さ単位が正しくありません", "Invalid document length unit"));
-    }
-    const loadedUnits = { ...DEFAULT_DOCUMENT_UNITS };
-    const normalizeLoadedExpression = (value) => sourceVersion < 17
-      ? migrateLegacyParameterExpression(String(value ?? ""))
-      : String(value ?? "");
-    if (sourceVersion >= 15 && !Array.isArray(data.splines)) throw new Error(applicationText("スプライン配列がありません", "The spline array is missing"));
-    if (sourceVersion >= 18 && !validSerializedReferenceImageList(data.referenceImages)) throw new Error(applicationText("参照画像の形式が正しくありません", "Invalid reference image data"));
-    if (sourceVersion >= 21 && !Array.isArray(data.geometryInstances)) throw new Error(applicationText("派生インスタンス配列がありません", "The derived instance array is missing"));
-    const rootGeometryInstanceError = serializedGeometryInstanceListError(data.geometryInstances || []);
-    if (rootGeometryInstanceError) throw new Error(`${applicationText("派生インスタンス", "Derived instances")}: ${rootGeometryInstanceError}`);
-    const normalizeLoadedDimensionAppearance = (value, options = {}) => loadedDimensionAppearance(value, sourceVersion, options);
-    const loadedDocumentName = effectiveDocumentNameFromValue(options.documentNameOverride || data.documentName || options.documentNameFallback || DEFAULT_DOCUMENT_NAME);
     const preservedSketchTreeSketches = options.preserveSketchTreeState ? new Map(sketchTreeSketchOpenState) : null;
     const preservedSketchTreeGroups = options.preserveSketchTreeState ? new Map(sketchTreeGroupOpenState) : null;
-
-    const { sketches: loadedSketches, ids: loadedSketchIds, normalizeId: normalizeSketchId } = window.SketchHierarchy.decode(data.sketches, {
-      dimensionAppearanceLoader: normalizeLoadedDimensionAppearance,
-    });
-
-    const { definitions: loadedBlockDefinitions, metadata: loadedBlockDefinitionMeta } = blockDefinitionPersistence.decode(data.blockDefinitions, {
-      sourceVersion, normalizeLoadedExpression, normalizeLoadedDimensionAppearance,
-    });
-    const loadedBlockInstancesCodec = window.BlockInstancePersistence.create({
-      definitions: loadedBlockDefinitions, metadata: loadedBlockDefinitionMeta, normalizeGeometryInstance,
-    });
-    const loadedDefinitionById = loadedBlockInstancesCodec.definitionById;
-    loadedBlockInstancesCodec.connectDefinitions();
-    window.BlockOwnershipPersistence.restore(loadedBlockDefinitions, id => loadedBlockDefinitionMeta.get(id).rawDefinition);
-    const repairedBlockConstraintCount = blockConnectionsPersistence.restore(loadedBlockDefinitions, loadedBlockDefinitionMeta, {
-      definitionById: loadedDefinitionById, sourceVersion, normalizeLoadedDimensionAppearance, normalizeLoadedExpression,
-    });
-    const loadedBlockInstances = loadedBlockInstancesCodec.decodeDocument(data.blockInstances, normalizeSketchId);
-    const loadedGeometryInstances = (data.geometryInstances || []).map((instance, index) => normalizeGeometryInstance(instance, normalizeSketchId, index));
-    const { retainedPoints, lines, circles, arcs, splines, constraints, loadedAnnotations, loadedHatches, loadedReferenceImages, loadedRootNamespace } =
-      documentGeometryPersistence.decode(data, {
-        sourceVersion, normalizeSketchId, sketches: loadedSketches, sketchIds: loadedSketchIds,
-        definitions: loadedBlockDefinitions, definitionById: loadedDefinitionById, blockInstances: loadedBlockInstances,
-        geometryInstances: loadedGeometryInstances, normalizeLoadedDimensionAppearance, normalizeLoadedExpression,
-      });
-
-    for (const definition of loadedBlockDefinitions) ensureDrawingOrderState(definition);
-    ensureDrawingOrderState({
-      hatches: loadedHatches,
-      lines,
-      circles,
-      arcs,
-      splines,
-      blockInstances: loadedBlockInstances,
-      geometryInstances: loadedGeometryInstances,
-    });
+    const candidate = documentLoading.decode(data, options);
+    const { repairedBlockConstraintCount } = candidate;
 
     resetModelState();
     if (preservedSketchTreeSketches) {
@@ -5619,31 +5567,7 @@
       sketchTreeGroupOpenState.clear();
       for (const [key, value] of preservedSketchTreeGroups) sketchTreeGroupOpenState.set(key, value);
     }
-    documentModel.documentName = loadedDocumentName;
-    documentModel.units = loadedUnits;
-    model.sketches.length = 0;
-    model.sketches.push(...loadedSketches);
-    model.activeSketchId = normalizeSketchId(data.activeSketchId);
-    documentModel.defaultAppearance = normalizeAppearance(data.defaultAppearance, { partial: false });
-    documentModel.defaultConstructionAppearance = normalizeConstructionAppearance(data.defaultConstructionAppearance, { partial: false });
-    documentModel.defaultDimensionAppearance = normalizeLoadedDimensionAppearance(data.defaultDimensionAppearance, { partial: false });
-    model.annotations = loadedAnnotations;
-    model.hatches = loadedHatches;
-    model.referenceImages = loadedReferenceImages;
-    model.nextHatchIndex = Math.max(nextSeq(loadedHatches, "H"), Number(data.nextHatchIndex) || 1);
-    documentModel.blockDefinitions = loadedBlockDefinitions;
-    model.blockInstances = loadedBlockInstances;
-    model.geometryInstances = loadedGeometryInstances;
-    invalidateBlockProjectionCache();
-    model.points.push(...retainedPoints);
-    model.lines.push(...lines);
-    model.circles.push(...circles);
-    model.arcs.push(...arcs);
-    model.splines.push(...splines);
-    model.constraints.push(...constraints);
-    normalizeArcSweeps(model.arcs);
-    model.parameters = loadedRootNamespace.parameters;
-    model.nextDimensionParameterIndex = loadedRootNamespace.nextDimensionParameterIndex;
+    documentLoading.install(candidate, documentModel, model);
     refreshReferenceConstraintValidity();
     const lineRepair = enforceMinimumLineLengths(model.lines);
     lastLoadLineRepairMessage =
