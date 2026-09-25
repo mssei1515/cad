@@ -9905,6 +9905,11 @@
     hatchAppearanceForDisplay, normalizeAnnotationStyle,
   });
   const { selectedPropertiesTarget, multiplePropertyTypeKey, multiplePropertySameType, blockPropertyAppearance, multiplePropertyAppearance, multiplePropertySupports, multiplePropertyValue } = propertySelection;
+  const geometryPropertyCommand = window.GeometryPropertyCommand.create({
+    currentScope: workspace.current, SplineLineTangentConstraint, SplineSplineTangentConstraint,
+    guardSketchProjectionShapeEdit, applicationText, synchronizeSketchProjectionMetadata,
+    snapshotModelState, restoreModelState, stabilizeActiveParameterNamespace, elementSketchId, recordHistory,
+  });
   const appearanceEditing = window.AppearanceEditing.create({
     normalizeAppearance, normalizeAnnotationStyle, normalizeHatchAppearance, normalizeDimensionAppearance,
     defaultDimensionAppearance: DEFAULT_DIMENSION_APPEARANCE, dimensionNumericRules: DIMENSION_APPEARANCE_NUMERIC_RULES,
@@ -10411,51 +10416,16 @@
       if (!setBlockInstanceOrthogonalRotation(target.item, Number(input.value) * Math.PI / 180)) updatePropertiesUI();
       return;
     }
-    if (target.kind === "geometry" && property === "construction") {
-      if (!guardSketchProjectionShapeEdit([target.item], {
-        includeSharedNodes: false,
-        action: applicationText("通常／補助作図切替", "Construction toggle"),
-      })) {
-        input.checked = Boolean(target.item.construction);
-        updatePropertiesUI();
-        draw();
-        return;
-      }
-      target.item.construction = input.checked;
-      synchronizeSketchProjectionMetadata();
-      recordHistory("補助線変更");
-    } else if (target.kind === "geometry" && target.item instanceof Spline && property === "spline-closed") {
-      if (!guardSketchProjectionShapeEdit([target.item], { action: applicationText("スプライン開閉変更", "Change spline open/closed state") })) {
-        input.checked = Boolean(target.item.closed);
-        updatePropertiesUI();
-        draw();
-        return;
-      }
-      if (input.checked && model.constraints.some((constraint) => (constraint instanceof SplineLineTangentConstraint && constraint.spline === target.item) || (constraint instanceof SplineSplineTangentConstraint && (constraint.a === target.item || constraint.b === target.item)))) {
-        input.checked = false;
-        setHint(applicationText("端点接線拘束があるスプラインは閉じられません", "A spline with endpoint tangent constraints cannot be closed."), "error");
-        return;
-      }
-      const snapshot = snapshotModelState();
-      const previousClosed = target.item.closed;
-      target.item.closed = input.checked;
-      target.item._curveCache = null;
-      if (!target.item.curve().valid) {
-        target.item.closed = previousClosed;
-        target.item._curveCache = null;
-        input.checked = previousClosed;
-        setHint(applicationText("この通過点配置では開閉状態を変更できません", "The spline cannot change its open/closed state with these fit points."), "error");
-        return;
-      }
-      const stabilized = stabilizeActiveParameterNamespace(elementSketchId(target.item));
-      if (!stabilized.success || stabilized.dependent?.success === false) {
-        restoreModelState(snapshot);
-        setHint(applicationText("拘束を維持できないためスプラインの開閉変更を戻しました", "The spline open/closed change was restored because its constraints could not be maintained."), "error");
-        updateUI();
-        draw();
-        return;
-      }
-      recordHistory("スプライン開閉変更");
+    if (target.kind === "geometry" && (property === "construction" || target.item instanceof Spline && property === "spline-closed")) {
+      const result = property === "construction"
+        ? geometryPropertyCommand.setConstruction(target.item, input.checked)
+        : geometryPropertyCommand.setSplineClosed(target.item, input.checked);
+      if (Object.hasOwn(result, "checked")) input.checked = result.checked;
+      if (result.message) setHint(result.message, "error");
+      if (result.refresh === "properties") updatePropertiesUI();
+      else if (result.refresh === "all") updateUI();
+      if (result.refresh) draw();
+      return;
     } else if (target.kind === "constraint" && (property === "constraint-parameter-name" || property === "constraint-expression")) {
       commitDimensionPropertyEdit(target.item, property, input.value);
       updateUI();
