@@ -100,3 +100,13 @@ test("appearance targets distinguish ordinary geometry and instance overrides", 
   point.blockProjection = true;
   assert.equal(selection.appearanceSelectionTarget(), null);
 });
+
+
+test('rectangle application merges by identity and retains unrelated derived-instance selection', () => {
+  const selection = create(), a = { id: 'P1' }, b = { id: 'P1' }, instance = { id: 'GI1' };
+  selection.set('points', [a]); selection.set('geometryInstances', [instance]); selection.set('constraint', {}); selection.set('arcEndpointPair', {});
+  const candidates = { points: [a, b], lines: [], circles: [], arcs: [], splines: [], blockInstances: [], annotations: [], hatches: [], referenceImages: [] };
+  selection.applyRectangle(candidates, true); assert.deepEqual(Array.from(selection.points), [a, b]);
+  assert.equal(selection.constraint, null); assert.equal(selection.arcEndpointPair, null); assert.equal(selection.geometryInstances[0], instance);
+  candidates.points = [b]; selection.applyRectangle(candidates); assert.deepEqual(Array.from(selection.points), [b]); assert.equal(selection.geometryInstances[0], instance);
+});
