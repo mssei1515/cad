@@ -210,7 +210,7 @@
   const instanceProjections = window.InstanceProjection.create({ elementSketchId, applicationText });
   const { emptyGeometryInstanceBundle, geometryInstanceSourcePoints, createGeometryInstanceBundle, geometryInstanceBundlesForScope } = instanceProjections;
   const blockCatalog = window.BlockCatalog.create({ definitions: () => documentModel.blockDefinitions });
-  const { blockDefinitionById, blockDefinitionDrawableSketchIds, blockDefinitionHasGeometry, blockDefinitionGeometrySketchIds, blockInstanceEnabledSketchSet } = blockCatalog;
+  const { blockDefinitionOwnedSubtreeIds, blockDefinitionSketchRows, blockDefinitionById, blockDefinitionDrawableSketchIds, blockDefinitionHasGeometry, blockDefinitionGeometrySketchIds, blockInstanceEnabledSketchSet } = blockCatalog;
   const blockProjections = window.BlockProjection.create({
     blockCatalog, geometryInstanceBundlesForScope, emptyGeometryInstanceBundle, hatchPrimitivesFromElements, hatchPrimitivesForScope,
   });
@@ -338,6 +338,13 @@
   });
   const { live: liveBlockEditorDefinition, chain: blockEditorSessionChain,
     scopeId: currentBlockDefinitionScopeId } = blockEditor;
+  const blockEditingQueries = window.BlockEditingQueries.create({
+    definitions: () => documentModel.blockDefinitions, currentScope: workspace.current,
+    editor: blockEditor, catalog: blockCatalog,
+  });
+  const { selectedBlockDefinitionMoveError, blockDefinitionsInCurrentScope, blockDefinitionScopeError,
+    blockDefinitionDependsOn, storedBlockInstancesReferencing, blockDefinitionUsageCount,
+    blockDefinitionEditError, blockDefinitionCyclePath } = blockEditingQueries;
   let hatchResolutionCache = new WeakMap();
   let hatchFaceCache = new Map();
 
@@ -3657,33 +3664,6 @@
     return documentModel.blockDefinitions.reduce((removed, definition) => removed + rebuildBlockDefinitionConstraintObjects(definition), 0);
   }
 
-  function blockDefinitionOwnedSubtreeIds(rootDefinitionIds) {
-    const ids = new Set(rootDefinitionIds);
-    let changed = true;
-    while (changed) {
-      changed = false;
-      for (const definition of documentModel.blockDefinitions) {
-        if (!definition.parentDefinitionId || !ids.has(definition.parentDefinitionId) || ids.has(definition.id)) continue;
-        ids.add(definition.id);
-        changed = true;
-      }
-    }
-    return ids;
-  }
-
-  function selectedBlockDefinitionMoveError(selection) {
-    const selectedInstances = new Set(selection?.blockInstances || []);
-    const definitionIds = [...new Set((selection?.blockInstances || []).map((instance) => instance.definitionId))];
-    for (const definitionId of definitionIds) {
-      const definition = blockDefinitionById(definitionId);
-      if (!definition) return `ブロック定義 ${definitionId} が見つかりません`;
-      const unselected = model.blockInstances.filter((instance) => instance.definitionId === definitionId && !selectedInstances.has(instance));
-      if (unselected.length === 0) continue;
-      return `${definition.name} を使用する未選択インスタンス（${unselected.map((instance) => instance.id).join(", ")}）があります。対象インスタンスをすべて選択してください`;
-    }
-    return null;
-  }
-
   function stageSelectedBlockDefinitionsForParent(draft) {
     const rootDefinitionIds = [...new Set((draft?.blockInstances || []).map((instance) => instance.definitionId))];
     if (!draft || rootDefinitionIds.length === 0) return new Map();
@@ -3704,88 +3684,6 @@
     rebuildBlockDefinitionConstraintObjects(draft);
     invalidateBlockProjectionCache();
     return rollbackEntries;
-  }
-
-  function blockDefinitionsInCurrentScope() {
-    const parentDefinitionId = currentBlockDefinitionScopeId();
-    return documentModel.blockDefinitions.filter((definition) => (definition.parentDefinitionId || null) === parentDefinitionId);
-  }
-
-  function blockDefinitionScopeError(definitionId) {
-    const definition = blockDefinitionById(definitionId);
-    if (!definition) return "ブロック定義が見つかりません";
-    return (definition.parentDefinitionId || null) === currentBlockDefinitionScopeId()
-      ? null
-      : "このブロックは現在の階層では使用できません";
-  }
-
-  function blockDefinitionForDependency(definitionId) {
-    const session = blockEditorSessionChain().find((item) => item.draft?.id === definitionId);
-    return session?.draft || blockDefinitionById(definitionId);
-  }
-
-  function blockDefinitionDependsOn(definitionId, targetDefinitionId, visiting = new Set()) {
-    if (!definitionId || !targetDefinitionId || visiting.has(definitionId)) return false;
-    if (definitionId === targetDefinitionId) return true;
-    const definition = blockDefinitionForDependency(definitionId);
-    if (!definition) return false;
-    const nextVisiting = new Set(visiting).add(definitionId);
-    return (definition.blockInstances || []).some((instance) => blockDefinitionDependsOn(instance.definitionId, targetDefinitionId, nextVisiting));
-  }
-
-  function blockInstancesInEditingScope() {
-    const instances = new Set(model.blockInstances);
-    for (const session of blockEditorSessionChain()) {
-      for (const instance of session.draft?.blockInstances || []) instances.add(instance);
-      for (const instance of session.original?.values.blockInstances || []) instances.add(instance);
-    }
-    for (const definition of documentModel.blockDefinitions) for (const instance of definition.blockInstances || []) instances.add(instance);
-    return [...instances];
-  }
-
-  function storedBlockInstancesReferencing(definitionId, hostInstances = null) {
-    const instances = hostInstances
-      ? [...hostInstances, ...documentModel.blockDefinitions.flatMap((definition) => definition.blockInstances || [])]
-      : blockInstancesInEditingScope();
-    return [...new Set(instances)].filter((instance) => instance.definitionId === definitionId);
-  }
-
-  function blockDefinitionUsageCount(definitionId) {
-    return model.blockInstances.filter((instance) => instance.definitionId === definitionId).length;
-  }
-
-  function blockDefinitionEditError(definitionId) {
-    const activeSession = blockEditorSessionChain().find((session) => session.draft?.id === definitionId);
-    return activeSession ? `${activeSession.draft.name} は現在編集中です` : null;
-  }
-
-  function blockDefinitionCyclePath(startDefinitionId) {
-    const complete = new Set();
-    const visit = (definitionId, path) => {
-      const repeatedAt = path.indexOf(definitionId);
-      if (repeatedAt >= 0) return [...path.slice(repeatedAt), definitionId];
-      if (complete.has(definitionId)) return null;
-      const definition = blockDefinitionForDependency(definitionId);
-      if (!definition) return null;
-      const nextPath = [...path, definitionId];
-      for (const instance of definition.blockInstances || []) {
-        const cycle = visit(instance.definitionId, nextPath);
-        if (cycle) return cycle;
-      }
-      complete.add(definitionId);
-      return null;
-    };
-    return visit(startDefinitionId, []);
-  }
-
-  function nestedBlockPlacementError(definitionId) {
-    if (!blockEditor.current) return null;
-    for (const session of blockEditorSessionChain()) {
-      if (blockDefinitionDependsOn(definitionId, session.draft.id)) {
-        return `${session.draft.name} を循環参照するため、このブロックは配置できません`;
-      }
-    }
-    return null;
   }
 
   function startBlockCreation() {
@@ -3943,17 +3841,7 @@
       setHint(`${definition.name} は ${instances.length}個のインスタンスで使用中のため削除できません`, "error");
       return;
     }
-    const removedDefinitionIds = new Set([definitionId]);
-    let changed = true;
-    while (changed) {
-      changed = false;
-      for (const item of documentModel.blockDefinitions) {
-        if (item.parentDefinitionId && removedDefinitionIds.has(item.parentDefinitionId) && !removedDefinitionIds.has(item.id)) {
-          removedDefinitionIds.add(item.id);
-          changed = true;
-        }
-      }
-    }
+    const removedDefinitionIds = blockDefinitionOwnedSubtreeIds([definitionId]);
     documentModel.blockDefinitions = documentModel.blockDefinitions.filter((item) => !removedDefinitionIds.has(item.id));
     blockEditor.forgetDefinitions(removedDefinitionIds);
     invalidateBlockProjectionCache();
@@ -8848,26 +8736,6 @@
 
 
 
-
-  function blockDefinitionSketchRows(definition) {
-    if (!definition) return [];
-    const children = new Map();
-    for (const sketch of definition.sketches) {
-      if (!children.has(sketch.parentSketchId)) children.set(sketch.parentSketchId, []);
-      children.get(sketch.parentSketchId).push(sketch);
-    }
-    const rows = [];
-    const visit = (parentId, depth) => {
-      for (const sketch of children.get(parentId) || []) {
-        if (sketch.kind === "root") continue;
-        const count = [...definition.lines, ...definition.circles, ...definition.arcs, ...(definition.splines || []), ...(definition.annotations || []), ...(definition.hatches || []), ...(definition.blockInstances || []), ...(definition.geometryInstances || [])].filter((item) => item.sketchId === sketch.id).length;
-        rows.push({ sketch, depth, count });
-        visit(sketch.id, depth + 1);
-      }
-    };
-    visit(ROOT_SKETCH_ID, 0);
-    return rows;
-  }
 
   const blockView = window.BlockView.create({
     document, escapeHtml,

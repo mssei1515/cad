@@ -57,7 +57,8 @@
 - `be80e08`: Block一覧と編集パネルの表示・イベント接続。
 - `6c08102`: 親子Blockの編集sessionと復元情報の所有者。
 - `a70e9d0`: BlockDefinitionEditingへの複製・座標移動・定義反映の分離。
-- BlockCompletionCommandへの検証・確認待ち・確定処理の分離。最新の確定状況と検証結果は下の「再開地点」を参照する。
+- `893b14b`: BlockCompletionCommandへの検証・確認待ち・確定処理の分離。
+- BlockEditingQueriesと既存BlockCatalogへの照会集約。最新の確定状況と検証結果は下の「再開地点」を参照する。
 
 残る主要な領域は以下。順番や個数は固定しない。
 
@@ -100,7 +101,7 @@
 
 ## 8. 再開地点（2026-09-25）
 
-この文書と同じコミットでBlockCompletionCommandへ下書き検証・確認待ち・確定処理を分離した（直前の方針文書コミットは`b93e2da`）。作業branchは`codex/composition-root-next`。app.jsは18,164行。構文241件・単体477件・Block／統合UI／保存互換E2E151件が成功し、実行中のテストはない。全体E2Eとリファクタリング全体は未完了。
+この文書と同じコミットでBlockEditingQueriesへ編集範囲・依存・参照Instance照会を集約し、BlockCatalogへ所有子孫とSketch表示行を統合した（直前の実装コミットは`893b14b`）。作業branchは`codex/composition-root-next`。app.jsは18,032行。構文243件・単体483件・Block／統合UI／保存互換E2E151件が成功し、実行中のテストはない。全体E2Eとリファクタリング全体は未完了。
 
 今回の検証コマンド：
 
@@ -112,14 +113,16 @@ npm run test:e2e -- tests/e2e/blocks.spec.js tests/e2e/unified-ui.spec.js tests/
 
 `BlockDefinitionEditing`は定義のclone／translate／apply、`BlockEditorSession`は親子sessionと復元情報、`BlockCompletionCommand`は検証・確認待ち・確定操作を所有する。確認中の重複要求、取消・拒否、別sessionへの遅延回答、内部不正の拒否、選択置換、参照削除、TX-05の配置先エラーを検証した。
 
-次はappに残るBlockの階層／依存照会と、選択からの作成・編集開始／取消・定義削除を調べる。`blockEditorSessionChain`と`blockDefinitionById`を併用する照会群、`startBlockCreation`、`openBlockDefinitionEditor`、`cancelBlockDefinitionEdit`、`deleteBlockDefinition`が入口。既存のSession／DefinitionEditing／Completionを再利用し、機能単位のまとまりを保つ。
+`BlockEditingQueries`はscope切替ごとに現在値を照会し、依存判定では編集中draftを優先する。使用数表示は現在scopeだけ、参照Instance取得は編集session／退避host／保存済み定義をObject同一性で集計する。BlockCatalogの所有子孫取得を仮移動と削除で共用した。移動した12照会関数は状態取得先以外の本体一致も確認した。
+
+次はappに残る選択からのBlock下書き生成・仮移動、作成開始、編集開始／取消・定義削除を調べる。`createBlockDefinitionFromSelection`、`stageSelectedBlockDefinitionsForParent`、`startBlockCreation`、`openBlockDefinitionEditor`、`cancelBlockDefinitionEdit`、`deleteBlockDefinition`が入口。既存のSession／DefinitionEditing／Completion／EditingQueries／Catalogを再利用し、機能単位のまとまりを保つ。
 
 再開時は次の順で確認する。
 
 1. この文書とAGENTS.mdを読み、`git status --short`・`git branch --show-current`・`git log -5 --oneline`を確認する。記載の件数やHEADより現在のGitとコードを優先する。
 2. `composition-root.md`先頭の最新記録と`spec/architecture/モジュール構成.md`を読む。古い経過記録は当時の状態として扱う。
 3. 未コミット変更があれば先に内容と所属を確認する。検証中と記録されている場合はprocessの実在を確認し、残っていなければ必要な検証を実行する。
-4. 上記の最新区切りが完了していれば、残るBlock照会と作成・開始／取消・削除の依存を調べ、既存の所有者を利用して整理する。
+4. 上記の最新区切りが完了していれば、残るBlock下書き生成と作成・開始／取消・削除の依存を調べ、既存の所有者を利用して整理する。
 5. 一つのまとまりを実装・検証・Commit・Pushし、この再開地点を更新する。全体目標は途中成果へ縮小しない。
 
 ### 再開時に渡す指示の例

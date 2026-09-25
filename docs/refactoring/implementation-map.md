@@ -16,6 +16,7 @@
 - `src/persistence/geometry.js`: Document／BlockのローカルGeometry復元と参照Map
 - `src/persistence/document_snapshot.js`: DocumentとBlockで共有する保存field writer、派生Instance保存値
 - `src/editing/block_definition_editing.js`: Block定義の複製・座標移動・Object同一性を維持するdraft反映
+- `src/editing/block_editing_queries.js`: 編集範囲・編集中定義・参照Instance・draftを優先する依存循環の読取り
 - `src/editing/block_editor_session.js`: Block編集session連鎖、draft同期・差替え、親scope復帰、子の復元記録引継ぎと取消
 - `src/editing/edit_history.js`: 履歴stack操作
 - `src/diagnostics/interaction_profiler.js`: 同期処理の時間・実行回数計測
@@ -25,7 +26,7 @@
 - `src/solver/constraint_solver.js`: GeometryとConstraintのsolver
 - `src/geometry/geometry_ref.js`: 直接GeometryとBlock Projectionの参照codec
 - `src/geometry/objects.js`: Geometryの型、canonical参照、bundleのMap登録
-- `src/document/block_catalog.js`: 現在のDefinition registry検索と有効Sketchの判定
+- `src/document/block_catalog.js`: 現在のDefinition registry・所有子孫・Sketch表示行の照会と有効Sketchの判定
 - `src/geometry/block_projection.js`: 入れ子BlockのGeometry・Annotation・Hatch投影と永続cache
 - `src/geometry/instance_projection.js`: 派生InstanceのGeometry読取りviewとscope内の依存解決
 - `src/geometry/read_model.js`: 現在scopeと投影を合わせた一覧・参照解決、同期読出し中のGeometry／外観cache
