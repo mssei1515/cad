@@ -239,7 +239,6 @@
     trimConstraintSelection, pushPrimitiveSelection, geometryItemSelectedInCanvas,
     constraintSelectedInCanvas, hasSelection,
   } = canvasSelection;
-  let freeInstancePlacement = null;
   let dragSession = null;
   let dimensionDragSession = null;
   let annotationDragSession = null;
@@ -279,7 +278,6 @@
   let suppressNextBlankDoubleClickEvent = false;
   let splineEditSession = null;
   let sketchProjectionSources = [];
-  let geometryInstanceCommandSources = [];
   let pointerPreview = null;
   let trimPreview = null;
 
@@ -329,6 +327,17 @@
   let historyRestoring = false;
   let geometryClipboard = null;
   const HISTORY_LIMIT = 80;
+  const geometryInstanceCommand = window.GeometryInstanceCommand.create({
+    cancelConstraintTargetCommand, cancelPendingCommand, canCreateInActiveSketch, rejectRootSketchCreation,
+    selectedItemsForGeometryInstance, geometryRefForItem, clearSelection, normalizeGeometryInstance,
+    previewFreeId: () => `FI${freeInstanceSeq}`,
+    nextInstanceId: type => type === "free" ? `FI${freeInstanceSeq++}` : type === "mirror" ? `MI${mirrorInstanceSeq++}` : `PI${patternInstanceSeq++}`,
+    activeSketchId, getMode: () => mode, setMode: value => { mode = value; }, updateToolbar, updateUI,
+    applicationText, setHint, draw, currentScope: workspace.current, canvasSelection, recordHistory,
+    Line, lineHasDirection, elementSketchId, prompt: (message, initial) => window.prompt(message, initial),
+    resolveGeometryRef, createGeometryInstanceBundle,
+  });
+  const { start: startGeometryInstanceCommand, placeFree: placeFreeInstance, commitReference: commitGeometryInstanceReference } = geometryInstanceCommand;
   const instanceSourceCommand = window.InstanceSourceCommand.create({
     currentScope: workspace.current, activeSketchId, exitDrawMode, cancelConstraintTargetCommand, cancelPendingCommand,
     clearSelection, canvasSelection, getMode: () => mode, setMode: value => { mode = value; }, updateToolbar, updateUI, updatePropertiesUI,
@@ -3006,57 +3015,7 @@
 
 
 
-  function startGeometryInstanceCommand(type) {
-    cancelConstraintTargetCommand("");
-    cancelPendingCommand("");
-    if (!canCreateInActiveSketch()) return void rejectRootSketchCreation();
-    const sources = selectedItemsForGeometryInstance();
-    if (sources.length === 0) {
-      setHint(applicationText("同じSketchの複写元Geometryを先に選択してください", "Select source geometry in the active sketch first."), "error");
-      return;
-    }
-    geometryInstanceCommandSources = sources.map(geometryRefForItem).filter(Boolean);
-    clearSelection();
-    if (type === "free") {
-      freeInstancePlacement = normalizeGeometryInstance({ id: `FI${freeInstanceSeq}`, type: "free", sources: geometryInstanceCommandSources, sketchId: activeSketchId() });
-      mode = "free-instance-origin";
-      updateToolbar();
-      updateUI({ refreshAnalysis: false });
-      setHint(applicationText("配置基準点をクリックしてください。Escでキャンセルします", "Click the source anchor. Press Esc to cancel."));
-      draw();
-      return;
-    }
-    mode = type === "mirror" ? "mirror-axis" : "pattern-direction";
-    updateToolbar();
-    setHint(type === "mirror"
-      ? applicationText("対称軸にする線をクリックしてください。Escでキャンセルします", "Click the mirror axis line. Press Esc to cancel.")
-      : applicationText("配列方向にする線をクリックしてください。Escでキャンセルします", "Click the pattern direction line. Press Esc to cancel."));
-    draw();
-  }
 
-  function placeFreeInstance(pointer) {
-    if (!freeInstancePlacement) return;
-    if (mode === "free-instance-origin") {
-      freeInstancePlacement.origin = { x: pointer.x, y: pointer.y };
-      mode = "free-instance-place";
-      setHint(applicationText("配置先をクリックしてください。回転と鏡像はPropertiesで設定できます", "Click the destination. Set rotation and reflection in Properties."));
-      updateUI({ refreshAnalysis: false });
-    } else {
-      Object.assign(freeInstancePlacement, { x: pointer.x, y: pointer.y, id: `FI${freeInstanceSeq++}` });
-      const instance = freeInstancePlacement;
-      model.geometryInstances.push(instance);
-      freeInstancePlacement = null;
-      geometryInstanceCommandSources = [];
-      mode = "select";
-      clearSelection();
-      canvasSelection.set("geometryInstances", [instance]);
-      recordHistory("同期インスタンス追加");
-      updateUI();
-      setHint(applicationText("同期インスタンスを作成しました", "Synchronized instance created"));
-    }
-    updateToolbar();
-    draw();
-  }
 
 
   function changeFreeInstanceProperty(instance, key, value) {
@@ -3064,7 +3023,7 @@
     if (key === "rotation" && (String(value).trim() === "" || !Number.isFinite(Number(value)))) return false;
     const snapshot = snapshotModelState();
     instance[key] = key === "rotation" ? Number(value) * Math.PI / 180 : Boolean(value);
-    if (instance === freeInstancePlacement) return true;
+    if (geometryInstanceCommand.isPlacing(instance)) return true;
     // A property edit specifies the transform; solving must not silently undo it
     // or deform the shared source to make an impossible placement succeed.
     const sources = geometryInstanceSourceObjects(instance);
@@ -3086,44 +3045,6 @@
     return true;
   }
 
-  function commitGeometryInstanceReference(line) {
-    if (!(line instanceof Line) || !lineHasDirection(line) || elementSketchId(line) !== activeSketchId()) {
-      setHint(applicationText("同じSketchの有効な線を選択してください", "Select a valid line in the active sketch."), "error");
-      return false;
-    }
-    const type = mode === "mirror-axis" ? "mirror" : mode === "pattern-direction" ? "pattern" : null;
-    if (!type || geometryInstanceCommandSources.length === 0) return false;
-    let spacing = 10;
-    let copies = 2;
-    if (type === "pattern") {
-      const rawSpacing = window.prompt(applicationText("パターン間隔 (mm)", "Pattern spacing (mm)"), "10");
-      if (rawSpacing == null) return false;
-      const rawCopies = window.prompt(applicationText("コピー数（元図形を含まない）", "Number of copies (excluding source)"), "2");
-      if (rawCopies == null) return false;
-      spacing = Number(rawSpacing);
-      copies = Math.trunc(Number(rawCopies));
-      if (!(spacing > 0) || !(copies > 0) || copies > 1000) {
-        setHint(applicationText("間隔は正数、コピー数は1〜1000で指定してください", "Spacing must be positive and copies must be from 1 to 1000."), "error");
-        return false;
-      }
-    }
-    const id = type === "mirror" ? `MI${mirrorInstanceSeq++}` : `PI${patternInstanceSeq++}`;
-    const raw = { id, type, sketchId: activeSketchId(), sources: geometryInstanceCommandSources, appearanceOverride: {} };
-    if (type === "mirror") raw.axis = geometryRefForItem(line);
-    else Object.assign(raw, { direction: geometryRefForItem(line), spacing, copies, reversed: false });
-    const instance = normalizeGeometryInstance(raw);
-    model.geometryInstances.push(instance);
-    geometryInstanceCommandSources = [];
-    mode = "select";
-    clearSelection();
-    canvasSelection.set("geometryInstances", [instance]);
-    updateToolbar();
-    updateUI({ refreshAnalysis: false });
-    draw();
-    recordHistory(type === "mirror" ? "ミラーインスタンス追加" : "パターンインスタンス追加");
-    setHint(type === "mirror" ? applicationText("ミラーインスタンスを作成しました", "Mirror instance created") : applicationText("パターンインスタンスを作成しました", "Pattern instance created"));
-    return true;
-  }
 
   function startCenterlineCommand() {
     cancelConstraintTargetCommand("");
@@ -4596,7 +4517,7 @@
     resetArcCommandState();
     splineDraft.reset();
     sketchProjectionSources = [];
-    geometryInstanceCommandSources = [];
+    geometryInstanceCommand.clearSources();
     instanceSourceCommand.reset();
     splineEditSession = null;
     pointerPreview = null;
@@ -7427,11 +7348,8 @@
   }
 
   function drawFreeInstancePreview() {
-    if (mode !== "free-instance-place" || !freeInstancePlacement || !pointerPreview) return;
-    Object.assign(freeInstancePlacement, { x: pointerPreview.x, y: pointerPreview.y });
-    const sources = freeInstancePlacement.sources.map((ref) => ({ ref, item: resolveGeometryRef(ref) }));
-    if (sources.some(({ item }) => !item)) return;
-    const bundle = createGeometryInstanceBundle(freeInstancePlacement, sources, null, null);
+    const bundle = geometryInstanceCommand.preview(pointerPreview);
+    if (!bundle) return;
     withCanvasState(() => {
       ctx.strokeStyle = "#2563eb";
       ctx.lineWidth = 2 / viewport.scale;
@@ -8846,7 +8764,7 @@
   }
 
   function cancelPendingCommand(message = "コマンドをキャンセルしました") {
-    freeInstancePlacement = null;
+    geometryInstanceCommand.clearPlacement();
     if (!pendingCommand) return;
     if (pendingCommand.type === "offset-value") {
       offsetSelection.reset();
@@ -9093,7 +9011,7 @@
     pendingCommand = null;
     pendingConstraintCommand = null;
     sketchProjectionSources = [];
-    geometryInstanceCommandSources = [];
+    geometryInstanceCommand.clearSources();
     instanceSourceCommand.reset();
     hoveredSketchIdentity = null;
     lastPointerWorld = null;
@@ -9750,7 +9668,7 @@
   const MULTIPLE_PROPERTY_MIXED = window.PropertySelection.mixedValue;
   const propertySelection = window.PropertySelection.create({
     Point, Line, canvasSelection,
-    getOperation: () => ({ mode, instanceSourceEdit: instanceSourceCommand.current, freeInstancePlacement, blockPlacementDefinitionId: blockPlacementCommand.definitionId }),
+    getOperation: () => ({ mode, instanceSourceEdit: instanceSourceCommand.current, freeInstancePlacement: geometryInstanceCommand.pending, blockPlacementDefinitionId: blockPlacementCommand.definitionId }),
     effectiveSelectedConstraint, selectedGeometryItems, blockDefinitionById, sketchById, activeSketchId,
     blockProjectionBundle, effectiveAppearanceForElement, documentModel, normalizeAppearance,
     hatchAppearanceForDisplay, normalizeAnnotationStyle,
@@ -9815,7 +9733,7 @@
   const { input: handlePropertiesInput, change: handlePropertiesChange, click: handlePropertiesClick } = propertiesController;
   const propertyPresentation = window.PropertyPresentation.create({
     currentScope: workspace.current, documentModel, canvasSelection,
-    getOperation: () => ({ mode, freeInstancePlacement, instanceSourceEdit: instanceSourceCommand.current, blockPlacementEnabledSketchIds: blockPlacementCommand.enabledSketchIds, blockPlacementRotationLocked: blockPlacementCommand.rotationLocked }),
+    getOperation: () => ({ mode, freeInstancePlacement: geometryInstanceCommand.pending, instanceSourceEdit: instanceSourceCommand.current, blockPlacementEnabledSketchIds: blockPlacementCommand.enabledSketchIds, blockPlacementRotationLocked: blockPlacementCommand.rotationLocked }),
     effectiveAppearanceForElement, sketchName, hatchAppearanceForDisplay, resolvedHatchBoundary,
     blockDefinitionById, blockProjectionBundle, normalizeAppearance, emptyGeometryInstanceBundle,
     geometryInstanceBundle, activeSketchId, targetFromConstraint, dimensionDisplayState,
@@ -13987,8 +13905,7 @@
     if (e.key === "Escape") {
       e.preventDefault();
       if (mode.startsWith("free-instance-")) {
-        freeInstancePlacement = null;
-        geometryInstanceCommandSources = [];
+        geometryInstanceCommand.reset();
         mode = "select";
         updateUI({ refreshAnalysis: false });
         updateToolbar();
@@ -13996,7 +13913,7 @@
         return;
       }
       if (mode === "mirror-axis" || mode === "pattern-direction") {
-        geometryInstanceCommandSources = [];
+        geometryInstanceCommand.clearSources();
         mode = "select";
         updateToolbar();
         setHint(applicationText("派生インスタンス作成をキャンセルしました", "Derived instance creation canceled."));
