@@ -299,9 +299,6 @@
 
   let hatchPreview = null;
   let hatchRepairTarget = null;
-  let offsetSource = null;
-  let offsetChainEntries = [];
-  let offsetChainSelectionCommitted = false;
   let pendingCommand = null;
   let pendingConstraintCommand = null;
   let constraintOperands = [];
@@ -315,6 +312,13 @@
   let hoveredSketchIdentity = null;
   let hoveredSketchTreeId = null;
   let constructionLineMode = false;
+  const offsetSelection = window.OffsetSelection.create({
+    getModel: () => model, activeSketchId, elementSketchId, constraintSketchId,
+    Line, Arc, CoincidentConstraint, ArcEndpointCoincidentConstraint,
+    ArcEndpointArcEndpointCoincidentConstraint, OffsetChainConstraint,
+    onSelectionChanged: syncOffsetChainSelection,
+  });
+  const { add: addOffsetChainGeometry, isClosed: offsetChainIsClosed } = offsetSelection;
   const geometryIds = window.GeometryIds.create();
   const { nextSeq } = window.GeometryIds;
   let sketchSeq = 2;
@@ -4681,76 +4685,11 @@
     return { distance: Math.abs(signed), sign: signed < 0 ? -1 : 1 };
   }
 
-  function offsetEndpointToken(geometry, endpoint) {
-    if (geometry instanceof Line) return endpoint === "start" ? geometry.p1 : geometry.p2;
-    return `${geometry.id}:${endpoint}`;
-  }
-
-  function offsetChainTopology() {
-    const parent = new Map();
-    const ensure = (item) => {
-      if (!parent.has(item)) parent.set(item, item);
-      return item;
-    };
-    const find = (item) => {
-      ensure(item);
-      let root = item;
-      while (parent.get(root) !== root) root = parent.get(root);
-      let current = item;
-      while (parent.get(current) !== current) {
-        const next = parent.get(current);
-        parent.set(current, root);
-        current = next;
-      }
-      return root;
-    };
-    const union = (first, second) => {
-      const a = find(first);
-      const b = find(second);
-      if (a !== b) parent.set(b, a);
-    };
-    for (const line of model.lines.filter((item) => elementSketchId(item) === activeSketchId())) {
-      ensure(line.p1);
-      ensure(line.p2);
-    }
-    for (const arc of model.arcs.filter((item) => elementSketchId(item) === activeSketchId())) {
-      ensure(offsetEndpointToken(arc, "start"));
-      ensure(offsetEndpointToken(arc, "end"));
-    }
-    for (const constraint of model.constraints) {
-      if (constraint.enabled === false || constraintSketchId(constraint) !== activeSketchId()) continue;
-      if (constraint instanceof CoincidentConstraint) union(constraint.p1, constraint.p2);
-      else if (constraint instanceof ArcEndpointCoincidentConstraint) union(offsetEndpointToken(constraint.arc, constraint.endpoint), constraint.point);
-      else if (constraint instanceof ArcEndpointArcEndpointCoincidentConstraint) {
-        union(offsetEndpointToken(constraint.a, constraint.endpointA), offsetEndpointToken(constraint.b, constraint.endpointB));
-      } else if (constraint instanceof OffsetChainConstraint) {
-        const joinCount = constraint.closed ? constraint.offsets.length : constraint.offsets.length - 1;
-        for (let index = 0; index < joinCount; index++) {
-          const next = (index + 1) % constraint.offsets.length;
-          union(offsetEndpointToken(constraint.offsets[index], "end"), offsetEndpointToken(constraint.offsets[next], "start"));
-        }
-      }
-    }
-    return { find };
-  }
-
-  function offsetChainEntryEndpoint(entry, endpoint, topology) {
-    const nativeEndpoint = entry.reversed
-      ? (endpoint === "start" ? "end" : "start")
-      : endpoint;
-    return topology.find(offsetEndpointToken(entry.geometry, nativeEndpoint));
-  }
-
-  function offsetChainIsClosed(entries = offsetChainEntries, topology = offsetChainTopology()) {
-    return entries.length > 1
-      && offsetChainEntryEndpoint(entries[0], "start", topology) === offsetChainEntryEndpoint(entries.at(-1), "end", topology);
-  }
-
   function syncOffsetChainSelection() {
     canvasSelection.set("points", []);
-    canvasSelection.set("circles", offsetSource instanceof Circle ? [offsetSource] : []);
-    canvasSelection.set("lines", offsetChainEntries.map((entry) => entry.geometry).filter((item) => item instanceof Line));
-    canvasSelection.set("arcs", offsetChainEntries.map((entry) => entry.geometry).filter((item) => item instanceof Arc));
+    canvasSelection.set("circles", offsetSelection.source instanceof Circle ? [offsetSelection.source] : []);
+    canvasSelection.set("lines", offsetSelection.entries.map((entry) => entry.geometry).filter((item) => item instanceof Line));
+    canvasSelection.set("arcs", offsetSelection.entries.map((entry) => entry.geometry).filter((item) => item instanceof Arc));
     canvasSelection.set("blockInstances", []);
     canvasSelection.set("annotations", []);
     canvasSelection.set("hatches", []);
@@ -4759,39 +4698,6 @@
     canvasSelection.set("arcEndpointPair", null);
     canvasSelection.set("dimensionConstraint", null);
     canvasSelection.set("constraint", null);
-  }
-
-  function addOffsetChainGeometry(geometry) {
-    if (!(geometry instanceof Line || geometry instanceof Arc) || geometry.blockProjection || elementSketchId(geometry) !== activeSketchId()) {
-      return { ok: false, code: "unsupported" };
-    }
-    if (offsetChainEntries.some((entry) => entry.geometry === geometry)) return { ok: false, code: "already-selected" };
-    if (offsetChainEntries.length === 0) {
-      offsetChainEntries = [{ geometry, reversed: false }];
-      offsetSource = geometry;
-      syncOffsetChainSelection();
-      return { ok: true };
-    }
-    const topology = offsetChainTopology();
-    if (offsetChainIsClosed(offsetChainEntries, topology)) return { ok: false, code: "closed-chain" };
-    const head = offsetChainEntryEndpoint(offsetChainEntries[0], "start", topology);
-    const tail = offsetChainEntryEndpoint(offsetChainEntries.at(-1), "end", topology);
-    const candidateStart = topology.find(offsetEndpointToken(geometry, "start"));
-    const candidateEnd = topology.find(offsetEndpointToken(geometry, "end"));
-    let placement = null;
-    if (candidateStart === tail && candidateEnd === head) placement = { position: "append", reversed: false };
-    else if (candidateEnd === tail && candidateStart === head) placement = { position: "append", reversed: true };
-    else if (candidateStart === tail) placement = { position: "append", reversed: false };
-    else if (candidateEnd === tail) placement = { position: "append", reversed: true };
-    else if (candidateEnd === head) placement = { position: "prepend", reversed: false };
-    else if (candidateStart === head) placement = { position: "prepend", reversed: true };
-    if (!placement) return { ok: false, code: "not-connected" };
-    const entry = { geometry, reversed: placement.reversed };
-    if (placement.position === "append") offsetChainEntries.push(entry);
-    else offsetChainEntries.unshift(entry);
-    offsetSource = offsetChainEntries[0].geometry;
-    syncOffsetChainSelection();
-    return { ok: true, closed: offsetChainIsClosed(offsetChainEntries, topology) };
   }
 
   function offsetChainEntryDistanceFromPointer(entry, pointer) {
@@ -5079,9 +4985,7 @@
     const ok = chainEntries?.length > 1
       ? createOffsetChainGeometry(chainEntries, value, chainSide, pointer, chainClosed, dimensionSegmentIndex)
       : createOffsetGeometry(source, value, sign, pointer);
-    offsetSource = null;
-    offsetChainEntries = [];
-    offsetChainSelectionCommitted = false;
+    offsetSelection.reset();
     pointerPreview = null;
     clearSelection();
     updateToolbar();
@@ -5123,9 +5027,7 @@
     instanceSourceEdit = null;
     splineEditSession = null;
     pointerPreview = null;
-    offsetSource = null;
-    offsetChainEntries = [];
-    offsetChainSelectionCommitted = false;
+    offsetSelection.reset();
     pendingCommand = null;
     pendingConstraintCommand = null;
     constraintOperands = [];
@@ -5803,9 +5705,7 @@
     filletCommand.reset();
     pointerPreview = null;
     trimPreview = null;
-    offsetSource = null;
-    offsetChainEntries = [];
-    offsetChainSelectionCommitted = false;
+    offsetSelection.reset();
     clearSnap();
     mode = "select";
     updateToolbar();
@@ -5830,9 +5730,7 @@
     sketchProjectionSources = [];
     pointerPreview = null;
     trimPreview = null;
-    offsetSource = null;
-    offsetChainEntries = [];
-    offsetChainSelectionCommitted = false;
+    offsetSelection.reset();
     hatchPreview = null;
     hatchRepairTarget = null;
     clearSnap();
@@ -5844,7 +5742,7 @@
   }
 
   function hasActiveDrawOperation() {
-    return Boolean(lineCommand.startPoint || centerlineCommand.targets.length || centerlineCommand.firstPoint || rectangleCommand.startPoint || slotCommand.firstCenter || slotCommand.secondCenter || filletCommand.firstLine || circularCommands.circleCenterPoint || circularCommands.arcCenterPoint || circularCommands.arcStartPoint || circularCommands.threePointArcStart || circularCommands.threePointArcEnd || splineDraft.points.length || offsetSource || offsetChainEntries.length);
+    return Boolean(lineCommand.startPoint || centerlineCommand.targets.length || centerlineCommand.firstPoint || rectangleCommand.startPoint || slotCommand.firstCenter || slotCommand.secondCenter || filletCommand.firstLine || circularCommands.circleCenterPoint || circularCommands.arcCenterPoint || circularCommands.arcStartPoint || circularCommands.threePointArcStart || circularCommands.threePointArcEnd || splineDraft.points.length || offsetSelection.source || offsetSelection.entries.length);
   }
 
 
@@ -5864,9 +5762,7 @@
     sketchProjectionSources = [];
     pointerPreview = null;
     trimPreview = null;
-    offsetSource = null;
-    offsetChainEntries = [];
-    offsetChainSelectionCommitted = false;
+    offsetSelection.reset();
     hatchPreview = null;
     hatchRepairTarget = null;
     clearSnap();
@@ -8551,15 +8447,15 @@
   }
 
   function drawOffsetPreview() {
-    if (mode !== "offset" || !(offsetSource || offsetChainEntries.length)) return;
+    if (mode !== "offset" || !(offsetSelection.source || offsetSelection.entries.length)) return;
     const pointer = pendingCommand?.type === "offset-value" ? pendingCommand.pointer : pointerPreview;
     if (!pointer) return;
-    if (offsetChainEntries.length > 1) {
+    if (offsetSelection.entries.length > 1) {
       const measured = pendingCommand?.type === "offset-value"
         ? { distance: Number(pendingCommand.buffer), side: pendingCommand.chainSide, index: pendingCommand.dimensionSegmentIndex }
-        : offsetChainDistanceFromPointer(offsetChainEntries, pointer);
+        : offsetChainDistanceFromPointer(offsetSelection.entries, pointer);
       const distance = Number.isFinite(measured.distance) && measured.distance > 0 ? measured.distance : MIN_ORIENTATION_LENGTH * 10;
-      const plan = offsetChainDraft(offsetChainEntries, distance, measured.side, offsetChainIsClosed(offsetChainEntries));
+      const plan = offsetChainDraft(offsetSelection.entries, distance, measured.side, offsetChainIsClosed(offsetSelection.entries));
       if (!plan.ok) return;
       withCanvasState(() => {
         ctx.strokeStyle = "#2563eb";
@@ -8576,8 +8472,8 @@
           ctx.stroke();
         }
       });
-      const index = Math.max(0, Math.min(offsetChainEntries.length - 1, Number(measured.index) || 0));
-      const source = offsetChainEntries[index].geometry;
+      const index = Math.max(0, Math.min(offsetSelection.entries.length - 1, Number(measured.index) || 0));
+      const source = offsetSelection.entries[index].geometry;
       const offset = plan.geometries[index];
       const target = offsetDimensionTarget(source, offset, distance, offsetPairSign(source, offset));
       const dimension = dimensionWithLabelAt(target, dimensionFromAnchor(target, pointer, { allowPointAxis: false }), pointer);
@@ -8588,7 +8484,7 @@
       drawDimension(target, dimension, formatDimensionLabel(distance), true);
       return;
     }
-    const source = offsetSource || offsetChainEntries[0]?.geometry;
+    const source = offsetSelection.source || offsetSelection.entries[0]?.geometry;
     if (!source) return;
     const measured = offsetDistanceFromPointer(source, pointer);
     const sign = pendingCommand?.type === "offset-value" ? pendingCommand.sign : measured.sign;
@@ -9467,9 +9363,7 @@
     freeInstancePlacement = null;
     if (!pendingCommand) return;
     if (pendingCommand.type === "offset-value") {
-      offsetSource = null;
-      offsetChainEntries = [];
-      offsetChainSelectionCommitted = false;
+      offsetSelection.reset();
       pointerPreview = null;
     }
     pendingCommand = null;
@@ -9709,9 +9603,7 @@
     resetArcCommandState();
     pointerPreview = null;
     trimPreview = null;
-    offsetSource = null;
-    offsetChainEntries = [];
-    offsetChainSelectionCommitted = false;
+    offsetSelection.reset();
     pendingCommand = null;
     pendingConstraintCommand = null;
     sketchProjectionSources = [];
@@ -15106,13 +14998,13 @@
     }
 
     if (mode === "offset") {
-      if (offsetSource instanceof Circle) {
-        startOffsetDistanceInput(offsetSource, p);
+      if (offsetSelection.source instanceof Circle) {
+        startOffsetDistanceInput(offsetSelection.source, p);
         return;
       }
-      if (offsetChainSelectionCommitted && offsetChainEntries.length > 0) {
-        if (offsetChainEntries.length === 1) startOffsetDistanceInput(offsetChainEntries[0].geometry, p);
-        else startOffsetChainDistanceInput(offsetChainEntries, p);
+      if (offsetSelection.committed && offsetSelection.entries.length > 0) {
+        if (offsetSelection.entries.length === 1) startOffsetDistanceInput(offsetSelection.entries[0].geometry, p);
+        else startOffsetChainDistanceInput(offsetSelection.entries, p);
         return;
       }
       const candidate = hitL || hitA;
@@ -15130,8 +15022,8 @@
           pointerPreview = p;
           const closedText = added.closed ? applicationText("（閉チェーン）", " (closed chain)") : "";
           setHint(applicationText(
-            `${offsetChainEntries.length}個選択${closedText}。続けて線・円弧を選択するか、空白クリック／Enterでチェーンを確定してください`,
-            `${offsetChainEntries.length} selected${closedText}. Select another line/arc, or click blank canvas / press Enter to finish the chain.`,
+            `${offsetSelection.entries.length}個選択${closedText}。続けて線・円弧を選択するか、空白クリック／Enterでチェーンを確定してください`,
+            `${offsetSelection.entries.length} selected${closedText}. Select another line/arc, or click blank canvas / press Enter to finish the chain.`,
           ));
           updateGeometrySelectionUI();
           draw();
@@ -15139,11 +15031,11 @@
         return;
       }
       if (hitC) {
-        if (offsetChainEntries.length > 0) {
+        if (offsetSelection.entries.length > 0) {
           setHint(applicationText("円は線・円弧のチェーンへ追加できません", "A circle cannot be added to a line/arc chain."), "error");
           return;
         }
-        offsetSource = hitC;
+        offsetSelection.selectSource(hitC);
         syncOffsetChainSelection();
         pointerPreview = p;
         setHint("オフセットする側と距離の目安をクリックしてください");
@@ -15151,10 +15043,10 @@
         draw();
         return;
       }
-      if (offsetChainEntries.length > 0) {
-        offsetChainSelectionCommitted = true;
-        if (offsetChainEntries.length === 1) startOffsetDistanceInput(offsetChainEntries[0].geometry, p);
-        else startOffsetChainDistanceInput(offsetChainEntries, p);
+      if (offsetSelection.entries.length > 0) {
+        offsetSelection.commitSelection();
+        if (offsetSelection.entries.length === 1) startOffsetDistanceInput(offsetSelection.entries[0].geometry, p);
+        else startOffsetChainDistanceInput(offsetSelection.entries, p);
         return;
       }
       setHint("オフセットする線、円、円弧をクリックしてください", "error");
@@ -15552,12 +15444,12 @@
         return;
       }
       pointerPreview = p;
-      if (offsetSource instanceof Circle || offsetChainSelectionCommitted) {
+      if (offsetSelection.source instanceof Circle || offsetSelection.committed) {
         hoveredPoint = null;
         hoveredEndpointPoint = null;
-        hoveredLine = offsetSource instanceof Line ? offsetSource : null;
-        hoveredCircle = offsetSource instanceof Circle ? offsetSource : null;
-        hoveredArc = offsetSource instanceof Arc ? offsetSource : null;
+        hoveredLine = offsetSelection.source instanceof Line ? offsetSelection.source : null;
+        hoveredCircle = offsetSelection.source instanceof Circle ? offsetSelection.source : null;
+        hoveredArc = offsetSelection.source instanceof Arc ? offsetSelection.source : null;
       } else {
         const nextLine = hitLine(p.x, p.y);
         const nextCircle = nextLine ? null : hitCircle(p.x, p.y);
@@ -16277,9 +16169,9 @@
       return;
     }
 
-    if (!textEditingTarget && e.key === "Enter" && mode === "offset" && !pendingCommand && offsetChainEntries.length > 0 && !offsetChainSelectionCommitted) {
+    if (!textEditingTarget && e.key === "Enter" && mode === "offset" && !pendingCommand && offsetSelection.entries.length > 0 && !offsetSelection.committed) {
       e.preventDefault();
-      offsetChainSelectionCommitted = true;
+      offsetSelection.commitSelection();
       pointerPreview = lastPointerWorld ? { ...lastPointerWorld } : pointerPreview;
       setHint(applicationText("チェーンを確定しました。オフセットする側と距離の目安をクリックしてください", "Chain confirmed. Click the offset side and an approximate distance."));
       updateToolbar();
@@ -16742,9 +16634,7 @@
     resetArcCommandState();
     pointerPreview = null;
     trimPreview = null;
-    offsetSource = null;
-    offsetChainEntries = [];
-    offsetChainSelectionCommitted = false;
+    offsetSelection.reset();
     hoveredPoint = null;
     hoveredEndpointPoint = null;
     hoveredLine = null;
@@ -16771,21 +16661,19 @@
     resetArcCommandState();
     pointerPreview = null;
     trimPreview = null;
-    offsetSource = null;
-    offsetChainEntries = [];
-    offsetChainSelectionCommitted = false;
+    offsetSelection.reset();
     const selected = [...canvasSelection.lines, ...canvasSelection.circles, ...canvasSelection.arcs];
     if (selected.length === 1 && selected[0] instanceof Circle) {
-      offsetSource = selected[0];
+      offsetSelection.selectSource(selected[0]);
     } else if (selected.length === 1 && (selected[0] instanceof Line || selected[0] instanceof Arc)) {
       addOffsetChainGeometry(selected[0]);
-      offsetChainSelectionCommitted = true;
+      offsetSelection.commitSelection();
     } else {
       clearSelection();
     }
     clearSnap();
     updateToolbar();
-    setHint(offsetSource && (offsetSource instanceof Circle || offsetChainSelectionCommitted)
+    setHint(offsetSelection.source && (offsetSelection.source instanceof Circle || offsetSelection.committed)
       ? "オフセットする側と距離の目安をクリックしてください"
       : applicationText("オフセットする線または円弧を順番にクリックしてください。円は単独で選択します", "Select connected lines or arcs in order. Select a circle by itself."));
     updateUI();
@@ -19722,7 +19610,7 @@
         }, drawArcPreview);
         capture("offset", () => {
           mode = "offset";
-          offsetSource = addLine(addPoint(0, 0, true, "endpoint"), addPoint(80, 0, true, "endpoint"));
+          offsetSelection.selectSource(addLine(addPoint(0, 0, true, "endpoint"), addPoint(80, 0, true, "endpoint")));
           pointerPreview = { x: 40, y: 20 };
         }, drawOffsetPreview);
         capture("trim", () => {
@@ -19969,7 +19857,7 @@
       },
       offsetUiState() {
         const constraints = model.constraints.filter((constraint) => constraint instanceof OffsetConstraint);
-        const preview = offsetSource && pointerPreview ? offsetDistanceFromPointer(offsetSource, pointerPreview) : null;
+        const preview = offsetSelection.source && pointerPreview ? offsetDistanceFromPointer(offsetSelection.source, pointerPreview) : null;
         return {
           pendingType: pendingCommand?.type || null,
           lineCount: model.lines.length,
@@ -20035,8 +19923,8 @@
         const constraints = model.constraints.filter((constraint) => constraint instanceof OffsetChainConstraint);
         const serialized = serializeModel();
         return {
-          selectedCount: offsetChainEntries.length,
-          selectionCommitted: offsetChainSelectionCommitted,
+          selectedCount: offsetSelection.entries.length,
+          selectionCommitted: offsetSelection.committed,
           pendingType: pendingCommand?.type || null,
           lineCount: model.lines.length,
           constraintCount: constraints.length,
@@ -20089,15 +19977,11 @@
       canReselectOffsetResultChainForTest() {
         const constraint = model.constraints.find((item) => item instanceof OffsetChainConstraint);
         if (!constraint) return null;
-        offsetSource = null;
-        offsetChainEntries = [];
-        offsetChainSelectionCommitted = false;
+        offsetSelection.reset();
         const first = addOffsetChainGeometry(constraint.offsets[0]);
         const second = addOffsetChainGeometry(constraint.offsets[1]);
-        const result = { first: first.ok, second: second.ok, selectedCount: offsetChainEntries.length };
-        offsetSource = null;
-        offsetChainEntries = [];
-        offsetChainSelectionCommitted = false;
+        const result = { first: first.ok, second: second.ok, selectedCount: offsetSelection.entries.length };
+        offsetSelection.reset();
         clearSelection();
         return result;
       },
