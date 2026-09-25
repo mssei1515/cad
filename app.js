@@ -9895,31 +9895,26 @@
 
 
 
-  function selectedPropertiesTarget() {
-    if (mode === "instance-sources" && instanceSourceEdit) return { kind: "geometryInstance", item: instanceSourceEdit.instance };
-    if (freeInstancePlacement) return { kind: "geometryInstance", item: freeInstancePlacement };
-    if (mode === "block-place" && blockPlacementDefinitionId) return { kind: "blockPlacement", item: blockDefinitionById(blockPlacementDefinitionId) };
-    const constraint = canvasSelection.dimensionConstraint || effectiveSelectedConstraint();
-    if (constraint) return { kind: "constraint", item: constraint };
-    if (canvasSelection.geometryInstances.length === 1 && canvasSelection.referenceImages.length === 0 && canvasSelection.hatches.length === 0 && canvasSelection.annotations.length === 0 && canvasSelection.blockInstances.length === 0 && selectedGeometryItems().length === 0) return { kind: "geometryInstance", item: canvasSelection.geometryInstances[0] };
-    if (canvasSelection.referenceImages.length === 1 && canvasSelection.hatches.length === 0 && canvasSelection.annotations.length === 0 && canvasSelection.blockInstances.length === 0 && canvasSelection.geometryInstances.length === 0 && selectedGeometryItems().length === 0) return { kind: "referenceImage", item: canvasSelection.referenceImages[0] };
-    if (canvasSelection.hatches.length === 1 && canvasSelection.referenceImages.length === 0 && canvasSelection.annotations.length === 0 && canvasSelection.blockInstances.length === 0 && canvasSelection.geometryInstances.length === 0 && selectedGeometryItems().length === 0) return { kind: "hatch", item: canvasSelection.hatches[0] };
-    if (canvasSelection.annotations.length === 1 && canvasSelection.referenceImages.length === 0 && canvasSelection.hatches.length === 0 && canvasSelection.blockInstances.length === 0 && canvasSelection.geometryInstances.length === 0 && selectedGeometryItems().length === 0) return { kind: "annotation", item: canvasSelection.annotations[0] };
-    if (canvasSelection.blockInstances.length === 1 && canvasSelection.referenceImages.length === 0 && canvasSelection.geometryInstances.length === 0 && selectedGeometryItems().length === 0 && canvasSelection.annotations.length === 0 && canvasSelection.hatches.length === 0) return { kind: "block", item: canvasSelection.blockInstances[0] };
-    const geometry = selectedGeometryItems();
-    if (geometry.length === 1 && canvasSelection.referenceImages.length === 0 && canvasSelection.blockInstances.length === 0 && canvasSelection.geometryInstances.length === 0 && canvasSelection.annotations.length === 0 && canvasSelection.hatches.length === 0) return { kind: "geometry", item: geometry[0] };
-    const multipleItems = [
-      ...geometry.map((item) => ({ kind: "geometry", item })),
-      ...canvasSelection.blockInstances.map((item) => ({ kind: "block", item })),
-      ...canvasSelection.geometryInstances.map((item) => ({ kind: "geometryInstance", item })),
-      ...canvasSelection.annotations.map((item) => ({ kind: "annotation", item })),
-      ...canvasSelection.hatches.map((item) => ({ kind: "hatch", item })),
-    ];
-    if (multipleItems.length > 1) return { kind: "multiple", count: multipleItems.length, items: multipleItems };
-    return { kind: "sketch", item: sketchById(activeSketchId()) };
-  }
 
-  const MULTIPLE_PROPERTY_MIXED = Symbol("multiple-property-mixed");
+  const MULTIPLE_PROPERTY_MIXED = window.PropertySelection.mixedValue;
+  const propertySelection = window.PropertySelection.create({
+    Point, Line, canvasSelection,
+    getOperation: () => ({ mode, instanceSourceEdit, freeInstancePlacement, blockPlacementDefinitionId }),
+    effectiveSelectedConstraint, selectedGeometryItems, blockDefinitionById, sketchById, activeSketchId,
+    blockProjectionBundle, effectiveAppearanceForElement, documentModel, normalizeAppearance,
+    hatchAppearanceForDisplay, normalizeAnnotationStyle,
+  });
+  const { selectedPropertiesTarget, multiplePropertyTypeKey, multiplePropertySameType, blockPropertyAppearance, multiplePropertyAppearance, multiplePropertySupports, multiplePropertyValue } = propertySelection;
+  const appearanceEditing = window.AppearanceEditing.create({
+    normalizeAppearance, normalizeAnnotationStyle, normalizeHatchAppearance, normalizeDimensionAppearance,
+    defaultDimensionAppearance: DEFAULT_DIMENSION_APPEARANCE, dimensionNumericRules: DIMENSION_APPEARANCE_NUMERIC_RULES,
+  });
+  const { applyAppearanceInput, applyAnnotationStyleValue, applyHatchAppearanceInput, applyDimensionAppearanceValue } = appearanceEditing;
+  const { apply: applyMultipleProperty } = window.BulkPropertyCommand.create({
+    guardSketchProjectionShapeEdit, applicationText, updatePropertiesUI, draw,
+    multiplePropertySupports, applyAnnotationStyleValue, normalizeHatchAppearance, applyAppearanceInput,
+    invalidateBlockProjectionCache, synchronizeSketchProjectionMetadata, recordHistory, updateUI,
+  });
   const appearanceControls = window.AppearanceControls.create({
     applicationText, escapeHtml, formatDisplayNumber, normalizeAppearance, normalizeDimensionAppearance,
     dimensionLengthKeys: DIMENSION_APPEARANCE_LENGTH_KEYS, defaultDimensionAppearance: DEFAULT_DIMENSION_APPEARANCE,
@@ -9936,54 +9931,11 @@
   const { open: openAppearanceColorPalette, commit: commitColorPaletteValue } = appearancePalette;
 
 
-  function multiplePropertyTypeKey(target) {
-    if (target.kind === "geometry") return `${target.kind}:${target.item?.constructor?.name || "Geometry"}`;
-    if (target.kind === "annotation") return `${target.kind}:${target.item?.type || "annotation"}`;
-    return target.kind;
-  }
 
-  function multiplePropertySameType(target) {
-    return new Set((target.items || []).map(multiplePropertyTypeKey)).size === 1;
-  }
 
-  function blockPropertyAppearance(item) {
-    const bundle = blockProjectionBundle(item);
-    const projected = [...(bundle.points || []), ...(bundle.lines || []), ...(bundle.circles || []), ...(bundle.arcs || []), ...(bundle.splines || [])][0];
-    return projected
-      ? effectiveAppearanceForElement(projected)
-      : { ...normalizeAppearance(documentModel.defaultAppearance, { partial: false }), ...normalizeAppearance(item.appearanceOverride) };
-  }
 
-  function multiplePropertyAppearance(target) {
-    if (target.kind === "geometry") return effectiveAppearanceForElement(target.item);
-    if (target.kind === "block") return blockPropertyAppearance(target.item);
-    if (target.kind === "hatch") return hatchAppearanceForDisplay(target.item);
-    if (target.kind === "annotation") return { ...normalizeAnnotationStyle(target.item.style), visible: target.item.visible !== false };
-    return {};
-  }
 
-  function multiplePropertySupports(target, key) {
-    if (key === "visible" || key === "color") return true;
-    if (key === "lineType") return target.kind === "geometry" || target.kind === "block" || (target.kind === "annotation" && target.item.type === "leader");
-    if (key === "lineWidth") return target.kind === "geometry" || target.kind === "block" || (target.kind === "hatch" && target.item.appearance?.patternType !== "solid") || (target.kind === "annotation" && target.item.type === "leader");
-    if (key === "construction") return target.kind === "geometry" && !(target.item instanceof Point);
-    if (key === "endpointOverhang" || key === "endpointMarkers") return target.kind === "geometry" && target.item instanceof Line && target.item.construction;
-    if (["patternType", "angle", "spacing", "opacity"].includes(key)) return target.kind === "hatch";
-    if (["textHeight", "fontFamily", "bold", "italic", "textAlign", "rotation"].includes(key)) return target.kind === "annotation";
-    if (["terminatorType", "terminatorSize"].includes(key)) return target.kind === "annotation" && target.item.type === "leader";
-    return false;
-  }
 
-  function multiplePropertyValue(target, key) {
-    const values = (target.items || []).map((entry) => {
-      if (key === "construction") return Boolean(entry.item.construction);
-      if (key === "rotation") return (Number(entry.item.rotation) || 0) * 180 / Math.PI;
-      const appearance = multiplePropertyAppearance(entry);
-      return key === "opacity" ? Number(appearance.opacity) * 100 : appearance[key];
-    });
-    if (values.length === 0) return MULTIPLE_PROPERTY_MIXED;
-    return values.every((value) => Object.is(value, values[0])) ? values[0] : MULTIPLE_PROPERTY_MIXED;
-  }
 
   function multiplePropertiesRows(target) {
     const items = target.items || [];
@@ -10423,101 +10375,10 @@
     panel.onclick = handlePropertiesClick;
   }
 
-  function applyAppearanceInput(target, key, rawValue) {
-    if (!target) return;
-    const next = { ...normalizeAppearance(target) };
-    if (rawValue === "") delete next[key];
-    else if (["visible", "endpointOverhang", "endpointMarkers"].includes(key)) next[key] = rawValue === "true";
-    else if (key === "lineWidth") next[key] = Math.max(0.1, Math.min(20, Number(rawValue)));
-    else next[key] = rawValue;
-    Object.assign(target, normalizeAppearance(next));
-    for (const existingKey of ["visible", "color", "lineType", "lineWidth", "endpointOverhang", "endpointMarkers"]) if (next[existingKey] == null) delete target[existingKey];
-  }
 
-  function applyAnnotationStyleValue(annotation, key, rawValue) {
-    if (!annotation) return false;
-    const next = { ...normalizeAnnotationStyle(annotation.style) };
-    if (["bold", "italic"].includes(key)) next[key] = Boolean(rawValue);
-    else if (["textHeight", "lineWidth", "terminatorSize"].includes(key)) next[key] = Number(rawValue);
-    else next[key] = rawValue;
-    annotation.style = normalizeAnnotationStyle(next);
-    return true;
-  }
 
-  function applyMultipleProperty(target, key, rawValue, { commit = true } = {}) {
-    if (target?.kind !== "multiple" || !key) return false;
-    const geometryItems = (target.items || []).filter((entry) => entry.kind === "geometry").map((entry) => entry.item);
-    if (key === "construction" && !guardSketchProjectionShapeEdit(geometryItems, {
-      includeSharedNodes: false,
-      action: applicationText("通常／補助作図切替", "Construction toggle"),
-    })) {
-      updatePropertiesUI();
-      draw();
-      return false;
-    }
-    for (const entry of target.items || []) {
-      if (!multiplePropertySupports(entry, key)) continue;
-      if (key === "construction") {
-        entry.item.construction = Boolean(rawValue);
-        continue;
-      }
-      if (entry.kind === "annotation") {
-        if (key === "visible") entry.item.visible = rawValue === true || rawValue === "true";
-        else if (key === "rotation") entry.item.rotation = Math.max(-3600, Math.min(3600, Number(rawValue) || 0)) * Math.PI / 180;
-        else applyAnnotationStyleValue(entry.item, key, rawValue);
-        continue;
-      }
-      if (entry.kind === "hatch") {
-        const next = { ...entry.item.appearance };
-        if (key === "visible") next.visible = rawValue === true || rawValue === "true";
-        else if (["angle", "spacing", "lineWidth"].includes(key)) next[key] = Number(rawValue);
-        else if (key === "opacity") next.opacity = Number(rawValue) / 100;
-        else next[key] = rawValue;
-        entry.item.appearance = normalizeHatchAppearance(next);
-        continue;
-      }
-      const owner = entry.kind === "block" ? (entry.item.appearanceOverride ||= {}) : (entry.item.appearance ||= {});
-      applyAppearanceInput(owner, key, typeof rawValue === "boolean" ? String(rawValue) : String(rawValue));
-      if (entry.kind === "block") invalidateBlockProjectionCache(entry.item.id);
-    }
-    if (key === "construction") synchronizeSketchProjectionMetadata();
-    if (commit) {
-      recordHistory("複数Objectプロパティ変更");
-      updateUI();
-    }
-    draw();
-    return true;
-  }
 
-  function applyHatchAppearanceInput(hatch, key, rawValue) {
-    if (!hatch || !key) return false;
-    const next = { ...hatch.appearance };
-    if (key === "visible") next.visible = rawValue === true || rawValue === "true";
-    else if (key === "patternType") next.patternType = rawValue;
-    else if (["angle", "spacing", "lineWidth"].includes(key)) next[key] = Number(rawValue);
-    else if (key === "opacity") next.opacity = Number(rawValue) / 100;
-    else if (key === "color") next.color = rawValue;
-    else return false;
-    hatch.appearance = normalizeHatchAppearance(next);
-    return true;
-  }
 
-  function applyDimensionAppearanceValue(owner, key, rawValue, { allowInheritance = true } = {}) {
-    if (!owner) return false;
-    const next = { ...normalizeDimensionAppearance(owner) };
-    if (allowInheritance && rawValue === "") delete next[key];
-    else if (key === "visible") next[key] = rawValue === "true";
-    else if (key === "terminatorType") next[key] = ["arrow", "filledArrow", "dot"].includes(rawValue) ? rawValue : DEFAULT_DIMENSION_APPEARANCE.terminatorType;
-    else if (key === "precision") {
-      next[key] = rawValue === "auto" || rawValue === "" ? null : Math.max(0, Math.min(10, Math.round(Number(rawValue))));
-    } else if (key === "toleranceUpper" || key === "toleranceLower") next[key] = rawValue === "" ? null : Number(rawValue);
-    else if (Object.prototype.hasOwnProperty.call(DIMENSION_APPEARANCE_NUMERIC_RULES, key)) next[key] = rawValue === "" ? DEFAULT_DIMENSION_APPEARANCE[key] : Number(rawValue);
-    else next[key] = rawValue;
-    const normalized = normalizeDimensionAppearance(next, { partial: allowInheritance });
-    for (const existingKey of ["visible", "color", "precision", "prefix", "suffix", "toleranceUpper", "toleranceLower", "terminatorType", "arrows", "extensionLines", "arrowheadLength", ...Object.keys(DIMENSION_APPEARANCE_NUMERIC_RULES)]) delete owner[existingKey];
-    Object.assign(owner, normalized);
-    return true;
-  }
 
   function applyDimensionDisplayInput(constraint, input) {
     if (!constraint?.dimension || !input?.dataset.dimensionDisplay) return false;

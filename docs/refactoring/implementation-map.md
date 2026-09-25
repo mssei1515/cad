@@ -283,3 +283,7 @@ index.htmlは既存の通常script読込列で両moduleをapp.jsより先に読�
 
 - `AppearanceControls`（`src/ui/appearance_controls.js`）: 図形／寸法外観の入力欄と継承値表示。Document非依存でPropertiesとDocument設定が共用する。
 - `AppearancePalette`（`src/ui/appearance_palette.js`）: 色選択session、標準色／使用中色、確定と取消を所有。各対象への適用と履歴は既存APIへ接続する。
+
+- `PropertySelection`（`src/editing/property_selection.js`）: Properties対象と共通値・対応項目の解決。操作状態とCanvas選択を読み、表示と編集の判断を共通化する。
+- `AppearanceEditing`（`src/editing/appearance_editing.js`）: 外観入力の正規化と指定対象への反映。DOM・Selection・履歴非依存。
+- `BulkPropertyCommand`（`src/commands/bulk_property_command.js`）: 一括適用の事前確認・同期・履歴・更新。入力プレビューと確定を区別する。

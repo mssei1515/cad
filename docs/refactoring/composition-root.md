@@ -4,6 +4,8 @@
 
 ## 現在の再開地点（2026-09-25）
 
+Propertiesの対象／共通値照会を`PropertySelection`、外観の正規化適用を`AppearanceEditing`、一括変更の調整を`BulkPropertyCommand`へ分離。表示・パレット・一括編集が同じ対応項目とmixed値を使う。構文210件・単体426件・統合UI／保存互換E2E114件が成功。app.jsは19,775行。次はProperties表示行の生成と編集入力transactionを整理する。全体目標と全体E2Eは未完了。
+
 Properties／Document設定の外観入力欄を`AppearanceControls`、色選択sessionと対象別適用・イベント接続を`AppearancePalette`へ分離。appからパレットsessionと使用中色収集・HTML生成を除去した。構文206件・単体423件・統合UI／保存互換E2E114件が成功。app.jsは19,914行。次はPropertiesの選択対象／表示モデルと入力編集transactionを整理する。全体目標と全体E2Eは未完了。
 
 共有サイドバーhoverと選択／拘束の表示参照を`SelectionHighlight`へ集約。ツリーの選択class更新をViewと表示対象解決へ分離し、呼出し元とDOM生成の存在しない旧一覧用イベント／選択処理を除去した。構文203件・単体420件・統合UI／保存互換E2E114件が成功。app.jsは20,188行。次はPropertiesの表示と編集コマンド、Canvasの広範なhover状態の境界を整理する。全体目標と全体E2Eは未完了。
