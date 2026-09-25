@@ -6,6 +6,8 @@
 
 ## 現在の再開地点（2026-09-25）
 
+SketchDeletionCommandへ削除範囲・外部参照検査・確認・寸法symbolガード・削除適用と通知順序を集約。scopeは呼出しごとに取得し、cache・解析・UIは所有者へ通知する。旧SketchProjectionConstraintによる子孫保持と親変更を維持し、仕様書に既存例外を明記。構文253件・単体514件・Block／統合UI／保存互換／SketchProjection E2E162件が成功。app.jsは17,485行。次は操作解除に残るドラッグ・選択矩形・画像操作sessionの所有者を調べ、状態と更新処理をまとめる。全体目標と全体E2Eは未完了。
+
 SketchCommandへSketch作成・切替・名前変更・表示切替と命名規則を集約。scopeを操作ごとに取得し、ID採番・入力・操作解除・UI・履歴は明示依存とした。復元後の操作解除には多数の未分離状態が残るため、setterを増やす抽出を避け、解除を利用する操作単位から整理した。構文251件・単体510件・Block／統合UI／保存互換E2E151件が成功。app.jsは17,565行。次は共通操作解除の状態所有者とSketch削除の参照検査・モデル更新を確認する。全体目標と全体E2Eは未完了。
 
 HistoryControllerへDocument／Block履歴の選択・記録・reset・Undo／Redo振分けと復元中状態を集約。appの共有historyRestoring変数を除去し、復元時の再記録抑止・finally通知を共通化した。具体的な復元とDOM・計測は明示adapterとして残る。構文249件・単体506件・Block／統合UI／保存互換E2E151件が成功。app.jsは17,639行。次はDocument読込／Block差替え後の操作解除・求解・表示更新と履歴UIの境界を調べる。全体目標と全体E2Eは未完了。
