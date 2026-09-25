@@ -291,10 +291,7 @@
   let blankDoubleClickCandidate = null;
   let suppressNextBlankDoubleClickEvent = false;
   let lineStartPoint = null;
-  let pointStartRollback = null;
   let rectangleStartPoint = null;
-  let lineStartRollback = null;
-  let lineCompletionRollback = null;
   let filletFirstLine = null;
   let splineEditSession = null;
   let sketchProjectionSources = [];
@@ -407,6 +404,14 @@
   const splineDraft = window.SplineDraft.create({
     currentScope: workspace.current, ids: geometryIds, endpointAt, samePosition, isPointUsedByPrimitive,
   });
+  const transientAuthoring = window.TransientAuthoring.create({
+    currentScope: workspace.current, ids: geometryIds, selection: canvasSelection, historySnapshot, documentHistory,
+    isHistoryRestoring: () => historyRestoring, updateHistoryButtons,
+    invalidateAnalysis: () => { constraintAnalysisState = null; },
+  });
+  const { beginTransientLineStartRollback, clearTransientLineStartRollback, beginTransientLineCompletionRollback,
+    clearTransientLineCompletionRollback, rollbackTransientLineCompletion, beginTransientPointRollback,
+    clearTransientPointRollback, rollbackTransientPoint, rollbackTransientLineStart } = transientAuthoring;
   const canvasSurface = window.CanvasSurface.create({
     canvas, ctx, viewport, readPixelRatio: () => window.devicePixelRatio || 1, ResizeObserverClass: window.ResizeObserver,
     onResize: () => {
@@ -5083,8 +5088,8 @@
     suppressNextBlankDoubleClickEvent = false;
     lineStartPoint = null;
     resetCenterlineCommandState();
-    pointStartRollback = null;
-    lineCompletionRollback = null;
+    clearTransientPointRollback();
+    clearTransientLineCompletionRollback();
     rectangleStartPoint = null;
     resetSlotCommandState();
     filletFirstLine = null;
@@ -5791,8 +5796,8 @@
     instanceSourceEdit = null;
     resetCenterlineCommandState();
     lineStartPoint = null;
-    pointStartRollback = null;
-    lineCompletionRollback = null;
+    clearTransientPointRollback();
+    clearTransientLineCompletionRollback();
     rectangleStartPoint = null;
     resetSlotCommandState();
     filletFirstLine = null;
@@ -5820,97 +5825,6 @@
     return Boolean(lineStartPoint || centerlineCommand.targets.length || centerlineCommand.firstPoint || rectangleStartPoint || slotCommand.firstCenter || slotCommand.secondCenter || filletFirstLine || circularCommands.circleCenterPoint || circularCommands.arcCenterPoint || circularCommands.arcStartPoint || circularCommands.threePointArcStart || circularCommands.threePointArcEnd || splineDraft.points.length || offsetSource || offsetChainEntries.length);
   }
 
-
-  function beginTransientLineStartRollback() {
-    lineStartRollback = {
-      pointLength: model.points.length,
-      constraintLength: model.constraints.length,
-      pointSeq: geometryIds.peek("point"),
-      lineLength: model.lines.length,
-    };
-  }
-
-  function clearTransientLineStartRollback() {
-    lineStartRollback = null;
-  }
-
-  function beginTransientLineCompletionRollback() {
-    lineCompletionRollback = {
-      pointLength: model.points.length,
-      constraintLength: model.constraints.length,
-      lineLength: model.lines.length,
-      pointSeq: geometryIds.peek("point"),
-      lineSeq: geometryIds.peek("line"),
-      completedEndpoint: null,
-      completedLine: null,
-      startRollback: lineStartRollback ? { ...lineStartRollback } : null,
-      createdAt: performance.now(),
-    };
-  }
-
-  function clearTransientLineCompletionRollback() {
-    lineCompletionRollback = null;
-  }
-
-  function rollbackTransientLineCompletion() {
-    if (!lineCompletionRollback) return false;
-    const transientSnapshot = historySnapshot();
-    const target = lineCompletionRollback.startRollback || lineCompletionRollback;
-    model.points.length = target.pointLength;
-    model.lines.length = target.lineLength ?? lineCompletionRollback.lineLength;
-    model.constraints.length = target.constraintLength;
-    geometryIds.restore({ pointSeq: target.pointSeq });
-    geometryIds.restore({ lineSeq: lineCompletionRollback.lineSeq });
-    constraintAnalysisState = null;
-    lineCompletionRollback = null;
-    lineStartRollback = null;
-    if (!historyRestoring && documentHistory.discardLatest(transientSnapshot)) {
-      updateHistoryButtons();
-    }
-    return true;
-  }
-
-  function beginTransientPointRollback() {
-    pointStartRollback = {
-      pointLength: model.points.length,
-      constraintLength: model.constraints.length,
-      pointSeq: geometryIds.peek("point"),
-      createdPoint: null,
-      createdAt: performance.now(),
-    };
-  }
-
-  function clearTransientPointRollback() {
-    pointStartRollback = null;
-  }
-
-  function rollbackTransientPoint() {
-    if (!pointStartRollback) return false;
-    const transientSnapshot = historySnapshot();
-    model.points.length = pointStartRollback.pointLength;
-    model.constraints.length = pointStartRollback.constraintLength;
-    const retainedPoints = new Set(model.points);
-    canvasSelection.set("points", canvasSelection.points.filter((point) => retainedPoints.has(point)));
-    geometryIds.restore({ pointSeq: pointStartRollback.pointSeq });
-    constraintAnalysisState = null;
-    pointStartRollback = null;
-    if (!historyRestoring && documentHistory.discardLatest(transientSnapshot)) {
-      updateHistoryButtons();
-    }
-    return true;
-  }
-
-  function rollbackTransientLineStart() {
-    if (!lineStartRollback) return false;
-    if (model.lines.length === lineStartRollback.lineLength) {
-      model.points.length = lineStartRollback.pointLength;
-      model.constraints.length = lineStartRollback.constraintLength;
-      geometryIds.restore({ pointSeq: lineStartRollback.pointSeq });
-      constraintAnalysisState = null;
-    }
-    lineStartRollback = null;
-    return true;
-  }
 
   function cancelActiveDrawOperation() {
     resetCenterlineCommandState();
@@ -14159,11 +14073,7 @@
 
     const l = addLine(lineStartPoint, endpoint);
     if (l) {
-      if (lineCompletionRollback) {
-        lineCompletionRollback.completedEndpoint = endpoint;
-        lineCompletionRollback.completedLine = l;
-        lineCompletionRollback.createdAt = performance.now();
-      }
+      transientAuthoring.markCompletedLine(endpoint, l);
       clearTransientLineStartRollback();
       addPointSnapConstraints(endpoint, snap);
       if (lockOrthogonal) addLineOrientationConstraint(l);
@@ -15527,7 +15437,7 @@
       const sp = snapForDrawing(p);
       const snap = drawingSnap.active;
       const np = addPoint(sp.x, sp.y, false);
-      if (pointStartRollback) pointStartRollback.createdPoint = np;
+      transientAuthoring.markCreatedPoint(np);
       addPointSnapConstraints(np, snap);
       clearSnap();
       canvasSelection.set("points", [np]);
@@ -16383,7 +16293,7 @@
 
     if (!dragSession) {
       // The first Line endpoint is provisional until a segment is completed.
-      if (!lineStartRollback) recordHistory("操作");
+      if (!transientAuthoring.hasLineStart) recordHistory("操作");
       return;
     }
     const session = dragSession;
@@ -16462,35 +16372,15 @@
   }
 
   function isTransientLineStartHit(hits = {}) {
-    return Boolean(
-      lineStartRollback &&
-        lineStartPoint &&
-        hits.hitP === lineStartPoint &&
-        model.points.indexOf(lineStartPoint) >= lineStartRollback.pointLength,
-    );
+    return transientAuthoring.isLineStartHit(hits.hitP, lineStartPoint);
   }
 
   function isTransientLineCompletionHit(hits = {}) {
-    return Boolean(
-      mode === "line" &&
-        lineCompletionRollback &&
-        lineCompletionRollback.completedEndpoint &&
-        performance.now() - lineCompletionRollback.createdAt <= 650 &&
-        hits.hitP === lineCompletionRollback.completedEndpoint &&
-        hits.hitP === lineStartPoint &&
-        model.lines.includes(lineCompletionRollback.completedLine),
-    );
+    return mode === "line" && transientAuthoring.isLineCompletionHit(hits.hitP, lineStartPoint);
   }
 
   function isTransientPointCommandHit(hits = {}) {
-    return Boolean(
-      mode === "point" &&
-        pointStartRollback &&
-        pointStartRollback.createdPoint &&
-        performance.now() - pointStartRollback.createdAt <= 650 &&
-        hits.hitP === pointStartRollback.createdPoint &&
-        model.points.indexOf(pointStartRollback.createdPoint) >= pointStartRollback.pointLength,
-    );
+    return mode === "point" && transientAuthoring.isPointHit(hits.hitP);
   }
 
   function isBlankDoubleClickTarget(hits = {}) {
@@ -16577,7 +16467,7 @@
         setHint("線の作図をキャンセルしました");
         updateUI();
         draw();
-      } else if (isTransientLineStartHit(hits) || (lineStartRollback && lineStartPoint && !lineCompletionRollback)) {
+      } else if (isTransientLineStartHit(hits) || (transientAuthoring.hasLineStart && lineStartPoint && !transientAuthoring.hasLineCompletion)) {
         cancelActiveDrawOperation();
         exitDrawMode();
       } else if (lineStartPoint) {
