@@ -4,6 +4,8 @@
 
 ## 1. 実装ファイルの責務
 
+- `src/editing/geometry_drag_plan.js`: 図形ドラッグ開始状態・移動先・一時拘束の生成
+
 - `src/commands/dimension_drag.js`: 寸法表示位置ドラッグのsession・更新・確定と小移動時のコマンド継続通知
 
 - `src/editing/rectangle_selection_query.js`: 現在scopeの矩形選択候補照会（選択更新はCanvasSelection）
