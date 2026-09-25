@@ -42,3 +42,46 @@ test('offset uses numeric input rather than the expression evaluator', () => {
 test('focus synchronization reads the latest pending command after cancellation', () => {
   const f = fixture(); f.controller.focus(); f.setPending(null); f.focus(); assert.deepEqual(f.calls, [['hide']]);
 });
+
+function keyboardFixture() {
+  const calls = [];
+  let pending = { type: 'distance-value', buffer: '20', editing: false };
+  const controller = sandbox.window.DimensionInputController.create({
+    enabled: false, getPending: () => pending,
+    applicationText: text => text, setHint: () => calls.push('hint'), draw: () => calls.push('draw'),
+    cancelPendingCommand: () => calls.push('cancel'),
+    startDistanceValueInput: point => calls.push(point), defaultDimensionForTarget: () => 'default-position',
+    submitOffsetValue: () => calls.push('offset'), submitDistanceValue: () => calls.push('dimension'),
+  });
+  return { calls, get pending() { return pending; }, setPending: value => { pending = value; },
+    key: key => controller.handleKey({ key, preventDefault: () => calls.push('prevent') }) };
+}
+
+test('canvas numeric editing replaces initial value, suppresses repeated decimal, and supports deletion', () => {
+  const f = keyboardFixture();
+  assert.equal(f.key('3'), true); assert.equal(f.pending.buffer, '3');
+  assert.equal(f.pending.editing, true);
+  f.key('.'); f.key('5'); assert.equal(f.pending.buffer, '3.5');
+  const draws = f.calls.filter(call => call === 'draw').length;
+  assert.equal(f.key('.'), true); assert.equal(f.pending.buffer, '3.5');
+  assert.equal(f.calls.filter(call => call === 'draw').length, draws);
+  f.key('Backspace'); assert.equal(f.pending.buffer, '3.');
+  f.key('Delete'); assert.equal(f.pending.buffer, '');
+  assert.equal(f.key('='), false); assert.equal(f.pending.buffer, '');
+});
+
+test('keyboard routes placement, distance and offset without consuming unrelated command keys', () => {
+  const f = keyboardFixture();
+  f.key('Enter'); assert.equal(f.calls.at(-1), 'dimension');
+  f.setPending({ type: 'offset-value', buffer: '10' });
+  f.key('Enter'); assert.equal(f.calls.at(-1), 'offset');
+  f.setPending({ type: 'distance-place', target: {} });
+  assert.equal(f.key('1'), false);
+  f.key('Enter'); assert.equal(f.calls.at(-1), 'default-position');
+  f.pending.pointer = { x: 4, y: 7 };
+  f.key('Enter'); assert.equal(f.calls.at(-1), f.pending.pointer);
+  f.key('Escape'); assert.equal(f.calls.at(-1), 'cancel');
+  f.setPending({ type: 'fillet-value' }); const before = f.calls.length;
+  assert.equal(f.key('Enter'), false); assert.equal(f.calls.length, before);
+  f.setPending(null); assert.equal(f.key('Escape'), false);
+});

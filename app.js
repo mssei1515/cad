@@ -430,8 +430,10 @@
     view: dimensionInputView, enabled: Boolean(dimensionValueInput), getPending: () => pendingCommand,
     dimensionLayout, worldToCanvasScreen, effectiveDimensionAppearance, constraintSketchId, activeSketchId,
     dimensionTextOffset, evaluateDimensionExpressionDraft, expressionFromUserInput,
+    cancelPendingCommand, startDistanceValueInput, defaultDimensionForTarget,
+    submitOffsetValue, submitDistanceValue: () => submitDistanceValue(), applicationText, setHint, draw,
   });
-  const { hide: hideDimensionValueInput, sync: syncDimensionValueInput, focus: focusDimensionValueInput } = dimensionInputController;
+  const { hide: hideDimensionValueInput, sync: syncDimensionValueInput, focus: focusDimensionValueInput, handleKey: handleDistanceKey, updateBufferLabel: updateDistanceBufferLabel } = dimensionInputController;
   function dimensionLayout(target, dimension, appearance = effectiveDimensionAppearance(dimension)) {
     return dimensionLayouts.dimensionLayout(target, dimension, appearance);
   }
@@ -9610,62 +9612,8 @@
     return true;
   }
 
-  function updateDistanceBufferLabel() {
-    if (!pendingCommand || !["distance-value", "offset-value"].includes(pendingCommand.type)) return;
-    setHint(pendingCommand.type === "offset-value" ? "オフセット距離を入力中: Enter/ダブルクリックで決定、Escでキャンセル" : applicationText("寸法値を入力中: 数式は = から開始し、Parameter参照はダブルクオーテーションで括ります。Canvas寸法のクリックで参照を挿入できます", "Editing dimension: begin expressions with = and enclose parameter references in double quotes. Click a canvas dimension to insert a reference."));
-    syncDimensionValueInput();
-    draw();
-  }
-
   function sketchHasDimensionConstraint(sketchId = activeSketchId()) {
     return model.constraints.some((constraint) => constraintSketchId(constraint) === sketchId && constraint.dimension);
-  }
-
-  function handleDistanceKey(e) {
-    if (!pendingCommand || !["distance-place", "distance-value", "offset-value"].includes(pendingCommand.type)) return false;
-    if (e.key === "Escape") {
-      e.preventDefault();
-      cancelPendingCommand("寸法入力をキャンセルしました");
-      return true;
-    }
-    if (pendingCommand.type === "distance-place" && e.key === "Enter") {
-      e.preventDefault();
-      startDistanceValueInput(pendingCommand.pointer || defaultDimensionForTarget(pendingCommand.target));
-      return true;
-    }
-    if (!["distance-value", "offset-value"].includes(pendingCommand.type)) return false;
-    if (e.key === "Enter") {
-      e.preventDefault();
-      if (pendingCommand.type === "offset-value") submitOffsetValue();
-      else submitDistanceValue();
-      return true;
-    }
-    if (e.key === "Backspace") {
-      e.preventDefault();
-      pendingCommand.buffer = pendingCommand.buffer.slice(0, -1);
-      pendingCommand.editing = true;
-      updateDistanceBufferLabel();
-      return true;
-    }
-    if (e.key === "Delete") {
-      e.preventDefault();
-      pendingCommand.buffer = "";
-      pendingCommand.editing = true;
-      updateDistanceBufferLabel();
-      return true;
-    }
-    if (/^[0-9.]$/.test(e.key)) {
-      e.preventDefault();
-      if (!pendingCommand.editing) {
-        pendingCommand.buffer = "";
-        pendingCommand.editing = true;
-      }
-      if (e.key === "." && pendingCommand.buffer.includes(".")) return true;
-      pendingCommand.buffer += e.key;
-      updateDistanceBufferLabel();
-      return true;
-    }
-    return false;
   }
 
   function selectedFixedBatchTargets() {
