@@ -241,7 +241,6 @@
   } = canvasSelection;
   let dragSession = null;
   let dimensionDragSession = null;
-  let annotationDragSession = null;
   let hoveredPoint = null;
   let hoveredEndpointPoint = null;
   let hoveredLine = null;
@@ -3566,7 +3565,7 @@
     hatchResolutionCache = new WeakMap();
     hatchFaceCache = new Map();
     sketchTreeView.reset();
-    annotationDragSession = null;
+    annotationDrag.reset();
     referenceImageInteraction.reset();
   }
 
@@ -5429,7 +5428,7 @@
 
     dragSession = null;
     dimensionDragSession = null;
-    annotationDragSession = null;
+    annotationDrag.reset();
     pendingCommand = null;
     pendingConstraintCommand = null;
     lineCommand.reset();
@@ -6583,42 +6582,12 @@
     return id ? model.annotations.find((element) => element.id === id) || null : null;
   }
 
-  function beginAnnotationDrag(e, hit, pointer) {
-    annotationDragSession = {
-      pointerId: e.pointerId,
-      elementId: hit.element?.id || null,
-      hit,
-      startPointer: pointer,
-      startEnd: hit.element?.end ? { ...hit.element.end } : null,
-      startElbow: hit.element?.elbow ? { ...hit.element.elbow } : null,
-      startText: hit.element ? { x: hit.element.x, y: hit.element.y } : null,
-    };
-    canvasSelection.set("annotations", [hit.element]);
-    canvas.setPointerCapture(e.pointerId);
-    canvas.classList.add("is-dragging");
-    setHint(hit.type === "leader" ? "引出線を移動中" : "テキストを移動中");
-  }
-
-  function updateAnnotationDrag(pointer) {
-    const session = annotationDragSession;
-    if (!session) return;
-    const dx = pointer.x - session.startPointer.x;
-    const dy = pointer.y - session.startPointer.y;
-    const element = annotationById(session.elementId) || session.hit.element;
-    if (!element) return;
-    if (session.hit.type === "leader") {
-      if (session.startEnd) element.end = { x: session.startEnd.x + dx, y: session.startEnd.y + dy };
-      if (session.startElbow) element.elbow = { x: session.startElbow.x + dx, y: session.startElbow.y + dy };
-      if (session.startText) {
-        element.x = session.startText.x + dx;
-        element.y = session.startText.y + dy;
-      }
-    } else if (session.hit.type === "text" && session.startText) {
-      element.x = session.startText.x + dx;
-      element.y = session.startText.y + dy;
-    }
-    draw();
-  }
+  const annotationDrag = window.AnnotationDrag.create({
+    annotationById, canvasSelection, setHint, updateUI, draw, recordHistory,
+    beginPointer: (id) => { canvas.setPointerCapture(id); canvas.classList.add("is-dragging"); },
+    endPointer: (id) => { canvas.classList.remove("is-dragging"); try { canvas.releasePointerCapture(id); } catch (_) {} },
+  });
+  const { begin: beginAnnotationDrag, update: updateAnnotationDrag } = annotationDrag;
 
   function drawDimensionPreview() {
     if (pendingCommand?.type === "fillet-radius-place") {
@@ -11498,7 +11467,7 @@
       return;
     }
 
-    if (annotationDragSession) {
+    if (annotationDrag.active) {
       clearSnap();
       updateAnnotationDrag(p);
       return;
@@ -11956,20 +11925,7 @@
 
     if (referenceImageInteraction.finishDrag(e)) return;
 
-    if (annotationDragSession) {
-      annotationDragSession = null;
-      canvas.classList.remove("is-dragging");
-      try {
-        canvas.releasePointerCapture(e.pointerId);
-      } catch (_) {
-        // Pointer capture may already be released by the browser.
-      }
-      setHint("注記の位置を更新しました");
-      updateUI();
-      draw();
-      recordHistory("注記移動");
-      return;
-    }
+    if (annotationDrag.finish(e)) return;
 
     if (dimensionDragSession) {
       const session = dimensionDragSession;
@@ -12247,7 +12203,7 @@
   canvas.addEventListener("pointerup", endDrag);
   canvas.addEventListener("pointercancel", endDrag);
   canvas.addEventListener("pointerleave", () => {
-    if (dragSession || dimensionDragSession || annotationDragSession || selectionRectSession || canvasNavigation.panning) return;
+    if (dragSession || dimensionDragSession || annotationDrag.active || selectionRectSession || canvasNavigation.panning) return;
     flushScheduledCanvasPointerMove({ discard: true });
     clearCanvasHover();
     draw();
@@ -15650,14 +15606,7 @@
         return hit ? { type: hit.type, part: hit.part } : null;
       },
       annotationDragActive() {
-        const element = annotationById(annotationDragSession?.elementId);
-        return annotationDragSession
-          ? {
-              type: annotationDragSession.hit?.type,
-              hasStart: Boolean(annotationDragSession.start),
-              elementId: element?.id || null,
-            }
-          : null;
+        return annotationDrag.inspect();
       },
       historyState() {
         const history = activeEditHistory();

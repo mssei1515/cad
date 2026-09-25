@@ -4,6 +4,8 @@
 
 ## 1. 実装ファイルの責務
 
+- `src/commands/annotation_drag.js`: 注記ドラッグのsession・ID再解決・位置更新・確定
+
 - `src/commands/reference_image_interaction.js`: 参照画像ドラッグと2点縮尺校正のsession・更新・確定・取消
 
 - `src/commands/sketch_deletion_command.js`: Sketch削除の参照ガード・確認・モデル更新と通知順序
