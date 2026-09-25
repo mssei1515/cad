@@ -4,6 +4,8 @@
 
 ## 1. 実装ファイルの責務
 
+- `src/commands/sketch_command.js`: Sketch作成・切替・名前変更・表示切替と通知順序
+
 - `src/constraints/rebinding.js`: scopeの拘束再接続、Block用拘束複製、保存済み固定座標の移動
 
 - `index.html`: 固定ワークスペースとコマンドUI

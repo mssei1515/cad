@@ -6,6 +6,8 @@
 
 ## 現在の再開地点（2026-09-25）
 
+SketchCommandへSketch作成・切替・名前変更・表示切替と命名規則を集約。scopeを操作ごとに取得し、ID採番・入力・操作解除・UI・履歴は明示依存とした。復元後の操作解除には多数の未分離状態が残るため、setterを増やす抽出を避け、解除を利用する操作単位から整理した。構文251件・単体510件・Block／統合UI／保存互換E2E151件が成功。app.jsは17,565行。次は共通操作解除の状態所有者とSketch削除の参照検査・モデル更新を確認する。全体目標と全体E2Eは未完了。
+
 HistoryControllerへDocument／Block履歴の選択・記録・reset・Undo／Redo振分けと復元中状態を集約。appの共有historyRestoring変数を除去し、復元時の再記録抑止・finally通知を共通化した。具体的な復元とDOM・計測は明示adapterとして残る。構文249件・単体506件・Block／統合UI／保存互換E2E151件が成功。app.jsは17,639行。次はDocument読込／Block差替え後の操作解除・求解・表示更新と履歴UIの境界を調べる。全体目標と全体E2Eは未完了。
 
 BlockHistorySnapshotへBlock履歴の復元用コピーとsignature生成を分離。session・DOM・履歴stackへの依存を持たず、定義とclone／拘束codecから生成する。旧signature関数の本体一致、コピーの独立性、参照metadata・採番値と差分判定を検証。構文248件・単体503件・Block／統合UI／保存互換E2E151件が成功。app.jsは17,652行。次はDocument／Block共通の履歴復元中状態と復元・UI通知の所有者を整理する。全体目標と全体E2Eは未完了。
