@@ -4,6 +4,8 @@
 
 ## 1. 実装ファイルの責務
 
+- `src/commands/dimension_drag.js`: 寸法表示位置ドラッグのsession・更新・確定と小移動時のコマンド継続通知
+
 - `src/editing/rectangle_selection_query.js`: 現在scopeの矩形選択候補照会（選択更新はCanvasSelection）
 
 - `src/commands/selection_rectangle.js`: 選択矩形のsession・previewと通常／投影選択の確定振分け

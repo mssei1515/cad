@@ -240,7 +240,6 @@
     constraintSelectedInCanvas, hasSelection,
   } = canvasSelection;
   let dragSession = null;
-  let dimensionDragSession = null;
   let hoveredPoint = null;
   let hoveredEndpointPoint = null;
   let hoveredLine = null;
@@ -3493,7 +3492,7 @@
     constraintAnalysisState = null;
     clearSelection();
     dragSession = null;
-    dimensionDragSession = null;
+    dimensionDrag.reset();
     referenceImageInteraction.reset();
     canvasNavigation.reset();
     suppressNextBlankDoubleClickEvent = false;
@@ -5426,7 +5425,7 @@
     if (!guardDimensionSymbolDeletion(constraintSet)) return false;
 
     dragSession = null;
-    dimensionDragSession = null;
+    dimensionDrag.reset();
     annotationDrag.reset();
     pendingCommand = null;
     pendingConstraintCommand = null;
@@ -6414,7 +6413,7 @@
       const dimension = c.dimension || defaultDimensionForTarget(target);
       const sketchId = constraintSketchId(c);
       if (!viewState.constraintStatus && effectiveDimensionAppearance(dimension, sketchId).visible === false) continue;
-      const highlighted = c === hoveredDimensionConstraint || c === canvasSelection.dimensionConstraint || c === dimensionDragSession?.constraint;
+      const highlighted = c === hoveredDimensionConstraint || c === canvasSelection.dimensionConstraint || c === dimensionDrag.constraint;
       const label = dimensionLabelForConstraint(c, target, dimension);
       const editing = pendingCommand?.type === "distance-value" && pendingCommand.constraint === c;
       const colorOverride = viewState.constraintStatus && !isActiveSketchConstraint(c) ? INACTIVE_CONSTRAINT_STATUS_COLOR : null;
@@ -7668,7 +7667,7 @@
     if (isReadOnlyDimension(hit.constraint)) {
       canvasSelection.set("dimensionConstraint", hit.constraint);
       canvasSelection.set("constraint", null);
-      dimensionDragSession = null;
+      dimensionDrag.reset();
       setHint("読み取り専用寸法の値は編集できません");
       draw();
       return true;
@@ -7683,7 +7682,7 @@
     };
     canvasSelection.set("dimensionConstraint", hit.constraint);
     canvasSelection.set("constraint", null);
-    dimensionDragSession = null;
+    dimensionDrag.reset();
     setHint(applicationText("寸法値を入力中: 数式は = から開始し、Parameter参照はダブルクオーテーションで括ります。Canvas寸法のクリックで参照を挿入できます", "Editing dimension: begin expressions with = and enclose parameter references in double quotes. Click a canvas dimension to insert a reference."));
     draw();
     focusDimensionValueInput();
@@ -7776,7 +7775,7 @@
   function clearInteractionForSketchChange() {
     clearSelection();
     dragSession = null;
-    dimensionDragSession = null;
+    dimensionDrag.reset();
     referenceImageInteraction.reset();
     selectionRectangle.reset();
     lineCommand.reset();
@@ -9888,37 +9887,24 @@
     }
   }
 
-  function beginDimensionDrag(e, hit, pointer, commandHits = null) {
-    const anchor = dimensionAnchor(hit.target, hit.dimension);
-    migrateAngleDimensionLabelPlacement(hit.target, hit.dimension);
-    canvasSelection.set("dimensionConstraint", hit.constraint);
-    canvasSelection.set("constraint", null);
-    dimensionDragSession = {
-      pointerId: e.pointerId,
-      constraint: hit.constraint,
-      target: hit.target,
-      part: hit.part || "line",
-      startPointer: pointer,
-      startAnchor: anchor,
-      startLabelOffsetU: Number(hit.dimension?.labelOffsetU) || 0,
-      startDisplay: hit.dimension?.display ? { ...hit.dimension.display } : null,
-      startAngleLabelOffsets:
-        hit.target.kind === "angle"
-          ? angleDimensionLabelOffsets(hit.target, hit.dimension) || { radial: 14 / viewport.scale, tangent: 0 }
-          : null,
-      startedDuringDimensionCommand: isDimensionConstraintCommandActive(),
-      commandHits,
-      moved: false,
-    };
-    canvas.classList.add("is-dragging");
-    canvas.setPointerCapture(e.pointerId);
-    setHint("寸法線を移動中");
-  }
-
-  function preserveDimensionDragDisplay(session, dimension) {
-    if (session?.startDisplay) dimension.display = { ...session.startDisplay };
-    return dimension;
-  }
+  const dimensionDrag = window.DimensionDrag.create({
+    dimensionAnchor, migrateAngleDimensionLabelPlacement, canvasSelection, angleDimensionLabelOffsets,
+    viewScale: () => viewport.scale, isDimensionConstraintCommandActive, setHint, clearSnap, hypot2,
+    beginPointer: (id) => { canvas.classList.add("is-dragging"); canvas.setPointerCapture(id); },
+    endPointer: (id) => { canvas.classList.remove("is-dragging"); try { canvas.releasePointerCapture(id); } catch (_) {} },
+    angleDimensionFromLabelPoint, dimensionWithLabelAt, dimensionFromAnchor, setAngleDimensionLabelOffsets,
+    syncAngleConstraintFromDimension, draw, updateUI, updateGeometrySelectionUI, syncDimensionValueInput, recordHistory,
+    continueCommandClick: (event, hits) => {
+      hoveredDimensionConstraint = null;
+      const pointer = canvasPoint(event);
+      if (pendingCommand?.type === "distance-place") {
+        if (!retargetDistancePlaceWithOperand(pointer, hits)) startDistanceValueInput(pointer);
+      } else if (pendingConstraintCommand?.type === "distance") {
+        handleConstraintOperandClick(pointer, "distance", hits);
+      }
+    },
+  });
+  const { begin: beginDimensionDrag } = dimensionDrag;
 
   function isDimensionConstraintCommandActive() {
     return pendingConstraintCommand?.type === "distance" && pendingCommand?.type !== "distance-value";
@@ -11426,62 +11412,8 @@
       return;
     }
 
-    if (dimensionDragSession) {
-      clearSnap();
-      const dx = p.x - dimensionDragSession.startPointer.x;
-      const dy = p.y - dimensionDragSession.startPointer.y;
-      if (dimensionDragSession.startedDuringDimensionCommand && !dimensionDragSession.moved) {
-        if (hypot2(dx, dy) * viewport.scale <= 3) return;
-        dimensionDragSession.moved = true;
-      }
-      if (dimensionDragSession.part === "label") {
-        if (dimensionDragSession.target.kind === "angle") {
-          const nextDimension = angleDimensionFromLabelPoint(
-            dimensionDragSession.target,
-            p,
-            dimensionDragSession.startAngleLabelOffsets,
-          );
-          if (!nextDimension) return;
-          preserveDimensionDragDisplay(dimensionDragSession, nextDimension);
-          dimensionDragSession.constraint.dimension = nextDimension;
-          syncAngleConstraintFromDimension(dimensionDragSession.constraint, dimensionDragSession.target, nextDimension);
-          draw();
-          return;
-        }
-        const anchor =
-          dimensionDragSession.target.kind === "radius" || dimensionDragSession.target.kind === "diameter"
-            ? p
-            : {
-                x: dimensionDragSession.startAnchor.x + dx,
-                y: dimensionDragSession.startAnchor.y + dy,
-              };
-        const nextDimension = dimensionWithLabelAt(
-          dimensionDragSession.target,
-          dimensionFromAnchor(dimensionDragSession.target, anchor, { allowPointAxis: false }),
-          p,
-        );
-        preserveDimensionDragDisplay(dimensionDragSession, nextDimension);
-        dimensionDragSession.constraint.dimension = nextDimension;
-        syncAngleConstraintFromDimension(dimensionDragSession.constraint, dimensionDragSession.target, nextDimension);
-        draw();
-        return;
-      }
-      const anchor =
-        dimensionDragSession.target.kind === "radius" || dimensionDragSession.target.kind === "diameter"
-          ? p
-          : {
-              x: dimensionDragSession.startAnchor.x + dx,
-              y: dimensionDragSession.startAnchor.y + dy,
-            };
-      const nextDimension = dimensionFromAnchor(dimensionDragSession.target, anchor, { allowPointAxis: false });
-      nextDimension.labelOffsetU = dimensionDragSession.startLabelOffsetU;
-      preserveDimensionDragDisplay(dimensionDragSession, nextDimension);
-      if (dimensionDragSession.target.kind === "angle") {
-        setAngleDimensionLabelOffsets(nextDimension, dimensionDragSession.startAngleLabelOffsets);
-      }
-      dimensionDragSession.constraint.dimension = nextDimension;
-      syncAngleConstraintFromDimension(dimensionDragSession.constraint, dimensionDragSession.target, nextDimension);
-      draw();
+    if (dimensionDrag.active) {
+      dimensionDrag.update(p);
       return;
     }
 
@@ -11838,37 +11770,7 @@
 
     if (annotationDrag.finish(e)) return;
 
-    if (dimensionDragSession) {
-      const session = dimensionDragSession;
-      dimensionDragSession = null;
-      canvas.classList.remove("is-dragging");
-      try {
-        canvas.releasePointerCapture(e.pointerId);
-      } catch (_) {
-        // Pointer capture may already be released by the browser.
-      }
-      if (session.startedDuringDimensionCommand && !session.moved) {
-        canvasSelection.set("dimensionConstraint", null);
-        hoveredDimensionConstraint = null;
-        const pointer = canvasPoint(e);
-        if (pendingCommand?.type === "distance-place") {
-          if (!retargetDistancePlaceWithOperand(pointer, session.commandHits || {})) startDistanceValueInput(pointer);
-        } else if (pendingConstraintCommand?.type === "distance") {
-          handleConstraintOperandClick(pointer, "distance", session.commandHits || {});
-        }
-        return;
-      }
-      setHint("寸法線の位置を更新しました");
-      // Angle placement can change the constraint target; other dimensions only change layout.
-      if (session.target.kind === "angle") updateUI();
-      else {
-        updateGeometrySelectionUI();
-        syncDimensionValueInput();
-      }
-      draw();
-      recordHistory("寸法線移動");
-      return;
-    }
+    if (dimensionDrag.finish(e)) return;
 
     if (selectionRectangle.finish(e)) return;
 
@@ -12087,7 +11989,7 @@
   canvas.addEventListener("pointerup", endDrag);
   canvas.addEventListener("pointercancel", endDrag);
   canvas.addEventListener("pointerleave", () => {
-    if (dragSession || dimensionDragSession || annotationDrag.active || selectionRectangle.active || canvasNavigation.panning) return;
+    if (dragSession || dimensionDrag.active || annotationDrag.active || selectionRectangle.active || canvasNavigation.panning) return;
     flushScheduledCanvasPointerMove({ discard: true });
     clearCanvasHover();
     draw();
@@ -16739,7 +16641,7 @@
           pendingConstraintType: pendingConstraintCommand?.type || null,
           pendingCommandType: pendingCommand?.type || null,
           selectedLineIds: canvasSelection.lines.map((line) => line.id),
-          dragging: Boolean(dimensionDragSession),
+          dragging: dimensionDrag.active,
         };
       },
       blockState() {
