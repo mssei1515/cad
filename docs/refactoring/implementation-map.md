@@ -304,3 +304,5 @@ index.htmlは既存の通常script読込列で両moduleをapp.jsより先に読�
 - `PropertiesContent`（`src/ui/properties_content.js`）: 表示情報から対象別のHTMLを構成。PropertyRows／AppearanceControls／Viewのsection生成を接続し、Documentや操作sessionは直接参照しない。
 
 - `BlockPlacementCommand`（`src/commands/block_placement_command.js`）: 配置定義・中心・有効Sketch・回転ロック・パネル復元状態、開始／クリック／確定とpreview Instance。mode／pointerと採番はappへ接続する。Propertiesや取消からの状態直接書込みは除去した。
+
+- `InstanceSourceCommand`（`src/commands/instance_source_command.js`）: 参照元編集対象と候補、追加時投影検証、確定時の順序／legacy ID維持・削除保護・関連拘束と注記の整理。表示はcurrent、CanvasはincludesRef、取消はresetを利用する。

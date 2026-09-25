@@ -4,6 +4,8 @@
 
 ## 現在の再開地点（2026-09-25）
 
+派生Instanceの参照元編集をInstanceSourceCommandへ分離。対象／候補状態、追加検証、確定時の参照順序とlegacy ID維持、削除保護、関連拘束・注記整理、履歴を同じ所有者にまとめた。Propertiesはcurrentの候補配列コピー、Canvas強調はincludesRef、モード終了／resetはAPIで接続する。構文227件・単体451件・Free Instance／Sketch投影／統合UI／保存互換E2E147件が成功。app.jsは18,944行。次はFree Instance配置とMirror／Pattern作成で共有する候補sourcesの所有者を整理する。全体目標と全体E2Eは未完了。
+
 Block配置の5状態（定義・中心・有効Sketch・回転ロック・パネル復元記録）と開始／クリック／確定をBlockPlacementCommandへ分離した。previewも同じ所有者から予定Instanceを返す。Properties・通常取消・Documentリセット・test hookはAPIで接続し、直接状態書込みを除去した。構文225件・単体448件・Block／統合UI／保存互換E2E151件が成功。app.jsは19,014行。次はFree Instanceの配置・参照元編集sessionの所有者を整理する。mode／共通pointerと採番はapp側に残る移行用コールバック。全体目標と全体E2Eは未完了。
 
 Propertiesの対象別HTML構成をPropertiesContent、現在scope／操作／選択からの表示情報取得をPropertyPresentationへ分離。配置中Instance、参照元編集中候補、Sketch外観、寸法評価値を照会側で解決し、ContentはDocument／操作sessionを直接参照しない。appはRows／Content／Controller／Viewと編集commandの接続を担当する。構文223件・単体445件・画像／Free Instance／Spline／統合UI／保存互換E2E144件が成功。app.jsは19,093行。次は共有の表示設定照会と、Block／Free Instanceの配置・編集sessionの所有者を整理する。全体目標と全体E2Eは未完了。
