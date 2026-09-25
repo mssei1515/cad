@@ -64,7 +64,7 @@
 
 残る主要な領域は以下。順番や個数は固定しない。
 
-- Block下書きの検証・確定、定義操作、選択からの作成、依存関係の照会。
+- Block選択候補の照会（作業中）、拘束複製と履歴adapter。下書き生成・確定・定義操作・依存照会は分離済みで、残る接続の整理を行う。
 - 拘束操作・Selection編集・コピー／削除・Sketch編集の調整。
 - ドラッグsession、hover／hit判定、Canvasとキーボードの入力振分け、共通モード遷移。
 - Annotation／Reference Image／Hatch等の残る操作状態と編集処理。
@@ -102,6 +102,20 @@
 - 差分確認、Commit、許可された範囲のPush、実行コミット情報更新が済んでいる。
 
 ## 8. 再開地点（2026-09-25）
+
+### 最新の引継ぎ：未コミットの候補照会分離あり
+
+最後の確定・Push済み実装は`27993b2`（BlockDefinitionCommand）。その後、`src/editing/block_selection_query.js`へ選択候補の検証と境界中心の照会を分離する作業が未コミットで残っている。以下の既存ファイルの変更と新規ファイルは今回のリファクタリング作業であり、無関係なユーザー変更として破棄しない。
+
+- `app.js`、`index.html`、`package.json`、`tools/check-syntax.js`、`tests/e2e/unified-ui.spec.js`
+- 新規`src/editing/block_selection_query.js`、`tests/unit/block-selection-query.test.js`
+
+`BlockSelectionQuery`は`read`と`center`を公開し、現在scopeを呼出しごとに取得する。選択の支持点補完、内部／外部拘束の分類、非選択図形との点共有、注記参照、ハッチ境界の整合を照会し、モデルを変更しない。投影ノードはObject同一性に加えて投影IDで比較する既存規則を維持する。
+
+この未コミット差分について構文247件・単体499件が成功済み。テストprocessは終了確認済み。関連E2Eはまだ実行していないため、挙動確認済み・分離完了とは扱わない。次回は差分レビュー、関連E2E151件、正式なモジュール構成仕様とimplementation-mapの更新、Commit／Pushを先に済ませる。失敗時は原因を調べ、期待値を緩めて通さない。この引継ぎ文書だけのコミットに実装途中の差分を含めない。
+
+以下は最後の確定済み区切りの記録であり、上記の未コミット作業が優先する。
+
 
 この文書と同じコミットでBlockDefinitionCommandへ作成・編集開始／取消・定義名変更／削除を集約し、BlockViewへ一覧dialog閉鎖と編集classを移した（直前の実装コミットは`47c8b07`）。作業branchは`codex/composition-root-next`。app.jsは17,805行。構文245件・単体494件・Block／統合UI／保存互換E2E151件が成功し、実行中のテストはない。全体E2Eとリファクタリング全体は未完了。
 
