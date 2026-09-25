@@ -5656,29 +5656,10 @@
       : "";
     if (lastLoadBlockConstraintRepairMessage) log(lastLoadBlockConstraintRepairMessage);
     ensureDimensionDefaults();
-    reserveGeometryElementSequences({
-      points: [...model.points, ...documentModel.blockDefinitions.flatMap((definition) => definition.points)],
-      lines: [...model.lines, ...documentModel.blockDefinitions.flatMap((definition) => definition.lines)],
-      circles: [...model.circles, ...documentModel.blockDefinitions.flatMap((definition) => definition.circles)],
-      arcs: [...model.arcs, ...documentModel.blockDefinitions.flatMap((definition) => definition.arcs)],
-      splines: [...model.splines, ...documentModel.blockDefinitions.flatMap((definition) => definition.splines || [])],
-      hatches: [...model.hatches, ...documentModel.blockDefinitions.flatMap((definition) => definition.hatches || [])],
-      referenceImages: [...model.referenceImages, ...documentModel.blockDefinitions.flatMap((definition) => definition.referenceImages || [])],
-    });
-    sketchSeq = Math.max(
-      nextSeq(model.sketches, "S"),
-      ...documentModel.blockDefinitions.map((definition) => nextSeq(definition.sketches || [], "S")),
-    );
-    annotationSeq = Math.max(nextSeq(model.annotations, "AN"), ...documentModel.blockDefinitions.map((definition) => nextSeq(definition.annotations || [], "AN")));
-    hatchSeq = Math.max(model.nextHatchIndex, nextSeq(model.hatches, "H"), ...documentModel.blockDefinitions.map((definition) => Math.max(Number(definition.nextHatchIndex) || 1, nextSeq(definition.hatches || [], "H"))));
-    referenceImageSeq = Math.max(nextSeq(model.referenceImages, "IMG"), ...documentModel.blockDefinitions.map((definition) => nextSeq(definition.referenceImages || [], "IMG")));
-    blockDefinitionSeq = nextSeq(documentModel.blockDefinitions, "B");
-    blockInstanceSeq = nextSeq([...model.blockInstances, ...documentModel.blockDefinitions.flatMap((definition) => definition.blockInstances || [])], "BI");
-    sketchProjectionInstanceSeq = nextSeq([...model.geometryInstances, ...documentModel.blockDefinitions.flatMap((definition) => definition.geometryInstances || [])], "SPI");
-    freeInstanceSeq = nextSeq([...model.geometryInstances, ...documentModel.blockDefinitions.flatMap((definition) => definition.geometryInstances || [])], "FI");
-    mirrorInstanceSeq = nextSeq([...model.geometryInstances, ...documentModel.blockDefinitions.flatMap((definition) => definition.geometryInstances || [])], "MI");
-    patternInstanceSeq = nextSeq([...model.geometryInstances, ...documentModel.blockDefinitions.flatMap((definition) => definition.geometryInstances || [])], "PI");
-    blockElementSeq = Math.max(1, ...documentModel.blockDefinitions.flatMap((definition) => [...definition.points, ...definition.lines, ...definition.circles, ...definition.arcs, ...(definition.splines || [])].map((element) => Number(/^(?:P|L|C|A|SP)(\d+)$/.exec(element.id || "")?.[1]) + 1 || 1)));
+    const recoveredSequences = window.DocumentSequences.recover(model, documentModel.blockDefinitions);
+    reserveGeometryElementSequences(recoveredSequences.geometry);
+    ({ sketchSeq, annotationSeq, hatchSeq, referenceImageSeq, blockDefinitionSeq, blockInstanceSeq,
+      sketchProjectionInstanceSeq, freeInstanceSeq, mirrorInstanceSeq, patternInstanceSeq, blockElementSeq } = recoveredSequences);
     ensureAppearanceState();
     ensureBlockState();
     ensureDrawingOrderState(model);
