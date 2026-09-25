@@ -272,7 +272,6 @@
   let interactionFrameStats = null;
   let sketchSolveStates = new Map();
   let invalidReferenceConstraints = new Map();
-  let selectionRectSession = null;
   let blankDoubleClickCandidate = null;
   let suppressNextBlankDoubleClickEvent = false;
   let splineEditSession = null;
@@ -6313,12 +6312,19 @@
     resetCanvasStrokeState();
   }
 
+  const selectionRectangle = window.SelectionRectangle.create({
+    rectFromPoints, hypot2, viewScale: () => viewport.scale,
+    releasePointer: (id) => { try { canvas.releasePointerCapture(id); } catch (_) {} },
+    clearSelection, selectByRect, addSketchProjectionSourcesByRect, setHint, updateGeometrySelectionUI, draw,
+  });
+
   function drawSelectionRect() {
-    if (!selectionRectSession?.current) return;
-    const rect = rectFromPoints(selectionRectSession.start, selectionRectSession.current);
+    const preview = selectionRectangle.preview();
+    if (!preview) return;
+    const { rect, crossing } = preview;
     withCanvasState(() => {
-      ctx.strokeStyle = selectionRectSession.current.x < selectionRectSession.start.x ? "#f59e0b" : "#2563eb";
-      ctx.fillStyle = selectionRectSession.current.x < selectionRectSession.start.x ? "rgba(245, 158, 11, 0.08)" : "rgba(37, 99, 235, 0.08)";
+      ctx.strokeStyle = crossing ? "#f59e0b" : "#2563eb";
+      ctx.fillStyle = crossing ? "rgba(245, 158, 11, 0.08)" : "rgba(37, 99, 235, 0.08)";
       ctx.lineWidth = 1.2 / viewport.scale;
       ctx.setLineDash([5 / viewport.scale, 4 / viewport.scale]);
       ctx.fillRect(rect.x1, rect.y1, rect.x2 - rect.x1, rect.y2 - rect.y1);
@@ -7857,7 +7863,7 @@
     dragSession = null;
     dimensionDragSession = null;
     referenceImageInteraction.reset();
-    selectionRectSession = null;
+    selectionRectangle.reset();
     lineCommand.reset();
     rectangleCommand.reset();
     filletCommand.reset();
@@ -11066,12 +11072,7 @@
         return;
       }
       clearSnap();
-      selectionRectSession = {
-        kind: "sketch-projection",
-        pointerId: e.pointerId,
-        start: p,
-        current: p,
-      };
+      selectionRectangle.begin(p, { kind: "sketch-projection" });
       canvas.setPointerCapture(e.pointerId);
       return;
     }
@@ -11421,12 +11422,7 @@
         return;
       }
     } else {
-      selectionRectSession = {
-        pointerId: e.pointerId,
-        start: p,
-        current: p,
-        additive: multiSelect,
-      };
+      selectionRectangle.begin(p, { additive: multiSelect });
       canvas.setPointerCapture(e.pointerId);
     }
 
@@ -11459,10 +11455,10 @@
       draw();
       return;
     }
-    if (selectionRectSession) {
+    if (selectionRectangle.active) {
       clearSnap();
       hoveredSketchIdentity = null;
-      selectionRectSession.current = p;
+      selectionRectangle.update(p);
       draw();
       return;
     }
@@ -11959,34 +11955,7 @@
       return;
     }
 
-    if (selectionRectSession) {
-      const session = selectionRectSession;
-      selectionRectSession = null;
-      try {
-        canvas.releasePointerCapture(e.pointerId);
-      } catch (_) {
-        // Pointer capture may already be released by the browser.
-      }
-      const current = session.current || session.start;
-      const moved = hypot2(current.x - session.start.x, current.y - session.start.y);
-      if (session.kind === "sketch-projection") {
-        if (moved > 3 / viewport.scale) {
-          addSketchProjectionSourcesByRect(rectFromPoints(session.start, current), current.x < session.start.x);
-        } else {
-          draw();
-        }
-        return;
-      }
-      if (moved <= 3 / viewport.scale) {
-        if (!session.additive) clearSelection();
-      } else {
-        selectByRect(rectFromPoints(session.start, current), current.x < session.start.x, session.additive);
-        setHint("矩形選択を更新しました");
-      }
-      updateGeometrySelectionUI();
-      draw();
-      return;
-    }
+    if (selectionRectangle.finish(e)) return;
 
     if (!dragSession) {
       // The first Line endpoint is provisional until a segment is completed.
@@ -12203,7 +12172,7 @@
   canvas.addEventListener("pointerup", endDrag);
   canvas.addEventListener("pointercancel", endDrag);
   canvas.addEventListener("pointerleave", () => {
-    if (dragSession || dimensionDragSession || annotationDrag.active || selectionRectSession || canvasNavigation.panning) return;
+    if (dragSession || dimensionDragSession || annotationDrag.active || selectionRectangle.active || canvasNavigation.panning) return;
     flushScheduledCanvasPointerMove({ discard: true });
     clearCanvasHover();
     draw();
@@ -15733,7 +15702,7 @@
           viewport.update({ y: 0 });
           pointerPreview = null;
           trimPreview = null;
-          selectionRectSession = null;
+          selectionRectangle.reset();
           mode = "select";
         };
         const capture = (name, setup, drawFn) => {
@@ -15803,7 +15772,7 @@
           };
         }, drawTrimPreview);
         capture("selection", () => {
-          selectionRectSession = { start: { x: 0, y: 0 }, current: { x: 80, y: 45 } };
+          selectionRectangle.begin({ x: 0, y: 0 }, { current: { x: 80, y: 45 } });
         }, drawSelectionRect);
         capture("blockPlacement", () => {
           const definition = makeBlockDefinition();

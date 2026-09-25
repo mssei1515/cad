@@ -105,6 +105,10 @@
 
 ### 最新の確定区切り
 
+SelectionRectangleへ矩形選択session・preview・確定振分け・resetを集約。appのsession変数を除去し、通常／SketchProjectionの経路、追加選択、3px閾値、方向別判定を維持した。描画は座標とcrossingだけを照会し、図形種ごとの選択適用は既存処理へ委譲。構文259件・単体526件・Block／統合UI／保存互換／SketchProjection E2E162件が成功。app.jsは17,309行。次はselectByRectの候補照会と選択適用の境界を整理する。全体目標と全体E2Eは未完了。
+
+直前の注記ドラッグ分離は`c5525df`で確定済み。実行中のテストはない。以下は直前の記録である。
+
 AnnotationDragへ注記ドラッグのsession・開始座標・ID再解決・更新・確定・resetを集約。appのsession変数を除去し、入力はactive照会と操作API、診断はinspectの値で接続。Leaderの終点／折れ点／文字位置とFree Textの移動規則、確定時の履歴通知を維持。構文257件・単体522件・Block／統合UI／保存互換E2E151件が成功。app.jsは17,340行。次は選択矩形の開始・更新・確定と選択判定の境界を整理する。全体目標と全体E2Eは未完了。
 
 直前の画像操作分離は`c57cab9`で確定済み。実行中のテストはない。以下は直前の記録である。
