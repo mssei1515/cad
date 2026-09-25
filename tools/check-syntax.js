@@ -2,6 +2,8 @@
 const { spawnSync } = require("node:child_process");
 const path = require("node:path");
 const files = [
+  "src/editing/spline_draft.js",
+  "tests/unit/spline-draft.test.js",
   "src/ui/canvas_navigation.js",
   "tests/unit/canvas-navigation.test.js",
   "src/document/state.js",
