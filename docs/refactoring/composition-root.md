@@ -1,8 +1,12 @@
 # app.jsを起動・接続専用にする継続作業
 
+再開時は先に[リファクタリング方針と再開手順](refactoring-policy-and-resume.md)を読む。本書の古い記録は当時の経過であり、現在の課題は先頭の再開地点とGitの現物を優先する。
+
 開始点はdevelopの`457adea`。承認された最終目標は、`app.js`を数百行程度の生成・接続・起動・終了へ整理すること。部分的な抽出や中間のテスト成功をもって、この目標の完了とはしない。
 
 ## 現在の再開地点（2026-09-25）
+
+Block定義のclone／cloneInstance／translate／applyをBlockDefinitionEditingへ集約（`a70e9d0`）。Geometry同一性と拘束map接続、固定位置・寸法・補助要素の移動を維持し、session・DOM・履歴から独立。4関数の本体比較、構文239件・単体471件・Block／統合UI／保存互換E2E151件が成功。app.jsは18,297行。次はvalidateBlockDraftとcompleteBlockDefinitionEditの依存を調べ、検証と確定commandを整理する。ユーザーの再開準備依頼により、全体方針・残作業・検証とGit運用・再開指示をrefactoring-policy-and-resume.mdに記録した。全体目標と全体E2Eは未完了。
 
 BlockEditorSessionへsession連鎖、draft同期とUndo差替え、親scope復帰、一時定義／復元記録の引継ぎ・取消・削除時整理を集約した。appのsession変数と管理情報への直接書込みを除去し、名称変更も所有者へ委譲。確定処理とUIはcurrentの参照とAPIで接続する。構文237件・単体468件・Block／統合UI／保存互換E2E151件が成功。app.jsは18,539行。次はBlock draftの検証・定義反映と確定commandを整理し、session所有者とは責務を分ける。全体目標と全体E2Eは未完了。
 
