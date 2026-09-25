@@ -294,3 +294,5 @@ index.htmlは既存の通常script読込列で両moduleをapp.jsより先に読�
 - 寸法Propertiesの名前／式確定は既存`DimensionValueCommand.commitProperty`へ統合。Canvas入力pendingを変更せずsnapshot・Solver・履歴を調整する。参照式書換えと採番予約は既存`ParameterNamespace.renameDimension`が担当する。
 
 - `GeometryPropertyCommand`（`src/commands/geometry_property_command.js`）: 補助作図切替・Spline開閉の保護判定、同期、Solver、復元、履歴。DOMを受け取らず、チェック状態の差戻し・通知・再表示範囲を結果として返す。
+
+- `AppearancePropertyCommand`（`src/commands/appearance_property_command.js`）: 単独対象の外観適用先、プレビュー／確定、Block cache、履歴と更新。AppearanceEditingへ正規化を委譲。UIは入力検証と値変換を担当し、色パレットは同じowner解決を共用する。

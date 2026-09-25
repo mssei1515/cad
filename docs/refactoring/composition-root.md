@@ -4,6 +4,8 @@
 
 ## 現在の再開地点（2026-09-25）
 
+Properties外観の適用先・プレビュー／確定をAppearancePropertyCommandへ集約。色パレットもowner解決を共用する。UIは入力検証と値変換、AppearanceEditingは正規化適用、commandはcache・履歴・更新を担当し、寸法prefix／suffixの入力欄を再生成しない規則を保持した。構文217件・単体437件・統合UI／保存互換E2E114件が成功。app.jsは19,404行。次は残るPropertiesの入力振分けと参照画像／注記／派生Instance編集、対象別内容構成の照会依存を整理する。全体目標と全体E2Eは未完了。
+
 Propertiesの補助作図切替とSpline開閉をGeometryPropertyCommandへ分離した。投影保護・曲線成立・Solver／従属解の確認と復元・履歴はcommand、入力欄の差戻しと通知・DOM／描画更新はappの接続処理が担当する。構文215件・単体434件・Spline／統合UI／保存互換E2E120件が成功。app.jsは19,474行。次はPropertiesの外観入力プレビュー／確定と対象別内容構成の依存を整理する。全体目標と全体E2Eは未完了。
 
 寸法Propertiesの名前／式確定を既存DimensionValueCommand.commitPropertyへ、名前検証・参照式書換え・採番予約を既存ParameterNamespace.renameDimensionへ統合した。snapshot復元とSolver成功判定、履歴・通知の順序を維持し、Canvas入力pendingを操作しない。新規モジュールは増やしていない。構文213件・単体431件・統合UI／保存互換E2E114件が成功。app.jsは19,504行。次はProperties内の図形構造編集（construction／Spline開閉）の確定処理と、対象別内容構成の照会依存を整理する。全体目標と全体E2Eは未完了。

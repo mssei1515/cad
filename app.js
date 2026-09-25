@@ -9915,6 +9915,12 @@
     defaultDimensionAppearance: DEFAULT_DIMENSION_APPEARANCE, dimensionNumericRules: DIMENSION_APPEARANCE_NUMERIC_RULES,
   });
   const { applyAppearanceInput, applyAnnotationStyleValue, applyHatchAppearanceInput, applyDimensionAppearanceValue } = appearanceEditing;
+  const appearancePropertyCommand = window.AppearancePropertyCommand.create({
+    editing: appearanceEditing, normalizeHatchAppearance, normalizeAnnotationStyle,
+    invalidateBlockProjectionCache, recordHistory, updateUI, updatePropertiesUI, draw,
+  });
+  const { owner: appearanceOwnerForPropertiesTarget } = appearancePropertyCommand;
+
   const { apply: applyMultipleProperty } = window.BulkPropertyCommand.create({
     guardSketchProjectionShapeEdit, applicationText, updatePropertiesUI, draw,
     multiplePropertySupports, applyAnnotationStyleValue, normalizeHatchAppearance, applyAppearanceInput,
@@ -10151,23 +10157,7 @@
 
 
 
-  function applyDimensionDisplayInput(constraint, input) {
-    if (!constraint?.dimension || !input?.dataset.dimensionDisplay) return false;
-    const display = (constraint.dimension.display ||= {});
-    const key = input.dataset.dimensionDisplay;
-    const rawValue = input.type === "checkbox" ? String(input.checked) : ["prefix", "suffix"].includes(key) ? input.value : input.value.trim();
-    applyDimensionAppearanceValue(display, key, rawValue);
-    return true;
-  }
 
-  function appearanceOwnerForPropertiesTarget(target) {
-    if (target.kind === "block") return (target.item.appearanceOverride ||= {});
-    if (target.kind === "geometryInstance") return (target.item.appearanceOverride ||= {});
-    if (target.kind === "hatch") return (target.item.appearance ||= normalizeHatchAppearance());
-    if (target.kind === "annotation") return (target.item.style ||= normalizeAnnotationStyle());
-    if (target.kind === "geometry" || target.kind === "sketch") return (target.item.appearance ||= {});
-    return null;
-  }
 
   function sketchDefaultAppearanceContext(input, target = selectedPropertiesTarget()) {
     if (target.kind !== "sketch") return null;
@@ -10203,6 +10193,23 @@
     }
     else return false;
     return true;
+  }
+
+  function applyAppearancePropertyInput(target, input, { commit = true, rawValue } = {}) {
+    const data = input.dataset;
+    const category = target.kind === "annotation" && data.annotationStyle ? "annotation"
+      : target.kind === "hatch" && data.hatchProperty ? "hatch"
+        : data.appearanceKey ? "appearance" : data.dimensionDisplay ? "dimension" : null;
+    if (!category) return false;
+    const key = category === "annotation" ? data.annotationStyle : category === "hatch" ? data.hatchProperty
+      : category === "appearance" ? data.appearanceKey : data.dimensionDisplay;
+    let value = rawValue;
+    if (commit || category === "dimension" && target.kind === "constraint") {
+      value = category === "dimension" && ["prefix", "suffix"].includes(key) ? input.value : input.value.trim();
+      if (input.type === "checkbox" && (category === "annotation" || category === "hatch")) value = input.checked;
+      if (input.type === "checkbox" && category === "dimension" && target.kind === "constraint") value = String(input.checked);
+    }
+    return appearancePropertyCommand.apply(target, { category, key, value, context: sketchDefaultAppearanceContext(input, target) }, { commit });
   }
 
   function handlePropertiesInput(event) {
@@ -10248,39 +10255,12 @@
       applyMultipleProperty(target, input.dataset.bulkProperty, rawValue, { commit: false });
       return;
     }
-    if (target.kind === "annotation" && input.dataset.annotationStyle) {
-      applyAnnotationStyleValue(target.item, input.dataset.annotationStyle, rawValue);
-      draw();
-      return;
-    }
     if (target.kind === "annotation" && input.dataset.property === "annotation-rotation") {
       target.item.rotation = Math.max(-3600, Math.min(3600, Number(rawValue))) * Math.PI / 180;
       draw();
       return;
     }
-    if (target.kind === "hatch" && input.dataset.hatchProperty) {
-      applyHatchAppearanceInput(target.item, input.dataset.hatchProperty, rawValue);
-      draw();
-      return;
-    }
-    const sketchDefaultContext = sketchDefaultAppearanceContext(input, target);
-    if (sketchDefaultContext === "construction" && input.dataset.appearanceKey) {
-      applyAppearanceInput((target.item.constructionAppearance ||= {}), input.dataset.appearanceKey, rawValue);
-      draw();
-      return;
-    }
-    if (sketchDefaultContext === "dimension" && input.dataset.dimensionDisplay) {
-      applyDimensionAppearanceValue((target.item.dimensionAppearance ||= {}), input.dataset.dimensionDisplay, rawValue);
-      draw();
-      return;
-    }
-    if (input.dataset.appearanceKey) {
-      applyAppearanceInput(appearanceOwnerForPropertiesTarget(target), input.dataset.appearanceKey, rawValue);
-      if (target.kind === "block") invalidateBlockProjectionCache(target.item.id);
-      draw();
-      return;
-    }
-    if (input.dataset.dimensionDisplay && target.kind === "constraint" && applyDimensionDisplayInput(target.item, input)) draw();
+    applyAppearancePropertyInput(target, input, { commit: false, rawValue });
   }
 
   function clearCanvasHover() {
@@ -10338,23 +10318,6 @@
       applyMultipleProperty(target, input.dataset.bulkProperty, raw);
       return;
     }
-    if (target.kind === "annotation" && input.dataset.annotationStyle) {
-      const raw = input.type === "checkbox" ? input.checked : input.value.trim();
-      applyAnnotationStyleValue(target.item, input.dataset.annotationStyle, raw);
-      recordHistory("注記外観変更");
-      updateUI();
-      draw();
-      return;
-    }
-    if (target.kind === "hatch" && input.dataset.hatchProperty) {
-      const key = input.dataset.hatchProperty;
-      const raw = input.type === "checkbox" ? input.checked : input.value.trim();
-      applyHatchAppearanceInput(target.item, key, raw);
-      recordHistory("ハッチング外観変更");
-      updateUI();
-      draw();
-      return;
-    }
     if (target.kind === "blockPlacement" && input.dataset.placementRotationMode) {
       blockPlacementRotationLocked = input.dataset.placementRotationMode === "locked";
       setHint(blockPlacementRotationLocked ? applicationText("配置角度を90°単位にロックします", "Placement rotation is locked to 90° increments") : applicationText("配置角度を自由回転にします", "Placement rotation is free"));
@@ -10367,40 +10330,7 @@
       draw();
       return;
     }
-    const sketchDefaultContext = sketchDefaultAppearanceContext(input, target);
-    if (sketchDefaultContext === "construction" && input.dataset.appearanceKey) {
-      applyAppearanceInput((target.item.constructionAppearance ||= {}), input.dataset.appearanceKey, input.value.trim());
-      recordHistory("Sketch Default Construction Appearance変更");
-      updateUI();
-      draw();
-      return;
-    }
-    if (sketchDefaultContext === "dimension" && input.dataset.dimensionDisplay) {
-      const liveTextInput = input.dataset.dimensionDisplay === "prefix" || input.dataset.dimensionDisplay === "suffix";
-      const rawValue = liveTextInput ? input.value : input.value.trim();
-      applyDimensionAppearanceValue((target.item.dimensionAppearance ||= {}), input.dataset.dimensionDisplay, rawValue);
-      recordHistory("Sketch Default Dimension Appearance変更");
-      if (!liveTextInput) updatePropertiesUI();
-      draw();
-      return;
-    }
-    if (input.dataset.appearanceKey) {
-      const owner = appearanceOwnerForPropertiesTarget(target);
-      applyAppearanceInput(owner, input.dataset.appearanceKey, input.value.trim());
-      if (target.kind === "block") invalidateBlockProjectionCache(target.item.id);
-      recordHistory(target.kind === "block" || target.kind === "geometryInstance" ? "Appearance Override変更" : "Appearance変更");
-      updateUI();
-      draw();
-      return;
-    }
-    if (input.dataset.dimensionDisplay && target.kind === "constraint" && target.item.dimension) {
-      const liveTextInput = input.dataset.dimensionDisplay === "prefix" || input.dataset.dimensionDisplay === "suffix";
-      applyDimensionDisplayInput(target.item, input);
-      recordHistory("寸法外観変更");
-      if (!liveTextInput) updatePropertiesUI();
-      draw();
-      return;
-    }
+    if (applyAppearancePropertyInput(target, input)) return;
     if (target.kind === "block" && input.dataset.blockRotationMode) {
       if (!setBlockInstanceRotationLocked(target.item, input.dataset.blockRotationMode === "locked")) updatePropertiesUI();
       return;
