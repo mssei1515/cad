@@ -290,7 +290,6 @@
   let selectionRectSession = null;
   let blankDoubleClickCandidate = null;
   let suppressNextBlankDoubleClickEvent = false;
-  let lineStartPoint = null;
   let filletFirstLine = null;
   let splineEditSession = null;
   let sketchProjectionSources = [];
@@ -469,6 +468,13 @@
   const { finalize: finalizeSplineCreation, click: handleSplineClick, doubleClick: finalizeSplineFromDoubleClick } = splineCommand;
   const snapConstraints = window.SnapConstraints.create({ isActiveSketchElement, elementSketchId, isReferenceSourceSketchId, addPoint, addConstraintIfMissing });
   const { addPointSnapConstraints, addArcEndpointSnapConstraints, addCircularBoundarySnapConstraints, addLineBoundarySnapConstraints } = snapConstraints;
+  const lineCommand = window.LineCommand.create({
+    minLineLength: MIN_LINE_LENGTH, snapForDrawing: point => ({ point: snapForDrawing(point), snap: drawingSnap.active }),
+    samePosition, addPoint, endpointAt, addLine, addPointSnapConstraints, pushModelConstraint, transientAuthoring,
+    selection: canvasSelection, setPointerPreview: value => { pointerPreview = value; },
+    clearSelection, setHint, updateUI, draw, solveAndRefresh, log,
+  });
+  const { click: handleLineClick } = lineCommand;
   const rectangleCommand = window.RectangleCommand.create({
     endpointAt, addPoint, addLine, addPointSnapConstraints, pushModelConstraint,
     minLineLength: MIN_LINE_LENGTH, samePosition, selection: canvasSelection,
@@ -3271,25 +3277,6 @@
     return createCircleCenterCrosses([circle]);
   }
 
-  function preferredDirectionFrom(start, p) {
-    const dx = p.x - start.x;
-    const dy = p.y - start.y;
-    const len = hypot2(dx, dy);
-    if (len >= MIN_LINE_LENGTH) return { x: dx / len, y: dy / len };
-    if (len > 1e-9) return { x: dx / len, y: dy / len };
-    return { x: 1, y: 0 };
-  }
-
-  function pointAtMinimumDistance(start, p) {
-    const dx = p.x - start.x;
-    const dy = p.y - start.y;
-    const len = hypot2(dx, dy);
-    if (len >= MIN_LINE_LENGTH) return p;
-    const dir = preferredDirectionFrom(start, p);
-    return { x: start.x + dir.x * MIN_LINE_LENGTH, y: start.y + dir.y * MIN_LINE_LENGTH };
-  }
-
-
   function snapshotLineLength(snapshot, line) {
     if (!snapshot || !line) return line?.length?.() || 0;
     const pointState = new Map(snapshot.points.map((p) => [p.point, p]));
@@ -5091,7 +5078,7 @@
     referenceImageCalibrationSession = null;
     canvasNavigation.reset();
     suppressNextBlankDoubleClickEvent = false;
-    lineStartPoint = null;
+    lineCommand.reset();
     resetCenterlineCommandState();
     clearTransientPointRollback();
     clearTransientLineCompletionRollback();
@@ -5780,7 +5767,7 @@
 
   function exitLineMode() {
     resetCenterlineCommandState();
-    lineStartPoint = null;
+    lineCommand.reset();
     rectangleCommand.reset();
     resetSlotCommandState();
     filletFirstLine = null;
@@ -5800,7 +5787,7 @@
   function exitDrawMode() {
     instanceSourceEdit = null;
     resetCenterlineCommandState();
-    lineStartPoint = null;
+    lineCommand.reset();
     clearTransientPointRollback();
     clearTransientLineCompletionRollback();
     rectangleCommand.reset();
@@ -5827,7 +5814,7 @@
   }
 
   function hasActiveDrawOperation() {
-    return Boolean(lineStartPoint || centerlineCommand.targets.length || centerlineCommand.firstPoint || rectangleCommand.startPoint || slotCommand.firstCenter || slotCommand.secondCenter || filletFirstLine || circularCommands.circleCenterPoint || circularCommands.arcCenterPoint || circularCommands.arcStartPoint || circularCommands.threePointArcStart || circularCommands.threePointArcEnd || splineDraft.points.length || offsetSource || offsetChainEntries.length);
+    return Boolean(lineCommand.startPoint || centerlineCommand.targets.length || centerlineCommand.firstPoint || rectangleCommand.startPoint || slotCommand.firstCenter || slotCommand.secondCenter || filletFirstLine || circularCommands.circleCenterPoint || circularCommands.arcCenterPoint || circularCommands.arcStartPoint || circularCommands.threePointArcStart || circularCommands.threePointArcEnd || splineDraft.points.length || offsetSource || offsetChainEntries.length);
   }
 
 
@@ -5836,7 +5823,7 @@
     rollbackTransientLineStart();
     clearTransientPointRollback();
     clearTransientLineCompletionRollback();
-    lineStartPoint = null;
+    lineCommand.reset();
     rectangleCommand.reset();
     resetSlotCommandState();
     filletFirstLine = null;
@@ -7140,7 +7127,7 @@
     annotationDragSession = null;
     pendingCommand = null;
     pendingConstraintCommand = null;
-    lineStartPoint = null;
+    lineCommand.reset();
     circularCommands.resetCircle();
     resetArcCommandState();
     pointerPreview = null;
@@ -8480,19 +8467,19 @@
   }
 
   function drawTemporaryLine() {
-    if (mode !== "line" || !lineStartPoint) return;
-    const target = pointerPreview || lineStartPoint;
+    if (mode !== "line" || !lineCommand.startPoint) return;
+    const target = pointerPreview || lineCommand.startPoint;
     withCanvasState(() => {
       ctx.strokeStyle = "#2563eb";
       ctx.lineWidth = 2 / viewport.scale;
       ctx.setLineDash([6 / viewport.scale, 5 / viewport.scale]);
       ctx.beginPath();
-      ctx.moveTo(lineStartPoint.x, lineStartPoint.y);
+      ctx.moveTo(lineCommand.startPoint.x, lineCommand.startPoint.y);
       ctx.lineTo(target.x, target.y);
       ctx.stroke();
       ctx.setLineDash([]);
       ctx.beginPath();
-      ctx.arc(lineStartPoint.x, lineStartPoint.y, 12 / viewport.scale, 0, Math.PI * 2);
+      ctx.arc(lineCommand.startPoint.x, lineCommand.startPoint.y, 12 / viewport.scale, 0, Math.PI * 2);
       ctx.stroke();
     });
   }
@@ -9156,7 +9143,7 @@
     resetCenterlineCommandState();
     resetSlotCommandState();
     mode = "select";
-    lineStartPoint = null;
+    lineCommand.reset();
     rectangleCommand.reset();
     filletFirstLine = null;
     circularCommands.resetCircle();
@@ -9533,7 +9520,7 @@
       return;
     }
     mode = "select";
-    lineStartPoint = null;
+    lineCommand.reset();
     rectangleCommand.reset();
     filletFirstLine = null;
     circularCommands.resetCircle();
@@ -9561,7 +9548,7 @@
     if (!primitive) return;
     const value = kind === "diameter" ? primitive.radius() * 2 : primitive.radius();
     mode = "select";
-    lineStartPoint = null;
+    lineCommand.reset();
     rectangleCommand.reset();
     filletFirstLine = null;
     circularCommands.resetCircle();
@@ -9923,7 +9910,7 @@
     referenceImageDragSession = null;
     referenceImageCalibrationSession = null;
     selectionRectSession = null;
-    lineStartPoint = null;
+    lineCommand.reset();
     rectangleCommand.reset();
     filletFirstLine = null;
     circularCommands.resetCircle();
@@ -14039,68 +14026,6 @@
     constraint.target = Math.abs(angles.signed);
   }
 
-  function orthogonalPointFrom(start, p) {
-    const dx = p.x - start.x;
-    const dy = p.y - start.y;
-    return Math.abs(dx) >= Math.abs(dy) ? { x: p.x, y: start.y } : { x: start.x, y: p.y };
-  }
-
-  function addLineOrientationConstraint(line) {
-    if (!line) return;
-    const dx = Math.abs(line.p2.x - line.p1.x);
-    const dy = Math.abs(line.p2.y - line.p1.y);
-    pushModelConstraint(dx >= dy ? new HorizontalConstraint(line) : new VerticalConstraint(line));
-  }
-
-  function handleLineClick(p, lockOrthogonal = false) {
-    if (lineStartPoint && lockOrthogonal) p = orthogonalPointFrom(lineStartPoint, p);
-    p = snapForDrawing(p);
-    let snap = drawingSnap.active;
-    if (lineStartPoint) p = pointAtMinimumDistance(lineStartPoint, p);
-    if (snap && !samePosition(p, snap)) snap = null;
-    if (lineStartPoint) beginTransientLineCompletionRollback();
-    else beginTransientLineStartRollback();
-    const endpoint = lineStartPoint && hypot2(p.x - lineStartPoint.x, p.y - lineStartPoint.y) <= MIN_LINE_LENGTH + 1e-9 ? addPoint(p.x, p.y, false, "endpoint") : endpointAt(p.x, p.y);
-    pointerPreview = p;
-
-    if (!lineStartPoint) {
-      addPointSnapConstraints(endpoint, snap);
-      lineStartPoint = endpoint;
-      canvasSelection.set("points", [endpoint]);
-      canvasSelection.set("lines", []);
-      canvasSelection.set("circles", []);
-      canvasSelection.set("arcs", []);
-      setHint("次の端点をクリックすると線を作成します。終了はEscです。");
-      updateUI();
-      draw();
-      return;
-    }
-
-    const l = addLine(lineStartPoint, endpoint);
-    if (l) {
-      transientAuthoring.markCompletedLine(endpoint, l);
-      clearTransientLineStartRollback();
-      addPointSnapConstraints(endpoint, snap);
-      if (lockOrthogonal) addLineOrientationConstraint(l);
-      canvasSelection.set("points", []);
-      canvasSelection.set("lines", [l]);
-      canvasSelection.set("circles", []);
-      canvasSelection.set("arcs", []);
-      lineStartPoint = endpoint;
-      clearSelection();
-      const result = solveAndRefresh("線追加");
-      log(`線 ${l.id} を追加しました\n自動solve: success=${result.success}`);
-    } else {
-      canvasSelection.set("points", [endpoint]);
-      canvasSelection.set("lines", []);
-      canvasSelection.set("circles", []);
-      canvasSelection.set("arcs", []);
-      setHint("同じ端点です。別の位置をクリックしてください。終了はEscです。");
-      updateUI();
-      draw();
-    }
-  }
-
   function handleRectangleClick(point) {
     const snapped = snapForDrawing(point);
     rectangleCommand.click(snapped, drawingSnap.active);
@@ -15824,7 +15749,7 @@
 
     if (mode === "line") {
       hoveredSketchIdentity = null;
-      const rawPreview = lineStartPoint && e.shiftKey ? orthogonalPointFrom(lineStartPoint, p) : p;
+      const rawPreview = lineCommand.previewPoint(p, e.shiftKey);
       pointerPreview = snapForDrawing(rawPreview);
       draw();
     }
@@ -16336,11 +16261,11 @@
   }
 
   function isTransientLineStartHit(hits = {}) {
-    return transientAuthoring.isLineStartHit(hits.hitP, lineStartPoint);
+    return transientAuthoring.isLineStartHit(hits.hitP, lineCommand.startPoint);
   }
 
   function isTransientLineCompletionHit(hits = {}) {
-    return mode === "line" && transientAuthoring.isLineCompletionHit(hits.hitP, lineStartPoint);
+    return mode === "line" && transientAuthoring.isLineCompletionHit(hits.hitP, lineCommand.startPoint);
   }
 
   function isTransientPointCommandHit(hits = {}) {
@@ -16424,17 +16349,17 @@
     if (mode === "line") {
       if (isTransientLineCompletionHit(hits)) {
         rollbackTransientLineCompletion();
-        lineStartPoint = null;
+        lineCommand.reset();
         pointerPreview = null;
         clearSnap();
         clearSelection();
         setHint("線の作図をキャンセルしました");
         updateUI();
         draw();
-      } else if (isTransientLineStartHit(hits) || (transientAuthoring.hasLineStart && lineStartPoint && !transientAuthoring.hasLineCompletion)) {
+      } else if (isTransientLineStartHit(hits) || (transientAuthoring.hasLineStart && lineCommand.startPoint && !transientAuthoring.hasLineCompletion)) {
         cancelActiveDrawOperation();
         exitDrawMode();
-      } else if (lineStartPoint) {
+      } else if (lineCommand.startPoint) {
         cancelActiveDrawOperation();
         updateUI();
         draw();
@@ -16978,7 +16903,7 @@
   document.getElementById("toolSelect").addEventListener("click", () => {
     cancelConstraintTargetCommand("");
     mode = "select";
-    lineStartPoint = null;
+    lineCommand.reset();
     rectangleCommand.reset();
     filletFirstLine = null;
     circularCommands.resetCircle();
@@ -16993,7 +16918,7 @@
   document.getElementById("toolPoint").addEventListener("click", () => {
     cancelConstraintTargetCommand("");
     mode = "point";
-    lineStartPoint = null;
+    lineCommand.reset();
     rectangleCommand.reset();
     filletFirstLine = null;
     circularCommands.resetCircle();
@@ -17008,7 +16933,7 @@
   document.getElementById("toolLine").addEventListener("click", () => {
     cancelConstraintTargetCommand("");
     mode = "line";
-    lineStartPoint = null;
+    lineCommand.reset();
     rectangleCommand.reset();
     filletFirstLine = null;
     circularCommands.resetCircle();
@@ -17050,7 +16975,7 @@
     }
     mode = "line";
     constructionLineMode = !constructionLineMode;
-    lineStartPoint = null;
+    lineCommand.reset();
     rectangleCommand.reset();
     filletFirstLine = null;
     circularCommands.resetCircle();
@@ -17065,7 +16990,7 @@
   document.getElementById("toolRectangle")?.addEventListener("click", () => {
     cancelConstraintTargetCommand("");
     mode = "rectangle";
-    lineStartPoint = null;
+    lineCommand.reset();
     rectangleCommand.reset();
     filletFirstLine = null;
     circularCommands.resetCircle();
@@ -17080,7 +17005,7 @@
   document.getElementById("toolSlot")?.addEventListener("click", () => {
     cancelConstraintTargetCommand("");
     mode = "slot";
-    lineStartPoint = null;
+    lineCommand.reset();
     rectangleCommand.reset();
     resetSlotCommandState();
     filletFirstLine = null;
@@ -17100,7 +17025,7 @@
       return;
     }
     mode = "fillet";
-    lineStartPoint = null;
+    lineCommand.reset();
     rectangleCommand.reset();
     filletFirstLine = null;
     circularCommands.resetCircle();
@@ -17115,7 +17040,7 @@
   document.getElementById("toolTrim")?.addEventListener("click", () => {
     cancelConstraintTargetCommand("");
     mode = "trim";
-    lineStartPoint = null;
+    lineCommand.reset();
     rectangleCommand.reset();
     filletFirstLine = null;
     circularCommands.resetCircle();
@@ -17144,7 +17069,7 @@
     cancelConstraintTargetCommand("");
     cancelPendingCommand("");
     mode = "offset";
-    lineStartPoint = null;
+    lineCommand.reset();
     rectangleCommand.reset();
     filletFirstLine = null;
     circularCommands.resetCircle();
@@ -17175,7 +17100,7 @@
   document.getElementById("toolCircle").addEventListener("click", () => {
     cancelConstraintTargetCommand("");
     mode = "circle";
-    lineStartPoint = null;
+    lineCommand.reset();
     rectangleCommand.reset();
     filletFirstLine = null;
     circularCommands.resetCircle();
@@ -17190,7 +17115,7 @@
   document.getElementById("toolArc").addEventListener("click", () => {
     cancelConstraintTargetCommand("");
     mode = "arc";
-    lineStartPoint = null;
+    lineCommand.reset();
     rectangleCommand.reset();
     filletFirstLine = null;
     circularCommands.resetCircle();
@@ -17205,7 +17130,7 @@
   document.getElementById("toolThreePointArc")?.addEventListener("click", () => {
     cancelConstraintTargetCommand("");
     mode = "three-point-arc";
-    lineStartPoint = null;
+    lineCommand.reset();
     rectangleCommand.reset();
     filletFirstLine = null;
     circularCommands.resetCircle();
@@ -20072,7 +19997,8 @@
 
         capture("line", () => {
           mode = "line";
-          lineStartPoint = addPoint(0, 0, true, "endpoint");
+          lineCommand.click({ x: 0, y: 0 });
+          lineCommand.startPoint.fixed = true;
           pointerPreview = { x: 80, y: 0 };
         }, drawTemporaryLine);
         capture("rectangle", () => {

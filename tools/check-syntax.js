@@ -2,6 +2,8 @@
 const { spawnSync } = require("node:child_process");
 const path = require("node:path");
 const files = [
+  "src/commands/line_command.js",
+  "tests/unit/line-command.test.js",
   "src/commands/rectangle_command.js",
   "tests/unit/rectangle-command.test.js",
   "src/editing/transient_authoring.js",
