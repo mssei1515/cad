@@ -22,6 +22,7 @@
 - `src/editing/block_editing_queries.js`: 編集範囲・編集中定義・参照Instance・draftを優先する依存循環の読取り
 - `src/editing/block_editor_session.js`: Block編集session連鎖、draft同期・差替え、親scope復帰、子定義の仮移動・復元記録引継ぎと取消
 - `src/editing/block_history_snapshot.js`: Block履歴の復元用コピーと変更検出signatureの生成
+- `src/editing/history_controller.js`: 現在scopeへの履歴操作振分け、復元中の記録抑止と変更通知
 - `src/editing/edit_history.js`: 履歴stack操作
 - `src/diagnostics/interaction_profiler.js`: 同期処理の時間・実行回数計測
 - `src/ui/block_view.js`: Block一覧・編集パネルのDOM表示とイベント接続。状態変更は操作コールバックへ委譲

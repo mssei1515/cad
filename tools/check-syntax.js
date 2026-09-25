@@ -56,7 +56,7 @@ const files = [
   "src/geometry/offset_chain.js",
   "src/persistence/constraint_codec_registry.js",
   "src/parameters/parameter_engine.js",
-  "src/editing/edit_history.js",
+  "src/editing/edit_history.js", "src/editing/history_controller.js",
   "src/diagnostics/interaction_profiler.js",
   "src/ui/choice_dialog.js",
   "tests/e2e/choice-dialog.spec.js",

@@ -141,3 +141,41 @@ test("owned history restoration preserves the existing stack transition and erro
   assert.equal(history.undoCount, 2);
   assert.equal(history.redoCount, 0);
 });
+
+
+vm.runInNewContext(fs.readFileSync(path.resolve(__dirname, "../../src/editing/history_controller.js"), "utf8"), sandbox);
+function controllerFixture() {
+  const events = [], make = name => ({ recordLabel: name,
+    reset: () => events.push(`${name}:reset`), record: () => { events.push(`${name}:record`); return true; },
+    undo: () => `${name}:undo`, redo: () => `${name}:redo` });
+  const documentHistory = make('document'), block = make('block'), state = { block: null };
+  const controller = sandbox.window.HistoryController.create({ documentHistory, currentBlockHistory: () => state.block,
+    changed: () => events.push('changed'), log: value => events.push(value) });
+  return { controller, events, documentHistory, block, state };
+}
+
+test('history controller routes each operation to the current scope while document reset stays explicit', () => {
+  const f = controllerFixture();
+  assert.equal(f.controller.active(), f.documentHistory); assert.equal(f.controller.undo(), 'document:undo');
+  f.controller.resetBlock(); assert.deepEqual(f.events, []);
+  f.state.block = f.block; assert.equal(f.controller.redo(), 'block:redo');
+  f.controller.record('edit'); assert.deepEqual(f.events, ['block:record', 'changed', 'block: edit']);
+  f.events.length = 0; f.controller.resetDocument('load'); f.controller.resetBlock();
+  assert.deepEqual(f.events, ['document:reset', 'changed', '履歴を初期化しました: load', 'block:reset', 'changed']);
+  f.state.block = null; assert.equal(f.controller.active(), f.documentHistory);
+});
+
+test('history restoration suppresses recording and always clears its guard before notifying', () => {
+  const f = controllerFixture();
+  assert.equal(f.controller.restore(() => { assert.equal(f.controller.restoring, true); f.controller.record(); return 42; }), 42);
+  assert.equal(f.controller.restoring, false); assert.deepEqual(f.events, ['changed']);
+  f.events.length = 0;
+  assert.throws(() => f.controller.restore(() => { f.controller.record(); throw new Error('restore failed'); }), /restore failed/);
+  assert.equal(f.controller.restoring, false); assert.deepEqual(f.events, ['changed']);
+  f.controller.record(); assert.equal(f.events[1], 'document:record');
+});
+
+test('unchanged history records still notify but do not log a new snapshot', () => {
+  const f = controllerFixture(); f.documentHistory.record = () => false;
+  f.controller.record(); assert.deepEqual(f.events, ['changed']);
+});

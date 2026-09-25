@@ -358,7 +358,6 @@
   let referenceImageDragSession = null;
   let referenceImageCalibrationSession = null;
   let dimensionExpressionMarkCapture = null;
-  let historyRestoring = false;
   let geometryClipboard = null;
   const HISTORY_LIMIT = 80;
   const geometryInstanceCommand = window.GeometryInstanceCommand.create({
@@ -400,6 +399,10 @@
     restore: (snapshot, label) => { restoreHistorySnapshot(snapshot, label); return true; },
     limit: HISTORY_LIMIT,
     recordLabel: "履歴に追加しました", undoLabel: "戻る", redoLabel: "進む",
+  });
+  const historyController = window.HistoryController.create({
+    documentHistory, currentBlockHistory: () => blockEditor.current?.history,
+    changed: updateHistoryButtons, log,
   });
   const CURRENT_JSON_VERSION = 22;
   const CLIPBOARD_PASTE_OFFSET_SCREEN_PX = 24;
@@ -449,7 +452,7 @@
   });
   const transientAuthoring = window.TransientAuthoring.create({
     currentScope: workspace.current, ids: geometryIds, selection: canvasSelection, historySnapshot, documentHistory,
-    isHistoryRestoring: () => historyRestoring, updateHistoryButtons,
+    isHistoryRestoring: () => historyController.restoring, updateHistoryButtons,
     invalidateAnalysis: () => { constraintAnalysisState = null; },
   });
   const { beginTransientLineStartRollback, clearTransientLineStartRollback, beginTransientLineCompletionRollback,
@@ -2383,7 +2386,7 @@
     setSolveResultHint(label, solved, analysis, solved.dependent);
     updateUI({ refreshAnalysis: false });
     draw();
-    if (solved.success && !historyRestoring) recordHistory(label);
+    if (solved.success && !historyController.restoring) recordHistory(label);
     return result;
   }
 
@@ -3741,9 +3744,7 @@
 
 
   function resetBlockEditorHistory() {
-    if (!blockEditor.current) return;
-    blockEditor.current.history.reset();
-    updateHistoryButtons();
+    return historyController.resetBlock();
   }
 
   function createBlockEditHistory() {
@@ -3759,7 +3760,7 @@
   }
 
   function activeEditHistory() {
-    return blockEditor.current?.history || documentHistory;
+    return historyController.active();
   }
 
   function updateHistoryButtons() {
@@ -3772,9 +3773,7 @@
   }
 
   function resetHistory(label = "initial") {
-    documentHistory.reset();
-    updateHistoryButtons();
-    log(`履歴を初期化しました: ${label}`);
+    return historyController.resetDocument(label);
   }
 
   function recordHistory(label = "変更") {
@@ -3783,34 +3782,25 @@
   }
 
   function recordHistoryUnprofiled(label = "変更") {
-    if (historyRestoring) return;
-    const history = activeEditHistory();
-    const recorded = history.record();
-    updateHistoryButtons();
-    if (recorded) log(`${history.recordLabel}: ${label}`);
+    return historyController.record(label);
   }
 
   function restoreHistorySnapshot(snapshot, label) {
     const constructionModeBeforeRestore = constructionLineMode;
     const documentNameBeforeRestore = documentModel.documentName;
-    historyRestoring = true;
-    try {
+    return historyController.restore(() => {
       loadModelData(JSON.parse(snapshot), { documentNameFallback: documentNameBeforeRestore, preserveSketchTreeState: true });
       documentModel.documentName = documentNameBeforeRestore;
       constructionLineMode = constructionModeBeforeRestore;
       clearInteractionForSketchChange();
       solveAndRefresh(label);
       setHint(label);
-    } finally {
-      historyRestoring = false;
-      updateHistoryButtons();
-    }
+    });
   }
 
   function restoreBlockEditorHistorySnapshot(snapshot, label) {
     if (!blockEditor.current || !snapshot?.definition) return false;
-    historyRestoring = true;
-    try {
+    return historyController.restore(() => {
       const restored = cloneBlockDefinition(snapshot.definition);
       blockEditor.replaceDraft(restored);
       invalidateBlockProjectionCache();
@@ -3818,18 +3808,15 @@
       solveAndRefresh(label);
       setHint(label);
       return true;
-    } finally {
-      historyRestoring = false;
-      updateHistoryButtons();
-    }
+    });
   }
 
   function undoHistory() {
-    return activeEditHistory().undo();
+    return historyController.undo();
   }
 
   function redoHistory() {
-    return activeEditHistory().redo();
+    return historyController.redo();
   }
 
   function deserializeConstraint(...args) {
