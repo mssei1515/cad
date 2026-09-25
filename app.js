@@ -160,18 +160,6 @@
   const canvasContextMenu = document.getElementById("canvasContextMenu");
   const sketchOverlay = document.getElementById("sketchOverlay");
   const sketchOverlayResizeHandle = document.getElementById("sketchOverlayResizeHandle");
-  const DEFAULT_COLOR_PALETTE = [
-    "#000000", "#111827", "#374151", "#64748b", "#94a3b8", "#cbd5e1", "#ffffff",
-    "#fca5a5", "#dc2626", "#991b1b",
-    "#fdba74", "#f97316", "#c2410c",
-    "#fde68a", "#f59e0b", "#b45309",
-    "#86efac", "#16a34a", "#166534",
-    "#5eead4", "#14b8a6", "#0f766e",
-    "#67e8f9", "#0ea5e9", "#0e7490",
-    "#93c5fd", "#2563eb", "#1e40af",
-    "#c4b5fd", "#7c3aed", "#5b21b6",
-    "#f9a8d4", "#db2777", "#9d174d",
-  ];
   const applicationSettings = window.ApplicationSettings.create({
     document, storage: () => localStorage,
     refreshViews: (options) => updateUI(options),
@@ -302,7 +290,6 @@
   let pendingConstraintCommand = null;
   let constraintOperands = [];
   let lastPointerWorld = null;
-  let colorPaletteSession = null;
   const sketchAppearanceSectionOpenState = { general: false, construction: false, dimension: false };
   let hoveredSketchIdentity = null;
   let hoveredSketchTreeId = null;
@@ -9901,180 +9888,12 @@
     });
   }
 
-  function defaultAppearanceLabel() {
-    return applicationText("既定", "Default");
-  }
 
-  function colorPickerValue(value) {
-    const color = String(value || "").trim();
-    if (/^#[0-9a-f]{6}$/i.test(color)) return color.toLowerCase();
-    if (/^#[0-9a-f]{3}$/i.test(color)) return `#${[...color.slice(1)].map((part) => part.repeat(2)).join("")}`.toLowerCase();
-    return "#111827";
-  }
 
-  function usedFileColors() {
-    const colors = [];
-    const seen = new Set();
-    const add = (value) => {
-      const color = String(value || "").trim();
-      if (!/^#[0-9a-f]{3}(?:[0-9a-f]{3})?$/i.test(color)) return;
-      const normalized = colorPickerValue(color);
-      if (seen.has(normalized)) return;
-      seen.add(normalized);
-      colors.push(normalized);
-    };
-    const addAppearance = (appearance) => add(appearance?.color);
-    addAppearance(documentModel.defaultAppearance);
-    addAppearance(documentModel.defaultConstructionAppearance);
-    addAppearance(documentModel.defaultDimensionAppearance);
-    for (const sketch of model.sketches) {
-      addAppearance(sketch.appearance);
-      addAppearance(sketch.constructionAppearance);
-      addAppearance(sketch.dimensionAppearance);
-    }
-    for (const item of [...model.points, ...model.lines, ...model.circles, ...model.arcs, ...model.splines]) addAppearance(item.appearance);
-    for (const instance of model.blockInstances) addAppearance(instance.appearanceOverride);
-    for (const instance of model.geometryInstances) addAppearance(instance.appearanceOverride);
-    for (const constraint of model.constraints) addAppearance(constraint.dimension?.display);
-    for (const hatch of model.hatches) addAppearance(hatch.appearance);
-    for (const annotation of model.annotations) add(annotation.style?.color);
-    for (const definition of documentModel.blockDefinitions) {
-      for (const hatch of definition.hatches || []) addAppearance(hatch.appearance);
-      for (const sketch of definition.sketches || []) {
-        addAppearance(sketch.appearance);
-        addAppearance(sketch.constructionAppearance);
-        addAppearance(sketch.dimensionAppearance);
-      }
-      for (const item of [...(definition.points || []), ...(definition.lines || []), ...(definition.circles || []), ...(definition.arcs || []), ...(definition.splines || [])]) addAppearance(item.appearance);
-      for (const instance of definition.blockInstances || []) addAppearance(instance.appearanceOverride);
-      for (const instance of definition.geometryInstances || []) addAppearance(instance.appearanceOverride);
-      for (const constraint of definition.constraints || []) addAppearance(constraint.dimension?.display);
-      for (const annotation of definition.annotations || []) add(annotation.style?.color);
-    }
-    return colors;
-  }
 
-  function colorPaletteSwatches(colors, selectedColor, groupLabel) {
-    const selected = colorPickerValue(selectedColor);
-    return colors.map((color) =>
-      `<button class="property-color-swatch" data-palette-color="${color}" type="button" style="--swatch-color:${color}" title="${escapeHtml(groupLabel)}: ${color}" aria-label="${escapeHtml(groupLabel)}: ${color}" aria-pressed="${selected === color}"></button>`,
-    ).join("");
-  }
 
-  function appearancePropertyRows(owner, effective, { allowInheritance = true, constructionEndpoints = false, idPrefix = "property" } = {}) {
-    const direct = normalizeAppearance(owner);
-    const inherited = (key) => allowInheritance && direct[key] == null;
-    const option = (value, label, selected) => `<option value="${value}" ${selected ? "selected" : ""}>${label}</option>`;
-    const defaultLabel = defaultAppearanceLabel();
-    const inheritedValue = (key) => {
-      if (key === "visible") return applicationText(effective.visible !== false ? "表示" : "非表示", effective.visible !== false ? "Visible" : "Hidden");
-      if (key === "lineType") {
-        const labels = { solid: ["実線", "Solid"], dashed: ["破線", "Dashed"], dashdot: ["一点鎖線", "Dash-dot"], dashdotdot: ["二点鎖線", "Dash-dot-dot"], dotted: ["点線", "Dotted"] };
-        const label = labels[effective.lineType] || [String(effective.lineType || ""), String(effective.lineType || "")];
-        return applicationText(label[0], label[1]);
-      }
-      if (key === "endpointOverhang") return applicationText(effective.endpointOverhang !== false ? "あり" : "なし", effective.endpointOverhang !== false ? "Enabled" : "Disabled");
-      if (key === "endpointMarkers") return applicationText(effective.endpointMarkers !== false ? "表示" : "非表示", effective.endpointMarkers !== false ? "Visible" : "Hidden");
-      return String(effective[key] ?? "");
-    };
-    const inheritedLabel = (key) => `${defaultLabel} (${inheritedValue(key)})`;
-    const colorValue = colorPickerValue(direct.color || effective.color);
-    const endpointRows = constructionEndpoints ? `
-      <div class="property-row"><label for="${idPrefix}EndpointOverhang">${applicationText("端部のはみ出し", "Endpoint overhang")}</label><select id="${idPrefix}EndpointOverhang" data-appearance-key="endpointOverhang">
-        ${allowInheritance ? option("", inheritedLabel("endpointOverhang"), inherited("endpointOverhang")) : ""}
-        ${option("true", applicationText("あり", "Enabled"), direct.endpointOverhang === true || !allowInheritance && effective.endpointOverhang !== false)}${option("false", applicationText("なし", "Disabled"), direct.endpointOverhang === false)}
-      </select></div>
-      <div class="property-row"><label for="${idPrefix}EndpointMarkers">${applicationText("端部の点", "Endpoint points")}</label><select id="${idPrefix}EndpointMarkers" data-appearance-key="endpointMarkers">
-        ${allowInheritance ? option("", inheritedLabel("endpointMarkers"), inherited("endpointMarkers")) : ""}
-        ${option("true", applicationText("表示", "Visible"), direct.endpointMarkers === true || !allowInheritance && effective.endpointMarkers !== false)}${option("false", applicationText("非表示", "Hidden"), direct.endpointMarkers === false)}
-      </select></div>` : "";
-    return `
-      <div class="property-row"><label for="${idPrefix}Visible">${applicationText("表示", "Visible")}</label><select id="${idPrefix}Visible" data-appearance-key="visible">
-        ${allowInheritance ? option("", inheritedLabel("visible"), inherited("visible")) : ""}
-        ${option("true", applicationText("表示", "Visible"), direct.visible === true || !allowInheritance && effective.visible !== false)}${option("false", applicationText("非表示", "Hidden"), direct.visible === false)}
-      </select></div>
-      <div class="property-row"><label for="${idPrefix}Color">${applicationText("色", "Color")}</label><div class="property-color-control"><input id="${idPrefix}Color" data-appearance-key="color" type="text" placeholder="${escapeHtml(allowInheritance ? inheritedLabel("color") : "")}" value="${escapeHtml(direct.color || "")}" /><button class="property-color-picker" data-appearance-palette-open data-current-color="${colorValue}" type="button" title="${applicationText("カラーパレット", "Color palette")}" aria-label="${applicationText("カラーパレット", "Color palette")}"><span class="property-color-picker-swatch" style="--swatch-color:${colorValue}" aria-hidden="true"></span></button></div></div>
-      <div class="property-row"><label for="${idPrefix}LineType">${applicationText("線種", "Line type")}</label><select id="${idPrefix}LineType" data-appearance-key="lineType">
-        ${allowInheritance ? option("", inheritedLabel("lineType"), inherited("lineType")) : ""}
-        ${option("solid", applicationText("実線", "Solid"), direct.lineType === "solid" || !allowInheritance && effective.lineType === "solid")}${option("dashed", applicationText("破線", "Dashed"), direct.lineType === "dashed")}${option("dashdot", applicationText("一点鎖線", "Dash-dot"), direct.lineType === "dashdot")}${option("dashdotdot", applicationText("二点鎖線", "Dash-dot-dot"), direct.lineType === "dashdotdot")}${option("dotted", applicationText("点線", "Dotted"), direct.lineType === "dotted")}
-      </select></div>
-      <div class="property-row"><label for="${idPrefix}LineWidth">${applicationText("線幅", "Line width")}</label><input id="${idPrefix}LineWidth" data-appearance-key="lineWidth" type="number" min="0.1" max="20" step="0.1" placeholder="${escapeHtml(allowInheritance ? inheritedLabel("lineWidth") : "")}" value="${direct.lineWidth ?? ""}" /></div>${endpointRows}`;
-  }
 
-  function dimensionAppearancePropertyRows(owner, effective, { allowInheritance = true, idPrefix = "dimensionProperty" } = {}) {
-    const direct = normalizeDimensionAppearance(owner);
-    const hasDirect = (key) => Object.prototype.hasOwnProperty.call(direct, key);
-    const option = (value, label, selected) => `<option value="${value}" ${selected ? "selected" : ""}>${label}</option>`;
-    const defaultLabel = defaultAppearanceLabel();
-    const inheritedValue = (key) => {
-      const value = effective[key];
-      if (key === "visible") return applicationText(value !== false ? "表示" : "非表示", value !== false ? "Visible" : "Hidden");
-      if (key === "terminatorType") {
-        const labels = {
-          arrow: ["標準矢印", "Standard arrow"],
-          filledArrow: ["塗りつぶし矢印", "Filled arrow"],
-          dot: ["点", "Dot"],
-        };
-        const label = labels[value] || labels.arrow;
-        return applicationText(label[0], label[1]);
-      }
-      if (key === "precision") return value == null ? applicationText("自動", "Auto") : String(value);
-      if (key === "prefix" || key === "suffix") return String(value || "") || applicationText("空", "Empty");
-      if (key === "arrowheadAngle") return `${formatDisplayNumber(value)}°`;
-      if (DIMENSION_APPEARANCE_LENGTH_KEYS.includes(key)) return `${formatDisplayNumber(value)} mm`;
-      return String(value ?? "");
-    };
-    const inheritedLabel = (key) => `${defaultLabel} (${inheritedValue(key)})`;
-    const colorValue = colorPickerValue(direct.color || effective.color);
-    const booleanOptions = (key, enabledLabel = applicationText("表示", "Visible"), disabledLabel = applicationText("非表示", "Hidden")) => `
-      ${allowInheritance ? option("", inheritedLabel(key), !hasDirect(key)) : ""}
-      ${option("true", enabledLabel, direct[key] === true || !allowInheritance && effective[key] !== false)}
-      ${option("false", disabledLabel, direct[key] === false)}`;
-    const precisionOptions = [
-      allowInheritance ? option("", inheritedLabel("precision"), !hasDirect("precision")) : "",
-      option("auto", applicationText("自動", "Auto"), hasDirect("precision") && direct.precision == null || !allowInheritance && effective.precision == null),
-      ...Array.from({ length: 11 }, (_, precision) => option(String(precision), String(precision), direct.precision === precision || !allowInheritance && effective.precision === precision)),
-    ].join("");
-    const terminatorType = hasDirect("terminatorType") ? direct.terminatorType : effective.terminatorType;
-    const terminatorTypeOptions = [
-      allowInheritance ? option("", inheritedLabel("terminatorType"), !hasDirect("terminatorType")) : "",
-      option("arrow", applicationText("標準矢印", "Standard arrow"), direct.terminatorType === "arrow" || !allowInheritance && effective.terminatorType === "arrow"),
-      option("filledArrow", applicationText("塗りつぶし矢印", "Filled arrow"), direct.terminatorType === "filledArrow" || !allowInheritance && effective.terminatorType === "filledArrow"),
-      option("dot", applicationText("点", "Dot"), direct.terminatorType === "dot" || !allowInheritance && effective.terminatorType === "dot"),
-    ].join("");
-    const numericRow = (key, idSuffix, labelJa, labelEn, { min = 0, max = 1000, step = 0.1, titleJa = "", titleEn = "" } = {}) => {
-      const value = hasDirect(key) ? direct[key] : "";
-      const title = titleJa ? ` title="${escapeHtml(applicationText(titleJa, titleEn))}"` : "";
-      const unit = key === "arrowheadAngle" ? "°" : "mm";
-      return `<div class="property-row"><label for="${idPrefix}${idSuffix}"${title}>${applicationText(labelJa, labelEn)}</label><div class="property-input-with-unit"><input id="${idPrefix}${idSuffix}" data-dimension-display="${key}" type="number" min="${min}" max="${max}" step="${step}" placeholder="${escapeHtml(allowInheritance ? inheritedLabel(key) : "")}" value="${value}"${title}><span class="property-input-unit" aria-hidden="true">${unit}</span></div></div>`;
-    };
-    const group = (key, titleJa, titleEn, rows) => `<div class="dimension-appearance-group" data-dimension-appearance-group="${key}"><div class="dimension-appearance-group-title">${applicationText(titleJa, titleEn)}</div>${rows}</div>`;
-    return `
-      <div class="property-row"><label for="${idPrefix}Visible">${applicationText("表示", "Visible")}</label><select id="${idPrefix}Visible" data-dimension-display="visible">${booleanOptions("visible")}</select></div>
-      <div class="property-row"><label for="${idPrefix}Color">${applicationText("色", "Color")}</label><div class="property-color-control"><input id="${idPrefix}Color" data-dimension-display="color" type="text" placeholder="${escapeHtml(allowInheritance ? inheritedLabel("color") : "")}" value="${escapeHtml(direct.color || "")}" /><button class="property-color-picker" data-appearance-palette-open data-current-color="${colorValue}" type="button" title="${applicationText("カラーパレット", "Color palette")}" aria-label="${applicationText("カラーパレット", "Color palette")}"><span class="property-color-picker-swatch" style="--swatch-color:${colorValue}" aria-hidden="true"></span></button></div></div>
-      <div class="property-row"><label for="${idPrefix}LineWidth">${applicationText("線幅", "Line width")}</label><input id="${idPrefix}LineWidth" data-dimension-display="lineWidth" type="number" min="0.5" max="10" step="0.1" placeholder="${escapeHtml(allowInheritance ? inheritedLabel("lineWidth") : "")}" value="${hasDirect("lineWidth") ? direct.lineWidth : ""}"></div>
-      <div class="property-row"><label for="${idPrefix}Precision">${applicationText("精度", "Precision")}</label><select id="${idPrefix}Precision" data-dimension-display="precision">${precisionOptions}</select></div>
-      <div class="property-row"><label for="${idPrefix}Prefix">${applicationText("接頭辞", "Prefix")}</label><input id="${idPrefix}Prefix" data-dimension-display="prefix" placeholder="${escapeHtml(allowInheritance ? inheritedLabel("prefix") : "")}" value="${escapeHtml(direct.prefix ?? "")}"></div>
-      <div class="property-row"><label for="${idPrefix}Suffix">${applicationText("接尾辞", "Suffix")}</label><input id="${idPrefix}Suffix" data-dimension-display="suffix" placeholder="${escapeHtml(allowInheritance ? inheritedLabel("suffix") : "")}" value="${escapeHtml(direct.suffix ?? "")}"></div>
-      ${group("extension-lines", "寸法補助線", "Extension lines", `
-        ${numericRow("extensionLineOvershoot", "ExtensionLineOvershoot", "突出量", "Overshoot", { titleJa: "寸法補助線が寸法線を越えて外側へ伸びる長さ", titleEn: "Length that extension lines project beyond the dimension line" })}
-        ${numericRow("extensionLineOriginGap", "ExtensionLineOriginGap", "起点すき間", "Origin gap", { titleJa: "寸法対象の図形と寸法補助線の開始位置との間隔", titleEn: "Gap between measured geometry and the start of extension lines" })}`)}
-      ${group("terminators", "端末記号", "Terminators", `
-        <div class="property-row"><label for="${idPrefix}TerminatorType">${applicationText("種類", "Type")}</label><select id="${idPrefix}TerminatorType" data-dimension-display="terminatorType" data-inherited-terminator-type="${escapeHtml(effective.terminatorType)}">${terminatorTypeOptions}</select></div>
-        ${numericRow("terminatorSize", "TerminatorSize", "サイズ", "Size", { min: 0.1, titleJa: "端末記号の代表寸法。矢印は長さ、点は直径", titleEn: "Representative terminator dimension: arrow length or dot diameter" })}
-        <div data-terminator-angle-row ${terminatorType === "dot" ? "hidden" : ""}>${numericRow("arrowheadAngle", "ArrowheadAngle", "開き角", "Opening angle", { min: 1, max: 179, step: 1, titleJa: "矢印を構成する2辺のなす角度（度）", titleEn: "Included angle between the two arrow sides in degrees" })}</div>`)}
-      ${group("dimension-text", "寸法文字", "Dimension text", `
-        ${numericRow("dimensionTextHeight", "DimensionTextHeight", "高さ", "Height", { min: 0.1, titleJa: "寸法文字の表示高さ", titleEn: "Display height of dimension text" })}
-        ${numericRow("dimensionTextGap", "DimensionTextGap", "寸法線との間隔", "Gap from dimension line", { titleJa: "寸法文字領域と寸法線との間隔", titleEn: "Gap between the dimension text region and dimension line" })}`)}`;
-  }
 
-  function updateDimensionTerminatorAngleVisibility(container) {
-    const select = container?.querySelector('[data-dimension-display="terminatorType"]');
-    const row = container?.querySelector("[data-terminator-angle-row]");
-    if (!select || !row) return;
-    const type = select.value || select.dataset.inheritedTerminatorType || DEFAULT_DIMENSION_APPEARANCE.terminatorType;
-    row.hidden = type === "dot";
-  }
 
   function selectedPropertiesTarget() {
     if (mode === "instance-sources" && instanceSourceEdit) return { kind: "geometryInstance", item: instanceSourceEdit.instance };
@@ -10101,6 +9920,21 @@
   }
 
   const MULTIPLE_PROPERTY_MIXED = Symbol("multiple-property-mixed");
+  const appearanceControls = window.AppearanceControls.create({
+    applicationText, escapeHtml, formatDisplayNumber, normalizeAppearance, normalizeDimensionAppearance,
+    dimensionLengthKeys: DIMENSION_APPEARANCE_LENGTH_KEYS, defaultDimensionAppearance: DEFAULT_DIMENSION_APPEARANCE,
+  });
+  const { defaultAppearanceLabel, colorPickerValue, appearancePropertyRows, dimensionAppearancePropertyRows, updateDimensionTerminatorAngleVisibility } = appearanceControls;
+  const appearancePalette = window.AppearancePalette.create({
+    document, documentModel, currentScope: () => model, applicationText, escapeHtml,
+    colorPickerValue, localizeApplicationUI, selectedPropertiesTarget, multiplePropertyValue,
+    multiplePropertyAppearance, mixedValue: MULTIPLE_PROPERTY_MIXED, appearanceOwnerForPropertiesTarget,
+    normalizeAnnotationStyle, applyMultipleProperty, applyDimensionAppearanceValue, normalizeHatchAppearance,
+    applyAnnotationStyleValue, applyAppearanceInput, invalidateBlockProjectionCache, normalizeAppearance,
+    normalizeConstructionAppearance, normalizeDimensionAppearance, recordHistory, updateUI, draw,
+  });
+  const { open: openAppearanceColorPalette, commit: commitColorPaletteValue } = appearancePalette;
+
 
   function multiplePropertyTypeKey(target) {
     if (target.kind === "geometry") return `${target.kind}:${target.item?.constructor?.name || "Geometry"}`;
@@ -10708,107 +10542,8 @@
     return input.closest("[data-sketch-default-appearance]")?.dataset.sketchDefaultAppearance || null;
   }
 
-  function renderColorPaletteDialog(selectedColor) {
-    const defaultPalette = document.getElementById("defaultColorPalette");
-    const usedPalette = document.getElementById("usedColorPalette");
-    const customPicker = document.getElementById("customColorPicker");
-    const defaultsLabel = applicationText("標準色", "Standard colors");
-    const usedLabel = applicationText("このファイルで使用中の色", "Colors used in this file");
-    const selected = colorPickerValue(selectedColor);
-    if (defaultPalette) defaultPalette.innerHTML = colorPaletteSwatches(DEFAULT_COLOR_PALETTE, selected, defaultsLabel);
-    if (usedPalette) {
-      const colors = usedFileColors();
-      usedPalette.innerHTML = colors.length > 0
-        ? colorPaletteSwatches(colors, selected, usedLabel)
-        : `<p class="color-palette-empty">${applicationText("使用中の色はありません", "No colors are used yet")}</p>`;
-    }
-    if (customPicker) customPicker.value = selected;
-    const dialog = document.getElementById("colorPaletteDialog");
-    if (dialog) localizeApplicationUI(dialog);
-  }
 
-  function openAppearanceColorPalette(button, context = "properties") {
-    let target = null;
-    let owner = null;
-    let historyLabel = "Appearance変更";
-    if (context === "document") {
-      owner = documentModel.defaultAppearance;
-      historyLabel = "Document Default Appearance変更";
-    } else if (context === "document-construction") {
-      owner = documentModel.defaultConstructionAppearance;
-      historyLabel = "Document Default Construction Appearance変更";
-    } else if (context === "document-dimension") {
-      owner = documentModel.defaultDimensionAppearance;
-      historyLabel = "Document Default Dimension Appearance変更";
-    } else if (context === "sketch-construction") {
-      target = selectedPropertiesTarget();
-      owner = (target.item.constructionAppearance ||= {});
-      historyLabel = "Sketch Default Construction Appearance変更";
-    } else if (context === "sketch-dimension") {
-      target = selectedPropertiesTarget();
-      owner = (target.item.dimensionAppearance ||= {});
-      historyLabel = "Sketch Default Dimension Appearance変更";
-    } else {
-      target = selectedPropertiesTarget();
-      if (target.kind === "multiple") {
-        const color = multiplePropertyValue(target, "color");
-        owner = { color: color === MULTIPLE_PROPERTY_MIXED ? multiplePropertyAppearance(target.items[0]).color : color };
-        historyLabel = "複数Objectプロパティ変更";
-      } else if (target.kind === "constraint" && target.item.dimension) {
-        owner = (target.item.dimension.display ||= {});
-        historyLabel = "寸法外観変更";
-      } else if (target.kind === "annotation") {
-        owner = (target.item.style ||= normalizeAnnotationStyle());
-        historyLabel = "注記外観変更";
-      } else {
-        owner = appearanceOwnerForPropertiesTarget(target);
-        historyLabel = target.kind === "block" ? "Appearance Override変更" : "Appearance変更";
-      }
-    }
-    if (!owner) return;
-    colorPaletteSession = {
-      owner,
-      target,
-      historyLabel,
-      context,
-      sourceButton: button,
-      sourceInput: button.closest(".property-color-control")?.querySelector('[data-appearance-key="color"], [data-dimension-display="color"], [data-hatch-property="color"], [data-annotation-style="color"], [data-bulk-property="color"]') || null,
-    };
-    const selected = colorPaletteSession.sourceInput?.value.trim() || button.dataset.currentColor || owner.color;
-    renderColorPaletteDialog(selected);
-    const dialog = document.getElementById("colorPaletteDialog");
-    if (dialog && !dialog.open) dialog.showModal();
-  }
 
-  function commitColorPaletteValue(value) {
-    if (!colorPaletteSession) return;
-    const color = colorPickerValue(value);
-    const { owner, target, historyLabel, context, sourceButton, sourceInput } = colorPaletteSession;
-    if (target?.kind === "multiple") {
-      document.getElementById("colorPaletteDialog")?.close();
-      colorPaletteSession = null;
-      applyMultipleProperty(target, "color", color);
-      return;
-    }
-    if (target?.kind === "constraint" || context === "sketch-dimension" || context === "document-dimension") applyDimensionAppearanceValue(owner, "color", color, { allowInheritance: context !== "document-dimension" });
-    else if (target?.kind === "hatch") Object.assign(owner, normalizeHatchAppearance({ ...owner, color }));
-    else if (target?.kind === "annotation") applyAnnotationStyleValue(target.item, "color", color);
-    else applyAppearanceInput(owner, "color", color);
-    if (target?.kind === "block") invalidateBlockProjectionCache(target.item.id);
-    if (context === "document") documentModel.defaultAppearance = normalizeAppearance(documentModel.defaultAppearance, { partial: false });
-    if (context === "document-construction") documentModel.defaultConstructionAppearance = normalizeConstructionAppearance(documentModel.defaultConstructionAppearance, { partial: false });
-    if (context === "document-dimension") documentModel.defaultDimensionAppearance = normalizeDimensionAppearance(documentModel.defaultDimensionAppearance, { partial: false });
-    if (sourceInput) sourceInput.value = color;
-    if (sourceButton) {
-      sourceButton.dataset.currentColor = color;
-      sourceButton.querySelector(".property-color-picker-swatch")?.style.setProperty("--swatch-color", color);
-    }
-    recordHistory(historyLabel);
-    document.getElementById("colorPaletteDialog")?.close();
-    colorPaletteSession = null;
-    updateUI();
-    draw();
-  }
 
   function applyReferenceImageProperty(item, key, rawValue) {
     if (!item || !key) return false;
@@ -15482,16 +15217,7 @@
     }
     document.getElementById("documentSettingsDialog")?.showModal();
   });
-  document.getElementById("colorPaletteDialog")?.addEventListener("click", (event) => {
-    const swatch = event.target.closest("[data-palette-color]");
-    if (swatch) commitColorPaletteValue(swatch.dataset.paletteColor);
-  });
-  document.getElementById("applyCustomColorBtn")?.addEventListener("click", () => {
-    commitColorPaletteValue(document.getElementById("customColorPicker")?.value);
-  });
-  document.getElementById("colorPaletteDialog")?.addEventListener("close", () => {
-    colorPaletteSession = null;
-  });
+  appearancePalette.bind();
   applicationSettings.start();
   document.getElementById("openBlockDefinitionsBtn")?.addEventListener("click", () => {
     updateBlockUI();

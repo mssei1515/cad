@@ -4,6 +4,8 @@
 
 ## 現在の再開地点（2026-09-25）
 
+Properties／Document設定の外観入力欄を`AppearanceControls`、色選択sessionと対象別適用・イベント接続を`AppearancePalette`へ分離。appからパレットsessionと使用中色収集・HTML生成を除去した。構文206件・単体423件・統合UI／保存互換E2E114件が成功。app.jsは19,914行。次はPropertiesの選択対象／表示モデルと入力編集transactionを整理する。全体目標と全体E2Eは未完了。
+
 共有サイドバーhoverと選択／拘束の表示参照を`SelectionHighlight`へ集約。ツリーの選択class更新をViewと表示対象解決へ分離し、呼出し元とDOM生成の存在しない旧一覧用イベント／選択処理を除去した。構文203件・単体420件・統合UI／保存互換E2E114件が成功。app.jsは20,188行。次はPropertiesの表示と編集コマンド、Canvasの広範なhover状態の境界を整理する。全体目標と全体E2Eは未完了。
 
 Sketchツリーの表示索引・図形行・拘束集計を`SketchTreeObjects`、クリック選択・展開・編集操作の振分けを`SketchTreeController`へ分離。Viewへ表示情報と操作を接続し、図形名のescape、拘束の元配列index、別Sketch選択時の追加選択解除を維持した。構文201件・単体417件・統合UI／保存互換E2E114件が成功。app.jsは20,406行。次はCanvasと共有する選択／hoverの所有者を整理し、Propertiesやツリーから直接参照する操作状態を減らす。全体目標と全体E2Eは未完了。
