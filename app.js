@@ -320,11 +320,6 @@
   let patternInstanceSeq = 1;
   let freeInstanceSeq = 1;
   let blockElementSeq = 1;
-  let blockPlacementDefinitionId = null;
-  let blockPlacementAnchor = null;
-  let blockPlacementEnabledSketchIds = [];
-  let blockPlacementRotationLocked = true;
-  let blockPlacementPropertiesWasCollapsed = null;
   let blockEditSession = null;
   let hatchResolutionCache = new WeakMap();
   let hatchFaceCache = new Map();
@@ -335,6 +330,18 @@
   let historyRestoring = false;
   let geometryClipboard = null;
   const HISTORY_LIMIT = 80;
+  const blockPlacementCommand = window.BlockPlacementCommand.create({
+    isGeometryMode, canCreateInActiveSketch, blockDefinitionById, blockDefinitionScopeError,
+    blockDefinitionDrawableSketchIds, blockDefinitionGeometrySketchIds, snappedBlockRotation,
+    blockInstanceTranslationForAnchor, activeSketchId, currentScope: workspace.current,
+    nextInstanceId: () => `BI${blockInstanceSeq++}`, clearSelection, canvasSelection, invalidateBlockProjectionCache,
+    isPropertiesCollapsed: () => Boolean(document.querySelector(".workspace")?.classList.contains("properties-collapsed")),
+    setPropertiesPanelCollapsed, getPointerPreview: () => pointerPreview,
+    setPointerPreview: value => { pointerPreview = value; }, getLastPointerWorld: () => lastPointerWorld,
+    setMode: value => { mode = value; }, setHint, updateUI, draw, solveAndRefresh, recordHistory,
+  });
+  const { start: startBlockPlacement, commit: commitBlockPlacement, click: handleBlockPlacementClick,
+    restorePropertiesPanel: restoreBlockPlacementPropertiesPanel } = blockPlacementCommand;
   const documentHistory = window.EditHistory.create({
     capture: historySnapshot,
     signature: (snapshot) => snapshot,
@@ -1522,11 +1529,6 @@
     return ((quarterTurns % 4) + 4) % 4 * BLOCK_ORTHOGONAL_ROTATION_STEP;
   }
 
-  function blockPlacementRotation(pointer = pointerPreview) {
-    if (!blockPlacementAnchor || !pointer) return 0;
-    const rotation = Math.atan2(pointer.y - blockPlacementAnchor.y, pointer.x - blockPlacementAnchor.x);
-    return blockPlacementRotationLocked ? snappedBlockRotation(rotation) : rotation;
-  }
 
   function setBlockInstanceRotationAroundDisplayCenter(instance, rotation) {
     const definition = blockDefinitionById(instance?.definitionId);
@@ -4100,71 +4102,8 @@
     openBlockDefinitionEditor(draft, { isNew: true, creationSelection: selection, replacementCenter: origin, definitionRollbackEntries, originalHost: creationHost });
   }
 
-  function startBlockPlacement(definitionId) {
-    if (!isGeometryMode() || !canCreateInActiveSketch()) return;
-    if (!blockDefinitionById(definitionId)) return;
-    const scopeError = blockDefinitionScopeError(definitionId);
-    if (scopeError) {
-      setHint(scopeError, "error");
-      return;
-    }
-    clearSelection();
-    mode = "block-place";
-    blockPlacementDefinitionId = definitionId;
-    blockPlacementAnchor = null;
-    blockPlacementEnabledSketchIds = blockDefinitionDrawableSketchIds(blockDefinitionById(definitionId));
-    blockPlacementRotationLocked = true;
-    const workspace = document.querySelector(".workspace");
-    blockPlacementPropertiesWasCollapsed = Boolean(workspace?.classList.contains("properties-collapsed"));
-    if (blockPlacementPropertiesWasCollapsed) setPropertiesPanelCollapsed(false);
-    pointerPreview = lastPointerWorld || { x: 0, y: 0 };
-    setHint("配置する内部スケッチを選び、表示中心をクリックしてください");
-    updateUI();
-    draw();
-  }
 
-  function commitBlockPlacement(rotation = 0) {
-    const definition = blockDefinitionById(blockPlacementDefinitionId);
-    if (!definition || !blockPlacementAnchor) return null;
-    const enabledSketchIds = blockPlacementEnabledSketchIds.filter((id) => blockDefinitionDrawableSketchIds(definition).includes(id));
-    if (!enabledSketchIds.some((id) => blockDefinitionGeometrySketchIds(definition).includes(id))) {
-      setHint("オブジェクトを持つ内部スケッチを1つ以上有効にしてください", "error");
-      return null;
-    }
-    const committedRotation = blockPlacementRotationLocked ? snappedBlockRotation(rotation) : rotation;
-    const translation = blockInstanceTranslationForAnchor(definition, enabledSketchIds, blockPlacementAnchor, committedRotation);
-    const instance = { id: `BI${blockInstanceSeq++}`, definitionId: definition.id, sketchId: activeSketchId(), x: translation.x, y: translation.y, rotation: committedRotation, fixed: false, rotationLocked: blockPlacementRotationLocked, enabledSketchIds: enabledSketchIds.slice(), appearanceOverride: {} };
-    model.blockInstances.push(instance);
-    invalidateBlockProjectionCache(instance.id);
-    clearSelection();
-    canvasSelection.set("blockInstances", [instance]);
-    blockPlacementAnchor = null;
-    blockPlacementEnabledSketchIds = [];
-    pointerPreview = null;
-    mode = "select";
-    restoreBlockPlacementPropertiesPanel();
-    solveAndRefresh("ブロック配置");
-    setHint(`${definition.name} を配置しました`);
-    updateUI();
-    draw();
-    recordHistory("ブロック配置");
-    return instance;
-  }
 
-  function handleBlockPlacementClick(pointer) {
-    if (!blockPlacementAnchor) {
-      if (!blockPlacementEnabledSketchIds.some((id) => blockDefinitionGeometrySketchIds(blockDefinitionById(blockPlacementDefinitionId)).includes(id))) {
-        setHint("オブジェクトを持つ内部スケッチを1つ以上有効にしてください", "error");
-        return;
-      }
-      blockPlacementAnchor = { x: pointer.x, y: pointer.y };
-      pointerPreview = pointer;
-      setHint("回転方向をクリックしてください。Escで角度0度として配置します");
-      draw();
-      return;
-    }
-    commitBlockPlacement(blockPlacementRotation(pointer));
-  }
 
   function openBlockDefinitionEditor(draft, options = {}) {
     if (!draft) return;
@@ -4775,11 +4714,7 @@
     patternInstanceSeq = 1;
     freeInstanceSeq = 1;
     blockElementSeq = 1;
-    blockPlacementDefinitionId = null;
-    blockPlacementAnchor = null;
-    blockPlacementEnabledSketchIds = [];
-    blockPlacementRotationLocked = true;
-    blockPlacementPropertiesWasCollapsed = null;
+    blockPlacementCommand.reset();
     blockEditSession = null;
     window.DocumentState.resetDefaults(documentModel);
     hatchPreview = null;
@@ -5502,10 +5437,6 @@
     if (pendingCommand && ["distance-value", "offset-value"].includes(pendingCommand.type)) syncDimensionValueInput();
   }
 
-  function restoreBlockPlacementPropertiesPanel() {
-    if (blockPlacementPropertiesWasCollapsed) setPropertiesPanelCollapsed(true);
-    blockPlacementPropertiesWasCollapsed = null;
-  }
 
   function setPropertiesPanelCollapsed(collapsed) {
     const workspace = document.querySelector(".workspace");
@@ -7525,13 +7456,10 @@
   }
 
   function drawBlockPlacementPreview() {
-    if (mode !== "block-place" || !blockPlacementDefinitionId || !pointerPreview) return;
-    const definition = blockDefinitionById(blockPlacementDefinitionId);
-    if (!definition) return;
-    const anchor = blockPlacementAnchor || pointerPreview;
-    const rotation = blockPlacementRotation(pointerPreview);
-    const translation = blockInstanceTranslationForAnchor(definition, blockPlacementEnabledSketchIds, anchor, rotation);
-    const previewInstance = { id: "BLOCK_PREVIEW", definitionId: definition.id, sketchId: activeSketchId(), x: translation.x, y: translation.y, rotation, fixed: false, rotationLocked: blockPlacementRotationLocked, enabledSketchIds: blockPlacementEnabledSketchIds.slice() };
+    if (mode !== "block-place" || !blockPlacementCommand.definitionId || !pointerPreview) return;
+    const preview = blockPlacementCommand.preview(pointerPreview);
+    if (!preview) return;
+    const { definition, instance: previewInstance } = preview;
     const bundle = createBlockProjectionBundle(previewInstance, definition);
     withCanvasState(() => {
       for (const hatch of bundle.hatches || []) {
@@ -9892,7 +9820,7 @@
   const MULTIPLE_PROPERTY_MIXED = window.PropertySelection.mixedValue;
   const propertySelection = window.PropertySelection.create({
     Point, Line, canvasSelection,
-    getOperation: () => ({ mode, instanceSourceEdit, freeInstancePlacement, blockPlacementDefinitionId }),
+    getOperation: () => ({ mode, instanceSourceEdit, freeInstancePlacement, blockPlacementDefinitionId: blockPlacementCommand.definitionId }),
     effectiveSelectedConstraint, selectedGeometryItems, blockDefinitionById, sketchById, activeSketchId,
     blockProjectionBundle, effectiveAppearanceForElement, documentModel, normalizeAppearance,
     hatchAppearanceForDisplay, normalizeAnnotationStyle,
@@ -9948,8 +9876,8 @@
     elementPropertyCommand, appearancePropertyCommand, geometryPropertyCommand, applyMultipleProperty,
     changeFreeInstanceProperty, commitDimensionPropertyEdit, updateUI, updatePropertiesUI, draw,
     applicationText, setHint,
-    setPlacementRotationLocked: value => { blockPlacementRotationLocked = value; },
-    setPlacementSketchIds: ids => { blockPlacementEnabledSketchIds = ids; invalidateBlockProjectionCache(); },
+    setPlacementRotationLocked: blockPlacementCommand.setRotationLocked,
+    setPlacementSketchIds: blockPlacementCommand.setEnabledSketchIds,
     setBlockInstanceRotationLocked, setBlockInstanceEnabledSketchIds, setBlockInstanceOrthogonalRotation,
     startInstanceSourceEdit, startReferenceImageCalibration, startHatchBoundaryRepair,
     startSplineEdit: spline => { splineEditSession = { spline }; }, openAppearanceColorPalette,
@@ -9957,7 +9885,7 @@
   const { input: handlePropertiesInput, change: handlePropertiesChange, click: handlePropertiesClick } = propertiesController;
   const propertyPresentation = window.PropertyPresentation.create({
     currentScope: workspace.current, documentModel, canvasSelection,
-    getOperation: () => ({ mode, freeInstancePlacement, instanceSourceEdit, blockPlacementEnabledSketchIds, blockPlacementRotationLocked }),
+    getOperation: () => ({ mode, freeInstancePlacement, instanceSourceEdit, blockPlacementEnabledSketchIds: blockPlacementCommand.enabledSketchIds, blockPlacementRotationLocked: blockPlacementCommand.rotationLocked }),
     effectiveAppearanceForElement, sketchName, hatchAppearanceForDisplay, resolvedHatchBoundary,
     blockDefinitionById, blockProjectionBundle, normalizeAppearance, emptyGeometryInstanceBundle,
     geometryInstanceBundle, activeSketchId, targetFromConstraint, dimensionDisplayState,
@@ -12298,10 +12226,7 @@
   function cancelCanvasCommandFromContextMenu() {
     let canceled = false;
     if (mode === "block-place") {
-      blockPlacementDefinitionId = null;
-      blockPlacementAnchor = null;
-      blockPlacementEnabledSketchIds = [];
-      blockPlacementRotationLocked = true;
+      blockPlacementCommand.reset({ preservePanelState: true });
       pointerPreview = null;
       mode = "select";
       restoreBlockPlacementPropertiesPanel();
@@ -14172,12 +14097,9 @@
         return;
       }
       if (mode === "block-place") {
-        if (blockPlacementAnchor) commitBlockPlacement(0);
+        if (blockPlacementCommand.anchor) commitBlockPlacement(0);
         else {
-          blockPlacementDefinitionId = null;
-          blockPlacementAnchor = null;
-          blockPlacementEnabledSketchIds = [];
-          blockPlacementRotationLocked = true;
+          blockPlacementCommand.reset({ preservePanelState: true });
           pointerPreview = null;
           mode = "select";
           restoreBlockPlacementPropertiesPanel();
@@ -17560,8 +17482,7 @@
         capture("blockPlacement", () => {
           const definition = makeBlockDefinition();
           mode = "block-place";
-          blockPlacementDefinitionId = definition.id;
-          blockPlacementEnabledSketchIds = [DEFAULT_SKETCH_ID];
+          blockPlacementCommand.prepare(definition.id, [DEFAULT_SKETCH_ID]);
           pointerPreview = { x: 120, y: 40 };
         }, drawBlockPlacementPreview);
         capture("blockHandles", () => {
@@ -18955,8 +18876,8 @@
         };
       },
       commitBlockPlacementForTest(anchor, rotation = 0) {
-        if (mode !== "block-place" || !blockPlacementDefinitionId) return null;
-        blockPlacementAnchor = { x: Number(anchor?.x) || 0, y: Number(anchor?.y) || 0 };
+        if (mode !== "block-place" || !blockPlacementCommand.definitionId) return null;
+        blockPlacementCommand.setAnchor({ x: Number(anchor?.x) || 0, y: Number(anchor?.y) || 0 });
         const instance = commitBlockPlacement(Number(rotation) || 0);
         return instance ? { id: instance.id, definitionId: instance.definitionId, x: instance.x, y: instance.y, rotation: instance.rotation, rotationLocked: Boolean(instance.rotationLocked) } : null;
       },

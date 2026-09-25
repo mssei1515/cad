@@ -5,7 +5,7 @@ const files = [
   "tests/unit/property-selection.test.js",
   "src/editing/property_selection.js",
   "src/editing/appearance_editing.js",
-  "src/commands/bulk_property_command.js", "src/commands/geometry_property_command.js", "src/commands/appearance_property_command.js", "src/commands/element_property_command.js", "src/ui/properties_controller.js", "src/ui/properties_content.js", "src/editing/property_presentation.js", "tests/unit/property-presentation.test.js", "tests/unit/properties-controller.test.js", "tests/unit/appearance-property-command.test.js", "tests/unit/geometry-property-command.test.js",
+  "src/commands/bulk_property_command.js", "src/commands/geometry_property_command.js", "src/commands/appearance_property_command.js", "src/commands/element_property_command.js", "src/commands/block_placement_command.js", "tests/unit/block-placement-command.test.js", "src/ui/properties_controller.js", "src/ui/properties_content.js", "src/editing/property_presentation.js", "tests/unit/property-presentation.test.js", "tests/unit/properties-controller.test.js", "tests/unit/appearance-property-command.test.js", "tests/unit/geometry-property-command.test.js",
   "tests/unit/appearance-controls.test.js",
   "src/ui/appearance_controls.js", "src/ui/property_rows.js", "src/ui/properties_view.js", "tests/unit/properties-view.test.js",
   "src/ui/appearance_palette.js",
