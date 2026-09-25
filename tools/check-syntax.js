@@ -2,6 +2,8 @@
 const { spawnSync } = require("node:child_process");
 const path = require("node:path");
 const files = [
+  "tests/unit/sketch-tree-view.test.js",
+  "src/ui/sketch_tree_view.js",
   "src/rendering/offset_preview_renderer.js",
   "tests/unit/offset-command.test.js",
   "src/geometry/offset_geometry.js",
