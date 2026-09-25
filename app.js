@@ -291,7 +291,6 @@
   let blankDoubleClickCandidate = null;
   let suppressNextBlankDoubleClickEvent = false;
   let lineStartPoint = null;
-  let rectangleStartPoint = null;
   let filletFirstLine = null;
   let splineEditSession = null;
   let sketchProjectionSources = [];
@@ -470,6 +469,12 @@
   const { finalize: finalizeSplineCreation, click: handleSplineClick, doubleClick: finalizeSplineFromDoubleClick } = splineCommand;
   const snapConstraints = window.SnapConstraints.create({ isActiveSketchElement, elementSketchId, isReferenceSourceSketchId, addPoint, addConstraintIfMissing });
   const { addPointSnapConstraints, addArcEndpointSnapConstraints, addCircularBoundarySnapConstraints, addLineBoundarySnapConstraints } = snapConstraints;
+  const rectangleCommand = window.RectangleCommand.create({
+    endpointAt, addPoint, addLine, addPointSnapConstraints, pushModelConstraint,
+    minLineLength: MIN_LINE_LENGTH, samePosition, selection: canvasSelection,
+    setPointerPreview: value => { pointerPreview = value; },
+    clearSnap, clearSelection, setHint, updateUI, draw, solveAndRefresh, log,
+  });
   const filletPlans = window.FilletGeometry.create({ minLineLength: MIN_LINE_LENGTH });
   const { filletGeometryBasis, filletGeometryFromPointer } = filletPlans;
   const { createFillet } = window.FilletConstruction.create({
@@ -5090,7 +5095,7 @@
     resetCenterlineCommandState();
     clearTransientPointRollback();
     clearTransientLineCompletionRollback();
-    rectangleStartPoint = null;
+    rectangleCommand.reset();
     resetSlotCommandState();
     filletFirstLine = null;
     circularCommands.resetCircle();
@@ -5776,7 +5781,7 @@
   function exitLineMode() {
     resetCenterlineCommandState();
     lineStartPoint = null;
-    rectangleStartPoint = null;
+    rectangleCommand.reset();
     resetSlotCommandState();
     filletFirstLine = null;
     pointerPreview = null;
@@ -5798,7 +5803,7 @@
     lineStartPoint = null;
     clearTransientPointRollback();
     clearTransientLineCompletionRollback();
-    rectangleStartPoint = null;
+    rectangleCommand.reset();
     resetSlotCommandState();
     filletFirstLine = null;
     circularCommands.resetCircle();
@@ -5822,7 +5827,7 @@
   }
 
   function hasActiveDrawOperation() {
-    return Boolean(lineStartPoint || centerlineCommand.targets.length || centerlineCommand.firstPoint || rectangleStartPoint || slotCommand.firstCenter || slotCommand.secondCenter || filletFirstLine || circularCommands.circleCenterPoint || circularCommands.arcCenterPoint || circularCommands.arcStartPoint || circularCommands.threePointArcStart || circularCommands.threePointArcEnd || splineDraft.points.length || offsetSource || offsetChainEntries.length);
+    return Boolean(lineStartPoint || centerlineCommand.targets.length || centerlineCommand.firstPoint || rectangleCommand.startPoint || slotCommand.firstCenter || slotCommand.secondCenter || filletFirstLine || circularCommands.circleCenterPoint || circularCommands.arcCenterPoint || circularCommands.arcStartPoint || circularCommands.threePointArcStart || circularCommands.threePointArcEnd || splineDraft.points.length || offsetSource || offsetChainEntries.length);
   }
 
 
@@ -5832,7 +5837,7 @@
     clearTransientPointRollback();
     clearTransientLineCompletionRollback();
     lineStartPoint = null;
-    rectangleStartPoint = null;
+    rectangleCommand.reset();
     resetSlotCommandState();
     filletFirstLine = null;
     circularCommands.resetCircle();
@@ -8493,12 +8498,12 @@
   }
 
   function drawRectanglePreview() {
-    if (mode !== "rectangle" || !rectangleStartPoint || !pointerPreview) return;
+    if (mode !== "rectangle" || !rectangleCommand.startPoint || !pointerPreview) return;
     withCanvasState(() => {
       ctx.strokeStyle = "#2563eb";
       ctx.lineWidth = 2 / viewport.scale;
       ctx.setLineDash([6 / viewport.scale, 5 / viewport.scale]);
-      ctx.strokeRect(rectangleStartPoint.x, rectangleStartPoint.y, pointerPreview.x - rectangleStartPoint.x, pointerPreview.y - rectangleStartPoint.y);
+      ctx.strokeRect(rectangleCommand.startPoint.x, rectangleCommand.startPoint.y, pointerPreview.x - rectangleCommand.startPoint.x, pointerPreview.y - rectangleCommand.startPoint.y);
     });
   }
 
@@ -9152,7 +9157,7 @@
     resetSlotCommandState();
     mode = "select";
     lineStartPoint = null;
-    rectangleStartPoint = null;
+    rectangleCommand.reset();
     filletFirstLine = null;
     circularCommands.resetCircle();
     resetArcCommandState();
@@ -9529,7 +9534,7 @@
     }
     mode = "select";
     lineStartPoint = null;
-    rectangleStartPoint = null;
+    rectangleCommand.reset();
     filletFirstLine = null;
     circularCommands.resetCircle();
     resetArcCommandState();
@@ -9557,7 +9562,7 @@
     const value = kind === "diameter" ? primitive.radius() * 2 : primitive.radius();
     mode = "select";
     lineStartPoint = null;
-    rectangleStartPoint = null;
+    rectangleCommand.reset();
     filletFirstLine = null;
     circularCommands.resetCircle();
     resetArcCommandState();
@@ -9919,7 +9924,7 @@
     referenceImageCalibrationSession = null;
     selectionRectSession = null;
     lineStartPoint = null;
-    rectangleStartPoint = null;
+    rectangleCommand.reset();
     filletFirstLine = null;
     circularCommands.resetCircle();
     resetArcCommandState();
@@ -14096,51 +14101,10 @@
     }
   }
 
-  function handleRectangleClick(p) {
-    p = snapForDrawing(p);
-    let snap = drawingSnap.active;
-    pointerPreview = p;
-    if (!rectangleStartPoint) {
-      rectangleStartPoint = endpointAt(p.x, p.y);
-      addPointSnapConstraints(rectangleStartPoint, snap);
-      canvasSelection.set("points", [rectangleStartPoint]);
-      canvasSelection.set("lines", []);
-      canvasSelection.set("circles", []);
-      canvasSelection.set("arcs", []);
-      setHint("対角の角をクリックすると矩形を作成します。Escで選択モードに戻ります");
-      updateUI();
-      draw();
-      return;
-    }
-
-    const rx = p.x - rectangleStartPoint.x;
-    const ry = p.y - rectangleStartPoint.y;
-    if (Math.abs(rx) < MIN_LINE_LENGTH) p = { ...p, x: rectangleStartPoint.x + (rx < 0 ? -MIN_LINE_LENGTH : MIN_LINE_LENGTH) };
-    if (Math.abs(ry) < MIN_LINE_LENGTH) p = { ...p, y: rectangleStartPoint.y + (ry < 0 ? -MIN_LINE_LENGTH : MIN_LINE_LENGTH) };
-    if (snap && !samePosition(p, snap)) snap = null;
-    const p1 = rectangleStartPoint;
-    const p2 = addPoint(p.x, p1.y, false, "endpoint");
-    const p3 = addPoint(p.x, p.y, false, "endpoint");
-    const p4 = addPoint(p1.x, p.y, false, "endpoint");
-    addPointSnapConstraints(p3, snap);
-    const lines = [addLine(p1, p2), addLine(p2, p3), addLine(p3, p4), addLine(p4, p1)].filter(Boolean);
-    if (lines[0]) pushModelConstraint(new HorizontalConstraint(lines[0]));
-    if (lines[1]) pushModelConstraint(new VerticalConstraint(lines[1]));
-    if (lines[2]) pushModelConstraint(new HorizontalConstraint(lines[2]));
-    if (lines[3]) pushModelConstraint(new VerticalConstraint(lines[3]));
-    canvasSelection.set("points", []);
-    canvasSelection.set("lines", lines);
-    canvasSelection.set("circles", []);
-    canvasSelection.set("arcs", []);
-    rectangleStartPoint = null;
-    pointerPreview = null;
-    clearSnap();
-    clearSelection();
-    const result = solveAndRefresh("矩形追加");
-    log(`矩形を追加しました\n自動solve: success=${result.success}`);
+  function handleRectangleClick(point) {
+    const snapped = snapForDrawing(point);
+    rectangleCommand.click(snapped, drawingSnap.active);
   }
-
-
 
   function hitSketchIdentityElement(x, y, options = {}) {
     const allowInactiveGeometry = Boolean(options.allowInactiveGeometry);
@@ -17015,7 +16979,7 @@
     cancelConstraintTargetCommand("");
     mode = "select";
     lineStartPoint = null;
-    rectangleStartPoint = null;
+    rectangleCommand.reset();
     filletFirstLine = null;
     circularCommands.resetCircle();
     resetArcCommandState();
@@ -17030,7 +16994,7 @@
     cancelConstraintTargetCommand("");
     mode = "point";
     lineStartPoint = null;
-    rectangleStartPoint = null;
+    rectangleCommand.reset();
     filletFirstLine = null;
     circularCommands.resetCircle();
     resetArcCommandState();
@@ -17045,7 +17009,7 @@
     cancelConstraintTargetCommand("");
     mode = "line";
     lineStartPoint = null;
-    rectangleStartPoint = null;
+    rectangleCommand.reset();
     filletFirstLine = null;
     circularCommands.resetCircle();
     resetArcCommandState();
@@ -17087,7 +17051,7 @@
     mode = "line";
     constructionLineMode = !constructionLineMode;
     lineStartPoint = null;
-    rectangleStartPoint = null;
+    rectangleCommand.reset();
     filletFirstLine = null;
     circularCommands.resetCircle();
     resetArcCommandState();
@@ -17102,7 +17066,7 @@
     cancelConstraintTargetCommand("");
     mode = "rectangle";
     lineStartPoint = null;
-    rectangleStartPoint = null;
+    rectangleCommand.reset();
     filletFirstLine = null;
     circularCommands.resetCircle();
     resetArcCommandState();
@@ -17117,7 +17081,7 @@
     cancelConstraintTargetCommand("");
     mode = "slot";
     lineStartPoint = null;
-    rectangleStartPoint = null;
+    rectangleCommand.reset();
     resetSlotCommandState();
     filletFirstLine = null;
     circularCommands.resetCircle();
@@ -17137,7 +17101,7 @@
     }
     mode = "fillet";
     lineStartPoint = null;
-    rectangleStartPoint = null;
+    rectangleCommand.reset();
     filletFirstLine = null;
     circularCommands.resetCircle();
     resetArcCommandState();
@@ -17152,7 +17116,7 @@
     cancelConstraintTargetCommand("");
     mode = "trim";
     lineStartPoint = null;
-    rectangleStartPoint = null;
+    rectangleCommand.reset();
     filletFirstLine = null;
     circularCommands.resetCircle();
     resetArcCommandState();
@@ -17181,7 +17145,7 @@
     cancelPendingCommand("");
     mode = "offset";
     lineStartPoint = null;
-    rectangleStartPoint = null;
+    rectangleCommand.reset();
     filletFirstLine = null;
     circularCommands.resetCircle();
     resetArcCommandState();
@@ -17212,7 +17176,7 @@
     cancelConstraintTargetCommand("");
     mode = "circle";
     lineStartPoint = null;
-    rectangleStartPoint = null;
+    rectangleCommand.reset();
     filletFirstLine = null;
     circularCommands.resetCircle();
     resetArcCommandState();
@@ -17227,7 +17191,7 @@
     cancelConstraintTargetCommand("");
     mode = "arc";
     lineStartPoint = null;
-    rectangleStartPoint = null;
+    rectangleCommand.reset();
     filletFirstLine = null;
     circularCommands.resetCircle();
     resetArcCommandState();
@@ -17242,7 +17206,7 @@
     cancelConstraintTargetCommand("");
     mode = "three-point-arc";
     lineStartPoint = null;
-    rectangleStartPoint = null;
+    rectangleCommand.reset();
     filletFirstLine = null;
     circularCommands.resetCircle();
     resetArcCommandState();
@@ -20113,7 +20077,7 @@
         }, drawTemporaryLine);
         capture("rectangle", () => {
           mode = "rectangle";
-          rectangleStartPoint = { x: 0, y: 0 };
+          rectangleCommand.click({ x: 0, y: 0 }, null);
           pointerPreview = { x: 80, y: 45 };
         }, drawRectanglePreview);
         capture("slot", () => {
