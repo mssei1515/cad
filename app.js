@@ -512,12 +512,17 @@
   const offsetCommand = window.OffsetCommand.create({
     getPending: () => pendingCommand, setPending: value => { pendingCommand = value; },
     plans: offsetGeometry, construction: offsetConstruction, placement: dimensionPlacement, offsetSelection,
-    viewport, Line, minOrientationLength: MIN_ORIENTATION_LENGTH, offsetPairSign,
+    viewport, Line, Circle, minOrientationLength: MIN_ORIENTATION_LENGTH, offsetPairSign,
     offsetChainErrorText, formatDisplayNumber, formatDimensionLabel, setHint, updateToolbar,
     syncDimensionValueInput, focusDimensionValueInput, hideDimensionValueInput, draw,
     clearPointerPreview: () => { pointerPreview = null; }, clearSelection,
+    setPointerPreview: value => { pointerPreview = value; }, syncOffsetChainSelection,
+    applicationText, updateGeometrySelectionUI,
   });
   const { start: startOffsetDistanceInput, startChain: startOffsetChainDistanceInput, submit: submitOffsetValue } = offsetCommand;
+  const offsetPreviewRenderer = window.OffsetPreviewRenderer.create({
+    ctx, viewport, withCanvasState, Line, Circle, drawDimension, formatDimensionLabel,
+  });
   const filletPlans = window.FilletGeometry.create({ minLineLength: MIN_LINE_LENGTH });
   const { filletGeometryBasis, filletGeometryFromPointer } = filletPlans;
   const { createFillet } = window.FilletConstruction.create({
@@ -8181,75 +8186,8 @@
   }
 
   function drawOffsetPreview() {
-    if (mode !== "offset" || !(offsetSelection.source || offsetSelection.entries.length)) return;
-    const pointer = pendingCommand?.type === "offset-value" ? pendingCommand.pointer : pointerPreview;
-    if (!pointer) return;
-    if (offsetSelection.entries.length > 1) {
-      const measured = pendingCommand?.type === "offset-value"
-        ? { distance: Number(pendingCommand.buffer), side: pendingCommand.chainSide, index: pendingCommand.dimensionSegmentIndex }
-        : offsetChainDistanceFromPointer(offsetSelection.entries, pointer);
-      const distance = Number.isFinite(measured.distance) && measured.distance > 0 ? measured.distance : MIN_ORIENTATION_LENGTH * 10;
-      const plan = offsetChainDraft(offsetSelection.entries, distance, measured.side, offsetChainIsClosed(offsetSelection.entries));
-      if (!plan.ok) return;
-      withCanvasState(() => {
-        ctx.strokeStyle = "#2563eb";
-        ctx.lineWidth = 2 / viewport.scale;
-        ctx.setLineDash([6 / viewport.scale, 5 / viewport.scale]);
-        for (const offset of plan.geometries) {
-          ctx.beginPath();
-          if (offset instanceof Line) {
-            ctx.moveTo(offset.p1.x, offset.p1.y);
-            ctx.lineTo(offset.p2.x, offset.p2.y);
-          } else {
-            ctx.arc(offset.center.x, offset.center.y, offset.radius(), offset.startAngle, offset.endAngle, offset.endAngle < offset.startAngle);
-          }
-          ctx.stroke();
-        }
-      });
-      const index = Math.max(0, Math.min(offsetSelection.entries.length - 1, Number(measured.index) || 0));
-      const source = offsetSelection.entries[index].geometry;
-      const offset = plan.geometries[index];
-      const target = offsetDimensionTarget(source, offset, distance, offsetPairSign(source, offset));
-      const dimension = dimensionWithLabelAt(target, dimensionFromAnchor(target, pointer, { allowPointAxis: false }), pointer);
-      if (pendingCommand?.type === "offset-value") {
-        pendingCommand.target = target;
-        pendingCommand.dimension = dimension;
-      }
-      drawDimension(target, dimension, formatDimensionLabel(distance), true);
-      return;
-    }
-    const source = offsetSelection.source || offsetSelection.entries[0]?.geometry;
-    if (!source) return;
-    const measured = offsetDistanceFromPointer(source, pointer);
-    const sign = pendingCommand?.type === "offset-value" ? pendingCommand.sign : measured.sign;
-    const inputValue = pendingCommand?.type === "offset-value" ? Number(pendingCommand.buffer) : measured.distance;
-    const distance = Number.isFinite(inputValue) && inputValue > 0 ? inputValue : measured.distance;
-    const offset = offsetDraftGeometry(source, distance, sign);
-    if (!offset) return;
-
-    withCanvasState(() => {
-      ctx.strokeStyle = "#2563eb";
-      ctx.lineWidth = 2 / viewport.scale;
-      ctx.setLineDash([6 / viewport.scale, 5 / viewport.scale]);
-      ctx.beginPath();
-      if (offset instanceof Line) {
-        ctx.moveTo(offset.p1.x, offset.p1.y);
-        ctx.lineTo(offset.p2.x, offset.p2.y);
-      } else if (offset instanceof Circle) {
-        ctx.arc(offset.center.x, offset.center.y, offset.radius(), 0, Math.PI * 2);
-      } else {
-        ctx.arc(offset.center.x, offset.center.y, offset.radius(), offset.startAngle, offset.endAngle, offset.endAngle < offset.startAngle);
-      }
-      ctx.stroke();
-    });
-
-    const target = offsetDimensionTarget(source, offset, distance, sign);
-    const dimension = dimensionWithLabelAt(target, dimensionFromAnchor(target, pointer, { allowPointAxis: false }), pointer);
-    if (pendingCommand?.type === "offset-value") {
-      pendingCommand.target = target;
-      pendingCommand.dimension = dimension;
-    }
-    drawDimension(target, dimension, formatDimensionLabel(distance), true);
+    if (mode !== "offset") return;
+    offsetPreviewRenderer.draw(offsetCommand.preview(pointerPreview));
   }
 
   function drawTrimPreview() {
@@ -14732,58 +14670,7 @@
     }
 
     if (mode === "offset") {
-      if (offsetSelection.source instanceof Circle) {
-        startOffsetDistanceInput(offsetSelection.source, p);
-        return;
-      }
-      if (offsetSelection.committed && offsetSelection.entries.length > 0) {
-        if (offsetSelection.entries.length === 1) startOffsetDistanceInput(offsetSelection.entries[0].geometry, p);
-        else startOffsetChainDistanceInput(offsetSelection.entries, p);
-        return;
-      }
-      const candidate = hitL || hitA;
-      if (candidate) {
-        const added = addOffsetChainGeometry(candidate);
-        if (!added.ok) {
-          const messages = {
-            "already-selected": ["その図形は既に選択されています", "That geometry is already selected."],
-            "not-connected": ["選択中チェーンの端部に明示的に接続された線または円弧を選択してください", "Select a line or arc explicitly connected to an end of the current chain."],
-            "closed-chain": ["閉じたチェーンには図形を追加できません", "No more geometry can be added to a closed chain."],
-          };
-          const message = messages[added.code] || ["この図形はチェーンへ追加できません", "This geometry cannot be added to the chain."];
-          setHint(applicationText(message[0], message[1]), "error");
-        } else {
-          pointerPreview = p;
-          const closedText = added.closed ? applicationText("（閉チェーン）", " (closed chain)") : "";
-          setHint(applicationText(
-            `${offsetSelection.entries.length}個選択${closedText}。続けて線・円弧を選択するか、空白クリック／Enterでチェーンを確定してください`,
-            `${offsetSelection.entries.length} selected${closedText}. Select another line/arc, or click blank canvas / press Enter to finish the chain.`,
-          ));
-          updateGeometrySelectionUI();
-          draw();
-        }
-        return;
-      }
-      if (hitC) {
-        if (offsetSelection.entries.length > 0) {
-          setHint(applicationText("円は線・円弧のチェーンへ追加できません", "A circle cannot be added to a line/arc chain."), "error");
-          return;
-        }
-        offsetSelection.selectSource(hitC);
-        syncOffsetChainSelection();
-        pointerPreview = p;
-        setHint("オフセットする側と距離の目安をクリックしてください");
-        updateGeometrySelectionUI();
-        draw();
-        return;
-      }
-      if (offsetSelection.entries.length > 0) {
-        offsetSelection.commitSelection();
-        if (offsetSelection.entries.length === 1) startOffsetDistanceInput(offsetSelection.entries[0].geometry, p);
-        else startOffsetChainDistanceInput(offsetSelection.entries, p);
-        return;
-      }
-      setHint("オフセットする線、円、円弧をクリックしてください", "error");
+      offsetCommand.click(p, { hitL, hitA, hitC });
       return;
     }
 
@@ -15903,13 +15790,9 @@
       return;
     }
 
-    if (!textEditingTarget && e.key === "Enter" && mode === "offset" && !pendingCommand && offsetSelection.entries.length > 0 && !offsetSelection.committed) {
+    if (!textEditingTarget && e.key === "Enter" && mode === "offset" && offsetCommand.canConfirmSelection()) {
       e.preventDefault();
-      offsetSelection.commitSelection();
-      pointerPreview = lastPointerWorld ? { ...lastPointerWorld } : pointerPreview;
-      setHint(applicationText("チェーンを確定しました。オフセットする側と距離の目安をクリックしてください", "Chain confirmed. Click the offset side and an approximate distance."));
-      updateToolbar();
-      draw();
+      offsetCommand.confirmSelection(lastPointerWorld);
       return;
     }
 

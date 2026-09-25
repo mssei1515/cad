@@ -4,7 +4,7 @@ const path = require('node:path');
 const vm = require('node:vm');
 const test = require('node:test');
 const sandbox = { window: {} }; vm.createContext(sandbox);
-for (const file of ['geometry/geometry_kernel', 'geometry/spline_geometry', 'geometry/offset_chain', 'solver/constraint_solver', 'constraints/dimension_queries', 'editing/geometry_ids', 'editing/geometry_creation', 'geometry/offset_geometry', 'editing/offset_construction', 'commands/offset_command']) {
+for (const file of ['geometry/geometry_kernel', 'geometry/spline_geometry', 'geometry/offset_chain', 'solver/constraint_solver', 'constraints/dimension_queries', 'editing/geometry_ids', 'editing/geometry_creation', 'geometry/offset_geometry', 'editing/offset_construction', 'commands/offset_command', 'editing/offset_selection', 'rendering/offset_preview_renderer']) {
   vm.runInContext(fs.readFileSync(path.resolve(__dirname, '../../src', `${file}.js`), 'utf8'), sandbox);
 }
 const w = sandbox.window;
@@ -22,15 +22,20 @@ function fixture() {
     normalizeAppearance: value => ({ ...value }), offsetPairSign: w.DimensionQueries.offsetPairSign,
     offsetChainErrorText: result => result.code, applicationText: value => value,
     setHint: () => events.push('hint'), updateUI: () => events.push('ui'), draw: () => events.push('draw'), invalidateAnalysis: () => events.push('invalidate') });
+  const selection = w.OffsetSelection.create({ ...w.GeometrySolver, getModel: () => model,
+    activeSketchId: () => 'S1', elementSketchId: item => item.sketchId || 'S1', constraintSketchId: item => item.sketchId || 'S1',
+    onSelectionChanged: () => events.push('selection-sync') });
   const command = w.OffsetCommand.create({ getPending: () => pending, setPending: value => { pending = value; events.push(value ? 'pending' : 'clear'); },
-    plans, construction, placement, offsetSelection: { isClosed: () => false, reset: () => events.push('reset') },
-    viewport: { scale: 2 }, Line: w.GeometrySolver.Line, minOrientationLength: w.GeometryKernel.MIN_ORIENTATION_LENGTH,
+    plans, construction, placement, offsetSelection: selection,
+    viewport: { scale: 2 }, Line: w.GeometrySolver.Line, Circle: w.GeometrySolver.Circle, minOrientationLength: w.GeometryKernel.MIN_ORIENTATION_LENGTH,
     offsetPairSign: w.DimensionQueries.offsetPairSign, offsetChainErrorText: result => result.code,
     formatDisplayNumber: String, formatDimensionLabel: String, setHint: () => events.push('hint'), updateToolbar: () => events.push('toolbar'),
     syncDimensionValueInput: () => events.push('sync'), focusDimensionValueInput: () => events.push('focus'), hideDimensionValueInput: () => events.push('hide'),
-    draw: () => events.push('draw'), clearPointerPreview: () => events.push('preview'), clearSelection: () => events.push('selection') });
+    draw: () => events.push('draw'), clearPointerPreview: () => events.push('preview'), clearSelection: () => events.push('selection'),
+    setPointerPreview: () => events.push('pointer'), syncOffsetChainSelection: () => events.push('selection-sync'),
+    applicationText: value => value, updateGeometrySelectionUI: () => events.push('selection-ui') });
   const line = geometry.addLine(geometry.addPoint(0, 0), geometry.addPoint(100, 0));
-  return { model, ids, geometry, plans, construction, command, line, events, get pending() { return pending; }, accept: () => { accepted = true; } };
+  return { model, ids, geometry, plans, construction, command, selection, line, events, get pending() { return pending; }, accept: () => { accepted = true; } };
 }
 test('offset measurements respect traversal direction and drafts do not allocate document geometry', () => {
   const f = fixture(), before = JSON.stringify(f.model), ids = JSON.stringify(f.ids.snapshot());
@@ -61,5 +66,43 @@ test('zero-distance input uses screen fallback and invalid values preserve pendi
   pending.buffer = '20'; f.accept(); assert.equal(f.command.submit(), true);
   assert.equal(f.pending, null); assert.equal(f.model.lines.length, 2);
   assert.ok(f.events.indexOf('hide') < f.events.indexOf('offset'));
-  assert.deepEqual(f.events.slice(-6), ['reset', 'preview', 'selection', 'toolbar', 'hint', 'draw']);
+  assert.equal(f.selection.source, null); assert.equal(f.selection.entries.length, 0);
+  assert.deepEqual(f.events.slice(-5), ['preview', 'selection', 'toolbar', 'hint', 'draw']);
+});
+
+test('click selection distinguishes blank-click input from Enter confirmation and rejects duplicate or circle additions', () => {
+  const f = fixture(), pointer = { x: 50, y: 10 };
+  assert.equal(f.command.canConfirmSelection(), false);
+  f.command.click(pointer, { hitL: f.line });
+  assert.equal(f.selection.entries.length, 1); assert.equal(f.pending, null);
+  const circle = f.geometry.addCircle(f.geometry.addPoint(0, 0), 30);
+  f.command.click(pointer, { hitC: circle });
+  f.command.click(pointer, { hitL: f.line });
+  assert.equal(f.selection.entries.length, 1); assert.equal(f.selection.source, f.line);
+  assert.equal(f.command.canConfirmSelection(), true);
+  f.command.confirmSelection(pointer);
+  assert.equal(f.selection.committed, true); assert.equal(f.pending, null);
+  assert.equal(f.command.canConfirmSelection(), false);
+  f.command.click(pointer, {}); assert.equal(f.pending.type, 'offset-value');
+  const other = fixture(); other.command.click(pointer, { hitL: other.line });
+  other.command.click(pointer, {});
+  assert.equal(other.selection.committed, true); assert.equal(other.pending.type, 'offset-value');
+});
+test('preview updates the input target while the renderer consumes only a plan and restores canvas state before dimensions', () => {
+  const f = fixture(), pointer = { x: 50, y: 10 };
+  f.command.click(pointer, { hitL: f.line }); f.command.click(pointer, {});
+  f.pending.buffer = '20';
+  const before = JSON.stringify(f.model), plan = f.command.preview(null);
+  assert.equal(plan.distance, 20); assert.equal(plan.geometries[0].p1.y, 20);
+  assert.equal(f.pending.target, plan.target); assert.equal(f.pending.dimension, plan.dimension);
+  assert.equal(JSON.stringify(f.model), before);
+  const calls = [], ctx = { setLineDash: values => calls.push(['dash', ...values]), beginPath() {},
+    moveTo() {}, lineTo() {}, stroke: () => calls.push('stroke') };
+  const renderer = w.OffsetPreviewRenderer.create({ ctx, viewport: { scale: 2 }, ...w.GeometrySolver,
+    withCanvasState: callback => { calls.push('save'); callback(); calls.push('restore'); },
+    drawDimension: (target, dimension, label) => { assert.equal(target, plan.target); assert.equal(dimension, plan.dimension); calls.push(label); }, formatDimensionLabel: String });
+  renderer.draw(plan);
+  assert.equal(ctx.lineWidth, 1); assert.deepEqual(calls, ['save', ['dash', 3, 2.5], 'stroke', 'restore', '20']);
+  renderer.draw(null); assert.equal(calls.length, 5);
+  assert.equal(JSON.stringify(f.model), before);
 });

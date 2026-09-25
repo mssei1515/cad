@@ -2,6 +2,7 @@
 const { spawnSync } = require("node:child_process");
 const path = require("node:path");
 const files = [
+  "src/rendering/offset_preview_renderer.js",
   "tests/unit/offset-command.test.js",
   "src/geometry/offset_geometry.js",
   "src/editing/offset_construction.js",
