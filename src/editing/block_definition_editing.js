@@ -3,7 +3,8 @@
   "use strict";
   function create({ normalizedSketchCopy, cloneConstraintForBlock, blockDefinitionById,
     createBlockProjectionBundle, geometryInstanceBundlesForScope, emptyGeometryInstanceBundle,
-    normalizeGeometryInstance, hatchSequence }) {
+    normalizeGeometryInstance, hatchSequence, nextDefinitionId, isDimensionConstraint, isReadOnlyDimension,
+    numericDimensionExpression, ensureParameterNamespace }) {
     const { Point, Line, Circle, Arc, Spline, GeometryFixedConstraint, ArcEndpointFixedConstraint, LineFixedConstraint } = window.GeometrySolver;
     const { normalizeAppearance } = window.Appearance;
     const { normalizedDrawingOrder } = window.DrawingOrder;
@@ -13,6 +14,7 @@
     const { serializeGeometryInstance } = window.DocumentSnapshot;
     const { addGeometryBundleToMaps } = window.GeometryObjects;
     const { nextSeq } = window.GeometryIds;
+    const { ROOT_SKETCH_ID, ROOT_SKETCH_NAME, DEFAULT_SKETCH_ID, DEFAULT_SKETCH_NAME } = window.SketchHierarchy;
     function cloneBlockInstance(instance, offset = { x: 0, y: 0 }) {
       return {
         id: instance.id,
@@ -261,7 +263,103 @@
       target.revision = (Number(target.revision) || 0) + 1;
       return target;
     }
-    return Object.freeze({ clone: cloneBlockDefinition, cloneInstance: cloneBlockInstance,
+    function createBlockSketchState() {
+      return {
+        sketches: [
+          { id: ROOT_SKETCH_ID, name: ROOT_SKETCH_NAME, parentSketchId: null, kind: "root", appearance: {}, constructionAppearance: {}, dimensionAppearance: {} },
+          { id: DEFAULT_SKETCH_ID, name: DEFAULT_SKETCH_NAME, parentSketchId: ROOT_SKETCH_ID, kind: "sketch", appearance: {}, constructionAppearance: {}, dimensionAppearance: {} },
+        ],
+        activeSketchId: DEFAULT_SKETCH_ID,
+      };
+    }
+
+    function createBlockDefinitionFromSelection(selection, origin, name) {
+      const sketchState = createBlockSketchState();
+      const pointById = new Map();
+      const points = selection.points.map((source) => {
+        const point = new Point(source.id, source.x - origin.x, source.y - origin.y, source.fixed, source.kind || "endpoint");
+        point.sketchId = DEFAULT_SKETCH_ID;
+        point.appearance = normalizeAppearance(source.appearance);
+        pointById.set(point.id, point);
+        return point;
+      });
+      const lineById = new Map();
+      const lines = selection.lines.map((source) => {
+        const line = new Line(source.id, pointById.get(source.p1.id), pointById.get(source.p2.id), source.construction);
+        line.sketchId = DEFAULT_SKETCH_ID;
+        line.drawingOrder = normalizedDrawingOrder(source.drawingOrder);
+        line.appearance = normalizeAppearance(source.appearance);
+        lineById.set(line.id, line);
+        return line;
+      });
+      const primitiveById = new Map();
+      const circles = selection.circles.map((source) => {
+        const circle = new Circle(source.id, pointById.get(source.center.id), source.radius(), source.construction);
+        circle.sketchId = DEFAULT_SKETCH_ID;
+        circle.drawingOrder = normalizedDrawingOrder(source.drawingOrder);
+        circle.appearance = normalizeAppearance(source.appearance);
+        primitiveById.set(circle.id, circle);
+        return circle;
+      });
+      const arcs = selection.arcs.map((source) => {
+        const arc = new Arc(source.id, pointById.get(source.center.id), source.radius(), source.startAngle, source.endAngle, source.construction);
+        arc.sketchId = DEFAULT_SKETCH_ID;
+        arc.drawingOrder = normalizedDrawingOrder(source.drawingOrder);
+        arc.appearance = normalizeAppearance(source.appearance);
+        primitiveById.set(arc.id, arc);
+        return arc;
+      });
+      const splines = (selection.splines || []).map((source) => {
+        const spline = new Spline(source.id, source.fitPoints.map((point) => pointById.get(point.id)), source.closed, source.construction);
+        spline.sketchId = DEFAULT_SKETCH_ID;
+        spline.drawingOrder = normalizedDrawingOrder(source.drawingOrder);
+        spline.appearance = normalizeAppearance(source.appearance);
+        primitiveById.set(spline.id, spline);
+        return spline;
+      });
+      const blockInstances = (selection.blockInstances || []).map((source) => {
+        const instance = cloneBlockInstance(source, origin);
+        instance.sketchId = DEFAULT_SKETCH_ID;
+        return instance;
+      });
+      for (const instance of blockInstances) {
+        const nestedDefinition = blockDefinitionById(instance.definitionId);
+        if (nestedDefinition) addGeometryBundleToMaps(createBlockProjectionBundle(instance, nestedDefinition), pointById, lineById, primitiveById);
+      }
+      const constraints = selection.constraints.map((constraint) => {
+        const cloned = cloneConstraintForBlock(constraint, pointById, lineById, primitiveById, origin);
+        cloned.sketchId = DEFAULT_SKETCH_ID;
+        if (isDimensionConstraint(cloned)) {
+          delete cloned.parameterName;
+          if (!isReadOnlyDimension(cloned)) cloned.expression = numericDimensionExpression(cloned);
+        }
+        return cloned;
+      });
+      const annotations = (selection.annotations || []).map((source) => {
+        const cloned = serializeAnnotation(source);
+        cloned.id = source.id;
+        cloned.sketchId = DEFAULT_SKETCH_ID;
+        cloned.x -= origin.x;
+        cloned.y -= origin.y;
+        for (const key of ["start", "elbow", "end"]) if (cloned[key]) cloned[key] = { x: cloned[key].x - origin.x, y: cloned[key].y - origin.y };
+        return cloned;
+      });
+      const hatches = (selection.hatches || []).map((source) => ({
+        ...serializeHatch(source),
+        sketchId: DEFAULT_SKETCH_ID,
+        seed: { x: source.seed.x - origin.x, y: source.seed.y - origin.y },
+      }));
+      const definition = { id: nextDefinitionId(), name, parentDefinitionId: null, origin: { x: 0, y: 0 }, ...sketchState, points, lines, circles, arcs, splines, annotations, hatches, referenceImages: [], nextHatchIndex: Math.max(1, nextSeq(hatches, "H")), blockInstances, geometryInstances: [], constraints, parameters: [], nextDimensionParameterIndex: 1, revision: 1 };
+      ensureParameterNamespace(definition);
+      return definition;
+    }
+
+    function createEmptyBlockDefinition(name) {
+      const sketchState = createBlockSketchState();
+      return { id: nextDefinitionId(), name, parentDefinitionId: null, origin: { x: 0, y: 0 }, ...sketchState, points: [], lines: [], circles: [], arcs: [], splines: [], annotations: [], hatches: [], referenceImages: [], nextHatchIndex: 1, blockInstances: [], geometryInstances: [], constraints: [], parameters: [], nextDimensionParameterIndex: 1, revision: 1 };
+    }
+
+    return Object.freeze({ fromSelection: createBlockDefinitionFromSelection, empty: createEmptyBlockDefinition, clone: cloneBlockDefinition, cloneInstance: cloneBlockInstance,
       translate: translateBlockDefinition, apply: mergeBlockDefinitionDraft });
   }
   window.BlockDefinitionEditing = Object.freeze({ create });

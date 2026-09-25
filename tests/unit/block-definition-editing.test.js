@@ -17,7 +17,7 @@ function fixture() {
     blockInstances: [{ id: 'BI1', definitionId: 'child', sketchId: 'S1', x: 0, y: 0, enabledSketchIds: ['S1'] }],
     geometryInstances: [], parameters: [{ name: 'width', expression: '2' }], nextDimensionParameterIndex: 2, nextHatchIndex: 1 };
 }
-function service() {
+function service(overrides = {}) {
   const nested = new Point('BI1/P1', 9, 10), derived = new Point('FI1/P1', 20, 30);
   const bundle = points => ({ points, lines: [], circles: [], arcs: [], splines: [] });
   const editing = sandbox.window.BlockDefinitionEditing.create({ normalizedSketchCopy: sketch => ({ ...sketch }),
@@ -25,7 +25,7 @@ function service() {
       point: points.get(constraint.point?.id), line: lines.get(constraint.line?.id), primitive: primitives.get(constraint.primitive?.id), preserveReference }),
     blockDefinitionById: () => ({ id: 'child' }), createBlockProjectionBundle: () => bundle([nested]),
     geometryInstanceBundlesForScope: () => [bundle([derived])], emptyGeometryInstanceBundle: () => bundle([]),
-    normalizeGeometryInstance: codec.normalize, hatchSequence: () => 12 });
+    normalizeGeometryInstance: codec.normalize, hatchSequence: () => 12, ...overrides });
   return { editing, nested, derived };
 }
 test('Block copy isolates geometry and reconnects local, nested and derived constraint references', () => {
@@ -77,4 +77,46 @@ test('Block translation moves fixed targets, placement origins and auxiliary geo
   assert.deepEqual([target.annotations[0].start.x, target.annotations[0].start.y], [13, -1]);
   assert.equal(target.hatches[0].seed.x, 11); assert.equal(target.referenceImages[0].y, -3);
   assert.deepEqual([target.blockInstances[0].x, target.blockInstances[0].y], [10, -5]);
+});
+test('selection conversion rebases geometry and annotations, freezes dimension formulas and allocates a local namespace', () => {
+  const selection = fixture(), { DistanceConstraint } = sandbox.window.GeometrySolver;
+  const driving = Object.assign(new DistanceConstraint(selection.points[0], selection.points[1], 42), { parameterName: 'width', expression: '="sourceWidth" * 2' });
+  const measured = Object.assign(new DistanceConstraint(selection.points[0], selection.points[1], 10), { parameterName: 'measured', readOnlyDimension: true });
+  selection.constraints = [driving, measured];
+  selection.annotations = [{ id: 'AN1', type: 'leader', sketchId: 'SOURCE', x: 12, y: 22, start: { x: 13, y: 23 }, elbow: { x: 14, y: 24 }, end: { x: 15, y: 25 }, style: {} }];
+  selection.hatches = [{ id: 'H5', sketchId: 'SOURCE', seed: { x: 16, y: 26 }, boundaryLoops: [], appearance: {} }];
+  const parameters = sandbox.window.ParameterNamespace.create({ currentParameterNamespace: () => null, applicationText: (_ja, en) => en });
+  let allocated = 0;
+  const { editing } = service({ nextDefinitionId: () => `B${++allocated}`,
+    isDimensionConstraint: sandbox.window.DimensionQueries.isDimensionConstraint, isReadOnlyDimension: sandbox.window.DimensionQueries.isReadOnlyDimension,
+    numericDimensionExpression: parameters.numericDimensionExpression, ensureParameterNamespace: parameters.ensureParameterNamespace,
+    cloneConstraintForBlock: (source, points, _lines, _primitives, origin, preserveReference) => {
+      assert.equal(origin.x, 10); assert.equal(origin.y, 20); assert.equal(preserveReference, undefined);
+      return Object.assign(new DistanceConstraint(points.get(source.p1.id), points.get(source.p2.id), source.target), {
+        parameterName: source.parameterName, expression: source.expression, readOnlyDimension: source.readOnlyDimension });
+    } });
+  const draft = editing.fromSelection(selection, { x: 10, y: 20 }, 'New');
+  assert.equal(draft.id, 'B1'); assert.equal(draft.activeSketchId, 'S1');
+  assert.deepEqual([draft.points[0].x, draft.points[0].y, draft.lines[0].sketchId], [-9, -18, 'S1']);
+  assert.equal(draft.constraints[0].p1, draft.points[0]);
+  assert.equal(draft.constraints[0].expression, '42'); assert.equal(draft.constraints[0].parameterName, 'd1');
+  assert.equal(draft.constraints[1].parameterName, 'd2'); assert.equal(draft.constraints[1].expression, undefined);
+  assert.equal(draft.parameters.length, 0); assert.equal(draft.nextDimensionParameterIndex, 3);
+  assert.deepEqual([draft.annotations[0].x, draft.annotations[0].start.y, draft.hatches[0].seed.x], [2, 3, 6]);
+  assert.equal(draft.nextHatchIndex, 6);
+  assert.deepEqual([draft.blockInstances[0].x, draft.blockInstances[0].y], [-10, -20]);
+  assert.equal(selection.annotations[0].x, 12); assert.equal(selection.points[0].x, 1); assert.equal(driving.parameterName, 'width');
+  assert.equal(driving.expression, '="sourceWidth" * 2');
+});
+test('failed selection conversion does not allocate a definition id and empty drafts have independent Sketch state', () => {
+  let allocated = 0;
+  const { editing } = service({ nextDefinitionId: () => `B${++allocated}`, cloneConstraintForBlock: () => { throw new Error('unsupported constraint'); } });
+  assert.throws(() => editing.fromSelection(fixture(), { x: 0, y: 0 }, 'fail'), /unsupported/);
+  assert.equal(allocated, 0);
+  const first = editing.empty('first'), second = editing.empty('second');
+  assert.equal(first.id, 'B1'); assert.equal(second.id, 'B2');
+  assert.equal(first.sketches[0].kind, 'root'); assert.equal(first.sketches[1].parentSketchId, first.sketches[0].id);
+  first.sketches[1].appearance.color = '#123456';
+  assert.equal(second.sketches[1].appearance.color, undefined);
+  assert.equal(first.constraints.length, 0); assert.equal(first.nextDimensionParameterIndex, 1);
 });

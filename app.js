@@ -320,10 +320,12 @@
   const blockDefinitionEditing = window.BlockDefinitionEditing.create({
     normalizedSketchCopy, cloneConstraintForBlock, blockDefinitionById, createBlockProjectionBundle,
     geometryInstanceBundlesForScope, emptyGeometryInstanceBundle, normalizeGeometryInstance,
-    hatchSequence: () => hatchSeq,
+    hatchSequence: () => hatchSeq, nextDefinitionId: () => `B${blockDefinitionSeq++}`,
+    isDimensionConstraint, isReadOnlyDimension, numericDimensionExpression, ensureParameterNamespace,
   });
   const { clone: cloneBlockDefinition, cloneInstance: cloneBlockInstance,
-    apply: mergeBlockDefinitionDraft } = blockDefinitionEditing;
+    apply: mergeBlockDefinitionDraft, fromSelection: createBlockDefinitionFromSelection,
+    empty: createEmptyBlockDefinition } = blockDefinitionEditing;
   const blockEditor = window.BlockEditorSession.create({
     currentScope: workspace.current, documentModel, hatchSequence: () => hatchSeq,
     normalizedSketchCopy, activeSketchId, blockProjectionBundles, geometryElementKey,
@@ -335,6 +337,7 @@
     activateScope: activateEditingScope, reserveScopeSequences: reserveBlockEditorSequences,
     cloneBlockDefinition, createHistory: createBlockEditHistory, mergeBlockDefinitionDraft,
     rebuildStoredBlockDefinitionConstraints, invalidateBlockProjectionCache,
+    blockDefinitionOwnedSubtreeIds, rebuildBlockDefinitionConstraintObjects,
   });
   const { live: liveBlockEditorDefinition, chain: blockEditorSessionChain,
     scopeId: currentBlockDefinitionScopeId } = blockEditor;
@@ -3543,16 +3546,6 @@
     return cloned;
   }
 
-  function createBlockSketchState() {
-    return {
-      sketches: [
-        { id: ROOT_SKETCH_ID, name: ROOT_SKETCH_NAME, parentSketchId: null, kind: "root", appearance: {}, constructionAppearance: {}, dimensionAppearance: {} },
-        { id: DEFAULT_SKETCH_ID, name: DEFAULT_SKETCH_NAME, parentSketchId: ROOT_SKETCH_ID, kind: "sketch", appearance: {}, constructionAppearance: {}, dimensionAppearance: {} },
-      ],
-      activeSketchId: DEFAULT_SKETCH_ID,
-    };
-  }
-
   function blockSelectionBoundsCenter(selection) {
     let bounds = null;
     for (const line of selection.lines || []) bounds = mergeBounds(bounds, lineBBox(line));
@@ -3570,120 +3563,12 @@
     return bounds ? { x: (bounds.x1 + bounds.x2) / 2, y: (bounds.y1 + bounds.y2) / 2 } : { x: 0, y: 0 };
   }
 
-  function createBlockDefinitionFromSelection(selection, origin, name) {
-    const sketchState = createBlockSketchState();
-    const pointById = new Map();
-    const points = selection.points.map((source) => {
-      const point = new Point(source.id, source.x - origin.x, source.y - origin.y, source.fixed, source.kind || "endpoint");
-      point.sketchId = DEFAULT_SKETCH_ID;
-      point.appearance = normalizeAppearance(source.appearance);
-      pointById.set(point.id, point);
-      return point;
-    });
-    const lineById = new Map();
-    const lines = selection.lines.map((source) => {
-      const line = new Line(source.id, pointById.get(source.p1.id), pointById.get(source.p2.id), source.construction);
-      line.sketchId = DEFAULT_SKETCH_ID;
-      line.drawingOrder = normalizedDrawingOrder(source.drawingOrder);
-      line.appearance = normalizeAppearance(source.appearance);
-      lineById.set(line.id, line);
-      return line;
-    });
-    const primitiveById = new Map();
-    const circles = selection.circles.map((source) => {
-      const circle = new Circle(source.id, pointById.get(source.center.id), source.radius(), source.construction);
-      circle.sketchId = DEFAULT_SKETCH_ID;
-      circle.drawingOrder = normalizedDrawingOrder(source.drawingOrder);
-      circle.appearance = normalizeAppearance(source.appearance);
-      primitiveById.set(circle.id, circle);
-      return circle;
-    });
-    const arcs = selection.arcs.map((source) => {
-      const arc = new Arc(source.id, pointById.get(source.center.id), source.radius(), source.startAngle, source.endAngle, source.construction);
-      arc.sketchId = DEFAULT_SKETCH_ID;
-      arc.drawingOrder = normalizedDrawingOrder(source.drawingOrder);
-      arc.appearance = normalizeAppearance(source.appearance);
-      primitiveById.set(arc.id, arc);
-      return arc;
-    });
-    const splines = (selection.splines || []).map((source) => {
-      const spline = new Spline(source.id, source.fitPoints.map((point) => pointById.get(point.id)), source.closed, source.construction);
-      spline.sketchId = DEFAULT_SKETCH_ID;
-      spline.drawingOrder = normalizedDrawingOrder(source.drawingOrder);
-      spline.appearance = normalizeAppearance(source.appearance);
-      primitiveById.set(spline.id, spline);
-      return spline;
-    });
-    const blockInstances = (selection.blockInstances || []).map((source) => {
-      const instance = cloneBlockInstance(source, origin);
-      instance.sketchId = DEFAULT_SKETCH_ID;
-      return instance;
-    });
-    for (const instance of blockInstances) {
-      const nestedDefinition = blockDefinitionById(instance.definitionId);
-      if (nestedDefinition) addGeometryBundleToMaps(createBlockProjectionBundle(instance, nestedDefinition), pointById, lineById, primitiveById);
-    }
-    const constraints = selection.constraints.map((constraint) => {
-      const cloned = cloneConstraintForBlock(constraint, pointById, lineById, primitiveById, origin);
-      cloned.sketchId = DEFAULT_SKETCH_ID;
-      if (isDimensionConstraint(cloned)) {
-        delete cloned.parameterName;
-        if (!isReadOnlyDimension(cloned)) cloned.expression = numericDimensionExpression(cloned);
-      }
-      return cloned;
-    });
-    const annotations = (selection.annotations || []).map((source) => {
-      const cloned = serializeAnnotation(source);
-      cloned.id = source.id;
-      cloned.sketchId = DEFAULT_SKETCH_ID;
-      cloned.x -= origin.x;
-      cloned.y -= origin.y;
-      for (const key of ["start", "elbow", "end"]) if (cloned[key]) cloned[key] = { x: cloned[key].x - origin.x, y: cloned[key].y - origin.y };
-      return cloned;
-    });
-    const hatches = (selection.hatches || []).map((source) => ({
-      ...serializeHatch(source),
-      sketchId: DEFAULT_SKETCH_ID,
-      seed: { x: source.seed.x - origin.x, y: source.seed.y - origin.y },
-    }));
-    const definition = { id: `B${blockDefinitionSeq++}`, name, parentDefinitionId: null, origin: { x: 0, y: 0 }, ...sketchState, points, lines, circles, arcs, splines, annotations, hatches, referenceImages: [], nextHatchIndex: Math.max(1, nextSeq(hatches, "H")), blockInstances, geometryInstances: [], constraints, parameters: [], nextDimensionParameterIndex: 1, revision: 1 };
-    ensureParameterNamespace(definition);
-    return definition;
-  }
-
-  function createEmptyBlockDefinition(name) {
-    const sketchState = createBlockSketchState();
-    return { id: `B${blockDefinitionSeq++}`, name, parentDefinitionId: null, origin: { x: 0, y: 0 }, ...sketchState, points: [], lines: [], circles: [], arcs: [], splines: [], annotations: [], hatches: [], referenceImages: [], nextHatchIndex: 1, blockInstances: [], geometryInstances: [], constraints: [], parameters: [], nextDimensionParameterIndex: 1, revision: 1 };
-  }
-
   function rebuildBlockDefinitionConstraintObjects(definition) {
     return constraintRebinding.rebuildDefinition(definition);
   }
 
   function rebuildStoredBlockDefinitionConstraints() {
     return documentModel.blockDefinitions.reduce((removed, definition) => removed + rebuildBlockDefinitionConstraintObjects(definition), 0);
-  }
-
-  function stageSelectedBlockDefinitionsForParent(draft) {
-    const rootDefinitionIds = [...new Set((draft?.blockInstances || []).map((instance) => instance.definitionId))];
-    if (!draft || rootDefinitionIds.length === 0) return new Map();
-    const rootIdSet = new Set(rootDefinitionIds);
-    const subtreeIds = blockDefinitionOwnedSubtreeIds(rootDefinitionIds);
-    const rollbackEntries = new Map();
-    const stagedDefinitions = new Map();
-    for (let index = 0; index < documentModel.blockDefinitions.length; index += 1) {
-      const definition = documentModel.blockDefinitions[index];
-      if (!subtreeIds.has(definition.id)) continue;
-      rollbackEntries.set(definition.id, { definition, index });
-      const staged = cloneBlockDefinition(definition);
-      if (rootIdSet.has(staged.id)) staged.parentDefinitionId = draft.id;
-      stagedDefinitions.set(staged.id, staged);
-    }
-    documentModel.blockDefinitions = documentModel.blockDefinitions.map((definition) => stagedDefinitions.get(definition.id) || definition);
-    for (const definition of stagedDefinitions.values()) rebuildBlockDefinitionConstraintObjects(definition);
-    rebuildBlockDefinitionConstraintObjects(draft);
-    invalidateBlockProjectionCache();
-    return rollbackEntries;
   }
 
   function startBlockCreation() {
@@ -3711,7 +3596,7 @@
     }
     const draft = selection ? createBlockDefinitionFromSelection(selection, origin, defaultName) : createEmptyBlockDefinition(defaultName);
     draft.parentDefinitionId = currentBlockDefinitionScopeId();
-    const definitionRollbackEntries = selection ? stageSelectedBlockDefinitionsForParent(draft) : new Map();
+    const definitionRollbackEntries = selection ? blockEditor.stageChildren(draft) : new Map();
     openBlockDefinitionEditor(draft, { isNew: true, creationSelection: selection, replacementCenter: origin, definitionRollbackEntries, originalHost: creationHost });
   }
 

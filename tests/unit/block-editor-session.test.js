@@ -9,7 +9,7 @@ function definition(id) {
     annotations: [], hatches: [], referenceImages: [], blockInstances: [], geometryInstances: [],
     constraints: [], parameters: [], sketches: [{ id: 'S1' }], activeSketchId: 'S1', nextHatchIndex: 1, nextDimensionParameterIndex: 1 };
 }
-function fixture() {
+function fixture(overrides = {}) {
   const document = { ...definition('document'), blockDefinitions: [] }, calls = [];
   const workspace = sandbox.window.EditingWorkspace.create(document);
   let viewport = { x: 1, y: 2, scale: 3 }, historyId = 0;
@@ -21,7 +21,7 @@ function fixture() {
     activateScope: workspace.activate, reserveScopeSequences: scope => calls.push(['reserve', scope.id]),
     cloneBlockDefinition: structuredClone, createHistory: () => ({ id: ++historyId }),
     mergeBlockDefinitionDraft: (target, draft) => { Object.assign(target, structuredClone(draft)); target.revision += 1; },
-    rebuildStoredBlockDefinitionConstraints: () => calls.push('rebuild'), invalidateBlockProjectionCache: () => calls.push('invalidate') });
+    rebuildStoredBlockDefinitionConstraints: () => calls.push('rebuild'), invalidateBlockProjectionCache: () => calls.push('invalidate'), ...overrides });
   return { document, editor, workspace, calls, view: () => viewport, setView: value => { viewport = value; } };
 }
 test('nested Block editing restores exact host scope, viewport and independent history', () => {
@@ -109,4 +109,32 @@ test('definition deletion forgets transient ids in every active ancestor without
   assert.equal(child.transientDefinitionIds.has('removed'), false);
   assert.equal(parent.transientDefinitionIds.has('keep'), true);
   assert.equal(parent.definitionRollbackEntries.get('removed').definition, original);
+});
+test('staging children rewrites the entire subtree before rebinding and cancellation restores registry identity and order', () => {
+  const child = definition('child'), grandchild = definition('grand'), unrelated = definition('other');
+  grandchild.parentDefinitionId = child.id;
+  const parent = definition('parent'); parent.blockInstances = [{ id: 'BI1', definitionId: child.id }];
+  let f;
+  f = fixture({ blockDefinitionOwnedSubtreeIds: roots => { assert.deepEqual(Array.from(roots), ['child']); return new Set(['child', 'grand']); },
+    rebuildBlockDefinitionConstraintObjects: item => {
+      assert.notEqual(f.document.blockDefinitions[0], grandchild);
+      assert.notEqual(f.document.blockDefinitions[2], child);
+      f.calls.push(`rebind:${item.id}`);
+    } });
+  f.document.blockDefinitions = [grandchild, unrelated, child];
+  const entries = f.editor.stageChildren(parent);
+  assert.equal(entries.get('grand').definition, grandchild); assert.equal(entries.get('child').index, 2);
+  assert.equal(f.document.blockDefinitions[0].parentDefinitionId, 'child');
+  assert.equal(f.document.blockDefinitions[2].parentDefinitionId, 'parent');
+  assert.equal(f.document.blockDefinitions[1], unrelated); assert.equal(child.parentDefinitionId, undefined);
+  assert.deepEqual(f.calls, ['rebind:grand', 'rebind:child', 'rebind:parent', 'invalidate']);
+  const session = f.editor.open(parent, { isNew: true, definitionRollbackEntries: entries });
+  f.editor.restoreHost(session); f.editor.rollback(session);
+  assert.equal(f.document.blockDefinitions[0], grandchild); assert.equal(f.document.blockDefinitions[1], unrelated); assert.equal(f.document.blockDefinitions[2], child);
+});
+test('staging without child instances does not touch registry or caches', () => {
+  const f = fixture(), registry = f.document.blockDefinitions;
+  assert.equal(f.editor.stageChildren(null).size, 0);
+  assert.equal(f.editor.stageChildren(definition('empty')).size, 0);
+  assert.equal(f.document.blockDefinitions, registry); assert.equal(f.calls.length, 0);
 });

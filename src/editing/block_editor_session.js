@@ -4,7 +4,8 @@
   function create({ currentScope, documentModel, hatchSequence, normalizedSketchCopy, activeSketchId,
     blockProjectionBundles, geometryElementKey, captureHost, restoreHostState, activateScope,
     reserveScopeSequences, cloneBlockDefinition, createHistory, mergeBlockDefinitionDraft,
-    rebuildStoredBlockDefinitionConstraints, invalidateBlockProjectionCache }) {
+    rebuildStoredBlockDefinitionConstraints, invalidateBlockProjectionCache,
+    blockDefinitionOwnedSubtreeIds, rebuildBlockDefinitionConstraintObjects }) {
     let current = null;
 
     function syncBlockEditorDraft(session = current) {
@@ -90,6 +91,28 @@
       }
     }
 
+    function stageSelectedBlockDefinitionsForParent(draft) {
+      const rootDefinitionIds = [...new Set((draft?.blockInstances || []).map((instance) => instance.definitionId))];
+      if (!draft || rootDefinitionIds.length === 0) return new Map();
+      const rootIdSet = new Set(rootDefinitionIds);
+      const subtreeIds = blockDefinitionOwnedSubtreeIds(rootDefinitionIds);
+      const rollbackEntries = new Map();
+      const stagedDefinitions = new Map();
+      for (let index = 0; index < documentModel.blockDefinitions.length; index += 1) {
+        const definition = documentModel.blockDefinitions[index];
+        if (!subtreeIds.has(definition.id)) continue;
+        rollbackEntries.set(definition.id, { definition, index });
+        const staged = cloneBlockDefinition(definition);
+        if (rootIdSet.has(staged.id)) staged.parentDefinitionId = draft.id;
+        stagedDefinitions.set(staged.id, staged);
+      }
+      documentModel.blockDefinitions = documentModel.blockDefinitions.map((definition) => stagedDefinitions.get(definition.id) || definition);
+      for (const definition of stagedDefinitions.values()) rebuildBlockDefinitionConstraintObjects(definition);
+      rebuildBlockDefinitionConstraintObjects(draft);
+      invalidateBlockProjectionCache();
+      return rollbackEntries;
+    }
+
     function open(draft, options = {}) {
       if (!draft) return;
       const parentSession = current;
@@ -168,7 +191,7 @@
       return true;
     }
 
-    return Object.freeze({ open, restoreHost, adoptChildChanges, forgetDefinitions, rollback, replaceDraft, rename,
+    return Object.freeze({ stageChildren: stageSelectedBlockDefinitionsForParent, open, restoreHost, adoptChildChanges, forgetDefinitions, rollback, replaceDraft, rename,
       sync: syncBlockEditorDraft, live: liveBlockEditorDefinition, chain: blockEditorSessionChain,
       isTransient: blockDefinitionIsTransientInEditor, scopeId: currentBlockDefinitionScopeId,
       reset() { current = null; }, get current() { return current; } });
