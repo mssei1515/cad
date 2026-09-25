@@ -40,3 +40,12 @@ test('Block view delegates editing and refreshes and localizes before showing di
   f.elements.completeBlockEditBtn.events.click(); f.elements.cancelBlockEditBtn.events.click();
   assert.deepEqual(f.calls.slice(-2), ['complete', 'cancel']);
 });
+test('Block view closes only an open list and owns the editor body class', () => {
+  const f = fixture(), flags = [];
+  f.document.body = { classList: { toggle: (name, active) => flags.push([name, active]) } };
+  f.view.closeDefinitions(); assert.equal(f.calls.length, 0);
+  f.elements.blockDefinitionsDialog.open = true; f.view.closeDefinitions();
+  assert.deepEqual(f.calls, ['close']);
+  f.view.setEditorActive(true); f.view.setEditorActive(false);
+  assert.deepEqual(flags, [['block-editing', true], ['block-editing', false]]);
+});

@@ -73,7 +73,14 @@
         commitName();
       });
     }
-    return Object.freeze({ render, bind });
+    function closeDefinitions() {
+      const dialog = document.getElementById("blockDefinitionsDialog");
+      if (dialog?.open) dialog.close();
+    }
+    function setEditorActive(active) {
+      document.body.classList.toggle("block-editing", active);
+    }
+    return Object.freeze({ render, bind, closeDefinitions, setEditorActive });
   }
   window.BlockView = Object.freeze({ create });
 })();

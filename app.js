@@ -323,7 +323,7 @@
     hatchSequence: () => hatchSeq, nextDefinitionId: () => `B${blockDefinitionSeq++}`,
     isDimensionConstraint, isReadOnlyDimension, numericDimensionExpression, ensureParameterNamespace,
   });
-  const { clone: cloneBlockDefinition, cloneInstance: cloneBlockInstance,
+  const { clone: cloneBlockDefinition,
     apply: mergeBlockDefinitionDraft, fromSelection: createBlockDefinitionFromSelection,
     empty: createEmptyBlockDefinition } = blockDefinitionEditing;
   const blockEditor = window.BlockEditorSession.create({
@@ -345,7 +345,7 @@
     definitions: () => documentModel.blockDefinitions, currentScope: workspace.current,
     editor: blockEditor, catalog: blockCatalog,
   });
-  const { selectedBlockDefinitionMoveError, blockDefinitionsInCurrentScope, blockDefinitionScopeError,
+  const { blockDefinitionsInCurrentScope, blockDefinitionScopeError,
     blockDefinitionDependsOn, storedBlockInstancesReferencing, blockDefinitionUsageCount,
     blockDefinitionEditError, blockDefinitionCyclePath } = blockEditingQueries;
   let hatchResolutionCache = new WeakMap();
@@ -3571,34 +3571,26 @@
     return documentModel.blockDefinitions.reduce((removed, definition) => removed + rebuildBlockDefinitionConstraintObjects(definition), 0);
   }
 
-  function startBlockCreation() {
-    if (!isGeometryMode() || !canCreateInActiveSketch()) return;
-    const definitionsDialog = document.getElementById("blockDefinitionsDialog");
-    if (definitionsDialog?.open) definitionsDialog.close();
-    const creationHost = { ...workspace.capture(), viewport: viewport.snapshot() };
-    const defaultName = `Block-${blockDefinitionSeq}`;
-    const hasGeometrySelection = canvasSelection.lines.length + canvasSelection.circles.length + canvasSelection.arcs.length + canvasSelection.splines.length + canvasSelection.annotations.length + canvasSelection.hatches.length > 0;
-    let selection = null;
-    let origin = { x: 0, y: 0 };
-    if (hasGeometrySelection || canvasSelection.blockInstances.length > 0) {
-      selection = blockSelectionGeometry();
-      if (selection.error) {
-        setHint(selection.error, "error");
-        return;
-      }
-      const definitionMoveError = selectedBlockDefinitionMoveError(selection);
-      if (definitionMoveError) {
-        setHint(definitionMoveError, "error");
-        return;
-      }
-      if (!guardDimensionSymbolDeletion(new Set([...(selection.constraints || []), ...(selection.externalConstraints || [])]))) return;
-      origin = blockSelectionBoundsCenter(selection);
-    }
-    const draft = selection ? createBlockDefinitionFromSelection(selection, origin, defaultName) : createEmptyBlockDefinition(defaultName);
-    draft.parentDefinitionId = currentBlockDefinitionScopeId();
-    const definitionRollbackEntries = selection ? blockEditor.stageChildren(draft) : new Map();
-    openBlockDefinitionEditor(draft, { isNew: true, creationSelection: selection, replacementCenter: origin, definitionRollbackEntries, originalHost: creationHost });
-  }
+  const blockDefinitionCommand = window.BlockDefinitionCommand.create({
+    blockEditor, blockDefinitionEditing, blockCatalog, blockEditingQueries, documentModel,
+    currentScope: workspace.current, canStartCreation: () => isGeometryMode() && canCreateInActiveSketch(),
+    canvasSelection, captureHost: () => ({ ...workspace.capture(), viewport: viewport.snapshot() }),
+    defaultName: () => `Block-${blockDefinitionSeq}`, blockSelectionGeometry, blockSelectionBoundsCenter,
+    guardDimensionSymbolDeletion, resetBlockEditorHistory, clearSelection,
+    setMode: (value) => { mode = value; }, closeDefinitions: () => blockView.closeDefinitions(),
+    setEditorActive: (active) => blockView.setEditorActive(active), fitAllGeometryToViewport,
+    resetEmptyViewport: () => {
+      const rect = canvas.getBoundingClientRect();
+      viewport.update({ scale: CSS_PX_PER_MM });
+      viewport.update({ x: rect.width / 2 });
+      viewport.update({ y: rect.height / 2 });
+    },
+    promptName: (name) => window.prompt("ブロック名", name), invalidateBlockProjectionCache,
+    updateBlockUI, updateUI, draw, recordHistory, setHint,
+  });
+  const { startCreation: startBlockCreation, open: openBlockDefinitionEditor, enter: enterBlockDefinitionEdit,
+    restoreHost: restoreBlockEditorHost, cancel: cancelBlockDefinitionEdit,
+    rename: renameBlockDefinition, remove: deleteBlockDefinition } = blockDefinitionCommand;
 
 
 
@@ -3609,51 +3601,6 @@
     annotationSeq = Math.max(annotationSeq, nextSeq(draft.annotations || [], "AN"));
     hatchSeq = Math.max(hatchSeq, model.nextHatchIndex, nextSeq(draft.hatches || [], "H"));
     referenceImageSeq = Math.max(referenceImageSeq, nextSeq(draft.referenceImages || [], "IMG"));
-  }
-
-  function openBlockDefinitionEditor(draft, options = {}) {
-    if (!draft) return;
-    blockEditor.open(draft, options);
-    resetBlockEditorHistory();
-    clearSelection();
-    mode = "select";
-    document.body.classList.add("block-editing");
-    if (draft.lines.length + draft.circles.length + draft.arcs.length + (draft.splines?.length || 0) + (draft.annotations?.length || 0) + (draft.hatches?.length || 0) + (draft.referenceImages?.length || 0) + model.blockInstances.length > 0) fitAllGeometryToViewport();
-    else {
-      const rect = canvas.getBoundingClientRect();
-      viewport.update({ scale: CSS_PX_PER_MM });
-      viewport.update({ x: rect.width / 2 });
-      viewport.update({ y: rect.height / 2 });
-    }
-    const externalConstraintCount = blockEditor.current.creationSelection?.externalConstraints?.length || 0;
-    setHint(
-      externalConstraintCount > 0
-        ? `ブロックエディタ: ${draft.name} / 選択外につながる拘束${externalConstraintCount}件は完了時に解除されます`
-        : `ブロックエディタ: ${draft.name}`,
-    );
-    updateUI();
-    draw();
-  }
-
-  function enterBlockDefinitionEdit(definitionId) {
-    const scopeError = blockDefinitionScopeError(definitionId);
-    if (scopeError) {
-      setHint(scopeError, "error");
-      return;
-    }
-    const editError = blockDefinitionEditError(definitionId);
-    if (editError) {
-      setHint(editError, "error");
-      return;
-    }
-    const definition = blockDefinitionById(definitionId);
-    if (!definition) return;
-    openBlockDefinitionEditor(cloneBlockDefinition(definition), { sourceDefinition: definition });
-  }
-
-  function restoreBlockEditorHost(session) {
-    blockEditor.restoreHost(session);
-    document.body.classList.toggle("block-editing", Boolean(blockEditor.current));
   }
 
   const choiceDialog = window.ChoiceDialog.create(document.getElementById("choiceDialog"));
@@ -3672,67 +3619,8 @@
   });
   const { complete: completeBlockDefinitionEdit } = blockCompletionCommand;
 
-  function cancelBlockDefinitionEdit() {
-    if (!blockEditor.current) return;
-    const session = blockEditor.current;
-    restoreBlockEditorHost(session);
-    blockEditor.rollback(session);
-    clearSelection();
-    mode = "select";
-    setHint(session.sourceDefinition ? "ブロック定義編集をキャンセルしました" : "ブロック作成をキャンセルしました");
-    updateUI();
-    draw();
-  }
-
   function exitBlockDefinitionEdit() {
     completeBlockDefinitionEdit();
-  }
-
-  function renameBlockDefinition(definitionId) {
-    const scopeError = blockDefinitionScopeError(definitionId);
-    if (scopeError) {
-      setHint(scopeError, "error");
-      return;
-    }
-    const editError = blockDefinitionEditError(definitionId);
-    if (editError) {
-      setHint(`${editError}。編集中の名前欄を使用してください`, "error");
-      return;
-    }
-    const definition = blockDefinitionById(definitionId);
-    if (!definition) return;
-    const name = window.prompt("ブロック名", definition.name);
-    if (name == null || !name.trim()) return;
-    definition.name = name.trim();
-    updateBlockUI();
-    recordHistory("ブロック名変更");
-  }
-
-  function deleteBlockDefinition(definitionId) {
-    const scopeError = blockDefinitionScopeError(definitionId);
-    if (scopeError) {
-      setHint(scopeError, "error");
-      return;
-    }
-    const editError = blockDefinitionEditError(definitionId);
-    if (editError) {
-      setHint(`${editError}。完了またはキャンセルしてから削除してください`, "error");
-      return;
-    }
-    const definition = blockDefinitionById(definitionId);
-    if (!definition) return;
-    const instances = model.blockInstances.filter((instance) => instance.definitionId === definitionId);
-    if (instances.length > 0) {
-      setHint(`${definition.name} は ${instances.length}個のインスタンスで使用中のため削除できません`, "error");
-      return;
-    }
-    const removedDefinitionIds = blockDefinitionOwnedSubtreeIds([definitionId]);
-    documentModel.blockDefinitions = documentModel.blockDefinitions.filter((item) => !removedDefinitionIds.has(item.id));
-    blockEditor.forgetDefinitions(removedDefinitionIds);
-    invalidateBlockProjectionCache();
-    updateBlockUI();
-    draw();
-    recordHistory("ブロック定義削除");
   }
 
   function syncOffsetChainSelection() {
