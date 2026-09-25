@@ -454,6 +454,15 @@
   const { candidates: snapCandidates, clear: clearSnap } = drawingSnap;
   const { circlePointAtPointer } = window.GeometryKernel;
   function snapForDrawing(point) { return drawingSnap.resolve(point, 10 / viewport.scale); }
+  const splineCommand = window.SplineCommand.create({
+    draft: splineDraft, addSpline, snapForDrawing, scale: () => viewport.scale,
+    clearProjectionSources: () => { sketchProjectionSources = []; },
+    setPointerPreview: value => { pointerPreview = value; },
+    clearSnap, clearSelection,
+    selectCreatedSpline: spline => { canvasSelection.set("splines", [spline]); mode = "select"; },
+    solveAndRefresh, recordHistory, applicationText, setHint, updateUI, draw,
+  });
+  const { finalize: finalizeSplineCreation, click: handleSplineClick, doubleClick: finalizeSplineFromDoubleClick } = splineCommand;
   const snapConstraints = window.SnapConstraints.create({ isActiveSketchElement, elementSketchId, isReferenceSourceSketchId, addPoint, addConstraintIfMissing });
   const { addPointSnapConstraints, addArcEndpointSnapConstraints, addCircularBoundarySnapConstraints, addLineBoundarySnapConstraints } = snapConstraints;
   const filletPlans = window.FilletGeometry.create({ minLineLength: MIN_LINE_LENGTH });
@@ -3337,31 +3346,6 @@
     draw();
   }
 
-  function finalizeSplineCreation(closed = false) {
-    if (splineDraft.points.length < 3) {
-      setHint("スプラインには3点以上の通過点が必要です", "error");
-      return false;
-    }
-    const spline = addSpline(splineDraft.points.slice(), closed);
-    if (!spline) {
-      setHint(applicationText("通過点からスプラインを作成できません", "Could not create a spline from the fit points."), "error");
-      return false;
-    }
-    splineDraft.reset();
-    sketchProjectionSources = [];
-    pointerPreview = null;
-    clearSnap();
-    clearSelection();
-    canvasSelection.set("splines", [spline]);
-    mode = "select";
-    solveAndRefresh("スプライン追加");
-    recordHistory("スプライン追加");
-    setHint(applicationText(`${spline.id} を作成しました`, `Created ${spline.id}`));
-    updateUI();
-    draw();
-    return true;
-  }
-
   function finishSplineEditSession() {
     if (!splineEditSession) return false;
     splineEditSession = null;
@@ -3477,31 +3461,6 @@
       applicationText(`${spline.id} から通過点 ${point.id} を削除しました`, `Removed fit point ${point.id} from ${spline.id}.`),
       applicationText("拘束を維持できないため通過点の削除を戻しました", "The fit point removal was restored because its constraints could not be maintained."),
     );
-  }
-
-  function handleSplineClick(pointer) {
-    const snapped = snapForDrawing(pointer);
-    if (splineDraft.points.length >= 3 && hypot2(snapped.x - splineDraft.points[0].x, snapped.y - splineDraft.points[0].y) <= 10 / viewport.scale) {
-      return finalizeSplineCreation(true);
-    }
-    if (!splineDraft.add(snapped, pointer)) {
-      setHint(applicationText("前の通過点と異なる位置を指定してください", "Choose a position different from the previous fit point."), "error");
-      return false;
-    }
-    pointerPreview = snapped;
-    clearSnap();
-    setHint(splineDraft.points.length >= 3
-      ? applicationText(`${splineDraft.points.length}点。Enterまたは空白のダブルクリックで開いたスプラインを確定します（ダブルクリック位置は追加しません）`, `${splineDraft.points.length} points. Press Enter or double-click blank canvas to finish an open spline without adding that position.`)
-      : applicationText(`${splineDraft.points.length}点。あと${3 - splineDraft.points.length}点指定してください`, `${splineDraft.points.length} points. Add ${3 - splineDraft.points.length} more.`));
-    draw();
-    return true;
-  }
-
-  function finalizeSplineFromDoubleClick(pointer) {
-    const discarded = splineDraft.discardDoubleClick(pointer, 8 / viewport.scale);
-    const finalized = finalizeSplineCreation(false);
-    if (!finalized && discarded) draw();
-    return finalized;
   }
 
   function hatchRegionErrorText(result) {
