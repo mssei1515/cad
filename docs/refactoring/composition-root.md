@@ -4,6 +4,8 @@
 
 ## 現在の再開地点（2026-09-25）
 
+Offsetの距離・draft計算を`OffsetGeometry`、Geometry／拘束生成と失敗時復元を`OffsetConstruction`、入力開始・検証・確定を`OffsetCommand`へ分離。Geometry計算はDocument非依存、生成は現在の編集対象と採番を明示し、入力は選択状態と生成処理へ接続する。構文195件・単体410件・統合UI／保存互換E2E114件が成功。app.jsは20,896行。次は残ったOffsetクリック／hover／Enterイベントとプレビュー描画をcommand／rendererへ接続し、作図モード全体の開始・取消を整理する。全体目標と全体E2Eは未完了。
+
 Offsetの対象・向き付きチェーン・選択確定を`OffsetSelection`へ集約。接続判定も同じ所有者に移し、クリック／Enter／モード切替／取消／test hookからの3変数への直接書込みを除去した。構文191件・単体407件・統合UI／保存互換E2E114件が成功。app.jsは21,162行。次はOffsetの距離測定・draft・入力開始・生成／失敗時復元を既存選択状態と接続し、機能全体のcommand境界を整理する。全体目標と全体E2Eは未完了。
 
 寸法入力ControllerへCanvasキーによるbuffer編集と入力中表示更新を統合。Enterの入力開始／確定とEscape取消は明示したコールバックへ委譲し、モデル更新とは分離する。構文189件・単体404件・統合UI／保存互換E2E114件が成功。app.jsは21,278行。次はOffsetの選択状態（source、chain entries、選択確定フラグ）をまとめて所有させ、選択開始・追加・確定・取消とプレビュー／生成への接続を機能単位で整理する。現在の3変数はクリック・hover・Enter・モード切替・test hookに分散しており、単純な関数移動では解消しない。全体目標と全体E2Eは未完了。

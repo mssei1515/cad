@@ -435,7 +435,7 @@
     dimensionLayout, worldToCanvasScreen, effectiveDimensionAppearance, constraintSketchId, activeSketchId,
     dimensionTextOffset, evaluateDimensionExpressionDraft, expressionFromUserInput,
     cancelPendingCommand, startDistanceValueInput, defaultDimensionForTarget,
-    submitOffsetValue, submitDistanceValue: () => submitDistanceValue(), applicationText, setHint, draw,
+    submitOffsetValue: () => submitOffsetValue(), submitDistanceValue: () => submitDistanceValue(), applicationText, setHint, draw,
   });
   const { hide: hideDimensionValueInput, sync: syncDimensionValueInput, focus: focusDimensionValueInput, handleKey: handleDistanceKey, updateBufferLabel: updateDistanceBufferLabel } = dimensionInputController;
   function dimensionLayout(target, dimension, appearance = effectiveDimensionAppearance(dimension)) {
@@ -494,6 +494,30 @@
     setPointerPreview: value => { pointerPreview = value; },
     clearSnap, clearSelection, setHint, updateUI, draw, solveAndRefresh, log,
   });
+  const offsetGeometry = window.OffsetGeometry.create({
+    types: window.GeometrySolver, kernel: window.GeometryKernel, buildOffsetChainGeometry,
+  });
+  const { offsetDistanceFromPointer, offsetChainDistanceFromPointer, offsetDraftGeometry, offsetDimensionTarget } = offsetGeometry;
+  function offsetChainDraft(entries, distance, side, closed = offsetChainIsClosed(entries)) {
+    return offsetGeometry.offsetChainDraft(entries, distance, side, closed);
+  }
+  const offsetConstruction = window.OffsetConstruction.create({
+    currentScope: () => model, geometryIds, geometry: geometryCreation, plans: offsetGeometry,
+    placement: dimensionPlacement, types: window.GeometrySolver, kernel: window.GeometryKernel,
+    commitNewConstraint, normalizeAppearance, offsetPairSign, offsetChainErrorText,
+    applicationText, setHint, updateUI, draw, invalidateAnalysis: () => { constraintAnalysisState = null; },
+    minLineLength: MIN_LINE_LENGTH, minArcLength: MIN_ARC_LENGTH,
+  });
+  const { createOffsetGeometry, createOffsetChainGeometry } = offsetConstruction;
+  const offsetCommand = window.OffsetCommand.create({
+    getPending: () => pendingCommand, setPending: value => { pendingCommand = value; },
+    plans: offsetGeometry, construction: offsetConstruction, placement: dimensionPlacement, offsetSelection,
+    viewport, Line, minOrientationLength: MIN_ORIENTATION_LENGTH, offsetPairSign,
+    offsetChainErrorText, formatDisplayNumber, formatDimensionLabel, setHint, updateToolbar,
+    syncDimensionValueInput, focusDimensionValueInput, hideDimensionValueInput, draw,
+    clearPointerPreview: () => { pointerPreview = null; }, clearSelection,
+  });
+  const { start: startOffsetDistanceInput, startChain: startOffsetChainDistanceInput, submit: submitOffsetValue } = offsetCommand;
   const filletPlans = window.FilletGeometry.create({ minLineLength: MIN_LINE_LENGTH });
   const { filletGeometryBasis, filletGeometryFromPointer } = filletPlans;
   const { createFillet } = window.FilletConstruction.create({
@@ -4675,16 +4699,6 @@
     recordHistory("ブロック定義削除");
   }
 
-  function offsetDistanceFromPointer(source, pointer) {
-    if (source instanceof Line) {
-      const signed = signedPointDirectedLineDistance(pointer, source);
-      return { distance: Math.abs(signed), sign: signed < 0 ? -1 : 1 };
-    }
-    const radial = hypot2(pointer.x - source.center.x, pointer.y - source.center.y);
-    const signed = radial - source.radius();
-    return { distance: Math.abs(signed), sign: signed < 0 ? -1 : 1 };
-  }
-
   function syncOffsetChainSelection() {
     canvasSelection.set("points", []);
     canvasSelection.set("circles", offsetSelection.source instanceof Circle ? [offsetSelection.source] : []);
@@ -4700,35 +4714,6 @@
     canvasSelection.set("constraint", null);
   }
 
-  function offsetChainEntryDistanceFromPointer(entry, pointer) {
-    const geometry = entry.geometry;
-    if (geometry instanceof Line) return distancePointToSegment(pointer.x, pointer.y, geometry);
-    const radialDistance = Math.abs(hypot2(pointer.x - geometry.center.x, pointer.y - geometry.center.y) - geometry.radius());
-    const angle = Math.atan2(pointer.y - geometry.center.y, pointer.x - geometry.center.x);
-    if (angleOnSignedSweep(angle, geometry.startAngle, geometry.endAngle)) return radialDistance;
-    return Math.min(
-      hypot2(pointer.x - geometry.startPoint().x, pointer.y - geometry.startPoint().y),
-      hypot2(pointer.x - geometry.endPoint().x, pointer.y - geometry.endPoint().y),
-    );
-  }
-
-  function offsetChainDistanceFromPointer(entries, pointer) {
-    const indexed = entries.map((entry, index) => ({ entry, index, proximity: offsetChainEntryDistanceFromPointer(entry, pointer) }));
-    const nearest = indexed.reduce((best, item) => !best || item.proximity < best.proximity ? item : best, null);
-    if (!nearest) return { distance: 0, side: 1, index: 0 };
-    const geometry = nearest.entry.geometry;
-    if (geometry instanceof Line) {
-      const nativeSigned = signedPointDirectedLineDistance(pointer, geometry);
-      const signed = nearest.entry.reversed ? -nativeSigned : nativeSigned;
-      return { distance: Math.abs(signed), side: signed < 0 ? -1 : 1, index: nearest.index };
-    }
-    const radialDelta = hypot2(pointer.x - geometry.center.x, pointer.y - geometry.center.y) - geometry.radius();
-    const traversalSweep = (geometry.endAngle - geometry.startAngle) * (nearest.entry.reversed ? -1 : 1);
-    const sweepSign = traversalSweep < 0 ? -1 : 1;
-    const side = -radialDelta * sweepSign < 0 ? -1 : 1;
-    return { distance: Math.abs(radialDelta), side, index: nearest.index };
-  }
-
   function offsetChainErrorText(result) {
     const messages = {
       "empty-chain": ["オフセットするチェーンがありません", "There is no chain to offset"],
@@ -4741,257 +4726,6 @@
     };
     const pair = messages[result?.code];
     return pair ? applicationText(pair[0], pair[1]) : applicationText("チェーンをオフセットできません", "The chain cannot be offset");
-  }
-
-  function offsetChainDraft(entries, distance, side, closed = offsetChainIsClosed(entries)) {
-    const result = buildOffsetChainGeometry(entries, { distance, side, closed, epsilon: MIN_ORIENTATION_LENGTH });
-    if (!result.ok) return result;
-    const geometries = result.geometries.map((geometry, index) => {
-      const source = entries[index].geometry;
-      if (geometry.kind === "line") {
-        return new Line("OFFSET", new Point("OP1", geometry.p1.x, geometry.p1.y, false, "endpoint"), new Point("OP2", geometry.p2.x, geometry.p2.y, false, "endpoint"), source.construction);
-      }
-      return new Arc("OFFSET", new Point("OC", geometry.center.x, geometry.center.y, false, "center"), geometry.radius, geometry.startAngle, geometry.endAngle, source.construction);
-    });
-    return { ...result, geometries };
-  }
-
-  function offsetDraftGeometry(source, distance, sign) {
-    if (!source || !Number.isFinite(distance) || distance <= 0) return null;
-    if (source instanceof Line) {
-      const normal = lineNormal(source);
-      const dx = normal.x * sign * distance;
-      const dy = normal.y * sign * distance;
-      const p1 = new Point("OP1", source.p1.x + dx, source.p1.y + dy, false, "endpoint");
-      const p2 = new Point("OP2", source.p2.x + dx, source.p2.y + dy, false, "endpoint");
-      return new Line("OFFSET", p1, p2, source.construction);
-    }
-    const radius = source.radius() + sign * distance;
-    if (radius < MIN_ORIENTATION_LENGTH) return null;
-    const center = new Point("OC", source.center.x, source.center.y, false, "center");
-    if (source instanceof Circle) return new Circle("OFFSET", center, radius, source.construction);
-    if (source instanceof Arc) return new Arc("OFFSET", center, radius, source.startAngle, source.endAngle, source.construction);
-    return null;
-  }
-
-  function offsetDimensionTarget(source, offset, distance, sign) {
-    return { kind: "offset-distance", source, offset, value: distance, sign };
-  }
-
-  function startOffsetDistanceInput(source, pointer) {
-    if (!source || !pointer) return false;
-    let { distance, sign } = offsetDistanceFromPointer(source, pointer);
-    if (distance < MIN_ORIENTATION_LENGTH) distance = Math.max(20 / viewport.scale, MIN_ORIENTATION_LENGTH * 10);
-    const offset = offsetDraftGeometry(source, distance, sign);
-    if (!offset) {
-      setHint("指定した側にはオフセットを作成できません", "error");
-      return false;
-    }
-    const target = offsetDimensionTarget(source, offset, distance, sign);
-    pendingCommand = {
-      type: "offset-value",
-      source,
-      sign,
-      pointer: { ...pointer },
-      target,
-      dimension: dimensionWithLabelAt(target, dimensionFromAnchor(target, pointer, { allowPointAxis: false }), pointer),
-      buffer: formatDisplayNumber(distance),
-      editing: false,
-    };
-    setHint("オフセット距離を入力してください。Enterまたはダブルクリックで決定します");
-    updateToolbar();
-    syncDimensionValueInput();
-    draw();
-    focusDimensionValueInput();
-    return true;
-  }
-
-  function startOffsetChainDistanceInput(entries, pointer) {
-    if (!Array.isArray(entries) || entries.length < 2 || !pointer) return false;
-    let measured = offsetChainDistanceFromPointer(entries, pointer);
-    if (measured.distance < MIN_ORIENTATION_LENGTH) measured = { ...measured, distance: Math.max(20 / viewport.scale, MIN_ORIENTATION_LENGTH * 10) };
-    const closed = offsetChainIsClosed(entries);
-    const draft = offsetChainDraft(entries, measured.distance, measured.side, closed);
-    if (!draft.ok) {
-      setHint(offsetChainErrorText(draft), "error");
-      return false;
-    }
-    const source = entries[measured.index].geometry;
-    const offset = draft.geometries[measured.index];
-    const target = offsetDimensionTarget(source, offset, measured.distance, offsetPairSign(source, offset));
-    pendingCommand = {
-      type: "offset-value",
-      source,
-      sign: target.sign,
-      pointer: { ...pointer },
-      target,
-      dimension: dimensionWithLabelAt(target, dimensionFromAnchor(target, pointer, { allowPointAxis: false }), pointer),
-      buffer: formatDisplayNumber(measured.distance),
-      editing: false,
-      chainEntries: entries.map((entry) => ({ ...entry })),
-      chainClosed: closed,
-      chainSide: measured.side,
-      dimensionSegmentIndex: measured.index,
-    };
-    setHint("オフセット距離を入力してください。Enterまたはダブルクリックで決定します");
-    updateToolbar();
-    syncDimensionValueInput();
-    draw();
-    focusDimensionValueInput();
-    return true;
-  }
-
-  function createOffsetGeometry(source, distance, sign, pointer) {
-    const state = {
-      pointLength: model.points.length,
-      lineLength: model.lines.length,
-      circleLength: model.circles.length,
-      arcLength: model.arcs.length,
-      pointSeq: geometryIds.peek("point"),
-      lineSeq: geometryIds.peek("line"),
-      circleSeq: geometryIds.peek("circle"),
-      arcSeq: geometryIds.peek("arc"),
-    };
-    let offset = null;
-    if (source instanceof Line) {
-      const normal = lineNormal(source);
-      const dx = normal.x * sign * distance;
-      const dy = normal.y * sign * distance;
-      const p1 = addPoint(source.p1.x + dx, source.p1.y + dy, false, "endpoint");
-      const p2 = addPoint(source.p2.x + dx, source.p2.y + dy, false, "endpoint");
-      offset = addLine(p1, p2, source.construction);
-    } else {
-      const radius = source.radius() + sign * distance;
-      if (radius < MIN_ORIENTATION_LENGTH) return false;
-      const center = addPoint(source.center.x, source.center.y, false, "center");
-      offset = source instanceof Circle
-        ? addCircle(center, radius, source.construction)
-        : addArc(center, radius, source.startAngle, source.endAngle, source.construction);
-    }
-    if (!offset) return false;
-    const constraint = new OffsetConstraint(source, offset, distance, sign);
-    const target = offsetDimensionTarget(source, offset, distance, sign);
-    constraint.dimension = dimensionWithLabelAt(target, dimensionFromAnchor(target, pointer, { allowPointAxis: false }), pointer);
-    const ok = commitNewConstraint("offset", constraint);
-    if (ok) return true;
-
-    model.points.length = state.pointLength;
-    model.lines.length = state.lineLength;
-    model.circles.length = state.circleLength;
-    model.arcs.length = state.arcLength;
-    geometryIds.restore({ pointSeq: state.pointSeq });
-    geometryIds.restore({ lineSeq: state.lineSeq });
-    geometryIds.restore({ circleSeq: state.circleSeq });
-    geometryIds.restore({ arcSeq: state.arcSeq });
-    constraintAnalysisState = null;
-    updateUI();
-    draw();
-    return false;
-  }
-
-  function createOffsetChainGeometry(entries, distance, side, pointer, closed, dimensionSegmentIndex = 0) {
-    const plan = offsetChainDraft(entries, distance, side, closed);
-    if (!plan.ok) {
-      setHint(offsetChainErrorText(plan), "error");
-      return false;
-    }
-    if (plan.geometries.some((geometry) => geometry instanceof Line
-      ? geometry.length() < MIN_LINE_LENGTH
-      : Math.abs(geometry.endAngle - geometry.startAngle) * geometry.radius() < MIN_ARC_LENGTH)) {
-      setHint(applicationText("指定距離ではチェーンの一部が短すぎます", "Part of the chain is too short at this distance"), "error");
-      return false;
-    }
-    const state = {
-      pointLength: model.points.length,
-      lineLength: model.lines.length,
-      circleLength: model.circles.length,
-      arcLength: model.arcs.length,
-      constraintLength: model.constraints.length,
-      pointSeq: geometryIds.peek("point"),
-      lineSeq: geometryIds.peek("line"),
-      circleSeq: geometryIds.peek("circle"),
-      arcSeq: geometryIds.peek("arc"),
-      nextDimensionParameterIndex: model.nextDimensionParameterIndex,
-    };
-    const offsets = [];
-    for (let index = 0; index < plan.geometries.length; index++) {
-      const draft = plan.geometries[index];
-      const source = entries[index].geometry;
-      let offset;
-      if (draft instanceof Line) {
-        const p1 = addPoint(draft.p1.x, draft.p1.y, false, "endpoint");
-        const p2 = addPoint(draft.p2.x, draft.p2.y, false, "endpoint");
-        offset = addLine(p1, p2, source.construction);
-      } else {
-        const center = addPoint(draft.center.x, draft.center.y, false, "center");
-        offset = addArc(center, draft.radius(), draft.startAngle, draft.endAngle, source.construction);
-      }
-      if (!offset) break;
-      offset.appearance = normalizeAppearance(source.appearance);
-      offsets.push(offset);
-    }
-    if (offsets.length !== entries.length) {
-      model.points.length = state.pointLength;
-      model.lines.length = state.lineLength;
-      model.arcs.length = state.arcLength;
-      geometryIds.restore({ pointSeq: state.pointSeq });
-      geometryIds.restore({ lineSeq: state.lineSeq });
-      geometryIds.restore({ arcSeq: state.arcSeq });
-      return false;
-    }
-    const index = Math.max(0, Math.min(entries.length - 1, Number(dimensionSegmentIndex) || 0));
-    const constraint = new OffsetChainConstraint(
-      entries.map((entry) => entry.geometry),
-      offsets,
-      distance,
-      side,
-      entries.map((entry) => entry.reversed),
-      closed,
-      index,
-    );
-    const target = offsetDimensionTarget(entries[index].geometry, offsets[index], distance, offsetPairSign(entries[index].geometry, offsets[index]));
-    constraint.dimension = dimensionWithLabelAt(target, dimensionFromAnchor(target, pointer, { allowPointAxis: false }), pointer);
-    const ok = commitNewConstraint("offset-chain", constraint);
-    if (ok) return true;
-
-    model.points.length = state.pointLength;
-    model.lines.length = state.lineLength;
-    model.circles.length = state.circleLength;
-    model.arcs.length = state.arcLength;
-    model.constraints.length = state.constraintLength;
-    geometryIds.restore({ pointSeq: state.pointSeq });
-    geometryIds.restore({ lineSeq: state.lineSeq });
-    geometryIds.restore({ circleSeq: state.circleSeq });
-    geometryIds.restore({ arcSeq: state.arcSeq });
-    model.nextDimensionParameterIndex = state.nextDimensionParameterIndex;
-    constraintAnalysisState = null;
-    updateUI();
-    draw();
-    return false;
-  }
-
-  function submitOffsetValue() {
-    if (pendingCommand?.type !== "offset-value") return false;
-    const value = Number(pendingCommand.buffer);
-    const { source, sign, pointer, chainEntries, chainClosed, chainSide, dimensionSegmentIndex } = pendingCommand;
-    const chainPlan = chainEntries?.length > 1 ? offsetChainDraft(chainEntries, value, chainSide, chainClosed) : null;
-    if (!Number.isFinite(value) || value <= 0 || chainPlan && !chainPlan.ok || (!chainPlan && !(source instanceof Line) && source.radius() + sign * value < MIN_ORIENTATION_LENGTH)) {
-      setHint(chainPlan && !chainPlan.ok ? offsetChainErrorText(chainPlan) : "作成可能な0より大きいオフセット距離を入力してください", "error");
-      draw();
-      return false;
-    }
-    pendingCommand = null;
-    hideDimensionValueInput();
-    const ok = chainEntries?.length > 1
-      ? createOffsetChainGeometry(chainEntries, value, chainSide, pointer, chainClosed, dimensionSegmentIndex)
-      : createOffsetGeometry(source, value, sign, pointer);
-    offsetSelection.reset();
-    pointerPreview = null;
-    clearSelection();
-    updateToolbar();
-    if (ok) setHint(`オフセット ${formatDimensionLabel(value)} を作成しました。次の図形を選択してください`);
-    draw();
-    return ok;
   }
 
   function resetModelState() {

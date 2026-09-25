@@ -265,3 +265,7 @@ index.htmlは既存の通常script読込列で両moduleをapp.jsより先に読�
 - `DimensionValueCommand`（`src/commands/dimension_value_command.js`）: 寸法値・式の確定、既存寸法の更新と失敗時復元、初回寸法追加後の表示範囲復元。入力イベントとDOMを所有しない。
 
 - `OffsetSelection`（`src/editing/offset_selection.js`）: Offset対象・向き付きチェーン・選択確定を所有。現在のSketchと拘束を読んで接続判定し、成功した追加だけ表示同期を通知する。クリック／Enter／取消／モード切替はこのAPIへ接続する。
+
+- `OffsetGeometry`（`src/geometry/offset_geometry.js`）: 距離・側・draftの計算。Geometry型とkernel／チェーン計算に依存し、Documentを変更しない。
+- `OffsetConstruction`（`src/editing/offset_construction.js`）: Geometry追加と拘束commit、失敗時の追加分と採番復元。現在の編集対象・生成API・計算・拘束commitへ接続する。
+- `OffsetCommand`（`src/commands/offset_command.js`）: 距離入力の開始・検証・生成要求・選択解除を調整する。イベント登録とプレビュー描画はappに残る。
