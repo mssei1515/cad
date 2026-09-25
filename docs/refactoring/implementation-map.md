@@ -287,3 +287,6 @@ index.htmlは既存の通常script読込列で両moduleをapp.jsより先に読�
 - `PropertySelection`（`src/editing/property_selection.js`）: Properties対象と共通値・対応項目の解決。操作状態とCanvas選択を読み、表示と編集の判断を共通化する。
 - `AppearanceEditing`（`src/editing/appearance_editing.js`）: 外観入力の正規化と指定対象への反映。DOM・Selection・履歴非依存。
 - `BulkPropertyCommand`（`src/commands/bulk_property_command.js`）: 一括適用の事前確認・同期・履歴・更新。入力プレビューと確定を区別する。
+
+- `PropertyRows`（`src/ui/property_rows.js`）: 図形・寸法・拘束・Block・注記・複数選択の表示行。照会と書式を受け取り、モデルを変更しない。
+- `PropertiesView`（`src/ui/properties_view.js`）: DOM更新・装飾・開閉状態・イベント接続。内容生成と編集処理は明示したコールバックへ委譲する。appの対象別内容構成と編集transactionは次の分離対象。

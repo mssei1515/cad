@@ -7,7 +7,7 @@ const files = [
   "src/editing/appearance_editing.js",
   "src/commands/bulk_property_command.js",
   "tests/unit/appearance-controls.test.js",
-  "src/ui/appearance_controls.js",
+  "src/ui/appearance_controls.js", "src/ui/property_rows.js", "src/ui/properties_view.js", "tests/unit/properties-view.test.js",
   "src/ui/appearance_palette.js",
   "tests/unit/selection-highlight.test.js",
   "src/editing/selection_highlight.js",
