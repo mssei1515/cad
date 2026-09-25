@@ -426,6 +426,12 @@
   const { dimensionFromAnchor, angleDimensionLabelBasis, angleDimensionLabelOffsets, setAngleDimensionLabelOffsets, migrateAngleDimensionLabelPlacement, dimensionWithLabelAt, angleDimensionFromLabelPoint, applyDefaultCircleDimensionLabelOffset, storedDimensionAxis, dimensionAnchor, defaultDimensionForTarget } = dimensionPlacement;
   const dimensionLayouts = window.DimensionLayout.create({ viewport, placement: dimensionPlacement, metrics: dimensionMetrics, currentLines: () => workspace.current().lines, minLineLength: MIN_LINE_LENGTH });
   const { linearDimensionRenderPlan, jisDimensionTextAngle, dimensionTextOffset, arcRadiusDimensionExtensionSegment, angleDimensionLayout, angleDimensionExtensionSegments } = dimensionLayouts;
+  const dimensionInputController = window.DimensionInputController.create({
+    view: dimensionInputView, enabled: Boolean(dimensionValueInput), getPending: () => pendingCommand,
+    dimensionLayout, worldToCanvasScreen, effectiveDimensionAppearance, constraintSketchId, activeSketchId,
+    dimensionTextOffset, evaluateDimensionExpressionDraft, expressionFromUserInput,
+  });
+  const { hide: hideDimensionValueInput, sync: syncDimensionValueInput, focus: focusDimensionValueInput } = dimensionInputController;
   function dimensionLayout(target, dimension, appearance = effectiveDimensionAppearance(dimension)) {
     return dimensionLayouts.dimensionLayout(target, dimension, appearance);
   }
@@ -8037,48 +8043,6 @@
     resetCanvasStrokeState();
     ctx.restore();
     resetCanvasStrokeState();
-  }
-
-  function hideDimensionValueInput() { dimensionInputView.hide(); }
-
-  function dimensionInputLayoutForPendingCommand() {
-    if (!pendingCommand || !["distance-value", "offset-value"].includes(pendingCommand.type)) return null;
-    return dimensionLayout(pendingCommand.target, pendingCommand.dimension);
-  }
-
-  function syncDimensionValueInput() {
-    if (!dimensionValueInput) return;
-    if (!pendingCommand || !["distance-value", "offset-value"].includes(pendingCommand.type)) {
-      hideDimensionValueInput();
-      return;
-    }
-    const layout = dimensionInputLayoutForPendingCommand();
-    if (!layout?.text) {
-      hideDimensionValueInput();
-      return;
-    }
-    const screen = worldToCanvasScreen(layout.text);
-    const angle = Number.isFinite(layout.textAngle) ? layout.textAngle : 0;
-    const appearance = effectiveDimensionAppearance(pendingCommand.dimension, pendingCommand.constraint ? constraintSketchId(pendingCommand.constraint) : activeSketchId());
-    const labelGap = appearance.dimensionTextGap;
-    const labelOffset = dimensionTextOffset(angle, labelGap);
-    dimensionInputView.render({ screen, angle, labelOffset, textHeight: appearance.dimensionTextHeight, buffer: pendingCommand.buffer });
-    let invalid = pendingCommand.buffer === "";
-    if (!invalid) {
-      try {
-        const value = pendingCommand.type === "distance-value"
-          ? evaluateDimensionExpressionDraft(pendingCommand.constraint || null, expressionFromUserInput(pendingCommand.buffer))
-          : Number(pendingCommand.buffer);
-        invalid = !Number.isFinite(value) || value <= 0 || (pendingCommand.target?.kind === "angle" && value >= 180);
-      } catch (_error) {
-        invalid = true;
-      }
-    }
-    dimensionInputView.setInvalid(invalid);
-  }
-
-  function focusDimensionValueInput() {
-    dimensionInputView.focus(syncDimensionValueInput);
   }
 
   function drawSelectionRect() {
