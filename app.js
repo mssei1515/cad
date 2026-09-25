@@ -417,6 +417,10 @@
   const { syncCanvasBitmapSize, resetCanvasStrokeState, withCanvasState, appearanceLineDash } = canvasSurface;
   const { DIMENSION_SCREEN_PX_PER_MM, DIMENSION_TERMINATOR_FIT_MARGIN_FACTOR, DIMENSION_ARROW_MITER_LIMIT } = window.DimensionMetrics;
   const dimensionMetrics = window.DimensionMetrics.create({ ctx, viewport });
+  const dimensionInputView = window.DimensionInputView.create({
+    input: dimensionValueInput, shell: dimensionValueInputShell, screenPxPerMm: DIMENSION_SCREEN_PX_PER_MM,
+    syncHighlight: syncExpressionInputHighlight, scheduleFrame: callback => requestAnimationFrame(callback),
+  });
   const { dimensionMillimetersToWorld, dimensionTextDrawingMetrics, dimensionTextWidth, shouldPlaceDimensionTerminatorsOutside, linearDimensionTerminatorDirections, dimensionStrokeWidth, dimensionArrowheadPoints, dimensionOpenArrowJoinProjection, dimensionOpenArrowheadRenderPoints } = dimensionMetrics;
   const dimensionPlacement = window.DimensionPlacement.create({ viewport });
   const { dimensionFromAnchor, angleDimensionLabelBasis, angleDimensionLabelOffsets, setAngleDimensionLabelOffsets, migrateAngleDimensionLabelPlacement, dimensionWithLabelAt, angleDimensionFromLabelPoint, applyDefaultCircleDimensionLabelOffset, storedDimensionAxis, dimensionAnchor, defaultDimensionForTarget } = dimensionPlacement;
@@ -8035,12 +8039,7 @@
     resetCanvasStrokeState();
   }
 
-  function hideDimensionValueInput() {
-    if (!dimensionValueInput) return;
-    if (dimensionValueInputShell?.hidden === false) dimensionValueInputShell.hidden = true;
-    if (dimensionValueInput.hidden === false) dimensionValueInput.hidden = true;
-    if (dimensionValueInput.classList.contains("is-invalid")) dimensionValueInput.classList.remove("is-invalid");
-  }
+  function hideDimensionValueInput() { dimensionInputView.hide(); }
 
   function dimensionInputLayoutForPendingCommand() {
     if (!pendingCommand || !["distance-value", "offset-value"].includes(pendingCommand.type)) return null;
@@ -8063,15 +8062,7 @@
     const appearance = effectiveDimensionAppearance(pendingCommand.dimension, pendingCommand.constraint ? constraintSketchId(pendingCommand.constraint) : activeSketchId());
     const labelGap = appearance.dimensionTextGap;
     const labelOffset = dimensionTextOffset(angle, labelGap);
-    const inputHost = dimensionValueInputShell || dimensionValueInput;
-    inputHost.hidden = false;
-    dimensionValueInput.hidden = false;
-    inputHost.style.left = `${screen.x + labelOffset.x}px`;
-    inputHost.style.top = `${screen.y + labelOffset.y}px`;
-    inputHost.style.setProperty("--dimension-text-angle", `${angle}rad`);
-    inputHost.style.fontSize = `${Math.max(8, appearance.dimensionTextHeight * DIMENSION_SCREEN_PX_PER_MM)}px`;
-    inputHost.style.width = `${Math.max(132, Math.min(280, pendingCommand.buffer.length * 9 + 34))}px`;
-    if (dimensionValueInput.value !== pendingCommand.buffer) dimensionValueInput.value = pendingCommand.buffer;
+    dimensionInputView.render({ screen, angle, labelOffset, textHeight: appearance.dimensionTextHeight, buffer: pendingCommand.buffer });
     let invalid = pendingCommand.buffer === "";
     if (!invalid) {
       try {
@@ -8083,18 +8074,11 @@
         invalid = true;
       }
     }
-    dimensionValueInput.classList.toggle("is-invalid", invalid);
-    syncExpressionInputHighlight(dimensionValueInput);
+    dimensionInputView.setInvalid(invalid);
   }
 
   function focusDimensionValueInput() {
-    requestAnimationFrame(() => {
-      syncDimensionValueInput();
-      if (dimensionValueInput?.hidden === false) {
-        dimensionValueInput.focus();
-        dimensionValueInput.select();
-      }
-    });
+    dimensionInputView.focus(syncDimensionValueInput);
   }
 
   function drawSelectionRect() {
