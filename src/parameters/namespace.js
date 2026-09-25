@@ -224,8 +224,28 @@
       return [...new Set(dependents)];
     }
 
+    function renameDimension(constraint, requestedName) {
+      const namespace = currentParameterNamespace();
+      ensureParameterNamespace(namespace);
+      const oldName = constraint.parameterName;
+      const nextName = validateParameterIdentifier(String(requestedName || "").trim(), { dimension: true });
+      if (nextName === oldName) return true;
+      const conflict = namespace.parameters.some((parameter) => parameter.name === nextName)
+        || dimensionConstraintsInNamespace(namespace).some((item) => item !== constraint && item.parameterName === nextName);
+      if (conflict) throw Object.assign(new Error(`Duplicate identifier '${nextName}'`), { code: "DUPLICATE_IDENTIFIER", identifier: nextName });
+      const replacements = new Map([[oldName, nextName]]);
+      for (const parameter of namespace.parameters) parameter.expression = rewriteParameterIdentifiers(parameter.expression, replacements);
+      for (const item of dimensionConstraintsInNamespace(namespace)) {
+        if (!isReadOnlyDimension(item)) item.expression = rewriteParameterIdentifiers(item.expression, replacements);
+      }
+      constraint.parameterName = nextName;
+      const autoMatch = /^d(\d+)$/.exec(nextName);
+      if (autoMatch) namespace.nextDimensionParameterIndex = Math.max(namespace.nextDimensionParameterIndex, Number(autoMatch[1]) + 1);
+      return true;
+    }
+
     return Object.freeze({
-      dimensionExpressionValue, numericDimensionExpression, isDirectNumericExpressionInput,
+      renameDimension, dimensionExpressionValue, numericDimensionExpression, isDirectNumericExpressionInput,
       dimensionUsesExpression, expressionInputValue, expressionFromUserInput,
       rewriteExpressionInputIdentifiers, dimensionConstraintsInNamespace, allocateDimensionParameterName,
       ensureDimensionParameter, ensureParameterNamespace, parameterErrorText,

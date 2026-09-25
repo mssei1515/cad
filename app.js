@@ -554,6 +554,7 @@
     applicationText, invalidateProjection: invalidateBlockProjectionCache, normalizeArcSweeps,
   });
   const dimensionValueCommand = window.DimensionValueCommand.create({
+    renameDimension: parameterNamespace.renameDimension,
     getPending: () => pendingCommand, setPending: value => { pendingCommand = value; },
     expressionFromUserInput, evaluateDimensionExpressionDraft, applicationText, parameterErrorText,
     setHint, syncDimensionValueInput, draw, activeSketchId, sketchHasDimensionConstraint, captureSketchScreenFootprint,
@@ -562,7 +563,7 @@
     hideDimensionValueInput, recordHistory, updateUI, scaleSketchForFirstDimension,
     addDistanceConstraintFromTarget, restoreSketchScreenFootprint,
   });
-  const { submit: submitDistanceValue } = dimensionValueCommand;
+  const { submit: submitDistanceValue, commitProperty: commitDimensionPropertyEdit } = dimensionValueCommand;
   const constraintRebinding = window.ConstraintRebinding.create({
     catalog: blockCatalog, projections: blockProjections, geometryInstanceBundlesForScope,
     serializeConstraint, decorateSerializedConstraint, deserializeConstraint, applicationText,
@@ -10294,44 +10295,7 @@
     hoveredReferenceImage = null;
   }
 
-  function commitDimensionParameterName(constraint, requestedName) {
-    const namespace = currentParameterNamespace();
-    ensureParameterNamespace(namespace);
-    const oldName = constraint.parameterName;
-    const nextName = validateParameterIdentifier(String(requestedName || "").trim(), { dimension: true });
-    if (nextName === oldName) return true;
-    const conflict = namespace.parameters.some((parameter) => parameter.name === nextName)
-      || dimensionConstraintsInNamespace(namespace).some((item) => item !== constraint && item.parameterName === nextName);
-    if (conflict) throw Object.assign(new Error(`Duplicate identifier '${nextName}'`), { code: "DUPLICATE_IDENTIFIER", identifier: nextName });
-    const replacements = new Map([[oldName, nextName]]);
-    for (const parameter of namespace.parameters) parameter.expression = rewriteParameterIdentifiers(parameter.expression, replacements);
-    for (const item of dimensionConstraintsInNamespace(namespace)) {
-      if (!isReadOnlyDimension(item)) item.expression = rewriteParameterIdentifiers(item.expression, replacements);
-    }
-    constraint.parameterName = nextName;
-    const autoMatch = /^d(\d+)$/.exec(nextName);
-    if (autoMatch) namespace.nextDimensionParameterIndex = Math.max(namespace.nextDimensionParameterIndex, Number(autoMatch[1]) + 1);
-    return true;
-  }
 
-  function commitDimensionPropertyEdit(constraint, property, value) {
-    const snapshot = snapshotModelState();
-    try {
-      if (property === "constraint-parameter-name") commitDimensionParameterName(constraint, value);
-      else if (property === "constraint-expression") constraint.expression = expressionFromUserInput(value);
-      const solved = stabilizeActiveParameterNamespace(constraintSketchId(constraint));
-      if (!solved.success || solved.dependent?.success === false || solved.result.errorNorm > CONSTRAINT_ACCEPT_ERROR) {
-        throw new Error(solved.result.reason || applicationText("拘束が成立しません", "Constraints could not be satisfied"));
-      }
-      recordHistory(property === "constraint-parameter-name" ? "寸法Parameter名変更" : "寸法式変更");
-      setHint(property === "constraint-parameter-name" ? applicationText("寸法Parameter名を変更しました", "Dimension parameter name changed") : applicationText("寸法の値 / 数式を変更しました", "Dimension Value / Expression changed"));
-      return true;
-    } catch (error) {
-      restoreModelState(snapshot);
-      setHint(parameterErrorText(error), "error");
-      return false;
-    }
-  }
 
   function handlePropertiesChange(event) {
     const target = selectedPropertiesTarget();

@@ -120,3 +120,22 @@ test("input expression prefixes, identifier rewrites and localized errors keep t
   english = false;
   assert.equal(api.parameterErrorText({ code: "EMPTY_EXPRESSION" }), "値 / 数式が空です");
 });
+
+test("renaming dimension symbols rewrites dependent expressions only in the active namespace", () => {
+  const first = dimension(), second = dimension();
+  first.parameterName = 'd1'; first.expression = '12';
+  second.parameterName = 'd2'; second.expression = '"d1" * 2';
+  const current = namespace([first, second]);
+  current.parameters = [{ name: 'width', expression: '"d1" + "d2"' }];
+  const other = namespace([dimension()]);
+  const api = create(() => current);
+  assert.equal(api.renameDimension(first, 'd20'), true);
+  assert.equal(first.parameterName, 'd20');
+  assert.equal(second.expression, '"d20" * 2');
+  assert.equal(current.parameters[0].expression, '"d20" + "d2"');
+  assert.equal(current.nextDimensionParameterIndex, 21);
+  assert.equal(other.constraints[0].parameterName, undefined);
+  assert.throws(() => api.renameDimension(first, 'width'), error => error.code === 'DUPLICATE_IDENTIFIER');
+  assert.equal(first.parameterName, 'd20');
+  assert.equal(second.expression, '"d20" * 2');
+});

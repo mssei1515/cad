@@ -49,3 +49,27 @@ test('evaluation errors and out-of-range values keep input and skip model operat
   const angle = fixture({ value: 180 }); angle.pending().target.kind = 'angle'; angle.command.submit();
   assert.deepEqual(angle.calls, ['hint', 'draw']);
 });
+
+test('property expression commits once and restores failed solver changes without controlling canvas input', () => {
+  for (const success of [true, false]) {
+    const f = fixture({ existing: true, success });
+    assert.equal(f.command.commitProperty(f.constraint, 'constraint-expression', '30'), success);
+    assert.equal(f.constraint.expression, success ? '30' : '10');
+    assert.ok(f.pending());
+    assert.deepEqual(f.calls, success ? ['history', 'hint'] : ['restore', 'hint']);
+  }
+});
+
+test('property rename restores the entire checkpoint when dependent solving fails', () => {
+  const state = { name: 'd1', expression: 'd1 * 2' }, calls = [];
+  const command = sandbox.window.DimensionValueCommand.create({
+    snapshotModelState: () => ({ ...state }), restoreModelState: snapshot => { Object.assign(state, snapshot); calls.push('restore'); },
+    renameDimension: (_constraint, value) => { state.name = value; state.expression = `${value} * 2`; },
+    constraintSketchId: () => 'S1', stabilizeActiveParameterNamespace: () => ({ success: true, dependent: { success: false }, result: { errorNorm: 0 } }),
+    applicationText: (_ja, en) => en, parameterErrorText: error => error.message,
+    acceptError: 1e-4, recordHistory: () => calls.push('history'), setHint: () => calls.push('hint'),
+  });
+  assert.equal(command.commitProperty({}, 'constraint-parameter-name', 'd3'), false);
+  assert.deepEqual(state, { name: 'd1', expression: 'd1 * 2' });
+  assert.deepEqual(calls, ['restore', 'hint']);
+});

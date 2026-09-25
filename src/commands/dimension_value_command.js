@@ -1,7 +1,7 @@
 /* Apply a dimension value while preserving rollback and first-dimension framing. */
 (() => {
   "use strict";
-  function create({ getPending, setPending, expressionFromUserInput, evaluateDimensionExpressionDraft,
+  function create({ renameDimension, getPending, setPending, expressionFromUserInput, evaluateDimensionExpressionDraft,
     applicationText, parameterErrorText, setHint, syncDimensionValueInput, draw, activeSketchId,
     sketchHasDimensionConstraint, captureSketchScreenFootprint, snapshotModelState, restoreModelState,
     withTemporarySolveStepNorm, solveStepNormForConstraint, stabilizeActiveParameterNamespace,
@@ -61,7 +61,26 @@
         draw();
       }
     }
-    return Object.freeze({ submit });
+    function commitProperty(constraint, property, value) {
+      const snapshot = snapshotModelState();
+      try {
+        if (property === "constraint-parameter-name") renameDimension(constraint, value);
+        else if (property === "constraint-expression") constraint.expression = expressionFromUserInput(value);
+        const solved = stabilizeActiveParameterNamespace(constraintSketchId(constraint));
+        if (!solved.success || solved.dependent?.success === false || solved.result.errorNorm > acceptError) {
+          throw new Error(solved.result.reason || applicationText("拘束が成立しません", "Constraints could not be satisfied"));
+        }
+        recordHistory(property === "constraint-parameter-name" ? "寸法Parameter名変更" : "寸法式変更");
+        setHint(property === "constraint-parameter-name" ? applicationText("寸法Parameter名を変更しました", "Dimension parameter name changed") : applicationText("寸法の値 / 数式を変更しました", "Dimension Value / Expression changed"));
+        return true;
+      } catch (error) {
+        restoreModelState(snapshot);
+        setHint(parameterErrorText(error), "error");
+        return false;
+      }
+    }
+
+    return Object.freeze({ submit, commitProperty });
   }
   window.DimensionValueCommand = Object.freeze({ create });
 })();
