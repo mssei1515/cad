@@ -272,7 +272,6 @@
   let hoveredAnnotation = null;
   let hoveredHatch = null;
   let hoveredReferenceImage = null;
-  let hoveredSidebarItem = null;
   let constraintAnalysisState = null;
   let constraintRedundancyState = { constraints: new Map(), sketches: new Map(), count: 0 };
   let lastAuthoringPerformance = null;
@@ -308,6 +307,13 @@
   let hoveredSketchIdentity = null;
   let hoveredSketchTreeId = null;
   let constructionLineMode = false;
+  const selectionHighlight = window.SelectionHighlight.create({
+    canvasSelection, blockProjectionBundle, geometryRefsEqual, geometryRefForItem,
+    constraintGraphNodes, constraintHighlightNodes, effectiveSelectedConstraint, targetFromConstraint,
+    getHoveredDimension: () => hoveredDimensionConstraint,
+    setHoveredDimension: value => { hoveredDimensionConstraint = value; }, draw,
+  });
+  const { sameConstraintDisplayElement, isSidebarHoveredElement, isSelectedConstraintRelatedElement, selectedConstraintReferenceElements, constraintDirectlyReferencesCanvasSelection, sidebarHoverElementsForItem, sidebarHoverElementsForConstraint, setSidebarHover, clearSidebarHover } = selectionHighlight;
   const offsetSelection = window.OffsetSelection.create({
     getModel: () => model, activeSketchId, elementSketchId, constraintSketchId,
     Line, Arc, CoincidentConstraint, ArcEndpointCoincidentConstraint,
@@ -2745,22 +2751,8 @@
     return hoveredSketchTreeId === ROOT_SKETCH_ID ? itemSketchId !== ROOT_SKETCH_ID : itemSketchId === hoveredSketchTreeId;
   }
 
-  function sameConstraintDisplayElement(a, b) {
-    if (a === b) return true;
-    if (!a?.blockProjection || !b?.blockProjection) return false;
-    return geometryRefsEqual(geometryRefForItem(a), geometryRefForItem(b));
-  }
 
-  function isSidebarHoveredElement(item) {
-    if (!item || !hoveredSidebarItem?.elements) return false;
-    if (hoveredSidebarItem.elements.has(item)) return true;
-    return [...hoveredSidebarItem.elements].some((element) => sameConstraintDisplayElement(element, item));
-  }
 
-  function isSelectedConstraintRelatedElement(item) {
-    const constraint = effectiveSelectedConstraint();
-    return Boolean(constraint && constraintHighlightNodes(constraint).some((element) => sameConstraintDisplayElement(element, item)));
-  }
 
   function isReferenceHoverElement(item) {
     return Boolean(pendingConstraintCommand && item && !isActiveSketchElement(item) && isReferenceSourceSketchId(elementSketchId(item)));
@@ -4772,7 +4764,7 @@
     hoveredSpline = null;
     hoveredArcEndpoint = null;
     hoveredDimensionConstraint = null;
-    hoveredSidebarItem = null;
+    selectionHighlight.reset();
     hoveredSketchIdentity = null;
     lastPointerWorld = null;
     clearSnap();
@@ -5409,7 +5401,7 @@
     hoveredSketchIdentity = null;
     hoveredBlockInstance = null;
     hoveredGeometryInstance = null;
-    hoveredSidebarItem = null;
+    selectionHighlight.reset();
     hoveredAnnotation = null;
     hoveredHatch = null;
     hoveredReferenceImage = null;
@@ -8316,7 +8308,7 @@
   function shouldShowPrimitiveCenter(point) {
     if (canvasSelection.circles.some((circle) => circle.center === point) || canvasSelection.arcs.some((arc) => arc.center === point)) return true;
     if (hoveredCircle?.center === point || hoveredArc?.center === point || hoveredArcEndpoint?.arc?.center === point) return true;
-    if (hoveredSidebarItem?.item?.center === point) return true;
+    if (selectionHighlight.current?.item?.center === point) return true;
     if ((dragSession?.kind === "circle" || dragSession?.kind === "arc" || dragSession?.kind === "arc-endpoint") && dragSession.item?.center === point) return true;
     return false;
   }
@@ -9498,10 +9490,11 @@
     if (category === "instance") return hoveredGeometryInstance === entry;
     if (category === "annotation") return hoveredAnnotation === entry;
     const item = category === "constraint" ? (entry.kind === "fixed-point" ? entry.point : entry.constraint) : entry;
-    return hoveredSidebarItem?.item === item;
+    return selectionHighlight.current?.item === item;
   }
 
   const sketchTreeObjects = window.SketchTreeObjects.create({
+    sidebarGeometryItem,
     currentScope: () => model, getLanguage: () => applicationSettings.language,
     ensureAnalysis: () => { if (!constraintAnalysisState) refreshConstraintAnalysis(); }, types: window.GeometrySolver,
     isExplicitPoint, isPointUsedByLine, elementSketchId, constraintSketchId,
@@ -9537,7 +9530,7 @@
     sketchTreeView, updateSketchUI, toggleSketchVisibility, renameSketch, deleteSketch, deleteElements,
     unfixPoint: point => { point.fixed = false; solveAndRefresh(`固定解除 ${point.id}`); },
   });
-  const { render: updateSketchUIUnprofiled, applyWidth: applySketchTreeWidth } = sketchTreeView;
+  const { refreshSelection: updateSketchTreeSelectionState, render: updateSketchUIUnprofiled, applyWidth: applySketchTreeWidth } = sketchTreeView;
 
   function updateSketchUI() {
     if (!interactionProfiler.active) return updateSketchUIUnprofiled();
@@ -9591,131 +9584,10 @@
     }
   }
 
-  function selectedConstraintReferenceElements() {
-    const elements = new Set(canvasSelection.points);
-    for (const line of canvasSelection.lines) {
-      elements.add(line);
-      elements.add(line.p1);
-      elements.add(line.p2);
-    }
-    for (const circle of canvasSelection.circles) {
-      elements.add(circle);
-      elements.add(circle.center);
-    }
-    for (const arc of canvasSelection.arcs) {
-      elements.add(arc);
-      elements.add(arc.center);
-    }
-    for (const spline of canvasSelection.splines) {
-      elements.add(spline);
-      for (const point of spline.fitPoints) elements.add(point);
-    }
-    if (canvasSelection.arcEndpoint) {
-      elements.add(canvasSelection.arcEndpoint.arc);
-      elements.add(canvasSelection.arcEndpoint.arc.center);
-    }
-    for (const endpoint of canvasSelection.arcEndpointPair || []) {
-      elements.add(endpoint.arc);
-      elements.add(endpoint.arc.center);
-    }
-    for (const instance of canvasSelection.blockInstances) {
-      elements.add(instance);
-      const bundle = blockProjectionBundle(instance);
-      for (const item of [...bundle.points, ...bundle.lines, ...bundle.circles, ...bundle.arcs, ...(bundle.splines || [])]) elements.add(item);
-    }
-    return [...elements];
-  }
 
-  function constraintDirectlyReferencesCanvasSelection(constraint, selectedElements = selectedConstraintReferenceElements()) {
-    if (!constraint || selectedElements.length === 0) return false;
-    return constraintGraphNodes(constraint).some((node) => selectedElements.some((selected) => sameConstraintDisplayElement(node, selected)));
-  }
 
-  function fixedPointSelectedInCanvas(point) {
-    return Boolean(point && canvasSelection.points.includes(point));
-  }
 
-  function sidebarHoverElementsForItem(item) {
-    const elements = new Set();
-    if (!item) return elements;
-    elements.add(item);
-    return elements;
-  }
 
-  function sidebarHoverElementsForConstraint(constraint) {
-    if (constraint && targetFromConstraint(constraint)) return new Set();
-    return new Set(constraint ? constraintHighlightNodes(constraint).filter(Boolean) : []);
-  }
-
-  function setSidebarHover(type, item, elements) {
-    hoveredSidebarItem = { type, item, elements };
-    if (type === "constraint" && targetFromConstraint(item)) hoveredDimensionConstraint = item;
-    draw();
-  }
-
-  function clearSidebarHover(type = null, item = null) {
-    if (!hoveredSidebarItem) return;
-    if (type && hoveredSidebarItem.type !== type) return;
-    if (item && hoveredSidebarItem.item !== item) return;
-    if (hoveredDimensionConstraint === hoveredSidebarItem.item) hoveredDimensionConstraint = null;
-    hoveredSidebarItem = null;
-    draw();
-  }
-
-  function updateSidebarSelectionRowClasses() {
-    const selectedConstraintElements = selectedConstraintReferenceElements();
-    for (const row of document.querySelectorAll(".geometry-list-row")) {
-      const item = sidebarGeometryItem(row.dataset.kind, row.dataset.id);
-      row.classList.toggle("sidebar-selected", geometryItemSelectedInCanvas(item));
-    }
-    for (const row of document.querySelectorAll(".constraint-list-row[data-idx]")) {
-      const constraint = model.constraints[Number(row.dataset.idx)];
-      row.classList.toggle("sidebar-selected", constraintSelectedInCanvas(constraint));
-      row.classList.toggle("sidebar-related", constraintDirectlyReferencesCanvasSelection(constraint, selectedConstraintElements));
-    }
-    for (const row of document.querySelectorAll(".fixed-point-list-row")) {
-      const point = model.points.find((item) => item.id === row.dataset.pointId);
-      row.classList.toggle("sidebar-selected", fixedPointSelectedInCanvas(point));
-    }
-  }
-
-  function updateSketchTreeSelectionState() {
-    const selectedConstraintElements = selectedConstraintReferenceElements();
-    for (const row of document.querySelectorAll("#sketchList .sketch-object-row")) {
-      const category = row.dataset.objectKind;
-      let entry = null;
-      if (["point", "line", "circle", "arc"].includes(category)) {
-        entry = sidebarGeometryItem(category, row.dataset.id);
-      } else if (category === "block") {
-        entry = model.blockInstances.find((item) => item.id === row.dataset.id) || null;
-      } else if (category === "hatch") {
-        entry = model.hatches.find((item) => item.id === row.dataset.id) || null;
-      } else if (category === "annotation") {
-        entry = model.annotations.find((item) => item.id === row.dataset.id) || null;
-      } else if (row.dataset.fixedPointId) {
-        const point = model.points.find((item) => item.id === row.dataset.fixedPointId) || null;
-        if (point) entry = { kind: "fixed-point", point };
-      } else if (category === "constraint") {
-        const modelIndex = Number(row.dataset.constraintIndex);
-        const constraint = model.constraints[modelIndex] || null;
-        if (constraint) entry = { kind: "constraint", constraint, modelIndex };
-      }
-      const selected = Boolean(entry && sketchTreeObjectSelected(category, entry));
-      const hovered = Boolean(entry && sketchTreeObjectHovered(category, entry));
-      const related = Boolean(entry && category === "constraint" && entry.kind !== "fixed-point"
-        && constraintDirectlyReferencesCanvasSelection(entry.constraint, selectedConstraintElements));
-      row.classList.toggle("selected", selected);
-      row.classList.toggle("sidebar-selected", selected);
-      row.classList.toggle("sidebar-related", hovered || related);
-    }
-    const objectIndex = sketchTreeObjects.index();
-    for (const groupRow of document.querySelectorAll("#sketchList .sketch-group-row")) {
-      const items = objectIndex.get(groupRow.dataset.sketchId)?.[groupRow.dataset.category] || [];
-      groupRow.classList.toggle("has-active-descendant", items.some((item) =>
-        sketchTreeObjectSelected(groupRow.dataset.category, item) || sketchTreeObjectHovered(groupRow.dataset.category, item),
-      ));
-    }
-  }
 
   function updateGeometrySelectionUI() {
     if (!interactionProfiler.active) return updateGeometrySelectionUIUnprofiled();
@@ -9728,51 +9600,10 @@
     if (document.getElementById("blockDefinitionsDialog")?.open) updateBlockUI();
     updateSketchTreeSelectionState();
     updatePropertiesUI();
-    updateSidebarSelectionRowClasses();
   }
 
-  function selectSidebarGeometryItem(item) {
-    canvasSelection.set("dimensionConstraint", null);
-    canvasSelection.set("constraint", null);
-    canvasSelection.set("arcEndpoint", null);
-    canvasSelection.set("arcEndpointPair", null);
-    if (!item) {
-      updateSidebarSelectionRowClasses();
-      draw();
-      return;
-    }
-    if (item instanceof Point) canvasSelection.toggleById("points", item);
-    else if (item instanceof Line) canvasSelection.toggleById("lines", item);
-    else if (item instanceof Circle) canvasSelection.toggleById("circles", item);
-    else if (item instanceof Arc) canvasSelection.toggleById("arcs", item);
-    updateToolbar();
-    updateSidebarSelectionRowClasses();
-    draw();
-  }
 
-  function selectSidebarConstraintItem(constraint) {
-    clearSelection();
-    if (!constraint) {
-      updateGeometrySelectionUI();
-      draw();
-      return;
-    }
-    if (targetFromConstraint(constraint)) canvasSelection.set("dimensionConstraint", constraint);
-    else canvasSelection.set("constraint", constraint);
-    updateGeometrySelectionUI();
-    draw();
-  }
 
-  function selectSidebarFixedPoint(point) {
-    canvasSelection.set("dimensionConstraint", null);
-    canvasSelection.set("constraint", null);
-    canvasSelection.set("arcEndpoint", null);
-    canvasSelection.set("arcEndpointPair", null);
-    if (point) canvasSelection.toggleById("points", point);
-    updateToolbar();
-    updateSidebarSelectionRowClasses();
-    draw();
-  }
 
   function sidebarGeometryItem(kind, id) {
     if (kind === "point") return model.points.find((item) => item.id === id) || null;
@@ -9783,54 +9614,6 @@
     return null;
   }
 
-  function bindSidebarItemHover() {
-    for (const row of document.querySelectorAll(".geometry-list-row")) {
-      row.addEventListener("mouseenter", () => {
-        const item = sidebarGeometryItem(row.dataset.kind, row.dataset.id);
-        setSidebarHover("geometry", item, sidebarHoverElementsForItem(item));
-      });
-      row.addEventListener("mouseleave", () => {
-        const item = sidebarGeometryItem(row.dataset.kind, row.dataset.id);
-        clearSidebarHover("geometry", item);
-      });
-      row.addEventListener("click", (event) => {
-        if (event.target.closest("button")) return;
-        const item = sidebarGeometryItem(row.dataset.kind, row.dataset.id);
-        selectSidebarGeometryItem(item);
-      });
-    }
-    for (const row of document.querySelectorAll(".constraint-list-row[data-idx]")) {
-      row.addEventListener("mouseenter", () => {
-        const constraint = model.constraints[Number(row.dataset.idx)];
-        setSidebarHover("constraint", constraint, sidebarHoverElementsForConstraint(constraint));
-      });
-      row.addEventListener("mouseleave", () => {
-        const constraint = model.constraints[Number(row.dataset.idx)];
-        clearSidebarHover("constraint", constraint);
-      });
-      row.addEventListener("click", (event) => {
-        if (event.target.closest("button")) return;
-        const constraint = model.constraints[Number(row.dataset.idx)];
-        selectSidebarConstraintItem(constraint);
-      });
-    }
-    for (const row of document.querySelectorAll(".fixed-point-list-row")) {
-      row.addEventListener("mouseenter", () => {
-        const point = model.points.find((item) => item.id === row.dataset.pointId);
-        setSidebarHover("fixed-point", point, sidebarHoverElementsForItem(point));
-      });
-      row.addEventListener("mouseleave", () => {
-        const point = model.points.find((item) => item.id === row.dataset.pointId);
-        clearSidebarHover("fixed-point", point);
-      });
-      row.addEventListener("click", (event) => {
-        if (event.target.closest("button")) return;
-        const point = model.points.find((item) => item.id === row.dataset.pointId);
-        selectSidebarFixedPoint(point);
-      });
-    }
-    updateSidebarSelectionRowClasses();
-  }
 
   function blockInstanceDisableImpact(instance, nextEnabledSketchIds) {
     const definition = blockDefinitionById(instance.definitionId);
@@ -11418,7 +11201,6 @@
     updateStatusUI();
     updateConstraintButtons();
     localizeApplicationUI();
-    updateSidebarSelectionRowClasses();
     syncDimensionValueInput();
   }
 
@@ -20364,7 +20146,7 @@
             if (item?.id) ids.add(item.id);
           }
         }
-        for (const item of hoveredSidebarItem?.elements || []) {
+        for (const item of selectionHighlight.current?.elements || []) {
           if (item?.id) ids.add(item.id);
         }
         if (hoveredDimensionConstraint) {

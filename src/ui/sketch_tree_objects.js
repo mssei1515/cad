@@ -1,7 +1,7 @@
 /* Present sketch-owned objects and constraint summaries without owning UI or edit state. */
 (() => {
   "use strict";
-  function create({ currentScope, getLanguage, ensureAnalysis, types,
+  function create({ sidebarGeometryItem, currentScope, getLanguage, ensureAnalysis, types,
     isExplicitPoint, isPointUsedByLine, elementSketchId, constraintSketchId,
     constraintStatusOf, blockProjectionBundle, applicationText, escapeHtml, formatDisplayNumber,
     toolbarSvgMarkup, constraintToolbarIcon, sketchTreeGutter, isSketchProjectedGeometry,
@@ -150,7 +150,29 @@
       return `<div class="sketch-object-row ${selected ? "selected sidebar-selected" : ""} ${hovered || related ? "sidebar-related" : ""}" ${data} data-sketch-id="${escapeHtml(sketchId)}" title="${escapeHtml(title)}">${sketchTreeGutter(segments)}${icon}<span class="sketch-object-content"><span class="sketch-object-primary">${escapeHtml(primary)}</span><span class="sketch-object-secondary">${escapeHtml(secondary)}</span>${badges}</span><span class="sketch-object-actions">${action}</span></div>`;
     }
 
-    return Object.freeze({ index: sketchTreeObjectIndex, row: sketchTreeObjectRow,
+    function resolveSelectionEntry(data) {
+      const model = currentScope();
+      const category = data.objectKind;
+      let entry = null;
+      if (["point", "line", "circle", "arc"].includes(category)) {
+        entry = sidebarGeometryItem(category, data.id);
+      } else if (category === "block") {
+        entry = model.blockInstances.find((item) => item.id === data.id) || null;
+      } else if (category === "hatch") {
+        entry = model.hatches.find((item) => item.id === data.id) || null;
+      } else if (category === "annotation") {
+        entry = model.annotations.find((item) => item.id === data.id) || null;
+      } else if (data.fixedPointId) {
+        const point = model.points.find((item) => item.id === data.fixedPointId) || null;
+        if (point) entry = { kind: "fixed-point", point };
+      } else if (category === "constraint") {
+        const modelIndex = Number(data.constraintIndex);
+        const constraint = model.constraints[modelIndex] || null;
+        if (constraint) entry = { kind: "constraint", constraint, modelIndex };
+      }
+      return entry;
+    }
+    return Object.freeze({ resolveSelectionEntry, selectedReferenceElements: selectedConstraintReferenceElements, related: constraintDirectlyReferencesCanvasSelection, index: sketchTreeObjectIndex, row: sketchTreeObjectRow,
       summary: sketchConstraintSummaryMarkup, summaryCounts: sketchConstraintSummaryCounts,
       selected: sketchTreeObjectSelected, hovered: sketchTreeObjectHovered });
   }

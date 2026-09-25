@@ -169,6 +169,28 @@
       sketchList.onmouseleave = actions.leave;
     }
 
+    function updateSketchTreeSelectionState() {
+      const selectedConstraintElements = objects.selectedReferenceElements();
+      for (const row of document.querySelectorAll("#sketchList .sketch-object-row")) {
+        const category = row.dataset.objectKind;
+        const entry = objects.resolveSelectionEntry(row.dataset);
+        const selected = Boolean(entry && sketchTreeObjectSelected(category, entry));
+        const hovered = Boolean(entry && sketchTreeObjectHovered(category, entry));
+        const related = Boolean(entry && category === "constraint" && entry.kind !== "fixed-point"
+          && objects.related(entry.constraint, selectedConstraintElements));
+        row.classList.toggle("selected", selected);
+        row.classList.toggle("sidebar-selected", selected);
+        row.classList.toggle("sidebar-related", hovered || related);
+      }
+      const objectIndex = sketchTreeObjectIndex();
+      for (const groupRow of document.querySelectorAll("#sketchList .sketch-group-row")) {
+        const items = objectIndex.get(groupRow.dataset.sketchId)?.[groupRow.dataset.category] || [];
+        groupRow.classList.toggle("has-active-descendant", items.some((item) =>
+          sketchTreeObjectSelected(groupRow.dataset.category, item) || sketchTreeObjectHovered(groupRow.dataset.category, item),
+        ));
+      }
+    }
+
     function reset() { sketchTreeSketchOpenState.clear(); sketchTreeGroupOpenState.clear(); }
     function capture() { return { sketches: new Map(sketchTreeSketchOpenState), groups: new Map(sketchTreeGroupOpenState) }; }
     function restore(snapshot) {
@@ -181,7 +203,7 @@
       sketchTreeGroupOpenState.set(key, sketchTreeGroupOpenState.get(key) !== true);
     }
     function setSketchOpen(sketchId, open) { sketchTreeSketchOpenState.set(sketchTreeSketchKey(sketchId), open); }
-    return Object.freeze({ render: updateSketchUIUnprofiled, applyWidth: applySketchTreeWidth,
+    return Object.freeze({ refreshSelection: updateSketchTreeSelectionState, render: updateSketchUIUnprofiled, applyWidth: applySketchTreeWidth,
       reset, capture, restore, toggleGroup, setSketchOpen });
   }
   function sketchTreeGutter(segments) {
