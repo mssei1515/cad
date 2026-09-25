@@ -3,7 +3,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
 const test = require('node:test');
-const sandbox = { window: { GeometrySolver: {}, GeometryRef: {} } }; vm.createContext(sandbox);
+const sandbox = { window: { GeometrySolver: {}, GeometryRef: {}, SketchHierarchy: { DEFAULT_SKETCH_ID: "S1" } } }; vm.createContext(sandbox);
 for (const file of ['src/geometry/objects.js', 'src/constraints/rebinding.js']) vm.runInContext(fs.readFileSync(path.resolve(__dirname, '../..', file), 'utf8'), sandbox);
 const bundle = (points = []) => ({ points, lines: [], circles: [], arcs: [], splines: [] });
 function fixture() {
@@ -52,4 +52,36 @@ test('document decode errors propagate and successful rebinding uses supplied pr
   assert.throws(() => f.rebinding.rebuildDocument(f.scope, []), /decode/); assert.equal(f.scope.constraints, original);
   f.scope.constraints = [{ pointId: f.nested.id }]; f.rebinding.rebuildDocument(f.scope, [bundle([f.nested])]);
   assert.equal(f.scope.constraints[0].point, f.nested);
+});
+
+
+test('Block constraint copies rebase dimension and fixed coordinates and preserve reference metadata only on request', () => {
+  const point = { id: 'P1' }, points = new Map([['P1', point]]), lines = new Map(), primitives = new Map();
+  const service = sandbox.window.ConstraintRebinding.create({
+    serializeConstraint: source => ({ ...source }), decorateSerializedConstraint: data => data,
+    deserializeConstraint(data, p, l, g) { assert.equal(p, points); assert.equal(l, lines); assert.equal(g, primitives); return { ...data, point: p.get(data.pointId) }; },
+  });
+  const source = { pointId: 'P1', type: 'lineFixed', p1x: 12, p2x: 14, p1y: 23, p2y: 25,
+    dimension: { x: '13', labelX: 14, y: 25, labelY: '26', text: 'unchanged' }, reference: true, referenceSketchId: 'S9' };
+  const before = JSON.stringify(source);
+  const copy = service.cloneForBlock(source, points, lines, primitives, { x: 10, y: 20 });
+  assert.equal(copy.point, point); assert.equal(copy.sketchId, 'S1');
+  assert.deepEqual([copy.p1x, copy.p2x, copy.p1y, copy.p2y], [2, 4, 3, 5]);
+  assert.deepEqual([copy.dimension.x, copy.dimension.labelX, copy.dimension.y, copy.dimension.labelY], [3, 4, 5, 6]);
+  assert.equal(copy.dimension.text, 'unchanged'); assert.equal(copy.reference, false); assert.equal(copy.referenceSketchId, null);
+  assert.equal(JSON.stringify(source), before);
+  source.sketchId = 'S3';
+  const preserved = service.cloneForBlock(source, points, lines, primitives, undefined, true);
+  assert.equal(preserved.reference, true); assert.equal(preserved.referenceSketchId, 'S9'); assert.equal(preserved.sketchId, 'S3');
+  for (const type of ['geometryFixed', 'arcEndpointFixed']) {
+    const fixed = service.cloneForBlock({ type, x: 12, y: 23 }, points, lines, primitives, { x: 10, y: 20 });
+    assert.deepEqual([fixed.x, fixed.y], [2, 3]);
+  }
+});
+
+test('Block constraint copy rejects unsupported serialization and unresolved references', () => {
+  const options = { serializeConstraint: value => value, decorateSerializedConstraint: value => value, deserializeConstraint: () => null };
+  const service = sandbox.window.ConstraintRebinding.create(options);
+  assert.throws(() => service.cloneForBlock(null), /未対応/);
+  assert.throws(() => service.cloneForBlock({}), /複製できません/);
 });

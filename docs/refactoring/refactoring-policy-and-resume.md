@@ -64,7 +64,7 @@
 
 残る主要な領域は以下。順番や個数は固定しない。
 
-- Block拘束複製と履歴adapter。選択候補照会は分離済み。下書き生成・確定・定義操作・依存照会は分離済みで、残る接続の整理を行う。
+- Block履歴adapter。拘束複製と選択候補照会は分離済み。下書き生成・確定・定義操作・依存照会は分離済みで、残る接続の整理を行う。
 - 拘束操作・Selection編集・コピー／削除・Sketch編集の調整。
 - ドラッグsession、hover／hit判定、Canvasとキーボードの入力振分け、共通モード遷移。
 - Annotation／Reference Image／Hatch等の残る操作状態と編集処理。
@@ -104,6 +104,10 @@
 ## 8. 再開地点（2026-09-25）
 
 ### 最新の確定区切り
+
+ConstraintRebindingへBlock拘束の複製と保存済み固定座標の移動を統合。BlockDefinitionEditingへcloneForBlockを直接渡し、appの複製実装への逆依存を除去。クリップボードも同じ固定座標移動を利用する。寸法表示位置・参照metadata・復元不能時の拒否を維持。構文247件・単体501件・Block／統合UI／保存互換E2E151件が成功。app.jsは17,697行。次はBlock履歴snapshotの生成・復元とUI通知の境界を整理する。全体目標と全体E2Eは未完了。
+
+直前のBlockSelectionQuery分離は`bbc64ec`で確定済み。実行中のテストはない。以下は直前の記録である。
 
 BlockSelectionQueryへBlock作成候補の検証と配置中心照会を分離。現在scopeを都度取得し、共有点・注記・ハッチ境界と内部／外部拘束を照会する。2関数の本体一致を確認した。依存の明示で旧未定義constraintLabelForList参照が起動時エラーとなることをE2Eで検出し、既存localizedConstraintNameへ接続して修正。構文247件・単体499件・Block／統合UI／保存互換E2E151件が成功。app.jsは17,726行。次はcloneConstraintForBlockのappへの逆依存とBlock履歴adapterを整理する。全体目標と全体E2Eは未完了。
 

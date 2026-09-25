@@ -4,6 +4,8 @@
 
 ## 1. 実装ファイルの責務
 
+- `src/constraints/rebinding.js`: scopeの拘束再接続、Block用拘束複製、保存済み固定座標の移動
+
 - `index.html`: 固定ワークスペースとコマンドUI
 - `style.css`: レイアウトと状態表現
 - `app.js`: moduleの組合せ、Documentと操作状態、描画、入力、保存読込の進行、履歴adapter、Block、Annotation、Reference Image
