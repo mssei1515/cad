@@ -15,6 +15,7 @@
 - `src/persistence/constraints.js`: 具体的なConstraint保存形式、scopeごとの参照復元、寸法metadataの復元
 - `src/persistence/geometry.js`: Document／BlockのローカルGeometry復元と参照Map
 - `src/persistence/document_snapshot.js`: DocumentとBlockで共有する保存field writer、派生Instance保存値
+- `src/editing/block_definition_editing.js`: Block定義の複製・座標移動・Object同一性を維持するdraft反映
 - `src/editing/block_editor_session.js`: Block編集session連鎖、draft同期・差替え、親scope復帰、子の復元記録引継ぎと取消
 - `src/editing/edit_history.js`: 履歴stack操作
 - `src/diagnostics/interaction_profiler.js`: 同期処理の時間・実行回数計測
