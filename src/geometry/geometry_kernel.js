@@ -277,7 +277,25 @@
     return { x: projectionX * 2 - point.x, y: projectionY * 2 - point.y };
   }
 
+  function circlePointAtAngle(primitive, angle) {
+    return {
+      x: primitive.center.x + Math.cos(angle) * primitive.radius(),
+      y: primitive.center.y + Math.sin(angle) * primitive.radius(),
+    };
+  }
+
+  function circlePointAtPointer(source, primitive) {
+    const dx = source.x - primitive.center.x;
+    const dy = source.y - primitive.center.y;
+    const len = Math.sqrt(dx * dx + dy * dy);
+    if (len < 1e-12) return null;
+    const r = primitive.radius();
+    return { x: primitive.center.x + (dx / len) * r, y: primitive.center.y + (dy / len) * r };
+  }
+
   window.GeometryKernel = Object.freeze({
+    circlePointAtPointer,
+    circlePointAtAngle,
     MIN_ORIENTATION_LENGTH,
     normalizeAnglePositive,
     normalizeAngleSigned,

@@ -238,6 +238,9 @@ const offsetCopy = line(
   offsetSource.p2Object.y + offsetY,
 );
 addConstraint({ type: "offsetDimension", source: offsetSource.id, offset: offsetCopy.id, sign: 1, target: offsetNormalLength, directionBasis: "endpoint" });
+// Offset constrains the supporting line, leaving endpoint placement and length free.
+constrainAxis(offsetCopy.p1Object, "x");
+constrainLength(offsetCopy);
 
 const coincidentA = line("L_COIN_A", -300, 650, -200, 700);
 constrainPlacedLine(coincidentA, Math.atan2(50, 100));

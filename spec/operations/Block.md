@@ -110,7 +110,7 @@ Block Editor はCanvasを太枠で囲まず、通常画面の白とは異なる�
 
 ## 9. 配置
 
-配置開始時は全作図可能内部 Sketch を有効にし、ユーザーが個別に切り替えられる。Geometry、Annotationまたは子Blockを持つ Sketch を少なくとも1つ有効にする必要がある。配置中の回転モードと表示内部SketchはPropertiesへ表示し、Propertiesが畳まれていれば一時的に展開する。配置完了またはキャンセル後は開始前のProperties開閉状態へ戻す。
+配置開始時は全作図可能内部 Sketch を有効にし、ユーザーが個別に切り替えられる。Geometry、派生Geometry Instance（Sketch Projectionを含む）、Annotation、Hatchまたは子Blockを持つ Sketch を少なくとも1つ有効にする必要がある。投影だけを持つ内部Sketchも単独で配置でき、その投影Geometryを外接範囲中心の計算に含める。配置中の回転モードと表示内部SketchはPropertiesへ表示し、Propertiesが畳まれていれば一時的に展開する。配置完了またはキャンセル後は開始前のProperties開閉状態へ戻す。
 
 1. 1クリック目で、有効 Geometry の外接範囲中心を置く位置を決める。
 2. 2クリック目で回転方向を決める。
@@ -136,12 +136,12 @@ Block Editor はCanvasを太枠で囲まず、通常画面の白とは異なる�
 
 ## 11. 有効内部 Sketch
 
-Instance ごとに `enabledSketchIds` を持ち、配置後も変更できる。親子内部 Sketch は独立して有効化でき、Annotationしか持たない内部Sketchも選択肢と件数へ含める。
+Instance ごとに `enabledSketchIds` を持ち、配置後も変更できる。親子内部 Sketch は独立して有効化でき、派生Geometry InstanceやAnnotationしか持たない内部Sketchも選択肢と件数へ含める。
 
 変更ルールは次のとおり。
 
 - `x`, `y`, `rotation` は変更しない。
-- 図形を持つ有効 Sketch が0件になる変更を拒否する。
+- Geometry、派生Geometry Instance、Annotation、Hatchまたは子Blockを持つ有効Sketchが0件になる変更を拒否する。
 - Definition 編集で追加した内部 Sketch は既存 Instance へ自動追加しない。
 - 無効化されるProjectionへの参照は[Blockの構成変更](Block.md#16-blockの構成変更)に従って扱う。
 

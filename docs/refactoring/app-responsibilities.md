@@ -96,6 +96,6 @@ tools/                      server・生成など開発補助
 
 `app.js`はまだCanvas renderer、DOM panel、Document Loader、Block・Sketchの操作、Selectionを更新するcommand群とE2E hookを持つ。Documentと編集scopeの所有者は`src/editing/workspace.js`、Selectionの状態と選択規則は`src/editing/selection.js`へ分離した。残りを独立させるには、Projectionの参照解決、操作ごとのsnapshot／確定の境界をさらに整理する必要がある。分離済みmoduleへそれらの状態を流し込まない。
 
-派生InstanceのGeometry読取りviewとscope内の参照解決は`src/geometry/instance_projection.js`へ分離した。Geometryの型・canonical参照・bundleのMap登録は`src/geometry/objects.js`で共通化する。Block Projectionの生成と永続cacheは`src/geometry/block_projection.js`、Definitionの検索と有効Sketch判定は`src/document/block_catalog.js`が担当する。描画／pointer処理中だけ共有するGeometry read cacheと展開結果の一覧化は後続で読出しserviceへまとめる対象とする。
+派生InstanceのGeometry読取りviewとscope内の参照解決は`src/geometry/instance_projection.js`へ分離した。Geometryの型・canonical参照・bundleのMap登録は`src/geometry/objects.js`で共通化する。Block Projectionの生成と永続cacheは`src/geometry/block_projection.js`、Definitionの検索と有効Sketch判定は`src/document/block_catalog.js`が担当する。描画／pointer処理中だけ共有するGeometry read cacheと展開結果の一覧化・参照解決は`src/geometry/read_model.js`が所有する。残るHatch境界と実効外観の取得、読出し時のモデル補完は後続の整理対象とする。
 
 数百行の起動・接続用appへ移行する実現性、代償、段階と進捗は[composition rootへの移行](./composition-root.md)に記録する。

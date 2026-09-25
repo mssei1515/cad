@@ -246,3 +246,36 @@ test("circle center cross command accepts multiple preselected circles as one op
   expect(afterHistory.lines.filter((line) => createdLineIds.includes(line.id))).toHaveLength(4);
   expect(afterHistory.constraints).toHaveLength(16);
 });
+
+test("centerline creation is one undo step and endpoint cancellation does not alter completed geometry", async ({ page }) => {
+  await openFixture(page);
+  const before = await page.evaluate(() => window.__jot2dTest.serializedModelForTest());
+  await page.evaluate(() => window.__jot2dTest.selectGeometryIdsForTest({ points: ["P6", "P7"] }));
+  await page.click("#toolCenterline");
+  await clickWorld(page, { x: 18, y: 70 });
+  await clickWorld(page, { x: -20, y: 180 });
+  const completed = await page.evaluate(() => window.__jot2dTest.serializedModelForTest());
+  const created = completed.lines.find(line => !before.lines.some(old => old.id === line.id));
+  expect(created).toBeTruthy();
+  expect(completed.points).toHaveLength(before.points.length + 2);
+  await page.click("#undoBtn");
+  const undone = await page.evaluate(() => window.__jot2dTest.serializedModelForTest());
+  expect(undone.lines).toEqual(before.lines);
+  expect(undone.points).toHaveLength(before.points.length);
+  expect(undone.constraints).toEqual(before.constraints);
+  await page.click("#redoBtn");
+  const redone = await page.evaluate(() => window.__jot2dTest.serializedModelForTest());
+  expect(redone.lines).toEqual(completed.lines);
+  expect(redone.constraints).toEqual(completed.constraints);
+  await page.evaluate(() => window.__jot2dTest.selectGeometryIdsForTest({ points: ["P6", "P7"] }));
+  await page.click("#toolCenterline");
+  await clickWorld(page, { x: 20, y: 60 });
+  expect((await page.evaluate(() => window.__jot2dTest.authoringStateForTest())).centerlineFirstPoint).not.toBeNull();
+  await page.keyboard.press("Escape");
+  const cancelled = await page.evaluate(() => ({ state: window.__jot2dTest.authoringStateForTest(), model: window.__jot2dTest.serializedModelForTest() }));
+  expect(cancelled.state.centerlineTargetIds).toEqual([]);
+  expect(cancelled.state.centerlineFirstPoint).toBeNull();
+  expect(cancelled.model.lines).toEqual(redone.lines);
+  expect(cancelled.model.points).toEqual(redone.points);
+  expect(cancelled.model.constraints).toEqual(redone.constraints);
+});

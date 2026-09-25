@@ -43,6 +43,18 @@
       else items.push(item);
     }
 
+    function applyRectangle(candidates, additive = false) {
+      for (const field of ["points", "lines", "circles", "arcs", "splines", "blockInstances", "annotations", "hatches", "referenceImages"]) {
+        const next = additive ? [...state[field]] : [];
+        for (const item of candidates[field]) if (item && !next.includes(item)) next.push(item);
+        state[field] = next;
+      }
+      state.arcEndpoint = null;
+      state.arcEndpointPair = null;
+      state.dimensionConstraint = null;
+      state.constraint = null;
+    }
+
     function selectedGeometryItems() {
       return [...state.points, ...state.lines, ...state.circles, ...state.arcs, ...state.splines];
     }
@@ -280,7 +292,7 @@
 
     // Read views retain geometry identity. Mutations go through this instance's API.
     const api = {
-      set, clear, append, removeAt, toggleById,
+      set, clear, append, removeAt, toggleById, applyRectangle,
       selectedGeometryItems, appearanceSelectionTarget, setGeometrySelection, currentConstraintTargets,
       hasPrimaryCanvasSelection, effectiveSelectedConstraint, selectedPrimitives,
       togglePointSelection, toggleLineSelection, toggleCircleSelection, toggleArcSelection,
