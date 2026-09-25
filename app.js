@@ -287,7 +287,6 @@
   let interactionFrameStats = null;
   let sketchSolveStates = new Map();
   let invalidReferenceConstraints = new Map();
-  let panSession = null;
   let selectionRectSession = null;
   let blankDoubleClickCandidate = null;
   let suppressNextBlankDoubleClickEvent = false;
@@ -340,7 +339,6 @@
   let patternInstanceSeq = 1;
   let freeInstanceSeq = 1;
   let blockElementSeq = 1;
-  let lastMiddleAuxClick = null;
   let blockPlacementDefinitionId = null;
   let blockPlacementAnchor = null;
   let blockPlacementEnabledSketchIds = [];
@@ -406,6 +404,9 @@
     minZoom: MIN_ZOOM, maxZoom: MAX_ZOOM, minLength: MIN_LINE_LENGTH,
   });
   const { currentCanvasCenterWorld, clampZoom, formatZoom, canvasScreenPoint, screenToWorld, worldToCanvasScreen, canvasPoint, fitBoundsToViewport, screenBoxForBounds, visibleWorldBounds } = viewport;
+  const canvasNavigation = window.CanvasNavigation.create({
+    canvas, viewport, draw, setHint, fitVisibleGeometry: fitVisibleGeometryToViewport,
+  });
   const canvasSurface = window.CanvasSurface.create({
     canvas, ctx, viewport, readPixelRatio: () => window.devicePixelRatio || 1, ResizeObserverClass: window.ResizeObserver,
     onResize: () => {
@@ -5146,7 +5147,7 @@
     dimensionDragSession = null;
     referenceImageDragSession = null;
     referenceImageCalibrationSession = null;
-    panSession = null;
+    canvasNavigation.reset();
     suppressNextBlankDoubleClickEvent = false;
     lineStartPoint = null;
     resetCenterlineCommandState();
@@ -5183,7 +5184,6 @@
     hoveredSidebarItem = null;
     hoveredSketchIdentity = null;
     lastPointerWorld = null;
-    lastMiddleAuxClick = null;
     clearSnap();
     canvasSelection.set("arcEndpoint", null);
     canvasSelection.set("arcEndpointPair", null);
@@ -15396,16 +15396,7 @@
     }
     closeCanvasContextMenu();
     if (e.button === 1) {
-      e.preventDefault();
-      panSession = {
-        pointerId: e.pointerId,
-        startPointer: canvasScreenPoint(e),
-        startX: viewport.x,
-        startY: viewport.y,
-      };
-      canvas.classList.add("is-panning");
-      canvas.setPointerCapture(e.pointerId);
-      setHint("画面移動中: マウススクロールボタンを押しながらドラッグ");
+      canvasNavigation.beginPan(e);
       return;
     }
 
@@ -15895,13 +15886,7 @@
     const coordinateStatus = document.getElementById("statusCoordinates");
     const coordinateText = `X ${formatDisplayNumber(coordinatePoint.x, 3)} / Y ${formatDisplayNumber(coordinatePoint.y, 3)}`;
     if (coordinateStatus && coordinateStatus.textContent !== coordinateText) coordinateStatus.textContent = coordinateText;
-    if (panSession) {
-      const p = screenPoint;
-      viewport.update({ x: panSession.startX + (p.x - panSession.startPointer.x) });
-      viewport.update({ y: panSession.startY + (p.y - panSession.startPointer.y) });
-      draw();
-      return;
-    }
+    if (canvasNavigation.movePan(screenPoint)) return;
 
     const p = coordinatePoint;
     lastPointerWorld = p;
@@ -16380,17 +16365,7 @@
   }
 
   function finishPointerInteraction(e) {
-    if (panSession) {
-      panSession = null;
-      canvas.classList.remove("is-panning");
-      try {
-        canvas.releasePointerCapture(e.pointerId);
-      } catch (_) {
-        // Pointer capture may already be released by the browser.
-      }
-      setHint("画面移動を終了しました");
-      return;
-    }
+    if (canvasNavigation.endPan(e)) return;
 
     if (referenceImageDragSession) {
       const session = referenceImageDragSession;
@@ -16716,30 +16691,10 @@
     return false;
   }
 
-  function handleMiddleButtonDoubleClickFit(e) {
-    if (e.button !== 1) return false;
-    const now = performance.now();
-    const screen = canvasScreenPoint(e);
-    const previous = lastMiddleAuxClick;
-    const repeated =
-      previous &&
-      now - previous.time <= 450 &&
-      hypot2(screen.x - previous.x, screen.y - previous.y) <= 12;
-    lastMiddleAuxClick = repeated ? null : { time: now, x: screen.x, y: screen.y };
-    if (!repeated) return false;
-    if (fitVisibleGeometryToViewport()) {
-      setHint("表示中の図形全体が見えるように調整しました");
-    } else {
-      setHint("表示中の図形がありません", "error");
-    }
-    draw();
-    return true;
-  }
-
   canvas.addEventListener("pointerup", endDrag);
   canvas.addEventListener("pointercancel", endDrag);
   canvas.addEventListener("pointerleave", () => {
-    if (dragSession || dimensionDragSession || annotationDragSession || selectionRectSession || panSession) return;
+    if (dragSession || dimensionDragSession || annotationDragSession || selectionRectSession || canvasNavigation.panning) return;
     flushScheduledCanvasPointerMove({ discard: true });
     clearCanvasHover();
     draw();
@@ -16814,7 +16769,7 @@
   canvas.addEventListener("auxclick", (e) => {
     if (e.button === 1) {
       e.preventDefault();
-      handleMiddleButtonDoubleClickFit(e);
+      canvasNavigation.doubleClickFit(e);
     }
   });
   if (dimensionValueInput) {
