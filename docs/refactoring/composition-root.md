@@ -1,8 +1,120 @@
 # app.jsを起動・接続専用にする継続作業
 
+再開時は先に[リファクタリング方針と再開手順](refactoring-policy-and-resume.md)を読む。本書の古い記録は当時の経過であり、現在の課題は先頭の再開地点とGitの現物を優先する。
+
 開始点はdevelopの`457adea`。承認された最終目標は、`app.js`を数百行程度の生成・接続・起動・終了へ整理すること。部分的な抽出や中間のテスト成功をもって、この目標の完了とはしない。
 
-## 現在の再開地点（2026-09-21）
+## 現在の再開地点（2026-09-25）
+
+通常図形ドラッグの開始状態・移動先・一時拘束生成を`GeometryDragPlan`へ分離。固定／ロック判定、開始時座標、Block回転pivot、半径の開始中心基準を維持し、構文265件・単体539件・関連E2E191件が成功。app.jsは16,989行。次はSolver適用・復元の実行境界を整理する。
+
+DimensionDragへ寸法位置ドラッグのsession・開始表示値・更新・確定・resetを集約。appのsession変数を除去し、描画は対象constraintの照会、入力は操作APIで接続。寸法コマンド中の3px閾値と小移動時のクリック継続、角度と通常寸法の通知差を維持。構文263件・単体534件・Slot寸法／Block／統合UI／保存互換E2E153件が成功。app.jsは17,126行。次は通常図形ドラッグの状態とSolver・復元の境界を調べる。全体目標と全体E2Eは未完了。
+
+RectangleSelectionQueryへ矩形内候補の読取りを分離し、追加／置換と補助選択解除は既存CanvasSelection.applyRectangleへ統合。selectByRectは接続のみになった。Object同一性、表示・所属条件、Arc／Splineサンプル、Block投影境界とgeometryInstances選択の保持を維持。構文261件・単体530件・Block／統合UI／保存互換／SketchProjection E2E162件が成功。app.jsは17,224行。次は寸法ドラッグなど残る入力sessionの開始・更新・確定を整理する。全体目標と全体E2Eは未完了。
+
+SelectionRectangleへ矩形選択session・preview・確定振分け・resetを集約。appのsession変数を除去し、通常／SketchProjectionの経路、追加選択、3px閾値、方向別判定を維持した。描画は座標とcrossingだけを照会し、図形種ごとの選択適用は既存処理へ委譲。構文259件・単体526件・Block／統合UI／保存互換／SketchProjection E2E162件が成功。app.jsは17,309行。次はselectByRectの候補照会と選択適用の境界を整理する。全体目標と全体E2Eは未完了。
+
+AnnotationDragへ注記ドラッグのsession・開始座標・ID再解決・更新・確定・resetを集約。appのsession変数を除去し、入力はactive照会と操作API、診断はinspectの値で接続。Leaderの終点／折れ点／文字位置とFree Textの移動規則、確定時の履歴通知を維持。構文257件・単体522件・Block／統合UI／保存互換E2E151件が成功。app.jsは17,340行。次は選択矩形の開始・更新・確定と選択判定の境界を整理する。全体目標と全体E2Eは未完了。
+
+ReferenceImageInteractionへ画像ドラッグ・2点縮尺校正のsessionと開始・更新・確定・取消・resetを集約。appの2つのsession変数と直接書換えを除去し、入力は操作API、描画は校正点の照会で接続。移動閾値、1点目を維持する回転画像の校正、不正入力の再試行と履歴時機を維持。構文255件・単体519件・参照画像／Block／統合UI／保存互換E2E153件が成功。app.jsは17,391行。次は注記ドラッグと選択矩形など残る入力sessionの所有者を整理する。全体目標と全体E2Eは未完了。
+
+SketchDeletionCommandへ削除範囲・外部参照検査・確認・寸法symbolガード・削除適用と通知順序を集約。scopeは呼出しごとに取得し、cache・解析・UIは所有者へ通知する。旧SketchProjectionConstraintによる子孫保持と親変更を維持し、仕様書に既存例外を明記。構文253件・単体514件・Block／統合UI／保存互換／SketchProjection E2E162件が成功。app.jsは17,485行。次は操作解除に残るドラッグ・選択矩形・画像操作sessionの所有者を調べ、状態と更新処理をまとめる。全体目標と全体E2Eは未完了。
+
+SketchCommandへSketch作成・切替・名前変更・表示切替と命名規則を集約。scopeを操作ごとに取得し、ID採番・入力・操作解除・UI・履歴は明示依存とした。復元後の操作解除には多数の未分離状態が残るため、setterを増やす抽出を避け、解除を利用する操作単位から整理した。構文251件・単体510件・Block／統合UI／保存互換E2E151件が成功。app.jsは17,565行。次は共通操作解除の状態所有者とSketch削除の参照検査・モデル更新を確認する。全体目標と全体E2Eは未完了。
+
+HistoryControllerへDocument／Block履歴の選択・記録・reset・Undo／Redo振分けと復元中状態を集約。appの共有historyRestoring変数を除去し、復元時の再記録抑止・finally通知を共通化した。具体的な復元とDOM・計測は明示adapterとして残る。構文249件・単体506件・Block／統合UI／保存互換E2E151件が成功。app.jsは17,639行。次はDocument読込／Block差替え後の操作解除・求解・表示更新と履歴UIの境界を調べる。全体目標と全体E2Eは未完了。
+
+BlockHistorySnapshotへBlock履歴の復元用コピーとsignature生成を分離。session・DOM・履歴stackへの依存を持たず、定義とclone／拘束codecから生成する。旧signature関数の本体一致、コピーの独立性、参照metadata・採番値と差分判定を検証。構文248件・単体503件・Block／統合UI／保存互換E2E151件が成功。app.jsは17,652行。次はDocument／Block共通の履歴復元中状態と復元・UI通知の所有者を整理する。全体目標と全体E2Eは未完了。
+
+ConstraintRebindingへBlock拘束の複製と保存済み固定座標の移動を統合。BlockDefinitionEditingへcloneForBlockを直接渡し、appの複製実装への逆依存を除去。クリップボードも同じ固定座標移動を利用する。寸法表示位置・参照metadata・復元不能時の拒否を維持。構文247件・単体501件・Block／統合UI／保存互換E2E151件が成功。app.jsは17,697行。次はBlock履歴snapshotの生成・復元とUI通知の境界を整理する。全体目標と全体E2Eは未完了。
+
+BlockSelectionQueryへBlock作成候補の検証と配置中心照会を分離。現在scopeを都度取得し、共有点・注記・ハッチ境界と内部／外部拘束を照会する。2関数の本体一致を確認した。依存の明示で旧未定義constraintLabelForList参照が起動時エラーとなることをE2Eで検出し、既存localizedConstraintNameへ接続して修正。構文247件・単体499件・Block／統合UI／保存互換E2E151件が成功。app.jsは17,726行。次はcloneConstraintForBlockのappへの逆依存とBlock履歴adapterを整理する。全体目標と全体E2Eは未完了。
+
+BlockDefinitionCommandへ作成・編集開始／取消・定義名変更／削除と親host復帰の調整を集約。Session／DefinitionEditing／EditingQueries／Catalogへ委譲し、BlockViewが一覧dialog閉鎖と編集classを担当する。空編集viewportの調整と履歴resetはappの明示adapterとして残る。構文245件・単体494件・Block／統合UI／保存互換E2E151件が成功。app.jsは17,805行。次はBlock候補の選択検証と境界中心の照会、拘束複製と残るBlock履歴adapterを整理する。全体目標と全体E2Eは未完了。
+
+選択からのBlock下書き生成と空定義生成を既存BlockDefinitionEditingへ、所有子孫の仮移動と復元記録生成を既存BlockEditorSession.stageChildrenへ統合。新しいmoduleは追加していない。座標変換・寸法式の数値固定と採番時点、全registry差替え後の拘束再接続を維持。4関数の本体比較、構文243件・単体487件・Block／統合UI／保存互換E2E151件が成功。app.jsは17,917行。次はBlock作成・編集開始／取消・定義操作の進行と、選択からのBlock候補照会を整理する。全体目標と全体E2Eは未完了。
+
+BlockEditingQueriesへ編集範囲・利用可否・参照Instance・draftを優先する依存循環と移動可否を集約。保存済み所有子孫とSketch表示行は既存BlockCatalogへ統合し、仮移動と削除の子孫探索を共用した。呼出し元のないnestedBlockPlacementErrorは除去。12照会関数の本体比較、構文243件・単体483件・Block／統合UI／保存互換E2E151件が成功。app.jsは18,032行。次は選択からのBlock下書き生成・仮移動と作成開始、編集開始／取消・定義削除を既存の所有者へ接続して整理する。全体目標と全体E2Eは未完了。
+
+Block編集の下書き検証・回転確認待ち・定義反映・参照整理・配置先求解・履歴をBlockCompletionCommandへ集約。待機状態も所有し、同じsessionへの回答だけ適用する。親scope復帰後にモデルを取得し、内部拒否とTX-05の配置先エラーを区別する。構文241件・単体477件・Block／統合UI／保存互換E2E151件が成功。app.jsは18,164行。次は残るBlock定義の階層／依存照会、選択からの作成開始、編集開始・取消・削除の依存を整理する。全体目標と全体E2Eは未完了。
+
+Block定義のclone／cloneInstance／translate／applyをBlockDefinitionEditingへ集約（`a70e9d0`）。Geometry同一性と拘束map接続、固定位置・寸法・補助要素の移動を維持し、session・DOM・履歴から独立。4関数の本体比較、構文239件・単体471件・Block／統合UI／保存互換E2E151件が成功。app.jsは18,297行。次はvalidateBlockDraftとcompleteBlockDefinitionEditの依存を調べ、検証と確定commandを整理する。ユーザーの再開準備依頼により、全体方針・残作業・検証とGit運用・再開指示をrefactoring-policy-and-resume.mdに記録した。全体目標と全体E2Eは未完了。
+
+BlockEditorSessionへsession連鎖、draft同期とUndo差替え、親scope復帰、一時定義／復元記録の引継ぎ・取消・削除時整理を集約した。appのsession変数と管理情報への直接書込みを除去し、名称変更も所有者へ委譲。確定処理とUIはcurrentの参照とAPIで接続する。構文237件・単体468件・Block／統合UI／保存互換E2E151件が成功。app.jsは18,539行。次はBlock draftの検証・定義反映と確定commandを整理し、session所有者とは責務を分ける。全体目標と全体E2Eは未完了。
+
+Block一覧と編集パネルのDOM表示・イベント接続をBlockViewへ分離。編集名は表示用コピー、モデル変更と履歴は明示した操作コールバックへ委譲し、focus中の入力保持とdialog更新順序を維持した。構文235件・単体463件・Block／統合UI／保存互換E2E151件が成功。app.jsは18,673行。次はBlock編集sessionの開始・確定・取消とhost復元を一体で整理する。全体目標と全体E2Eは未完了。
+
+Blockの有効Sketch変更と影響検査をBlockConfigurationCommandへ分離。投影差分から拘束／注記参照を確認し、拒否時の無変更、許可時の関連拘束と選択解除、cache・履歴・更新の順序を保持した。hover解除はappの所有者へのコールバック。構文233件・単体461件・Block／統合UI／保存互換E2E151件が成功。app.jsは18,719行。次はBlock UIの内容生成・イベント接続、またはドラッグsessionの所有者を整理する。全体目標と全体E2Eは未完了。
+
+Free Instanceの回転／反転とBlockの回転ロック／直交角度変更をInstanceTransformCommandへ分離した。Freeは共有元と指定InstanceをSolver変数から除外し、Blockは表示中心を保持する。各経路の局所／従属解、復元、解析・UI更新、履歴の違いを維持し、PropertiesとBlock UIが共用する。構文231件・単体458件・Block固定／Block／Free Instance／統合UI／保存互換E2E181件が成功。app.jsは18,761行。次はBlock構成変更の影響照会と確定処理、または残るドラッグsessionの所有者を整理する。全体目標と全体E2Eは未完了。
+
+Free／Mirror／Patternの作成をGeometryInstanceCommandへ分離し、参照元候補と配置途中Instanceの所有者を集約。開始・配置・軸／方向確定・previewを同じcommandに接続し、Propertiesはpending、変換編集はisPlacing、取消は各破棄APIを使用する。Freeの確定時採番とPattern入力取消時の候補維持を保持した。構文229件・単体454件・Free Instance／統合UI／保存互換E2E136件が成功。app.jsは18,861行。次はFree Instanceの変換編集と共有元を動かさないSolver transaction、および残る描画／ドラッグsessionの所有者を整理する。全体目標と全体E2Eは未完了。
+
+派生Instanceの参照元編集をInstanceSourceCommandへ分離。対象／候補状態、追加検証、確定時の参照順序とlegacy ID維持、削除保護、関連拘束・注記整理、履歴を同じ所有者にまとめた。Propertiesはcurrentの候補配列コピー、Canvas強調はincludesRef、モード終了／resetはAPIで接続する。構文227件・単体451件・Free Instance／Sketch投影／統合UI／保存互換E2E147件が成功。app.jsは18,944行。次はFree Instance配置とMirror／Pattern作成で共有する候補sourcesの所有者を整理する。全体目標と全体E2Eは未完了。
+
+Block配置の5状態（定義・中心・有効Sketch・回転ロック・パネル復元記録）と開始／クリック／確定をBlockPlacementCommandへ分離した。previewも同じ所有者から予定Instanceを返す。Properties・通常取消・Documentリセット・test hookはAPIで接続し、直接状態書込みを除去した。構文225件・単体448件・Block／統合UI／保存互換E2E151件が成功。app.jsは19,014行。次はFree Instanceの配置・参照元編集sessionの所有者を整理する。mode／共通pointerと採番はapp側に残る移行用コールバック。全体目標と全体E2Eは未完了。
+
+Propertiesの対象別HTML構成をPropertiesContent、現在scope／操作／選択からの表示情報取得をPropertyPresentationへ分離。配置中Instance、参照元編集中候補、Sketch外観、寸法評価値を照会側で解決し、ContentはDocument／操作sessionを直接参照しない。appはRows／Content／Controller／Viewと編集commandの接続を担当する。構文223件・単体445件・画像／Free Instance／Spline／統合UI／保存互換E2E144件が成功。app.jsは19,093行。次は共有の表示設定照会と、Block／Free Instanceの配置・編集sessionの所有者を整理する。全体目標と全体E2Eは未完了。
+
+Propertiesのinput/change/clickをPropertiesControllerへ集約。参照画像・注記・派生Instanceの基本値適用はElementPropertyCommandへ分離し、Controllerはモデルやsessionを直接変更せず、既存commandと明示した操作コールバックを呼ぶ。Viewへ3イベントを接続した。構文220件・単体442件・画像／Free Instance／Spline／統合UI／保存互換E2E144件が成功。app.jsは19,208行。次はPropertiesの対象別内容構成と照会依存を整理する。Block配置・Spline編集sessionの所有者はまだappに残り、Controllerからは専用コールバック経由で接続する。全体目標と全体E2Eは未完了。
+
+Properties外観の適用先・プレビュー／確定をAppearancePropertyCommandへ集約。色パレットもowner解決を共用する。UIは入力検証と値変換、AppearanceEditingは正規化適用、commandはcache・履歴・更新を担当し、寸法prefix／suffixの入力欄を再生成しない規則を保持した。構文217件・単体437件・統合UI／保存互換E2E114件が成功。app.jsは19,404行。次は残るPropertiesの入力振分けと参照画像／注記／派生Instance編集、対象別内容構成の照会依存を整理する。全体目標と全体E2Eは未完了。
+
+Propertiesの補助作図切替とSpline開閉をGeometryPropertyCommandへ分離した。投影保護・曲線成立・Solver／従属解の確認と復元・履歴はcommand、入力欄の差戻しと通知・DOM／描画更新はappの接続処理が担当する。構文215件・単体434件・Spline／統合UI／保存互換E2E120件が成功。app.jsは19,474行。次はPropertiesの外観入力プレビュー／確定と対象別内容構成の依存を整理する。全体目標と全体E2Eは未完了。
+
+寸法Propertiesの名前／式確定を既存DimensionValueCommand.commitPropertyへ、名前検証・参照式書換え・採番予約を既存ParameterNamespace.renameDimensionへ統合した。snapshot復元とSolver成功判定、履歴・通知の順序を維持し、Canvas入力pendingを操作しない。新規モジュールは増やしていない。構文213件・単体431件・統合UI／保存互換E2E114件が成功。app.jsは19,504行。次はProperties内の図形構造編集（construction／Spline開閉）の確定処理と、対象別内容構成の照会依存を整理する。全体目標と全体E2Eは未完了。
+
+Propertiesの図形・寸法・拘束・Block・注記・複数選択の表示行をPropertyRowsへ、DOM更新・装飾・開閉状態・イベント接続をPropertiesViewへ分離した。内容生成はHTMLを返し、ViewがDOMへ反映する。構文213件・単体428件・統合UI／保存互換E2E114件が成功。app.jsは19,540行。次は対象別の内容構成の照会依存と、Properties入力の編集transactionを整理する。ユーザーの最新方針に従い、行数や残り利用枠に合わせて分割を急がず、今後の開発に適した責務の粒度を優先する。全体目標と全体E2Eは未完了。
+
+Propertiesの対象／共通値照会を`PropertySelection`、外観の正規化適用を`AppearanceEditing`、一括変更の調整を`BulkPropertyCommand`へ分離。表示・パレット・一括編集が同じ対応項目とmixed値を使う。構文210件・単体426件・統合UI／保存互換E2E114件が成功。app.jsは19,775行。次はProperties表示行の生成と編集入力transactionを整理する。全体目標と全体E2Eは未完了。
+
+Properties／Document設定の外観入力欄を`AppearanceControls`、色選択sessionと対象別適用・イベント接続を`AppearancePalette`へ分離。appからパレットsessionと使用中色収集・HTML生成を除去した。構文206件・単体423件・統合UI／保存互換E2E114件が成功。app.jsは19,914行。次はPropertiesの選択対象／表示モデルと入力編集transactionを整理する。全体目標と全体E2Eは未完了。
+
+共有サイドバーhoverと選択／拘束の表示参照を`SelectionHighlight`へ集約。ツリーの選択class更新をViewと表示対象解決へ分離し、呼出し元とDOM生成の存在しない旧一覧用イベント／選択処理を除去した。構文203件・単体420件・統合UI／保存互換E2E114件が成功。app.jsは20,188行。次はPropertiesの表示と編集コマンド、Canvasの広範なhover状態の境界を整理する。全体目標と全体E2Eは未完了。
+
+Sketchツリーの表示索引・図形行・拘束集計を`SketchTreeObjects`、クリック選択・展開・編集操作の振分けを`SketchTreeController`へ分離。Viewへ表示情報と操作を接続し、図形名のescape、拘束の元配列index、別Sketch選択時の追加選択解除を維持した。構文201件・単体417件・統合UI／保存互換E2E114件が成功。app.jsは20,406行。次はCanvasと共有する選択／hoverの所有者を整理し、Propertiesやツリーから直接参照する操作状態を減らす。全体目標と全体E2Eは未完了。
+
+Sketchツリーの階層／カテゴリ描画・開閉状態・リサイズ操作を`SketchTreeView`へ集約。Document読込はcapture／restore APIで開閉状態を保存し、内部Mapへ直接書き込まない。構文198件・単体414件・統合UI／保存互換E2E114件が成功。app.jsは20,615行。次は図形行と拘束集計の表示モデル、ツリー操作からSelection／Document編集への接続をまとめる。全体目標と全体E2Eは未完了。
+
+OffsetのクリックとEnter確定を既存`OffsetCommand`へ統合。プレビュー計算と入力待ちtargetの同期もcommandが担当し、`OffsetPreviewRenderer`は解決済みデータの描画だけを行う。構文196件・単体412件・統合UI／保存互換E2E114件が成功。app.jsは20,779行。残る大きな責務はBlock編集、Sketchツリー、Properties、Selection編集、拘束操作、ドラッグ／Canvasイベント、Document操作調整、test hook。次は機能単位の統合を優先し、細かな関数抽出だけを繰り返さない。全体目標と全体E2Eは未完了。
+
+Offsetの距離・draft計算を`OffsetGeometry`、Geometry／拘束生成と失敗時復元を`OffsetConstruction`、入力開始・検証・確定を`OffsetCommand`へ分離。Geometry計算はDocument非依存、生成は現在の編集対象と採番を明示し、入力は選択状態と生成処理へ接続する。構文195件・単体410件・統合UI／保存互換E2E114件が成功。app.jsは20,896行。次は残ったOffsetクリック／hover／Enterイベントとプレビュー描画をcommand／rendererへ接続し、作図モード全体の開始・取消を整理する。全体目標と全体E2Eは未完了。
+
+Offsetの対象・向き付きチェーン・選択確定を`OffsetSelection`へ集約。接続判定も同じ所有者に移し、クリック／Enter／モード切替／取消／test hookからの3変数への直接書込みを除去した。構文191件・単体407件・統合UI／保存互換E2E114件が成功。app.jsは21,162行。次はOffsetの距離測定・draft・入力開始・生成／失敗時復元を既存選択状態と接続し、機能全体のcommand境界を整理する。全体目標と全体E2Eは未完了。
+
+寸法入力ControllerへCanvasキーによるbuffer編集と入力中表示更新を統合。Enterの入力開始／確定とEscape取消は明示したコールバックへ委譲し、モデル更新とは分離する。構文189件・単体404件・統合UI／保存互換E2E114件が成功。app.jsは21,278行。次はOffsetの選択状態（source、chain entries、選択確定フラグ）をまとめて所有させ、選択開始・追加・確定・取消とプレビュー／生成への接続を機能単位で整理する。現在の3変数はクリック・hover・Enter・モード切替・test hookに分散しており、単純な関数移動では解消しない。全体目標と全体E2Eは未完了。
+
+寸法値・式の確定を`DimensionValueCommand`へ分離。既存寸法の更新失敗時のsnapshot復元と入力継続、成功時の履歴記録、初回寸法の拡縮と画面上の大きさの復元を同じ確定処理で調整する。構文189件・単体402件・統合UI／保存互換E2E114件が成功。app.jsは21,330行。次は入力待ちコマンドの開始・キーボード更新・取消を整理する。全体目標と全体E2Eは未完了。
+
+寸法入力のlayout・所有Sketchの表示設定・入力検証とview同期を`DimensionInputController`へ分離。pendingCommandは読取りだけとし、距離の式評価とOffsetの数値判定、表示後の検証順序を維持した。構文187件・単体398件・統合UI E2E93件が成功。app.jsは21,374行。次は入力待ちコマンドの更新／確定／取消の所有者を整理する。全体目標と全体E2Eは未完了。
+
+寸法入力欄のDOM操作を`DimensionInputView`へ分離。位置・角度・文字サイズ・幅・非表示・invalid表示・focus予約を担当し、寸法layoutと数式評価は呼出し側へ残す。表示後に検証結果を反映する順序と、focus予約後に取消された場合の非表示判定を維持した。構文185件・単体394件・統合UI E2E93件が成功。app.jsは21,410行。次は入力待ちコマンドの更新／取消と表示用値の生成を整理する。全体目標と全体E2Eは未完了。
+
+入力待ちコマンドと描画モードからカーソルを表示する処理を`CommandCursor`へ分離。コマンド状態への直接依存を除き、種類とモードだけを値で渡す。SVG cacheと表示元の状態もviewが所有する。構文183件・単体391件・統合UI E2E93件が成功。app.jsは21,426行。次は入力待ち状態の表示依存（寸法入力欄）と取消・モード遷移の境界を整理する。全体目標と全体E2Eは未完了。
+
+フィレットの最初の線と、半径配置から生成・拘束安定化・失敗時復元・履歴記録までを`FilletCommand`へ分離。pendingCommandは既存取消規則を維持する移行用get／setで接続する。構文181件・単体388件・統合UI／保存互換E2E114件・フィレットドラッグ回帰1件（3,744 previews）が成功。app.jsは21,495行。次は共通の入力待ち状態と作図モード遷移の境界を整理する。全体目標と全体E2Eは未完了。
+
+連続線作図の開始Point、直交・最小距離補正と確定を`LineCommand`へ分離し、TransientAuthoringの復元記録へ接続した。開始点の直接書込みをreset／clickへ置き換え、プレビューも同じ直交補正を使用する。構文179件・単体383件・統合UI／保存互換E2E114件が成功。app.jsは21,583行。次は作図モード開始／終了の共通調整と、残る操作固有の状態を整理する。全体目標と全体E2Eは未完了。
+
+矩形の開始Pointと二回クリック確定を`RectangleCommand`へ分離。各モード切替・取消はresetへ委譲し、プレビューは読出し専用の開始点を参照する。最小辺長、対角点snapの解除、四辺の水平／垂直拘束と確定後の更新順を維持した。構文177件・単体379件・統合UI／保存互換E2E114件が成功。app.jsは21,657行。次はLine作図の状態と確定処理を既存TransientAuthoringへ接続して分離する。全体目標と全体E2Eは未完了。
+
+点・線作図の3個の復元記録を`TransientAuthoring`へ分離し、モデルと採番の復元・一時点判定・Selection整理・直前履歴破棄を同じ所有者へまとめた。appから復元記録への直接書込みを除き、作成Point／Lineの通知APIへ変更。構文175件・単体376件・統合UI／保存互換E2E114件が成功。app.jsは21,693行。次はモード遷移と各作図commandの開始／取消の接続を整理する。全体目標と全体E2Eは未完了。
+
+スプラインのクリック判定・開閉曲線確定・ダブルクリック確定を`SplineCommand`へ分離。SplineDraft、Geometry生成、スナップ、選択・解析・履歴・表示更新を明示して接続した。appの初期化順序でGeometry生成とスナップが先行するよう調整。構文173件・単体372件・Spline／統合UI／保存互換E2E120件が成功。app.jsは21,803行。次は作図開始時のモード切替と他コマンド取消の責務を整理する。全体目標と全体E2Eは未完了。
+
+スプライン作成中の通過点・Point rollback・最後のクリック情報を`SplineDraft`へ分離。開始、記録破棄、取消、Backspace、ダブルクリックの追加点除去を所有させ、appから3個の状態変数を除いた。既存Point保護と単点削除時に採番を戻さない規則を維持。構文171件・単体368件・Spline／統合UI／保存互換E2E120件が成功。app.jsは21,844行。次はスプライン確定・モード切替と残る作図操作の責務を整理する。全体目標と全体E2Eは未完了。
+
+中ボタンのパン操作と全体表示用クリック履歴を`CanvasNavigation`へ分離した。開始・移動・終了・リセットを同じ所有者へまとめ、appはイベントの振分けを担当する。既存の計算順序、450ms／12pxの境界、Documentリセット時の状態破棄を維持。構文169件・単体364件・統合UI／保存互換のE2E114件が成功。app.jsは21,885行。次は残る描画操作のsession・取消処理を責務単位で整理する。全体目標と全体E2Eは未完了。
+
+Document生成・内容消去・既定Sketchと表示設定の復元を`DocumentState`へ分離。編集scopeをDocumentへ戻し、内容消去→操作取消／cache破棄／採番リセット→既定値復元の順序を維持した。構文167件・単体360件が成功。関連E2E162件中161件が成功し、file URLテストの固定読込一覧へ新規3moduleを追加した後、残り1件も再実行成功。app.jsは21,930行。次は操作状態の所有者を分離し、resetModelStateの操作取消を各所有者へ委譲する。全体目標と全体E2Eは未完了。
+
+続いてDocument読込の候補生成とモデル反映を`DocumentLoading`へ分離した。読込codec間の接続・版別検査・移行はdecode、リセット後のデータ反映はinstallが担当し、Sketchツリー復元・履歴・修復通知はapp側に残した。配列参照・拘束参照とcache無効化／円弧正規化の順序を保持。構文165件・単体357件・保存互換／Block／ファイル安全性／派生Instance／Sketch投影のE2E102件が成功。app.jsは21,980行。次はDocumentリセットと編集操作状態のリセットの境界を整理する。全体目標と全体E2Eは未完了。
+
+継続指示により再開。`codex/composition-root-next`で読込後の採番復元を`DocumentSequences`へ分離した。入力を変更せず、Documentと全Definitionから予約対象と次番号を返す。Windowsのコマンド長制限に達した構文チェックは、対象161件を維持して新規2件を追加し、`tools/check-syntax.js`へ移した。構文163件・単体352件・Block／保存互換のE2E58件が成功。app.jsは22,056行で、数百行化の目標は未完了。次は読込候補の最終反映とUI復元の境界を整理する。
+
+前回以降のSolver修正47494f0は取り込み済み。全体E2Eと航空機ドラッグの再検証はこの段階では実施しておらず、最終検証に残る。以下は一時停止時点の記録。
+
+## 前回の一時停止地点（2026-09-21）
 
 再開用ブランチは`codex/composition-root-next`。developの投影SketchのみのBlock配置修正（a995427）も統合した。検証は構文チェック・単体346件・Offset全10,296プレビューまで成功。全体E2Eは航空機A2/A3ドラッグで10分のタイムアウトが発生し、その後ユーザーのクレジット節約の指示により停止した。全313件の成功は未確認で、再開時にはこのタイムアウトの調査と全体検証が必要。今回はユーザー承認により残りのテストを省略してコミット・developへの統合を行う。
 

@@ -35,11 +35,45 @@
       return new Set(enabled.length > 0 ? enabled : blockDefinitionGeometrySketchIds(definition));
     }
 
+    function blockDefinitionOwnedSubtreeIds(rootDefinitionIds) {
+      const ids = new Set(rootDefinitionIds);
+      let changed = true;
+      while (changed) {
+        changed = false;
+        for (const definition of definitions()) {
+          if (!definition.parentDefinitionId || !ids.has(definition.parentDefinitionId) || ids.has(definition.id)) continue;
+          ids.add(definition.id);
+          changed = true;
+        }
+      }
+      return ids;
+    }
+
+    function blockDefinitionSketchRows(definition) {
+      if (!definition) return [];
+      const children = new Map();
+      for (const sketch of definition.sketches) {
+        if (!children.has(sketch.parentSketchId)) children.set(sketch.parentSketchId, []);
+        children.get(sketch.parentSketchId).push(sketch);
+      }
+      const rows = [];
+      const visit = (parentId, depth) => {
+        for (const sketch of children.get(parentId) || []) {
+          if (sketch.kind === "root") continue;
+          const count = [...definition.lines, ...definition.circles, ...definition.arcs, ...(definition.splines || []), ...(definition.annotations || []), ...(definition.hatches || []), ...(definition.blockInstances || []), ...(definition.geometryInstances || [])].filter((item) => item.sketchId === sketch.id).length;
+          rows.push({ sketch, depth, count });
+          visit(sketch.id, depth + 1);
+        }
+      };
+      visit(ROOT_SKETCH_ID, 0);
+      return rows;
+    }
+
     function hasHatches() {
       return definitions().some(definition => (definition.hatches?.length || 0) > 0);
     }
 
-    return Object.freeze({ hasHatches, blockDefinitionById, blockDefinitionDrawableSketchIds, blockDefinitionHasGeometry, blockDefinitionGeometrySketchIds, blockInstanceEnabledSketchSet });
+    return Object.freeze({ blockDefinitionOwnedSubtreeIds, blockDefinitionSketchRows, hasHatches, blockDefinitionById, blockDefinitionDrawableSketchIds, blockDefinitionHasGeometry, blockDefinitionGeometrySketchIds, blockInstanceEnabledSketchSet });
   }
   window.BlockCatalog = Object.freeze({ create });
 })();

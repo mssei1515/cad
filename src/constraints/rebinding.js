@@ -1,9 +1,38 @@
 (() => {
   "use strict";
 
+  function translateFixedConstraintValues(data, dx, dy) {
+    if (data.type === "arcEndpointFixed" || data.type === "geometryFixed") {
+      data.x += dx;
+      data.y += dy;
+    } else if (data.type === "lineFixed") {
+      data.p1x += dx;
+      data.p2x += dx;
+      data.p1y += dy;
+      data.p2y += dy;
+    }
+  }
+
   function create({ catalog, projections, geometryInstanceBundlesForScope,
     serializeConstraint, decorateSerializedConstraint, deserializeConstraint, applicationText }) {
     const { addGeometryBundleToMaps } = window.GeometryObjects;
+    const { DEFAULT_SKETCH_ID } = window.SketchHierarchy;
+    function cloneConstraintForBlock(constraint, pointById, lineById, primitiveById, origin = { x: 0, y: 0 }, preserveReference = false) {
+      const data = decorateSerializedConstraint(serializeConstraint(constraint), constraint);
+      if (!data) throw new Error("未対応の内部拘束があります");
+      if (data.dimension) {
+        data.dimension = { ...data.dimension };
+        for (const key of ["x", "labelX"]) if (Number.isFinite(Number(data.dimension[key]))) data.dimension[key] = Number(data.dimension[key]) - origin.x;
+        for (const key of ["y", "labelY"]) if (Number.isFinite(Number(data.dimension[key]))) data.dimension[key] = Number(data.dimension[key]) - origin.y;
+      }
+      translateFixedConstraintValues(data, -origin.x, -origin.y);
+      const cloned = deserializeConstraint(data, pointById, lineById, primitiveById);
+      if (!cloned) throw new Error("内部拘束を複製できません");
+      cloned.sketchId = constraint.sketchId || DEFAULT_SKETCH_ID;
+      cloned.reference = preserveReference && Boolean(constraint.reference);
+      cloned.referenceSketchId = cloned.reference ? constraint.referenceSketchId || null : null;
+      return cloned;
+    }
     function rebuildBlockDefinitionConstraintObjects(definition) {
       const pointById = new Map(definition.points.map((point) => [point.id, point]));
       const lineById = new Map(definition.lines.map((line) => [line.id, line]));
@@ -56,7 +85,7 @@
       });
     }
 
-    return Object.freeze({ rebuildDefinition: rebuildBlockDefinitionConstraintObjects, rebuildDocument });
+    return Object.freeze({ rebuildDefinition: rebuildBlockDefinitionConstraintObjects, rebuildDocument, cloneForBlock: cloneConstraintForBlock });
   }
-  window.ConstraintRebinding = Object.freeze({ create });
+  window.ConstraintRebinding = Object.freeze({ create, translateFixedValues: translateFixedConstraintValues });
 })();
