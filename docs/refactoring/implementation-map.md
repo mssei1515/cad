@@ -17,6 +17,7 @@
 - `src/persistence/document_snapshot.js`: DocumentとBlockで共有する保存field writer、派生Instance保存値
 - `src/editing/edit_history.js`: 履歴stack操作
 - `src/diagnostics/interaction_profiler.js`: 同期処理の時間・実行回数計測
+- `src/ui/block_view.js`: Block一覧・編集パネルのDOM表示とイベント接続。状態変更は操作コールバックへ委譲
 - `src/ui/choice_dialog.js`: 共通選択dialog
 - `src/parameters/parameter_engine.js`: Parameter式の字句解析、構文解析、依存評価、識別子検証と名称書換え
 - `src/solver/constraint_solver.js`: GeometryとConstraintのsolver

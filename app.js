@@ -9374,53 +9374,25 @@
     return rows;
   }
 
+  const blockView = window.BlockView.create({
+    document, escapeHtml,
+    readEditing: () => blockEditSession ? { name: blockEditSession.draft.name } : null,
+    blockDefinitionsInCurrentScope, blockDefinitionUsageCount,
+    selectedDefinitionIds: () => canvasSelection.blockInstances.map((instance) => instance.definitionId),
+    startBlockPlacement, enterBlockDefinitionEdit, renameBlockDefinition, deleteBlockDefinition,
+    completeBlockDefinitionEdit, cancelBlockDefinitionEdit,
+    changeName: (value) => {
+      if (!blockEditSession) return false;
+      blockEditSession.draft.name = value || blockEditSession.draft.name;
+      return true;
+    },
+    commitName: () => { if (blockEditSession) recordHistory("ブロック名変更"); },
+    refresh: updateBlockUI, localizeApplicationUI,
+  });
+
   function updateBlockUI() {
     ensureBlockState();
-    const list = document.getElementById("blockList");
-    const title = document.getElementById("blockOverlayTitle");
-    const editorOverlay = document.getElementById("blockEditorOverlay");
-    const nameInput = document.getElementById("blockEditorNameInput");
-    const editorActions = document.getElementById("blockEditorActions");
-    if (title) title.textContent = blockEditSession ? "ブロックエディタ" : "ブロック";
-    if (editorOverlay) editorOverlay.hidden = !blockEditSession;
-    if (nameInput) {
-      nameInput.hidden = !blockEditSession;
-      if (blockEditSession && document.activeElement !== nameInput) nameInput.value = blockEditSession.draft.name;
-    }
-    if (editorActions) editorActions.hidden = !blockEditSession;
-    if (!list) return;
-    list.hidden = false;
-    const scopedDefinitions = blockDefinitionsInCurrentScope();
-    if (scopedDefinitions.length === 0) {
-      list.innerHTML = '<div class="block-item"><span class="block-item-name" data-i18n-ja="ブロックはありません" data-i18n-en="No blocks">ブロックはありません</span></div>';
-      return;
-    }
-    list.innerHTML = scopedDefinitions.map((definition) => {
-      const count = blockDefinitionUsageCount(definition.id);
-      return `<div class="block-item" data-id="${escapeHtml(definition.id)}"><span class="block-item-name" title="${escapeHtml(definition.name)}">${escapeHtml(definition.name)}</span><span class="block-item-count">${count}</span><button class="blockPlaceBtn" data-id="${escapeHtml(definition.id)}">配置</button><button class="blockEditBtn" data-id="${escapeHtml(definition.id)}">編集</button><button class="blockRenameBtn" data-id="${escapeHtml(definition.id)}">Aa</button><button class="blockDeleteBtn" data-id="${escapeHtml(definition.id)}">削除</button></div>`;
-    }).join("");
-    const selectedDefinitionIds = new Set(canvasSelection.blockInstances.map((instance) => instance.definitionId));
-    for (const row of document.querySelectorAll(".block-item[data-id]")) {
-      const selected = selectedDefinitionIds.has(row.dataset.id);
-      row.classList.toggle("block-selected", selected);
-      row.setAttribute("aria-selected", String(selected));
-    }
-    for (const button of document.querySelectorAll(".blockPlaceBtn")) button.addEventListener("click", () => {
-      document.getElementById("blockDefinitionsDialog")?.close();
-      startBlockPlacement(button.dataset.id);
-    });
-    for (const button of document.querySelectorAll(".blockEditBtn")) button.addEventListener("click", () => {
-      document.getElementById("blockDefinitionsDialog")?.close();
-      enterBlockDefinitionEdit(button.dataset.id);
-    });
-    for (const button of document.querySelectorAll(".blockRenameBtn")) button.addEventListener("click", () => renameBlockDefinition(button.dataset.id));
-    for (const button of document.querySelectorAll(".blockDeleteBtn")) button.addEventListener("click", () => deleteBlockDefinition(button.dataset.id));
-    for (const row of document.querySelectorAll(".block-item[data-id]")) row.addEventListener("dblclick", (event) => {
-      if (!event.target.closest("button")) {
-        document.getElementById("blockDefinitionsDialog")?.close();
-        enterBlockDefinitionEdit(row.dataset.id);
-      }
-    });
+    blockView.render();
   }
 
   function focusedExpressionInputContext() {
@@ -14025,25 +13997,7 @@
   });
   appearancePalette.bind();
   applicationSettings.start();
-  document.getElementById("openBlockDefinitionsBtn")?.addEventListener("click", () => {
-    updateBlockUI();
-    const dialog = document.getElementById("blockDefinitionsDialog");
-    if (dialog && !dialog.open) {
-      localizeApplicationUI(dialog);
-      dialog.showModal();
-    }
-  });
-  document.getElementById("completeBlockEditBtn")?.addEventListener("click", completeBlockDefinitionEdit);
-  document.getElementById("cancelBlockEditBtn")?.addEventListener("click", cancelBlockDefinitionEdit);
-  document.getElementById("blockEditorNameInput")?.addEventListener("input", (event) => {
-    if (!blockEditSession) return;
-    blockEditSession.draft.name = event.target.value || blockEditSession.draft.name;
-    const title = document.getElementById("blockOverlayTitle");
-    if (title) title.textContent = "ブロックエディタ";
-  });
-  document.getElementById("blockEditorNameInput")?.addEventListener("change", () => {
-    if (blockEditSession) recordHistory("ブロック名変更");
-  });
+  blockView.bind();
 
   document.getElementById("toolSelect").addEventListener("click", () => {
     cancelConstraintTargetCommand("");
