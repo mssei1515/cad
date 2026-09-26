@@ -8,7 +8,7 @@ const sandbox = { window: {} };
 vm.createContext(sandbox);
 const sources = vm.runInNewContext(fs.readFileSync(path.join(root, "index.html"), "utf8").match(/const sources = (\[[\s\S]*?\]);/)[1]);
 for (const file of sources.filter(source => source.startsWith("src/"))) vm.runInContext(fs.readFileSync(path.join(root, file), "utf8"), sandbox, { filename: file });
-const { Point, Line } = sandbox.window.GeometrySolver;
+const { Point, Line, Circle } = sandbox.window.GeometrySolver;
 const near = (actual, expected) => assert.ok(Math.abs(actual - expected) < 1e-10, `${actual} != ${expected}`);
 const point = (id, x, y) => Object.assign(new Point(id, x, y), { sketchId: "S1" });
 function definition(id) {
@@ -20,7 +20,11 @@ const instance = (id, definitionId, fields = {}) => ({ id, definitionId, sketchI
 function services(definitions) {
   const catalog = sandbox.window.BlockCatalog.create({ definitions });
   const derived = sandbox.window.InstanceProjection.create({ elementSketchId: item => item.sketchId, applicationText: (_ja, en) => en });
-  const hatchPrimitivesFromElements = elements => elements.filter(item => item instanceof Line).map(item => ({ kind: "line", id: item.id, p1: item.p1, p2: item.p2 }));
+  const hatchPrimitivesFromElements = elements => elements.flatMap(item => {
+    if (item instanceof Line) return [{ kind: "line", id: item.id, p1: item.p1, p2: item.p2 }];
+    if (item instanceof Circle) return [{ kind: "circle", id: item.id, center: item.center, radius: item.radius() }];
+    return [];
+  });
   const projection = sandbox.window.BlockProjection.create({ blockCatalog: catalog, ...derived, hatchPrimitivesFromElements, hatchPrimitivesForScope: scope => hatchPrimitivesFromElements(scope.lines) });
   return { catalog, projection };
 }
@@ -215,4 +219,44 @@ test("annotation projection preserves geometry references, transforms and outer 
   assert.equal(projected.style.color, "#ff0000");
   assert.equal(source.annotations[0].style.color, "#112233");
   assert.equal(projected.localElement, source.annotations[0]);
+});
+
+test("cached block hatch projections follow instance translation and rotation", () => {
+  const source = definition("B1");
+  const center = point("PC1", 2, 3);
+  const circle = Object.assign(new Circle("C1", center, 2), { sketchId: "S1" });
+  source.points.push(center);
+  source.lines = [];
+  source.circles = [circle];
+  source.hatches = [{
+    id: "H1",
+    sketchId: "S1",
+    seed: { x: 2, y: 3 },
+    boundaryLoops: [{ spans: [{ source: { kind: "circle", path: ["C1"] }, fullLoop: true }] }],
+    appearance: { patternType: "solid", angle: 10, color: "#112233", visible: true, spacing: 2, lineWidth: 1, opacity: 1 },
+  }];
+  const { projection } = services(() => [source]);
+  const block = instance("BI1", source.id, { x: 10, y: 20, rotation: 0 });
+  const first = projection.blockProjectionBundle(block);
+  const hatch = first.hatches[0];
+  assert.equal(projection.blockProjectionBundle(block), first);
+  near(hatch.resolvedBoundary.loops[0].points[0].x, 14);
+  near(hatch.resolvedBoundary.loops[0].points[0].y, 23);
+  near(hatch.seed.x, 12);
+  near(hatch.seed.y, 23);
+  near(hatch.patternOrigin.x, 10);
+  near(hatch.patternOrigin.y, 20);
+  near(hatch.appearance.angle, 10);
+
+  block.x = 30;
+  block.y = 40;
+  block.rotation = Math.PI / 2;
+  assert.equal(projection.blockProjectionBundle(block), first);
+  near(hatch.resolvedBoundary.loops[0].points[0].x, 27);
+  near(hatch.resolvedBoundary.loops[0].points[0].y, 44);
+  near(hatch.seed.x, 27);
+  near(hatch.seed.y, 42);
+  near(hatch.patternOrigin.x, 30);
+  near(hatch.patternOrigin.y, 40);
+  near(hatch.appearance.angle, 100);
 });
