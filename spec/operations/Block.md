@@ -48,7 +48,7 @@ Projection AnnotationのIDは`BI1/AN1`、入れ子では`BI1/BI2/AN1`とする�
 
 配置先Canvasで投影Annotationまたは投影Hatchをclickした場合は単体でなく最上位Block Instance全体を選択し、内部Object自体の編集はBlock Editor内だけで行う。Projection AnnotationとHatchはBlock bounds、fit、配置中心、配置preview、hit testへ含める。
 
-Hatchの輪郭、seed、pattern原点、angleへInstance変換を合成し、Block回転とともに平行線・クロスpatternも回転する。色塗りつぶしは同じ変換済み輪郭へ描画する。
+Hatchの輪郭、seed、pattern原点、angleへInstance変換を合成し、Block回転とともに平行線・クロスpatternも回転する。色塗りつぶしは同じ変換済み輪郭へ描画する。Instanceの移動・回転中も、投影済みHatchは同じBlock Instanceの変換へ追従する。
 
 参照の値・path・保存と解決は[GeometryRefとConstraint参照](../data/保存形式.md#13-geometryrefとconstraint参照)に従う。
 

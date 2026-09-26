@@ -98,7 +98,7 @@
         if (normalized.lineWidth != null) appearance.lineWidth = normalized.lineWidth;
         if (Object.prototype.hasOwnProperty.call(normalized, "visible")) appearance.visible = normalized.visible !== false;
       }
-      const projectedResolved = localResolved.ok
+      const projectResolvedBoundary = () => localResolved.ok
         ? {
             ok: true,
             epsilon: localResolved.epsilon,
@@ -108,14 +108,10 @@
             })),
           }
         : localResolved;
-      return {
+      const projected = {
         ...serializeHatch(localHatch),
         id: blockProjectionHatchId(ownerInstance, localPath),
         sketchId: ownerInstance.sketchId,
-        seed: blockWorldPoint(transform, localHatch.seed),
-        patternOrigin: blockWorldPoint(transform, { x: 0, y: 0 }),
-        appearance: { ...appearance, angle: appearance.angle + (Number(transform.rotation) || 0) * 180 / Math.PI },
-        resolvedBoundary: projectedResolved,
         blockProjection: true,
         blockInstance: ownerInstance,
         blockDefinition: definition,
@@ -123,6 +119,13 @@
         blockLocalId: localPath.join("/"),
         blockAppearanceOverrides: appearanceOverrides,
       };
+      Object.defineProperties(projected, {
+        seed: { configurable: true, enumerable: true, get: () => blockWorldPoint(transform, localHatch.seed) },
+        patternOrigin: { configurable: true, enumerable: true, get: () => blockWorldPoint(transform, { x: 0, y: 0 }) },
+        appearance: { configurable: true, enumerable: true, get: () => ({ ...appearance, angle: appearance.angle + (Number(transform.rotation) || 0) * 180 / Math.PI }) },
+        resolvedBoundary: { configurable: true, enumerable: true, get: projectResolvedBoundary },
+      });
+      return projected;
     }
 
     function createBlockProjectionBundle(instance, definition, enabledSketchIdsOverride = null, options = {}) {
