@@ -36,7 +36,6 @@ function fixture() {
     contextFromSeeds: (seeds, sketchId) => { state.seeds = seeds; state.sketchId = sketchId; return state.context; },
     projectionConstraintsForItems: items => { state.projectionItems = items; return state.projection; },
     pointLockedByLineFixed: point => Boolean(point.lineLocked),
-    variableDeltaInBasis: (point, prop, basis, analysis) => basis[analysis.variableIndex.get(point)?.[prop]] || 0,
     captureValues: () => { events.push('snapshot'); return state.snapshot; },
     enforceMinimumLineLengths: lines => { state.repairLines = lines; events.push('repair'); return state.repair; },
     normalizeArcSweeps: () => events.push('normalize'), invalidateProjection: id => events.push(['invalidate', id]),

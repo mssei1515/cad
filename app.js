@@ -174,7 +174,7 @@
   const currentParameterNamespace = workspace.current;
   const parameterNamespace = window.ParameterNamespace.create({ currentParameterNamespace, applicationText });
   const {
-    dimensionExpressionValue, numericDimensionExpression, isDirectNumericExpressionInput,
+    evaluateDimensionExpressionDraft, dimensionExpressionValue, numericDimensionExpression, isDirectNumericExpressionInput,
     dimensionUsesExpression, expressionInputValue, expressionFromUserInput,
     dimensionConstraintsInNamespace, allocateDimensionParameterName,
     ensureDimensionParameter, ensureParameterNamespace, parameterErrorText,
@@ -182,6 +182,11 @@
     validateParameterNamespace, prepareLoadedParameterNamespace, parameterDependents,
   } = parameterNamespace;
   const parameterDraft = window.ParameterDialogDraft.create({ namespace: parameterNamespace });
+  const expressionInputView = window.ExpressionInputView.create({
+    document, InputElement: HTMLInputElement, referenceNamesForInput: expressionReferenceNamesForInput, escapeHtml,
+  });
+  const { sync: syncExpressionInputHighlight, install: installExpressionInputHighlights,
+    refresh: refreshExpressionInputHighlights } = expressionInputView;
   const parameterDialogView = window.ParameterDialogView.create({
     document, applicationText, escapeHtml, formatDisplayNumber, parameterErrorText,
     localizeApplicationUI, installExpressionInputHighlights, defaultSketchId: DEFAULT_SKETCH_ID,
@@ -256,8 +261,6 @@
   let hoveredAnnotation = null;
   let hoveredHatch = null;
   let hoveredReferenceImage = null;
-  let constraintAnalysisState = null;
-  let constraintRedundancyState = { constraints: new Map(), sketches: new Map(), count: 0 };
   let lastAuthoringPerformance = null;
   const interactionProfiler = window.InteractionProfiler.create();
   const { work: profileInteractionWork, phase: profileInteractionPhase } = interactionProfiler;
@@ -268,8 +271,15 @@
   });
   const { withGeometryReadCache, blockProjectionBundles, geometryInstanceBundles, geometryInstanceBundle, allGeometryPoints, allGeometryLines, allGeometryCircles, allGeometryArcs, allGeometrySplines, allAnnotations, allHatches, allGeometryPrimitives, resolveGeometryRef, geometryElementFromKey } = geometryReads;
   let interactionFrameStats = null;
-  let sketchSolveStates = new Map();
-  let invalidReferenceConstraints = new Map();
+  const referenceConstraintState = window.ReferenceConstraintState.create({
+    currentScope: workspace.current, constraintSketchId, isReferenceSourceSketchId,
+  });
+  const { constraintIsOperational, wouldCreateReferenceCycle, refreshReferenceConstraintValidity,
+    referenceConstraintErrorInfo, referenceConstraintErrorCountForSketch } = referenceConstraintState;
+  const sketchProjectionQueries = window.SketchProjectionQueries.create({
+    currentScope: workspace.current, constraintIsOperational,
+  });
+  const { sketchProjectionConstraints, sketchProjectionConstraintForTarget, sketchProjectionConstraintsForTarget, isSketchProjectedGeometry, sketchProjectionPointPairs, sketchProjectionConstraintsAffectingItems } = sketchProjectionQueries;
   let blankDoubleClickCandidate = null;
   let suppressNextBlankDoubleClickEvent = false;
   let splineEditSession = null;
@@ -430,6 +440,25 @@
   const PARAMETER_STABILIZATION_RELATIVE_TOLERANCE = 1e-7;
   const DRAG_PREVIEW_MAX_MODEL_ERROR = 0.125;
   const MIN_LINE_LENGTH = Math.max(MIN_ORIENTATION_LENGTH, solver.minLineLength || 12);
+  const solveScopeQuery = window.SolveScopeQuery.create({
+    currentScope: workspace.current, geometryReads, activeSketchId, elementSketchId, constraintSketchId,
+    isVisibleSketchElement, constraintIsOperational, constraintGraphNodes, geometryInstanceDependencyRefs, minimumLength: MIN_LINE_LENGTH,
+  });
+  const { connectedComponentFromSeeds, localSolveVariables, localSolveConstraints, localSolveLines, sketchSolveVariables, sketchSolveConstraints, sketchSolveLines, localSolveContextFromSeeds } = solveScopeQuery;
+  const constraintRedundancy = window.ConstraintRedundancy.create({
+    currentScope: workspace.current, solver, sketchSolveVariables, constraintSketchId,
+    constraintIsOperational, isRootSketch, acceptError: CONSTRAINT_ACCEPT_ERROR,
+  });
+  const { redundantConstraintInfo, refreshConstraintRedundancy, constraintRedundancyInfo,
+    constraintIsRedundant, constraintDuplicateCountForSketch } = constraintRedundancy;
+  const constraintAnalysis = window.ConstraintAnalysis.create({
+    currentScope: workspace.current, solver, scopeQuery: solveScopeQuery, activeSketchId, descendantSketchIds, elementSketchId,
+    geometryInstanceBundles, blockProjectionBundles, geometryInstanceSourcePoints,
+    refreshReferenceConstraintValidity, refreshConstraintRedundancy, sketchHasSolveError,
+    isEditableSketchElement, isExplicitPoint, minimumLength: MIN_LINE_LENGTH, acceptError: CONSTRAINT_ACCEPT_ERROR,
+    profileAnalysis: work => interactionProfiler.active ? profileInteractionWork("analysis", work) : work(),
+  });
+  const { statusOf: constraintStatusOf } = constraintAnalysis;
   const viewport = window.CanvasViewport.create({
     canvasRect: () => canvas.getBoundingClientRect(), initialScale: CSS_PX_PER_MM,
     minZoom: MIN_ZOOM, maxZoom: MAX_ZOOM, minLength: MIN_LINE_LENGTH,
@@ -444,7 +473,7 @@
   const transientAuthoring = window.TransientAuthoring.create({
     currentScope: workspace.current, ids: geometryIds, selection: canvasSelection, historySnapshot, documentHistory,
     isHistoryRestoring: () => historyController.restoring, updateHistoryButtons,
-    invalidateAnalysis: () => { constraintAnalysisState = null; },
+    invalidateAnalysis: () => { constraintAnalysis.invalidate(); },
   });
   const { beginTransientLineStartRollback, clearTransientLineStartRollback, beginTransientLineCompletionRollback,
     clearTransientLineCompletionRollback, rollbackTransientLineCompletion, beginTransientPointRollback,
@@ -502,6 +531,11 @@
     minLineLength: MIN_LINE_LENGTH, minArcLength: MIN_ARC_LENGTH,
   });
   const { addPoint, addPointToSketch, addLine, addCircle, addArc, addSpline, ensureLineMinimumLength, normalizeArcSweep, enforceMinimumLineLengths, normalizeArcSweeps } = geometryCreation;
+  const sketchProjectionEditing = window.SketchProjectionEditing.create({
+    currentScope: workspace.current, queries: sketchProjectionQueries, resolveGeometryRef, geometryRefForItem, geometryKindForItem,
+    constraintSketchId, constraintIsOperational, addPointToSketch, constraintReferencesPoint, nextSeq, normalizeAppearance,
+  });
+  const { separateSharedSketchProjectionTargetPoints, synchronizeSketchProjectionMetadata } = sketchProjectionEditing;
   const drawingSnap = window.DrawingSnap.create({
     geometryReads, isVisibleSketchElement, isActiveSketchElement, isSplineOnlyFitPoint, isReferencePoint, isPrimitiveCenterPoint, isEndpointPoint, isPointUsedByPrimitive, isExplicitPoint, sketchName, elementSketchId, applicationText,
   });
@@ -543,7 +577,7 @@
     currentScope: () => model, geometryIds, geometry: geometryCreation, plans: offsetGeometry,
     placement: dimensionPlacement, types: window.GeometrySolver, kernel: window.GeometryKernel,
     commitNewConstraint, normalizeAppearance, offsetPairSign, offsetChainErrorText,
-    applicationText, setHint, updateUI, draw, invalidateAnalysis: () => { constraintAnalysisState = null; },
+    applicationText, setHint, updateUI, draw, invalidateAnalysis: () => { constraintAnalysis.invalidate(); },
     minLineLength: MIN_LINE_LENGTH, minArcLength: MIN_ARC_LENGTH,
   });
   const { createOffsetGeometry, createOffsetChainGeometry } = offsetConstruction;
@@ -577,15 +611,30 @@
   const { executeLineTrim, executeArcTrim, executeCircleTrim } = trimEditing;
   const editingCheckpoint = window.EditingCheckpoint.create({
     currentScope: workspace.current, ids: geometryIds, invalidateProjection: invalidateBlockProjectionCache,
-    invalidateAnalysis: () => { constraintAnalysisState = null; },
+    invalidateAnalysis: () => { constraintAnalysis.invalidate(); },
   });
   const { captureValues: snapshotModelState, restoreValues: restoreModelState, captureGeometry: snapshotGeometryMutationState, restoreGeometry: restoreGeometryMutationState } = editingCheckpoint;
+  const sketchSolving = window.SketchSolving.create({
+    currentScope: workspace.current, solver, scopeQuery: solveScopeQuery, activeSketchId, elementSketchId,
+    constraintSketchId, constraintGraphNodes, constraintIsOperational, geometryInstanceBundles, orderedSketches,
+    synchronizeSketchProjectionMetadata, refreshReferenceConstraintValidity, normalizeArcSweeps,
+    resultIsAccepted, restoreModelState, acceptError: CONSTRAINT_ACCEPT_ERROR,
+    profileDependencies: work => interactionProfiler.active ? profileInteractionWork("dependencies", work) : work(),
+  });
+  const parameterStabilization = window.ParameterStabilization.create({
+    namespace: parameterNamespace, currentParameterNamespace, activeSketchId,
+    solveSketchAndDependents: sketchSolving.solveSketchAndDependents,
+    captureValues: snapshotModelState, restoreValues: restoreModelState,
+    maxPasses: PARAMETER_STABILIZATION_MAX_PASSES, relativeTolerance: PARAMETER_STABILIZATION_RELATIVE_TOLERANCE,
+    nonConvergenceReason: () => applicationText("Parameter計算が収束しません", "Parameter calculation did not converge"),
+    profile: work => interactionProfiler.active ? profileInteractionWork("parameters", work) : work(),
+  });
   const filletCommand = window.FilletCommand.create({
     getPending: () => pendingCommand, setPending: value => { pendingCommand = value; },
     guardSketchProjectionShapeEdit, filletGeometryBasis, filletGeometryFromPointer, hideDimensionValueInput,
     snapshotGeometryMutationState, restoreGeometryMutationState, createFillet, clearSelection, selection: canvasSelection,
     stabilize: () => stabilizeActiveParameterNamespace(activeSketchId()), acceptError: CONSTRAINT_ACCEPT_ERROR,
-    invalidateAnalysis: () => { constraintAnalysisState = null; }, refreshConstraintAnalysis,
+    invalidateAnalysis: () => { constraintAnalysis.invalidate(); }, refreshConstraintAnalysis,
     applicationText, setHint, updateUI, updateGeometrySelectionUI, draw, recordHistory,
   });
   const { start: startFilletRadiusPlacement, update: updateFilletRadiusPlacement,
@@ -659,7 +708,7 @@
     plans: centerlinePlans, construction: centerlineConstruction, selection: canvasSelection, sameSketchElements, activeSketchId, isActiveSketchElement, applicationText, minLineLength: MIN_LINE_LENGTH,
     snapForDrawing: pointer => ({ point: snapForDrawing(pointer), snap: drawingSnap.active }), clearSnap,
     setPointerPreview: value => { pointerPreview = value; }, setMode: value => { mode = value; },
-    invalidateAnalysis: () => { constraintAnalysisState = null; }, setHint, updateUI, draw,
+    invalidateAnalysis: () => { constraintAnalysis.invalidate(); }, setHint, updateUI, draw,
   });
   const { reset: resetCenterlineCommandState, prepare: prepareCenterlineEndpointPlacement, click: handleCenterlineClick, projectPointToCenterlineSupport } = centerlineCommand;
   const circularConstruction = window.CircularConstruction.create({
@@ -812,7 +861,7 @@
 
   function setSolveResultHint(label, solved, analysis, dependent) {
     const hasDependentError = dependent?.success === false;
-    const hasDuplicateConstraints = (constraintRedundancyState?.count || 0) > 0;
+    const hasDuplicateConstraints = (constraintRedundancy.count) > 0;
     const stable = Boolean(solved?.success && analysis?.analysis?.stable && !hasDependentError && !hasDuplicateConstraints);
     const operation = solveOperationLabel(label);
     const message = stable
@@ -1104,67 +1153,6 @@
     ]);
   }
 
-  function expressionHighlightMarkup(input) {
-    const value = String(input?.value ?? "");
-    if (!value.trimStart().startsWith("=")) return escapeHtml(value);
-    const names = expressionReferenceNamesForInput(input);
-    const pattern = /"([A-Za-z_][A-Za-z0-9_]*)"/g;
-    let result = "";
-    let cursor = 0;
-    for (const match of value.matchAll(pattern)) {
-      result += escapeHtml(value.slice(cursor, match.index));
-      const token = match[0];
-      result += names.has(match[1])
-        ? `<span class="expression-reference-token">${escapeHtml(token)}</span>`
-        : escapeHtml(token);
-      cursor = match.index + token.length;
-    }
-    return result + escapeHtml(value.slice(cursor));
-  }
-
-  function syncExpressionInputHighlight(input) {
-    if (!(input instanceof HTMLInputElement)) return;
-    const shell = input.closest(".expression-input-shell");
-    const text = shell?.querySelector(".expression-input-highlight-text");
-    if (!text) return;
-    text.innerHTML = expressionHighlightMarkup(input) || "&#8203;";
-    text.style.transform = `translateX(${-input.scrollLeft}px)`;
-  }
-
-  function installExpressionInputHighlight(input) {
-    if (!(input instanceof HTMLInputElement) || input.readOnly) return;
-    let shell = input.closest(".expression-input-shell");
-    if (!shell) {
-      shell = document.createElement("span");
-      shell.className = "expression-input-shell";
-      const highlight = document.createElement("span");
-      highlight.className = "expression-input-highlight";
-      highlight.setAttribute("aria-hidden", "true");
-      const text = document.createElement("span");
-      text.className = "expression-input-highlight-text";
-      highlight.append(text);
-      input.before(shell);
-      shell.append(highlight, input);
-    }
-    input.classList.add("expression-input-source");
-    if (input.dataset.expressionHighlightInstalled !== "true") {
-      input.dataset.expressionHighlightInstalled = "true";
-      input.addEventListener("input", () => syncExpressionInputHighlight(input));
-      input.addEventListener("scroll", () => syncExpressionInputHighlight(input));
-    }
-    syncExpressionInputHighlight(input);
-  }
-
-  function installExpressionInputHighlights(root = document) {
-    const selector = '#dimensionValueInput, #propertiesPanel [data-property="constraint-expression"], [data-parameter-field="expression"], [data-dimension-field="expression"]:not([readonly])';
-    if (root instanceof HTMLInputElement && root.matches(selector)) installExpressionInputHighlight(root);
-    for (const input of root.querySelectorAll?.(selector) || []) installExpressionInputHighlight(input);
-  }
-
-  function refreshExpressionInputHighlights(root = document) {
-    for (const input of root.querySelectorAll?.(".expression-input-source") || []) syncExpressionInputHighlight(input);
-  }
-
   function guardDimensionSymbolDeletion(constraints, namespace = currentParameterNamespace()) {
     const removedConstraints = new Set(constraints || []);
     const removedNames = [...removedConstraints].filter(isDimensionConstraint).map((constraint) => constraint.parameterName).filter(Boolean);
@@ -1177,34 +1165,6 @@
     setHint(message, "error");
     log(message);
     return false;
-  }
-
-  function evaluateDimensionExpressionDraft(constraint, expression, namespace = currentParameterNamespace()) {
-    ensureParameterNamespace(namespace);
-    validateParameterSymbolNames(namespace.parameters, dimensionConstraintsInNamespace(namespace));
-    const referenceValues = new Map();
-    const definitions = namespace.parameters.map((parameter) => ({ ...parameter, kind: "parameter" }));
-    for (const item of dimensionConstraintsInNamespace(namespace)) {
-      if (isReadOnlyDimension(item)) {
-        const target = targetFromConstraint(item);
-        const value = target ? measuredDimensionValue(target, item.dimension) : NaN;
-        referenceValues.set(item.parameterName, value);
-      } else {
-        definitions.push({
-          name: item.parameterName,
-          expression: item === constraint ? String(expression) : item.expression,
-          kind: "dimension",
-        });
-      }
-    }
-    const evaluated = evaluateParameterDefinitions(definitions, referenceValues);
-    const value = constraint
-      ? evaluated.values.get(constraint.parameterName)
-      : evaluateParameterExpression(String(expression), evaluated.values);
-    const target = constraint ? targetFromConstraint(constraint) : null;
-    const max = target?.kind === "angle" ? 180 : Infinity;
-    if (!Number.isFinite(value) || value <= 0 || value >= max) throw new Error(applicationText("寸法値の範囲が正しくありません", "Dimension value is out of range"));
-    return value;
   }
 
   function isGeometryMode() {
@@ -1241,194 +1201,6 @@
 
   function geometryElementKey(item) {
     return geometryRefKey(geometryRefForItem(item)) || "";
-  }
-
-  function sketchProjectionConstraints() {
-    return model.constraints.filter((constraint) => constraint instanceof SketchProjectionConstraint);
-  }
-
-  let sketchProjectionTargetCacheConstraints = null;
-  let sketchProjectionTargetCacheLength = -1;
-  let sketchProjectionTargetCache = new Map();
-
-  function sketchProjectionTargetConstraintMap() {
-    if (sketchProjectionTargetCacheConstraints === model.constraints && sketchProjectionTargetCacheLength === model.constraints.length) {
-      return sketchProjectionTargetCache;
-    }
-    const next = new Map();
-    for (const constraint of model.constraints) {
-      if (!(constraint instanceof SketchProjectionConstraint) || !constraint.target) continue;
-      const entries = next.get(constraint.target) || [];
-      entries.push(constraint);
-      next.set(constraint.target, entries);
-    }
-    sketchProjectionTargetCacheConstraints = model.constraints;
-    sketchProjectionTargetCacheLength = model.constraints.length;
-    sketchProjectionTargetCache = next;
-    return next;
-  }
-
-  function sketchProjectionConstraintForTarget(item, { operationalOnly = true } = {}) {
-    return (sketchProjectionTargetConstraintMap().get(item) || []).find((constraint) =>
-      !operationalOnly || constraintIsOperational(constraint)) || null;
-  }
-
-  function sketchProjectionConstraintsForTarget(item, { operationalOnly = true } = {}) {
-    return (sketchProjectionTargetConstraintMap().get(item) || []).filter((constraint) =>
-      !operationalOnly || constraintIsOperational(constraint));
-  }
-
-  function isSketchProjectedGeometry(item) {
-    return Boolean(sketchProjectionConstraintForTarget(item));
-  }
-
-  function sketchProjectionPointPairs(constraint) {
-    if (!(constraint instanceof SketchProjectionConstraint) || !constraint.source || !constraint.target) return [];
-    if (constraint.kind === "point") return [[constraint.source, constraint.target]];
-    if (constraint.kind === "line") return [[constraint.source.p1, constraint.target.p1], [constraint.source.p2, constraint.target.p2]];
-    if (constraint.kind === "circle" || constraint.kind === "arc") return [[constraint.source.center, constraint.target.center]];
-    if (constraint.kind === "spline") {
-      return constraint.source.fitPoints.slice(0, constraint.target.fitPoints.length).map((point, index) => [point, constraint.target.fitPoints[index]]);
-    }
-    return [];
-  }
-
-
-  function separateSharedSketchProjectionTargetPoints(namespace) {
-    const points = Array.isArray(namespace?.points) ? namespace.points : [];
-    const constraints = Array.isArray(namespace?.constraints) ? namespace.constraints : [];
-    const claimed = new Set();
-    const processedTargets = new Set();
-    const pointIds = new Set(points.map((point) => String(point.id)));
-    let nextPointIndex = nextSeq(points, "P");
-    const cloneEndpoint = (point) => {
-      let id = `P${nextPointIndex++}`;
-      while (pointIds.has(id)) id = `P${nextPointIndex++}`;
-      pointIds.add(id);
-      const clone = new Point(id, point.x, point.y, Boolean(point.fixed), point.kind || "endpoint");
-      clone.sketchId = point.sketchId;
-      const appearance = normalizeAppearance(point.appearance);
-      if (Object.keys(appearance).length > 0) clone.appearance = appearance;
-      points.push(clone);
-      return clone;
-    };
-    let separated = 0;
-    for (const constraint of constraints) {
-      if (!(constraint instanceof SketchProjectionConstraint) || !constraint.target || processedTargets.has(constraint.target)) continue;
-      processedTargets.add(constraint.target);
-      const slots = constraint.kind === "point" && constraint.target instanceof Point
-        ? [{ point: constraint.target, assign: (point) => { constraint.target = point; } }]
-        : constraint.kind === "line" && constraint.target instanceof Line
-          ? [
-              { point: constraint.target.p1, assign: (point) => { constraint.target.p1 = point; } },
-              { point: constraint.target.p2, assign: (point) => { constraint.target.p2 = point; } },
-            ]
-          : (constraint.kind === "circle" && constraint.target instanceof Circle) || (constraint.kind === "arc" && constraint.target instanceof Arc)
-            ? [{ point: constraint.target.center, assign: (point) => { constraint.target.center = point; } }]
-            : constraint.kind === "spline" && constraint.target instanceof Spline
-              ? constraint.target.fitPoints.map((point, index) => ({ point, assign: (next) => { constraint.target.fitPoints[index] = next; } }))
-              : [];
-      for (const slot of slots) {
-        let point = slot.point;
-        if (claimed.has(point)) {
-          point = cloneEndpoint(point);
-          slot.assign(point);
-          if (constraint.target instanceof Spline) constraint.target._curveCache = null;
-          separated += 1;
-        }
-        claimed.add(point);
-      }
-    }
-    return separated;
-  }
-
-  function pointHasNonProjectionUse(point, excludingConstraint = null) {
-    if (!point) return false;
-    if (model.lines.some((line) => line.p1 === point || line.p2 === point)) return true;
-    if (model.circles.some((circle) => circle.center === point)) return true;
-    if (model.arcs.some((arc) => arc.center === point)) return true;
-    if (model.splines.some((spline) => spline.fitPoints.includes(point))) return true;
-    if (model.constraints.some((constraint) => constraint !== excludingConstraint && constraintReferencesPoint(constraint, point))) return true;
-    return model.annotations.some((annotation) => annotation?.type === "leader" && resolveGeometryRef(annotation.geometryRef) === point);
-  }
-
-  function synchronizeSketchProjectionConstraint(constraint) {
-    if (!(constraint instanceof SketchProjectionConstraint) || !constraint.source || !constraint.target) return false;
-    const reboundSource = resolveGeometryRef(geometryRefForItem(constraint.source));
-    if (reboundSource) constraint.source = reboundSource;
-    if (geometryKindForItem(constraint.source) !== constraint.kind || geometryKindForItem(constraint.target) !== constraint.kind) return false;
-    let changed = false;
-    if (["line", "circle", "arc", "spline"].includes(constraint.kind) && constraint.target.construction !== Boolean(constraint.source.construction)) {
-      constraint.target.construction = Boolean(constraint.source.construction);
-      changed = true;
-    }
-    if (constraint.kind !== "spline") return changed;
-
-    const sourceIdsBefore = Array.isArray(constraint.sourcePointIds) ? constraint.sourcePointIds : [];
-    const oldTargetPoints = constraint.target.fitPoints.slice();
-    const oldBySourceId = new Map();
-    sourceIdsBefore.forEach((id, index) => {
-      if (!oldTargetPoints[index]) return;
-      const key = String(id);
-      const entries = oldBySourceId.get(key) || [];
-      entries.push(oldTargetPoints[index]);
-      oldBySourceId.set(key, entries);
-    });
-    const targetSketchId = constraintSketchId(constraint);
-    const nextTargetPoints = constraint.source.fitPoints.map((sourcePoint) => {
-      const existing = oldBySourceId.get(String(sourcePoint.id))?.shift();
-      return existing || addPointToSketch(sourcePoint.x, sourcePoint.y, targetSketchId, "endpoint");
-    });
-    if (nextTargetPoints.length !== oldTargetPoints.length || nextTargetPoints.some((point, index) => point !== oldTargetPoints[index])) {
-      constraint.target.fitPoints = nextTargetPoints;
-      constraint.target._curveCache = null;
-      changed = true;
-    }
-    if (constraint.target.closed !== Boolean(constraint.source.closed)) {
-      constraint.target.closed = Boolean(constraint.source.closed);
-      constraint.target._curveCache = null;
-      changed = true;
-    }
-    constraint.sourcePointIds = constraint.source.fitPoints.map((point) => String(point.id));
-    for (const point of oldTargetPoints) {
-      if (nextTargetPoints.includes(point) || point.kind !== "endpoint" || pointHasNonProjectionUse(point, constraint)) continue;
-      model.points = model.points.filter((item) => item !== point);
-      changed = true;
-    }
-    return changed;
-  }
-
-  function synchronizeSketchProjectionMetadata(sketchId = null) {
-    let changed = false;
-    for (const constraint of sketchProjectionConstraints()) {
-      if (!constraintIsOperational(constraint) || sketchId && constraintSketchId(constraint) !== sketchId) continue;
-      changed = synchronizeSketchProjectionConstraint(constraint) || changed;
-    }
-    return changed;
-  }
-
-  function sketchProjectionTargetNodes(target) {
-    const nodes = new Set([target]);
-    if (target instanceof Line) {
-      nodes.add(target.p1).add(target.p2);
-    } else if (target instanceof Circle || target instanceof Arc) {
-      nodes.add(target.center);
-    } else if (target instanceof Spline) {
-      for (const point of target.fitPoints) nodes.add(point);
-    }
-    return nodes;
-  }
-
-  function sketchProjectionConstraintsAffectingItems(items, { includeSharedNodes = true, operationalOnly = true } = {}) {
-    const directTargets = new Set(items || []);
-    const touched = new Set();
-    for (const item of items || []) for (const node of sketchProjectionTargetNodes(item)) touched.add(node);
-    return model.constraints.filter((constraint) =>
-      constraint instanceof SketchProjectionConstraint
-      && (!operationalOnly || constraintIsOperational(constraint))
-      && (includeSharedNodes
-        ? [...sketchProjectionTargetNodes(constraint.target)].some((node) => touched.has(node))
-        : directTargets.has(constraint.target)));
   }
 
   function sketchProjectionShapeEditBlockedMessage(action = "") {
@@ -1942,68 +1714,6 @@
     return window.SketchHierarchy.parentSketchOf(model.sketches, sketch);
   }
 
-  function constraintIsOperational(constraint) {
-    return constraint?.enabled !== false && !invalidReferenceConstraints.has(constraint);
-  }
-
-  function referenceSketchTargets(sketchId) {
-    return [...new Set(model.constraints
-      .filter((constraint) => constraintIsOperational(constraint) && constraint.reference && constraintSketchId(constraint) === sketchId && constraint.referenceSketchId)
-      .map((constraint) => constraint.referenceSketchId))];
-  }
-
-  function referencePathExists(fromSketchId, toSketchId) {
-    const pending = [fromSketchId];
-    const visited = new Set();
-    while (pending.length > 0) {
-      const current = pending.pop();
-      if (current === toSketchId) return true;
-      if (!current || visited.has(current)) continue;
-      visited.add(current);
-      pending.push(...referenceSketchTargets(current));
-    }
-    return false;
-  }
-
-  function wouldCreateReferenceCycle(subjectSketchId, referenceSketchId) {
-    return subjectSketchId === referenceSketchId || referencePathExists(referenceSketchId, subjectSketchId);
-  }
-
-  function refreshReferenceConstraintValidity() {
-    const invalid = new Map();
-    const acceptedTargets = new Map();
-    const targetsOf = (sketchId) => acceptedTargets.get(sketchId) || [];
-    const pathExists = (fromSketchId, toSketchId) => {
-      const pending = [fromSketchId];
-      const visited = new Set();
-      while (pending.length > 0) {
-        const current = pending.pop();
-        if (current === toSketchId) return true;
-        if (!current || visited.has(current)) continue;
-        visited.add(current);
-        pending.push(...targetsOf(current));
-      }
-      return false;
-    };
-    for (const constraint of model.constraints) {
-      if (constraint.enabled === false || !constraint.reference || !constraint.referenceSketchId) continue;
-      const ownerSketchId = constraintSketchId(constraint);
-      const referenceSketchId = constraint.referenceSketchId;
-      if (!isReferenceSourceSketchId(referenceSketchId, ownerSketchId)) {
-        invalid.set(constraint, "参照範囲外");
-        continue;
-      }
-      if (ownerSketchId === referenceSketchId || pathExists(referenceSketchId, ownerSketchId)) {
-        invalid.set(constraint, "循環参照");
-        continue;
-      }
-      if (!acceptedTargets.has(ownerSketchId)) acceptedTargets.set(ownerSketchId, []);
-      acceptedTargets.get(ownerSketchId).push(referenceSketchId);
-    }
-    invalidReferenceConstraints = invalid;
-    return invalid;
-  }
-
   function sketchDepth(sketch) {
     ensureSketchState();
     return window.SketchHierarchy.sketchDepth(model.sketches, sketch);
@@ -2154,128 +1864,20 @@
     return Boolean(result) && Number.isFinite(result.errorNorm) && result.errorNorm <= CONSTRAINT_ACCEPT_ERROR;
   }
 
-  function constraintsForRedundancy(sketchId) {
-    return model.constraints.filter((constraint) => constraintIsOperational(constraint) && constraintSketchId(constraint) === sketchId);
-  }
-
-  function shouldRetainConnectedLineArcTangency(constraint, constraints) {
-    // Endpoint tangency can have zero first-order rank while still preserving the nonlinear shape.
-    if (!(constraint instanceof LineCircleTangentConstraint) || !(constraint.primitive instanceof Arc)) return false;
-    const firstEquivalent = constraints.find((item) =>
-      item instanceof LineCircleTangentConstraint &&
-      item.line === constraint.line &&
-      item.primitive === constraint.primitive &&
-      item.sign === constraint.sign);
-    if (firstEquivalent !== constraint) return false;
-    return constraints.some((item) =>
-      item instanceof ArcEndpointCoincidentConstraint &&
-      item.arc === constraint.primitive &&
-      (item.point === constraint.line.p1 || item.point === constraint.line.p2));
-  }
-
-  function redundantConstraintInfo(constraint, sketchId = constraintSketchId(constraint)) {
-    if (!constraint || constraint.enabled === false) return { redundant: false };
-    const constraints = constraintsForRedundancy(sketchId);
-    if (!constraints.includes(constraint)) return { redundant: false };
-    const redundancy = solver.constraintRedundancyState({
-      variables: sketchSolveVariables(sketchId),
-      constraints,
-      errorTolerance: CONSTRAINT_ACCEPT_ERROR,
-      rankTolerance: 1e-8,
-    });
-    const contribution = redundancy.byConstraint.get(constraint);
-    if (!redundancy.stable || !contribution) return { redundant: false, unstable: true, redundancy };
-    return {
-      redundant: contribution.redundant && !shouldRetainConnectedLineArcTangency(constraint, constraints),
-      rankBefore: contribution.rankBefore,
-      rankAfter: contribution.rankAfter,
-      redundancy,
-    };
-  }
-
-  function refreshConstraintRedundancy(precomputedBySketch = null) {
-    const byConstraint = new Map();
-    const bySketch = new Map();
-    let count = 0;
-    for (const sketch of model.sketches.filter((item) => !isRootSketch(item))) {
-      const sketchId = sketch.id;
-      const constraints = constraintsForRedundancy(sketchId);
-      const redundancy = precomputedBySketch?.get(sketchId) || solver.constraintRedundancyState({
-          variables: sketchSolveVariables(sketchId),
-          constraints,
-          errorTolerance: CONSTRAINT_ACCEPT_ERROR,
-          rankTolerance: 1e-8,
-        });
-      let sketchCount = 0;
-      for (const constraint of constraints) {
-        const contribution = redundancy.byConstraint.get(constraint);
-        if (!redundancy.stable || !contribution?.redundant || shouldRetainConnectedLineArcTangency(constraint, constraints)) continue;
-        const info = { redundant: true, sketchId, rankBefore: contribution.rankBefore, rankAfter: contribution.rankAfter };
-        byConstraint.set(constraint, info);
-        sketchCount += 1;
-        count += 1;
-      }
-      if (sketchCount > 0) bySketch.set(sketchId, sketchCount);
-    }
-    constraintRedundancyState = { constraints: byConstraint, sketches: bySketch, count };
-    return constraintRedundancyState;
-  }
-
-  function constraintRedundancyInfo(constraint) {
-    return constraintRedundancyState?.constraints?.get(constraint) || null;
-  }
-
-  function constraintIsRedundant(constraint) {
-    return Boolean(constraintRedundancyInfo(constraint)?.redundant);
-  }
-
-  function constraintDuplicateCountForSketch(sketchId) {
-    return constraintRedundancyState?.sketches?.get(sketchId) || 0;
-  }
-
   function constraintDuplicateSummary() {
-    const count = constraintRedundancyState?.count || 0;
+    const count = constraintRedundancy.count;
     return count > 0 ? applicationSettings.language === "en" ? ` / Duplicate constraints: ${count}` : ` / 重複拘束: ${count}` : "";
   }
 
-  function referenceConstraintErrorInfo(constraint) {
-    return invalidReferenceConstraints.get(constraint) || null;
-  }
-
-  function referenceConstraintErrorCountForSketch(sketchId) {
-    let count = 0;
-    for (const constraint of invalidReferenceConstraints.keys()) {
-      if (constraintSketchId(constraint) === sketchId) count += 1;
-    }
-    return count;
-  }
-
   function referenceConstraintErrorSummary() {
-    const count = invalidReferenceConstraints.size;
+    const count = referenceConstraintState.errorCount;
     return count > 0 ? applicationSettings.language === "en" ? ` / Reference errors: ${count}` : ` / 参照エラー: ${count}` : "";
   }
 
-  function clearSketchSolveState(sketchId) {
-    sketchSolveStates.delete(sketchId);
-  }
-
-  function setSketchSolveOk(sketchId, result, sourceSketchId = sketchId) {
-    sketchSolveStates.set(sketchId, { status: "ok", sourceSketchId, result });
-  }
-
-  function setSketchSolveError(sketchId, result, sourceSketchId = sketchId) {
-    sketchSolveStates.set(sketchId, {
-      status: "error",
-      sourceSketchId,
-      errorNorm: Number.isFinite(result?.errorNorm) ? result.errorNorm : Infinity,
-      reason: result?.reason || "solve failed",
-      result,
-    });
-  }
-
-  function sketchSolveState(sketchId) {
-    return sketchSolveStates.get(sketchId) || null;
-  }
+  function clearSketchSolveState(...args) { return sketchSolving.clearSketchSolveState(...args); }
+  function setSketchSolveOk(...args) { return sketchSolving.setSketchSolveOk(...args); }
+  function setSketchSolveError(...args) { return sketchSolving.setSketchSolveError(...args); }
+  function sketchSolveState(...args) { return sketchSolving.sketchSolveState(...args); }
 
   function sketchHasSolveError(sketchId) {
     return sketchSolveState(sketchId)?.status === "error";
@@ -2306,338 +1908,13 @@
     return result;
   }
 
-  function referenceValuesConverged(previous, next) {
-    if (previous.size !== next.size) return false;
-    for (const [name, value] of next) {
-      const before = previous.get(name);
-      if (!Number.isFinite(before)) return false;
-      const tolerance = PARAMETER_STABILIZATION_RELATIVE_TOLERANCE * Math.max(1, Math.abs(value));
-      if (Math.abs(value - before) > tolerance) return false;
-    }
-
-    return true;
-  }
-
-  function parameterFailureResult(reason) {
-    return { success: false, errorNorm: Infinity, iterations: 0, reason };
-  }
-
-  function stabilizeActiveParameterNamespace(sketchId = activeSketchId(), options = {}) {
-    if (!interactionProfiler.active) return stabilizeActiveParameterNamespaceUnprofiled(sketchId, options);
-    return profileInteractionWork("parameters", () => stabilizeActiveParameterNamespaceUnprofiled(sketchId, options));
-  }
-
-  function solveParameterTargetTransition(sketchId, requestedSketchIds, variableAllowed, previousTargets) {
-    const solvePass = () => {
-      let solved = null;
-      const dependentResults = [];
-      for (const requestedSketchId of [...new Set(requestedSketchIds)]) {
-        const item = solveSketchAndDependents(requestedSketchId, null, variableAllowed);
-        solved ||= item;
-        dependentResults.push(...(item.dependent?.results || []));
-        if (!item.success || item.dependent?.success === false) return item;
-      }
-      solved ||= { success: true, sketchId, result: { success: true, errorNorm: 0, iterations: 0 } };
-      solved.dependent = { success: true, results: dependentResults };
-      return solved;
-    };
-    const changes = [...previousTargets]
-      .filter(([constraint, value]) => constraint.enabled !== false && Number.isFinite(value) && value > 0 && constraint.target !== value)
-      .map(([constraint, value]) => ({ constraint, start: value, end: constraint.target }));
-    if (!changes.length) return solvePass();
-
-    // Follow the existing solution branch before attempting a large target
-    // change. All dependent targets share the same interpolation progress;
-    // intermediate steps are internal to the caller's single transaction.
-    let progress = 0;
-    let solved;
-    try {
-      for (let step = 0; progress < 1 && step < 128; step++) {
-        let increment = 1 - progress;
-        for (const change of changes) {
-          const current = change.start + (change.end - change.start) * progress;
-          increment = Math.min(increment, 0.2 * current / Math.abs(change.end - change.start));
-        }
-        const state = snapshotModelState();
-        let accepted = false;
-        for (let retry = 0; retry < 12; retry++) {
-          const nextProgress = Math.min(1, progress + increment);
-          for (const change of changes) change.constraint.target = nextProgress === 1 ? change.end : change.start + (change.end - change.start) * nextProgress;
-          solved = solvePass();
-          if (solved.success && solved.dependent?.success !== false) {
-            progress = nextProgress;
-            accepted = true;
-            break;
-          }
-          restoreModelState(state);
-          increment *= 0.5;
-        }
-        if (!accepted) return solved;
-      }
-      if (progress === 1) return solved;
-      return { success: false, sketchId, result: parameterFailureResult(applicationText("Parameter計算が収束しません", "Parameter calculation did not converge")), dependent: { success: true, results: [] } };
-    } finally {
-      for (const change of changes) change.constraint.target = change.end;
-    }
-  }
-
-  function stabilizeActiveParameterNamespaceUnprofiled(sketchId = activeSketchId(), options = {}) {
-    let previous;
-    try {
-      ensureParameterNamespace(currentParameterNamespace());
-      previous = referenceDimensionValues(currentParameterNamespace());
-    } catch (error) {
-      const result = parameterFailureResult(parameterErrorText(error));
-      return { success: false, sketchId, result, dependent: { success: true, results: [] }, parameterError: error };
-    }
-    const hasReferences = previous.size > 0;
-    for (let pass = 0; pass < PARAMETER_STABILIZATION_MAX_PASSES; pass += 1) {
-      const previousTargets = new Map(dimensionConstraintsInNamespace(currentParameterNamespace())
-        .filter((constraint) => !isReadOnlyDimension(constraint))
-        .map((constraint) => [constraint, constraint.target]));
-      try {
-        evaluateParameterNamespace(currentParameterNamespace(), { referenceValues: previous });
-      } catch (error) {
-        const result = parameterFailureResult(parameterErrorText(error));
-        return { success: false, sketchId, result, dependent: { success: true, results: [] }, parameterError: error };
-      }
-      const requestedSketchIds = Array.isArray(options.allSketches) && options.allSketches.length > 0 ? options.allSketches : [sketchId];
-      const solved = solveParameterTargetTransition(sketchId, requestedSketchIds, options.variableAllowed, previousTargets);
-      if (!solved.success || solved.dependent?.success === false) return solved;
-      let next;
-      try {
-        next = referenceDimensionValues(currentParameterNamespace());
-      } catch (error) {
-        const result = parameterFailureResult(parameterErrorText(error));
-        return { success: false, sketchId, result, dependent: solved.dependent, parameterError: error };
-      }
-      if (!hasReferences || referenceValuesConverged(previous, next)) {
-        evaluateParameterNamespace(currentParameterNamespace(), { referenceValues: next });
-        solved.parameterPasses = pass + 1;
-        return solved;
-      }
-      previous = next;
-    }
-    const result = parameterFailureResult(applicationText("Parameter計算が収束しません", "Parameter calculation did not converge"));
-    return { success: false, sketchId, result, dependent: { success: true, results: [] }, parameterNonConvergent: true };
-  }
+  function stabilizeActiveParameterNamespace(...args) { return parameterStabilization.stabilize(...args); }
 
   function geometryErrorNorm() {
     return vectorNorm(solver.computeErrorVector());
   }
 
-  function pointHasConstraintFreedom(point, analysis) {
-    if (point.fixed) return false;
-    const freedom = analysis.variableFreedom.get(point);
-    return Boolean(freedom?.x || freedom?.y);
-  }
-
-  function objectHasConstraintFreedom(object, prop, analysis) {
-    return Boolean(analysis.variableFreedom.get(object)?.[prop]);
-  }
-
-  function variableDeltaInBasis(object, prop, basis, analysis) {
-    const index = analysis.variableIndex?.get(object)?.[prop];
-    return index >= 0 ? basis[index] || 0 : 0;
-  }
-
-  function lineSupportHasConstraintFreedom(line, analysis) {
-    const normal = analysis.lineNormals?.get(line) || lineSupportNormal(line);
-    for (const basis of analysis.nullspaceBasis || []) {
-      const norm = Math.max(1, Math.sqrt(basis.reduce((sum, value) => sum + value * value, 0)));
-      const p1Normal = normal.x * variableDeltaInBasis(line.p1, "x", basis, analysis) + normal.y * variableDeltaInBasis(line.p1, "y", basis, analysis);
-      const p2Normal = normal.x * variableDeltaInBasis(line.p2, "x", basis, analysis) + normal.y * variableDeltaInBasis(line.p2, "y", basis, analysis);
-      if (Math.abs(p1Normal) > 1e-7 * norm || Math.abs(p2Normal) > 1e-7 * norm) return true;
-    }
-    return false;
-  }
-
-  function classifyConstraintStatus(item, kind, analysis) {
-    if (!analysis.stable) return "conflict";
-    if (kind === "point") return pointHasConstraintFreedom(item, analysis) ? "under" : "full";
-    if (kind === "line") {
-      const hasEndpointFreedom = pointHasConstraintFreedom(item.p1, analysis) || pointHasConstraintFreedom(item.p2, analysis);
-      if (!hasEndpointFreedom) return "full";
-      return lineSupportHasConstraintFreedom(item, analysis) ? "under" : "support";
-    }
-    if (kind === "circle") return pointHasConstraintFreedom(item.center, analysis) || objectHasConstraintFreedom(item, "radiusValue", analysis) ? "under" : "full";
-    if (kind === "arc") {
-      const supportFreedom = pointHasConstraintFreedom(item.center, analysis) || objectHasConstraintFreedom(item, "radiusValue", analysis);
-      const endpointFreedom = objectHasConstraintFreedom(item, "startAngle", analysis) || objectHasConstraintFreedom(item, "endAngle", analysis);
-      if (!supportFreedom && !endpointFreedom) return "full";
-      return !supportFreedom && endpointFreedom ? "support" : "under";
-    }
-    if (kind === "spline") return item.fitPoints.some((point) => pointHasConstraintFreedom(point, analysis)) ? "under" : "full";
-    return "full";
-  }
-
-  function classifyBlockProjectionStatus(item, analysis) {
-    if (!analysis.stable) return "conflict";
-    const instance = item?.blockInstance;
-    if (!instance || instance.fixed) return "full";
-    const freedom = analysis.variableFreedom.get(instance) || {};
-    const translationFree = Boolean(freedom.x || freedom.y);
-    const rotationFree = Boolean(freedom.rotation);
-    if (item instanceof Arc) {
-      if (translationFree) return "under";
-      return rotationFree ? "support" : "full";
-    }
-    if (item instanceof Circle || item instanceof Point) return translationFree ? "under" : "full";
-    if (item instanceof Line) {
-      if (!translationFree && !rotationFree) return "full";
-      const length = Math.max(item.length(), MIN_LINE_LENGTH);
-      const direction = { x: item.dx() / length, y: item.dy() / length };
-      for (const basis of analysis.nullspaceBasis || []) {
-        const norm = Math.max(1, Math.sqrt(basis.reduce((sum, value) => sum + value * value, 0)));
-        const dx = variableDeltaInBasis(instance, "x", basis, analysis);
-        const dy = variableDeltaInBasis(instance, "y", basis, analysis);
-        const dr = variableDeltaInBasis(instance, "rotation", basis, analysis);
-        const normalMotion = -direction.y * dx + direction.x * dy;
-        if (Math.abs(normalMotion) > 1e-7 * norm || Math.abs(dr) > 1e-7 * norm) return "under";
-      }
-      return "support";
-    }
-    return translationFree || rotationFree ? "under" : "full";
-  }
-
-  function refreshConstraintAnalysis(options = {}) {
-    if (!interactionProfiler.active) return refreshConstraintAnalysisUnprofiled(options);
-    return profileInteractionWork("analysis", () => refreshConstraintAnalysisUnprofiled(options));
-  }
-
-  function refreshConstraintAnalysisUnprofiled(options = {}) {
-    refreshReferenceConstraintValidity();
-    const rootSketchId = activeSketchId();
-    const sketchIdSet = new Set([rootSketchId, ...descendantSketchIds(rootSketchId)]);
-    const derivedBundles = geometryInstanceBundles().filter((bundle) => bundle.valid);
-    let sourceSketchAdded = true;
-    while (sourceSketchAdded) {
-      sourceSketchAdded = false;
-      for (const bundle of derivedBundles) {
-        if (!sketchIdSet.has(bundle.instance.sketchId)) continue;
-        const outputs = [...bundle.points, ...bundle.lines, ...bundle.circles, ...bundle.arcs, ...bundle.splines];
-        for (const source of outputs.map((item) => item.sourceElement).filter(Boolean)) {
-          const sourceSketchId = elementSketchId(source);
-          if (!sourceSketchId || sketchIdSet.has(sourceSketchId)) continue;
-          sketchIdSet.add(sourceSketchId);
-          sourceSketchAdded = true;
-        }
-      }
-    }
-    const sketchIds = [...sketchIdSet];
-    const analyses = new Map();
-    const statuses = new Map();
-    const items = [];
-    for (const sketchId of sketchIds) {
-      const analysis = solver.analyzeConstraintState({
-        variables: sketchSolveVariables(sketchId),
-        constraints: sketchSolveConstraints(sketchId),
-        lines: sketchSolveLines(sketchId),
-        errorTolerance: CONSTRAINT_ACCEPT_ERROR,
-      });
-      const forceConflict = sketchHasSolveError(sketchId);
-      analyses.set(sketchId, analysis);
-      for (const p of model.points) {
-        if (elementSketchId(p) !== sketchId) continue;
-        const status = forceConflict ? "conflict" : classifyConstraintStatus(p, "point", analysis);
-        statuses.set(p, status);
-        if (isEditableSketchElement(p) && isExplicitPoint(p)) items.push(status);
-      }
-      for (const l of model.lines) {
-        if (elementSketchId(l) !== sketchId) continue;
-        const status = forceConflict ? "conflict" : classifyConstraintStatus(l, "line", analysis);
-        statuses.set(l, status);
-        if (isEditableSketchElement(l)) items.push(status);
-      }
-      for (const c of model.circles) {
-        if (elementSketchId(c) !== sketchId) continue;
-        const status = forceConflict ? "conflict" : classifyConstraintStatus(c, "circle", analysis);
-        statuses.set(c, status);
-        if (isEditableSketchElement(c)) items.push(status);
-      }
-      for (const a of model.arcs) {
-        if (elementSketchId(a) !== sketchId) continue;
-        const status = forceConflict ? "conflict" : classifyConstraintStatus(a, "arc", analysis);
-        statuses.set(a, status);
-        if (isEditableSketchElement(a)) items.push(status);
-      }
-      for (const spline of model.splines) {
-        if (elementSketchId(spline) !== sketchId) continue;
-        const status = forceConflict ? "conflict" : classifyConstraintStatus(spline, "spline", analysis);
-        statuses.set(spline, status);
-        if (isEditableSketchElement(spline)) items.push(status);
-      }
-      for (const bundle of blockProjectionBundles()) {
-        if (bundle.instance.sketchId !== sketchId) continue;
-        for (const item of [...bundle.points, ...bundle.lines, ...bundle.circles, ...bundle.arcs, ...(bundle.splines || [])]) {
-          const status = forceConflict ? "conflict" : classifyBlockProjectionStatus(item, analysis);
-          statuses.set(item, status);
-          if (isEditableSketchElement(item) && !(item instanceof Point)) items.push(status);
-        }
-      }
-    }
-    const summary = {
-      full: items.filter((status) => status === "full").length,
-      support: items.filter((status) => status === "support").length,
-      under: items.filter((status) => status === "under").length,
-      conflict: items.filter((status) => status === "conflict").length,
-      total: items.length,
-    };
-    constraintAnalysisState = { analysis: analyses.get(rootSketchId), analyses, statuses, summary };
-    refreshConstraintRedundancy(options.redundancyBySketch || null);
-    return constraintAnalysisState;
-  }
-
-  function constraintStatusOf(item) {
-    if (item?.derivedInstance?.type === "sketchProjection") return "full";
-    if (!constraintAnalysisState) refreshConstraintAnalysis();
-    let current = item;
-    const visited = new Set();
-    let hasFreePlacement = false;
-    while (current?.derivedProjection && current.sourceElement && !visited.has(current)) {
-      visited.add(current);
-      if (current.derivedInstance?.type === "free") hasFreePlacement = true;
-      current = current.sourceElement;
-    }
-    if (hasFreePlacement) {
-      if (!constraintAnalysisState.statuses.has(item)) {
-        constraintAnalysisState.statuses.set(item, classifyFreeInstanceGeometry(item, constraintAnalysisState.analyses.get(elementSketchId(item))));
-      }
-      return constraintAnalysisState.statuses.get(item);
-    }
-    return constraintAnalysisState?.statuses.get(current) || "full";
-  }
-
-  function classifyFreeInstanceGeometry(item, analysis) {
-    if (!analysis?.stable) return "conflict";
-    const sample = () => {
-      const values = geometryInstanceSourcePoints(item).flatMap((p) => [p.x, p.y]);
-      if (item instanceof Circle || item instanceof Arc) values.push(item.radius());
-      if (item instanceof Arc) values.push(item.startPoint().x, item.startPoint().y, item.endPoint().x, item.endPoint().y);
-      return values;
-    };
-    const baseline = sample();
-    const derivatives = analysis.variables.map((v) => {
-      const old = v.object[v.prop];
-      const step = 1e-6 * Math.max(1, Math.abs(old));
-      try {
-        v.object[v.prop] = old + step;
-        return sample().map((value, index) => (value - baseline[index]) / step);
-      } finally { v.object[v.prop] = old; }
-    });
-    let hasMotion = false;
-    for (const basis of analysis.nullspaceBasis) {
-      const motion = baseline.map((_, i) => derivatives.reduce((sum, column, j) => sum + column[i] * basis[j], 0));
-      const tolerance = 1e-5 * Math.max(1, vectorNorm(basis));
-      if (vectorNorm(motion) <= tolerance) continue;
-      hasMotion = true;
-      if (!(item instanceof Line)) return "under";
-      const length = Math.max(item.length(), MIN_LINE_LENGTH);
-      const nx = -item.dy() / length, ny = item.dx() / length;
-      if (Math.abs(nx * motion[0] + ny * motion[1]) > tolerance || Math.abs(nx * motion[2] + ny * motion[3]) > tolerance) return "under";
-    }
-    return hasMotion ? "support" : "full";
-  }
+  function refreshConstraintAnalysis(options = {}) { return constraintAnalysis.refresh(options); }
 
   function constraintStatusColor(item, selected = false, hovered = false) {
     if (selected) return "#1d4ed8";
@@ -2747,8 +2024,7 @@
   }
 
   function constraintSummaryText() {
-    if (!constraintAnalysisState) refreshConstraintAnalysis();
-    const s = constraintAnalysisState?.summary || { full: 0, support: 0, under: 0, conflict: 0 };
+    const s = constraintAnalysis.summary();
     return applicationSettings.language === "en"
       ? `Fully constrained: ${s.full} / Supported position: ${s.support} / Under-constrained: ${s.under} / Conflict: ${s.conflict}${constraintDuplicateSummary()}${referenceConstraintErrorSummary()}`
       : `完全拘束: ${s.full} / 支持位置拘束: ${s.support} / 未拘束: ${s.under} / 矛盾: ${s.conflict}${constraintDuplicateSummary()}${referenceConstraintErrorSummary()}`;
@@ -3043,7 +2319,7 @@
       const reason = solved.result?.reason || applicationText("拘束を解けません", "The constraints could not be solved");
       restoreGeometryMutationState(snapshot);
       solveSketchAndDependents(sketchId);
-      constraintAnalysisState = null;
+      constraintAnalysis.invalidate();
       setHint(`${applicationText("円中心十字線を作成できません", "Could not create the circle center cross")}: ${reason}`, "error");
       updateUI();
       draw();
@@ -3055,7 +2331,7 @@
     clearSnap();
     clearSelection();
     canvasSelection.set("lines", createdLines);
-    constraintAnalysisState = null;
+    constraintAnalysis.invalidate();
     updateUI();
     draw();
     setHint(applicationText(`${targets.length}個の円に十字補助線を作成しました`, `Created centerlines for ${targets.length} circle(s)`));
@@ -3196,7 +2472,7 @@
       draw();
       return false;
     }
-    constraintAnalysisState = null;
+    constraintAnalysis.invalidate();
     recordHistory(historyLabel);
     setHint(successMessage);
     updateUI();
@@ -3430,7 +2706,7 @@
   const blockCompletionCommand = window.BlockCompletionCommand.create({
     blockEditor, blockDefinitionEditing, blockCatalog, documentModel, currentScope: workspace.current,
     blockDefinitionCyclePath, duplicateBlockElementId, refreshReferenceConstraintValidity,
-    hasInvalidReferenceConstraints: () => invalidReferenceConstraints.size > 0,
+    hasInvalidReferenceConstraints: () => referenceConstraintState.errorCount > 0,
     solveSketchById, resultIsAccepted, sketchName, solveReferenceDependentSketches,
     requestChoice: (options) => choiceDialog.show(options), applicationText, blockLocalGeometryBounds,
     storedBlockInstancesReferencing, restoreBlockEditorHost, rebuildStoredBlockDefinitionConstraints,
@@ -3483,9 +2759,9 @@
     window.DocumentState.clearContent(documentModel);
     referenceImageRenderer.clear();
     invalidateBlockProjectionCache();
-    sketchSolveStates.clear();
-    invalidReferenceConstraints.clear();
-    constraintAnalysisState = null;
+    sketchSolving.clearAll();
+    referenceConstraintState.clear();
+    constraintAnalysis.invalidate();
     clearSelection();
     geometryDrag.reset();
     dimensionDrag.reset();
@@ -4704,7 +3980,7 @@
     const duplicate = redundantConstraintInfo(constraint, constraintSketchId(constraint));
     if (duplicate?.redundant) {
       model.constraints = model.constraints.filter((item) => item !== constraint);
-      constraintRedundancyState.constraints.delete(constraint);
+      constraintRedundancy.forgetConstraint(constraint);
       return false;
     }
     return true;
@@ -4959,339 +4235,20 @@
     return constraintGraphNodes(constraint).filter((item) => !lineEndpoints.has(item) || directPoints.has(item));
   }
 
-  function addIntrinsicGraphEdges(adjacency, a, b) {
-    if (!a || !b) return;
-    if (!adjacency.has(a)) adjacency.set(a, new Set());
-    if (!adjacency.has(b)) adjacency.set(b, new Set());
-    adjacency.get(a).add(b);
-    adjacency.get(b).add(a);
-  }
-
-  function buildConstraintAdjacency() {
-    const adjacency = new Map();
-    for (const p of allGeometryPoints()) {
-      if (!adjacency.has(p)) adjacency.set(p, new Set());
-      if (p.blockInstance) addIntrinsicGraphEdges(adjacency, p, p.blockInstance);
-      if (p.derivedInstance) addIntrinsicGraphEdges(adjacency, p, p.derivedInstance);
-    }
-    for (const line of allGeometryLines()) {
-      addIntrinsicGraphEdges(adjacency, line, line.p1);
-      addIntrinsicGraphEdges(adjacency, line, line.p2);
-      if (line.blockInstance) addIntrinsicGraphEdges(adjacency, line, line.blockInstance);
-      if (line.derivedInstance) addIntrinsicGraphEdges(adjacency, line, line.derivedInstance);
-    }
-    for (const circle of allGeometryCircles()) {
-      addIntrinsicGraphEdges(adjacency, circle, circle.center);
-      if (circle.blockInstance) addIntrinsicGraphEdges(adjacency, circle, circle.blockInstance);
-      if (circle.derivedInstance) addIntrinsicGraphEdges(adjacency, circle, circle.derivedInstance);
-    }
-    for (const arc of allGeometryArcs()) {
-      addIntrinsicGraphEdges(adjacency, arc, arc.center);
-      if (arc.blockInstance) addIntrinsicGraphEdges(adjacency, arc, arc.blockInstance);
-      if (arc.derivedInstance) addIntrinsicGraphEdges(adjacency, arc, arc.derivedInstance);
-    }
-    for (const spline of allGeometrySplines()) {
-      for (const point of spline.fitPoints) addIntrinsicGraphEdges(adjacency, spline, point);
-      if (spline.blockInstance) addIntrinsicGraphEdges(adjacency, spline, spline.blockInstance);
-      if (spline.derivedInstance) addIntrinsicGraphEdges(adjacency, spline, spline.derivedInstance);
-    }
-    for (const instance of model.geometryInstances) {
-      if (!adjacency.has(instance)) adjacency.set(instance, new Set());
-      for (const ref of geometryInstanceDependencyRefs(instance)) addIntrinsicGraphEdges(adjacency, instance, resolveGeometryRef(ref));
-    }
-
-    for (const constraint of model.constraints) {
-      if (!constraintIsOperational(constraint)) continue;
-      const nodes = constraintGraphNodes(constraint);
-      for (const node of nodes) {
-        if (!adjacency.has(node)) adjacency.set(node, new Set());
-      }
-      for (let i = 0; i < nodes.length; i++) {
-        for (let j = i + 1; j < nodes.length; j++) addIntrinsicGraphEdges(adjacency, nodes[i], nodes[j]);
-      }
-    }
-    return adjacency;
-  }
-
-  function connectedComponentFromSeeds(seeds) {
-    const adjacency = buildConstraintAdjacency();
-    const seen = new Set();
-    const queue = [];
-    for (const seed of seeds) {
-      if (!seed || seen.has(seed)) continue;
-      seen.add(seed);
-      queue.push(seed);
-    }
-    while (queue.length > 0) {
-      const node = queue.shift();
-      // A fixed point is a kinematic boundary: it contributes a constant to
-      // constraints on either side, but motion cannot propagate through it to
-      // otherwise independent geometry. Stopping here keeps large anchored
-      // sketches local during interactive dragging.
-      if (node instanceof Point && node.fixed) continue;
-      for (const next of adjacency.get(node) || []) {
-        if (seen.has(next)) continue;
-        seen.add(next);
-        queue.push(next);
-      }
-    }
-    return seen;
-  }
-
-  function localSolveVariables(component, sketchId = activeSketchId()) {
-    const vars = [];
-    for (const instance of model.geometryInstances) {
-      if (instance.type !== "free" || instance.sketchId !== sketchId || !component.has(instance)) continue;
-      for (const prop of ["x", "y", "rotation"]) vars.push({ object: instance, prop, label: `${instance.id}.${prop}` });
-    }
-    for (const p of model.points) {
-      if (!isVisibleSketchElement(p)) continue;
-      if (component.has(p) && elementSketchId(p) === sketchId && !p.fixed) {
-        vars.push({ object: p, prop: "x", label: `${p.id}.x` });
-        vars.push({ object: p, prop: "y", label: `${p.id}.y` });
-      }
-    }
-    for (const c of model.circles) {
-      if (component.has(c) && elementSketchId(c) === sketchId) vars.push({ object: c, prop: "radiusValue", label: `${c.id}.r`, min: MIN_LINE_LENGTH });
-    }
-    for (const a of model.arcs) {
-      if (component.has(a) && elementSketchId(a) === sketchId) {
-        vars.push({ object: a, prop: "radiusValue", label: `${a.id}.r`, min: MIN_LINE_LENGTH });
-        vars.push({ object: a, prop: "startAngle", label: `${a.id}.startAngle` });
-        vars.push({ object: a, prop: "endAngle", label: `${a.id}.endAngle` });
-      }
-    }
-    for (const instance of model.blockInstances) {
-      if (!component.has(instance) || instance.sketchId !== sketchId || instance.fixed) continue;
-      vars.push({ object: instance, prop: "x", label: `${instance.id}.x` });
-      vars.push({ object: instance, prop: "y", label: `${instance.id}.y` });
-      if (!instance.rotationLocked) vars.push({ object: instance, prop: "rotation", label: `${instance.id}.rotation` });
-    }
-    return vars;
-  }
-
-  function localSolveConstraints(component, sketchId = activeSketchId()) {
-    return model.constraints.filter((constraint) =>
-      constraintIsOperational(constraint)
-      && constraintSketchId(constraint) === sketchId
-      && constraintGraphNodes(constraint).some((node) => component.has(node) && !(node instanceof Point && node.fixed)),
-    );
-  }
-
-  function localSolveLines(component, sketchId = activeSketchId()) {
-    return model.lines.filter((line) => component.has(line) && elementSketchId(line) === sketchId);
-  }
-
-  function sketchSolveVariables(sketchId = activeSketchId()) {
-    const vars = [];
-    for (const instance of model.geometryInstances) {
-      if (instance.type !== "free" || instance.sketchId !== sketchId) continue;
-      for (const prop of ["x", "y", "rotation"]) vars.push({ object: instance, prop, label: `${instance.id}.${prop}` });
-    }
-    for (const p of model.points) {
-      if (elementSketchId(p) === sketchId && !p.fixed) {
-        vars.push({ object: p, prop: "x", label: `${p.id}.x` });
-        vars.push({ object: p, prop: "y", label: `${p.id}.y` });
-      }
-    }
-    for (const c of model.circles) {
-      if (elementSketchId(c) === sketchId) vars.push({ object: c, prop: "radiusValue", label: `${c.id}.r`, min: MIN_LINE_LENGTH });
-    }
-    for (const a of model.arcs) {
-      if (elementSketchId(a) === sketchId) {
-        vars.push({ object: a, prop: "radiusValue", label: `${a.id}.r`, min: MIN_LINE_LENGTH });
-        vars.push({ object: a, prop: "startAngle", label: `${a.id}.startAngle` });
-        vars.push({ object: a, prop: "endAngle", label: `${a.id}.endAngle` });
-      }
-    }
-    for (const instance of model.blockInstances) {
-      if (instance.sketchId !== sketchId || instance.fixed) continue;
-      vars.push({ object: instance, prop: "x", label: `${instance.id}.x` });
-      vars.push({ object: instance, prop: "y", label: `${instance.id}.y` });
-      if (!instance.rotationLocked) vars.push({ object: instance, prop: "rotation", label: `${instance.id}.rotation` });
-    }
-    return vars;
-  }
-
-  function sketchSolveConstraints(sketchId = activeSketchId()) {
-    return model.constraints.filter((constraint) => constraintIsOperational(constraint) && constraintSketchId(constraint) === sketchId);
-  }
-
-  function sketchSolveLines(sketchId = activeSketchId()) {
-    return model.lines.filter((line) => elementSketchId(line) === sketchId);
-  }
-
-  function solveActiveSketch(extra = []) {
-    const sketchId = activeSketchId();
-    synchronizeSketchProjectionMetadata(sketchId);
-    return solver.solveSubset({
-      variables: sketchSolveVariables(sketchId),
-      constraints: sketchSolveConstraints(sketchId),
-      lines: sketchSolveLines(sketchId),
-      extra,
-    });
-  }
-
-  function solveSketchById(sketchId, extra = [], variableAllowed = null) {
-    synchronizeSketchProjectionMetadata(sketchId);
-    return solver.solveSubset({
-      variables: variableAllowed ? sketchSolveVariables(sketchId).filter(variableAllowed) : sketchSolveVariables(sketchId),
-      constraints: sketchSolveConstraints(sketchId),
-      lines: sketchSolveLines(sketchId),
-      extra,
-    });
-  }
+  function solveActiveSketch(...args) { return sketchSolving.solveActiveSketch(...args); }
+  function solveSketchById(...args) { return sketchSolving.solveSketchById(...args); }
 
   function solveFinalDragSession(session) {
     if (!interactionProfiler.active) return geometryDragEditing.finish(session);
     return profileInteractionWork("solve", () => geometryDragEditing.finish(session));
   }
 
-  function solveReferenceDependentSketches(rootSketchId) {
-    if (!interactionProfiler.active) return solveReferenceDependentSketchesUnprofiled(rootSketchId);
-    return profileInteractionWork("dependencies", () => solveReferenceDependentSketchesUnprofiled(rootSketchId));
-  }
-
-  function solveReferenceDependentSketchesUnprofiled(rootSketchId) {
-    refreshReferenceConstraintValidity();
-    const results = [];
-    const dependentsBySource = new Map();
-    const addDependency = (sourceSketchId, dependentSketchId) => {
-      if (!sourceSketchId || !dependentSketchId || sourceSketchId === dependentSketchId) return;
-      if (!dependentsBySource.has(sourceSketchId)) dependentsBySource.set(sourceSketchId, new Set());
-      dependentsBySource.get(sourceSketchId).add(dependentSketchId);
-    };
-    for (const constraint of model.constraints) {
-      if (!constraintIsOperational(constraint) || !constraint.reference || !constraint.referenceSketchId) continue;
-      const dependentSketchId = constraintSketchId(constraint);
-      addDependency(constraint.referenceSketchId, dependentSketchId);
-    }
-    for (const bundle of geometryInstanceBundles()) {
-      if (!bundle.valid) continue;
-      const outputs = [...bundle.points, ...bundle.lines, ...bundle.circles, ...bundle.arcs, ...bundle.splines];
-      for (const source of new Set(outputs.map((item) => item.sourceElement).filter(Boolean))) {
-        addDependency(elementSketchId(source), bundle.instance.sketchId);
-      }
-    }
-
-    const affected = new Set([rootSketchId]);
-    const pending = [rootSketchId];
-    while (pending.length > 0) {
-      const sourceSketchId = pending.shift();
-      for (const dependentSketchId of dependentsBySource.get(sourceSketchId) || []) {
-        if (affected.has(dependentSketchId)) continue;
-        affected.add(dependentSketchId);
-        pending.push(dependentSketchId);
-      }
-    }
-
-    const indegree = new Map([...affected].map((sketchId) => [sketchId, 0]));
-    for (const [sourceSketchId, dependents] of dependentsBySource) {
-      if (!affected.has(sourceSketchId)) continue;
-      for (const dependentSketchId of dependents) {
-        if (affected.has(dependentSketchId)) indegree.set(dependentSketchId, (indegree.get(dependentSketchId) || 0) + 1);
-      }
-    }
-    const orderIndex = new Map(orderedSketches().map((sketch, index) => [sketch.id, index]));
-    const ready = [...affected]
-      .filter((sketchId) => (indegree.get(sketchId) || 0) === 0)
-      .sort((a, b) => (orderIndex.get(a) ?? Infinity) - (orderIndex.get(b) ?? Infinity));
-    const processed = new Set();
-    while (ready.length > 0) {
-      const sketchId = ready.shift();
-      if (processed.has(sketchId)) continue;
-      processed.add(sketchId);
-      if (sketchId !== rootSketchId) {
-        clearSketchSolveState(sketchId);
-        const result = solveSketchById(sketchId);
-        normalizeArcSweeps();
-        const status = resultIsAccepted(result) ? "ok" : "error";
-        if (status === "ok") setSketchSolveOk(sketchId, result, rootSketchId);
-        else setSketchSolveError(sketchId, result, rootSketchId);
-        results.push({ sketchId, result, status });
-      }
-      for (const dependentSketchId of dependentsBySource.get(sketchId) || []) {
-        if (!affected.has(dependentSketchId)) continue;
-        indegree.set(dependentSketchId, (indegree.get(dependentSketchId) || 0) - 1);
-        if (indegree.get(dependentSketchId) === 0) {
-          ready.push(dependentSketchId);
-          ready.sort((a, b) => (orderIndex.get(a) ?? Infinity) - (orderIndex.get(b) ?? Infinity));
-        }
-      }
-    }
-
-    for (const sketchId of affected) {
-      if (sketchId === rootSketchId || processed.has(sketchId)) continue;
-      const result = { success: false, errorNorm: Infinity, iterations: 0, reason: "循環参照" };
-      setSketchSolveError(sketchId, result, rootSketchId);
-      results.push({ sketchId, result, status: "error" });
-    }
-    const failed = results.find((entry) => entry.status === "error");
-    return { success: !failed, sketchId: failed?.sketchId || null, result: failed?.result || null, results };
-  }
-
-  function solveSketchAndDependents(sketchId = activeSketchId(), rollbackState = null, variableAllowed = null) {
-    refreshReferenceConstraintValidity();
-    clearSketchSolveState(sketchId);
-    const result = solveSketchById(sketchId, [], variableAllowed);
-    normalizeArcSweeps();
-    if (!resultIsAccepted(result)) {
-      if (rollbackState) {
-        restoreModelState(rollbackState);
-        clearSketchSolveState(sketchId);
-      } else {
-        setSketchSolveError(sketchId, result, sketchId);
-      }
-      return { success: false, sketchId, result, dependent: { success: true, results: [] } };
-    }
-    setSketchSolveOk(sketchId, result, sketchId);
-    const dependent = solveReferenceDependentSketches(sketchId);
-    return { success: true, sketchId, result, dependent };
-  }
-
-  function solveConstraintComponentAndDependents(constraint, rollbackState = null) {
-    const sketchId = constraintSketchId(constraint);
-    refreshReferenceConstraintValidity();
-    clearSketchSolveState(sketchId);
-    const context = localSolveContextFromSeeds(constraintGraphNodes(constraint), sketchId);
-    let result = solver.solveSubset(context);
-    normalizeArcSweeps();
-    const globalConstraints = sketchSolveConstraints(sketchId);
-    const globalErrorAfterLocal = vectorNorm(solver.computeErrorVectorForConstraints(globalConstraints));
-    let fullFallback = false;
-    if (resultIsAccepted(result) && globalErrorAfterLocal > CONSTRAINT_ACCEPT_ERROR) {
-      result = solveSketchById(sketchId);
-      normalizeArcSweeps();
-      result.localErrorNorm = globalErrorAfterLocal;
-      result.fullFallback = true;
-      fullFallback = true;
-    }
-    if (!resultIsAccepted(result)) {
-      if (rollbackState) {
-        restoreModelState(rollbackState);
-        clearSketchSolveState(sketchId);
-      } else {
-        setSketchSolveError(sketchId, result, sketchId);
-      }
-      return { success: false, sketchId, result, dependent: { success: true, results: [] }, local: !fullFallback, fullFallback };
-    }
-    setSketchSolveOk(sketchId, result, sketchId);
-    const dependent = solveReferenceDependentSketches(sketchId);
-    return { success: true, sketchId, result, dependent, local: !fullFallback, fullFallback };
-  }
+  function solveReferenceDependentSketches(...args) { return sketchSolving.solveReferenceDependentSketches(...args); }
+  function solveSketchAndDependents(...args) { return sketchSolving.solveSketchAndDependents(...args); }
+  function solveConstraintComponentAndDependents(...args) { return sketchSolving.solveConstraintComponentAndDependents(...args); }
 
   function solveElementSketchAndDescendants(element, rollbackState = null) {
     return solveSketchAndDependents(elementSketchId(element), rollbackState);
-  }
-
-  function localSolveContextFromSeeds(seeds, sketchId = activeSketchId()) {
-    const component = connectedComponentFromSeeds(seeds);
-    return {
-      component,
-      variables: localSolveVariables(component, sketchId),
-      constraints: localSolveConstraints(component, sketchId),
-      lines: localSolveLines(component, sketchId),
-    };
   }
 
   function removeFromArray(array, item) {
@@ -5415,7 +4372,7 @@
     updateUI();
     draw();
     const msg = `削除しました: 点${pointSet.size} / 線${lineSet.size} / 円${circleSet.size} / 円弧${arcSet.size} / スプライン${splineSet.size} / 拘束${constraintSet.size}`;
-    const stable = result.success && constraintAnalysisState?.analysis?.stable;
+    const stable = result.success && constraintAnalysis.stable;
     setHint(stable ? msg : `${msg}。拘束状態を確認してください`, stable ? "normal" : "error");
     log(`${msg}\n自動solve: success=${result.success}, error=${result.errorNorm.toExponential(3)}`);
     recordHistory("削除");
@@ -7779,8 +6736,8 @@
     geometryInstanceDependencyRefs, resolveGeometryRef, elementSketchId, rejectReferencedGeometryDeletion,
     sketchName, setHint, log, blockAllProjectionBundle, geometryElementKey, constraintGraphNodes,
     guardDimensionSymbolDeletion, invalidateBlockProjectionCache, annotationReferencesRemovedGeometry,
-    clearSketchSolveState: (id) => sketchSolveStates.delete(id), clearInteractionForSketchChange,
-    invalidateAnalysis: () => { constraintAnalysisState = null; }, solveSketchAndDependents,
+    clearSketchSolveState, clearInteractionForSketchChange,
+    invalidateAnalysis: () => { constraintAnalysis.invalidate(); }, solveSketchAndDependents,
     activeSketchId, refreshConstraintAnalysis, updateUI, draw, recordHistory,
     confirmDeletion: (message) => window.confirm(message),
   });
@@ -7829,7 +6786,7 @@
   const sketchTreeObjects = window.SketchTreeObjects.create({
     sidebarGeometryItem,
     currentScope: () => model, getLanguage: () => applicationSettings.language,
-    ensureAnalysis: () => { if (!constraintAnalysisState) refreshConstraintAnalysis(); }, types: window.GeometrySolver,
+    ensureAnalysis: constraintAnalysis.ensure, types: window.GeometrySolver,
     isExplicitPoint, isPointUsedByLine, elementSketchId, constraintSketchId,
     constraintStatusOf, blockProjectionBundle, applicationText, escapeHtml, formatDisplayNumber,
     toolbarSvgMarkup, constraintToolbarIcon, sketchTreeGutter: window.SketchTreeView.gutter, isSketchProjectedGeometry,
@@ -8877,7 +7834,7 @@
   const geometryDragEditing = window.GeometryDragEditing.create({
     currentScope: workspace.current, solver, plan: geometryDragPlan, dragSolver: geometryDragSolver,
     contextFromSeeds: localSolveContextFromSeeds, projectionConstraintsForItems: sketchProjectionConstraintsAffectingItems,
-    pointLockedByLineFixed, variableDeltaInBasis, captureValues: snapshotModelState,
+    pointLockedByLineFixed, captureValues: snapshotModelState,
     enforceMinimumLineLengths, normalizeArcSweeps, invalidateProjection: invalidateBlockProjectionCache,
     projectionBlockedMessage: () => sketchProjectionShapeEditBlockedMessage(applicationText("ドラッグ", "Drag")),
     previewMaxModelError: DRAG_PREVIEW_MAX_MODEL_ERROR,
@@ -9339,7 +8296,7 @@
       draw();
       return false;
     }
-    constraintAnalysisState = null;
+    constraintAnalysis.invalidate();
     refreshConstraintAnalysis();
     setHint(applicationText("トリムしました", "Trim completed"));
     updateUI({ refreshAnalysis: false });
@@ -15456,7 +14413,7 @@
         return {
           total: model.constraints.length,
           operational: model.constraints.filter(constraintIsOperational).length,
-          invalid: [...invalidReferenceConstraints.values()],
+          invalid: referenceConstraintState.errorReasons(),
           badges: document.querySelectorAll(".sketch-reference-error-badge, .constraint-reference-error-badge").length,
         };
       },
@@ -15517,7 +14474,7 @@
           underLine: { status: constraintStatusOf(underLine), color: constraintStatusColor(underLine) },
           fullLine: { status: constraintStatusOf(fullLine), color: constraintStatusColor(fullLine) },
           supportArc: { status: constraintStatusOf(supportArc), color: constraintStatusColor(supportArc) },
-          summary: constraintAnalysisState.summary,
+          summary: constraintAnalysis.summary(),
         };
       },
       resetForReferencePointLineCoincidence() {

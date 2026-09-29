@@ -4,6 +4,23 @@
 
 ## 1. 実装ファイルの責務
 
+- `src/constraints/sketch_projection_queries.js`: 旧投影拘束の索引・対応点・影響対象の照会。
+- `src/editing/sketch_projection_editing.js`: 旧投影先の共有Point分離と参照再接続・Spline metadata同期。
+
+- `src/ui/expression_input_view.js`: 式入力の強調markup、入力欄装飾、input／scroll同期と一括更新。下書きの式評価は既存ParameterNamespaceへ統合。
+
+- `src/parameters/stabilization.js`: 式評価・参照寸法の収束反復と、目標値変更の段階的求解／再試行。操作全体の復元と履歴は持たない。
+
+- `src/constraints/constraint_analysis.js`: 拘束状態の解析対象・図形分類・cache・遅延評価と無効化。描画色と表示文言は含まない。
+
+- `src/constraints/constraint_redundancy.js`: 重複拘束の個別解析・全Sketch集計、接線維持の例外、非公開の結果Mapと件数照会。
+
+- `src/constraints/reference_constraint_state.js`: 参照拘束の範囲／循環判定、操作可否、非公開の参照エラー状態と読取りAPI。
+
+- `src/solver/sketch_solving.js`: Sketch／局所求解、依存順序に沿う伝播、失敗時の値復元と非公開の求解結果状態。通知・履歴は操作側。
+
+- `src/solver/solve_scope_query.js`: 拘束連結成分と局所／Sketch全体の求解入力の照会。求解・変更・cacheの所有は行わない。
+
 - `src/editing/geometry_drag_editing.js`: 図形ドラッグの局所context準備・開始前snapshot・preview適用／補正／復元（操作と診断で共用）
 
 - `src/commands/geometry_drag.js`: 図形ドラッグsessionの所有、移動開始閾値、更新、確定／失敗復元・履歴と強調対象の照会

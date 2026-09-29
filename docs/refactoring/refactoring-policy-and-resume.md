@@ -96,35 +96,12 @@
 - 仕様と実装配置が一致し、未解決の不具合・未検証項目を隠していない。
 - 差分確認、Commit、許可された範囲のPush、実行コミット情報更新が済んでいる。
 
-## 8. 再開地点（2026-09-29）
+## 8. 再開地点（2026-09-30）
 
-### 最新の区切り
+ユーザーの今回の明示依頼により、未コミット分を確定し、作業branchの既存コミットとともにdevelop経由でmainへ反映する。リリース後はmainとdevelopを同期する。正確なcommit IDとPush状態はGitで確認する。継続開発予定のcodex/composition-root-nextは保持する。
 
-GeometryDragEditingへ局所context準備・Line代表target判定・開始前snapshot・図形種別のpreview適用と補正／復元を集約した。GeometryDragは操作session、GeometryDragPlanは移動先の計画、GeometryDragSolverは数値求解を担い、操作と診断がEditingのprepare／preview／finishを共用する。appのpreview／finishは計測adapterとなった。
+SketchProjectionQueriesへ旧投影拘束の検索cache・対応点・影響対象照会を、SketchProjectionEditingへ共有Point分離とmetadata同期を分離した。抽出した12関数はscope取得の依存名と空白以外、抽出前の本体と一致する。app.jsは15,226行。UI、求解、履歴、保存形式の変更はない。
 
-直接Radius／Diameter寸法の照会は既存DimensionQueriesへ集約し、ドラッグと拘束編集で共用する。UI、求解条件、復元範囲、保存形式は変更していない。app.jsは16,269行。全体リファクタリングと全体E2Eは未完了。
+検証結果はcomposition-root.md先頭に記録する。全体リファクタリングと全体E2Eは未完了。次の分離単位は未着手であり、残る操作調整・入力振分け・Document操作などから依存と状態所有者を確認して選ぶ。行数だけを減らす分割は行わない。
 
-ユーザーから本区切りの未コミット変更をCommitし、mainへマージする明示指示を受けた。作業branchはcodex/composition-root-next。developへ統合後、mainへマージ・Pushし、developをmainへfast-forwardして同期する。実際の完了状態はGitで確認する。このリリース指示を将来の変更への自動リリース許可に拡張しない。
-
-### 検証
-
-構文271件・単体564件が成功。関連E2E187件と実pointer操作・Undoの回帰7件、合計194件が成功。実行中のテストはない。ログは一時フォルダのcad-drag-editing-check.log、cad-drag-editing-unit.log、cad-drag-editing-e2e.log、cad-drag-editing-native.log。全体E2E成功とは扱わない。
-
-```powershell
-npm run check
-npm run test:unit
-npm run test:e2e -- tests/e2e/blocks.spec.js tests/e2e/unified-ui.spec.js tests/e2e/phase0-characterization.spec.js tests/e2e/free-instance.spec.js tests/e2e/sketch-projection.spec.js tests/e2e/geometry-drag-smoothness.spec.js
-npm run test:e2e -- tests/e2e/constraint-drag-regressions.spec.js --grep "native pointer reversals and undo"
-```
-
-### 次に調べる境界
-
-共通の拘束連結成分・局所／Sketch求解対象の照会境界を整理する。対象はbuildConstraintAdjacency、connectedComponentFromSeeds、localSolveVariables／Constraints／Lines、sketchSolveVariables／Constraints／Lines、localSolveContextFromSeeds。
-
-localSolveContextFromSeedsはドラッグだけでなくsolveConstraintComponentAndDependentsも利用する。固定Pointで探索を止める規則、表示・所属・固定／回転ロックによる変数選択を保持し、ドラッグ専用に複製しない。GeometryDragの非公開sessionを再公開せず、数値求解側へUIや履歴を持ち込まない。
-
-再開時はこの文書とAGENTS.md、composition-root.md先頭、spec/architecture/モジュール構成.mdを読む。Gitの状態・ブランチ・最新履歴と週の残り利用枠を確認し、未コミット変更と実行中テストがないか確認する。main上では開発せずdevelopを基準に適切な作業branchで再開する。上記境界を調べ、まとまった単位で検証・差分確認・Commit・Push・runtime-version再生成を行う。全体目標を途中成果へ縮小しない。
-
-### 再開時に渡す指示の例
-
-> docs/refactoring/refactoring-policy-and-resume.mdとAGENTS.mdを読み、現在のGit状態を確認してJot2Dのリファクタリングを再開してください。app.jsを組立て・起動中心へ整理する全体目標を維持し、行数や期限より責務と状態所有者の適切な境界を優先してください。サブエージェントは使わず、まとまった単位で検証・コミット・Pushし、再開地点を更新してください。
+再開時は本書、AGENTS.md、composition-root.md先頭とGitの現物を確認する。週の残り利用枠を確認し、サブエージェントを使わず、責務単位の検証・Commit・Pushを続ける。今回のmain反映許可を今後の自動リリース許可へ拡張しない。

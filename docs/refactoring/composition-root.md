@@ -4,7 +4,23 @@
 
 開始点はdevelopの`457adea`。承認された最終目標は、`app.js`を数百行程度の生成・接続・起動・終了へ整理すること。部分的な抽出や中間のテスト成功をもって、この目標の完了とはしない。
 
-## 現在の再開地点（2026-09-29）
+## 現在の再開地点（2026-09-30）
+
+旧SketchProjection拘束をSketchProjectionQueries（投影先索引・対応点・影響対象の照会）とSketchProjectionEditing（共有Point分離・source再接続・Spline metadata同期）へ分離。抽出12関数の本体はscope取得の依存名と空白以外の一致を確認。構文286件・既存単体599件・関連E2E184件が成功（ログ: 一時フォルダのcad-release-check.log、cad-release-unit.log、cad-release-e2e.log）。app.jsは15,226行。ユーザーの明示依頼で既存の未リリース分離と合わせてdevelop経由でmainへ反映する。全体リファクタリング・全体E2Eは未完了。次の分離にはまだ着手していない。
+
+寸法式の下書き評価を既存ParameterNamespaceへ統合し、ExpressionInputViewへ強調表示・DOM装飾・input／scrollイベントと再描画を集約。参照名のscope選択はappから明示callbackで接続し、UIには計算とモデル更新を持たせない。構文284件・単体599件・関連E2E185件が成功。app.jsは15,405行。次はSketchProjection拘束の照会・metadata同期・共有点分離の境界を調べる。全体目標は未完了。
+
+ParameterStabilizationへ式評価と参照寸法feedback・目標値の段階的求解を集約。ParameterNamespace、SketchSolving、EditingCheckpointを接続し、ParameterApplicationは操作全体の確定・復元を引き続き担当する。反復上限・補間・半減再試行・finallyによる最終target復帰を維持。構文283件・単体597件・関連E2E185件が成功。app.jsは15,489行。次は寸法式の下書き評価を既存ParameterNamespaceへ集約し、式入力表示の責務を整理する。全体目標は未完了。
+
+ConstraintAnalysisへ解析対象の拡張・通常／Block／Free Instance分類・cacheと遅延評価を集約。appの直接無効化をinvalidate APIへ置換し、UIは分類・summary・安定性を照会する。数値解析の基底成分取得はSolverの共通関数へ移し、GeometryDragEditingも直接利用する。構文281件・単体591件・関連E2E191件が成功。app.jsは15,595行。次はParameterの反復評価と目標遷移求解を整理する。全体目標は未完了。
+
+ConstraintRedundancyへ追加時の個別冗長判定・全Sketchの集計・結果Mapを集約。接続されたLine／Arcの最初の同等接線を維持する例外、前計算の再利用、個別詳細破棄後は次のrefreshで件数を更新する時機を保持した。構文279件・単体584件・関連E2E184件が成功。app.jsは15,800行。次は拘束状態の解析・分類・cacheの所有者を整理する。全体目標は未完了。
+
+ReferenceConstraintStateへ参照の有効性・循環照会と参照エラーMapを集約。現在scopeとSketchContextの所属／参照範囲判定だけに依存し、求解・UIは操作可否、理由、件数をAPIで照会する。読込順の判定と永続enabledの保持を維持し、診断用snapshotから内部Mapを変更できない構成にした。構文277件・単体580件・関連E2E184件が成功。app.jsは15,874行。次は重複拘束の解析と結果状態を整理する。全体目標は未完了。
+
+SketchSolvingへ単一／局所Sketch求解・依存順序に沿う伝播・失敗復元と求解結果状態を集約。状態Mapを非公開にし、削除・モデルresetもAPI経由へ変更した。求解対象はSolveScopeQuery、値復元はEditingCheckpoint、通知・履歴は各操作側へ委譲する。構文275件・単体575件・関連E2E191件が成功。app.jsは15,944行。次は参照拘束の有効性と参照エラー状態の境界を整理する。全体リファクタリングは未完了。
+
+SolveScopeQueryへ拘束連結成分と局所／Sketch全体の変数・拘束・線の照会を集約。現在のworkspaceとGeometryReadModel、所属・有効性の判定を明示依存とし、操作・求解実行・数値状態を持たない。固定Pointでの探索停止、局所Pointだけの表示判定、変数順序とBlock回転ロックを維持した。構文273件・単体568件・関連E2E191件が成功。app.jsは16,102行。次はSketch求解・依存先求解と失敗復元の調整境界を調べる。全体目標は未完了。
 
 GeometryDragEditingへ局所context準備・Line代表target判定・開始前snapshot・図形種別のpreview適用と補正／復元を集約。操作と診断がprepare／preview／finishを共用し、appに残るpreview／finishは計測adapterのみとした。共有のRadius／Diameter寸法照会は既存DimensionQueriesへ統合し、拘束編集の参照を維持。構文271件・単体564件・関連E2E194件が成功。app.jsは16,269行。次は共通の拘束連結成分・局所／Sketch求解対象の照会境界を整理する。全体目標と全体E2Eは未完了。
 
