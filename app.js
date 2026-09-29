@@ -218,6 +218,11 @@
   const { emptyGeometryInstanceBundle, geometryInstanceSourcePoints, createGeometryInstanceBundle, geometryInstanceBundlesForScope } = instanceProjections;
   const blockCatalog = window.BlockCatalog.create({ definitions: () => documentModel.blockDefinitions });
   const { blockDefinitionOwnedSubtreeIds, blockDefinitionSketchRows, blockDefinitionById, blockDefinitionDrawableSketchIds, blockDefinitionHasGeometry, blockDefinitionGeometrySketchIds, blockInstanceEnabledSketchSet } = blockCatalog;
+  const hatchGeometryQuery = window.HatchGeometryQuery.create({
+    currentScope: workspace.current, activeSketchId, effectiveAppearanceForElement, applicationText,
+    boundaryGeometry: () => [...allGeometryLines(), ...allGeometryCircles(), ...allGeometryArcs(), ...allGeometrySplines()],
+  });
+  const { hatchPrimitivesFromElements, hatchPrimitivesForScope, resolvedHatchBoundary, hatchFaceAt } = hatchGeometryQuery;
   const blockProjections = window.BlockProjection.create({
     blockCatalog, geometryInstanceBundlesForScope, emptyGeometryInstanceBundle, hatchPrimitivesFromElements, hatchPrimitivesForScope,
   });
@@ -362,8 +367,6 @@
   const { blockDefinitionsInCurrentScope, blockDefinitionScopeError,
     blockDefinitionDependsOn, storedBlockInstancesReferencing, blockDefinitionUsageCount,
     blockDefinitionEditError, blockDefinitionCyclePath } = blockEditingQueries;
-  let hatchResolutionCache = new WeakMap();
-  let hatchFaceCache = new Map();
 
   let dimensionExpressionMarkCapture = null;
   let geometryClipboard = null;
@@ -1285,36 +1288,6 @@
     return model.blockInstances.find((instance) => instance.id === id) || null;
   }
 
-  function hatchPrimitiveForElement(element) {
-    if (element instanceof Line) return { kind: "line", id: element.id, p1: element.p1, p2: element.p2 };
-    if (element instanceof Circle) return { kind: "circle", id: element.id, center: element.center, radius: element.radius() };
-    if (element instanceof Arc) return { kind: "arc", id: element.id, center: element.center, radius: element.radius(), startAngle: element.startAngle, endAngle: element.endAngle };
-    if (element instanceof Spline) return { kind: "spline", id: element.id, points: element.fitPoints, closed: element.closed };
-    return null;
-  }
-
-  function hatchPrimitiveFingerprint(primitive) {
-    if (!primitive) return "invalid";
-    if (primitive.kind === "line") return `line:${primitive.id}:${primitive.p1.x}:${primitive.p1.y}:${primitive.p2.x}:${primitive.p2.y}`;
-    if (primitive.kind === "spline") return `spline:${primitive.id}:${primitive.closed ? 1 : 0}:${(primitive.points || []).map((point) => `${point.x}:${point.y}`).join("|")}`;
-    return `${primitive.kind}:${primitive.id}:${primitive.center?.x}:${primitive.center?.y}:${primitive.radius}:${primitive.startAngle ?? ""}:${primitive.endAngle ?? ""}`;
-  }
-
-  function hatchPrimitivesFromElements(elements, sketchId, { visibleOnly = false } = {}) {
-    return elements
-      .filter((element) => String(element.sketchId) === String(sketchId) && !element.construction)
-      .filter((element) => !visibleOnly || effectiveAppearanceForElement(element).visible !== false)
-      .map(hatchPrimitiveForElement)
-      .filter(Boolean);
-  }
-
-  function hatchPrimitivesForScope(scope, sketchId, { visibleOnly = false } = {}) {
-    const elements = scope === model
-      ? [...allGeometryLines(), ...allGeometryCircles(), ...allGeometryArcs(), ...allGeometrySplines()]
-      : [...(scope?.lines || []), ...(scope?.circles || []), ...(scope?.arcs || []), ...(scope?.splines || [])];
-    return hatchPrimitivesFromElements(elements, sketchId, { visibleOnly });
-  }
-
   function normalizeGeometryInstanceRef(value, expectedKind = null) {
     return geometryInstancePersistence.normalizeRef(value, expectedKind);
   }
@@ -1330,33 +1303,6 @@
     if (type === "mirror") return applicationText("ミラー", "Mirror");
     if (type === "pattern") return applicationText("直線パターン", "Linear Pattern");
     return applicationText("スケッチ投影", "Sketch Projection");
-  }
-
-  function hatchBoundaryFingerprint(hatch, scope = model) {
-    const elements = scope === model
-      ? [...allGeometryLines(), ...allGeometryCircles(), ...allGeometryArcs(), ...allGeometrySplines()]
-      : [...(scope.lines || []), ...(scope.circles || []), ...(scope.arcs || []), ...(scope.splines || [])];
-    const byKey = new Map([
-      ...elements.map((item) => [`${geometryKindForItem(item)}:${item.id}`, item]),
-    ]);
-    return hatchBoundaryGeometryRefs(hatch.boundaryLoops).map((ref) => {
-      const item = byKey.get(`${ref.kind}:${geometryRefId(ref)}`);
-      if (!item) return `${ref.kind}:${geometryRefId(ref)}:missing`;
-      if (item instanceof Line) return `line:${item.id}:${item.construction}:${item.p1.x}:${item.p1.y}:${item.p2.x}:${item.p2.y}`;
-      if (item instanceof Spline) return `spline:${item.id}:${item.construction}:${item.closed}:${item.fitPoints.map((point) => `${point.x}:${point.y}`).join(":")}`;
-      return `${ref.kind}:${item.id}:${item.construction}:${item.center.x}:${item.center.y}:${item.radius()}:${item instanceof Arc ? `${item.startAngle}:${item.endAngle}` : ""}`;
-    }).join("|");
-  }
-
-  function resolvedHatchBoundary(hatch) {
-    if (!hatch) return { ok: false, code: "missing-hatch", reason: applicationText("ハッチングが見つかりません", "Hatch not found") };
-    if (hatch.blockProjection) return hatch.resolvedBoundary || { ok: false, code: "invalid-boundary", reason: applicationText("ブロック内の境界が無効です", "The block hatch boundary is invalid") };
-    const fingerprint = hatchBoundaryFingerprint(hatch);
-    const cached = hatchResolutionCache.get(hatch);
-    if (cached?.fingerprint === fingerprint) return cached.result;
-    const result = resolveHatchBoundaryLoops(hatch.boundaryLoops, hatchPrimitivesForScope(model, hatch.sketchId));
-    hatchResolutionCache.set(hatch, { fingerprint, result });
-    return result;
   }
 
   function hitHatchAt(x, y, { activeOnly = true } = {}) {
@@ -2479,18 +2425,6 @@
     return pair ? applicationText(pair[0], pair[1]) : applicationText("閉領域を判定できません", result?.reason || "Could not detect a closed region");
   }
 
-  function hatchFaceAt(pointer) {
-    const sketchId = activeSketchId();
-    const primitives = hatchPrimitivesForScope(model, sketchId, { visibleOnly: true });
-    const fingerprint = primitives.map(hatchPrimitiveFingerprint).join("|");
-    let cached = hatchFaceCache.get(sketchId);
-    if (!cached || cached.fingerprint !== fingerprint) {
-      cached = { fingerprint, index: createHatchRegionIndex(primitives) };
-      hatchFaceCache.set(sketchId, cached);
-    }
-    return findHatchFaceInIndex(cached.index, pointer);
-  }
-
   function updateHatchPreview(pointer) {
     if (!pointer || !["hatch", "hatch-repair"].includes(mode)) return;
     hatchPreview = { pointer: { x: pointer.x, y: pointer.y }, result: hatchFaceAt(pointer) };
@@ -2542,7 +2476,7 @@
       const hatch = hatchRepairTarget;
       hatch.seed = { x: pointer.x, y: pointer.y };
       hatch.boundaryLoops = result.boundaryLoops;
-      hatchResolutionCache.delete(hatch);
+      hatchGeometryQuery.forget(hatch);
       clearSelection();
       canvasSelection.set("hatches", [hatch]);
       hatchRepairTarget = null;
@@ -2750,8 +2684,7 @@
     window.DocumentState.resetDefaults(documentModel);
     hatchPreview = null;
     hatchRepairTarget = null;
-    hatchResolutionCache = new WeakMap();
-    hatchFaceCache = new Map();
+    hatchGeometryQuery.clear();
     sketchTreeView.reset();
     annotationDrag.reset();
     referenceImageInteraction.reset();

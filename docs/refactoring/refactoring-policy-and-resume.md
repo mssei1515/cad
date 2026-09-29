@@ -98,12 +98,12 @@
 
 ## 8. 再開地点（2026-09-30）
 
-main／developはd76dfefでリリース同期済み。継続作業はcodex/composition-root-nextで進め、mainへの自動反映は行わない。直前の初回寸法拡縮は1fdd86dでCommit・Push済み。
+main／developはd76dfefでリリース同期済み。継続作業はcodex/composition-root-nextで進め、mainへの自動反映は行わない。直前のBlock配置範囲は38ffbcfでCommit・Push済み。
 
-BlockLayoutへ入れ子を含むBlockローカル範囲、表示中心、配置anchorへの平行移動を集約。BlockCatalog・BlockProjection・InstanceProjectionと形状解決を明示依存とし、抽出3関数の本体一致を確認。構文296件・単体619件・関連E2E184件が成功。app.jsは14,817行。全体目標と全体E2Eは未完了。
+HatchGeometryQueryへprimitive変換・境界fingerprint・境界解決WeakMap・閉領域indexを集約。修復後のforgetとDocumentリセット時のclearでcacheを操作し、appから直接参照を除去。抽出7関数は依存取得方法以外の本体一致を確認。構文298件・単体623件・関連E2E191件が成功。app.jsは14,750行。全体目標と全体E2Eは未完了。
 
-追加単体5件は有効Sketchと円弧sweep、入れ子回転・循環防止、非表示Annotation／Hatchとseed fallback、originと配置anchor、派生Mirrorを確認した。ログは一時フォルダのcad-block-layout-check.log、cad-block-layout-unit.log、cad-block-layout-e2e.log。実行中のテストはない。
+追加単体4件はcache再利用、図形／表示／Sketchの変更、個別無効化と全破棄、投影境界の優先、現在scopeと別scopeの対象区別を確認した。E2Eは従来の184件にhatching.spec.jsを追加。ログは一時フォルダのcad-hatch-query-check.log、cad-hatch-query-unit.log、cad-hatch-query-e2e.log。実行中のテストはない。
 
-次はHatchの境界解決と閉領域検索のcache（hatchResolutionCache／hatchFaceCache）を調べる。primitive変換、fingerprint、scopeに応じた対象取得、resolvedHatchBoundary／hatchFaceAtを照会側へまとめ、repair時の個別無効化とDocumentリセット時の全破棄をAPIにする。UI・作成／修復mode・previewは別責務として残す。BlockProjectionとGeometryReadModelの初期化順・遅延参照に注意する。まだ実装には着手していない。
+次はHatchの作成・境界修復操作を調べる。updateHatchPreview／startHatchCreation／startHatchBoundaryRepair／commitHatchAtとhatchPreview／hatchRepairTargetの所有者を揃え、作成の連続入力と修復後の選択mode、ID採番、取消・Documentリセット時の破棄、履歴単位を維持する。共通modeとpointerは明示adapterで接続し、描画は読み取りAPIを利用する。まだ実装には着手していない。
 
 再開時は本書、AGENTS.md、composition-root.md先頭とGitの現物を確認する。週の残り利用枠を確認し、サブエージェントを使わず、責務単位の検証・Commit・Pushを続ける。行数だけの分割で全体目標を縮小しない。
