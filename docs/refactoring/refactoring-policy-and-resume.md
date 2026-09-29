@@ -100,19 +100,19 @@
 
 ### 最新の区切り
 
-main／developは1a7d5ccで同期済み。本区切りはcodex/composition-root-nextで継続する。前回のリリース指示を新しい変更へ拡張しない。直前の求解対象照会の分離は1628ce5でCommit・Push済み。
+main／developは1a7d5ccで同期済み。本区切りはcodex/composition-root-nextで継続する。前回のリリース指示を新しい変更へ拡張しない。直前のSketch求解と結果状態の分離は0ea86b4でCommit・Push済み。
 
-SketchSolvingへ単一Sketch・局所求解・依存順序に沿う伝播・失敗時復元と求解結果状態を集約した。状態Mapは非公開で、削除・モデルresetはAPIを通す。求解対象はSolveScopeQuery、値の復元はEditingCheckpointを使い、UI・履歴・操作全体の復元判断は各操作側に残す。
+ReferenceConstraintStateへ参照拘束の有効性・循環照会と参照エラーMapを集約した。現在scopeとSketchContextの所属／参照範囲だけを明示依存とし、求解・編集・UIには操作可否、理由、件数をAPIで渡す。モデルresetはclearを通し、診断には理由配列のコピーを渡す。refreshの返却Mapもコピーであり内部Mapを公開しない。従来の呼出し元はrefreshの返値を使用していない。
 
-参照元成功と依存先失敗を別に返す規則、循環時のエラー、局所成功後だけの全体残差確認と再試行、復元snapshotの有無による状態記録の違いを保持した。app.jsは15,944行。全体リファクタリングと全体E2Eは未完了。
+拘束の順に受理済み参照を評価する規則、範囲違反を循環より先に判定する規則、永続enabledを変更せず操作可否に診断を反映する規則を維持した。app.jsは15,874行。全体リファクタリングと全体E2Eは未完了。
 
 ### 検証
 
-構文275件・単体575件が成功。関連E2E184件と実pointer操作・Undo回帰7件（合計191件）が成功。実行中のテストはない。全体E2Eは未完了。ログは一時フォルダのcad-sketch-solving-check.log、cad-sketch-solving-unit.log、cad-sketch-solving-e2e.log、cad-sketch-solving-native.log。抽出した関数本体が依存名・計測adapter・空白以外で変わっていないことも比較した。
+構文277件・単体580件・関連E2E184件が成功。実行中のテストはない。全体E2Eは未完了。ログは一時フォルダのcad-reference-state-check.log、cad-reference-state-unit.log、cad-reference-state-e2e.log。新規単体5件は評価順、範囲／循環、無効・欠落参照の従来条件、巡回探索、snapshot隔離とscope更新を確認する。
 
 ### 次に調べる境界
 
-参照拘束の有効性と参照エラー状態を整理する。constraintIsOperational、referenceSketchTargets／referencePathExists／wouldCreateReferenceCycle、refreshReferenceConstraintValidityとinvalidReferenceConstraintsが対象。読込順に受理済み参照を評価する規則、範囲外／循環の理由、無効な拘束を求解から除外する条件を保持する。Sketch階層の照会は既存SketchContextへ委譲し、UIの集計表示と診断には必要な読取りAPIを渡す。
+重複拘束の解析と結果状態を整理する。constraintsForRedundancy、shouldRetainConnectedLineArcTangency、redundantConstraintInfo、refreshConstraintRedundancy、constraintRedundancyStateと関連の照会／削除が対象。接線が一階rankで冗長に見えても非線形形状の維持に必要な場合の例外を保持する。前計算結果を再利用する経路、追加前の冗長判定と表示用の全体解析を区別し、現在の無効化・再計算の時機を追跡する。
 
 再開時はこの文書とAGENTS.md、composition-root.md先頭、spec/architecture/モジュール構成.mdを読む。Gitの状態・最新履歴と週の残り利用枠を確認する。main上では開発せず、developを基準に適切な作業branchで再開する。まとまった単位で検証・差分確認・Commit・Push・runtime-version再生成を行う。全体目標を途中成果へ縮小しない。
 

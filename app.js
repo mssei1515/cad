@@ -268,7 +268,11 @@
   });
   const { withGeometryReadCache, blockProjectionBundles, geometryInstanceBundles, geometryInstanceBundle, allGeometryPoints, allGeometryLines, allGeometryCircles, allGeometryArcs, allGeometrySplines, allAnnotations, allHatches, allGeometryPrimitives, resolveGeometryRef, geometryElementFromKey } = geometryReads;
   let interactionFrameStats = null;
-  let invalidReferenceConstraints = new Map();
+  const referenceConstraintState = window.ReferenceConstraintState.create({
+    currentScope: workspace.current, constraintSketchId, isReferenceSourceSketchId,
+  });
+  const { constraintIsOperational, wouldCreateReferenceCycle, refreshReferenceConstraintValidity,
+    referenceConstraintErrorInfo, referenceConstraintErrorCountForSketch } = referenceConstraintState;
   let blankDoubleClickCandidate = null;
   let suppressNextBlankDoubleClickEvent = false;
   let splineEditSession = null;
@@ -1953,68 +1957,6 @@
     return window.SketchHierarchy.parentSketchOf(model.sketches, sketch);
   }
 
-  function constraintIsOperational(constraint) {
-    return constraint?.enabled !== false && !invalidReferenceConstraints.has(constraint);
-  }
-
-  function referenceSketchTargets(sketchId) {
-    return [...new Set(model.constraints
-      .filter((constraint) => constraintIsOperational(constraint) && constraint.reference && constraintSketchId(constraint) === sketchId && constraint.referenceSketchId)
-      .map((constraint) => constraint.referenceSketchId))];
-  }
-
-  function referencePathExists(fromSketchId, toSketchId) {
-    const pending = [fromSketchId];
-    const visited = new Set();
-    while (pending.length > 0) {
-      const current = pending.pop();
-      if (current === toSketchId) return true;
-      if (!current || visited.has(current)) continue;
-      visited.add(current);
-      pending.push(...referenceSketchTargets(current));
-    }
-    return false;
-  }
-
-  function wouldCreateReferenceCycle(subjectSketchId, referenceSketchId) {
-    return subjectSketchId === referenceSketchId || referencePathExists(referenceSketchId, subjectSketchId);
-  }
-
-  function refreshReferenceConstraintValidity() {
-    const invalid = new Map();
-    const acceptedTargets = new Map();
-    const targetsOf = (sketchId) => acceptedTargets.get(sketchId) || [];
-    const pathExists = (fromSketchId, toSketchId) => {
-      const pending = [fromSketchId];
-      const visited = new Set();
-      while (pending.length > 0) {
-        const current = pending.pop();
-        if (current === toSketchId) return true;
-        if (!current || visited.has(current)) continue;
-        visited.add(current);
-        pending.push(...targetsOf(current));
-      }
-      return false;
-    };
-    for (const constraint of model.constraints) {
-      if (constraint.enabled === false || !constraint.reference || !constraint.referenceSketchId) continue;
-      const ownerSketchId = constraintSketchId(constraint);
-      const referenceSketchId = constraint.referenceSketchId;
-      if (!isReferenceSourceSketchId(referenceSketchId, ownerSketchId)) {
-        invalid.set(constraint, "参照範囲外");
-        continue;
-      }
-      if (ownerSketchId === referenceSketchId || pathExists(referenceSketchId, ownerSketchId)) {
-        invalid.set(constraint, "循環参照");
-        continue;
-      }
-      if (!acceptedTargets.has(ownerSketchId)) acceptedTargets.set(ownerSketchId, []);
-      acceptedTargets.get(ownerSketchId).push(referenceSketchId);
-    }
-    invalidReferenceConstraints = invalid;
-    return invalid;
-  }
-
   function sketchDepth(sketch) {
     ensureSketchState();
     return window.SketchHierarchy.sketchDepth(model.sketches, sketch);
@@ -2249,20 +2191,8 @@
     return count > 0 ? applicationSettings.language === "en" ? ` / Duplicate constraints: ${count}` : ` / 重複拘束: ${count}` : "";
   }
 
-  function referenceConstraintErrorInfo(constraint) {
-    return invalidReferenceConstraints.get(constraint) || null;
-  }
-
-  function referenceConstraintErrorCountForSketch(sketchId) {
-    let count = 0;
-    for (const constraint of invalidReferenceConstraints.keys()) {
-      if (constraintSketchId(constraint) === sketchId) count += 1;
-    }
-    return count;
-  }
-
   function referenceConstraintErrorSummary() {
-    const count = invalidReferenceConstraints.size;
+    const count = referenceConstraintState.errorCount;
     return count > 0 ? applicationSettings.language === "en" ? ` / Reference errors: ${count}` : ` / 参照エラー: ${count}` : "";
   }
 
@@ -3424,7 +3354,7 @@
   const blockCompletionCommand = window.BlockCompletionCommand.create({
     blockEditor, blockDefinitionEditing, blockCatalog, documentModel, currentScope: workspace.current,
     blockDefinitionCyclePath, duplicateBlockElementId, refreshReferenceConstraintValidity,
-    hasInvalidReferenceConstraints: () => invalidReferenceConstraints.size > 0,
+    hasInvalidReferenceConstraints: () => referenceConstraintState.errorCount > 0,
     solveSketchById, resultIsAccepted, sketchName, solveReferenceDependentSketches,
     requestChoice: (options) => choiceDialog.show(options), applicationText, blockLocalGeometryBounds,
     storedBlockInstancesReferencing, restoreBlockEditorHost, rebuildStoredBlockDefinitionConstraints,
@@ -3478,7 +3408,7 @@
     referenceImageRenderer.clear();
     invalidateBlockProjectionCache();
     sketchSolving.clearAll();
-    invalidReferenceConstraints.clear();
+    referenceConstraintState.clear();
     constraintAnalysisState = null;
     clearSelection();
     geometryDrag.reset();
@@ -15131,7 +15061,7 @@
         return {
           total: model.constraints.length,
           operational: model.constraints.filter(constraintIsOperational).length,
-          invalid: [...invalidReferenceConstraints.values()],
+          invalid: referenceConstraintState.errorReasons(),
           badges: document.querySelectorAll(".sketch-reference-error-badge, .constraint-reference-error-badge").length,
         };
       },
