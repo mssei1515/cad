@@ -6,6 +6,8 @@
 
 ## 現在の再開地点（2026-09-29）
 
+SketchSolvingへ単一／局所Sketch求解・依存順序に沿う伝播・失敗復元と求解結果状態を集約。状態Mapを非公開にし、削除・モデルresetもAPI経由へ変更した。求解対象はSolveScopeQuery、値復元はEditingCheckpoint、通知・履歴は各操作側へ委譲する。構文275件・単体575件・関連E2E191件が成功。app.jsは15,944行。次は参照拘束の有効性と参照エラー状態の境界を整理する。全体リファクタリングは未完了。
+
 SolveScopeQueryへ拘束連結成分と局所／Sketch全体の変数・拘束・線の照会を集約。現在のworkspaceとGeometryReadModel、所属・有効性の判定を明示依存とし、操作・求解実行・数値状態を持たない。固定Pointでの探索停止、局所Pointだけの表示判定、変数順序とBlock回転ロックを維持した。構文273件・単体568件・関連E2E191件が成功。app.jsは16,102行。次はSketch求解・依存先求解と失敗復元の調整境界を調べる。全体目標は未完了。
 
 GeometryDragEditingへ局所context準備・Line代表target判定・開始前snapshot・図形種別のpreview適用と補正／復元を集約。操作と診断がprepare／preview／finishを共用し、appに残るpreview／finishは計測adapterのみとした。共有のRadius／Diameter寸法照会は既存DimensionQueriesへ統合し、拘束編集の参照を維持。構文271件・単体564件・関連E2E194件が成功。app.jsは16,269行。次は共通の拘束連結成分・局所／Sketch求解対象の照会境界を整理する。全体目標と全体E2Eは未完了。

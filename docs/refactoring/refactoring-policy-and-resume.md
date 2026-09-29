@@ -100,19 +100,19 @@
 
 ### 最新の区切り
 
-前回のGeometryDragEditing分離は6fdc769で確定し、1a7d5ccでmain／developへ反映・同期済み。本区切りはcodex/composition-root-nextで継続する。前回のリリース指示を新しい変更へ拡張しない。
+main／developは1a7d5ccで同期済み。本区切りはcodex/composition-root-nextで継続する。前回のリリース指示を新しい変更へ拡張しない。直前の求解対象照会の分離は1628ce5でCommit・Push済み。
 
-SolveScopeQueryへ拘束連結成分と局所／Sketch全体の変数・拘束・線の照会を分離した。現在scopeとGeometryReadModel、所属・表示・有効性・Instance依存参照を明示依存とする。Solver実行・操作session・UI・履歴・cacheを所有しない。拘束編集、ドラッグ、Parameter適用、診断が同じAPIを使用する。
+SketchSolvingへ単一Sketch・局所求解・依存順序に沿う伝播・失敗時復元と求解結果状態を集約した。状態Mapは非公開で、削除・モデルresetはAPIを通す。求解対象はSolveScopeQuery、値の復元はEditingCheckpointを使い、UI・履歴・操作全体の復元判断は各操作側に残す。
 
-固定Pointで探索を止める規則、局所Pointのみの表示条件、Object同一性、変数順序とBlock固定／回転ロックを保持した。app.jsは16,102行。全体リファクタリングと全体E2Eは未完了。
+参照元成功と依存先失敗を別に返す規則、循環時のエラー、局所成功後だけの全体残差確認と再試行、復元snapshotの有無による状態記録の違いを保持した。app.jsは15,944行。全体リファクタリングと全体E2Eは未完了。
 
 ### 検証
 
-構文273件・単体568件が成功。関連E2E184件と実pointer操作・Undo回帰7件（合計191件）が成功。実行中のテストはない。最初のE2Eでは半径下限定数より先にmoduleを生成する初期化順エラーを検出したため、生成を定数初期化後へ移して再実行し、成功を確認した。ログは一時フォルダのcad-solve-scope-check.log、cad-solve-scope-unit.log、cad-solve-scope-e2e.log、cad-solve-scope-native.log。全体E2Eは未完了。
+構文275件・単体575件が成功。関連E2E184件と実pointer操作・Undo回帰7件（合計191件）が成功。実行中のテストはない。全体E2Eは未完了。ログは一時フォルダのcad-sketch-solving-check.log、cad-sketch-solving-unit.log、cad-sketch-solving-e2e.log、cad-sketch-solving-native.log。抽出した関数本体が依存名・計測adapter・空白以外で変わっていないことも比較した。
 
 ### 次に調べる境界
 
-Sketch求解と依存先の求解、失敗復元と状態記録の調整を調べる。対象はsolveActiveSketch、solveSketchById、solveReferenceDependentSketches、solveSketchAndDependents、solveConstraintComponentAndDependents。依存グラフの順序、循環参照の扱い、局所成功後の全体残差確認と全体再試行、開始前復元の有無による状態記録の違いを保持する。照会と求解実行を混在させず、既存EditingCheckpointと求解状態の所有者を確認して境界を決める。
+参照拘束の有効性と参照エラー状態を整理する。constraintIsOperational、referenceSketchTargets／referencePathExists／wouldCreateReferenceCycle、refreshReferenceConstraintValidityとinvalidReferenceConstraintsが対象。読込順に受理済み参照を評価する規則、範囲外／循環の理由、無効な拘束を求解から除外する条件を保持する。Sketch階層の照会は既存SketchContextへ委譲し、UIの集計表示と診断には必要な読取りAPIを渡す。
 
 再開時はこの文書とAGENTS.md、composition-root.md先頭、spec/architecture/モジュール構成.mdを読む。Gitの状態・最新履歴と週の残り利用枠を確認する。main上では開発せず、developを基準に適切な作業branchで再開する。まとまった単位で検証・差分確認・Commit・Push・runtime-version再生成を行う。全体目標を途中成果へ縮小しない。
 
