@@ -257,7 +257,6 @@
   let hoveredHatch = null;
   let hoveredReferenceImage = null;
   let constraintAnalysisState = null;
-  let constraintRedundancyState = { constraints: new Map(), sketches: new Map(), count: 0 };
   let lastAuthoringPerformance = null;
   const interactionProfiler = window.InteractionProfiler.create();
   const { work: profileInteractionWork, phase: profileInteractionPhase } = interactionProfiler;
@@ -438,6 +437,12 @@
     isVisibleSketchElement, constraintIsOperational, constraintGraphNodes, geometryInstanceDependencyRefs, minimumLength: MIN_LINE_LENGTH,
   });
   const { connectedComponentFromSeeds, localSolveVariables, localSolveConstraints, localSolveLines, sketchSolveVariables, sketchSolveConstraints, sketchSolveLines, localSolveContextFromSeeds } = solveScopeQuery;
+  const constraintRedundancy = window.ConstraintRedundancy.create({
+    currentScope: workspace.current, solver, sketchSolveVariables, constraintSketchId,
+    constraintIsOperational, isRootSketch, acceptError: CONSTRAINT_ACCEPT_ERROR,
+  });
+  const { redundantConstraintInfo, refreshConstraintRedundancy, constraintRedundancyInfo,
+    constraintIsRedundant, constraintDuplicateCountForSketch } = constraintRedundancy;
   const viewport = window.CanvasViewport.create({
     canvasRect: () => canvas.getBoundingClientRect(), initialScale: CSS_PX_PER_MM,
     minZoom: MIN_ZOOM, maxZoom: MAX_ZOOM, minLength: MIN_LINE_LENGTH,
@@ -827,7 +832,7 @@
 
   function setSolveResultHint(label, solved, analysis, dependent) {
     const hasDependentError = dependent?.success === false;
-    const hasDuplicateConstraints = (constraintRedundancyState?.count || 0) > 0;
+    const hasDuplicateConstraints = (constraintRedundancy.count) > 0;
     const stable = Boolean(solved?.success && analysis?.analysis?.stable && !hasDependentError && !hasDuplicateConstraints);
     const operation = solveOperationLabel(label);
     const message = stable
@@ -2107,87 +2112,8 @@
     return Boolean(result) && Number.isFinite(result.errorNorm) && result.errorNorm <= CONSTRAINT_ACCEPT_ERROR;
   }
 
-  function constraintsForRedundancy(sketchId) {
-    return model.constraints.filter((constraint) => constraintIsOperational(constraint) && constraintSketchId(constraint) === sketchId);
-  }
-
-  function shouldRetainConnectedLineArcTangency(constraint, constraints) {
-    // Endpoint tangency can have zero first-order rank while still preserving the nonlinear shape.
-    if (!(constraint instanceof LineCircleTangentConstraint) || !(constraint.primitive instanceof Arc)) return false;
-    const firstEquivalent = constraints.find((item) =>
-      item instanceof LineCircleTangentConstraint &&
-      item.line === constraint.line &&
-      item.primitive === constraint.primitive &&
-      item.sign === constraint.sign);
-    if (firstEquivalent !== constraint) return false;
-    return constraints.some((item) =>
-      item instanceof ArcEndpointCoincidentConstraint &&
-      item.arc === constraint.primitive &&
-      (item.point === constraint.line.p1 || item.point === constraint.line.p2));
-  }
-
-  function redundantConstraintInfo(constraint, sketchId = constraintSketchId(constraint)) {
-    if (!constraint || constraint.enabled === false) return { redundant: false };
-    const constraints = constraintsForRedundancy(sketchId);
-    if (!constraints.includes(constraint)) return { redundant: false };
-    const redundancy = solver.constraintRedundancyState({
-      variables: sketchSolveVariables(sketchId),
-      constraints,
-      errorTolerance: CONSTRAINT_ACCEPT_ERROR,
-      rankTolerance: 1e-8,
-    });
-    const contribution = redundancy.byConstraint.get(constraint);
-    if (!redundancy.stable || !contribution) return { redundant: false, unstable: true, redundancy };
-    return {
-      redundant: contribution.redundant && !shouldRetainConnectedLineArcTangency(constraint, constraints),
-      rankBefore: contribution.rankBefore,
-      rankAfter: contribution.rankAfter,
-      redundancy,
-    };
-  }
-
-  function refreshConstraintRedundancy(precomputedBySketch = null) {
-    const byConstraint = new Map();
-    const bySketch = new Map();
-    let count = 0;
-    for (const sketch of model.sketches.filter((item) => !isRootSketch(item))) {
-      const sketchId = sketch.id;
-      const constraints = constraintsForRedundancy(sketchId);
-      const redundancy = precomputedBySketch?.get(sketchId) || solver.constraintRedundancyState({
-          variables: sketchSolveVariables(sketchId),
-          constraints,
-          errorTolerance: CONSTRAINT_ACCEPT_ERROR,
-          rankTolerance: 1e-8,
-        });
-      let sketchCount = 0;
-      for (const constraint of constraints) {
-        const contribution = redundancy.byConstraint.get(constraint);
-        if (!redundancy.stable || !contribution?.redundant || shouldRetainConnectedLineArcTangency(constraint, constraints)) continue;
-        const info = { redundant: true, sketchId, rankBefore: contribution.rankBefore, rankAfter: contribution.rankAfter };
-        byConstraint.set(constraint, info);
-        sketchCount += 1;
-        count += 1;
-      }
-      if (sketchCount > 0) bySketch.set(sketchId, sketchCount);
-    }
-    constraintRedundancyState = { constraints: byConstraint, sketches: bySketch, count };
-    return constraintRedundancyState;
-  }
-
-  function constraintRedundancyInfo(constraint) {
-    return constraintRedundancyState?.constraints?.get(constraint) || null;
-  }
-
-  function constraintIsRedundant(constraint) {
-    return Boolean(constraintRedundancyInfo(constraint)?.redundant);
-  }
-
-  function constraintDuplicateCountForSketch(sketchId) {
-    return constraintRedundancyState?.sketches?.get(sketchId) || 0;
-  }
-
   function constraintDuplicateSummary() {
-    const count = constraintRedundancyState?.count || 0;
+    const count = constraintRedundancy.count;
     return count > 0 ? applicationSettings.language === "en" ? ` / Duplicate constraints: ${count}` : ` / 重複拘束: ${count}` : "";
   }
 
@@ -4628,7 +4554,7 @@
     const duplicate = redundantConstraintInfo(constraint, constraintSketchId(constraint));
     if (duplicate?.redundant) {
       model.constraints = model.constraints.filter((item) => item !== constraint);
-      constraintRedundancyState.constraints.delete(constraint);
+      constraintRedundancy.forgetConstraint(constraint);
       return false;
     }
     return true;

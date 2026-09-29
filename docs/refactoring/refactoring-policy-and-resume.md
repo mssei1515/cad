@@ -100,19 +100,19 @@
 
 ### 最新の区切り
 
-main／developは1a7d5ccで同期済み。本区切りはcodex/composition-root-nextで継続する。前回のリリース指示を新しい変更へ拡張しない。直前のSketch求解と結果状態の分離は0ea86b4でCommit・Push済み。
+main／developは1a7d5ccで同期済み。本区切りはcodex/composition-root-nextで継続する。前回のリリース指示を新しい変更へ拡張しない。直前の参照拘束状態の分離はd762688でCommit・Push済み。
 
-ReferenceConstraintStateへ参照拘束の有効性・循環照会と参照エラーMapを集約した。現在scopeとSketchContextの所属／参照範囲だけを明示依存とし、求解・編集・UIには操作可否、理由、件数をAPIで渡す。モデルresetはclearを通し、診断には理由配列のコピーを渡す。refreshの返却Mapもコピーであり内部Mapを公開しない。従来の呼出し元はrefreshの返値を使用していない。
+ConstraintRedundancyへ個別冗長判定・全Sketchの表示集計と結果Mapを集約した。現在scope、Solver、変数・所属・有効性・Root判定を明示依存とし、UIには詳細と件数の照会、追加拒否側には詳細破棄APIを渡す。集計snapshotのMapはコピーであり、所有Mapを外へ渡さない。
 
-拘束の順に受理済み参照を評価する規則、範囲違反を循環より先に判定する規則、永続enabledを変更せず操作可否に診断を反映する規則を維持した。app.jsは15,874行。全体リファクタリングと全体E2Eは未完了。
+接続されたLine／Arcの最初の同等接線を維持する例外、前計算結果の再利用、個別判定は表示状態を更新しないこと、個別詳細破棄後の件数は次回refreshで再集計することを保持した。app.jsは15,800行。全体リファクタリングと全体E2Eは未完了。
 
 ### 検証
 
-構文277件・単体580件・関連E2E184件が成功。実行中のテストはない。全体E2Eは未完了。ログは一時フォルダのcad-reference-state-check.log、cad-reference-state-unit.log、cad-reference-state-e2e.log。新規単体5件は評価順、範囲／循環、無効・欠落参照の従来条件、巡回探索、snapshot隔離とscope更新を確認する。
+構文279件・単体584件・関連E2E184件が成功。実行中のテストはない。全体E2Eは未完了。ログは一時フォルダのcad-redundancy-check.log、cad-redundancy-unit.log、cad-redundancy-e2e.log。追加単体4件で対象除外、安定性とrank、接線維持の例外、前計算の再利用、Root除外、集計と詳細の更新時機を確認する。
 
 ### 次に調べる境界
 
-重複拘束の解析と結果状態を整理する。constraintsForRedundancy、shouldRetainConnectedLineArcTangency、redundantConstraintInfo、refreshConstraintRedundancy、constraintRedundancyStateと関連の照会／削除が対象。接線が一階rankで冗長に見えても非線形形状の維持に必要な場合の例外を保持する。前計算結果を再利用する経路、追加前の冗長判定と表示用の全体解析を区別し、現在の無効化・再計算の時機を追跡する。
+拘束状態の解析・分類・cacheを整理する。constraintAnalysisState、refreshConstraintAnalysis、constraintStatusOf、classifyConstraintStatus／classifyBlockProjectionStatus／classifyFreeInstanceGeometryと無効化経路が対象。解析対象Sketchを派生参照元へ拡張する規則、求解失敗時のconflict表示、Free Instanceの微小変位試行とfinally復元、投影Geometryの分類を保持する。variableDeltaInBasisはドラッグ準備でも共有されるので、解析moduleへ閉じ込めてapp経由の循環を作らない。表示色・線幅・UIの集計文字列は描画／表示側の責務として分ける。
 
 再開時はこの文書とAGENTS.md、composition-root.md先頭、spec/architecture/モジュール構成.mdを読む。Gitの状態・最新履歴と週の残り利用枠を確認する。main上では開発せず、developを基準に適切な作業branchで再開する。まとまった単位で検証・差分確認・Commit・Push・runtime-version再生成を行う。全体目標を途中成果へ縮小しない。
 
