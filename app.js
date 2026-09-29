@@ -256,7 +256,6 @@
   let hoveredAnnotation = null;
   let hoveredHatch = null;
   let hoveredReferenceImage = null;
-  let constraintAnalysisState = null;
   let lastAuthoringPerformance = null;
   const interactionProfiler = window.InteractionProfiler.create();
   const { work: profileInteractionWork, phase: profileInteractionPhase } = interactionProfiler;
@@ -443,6 +442,14 @@
   });
   const { redundantConstraintInfo, refreshConstraintRedundancy, constraintRedundancyInfo,
     constraintIsRedundant, constraintDuplicateCountForSketch } = constraintRedundancy;
+  const constraintAnalysis = window.ConstraintAnalysis.create({
+    currentScope: workspace.current, solver, scopeQuery: solveScopeQuery, activeSketchId, descendantSketchIds, elementSketchId,
+    geometryInstanceBundles, blockProjectionBundles, geometryInstanceSourcePoints,
+    refreshReferenceConstraintValidity, refreshConstraintRedundancy, sketchHasSolveError,
+    isEditableSketchElement, isExplicitPoint, minimumLength: MIN_LINE_LENGTH, acceptError: CONSTRAINT_ACCEPT_ERROR,
+    profileAnalysis: work => interactionProfiler.active ? profileInteractionWork("analysis", work) : work(),
+  });
+  const { statusOf: constraintStatusOf } = constraintAnalysis;
   const viewport = window.CanvasViewport.create({
     canvasRect: () => canvas.getBoundingClientRect(), initialScale: CSS_PX_PER_MM,
     minZoom: MIN_ZOOM, maxZoom: MAX_ZOOM, minLength: MIN_LINE_LENGTH,
@@ -457,7 +464,7 @@
   const transientAuthoring = window.TransientAuthoring.create({
     currentScope: workspace.current, ids: geometryIds, selection: canvasSelection, historySnapshot, documentHistory,
     isHistoryRestoring: () => historyController.restoring, updateHistoryButtons,
-    invalidateAnalysis: () => { constraintAnalysisState = null; },
+    invalidateAnalysis: () => { constraintAnalysis.invalidate(); },
   });
   const { beginTransientLineStartRollback, clearTransientLineStartRollback, beginTransientLineCompletionRollback,
     clearTransientLineCompletionRollback, rollbackTransientLineCompletion, beginTransientPointRollback,
@@ -556,7 +563,7 @@
     currentScope: () => model, geometryIds, geometry: geometryCreation, plans: offsetGeometry,
     placement: dimensionPlacement, types: window.GeometrySolver, kernel: window.GeometryKernel,
     commitNewConstraint, normalizeAppearance, offsetPairSign, offsetChainErrorText,
-    applicationText, setHint, updateUI, draw, invalidateAnalysis: () => { constraintAnalysisState = null; },
+    applicationText, setHint, updateUI, draw, invalidateAnalysis: () => { constraintAnalysis.invalidate(); },
     minLineLength: MIN_LINE_LENGTH, minArcLength: MIN_ARC_LENGTH,
   });
   const { createOffsetGeometry, createOffsetChainGeometry } = offsetConstruction;
@@ -590,7 +597,7 @@
   const { executeLineTrim, executeArcTrim, executeCircleTrim } = trimEditing;
   const editingCheckpoint = window.EditingCheckpoint.create({
     currentScope: workspace.current, ids: geometryIds, invalidateProjection: invalidateBlockProjectionCache,
-    invalidateAnalysis: () => { constraintAnalysisState = null; },
+    invalidateAnalysis: () => { constraintAnalysis.invalidate(); },
   });
   const { captureValues: snapshotModelState, restoreValues: restoreModelState, captureGeometry: snapshotGeometryMutationState, restoreGeometry: restoreGeometryMutationState } = editingCheckpoint;
   const sketchSolving = window.SketchSolving.create({
@@ -605,7 +612,7 @@
     guardSketchProjectionShapeEdit, filletGeometryBasis, filletGeometryFromPointer, hideDimensionValueInput,
     snapshotGeometryMutationState, restoreGeometryMutationState, createFillet, clearSelection, selection: canvasSelection,
     stabilize: () => stabilizeActiveParameterNamespace(activeSketchId()), acceptError: CONSTRAINT_ACCEPT_ERROR,
-    invalidateAnalysis: () => { constraintAnalysisState = null; }, refreshConstraintAnalysis,
+    invalidateAnalysis: () => { constraintAnalysis.invalidate(); }, refreshConstraintAnalysis,
     applicationText, setHint, updateUI, updateGeometrySelectionUI, draw, recordHistory,
   });
   const { start: startFilletRadiusPlacement, update: updateFilletRadiusPlacement,
@@ -679,7 +686,7 @@
     plans: centerlinePlans, construction: centerlineConstruction, selection: canvasSelection, sameSketchElements, activeSketchId, isActiveSketchElement, applicationText, minLineLength: MIN_LINE_LENGTH,
     snapForDrawing: pointer => ({ point: snapForDrawing(pointer), snap: drawingSnap.active }), clearSnap,
     setPointerPreview: value => { pointerPreview = value; }, setMode: value => { mode = value; },
-    invalidateAnalysis: () => { constraintAnalysisState = null; }, setHint, updateUI, draw,
+    invalidateAnalysis: () => { constraintAnalysis.invalidate(); }, setHint, updateUI, draw,
   });
   const { reset: resetCenterlineCommandState, prepare: prepareCenterlineEndpointPlacement, click: handleCenterlineClick, projectPointToCenterlineSupport } = centerlineCommand;
   const circularConstruction = window.CircularConstruction.create({
@@ -2276,218 +2283,7 @@
     return vectorNorm(solver.computeErrorVector());
   }
 
-  function pointHasConstraintFreedom(point, analysis) {
-    if (point.fixed) return false;
-    const freedom = analysis.variableFreedom.get(point);
-    return Boolean(freedom?.x || freedom?.y);
-  }
-
-  function objectHasConstraintFreedom(object, prop, analysis) {
-    return Boolean(analysis.variableFreedom.get(object)?.[prop]);
-  }
-
-  function variableDeltaInBasis(object, prop, basis, analysis) {
-    const index = analysis.variableIndex?.get(object)?.[prop];
-    return index >= 0 ? basis[index] || 0 : 0;
-  }
-
-  function lineSupportHasConstraintFreedom(line, analysis) {
-    const normal = analysis.lineNormals?.get(line) || lineSupportNormal(line);
-    for (const basis of analysis.nullspaceBasis || []) {
-      const norm = Math.max(1, Math.sqrt(basis.reduce((sum, value) => sum + value * value, 0)));
-      const p1Normal = normal.x * variableDeltaInBasis(line.p1, "x", basis, analysis) + normal.y * variableDeltaInBasis(line.p1, "y", basis, analysis);
-      const p2Normal = normal.x * variableDeltaInBasis(line.p2, "x", basis, analysis) + normal.y * variableDeltaInBasis(line.p2, "y", basis, analysis);
-      if (Math.abs(p1Normal) > 1e-7 * norm || Math.abs(p2Normal) > 1e-7 * norm) return true;
-    }
-    return false;
-  }
-
-  function classifyConstraintStatus(item, kind, analysis) {
-    if (!analysis.stable) return "conflict";
-    if (kind === "point") return pointHasConstraintFreedom(item, analysis) ? "under" : "full";
-    if (kind === "line") {
-      const hasEndpointFreedom = pointHasConstraintFreedom(item.p1, analysis) || pointHasConstraintFreedom(item.p2, analysis);
-      if (!hasEndpointFreedom) return "full";
-      return lineSupportHasConstraintFreedom(item, analysis) ? "under" : "support";
-    }
-    if (kind === "circle") return pointHasConstraintFreedom(item.center, analysis) || objectHasConstraintFreedom(item, "radiusValue", analysis) ? "under" : "full";
-    if (kind === "arc") {
-      const supportFreedom = pointHasConstraintFreedom(item.center, analysis) || objectHasConstraintFreedom(item, "radiusValue", analysis);
-      const endpointFreedom = objectHasConstraintFreedom(item, "startAngle", analysis) || objectHasConstraintFreedom(item, "endAngle", analysis);
-      if (!supportFreedom && !endpointFreedom) return "full";
-      return !supportFreedom && endpointFreedom ? "support" : "under";
-    }
-    if (kind === "spline") return item.fitPoints.some((point) => pointHasConstraintFreedom(point, analysis)) ? "under" : "full";
-    return "full";
-  }
-
-  function classifyBlockProjectionStatus(item, analysis) {
-    if (!analysis.stable) return "conflict";
-    const instance = item?.blockInstance;
-    if (!instance || instance.fixed) return "full";
-    const freedom = analysis.variableFreedom.get(instance) || {};
-    const translationFree = Boolean(freedom.x || freedom.y);
-    const rotationFree = Boolean(freedom.rotation);
-    if (item instanceof Arc) {
-      if (translationFree) return "under";
-      return rotationFree ? "support" : "full";
-    }
-    if (item instanceof Circle || item instanceof Point) return translationFree ? "under" : "full";
-    if (item instanceof Line) {
-      if (!translationFree && !rotationFree) return "full";
-      const length = Math.max(item.length(), MIN_LINE_LENGTH);
-      const direction = { x: item.dx() / length, y: item.dy() / length };
-      for (const basis of analysis.nullspaceBasis || []) {
-        const norm = Math.max(1, Math.sqrt(basis.reduce((sum, value) => sum + value * value, 0)));
-        const dx = variableDeltaInBasis(instance, "x", basis, analysis);
-        const dy = variableDeltaInBasis(instance, "y", basis, analysis);
-        const dr = variableDeltaInBasis(instance, "rotation", basis, analysis);
-        const normalMotion = -direction.y * dx + direction.x * dy;
-        if (Math.abs(normalMotion) > 1e-7 * norm || Math.abs(dr) > 1e-7 * norm) return "under";
-      }
-      return "support";
-    }
-    return translationFree || rotationFree ? "under" : "full";
-  }
-
-  function refreshConstraintAnalysis(options = {}) {
-    if (!interactionProfiler.active) return refreshConstraintAnalysisUnprofiled(options);
-    return profileInteractionWork("analysis", () => refreshConstraintAnalysisUnprofiled(options));
-  }
-
-  function refreshConstraintAnalysisUnprofiled(options = {}) {
-    refreshReferenceConstraintValidity();
-    const rootSketchId = activeSketchId();
-    const sketchIdSet = new Set([rootSketchId, ...descendantSketchIds(rootSketchId)]);
-    const derivedBundles = geometryInstanceBundles().filter((bundle) => bundle.valid);
-    let sourceSketchAdded = true;
-    while (sourceSketchAdded) {
-      sourceSketchAdded = false;
-      for (const bundle of derivedBundles) {
-        if (!sketchIdSet.has(bundle.instance.sketchId)) continue;
-        const outputs = [...bundle.points, ...bundle.lines, ...bundle.circles, ...bundle.arcs, ...bundle.splines];
-        for (const source of outputs.map((item) => item.sourceElement).filter(Boolean)) {
-          const sourceSketchId = elementSketchId(source);
-          if (!sourceSketchId || sketchIdSet.has(sourceSketchId)) continue;
-          sketchIdSet.add(sourceSketchId);
-          sourceSketchAdded = true;
-        }
-      }
-    }
-    const sketchIds = [...sketchIdSet];
-    const analyses = new Map();
-    const statuses = new Map();
-    const items = [];
-    for (const sketchId of sketchIds) {
-      const analysis = solver.analyzeConstraintState({
-        variables: sketchSolveVariables(sketchId),
-        constraints: sketchSolveConstraints(sketchId),
-        lines: sketchSolveLines(sketchId),
-        errorTolerance: CONSTRAINT_ACCEPT_ERROR,
-      });
-      const forceConflict = sketchHasSolveError(sketchId);
-      analyses.set(sketchId, analysis);
-      for (const p of model.points) {
-        if (elementSketchId(p) !== sketchId) continue;
-        const status = forceConflict ? "conflict" : classifyConstraintStatus(p, "point", analysis);
-        statuses.set(p, status);
-        if (isEditableSketchElement(p) && isExplicitPoint(p)) items.push(status);
-      }
-      for (const l of model.lines) {
-        if (elementSketchId(l) !== sketchId) continue;
-        const status = forceConflict ? "conflict" : classifyConstraintStatus(l, "line", analysis);
-        statuses.set(l, status);
-        if (isEditableSketchElement(l)) items.push(status);
-      }
-      for (const c of model.circles) {
-        if (elementSketchId(c) !== sketchId) continue;
-        const status = forceConflict ? "conflict" : classifyConstraintStatus(c, "circle", analysis);
-        statuses.set(c, status);
-        if (isEditableSketchElement(c)) items.push(status);
-      }
-      for (const a of model.arcs) {
-        if (elementSketchId(a) !== sketchId) continue;
-        const status = forceConflict ? "conflict" : classifyConstraintStatus(a, "arc", analysis);
-        statuses.set(a, status);
-        if (isEditableSketchElement(a)) items.push(status);
-      }
-      for (const spline of model.splines) {
-        if (elementSketchId(spline) !== sketchId) continue;
-        const status = forceConflict ? "conflict" : classifyConstraintStatus(spline, "spline", analysis);
-        statuses.set(spline, status);
-        if (isEditableSketchElement(spline)) items.push(status);
-      }
-      for (const bundle of blockProjectionBundles()) {
-        if (bundle.instance.sketchId !== sketchId) continue;
-        for (const item of [...bundle.points, ...bundle.lines, ...bundle.circles, ...bundle.arcs, ...(bundle.splines || [])]) {
-          const status = forceConflict ? "conflict" : classifyBlockProjectionStatus(item, analysis);
-          statuses.set(item, status);
-          if (isEditableSketchElement(item) && !(item instanceof Point)) items.push(status);
-        }
-      }
-    }
-    const summary = {
-      full: items.filter((status) => status === "full").length,
-      support: items.filter((status) => status === "support").length,
-      under: items.filter((status) => status === "under").length,
-      conflict: items.filter((status) => status === "conflict").length,
-      total: items.length,
-    };
-    constraintAnalysisState = { analysis: analyses.get(rootSketchId), analyses, statuses, summary };
-    refreshConstraintRedundancy(options.redundancyBySketch || null);
-    return constraintAnalysisState;
-  }
-
-  function constraintStatusOf(item) {
-    if (item?.derivedInstance?.type === "sketchProjection") return "full";
-    if (!constraintAnalysisState) refreshConstraintAnalysis();
-    let current = item;
-    const visited = new Set();
-    let hasFreePlacement = false;
-    while (current?.derivedProjection && current.sourceElement && !visited.has(current)) {
-      visited.add(current);
-      if (current.derivedInstance?.type === "free") hasFreePlacement = true;
-      current = current.sourceElement;
-    }
-    if (hasFreePlacement) {
-      if (!constraintAnalysisState.statuses.has(item)) {
-        constraintAnalysisState.statuses.set(item, classifyFreeInstanceGeometry(item, constraintAnalysisState.analyses.get(elementSketchId(item))));
-      }
-      return constraintAnalysisState.statuses.get(item);
-    }
-    return constraintAnalysisState?.statuses.get(current) || "full";
-  }
-
-  function classifyFreeInstanceGeometry(item, analysis) {
-    if (!analysis?.stable) return "conflict";
-    const sample = () => {
-      const values = geometryInstanceSourcePoints(item).flatMap((p) => [p.x, p.y]);
-      if (item instanceof Circle || item instanceof Arc) values.push(item.radius());
-      if (item instanceof Arc) values.push(item.startPoint().x, item.startPoint().y, item.endPoint().x, item.endPoint().y);
-      return values;
-    };
-    const baseline = sample();
-    const derivatives = analysis.variables.map((v) => {
-      const old = v.object[v.prop];
-      const step = 1e-6 * Math.max(1, Math.abs(old));
-      try {
-        v.object[v.prop] = old + step;
-        return sample().map((value, index) => (value - baseline[index]) / step);
-      } finally { v.object[v.prop] = old; }
-    });
-    let hasMotion = false;
-    for (const basis of analysis.nullspaceBasis) {
-      const motion = baseline.map((_, i) => derivatives.reduce((sum, column, j) => sum + column[i] * basis[j], 0));
-      const tolerance = 1e-5 * Math.max(1, vectorNorm(basis));
-      if (vectorNorm(motion) <= tolerance) continue;
-      hasMotion = true;
-      if (!(item instanceof Line)) return "under";
-      const length = Math.max(item.length(), MIN_LINE_LENGTH);
-      const nx = -item.dy() / length, ny = item.dx() / length;
-      if (Math.abs(nx * motion[0] + ny * motion[1]) > tolerance || Math.abs(nx * motion[2] + ny * motion[3]) > tolerance) return "under";
-    }
-    return hasMotion ? "support" : "full";
-  }
+  function refreshConstraintAnalysis(options = {}) { return constraintAnalysis.refresh(options); }
 
   function constraintStatusColor(item, selected = false, hovered = false) {
     if (selected) return "#1d4ed8";
@@ -2597,8 +2393,7 @@
   }
 
   function constraintSummaryText() {
-    if (!constraintAnalysisState) refreshConstraintAnalysis();
-    const s = constraintAnalysisState?.summary || { full: 0, support: 0, under: 0, conflict: 0 };
+    const s = constraintAnalysis.summary();
     return applicationSettings.language === "en"
       ? `Fully constrained: ${s.full} / Supported position: ${s.support} / Under-constrained: ${s.under} / Conflict: ${s.conflict}${constraintDuplicateSummary()}${referenceConstraintErrorSummary()}`
       : `完全拘束: ${s.full} / 支持位置拘束: ${s.support} / 未拘束: ${s.under} / 矛盾: ${s.conflict}${constraintDuplicateSummary()}${referenceConstraintErrorSummary()}`;
@@ -2893,7 +2688,7 @@
       const reason = solved.result?.reason || applicationText("拘束を解けません", "The constraints could not be solved");
       restoreGeometryMutationState(snapshot);
       solveSketchAndDependents(sketchId);
-      constraintAnalysisState = null;
+      constraintAnalysis.invalidate();
       setHint(`${applicationText("円中心十字線を作成できません", "Could not create the circle center cross")}: ${reason}`, "error");
       updateUI();
       draw();
@@ -2905,7 +2700,7 @@
     clearSnap();
     clearSelection();
     canvasSelection.set("lines", createdLines);
-    constraintAnalysisState = null;
+    constraintAnalysis.invalidate();
     updateUI();
     draw();
     setHint(applicationText(`${targets.length}個の円に十字補助線を作成しました`, `Created centerlines for ${targets.length} circle(s)`));
@@ -3046,7 +2841,7 @@
       draw();
       return false;
     }
-    constraintAnalysisState = null;
+    constraintAnalysis.invalidate();
     recordHistory(historyLabel);
     setHint(successMessage);
     updateUI();
@@ -3335,7 +3130,7 @@
     invalidateBlockProjectionCache();
     sketchSolving.clearAll();
     referenceConstraintState.clear();
-    constraintAnalysisState = null;
+    constraintAnalysis.invalidate();
     clearSelection();
     geometryDrag.reset();
     dimensionDrag.reset();
@@ -4946,7 +4741,7 @@
     updateUI();
     draw();
     const msg = `削除しました: 点${pointSet.size} / 線${lineSet.size} / 円${circleSet.size} / 円弧${arcSet.size} / スプライン${splineSet.size} / 拘束${constraintSet.size}`;
-    const stable = result.success && constraintAnalysisState?.analysis?.stable;
+    const stable = result.success && constraintAnalysis.stable;
     setHint(stable ? msg : `${msg}。拘束状態を確認してください`, stable ? "normal" : "error");
     log(`${msg}\n自動solve: success=${result.success}, error=${result.errorNorm.toExponential(3)}`);
     recordHistory("削除");
@@ -7311,7 +7106,7 @@
     sketchName, setHint, log, blockAllProjectionBundle, geometryElementKey, constraintGraphNodes,
     guardDimensionSymbolDeletion, invalidateBlockProjectionCache, annotationReferencesRemovedGeometry,
     clearSketchSolveState, clearInteractionForSketchChange,
-    invalidateAnalysis: () => { constraintAnalysisState = null; }, solveSketchAndDependents,
+    invalidateAnalysis: () => { constraintAnalysis.invalidate(); }, solveSketchAndDependents,
     activeSketchId, refreshConstraintAnalysis, updateUI, draw, recordHistory,
     confirmDeletion: (message) => window.confirm(message),
   });
@@ -7360,7 +7155,7 @@
   const sketchTreeObjects = window.SketchTreeObjects.create({
     sidebarGeometryItem,
     currentScope: () => model, getLanguage: () => applicationSettings.language,
-    ensureAnalysis: () => { if (!constraintAnalysisState) refreshConstraintAnalysis(); }, types: window.GeometrySolver,
+    ensureAnalysis: constraintAnalysis.ensure, types: window.GeometrySolver,
     isExplicitPoint, isPointUsedByLine, elementSketchId, constraintSketchId,
     constraintStatusOf, blockProjectionBundle, applicationText, escapeHtml, formatDisplayNumber,
     toolbarSvgMarkup, constraintToolbarIcon, sketchTreeGutter: window.SketchTreeView.gutter, isSketchProjectedGeometry,
@@ -8408,7 +8203,7 @@
   const geometryDragEditing = window.GeometryDragEditing.create({
     currentScope: workspace.current, solver, plan: geometryDragPlan, dragSolver: geometryDragSolver,
     contextFromSeeds: localSolveContextFromSeeds, projectionConstraintsForItems: sketchProjectionConstraintsAffectingItems,
-    pointLockedByLineFixed, variableDeltaInBasis, captureValues: snapshotModelState,
+    pointLockedByLineFixed, captureValues: snapshotModelState,
     enforceMinimumLineLengths, normalizeArcSweeps, invalidateProjection: invalidateBlockProjectionCache,
     projectionBlockedMessage: () => sketchProjectionShapeEditBlockedMessage(applicationText("ドラッグ", "Drag")),
     previewMaxModelError: DRAG_PREVIEW_MAX_MODEL_ERROR,
@@ -8870,7 +8665,7 @@
       draw();
       return false;
     }
-    constraintAnalysisState = null;
+    constraintAnalysis.invalidate();
     refreshConstraintAnalysis();
     setHint(applicationText("トリムしました", "Trim completed"));
     updateUI({ refreshAnalysis: false });
@@ -15048,7 +14843,7 @@
           underLine: { status: constraintStatusOf(underLine), color: constraintStatusColor(underLine) },
           fullLine: { status: constraintStatusOf(fullLine), color: constraintStatusColor(fullLine) },
           supportArc: { status: constraintStatusOf(supportArc), color: constraintStatusColor(supportArc) },
-          summary: constraintAnalysisState.summary,
+          summary: constraintAnalysis.summary(),
         };
       },
       resetForReferencePointLineCoincidence() {

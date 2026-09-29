@@ -31,6 +31,11 @@
     return Math.sqrt(s);
   }
 
+  function variableDeltaInBasis(object, prop, basis, analysis) {
+    const index = analysis.variableIndex?.get(object)?.[prop];
+    return index >= 0 ? basis[index] || 0 : 0;
+  }
+
   function normalizeAxisAngle(angle) {
     let a = Math.abs(normalizeAngleSigned(angle));
     return clamp(a, 0, Math.PI);
@@ -2404,6 +2409,7 @@
   window.GeometrySolver = {
     hypot2,
     vectorNorm,
+    variableDeltaInBasis,
     MIN_ORIENTATION_LENGTH,
     Point,
     Line,

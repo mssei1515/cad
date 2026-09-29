@@ -100,19 +100,19 @@
 
 ### 最新の区切り
 
-main／developは1a7d5ccで同期済み。本区切りはcodex/composition-root-nextで継続する。前回のリリース指示を新しい変更へ拡張しない。直前の参照拘束状態の分離はd762688でCommit・Push済み。
+main／developは1a7d5ccで同期済み。本区切りはcodex/composition-root-nextで継続する。前回のリリース指示を新しい変更へ拡張しない。直前の重複拘束解析の分離はc33080cでCommit・Push済み。
 
-ConstraintRedundancyへ個別冗長判定・全Sketchの表示集計と結果Mapを集約した。現在scope、Solver、変数・所属・有効性・Root判定を明示依存とし、UIには詳細と件数の照会、追加拒否側には詳細破棄APIを渡す。集計snapshotのMapはコピーであり、所有Mapを外へ渡さない。
+ConstraintAnalysisへ解析範囲の拡張・図形分類・cacheと遅延評価を集約した。appの直接cache書換えをinvalidateへ置換し、表示はstatusOf／summary／ensure／stableを使う。refreshのMapとsummaryはコピー、数値解析とGeometryの参照は維持する。無効化の時機、派生元への範囲拡張、求解エラー優先、支持位置の分類を変更しない。
 
-接続されたLine／Arcの最初の同等接線を維持する例外、前計算結果の再利用、個別判定は表示状態を更新しないこと、個別詳細破棄後の件数は次回refreshで再集計することを保持した。app.jsは15,800行。全体リファクタリングと全体E2Eは未完了。
+Free Instanceの微小変位は例外時にも元へ復帰する。共有のvariableDeltaInBasisはGeometrySolverへ移し、分類とGeometryDragEditingが共用する。色・線幅・表示文言はappに残した。app.jsは15,595行。全体リファクタリングと全体E2Eは未完了。
 
 ### 検証
 
-構文279件・単体584件・関連E2E184件が成功。実行中のテストはない。全体E2Eは未完了。ログは一時フォルダのcad-redundancy-check.log、cad-redundancy-unit.log、cad-redundancy-e2e.log。追加単体4件で対象除外、安定性とrank、接線維持の例外、前計算の再利用、Root除外、集計と詳細の更新時機を確認する。
+構文281件・単体591件・関連E2E184件と実pointer操作・Undo回帰7件（合計191件）が成功。実行中のテストはない。全体E2Eは未完了。ログは一時フォルダのcad-constraint-analysis-check.log、cad-constraint-analysis-unit.log、cad-constraint-analysis-e2e.log、cad-constraint-analysis-native.log。追加単体7件で基底照会、通常／Block分類、遅延評価とsnapshot、派生元の追加探索、集計対象、Free Instance試行と例外時復元を確認する。
 
 ### 次に調べる境界
 
-拘束状態の解析・分類・cacheを整理する。constraintAnalysisState、refreshConstraintAnalysis、constraintStatusOf、classifyConstraintStatus／classifyBlockProjectionStatus／classifyFreeInstanceGeometryと無効化経路が対象。解析対象Sketchを派生参照元へ拡張する規則、求解失敗時のconflict表示、Free Instanceの微小変位試行とfinally復元、投影Geometryの分類を保持する。variableDeltaInBasisはドラッグ準備でも共有されるので、解析moduleへ閉じ込めてapp経由の循環を作らない。表示色・線幅・UIの集計文字列は描画／表示側の責務として分ける。
+Parameterの反復評価と目標遷移求解を整理する。referenceValuesConverged、solveParameterTargetTransition、stabilizeActiveParameterNamespaceと既存ParameterApplication／ParameterNamespaceの分担を確認する。反復上限・相対許容差、参照寸法feedback、目標変更の補間、全Sketch求解と復元snapshotの範囲を保持する。SketchSolvingとEditingCheckpointを接続して、UIやダイアログ状態を数値反復へ持ち込まない。
 
 再開時はこの文書とAGENTS.md、composition-root.md先頭、spec/architecture/モジュール構成.mdを読む。Gitの状態・最新履歴と週の残り利用枠を確認する。main上では開発せず、developを基準に適切な作業branchで再開する。まとまった単位で検証・差分確認・Commit・Push・runtime-version再生成を行う。全体目標を途中成果へ縮小しない。
 
