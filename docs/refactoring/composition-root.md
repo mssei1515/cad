@@ -6,6 +6,8 @@
 
 ## 現在の再開地点（2026-09-29）
 
+GeometryDragへドラッグsessionの開始・更新・終了・resetとTX-02の復元／履歴調整を集約。appの共有dragSessionを除去し、入力を操作API、描画を3種の強調対象照会へ接続した。開始計画をコピーして保持し、小移動／クリック、投影拒否、最終求解・Spline・Parameter失敗の復元と通知順序を維持。構文269件・単体556件・関連E2E191件（通常184件と実pointer操作・Undo7件）が成功。app.jsは16,501行。局所context準備と図形種別ごとのpreview適用は明示callbackとして残り、次はその依存を整理する。直前の求解分離は`0ee5b09`で確定済み。全体目標と全体E2Eは未完了。
+
 GeometryDragSolverへ局所／guided求解、全Sketch再試行、大移動の区間分割と終了時補正を集約。前回／保留中の目標、guided対象変数、一時拘束、preview残差は非公開WeakMapでドラッグごとに所有し、appのsessionから除去した。局所／全Sketchの復元範囲、許容差、反復上限のfinally復帰と診断の件数を維持。構文267件・単体548件・関連E2E202件（20.5分）が成功。app.jsは16,594行。次は局所context準備とドラッグ操作の開始・更新・確定／復元の所有者を整理する。全体目標と全体E2Eは未完了。
 
 直前のGeometryDragPlan分離は`dd5399d`で確定済み。その後のBlockハッチ変換追従修正`d0db050`も含め、`0c4bbc1`でdevelop／mainへ反映済み。以下は各区切りの記録であり、現在の再開手順はrefactoring-policy-and-resume.mdを優先する。

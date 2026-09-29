@@ -239,7 +239,6 @@
     trimConstraintSelection, pushPrimitiveSelection, geometryItemSelectedInCanvas,
     constraintSelectedInCanvas, hasSelection,
   } = canvasSelection;
-  let dragSession = null;
   let hoveredPoint = null;
   let hoveredEndpointPoint = null;
   let hoveredLine = null;
@@ -3488,7 +3487,7 @@
     invalidReferenceConstraints.clear();
     constraintAnalysisState = null;
     clearSelection();
-    dragSession = null;
+    geometryDrag.reset();
     dimensionDrag.reset();
     referenceImageInteraction.reset();
     canvasNavigation.reset();
@@ -5383,7 +5382,7 @@
     if (pointSet.size === 0 && lineSet.size === 0 && circleSet.size === 0 && arcSet.size === 0 && splineSet.size === 0 && constraintSet.size === 0) return false;
     if (!guardDimensionSymbolDeletion(constraintSet)) return false;
 
-    dragSession = null;
+    geometryDrag.reset();
     dimensionDrag.reset();
     annotationDrag.reset();
     pendingCommand = null;
@@ -6803,7 +6802,7 @@
     if (canvasSelection.circles.some((circle) => circle.center === point) || canvasSelection.arcs.some((arc) => arc.center === point)) return true;
     if (hoveredCircle?.center === point || hoveredArc?.center === point || hoveredArcEndpoint?.arc?.center === point) return true;
     if (selectionHighlight.current?.item?.center === point) return true;
-    if ((dragSession?.kind === "circle" || dragSession?.kind === "arc" || dragSession?.kind === "arc-endpoint") && dragSession.item?.center === point) return true;
+    if (geometryDrag.isCenter(point)) return true;
     return false;
   }
 
@@ -6837,7 +6836,7 @@
   function shouldShowArcEndpointHandle(arc, endpoint) {
     if (sameArcEndpoint(hoveredArcEndpoint, { arc, endpoint }) || sameArcEndpoint(canvasSelection.arcEndpoint, { arc, endpoint })) return true;
     if (canvasSelection.arcEndpointPair?.some((item) => sameArcEndpoint(item, { arc, endpoint }))) return true;
-    if (dragSession?.kind === "arc-endpoint" && dragSession.item === arc && dragSession.endpoint === endpoint) return true;
+    if (geometryDrag.isArcEndpoint(arc, endpoint)) return true;
     return false;
   }
 
@@ -6848,7 +6847,7 @@
       for (const endpoint of ["start", "end"]) {
         if (!shouldShowArcEndpointHandle(arc, endpoint)) continue;
         const p = arcEndpointPoint(arc, endpoint);
-        const selected = sameArcEndpoint(canvasSelection.arcEndpoint, { arc, endpoint }) || canvasSelection.arcEndpointPair?.some((item) => sameArcEndpoint(item, { arc, endpoint })) || isConstraintOperandSelected(arc, { arcEndpoint: { arc, endpoint } }) || (dragSession?.kind === "arc-endpoint" && dragSession.item === arc && dragSession.endpoint === endpoint);
+        const selected = sameArcEndpoint(canvasSelection.arcEndpoint, { arc, endpoint }) || canvasSelection.arcEndpointPair?.some((item) => sameArcEndpoint(item, { arc, endpoint })) || isConstraintOperandSelected(arc, { arcEndpoint: { arc, endpoint } }) || (geometryDrag.isArcEndpoint(arc, endpoint));
         const hovered = sameArcEndpoint(hoveredArcEndpoint, { arc, endpoint });
         const fixed = Boolean(findArcEndpointFixedConstraint(arc, endpoint));
         ctx.beginPath();
@@ -6881,7 +6880,7 @@
       const canvasHovered = (active || isReferenceHoverElement(p)) && (hoveredPoint === p || hoveredEndpointPoint === p);
       if (viewState.constraintStatus && p.kind === "endpoint" && !canvasHovered && !sel) continue;
       const hovered = treeHovered || sidebarHovered || canvasHovered || ownerInstanceHovered(p);
-      const dragging = dragSession?.kind === "point" && dragSession.points.some((target) => target.point === p);
+      const dragging = geometryDrag.isPoint(p);
       const primitiveCenter = shouldShowPrimitiveCenter(p);
       const fixedByLine = pointLockedByLineFixed(p);
       const fixedHighlighted = (!p.derivedProjection && p.fixed || fixedByLine) && (sel || hovered);
@@ -7733,7 +7732,7 @@
 
   function clearInteractionForSketchChange() {
     clearSelection();
-    dragSession = null;
+    geometryDrag.reset();
     dimensionDrag.reset();
     referenceImageInteraction.reset();
     selectionRectangle.reset();
@@ -8883,6 +8882,18 @@
     primitiveMove: primitiveMoveTargets, arcEndpoint: arcEndpointDragTargets,
     pointConstraints: dragConstraintsFromTargets, parameterConstraints: parameterDragConstraintsFromTargets } = geometryDragPlan;
 
+  const geometryDrag = window.GeometryDrag.create({
+    prepareSession: attachLocalSolveContext, dragResultForSession, solveFinalDragSession,
+    currentScope: workspace.current, activeSketchId, viewScale: () => viewport.scale,
+    beginPointer: (id) => { canvas.classList.add("is-dragging"); canvas.setPointerCapture(id); },
+    endPointer: (id) => { canvas.classList.remove("is-dragging"); try { canvas.releasePointerCapture(id); } catch (_) {} },
+    projectionBlockedMessage: () => sketchProjectionShapeEditBlockedMessage(applicationText("ドラッグ", "Drag")),
+    canvasSelection, restoreModelState, restoreSolverState: (state) => solver.restore(state),
+    solveReferenceDependentSketches, normalizeArcSweeps, clearSketchSolveState, invalidateBlockProjectionCache,
+    stabilizeActiveParameterNamespace, refreshConstraintAnalysis, acceptError: CONSTRAINT_ACCEPT_ERROR,
+    applicationText, setHint, updateUI, updateGeometrySelectionUI, draw, recordHistory,
+  });
+
   function resolveDerivedDragSource(hit, pointer) {
     let item = hit?.item || null;
     const inverseTransforms = [];
@@ -8908,7 +8919,7 @@
       const sources = geometryInstanceSourceObjects(instance);
       clearSelection();
       canvasSelection.set("geometryInstances", [instance]);
-      dragSession = { kind: "free-instance", mode: "block", item: instance, sketchId: instance.sketchId,
+      const plan = { kind: "free-instance", mode: "block", item: instance, sketchId: instance.sketchId,
         startPointer: pointer, startX: instance.x, startY: instance.y,
         clickGeometrySelection: wholeSelected ? { instanceId: instance.id, id: hit.item.id, kind: hit.kind, endpoint: hit.endpoint } : null,
         variableAllowed: (v) => !sources.has(v.object) && !(v.object === instance && v.prop === "rotation") };
@@ -8922,12 +8933,10 @@
             get y() { return item.p1.y + t * (item.p2.y - item.p1.y); } };
         }
         if (!anchor) return;
-        Object.assign(dragSession, { kind: "derived-instance", mode: "derived-placement", anchor,
+        Object.assign(plan, { kind: "derived-instance", mode: "derived-placement", anchor,
           startAnchor: { x: anchor.x, y: anchor.y } });
       }
-      attachLocalSolveContext(dragSession);
-      canvas.classList.add("is-dragging");
-      canvas.setPointerCapture(e.pointerId);
+      geometryDrag.begin(e, plan);
       setHint(applicationText("インスタンス全体を移動中", "Moving the whole instance"));
       updateGeometrySelectionUI();
       draw();
@@ -8962,26 +8971,25 @@
     } else if (kind === "arc-endpoint") {
       dragItem = { arc: source, endpoint: hit.endpoint };
     }
-    dragSession = buildDragSession(kind, dragItem, resolved.pointer);
-    if (!dragSession) {
+    const plan = buildDragSession(kind, dragItem, resolved.pointer);
+    if (!plan) {
+      geometryDrag.reset();
       setHint(applicationText("参照元が固定されているためドラッグできません", "The source is fixed and cannot be dragged."), "error");
       updateGeometrySelectionUI();
       draw();
       return;
     }
-    dragSession.displayStartPointer = pointer;
-    dragSession.pointerMap = resolved.mapPointer;
-    dragSession.derivedInstance = hit.instance;
-    dragSession.derivedSource = resolved.item;
+    plan.displayStartPointer = pointer;
+    plan.pointerMap = resolved.mapPointer;
+    plan.derivedInstance = hit.instance;
+    plan.derivedSource = resolved.item;
     const placements = new Set();
     for (let node = hit.item; node?.derivedProjection; node = node.sourceElement) {
       if (node.derivedInstance?.type === "free") placements.add(node.derivedInstance);
     }
-    if (placements.size) dragSession.variableAllowed = (v) => !placements.has(v.object);
-    attachLocalSolveContext(dragSession);
-    canvas.classList.add("is-dragging");
-    canvas.setPointerCapture(e.pointerId);
-    setHint(applicationText(`${dragLabel(dragSession)}中: 参照元へ反映しながら拘束をsolveしています`, `${dragLabel(dragSession)}: solving constraints while updating the source`));
+    if (placements.size) plan.variableAllowed = (v) => !placements.has(v.object);
+    geometryDrag.begin(e, plan);
+    setHint(applicationText(`${geometryDrag.label}中: 参照元へ反映しながら拘束をsolveしています`, `${geometryDrag.label}: solving constraints while updating the source`));
     updateUI({ refreshAnalysis: false });
     draw();
   }
@@ -9286,22 +9294,12 @@
     return finalizeDragResult(result, dragState, session, extra, retry);
   }
 
-  function dragLabel(session) {
-    if (session.kind === "free-instance" || session.kind === "derived-instance") return applicationText("インスタンス移動", "Instance move");
-    if (session.mode === "block") return applicationText("ブロック移動", "Block move");
-    if (session.mode === "block-rotation") return applicationText("ブロック回転", "Block rotation");
-    if (session.kind === "selection") return applicationText("選択移動", "Selection move");
-    if (session.mode === "radius" && session.activeMode === "move") return applicationText("ドラッグ", "Drag");
-    if (session.mode === "radius") return applicationText("半径変更", "Radius change");
-    if (session.mode === "arc-endpoint") return applicationText("円弧端点変更", "Arc endpoint change");
-    return applicationText("ドラッグ", "Drag");
-  }
-
   function beginDrag(e, hitP, hitL, hitC, hitA, hitArcEnd, pointer) {
+    let plan = null;
     canvasSelection.set("constraint", null);
     const preserveMixedSelection = selectedElementCount() > 1 && hitIsSelected(hitP, hitL, hitC, hitA, hitArcEnd);
     if (preserveMixedSelection) {
-      dragSession = buildDragSession("selection", selectedDragPoints(), pointer);
+      plan = buildDragSession("selection", selectedDragPoints(), pointer);
       canvasSelection.set("dimensionConstraint", null);
     } else {
       canvasSelection.set("blockInstances", []);
@@ -9316,42 +9314,39 @@
       canvasSelection.set("circles", []);
       canvasSelection.set("arcs", []);
       canvasSelection.set("arcEndpoint", null);
-      dragSession = buildDragSession("point", hitP, pointer);
+      plan = buildDragSession("point", hitP, pointer);
     } else if (!preserveMixedSelection && hitArcEnd) {
       canvasSelection.set("arcs", [hitArcEnd.arc]);
       canvasSelection.set("arcEndpoint", { arc: hitArcEnd.arc, endpoint: hitArcEnd.endpoint });
       canvasSelection.set("points", []);
       canvasSelection.set("lines", []);
       canvasSelection.set("circles", []);
-      dragSession = buildDragSession("arc-endpoint", hitArcEnd, pointer);
+      plan = buildDragSession("arc-endpoint", hitArcEnd, pointer);
     } else if (!preserveMixedSelection && hitL) {
       canvasSelection.set("lines", [hitL]);
       canvasSelection.set("points", []);
       canvasSelection.set("circles", []);
       canvasSelection.set("arcs", []);
       canvasSelection.set("arcEndpoint", null);
-      dragSession = buildDragSession("line", hitL, pointer);
+      plan = buildDragSession("line", hitL, pointer);
     } else if (!preserveMixedSelection && hitC) {
       canvasSelection.set("circles", [hitC]);
       canvasSelection.set("points", []);
       canvasSelection.set("lines", []);
       canvasSelection.set("arcs", []);
       canvasSelection.set("arcEndpoint", null);
-      dragSession = buildDragSession("circle", hitC, pointer);
+      plan = buildDragSession("circle", hitC, pointer);
     } else if (!preserveMixedSelection && hitA) {
       canvasSelection.set("arcs", [hitA]);
       canvasSelection.set("points", []);
       canvasSelection.set("lines", []);
       canvasSelection.set("circles", []);
       canvasSelection.set("arcEndpoint", null);
-      dragSession = buildDragSession("arc", hitA, pointer);
+      plan = buildDragSession("arc", hitA, pointer);
     }
 
-    if (dragSession) {
-      attachLocalSolveContext(dragSession);
-      canvas.classList.add("is-dragging");
-      canvas.setPointerCapture(e.pointerId);
-      setHint(`${dragLabel(dragSession)}中: 拘束を保ちながら自動solveしています`);
+    if (geometryDrag.begin(e, plan)) {
+      setHint(`${geometryDrag.label}中: 拘束を保ちながら自動solveしています`);
     }
   }
 
@@ -9453,15 +9448,12 @@
   function beginBlockDrag(e, instance, pointer, rotate = false) {
     clearSelection();
     canvasSelection.set("blockInstances", [instance]);
-    dragSession = buildDragSession(rotate ? "block-rotation" : "block", instance, pointer);
-    if (!dragSession) {
+    const plan = buildDragSession(rotate ? "block-rotation" : "block", instance, pointer);
+    if (!geometryDrag.begin(e, plan)) {
       setHint(rotate && instance.rotationLocked ? "回転がロックされたブロックインスタンスです" : "固定されたブロックインスタンスです", "error");
       draw();
       return;
     }
-    attachLocalSolveContext(dragSession);
-    canvas.classList.add("is-dragging");
-    canvas.setPointerCapture(e.pointerId);
     setHint(rotate ? "ブロックを回転中" : "ブロックを移動中");
     updateUI({ refreshAnalysis: false });
     draw();
@@ -10759,18 +10751,16 @@
       canvasSelection.set("dimensionConstraint", null);
       if (multiSelect) toggleSplineSelection(hitS);
       else {
+        let plan = null;
         const preserveMixedSelection = selectedElementCount() > 1 && canvasSelection.splines.includes(hitS);
-        if (preserveMixedSelection) dragSession = buildDragSession("selection", selectedDragPoints(), p);
+        if (preserveMixedSelection) plan = buildDragSession("selection", selectedDragPoints(), p);
         else {
           clearSelection();
           canvasSelection.set("splines", [hitS]);
-          dragSession = buildDragSession("spline", hitS, p);
+          plan = buildDragSession("spline", hitS, p);
         }
-        if (dragSession) {
-          attachLocalSolveContext(dragSession);
-          canvas.classList.add("is-dragging");
-          canvas.setPointerCapture(e.pointerId);
-          setHint(`${dragLabel(dragSession)}中: 拘束を保ちながら自動solveしています`);
+        if (geometryDrag.begin(e, plan)) {
+          setHint(`${geometryDrag.label}中: 拘束を保ちながら自動solveしています`);
         }
       }
     } else if (hatchHit && drawingHitIsTop(hatchHit)) {
@@ -11025,7 +11015,7 @@
       return;
     }
 
-    if (pendingConstraintCommand && !dragSession) {
+    if (pendingConstraintCommand && !geometryDrag.active) {
       const hitD = pendingConstraintCommand.type === "distance" ? hitDimension(p.x, p.y) : null;
       if (hitD) {
         hoveredPoint = null;
@@ -11096,7 +11086,7 @@
       return;
     }
 
-    if (!dragSession) {
+    if (!geometryDrag.active) {
       const hitD = hitDimension(p.x, p.y, { activeOnly: false });
       const nextHover = hitD && isActiveSketchConstraint(hitD.constraint) ? hitD.constraint : null;
       const nextEndpointHover = nextHover ? null : hitEndpointPoint(p.x, p.y);
@@ -11152,31 +11142,7 @@
       }
     }
 
-    if (!dragSession) return;
-    const displayStartPointer = dragSession.displayStartPointer || dragSession.startPointer;
-    const pointerDistance = hypot2(p.x - displayStartPointer.x, p.y - displayStartPointer.y);
-    if (!dragSession.previewMoved && pointerDistance <= 3 / viewport.scale) return;
-    if (dragSession.projectionShapeLocked) {
-      dragSession.projectionDragAttempted = true;
-      setHint(sketchProjectionShapeEditBlockedMessage(applicationText("ドラッグ", "Drag")), "error");
-      draw();
-      return;
-    }
-    dragSession.previewMoved = true;
-    const dragPointer = dragSession.pointerMap ? dragSession.pointerMap(p) : p;
-    const result = dragResultForSession(dragSession, dragPointer);
-    if (result.blocked) {
-      setHint(result.reason, "error");
-      updateUI({ refreshAnalysis: false });
-      draw();
-      return;
-    }
-    const dependentResult = solveReferenceDependentSketches(dragSession.sketchId || activeSketchId());
-    setHint(dependentResult.success
-      ? applicationText("ドラッグ中: 拘束を保ちながら調整しています", "Dragging: maintaining constraints")
-      : applicationText("ドラッグ中: 参照先の拘束を確認してください", "Dragging: check the referenced constraints"), dependentResult.success ? "normal" : "error");
-    if (!dependentResult.success) updateUI();
-    draw();
+    geometryDrag.update(p);
   }
 
   function processScheduledCanvasPointerMove({ animationFrame = false, synchronousFlush = false } = {}) {
@@ -11242,68 +11208,9 @@
 
     if (selectionRectangle.finish(e)) return;
 
-    if (!dragSession) {
-      // The first Line endpoint is provisional until a segment is completed.
-      if (!transientAuthoring.hasLineStart) recordHistory("操作");
-      return;
-    }
-    const session = dragSession;
-    const completedLabel = dragLabel(session);
-    dragSession = null;
-    canvas.classList.remove("is-dragging");
-    try {
-      canvas.releasePointerCapture(e.pointerId);
-    } catch (_) {
-      // Pointer capture may already be released by the browser.
-    }
-    if (session.projectionDragAttempted) {
-      setHint(sketchProjectionShapeEditBlockedMessage(applicationText("ドラッグ", "Drag")), "error");
-      draw();
-      return;
-    }
-    if (!session.previewMoved) {
-      if (session.clickGeometrySelection && e.type !== "pointercancel") {
-        canvasSelection.set("instanceGeometry", session.clickGeometrySelection);
-        updateGeometrySelectionUI();
-      }
-      setHint("図形を選択しました");
-      draw();
-      return;
-    }
-    const result = solveFinalDragSession(session);
-    normalizeArcSweeps();
-    const invalidSpline = model.splines.find((spline) => !spline.curve().valid);
-    if (!result.success || result.errorNorm > CONSTRAINT_ACCEPT_ERROR || invalidSpline) {
-      if (session.parameterDragSnapshot) restoreModelState(session.parameterDragSnapshot);
-      else if (session.fullDragState) solver.restore(session.fullDragState);
-      clearSketchSolveState(session.sketchId || activeSketchId());
-      setHint(invalidSpline
-        ? applicationText(`${invalidSpline.id} の通過点が重なり、スプラインが成立しないため移動を戻しました`, `${invalidSpline.id} was restored because overlapping fit points made the spline invalid.`)
-        : applicationText(`${completedLabel}完了時に拘束を解決できないため移動を戻しました`, `${completedLabel} was restored because its constraints could not be resolved.`), "error");
-      updateUI();
-      draw();
-      return;
-    }
-
-    if (session.item && model.blockInstances.includes(session.item)) invalidateBlockProjectionCache(session.item.id);
-    const stabilized = stabilizeActiveParameterNamespace(session.sketchId || activeSketchId(), { variableAllowed: session.variableAllowed });
-    if (!stabilized.success || stabilized.dependent?.success === false || stabilized.result.errorNorm > CONSTRAINT_ACCEPT_ERROR) {
-      if (session.parameterDragSnapshot) restoreModelState(session.parameterDragSnapshot);
-      clearSketchSolveState(session.sketchId || activeSketchId());
-      setHint(`${completedLabel}${applicationText("後のParameter計算に失敗しました", " parameter calculation failed")}: ${stabilized.result.reason || "solve failed"}`, "error");
-      updateUI();
-      draw();
-      return;
-    }
-    const dependentResult = stabilized.dependent;
-    const analysis = refreshConstraintAnalysis();
-    const stable = analysis.analysis.stable && dependentResult.success;
-    setHint(stable
-      ? applicationText(`${completedLabel}を完了しました`, `${completedLabel} completed`)
-      : applicationText(`${completedLabel}を完了しました。拘束状態を確認してください`, `${completedLabel} completed. Check the constraint status`), stable ? "normal" : "error");
-    updateUI({ refreshAnalysis: false });
-    draw();
-    recordHistory(`${completedLabel}ドラッグ`);
+    if (geometryDrag.finish(e)) return;
+    // The first Line endpoint is provisional until a segment is completed.
+    if (!transientAuthoring.hasLineStart) recordHistory("操作");
   }
 
   function isBlankCanvasHit(hits = {}) {
@@ -11457,7 +11364,7 @@
   canvas.addEventListener("pointerup", endDrag);
   canvas.addEventListener("pointercancel", endDrag);
   canvas.addEventListener("pointerleave", () => {
-    if (dragSession || dimensionDrag.active || annotationDrag.active || selectionRectangle.active || canvasNavigation.panning) return;
+    if (geometryDrag.active || dimensionDrag.active || annotationDrag.active || selectionRectangle.active || canvasNavigation.panning) return;
     flushScheduledCanvasPointerMove({ discard: true });
     clearCanvasHover();
     draw();

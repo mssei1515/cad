@@ -50,7 +50,7 @@
 
 ## 5. 現在地と残作業
 
-2026-09-29時点、保存読込の構成要素、描画器、Properties、Sketchツリー、多くの作図command、Instanceの作成・編集、Block定義操作と編集session、履歴制御、Sketch操作、画像／注記／寸法のドラッグ、選択矩形を分離済み。通常図形ドラッグは計画生成に続いて求解方針を分離した。ただし`app.js`は16,594行あり、入力・操作状態・共通編集・起動接続の整理は未完了である。
+2026-09-29時点、保存読込の構成要素、描画器、Properties、Sketchツリー、多くの作図command、Instanceの作成・編集、Block定義操作と編集session、履歴制御、Sketch操作、画像／注記／寸法のドラッグ、選択矩形を分離済み。通常図形ドラッグは計画生成・求解方針に続き、操作sessionと確定・復元の調整を分離した。ただし`app.js`は16,501行あり、入力・操作状態・共通編集・起動接続の整理は未完了である。
 
 各区切りのコミットと検証記録は[composition-root.md](composition-root.md)へ集約する。この文書の「再開地点」は最新の一件に置き換え、過去の未コミット表示や次の候補を積み重ねない。
 
@@ -81,7 +81,7 @@
 - 過去のdevelop／mainへのマージ依頼を、新しい変更の自動リリース許可と解釈しない。現在は作業branchで進める。mainへの新たなマージ／Pushは明示指示が必要。
 - Commit後には`npm run write:runtime-version`を実行する。生成物はGitに含めない。
 
-全体E2Eは未完了である。今回の求解分離では関連E2E202件（航空機図面・Offsetチェーンのドラッグ回帰を含む）が成功しているが、全体成功の証拠にはしない。Offset問題の過去の判断・修正は履歴に残っているため、古い進捗記録の「未回答」だけを根拠に同じ質問や修正をやり直さない。
+全体E2Eは未完了である。直前の求解分離（`0ee5b09`）では関連E2E202件（航空機図面・Offsetチェーンのドラッグ回帰を含む）が成功しているが、全体成功の証拠にはしない。Offset問題の過去の判断・修正は履歴に残っているため、古い進捗記録の「未回答」だけを根拠に同じ質問や修正をやり直さない。
 
 ## 7. 全体の完了条件
 
@@ -97,38 +97,39 @@
 
 ### 最新の区切り
 
-作業branchは`codex/composition-root-next`。開始時に未コミット差分はなく、local／remoteのmain・developは`0c4bbc1`で一致し、mainがdevelopの祖先であることを確認した。作業branchへこのmerge commitをfast-forwardで取り込んだ。GeometryDragPlan分離`dd5399d`とBlockハッチ変換追従修正`d0db050`は取り込み済みであり、再実装や再マージは不要。
+作業branchは`codex/composition-root-next`。開始時のHEADは`0ee5b09`（求解方針と数値計算状態の分離）で未コミット差分はなかった。main／developは`0c4bbc1`で同期済み。今回も作業branchで進め、新たなmainへの反映は含めない。
 
-本区切りでは`src/solver/geometry_drag_solver.js`へ局所／guided求解、全Sketch再試行、大移動の区間分割と終了時補正を集約した。前回／保留中の目標、guided対象変数、終了時の一時拘束、preview残差を非公開WeakMapでドラッグsessionごとに所有する。appは現在scopeの照会、Solver、倍率等を接続し、数値計算状態を直接変更しない。診断は件数照会で接続する。
+本区切りでは`src/commands/geometry_drag.js`へ操作sessionと開始・更新・終了・resetを集約した。appの共有`dragSession`はなくなり、入力は操作API、描画は中心点／円弧端点／点の強調対象を真偽値で照会する。開始計画をコピーして非公開で保持し、局所contextを準備してPointerをcaptureする。
 
-求解順序・許容差・モデルの復元範囲は維持している。GeometryDragPlanは入力計画、GeometryDragSolverは数値求解を担当する。最小線長補正・円弧正規化、開始前snapshot、Parameter・依存Sketchの確定検査とTX-02の復元はappの操作側に残る。これらをすべてSolverへ移さない。
+3pxの開始閾値、派生元座標への変換、小移動時のInstance内部選択、投影の編集拒否、最終求解・Spline・Parameterと依存Sketchの検査、開始前への復元と履歴の順序を維持した。従来どおりpointercancelは未移動時の内部選択を抑制し、移動済みの場合は確定処理へ進む。resetはsession破棄だけであり、新しい取消仕様は導入していない。
+
+GeometryDragPlanは入力計画、GeometryDragSolverは数値求解と数値的な進行状態、GeometryDragはUIを伴う操作の進行と確定を担当する。局所context準備・図形種別ごとのpreview適用・最終求解の計測adapterは、現在はappから渡す明示callbackとして残る。この依存は移行途中のものであり、appの操作状態をgetterで共有する仕組みではない。
 
 ### 検証とGitの状況
 
-- 構文267件・単体548件が成功。追加の単体8件は再試行前の復元、モデル残差の検査、session間の独立性、目標の保持、区間分割、終了時補正とSolver設定の復帰を確認する。
-- 関連E2E202件が成功（20.5分）。ログは`$env:TEMP\cad-drag-solver-e2e.log`。実行中のテストはない。本書と同じコミットが今回の求解分離の区切りである。作業branchで継続し、新たなmainへの反映は含めない。
-- app.jsは16,594行。全体リファクタリングと全体E2Eは未完了。
+- 構文269件・単体556件が成功。追加の単体8件で開始計画の分離、閾値・座標変換、クリック／pointercancel、投影拒否、preview失敗、最終求解／Spline／Parameter／依存先失敗の復元、通知と履歴順序を確認する。
+- Block／Free Instance／SketchProjection／保存互換／統合UIのE2E184件（1.9分）と、実pointer操作・Undoの回帰7件（23.6秒）が成功。ログは`$env:TEMP\cad-geometry-drag-e2e.log`と`$env:TEMP\cad-geometry-drag-native.log`。実行中のテストはない。本書と同じコミットが操作session分離の区切りである。
+- app.jsは16,501行。全体リファクタリングと全体E2Eは未完了。
 
 ```powershell
 npm run check
 npm run test:unit
-npm run test:e2e -- tests/e2e/blocks.spec.js tests/e2e/unified-ui.spec.js tests/e2e/phase0-characterization.spec.js tests/e2e/geometry-drag-smoothness.spec.js tests/e2e/constraint-drag-regressions.spec.js tests/e2e/free-instance.spec.js tests/e2e/sketch-projection.spec.js
+npm run test:e2e -- tests/e2e/blocks.spec.js tests/e2e/unified-ui.spec.js tests/e2e/phase0-characterization.spec.js tests/e2e/free-instance.spec.js tests/e2e/sketch-projection.spec.js
+npm run test:e2e -- tests/e2e/constraint-drag-regressions.spec.js --grep "native pointer reversals and undo"
 ```
 
 ### 次に調べる境界
 
-通常図形ドラッグの局所context準備（`attachLocalSolveContext`）、`dragResultForSession`、pointer更新と終了処理を調べる。GeometryDragPlan／GeometryDragSolverを利用して、操作sessionと開始・更新・確定／取消・復元を同じ所有者へ集める。描画からの強調照会と診断は値の照会、Canvas入力からは操作APIにする。現在の多数のsessionフィールドをそのまま公開してsetterを増やす分離は避ける。
+appに残る`attachLocalSolveContext`、`dragResultForSession`と`finalizeDragResult`を調べる。操作本体と診断が共用できる準備・preview適用の責務として、既存GeometryDragPlan／GeometryDragSolverとの分担を整理する。GeometryDragの非公開sessionを再び外へ公開したり、数値求解側へUIと履歴を持ち込んだりしない。
 
-求解サービスは数値計算までを担当し、UI通知・履歴・Parameter確定を引き取らない。局所contextは共通の拘束連結成分照会との重複を確認してから配置を決める。残る他領域と全体完了条件は第5節・第7節を維持する。
-
-`localSolveContextFromSeeds`はドラッグだけでなく`solveConstraintComponentAndDependents`も利用する。固定Pointで探索を止める連結成分の規則、表示・所属・固定／回転ロックによる変数選択を保持し、ドラッグ専用に同じ実装を複製しない。開始前の値snapshotと復元は既存`EditingCheckpoint.captureValues／restoreValues`の責務なので、操作の所有者はこれを利用する。
+`localSolveContextFromSeeds`はドラッグだけでなく`solveConstraintComponentAndDependents`も利用する。固定Pointで探索を止める連結成分の規則、表示・所属・固定／回転ロックによる変数選択を保持し、ドラッグ専用に同じ実装を複製しない。開始前の値snapshotと復元は既存`EditingCheckpoint.captureValues／restoreValues`の責務なので、準備・操作の所有者はこれを利用する。
 
 再開時は次の順で確認する。
 
 1. この文書とAGENTS.mdを読み、`git status --short`・`git branch --show-current`・`git log -5 --oneline`を確認する。記載の件数やHEADより現在のGitとコードを優先する。
 2. `composition-root.md`先頭と`spec/architecture/モジュール構成.md`を読む。古い経過記録は当時の状態として扱う。
 3. 未コミット変更があれば先に内容と所属を確認する。検証中ならprocessの実在と終了結果を確認し、単なる出力待ちで重複実行しない。
-4. 本区切りが確定済みなら、上記のドラッグ操作境界を調べて次のまとまりを実装する。
+4. 本区切りが確定済みなら、上記の準備・preview適用の境界を調べて次のまとまりを実装する。
 5. 検証・差分確認・Commit・Push・runtime-version再生成を行い、この再開地点を更新する。全体目標は途中成果へ縮小しない。
 
 ### 再開時に渡す指示の例

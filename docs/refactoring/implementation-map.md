@@ -4,6 +4,8 @@
 
 ## 1. 実装ファイルの責務
 
+- `src/commands/geometry_drag.js`: 図形ドラッグsessionの所有、移動開始閾値、更新、確定／失敗復元・履歴と強調対象の照会
+
 - `src/solver/geometry_drag_solver.js`: 図形ドラッグの局所／guided求解・全Sketch再試行・終了時補正とsessionごとの非公開数値計算状態
 
 - `src/editing/geometry_drag_plan.js`: 図形ドラッグ開始状態・移動先・一時拘束の生成
