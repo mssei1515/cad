@@ -6,6 +6,8 @@
 
 ## 現在の再開地点（2026-09-29）
 
+SolveScopeQueryへ拘束連結成分と局所／Sketch全体の変数・拘束・線の照会を集約。現在のworkspaceとGeometryReadModel、所属・有効性の判定を明示依存とし、操作・求解実行・数値状態を持たない。固定Pointでの探索停止、局所Pointだけの表示判定、変数順序とBlock回転ロックを維持した。構文273件・単体568件・関連E2E191件が成功。app.jsは16,102行。次はSketch求解・依存先求解と失敗復元の調整境界を調べる。全体目標は未完了。
+
 GeometryDragEditingへ局所context準備・Line代表target判定・開始前snapshot・図形種別のpreview適用と補正／復元を集約。操作と診断がprepare／preview／finishを共用し、appに残るpreview／finishは計測adapterのみとした。共有のRadius／Diameter寸法照会は既存DimensionQueriesへ統合し、拘束編集の参照を維持。構文271件・単体564件・関連E2E194件が成功。app.jsは16,269行。次は共通の拘束連結成分・局所／Sketch求解対象の照会境界を整理する。全体目標と全体E2Eは未完了。
 
 GeometryDragへドラッグsessionの開始・更新・終了・resetとTX-02の復元／履歴調整を集約。appの共有dragSessionを除去し、入力を操作API、描画を3種の強調対象照会へ接続した。開始計画をコピーして保持し、小移動／クリック、投影拒否、最終求解・Spline・Parameter失敗の復元と通知順序を維持。構文269件・単体556件・関連E2E191件（通常184件と実pointer操作・Undo7件）が成功。app.jsは16,501行。局所context準備と図形種別ごとのpreview適用は明示callbackとして残り、次はその依存を整理する。直前の求解分離は`0ee5b09`で確定済み。全体目標と全体E2Eは未完了。

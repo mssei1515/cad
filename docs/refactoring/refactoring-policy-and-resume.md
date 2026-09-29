@@ -100,30 +100,21 @@
 
 ### 最新の区切り
 
-GeometryDragEditingへ局所context準備・Line代表target判定・開始前snapshot・図形種別のpreview適用と補正／復元を集約した。GeometryDragは操作session、GeometryDragPlanは移動先の計画、GeometryDragSolverは数値求解を担い、操作と診断がEditingのprepare／preview／finishを共用する。appのpreview／finishは計測adapterとなった。
+前回のGeometryDragEditing分離は6fdc769で確定し、1a7d5ccでmain／developへ反映・同期済み。本区切りはcodex/composition-root-nextで継続する。前回のリリース指示を新しい変更へ拡張しない。
 
-直接Radius／Diameter寸法の照会は既存DimensionQueriesへ集約し、ドラッグと拘束編集で共用する。UI、求解条件、復元範囲、保存形式は変更していない。app.jsは16,269行。全体リファクタリングと全体E2Eは未完了。
+SolveScopeQueryへ拘束連結成分と局所／Sketch全体の変数・拘束・線の照会を分離した。現在scopeとGeometryReadModel、所属・表示・有効性・Instance依存参照を明示依存とする。Solver実行・操作session・UI・履歴・cacheを所有しない。拘束編集、ドラッグ、Parameter適用、診断が同じAPIを使用する。
 
-ユーザーから本区切りの未コミット変更をCommitし、mainへマージする明示指示を受けた。作業branchはcodex/composition-root-next。developへ統合後、mainへマージ・Pushし、developをmainへfast-forwardして同期する。実際の完了状態はGitで確認する。このリリース指示を将来の変更への自動リリース許可に拡張しない。
+固定Pointで探索を止める規則、局所Pointのみの表示条件、Object同一性、変数順序とBlock固定／回転ロックを保持した。app.jsは16,102行。全体リファクタリングと全体E2Eは未完了。
 
 ### 検証
 
-構文271件・単体564件が成功。関連E2E187件と実pointer操作・Undoの回帰7件、合計194件が成功。実行中のテストはない。ログは一時フォルダのcad-drag-editing-check.log、cad-drag-editing-unit.log、cad-drag-editing-e2e.log、cad-drag-editing-native.log。全体E2E成功とは扱わない。
-
-```powershell
-npm run check
-npm run test:unit
-npm run test:e2e -- tests/e2e/blocks.spec.js tests/e2e/unified-ui.spec.js tests/e2e/phase0-characterization.spec.js tests/e2e/free-instance.spec.js tests/e2e/sketch-projection.spec.js tests/e2e/geometry-drag-smoothness.spec.js
-npm run test:e2e -- tests/e2e/constraint-drag-regressions.spec.js --grep "native pointer reversals and undo"
-```
+構文273件・単体568件が成功。関連E2E184件と実pointer操作・Undo回帰7件（合計191件）が成功。実行中のテストはない。最初のE2Eでは半径下限定数より先にmoduleを生成する初期化順エラーを検出したため、生成を定数初期化後へ移して再実行し、成功を確認した。ログは一時フォルダのcad-solve-scope-check.log、cad-solve-scope-unit.log、cad-solve-scope-e2e.log、cad-solve-scope-native.log。全体E2Eは未完了。
 
 ### 次に調べる境界
 
-共通の拘束連結成分・局所／Sketch求解対象の照会境界を整理する。対象はbuildConstraintAdjacency、connectedComponentFromSeeds、localSolveVariables／Constraints／Lines、sketchSolveVariables／Constraints／Lines、localSolveContextFromSeeds。
+Sketch求解と依存先の求解、失敗復元と状態記録の調整を調べる。対象はsolveActiveSketch、solveSketchById、solveReferenceDependentSketches、solveSketchAndDependents、solveConstraintComponentAndDependents。依存グラフの順序、循環参照の扱い、局所成功後の全体残差確認と全体再試行、開始前復元の有無による状態記録の違いを保持する。照会と求解実行を混在させず、既存EditingCheckpointと求解状態の所有者を確認して境界を決める。
 
-localSolveContextFromSeedsはドラッグだけでなくsolveConstraintComponentAndDependentsも利用する。固定Pointで探索を止める規則、表示・所属・固定／回転ロックによる変数選択を保持し、ドラッグ専用に複製しない。GeometryDragの非公開sessionを再公開せず、数値求解側へUIや履歴を持ち込まない。
-
-再開時はこの文書とAGENTS.md、composition-root.md先頭、spec/architecture/モジュール構成.mdを読む。Gitの状態・ブランチ・最新履歴と週の残り利用枠を確認し、未コミット変更と実行中テストがないか確認する。main上では開発せずdevelopを基準に適切な作業branchで再開する。上記境界を調べ、まとまった単位で検証・差分確認・Commit・Push・runtime-version再生成を行う。全体目標を途中成果へ縮小しない。
+再開時はこの文書とAGENTS.md、composition-root.md先頭、spec/architecture/モジュール構成.mdを読む。Gitの状態・最新履歴と週の残り利用枠を確認する。main上では開発せず、developを基準に適切な作業branchで再開する。まとまった単位で検証・差分確認・Commit・Push・runtime-version再生成を行う。全体目標を途中成果へ縮小しない。
 
 ### 再開時に渡す指示の例
 
