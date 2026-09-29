@@ -98,12 +98,12 @@
 
 ## 8. 再開地点（2026-09-30）
 
-main／developはd76dfefでリリース同期済み。今回以降の継続作業はcodex/composition-root-nextで進め、mainへの自動反映は行わない。
+main／developはd76dfefでリリース同期済み。継続作業はcodex/composition-root-nextで進め、mainへの自動反映は行わない。直前の入力frame集約はfdf95e4でCommit・Push済み。
 
-PointerMoveSchedulerへ保留中のpointer入力・frame予約・flush／破棄と診断件数を集約。appは移動処理とpreview計測・Geometry読取りcache・寸法入力同期を接続する。構文288件・単体603件・関連E2E118件（図形ドラッグ／基本操作117件と240入力のframe集約1件）が成功。app.jsは15,176行。全体リファクタリングと全体E2Eは未完了。
+GeometryBoundsへ矩形判定・図形bounds・範囲結合、ReferenceImageGeometryへ画像座標変換、DrawingBoundsへSketch指定・全体・可視対象の範囲集計を分離。計算15関数は依存取得名と空白以外の本体一致を確認。構文292件・単体608件・関連E2E186件が成功。app.jsは15,023行。全体目標と全体E2Eは未完了。
 
-追加単体4件は最新入力の集約、frame ID 0、同期flush・破棄、計測resetとコピー、処理中の再予約を確認する。ログは一時フォルダのcad-pointer-check.log、cad-pointer-unit.log、cad-pointer-e2e.log、cad-pointer-frame-e2e.log。実行中のテストはない。
+追加単体5件は範囲結合・矩形境界、画像座標の往復変換、scopeとSketch切替、可視性、円弧とSplineのboundsを確認する。新規Spline fixtureは既存の3点以上という成立条件に合わせて修正した。計算仕様の変更はない。E2E後の変更は空白整形のみで、関数本体の一致も再確認した。ログは一時フォルダのcad-bounds-check.log、cad-bounds-unit.log、cad-bounds-e2e.log。実行中のテストはない。
 
-次は表示範囲の集計（sketchGeometryBounds／allGeometryBounds／visibleGeometryBounds）とReference Imageの座標変換・boundsを調べる。Renderer・矩形選択・画像操作が共用する計算と、現在scope・可視性を用いた集計を区別し、表示範囲やフィット動作を変えず所有者を整理する。まだ実装には着手していない。
+次は初回寸法入力時のSketch拡縮（scaleSketchForFirstDimension）と画面上の範囲の取得／復元（captureSketchScreenFootprint／restoreSketchScreenFootprint）を調べる。モデルの拡縮とViewport更新の所有者を分け、初回判定・固定／参照拘束の除外・寸法配置・画面中心と倍率を維持する。まだ実装には着手していない。
 
 再開時は本書、AGENTS.md、composition-root.md先頭とGitの現物を確認する。週の残り利用枠を確認し、サブエージェントを使わず、責務単位の検証・Commit・Pushを続ける。行数だけの分割で全体目標を縮小しない。

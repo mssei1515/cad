@@ -4,6 +4,10 @@
 
 ## 1. 実装ファイルの責務
 
+- `src/geometry/bounds.js`: 矩形判定、図形boundsと結合。
+- `src/geometry/reference_image_geometry.js`: 参照画像の座標変換・四隅・bounds。
+- `src/rendering/drawing_bounds.js`: Sketch指定・全体・可視対象の範囲集計。
+
 - `src/ui/pointer_move_scheduler.js`: pointermoveの保留入力・frame予約・flush／破棄と診断件数を所有する。
 
 - `src/constraints/sketch_projection_queries.js`: 旧投影拘束の索引・対応点・影響対象の照会。

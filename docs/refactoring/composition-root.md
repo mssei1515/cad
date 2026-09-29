@@ -6,6 +6,8 @@
 
 ## 現在の再開地点（2026-09-30）
 
+GeometryBoundsへ矩形判定・図形bounds・範囲結合、ReferenceImageGeometryへ画像座標変換、DrawingBoundsへSketch指定・全体・可視対象の範囲集計を分離。計算15関数は依存取得名と空白以外の本体一致を確認。構文292件・単体608件・関連E2E186件が成功。app.jsは15,023行。全体目標と全体E2Eは未完了。
+
 PointerMoveSchedulerへ保留中のpointer入力・frame予約・flush／破棄と診断件数を集約。appは移動処理とpreview計測・Geometry読取りcache・寸法入力同期を接続する。構文288件・単体603件・関連E2E118件（図形ドラッグ／基本操作117件と240入力のframe集約1件）が成功。app.jsは15,176行。全体リファクタリングと全体E2Eは未完了。
 
 旧SketchProjection拘束をSketchProjectionQueries（投影先索引・対応点・影響対象の照会）とSketchProjectionEditing（共有Point分離・source再接続・Spline metadata同期）へ分離。抽出12関数の本体はscope取得の依存名と空白以外の一致を確認。構文286件・既存単体599件・関連E2E184件が成功（ログ: 一時フォルダのcad-release-check.log、cad-release-unit.log、cad-release-e2e.log）。app.jsは15,226行。ユーザーの明示依頼で既存の未リリース分離と合わせてdevelop経由でmainへ反映する。全体リファクタリング・全体E2Eは未完了。次の分離にはまだ着手していない。

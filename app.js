@@ -2,6 +2,8 @@
 (function () {
   "use strict";
   const { referenceImageMimeType, validReferenceImageDataUrl, normalizeReferenceImages, serializeReferenceImage, REFERENCE_IMAGE_MAX_SIDE_PX } = window.ReferenceImageData;
+  const { rectFromPoints, pointInRect, bboxInRect, bboxIntersectsRect, lineBBox, primitiveBBox, mergeBounds, splineBBox } = window.GeometryBounds;
+  const { referenceImageLocalToWorld, referenceImageWorldToLocal, referenceImageCorners, referenceImageBounds } = window.ReferenceImageGeometry;
   const { normalizeHatches, validSerializedHatch, validSerializedHatchList, serializeHatch } = window.HatchData;
   const { normalizeAnnotations, serializeAnnotation } = window.AnnotationData;
 
@@ -521,6 +523,12 @@
   const geometryRenderer = window.GeometryRenderer.create({ ctx, viewport, paintState: geometryPaintState, appearanceLineDash, lineDisplaySegment, canvasThemeColor });
   const { traceSplinePath } = geometryRenderer;
   const { resolvedLoopBounds } = window.HatchRegionEngine;
+  const drawingBounds = window.DrawingBounds.create({
+    currentScope: workspace.current, geometryReads, activeSketchId, elementSketchId, isVisibleSketchElement,
+    isVisibleSketchId, annotationBounds, resolvedLoopBounds, resolvedHatchBoundary, hatchAppearanceForDisplay,
+  });
+  const { sketchGeometryBounds, allGeometryBounds, visibleGeometryBounds } = drawingBounds;
+
   const { drawResolvedHatchContent } = window.HatchRenderer.create({ viewport, visibleWorldBounds, canvasThemeColor });
   const { annotationTextWorldHeight, drawAnnotationText, drawAnnotationLeader } = window.AnnotationRenderer.create({ ctx, viewport, withCanvasState, annotationDisplayColor, annotationLeaderAnchor, appearanceLineDash });
   const referenceImageRenderer = window.ReferenceImageRenderer.create({
@@ -3609,164 +3617,6 @@
     return hitAnyPoint(x, y);
   }
 
-  function rectFromPoints(a, b) {
-    return {
-      x1: Math.min(a.x, b.x),
-      y1: Math.min(a.y, b.y),
-      x2: Math.max(a.x, b.x),
-      y2: Math.max(a.y, b.y),
-    };
-  }
-
-  function pointInRect(p, rect) {
-    return p.x >= rect.x1 && p.x <= rect.x2 && p.y >= rect.y1 && p.y <= rect.y2;
-  }
-
-  function bboxInRect(box, rect) {
-    return box.x1 >= rect.x1 && box.x2 <= rect.x2 && box.y1 >= rect.y1 && box.y2 <= rect.y2;
-  }
-
-  function bboxIntersectsRect(box, rect) {
-    return box.x2 >= rect.x1 && box.x1 <= rect.x2 && box.y2 >= rect.y1 && box.y1 <= rect.y2;
-  }
-
-  function lineBBox(line) {
-    return {
-      x1: Math.min(line.p1.x, line.p2.x),
-      y1: Math.min(line.p1.y, line.p2.y),
-      x2: Math.max(line.p1.x, line.p2.x),
-      y2: Math.max(line.p1.y, line.p2.y),
-    };
-  }
-
-  function primitiveBBox(primitive) {
-    const r = primitive.radius();
-    return {
-      x1: primitive.center.x - r,
-      y1: primitive.center.y - r,
-      x2: primitive.center.x + r,
-      y2: primitive.center.y + r,
-    };
-  }
-
-  function mergeBounds(bounds, box) {
-    if (!box) return bounds;
-    const x1 = box.x1 ?? box.left;
-    const y1 = box.y1 ?? box.top;
-    const x2 = box.x2 ?? box.right;
-    const y2 = box.y2 ?? box.bottom;
-    if (![x1, y1, x2, y2].every(Number.isFinite)) return bounds;
-    if (!bounds) return { x1, y1, x2, y2 };
-    return {
-      x1: Math.min(bounds.x1, x1),
-      y1: Math.min(bounds.y1, y1),
-      x2: Math.max(bounds.x2, x2),
-      y2: Math.max(bounds.y2, y2),
-    };
-  }
-
-  function referenceImageLocalToWorld(image, point) {
-    const cos = Math.cos(image.rotation);
-    const sin = Math.sin(image.rotation);
-    const x = point.x * image.scale;
-    const y = point.y * image.scale;
-    return { x: image.x + x * cos - y * sin, y: image.y + x * sin + y * cos };
-  }
-
-  function referenceImageWorldToLocal(image, point) {
-    const cos = Math.cos(image.rotation);
-    const sin = Math.sin(image.rotation);
-    const dx = point.x - image.x;
-    const dy = point.y - image.y;
-    return { x: (dx * cos + dy * sin) / image.scale, y: (-dx * sin + dy * cos) / image.scale };
-  }
-
-  function referenceImageCorners(image) {
-    const halfWidth = image.pixelWidth / 2;
-    const halfHeight = image.pixelHeight / 2;
-    return [
-      referenceImageLocalToWorld(image, { x: -halfWidth, y: -halfHeight }),
-      referenceImageLocalToWorld(image, { x: halfWidth, y: -halfHeight }),
-      referenceImageLocalToWorld(image, { x: halfWidth, y: halfHeight }),
-      referenceImageLocalToWorld(image, { x: -halfWidth, y: halfHeight }),
-    ];
-  }
-
-  function referenceImageBounds(image) {
-    const corners = referenceImageCorners(image);
-    return {
-      x1: Math.min(...corners.map((point) => point.x)),
-      y1: Math.min(...corners.map((point) => point.y)),
-      x2: Math.max(...corners.map((point) => point.x)),
-      y2: Math.max(...corners.map((point) => point.y)),
-    };
-  }
-
-  function sketchGeometryBounds(sketchId = activeSketchId()) {
-    let bounds = null;
-    for (const line of allGeometryLines()) {
-      if (elementSketchId(line) === sketchId) bounds = mergeBounds(bounds, lineBBox(line));
-    }
-    for (const circle of allGeometryCircles()) {
-      if (elementSketchId(circle) === sketchId) bounds = mergeBounds(bounds, primitiveBBox(circle));
-    }
-    for (const arc of allGeometryArcs()) {
-      if (elementSketchId(arc) === sketchId) bounds = mergeBounds(bounds, primitiveBBox(arc));
-    }
-    for (const spline of allGeometrySplines()) {
-      if (elementSketchId(spline) === sketchId) bounds = mergeBounds(bounds, splineBBox(spline));
-    }
-    for (const point of allGeometryPoints()) {
-      if (elementSketchId(point) === sketchId) bounds = mergeBounds(bounds, { x1: point.x, y1: point.y, x2: point.x, y2: point.y });
-    }
-    for (const annotation of allAnnotations()) if (annotation.sketchId === sketchId) bounds = mergeBounds(bounds, annotationBounds(annotation));
-    for (const hatch of allHatches()) if (hatch.sketchId === sketchId) bounds = mergeBounds(bounds, resolvedLoopBounds(resolvedHatchBoundary(hatch)));
-    for (const image of model.referenceImages) if (image.sketchId === sketchId) bounds = mergeBounds(bounds, referenceImageBounds(image));
-    return bounds;
-  }
-
-  function allGeometryBounds() {
-    let bounds = null;
-    for (const line of allGeometryLines()) bounds = mergeBounds(bounds, lineBBox(line));
-    for (const circle of allGeometryCircles()) bounds = mergeBounds(bounds, primitiveBBox(circle));
-    for (const arc of allGeometryArcs()) bounds = mergeBounds(bounds, primitiveBBox(arc));
-    for (const spline of allGeometrySplines()) bounds = mergeBounds(bounds, splineBBox(spline));
-    for (const point of allGeometryPoints()) bounds = mergeBounds(bounds, { x1: point.x, y1: point.y, x2: point.x, y2: point.y });
-    for (const annotation of allAnnotations()) bounds = mergeBounds(bounds, annotationBounds(annotation));
-    for (const hatch of allHatches()) bounds = mergeBounds(bounds, resolvedLoopBounds(resolvedHatchBoundary(hatch)));
-    for (const image of model.referenceImages) bounds = mergeBounds(bounds, referenceImageBounds(image));
-    return bounds;
-  }
-
-  function isVisibleOnCanvasGeometry(item) {
-    return isVisibleSketchElement(item);
-  }
-
-  function visibleGeometryBounds() {
-    let bounds = null;
-    for (const line of allGeometryLines()) {
-      if (isVisibleOnCanvasGeometry(line)) bounds = mergeBounds(bounds, lineBBox(line));
-    }
-    for (const circle of allGeometryCircles()) {
-      if (isVisibleOnCanvasGeometry(circle)) bounds = mergeBounds(bounds, primitiveBBox(circle));
-    }
-    for (const arc of allGeometryArcs()) {
-      if (isVisibleOnCanvasGeometry(arc)) bounds = mergeBounds(bounds, primitiveBBox(arc));
-    }
-    for (const spline of allGeometrySplines()) {
-      if (isVisibleOnCanvasGeometry(spline)) bounds = mergeBounds(bounds, splineBBox(spline));
-    }
-    for (const point of allGeometryPoints()) {
-      if (isVisibleOnCanvasGeometry(point)) bounds = mergeBounds(bounds, { x1: point.x, y1: point.y, x2: point.x, y2: point.y });
-    }
-    for (const annotation of allAnnotations()) if (annotation.visible !== false && isVisibleSketchId(annotation.sketchId)) bounds = mergeBounds(bounds, annotationBounds(annotation));
-    for (const hatch of allHatches()) if (hatchAppearanceForDisplay(hatch).visible !== false && isVisibleSketchId(hatch.sketchId)) bounds = mergeBounds(bounds, resolvedLoopBounds(resolvedHatchBoundary(hatch)));
-    for (const image of model.referenceImages) if (image.visible !== false && isVisibleSketchId(image.sketchId)) bounds = mergeBounds(bounds, referenceImageBounds(image));
-    return bounds;
-  }
-
-
-
   function fitSketchToViewport(sketchId = activeSketchId(), paddingPx = 96) {
     return fitBoundsToViewport(sketchGeometryBounds(sketchId), paddingPx);
   }
@@ -4932,10 +4782,7 @@
   }
 
 
-  function splineBBox(spline) {
-    const bounds = window.SplineGeometry.bounds(spline.curve());
-    return bounds ? { x1: bounds.minX, y1: bounds.minY, x2: bounds.maxX, y2: bounds.maxY } : null;
-  }
+
 
 
 
