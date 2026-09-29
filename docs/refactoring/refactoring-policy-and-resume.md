@@ -96,26 +96,12 @@
 - 仕様と実装配置が一致し、未解決の不具合・未検証項目を隠していない。
 - 差分確認、Commit、許可された範囲のPush、実行コミット情報更新が済んでいる。
 
-## 8. 再開地点（2026-09-29）
+## 8. 再開地点（2026-09-30）
 
-### 最新の区切り
+ユーザーの今回の明示依頼により、未コミット分を確定し、作業branchの既存コミットとともにdevelop経由でmainへ反映する。リリース後はmainとdevelopを同期する。正確なcommit IDとPush状態はGitで確認する。継続開発予定のcodex/composition-root-nextは保持する。
 
-main／developは1a7d5ccで同期済み。本区切りはcodex/composition-root-nextで継続する。前回のリリース指示を新しい変更へ拡張しない。直前のParameter反復評価の分離は33de21eでCommit・Push済み。
+SketchProjectionQueriesへ旧投影拘束の検索cache・対応点・影響対象照会を、SketchProjectionEditingへ共有Point分離とmetadata同期を分離した。抽出した12関数はscope取得の依存名と空白以外、抽出前の本体と一致する。app.jsは15,226行。UI、求解、履歴、保存形式の変更はない。
 
-寸法式の下書き評価を既存ParameterNamespaceへ統合し、ExpressionInputViewへ強調markup、DOM装飾、入力／scroll同期と一括更新を集約した。現在scopeかParameter画面のdraftかの参照名選択は、接続側のcallbackで都度渡す。UIには式計算・モデル更新・履歴を持ち込まない。
+検証結果はcomposition-root.md先頭に記録する。全体リファクタリングと全体E2Eは未完了。次の分離単位は未着手であり、残る操作調整・入力振分け・Document操作などから依存と状態所有者を確認して選ぶ。行数だけを減らす分割は行わない。
 
-既存の名前検証、参照寸法実測、値範囲、HTML escape、readonly除外、wrapperとイベントの再利用を維持した。app.jsは15,405行。全体リファクタリングと全体E2Eは未完了。
-
-### 検証
-
-構文284件・単体599件・関連E2E185件が成功。実行中のテストはない。全体E2Eは未完了。ログは一時フォルダのcad-expression-input-check.log、cad-expression-input-unit.log、cad-expression-input-e2e.log。既存namespace単体へ下書き評価の非確定性・参照実測・循環拒否・角度範囲・scope切替の2件を追加した。新規テストの循環エラーcodeは実装のCYCLEに合わせた。抽出本体は依存名以外の一致を確認した。
-
-### 次に調べる境界
-
-SketchProjection拘束の照会・metadata同期・共有点分離を調べる。sketchProjectionConstraints、sketchProjectionTargetConstraintMap、sketchProjectionConstraintsForTarget／AffectingItems、separateSharedSketchProjectionTargetPoints、synchronizeSketchProjectionConstraint／Metadataが対象。GeometryRef・投影・現在scopeの依存を明示し、読取りとモデル更新の責務を分ける。ID照合、円弧端点と共有Pointの扱い、拘束参照の再接続、固定属性と投影拒否条件を保持し、保存互換性を変えない。
-
-再開時はこの文書とAGENTS.md、composition-root.md先頭、spec/architecture/モジュール構成.mdを読む。Gitの状態・最新履歴と週の残り利用枠を確認する。main上では開発せず、developを基準に適切な作業branchで再開する。まとまった単位で検証・差分確認・Commit・Push・runtime-version再生成を行う。全体目標を途中成果へ縮小しない。
-
-### 再開時に渡す指示の例
-
-> docs/refactoring/refactoring-policy-and-resume.mdとAGENTS.mdを読み、現在のGit状態を確認してJot2Dのリファクタリングを再開してください。app.jsを組立て・起動中心へ整理する全体目標を維持し、行数や期限より責務と状態所有者の適切な境界を優先してください。サブエージェントは使わず、まとまった単位で検証・コミット・Pushし、再開地点を更新してください。
+再開時は本書、AGENTS.md、composition-root.md先頭とGitの現物を確認する。週の残り利用枠を確認し、サブエージェントを使わず、責務単位の検証・Commit・Pushを続ける。今回のmain反映許可を今後の自動リリース許可へ拡張しない。
