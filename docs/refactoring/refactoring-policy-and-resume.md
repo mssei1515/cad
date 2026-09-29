@@ -98,12 +98,12 @@
 
 ## 8. 再開地点（2026-09-30）
 
-main／developはd76dfefでリリース同期済み。継続作業はcodex/composition-root-nextで進め、mainへの自動反映は行わない。直前の入力frame集約はfdf95e4でCommit・Push済み。
+main／developはd76dfefでリリース同期済み。継続作業はcodex/composition-root-nextで進め、mainへの自動反映は行わない。直前の範囲集計の分離は40e296dでCommit・Push済み。
 
-GeometryBoundsへ矩形判定・図形bounds・範囲結合、ReferenceImageGeometryへ画像座標変換、DrawingBoundsへSketch指定・全体・可視対象の範囲集計を分離。計算15関数は依存取得名と空白以外の本体一致を確認。構文292件・単体608件・関連E2E186件が成功。app.jsは15,023行。全体目標と全体E2Eは未完了。
+FirstDimensionScalingへ初回寸法のモデル拡縮を分離し、画面上の範囲取得／復元を既存CanvasViewportへ統合。DimensionValueCommandの初回判定・追加成否・履歴と順序を保持。モデル操作7関数は依存名以外の本体一致を確認。構文294件・単体614件・関連E2E184件が成功。app.jsは14,918行。全体目標と全体E2Eは未完了。
 
-追加単体5件は範囲結合・矩形境界、画像座標の往復変換、scopeとSketch切替、可視性、円弧とSplineのboundsを確認する。新規Spline fixtureは既存の3点以上という成立条件に合わせて修正した。計算仕様の変更はない。E2E後の変更は空白整形のみで、関数本体の一致も再確認した。ログは一時フォルダのcad-bounds-check.log、cad-bounds-unit.log、cad-bounds-e2e.log。実行中のテストはない。
+単体を6件追加し、指定Sketchだけの拡縮、固定／参照拘束の除外、値範囲・角度・無変更、scope切替、画面の中心・大きさの復元、微小範囲・zoom制限を確認した。ログは一時フォルダのcad-first-dimension-check.log、cad-first-dimension-unit.log、cad-first-dimension-e2e.log。実行中のテストはない。
 
-次は初回寸法入力時のSketch拡縮（scaleSketchForFirstDimension）と画面上の範囲の取得／復元（captureSketchScreenFootprint／restoreSketchScreenFootprint）を調べる。モデルの拡縮とViewport更新の所有者を分け、初回判定・固定／参照拘束の除外・寸法配置・画面中心と倍率を維持する。まだ実装には着手していない。
+次はBlockの再帰的な範囲計算と配置中心（blockLocalGeometryBounds、blockInstanceDisplayCenter、blockInstanceTranslationForAnchor）を調べる。有効Sketch、nested Block／Geometry Instance、円弧のsweep、Hatch解決、循環防止とorigin fallbackを維持し、DrawingBoundsの表示全体の集計とは別の配置照会として整理する。まだ実装には着手していない。
 
 再開時は本書、AGENTS.md、composition-root.md先頭とGitの現物を確認する。週の残り利用枠を確認し、サブエージェントを使わず、責務単位の検証・Commit・Pushを続ける。行数だけの分割で全体目標を縮小しない。

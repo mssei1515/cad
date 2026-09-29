@@ -4,6 +4,8 @@
 
 ## 1. 実装ファイルの責務
 
+- `src/editing/first_dimension_scaling.js`: 初回寸法に合わせたSketch geometryと寸法配置の拡縮。画面上の大きさの取得／復元は既存CanvasViewportへ統合。
+
 - `src/geometry/bounds.js`: 矩形判定、図形boundsと結合。
 - `src/geometry/reference_image_geometry.js`: 参照画像の座標変換・四隅・bounds。
 - `src/rendering/drawing_bounds.js`: Sketch指定・全体・可視対象の範囲集計。

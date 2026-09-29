@@ -528,6 +528,9 @@
     isVisibleSketchId, annotationBounds, resolvedLoopBounds, resolvedHatchBoundary, hatchAppearanceForDisplay,
   });
   const { sketchGeometryBounds, allGeometryBounds, visibleGeometryBounds } = drawingBounds;
+  const { scaleSketchForFirstDimension } = window.FirstDimensionScaling.create({
+    currentScope: workspace.current, activeSketchId, constraintSketchId, elementSketchId, sketchGeometryBounds, minLength: MIN_LINE_LENGTH,
+  });
 
   const { drawResolvedHatchContent } = window.HatchRenderer.create({ viewport, visibleWorldBounds, canvasThemeColor });
   const { annotationTextWorldHeight, drawAnnotationText, drawAnnotationLeader } = window.AnnotationRenderer.create({ ctx, viewport, withCanvasState, annotationDisplayColor, annotationLeaderAnchor, appearanceLineDash });
@@ -691,11 +694,13 @@
     renameDimension: parameterNamespace.renameDimension,
     getPending: () => pendingCommand, setPending: value => { pendingCommand = value; },
     expressionFromUserInput, evaluateDimensionExpressionDraft, applicationText, parameterErrorText,
-    setHint, syncDimensionValueInput, draw, activeSketchId, sketchHasDimensionConstraint, captureSketchScreenFootprint,
+    setHint, syncDimensionValueInput, draw, activeSketchId, sketchHasDimensionConstraint,
+    captureSketchScreenFootprint: (sketchId = activeSketchId()) => viewport.captureBoundsFootprint(sketchGeometryBounds(sketchId)),
     snapshotModelState, restoreModelState, withTemporarySolveStepNorm, solveStepNormForConstraint,
     stabilizeActiveParameterNamespace, constraintSketchId, acceptError: CONSTRAINT_ACCEPT_ERROR,
     hideDimensionValueInput, recordHistory, updateUI, scaleSketchForFirstDimension,
-    addDistanceConstraintFromTarget, restoreSketchScreenFootprint,
+    addDistanceConstraintFromTarget,
+    restoreSketchScreenFootprint: (sketchId, footprint) => viewport.restoreBoundsFootprint(sketchGeometryBounds(sketchId), footprint),
   });
   const { submit: submitDistanceValue, commitProperty: commitDimensionPropertyEdit } = dimensionValueCommand;
   const blockParameterPropagation = window.BlockParameterPropagation.create({
@@ -3630,116 +3635,6 @@
   }
 
 
-
-  function captureSketchScreenFootprint(sketchId = activeSketchId()) {
-    const bounds = sketchGeometryBounds(sketchId);
-    const screenBox = screenBoxForBounds(bounds);
-    if (!bounds || !screenBox) return null;
-    return {
-      bounds,
-      screenBox,
-      center: {
-        x: (screenBox.left + screenBox.right) / 2,
-        y: (screenBox.top + screenBox.bottom) / 2,
-      },
-      width: Math.max(screenBox.right - screenBox.left, 1),
-      height: Math.max(screenBox.bottom - screenBox.top, 1),
-    };
-  }
-
-  function restoreSketchScreenFootprint(sketchId, footprint) {
-    if (!footprint) return false;
-    const bounds = sketchGeometryBounds(sketchId);
-    if (!bounds) return false;
-    const worldWidth = bounds.x2 - bounds.x1;
-    const worldHeight = bounds.y2 - bounds.y1;
-    const scaleCandidates = [];
-    if (worldWidth > MIN_LINE_LENGTH) scaleCandidates.push(footprint.width / worldWidth);
-    if (worldHeight > MIN_LINE_LENGTH) scaleCandidates.push(footprint.height / worldHeight);
-    if (scaleCandidates.length === 0) return false;
-    const nextScale = clampZoom(Math.min(...scaleCandidates));
-    const centerX = (bounds.x1 + bounds.x2) / 2;
-    const centerY = (bounds.y1 + bounds.y2) / 2;
-    viewport.update({ scale: nextScale });
-    viewport.update({ x: footprint.center.x - centerX * viewport.scale });
-    viewport.update({ y: footprint.center.y - centerY * viewport.scale });
-    return true;
-  }
-
-  function scalePointAbout(point, origin, scale) {
-    point.x = origin.x + (point.x - origin.x) * scale;
-    point.y = origin.y + (point.y - origin.y) * scale;
-  }
-
-  function scaleValueAbout(value, originValue, scale) {
-    return originValue + (value - originValue) * scale;
-  }
-
-  function scaleDimensionAbout(dimension, origin, scale) {
-    if (!dimension) return dimension;
-    for (const key of ["x", "labelX"]) {
-      if (Number.isFinite(dimension[key])) dimension[key] = scaleValueAbout(dimension[key], origin.x, scale);
-    }
-    for (const key of ["y", "labelY"]) {
-      if (Number.isFinite(dimension[key])) dimension[key] = scaleValueAbout(dimension[key], origin.y, scale);
-    }
-    for (const key of ["offsetU", "offsetN", "labelOffsetU", "angleRadius", "angleLabelOffsetR", "angleLabelOffsetT"]) {
-      if (Number.isFinite(dimension[key])) dimension[key] *= scale;
-    }
-    return dimension;
-  }
-
-  function currentTargetValue(target) {
-    if (!target) return NaN;
-    if (target.kind === "point-point") {
-      if (target.dimensionAxis === "x") return Math.abs(target.p2.x - target.p1.x);
-      if (target.dimensionAxis === "y") return Math.abs(target.p2.y - target.p1.y);
-      return hypot2(target.p2.x - target.p1.x, target.p2.y - target.p1.y);
-    }
-    if (target.kind === "line-length") return target.line.length();
-    if (target.kind === "point-line") return Math.abs(signedPointLineDistance(target.point, target.line));
-    if (target.kind === "line-line") return Math.abs(signedPointLineDistance(target.line1.p1, target.line2));
-    if (target.kind === "line-circle") return Math.abs(signedPointLineDistance(target.circle.center, target.line));
-    if (target.kind === "radius-difference") return Math.abs(target.b.radius() - target.a.radius());
-    if (target.kind === "radius") return target.primitive.radius();
-    if (target.kind === "diameter") return target.primitive.radius() * 2;
-    if (target.kind === "offset-distance") {
-      if (target.source instanceof Line) return Math.abs(signedPointLineDistance(target.offset.p1, target.source));
-      return Math.abs(target.offset.radius() - target.source.radius());
-    }
-    return target.value;
-  }
-
-  function sketchHasReferenceConstraint(sketchId = activeSketchId()) {
-    return model.constraints.some((constraint) => constraintSketchId(constraint) === sketchId && constraint.reference);
-  }
-
-  function sketchHasFixedGeometry(sketchId = activeSketchId()) {
-    if (model.points.some((point) => elementSketchId(point) === sketchId && point.fixed)) return true;
-    return model.constraints.some((constraint) => constraintSketchId(constraint) === sketchId && (constraint instanceof LineFixedConstraint || constraint instanceof GeometryFixedConstraint));
-  }
-
-  function scaleSketchForFirstDimension(sketchId, target, targetValue, dimension) {
-    if (!sketchId || target?.kind === "angle" || sketchHasReferenceConstraint(sketchId) || sketchHasFixedGeometry(sketchId)) return false;
-    const current = currentTargetValue(target);
-    if (!Number.isFinite(current) || current <= MIN_LINE_LENGTH || !Number.isFinite(targetValue) || targetValue <= 0) return false;
-    const scale = targetValue / current;
-    if (!Number.isFinite(scale) || scale <= 0 || Math.abs(scale - 1) < 1e-9) return false;
-    const bounds = sketchGeometryBounds(sketchId);
-    if (!bounds) return false;
-    const origin = { x: (bounds.x1 + bounds.x2) / 2, y: (bounds.y1 + bounds.y2) / 2 };
-    for (const point of model.points) {
-      if (elementSketchId(point) === sketchId) scalePointAbout(point, origin, scale);
-    }
-    for (const circle of model.circles) {
-      if (elementSketchId(circle) === sketchId) circle.radiusValue = Math.max(MIN_LINE_LENGTH, circle.radiusValue * scale);
-    }
-    for (const arc of model.arcs) {
-      if (elementSketchId(arc) === sketchId) arc.radiusValue = Math.max(MIN_LINE_LENGTH, arc.radiusValue * scale);
-    }
-    scaleDimensionAbout(dimension, origin, scale);
-    return true;
-  }
 
   function arcEndpointDragValue(arc, endpoint, rawAngle) {
     const twoPi = Math.PI * 2;

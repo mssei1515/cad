@@ -6,6 +6,8 @@
 
 ## 現在の再開地点（2026-09-30）
 
+FirstDimensionScalingへ初回寸法のモデル拡縮を分離し、画面上の範囲取得／復元を既存CanvasViewportへ統合。DimensionValueCommandの初回判定・追加成否・履歴と順序を保持。モデル操作7関数は依存名以外の本体一致を確認。構文294件・単体614件・関連E2E184件が成功。app.jsは14,918行。全体目標と全体E2Eは未完了。
+
 GeometryBoundsへ矩形判定・図形bounds・範囲結合、ReferenceImageGeometryへ画像座標変換、DrawingBoundsへSketch指定・全体・可視対象の範囲集計を分離。計算15関数は依存取得名と空白以外の本体一致を確認。構文292件・単体608件・関連E2E186件が成功。app.jsは15,023行。全体目標と全体E2Eは未完了。
 
 PointerMoveSchedulerへ保留中のpointer入力・frame予約・flush／破棄と診断件数を集約。appは移動処理とpreview計測・Geometry読取りcache・寸法入力同期を接続する。構文288件・単体603件・関連E2E118件（図形ドラッグ／基本操作117件と240入力のframe集約1件）が成功。app.jsは15,176行。全体リファクタリングと全体E2Eは未完了。
