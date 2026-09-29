@@ -98,10 +98,12 @@
 
 ## 8. 再開地点（2026-09-30）
 
-ユーザーの今回の明示依頼により、未コミット分を確定し、作業branchの既存コミットとともにdevelop経由でmainへ反映する。リリース後はmainとdevelopを同期する。正確なcommit IDとPush状態はGitで確認する。継続開発予定のcodex/composition-root-nextは保持する。
+main／developはd76dfefでリリース同期済み。今回以降の継続作業はcodex/composition-root-nextで進め、mainへの自動反映は行わない。
 
-SketchProjectionQueriesへ旧投影拘束の検索cache・対応点・影響対象照会を、SketchProjectionEditingへ共有Point分離とmetadata同期を分離した。抽出した12関数はscope取得の依存名と空白以外、抽出前の本体と一致する。app.jsは15,226行。UI、求解、履歴、保存形式の変更はない。
+PointerMoveSchedulerへ保留中のpointer入力・frame予約・flush／破棄と診断件数を集約。appは移動処理とpreview計測・Geometry読取りcache・寸法入力同期を接続する。構文288件・単体603件・関連E2E118件（図形ドラッグ／基本操作117件と240入力のframe集約1件）が成功。app.jsは15,176行。全体リファクタリングと全体E2Eは未完了。
 
-検証結果はcomposition-root.md先頭に記録する。全体リファクタリングと全体E2Eは未完了。次の分離単位は未着手であり、残る操作調整・入力振分け・Document操作などから依存と状態所有者を確認して選ぶ。行数だけを減らす分割は行わない。
+追加単体4件は最新入力の集約、frame ID 0、同期flush・破棄、計測resetとコピー、処理中の再予約を確認する。ログは一時フォルダのcad-pointer-check.log、cad-pointer-unit.log、cad-pointer-e2e.log、cad-pointer-frame-e2e.log。実行中のテストはない。
 
-再開時は本書、AGENTS.md、composition-root.md先頭とGitの現物を確認する。週の残り利用枠を確認し、サブエージェントを使わず、責務単位の検証・Commit・Pushを続ける。今回のmain反映許可を今後の自動リリース許可へ拡張しない。
+次は表示範囲の集計（sketchGeometryBounds／allGeometryBounds／visibleGeometryBounds）とReference Imageの座標変換・boundsを調べる。Renderer・矩形選択・画像操作が共用する計算と、現在scope・可視性を用いた集計を区別し、表示範囲やフィット動作を変えず所有者を整理する。まだ実装には着手していない。
+
+再開時は本書、AGENTS.md、composition-root.md先頭とGitの現物を確認する。週の残り利用枠を確認し、サブエージェントを使わず、責務単位の検証・Commit・Pushを続ける。行数だけの分割で全体目標を縮小しない。

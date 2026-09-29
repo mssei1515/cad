@@ -270,7 +270,6 @@
     profileRead: read => interactionProfiler.active ? profileInteractionWork("geometryReads", read) : read(),
   });
   const { withGeometryReadCache, blockProjectionBundles, geometryInstanceBundles, geometryInstanceBundle, allGeometryPoints, allGeometryLines, allGeometryCircles, allGeometryArcs, allGeometrySplines, allAnnotations, allHatches, allGeometryPrimitives, resolveGeometryRef, geometryElementFromKey } = geometryReads;
-  let interactionFrameStats = null;
   const referenceConstraintState = window.ReferenceConstraintState.create({
     currentScope: workspace.current, constraintSketchId, isReferenceSourceSketchId,
   });
@@ -413,8 +412,15 @@
   const BLOCK_ORTHOGONAL_ROTATION_STEP = Math.PI / 2;
 
 
-  let pendingCanvasPointerMove = null;
-  let canvasPointerMoveFrame = null;
+  const pointerMoveScheduler = window.PointerMoveScheduler.create({
+    requestFrame: (callback) => requestAnimationFrame(callback),
+    cancelFrame: (frame) => cancelAnimationFrame(frame),
+    processMove: (pointer) => profileInteractionPhase("preview", () => {
+      withGeometryReadCache(() => processCanvasPointerMove(pointer));
+      if (pendingCommand && ["distance-value", "offset-value"].includes(pendingCommand.type)) syncDimensionValueInput();
+    }),
+  });
+  const { schedule: scheduleCanvasPointerMove, flush: flushScheduledCanvasPointerMove } = pointerMoveScheduler;
   const viewState = { constraintStatus: false, geometryIds: false };
   let constraintStatusMouseLatched = false;
   let constraintStatusSpaceHeld = false;
@@ -5094,7 +5100,7 @@
   function drawCanvas() {
     if (canvasSurface.width <= 0 || canvasSurface.height <= 0) syncCanvasBitmapSize();
     const dpr = canvasSurface.dpr;
-    if (interactionFrameStats) interactionFrameStats.canvasDraws += 1;
+    pointerMoveScheduler.recordDraw();
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     resetCanvasStrokeState();
     ctx.clearRect(0, 0, canvas.width, canvas.height);
@@ -9870,51 +9876,6 @@
     geometryDrag.update(p);
   }
 
-  function processScheduledCanvasPointerMove({ animationFrame = false, synchronousFlush = false } = {}) {
-    if (!pendingCanvasPointerMove) return false;
-    const pointer = pendingCanvasPointerMove;
-    pendingCanvasPointerMove = null;
-    if (interactionFrameStats) {
-      interactionFrameStats.processedMoves += 1;
-      if (animationFrame) interactionFrameStats.animationFrames += 1;
-      if (synchronousFlush) interactionFrameStats.synchronousFlushes += 1;
-    }
-    profileInteractionPhase("preview", () => {
-      withGeometryReadCache(() => processCanvasPointerMove(pointer));
-      if (pendingCommand && ["distance-value", "offset-value"].includes(pendingCommand.type)) syncDimensionValueInput();
-    });
-    return true;
-  }
-
-  function scheduleCanvasPointerMove(e) {
-    if (interactionFrameStats) interactionFrameStats.receivedMoves += 1;
-    if (pendingCanvasPointerMove) {
-      if (interactionFrameStats) interactionFrameStats.coalescedMoves += 1;
-      pendingCanvasPointerMove.offsetX = e.offsetX;
-      pendingCanvasPointerMove.offsetY = e.offsetY;
-      pendingCanvasPointerMove.shiftKey = e.shiftKey;
-    } else {
-      pendingCanvasPointerMove = { offsetX: e.offsetX, offsetY: e.offsetY, shiftKey: e.shiftKey };
-    }
-    if (canvasPointerMoveFrame != null) return;
-    canvasPointerMoveFrame = requestAnimationFrame(() => {
-      canvasPointerMoveFrame = null;
-      processScheduledCanvasPointerMove({ animationFrame: true });
-    });
-  }
-
-  function flushScheduledCanvasPointerMove({ discard = false } = {}) {
-    if (canvasPointerMoveFrame != null) {
-      cancelAnimationFrame(canvasPointerMoveFrame);
-      canvasPointerMoveFrame = null;
-    }
-    if (discard) {
-      pendingCanvasPointerMove = null;
-      return false;
-    }
-    return processScheduledCanvasPointerMove({ synchronousFlush: true });
-  }
-
   canvas.addEventListener("pointermove", scheduleCanvasPointerMove);
 
   function endDrag(e) {
@@ -11020,21 +10981,10 @@
         return interactionProfiler.stop();
       },
       resetInteractionFrameStatsForTest() {
-        flushScheduledCanvasPointerMove();
-        interactionFrameStats = {
-          receivedMoves: 0,
-          processedMoves: 0,
-          coalescedMoves: 0,
-          animationFrames: 0,
-          synchronousFlushes: 0,
-          canvasDraws: 0,
-        };
-        return { ...interactionFrameStats };
+        return pointerMoveScheduler.resetStats();
       },
       interactionFrameStatsForTest() {
-        return interactionFrameStats
-          ? { ...interactionFrameStats, pendingMove: Boolean(pendingCanvasPointerMove), frameScheduled: canvasPointerMoveFrame != null }
-          : null;
+        return pointerMoveScheduler.stats();
       },
       resetForResponsiveLineDragTest() {
         sampleModel();
