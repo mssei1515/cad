@@ -53,3 +53,27 @@ test("visible world bounds and screen boxes use the same current transform", () 
   assert.equal(viewport.screenBoxForBounds(null), null);
   assert.equal(viewport.formatZoom(2), "100%");
 });
+
+test("footprint restore preserves screen center and size after world geometry scales", () => {
+  const { viewport } = create();
+  viewport.update({ x: 70, y: -30, scale: 4 });
+  const footprint = viewport.captureBoundsFootprint({ x1: 10, y1: 20, x2: 110, y2: 70 });
+  assert.equal(viewport.restoreBoundsFootprint({ x1: -40, y1: -5, x2: 160, y2: 95 }, footprint), true);
+  assert.equal(viewport.scale, 2);
+  assert.deepEqual({ ...viewport.screenBoxForBounds({ x1: -40, y1: -5, x2: 160, y2: 95 }) }, { ...footprint.screenBox });
+});
+
+test("footprint restore rejects missing or negligible extents and clamps zoom", () => {
+  const { viewport } = create();
+  const initial = viewport.snapshot();
+  assert.equal(viewport.captureBoundsFootprint(null), null);
+  assert.equal(viewport.restoreBoundsFootprint(null, {}), false);
+  assert.equal(viewport.restoreBoundsFootprint({}, null), false);
+  const footprint = viewport.captureBoundsFootprint({ x1: 0, y1: 0, x2: 100, y2: 0 });
+  assert.equal(footprint.height, 1);
+  assert.equal(viewport.restoreBoundsFootprint({ x1: 0, y1: 0, x2: 12, y2: 12 }, footprint), false);
+  assert.deepEqual(viewport.snapshot(), initial);
+  assert.equal(viewport.restoreBoundsFootprint({ x1: 0, y1: 0, x2: 1e9, y2: 0 }, footprint), true);
+  assert.equal(viewport.scale, 0.01);
+  assert.deepEqual({ ...viewport.worldToCanvasScreen({ x: 5e8, y: 0 }) }, { ...footprint.center });
+});
