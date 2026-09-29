@@ -10,6 +10,8 @@
 
 ユーザーは長時間の段階的な実装を許可している。「無理に終わらせる必要はない」「今後の開発に過不足なく良い単位で分離する」が最新方針であり、残りクレジットに合わせて設計を急いだり、分離数を固定したりしない。
 
+週のCodex残り利用枠が50%を下回ったら、切りのよいところでリファクタリングを停止する。進行中のまとまりを検証・Commit・Pushし、未完了事項と再開地点を残してから停止し、新しい分離には着手しない。利用枠が回復した後、ユーザーの再開指示で続ける。残量に合わせて全体目標や責務境界を縮小しない。
+
 ## 2. 維持するもの
 
 - UI、操作手順、計算結果、モード遷移、取消、Undo／Redoと履歴のまとまり。
@@ -70,6 +72,7 @@
 ## 6. 実装・検証・履歴の進め方
 
 - サブエージェントは使わない（ユーザーの明示指示）。
+- 作業開始時とまとまったコミットの区切りでCodexアプリの利用状況を確認する。Codexの週枠（7日間）の残りは`100 - usedPercent`として判定し、50%未満なら上記の停止条件を適用する。追加購入クレジット残高とは区別し、利用情報が取得できない場合は残量を推測しない。
 - 開始時にAGENTS.md、Gitのbranch／status、関連仕様・テストを確認する。既存の無関係な変更を混ぜない。
 - 責務としてまとまった単位で実装し、差分を確認し、関連仕様を更新して検証・Commit・Pushする。将来の原因調査で区切りを追える履歴を残す。
 - 構文は`npm run check`、単体は`npm run test:unit`。関連E2Eを実施し、全体完了前には全体E2Eも確認する。
@@ -108,7 +111,7 @@ GeometryDragPlanは入力計画、GeometryDragSolverは数値求解と数値的�
 ### 検証とGitの状況
 
 - 構文269件・単体556件が成功。追加の単体8件で開始計画の分離、閾値・座標変換、クリック／pointercancel、投影拒否、preview失敗、最終求解／Spline／Parameter／依存先失敗の復元、通知と履歴順序を確認する。
-- Block／Free Instance／SketchProjection／保存互換／統合UIのE2E184件（1.9分）と、実pointer操作・Undoの回帰7件（23.6秒）が成功。ログは`$env:TEMP\cad-geometry-drag-e2e.log`と`$env:TEMP\cad-geometry-drag-native.log`。実行中のテストはない。本書と同じコミットが操作session分離の区切りである。
+- Block／Free Instance／SketchProjection／保存互換／統合UIのE2E184件（1.9分）と、実pointer操作・Undoの回帰7件（23.6秒）が成功。ログは`$env:TEMP\cad-geometry-drag-e2e.log`と`$env:TEMP\cad-geometry-drag-native.log`。実行中のテストはない。操作session分離は`7c117e1`でCommit・Push済み。
 - app.jsは16,501行。全体リファクタリングと全体E2Eは未完了。
 
 ```powershell
