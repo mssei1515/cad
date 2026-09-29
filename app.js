@@ -222,7 +222,7 @@
     currentScope: workspace.current, activeSketchId, effectiveAppearanceForElement, applicationText,
     boundaryGeometry: () => [...allGeometryLines(), ...allGeometryCircles(), ...allGeometryArcs(), ...allGeometrySplines()],
   });
-  const { hatchPrimitivesFromElements, hatchPrimitivesForScope, resolvedHatchBoundary, hatchFaceAt } = hatchGeometryQuery;
+  const { hatchPrimitivesFromElements, hatchPrimitivesForScope, resolvedHatchBoundary } = hatchGeometryQuery;
   const blockProjections = window.BlockProjection.create({
     blockCatalog, geometryInstanceBundlesForScope, emptyGeometryInstanceBundle, hatchPrimitivesFromElements, hatchPrimitivesForScope,
   });
@@ -296,8 +296,6 @@
   let pointerPreview = null;
   let trimPreview = null;
 
-  let hatchPreview = null;
-  let hatchRepairTarget = null;
   let pendingCommand = null;
   let pendingConstraintCommand = null;
   let constraintOperands = [];
@@ -2425,88 +2423,6 @@
     return pair ? applicationText(pair[0], pair[1]) : applicationText("閉領域を判定できません", result?.reason || "Could not detect a closed region");
   }
 
-  function updateHatchPreview(pointer) {
-    if (!pointer || !["hatch", "hatch-repair"].includes(mode)) return;
-    hatchPreview = { pointer: { x: pointer.x, y: pointer.y }, result: hatchFaceAt(pointer) };
-  }
-
-  function startHatchCreation() {
-    cancelConstraintTargetCommand("");
-    cancelPendingCommand("");
-    if (!canCreateInActiveSketch()) {
-      rejectRootSketchCreation();
-      return;
-    }
-    mode = "hatch";
-    hatchRepairTarget = null;
-    pointerPreview = lastPointerWorld;
-    hatchPreview = null;
-    if (pointerPreview) updateHatchPreview(pointerPreview);
-    clearSnap();
-    updateToolbar();
-    updateStatusUI();
-    setHint(applicationText("ハッチングする閉領域の内側をクリックしてください。終了はEscです", "Click inside a closed region to hatch it. Press Esc to finish."));
-    draw();
-  }
-
-  function startHatchBoundaryRepair(hatch) {
-    if (!hatch || hatch.blockProjection || !model.hatches.includes(hatch)) return false;
-    if (hatch.sketchId !== activeSketchId()) setActiveSketch(hatch.sketchId);
-    mode = "hatch-repair";
-    hatchRepairTarget = hatch;
-    hatchPreview = null;
-    pointerPreview = lastPointerWorld;
-    if (pointerPreview) updateHatchPreview(pointerPreview);
-    updateToolbar();
-    updateStatusUI();
-    setHint(applicationText(`${hatch.id} の新しい閉領域をクリックしてください`, `Click a new closed region for ${hatch.id}`));
-    draw();
-    return true;
-  }
-
-  function commitHatchAt(pointer) {
-    const result = hatchFaceAt(pointer);
-    hatchPreview = { pointer: { x: pointer.x, y: pointer.y }, result };
-    if (!result.ok) {
-      setHint(hatchRegionErrorText(result), "error");
-      draw();
-      return false;
-    }
-    if (mode === "hatch-repair" && hatchRepairTarget) {
-      const hatch = hatchRepairTarget;
-      hatch.seed = { x: pointer.x, y: pointer.y };
-      hatch.boundaryLoops = result.boundaryLoops;
-      hatchGeometryQuery.forget(hatch);
-      clearSelection();
-      canvasSelection.set("hatches", [hatch]);
-      hatchRepairTarget = null;
-      hatchPreview = null;
-      pointerPreview = null;
-      mode = "select";
-      updateUI({ refreshAnalysis: false });
-      draw();
-      recordHistory("ハッチング境界再指定");
-      setHint(applicationText(`${hatch.id} の境界を再指定しました`, `Reassigned the boundary of ${hatch.id}`));
-      return true;
-    }
-    const hatch = {
-      id: `H${hatchSeq++}`,
-      sketchId: activeSketchId(),
-      seed: { x: pointer.x, y: pointer.y },
-      boundaryLoops: result.boundaryLoops,
-      appearance: { ...DEFAULT_HATCH_APPEARANCE },
-    };
-    model.hatches.push(hatch);
-    model.nextHatchIndex = hatchSeq;
-    clearSelection();
-    canvasSelection.set("hatches", [hatch]);
-    updateUI({ refreshAnalysis: false });
-    draw();
-    recordHistory("ハッチング追加");
-    setHint(applicationText(`${hatch.id} を作成しました。続けて閉領域をクリックできます`, `Created ${hatch.id}. Click another closed region to continue.`));
-    return true;
-  }
-
   const blockSelectionQuery = window.BlockSelectionQuery.create({
     currentScope: workspace.current, canvasSelection, blockProjectionBundle, elementSketchId, activeSketchId,
     constraintGraphNodes, serializeConstraint, constraintLabelForList: (constraint) => localizedConstraintName(constraint.name), resolveGeometryRef,
@@ -2682,8 +2598,7 @@
     blockPlacementCommand.reset();
     blockEditor.reset();
     window.DocumentState.resetDefaults(documentModel);
-    hatchPreview = null;
-    hatchRepairTarget = null;
+    hatchCommand.reset();
     hatchGeometryQuery.clear();
     sketchTreeView.reset();
     annotationDrag.reset();
@@ -3234,8 +3149,7 @@
     pointerPreview = null;
     trimPreview = null;
     offsetSelection.reset();
-    hatchPreview = null;
-    hatchRepairTarget = null;
+    hatchCommand.reset();
     clearSnap();
     mode = "select";
     updateToolbar();
@@ -3266,8 +3180,7 @@
     pointerPreview = null;
     trimPreview = null;
     offsetSelection.reset();
-    hatchPreview = null;
-    hatchRepairTarget = null;
+    hatchCommand.reset();
     clearSnap();
     clearSelection();
     setHint("作図操作をキャンセルしました");
@@ -4576,8 +4489,8 @@
       const hovered = hatch.blockProjection ? hoveredBlockInstance === hatch.blockInstance : hatch.sketchId === activeSketchId() && hoveredHatch === hatch;
       drawResolvedHatch(resolvedHatchBoundary(hatch), appearance, hatchPatternOrigin(hatch), { hatch, selected, hovered, alpha: sketchAlpha(hatch) });
     }
-    if (includePreview && ["hatch", "hatch-repair"].includes(mode) && hatchPreview?.result?.ok) {
-      drawResolvedHatch({ ...hatchPreview.result.resolved, ok: true }, DEFAULT_HATCH_APPEARANCE, { x: 0, y: 0 }, { preview: true });
+    if (includePreview && ["hatch", "hatch-repair"].includes(mode) && hatchCommand.preview?.result?.ok) {
+      drawResolvedHatch({ ...hatchCommand.preview.result.resolved, ok: true }, DEFAULT_HATCH_APPEARANCE, { x: 0, y: 0 }, { preview: true });
     }
   }
 
@@ -6296,6 +6209,17 @@
     effectiveAppearanceForElement, clearTreeHover: () => { hoveredSketchTreeId = null; }, clearSnap,
   });
   const { createSketch, activate: setActiveSketch, rename: renameSketch, toggleVisibility: toggleSketchVisibility } = sketchCommand;
+  const hatchCommand = window.HatchCommand.create({
+    currentScope: workspace.current, hatchGeometryQuery, getMode: () => mode, setMode: value => { mode = value; },
+    lastPointer: () => lastPointerWorld, getPointerPreview: () => pointerPreview, setPointerPreview: value => { pointerPreview = value; },
+    activeSketchId, setActiveSketch, canCreateInActiveSketch, rejectRootSketchCreation,
+    nextHatchId: () => `H${hatchSeq++}`, hatchSequence: () => hatchSeq,
+    cancelConstraintTargetCommand, cancelPendingCommand, clearSnap, clearSelection, canvasSelection,
+    updateToolbar, updateStatusUI, updateUI, setHint, draw, recordHistory, applicationText, hatchRegionErrorText,
+  });
+  const { updateHatchPreview, startHatchCreation, startHatchBoundaryRepair, commitHatchAt } = hatchCommand;
+
+
 
   function valueReferencesRemovedGeometry(value, removedIds, removedKeys) {
     if (typeof value === "string") return removedIds.has(value) || removedKeys.has(value);
@@ -10935,7 +10859,7 @@
             return { ...serializeHatch(hatch), valid: resolved.ok, reason: resolved.ok ? null : hatchRegionErrorText(resolved) };
           }),
           selectedIds: canvasSelection.hatches.map((hatch) => hatch.id),
-          preview: hatchPreview ? { ok: Boolean(hatchPreview.result?.ok), code: hatchPreview.result?.code || null } : null,
+          preview: hatchCommand.preview ? { ok: Boolean(hatchCommand.preview.result?.ok), code: hatchCommand.preview.result?.code || null } : null,
           serialized: serializeModel(),
           treeHatchRows: document.querySelectorAll('#sketchList [data-object-kind="hatch"]').length,
           propertiesText: document.getElementById("propertiesPanel")?.textContent || "",

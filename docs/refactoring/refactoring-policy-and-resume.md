@@ -98,12 +98,12 @@
 
 ## 8. 再開地点（2026-09-30）
 
-main／developはd76dfefでリリース同期済み。継続作業はcodex/composition-root-nextで進め、mainへの自動反映は行わない。直前のBlock配置範囲は38ffbcfでCommit・Push済み。
+main／developはd76dfefでリリース同期済み。継続作業はcodex/composition-root-nextで進め、mainへの自動反映は行わない。直前のHatch照会cacheはc457006でCommit・Push済み。
 
-HatchGeometryQueryへprimitive変換・境界fingerprint・境界解決WeakMap・閉領域indexを集約。修復後のforgetとDocumentリセット時のclearでcacheを操作し、appから直接参照を除去。抽出7関数は依存取得方法以外の本体一致を確認。構文298件・単体623件・関連E2E191件が成功。app.jsは14,750行。全体目標と全体E2Eは未完了。
+HatchCommandへ作成・境界修復の進行とpreview／修復対象を集約。共通mode・pointer・ID採番・UI・履歴は明示adapterで接続し、取消とDocumentリセットはresetを利用。構文300件・単体628件・関連E2E191件が成功。app.jsは14,674行。全体目標と全体E2Eは未完了。
 
-追加単体4件はcache再利用、図形／表示／Sketchの変更、個別無効化と全破棄、投影境界の優先、現在scopeと別scopeの対象区別を確認した。E2Eは従来の184件にhatching.spec.jsを追加。ログは一時フォルダのcad-hatch-query-check.log、cad-hatch-query-unit.log、cad-hatch-query-e2e.log。実行中のテストはない。
+追加単体5件は連続作成、修復時のidentity保持とSketch切替、失敗時のモデル非更新、reset、Root／投影／別scopeの拒否を確認した。初回検証でAppearanceより前のscript読込、再検証でsetActiveSketchより前のfactory生成が失敗したため、moduleをAppearance後、factoryをSketchCommand後へ移し、全検証を再実行して成功した。コマンド4関数の本体はadapter置換以外の一致を確認。ログは一時フォルダのcad-hatch-command-check.log、cad-hatch-command-unit.log、cad-hatch-command-e2e.log。実行中のテストはない。
 
-次はHatchの作成・境界修復操作を調べる。updateHatchPreview／startHatchCreation／startHatchBoundaryRepair／commitHatchAtとhatchPreview／hatchRepairTargetの所有者を揃え、作成の連続入力と修復後の選択mode、ID採番、取消・Documentリセット時の破棄、履歴単位を維持する。共通modeとpointerは明示adapterで接続し、描画は読み取りAPIを利用する。まだ実装には着手していない。
+次はAnnotationの作成操作を調べる。startLeaderAnnotationPlacement／commitLeaderAnnotationAt／createTextAnnotation／commitTextAnnotationAtとleader layoutを、geometry参照の照会やRendererと区別して整理する。共通pendingCommand、文字promptの取消、ID採番とSketch所属、履歴、previewの境界を維持し、初期化順に注意する。まだ実装には着手していない。
 
 再開時は本書、AGENTS.md、composition-root.md先頭とGitの現物を確認する。週の残り利用枠を確認し、サブエージェントを使わず、責務単位の検証・Commit・Pushを続ける。行数だけの分割で全体目標を縮小しない。
