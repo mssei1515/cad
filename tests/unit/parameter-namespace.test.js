@@ -139,3 +139,36 @@ test("renaming dimension symbols rewrites dependent expressions only in the acti
   assert.equal(first.parameterName, 'd20');
   assert.equal(second.expression, '"d20" * 2');
 });
+
+test('dimension draft evaluation uses measured references and leaves committed expressions and targets intact', () => {
+  const edited = dimension(), reference = dimension();
+  edited.parameterName = 'd1'; edited.expression = '12';
+  reference.parameterName = 'd2'; reference.readOnlyDimension = true;
+  const current = namespace([edited, reference]);
+  current.parameters = [{ name: 'width', expression: '3' }];
+  const api = create(() => current);
+  assert.equal(api.evaluateDimensionExpressionDraft(edited, '"width" + "d2"'), 8);
+  assert.equal(edited.target, 12); assert.equal(edited.expression, '12');
+  assert.equal(reference.target, 12);
+  assert.equal(api.evaluateDimensionExpressionDraft(null, '"d1" * 2'), 24);
+  assert.throws(() => api.evaluateDimensionExpressionDraft(edited, '"d1"'), error => error.code === 'CYCLE');
+  assert.equal(edited.expression, '12');
+});
+
+test('dimension draft ranges distinguish angles and lengths and resolve the supplied or current namespace', () => {
+  const distance = dimension(), a = new Line('a', new Point('a1', 0, 0), new Point('a2', 1, 0));
+  const b = new Line('b', new Point('b1', 0, 0), new Point('b2', 0, 1));
+  const angle = new LineAngleConstraint(a, b, Math.PI / 2);
+  let current = namespace([distance]);
+  current.parameters = [{ name: 'width', expression: '200' }];
+  const angleScope = namespace([angle]); angleScope.parameters = [{ name: 'width', expression: '45' }];
+  const api = create(() => current);
+  assert.equal(api.evaluateDimensionExpressionDraft(distance, '"width"'), 200);
+  assert.equal(api.evaluateDimensionExpressionDraft(angle, '"width"', angleScope), 45);
+  for (const expression of ['0', '-1', '180', '181']) {
+    assert.throws(() => api.evaluateDimensionExpressionDraft(angle, expression, angleScope), /Dimension value is out of range/);
+  }
+  current = angleScope;
+  assert.equal(api.evaluateDimensionExpressionDraft(null, '"width"'), 45);
+  assert.equal(angle.target, Math.PI / 2);
+});

@@ -6,6 +6,8 @@
 
 ## 現在の再開地点（2026-09-29）
 
+寸法式の下書き評価を既存ParameterNamespaceへ統合し、ExpressionInputViewへ強調表示・DOM装飾・input／scrollイベントと再描画を集約。参照名のscope選択はappから明示callbackで接続し、UIには計算とモデル更新を持たせない。構文284件・単体599件・関連E2E185件が成功。app.jsは15,405行。次はSketchProjection拘束の照会・metadata同期・共有点分離の境界を調べる。全体目標は未完了。
+
 ParameterStabilizationへ式評価と参照寸法feedback・目標値の段階的求解を集約。ParameterNamespace、SketchSolving、EditingCheckpointを接続し、ParameterApplicationは操作全体の確定・復元を引き続き担当する。反復上限・補間・半減再試行・finallyによる最終target復帰を維持。構文283件・単体597件・関連E2E185件が成功。app.jsは15,489行。次は寸法式の下書き評価を既存ParameterNamespaceへ集約し、式入力表示の責務を整理する。全体目標は未完了。
 
 ConstraintAnalysisへ解析対象の拡張・通常／Block／Free Instance分類・cacheと遅延評価を集約。appの直接無効化をinvalidate APIへ置換し、UIは分類・summary・安定性を照会する。数値解析の基底成分取得はSolverの共通関数へ移し、GeometryDragEditingも直接利用する。構文281件・単体591件・関連E2E191件が成功。app.jsは15,595行。次はParameterの反復評価と目標遷移求解を整理する。全体目標は未完了。

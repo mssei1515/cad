@@ -100,19 +100,19 @@
 
 ### 最新の区切り
 
-main／developは1a7d5ccで同期済み。本区切りはcodex/composition-root-nextで継続する。前回のリリース指示を新しい変更へ拡張しない。直前の拘束分類・cache分離はfdc41c8でCommit・Push済み。
+main／developは1a7d5ccで同期済み。本区切りはcodex/composition-root-nextで継続する。前回のリリース指示を新しい変更へ拡張しない。直前のParameter反復評価の分離は33de21eでCommit・Push済み。
 
-ParameterStabilizationへ式評価・参照寸法feedback・目標値の段階的求解を集約した。ParameterNamespace、SketchSolving、EditingCheckpointを明示依存で接続し、ParameterApplicationや各操作は操作全体の確定・復元を引き続き担当する。
+寸法式の下書き評価を既存ParameterNamespaceへ統合し、ExpressionInputViewへ強調markup、DOM装飾、入力／scroll同期と一括更新を集約した。現在scopeかParameter画面のdraftかの参照名選択は、接続側のcallbackで都度渡す。UIには式計算・モデル更新・履歴を持ち込まない。
 
-20回の反復、1e-7の相対許容差、128段階・20%の補間、12回の半減再試行、finallyによる最終target復帰を維持した。複数Sketchの順序と重複除去、依存結果の集約、エラーの扱いを変更しない。app.jsは15,489行。全体リファクタリングと全体E2Eは未完了。
+既存の名前検証、参照寸法実測、値範囲、HTML escape、readonly除外、wrapperとイベントの再利用を維持した。app.jsは15,405行。全体リファクタリングと全体E2Eは未完了。
 
 ### 検証
 
-構文283件・単体597件・関連E2E185件が成功。実行中のテストはない。全体E2Eは未完了。ログは一時フォルダのcad-parameter-stabilization-check.log、cad-parameter-stabilization-unit.log、cad-parameter-stabilization-e2e.log。追加単体6件で通常／複数Sketch求解、共通補間、半減と復元、再試行・段階・反復の上限、最終target復帰、参照feedback、式と依存先の失敗を確認する。
+構文284件・単体599件・関連E2E185件が成功。実行中のテストはない。全体E2Eは未完了。ログは一時フォルダのcad-expression-input-check.log、cad-expression-input-unit.log、cad-expression-input-e2e.log。既存namespace単体へ下書き評価の非確定性・参照実測・循環拒否・角度範囲・scope切替の2件を追加した。新規テストの循環エラーcodeは実装のCYCLEに合わせた。抽出本体は依存名以外の一致を確認した。
 
 ### 次に調べる境界
 
-寸法式の下書き評価evaluateDimensionExpressionDraftを既存ParameterNamespaceの評価責務へ集約する。直接値／拘束寸法／参照寸法の区別、角度と長さの範囲、名前空間の検証を保持する。expressionReferenceNamesForInputからrefreshExpressionInputHighlightsまでの式入力表示も、参照名照会とDOM装飾の境界を確認する。表示moduleに式計算やモデル更新を持ち込まず、Parameter画面・Canvas入力・Propertiesで共通利用する。
+SketchProjection拘束の照会・metadata同期・共有点分離を調べる。sketchProjectionConstraints、sketchProjectionTargetConstraintMap、sketchProjectionConstraintsForTarget／AffectingItems、separateSharedSketchProjectionTargetPoints、synchronizeSketchProjectionConstraint／Metadataが対象。GeometryRef・投影・現在scopeの依存を明示し、読取りとモデル更新の責務を分ける。ID照合、円弧端点と共有Pointの扱い、拘束参照の再接続、固定属性と投影拒否条件を保持し、保存互換性を変えない。
 
 再開時はこの文書とAGENTS.md、composition-root.md先頭、spec/architecture/モジュール構成.mdを読む。Gitの状態・最新履歴と週の残り利用枠を確認する。main上では開発せず、developを基準に適切な作業branchで再開する。まとまった単位で検証・差分確認・Commit・Push・runtime-version再生成を行う。全体目標を途中成果へ縮小しない。
 

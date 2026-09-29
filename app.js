@@ -174,7 +174,7 @@
   const currentParameterNamespace = workspace.current;
   const parameterNamespace = window.ParameterNamespace.create({ currentParameterNamespace, applicationText });
   const {
-    dimensionExpressionValue, numericDimensionExpression, isDirectNumericExpressionInput,
+    evaluateDimensionExpressionDraft, dimensionExpressionValue, numericDimensionExpression, isDirectNumericExpressionInput,
     dimensionUsesExpression, expressionInputValue, expressionFromUserInput,
     dimensionConstraintsInNamespace, allocateDimensionParameterName,
     ensureDimensionParameter, ensureParameterNamespace, parameterErrorText,
@@ -182,6 +182,11 @@
     validateParameterNamespace, prepareLoadedParameterNamespace, parameterDependents,
   } = parameterNamespace;
   const parameterDraft = window.ParameterDialogDraft.create({ namespace: parameterNamespace });
+  const expressionInputView = window.ExpressionInputView.create({
+    document, InputElement: HTMLInputElement, referenceNamesForInput: expressionReferenceNamesForInput, escapeHtml,
+  });
+  const { sync: syncExpressionInputHighlight, install: installExpressionInputHighlights,
+    refresh: refreshExpressionInputHighlights } = expressionInputView;
   const parameterDialogView = window.ParameterDialogView.create({
     document, applicationText, escapeHtml, formatDisplayNumber, parameterErrorText,
     localizeApplicationUI, installExpressionInputHighlights, defaultSketchId: DEFAULT_SKETCH_ID,
@@ -1139,67 +1144,6 @@
     ]);
   }
 
-  function expressionHighlightMarkup(input) {
-    const value = String(input?.value ?? "");
-    if (!value.trimStart().startsWith("=")) return escapeHtml(value);
-    const names = expressionReferenceNamesForInput(input);
-    const pattern = /"([A-Za-z_][A-Za-z0-9_]*)"/g;
-    let result = "";
-    let cursor = 0;
-    for (const match of value.matchAll(pattern)) {
-      result += escapeHtml(value.slice(cursor, match.index));
-      const token = match[0];
-      result += names.has(match[1])
-        ? `<span class="expression-reference-token">${escapeHtml(token)}</span>`
-        : escapeHtml(token);
-      cursor = match.index + token.length;
-    }
-    return result + escapeHtml(value.slice(cursor));
-  }
-
-  function syncExpressionInputHighlight(input) {
-    if (!(input instanceof HTMLInputElement)) return;
-    const shell = input.closest(".expression-input-shell");
-    const text = shell?.querySelector(".expression-input-highlight-text");
-    if (!text) return;
-    text.innerHTML = expressionHighlightMarkup(input) || "&#8203;";
-    text.style.transform = `translateX(${-input.scrollLeft}px)`;
-  }
-
-  function installExpressionInputHighlight(input) {
-    if (!(input instanceof HTMLInputElement) || input.readOnly) return;
-    let shell = input.closest(".expression-input-shell");
-    if (!shell) {
-      shell = document.createElement("span");
-      shell.className = "expression-input-shell";
-      const highlight = document.createElement("span");
-      highlight.className = "expression-input-highlight";
-      highlight.setAttribute("aria-hidden", "true");
-      const text = document.createElement("span");
-      text.className = "expression-input-highlight-text";
-      highlight.append(text);
-      input.before(shell);
-      shell.append(highlight, input);
-    }
-    input.classList.add("expression-input-source");
-    if (input.dataset.expressionHighlightInstalled !== "true") {
-      input.dataset.expressionHighlightInstalled = "true";
-      input.addEventListener("input", () => syncExpressionInputHighlight(input));
-      input.addEventListener("scroll", () => syncExpressionInputHighlight(input));
-    }
-    syncExpressionInputHighlight(input);
-  }
-
-  function installExpressionInputHighlights(root = document) {
-    const selector = '#dimensionValueInput, #propertiesPanel [data-property="constraint-expression"], [data-parameter-field="expression"], [data-dimension-field="expression"]:not([readonly])';
-    if (root instanceof HTMLInputElement && root.matches(selector)) installExpressionInputHighlight(root);
-    for (const input of root.querySelectorAll?.(selector) || []) installExpressionInputHighlight(input);
-  }
-
-  function refreshExpressionInputHighlights(root = document) {
-    for (const input of root.querySelectorAll?.(".expression-input-source") || []) syncExpressionInputHighlight(input);
-  }
-
   function guardDimensionSymbolDeletion(constraints, namespace = currentParameterNamespace()) {
     const removedConstraints = new Set(constraints || []);
     const removedNames = [...removedConstraints].filter(isDimensionConstraint).map((constraint) => constraint.parameterName).filter(Boolean);
@@ -1212,34 +1156,6 @@
     setHint(message, "error");
     log(message);
     return false;
-  }
-
-  function evaluateDimensionExpressionDraft(constraint, expression, namespace = currentParameterNamespace()) {
-    ensureParameterNamespace(namespace);
-    validateParameterSymbolNames(namespace.parameters, dimensionConstraintsInNamespace(namespace));
-    const referenceValues = new Map();
-    const definitions = namespace.parameters.map((parameter) => ({ ...parameter, kind: "parameter" }));
-    for (const item of dimensionConstraintsInNamespace(namespace)) {
-      if (isReadOnlyDimension(item)) {
-        const target = targetFromConstraint(item);
-        const value = target ? measuredDimensionValue(target, item.dimension) : NaN;
-        referenceValues.set(item.parameterName, value);
-      } else {
-        definitions.push({
-          name: item.parameterName,
-          expression: item === constraint ? String(expression) : item.expression,
-          kind: "dimension",
-        });
-      }
-    }
-    const evaluated = evaluateParameterDefinitions(definitions, referenceValues);
-    const value = constraint
-      ? evaluated.values.get(constraint.parameterName)
-      : evaluateParameterExpression(String(expression), evaluated.values);
-    const target = constraint ? targetFromConstraint(constraint) : null;
-    const max = target?.kind === "angle" ? 180 : Infinity;
-    if (!Number.isFinite(value) || value <= 0 || value >= max) throw new Error(applicationText("寸法値の範囲が正しくありません", "Dimension value is out of range"));
-    return value;
   }
 
   function isGeometryMode() {
