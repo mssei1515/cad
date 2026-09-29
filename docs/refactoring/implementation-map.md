@@ -4,6 +4,8 @@
 
 ## 1. 実装ファイルの責務
 
+- `src/geometry/block_layout.js`: 入れ子を含むBlockのローカル範囲、表示中心、配置anchorへの平行移動。
+
 - `src/editing/first_dimension_scaling.js`: 初回寸法に合わせたSketch geometryと寸法配置の拡縮。画面上の大きさの取得／復元は既存CanvasViewportへ統合。
 
 - `src/geometry/bounds.js`: 矩形判定、図形boundsと結合。

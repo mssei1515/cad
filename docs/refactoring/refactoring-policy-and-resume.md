@@ -98,12 +98,12 @@
 
 ## 8. 再開地点（2026-09-30）
 
-main／developはd76dfefでリリース同期済み。継続作業はcodex/composition-root-nextで進め、mainへの自動反映は行わない。直前の範囲集計の分離は40e296dでCommit・Push済み。
+main／developはd76dfefでリリース同期済み。継続作業はcodex/composition-root-nextで進め、mainへの自動反映は行わない。直前の初回寸法拡縮は1fdd86dでCommit・Push済み。
 
-FirstDimensionScalingへ初回寸法のモデル拡縮を分離し、画面上の範囲取得／復元を既存CanvasViewportへ統合。DimensionValueCommandの初回判定・追加成否・履歴と順序を保持。モデル操作7関数は依存名以外の本体一致を確認。構文294件・単体614件・関連E2E184件が成功。app.jsは14,918行。全体目標と全体E2Eは未完了。
+BlockLayoutへ入れ子を含むBlockローカル範囲、表示中心、配置anchorへの平行移動を集約。BlockCatalog・BlockProjection・InstanceProjectionと形状解決を明示依存とし、抽出3関数の本体一致を確認。構文296件・単体619件・関連E2E184件が成功。app.jsは14,817行。全体目標と全体E2Eは未完了。
 
-単体を6件追加し、指定Sketchだけの拡縮、固定／参照拘束の除外、値範囲・角度・無変更、scope切替、画面の中心・大きさの復元、微小範囲・zoom制限を確認した。ログは一時フォルダのcad-first-dimension-check.log、cad-first-dimension-unit.log、cad-first-dimension-e2e.log。実行中のテストはない。
+追加単体5件は有効Sketchと円弧sweep、入れ子回転・循環防止、非表示Annotation／Hatchとseed fallback、originと配置anchor、派生Mirrorを確認した。ログは一時フォルダのcad-block-layout-check.log、cad-block-layout-unit.log、cad-block-layout-e2e.log。実行中のテストはない。
 
-次はBlockの再帰的な範囲計算と配置中心（blockLocalGeometryBounds、blockInstanceDisplayCenter、blockInstanceTranslationForAnchor）を調べる。有効Sketch、nested Block／Geometry Instance、円弧のsweep、Hatch解決、循環防止とorigin fallbackを維持し、DrawingBoundsの表示全体の集計とは別の配置照会として整理する。まだ実装には着手していない。
+次はHatchの境界解決と閉領域検索のcache（hatchResolutionCache／hatchFaceCache）を調べる。primitive変換、fingerprint、scopeに応じた対象取得、resolvedHatchBoundary／hatchFaceAtを照会側へまとめ、repair時の個別無効化とDocumentリセット時の全破棄をAPIにする。UI・作成／修復mode・previewは別責務として残す。BlockProjectionとGeometryReadModelの初期化順・遅延参照に注意する。まだ実装には着手していない。
 
 再開時は本書、AGENTS.md、composition-root.md先頭とGitの現物を確認する。週の残り利用枠を確認し、サブエージェントを使わず、責務単位の検証・Commit・Pushを続ける。行数だけの分割で全体目標を縮小しない。
