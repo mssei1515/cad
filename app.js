@@ -239,7 +239,6 @@
     trimConstraintSelection, pushPrimitiveSelection, geometryItemSelectedInCanvas,
     constraintSelectedInCanvas, hasSelection,
   } = canvasSelection;
-  let dragSession = null;
   let hoveredPoint = null;
   let hoveredEndpointPoint = null;
   let hoveredLine = null;
@@ -429,10 +428,7 @@
   const { sameArcEndpoint, constraintTargetsFromOperands, linesAreParallel, distanceTargetFromTargets, distanceTargetFromOperands, referenceDistanceTargetForSubject, canApplyConstraintToTargets, referenceConstraintForType, symmetryConstraintFromOperands, constraintFromTargets } = constraintCandidates;
   const PARAMETER_STABILIZATION_MAX_PASSES = 20;
   const PARAMETER_STABILIZATION_RELATIVE_TOLERANCE = 1e-7;
-  const DRAG_PREVIEW_ERROR_SCREEN_PX = 0.1;
   const DRAG_PREVIEW_MAX_MODEL_ERROR = 0.125;
-  const SPARSE_LINE_DRAG_SUBSTEP_NORM = 4;
-  const SPARSE_LINE_DRAG_MAX_SUBSTEPS = 128;
   const MIN_LINE_LENGTH = Math.max(MIN_ORIENTATION_LENGTH, solver.minLineLength || 12);
   const viewport = window.CanvasViewport.create({
     canvasRect: () => canvas.getBoundingClientRect(), initialScale: CSS_PX_PER_MM,
@@ -3491,7 +3487,7 @@
     invalidReferenceConstraints.clear();
     constraintAnalysisState = null;
     clearSelection();
-    dragSession = null;
+    geometryDrag.reset();
     dimensionDrag.reset();
     referenceImageInteraction.reset();
     canvasNavigation.reset();
@@ -5146,52 +5142,9 @@
     });
   }
 
-  function solveDragSketch(session, extra = []) {
-    return solveSketchById(session?.sketchId || activeSketchId(), extra, session?.variableAllowed);
-  }
-
   function solveFinalDragSession(session) {
-    if (!interactionProfiler.active) return solveFinalDragSessionUnprofiled(session);
-    return profileInteractionWork("solve", () => solveFinalDragSessionUnprofiled(session));
-  }
-
-  function solveFinalDragSessionUnprofiled(session) {
-    if (session?.projectionShapeLocked) return sketchProjectionBlockedDragResult();
-    const extra = session?.finalDragConstraints || [];
-    if (session?.lastGuidedPreviewError > CONSTRAINT_ACCEPT_ERROR) {
-      // Mouse-up is allowed a larger local iteration budget than an animation
-      // frame. This removes accumulated preview error without invoking the
-      // much heavier full-sketch solve for an otherwise isolated component.
-      const localResult = withSolverMaxIterations(100, () => solveLocalDrag(session, []));
-      if (localResult) {
-        const baseErrorNorm = vectorNorm(solver.computeErrorVectorForConstraints(sketchSolveConstraints(session?.sketchId || activeSketchId())));
-        localResult.baseErrorNorm = baseErrorNorm;
-        localResult.localFinalCorrection = true;
-        if (localResult.success || baseErrorNorm <= CONSTRAINT_ACCEPT_ERROR) {
-          localResult.success = true;
-          return localResult;
-        }
-      }
-      const result = solveDragSketch(session);
-      result.guidedFinalFallback = true;
-      return result;
-    }
-    const variables = sketchSolveVariables(session?.sketchId || activeSketchId());
-    const state = solver.clone(variables);
-    const guidedResult = solveDragSketch(session, extra);
-    if (guidedResult.success || guidedResult.errorNorm <= CONSTRAINT_ACCEPT_ERROR) {
-      if (!guidedResult.success) guidedResult.acceptedAtDragTolerance = true;
-      guidedResult.success = true;
-      return guidedResult;
-    }
-    solver.restore(state);
-    const fallbackResult = solveDragSketch(session);
-    fallbackResult.guidedFinalFallback = true;
-    if (!fallbackResult.success && fallbackResult.errorNorm <= CONSTRAINT_ACCEPT_ERROR) {
-      fallbackResult.acceptedAtDragTolerance = true;
-      fallbackResult.success = true;
-    }
-    return fallbackResult;
+    if (!interactionProfiler.active) return geometryDragEditing.finish(session);
+    return profileInteractionWork("solve", () => geometryDragEditing.finish(session));
   }
 
   function solveReferenceDependentSketches(rootSketchId) {
@@ -5424,7 +5377,7 @@
     if (pointSet.size === 0 && lineSet.size === 0 && circleSet.size === 0 && arcSet.size === 0 && splineSet.size === 0 && constraintSet.size === 0) return false;
     if (!guardDimensionSymbolDeletion(constraintSet)) return false;
 
-    dragSession = null;
+    geometryDrag.reset();
     dimensionDrag.reset();
     annotationDrag.reset();
     pendingCommand = null;
@@ -6844,7 +6797,7 @@
     if (canvasSelection.circles.some((circle) => circle.center === point) || canvasSelection.arcs.some((arc) => arc.center === point)) return true;
     if (hoveredCircle?.center === point || hoveredArc?.center === point || hoveredArcEndpoint?.arc?.center === point) return true;
     if (selectionHighlight.current?.item?.center === point) return true;
-    if ((dragSession?.kind === "circle" || dragSession?.kind === "arc" || dragSession?.kind === "arc-endpoint") && dragSession.item?.center === point) return true;
+    if (geometryDrag.isCenter(point)) return true;
     return false;
   }
 
@@ -6878,7 +6831,7 @@
   function shouldShowArcEndpointHandle(arc, endpoint) {
     if (sameArcEndpoint(hoveredArcEndpoint, { arc, endpoint }) || sameArcEndpoint(canvasSelection.arcEndpoint, { arc, endpoint })) return true;
     if (canvasSelection.arcEndpointPair?.some((item) => sameArcEndpoint(item, { arc, endpoint }))) return true;
-    if (dragSession?.kind === "arc-endpoint" && dragSession.item === arc && dragSession.endpoint === endpoint) return true;
+    if (geometryDrag.isArcEndpoint(arc, endpoint)) return true;
     return false;
   }
 
@@ -6889,7 +6842,7 @@
       for (const endpoint of ["start", "end"]) {
         if (!shouldShowArcEndpointHandle(arc, endpoint)) continue;
         const p = arcEndpointPoint(arc, endpoint);
-        const selected = sameArcEndpoint(canvasSelection.arcEndpoint, { arc, endpoint }) || canvasSelection.arcEndpointPair?.some((item) => sameArcEndpoint(item, { arc, endpoint })) || isConstraintOperandSelected(arc, { arcEndpoint: { arc, endpoint } }) || (dragSession?.kind === "arc-endpoint" && dragSession.item === arc && dragSession.endpoint === endpoint);
+        const selected = sameArcEndpoint(canvasSelection.arcEndpoint, { arc, endpoint }) || canvasSelection.arcEndpointPair?.some((item) => sameArcEndpoint(item, { arc, endpoint })) || isConstraintOperandSelected(arc, { arcEndpoint: { arc, endpoint } }) || (geometryDrag.isArcEndpoint(arc, endpoint));
         const hovered = sameArcEndpoint(hoveredArcEndpoint, { arc, endpoint });
         const fixed = Boolean(findArcEndpointFixedConstraint(arc, endpoint));
         ctx.beginPath();
@@ -6922,7 +6875,7 @@
       const canvasHovered = (active || isReferenceHoverElement(p)) && (hoveredPoint === p || hoveredEndpointPoint === p);
       if (viewState.constraintStatus && p.kind === "endpoint" && !canvasHovered && !sel) continue;
       const hovered = treeHovered || sidebarHovered || canvasHovered || ownerInstanceHovered(p);
-      const dragging = dragSession?.kind === "point" && dragSession.points.some((target) => target.point === p);
+      const dragging = geometryDrag.isPoint(p);
       const primitiveCenter = shouldShowPrimitiveCenter(p);
       const fixedByLine = pointLockedByLineFixed(p);
       const fixedHighlighted = (!p.derivedProjection && p.fixed || fixedByLine) && (sel || hovered);
@@ -7774,7 +7727,7 @@
 
   function clearInteractionForSketchChange() {
     clearSelection();
-    dragSession = null;
+    geometryDrag.reset();
     dimensionDrag.reset();
     referenceImageInteraction.reset();
     selectionRectangle.reset();
@@ -8910,14 +8863,38 @@
     }
   }
 
+  const geometryDragSolver = window.GeometryDragSolver.create({
+    solver, activeSketchId, sketchSolveVariables, sketchSolveConstraints, solveSketchById,
+    viewScale: () => viewport.scale, arcEndpointPoint, acceptError: CONSTRAINT_ACCEPT_ERROR,
+    previewMaxModelError: DRAG_PREVIEW_MAX_MODEL_ERROR,
+  });
   const geometryDragPlan = window.GeometryDragPlan.create({
     elementSketchId, isEditableSketchId, activeSketchId, blockDefinitionById, blockLocalGeometryBounds,
     blockInstanceEnabledSketchSet, blockWorldPoint, pointLockedByLineFixed, findLineFixedConstraint,
     findArcEndpointFixedConstraint, arcEndpointPoint, arcEndpointDragValue, hypot2, minimumLength: MIN_ORIENTATION_LENGTH,
   });
-  const { build: buildDragSession, points: dragTargets, radius: radiusDragTargets,
-    primitiveMove: primitiveMoveTargets, arcEndpoint: arcEndpointDragTargets,
-    pointConstraints: dragConstraintsFromTargets, parameterConstraints: parameterDragConstraintsFromTargets } = geometryDragPlan;
+  const buildDragSession = geometryDragPlan.build;
+  const geometryDragEditing = window.GeometryDragEditing.create({
+    currentScope: workspace.current, solver, plan: geometryDragPlan, dragSolver: geometryDragSolver,
+    contextFromSeeds: localSolveContextFromSeeds, projectionConstraintsForItems: sketchProjectionConstraintsAffectingItems,
+    pointLockedByLineFixed, variableDeltaInBasis, captureValues: snapshotModelState,
+    enforceMinimumLineLengths, normalizeArcSweeps, invalidateProjection: invalidateBlockProjectionCache,
+    projectionBlockedMessage: () => sketchProjectionShapeEditBlockedMessage(applicationText("ドラッグ", "Drag")),
+    previewMaxModelError: DRAG_PREVIEW_MAX_MODEL_ERROR,
+  });
+  const attachLocalSolveContext = geometryDragEditing.prepare;
+
+  const geometryDrag = window.GeometryDrag.create({
+    prepareSession: attachLocalSolveContext, dragResultForSession, solveFinalDragSession,
+    currentScope: workspace.current, activeSketchId, viewScale: () => viewport.scale,
+    beginPointer: (id) => { canvas.classList.add("is-dragging"); canvas.setPointerCapture(id); },
+    endPointer: (id) => { canvas.classList.remove("is-dragging"); try { canvas.releasePointerCapture(id); } catch (_) {} },
+    projectionBlockedMessage: () => sketchProjectionShapeEditBlockedMessage(applicationText("ドラッグ", "Drag")),
+    canvasSelection, restoreModelState, restoreSolverState: (state) => solver.restore(state),
+    solveReferenceDependentSketches, normalizeArcSweeps, clearSketchSolveState, invalidateBlockProjectionCache,
+    stabilizeActiveParameterNamespace, refreshConstraintAnalysis, acceptError: CONSTRAINT_ACCEPT_ERROR,
+    applicationText, setHint, updateUI, updateGeometrySelectionUI, draw, recordHistory,
+  });
 
   function resolveDerivedDragSource(hit, pointer) {
     let item = hit?.item || null;
@@ -8944,7 +8921,7 @@
       const sources = geometryInstanceSourceObjects(instance);
       clearSelection();
       canvasSelection.set("geometryInstances", [instance]);
-      dragSession = { kind: "free-instance", mode: "block", item: instance, sketchId: instance.sketchId,
+      const plan = { kind: "free-instance", mode: "block", item: instance, sketchId: instance.sketchId,
         startPointer: pointer, startX: instance.x, startY: instance.y,
         clickGeometrySelection: wholeSelected ? { instanceId: instance.id, id: hit.item.id, kind: hit.kind, endpoint: hit.endpoint } : null,
         variableAllowed: (v) => !sources.has(v.object) && !(v.object === instance && v.prop === "rotation") };
@@ -8958,12 +8935,10 @@
             get y() { return item.p1.y + t * (item.p2.y - item.p1.y); } };
         }
         if (!anchor) return;
-        Object.assign(dragSession, { kind: "derived-instance", mode: "derived-placement", anchor,
+        Object.assign(plan, { kind: "derived-instance", mode: "derived-placement", anchor,
           startAnchor: { x: anchor.x, y: anchor.y } });
       }
-      attachLocalSolveContext(dragSession);
-      canvas.classList.add("is-dragging");
-      canvas.setPointerCapture(e.pointerId);
+      geometryDrag.begin(e, plan);
       setHint(applicationText("インスタンス全体を移動中", "Moving the whole instance"));
       updateGeometrySelectionUI();
       draw();
@@ -8998,40 +8973,29 @@
     } else if (kind === "arc-endpoint") {
       dragItem = { arc: source, endpoint: hit.endpoint };
     }
-    dragSession = buildDragSession(kind, dragItem, resolved.pointer);
-    if (!dragSession) {
+    const plan = buildDragSession(kind, dragItem, resolved.pointer);
+    if (!plan) {
+      geometryDrag.reset();
       setHint(applicationText("参照元が固定されているためドラッグできません", "The source is fixed and cannot be dragged."), "error");
       updateGeometrySelectionUI();
       draw();
       return;
     }
-    dragSession.displayStartPointer = pointer;
-    dragSession.pointerMap = resolved.mapPointer;
-    dragSession.derivedInstance = hit.instance;
-    dragSession.derivedSource = resolved.item;
+    plan.displayStartPointer = pointer;
+    plan.pointerMap = resolved.mapPointer;
+    plan.derivedInstance = hit.instance;
+    plan.derivedSource = resolved.item;
     const placements = new Set();
     for (let node = hit.item; node?.derivedProjection; node = node.sourceElement) {
       if (node.derivedInstance?.type === "free") placements.add(node.derivedInstance);
     }
-    if (placements.size) dragSession.variableAllowed = (v) => !placements.has(v.object);
-    attachLocalSolveContext(dragSession);
-    canvas.classList.add("is-dragging");
-    canvas.setPointerCapture(e.pointerId);
-    setHint(applicationText(`${dragLabel(dragSession)}中: 参照元へ反映しながら拘束をsolveしています`, `${dragLabel(dragSession)}: solving constraints while updating the source`));
+    if (placements.size) plan.variableAllowed = (v) => !placements.has(v.object);
+    geometryDrag.begin(e, plan);
+    setHint(applicationText(`${geometryDrag.label}中: 参照元へ反映しながら拘束をsolveしています`, `${geometryDrag.label}: solving constraints while updating the source`));
     updateUI({ refreshAnalysis: false });
     draw();
   }
 
-  function dragSessionSeeds(session) {
-    const seeds = [];
-    if (!session) return seeds;
-    if (session.item) {
-      seeds.push(session.item);
-      if (session.item.center) seeds.push(session.item.center);
-    }
-    for (const p of session.points || []) seeds.push(p.point);
-    return seeds;
-  }
 
   function geometryInstanceSourceObjects(instance) {
     const seen = new Set();
@@ -9049,116 +9013,6 @@
     return seen;
   }
 
-  function pointCoordinateFreedomRank(analysis, pointEntries, tolerance = 1e-8) {
-    const basis = analysis?.nullspaceBasis || [];
-    if (basis.length === 0) return 0;
-    const orthonormalRows = [];
-    for (const entry of pointEntries || []) {
-      const indices = analysis.variableIndex.get(entry.point) || {};
-      for (const prop of ["x", "y"]) {
-        const index = indices[prop];
-        if (!Number.isInteger(index)) continue;
-        const residual = basis.map((vector) => vector[index] || 0);
-        for (const row of orthonormalRows) {
-          const projection = residual.reduce((sum, value, rowIndex) => sum + value * row[rowIndex], 0);
-          for (let rowIndex = 0; rowIndex < residual.length; rowIndex += 1) residual[rowIndex] -= projection * row[rowIndex];
-        }
-        const norm = vectorNorm(residual);
-        if (norm <= tolerance) continue;
-        orthonormalRows.push(residual.map((value) => value / norm));
-      }
-    }
-    return orthonormalRows.length;
-  }
-
-  function attachLocalSolveContext(session) {
-    if (!session) return session;
-    const projectionTouched = [
-      ...(session.item && !model.blockInstances.includes(session.item) ? [session.item] : []),
-      ...(session.points || []).map((entry) => entry.point),
-    ].filter(Boolean);
-    session.projectionShapeLocked = sketchProjectionConstraintsAffectingItems(projectionTouched).length > 0;
-    session.local = localSolveContextFromSeeds(dragSessionSeeds(session), session.sketchId);
-    if (session.variableAllowed) session.local.variables = session.local.variables.filter(session.variableAllowed);
-    if ((session.kind === "block" || session.kind === "block-rotation") && session.item && !session.item.fixed) {
-      const existing = new Set(session.local.variables.filter((variable) => variable.object === session.item).map((variable) => variable.prop));
-      if (!existing.has("x")) session.local.variables.push({ object: session.item, prop: "x", label: `${session.item.id}.x` });
-      if (!existing.has("y")) session.local.variables.push({ object: session.item, prop: "y", label: `${session.item.id}.y` });
-      if (!session.item.rotationLocked && !existing.has("rotation")) session.local.variables.push({ object: session.item, prop: "rotation", label: `${session.item.id}.rotation` });
-    }
-    session.local.pointStarts = model.points
-      .filter((p) => session.local.component.has(p) && !p.fixed && !pointLockedByLineFixed(p))
-      .map((point) => ({ point, startX: point.x, startY: point.y }));
-    session.local.fixedPointCount = model.points.filter((p) => session.local.component.has(p) && (p.fixed || pointLockedByLineFixed(p))).length;
-    // Count motion visible at the dragged line, rather than unrelated freedom
-    // elsewhere in its component. One visible DOF needs one representative
-    // point even when another attached arc has an independent free endpoint.
-    if (session.kind === "line") {
-      const analysis = solver.analyzeConstraintState({
-        variables: session.local.variables,
-        constraints: session.local.constraints,
-        lines: session.local.lines,
-      });
-      const line = session.item;
-      const visibleBasis = [];
-      for (const basis of analysis.nullspaceBasis) {
-        const residual = [line.p1, line.p2].flatMap((point) => ["x", "y"].map((prop) => variableDeltaInBasis(point, prop, basis, analysis)));
-        for (let pass = 0; pass < 2; pass++) for (const previous of visibleBasis) {
-          const factor = residual.reduce((sum, value, i) => sum + value * previous[i], 0);
-          for (let i = 0; i < residual.length; i++) residual[i] -= factor * previous[i];
-        }
-        const norm = vectorNorm(residual);
-        if (norm > 1e-8) visibleBasis.push(residual.map((value) => value / norm));
-      }
-      const freeTranslation = [[1, 0, 1, 0], [0, 1, 0, 1]].every((translation) => {
-        const residual = [...translation];
-        for (const basis of visibleBasis) {
-          const factor = translation.reduce((sum, value, i) => sum + value * basis[i], 0);
-          for (let i = 0; i < residual.length; i++) residual[i] -= factor * basis[i];
-        }
-        return vectorNorm(residual) < 1e-7;
-      });
-      const normal = analysis.lineNormals?.get(line) || lineSupportNormal(line);
-      session.translationReference = analysis.stable && (freeTranslation || !analysis.nullspaceBasis.some((basis) => {
-        const dx = variableDeltaInBasis(line.p2, "x", basis, analysis) - variableDeltaInBasis(line.p1, "x", basis, analysis);
-        const dy = variableDeltaInBasis(line.p2, "y", basis, analysis) - variableDeltaInBasis(line.p1, "y", basis, analysis);
-        return Math.abs(normal.x * dx + normal.y * dy) > 1e-7 * Math.max(1, Math.hypot(...basis));
-      }));
-      if (session.points.length > 1 && session.local.fixedPointCount > 0 && analysis.stable && pointCoordinateFreedomRank(analysis, session.points) === 1) {
-        const fixedPoints = model.points.filter((point) =>
-          session.local.component.has(point) && (point.fixed || pointLockedByLineFixed(point)));
-        const pointActivity = (entry) => {
-          const index = analysis.variableIndex.get(entry.point) || {};
-          return Math.sqrt((analysis.nullspaceBasis || []).reduce((sum, basis) =>
-            sum + (basis[index.x] || 0) ** 2 + (basis[index.y] || 0) ** 2, 0));
-        };
-        const nearestFixedDistance = (entry) => Math.min(...fixedPoints.map((fixed) =>
-          hypot2(entry.point.x - fixed.x, entry.point.y - fixed.y)));
-        const best = session.points.reduce((current, candidate) => {
-          if (!current) return candidate;
-          const activityDifference = pointActivity(candidate) - pointActivity(current);
-          if (Math.abs(activityDifference) > 1e-8) return activityDifference > 0 ? candidate : current;
-          return nearestFixedDistance(candidate) > nearestFixedDistance(current) ? candidate : current;
-        }, null);
-        if (best && pointActivity(best) > 1e-8) session.lineDragPoint = best;
-      }
-    }
-    session.fullDragState = solver.clone(solver.getVariables());
-    session.parameterDragSnapshot = snapshotModelState();
-    return session;
-  }
-
-  function sketchProjectionBlockedDragResult() {
-    return {
-      success: false,
-      blocked: true,
-      reason: sketchProjectionShapeEditBlockedMessage(applicationText("ドラッグ", "Drag")),
-      errorNorm: 0,
-      iterations: 0,
-      variableCount: 0,
-      constraintCount: 0,
-    };
-  }
 
   function selectedDragPoints() {
     const points = [...canvasSelection.points];
@@ -9199,504 +9053,21 @@
     draw();
   }
 
-  function hasDirectRadiusDimension(primitive) {
-    return model.constraints.some(
-      (c) => c.enabled !== false && (c instanceof RadiusConstraint || c instanceof DiameterConstraint) && c.primitive === primitive,
-    );
-  }
-
-  function guidedTargetHasNoActivity(result) {
-    return Boolean(
-      result?.guided
-      && Array.isArray(result.targetConstraints)
-      && result.targetConstraints.length === 0
-      && Array.isArray(result.targetActivity)
-      && result.targetActivity.every((activity) => activity <= 1e-8)
-    );
-  }
-
-  function solveLocalDrag(session, extra) {
-    if (!session?.local) return null;
-    return solver.solveSubset({
-      variables: session.local.variables,
-      constraints: session.local.constraints,
-      lines: session.local.lines,
-      extra,
-    });
-  }
-
-  function guidedTargetEntries(targets = []) {
-    const entries = [];
-    for (const target of targets) {
-      if (target.point) {
-        entries.push({ object: target.point, prop: "x", value: target.x });
-        entries.push({ object: target.point, prop: "y", value: target.y });
-      } else if (target.object && target.prop) {
-        entries.push({ object: target.object, prop: target.prop, value: target.value });
-      }
-    }
-    return entries;
-  }
-
-  function sameGuidedTargetEntries(a = [], b = []) {
-    return a.length === b.length && a.every((entry, index) =>
-      entry.object === b[index].object && entry.prop === b[index].prop && entry.value === b[index].value,
-    );
-  }
-
-  function guidedTargetStepForSession(session, targets) {
-    const entries = guidedTargetEntries(targets);
-    if (sameGuidedTargetEntries(entries, session?.pendingGuidedTargetEntries)) {
-      return { entries, norm: session.pendingGuidedTargetStepNorm };
-    }
-    const previous = session?.lastGuidedTargetEntries || [];
-    const deltas = entries.map((entry) => {
-      const prior = previous.find((candidate) => candidate.object === entry.object && candidate.prop === entry.prop);
-      const previousValue = prior ? prior.value : entry.object[entry.prop];
-      const rawDelta = entry.value - previousValue;
-      if (
-        (entry.prop === "startAngle" || entry.prop === "endAngle")
-        && Number.isFinite(entry.object?.radiusValue)
-      ) {
-        return rawDelta * Math.max(MIN_ORIENTATION_LENGTH, Math.abs(entry.object.radiusValue));
-      }
-      return rawDelta;
-    });
-    const norm = vectorNorm(deltas);
-    if (session) {
-      session.pendingGuidedTargetEntries = entries;
-      session.pendingGuidedTargetStepNorm = norm;
-    }
-    return { entries, norm };
-  }
-
-  function commitGuidedTargetStep(session, targetStep) {
-    if (!session || !targetStep) return;
-    session.lastGuidedTargetEntries = targetStep.entries;
-  }
-
-  function solveLocalGuidedDrag(session, targets, targetStepNorm = null) {
-    if (!session?.local) return null;
-    const errorTolerance = Math.max(
-      CONSTRAINT_ACCEPT_ERROR,
-      Math.min(DRAG_PREVIEW_MAX_MODEL_ERROR, DRAG_PREVIEW_ERROR_SCREEN_PX / Math.max(viewport.scale, 1e-9)),
-    );
-    return withDragStepNorm(dragStepNormForTargets(targets), () =>
-      solver.solveSubsetGuided({
-        variables: session.local.variables,
-        constraints: session.local.constraints,
-        lines: session.local.lines,
-        targets,
-        errorTolerance,
-        activeTargetVariables: session.guidedTargetVariables || [],
-        referenceState: session.kind === "line" && (!session.lineDragPoint || session.translationReference) ? session.fullDragState || [] : [],
-        preserveTranslation: Boolean(session.translationReference),
-        targetStepNorm,
-      }),
-    );
-  }
-
-  function dragStepNormForTargets(targets = []) {
-    let maxDelta = solver.maxStepNorm;
-    for (const target of targets) {
-      if (target.point) {
-        maxDelta = Math.max(maxDelta, hypot2(target.x - target.point.x, target.y - target.point.y));
-      } else if (target.object && target.prop) {
-        maxDelta = Math.max(maxDelta, Math.abs(target.value - target.object[target.prop]));
-      }
-    }
-    return Math.max(solver.maxStepNorm, maxDelta * 1.25);
-  }
-
-  function dragStepNormForExtra(extra = []) {
-    let maxDelta = solver.maxStepNorm;
-    for (const constraint of extra) {
-      if (constraint instanceof DragConstraint) {
-        maxDelta = Math.max(maxDelta, hypot2(constraint.targetX - constraint.point.x, constraint.targetY - constraint.point.y));
-      } else if (constraint instanceof ArcEndpointDragConstraint) {
-        const p = arcEndpointPoint(constraint.arc, constraint.endpoint);
-        maxDelta = Math.max(maxDelta, hypot2(constraint.targetX - p.x, constraint.targetY - p.y));
-      } else if (constraint instanceof ParameterDragConstraint) {
-        maxDelta = Math.max(maxDelta, Math.abs(constraint.target - constraint.object[constraint.prop]));
-      }
-    }
-    return Math.max(solver.maxStepNorm, maxDelta * 1.25);
-  }
-
-  function withDragStepNorm(stepNorm, callback) {
-    const previous = solver.maxStepNorm;
-    solver.maxStepNorm = Math.max(previous, Number.isFinite(stepNorm) ? stepNorm : previous);
-    try {
-      return callback();
-    } finally {
-      solver.maxStepNorm = previous;
-    }
-  }
-
-  function withSolverMaxIterations(maxIterations, callback) {
-    const previous = solver.maxIterations;
-    solver.maxIterations = Math.max(previous, maxIterations);
-    try {
-      return callback();
-    } finally {
-      solver.maxIterations = previous;
-    }
-  }
-
-  function solveDragWithFallback(session, extra, fullSolve, restoreState = null) {
-    const stepNorm = dragStepNormForExtra(extra);
-    const localResult = withDragStepNorm(stepNorm, () => solveLocalDrag(session, extra));
-    if (localResult && localResult.success && localResult.errorNorm <= CONSTRAINT_ACCEPT_ERROR) return localResult;
-    if (restoreState) solver.restore(restoreState);
-    const result = withDragStepNorm(stepNorm, fullSolve);
-    result.local = false;
-    result.fallback = Boolean(localResult);
-    result.localErrorNorm = localResult?.errorNorm;
-    return result;
-  }
-
-  function solvePinnedLineTargets(session, targets, stepNorm) {
-    if (
-      session?.kind !== "line"
-      || session.lineDragPoint
-      || !session.local
-      || session.local.constraints.length !== 1
-      || !(session.local.constraints[0] instanceof LineCircleDistanceConstraint)
-      || targets.length < 2
-      || targets.some((target) => !target.point || !Number.isFinite(target.x) || !Number.isFinite(target.y))
-    ) return null;
-    const targetPoints = new Set(targets.map((target) => target.point));
-    const remainingVariables = session.local.variables.filter((variable) => !targetPoints.has(variable.object));
-    if (remainingVariables.length === session.local.variables.length) return null;
-    const state = solver.clone(session.local.variables);
-    for (const target of targets) {
-      target.point.x = target.x;
-      target.point.y = target.y;
-    }
-    const result = withDragStepNorm(stepNorm, () => solver.solveSubset({
-      variables: remainingVariables,
-      constraints: session.local.constraints,
-      lines: session.local.lines,
-    }));
-    if (!Number.isFinite(result.errorNorm) || result.errorNorm > CONSTRAINT_ACCEPT_ERROR) {
-      solver.restore(state);
-      return null;
-    }
-    result.success = true;
-    result.local = true;
-    result.guided = false;
-    result.pinnedLineTargets = true;
-    return result;
-  }
-
-  function solveGuidedDragWithFallback(session, targets, fallbackExtra, fullSolve, restoreState = null) {
-    const targetStep = guidedTargetStepForSession(session, targets);
-    for (const target of targets) target.guidedStepNorm = targetStep.norm;
-    const stepNorm = Math.max(dragStepNormForTargets(targets), dragStepNormForExtra(fallbackExtra));
-    if (session?.local && session.local.constraints.length === 0) {
-      for (const target of targets) {
-        if (target.point) {
-          target.point.x = target.x;
-          target.point.y = target.y;
-        } else if (target.object && target.prop) {
-          target.object[target.prop] = target.min != null ? Math.max(target.min, target.value) : target.value;
-        }
-      }
-      commitGuidedTargetStep(session, targetStep);
-      session.lastGuidedPreviewError = 0;
-      return {
-        success: true,
-        errorNorm: 0,
-        iterations: 0,
-        reason: "直接移動",
-        local: true,
-        guided: true,
-        variableCount: session.local.variables.length,
-        constraintCount: 0,
-      };
-    }
-    const pinnedLineResult = solvePinnedLineTargets(session, targets, stepNorm);
-    if (pinnedLineResult) {
-      pinnedLineResult.targetStepNorm = targetStep.norm;
-      pinnedLineResult.targetConstraints = fallbackExtra;
-      pinnedLineResult.guidedRetryCount = 0;
-      session.finalDragConstraints = fallbackExtra;
-      commitGuidedTargetStep(session, targetStep);
-      session.lastGuidedPreviewError = pinnedLineResult.errorNorm;
-      return pinnedLineResult;
-    }
-    const guidedAttemptState = restoreState || solver.clone(session.local?.variables || solver.getVariables());
-    let localResult = null;
-    let localAcceptError = CONSTRAINT_ACCEPT_ERROR;
-    const acceptablePreview = (result) => result
-      && Number.isFinite(result.errorNorm)
-      && result.errorNorm <= localAcceptError
-      && vectorNorm(solver.computeErrorVectorForConstraints(session.local.constraints)) <= CONSTRAINT_ACCEPT_ERROR;
-    let guidedRetryCount = 0;
-    // A missed animation frame can collapse a long line translation into one
-    // nonlinear solve. Give an exact whole-sketch solve a larger iteration
-    // budget first; this is substantially cheaper than replaying dozens of
-    // local steps when it converges. Keep bounded substeps as the robust
-    // fallback so manifold backtracking cannot dilute the pointer movement.
-    if (
-      session?.kind === "line"
-      && session.points.length > 1
-      && !session.lineDragPoint
-      && session.local.fixedPointCount === 0
-      && targetStep.norm > 50
-    ) {
-      const guidedResult = withDragStepNorm(stepNorm, () => solveLocalGuidedDrag(session, targets, targetStep.norm));
-      if (guidedResult?.success && guidedResult.errorNorm <= CONSTRAINT_ACCEPT_ERROR
-        && targets.every((target) => hypot2(target.point.x - target.x, target.point.y - target.y) <= CONSTRAINT_ACCEPT_ERROR)) {
-        session.finalDragConstraints = guidedResult.targetConstraints || [];
-        session.guidedTargetVariables = guidedResult.activeTargetVariables || [];
-        session.lastGuidedPreviewError = guidedResult.errorNorm;
-        commitGuidedTargetStep(session, targetStep);
-        return guidedResult;
-      }
-      solver.restore(guidedAttemptState);
-      const fullVariables = sketchSolveVariables(session.sketchId);
-      const fullAttemptState = solver.clone(fullVariables);
-      const exactResult = withDragStepNorm(
-        stepNorm,
-        () => withSolverMaxIterations(100, fullSolve),
-      );
-      if (exactResult.success && exactResult.errorNorm <= CONSTRAINT_ACCEPT_ERROR) {
-        exactResult.local = false;
-        exactResult.guided = false;
-        exactResult.exactSparseLine = true;
-        exactResult.guidedRetryCount = 0;
-        session.finalDragConstraints = fallbackExtra;
-        commitGuidedTargetStep(session, targetStep);
-        session.lastGuidedPreviewError = exactResult.errorNorm;
-        return exactResult;
-      }
-      solver.restore(fullAttemptState);
-      const substepCount = Math.min(
-        SPARSE_LINE_DRAG_MAX_SUBSTEPS,
-        Math.ceil(targetStep.norm / SPARSE_LINE_DRAG_SUBSTEP_NORM),
-      );
-      const starts = targets.map((target) => ({ x: target.point.x, y: target.point.y }));
-      const previousActiveTargetVariables = session.guidedTargetVariables || [];
-      let totalIterations = 0;
-      let totalProjectedNorm = 0;
-      let completed = true;
-      for (let index = 1; index <= substepCount; index += 1) {
-        const progress = index / substepCount;
-        const substepTargets = targets.map((target, targetIndex) => {
-          const start = starts[targetIndex];
-          return {
-            ...target,
-            x: start.x + (target.x - start.x) * progress,
-            y: start.y + (target.y - start.y) * progress,
-          };
-        });
-        localResult = withDragStepNorm(stepNorm, () =>
-          solveLocalGuidedDrag(session, substepTargets, targetStep.norm / substepCount));
-        localAcceptError = Number.isFinite(localResult?.acceptError) ? localResult.acceptError : CONSTRAINT_ACCEPT_ERROR;
-        const acceptable = acceptablePreview(localResult);
-        if (!acceptable) {
-          completed = false;
-          break;
-        }
-        if (!localResult.success) {
-          localResult.success = true;
-          localResult.approximate = true;
-          localResult.reason = "プレビュー許容誤差内";
-        }
-        totalIterations += localResult.iterations || 0;
-        totalProjectedNorm += localResult.projectedNorm || 0;
-        session.guidedTargetVariables = localResult.activeTargetVariables || session.guidedTargetVariables || [];
-      }
-      if (completed && localResult?.success) {
-        localResult.iterations = totalIterations;
-        localResult.projectedNorm = totalProjectedNorm;
-        localResult.targetStepNorm = targetStep.norm;
-        localResult.guidedSubstepCount = substepCount;
-        localResult.guidedRetryCount = 0;
-        session.finalDragConstraints = localResult.targetConstraints || [];
-        commitGuidedTargetStep(session, targetStep);
-        session.lastGuidedPreviewError = localResult.errorNorm;
-        return localResult;
-      }
-      solver.restore(guidedAttemptState);
-      session.guidedTargetVariables = previousActiveTargetVariables;
-      localResult = null;
-    }
-    // A sparse pointer stream can deliver a very large reversal in one event.
-    // Lines translate linearly and should follow that event exactly. For more
-    // nonlinear point/arc drags, start with a shorter manifold step to avoid an
-    // expensive, often singular full-step solve.
-    const canShortenSparseStep = session?.mode !== "block" && session?.mode !== "block-rotation";
-    const shouldTryExactSparseStep = session?.kind === "line" || targets.some((target) => target.point);
-    const guidedScales = canShortenSparseStep && targetStep.norm > 50
-      ? (shouldTryExactSparseStep ? [1, 0.25, 0.125, 0.0625] : [0.25, 0.125, 0.0625])
-      : [1, 0.5, 0.25, 0.125, 0.0625];
-    for (const scale of guidedScales) {
-      if (scale < 1) solver.restore(guidedAttemptState);
-      localResult = withDragStepNorm(stepNorm, () => solveLocalGuidedDrag(session, targets, targetStep.norm * scale));
-      localAcceptError = Number.isFinite(localResult?.acceptError) ? localResult.acceptError : CONSTRAINT_ACCEPT_ERROR;
-      const locallyAcceptable = acceptablePreview(localResult);
-      if (locallyAcceptable) {
-        // The nonlinear correction can exhaust its strict iteration budget
-        // after already reaching the looser, screen-space preview tolerance.
-        // Keep that visually valid local result; a full-document fallback is
-        // both slower and less likely to converge during a sparse drag event.
-        if (!localResult.success) {
-          localResult.success = true;
-          localResult.approximate = true;
-          localResult.reason = "プレビュー許容誤差内";
-        }
-        break;
-      }
-      guidedRetryCount += 1;
-    }
-    if (localResult?.success && acceptablePreview(localResult)) {
-      localResult.guidedRetryCount = guidedRetryCount;
-      session.finalDragConstraints = localResult.targetConstraints || [];
-      session.guidedTargetVariables = localResult.activeTargetVariables || [];
-      commitGuidedTargetStep(session, targetStep);
-      session.lastGuidedPreviewError = localResult.errorNorm;
-      return localResult;
-    }
-    if (restoreState) solver.restore(restoreState);
-    const result = withDragStepNorm(stepNorm, fullSolve);
-    if (result.success) {
-      session.finalDragConstraints = fallbackExtra;
-      commitGuidedTargetStep(session, targetStep);
-      session.lastGuidedPreviewError = result.errorNorm;
-    }
-    result.local = false;
-    result.guided = false;
-    result.fallback = Boolean(localResult);
-    result.localErrorNorm = localResult?.errorNorm;
-    result.guidedRetryCount = guidedRetryCount;
-    return result;
-  }
-
-  function finalizeDragResult(result, state, session = null, extra = [], retry = null) {
-    const lineRepair = enforceMinimumLineLengths(session?.local?.lines || model.lines);
-    if (lineRepair.changed > 0) {
-      result = retry ? retry() : session?.local ? solveDragWithFallback(session, extra, () => solveDragSketch(session, extra), state) : solveDragSketch(session, extra);
-    }
-    normalizeArcSweeps();
-    result.lineRepair = lineRepair;
-    if (lineRepair.failed) {
-      solver.restore(state);
-      result.blocked = true;
-      result.success = false;
-      result.reason = "R寸法と固定点によりこれ以上潰せません";
-      result.lineRepair = lineRepair;
-    } else if (!result.success) {
-      solver.restore(state);
-      result.blocked = true;
-    }
-    return result;
-  }
-
   function dragResultForSession(session, pointer) {
-    if (!interactionProfiler.active) return dragResultForSessionUnprofiled(session, pointer);
-    return profileInteractionWork("solve", () => dragResultForSessionUnprofiled(session, pointer));
+    if (!interactionProfiler.active) return geometryDragEditing.preview(session, pointer);
+    return profileInteractionWork("solve", () => geometryDragEditing.preview(session, pointer));
   }
 
-  function dragResultForSessionUnprofiled(session, pointer) {
-    if (session?.projectionShapeLocked) return sketchProjectionBlockedDragResult();
-    let result;
-    const dragVars = session?.local?.variables || solver.getVariables();
-    const dragState = solver.clone(dragVars);
-    if (session.mode === "derived-placement") {
-      const targets = solver.observablePointDragTargets({ ...session.local, point: session.anchor,
-        errorTolerance: DRAG_PREVIEW_MAX_MODEL_ERROR,
-        x: session.startAnchor.x + pointer.x - session.startPointer.x,
-        y: session.startAnchor.y + pointer.y - session.startPointer.y });
-      const extra = parameterDragConstraintsFromTargets(targets);
-      const retry = () => solveGuidedDragWithFallback(session, targets, extra, () => solveDragSketch(session, extra), dragState);
-      return finalizeDragResult(retry(), dragState, session, extra, retry);
-    }
-    if (session.mode === "block" || session.mode === "block-rotation") {
-      const targets = session.mode === "block"
-        ? [
-            { object: session.item, prop: "x", value: session.startX + pointer.x - session.startPointer.x },
-            { object: session.item, prop: "y", value: session.startY + pointer.y - session.startPointer.y },
-          ]
-        : (() => {
-            const rotation = Math.atan2(pointer.y - session.rotationPivot.y, pointer.x - session.rotationPivot.x);
-            const cos = Math.cos(rotation);
-            const sin = Math.sin(rotation);
-            return [
-              { object: session.item, prop: "x", value: session.rotationPivot.x - session.localCenter.x * cos + session.localCenter.y * sin },
-              { object: session.item, prop: "y", value: session.rotationPivot.y - session.localCenter.x * sin - session.localCenter.y * cos },
-              { object: session.item, prop: "rotation", value: rotation },
-            ];
-          })();
-      const extra = parameterDragConstraintsFromTargets(targets);
-      const retry = () => solveGuidedDragWithFallback(session, targets, extra, () => solveDragSketch(session, extra), dragState);
-      result = retry();
-      invalidateBlockProjectionCache(session.item.id);
-      return finalizeDragResult(result, dragState, session, extra, retry);
-    }
-    if (session.mode === "radius") {
-      const moveTargets = primitiveMoveTargets(session, pointer);
-      if (hasDirectRadiusDimension(session.item)) {
-        session.activeMode = "move";
-        const extra = dragConstraintsFromTargets(moveTargets);
-        const targets = moveTargets;
-        const retry = () => solveGuidedDragWithFallback(session, targets, extra, () => solveDragSketch(session, extra), dragState);
-        result = retry();
-        return finalizeDragResult(result, dragState, session, extra, retry);
-      }
-
-      const state = solver.clone(dragVars);
-      let targets = radiusDragTargets(session, pointer);
-      let extra = parameterDragConstraintsFromTargets(targets);
-      let retry = () => solveGuidedDragWithFallback(session, targets, extra, () => solveDragSketch(session, extra), dragState);
-      result = retry();
-      if ((!result.success || guidedTargetHasNoActivity(result)) && moveTargets.length > 0) {
-        solver.restore(state);
-        session.activeMode = "move";
-        targets = moveTargets;
-        extra = dragConstraintsFromTargets(moveTargets);
-        retry = () => solveGuidedDragWithFallback(session, targets, extra, () => solveDragSketch(session, extra), dragState);
-        result = retry();
-        return finalizeDragResult(result, dragState, session, extra, retry);
-      }
-      session.activeMode = "radius";
-      return finalizeDragResult(result, dragState, session, extra, retry);
-    }
-    let targets;
-    let extra;
-    if (session.mode === "arc-endpoint") {
-      targets = arcEndpointDragTargets(session, pointer);
-      extra = parameterDragConstraintsFromTargets(targets);
-      const retry = () => solveGuidedDragWithFallback(session, targets, extra, () => solveDragSketch(session, extra), dragState);
-      result = retry();
-      return finalizeDragResult(result, dragState, session, extra, retry);
-    } else {
-      const directTargets = dragTargets(session, pointer);
-      targets = directTargets;
-      extra = dragConstraintsFromTargets(directTargets);
-    }
-    const retry = () => solveGuidedDragWithFallback(session, targets, extra, () => solveDragSketch(session, extra), dragState);
-    result = retry();
-    return finalizeDragResult(result, dragState, session, extra, retry);
-  }
-
-  function dragLabel(session) {
-    if (session.kind === "free-instance" || session.kind === "derived-instance") return applicationText("インスタンス移動", "Instance move");
-    if (session.mode === "block") return applicationText("ブロック移動", "Block move");
-    if (session.mode === "block-rotation") return applicationText("ブロック回転", "Block rotation");
-    if (session.kind === "selection") return applicationText("選択移動", "Selection move");
-    if (session.mode === "radius" && session.activeMode === "move") return applicationText("ドラッグ", "Drag");
-    if (session.mode === "radius") return applicationText("半径変更", "Radius change");
-    if (session.mode === "arc-endpoint") return applicationText("円弧端点変更", "Arc endpoint change");
-    return applicationText("ドラッグ", "Drag");
+  function hasDirectRadiusDimension(primitive) {
+    return window.DimensionQueries.hasDirectRadiusDimension(model.constraints, primitive);
   }
 
   function beginDrag(e, hitP, hitL, hitC, hitA, hitArcEnd, pointer) {
+    let plan = null;
     canvasSelection.set("constraint", null);
     const preserveMixedSelection = selectedElementCount() > 1 && hitIsSelected(hitP, hitL, hitC, hitA, hitArcEnd);
     if (preserveMixedSelection) {
-      dragSession = buildDragSession("selection", selectedDragPoints(), pointer);
+      plan = buildDragSession("selection", selectedDragPoints(), pointer);
       canvasSelection.set("dimensionConstraint", null);
     } else {
       canvasSelection.set("blockInstances", []);
@@ -9711,42 +9082,39 @@
       canvasSelection.set("circles", []);
       canvasSelection.set("arcs", []);
       canvasSelection.set("arcEndpoint", null);
-      dragSession = buildDragSession("point", hitP, pointer);
+      plan = buildDragSession("point", hitP, pointer);
     } else if (!preserveMixedSelection && hitArcEnd) {
       canvasSelection.set("arcs", [hitArcEnd.arc]);
       canvasSelection.set("arcEndpoint", { arc: hitArcEnd.arc, endpoint: hitArcEnd.endpoint });
       canvasSelection.set("points", []);
       canvasSelection.set("lines", []);
       canvasSelection.set("circles", []);
-      dragSession = buildDragSession("arc-endpoint", hitArcEnd, pointer);
+      plan = buildDragSession("arc-endpoint", hitArcEnd, pointer);
     } else if (!preserveMixedSelection && hitL) {
       canvasSelection.set("lines", [hitL]);
       canvasSelection.set("points", []);
       canvasSelection.set("circles", []);
       canvasSelection.set("arcs", []);
       canvasSelection.set("arcEndpoint", null);
-      dragSession = buildDragSession("line", hitL, pointer);
+      plan = buildDragSession("line", hitL, pointer);
     } else if (!preserveMixedSelection && hitC) {
       canvasSelection.set("circles", [hitC]);
       canvasSelection.set("points", []);
       canvasSelection.set("lines", []);
       canvasSelection.set("arcs", []);
       canvasSelection.set("arcEndpoint", null);
-      dragSession = buildDragSession("circle", hitC, pointer);
+      plan = buildDragSession("circle", hitC, pointer);
     } else if (!preserveMixedSelection && hitA) {
       canvasSelection.set("arcs", [hitA]);
       canvasSelection.set("points", []);
       canvasSelection.set("lines", []);
       canvasSelection.set("circles", []);
       canvasSelection.set("arcEndpoint", null);
-      dragSession = buildDragSession("arc", hitA, pointer);
+      plan = buildDragSession("arc", hitA, pointer);
     }
 
-    if (dragSession) {
-      attachLocalSolveContext(dragSession);
-      canvas.classList.add("is-dragging");
-      canvas.setPointerCapture(e.pointerId);
-      setHint(`${dragLabel(dragSession)}中: 拘束を保ちながら自動solveしています`);
+    if (geometryDrag.begin(e, plan)) {
+      setHint(`${geometryDrag.label}中: 拘束を保ちながら自動solveしています`);
     }
   }
 
@@ -9848,15 +9216,12 @@
   function beginBlockDrag(e, instance, pointer, rotate = false) {
     clearSelection();
     canvasSelection.set("blockInstances", [instance]);
-    dragSession = buildDragSession(rotate ? "block-rotation" : "block", instance, pointer);
-    if (!dragSession) {
+    const plan = buildDragSession(rotate ? "block-rotation" : "block", instance, pointer);
+    if (!geometryDrag.begin(e, plan)) {
       setHint(rotate && instance.rotationLocked ? "回転がロックされたブロックインスタンスです" : "固定されたブロックインスタンスです", "error");
       draw();
       return;
     }
-    attachLocalSolveContext(dragSession);
-    canvas.classList.add("is-dragging");
-    canvas.setPointerCapture(e.pointerId);
     setHint(rotate ? "ブロックを回転中" : "ブロックを移動中");
     updateUI({ refreshAnalysis: false });
     draw();
@@ -11154,18 +10519,16 @@
       canvasSelection.set("dimensionConstraint", null);
       if (multiSelect) toggleSplineSelection(hitS);
       else {
+        let plan = null;
         const preserveMixedSelection = selectedElementCount() > 1 && canvasSelection.splines.includes(hitS);
-        if (preserveMixedSelection) dragSession = buildDragSession("selection", selectedDragPoints(), p);
+        if (preserveMixedSelection) plan = buildDragSession("selection", selectedDragPoints(), p);
         else {
           clearSelection();
           canvasSelection.set("splines", [hitS]);
-          dragSession = buildDragSession("spline", hitS, p);
+          plan = buildDragSession("spline", hitS, p);
         }
-        if (dragSession) {
-          attachLocalSolveContext(dragSession);
-          canvas.classList.add("is-dragging");
-          canvas.setPointerCapture(e.pointerId);
-          setHint(`${dragLabel(dragSession)}中: 拘束を保ちながら自動solveしています`);
+        if (geometryDrag.begin(e, plan)) {
+          setHint(`${geometryDrag.label}中: 拘束を保ちながら自動solveしています`);
         }
       }
     } else if (hatchHit && drawingHitIsTop(hatchHit)) {
@@ -11420,7 +10783,7 @@
       return;
     }
 
-    if (pendingConstraintCommand && !dragSession) {
+    if (pendingConstraintCommand && !geometryDrag.active) {
       const hitD = pendingConstraintCommand.type === "distance" ? hitDimension(p.x, p.y) : null;
       if (hitD) {
         hoveredPoint = null;
@@ -11491,7 +10854,7 @@
       return;
     }
 
-    if (!dragSession) {
+    if (!geometryDrag.active) {
       const hitD = hitDimension(p.x, p.y, { activeOnly: false });
       const nextHover = hitD && isActiveSketchConstraint(hitD.constraint) ? hitD.constraint : null;
       const nextEndpointHover = nextHover ? null : hitEndpointPoint(p.x, p.y);
@@ -11547,31 +10910,7 @@
       }
     }
 
-    if (!dragSession) return;
-    const displayStartPointer = dragSession.displayStartPointer || dragSession.startPointer;
-    const pointerDistance = hypot2(p.x - displayStartPointer.x, p.y - displayStartPointer.y);
-    if (!dragSession.previewMoved && pointerDistance <= 3 / viewport.scale) return;
-    if (dragSession.projectionShapeLocked) {
-      dragSession.projectionDragAttempted = true;
-      setHint(sketchProjectionShapeEditBlockedMessage(applicationText("ドラッグ", "Drag")), "error");
-      draw();
-      return;
-    }
-    dragSession.previewMoved = true;
-    const dragPointer = dragSession.pointerMap ? dragSession.pointerMap(p) : p;
-    const result = dragResultForSession(dragSession, dragPointer);
-    if (result.blocked) {
-      setHint(result.reason, "error");
-      updateUI({ refreshAnalysis: false });
-      draw();
-      return;
-    }
-    const dependentResult = solveReferenceDependentSketches(dragSession.sketchId || activeSketchId());
-    setHint(dependentResult.success
-      ? applicationText("ドラッグ中: 拘束を保ちながら調整しています", "Dragging: maintaining constraints")
-      : applicationText("ドラッグ中: 参照先の拘束を確認してください", "Dragging: check the referenced constraints"), dependentResult.success ? "normal" : "error");
-    if (!dependentResult.success) updateUI();
-    draw();
+    geometryDrag.update(p);
   }
 
   function processScheduledCanvasPointerMove({ animationFrame = false, synchronousFlush = false } = {}) {
@@ -11637,68 +10976,9 @@
 
     if (selectionRectangle.finish(e)) return;
 
-    if (!dragSession) {
-      // The first Line endpoint is provisional until a segment is completed.
-      if (!transientAuthoring.hasLineStart) recordHistory("操作");
-      return;
-    }
-    const session = dragSession;
-    const completedLabel = dragLabel(session);
-    dragSession = null;
-    canvas.classList.remove("is-dragging");
-    try {
-      canvas.releasePointerCapture(e.pointerId);
-    } catch (_) {
-      // Pointer capture may already be released by the browser.
-    }
-    if (session.projectionDragAttempted) {
-      setHint(sketchProjectionShapeEditBlockedMessage(applicationText("ドラッグ", "Drag")), "error");
-      draw();
-      return;
-    }
-    if (!session.previewMoved) {
-      if (session.clickGeometrySelection && e.type !== "pointercancel") {
-        canvasSelection.set("instanceGeometry", session.clickGeometrySelection);
-        updateGeometrySelectionUI();
-      }
-      setHint("図形を選択しました");
-      draw();
-      return;
-    }
-    const result = solveFinalDragSession(session);
-    normalizeArcSweeps();
-    const invalidSpline = model.splines.find((spline) => !spline.curve().valid);
-    if (!result.success || result.errorNorm > CONSTRAINT_ACCEPT_ERROR || invalidSpline) {
-      if (session.parameterDragSnapshot) restoreModelState(session.parameterDragSnapshot);
-      else if (session.fullDragState) solver.restore(session.fullDragState);
-      clearSketchSolveState(session.sketchId || activeSketchId());
-      setHint(invalidSpline
-        ? applicationText(`${invalidSpline.id} の通過点が重なり、スプラインが成立しないため移動を戻しました`, `${invalidSpline.id} was restored because overlapping fit points made the spline invalid.`)
-        : applicationText(`${completedLabel}完了時に拘束を解決できないため移動を戻しました`, `${completedLabel} was restored because its constraints could not be resolved.`), "error");
-      updateUI();
-      draw();
-      return;
-    }
-
-    if (session.item && model.blockInstances.includes(session.item)) invalidateBlockProjectionCache(session.item.id);
-    const stabilized = stabilizeActiveParameterNamespace(session.sketchId || activeSketchId(), { variableAllowed: session.variableAllowed });
-    if (!stabilized.success || stabilized.dependent?.success === false || stabilized.result.errorNorm > CONSTRAINT_ACCEPT_ERROR) {
-      if (session.parameterDragSnapshot) restoreModelState(session.parameterDragSnapshot);
-      clearSketchSolveState(session.sketchId || activeSketchId());
-      setHint(`${completedLabel}${applicationText("後のParameter計算に失敗しました", " parameter calculation failed")}: ${stabilized.result.reason || "solve failed"}`, "error");
-      updateUI();
-      draw();
-      return;
-    }
-    const dependentResult = stabilized.dependent;
-    const analysis = refreshConstraintAnalysis();
-    const stable = analysis.analysis.stable && dependentResult.success;
-    setHint(stable
-      ? applicationText(`${completedLabel}を完了しました`, `${completedLabel} completed`)
-      : applicationText(`${completedLabel}を完了しました。拘束状態を確認してください`, `${completedLabel} completed. Check the constraint status`), stable ? "normal" : "error");
-    updateUI({ refreshAnalysis: false });
-    draw();
-    recordHistory(`${completedLabel}ドラッグ`);
+    if (geometryDrag.finish(e)) return;
+    // The first Line endpoint is provisional until a segment is completed.
+    if (!transientAuthoring.hasLineStart) recordHistory("操作");
   }
 
   function isBlankCanvasHit(hits = {}) {
@@ -11852,7 +11132,7 @@
   canvas.addEventListener("pointerup", endDrag);
   canvas.addEventListener("pointercancel", endDrag);
   canvas.addEventListener("pointerleave", () => {
-    if (dragSession || dimensionDrag.active || annotationDrag.active || selectionRectangle.active || canvasNavigation.panning) return;
+    if (geometryDrag.active || dimensionDrag.active || annotationDrag.active || selectionRectangle.active || canvasNavigation.panning) return;
     flushScheduledCanvasPointerMove({ discard: true });
     clearCanvasHover();
     draw();
@@ -14568,7 +13848,7 @@
         const baseErrorNorm = vectorNorm(solver.computeErrorVectorForConstraints(sketchSolveConstraints(session.sketchId)));
         return {
           target,
-          targetConstraintCount: session.finalDragConstraints?.length || 0,
+          targetConstraintCount: geometryDragSolver.targetConstraintCount(session),
           preview: {
             success: previewResult.success,
             errorNorm: previewResult.errorNorm,
