@@ -25,7 +25,7 @@
 | --- | --- | --- |
 | `src/document/` | Documentの値、外観、階層、順序、定義の照会 | DOM、イベント、操作中の一時状態 |
 | `src/geometry/` | 幾何計算、参照、投影と読取り | UI、履歴、操作の開始／終了 |
-| `src/constraints/`・`src/solver/` | 拘束の照会・再接続・求解 | DOMや画面操作の都合 |
+| `src/constraints/`・`src/solver/` | 拘束の照会・再接続・求解と数値的な再試行方針 | DOM更新、入力イベント、履歴確定 |
 | `src/editing/` | 編集scope、Selection、session、snapshot復元、モデル編集 | DOM入力の解釈、Canvas命令 |
 | `src/commands/` | 一つのユーザー操作の開始・検証・確定・取消、必要な求解・履歴の調整 | アプリ全体を自由に操作できるcontext |
 | `src/ui/` | 表示情報のHTML化、DOM更新、入力解釈、操作への通知 | モデルやsessionへの無断の直接書込み |
@@ -50,17 +50,9 @@
 
 ## 5. 現在地と残作業
 
-2026-09-25時点、保存読込の構成要素、描画器、Properties、Sketchツリー、多くの作図command、Instanceの作成・編集、Block配置・構成・UI・編集sessionを分離済み。ただし`app.js`には依然として約1.8万行が残り、全体目標は未達である。
+2026-09-29時点、保存読込の構成要素、描画器、Properties、Sketchツリー、多くの作図command、Instanceの作成・編集、Block定義操作と編集session、履歴制御、Sketch操作、画像／注記／寸法のドラッグ、選択矩形を分離済み。通常図形ドラッグは計画生成に続いて求解方針を分離した。ただし`app.js`は16,594行あり、入力・操作状態・共通編集・起動接続の整理は未完了である。
 
-直近で完了した区切り：
-
-- `be80e08`: Block一覧と編集パネルの表示・イベント接続。
-- `6c08102`: 親子Blockの編集sessionと復元情報の所有者。
-- `a70e9d0`: BlockDefinitionEditingへの複製・座標移動・定義反映の分離。
-- `893b14b`: BlockCompletionCommandへの検証・確認待ち・確定処理の分離。
-- `32a9bc5`: BlockEditingQueriesと既存BlockCatalogへの照会集約。
-- `47c8b07`: 選択からの下書き生成と子定義の仮移動を既存の所有者へ統合。
-- BlockDefinitionCommandへ作成・編集開始／取消・定義名変更／削除を集約。最新の確定状況と検証結果は下の「再開地点」を参照する。
+各区切りのコミットと検証記録は[composition-root.md](composition-root.md)へ集約する。この文書の「再開地点」は最新の一件に置き換え、過去の未コミット表示や次の候補を積み重ねない。
 
 残る主要な領域は以下。順番や個数は固定しない。
 
@@ -89,7 +81,7 @@
 - 過去のdevelop／mainへのマージ依頼を、新しい変更の自動リリース許可と解釈しない。現在は作業branchで進める。mainへの新たなマージ／Pushは明示指示が必要。
 - Commit後には`npm run write:runtime-version`を実行する。生成物はGitに含めない。
 
-全体E2Eは未完了である。過去に航空機図面のドラッグ検証で長時間timeoutがあり、関連する限定E2Eの成功だけで解消済みとも全体成功とも扱わない。Offset問題の過去の判断・修正は履歴に残っているため、古い進捗記録の「未回答」だけを根拠に同じ質問や修正をやり直さない。
+全体E2Eは未完了である。今回の求解分離では関連E2E202件（航空機図面・Offsetチェーンのドラッグ回帰を含む）が成功しているが、全体成功の証拠にはしない。Offset問題の過去の判断・修正は履歴に残っているため、古い進捗記録の「未回答」だけを根拠に同じ質問や修正をやり直さない。
 
 ## 7. 全体の完了条件
 
@@ -101,86 +93,43 @@
 - 仕様と実装配置が一致し、未解決の不具合・未検証項目を隠していない。
 - 差分確認、Commit、許可された範囲のPush、実行コミット情報更新が済んでいる。
 
-## 8. 再開地点（2026-09-25）
+## 8. 再開地点（2026-09-29）
 
-### 最新の確定区切り
+### 最新の区切り
 
-通常図形ドラッグの計画生成を`src/editing/geometry_drag_plan.js`へ分離する未コミット差分がある。構文265件・単体539件・関連E2E191件が成功し、次回はこの差分を確認してコミットする。
+作業branchは`codex/composition-root-next`。開始時に未コミット差分はなく、local／remoteのmain・developは`0c4bbc1`で一致し、mainがdevelopの祖先であることを確認した。作業branchへこのmerge commitをfast-forwardで取り込んだ。GeometryDragPlan分離`dd5399d`とBlockハッチ変換追従修正`d0db050`は取り込み済みであり、再実装や再マージは不要。
 
-DimensionDragへ寸法位置ドラッグのsession・開始表示値・更新・確定・resetを集約。appのsession変数を除去し、描画は対象constraintの照会、入力は操作APIで接続。寸法コマンド中の3px閾値と小移動時のクリック継続、角度と通常寸法の通知差を維持。構文263件・単体534件・Slot寸法／Block／統合UI／保存互換E2E153件が成功。app.jsは17,126行。次は通常図形ドラッグの状態とSolver・復元の境界を調べる。全体目標と全体E2Eは未完了。
+本区切りでは`src/solver/geometry_drag_solver.js`へ局所／guided求解、全Sketch再試行、大移動の区間分割と終了時補正を集約した。前回／保留中の目標、guided対象変数、終了時の一時拘束、preview残差を非公開WeakMapでドラッグsessionごとに所有する。appは現在scopeの照会、Solver、倍率等を接続し、数値計算状態を直接変更しない。診断は件数照会で接続する。
 
-直前の矩形候補照会分離は`844c77f`で確定済み。実行中のテストはない。以下は直前の記録である。
+求解順序・許容差・モデルの復元範囲は維持している。GeometryDragPlanは入力計画、GeometryDragSolverは数値求解を担当する。最小線長補正・円弧正規化、開始前snapshot、Parameter・依存Sketchの確定検査とTX-02の復元はappの操作側に残る。これらをすべてSolverへ移さない。
 
-RectangleSelectionQueryへ矩形内候補の読取りを分離し、追加／置換と補助選択解除は既存CanvasSelection.applyRectangleへ統合。selectByRectは接続のみになった。Object同一性、表示・所属条件、Arc／Splineサンプル、Block投影境界とgeometryInstances選択の保持を維持。構文261件・単体530件・Block／統合UI／保存互換／SketchProjection E2E162件が成功。app.jsは17,224行。次は寸法ドラッグなど残る入力sessionの開始・更新・確定を整理する。全体目標と全体E2Eは未完了。
+### 検証とGitの状況
 
-直前の矩形session分離は`cb306e3`で確定済み。実行中のテストはない。以下は直前の記録である。
-
-SelectionRectangleへ矩形選択session・preview・確定振分け・resetを集約。appのsession変数を除去し、通常／SketchProjectionの経路、追加選択、3px閾値、方向別判定を維持した。描画は座標とcrossingだけを照会し、図形種ごとの選択適用は既存処理へ委譲。構文259件・単体526件・Block／統合UI／保存互換／SketchProjection E2E162件が成功。app.jsは17,309行。次はselectByRectの候補照会と選択適用の境界を整理する。全体目標と全体E2Eは未完了。
-
-直前の注記ドラッグ分離は`c5525df`で確定済み。実行中のテストはない。以下は直前の記録である。
-
-AnnotationDragへ注記ドラッグのsession・開始座標・ID再解決・更新・確定・resetを集約。appのsession変数を除去し、入力はactive照会と操作API、診断はinspectの値で接続。Leaderの終点／折れ点／文字位置とFree Textの移動規則、確定時の履歴通知を維持。構文257件・単体522件・Block／統合UI／保存互換E2E151件が成功。app.jsは17,340行。次は選択矩形の開始・更新・確定と選択判定の境界を整理する。全体目標と全体E2Eは未完了。
-
-直前の画像操作分離は`c57cab9`で確定済み。実行中のテストはない。以下は直前の記録である。
-
-
-ReferenceImageInteractionへ画像ドラッグ・2点縮尺校正のsessionと開始・更新・確定・取消・resetを集約。appの2つのsession変数と直接書換えを除去し、入力は操作API、描画は校正点の照会で接続。移動閾値、1点目を維持する回転画像の校正、不正入力の再試行と履歴時機を維持。構文255件・単体519件・参照画像／Block／統合UI／保存互換E2E153件が成功。app.jsは17,391行。次は注記ドラッグと選択矩形など残る入力sessionの所有者を整理する。全体目標と全体E2Eは未完了。
-
-直前のSketch削除分離は`278ed8b`で確定済み。実行中のテストはない。以下は直前の記録である。
-
-SketchDeletionCommandへ削除範囲・外部参照検査・確認・寸法symbolガード・削除適用と通知順序を集約。scopeは呼出しごとに取得し、cache・解析・UIは所有者へ通知する。旧SketchProjectionConstraintによる子孫保持と親変更を維持し、仕様書に既存例外を明記。構文253件・単体514件・Block／統合UI／保存互換／SketchProjection E2E162件が成功。app.jsは17,485行。次は操作解除に残るドラッグ・選択矩形・画像操作sessionの所有者を調べ、状態と更新処理をまとめる。全体目標と全体E2Eは未完了。
-
-直前のSketch基本操作分離は`9811c82`で確定済み。実行中のテストはない。以下は直前の記録である。
-
-SketchCommandへSketch作成・切替・名前変更・表示切替と命名規則を集約。scopeを操作ごとに取得し、ID採番・入力・操作解除・UI・履歴は明示依存とした。復元後の操作解除には多数の未分離状態が残るため、setterを増やす抽出を避け、解除を利用する操作単位から整理した。構文251件・単体510件・Block／統合UI／保存互換E2E151件が成功。app.jsは17,565行。次は共通操作解除の状態所有者とSketch削除の参照検査・モデル更新を確認する。全体目標と全体E2Eは未完了。
-
-直前の履歴制御分離は`2e24614`で確定済み。実行中のテストはない。以下は直前の記録である。
-
-HistoryControllerへDocument／Block履歴の選択・記録・reset・Undo／Redo振分けと復元中状態を集約。appの共有historyRestoring変数を除去し、復元時の再記録抑止・finally通知を共通化した。具体的な復元とDOM・計測は明示adapterとして残る。構文249件・単体506件・Block／統合UI／保存互換E2E151件が成功。app.jsは17,639行。次はDocument読込／Block差替え後の操作解除・求解・表示更新と履歴UIの境界を調べる。全体目標と全体E2Eは未完了。
-
-直前のBlock履歴snapshot分離は`e8847c3`で確定済み。実行中のテストはない。以下は直前の記録である。
-
-BlockHistorySnapshotへBlock履歴の復元用コピーとsignature生成を分離。session・DOM・履歴stackへの依存を持たず、定義とclone／拘束codecから生成する。旧signature関数の本体一致、コピーの独立性、参照metadata・採番値と差分判定を検証。構文248件・単体503件・Block／統合UI／保存互換E2E151件が成功。app.jsは17,652行。次はDocument／Block共通の履歴復元中状態と復元・UI通知の所有者を整理する。全体目標と全体E2Eは未完了。
-
-直前の拘束複製統合は`d486f1f`で確定済み。実行中のテストはない。以下は直前の記録である。
-
-ConstraintRebindingへBlock拘束の複製と保存済み固定座標の移動を統合。BlockDefinitionEditingへcloneForBlockを直接渡し、appの複製実装への逆依存を除去。クリップボードも同じ固定座標移動を利用する。寸法表示位置・参照metadata・復元不能時の拒否を維持。構文247件・単体501件・Block／統合UI／保存互換E2E151件が成功。app.jsは17,697行。次はBlock履歴snapshotの生成・復元とUI通知の境界を整理する。全体目標と全体E2Eは未完了。
-
-直前のBlockSelectionQuery分離は`bbc64ec`で確定済み。実行中のテストはない。以下は直前の記録である。
-
-BlockSelectionQueryへBlock作成候補の検証と配置中心照会を分離。現在scopeを都度取得し、共有点・注記・ハッチ境界と内部／外部拘束を照会する。2関数の本体一致を確認した。依存の明示で旧未定義constraintLabelForList参照が起動時エラーとなることをE2Eで検出し、既存localizedConstraintNameへ接続して修正。構文247件・単体499件・Block／統合UI／保存互換E2E151件が成功。app.jsは17,726行。次はcloneConstraintForBlockのappへの逆依存とBlock履歴adapterを整理する。全体目標と全体E2Eは未完了。
-
-作業branchは`codex/composition-root-next`。実行中のテストはない。今回の候補照会分離と仕様・読込一覧・単体テストを同じコミットに含める。前の引継ぎに記録した未コミット差分は今回の区切りで解消する。次回はGit状態を確認してから拘束複製の責務を調べる。
-
-以下は直前の確定済み区切りの記録である。
-
-この文書と同じコミットでBlockDefinitionCommandへ作成・編集開始／取消・定義名変更／削除を集約し、BlockViewへ一覧dialog閉鎖と編集classを移した（直前の実装コミットは`47c8b07`）。作業branchは`codex/composition-root-next`。app.jsは17,805行。構文245件・単体494件・Block／統合UI／保存互換E2E151件が成功し、実行中のテストはない。全体E2Eとリファクタリング全体は未完了。
-
-今回の検証コマンド：
+- 構文267件・単体548件が成功。追加の単体8件は再試行前の復元、モデル残差の検査、session間の独立性、目標の保持、区間分割、終了時補正とSolver設定の復帰を確認する。
+- 関連E2E202件が成功（20.5分）。ログは`$env:TEMP\cad-drag-solver-e2e.log`。実行中のテストはない。本書と同じコミットが今回の求解分離の区切りである。作業branchで継続し、新たなmainへの反映は含めない。
+- app.jsは16,594行。全体リファクタリングと全体E2Eは未完了。
 
 ```powershell
 npm run check
 npm run test:unit
-npm run test:e2e -- tests/e2e/blocks.spec.js tests/e2e/unified-ui.spec.js tests/e2e/phase0-characterization.spec.js
+npm run test:e2e -- tests/e2e/blocks.spec.js tests/e2e/unified-ui.spec.js tests/e2e/phase0-characterization.spec.js tests/e2e/geometry-drag-smoothness.spec.js tests/e2e/constraint-drag-regressions.spec.js tests/e2e/free-instance.spec.js tests/e2e/sketch-projection.spec.js
 ```
 
-`BlockDefinitionEditing`は定義のclone／translate／apply、`BlockEditorSession`は親子sessionと復元情報、`BlockCompletionCommand`は検証・確認待ち・確定操作を所有する。確認中の重複要求、取消・拒否、別sessionへの遅延回答、内部不正の拒否、選択置換、参照削除、TX-05の配置先エラーを検証した。
+### 次に調べる境界
 
-`BlockEditingQueries`はscope切替ごとに現在値を照会し、依存判定では編集中draftを優先する。使用数表示は現在scopeだけ、参照Instance取得は編集session／退避host／保存済み定義をObject同一性で集計する。BlockCatalogの所有子孫取得を仮移動と削除で共用した。移動した12照会関数は状態取得先以外の本体一致も確認した。
+通常図形ドラッグの局所context準備（`attachLocalSolveContext`）、`dragResultForSession`、pointer更新と終了処理を調べる。GeometryDragPlan／GeometryDragSolverを利用して、操作sessionと開始・更新・確定／取消・復元を同じ所有者へ集める。描画からの強調照会と診断は値の照会、Canvas入力からは操作APIにする。現在の多数のsessionフィールドをそのまま公開してsetterを増やす分離は避ける。
 
-選択からの下書き生成はBlockDefinitionEditing.fromSelection、空定義はempty、子定義の仮移動はBlockEditorSession.stageChildrenへ統合済み。寸法の数値式固定・独立した名前割当て・ID消費時点と、子孫のregistry差替えから拘束再接続・取消復元の順序を維持した。新規moduleを増やさず、4関数の本体一致も確認した。
+求解サービスは数値計算までを担当し、UI通知・履歴・Parameter確定を引き取らない。局所contextは共通の拘束連結成分照会との重複を確認してから配置を決める。残る他領域と全体完了条件は第5節・第7節を維持する。
 
-BlockDefinitionCommandは開始・取消・名前変更・削除、BlockCompletionCommandは検証・確認待ち・確定を担当する。前者のrestoreHostを後者も利用する。Session／DefinitionEditing／EditingQueries／Catalogを組み合わせ、BlockViewへ表示状態変更を通知する。空編集画面の原点・倍率設定と履歴resetはappの明示adapterとして残る。
-
-次はappに残る`blockSelectionGeometry`と`blockSelectionBoundsCenter`の候補検証・境界中心照会、`cloneConstraintForBlock`とBlock履歴adapterを調べる。Block操作を新しい汎用contextへまとめず、既存の所有者へ適切に統合する。
+`localSolveContextFromSeeds`はドラッグだけでなく`solveConstraintComponentAndDependents`も利用する。固定Pointで探索を止める連結成分の規則、表示・所属・固定／回転ロックによる変数選択を保持し、ドラッグ専用に同じ実装を複製しない。開始前の値snapshotと復元は既存`EditingCheckpoint.captureValues／restoreValues`の責務なので、操作の所有者はこれを利用する。
 
 再開時は次の順で確認する。
 
 1. この文書とAGENTS.mdを読み、`git status --short`・`git branch --show-current`・`git log -5 --oneline`を確認する。記載の件数やHEADより現在のGitとコードを優先する。
-2. `composition-root.md`先頭の最新記録と`spec/architecture/モジュール構成.md`を読む。古い経過記録は当時の状態として扱う。
-3. 未コミット変更があれば先に内容と所属を確認する。検証中と記録されている場合はprocessの実在を確認し、残っていなければ必要な検証を実行する。
-4. 上記の最新区切りが完了していれば、残るBlock候補照会・拘束複製・履歴adapterの依存を調べ、既存の所有者を利用して整理する。
-5. 一つのまとまりを実装・検証・Commit・Pushし、この再開地点を更新する。全体目標は途中成果へ縮小しない。
+2. `composition-root.md`先頭と`spec/architecture/モジュール構成.md`を読む。古い経過記録は当時の状態として扱う。
+3. 未コミット変更があれば先に内容と所属を確認する。検証中ならprocessの実在と終了結果を確認し、単なる出力待ちで重複実行しない。
+4. 本区切りが確定済みなら、上記のドラッグ操作境界を調べて次のまとまりを実装する。
+5. 検証・差分確認・Commit・Push・runtime-version再生成を行い、この再開地点を更新する。全体目標は途中成果へ縮小しない。
 
 ### 再開時に渡す指示の例
 
