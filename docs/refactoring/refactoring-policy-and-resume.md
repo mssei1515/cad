@@ -100,19 +100,19 @@
 
 ### 最新の区切り
 
-main／developは1a7d5ccで同期済み。本区切りはcodex/composition-root-nextで継続する。前回のリリース指示を新しい変更へ拡張しない。直前の重複拘束解析の分離はc33080cでCommit・Push済み。
+main／developは1a7d5ccで同期済み。本区切りはcodex/composition-root-nextで継続する。前回のリリース指示を新しい変更へ拡張しない。直前の拘束分類・cache分離はfdc41c8でCommit・Push済み。
 
-ConstraintAnalysisへ解析範囲の拡張・図形分類・cacheと遅延評価を集約した。appの直接cache書換えをinvalidateへ置換し、表示はstatusOf／summary／ensure／stableを使う。refreshのMapとsummaryはコピー、数値解析とGeometryの参照は維持する。無効化の時機、派生元への範囲拡張、求解エラー優先、支持位置の分類を変更しない。
+ParameterStabilizationへ式評価・参照寸法feedback・目標値の段階的求解を集約した。ParameterNamespace、SketchSolving、EditingCheckpointを明示依存で接続し、ParameterApplicationや各操作は操作全体の確定・復元を引き続き担当する。
 
-Free Instanceの微小変位は例外時にも元へ復帰する。共有のvariableDeltaInBasisはGeometrySolverへ移し、分類とGeometryDragEditingが共用する。色・線幅・表示文言はappに残した。app.jsは15,595行。全体リファクタリングと全体E2Eは未完了。
+20回の反復、1e-7の相対許容差、128段階・20%の補間、12回の半減再試行、finallyによる最終target復帰を維持した。複数Sketchの順序と重複除去、依存結果の集約、エラーの扱いを変更しない。app.jsは15,489行。全体リファクタリングと全体E2Eは未完了。
 
 ### 検証
 
-構文281件・単体591件・関連E2E184件と実pointer操作・Undo回帰7件（合計191件）が成功。実行中のテストはない。全体E2Eは未完了。ログは一時フォルダのcad-constraint-analysis-check.log、cad-constraint-analysis-unit.log、cad-constraint-analysis-e2e.log、cad-constraint-analysis-native.log。追加単体7件で基底照会、通常／Block分類、遅延評価とsnapshot、派生元の追加探索、集計対象、Free Instance試行と例外時復元を確認する。
+構文283件・単体597件・関連E2E185件が成功。実行中のテストはない。全体E2Eは未完了。ログは一時フォルダのcad-parameter-stabilization-check.log、cad-parameter-stabilization-unit.log、cad-parameter-stabilization-e2e.log。追加単体6件で通常／複数Sketch求解、共通補間、半減と復元、再試行・段階・反復の上限、最終target復帰、参照feedback、式と依存先の失敗を確認する。
 
 ### 次に調べる境界
 
-Parameterの反復評価と目標遷移求解を整理する。referenceValuesConverged、solveParameterTargetTransition、stabilizeActiveParameterNamespaceと既存ParameterApplication／ParameterNamespaceの分担を確認する。反復上限・相対許容差、参照寸法feedback、目標変更の補間、全Sketch求解と復元snapshotの範囲を保持する。SketchSolvingとEditingCheckpointを接続して、UIやダイアログ状態を数値反復へ持ち込まない。
+寸法式の下書き評価evaluateDimensionExpressionDraftを既存ParameterNamespaceの評価責務へ集約する。直接値／拘束寸法／参照寸法の区別、角度と長さの範囲、名前空間の検証を保持する。expressionReferenceNamesForInputからrefreshExpressionInputHighlightsまでの式入力表示も、参照名照会とDOM装飾の境界を確認する。表示moduleに式計算やモデル更新を持ち込まず、Parameter画面・Canvas入力・Propertiesで共通利用する。
 
 再開時はこの文書とAGENTS.md、composition-root.md先頭、spec/architecture/モジュール構成.mdを読む。Gitの状態・最新履歴と週の残り利用枠を確認する。main上では開発せず、developを基準に適切な作業branchで再開する。まとまった単位で検証・差分確認・Commit・Push・runtime-version再生成を行う。全体目標を途中成果へ縮小しない。
 

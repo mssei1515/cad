@@ -6,6 +6,8 @@
 
 ## 現在の再開地点（2026-09-29）
 
+ParameterStabilizationへ式評価と参照寸法feedback・目標値の段階的求解を集約。ParameterNamespace、SketchSolving、EditingCheckpointを接続し、ParameterApplicationは操作全体の確定・復元を引き続き担当する。反復上限・補間・半減再試行・finallyによる最終target復帰を維持。構文283件・単体597件・関連E2E185件が成功。app.jsは15,489行。次は寸法式の下書き評価を既存ParameterNamespaceへ集約し、式入力表示の責務を整理する。全体目標は未完了。
+
 ConstraintAnalysisへ解析対象の拡張・通常／Block／Free Instance分類・cacheと遅延評価を集約。appの直接無効化をinvalidate APIへ置換し、UIは分類・summary・安定性を照会する。数値解析の基底成分取得はSolverの共通関数へ移し、GeometryDragEditingも直接利用する。構文281件・単体591件・関連E2E191件が成功。app.jsは15,595行。次はParameterの反復評価と目標遷移求解を整理する。全体目標は未完了。
 
 ConstraintRedundancyへ追加時の個別冗長判定・全Sketchの集計・結果Mapを集約。接続されたLine／Arcの最初の同等接線を維持する例外、前計算の再利用、個別詳細破棄後は次のrefreshで件数を更新する時機を保持した。構文279件・単体584件・関連E2E184件が成功。app.jsは15,800行。次は拘束状態の解析・分類・cacheの所有者を整理する。全体目標は未完了。
