@@ -145,10 +145,16 @@
     return Boolean(constraint?.readOnlyDimension);
   }
 
+  function hasDirectRadiusDimension(constraints, primitive) {
+    return constraints.some(
+      (c) => c.enabled !== false && (c instanceof RadiusConstraint || c instanceof DiameterConstraint) && c.primitive === primitive,
+    );
+  }
+
   window.DimensionQueries = Object.freeze({
     targetFromConstraint, offsetPairSign, angleDegrees,
     angleDimensionSweep, signedAngleBetweenLines, measuredDimensionValue,
     angleDimensionAngles, angleDimensionCandidate, geometryTargetValue,
-    isReadOnlyDimension, isDimensionConstraint,
+    isReadOnlyDimension, isDimensionConstraint, hasDirectRadiusDimension,
   });
 })();

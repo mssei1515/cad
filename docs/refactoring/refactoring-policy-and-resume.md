@@ -100,41 +100,31 @@
 
 ### 最新の区切り
 
-作業branchは`codex/composition-root-next`。開始時のHEADは`0ee5b09`（求解方針と数値計算状態の分離）で未コミット差分はなかった。main／developは`0c4bbc1`で同期済み。今回も作業branchで進め、新たなmainへの反映は含めない。
+GeometryDragEditingへ局所context準備・Line代表target判定・開始前snapshot・図形種別のpreview適用と補正／復元を集約した。GeometryDragは操作session、GeometryDragPlanは移動先の計画、GeometryDragSolverは数値求解を担い、操作と診断がEditingのprepare／preview／finishを共用する。appのpreview／finishは計測adapterとなった。
 
-本区切りでは`src/commands/geometry_drag.js`へ操作sessionと開始・更新・終了・resetを集約した。appの共有`dragSession`はなくなり、入力は操作API、描画は中心点／円弧端点／点の強調対象を真偽値で照会する。開始計画をコピーして非公開で保持し、局所contextを準備してPointerをcaptureする。
+直接Radius／Diameter寸法の照会は既存DimensionQueriesへ集約し、ドラッグと拘束編集で共用する。UI、求解条件、復元範囲、保存形式は変更していない。app.jsは16,269行。全体リファクタリングと全体E2Eは未完了。
 
-3pxの開始閾値、派生元座標への変換、小移動時のInstance内部選択、投影の編集拒否、最終求解・Spline・Parameterと依存Sketchの検査、開始前への復元と履歴の順序を維持した。従来どおりpointercancelは未移動時の内部選択を抑制し、移動済みの場合は確定処理へ進む。resetはsession破棄だけであり、新しい取消仕様は導入していない。
+ユーザーから本区切りの未コミット変更をCommitし、mainへマージする明示指示を受けた。作業branchはcodex/composition-root-next。developへ統合後、mainへマージ・Pushし、developをmainへfast-forwardして同期する。実際の完了状態はGitで確認する。このリリース指示を将来の変更への自動リリース許可に拡張しない。
 
-GeometryDragPlanは入力計画、GeometryDragSolverは数値求解と数値的な進行状態、GeometryDragはUIを伴う操作の進行と確定を担当する。局所context準備・図形種別ごとのpreview適用・最終求解の計測adapterは、現在はappから渡す明示callbackとして残る。この依存は移行途中のものであり、appの操作状態をgetterで共有する仕組みではない。
+### 検証
 
-### 検証とGitの状況
-
-- 構文269件・単体556件が成功。追加の単体8件で開始計画の分離、閾値・座標変換、クリック／pointercancel、投影拒否、preview失敗、最終求解／Spline／Parameter／依存先失敗の復元、通知と履歴順序を確認する。
-- Block／Free Instance／SketchProjection／保存互換／統合UIのE2E184件（1.9分）と、実pointer操作・Undoの回帰7件（23.6秒）が成功。ログは`$env:TEMP\cad-geometry-drag-e2e.log`と`$env:TEMP\cad-geometry-drag-native.log`。実行中のテストはない。操作session分離は`7c117e1`でCommit・Push済み。
-- app.jsは16,501行。全体リファクタリングと全体E2Eは未完了。
+構文271件・単体564件が成功。関連E2E187件と実pointer操作・Undoの回帰7件、合計194件が成功。実行中のテストはない。ログは一時フォルダのcad-drag-editing-check.log、cad-drag-editing-unit.log、cad-drag-editing-e2e.log、cad-drag-editing-native.log。全体E2E成功とは扱わない。
 
 ```powershell
 npm run check
 npm run test:unit
-npm run test:e2e -- tests/e2e/blocks.spec.js tests/e2e/unified-ui.spec.js tests/e2e/phase0-characterization.spec.js tests/e2e/free-instance.spec.js tests/e2e/sketch-projection.spec.js
+npm run test:e2e -- tests/e2e/blocks.spec.js tests/e2e/unified-ui.spec.js tests/e2e/phase0-characterization.spec.js tests/e2e/free-instance.spec.js tests/e2e/sketch-projection.spec.js tests/e2e/geometry-drag-smoothness.spec.js
 npm run test:e2e -- tests/e2e/constraint-drag-regressions.spec.js --grep "native pointer reversals and undo"
 ```
 
 ### 次に調べる境界
 
-appに残る`attachLocalSolveContext`、`dragResultForSession`と`finalizeDragResult`を調べる。操作本体と診断が共用できる準備・preview適用の責務として、既存GeometryDragPlan／GeometryDragSolverとの分担を整理する。GeometryDragの非公開sessionを再び外へ公開したり、数値求解側へUIと履歴を持ち込んだりしない。
+共通の拘束連結成分・局所／Sketch求解対象の照会境界を整理する。対象はbuildConstraintAdjacency、connectedComponentFromSeeds、localSolveVariables／Constraints／Lines、sketchSolveVariables／Constraints／Lines、localSolveContextFromSeeds。
 
-`localSolveContextFromSeeds`はドラッグだけでなく`solveConstraintComponentAndDependents`も利用する。固定Pointで探索を止める連結成分の規則、表示・所属・固定／回転ロックによる変数選択を保持し、ドラッグ専用に同じ実装を複製しない。開始前の値snapshotと復元は既存`EditingCheckpoint.captureValues／restoreValues`の責務なので、準備・操作の所有者はこれを利用する。
+localSolveContextFromSeedsはドラッグだけでなくsolveConstraintComponentAndDependentsも利用する。固定Pointで探索を止める規則、表示・所属・固定／回転ロックによる変数選択を保持し、ドラッグ専用に複製しない。GeometryDragの非公開sessionを再公開せず、数値求解側へUIや履歴を持ち込まない。
 
-再開時は次の順で確認する。
-
-1. この文書とAGENTS.mdを読み、`git status --short`・`git branch --show-current`・`git log -5 --oneline`を確認する。記載の件数やHEADより現在のGitとコードを優先する。
-2. `composition-root.md`先頭と`spec/architecture/モジュール構成.md`を読む。古い経過記録は当時の状態として扱う。
-3. 未コミット変更があれば先に内容と所属を確認する。検証中ならprocessの実在と終了結果を確認し、単なる出力待ちで重複実行しない。
-4. 本区切りが確定済みなら、上記の準備・preview適用の境界を調べて次のまとまりを実装する。
-5. 検証・差分確認・Commit・Push・runtime-version再生成を行い、この再開地点を更新する。全体目標は途中成果へ縮小しない。
+再開時はこの文書とAGENTS.md、composition-root.md先頭、spec/architecture/モジュール構成.mdを読む。Gitの状態・ブランチ・最新履歴と週の残り利用枠を確認し、未コミット変更と実行中テストがないか確認する。main上では開発せずdevelopを基準に適切な作業branchで再開する。上記境界を調べ、まとまった単位で検証・差分確認・Commit・Push・runtime-version再生成を行う。全体目標を途中成果へ縮小しない。
 
 ### 再開時に渡す指示の例
 
-> `docs/refactoring/refactoring-policy-and-resume.md`とAGENTS.mdを読み、現在のGit状態を確認してJot2Dのリファクタリングを再開してください。app.jsを組立て・起動中心へ整理する全体目標を維持し、行数や期限より責務と状態所有者の適切な境界を優先してください。サブエージェントは使わず、まとまった単位で検証・コミット・Pushし、再開地点を更新してください。
+> docs/refactoring/refactoring-policy-and-resume.mdとAGENTS.mdを読み、現在のGit状態を確認してJot2Dのリファクタリングを再開してください。app.jsを組立て・起動中心へ整理する全体目標を維持し、行数や期限より責務と状態所有者の適切な境界を優先してください。サブエージェントは使わず、まとまった単位で検証・コミット・Pushし、再開地点を更新してください。
