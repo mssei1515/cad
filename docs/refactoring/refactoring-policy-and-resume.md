@@ -98,10 +98,24 @@
 
 ## 8. 再開地点（2026-09-30）
 
-ユーザーの今回の明示依頼により、未コミット分を確定し、作業branchの既存コミットとともにdevelop経由でmainへ反映する。リリース後はmainとdevelopを同期する。正確なcommit IDとPush状態はGitで確認する。継続開発予定のcodex/composition-root-nextは保持する。
+### 停止理由とGit
 
-SketchProjectionQueriesへ旧投影拘束の検索cache・対応点・影響対象照会を、SketchProjectionEditingへ共有Point分離とmetadata同期を分離した。抽出した12関数はscope取得の依存名と空白以外、抽出前の本体と一致する。app.jsは15,226行。UI、求解、履歴、保存形式の変更はない。
+Codex週枠の使用率51%（残り49%）を確認したため、ユーザー指定の「残り50%未満なら区切りで停止」を適用する。このAnnotation分離を検証・Commit・Pushまで完了し、一時停止する。自動再開は設定せず、回復後のユーザー指示で再開する。
 
-検証結果はcomposition-root.md先頭に記録する。全体リファクタリングと全体E2Eは未完了。次の分離単位は未着手であり、残る操作調整・入力振分け・Document操作などから依存と状態所有者を確認して選ぶ。行数だけを減らす分割は行わない。
+main／developはd76dfefでリリース同期済み。継続作業branchはcodex/composition-root-next。直前のHatchCommandはbaa4591でCommit・Push済み。以降の作業をmainへ自動反映しない。最新commit ID、clean状態、remote一致は再開時にGitで確認する。
 
-再開時は本書、AGENTS.md、composition-root.md先頭とGitの現物を確認する。週の残り利用枠を確認し、サブエージェントを使わず、責務単位の検証・Commit・Pushを続ける。今回のmain反映許可を今後の自動リリース許可へ拡張しない。
+### 最新の区切りと検証
+
+AnnotationCommandへテキスト／引出線の作成・対象選択・prompt・確定取消と配置計算を集約。previewを描画データとして返し、appが既存Rendererへ接続する。共通pendingCommandは明示get／setを使用。操作・配置9関数はadapter置換とpreviewデータ化以外の一致を確認。構文302件・単体633件・関連E2E184件が成功。app.jsは14,539行。全体目標と全体E2Eは未完了。
+
+追加単体5件は文字確定・取消、leader previewと確定配置の一致、対象選択、Root拒否、scope切替を確認した。ログは一時フォルダのcad-annotation-command-check.log、cad-annotation-command-unit.log、cad-annotation-command-e2e.log。実行中のテストはない。全体E2Eは未完了であり、関連テストの成功を全体完了とは扱わない。
+
+### 次に調べる境界
+
+Annotationの図形参照とanchor照会（annotationLeaderTargetFromSelection／Hit／Item、annotationLeaderAnchor、clampAngleToArcSweep）を調べる。現在Sketch判定、GeometryRefの保持と再解決、Line／Circle／Arc／Splineの最近点、参照失敗時の保存start fallbackを維持する。作成コマンド・Renderer・Annotationドラッグが共用する照会として整理する。まだ実装には着手していない。
+
+残る全体の主要領域は本書5節を参照する。app.jsを数百行へ近づける全体目標は未達であり、今回の部分分離を完了条件に置き換えない。
+
+### 再開指示の例
+
+> docs/refactoring/refactoring-policy-and-resume.mdとAGENTS.mdを読み、利用枠・Git状態を確認してリファクタリングを再開してください。app.jsを組立て・起動中心にする全体目標を維持し、責務と状態所有者を優先してください。サブエージェントを使わず、責務単位で検証・Commit・Pushし、週枠の残りが50%未満なら区切りで停止してください。

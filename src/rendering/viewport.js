@@ -79,6 +79,39 @@
       };
     }
 
+    function captureBoundsFootprint(bounds) {
+      const screenBox = screenBoxForBounds(bounds);
+      if (!bounds || !screenBox) return null;
+      return {
+        bounds,
+        screenBox,
+        center: {
+          x: (screenBox.left + screenBox.right) / 2,
+          y: (screenBox.top + screenBox.bottom) / 2,
+        },
+        width: Math.max(screenBox.right - screenBox.left, 1),
+        height: Math.max(screenBox.bottom - screenBox.top, 1),
+      };
+    }
+
+    function restoreBoundsFootprint(bounds, footprint) {
+      if (!footprint) return false;
+      if (!bounds) return false;
+      const worldWidth = bounds.x2 - bounds.x1;
+      const worldHeight = bounds.y2 - bounds.y1;
+      const scaleCandidates = [];
+      if (worldWidth > minLength) scaleCandidates.push(footprint.width / worldWidth);
+      if (worldHeight > minLength) scaleCandidates.push(footprint.height / worldHeight);
+      if (scaleCandidates.length === 0) return false;
+      const nextScale = clampZoom(Math.min(...scaleCandidates));
+      const centerX = (bounds.x1 + bounds.x2) / 2;
+      const centerY = (bounds.y1 + bounds.y2) / 2;
+      update({ scale: nextScale });
+      update({ x: footprint.center.x - centerX * state.scale });
+      update({ y: footprint.center.y - centerY * state.scale });
+      return true;
+    }
+
     function visibleWorldBounds() {
       const rect = canvasRect();
       return {
@@ -90,7 +123,7 @@
     }
     return Object.freeze({
       get x() { return state.x; }, get y() { return state.y; }, get scale() { return state.scale; },
-      snapshot, update, currentCanvasCenterWorld, clampZoom, formatZoom, canvasScreenPoint, screenToWorld, worldToCanvasScreen, canvasPoint, fitBoundsToViewport, screenBoxForBounds, visibleWorldBounds
+      captureBoundsFootprint, restoreBoundsFootprint, snapshot, update, currentCanvasCenterWorld, clampZoom, formatZoom, canvasScreenPoint, screenToWorld, worldToCanvasScreen, canvasPoint, fitBoundsToViewport, screenBoxForBounds, visibleWorldBounds
     });
   }
   window.CanvasViewport = Object.freeze({ create });

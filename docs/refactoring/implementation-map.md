@@ -4,6 +4,22 @@
 
 ## 1. 実装ファイルの責務
 
+- `src/commands/annotation_command.js`: テキスト／引出線の作成・対象選択・文字入力・確定取消、配置計算とpreviewデータ。
+
+- `src/commands/hatch_command.js`: Hatch作成・境界修復の進行、preview／修復対象の所有、取消時の破棄。
+
+- `src/geometry/hatch_query.js`: Hatch primitive変換・境界解決・閉領域検索とcacheの所有、個別無効化／全破棄。
+
+- `src/geometry/block_layout.js`: 入れ子を含むBlockのローカル範囲、表示中心、配置anchorへの平行移動。
+
+- `src/editing/first_dimension_scaling.js`: 初回寸法に合わせたSketch geometryと寸法配置の拡縮。画面上の大きさの取得／復元は既存CanvasViewportへ統合。
+
+- `src/geometry/bounds.js`: 矩形判定、図形boundsと結合。
+- `src/geometry/reference_image_geometry.js`: 参照画像の座標変換・四隅・bounds。
+- `src/rendering/drawing_bounds.js`: Sketch指定・全体・可視対象の範囲集計。
+
+- `src/ui/pointer_move_scheduler.js`: pointermoveの保留入力・frame予約・flush／破棄と診断件数を所有する。
+
 - `src/constraints/sketch_projection_queries.js`: 旧投影拘束の索引・対応点・影響対象の照会。
 - `src/editing/sketch_projection_editing.js`: 旧投影先の共有Point分離と参照再接続・Spline metadata同期。
 

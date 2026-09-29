@@ -2,6 +2,8 @@
 (function () {
   "use strict";
   const { referenceImageMimeType, validReferenceImageDataUrl, normalizeReferenceImages, serializeReferenceImage, REFERENCE_IMAGE_MAX_SIDE_PX } = window.ReferenceImageData;
+  const { rectFromPoints, pointInRect, bboxInRect, bboxIntersectsRect, lineBBox, primitiveBBox, mergeBounds, splineBBox } = window.GeometryBounds;
+  const { referenceImageLocalToWorld, referenceImageWorldToLocal, referenceImageCorners, referenceImageBounds } = window.ReferenceImageGeometry;
   const { normalizeHatches, validSerializedHatch, validSerializedHatchList, serializeHatch } = window.HatchData;
   const { normalizeAnnotations, serializeAnnotation } = window.AnnotationData;
 
@@ -216,10 +218,18 @@
   const { emptyGeometryInstanceBundle, geometryInstanceSourcePoints, createGeometryInstanceBundle, geometryInstanceBundlesForScope } = instanceProjections;
   const blockCatalog = window.BlockCatalog.create({ definitions: () => documentModel.blockDefinitions });
   const { blockDefinitionOwnedSubtreeIds, blockDefinitionSketchRows, blockDefinitionById, blockDefinitionDrawableSketchIds, blockDefinitionHasGeometry, blockDefinitionGeometrySketchIds, blockInstanceEnabledSketchSet } = blockCatalog;
+  const hatchGeometryQuery = window.HatchGeometryQuery.create({
+    currentScope: workspace.current, activeSketchId, effectiveAppearanceForElement, applicationText,
+    boundaryGeometry: () => [...allGeometryLines(), ...allGeometryCircles(), ...allGeometryArcs(), ...allGeometrySplines()],
+  });
+  const { hatchPrimitivesFromElements, hatchPrimitivesForScope, resolvedHatchBoundary } = hatchGeometryQuery;
   const blockProjections = window.BlockProjection.create({
     blockCatalog, geometryInstanceBundlesForScope, emptyGeometryInstanceBundle, hatchPrimitivesFromElements, hatchPrimitivesForScope,
   });
   const { blockProjectionId, blockProjectionLocalId, blockWorldPoint, createBlockProjectionBundle, blockAllProjectionBundle, blockProjectionBundle, invalidateBlockProjectionCache } = blockProjections;
+  const { blockLocalGeometryBounds, blockInstanceDisplayCenter, blockInstanceTranslationForAnchor } = window.BlockLayout.create({
+    catalog: blockCatalog, projections: blockProjections, instanceProjections, annotationBounds, hatchPrimitivesForScope,
+  });
   let model = workspace.current();
   const solver = new ConstraintSolver(model);
 
@@ -270,7 +280,6 @@
     profileRead: read => interactionProfiler.active ? profileInteractionWork("geometryReads", read) : read(),
   });
   const { withGeometryReadCache, blockProjectionBundles, geometryInstanceBundles, geometryInstanceBundle, allGeometryPoints, allGeometryLines, allGeometryCircles, allGeometryArcs, allGeometrySplines, allAnnotations, allHatches, allGeometryPrimitives, resolveGeometryRef, geometryElementFromKey } = geometryReads;
-  let interactionFrameStats = null;
   const referenceConstraintState = window.ReferenceConstraintState.create({
     currentScope: workspace.current, constraintSketchId, isReferenceSourceSketchId,
   });
@@ -287,8 +296,6 @@
   let pointerPreview = null;
   let trimPreview = null;
 
-  let hatchPreview = null;
-  let hatchRepairTarget = null;
   let pendingCommand = null;
   let pendingConstraintCommand = null;
   let constraintOperands = [];
@@ -358,8 +365,6 @@
   const { blockDefinitionsInCurrentScope, blockDefinitionScopeError,
     blockDefinitionDependsOn, storedBlockInstancesReferencing, blockDefinitionUsageCount,
     blockDefinitionEditError, blockDefinitionCyclePath } = blockEditingQueries;
-  let hatchResolutionCache = new WeakMap();
-  let hatchFaceCache = new Map();
 
   let dimensionExpressionMarkCapture = null;
   let geometryClipboard = null;
@@ -413,8 +418,15 @@
   const BLOCK_ORTHOGONAL_ROTATION_STEP = Math.PI / 2;
 
 
-  let pendingCanvasPointerMove = null;
-  let canvasPointerMoveFrame = null;
+  const pointerMoveScheduler = window.PointerMoveScheduler.create({
+    requestFrame: (callback) => requestAnimationFrame(callback),
+    cancelFrame: (frame) => cancelAnimationFrame(frame),
+    processMove: (pointer) => profileInteractionPhase("preview", () => {
+      withGeometryReadCache(() => processCanvasPointerMove(pointer));
+      if (pendingCommand && ["distance-value", "offset-value"].includes(pendingCommand.type)) syncDimensionValueInput();
+    }),
+  });
+  const { schedule: scheduleCanvasPointerMove, flush: flushScheduledCanvasPointerMove } = pointerMoveScheduler;
   const viewState = { constraintStatus: false, geometryIds: false };
   let constraintStatusMouseLatched = false;
   let constraintStatusSpaceHeld = false;
@@ -515,8 +527,26 @@
   const geometryRenderer = window.GeometryRenderer.create({ ctx, viewport, paintState: geometryPaintState, appearanceLineDash, lineDisplaySegment, canvasThemeColor });
   const { traceSplinePath } = geometryRenderer;
   const { resolvedLoopBounds } = window.HatchRegionEngine;
+  const drawingBounds = window.DrawingBounds.create({
+    currentScope: workspace.current, geometryReads, activeSketchId, elementSketchId, isVisibleSketchElement,
+    isVisibleSketchId, annotationBounds, resolvedLoopBounds, resolvedHatchBoundary, hatchAppearanceForDisplay,
+  });
+  const { sketchGeometryBounds, allGeometryBounds, visibleGeometryBounds } = drawingBounds;
+  const { scaleSketchForFirstDimension } = window.FirstDimensionScaling.create({
+    currentScope: workspace.current, activeSketchId, constraintSketchId, elementSketchId, sketchGeometryBounds, minLength: MIN_LINE_LENGTH,
+  });
+
   const { drawResolvedHatchContent } = window.HatchRenderer.create({ viewport, visibleWorldBounds, canvasThemeColor });
   const { annotationTextWorldHeight, drawAnnotationText, drawAnnotationLeader } = window.AnnotationRenderer.create({ ctx, viewport, withCanvasState, annotationDisplayColor, annotationLeaderAnchor, appearanceLineDash });
+  const annotationCommand = window.AnnotationCommand.create({
+    currentScope: workspace.current, getPending: () => pendingCommand, setPending: value => { pendingCommand = value; },
+    lastPointer: () => lastPointerWorld, viewScale: () => viewport.scale, promptText: (...args) => window.prompt(...args),
+    nextAnnotationId: () => `AN${annotationSeq++}`, activeSketchId, canCreateInActiveSketch, rejectRootSketchCreation,
+    annotationLeaderTargetFromSelection, annotationLeaderTargetFromHit, setGeometrySelection, clearSelection, cancelPendingCommand,
+    setHint, updateToolbar, updateUI, draw, recordHistory,
+  });
+  const { pushAnnotation, createLeaderAnnotation, handleLeaderAnnotationTargetClick,
+    startLeaderAnnotationPlacement, commitLeaderAnnotationAt, createTextAnnotation, commitTextAnnotationAt } = annotationCommand;
   const referenceImageRenderer = window.ReferenceImageRenderer.create({
     ctx, viewport, withCanvasState, createImage: () => new Image(), onImageLoad: draw, referenceImageCorners,
   });
@@ -677,11 +707,13 @@
     renameDimension: parameterNamespace.renameDimension,
     getPending: () => pendingCommand, setPending: value => { pendingCommand = value; },
     expressionFromUserInput, evaluateDimensionExpressionDraft, applicationText, parameterErrorText,
-    setHint, syncDimensionValueInput, draw, activeSketchId, sketchHasDimensionConstraint, captureSketchScreenFootprint,
+    setHint, syncDimensionValueInput, draw, activeSketchId, sketchHasDimensionConstraint,
+    captureSketchScreenFootprint: (sketchId = activeSketchId()) => viewport.captureBoundsFootprint(sketchGeometryBounds(sketchId)),
     snapshotModelState, restoreModelState, withTemporarySolveStepNorm, solveStepNormForConstraint,
     stabilizeActiveParameterNamespace, constraintSketchId, acceptError: CONSTRAINT_ACCEPT_ERROR,
     hideDimensionValueInput, recordHistory, updateUI, scaleSketchForFirstDimension,
-    addDistanceConstraintFromTarget, restoreSketchScreenFootprint,
+    addDistanceConstraintFromTarget,
+    restoreSketchScreenFootprint: (sketchId, footprint) => viewport.restoreBoundsFootprint(sketchGeometryBounds(sketchId), footprint),
   });
   const { submit: submitDistanceValue, commitProperty: commitDimensionPropertyEdit } = dimensionValueCommand;
   const blockParameterPropagation = window.BlockParameterPropagation.create({
@@ -1171,29 +1203,6 @@
     return true;
   }
 
-  function nextAnnotationId() {
-    return `AN${annotationSeq++}`;
-  }
-
-  function pushAnnotation(element) {
-    if (!canCreateInActiveSketch()) {
-      rejectRootSketchCreation();
-      return null;
-    }
-    const item = {
-      id: nextAnnotationId(),
-      sketchId: activeSketchId(),
-      visible: true,
-      style: {},
-      ...element,
-    };
-    item.rotation = Number.isFinite(Number(item.rotation)) ? Number(item.rotation) : 0;
-    item.style = normalizeAnnotationStyle(item.style);
-    model.annotations.push(item);
-    updateUI();
-    draw();
-    return item;
-  }
 
   function constraintGeometryId(item) {
     return geometryRefId(geometryRefForItem(item));
@@ -1252,110 +1261,6 @@
     return bounds;
   }
 
-  function blockLocalGeometryBounds(definition, enabledSketchIds = blockDefinitionDrawableSketchIds(definition), visiting = new Set()) {
-    if (!definition) return null;
-    if (visiting.has(definition.id)) return null;
-    const nextVisiting = new Set(visiting).add(definition.id);
-    const enabled = new Set(enabledSketchIds);
-    const points = [];
-    for (const line of definition.lines || []) {
-      if (!enabled.has(String(line.sketchId))) continue;
-      points.push(line.p1, line.p2);
-    }
-    for (const circle of definition.circles || []) {
-      if (!enabled.has(String(circle.sketchId))) continue;
-      points.push({ x: circle.center.x - circle.radius(), y: circle.center.y - circle.radius() }, { x: circle.center.x + circle.radius(), y: circle.center.y + circle.radius() });
-    }
-    for (const arc of definition.arcs || []) {
-      if (!enabled.has(String(arc.sketchId))) continue;
-      const samples = [arc.startAngle, arc.endAngle, 0, Math.PI / 2, Math.PI, Math.PI * 1.5];
-      for (const angle of samples) {
-        if (angle === arc.startAngle || angle === arc.endAngle || angleOnSignedSweep(angle, arc.startAngle, arc.endAngle)) {
-          points.push({ x: arc.center.x + Math.cos(angle) * arc.radius(), y: arc.center.y + Math.sin(angle) * arc.radius() });
-        }
-      }
-    }
-    for (const spline of definition.splines || []) {
-      if (!enabled.has(String(spline.sketchId))) continue;
-      const bounds = splineBBox(spline);
-      if (bounds) points.push({ x: bounds.x1, y: bounds.y1 }, { x: bounds.x2, y: bounds.y2 });
-    }
-    for (const annotation of definition.annotations || []) {
-      if (!enabled.has(String(annotation.sketchId)) || annotation.visible === false) continue;
-      const bounds = annotationBounds(annotation);
-      if (bounds) points.push({ x: bounds.x1, y: bounds.y1 }, { x: bounds.x2, y: bounds.y2 });
-    }
-    for (const hatch of definition.hatches || []) {
-      if (!enabled.has(String(hatch.sketchId)) || hatch.appearance?.visible === false) continue;
-      const resolved = resolveHatchBoundaryLoops(hatch.boundaryLoops, hatchPrimitivesForScope(definition, hatch.sketchId));
-      if (resolved.ok) for (const loop of resolved.loops) points.push(...loop.points);
-      else if (hatch.seed) points.push(hatch.seed);
-    }
-    for (const instance of definition.blockInstances || []) {
-      if (!enabled.has(String(instance.sketchId))) continue;
-      const nestedDefinition = blockDefinitionById(instance.definitionId);
-      const nestedBounds = blockLocalGeometryBounds(nestedDefinition, [...blockInstanceEnabledSketchSet(instance, nestedDefinition)], nextVisiting);
-      if (!nestedBounds) continue;
-      for (const localPoint of [
-        { x: nestedBounds.minX, y: nestedBounds.minY },
-        { x: nestedBounds.minX, y: nestedBounds.maxY },
-        { x: nestedBounds.maxX, y: nestedBounds.minY },
-        { x: nestedBounds.maxX, y: nestedBounds.maxY },
-      ]) points.push(blockWorldPoint(instance, localPoint));
-    }
-    if ((definition.geometryInstances || []).length > 0) {
-      const nestedBundles = (definition.blockInstances || []).map((instance) => {
-        const nestedDefinition = blockDefinitionById(instance.definitionId);
-        return nestedDefinition ? createBlockProjectionBundle(instance, nestedDefinition) : emptyGeometryInstanceBundle(instance);
-      });
-      for (const bundle of geometryInstanceBundlesForScope(definition, nestedBundles)) {
-        if (!bundle.valid || !enabled.has(String(bundle.instance.sketchId))) continue;
-        points.push(...bundle.points);
-        for (const circle of bundle.circles) {
-          points.push({ x: circle.center.x - circle.radius(), y: circle.center.y - circle.radius() }, { x: circle.center.x + circle.radius(), y: circle.center.y + circle.radius() });
-        }
-        for (const arc of bundle.arcs) {
-          const samples = [arc.startAngle, arc.endAngle, 0, Math.PI / 2, Math.PI, Math.PI * 1.5];
-          for (const angle of samples) {
-            if (angle === arc.startAngle || angle === arc.endAngle || angleOnSignedSweep(angle, arc.startAngle, arc.endAngle)) {
-              points.push({ x: arc.center.x + Math.cos(angle) * arc.radius(), y: arc.center.y + Math.sin(angle) * arc.radius() });
-            }
-          }
-        }
-        for (const spline of bundle.splines || []) {
-          const bounds = splineBBox(spline);
-          if (bounds) points.push({ x: bounds.x1, y: bounds.y1 }, { x: bounds.x2, y: bounds.y2 });
-        }
-      }
-    }
-    if (points.length === 0) return null;
-    const xs = points.map((point) => point.x);
-    const ys = points.map((point) => point.y);
-    const minX = Math.min(...xs);
-    const maxX = Math.max(...xs);
-    const minY = Math.min(...ys);
-    const maxY = Math.max(...ys);
-    return { minX, minY, maxX, maxY, center: { x: (minX + maxX) / 2, y: (minY + maxY) / 2 } };
-  }
-
-  function blockInstanceDisplayCenter(instance) {
-    const definition = blockDefinitionById(instance?.definitionId);
-    const bounds = blockLocalGeometryBounds(definition, [...blockInstanceEnabledSketchSet(instance, definition)]);
-    const center = bounds?.center || definition?.origin || { x: 0, y: 0 };
-    return blockWorldPoint(instance, center);
-  }
-
-  function blockInstanceTranslationForAnchor(definition, enabledSketchIds, anchor, rotation) {
-    const localCenter = blockLocalGeometryBounds(definition, enabledSketchIds)?.center || definition?.origin || { x: 0, y: 0 };
-    const cos = Math.cos(rotation);
-    const sin = Math.sin(rotation);
-    return {
-      x: anchor.x - localCenter.x * cos + localCenter.y * sin,
-      y: anchor.y - localCenter.x * sin - localCenter.y * cos,
-      localCenter,
-    };
-  }
-
   function snappedBlockRotation(rotation) {
     const quarterTurns = Math.round((Number(rotation) || 0) / BLOCK_ORTHOGONAL_ROTATION_STEP);
     return ((quarterTurns % 4) + 4) % 4 * BLOCK_ORTHOGONAL_ROTATION_STEP;
@@ -1365,36 +1270,6 @@
 
   function blockInstanceById(id) {
     return model.blockInstances.find((instance) => instance.id === id) || null;
-  }
-
-  function hatchPrimitiveForElement(element) {
-    if (element instanceof Line) return { kind: "line", id: element.id, p1: element.p1, p2: element.p2 };
-    if (element instanceof Circle) return { kind: "circle", id: element.id, center: element.center, radius: element.radius() };
-    if (element instanceof Arc) return { kind: "arc", id: element.id, center: element.center, radius: element.radius(), startAngle: element.startAngle, endAngle: element.endAngle };
-    if (element instanceof Spline) return { kind: "spline", id: element.id, points: element.fitPoints, closed: element.closed };
-    return null;
-  }
-
-  function hatchPrimitiveFingerprint(primitive) {
-    if (!primitive) return "invalid";
-    if (primitive.kind === "line") return `line:${primitive.id}:${primitive.p1.x}:${primitive.p1.y}:${primitive.p2.x}:${primitive.p2.y}`;
-    if (primitive.kind === "spline") return `spline:${primitive.id}:${primitive.closed ? 1 : 0}:${(primitive.points || []).map((point) => `${point.x}:${point.y}`).join("|")}`;
-    return `${primitive.kind}:${primitive.id}:${primitive.center?.x}:${primitive.center?.y}:${primitive.radius}:${primitive.startAngle ?? ""}:${primitive.endAngle ?? ""}`;
-  }
-
-  function hatchPrimitivesFromElements(elements, sketchId, { visibleOnly = false } = {}) {
-    return elements
-      .filter((element) => String(element.sketchId) === String(sketchId) && !element.construction)
-      .filter((element) => !visibleOnly || effectiveAppearanceForElement(element).visible !== false)
-      .map(hatchPrimitiveForElement)
-      .filter(Boolean);
-  }
-
-  function hatchPrimitivesForScope(scope, sketchId, { visibleOnly = false } = {}) {
-    const elements = scope === model
-      ? [...allGeometryLines(), ...allGeometryCircles(), ...allGeometryArcs(), ...allGeometrySplines()]
-      : [...(scope?.lines || []), ...(scope?.circles || []), ...(scope?.arcs || []), ...(scope?.splines || [])];
-    return hatchPrimitivesFromElements(elements, sketchId, { visibleOnly });
   }
 
   function normalizeGeometryInstanceRef(value, expectedKind = null) {
@@ -1412,33 +1287,6 @@
     if (type === "mirror") return applicationText("ミラー", "Mirror");
     if (type === "pattern") return applicationText("直線パターン", "Linear Pattern");
     return applicationText("スケッチ投影", "Sketch Projection");
-  }
-
-  function hatchBoundaryFingerprint(hatch, scope = model) {
-    const elements = scope === model
-      ? [...allGeometryLines(), ...allGeometryCircles(), ...allGeometryArcs(), ...allGeometrySplines()]
-      : [...(scope.lines || []), ...(scope.circles || []), ...(scope.arcs || []), ...(scope.splines || [])];
-    const byKey = new Map([
-      ...elements.map((item) => [`${geometryKindForItem(item)}:${item.id}`, item]),
-    ]);
-    return hatchBoundaryGeometryRefs(hatch.boundaryLoops).map((ref) => {
-      const item = byKey.get(`${ref.kind}:${geometryRefId(ref)}`);
-      if (!item) return `${ref.kind}:${geometryRefId(ref)}:missing`;
-      if (item instanceof Line) return `line:${item.id}:${item.construction}:${item.p1.x}:${item.p1.y}:${item.p2.x}:${item.p2.y}`;
-      if (item instanceof Spline) return `spline:${item.id}:${item.construction}:${item.closed}:${item.fitPoints.map((point) => `${point.x}:${point.y}`).join(":")}`;
-      return `${ref.kind}:${item.id}:${item.construction}:${item.center.x}:${item.center.y}:${item.radius()}:${item instanceof Arc ? `${item.startAngle}:${item.endAngle}` : ""}`;
-    }).join("|");
-  }
-
-  function resolvedHatchBoundary(hatch) {
-    if (!hatch) return { ok: false, code: "missing-hatch", reason: applicationText("ハッチングが見つかりません", "Hatch not found") };
-    if (hatch.blockProjection) return hatch.resolvedBoundary || { ok: false, code: "invalid-boundary", reason: applicationText("ブロック内の境界が無効です", "The block hatch boundary is invalid") };
-    const fingerprint = hatchBoundaryFingerprint(hatch);
-    const cached = hatchResolutionCache.get(hatch);
-    if (cached?.fingerprint === fingerprint) return cached.result;
-    const result = resolveHatchBoundaryLoops(hatch.boundaryLoops, hatchPrimitivesForScope(model, hatch.sketchId));
-    hatchResolutionCache.set(hatch, { fingerprint, result });
-    return result;
   }
 
   function hitHatchAt(x, y, { activeOnly = true } = {}) {
@@ -1520,32 +1368,6 @@
     return true;
   }
 
-  function createLeaderAnnotation() {
-    if (rejectRootSketchCreation()) return;
-    const target = annotationLeaderTargetFromSelection(lastPointerWorld);
-    if (target) {
-      startLeaderAnnotationPlacement(target, lastPointerWorld);
-      return;
-    }
-    clearSelection();
-    pendingCommand = { type: "annotation-leader-select" };
-    setHint("引出線を付ける図形をクリックしてください");
-    updateToolbar();
-    draw();
-  }
-
-  function handleLeaderAnnotationTargetClick(hit, pointer) {
-    if (pendingCommand?.type !== "annotation-leader-select") return false;
-    const target = annotationLeaderTargetFromHit(hit, pointer);
-    if (!target) {
-      setHint("引出線を付ける図形をクリックしてください", "error");
-      return true;
-    }
-    setGeometrySelection(hit, false);
-    startLeaderAnnotationPlacement(target, pointer);
-    return true;
-  }
-
   function annotationLeaderTargetFromSelection(pointer = null) {
     const items = selectedGeometryItems();
     if (items.length !== 1) return null;
@@ -1598,102 +1420,6 @@
       y: arc.center.y + Math.sin(angle) * arc.radius(),
     };
     return hypot2(point.x - start.x, point.y - start.y) <= hypot2(point.x - end.x, point.y - end.y) ? arc.startAngle : arc.endAngle;
-  }
-
-  function startLeaderAnnotationPlacement(target, pointer = null) {
-    pendingCommand = {
-      type: "annotation-leader-place",
-      leaderTarget: target,
-      pointer: pointer || {
-        x: target.anchor.x + 90 / viewport.scale,
-        y: target.anchor.y - 36 / viewport.scale,
-      },
-    };
-    setHint("引出線の文字位置をクリックしてください");
-    updateToolbar();
-    draw();
-  }
-
-  function annotationLeaderLayout(anchor, pointer) {
-    const side = pointer.x >= anchor.x ? 1 : -1;
-    const minShelf = 64 / viewport.scale;
-    const end = { x: pointer.x, y: pointer.y };
-    if (Math.abs(end.x - anchor.x) < minShelf) end.x = anchor.x + side * minShelf;
-    const elbowX = side > 0 ? Math.min(anchor.x + 42 / viewport.scale, end.x - minShelf) : Math.max(anchor.x - 42 / viewport.scale, end.x + minShelf);
-    const elbow = { x: elbowX, y: end.y };
-    const text = {
-      x: (elbow.x + end.x) / 2,
-      y: end.y - 10 / viewport.scale,
-    };
-    return { start: anchor, elbow, end, text };
-  }
-
-  function commitLeaderAnnotationAt(pointer) {
-    if (pendingCommand?.type !== "annotation-leader-place" || !pendingCommand.leaderTarget) return;
-    const target = pendingCommand.leaderTarget;
-    const layout = annotationLeaderLayout(target.anchor, pointer);
-    const text = window.prompt("引出線テキスト", "注記");
-    if (!text) {
-      setHint("引出線をキャンセルしました");
-      pendingCommand = null;
-      updateToolbar();
-      draw();
-      return;
-    }
-    pushAnnotation({
-      type: "leader",
-      text,
-      start: layout.start,
-      elbow: layout.elbow,
-      end: layout.end,
-      x: layout.text.x,
-      y: layout.text.y,
-      geometryRef: target.geometryRef,
-      style: { ...DEFAULT_ANNOTATION_STYLE },
-    });
-    pendingCommand = null;
-    setHint("引出線を追加しました");
-    updateToolbar();
-    recordHistory("引出線追加");
-  }
-
-  function drawLeaderAnnotationCommandPreview() {
-    if (pendingCommand?.type !== "annotation-leader-place" || !pendingCommand.leaderTarget) return;
-    const layout = annotationLeaderLayout(pendingCommand.leaderTarget.anchor, pendingCommand.pointer);
-    drawAnnotationLeader({
-      start: layout.start,
-      elbow: layout.elbow,
-      end: layout.end,
-      x: layout.text.x,
-      y: layout.text.y,
-      text: "注記",
-      style: { ...DEFAULT_ANNOTATION_STYLE, color: "#2563eb" },
-    }, true);
-  }
-
-  function createTextAnnotation() {
-    if (rejectRootSketchCreation()) return;
-    cancelPendingCommand("");
-    pendingCommand = { type: "annotation-text-place", pointer: lastPointerWorld || { x: 0, y: 0 } };
-    setHint("テキストを配置する位置をクリックしてください");
-    updateToolbar();
-    draw();
-  }
-
-  function commitTextAnnotationAt(pointer) {
-    if (pendingCommand?.type !== "annotation-text-place") return false;
-    const text = window.prompt("テキスト", "注記");
-    if (text) {
-      pushAnnotation({ type: "text", text, x: pointer.x, y: pointer.y, style: { ...DEFAULT_ANNOTATION_STYLE } });
-      recordHistory("テキスト追加");
-      setHint("テキストを追加しました");
-    } else {
-      setHint("テキストをキャンセルしました");
-    }
-    pendingCommand = null;
-    updateToolbar();
-    draw();
-    return true;
   }
 
   function canCreateInActiveSketch() {
@@ -2561,100 +2287,6 @@
     return pair ? applicationText(pair[0], pair[1]) : applicationText("閉領域を判定できません", result?.reason || "Could not detect a closed region");
   }
 
-  function hatchFaceAt(pointer) {
-    const sketchId = activeSketchId();
-    const primitives = hatchPrimitivesForScope(model, sketchId, { visibleOnly: true });
-    const fingerprint = primitives.map(hatchPrimitiveFingerprint).join("|");
-    let cached = hatchFaceCache.get(sketchId);
-    if (!cached || cached.fingerprint !== fingerprint) {
-      cached = { fingerprint, index: createHatchRegionIndex(primitives) };
-      hatchFaceCache.set(sketchId, cached);
-    }
-    return findHatchFaceInIndex(cached.index, pointer);
-  }
-
-  function updateHatchPreview(pointer) {
-    if (!pointer || !["hatch", "hatch-repair"].includes(mode)) return;
-    hatchPreview = { pointer: { x: pointer.x, y: pointer.y }, result: hatchFaceAt(pointer) };
-  }
-
-  function startHatchCreation() {
-    cancelConstraintTargetCommand("");
-    cancelPendingCommand("");
-    if (!canCreateInActiveSketch()) {
-      rejectRootSketchCreation();
-      return;
-    }
-    mode = "hatch";
-    hatchRepairTarget = null;
-    pointerPreview = lastPointerWorld;
-    hatchPreview = null;
-    if (pointerPreview) updateHatchPreview(pointerPreview);
-    clearSnap();
-    updateToolbar();
-    updateStatusUI();
-    setHint(applicationText("ハッチングする閉領域の内側をクリックしてください。終了はEscです", "Click inside a closed region to hatch it. Press Esc to finish."));
-    draw();
-  }
-
-  function startHatchBoundaryRepair(hatch) {
-    if (!hatch || hatch.blockProjection || !model.hatches.includes(hatch)) return false;
-    if (hatch.sketchId !== activeSketchId()) setActiveSketch(hatch.sketchId);
-    mode = "hatch-repair";
-    hatchRepairTarget = hatch;
-    hatchPreview = null;
-    pointerPreview = lastPointerWorld;
-    if (pointerPreview) updateHatchPreview(pointerPreview);
-    updateToolbar();
-    updateStatusUI();
-    setHint(applicationText(`${hatch.id} の新しい閉領域をクリックしてください`, `Click a new closed region for ${hatch.id}`));
-    draw();
-    return true;
-  }
-
-  function commitHatchAt(pointer) {
-    const result = hatchFaceAt(pointer);
-    hatchPreview = { pointer: { x: pointer.x, y: pointer.y }, result };
-    if (!result.ok) {
-      setHint(hatchRegionErrorText(result), "error");
-      draw();
-      return false;
-    }
-    if (mode === "hatch-repair" && hatchRepairTarget) {
-      const hatch = hatchRepairTarget;
-      hatch.seed = { x: pointer.x, y: pointer.y };
-      hatch.boundaryLoops = result.boundaryLoops;
-      hatchResolutionCache.delete(hatch);
-      clearSelection();
-      canvasSelection.set("hatches", [hatch]);
-      hatchRepairTarget = null;
-      hatchPreview = null;
-      pointerPreview = null;
-      mode = "select";
-      updateUI({ refreshAnalysis: false });
-      draw();
-      recordHistory("ハッチング境界再指定");
-      setHint(applicationText(`${hatch.id} の境界を再指定しました`, `Reassigned the boundary of ${hatch.id}`));
-      return true;
-    }
-    const hatch = {
-      id: `H${hatchSeq++}`,
-      sketchId: activeSketchId(),
-      seed: { x: pointer.x, y: pointer.y },
-      boundaryLoops: result.boundaryLoops,
-      appearance: { ...DEFAULT_HATCH_APPEARANCE },
-    };
-    model.hatches.push(hatch);
-    model.nextHatchIndex = hatchSeq;
-    clearSelection();
-    canvasSelection.set("hatches", [hatch]);
-    updateUI({ refreshAnalysis: false });
-    draw();
-    recordHistory("ハッチング追加");
-    setHint(applicationText(`${hatch.id} を作成しました。続けて閉領域をクリックできます`, `Created ${hatch.id}. Click another closed region to continue.`));
-    return true;
-  }
-
   const blockSelectionQuery = window.BlockSelectionQuery.create({
     currentScope: workspace.current, canvasSelection, blockProjectionBundle, elementSketchId, activeSketchId,
     constraintGraphNodes, serializeConstraint, constraintLabelForList: (constraint) => localizedConstraintName(constraint.name), resolveGeometryRef,
@@ -2830,10 +2462,8 @@
     blockPlacementCommand.reset();
     blockEditor.reset();
     window.DocumentState.resetDefaults(documentModel);
-    hatchPreview = null;
-    hatchRepairTarget = null;
-    hatchResolutionCache = new WeakMap();
-    hatchFaceCache = new Map();
+    hatchCommand.reset();
+    hatchGeometryQuery.clear();
     sketchTreeView.reset();
     annotationDrag.reset();
     referenceImageInteraction.reset();
@@ -3383,8 +3013,7 @@
     pointerPreview = null;
     trimPreview = null;
     offsetSelection.reset();
-    hatchPreview = null;
-    hatchRepairTarget = null;
+    hatchCommand.reset();
     clearSnap();
     mode = "select";
     updateToolbar();
@@ -3415,8 +3044,7 @@
     pointerPreview = null;
     trimPreview = null;
     offsetSelection.reset();
-    hatchPreview = null;
-    hatchRepairTarget = null;
+    hatchCommand.reset();
     clearSnap();
     clearSelection();
     setHint("作図操作をキャンセルしました");
@@ -3603,164 +3231,6 @@
     return hitAnyPoint(x, y);
   }
 
-  function rectFromPoints(a, b) {
-    return {
-      x1: Math.min(a.x, b.x),
-      y1: Math.min(a.y, b.y),
-      x2: Math.max(a.x, b.x),
-      y2: Math.max(a.y, b.y),
-    };
-  }
-
-  function pointInRect(p, rect) {
-    return p.x >= rect.x1 && p.x <= rect.x2 && p.y >= rect.y1 && p.y <= rect.y2;
-  }
-
-  function bboxInRect(box, rect) {
-    return box.x1 >= rect.x1 && box.x2 <= rect.x2 && box.y1 >= rect.y1 && box.y2 <= rect.y2;
-  }
-
-  function bboxIntersectsRect(box, rect) {
-    return box.x2 >= rect.x1 && box.x1 <= rect.x2 && box.y2 >= rect.y1 && box.y1 <= rect.y2;
-  }
-
-  function lineBBox(line) {
-    return {
-      x1: Math.min(line.p1.x, line.p2.x),
-      y1: Math.min(line.p1.y, line.p2.y),
-      x2: Math.max(line.p1.x, line.p2.x),
-      y2: Math.max(line.p1.y, line.p2.y),
-    };
-  }
-
-  function primitiveBBox(primitive) {
-    const r = primitive.radius();
-    return {
-      x1: primitive.center.x - r,
-      y1: primitive.center.y - r,
-      x2: primitive.center.x + r,
-      y2: primitive.center.y + r,
-    };
-  }
-
-  function mergeBounds(bounds, box) {
-    if (!box) return bounds;
-    const x1 = box.x1 ?? box.left;
-    const y1 = box.y1 ?? box.top;
-    const x2 = box.x2 ?? box.right;
-    const y2 = box.y2 ?? box.bottom;
-    if (![x1, y1, x2, y2].every(Number.isFinite)) return bounds;
-    if (!bounds) return { x1, y1, x2, y2 };
-    return {
-      x1: Math.min(bounds.x1, x1),
-      y1: Math.min(bounds.y1, y1),
-      x2: Math.max(bounds.x2, x2),
-      y2: Math.max(bounds.y2, y2),
-    };
-  }
-
-  function referenceImageLocalToWorld(image, point) {
-    const cos = Math.cos(image.rotation);
-    const sin = Math.sin(image.rotation);
-    const x = point.x * image.scale;
-    const y = point.y * image.scale;
-    return { x: image.x + x * cos - y * sin, y: image.y + x * sin + y * cos };
-  }
-
-  function referenceImageWorldToLocal(image, point) {
-    const cos = Math.cos(image.rotation);
-    const sin = Math.sin(image.rotation);
-    const dx = point.x - image.x;
-    const dy = point.y - image.y;
-    return { x: (dx * cos + dy * sin) / image.scale, y: (-dx * sin + dy * cos) / image.scale };
-  }
-
-  function referenceImageCorners(image) {
-    const halfWidth = image.pixelWidth / 2;
-    const halfHeight = image.pixelHeight / 2;
-    return [
-      referenceImageLocalToWorld(image, { x: -halfWidth, y: -halfHeight }),
-      referenceImageLocalToWorld(image, { x: halfWidth, y: -halfHeight }),
-      referenceImageLocalToWorld(image, { x: halfWidth, y: halfHeight }),
-      referenceImageLocalToWorld(image, { x: -halfWidth, y: halfHeight }),
-    ];
-  }
-
-  function referenceImageBounds(image) {
-    const corners = referenceImageCorners(image);
-    return {
-      x1: Math.min(...corners.map((point) => point.x)),
-      y1: Math.min(...corners.map((point) => point.y)),
-      x2: Math.max(...corners.map((point) => point.x)),
-      y2: Math.max(...corners.map((point) => point.y)),
-    };
-  }
-
-  function sketchGeometryBounds(sketchId = activeSketchId()) {
-    let bounds = null;
-    for (const line of allGeometryLines()) {
-      if (elementSketchId(line) === sketchId) bounds = mergeBounds(bounds, lineBBox(line));
-    }
-    for (const circle of allGeometryCircles()) {
-      if (elementSketchId(circle) === sketchId) bounds = mergeBounds(bounds, primitiveBBox(circle));
-    }
-    for (const arc of allGeometryArcs()) {
-      if (elementSketchId(arc) === sketchId) bounds = mergeBounds(bounds, primitiveBBox(arc));
-    }
-    for (const spline of allGeometrySplines()) {
-      if (elementSketchId(spline) === sketchId) bounds = mergeBounds(bounds, splineBBox(spline));
-    }
-    for (const point of allGeometryPoints()) {
-      if (elementSketchId(point) === sketchId) bounds = mergeBounds(bounds, { x1: point.x, y1: point.y, x2: point.x, y2: point.y });
-    }
-    for (const annotation of allAnnotations()) if (annotation.sketchId === sketchId) bounds = mergeBounds(bounds, annotationBounds(annotation));
-    for (const hatch of allHatches()) if (hatch.sketchId === sketchId) bounds = mergeBounds(bounds, resolvedLoopBounds(resolvedHatchBoundary(hatch)));
-    for (const image of model.referenceImages) if (image.sketchId === sketchId) bounds = mergeBounds(bounds, referenceImageBounds(image));
-    return bounds;
-  }
-
-  function allGeometryBounds() {
-    let bounds = null;
-    for (const line of allGeometryLines()) bounds = mergeBounds(bounds, lineBBox(line));
-    for (const circle of allGeometryCircles()) bounds = mergeBounds(bounds, primitiveBBox(circle));
-    for (const arc of allGeometryArcs()) bounds = mergeBounds(bounds, primitiveBBox(arc));
-    for (const spline of allGeometrySplines()) bounds = mergeBounds(bounds, splineBBox(spline));
-    for (const point of allGeometryPoints()) bounds = mergeBounds(bounds, { x1: point.x, y1: point.y, x2: point.x, y2: point.y });
-    for (const annotation of allAnnotations()) bounds = mergeBounds(bounds, annotationBounds(annotation));
-    for (const hatch of allHatches()) bounds = mergeBounds(bounds, resolvedLoopBounds(resolvedHatchBoundary(hatch)));
-    for (const image of model.referenceImages) bounds = mergeBounds(bounds, referenceImageBounds(image));
-    return bounds;
-  }
-
-  function isVisibleOnCanvasGeometry(item) {
-    return isVisibleSketchElement(item);
-  }
-
-  function visibleGeometryBounds() {
-    let bounds = null;
-    for (const line of allGeometryLines()) {
-      if (isVisibleOnCanvasGeometry(line)) bounds = mergeBounds(bounds, lineBBox(line));
-    }
-    for (const circle of allGeometryCircles()) {
-      if (isVisibleOnCanvasGeometry(circle)) bounds = mergeBounds(bounds, primitiveBBox(circle));
-    }
-    for (const arc of allGeometryArcs()) {
-      if (isVisibleOnCanvasGeometry(arc)) bounds = mergeBounds(bounds, primitiveBBox(arc));
-    }
-    for (const spline of allGeometrySplines()) {
-      if (isVisibleOnCanvasGeometry(spline)) bounds = mergeBounds(bounds, splineBBox(spline));
-    }
-    for (const point of allGeometryPoints()) {
-      if (isVisibleOnCanvasGeometry(point)) bounds = mergeBounds(bounds, { x1: point.x, y1: point.y, x2: point.x, y2: point.y });
-    }
-    for (const annotation of allAnnotations()) if (annotation.visible !== false && isVisibleSketchId(annotation.sketchId)) bounds = mergeBounds(bounds, annotationBounds(annotation));
-    for (const hatch of allHatches()) if (hatchAppearanceForDisplay(hatch).visible !== false && isVisibleSketchId(hatch.sketchId)) bounds = mergeBounds(bounds, resolvedLoopBounds(resolvedHatchBoundary(hatch)));
-    for (const image of model.referenceImages) if (image.visible !== false && isVisibleSketchId(image.sketchId)) bounds = mergeBounds(bounds, referenceImageBounds(image));
-    return bounds;
-  }
-
-
-
   function fitSketchToViewport(sketchId = activeSketchId(), paddingPx = 96) {
     return fitBoundsToViewport(sketchGeometryBounds(sketchId), paddingPx);
   }
@@ -3774,116 +3244,6 @@
   }
 
 
-
-  function captureSketchScreenFootprint(sketchId = activeSketchId()) {
-    const bounds = sketchGeometryBounds(sketchId);
-    const screenBox = screenBoxForBounds(bounds);
-    if (!bounds || !screenBox) return null;
-    return {
-      bounds,
-      screenBox,
-      center: {
-        x: (screenBox.left + screenBox.right) / 2,
-        y: (screenBox.top + screenBox.bottom) / 2,
-      },
-      width: Math.max(screenBox.right - screenBox.left, 1),
-      height: Math.max(screenBox.bottom - screenBox.top, 1),
-    };
-  }
-
-  function restoreSketchScreenFootprint(sketchId, footprint) {
-    if (!footprint) return false;
-    const bounds = sketchGeometryBounds(sketchId);
-    if (!bounds) return false;
-    const worldWidth = bounds.x2 - bounds.x1;
-    const worldHeight = bounds.y2 - bounds.y1;
-    const scaleCandidates = [];
-    if (worldWidth > MIN_LINE_LENGTH) scaleCandidates.push(footprint.width / worldWidth);
-    if (worldHeight > MIN_LINE_LENGTH) scaleCandidates.push(footprint.height / worldHeight);
-    if (scaleCandidates.length === 0) return false;
-    const nextScale = clampZoom(Math.min(...scaleCandidates));
-    const centerX = (bounds.x1 + bounds.x2) / 2;
-    const centerY = (bounds.y1 + bounds.y2) / 2;
-    viewport.update({ scale: nextScale });
-    viewport.update({ x: footprint.center.x - centerX * viewport.scale });
-    viewport.update({ y: footprint.center.y - centerY * viewport.scale });
-    return true;
-  }
-
-  function scalePointAbout(point, origin, scale) {
-    point.x = origin.x + (point.x - origin.x) * scale;
-    point.y = origin.y + (point.y - origin.y) * scale;
-  }
-
-  function scaleValueAbout(value, originValue, scale) {
-    return originValue + (value - originValue) * scale;
-  }
-
-  function scaleDimensionAbout(dimension, origin, scale) {
-    if (!dimension) return dimension;
-    for (const key of ["x", "labelX"]) {
-      if (Number.isFinite(dimension[key])) dimension[key] = scaleValueAbout(dimension[key], origin.x, scale);
-    }
-    for (const key of ["y", "labelY"]) {
-      if (Number.isFinite(dimension[key])) dimension[key] = scaleValueAbout(dimension[key], origin.y, scale);
-    }
-    for (const key of ["offsetU", "offsetN", "labelOffsetU", "angleRadius", "angleLabelOffsetR", "angleLabelOffsetT"]) {
-      if (Number.isFinite(dimension[key])) dimension[key] *= scale;
-    }
-    return dimension;
-  }
-
-  function currentTargetValue(target) {
-    if (!target) return NaN;
-    if (target.kind === "point-point") {
-      if (target.dimensionAxis === "x") return Math.abs(target.p2.x - target.p1.x);
-      if (target.dimensionAxis === "y") return Math.abs(target.p2.y - target.p1.y);
-      return hypot2(target.p2.x - target.p1.x, target.p2.y - target.p1.y);
-    }
-    if (target.kind === "line-length") return target.line.length();
-    if (target.kind === "point-line") return Math.abs(signedPointLineDistance(target.point, target.line));
-    if (target.kind === "line-line") return Math.abs(signedPointLineDistance(target.line1.p1, target.line2));
-    if (target.kind === "line-circle") return Math.abs(signedPointLineDistance(target.circle.center, target.line));
-    if (target.kind === "radius-difference") return Math.abs(target.b.radius() - target.a.radius());
-    if (target.kind === "radius") return target.primitive.radius();
-    if (target.kind === "diameter") return target.primitive.radius() * 2;
-    if (target.kind === "offset-distance") {
-      if (target.source instanceof Line) return Math.abs(signedPointLineDistance(target.offset.p1, target.source));
-      return Math.abs(target.offset.radius() - target.source.radius());
-    }
-    return target.value;
-  }
-
-  function sketchHasReferenceConstraint(sketchId = activeSketchId()) {
-    return model.constraints.some((constraint) => constraintSketchId(constraint) === sketchId && constraint.reference);
-  }
-
-  function sketchHasFixedGeometry(sketchId = activeSketchId()) {
-    if (model.points.some((point) => elementSketchId(point) === sketchId && point.fixed)) return true;
-    return model.constraints.some((constraint) => constraintSketchId(constraint) === sketchId && (constraint instanceof LineFixedConstraint || constraint instanceof GeometryFixedConstraint));
-  }
-
-  function scaleSketchForFirstDimension(sketchId, target, targetValue, dimension) {
-    if (!sketchId || target?.kind === "angle" || sketchHasReferenceConstraint(sketchId) || sketchHasFixedGeometry(sketchId)) return false;
-    const current = currentTargetValue(target);
-    if (!Number.isFinite(current) || current <= MIN_LINE_LENGTH || !Number.isFinite(targetValue) || targetValue <= 0) return false;
-    const scale = targetValue / current;
-    if (!Number.isFinite(scale) || scale <= 0 || Math.abs(scale - 1) < 1e-9) return false;
-    const bounds = sketchGeometryBounds(sketchId);
-    if (!bounds) return false;
-    const origin = { x: (bounds.x1 + bounds.x2) / 2, y: (bounds.y1 + bounds.y2) / 2 };
-    for (const point of model.points) {
-      if (elementSketchId(point) === sketchId) scalePointAbout(point, origin, scale);
-    }
-    for (const circle of model.circles) {
-      if (elementSketchId(circle) === sketchId) circle.radiusValue = Math.max(MIN_LINE_LENGTH, circle.radiusValue * scale);
-    }
-    for (const arc of model.arcs) {
-      if (elementSketchId(arc) === sketchId) arc.radiusValue = Math.max(MIN_LINE_LENGTH, arc.radiusValue * scale);
-    }
-    scaleDimensionAbout(dimension, origin, scale);
-    return true;
-  }
 
   function arcEndpointDragValue(arc, endpoint, rawAngle) {
     const twoPi = Math.PI * 2;
@@ -4926,10 +4286,7 @@
   }
 
 
-  function splineBBox(spline) {
-    const bounds = window.SplineGeometry.bounds(spline.curve());
-    return bounds ? { x1: bounds.minX, y1: bounds.minY, x2: bounds.maxX, y2: bounds.maxY } : null;
-  }
+
 
 
 
@@ -4996,8 +4353,8 @@
       const hovered = hatch.blockProjection ? hoveredBlockInstance === hatch.blockInstance : hatch.sketchId === activeSketchId() && hoveredHatch === hatch;
       drawResolvedHatch(resolvedHatchBoundary(hatch), appearance, hatchPatternOrigin(hatch), { hatch, selected, hovered, alpha: sketchAlpha(hatch) });
     }
-    if (includePreview && ["hatch", "hatch-repair"].includes(mode) && hatchPreview?.result?.ok) {
-      drawResolvedHatch({ ...hatchPreview.result.resolved, ok: true }, DEFAULT_HATCH_APPEARANCE, { x: 0, y: 0 }, { preview: true });
+    if (includePreview && ["hatch", "hatch-repair"].includes(mode) && hatchCommand.preview?.result?.ok) {
+      drawResolvedHatch({ ...hatchCommand.preview.result.resolved, ok: true }, DEFAULT_HATCH_APPEARANCE, { x: 0, y: 0 }, { preview: true });
     }
   }
 
@@ -5094,7 +4451,7 @@
   function drawCanvas() {
     if (canvasSurface.width <= 0 || canvasSurface.height <= 0) syncCanvasBitmapSize();
     const dpr = canvasSurface.dpr;
-    if (interactionFrameStats) interactionFrameStats.canvasDraws += 1;
+    pointerMoveScheduler.recordDraw();
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     resetCanvasStrokeState();
     ctx.clearRect(0, 0, canvas.width, canvas.height);
@@ -5111,7 +4468,8 @@
     drawDimensions();
     drawDimensionPreview();
     drawAnnotations();
-    drawLeaderAnnotationCommandPreview();
+    const leaderPreview = annotationCommand.leaderPreview();
+    if (leaderPreview) drawAnnotationLeader(leaderPreview, true);
     drawTemporaryLine();
     drawCenterlinePreview();
     drawRectanglePreview();
@@ -6716,6 +6074,17 @@
     effectiveAppearanceForElement, clearTreeHover: () => { hoveredSketchTreeId = null; }, clearSnap,
   });
   const { createSketch, activate: setActiveSketch, rename: renameSketch, toggleVisibility: toggleSketchVisibility } = sketchCommand;
+  const hatchCommand = window.HatchCommand.create({
+    currentScope: workspace.current, hatchGeometryQuery, getMode: () => mode, setMode: value => { mode = value; },
+    lastPointer: () => lastPointerWorld, getPointerPreview: () => pointerPreview, setPointerPreview: value => { pointerPreview = value; },
+    activeSketchId, setActiveSketch, canCreateInActiveSketch, rejectRootSketchCreation,
+    nextHatchId: () => `H${hatchSeq++}`, hatchSequence: () => hatchSeq,
+    cancelConstraintTargetCommand, cancelPendingCommand, clearSnap, clearSelection, canvasSelection,
+    updateToolbar, updateStatusUI, updateUI, setHint, draw, recordHistory, applicationText, hatchRegionErrorText,
+  });
+  const { updateHatchPreview, startHatchCreation, startHatchBoundaryRepair, commitHatchAt } = hatchCommand;
+
+
 
   function valueReferencesRemovedGeometry(value, removedIds, removedKeys) {
     if (typeof value === "string") return removedIds.has(value) || removedKeys.has(value);
@@ -9870,51 +9239,6 @@
     geometryDrag.update(p);
   }
 
-  function processScheduledCanvasPointerMove({ animationFrame = false, synchronousFlush = false } = {}) {
-    if (!pendingCanvasPointerMove) return false;
-    const pointer = pendingCanvasPointerMove;
-    pendingCanvasPointerMove = null;
-    if (interactionFrameStats) {
-      interactionFrameStats.processedMoves += 1;
-      if (animationFrame) interactionFrameStats.animationFrames += 1;
-      if (synchronousFlush) interactionFrameStats.synchronousFlushes += 1;
-    }
-    profileInteractionPhase("preview", () => {
-      withGeometryReadCache(() => processCanvasPointerMove(pointer));
-      if (pendingCommand && ["distance-value", "offset-value"].includes(pendingCommand.type)) syncDimensionValueInput();
-    });
-    return true;
-  }
-
-  function scheduleCanvasPointerMove(e) {
-    if (interactionFrameStats) interactionFrameStats.receivedMoves += 1;
-    if (pendingCanvasPointerMove) {
-      if (interactionFrameStats) interactionFrameStats.coalescedMoves += 1;
-      pendingCanvasPointerMove.offsetX = e.offsetX;
-      pendingCanvasPointerMove.offsetY = e.offsetY;
-      pendingCanvasPointerMove.shiftKey = e.shiftKey;
-    } else {
-      pendingCanvasPointerMove = { offsetX: e.offsetX, offsetY: e.offsetY, shiftKey: e.shiftKey };
-    }
-    if (canvasPointerMoveFrame != null) return;
-    canvasPointerMoveFrame = requestAnimationFrame(() => {
-      canvasPointerMoveFrame = null;
-      processScheduledCanvasPointerMove({ animationFrame: true });
-    });
-  }
-
-  function flushScheduledCanvasPointerMove({ discard = false } = {}) {
-    if (canvasPointerMoveFrame != null) {
-      cancelAnimationFrame(canvasPointerMoveFrame);
-      canvasPointerMoveFrame = null;
-    }
-    if (discard) {
-      pendingCanvasPointerMove = null;
-      return false;
-    }
-    return processScheduledCanvasPointerMove({ synchronousFlush: true });
-  }
-
   canvas.addEventListener("pointermove", scheduleCanvasPointerMove);
 
   function endDrag(e) {
@@ -11020,21 +10344,10 @@
         return interactionProfiler.stop();
       },
       resetInteractionFrameStatsForTest() {
-        flushScheduledCanvasPointerMove();
-        interactionFrameStats = {
-          receivedMoves: 0,
-          processedMoves: 0,
-          coalescedMoves: 0,
-          animationFrames: 0,
-          synchronousFlushes: 0,
-          canvasDraws: 0,
-        };
-        return { ...interactionFrameStats };
+        return pointerMoveScheduler.resetStats();
       },
       interactionFrameStatsForTest() {
-        return interactionFrameStats
-          ? { ...interactionFrameStats, pendingMove: Boolean(pendingCanvasPointerMove), frameScheduled: canvasPointerMoveFrame != null }
-          : null;
+        return pointerMoveScheduler.stats();
       },
       resetForResponsiveLineDragTest() {
         sampleModel();
@@ -11411,7 +10724,7 @@
             return { ...serializeHatch(hatch), valid: resolved.ok, reason: resolved.ok ? null : hatchRegionErrorText(resolved) };
           }),
           selectedIds: canvasSelection.hatches.map((hatch) => hatch.id),
-          preview: hatchPreview ? { ok: Boolean(hatchPreview.result?.ok), code: hatchPreview.result?.code || null } : null,
+          preview: hatchCommand.preview ? { ok: Boolean(hatchCommand.preview.result?.ok), code: hatchCommand.preview.result?.code || null } : null,
           serialized: serializeModel(),
           treeHatchRows: document.querySelectorAll('#sketchList [data-object-kind="hatch"]').length,
           propertiesText: document.getElementById("propertiesPanel")?.textContent || "",
