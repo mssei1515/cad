@@ -6,6 +6,8 @@
 
 ## 現在の再開地点（2026-09-30）
 
+AnnotationCommandへテキスト／引出線の作成・対象選択・prompt・確定取消と配置計算を集約。previewを描画データとして返し、appが既存Rendererへ接続する。共通pendingCommandは明示get／setを使用。操作・配置9関数はadapter置換とpreviewデータ化以外の一致を確認。構文302件・単体633件・関連E2E184件が成功。app.jsは14,539行。全体目標と全体E2Eは未完了。 週枠の残りが49%となり、ユーザー指定の50%未満停止条件に達したため、この区切りをCommit・Pushして一時停止する。
+
 HatchCommandへ作成・境界修復の進行とpreview／修復対象を集約。共通mode・pointer・ID採番・UI・履歴は明示adapterで接続し、取消とDocumentリセットはresetを利用。構文300件・単体628件・関連E2E191件が成功。app.jsは14,674行。全体目標と全体E2Eは未完了。
 
 HatchGeometryQueryへprimitive変換・境界fingerprint・境界解決WeakMap・閉領域indexを集約。修復後のforgetとDocumentリセット時のclearでcacheを操作し、appから直接参照を除去。抽出7関数は依存取得方法以外の本体一致を確認。構文298件・単体623件・関連E2E191件が成功。app.jsは14,750行。全体目標と全体E2Eは未完了。

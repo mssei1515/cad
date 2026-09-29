@@ -538,6 +538,15 @@
 
   const { drawResolvedHatchContent } = window.HatchRenderer.create({ viewport, visibleWorldBounds, canvasThemeColor });
   const { annotationTextWorldHeight, drawAnnotationText, drawAnnotationLeader } = window.AnnotationRenderer.create({ ctx, viewport, withCanvasState, annotationDisplayColor, annotationLeaderAnchor, appearanceLineDash });
+  const annotationCommand = window.AnnotationCommand.create({
+    currentScope: workspace.current, getPending: () => pendingCommand, setPending: value => { pendingCommand = value; },
+    lastPointer: () => lastPointerWorld, viewScale: () => viewport.scale, promptText: (...args) => window.prompt(...args),
+    nextAnnotationId: () => `AN${annotationSeq++}`, activeSketchId, canCreateInActiveSketch, rejectRootSketchCreation,
+    annotationLeaderTargetFromSelection, annotationLeaderTargetFromHit, setGeometrySelection, clearSelection, cancelPendingCommand,
+    setHint, updateToolbar, updateUI, draw, recordHistory,
+  });
+  const { pushAnnotation, createLeaderAnnotation, handleLeaderAnnotationTargetClick,
+    startLeaderAnnotationPlacement, commitLeaderAnnotationAt, createTextAnnotation, commitTextAnnotationAt } = annotationCommand;
   const referenceImageRenderer = window.ReferenceImageRenderer.create({
     ctx, viewport, withCanvasState, createImage: () => new Image(), onImageLoad: draw, referenceImageCorners,
   });
@@ -1194,29 +1203,6 @@
     return true;
   }
 
-  function nextAnnotationId() {
-    return `AN${annotationSeq++}`;
-  }
-
-  function pushAnnotation(element) {
-    if (!canCreateInActiveSketch()) {
-      rejectRootSketchCreation();
-      return null;
-    }
-    const item = {
-      id: nextAnnotationId(),
-      sketchId: activeSketchId(),
-      visible: true,
-      style: {},
-      ...element,
-    };
-    item.rotation = Number.isFinite(Number(item.rotation)) ? Number(item.rotation) : 0;
-    item.style = normalizeAnnotationStyle(item.style);
-    model.annotations.push(item);
-    updateUI();
-    draw();
-    return item;
-  }
 
   function constraintGeometryId(item) {
     return geometryRefId(geometryRefForItem(item));
@@ -1382,32 +1368,6 @@
     return true;
   }
 
-  function createLeaderAnnotation() {
-    if (rejectRootSketchCreation()) return;
-    const target = annotationLeaderTargetFromSelection(lastPointerWorld);
-    if (target) {
-      startLeaderAnnotationPlacement(target, lastPointerWorld);
-      return;
-    }
-    clearSelection();
-    pendingCommand = { type: "annotation-leader-select" };
-    setHint("引出線を付ける図形をクリックしてください");
-    updateToolbar();
-    draw();
-  }
-
-  function handleLeaderAnnotationTargetClick(hit, pointer) {
-    if (pendingCommand?.type !== "annotation-leader-select") return false;
-    const target = annotationLeaderTargetFromHit(hit, pointer);
-    if (!target) {
-      setHint("引出線を付ける図形をクリックしてください", "error");
-      return true;
-    }
-    setGeometrySelection(hit, false);
-    startLeaderAnnotationPlacement(target, pointer);
-    return true;
-  }
-
   function annotationLeaderTargetFromSelection(pointer = null) {
     const items = selectedGeometryItems();
     if (items.length !== 1) return null;
@@ -1460,102 +1420,6 @@
       y: arc.center.y + Math.sin(angle) * arc.radius(),
     };
     return hypot2(point.x - start.x, point.y - start.y) <= hypot2(point.x - end.x, point.y - end.y) ? arc.startAngle : arc.endAngle;
-  }
-
-  function startLeaderAnnotationPlacement(target, pointer = null) {
-    pendingCommand = {
-      type: "annotation-leader-place",
-      leaderTarget: target,
-      pointer: pointer || {
-        x: target.anchor.x + 90 / viewport.scale,
-        y: target.anchor.y - 36 / viewport.scale,
-      },
-    };
-    setHint("引出線の文字位置をクリックしてください");
-    updateToolbar();
-    draw();
-  }
-
-  function annotationLeaderLayout(anchor, pointer) {
-    const side = pointer.x >= anchor.x ? 1 : -1;
-    const minShelf = 64 / viewport.scale;
-    const end = { x: pointer.x, y: pointer.y };
-    if (Math.abs(end.x - anchor.x) < minShelf) end.x = anchor.x + side * minShelf;
-    const elbowX = side > 0 ? Math.min(anchor.x + 42 / viewport.scale, end.x - minShelf) : Math.max(anchor.x - 42 / viewport.scale, end.x + minShelf);
-    const elbow = { x: elbowX, y: end.y };
-    const text = {
-      x: (elbow.x + end.x) / 2,
-      y: end.y - 10 / viewport.scale,
-    };
-    return { start: anchor, elbow, end, text };
-  }
-
-  function commitLeaderAnnotationAt(pointer) {
-    if (pendingCommand?.type !== "annotation-leader-place" || !pendingCommand.leaderTarget) return;
-    const target = pendingCommand.leaderTarget;
-    const layout = annotationLeaderLayout(target.anchor, pointer);
-    const text = window.prompt("引出線テキスト", "注記");
-    if (!text) {
-      setHint("引出線をキャンセルしました");
-      pendingCommand = null;
-      updateToolbar();
-      draw();
-      return;
-    }
-    pushAnnotation({
-      type: "leader",
-      text,
-      start: layout.start,
-      elbow: layout.elbow,
-      end: layout.end,
-      x: layout.text.x,
-      y: layout.text.y,
-      geometryRef: target.geometryRef,
-      style: { ...DEFAULT_ANNOTATION_STYLE },
-    });
-    pendingCommand = null;
-    setHint("引出線を追加しました");
-    updateToolbar();
-    recordHistory("引出線追加");
-  }
-
-  function drawLeaderAnnotationCommandPreview() {
-    if (pendingCommand?.type !== "annotation-leader-place" || !pendingCommand.leaderTarget) return;
-    const layout = annotationLeaderLayout(pendingCommand.leaderTarget.anchor, pendingCommand.pointer);
-    drawAnnotationLeader({
-      start: layout.start,
-      elbow: layout.elbow,
-      end: layout.end,
-      x: layout.text.x,
-      y: layout.text.y,
-      text: "注記",
-      style: { ...DEFAULT_ANNOTATION_STYLE, color: "#2563eb" },
-    }, true);
-  }
-
-  function createTextAnnotation() {
-    if (rejectRootSketchCreation()) return;
-    cancelPendingCommand("");
-    pendingCommand = { type: "annotation-text-place", pointer: lastPointerWorld || { x: 0, y: 0 } };
-    setHint("テキストを配置する位置をクリックしてください");
-    updateToolbar();
-    draw();
-  }
-
-  function commitTextAnnotationAt(pointer) {
-    if (pendingCommand?.type !== "annotation-text-place") return false;
-    const text = window.prompt("テキスト", "注記");
-    if (text) {
-      pushAnnotation({ type: "text", text, x: pointer.x, y: pointer.y, style: { ...DEFAULT_ANNOTATION_STYLE } });
-      recordHistory("テキスト追加");
-      setHint("テキストを追加しました");
-    } else {
-      setHint("テキストをキャンセルしました");
-    }
-    pendingCommand = null;
-    updateToolbar();
-    draw();
-    return true;
   }
 
   function canCreateInActiveSketch() {
@@ -4604,7 +4468,8 @@
     drawDimensions();
     drawDimensionPreview();
     drawAnnotations();
-    drawLeaderAnnotationCommandPreview();
+    const leaderPreview = annotationCommand.leaderPreview();
+    if (leaderPreview) drawAnnotationLeader(leaderPreview, true);
     drawTemporaryLine();
     drawCenterlinePreview();
     drawRectanglePreview();
