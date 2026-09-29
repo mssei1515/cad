@@ -3,7 +3,7 @@
   "use strict";
   const { isDimensionConstraint, targetFromConstraint, measuredDimensionValue, isReadOnlyDimension, angleDegrees } = window.DimensionQueries;
   const {
-    dependencies: expressionDependencies, evaluateDefinitions: evaluateParameterDefinitions,
+    dependencies: expressionDependencies, evaluateDefinitions: evaluateParameterDefinitions, evaluate: evaluateParameterExpression,
     validateIdentifier: validateParameterIdentifier, rewriteIdentifiers: rewriteParameterIdentifiers,
   } = window.ParameterEngine;
   const DIRECT_NUMERIC_INPUT_PATTERN = /^[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?$/;
@@ -224,6 +224,34 @@
       return [...new Set(dependents)];
     }
 
+    function evaluateDimensionExpressionDraft(constraint, expression, namespace = currentParameterNamespace()) {
+      ensureParameterNamespace(namespace);
+      validateParameterSymbolNames(namespace.parameters, dimensionConstraintsInNamespace(namespace));
+      const referenceValues = new Map();
+      const definitions = namespace.parameters.map((parameter) => ({ ...parameter, kind: "parameter" }));
+      for (const item of dimensionConstraintsInNamespace(namespace)) {
+        if (isReadOnlyDimension(item)) {
+          const target = targetFromConstraint(item);
+          const value = target ? measuredDimensionValue(target, item.dimension) : NaN;
+          referenceValues.set(item.parameterName, value);
+        } else {
+          definitions.push({
+            name: item.parameterName,
+            expression: item === constraint ? String(expression) : item.expression,
+            kind: "dimension",
+          });
+        }
+      }
+      const evaluated = evaluateParameterDefinitions(definitions, referenceValues);
+      const value = constraint
+        ? evaluated.values.get(constraint.parameterName)
+        : evaluateParameterExpression(String(expression), evaluated.values);
+      const target = constraint ? targetFromConstraint(constraint) : null;
+      const max = target?.kind === "angle" ? 180 : Infinity;
+      if (!Number.isFinite(value) || value <= 0 || value >= max) throw new Error(applicationText("寸法値の範囲が正しくありません", "Dimension value is out of range"));
+      return value;
+    }
+
     function renameDimension(constraint, requestedName) {
       const namespace = currentParameterNamespace();
       ensureParameterNamespace(namespace);
@@ -245,7 +273,7 @@
     }
 
     return Object.freeze({
-      renameDimension, dimensionExpressionValue, numericDimensionExpression, isDirectNumericExpressionInput,
+      evaluateDimensionExpressionDraft, renameDimension, dimensionExpressionValue, numericDimensionExpression, isDirectNumericExpressionInput,
       dimensionUsesExpression, expressionInputValue, expressionFromUserInput,
       rewriteExpressionInputIdentifiers, dimensionConstraintsInNamespace, allocateDimensionParameterName,
       ensureDimensionParameter, ensureParameterNamespace, parameterErrorText,

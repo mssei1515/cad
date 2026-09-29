@@ -1,10 +1,10 @@
 /* Prepare and apply geometry drag edits without owning input events or history. */
 (() => {
   "use strict";
-  const { hypot2, vectorNorm } = window.GeometrySolver;
+  const { hypot2, vectorNorm, variableDeltaInBasis } = window.GeometrySolver;
   const { lineSupportNormal } = window.GeometryKernel;
   function create({ currentScope, solver, plan, dragSolver, contextFromSeeds, projectionConstraintsForItems,
-    pointLockedByLineFixed, variableDeltaInBasis, captureValues,
+    pointLockedByLineFixed, captureValues,
     enforceMinimumLineLengths, normalizeArcSweeps, invalidateProjection, projectionBlockedMessage, previewMaxModelError }) {
     const { points: dragTargets, radius: radiusDragTargets, primitiveMove: primitiveMoveTargets,
       arcEndpoint: arcEndpointDragTargets, pointConstraints: dragConstraintsFromTargets,
