@@ -54,7 +54,7 @@
     }
 
     function installExpressionInputHighlights(root = document) {
-      const selector = '#dimensionValueInput, #propertiesPanel [data-property="constraint-expression"], [data-parameter-field="expression"], [data-dimension-field="expression"]:not([readonly])';
+      const selector = '#dimensionValueInput, #propertiesPanel [data-property="constraint-expression"], #propertiesPanel [data-property="annotation-expression"], [data-parameter-field="expression"], [data-dimension-field="expression"]:not([readonly])';
       if (root instanceof InputElement && root.matches(selector)) installExpressionInputHighlight(root);
       for (const input of root.querySelectorAll?.(selector) || []) installExpressionInputHighlight(input);
     }

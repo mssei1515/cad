@@ -54,3 +54,12 @@ test("angle painter preserves signed sweeps and outside arc extension", () => {
     assert.deepEqual(h.calls.find(c => c[0] === "rotate"), ["rotate", 0.4]);
   }
 });
+
+test("multiline dimension affixes keep the final line above the dimension line", () => {
+  const h = harness();
+  h.renderer.drawLinear({ ...h.input, label: "top\n120\nend" });
+  const text = h.calls.filter(call => call[0] === "fillText");
+  assert.deepEqual(text.map(call => call[1]), ["top", "120", "end"]);
+  assert.ok(text[0][3] < text[1][3] && text[1][3] < text[2][3]);
+  assert.ok(text[2][3] === 0);
+});

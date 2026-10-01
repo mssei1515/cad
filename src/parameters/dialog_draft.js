@@ -4,7 +4,7 @@
   const { dependencies: expressionDependencies, evaluateDefinitions: evaluateParameterDefinitions } = window.ParameterEngine;
   const { isReadOnlyDimension, targetFromConstraint, measuredDimensionValue } = window.DimensionQueries;
   function create({ namespace }) {
-    const { ensureParameterNamespace, dimensionConstraintsInNamespace, expressionInputValue, expressionFromUserInput, rewriteExpressionInputIdentifiers, validateParameterSymbolNames } = namespace;
+    const { ensureParameterNamespace, dimensionConstraintsInNamespace, expressionInputValue, expressionFromUserInput, symbolElementsInNamespace, rewriteExpressionInputIdentifiers, validateParameterSymbolNames } = namespace;
     let parameterDialogSession = null;
     function parameterDraftSignature(session = parameterDialogSession) {
       if (!session) return "";
@@ -20,7 +20,7 @@
 
     function createParameterDialogSession(scope) {
       ensureParameterNamespace(scope.namespace);
-      const dimensions = dimensionConstraintsInNamespace(scope.namespace).map((constraint) => ({
+      const dimensions = (symbolElementsInNamespace || dimensionConstraintsInNamespace)(scope.namespace).map((constraint) => ({
         constraint,
         name: constraint.parameterName,
         committedName: constraint.parameterName,

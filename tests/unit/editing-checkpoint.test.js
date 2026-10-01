@@ -72,3 +72,16 @@ test('checkpoints read the active editing scope after a scope switch', () => {
   first.checkpoint.restoreGeometry(snapshot);
   assert.equal(second.model.points[0].x, 11); assert.equal(first.model.points[0].x, 0); assert.equal(first.model.constraints[0], first.constraint);
 });
+
+test('annotation parameter settings and expression values roll back with the checkpoint', () => {
+  const f = fixture();
+  const annotation = f.model.annotations[0];
+  Object.assign(annotation, { parameterEnabled: true, parameterName: 'd3', expression: '120', evaluatedParameterValue: 120 });
+  const state = f.checkpoint.captureValues();
+  Object.assign(annotation, { parameterEnabled: false, parameterName: 'changed', expression: 'invalid', evaluatedParameterValue: 0 });
+  f.checkpoint.restoreValues(state);
+  assert.equal(annotation.parameterEnabled, true);
+  assert.equal(annotation.parameterName, 'd3');
+  assert.equal(annotation.expression, '120');
+  assert.equal(annotation.evaluatedParameterValue, 120);
+});

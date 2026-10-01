@@ -1,6 +1,13 @@
 /* Geometry and dimension appearance controls, independent of document and selection. */
 (() => {
   "use strict";
+  function prepareAffixInputs(container) {
+    for (const input of container.querySelectorAll("textarea[data-affix-input]")) {
+      const resize = () => { input.rows = Math.max(1, input.value.split(/\r\n|\r|\n/).length); };
+      resize();
+      input.addEventListener("input", resize);
+    }
+  }
   function create({ applicationText, escapeHtml, formatDisplayNumber, normalizeAppearance,
     normalizeDimensionAppearance, dimensionLengthKeys: DIMENSION_APPEARANCE_LENGTH_KEYS,
     defaultDimensionAppearance: DEFAULT_DIMENSION_APPEARANCE }) {
@@ -103,13 +110,16 @@
         return `<div class="property-row"><label for="${idPrefix}${idSuffix}"${title}>${applicationText(labelJa, labelEn)}</label><div class="property-input-with-unit"><input id="${idPrefix}${idSuffix}" data-dimension-display="${key}" type="number" min="${min}" max="${max}" step="${step}" placeholder="${escapeHtml(allowInheritance ? inheritedLabel(key) : "")}" value="${value}"${title}><span class="property-input-unit" aria-hidden="true">${unit}</span></div></div>`;
       };
       const group = (key, titleJa, titleEn, rows) => `<div class="dimension-appearance-group" data-dimension-appearance-group="${key}"><div class="dimension-appearance-group-title">${applicationText(titleJa, titleEn)}</div>${rows}</div>`;
+      // The extra initial newline preserves affixes starting with a newline: HTML strips the first one in a textarea.
       return `
         <div class="property-row"><label for="${idPrefix}Visible">${applicationText("表示", "Visible")}</label><select id="${idPrefix}Visible" data-dimension-display="visible">${booleanOptions("visible")}</select></div>
         <div class="property-row"><label for="${idPrefix}Color">${applicationText("色", "Color")}</label><div class="property-color-control"><input id="${idPrefix}Color" data-dimension-display="color" type="text" placeholder="${escapeHtml(allowInheritance ? inheritedLabel("color") : "")}" value="${escapeHtml(direct.color || "")}" /><button class="property-color-picker" data-appearance-palette-open data-current-color="${colorValue}" type="button" title="${applicationText("カラーパレット", "Color palette")}" aria-label="${applicationText("カラーパレット", "Color palette")}"><span class="property-color-picker-swatch" style="--swatch-color:${colorValue}" aria-hidden="true"></span></button></div></div>
         <div class="property-row"><label for="${idPrefix}LineWidth">${applicationText("線幅", "Line width")}</label><input id="${idPrefix}LineWidth" data-dimension-display="lineWidth" type="number" min="0.5" max="10" step="0.1" placeholder="${escapeHtml(allowInheritance ? inheritedLabel("lineWidth") : "")}" value="${hasDirect("lineWidth") ? direct.lineWidth : ""}"></div>
         <div class="property-row"><label for="${idPrefix}Precision">${applicationText("精度", "Precision")}</label><select id="${idPrefix}Precision" data-dimension-display="precision">${precisionOptions}</select></div>
-        <div class="property-row"><label for="${idPrefix}Prefix">${applicationText("接頭辞", "Prefix")}</label><input id="${idPrefix}Prefix" data-dimension-display="prefix" placeholder="${escapeHtml(allowInheritance ? inheritedLabel("prefix") : "")}" value="${escapeHtml(direct.prefix ?? "")}"></div>
-        <div class="property-row"><label for="${idPrefix}Suffix">${applicationText("接尾辞", "Suffix")}</label><input id="${idPrefix}Suffix" data-dimension-display="suffix" placeholder="${escapeHtml(allowInheritance ? inheritedLabel("suffix") : "")}" value="${escapeHtml(direct.suffix ?? "")}"></div>
+        <div class="property-row"><label for="${idPrefix}Prefix">${applicationText("接頭辞", "Prefix")}</label><textarea id="${idPrefix}Prefix" data-dimension-display="prefix" data-affix-input rows="1" wrap="off" data-user-content placeholder="${escapeHtml(allowInheritance ? inheritedLabel("prefix") : "")}">
+${escapeHtml(direct.prefix ?? "")}</textarea></div>
+        <div class="property-row"><label for="${idPrefix}Suffix">${applicationText("接尾辞", "Suffix")}</label><textarea id="${idPrefix}Suffix" data-dimension-display="suffix" data-affix-input rows="1" wrap="off" data-user-content placeholder="${escapeHtml(allowInheritance ? inheritedLabel("suffix") : "")}">
+${escapeHtml(direct.suffix ?? "")}</textarea></div>
         ${group("extension-lines", "寸法補助線", "Extension lines", `
           ${numericRow("extensionLineOvershoot", "ExtensionLineOvershoot", "突出量", "Overshoot", { titleJa: "寸法補助線が寸法線を越えて外側へ伸びる長さ", titleEn: "Length that extension lines project beyond the dimension line" })}
           ${numericRow("extensionLineOriginGap", "ExtensionLineOriginGap", "起点すき間", "Origin gap", { titleJa: "寸法対象の図形と寸法補助線の開始位置との間隔", titleEn: "Gap between measured geometry and the start of extension lines" })}`)}
@@ -130,7 +140,7 @@
       row.hidden = type === "dot";
     }
 
-    return Object.freeze({ defaultAppearanceLabel, colorPickerValue, appearancePropertyRows, dimensionAppearancePropertyRows, updateDimensionTerminatorAngleVisibility });
+    return Object.freeze({ defaultAppearanceLabel, colorPickerValue, appearancePropertyRows, dimensionAppearancePropertyRows, updateDimensionTerminatorAngleVisibility, prepareAffixInputs });
   }
   window.AppearanceControls = Object.freeze({ create });
 })();

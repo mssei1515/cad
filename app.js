@@ -538,7 +538,7 @@
   });
 
   const { drawResolvedHatchContent } = window.HatchRenderer.create({ viewport, visibleWorldBounds, canvasThemeColor });
-  const { annotationTextWorldHeight, drawAnnotationText, drawAnnotationLeader } = window.AnnotationRenderer.create({ ctx, viewport, withCanvasState, annotationDisplayColor, annotationLeaderAnchor, appearanceLineDash });
+  const { annotationTextWorldHeight, drawAnnotationText, drawAnnotationLeader } = window.AnnotationRenderer.create({ ctx, viewport, withCanvasState, annotationDisplayColor, annotationLeaderAnchor, appearanceLineDash, formatValue: formatDisplayNumber });
   const annotationCommand = window.AnnotationCommand.create({
     currentScope: workspace.current, getPending: () => pendingCommand, setPending: value => { pendingCommand = value; },
     lastPointer: () => lastPointerWorld, viewScale: () => viewport.scale, promptText: (...args) => window.prompt(...args),
@@ -1182,13 +1182,33 @@
     }
     return new Set([
       ...(model.parameters || []).map((parameter) => String(parameter.name || "")),
-      ...dimensionConstraintsInNamespace(model).map((constraint) => String(constraint.parameterName || "")),
+      ...parameterNamespace.symbolElementsInNamespace(model).map((constraint) => String(constraint.parameterName || "")),
     ]);
+  }
+
+  function commitAnnotationParameterEdit(item, property, value) {
+    const snapshot = snapshotModelState();
+    try {
+      if (property === "annotation-parameter-enabled") {
+        if (!value && !guardDimensionSymbolDeletion([item])) return false;
+        item.parameterEnabled = Boolean(value);
+        if (item.parameterEnabled) ensureDimensionParameter(item, currentParameterNamespace());
+      } else if (property === "annotation-parameter-name") parameterNamespace.renameDimension(item, value);
+      else if (property === "annotation-expression") item.expression = expressionFromUserInput(value);
+      const solved = stabilizeActiveParameterNamespace(activeSketchId(), { allSketches: model.sketches.filter(sketch => !isRootSketch(sketch)).map(sketch => sketch.id) });
+      if (!solved.success || solved.dependent?.success === false) throw new Error(solved.result.reason);
+      recordHistory("注記Parameter変更");
+      return true;
+    } catch (error) {
+      restoreModelState(snapshot);
+      setHint(parameterErrorText(error), "error");
+      return false;
+    }
   }
 
   function guardDimensionSymbolDeletion(constraints, namespace = currentParameterNamespace()) {
     const removedConstraints = new Set(constraints || []);
-    const removedNames = [...removedConstraints].filter(isDimensionConstraint).map((constraint) => constraint.parameterName).filter(Boolean);
+    const removedNames = [...removedConstraints].filter(item => isDimensionConstraint(item) || item.parameterEnabled === true).map((constraint) => constraint.parameterName).filter(Boolean);
     if (removedNames.length === 0) return true;
     const dependents = parameterDependents(namespace, removedNames, removedConstraints);
     if (dependents.length === 0) return true;
@@ -1233,8 +1253,9 @@
     const fixed = style.fixedDisplaySize !== false;
     const fontSize = fixed ? style.textHeight * ANNOTATION_SCREEN_PX_PER_MM : annotationTextWorldHeight(style);
     const paddingScale = fixed ? 1 : 1 / viewport.scale;
-    const textWidth = Math.max(28 * paddingScale, String(element.text || "").length * fontSize * 0.62);
-    const textHeight = fontSize + 10 * paddingScale;
+    const lines = window.AnnotationRenderer.displayText(element, formatDisplayNumber).split(/\r\n|\r|\n/);
+    const textWidth = Math.max(28 * paddingScale, ...lines.map(line => line.length * fontSize * 0.62));
+    const textHeight = fontSize * (1 + (lines.length - 1) * 1.2) + 10 * paddingScale;
     const center = { x: Number(element.x) || 0, y: Number(element.y) || 0 };
     const rotation = Number(element.rotation) || 0;
     const cos = Math.cos(rotation);
@@ -3363,14 +3384,14 @@
       if (!layout) continue;
       const appearance = effectiveDimensionAppearance(dimension, constraintSketchId(constraint));
       let scaledLabelHit = false;
-      if (appearance.fixedDisplaySize === false) {
+      if (appearance.fixedDisplaySize === false || /[\r\n]/.test(dimensionLabelForConstraint(constraint, target, dimension))) {
         const label = dimensionLabelForConstraint(constraint, target, dimension);
         const metrics = dimensionTextDrawingMetrics(appearance);
         const width = dimensionTextWidth(label, appearance, dimensionUsesExpression(constraint));
         const angle = -(Number(layout.textAngle) || 0);
         const dx = x - layout.text.x, dy = y - layout.text.y;
         scaledLabelHit = pointInExpandedBox(dx * Math.cos(angle) - dy * Math.sin(angle), dx * Math.sin(angle) + dy * Math.cos(angle),
-          { left: -width / 2, right: width / 2, top: -metrics.gap - metrics.height, bottom: -metrics.gap }, threshold);
+          { left: -width / 2, right: width / 2, top: -metrics.gap - metrics.height * (1 + (String(label).split(/\r\n|\r|\n/).length - 1) * 1.2), bottom: -metrics.gap }, threshold);
       }
       if (scaledLabelHit || hypot2(x - layout.text.x, y - layout.text.y) <= threshold * 2.2) {
         return { constraint, target, dimension, part: "label" };
@@ -3706,7 +3727,8 @@
     const dependentInstances = model.geometryInstances.filter((instance) => geometryInstanceUsesRemovedGeometry(instance, removedKeysForDependency));
     if (rejectReferencedGeometryDeletion(dependentInstances, applicationText("選択したGeometry", "the selected geometry"))) return false;
     if (pointSet.size === 0 && lineSet.size === 0 && circleSet.size === 0 && arcSet.size === 0 && splineSet.size === 0 && constraintSet.size === 0) return false;
-    if (!guardDimensionSymbolDeletion(constraintSet)) return false;
+    const removedAnnotationsForSymbols = model.annotations.filter(annotation => annotationReferencesRemovedGeometry(annotation, new Set([...pointSet, ...lineSet, ...circleSet, ...arcSet, ...splineSet].map(item => item.id)), removedKeysForDependency));
+    if (!guardDimensionSymbolDeletion([...constraintSet, ...removedAnnotationsForSymbols])) return false;
 
     geometryDrag.reset();
     dimensionDrag.reset();
@@ -3757,6 +3779,7 @@
     const annotationsToDelete = canvasSelection.annotations.filter((annotation) => model.annotations.includes(annotation));
     const hatchesToDelete = canvasSelection.hatches.filter((hatch) => model.hatches.includes(hatch));
     const referenceImagesToDelete = canvasSelection.referenceImages.filter((image) => model.referenceImages.includes(image));
+    if (annotationsToDelete.length > 0 && !guardDimensionSymbolDeletion(annotationsToDelete)) return false;
     if (annotationsToDelete.length > 0) {
       model.annotations = model.annotations.filter((item) => !annotationsToDelete.includes(item));
       canvasSelection.set("annotations", []);
@@ -3783,7 +3806,7 @@
       const removedIds = new Set(projectionItems.map((item) => item.id));
       const removedKeys = new Set(projectionItems.map(geometryElementKey).filter(Boolean));
       const removedConstraints = new Set(model.constraints.filter((constraint) => constraintGraphNodes(constraint).some((node) => projectionItems.includes(node) || removedKeys.has(geometryElementKey(node)))));
-      if (!guardDimensionSymbolDeletion(removedConstraints)) return false;
+      if (!guardDimensionSymbolDeletion([...removedConstraints, ...model.annotations.filter(annotation => annotationReferencesRemovedGeometry(annotation, removedIds, removedKeys))])) return false;
       model.constraints = model.constraints.filter((constraint) => !removedConstraints.has(constraint));
       model.annotations = model.annotations.filter((annotation) => !annotationReferencesRemovedGeometry(annotation, removedIds, removedKeys));
       model.geometryInstances = model.geometryInstances.filter((instance) => !instances.includes(instance));
@@ -3804,7 +3827,7 @@
       const removedKeys = new Set(projectionItems.map(geometryElementKey));
       const removedConstraints = new Set(model.constraints.filter((constraint) => constraintGraphNodes(constraint).some((node) =>
         instances.includes(node) || projectionItems.includes(node) || removedKeys.has(geometryElementKey(node)))));
-      if (!guardDimensionSymbolDeletion(removedConstraints)) return false;
+      if (!guardDimensionSymbolDeletion([...removedConstraints, ...model.annotations.filter(annotation => annotationReferencesRemovedGeometry(annotation, removedIds, removedKeys))])) return false;
       model.constraints = model.constraints.filter((constraint) => !removedConstraints.has(constraint));
       model.annotations = model.annotations.filter((annotation) => !annotationReferencesRemovedGeometry(annotation, removedIds, removedKeys));
       model.blockInstances = model.blockInstances.filter((instance) => !instances.includes(instance));
@@ -3927,7 +3950,7 @@
         appearanceOverride: normalizeAppearance(instance.appearanceOverride),
         projection: blockProjectionData.get(instance),
       })),
-      annotations: annotations.map(serializeAnnotation),
+      annotations: annotations.map(annotation => ({ ...serializeAnnotation(annotation), parameterValue: annotation.evaluatedParameterValue })),
       hatches: hatches.map(serializeHatch),
       selection: {
         points: canvasSelection.points.filter((point) => points.has(point)).map((point) => point.id),
@@ -4158,10 +4181,22 @@
       for (const source of payload.constraints) {
         if (!source.parameterName) continue;
         const keepCutName = payload.cut && sameNamespace
-          && !dimensionConstraintsInNamespace(currentParameterNamespace()).some((constraint) => constraint.parameterName === source.parameterName)
+          && !parameterNamespace.symbolElementsInNamespace(currentParameterNamespace()).some((constraint) => constraint.parameterName === source.parameterName)
           && !(currentParameterNamespace().parameters || []).some((parameter) => parameter.name === source.parameterName);
         copiedDimensionNames.set(source.parameterName, keepCutName ? source.parameterName : allocateDimensionParameterName(currentParameterNamespace()));
       }
+      (payload.annotations || []).forEach((source, index) => {
+        const annotation = pastedAnnotations[index];
+        if (!annotation?.parameterEnabled) return;
+        const nextName = allocateDimensionParameterName(currentParameterNamespace());
+        if (source.parameterName) copiedDimensionNames.set(source.parameterName, nextName);
+        annotation.parameterName = nextName;
+      });
+      (payload.annotations || []).forEach((source, index) => {
+        const annotation = pastedAnnotations[index];
+        if (!annotation?.parameterEnabled) return;
+        annotation.expression = sameNamespace ? rewriteParameterIdentifiers(source.expression || "0", copiedDimensionNames) : String(Number(source.parameterValue) || 0);
+      });
       for (const source of payload.constraints) {
         const data = translatedClipboardConstraintData(source, idMap, dx, dy);
         if (source.parameterName) {
@@ -4723,8 +4758,9 @@
   }
 
   function textHitBox(text, x, y, fontSize = 13, textAlign = "left") {
-    const width = Math.max(28, String(text || "").length * fontSize * 0.62);
-    const height = fontSize + 10;
+    const lines = String(text || "").split(/\r\n|\r|\n/);
+    const width = Math.max(28, ...lines.map(line => line.length * fontSize * 0.62));
+    const height = fontSize * (1 + (lines.length - 1) * 1.2) + 10;
     const left = textAlign === "center" ? x - width / 2 : textAlign === "right" ? x - width : x;
     return {
       left,
@@ -4746,7 +4782,7 @@
     const localY = dx * Math.sin(rotation) + dy * Math.cos(rotation) + (Number(element?.y) || 0);
     const style = normalizeAnnotationStyle(element?.style);
     const fontSize = annotationTextWorldHeight(style);
-    return pointInExpandedBox(localX, localY, textHitBox(element?.text, element?.x, element?.y, fontSize, style.textAlign), padding);
+    return pointInExpandedBox(localX, localY, textHitBox(window.AnnotationRenderer.displayText(element || {}, formatDisplayNumber), element?.x, element?.y, fontSize, style.textAlign), padding);
   }
 
   function boxFromPoints(points) {
@@ -5800,6 +5836,7 @@
       operands: resolution.operands || constraintOperands.slice(),
       referenceSketchId: resolution.referenceSketchId,
       sketchId: resolution.sketchId,
+      readOnlyDimension: resolution.readOnlyDimension === true,
     };
     updateConstraintButtons();
     updateToolbar();
@@ -5846,6 +5883,7 @@
     if (!pendingCommand || pendingCommand.type !== "distance-place") return;
     const referenceSketchId = pendingCommand.referenceSketchId;
     const sketchId = pendingCommand.sketchId;
+    const readOnlyDimension = pendingCommand.readOnlyDimension === true;
     const dimension = dimensionWithLabelAt(
       pendingCommand.target,
       applyDefaultCircleDimensionLabelOffset(pendingCommand.target, dimensionFromAnchor(pendingCommand.target, pointer)),
@@ -5860,11 +5898,11 @@
           : pendingCommand.target.kind === "angle"
             ? angleDegrees(angleDimensionAngles(pendingCommand.target, pointer, dimension).signed)
           : pendingCommand.target.value;
-    const readOnlyConstraint = readOnlyDimensionConstraintForPlacement(target, value, dimension, { referenceSketchId, sketchId });
+    const readOnlyConstraint = readOnlyDimensionConstraintForPlacement(target, value, dimension, { referenceSketchId, sketchId, readOnlyDimension });
     if (readOnlyConstraint) {
       pendingCommand = null;
       hideDimensionValueInput();
-      addReadOnlyDimensionConstraint(readOnlyConstraint, sketchId || activeSketchId(), referenceSketchId ? "重複参照寸法" : "重複寸法");
+      addReadOnlyDimensionConstraint(readOnlyConstraint, sketchId || activeSketchId(), readOnlyDimension ? "参照元の測定寸法" : referenceSketchId ? "重複参照寸法" : "重複寸法");
       return;
     }
     pendingCommand = {
@@ -6322,7 +6360,7 @@
     const input = document.activeElement;
     if (!(input instanceof HTMLInputElement) || input.readOnly || input.disabled) return null;
     if (input === dimensionValueInput && pendingCommand?.type === "distance-value") return { input, namespace: model };
-    if (input.matches('#propertiesPanel [data-property="constraint-expression"]')) return { input, namespace: model };
+    if (input.matches('#propertiesPanel [data-property="constraint-expression"], #propertiesPanel [data-property="annotation-expression"]')) return { input, namespace: model };
     const parameterExpression = input.matches('[data-parameter-field="expression"], [data-dimension-field="expression"]');
     if (parameterExpression && input.closest("#parametersDialog") && parameterDraft.current) {
       return { input, namespace: parameterDraft.current.namespace };
@@ -6452,7 +6490,7 @@
     applicationText, escapeHtml, formatDisplayNumber, normalizeAppearance, normalizeDimensionAppearance,
     dimensionLengthKeys: DIMENSION_APPEARANCE_LENGTH_KEYS, defaultDimensionAppearance: DEFAULT_DIMENSION_APPEARANCE,
   });
-  const { defaultAppearanceLabel, colorPickerValue, appearancePropertyRows, dimensionAppearancePropertyRows, updateDimensionTerminatorAngleVisibility } = appearanceControls;
+  const { defaultAppearanceLabel, colorPickerValue, appearancePropertyRows, dimensionAppearancePropertyRows, updateDimensionTerminatorAngleVisibility, prepareAffixInputs } = appearanceControls;
   const propertyRows = window.PropertyRows.create({
     Point, Line, Circle, Arc, Spline, applicationText, escapeHtml, formatDisplayNumber,
     multiplePropertySameType, multiplePropertySupports, multiplePropertyValue, multiplePropertyAppearance,
@@ -6475,7 +6513,7 @@
   const propertiesController = window.PropertiesController.create({
     HTMLTextAreaElement, HTMLInputElement, Spline, selectedPropertiesTarget, activeSketchId,
     elementPropertyCommand, appearancePropertyCommand, geometryPropertyCommand, applyMultipleProperty,
-    changeFreeInstanceProperty, commitDimensionPropertyEdit, updateUI, updatePropertiesUI, draw,
+    changeFreeInstanceProperty, commitDimensionPropertyEdit, commitAnnotationParameterEdit, updateUI, updatePropertiesUI, draw,
     applicationText, setHint,
     setPlacementRotationLocked: blockPlacementCommand.setRotationLocked,
     setPlacementSketchIds: blockPlacementCommand.setEnabledSketchIds,
@@ -6502,7 +6540,7 @@
   });
   const propertiesView = window.PropertiesView.create({
     document, applicationText, localizeApplicationUI, installExpressionInputHighlights,
-    content: propertiesContent.render,
+    content: propertiesContent.render, prepareAffixInputs,
     onInput: handlePropertiesInput, onChange: handlePropertiesChange, onClick: handlePropertiesClick,
   });
   function updatePropertiesUIUnprofiled() {
@@ -7003,6 +7041,11 @@
     const { active, reference, descendant } = splitConstraintOperands(cleanOperands);
     if (descendant.length > 0) return { error: "子孫スケッチは参照できません" };
     if (reference.length > 0) {
+      if (type === "distance" && active.length === 0 && reference.length === cleanOperands.length) {
+        const target = distanceTargetFromOperands(cleanOperands);
+        if (!target || target.kind === "invalid") return target?.kind === "invalid" ? { error: target.reason } : null;
+        return { type, action: "place-dimension", target, operands: cleanOperands, sketchId: activeSketchId(), readOnlyDimension: true };
+      }
       if (type === "symmetry") return symmetryReferenceResolutionFromOperands(cleanOperands);
       if (cleanOperands.length < 2 || active.length === 0) return null;
       if (cleanOperands.length !== 2) return { error: "参照拘束はアクティブスケッチ側と先祖スケッチ側を1つずつ選択してください" };
@@ -7089,6 +7132,7 @@
       operands: resolution.operands || constraintOperands.slice(),
       referenceSketchId: resolution.referenceSketchId,
       sketchId: resolution.sketchId,
+      readOnlyDimension: resolution.readOnlyDimension === true,
     };
     updateConstraintButtons();
     updateToolbar();
@@ -7157,6 +7201,7 @@
   function readOnlyDimensionConstraintForPlacement(target, value, dimension, options = {}) {
     const constraint = distanceConstraintFromTarget(target, value, dimension, { silent: true });
     if (!constraint) return null;
+    if (options.readOnlyDimension) return assignConstraintSketchId(constraint, options.sketchId || activeSketchId());
     const targetItems = target.kind === "point-point"
       ? [target.p1, target.p2]
       : target.kind === "point-line"
@@ -9862,6 +9907,7 @@
     if (dimensionFields) {
       const appearance = normalizeDimensionAppearance(documentModel.defaultDimensionAppearance, { partial: false });
       dimensionFields.innerHTML = dimensionAppearancePropertyRows(appearance, appearance, { allowInheritance: false, idPrefix: "documentDimension" });
+      prepareAffixInputs(dimensionFields);
       localizeApplicationUI(dimensionFields);
       updateDimensionTerminatorAngleVisibility(dimensionFields);
       const applyDimensionInput = (input, { history = true } = {}) => {
@@ -12774,6 +12820,7 @@
           rotation: Number(annotation.rotation) || 0,
           screenTextHeight: annotationTextWorldHeight(style) * viewport.scale,
           screenTerminatorSize: style.terminatorSize * ANNOTATION_SCREEN_PX_PER_MM * window.Appearance.annotationDisplayFactor(style, viewport.scale),
+          displayedText: window.AnnotationRenderer.displayText(annotation, formatDisplayNumber),
           serialized: serializeAnnotation(annotation),
         };
       },
@@ -12790,6 +12837,7 @@
             sketchId: annotation.sketchId,
             type: annotation.type,
             text: annotation.text,
+            displayedText: window.AnnotationRenderer.displayText(annotation, formatDisplayNumber),
             x: annotation.x,
             y: annotation.y,
             rotation: Number(annotation.rotation) || 0,

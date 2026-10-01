@@ -338,6 +338,10 @@
       const annotations = (selection.annotations || []).map((source) => {
         const cloned = serializeAnnotation(source);
         cloned.id = source.id;
+        if (cloned.parameterEnabled) {
+          delete cloned.parameterName;
+          cloned.expression = String(Number(source.evaluatedParameterValue) || 0);
+        }
         cloned.sketchId = DEFAULT_SKETCH_ID;
         cloned.x -= origin.x;
         cloned.y -= origin.y;

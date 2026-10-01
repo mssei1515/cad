@@ -85,6 +85,7 @@
 
       const loadedRootNamespace = {
         constraints,
+        annotations: loadedAnnotations,
         parameters: Array.isArray(data.parameters) ? data.parameters.map((parameter) => ({ name: String(parameter?.name || ""), expression: normalizeLoadedExpression(parameter?.expression) })) : [],
         nextDimensionParameterIndex: Number(data.nextDimensionParameterIndex) || 1,
       };

@@ -22,6 +22,7 @@
       } else if (category === "annotation" && target.kind === "annotation") {
         editing.applyAnnotationStyleValue(target.item, key, value);
         label = "注記外観変更";
+        if (["prefix", "suffix"].includes(key)) refresh = null;
       } else if (category === "hatch" && target.kind === "hatch") {
         editing.applyHatchAppearanceInput(target.item, key, value);
         label = "ハッチング外観変更";

@@ -3,7 +3,15 @@
   "use strict";
   const { CSS_PX_PER_MM: ANNOTATION_SCREEN_PX_PER_MM, normalizeAnnotationStyle } = window.Appearance;
   const { hypot2 } = window.GeometrySolver;
-  function create({ ctx, viewport, withCanvasState, annotationDisplayColor, annotationLeaderAnchor, appearanceLineDash }) {
+  function displayText(element, formatValue = String) {
+    const source = element.localElement || element;
+    if (source.parameterEnabled !== true) return String(element.text || "");
+    const style = normalizeAnnotationStyle(element.style);
+    const value = Number.isFinite(source.evaluatedParameterValue) ? formatValue(source.evaluatedParameterValue) : "—";
+    return `${style.prefix}${value}${style.suffix}`;
+  }
+
+  function create({ ctx, viewport, withCanvasState, annotationDisplayColor, annotationLeaderAnchor, appearanceLineDash, formatValue }) {
     function annotationFontFamilyStack(fontFamily) {
       if (fontFamily === "serif") return 'Georgia, "Times New Roman", serif';
       if (fontFamily === "monospace") return 'ui-monospace, SFMono-Regular, Consolas, monospace';
@@ -29,7 +37,8 @@
       ctx.textBaseline = "middle";
       ctx.translate(element.x, element.y);
       ctx.rotate(Number(element.rotation) || 0);
-      ctx.fillText(element.text || "", 0, 0);
+      const lines = displayText(element, formatValue).split(/\r\n|\r|\n/);
+      lines.forEach((line, index) => ctx.fillText(line, 0, (index - (lines.length - 1) / 2) * fontSize * 1.2));
       ctx.restore();
     }
 
@@ -88,10 +97,10 @@
         const dy = elbow.y - start.y;
         const len = Math.max(1e-9, hypot2(dx, dy));
         drawAnnotationTerminator(start, { x: dx / len, y: dy / len }, style);
-        if (element.text) drawAnnotationText(element, color);
+        if (element.parameterEnabled || element.text) drawAnnotationText(element, color);
       });
     }
     return Object.freeze({ annotationTextWorldHeight, drawAnnotationText, drawAnnotationLeader });
   }
-  window.AnnotationRenderer = Object.freeze({ create });
+  window.AnnotationRenderer = Object.freeze({ create, displayText });
 })();

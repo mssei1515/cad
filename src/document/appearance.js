@@ -203,6 +203,8 @@
         : Number.isFinite(legacyFontSize)
           ? Math.max(0.5, Math.min(100, legacyFontSize / CSS_PX_PER_MM))
           : DEFAULT_ANNOTATION_STYLE.textHeight,
+      prefix: String(source.prefix || ""),
+      suffix: String(source.suffix || ""),
       fontFamily,
       bold: source.bold === true || source.fontWeight === "bold" || Number(source.fontWeight) >= 600,
       italic: source.italic === true || source.fontStyle === "italic",

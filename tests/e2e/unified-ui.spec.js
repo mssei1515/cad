@@ -42,6 +42,23 @@ async function openDocumentSettings(page) {
   await button.click();
 }
 
+async function expectAffixInputToFollowNewlines(input) {
+  const height = () => input.evaluate(element => element.getBoundingClientRect().height);
+  await input.fill('');
+  const baseline = await height();
+  expect(baseline).toBeLessThan(30);
+  await input.fill('long single line '.repeat(30));
+  expect(await height()).toBe(baseline);
+  expect(await input.evaluate(element => element.scrollHeight <= element.clientHeight)).toBe(true);
+  await input.fill('first\nsecond\n');
+  expect(await input.evaluate(element => element.rows)).toBe(3);
+  expect(await height()).toBeGreaterThan(baseline + 20);
+  await input.blur();
+  expect(await input.evaluate(element => element.rows)).toBe(3);
+  await input.fill('single');
+  expect(await height()).toBe(baseline);
+}
+
 async function selectSketch(page, sketchId) {
   await page.locator(`.sketch-item[data-id="${sketchId}"] .sketchActivateBtn`).dblclick();
   await expect(page.locator("#propertiesPanel .property-heading")).toHaveText(/^(?:Sketch|スケッチ)$/);
@@ -567,6 +584,7 @@ test("document annotations can be dragged on the unified canvas", async ({ page 
 test("annotation Properties edit complete appearance in approximate millimeters", async ({ page }) => {
   await openTestDocument(page);
   const fixture = annotationSketchFixture(11);
+  fixture.activeSketchId = "S1";
   expect(await page.evaluate((data) => window.__jot2dTest.loadDocumentFixtureForDragTest(data, "annotation-appearance.jot2d"), fixture)).toEqual(expect.objectContaining({ success: true }));
   await expandSketchTreeGroup(page, "annotation", "S1");
 
@@ -4286,4 +4304,183 @@ test("sketch selection edits its own appearance and resets during undo and redo"
   await expect(page.locator('#sketchList .sketch-item.selected')).toHaveCount(0);
   state = await page.evaluate(() => window.__jot2dTest.serializedModelForTest());
   expect(state.sketches.find(s => s.id === "S1").appearance.color).toBe("#ff0000");
+});
+
+test("ancestor-only dimensions are measured in the active sketch across ancestors", async ({ page }) => {
+  await openTestDocument(page);
+  const fixture = annotationSketchFixture(11);
+  fixture.annotations = [];
+  fixture.sketches[2].parentSketchId = "S1";
+  fixture.sketches.push({ id: "S3", name: "Measurements", parentSketchId: "S2", kind: "sketch" });
+  fixture.activeSketchId = "S3";
+  expect(await page.evaluate(data => window.__jot2dTest.loadDocumentFixtureForDragTest(data, "ancestor-measurements.jot2d"), fixture)).toEqual(expect.objectContaining({ success: true }));
+  await page.evaluate(() => window.__jot2dTest.fitAllGeometryForTest(190));
+  const clickWorld = async point => {
+    const client = await page.evaluate(point => window.__jot2dTest.worldClientPositionForTest(point), point);
+    await page.mouse.click(client.x, client.y);
+  };
+  await page.click('[data-constraint="distance"]');
+  await clickWorld({ x: 0, y: 0 });
+  await clickWorld({ x: 0, y: -30 });
+  await expect(page.locator('#dimensionValueInput')).toBeHidden();
+  let saved = await page.evaluate(() => window.__jot2dTest.serializedModelForTest());
+  expect(saved.activeSketchId).toBe("S3");
+  expect(saved.constraints).toHaveLength(1);
+  expect(saved.constraints[0]).toEqual(expect.objectContaining({ sketchId: "S3", readOnlyDimension: true, enabled: false, target: 120 }));
+  expect(saved.points.map(({ id, x, y, sketchId }) => ({ id, x, y, sketchId }))).toEqual(fixture.points.map(({ id, x, y, sketchId }) => ({ id, x, y, sketchId })));
+  await page.keyboard.press('Escape');
+  await page.click('[data-constraint="distance"]');
+  await clickWorld({ x: -60, y: 0 });
+  await clickWorld({ x: -40, y: 50 });
+  await clickWorld({ x: -80, y: 25 });
+  saved = await page.evaluate(() => window.__jot2dTest.serializedModelForTest());
+  expect(saved.constraints).toHaveLength(2);
+  expect(saved.constraints.every(item => item.sketchId === 'S3' && item.readOnlyDimension && item.enabled === false)).toBe(true);
+  expect(saved.points.map(({ id, x, y, sketchId }) => ({ id, x, y, sketchId }))).toEqual(fixture.points.map(({ id, x, y, sketchId }) => ({ id, x, y, sketchId })));
+  await page.click('#undoBtn');
+  expect((await page.evaluate(() => window.__jot2dTest.serializedModelForTest())).constraints).toHaveLength(1);
+  await page.click('#redoBtn');
+  expect((await page.evaluate(() => window.__jot2dTest.serializedModelForTest())).constraints).toHaveLength(2);
+  await page.evaluate(() => window.__jot2dTest.selectDimensionForPropertiesForTest(0));
+  for (const key of ['prefix', 'suffix']) {
+    await expectAffixInputToFollowNewlines(page.locator('[data-dimension-display="' + key + '"]'));
+  }
+  await page.locator('[data-dimension-display="prefix"]').fill('top\n');
+  await page.locator('[data-dimension-display="suffix"]').fill('\nend');
+  await page.locator('[data-dimension-display="suffix"]').blur();
+  saved = await page.evaluate(() => window.__jot2dTest.serializedModelForTest());
+  expect(saved.constraints[0].dimension.display).toEqual(expect.objectContaining({ prefix: 'top\n', suffix: '\nend' }));
+  const loaded = await page.evaluate(data => window.__jot2dTest.loadDocumentFixtureForDragTest(data, "measurements-reloaded.jot2d"), saved);
+  expect(loaded.success).toBe(true);
+  const roundTrip = await page.evaluate(() => window.__jot2dTest.serializedModelForTest());
+  expect(roundTrip.constraints).toEqual(saved.constraints);
+  const moved = structuredClone(saved);
+  moved.points.find(point => point.id === 'P2').x += 30;
+  expect((await page.evaluate(data => window.__jot2dTest.loadDocumentFixtureForDragTest(data, 'ancestor-changed.jot2d'), moved)).success).toBe(true);
+  const parameters = await page.evaluate(() => window.__jot2dTest.parameterStateForTest());
+  expect(parameters.valid).toBe(true);
+  expect(parameters.dimensions[0].value).toBe(150);
+});
+
+test("annotation affixes keep multiline values through Properties and save reload", async ({ page }) => {
+  await openTestDocument(page);
+  const fixture = annotationSketchFixture(11);
+  fixture.activeSketchId = 'S1';
+  await page.evaluate(data => window.__jot2dTest.loadDocumentFixtureForDragTest(data, 'affixes.jot2d'), fixture);
+  await expandSketchTreeGroup(page, 'annotation', 'S1');
+  for (const id of ['AN1', 'AN2']) {
+    await page.locator('.sketch-object-row[data-object-kind="annotation"][data-id="' + id + '"]').click();
+    await page.locator('[data-property="annotation-parameter-enabled"]').check();
+    for (const key of ['prefix', 'suffix']) {
+      await expectAffixInputToFollowNewlines(page.locator('[data-annotation-style="' + key + '"]'));
+    }
+    await page.locator('[data-annotation-style="prefix"]').fill('top\n');
+    await page.locator('[data-annotation-style="suffix"]').fill('\nend');
+    await page.locator('[data-annotation-style="suffix"]').blur();
+  }
+  const saved = await page.evaluate(() => window.__jot2dTest.serializedModelForTest());
+  expect(saved.annotations.every(item => item.style.prefix === 'top\n' && item.style.suffix === '\nend')).toBe(true);
+  const loaded = await page.evaluate(data => window.__jot2dTest.loadDocumentFixtureForDragTest(data, 'affixes-reloaded.jot2d'), saved);
+  expect(loaded.success).toBe(true);
+  const roundTrip = await page.evaluate(() => window.__jot2dTest.serializedModelForTest());
+  expect(roundTrip.annotations).toEqual(saved.annotations);
+  await expandSketchTreeGroup(page, 'annotation', 'S1');
+  await page.locator('.sketch-object-row[data-object-kind="annotation"][data-id="AN1"]').click();
+  await expect(page.locator('[data-annotation-style="prefix"]')).toHaveJSProperty('rows', 2);
+  await expect(page.locator('[data-annotation-style="suffix"]')).toHaveJSProperty('rows', 2);
+  await expect(page.locator('[data-annotation-style="suffix"]')).toHaveValue('\nend');
+});
+
+test("document dimension affix inputs expand only for newlines", async ({ page }) => {
+  await openTestDocument(page);
+  await openDocumentSettings(page);
+  for (const key of ['prefix', 'suffix']) {
+    const input = page.locator('#documentDimensionAppearanceFields [data-dimension-display="' + key + '"]');
+    await expectAffixInputToFollowNewlines(input);
+    await input.fill('saved\nvalue');
+    await input.blur();
+  }
+  await page.locator('#documentSettingsDialog button[value=cancel]').first().click();
+  await openDocumentSettings(page);
+  for (const key of ['prefix', 'suffix']) {
+    await expect(page.locator('#documentDimensionAppearanceFields [data-dimension-display="' + key + '"]')).toHaveJSProperty('rows', 2);
+  }
+});
+
+test("annotation parameter checkbox switches body and formula modes with live values and recovery", async ({ page }) => {
+  await openTestDocument(page);
+  const fixture = annotationSketchFixture(11);
+  fixture.activeSketchId = 'S1';
+  fixture.parameters = [{ name: 'width', expression: '120' }];
+  expect((await page.evaluate(data => window.__jot2dTest.loadDocumentFixtureForDragTest(data, 'annotation-parameters.jot2d'), fixture)).success).toBe(true);
+  await expandSketchTreeGroup(page, 'annotation', 'S1');
+  const state = type => page.evaluate(type => window.__jot2dTest.annotationAppearanceStateForTest(type), type);
+  for (const [id, type] of [['AN1', 'text'], ['AN2', 'leader']]) {
+    await page.locator('.sketch-object-row[data-object-kind="annotation"][data-id="' + id + '"]').click();
+    await expect(page.locator('[data-property="annotation-text"]')).toBeVisible();
+    await expect(page.locator('[data-annotation-style="prefix"]')).toHaveCount(0);
+    await page.locator('[data-property="annotation-parameter-enabled"]').check();
+    await expect(page.locator('[data-property="annotation-text"]')).toHaveCount(0);
+    await page.locator('[data-property="annotation-expression"]').fill('="width" / 2');
+    await page.locator('[data-property="annotation-expression"]').press('Tab');
+    await page.locator('[data-annotation-style="prefix"]').fill('幅：\n');
+    await page.locator('[data-annotation-style="suffix"]').fill(' mm');
+    await page.locator('[data-annotation-style="suffix"]').blur();
+    expect((await state(type)).displayedText).toBe('幅：\n60 mm');
+    await page.locator('[data-property="annotation-expression"]').fill('="missing"');
+    await page.locator('[data-property="annotation-expression"]').press('Tab');
+    expect((await state(type)).displayedText).toBe('幅：\n60 mm');
+    await expect(page.locator('#hint')).toContainText('未定義');
+  }
+  await openParameterDialog(page);
+  await expect(page.locator('#parameterDimensionRows tr')).toHaveCount(2);
+  await page.locator('[data-parameter-field="name"]').fill('span');
+  await page.locator('[data-parameter-field="name"]').press('Tab');
+  await page.locator('[data-parameter-field="expression"]').fill('150');
+  await page.locator('[data-parameter-field="expression"]').press('Tab');
+  await page.locator('#applyParametersBtn').click();
+  await expect(page.locator('#parameterDialogError')).toBeHidden();
+  await page.locator('#parametersCloseBtn').click();
+  expect((await state('text')).displayedText).toBe('幅：\n75 mm');
+  expect((await state('leader')).serialized.expression).toBe('"span" / 2');
+  await page.locator('.sketch-object-row[data-object-kind="annotation"][data-id="AN1"]').click();
+  await page.keyboard.press('Control+C');
+  await page.keyboard.press('Control+V');
+  const copied = await page.evaluate(() => window.__jot2dTest.serializedModelForTest());
+  const original = copied.annotations.find(item => item.id === 'AN1');
+  const copy = copied.annotations.find(item => item.id !== 'AN1' && item.type === 'text');
+  expect(copy.parameterEnabled).toBe(true);
+  expect(copy.parameterName).not.toBe(original.parameterName);
+  expect(copy.expression).toBe(original.expression);
+  await page.locator('.sketch-object-row[data-object-kind="annotation"][data-id="AN1"]').click();
+  await page.locator('[data-property="annotation-parameter-enabled"]').uncheck();
+  await expect(page.locator('[data-property="annotation-text"]')).toHaveValue('Room note');
+  expect((await state('text')).displayedText).toBe('Room note');
+  await page.click('#undoBtn');
+  expect((await state('text')).serialized.parameterEnabled).toBe(true);
+  await page.click('#redoBtn');
+  expect((await state('text')).serialized.parameterEnabled).toBe(false);
+  const saved = await page.evaluate(() => window.__jot2dTest.serializedModelForTest());
+  expect(saved.annotations.every(item => !Object.hasOwn(item, 'evaluatedParameterValue'))).toBe(true);
+  expect((await page.evaluate(data => window.__jot2dTest.loadDocumentFixtureForDragTest(data, 'parameters-reloaded.jot2d'), saved)).success).toBe(true);
+  expect((await state('leader')).displayedText).toBe('幅：\n75 mm');
+});
+
+test("projected parameter annotations use their own Block namespace and update after applying", async ({ page }) => {
+  await openTestDocument(page);
+  await page.evaluate(() => window.__jot2dTest.resetForParameterTest());
+  const saved = await page.evaluate(() => window.__jot2dTest.serializedModelForTest());
+  const definition = saved.blockDefinitions[0];
+  definition.annotations = [{ id: 'AN1', type: 'text', sketchId: definition.activeSketchId, x: 0, y: 20, text: 'retained', parameterEnabled: true, parameterName: 'blockNote', expression: '"width"', style: { prefix: 'B:' } }];
+  expect((await page.evaluate(data => window.__jot2dTest.loadDocumentFixtureForDragTest(data, 'block-annotation-parameter.jot2d'), saved)).success).toBe(true);
+  const projectedText = () => page.evaluate(() => window.__jot2dTest.annotationOwnershipStateForTest().projected.find(item => item.id.endsWith('/AN1')).displayedText);
+  expect(await projectedText()).toBe('B:25');
+  await openParameterDialog(page);
+  await page.locator('#parameterScopeSelect').selectOption('block:' + definition.id);
+  await page.locator('[data-parameter-field="expression"]').first().fill('30');
+  await page.locator('[data-parameter-field="expression"]').first().press('Tab');
+  await page.locator('#applyParametersBtn').click();
+  await expect(page.locator('#parameterDialogError')).toBeHidden();
+  await page.locator('#parametersCloseBtn').click();
+  expect(await projectedText()).toBe('B:30');
 });

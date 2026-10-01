@@ -3,7 +3,7 @@
   "use strict";
   function create({ HTMLTextAreaElement, HTMLInputElement, Spline, selectedPropertiesTarget,
     elementPropertyCommand, appearancePropertyCommand, geometryPropertyCommand, applyMultipleProperty,
-    changeFreeInstanceProperty, commitDimensionPropertyEdit, updateUI, updatePropertiesUI, draw,
+    changeFreeInstanceProperty, commitDimensionPropertyEdit, commitAnnotationParameterEdit, updateUI, updatePropertiesUI, draw,
     applicationText, setHint, setPlacementRotationLocked, setPlacementSketchIds,
     setBlockInstanceRotationLocked, setBlockInstanceEnabledSketchIds, setBlockInstanceOrthogonalRotation,
     startInstanceSourceEdit, startReferenceImageCalibration, startHatchBoundaryRepair, startSplineEdit,
@@ -29,7 +29,7 @@
       }
       let value = rawValue;
       if (commit || category === "dimension" && target.kind === "constraint") {
-        value = category === "dimension" && ["prefix", "suffix"].includes(key) ? input.value : input.value.trim();
+        value = ["dimension", "annotation"].includes(category) && ["prefix", "suffix"].includes(key) ? input.value : input.value.trim();
         if (input.type === "checkbox" && ["annotation", "hatch", "annotationDisplay"].includes(category)) value = input.checked;
         if (input.type === "checkbox" && category === "dimension" && target.kind === "constraint") value = String(input.checked);
       }
@@ -57,15 +57,16 @@
         elementPropertyCommand.annotation(target.item, "annotation-text", input.value, { commit: false });
         return;
       }
+      if (target.kind === "annotation" && ["annotation-parameter-enabled", "annotation-parameter-name", "annotation-expression"].includes(input.dataset.property)) return;
       if (target.kind === "constraint" && ["constraint-parameter-name", "constraint-expression"].includes(input.dataset.property)) return;
       if (target.kind === "geometryInstance" && input.dataset.geometryInstanceProperty && input.type === "number") {
         elementPropertyCommand.geometryInstance(target.item, input.dataset.geometryInstanceProperty, input.value, { commit: false });
         return;
       }
-      const rawValue = input.type === "number" || input.dataset.annotationStyle || input.dataset.hatchProperty || input.dataset.bulkProperty || input.dataset.appearanceKey
+      const rawValue = input.type === "number" || input.dataset.annotationStyle && !["prefix", "suffix"].includes(input.dataset.annotationStyle) || input.dataset.hatchProperty || input.dataset.bulkProperty || input.dataset.appearanceKey
         ? input.value.trim()
         : input.value;
-      const appearanceAllowsEmpty = Boolean(input.dataset.appearanceKey || input.dataset.dimensionDisplay);
+      const appearanceAllowsEmpty = Boolean(input.dataset.appearanceKey || input.dataset.dimensionDisplay || ["prefix", "suffix"].includes(input.dataset.annotationStyle));
       const colorInput = input.dataset.appearanceKey === "color"
         || input.dataset.dimensionDisplay === "color"
         || input.dataset.annotationStyle === "color"
@@ -146,6 +147,11 @@
         if (result.refresh === "properties") updatePropertiesUI();
         else if (result.refresh === "all") updateUI();
         if (result.refresh) draw();
+        return;
+      } else if (target.kind === "annotation" && ["annotation-parameter-enabled", "annotation-parameter-name", "annotation-expression"].includes(property)) {
+        commitAnnotationParameterEdit(target.item, property, input.type === "checkbox" ? input.checked : input.value);
+        updateUI();
+        draw();
         return;
       } else if (target.kind === "constraint" && (property === "constraint-parameter-name" || property === "constraint-expression")) {
         commitDimensionPropertyEdit(target.item, property, input.value);

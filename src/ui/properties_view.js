@@ -2,7 +2,7 @@
 (() => {
   "use strict";
   function create({ document, applicationText, localizeApplicationUI, installExpressionInputHighlights,
-    content, onInput, onChange, onClick }) {
+    content, onInput, onChange, onClick, prepareAffixInputs = () => {} }) {
     const sketchAppearanceSectionOpenState = { general: false, construction: false, dimension: false };
     function collapsibleSketchAppearanceSection(key, labelJa, labelEn, content, attributes = "") {
       const open = sketchAppearanceSectionOpenState[key] === true ? " open" : "";
@@ -18,6 +18,7 @@
         return;
       }
       panel.innerHTML = content(target);
+      prepareAffixInputs(panel);
       localizeApplicationUI(panel);
       if (target.readOnly) {
         panel.insertAdjacentHTML("afterbegin", `<p class="properties-read-only">${applicationText("読み取り専用：編集するには所属スケッチをアクティブにしてください", "Read-only: activate the owning sketch to edit")}</p>`);
