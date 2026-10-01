@@ -4,6 +4,7 @@
 
 ## 1. 実装ファイルの責務
 
+- `src/editing/pointer_hover.js`: 通常選択／拘束入力のhit優先順位とCanvasHover更新。再描画の要否を返す。
 - `src/editing/geometry_hit_query.js`: 通常Geometry hit。点の分類優先・描画順・倍率依存の許容距離を扱う読取り専用照会。
 - `src/editing/canvas_hover.js`: Canvas hover参照、一括更新・clear・メニュー退避復元・候補preview。読取り状態は変更不能。
 - `src/editing/canvas_context_query.js`: 現在scopeの右クリック候補、投影の親への集約、距離／種類／描画順の順位付け。

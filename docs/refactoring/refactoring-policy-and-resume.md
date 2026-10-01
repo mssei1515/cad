@@ -100,8 +100,8 @@
 
 週枠50%の停止条件はユーザー指示で解除済み。main／developのリリース5116a81をcodex/composition-root-nextへ取り込み、Annotation Parameter表示などの最新変更を保持する。新たなmainへのマージは行わない。
 
-GeometryHitQueryへ通常図形hit10関数を分離し、点・端点の分類優先と描画順・倍率による許容距離を維持した。選択可能端点のpredicateを右クリック候補と共用する。検証はcomposition-root.md先頭を参照する。
+PointerHoverへ通常選択／拘束入力のhover優先判断・CanvasHover更新を分離。hit照会を接続し、再描画の要否だけを呼出し側へ返す。コマンド・dragの進行を所有しない。検証はcomposition-root.md先頭を参照する。
 
-次は通常pointer移動時のhover決定を調べる。GeometryHitQuery・AnnotationSpatialQuery・投影／Hatch等の照会結果をどう優先するかを、作図commandやdrag更新から切り離す。現在の更新省略・再描画条件と参照Sketch／Blockの扱いを保持する。点分類の使用関係とSpline編集session、Sketchツリー行hoverもappに残っている。全体目標と全体E2Eは未完了。
+次は参照Sketch・Block／派生Geometryに対するhit照会とoperand構成を調べる。通常hit・右クリック候補とは対象範囲や優先順が違うため、形式的に共通化せず意味を維持する。作図modeのpreview／snapとpointer routing、点分類・Spline編集session、Sketchツリー行hoverはappに残る。全体目標と全体E2Eは未完了。
 
 再開時はAGENTS.mdと本書を読み、Git状態を確認する。サブエージェントを使わず、責務単位で検証・Commit・Pushを続ける。週枠50%の停止条件を再適用しない。
