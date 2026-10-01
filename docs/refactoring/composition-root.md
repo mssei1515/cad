@@ -6,6 +6,10 @@
 
 ## 現在の再開地点（2026-10-02）
 
+CanvasContextQueryへ候補収集・投影集約・順位付け、CanvasContextPresentationへ表示ラベルを分離。scope・倍率・編集中fit pointと各種読取りを明示依存にし、UI／Selection更新を持たない。4関数は読取りportへの置換以外の本体一致を確認。app.jsは14,303行から14,067行へ縮小。構文311件・単体673件が成功。関連E2E192件が成功（右クリック候補・拘束入力・Block／派生Instanceを含む5ファイル）。ログは一時フォルダのcad-context-query-{check,unit,e2e}.log。全体目標と全体E2Eは未完了。
+
+### 直前の区切り
+
 CanvasContextMenuへ対象・pointer・候補一覧・hover snapshotの所有と、HTML・位置・focus・イベント・開閉／復元を集約。appは候補を供給し選択／操作通知を既存コマンドへ接続する。start／disposeでイベント寿命を管理。app.jsは14,431行から14,303行へ縮小。構文308件・単体667件が成功。関連E2E192件が成功（右クリック操作・重なり候補・拘束対象選択を含む5ファイル）。ログは一時フォルダのcad-context-menu-{check,unit,e2e}.log。全体目標と全体E2Eは未完了。
 
 ### 直前の区切り

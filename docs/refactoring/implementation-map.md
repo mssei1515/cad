@@ -4,6 +4,8 @@
 
 ## 1. 実装ファイルの責務
 
+- `src/editing/canvas_context_query.js`: 現在scopeの右クリック候補、投影の親への集約、距離／種類／描画順の順位付け。
+- `src/ui/canvas_context_presentation.js`: 候補SVG・種類・ID・補助文字列。読取り／翻訳のみ。
 - `src/ui/canvas_context_menu.js`: Canvasメニューsession・候補preview・HTML・DOMイベント。候補取得と編集実行はappから接続。
 - `src/rendering/annotation_spatial_query.js`: Annotation表示範囲・文字領域・通常選択／右クリックのhit照会。描画と編集を持たない。
 - `src/geometry/annotation_anchor_query.js`: 引出線対象・最近点・GeometryRef再解決。Selection／現在Sketch／参照解決を明示依存とする読取り専用照会。
