@@ -32,7 +32,7 @@ test('instance presentation follows placement and source-edit state without chan
 test('placement presentation copies enabled sketch IDs and root sketch skips appearance resolution', () => {
   const operation = { blockPlacementEnabledSketchIds: ['S1'], blockPlacementRotationLocked: true };
   const query = sandbox.window.PropertyPresentation.create({ getOperation: () => operation,
-    blockDefinitionSketchRows: () => [], sketchById: () => null, isRootSketch: () => true,
+    blockDefinitionSketchRows: () => [], sketchById: () => null, isRootSketch: () => true, activeSketchId: () => "ROOT",
     effectiveAppearanceForSketch: () => { throw new Error('Root has no appearance controls'); },
   });
   const view = query.read({ kind: 'blockPlacement', item: {} });

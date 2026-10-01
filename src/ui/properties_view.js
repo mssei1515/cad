@@ -19,6 +19,15 @@
       }
       panel.innerHTML = content(target);
       localizeApplicationUI(panel);
+      if (target.readOnly) {
+        panel.insertAdjacentHTML("afterbegin", `<p class="properties-read-only">${applicationText("読み取り専用：編集するには所属スケッチをアクティブにしてください", "Read-only: activate the owning sketch to edit")}</p>`);
+        for (const control of panel.querySelectorAll("input, select, textarea, button")) control.disabled = true;
+      }
+      if (target.kind === "sketch" && target.active) {
+        for (const control of panel.querySelectorAll('[data-appearance-key="visible"]')) {
+          if (!control.closest("[data-sketch-default-appearance]")) control.disabled = true;
+        }
+      }
       if (target.kind === "multiple") {
         for (const checkbox of panel.querySelectorAll('input[type="checkbox"][data-mixed="true"]')) checkbox.indeterminate = true;
       } else {

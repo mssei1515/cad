@@ -43,7 +43,7 @@ async function openDocumentSettings(page) {
 }
 
 async function selectSketch(page, sketchId) {
-  await page.locator(`.sketch-item[data-id="${sketchId}"]`).click();
+  await page.locator(`.sketch-item[data-id="${sketchId}"] .sketchActivateBtn`).dblclick();
   await expect(page.locator("#propertiesPanel .property-heading")).toHaveText(/^(?:Sketch|スケッチ)$/);
 }
 
@@ -702,7 +702,7 @@ test("fix toggle applies points and lines as one multiple-selection operation", 
   expect(state.constraintCount).toBe(2);
 });
 
-test("Sketch Tree owns object groups, activates inactive rows, and copies annotations across sketches", async ({ page }) => {
+test("Sketch Tree owns object groups, inspects inactive rows, and copies annotations across sketches", async ({ page }) => {
   await openTestDocument(page);
   const fixture = annotationSketchFixture();
   expect(await page.evaluate((data) => window.__jot2dTest.loadDocumentFixtureForDragTest(data, "annotation-tree.json"), fixture)).toEqual(expect.objectContaining({ success: true }));
@@ -720,6 +720,11 @@ test("Sketch Tree owns object groups, activates inactive rows, and copies annota
   await expect(inactiveLine).toBeVisible();
   await inactiveLine.hover();
   expect((await page.evaluate(() => window.__jot2dTest.selectedGeometryIdsForTest())).lines).toEqual([]);
+  await inactiveLine.click();
+  expect((await page.evaluate(() => window.__jot2dTest.serializedModelForTest())).activeSketchId).toBe("S2");
+  expect((await page.evaluate(() => window.__jot2dTest.selectedGeometryIdsForTest())).lines).toEqual([]);
+  await expect(page.locator("#propertiesPanel")).toContainText(/読み取り専用|Read-only/);
+  await sketchTreeSketch(page, "S1").locator(".sketchActivateBtn").dblclick();
   await inactiveLine.click();
   expect((await page.evaluate(() => window.__jot2dTest.serializedModelForTest())).activeSketchId).toBe("S1");
   expect((await page.evaluate(() => window.__jot2dTest.selectedGeometryIdsForTest())).lines).toEqual(["L1"]);
@@ -740,7 +745,7 @@ test("Sketch Tree owns object groups, activates inactive rows, and copies annota
   expect((await page.evaluate(() => window.__jot2dTest.annotationOwnershipStateForTest())).selectedIds).toEqual(["AN1"]);
 
   await page.keyboard.press("Control+C");
-  await page.locator('.sketchActivateBtn[data-id="S2"]').click();
+  await page.locator('.sketchActivateBtn[data-id="S2"]').dblclick();
   await page.keyboard.press("Control+V");
   const pasted = await page.evaluate(() => window.__jot2dTest.serializedModelForTest());
   const copiedAnnotation = pasted.annotations.find((annotation) => annotation.id !== "AN1" && annotation.id !== "AN2");
@@ -756,32 +761,36 @@ test("Sketch Tree owns object groups, activates inactive rows, and copies annota
   await expect(page.locator('.sketch-object-row[data-sketch-id="S1"]')).toHaveCount(0);
 });
 
-test("inactive sketch row clicks activate first and toggle on the next click", async ({ page }) => {
+test("sketch selection and activation are independent and only chevrons expand rows", async ({ page }) => {
   await openTestDocument(page);
   const fixture = annotationSketchFixture();
-  expect(await page.evaluate((data) => window.__jot2dTest.loadDocumentFixtureForDragTest(data, "sketch-row-toggle.json"), fixture)).toEqual(expect.objectContaining({ success: true }));
-
-  const sketch = sketchTreeSketch(page, "S1");
+  await page.evaluate(data => window.__jot2dTest.loadDocumentFixtureForDragTest(data, "sketch-selection.json"), fixture);
+  const sketch = sketchTreeSketch(page, "S1"), button = sketch.locator(".sketchActivateBtn");
+  await button.click();
+  expect((await page.evaluate(() => window.__jot2dTest.serializedModelForTest())).activeSketchId).toBe("S2");
+  await expect(sketch).toHaveClass(/selected/);
+  await expect(sketchTreeSketch(page, "S2")).toHaveClass(/active/);
+  await expect(button).toHaveAttribute("aria-current", "false");
+  await expect(button).toHaveAttribute("aria-pressed", "true");
+  await expect(page.locator("#propertiesPanel")).toContainText("S1");
   await expect(sketch).toHaveAttribute("aria-expanded", "false");
-  await sketch.locator(".sketchActivateBtn").click();
+  await button.click();
+  await expect(sketch).toHaveAttribute("aria-expanded", "false");
+  await button.dblclick();
   expect((await page.evaluate(() => window.__jot2dTest.serializedModelForTest())).activeSketchId).toBe("S1");
+  await expect(button).toHaveAttribute("aria-current", "true");
   await expect(sketch).toHaveAttribute("aria-expanded", "false");
-  await expect(sketch.locator(".sketchActivateBtn")).toHaveAttribute("aria-current", "true");
-  await expect(page.locator('.sketch-group-row[data-sketch-id="S1"]')).toHaveCount(0);
-
-  await sketch.locator(".sketchActivateBtn").click();
-  await expect(sketch).toHaveAttribute("aria-expanded", "true");
-  await expect(page.locator('.sketch-group-row[data-sketch-id="S1"]')).toHaveCount(3);
-
-  await sketch.locator(".sketch-badges").click();
-  await expect(sketch).toHaveAttribute("aria-expanded", "false");
-  await expect(page.locator('.sketch-group-row[data-sketch-id="S1"]')).toHaveCount(0);
-
-  await sketch.locator(".sketchActivateBtn").click();
-  await expect(sketch).toHaveAttribute("aria-expanded", "true");
   await sketch.locator(".sketchExpandBtn").click();
-  await expect(sketch).toHaveAttribute("aria-expanded", "false");
-  expect((await page.evaluate(() => window.__jot2dTest.serializedModelForTest())).activeSketchId).toBe("S1");
+  await expect(sketch).toHaveAttribute("aria-expanded", "true");
+  await sketch.locator(".sketch-badges").click();
+  await expect(sketch).toHaveAttribute("aria-expanded", "true");
+  await button.dblclick();
+  await expect(sketch).toHaveAttribute("aria-expanded", "true");
+  await sketchTreeSketch(page, "S2").locator(".sketchActivateBtn").focus();
+  await page.keyboard.press("Alt+Enter");
+  expect((await page.evaluate(() => window.__jot2dTest.serializedModelForTest())).activeSketchId).toBe("S2");
+  await page.keyboard.press("Escape");
+  await expect(sketchTreeSketch(page, "S2")).not.toHaveClass(/selected/);
 });
 
 test("v10 annotations migrate by target or active sketch and invalid v11 ownership is atomic", async ({ page }) => {
@@ -964,7 +973,7 @@ test("geometry copy and paste crosses sketches with internal constraints and ste
   let state = await page.evaluate(() => window.__jot2dTest.clipboardStateForTest());
   expect(state.clipboard).toEqual({ pasteCount: 0, points: 5, lines: 1, circles: 1, arcs: 1, splines: 0, constraints: 4, blockInstances: 0 });
 
-  await page.click('.sketchActivateBtn[data-id="S2"]');
+  await page.dblclick('.sketchActivateBtn[data-id="S2"]');
   await page.keyboard.press("Control+V");
   state = await page.evaluate(() => window.__jot2dTest.clipboardStateForTest());
   expect(state.activeSketchId).toBe("S2");
@@ -1010,7 +1019,7 @@ test("cut uses one undo step and keeps a pasteable cross-sketch payload", async 
   expect(state.constraints).toHaveLength(0);
   expect(state.history.undoCount).toBe(2);
 
-  await page.click('.sketchActivateBtn[data-id="S2"]');
+  await page.dblclick('.sketchActivateBtn[data-id="S2"]');
   await page.keyboard.press("Control+V");
   state = await page.evaluate(() => window.__jot2dTest.clipboardStateForTest());
   expect(state.geometryBySketch.S1.lines).toHaveLength(0);
@@ -1035,7 +1044,7 @@ test("block instances and their closed constraints can be copied across sketches
   await page.keyboard.press("Control+C");
   let state = await page.evaluate(() => window.__jot2dTest.clipboardStateForTest());
   expect(state.clipboard).toEqual({ pasteCount: 0, points: 0, lines: 0, circles: 0, arcs: 0, splines: 0, constraints: 1, blockInstances: 1 });
-  await page.click('.sketchActivateBtn[data-id="S2"]');
+  await page.dblclick('.sketchActivateBtn[data-id="S2"]');
   await page.keyboard.press("Control+V");
   state = await page.evaluate(() => window.__jot2dTest.clipboardStateForTest());
   expect(state.geometryBySketch.S2.blockInstances).toHaveLength(1);
@@ -4187,4 +4196,94 @@ test("slot creation stays one undo step and cancellation leaves completed geomet
   expect(await page.evaluate(data => window.__jot2dTest.loadDocumentFixtureForDragTest(data, "slot-roundtrip.jot2d"), completed)).toEqual(expect.objectContaining({ success: true }));
   const reloaded = await page.evaluate(() => window.__jot2dTest.serializedModelForTest());
   for (const key of ["points", "lines", "arcs", "constraints"]) expect(reloaded[key]).toEqual(restored[key]);
+});
+
+
+test("inactive tree objects are read-only, add only within one sketch, and clear on reload", async ({ page }) => {
+  await openTestDocument(page);
+  const fixture = annotationSketchFixture();
+  fixture.sketches.push({ id: "S3", name: "Other", parentSketchId: "ROOT", kind: "sketch", appearance: {} });
+  fixture.annotations.push({ id: "AN3", type: "text", sketchId: "S3", visible: true, text: "Other note", x: 50, y: 50, style: {} });
+  fixture.constraints = [{ type: "horizontal", line: "L1", enabled: true, sketchId: "S1" }];
+  expect(await page.evaluate(data => window.__jot2dTest.loadDocumentFixtureForDragTest(data), fixture)).toEqual(expect.objectContaining({ success: true }));
+  const before = await page.evaluate(() => window.__jot2dTest.serializedModelForTest());
+  await expandSketchTreeGroup(page, "line", "S1");
+  const line = page.locator('.sketch-object-row[data-object-kind="line"][data-id="L1"]');
+  await line.click();
+  await expect(line).toHaveClass(/selected/);
+  await expect(line.locator(".removeLineBtn")).toBeDisabled();
+  await expect(page.locator('#propertiesPanel [data-property="construction"]')).toBeDisabled();
+  await page.locator('#propertiesPanel [data-property="construction"]').evaluate(input => {
+    input.checked = true; input.dispatchEvent(new Event("change", { bubbles: true }));
+  });
+  await page.keyboard.press("Delete");
+  const after = await page.evaluate(() => window.__jot2dTest.serializedModelForTest());
+  expect(after.lines).toEqual(before.lines); expect(after.constraints).toEqual(before.constraints);
+  expect(after.activeSketchId).toBe("S2");
+  await expandSketchTreeGroup(page, "annotation", "S1");
+  const annotation = page.locator('.sketch-object-row[data-object-kind="annotation"][data-id="AN1"]');
+  await annotation.click({ modifiers: ["Control"] });
+  await expect(line).toHaveClass(/selected/); await expect(annotation).toHaveClass(/selected/);
+  await expect(page.locator("#propertiesPanel")).toContainText(/読み取り専用|Read-only/);
+  await expandSketchTreeGroup(page, "annotation", "S3");
+  await page.locator('.sketch-object-row[data-object-kind="annotation"][data-id="AN3"]').click({ modifiers: ["Control"] });
+  await expect(line).not.toHaveClass(/selected/); await expect(annotation).not.toHaveClass(/selected/);
+  await expect(page.locator("#propertiesPanel")).toContainText("AN3");
+  await expandSketchTreeGroup(page, "constraint", "S1");
+  const constraint = page.locator('.sketch-object-row[data-object-kind="constraint"][data-sketch-id="S1"]').first();
+  await constraint.click();
+  await expect(constraint.locator(".removeConstraintBtn")).toBeDisabled();
+  await page.keyboard.press("Delete");
+  expect((await page.evaluate(() => window.__jot2dTest.serializedModelForTest())).constraints).toEqual(before.constraints);
+  await page.keyboard.press("Escape");
+  await expect(page.locator("#propertiesPanel")).not.toContainText(/読み取り専用|Read-only/);
+  await annotation.click();
+  await page.evaluate(data => window.__jot2dTest.loadDocumentFixtureForDragTest(data), before);
+  await expect(page.locator("#propertiesPanel")).not.toContainText(/読み取り専用|Read-only/);
+  await expect(page.locator('#sketchList .sketch-object-row.selected')).toHaveCount(0);
+});
+
+test("hidden sketches stay hidden when selected and activate explicitly; Root selection preserves the drawing target", async ({ page }) => {
+  await openTestDocument(page);
+  const fixture = annotationSketchFixture();
+  fixture.sketches[1].visible = false; fixture.sketches[1].appearance.visible = false;
+  await page.evaluate(data => window.__jot2dTest.loadDocumentFixtureForDragTest(data), fixture);
+  const sketch = sketchTreeSketch(page, "S1");
+  await sketch.locator(".sketchActivateBtn").click();
+  let state = await page.evaluate(() => window.__jot2dTest.serializedModelForTest());
+  expect(state.activeSketchId).toBe("S2"); expect(state.sketches.find(s => s.id === "S1").appearance.visible).toBe(false);
+  await expandSketchTreeGroup(page, "line", "S1");
+  await page.locator('.sketch-object-row[data-object-kind="line"][data-id="L1"]').click();
+  state = await page.evaluate(() => window.__jot2dTest.serializedModelForTest());
+  expect(state.sketches.find(s => s.id === "S1").appearance.visible).toBe(false);
+  await sketch.locator(".sketchActivateBtn").dblclick();
+  state = await page.evaluate(() => window.__jot2dTest.serializedModelForTest());
+  expect(state.activeSketchId).toBe("S1"); expect(state.sketches.find(s => s.id === "S1").appearance.visible).toBe(true);
+  await sketchTreeSketch(page, "ROOT").locator(".sketchActivateBtn").focus();
+  await page.keyboard.press("Space");
+  expect((await page.evaluate(() => window.__jot2dTest.serializedModelForTest())).activeSketchId).toBe("S1");
+  await expect(sketchTreeSketch(page, "ROOT")).toHaveClass(/selected/);
+  await expect(page.locator("#propertiesPanel")).toContainText("ROOT");
+  await page.keyboard.press("Escape");
+  await expect(sketchTreeSketch(page, "ROOT")).not.toHaveClass(/selected/);
+});
+
+test("sketch selection edits its own appearance and resets during undo and redo", async ({ page }) => {
+  await openTestDocument(page);
+  await page.evaluate(data => window.__jot2dTest.loadDocumentFixtureForDragTest(data, "selection-history.json", { resetLoadedHistory: true }), annotationSketchFixture());
+  await sketchTreeSketch(page, "S1").locator(".sketchActivateBtn").click();
+  const section = page.locator('#propertiesPanel [data-property-section="general"]');
+  await section.locator("summary").click();
+  await section.locator('[data-appearance-key="color"]').fill("#ff0000");
+  await section.locator('[data-appearance-key="color"]').dispatchEvent("change");
+  let state = await page.evaluate(() => window.__jot2dTest.serializedModelForTest());
+  expect(state.activeSketchId).toBe("S2"); expect(state.sketches.find(s => s.id === "S1").appearance.color).toBe("#ff0000");
+  await page.keyboard.press("Control+z");
+  await expect(page.locator('#sketchList .sketch-item.selected')).toHaveCount(0);
+  state = await page.evaluate(() => window.__jot2dTest.serializedModelForTest());
+  expect(state.sketches.find(s => s.id === "S1").appearance.color).not.toBe("#ff0000");
+  await page.keyboard.press("Control+y");
+  await expect(page.locator('#sketchList .sketch-item.selected')).toHaveCount(0);
+  state = await page.evaluate(() => window.__jot2dTest.serializedModelForTest());
+  expect(state.sketches.find(s => s.id === "S1").appearance.color).toBe("#ff0000");
 });

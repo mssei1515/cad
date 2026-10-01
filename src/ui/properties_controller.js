@@ -7,13 +7,14 @@
     applicationText, setHint, setPlacementRotationLocked, setPlacementSketchIds,
     setBlockInstanceRotationLocked, setBlockInstanceEnabledSketchIds, setBlockInstanceOrthogonalRotation,
     startInstanceSourceEdit, startReferenceImageCalibration, startHatchBoundaryRepair, startSplineEdit,
-    openAppearanceColorPalette }) {
+    openAppearanceColorPalette, activeSketchId = () => null }) {
     function sketchDefaultAppearanceContext(input, target = selectedPropertiesTarget()) {
       if (target.kind !== "sketch") return null;
       return input.closest("[data-sketch-default-appearance]")?.dataset.sketchDefaultAppearance || null;
     }
 
     function applyAppearancePropertyInput(target, input, { commit = true, rawValue } = {}) {
+      if (target.readOnly) return false;
       const data = input.dataset;
       const category = data.annotationDisplay ? "annotationDisplay" : target.kind === "annotation" && data.annotationStyle ? "annotation"
         : target.kind === "hatch" && data.hatchProperty ? "hatch"
@@ -21,6 +22,11 @@
       if (!category) return false;
       const key = category === "annotationDisplay" ? (data.annotationDisplay === "modelRelativeSize" ? "fixedDisplaySize" : data.annotationDisplay) : category === "annotation" ? data.annotationStyle : category === "hatch" ? data.hatchProperty
         : category === "appearance" ? data.appearanceKey : data.dimensionDisplay;
+      if (target.kind === "sketch" && target.item.id === activeSketchId() && category === "appearance" && key === "visible"
+        && !sketchDefaultAppearanceContext(input, target) && input.value === "false") {
+        updatePropertiesUI();
+        return true;
+      }
       let value = rawValue;
       if (commit || category === "dimension" && target.kind === "constraint") {
         value = category === "dimension" && ["prefix", "suffix"].includes(key) ? input.value : input.value.trim();
@@ -36,6 +42,7 @@
       if (event.target.dataset.freeInstanceProperty) return;
       const input = event.target;
       const target = selectedPropertiesTarget();
+      if (target.readOnly) return;
       const isTextInput = input instanceof HTMLTextAreaElement
         || input instanceof HTMLInputElement && ["text", "number"].includes(input.type);
       if (!isTextInput) return;
@@ -80,6 +87,7 @@
 
     function handlePropertiesChange(event) {
       const target = selectedPropertiesTarget();
+      if (target.readOnly) return;
       const input = event.target;
       if (target.kind === "geometryInstance" && input.dataset.freeInstanceProperty) {
         changeFreeInstanceProperty(target.item, input.dataset.freeInstanceProperty, input.type === "checkbox" ? input.checked : input.value);
@@ -153,6 +161,7 @@
     }
 
     function handlePropertiesClick(event) {
+      if (selectedPropertiesTarget().readOnly) return false;
       const action = event.target.closest("[data-property-action]")?.dataset.propertyAction;
       if (action === "instance-sources") return startInstanceSourceEdit(selectedPropertiesTarget().item);
       if (action === "reference-image-calibrate") {
