@@ -259,19 +259,8 @@
     trimConstraintSelection, pushPrimitiveSelection, geometryItemSelectedInCanvas,
     constraintSelectedInCanvas, hasSelection,
   } = canvasSelection;
-  let hoveredPoint = null;
-  let hoveredEndpointPoint = null;
-  let hoveredLine = null;
-  let hoveredCircle = null;
-  let hoveredArc = null;
-  let hoveredSpline = null;
-  let hoveredBlockInstance = null;
-  let hoveredGeometryInstance = null;
-  let hoveredArcEndpoint = null;
-  let hoveredDimensionConstraint = null;
-  let hoveredAnnotation = null;
-  let hoveredHatch = null;
-  let hoveredReferenceImage = null;
+  const canvasHover = window.CanvasHover.create({ isEndpointPoint });
+  const { clear: clearCanvasHover, capture: captureCanvasHoverState, restore: restoreCanvasHoverState } = canvasHover;
   let lastAuthoringPerformance = null;
   const interactionProfiler = window.InteractionProfiler.create();
   const { work: profileInteractionWork, phase: profileInteractionPhase } = interactionProfiler;
@@ -311,14 +300,13 @@
   let pendingConstraintCommand = null;
   let constraintOperands = [];
   let lastPointerWorld = null;
-  let hoveredSketchIdentity = null;
   let hoveredSketchTreeId = null;
   let constructionLineMode = false;
   const selectionHighlight = window.SelectionHighlight.create({
     canvasSelection, blockProjectionBundle, geometryRefsEqual, geometryRefForItem,
     constraintGraphNodes, constraintHighlightNodes, effectiveSelectedConstraint, targetFromConstraint,
-    getHoveredDimension: () => hoveredDimensionConstraint,
-    setHoveredDimension: value => { hoveredDimensionConstraint = value; }, draw,
+    getHoveredDimension: () => canvasHover.current.dimension,
+    setHoveredDimension: value => { canvasHover.update({ dimension: value }); }, draw,
   });
   const { sameConstraintDisplayElement, isSidebarHoveredElement, isSelectedConstraintRelatedElement, selectedConstraintReferenceElements, constraintDirectlyReferencesCanvasSelection, sidebarHoverElementsForItem, sidebarHoverElementsForConstraint, setSidebarHover, clearSidebarHover } = selectionHighlight;
   const offsetSelection = window.OffsetSelection.create({
@@ -701,7 +689,7 @@
     currentScope: workspace.current, blockDefinitionById, blockProjectionBundle, createBlockProjectionBundle,
     blockDefinitionDrawableSketchIds, blockDefinitionGeometrySketchIds, constraintGraphNodes,
     geometryRefKey, parseGeometryRefId, annotationReferencesRemovedGeometry, guardDimensionSymbolDeletion,
-    canvasSelection, clearRemovedHover: removed => { if (removed.has(hoveredDimensionConstraint)) hoveredDimensionConstraint = null; },
+    canvasSelection, clearRemovedHover: removed => { if (removed.has(canvasHover.current.dimension)) canvasHover.update({ dimension: null }); },
     invalidateBlockProjectionCache, setHint, updateBlockUI, log, updateUI, draw, recordHistory,
   });
   const { setEnabledSketchIds: setBlockInstanceEnabledSketchIds } = blockConfigurationCommand;
@@ -2364,16 +2352,13 @@
     pendingConstraintCommand = null;
     constraintOperands = [];
     constructionLineMode = false;
-    hoveredPoint = null;
-    hoveredEndpointPoint = null;
-    hoveredLine = null;
-    hoveredCircle = null;
-    hoveredArc = null;
-    hoveredSpline = null;
-    hoveredArcEndpoint = null;
-    hoveredDimensionConstraint = null;
+    canvasHover.update({
+      point: null, endpointPoint: null, line: null,
+      circle: null, arc: null, spline: null,
+      arcEndpoint: null, dimension: null,
+    });
     selectionHighlight.reset();
-    hoveredSketchIdentity = null;
+    canvasHover.update({ sketchIdentity: null });
     lastPointerWorld = null;
     clearSnap();
     canvasSelection.set("arcEndpoint", null);
@@ -2386,11 +2371,11 @@
     canvasSelection.set("splines", []);
     canvasSelection.set("blockInstances", []);
     canvasSelection.set("geometryInstances", []);
-    hoveredBlockInstance = null;
+    canvasHover.update({ block: null });
     canvasSelection.set("instanceGeometry", null);
-    hoveredGeometryInstance = null;
-    hoveredHatch = null;
-    hoveredReferenceImage = null;
+    canvasHover.update({
+      geometryInstance: null, hatch: null, referenceImage: null,
+    });
     geometryIds.reset();
     sketchSeq = 2;
     annotationSeq = 1;
@@ -2909,14 +2894,14 @@
   function clearSelection() {
     canvasSelection.clear();
     constraintOperands = [];
-    hoveredSketchIdentity = null;
-    hoveredBlockInstance = null;
-    hoveredGeometryInstance = null;
+    canvasHover.update({
+      sketchIdentity: null, block: null, geometryInstance: null,
+    });
     selectionHighlight.reset();
-    hoveredAnnotation = null;
-    hoveredHatch = null;
-    hoveredReferenceImage = null;
-    hoveredSpline = null;
+    canvasHover.update({
+      annotation: null, hatch: null, referenceImage: null,
+      spline: null,
+    });
   }
 
   function selectableSketchElement(item) {
@@ -3680,7 +3665,7 @@
     if (splineEditSession && splineSet.has(splineEditSession.spline)) splineEditSession = null;
     if (constraintSet.has(canvasSelection.dimensionConstraint)) canvasSelection.set("dimensionConstraint", null);
     if (constraintSet.has(canvasSelection.constraint)) canvasSelection.set("constraint", null);
-    if (constraintSet.has(hoveredDimensionConstraint)) hoveredDimensionConstraint = null;
+    if (constraintSet.has(canvasHover.current.dimension)) canvasHover.update({ dimension: null });
 
     const result = solveActiveSketch();
     normalizeArcSweeps();
@@ -4319,7 +4304,7 @@
       if (!isVisibleSketchId(hatch.sketchId)) continue;
       const appearance = hatchAppearanceForDisplay(hatch);
       const selected = hatch.blockProjection ? canvasSelection.blockInstances.includes(hatch.blockInstance) : hatch.sketchId === activeSketchId() && canvasSelection.hatches.includes(hatch);
-      const hovered = hatch.blockProjection ? hoveredBlockInstance === hatch.blockInstance : hatch.sketchId === activeSketchId() && hoveredHatch === hatch;
+      const hovered = hatch.blockProjection ? canvasHover.current.block === hatch.blockInstance : hatch.sketchId === activeSketchId() && canvasHover.current.hatch === hatch;
       drawResolvedHatch(resolvedHatchBoundary(hatch), appearance, hatchPatternOrigin(hatch), { hatch, selected, hovered, alpha: sketchAlpha(hatch) });
     }
     if (includePreview && ["hatch", "hatch-repair"].includes(mode) && hatchCommand.preview?.result?.ok) {
@@ -4336,7 +4321,7 @@
   }
 
   function drawReferenceImageOverlays() {
-    const item = canvasSelection.referenceImages.length === 1 ? canvasSelection.referenceImages[0] : hoveredReferenceImage;
+    const item = canvasSelection.referenceImages.length === 1 ? canvasSelection.referenceImages[0] : canvasHover.current.referenceImage;
     referenceImageRenderer.drawOverlays(
       item && item.visible !== false && item.sketchId === activeSketchId() ? item : null,
       canvasSelection.referenceImages.includes(item),
@@ -4516,7 +4501,7 @@
   function ownerInstanceHovered(item) {
     if (item?.derivedInstance && canvasSelection.instanceGeometry?.instanceId === item.derivedInstance.id) return false;
     if (item instanceof Point) return false;
-    return Boolean((item?.blockInstance && hoveredBlockInstance === item.blockInstance) || (item?.derivedInstance && hoveredGeometryInstance === item.derivedInstance));
+    return Boolean((item?.blockInstance && canvasHover.current.block === item.blockInstance) || (item?.derivedInstance && canvasHover.current.geometryInstance === item.derivedInstance));
   }
 
 
@@ -4528,7 +4513,7 @@
     const selected = ownerInstanceSelected(item) || geometrySelected;
     const treeHovered = isSidebarHighlightedElement(item);
     const sidebarHovered = isSidebarHoveredElement(item);
-    const hoverItem = { lines: hoveredLine, circles: hoveredCircle, arcs: hoveredArc, splines: hoveredSpline }[kind];
+    const hoverItem = { lines: canvasHover.current.line, circles: canvasHover.current.circle, arcs: canvasHover.current.arc, splines: canvasHover.current.spline }[kind];
     const canvasHovered = (active || isReferenceHoverElement(item)) && hoverItem === item;
     const hovered = treeHovered || sidebarHovered || canvasHovered || ownerInstanceHovered(item);
     const relatedHighlighted = isSelectedConstraintRelatedElement(item);
@@ -4653,7 +4638,7 @@
       const dimension = c.dimension || defaultDimensionForTarget(target);
       const sketchId = constraintSketchId(c);
       if (!viewState.constraintStatus && effectiveDimensionAppearance(dimension, sketchId).visible === false) continue;
-      const highlighted = c === hoveredDimensionConstraint || c === canvasSelection.dimensionConstraint || c === dimensionDrag.constraint;
+      const highlighted = c === canvasHover.current.dimension || c === canvasSelection.dimensionConstraint || c === dimensionDrag.constraint;
       const label = dimensionLabelForConstraint(c, target, dimension);
       const editing = pendingCommand?.type === "distance-value" && pendingCommand.constraint === c;
       const colorOverride = viewState.constraintStatus && !isActiveSketchConstraint(c) ? INACTIVE_CONSTRAINT_STATUS_COLOR : null;
@@ -4673,7 +4658,7 @@
 
   function annotationDisplayColor(element, style = normalizeAnnotationStyle(element?.style)) {
     if (canvasSelection.annotations.includes(element)) return canvasThemeColor("#2563eb");
-    if (element === hoveredAnnotation) return canvasThemeColor("#0ea5e9");
+    if (element === canvasHover.current.annotation) return canvasThemeColor("#0ea5e9");
     return canvasThemeColor(style.color);
   }
 
@@ -4973,7 +4958,7 @@
   }
 
   function drawSketchIdentityLabel() {
-    const identity = hoveredSketchIdentity || selectedSketchIdentityElement();
+    const identity = canvasHover.current.sketchIdentity || selectedSketchIdentityElement();
     const pointer = lastPointerWorld;
     if (!identity || !pointer || !isVisibleSketchId(identity.sketchId) || identity.sketchId === activeSketchId()) return;
     const baseLabel = `${identity.label || identity.id} / ${sketchName(identity.sketchId)}`;
@@ -5026,7 +5011,7 @@
 
   function shouldShowPrimitiveCenter(point) {
     if (canvasSelection.circles.some((circle) => circle.center === point) || canvasSelection.arcs.some((arc) => arc.center === point)) return true;
-    if (hoveredCircle?.center === point || hoveredArc?.center === point || hoveredArcEndpoint?.arc?.center === point) return true;
+    if (canvasHover.current.circle?.center === point || canvasHover.current.arc?.center === point || canvasHover.current.arcEndpoint?.arc?.center === point) return true;
     if (selectionHighlight.current?.item?.center === point) return true;
     if (geometryDrag.isCenter(point)) return true;
     return false;
@@ -5060,7 +5045,7 @@
   }
 
   function shouldShowArcEndpointHandle(arc, endpoint) {
-    if (sameArcEndpoint(hoveredArcEndpoint, { arc, endpoint }) || sameArcEndpoint(canvasSelection.arcEndpoint, { arc, endpoint })) return true;
+    if (sameArcEndpoint(canvasHover.current.arcEndpoint, { arc, endpoint }) || sameArcEndpoint(canvasSelection.arcEndpoint, { arc, endpoint })) return true;
     if (canvasSelection.arcEndpointPair?.some((item) => sameArcEndpoint(item, { arc, endpoint }))) return true;
     if (geometryDrag.isArcEndpoint(arc, endpoint)) return true;
     return false;
@@ -5074,7 +5059,7 @@
         if (!shouldShowArcEndpointHandle(arc, endpoint)) continue;
         const p = arcEndpointPoint(arc, endpoint);
         const selected = sameArcEndpoint(canvasSelection.arcEndpoint, { arc, endpoint }) || canvasSelection.arcEndpointPair?.some((item) => sameArcEndpoint(item, { arc, endpoint })) || isConstraintOperandSelected(arc, { arcEndpoint: { arc, endpoint } }) || (geometryDrag.isArcEndpoint(arc, endpoint));
-        const hovered = sameArcEndpoint(hoveredArcEndpoint, { arc, endpoint });
+        const hovered = sameArcEndpoint(canvasHover.current.arcEndpoint, { arc, endpoint });
         const fixed = Boolean(findArcEndpointFixedConstraint(arc, endpoint));
         ctx.beginPath();
         ctx.arc(p.x, p.y, (selected ? 7 : 5) / viewport.scale, 0, Math.PI * 2);
@@ -5103,7 +5088,7 @@
       const auxiliaryHighlighted = relatedHighlighted;
       const sel = (active && canvasSelection.points.includes(p)) || refSelected || ownerInstanceSelected(p);
       const endpoint = isEndpointPoint(p);
-      const canvasHovered = (active || isReferenceHoverElement(p)) && (hoveredPoint === p || hoveredEndpointPoint === p);
+      const canvasHovered = (active || isReferenceHoverElement(p)) && (canvasHover.current.point === p || canvasHover.current.endpointPoint === p);
       if (viewState.constraintStatus && p.kind === "endpoint" && !canvasHovered && !sel) continue;
       const hovered = treeHovered || sidebarHovered || canvasHovered || ownerInstanceHovered(p);
       const dragging = geometryDrag.isPoint(p);
@@ -5809,22 +5794,19 @@
   }
 
   function applyReferenceHoverTarget(referenceTarget) {
-    hoveredPoint = referenceTarget?.kind === "point" ? referenceTarget.point : null;
-    hoveredEndpointPoint = hoveredPoint;
-    hoveredLine = referenceTarget?.kind === "line" ? referenceTarget.line : null;
-    hoveredCircle = referenceTarget?.primitive instanceof Circle ? referenceTarget.primitive : null;
-    hoveredArc = referenceTarget?.primitive instanceof Arc ? referenceTarget.primitive : null;
-    hoveredArcEndpoint = null;
-    hoveredDimensionConstraint = null;
+    canvasHover.update({ point: referenceTarget?.kind === "point" ? referenceTarget.point : null });
+    canvasHover.update({
+      endpointPoint: canvasHover.current.point, line: referenceTarget?.kind === "line" ? referenceTarget.line : null, circle: referenceTarget?.primitive instanceof Circle ? referenceTarget.primitive : null,
+      arc: referenceTarget?.primitive instanceof Arc ? referenceTarget.primitive : null, arcEndpoint: null, dimension: null,
+    });
   }
 
   function updatePendingDistanceRetargetHover(pointer) {
     if (pendingCommand?.type !== "distance-place" || !["line-length", "radius", "diameter"].includes(pendingCommand.target.kind)) {
-      hoveredPoint = null;
-      hoveredEndpointPoint = null;
-      hoveredLine = null;
-      hoveredCircle = null;
-      hoveredArc = null;
+      canvasHover.update({
+        point: null, endpointPoint: null, line: null,
+        circle: null, arc: null,
+      });
       return false;
     }
     const baseOperands = (pendingCommand.operands || []).filter(Boolean);
@@ -5834,15 +5816,16 @@
       : null;
     const target = resolution?.target && resolution.target.kind !== "invalid" ? referenceTargetFromOperand(operand) : null;
     const changed =
-      (target?.kind === "point" ? target.point : null) !== hoveredPoint ||
-      (target?.kind === "line" ? target.line : null) !== hoveredLine ||
-      (target?.primitive instanceof Circle ? target.primitive : null) !== hoveredCircle ||
-      (target?.primitive instanceof Arc ? target.primitive : null) !== hoveredArc ||
-      hoveredArcEndpoint ||
-      hoveredDimensionConstraint;
+      (target?.kind === "point" ? target.point : null) !== canvasHover.current.point ||
+      (target?.kind === "line" ? target.line : null) !== canvasHover.current.line ||
+      (target?.primitive instanceof Circle ? target.primitive : null) !== canvasHover.current.circle ||
+      (target?.primitive instanceof Arc ? target.primitive : null) !== canvasHover.current.arc ||
+      canvasHover.current.arcEndpoint ||
+      canvasHover.current.dimension;
     applyReferenceHoverTarget(target);
-    hoveredArcEndpoint = null;
-    hoveredBlockInstance = null;
+    canvasHover.update({
+      arcEndpoint: null, block: null,
+    });
     return changed;
   }
 
@@ -5977,7 +5960,7 @@
     sketchProjectionSources = [];
     geometryInstanceCommand.clearSources();
     instanceSourceCommand.reset();
-    hoveredSketchIdentity = null;
+    canvasHover.update({ sketchIdentity: null });
     lastPointerWorld = null;
     hideDimensionValueInput();
     clearSnap();
@@ -6064,11 +6047,11 @@
   }
 
   function sketchTreeObjectHovered(category, entry) {
-    if (category === "hatch") return hoveredHatch === entry;
-    if (category === "image") return hoveredReferenceImage === entry;
-    if (category === "block") return hoveredBlockInstance === entry;
-    if (category === "instance") return hoveredGeometryInstance === entry;
-    if (category === "annotation") return hoveredAnnotation === entry;
+    if (category === "hatch") return canvasHover.current.hatch === entry;
+    if (category === "image") return canvasHover.current.referenceImage === entry;
+    if (category === "block") return canvasHover.current.block === entry;
+    if (category === "instance") return canvasHover.current.geometryInstance === entry;
+    if (category === "annotation") return canvasHover.current.annotation === entry;
     const item = category === "constraint" ? (entry.kind === "fixed-point" ? entry.point : entry.constraint) : entry;
     return selectionHighlight.current?.item === item;
   }
@@ -6097,10 +6080,10 @@
       leave: () => {
         hoveredSketchTreeId = null;
         clearSidebarHover();
-        hoveredBlockInstance = null;
-        hoveredAnnotation = null;
-        hoveredHatch = null;
-        hoveredReferenceImage = null;
+        canvasHover.update({
+          block: null, annotation: null, hatch: null,
+          referenceImage: null,
+        });
         draw();
       },
     },
@@ -6124,11 +6107,11 @@
     const objectRow = event.target.closest(".sketch-object-row");
     if (objectRow && !objectRow.contains(event.relatedTarget) && objectRow.dataset.sketchId === activeSketchId()) {
       const category = objectRow.dataset.objectKind;
-      if (category === "block") hoveredBlockInstance = model.blockInstances.find((item) => item.id === objectRow.dataset.id) || null;
-      else if (category === "instance") hoveredGeometryInstance = model.geometryInstances.find((item) => item.id === objectRow.dataset.id) || null;
-      else if (category === "hatch") hoveredHatch = model.hatches.find((item) => item.id === objectRow.dataset.id) || null;
-      else if (category === "image") hoveredReferenceImage = model.referenceImages.find((item) => item.id === objectRow.dataset.id) || null;
-      else if (category === "annotation") hoveredAnnotation = model.annotations.find((item) => item.id === objectRow.dataset.id) || null;
+      if (category === "block") canvasHover.update({ block: model.blockInstances.find((item) => item.id === objectRow.dataset.id) || null });
+      else if (category === "instance") canvasHover.update({ geometryInstance: model.geometryInstances.find((item) => item.id === objectRow.dataset.id) || null });
+      else if (category === "hatch") canvasHover.update({ hatch: model.hatches.find((item) => item.id === objectRow.dataset.id) || null });
+      else if (category === "image") canvasHover.update({ referenceImage: model.referenceImages.find((item) => item.id === objectRow.dataset.id) || null });
+      else if (category === "annotation") canvasHover.update({ annotation: model.annotations.find((item) => item.id === objectRow.dataset.id) || null });
       else if (objectRow.dataset.fixedPointId) {
         const point = model.points.find((item) => item.id === objectRow.dataset.fixedPointId);
         setSidebarHover("fixed-point", point, sidebarHoverElementsForItem(point));
@@ -6153,11 +6136,10 @@
     const objectRow = event.target.closest(".sketch-object-row");
     if (objectRow && !objectRow.contains(event.relatedTarget)) {
       clearSidebarHover();
-      hoveredBlockInstance = null;
-      hoveredGeometryInstance = null;
-      hoveredAnnotation = null;
-      hoveredHatch = null;
-      hoveredReferenceImage = null;
+      canvasHover.update({
+        block: null, geometryInstance: null, annotation: null,
+        hatch: null, referenceImage: null,
+      });
       draw();
     }
     const sketchRow = event.target.closest(".sketch-item");
@@ -6494,22 +6476,6 @@
 
 
 
-  function clearCanvasHover() {
-    hoveredPoint = null;
-    hoveredEndpointPoint = null;
-    hoveredLine = null;
-    hoveredCircle = null;
-    hoveredArcEndpoint = null;
-    hoveredArc = null;
-    hoveredSpline = null;
-    hoveredDimensionConstraint = null;
-    hoveredSketchIdentity = null;
-    hoveredBlockInstance = null;
-    hoveredGeometryInstance = null;
-    hoveredAnnotation = null;
-    hoveredHatch = null;
-    hoveredReferenceImage = null;
-  }
 
 
 
@@ -7383,7 +7349,7 @@
     angleDimensionFromLabelPoint, dimensionWithLabelAt, dimensionFromAnchor, setAngleDimensionLabelOffsets,
     syncAngleConstraintFromDimension, draw, updateUI, updateGeometrySelectionUI, syncDimensionValueInput, recordHistory,
     continueCommandClick: (event, hits) => {
-      hoveredDimensionConstraint = null;
+      canvasHover.update({ dimension: null });
       const pointer = canvasPoint(event);
       if (pendingCommand?.type === "distance-place") {
         if (!retargetDistancePlaceWithOperand(pointer, hits)) startDistanceValueInput(pointer);
@@ -7623,57 +7589,11 @@
     blockDefinitionById, geometryInstanceTypeLabel, hatchPatternTypeLabel, hatchAppearanceForDisplay,
   });
 
-  function captureCanvasHoverState() {
-    return {
-      point: hoveredPoint,
-      endpointPoint: hoveredEndpointPoint,
-      line: hoveredLine,
-      circle: hoveredCircle,
-      arc: hoveredArc,
-      spline: hoveredSpline,
-      block: hoveredBlockInstance,
-      geometryInstance: hoveredGeometryInstance,
-      arcEndpoint: hoveredArcEndpoint,
-      dimension: hoveredDimensionConstraint,
-      sketchIdentity: hoveredSketchIdentity,
-      annotation: hoveredAnnotation,
-      hatch: hoveredHatch,
-    };
-  }
 
-  function restoreCanvasHoverState(state) {
-    if (!state) return;
-    hoveredPoint = state.point;
-    hoveredEndpointPoint = state.endpointPoint;
-    hoveredLine = state.line;
-    hoveredCircle = state.circle;
-    hoveredArc = state.arc;
-    hoveredSpline = state.spline;
-    hoveredBlockInstance = state.block;
-    hoveredGeometryInstance = state.geometryInstance;
-    hoveredArcEndpoint = state.arcEndpoint;
-    hoveredDimensionConstraint = state.dimension;
-    hoveredSketchIdentity = state.sketchIdentity;
-    hoveredAnnotation = state.annotation;
-    hoveredHatch = state.hatch;
-  }
 
 
   function previewCanvasContextCandidate(target) {
-    clearCanvasHover();
-    if (target.kind === "point") {
-      hoveredPoint = target.item;
-      hoveredEndpointPoint = isEndpointPoint(target.item) ? target.item : null;
-    } else if (target.kind === "line") hoveredLine = target.item;
-    else if (target.kind === "circle") hoveredCircle = target.item;
-    else if (target.kind === "arc") hoveredArc = target.item;
-    else if (target.kind === "spline") hoveredSpline = target.item;
-    else if (target.kind === "arc-endpoint") hoveredArcEndpoint = { arc: target.item, endpoint: target.endpoint };
-    else if (target.kind === "dimension") hoveredDimensionConstraint = target.item;
-    else if (target.kind === "block") hoveredBlockInstance = target.item;
-    else if (target.kind === "geometry-instance") hoveredGeometryInstance = target.item;
-    else if (target.kind === "annotation") hoveredAnnotation = target.item;
-    else if (target.kind === "hatch") hoveredHatch = target.item;
+    canvasHover.previewCandidate(target);
     draw();
   }
 
@@ -8031,7 +7951,7 @@
       || (hitS && !hitS.blockProjection) ||
       hitDerivedGeometry
     );
-    hoveredSketchIdentity = hitSketchIdentityElement(p.x, p.y, { allowInactiveGeometry: true });
+    canvasHover.update({ sketchIdentity: hitSketchIdentityElement(p.x, p.y, { allowInactiveGeometry: true }) });
     const inactiveHit = null;
     const blankAnnotationHit = hitAnnotationElement(p.x, p.y);
     const annotationTargetHit = hitAnnotationTarget(p.x, p.y);
@@ -8177,7 +8097,7 @@
       e.preventDefault();
       canvasSelection.set("dimensionConstraint", null);
       canvasSelection.set("constraint", null);
-      hoveredDimensionConstraint = null;
+      canvasHover.update({ dimension: null });
       setHint(constraintTargetHint(pendingConstraintCommand.type));
       updateGeometrySelectionUI();
       draw();
@@ -8272,16 +8192,12 @@
     if (mode === "sketch-projection") {
       clearSnap();
       const target = hitReferenceTarget(p.x, p.y);
-      hoveredPoint = target?.kind === "point" ? target.point : null;
-      hoveredEndpointPoint = null;
-      hoveredLine = target?.kind === "line" ? target.line : null;
-      hoveredCircle = target?.kind === "primitive" && target.primitive instanceof Circle ? target.primitive : null;
-      hoveredArc = target?.kind === "primitive" && target.primitive instanceof Arc ? target.primitive : null;
-      hoveredSpline = target?.kind === "spline" ? target.spline : null;
-      hoveredArcEndpoint = null;
-      hoveredDimensionConstraint = null;
-      hoveredBlockInstance = null;
-      hoveredSketchIdentity = target ? { id: operandElement(target)?.id, sketchId: target.sketchId, item: operandElement(target), kind: geometryKindForItem(operandElement(target)) } : null;
+      canvasHover.update({
+        point: target?.kind === "point" ? target.point : null, endpointPoint: null, line: target?.kind === "line" ? target.line : null,
+        circle: target?.kind === "primitive" && target.primitive instanceof Circle ? target.primitive : null, arc: target?.kind === "primitive" && target.primitive instanceof Arc ? target.primitive : null, spline: target?.kind === "spline" ? target.spline : null,
+        arcEndpoint: null, dimension: null, block: null,
+      });
+      canvasHover.update({ sketchIdentity: target ? { id: operandElement(target)?.id, sketchId: target.sketchId, item: operandElement(target), kind: geometryKindForItem(operandElement(target)) } : null });
       draw();
       return;
     }
@@ -8449,7 +8365,7 @@
     }
     if (selectionRectangle.active) {
       clearSnap();
-      hoveredSketchIdentity = null;
+      canvasHover.update({ sketchIdentity: null });
       selectionRectangle.update(p);
       draw();
       return;
@@ -8476,28 +8392,22 @@
 
     if (pendingCommand?.type === "annotation-leader-place" || pendingCommand?.type === "annotation-text-place") {
       pendingCommand.pointer = p;
-      hoveredPoint = null;
-      hoveredEndpointPoint = null;
-      hoveredLine = null;
-      hoveredCircle = null;
-      hoveredArcEndpoint = null;
-      hoveredArc = null;
-      hoveredDimensionConstraint = null;
-      hoveredSketchIdentity = null;
+      canvasHover.update({
+        point: null, endpointPoint: null, line: null,
+        circle: null, arcEndpoint: null, arc: null,
+        dimension: null, sketchIdentity: null,
+      });
       draw();
       return;
     }
 
     if (pendingCommand?.type === "fillet-radius-place") {
       clearSnap();
-      hoveredPoint = null;
-      hoveredEndpointPoint = null;
-      hoveredLine = null;
-      hoveredCircle = null;
-      hoveredArcEndpoint = null;
-      hoveredArc = null;
-      hoveredDimensionConstraint = null;
-      hoveredSketchIdentity = null;
+      canvasHover.update({
+        point: null, endpointPoint: null, line: null,
+        circle: null, arcEndpoint: null, arc: null,
+        dimension: null, sketchIdentity: null,
+      });
       updateFilletRadiusPlacement(p);
       draw();
       return;
@@ -8512,12 +8422,12 @@
       clearSnap();
       pointerPreview = null;
       trimPreview = null;
-      hoveredSketchIdentity = null;
+      canvasHover.update({ sketchIdentity: null });
       return;
     }
 
     if (mode === "line") {
-      hoveredSketchIdentity = null;
+      canvasHover.update({ sketchIdentity: null });
       const rawPreview = lineCommand.previewPoint(p, e.shiftKey);
       pointerPreview = snapForDrawing(rawPreview);
       draw();
@@ -8525,54 +8435,53 @@
 
     if (mode === "centerline") {
       clearSnap();
-      hoveredSketchIdentity = null;
+      canvasHover.update({ sketchIdentity: null });
       pointerPreview = centerlineCommand.support?.ok ? projectPointToCenterlineSupport(snapForDrawing(p)) : p;
       if (centerlineCommand.targets.length < 2) {
         clearSnap();
         const wantsLine = centerlineCommand.targets[0] instanceof Line;
         const wantsPoint = centerlineCommand.targets[0] instanceof Point;
-        hoveredPoint = wantsLine ? null : hitPoint(p.x, p.y);
-        hoveredEndpointPoint = hoveredPoint;
-        hoveredLine = wantsPoint || hoveredPoint ? null : hitLine(p.x, p.y);
+        canvasHover.update({ point: wantsLine ? null : hitPoint(p.x, p.y) });
+        canvasHover.update({ endpointPoint: canvasHover.current.point });
+        canvasHover.update({ line: wantsPoint || canvasHover.current.point ? null : hitLine(p.x, p.y) });
       } else {
-        hoveredPoint = null;
-        hoveredEndpointPoint = null;
-        hoveredLine = null;
+        canvasHover.update({
+          point: null, endpointPoint: null, line: null,
+        });
       }
-      hoveredCircle = null;
-      hoveredArc = null;
-      hoveredArcEndpoint = null;
-      hoveredSpline = null;
-      hoveredDimensionConstraint = null;
+      canvasHover.update({
+        circle: null, arc: null, arcEndpoint: null,
+        spline: null, dimension: null,
+      });
       draw();
       return;
     }
 
     if (mode === "circle-center-cross") {
       clearSnap();
-      hoveredSketchIdentity = null;
+      canvasHover.update({ sketchIdentity: null });
       pointerPreview = p;
-      hoveredPoint = null;
-      hoveredEndpointPoint = null;
-      hoveredLine = null;
-      hoveredCircle = hitCircle(p.x, p.y);
-      hoveredArc = null;
-      hoveredArcEndpoint = null;
-      hoveredSpline = null;
-      hoveredDimensionConstraint = null;
+      canvasHover.update({
+        point: null, endpointPoint: null, line: null,
+      });
+      canvasHover.update({ circle: hitCircle(p.x, p.y) });
+      canvasHover.update({
+        arc: null, arcEndpoint: null, spline: null,
+        dimension: null,
+      });
       draw();
       return;
     }
 
     if (mode === "rectangle" || mode === "slot" || mode === "circle" || mode === "arc" || mode === "three-point-arc" || mode === "spline") {
-      hoveredSketchIdentity = null;
+      canvasHover.update({ sketchIdentity: null });
       pointerPreview = snapForDrawing(p);
       draw();
     }
 
     if (mode === "block-place") {
       clearSnap();
-      hoveredSketchIdentity = null;
+      canvasHover.update({ sketchIdentity: null });
       pointerPreview = p;
       draw();
       return;
@@ -8581,18 +8490,16 @@
     if (pendingCommand?.type === "distance-place") {
       clearSnap();
       const hitD = hitDimension(p.x, p.y);
-      hoveredSketchIdentity = hitSketchIdentityElement(p.x, p.y, { allowInactiveGeometry: true });
+      canvasHover.update({ sketchIdentity: hitSketchIdentityElement(p.x, p.y, { allowInactiveGeometry: true }) });
       pendingCommand.pointer = p;
       pendingCommand.dimension = null;
       updatePendingDistanceRetargetHover(p);
       if (hitD) {
-        hoveredPoint = null;
-        hoveredEndpointPoint = null;
-        hoveredLine = null;
-        hoveredCircle = null;
-        hoveredArcEndpoint = null;
-        hoveredArc = null;
-        hoveredDimensionConstraint = hitD.constraint;
+        canvasHover.update({
+          point: null, endpointPoint: null, line: null,
+          circle: null, arcEndpoint: null, arc: null,
+          dimension: hitD.constraint,
+        });
       }
       draw();
       return;
@@ -8600,16 +8507,12 @@
 
     if (mode === "trim") {
       clearSnap();
-      const hadHover = Boolean(hoveredPoint || hoveredEndpointPoint || hoveredLine || hoveredCircle || hoveredArcEndpoint || hoveredArc || hoveredDimensionConstraint);
-      hoveredPoint = null;
-      hoveredEndpointPoint = null;
-      hoveredLine = null;
-      hoveredCircle = null;
-      hoveredArcEndpoint = null;
-      hoveredArc = null;
-      hoveredSpline = null;
-      hoveredDimensionConstraint = null;
-      hoveredSketchIdentity = null;
+      const hadHover = Boolean(canvasHover.current.point || canvasHover.current.endpointPoint || canvasHover.current.line || canvasHover.current.circle || canvasHover.current.arcEndpoint || canvasHover.current.arc || canvasHover.current.dimension);
+      canvasHover.update({
+        point: null, endpointPoint: null, line: null,
+        circle: null, arcEndpoint: null, arc: null,
+        spline: null, dimension: null, sketchIdentity: null,
+      });
       const nextTrimPreview = computeTrimPreview(p);
       if (nextTrimPreview !== trimPreview || hadHover) {
         trimPreview = nextTrimPreview;
@@ -8620,30 +8523,29 @@
 
     if (mode === "offset") {
       clearSnap();
-      hoveredSketchIdentity = null;
+      canvasHover.update({ sketchIdentity: null });
       if (pendingCommand?.type === "offset-value") {
         draw();
         return;
       }
       pointerPreview = p;
       if (offsetSelection.source instanceof Circle || offsetSelection.committed) {
-        hoveredPoint = null;
-        hoveredEndpointPoint = null;
-        hoveredLine = offsetSelection.source instanceof Line ? offsetSelection.source : null;
-        hoveredCircle = offsetSelection.source instanceof Circle ? offsetSelection.source : null;
-        hoveredArc = offsetSelection.source instanceof Arc ? offsetSelection.source : null;
+        canvasHover.update({
+          point: null, endpointPoint: null, line: offsetSelection.source instanceof Line ? offsetSelection.source : null,
+          circle: offsetSelection.source instanceof Circle ? offsetSelection.source : null, arc: offsetSelection.source instanceof Arc ? offsetSelection.source : null,
+        });
       } else {
         const nextLine = hitLine(p.x, p.y);
         const nextCircle = nextLine ? null : hitCircle(p.x, p.y);
         const nextArc = nextLine || nextCircle ? null : hitArc(p.x, p.y);
-        hoveredPoint = null;
-        hoveredEndpointPoint = null;
-        hoveredLine = nextLine;
-        hoveredCircle = nextCircle;
-        hoveredArc = nextArc;
+        canvasHover.update({
+          point: null, endpointPoint: null, line: nextLine,
+          circle: nextCircle, arc: nextArc,
+        });
       }
-      hoveredArcEndpoint = null;
-      hoveredDimensionConstraint = null;
+      canvasHover.update({
+        arcEndpoint: null, dimension: null,
+      });
       draw();
       return;
     }
@@ -8651,27 +8553,21 @@
     if (pendingConstraintCommand && !geometryDrag.active) {
       const hitD = pendingConstraintCommand.type === "distance" ? hitDimension(p.x, p.y) : null;
       if (hitD) {
-        hoveredPoint = null;
-        hoveredEndpointPoint = null;
-        hoveredLine = null;
-        hoveredCircle = null;
-        hoveredArcEndpoint = null;
-        hoveredArc = null;
-        hoveredDimensionConstraint = hitD.constraint;
-        hoveredBlockInstance = null;
+        canvasHover.update({
+          point: null, endpointPoint: null, line: null,
+          circle: null, arcEndpoint: null, arc: null,
+          dimension: hitD.constraint, block: null,
+        });
         draw();
         return;
       }
       const blockOperand = hitDerivedProjectionOperand(p.x, p.y) || hitBlockProjectionOperand(p.x, p.y);
       if (blockOperand) {
-        hoveredPoint = blockOperand.kind === "point" ? blockOperand.point : null;
-        hoveredEndpointPoint = null;
-        hoveredLine = blockOperand.kind === "line" ? blockOperand.line : null;
-        hoveredCircle = blockOperand.kind === "primitive" && blockOperand.primitive instanceof Circle ? blockOperand.primitive : null;
-        hoveredArc = blockOperand.kind === "primitive" && blockOperand.primitive instanceof Arc ? blockOperand.primitive : null;
-        hoveredArcEndpoint = blockOperand.kind === "arc-endpoint" ? { arc: blockOperand.arc, endpoint: blockOperand.endpoint } : null;
-        hoveredDimensionConstraint = null;
-        hoveredBlockInstance = null;
+        canvasHover.update({
+          point: blockOperand.kind === "point" ? blockOperand.point : null, endpointPoint: null, line: blockOperand.kind === "line" ? blockOperand.line : null,
+          circle: blockOperand.kind === "primitive" && blockOperand.primitive instanceof Circle ? blockOperand.primitive : null, arc: blockOperand.kind === "primitive" && blockOperand.primitive instanceof Arc ? blockOperand.primitive : null, arcEndpoint: blockOperand.kind === "arc-endpoint" ? { arc: blockOperand.arc, endpoint: blockOperand.endpoint } : null,
+          dimension: null, block: null,
+        });
         draw();
         return;
       }
@@ -8696,24 +8592,21 @@
           ? null
           : hitArc(p.x, p.y);
       if (
-        nextPointHover !== hoveredPoint ||
-        nextEndpointHover !== hoveredEndpointPoint ||
-        nextLineHover !== hoveredLine ||
-        nextCircleHover !== hoveredCircle ||
-        !sameArcEndpoint(nextArcEndpointHover, hoveredArcEndpoint) ||
-        nextArcHover !== hoveredArc ||
-        hoveredDimensionConstraint ||
-        nextSketchIdentity?.item !== hoveredSketchIdentity?.item ||
+        nextPointHover !== canvasHover.current.point ||
+        nextEndpointHover !== canvasHover.current.endpointPoint ||
+        nextLineHover !== canvasHover.current.line ||
+        nextCircleHover !== canvasHover.current.circle ||
+        !sameArcEndpoint(nextArcEndpointHover, canvasHover.current.arcEndpoint) ||
+        nextArcHover !== canvasHover.current.arc ||
+        canvasHover.current.dimension ||
+        nextSketchIdentity?.item !== canvasHover.current.sketchIdentity?.item ||
         Boolean(nextSketchIdentity)
       ) {
-        hoveredPoint = nextPointHover;
-        hoveredEndpointPoint = nextEndpointHover;
-        hoveredLine = nextLineHover;
-        hoveredCircle = nextCircleHover;
-        hoveredArcEndpoint = nextArcEndpointHover;
-        hoveredArc = nextArcHover;
-        hoveredDimensionConstraint = null;
-        hoveredSketchIdentity = nextSketchIdentity;
+        canvasHover.update({
+          point: nextPointHover, endpointPoint: nextEndpointHover, line: nextLineHover,
+          circle: nextCircleHover, arcEndpoint: nextArcEndpointHover, arc: nextArcHover,
+          dimension: null, sketchIdentity: nextSketchIdentity,
+        });
         draw();
       }
       return;
@@ -8743,34 +8636,27 @@
         ? null
         : hitReferenceImageAt(p.x, p.y);
       if (
-        nextPointHover !== hoveredPoint ||
-        nextEndpointHover !== hoveredEndpointPoint ||
-        nextLineHover !== hoveredLine ||
-        nextCircleHover !== hoveredCircle ||
-        !sameArcEndpoint(nextArcEndpointHover, hoveredArcEndpoint) ||
-        nextArcHover !== hoveredArc ||
-        nextSplineHover !== hoveredSpline ||
-        nextHover !== hoveredDimensionConstraint ||
-        nextSketchIdentity?.item !== hoveredSketchIdentity?.item ||
-        Boolean(nextSketchIdentity) || nextBlockHover !== hoveredBlockInstance || nextGeometryInstanceHover !== hoveredGeometryInstance ||
-        nextAnnotationHover !== hoveredAnnotation ||
-        nextHatchHover !== hoveredHatch ||
-        nextReferenceImageHover !== hoveredReferenceImage
+        nextPointHover !== canvasHover.current.point ||
+        nextEndpointHover !== canvasHover.current.endpointPoint ||
+        nextLineHover !== canvasHover.current.line ||
+        nextCircleHover !== canvasHover.current.circle ||
+        !sameArcEndpoint(nextArcEndpointHover, canvasHover.current.arcEndpoint) ||
+        nextArcHover !== canvasHover.current.arc ||
+        nextSplineHover !== canvasHover.current.spline ||
+        nextHover !== canvasHover.current.dimension ||
+        nextSketchIdentity?.item !== canvasHover.current.sketchIdentity?.item ||
+        Boolean(nextSketchIdentity) || nextBlockHover !== canvasHover.current.block || nextGeometryInstanceHover !== canvasHover.current.geometryInstance ||
+        nextAnnotationHover !== canvasHover.current.annotation ||
+        nextHatchHover !== canvasHover.current.hatch ||
+        nextReferenceImageHover !== canvasHover.current.referenceImage
       ) {
-        hoveredPoint = nextPointHover;
-        hoveredEndpointPoint = nextEndpointHover;
-        hoveredLine = nextLineHover;
-        hoveredCircle = nextCircleHover;
-        hoveredArcEndpoint = nextArcEndpointHover;
-        hoveredArc = nextArcHover;
-        hoveredSpline = nextSplineHover;
-        hoveredDimensionConstraint = nextHover;
-        hoveredSketchIdentity = nextSketchIdentity;
-        hoveredBlockInstance = nextBlockHover;
-        hoveredGeometryInstance = nextGeometryInstanceHover;
-        hoveredAnnotation = nextAnnotationHover;
-        hoveredHatch = nextHatchHover;
-        hoveredReferenceImage = nextReferenceImageHover;
+        canvasHover.update({
+          point: nextPointHover, endpointPoint: nextEndpointHover, line: nextLineHover,
+          circle: nextCircleHover, arcEndpoint: nextArcEndpointHover, arc: nextArcHover,
+          spline: nextSplineHover, dimension: nextHover, sketchIdentity: nextSketchIdentity,
+          block: nextBlockHover, geometryInstance: nextGeometryInstanceHover, annotation: nextAnnotationHover,
+          hatch: nextHatchHover, referenceImage: nextReferenceImageHover,
+        });
         draw();
       }
     }
@@ -9176,12 +9062,10 @@
       if (mode === "sketch-projection") {
         sketchProjectionSources = [];
         mode = "select";
-        hoveredPoint = null;
-        hoveredLine = null;
-        hoveredCircle = null;
-        hoveredArc = null;
-        hoveredSpline = null;
-        hoveredSketchIdentity = null;
+        canvasHover.update({
+          point: null, line: null, circle: null,
+          arc: null, spline: null, sketchIdentity: null,
+        });
         updateToolbar();
         setHint(applicationText("スケッチ投影をキャンセルしました", "Sketch projection was canceled."));
         updateUI({ refreshAnalysis: false });
@@ -9557,13 +9441,11 @@
     pointerPreview = null;
     trimPreview = null;
     offsetSelection.reset();
-    hoveredPoint = null;
-    hoveredEndpointPoint = null;
-    hoveredLine = null;
-    hoveredCircle = null;
-    hoveredArcEndpoint = null;
-    hoveredArc = null;
-    hoveredDimensionConstraint = null;
+    canvasHover.update({
+      point: null, endpointPoint: null, line: null,
+      circle: null, arcEndpoint: null, arc: null,
+      dimension: null,
+    });
     clearSnap();
     updateToolbar();
     setHint("トリムする線、円、円弧の削除したい区間をクリックしてください。Escで選択モードに戻ります");
@@ -11080,11 +10962,11 @@
         const colors = [];
         const previousSelectedDimension = canvasSelection.dimensionConstraint;
         const previousSelectedConstraint = canvasSelection.constraint;
-        const previousHoveredDimension = hoveredDimensionConstraint;
+        const previousHoveredDimension = canvasHover.current.dimension;
         const originalStroke = ctx.stroke;
         canvasSelection.set("dimensionConstraint", null);
         canvasSelection.set("constraint", null);
-        hoveredDimensionConstraint = null;
+        canvasHover.update({ dimension: null });
         ctx.stroke = (...args) => {
           colors.push(String(ctx.strokeStyle).toLowerCase());
           return originalStroke.apply(ctx, args);
@@ -11095,7 +10977,7 @@
           ctx.stroke = originalStroke;
           canvasSelection.set("dimensionConstraint", previousSelectedDimension);
           canvasSelection.set("constraint", previousSelectedConstraint);
-          hoveredDimensionConstraint = previousHoveredDimension;
+          canvasHover.update({ dimension: previousHoveredDimension });
         }
         return [...new Set(colors)];
       },
@@ -11413,7 +11295,7 @@
         };
       },
       canvasContextSelectionStateForTest() {
-        const hover = hoveredPoint || hoveredEndpointPoint || hoveredLine || hoveredCircle || hoveredArc || hoveredSpline || hoveredDimensionConstraint || hoveredBlockInstance || hoveredAnnotation || hoveredHatch;
+        const hover = canvasHover.current.point || canvasHover.current.endpointPoint || canvasHover.current.line || canvasHover.current.circle || canvasHover.current.arc || canvasHover.current.spline || canvasHover.current.dimension || canvasHover.current.block || canvasHover.current.annotation || canvasHover.current.hatch;
         return {
           menuOpen: Boolean(canvasContextMenu && !canvasContextMenu.hidden),
           candidates: canvasContextController.candidates().map((target) => {
@@ -11421,7 +11303,7 @@
             return { kind: target.kind, id: presentation.id, type: presentation.type, secondary: presentation.secondary };
           }),
           hovered: hover?.id || hover?.parameterName || null,
-          hoveredArcEndpoint: hoveredArcEndpoint ? { id: hoveredArcEndpoint.arc.id, endpoint: hoveredArcEndpoint.endpoint } : null,
+          hoveredArcEndpoint: canvasHover.current.arcEndpoint ? { id: canvasHover.current.arcEndpoint.arc.id, endpoint: canvasHover.current.arcEndpoint.endpoint } : null,
           selected: this.selectedGeometryIdsForTest(),
         };
       },
@@ -11566,8 +11448,8 @@
         const appearance = effectiveAppearanceForElement(item);
         const treeHovered = isSidebarHighlightedElement(item) && (!(item instanceof Point) || (!item.blockProjection && !isAnyLineEndpoint(item)));
         const sidebarHovered = isSidebarHoveredElement(item);
-        const canvasHovered = hoveredLine === item || hoveredCircle === item || hoveredArc === item || hoveredSpline === item || hoveredPoint === item || hoveredEndpointPoint === item;
-        const blockHovered = Boolean(item.blockInstance && hoveredBlockInstance === item.blockInstance);
+        const canvasHovered = canvasHover.current.line === item || canvasHover.current.circle === item || canvasHover.current.arc === item || canvasHover.current.spline === item || canvasHover.current.point === item || canvasHover.current.endpointPoint === item;
+        const blockHovered = Boolean(item.blockInstance && canvasHover.current.block === item.blockInstance);
         const hovered = treeHovered || sidebarHovered || canvasHovered || blockHovered;
         return {
           treeHovered,
@@ -12994,13 +12876,13 @@
         };
       },
       hoverIdentityStateForTest() {
-        return hoveredSketchIdentity ? {
-          kind: hoveredSketchIdentity.kind || null,
-          id: hoveredSketchIdentity.id,
-          sketchId: hoveredSketchIdentity.sketchId,
-          relation: sketchIdentityRelationLabel(hoveredSketchIdentity.sketchId),
-          hoveredDimension: hoveredDimensionConstraint ? hoveredDimensionConstraint.name || "寸法" : null,
-          hoveredBlock: hoveredBlockInstance?.id || null,
+        return canvasHover.current.sketchIdentity ? {
+          kind: canvasHover.current.sketchIdentity.kind || null,
+          id: canvasHover.current.sketchIdentity.id,
+          sketchId: canvasHover.current.sketchIdentity.sketchId,
+          relation: sketchIdentityRelationLabel(canvasHover.current.sketchIdentity.sketchId),
+          hoveredDimension: canvasHover.current.dimension ? canvasHover.current.dimension.name || "寸法" : null,
+          hoveredBlock: canvasHover.current.block?.id || null,
         } : null;
       },
       geometryStrokeStyleCasesForTest() {
@@ -13050,7 +12932,7 @@
         viewport.update({ scale: 2 });
         const line = addLine(addPoint(-40, 0, false, "endpoint"), addPoint(40, 0, false, "endpoint"), true);
         const direct = captureOverhang(line, () => {
-          hoveredLine = line;
+          canvasHover.update({ line: line });
         });
 
         resetModelState();
@@ -13081,10 +12963,11 @@
         invalidateBlockProjectionCache();
         const projection = blockProjectionBundle(instance).lines[0];
         const block = captureOverhang(projection, () => {
-          hoveredBlockInstance = instance;
+          canvasHover.update({ block: instance });
         });
-        hoveredLine = null;
-        hoveredBlockInstance = null;
+        canvasHover.update({
+          line: null, block: null,
+        });
         return { direct, block };
       },
       constructionLineRenderingForTest(lineId) {
@@ -13673,11 +13556,11 @@
       blockProjectionHoverState() {
         return {
           command: pendingConstraintCommand?.type || null,
-          blockInstanceId: hoveredBlockInstance?.id || null,
-          pointId: hoveredPoint?.id || null,
-          pointIsBlockProjection: Boolean(hoveredPoint?.blockProjection),
-          lineId: hoveredLine?.id || null,
-          arcEndpointId: hoveredArcEndpoint ? `${hoveredArcEndpoint.arc.id}.${hoveredArcEndpoint.endpoint}` : null,
+          blockInstanceId: canvasHover.current.block?.id || null,
+          pointId: canvasHover.current.point?.id || null,
+          pointIsBlockProjection: Boolean(canvasHover.current.point?.blockProjection),
+          lineId: canvasHover.current.line?.id || null,
+          arcEndpointId: canvasHover.current.arcEndpoint ? `${canvasHover.current.arcEndpoint.arc.id}.${canvasHover.current.arcEndpoint.endpoint}` : null,
         };
       },
       drawnGeometryIdLabelsForTest() {
@@ -14028,8 +13911,8 @@
         for (const item of selectionHighlight.current?.elements || []) {
           if (item?.id) ids.add(item.id);
         }
-        if (hoveredDimensionConstraint) {
-          for (const item of constraintHighlightNodes(hoveredDimensionConstraint)) {
+        if (canvasHover.current.dimension) {
+          for (const item of constraintHighlightNodes(canvasHover.current.dimension)) {
             if (item?.id) ids.add(item.id);
           }
         }

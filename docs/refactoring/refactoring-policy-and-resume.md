@@ -100,8 +100,8 @@
 
 週枠50%の停止条件はユーザー指示で解除済み。main／developのリリース5116a81をcodex/composition-root-nextへ取り込み、Annotation Parameter表示などの最新変更を保持する。新たなmainへのマージは行わない。
 
-CanvasContextQueryへ候補収集・投影集約・順位付け、CanvasContextPresentationへ表示情報を分離。scope・倍率・編集中fit pointを遅延取得し、型ごとのGeometry／Sketch／寸法／Annotation／Hatchの読取りだけを接続した。メニューsession・モデル編集は持たない。検証はcomposition-root.md先頭を参照する。
+CanvasHoverへ14種類のCanvas hoverと更新・clear・退避復元・候補previewを集約。194代入を明示APIへ移行し、独立する28組を一括化した。状態の読取りは変更不能、図形参照は同一性を維持。検証はcomposition-root.md先頭を参照する。
 
-次はCanvasの共通hover状態と、context候補preview・通常pointer処理の更新境界を調べる。capture／restore／clearの対象と既存の強調表示を維持し、状態だけを移してsetterを増やさず、更新の所有者を揃える。未着手。全体目標と全体E2Eは未完了。
+各モードのhit計算とSketchツリー行hoverはappに残る。次は共通hit照会と通常pointer移動のhover決定を調べ、モードの開始／確定・ドラッグ処理と切り離す。現在の優先順位、参照先Sketchの扱い、更新省略と再描画の条件を保持する。状態所有だけで入力処理全体の分離が済んだとは扱わない。全体目標と全体E2Eは未完了。
 
 再開時はAGENTS.mdと本書を読み、Git状態を確認する。サブエージェントを使わず、責務単位で検証・Commit・Pushを続ける。週枠50%の停止条件を再適用しない。

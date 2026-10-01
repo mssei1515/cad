@@ -6,6 +6,10 @@
 
 ## 現在の再開地点（2026-10-02）
 
+CanvasHoverへ14種類のhover参照と一括更新・clear・退避復元・候補previewを集約。194代入を更新APIへ移行し、独立する28組を一括化。元の代入式と順序の一致を確認した。参照画像を含まないメニュー退避範囲とSketchツリー行hoverの区別を維持。app.jsは14,067行から13,950行へ縮小。構文313件・単体678件が成功。関連E2E197件が成功（通常操作192件・図形ドラッグ3件・参照画像2件）。ログは一時フォルダのcad-canvas-hover-{check,unit,e2e,images}.log。全体目標と全体E2Eは未完了。
+
+### 直前の区切り
+
 CanvasContextQueryへ候補収集・投影集約・順位付け、CanvasContextPresentationへ表示ラベルを分離。scope・倍率・編集中fit pointと各種読取りを明示依存にし、UI／Selection更新を持たない。4関数は読取りportへの置換以外の本体一致を確認。app.jsは14,303行から14,067行へ縮小。構文311件・単体673件が成功。関連E2E192件が成功（右クリック候補・拘束入力・Block／派生Instanceを含む5ファイル）。ログは一時フォルダのcad-context-query-{check,unit,e2e}.log。全体目標と全体E2Eは未完了。
 
 ### 直前の区切り
