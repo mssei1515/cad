@@ -4,7 +4,11 @@
 
 開始点はdevelopの`457adea`。承認された最終目標は、`app.js`を数百行程度の生成・接続・起動・終了へ整理すること。部分的な抽出や中間のテスト成功をもって、この目標の完了とはしない。
 
-## 現在の再開地点（2026-09-30）
+## 現在の再開地点（2026-10-02）
+
+週枠50%の停止条件はユーザー指示で解除済み。最新develop（5116a81）を作業branchへ取り込んだ。AnnotationAnchorQueryへ引出線対象・最近点・GeometryRef再解決を分離し、Selection／現在Sketch／参照解決を明示callbackで接続した。抽出5関数の本体一致を確認。app.jsは14,596行から14,545行へ縮小。構文304件・単体657件が成功。関連E2E198件が成功（Annotation表示サイズ・Parameter・保存再読込を含む6ファイル）。ログは一時フォルダのcad-annotation-anchor-{check,unit,e2e}.log。全体目標と全体E2Eは未完了。
+
+## 過去の区切り
 
 AnnotationCommandへテキスト／引出線の作成・対象選択・prompt・確定取消と配置計算を集約。previewを描画データとして返し、appが既存Rendererへ接続する。共通pendingCommandは明示get／setを使用。操作・配置9関数はadapter置換とpreviewデータ化以外の一致を確認。構文302件・単体633件・関連E2E184件が成功。app.jsは14,539行。全体目標と全体E2Eは未完了。 週枠の残りが49%となり、ユーザー指定の50%未満停止条件に達したため、この区切りをCommit・Pushして一時停止する。
 
