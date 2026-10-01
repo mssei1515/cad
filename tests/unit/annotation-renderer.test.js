@@ -64,11 +64,17 @@ test("leader terminators preserve open, filled and dot drawing modes", () => {
 
  test("annotation affixes render multiline text around the existing anchor", () => {
   const h = create();
-  h.renderer.drawAnnotationText({ text: "body", x: 3, y: 4, style: { prefix: "top\n", suffix: "\nend", textHeight: 3 } });
+  h.renderer.drawAnnotationText({ text: "body", parameterEnabled: true, evaluatedParameterValue: 120, x: 3, y: 4, style: { prefix: "top\n", suffix: "\nend", textHeight: 3 } });
   const text = h.calls.filter(call => call[0] === "fillText");
-  assert.deepEqual(text.map(call => call[1]), ["top", "body", "end"]);
+  assert.deepEqual(text.map(call => call[1]), ["top", "120", "end"]);
   const height = h.renderer.annotationTextWorldHeight({ textHeight: 3 });
   assert.equal(text[0][3], -height * 1.2);
   assert.equal(text[1][3], 0);
   assert.equal(text[2][3], height * 1.2);
+});
+
+test("unchecked text preserves its body and projected parameters read their definition source", () => {
+  const render = sandbox.window.AnnotationRenderer.displayText;
+  assert.equal(render({ text: 'body', style: { prefix: 'prefix', suffix: 'suffix' } }), 'body');
+  assert.equal(render({ text: 'body', parameterEnabled: true, localElement: { parameterEnabled: true, evaluatedParameterValue: 150 }, style: { prefix: 'Width: ', suffix: ' mm' } }), 'Width: 150 mm');
 });

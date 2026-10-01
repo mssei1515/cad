@@ -17,6 +17,7 @@
           rotationLocked: instance.rotationLocked,
         })),
         freeInstances: currentScope().geometryInstances.filter((instance) => instance.type === "free").map((instance) => ({ instance, x: instance.x, y: instance.y, rotation: instance.rotation, mirrorX: instance.mirrorX, mirrorY: instance.mirrorY })),
+        annotationParameters: (currentScope().annotations || []).map(annotation => ({ annotation, parameterEnabled: annotation.parameterEnabled, parameterName: annotation.parameterName, expression: annotation.expression, evaluatedParameterValue: annotation.evaluatedParameterValue })),
         constraintLength: currentScope().constraints.length,
         constraints: currentScope().constraints.map((constraint) => ({
           constraint,
@@ -97,6 +98,12 @@
         else entry.constraint.expression = entry.expression;
         entry.constraint.evaluatedParameterValue = entry.evaluatedParameterValue;
         if (entry.constraint instanceof PointOnSplineConstraint && Number.isFinite(entry.splineParameter)) entry.constraint.parameter = entry.splineParameter;
+      }
+      for (const { annotation, ...values } of snapshot.annotationParameters || []) {
+        for (const [key, value] of Object.entries(values)) {
+          if (value === undefined) delete annotation[key];
+          else annotation[key] = value;
+        }
       }
       currentScope().parameters = (snapshot.parameters || []).map((parameter) => ({ ...parameter }));
       currentScope().nextDimensionParameterIndex = Math.max(1, Number(snapshot.nextDimensionParameterIndex) || 1);

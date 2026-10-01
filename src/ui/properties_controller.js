@@ -3,7 +3,7 @@
   "use strict";
   function create({ HTMLTextAreaElement, HTMLInputElement, Spline, selectedPropertiesTarget,
     elementPropertyCommand, appearancePropertyCommand, geometryPropertyCommand, applyMultipleProperty,
-    changeFreeInstanceProperty, commitDimensionPropertyEdit, updateUI, updatePropertiesUI, draw,
+    changeFreeInstanceProperty, commitDimensionPropertyEdit, commitAnnotationParameterEdit, updateUI, updatePropertiesUI, draw,
     applicationText, setHint, setPlacementRotationLocked, setPlacementSketchIds,
     setBlockInstanceRotationLocked, setBlockInstanceEnabledSketchIds, setBlockInstanceOrthogonalRotation,
     startInstanceSourceEdit, startReferenceImageCalibration, startHatchBoundaryRepair, startSplineEdit,
@@ -57,6 +57,7 @@
         elementPropertyCommand.annotation(target.item, "annotation-text", input.value, { commit: false });
         return;
       }
+      if (target.kind === "annotation" && ["annotation-parameter-enabled", "annotation-parameter-name", "annotation-expression"].includes(input.dataset.property)) return;
       if (target.kind === "constraint" && ["constraint-parameter-name", "constraint-expression"].includes(input.dataset.property)) return;
       if (target.kind === "geometryInstance" && input.dataset.geometryInstanceProperty && input.type === "number") {
         elementPropertyCommand.geometryInstance(target.item, input.dataset.geometryInstanceProperty, input.value, { commit: false });
@@ -146,6 +147,11 @@
         if (result.refresh === "properties") updatePropertiesUI();
         else if (result.refresh === "all") updateUI();
         if (result.refresh) draw();
+        return;
+      } else if (target.kind === "annotation" && ["annotation-parameter-enabled", "annotation-parameter-name", "annotation-expression"].includes(property)) {
+        commitAnnotationParameterEdit(target.item, property, input.type === "checkbox" ? input.checked : input.value);
+        updateUI();
+        draw();
         return;
       } else if (target.kind === "constraint" && (property === "constraint-parameter-name" || property === "constraint-expression")) {
         commitDimensionPropertyEdit(target.item, property, input.value);

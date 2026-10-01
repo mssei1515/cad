@@ -56,11 +56,16 @@
       return (namespace?.constraints || []).filter(isDimensionConstraint);
     }
 
+    function symbolElementsInNamespace(namespace) {
+      return [...dimensionConstraintsInNamespace(namespace), ...(namespace?.annotations || []).filter(item => item.parameterEnabled === true)];
+    }
+
     function allocateDimensionParameterName(namespace) {
       ensureParameterNamespace(namespace, { assignDimensions: false });
       const used = new Set([
         ...(namespace.parameters || []).map((parameter) => String(parameter.name)),
-        ...dimensionConstraintsInNamespace(namespace).map((constraint) => String(constraint.parameterName || "")),
+        ...symbolElementsInNamespace(namespace).map((constraint) => String(constraint.parameterName || "")),
+        ...(namespace.annotations || []).map(item => String(item.parameterName || "")),
       ]);
       let index = Math.max(1, Number(namespace.nextDimensionParameterIndex) || 1);
       while (used.has(`d${index}`)) index += 1;
@@ -69,14 +74,14 @@
     }
 
     function ensureDimensionParameter(constraint, namespace = currentParameterNamespace()) {
-      if (!isDimensionConstraint(constraint)) return constraint;
+      if (!isDimensionConstraint(constraint) && constraint.parameterEnabled !== true) return constraint;
       if (!constraint.parameterName) constraint.parameterName = allocateDimensionParameterName(namespace);
       const autoMatch = /^d(\d+)$/.exec(String(constraint.parameterName));
       if (autoMatch) namespace.nextDimensionParameterIndex = Math.max(Number(namespace.nextDimensionParameterIndex) || 1, Number(autoMatch[1]) + 1);
       if (isReadOnlyDimension(constraint)) {
         delete constraint.expression;
       } else if (typeof constraint.expression !== "string" || !constraint.expression.trim()) {
-        constraint.expression = numericDimensionExpression(constraint);
+        constraint.expression = constraint.parameterEnabled === true ? "0" : numericDimensionExpression(constraint);
       }
       return constraint;
     }
@@ -94,7 +99,7 @@
       }
       namespace.nextDimensionParameterIndex = Math.max(1, Number(namespace.nextDimensionParameterIndex) || 1);
       if (options.assignDimensions !== false) {
-        for (const constraint of dimensionConstraintsInNamespace(namespace)) ensureDimensionParameter(constraint, namespace);
+        for (const constraint of symbolElementsInNamespace(namespace)) ensureDimensionParameter(constraint, namespace);
       }
       return namespace;
     }
@@ -147,21 +152,21 @@
 
     function evaluateParameterNamespace(namespace, options = {}) {
       ensureParameterNamespace(namespace);
-      validateParameterSymbolNames(namespace.parameters, dimensionConstraintsInNamespace(namespace));
+      validateParameterSymbolNames(namespace.parameters, symbolElementsInNamespace(namespace));
       const inputs = options.referenceValues || referenceDimensionValues(namespace);
       const definitions = [
         ...namespace.parameters.map((parameter) => ({ ...parameter, kind: "parameter" })),
-        ...dimensionConstraintsInNamespace(namespace)
+        ...symbolElementsInNamespace(namespace)
           .filter((constraint) => !isReadOnlyDimension(constraint))
           .map((constraint) => ({ name: constraint.parameterName, expression: constraint.expression, kind: "dimension", constraint })),
       ];
       const evaluated = evaluateParameterDefinitions(definitions, inputs);
       for (const parameter of namespace.parameters) parameter.evaluatedValue = evaluated.values.get(parameter.name);
-      for (const constraint of dimensionConstraintsInNamespace(namespace)) {
+      for (const constraint of symbolElementsInNamespace(namespace)) {
         const value = evaluated.values.get(constraint.parameterName);
         if (!Number.isFinite(value)) throw new Error(`${constraint.parameterName}: ${applicationText("値を計算できません", "Value could not be evaluated")}`);
         const target = targetFromConstraint(constraint);
-        if (!isReadOnlyDimension(constraint)) {
+        if (isDimensionConstraint(constraint) && !isReadOnlyDimension(constraint)) {
           const max = target?.kind === "angle" ? 180 : Infinity;
           if (value <= 0 || value >= max) throw new Error(`${constraint.parameterName}: ${applicationText("寸法値の範囲が正しくありません", "Dimension value is out of range")}`);
           constraint.target = target?.kind === "angle" ? (value * Math.PI) / 180 : value;
@@ -186,7 +191,7 @@
         if (!Array.isArray(namespace.parameters) || !Number.isInteger(Number(namespace.nextDimensionParameterIndex)) || Number(namespace.nextDimensionParameterIndex) < 1) {
           throw new Error(`${label}: ${applicationText("Parameter名前空間の形式が正しくありません", "The parameter namespace is invalid")}`);
         }
-        for (const constraint of dimensionConstraintsInNamespace(namespace)) {
+        for (const constraint of symbolElementsInNamespace(namespace)) {
           if (typeof constraint.parameterName !== "string" || !constraint.parameterName) {
             throw new Error(`${label}: ${applicationText("寸法のParameter名がありません", "A dimension parameter name is missing")}`);
           }
@@ -207,7 +212,7 @@
       const dependents = [];
       const formulas = [
         ...namespace.parameters.map((parameter) => ({ name: parameter.name, expression: parameter.expression })),
-        ...dimensionConstraintsInNamespace(namespace)
+        ...symbolElementsInNamespace(namespace)
           .filter((constraint) => !isReadOnlyDimension(constraint) && !removedConstraints.has(constraint))
           .map((constraint) => ({ name: constraint.parameterName, expression: constraint.expression })),
       ];
@@ -226,10 +231,10 @@
 
     function evaluateDimensionExpressionDraft(constraint, expression, namespace = currentParameterNamespace()) {
       ensureParameterNamespace(namespace);
-      validateParameterSymbolNames(namespace.parameters, dimensionConstraintsInNamespace(namespace));
+      validateParameterSymbolNames(namespace.parameters, symbolElementsInNamespace(namespace));
       const referenceValues = new Map();
       const definitions = namespace.parameters.map((parameter) => ({ ...parameter, kind: "parameter" }));
-      for (const item of dimensionConstraintsInNamespace(namespace)) {
+      for (const item of symbolElementsInNamespace(namespace)) {
         if (isReadOnlyDimension(item)) {
           const target = targetFromConstraint(item);
           const value = target ? measuredDimensionValue(target, item.dimension) : NaN;
@@ -259,11 +264,11 @@
       const nextName = validateParameterIdentifier(String(requestedName || "").trim(), { dimension: true });
       if (nextName === oldName) return true;
       const conflict = namespace.parameters.some((parameter) => parameter.name === nextName)
-        || dimensionConstraintsInNamespace(namespace).some((item) => item !== constraint && item.parameterName === nextName);
+        || symbolElementsInNamespace(namespace).some((item) => item !== constraint && item.parameterName === nextName);
       if (conflict) throw Object.assign(new Error(`Duplicate identifier '${nextName}'`), { code: "DUPLICATE_IDENTIFIER", identifier: nextName });
       const replacements = new Map([[oldName, nextName]]);
       for (const parameter of namespace.parameters) parameter.expression = rewriteParameterIdentifiers(parameter.expression, replacements);
-      for (const item of dimensionConstraintsInNamespace(namespace)) {
+      for (const item of symbolElementsInNamespace(namespace)) {
         if (!isReadOnlyDimension(item)) item.expression = rewriteParameterIdentifiers(item.expression, replacements);
       }
       constraint.parameterName = nextName;
@@ -275,7 +280,7 @@
     return Object.freeze({
       evaluateDimensionExpressionDraft, renameDimension, dimensionExpressionValue, numericDimensionExpression, isDirectNumericExpressionInput,
       dimensionUsesExpression, expressionInputValue, expressionFromUserInput,
-      rewriteExpressionInputIdentifiers, dimensionConstraintsInNamespace, allocateDimensionParameterName,
+      rewriteExpressionInputIdentifiers, dimensionConstraintsInNamespace, symbolElementsInNamespace, allocateDimensionParameterName,
       ensureDimensionParameter, ensureParameterNamespace, parameterErrorText,
       referenceDimensionValues, validateParameterSymbolNames, evaluateParameterNamespace,
       validateParameterNamespace, prepareLoadedParameterNamespace, parameterDependents,

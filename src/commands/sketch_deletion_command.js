@@ -68,7 +68,8 @@
         || sketchIds.has(constraint.referenceSketchId)
         || constraintGraphNodes(constraint).some((node) => removedItems.includes(node) || removedKeys.has(geometryElementKey(node))),
       ));
-      if (!guardDimensionSymbolDeletion(removedConstraints)) return false;
+      const removedAnnotations = model.annotations.filter(annotation => sketchIds.has(annotation.sketchId) || annotationReferencesRemovedGeometry(annotation, removedIds, removedKeys));
+      if (!guardDimensionSymbolDeletion([...removedConstraints, ...removedAnnotations])) return false;
   
       model.constraints = model.constraints.filter((constraint) => !removedConstraints.has(constraint));
       model.lines = model.lines.filter((line) => !lineSet.has(line));

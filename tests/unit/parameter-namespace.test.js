@@ -172,3 +172,26 @@ test('dimension draft ranges distinguish angles and lengths and resolve the supp
   assert.equal(api.evaluateDimensionExpressionDraft(null, '"width"'), 45);
   assert.equal(angle.target, Math.PI / 2);
 });
+
+test("annotation symbols share evaluation, rename and dependency guards without changing geometry", () => {
+  const driven = dimension();
+  driven.parameterName = "d1"; driven.expression = '"note" * 2';
+  const scope = namespace([driven]);
+  const annotation = { parameterEnabled: true, parameterName: "note", expression: '"width" / 2', text: 'retained' };
+  scope.parameters = [{ name: 'width', expression: '120' }];
+  scope.annotations = [annotation];
+  const api = create(() => scope);
+  api.evaluateParameterNamespace(scope);
+  assert.equal(annotation.evaluatedParameterValue, 60);
+  assert.equal(driven.target, 120);
+  assert.equal(driven.p2.x, 3);
+  assert.deepEqual([...api.parameterDependents(scope, ['width'])], ['note']);
+  api.renameDimension(annotation, 'labelValue');
+  assert.equal(driven.expression, '"labelValue" * 2');
+  annotation.expression = '-2';
+  scope.constraints = [];
+  api.evaluateParameterNamespace(scope);
+  assert.equal(annotation.evaluatedParameterValue, -2);
+  annotation.parameterEnabled = false;
+  assert.equal(api.symbolElementsInNamespace(scope).length, 0);
+});

@@ -4350,6 +4350,7 @@ test("annotation affixes keep multiline values through Properties and save reloa
   await expandSketchTreeGroup(page, 'annotation', 'S1');
   for (const id of ['AN1', 'AN2']) {
     await page.locator('.sketch-object-row[data-object-kind="annotation"][data-id="' + id + '"]').click();
+    await page.locator('[data-property="annotation-parameter-enabled"]').check();
     await page.locator('[data-annotation-style="prefix"]').fill('top\n');
     await page.locator('[data-annotation-style="suffix"]').fill('\nend');
     await page.locator('[data-annotation-style="suffix"]').blur();
@@ -4360,4 +4361,82 @@ test("annotation affixes keep multiline values through Properties and save reloa
   expect(loaded.success).toBe(true);
   const roundTrip = await page.evaluate(() => window.__jot2dTest.serializedModelForTest());
   expect(roundTrip.annotations).toEqual(saved.annotations);
+});
+
+test("annotation parameter checkbox switches body and formula modes with live values and recovery", async ({ page }) => {
+  await openTestDocument(page);
+  const fixture = annotationSketchFixture(11);
+  fixture.activeSketchId = 'S1';
+  fixture.parameters = [{ name: 'width', expression: '120' }];
+  expect((await page.evaluate(data => window.__jot2dTest.loadDocumentFixtureForDragTest(data, 'annotation-parameters.jot2d'), fixture)).success).toBe(true);
+  await expandSketchTreeGroup(page, 'annotation', 'S1');
+  const state = type => page.evaluate(type => window.__jot2dTest.annotationAppearanceStateForTest(type), type);
+  for (const [id, type] of [['AN1', 'text'], ['AN2', 'leader']]) {
+    await page.locator('.sketch-object-row[data-object-kind="annotation"][data-id="' + id + '"]').click();
+    await expect(page.locator('[data-property="annotation-text"]')).toBeVisible();
+    await expect(page.locator('[data-annotation-style="prefix"]')).toHaveCount(0);
+    await page.locator('[data-property="annotation-parameter-enabled"]').check();
+    await expect(page.locator('[data-property="annotation-text"]')).toHaveCount(0);
+    await page.locator('[data-property="annotation-expression"]').fill('="width" / 2');
+    await page.locator('[data-property="annotation-expression"]').press('Tab');
+    await page.locator('[data-annotation-style="prefix"]').fill('幅：\n');
+    await page.locator('[data-annotation-style="suffix"]').fill(' mm');
+    await page.locator('[data-annotation-style="suffix"]').blur();
+    expect((await state(type)).displayedText).toBe('幅：\n60 mm');
+    await page.locator('[data-property="annotation-expression"]').fill('="missing"');
+    await page.locator('[data-property="annotation-expression"]').press('Tab');
+    expect((await state(type)).displayedText).toBe('幅：\n60 mm');
+    await expect(page.locator('#hint')).toContainText('未定義');
+  }
+  await openParameterDialog(page);
+  await expect(page.locator('#parameterDimensionRows tr')).toHaveCount(2);
+  await page.locator('[data-parameter-field="name"]').fill('span');
+  await page.locator('[data-parameter-field="name"]').press('Tab');
+  await page.locator('[data-parameter-field="expression"]').fill('150');
+  await page.locator('[data-parameter-field="expression"]').press('Tab');
+  await page.locator('#applyParametersBtn').click();
+  await expect(page.locator('#parameterDialogError')).toBeHidden();
+  await page.locator('#parametersCloseBtn').click();
+  expect((await state('text')).displayedText).toBe('幅：\n75 mm');
+  expect((await state('leader')).serialized.expression).toBe('"span" / 2');
+  await page.locator('.sketch-object-row[data-object-kind="annotation"][data-id="AN1"]').click();
+  await page.keyboard.press('Control+C');
+  await page.keyboard.press('Control+V');
+  const copied = await page.evaluate(() => window.__jot2dTest.serializedModelForTest());
+  const original = copied.annotations.find(item => item.id === 'AN1');
+  const copy = copied.annotations.find(item => item.id !== 'AN1' && item.type === 'text');
+  expect(copy.parameterEnabled).toBe(true);
+  expect(copy.parameterName).not.toBe(original.parameterName);
+  expect(copy.expression).toBe(original.expression);
+  await page.locator('.sketch-object-row[data-object-kind="annotation"][data-id="AN1"]').click();
+  await page.locator('[data-property="annotation-parameter-enabled"]').uncheck();
+  await expect(page.locator('[data-property="annotation-text"]')).toHaveValue('Room note');
+  expect((await state('text')).displayedText).toBe('Room note');
+  await page.click('#undoBtn');
+  expect((await state('text')).serialized.parameterEnabled).toBe(true);
+  await page.click('#redoBtn');
+  expect((await state('text')).serialized.parameterEnabled).toBe(false);
+  const saved = await page.evaluate(() => window.__jot2dTest.serializedModelForTest());
+  expect(saved.annotations.every(item => !Object.hasOwn(item, 'evaluatedParameterValue'))).toBe(true);
+  expect((await page.evaluate(data => window.__jot2dTest.loadDocumentFixtureForDragTest(data, 'parameters-reloaded.jot2d'), saved)).success).toBe(true);
+  expect((await state('leader')).displayedText).toBe('幅：\n75 mm');
+});
+
+test("projected parameter annotations use their own Block namespace and update after applying", async ({ page }) => {
+  await openTestDocument(page);
+  await page.evaluate(() => window.__jot2dTest.resetForParameterTest());
+  const saved = await page.evaluate(() => window.__jot2dTest.serializedModelForTest());
+  const definition = saved.blockDefinitions[0];
+  definition.annotations = [{ id: 'AN1', type: 'text', sketchId: definition.activeSketchId, x: 0, y: 20, text: 'retained', parameterEnabled: true, parameterName: 'blockNote', expression: '"width"', style: { prefix: 'B:' } }];
+  expect((await page.evaluate(data => window.__jot2dTest.loadDocumentFixtureForDragTest(data, 'block-annotation-parameter.jot2d'), saved)).success).toBe(true);
+  const projectedText = () => page.evaluate(() => window.__jot2dTest.annotationOwnershipStateForTest().projected.find(item => item.id.endsWith('/AN1')).displayedText);
+  expect(await projectedText()).toBe('B:25');
+  await openParameterDialog(page);
+  await page.locator('#parameterScopeSelect').selectOption('block:' + definition.id);
+  await page.locator('[data-parameter-field="expression"]').first().fill('30');
+  await page.locator('[data-parameter-field="expression"]').first().press('Tab');
+  await page.locator('#applyParametersBtn').click();
+  await expect(page.locator('#parameterDialogError')).toBeHidden();
+  await page.locator('#parametersCloseBtn').click();
+  expect(await projectedText()).toBe('B:30');
 });
