@@ -66,3 +66,27 @@ test('spline anchors use the fitted curve and retain the canonical geometry refe
   assert.equal(target.geometryRef.kind, 'spline'); assert.equal(target.geometryRef.path[0], 'SP1');
   near(f.query.annotationLeaderTargetFromItem(spline).anchor.x, 10);
 });
+
+function targetFixture() {
+  const data = { points: [], lines: [], circles: [], arcs: [], splines: [] };
+  const query = sandbox.window.AnnotationAnchorQuery.create({ viewportScale: () => 1,
+    isVisibleSketchElement: item => item.visible !== false, isExplicitPoint: item => item.kind !== 'endpoint',
+    isPointUsedByPrimitive: () => false, isPointUsedByLine: () => false, isReferencePoint: () => false,
+    geometry: { allGeometryPoints: () => data.points, allGeometryLines: () => data.lines, allGeometryCircles: () => data.circles,
+      allGeometryArcs: () => data.arcs, allGeometrySplines: () => data.splines } });
+  return { data, query };
+}
+test('annotation target query keeps arc then circle then line priority with visible geometry', () => {
+  const f = targetFixture(), center = point('O', 0, 0), arc = new Arc('A', center, 100, 0, Math.PI / 2), circle = new Circle('C', center, 100), line = new Line('L', point('a', 100, -10), point('b', 100, 10));
+  f.data.arcs.push(arc); f.data.circles.push(circle); f.data.lines.push(line);
+  assert.equal(f.query.hitAnnotationTarget(100, 0).item, arc); arc.visible = false;
+  assert.equal(f.query.hitAnnotationTarget(100, 0).item, circle); circle.visible = false;
+  assert.equal(f.query.hitAnnotationTarget(100, 0).item, line);
+});
+test('annotation target query ignores orphan endpoints except projected points and reads current arrays', () => {
+  const f = targetFixture(), p = Object.assign(point('P', 0, 0), { kind: 'endpoint' }); f.data.points.push(p);
+  assert.equal(f.query.hitAnnotationTarget(0, 0), null); p.blockProjection = true;
+  assert.equal(f.query.hitAnnotationTarget(0, 0).item, p); p.visible = false;
+  assert.equal(f.query.hitAnnotationTarget(0, 0), null); f.data.points = [point('Q', 0, 0)];
+  assert.equal(f.query.hitAnnotationTarget(0, 0).item.id, 'Q');
+});

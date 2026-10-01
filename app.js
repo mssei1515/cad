@@ -277,8 +277,10 @@
     profileRead: read => interactionProfiler.active ? profileInteractionWork("geometryReads", read) : read(),
   });
   const { withGeometryReadCache, blockProjectionBundles, geometryInstanceBundles, geometryInstanceBundle, allGeometryPoints, allGeometryLines, allGeometryCircles, allGeometryArcs, allGeometrySplines, allAnnotations, allHatches, allGeometryPrimitives, resolveGeometryRef, geometryElementFromKey } = geometryReads;
-  const { annotationLeaderTargetFromSelection, annotationLeaderTargetFromHit, annotationLeaderTargetFromItem, annotationLeaderAnchor } = window.AnnotationAnchorQuery.create({
+  const { hitAnnotationTarget, annotationLeaderTargetFromSelection, annotationLeaderTargetFromHit, annotationLeaderTargetFromItem, annotationLeaderAnchor } = window.AnnotationAnchorQuery.create({
     selectedGeometryItems, elementSketchId, activeSketchId, resolveGeometryRef,
+    viewportScale: () => viewport.scale, isVisibleSketchElement, isExplicitPoint, isPointUsedByPrimitive, isPointUsedByLine, isReferencePoint,
+    geometry: { allGeometryPoints, allGeometryLines, allGeometryCircles, allGeometryArcs, allGeometrySplines },
   });
   const referenceConstraintState = window.ReferenceConstraintState.create({
     currentScope: workspace.current, constraintSketchId, isReferenceSourceSketchId,
@@ -3142,9 +3144,10 @@
     return ((isEndpointPoint(p) && isPointUsedByPrimitive(p) && (!isSplineOnlyFitPoint(p) || isEditableSplineFitPoint(p))) || isReferencePoint(p));
   }
 
-  const { hitEndpointPoint, hitExplicitPoint, hitAnyPoint, hitPoint, hitLine, hitCircle, hitArc, hitArcEndpoint, hitSpline } = window.GeometryHitQuery.create({
+  const { hitSketchIdentityElement, hitEndpointPoint, hitExplicitPoint, hitAnyPoint, hitPoint, hitLine, hitCircle, hitArc, hitArcEndpoint, hitSpline } = window.GeometryHitQuery.create({
     currentScope: workspace.current, viewportScale: () => viewport.scale,
     isEditableSketchElement, isSelectableEndpointPoint, isExplicitPoint,
+    hitDimension, constraintSketchId, elementSketchId, isVisibleSketchElement, hitBlockInstance, blockDefinitionById,
   });
 
   function fitSketchToViewport(sketchId = activeSketchId(), paddingPx = 96) {
@@ -7269,63 +7272,6 @@
     rectangleCommand.click(snapped, drawingSnap.active);
   }
 
-  function hitSketchIdentityElement(x, y, options = {}) {
-    const allowInactiveGeometry = Boolean(options.allowInactiveGeometry);
-    const threshold = 7 / viewport.scale;
-    const pointThreshold = 10 / viewport.scale;
-    const accepts = (item) => isVisibleSketchElement(item) && (allowInactiveGeometry || isEditableSketchElement(item));
-    const dimensionHit = hitDimension(x, y, { activeOnly: false });
-    if (dimensionHit) {
-      const sketchId = constraintSketchId(dimensionHit.constraint);
-      return {
-        id: dimensionHit.constraint.name || "寸法",
-        label: dimensionHit.constraint.name || "寸法",
-        sketchId,
-        item: dimensionHit.constraint,
-        kind: "dimension",
-      };
-    }
-
-    for (let i = model.points.length - 1; i >= 0; i--) {
-      const p = model.points[i];
-      if (!accepts(p)) continue;
-      if (hypot2(p.x - x, p.y - y) <= pointThreshold) return { id: p.id, sketchId: elementSketchId(p), item: p, kind: "point" };
-    }
-    for (let i = model.lines.length - 1; i >= 0; i--) {
-      const line = model.lines[i];
-      if (!accepts(line)) continue;
-      if (distancePointToSegment(x, y, line) <= threshold) return { id: line.id, sketchId: elementSketchId(line), item: line, kind: "line" };
-    }
-    for (let i = model.circles.length - 1; i >= 0; i--) {
-      const circle = model.circles[i];
-      if (!accepts(circle)) continue;
-      if (Math.abs(hypot2(x - circle.center.x, y - circle.center.y) - circle.radius()) <= threshold) return { id: circle.id, sketchId: elementSketchId(circle), item: circle, kind: "circle" };
-    }
-    for (let i = model.arcs.length - 1; i >= 0; i--) {
-      const arc = model.arcs[i];
-      if (!accepts(arc)) continue;
-      const angle = Math.atan2(y - arc.center.y, x - arc.center.x);
-      if (Math.abs(hypot2(x - arc.center.x, y - arc.center.y) - arc.radius()) <= threshold && angleOnSignedSweep(angle, arc.startAngle, arc.endAngle)) return { id: arc.id, sketchId: elementSketchId(arc), item: arc, kind: "arc" };
-    }
-    for (let i = model.splines.length - 1; i >= 0; i--) {
-      const spline = model.splines[i];
-      if (!accepts(spline)) continue;
-      const closest = window.SplineGeometry.closestPoint(spline.curve(), { x, y }, { samplesPerSpan: 28 });
-      if (closest?.distance <= threshold) return { id: spline.id, sketchId: elementSketchId(spline), item: spline, kind: "spline" };
-    }
-    const block = hitBlockInstance(x, y, !allowInactiveGeometry);
-    if (block) {
-      const definition = blockDefinitionById(block.definitionId);
-      return {
-        id: block.id,
-        label: `Block ${block.id}${definition?.name ? `: ${definition.name}` : ""}`,
-        sketchId: block.sketchId,
-        item: block,
-        kind: "block",
-      };
-    }
-    return null;
-  }
 
   function beginBlockDrag(e, instance, pointer, rotate = false) {
     clearSelection();
@@ -7341,44 +7287,6 @@
     draw();
   }
 
-  function hitAnnotationTarget(x, y) {
-    const threshold = 8 / viewport.scale;
-    const pointThreshold = 10 / viewport.scale;
-    const points = allGeometryPoints();
-    const arcs = allGeometryArcs();
-    const circles = allGeometryCircles();
-    const lines = allGeometryLines();
-    const splines = allGeometrySplines();
-    for (let i = points.length - 1; i >= 0; i--) {
-      const point = points[i];
-      if (!isVisibleSketchElement(point)) continue;
-      if (!point.blockProjection && !isExplicitPoint(point) && !isPointUsedByPrimitive(point) && !isPointUsedByLine(point) && !isReferencePoint(point)) continue;
-      if (hypot2(point.x - x, point.y - y) <= pointThreshold) return { kind: "point", item: point };
-    }
-    for (let i = arcs.length - 1; i >= 0; i--) {
-      const arc = arcs[i];
-      if (!isVisibleSketchElement(arc)) continue;
-      const angle = Math.atan2(y - arc.center.y, x - arc.center.x);
-      if (Math.abs(hypot2(x - arc.center.x, y - arc.center.y) - arc.radius()) <= threshold && angleOnSignedSweep(angle, arc.startAngle, arc.endAngle)) return { kind: "arc", item: arc };
-    }
-    for (let i = circles.length - 1; i >= 0; i--) {
-      const circle = circles[i];
-      if (!isVisibleSketchElement(circle)) continue;
-      if (Math.abs(hypot2(x - circle.center.x, y - circle.center.y) - circle.radius()) <= threshold) return { kind: "circle", item: circle };
-    }
-    for (let i = lines.length - 1; i >= 0; i--) {
-      const line = lines[i];
-      if (!isVisibleSketchElement(line)) continue;
-      if (distancePointToSegment(x, y, line) <= threshold) return { kind: "line", item: line };
-    }
-    for (let i = splines.length - 1; i >= 0; i--) {
-      const spline = splines[i];
-      if (!isVisibleSketchElement(spline)) continue;
-      const closest = window.SplineGeometry.closestPoint(spline.curve(), { x, y }, { samplesPerSpan: 28 });
-      if (closest?.distance <= threshold) return { kind: "spline", item: spline };
-    }
-    return null;
-  }
 
 
   function executeTrimAt(pointer) {

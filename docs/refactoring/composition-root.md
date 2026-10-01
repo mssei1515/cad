@@ -6,6 +6,10 @@
 
 ## 現在の再開地点（2026-10-02）
 
+所属Sketch表示のhitをGeometryHitQueryへ、注記対象hitをAnnotationAnchorQueryへ統合。新moduleを増やさず、既存の照会所有者へ集約した。2関数はscope／倍率取得以外の本体一致を確認。app.jsは13,698行から13,606行へ縮小。構文319件・単体698件が成功。関連E2E192件が成功（所属Sketch・Annotation・Block投影を含む5ファイル）。ログは一時フォルダのcad-identity-hit-{check,unit,e2e}.log。全体目標と全体E2Eは未完了。
+
+### 直前の区切り
+
 OperandHitQueryへ参照SketchとBlock／派生Geometryの拘束対象照会を分離。Geometry読取り・Sketch関係・点分類・operand生成を明示依存とし、逆順と円弧端点の扱いを維持。3関数は倍率getter以外の本体一致を確認。app.jsは13,785行から13,698行へ縮小。構文319件・単体694件が成功。関連E2E192件が成功（Block・派生Instance・参照拘束を含む5ファイル）。ログは一時フォルダのcad-operand-hit-{check,unit,e2e}.log。全体目標と全体E2Eは未完了。
 
 ### 直前の区切り

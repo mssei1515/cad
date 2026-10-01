@@ -6,13 +6,13 @@
 
 - `src/constraints/operand_hit_query.js`: 参照SketchとBlock／派生Geometryの拘束対象hit。Sketch関係と探索優先順を扱う。
 - `src/editing/pointer_hover.js`: 通常選択／拘束入力のhit優先順位とCanvasHover更新。再描画の要否を返す。
-- `src/editing/geometry_hit_query.js`: 通常Geometry hit。点の分類優先・描画順・倍率依存の許容距離を扱う読取り専用照会。
+- `src/editing/geometry_hit_query.js`: 通常Geometry hitと所属Sketch表示の照会。点分類・描画順・倍率依存の許容距離を扱う。
 - `src/editing/canvas_hover.js`: Canvas hover参照、一括更新・clear・メニュー退避復元・候補preview。読取り状態は変更不能。
 - `src/editing/canvas_context_query.js`: 現在scopeの右クリック候補、投影の親への集約、距離／種類／描画順の順位付け。
 - `src/ui/canvas_context_presentation.js`: 候補SVG・種類・ID・補助文字列。読取り／翻訳のみ。
 - `src/ui/canvas_context_menu.js`: Canvasメニューsession・候補preview・HTML・DOMイベント。候補取得と編集実行はappから接続。
 - `src/rendering/annotation_spatial_query.js`: Annotation表示範囲・文字領域・通常選択／右クリックのhit照会。描画と編集を持たない。
-- `src/geometry/annotation_anchor_query.js`: 引出線対象・最近点・GeometryRef再解決。Selection／現在Sketch／参照解決を明示依存とする読取り専用照会。
+- `src/geometry/annotation_anchor_query.js`: 注記対象hit・引出線対象・最近点・GeometryRef再解決。Geometry／Selection／現在Sketchを明示依存とする読取り専用照会。
 - `src/commands/annotation_command.js`: テキスト／引出線の作成・対象選択・文字入力・確定取消、配置計算とpreviewデータ。
 
 - `src/commands/hatch_command.js`: Hatch作成・境界修復の進行、preview／修復対象の所有、取消時の破棄。

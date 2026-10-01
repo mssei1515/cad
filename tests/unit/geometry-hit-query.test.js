@@ -50,3 +50,23 @@ test('queries use current scope and zoom, including fitted spline distance', () 
   next.splines.push(spline); f.scope(next);
   assert.equal(f.query.hitPoint(8, 0), null); assert.equal(f.query.hitSpline(10, 3), spline); assert.equal(f.query.hitSpline(10, 4), null);
 });
+
+test('identity query gives dimensions priority and preserves their owning sketch', () => {
+  const model = empty(), constraint = { name: 'Length', sketchId: 'S2' }; model.points.push(point('P', 0, 0));
+  const query = sandbox.window.GeometryHitQuery.create({ currentScope: () => model, viewportScale: () => 1,
+    hitDimension: (x, y, options) => { assert.equal(options.activeOnly, false); return { constraint }; },
+    constraintSketchId: item => item.sketchId });
+  const result = query.hitSketchIdentityElement(0, 0);
+  assert.equal(result.item, constraint); assert.equal(result.sketchId, 'S2'); assert.equal(result.label, 'Length');
+});
+test('identity query optionally includes inactive geometry but always excludes hidden geometry', () => {
+  const model = empty(), p = Object.assign(point('P', 0, 0), { sketchId: 'S2' }), block = { id: 'B', definitionId: 'D', sketchId: 'S1' };
+  model.points.push(p); const flags = [];
+  const query = sandbox.window.GeometryHitQuery.create({ currentScope: () => model, viewportScale: () => 1, hitDimension: () => null,
+    isVisibleSketchElement: item => item.visible !== false, isEditableSketchElement: item => item.sketchId === 'S1', elementSketchId: item => item.sketchId,
+    hitBlockInstance: (x, y, editableOnly) => { flags.push(editableOnly); return block; }, blockDefinitionById: () => ({ name: 'Door' }) });
+  assert.equal(query.hitSketchIdentityElement(0, 0).item, block); assert.equal(flags[0], true);
+  assert.equal(query.hitSketchIdentityElement(0, 0, { allowInactiveGeometry: true }).item, p);
+  p.visible = false; const result = query.hitSketchIdentityElement(0, 0, { allowInactiveGeometry: true });
+  assert.equal(result.label, 'Block B: Door'); assert.equal(flags.at(-1), false);
+});
