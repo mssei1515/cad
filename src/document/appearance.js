@@ -3,6 +3,34 @@
   "use strict";
 
   const CSS_PX_PER_MM = 96 / 25.4;
+  // Missing settings are legacy screen-fixed annotations. Model-relative sizing owns a scale.
+  function annotationDisplaySettings(source = {}) {
+    if (source.fixedDisplaySize !== false) return { fixedDisplaySize: true };
+    const scale = Number(source.displayScale);
+    return { fixedDisplaySize: false, displayScale: Number.isFinite(scale) && scale > 0 ? scale : 1 };
+  }
+
+  function annotationDisplayFactor(source, viewportScale) {
+    const settings = annotationDisplaySettings(source);
+    return settings.fixedDisplaySize ? 1 : viewportScale / CSS_PX_PER_MM / settings.displayScale;
+  }
+
+  function applyAnnotationDisplaySetting(owner, key, value, viewportScale) {
+    if (key === "fixedDisplaySize") {
+      const fixed = value === true || value === "true";
+      if (!fixed && owner.fixedDisplaySize !== false) owner.displayScale = viewportScale / CSS_PX_PER_MM;
+      owner.fixedDisplaySize = fixed;
+      if (fixed) delete owner.displayScale;
+      return true;
+    }
+    if (key === "displayScale" && owner.fixedDisplaySize === false) {
+      const scale = Number(value) / 100;
+      if (!Number.isFinite(scale) || scale <= 0) return false;
+      owner.displayScale = scale;
+      return true;
+    }
+    return false;
+  }
   const DIMENSION_APPEARANCE_LENGTH_KEYS = ["extensionLineOvershoot", "extensionLineOriginGap", "terminatorSize", "dimensionTextHeight", "dimensionTextGap"];
   const DEFAULT_APPEARANCE = {
     visible: true,
@@ -84,6 +112,7 @@
   function normalizeDimensionAppearance(value, { partial = true } = {}) {
     const source = value && typeof value === "object" && !Array.isArray(value) ? value : {};
     const result = partial ? {} : { ...DEFAULT_DIMENSION_APPEARANCE };
+    if (Object.hasOwn(source, "fixedDisplaySize")) Object.assign(result, annotationDisplaySettings(source));
     if (Object.prototype.hasOwnProperty.call(source, "visible")) result.visible = source.visible !== false;
     if (typeof source.color === "string" && /^#[0-9a-fA-F]{6}$/.test(source.color)) result.color = source.color.toLowerCase();
     if (Object.prototype.hasOwnProperty.call(source, "precision")) {
@@ -165,6 +194,7 @@
       ? source.terminatorType
       : DEFAULT_ANNOTATION_STYLE.terminatorType;
     return {
+      ...(Object.hasOwn(source, "fixedDisplaySize") ? annotationDisplaySettings(source) : {}),
       color: typeof source.color === "string" && /^#[0-9a-fA-F]{6}$/.test(source.color)
         ? source.color.toLowerCase()
         : DEFAULT_ANNOTATION_STYLE.color,
@@ -210,6 +240,7 @@
   for (const rule of Object.values(DIMENSION_APPEARANCE_NUMERIC_RULES)) Object.freeze(rule);
   for (const value of [DEFAULT_APPEARANCE, DEFAULT_CONSTRUCTION_APPEARANCE, DEFAULT_DIMENSION_APPEARANCE, DEFAULT_HATCH_APPEARANCE, DEFAULT_ANNOTATION_STYLE, DIMENSION_APPEARANCE_LENGTH_KEYS, DIMENSION_APPEARANCE_NUMERIC_RULES]) Object.freeze(value);
   window.Appearance = Object.freeze({
+    annotationDisplaySettings, annotationDisplayFactor, applyAnnotationDisplaySetting,
     CSS_PX_PER_MM, DEFAULT_APPEARANCE, DEFAULT_CONSTRUCTION_APPEARANCE,
     DEFAULT_DIMENSION_APPEARANCE, DEFAULT_HATCH_APPEARANCE, DEFAULT_ANNOTATION_STYLE,
     DIMENSION_APPEARANCE_LENGTH_KEYS, DIMENSION_APPEARANCE_NUMERIC_RULES,

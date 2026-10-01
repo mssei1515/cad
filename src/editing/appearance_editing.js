@@ -50,7 +50,7 @@
       else if (Object.prototype.hasOwnProperty.call(DIMENSION_APPEARANCE_NUMERIC_RULES, key)) next[key] = rawValue === "" ? DEFAULT_DIMENSION_APPEARANCE[key] : Number(rawValue);
       else next[key] = rawValue;
       const normalized = normalizeDimensionAppearance(next, { partial: allowInheritance });
-      for (const existingKey of ["visible", "color", "precision", "prefix", "suffix", "toleranceUpper", "toleranceLower", "terminatorType", "arrows", "extensionLines", "arrowheadLength", ...Object.keys(DIMENSION_APPEARANCE_NUMERIC_RULES)]) delete owner[existingKey];
+      for (const existingKey of ["fixedDisplaySize", "displayScale", "visible", "color", "precision", "prefix", "suffix", "toleranceUpper", "toleranceLower", "terminatorType", "arrows", "extensionLines", "arrowheadLength", ...Object.keys(DIMENSION_APPEARANCE_NUMERIC_RULES)]) delete owner[existingKey];
       Object.assign(owner, normalized);
       return true;
     }

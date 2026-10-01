@@ -5,7 +5,7 @@
     effectiveDimensionAppearance, constraintSketchId, activeSketchId, dimensionTextOffset,
     evaluateDimensionExpressionDraft, expressionFromUserInput, cancelPendingCommand,
     startDistanceValueInput, defaultDimensionForTarget, submitOffsetValue, submitDistanceValue,
-    applicationText, setHint, draw }) {
+    applicationText, setHint, draw, displayFactor = () => 1 }) {
     function hideDimensionValueInput() { view.hide(); }
 
     function syncDimensionValueInput() {
@@ -23,9 +23,10 @@
       const screen = worldToCanvasScreen(layout.text);
       const angle = Number.isFinite(layout.textAngle) ? layout.textAngle : 0;
       const appearance = effectiveDimensionAppearance(pendingCommand.dimension, pendingCommand.constraint ? constraintSketchId(pendingCommand.constraint) : activeSketchId());
-      const labelGap = appearance.dimensionTextGap;
+      const factor = displayFactor(appearance);
+      const labelGap = appearance.dimensionTextGap * factor;
       const labelOffset = dimensionTextOffset(angle, labelGap);
-      view.render({ screen, angle, labelOffset, textHeight: appearance.dimensionTextHeight, buffer: pendingCommand.buffer });
+      view.render({ screen, angle, labelOffset, textHeight: appearance.dimensionTextHeight * factor, buffer: pendingCommand.buffer });
       let invalid = pendingCommand.buffer === "";
       if (!invalid) {
         try {

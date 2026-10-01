@@ -19,7 +19,7 @@
       const directions = linearDimensionTerminatorDirections(layout.d, outside);
       const firstTerminator = arcRadius ? null : { point: layout.a, direction: directions.first };
       const secondTerminator = { point: layout.b, direction: directions.second };
-      const shaftLength = dimensionMillimetersToWorld(appearance.terminatorSize * DIMENSION_OUTSIDE_SHAFT_LENGTH_FACTOR);
+      const shaftLength = dimensionMillimetersToWorld(appearance.terminatorSize * DIMENSION_OUTSIDE_SHAFT_LENGTH_FACTOR, appearance);
       const shafts = outside && ["arrow", "filledArrow"].includes(appearance.terminatorType)
         ? [firstTerminator, secondTerminator].filter(Boolean).map((terminator) => ({
           start: terminator.point,
@@ -74,8 +74,8 @@
       const points = targetPointsForDimension(target, anchor);
       if (points.length < 2) return null;
       const tick = 9 / viewport.scale;
-      const extension = dimensionMillimetersToWorld(appearance.extensionLineOvershoot);
-      const gap = dimensionMillimetersToWorld(appearance.extensionLineOriginGap);
+      const extension = dimensionMillimetersToWorld(appearance.extensionLineOvershoot, appearance);
+      const gap = dimensionMillimetersToWorld(appearance.extensionLineOriginGap, appearance);
       const projectedPoints = points.map((source, index) => {
         const t = (source.x - anchor.x) * d.x + (source.y - anchor.y) * d.y;
         const onDimension = { x: anchor.x + d.x * t, y: anchor.y + d.y * t };
@@ -109,7 +109,7 @@
       const b = { x: anchor.x + d.x * max, y: anchor.y + d.y * max };
       const labelOffset = Number(dimension?.labelOffsetU) || 0;
       const textProjection = (min + max) / 2 + labelOffset;
-      const labelPad = 18 / viewport.scale;
+      const labelPad = 18 / viewport.scale * window.Appearance.annotationDisplayFactor(appearance, viewport.scale);
       const lineMin = Math.min(min, textProjection - labelPad);
       const lineMax = Math.max(max, textProjection + labelPad);
       const lineA = { x: anchor.x + d.x * lineMin, y: anchor.y + d.y * lineMin };
@@ -155,8 +155,8 @@
 
       const resolved = normalizeDimensionAppearance(appearance, { partial: false });
       const pathLength = Math.abs(nearest.delta) * radius;
-      const gap = dimensionMillimetersToWorld(resolved.extensionLineOriginGap);
-      const overshoot = dimensionMillimetersToWorld(resolved.extensionLineOvershoot);
+      const gap = dimensionMillimetersToWorld(resolved.extensionLineOriginGap, resolved);
+      const overshoot = dimensionMillimetersToWorld(resolved.extensionLineOvershoot, resolved);
       const visibleGap = Math.min(gap, Math.max(0, pathLength - 2 / viewport.scale));
       const direction = nearest.delta < 0 ? -1 : 1;
       return {
@@ -261,8 +261,8 @@
 
     function angleDimensionExtensionSegments(layout, appearance = DEFAULT_DIMENSION_APPEARANCE) {
       const resolved = normalizeDimensionAppearance(appearance, { partial: false });
-      const extension = dimensionMillimetersToWorld(resolved.extensionLineOvershoot);
-      const gap = dimensionMillimetersToWorld(resolved.extensionLineOriginGap);
+      const extension = dimensionMillimetersToWorld(resolved.extensionLineOvershoot, resolved);
+      const gap = dimensionMillimetersToWorld(resolved.extensionLineOriginGap, resolved);
       const visibleGap = Math.min(gap, Math.max(0, layout.radius - 2 / viewport.scale));
       return [layout.start, layout.end].map((angle) => ({
         start: {

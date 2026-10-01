@@ -12,6 +12,22 @@ function create(anchor = { x: 10, y: 20 }) {
   const renderer = sandbox.window.AnnotationRenderer.create({ ctx, viewport, withCanvasState: callback => callback(), annotationDisplayColor: () => "blue", annotationLeaderAnchor: () => { anchorReads++; return anchor; }, appearanceLineDash: () => [1, 2] });
   return { renderer, viewport, ctx, calls, anchorReads: () => anchorReads };
 }
+
+test("OFF leaders scale text, terminators and strokes while keeping all path coordinates", () => {
+  const h = create();
+  const px = sandbox.window.Appearance.CSS_PX_PER_MM;
+  h.viewport.scale = px * 3;
+  const element = { start: { x: 10, y: 20 }, elbow: { x: 30, y: 20 }, end: { x: 40, y: 20 }, x: 40, y: 20, text: "note",
+    style: { fixedDisplaySize: false, displayScale: 1.5, textHeight: 3, terminatorType: "dot", terminatorSize: 2, lineWidth: 1.5 } };
+  h.renderer.drawAnnotationLeader(element);
+  assert.equal(parseFloat(h.ctx.font), 2);
+  assert.ok(Math.abs(h.ctx.lineWidth * h.viewport.scale - 3) < 1e-12);
+  assert.ok(h.calls.some(call => call[0] === "arc" && call[1] === 10 && call[2] === 20 && Math.abs(call[3] - 2 / 3) < 1e-12));
+  for (const expected of [["moveTo", 10, 20], ["lineTo", 30, 20], ["lineTo", 40, 20]]) assert.ok(h.calls.some(call => JSON.stringify(call) === JSON.stringify(expected)));
+  h.viewport.scale *= 2;
+  assert.equal(h.renderer.annotationTextWorldHeight(element.style), 2);
+  assert.equal(element.style.displayScale, 1.5);
+});
 test("annotation text preserves rotation, alignment and explicit color overrides", () => {
   const h = create();
   h.renderer.drawAnnotationText({ text: "note", x: 3, y: 4, rotation: 0.5, style: { textHeight: 3, textAlign: "right", bold: true, italic: true, fontFamily: "serif" } }, "red");

@@ -12,7 +12,7 @@
       const color = canvasThemeColor(preview || highlighted ? "#2563eb" : colorOverride || appearance.color);
       ctx.strokeStyle = color;
       ctx.fillStyle = color;
-      ctx.lineWidth = dimensionStrokeWidth(appearance, highlighted) / viewport.scale;
+      ctx.lineWidth = dimensionStrokeWidth(appearance, highlighted) / viewport.scale * window.Appearance.annotationDisplayFactor(appearance, viewport.scale);
       ctx.setLineDash(preview ? [5 / viewport.scale, 4 / viewport.scale] : []);
       ctx.beginPath();
       ctx.moveTo(renderPlan.lineStart.x, renderPlan.lineStart.y);
@@ -63,7 +63,7 @@
       const color = canvasThemeColor(preview || highlighted ? "#2563eb" : colorOverride || appearance.color);
       ctx.strokeStyle = color;
       ctx.fillStyle = color;
-      ctx.lineWidth = dimensionStrokeWidth(appearance, highlighted) / viewport.scale;
+      ctx.lineWidth = dimensionStrokeWidth(appearance, highlighted) / viewport.scale * window.Appearance.annotationDisplayFactor(appearance, viewport.scale);
       ctx.setLineDash(preview ? [5 / viewport.scale, 4 / viewport.scale] : []);
       const p1 = { x: vertex.x + Math.cos(start) * radius, y: vertex.y + Math.sin(start) * radius };
       const p2 = { x: vertex.x + Math.cos(end) * radius, y: vertex.y + Math.sin(end) * radius };
@@ -175,7 +175,7 @@
       const resolved = appearance || DEFAULT_DIMENSION_APPEARANCE;
       if (resolved.terminatorType === "dot") {
         ctx.beginPath();
-        ctx.arc(point.x, point.y, dimensionMillimetersToWorld(resolved.terminatorSize) / 2, 0, Math.PI * 2);
+        ctx.arc(point.x, point.y, dimensionMillimetersToWorld(resolved.terminatorSize, resolved) / 2, 0, Math.PI * 2);
         ctx.fill();
         return;
       }

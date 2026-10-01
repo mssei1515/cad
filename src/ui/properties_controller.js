@@ -15,18 +15,20 @@
 
     function applyAppearancePropertyInput(target, input, { commit = true, rawValue } = {}) {
       const data = input.dataset;
-      const category = target.kind === "annotation" && data.annotationStyle ? "annotation"
+      const category = data.annotationDisplay ? "annotationDisplay" : target.kind === "annotation" && data.annotationStyle ? "annotation"
         : target.kind === "hatch" && data.hatchProperty ? "hatch"
           : data.appearanceKey ? "appearance" : data.dimensionDisplay ? "dimension" : null;
       if (!category) return false;
-      const key = category === "annotation" ? data.annotationStyle : category === "hatch" ? data.hatchProperty
+      const key = category === "annotationDisplay" ? (data.annotationDisplay === "modelRelativeSize" ? "fixedDisplaySize" : data.annotationDisplay) : category === "annotation" ? data.annotationStyle : category === "hatch" ? data.hatchProperty
         : category === "appearance" ? data.appearanceKey : data.dimensionDisplay;
       let value = rawValue;
       if (commit || category === "dimension" && target.kind === "constraint") {
         value = category === "dimension" && ["prefix", "suffix"].includes(key) ? input.value : input.value.trim();
-        if (input.type === "checkbox" && (category === "annotation" || category === "hatch")) value = input.checked;
+        if (input.type === "checkbox" && ["annotation", "hatch", "annotationDisplay"].includes(category)) value = input.checked;
         if (input.type === "checkbox" && category === "dimension" && target.kind === "constraint") value = String(input.checked);
       }
+      // UI checks model-relative sizing; the persisted flag describes screen-fixed sizing.
+      if (category === "annotationDisplay" && data.annotationDisplay === "modelRelativeSize") value = !input.checked;
       return appearancePropertyCommand.apply(target, { category, key, value, context: sketchDefaultAppearanceContext(input, target) }, { commit });
     }
 

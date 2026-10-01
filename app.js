@@ -510,6 +510,7 @@
   const dimensionLayouts = window.DimensionLayout.create({ viewport, placement: dimensionPlacement, metrics: dimensionMetrics, currentLines: () => workspace.current().lines, minLineLength: MIN_LINE_LENGTH });
   const { linearDimensionRenderPlan, jisDimensionTextAngle, dimensionTextOffset, arcRadiusDimensionExtensionSegment, angleDimensionLayout, angleDimensionExtensionSegments } = dimensionLayouts;
   const dimensionInputController = window.DimensionInputController.create({
+    displayFactor: appearance => window.Appearance.annotationDisplayFactor(appearance, viewport.scale),
     view: dimensionInputView, enabled: Boolean(dimensionValueInput), getPending: () => pendingCommand,
     dimensionLayout, worldToCanvasScreen, effectiveDimensionAppearance, constraintSketchId, activeSketchId,
     dimensionTextOffset, evaluateDimensionExpressionDraft, expressionFromUserInput,
@@ -1229,9 +1230,11 @@
   function annotationBounds(element) {
     if (!element) return null;
     const style = normalizeAnnotationStyle(element.style);
-    const fontSize = style.textHeight * ANNOTATION_SCREEN_PX_PER_MM;
-    const textWidth = Math.max(28, String(element.text || "").length * fontSize * 0.62);
-    const textHeight = fontSize + 10;
+    const fixed = style.fixedDisplaySize !== false;
+    const fontSize = fixed ? style.textHeight * ANNOTATION_SCREEN_PX_PER_MM : annotationTextWorldHeight(style);
+    const paddingScale = fixed ? 1 : 1 / viewport.scale;
+    const textWidth = Math.max(28 * paddingScale, String(element.text || "").length * fontSize * 0.62);
+    const textHeight = fontSize + 10 * paddingScale;
     const center = { x: Number(element.x) || 0, y: Number(element.y) || 0 };
     const rotation = Number(element.rotation) || 0;
     const cos = Math.cos(rotation);
@@ -3358,7 +3361,18 @@
       if (!viewState.constraintStatus && effectiveDimensionAppearance(dimension, constraintSketchId(constraint)).visible === false) continue;
       const layout = dimensionLayout(target, dimension);
       if (!layout) continue;
-      if (hypot2(x - layout.text.x, y - layout.text.y) <= threshold * 2.2) {
+      const appearance = effectiveDimensionAppearance(dimension, constraintSketchId(constraint));
+      let scaledLabelHit = false;
+      if (appearance.fixedDisplaySize === false) {
+        const label = dimensionLabelForConstraint(constraint, target, dimension);
+        const metrics = dimensionTextDrawingMetrics(appearance);
+        const width = dimensionTextWidth(label, appearance, dimensionUsesExpression(constraint));
+        const angle = -(Number(layout.textAngle) || 0);
+        const dx = x - layout.text.x, dy = y - layout.text.y;
+        scaledLabelHit = pointInExpandedBox(dx * Math.cos(angle) - dy * Math.sin(angle), dx * Math.sin(angle) + dy * Math.cos(angle),
+          { left: -width / 2, right: width / 2, top: -metrics.gap - metrics.height, bottom: -metrics.gap }, threshold);
+      }
+      if (scaledLabelHit || hypot2(x - layout.text.x, y - layout.text.y) <= threshold * 2.2) {
         return { constraint, target, dimension, part: "label" };
       }
       if (distancePointToSegmentPoints(x, y, layout.hitA, layout.hitB) <= threshold * 1.4) {
@@ -4449,6 +4463,9 @@
   }
 
   function drawCanvas() {
+    const zoomStatus = document.getElementById("statusZoom");
+    const zoomText = formatZoom(viewport.scale);
+    if (zoomStatus && zoomStatus.textContent !== zoomText) zoomStatus.textContent = zoomText;
     if (canvasSurface.width <= 0 || canvasSurface.height <= 0) syncCanvasBitmapSize();
     const dpr = canvasSurface.dpr;
     pointerMoveScheduler.recordDraw();
@@ -4654,7 +4671,7 @@
     const appearance = effectiveDimensionAppearance(dimension, sketchId);
     const extensions = angleDimensionExtensionSegments(layout, appearance);
     const outside = shouldPlaceDimensionTerminatorsOutside(Math.abs(layout.signed) * layout.radius, label, appearance, dimension, expressionMark);
-    const arcExtension = outside ? dimensionMillimetersToWorld(appearance.terminatorSize * DIMENSION_OUTSIDE_SHAFT_LENGTH_FACTOR) / Math.max(layout.radius, 1e-12) : 0;
+    const arcExtension = outside ? dimensionMillimetersToWorld(appearance.terminatorSize * DIMENSION_OUTSIDE_SHAFT_LENGTH_FACTOR, appearance) / Math.max(layout.radius, 1e-12) : 0;
     dimensionRenderer.drawAngle({ layout, extensions, outside, arcExtension, appearance, label, preview, highlighted, editState, colorOverride, expressionMark });
   }
 
@@ -6415,7 +6432,7 @@
   });
   const { applyAppearanceInput, applyAnnotationStyleValue, applyHatchAppearanceInput, applyDimensionAppearanceValue } = appearanceEditing;
   const appearancePropertyCommand = window.AppearancePropertyCommand.create({
-    editing: appearanceEditing, normalizeHatchAppearance, normalizeAnnotationStyle,
+    editing: appearanceEditing, viewport, normalizeHatchAppearance, normalizeAnnotationStyle,
     invalidateBlockProjectionCache, recordHistory, updateUI, updatePropertiesUI, draw,
   });
   const { owner: appearanceOwnerForPropertiesTarget } = appearancePropertyCommand;
@@ -11478,10 +11495,10 @@
           },
           terminator: {
             type: appearance.terminatorType,
-            size: appearance.terminatorSize * DIMENSION_SCREEN_PX_PER_MM,
+            size: appearance.terminatorSize * DIMENSION_SCREEN_PX_PER_MM * window.Appearance.annotationDisplayFactor(appearance, viewport.scale),
             openingAngle: appearance.terminatorType === "dot" ? null : Math.atan2(arrowHalfWidth, arrowLength) * 360 / Math.PI,
           },
-          lineWidth: dimensionStrokeWidth(appearance),
+          lineWidth: dimensionStrokeWidth(appearance) * window.Appearance.annotationDisplayFactor(appearance, viewport.scale),
           text: {
             height: text.height * viewport.scale,
             gap: text.gap * viewport.scale,
@@ -12764,7 +12781,7 @@
           style: structuredClone(style),
           rotation: Number(annotation.rotation) || 0,
           screenTextHeight: annotationTextWorldHeight(style) * viewport.scale,
-          screenTerminatorSize: style.terminatorSize * ANNOTATION_SCREEN_PX_PER_MM,
+          screenTerminatorSize: style.terminatorSize * ANNOTATION_SCREEN_PX_PER_MM * window.Appearance.annotationDisplayFactor(style, viewport.scale),
           serialized: serializeAnnotation(annotation),
         };
       },

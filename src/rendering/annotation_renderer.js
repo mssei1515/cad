@@ -11,7 +11,7 @@
     }
 
     function annotationTextScreenHeight(style) {
-      return normalizeAnnotationStyle(style).textHeight * ANNOTATION_SCREEN_PX_PER_MM;
+      return normalizeAnnotationStyle(style).textHeight * ANNOTATION_SCREEN_PX_PER_MM * window.Appearance.annotationDisplayFactor(style, viewport.scale);
     }
 
     function annotationTextWorldHeight(style) {
@@ -36,7 +36,7 @@
     function drawAnnotationTerminator(point, direction, annotationStyle) {
       const style = normalizeAnnotationStyle(annotationStyle);
       if (style.terminatorType === "none") return;
-      const size = style.terminatorSize * ANNOTATION_SCREEN_PX_PER_MM / viewport.scale;
+      const size = style.terminatorSize * ANNOTATION_SCREEN_PX_PER_MM / viewport.scale * window.Appearance.annotationDisplayFactor(style, viewport.scale);
       if (style.terminatorType === "dot") {
         ctx.beginPath();
         ctx.arc(point.x, point.y, size / 2, 0, Math.PI * 2);
@@ -75,8 +75,9 @@
         const color = annotationDisplayColor(element, style);
         ctx.strokeStyle = color;
         ctx.fillStyle = color;
-        ctx.lineWidth = style.lineWidth / viewport.scale;
-        ctx.setLineDash(preview ? [5 / viewport.scale, 4 / viewport.scale] : appearanceLineDash(style.lineType));
+        const factor = window.Appearance.annotationDisplayFactor(style, viewport.scale);
+        ctx.lineWidth = style.lineWidth / viewport.scale * factor;
+        ctx.setLineDash(preview ? [5 / viewport.scale, 4 / viewport.scale] : appearanceLineDash(style.lineType).map(value => value * factor));
         ctx.beginPath();
         ctx.moveTo(start.x, start.y);
         ctx.lineTo(elbow.x, elbow.y);

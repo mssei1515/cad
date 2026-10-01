@@ -9,6 +9,23 @@ for (const file of ["src/document/appearance.js", "src/rendering/dimension_metri
   vm.runInContext(fs.readFileSync(path.resolve(__dirname, "../..", file), "utf8"), sandbox, { filename: file });
 }
 const { DEFAULT_DIMENSION_APPEARANCE, CSS_PX_PER_MM } = sandbox.window.Appearance;
+
+test("OFF dimension metrics scale together and fit caches invalidate when the baseline changes", () => {
+  const { metrics, viewport } = create();
+  viewport.scale = CSS_PX_PER_MM * 1.5;
+  const appearance = { ...DEFAULT_DIMENSION_APPEARANCE, fixedDisplaySize: false, displayScale: 1.5 };
+  const initialHeight = metrics.dimensionTextDrawingMetrics(appearance).height;
+  const initialArrow = metrics.dimensionArrowheadPoints({ x: 0, y: 0 }, { x: 1, y: 0 }, appearance)[1].x;
+  viewport.scale *= 2;
+  assert.equal(metrics.dimensionTextDrawingMetrics(appearance).height, initialHeight);
+  assert.equal(metrics.dimensionArrowheadPoints({ x: 0, y: 0 }, { x: 1, y: 0 }, appearance)[1].x, initialArrow);
+  const cache = {};
+  const available = 110 / viewport.scale;
+  assert.equal(metrics.shouldPlaceDimensionTerminatorsOutside(available, "1234", appearance, cache), false);
+  appearance.displayScale = 0.75;
+  assert.equal(metrics.shouldPlaceDimensionTerminatorsOutside(available, "1234", appearance, cache), true);
+  assert.equal(metrics.dimensionTextDrawingMetrics(appearance).height, initialHeight * 2);
+});
 function create() {
   const viewport = { scale: 2 };
   const stack = [];
