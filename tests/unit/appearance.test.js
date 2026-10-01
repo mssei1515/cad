@@ -9,6 +9,31 @@ vm.runInNewContext(fs.readFileSync(path.resolve(__dirname, "../../src/document/a
 const appearance = sandbox.window.Appearance;
 const plain = (value) => JSON.parse(JSON.stringify(value));
 
+test("annotation display settings preserve legacy sizes and capture OFF baselines once", () => {
+  const { CSS_PX_PER_MM: px, applyAnnotationDisplaySetting: apply, annotationDisplayFactor: factor } = appearance;
+  const owner = {};
+  assert.equal(factor(owner, px * 1.5), 1);
+  apply(owner, "fixedDisplaySize", false, px * 1.5);
+  assert.equal(owner.displayScale, 1.5);
+  assert.equal(factor(owner, px * 1.5), 1);
+  assert.equal(factor(owner, px * 3), 2);
+  apply(owner, "fixedDisplaySize", false, px * 3);
+  assert.equal(owner.displayScale, 1.5);
+  apply(owner, "displayScale", "300", px * 3);
+  assert.equal(owner.displayScale, 3);
+  assert.equal(factor(owner, px * 3), 1);
+  assert.equal(apply(owner, "displayScale", "0", px), false);
+  assert.equal(owner.displayScale, 3);
+  for (const normalize of [appearance.normalizeAnnotationStyle, appearance.normalizeDimensionAppearance]) {
+    assert.equal(normalize(owner).displayScale, 3);
+    assert.equal(normalize({ fixedDisplaySize: false, displayScale: -1 }).displayScale, 1);
+    assert.equal(Object.hasOwn(normalize({ fixedDisplaySize: true, displayScale: 3 }), "displayScale"), false);
+  }
+  apply(owner, "fixedDisplaySize", true, px * 3);
+  assert.equal(Object.hasOwn(owner, "displayScale"), false);
+  assert.equal(factor(owner, px * 3), 1);
+});
+
 test("partial appearance preserves inheritance and full defaults are independent values", () => {
   for (const normalize of [appearance.normalizeAppearance, appearance.normalizeConstructionAppearance, appearance.normalizeDimensionAppearance]) {
     assert.deepEqual(plain(normalize(null)), {});

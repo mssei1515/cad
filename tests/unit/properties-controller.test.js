@@ -26,6 +26,22 @@ function fixture(target) {
   return { controller, elements, calls };
 }
 
+test('checked model-relative sizing maps to the opposite screen-fixed flag for annotations and dimensions', () => {
+  for (const kind of ['annotation', 'constraint']) {
+    const f = fixture({ kind, item: { dimension: {} } });
+    const input = new Input({ annotationDisplay: 'modelRelativeSize' }, 'on', 'checkbox');
+    input.checked = true;
+    f.controller.change({ target: input });
+    assert.equal(f.calls[0].request.category, 'annotationDisplay');
+    assert.equal(f.calls[0].request.key, 'fixedDisplaySize');
+    assert.equal(f.calls[0].request.value, false);
+    f.calls.length = 0;
+    input.checked = false;
+    f.controller.change({ target: input });
+    assert.equal(f.calls[0].request.value, true);
+  }
+});
+
 test('reference image lock protects geometry while allowing opacity; only successful commits create history', () => {
   const item = { locked: true, x: 10, opacity: 0.5, pixelWidth: 100, scale: 1 };
   const f = fixture({ kind: 'referenceImage', item });

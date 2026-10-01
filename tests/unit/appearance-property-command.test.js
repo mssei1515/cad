@@ -31,6 +31,26 @@ test('block appearance previews invalidate projection without history and cleari
   assert.deepEqual(calls, ['invalidate:B1', 'history', 'ui', 'draw']);
 });
 
+test('annotation display changes use the same command for text, leaders and dimensions', () => {
+  for (const target of [{ kind: 'annotation', item: { type: 'text' } }, { kind: 'annotation', item: { type: 'leader' } }, { kind: 'constraint', item: { dimension: {} } }]) {
+    const { calls } = fixture();
+    // Zoom never rewrites a captured baseline.
+    const viewport = { scale: appearance.CSS_PX_PER_MM * 1.5 };
+    const displayCommand = sandbox.window.AppearancePropertyCommand.create({ viewport, ...appearance,
+      recordHistory: () => calls.push('history'), updateUI: () => calls.push('ui'), draw: () => calls.push('draw') });
+    displayCommand.apply(target, { category: 'annotationDisplay', key: 'fixedDisplaySize', value: false });
+    const owner = target.kind === 'annotation' ? target.item.style : target.item.dimension.display;
+    assert.equal(owner.displayScale, 1.5);
+    assert.deepEqual(calls, ['history', 'ui', 'draw']);
+    viewport.scale *= 2;
+    displayCommand.apply(target, { category: 'annotationDisplay', key: 'displayScale', value: '200' });
+    assert.equal(owner.displayScale, 2);
+    displayCommand.apply(target, { category: 'annotationDisplay', key: 'fixedDisplaySize', value: true });
+    assert.equal(Object.hasOwn(owner, 'displayScale'), false);
+    assert.equal(owner.fixedDisplaySize, true);
+  }
+});
+
 test('dimension text preserves whitespace and caret while numeric changes refresh Properties', () => {
   for (const target of [{ kind: 'constraint', item: { dimension: {} } }, { kind: 'sketch', item: {} }]) {
     const { command, calls } = fixture();

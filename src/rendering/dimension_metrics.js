@@ -10,15 +10,15 @@
   function create({ ctx, viewport }) {
     const dimensionTextWidthCache = new WeakMap();
     const dimensionArrowheadFactorCache = new Map();
-    function dimensionMillimetersToWorld(value) {
-      return Number(value) * DIMENSION_SCREEN_PX_PER_MM / viewport.scale;
+    function dimensionMillimetersToWorld(value, appearance = DEFAULT_DIMENSION_APPEARANCE) {
+      return Number(value) * DIMENSION_SCREEN_PX_PER_MM / viewport.scale * window.Appearance.annotationDisplayFactor(appearance, viewport.scale);
     }
 
     function dimensionTextDrawingMetrics(appearance = DEFAULT_DIMENSION_APPEARANCE) {
       const resolved = normalizeDimensionAppearance(appearance, { partial: false });
       return {
-        height: dimensionMillimetersToWorld(resolved.dimensionTextHeight),
-        gap: dimensionMillimetersToWorld(resolved.dimensionTextGap),
+        height: dimensionMillimetersToWorld(resolved.dimensionTextHeight, resolved),
+        gap: dimensionMillimetersToWorld(resolved.dimensionTextGap, resolved),
       };
     }
 
@@ -29,7 +29,7 @@
 
     function dimensionTextWidthFromResolved(label, resolved, cacheOwner = null, expressionMark = false) {
       const text = String(label ?? "");
-      const screenHeight = resolved.dimensionTextHeight * DIMENSION_SCREEN_PX_PER_MM;
+      const screenHeight = resolved.dimensionTextHeight * DIMENSION_SCREEN_PX_PER_MM * window.Appearance.annotationDisplayFactor(resolved, viewport.scale);
       const cached = cacheOwner && typeof cacheOwner === "object" ? dimensionTextWidthCache.get(cacheOwner) : null;
       if (cached?.text === text && cached.screenHeight === screenHeight && cached.expressionMark === expressionMark) return cached.screenWidth / viewport.scale;
       ctx.save();
@@ -45,6 +45,7 @@
     }
 
     function shouldPlaceDimensionTerminatorsOutside(availableLength, label, appearance = DEFAULT_DIMENSION_APPEARANCE, cacheOwner = null, expressionMark = false) {
+      const displayFactor = window.Appearance.annotationDisplayFactor(appearance, viewport.scale);
       const terminatorType = appearance.terminatorType;
       if (!["arrow", "filledArrow"].includes(terminatorType)) return false;
       const normalizedAvailableLength = Math.max(0, Number(availableLength) || 0);
@@ -52,17 +53,18 @@
       if (cached?.label === label
         && cached.availableLength === normalizedAvailableLength
         && cached.viewportScale === viewport.scale
+        && cached.displayFactor === displayFactor
         && cached.dimensionTextHeight === appearance.dimensionTextHeight
         && cached.terminatorType === terminatorType
         && cached.terminatorSize === appearance.terminatorSize
         && cached.expressionMark === expressionMark) return cached.outside;
       const availableScreenLength = normalizedAvailableLength * viewport.scale;
       const text = String(label ?? "");
-      const screenHeight = appearance.dimensionTextHeight * DIMENSION_SCREEN_PX_PER_MM;
+      const screenHeight = appearance.dimensionTextHeight * DIMENSION_SCREEN_PX_PER_MM * displayFactor;
       const screenWidth = cached?.text === text && cached.screenHeight === screenHeight && cached.expressionMark === expressionMark
         ? cached.screenWidth
         : dimensionTextWidthFromResolved(text, appearance, cacheOwner, expressionMark) * viewport.scale;
-      const fitMargin = appearance.terminatorSize * DIMENSION_SCREEN_PX_PER_MM * DIMENSION_TERMINATOR_FIT_MARGIN_FACTOR;
+      const fitMargin = appearance.terminatorSize * DIMENSION_SCREEN_PX_PER_MM * DIMENSION_TERMINATOR_FIT_MARGIN_FACTOR * displayFactor;
       const outside = availableScreenLength < screenWidth + fitMargin;
       if (cacheOwner && typeof cacheOwner === "object") {
         dimensionTextWidthCache.set(cacheOwner, {
@@ -72,6 +74,7 @@
           screenWidth,
           availableLength: normalizedAvailableLength,
           viewportScale: viewport.scale,
+          displayFactor,
           dimensionTextHeight: appearance.dimensionTextHeight,
           terminatorType,
           terminatorSize: appearance.terminatorSize,
@@ -125,7 +128,7 @@
     }
 
     function dimensionArrowheadPointsFromResolved(point, direction, resolved, factors = dimensionArrowheadFactors(resolved.arrowheadAngle)) {
-      const size = dimensionMillimetersToWorld(resolved.terminatorSize);
+      const size = dimensionMillimetersToWorld(resolved.terminatorSize, resolved);
       const wing = size * factors.wing;
       const n = { x: -direction.y, y: direction.x };
       return [
@@ -174,7 +177,7 @@
 
     function dimensionOpenArrowheadRenderPoints(point, direction, resolved, strokeWidth) {
       const factors = dimensionArrowheadFactors(resolved.arrowheadAngle);
-      const screenNominalSize = resolved.terminatorSize * DIMENSION_SCREEN_PX_PER_MM;
+      const screenNominalSize = resolved.terminatorSize * DIMENSION_SCREEN_PX_PER_MM * window.Appearance.annotationDisplayFactor(resolved, viewport.scale);
       const screenStrokeWidth = Math.max(0, Number(strokeWidth) || 0) * viewport.scale;
       const screenWing = screenNominalSize * factors.wing;
       const strokeRatio = screenNominalSize > 0 ? screenStrokeWidth / screenNominalSize : 0;
