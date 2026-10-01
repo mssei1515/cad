@@ -11,6 +11,12 @@
       if (mode === "instance-sources" && instanceSourceEdit) return { kind: "geometryInstance", item: instanceSourceEdit.instance };
       if (freeInstancePlacement) return { kind: "geometryInstance", item: freeInstancePlacement };
       if (mode === "block-place" && blockPlacementDefinitionId) return { kind: "blockPlacement", item: blockDefinitionById(blockPlacementDefinitionId) };
+      if (canvasSelection.inspection?.targets.length) {
+        const targets = canvasSelection.inspection.targets;
+        return targets.length === 1 ? { ...targets[0], readOnly: true }
+          : { kind: "multiple", count: targets.length, items: targets, readOnly: true };
+      }
+      if (canvasSelection.sketchId) return { kind: "sketch", item: sketchById(canvasSelection.sketchId), active: canvasSelection.sketchId === activeSketchId() };
       const constraint = canvasSelection.dimensionConstraint || effectiveSelectedConstraint();
       if (constraint) return { kind: "constraint", item: constraint };
       if (canvasSelection.geometryInstances.length === 1 && canvasSelection.referenceImages.length === 0 && canvasSelection.hatches.length === 0 && canvasSelection.annotations.length === 0 && canvasSelection.blockInstances.length === 0 && selectedGeometryItems().length === 0) return { kind: "geometryInstance", item: canvasSelection.geometryInstances[0] };
@@ -28,7 +34,7 @@
         ...canvasSelection.hatches.map((item) => ({ kind: "hatch", item })),
       ];
       if (multipleItems.length > 1) return { kind: "multiple", count: multipleItems.length, items: multipleItems };
-      return { kind: "sketch", item: sketchById(activeSketchId()) };
+      return { kind: "sketch", item: sketchById(activeSketchId()), active: true };
     }
 
     function multiplePropertyTypeKey(target) {

@@ -47,7 +47,7 @@
           sketchRows: blockDefinitionSketchRows(item) };
       }
       const parent = sketchById(item.parentSketchId), root = isRootSketch(item);
-      return { parent, root, ...(root ? {} : { effective: effectiveAppearanceForSketch(item),
+      return { parent, root, active: item.id === activeSketchId(), ...(root ? {} : { effective: effectiveAppearanceForSketch(item),
         constructionAppearance: effectiveConstructionAppearanceForSketch(item), dimensionAppearance: effectiveDimensionAppearanceForSketch(item) }) };
     }
     return Object.freeze({ read });

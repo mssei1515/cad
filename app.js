@@ -1428,7 +1428,7 @@
 
   function rejectRootSketchCreation() {
     if (canCreateInActiveSketch()) return false;
-    setHint("Root Sketchには図形を作成できません。子スケッチを選択してください。", "error");
+    setHint("Root Sketchには図形を作成できません。子スケッチをダブルクリックしてアクティブにしてください。", "error");
     clearSnap();
     pointerPreview = null;
     draw();
@@ -6133,6 +6133,9 @@
   }
 
   function sketchTreeObjectSelected(category, entry) {
+    const item = category === "constraint" ? entry.point || entry.constraint : entry;
+    if (canvasSelection.inspection?.targets.some((target) => target.category === category
+      && (target.item === item || item?.id && target.item.id === item.id))) return true;
     if (category === "hatch") return canvasSelection.hatches.includes(entry);
     if (category === "image") return canvasSelection.referenceImages.includes(entry);
     if (category === "block") return canvasSelection.blockInstances.includes(entry);
@@ -6153,7 +6156,7 @@
   }
 
   const sketchTreeObjects = window.SketchTreeObjects.create({
-    sidebarGeometryItem,
+    sidebarGeometryItem, activeSketchId,
     currentScope: () => model, getLanguage: () => applicationSettings.language,
     ensureAnalysis: constraintAnalysis.ensure, types: window.GeometrySolver,
     isExplicitPoint, isPointUsedByLine, elementSketchId, constraintSketchId,
@@ -6169,9 +6172,10 @@
     document, sketchOverlay, sketchOverlayResizeHandle,
     getScopeKey: () => blockEditor.current?.draft?.id ? `block:${blockEditor.current.draft.id}` : "document",
     currentScope: () => model, ensureSketchState, isRootSketch, activeSketchId, applicationText, escapeHtml,
-    objects: sketchTreeObjects,
+    objects: sketchTreeObjects, selectedSketchId: () => canvasSelection.sketchId,
     sketchHasSolveError, referenceConstraintErrorCountForSketch, constraintDuplicateCountForSketch,
-    actions: { click: event => sketchTreeController.click(event), pointerOver: handleSketchTreePointerOver, pointerOut: handleSketchTreePointerOut,
+    actions: { click: event => sketchTreeController.click(event), doubleClick: event => sketchTreeController.doubleClick(event),
+      keyDown: event => sketchTreeController.keyDown(event), pointerOver: handleSketchTreePointerOver, pointerOut: handleSketchTreePointerOut,
       leave: () => {
         hoveredSketchTreeId = null;
         clearSidebarHover();
@@ -6187,6 +6191,8 @@
     currentScope: () => model, activeSketchId, setActiveSketch, clearSelection, canvasSelection,
     sidebarGeometryItem, toggleBlockInstanceSelection, targetFromConstraint, updateUI, draw,
     sketchTreeView, updateSketchUI, toggleSketchVisibility, renameSketch, deleteSketch, deleteElements,
+    resolveSelectionEntry: sketchTreeObjects.resolveSelectionEntry,
+    updateSelectionUI: updateGeometrySelectionUI,
     unfixPoint: point => { point.fixed = false; solveAndRefresh(`固定解除 ${point.id}`); },
   });
   const { refreshSelection: updateSketchTreeSelectionState, render: updateSketchUIUnprofiled, applyWidth: applySketchTreeWidth } = sketchTreeView;
@@ -6450,7 +6456,7 @@
   const { open: openAppearanceColorPalette, commit: commitColorPaletteValue } = appearancePalette;
   const elementPropertyCommand = window.ElementPropertyCommand.create({ recordHistory, updateUI, updatePropertiesUI, draw });
   const propertiesController = window.PropertiesController.create({
-    HTMLTextAreaElement, HTMLInputElement, Spline, selectedPropertiesTarget,
+    HTMLTextAreaElement, HTMLInputElement, Spline, selectedPropertiesTarget, activeSketchId,
     elementPropertyCommand, appearancePropertyCommand, geometryPropertyCommand, applyMultipleProperty,
     changeFreeInstanceProperty, commitDimensionPropertyEdit, updateUI, updatePropertiesUI, draw,
     applicationText, setHint,
@@ -9686,21 +9692,7 @@
         exitDrawMode();
         return;
       }
-      if (
-        canvasSelection.points.length > 0 ||
-        canvasSelection.lines.length > 0 ||
-        canvasSelection.circles.length > 0 ||
-        canvasSelection.arcs.length > 0 ||
-        canvasSelection.splines.length > 0 ||
-        canvasSelection.blockInstances.length > 0 ||
-        canvasSelection.geometryInstances.length > 0 ||
-        canvasSelection.arcEndpoint ||
-        canvasSelection.dimensionConstraint ||
-        canvasSelection.annotations.length > 0 ||
-        canvasSelection.hatches.length > 0 ||
-        canvasSelection.referenceImages.length > 0 ||
-        effectiveSelectedConstraint()
-      ) {
+      if (hasSelection()) {
         clearSelection();
         setHint("選択を解除しました");
         updateUI();

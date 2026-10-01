@@ -48,3 +48,11 @@ test('resize clamps to available canvas width and only the active pointer change
   f.setArea(200); f.view.applyWidth(); assert.equal(f.overlay.style.width, '176px');
   assert.equal(f.attrs['aria-valuenow'], '176'); assert.equal(f.attrs['aria-valuemax'], '176');
 });
+
+
+test('active markers do not imply selection and click routes include explicit activation', () => {
+  const f = fixture(); f.view.render();
+  assert.ok(f.list.innerHTML.includes('sketch-active-label'));
+  assert.ok(f.list.innerHTML.includes('aria-current="true" aria-pressed="false"'));
+  assert.ok(f.list.innerHTML.includes('double-click or Alt+Enter'));
+});

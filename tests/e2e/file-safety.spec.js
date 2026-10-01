@@ -63,7 +63,7 @@ test("save status follows edits, save, undo and redo without treating navigation
   await expectDirty(page, true);
   await page.keyboard.press("Control+Y");
   await expectDirty(page, false);
-  await page.locator('.sketch-item[data-id="ROOT"] .sketchActivateBtn').click();
+  await page.locator('.sketch-item[data-id="ROOT"] .sketchActivateBtn').dblclick();
   await expectDirty(page, false);
   const prevented = await page.evaluate(() => {
     const event = new Event("beforeunload", { cancelable: true });

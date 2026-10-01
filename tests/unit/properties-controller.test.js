@@ -75,3 +75,12 @@ test('rejected geometry edits restore the checkbox and refresh the panel without
   f.controller.change({ target: input });
   assert.equal(input.checked, false); assert.deepEqual(f.calls, ['properties', 'draw']);
 });
+
+
+test('inspection rejects synthetic preview, commit and action events', () => {
+  const item = { text: 'Original' }, f = fixture({ kind: 'annotation', item, readOnly: true });
+  const input = new TextArea({ property: 'annotation-text' }, 'Changed');
+  f.controller.input({ target: input }); f.controller.change({ target: input });
+  f.controller.click({ target: { closest: () => ({ dataset: { propertyAction: 'spline-edit' } }) } });
+  assert.equal(item.text, 'Original'); assert.deepEqual(f.calls, []);
+});

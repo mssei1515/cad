@@ -20,23 +20,28 @@
       annotations: [],
       hatches: [],
       referenceImages: [],
+      sketchId: null,
+      inspection: null,
     };
     const arrayFields = Object.keys(state).filter(field => Array.isArray(state[field]));
     const fields = Object.keys(state);
     function set(field, value) {
       if (!Object.hasOwn(state, field)) throw new TypeError('Unknown selection field: ' + field);
+      if (field !== "sketchId" && field !== "inspection" && (Array.isArray(value) ? value.length : value)) clearTreeSelection();
       state[field] = value;
       return value;
     }
     function clear() {
       for (const field of fields) state[field] = arrayFields.includes(field) ? [] : null;
     }
-    function append(field, ...items) { return state[field].push(...items); }
+    function clearTreeSelection() { state.sketchId = null; state.inspection = null; }
+    function append(field, ...items) { clearTreeSelection(); return state[field].push(...items); }
     function removeAt(field, index, count) { return state[field].splice(index, count); }
     // Sidebar rows survive regenerated projections: their identity rule uses the ID.
     // Canvas geometry toggles below intentionally use object identity instead.
     function toggleById(field, item) {
       if (!item) return;
+      clearTreeSelection();
       const items = state[field];
       const index = items.findIndex(selected => selected === item || selected?.id === item.id);
       if (index >= 0) items.splice(index, 1);
@@ -44,6 +49,7 @@
     }
 
     function applyRectangle(candidates, additive = false) {
+      clearTreeSelection();
       for (const field of ["points", "lines", "circles", "arcs", "splines", "blockInstances", "annotations", "hatches", "referenceImages"]) {
         const next = additive ? [...state[field]] : [];
         for (const item of candidates[field]) if (item && !next.includes(item)) next.push(item);
@@ -72,6 +78,7 @@
     }
 
     function setGeometrySelection(hit, additive = false) {
+      clearTreeSelection();
       if (!additive) {
         state.points = [];
         state.lines = [];
@@ -133,6 +140,7 @@
 
     function togglePointSelection(p) {
       if (!p) return;
+      clearTreeSelection();
       state.constraint = null;
       const i = state.points.indexOf(p);
       if (i >= 0) state.points.splice(i, 1);
@@ -141,6 +149,7 @@
 
     function toggleLineSelection(l) {
       if (!l) return;
+      clearTreeSelection();
       state.constraint = null;
       const i = state.lines.indexOf(l);
       if (i >= 0) state.lines.splice(i, 1);
@@ -149,6 +158,7 @@
 
     function toggleCircleSelection(c) {
       if (!c) return;
+      clearTreeSelection();
       state.constraint = null;
       const i = state.circles.indexOf(c);
       if (i >= 0) state.circles.splice(i, 1);
@@ -157,6 +167,7 @@
 
     function toggleArcSelection(a) {
       if (!a) return;
+      clearTreeSelection();
       state.constraint = null;
       const i = state.arcs.indexOf(a);
       if (i >= 0) state.arcs.splice(i, 1);
@@ -165,6 +176,7 @@
 
     function toggleSplineSelection(spline) {
       if (!spline) return;
+      clearTreeSelection();
       state.constraint = null;
       const index = state.splines.indexOf(spline);
       if (index >= 0) state.splines.splice(index, 1);
@@ -172,6 +184,7 @@
     }
 
     function toggleBlockInstanceSelection(instance) {
+      clearTreeSelection();
       const index = state.blockInstances.indexOf(instance);
       if (index >= 0) state.blockInstances.splice(index, 1);
       else state.blockInstances.push(instance);
@@ -253,6 +266,7 @@
 
     function pushPrimitiveSelection(primitive) {
       if (!primitive) return;
+      clearTreeSelection();
       if (primitive instanceof Circle) {
         if (!state.circles.includes(primitive)) state.circles.push(primitive);
       } else if (primitive instanceof Arc) {
@@ -275,7 +289,7 @@
     }
 
     function hasSelection() {
-      return state.points.length > 0 ||
+      return Boolean(state.sketchId || state.inspection) || state.points.length > 0 ||
         state.lines.length > 0 ||
         state.circles.length > 0 ||
         state.arcs.length > 0 ||
