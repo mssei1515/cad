@@ -110,3 +110,18 @@ test('rectangle application merges by identity and retains unrelated derived-ins
   assert.equal(selection.constraint, null); assert.equal(selection.arcEndpointPair, null); assert.equal(selection.geometryInstances[0], instance);
   candidates.points = [b]; selection.applyRectangle(candidates); assert.deepEqual(Array.from(selection.points), [b]); assert.equal(selection.geometryInstances[0], instance);
 });
+
+
+test('tree selections clear with Canvas selections and never become editing operands', () => {
+  const s = create(), point = new Point('P1', 0, 0);
+  s.set('inspection', { sketchId: 'S2', targets: [{ kind: 'geometry', item: point }] });
+  assert.equal(s.hasSelection(), true);
+  assert.equal(s.selectedGeometryItems().length, 0);
+  assert.equal(s.currentConstraintTargets().points.length, 0);
+  assert.equal(s.appearanceSelectionTarget(), null);
+  s.togglePointSelection(point); assert.equal(s.inspection, null);
+  s.clear(); s.set('sketchId', 'S2'); assert.equal(s.hasSelection(), true);
+  s.set('lines', []); assert.equal(s.sketchId, 'S2');
+  s.append('points', point); assert.equal(s.sketchId, null);
+  s.clear(); assert.equal(s.hasSelection(), false); assert.equal(s.inspection, null);
+});

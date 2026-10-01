@@ -62,7 +62,7 @@
     ["引出線を付ける図形をクリックしてください", "Click geometry to attach the leader."], ["引出線の文字位置をクリックしてください", "Click the leader text position."],
     ["引出線をキャンセルしました", "Leader creation was canceled."], ["引出線を追加しました", "Leader was added."],
     ["テキストを配置する位置をクリックしてください", "Click where you want to place the text."], ["テキストを追加しました", "Text was added."], ["テキストをキャンセルしました", "Text creation was canceled."],
-    ["Root Sketchには図形を作成できません。子スケッチを選択してください。", "Geometry cannot be created in the Root Sketch. Select a child sketch."],
+    ["Root Sketchには図形を作成できません。子スケッチをダブルクリックしてアクティブにしてください。", "Geometry cannot be created in the Root Sketch. Double-click a child sketch to activate it."],
     ["配置する内部スケッチを選び、表示中心をクリックしてください", "Select internal sketches to place, then click the display center."],
     ["オブジェクトを持つ内部スケッチを1つ以上有効にしてください", "Enable at least one internal sketch that contains objects."],
     ["回転方向をクリックしてください。Escで角度0度として配置します", "Click to set the rotation direction. Press Esc to place at 0 degrees."],

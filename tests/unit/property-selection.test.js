@@ -57,3 +57,16 @@ test('bulk construction rejection is atomic and preview changes omit history unt
   calls.length = 0; command.apply(target, 'construction', false);
   assert.deepEqual(calls, ['sync', 'history', 'ui', 'draw']);
 });
+
+
+test('explicit sketch and inspection targets are independent of the active sketch', () => {
+  const f = fixture(), item = new Point();
+  f.selection.sketchId = 'S2';
+  assert.equal(f.query.selectedPropertiesTarget().active, false);
+  f.selection.sketchId = null;
+  f.selection.inspection = { sketchId: 'S2', targets: [{ kind: 'geometry', item }] };
+  let target = f.query.selectedPropertiesTarget(); assert.equal(target.item, item); assert.equal(target.readOnly, true);
+  f.selection.inspection.targets.push({ kind: 'annotation', item: {} });
+  target = f.query.selectedPropertiesTarget(); assert.equal(target.kind, 'multiple'); assert.equal(target.readOnly, true);
+  f.selection.inspection = null; assert.equal(f.query.selectedPropertiesTarget().active, true);
+});

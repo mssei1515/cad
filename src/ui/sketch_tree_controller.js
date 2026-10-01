@@ -3,16 +3,46 @@
   "use strict";
   function create({ currentScope, activeSketchId, setActiveSketch, clearSelection, canvasSelection,
     sidebarGeometryItem, toggleBlockInstanceSelection, targetFromConstraint, updateUI, draw,
-    sketchTreeView, updateSketchUI, toggleSketchVisibility, renameSketch, deleteSketch, deleteElements, unfixPoint }) {
+    sketchTreeView, updateSketchUI, toggleSketchVisibility, renameSketch, deleteSketch, deleteElements, unfixPoint,
+    resolveSelectionEntry, updateSelectionUI = updateUI }) {
+    function selectSketch(sketchId) {
+      if (!currentScope().sketches.some((sketch) => sketch.id === sketchId)) return;
+      clearSelection();
+      canvasSelection.set("sketchId", sketchId);
+      updateSelectionUI();
+      draw();
+    }
+
+    function inspectObject(row, additive) {
+      const data = row.dataset, category = data.objectKind;
+      const entry = resolveSelectionEntry(data);
+      if (!entry) return;
+      const item = category === "constraint" ? entry.point || entry.constraint : entry;
+      const kind = category === "constraint" && !entry.point ? "constraint"
+        : ["point", "line", "circle", "arc", "spline"].includes(category) || entry.point ? "geometry"
+          : ({ image: "referenceImage", instance: "geometryInstance" }[category] || category);
+      const target = { kind, item, category };
+      const previous = canvasSelection.inspection;
+      let targets = additive && category !== "constraint" && previous?.sketchId === data.sketchId
+        && previous.targets.every((candidate) => candidate.category !== "constraint") ? [...previous.targets] : [];
+      const index = targets.findIndex((candidate) => candidate.kind === kind && candidate.category === category
+        && (candidate.item === item || item.id && candidate.item.id === item.id));
+      if (index >= 0) targets.splice(index, 1); else targets.push(target);
+      clearSelection();
+      if (targets.length) canvasSelection.set("inspection", { sketchId: data.sketchId, targets });
+      updateUI();
+      draw();
+    }
+
     function activateSketchTreeObject(row, additive) {
       const sketchId = row.dataset.sketchId;
       const category = row.dataset.objectKind;
       if (sketchId !== activeSketchId()) {
-        setActiveSketch(sketchId);
-        additive = false;
+        return inspectObject(row, additive);
       }
       const model = currentScope();
-      if (!additive || category === "constraint") clearSelection();
+      if (canvasSelection.inspection || canvasSelection.sketchId) additive = false;
+      if (!additive || category === "constraint" || canvasSelection.inspection || canvasSelection.sketchId) clearSelection();
       if (["point", "line", "circle", "arc", "spline"].includes(category)) {
         const item = sidebarGeometryItem(category, row.dataset.id);
         if (item) {
@@ -63,6 +93,8 @@
         return;
       }
       const action = event.target.closest("button");
+      const actionObjectRow = action?.closest(".sketch-object-row");
+      if (actionObjectRow && actionObjectRow.dataset.sketchId !== activeSketchId()) return;
       if (action?.classList.contains("sketchExpandBtn")) {
         sketchTreeView.setSketchOpen(action.dataset.id, action.getAttribute("aria-expanded") !== "true");
         updateSketchUI();
@@ -85,17 +117,28 @@
       const objectRow = event.target.closest(".sketch-object-row");
       if (objectRow) return void activateSketchTreeObject(objectRow, event.ctrlKey || event.shiftKey);
       const sketchRow = event.target.closest(".sketch-item");
-      if (sketchRow) {
-        const wasActive = sketchRow.dataset.id === activeSketchId();
-        setActiveSketch(sketchRow.dataset.id);
-        if (wasActive && sketchRow.classList.contains("has-groups")) {
-          sketchTreeView.setSketchOpen(sketchRow.dataset.id, sketchRow.getAttribute("aria-expanded") !== "true");
-          updateSketchUI();
-        }
-      }
+      if (sketchRow) selectSketch(sketchRow.dataset.id);
     }
 
-    return Object.freeze({ click: handleSketchTreeClick, activateObject: activateSketchTreeObject });
+    function activateRow(event) {
+      const action = event.target.closest("button");
+      if (action && !action.classList.contains("sketchActivateBtn")) return;
+      const row = event.target.closest(".sketch-item");
+      if (!row) return;
+      setActiveSketch(row.dataset.id);
+      selectSketch(row.dataset.id);
+    }
+
+    function keyDown(event) {
+      const button = event.target.closest(".sketchActivateBtn");
+      if (!button || !["Enter", " "].includes(event.key)) return;
+      event.preventDefault();
+      event.stopPropagation();
+      if (event.key === "Enter" && event.altKey) activateRow(event);
+      else selectSketch(button.dataset.id);
+    }
+
+    return Object.freeze({ click: handleSketchTreeClick, doubleClick: activateRow, keyDown, activateObject: activateSketchTreeObject });
   }
   window.SketchTreeController = Object.freeze({ create });
 })();

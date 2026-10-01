@@ -9,7 +9,7 @@
     resolvedHatchBoundary, hatchPatternTypeLabel, hatchAppearanceForDisplay,
     isDimensionConstraint, localizedConstraintName, constraintGeometryId, isReadOnlyDimension,
     constraintIsRedundant, referenceConstraintErrorInfo, sketchTreeObjectSelected, sketchTreeObjectHovered,
-    constraintDirectlyReferencesCanvasSelection, selectedConstraintReferenceElements }) {
+    constraintDirectlyReferencesCanvasSelection, selectedConstraintReferenceElements, activeSketchId }) {
     const { ParallelLinesCenterlineConstraint, PointPairCenterlineConstraint, SketchProjectionConstraint } = types;
     function sketchTreeObjectIndex() {
       const model = currentScope();
@@ -142,6 +142,7 @@
         data += ` data-constraint-index="${entry.modelIndex}"`;
       }
       const selected = sketchTreeObjectSelected(category, entry);
+      if (activeSketchId && sketchId !== activeSketchId()) action = action.replaceAll("<button ", "<button disabled ");
       const hovered = sketchTreeObjectHovered(category, entry);
       const related = category === "constraint" && entry.kind !== "fixed-point"
         ? constraintDirectlyReferencesCanvasSelection(entry.constraint, selectedConstraintReferenceElements())
@@ -154,7 +155,7 @@
       const model = currentScope();
       const category = data.objectKind;
       let entry = null;
-      if (["point", "line", "circle", "arc"].includes(category)) {
+      if (["point", "line", "circle", "arc", "spline"].includes(category)) {
         entry = sidebarGeometryItem(category, data.id);
       } else if (category === "block") {
         entry = model.blockInstances.find((item) => item.id === data.id) || null;
@@ -162,6 +163,10 @@
         entry = model.hatches.find((item) => item.id === data.id) || null;
       } else if (category === "annotation") {
         entry = model.annotations.find((item) => item.id === data.id) || null;
+      } else if (category === "image") {
+        entry = model.referenceImages.find((item) => item.id === data.id) || null;
+      } else if (category === "instance") {
+        entry = model.geometryInstances.find((item) => item.id === data.id) || null;
       } else if (data.fixedPointId) {
         const point = model.points.find((item) => item.id === data.fixedPointId) || null;
         if (point) entry = { kind: "fixed-point", point };
