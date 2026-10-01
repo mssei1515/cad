@@ -101,12 +101,15 @@
           + propertyReadonlyRow("ID", "ID", item.id)
           + propertyReadonlyRow("所属スケッチ", "Owning sketch", `${info.owningSketchName} (${item.sketchId})`, { userContent: true });
         const style = window.Appearance.normalizeAnnotationStyle(item.style);
+        // HTML strips the first textarea newline, so affix markup includes an extra one before its content.
         const content = `<div class="property-row"><label for="annotationParameterEnabled">${applicationText("パラメータを使用", "Use parameter")}</label><input id="annotationParameterEnabled" data-property="annotation-parameter-enabled" type="checkbox" ${item.parameterEnabled ? "checked" : ""}></div>`
           + (item.parameterEnabled
             ? `<div class="property-row"><label>${applicationText("Parameter名", "Parameter name")}</label><input data-property="annotation-parameter-name" value="${escapeHtml(item.parameterName || "")}"></div>
-              <div class="property-row"><label>${applicationText("接頭辞", "Prefix")}</label><textarea data-annotation-style="prefix" data-user-content>${escapeHtml(style.prefix)}</textarea></div>
+              <div class="property-row"><label>${applicationText("接頭辞", "Prefix")}</label><textarea data-annotation-style="prefix" data-affix-input rows="1" wrap="off" data-user-content>
+${escapeHtml(style.prefix)}</textarea></div>
               <div class="property-row"><label>${applicationText("値 / 数式", "Value / Expression")}</label><input data-property="annotation-expression" value="${escapeHtml(expressionInputValue(item.expression || "0"))}"></div>
-              <div class="property-row"><label>${applicationText("接尾辞", "Suffix")}</label><textarea data-annotation-style="suffix" data-user-content>${escapeHtml(style.suffix)}</textarea></div>`
+              <div class="property-row"><label>${applicationText("接尾辞", "Suffix")}</label><textarea data-annotation-style="suffix" data-affix-input rows="1" wrap="off" data-user-content>
+${escapeHtml(style.suffix)}</textarea></div>`
               + propertyReadonlyRow("評価値", "Evaluated value", Number.isFinite(item.evaluatedParameterValue) ? formatDisplayNumber(item.evaluatedParameterValue) : "—")
             : `<div class="property-row"><label for="annotationText">${applicationText("本文", "Text")}</label><textarea id="annotationText" data-property="annotation-text" data-user-content>${escapeHtml(item.text || "")}</textarea></div>`);
         const appearanceHeading = item.type === "leader"

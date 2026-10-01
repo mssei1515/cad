@@ -42,6 +42,23 @@ async function openDocumentSettings(page) {
   await button.click();
 }
 
+async function expectAffixInputToFollowNewlines(input) {
+  const height = () => input.evaluate(element => element.getBoundingClientRect().height);
+  await input.fill('');
+  const baseline = await height();
+  expect(baseline).toBeLessThan(30);
+  await input.fill('long single line '.repeat(30));
+  expect(await height()).toBe(baseline);
+  expect(await input.evaluate(element => element.scrollHeight <= element.clientHeight)).toBe(true);
+  await input.fill('first\nsecond\n');
+  expect(await input.evaluate(element => element.rows)).toBe(3);
+  expect(await height()).toBeGreaterThan(baseline + 20);
+  await input.blur();
+  expect(await input.evaluate(element => element.rows)).toBe(3);
+  await input.fill('single');
+  expect(await height()).toBe(baseline);
+}
+
 async function selectSketch(page, sketchId) {
   await page.locator(`.sketch-item[data-id="${sketchId}"] .sketchActivateBtn`).dblclick();
   await expect(page.locator("#propertiesPanel .property-heading")).toHaveText(/^(?:Sketch|スケッチ)$/);
@@ -4325,6 +4342,9 @@ test("ancestor-only dimensions are measured in the active sketch across ancestor
   await page.click('#redoBtn');
   expect((await page.evaluate(() => window.__jot2dTest.serializedModelForTest())).constraints).toHaveLength(2);
   await page.evaluate(() => window.__jot2dTest.selectDimensionForPropertiesForTest(0));
+  for (const key of ['prefix', 'suffix']) {
+    await expectAffixInputToFollowNewlines(page.locator('[data-dimension-display="' + key + '"]'));
+  }
   await page.locator('[data-dimension-display="prefix"]').fill('top\n');
   await page.locator('[data-dimension-display="suffix"]').fill('\nend');
   await page.locator('[data-dimension-display="suffix"]').blur();
@@ -4351,6 +4371,9 @@ test("annotation affixes keep multiline values through Properties and save reloa
   for (const id of ['AN1', 'AN2']) {
     await page.locator('.sketch-object-row[data-object-kind="annotation"][data-id="' + id + '"]').click();
     await page.locator('[data-property="annotation-parameter-enabled"]').check();
+    for (const key of ['prefix', 'suffix']) {
+      await expectAffixInputToFollowNewlines(page.locator('[data-annotation-style="' + key + '"]'));
+    }
     await page.locator('[data-annotation-style="prefix"]').fill('top\n');
     await page.locator('[data-annotation-style="suffix"]').fill('\nend');
     await page.locator('[data-annotation-style="suffix"]').blur();
@@ -4361,6 +4384,27 @@ test("annotation affixes keep multiline values through Properties and save reloa
   expect(loaded.success).toBe(true);
   const roundTrip = await page.evaluate(() => window.__jot2dTest.serializedModelForTest());
   expect(roundTrip.annotations).toEqual(saved.annotations);
+  await expandSketchTreeGroup(page, 'annotation', 'S1');
+  await page.locator('.sketch-object-row[data-object-kind="annotation"][data-id="AN1"]').click();
+  await expect(page.locator('[data-annotation-style="prefix"]')).toHaveJSProperty('rows', 2);
+  await expect(page.locator('[data-annotation-style="suffix"]')).toHaveJSProperty('rows', 2);
+  await expect(page.locator('[data-annotation-style="suffix"]')).toHaveValue('\nend');
+});
+
+test("document dimension affix inputs expand only for newlines", async ({ page }) => {
+  await openTestDocument(page);
+  await openDocumentSettings(page);
+  for (const key of ['prefix', 'suffix']) {
+    const input = page.locator('#documentDimensionAppearanceFields [data-dimension-display="' + key + '"]');
+    await expectAffixInputToFollowNewlines(input);
+    await input.fill('saved\nvalue');
+    await input.blur();
+  }
+  await page.locator('#documentSettingsDialog button[value=cancel]').first().click();
+  await openDocumentSettings(page);
+  for (const key of ['prefix', 'suffix']) {
+    await expect(page.locator('#documentDimensionAppearanceFields [data-dimension-display="' + key + '"]')).toHaveJSProperty('rows', 2);
+  }
 });
 
 test("annotation parameter checkbox switches body and formula modes with live values and recovery", async ({ page }) => {

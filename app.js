@@ -6490,7 +6490,7 @@
     applicationText, escapeHtml, formatDisplayNumber, normalizeAppearance, normalizeDimensionAppearance,
     dimensionLengthKeys: DIMENSION_APPEARANCE_LENGTH_KEYS, defaultDimensionAppearance: DEFAULT_DIMENSION_APPEARANCE,
   });
-  const { defaultAppearanceLabel, colorPickerValue, appearancePropertyRows, dimensionAppearancePropertyRows, updateDimensionTerminatorAngleVisibility } = appearanceControls;
+  const { defaultAppearanceLabel, colorPickerValue, appearancePropertyRows, dimensionAppearancePropertyRows, updateDimensionTerminatorAngleVisibility, prepareAffixInputs } = appearanceControls;
   const propertyRows = window.PropertyRows.create({
     Point, Line, Circle, Arc, Spline, applicationText, escapeHtml, formatDisplayNumber,
     multiplePropertySameType, multiplePropertySupports, multiplePropertyValue, multiplePropertyAppearance,
@@ -6540,7 +6540,7 @@
   });
   const propertiesView = window.PropertiesView.create({
     document, applicationText, localizeApplicationUI, installExpressionInputHighlights,
-    content: propertiesContent.render,
+    content: propertiesContent.render, prepareAffixInputs,
     onInput: handlePropertiesInput, onChange: handlePropertiesChange, onClick: handlePropertiesClick,
   });
   function updatePropertiesUIUnprofiled() {
@@ -9907,6 +9907,7 @@
     if (dimensionFields) {
       const appearance = normalizeDimensionAppearance(documentModel.defaultDimensionAppearance, { partial: false });
       dimensionFields.innerHTML = dimensionAppearancePropertyRows(appearance, appearance, { allowInheritance: false, idPrefix: "documentDimension" });
+      prepareAffixInputs(dimensionFields);
       localizeApplicationUI(dimensionFields);
       updateDimensionTerminatorAngleVisibility(dimensionFields);
       const applyDimensionInput = (input, { history = true } = {}) => {

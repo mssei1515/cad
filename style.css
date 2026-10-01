@@ -328,6 +328,7 @@ body.block-editing .canvas-area { background: var(--block-edit-canvas); box-shad
 .property-input-unit { min-width: 18px; color: var(--muted); font-size: 11px; }
 .property-row input[type="checkbox"] { width: auto; min-height: 0; justify-self: start; }
 .property-row textarea { min-height: 48px; resize: vertical; }
+.property-row textarea[data-affix-input] { min-height: 25px; resize: none; overflow: hidden; }
 .property-option-group { margin-top: 7px; padding-top: 5px; border-top: 1px solid var(--border); }
 .property-option-group-title { margin-bottom: 3px; color: var(--text-subtle); font-size: 12px; font-weight: 600; }
 .property-option-group > small { display: block; margin: 2px 0 0 20px; color: var(--muted); font-size: 10px; }
