@@ -61,3 +61,14 @@ test("leader terminators preserve open, filled and dot drawing modes", () => {
   assert.deepEqual(circle.slice(1, 3), [10, 20]);
   assert.equal(circle[3], sandbox.window.Appearance.CSS_PX_PER_MM);
 });
+
+ test("annotation affixes render multiline text around the existing anchor", () => {
+  const h = create();
+  h.renderer.drawAnnotationText({ text: "body", x: 3, y: 4, style: { prefix: "top\n", suffix: "\nend", textHeight: 3 } });
+  const text = h.calls.filter(call => call[0] === "fillText");
+  assert.deepEqual(text.map(call => call[1]), ["top", "body", "end"]);
+  const height = h.renderer.annotationTextWorldHeight({ textHeight: 3 });
+  assert.equal(text[0][3], -height * 1.2);
+  assert.equal(text[1][3], 0);
+  assert.equal(text[2][3], height * 1.2);
+});

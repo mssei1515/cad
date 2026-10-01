@@ -567,6 +567,7 @@ test("document annotations can be dragged on the unified canvas", async ({ page 
 test("annotation Properties edit complete appearance in approximate millimeters", async ({ page }) => {
   await openTestDocument(page);
   const fixture = annotationSketchFixture(11);
+  fixture.activeSketchId = "S1";
   expect(await page.evaluate((data) => window.__jot2dTest.loadDocumentFixtureForDragTest(data, "annotation-appearance.jot2d"), fixture)).toEqual(expect.objectContaining({ success: true }));
   await expandSketchTreeGroup(page, "annotation", "S1");
 
@@ -4286,4 +4287,77 @@ test("sketch selection edits its own appearance and resets during undo and redo"
   await expect(page.locator('#sketchList .sketch-item.selected')).toHaveCount(0);
   state = await page.evaluate(() => window.__jot2dTest.serializedModelForTest());
   expect(state.sketches.find(s => s.id === "S1").appearance.color).toBe("#ff0000");
+});
+
+test("ancestor-only dimensions are measured in the active sketch across ancestors", async ({ page }) => {
+  await openTestDocument(page);
+  const fixture = annotationSketchFixture(11);
+  fixture.annotations = [];
+  fixture.sketches[2].parentSketchId = "S1";
+  fixture.sketches.push({ id: "S3", name: "Measurements", parentSketchId: "S2", kind: "sketch" });
+  fixture.activeSketchId = "S3";
+  expect(await page.evaluate(data => window.__jot2dTest.loadDocumentFixtureForDragTest(data, "ancestor-measurements.jot2d"), fixture)).toEqual(expect.objectContaining({ success: true }));
+  await page.evaluate(() => window.__jot2dTest.fitAllGeometryForTest(190));
+  const clickWorld = async point => {
+    const client = await page.evaluate(point => window.__jot2dTest.worldClientPositionForTest(point), point);
+    await page.mouse.click(client.x, client.y);
+  };
+  await page.click('[data-constraint="distance"]');
+  await clickWorld({ x: 0, y: 0 });
+  await clickWorld({ x: 0, y: -30 });
+  await expect(page.locator('#dimensionValueInput')).toBeHidden();
+  let saved = await page.evaluate(() => window.__jot2dTest.serializedModelForTest());
+  expect(saved.activeSketchId).toBe("S3");
+  expect(saved.constraints).toHaveLength(1);
+  expect(saved.constraints[0]).toEqual(expect.objectContaining({ sketchId: "S3", readOnlyDimension: true, enabled: false, target: 120 }));
+  expect(saved.points.map(({ id, x, y, sketchId }) => ({ id, x, y, sketchId }))).toEqual(fixture.points.map(({ id, x, y, sketchId }) => ({ id, x, y, sketchId })));
+  await page.keyboard.press('Escape');
+  await page.click('[data-constraint="distance"]');
+  await clickWorld({ x: -60, y: 0 });
+  await clickWorld({ x: -40, y: 50 });
+  await clickWorld({ x: -80, y: 25 });
+  saved = await page.evaluate(() => window.__jot2dTest.serializedModelForTest());
+  expect(saved.constraints).toHaveLength(2);
+  expect(saved.constraints.every(item => item.sketchId === 'S3' && item.readOnlyDimension && item.enabled === false)).toBe(true);
+  expect(saved.points.map(({ id, x, y, sketchId }) => ({ id, x, y, sketchId }))).toEqual(fixture.points.map(({ id, x, y, sketchId }) => ({ id, x, y, sketchId })));
+  await page.click('#undoBtn');
+  expect((await page.evaluate(() => window.__jot2dTest.serializedModelForTest())).constraints).toHaveLength(1);
+  await page.click('#redoBtn');
+  expect((await page.evaluate(() => window.__jot2dTest.serializedModelForTest())).constraints).toHaveLength(2);
+  await page.evaluate(() => window.__jot2dTest.selectDimensionForPropertiesForTest(0));
+  await page.locator('[data-dimension-display="prefix"]').fill('top\n');
+  await page.locator('[data-dimension-display="suffix"]').fill('\nend');
+  await page.locator('[data-dimension-display="suffix"]').blur();
+  saved = await page.evaluate(() => window.__jot2dTest.serializedModelForTest());
+  expect(saved.constraints[0].dimension.display).toEqual(expect.objectContaining({ prefix: 'top\n', suffix: '\nend' }));
+  const loaded = await page.evaluate(data => window.__jot2dTest.loadDocumentFixtureForDragTest(data, "measurements-reloaded.jot2d"), saved);
+  expect(loaded.success).toBe(true);
+  const roundTrip = await page.evaluate(() => window.__jot2dTest.serializedModelForTest());
+  expect(roundTrip.constraints).toEqual(saved.constraints);
+  const moved = structuredClone(saved);
+  moved.points.find(point => point.id === 'P2').x += 30;
+  expect((await page.evaluate(data => window.__jot2dTest.loadDocumentFixtureForDragTest(data, 'ancestor-changed.jot2d'), moved)).success).toBe(true);
+  const parameters = await page.evaluate(() => window.__jot2dTest.parameterStateForTest());
+  expect(parameters.valid).toBe(true);
+  expect(parameters.dimensions[0].value).toBe(150);
+});
+
+test("annotation affixes keep multiline values through Properties and save reload", async ({ page }) => {
+  await openTestDocument(page);
+  const fixture = annotationSketchFixture(11);
+  fixture.activeSketchId = 'S1';
+  await page.evaluate(data => window.__jot2dTest.loadDocumentFixtureForDragTest(data, 'affixes.jot2d'), fixture);
+  await expandSketchTreeGroup(page, 'annotation', 'S1');
+  for (const id of ['AN1', 'AN2']) {
+    await page.locator('.sketch-object-row[data-object-kind="annotation"][data-id="' + id + '"]').click();
+    await page.locator('[data-annotation-style="prefix"]').fill('top\n');
+    await page.locator('[data-annotation-style="suffix"]').fill('\nend');
+    await page.locator('[data-annotation-style="suffix"]').blur();
+  }
+  const saved = await page.evaluate(() => window.__jot2dTest.serializedModelForTest());
+  expect(saved.annotations.every(item => item.style.prefix === 'top\n' && item.style.suffix === '\nend')).toBe(true);
+  const loaded = await page.evaluate(data => window.__jot2dTest.loadDocumentFixtureForDragTest(data, 'affixes-reloaded.jot2d'), saved);
+  expect(loaded.success).toBe(true);
+  const roundTrip = await page.evaluate(() => window.__jot2dTest.serializedModelForTest());
+  expect(roundTrip.annotations).toEqual(saved.annotations);
 });

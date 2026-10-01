@@ -100,3 +100,15 @@ test('inspection rejects synthetic preview, commit and action events', () => {
   f.controller.click({ target: { closest: () => ({ dataset: { propertyAction: 'spline-edit' } }) } });
   assert.equal(item.text, 'Original'); assert.deepEqual(f.calls, []);
 });
+
+test('annotation affix previews and commits preserve newlines and allow clearing', () => {
+  const f = fixture({ kind: 'annotation', item: {} });
+  const input = new TextArea({ annotationStyle: 'prefix' }, ' top\n');
+  f.controller.input({ target: input });
+  f.controller.change({ target: input });
+  assert.equal(f.calls[0].request.value, ' top\n');
+  assert.equal(f.calls[1].request.value, ' top\n');
+  input.value = '';
+  f.controller.input({ target: input });
+  assert.equal(f.calls[2].request.value, '');
+});

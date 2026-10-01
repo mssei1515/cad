@@ -29,7 +29,7 @@
       }
       let value = rawValue;
       if (commit || category === "dimension" && target.kind === "constraint") {
-        value = category === "dimension" && ["prefix", "suffix"].includes(key) ? input.value : input.value.trim();
+        value = ["dimension", "annotation"].includes(category) && ["prefix", "suffix"].includes(key) ? input.value : input.value.trim();
         if (input.type === "checkbox" && ["annotation", "hatch", "annotationDisplay"].includes(category)) value = input.checked;
         if (input.type === "checkbox" && category === "dimension" && target.kind === "constraint") value = String(input.checked);
       }
@@ -62,10 +62,10 @@
         elementPropertyCommand.geometryInstance(target.item, input.dataset.geometryInstanceProperty, input.value, { commit: false });
         return;
       }
-      const rawValue = input.type === "number" || input.dataset.annotationStyle || input.dataset.hatchProperty || input.dataset.bulkProperty || input.dataset.appearanceKey
+      const rawValue = input.type === "number" || input.dataset.annotationStyle && !["prefix", "suffix"].includes(input.dataset.annotationStyle) || input.dataset.hatchProperty || input.dataset.bulkProperty || input.dataset.appearanceKey
         ? input.value.trim()
         : input.value;
-      const appearanceAllowsEmpty = Boolean(input.dataset.appearanceKey || input.dataset.dimensionDisplay);
+      const appearanceAllowsEmpty = Boolean(input.dataset.appearanceKey || input.dataset.dimensionDisplay || ["prefix", "suffix"].includes(input.dataset.annotationStyle));
       const colorInput = input.dataset.appearanceKey === "color"
         || input.dataset.dimensionDisplay === "color"
         || input.dataset.annotationStyle === "color"

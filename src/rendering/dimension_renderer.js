@@ -121,14 +121,16 @@
         ctx.font = `${metrics.height}px system-ui`;
         ctx.textAlign = "center";
         ctx.textBaseline = "bottom";
+        const lines = String(label).split(/\r\n|\r|\n/);
+        const drawLines = x => lines.forEach((line, index) => ctx.fillText(line, x, -metrics.gap - (lines.length - 1 - index) * metrics.height * 1.2));
         if (expressionMark) {
-          const textWidth = ctx.measureText(label).width;
+          const textWidth = Math.max(...lines.map(line => ctx.measureText(line).width));
           const markWidth = metrics.height * DIMENSION_EXPRESSION_MARK_WIDTH_FACTOR;
           const markGap = metrics.height * DIMENSION_EXPRESSION_MARK_GAP_FACTOR;
-          ctx.fillText(label, (markWidth + markGap) / 2, -metrics.gap);
+          drawLines((markWidth + markGap) / 2);
           drawDimensionExpressionMark(-(textWidth + markGap) / 2, -metrics.gap, metrics.height);
         } else {
-          ctx.fillText(label, 0, -metrics.gap);
+          drawLines(0);
         }
         ctx.restore();
       }

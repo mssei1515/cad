@@ -1233,8 +1233,9 @@
     const fixed = style.fixedDisplaySize !== false;
     const fontSize = fixed ? style.textHeight * ANNOTATION_SCREEN_PX_PER_MM : annotationTextWorldHeight(style);
     const paddingScale = fixed ? 1 : 1 / viewport.scale;
-    const textWidth = Math.max(28 * paddingScale, String(element.text || "").length * fontSize * 0.62);
-    const textHeight = fontSize + 10 * paddingScale;
+    const lines = `${style.prefix}${element.text || ""}${style.suffix}`.split(/\r\n|\r|\n/);
+    const textWidth = Math.max(28 * paddingScale, ...lines.map(line => line.length * fontSize * 0.62));
+    const textHeight = fontSize * (1 + (lines.length - 1) * 1.2) + 10 * paddingScale;
     const center = { x: Number(element.x) || 0, y: Number(element.y) || 0 };
     const rotation = Number(element.rotation) || 0;
     const cos = Math.cos(rotation);
@@ -3363,14 +3364,14 @@
       if (!layout) continue;
       const appearance = effectiveDimensionAppearance(dimension, constraintSketchId(constraint));
       let scaledLabelHit = false;
-      if (appearance.fixedDisplaySize === false) {
+      if (appearance.fixedDisplaySize === false || /[\r\n]/.test(dimensionLabelForConstraint(constraint, target, dimension))) {
         const label = dimensionLabelForConstraint(constraint, target, dimension);
         const metrics = dimensionTextDrawingMetrics(appearance);
         const width = dimensionTextWidth(label, appearance, dimensionUsesExpression(constraint));
         const angle = -(Number(layout.textAngle) || 0);
         const dx = x - layout.text.x, dy = y - layout.text.y;
         scaledLabelHit = pointInExpandedBox(dx * Math.cos(angle) - dy * Math.sin(angle), dx * Math.sin(angle) + dy * Math.cos(angle),
-          { left: -width / 2, right: width / 2, top: -metrics.gap - metrics.height, bottom: -metrics.gap }, threshold);
+          { left: -width / 2, right: width / 2, top: -metrics.gap - metrics.height * (1 + (String(label).split(/\r\n|\r|\n/).length - 1) * 1.2), bottom: -metrics.gap }, threshold);
       }
       if (scaledLabelHit || hypot2(x - layout.text.x, y - layout.text.y) <= threshold * 2.2) {
         return { constraint, target, dimension, part: "label" };
@@ -4723,8 +4724,9 @@
   }
 
   function textHitBox(text, x, y, fontSize = 13, textAlign = "left") {
-    const width = Math.max(28, String(text || "").length * fontSize * 0.62);
-    const height = fontSize + 10;
+    const lines = String(text || "").split(/\r\n|\r|\n/);
+    const width = Math.max(28, ...lines.map(line => line.length * fontSize * 0.62));
+    const height = fontSize * (1 + (lines.length - 1) * 1.2) + 10;
     const left = textAlign === "center" ? x - width / 2 : textAlign === "right" ? x - width : x;
     return {
       left,
@@ -4746,7 +4748,7 @@
     const localY = dx * Math.sin(rotation) + dy * Math.cos(rotation) + (Number(element?.y) || 0);
     const style = normalizeAnnotationStyle(element?.style);
     const fontSize = annotationTextWorldHeight(style);
-    return pointInExpandedBox(localX, localY, textHitBox(element?.text, element?.x, element?.y, fontSize, style.textAlign), padding);
+    return pointInExpandedBox(localX, localY, textHitBox(`${style.prefix}${element?.text || ""}${style.suffix}`, element?.x, element?.y, fontSize, style.textAlign), padding);
   }
 
   function boxFromPoints(points) {
@@ -5800,6 +5802,7 @@
       operands: resolution.operands || constraintOperands.slice(),
       referenceSketchId: resolution.referenceSketchId,
       sketchId: resolution.sketchId,
+      readOnlyDimension: resolution.readOnlyDimension === true,
     };
     updateConstraintButtons();
     updateToolbar();
@@ -5846,6 +5849,7 @@
     if (!pendingCommand || pendingCommand.type !== "distance-place") return;
     const referenceSketchId = pendingCommand.referenceSketchId;
     const sketchId = pendingCommand.sketchId;
+    const readOnlyDimension = pendingCommand.readOnlyDimension === true;
     const dimension = dimensionWithLabelAt(
       pendingCommand.target,
       applyDefaultCircleDimensionLabelOffset(pendingCommand.target, dimensionFromAnchor(pendingCommand.target, pointer)),
@@ -5860,11 +5864,11 @@
           : pendingCommand.target.kind === "angle"
             ? angleDegrees(angleDimensionAngles(pendingCommand.target, pointer, dimension).signed)
           : pendingCommand.target.value;
-    const readOnlyConstraint = readOnlyDimensionConstraintForPlacement(target, value, dimension, { referenceSketchId, sketchId });
+    const readOnlyConstraint = readOnlyDimensionConstraintForPlacement(target, value, dimension, { referenceSketchId, sketchId, readOnlyDimension });
     if (readOnlyConstraint) {
       pendingCommand = null;
       hideDimensionValueInput();
-      addReadOnlyDimensionConstraint(readOnlyConstraint, sketchId || activeSketchId(), referenceSketchId ? "重複参照寸法" : "重複寸法");
+      addReadOnlyDimensionConstraint(readOnlyConstraint, sketchId || activeSketchId(), readOnlyDimension ? "参照元の測定寸法" : referenceSketchId ? "重複参照寸法" : "重複寸法");
       return;
     }
     pendingCommand = {
@@ -7003,6 +7007,11 @@
     const { active, reference, descendant } = splitConstraintOperands(cleanOperands);
     if (descendant.length > 0) return { error: "子孫スケッチは参照できません" };
     if (reference.length > 0) {
+      if (type === "distance" && active.length === 0 && reference.length === cleanOperands.length) {
+        const target = distanceTargetFromOperands(cleanOperands);
+        if (!target || target.kind === "invalid") return target?.kind === "invalid" ? { error: target.reason } : null;
+        return { type, action: "place-dimension", target, operands: cleanOperands, sketchId: activeSketchId(), readOnlyDimension: true };
+      }
       if (type === "symmetry") return symmetryReferenceResolutionFromOperands(cleanOperands);
       if (cleanOperands.length < 2 || active.length === 0) return null;
       if (cleanOperands.length !== 2) return { error: "参照拘束はアクティブスケッチ側と先祖スケッチ側を1つずつ選択してください" };
@@ -7089,6 +7098,7 @@
       operands: resolution.operands || constraintOperands.slice(),
       referenceSketchId: resolution.referenceSketchId,
       sketchId: resolution.sketchId,
+      readOnlyDimension: resolution.readOnlyDimension === true,
     };
     updateConstraintButtons();
     updateToolbar();
@@ -7157,6 +7167,7 @@
   function readOnlyDimensionConstraintForPlacement(target, value, dimension, options = {}) {
     const constraint = distanceConstraintFromTarget(target, value, dimension, { silent: true });
     if (!constraint) return null;
+    if (options.readOnlyDimension) return assignConstraintSketchId(constraint, options.sketchId || activeSketchId());
     const targetItems = target.kind === "point-point"
       ? [target.p1, target.p2]
       : target.kind === "point-line"

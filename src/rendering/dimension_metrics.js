@@ -34,7 +34,7 @@
       if (cached?.text === text && cached.screenHeight === screenHeight && cached.expressionMark === expressionMark) return cached.screenWidth / viewport.scale;
       ctx.save();
       ctx.font = `${screenHeight / viewport.scale}px system-ui`;
-      const textScreenWidth = ctx.measureText(text).width * viewport.scale;
+      const textScreenWidth = Math.max(...text.split(/\r\n|\r|\n/).map(line => ctx.measureText(line).width)) * viewport.scale;
       ctx.restore();
       const markScreenWidth = expressionMark
         ? screenHeight * (DIMENSION_EXPRESSION_MARK_WIDTH_FACTOR + DIMENSION_EXPRESSION_MARK_GAP_FACTOR)

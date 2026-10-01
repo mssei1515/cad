@@ -215,6 +215,8 @@
         option("right", applicationText("右揃え", "Right"), style.textAlign === "right"),
       ].join("");
       const common = `
+        <div class="property-row"><label for="annotationPrefix">${applicationText("接頭辞", "Prefix")}</label><textarea id="annotationPrefix" data-annotation-style="prefix" data-user-content>${escapeHtml(style.prefix)}</textarea></div>
+        <div class="property-row"><label for="annotationSuffix">${applicationText("接尾辞", "Suffix")}</label><textarea id="annotationSuffix" data-annotation-style="suffix" data-user-content>${escapeHtml(style.suffix)}</textarea></div>
         ${annotationDisplayPropertyRows(style)}
         <div class="property-row"><label for="annotationVisible">${applicationText("表示", "Visible")}</label><input id="annotationVisible" data-property="annotation-visible" type="checkbox" ${item.visible !== false ? "checked" : ""}></div>
         <div class="property-row"><label for="annotationColor">${applicationText("色", "Color")}</label><div class="property-color-control"><input id="annotationColor" data-annotation-style="color" type="text" value="${escapeHtml(style.color)}"><button class="property-color-picker" data-appearance-palette-open data-current-color="${color}" type="button" title="${applicationText("カラーパレット", "Color palette")}" aria-label="${applicationText("カラーパレット", "Color palette")}"><span class="property-color-picker-swatch" style="--swatch-color:${color}" aria-hidden="true"></span></button></div></div>
