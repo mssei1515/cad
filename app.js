@@ -259,6 +259,12 @@
     trimConstraintSelection, pushPrimitiveSelection, geometryItemSelectedInCanvas,
     constraintSelectedInCanvas, hasSelection,
   } = canvasSelection;
+  const { isPointUsedByLine, isAnyLineEndpoint, isPointUsedByCircle, isPointUsedByArc, isPointUsedBySpline, isSplineOnlyFitPoint, isEditableSplineFitPoint, isPointUsedByPrimitive, isEndpointPoint, isExplicitPoint, isReferencePoint, isPrimitiveCenterPoint, isStandalonePoint, isSelectableEndpointPoint } = window.PointUsage.create({
+    currentScope: workspace.current, constraintReferencesPoint,
+    allGeometryLines: () => allGeometryLines(), allGeometryCircles: () => allGeometryCircles(),
+    allGeometryArcs: () => allGeometryArcs(), allGeometrySplines: () => allGeometrySplines(),
+    editedFitPoints: () => splineEditSession?.spline?.fitPoints,
+  });
   const canvasHover = window.CanvasHover.create({ isEndpointPoint });
   const { clear: clearCanvasHover, capture: captureCanvasHoverState, restore: restoreCanvasHoverState } = canvasHover;
   let lastAuthoringPerformance = null;
@@ -3078,71 +3084,24 @@
 
 
 
-  function isPointUsedByLine(point, lines = model.lines) {
-    return lines.some((line) => line.p1 === point || line.p2 === point);
-  }
-
-  function isAnyLineEndpoint(point) {
-    return isPointUsedByLine(point, allGeometryLines());
-  }
-
-  function isPointUsedByCircle(point, circles = model.circles) {
-    return circles.some((circle) => circle.center === point);
-  }
-
-  function isPointUsedByArc(point, arcs = model.arcs) {
-    return arcs.some((arc) => arc.center === point);
-  }
-
-  function isPointUsedBySpline(point, splines = model.splines) {
-    return splines.some((spline) => spline.fitPoints.includes(point));
-  }
-
-  function isSplineOnlyFitPoint(point) {
-    const projected = Boolean(point?.blockProjection);
-    const splines = projected ? allGeometrySplines() : model.splines;
-    const lines = projected ? allGeometryLines() : model.lines;
-    const circles = projected ? allGeometryCircles() : model.circles;
-    const arcs = projected ? allGeometryArcs() : model.arcs;
-    return isPointUsedBySpline(point, splines) && !isPointUsedByLine(point, lines) && !isPointUsedByCircle(point, circles) && !isPointUsedByArc(point, arcs) && !isExplicitPoint(point);
-  }
-
-  function isEditableSplineFitPoint(point) {
-    return Boolean(splineEditSession?.spline?.fitPoints.includes(point));
-  }
-
-  function isPointUsedByPrimitive(point) {
-    return isPointUsedByLine(point) || isPointUsedByCircle(point) || isPointUsedByArc(point) || isPointUsedBySpline(point);
-  }
-
-  function isEndpointPoint(point) {
-    return point?.kind === "endpoint" || isPointUsedByPrimitive(point);
-  }
-
-  function isExplicitPoint(point) {
-    return point?.kind !== "endpoint";
-  }
-
-  function isReferencePoint(point) {
-    return Boolean(point?.kind === "endpoint" && !isPointUsedByPrimitive(point) && model.constraints.some((c) => c.enabled !== false && constraintReferencesPoint(c, point)));
-  }
-
-  function isPrimitiveCenterPoint(point) {
-    return model.circles.some((circle) => circle.center === point) || model.arcs.some((arc) => arc.center === point);
-  }
-
-  function isStandalonePoint(point) {
-    return isExplicitPoint(point) && !isPointUsedByPrimitive(point);
-  }
 
 
 
 
 
 
-  function isSelectableEndpointPoint(p) {
-    return ((isEndpointPoint(p) && isPointUsedByPrimitive(p) && (!isSplineOnlyFitPoint(p) || isEditableSplineFitPoint(p))) || isReferencePoint(p));
-  }
+
+
+
+
+
+
+
+
+
+
+
+
 
   const { hitSketchIdentityElement, hitEndpointPoint, hitExplicitPoint, hitAnyPoint, hitPoint, hitLine, hitCircle, hitArc, hitArcEndpoint, hitSpline } = window.GeometryHitQuery.create({
     currentScope: workspace.current, viewportScale: () => viewport.scale,

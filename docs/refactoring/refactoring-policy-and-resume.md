@@ -100,8 +100,8 @@
 
 週枠50%の停止条件はユーザー指示で解除済み。main／developのリリース5116a81をcodex/composition-root-nextへ取り込み、Annotation Parameter表示などの最新変更を保持する。新たなmainへのマージは行わない。
 
-所属Sketch表示のhit照会をGeometryHitQueryへ、注記対象hitをAnnotationAnchorQueryへ統合。既存の所有者を拡張し、非アクティブSketch・可視性・種別優先順を維持した。検証はcomposition-root.md先頭を参照する。
+PointUsageへ点の使用関係と分類14関数を分離。現在scopeと投影Geometryを区別し、編集中Splineと拘束の点参照を明示callbackで接続する。hit・描画・編集で共通の判定を使い、モデルやsessionは更新しない。検証はcomposition-root.md先頭を参照する。
 
-次は点の使用関係・端点／参照点／Spline fit pointの分類照会を調べる。複数hitモジュールが受け取るpredicateの実体がappに残るため、現在scopeと投影Geometry、編集中Splineの依存を明示する。作図preview／snapとpointer routing、Sketchツリー行hoverも未分離。全体目標と全体E2Eは未完了。
+次はSketchツリーのhover入力・行強調とCanvasHover／SelectionHighlightの接続を調べる。既存のSketchTreeController／Viewを優先して利用し、行hoverと図形選択・アクティブSketchを混同しない。作図preview／snapとpointer routing等も未分離。全体目標と全体E2Eは未完了。
 
 再開時はAGENTS.mdと本書を読み、Git状態を確認する。サブエージェントを使わず、責務単位で検証・Commit・Pushを続ける。週枠50%の停止条件を再適用しない。

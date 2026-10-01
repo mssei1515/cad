@@ -6,6 +6,10 @@
 
 ## 現在の再開地点（2026-10-02）
 
+PointUsageへ点の使用関係と分類14関数を集約。現在scope・展開Geometry・編集fit point・拘束参照を明示読取りで接続し、Object同一性と分類条件を維持。14関数はscope／session取得以外の本体一致を確認。app.jsは13,606行から13,565行へ縮小。構文321件・単体703件が成功。関連E2E192件が成功（点選択・拘束・Spline／投影を含む5ファイル）。ログは一時フォルダのcad-point-usage-{check,unit,e2e}.log。全体目標と全体E2Eは未完了。
+
+### 直前の区切り
+
 所属Sketch表示のhitをGeometryHitQueryへ、注記対象hitをAnnotationAnchorQueryへ統合。新moduleを増やさず、既存の照会所有者へ集約した。2関数はscope／倍率取得以外の本体一致を確認。app.jsは13,698行から13,606行へ縮小。構文319件・単体698件が成功。関連E2E192件が成功（所属Sketch・Annotation・Block投影を含む5ファイル）。ログは一時フォルダのcad-identity-hit-{check,unit,e2e}.log。全体目標と全体E2Eは未完了。
 
 ### 直前の区切り
