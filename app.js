@@ -269,16 +269,19 @@
   let hoveredGeometryInstance = null;
   let hoveredArcEndpoint = null;
   let hoveredDimensionConstraint = null;
-  let canvasContextTarget = null;
-  let canvasContextPointer = null;
-  let canvasContextCandidates = [];
-  let canvasContextBaseHoverState = null;
   let hoveredAnnotation = null;
   let hoveredHatch = null;
   let hoveredReferenceImage = null;
   let lastAuthoringPerformance = null;
   const interactionProfiler = window.InteractionProfiler.create();
   const { work: profileInteractionWork, phase: profileInteractionPhase } = interactionProfiler;
+  const canvasContextController = window.CanvasContextMenu.create({
+    document, window, canvas, menu: canvasContextMenu, escapeHtml, applicationText,
+    presentCandidate: canvasContextCandidatePresentation,
+    hover: { capture: captureCanvasHoverState, restore: restoreCanvasHoverState, preview: previewCanvasContextCandidate, clear: clearCanvasHover, draw },
+    onOpen: openCanvasContextMenu, onSelect: selectCanvasContextCandidate, onAction: executeCanvasContextAction,
+  });
+  const closeCanvasContextMenu = canvasContextController.close;
   const geometryReads = window.GeometryReadModel.create({
     currentScope: workspace.current, prepareBlocks: ensureBlockState, blockProjections, instanceProjections,
     hasBlockHatches: blockCatalog.hasHatches,
@@ -7891,13 +7894,8 @@
     hoveredHatch = state.hatch;
   }
 
-  function previewCanvasContextCandidate(target = null) {
-    if (!canvasContextBaseHoverState) return;
-    if (!target) {
-      restoreCanvasHoverState(canvasContextBaseHoverState);
-      draw();
-      return;
-    }
+
+  function previewCanvasContextCandidate(target) {
     clearCanvasHover();
     if (target.kind === "point") {
       hoveredPoint = target.item;
@@ -8156,41 +8154,22 @@
     ]);
   }
 
-  function closeCanvasContextMenu({ restoreHover = true } = {}) {
-    if (!canvasContextMenu || canvasContextMenu.hidden) return false;
-    canvasContextMenu.hidden = true;
-    canvasContextMenu.innerHTML = "";
-    canvasContextMenu.classList.remove("candidate-menu");
-    if (canvasContextBaseHoverState) {
-      if (restoreHover) restoreCanvasHoverState(canvasContextBaseHoverState);
-      else clearCanvasHover();
-      draw();
+
+
+
+
+  function selectCanvasContextCandidate(target, pointer) {
+    const commandType = pendingConstraintCommand?.type;
+    if (commandType) {
+      handleConstraintOperandClick(pointer || { x: 0, y: 0 }, commandType, constraintHitsFromCanvasContextTarget(target));
+      return;
     }
-    canvasContextTarget = null;
-    canvasContextPointer = null;
-    canvasContextCandidates = [];
-    canvasContextBaseHoverState = null;
-    return true;
+    selectCanvasContextTarget(target, { preserveSelectedSet: false });
+    updateUI({ refreshAnalysis: false });
+    draw();
   }
 
-  function renderCanvasContextMenu(items) {
-    if (!canvasContextMenu) return;
-    canvasContextMenu.classList.remove("candidate-menu");
-    canvasContextMenu.innerHTML = items.map((item) => item.separator
-      ? '<div class="canvas-context-menu-separator" role="separator"></div>'
-      : `<button type="button" role="menuitem" data-context-action="${item.action}" class="${item.danger ? "danger" : ""}" ${item.disabled ? "disabled" : ""}><span>${escapeHtml(item.label)}</span>${item.shortcut ? `<kbd>${escapeHtml(item.shortcut)}</kbd>` : ""}</button>`).join("");
-  }
 
-  function renderCanvasContextCandidates(candidates) {
-    if (!canvasContextMenu) return;
-    canvasContextMenu.classList.add("candidate-menu");
-    const heading = applicationText("選択候補", "Selection Candidates");
-    canvasContextMenu.innerHTML = `<div class="canvas-context-candidate-heading" role="presentation">${escapeHtml(heading)}<span>${candidates.length}</span></div>${candidates.map((target, index) => {
-      const presentation = canvasContextCandidatePresentation(target);
-      const title = `${presentation.type} ${presentation.id}${presentation.secondary ? ` — ${presentation.secondary}` : ""}`;
-      return `<button type="button" role="menuitem" class="canvas-context-candidate" data-context-candidate-index="${index}" title="${escapeHtml(title)}">${presentation.icon}<span class="canvas-context-candidate-content"><span class="canvas-context-candidate-primary"><span>${escapeHtml(presentation.type)}</span><strong>${escapeHtml(presentation.id)}</strong></span><span class="canvas-context-candidate-secondary">${escapeHtml(presentation.secondary)}</span></span></button>`;
-    }).join("")}`;
-  }
 
   function openCanvasContextMenu(event) {
     if (!canvasContextMenu || !isGeometryMode()) return;
@@ -8209,50 +8188,7 @@
       updateUI({ refreshAnalysis: false });
       draw();
     }
-    canvasContextTarget = target;
-    canvasContextPointer = pointer;
-    canvasContextCandidates = showCandidates ? candidates : [];
-    canvasContextBaseHoverState = showCandidates ? captureCanvasHoverState() : null;
-    if (showCandidates) renderCanvasContextCandidates(candidates);
-    else renderCanvasContextMenu(canvasContextMenuItems(target, commandActive));
-    canvasContextMenu.setAttribute("aria-label", applicationText("キャンバスコンテキストメニュー", "Canvas context menu"));
-    canvasContextMenu.hidden = false;
-    canvasContextMenu.style.left = "0px";
-    canvasContextMenu.style.top = "0px";
-    const area = canvas.closest(".canvas-area")?.getBoundingClientRect();
-    const bounds = canvasContextMenu.getBoundingClientRect();
-    if (area) {
-      const left = Math.max(4, Math.min(event.clientX - area.left, area.width - bounds.width - 4));
-      const top = Math.max(4, Math.min(event.clientY - area.top, area.height - bounds.height - 4));
-      canvasContextMenu.style.left = `${left}px`;
-      canvasContextMenu.style.top = `${top}px`;
-    }
-    canvasContextMenu.querySelector("button:not(:disabled)")?.focus({ preventScroll: true });
-  }
-
-  function selectCanvasContextCandidate(index) {
-    const target = canvasContextCandidates[index];
-    if (!target) return;
-    const pointer = canvasContextPointer;
-    const commandType = pendingConstraintCommand?.type;
-    closeCanvasContextMenu({ restoreHover: false });
-    if (commandType) {
-      handleConstraintOperandClick(pointer || { x: 0, y: 0 }, commandType, constraintHitsFromCanvasContextTarget(target));
-      return;
-    }
-    selectCanvasContextTarget(target, { preserveSelectedSet: false });
-    updateUI({ refreshAnalysis: false });
-    draw();
-  }
-
-  function focusedCanvasContextCandidate() {
-    const button = document.activeElement?.closest?.("[data-context-candidate-index]");
-    if (!button || !canvasContextMenu?.contains(button)) return null;
-    return canvasContextCandidates[Number(button.dataset.contextCandidateIndex)] || null;
-  }
-
-  function restoreFocusedCanvasContextCandidatePreview() {
-    previewCanvasContextCandidate(focusedCanvasContextCandidate());
+    canvasContextController.open({ event, pointer, target, candidates, showCandidates, items: showCandidates ? [] : canvasContextMenuItems(target, commandActive) });
   }
 
   function showSelectedObjectProperties() {
@@ -8263,10 +8199,7 @@
     setHint(applicationText("選択したオブジェクトのプロパティを表示します。", "Select an object to display its properties."));
   }
 
-  function executeCanvasContextAction(action) {
-    const target = canvasContextTarget;
-    const pointer = canvasContextPointer;
-    closeCanvasContextMenu();
+  function executeCanvasContextAction(action, target, pointer) {
     if (action === "sketch-projection-commit") commitSketchProjectionCommand();
     else if (action === "cancel-command") cancelCanvasCommandFromContextMenu();
     else if (action === "undo") undoHistory();
@@ -8296,68 +8229,7 @@
     }
   }
 
-  canvasContextMenu?.addEventListener("click", (event) => {
-    const candidateButton = event.target.closest("[data-context-candidate-index]");
-    if (candidateButton) {
-      selectCanvasContextCandidate(Number(candidateButton.dataset.contextCandidateIndex));
-      return;
-    }
-    const button = event.target.closest("[data-context-action]");
-    if (!button || button.disabled) return;
-    executeCanvasContextAction(button.dataset.contextAction);
-  });
-  canvasContextMenu?.addEventListener("pointerover", (event) => {
-    const button = event.target.closest("[data-context-candidate-index]");
-    if (!button || button.contains(event.relatedTarget)) return;
-    button.focus({ preventScroll: true });
-    previewCanvasContextCandidate(canvasContextCandidates[Number(button.dataset.contextCandidateIndex)] || null);
-  });
-  canvasContextMenu?.addEventListener("pointerout", (event) => {
-    const button = event.target.closest("[data-context-candidate-index]");
-    if (!button || button.contains(event.relatedTarget)) return;
-    restoreFocusedCanvasContextCandidatePreview();
-  });
-  canvasContextMenu?.addEventListener("focusin", (event) => {
-    const button = event.target.closest("[data-context-candidate-index]");
-    if (button) previewCanvasContextCandidate(canvasContextCandidates[Number(button.dataset.contextCandidateIndex)] || null);
-  });
-  canvasContextMenu?.addEventListener("focusout", (event) => {
-    if (event.relatedTarget && canvasContextMenu.contains(event.relatedTarget)) return;
-    previewCanvasContextCandidate();
-  });
-  canvasContextMenu?.addEventListener("keydown", (event) => {
-    if (event.key === "Escape") {
-      event.preventDefault();
-      event.stopPropagation();
-      closeCanvasContextMenu();
-      return;
-    }
-    if (event.key === "Enter" || event.key === " " || event.key === "Spacebar") {
-      const candidateButton = document.activeElement?.closest?.("[data-context-candidate-index]");
-      if (candidateButton && canvasContextMenu.contains(candidateButton)) {
-        event.preventDefault();
-        event.stopPropagation();
-        selectCanvasContextCandidate(Number(candidateButton.dataset.contextCandidateIndex));
-      }
-      return;
-    }
-    if (!['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key)) return;
-    event.preventDefault();
-    const buttons = [...canvasContextMenu.querySelectorAll("button:not(:disabled)")];
-    if (buttons.length === 0) return;
-    const current = buttons.indexOf(document.activeElement);
-    let next = current;
-    if (event.key === "Home") next = 0;
-    else if (event.key === "End") next = buttons.length - 1;
-    else if (event.key === "ArrowDown") next = (current + 1 + buttons.length) % buttons.length;
-    else next = (current - 1 + buttons.length) % buttons.length;
-    buttons[next].focus({ preventScroll: true });
-  });
-  canvas.addEventListener("contextmenu", openCanvasContextMenu);
-  document.addEventListener("pointerdown", (event) => {
-    if (!event.target.closest("#canvasContextMenu")) closeCanvasContextMenu();
-  });
-  window.addEventListener("blur", closeCanvasContextMenu);
+  canvasContextController.start();
 
   canvas.addEventListener("pointerdown", (e) => {
     flushScheduledCanvasPointerMove();
@@ -11780,7 +11652,7 @@
         const hover = hoveredPoint || hoveredEndpointPoint || hoveredLine || hoveredCircle || hoveredArc || hoveredSpline || hoveredDimensionConstraint || hoveredBlockInstance || hoveredAnnotation || hoveredHatch;
         return {
           menuOpen: Boolean(canvasContextMenu && !canvasContextMenu.hidden),
-          candidates: canvasContextCandidates.map((target) => {
+          candidates: canvasContextController.candidates().map((target) => {
             const presentation = canvasContextCandidatePresentation(target);
             return { kind: target.kind, id: presentation.id, type: presentation.type, secondary: presentation.secondary };
           }),

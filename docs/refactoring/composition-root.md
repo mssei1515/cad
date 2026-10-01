@@ -6,6 +6,10 @@
 
 ## 現在の再開地点（2026-10-02）
 
+CanvasContextMenuへ対象・pointer・候補一覧・hover snapshotの所有と、HTML・位置・focus・イベント・開閉／復元を集約。appは候補を供給し選択／操作通知を既存コマンドへ接続する。start／disposeでイベント寿命を管理。app.jsは14,431行から14,303行へ縮小。構文308件・単体667件が成功。関連E2E192件が成功（右クリック操作・重なり候補・拘束対象選択を含む5ファイル）。ログは一時フォルダのcad-context-menu-{check,unit,e2e}.log。全体目標と全体E2Eは未完了。
+
+### 直前の区切り
+
 AnnotationSpatialQueryへ表示範囲・文字領域・通常選択／右クリックhit照会を分離。6関数の計算は倍率getter以外を維持。矩形拡張判定はGeometryBoundsへ統合し、描画とモデル編集は持たない。app.jsは14,545行から14,431行へ縮小。構文306件・単体662件が成功。関連E2E198件が成功（Annotation表示サイズを含む6ファイル）。ログは一時フォルダのcad-annotation-spatial-{check,unit,e2e}.log。全体目標と全体E2Eは未完了。
 
 ### 直前の区切り
