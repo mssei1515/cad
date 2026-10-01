@@ -194,6 +194,12 @@
         .join("");
     }
 
+    function annotationDisplayPropertyRows(owner) {
+      const settings = window.Appearance.annotationDisplaySettings(owner);
+      return `<div class="property-row"><label for="annotationModelRelativeSize">${applicationText("図形に対する注記の大きさを固定", "Keep annotation size relative to geometry")}</label><input id="annotationModelRelativeSize" data-annotation-display="modelRelativeSize" type="checkbox" ${settings.fixedDisplaySize ? "" : "checked"}></div>
+        ${settings.fixedDisplaySize ? "" : `<div class="property-row"><label for="annotationDisplayScale">${applicationText("基準倍率", "Reference zoom")}</label><div class="property-input-with-unit"><input id="annotationDisplayScale" data-annotation-display="displayScale" type="number" min="0.000001" step="any" value="${(settings.displayScale * 100).toFixed(1)}"><span class="property-input-unit">%</span></div></div>`}`;
+    }
+
     function annotationAppearancePropertyRows(item) {
       const style = normalizeAnnotationStyle(item.style);
       const color = colorPickerValue(style.color);
@@ -209,6 +215,7 @@
         option("right", applicationText("右揃え", "Right"), style.textAlign === "right"),
       ].join("");
       const common = `
+        ${annotationDisplayPropertyRows(style)}
         <div class="property-row"><label for="annotationVisible">${applicationText("表示", "Visible")}</label><input id="annotationVisible" data-property="annotation-visible" type="checkbox" ${item.visible !== false ? "checked" : ""}></div>
         <div class="property-row"><label for="annotationColor">${applicationText("色", "Color")}</label><div class="property-color-control"><input id="annotationColor" data-annotation-style="color" type="text" value="${escapeHtml(style.color)}"><button class="property-color-picker" data-appearance-palette-open data-current-color="${color}" type="button" title="${applicationText("カラーパレット", "Color palette")}" aria-label="${applicationText("カラーパレット", "Color palette")}"><span class="property-color-picker-swatch" style="--swatch-color:${color}" aria-hidden="true"></span></button></div></div>
         <div class="property-row"><label for="annotationTextHeight">${applicationText("文字高さ", "Text height")}</label><div class="property-input-with-unit"><input id="annotationTextHeight" data-annotation-style="textHeight" type="number" min="0.5" max="100" step="0.1" value="${formatDisplayNumber(style.textHeight, 3)}"><span class="property-input-unit" aria-hidden="true">mm</span></div></div>
@@ -238,7 +245,7 @@
         <div class="property-row"><label for="annotationTerminatorSize">${applicationText("端末サイズ", "Terminator size")}</label><div class="property-input-with-unit"><input id="annotationTerminatorSize" data-annotation-style="terminatorSize" type="number" min="0.1" max="100" step="0.1" value="${formatDisplayNumber(style.terminatorSize, 3)}"><span class="property-input-unit" aria-hidden="true">mm</span></div></div>`;
     }
 
-    return Object.freeze({ multiplePropertiesRows, geometryPropertyName, geometryAppearanceSectionName, propertyReadonlyRow, geometryPropertyRows, blockPropertiesConfiguration, blockRotationPropertyRow, dimensionGeometryPropertyRows, constraintDefiningGeometryPropertyRows, annotationAppearancePropertyRows });
+    return Object.freeze({ annotationDisplayPropertyRows, multiplePropertiesRows, geometryPropertyName, geometryAppearanceSectionName, propertyReadonlyRow, geometryPropertyRows, blockPropertiesConfiguration, blockRotationPropertyRow, dimensionGeometryPropertyRows, constraintDefiningGeometryPropertyRows, annotationAppearancePropertyRows });
   }
   window.PropertyRows = Object.freeze({ create });
 })();

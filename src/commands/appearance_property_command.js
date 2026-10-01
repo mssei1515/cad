@@ -2,7 +2,7 @@
 (() => {
   "use strict";
   function create({ editing, normalizeHatchAppearance, normalizeAnnotationStyle,
-    invalidateBlockProjectionCache, recordHistory, updateUI, updatePropertiesUI, draw }) {
+    invalidateBlockProjectionCache, recordHistory, updateUI, updatePropertiesUI, draw, viewport }) {
     function owner(target) {
       if (target.kind === "block" || target.kind === "geometryInstance") return (target.item.appearanceOverride ||= {});
       if (target.kind === "hatch") return (target.item.appearance ||= normalizeHatchAppearance());
@@ -14,7 +14,12 @@
     function apply(target, { category, key, value, context = null }, { commit = true } = {}) {
       let label;
       let refresh = "all";
-      if (category === "annotation" && target.kind === "annotation") {
+      if (category === "annotationDisplay") {
+        const displayOwner = target.kind === "annotation" ? (target.item.style ||= normalizeAnnotationStyle())
+          : target.kind === "constraint" && target.item.dimension ? (target.item.dimension.display ||= {}) : null;
+        if (!displayOwner || !window.Appearance.applyAnnotationDisplaySetting(displayOwner, key, value, viewport.scale)) return false;
+        label = "注記表示倍率変更";
+      } else if (category === "annotation" && target.kind === "annotation") {
         editing.applyAnnotationStyleValue(target.item, key, value);
         label = "注記外観変更";
       } else if (category === "hatch" && target.kind === "hatch") {
