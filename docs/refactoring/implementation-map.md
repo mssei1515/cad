@@ -4,6 +4,7 @@
 
 ## 1. 実装ファイルの責務
 
+- `src/constraints/operand_hit_query.js`: 参照SketchとBlock／派生Geometryの拘束対象hit。Sketch関係と探索優先順を扱う。
 - `src/editing/pointer_hover.js`: 通常選択／拘束入力のhit優先順位とCanvasHover更新。再描画の要否を返す。
 - `src/editing/geometry_hit_query.js`: 通常Geometry hit。点の分類優先・描画順・倍率依存の許容距離を扱う読取り専用照会。
 - `src/editing/canvas_hover.js`: Canvas hover参照、一括更新・clear・メニュー退避復元・候補preview。読取り状態は変更不能。

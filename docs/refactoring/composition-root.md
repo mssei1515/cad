@@ -6,6 +6,10 @@
 
 ## 現在の再開地点（2026-10-02）
 
+OperandHitQueryへ参照SketchとBlock／派生Geometryの拘束対象照会を分離。Geometry読取り・Sketch関係・点分類・operand生成を明示依存とし、逆順と円弧端点の扱いを維持。3関数は倍率getter以外の本体一致を確認。app.jsは13,785行から13,698行へ縮小。構文319件・単体694件が成功。関連E2E192件が成功（Block・派生Instance・参照拘束を含む5ファイル）。ログは一時フォルダのcad-operand-hit-{check,unit,e2e}.log。全体目標と全体E2Eは未完了。
+
+### 直前の区切り
+
 PointerHoverへ通常選択・拘束入力のhit優先判断とCanvasHover更新を分離。command種別を引数で受け、描画要否を返す。両経路は引数化・再描画通知以外の本体一致を確認。app.jsは13,883行から13,785行へ縮小。構文317件・単体690件が成功。関連E2E194件が成功（選択・拘束入力・投影・参照画像を含む6ファイル）。ログは一時フォルダのcad-pointer-hover-{check,unit,e2e}.log。全体目標と全体E2Eは未完了。
 
 ### 直前の区切り
