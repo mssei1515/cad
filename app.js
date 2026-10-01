@@ -3133,32 +3133,19 @@
     return isExplicitPoint(point) && !isPointUsedByPrimitive(point);
   }
 
-  function hitPointByPredicate(x, y, predicate) {
-    const radius = 10 / viewport.scale;
-    for (let i = model.points.length - 1; i >= 0; i--) {
-      const p = model.points[i];
-      if (!isEditableSketchElement(p)) continue;
-      if (!predicate(p)) continue;
-      if (hypot2(p.x - x, p.y - y) <= radius) return p;
-    }
-    return null;
+
+
+
+
+
+  function isSelectableEndpointPoint(p) {
+    return ((isEndpointPoint(p) && isPointUsedByPrimitive(p) && (!isSplineOnlyFitPoint(p) || isEditableSplineFitPoint(p))) || isReferencePoint(p));
   }
 
-  function hitEndpointPoint(x, y) {
-    return hitPointByPredicate(x, y, (p) => ((isEndpointPoint(p) && isPointUsedByPrimitive(p) && (!isSplineOnlyFitPoint(p) || isEditableSplineFitPoint(p))) || isReferencePoint(p)));
-  }
-
-  function hitExplicitPoint(x, y) {
-    return hitPointByPredicate(x, y, isExplicitPoint);
-  }
-
-  function hitAnyPoint(x, y) {
-    return hitEndpointPoint(x, y) || hitExplicitPoint(x, y);
-  }
-
-  function hitPoint(x, y) {
-    return hitAnyPoint(x, y);
-  }
+  const { hitEndpointPoint, hitExplicitPoint, hitAnyPoint, hitPoint, hitLine, hitCircle, hitArc, hitArcEndpoint, hitSpline } = window.GeometryHitQuery.create({
+    currentScope: workspace.current, viewportScale: () => viewport.scale,
+    isEditableSketchElement, isSelectableEndpointPoint, isExplicitPoint,
+  });
 
   function fitSketchToViewport(sketchId = activeSketchId(), paddingPx = 96) {
     return fitBoundsToViewport(sketchGeometryBounds(sketchId), paddingPx);
@@ -3205,53 +3192,9 @@
     return model.constraints.some((c) => c.enabled !== false && c instanceof LineFixedConstraint && (c.line.p1 === point || c.line.p2 === point));
   }
 
-  function hitLine(x, y) {
-    const threshold = 7 / viewport.scale;
-    const lines = model.lines.slice().sort((a, b) => (normalizedDrawingOrder(b.drawingOrder) ?? 0) - (normalizedDrawingOrder(a.drawingOrder) ?? 0));
-    for (const l of lines) {
-      if (!isEditableSketchElement(l)) continue;
-      if (distancePointToSegment(x, y, l) <= threshold) return l;
-    }
-    return null;
-  }
 
-  function hitCircle(x, y) {
-    const threshold = 7 / viewport.scale;
-    const circles = model.circles.slice().sort((a, b) => (normalizedDrawingOrder(b.drawingOrder) ?? 0) - (normalizedDrawingOrder(a.drawingOrder) ?? 0));
-    for (const c of circles) {
-      if (!isEditableSketchElement(c)) continue;
-      const d = hypot2(x - c.center.x, y - c.center.y);
-      if (Math.abs(d - c.radius()) <= threshold) return c;
-    }
-    return null;
-  }
 
-  function hitArc(x, y) {
-    const threshold = 7 / viewport.scale;
-    const arcs = model.arcs.slice().sort((a, b) => (normalizedDrawingOrder(b.drawingOrder) ?? 0) - (normalizedDrawingOrder(a.drawingOrder) ?? 0));
-    for (const a of arcs) {
-      if (!isEditableSketchElement(a)) continue;
-      const radius = a.radius();
-      const d = hypot2(x - a.center.x, y - a.center.y);
-      if (Math.abs(d - radius) > threshold) continue;
-      const angle = Math.atan2(y - a.center.y, x - a.center.x);
-      if (angleOnSignedSweep(angle, a.startAngle, a.endAngle)) return a;
-    }
-    return null;
-  }
 
-  function hitArcEndpoint(x, y) {
-    const threshold = 10 / viewport.scale;
-    for (let i = model.arcs.length - 1; i >= 0; i--) {
-      const arc = model.arcs[i];
-      if (!isEditableSketchElement(arc)) continue;
-      for (const endpoint of ["end", "start"]) {
-        const point = arcEndpointPoint(arc, endpoint);
-        if (hypot2(point.x - x, point.y - y) <= threshold) return { arc, endpoint, point };
-      }
-    }
-    return null;
-  }
 
   function samePosition(a, b, tolerance = 1e-9) {
     return Boolean(a && b && hypot2(a.x - b.x, a.y - b.y) <= tolerance);
@@ -6213,16 +6156,6 @@
     return null;
   }
 
-  function hitSpline(x, y) {
-    const threshold = 7 / viewport.scale;
-    const splines = model.splines.slice().sort((a, b) => (normalizedDrawingOrder(b.drawingOrder) ?? 0) - (normalizedDrawingOrder(a.drawingOrder) ?? 0));
-    for (const spline of splines) {
-      if (!isEditableSketchElement(spline)) continue;
-      const closest = window.SplineGeometry.closestPoint(spline.curve(), { x, y }, { samplesPerSpan: 28 });
-      if (closest && closest.distance <= threshold) return spline;
-    }
-    return null;
-  }
 
   function insertIdentifierIntoExpressionInput(input, identifier) {
     let value = String(input.value ?? "");
@@ -7581,7 +7514,7 @@
   });
 
   function canvasContextPointIsSelectable(point) {
-    return isExplicitPoint(point) || ((isEndpointPoint(point) && isPointUsedByPrimitive(point) && (!isSplineOnlyFitPoint(point) || isEditableSplineFitPoint(point))) || isReferencePoint(point));
+    return isExplicitPoint(point) || isSelectableEndpointPoint(point);
   }
 
   const canvasContextCandidatePresentation = window.CanvasContextPresentation.create({
