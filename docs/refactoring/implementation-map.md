@@ -4,6 +4,7 @@
 
 ## 1. 実装ファイルの責務
 
+- `src/rendering/annotation_spatial_query.js`: Annotation表示範囲・文字領域・通常選択／右クリックのhit照会。描画と編集を持たない。
 - `src/geometry/annotation_anchor_query.js`: 引出線対象・最近点・GeometryRef再解決。Selection／現在Sketch／参照解決を明示依存とする読取り専用照会。
 - `src/commands/annotation_command.js`: テキスト／引出線の作成・対象選択・文字入力・確定取消、配置計算とpreviewデータ。
 

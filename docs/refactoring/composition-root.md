@@ -6,6 +6,10 @@
 
 ## 現在の再開地点（2026-10-02）
 
+AnnotationSpatialQueryへ表示範囲・文字領域・通常選択／右クリックhit照会を分離。6関数の計算は倍率getter以外を維持。矩形拡張判定はGeometryBoundsへ統合し、描画とモデル編集は持たない。app.jsは14,545行から14,431行へ縮小。構文306件・単体662件が成功。関連E2E198件が成功（Annotation表示サイズを含む6ファイル）。ログは一時フォルダのcad-annotation-spatial-{check,unit,e2e}.log。全体目標と全体E2Eは未完了。
+
+### 直前の区切り
+
 週枠50%の停止条件はユーザー指示で解除済み。最新develop（5116a81）を作業branchへ取り込んだ。AnnotationAnchorQueryへ引出線対象・最近点・GeometryRef再解決を分離し、Selection／現在Sketch／参照解決を明示callbackで接続した。抽出5関数の本体一致を確認。app.jsは14,596行から14,545行へ縮小。構文304件・単体657件が成功。関連E2E198件が成功（Annotation表示サイズ・Parameter・保存再読込を含む6ファイル）。ログは一時フォルダのcad-annotation-anchor-{check,unit,e2e}.log。全体目標と全体E2Eは未完了。
 
 ## 過去の区切り

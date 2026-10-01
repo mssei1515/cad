@@ -100,8 +100,8 @@
 
 週枠50%の停止条件はユーザー指示で解除済み。main／developのリリース5116a81をcodex/composition-root-nextへ取り込み、Annotation Parameter表示などの最新変更を保持する。新たなmainへのマージは行わない。
 
-AnnotationAnchorQueryへ引出線対象・最近点・GeometryRef再解決を分離。Selection／現在Sketch／参照解決を明示依存とし、参照失敗時の保存startへのfallbackを維持した。抽出5関数は空白以外の本体一致を確認。検証結果はcomposition-root.mdの先頭を参照する。
+AnnotationSpatialQueryへ表示範囲・文字領域・通常選択／右クリックhit照会を分離。描画・選択更新・編集を持たず、倍率や一覧・anchorを明示callbackで照会する。6関数は倍率取得方法と空白以外の本体一致を確認。矩形拡張判定はGeometryBoundsへ統合。選択色はSelection／hoverとの接続なのでapp側に残す。検証結果はcomposition-root.md先頭を参照する。
 
-次はAnnotationの表示bounds・色・文字領域とhit照会を調べる。Parameter表示、viewport依存の文字サイズ、投影図形を含む判定順序を確認し、Rendererとの境界を整理する。未着手。全体の主要領域は5節を参照する。全体目標と全体E2Eは未完了。
+次はCanvas右クリックの候補収集・表示・選択とメニュー操作の境界を調べる。候補順序、距離、Sketch／投影の制限、重なり選択を維持し、UIとGeometry照会を区別する。未着手。全体の主要領域は5節を参照する。全体目標と全体E2Eは未完了。
 
 再開時はAGENTS.mdと本書を読み、Git状態を確認する。サブエージェントを使わず、責務単位で検証・Commit・Pushを続ける。週枠50%の停止条件を再適用しない。

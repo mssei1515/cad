@@ -62,5 +62,9 @@
     return bounds ? { x1: bounds.minX, y1: bounds.minY, x2: bounds.maxX, y2: bounds.maxY } : null;
   }
 
-  window.GeometryBounds = Object.freeze({ rectFromPoints, pointInRect, bboxInRect, bboxIntersectsRect, lineBBox, primitiveBBox, mergeBounds, splineBBox });
+  function pointInExpandedBox(x, y, box, padding) {
+    return x >= box.left - padding && x <= box.right + padding && y >= box.top - padding && y <= box.bottom + padding;
+  }
+
+  window.GeometryBounds = Object.freeze({ pointInExpandedBox, rectFromPoints, pointInRect, bboxInRect, bboxIntersectsRect, lineBBox, primitiveBBox, mergeBounds, splineBBox });
 })();
