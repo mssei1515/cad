@@ -61,6 +61,7 @@ const files = [
   "src/ui/choice_dialog.js",
   "tests/e2e/choice-dialog.spec.js",
   "tests/e2e/dimension-prefix.spec.js",
+  "tests/e2e/sketch-edit.spec.js",
   "tests/e2e/fixed-command.spec.js",
   "tests/e2e/block-geometry-fixed.spec.js",
   "app.js",

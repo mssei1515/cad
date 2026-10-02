@@ -4,7 +4,7 @@
   function create({ currentScope, activeSketchId, setActiveSketch, clearSelection, canvasSelection,
     sidebarGeometryItem, toggleBlockInstanceSelection, targetFromConstraint, updateUI, draw,
     sketchTreeView, updateSketchUI, toggleSketchVisibility, renameSketch, deleteSketch, deleteElements, unfixPoint,
-    resolveSelectionEntry, updateSelectionUI = updateUI, hover = {}, move = {} }) {
+    resolveSelectionEntry, updateSelectionUI = updateUI, hover = {}, move = {}, openContextMenu = () => {} }) {
     const { canvasHover, setSidebarHover, clearSidebarHover, sidebarHoverElementsForItem, sidebarHoverElementsForConstraint, elementSketchId, ROOT_SKETCH_ID } = hover;
     let hoveredSketchTreeId = null;
     function selectSketch(sketchId) {
@@ -13,6 +13,12 @@
       canvasSelection.set("sketchId", sketchId);
       updateSelectionUI();
       draw();
+    }
+
+    function editSketch(sketchId) {
+      if (move.active?.() || !currentScope().sketches.some(sketch => sketch.id === sketchId)) return;
+      setActiveSketch(sketchId);
+      selectSketch(sketchId);
     }
 
     function inspectObject(row, additive) {
@@ -112,6 +118,7 @@
         return;
       }
       if (action?.classList.contains("sketchVisibilityBtn")) return void toggleSketchVisibility(action.dataset.id);
+      if (action?.classList.contains("sketchEditBtn")) return void editSketch(action.dataset.id);
       if (action?.classList.contains("sketchRenameBtn")) return void renameSketch(action.dataset.id);
       if (action?.classList.contains("sketchDeleteBtn")) return void deleteSketch(action.dataset.id);
       if (action?.classList.contains("removePointBtn")) return void deleteElements({ points: [model.points.find((item) => item.id === action.dataset.id)].filter(Boolean) });
@@ -137,8 +144,16 @@
       if (action && !action.classList.contains("sketchActivateBtn")) return;
       const row = event.target.closest(".sketch-item");
       if (!row) return;
-      setActiveSketch(row.dataset.id);
+      editSketch(row.dataset.id);
+    }
+
+    function contextMenu(event) {
+      event.preventDefault();
+      if (move.active?.() || event.target.closest(".sketch-object-row, .sketch-group-row")) return;
+      const row = event.target.closest(".sketch-item");
+      if (!row) return;
       selectSketch(row.dataset.id);
+      openContextMenu(event, row.dataset.id);
     }
 
     function keyDown(event) {
@@ -211,7 +226,7 @@
       canvasHover.update({ block: null, annotation: null, hatch: null, referenceImage: null });
       draw();
     }
-    return Object.freeze({ pointerOver: handleSketchTreePointerOver, pointerOut: handleSketchTreePointerOut, isHighlightedElement: isSidebarHighlightedElement, clearHoverSketch, leave, click: handleSketchTreeClick, doubleClick: activateRow, keyDown, activateObject: activateSketchTreeObject });
+    return Object.freeze({ pointerOver: handleSketchTreePointerOver, pointerOut: handleSketchTreePointerOut, isHighlightedElement: isSidebarHighlightedElement, clearHoverSketch, leave, click: handleSketchTreeClick, doubleClick: activateRow, keyDown, contextMenu, editSketch, activateObject: activateSketchTreeObject });
   }
   window.SketchTreeController = Object.freeze({ create });
 })();

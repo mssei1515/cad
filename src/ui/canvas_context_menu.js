@@ -1,7 +1,7 @@
 /* Canvas menu session, candidate preview and DOM lifecycle; editing is supplied as actions. */
 (() => {
   "use strict";
-  function create({ document, window, canvas, menu: canvasContextMenu, escapeHtml, applicationText, presentCandidate, hover, onOpen, onSelect, onAction }) {
+  function create({ document, window, canvas, menu: canvasContextMenu, escapeHtml, applicationText, presentCandidate, hover, onOpen, onSelect, onAction, ariaLabel = () => applicationText("キャンバスコンテキストメニュー", "Canvas context menu") }) {
     let canvasContextTarget = null;
     let canvasContextPointer = null;
     let canvasContextCandidates = [];
@@ -59,7 +59,7 @@
       canvasContextBaseHoverState = showCandidates ? hover.capture() : null;
       if (showCandidates) renderCanvasContextCandidates(candidates);
       else renderCanvasContextMenu(items);
-      canvasContextMenu.setAttribute("aria-label", applicationText("キャンバスコンテキストメニュー", "Canvas context menu"));
+      canvasContextMenu.setAttribute("aria-label", ariaLabel());
       canvasContextMenu.hidden = false;
       canvasContextMenu.style.left = "0px";
       canvasContextMenu.style.top = "0px";
@@ -160,7 +160,7 @@
       });
       listen(canvas, "contextmenu", onOpen);
       listen(document, "pointerdown", (event) => {
-        if (!event.target.closest("#canvasContextMenu")) closeCanvasContextMenu();
+        if (!canvasContextMenu.contains(event.target)) closeCanvasContextMenu();
       });
       listen(window, "blur", closeCanvasContextMenu);
 

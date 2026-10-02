@@ -28,6 +28,8 @@ UI には既存 Sketch の親を変更する操作はない。
 
 Sketch Treeの表示・分類・選択・開閉は[画面構成](../ui/画面構成.md#4-sketch-tree)に従う。
 
+Sketch行のシングルクリックは選択だけを行う。選択行の「編集」button、右クリックメニューの「編集」、ダブルクリック、Alt+Enterはいずれも既存のactive Sketch切替を実行する。右クリックは対象行を選択してmenuを開き、menuを閉じただけではactiveを変えない。編集中のSketchに対する「編集」は無効にする。Rootの作図禁止、scope境界、切替時の操作状態解除は既存規則を維持する。
+
 ## 3. Appearanceと表示状態
 
 Root以外のすべてのSketchは、通常Geometry用のAppearance、補助Geometry用のConstruction Appearance、寸法用のDimension Appearanceを持つ。編集UIは[画面構成](../ui/画面構成.md#2-menu-bar)、値の解決は[外観](../contracts/外観.md)に従う。

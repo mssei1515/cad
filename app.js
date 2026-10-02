@@ -236,11 +236,13 @@
     catalog: blockCatalog, projections: blockProjections, instanceProjections, annotationBounds, hatchPrimitivesForScope,
   });
   let sketchMoveCommand = null;
+  let sketchContextController = null;
   let model = workspace.current();
   const solver = new ConstraintSolver(model);
 
   // Temporary binding for legacy commands; new services receive explicit scopes.
   function activateEditingScope(scope) {
+    sketchContextController?.close();
     sketchMoveCommand?.reset();
     model = workspace.activate(scope);
     solver.model = model;
@@ -5482,9 +5484,20 @@
     resolveSelectionEntry: sketchTreeObjects.resolveSelectionEntry,
     move: { active: () => sketchMoveCommand.active, choose: sketchMoveCommand.choose, commit: sketchMoveCommand.commit, cancel: sketchMoveCommand.cancel },
     updateSelectionUI: updateGeometrySelectionUI,
+    openContextMenu: (event, id) => {
+      closeCanvasContextMenu();
+      sketchContextController.open({ event, target: { id }, items: [{ action: "sketch-edit", label: applicationText("編集", "Edit"), disabled: id === activeSketchId() }] });
+    },
     unfixPoint: point => { point.fixed = false; solveAndRefresh(`固定解除 ${point.id}`); },
   });
   const { refreshSelection: updateSketchTreeSelectionState, render: updateSketchUIUnprofiled, applyWidth: applySketchTreeWidth } = sketchTreeView;
+  sketchContextController = window.CanvasContextMenu.create({
+    document, window, canvas: document.getElementById("sketchList"), menu: document.getElementById("sketchContextMenu"),
+    escapeHtml, applicationText, ariaLabel: () => applicationText("スケッチメニュー", "Sketch menu"),
+    onOpen: event => sketchTreeController.contextMenu(event),
+    onAction: (_action, target) => sketchTreeController.editSketch(target.id),
+  });
+  sketchContextController.start();
 
   function isSidebarHighlightedElement(item) { return sketchTreeController.isHighlightedElement(item); }
 
@@ -7245,6 +7258,7 @@
   );
 
   window.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && sketchContextController.close()) { e.preventDefault(); return; }
     if (sketchMoveCommand.active) {
       if (e.key === "Escape") sketchMoveCommand.cancel();
       else if (e.target.closest?.("#sketchList") && !e.ctrlKey && !e.metaKey && ["Tab", "Enter", " ", "ArrowUp", "ArrowDown"].includes(e.key)) return;

@@ -53,6 +53,9 @@ test('resize clamps to available canvas width and only the active pointer change
 test('active markers do not imply selection and click routes include explicit activation', () => {
   const f = fixture(); f.view.render();
   assert.ok(f.list.innerHTML.includes('sketch-active-label'));
+  assert.ok(f.list.innerHTML.includes('Editing</span>'));
+  assert.ok(f.list.innerHTML.includes('sketchEditBtn'));
+  assert.ok(f.list.innerHTML.includes('Edit this sketch'));
   assert.ok(f.list.innerHTML.includes('aria-current="true" aria-pressed="false"'));
   assert.ok(f.list.innerHTML.includes('double-click or Alt+Enter'));
 });
