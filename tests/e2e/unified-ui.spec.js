@@ -1174,7 +1174,7 @@ test("workspace integrates transparent compact Object groups into Sketch Tree an
 
   expect(layout.modeControls).toBe(0);
   expect(layout.menus).toEqual(["ファイル", "編集", "表示", "ジオメトリ", "ブロック", "拘束", "注記", "ヘルプ"]);
-  expect(layout.toolIds).toEqual(expect.arrayContaining(["exportBtn", "importBtn", "undoBtn", "redoBtn", "deleteSelectionBtn", "toolSelect", "toolPoint", "toolLine", "toolCreateBlock", "annotationLeaderBtn", "annotationTextBtn"]));
+  expect(layout.toolIds).toEqual(expect.arrayContaining(["exportBtn", "importBtn", "undoBtn", "redoBtn", "saveAsBtn", "selectionVisibilityBtn", "toolSelect", "toolPoint", "toolLine", "toolCreateBlock", "annotationLeaderBtn", "annotationTextBtn"]));
   expect(layout.iconButtons.every((button) => button.text === "" && button.hasIcon && button.title && button.label)).toBe(true);
   expect(layout.canvasCursor).toMatch(/^url\(/);
   expect(layout.gridControls).toBe(0);
@@ -1187,7 +1187,7 @@ test("workspace integrates transparent compact Object groups into Sketch Tree an
   expect(layout.menuBackground).toBe("rgb(30, 58, 95)");
   expect(layout.menuBackground).toBe(layout.statusBackground);
   expect(layout.geometryMenuColumnCount).toBe(1);
-  expect(layout.fileMenuTools).toEqual(["exportBtn", "importBtn"]);
+  expect(layout.fileMenuTools).toEqual(["exportBtn", "importBtn", "saveAsBtn"]);
   expect(layout.blockMenuTools).toEqual(["toolCreateBlock"]);
   await expect(page.locator("#openBlockDefinitionsBtn")).toHaveCount(1);
   expect(layout.blockCreateButtonCount).toBe(1);
@@ -1431,6 +1431,7 @@ test("workspace integrates transparent compact Object groups into Sketch Tree an
   expect(pointRows[0]).toBe("種類点");
   expect(pointRows[1]).toMatch(/^ID.+/);
   expect(pointRows).toEqual(expect.arrayContaining([expect.stringMatching(/^X座標/), expect.stringMatching(/^Y座標/)]));
+  await page.locator(".app-menu > summary").filter({ hasText: /^編集$/ }).click();
   await page.click("#deleteSelectionBtn");
   await expect(page.locator('.sketch-group-row[data-category="point"]')).toHaveCount(0);
 });
@@ -1498,7 +1499,7 @@ test("Jot2D files open, overwrite, save as, and cancel without errors", async ({
   await expect(page.locator('[data-menu-tool="exportBtn"]')).toContainText("上書き保存");
   await expect(page.locator("#exportBtn")).toHaveAttribute("title", "上書き保存");
   await expect(page.locator("#exportBtn")).toHaveAttribute("aria-label", "上書き保存");
-  await expect(page.locator("#saveAsBtn")).toContainText("名前を付けて保存");
+  await expect(page.locator("#saveAsBtn")).toHaveAttribute("aria-label", "名前を付けて保存");
   await page.click("#exportBtn");
   await expect.poll(() => page.evaluate(() => window.__jot2dFsMock.records[0]?.writeCount)).toBe(1);
   let state = await page.evaluate(() => ({

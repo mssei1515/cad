@@ -57,7 +57,7 @@
   --context-hover-bg: #dbeafe;
   --context-separator: #e2e8f0;
   --menu-h: 38px;
-  --toolbar-h: 58px;
+  --toolbar-h: auto;
   --status-h: 28px;
   --properties-w: 300px;
   --panel-collapsed-w: 36px;
@@ -160,11 +160,12 @@ button:disabled { opacity: .45; cursor: default; }
 .runtime-version code { color: var(--text); font-size: 11px; font-variant-numeric: tabular-nums; }
 .menu-command-list { grid-template-columns: minmax(0, 1fr); }
 
-.command-toolbar { min-width: 0; display: flex; gap: 5px; align-items: stretch; overflow-x: auto; padding: 5px 8px; background: var(--panel); border-bottom: 1px solid var(--border-strong); }
-.tool-group { flex: 0 0 auto; display: flex; align-items: center; gap: 3px; padding: 3px 7px; border-right: 1px solid var(--border); }
+.command-toolbar { min-width: 0; min-height: 66px; display: grid; grid-template-rows: repeat(2, 26px); gap: 3px; align-content: start; overflow-x: auto; padding: 4px 6px; background: var(--panel); border-bottom: 1px solid var(--border-strong); }
+.toolbar-row { display: flex; gap: 4px; width: max-content; min-width: 100%; }
+.tool-group { flex: 0 0 auto; display: flex; align-items: center; gap: 2px; padding: 0 5px 0 0; border-right: 1px solid var(--border); }
 .tool-group:last-child { border-right: 0; }
-.tool-group button, .tool-button { display: grid; place-items: center; width: 34px; min-width: 34px; height: 30px; padding: 4px 6px; font-size: 12px; }
-.tool-group button svg, .tool-button svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; pointer-events: none; }
+.tool-group button, .tool-button { display: grid; place-items: center; width: 28px; min-width: 28px; height: 26px; padding: 2px 3px; font-size: 12px; }
+.tool-group button svg, .tool-button svg { width: 19px; height: 19px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; pointer-events: none; }
 .constraint-status-icon .constraint-status-swatch { stroke-width: 2.6; }
 .constraint-status-icon .status-full { stroke: #111827; }
 .constraint-status-icon .status-support { stroke: #0f766e; }

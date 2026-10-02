@@ -4516,6 +4516,31 @@
     geometryRenderer.drawPoints(drawOrderBySketch(allGeometryPoints()));
   }
 
+  function selectedVisibilityTargets() {
+    if (canvasSelection.inspection || canvasSelection.sketchId) return [];
+    return [
+      ...selectedGeometryItems().filter(item => !item.blockProjection).map(item => ({ kind: "geometry", item })),
+      ...canvasSelection.blockInstances.map(item => ({ kind: "block", item })),
+      ...canvasSelection.geometryInstances.map(item => ({ kind: "geometryInstance", item })),
+      ...canvasSelection.annotations.map(item => ({ kind: "annotation", item })),
+      ...canvasSelection.hatches.map(item => ({ kind: "hatch", item })),
+      ...canvasSelection.referenceImages.map(item => ({ kind: "referenceImage", item })),
+    ];
+  }
+
+  function selectionVisibilityIsHidden(targets) {
+    return targets.length > 0 && targets.every(target => {
+      if (target.kind !== "geometryInstance") return multiplePropertyAppearance(target).visible === false;
+      if (typeof target.item.appearanceOverride?.visible === "boolean") return !target.item.appearanceOverride.visible;
+      const bundle = geometryInstanceBundle(target.item);
+      const geometry = [...bundle.points, ...bundle.lines, ...bundle.circles, ...bundle.arcs, ...bundle.splines];
+      if (geometry.length) return geometry.every(item => effectiveAppearanceForElement(item).visible === false);
+      return resolveGeometryAppearance({ defaults: documentModel.defaultAppearance,
+        sketchAppearance: sketchById(target.item.sketchId)?.appearance,
+        overrides: [target.item.appearanceOverride] }).visible === false;
+    });
+  }
+
   function updateToolbar() {
     const geometryMode = isGeometryMode();
     const constructionState = constructionToggleState(geometryMode);
@@ -4556,6 +4581,14 @@
       if (button) button.disabled = !geometryMode;
     }
     updateHistoryButtons();
+    const visibilityButton = document.getElementById("selectionVisibilityBtn");
+    const visibilityTargets = selectedVisibilityTargets();
+    if (visibilityButton) {
+      const hidden = selectionVisibilityIsHidden(visibilityTargets);
+      visibilityButton.disabled = !geometryMode || visibilityTargets.length === 0;
+      visibilityButton.classList.toggle("active", hidden);
+      visibilityButton.setAttribute("aria-pressed", String(hidden));
+    }
     commandCursor.update({ pendingType: pendingCommand?.type, constraintType: pendingConstraintCommand?.type,
       splineEditing: Boolean(splineEditSession), mode });
   }
@@ -7454,6 +7487,20 @@
 
   document.getElementById("undoBtn")?.addEventListener("click", undoHistory);
   document.getElementById("redoBtn")?.addEventListener("click", redoHistory);
+  document.getElementById("selectionVisibilityBtn")?.addEventListener("click", () => {
+    if (!isGeometryMode()) return;
+    const targets = selectedVisibilityTargets();
+    if (targets.length === 0) return;
+    const visible = selectionVisibilityIsHidden(targets);
+    const ordinaryTargets = targets.filter(target => target.kind !== "geometryInstance");
+    if (ordinaryTargets.length) applyMultipleProperty({ kind: "multiple", items: ordinaryTargets }, "visible", visible, { commit: false });
+    for (const target of targets.filter(target => target.kind === "geometryInstance")) {
+      appearancePropertyCommand.apply(target, { category: "appearance", key: "visible", value: String(visible) }, { commit: false });
+    }
+    recordHistory("選択図形の表示切替");
+    updateUI();
+    draw();
+  });
   document.getElementById("deleteSelectionBtn")?.addEventListener("click", () => {
     if (!isGeometryMode()) return;
     if (deleteCurrentSelection()) {

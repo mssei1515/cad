@@ -968,7 +968,7 @@ test("selection, deletion, undo and redo stay responsive on the complete fixture
   expect(selectable).not.toBeNull();
 
   await measureInteraction(page, results, "selection/line-pointerdown-up", () => page.mouse.click(selectable.x, selectable.y), 150);
-  await measureInteraction(page, results, "selection/delete", () => page.locator("#deleteSelectionBtn").click(), 500);
+  await measureInteraction(page, results, "selection/delete", () => page.keyboard.press("Delete"), 500);
   await measureInteraction(page, results, "history/undo", () => page.locator("#undoBtn").click(), 500);
   await measureInteraction(page, results, "history/redo", () => page.locator("#redoBtn").click(), 500);
 

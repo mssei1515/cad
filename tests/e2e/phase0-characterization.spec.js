@@ -278,6 +278,7 @@ test("direct geometry deletion removes constraints and undo restores the documen
   const historyBefore = await page.evaluate(() => window.__jot2dTest.historyState());
 
   await page.evaluate(() => window.__jot2dTest.selectGeometryIdsForTest({ lines: ["L1"] }));
+  await page.locator(".app-menu > summary").filter({ hasText: /^編集$/ }).click();
   await page.click("#deleteSelectionBtn");
   const deleted = await page.evaluate(() => window.__jot2dTest.serializedModelForTest());
   const history = await page.evaluate(() => window.__jot2dTest.historyState());
@@ -330,6 +331,7 @@ test("block instance and definition deletion clean projection references", async
   const beforeInstanceDelete = await importFixture(page);
   await page.evaluate(() => window.__jot2dTest.selectGeometryIdsForTest({ blockInstances: ["BI1"] }));
   page.once("dialog", (dialog) => dialog.accept());
+  await page.locator(".app-menu > summary").filter({ hasText: /^編集$/ }).click();
   await page.click("#deleteSelectionBtn");
   const withoutInstance = await page.evaluate(() => window.__jot2dTest.serializedModelForTest());
 
@@ -344,6 +346,7 @@ test("block instance and definition deletion clean projection references", async
   const linePoint = await page.evaluate(() => window.__jot2dTest.geometryClientPositionForTest("line", "LB2"));
   expect(linePoint).not.toBeNull();
   await page.mouse.click(linePoint.x, linePoint.y);
+  await page.locator(".app-menu > summary").filter({ hasText: /^編集$/ }).click();
   await page.click("#deleteSelectionBtn");
   await completeBlockEdit(page);
   const afterDefinitionEdit = await page.evaluate(() => window.__jot2dTest.serializedModelForTest());

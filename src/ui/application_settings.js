@@ -4,6 +4,11 @@
   const APPLICATION_LANGUAGE_STORAGE_KEY = "jot2d.application.language";
   const APPLICATION_THEME_STORAGE_KEY = "jot2d.application.theme";
   const UI_TRANSLATIONS = [
+    ["選択した図形の表示／非表示", "Show/hide selected objects"],
+    ["アプリ操作", "Application"], ["履歴関連操作", "History"], ["作図", "Drawing"], ["修正", "Modify"],
+    ["実線／補助線 切り替え", "Normal/construction toggle"], ["図形の表示／非表示 切り替え", "Object visibility toggle"],
+    ["拘束状態表示との切り替え", "Constraint status view toggle"], ["拘束・寸法", "Constraints / Dimensions"],
+    ["参照・再利用", "References / Reuse"], ["注記・表現", "Annotations / Appearance"],
     ["同期インスタンス", "Synchronized Instance"],
     ["ファイル", "File"], ["編集", "Edit"], ["ヘルプ", "Help"],
     ["上書き保存", "Overwrite Save"], ["名前を付けて保存", "Save As"], ["開く", "Open"], ["Parameter…", "Parameters…"], ["ドキュメント設定", "Document Settings"], ["アプリケーション設定", "Application Settings"],
