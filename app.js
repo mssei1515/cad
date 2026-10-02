@@ -465,6 +465,7 @@
     }),
   });
   const { schedule: scheduleCanvasPointerMove, flush: flushScheduledCanvasPointerMove } = pointerMoveScheduler;
+  let toolFlyouts = null;
   const viewState = { constraintStatus: false, geometryIds: false, showHiddenElements: false };
   let constraintStatusMouseLatched = false;
   let constraintStatusSpaceHeld = false;
@@ -4592,6 +4593,7 @@
       visibilityButton.classList.toggle("active", hidden);
       visibilityButton.setAttribute("aria-pressed", String(hidden));
     }
+    toolFlyouts?.sync();
     commandCursor.update({ pendingType: pendingCommand?.type, constraintType: pendingConstraintCommand?.type,
       splineEditing: Boolean(splineEditSession), mode });
   }
@@ -7591,6 +7593,8 @@
   const applicationMenus = window.ApplicationMenus.create({ document, window, activateTool: id => document.getElementById(id)?.click() });
   const { close: closeAppMenus } = applicationMenus;
   applicationMenus.start();
+  toolFlyouts = window.ToolFlyouts.create({ document, window, onOpen: closeAppMenus });
+  toolFlyouts.start();
   document.getElementById("togglePropertiesPanelBtn")?.addEventListener("click", () => {
     const workspace = document.querySelector(".workspace");
     setPropertiesPanelCollapsed(!workspace?.classList.contains("properties-collapsed"));

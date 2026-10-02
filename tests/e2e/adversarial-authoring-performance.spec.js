@@ -1,4 +1,4 @@
-const { test, expect, openTestDocument } = require("./test-fixture");
+const { test, expect, openTestDocument, revealToolbarTool } = require("./test-fixture");
 const fs = require("fs");
 const path = require("path");
 
@@ -239,6 +239,7 @@ test("all drawing and constraint commands stay responsive as the sketch grows", 
     const counts = loaded.state;
     const stage = `${Math.round(fraction * 100)}%-p${counts.pointCount}-g${counts.lineCount + counts.circleCount + counts.arcCount}-c${counts.constraintCount}`;
     for (const id of drawingToolIds) {
+      await revealToolbarTool(page, `#${id}`);
       await measureInteraction(page, results, `${stage}/command/${id}`, () => page.locator(`#${id}`).click(), 250);
       await pressEscape(page);
     }
@@ -304,6 +305,7 @@ test("every geometry creation click stays responsive at full fixture complexity"
   for (const creation of cases) {
     const loaded = await loadFixture(page, fixture);
     const before = loaded.state;
+    await revealToolbarTool(page, `#${creation.tool}`);
     await measureInteraction(page, results, `${creation.name}/command`, () => page.locator(`#${creation.tool}`).click(), 250);
     for (let index = 0; index < creation.clicks.length; index += 1) {
       await measureInteraction(

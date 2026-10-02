@@ -8,14 +8,14 @@ test("Toolbar groups follow the requested order in two compact rows without clip
     ["アプリ操作", "履歴関連操作", "選択", "作図", "実線／補助線 切り替え", "図形の表示／非表示 切り替え", "拘束状態表示との切り替え", "修正"],
     ["拘束・寸法", "ブロック", "参照・再利用", "注記・表現"],
   ]);
-  expect(await page.locator('[aria-label="作図"] button').evaluateAll(buttons => buttons.map(button => button.id))).toEqual([
-    "toolPoint", "toolLine", "toolRectangle", "toolSlot", "toolCircle", "toolArc", "toolThreePointArc", "toolSpline", "toolCenterline", "toolCircleCenterCross",
+  expect(await page.locator('[aria-label="作図"] button:not([data-flyout-toggle])').evaluateAll(buttons => buttons.map(button => button.id))).toEqual([
+    "toolPoint", "toolLine", "toolRectangle", "toolSlot", "toolCircle", "toolArcMain", "toolSpline", "toolCenterline", "toolCircleCenterCross",
   ]);
   for (const width of [1280, 1024, 800]) {
     await page.setViewportSize({ width, height: 700 });
     const layout = await page.locator(".command-toolbar").evaluate(toolbar => {
       const bounds = toolbar.getBoundingClientRect();
-      const buttons = [...toolbar.querySelectorAll("button")].map(button => button.getBoundingClientRect());
+      const buttons = [...toolbar.querySelectorAll("button:not([data-flyout-toggle])")].map(button => button.getBoundingClientRect());
       return {
         height: bounds.height,
         fits: toolbar.scrollWidth === toolbar.clientWidth,

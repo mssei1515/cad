@@ -4,6 +4,7 @@
   const APPLICATION_LANGUAGE_STORAGE_KEY = "jot2d.application.language";
   const APPLICATION_THEME_STORAGE_KEY = "jot2d.application.theme";
   const UI_TRANSLATIONS = [
+    ["保存ツールを表示", "Show save tools"], ["円弧ツールを表示", "Show arc tools"], ["保存", "Save"],
     ["選択した図形の表示／非表示", "Show/hide selected objects"],
     ["アプリ操作", "Application"], ["履歴関連操作", "History"], ["作図", "Drawing"], ["修正", "Modify"],
     ["実線／補助線 切り替え", "Normal/construction toggle"], ["図形の表示／非表示 切り替え", "Object visibility toggle"],
