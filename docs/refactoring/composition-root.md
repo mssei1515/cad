@@ -6,6 +6,10 @@
 
 ## 現在の再開地点（2026-10-02）
 
+BlankCanvasGestureへ空白double clickの候補・重複抑止状態と終了／取消の優先順位を分離。仮Point／Lineの判定、450ms／6px境界、Spline確定優先、候補と抑止の別resetタイミングを維持。操作APIの接続はまだ多く、共通モード遷移整理時に見直す。app.jsは12,578行から12,455行へ縮小。構文338件・単体766件成功。関連E2E203件の初回は202成功／1失敗：既存Spline test hookのhatchFaceAt参照切れを発見し、独立commit 06e2026でhatchGeometryQuery経由へ修正。Spline6件再実行は全件成功、修正後app構文も成功。残る197件は初回成功で、失敗は解消。ログはcad-blank-gesture-{check,unit,e2e,spline-recheck}.log。開始時週枠残量70%。次は通常pointerdownのhit snapshotとcommand受付。全体目標と全体E2Eは未完了。
+
+### 前回の区切り
+
 選択数・drag対象点の照会をCanvasSelectionへ集約し、通常図形のbeginDragと既選択判定をCanvasSelectionInteractionへ統合。appから3つのcallback注入を除去。共有点の参照・重複・順序、選択数の分類、単独／複数選択dragの条件と選択消去順を維持。app.jsは12,656行から12,578行へ縮小。構文336件・単体759件・関連E2E197件成功（exit 0、4.0分）。ログはcad-drag-start-{check,unit,e2e}.log。開始時週枠残量72%。次はpointerdownに残るhit snapshotとcommand受付。全体目標と全体E2Eは未完了。
 
 ### 前回の区切り

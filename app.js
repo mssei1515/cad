@@ -297,8 +297,30 @@
     currentScope: workspace.current, constraintIsOperational,
   });
   const { sketchProjectionConstraints, sketchProjectionConstraintForTarget, sketchProjectionConstraintsForTarget, isSketchProjectedGeometry, sketchProjectionPointPairs, sketchProjectionConstraintsAffectingItems } = sketchProjectionQueries;
-  let blankDoubleClickCandidate = null;
-  let suppressNextBlankDoubleClickEvent = false;
+  const blankCanvasGesture = window.BlankCanvasGesture.create({
+    getMode: () => mode, getPending: () => pendingCommand, getPendingConstraint: () => pendingConstraintCommand,
+    getSplineEditSession: () => splineEditSession, getLineCommand: () => lineCommand, getTransientAuthoring: () => transientAuthoring,
+    getTime: () => performance.now(), hypot2, clearPreview: () => drawingPreview.setPointer(null),
+    finalizeSplineFromDoubleClick: (...args) => finalizeSplineFromDoubleClick(...args),
+    finishSplineEditSession: (...args) => finishSplineEditSession(...args),
+    submitDistanceValue: (...args) => submitDistanceValue(...args),
+    submitOffsetValue: (...args) => submitOffsetValue(...args),
+    cancelPendingCommand: (...args) => cancelPendingCommand(...args),
+    isDrawToolMode: (...args) => isDrawToolMode(...args),
+    exitDrawMode: (...args) => exitDrawMode(...args),
+    cancelConstraintTargetCommand: (...args) => cancelConstraintTargetCommand(...args),
+    rollbackTransientLineCompletion: (...args) => rollbackTransientLineCompletion(...args),
+    clearSnap: (...args) => clearSnap(...args),
+    clearSelection: (...args) => clearSelection(...args),
+    setHint: (...args) => setHint(...args),
+    updateUI: (...args) => updateUI(...args),
+    draw: (...args) => draw(...args),
+    cancelActiveDrawOperation: (...args) => cancelActiveDrawOperation(...args),
+    rollbackTransientPoint: (...args) => rollbackTransientPoint(...args),
+    hasActiveDrawOperation: (...args) => hasActiveDrawOperation(...args),
+    hasSelection: (...args) => hasSelection(...args),
+    updateGeometrySelectionUI: (...args) => updateGeometrySelectionUI(...args),
+  });
   let splineEditSession = null;
   let sketchProjectionSources = [];
   const drawingPreview = window.DrawingPreview.create({ types: { Point, Line, Circle, Arc }, canvasHover,
@@ -2096,7 +2118,7 @@
     splineDraft.begin();
     sketchProjectionSources = [];
     splineEditSession = null;
-    blankDoubleClickCandidate = null;
+    blankCanvasGesture.resetCandidate();
     drawingPreview.setPointer(null);
     clearSelection();
     clearSnap();
@@ -2350,7 +2372,7 @@
     dimensionDrag.reset();
     referenceImageInteraction.reset();
     canvasNavigation.reset();
-    suppressNextBlankDoubleClickEvent = false;
+    blankCanvasGesture.clearSuppression();
     lineCommand.reset();
     resetCenterlineCommandState();
     clearTransientPointRollback();
@@ -7069,8 +7091,8 @@
     }
 
     const blankDoubleClickHits = { hitP, hitL, hitC, hitArcEnd, hitA, hitS, hitD, hitBlock, hitDerivedInstance, hatchHit, referenceImageHit, inactiveHit, annotationHit: blankAnnotationHit };
-    if (isRepeatedBlankDoubleClick(e, blankDoubleClickHits) && handleBlankCanvasDoubleClick(p, blankDoubleClickHits)) {
-      suppressNextBlankDoubleClickEvent = true;
+    if (blankCanvasGesture.isRepeated(canvasScreenPoint(e), blankDoubleClickHits) && blankCanvasGesture.handle(p, blankDoubleClickHits)) {
+      blankCanvasGesture.suppressNext();
       e.preventDefault();
       return;
     }
@@ -7318,152 +7340,8 @@
     return profileInteractionPhase("commit", () => pointerInteractionController.finish(e));
   }
 
-  function isBlankCanvasHit(hits = {}) {
-    return !hits.hitP &&
-      !hits.hitL &&
-      !hits.hitC &&
-      !hits.hitArcEnd &&
-      !hits.hitA &&
-      !hits.hitS &&
-      !hits.hitD &&
-      !hits.hitBlock &&
-      !hits.hitDerivedInstance &&
-      !hits.hatchHit &&
-      !hits.referenceImageHit &&
-      !hits.annotationHit &&
-      !hits.inactiveHit;
-  }
-
-  function isTransientLineStartHit(hits = {}) {
-    return transientAuthoring.isLineStartHit(hits.hitP, lineCommand.startPoint);
-  }
-
-  function isTransientLineCompletionHit(hits = {}) {
-    return mode === "line" && transientAuthoring.isLineCompletionHit(hits.hitP, lineCommand.startPoint);
-  }
-
-  function isTransientPointCommandHit(hits = {}) {
-    return mode === "point" && transientAuthoring.isPointHit(hits.hitP);
-  }
-
-  function isBlankDoubleClickTarget(hits = {}) {
-    if (isBlankCanvasHit(hits)) return true;
-    if (
-      isTransientPointCommandHit(hits) &&
-      !hits.hitL &&
-      !hits.hitC &&
-      !hits.hitArcEnd &&
-      !hits.hitA &&
-      !hits.hitS &&
-      !hits.hitD &&
-      !hits.annotationHit &&
-      !hits.inactiveHit
-    ) {
-      return true;
-    }
-    if (isTransientLineCompletionHit(hits)) {
-      return !hits.hitC &&
-        !hits.hitArcEnd &&
-        !hits.hitA &&
-        !hits.hitD &&
-        !hits.annotationHit &&
-        !hits.inactiveHit;
-    }
-    return isTransientLineStartHit(hits) &&
-      !hits.hitC &&
-      !hits.hitArcEnd &&
-      !hits.hitA &&
-      !hits.hitD &&
-      !hits.annotationHit &&
-      !hits.inactiveHit;
-  }
-
-  function isRepeatedBlankDoubleClick(e, hits = {}) {
-    const screen = canvasScreenPoint(e);
-    const now = performance.now();
-    const repeated = Boolean(
-      isBlankDoubleClickTarget(hits) &&
-        blankDoubleClickCandidate &&
-        now - blankDoubleClickCandidate.time <= 450 &&
-        hypot2(screen.x - blankDoubleClickCandidate.x, screen.y - blankDoubleClickCandidate.y) <= 6,
-    );
-    blankDoubleClickCandidate = isBlankDoubleClickTarget(hits) ? { time: now, x: screen.x, y: screen.y } : null;
-    return repeated;
-  }
-
   function isDrawToolMode() {
     return mode === "instance-sources" || mode === "line" || mode === "centerline" || mode === "circle-center-cross" || mode === "point" || mode === "rectangle" || mode === "slot" || mode === "fillet" || mode === "trim" || mode === "offset" || mode === "circle" || mode === "arc" || mode === "three-point-arc" || mode === "spline" || mode === "sketch-projection" || mode === "hatch" || mode === "hatch-repair";
-  }
-
-  function handleBlankCanvasDoubleClick(pointer, hits = {}) {
-    if (!isBlankDoubleClickTarget(hits)) return false;
-    blankDoubleClickCandidate = null;
-    if (mode === "spline") {
-      finalizeSplineFromDoubleClick(pointer);
-      return true;
-    }
-    if (splineEditSession) return finishSplineEditSession();
-    if (pendingCommand?.type === "distance-value") {
-      submitDistanceValue();
-      return true;
-    }
-    if (pendingCommand?.type === "offset-value") {
-      submitOffsetValue();
-      return true;
-    }
-    if (pendingCommand) {
-      cancelPendingCommand();
-      if (isDrawToolMode()) exitDrawMode();
-      return true;
-    }
-    if (pendingConstraintCommand) {
-      cancelConstraintTargetCommand();
-      return true;
-    }
-    if (mode === "line") {
-      if (isTransientLineCompletionHit(hits)) {
-        rollbackTransientLineCompletion();
-        lineCommand.reset();
-        drawingPreview.setPointer(null);
-        clearSnap();
-        clearSelection();
-        setHint("線の作図をキャンセルしました");
-        updateUI();
-        draw();
-      } else if (isTransientLineStartHit(hits) || (transientAuthoring.hasLineStart && lineCommand.startPoint && !transientAuthoring.hasLineCompletion)) {
-        cancelActiveDrawOperation();
-        exitDrawMode();
-      } else if (lineCommand.startPoint) {
-        cancelActiveDrawOperation();
-        updateUI();
-        draw();
-      } else {
-        exitDrawMode();
-      }
-      return true;
-    }
-    if (mode === "point") {
-      rollbackTransientPoint();
-      exitDrawMode();
-      return true;
-    }
-    if (hasActiveDrawOperation()) {
-      cancelActiveDrawOperation();
-      exitDrawMode();
-      return true;
-    }
-    if (isDrawToolMode()) {
-      exitDrawMode();
-      return true;
-    }
-    if (hasSelection()) {
-      clearSelection();
-      setHint("選択を解除しました");
-      updateGeometrySelectionUI();
-      draw();
-      return true;
-    }
-    return false;
   }
 
   canvas.addEventListener("pointerup", endDrag);
@@ -7476,8 +7354,7 @@
   });
   canvas.addEventListener("dblclick", (e) => {
     flushScheduledCanvasPointerMove();
-    if (suppressNextBlankDoubleClickEvent) {
-      suppressNextBlankDoubleClickEvent = false;
+    if (blankCanvasGesture.takeSuppression()) {
       e.preventDefault();
       return;
     }
@@ -7536,7 +7413,7 @@
       draw();
       return;
     }
-    if (handleBlankCanvasDoubleClick(p, { hitP, hitL, hitC, hitArcEnd, hitA, hitS, hitD })) {
+    if (blankCanvasGesture.handle(p, { hitP, hitL, hitC, hitArcEnd, hitA, hitS, hitD })) {
       e.preventDefault();
       return;
     }

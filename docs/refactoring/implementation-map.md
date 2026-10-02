@@ -415,3 +415,5 @@ AuthoringPreviewRendererへSpline／Centerline／Trim描画も統合。Spline構
 - `CanvasSelectionInteraction`（`src/editing/canvas_selection_interaction.js`）: 通常pointerdownのhit結果から選択とdrag開始を調整。CanvasSelectionの状態更新API、描画順照会、各drag開始、矩形、UI通知を接続する。command受付とhit生成は呼出し側。
 
 - CanvasSelectionの`selectedElementCount`／`selectedDragPoints`が選択数・drag対象点の照会を所有。CanvasSelectionInteractionが通常図形の単独／複数選択drag計画を生成しGeometryDragへ渡す。appからのbeginDrag・選択照会callbackを除去。
+
+- `BlankCanvasGesture`（`src/editing/blank_canvas_gesture.js`）: 空白double clickの候補・重複抑止状態、時間／距離判定、終了・取消の優先順位を所有。command・sessionの照会と操作を明示注入。
