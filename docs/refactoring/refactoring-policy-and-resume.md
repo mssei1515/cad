@@ -84,7 +84,7 @@
 - 現在は作業branchで進める。最新の目標継続指示で指定された最後のコミットをリリースする際にdevelop／mainへ統合する。各抽出の途中では自動リリースしない。
 - Commit後には`npm run write:runtime-version`を実行する。生成物はGitに含めない。
 
-全体E2Eは未完了である。直前の求解分離（`0ee5b09`）では関連E2E202件（航空機図面・Offsetチェーンのドラッグ回帰を含む）が成功しているが、全体成功の証拠にはしない。Offset問題の過去の判断・修正は履歴に残っているため、古い進捗記録の「未回答」だけを根拠に同じ質問や修正をやり直さない。
+2026-10-02、コードcommit `4ead051`に対する全E2E327件が成功した（19.5分、exit 0）。構文347件・単体785件も同じコードで成功済み。全体リファクタリングの完成とは区別し、以後コードを変更した場合は変更に応じて再検証する。Offset問題の過去の判断・修正は履歴に残っているため、古い進捗記録の「未回答」だけを根拠に同じ質問や修正をやり直さない。
 
 ## 7. 全体の完了条件
 
@@ -96,12 +96,19 @@
 - 仕様と実装配置が一致し、未解決の不具合・未検証項目を隠していない。
 - 差分確認、Commit、許可された範囲のPush、実行コミット情報更新が済んでいる。
 
-## 8. 再開地点（2026-10-02）
+## 8. 再開地点（2026-10-02、一時停止）
 
-最新の目標継続指示に従い週枠残量50%未満で停止し、その最後のコミットをmainへマージする。今回開始時は残量85%。main／developのリリース5116a81は作業branchへ取込済み。作業途中の単位ごとのリリースは行わない。
+週枠残量が49%となり、ユーザー指定の50%未満の停止条件に達したため、新たな分離を停止した。実行中の全体検証は最後まで確認し、全E2E327件が成功（19.5分、exit 0）。コードは4ead051、構文347件・単体785件も成功済み。ログはTEMPのcad-refactor-full-e2e.log、直前の構文／単体はcad-pointer-press-{check,unit}.log。
 
-PointerInteractionControllerへパン・配置・drag・作図preview・hoverの振分けを分離した。終了処理も同じcontrollerへ集約し、終了順序と仮Line始点の履歴抑止を維持する。DOM座標表示／イベント／Scheduler／終了前flushは呼出し側。注記／距離寸法のpending record更新はsession整理時にcommand APIへ収束させる。検証はcomposition-root.md先頭を参照する。
+この記録のcommitを作業branchからdevelopへ反映し、mainを最後に更新してlocal／remoteの両branchを同期する。再開時はGitの現物で同期結果を確認する。codex/composition-root-nextは目標が未完了で継続作業に使うため保持する。
 
-通常選択・drag開始の振分けはCanvasSelectionInteractionへ分離した。CanvasSelectionが状態を所有し、hit結果と操作APIを明示注入する。通常図形のbeginDragも同じownerへ統合し、選択数／drag対象点はCanvasSelectionへ集約した。空白double clickの候補・重複抑止状態と終了／取消の順序はBlankCanvasGestureへ分離した。基本作図のclick受付はDrawingCommandInput、点作成の手順はPointCommandへ分離した。Instanceの派生元・投影・配置・基準線入力はInstanceCommandInputへ分離した。注記配置／選択はAnnotationCommandInput、寸法／拘束の対象受付はConstraintCommandInputへ分離した。hit snapshotをCanvasPressQueryへ、pointerdownの順序をPointerInteractionController.downへ集約した。次は入力moduleの組立てと残るdblclick／pointerleave／キーボード入力の所有者を整理する。入力全体を一括で移して依存を肥大化させない。Dimension preview・描画調整・入力／共通編集／Document操作・診断hookなども残る。全体目標と全体E2Eは未完了。
+app.jsは12,190行。今回の検証単位では行数変更なし。pointerdown／move／finishの入力順序はPointerInteractionController、hit snapshotはCanvasPressQuery、各command受付は個別入力moduleへ分離済み。所有者と依存はspec/architecture/モジュール構成.md、区切りの検証記録はcomposition-root.mdを参照する。
 
-再開時はAGENTS.mdと本書を読み、Git状態を確認する。サブエージェントを使わず、責務単位で検証・Commit・Pushを続ける。週枠の残量と最新の停止／リリース指示を確認する。
+再開後の候補は以下。行数だけを削るために巨大なapp contextを別moduleへ渡さない。
+
+- dblclick／pointerleave／キーボード入力と入力moduleの組立てを整理する。
+- 共通モード遷移・pending配置sessionの所有者を揃え、既存の暫定callback接続を減らす。
+- Dimension preview・描画調整・共通編集・Document操作・起動接続を整理する。
+- installTestHooksは現時点で約4,200行ある。機能ごとの公開境界とfixture生成を分ける。単に巨大なclosureを移さない。
+
+数百行程度のcomposition rootという全体目標は未達。全テスト成功は互換性の確認であり、設計目標の完了ではない。週枠回復後、ユーザーの再開指示を受けてAGENTS.mdと本書、Git状態、使用量を確認し、サブエージェントを使わず再開する。
