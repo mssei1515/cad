@@ -6,6 +6,10 @@
 
 ## 現在の再開地点（2026-10-02）
 
+AnnotationCommandInputへ注記配置／選択、ConstraintCommandInputへ寸法drag・距離配置・数値入力中のクリック消費・拘束対象指定を分離。注記配置と選択の間にFillet半径配置を残し、既存の優先順位を保持。app.jsは12,359行から12,280行へ縮小。構文346件・単体780件・関連E2E192件成功（exit 0、2.4分）。ログはcad-target-input-{check,unit,e2e}.log。開始時週枠残量61%。次はhit snapshotとpointerdown全体の順序を整理してPointerInteractionControllerへ収束し、入力moduleの組立てをまとめる。全体目標と全体E2Eは未完了。
+
+### 前回の区切り
+
 InstanceCommandInputへ派生元編集・Sketch投影元選択・Free配置・Mirror／Pattern基準線の入力を分離。投影operandの優先順位、直接hitへのfallback、投影矩形のcapture、非線operand時の拒否、Free配置のsnapを維持。状態は既存Instance commandが所有。app.jsは12,383行から12,359行へ縮小。構文343件・単体774件・関連E2E192件成功（exit 0、2.4分）。ログはcad-instance-input-{check,unit,e2e}.log。開始時週枠残量63%。次は注記／寸法／拘束の受付とhit snapshot、その後入力moduleの組立て整理。全体目標と全体E2Eは未完了。
 
 ### 前回の区切り

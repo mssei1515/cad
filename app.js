@@ -6996,6 +6996,16 @@
 
   canvasContextController.start();
 
+  const annotationCommandInput = window.AnnotationCommandInput.create({
+    getMode: () => mode, getPending: () => pendingCommand, getPendingConstraint: () => pendingConstraintCommand,
+    annotationCommand, canvasSelection, clearSelection, annotationDrag, updateUI, draw,
+  });
+  const constraintCommandInput = window.ConstraintCommandInput.create({
+    getPending: () => pendingCommand, getPendingConstraint: () => pendingConstraintCommand, canvasSelection, canvasHover, isDimensionConstraintCommandActive,
+    beginDimensionDrag, retargetDistancePlaceWithOperand, startDistanceValueInput, constraintTargetHint,
+    handleConstraintOperandClick, setHint, updateGeometrySelectionUI, draw,
+  });
+
   const instanceCommandInput = window.InstanceCommandInput.create({
     getMode: () => mode, instanceSourceCommand, geometryInstanceCommand, hitReferenceTarget, hitDerivedProjectionOperand,
     hitBlockProjectionOperand, operandElement, toggleSketchProjectionSource, clearSnap, selectionRectangle,
@@ -7082,23 +7092,7 @@
       return;
     }
 
-    if (pendingCommand?.type === "annotation-text-place") {
-      e.preventDefault();
-      commitTextAnnotationAt(p);
-      return;
-    }
-
-    if (pendingCommand?.type === "annotation-leader-select") {
-      e.preventDefault();
-      handleLeaderAnnotationTargetClick(annotationTargetHit, p);
-      return;
-    }
-
-    if (pendingCommand?.type === "annotation-leader-place") {
-      e.preventDefault();
-      commitLeaderAnnotationAt(p);
-      return;
-    }
+    if (annotationCommandInput.place(e, p, annotationTargetHit)) return;
 
     if (pendingCommand?.type === "fillet-radius-place") {
       e.preventDefault();
@@ -7106,82 +7100,9 @@
       return;
     }
 
-    if (blankAnnotationHit && !directGeometryHit && !hitD && mode === "select" && !pendingCommand && !pendingConstraintCommand) {
-      e.preventDefault();
-      if (blankAnnotationHit.element.blockProjection) {
-        if (!e.ctrlKey && !e.shiftKey) clearSelection();
-        if (e.ctrlKey || e.shiftKey) toggleBlockInstanceSelection(blankAnnotationHit.element.blockInstance);
-        else canvasSelection.set("blockInstances", [blankAnnotationHit.element.blockInstance]);
-        updateUI({ refreshAnalysis: false });
-        draw();
-        return;
-      }
-      if (e.ctrlKey || e.shiftKey) {
-        canvasSelection.toggleById("annotations", blankAnnotationHit.element);
-        updateUI({ refreshAnalysis: false });
-        draw();
-        return;
-      }
-      clearSelection();
-      beginAnnotationDrag(e, blankAnnotationHit, p);
-      updateUI({ refreshAnalysis: false });
-      draw();
-      return;
-    }
+    if (annotationCommandInput.select(e, p, { blankAnnotationHit, directGeometryHit, hitD })) return;
 
-    if (hitD && !directGeometryHit && !e.shiftKey && !e.ctrlKey && ((!pendingCommand && !pendingConstraintCommand) || isDimensionConstraintCommandActive())) {
-      e.preventDefault();
-      if (!isDimensionConstraintCommandActive()) {
-        canvasSelection.set("points", []);
-        canvasSelection.set("lines", []);
-        canvasSelection.set("circles", []);
-        canvasSelection.set("arcs", []);
-        canvasSelection.set("splines", []);
-        canvasSelection.set("arcEndpoint", null);
-      }
-      beginDimensionDrag(e, hitD, p, { hitP, hitL, hitC, hitA, hitArcEnd });
-      return;
-    }
-
-    if (pendingCommand?.type === "distance-place") {
-      e.preventDefault();
-      if (retargetDistancePlaceWithOperand(p, { hitP, hitL, hitC, hitA, hitArcEnd })) return;
-      startDistanceValueInput(p);
-      return;
-    }
-
-    if (pendingCommand?.type === "distance-value" || pendingCommand?.type === "offset-value") {
-      e.preventDefault();
-      return;
-    }
-
-    if (
-      pendingConstraintCommand &&
-      (canvasSelection.dimensionConstraint || effectiveSelectedConstraint()) &&
-      !hitP &&
-      !hitL &&
-      !hitC &&
-      !hitArcEnd &&
-      !hitA &&
-      !hitS &&
-      !hitD &&
-      !inactiveHit
-    ) {
-      e.preventDefault();
-      canvasSelection.set("dimensionConstraint", null);
-      canvasSelection.set("constraint", null);
-      canvasHover.update({ dimension: null });
-      setHint(constraintTargetHint(pendingConstraintCommand.type));
-      updateGeometrySelectionUI();
-      draw();
-      return;
-    }
-
-    if (pendingConstraintCommand) {
-      e.preventDefault();
-      handleConstraintOperandClick(p, pendingConstraintCommand.type, { hitP, hitL, hitC, hitA, hitS, hitArcEnd });
-      return;
-    }
+    if (constraintCommandInput.click(e, p, { hitD, directGeometryHit, hitP, hitL, hitC, hitA, hitS, hitArcEnd, inactiveHit })) return;
 
     if (mode === "block-place") {
       e.preventDefault();
