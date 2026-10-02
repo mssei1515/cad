@@ -7484,113 +7484,21 @@
       hitBlockInstance, hitGeometryInstance, hitAnnotationElement, hitHatchAt, hitReferenceImageAt },
   });
 
+  const pointerMoveController = window.PointerMoveController.create({
+    canvasNavigation, drawingPreview, canvasHover, clearSnap, draw,
+    selectionRectangle, annotationDrag, referenceImageInteraction, dimensionDrag, geometryDrag, pointerHover,
+    getMode: () => mode, getPendingCommand: () => pendingCommand,
+    getPendingConstraintCommand: () => pendingConstraintCommand, setLastPointer: point => { lastPointerWorld = point; },
+    updateHatchPreview, updateFilletRadiusPlacement, updatePendingDistanceRetargetHover, hitDimension, hitSketchIdentityElement,
+  });
+
   function processCanvasPointerMove(e) {
     const screenPoint = { x: e.offsetX, y: e.offsetY };
     const coordinatePoint = screenToWorld(screenPoint);
     const coordinateStatus = document.getElementById("statusCoordinates");
     const coordinateText = `X ${formatDisplayNumber(coordinatePoint.x, 3)} / Y ${formatDisplayNumber(coordinatePoint.y, 3)}`;
     if (coordinateStatus && coordinateStatus.textContent !== coordinateText) coordinateStatus.textContent = coordinateText;
-    if (canvasNavigation.movePan(screenPoint)) return;
-
-    const p = coordinatePoint;
-    lastPointerWorld = p;
-    if (mode.startsWith("free-instance-")) {
-      drawingPreview.updateFreeInstance(p);
-      return;
-    }
-    if (mode === "hatch" || mode === "hatch-repair") {
-      clearSnap();
-      clearCanvasHover();
-      drawingPreview.setPointer(p);
-      updateHatchPreview(p);
-      draw();
-      return;
-    }
-    if (selectionRectangle.active) {
-      clearSnap();
-      canvasHover.update({ sketchIdentity: null });
-      selectionRectangle.update(p);
-      draw();
-      return;
-    }
-
-    if (annotationDrag.active) {
-      clearSnap();
-      updateAnnotationDrag(p);
-      return;
-    }
-
-    if (referenceImageInteraction.dragging) {
-      clearSnap();
-      updateReferenceImageDrag(p);
-      return;
-    }
-
-    if (referenceImageInteraction.calibrating) {
-      clearSnap();
-      clearCanvasHover();
-      draw();
-      return;
-    }
-
-    if (pendingCommand?.type === "annotation-leader-place" || pendingCommand?.type === "annotation-text-place") {
-      pendingCommand.pointer = p;
-      canvasHover.update({
-        point: null, endpointPoint: null, line: null,
-        circle: null, arcEndpoint: null, arc: null,
-        dimension: null, sketchIdentity: null,
-      });
-      draw();
-      return;
-    }
-
-    if (pendingCommand?.type === "fillet-radius-place") {
-      clearSnap();
-      canvasHover.update({
-        point: null, endpointPoint: null, line: null,
-        circle: null, arcEndpoint: null, arc: null,
-        dimension: null, sketchIdentity: null,
-      });
-      updateFilletRadiusPlacement(p);
-      draw();
-      return;
-    }
-
-    if (dimensionDrag.active) {
-      dimensionDrag.update(p);
-      return;
-    }
-
-    if (drawingPreview.updateAuthoring(mode, p, e.shiftKey)) return;
-
-    if (pendingCommand?.type === "distance-place") {
-      clearSnap();
-      const hitD = hitDimension(p.x, p.y);
-      canvasHover.update({ sketchIdentity: hitSketchIdentityElement(p.x, p.y, { allowInactiveGeometry: true }) });
-      pendingCommand.pointer = p;
-      pendingCommand.dimension = null;
-      updatePendingDistanceRetargetHover(p);
-      if (hitD) {
-        canvasHover.update({
-          point: null, endpointPoint: null, line: null,
-          circle: null, arcEndpoint: null, arc: null,
-          dimension: hitD.constraint,
-        });
-      }
-      draw();
-      return;
-    }
-
-    if (mode === "trim") { drawingPreview.updateTrim(p); return; }
-    if (mode === "offset") { drawingPreview.updateOffset(p, pendingCommand?.type === "offset-value"); return; }
-
-    if (pendingConstraintCommand && !geometryDrag.active) {
-      if (pointerHover.updateConstraint(p, pendingConstraintCommand.type)) draw();
-      return;
-    }
-    if (!geometryDrag.active && pointerHover.updateOrdinary(p)) draw();
-
-    geometryDrag.update(p);
+    pointerMoveController.move(screenPoint, coordinatePoint, e.shiftKey);
   }
 
   canvas.addEventListener("pointermove", scheduleCanvasPointerMove);

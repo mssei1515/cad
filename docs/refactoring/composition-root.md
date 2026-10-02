@@ -6,6 +6,10 @@
 
 ## 現在の再開地点（2026-10-02）
 
+PointerMoveControllerへ入力振分けを分離。座標表示・変換・間引き・profile／read cacheはUI側に保持し、controllerは各操作の公開APIと状態照会を受け取る。重なる状態の優先順位、消費／継続、部分hover消去、距離寸法のpending更新を維持。app.jsは12,876行から12,784行へ縮小。振分け本体は明示portへの置換を除いて旧コードとの一致を確認。構文334件・単体746件・関連E2E197件が成功（exit 0）。ログはcad-pointer-move-{check,unit,e2e}.log。全体目標と全体E2Eは未完了。開始時週枠残量79%。
+
+### 前回の区切り
+
 DrawingPreviewへpointer／Trim候補の状態と作図feedback更新を分離。command・モード切替・描画・診断を同じ所有者へ接続し、resetを集約。line／基本図形の後続hover継続、Centerline等の消費、距離寸法の前後関係、Trim参照同一性と既存hover条件を維持。app.jsは12,990行から12,876行へ縮小。構文332件・単体740件・関連E2E197件が成功（exit 0、ドラッグ・画像操作を含む）。ログはcad-drawing-preview-{check,unit,e2e}.log。全体目標と全体E2Eは未完了。開始時週枠残量83%。
 
 ### 前回の区切り
