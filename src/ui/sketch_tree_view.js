@@ -4,7 +4,7 @@
   function create({ document, sketchOverlay, sketchOverlayResizeHandle, getScopeKey,
     currentScope, ensureSketchState, isRootSketch, activeSketchId, applicationText, escapeHtml,
     objects, selectedSketchId = () => null, sketchHasSolveError, referenceConstraintErrorCountForSketch,
-    constraintDuplicateCountForSketch, actions }) {
+    constraintDuplicateCountForSketch, actions, moveState = () => null }) {
     const { index: sketchTreeObjectIndex, row: sketchTreeObjectRow,
       selected: sketchTreeObjectSelected, hovered: sketchTreeObjectHovered,
       summary: sketchConstraintSummaryMarkup } = objects;
@@ -102,6 +102,10 @@
       const sketchList = document.getElementById("sketchList");
       if (!sketchList) return;
       const objectIndex = sketchTreeObjectIndex();
+      const moving = moveState();
+      const focused = moving && sketchList.contains(document.activeElement) ? document.activeElement : null;
+      const focusedSketchId = focused?.classList.contains("sketchActivateBtn") ? focused.dataset.id : null;
+      const focusedMoveAction = focused?.dataset.sketchMoveAction;
       const children = new Map();
       for (const sketch of model.sketches) {
         const key = sketch.parentSketchId || "";
@@ -113,6 +117,10 @@
         ["arc", applicationText("円弧", "Arc")], ["spline", applicationText("スプライン", "Spline")], ["hatch", applicationText("塗りつぶし", "Fill")], ["image", applicationText("画像", "Image")], ["block", applicationText("ブロック", "Block")], ["instance", applicationText("派生インスタンス", "Derived Instance")], ["constraint", applicationText("拘束", "Constraint")], ["annotation", applicationText("注記", "Annotation")],
       ];
       const html = [];
+      if (moving) {
+        const target = model.sketches.find(sketch => sketch.id === moving.targetId);
+        html.push(`<div class="sketch-move-panel" role="region" aria-label="${applicationText("スケッチ間の移動", "Move between sketches")}"><strong>${applicationText(`${moving.count}個の図形を移動`, `Move ${moving.count} objects`)}</strong><span>${applicationText("移動先", "Destination")}: ${target ? escapeHtml(`${target.name} (${target.id})`) : applicationText("スケッチ行を選択してください", "Select a sketch row")}</span>${moving.reason ? `<span class="sketch-move-error" role="alert">${escapeHtml(moving.reason)}</span>` : ""}<div class="sketch-move-actions"><button type="button" data-sketch-move-action="commit" ${moving.canCommit ? "" : "disabled"}>${applicationText("移動", "Move")}</button><button type="button" data-sketch-move-action="cancel">${applicationText("取消", "Cancel")}</button></div></div>`);
+      }
       const renderSketch = (sketch, depth, ancestorHasNext, isLast) => {
         const groups = objectIndex.get(sketch.id) || { point: [], line: [], circle: [], arc: [], spline: [], hatch: [], image: [], block: [], instance: [], constraint: [], annotation: [] };
         const nonEmptyCategories = isRootSketch(sketch) ? [] : categoryDefinitions.filter(([category]) => groups[category].length > 0);
@@ -164,6 +172,23 @@
       const roots = children.get("") || model.sketches.filter((sketch) => !sketch.parentSketchId);
       roots.forEach((sketch, index) => renderSketch(sketch, 0, [], index === roots.length - 1));
       sketchList.innerHTML = html.join("");
+      if (moving) {
+        for (const row of sketchList.querySelectorAll(".sketch-item")) {
+          const candidate = moving.destinations.get(row.dataset.id);
+          row.classList.add(candidate?.ok ? "move-eligible" : "move-unavailable");
+          if (row.dataset.id === moving.targetId) row.classList.add("move-destination");
+          row.title = candidate?.ok ? applicationText("クリックで移動先に指定", "Click to choose destination") : candidate?.reason || "";
+          const button = row.querySelector(".sketchActivateBtn");
+          button.disabled = !candidate?.ok;
+          button.title = row.title;
+          button.setAttribute("aria-pressed", String(row.dataset.id === moving.targetId));
+        }
+        for (const button of sketchList.querySelectorAll(".sketchVisibilityBtn, .sketchRenameBtn, .sketchDeleteBtn, .sketch-object-row button")) button.disabled = true;
+        const focusTarget = focusedSketchId
+          ? [...sketchList.querySelectorAll(".sketchActivateBtn")].find(button => button.dataset.id === focusedSketchId && !button.disabled)
+          : [...sketchList.querySelectorAll("[data-sketch-move-action]")].find(button => button.dataset.sketchMoveAction === focusedMoveAction && !button.disabled);
+        (focusTarget || sketchList.querySelector('[data-sketch-move-action="cancel"]'))?.focus();
+      }
       sketchList.onclick = actions.click;
       sketchList.ondblclick = actions.doubleClick;
       sketchList.onkeydown = actions.keyDown;

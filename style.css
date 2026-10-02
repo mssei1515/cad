@@ -197,6 +197,13 @@ button:disabled { opacity: .45; cursor: default; }
 .badge { display: inline-block; margin-left: 4px; padding: 1px 4px; border-radius: 8px; background: var(--badge-bg); color: var(--badge-text); font-size: 9px; }
 .sketch-item { position: relative; display: grid; grid-template-columns: auto 10px minmax(0, 1fr) auto auto auto auto; gap: 0; align-items: center; min-height: 18px; padding: 0; border: 0; border-radius: 0; border-color: transparent; line-height: 1; cursor: pointer; }
 .sketch-item.selected { background: var(--accent-soft); }
+.sketch-move-panel { position: sticky; top: 0; z-index: 2; display: flex; flex-direction: column; gap: 7px; padding: 10px; border: 1px solid var(--accent); border-radius: 6px; background: var(--panel); font-size: 12px; }
+.sketch-move-actions { display: flex; gap: 8px; }
+.sketch-move-actions button { flex: 1; }
+.sketch-move-error { color: var(--danger); }
+.sketch-item.move-eligible { outline: 1px dashed var(--accent); outline-offset: -2px; }
+.sketch-overlay .sketch-item.move-destination { background: var(--accent-soft); box-shadow: inset 3px 0 var(--accent); }
+.sketch-item.move-unavailable .sketchActivateBtn { opacity: .55; }
 .sketch-item.active .sketch-name { font-weight: 700; }
 .sketch-active-label { color: var(--tree-primary-text); font-size: 10px; }
 .properties-read-only { color: var(--muted); font-size: 12px; }

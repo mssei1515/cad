@@ -235,11 +235,13 @@
   const { blockLocalGeometryBounds, blockInstanceDisplayCenter, blockInstanceTranslationForAnchor } = window.BlockLayout.create({
     catalog: blockCatalog, projections: blockProjections, instanceProjections, annotationBounds, hatchPrimitivesForScope,
   });
+  let sketchMoveCommand = null;
   let model = workspace.current();
   const solver = new ConstraintSolver(model);
 
   // Temporary binding for legacy commands; new services receive explicit scopes.
   function activateEditingScope(scope) {
+    sketchMoveCommand?.reset();
     model = workspace.activate(scope);
     solver.model = model;
     geometryReads.clearReadCache();
@@ -2357,6 +2359,7 @@
   }
 
   function resetModelState() {
+    sketchMoveCommand?.reset();
     activateEditingScope(documentModel);
     flushScheduledCanvasPointerMove({ discard: true });
     mode = "select";
@@ -5308,6 +5311,7 @@
   }
 
   function clearInteractionForSketchChange() {
+    sketchMoveCommand?.reset();
     clearSelection();
     geometryDrag.reset();
     dimensionDrag.reset();
@@ -5340,6 +5344,30 @@
     effectiveAppearanceForElement, clearTreeHover: () => sketchTreeController.clearHoverSketch(), clearSnap,
   });
   const { createSketch, activate: setActiveSketch, rename: renameSketch, toggleVisibility: toggleSketchVisibility } = sketchCommand;
+  const sketchMoveQuery = window.SketchMove.create({
+    currentScope: workspace.current, activeSketchId, constraintGraphNodes, constraintSketchId,
+    resolveGeometryRef, geometryInstanceDependencyRefs, isReferenceSourceSketchId, applicationText,
+  });
+  function refreshSketchMoveGeometry() {
+    invalidateBlockProjectionCache();
+    geometryReads.clearReadCache();
+    hatchGeometryQuery.clear();
+    constraintRebinding.rebuildDocument(model, [...blockProjectionBundles(), ...geometryInstanceBundles()]);
+    constraintAnalysis.invalidate();
+    refreshReferenceConstraintValidity();
+  }
+  sketchMoveCommand = window.SketchMoveCommand.create({
+    currentScope: workspace.current, activeSketchId, selection: canvasSelection, query: sketchMoveQuery,
+    prepare: () => { cancelConstraintTargetCommand(""); cancelPendingCommand(""); exitDrawMode(); canvasHover.clear(); },
+    refresh: refreshSketchMoveGeometry, clearSelection, updateUI, draw, setHint, recordHistory, applicationText,
+  });
+  // Destination mode keeps all editing input in the tree until commit or cancellation.
+  for (const eventName of ["pointerdown", "click", "dblclick", "contextmenu", "input", "change"]) {
+    document.addEventListener(eventName, event => {
+      if (!sketchMoveCommand.active || event.target.closest("#sketchList, #sketchOverlayResizeHandle")) return;
+      event.preventDefault(); event.stopImmediatePropagation();
+    }, true);
+  }
   const hatchCommand = window.HatchCommand.create({
     currentScope: workspace.current, hatchGeometryQuery, getMode: () => mode, setMode: value => { mode = value; },
     lastPointer: () => lastPointerWorld, getPointerPreview: () => drawingPreview.pointer, setPointerPreview: value => { drawingPreview.setPointer(value); },
@@ -5439,6 +5467,7 @@
     getScopeKey: () => blockEditor.current?.draft?.id ? `block:${blockEditor.current.draft.id}` : "document",
     currentScope: () => model, ensureSketchState, isRootSketch, activeSketchId, applicationText, escapeHtml,
     objects: sketchTreeObjects, selectedSketchId: () => canvasSelection.sketchId,
+    moveState: () => sketchMoveCommand.state(),
     sketchHasSolveError, referenceConstraintErrorCountForSketch, constraintDuplicateCountForSketch,
     actions: { click: event => sketchTreeController.click(event), doubleClick: event => sketchTreeController.doubleClick(event),
       keyDown: event => sketchTreeController.keyDown(event), pointerOver: event => sketchTreeController.pointerOver(event), pointerOut: event => sketchTreeController.pointerOut(event),
@@ -5451,6 +5480,7 @@
     sketchTreeView, updateSketchUI, toggleSketchVisibility, renameSketch, deleteSketch, deleteElements,
     hover: { canvasHover, setSidebarHover, clearSidebarHover, sidebarHoverElementsForItem, sidebarHoverElementsForConstraint, elementSketchId, ROOT_SKETCH_ID },
     resolveSelectionEntry: sketchTreeObjects.resolveSelectionEntry,
+    move: { active: () => sketchMoveCommand.active, choose: sketchMoveCommand.choose, commit: sketchMoveCommand.commit, cancel: sketchMoveCommand.cancel },
     updateSelectionUI: updateGeometrySelectionUI,
     unfixPoint: point => { point.fixed = false; solveAndRefresh(`固定解除 ${point.id}`); },
   });
@@ -5807,6 +5837,8 @@
     updateSketchUI();
     updateBlockUI();
     updatePropertiesUI();
+    const propertiesPanel = document.getElementById("propertiesPanel");
+    if (propertiesPanel) propertiesPanel.inert = sketchMoveCommand.active;
     updateStatusUI();
     updateConstraintButtons();
     localizeApplicationUI();
@@ -6653,6 +6685,7 @@
   }
 
   const { candidatesAt: canvasContextCandidatesAt } = window.CanvasContextQuery.create({
+    hitReferenceImageAt,
     currentScope: workspace.current, viewportScale: () => viewport.scale,
     canvasContextPointIsSelectable, editedFitPoints: () => splineEditSession?.spline?.fitPoints,
     sketches: { isEditableSketchId, isVisibleSketchId, isEditableSketchElement, isVisibleSketchElement, activeSketchId, isActiveSketchConstraint, constraintSketchId },
@@ -6690,6 +6723,7 @@
     if (target.kind === "geometry-instance") return canvasSelection.geometryInstances.includes(target.item);
     if (target.kind === "annotation") return canvasSelection.annotations.includes(target.item);
     if (target.kind === "hatch") return canvasSelection.hatches.includes(target.item);
+    if (target.kind === "image") return canvasSelection.referenceImages.includes(target.item);
     if (target.kind === "dimension") return canvasSelection.dimensionConstraint === target.item || effectiveSelectedConstraint() === target.item;
     return false;
   }
@@ -6709,6 +6743,7 @@
     else if (target.kind === "geometry-instance") canvasSelection.set("geometryInstances", [target.item]);
     else if (target.kind === "annotation") canvasSelection.set("annotations", [target.item]);
     else if (target.kind === "hatch") canvasSelection.set("hatches", [target.item]);
+    else if (target.kind === "image") canvasSelection.set("referenceImages", [target.item]);
     else if (target.kind === "dimension") canvasSelection.set("dimensionConstraint", target.item);
   }
 
@@ -6862,6 +6897,9 @@
       groups.push([{ action: "fit-visible", label: applicationText("表示中図形へフィット", "Fit Visible Geometry"), disabled: !visibleGeometryBounds() }]);
     } else {
       const specific = [];
+      if (["point", "line", "circle", "arc", "spline", "block", "hatch", "annotation", "image"].includes(target.kind)) {
+        specific.push({ action: "sketch-move", label: applicationText("別スケッチへ移動…", "Move to Another Sketch…"), disabled: mode !== "select" || Boolean(pendingCommand || pendingConstraintCommand) });
+      }
       const editingFitPoint = target.kind === "point" && Boolean(splineEditSession?.spline?.fitPoints.includes(target.item));
       if (target.kind === "spline" && splineEditSession?.spline === target.item) {
         specific.push({ action: "spline-fit-point-add", label: applicationText("通過点を追加", "Add Fit Point") });
@@ -6983,6 +7021,7 @@
     else if (action === "block-edit" && target?.item) enterBlockDefinitionEdit(target.item.definitionId);
     else if (action === "block-rotation-toggle" && target?.item) setBlockInstanceRotationLocked(target.item, !target.item.rotationLocked);
     else if (action === "dimension-edit" && target?.hit) startDimensionEditInput(target.hit);
+    else if (action === "sketch-move") sketchMoveCommand.start();
     else if (action === "hatch-repair" && target?.item) startHatchBoundaryRepair(target.item);
     else if (["drawing-front", "drawing-forward", "drawing-backward", "drawing-back"].includes(action)) reorderSelectedDrawingObjects(action);
     else if (action === "spline-fit-point-add" && target?.item && pointer) addSplineFitPointFromContext(target.item, pointer);
@@ -7201,6 +7240,11 @@
   );
 
   window.addEventListener("keydown", (e) => {
+    if (sketchMoveCommand.active) {
+      if (e.key === "Escape") sketchMoveCommand.cancel();
+      else if (e.target.closest?.("#sketchList") && !e.ctrlKey && !e.metaKey && ["Tab", "Enter", " ", "ArrowUp", "ArrowDown"].includes(e.key)) return;
+      e.preventDefault(); return;
+    }
     if (e.key === "Escape" && canvasContextMenu && !canvasContextMenu.hidden) {
       e.preventDefault();
       closeCanvasContextMenu();
@@ -9587,6 +9631,16 @@
           targetKind: resolution.target?.kind || null,
         } : null;
       },
+      sketchMoveStateForTest() {
+        const state = sketchMoveCommand.state();
+        return {
+          active: Boolean(state), targetId: state?.targetId || null, activeSketchId: activeSketchId(),
+          selected: Object.fromEntries(window.SketchMove.fields.map(field => [field, canvasSelection[field].map(item => item.id)])),
+          ownership: Object.fromEntries(window.SketchMove.fields.map(field => [field, model[field].map(item => ({ id: item.id, sketchId: item.sketchId, drawingOrder: item.drawingOrder }))])),
+          constraints: model.constraints.map(constraint => decorateSerializedConstraint(serializeConstraint(constraint), constraint)),
+          serialized: serializeModel(), editingBlock: Boolean(blockEditor.current),
+        };
+      },
       selectGeometryIdsForTest(ids = {}) {
         clearSelection();
         const pointIds = new Set(ids.points || []);
@@ -9601,6 +9655,7 @@
         canvasSelection.set("arcs", model.arcs.filter((arc) => arcIds.has(arc.id)));
         canvasSelection.set("splines", model.splines.filter((spline) => splineIds.has(spline.id)));
         canvasSelection.set("blockInstances", model.blockInstances.filter((instance) => blockInstanceIds.has(instance.id)));
+        for (const field of ["hatches", "annotations", "referenceImages"]) canvasSelection.set(field, model[field].filter(item => (ids[field] || []).includes(item.id)));
         updateUI();
         draw();
         const selection = blockSelectionGeometry();

@@ -4,7 +4,7 @@
   function create({ currentScope, activeSketchId, setActiveSketch, clearSelection, canvasSelection,
     sidebarGeometryItem, toggleBlockInstanceSelection, targetFromConstraint, updateUI, draw,
     sketchTreeView, updateSketchUI, toggleSketchVisibility, renameSketch, deleteSketch, deleteElements, unfixPoint,
-    resolveSelectionEntry, updateSelectionUI = updateUI, hover = {} }) {
+    resolveSelectionEntry, updateSelectionUI = updateUI, hover = {}, move = {} }) {
     const { canvasHover, setSidebarHover, clearSidebarHover, sidebarHoverElementsForItem, sidebarHoverElementsForConstraint, elementSketchId, ROOT_SKETCH_ID } = hover;
     let hoveredSketchTreeId = null;
     function selectSketch(sketchId) {
@@ -102,6 +102,15 @@
         updateSketchUI();
         return;
       }
+      if (move.active?.()) {
+        if (action?.dataset.sketchMoveAction === "commit") move.commit();
+        else if (action?.dataset.sketchMoveAction === "cancel") move.cancel();
+        else if (!event.target.closest(".sketch-object-row") && (!action || action.classList.contains("sketchActivateBtn"))) {
+          const row = event.target.closest(".sketch-item");
+          if (row) move.choose(row.dataset.id);
+        }
+        return;
+      }
       if (action?.classList.contains("sketchVisibilityBtn")) return void toggleSketchVisibility(action.dataset.id);
       if (action?.classList.contains("sketchRenameBtn")) return void renameSketch(action.dataset.id);
       if (action?.classList.contains("sketchDeleteBtn")) return void deleteSketch(action.dataset.id);
@@ -123,6 +132,7 @@
     }
 
     function activateRow(event) {
+      if (move.active?.()) return;
       const action = event.target.closest("button");
       if (action && !action.classList.contains("sketchActivateBtn")) return;
       const row = event.target.closest(".sketch-item");
@@ -136,11 +146,13 @@
       if (!button || !["Enter", " "].includes(event.key)) return;
       event.preventDefault();
       event.stopPropagation();
+      if (move.active?.()) { move.choose(button.dataset.id); return; }
       if (event.key === "Enter" && event.altKey) activateRow(event);
       else selectSketch(button.dataset.id);
     }
 
     function handleSketchTreePointerOver(event) {
+      if (move.active?.()) return;
       const objectRow = event.target.closest(".sketch-object-row");
       if (objectRow && !objectRow.contains(event.relatedTarget) && objectRow.dataset.sketchId === activeSketchId()) {
         const category = objectRow.dataset.objectKind;

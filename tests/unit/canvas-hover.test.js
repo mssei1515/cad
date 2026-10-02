@@ -18,12 +18,12 @@ test('clear removes all canvas hover types including reference images', () => {
   hover.update(Object.fromEntries(Object.keys(hover.current).map(key => [key, marker])));
   hover.clear(); assert.ok(Object.values(hover.current).every(value => value === null));
 });
-test('context snapshot restores its original fields while preserving the legacy image exclusion', () => {
+test('context snapshot restores its original fields including reference images', () => {
   const hover = create(), point = {}, firstImage = {}, secondImage = {};
   hover.update({ point, referenceImage: firstImage }); const snapshot = hover.capture();
-  assert.equal(Object.hasOwn(snapshot, 'referenceImage'), false);
+  assert.equal(snapshot.referenceImage, firstImage);
   hover.update({ point: null, referenceImage: secondImage }); hover.restore(snapshot);
-  assert.equal(hover.current.point, point); assert.equal(hover.current.referenceImage, secondImage);
+  assert.equal(hover.current.point, point); assert.equal(hover.current.referenceImage, firstImage);
   snapshot.point = null; assert.equal(hover.current.point, point);
   const before = hover.current; hover.restore(null); assert.equal(hover.current, before);
 });
@@ -36,7 +36,7 @@ test('candidate preview replaces prior highlights and distinguishes endpoint poi
 });
 test('candidate preview maps each selectable type and creates an arc endpoint descriptor', () => {
   const hover = create(), item = {};
-  for (const [kind, field] of Object.entries({ line: 'line', circle: 'circle', arc: 'arc', spline: 'spline', dimension: 'dimension', block: 'block', 'geometry-instance': 'geometryInstance', annotation: 'annotation', hatch: 'hatch' })) {
+  for (const [kind, field] of Object.entries({ line: 'line', circle: 'circle', arc: 'arc', spline: 'spline', dimension: 'dimension', block: 'block', 'geometry-instance': 'geometryInstance', annotation: 'annotation', hatch: 'hatch', image: 'referenceImage' })) {
     hover.previewCandidate({ kind, item }); assert.equal(hover.current[field], item);
     assert.equal(Object.values(hover.current).filter(value => value !== null).length, 1);
   }

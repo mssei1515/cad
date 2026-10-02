@@ -16,8 +16,9 @@
     block: 8,
     "geometry-instance": 9,
     hatch: 10,
+    image: 11,
   });
-  function create({ currentScope, viewportScale, canvasContextPointIsSelectable, editedFitPoints, sketches, projections, dimensions, annotations, hatches }) {
+  function create({ currentScope, viewportScale, canvasContextPointIsSelectable, editedFitPoints, sketches, projections, dimensions, annotations, hatches, hitReferenceImageAt = () => null }) {
     const { isEditableSketchId, isVisibleSketchId, isEditableSketchElement, isVisibleSketchElement, activeSketchId, isActiveSketchConstraint, constraintSketchId } = sketches;
     const { blockProjectionBundle, geometryInstanceBundle } = projections;
     const { targetFromConstraint, defaultDimensionForTarget, effectiveDimensionAppearance, dimensionLayout, showConstraintStatus } = dimensions;
@@ -185,6 +186,8 @@
         if (hatchContainsSelectablePoint(hatch, resolved, pointer)) push({ kind: "hatch", item: hatch }, 0, normalizedDrawingOrder(hatch.drawingOrder) ?? index);
       });
 
+      const image = hitReferenceImageAt(pointer.x, pointer.y);
+      if (image) push({ kind: "image", item: image }, 0, (model.referenceImages || []).indexOf(image));
       const sorted = candidates.sort((a, b) => {
         const distanceDifference = a.contextDistance - b.contextDistance;
         if (Math.abs(distanceDifference) > 1e-9) return distanceDifference;
