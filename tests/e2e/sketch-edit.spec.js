@@ -13,7 +13,7 @@ test('selected row exposes Edit while the editing marker remains independent; al
   await expect(other.locator('.sketch-active-label svg')).toBeVisible();
   await source.locator('.sketchEditBtn').click();
   await expect(source).toHaveClass(/active/); await expect(source).toHaveClass(/selected/);
-  await expect(source.locator('.sketchEditBtn')).toBeDisabled();
+  await expect(source.locator('.sketchEditBtn')).toBeHidden();
   await expect(other.locator('.sketch-active-label')).toHaveCount(0);
   await other.locator('.sketchActivateBtn').dblclick();
   await expect(other).toHaveClass(/active/);
@@ -42,7 +42,7 @@ test('inactive Sketch hover exposes Edit without selecting or activating the row
  await source.locator('.sketchActivateBtn').hover();await source.locator('.sketchEditBtn').click();
  await expect(source).toHaveClass(/active/);await expect(source).toHaveClass(/selected/);
  await active.locator('.sketchActivateBtn').hover();await expect(active.locator('.sketchEditBtn')).toBeVisible();
- await source.locator('.sketchActivateBtn').hover();await expect(source.locator('.sketchEditBtn')).toBeDisabled();
+ await source.locator('.sketchActivateBtn').hover();await expect(source.locator('.sketchEditBtn')).toBeHidden();
 });
 
 test('active and inactive Sketch rows share hover backgrounds while selection stays visible',async({page})=>{

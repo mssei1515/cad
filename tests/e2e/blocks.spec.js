@@ -1472,6 +1472,7 @@ test("deleting child geometry removes parent constraints without interrupting ne
   await openBlockDefinitions(page);
   await page.click('.block-item[data-id="B1"] .blockEditBtn');
   await page.evaluate(() => window.__jot2dTest.selectGeometryIdsForTest({ lines: ["L1"] }));
+  await page.locator(".app-menu > summary").filter({ hasText: /^編集$/ }).click();
   await page.click("#deleteSelectionBtn");
   await completeBlockEdit(page);
 

@@ -1,4 +1,4 @@
-const { test, expect, openTestDocument } = require("./test-fixture");
+const { test, expect, openTestDocument, revealToolbarTool } = require("./test-fixture");
 
 for (const scenario of [
   { name: "circle", tool: "#toolCircle", points: [{ x: 0, y: 0 }, { x: 40, y: 0 }], circles: 1, arcs: 0 },
@@ -9,6 +9,7 @@ for (const scenario of [
     await openTestDocument(page);
     await page.evaluate(() => window.__jot2dTest.focusWorldForTest({ x: 0, y: 0 }, 3));
     const clients = await page.evaluate(points => points.map(point => window.__jot2dTest.worldClientPositionForTest(point)), scenario.points);
+    await revealToolbarTool(page, scenario.tool);
     await page.locator(scenario.tool).click();
     for (const point of clients) await page.mouse.click(point.x, point.y);
     const completed = await page.evaluate(() => window.__jot2dTest.serializedModelForTest());

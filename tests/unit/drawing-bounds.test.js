@@ -37,16 +37,17 @@ test('rotated image coordinates round trip and bounds contain every corner', () 
 
 function fixture() {
   let scope = { lines: [], circles: [], arcs: [], splines: [], points: [], annotations: [], hatches: [], referenceImages: [] };
-  let active = 'S1';
+  let active = 'S1', showHidden = false;
   const geometryReads = {};
   for (const [method, key] of Object.entries({ allGeometryLines: 'lines', allGeometryCircles: 'circles', allGeometryArcs: 'arcs', allGeometrySplines: 'splines', allGeometryPoints: 'points', allAnnotations: 'annotations', allHatches: 'hatches' })) geometryReads[method] = () => scope[key];
   const api = sandbox.window.DrawingBounds.create({
     currentScope: () => scope, geometryReads, activeSketchId: () => active, elementSketchId: item => item.sketchId,
-    isVisibleSketchElement: item => item.visible !== false && item.sketchId !== 'hidden', isVisibleSketchId: id => id !== 'hidden',
+    isVisibleValue: visible => showHidden || visible !== false,
+    isVisibleSketchElement: item => showHidden || item.visible !== false && item.sketchId !== 'hidden', isVisibleSketchId: id => showHidden || id !== 'hidden',
     annotationBounds: item => item.bounds, resolvedLoopBounds: loops => loops.bounds, resolvedHatchBoundary: hatch => hatch,
     hatchAppearanceForDisplay: hatch => hatch.appearance || {},
   });
-  return { api, get scope() { return scope; }, setScope: next => { scope = next; }, activate: id => { active = id; } };
+  return { api, showHidden: value => { showHidden = value; }, get scope() { return scope; }, setScope: next => { scope = next; }, activate: id => { active = id; } };
 }
 
 test('drawing bounds read current scope and active sketch on every call', () => {
@@ -83,4 +84,17 @@ test('primitive extents preserve whole-circle arc bounds and actual spline bound
   assert.deepEqual(plain(bounds.splineBBox(spline)), box(20, 30, 25, 40));
   f.scope.splines.push(spline);
   assert.deepEqual(plain(f.api.allGeometryBounds()), box(-10, -5, 25, 40));
+});
+
+test('show hidden includes hidden sketch, annotation, hatch and image extents without changing model', () => {
+  const f = fixture();
+  f.scope.points.push({ x: 900, y: 900, sketchId: 'hidden' });
+  f.scope.annotations.push({ sketchId: 'S1', visible: false, bounds: box(-100, -100, -90, -90) });
+  f.scope.hatches.push({ sketchId: 'S1', appearance: { visible: false }, bounds: box(100, 100, 110, 110) });
+  f.scope.referenceImages.push({ sketchId: 'S1', visible: false, x: 200, y: 200, scale: 1, rotation: 0, pixelWidth: 10, pixelHeight: 10 });
+  const before = plain(f.scope);
+  assert.equal(f.api.visibleGeometryBounds(), null);
+  f.showHidden(true); assert.deepEqual(plain(f.api.visibleGeometryBounds()), box(-100, -100, 900, 900));
+  assert.deepEqual(plain(f.scope), before);
+  f.showHidden(false); assert.equal(f.api.visibleGeometryBounds(), null);
 });
