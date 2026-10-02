@@ -545,6 +545,9 @@
   });
   const geometryRenderer = window.GeometryRenderer.create({ ctx, viewport, paintState: geometryPaintState, pointPaintState, arcEndpointPaintState, withCanvasState, fixedPointLabel: () => applicationText("固定", "Fixed"), appearanceLineDash, lineDisplaySegment, canvasThemeColor });
   const { traceSplinePath } = geometryRenderer;
+  const interactionOverlay = window.InteractionOverlayRenderer.create({ ctx, viewport,
+    elementSketchId, sketchRelationToActive, applicationText, isVisibleSketchId, activeSketchId, sketchName });
+  const { sketchIdentityRelationLabel, sketchIdentityRelationColor } = interactionOverlay;
   const { resolvedLoopBounds } = window.HatchRegionEngine;
   const drawingBounds = window.DrawingBounds.create({
     currentScope: workspace.current, geometryReads, activeSketchId, elementSketchId, isVisibleSketchElement,
@@ -4499,109 +4502,10 @@
 
   function drawTrimPreview() { if (mode === "trim") authoringPreview.drawTrim(trimPreview); }
 
-  function drawSnapMarker() {
-    if (!drawingSnap.active) return;
-    ctx.save();
-    const r = 6 / viewport.scale;
-    ctx.strokeStyle = "#f59e0b";
-    ctx.fillStyle = "#f59e0b";
-    ctx.lineWidth = 1.5 / viewport.scale;
-    ctx.beginPath();
-    ctx.moveTo(drawingSnap.active.x - r, drawingSnap.active.y);
-    ctx.lineTo(drawingSnap.active.x + r, drawingSnap.active.y);
-    ctx.moveTo(drawingSnap.active.x, drawingSnap.active.y - r);
-    ctx.lineTo(drawingSnap.active.x, drawingSnap.active.y + r);
-    ctx.stroke();
-    ctx.beginPath();
-    ctx.arc(drawingSnap.active.x, drawingSnap.active.y, 3 / viewport.scale, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.font = `${11 / viewport.scale}px system-ui`;
-    ctx.textAlign = "left";
-    ctx.textBaseline = "bottom";
-    const pointLike = Boolean(drawingSnap.active.data?.point) || drawingSnap.active.priority === 0;
-    const labelX = drawingSnap.active.x + 8 / viewport.scale;
-    const labelY = drawingSnap.active.y + (pointLike ? 20 : -8) / viewport.scale;
-    const paddingX = 3 / viewport.scale;
-    const paddingY = 2 / viewport.scale;
-    const metrics = ctx.measureText(drawingSnap.active.label);
-    ctx.fillStyle = "rgba(255, 255, 255, 0.88)";
-    ctx.fillRect(labelX - paddingX, labelY - 12 / viewport.scale - paddingY, metrics.width + paddingX * 2, 14 / viewport.scale + paddingY * 2);
-    ctx.fillStyle = "#f59e0b";
-    ctx.fillText(drawingSnap.active.label, labelX, labelY);
-    ctx.restore();
-  }
-
-  function selectedSketchIdentityElement() {
-    if (canvasSelection.arcEndpoint?.arc) return { id: `${canvasSelection.arcEndpoint.arc.id}端点`, sketchId: elementSketchId(canvasSelection.arcEndpoint.arc), item: canvasSelection.arcEndpoint.arc };
-    const item = canvasSelection.points.at(-1) || canvasSelection.lines.at(-1) || canvasSelection.circles.at(-1) || canvasSelection.arcs.at(-1) || canvasSelection.splines.at(-1);
-    return item ? { id: item.id, sketchId: elementSketchId(item), item } : null;
-  }
-
-  function sketchIdentityRelationLabel(sketchId) {
-    const relation = sketchRelationToActive(sketchId);
-    if (relation === "reference") return applicationText("参照可", "Reference available");
-    if (relation === "descendant") return applicationText("参照不可（子孫）", "Not referenceable (descendant)");
-    if (relation === "inactive") return applicationText("参照不可", "Not referenceable");
-    return "";
-  }
-
-  function sketchIdentityRelationColor(sketchId) {
-    const relation = sketchRelationToActive(sketchId);
-    if (relation === "reference") return "#1d4ed8";
-    if (relation === "descendant") return "#b91c1c";
-    return "#64748b";
-  }
-
-  function sketchIdentityRelationBackground(sketchId) {
-    const relation = sketchRelationToActive(sketchId);
-    if (relation === "reference") return "rgba(219, 234, 254, 0.96)";
-    if (relation === "descendant") return "rgba(254, 226, 226, 0.96)";
-    return "rgba(241, 245, 249, 0.96)";
-  }
-
+  function drawSnapMarker() { interactionOverlay.drawSnapMarker(drawingSnap.active); }
   function drawSketchIdentityLabel() {
-    const identity = canvasHover.current.sketchIdentity || selectedSketchIdentityElement();
-    const pointer = lastPointerWorld;
-    if (!identity || !pointer || !isVisibleSketchId(identity.sketchId) || identity.sketchId === activeSketchId()) return;
-    const baseLabel = `${identity.label || identity.id} / ${sketchName(identity.sketchId)}`;
-    const relationLabel = sketchIdentityRelationLabel(identity.sketchId);
-    const separator = relationLabel ? " / " : "";
-    ctx.save();
-    ctx.font = `${11 / viewport.scale}px system-ui`;
-    ctx.textAlign = "left";
-    ctx.textBaseline = "bottom";
-    const paddingX = 4 / viewport.scale;
-    const paddingY = 2 / viewport.scale;
-    const labelX = pointer.x + 14 / viewport.scale;
-    const labelY = pointer.y + 26 / viewport.scale;
-    const baseWidth = ctx.measureText(baseLabel).width;
-    const separatorWidth = ctx.measureText(separator).width;
-    const relationWidth = relationLabel ? ctx.measureText(relationLabel).width : 0;
-    const width = baseWidth + separatorWidth + relationWidth;
-    ctx.fillStyle = "rgba(255, 255, 255, 0.9)";
-    ctx.fillRect(labelX - paddingX, labelY - 12 / viewport.scale - paddingY, width + paddingX * 2, 14 / viewport.scale + paddingY * 2);
-    ctx.strokeStyle = "rgba(148, 163, 184, 0.75)";
-    ctx.lineWidth = 1 / viewport.scale;
-    ctx.strokeRect(labelX - paddingX, labelY - 12 / viewport.scale - paddingY, width + paddingX * 2, 14 / viewport.scale + paddingY * 2);
-    ctx.fillStyle = "#64748b";
-    ctx.fillText(baseLabel, labelX, labelY);
-    if (relationLabel) {
-      const relationX = labelX + baseWidth + separatorWidth;
-      const relationPadX = 4 / viewport.scale;
-      const relationPadY = 1 / viewport.scale;
-      ctx.fillText(separator, labelX + baseWidth, labelY);
-      ctx.fillStyle = sketchIdentityRelationBackground(identity.sketchId);
-      ctx.fillRect(relationX - relationPadX, labelY - 12 / viewport.scale - relationPadY, relationWidth + relationPadX * 2, 14 / viewport.scale + relationPadY * 2);
-      ctx.fillStyle = sketchIdentityRelationColor(identity.sketchId);
-      ctx.font = `700 ${11 / viewport.scale}px system-ui`;
-      ctx.fillText(relationLabel, relationX, labelY);
-    }
-    ctx.restore();
+    interactionOverlay.drawSketchIdentityLabel({ hoveredIdentity: canvasHover.current.sketchIdentity, selection: canvasSelection, pointer: lastPointerWorld });
   }
-
-
-
-
 
   function drawCenterlinePreview() {
     if (mode !== "centerline" || !centerlineCommand.support?.ok) return;

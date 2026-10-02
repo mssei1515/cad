@@ -6,6 +6,10 @@
 
 ## 現在の再開地点（2026-10-02）
 
+snap markerとSketch識別ラベルをInteractionOverlayRendererへ分離。hover優先・選択種別順・可視性／active除外・参照関係文言／色・画面px配置を保持。状態所有者は変更せず、診断も同じ関係照会を利用。app.jsは13,137行から13,041行へ縮小。構文328件・単体731件・関連E2E192件が成功（exit 0）。ログはcad-interaction-overlay-{check,unit,e2e}.log。全体目標と全体E2Eは未完了。
+
+### 前回の区切り
+
 Spline／Centerline／TrimのpreviewをAuthoringPreviewRendererへ統合。draftを変更せず、投影済みpointer・支持線・Canvas寸法・Trim候補を引数で受け取る。mode・command・DOMはapp側。app.jsは13,202行から13,137行へ縮小。構文326件・単体727件・関連E2E192件が成功（exit 0）。ログはcad-remaining-preview-{check,unit,e2e}.log。全体目標と全体E2Eは未完了。
 
 ### 前回の区切り

@@ -100,8 +100,8 @@
 
 週枠50%の停止条件はユーザー指示で解除済み。main／developのリリース5116a81をcodex/composition-root-nextへ取り込み、Annotation Parameter表示などの最新変更を保持する。新たなmainへのマージは行わない。
 
-Spline／Centerline／TrimのpreviewをAuthoringPreviewRendererへ統合した。座標／候補区間／Canvas寸法を引数で渡し、commandとDOMをrendererへ渡さない。検証はcomposition-root.md先頭を参照する。
+snap markerとSketch識別ラベルをInteractionOverlayRendererへ分離した。操作状態は引数、Sketch関係は限定照会portで受け取り、診断も同じ文言／色照会を使う。検証はcomposition-root.md先頭を参照する。
 
-次はsnap markerとSketch識別ラベルなどの操作補助表示を調べ、状態照会とoverlay描画の責務を整理する。投影・参照図形の扱い、選択とhoverの独立性を維持する。作図preview／snapとpointer routing等も未分離。全体目標と全体E2Eは未完了。
+次はBlock／Free Instanceの配置previewを調べ、投影Geometryの生成・一時状態・描画の境界を整理する。投影・参照図形の扱い、選択とhoverの独立性を維持する。作図preview／snapとpointer routing等も未分離。全体目標と全体E2Eは未完了。
 
 再開時はAGENTS.mdと本書を読み、Git状態を確認する。サブエージェントを使わず、責務単位で検証・Commit・Pushを続ける。週枠50%の停止条件を再適用しない。
