@@ -4,6 +4,12 @@
   const APPLICATION_LANGUAGE_STORAGE_KEY = "jot2d.application.language";
   const APPLICATION_THEME_STORAGE_KEY = "jot2d.application.theme";
   const UI_TRANSLATIONS = [
+    ["保存ツールを表示", "Show save tools"], ["円弧ツールを表示", "Show arc tools"], ["保存", "Save"],
+    ["選択した図形の表示／非表示", "Show/hide selected objects"],
+    ["アプリ操作", "Application"], ["履歴関連操作", "History"], ["作図", "Drawing"], ["修正", "Modify"],
+    ["実線／補助線 切り替え", "Normal/construction toggle"], ["図形の表示／非表示 切り替え", "Object visibility toggle"],
+    ["拘束状態表示との切り替え", "Constraint status view toggle"], ["拘束・寸法", "Constraints / Dimensions"],
+    ["参照・再利用", "References / Reuse"], ["注記・表現", "Annotations / Appearance"],
     ["同期インスタンス", "Synchronized Instance"],
     ["ファイル", "File"], ["編集", "Edit"], ["ヘルプ", "Help"],
     ["上書き保存", "Overwrite Save"], ["名前を付けて保存", "Save As"], ["開く", "Open"], ["Parameter…", "Parameters…"], ["ドキュメント設定", "Document Settings"], ["アプリケーション設定", "Application Settings"],
@@ -13,7 +19,7 @@
     ["実線／補助線", "Normal / Construction"], ["トリム", "Trim"], ["R面取り", "Fillet"], ["フィレット", "Fillet"], ["オフセット", "Offset"], ["塗りつぶし", "Fill"],
     ["寸法・注記", "Dimensions and annotations"], ["寸法", "Dimension"], ["一致", "Coincident"], ["水平", "Horizontal"], ["垂直", "Vertical"], ["平行", "Parallel"], ["直角", "Perpendicular"],
     ["対称", "Symmetry"], ["同心", "Concentric"], ["等寸", "Equal"], ["接線", "Tangent"], ["固定／解除", "Fix / Unfix"], ["固定解除", "Unfix"],
-    ["引出線", "Leader"], ["自由テキスト", "Free Text"], ["画像を読み込み", "Import Image"], ["画像", "Image"], ["参照画像", "Reference Image"], ["位置ロック", "Position lock"], ["2点から縮尺を設定", "Calibrate scale from two points"], ["幅", "Width"], ["拘束状態表示", "Constraint Status View"],
+    ["引出線", "Leader"], ["自由テキスト", "Free Text"], ["画像を読み込み", "Import Image"], ["画像", "Image"], ["参照画像", "Reference Image"], ["位置ロック", "Position lock"], ["2点から縮尺を設定", "Calibrate scale from two points"], ["幅", "Width"], ["非表示要素を表示", "Show Hidden Elements"], ["拘束状態表示", "Constraint Status View"],
     ["拘束状態表示を切り替え（Space長押しでも一時表示）", "Toggle constraint status view (hold Space for temporary view)"],
     ["拘束ツールはツールバーから選択します", "Select constraint tools from the toolbar"],
     ["プロパティ", "Properties"], ["スケッチ", "Sketch"], ["スケッチツリー", "Sketch Tree"],
@@ -36,6 +42,7 @@
     ["選択したオブジェクトのプロパティを表示します。", "Select an object to display its properties."],
     ["個のオブジェクト", "objects"], ["選択数", "Selected objects"], ["混在", "Mixed"], ["自動", "Auto"], ["中心", "Center"], ["角度", "Angle"], ["補助", "Construction"], ["固定", "Fixed"],
     ["完全拘束", "Fully constrained"], ["支持位置拘束", "Supported position"], ["未拘束", "Under-constrained"], ["矛盾", "Conflict"],
+    ["拘束状態表示: 表示中のGeometryの拘束状態を表示しています", "Constraint status: showing the state of visible Geometry."],
     ["参照エラー", "Reference error"], ["重複", "Duplicate"], ["拘束状態表示中", "Constraint status view"],
     ["Geometryを選択または作成します。Spaceで拘束状態を表示します。", "Select or create geometry. Hold Space to show constraint status."],
     ["プロパティを最小化", "Collapse Properties"], ["プロパティを展開", "Expand Properties"],

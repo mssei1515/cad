@@ -37,4 +37,11 @@ async function completeBlockEdit(page) {
   if (await dialog.isVisible()) await dialog.locator('[data-choice-value="true"]').click();
 }
 
-module.exports = { test, expect: playwright.expect, openTestDocument, completeBlockEdit };
+async function revealToolbarTool(page, selector) {
+  const button = page.locator(selector);
+  if (await button.isVisible()) return;
+  const menuId = await button.evaluate(element => element.closest('[data-flyout-menu]')?.id);
+  if (menuId) await page.locator('[data-flyout-toggle][aria-controls="' + menuId + '"]').click();
+}
+
+module.exports = { revealToolbarTool, test, expect: playwright.expect, openTestDocument, completeBlockEdit };

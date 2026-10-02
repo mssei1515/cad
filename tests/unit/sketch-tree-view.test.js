@@ -5,7 +5,7 @@ const vm = require('node:vm');
 const test = require('node:test');
 const sandbox = { window: {} }; vm.createContext(sandbox);
 vm.runInContext(fs.readFileSync(path.resolve(__dirname, '../../src/ui/sketch_tree_view.js'), 'utf8'), sandbox);
-function fixture() {
+function fixture({ root = false, selected = false } = {}) {
   const handlers = {}, attrs = {}, classes = new Set(); let scope = 'document', areaWidth = 500;
   const list = {}, label = {}, sketch = { id: 'S1', name: 'Sketch' };
   const overlay = { style: {}, parentElement: { getBoundingClientRect: () => ({ width: areaWidth }) },
@@ -15,7 +15,7 @@ function fixture() {
     setAttribute: (name, value) => { attrs[name] = value; }, setPointerCapture: () => {} };
   const view = sandbox.window.SketchTreeView.create({
     document: { getElementById: id => id === 'sketchList' ? list : label }, sketchOverlay: overlay, sketchOverlayResizeHandle: handle,
-    getScopeKey: () => scope, currentScope: () => ({ sketches: [sketch] }), ensureSketchState() {}, isRootSketch: () => false,
+    getScopeKey: () => scope, currentScope: () => ({ sketches: [sketch] }), ensureSketchState() {}, isRootSketch: () => root, selectedSketchId: () => selected ? "S1" : null,
     activeSketchId: () => 'S1', applicationText: (_ja, en) => en, escapeHtml: String,
     objects: { index: () => new Map([['S1', { point: [{ id: 'P1' }], line: [], circle: [], arc: [], spline: [], hatch: [], image: [], block: [], instance: [], constraint: [], annotation: [] }]]), row: () => '<point-row>', selected: () => false, hovered: () => false, summary: () => '' },
     sketchHasSolveError: () => false, referenceConstraintErrorCountForSketch: () => 0, constraintDuplicateCountForSketch: () => 0, actions: {},
@@ -58,4 +58,13 @@ test('active markers do not imply selection and click routes include explicit ac
   assert.ok(f.list.innerHTML.includes('Edit this sketch'));
   assert.ok(f.list.innerHTML.includes('aria-current="true" aria-pressed="false"'));
   assert.ok(f.list.innerHTML.includes('double-click or Alt+Enter'));
+});
+
+test('selected active Sketch keeps its editing marker but hides Edit; Root never shows editing marker', () => {
+  const active = fixture({ selected: true }); active.view.render();
+  assert.match(active.list.innerHTML, /class="sketchEditBtn"[^>]* hidden /);
+  assert.ok(active.list.innerHTML.includes('sketch-active-label'));
+  const root = fixture({ root: true, selected: true }); root.view.render();
+  assert.match(root.list.innerHTML, /class="sketchEditBtn"[^>]* hidden /);
+  assert.equal(root.list.innerHTML.includes('sketch-active-label'), false);
 });

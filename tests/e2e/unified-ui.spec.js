@@ -1,4 +1,4 @@
-const { test, expect, openTestDocument, completeBlockEdit } = require("./test-fixture");
+const { test, expect, openTestDocument, completeBlockEdit, revealToolbarTool } = require("./test-fixture");
 const { execFileSync } = require("child_process");
 const path = require("path");
 const { pathToFileURL } = require("url");
@@ -252,6 +252,7 @@ test("three-point arc uses two endpoints and a circumference point while preserv
     through: window.__jot2dTest.worldClientPositionForTest({ x: 0, y: -50 }),
   }));
 
+  await revealToolbarTool(page, "#toolThreePointArc");
   await page.locator("#toolThreePointArc").click();
   await expect(page.locator("#hint")).toHaveText("3点円弧の始点をクリックしてください。Escで選択モードに戻ります");
   await page.mouse.click(positions.cancelStart.x, positions.cancelStart.y);
@@ -283,6 +284,7 @@ test("three-point arc uses two endpoints and a circumference point while preserv
   expect(center.y + Math.sin(arc.endAngle) * arc.radius).toBeCloseTo(0, 8);
   expect(arc.endAngle - arc.startAngle).toBeCloseTo(Math.PI, 8);
 
+  await revealToolbarTool(page, "#toolArc");
   await page.locator("#toolArc").click();
   await expect(page.locator("#hint")).toHaveText("円弧の中心をクリックしてください。Escで選択モードに戻ります");
 });
@@ -300,6 +302,7 @@ test("three-point arc keeps endpoint and circumference point snaps as constraint
   for (const position of positions) await page.mouse.click(position.x, position.y);
   const pointIds = (await page.evaluate(() => window.__jot2dTest.serializedModelForTest())).points.map((point) => point.id);
 
+  await revealToolbarTool(page, "#toolThreePointArc");
   await page.locator("#toolThreePointArc").click();
   for (const position of positions) await page.mouse.click(position.x, position.y);
   const state = await page.evaluate(() => window.__jot2dTest.serializedModelForTest());
@@ -1174,7 +1177,7 @@ test("workspace integrates transparent compact Object groups into Sketch Tree an
 
   expect(layout.modeControls).toBe(0);
   expect(layout.menus).toEqual(["ファイル", "編集", "表示", "ジオメトリ", "ブロック", "拘束", "注記", "ヘルプ"]);
-  expect(layout.toolIds).toEqual(expect.arrayContaining(["exportBtn", "importBtn", "undoBtn", "redoBtn", "deleteSelectionBtn", "toolSelect", "toolPoint", "toolLine", "toolCreateBlock", "annotationLeaderBtn", "annotationTextBtn"]));
+  expect(layout.toolIds).toEqual(expect.arrayContaining(["exportBtn", "importBtn", "undoBtn", "redoBtn", "saveFlyoutToggle", "arcFlyoutToggle", "toolArcMain", "selectionVisibilityBtn", "toolSelect", "toolPoint", "toolLine", "toolCreateBlock", "annotationLeaderBtn", "annotationTextBtn"]));
   expect(layout.iconButtons.every((button) => button.text === "" && button.hasIcon && button.title && button.label)).toBe(true);
   expect(layout.canvasCursor).toMatch(/^url\(/);
   expect(layout.gridControls).toBe(0);
@@ -1187,7 +1190,7 @@ test("workspace integrates transparent compact Object groups into Sketch Tree an
   expect(layout.menuBackground).toBe("rgb(30, 58, 95)");
   expect(layout.menuBackground).toBe(layout.statusBackground);
   expect(layout.geometryMenuColumnCount).toBe(1);
-  expect(layout.fileMenuTools).toEqual(["exportBtn", "importBtn"]);
+  expect(layout.fileMenuTools).toEqual(["exportBtn", "importBtn", "saveAsBtn"]);
   expect(layout.blockMenuTools).toEqual(["toolCreateBlock"]);
   await expect(page.locator("#openBlockDefinitionsBtn")).toHaveCount(1);
   expect(layout.blockCreateButtonCount).toBe(1);
@@ -1431,6 +1434,7 @@ test("workspace integrates transparent compact Object groups into Sketch Tree an
   expect(pointRows[0]).toBe("種類点");
   expect(pointRows[1]).toMatch(/^ID.+/);
   expect(pointRows).toEqual(expect.arrayContaining([expect.stringMatching(/^X座標/), expect.stringMatching(/^Y座標/)]));
+  await page.locator(".app-menu > summary").filter({ hasText: /^編集$/ }).click();
   await page.click("#deleteSelectionBtn");
   await expect(page.locator('.sketch-group-row[data-category="point"]')).toHaveCount(0);
 });
@@ -1498,7 +1502,7 @@ test("Jot2D files open, overwrite, save as, and cancel without errors", async ({
   await expect(page.locator('[data-menu-tool="exportBtn"]')).toContainText("上書き保存");
   await expect(page.locator("#exportBtn")).toHaveAttribute("title", "上書き保存");
   await expect(page.locator("#exportBtn")).toHaveAttribute("aria-label", "上書き保存");
-  await expect(page.locator("#saveAsBtn")).toContainText("名前を付けて保存");
+  await expect(page.locator("#saveAsBtn")).toHaveAttribute("aria-label", "名前を付けて保存");
   await page.click("#exportBtn");
   await expect.poll(() => page.evaluate(() => window.__jot2dFsMock.records[0]?.writeCount)).toBe(1);
   let state = await page.evaluate(() => ({
@@ -1632,7 +1636,7 @@ test("file URL Help menu reads the generated Git commit file", async ({ page }) 
     "runtime-version.js", "app.js",
     "src/geometry/geometry_kernel.js", "src/geometry/geometry_ref.js", "src/geometry/spline_geometry.js",
     "src/geometry/hatch_region.js", "src/geometry/offset_chain.js", "src/solver/constraint_solver.js", "src/constraints/references.js", "src/constraints/operand_hit_query.js", "src/geometry/objects.js", "src/geometry/annotation_anchor_query.js", "src/geometry/hatch_query.js", "src/geometry/instance_projection.js",
-    "src/parameters/parameter_engine.js", "src/editing/edit_history.js", "src/editing/history_controller.js", "src/editing/workspace.js", "src/editing/block_editor_session.js", "src/editing/block_editing_queries.js", "src/editing/block_selection_query.js", "src/editing/sketch_move.js", "src/editing/block_definition_editing.js", "src/editing/block_history_snapshot.js", "src/editing/sketch_context.js", "src/editing/selection.js", "src/editing/canvas_hover.js", "src/editing/point_usage.js", "src/editing/drawing_preview.js", "src/commands/point_command.js", "src/editing/annotation_command_input.js", "src/editing/constraint_command_input.js", "src/editing/instance_command_input.js", "src/editing/drawing_command_input.js", "src/editing/blank_canvas_gesture.js", "src/editing/canvas_selection_interaction.js", "src/editing/canvas_press_query.js", "src/editing/pointer_interaction_controller.js", "src/editing/pointer_hover.js", "src/editing/rectangle_selection_query.js", "src/editing/geometry_drag_plan.js", "src/editing/geometry_drag_editing.js", "src/solver/geometry_drag_solver.js", "src/solver/solve_scope_query.js", "src/solver/sketch_solving.js", "src/constraints/reference_constraint_state.js", "src/constraints/constraint_redundancy.js", "src/constraints/constraint_analysis.js", "src/constraints/sketch_projection_queries.js", "src/editing/sketch_projection_editing.js", "src/editing/selection_highlight.js", "src/editing/geometry_ids.js", "src/editing/spline_draft.js", "src/editing/offset_selection.js", "src/geometry/offset_geometry.js", "src/editing/offset_construction.js", "src/commands/offset_command.js", "src/rendering/interaction_overlay_renderer.js", "src/rendering/placement_preview_renderer.js", "src/rendering/authoring_preview_renderer.js", "src/rendering/offset_preview_renderer.js", "src/editing/transient_authoring.js", "src/editing/geometry_creation.js", "src/editing/first_dimension_scaling.js", "src/editing/checkpoint.js", "src/editing/trim_query.js", "src/editing/trim_editing.js", "src/geometry/fillet_geometry.js", "src/editing/fillet_construction.js", "src/geometry/centerline_geometry.js", "src/editing/centerline_construction.js", "src/commands/centerline_command.js", "src/editing/drawing_snap.js", "src/editing/snap_constraints.js", "src/ui/application_menus.js", "src/ui/canvas_context_menu.js", "src/ui/canvas_context_presentation.js", "src/parameters/dialog_draft.js", "src/parameters/application.js", "src/parameters/stabilization.js", "src/parameters/block_propagation.js", "src/constraints/rebinding.js", "src/persistence/block_ownership.js", "src/ui/expression_input_view.js", "src/ui/parameter_dialog_view.js", "src/ui/parameter_dialog_controller.js", "src/editing/slot_construction.js", "src/commands/slot_command.js", "src/commands/rectangle_command.js", "src/commands/line_command.js", "src/commands/fillet_command.js", "src/commands/dimension_value_command.js", "src/commands/spline_command.js", "src/editing/circular_construction.js", "src/commands/circular_commands.js", "src/diagnostics/interaction_profiler.js", "src/ui/canvas_navigation.js", "src/ui/pointer_move_scheduler.js", "src/ui/command_cursor.js", "src/ui/sketch_tree_view.js", "src/ui/sketch_tree_objects.js", "src/ui/sketch_tree_controller.js", "src/ui/appearance_controls.js", "src/ui/property_rows.js", "src/ui/properties_view.js", "src/ui/block_view.js", "src/ui/appearance_palette.js", "src/editing/property_selection.js", "src/editing/appearance_editing.js", "src/commands/bulk_property_command.js", "src/commands/geometry_property_command.js", "src/commands/appearance_property_command.js", "src/commands/element_property_command.js", "src/commands/block_placement_command.js", "src/commands/instance_source_command.js", "src/commands/geometry_instance_command.js", "src/commands/instance_transform_command.js", "src/commands/block_configuration_command.js", "src/commands/block_completion_command.js", "src/commands/block_definition_command.js", "src/commands/sketch_command.js", "src/commands/sketch_move_command.js", "src/commands/reference_image_interaction.js", "src/commands/annotation_drag.js", "src/commands/geometry_drag.js", "src/commands/dimension_drag.js", "src/commands/selection_rectangle.js", "src/commands/sketch_deletion_command.js", "src/ui/properties_controller.js", "src/ui/properties_content.js", "src/editing/property_presentation.js", "src/ui/dimension_input_view.js", "src/ui/dimension_input_controller.js", "src/ui/choice_dialog.js", "src/ui/application_settings.js",
+    "src/parameters/parameter_engine.js", "src/editing/edit_history.js", "src/editing/history_controller.js", "src/editing/workspace.js", "src/editing/block_editor_session.js", "src/editing/block_editing_queries.js", "src/editing/block_selection_query.js", "src/editing/sketch_move.js", "src/editing/block_definition_editing.js", "src/editing/block_history_snapshot.js", "src/editing/sketch_context.js", "src/editing/selection.js", "src/editing/canvas_hover.js", "src/editing/point_usage.js", "src/editing/drawing_preview.js", "src/commands/point_command.js", "src/editing/annotation_command_input.js", "src/editing/constraint_command_input.js", "src/editing/instance_command_input.js", "src/editing/drawing_command_input.js", "src/editing/blank_canvas_gesture.js", "src/editing/canvas_selection_interaction.js", "src/editing/canvas_press_query.js", "src/editing/pointer_interaction_controller.js", "src/editing/pointer_hover.js", "src/editing/rectangle_selection_query.js", "src/editing/geometry_drag_plan.js", "src/editing/geometry_drag_editing.js", "src/solver/geometry_drag_solver.js", "src/solver/solve_scope_query.js", "src/solver/sketch_solving.js", "src/constraints/reference_constraint_state.js", "src/constraints/constraint_redundancy.js", "src/constraints/constraint_analysis.js", "src/constraints/sketch_projection_queries.js", "src/editing/sketch_projection_editing.js", "src/editing/selection_highlight.js", "src/editing/geometry_ids.js", "src/editing/spline_draft.js", "src/editing/offset_selection.js", "src/geometry/offset_geometry.js", "src/editing/offset_construction.js", "src/commands/offset_command.js", "src/rendering/interaction_overlay_renderer.js", "src/rendering/placement_preview_renderer.js", "src/rendering/authoring_preview_renderer.js", "src/rendering/offset_preview_renderer.js", "src/editing/transient_authoring.js", "src/editing/geometry_creation.js", "src/editing/first_dimension_scaling.js", "src/editing/checkpoint.js", "src/editing/trim_query.js", "src/editing/trim_editing.js", "src/geometry/fillet_geometry.js", "src/editing/fillet_construction.js", "src/geometry/centerline_geometry.js", "src/editing/centerline_construction.js", "src/commands/centerline_command.js", "src/editing/drawing_snap.js", "src/editing/snap_constraints.js", "src/ui/application_menus.js", "src/ui/tool_flyouts.js", "src/ui/canvas_context_menu.js", "src/ui/canvas_context_presentation.js", "src/parameters/dialog_draft.js", "src/parameters/application.js", "src/parameters/stabilization.js", "src/parameters/block_propagation.js", "src/constraints/rebinding.js", "src/persistence/block_ownership.js", "src/ui/expression_input_view.js", "src/ui/parameter_dialog_view.js", "src/ui/parameter_dialog_controller.js", "src/editing/slot_construction.js", "src/commands/slot_command.js", "src/commands/rectangle_command.js", "src/commands/line_command.js", "src/commands/fillet_command.js", "src/commands/dimension_value_command.js", "src/commands/spline_command.js", "src/editing/circular_construction.js", "src/commands/circular_commands.js", "src/diagnostics/interaction_profiler.js", "src/ui/canvas_navigation.js", "src/ui/pointer_move_scheduler.js", "src/ui/command_cursor.js", "src/ui/sketch_tree_view.js", "src/ui/sketch_tree_objects.js", "src/ui/sketch_tree_controller.js", "src/ui/appearance_controls.js", "src/ui/property_rows.js", "src/ui/properties_view.js", "src/ui/block_view.js", "src/ui/appearance_palette.js", "src/editing/property_selection.js", "src/editing/appearance_editing.js", "src/commands/bulk_property_command.js", "src/commands/geometry_property_command.js", "src/commands/appearance_property_command.js", "src/commands/element_property_command.js", "src/commands/block_placement_command.js", "src/commands/instance_source_command.js", "src/commands/geometry_instance_command.js", "src/commands/instance_transform_command.js", "src/commands/block_configuration_command.js", "src/commands/block_completion_command.js", "src/commands/block_definition_command.js", "src/commands/sketch_command.js", "src/commands/sketch_move_command.js", "src/commands/reference_image_interaction.js", "src/commands/annotation_drag.js", "src/commands/geometry_drag.js", "src/commands/dimension_drag.js", "src/commands/selection_rectangle.js", "src/commands/sketch_deletion_command.js", "src/ui/properties_controller.js", "src/ui/properties_content.js", "src/editing/property_presentation.js", "src/ui/dimension_input_view.js", "src/ui/dimension_input_controller.js", "src/ui/choice_dialog.js", "src/ui/application_settings.js",
     "src/document/appearance.js", "src/commands/hatch_command.js", "src/commands/annotation_command.js", "src/document/drawing_order.js", "src/editing/canvas_context_query.js", "src/editing/geometry_hit_query.js", "src/document/sketch_hierarchy.js",
     "src/document/annotations.js", "src/document/hatches.js", "src/document/reference_images.js", "src/document/block_catalog.js", "src/geometry/block_projection.js", "src/geometry/read_model.js", "src/geometry/bounds.js", "src/geometry/block_layout.js", "src/geometry/reference_image_geometry.js", "src/rendering/drawing_bounds.js", "src/rendering/viewport.js", "src/rendering/canvas_surface.js", "src/rendering/dimension_metrics.js", "src/rendering/dimension_placement.js", "src/rendering/dimension_layout.js", "src/rendering/dimension_renderer.js", "src/rendering/geometry_presentation.js", "src/rendering/geometry_renderer.js", "src/rendering/hatch_renderer.js", "src/rendering/drawing_stack.js", "src/rendering/annotation_renderer.js", "src/rendering/annotation_spatial_query.js", "src/rendering/reference_image_renderer.js",
     "src/persistence/constraint_codec_registry.js", "src/persistence/constraints.js", "src/constraints/dimension_queries.js", "src/constraints/candidates.js", "src/parameters/namespace.js", "src/persistence/geometry.js", "src/persistence/geometry_instances.js", "src/persistence/block_definitions.js", "src/persistence/block_instances.js", "src/persistence/block_connections.js", "src/persistence/document_geometry.js",
@@ -2568,6 +2572,7 @@ test("Appearance cascades, used file colors are selectable, and constraint statu
   await statusMenuInput.check();
   await expect(page.locator("#constraintStatusViewBtn")).toHaveAttribute("aria-pressed", "true");
   expect(await page.evaluate(() => window.__jot2dTest.viewStateForTest())).toEqual(expect.objectContaining({ constraintStatus: true, mouseLatched: true, spaceHeld: false }));
+  await page.locator("#viewShowHiddenElementsInput").check();
   await statusMenuInput.uncheck();
   await expect(page.locator("#constraintStatusViewBtn")).toHaveAttribute("aria-pressed", "false");
   await viewMenuSummary.click();
@@ -3062,6 +3067,10 @@ test("Constraint dimensions expose defining geometry and inheritable appearance 
   await properties.locator('[data-dimension-display="visible"]').selectOption("false");
   expect(await page.evaluate(() => window.__jot2dTest.drawnDimensionLabelsForTest())).not.toEqual(expect.arrayContaining([expect.stringMatching(/REF .* mm/)]));
   await page.locator("#constraintStatusViewBtn").click();
+  expect(await page.evaluate(() => window.__jot2dTest.drawnDimensionLabelsForTest())).not.toEqual(expect.arrayContaining([expect.stringMatching(/REF .* mm/)]));
+  await page.locator(".app-menu > summary").nth(2).click();
+  await page.locator("#viewShowHiddenElementsInput").check();
+  await page.locator(".app-menu > summary").nth(2).click();
   expect(await page.evaluate(() => window.__jot2dTest.drawnDimensionLabelsForTest())).toEqual(expect.arrayContaining([expect.stringMatching(/REF .* mm/)]));
   await page.locator("#constraintStatusViewBtn").click();
   const serialized = await page.evaluate(() => window.__jot2dTest.serializedModelForTest());
@@ -3427,8 +3436,15 @@ test("unified canvas exposes dimensions from every visible sketch", async ({ pag
   expect(result.drawnDimensionSketchIds).toEqual(["S1", "S2"]);
   expect(new Set(result.drawnDimensionLabels)).toEqual(new Set(["100", "160"]));
   expect(result.labelsAfterHidingSecondSketch).toEqual(["100"]);
+  const hiddenSketchFixture = await page.evaluate(() => window.__jot2dTest.serializedModelForTest());
+  hiddenSketchFixture.sketches.find(sketch => sketch.id === "S2").appearance.visible = false;
+  await page.evaluate(data => window.__jot2dTest.loadDocumentFixtureForDragTest(data, "hidden-sketch.jot2d"), hiddenSketchFixture);
   expect(await page.evaluate(() => window.__jot2dTest.drawnDimensionColorsForTest())).toEqual(["#64748b"]);
   await page.locator("#constraintStatusViewBtn").click();
+  expect(await page.evaluate(() => window.__jot2dTest.drawnDimensionColorsForTest())).toEqual(["#64748b"]);
+  await page.locator(".app-menu > summary").nth(2).click();
+  await page.locator("#viewShowHiddenElementsInput").check();
+  await page.locator(".app-menu > summary").nth(2).click();
   expect(new Set(await page.evaluate(() => window.__jot2dTest.drawnDimensionColorsForTest()))).toEqual(new Set(["#64748b", "#cbd5e1"]));
   await page.locator("#constraintStatusViewBtn").click();
 });

@@ -4,7 +4,7 @@
   const { mergeBounds, lineBBox, primitiveBBox, splineBBox } = window.GeometryBounds;
   const { referenceImageBounds } = window.ReferenceImageGeometry;
   function create({ currentScope, geometryReads, activeSketchId, elementSketchId, isVisibleSketchElement,
-    isVisibleSketchId, annotationBounds, resolvedLoopBounds, resolvedHatchBoundary, hatchAppearanceForDisplay }) {
+    isVisibleSketchId, annotationBounds, resolvedLoopBounds, resolvedHatchBoundary, hatchAppearanceForDisplay, isVisibleValue = visible => visible !== false }) {
     const { allGeometryLines, allGeometryCircles, allGeometryArcs, allGeometrySplines, allGeometryPoints, allAnnotations, allHatches } = geometryReads;
     function sketchGeometryBounds(sketchId = activeSketchId()) {
       let bounds = null;
@@ -59,9 +59,9 @@
       for (const point of allGeometryPoints()) {
         if (isVisibleSketchElement(point)) bounds = mergeBounds(bounds, { x1: point.x, y1: point.y, x2: point.x, y2: point.y });
       }
-      for (const annotation of allAnnotations()) if (annotation.visible !== false && isVisibleSketchId(annotation.sketchId)) bounds = mergeBounds(bounds, annotationBounds(annotation));
-      for (const hatch of allHatches()) if (hatchAppearanceForDisplay(hatch).visible !== false && isVisibleSketchId(hatch.sketchId)) bounds = mergeBounds(bounds, resolvedLoopBounds(resolvedHatchBoundary(hatch)));
-      for (const image of currentScope().referenceImages) if (image.visible !== false && isVisibleSketchId(image.sketchId)) bounds = mergeBounds(bounds, referenceImageBounds(image));
+      for (const annotation of allAnnotations()) if (isVisibleValue(annotation.visible) && isVisibleSketchId(annotation.sketchId)) bounds = mergeBounds(bounds, annotationBounds(annotation));
+      for (const hatch of allHatches()) if (isVisibleValue(hatchAppearanceForDisplay(hatch).visible) && isVisibleSketchId(hatch.sketchId)) bounds = mergeBounds(bounds, resolvedLoopBounds(resolvedHatchBoundary(hatch)));
+      for (const image of currentScope().referenceImages) if (isVisibleValue(image.visible) && isVisibleSketchId(image.sketchId)) bounds = mergeBounds(bounds, referenceImageBounds(image));
       return bounds;
     }
 

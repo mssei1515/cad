@@ -18,10 +18,10 @@
     hatch: 10,
     image: 11,
   });
-  function create({ currentScope, viewportScale, canvasContextPointIsSelectable, editedFitPoints, sketches, projections, dimensions, annotations, hatches, hitReferenceImageAt = () => null }) {
+  function create({ currentScope, viewportScale, canvasContextPointIsSelectable, editedFitPoints, sketches, projections, dimensions, annotations, hatches, hitReferenceImageAt = () => null, isVisibleValue = visible => visible !== false }) {
     const { isEditableSketchId, isVisibleSketchId, isEditableSketchElement, isVisibleSketchElement, activeSketchId, isActiveSketchConstraint, constraintSketchId } = sketches;
     const { blockProjectionBundle, geometryInstanceBundle } = projections;
-    const { targetFromConstraint, defaultDimensionForTarget, effectiveDimensionAppearance, dimensionLayout, showConstraintStatus } = dimensions;
+    const { targetFromConstraint, defaultDimensionForTarget, effectiveDimensionAppearance, dimensionLayout } = dimensions;
     const { canvasContextAnnotationHit } = annotations;
     const { resolvedHatchBoundary, hatchAppearanceForDisplay, hatchContainsSelectablePoint } = hatches;
     function canvasContextBlockHitDistance(instance, pointer) {
@@ -61,7 +61,7 @@
       }
       for (const hatch of bundle.hatches || []) {
         const resolved = resolvedHatchBoundary(hatch);
-        if (resolved.ok && hatchAppearanceForDisplay(hatch).visible !== false && hatchContainsSelectablePoint(hatch, resolved, pointer)) distance = 0;
+        if (resolved.ok && isVisibleValue(hatchAppearanceForDisplay(hatch).visible) && hatchContainsSelectablePoint(hatch, resolved, pointer)) distance = 0;
       }
       return Number.isFinite(distance) ? distance : null;
     }
@@ -152,7 +152,7 @@
         const target = targetFromConstraint(constraint);
         if (!target) return;
         const dimension = constraint.dimension || defaultDimensionForTarget(target);
-        if (!showConstraintStatus() && effectiveDimensionAppearance(dimension, constraintSketchId(constraint)).visible === false) return;
+        if (!isVisibleValue(effectiveDimensionAppearance(dimension, constraintSketchId(constraint)).visible)) return;
         const layout = dimensionLayout(target, dimension);
         if (!layout) return;
         const labelDistance = hypot2(pointer.x - layout.text.x, pointer.y - layout.text.y);
@@ -181,7 +181,7 @@
       });
 
       model.hatches.forEach((hatch, index) => {
-        if (hatch.sketchId !== activeSketchId() || !isVisibleSketchId(hatch.sketchId) || hatchAppearanceForDisplay(hatch).visible === false) return;
+        if (hatch.sketchId !== activeSketchId() || !isVisibleSketchId(hatch.sketchId) || !isVisibleValue(hatchAppearanceForDisplay(hatch).visible)) return;
         const resolved = resolvedHatchBoundary(hatch);
         if (hatchContainsSelectablePoint(hatch, resolved, pointer)) push({ kind: "hatch", item: hatch }, 0, normalizedDrawingOrder(hatch.drawingOrder) ?? index);
       });
