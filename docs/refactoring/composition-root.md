@@ -6,6 +6,10 @@
 
 ## 現在の再開地点（2026-10-02）
 
+DrawingCommandInputへ基本作図のclick受付と拒否判定、PointCommandへ点作成の仮入力・snap・選択更新・求解の手順を分離。先行する注記／寸法／拘束等の入力優先度と各command引数、Point以外の既存選択の保持を維持。app.jsは12,455行から12,383行へ縮小。構文341件・単体769件・関連E2E203件成功（exit 0、4.1分）。ログはcad-drawing-input-{check,unit,e2e}.log。開始時週枠残量66%。次はInstance等の受付とhit snapshot。全体目標と全体E2Eは未完了。
+
+### 前回の区切り
+
 BlankCanvasGestureへ空白double clickの候補・重複抑止状態と終了／取消の優先順位を分離。仮Point／Lineの判定、450ms／6px境界、Spline確定優先、候補と抑止の別resetタイミングを維持。操作APIの接続はまだ多く、共通モード遷移整理時に見直す。app.jsは12,578行から12,455行へ縮小。構文338件・単体766件成功。関連E2E203件の初回は202成功／1失敗：既存Spline test hookのhatchFaceAt参照切れを発見し、独立commit 06e2026でhatchGeometryQuery経由へ修正。Spline6件再実行は全件成功、修正後app構文も成功。残る197件は初回成功で、失敗は解消。ログはcad-blank-gesture-{check,unit,e2e,spline-recheck}.log。開始時週枠残量70%。次は通常pointerdownのhit snapshotとcommand受付。全体目標と全体E2Eは未完了。
 
 ### 前回の区切り

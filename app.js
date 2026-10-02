@@ -6996,6 +6996,15 @@
 
   canvasContextController.start();
 
+  const pointCommand = window.PointCommand.create({
+    transientAuthoring, snapForDrawing, drawingSnap, addPoint, addPointSnapConstraints, clearSnap, canvasSelection, solveAndRefresh,
+  });
+  const drawingCommandInput = window.DrawingCommandInput.create({
+    getMode: () => mode, rejectRootSketchCreation, pointCommand, handleLineClick, handleCenterlineClick,
+    handleCircleCenterCrossClick, handleRectangleClick, handleSlotClick, handleFilletClick, handleCircleClick,
+    handleArcClick, handleThreePointArcClick, handleSplineClick, executeTrimAt, offsetCommand,
+  });
+
   const canvasSelectionInteraction = window.CanvasSelectionInteraction.create({
     canvasSelection, clearSelection, sameArcEndpoint, topmostDrawingOrderOwner, drawingOrderOwner,
     beginDerivedGeometryDrag, beginBlockDrag, beginDimensionDrag, beginReferenceImageDrag,
@@ -7204,78 +7213,7 @@
       return;
     }
 
-    if (["point", "line", "centerline", "circle-center-cross", "rectangle", "slot", "circle", "arc", "three-point-arc", "spline", "fillet", "trim", "offset", "block-place", "hatch", "hatch-repair"].includes(mode) && rejectRootSketchCreation()) {
-      e.preventDefault();
-      return;
-    }
-
-    if (mode === "point") {
-      clearTransientPointRollback();
-      beginTransientPointRollback();
-      const sp = snapForDrawing(p);
-      const snap = drawingSnap.active;
-      const np = addPoint(sp.x, sp.y, false);
-      transientAuthoring.markCreatedPoint(np);
-      addPointSnapConstraints(np, snap);
-      clearSnap();
-      canvasSelection.set("points", [np]);
-      canvasSelection.set("lines", []);
-      canvasSelection.set("circles", []);
-      canvasSelection.set("arcs", []);
-      canvasSelection.set("splines", []);
-      solveAndRefresh("点追加");
-      return;
-    }
-
-    if (mode === "line") {
-      handleLineClick(p, e.shiftKey);
-      return;
-    }
-
-    if (mode === "centerline") {
-      handleCenterlineClick(p, hitP, hitL);
-      return;
-    }
-
-    if (mode === "circle-center-cross") {
-      handleCircleCenterCrossClick(hitC);
-      return;
-    }
-
-    if (mode === "rectangle") {
-      handleRectangleClick(p);
-      return;
-    }
-
-    if (mode === "slot") {
-      handleSlotClick(p);
-      return;
-    }
-
-    if (mode === "fillet") {
-      handleFilletClick(hitL, p);
-      return;
-    }
-
-    if (mode === "circle") {
-      handleCircleClick(p);
-      return;
-    }
-
-    if (mode === "arc") {
-      handleArcClick(p);
-      return;
-    }
-
-    if (mode === "three-point-arc") {
-      handleThreePointArcClick(p);
-      return;
-    }
-
-    if (mode === "spline") {
-      handleSplineClick(p);
-      return;
-    }
+    if (drawingCommandInput.click(e, p, { hitP, hitL, hitC, hitA })) return;
 
     if (mode === "sketch-projection") {
       clearSnap();
@@ -7287,16 +7225,6 @@
       });
       canvasHover.update({ sketchIdentity: target ? { id: operandElement(target)?.id, sketchId: target.sketchId, item: operandElement(target), kind: geometryKindForItem(operandElement(target)) } : null });
       draw();
-      return;
-    }
-
-    if (mode === "trim") {
-      executeTrimAt(p);
-      return;
-    }
-
-    if (mode === "offset") {
-      offsetCommand.click(p, { hitL, hitA, hitC });
       return;
     }
 
