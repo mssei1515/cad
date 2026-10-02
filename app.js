@@ -301,8 +301,14 @@
   let suppressNextBlankDoubleClickEvent = false;
   let splineEditSession = null;
   let sketchProjectionSources = [];
-  let pointerPreview = null;
-  let trimPreview = null;
+  const drawingPreview = window.DrawingPreview.create({ types: { Point, Line, Circle, Arc }, canvasHover,
+    canCreateInActiveSketch, clearSnap: () => clearSnap(), snapForDrawing, draw,
+    linePreviewPoint: (point, shiftKey) => lineCommand.previewPoint(point, shiftKey),
+    readCenterline: () => centerlineCommand, projectPointToCenterlineSupport: point => projectPointToCenterlineSupport(point),
+    readOffsetSelection: () => offsetSelection, computeTrimPreview,
+    hits: { hitPoint: (x, y) => hitPoint(x, y), hitLine: (x, y) => hitLine(x, y),
+      hitCircle: (x, y) => hitCircle(x, y), hitArc: (x, y) => hitArc(x, y) },
+  });
 
   let pendingCommand = null;
   let pendingConstraintCommand = null;
@@ -402,8 +408,8 @@
     blockInstanceTranslationForAnchor, activeSketchId, currentScope: workspace.current,
     nextInstanceId: () => `BI${blockInstanceSeq++}`, clearSelection, canvasSelection, invalidateBlockProjectionCache,
     isPropertiesCollapsed: () => Boolean(document.querySelector(".workspace")?.classList.contains("properties-collapsed")),
-    setPropertiesPanelCollapsed, getPointerPreview: () => pointerPreview,
-    setPointerPreview: value => { pointerPreview = value; }, getLastPointerWorld: () => lastPointerWorld,
+    setPropertiesPanelCollapsed, getPointerPreview: () => drawingPreview.pointer,
+    setPointerPreview: value => { drawingPreview.setPointer(value); }, getLastPointerWorld: () => lastPointerWorld,
     setMode: value => { mode = value; }, setHint, updateUI, draw, solveAndRefresh, recordHistory,
   });
   const { start: startBlockPlacement, commit: commitBlockPlacement, click: handleBlockPlacementClick,
@@ -603,7 +609,7 @@
   const splineCommand = window.SplineCommand.create({
     draft: splineDraft, addSpline, snapForDrawing, scale: () => viewport.scale,
     clearProjectionSources: () => { sketchProjectionSources = []; },
-    setPointerPreview: value => { pointerPreview = value; },
+    setPointerPreview: value => { drawingPreview.setPointer(value); },
     clearSnap, clearSelection,
     selectCreatedSpline: spline => { canvasSelection.set("splines", [spline]); mode = "select"; },
     solveAndRefresh, recordHistory, applicationText, setHint, updateUI, draw,
@@ -614,14 +620,14 @@
   const lineCommand = window.LineCommand.create({
     minLineLength: MIN_LINE_LENGTH, snapForDrawing: point => ({ point: snapForDrawing(point), snap: drawingSnap.active }),
     samePosition, addPoint, endpointAt, addLine, addPointSnapConstraints, pushModelConstraint, transientAuthoring,
-    selection: canvasSelection, setPointerPreview: value => { pointerPreview = value; },
+    selection: canvasSelection, setPointerPreview: value => { drawingPreview.setPointer(value); },
     clearSelection, setHint, updateUI, draw, solveAndRefresh, log,
   });
   const { click: handleLineClick } = lineCommand;
   const rectangleCommand = window.RectangleCommand.create({
     endpointAt, addPoint, addLine, addPointSnapConstraints, pushModelConstraint,
     minLineLength: MIN_LINE_LENGTH, samePosition, selection: canvasSelection,
-    setPointerPreview: value => { pointerPreview = value; },
+    setPointerPreview: value => { drawingPreview.setPointer(value); },
     clearSnap, clearSelection, setHint, updateUI, draw, solveAndRefresh, log,
   });
   const offsetGeometry = window.OffsetGeometry.create({
@@ -645,8 +651,8 @@
     viewport, Line, Circle, minOrientationLength: MIN_ORIENTATION_LENGTH, offsetPairSign,
     offsetChainErrorText, formatDisplayNumber, formatDimensionLabel, setHint, updateToolbar,
     syncDimensionValueInput, focusDimensionValueInput, hideDimensionValueInput, draw,
-    clearPointerPreview: () => { pointerPreview = null; }, clearSelection,
-    setPointerPreview: value => { pointerPreview = value; }, syncOffsetChainSelection,
+    clearPointerPreview: () => { drawingPreview.setPointer(null); }, clearSelection,
+    setPointerPreview: value => { drawingPreview.setPointer(value); }, syncOffsetChainSelection,
     applicationText, updateGeometrySelectionUI,
   });
   const { start: startOffsetDistanceInput, startChain: startOffsetChainDistanceInput, submit: submitOffsetValue } = offsetCommand;
@@ -767,7 +773,7 @@
   const centerlineCommand = window.CenterlineCommand.create({
     plans: centerlinePlans, construction: centerlineConstruction, selection: canvasSelection, sameSketchElements, activeSketchId, isActiveSketchElement, applicationText, minLineLength: MIN_LINE_LENGTH,
     snapForDrawing: pointer => ({ point: snapForDrawing(pointer), snap: drawingSnap.active }), clearSnap,
-    setPointerPreview: value => { pointerPreview = value; }, setMode: value => { mode = value; },
+    setPointerPreview: value => { drawingPreview.setPointer(value); }, setMode: value => { mode = value; },
     invalidateAnalysis: () => { constraintAnalysis.invalidate(); }, setHint, updateUI, draw,
   });
   const { reset: resetCenterlineCommandState, prepare: prepareCenterlineEndpointPlacement, click: handleCenterlineClick, projectPointToCenterlineSupport } = centerlineCommand;
@@ -777,7 +783,7 @@
   });
   const circularCommands = window.CircularCommands.create({
     construction: circularConstruction, selection: canvasSelection, minArcLength: MIN_ARC_LENGTH,
-    setPointerPreview: point => { pointerPreview = point; }, clearSnap, clearSelection, setHint, updateUI, draw, solveAndRefresh,
+    setPointerPreview: point => { drawingPreview.setPointer(point); }, clearSnap, clearSelection, setHint, updateUI, draw, solveAndRefresh,
   });
   const { resetArcs: resetArcCommandState } = circularCommands;
   function handleCircleClick(point) { const snapped = snapForDrawing(point); circularCommands.clickCircle(snapped, drawingSnap.active); }
@@ -789,7 +795,7 @@
   });
   const slotCommand = window.SlotCommand.create({
     construction: slotConstruction, minLineLength: MIN_LINE_LENGTH, minArcLength: MIN_ARC_LENGTH,
-    setPointerPreview: point => { pointerPreview = point; }, clearSnap, clearSelection, setHint, updateUI, draw,
+    setPointerPreview: point => { drawingPreview.setPointer(point); }, clearSnap, clearSelection, setHint, updateUI, draw,
   });
   const { reset: resetSlotCommandState } = slotCommand;
   function handleSlotClick(point) {
@@ -1390,7 +1396,7 @@
     if (canCreateInActiveSketch()) return false;
     setHint("Root Sketchには図形を作成できません。子スケッチをダブルクリックしてアクティブにしてください。", "error");
     clearSnap();
-    pointerPreview = null;
+    drawingPreview.setPointer(null);
     draw();
     return true;
   }
@@ -1932,7 +1938,7 @@
         : [];
     resetCenterlineCommandState();
     mode = "centerline";
-    pointerPreview = null;
+    drawingPreview.setPointer(null);
     clearSnap();
     if (preselected.length === 2 && prepareCenterlineEndpointPlacement(preselected)) {
       updateToolbar();
@@ -1998,7 +2004,7 @@
     }
 
     mode = "select";
-    pointerPreview = null;
+    drawingPreview.setPointer(null);
     clearSnap();
     clearSelection();
     canvasSelection.set("lines", createdLines);
@@ -2018,7 +2024,7 @@
     if (preselected.length > 0 && createCircleCenterCrosses(preselected)) return;
     clearSelection();
     mode = "circle-center-cross";
-    pointerPreview = null;
+    drawingPreview.setPointer(null);
     clearSnap();
     updateUI({ refreshAnalysis: false });
     draw();
@@ -2091,7 +2097,7 @@
     sketchProjectionSources = [];
     splineEditSession = null;
     blankDoubleClickCandidate = null;
-    pointerPreview = null;
+    drawingPreview.setPointer(null);
     clearSelection();
     clearSnap();
     updateToolbar();
@@ -2359,7 +2365,7 @@
     geometryInstanceCommand.clearSources();
     instanceSourceCommand.reset();
     splineEditSession = null;
-    pointerPreview = null;
+    drawingPreview.setPointer(null);
     offsetSelection.reset();
     pendingCommand = null;
     pendingConstraintCommand = null;
@@ -2927,8 +2933,7 @@
     rectangleCommand.reset();
     resetSlotCommandState();
     filletCommand.reset();
-    pointerPreview = null;
-    trimPreview = null;
+    drawingPreview.reset();
     offsetSelection.reset();
     clearSnap();
     mode = "select";
@@ -2952,8 +2957,7 @@
     splineDraft.reset();
     splineEditSession = null;
     sketchProjectionSources = [];
-    pointerPreview = null;
-    trimPreview = null;
+    drawingPreview.reset();
     offsetSelection.reset();
     hatchCommand.reset();
     clearSnap();
@@ -2983,8 +2987,7 @@
     splineDraft.cancel();
     splineEditSession = null;
     sketchProjectionSources = [];
-    pointerPreview = null;
-    trimPreview = null;
+    drawingPreview.reset();
     offsetSelection.reset();
     hatchCommand.reset();
     clearSnap();
@@ -3464,7 +3467,7 @@
     lineCommand.reset();
     circularCommands.resetCircle();
     resetArcCommandState();
-    pointerPreview = null;
+    drawingPreview.setPointer(null);
     mode = "select";
 
     model.constraints = model.constraints.filter((c) => !constraintSet.has(c));
@@ -4151,14 +4154,14 @@
   }
 
   function drawBlockPlacementPreview() {
-    if (mode !== "block-place" || !blockPlacementCommand.definitionId || !pointerPreview) return;
-    const preview = blockPlacementCommand.preview(pointerPreview);
+    if (mode !== "block-place" || !blockPlacementCommand.definitionId || !drawingPreview.pointer) return;
+    const preview = blockPlacementCommand.preview(drawingPreview.pointer);
     if (!preview) return;
     placementPreview.drawBlock(createBlockProjectionBundle(preview.instance, preview.definition));
   }
 
   function drawFreeInstancePreview() {
-    placementPreview.drawFreeInstance(geometryInstanceCommand.preview(pointerPreview));
+    placementPreview.drawFreeInstance(geometryInstanceCommand.preview(drawingPreview.pointer));
   }
 
   function draw() {
@@ -4279,7 +4282,7 @@
     geometryRenderer.drawSplines(items ? items.filter(isVisibleSketchElement) : drawOrderBySketch(allGeometrySplines()));
   }
 
-  function drawSplinePreview() { if (mode === "spline") authoringPreview.drawSpline(splineDraft.points, pointerPreview); }
+  function drawSplinePreview() { if (mode === "spline") authoringPreview.drawSpline(splineDraft.points, drawingPreview.pointer); }
 
   function drawSplineEditHandles() { geometryRenderer.drawSplineEditHandles(splineHandleState()); }
 
@@ -4432,24 +4435,24 @@
 
 
 
-  function drawTemporaryLine() { if (mode === "line") authoringPreview.drawLine(lineCommand.startPoint, pointerPreview); }
+  function drawTemporaryLine() { if (mode === "line") authoringPreview.drawLine(lineCommand.startPoint, drawingPreview.pointer); }
 
-  function drawRectanglePreview() { if (mode === "rectangle") authoringPreview.drawRectangle(rectangleCommand.startPoint, pointerPreview); }
+  function drawRectanglePreview() { if (mode === "rectangle") authoringPreview.drawRectangle(rectangleCommand.startPoint, drawingPreview.pointer); }
 
-  function drawSlotPreview() { if (mode === "slot") authoringPreview.drawSlot(slotCommand.firstCenter, slotCommand.secondCenter, pointerPreview); }
+  function drawSlotPreview() { if (mode === "slot") authoringPreview.drawSlot(slotCommand.firstCenter, slotCommand.secondCenter, drawingPreview.pointer); }
 
-  function drawCirclePreview() { if (mode === "circle") authoringPreview.drawCircle(circularCommands.circleCenterPoint, pointerPreview); }
+  function drawCirclePreview() { if (mode === "circle") authoringPreview.drawCircle(circularCommands.circleCenterPoint, drawingPreview.pointer); }
 
-  function drawArcPreview() { if (mode === "arc") authoringPreview.drawArc(circularCommands.arcCenterPoint, circularCommands.arcStartPoint, pointerPreview); }
+  function drawArcPreview() { if (mode === "arc") authoringPreview.drawArc(circularCommands.arcCenterPoint, circularCommands.arcStartPoint, drawingPreview.pointer); }
 
-  function drawThreePointArcPreview() { if (mode === "three-point-arc") authoringPreview.drawThreePointArc(circularCommands.threePointArcStart, circularCommands.threePointArcEnd, pointerPreview); }
+  function drawThreePointArcPreview() { if (mode === "three-point-arc") authoringPreview.drawThreePointArc(circularCommands.threePointArcStart, circularCommands.threePointArcEnd, drawingPreview.pointer); }
 
   function drawOffsetPreview() {
     if (mode !== "offset") return;
-    offsetPreviewRenderer.draw(offsetCommand.preview(pointerPreview));
+    offsetPreviewRenderer.draw(offsetCommand.preview(drawingPreview.pointer));
   }
 
-  function drawTrimPreview() { if (mode === "trim") authoringPreview.drawTrim(trimPreview); }
+  function drawTrimPreview() { if (mode === "trim") authoringPreview.drawTrim(drawingPreview.trim); }
 
   function drawSnapMarker() { interactionOverlay.drawSnapMarker(drawingSnap.active); }
   function drawSketchIdentityLabel() {
@@ -4459,7 +4462,7 @@
   function drawCenterlinePreview() {
     if (mode !== "centerline" || !centerlineCommand.support?.ok) return;
     authoringPreview.drawCenterline(centerlineCommand.support, centerlineCommand.firstPoint,
-      pointerPreview ? projectPointToCenterlineSupport(pointerPreview) : null,
+      drawingPreview.pointer ? projectPointToCenterlineSupport(drawingPreview.pointer) : null,
       { width: canvas.clientWidth, height: canvas.clientHeight });
   }
 
@@ -4640,8 +4643,7 @@
     filletCommand.reset();
     circularCommands.resetCircle();
     resetArcCommandState();
-    pointerPreview = null;
-    trimPreview = null;
+    drawingPreview.reset();
     updateToolbar();
     if (pendingConstraintCommand?.type === type) {
       cancelConstraintTargetCommand(`${constraintLabel(type)}の対象選択をキャンセルしました`);
@@ -5017,8 +5019,7 @@
     filletCommand.reset();
     circularCommands.resetCircle();
     resetArcCommandState();
-    pointerPreview = null;
-    trimPreview = null;
+    drawingPreview.reset();
     pendingConstraintCommand = { type: "distance" };
     pendingCommand = {
       type: "distance-place",
@@ -5046,8 +5047,7 @@
     filletCommand.reset();
     circularCommands.resetCircle();
     resetArcCommandState();
-    pointerPreview = null;
-    trimPreview = null;
+    drawingPreview.reset();
     pendingConstraintCommand = { type: "distance" };
     pendingCommand = { type: "distance-place", target: { kind, primitive, value }, pointer: defaultDimensionForTarget({ kind, primitive, value }) };
     updateConstraintButtons();
@@ -5061,7 +5061,7 @@
     if (!pendingCommand) return;
     if (pendingCommand.type === "offset-value") {
       offsetSelection.reset();
-      pointerPreview = null;
+      drawingPreview.setPointer(null);
     }
     pendingCommand = null;
     hideDimensionValueInput();
@@ -5296,8 +5296,7 @@
     filletCommand.reset();
     circularCommands.resetCircle();
     resetArcCommandState();
-    pointerPreview = null;
-    trimPreview = null;
+    drawingPreview.reset();
     offsetSelection.reset();
     pendingCommand = null;
     pendingConstraintCommand = null;
@@ -5321,7 +5320,7 @@
   const { createSketch, activate: setActiveSketch, rename: renameSketch, toggleVisibility: toggleSketchVisibility } = sketchCommand;
   const hatchCommand = window.HatchCommand.create({
     currentScope: workspace.current, hatchGeometryQuery, getMode: () => mode, setMode: value => { mode = value; },
-    lastPointer: () => lastPointerWorld, getPointerPreview: () => pointerPreview, setPointerPreview: value => { pointerPreview = value; },
+    lastPointer: () => lastPointerWorld, getPointerPreview: () => drawingPreview.pointer, setPointerPreview: value => { drawingPreview.setPointer(value); },
     activeSketchId, setActiveSketch, canCreateInActiveSketch, rejectRootSketchCreation,
     nextHatchId: () => `H${hatchSeq++}`, hatchSequence: () => hatchSeq,
     cancelConstraintTargetCommand, cancelPendingCommand, clearSnap, clearSelection, canvasSelection,
@@ -6681,7 +6680,7 @@
       return false;
     }
     if (!guardSketchProjectionShapeEdit([preview.item], { action: applicationText("トリム", "Trim") })) {
-      trimPreview = null;
+      drawingPreview.setTrim(null);
       draw();
       return false;
     }
@@ -6689,7 +6688,7 @@
     if (preview.kind === "line") executeLineTrim(preview);
     else if (preview.kind === "arc") executeArcTrim(preview);
     else executeCircleTrim(preview);
-    trimPreview = null;
+    drawingPreview.setTrim(null);
     clearSelection();
     const solved = stabilizeActiveParameterNamespace(activeSketchId());
     const result = solved.result;
@@ -6790,7 +6789,7 @@
     let canceled = false;
     if (mode === "block-place") {
       blockPlacementCommand.reset({ preservePanelState: true });
-      pointerPreview = null;
+      drawingPreview.setPointer(null);
       mode = "select";
       restoreBlockPlacementPropertiesPanel();
       setHint(applicationText("ブロック配置をキャンセルしました", "Block placement canceled."));
@@ -7496,14 +7495,13 @@
     const p = coordinatePoint;
     lastPointerWorld = p;
     if (mode.startsWith("free-instance-")) {
-      pointerPreview = snapForDrawing(p);
-      draw();
+      drawingPreview.updateFreeInstance(p);
       return;
     }
     if (mode === "hatch" || mode === "hatch-repair") {
       clearSnap();
       clearCanvasHover();
-      pointerPreview = p;
+      drawingPreview.setPointer(p);
       updateHatchPreview(p);
       draw();
       return;
@@ -7563,74 +7561,7 @@
       return;
     }
 
-    if (["point", "line", "centerline", "circle-center-cross", "rectangle", "slot", "circle", "arc", "three-point-arc", "spline", "fillet", "trim", "offset", "block-place"].includes(mode) && !canCreateInActiveSketch()) {
-      clearSnap();
-      pointerPreview = null;
-      trimPreview = null;
-      canvasHover.update({ sketchIdentity: null });
-      return;
-    }
-
-    if (mode === "line") {
-      canvasHover.update({ sketchIdentity: null });
-      const rawPreview = lineCommand.previewPoint(p, e.shiftKey);
-      pointerPreview = snapForDrawing(rawPreview);
-      draw();
-    }
-
-    if (mode === "centerline") {
-      clearSnap();
-      canvasHover.update({ sketchIdentity: null });
-      pointerPreview = centerlineCommand.support?.ok ? projectPointToCenterlineSupport(snapForDrawing(p)) : p;
-      if (centerlineCommand.targets.length < 2) {
-        clearSnap();
-        const wantsLine = centerlineCommand.targets[0] instanceof Line;
-        const wantsPoint = centerlineCommand.targets[0] instanceof Point;
-        canvasHover.update({ point: wantsLine ? null : hitPoint(p.x, p.y) });
-        canvasHover.update({ endpointPoint: canvasHover.current.point });
-        canvasHover.update({ line: wantsPoint || canvasHover.current.point ? null : hitLine(p.x, p.y) });
-      } else {
-        canvasHover.update({
-          point: null, endpointPoint: null, line: null,
-        });
-      }
-      canvasHover.update({
-        circle: null, arc: null, arcEndpoint: null,
-        spline: null, dimension: null,
-      });
-      draw();
-      return;
-    }
-
-    if (mode === "circle-center-cross") {
-      clearSnap();
-      canvasHover.update({ sketchIdentity: null });
-      pointerPreview = p;
-      canvasHover.update({
-        point: null, endpointPoint: null, line: null,
-      });
-      canvasHover.update({ circle: hitCircle(p.x, p.y) });
-      canvasHover.update({
-        arc: null, arcEndpoint: null, spline: null,
-        dimension: null,
-      });
-      draw();
-      return;
-    }
-
-    if (mode === "rectangle" || mode === "slot" || mode === "circle" || mode === "arc" || mode === "three-point-arc" || mode === "spline") {
-      canvasHover.update({ sketchIdentity: null });
-      pointerPreview = snapForDrawing(p);
-      draw();
-    }
-
-    if (mode === "block-place") {
-      clearSnap();
-      canvasHover.update({ sketchIdentity: null });
-      pointerPreview = p;
-      draw();
-      return;
-    }
+    if (drawingPreview.updateAuthoring(mode, p, e.shiftKey)) return;
 
     if (pendingCommand?.type === "distance-place") {
       clearSnap();
@@ -7650,50 +7581,8 @@
       return;
     }
 
-    if (mode === "trim") {
-      clearSnap();
-      const hadHover = Boolean(canvasHover.current.point || canvasHover.current.endpointPoint || canvasHover.current.line || canvasHover.current.circle || canvasHover.current.arcEndpoint || canvasHover.current.arc || canvasHover.current.dimension);
-      canvasHover.update({
-        point: null, endpointPoint: null, line: null,
-        circle: null, arcEndpoint: null, arc: null,
-        spline: null, dimension: null, sketchIdentity: null,
-      });
-      const nextTrimPreview = computeTrimPreview(p);
-      if (nextTrimPreview !== trimPreview || hadHover) {
-        trimPreview = nextTrimPreview;
-        draw();
-      }
-      return;
-    }
-
-    if (mode === "offset") {
-      clearSnap();
-      canvasHover.update({ sketchIdentity: null });
-      if (pendingCommand?.type === "offset-value") {
-        draw();
-        return;
-      }
-      pointerPreview = p;
-      if (offsetSelection.source instanceof Circle || offsetSelection.committed) {
-        canvasHover.update({
-          point: null, endpointPoint: null, line: offsetSelection.source instanceof Line ? offsetSelection.source : null,
-          circle: offsetSelection.source instanceof Circle ? offsetSelection.source : null, arc: offsetSelection.source instanceof Arc ? offsetSelection.source : null,
-        });
-      } else {
-        const nextLine = hitLine(p.x, p.y);
-        const nextCircle = nextLine ? null : hitCircle(p.x, p.y);
-        const nextArc = nextLine || nextCircle ? null : hitArc(p.x, p.y);
-        canvasHover.update({
-          point: null, endpointPoint: null, line: nextLine,
-          circle: nextCircle, arc: nextArc,
-        });
-      }
-      canvasHover.update({
-        arcEndpoint: null, dimension: null,
-      });
-      draw();
-      return;
-    }
+    if (mode === "trim") { drawingPreview.updateTrim(p); return; }
+    if (mode === "offset") { drawingPreview.updateOffset(p, pendingCommand?.type === "offset-value"); return; }
 
     if (pendingConstraintCommand && !geometryDrag.active) {
       if (pointerHover.updateConstraint(p, pendingConstraintCommand.type)) draw();
@@ -7833,7 +7722,7 @@
       if (isTransientLineCompletionHit(hits)) {
         rollbackTransientLineCompletion();
         lineCommand.reset();
-        pointerPreview = null;
+        drawingPreview.setPointer(null);
         clearSnap();
         clearSelection();
         setHint("線の作図をキャンセルしました");
@@ -8124,7 +8013,7 @@
         if (blockPlacementCommand.anchor) commitBlockPlacement(0);
         else {
           blockPlacementCommand.reset({ preservePanelState: true });
-          pointerPreview = null;
+          drawingPreview.setPointer(null);
           mode = "select";
           restoreBlockPlacementPropertiesPanel();
           setHint("ブロック配置をキャンセルしました");
@@ -8341,7 +8230,7 @@
     filletCommand.reset();
     circularCommands.resetCircle();
     resetArcCommandState();
-    pointerPreview = null;
+    drawingPreview.setPointer(null);
     clearSnap();
     updateToolbar();
     setHint("選択・ドラッグできます。Shift/Ctrlクリックで複数選択できます。");
@@ -8356,7 +8245,7 @@
     filletCommand.reset();
     circularCommands.resetCircle();
     resetArcCommandState();
-    pointerPreview = null;
+    drawingPreview.setPointer(null);
     clearSnap();
     updateToolbar();
     setHint("キャンバスをクリックして点を追加します。");
@@ -8371,7 +8260,7 @@
     filletCommand.reset();
     circularCommands.resetCircle();
     resetArcCommandState();
-    pointerPreview = null;
+    drawingPreview.setPointer(null);
     clearSnap();
     updateToolbar();
     setHint("端点位置をクリックして連続線を作成します。終了はEscです。");
@@ -8413,7 +8302,7 @@
     filletCommand.reset();
     circularCommands.resetCircle();
     resetArcCommandState();
-    pointerPreview = null;
+    drawingPreview.setPointer(null);
     clearSnap();
     updateToolbar();
     setHint(constructionLineMode ? "補助線作図: 端点位置をクリックしてください" : "通常線作図に戻しました");
@@ -8428,7 +8317,7 @@
     filletCommand.reset();
     circularCommands.resetCircle();
     resetArcCommandState();
-    pointerPreview = null;
+    drawingPreview.setPointer(null);
     clearSnap();
     updateToolbar();
     setHint("矩形の1つ目の角をクリックしてください。Escで選択モードに戻ります");
@@ -8444,7 +8333,7 @@
     filletCommand.reset();
     circularCommands.resetCircle();
     circularCommands.resetCenterArc();
-    pointerPreview = null;
+    drawingPreview.setPointer(null);
     clearSnap();
     updateToolbar();
     setHint("長穴の1つ目の半円中心をクリックしてください。Escで選択モードに戻ります");
@@ -8463,7 +8352,7 @@
     filletCommand.reset();
     circularCommands.resetCircle();
     resetArcCommandState();
-    pointerPreview = null;
+    drawingPreview.setPointer(null);
     clearSnap();
     updateToolbar();
     setHint("R面取りする接続線を2本クリックしてください");
@@ -8478,8 +8367,7 @@
     filletCommand.reset();
     circularCommands.resetCircle();
     resetArcCommandState();
-    pointerPreview = null;
-    trimPreview = null;
+    drawingPreview.reset();
     offsetSelection.reset();
     canvasHover.update({
       point: null, endpointPoint: null, line: null,
@@ -8503,8 +8391,7 @@
     filletCommand.reset();
     circularCommands.resetCircle();
     resetArcCommandState();
-    pointerPreview = null;
-    trimPreview = null;
+    drawingPreview.reset();
     offsetSelection.reset();
     const selected = [...canvasSelection.lines, ...canvasSelection.circles, ...canvasSelection.arcs];
     if (selected.length === 1 && selected[0] instanceof Circle) {
@@ -8532,7 +8419,7 @@
     filletCommand.reset();
     circularCommands.resetCircle();
     resetArcCommandState();
-    pointerPreview = null;
+    drawingPreview.setPointer(null);
     clearSnap();
     updateToolbar();
     setHint("円の中心をクリックしてください。Escで選択モードに戻ります");
@@ -8547,7 +8434,7 @@
     filletCommand.reset();
     circularCommands.resetCircle();
     resetArcCommandState();
-    pointerPreview = null;
+    drawingPreview.setPointer(null);
     clearSnap();
     updateToolbar();
     setHint("円弧の中心をクリックしてください。Escで選択モードに戻ります");
@@ -8562,7 +8449,7 @@
     filletCommand.reset();
     circularCommands.resetCircle();
     resetArcCommandState();
-    pointerPreview = null;
+    drawingPreview.setPointer(null);
     clearSnap();
     updateToolbar();
     setHint("3点円弧の始点をクリックしてください。Escで選択モードに戻ります");
@@ -11380,8 +11267,7 @@
           viewport.update({ scale: 1 });
           viewport.update({ x: 0 });
           viewport.update({ y: 0 });
-          pointerPreview = null;
-          trimPreview = null;
+          drawingPreview.reset();
           selectionRectangle.reset();
           mode = "select";
         };
@@ -11410,46 +11296,46 @@
           mode = "line";
           lineCommand.click({ x: 0, y: 0 });
           lineCommand.startPoint.fixed = true;
-          pointerPreview = { x: 80, y: 0 };
+          drawingPreview.setPointer({ x: 80, y: 0 });
         }, drawTemporaryLine);
         capture("rectangle", () => {
           mode = "rectangle";
           rectangleCommand.click({ x: 0, y: 0 }, null);
-          pointerPreview = { x: 80, y: 45 };
+          drawingPreview.setPointer({ x: 80, y: 45 });
         }, drawRectanglePreview);
         capture("slot", () => {
           mode = "slot";
           slotCommand.click({ x: 0, y: 0 }, null);
           slotCommand.click({ x: 80, y: 0 }, null);
-          pointerPreview = { x: 40, y: 20 };
+          drawingPreview.setPointer({ x: 40, y: 20 });
         }, drawSlotPreview);
         capture("circle", () => {
           mode = "circle";
           circularCommands.clickCircle({ x: 0, y: 0 }, null);
           Object.assign(circularCommands.circleCenterPoint, { fixed: true, kind: "center" });
-          pointerPreview = { x: 35, y: 0 };
+          drawingPreview.setPointer({ x: 35, y: 0 });
         }, drawCirclePreview);
         capture("arc", () => {
           mode = "arc";
           circularCommands.clickArc({ x: 0, y: 0 }, null);
           Object.assign(circularCommands.arcCenterPoint, { fixed: true, kind: "center" });
           circularCommands.clickArc({ x: 35, y: 0 }, null);
-          pointerPreview = { x: 0, y: 35 };
+          drawingPreview.setPointer({ x: 0, y: 35 });
         }, drawArcPreview);
         capture("offset", () => {
           mode = "offset";
           offsetSelection.selectSource(addLine(addPoint(0, 0, true, "endpoint"), addPoint(80, 0, true, "endpoint")));
-          pointerPreview = { x: 40, y: 20 };
+          drawingPreview.setPointer({ x: 40, y: 20 });
         }, drawOffsetPreview);
         capture("trim", () => {
           mode = "trim";
-          trimPreview = {
+          drawingPreview.setTrim({
             kind: "line",
             interval: {
               left: { point: { x: 0, y: 0 } },
               right: { point: { x: 80, y: 0 } },
             },
-          };
+          });
         }, drawTrimPreview);
         capture("selection", () => {
           selectionRectangle.begin({ x: 0, y: 0 }, { current: { x: 80, y: 45 } });
@@ -11458,7 +11344,7 @@
           const definition = makeBlockDefinition();
           mode = "block-place";
           blockPlacementCommand.prepare(definition.id, [DEFAULT_SKETCH_ID]);
-          pointerPreview = { x: 120, y: 40 };
+          drawingPreview.setPointer({ x: 120, y: 40 });
         }, drawBlockPlacementPreview);
         capture("blockHandles", () => {
           const definition = makeBlockDefinition();
@@ -11684,7 +11570,7 @@
       },
       offsetUiState() {
         const constraints = model.constraints.filter((constraint) => constraint instanceof OffsetConstraint);
-        const preview = offsetSelection.source && pointerPreview ? offsetDistanceFromPointer(offsetSelection.source, pointerPreview) : null;
+        const preview = offsetSelection.source && drawingPreview.pointer ? offsetDistanceFromPointer(offsetSelection.source, drawingPreview.pointer) : null;
         return {
           pendingType: pendingCommand?.type || null,
           lineCount: model.lines.length,

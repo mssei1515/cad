@@ -6,6 +6,10 @@
 
 ## 現在の再開地点（2026-10-02）
 
+DrawingPreviewへpointer／Trim候補の状態と作図feedback更新を分離。command・モード切替・描画・診断を同じ所有者へ接続し、resetを集約。line／基本図形の後続hover継続、Centerline等の消費、距離寸法の前後関係、Trim参照同一性と既存hover条件を維持。app.jsは12,990行から12,876行へ縮小。構文332件・単体740件・関連E2E197件が成功（exit 0、ドラッグ・画像操作を含む）。ログはcad-drawing-preview-{check,unit,e2e}.log。全体目標と全体E2Eは未完了。開始時週枠残量83%。
+
+### 前回の区切り
+
 Block／Free Instanceの配置previewをPlacementPreviewRendererへ分離し、Geometry描画の重複を統合。投影生成は呼出し側、Hatch／注記は既存rendererへ委譲。描画順・青色・alpha・元styleの無変更・Free Instance点markerを保持。app.jsは13,041行から12,990行へ縮小。構文330件・単体734件・関連E2E192件が成功（exit 0）。ログはcad-placement-preview-{check,unit,e2e}.log。全体目標と全体E2Eは未完了。最新継続指示の週残量50%停止・最後のmainマージを再開方針に反映。開始時残量85%。
 
 ### 前回の区切り

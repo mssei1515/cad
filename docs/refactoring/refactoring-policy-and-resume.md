@@ -100,8 +100,8 @@
 
 最新の目標継続指示に従い週枠残量50%未満で停止し、その最後のコミットをmainへマージする。今回開始時は残量85%。main／developのリリース5116a81は作業branchへ取込済み。作業途中の単位ごとのリリースは行わない。
 
-Block／Free Instanceの配置previewをPlacementPreviewRendererへ分離した。投影生成は呼出し側、bundle描画はrendererが担当し、共通Geometry描画をまとめた。検証はcomposition-root.md先頭を参照する。
+DrawingPreviewへpointer／Trim候補の状態と作図時のsnap・hover更新を分離した。command・描画・モード切替・診断を同じ状態所有者へ接続。距離寸法の前後関係と入力消費／継続を保持。検証はcomposition-root.md先頭を参照する。
 
-次はCanvas入力のpointermove処理を調べ、各commandへの振分けとhover／drag状態の境界を整理する。Dimension preview・描画調整・入力／共通編集／Document操作・診断hookなども残る。全体目標と全体E2Eは未完了。
+次は残るpointermoveのパン・ドラッグ・注記／寸法配置・通常hoverの優先順位を整理し、入力イベントの振分けをappから切り離す。Dimension preview・描画調整・入力／共通編集／Document操作・診断hookなども残る。全体目標と全体E2Eは未完了。
 
 再開時はAGENTS.mdと本書を読み、Git状態を確認する。サブエージェントを使わず、責務単位で検証・Commit・Pushを続ける。週枠の残量と最新の停止／リリース指示を確認する。
