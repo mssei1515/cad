@@ -73,6 +73,15 @@
       return [...allGeometryCircles(), ...allGeometryArcs()];
     }
 
+    function scopeGeometryItem(kind, id) {
+      if (kind === "point") return currentScope().points.find((item) => item.id === id) || null;
+      if (kind === "line") return currentScope().lines.find((item) => item.id === id) || null;
+      if (kind === "circle") return currentScope().circles.find((item) => item.id === id) || null;
+      if (kind === "arc") return currentScope().arcs.find((item) => item.id === id) || null;
+      if (kind === "spline") return currentScope().splines.find((item) => item.id === id) || null;
+      return null;
+    }
+
     function resolveGeometryRef(ref) {
       return resolveGeometryRefValue(ref, (kind, canonicalId) => {
         if (kind === "point") return allGeometryPoints().find((item) => item.id === canonicalId);
@@ -100,7 +109,7 @@
       if (item && geometryReadCache) geometryReadCache.appearances.set(item, appearance);
     }
 
-    return Object.freeze({ withGeometryReadCache, blockProjectionBundles, geometryInstanceBundles, geometryInstanceBundle, allGeometryPoints, allGeometryLines, allGeometryCircles, allGeometryArcs, allGeometrySplines, allAnnotations, allHatches, allGeometryPrimitives, resolveGeometryRef, geometryElementFromKey, clearReadCache, readAppearance, cacheAppearance });
+    return Object.freeze({ scopeGeometryItem, withGeometryReadCache, blockProjectionBundles, geometryInstanceBundles, geometryInstanceBundle, allGeometryPoints, allGeometryLines, allGeometryCircles, allGeometryArcs, allGeometrySplines, allAnnotations, allHatches, allGeometryPrimitives, resolveGeometryRef, geometryElementFromKey, clearReadCache, readAppearance, cacheAppearance });
   }
   window.GeometryReadModel = Object.freeze({ create });
 })();

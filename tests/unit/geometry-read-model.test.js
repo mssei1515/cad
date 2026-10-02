@@ -102,3 +102,21 @@ test("reference lookups include splines while the legacy primitive list remains 
     assert.equal(reader.geometryElementFromKey("invalid"), null);
   });
 });
+
+test("scope geometry lookup uses current objects without expanding Block or Instance projections", () => {
+  const local = { id: "P1" }, projected = { id: "BI1@P1" };
+  const initial = scope({ points: [local], blockInstances: [{ bundle: bundle({ points: [projected] }) }] });
+  const { reader, switchScope, counts } = harness(initial);
+  assert.equal(reader.scopeGeometryItem("point", "P1"), local);
+  assert.equal(reader.scopeGeometryItem("point", projected.id), null);
+  assert.equal(reader.scopeGeometryItem("unknown", "P1"), null);
+  assert.equal(counts.prepare, 0); assert.equal(counts.derived, 0);
+  const replacement = scope();
+  for (const [kind, collection] of [["point", "points"], ["line", "lines"], ["circle", "circles"], ["arc", "arcs"], ["spline", "splines"]]) {
+    const item = { id: "same-id" }; replacement[collection].push(item);
+    switchScope(replacement);
+    assert.equal(reader.scopeGeometryItem(kind, "same-id"), item);
+    assert.equal(reader.scopeGeometryItem(kind, "missing"), null);
+  }
+  assert.equal(reader.scopeGeometryItem("point", "P1"), null);
+});

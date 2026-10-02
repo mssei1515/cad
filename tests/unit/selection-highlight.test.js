@@ -5,12 +5,13 @@ const vm = require('node:vm');
 const test = require('node:test');
 const sandbox = { window: {} }; vm.createContext(sandbox);
 vm.runInContext(fs.readFileSync(path.resolve(__dirname, '../../src/editing/selection_highlight.js'), 'utf8'), sandbox);
+const types = Object.fromEntries(["Point", "Line", "Circle", "Arc", "Spline", "OffsetChainConstraint"].map(name => [name, class {}]));
 function fixture() {
   let hoveredDimension = null, draws = 0;
   const selection = { points: [], lines: [], circles: [], arcs: [], splines: [], blockInstances: [] };
   const highlight = sandbox.window.SelectionHighlight.create({ canvasSelection: selection,
     blockProjectionBundle: instance => instance.bundle, geometryRefsEqual: (a, b) => a === b, geometryRefForItem: item => item.ref,
-    constraintGraphNodes: item => item.nodes, constraintHighlightNodes: item => item.nodes,
+    constraintGraphNodes: item => item.nodes, types,
     effectiveSelectedConstraint: () => selection.constraint, targetFromConstraint: item => item.dimension,
     getHoveredDimension: () => hoveredDimension, setHoveredDimension: value => { hoveredDimension = value; }, draw: () => draws++ });
   return { highlight, selection, get dimension() { return hoveredDimension; }, get draws() { return draws; } };
@@ -46,4 +47,31 @@ test('selection reference expansion includes primitive endpoints and block proje
   assert.deepEqual(Array.from(elements), [a, line, b, block, projected]);
   assert.equal(f.highlight.constraintDirectlyReferencesCanvasSelection({ nodes: [b] }), true);
   assert.equal(f.highlight.constraintDirectlyReferencesCanvasSelection({ nodes: [{}] }), false);
+});
+
+test('constraint display suppresses incidental line endpoints but retains directly constrained points', () => {
+  const f = fixture(), a = new types.Point(), b = new types.Point();
+  const line = Object.assign(new types.Line(), { p1: a, p2: b });
+  const constraint = { line, point: a, nodes: [line, a, b] };
+  assert.deepEqual(Array.from(f.highlight.constraintHighlightNodes(constraint)), [line, a]);
+  assert.deepEqual(Array.from(f.highlight.sidebarHoverElementsForConstraint(constraint)), [line, a]);
+  f.selection.constraint = constraint;
+  assert.equal(f.highlight.isSelectedConstraintRelatedElement(a), true);
+  assert.equal(f.highlight.isSelectedConstraintRelatedElement(b), false);
+  f.selection.points.push(b);
+  assert.equal(f.highlight.constraintDirectlyReferencesCanvasSelection(constraint), true);
+});
+test('constraint entries retain geometry role order, localized labels and Offset chain order', () => {
+  const f = fixture(), point = new types.Point(), line = new types.Line(), spline = new types.Spline();
+  const entries = f.highlight.constraintDefiningGeometryEntries({ point, line, spline, target: { id: 'untyped' } });
+  assert.deepEqual(Array.from(entries, e => e.key), ['point', 'line', 'spline']);
+  assert.equal(entries[0].labelJa, '点ID'); assert.equal(entries[0].labelEn, 'Point ID');
+  assert.equal(entries[0].item, point);
+  const chain = Object.assign(new types.OffsetChainConstraint(), { sources: [line, spline], offsets: [point] });
+  const chainEntries = f.highlight.constraintDefiningGeometryEntries(chain);
+  assert.deepEqual(Array.from(chainEntries, e => e.key), ['source0', 'source1', 'offset0']);
+  assert.deepEqual(Array.from(chainEntries, e => e.item), [line, spline, point]);
+  assert.equal(chainEntries[1].labelJa, '基準図形2 ID');
+  assert.equal(chainEntries[2].labelEn, 'Offset geometry 1 ID');
+  assert.equal(f.highlight.constraintDefiningGeometryEntries(null).length, 0);
 });

@@ -2,9 +2,57 @@
 (() => {
   "use strict";
   function create({ canvasSelection, blockProjectionBundle, geometryRefsEqual, geometryRefForItem,
-    constraintGraphNodes, constraintHighlightNodes, effectiveSelectedConstraint, targetFromConstraint,
+    constraintGraphNodes, types, effectiveSelectedConstraint, targetFromConstraint,
     getHoveredDimension, setHoveredDimension, draw }) {
+    const { Point, Line, Circle, Arc, Spline, OffsetChainConstraint } = types;
     let hoveredSidebarItem = null;
+    function constraintDefiningGeometryEntries(constraint) {
+      if (!constraint) return [];
+      if (constraint instanceof OffsetChainConstraint) {
+        return [
+          ...constraint.sources.map((item, index) => ({ key: `source${index}`, labelJa: `基準図形${index + 1} ID`, labelEn: `Source geometry ${index + 1} ID`, item })),
+          ...constraint.offsets.map((item, index) => ({ key: `offset${index}`, labelJa: `オフセット図形${index + 1} ID`, labelEn: `Offset geometry ${index + 1} ID`, item })),
+        ];
+      }
+      const roles = [
+        ["p1", "1つ目の点ID", "First point ID"],
+        ["p2", "2つ目の点ID", "Second point ID"],
+        ["point", "点ID", "Point ID"],
+        ["line", "線ID", "Line ID"],
+        ["circle", "円ID", "Circle ID"],
+        ["line1", "1本目の線ID", "First line ID"],
+        ["line2", "2本目の線ID", "Second line ID"],
+        ["centerline", "中心線ID", "Centerline ID"],
+        ["arc1", "1つ目の円弧ID", "First arc ID"],
+        ["arc2", "2つ目の円弧ID", "Second arc ID"],
+        ["source", "基準図形ID", "Source geometry ID"],
+        ["target", "投影先図形ID", "Target geometry ID"],
+        ["offset", "オフセット図形ID", "Offset geometry ID"],
+        ["arc", "円弧ID", "Arc ID"],
+        ["primitive", "図形ID", "Geometry ID"],
+        ["geometry", "図形ID", "Geometry ID"],
+        ["spline", "スプラインID", "Spline ID"],
+        ["a", "1つ目の図形ID", "First geometry ID"],
+        ["b", "2つ目の図形ID", "Second geometry ID"],
+        ["axis", "対称軸ID", "Symmetry axis ID"],
+      ];
+      return roles
+        .map(([key, labelJa, labelEn]) => ({ key, labelJa, labelEn, item: constraint[key] }))
+        .filter(({ item }) => item instanceof Point || item instanceof Line || item instanceof Circle || item instanceof Arc || item instanceof Spline);
+    }
+
+    function constraintHighlightNodes(constraint) {
+      const entries = constraintDefiningGeometryEntries(constraint);
+      const directPoints = new Set(entries.map(({ item }) => item).filter((item) => item instanceof Point));
+      const lineEndpoints = new Set();
+      for (const { item } of entries) {
+        if (!(item instanceof Line)) continue;
+        lineEndpoints.add(item.p1);
+        lineEndpoints.add(item.p2);
+      }
+      return constraintGraphNodes(constraint).filter((item) => !lineEndpoints.has(item) || directPoints.has(item));
+    }
+
     function sameConstraintDisplayElement(a, b) {
       if (a === b) return true;
       if (!a?.blockProjection || !b?.blockProjection) return false;
@@ -91,7 +139,7 @@
 
     function reset() { hoveredSidebarItem = null; }
     return Object.freeze({ reset, get current() { return hoveredSidebarItem; },
-      sameConstraintDisplayElement, isSidebarHoveredElement, isSelectedConstraintRelatedElement, selectedConstraintReferenceElements, constraintDirectlyReferencesCanvasSelection, sidebarHoverElementsForItem, sidebarHoverElementsForConstraint, setSidebarHover, clearSidebarHover });
+      constraintDefiningGeometryEntries, constraintHighlightNodes, sameConstraintDisplayElement, isSidebarHoveredElement, isSelectedConstraintRelatedElement, selectedConstraintReferenceElements, constraintDirectlyReferencesCanvasSelection, sidebarHoverElementsForItem, sidebarHoverElementsForConstraint, setSidebarHover, clearSidebarHover });
   }
   window.SelectionHighlight = Object.freeze({ create });
 })();

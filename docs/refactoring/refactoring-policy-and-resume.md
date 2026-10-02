@@ -100,8 +100,8 @@
 
 週枠50%の停止条件はユーザー指示で解除済み。main／developのリリース5116a81をcodex/composition-root-nextへ取り込み、Annotation Parameter表示などの最新変更を保持する。新たなmainへのマージは行わない。
 
-SketchTreeControllerへ行hover状態・イベント解釈・強調判定を統合。CanvasHoverとsidebar強調を明示portで接続し、Selection／アクティブSketchと分離した。検証はcomposition-root.md先頭を参照する。
+SelectionHighlightへ拘束の定義図形role・Propertiesラベル・強調対象の構成を統合。GeometryReadModelへscope内の図形ID検索を統合し、Sketchツリーから接続した。検証はcomposition-root.md先頭を参照する。
 
-次はsidebarのGeometry／拘束から強調対象を構成する照会とSelectionHighlightへの接続を調べる。投影・参照図形の扱い、選択とhoverの独立性を維持する。作図preview／snapとpointer routing等も未分離。全体目標と全体E2Eは未完了。
+次は描画前のgeometryPaintStateと所有Instanceの選択／hover照会を調べ、既存rendererとの境界を整理する。投影・参照図形の扱い、選択とhoverの独立性を維持する。作図preview／snapとpointer routing等も未分離。全体目標と全体E2Eは未完了。
 
 再開時はAGENTS.mdと本書を読み、Git状態を確認する。サブエージェントを使わず、責務単位で検証・Commit・Pushを続ける。週枠50%の停止条件を再適用しない。

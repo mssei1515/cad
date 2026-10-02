@@ -6,6 +6,10 @@
 
 ## 現在の再開地点（2026-10-02）
 
+SelectionHighlightへ拘束の図形role・Propertiesラベル・強調対象の構成を統合し、GeometryReadModelへ現在scopeの通常図形ID検索を統合。appからの逆向きcallbackを減らし、新moduleは追加しない。拘束照会2関数は本体一致を確認。app.jsは13,510行から13,456行へ縮小。構文322件・単体709件が成功。関連E2E192件が成功（cad-highlight-query-{check,unit,e2e}.log）。全テスト本体成功後のwebServer終了待ちが残ったため、今回の実行が生成したserverのPID／親PID／commandを確認して停止し、192 passedの最終出力を確認した。全体目標と全体E2Eは未完了。
+
+### 前回の区切り
+
 SketchTreeControllerへ行hover状態・pointerOver／Out・leave・所属図形の強調判定を統合。新moduleを増やさずCanvasHover／sidebar強調と接続し、SelectionとアクティブSketchは更新しない。3関数はscope取得以外の本体一致を確認。app.jsは13,565行から13,510行へ縮小。構文322件・単体706件が成功。関連E2E192件が成功（Sketchツリー・Canvas強調・選択を含む5ファイル）。ログは一時フォルダのcad-tree-hover-{check,unit,e2e}.log。全体目標と全体E2Eは未完了。
 
 ### 直前の区切り

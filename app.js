@@ -282,7 +282,7 @@
     hasBlockHatches: blockCatalog.hasHatches,
     profileRead: read => interactionProfiler.active ? profileInteractionWork("geometryReads", read) : read(),
   });
-  const { withGeometryReadCache, blockProjectionBundles, geometryInstanceBundles, geometryInstanceBundle, allGeometryPoints, allGeometryLines, allGeometryCircles, allGeometryArcs, allGeometrySplines, allAnnotations, allHatches, allGeometryPrimitives, resolveGeometryRef, geometryElementFromKey } = geometryReads;
+  const { scopeGeometryItem: sidebarGeometryItem, withGeometryReadCache, blockProjectionBundles, geometryInstanceBundles, geometryInstanceBundle, allGeometryPoints, allGeometryLines, allGeometryCircles, allGeometryArcs, allGeometrySplines, allAnnotations, allHatches, allGeometryPrimitives, resolveGeometryRef, geometryElementFromKey } = geometryReads;
   const { hitAnnotationTarget, annotationLeaderTargetFromSelection, annotationLeaderTargetFromHit, annotationLeaderTargetFromItem, annotationLeaderAnchor } = window.AnnotationAnchorQuery.create({
     selectedGeometryItems, elementSketchId, activeSketchId, resolveGeometryRef,
     viewportScale: () => viewport.scale, isVisibleSketchElement, isExplicitPoint, isPointUsedByPrimitive, isPointUsedByLine, isReferencePoint,
@@ -311,11 +311,11 @@
   let constructionLineMode = false;
   const selectionHighlight = window.SelectionHighlight.create({
     canvasSelection, blockProjectionBundle, geometryRefsEqual, geometryRefForItem,
-    constraintGraphNodes, constraintHighlightNodes, effectiveSelectedConstraint, targetFromConstraint,
+    constraintGraphNodes, types: { Point, Line, Circle, Arc, Spline, OffsetChainConstraint }, effectiveSelectedConstraint, targetFromConstraint,
     getHoveredDimension: () => canvasHover.current.dimension,
     setHoveredDimension: value => { canvasHover.update({ dimension: value }); }, draw,
   });
-  const { sameConstraintDisplayElement, isSidebarHoveredElement, isSelectedConstraintRelatedElement, selectedConstraintReferenceElements, constraintDirectlyReferencesCanvasSelection, sidebarHoverElementsForItem, sidebarHoverElementsForConstraint, setSidebarHover, clearSidebarHover } = selectionHighlight;
+  const { constraintDefiningGeometryEntries, constraintHighlightNodes, sameConstraintDisplayElement, isSidebarHoveredElement, isSelectedConstraintRelatedElement, selectedConstraintReferenceElements, constraintDirectlyReferencesCanvasSelection, sidebarHoverElementsForItem, sidebarHoverElementsForConstraint, setSidebarHover, clearSidebarHover } = selectionHighlight;
   const offsetSelection = window.OffsetSelection.create({
     getModel: () => model, activeSketchId, elementSketchId, constraintSketchId,
     Line, Arc, CoincidentConstraint, ArcEndpointCoincidentConstraint,
@@ -3345,53 +3345,6 @@
     return readOnly ? `(${label})` : label;
   }
 
-  function constraintDefiningGeometryEntries(constraint) {
-    if (!constraint) return [];
-    if (constraint instanceof OffsetChainConstraint) {
-      return [
-        ...constraint.sources.map((item, index) => ({ key: `source${index}`, labelJa: `基準図形${index + 1} ID`, labelEn: `Source geometry ${index + 1} ID`, item })),
-        ...constraint.offsets.map((item, index) => ({ key: `offset${index}`, labelJa: `オフセット図形${index + 1} ID`, labelEn: `Offset geometry ${index + 1} ID`, item })),
-      ];
-    }
-    const roles = [
-      ["p1", "1つ目の点ID", "First point ID"],
-      ["p2", "2つ目の点ID", "Second point ID"],
-      ["point", "点ID", "Point ID"],
-      ["line", "線ID", "Line ID"],
-      ["circle", "円ID", "Circle ID"],
-      ["line1", "1本目の線ID", "First line ID"],
-      ["line2", "2本目の線ID", "Second line ID"],
-      ["centerline", "中心線ID", "Centerline ID"],
-      ["arc1", "1つ目の円弧ID", "First arc ID"],
-      ["arc2", "2つ目の円弧ID", "Second arc ID"],
-      ["source", "基準図形ID", "Source geometry ID"],
-      ["target", "投影先図形ID", "Target geometry ID"],
-      ["offset", "オフセット図形ID", "Offset geometry ID"],
-      ["arc", "円弧ID", "Arc ID"],
-      ["primitive", "図形ID", "Geometry ID"],
-      ["geometry", "図形ID", "Geometry ID"],
-      ["spline", "スプラインID", "Spline ID"],
-      ["a", "1つ目の図形ID", "First geometry ID"],
-      ["b", "2つ目の図形ID", "Second geometry ID"],
-      ["axis", "対称軸ID", "Symmetry axis ID"],
-    ];
-    return roles
-      .map(([key, labelJa, labelEn]) => ({ key, labelJa, labelEn, item: constraint[key] }))
-      .filter(({ item }) => item instanceof Point || item instanceof Line || item instanceof Circle || item instanceof Arc || item instanceof Spline);
-  }
-
-  function constraintHighlightNodes(constraint) {
-    const entries = constraintDefiningGeometryEntries(constraint);
-    const directPoints = new Set(entries.map(({ item }) => item).filter((item) => item instanceof Point));
-    const lineEndpoints = new Set();
-    for (const { item } of entries) {
-      if (!(item instanceof Line)) continue;
-      lineEndpoints.add(item.p1);
-      lineEndpoints.add(item.p2);
-    }
-    return constraintGraphNodes(constraint).filter((item) => !lineEndpoints.has(item) || directPoints.has(item));
-  }
-
   function solveActiveSketch(...args) { return sketchSolving.solveActiveSketch(...args); }
   function solveSketchById(...args) { return sketchSolving.solveSketchById(...args); }
 
@@ -5978,14 +5931,7 @@
 
 
 
-  function sidebarGeometryItem(kind, id) {
-    if (kind === "point") return model.points.find((item) => item.id === id) || null;
-    if (kind === "line") return model.lines.find((item) => item.id === id) || null;
-    if (kind === "circle") return model.circles.find((item) => item.id === id) || null;
-    if (kind === "arc") return model.arcs.find((item) => item.id === id) || null;
-    if (kind === "spline") return model.splines.find((item) => item.id === id) || null;
-    return null;
-  }
+
 
 
 

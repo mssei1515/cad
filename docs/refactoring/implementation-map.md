@@ -391,3 +391,5 @@ index.htmlは既存の通常script読込列で両moduleをapp.jsより先に読�
 - `BlockDefinitionCommand`（`src/commands/block_definition_command.js`）: 作成・編集開始／取消・定義名変更／削除の進行。既存Session・DefinitionEditing・EditingQueries・Catalogを組み合わせ、DOMとviewportは明示した操作へ委譲する。BlockViewは一覧dialogと編集classも担当する。
 
 SketchTreeControllerは行hoverの所有、pointer入出力とCanvasHover／sidebar強調の更新も担当する。appから行hover変数とイベント本体を除去した。
+
+SelectionHighlightが拘束の定義図形role・表示ラベル・端点除外による強調集合も所有する。GeometryReadModel.scopeGeometryItemは現在scopeの通常図形ID検索を提供し、SketchTreeObjects／Controllerが共有する。
