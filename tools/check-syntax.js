@@ -17,7 +17,7 @@ const files = [
   "tests/unit/sketch-tree-view.test.js",
   "src/ui/sketch_tree_view.js",
   "src/rendering/offset_preview_renderer.js",
-  "tests/unit/point-usage.test.js", "tests/unit/operand-hit-query.test.js", "tests/unit/pointer-hover.test.js", "tests/unit/geometry-hit-query.test.js", "tests/unit/canvas-hover.test.js", "tests/unit/canvas-context-query.test.js", "tests/unit/canvas-context-menu.test.js", "tests/unit/annotation-spatial-query.test.js", "tests/unit/annotation-anchor-query.test.js", "tests/unit/annotation-command.test.js", "tests/unit/hatch-command.test.js", "tests/unit/offset-command.test.js",
+  "tests/unit/sketch-tree-hover.test.js", "tests/unit/point-usage.test.js", "tests/unit/operand-hit-query.test.js", "tests/unit/pointer-hover.test.js", "tests/unit/geometry-hit-query.test.js", "tests/unit/canvas-hover.test.js", "tests/unit/canvas-context-query.test.js", "tests/unit/canvas-context-menu.test.js", "tests/unit/annotation-spatial-query.test.js", "tests/unit/annotation-anchor-query.test.js", "tests/unit/annotation-command.test.js", "tests/unit/hatch-command.test.js", "tests/unit/offset-command.test.js",
   "src/geometry/offset_geometry.js",
   "src/editing/offset_construction.js",
   "src/commands/offset_command.js",

@@ -6,6 +6,10 @@
 
 ## 現在の再開地点（2026-10-02）
 
+SketchTreeControllerへ行hover状態・pointerOver／Out・leave・所属図形の強調判定を統合。新moduleを増やさずCanvasHover／sidebar強調と接続し、SelectionとアクティブSketchは更新しない。3関数はscope取得以外の本体一致を確認。app.jsは13,565行から13,510行へ縮小。構文322件・単体706件が成功。関連E2E192件が成功（Sketchツリー・Canvas強調・選択を含む5ファイル）。ログは一時フォルダのcad-tree-hover-{check,unit,e2e}.log。全体目標と全体E2Eは未完了。
+
+### 直前の区切り
+
 PointUsageへ点の使用関係と分類14関数を集約。現在scope・展開Geometry・編集fit point・拘束参照を明示読取りで接続し、Object同一性と分類条件を維持。14関数はscope／session取得以外の本体一致を確認。app.jsは13,606行から13,565行へ縮小。構文321件・単体703件が成功。関連E2E192件が成功（点選択・拘束・Spline／投影を含む5ファイル）。ログは一時フォルダのcad-point-usage-{check,unit,e2e}.log。全体目標と全体E2Eは未完了。
 
 ### 直前の区切り

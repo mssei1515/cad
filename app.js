@@ -308,7 +308,6 @@
   let pendingConstraintCommand = null;
   let constraintOperands = [];
   let lastPointerWorld = null;
-  let hoveredSketchTreeId = null;
   let constructionLineMode = false;
   const selectionHighlight = window.SelectionHighlight.create({
     canvasSelection, blockProjectionBundle, geometryRefsEqual, geometryRefForItem,
@@ -1649,11 +1648,6 @@
     return sketchStrokeWidth(item);
   }
 
-  function isSidebarHighlightedElement(item) {
-    if (!hoveredSketchTreeId || !item) return false;
-    const itemSketchId = elementSketchId(item);
-    return hoveredSketchTreeId === ROOT_SKETCH_ID ? itemSketchId !== ROOT_SKETCH_ID : itemSketchId === hoveredSketchTreeId;
-  }
 
 
 
@@ -5835,7 +5829,7 @@
     currentScope: workspace.current, ensureSketchState, activeSketch, activeSketchId, sketchById, childSketchesOf,
     sketchName, nextSketchId: () => `S${sketchSeq++}`, clearInteractionForSketchChange,
     setHint, updateUI, draw, recordHistory, promptName: (title, name) => window.prompt(title, name),
-    effectiveAppearanceForElement, clearTreeHover: () => { hoveredSketchTreeId = null; }, clearSnap,
+    effectiveAppearanceForElement, clearTreeHover: () => sketchTreeController.clearHoverSketch(), clearSnap,
   });
   const { createSketch, activate: setActiveSketch, rename: renameSketch, toggleVisibility: toggleSketchVisibility } = sketchCommand;
   const hatchCommand = window.HatchCommand.create({
@@ -5939,78 +5933,29 @@
     objects: sketchTreeObjects, selectedSketchId: () => canvasSelection.sketchId,
     sketchHasSolveError, referenceConstraintErrorCountForSketch, constraintDuplicateCountForSketch,
     actions: { click: event => sketchTreeController.click(event), doubleClick: event => sketchTreeController.doubleClick(event),
-      keyDown: event => sketchTreeController.keyDown(event), pointerOver: handleSketchTreePointerOver, pointerOut: handleSketchTreePointerOut,
-      leave: () => {
-        hoveredSketchTreeId = null;
-        clearSidebarHover();
-        canvasHover.update({
-          block: null, annotation: null, hatch: null,
-          referenceImage: null,
-        });
-        draw();
-      },
+      keyDown: event => sketchTreeController.keyDown(event), pointerOver: event => sketchTreeController.pointerOver(event), pointerOut: event => sketchTreeController.pointerOut(event),
+      leave: () => sketchTreeController.leave(),
     },
   });
   const sketchTreeController = window.SketchTreeController.create({
     currentScope: () => model, activeSketchId, setActiveSketch, clearSelection, canvasSelection,
     sidebarGeometryItem, toggleBlockInstanceSelection, targetFromConstraint, updateUI, draw,
     sketchTreeView, updateSketchUI, toggleSketchVisibility, renameSketch, deleteSketch, deleteElements,
+    hover: { canvasHover, setSidebarHover, clearSidebarHover, sidebarHoverElementsForItem, sidebarHoverElementsForConstraint, elementSketchId, ROOT_SKETCH_ID },
     resolveSelectionEntry: sketchTreeObjects.resolveSelectionEntry,
     updateSelectionUI: updateGeometrySelectionUI,
     unfixPoint: point => { point.fixed = false; solveAndRefresh(`固定解除 ${point.id}`); },
   });
   const { refreshSelection: updateSketchTreeSelectionState, render: updateSketchUIUnprofiled, applyWidth: applySketchTreeWidth } = sketchTreeView;
 
+  function isSidebarHighlightedElement(item) { return sketchTreeController.isHighlightedElement(item); }
+
   function updateSketchUI() {
     if (!interactionProfiler.active) return updateSketchUIUnprofiled();
     return profileInteractionWork("tree", updateSketchUIUnprofiled);
   }
 
-  function handleSketchTreePointerOver(event) {
-    const objectRow = event.target.closest(".sketch-object-row");
-    if (objectRow && !objectRow.contains(event.relatedTarget) && objectRow.dataset.sketchId === activeSketchId()) {
-      const category = objectRow.dataset.objectKind;
-      if (category === "block") canvasHover.update({ block: model.blockInstances.find((item) => item.id === objectRow.dataset.id) || null });
-      else if (category === "instance") canvasHover.update({ geometryInstance: model.geometryInstances.find((item) => item.id === objectRow.dataset.id) || null });
-      else if (category === "hatch") canvasHover.update({ hatch: model.hatches.find((item) => item.id === objectRow.dataset.id) || null });
-      else if (category === "image") canvasHover.update({ referenceImage: model.referenceImages.find((item) => item.id === objectRow.dataset.id) || null });
-      else if (category === "annotation") canvasHover.update({ annotation: model.annotations.find((item) => item.id === objectRow.dataset.id) || null });
-      else if (objectRow.dataset.fixedPointId) {
-        const point = model.points.find((item) => item.id === objectRow.dataset.fixedPointId);
-        setSidebarHover("fixed-point", point, sidebarHoverElementsForItem(point));
-      } else if (category === "constraint") {
-        const constraint = model.constraints[Number(objectRow.dataset.constraintIndex)];
-        setSidebarHover("constraint", constraint, sidebarHoverElementsForConstraint(constraint));
-      } else {
-        const item = sidebarGeometryItem(category, objectRow.dataset.id);
-        setSidebarHover("geometry", item, sidebarHoverElementsForItem(item));
-      }
-      draw();
-      return;
-    }
-    const sketchRow = event.target.closest(".sketch-item");
-    if (sketchRow && !sketchRow.contains(event.relatedTarget)) {
-      hoveredSketchTreeId = sketchRow.dataset.id;
-      draw();
-    }
-  }
 
-  function handleSketchTreePointerOut(event) {
-    const objectRow = event.target.closest(".sketch-object-row");
-    if (objectRow && !objectRow.contains(event.relatedTarget)) {
-      clearSidebarHover();
-      canvasHover.update({
-        block: null, geometryInstance: null, annotation: null,
-        hatch: null, referenceImage: null,
-      });
-      draw();
-    }
-    const sketchRow = event.target.closest(".sketch-item");
-    if (sketchRow && !sketchRow.contains(event.relatedTarget) && hoveredSketchTreeId === sketchRow.dataset.id) {
-      hoveredSketchTreeId = null;
-      draw();
-    }
-  }
 
 
 

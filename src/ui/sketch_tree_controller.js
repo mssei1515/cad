@@ -4,7 +4,9 @@
   function create({ currentScope, activeSketchId, setActiveSketch, clearSelection, canvasSelection,
     sidebarGeometryItem, toggleBlockInstanceSelection, targetFromConstraint, updateUI, draw,
     sketchTreeView, updateSketchUI, toggleSketchVisibility, renameSketch, deleteSketch, deleteElements, unfixPoint,
-    resolveSelectionEntry, updateSelectionUI = updateUI }) {
+    resolveSelectionEntry, updateSelectionUI = updateUI, hover = {} }) {
+    const { canvasHover, setSidebarHover, clearSidebarHover, sidebarHoverElementsForItem, sidebarHoverElementsForConstraint, elementSketchId, ROOT_SKETCH_ID } = hover;
+    let hoveredSketchTreeId = null;
     function selectSketch(sketchId) {
       if (!currentScope().sketches.some((sketch) => sketch.id === sketchId)) return;
       clearSelection();
@@ -138,7 +140,66 @@
       else selectSketch(button.dataset.id);
     }
 
-    return Object.freeze({ click: handleSketchTreeClick, doubleClick: activateRow, keyDown, activateObject: activateSketchTreeObject });
+    function handleSketchTreePointerOver(event) {
+      const objectRow = event.target.closest(".sketch-object-row");
+      if (objectRow && !objectRow.contains(event.relatedTarget) && objectRow.dataset.sketchId === activeSketchId()) {
+        const category = objectRow.dataset.objectKind;
+        if (category === "block") canvasHover.update({ block: currentScope().blockInstances.find((item) => item.id === objectRow.dataset.id) || null });
+        else if (category === "instance") canvasHover.update({ geometryInstance: currentScope().geometryInstances.find((item) => item.id === objectRow.dataset.id) || null });
+        else if (category === "hatch") canvasHover.update({ hatch: currentScope().hatches.find((item) => item.id === objectRow.dataset.id) || null });
+        else if (category === "image") canvasHover.update({ referenceImage: currentScope().referenceImages.find((item) => item.id === objectRow.dataset.id) || null });
+        else if (category === "annotation") canvasHover.update({ annotation: currentScope().annotations.find((item) => item.id === objectRow.dataset.id) || null });
+        else if (objectRow.dataset.fixedPointId) {
+          const point = currentScope().points.find((item) => item.id === objectRow.dataset.fixedPointId);
+          setSidebarHover("fixed-point", point, sidebarHoverElementsForItem(point));
+        } else if (category === "constraint") {
+          const constraint = currentScope().constraints[Number(objectRow.dataset.constraintIndex)];
+          setSidebarHover("constraint", constraint, sidebarHoverElementsForConstraint(constraint));
+        } else {
+          const item = sidebarGeometryItem(category, objectRow.dataset.id);
+          setSidebarHover("geometry", item, sidebarHoverElementsForItem(item));
+        }
+        draw();
+        return;
+      }
+      const sketchRow = event.target.closest(".sketch-item");
+      if (sketchRow && !sketchRow.contains(event.relatedTarget)) {
+        hoveredSketchTreeId = sketchRow.dataset.id;
+        draw();
+      }
+    }
+
+    function handleSketchTreePointerOut(event) {
+      const objectRow = event.target.closest(".sketch-object-row");
+      if (objectRow && !objectRow.contains(event.relatedTarget)) {
+        clearSidebarHover();
+        canvasHover.update({
+          block: null, geometryInstance: null, annotation: null,
+          hatch: null, referenceImage: null,
+        });
+        draw();
+      }
+      const sketchRow = event.target.closest(".sketch-item");
+      if (sketchRow && !sketchRow.contains(event.relatedTarget) && hoveredSketchTreeId === sketchRow.dataset.id) {
+        hoveredSketchTreeId = null;
+        draw();
+      }
+    }
+
+    function isSidebarHighlightedElement(item) {
+      if (!hoveredSketchTreeId || !item) return false;
+      const itemSketchId = elementSketchId(item);
+      return hoveredSketchTreeId === ROOT_SKETCH_ID ? itemSketchId !== ROOT_SKETCH_ID : itemSketchId === hoveredSketchTreeId;
+    }
+
+
+    function clearHoverSketch() { hoveredSketchTreeId = null; }
+    function leave() {
+      clearHoverSketch(); clearSidebarHover();
+      canvasHover.update({ block: null, annotation: null, hatch: null, referenceImage: null });
+      draw();
+    }
+    return Object.freeze({ pointerOver: handleSketchTreePointerOver, pointerOut: handleSketchTreePointerOut, isHighlightedElement: isSidebarHighlightedElement, clearHoverSketch, leave, click: handleSketchTreeClick, doubleClick: activateRow, keyDown, activateObject: activateSketchTreeObject });
   }
   window.SketchTreeController = Object.freeze({ create });
 })();
