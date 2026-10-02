@@ -531,13 +531,16 @@
     ctx, viewport, metrics: dimensionMetrics, canvasThemeColor,
     onExpressionMark: mark => dimensionExpressionMarkCapture?.(mark),
   });
-  const { geometryDisplayColor, geometryStrokeWidth, ownerInstanceSelected, ownerInstanceHovered, geometryPaintState } = window.GeometryPresentation.create({
+  const { geometryDisplayColor, geometryStrokeWidth, geometryPaintState, pointPaintState } = window.GeometryPresentation.create({
     Point, canvasSelection, canvasHover, viewState,
     effectiveAppearanceForElement, isEditableSketchElement, isConstraintOperandSelected, isPendingReferenceTarget,
     isSidebarHighlightedElement, isSidebarHoveredElement, isReferenceHoverElement, isSelectedConstraintRelatedElement,
     sketchAlpha, sketchStrokeWidth, constraintStatusColor, canvasThemeColor, constructionAlpha: CONSTRUCTION_GEOMETRY_ALPHA,
+    pointQueries: { isSplineOnlyFitPoint, isEditableSplineFitPoint, isExplicitPoint, isPointUsedByPrimitive, isReferencePoint,
+      isAnyLineEndpoint, isEndpointPoint, pointLockedByLineFixed, sidebarHoveredItem: () => selectionHighlight.current?.item,
+      isDraggingPoint: point => geometryDrag.isPoint(point), isDraggingCenter: point => geometryDrag.isCenter(point) },
   });
-  const geometryRenderer = window.GeometryRenderer.create({ ctx, viewport, paintState: geometryPaintState, appearanceLineDash, lineDisplaySegment, canvasThemeColor });
+  const geometryRenderer = window.GeometryRenderer.create({ ctx, viewport, paintState: geometryPaintState, pointPaintState, fixedPointLabel: () => applicationText("固定", "Fixed"), appearanceLineDash, lineDisplaySegment, canvasThemeColor });
   const { traceSplinePath } = geometryRenderer;
   const { resolvedLoopBounds } = window.HatchRegionEngine;
   const drawingBounds = window.DrawingBounds.create({
@@ -4782,13 +4785,7 @@
     ctx.restore();
   }
 
-  function shouldShowPrimitiveCenter(point) {
-    if (canvasSelection.circles.some((circle) => circle.center === point) || canvasSelection.arcs.some((arc) => arc.center === point)) return true;
-    if (canvasHover.current.circle?.center === point || canvasHover.current.arc?.center === point || canvasHover.current.arcEndpoint?.arc?.center === point) return true;
-    if (selectionHighlight.current?.item?.center === point) return true;
-    if (geometryDrag.isCenter(point)) return true;
-    return false;
-  }
+
 
   function drawCenterlinePreview() {
     if (mode !== "centerline" || !centerlineCommand.support?.ok) return;
@@ -4847,55 +4844,7 @@
   }
 
   function drawPoints() {
-    ctx.save();
-    for (const p of drawOrderBySketch(allGeometryPoints())) {
-      if (isSplineOnlyFitPoint(p) && !isEditableSplineFitPoint(p)) continue;
-      const appearance = effectiveAppearanceForElement(p);
-      if (!viewState.constraintStatus && !p.blockProjection && !p.derivedProjection && !isExplicitPoint(p) && !isPointUsedByPrimitive(p) && !isReferencePoint(p)) continue;
-      const active = isEditableSketchElement(p);
-      ctx.globalAlpha = sketchAlpha(p);
-      const refSelected = isPendingReferenceTarget(p) || isConstraintOperandSelected(p);
-      const treeHovered = isSidebarHighlightedElement(p) && !p.blockProjection && !isAnyLineEndpoint(p);
-      const sidebarHovered = isSidebarHoveredElement(p);
-      const relatedHighlighted = isSelectedConstraintRelatedElement(p);
-      const auxiliaryHighlighted = relatedHighlighted;
-      const sel = (active && canvasSelection.points.includes(p)) || refSelected || ownerInstanceSelected(p);
-      const endpoint = isEndpointPoint(p);
-      const canvasHovered = (active || isReferenceHoverElement(p)) && (canvasHover.current.point === p || canvasHover.current.endpointPoint === p);
-      if (viewState.constraintStatus && p.kind === "endpoint" && !canvasHovered && !sel) continue;
-      const hovered = treeHovered || sidebarHovered || canvasHovered || ownerInstanceHovered(p);
-      const dragging = geometryDrag.isPoint(p);
-      const primitiveCenter = shouldShowPrimitiveCenter(p);
-      const fixedByLine = pointLockedByLineFixed(p);
-      const fixedHighlighted = (!p.derivedProjection && p.fixed || fixedByLine) && (sel || hovered);
-      const reference = isReferencePoint(p);
-      if (!viewState.constraintStatus && (p.blockProjection || p.derivedProjection) && !sel && !hovered && !dragging && !primitiveCenter && !auxiliaryHighlighted) continue;
-      if (!viewState.constraintStatus && reference && !sel && !hovered && !dragging && !auxiliaryHighlighted) continue;
-      if (!viewState.constraintStatus && endpoint && !reference && !sel && !hovered && !dragging && !primitiveCenter && !auxiliaryHighlighted) continue;
-      ctx.beginPath();
-      ctx.arc(p.x, p.y, (sel || auxiliaryHighlighted ? 7 : endpoint || reference ? 5 : 5) / viewport.scale, 0, Math.PI * 2);
-      ctx.fillStyle = fixedHighlighted ? "#fee2e2" : sel ? "#1d4ed8" : auxiliaryHighlighted ? "#e0f2fe" : hovered || primitiveCenter || reference ? "#eff6ff" : "#fff";
-      ctx.fill();
-      ctx.strokeStyle = auxiliaryHighlighted ? "#0ea5e9" : fixedHighlighted ? "#dc2626" : geometryDisplayColor(p, appearance, sel, hovered || primitiveCenter || reference);
-      ctx.lineWidth = (sel || auxiliaryHighlighted ? 3 : Math.max(1.2, sketchStrokeWidth(p))) / viewport.scale;
-      ctx.shadowColor = sel || auxiliaryHighlighted ? "rgba(14, 165, 233, 0.45)" : "transparent";
-      ctx.shadowBlur = sel || auxiliaryHighlighted ? 8 / viewport.scale : 0;
-      ctx.stroke();
-      ctx.shadowBlur = 0;
-      ctx.setLineDash([]);
-      if (viewState.geometryIds || sel || sidebarHovered || canvasHovered || dragging || relatedHighlighted) {
-        ctx.fillStyle = canvasThemeColor(hovered || endpoint ? "#2563eb" : "#111827");
-        ctx.font = `${12 / viewport.scale}px system-ui`;
-        ctx.fillText(p.id, p.x + 8 / viewport.scale, p.y - 8 / viewport.scale);
-      }
-
-      if (p.fixed && !p.derivedProjection && (sel || hovered)) {
-        ctx.fillStyle = "#dc2626";
-        ctx.font = `${12 / viewport.scale}px system-ui`;
-        ctx.fillText(applicationText("固定", "Fixed"), p.x + 8 / viewport.scale, p.y + 8 / viewport.scale);
-      }
-    }
-    ctx.restore();
+    geometryRenderer.drawPoints(drawOrderBySketch(allGeometryPoints()));
   }
 
   function updateToolbar() {

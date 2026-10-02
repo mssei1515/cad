@@ -100,8 +100,8 @@
 
 週枠50%の停止条件はユーザー指示で解除済み。main／developのリリース5116a81をcodex/composition-root-nextへ取り込み、Annotation Parameter表示などの最新変更を保持する。新たなmainへのマージは行わない。
 
-GeometryPresentationへ描画状態・所有Instanceの選択／hover・色／線幅照会を分離し、GeometryRenderer・点描画・診断へ接続した。状態更新は持たない。検証はcomposition-root.md先頭を参照する。
+点の表示条件・中心強調をGeometryPresentationへ、円／ID／固定ラベル描画をGeometryRendererへ統合した。appは整列済みの点一覧を渡す。検証はcomposition-root.md先頭を参照する。
 
-次は点描画の表示条件・強調状態と実際のCanvas描画を調べ、GeometryPresentation／GeometryRendererへ統合できる境界を整理する。投影・参照図形の扱い、選択とhoverの独立性を維持する。作図preview／snapとpointer routing等も未分離。全体目標と全体E2Eは未完了。
+次は円弧端点handleやSpline編集handleなどの編集用overlayを調べ、通常Geometry描画との役割分担を整理する。投影・参照図形の扱い、選択とhoverの独立性を維持する。作図preview／snapとpointer routing等も未分離。全体目標と全体E2Eは未完了。
 
 再開時はAGENTS.mdと本書を読み、Git状態を確認する。サブエージェントを使わず、責務単位で検証・Commit・Pushを続ける。週枠50%の停止条件を再適用しない。

@@ -6,6 +6,10 @@
 
 ## 現在の再開地点（2026-10-02）
 
+点の表示条件と中心強調をGeometryPresentationへ、円／影／ID／固定ラベルの描画をGeometryRendererへ統合。新moduleは追加しない。Spline編集点・端点・参照点・投影点・拘束表示の条件と色の優先順位を維持。app.jsは13,419行から13,368行へ縮小。構文324件・単体717件・関連E2E192件が成功。E2Eは直近のsandbox内server終了待ちを避けるため承認済み権限で実行し、server手動停止なしでexit 0。ログはcad-point-render-{check,unit,e2e}.log。全体目標と全体E2Eは未完了。
+
+### 前回の区切り
+
 GeometryPresentationへGeometry描画状態・所有Instance選択／hover・色・線幅の5関数を分離。状態は既存所有者から読み、GeometryRenderer・点描画・診断で共有する。5関数の本体はconstruction alphaの明示依存化以外に変更がないことを確認。app.jsは13,456行から13,419行へ縮小。構文324件・単体713件・関連E2E192件が成功。全テスト本体成功後にwebServer終了待ちが残り、今回のserverのPID／親PID／commandを確認して停止。最終192 passedとexit 0を確認。ログはcad-geometry-presentation-{check,unit,e2e}.log。全体目標と全体E2Eは未完了。
 
 ### 前回の区切り

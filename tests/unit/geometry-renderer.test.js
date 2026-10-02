@@ -9,7 +9,7 @@ function create(state = {}) {
   const calls = [];
   const ctx = {};
   for (const name of ["save", "restore", "beginPath", "closePath", "moveTo", "lineTo", "stroke", "fill", "arc", "fillText", "setLineDash"]) ctx[name] = (...args) => calls.push([name, ...args]);
-  const renderer = sandbox.window.GeometryRenderer.create({ ctx, viewport: { scale: 2 }, paintState: () => ({ appearance: { lineType: "solid" }, alpha: 0.7, color: "red", strokeWidth: 4, ...state }), appearanceLineDash: () => [], lineDisplaySegment: line => line, canvasThemeColor: color => color });
+  const renderer = sandbox.window.GeometryRenderer.create({ ctx, viewport: { scale: 2 }, pointPaintState: p => p.hidden ? null : state, fixedPointLabel: () => "Fixed", paintState: () => ({ appearance: { lineType: "solid" }, alpha: 0.7, color: "red", strokeWidth: 4, ...state }), appearanceLineDash: () => [], lineDisplaySegment: line => line, canvasThemeColor: color => color });
   return { renderer, calls, ctx };
 }
 test("line rendering consumes prepared visual state and preserves drawing order", () => {
@@ -32,4 +32,13 @@ test("circle and arc rendering retain radius and signed arc direction", () => {
   renderer.drawCircles([{ center: { x: 2, y: 3 }, radius: () => 7 }]);
   renderer.drawArcs([{ center: { x: 4, y: 5 }, radius: () => 8, startAngle: 2, endAngle: -1 }]);
   assert.deepEqual(calls.filter(c => c[0] === "arc"), [["arc", 2, 3, 7, 0, Math.PI * 2], ["arc", 4, 5, 8, 2, -1, true]]);
+});
+
+test("point renderer skips hidden points and scales prepared circles and labels", () => {
+  const { renderer, calls, ctx } = create({ alpha: 0.4, radius: 7, fillColor: 'white', color: 'blue', strokeWidth: 3, emphasized: true, showId: true, idColor: 'black', showFixed: true });
+  renderer.drawPoints([{ id: 'hidden', hidden: true }, { id: 'P1', x: 10, y: 20 }]);
+  assert.deepEqual(calls.filter(c => c[0] === 'arc'), [['arc', 10, 20, 3.5, 0, Math.PI * 2]]);
+  assert.deepEqual(calls.filter(c => c[0] === 'fillText'), [['fillText', 'P1', 14, 16], ['fillText', 'Fixed', 14, 24]]);
+  assert.equal(ctx.globalAlpha, 0.4); assert.equal(ctx.lineWidth, 1.5); assert.equal(ctx.shadowBlur, 0);
+  assert.equal(calls[0][0], 'save'); assert.equal(calls.at(-1)[0], 'restore');
 });

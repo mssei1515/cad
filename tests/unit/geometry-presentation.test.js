@@ -15,7 +15,14 @@ function fixture() {
     isPendingReferenceTarget: item => !!item.reference, isSidebarHighlightedElement: item => !!item.tree,
     isSidebarHoveredElement: item => !!item.sidebar, isReferenceHoverElement: item => !!item.referenceHover,
     isSelectedConstraintRelatedElement: item => !!item.related, sketchAlpha: () => 0.5, sketchStrokeWidth: () => 2,
-    constraintStatusColor: () => 'constraint', canvasThemeColor: value => `theme:${value}`, constructionAlpha: 0.72 });
+    constraintStatusColor: () => 'constraint', canvasThemeColor: value => `theme:${value}`, constructionAlpha: 0.72, pointQueries: {
+      isSplineOnlyFitPoint: p => !!p.splineOnly, isEditableSplineFitPoint: p => !!p.editableFit,
+      isExplicitPoint: p => p.kind === 'explicit', isPointUsedByPrimitive: p => !!p.used,
+      isReferencePoint: p => !!p.referencePoint, isAnyLineEndpoint: p => !!p.lineEnd,
+      isEndpointPoint: p => p.kind === 'endpoint', isDraggingPoint: p => !!p.dragging,
+      isDraggingCenter: p => !!p.draggingCenter, sidebarHoveredItem: () => hover.sidebarItem,
+      pointLockedByLineFixed: p => !!p.fixedByLine,
+    } });
   return { presentation, selection, hover, view };
 }
 test('instance ownership distinguishes whole instances, internal geometry and point projections', () => {
@@ -69,4 +76,42 @@ test('color and width precedence reads current view flags and keeps fallback wid
   assert.equal(f.presentation.geometryStrokeWidth(item, { construction: true }), 1.1);
   assert.equal(f.presentation.geometryStrokeWidth(item), 2);
   f.view.geometryIds = true; assert.equal(f.presentation.geometryPaintState(item, 'splines').showId, true);
+});
+
+test('point visibility distinguishes spline edit points, endpoints, references and projections', () => {
+  const f = fixture(), point = Object.assign(new Point(), { kind: 'explicit', splineOnly: true });
+  assert.equal(f.presentation.pointPaintState(point), null);
+  point.editableFit = true; assert.ok(f.presentation.pointPaintState(point));
+  point.splineOnly = false; point.kind = 'endpoint'; point.used = true;
+  assert.equal(f.presentation.pointPaintState(point), null);
+  point.dragging = true; assert.equal(f.presentation.pointPaintState(point).showId, true);
+  point.dragging = false; point.referencePoint = true;
+  assert.equal(f.presentation.pointPaintState(point), null);
+  point.related = true; assert.equal(f.presentation.pointPaintState(point).radius, 7);
+  point.related = false; point.referencePoint = false; point.derivedProjection = {};
+  assert.equal(f.presentation.pointPaintState(point), null);
+  point.draggingCenter = true; assert.ok(f.presentation.pointPaintState(point));
+});
+test('constraint status endpoint visibility ignores sidebar-only emphasis and follows Canvas hover', () => {
+  const f = fixture(), point = Object.assign(new Point(), { kind: 'endpoint', used: true, sidebar: true });
+  f.view.constraintStatus = true;
+  assert.equal(f.presentation.pointPaintState(point), null);
+  f.hover.current.endpointPoint = point;
+  assert.ok(f.presentation.pointPaintState(point));
+  f.hover.current = {}; f.selection.points.push(point);
+  assert.equal(f.presentation.pointPaintState(point).radius, 7);
+});
+test('primitive centers follow selection, hover, sidebar and drag while fixed colors preserve precedence', () => {
+  const f = fixture(), point = Object.assign(new Point(), { kind: 'endpoint', used: true });
+  f.selection.circles.push({ center: point }); assert.ok(f.presentation.pointPaintState(point));
+  f.selection.circles.length = 0; f.hover.current.arcEndpoint = { arc: { center: point } };
+  assert.ok(f.presentation.pointPaintState(point));
+  f.hover.current = {}; f.hover.sidebarItem = { center: point }; assert.ok(f.presentation.pointPaintState(point));
+  point.fixed = true; f.selection.points.push(point);
+  let state = f.presentation.pointPaintState(point);
+  assert.equal(state.fillColor, '#fee2e2'); assert.equal(state.color, '#dc2626'); assert.equal(state.showFixed, true);
+  point.related = true; state = f.presentation.pointPaintState(point);
+  assert.equal(state.color, '#0ea5e9'); assert.equal(state.fillColor, '#fee2e2');
+  point.derivedProjection = {}; state = f.presentation.pointPaintState(point);
+  assert.equal(state.showFixed, false); assert.equal(state.fillColor, '#1d4ed8');
 });

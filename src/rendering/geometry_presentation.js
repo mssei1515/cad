@@ -4,7 +4,9 @@
   function create({ Point, canvasSelection, canvasHover, viewState,
     effectiveAppearanceForElement, isEditableSketchElement, isConstraintOperandSelected, isPendingReferenceTarget,
     isSidebarHighlightedElement, isSidebarHoveredElement, isReferenceHoverElement, isSelectedConstraintRelatedElement,
-    sketchAlpha, sketchStrokeWidth, constraintStatusColor, canvasThemeColor, constructionAlpha }) {
+    sketchAlpha, sketchStrokeWidth, constraintStatusColor, canvasThemeColor, constructionAlpha, pointQueries = {} }) {
+    const { isSplineOnlyFitPoint, isEditableSplineFitPoint, isExplicitPoint, isPointUsedByPrimitive, isReferencePoint,
+      isAnyLineEndpoint, isEndpointPoint, isDraggingPoint, isDraggingCenter, sidebarHoveredItem, pointLockedByLineFixed } = pointQueries;
     function geometryDisplayColor(item, appearance, selected = false, hovered = false) {
       if (selected) return canvasThemeColor("#1d4ed8");
       if (hovered) return canvasThemeColor("#3b82f6");
@@ -57,7 +59,50 @@
         showId: viewState.geometryIds || (kind === "splines" ? ownSelected || hovered : geometrySelected || sidebarHovered || canvasHovered || relatedHighlighted),
       };
     }
-    return Object.freeze({ geometryDisplayColor, geometryStrokeWidth, ownerInstanceSelected, ownerInstanceHovered, geometryPaintState });
+    function shouldShowPrimitiveCenter(point) {
+      if (canvasSelection.circles.some((circle) => circle.center === point) || canvasSelection.arcs.some((arc) => arc.center === point)) return true;
+      if (canvasHover.current.circle?.center === point || canvasHover.current.arc?.center === point || canvasHover.current.arcEndpoint?.arc?.center === point) return true;
+      if (sidebarHoveredItem()?.center === point) return true;
+      if (isDraggingCenter(point)) return true;
+      return false;
+    }
+
+    function pointPaintState(p) {
+      if (isSplineOnlyFitPoint(p) && !isEditableSplineFitPoint(p)) return null;
+      const appearance = effectiveAppearanceForElement(p);
+      if (!viewState.constraintStatus && !p.blockProjection && !p.derivedProjection && !isExplicitPoint(p) && !isPointUsedByPrimitive(p) && !isReferencePoint(p)) return null;
+      const active = isEditableSketchElement(p);
+      const alpha = sketchAlpha(p);
+      const refSelected = isPendingReferenceTarget(p) || isConstraintOperandSelected(p);
+      const treeHovered = isSidebarHighlightedElement(p) && !p.blockProjection && !isAnyLineEndpoint(p);
+      const sidebarHovered = isSidebarHoveredElement(p);
+      const relatedHighlighted = isSelectedConstraintRelatedElement(p);
+      const auxiliaryHighlighted = relatedHighlighted;
+      const sel = (active && canvasSelection.points.includes(p)) || refSelected || ownerInstanceSelected(p);
+      const endpoint = isEndpointPoint(p);
+      const canvasHovered = (active || isReferenceHoverElement(p)) && (canvasHover.current.point === p || canvasHover.current.endpointPoint === p);
+      if (viewState.constraintStatus && p.kind === "endpoint" && !canvasHovered && !sel) return null;
+      const hovered = treeHovered || sidebarHovered || canvasHovered || ownerInstanceHovered(p);
+      const dragging = isDraggingPoint(p);
+      const primitiveCenter = shouldShowPrimitiveCenter(p);
+      const fixedByLine = pointLockedByLineFixed(p);
+      const fixedHighlighted = (!p.derivedProjection && p.fixed || fixedByLine) && (sel || hovered);
+      const reference = isReferencePoint(p);
+      if (!viewState.constraintStatus && (p.blockProjection || p.derivedProjection) && !sel && !hovered && !dragging && !primitiveCenter && !auxiliaryHighlighted) return null;
+      if (!viewState.constraintStatus && reference && !sel && !hovered && !dragging && !auxiliaryHighlighted) return null;
+      if (!viewState.constraintStatus && endpoint && !reference && !sel && !hovered && !dragging && !primitiveCenter && !auxiliaryHighlighted) return null;
+      return {
+        alpha, radius: sel || auxiliaryHighlighted ? 7 : 5,
+        fillColor: fixedHighlighted ? "#fee2e2" : sel ? "#1d4ed8" : auxiliaryHighlighted ? "#e0f2fe" : hovered || primitiveCenter || reference ? "#eff6ff" : "#fff",
+        color: auxiliaryHighlighted ? "#0ea5e9" : fixedHighlighted ? "#dc2626" : geometryDisplayColor(p, appearance, sel, hovered || primitiveCenter || reference),
+        strokeWidth: sel || auxiliaryHighlighted ? 3 : Math.max(1.2, sketchStrokeWidth(p)),
+        emphasized: sel || auxiliaryHighlighted,
+        showId: viewState.geometryIds || sel || sidebarHovered || canvasHovered || dragging || relatedHighlighted,
+        idColor: canvasThemeColor(hovered || endpoint ? "#2563eb" : "#111827"),
+        showFixed: p.fixed && !p.derivedProjection && (sel || hovered),
+      };
+    }
+    return Object.freeze({ pointPaintState, geometryDisplayColor, geometryStrokeWidth, ownerInstanceSelected, ownerInstanceHovered, geometryPaintState });
   }
   window.GeometryPresentation = Object.freeze({ create });
 })();

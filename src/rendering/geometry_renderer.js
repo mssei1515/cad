@@ -2,7 +2,7 @@
 (function () {
   "use strict";
   const { arcSweep } = window.GeometryKernel;
-  function create({ ctx, viewport, paintState, appearanceLineDash, lineDisplaySegment, canvasThemeColor }) {
+  function create({ ctx, viewport, paintState, pointPaintState, fixedPointLabel, appearanceLineDash, lineDisplaySegment, canvasThemeColor }) {
     function drawLines(items) {
       ctx.save();
       const lines = items;
@@ -134,7 +134,37 @@
       if (spline.closed) ctx.closePath();
       return samples;
     }
-    return Object.freeze({ drawLines, drawCircles, drawArcs, drawSplines, traceSplinePath });
+    function drawPoints(items) {
+      ctx.save();
+      for (const p of items) {
+        const state = pointPaintState(p);
+        if (!state) continue;
+        ctx.globalAlpha = state.alpha;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, state.radius / viewport.scale, 0, Math.PI * 2);
+        ctx.fillStyle = state.fillColor;
+        ctx.fill();
+        ctx.strokeStyle = state.color;
+        ctx.lineWidth = state.strokeWidth / viewport.scale;
+        ctx.shadowColor = state.emphasized ? "rgba(14, 165, 233, 0.45)" : "transparent";
+        ctx.shadowBlur = state.emphasized ? 8 / viewport.scale : 0;
+        ctx.stroke();
+        ctx.shadowBlur = 0;
+        ctx.setLineDash([]);
+        if (state.showId) {
+          ctx.fillStyle = state.idColor;
+          ctx.font = `${12 / viewport.scale}px system-ui`;
+          ctx.fillText(p.id, p.x + 8 / viewport.scale, p.y - 8 / viewport.scale);
+        }
+        if (state.showFixed) {
+          ctx.fillStyle = "#dc2626";
+          ctx.font = `${12 / viewport.scale}px system-ui`;
+          ctx.fillText(fixedPointLabel(), p.x + 8 / viewport.scale, p.y + 8 / viewport.scale);
+        }
+      }
+      ctx.restore();
+    }
+    return Object.freeze({ drawPoints, drawLines, drawCircles, drawArcs, drawSplines, traceSplinePath });
   }
   window.GeometryRenderer = Object.freeze({ create });
 })();
