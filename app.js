@@ -8436,10 +8436,10 @@
         ];
         const spline = addSpline(points, true, false);
         const seed = { x: 50, y: 40 };
-        const before = hatchFaceAt(seed);
+        const before = hatchGeometryQuery.hatchFaceAt(seed);
         points[1].x = 180;
         points[2].x = 180;
-        const after = hatchFaceAt(seed);
+        const after = hatchGeometryQuery.hatchFaceAt(seed);
         const maxX = (result) => result?.ok
           ? Math.max(...result.resolved.loops.flatMap((loop) => loop.points.map((point) => point.x)))
           : null;
