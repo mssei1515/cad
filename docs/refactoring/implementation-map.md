@@ -420,3 +420,5 @@ AuthoringPreviewRendererへSpline／Centerline／Trim描画も統合。Spline構
 
 - `DrawingCommandInput`（`src/editing/drawing_command_input.js`）: 基本作図の拒否判定とclick振分け。高優先度のcommand受付はapp側。
 - `PointCommand`（`src/commands/point_command.js`）: 仮入力記録・snap・点作成・選択更新・求解の順序。状態はTransientAuthoring／DrawingSnap／CanvasSelectionを使う。
+
+- `InstanceCommandInput`（`src/editing/instance_command_input.js`）: Instance source・Sketch投影・Free配置・基準線指定の入力を既存commandへ接続。投影operand優先順位と空白矩形開始の規則を所有する。

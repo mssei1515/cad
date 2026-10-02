@@ -6,6 +6,10 @@
 
 ## 現在の再開地点（2026-10-02）
 
+InstanceCommandInputへ派生元編集・Sketch投影元選択・Free配置・Mirror／Pattern基準線の入力を分離。投影operandの優先順位、直接hitへのfallback、投影矩形のcapture、非線operand時の拒否、Free配置のsnapを維持。状態は既存Instance commandが所有。app.jsは12,383行から12,359行へ縮小。構文343件・単体774件・関連E2E192件成功（exit 0、2.4分）。ログはcad-instance-input-{check,unit,e2e}.log。開始時週枠残量63%。次は注記／寸法／拘束の受付とhit snapshot、その後入力moduleの組立て整理。全体目標と全体E2Eは未完了。
+
+### 前回の区切り
+
 DrawingCommandInputへ基本作図のclick受付と拒否判定、PointCommandへ点作成の仮入力・snap・選択更新・求解の手順を分離。先行する注記／寸法／拘束等の入力優先度と各command引数、Point以外の既存選択の保持を維持。app.jsは12,455行から12,383行へ縮小。構文341件・単体769件・関連E2E203件成功（exit 0、4.1分）。ログはcad-drawing-input-{check,unit,e2e}.log。開始時週枠残量66%。次はInstance等の受付とhit snapshot。全体目標と全体E2Eは未完了。
 
 ### 前回の区切り

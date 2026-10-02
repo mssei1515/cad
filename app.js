@@ -6996,6 +6996,12 @@
 
   canvasContextController.start();
 
+  const instanceCommandInput = window.InstanceCommandInput.create({
+    getMode: () => mode, instanceSourceCommand, geometryInstanceCommand, hitReferenceTarget, hitDerivedProjectionOperand,
+    hitBlockProjectionOperand, operandElement, toggleSketchProjectionSource, clearSnap, selectionRectangle,
+    capturePointer: id => canvas.setPointerCapture(id), snapForDrawing, makeConstraintOperand, setHint, applicationText,
+  });
+
   const pointCommand = window.PointCommand.create({
     transientAuthoring, snapForDrawing, drawingSnap, addPoint, addPointSnapConstraints, clearSnap, canvasSelection, solveAndRefresh,
   });
@@ -7067,37 +7073,7 @@
       return;
     }
 
-    if (mode === "instance-sources") {
-      e.preventDefault();
-      const operand = instanceSourceCommand.instance.type === "sketchProjection"
-        ? hitReferenceTarget(p.x, p.y)
-        : hitDerivedProjectionOperand(p.x, p.y) || hitBlockProjectionOperand(p.x, p.y);
-      toggleInstanceSource(operand ? operandElement(operand) : hitP || hitL || hitC || hitA || hitS);
-      return;
-    }
-    if (mode === "sketch-projection") {
-      e.preventDefault();
-      const target = hitReferenceTarget(p.x, p.y);
-      if (target) {
-        toggleSketchProjectionSource(target);
-        return;
-      }
-      clearSnap();
-      selectionRectangle.begin(p, { kind: "sketch-projection" });
-      canvas.setPointerCapture(e.pointerId);
-      return;
-    }
-    if (mode.startsWith("free-instance-")) {
-      placeFreeInstance(snapForDrawing(p));
-      return;
-    }
-    if (mode === "mirror-axis" || mode === "pattern-direction") {
-      e.preventDefault();
-      const operand = hitDerivedProjectionOperand(p.x, p.y) || hitBlockProjectionOperand(p.x, p.y) || (hitL ? makeConstraintOperand("line", { line: hitL }) : null);
-      if (operand?.kind === "line") commitGeometryInstanceReference(operand.line);
-      else setHint(applicationText("基準にする線をクリックしてください", "Click a reference line."), "error");
-      return;
-    }
+    if (instanceCommandInput.click(e, p, { hitP, hitL, hitC, hitA, hitS })) return;
 
     const blankDoubleClickHits = { hitP, hitL, hitC, hitArcEnd, hitA, hitS, hitD, hitBlock, hitDerivedInstance, hatchHit, referenceImageHit, inactiveHit, annotationHit: blankAnnotationHit };
     if (blankCanvasGesture.isRepeated(canvasScreenPoint(e), blankDoubleClickHits) && blankCanvasGesture.handle(p, blankDoubleClickHits)) {
