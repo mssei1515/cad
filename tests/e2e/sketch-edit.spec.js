@@ -44,3 +44,16 @@ test('inactive Sketch hover exposes Edit without selecting or activating the row
  await active.locator('.sketchActivateBtn').hover();await expect(active.locator('.sketchEditBtn')).toBeVisible();
  await source.locator('.sketchActivateBtn').hover();await expect(source.locator('.sketchEditBtn')).toBeDisabled();
 });
+
+test('active Sketch row and name keep their backgrounds on hover regardless of selection',async({page})=>{
+ await openTestDocument(page);await page.evaluate(()=>window.__jot2dTest.resetForHatchTest());await page.locator('#addSketchBtn').click();
+ const source=page.locator('.sketch-item[data-id="S1"]'),active=page.locator('.sketch-item[data-id="S2"]');
+ const backgrounds=()=>active.evaluate(row=>({row:getComputedStyle(row).backgroundColor,name:getComputedStyle(row.querySelector('.sketchActivateBtn')).backgroundColor}));
+ for(const selected of [true,false]){
+  if(selected)await active.locator('.sketchActivateBtn').click();else await source.locator('.sketchActivateBtn').click();
+  await page.mouse.move(900,800);const before=await backgrounds();
+  await active.locator('.sketchActivateBtn').hover();expect(await backgrounds()).toEqual(before);
+  await expect(active).toHaveClass(/active/);
+ }
+ await source.locator('.sketchActivateBtn').hover();await expect(source.locator('.sketchEditBtn')).toBeVisible();
+});

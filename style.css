@@ -214,6 +214,7 @@ button:disabled { opacity: .45; cursor: default; }
 .properties-read-only { color: var(--muted); font-size: 12px; }
 .sketch-item.solve-error, .item.reference-error { box-shadow: inset 3px 0 var(--danger); }
 .sketchActivateBtn { min-width: 0; display: flex; align-items: center; gap: 3px; padding: 1px 4px 1px 0; border: 0; border-radius: 0; background: transparent; color: var(--tree-primary-text); font-size: 12px; text-align: left; overflow: hidden; white-space: nowrap; }
+.sketch-item.active .sketchActivateBtn:hover:not(:disabled) { background: transparent; }
 .sketch-row-icon { width: 13px; height: 13px; flex: 0 0 13px; fill: none; stroke: #2563eb; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
 .sketch-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .sketch-badges { white-space: nowrap; }
@@ -274,7 +275,7 @@ button:disabled { opacity: .45; cursor: default; }
 .sketch-overlay-resize-handle:hover::after, .sketch-overlay-resize-handle:focus-visible::after, .sketch-overlay.resizing .sketch-overlay-resize-handle::after { width: 2px; background: #60a5fa; }
 .sketch-list { max-height: calc(min(70vh, 680px) - 30px); overflow: auto; }
 .sketch-overlay .sketch-item { min-height: 19px; background: transparent; }
-.sketch-overlay .sketch-item:hover { background: var(--tree-hover-bg); }
+.sketch-overlay .sketch-item:not(.active):not(.selected):hover { background: var(--tree-hover-bg); }
 .sketch-overlay .sketch-item.selected { background: var(--tree-active-bg); }
 .sketch-group-row { position: relative; min-height: 20px; display: grid; grid-template-columns: auto 12px minmax(0, 1fr) auto; align-items: center; color: var(--text-subtle); background: transparent; cursor: pointer; user-select: none; }
 .sketch-group-row:hover { color: var(--tree-group-hover-text); background: var(--tree-group-hover-bg); }
