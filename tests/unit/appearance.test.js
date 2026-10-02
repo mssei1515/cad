@@ -79,11 +79,13 @@ test("annotation legacy font style and hatch defaults preserve their separate po
   assert.equal(style.italic, true);
   assert.equal(style.terminatorType, "none");
   assert.deepEqual(plain(appearance.normalizeHatchAppearance({})), plain(appearance.DEFAULT_HATCH_APPEARANCE));
+  assert.equal(appearance.DEFAULT_HATCH_APPEARANCE.patternType, "solid");
+  assert.equal(appearance.DEFAULT_HATCH_APPEARANCE.opacity, 0.5);
   const hatch = appearance.normalizeHatchAppearance({ opacity: -1, spacing: 0, angle: 5000, patternType: "bad" });
   assert.equal(hatch.opacity, 0);
   assert.equal(hatch.spacing, 0.25);
   assert.equal(hatch.angle, 3600);
-  assert.equal(hatch.patternType, "parallel");
+  assert.equal(hatch.patternType, "solid");
 });
 
 test("block appearance resolves explicit layers and inner-to-outer overrides without mutation", () => {

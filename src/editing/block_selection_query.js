@@ -30,10 +30,10 @@
         return [...bundle.points, ...bundle.lines, ...bundle.circles, ...bundle.arcs, ...(bundle.splines || [])];
       });
       const geometry = [...points, ...lines, ...circles, ...arcs, ...splines, ...blockInstances, ...projectedGeometry];
-      if (lines.length + circles.length + arcs.length + splines.length + blockInstances.length + annotations.length + hatches.length === 0) return { error: applicationText("ブロック化する図形、ハッチングまたは注記を選択してください", "Select geometry, hatching, or annotations to create a block") };
+      if (lines.length + circles.length + arcs.length + splines.length + blockInstances.length + annotations.length + hatches.length === 0) return { error: applicationText("ブロック化する図形、塗りつぶしまたは注記を選択してください", "Select geometry, fill, or annotations to create a block") };
       if (!geometry.every((item) => elementSketchId(item) === activeSketchId())) return { error: "アクティブスケッチ内の図形だけをブロック化できます" };
       if (!annotations.every((item) => item.sketchId === activeSketchId())) return { error: applicationText("アクティブスケッチ内の注記だけをブロック化できます", "Only annotations in the active sketch can be converted to a block") };
-      if (!hatches.every((item) => item.sketchId === activeSketchId())) return { error: applicationText("アクティブスケッチ内のハッチングだけをブロック化できます", "Only hatching in the active sketch can be converted to a block") };
+      if (!hatches.every((item) => item.sketchId === activeSketchId())) return { error: applicationText("アクティブスケッチ内の塗りつぶしだけをブロック化できます", "Only fill in the active sketch can be converted to a block") };
       const selectedSet = new Set(geometry);
       const selectedProjectionIds = new Set(projectedGeometry.map((item) => item.id));
       const isSelectedNode = (node) => selectedSet.has(node) || Boolean(node?.blockProjection && selectedProjectionIds.has(node.id));
@@ -68,12 +68,12 @@
       const selectedBoundaryKeys = new Set([...lines, ...circles, ...arcs, ...splines].map((item) => `${geometryKindForItem(item)}:${item.id}`));
       for (const hatch of hatches) {
         const missing = hatchBoundaryGeometryRefs(hatch.boundaryLoops).filter((ref) => !selectedBoundaryKeys.has(`${ref.kind}:${geometryRefId(ref)}`));
-        if (missing.length) return { error: applicationText(`ハッチング ${hatch.id} の境界 ${missing.map(geometryRefId).join("、")} も選択してください`, `Also select boundary ${missing.map(geometryRefId).join(", ")} for hatch ${hatch.id}`) };
+        if (missing.length) return { error: applicationText(`塗りつぶし ${hatch.id} の境界 ${missing.map(geometryRefId).join("、")} も選択してください`, `Also select boundary ${missing.map(geometryRefId).join(", ")} for fill ${hatch.id}`) };
       }
       for (const hatch of model.hatches) {
         if (hatches.includes(hatch)) continue;
         if (hatchBoundaryGeometryRefs(hatch.boundaryLoops).some((ref) => selectedBoundaryKeys.has(`${ref.kind}:${geometryRefId(ref)}`))) {
-          return { error: applicationText(`ハッチング ${hatch.id} も選択してください`, `Also select hatch ${hatch.id}`) };
+          return { error: applicationText(`塗りつぶし ${hatch.id} も選択してください`, `Also select fill ${hatch.id}`) };
         }
       }
       return { points: [...points], lines, circles, arcs, splines, annotations, hatches, blockInstances, projectedGeometry, constraints: internalConstraints, externalConstraints };

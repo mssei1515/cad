@@ -60,7 +60,7 @@ test('Block candidates require selected leaders and hatch boundaries to remain i
   f.state.references.set('target', f.line); assert.equal(f.query.read().error, undefined);
   const boundary = id => [{ spans: [{ source: { kind: 'line', path: [id] }, start: { type: 'endpoint', name: 'p1' }, end: { type: 'endpoint', name: 'p2' } }] }];
   const hatch = { id: 'H1', sketchId: 'S1', boundaryLoops: boundary('L1') }; f.model.hatches = [hatch];
-  assert.match(f.query.read().error, /Also select hatch H1/);
+  assert.match(f.query.read().error, /Also select fill H1/);
   f.selection.hatches = [hatch]; hatch.boundaryLoops = boundary('L2'); assert.match(f.query.read().error, /boundary L2/);
   hatch.boundaryLoops = boundary('L1'); assert.equal(f.query.read().hatches[0], hatch);
   leader.sketchId = 'S2'; assert.match(f.query.read().error, /Only annotations/);

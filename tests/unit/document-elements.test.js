@@ -56,4 +56,9 @@ test("Hatch saved data validates boundaries, appearance and duplicate IDs withou
   assert.equal(HatchData.validSerializedHatch({ ...saved, appearance: { ...saved.appearance, spacing: 0 } }), false);
   assert.notEqual(saved.boundaryLoops, hatch.boundaryLoops);
   assert.equal(saved.seed.x, 1);
+  assert.equal(saved.appearance.opacity, 1);
+  const translucent = { ...saved, appearance: { ...saved.appearance, patternType: "parallel", opacity: 0.5 } };
+  HatchData.normalizeHatches([translucent]);
+  assert.equal(translucent.appearance.patternType, "parallel");
+  assert.equal(translucent.appearance.opacity, 0.5);
 });

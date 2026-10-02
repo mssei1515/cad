@@ -1,4 +1,4 @@
-# Hatchの操作
+# 塗りつぶしの操作
 
 対象の所属・編集可否は[共通契約](../contracts/所属と編集可否.md)、確定・失敗・履歴は[編集と履歴](../contracts/編集と履歴.md)に従う。以下に操作固有の条件を示す。
 
@@ -22,17 +22,19 @@ Block Instanceと派生Geometry InstanceはInstance全体を1つのObjectとし�
 
 ## 2. 基本仕様
 
-ハッチングは、アクティブSketchの通常Line、Circle、Arc、Splineから、pointerで指定した有界な閉領域を自動検出して作成するSketch所属Objectである。Geometryが交点で分割されていなくても交点で区間分割した平面グラフを内部生成し、half-edge探索で面を求める。選択した面に直接含まれる内側の閉輪郭は穴として除外する。
+塗りつぶしは、アクティブSketchの通常Line、Circle、Arc、Splineから、pointerで指定した有界な閉領域を自動検出して作成するSketch所属Objectである。Geometryが交点で分割されていなくても交点で区間分割した平面グラフを内部生成し、half-edge探索で面を求める。選択した面に直接含まれる内側の閉輪郭は穴として除外する。
 
-補助Geometry、非アクティブSketch、Block Projectionは境界候補に含めない。Block Definition内のハッチングはBlock Editorで作成する。実際の隙間を自動補完せず、開放境界、境界上のclick、重複区間など面を一意に決められない場合は理由を表示して作成しない。
+補助Geometry、非アクティブSketch、Block Projectionは境界候補に含めない。Block Definition内の塗りつぶしはBlock Editorで作成する。実際の隙間を自動補完せず、開放境界、境界上のclick、重複区間など面を一意に決められない場合は理由を表示して作成しない。
 
-ToolbarまたはGeometry menuからハッチングを開始し、閉領域内を1clickすると1つのUndo単位で確定する。確定後も同じcommandを継続し、Escで選択modeへ戻る。pointer移動中は候補面の淡色表示と仮ハッチをpreviewする。
+ToolbarまたはGeometry menuから塗りつぶしを開始し、閉領域内を1clickすると1つのUndo単位で確定する。確定後も同じcommandを継続し、Escで選択modeへ戻る。pointer移動中は候補面の淡色表示と仮ハッチをpreviewする。
+
+新規作成の外観は塗りつぶし（`solid`）、不透明度50%（`opacity: 0.5`、透明度50%）を既定値とする。平行線とクロスも引き続き選択できる。保存済みの種類と不透明度は維持し、旧ファイルで不透明度が省略されている場合は互換性のため100%へ補完する。
 
 ## 3. 描画と選択
 
 線patternの位相はDocumentではワールド原点、Block DefinitionではBlockローカル原点を基準に揃える。`spacing`は`96 / 25.4 px/mm`で画面距離へ換算し、viewport scaleで割ってモデル距離を求めるため、zoom倍率によらず画面上の見た目をほぼ一定にする。`parallel`はangle方向の1組を、`cross`はangle方向とangle+90°方向の2組を同じspacingで描く。物理displayの実寸校正は行わない。
 
-ハッチングは、同じSketchのLine、Circle、Arc、Spline、Block Instance、派生Geometry Instanceと共通の`drawingOrder`で描画する。`solid`はcolorとopacityで外周内部を塗り、hole輪郭はeven-odd規則で透明に残す。
+塗りつぶしは、同じSketchのLine、Circle、Arc、Spline、Block Instance、派生Geometry Instanceと共通の`drawingOrder`で描画する。`solid`はcolorとopacityで外周内部を塗り、hole輪郭はeven-odd規則で透明に残す。
 
 平行線、クロス、塗りつぶしのいずれも境界まで描画し、境界から内側を削る視覚的な隙間は設けない。Hatch描画直後に、そのHatch自身が参照する境界Geometryだけを同じAppearanceで再描画するため、境界線は見える状態を保つ。
 
@@ -40,19 +42,19 @@ ToolbarまたはGeometry menuからハッチングを開始し、閉領域内を
 
 通常clickは共通の重なり順で最前面のObjectを優先する。Hatch自身の境界Geometryを選択できるよう、境界線幅の半分に画面上1pxを加えた帯域はHatch領域のhit対象から除外する。この帯域はzoomに依存しない選択判定だけの余裕であり、描画には適用しない。非アクティブSketchでは表示だけを行い、Canvasからhover、選択、編集しない。
 
-Propertiesは「基本情報」に種類、ID、所属Sketch、境界状態を、`ハッチング外観`／`Hatching Appearance`に編集可能な種類、色、表示を出す。平行線・クロスでは角度、間隔、線幅も表示し、塗りつぶしではそれらを非表示にして0～100%の不透明度を表示する。色は線patternの線色とsolidの塗り色を兼ね、共通Color Paletteを使用する。Sketch TreeではArcの後、Blockの前へ「ハッチング」分類を置き、空分類は表示せず初期状態を折り畳む。Object rowはToolbarと同じSVGを使う。
+Propertiesは「基本情報」に種類、ID、所属Sketch、境界状態を、`塗りつぶし外観`／`Fill Appearance`に編集可能な種類、色、表示を出す。平行線・クロスでは角度、間隔、線幅も表示し、塗りつぶしではそれらを非表示にして0～100%の不透明度を表示する。色は線patternの線色とsolidの塗り色を兼ね、共通Color Paletteを使用する。Sketch TreeではArcの後、Blockの前へ「塗りつぶし」分類を置き、空分類は表示せず初期状態を折り畳む。Object rowはToolbarと同じSVGを使う。
 
 ## 4. 削除、コピー、Block化
 
 境界Geometryの削除と所属Sketchの削除は、[削除と参照](../contracts/削除と参照.md)のDEL-06／07に従う。
 
-ハッチングのCopy、Cut、Pasteおよび選択GeometryからのBlock化では、参照する全境界Geometryを同時選択しなければならない。不足時は対象境界IDを表示して操作全体を中止する。Pasteでは新しいGeometry IDへすべての境界参照と交差相手参照を書き換え、seedへpaste offsetを加える。Block化ではBlockローカル座標へseedを移し、内部Geometry参照を維持する。History、Block Editor draft、local履歴、clipboardはハッチングと採番値を含む。
+塗りつぶしのCopy、Cut、Pasteおよび選択GeometryからのBlock化では、参照する全境界Geometryを同時選択しなければならない。不足時は対象境界IDを表示して操作全体を中止する。Pasteでは新しいGeometry IDへすべての境界参照と交差相手参照を書き換え、seedへpaste offsetを加える。Block化ではBlockローカル座標へseedを移し、内部Geometry参照を維持する。History、Block Editor draft、local履歴、clipboardは塗りつぶしと採番値を含む。
 
 ## 5. Block Projection
 
-Block Definition内ハッチングをProjection bundleへ含める。Projection IDは`BI1/H1`、入れ子では`BI1/BI2/H1`の形式とする。輪郭、seed、pattern原点、angleへInstance変換を合成し、Block回転時はパターン角度も同時に回転する。表示する内部Sketch、入れ子Block、配置preview、bounds、fit、hit test、保存復元へ反映する。
+Block Definition内塗りつぶしをProjection bundleへ含める。Projection IDは`BI1/H1`、入れ子では`BI1/BI2/H1`の形式とする。輪郭、seed、pattern原点、angleへInstance変換を合成し、Block回転時はパターン角度も同時に回転する。表示する内部Sketch、入れ子Block、配置preview、bounds、fit、hit test、保存復元へ反映する。
 
-配置先CanvasでProjectionハッチングをclickした場合は最上位Block Instance全体を選択する。Instance Appearance Overrideのvisible、color、lineWidthをProjectionハッチングにも適用する。
+配置先CanvasでProjection塗りつぶしをclickした場合は最上位Block Instance全体を選択する。Instance Appearance Overrideのvisible、color、lineWidthをProjection塗りつぶしにも適用する。
 
 ## 6. JSON互換性と性能
 
@@ -64,6 +66,6 @@ Block Definition内ハッチングをProjection bundleへ含める。Projection 
 
 ## 7. 境界追従と修復
 
-作成後は保存済みの境界Geometryだけから輪郭を再構築する。後から別Geometryを追加しても既存ハッチングを自動分割しない。境界Geometryの座標、半径、角度が変化した場合は、保存した端点、交点順、進行方向から同じ位相を復元して追従する。
+作成後は保存済みの境界Geometryだけから輪郭を再構築する。後から別Geometryを追加しても既存塗りつぶしを自動分割しない。境界Geometryの座標、半径、角度が変化した場合は、保存した端点、交点順、進行方向から同じ位相を復元して追従する。
 
-境界Geometryの削除、交点順の変化、開放、重複、collapse等で復元できない場合はObjectを削除せず無効状態にする。無効時はCanvasへパターンを描画せず、Sketch Treeへ境界エラーbadge、Propertiesへ理由と「境界を再指定」／`Reselect boundary`を表示する。Propertiesまたは有効ハッチングのCanvas右click menuから再指定commandを開始し、新しい閉領域のclickでIDとAppearanceを維持したまま境界だけを置換する。同じIDと位相がUndo等で復元された場合は自動的に有効へ戻る。
+境界Geometryの削除、交点順の変化、開放、重複、collapse等で復元できない場合はObjectを削除せず無効状態にする。無効時はCanvasへパターンを描画せず、Sketch Treeへ境界エラーbadge、Propertiesへ理由を表示する。境界の有効・無効にかかわらずPropertiesに「境界を再指定」／`Reselect boundary`を表示する。Propertiesまたは有効な塗りつぶしのCanvas右click menuから再指定commandを開始し、新しい閉領域のclickでIDとAppearanceを維持したまま境界とseedだけを置換する。再指定は1つのUndo単位とし、Escによる取消では元の境界を維持する。同じIDと位相がUndo等で復元された場合は自動的に有効へ戻る。

@@ -45,7 +45,7 @@ test('repair switches sketch, preserves object identity and returns to selection
   assert.equal(f.scope.hatches.length, 1); assert.equal(f.selected[0], hatch);
   assert.equal(hatch.seed.x, 10); assert.equal(hatch.appearance.spacing, 8);
   assert.equal(f.mode, 'select'); assert.equal(f.command.preview, null); assert.equal(f.pointer, null);
-  assert.deepEqual(f.history, ['ハッチング境界再指定']);
+  assert.deepEqual(f.history, ['塗りつぶし境界再指定']);
   assert.ok(f.calls.some(c => Array.isArray(c) && c[0] === 'forget' && c[1] === hatch));
 });
 

@@ -2254,7 +2254,7 @@
       "changed-topology": ["境界の接続関係が変化しています", "The boundary topology has changed"],
       "open-boundary": ["境界が閉じていません", "The boundary is no longer closed"],
       "collapsed-boundary": ["境界領域がつぶれています", "The boundary has collapsed"],
-      "invalid-boundary": ["境界データが正しくありません", "The hatch boundary data is invalid"],
+      "invalid-boundary": ["境界データが正しくありません", "The fill boundary data is invalid"],
     };
     const pair = messages[result?.code];
     return pair ? applicationText(pair[0], pair[1]) : applicationText("閉領域を判定できません", result?.reason || "Could not detect a closed region");
@@ -3595,9 +3595,9 @@
     else {
       updateUI();
       draw();
-      recordHistory(referenceImagesToDelete.length ? "画像削除" : hatchesToDelete.length ? "ハッチング削除" : "注記削除");
+      recordHistory(referenceImagesToDelete.length ? "画像削除" : hatchesToDelete.length ? "塗りつぶし削除" : "注記削除");
     }
-    setHint(applicationText(`削除しました: 派生インスタンス${deletedInstanceCount} / ブロック${deletedBlockCount} / 画像${referenceImagesToDelete.length} / ハッチング${hatchesToDelete.length} / 注記${annotationsToDelete.length}`, `Deleted: derived instances ${deletedInstanceCount} / blocks ${deletedBlockCount} / images ${referenceImagesToDelete.length} / hatches ${hatchesToDelete.length} / annotations ${annotationsToDelete.length}`));
+    setHint(applicationText(`削除しました: 派生インスタンス${deletedInstanceCount} / ブロック${deletedBlockCount} / 画像${referenceImagesToDelete.length} / 塗りつぶし${hatchesToDelete.length} / 注記${annotationsToDelete.length}`, `Deleted: derived instances ${deletedInstanceCount} / blocks ${deletedBlockCount} / images ${referenceImagesToDelete.length} / fills ${hatchesToDelete.length} / annotations ${annotationsToDelete.length}`));
     return true;
   }
 
@@ -3659,7 +3659,7 @@
     for (const hatch of hatches) {
       const missing = hatchBoundaryGeometryRefs(hatch.boundaryLoops).filter((ref) => !selectedBoundaryKeys.has(`${ref.kind}:${geometryRefId(ref)}`));
       if (missing.length) {
-        setHint(applicationText(`ハッチング ${hatch.id} の境界 ${missing.map(geometryRefId).join("、")} も選択してください`, `Also select boundary ${missing.map(geometryRefId).join(", ")} for hatch ${hatch.id}`), "error");
+        setHint(applicationText(`塗りつぶし ${hatch.id} の境界 ${missing.map(geometryRefId).join("、")} も選択してください`, `Also select boundary ${missing.map(geometryRefId).join(", ")} for fill ${hatch.id}`), "error");
         return null;
       }
     }
@@ -3912,7 +3912,7 @@
           const mappedId = idMap.get(geometryRefId(ref));
           return mappedId ? createGeometryRef(ref.kind, mappedId) : null;
         });
-        if (!boundaryLoops) throw new Error(`${source.id}: ${applicationText("ハッチング境界を書き換えられません", "Could not rewrite hatch boundary")}`);
+        if (!boundaryLoops) throw new Error(`${source.id}: ${applicationText("塗りつぶし境界を書き換えられません", "Could not rewrite fill boundary")}`);
         const hatch = {
           ...serializeHatch(source),
           id: `H${hatchSeq++}`,
@@ -5787,7 +5787,7 @@
       "free-instance-place": applicationText("インスタンス配置", "Instance placement"),
       select: applicationText("選択", "Select"), point: applicationText("点", "Point"), line: applicationText("線", "Line"), centerline: applicationText("中心線", "Centerline"), "circle-center-cross": applicationText("円中心十字線", "Circle Center Cross"), rectangle: applicationText("矩形", "Rectangle"),
       slot: applicationText("長穴", "Slot"), circle: applicationText("円", "Circle"), arc: applicationText("円弧", "Arc"), "three-point-arc": applicationText("3点円弧", "Three-point Arc"), spline: applicationText("スプライン", "Spline"), fillet: applicationText("R面取り", "Fillet"), trim: applicationText("トリム", "Trim"),
-      offset: applicationText("オフセット", "Offset"), hatch: applicationText("ハッチング", "Hatching"), "hatch-repair": applicationText("境界を再指定", "Reselect boundary"), "block-place": applicationText("ブロック配置", "Block placement"),
+      offset: applicationText("オフセット", "Offset"), hatch: applicationText("塗りつぶし", "Fill"), "hatch-repair": applicationText("境界を再指定", "Reselect boundary"), "block-place": applicationText("ブロック配置", "Block placement"),
     };
     if (command) command.textContent = pendingCommand?.type?.startsWith("annotation-") ? applicationText("注記", "Annotation") : pendingConstraintCommand ? applicationText("拘束", "Constraint") : modeLabels[mode] || mode;
     const constraint = document.getElementById("statusConstraint");

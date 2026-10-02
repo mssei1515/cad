@@ -14,7 +14,7 @@ test('block decode creates geometry and metadata without resolving instances or 
   assert.equal(result.metadata.get('B1').rawDefinition, data); assert.equal(result.metadata.get('B1').normalizeDefinitionSketchId('missing'), 'S1');
   assert.equal(definition.parameters[0].expression, '12'); assert.equal(definition.constraints.length, 0); assert.equal(definition.blockInstances.length, 0); assert.equal(definition.parentDefinitionId, null);
 });
-for (const [field, message] of [['splines', /spline array/], ['referenceImages', /reference image/], ['geometryInstances', /derived instance array/], ['hatches', /hatch data/], ['nextHatchIndex', /hatch sequence/]]) {
+for (const [field, message] of [['splines', /spline array/], ['referenceImages', /reference image/], ['geometryInstances', /derived instance array/], ['hatches', /fill data/], ['nextHatchIndex', /fill sequence/]]) {
   test(`current block format rejects missing ${field}`, () => { const data = raw(); delete data[field]; assert.throws(() => decode(data), message); });
 }
 test('legacy blocks accept absent newer collections and normalize annotations into their active sketch', () => {

@@ -29,7 +29,7 @@
       clearSnap();
       updateToolbar();
       updateStatusUI();
-      setHint(applicationText("ハッチングする閉領域の内側をクリックしてください。終了はEscです", "Click inside a closed region to hatch it. Press Esc to finish."));
+      setHint(applicationText("塗りつぶす閉領域の内側をクリックしてください。終了はEscです", "Click inside a closed region to fill it. Press Esc to finish."));
       draw();
     }
 
@@ -69,7 +69,7 @@
         setMode("select");
         updateUI({ refreshAnalysis: false });
         draw();
-        recordHistory("ハッチング境界再指定");
+        recordHistory("塗りつぶし境界再指定");
         setHint(applicationText(`${hatch.id} の境界を再指定しました`, `Reassigned the boundary of ${hatch.id}`));
         return true;
       }
@@ -86,7 +86,7 @@
       canvasSelection.set("hatches", [hatch]);
       updateUI({ refreshAnalysis: false });
       draw();
-      recordHistory("ハッチング追加");
+      recordHistory("塗りつぶし追加");
       setHint(applicationText(`${hatch.id} を作成しました。続けて閉領域をクリックできます`, `Created ${hatch.id}. Click another closed region to continue.`));
       return true;
     }

@@ -61,7 +61,7 @@
       };
       return {
         icon: toolbarSvgMarkup("#toolHatch"),
-        type: applicationText("ハッチング", "Hatch"),
+        type: applicationText("塗りつぶし", "Fill"),
         id: item.id,
         secondary: hatchPatternTypeLabel(hatchAppearanceForDisplay(item).patternType),
       };

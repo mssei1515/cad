@@ -20,7 +20,8 @@
         drawingOrder: normalizedDrawingOrder(item.drawingOrder),
         seed,
         boundaryLoops,
-        appearance: normalizeHatchAppearance(item.appearance),
+        // Saved hatches without opacity predate transparency and remain fully opaque.
+        appearance: normalizeHatchAppearance({ opacity: 1, ...item.appearance }),
       };
       Object.assign(item, normalized);
       return item;

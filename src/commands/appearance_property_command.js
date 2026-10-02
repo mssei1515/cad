@@ -25,7 +25,7 @@
         if (["prefix", "suffix"].includes(key)) refresh = null;
       } else if (category === "hatch" && target.kind === "hatch") {
         editing.applyHatchAppearanceInput(target.item, key, value);
-        label = "ハッチング外観変更";
+        label = "塗りつぶし外観変更";
       } else if (category === "appearance") {
         const construction = target.kind === "sketch" && context === "construction";
         editing.applyAppearanceInput(construction ? (target.item.constructionAppearance ||= {}) : owner(target), key, value);
