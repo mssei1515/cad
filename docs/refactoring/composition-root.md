@@ -6,6 +6,10 @@
 
 ## 現在の再開地点（2026-10-02）
 
+GeometryPresentationへGeometry描画状態・所有Instance選択／hover・色・線幅の5関数を分離。状態は既存所有者から読み、GeometryRenderer・点描画・診断で共有する。5関数の本体はconstruction alphaの明示依存化以外に変更がないことを確認。app.jsは13,456行から13,419行へ縮小。構文324件・単体713件・関連E2E192件が成功。全テスト本体成功後にwebServer終了待ちが残り、今回のserverのPID／親PID／commandを確認して停止。最終192 passedとexit 0を確認。ログはcad-geometry-presentation-{check,unit,e2e}.log。全体目標と全体E2Eは未完了。
+
+### 前回の区切り
+
 SelectionHighlightへ拘束の図形role・Propertiesラベル・強調対象の構成を統合し、GeometryReadModelへ現在scopeの通常図形ID検索を統合。appからの逆向きcallbackを減らし、新moduleは追加しない。拘束照会2関数は本体一致を確認。app.jsは13,510行から13,456行へ縮小。構文322件・単体709件が成功。関連E2E192件が成功（cad-highlight-query-{check,unit,e2e}.log）。全テスト本体成功後のwebServer終了待ちが残ったため、今回の実行が生成したserverのPID／親PID／commandを確認して停止し、192 passedの最終出力を確認した。全体目標と全体E2Eは未完了。
 
 ### 前回の区切り
