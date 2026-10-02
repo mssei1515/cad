@@ -582,6 +582,8 @@
     hypot2, shortestAngleFrom, slotGeometry, threePointArcGeometry, minimumLineLength: MIN_LINE_LENGTH, minimumArcLength: MIN_ARC_LENGTH,
     buildSpline: window.SplineGeometry.build, traceSplinePath, angleAtArcParam });
   const { drawFilletArc: drawFilletPreviewArc } = authoringPreview;
+  const placementPreview = window.PlacementPreviewRenderer.create({ ctx, viewport, withCanvasState, traceSplinePath,
+    drawResolvedHatch, resolvedHatchBoundary, hatchAppearanceForDisplay, hatchPatternOrigin, drawAnnotationLeader, drawAnnotationText });
   const geometryCreation = window.GeometryCreation.create({
     currentScope: workspace.current, ids: geometryIds, assignSketchId, currentConstruction: () => constructionLineMode,
     minLineLength: MIN_LINE_LENGTH, minArcLength: MIN_ARC_LENGTH,
@@ -4152,64 +4154,11 @@
     if (mode !== "block-place" || !blockPlacementCommand.definitionId || !pointerPreview) return;
     const preview = blockPlacementCommand.preview(pointerPreview);
     if (!preview) return;
-    const { definition, instance: previewInstance } = preview;
-    const bundle = createBlockProjectionBundle(previewInstance, definition);
-    withCanvasState(() => {
-      for (const hatch of bundle.hatches || []) {
-        drawResolvedHatch(resolvedHatchBoundary(hatch), { ...hatchAppearanceForDisplay(hatch), color: "#2563eb" }, hatchPatternOrigin(hatch), { preview: true, alpha: 0.75 });
-      }
-      ctx.strokeStyle = "#2563eb";
-      ctx.lineWidth = 2 / viewport.scale;
-      ctx.setLineDash([6 / viewport.scale, 5 / viewport.scale]);
-      for (const line of bundle.lines) {
-        ctx.beginPath();
-        ctx.moveTo(line.p1.x, line.p1.y);
-        ctx.lineTo(line.p2.x, line.p2.y);
-        ctx.stroke();
-      }
-      for (const circle of bundle.circles) {
-        ctx.beginPath();
-        ctx.arc(circle.center.x, circle.center.y, circle.radius(), 0, Math.PI * 2);
-        ctx.stroke();
-      }
-      for (const arc of bundle.arcs) {
-        ctx.beginPath();
-        ctx.arc(arc.center.x, arc.center.y, arc.radius(), arc.startAngle, arc.endAngle, arc.endAngle < arc.startAngle);
-        ctx.stroke();
-      }
-      for (const spline of bundle.splines || []) {
-        traceSplinePath(spline);
-        ctx.stroke();
-      }
-      for (const annotation of bundle.annotations || []) {
-        const preview = { ...annotation, style: { ...annotation.style, color: "#2563eb" } };
-        if (preview.type === "leader") drawAnnotationLeader(preview, true);
-        else drawAnnotationText(preview);
-      }
-    });
+    placementPreview.drawBlock(createBlockProjectionBundle(preview.instance, preview.definition));
   }
 
   function drawFreeInstancePreview() {
-    const bundle = geometryInstanceCommand.preview(pointerPreview);
-    if (!bundle) return;
-    withCanvasState(() => {
-      ctx.strokeStyle = "#2563eb";
-      ctx.lineWidth = 2 / viewport.scale;
-      ctx.setLineDash([6 / viewport.scale, 5 / viewport.scale]);
-      for (const line of bundle.lines) {
-        ctx.beginPath(); ctx.moveTo(line.p1.x, line.p1.y); ctx.lineTo(line.p2.x, line.p2.y); ctx.stroke();
-      }
-      for (const circle of bundle.circles) {
-        ctx.beginPath(); ctx.arc(circle.center.x, circle.center.y, circle.radius(), 0, Math.PI * 2); ctx.stroke();
-      }
-      for (const arc of bundle.arcs) {
-        ctx.beginPath(); ctx.arc(arc.center.x, arc.center.y, arc.radius(), arc.startAngle, arc.endAngle, arc.endAngle < arc.startAngle); ctx.stroke();
-      }
-      for (const spline of bundle.splines) { traceSplinePath(spline); ctx.stroke(); }
-      for (const point of bundle.points) {
-        ctx.beginPath(); ctx.arc(point.x, point.y, 3 / viewport.scale, 0, Math.PI * 2); ctx.stroke();
-      }
-    });
+    placementPreview.drawFreeInstance(geometryInstanceCommand.preview(pointerPreview));
   }
 
   function draw() {

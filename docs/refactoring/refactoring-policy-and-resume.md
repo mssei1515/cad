@@ -72,7 +72,7 @@
 ## 6. 実装・検証・履歴の進め方
 
 - サブエージェントは使わない（ユーザーの明示指示）。
-- 週枠50%の自動停止条件は解除済み。利用状況を理由に以前の停止条件を再適用しない。
+- 最新の目標継続指示で週枠残量50%未満の停止条件が再提示されたため適用する。停止時の最後のコミットをmainへマージする指示も受領。残量はusage toolで確認し、リリース時はdevelop先行・main最後・両ブランチ同期の手順を守る。
 - 開始時にAGENTS.md、Gitのbranch／status、関連仕様・テストを確認する。既存の無関係な変更を混ぜない。
 - 責務としてまとまった単位で実装し、差分を確認し、関連仕様を更新して検証・Commit・Pushする。将来の原因調査で区切りを追える履歴を残す。
 - 構文は`npm run check`、単体は`npm run test:unit`。関連E2Eを実施し、全体完了前には全体E2Eも確認する。
@@ -81,7 +81,7 @@
 - E2E実行中にアプリのソースを変更しない。長時間のテストは同じprocess/sessionを追跡し、出力待ちのtimeoutだけで再起動しない。
 - 過去の「今回はテストをスキップ」はその時点だけの許可。今後の常時スキップには引き継がない。
 - originは`https://github.com/mssei1515/cad`。通常の作業branchとdevelopへのPushは継続許可がある。現在の作業branchは`codex/composition-root-next`。
-- 過去のdevelop／mainへのマージ依頼を、新しい変更の自動リリース許可と解釈しない。現在は作業branchで進める。mainへの新たなマージ／Pushは明示指示が必要。
+- 現在は作業branchで進める。最新の目標継続指示で指定された最後のコミットをリリースする際にdevelop／mainへ統合する。各抽出の途中では自動リリースしない。
 - Commit後には`npm run write:runtime-version`を実行する。生成物はGitに含めない。
 
 全体E2Eは未完了である。直前の求解分離（`0ee5b09`）では関連E2E202件（航空機図面・Offsetチェーンのドラッグ回帰を含む）が成功しているが、全体成功の証拠にはしない。Offset問題の過去の判断・修正は履歴に残っているため、古い進捗記録の「未回答」だけを根拠に同じ質問や修正をやり直さない。
@@ -98,10 +98,10 @@
 
 ## 8. 再開地点（2026-10-02）
 
-週枠50%の停止条件はユーザー指示で解除済み。main／developのリリース5116a81をcodex/composition-root-nextへ取り込み、Annotation Parameter表示などの最新変更を保持する。新たなmainへのマージは行わない。
+最新の目標継続指示に従い週枠残量50%未満で停止し、その最後のコミットをmainへマージする。今回開始時は残量85%。main／developのリリース5116a81は作業branchへ取込済み。作業途中の単位ごとのリリースは行わない。
 
-snap markerとSketch識別ラベルをInteractionOverlayRendererへ分離した。操作状態は引数、Sketch関係は限定照会portで受け取り、診断も同じ文言／色照会を使う。検証はcomposition-root.md先頭を参照する。
+Block／Free Instanceの配置previewをPlacementPreviewRendererへ分離した。投影生成は呼出し側、bundle描画はrendererが担当し、共通Geometry描画をまとめた。検証はcomposition-root.md先頭を参照する。
 
-次はBlock／Free Instanceの配置previewを調べ、投影Geometryの生成・一時状態・描画の境界を整理する。投影・参照図形の扱い、選択とhoverの独立性を維持する。作図preview／snapとpointer routing等も未分離。全体目標と全体E2Eは未完了。
+次はCanvas入力のpointermove処理を調べ、各commandへの振分けとhover／drag状態の境界を整理する。Dimension preview・描画調整・入力／共通編集／Document操作・診断hookなども残る。全体目標と全体E2Eは未完了。
 
-再開時はAGENTS.mdと本書を読み、Git状態を確認する。サブエージェントを使わず、責務単位で検証・Commit・Pushを続ける。週枠50%の停止条件を再適用しない。
+再開時はAGENTS.mdと本書を読み、Git状態を確認する。サブエージェントを使わず、責務単位で検証・Commit・Pushを続ける。週枠の残量と最新の停止／リリース指示を確認する。

@@ -6,6 +6,10 @@
 
 ## 現在の再開地点（2026-10-02）
 
+Block／Free Instanceの配置previewをPlacementPreviewRendererへ分離し、Geometry描画の重複を統合。投影生成は呼出し側、Hatch／注記は既存rendererへ委譲。描画順・青色・alpha・元styleの無変更・Free Instance点markerを保持。app.jsは13,041行から12,990行へ縮小。構文330件・単体734件・関連E2E192件が成功（exit 0）。ログはcad-placement-preview-{check,unit,e2e}.log。全体目標と全体E2Eは未完了。最新継続指示の週残量50%停止・最後のmainマージを再開方針に反映。開始時残量85%。
+
+### 前回の区切り
+
 snap markerとSketch識別ラベルをInteractionOverlayRendererへ分離。hover優先・選択種別順・可視性／active除外・参照関係文言／色・画面px配置を保持。状態所有者は変更せず、診断も同じ関係照会を利用。app.jsは13,137行から13,041行へ縮小。構文328件・単体731件・関連E2E192件が成功（exit 0）。ログはcad-interaction-overlay-{check,unit,e2e}.log。全体目標と全体E2Eは未完了。
 
 ### 前回の区切り

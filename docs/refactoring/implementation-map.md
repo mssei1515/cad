@@ -405,3 +405,5 @@ GeometryPresentationはarcEndpointPaintState／splineHandleStateを提供し、G
 AuthoringPreviewRendererへSpline／Centerline／Trim描画も統合。Spline構築・path描画・円弧parameter角度は明示port、Centerlineのpointer投影は呼出し側。
 
 - `InteractionOverlayRenderer`（`src/rendering/interaction_overlay_renderer.js`）: snap十字・ラベル、非アクティブSketch識別・参照関係ラベルの表示。操作状態は引数、Sketch関係は照会port。Selection／CanvasHover／DrawingSnapは更新しない。
+
+- `PlacementPreviewRenderer`（`src/rendering/placement_preview_renderer.js`）: Block／Free Instance配置bundleの描画と共通Geometry描画。Hatch・注記描画は明示portで既存rendererへ接続する。
