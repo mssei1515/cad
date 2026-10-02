@@ -45,15 +45,14 @@ test('inactive Sketch hover exposes Edit without selecting or activating the row
  await source.locator('.sketchActivateBtn').hover();await expect(source.locator('.sketchEditBtn')).toBeDisabled();
 });
 
-test('active Sketch row and name keep their backgrounds on hover regardless of selection',async({page})=>{
+test('active and inactive Sketch rows share hover backgrounds while selection stays visible',async({page})=>{
  await openTestDocument(page);await page.evaluate(()=>window.__jot2dTest.resetForHatchTest());await page.locator('#addSketchBtn').click();
  const source=page.locator('.sketch-item[data-id="S1"]'),active=page.locator('.sketch-item[data-id="S2"]');
- const backgrounds=()=>active.evaluate(row=>({row:getComputedStyle(row).backgroundColor,name:getComputedStyle(row.querySelector('.sketchActivateBtn')).backgroundColor}));
- for(const selected of [true,false]){
-  if(selected)await active.locator('.sketchActivateBtn').click();else await source.locator('.sketchActivateBtn').click();
-  await page.mouse.move(900,800);const before=await backgrounds();
-  await active.locator('.sketchActivateBtn').hover();expect(await backgrounds()).toEqual(before);
-  await expect(active).toHaveClass(/active/);
- }
- await source.locator('.sketchActivateBtn').hover();await expect(source.locator('.sketchEditBtn')).toBeVisible();
+ const backgrounds=row=>row.evaluate(element=>({row:getComputedStyle(element).backgroundColor,name:getComputedStyle(element.querySelector('.sketchActivateBtn')).backgroundColor}));
+ await active.locator('.sketchActivateBtn').click();await page.mouse.move(900,800);const selected=await backgrounds(active);
+ await active.locator('.sketchActivateBtn').hover();expect(await backgrounds(active)).toEqual(selected);
+ await source.locator('.sketchActivateBtn').hover();const inactiveHover=await backgrounds(source);expect(inactiveHover.name).toBe('rgba(0, 0, 0, 0)');
+ await source.locator('.sketchActivateBtn').click();await page.mouse.move(900,800);const before=await backgrounds(active);
+ await active.locator('.sketchActivateBtn').hover();expect(await backgrounds(active)).toEqual(inactiveHover);expect((await backgrounds(active)).row).not.toBe(before.row);
+ await expect(active).toHaveClass(/active/);await expect(source).toHaveClass(/selected/);
 });
