@@ -1,11 +1,74 @@
-/* Route pointer movement and completion through existing interactions in their established priority order. */
+/* Route pointer press, movement and completion through existing interactions in their established priority order. */
 (() => {
   "use strict";
   function create({ canvasNavigation, drawingPreview, canvasHover, clearSnap, draw, transientAuthoring, recordHistory,
     selectionRectangle, annotationDrag, referenceImageInteraction, dimensionDrag, geometryDrag, pointerHover,
     getMode, getPendingCommand, getPendingConstraintCommand, setLastPointer,
     updateHatchPreview, updateFilletRadiusPlacement, updatePendingDistanceRetargetHover,
-    hitDimension, hitSketchIdentityElement }) {
+    hitDimension, hitSketchIdentityElement, press }) {
+    function down(e) {
+      if (e.button === 2) {
+        e.preventDefault();
+        return;
+      }
+      press.closeContextMenu();
+      if (e.button === 1) {
+        canvasNavigation.beginPan(e);
+        return;
+      }
+
+      const p = press.worldPoint(e);
+      setLastPointer(p);
+      const hits = press.query.read(p);
+      const { hitP, hitL, hitC, hitArcEnd, hitA, hitS, hatchHit, referenceImageHit, hitD, hitBlockHandle, hitBlock, hitDerivedGeometry, hitDerivedInstance, directGeometryHit, sketchIdentity, inactiveHit, blankAnnotationHit, annotationTargetHit } = hits;
+      canvasHover.update({ sketchIdentity });
+
+      if (hitD && press.insertDimensionParameter(e, hitD)) return;
+
+      if (getMode() === "hatch" || getMode() === "hatch-repair") {
+        e.preventDefault();
+        press.commitHatch(p);
+        return;
+      }
+
+      if (referenceImageInteraction.calibrating) {
+        e.preventDefault();
+        press.calibrateImage(p);
+        return;
+      }
+
+      if (press.inputs.instance.click(e, p, { hitP, hitL, hitC, hitA, hitS })) return;
+
+      const blankDoubleClickHits = { hitP, hitL, hitC, hitArcEnd, hitA, hitS, hitD, hitBlock, hitDerivedInstance, hatchHit, referenceImageHit, inactiveHit, annotationHit: blankAnnotationHit };
+      if (press.blankGesture.isRepeated(press.screenPoint(e), blankDoubleClickHits) && press.blankGesture.handle(p, blankDoubleClickHits)) {
+        press.blankGesture.suppressNext();
+        e.preventDefault();
+        return;
+      }
+
+      if (press.inputs.annotation.place(e, p, annotationTargetHit)) return;
+
+      if (getPendingCommand()?.type === "fillet-radius-place") {
+        e.preventDefault();
+        press.placeFilletRadius(p);
+        return;
+      }
+
+      if (press.inputs.annotation.select(e, p, { blankAnnotationHit, directGeometryHit, hitD })) return;
+
+      if (press.inputs.constraint.click(e, p, { hitD, directGeometryHit, hitP, hitL, hitC, hitA, hitS, hitArcEnd, inactiveHit })) return;
+
+      if (getMode() === "block-place") {
+        e.preventDefault();
+        press.placeBlock(p);
+        return;
+      }
+
+      if (press.inputs.drawing.click(e, p, { hitP, hitL, hitC, hitA })) return;
+
+      press.inputs.selection.begin(e, p, { hitP, hitL, hitC, hitA, hitS, hitArcEnd, hitD, hitDerivedGeometry, hitDerivedInstance, hitBlock, hitBlockHandle, hatchHit, referenceImageHit, directGeometryHit });
+    }
+
     function move(screenPoint, p, shiftKey) {
       if (canvasNavigation.movePan(screenPoint)) return;
 
@@ -123,7 +186,7 @@
       // The first Line endpoint is provisional until a segment is completed.
       if (!transientAuthoring.hasLineStart) recordHistory("操作");
     }
-    return Object.freeze({ move, finish });
+    return Object.freeze({ down, move, finish });
   }
   window.PointerInteractionController = Object.freeze({ create });
 })();

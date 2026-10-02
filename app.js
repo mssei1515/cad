@@ -7028,110 +7028,14 @@
     capturePointer: id => canvas.setPointerCapture(id), setHint, applicationText, updateGeometrySelectionUI, draw,
   });
 
+  const canvasPressQuery = window.CanvasPressQuery.create({
+    geometry: { hitPoint, hitLine, hitCircle, hitArcEndpoint, hitArc, hitSpline },
+    scene: { hitHatchAt, hitReferenceImageAt, hitDimension, hitBlockRotationHandle, hitBlockInstance,
+      hitDerivedGeometryForDrag, hitGeometryInstance, hitSketchIdentityElement, hitAnnotationElement, hitAnnotationTarget },
+  });
   canvas.addEventListener("pointerdown", (e) => {
     flushScheduledCanvasPointerMove();
-    if (e.button === 2) {
-      e.preventDefault();
-      return;
-    }
-    closeCanvasContextMenu();
-    if (e.button === 1) {
-      canvasNavigation.beginPan(e);
-      return;
-    }
-
-    const p = canvasPoint(e);
-    lastPointerWorld = p;
-    const hitP = hitPoint(p.x, p.y);
-    const hitL = hitLine(p.x, p.y);
-    const hitC = hitCircle(p.x, p.y);
-    const hitArcEnd = hitArcEndpoint(p.x, p.y);
-    const hitA = hitArc(p.x, p.y);
-    const hitS = hitSpline(p.x, p.y);
-    const hatchHit = hitHatchAt(p.x, p.y);
-    const referenceImageHit = hitReferenceImageAt(p.x, p.y);
-    const hitD = hitDimension(p.x, p.y);
-    const hitBlockHandle = hitBlockRotationHandle(p.x, p.y);
-    const hitBlock = hitBlockHandle || hitBlockInstance(p.x, p.y);
-    const hitDerivedGeometry = hitDerivedGeometryForDrag(p.x, p.y);
-    const hitDerivedInstance = hitDerivedGeometry?.instance || hitGeometryInstance(p.x, p.y);
-    const directGeometryHit = Boolean(
-      (hitP && !hitP.blockProjection) ||
-      (hitArcEnd && !hitArcEnd.arc.blockProjection) ||
-      (hitL && !hitL.blockProjection) ||
-      (hitC && !hitC.blockProjection) ||
-      (hitA && !hitA.blockProjection)
-      || (hitS && !hitS.blockProjection) ||
-      hitDerivedGeometry
-    );
-    canvasHover.update({ sketchIdentity: hitSketchIdentityElement(p.x, p.y, { allowInactiveGeometry: true }) });
-    const inactiveHit = null;
-    const blankAnnotationHit = hitAnnotationElement(p.x, p.y);
-    const annotationTargetHit = hitAnnotationTarget(p.x, p.y);
-
-    if (hitD && insertClickedDimensionParameter(e, hitD)) return;
-
-    if (mode === "hatch" || mode === "hatch-repair") {
-      e.preventDefault();
-      commitHatchAt(p);
-      return;
-    }
-
-    if (referenceImageInteraction.calibrating) {
-      e.preventDefault();
-      handleReferenceImageCalibrationClick(p);
-      return;
-    }
-
-    if (instanceCommandInput.click(e, p, { hitP, hitL, hitC, hitA, hitS })) return;
-
-    const blankDoubleClickHits = { hitP, hitL, hitC, hitArcEnd, hitA, hitS, hitD, hitBlock, hitDerivedInstance, hatchHit, referenceImageHit, inactiveHit, annotationHit: blankAnnotationHit };
-    if (blankCanvasGesture.isRepeated(canvasScreenPoint(e), blankDoubleClickHits) && blankCanvasGesture.handle(p, blankDoubleClickHits)) {
-      blankCanvasGesture.suppressNext();
-      e.preventDefault();
-      return;
-    }
-
-    if (annotationCommandInput.place(e, p, annotationTargetHit)) return;
-
-    if (pendingCommand?.type === "fillet-radius-place") {
-      e.preventDefault();
-      submitFilletRadiusPlacement(p);
-      return;
-    }
-
-    if (annotationCommandInput.select(e, p, { blankAnnotationHit, directGeometryHit, hitD })) return;
-
-    if (constraintCommandInput.click(e, p, { hitD, directGeometryHit, hitP, hitL, hitC, hitA, hitS, hitArcEnd, inactiveHit })) return;
-
-    if (mode === "block-place") {
-      e.preventDefault();
-      handleBlockPlacementClick(p);
-      return;
-    }
-
-    if (drawingCommandInput.click(e, p, { hitP, hitL, hitC, hitA })) return;
-
-    if (mode === "sketch-projection") {
-      clearSnap();
-      const target = hitReferenceTarget(p.x, p.y);
-      canvasHover.update({
-        point: target?.kind === "point" ? target.point : null, endpointPoint: null, line: target?.kind === "line" ? target.line : null,
-        circle: target?.kind === "primitive" && target.primitive instanceof Circle ? target.primitive : null, arc: target?.kind === "primitive" && target.primitive instanceof Arc ? target.primitive : null, spline: target?.kind === "spline" ? target.spline : null,
-        arcEndpoint: null, dimension: null, block: null,
-      });
-      canvasHover.update({ sketchIdentity: target ? { id: operandElement(target)?.id, sketchId: target.sketchId, item: operandElement(target), kind: geometryKindForItem(operandElement(target)) } : null });
-      draw();
-      return;
-    }
-
-    if (inactiveHit) {
-      setHint(`${inactiveHit.id} / ${sketchName(inactiveHit.sketchId)} は非アクティブスケッチの要素です`);
-      draw();
-      return;
-    }
-
-    canvasSelectionInteraction.begin(e, p, { hitP, hitL, hitC, hitA, hitS, hitArcEnd, hitD, hitDerivedGeometry, hitDerivedInstance, hitBlock, hitBlockHandle, hatchHit, referenceImageHit, directGeometryHit });
+    pointerInteractionController.down(e);
   });
 
   const pointerHover = window.PointerHover.create({
@@ -7147,6 +7051,12 @@
     getMode: () => mode, getPendingCommand: () => pendingCommand,
     getPendingConstraintCommand: () => pendingConstraintCommand, setLastPointer: point => { lastPointerWorld = point; },
     updateHatchPreview, updateFilletRadiusPlacement, updatePendingDistanceRetargetHover, hitDimension, hitSketchIdentityElement,
+    press: { query: canvasPressQuery, worldPoint: canvasPoint, screenPoint: canvasScreenPoint,
+      closeContextMenu: closeCanvasContextMenu, insertDimensionParameter: insertClickedDimensionParameter,
+      commitHatch: commitHatchAt, calibrateImage: handleReferenceImageCalibrationClick,
+      placeFilletRadius: submitFilletRadiusPlacement, placeBlock: handleBlockPlacementClick, blankGesture: blankCanvasGesture,
+      inputs: { instance: instanceCommandInput, annotation: annotationCommandInput, constraint: constraintCommandInput,
+        drawing: drawingCommandInput, selection: canvasSelectionInteraction } },
   });
 
   function processCanvasPointerMove(e) {

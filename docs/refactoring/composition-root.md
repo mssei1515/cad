@@ -6,6 +6,10 @@
 
 ## 現在の再開地点（2026-10-02）
 
+CanvasPressQueryへ読取り専用hit snapshotを分離し、PointerInteractionController.downへpointerdown全体の優先順位を集約。listenerはflushと委譲のみ。注記queryはhover非依存を確認してsnapshot構成後にhover更新。Instance受付が必ず消費する重複Sketch投影分岐と常にnullのinactiveHit分岐を除去。app.jsは12,280行から12,190行へ縮小。構文347件・単体785件・関連E2E203件成功（exit 0、4.2分）。ログはcad-pointer-press-{check,unit,e2e}.log。開始時週枠残量58%。次は残るdblclick／pointerleave／キーボード入力と入力module組立て。全体目標と全体E2Eは未完了。
+
+### 前回の区切り
+
 AnnotationCommandInputへ注記配置／選択、ConstraintCommandInputへ寸法drag・距離配置・数値入力中のクリック消費・拘束対象指定を分離。注記配置と選択の間にFillet半径配置を残し、既存の優先順位を保持。app.jsは12,359行から12,280行へ縮小。構文346件・単体780件・関連E2E192件成功（exit 0、2.4分）。ログはcad-target-input-{check,unit,e2e}.log。開始時週枠残量61%。次はhit snapshotとpointerdown全体の順序を整理してPointerInteractionControllerへ収束し、入力moduleの組立てをまとめる。全体目標と全体E2Eは未完了。
 
 ### 前回の区切り

@@ -93,3 +93,50 @@ test('unconsumed completion records history except while a provisional line endp
   controller.finish({ pointerId: 3 });
   assert.deepEqual(history, ['操作']);
 });
+
+
+vm.runInContext(fs.readFileSync(path.resolve(__dirname, '../../src/editing/canvas_press_query.js'), 'utf8'), sandbox);
+function pressFixture() {
+  const f={calls:[],mode:'select',pending:null,consume:null,repeat:false,calibrating:false,hits:{},point:{x:1,y:2}};
+  const stage=name=>(...args)=>{f.calls.push(name);f[name+'Args']=args;return f.consume===name;};
+  const input=name=>({click:stage(name)});
+  const controller=sandbox.window.PointerInteractionController.create({getMode:()=>f.mode,getPendingCommand:()=>f.pending,
+    canvasNavigation:{beginPan:stage('pan')},referenceImageInteraction:{get calibrating(){return f.calibrating;}},
+    canvasHover:{update:stage('hover')},setLastPointer:stage('last'),press:{
+      closeContextMenu:stage('close'),worldPoint:()=>{f.calls.push('world');return f.point;},screenPoint:()=>({x:10,y:20}),
+      query:{read:p=>{assert.equal(p,f.point);f.calls.push('query');return f.hits;}},insertDimensionParameter:stage('parameter'),commitHatch:stage('hatch'),calibrateImage:stage('calibration'),
+      blankGesture:{isRepeated:()=>{f.calls.push('repeat');return f.repeat;},handle:stage('blank'),suppressNext:stage('suppress')},
+      placeFilletRadius:stage('fillet'),placeBlock:stage('block'),inputs:{instance:input('instance'),annotation:{place:stage('annotationPlace'),select:stage('annotationSelect')},constraint:input('constraint'),drawing:input('drawing'),selection:{begin:stage('selection')}}}});
+  f.event={button:0,preventDefault:()=>f.calls.push('prevent')};f.down=()=>controller.down(f.event);return f;
+}
+test('press buttons return before world query and normal presses traverse the established input order',()=>{
+  const f=pressFixture();f.event.button=2;f.down();assert.deepEqual(f.calls,['prevent']);
+  f.event.button=1;f.calls=[];f.down();assert.deepEqual(f.calls,['close','pan']);
+  f.event.button=0;f.calls=[];f.down();assert.deepEqual(f.calls,['close','world','last','query','hover','instance','repeat','annotationPlace','annotationSelect','constraint','drawing','selection']);
+});
+test('each consumed press stops subsequent command input',()=>{
+  const order=['instance','repeat','annotationPlace','annotationSelect','constraint','drawing','selection'];
+  for(const consumer of order.filter(x=>x!=='repeat')){const f=pressFixture();f.consume=consumer;f.down();assert.deepEqual(f.calls.slice(5),order.slice(0,order.indexOf(consumer)+1));}
+});
+test('dimension parameter insertion precedes Hatch and calibration while Hatch wins over calibration',()=>{
+  const f=pressFixture();f.hits.hitD={};f.mode='hatch';f.calibrating=true;f.consume='parameter';f.down();assert.equal(f.calls.at(-1),'parameter');
+  f.consume=null;f.calls=[];f.down();assert.deepEqual(f.calls.slice(5),['parameter','prevent','hatch']);
+  f.mode='select';f.calls=[];f.down();assert.deepEqual(f.calls.slice(5),['parameter','prevent','calibration']);
+});
+test('blank double click suppresses native duplicate and Fillet and Block placement retain their positions',()=>{
+  const f=pressFixture();f.repeat=true;f.consume='blank';f.down();assert.deepEqual(f.calls.slice(5),['instance','repeat','blank','suppress','prevent']);
+  f.repeat=false;f.consume=null;f.pending={type:'fillet-radius-place'};f.calls=[];f.down();assert.deepEqual(f.calls.slice(5),['instance','repeat','annotationPlace','prevent','fillet']);
+  f.pending=null;f.mode='block-place';f.calls=[];f.down();assert.deepEqual(f.calls.slice(5),['instance','repeat','annotationPlace','annotationSelect','constraint','prevent','block']);
+});
+test('press hit snapshot preserves handle and derived-geometry short circuits and direct classification',()=>{
+  const values={},calls=[];
+  const hit=name=>(x,y,options)=>{assert.equal(x,1);assert.equal(y,2);calls.push(name);if(name==='hitSketchIdentityElement')assert.equal(options.allowInactiveGeometry,true);return values[name]||null;};
+  const geometry=Object.fromEntries(['hitPoint','hitLine','hitCircle','hitArcEndpoint','hitArc','hitSpline'].map(n=>[n,hit(n)]));
+  const scene=Object.fromEntries(['hitHatchAt','hitReferenceImageAt','hitDimension','hitBlockRotationHandle','hitBlockInstance','hitDerivedGeometryForDrag','hitGeometryInstance','hitSketchIdentityElement','hitAnnotationElement','hitAnnotationTarget'].map(n=>[n,hit(n)]));
+  const query=sandbox.window.CanvasPressQuery.create({geometry,scene}),point={x:1,y:2};
+  values.hitPoint={blockProjection:true};values.hitBlockRotationHandle={id:'B'};values.hitDerivedGeometryForDrag={instance:{id:'I'}};
+  const result=query.read(point);assert.equal(result.hitBlock,values.hitBlockRotationHandle);assert.equal(result.hitDerivedInstance,values.hitDerivedGeometryForDrag.instance);assert.equal(result.directGeometryHit,true);
+  assert.equal(calls.includes('hitBlockInstance'),false);assert.equal(calls.includes('hitGeometryInstance'),false);assert.equal(result.inactiveHit,null);
+  values.hitDerivedGeometryForDrag=null;values.hitBlockRotationHandle=null;calls.length=0;assert.equal(query.read(point).directGeometryHit,false);assert.ok(calls.includes('hitBlockInstance'));assert.ok(calls.includes('hitGeometryInstance'));
+  values.hitSpline={id:'S'};assert.equal(query.read(point).directGeometryHit,true);
+});
