@@ -50,7 +50,7 @@
       }
       const model = currentScope();
       if (canvasSelection.inspection || canvasSelection.sketchId) additive = false;
-      if (!additive || category === "constraint" || canvasSelection.inspection || canvasSelection.sketchId) clearSelection();
+      if (!additive || canvasSelection.inspection || canvasSelection.sketchId) clearSelection();
       if (["point", "line", "circle", "arc", "spline"].includes(category)) {
         const item = sidebarGeometryItem(category, row.dataset.id);
         if (item) {
@@ -79,13 +79,14 @@
           if (additive) canvasSelection.toggleById("annotations", item); else canvasSelection.append("annotations", item);
         }
       } else if (row.dataset.fixedPointId) {
+        clearSelection();
         const point = model.points.find((item) => item.id === row.dataset.fixedPointId);
         if (point) canvasSelection.set("points", [point]);
       } else {
         const constraint = model.constraints[Number(row.dataset.constraintIndex)];
         if (constraint) {
-          if (targetFromConstraint(constraint)) canvasSelection.set("dimensionConstraint", constraint);
-          else canvasSelection.set("constraint", constraint);
+          if (targetFromConstraint(constraint)) { if (additive) canvasSelection.toggleDimensionConstraint(constraint); else canvasSelection.set("dimensionConstraint", constraint); }
+          else { clearSelection(); canvasSelection.set("constraint", constraint); }
         }
       }
       updateUI();

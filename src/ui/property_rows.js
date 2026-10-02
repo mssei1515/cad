@@ -57,6 +57,18 @@
         specificRows += `<div class="property-row"><label>${applicationText("回転", "Rotation")}</label><div class="property-input-with-unit">${textInput("rotation", "number", 'min="-3600" max="3600" step="1"')}<span class="property-input-unit">°</span></div></div>`;
         if (allSupport("terminatorType")) specificRows += `<div class="property-row"><label>${applicationText("端末記号", "Terminator")}</label>${select("terminatorType", (current) => option("arrow", applicationText("標準矢印", "Standard arrow"), current) + option("filledArrow", applicationText("塗りつぶし矢印", "Filled arrow"), current) + option("dot", applicationText("点", "Dot"), current) + option("none", applicationText("なし", "None"), current))}</div><div class="property-row"><label>${applicationText("端末サイズ", "Terminator size")}</label><div class="property-input-with-unit">${textInput("terminatorSize", "number", 'min="0.1" max="100" step="0.1"')}<span class="property-input-unit">mm</span></div></div>`;
       }
+      if (sameType && items.every(entry => entry.kind === "constraint")) {
+        for (const [key, ja, en] of [["prefix", "接頭辞", "Prefix"], ["suffix", "接尾辞", "Suffix"]]) {
+          const current = value(key);
+          specificRows += `<div class="property-row"><label>${applicationText(ja, en)}</label><textarea rows="1" wrap="off" data-affix-input data-user-content data-bulk-property="${key}" placeholder="${current === MULTIPLE_PROPERTY_MIXED ? mixedLabel : ""}">\n${current === MULTIPLE_PROPERTY_MIXED ? "" : escapeHtml(current)}</textarea></div>`;
+        }
+        specificRows += `<div class="property-row"><label>${applicationText("精度", "Precision")}</label>${select("precision", current => option("auto", applicationText("自動", "Auto"), current == null ? "auto" : String(current)) + Array.from({ length: 11 }, (_, i) => option(String(i), String(i), String(current))).join(""))}</div>`;
+        specificRows += `<div class="property-row"><label>${applicationText("端末記号", "Terminator")}</label>${select("terminatorType", current => option("arrow", applicationText("標準矢印", "Standard arrow"), current) + option("filledArrow", applicationText("塗りつぶし矢印", "Filled arrow"), current) + option("dot", applicationText("点", "Dot"), current))}</div>`;
+        for (const [key, ja, en] of [["dimensionTextHeight", "文字高さ", "Text height"], ["dimensionTextGap", "文字間隔", "Text gap"], ["terminatorSize", "端末サイズ", "Terminator size"], ["arrowheadAngle", "矢印角度", "Arrow angle"], ["extensionLineOvershoot", "補助線の延長", "Extension overshoot"], ["extensionLineOriginGap", "補助線の開始間隔", "Extension origin gap"]]) {
+          specificRows += `<div class="property-row"><label>${applicationText(ja, en)}</label>${textInput(key, "number", 'min="0" step="0.1"')}</div>`;
+        }
+
+      }
       return `${specificRows}${visibleRow}${colorRow}${lineTypeRow}${lineWidthRow}`;
     }
 

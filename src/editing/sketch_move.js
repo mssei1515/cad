@@ -14,7 +14,7 @@
     function collect(selection) {
       const scope = currentScope(), sourceId = activeSketchId();
       if (selection.geometryInstances?.length || selection.instanceGeometry || selection.inspection
-        || selection.constraint || selection.dimensionConstraint || selection.arcEndpoint || selection.arcEndpointPair) {
+        || selection.constraint || selection.dimensionConstraint || selection.dimensionConstraints?.length || selection.arcEndpoint || selection.arcEndpointPair) {
         return fail("派生図形・拘束・閲覧対象は移動できません", "Derived geometry, constraints, and inspected objects cannot be moved");
       }
       const groups = Object.fromEntries(FIELDS.map(field => [field, [...new Set(selection[field] || [])]]));

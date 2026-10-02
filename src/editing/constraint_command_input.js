@@ -5,15 +5,13 @@
     beginDimensionDrag, retargetDistancePlaceWithOperand, startDistanceValueInput, constraintTargetHint,
     handleConstraintOperandClick, setHint, updateGeometrySelectionUI, draw }) {
     function click(e, p, { hitD, directGeometryHit, hitP, hitL, hitC, hitA, hitS, hitArcEnd, inactiveHit }) {
+      if (hitD && !directGeometryHit && (e.shiftKey || e.ctrlKey) && !getPending() && !getPendingConstraint()) {
+        e.preventDefault(); canvasSelection.toggleDimensionConstraint(hitD.constraint); updateGeometrySelectionUI(); draw(); return true;
+      }
       if (hitD && !directGeometryHit && !e.shiftKey && !e.ctrlKey && ((!getPending() && !getPendingConstraint()) || isDimensionConstraintCommandActive())) {
         e.preventDefault();
         if (!isDimensionConstraintCommandActive()) {
-          canvasSelection.set("points", []);
-          canvasSelection.set("lines", []);
-          canvasSelection.set("circles", []);
-          canvasSelection.set("arcs", []);
-          canvasSelection.set("splines", []);
-          canvasSelection.set("arcEndpoint", null);
+          canvasSelection.clear();
         }
         beginDimensionDrag(e, hitD, p, { hitP, hitL, hitC, hitA, hitArcEnd });
         return true;

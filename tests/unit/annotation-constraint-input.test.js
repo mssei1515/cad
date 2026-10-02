@@ -4,7 +4,7 @@ const sandbox={window:{}};vm.createContext(sandbox);for(const name of ['annotati
 function fixture(){
   const f={mode:'select',pending:null,constraint:null,dimensionCommand:false,retarget:false,calls:[],state:{}};
   const record=name=>(...args)=>f.calls.push({name,args});
-  const selection={set:(k,v)=>{f.state[k]=v;record('set:'+k)(v);},effectiveSelectedConstraint:()=>f.state.constraint,toggleBlockInstanceSelection:record('toggleBlock'),toggleById:record('toggle'),get dimensionConstraint(){return f.state.dimensionConstraint;}};
+  const selection={clear:record('clear'),toggleDimensionConstraint:record('toggleDimension'),set:(k,v)=>{f.state[k]=v;record('set:'+k)(v);},effectiveSelectedConstraint:()=>f.state.constraint,toggleBlockInstanceSelection:record('toggleBlock'),toggleById:record('toggle'),get dimensionConstraint(){return f.state.dimensionConstraint;}};
   const common={getMode:()=>f.mode,getPending:()=>f.pending,getPendingConstraint:()=>f.constraint,canvasSelection:selection,draw:record('draw')};
   f.annotation=sandbox.window.AnnotationCommandInput.create({...common,annotationCommand:{commitTextAnnotationAt:record('text'),handleLeaderAnnotationTargetClick:record('target'),commitLeaderAnnotationAt:record('leader')},clearSelection:record('clear'),annotationDrag:{begin:record('annotationDrag')},updateUI:record('ui')});
   f.input=sandbox.window.ConstraintCommandInput.create({...common,canvasHover:{update:record('hover')},isDimensionConstraintCommandActive:()=>f.dimensionCommand,
@@ -26,7 +26,7 @@ test('ordinary annotation starts drag while additive annotation and block projec
   hit.element.blockProjection=true;hit.element.blockInstance={id:'B'};f.calls=[];f.annotation.select(f.e,f.p,{blankAnnotationHit:hit});assert.deepEqual(f.names(),['prevent','toggleBlock','ui','draw']);
 });
 test('dimension drag clears basic geometry only outside dimension commands',()=>{
-  const f=fixture(),dimension={id:'D'},point={id:'P'};f.click({hitD:dimension,hitP:point});assert.equal(f.names().at(-1),'dimensionDrag');assert.equal(f.state.points.length,0);assert.equal(f.calls.at(-1).args[3].hitP,point);
+  const f=fixture(),dimension={id:'D'},point={id:'P'};f.click({hitD:dimension,hitP:point});assert.equal(f.names().at(-1),'dimensionDrag');assert.ok(f.names().includes('clear')); assert.equal(f.calls.at(-1).args[3].hitP,point);
   f.pending={type:'distance-place'};f.dimensionCommand=true;f.calls=[];f.click({hitD:dimension});assert.deepEqual(f.names(),['prevent','dimensionDrag']);
 });
 test('distance placement retargets before accepting location and value entry consumes clicks',()=>{

@@ -20,7 +20,7 @@
       const preserveMixedSelection = canvasSelection.selectedElementCount() > 1 && hitIsSelected(hitP, hitL, hitC, hitA, hitArcEnd);
       if (preserveMixedSelection) {
         plan = buildDragSession("selection", canvasSelection.selectedDragPoints(), pointer);
-        canvasSelection.set("dimensionConstraint", null);
+        if (!e.shiftKey && !e.ctrlKey) canvasSelection.set("dimensionConstraint", null);
       } else {
         canvasSelection.set("blockInstances", []);
         canvasSelection.set("annotations", []);
@@ -89,7 +89,7 @@
           canvasSelection.set("instanceGeometry", null);
           if (!canvasSelection.geometryInstances.includes(hitDerivedGeometry.instance)) canvasSelection.append("geometryInstances", hitDerivedGeometry.instance);
           else canvasSelection.set("geometryInstances", canvasSelection.geometryInstances.filter((instance) => instance !== hitDerivedGeometry.instance));
-          canvasSelection.set("dimensionConstraint", null);
+          if (!e.shiftKey && !e.ctrlKey) canvasSelection.set("dimensionConstraint", null);
           canvasSelection.set("constraint", null);
           updateGeometrySelectionUI();
           draw();
@@ -101,14 +101,14 @@
         const index = canvasSelection.geometryInstances.indexOf(hitDerivedInstance);
         if (multiSelect && index >= 0) canvasSelection.removeAt("geometryInstances", index, 1);
         else if (!canvasSelection.geometryInstances.includes(hitDerivedInstance)) canvasSelection.append("geometryInstances", hitDerivedInstance);
-        canvasSelection.set("dimensionConstraint", null);
+        if (!e.shiftKey && !e.ctrlKey) canvasSelection.set("dimensionConstraint", null);
         canvasSelection.set("constraint", null);
         setHint(applicationText(`派生インスタンス ${hitDerivedInstance.id} を選択`, `Selected derived instance ${hitDerivedInstance.id}`));
         updateGeometrySelectionUI();
         draw();
       } else if (hitBlock && !hitP && !hitArcEnd && drawingHitIsTop(hitBlock)) {
         if (multiSelect) {
-          canvasSelection.set("dimensionConstraint", null);
+          if (!e.shiftKey && !e.ctrlKey) canvasSelection.set("dimensionConstraint", null);
           canvasSelection.set("constraint", null);
           canvasSelection.toggleBlockInstanceSelection(hitBlock);
           setHint(`ブロックインスタンスを${canvasSelection.blockInstances.length}個選択`);
@@ -124,11 +124,11 @@
         canvasSelection.set("arcEndpoint", null);
         beginDimensionDrag(e, hitD, p);
       } else if (hitP) {
-        canvasSelection.set("dimensionConstraint", null);
+        if (!e.shiftKey && !e.ctrlKey) canvasSelection.set("dimensionConstraint", null);
         if (multiSelect) canvasSelection.togglePointSelection(hitP);
         else beginDrag(e, hitP, null, null, null, null, p);
       } else if (hitArcEnd) {
-        canvasSelection.set("dimensionConstraint", null);
+        if (!e.shiftKey && !e.ctrlKey) canvasSelection.set("dimensionConstraint", null);
         if (multiSelect) {
           const next = { arc: hitArcEnd.arc, endpoint: hitArcEnd.endpoint };
           if (canvasSelection.arcEndpoint && !sameArcEndpoint(canvasSelection.arcEndpoint, next)) canvasSelection.set("arcEndpointPair", [canvasSelection.arcEndpoint, next]);
@@ -138,19 +138,19 @@
           beginDrag(e, null, null, null, null, hitArcEnd, p);
         }
       } else if (hitL && drawingHitIsTop(hitL)) {
-        canvasSelection.set("dimensionConstraint", null);
+        if (!e.shiftKey && !e.ctrlKey) canvasSelection.set("dimensionConstraint", null);
         if (multiSelect) canvasSelection.toggleLineSelection(hitL);
         else beginDrag(e, null, hitL, null, null, null, p);
       } else if (hitC && drawingHitIsTop(hitC)) {
-        canvasSelection.set("dimensionConstraint", null);
+        if (!e.shiftKey && !e.ctrlKey) canvasSelection.set("dimensionConstraint", null);
         if (multiSelect) canvasSelection.toggleCircleSelection(hitC);
         else beginDrag(e, null, null, hitC, null, null, p);
       } else if (hitA && drawingHitIsTop(hitA)) {
-        canvasSelection.set("dimensionConstraint", null);
+        if (!e.shiftKey && !e.ctrlKey) canvasSelection.set("dimensionConstraint", null);
         if (multiSelect) canvasSelection.toggleArcSelection(hitA);
         else beginDrag(e, null, null, null, hitA, null, p);
       } else if (hitS && drawingHitIsTop(hitS)) {
-        canvasSelection.set("dimensionConstraint", null);
+        if (!e.shiftKey && !e.ctrlKey) canvasSelection.set("dimensionConstraint", null);
         if (multiSelect) canvasSelection.toggleSplineSelection(hitS);
         else {
           let plan = null;

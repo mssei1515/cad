@@ -3514,7 +3514,7 @@
     canvasSelection.set("arcs", canvasSelection.arcs.filter((a) => !arcSet.has(a)));
     canvasSelection.set("splines", canvasSelection.splines.filter((spline) => !splineSet.has(spline)));
     if (splineEditSession && splineSet.has(splineEditSession.spline)) splineEditSession = null;
-    if (constraintSet.has(canvasSelection.dimensionConstraint)) canvasSelection.set("dimensionConstraint", null);
+    canvasSelection.set("dimensionConstraints", canvasSelection.dimensionConstraints.filter(item => !constraintSet.has(item)));
     if (constraintSet.has(canvasSelection.constraint)) canvasSelection.set("constraint", null);
     if (constraintSet.has(canvasHover.current.dimension)) canvasHover.update({ dimension: null });
 
@@ -3591,7 +3591,7 @@
       canvasSelection.set("blockInstances", []);
       deletedBlockCount = instances.length;
     }
-    const constraints = [...new Set([canvasSelection.dimensionConstraint, effectiveSelectedConstraint()].filter(Boolean))];
+    const constraints = [...new Set([...canvasSelection.dimensionConstraints, effectiveSelectedConstraint()].filter(Boolean))];
     const deletedGeometry = deleteElements({ points: canvasSelection.points, lines: canvasSelection.lines, circles: canvasSelection.circles, arcs: canvasSelection.arcs, splines: canvasSelection.splines, constraints });
     if (deletedGeometry) return true;
     if (deletedBlockCount === 0 && deletedInstanceCount === 0 && annotationsToDelete.length === 0 && hatchesToDelete.length === 0 && referenceImagesToDelete.length === 0) return false;
@@ -4072,6 +4072,23 @@
     arcSamplePoints, viewScale: () => viewport.scale, isEditableSketchId, isVisibleSketchId, blockProjectionBundle, mergeBounds,
     splineBBox, annotationBounds, resolvedLoopBounds, resolvedHatchBoundary, activeSketchId,
     hatchAppearanceForDisplay, referenceImageBounds,
+    dimensionSelectionBounds: constraint => {
+      if (!isActiveSketchConstraint(constraint) || !isVisibleSketchId(constraintSketchId(constraint))) return null;
+      const target = targetFromConstraint(constraint);
+      if (!target) return null;
+      const dimension = constraint.dimension || defaultDimensionForTarget(target);
+      const appearance = effectiveDimensionAppearance(dimension, constraintSketchId(constraint));
+      if (appearance.visible === false) return null;
+      const layout = dimensionLayout(target, dimension, appearance);
+      if (!layout) return null;
+      const metrics = dimensionTextDrawingMetrics(appearance);
+      const label = dimensionLabelForConstraint(constraint, target, dimension);
+      const width = dimensionTextWidth(label, appearance, dimensionUsesExpression(constraint));
+      const top = -metrics.gap - metrics.height * (1 + (String(label).split(/\r\n|\r|\n/).length - 1) * 1.2);
+      const angle = Number(layout.textAngle) || 0;
+      const points = [layout.hitA, layout.hitB, ...[-width / 2, width / 2].flatMap(x => [top, -metrics.gap].map(y => ({ x: layout.text.x + x * Math.cos(angle) - y * Math.sin(angle), y: layout.text.y + x * Math.sin(angle) + y * Math.cos(angle) })))].filter(Boolean);
+      return { x1: Math.min(...points.map(p => p.x)), y1: Math.min(...points.map(p => p.y)), x2: Math.max(...points.map(p => p.x)), y2: Math.max(...points.map(p => p.y)) };
+    },
   });
   function selectByRect(rect, crossing, additive = false) {
     canvasSelection.set("instanceGeometry", null);
@@ -4360,7 +4377,7 @@
       const dimension = c.dimension || defaultDimensionForTarget(target);
       const sketchId = constraintSketchId(c);
       if (!viewState.constraintStatus && effectiveDimensionAppearance(dimension, sketchId).visible === false) continue;
-      const highlighted = c === canvasHover.current.dimension || c === canvasSelection.dimensionConstraint || c === dimensionDrag.constraint;
+      const highlighted = c === canvasHover.current.dimension || canvasSelection.constraintSelectedInCanvas(c) || c === dimensionDrag.constraint;
       const label = dimensionLabelForConstraint(c, target, dimension);
       const editing = pendingCommand?.type === "distance-value" && pendingCommand.constraint === c;
       const colorOverride = viewState.constraintStatus && !isActiveSketchConstraint(c) ? INACTIVE_CONSTRAINT_STATUS_COLOR : null;
@@ -5649,7 +5666,7 @@
     getOperation: () => ({ mode, instanceSourceEdit: instanceSourceCommand.current, freeInstancePlacement: geometryInstanceCommand.pending, blockPlacementDefinitionId: blockPlacementCommand.definitionId }),
     effectiveSelectedConstraint, selectedGeometryItems, blockDefinitionById, sketchById, activeSketchId,
     blockProjectionBundle, effectiveAppearanceForElement, documentModel, normalizeAppearance,
-    hatchAppearanceForDisplay, normalizeAnnotationStyle,
+    hatchAppearanceForDisplay, normalizeAnnotationStyle, effectiveDimensionAppearance,
   });
   const { selectedPropertiesTarget, multiplePropertyTypeKey, multiplePropertySameType, blockPropertyAppearance, multiplePropertyAppearance, multiplePropertySupports, multiplePropertyValue } = propertySelection;
   const geometryPropertyCommand = window.GeometryPropertyCommand.create({
@@ -5670,7 +5687,7 @@
 
   const { apply: applyMultipleProperty } = window.BulkPropertyCommand.create({
     guardSketchProjectionShapeEdit, applicationText, updatePropertiesUI, draw,
-    multiplePropertySupports, applyAnnotationStyleValue, normalizeHatchAppearance, applyAppearanceInput,
+    multiplePropertySupports, applyDimensionAppearanceValue, applyAnnotationStyleValue, normalizeHatchAppearance, applyAppearanceInput,
     invalidateBlockProjectionCache, synchronizeSketchProjectionMetadata, recordHistory, updateUI,
   });
   const appearanceControls = window.AppearanceControls.create({
@@ -6742,7 +6759,7 @@
     if (target.kind === "annotation") return canvasSelection.annotations.includes(target.item);
     if (target.kind === "hatch") return canvasSelection.hatches.includes(target.item);
     if (target.kind === "image") return canvasSelection.referenceImages.includes(target.item);
-    if (target.kind === "dimension") return canvasSelection.dimensionConstraint === target.item || effectiveSelectedConstraint() === target.item;
+    if (target.kind === "dimension") return canvasSelection.constraintSelectedInCanvas(target.item);
     return false;
   }
 
@@ -12017,6 +12034,14 @@
         updateUI({ refreshAnalysis: false });
         draw();
         return true;
+      },
+      multipleDimensionSelectionForTest() {
+        return { dimensions: canvasSelection.dimensionConstraints.map(c => model.constraints.indexOf(c)), lines: canvasSelection.lines.map(l => l.id), single: Boolean(canvasSelection.dimensionConstraint) };
+      },
+      fitForMultipleDimensionsForTest() {
+        viewport.update({ scale: 2, x: 350, y: 250 });
+        updateUI();
+        draw();
       },
       blockDefinitionUpdateCase() {
         const definition = documentModel.blockDefinitions[0];

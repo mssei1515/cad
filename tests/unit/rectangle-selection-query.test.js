@@ -18,7 +18,7 @@ function fixture() {
     blockProjectionBundle: instance => instance.bundle,
     mergeBounds: (a, b) => !b ? a : !a ? b : ({ x1: Math.min(a.x1, b.x1), y1: Math.min(a.y1, b.y1), x2: Math.max(a.x2, b.x2), y2: Math.max(a.y2, b.y2) }),
     splineBBox: item => item.box, annotationBounds: item => item.box, resolvedLoopBounds: value => value,
-    resolvedHatchBoundary: item => item.box, activeSketchId: () => 'S1', hatchAppearanceForDisplay: h => ({ visible: h.visible }), referenceImageBounds: item => item.box });
+    resolvedHatchBoundary: item => item.box, activeSketchId: () => 'S1', hatchAppearanceForDisplay: h => ({ visible: h.visible }), referenceImageBounds: item => item.box, dimensionSelectionBounds: item => item.visible === false || item.sketchId !== 'S1' ? null : item.box });
   return { state, query, rect: { x1: 0, y1: 0, x2: 10, y2: 10 } };
 }
 test('rectangle candidates filter scope and visibility and distinguish support points and containment', () => {
@@ -45,4 +45,11 @@ test('Block bounds include projected annotations and hatches while local auxilia
   const result = f.query.read(f.rect, false); assert.equal(result.blockInstances[0], instance);
   for (const field of ['annotations', 'hatches', 'referenceImages']) assert.equal(result[field].length, 1);
   instance.bundle.points.push({ x: 20, y: 20 }); assert.equal(f.query.read(f.rect, false).blockInstances.length, 0); assert.equal(f.query.read(f.rect, true).blockInstances.length, 1);
+});
+
+test('dimension rectangles distinguish containment and crossing while excluding hidden and inactive candidates',()=>{
+ const f=fixture(),inside={sketchId:'S1',box:{x1:2,y1:2,x2:5,y2:5}},crossing={sketchId:'S1',box:{x1:8,y1:8,x2:15,y2:15}};
+ f.state.model.constraints=[inside,crossing,{...inside,visible:false},{...inside,sketchId:'S2'}];
+ assert.deepEqual(Array.from(f.query.read(f.rect,false).dimensionConstraints),[inside]);
+ assert.deepEqual(Array.from(f.query.read(f.rect,true).dimensionConstraints),[inside,crossing]);
 });

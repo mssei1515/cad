@@ -5,7 +5,7 @@
   function create({ Point, Line, canvasSelection, getOperation, effectiveSelectedConstraint,
     selectedGeometryItems, blockDefinitionById, sketchById, activeSketchId, blockProjectionBundle,
     effectiveAppearanceForElement, documentModel, normalizeAppearance, hatchAppearanceForDisplay,
-    normalizeAnnotationStyle }) {
+    normalizeAnnotationStyle, effectiveDimensionAppearance = () => ({}) }) {
     function selectedPropertiesTarget() {
       const { mode, instanceSourceEdit, freeInstancePlacement, blockPlacementDefinitionId } = getOperation();
       if (mode === "instance-sources" && instanceSourceEdit) return { kind: "geometryInstance", item: instanceSourceEdit.instance };
@@ -17,6 +17,17 @@
           : { kind: "multiple", count: targets.length, items: targets, readOnly: true };
       }
       if (canvasSelection.sketchId) return { kind: "sketch", item: sketchById(canvasSelection.sketchId), active: canvasSelection.sketchId === activeSketchId() };
+      const dimensions = canvasSelection.dimensionConstraints || (canvasSelection.dimensionConstraint ? [canvasSelection.dimensionConstraint] : []);
+      const dimensionItems = [
+        ...dimensions.map(item => ({ kind: "constraint", item })),
+        ...selectedGeometryItems().map(item => ({ kind: "geometry", item })),
+        ...canvasSelection.blockInstances.map(item => ({ kind: "block", item })),
+        ...canvasSelection.geometryInstances.map(item => ({ kind: "geometryInstance", item })),
+        ...canvasSelection.annotations.map(item => ({ kind: "annotation", item })),
+        ...canvasSelection.hatches.map(item => ({ kind: "hatch", item })),
+        ...canvasSelection.referenceImages.map(item => ({ kind: "referenceImage", item })),
+      ];
+      if (dimensions.length && dimensionItems.length > 1) return { kind: "multiple", count: dimensionItems.length, items: dimensionItems };
       const constraint = canvasSelection.dimensionConstraint || effectiveSelectedConstraint();
       if (constraint) return { kind: "constraint", item: constraint };
       if (canvasSelection.geometryInstances.length === 1 && canvasSelection.referenceImages.length === 0 && canvasSelection.hatches.length === 0 && canvasSelection.annotations.length === 0 && canvasSelection.blockInstances.length === 0 && selectedGeometryItems().length === 0) return { kind: "geometryInstance", item: canvasSelection.geometryInstances[0] };
@@ -56,6 +67,8 @@
     }
 
     function multiplePropertyAppearance(target) {
+      if (target.kind === "referenceImage") return { visible: target.item.visible !== false };
+      if (target.kind === "constraint") return effectiveDimensionAppearance(target.item.dimension, target.item.sketchId);
       if (target.kind === "geometry") return effectiveAppearanceForElement(target.item);
       if (target.kind === "block") return blockPropertyAppearance(target.item);
       if (target.kind === "hatch") return hatchAppearanceForDisplay(target.item);
@@ -64,11 +77,14 @@
     }
 
     function multiplePropertySupports(target, key) {
-      if (key === "visible" || key === "color") return true;
+      if (key === "visible") return true;
+      if (target.kind === "referenceImage") return false;
+      if (key === "color") return true;
       if (key === "lineType") return target.kind === "geometry" || target.kind === "block" || (target.kind === "annotation" && target.item.type === "leader");
-      if (key === "lineWidth") return target.kind === "geometry" || target.kind === "block" || (target.kind === "hatch" && target.item.appearance?.patternType !== "solid") || (target.kind === "annotation" && target.item.type === "leader");
+      if (key === "lineWidth") return target.kind === "constraint" || target.kind === "geometry" || target.kind === "block" || (target.kind === "hatch" && target.item.appearance?.patternType !== "solid") || (target.kind === "annotation" && target.item.type === "leader");
       if (key === "construction") return target.kind === "geometry" && !(target.item instanceof Point);
       if (key === "endpointOverhang" || key === "endpointMarkers") return target.kind === "geometry" && target.item instanceof Line && target.item.construction;
+      if (target.kind === "constraint") return ["prefix", "suffix", "precision", "terminatorType", "dimensionTextHeight", "dimensionTextGap", "terminatorSize", "arrowheadAngle", "extensionLineOvershoot", "extensionLineOriginGap"].includes(key);
       if (["patternType", "angle", "spacing", "opacity"].includes(key)) return target.kind === "hatch";
       if (["textHeight", "fontFamily", "bold", "italic", "textAlign", "rotation"].includes(key)) return target.kind === "annotation";
       if (["terminatorType", "terminatorSize"].includes(key)) return target.kind === "annotation" && target.item.type === "leader";
