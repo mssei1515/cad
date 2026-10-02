@@ -208,6 +208,9 @@ button:disabled { opacity: .45; cursor: default; }
 .sketch-active-label { display: inline-flex; align-items: center; gap: 2px; color: var(--tree-primary-text); font-size: 10px; }
 .sketch-active-label svg { width: 12px; height: 12px; fill: none; stroke: currentColor; stroke-width: 2; }
 .sketchEditBtn { padding: 2px 5px; font-size: 10px; }
+.sketch-item:not(.selected) .sketchEditBtn { display: none; }
+.sketch-item:not(.active):hover .sketchEditBtn:not([hidden]),
+.sketch-item:not(.active):focus-within .sketchEditBtn:not([hidden]) { display: inline-block; }
 .properties-read-only { color: var(--muted); font-size: 12px; }
 .sketch-item.solve-error, .item.reference-error { box-shadow: inset 3px 0 var(--danger); }
 .sketchActivateBtn { min-width: 0; display: flex; align-items: center; gap: 3px; padding: 1px 4px 1px 0; border: 0; border-radius: 0; background: transparent; color: var(--tree-primary-text); font-size: 12px; text-align: left; overflow: hidden; white-space: nowrap; }

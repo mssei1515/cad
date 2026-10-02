@@ -30,3 +30,17 @@ test('selected row exposes Edit while the editing marker remains independent; al
   await other.locator('.sketchActivateBtn').focus(); await page.keyboard.press('Alt+Enter');
   await expect(other).toHaveClass(/active/);
 });
+
+test('inactive Sketch hover exposes Edit without selecting or activating the row',async({page})=>{
+ await openTestDocument(page);await page.evaluate(()=>window.__jot2dTest.resetForHatchTest());await page.locator('#addSketchBtn').click();
+ const source=page.locator('.sketch-item[data-id="S1"]'),active=page.locator('.sketch-item[data-id="S2"]');
+ await page.mouse.move(900,800);await expect(source.locator('.sketchEditBtn')).toBeHidden();
+ await source.locator('.sketchActivateBtn').hover();await expect(source.locator('.sketchEditBtn')).toBeVisible();
+ await expect(source).not.toHaveClass(/selected/);await expect(active).toHaveClass(/active/);
+ await page.mouse.move(900,800);await expect(source.locator('.sketchEditBtn')).toBeHidden();
+ await source.locator('.sketchActivateBtn').focus();await expect(source.locator('.sketchEditBtn')).toBeVisible();
+ await source.locator('.sketchActivateBtn').hover();await source.locator('.sketchEditBtn').click();
+ await expect(source).toHaveClass(/active/);await expect(source).toHaveClass(/selected/);
+ await active.locator('.sketchActivateBtn').hover();await expect(active.locator('.sketchEditBtn')).toBeVisible();
+ await source.locator('.sketchActivateBtn').hover();await expect(source.locator('.sketchEditBtn')).toBeDisabled();
+});
