@@ -6,6 +6,10 @@
 
 ## 現在の再開地点（2026-10-02）
 
+Spline／Centerline／TrimのpreviewをAuthoringPreviewRendererへ統合。draftを変更せず、投影済みpointer・支持線・Canvas寸法・Trim候補を引数で受け取る。mode・command・DOMはapp側。app.jsは13,202行から13,137行へ縮小。構文326件・単体727件・関連E2E192件が成功（exit 0）。ログはcad-remaining-preview-{check,unit,e2e}.log。全体目標と全体E2Eは未完了。
+
+### 前回の区切り
+
 基本作図とFilletのpreview描画をAuthoringPreviewRendererへ分離。command／Documentは渡さず座標引数・幾何計算portだけを受け取る。途中段階のmarker・最小長・円弧方向・CanvasSurfaceのresetを保持。app.jsは13,322行から13,202行へ縮小。構文326件・単体724件・関連E2E192件が成功（exit 0）。ログはcad-authoring-preview-{check,unit,e2e}.log。全体目標と全体E2Eは未完了。
 
 ### 前回の区切り

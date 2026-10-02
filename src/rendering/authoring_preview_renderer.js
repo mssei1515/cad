@@ -1,7 +1,7 @@
 /* Draw transient construction previews from explicit points; no command or document ownership. */
 (() => {
   "use strict";
-  function create({ ctx, viewport, withCanvasState, hypot2, shortestAngleFrom, slotGeometry, threePointArcGeometry, minimumLineLength, minimumArcLength }) {
+  function create({ ctx, viewport, withCanvasState, hypot2, shortestAngleFrom, slotGeometry, threePointArcGeometry, minimumLineLength, minimumArcLength, buildSpline, traceSplinePath, angleAtArcParam }) {
     function drawFilletArc(geometry) {
       withCanvasState(() => {
         ctx.strokeStyle = "#2563eb";
@@ -140,7 +140,82 @@
       ctx.stroke();
       ctx.restore();
     }
-    return Object.freeze({ drawFilletArc, drawLine, drawRectangle, drawSlot, drawCircle, drawArc, drawThreePointArc });
+    function drawSpline(points, pointerPreview) {
+      if (points.length === 0) return;
+      const previewPoints = pointerPreview ? [...points, pointerPreview] : points.slice();
+      withCanvasState(() => {
+        ctx.strokeStyle = "#0ea5e9";
+        ctx.lineWidth = 1.5 / viewport.scale;
+        ctx.setLineDash([5 / viewport.scale, 4 / viewport.scale]);
+        ctx.beginPath();
+        ctx.moveTo(previewPoints[0].x, previewPoints[0].y);
+        for (const point of previewPoints.slice(1)) ctx.lineTo(point.x, point.y);
+        ctx.stroke();
+        ctx.setLineDash([]);
+        if (previewPoints.length >= 3) {
+          const curve = buildSpline(previewPoints, { closed: false });
+          const previewSpline = { curve: () => curve, closed: false };
+          ctx.strokeStyle = "#2563eb";
+          ctx.lineWidth = 2 / viewport.scale;
+          traceSplinePath(previewSpline);
+          ctx.stroke();
+        }
+      });
+    }
+
+    function drawTrim(trimPreview) {
+      if (!trimPreview) return;
+      withCanvasState(() => {
+        ctx.strokeStyle = "#dc2626";
+        ctx.lineWidth = 4 / viewport.scale;
+        ctx.lineCap = "round";
+        ctx.setLineDash([8 / viewport.scale, 5 / viewport.scale]);
+        if (trimPreview.kind === "line") {
+          ctx.beginPath();
+          ctx.moveTo(trimPreview.interval.left.point.x, trimPreview.interval.left.point.y);
+          ctx.lineTo(trimPreview.interval.right.point.x, trimPreview.interval.right.point.y);
+          ctx.stroke();
+        } else if (trimPreview.kind === "arc") {
+          const arc = trimPreview.item;
+          ctx.beginPath();
+          ctx.arc(arc.center.x, arc.center.y, arc.radius(), angleAtArcParam(arc, trimPreview.interval.left.t), angleAtArcParam(arc, trimPreview.interval.right.t), arc.endAngle < arc.startAngle);
+          ctx.stroke();
+        } else if (trimPreview.kind === "circle") {
+          const circle = trimPreview.item;
+          ctx.beginPath();
+          if (trimPreview.deleteWhole) ctx.arc(circle.center.x, circle.center.y, circle.radius(), 0, Math.PI * 2);
+          else ctx.arc(circle.center.x, circle.center.y, circle.radius(), trimPreview.interval.left.angle, trimPreview.interval.right.angle);
+          ctx.stroke();
+        }
+      });
+    }
+
+    function drawCenterline(support, firstPoint, preview, canvasSize) {
+      if (!support?.ok) return;
+      withCanvasState(() => {
+        ctx.strokeStyle = "#2563eb";
+        ctx.fillStyle = "#2563eb";
+        ctx.lineWidth = 1.5 / viewport.scale;
+        ctx.setLineDash([7 / viewport.scale, 4 / viewport.scale, 1.5 / viewport.scale, 4 / viewport.scale]);
+        ctx.beginPath();
+        if (firstPoint && preview) {
+          ctx.moveTo(firstPoint.x, firstPoint.y);
+          ctx.lineTo(preview.x, preview.y);
+        } else {
+          const halfLength = Math.max(canvasSize.width, canvasSize.height) * 0.75 / viewport.scale;
+          ctx.moveTo(support.anchor.x - support.ux * halfLength, support.anchor.y - support.uy * halfLength);
+          ctx.lineTo(support.anchor.x + support.ux * halfLength, support.anchor.y + support.uy * halfLength);
+        }
+        ctx.stroke();
+        ctx.setLineDash([]);
+        for (const point of [firstPoint, preview].filter(Boolean)) {
+          ctx.beginPath();
+          ctx.arc(point.x, point.y, 3 / viewport.scale, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      });
+    }
+    return Object.freeze({ drawSpline, drawCenterline, drawTrim, drawFilletArc, drawLine, drawRectangle, drawSlot, drawCircle, drawArc, drawThreePointArc });
   }
   window.AuthoringPreviewRenderer = Object.freeze({ create });
 })();

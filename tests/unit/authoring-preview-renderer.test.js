@@ -13,7 +13,11 @@ function fixture() {
     withCanvasState: fn => { calls.push(['enter']); try { fn(); } finally { calls.push(['exit']); } },
     hypot2: Math.hypot, shortestAngleFrom: (start, end) => end,
     slotGeometry: (...args) => { queries.push(args); return f.slot; },
-    threePointArcGeometry: (...args) => { queries.push(args); return f.three; }, minimumLineLength: 12, minimumArcLength: 12 });
+    threePointArcGeometry: (...args) => { queries.push(args); return f.three; }, minimumLineLength: 12, minimumArcLength: 12,
+    buildSpline: (points, options) => { queries.push([points, options]); return { points }; },
+    traceSplinePath: spline => calls.push(['spline', spline.curve(), spline.closed]),
+    angleAtArcParam: (arc, t) => arc.startAngle + t * (arc.endAngle - arc.startAngle),
+  });
   return f;
 }
 test('line fallback and signed rectangle preview preserve scale and incomplete-input guards', () => {
@@ -59,4 +63,39 @@ test('three-point arc keeps end markers when invalid and adds the computed cente
   assert.equal(circles[2].at(-1),true);assert.deepEqual(circles[3].slice(1,4),[10,5,2.5]);
   f.calls.length=0;f.renderer.drawFilletArc(f.three);
   assert.deepEqual(f.calls.find(c=>c[0]==='arc'),circles[2]);
+});
+
+test('spline preview retains draft points and adds a curve only from three preview points', () => {
+  const f=fixture(),a={x:1,y:2},b={x:3,y:4},p={x:5,y:6};
+  f.renderer.drawSpline([],p);assert.equal(f.calls.length,0);
+  const points=[a,b];f.renderer.drawSpline(points,null);
+  assert.equal(f.calls.some(c=>c[0]==='spline'),false);
+  f.calls.length=0;f.renderer.drawSpline(points,p);
+  const curveCall=f.calls.find(c=>c[0]==='spline');
+  assert.deepEqual(Array.from(curveCall[1].points),[a,b,p]);assert.equal(curveCall[2],false);
+  assert.deepEqual(points,[a,b]);assert.equal(f.queries[0][1].closed,false);
+});
+test('centerline preview uses canvas size before the first point and the projected segment afterwards', () => {
+  const f=fixture(),support={ok:true,anchor:{x:10,y:20},ux:1,uy:0},size={width:200,height:100};
+  f.renderer.drawCenterline({ok:false},null,null,size);assert.equal(f.calls.length,0);
+  f.renderer.drawCenterline(support,null,null,size);
+  assert.deepEqual(f.calls.find(c=>c[0]==='moveTo'),['moveTo',-65,20]);
+  assert.deepEqual(f.calls.find(c=>c[0]==='lineTo'),['lineTo',85,20]);
+  f.calls.length=0;f.renderer.drawCenterline(support,{x:2,y:20},{x:8,y:20},size);
+  assert.deepEqual(f.calls.find(c=>c[0]==='moveTo'),['moveTo',2,20]);
+  assert.deepEqual(f.calls.find(c=>c[0]==='lineTo'),['lineTo',8,20]);
+  assert.deepEqual(f.calls.filter(c=>c[0]==='arc').map(c=>c.slice(1,4)),[[2,20,1.5],[8,20,1.5]]);
+});
+test('trim preview retains line intervals, signed arc parameters and whole-circle deletion', () => {
+  const f=fixture();f.renderer.drawTrim(null);assert.equal(f.calls.length,0);
+  f.renderer.drawTrim({kind:'line',interval:{left:{point:{x:1,y:2}},right:{point:{x:3,y:4}}}});
+  assert.deepEqual(f.calls.find(c=>c[0]==='moveTo'),['moveTo',1,2]);assert.equal(f.ctx.lineWidth,2);
+  f.calls.length=0;
+  const arc={center:{x:1,y:2},radius:()=>9,startAngle:2,endAngle:0};
+  f.renderer.drawTrim({kind:'arc',item:arc,interval:{left:{t:0.25},right:{t:0.75}}});
+  assert.deepEqual(f.calls.find(c=>c[0]==='arc'),['arc',1,2,9,1.5,0.5,true]);
+  f.calls.length=0;f.renderer.drawTrim({kind:'circle',item:arc,deleteWhole:true});
+  assert.deepEqual(f.calls.find(c=>c[0]==='arc'),['arc',1,2,9,0,Math.PI*2]);
+  f.calls.length=0;f.renderer.drawTrim({kind:'circle',item:arc,interval:{left:{angle:1},right:{angle:3}}});
+  assert.deepEqual(f.calls.find(c=>c[0]==='arc'),['arc',1,2,9,1,3]);
 });
