@@ -252,7 +252,7 @@
   let mode = "select";
   const canvasSelection = window.CanvasSelection.create();
   const {
-    selectedGeometryItems, appearanceSelectionTarget, setGeometrySelection, currentConstraintTargets,
+    selectedElementCount, selectedGeometryItems, appearanceSelectionTarget, setGeometrySelection, currentConstraintTargets,
     hasPrimaryCanvasSelection, effectiveSelectedConstraint, selectedPrimitives,
     togglePointSelection, toggleLineSelection, toggleCircleSelection, toggleArcSelection,
     toggleSplineSelection, toggleBlockInstanceSelection, selectedConstructionTogglePrimitives,
@@ -6514,28 +6514,6 @@
   }
 
 
-  function selectedDragPoints() {
-    const points = [...canvasSelection.points];
-    for (const line of canvasSelection.lines) points.push(line.p1, line.p2);
-    for (const circle of canvasSelection.circles) points.push(circle.center);
-    for (const arc of canvasSelection.arcs) points.push(arc.center);
-    for (const spline of canvasSelection.splines) points.push(...spline.fitPoints);
-    return points;
-  }
-
-  function selectedElementCount() {
-    return canvasSelection.points.length + canvasSelection.lines.length + canvasSelection.circles.length + canvasSelection.arcs.length + canvasSelection.splines.length + canvasSelection.blockInstances.length + canvasSelection.geometryInstances.length + canvasSelection.annotations.length + canvasSelection.hatches.length + canvasSelection.referenceImages.length + (canvasSelection.arcEndpoint ? 1 : 0);
-  }
-
-  function hitIsSelected(hitP, hitL, hitC, hitA, hitArcEnd) {
-    if (hitP && canvasSelection.points.includes(hitP)) return true;
-    if (hitL && canvasSelection.lines.includes(hitL)) return true;
-    if (hitC && canvasSelection.circles.includes(hitC)) return true;
-    if (hitA && canvasSelection.arcs.includes(hitA)) return true;
-    if (hitArcEnd && sameArcEndpoint(canvasSelection.arcEndpoint, { arc: hitArcEnd.arc, endpoint: hitArcEnd.endpoint })) return true;
-    return false;
-  }
-
   function selectHitOnly(hitP, hitL, hitC, hitA, hitArcEnd) {
     canvasSelection.set("instanceGeometry", null);
     canvasSelection.set("dimensionConstraint", null);
@@ -6560,62 +6538,6 @@
 
   function hasDirectRadiusDimension(primitive) {
     return window.DimensionQueries.hasDirectRadiusDimension(model.constraints, primitive);
-  }
-
-  function beginDrag(e, hitP, hitL, hitC, hitA, hitArcEnd, pointer) {
-    let plan = null;
-    canvasSelection.set("constraint", null);
-    const preserveMixedSelection = selectedElementCount() > 1 && hitIsSelected(hitP, hitL, hitC, hitA, hitArcEnd);
-    if (preserveMixedSelection) {
-      plan = buildDragSession("selection", selectedDragPoints(), pointer);
-      canvasSelection.set("dimensionConstraint", null);
-    } else {
-      canvasSelection.set("blockInstances", []);
-      canvasSelection.set("annotations", []);
-      canvasSelection.set("hatches", []);
-      canvasSelection.set("referenceImages", []);
-      canvasSelection.set("splines", []);
-    }
-    if (!preserveMixedSelection && hitP) {
-      canvasSelection.set("points", [hitP]);
-      canvasSelection.set("lines", []);
-      canvasSelection.set("circles", []);
-      canvasSelection.set("arcs", []);
-      canvasSelection.set("arcEndpoint", null);
-      plan = buildDragSession("point", hitP, pointer);
-    } else if (!preserveMixedSelection && hitArcEnd) {
-      canvasSelection.set("arcs", [hitArcEnd.arc]);
-      canvasSelection.set("arcEndpoint", { arc: hitArcEnd.arc, endpoint: hitArcEnd.endpoint });
-      canvasSelection.set("points", []);
-      canvasSelection.set("lines", []);
-      canvasSelection.set("circles", []);
-      plan = buildDragSession("arc-endpoint", hitArcEnd, pointer);
-    } else if (!preserveMixedSelection && hitL) {
-      canvasSelection.set("lines", [hitL]);
-      canvasSelection.set("points", []);
-      canvasSelection.set("circles", []);
-      canvasSelection.set("arcs", []);
-      canvasSelection.set("arcEndpoint", null);
-      plan = buildDragSession("line", hitL, pointer);
-    } else if (!preserveMixedSelection && hitC) {
-      canvasSelection.set("circles", [hitC]);
-      canvasSelection.set("points", []);
-      canvasSelection.set("lines", []);
-      canvasSelection.set("arcs", []);
-      canvasSelection.set("arcEndpoint", null);
-      plan = buildDragSession("circle", hitC, pointer);
-    } else if (!preserveMixedSelection && hitA) {
-      canvasSelection.set("arcs", [hitA]);
-      canvasSelection.set("points", []);
-      canvasSelection.set("lines", []);
-      canvasSelection.set("circles", []);
-      canvasSelection.set("arcEndpoint", null);
-      plan = buildDragSession("arc", hitA, pointer);
-    }
-
-    if (geometryDrag.begin(e, plan)) {
-      setHint(`${geometryDrag.label}中: 拘束を保ちながら自動solveしています`);
-    }
   }
 
   const dimensionDrag = window.DimensionDrag.create({
@@ -7054,8 +6976,8 @@
 
   const canvasSelectionInteraction = window.CanvasSelectionInteraction.create({
     canvasSelection, clearSelection, sameArcEndpoint, topmostDrawingOrderOwner, drawingOrderOwner,
-    beginDerivedGeometryDrag, beginBlockDrag, beginDimensionDrag, beginDrag, beginReferenceImageDrag,
-    selectedElementCount, selectedDragPoints, buildDragSession, geometryDrag, selectionRectangle,
+    beginDerivedGeometryDrag, beginBlockDrag, beginDimensionDrag, beginReferenceImageDrag,
+    buildDragSession, geometryDrag, selectionRectangle,
     capturePointer: id => canvas.setPointerCapture(id), setHint, applicationText, updateGeometrySelectionUI, draw,
   });
 

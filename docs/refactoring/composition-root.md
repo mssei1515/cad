@@ -6,6 +6,10 @@
 
 ## 現在の再開地点（2026-10-02）
 
+選択数・drag対象点の照会をCanvasSelectionへ集約し、通常図形のbeginDragと既選択判定をCanvasSelectionInteractionへ統合。appから3つのcallback注入を除去。共有点の参照・重複・順序、選択数の分類、単独／複数選択dragの条件と選択消去順を維持。app.jsは12,656行から12,578行へ縮小。構文336件・単体759件・関連E2E197件成功（exit 0、4.0分）。ログはcad-drag-start-{check,unit,e2e}.log。開始時週枠残量72%。次はpointerdownに残るhit snapshotとcommand受付。全体目標と全体E2Eは未完了。
+
+### 前回の区切り
+
 CanvasSelectionInteractionへ通常pointerdownの選択・drag開始を分離。描画順、点／円弧端点優先、追加選択、投影HatchのBlock選択、Spline複数選択drag、画像dragの更新委譲を維持。選択状態はCanvasSelectionのAPI経由で更新し、DOM captureも明示portとする。旧本体との一致を依存置換を除き確認。app.jsは12,768行から12,656行へ縮小。構文336件・単体754件・関連E2E197件成功（exit 0、4.1分）。ログはcad-selection-interaction-{check,unit,e2e}.log。開始時週枠残量74%。次は選択数／drag対象点照会を既存Selectionへ収束し、beginDragの計画生成とpointerdownのcommand受付・hit snapshotを整理する。全体目標と全体E2Eは未完了。
 
 ### 前回の区切り

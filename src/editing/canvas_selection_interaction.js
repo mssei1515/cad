@@ -2,9 +2,74 @@
 (() => {
   "use strict";
   function create({ canvasSelection, clearSelection, sameArcEndpoint, topmostDrawingOrderOwner, drawingOrderOwner,
-    beginDerivedGeometryDrag, beginBlockDrag, beginDimensionDrag, beginDrag, beginReferenceImageDrag,
-    selectedElementCount, selectedDragPoints, buildDragSession, geometryDrag, selectionRectangle,
+    beginDerivedGeometryDrag, beginBlockDrag, beginDimensionDrag, beginReferenceImageDrag,
+    buildDragSession, geometryDrag, selectionRectangle,
     capturePointer, setHint, applicationText, updateGeometrySelectionUI, draw }) {
+    function hitIsSelected(hitP, hitL, hitC, hitA, hitArcEnd) {
+      if (hitP && canvasSelection.points.includes(hitP)) return true;
+      if (hitL && canvasSelection.lines.includes(hitL)) return true;
+      if (hitC && canvasSelection.circles.includes(hitC)) return true;
+      if (hitA && canvasSelection.arcs.includes(hitA)) return true;
+      if (hitArcEnd && sameArcEndpoint(canvasSelection.arcEndpoint, { arc: hitArcEnd.arc, endpoint: hitArcEnd.endpoint })) return true;
+      return false;
+    }
+
+    function beginDrag(e, hitP, hitL, hitC, hitA, hitArcEnd, pointer) {
+      let plan = null;
+      canvasSelection.set("constraint", null);
+      const preserveMixedSelection = canvasSelection.selectedElementCount() > 1 && hitIsSelected(hitP, hitL, hitC, hitA, hitArcEnd);
+      if (preserveMixedSelection) {
+        plan = buildDragSession("selection", canvasSelection.selectedDragPoints(), pointer);
+        canvasSelection.set("dimensionConstraint", null);
+      } else {
+        canvasSelection.set("blockInstances", []);
+        canvasSelection.set("annotations", []);
+        canvasSelection.set("hatches", []);
+        canvasSelection.set("referenceImages", []);
+        canvasSelection.set("splines", []);
+      }
+      if (!preserveMixedSelection && hitP) {
+        canvasSelection.set("points", [hitP]);
+        canvasSelection.set("lines", []);
+        canvasSelection.set("circles", []);
+        canvasSelection.set("arcs", []);
+        canvasSelection.set("arcEndpoint", null);
+        plan = buildDragSession("point", hitP, pointer);
+      } else if (!preserveMixedSelection && hitArcEnd) {
+        canvasSelection.set("arcs", [hitArcEnd.arc]);
+        canvasSelection.set("arcEndpoint", { arc: hitArcEnd.arc, endpoint: hitArcEnd.endpoint });
+        canvasSelection.set("points", []);
+        canvasSelection.set("lines", []);
+        canvasSelection.set("circles", []);
+        plan = buildDragSession("arc-endpoint", hitArcEnd, pointer);
+      } else if (!preserveMixedSelection && hitL) {
+        canvasSelection.set("lines", [hitL]);
+        canvasSelection.set("points", []);
+        canvasSelection.set("circles", []);
+        canvasSelection.set("arcs", []);
+        canvasSelection.set("arcEndpoint", null);
+        plan = buildDragSession("line", hitL, pointer);
+      } else if (!preserveMixedSelection && hitC) {
+        canvasSelection.set("circles", [hitC]);
+        canvasSelection.set("points", []);
+        canvasSelection.set("lines", []);
+        canvasSelection.set("arcs", []);
+        canvasSelection.set("arcEndpoint", null);
+        plan = buildDragSession("circle", hitC, pointer);
+      } else if (!preserveMixedSelection && hitA) {
+        canvasSelection.set("arcs", [hitA]);
+        canvasSelection.set("points", []);
+        canvasSelection.set("lines", []);
+        canvasSelection.set("circles", []);
+        canvasSelection.set("arcEndpoint", null);
+        plan = buildDragSession("arc", hitA, pointer);
+      }
+
+      if (geometryDrag.begin(e, plan)) {
+        setHint(`${geometryDrag.label}中: 拘束を保ちながら自動solveしています`);
+      }
+    }
+
     function begin(e, p, { hitP, hitL, hitC, hitA, hitS, hitArcEnd, hitD, hitDerivedGeometry, hitDerivedInstance, hitBlock, hitBlockHandle, hatchHit, referenceImageHit, directGeometryHit }) {
       const multiSelect = e.shiftKey || e.ctrlKey;
       const topDrawingOwner = topmostDrawingOrderOwner([
@@ -89,8 +154,8 @@
         if (multiSelect) canvasSelection.toggleSplineSelection(hitS);
         else {
           let plan = null;
-          const preserveMixedSelection = selectedElementCount() > 1 && canvasSelection.splines.includes(hitS);
-          if (preserveMixedSelection) plan = buildDragSession("selection", selectedDragPoints(), p);
+          const preserveMixedSelection = canvasSelection.selectedElementCount() > 1 && canvasSelection.splines.includes(hitS);
+          if (preserveMixedSelection) plan = buildDragSession("selection", canvasSelection.selectedDragPoints(), p);
           else {
             clearSelection();
             canvasSelection.set("splines", [hitS]);

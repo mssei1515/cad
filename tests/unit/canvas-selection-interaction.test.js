@@ -17,15 +17,16 @@ function fixture() {
   for(const [name,key] of Object.entries({Point:'points',Line:'lines',Circle:'circles',Arc:'arcs',Spline:'splines',BlockInstance:'blockInstances'})) {
     selection['toggle'+name+'Selection'] = v => selection.toggleById(key,v);
   }
+  selection.selectedElementCount = () => f.count;
+  selection.selectedDragPoints = () => f.dragPoints;
   const record = name => (...args) => f.calls.push({name,args});
   f.selection=selection; f.event={pointerId:3}; f.point={x:1,y:2};
   f.controller=sandbox.window.CanvasSelectionInteraction.create({canvasSelection:selection,clearSelection:clear,
     sameArcEndpoint:(a,b)=>a?.arc===b?.arc&&a?.endpoint===b?.endpoint,
     topmostDrawingOrderOwner:items=>f.top||items.find(Boolean),drawingOrderOwner:x=>x.owner||x,
     beginDerivedGeometryDrag:record('derived'),beginBlockDrag:record('block'),beginDimensionDrag:record('dimension'),
-    beginDrag:record('geometry'),beginReferenceImageDrag:record('image'), selectedElementCount:()=>f.count,
-    selectedDragPoints:()=>f.dragPoints,buildDragSession:(...args)=>{f.plan=args;return args;},
-    geometryDrag:{begin:(...args)=>{record('spline')(...args);return true;},label:'drag'},
+    beginReferenceImageDrag:record('image'),buildDragSession:(...args)=>{f.plan=args;return args;},
+    geometryDrag:{begin:(...args)=>{record('geometry')(...args);return true;},label:'drag'},
     selectionRectangle:{begin:record('rectangle')},capturePointer:record('capture'),setHint:record('hint'),
     applicationText:a=>a,updateGeometrySelectionUI:record('ui'),draw:record('draw')});
   f.begin=hits=>f.controller.begin(f.event,f.point,hits);
@@ -33,9 +34,9 @@ function fixture() {
 }
 test('drawing order chooses front geometry while a direct point wins over a block handle',()=>{
   const f=fixture(),line={id:'L'},circle={id:'C'};f.top=circle;f.begin({hitL:line,hitC:circle});
-  assert.equal(f.calls[0].args[3],circle);assert.deepEqual(f.names(),['geometry','ui','draw']);
+  assert.equal(f.plan[0],'circle');assert.equal(f.plan[1],circle);assert.deepEqual(f.names(),['geometry','hint','ui','draw']);
   f.calls=[];const block={id:'B'},point={id:'P'};f.top=block;f.begin({hitBlock:block,hitBlockHandle:block,hitP:point});
-  assert.equal(f.calls[0].args[1],point);assert.equal(f.calls[0].args[0],f.event);
+  assert.equal(f.plan[0],'point');assert.equal(f.plan[1],point);assert.equal(f.calls[0].args[0],f.event);
 });
 test('derived geometry additive selection toggles its owner and clears constraint selection',()=>{
   const f=fixture(),instance={id:'I'};f.event.shiftKey=true;f.selection.constraint={};f.selection.instanceGeometry={};
@@ -62,4 +63,25 @@ test('projected hatch selects its block and image drag owns its update path',()=
 test('blank additive selection begins a rectangle and captures the same pointer',()=>{
   const f=fixture();f.event.shiftKey=true;f.begin({});assert.deepEqual(f.names(),['rectangle','capture','ui','draw']);
   assert.equal(f.calls[0].args[0],f.point);assert.equal(f.calls[0].args[1].additive,true);assert.equal(f.calls[1].args[0],3);
+});
+
+test('dragging a selected primitive preserves the mixed selection and clears constraint selection',()=>{
+  const f=fixture(),line={id:'L'},point={id:'P'};f.count=2;f.dragPoints=[point];
+  f.selection.lines=[line];f.selection.points=[point];f.selection.constraint={};f.selection.dimensionConstraint={};
+  f.begin({hitL:line});assert.equal(f.plan[0],'selection');assert.equal(f.plan[1],f.dragPoints);
+  assert.equal(f.selection.points[0],point);assert.equal(f.selection.lines[0],line);
+  assert.equal(f.selection.constraint,null);assert.equal(f.selection.dimensionConstraint,null);
+});
+test('unselected primitive replaces drawable selection before starting its plan',()=>{
+  const f=fixture(),line={id:'new'},old={id:'old'};f.count=2;
+  for(const key of ['points','lines','circles','arcs','splines','blockInstances','annotations','hatches','referenceImages']) f.selection[key]=[old];
+  f.begin({hitL:line});assert.equal(f.plan[0],'line');assert.equal(f.plan[1],line);assert.equal(f.plan[2],f.point);
+  assert.equal(f.selection.lines[0],line);
+  for(const key of ['points','circles','arcs','splines','blockInstances','annotations','hatches','referenceImages']) assert.equal(f.selection[key].length,0);
+});
+test('selected endpoint preserves mixed drag only for the same arc reference and endpoint',()=>{
+  const f=fixture(),arc={id:'A'},point={id:'P'};f.count=2;f.dragPoints=[point];f.selection.arcEndpoint={arc,endpoint:'start'};
+  f.begin({hitArcEnd:{arc,endpoint:'start'}});assert.equal(f.plan[0],'selection');
+  const end={arc,endpoint:'end'};f.begin({hitArcEnd:end});assert.equal(f.plan[0],'arc-endpoint');assert.equal(f.plan[1],end);
+  assert.equal(f.selection.arcEndpoint.endpoint,'end');assert.equal(f.selection.arcs[0],arc);
 });

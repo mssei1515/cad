@@ -304,9 +304,22 @@
         Boolean(effectiveSelectedConstraint());
     }
 
+    function selectedDragPoints() {
+      const points = [...state.points];
+      for (const line of state.lines) points.push(line.p1, line.p2);
+      for (const circle of state.circles) points.push(circle.center);
+      for (const arc of state.arcs) points.push(arc.center);
+      for (const spline of state.splines) points.push(...spline.fitPoints);
+      return points;
+    }
+
+    function selectedElementCount() {
+      return state.points.length + state.lines.length + state.circles.length + state.arcs.length + state.splines.length + state.blockInstances.length + state.geometryInstances.length + state.annotations.length + state.hatches.length + state.referenceImages.length + (state.arcEndpoint ? 1 : 0);
+    }
+
     // Read views retain geometry identity. Mutations go through this instance's API.
     const api = {
-      set, clear, append, removeAt, toggleById, applyRectangle,
+      selectedDragPoints, selectedElementCount, set, clear, append, removeAt, toggleById, applyRectangle,
       selectedGeometryItems, appearanceSelectionTarget, setGeometrySelection, currentConstraintTargets,
       hasPrimaryCanvasSelection, effectiveSelectedConstraint, selectedPrimitives,
       togglePointSelection, toggleLineSelection, toggleCircleSelection, toggleArcSelection,

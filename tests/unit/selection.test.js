@@ -125,3 +125,21 @@ test('tree selections clear with Canvas selections and never become editing oper
   s.append('points', point); assert.equal(s.sketchId, null);
   s.clear(); assert.equal(s.hasSelection(), false); assert.equal(s.inspection, null);
 });
+
+
+test('drag points preserve geometry identity, source order and shared point multiplicity', () => {
+  const selection=create(),p={id:'P'},q={id:'Q'},r={id:'R'};
+  selection.set('points',[p]);selection.set('lines',[{p1:p,p2:q}]);selection.set('circles',[{center:r}]);
+  selection.set('arcs',[{center:q}]);selection.set('splines',[{fitPoints:[p,r]}]);
+  const result=selection.selectedDragPoints();
+  assert.deepEqual(Array.from(result),[p,p,q,r,q,p,r]);
+  result.pop();assert.equal(selection.splines[0].fitPoints.length,2);assert.equal(selection.points.length,1);
+});
+test('element count includes drawable selections and endpoint separately but excludes tree and constraints', () => {
+  const selection=create();
+  for(const field of ['points','lines','circles','arcs','splines','blockInstances','geometryInstances','annotations','hatches','referenceImages']) selection.set(field,[{}]);
+  selection.set('arcEndpoint',{arc:{},endpoint:'start'});selection.set('dimensionConstraint',{});selection.set('constraint',{});
+  assert.equal(selection.selectedElementCount(),11);
+  selection.clear();selection.set('sketchId','S');selection.set('inspection',{});selection.set('constraint',{});
+  assert.equal(selection.selectedElementCount(),0);
+});
