@@ -6354,7 +6354,12 @@
     } else if (target.kind === "diameter") {
       constraint = new DiameterConstraint(target.primitive, value);
     }
-    if (constraint) constraint.dimension = dimension;
+    if (constraint) {
+      constraint.dimension = dimension;
+      if (dimension && ["radius", "diameter"].includes(target.kind)) {
+        constraint.dimension = { ...dimension, display: { ...dimension.display, prefix: target.kind === "diameter" ? "Φ" : "R" } };
+      }
+    }
     return constraint;
   }
 

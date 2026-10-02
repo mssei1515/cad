@@ -46,6 +46,7 @@ test('fillet creation replaces shared endpoints and inserts seven constraints af
   assert.deepEqual(h.scope.constraints.map(c => c.constructor), [ArcEndpointCoincidentConstraint, ArcEndpointCoincidentConstraint, PointOnLineConstraint, PointOnLineConstraint, LineCircleTangentConstraint, LineCircleTangentConstraint, RadiusConstraint]);
   assert.equal(h.scope.constraints[0].point, h.line1.p1); assert.equal(h.scope.constraints[1].point, h.line2.p2); assert.equal(h.scope.constraints[2].point, h.corner);
   assert.equal(h.scope.constraints[6].target, 5); assert.equal(h.scope.constraints[6].dimension.labelX, 9); assert.ok(h.scope.constraints.every(c => c.sketchId === 'S1'));
+  assert.equal(h.scope.constraints[6].dimension.display.prefix, 'R');
   assert.deepEqual(h.events, ['dimension', 'orientation', ...Array(7).fill('constraint')]);
 });
 test('invalid plans do not allocate and failed arc insertion remains recoverable by the operation checkpoint', () => {
