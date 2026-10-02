@@ -1,7 +1,7 @@
-/* Route pointer moves through existing interactions in their established priority order. */
+/* Route pointer movement and completion through existing interactions in their established priority order. */
 (() => {
   "use strict";
-  function create({ canvasNavigation, drawingPreview, canvasHover, clearSnap, draw,
+  function create({ canvasNavigation, drawingPreview, canvasHover, clearSnap, draw, transientAuthoring, recordHistory,
     selectionRectangle, annotationDrag, referenceImageInteraction, dimensionDrag, geometryDrag, pointerHover,
     getMode, getPendingCommand, getPendingConstraintCommand, setLastPointer,
     updateHatchPreview, updateFilletRadiusPlacement, updatePendingDistanceRetargetHover,
@@ -108,7 +108,22 @@
 
       geometryDrag.update(p);
     }
-    return Object.freeze({ move });
+    function finish(e) {
+      if (canvasNavigation.endPan(e)) return;
+
+      if (referenceImageInteraction.finishDrag(e)) return;
+
+      if (annotationDrag.finish(e)) return;
+
+      if (dimensionDrag.finish(e)) return;
+
+      if (selectionRectangle.finish(e)) return;
+
+      if (geometryDrag.finish(e)) return;
+      // The first Line endpoint is provisional until a segment is completed.
+      if (!transientAuthoring.hasLineStart) recordHistory("操作");
+    }
+    return Object.freeze({ move, finish });
   }
-  window.PointerMoveController = Object.freeze({ create });
+  window.PointerInteractionController = Object.freeze({ create });
 })();

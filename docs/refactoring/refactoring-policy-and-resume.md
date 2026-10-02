@@ -100,8 +100,8 @@
 
 最新の目標継続指示に従い週枠残量50%未満で停止し、その最後のコミットをmainへマージする。今回開始時は残量85%。main／developのリリース5116a81は作業branchへ取込済み。作業途中の単位ごとのリリースは行わない。
 
-PointerMoveControllerへパン・配置・drag・作図preview・hoverの振分けを分離した。DOM座標表示／イベント／Schedulerは呼出し側。注記／距離寸法のpending record更新はsession整理時にcommand APIへ収束させる。検証はcomposition-root.md先頭を参照する。
+PointerInteractionControllerへパン・配置・drag・作図preview・hoverの振分けを分離した。終了処理も同じcontrollerへ集約し、終了順序と仮Line始点の履歴抑止を維持する。DOM座標表示／イベント／Scheduler／終了前flushは呼出し側。注記／距離寸法のpending record更新はsession整理時にcommand APIへ収束させる。検証はcomposition-root.md先頭を参照する。
 
-次はpointer終了処理とpointerdownの優先順位を分析し、moveと共有する操作境界を確認して入力controllerへ収束させる。Dimension preview・描画調整・入力／共通編集／Document操作・診断hookなども残る。全体目標と全体E2Eは未完了。
+次はpointerdownの作図コマンド受付と選択・drag開始を分けて検討する。全体を一括で渡すと多数の依存を抱えるため、hit snapshot、command受付、通常選択という責務境界と既存ownerのAPIを確認する。Dimension preview・描画調整・入力／共通編集／Document操作・診断hookなども残る。全体目標と全体E2Eは未完了。
 
 再開時はAGENTS.mdと本書を読み、Git状態を確認する。サブエージェントを使わず、責務単位で検証・Commit・Pushを続ける。週枠の残量と最新の停止／リリース指示を確認する。

@@ -6,6 +6,10 @@
 
 ## 現在の再開地点（2026-10-02）
 
+PointerInteractionControllerへpointer終了処理も集約し、移動・終了の優先順位を同じ所有者で扱う。操作が終了を消費した後の打切り、元のpointer eventの引渡し、未消費時の履歴確定と仮Line始点の抑止を維持。flushと計測はapp側。app.jsは12,784行から12,768行へ縮小。構文334件・単体748件・関連E2E197件が成功（exit 0、4.0分）。ログはcad-pointer-interaction-{check,unit,e2e}.log。週枠残量75%。次はpointerdownのcommand受付と通常選択／drag開始を分析する。一括移動による依存肥大化は避ける。全体目標と全体E2Eは未完了。
+
+### 前回の区切り
+
 PointerMoveControllerへ入力振分けを分離。座標表示・変換・間引き・profile／read cacheはUI側に保持し、controllerは各操作の公開APIと状態照会を受け取る。重なる状態の優先順位、消費／継続、部分hover消去、距離寸法のpending更新を維持。app.jsは12,876行から12,784行へ縮小。振分け本体は明示portへの置換を除いて旧コードとの一致を確認。構文334件・単体746件・関連E2E197件が成功（exit 0）。ログはcad-pointer-move-{check,unit,e2e}.log。全体目標と全体E2Eは未完了。開始時週枠残量79%。
 
 ### 前回の区切り

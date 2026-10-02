@@ -7484,8 +7484,8 @@
       hitBlockInstance, hitGeometryInstance, hitAnnotationElement, hitHatchAt, hitReferenceImageAt },
   });
 
-  const pointerMoveController = window.PointerMoveController.create({
-    canvasNavigation, drawingPreview, canvasHover, clearSnap, draw,
+  const pointerInteractionController = window.PointerInteractionController.create({
+    canvasNavigation, drawingPreview, canvasHover, clearSnap, draw, transientAuthoring, recordHistory,
     selectionRectangle, annotationDrag, referenceImageInteraction, dimensionDrag, geometryDrag, pointerHover,
     getMode: () => mode, getPendingCommand: () => pendingCommand,
     getPendingConstraintCommand: () => pendingConstraintCommand, setLastPointer: point => { lastPointerWorld = point; },
@@ -7498,30 +7498,14 @@
     const coordinateStatus = document.getElementById("statusCoordinates");
     const coordinateText = `X ${formatDisplayNumber(coordinatePoint.x, 3)} / Y ${formatDisplayNumber(coordinatePoint.y, 3)}`;
     if (coordinateStatus && coordinateStatus.textContent !== coordinateText) coordinateStatus.textContent = coordinateText;
-    pointerMoveController.move(screenPoint, coordinatePoint, e.shiftKey);
+    pointerInteractionController.move(screenPoint, coordinatePoint, e.shiftKey);
   }
 
   canvas.addEventListener("pointermove", scheduleCanvasPointerMove);
 
   function endDrag(e) {
     flushScheduledCanvasPointerMove();
-    return profileInteractionPhase("commit", () => finishPointerInteraction(e));
-  }
-
-  function finishPointerInteraction(e) {
-    if (canvasNavigation.endPan(e)) return;
-
-    if (referenceImageInteraction.finishDrag(e)) return;
-
-    if (annotationDrag.finish(e)) return;
-
-    if (dimensionDrag.finish(e)) return;
-
-    if (selectionRectangle.finish(e)) return;
-
-    if (geometryDrag.finish(e)) return;
-    // The first Line endpoint is provisional until a segment is completed.
-    if (!transientAuthoring.hasLineStart) recordHistory("操作");
+    return profileInteractionPhase("commit", () => pointerInteractionController.finish(e));
   }
 
   function isBlankCanvasHit(hits = {}) {

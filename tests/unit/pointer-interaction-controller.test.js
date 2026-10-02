@@ -4,14 +4,14 @@ const path = require('node:path');
 const vm = require('node:vm');
 const test = require('node:test');
 const sandbox = { window: {} }; vm.createContext(sandbox);
-vm.runInContext(fs.readFileSync(path.resolve(__dirname, '../../src/editing/pointer_move_controller.js'), 'utf8'), sandbox);
+vm.runInContext(fs.readFileSync(path.resolve(__dirname, '../../src/editing/pointer_interaction_controller.js'), 'utf8'), sandbox);
 function fixture() {
   const f={calls:[],mode:'select',pan:false,authoring:false,ordinary:true,constraint:true,pending:null,pendingConstraint:null,last:null,dimensionHit:null,identity:null};
   const record=name=>(...args)=>{f.calls.push(name);};
   f.hover={current:{spline:{id:'kept'}},update:values=>{Object.assign(f.hover.current,values);f.calls.push('hover');},clear:()=>{f.hover.current={};f.calls.push('clearHover');}};
   f.rectangle={active:false,update:record('rectangle')}; f.annotation={active:false,update:record('annotation')};
   f.image={dragging:false,calibrating:false,updateDrag:record('image')};f.dimension={active:false,update:record('dimension')};f.geometry={active:false,update:record('geometry')};
-  const controller=sandbox.window.PointerMoveController.create({canvasNavigation:{movePan:()=>{f.calls.push('pan');return f.pan;}},
+  const controller=sandbox.window.PointerInteractionController.create({canvasNavigation:{movePan:()=>{f.calls.push('pan');return f.pan;}},
     drawingPreview:{updateFreeInstance:record('free'),setPointer:record('pointer'),updateAuthoring:(mode,p,shift)=>{f.calls.push('authoring');f.authoringArgs=[mode,p,shift];return f.authoring;},updateTrim:record('trim'),updateOffset:(p,value)=>{f.calls.push('offset');f.offsetValue=value;}},
     canvasHover:f.hover,clearSnap:record('clearSnap'),draw:record('draw'),selectionRectangle:f.rectangle,annotationDrag:f.annotation,
     referenceImageInteraction:f.image,dimensionDrag:f.dimension,geometryDrag:f.geometry,
@@ -57,4 +57,39 @@ test('constraint hover consumes idle moves while ordinary hover falls through to
   f.calls=[];f.geometry.active=true;f.move();assert.deepEqual(f.calls,['pan','last','authoring','geometry']);
   f.calls=[];f.geometry.active=false;f.pendingConstraint=null;f.move();assert.deepEqual(f.calls,['pan','last','authoring','ordinary','draw','geometry']);
   f.calls=[];f.ordinary=false;f.move();assert.deepEqual(f.calls,['pan','last','authoring','ordinary','geometry']);
+});
+
+
+test('completion stops at the consuming interaction and forwards the original pointer event', () => {
+  const names = ['pan', 'image', 'annotation', 'dimension', 'rectangle', 'geometry'];
+  for (const consumed of names) {
+    const calls = [];
+    const event = { pointerId: 7, type: 'pointerup' };
+    const finish = name => input => { assert.equal(input, event); calls.push(name); return name === consumed; };
+    const controller = sandbox.window.PointerInteractionController.create({
+      canvasNavigation: { endPan: finish('pan') }, referenceImageInteraction: { finishDrag: finish('image') },
+      annotationDrag: { finish: finish('annotation') }, dimensionDrag: { finish: finish('dimension') },
+      selectionRectangle: { finish: finish('rectangle') }, geometryDrag: { finish: finish('geometry') },
+      transientAuthoring: { hasLineStart: false }, recordHistory: () => assert.fail('consumed interaction must own its history'),
+    });
+    controller.finish(event);
+    assert.deepEqual(calls, names.slice(0, names.indexOf(consumed) + 1));
+  }
+});
+
+test('unconsumed completion records history except while a provisional line endpoint exists', () => {
+  const history = [];
+  const transientAuthoring = { hasLineStart: true };
+  const idle = () => false;
+  const controller = sandbox.window.PointerInteractionController.create({
+    canvasNavigation: { endPan: idle }, referenceImageInteraction: { finishDrag: idle },
+    annotationDrag: { finish: idle }, dimensionDrag: { finish: idle },
+    selectionRectangle: { finish: idle }, geometryDrag: { finish: idle },
+    transientAuthoring, recordHistory: label => history.push(label),
+  });
+  controller.finish({ pointerId: 3 });
+  assert.deepEqual(history, []);
+  transientAuthoring.hasLineStart = false;
+  controller.finish({ pointerId: 3 });
+  assert.deepEqual(history, ['操作']);
 });
