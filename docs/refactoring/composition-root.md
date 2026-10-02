@@ -6,6 +6,10 @@
 
 ## 現在の再開地点（2026-10-02）
 
+基本作図とFilletのpreview描画をAuthoringPreviewRendererへ分離。command／Documentは渡さず座標引数・幾何計算portだけを受け取る。途中段階のmarker・最小長・円弧方向・CanvasSurfaceのresetを保持。app.jsは13,322行から13,202行へ縮小。構文326件・単体724件・関連E2E192件が成功（exit 0）。ログはcad-authoring-preview-{check,unit,e2e}.log。全体目標と全体E2Eは未完了。
+
+### 前回の区切り
+
 円弧端点／Spline編集ハンドルの表示状態をGeometryPresentationへ、描画をGeometryRendererへ統合。円弧の編集可否・端点対選択・固定強調、Splineのscope同一性・閉曲線・選択色、CanvasSurfaceのresetを保持。新moduleなし。app.jsは13,368行から13,322行へ縮小。構文324件・単体720件・関連E2E192件が成功（exit 0）。ログはcad-handles-{check,unit,e2e}.log。全体目標と全体E2Eは未完了。
 
 ### 前回の区切り

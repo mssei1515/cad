@@ -575,6 +575,9 @@
     painters: { hatch: items => drawHatches(items, { includePreview: false }), line: drawLines, circle: drawCircles, arc: drawArcs, spline: drawSplines },
   });
   const MIN_ARC_LENGTH = MIN_LINE_LENGTH;
+  const authoringPreview = window.AuthoringPreviewRenderer.create({ ctx, viewport, withCanvasState,
+    hypot2, shortestAngleFrom, slotGeometry, threePointArcGeometry, minimumLineLength: MIN_LINE_LENGTH, minimumArcLength: MIN_ARC_LENGTH });
+  const { drawFilletArc: drawFilletPreviewArc } = authoringPreview;
   const geometryCreation = window.GeometryCreation.create({
     currentScope: workspace.current, ids: geometryIds, assignSketchId, currentConstruction: () => constructionLineMode,
     minLineLength: MIN_LINE_LENGTH, minArcLength: MIN_ARC_LENGTH,
@@ -4495,132 +4498,19 @@
     drawDimension(previewTarget, dimensionWithLabelAt(previewTarget, dimension, pendingCommand.pointer), label, true);
   }
 
-  function drawFilletPreviewArc(geometry) {
-    withCanvasState(() => {
-      ctx.strokeStyle = "#2563eb";
-      ctx.lineWidth = 2 / viewport.scale;
-      ctx.setLineDash([6 / viewport.scale, 5 / viewport.scale]);
-      ctx.beginPath();
-      ctx.arc(geometry.center.x, geometry.center.y, geometry.radius, geometry.startAngle, geometry.endAngle, geometry.endAngle < geometry.startAngle);
-      ctx.stroke();
-    });
-  }
 
-  function drawTemporaryLine() {
-    if (mode !== "line" || !lineCommand.startPoint) return;
-    const target = pointerPreview || lineCommand.startPoint;
-    withCanvasState(() => {
-      ctx.strokeStyle = "#2563eb";
-      ctx.lineWidth = 2 / viewport.scale;
-      ctx.setLineDash([6 / viewport.scale, 5 / viewport.scale]);
-      ctx.beginPath();
-      ctx.moveTo(lineCommand.startPoint.x, lineCommand.startPoint.y);
-      ctx.lineTo(target.x, target.y);
-      ctx.stroke();
-      ctx.setLineDash([]);
-      ctx.beginPath();
-      ctx.arc(lineCommand.startPoint.x, lineCommand.startPoint.y, 12 / viewport.scale, 0, Math.PI * 2);
-      ctx.stroke();
-    });
-  }
 
-  function drawRectanglePreview() {
-    if (mode !== "rectangle" || !rectangleCommand.startPoint || !pointerPreview) return;
-    withCanvasState(() => {
-      ctx.strokeStyle = "#2563eb";
-      ctx.lineWidth = 2 / viewport.scale;
-      ctx.setLineDash([6 / viewport.scale, 5 / viewport.scale]);
-      ctx.strokeRect(rectangleCommand.startPoint.x, rectangleCommand.startPoint.y, pointerPreview.x - rectangleCommand.startPoint.x, pointerPreview.y - rectangleCommand.startPoint.y);
-    });
-  }
+  function drawTemporaryLine() { if (mode === "line") authoringPreview.drawLine(lineCommand.startPoint, pointerPreview); }
 
-  function drawSlotPreview() {
-    if (mode !== "slot" || !slotCommand.firstCenter) return;
-    drawConstructionPoint(slotCommand.firstCenter);
-    if (!slotCommand.secondCenter) {
-      if (!pointerPreview || hypot2(pointerPreview.x - slotCommand.firstCenter.x, pointerPreview.y - slotCommand.firstCenter.y) < MIN_LINE_LENGTH) return;
-      withCanvasState(() => {
-        ctx.strokeStyle = "#2563eb";
-        ctx.lineWidth = 2 / viewport.scale;
-        ctx.setLineDash([6 / viewport.scale, 5 / viewport.scale]);
-        ctx.beginPath();
-        ctx.moveTo(slotCommand.firstCenter.x, slotCommand.firstCenter.y);
-        ctx.lineTo(pointerPreview.x, pointerPreview.y);
-        ctx.stroke();
-      });
-      return;
-    }
-    drawConstructionPoint(slotCommand.secondCenter);
-    if (!pointerPreview) return;
-    const geometry = slotGeometry(slotCommand.firstCenter, slotCommand.secondCenter, pointerPreview, MIN_ARC_LENGTH);
-    if (!geometry) return;
-    withCanvasState(() => {
-      ctx.strokeStyle = "#2563eb";
-      ctx.lineWidth = 2 / viewport.scale;
-      ctx.setLineDash([6 / viewport.scale, 5 / viewport.scale]);
-      ctx.beginPath();
-      ctx.moveTo(geometry.sideStart.x, geometry.sideStart.y);
-      ctx.lineTo(geometry.sideEnd.x, geometry.sideEnd.y);
-      ctx.arc(geometry.secondCenter.x, geometry.secondCenter.y, geometry.radius, geometry.endArc.startAngle, geometry.endArc.endAngle, geometry.endArc.endAngle < geometry.endArc.startAngle);
-      ctx.lineTo(geometry.oppositeStart.x, geometry.oppositeStart.y);
-      ctx.arc(geometry.firstCenter.x, geometry.firstCenter.y, geometry.radius, geometry.startArc.startAngle, geometry.startArc.endAngle, geometry.startArc.endAngle < geometry.startArc.startAngle);
-      ctx.stroke();
-    });
-  }
+  function drawRectanglePreview() { if (mode === "rectangle") authoringPreview.drawRectangle(rectangleCommand.startPoint, pointerPreview); }
 
-  function drawCirclePreview() {
-    if (mode !== "circle" || !circularCommands.circleCenterPoint || !pointerPreview) return;
-    const radius = hypot2(pointerPreview.x - circularCommands.circleCenterPoint.x, pointerPreview.y - circularCommands.circleCenterPoint.y);
-    withCanvasState(() => {
-      ctx.strokeStyle = "#2563eb";
-      ctx.lineWidth = 2 / viewport.scale;
-      ctx.setLineDash([6 / viewport.scale, 5 / viewport.scale]);
-      ctx.beginPath();
-      ctx.arc(circularCommands.circleCenterPoint.x, circularCommands.circleCenterPoint.y, radius, 0, Math.PI * 2);
-      ctx.stroke();
-    });
-  }
+  function drawSlotPreview() { if (mode === "slot") authoringPreview.drawSlot(slotCommand.firstCenter, slotCommand.secondCenter, pointerPreview); }
 
-  function drawArcPreview() {
-    if (mode !== "arc" || !circularCommands.arcCenterPoint) return;
-    if (!circularCommands.arcStartPoint) {
-      drawConstructionPoint(circularCommands.arcCenterPoint);
-      return;
-    }
-    if (!pointerPreview) return;
-    const angles = {
-      start: circularCommands.arcStartPoint.startAngle,
-      end: shortestAngleFrom(circularCommands.arcStartPoint.startAngle, Math.atan2(pointerPreview.y - circularCommands.arcCenterPoint.y, pointerPreview.x - circularCommands.arcCenterPoint.x)),
-    };
-    withCanvasState(() => {
-      ctx.strokeStyle = "#2563eb";
-      ctx.lineWidth = 2 / viewport.scale;
-      ctx.setLineDash([6 / viewport.scale, 5 / viewport.scale]);
-      ctx.beginPath();
-      ctx.arc(circularCommands.arcCenterPoint.x, circularCommands.arcCenterPoint.y, circularCommands.arcStartPoint.radius, angles.start, angles.end, angles.end < angles.start);
-      ctx.stroke();
-    });
-    drawConstructionPoint(circularCommands.arcCenterPoint);
-  }
+  function drawCirclePreview() { if (mode === "circle") authoringPreview.drawCircle(circularCommands.circleCenterPoint, pointerPreview); }
 
-  function drawThreePointArcPreview() {
-    if (mode !== "three-point-arc" || !circularCommands.threePointArcStart) return;
-    drawConstructionPoint(circularCommands.threePointArcStart);
-    if (!circularCommands.threePointArcEnd) return;
-    drawConstructionPoint(circularCommands.threePointArcEnd);
-    if (!pointerPreview) return;
-    const geometry = threePointArcGeometry(circularCommands.threePointArcStart, circularCommands.threePointArcEnd, pointerPreview, MIN_ARC_LENGTH);
-    if (!geometry) return;
-    withCanvasState(() => {
-      ctx.strokeStyle = "#2563eb";
-      ctx.lineWidth = 2 / viewport.scale;
-      ctx.setLineDash([6 / viewport.scale, 5 / viewport.scale]);
-      ctx.beginPath();
-      ctx.arc(geometry.center.x, geometry.center.y, geometry.radius, geometry.startAngle, geometry.endAngle, geometry.endAngle < geometry.startAngle);
-      ctx.stroke();
-    });
-    drawConstructionPoint(geometry.center);
-  }
+  function drawArcPreview() { if (mode === "arc") authoringPreview.drawArc(circularCommands.arcCenterPoint, circularCommands.arcStartPoint, pointerPreview); }
+
+  function drawThreePointArcPreview() { if (mode === "three-point-arc") authoringPreview.drawThreePointArc(circularCommands.threePointArcStart, circularCommands.threePointArcEnd, pointerPreview); }
 
   function drawOffsetPreview() {
     if (mode !== "offset") return;
@@ -4754,17 +4644,7 @@
     ctx.restore();
   }
 
-  function drawConstructionPoint(point) {
-    ctx.save();
-    ctx.beginPath();
-    ctx.arc(point.x, point.y, 5 / viewport.scale, 0, Math.PI * 2);
-    ctx.fillStyle = "#eff6ff";
-    ctx.fill();
-    ctx.strokeStyle = "#2563eb";
-    ctx.lineWidth = 2 / viewport.scale;
-    ctx.stroke();
-    ctx.restore();
-  }
+
 
 
 

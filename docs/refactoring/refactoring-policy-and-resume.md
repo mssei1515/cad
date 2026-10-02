@@ -100,8 +100,8 @@
 
 週枠50%の停止条件はユーザー指示で解除済み。main／developのリリース5116a81をcodex/composition-root-nextへ取り込み、Annotation Parameter表示などの最新変更を保持する。新たなmainへのマージは行わない。
 
-円弧端点／Spline編集ハンドルの表示状態をGeometryPresentationへ、描画をGeometryRendererへ統合した。CanvasSurfaceのstroke状態resetも維持した。検証はcomposition-root.md先頭を参照する。
+基本作図（線・矩形・スロット・円・円弧・3点円弧）とFilletのpreviewをAuthoringPreviewRendererへ分離した。command状態は座標引数として渡し、mode判定はappに残す。検証はcomposition-root.md先頭を参照する。
 
-次は作図preview（線・矩形・円／円弧・Spline等）の描画を調べ、commandが持つ操作状態とpreview描画の境界を整理する。投影・参照図形の扱い、選択とhoverの独立性を維持する。作図preview／snapとpointer routing等も未分離。全体目標と全体E2Eは未完了。
+次は残るSpline／Centerline／Trimのpreview描画を調べ、AuthoringPreviewRendererと各command／幾何照会との境界を整理する。投影・参照図形の扱い、選択とhoverの独立性を維持する。作図preview／snapとpointer routing等も未分離。全体目標と全体E2Eは未完了。
 
 再開時はAGENTS.mdと本書を読み、Git状態を確認する。サブエージェントを使わず、責務単位で検証・Commit・Pushを続ける。週枠50%の停止条件を再適用しない。
