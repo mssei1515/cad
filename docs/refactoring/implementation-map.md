@@ -411,3 +411,5 @@ AuthoringPreviewRendererへSpline／Centerline／Trim描画も統合。Spline構
 - `DrawingPreview`（`src/editing/drawing_preview.js`）: 作図pointer／Trim候補の所有、更新・reset・snap／hover調整。描画は要求のみ。appのpointermoveは距離寸法との処理順と消費／継続判定を接続する。
 
 - `PointerInteractionController`（`src/editing/pointer_interaction_controller.js`）: pointer移動・終了の優先順位・消費／継続を調整。終了時は操作の確定APIを順に呼び、未消費かつLine始点が仮置きでない場合だけ履歴確定を依頼。UI adapterが座標変換・表示し、Schedulerが間引き、controllerが各command／drag／hover APIを呼ぶ。pending配置record更新は既存sessionへの暫定接続。
+
+- `CanvasSelectionInteraction`（`src/editing/canvas_selection_interaction.js`）: 通常pointerdownのhit結果から選択とdrag開始を調整。CanvasSelectionの状態更新API、描画順照会、各drag開始、矩形、UI通知を接続する。command受付とhit生成は呼出し側。

@@ -6,6 +6,10 @@
 
 ## 現在の再開地点（2026-10-02）
 
+CanvasSelectionInteractionへ通常pointerdownの選択・drag開始を分離。描画順、点／円弧端点優先、追加選択、投影HatchのBlock選択、Spline複数選択drag、画像dragの更新委譲を維持。選択状態はCanvasSelectionのAPI経由で更新し、DOM captureも明示portとする。旧本体との一致を依存置換を除き確認。app.jsは12,768行から12,656行へ縮小。構文336件・単体754件・関連E2E197件成功（exit 0、4.1分）。ログはcad-selection-interaction-{check,unit,e2e}.log。開始時週枠残量74%。次は選択数／drag対象点照会を既存Selectionへ収束し、beginDragの計画生成とpointerdownのcommand受付・hit snapshotを整理する。全体目標と全体E2Eは未完了。
+
+### 前回の区切り
+
 PointerInteractionControllerへpointer終了処理も集約し、移動・終了の優先順位を同じ所有者で扱う。操作が終了を消費した後の打切り、元のpointer eventの引渡し、未消費時の履歴確定と仮Line始点の抑止を維持。flushと計測はapp側。app.jsは12,784行から12,768行へ縮小。構文334件・単体748件・関連E2E197件が成功（exit 0、4.0分）。ログはcad-pointer-interaction-{check,unit,e2e}.log。週枠残量75%。次はpointerdownのcommand受付と通常選択／drag開始を分析する。一括移動による依存肥大化は避ける。全体目標と全体E2Eは未完了。
 
 ### 前回の区切り
