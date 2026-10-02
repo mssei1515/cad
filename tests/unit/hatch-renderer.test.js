@@ -7,10 +7,10 @@ const sandbox = { window: {} }; vm.createContext(sandbox);
 for (const file of ["src/geometry/geometry_kernel.js", "src/geometry/hatch_region.js", "src/document/appearance.js", "src/rendering/hatch_renderer.js"]) vm.runInContext(fs.readFileSync(path.resolve(__dirname, "../..", file), "utf8"), sandbox, { filename: file });
 const loop = (x1, y1, x2, y2) => ({ points: [{ x: x1, y: y1 }, { x: x2, y: y1 }, { x: x2, y: y2 }, { x: x1, y: y2 }] });
 const resolved = { ok: true, loops: [loop(0, 0, 20, 20), loop(5, 5, 10, 10)] };
-function harness(scale = sandbox.window.Appearance.CSS_PX_PER_MM, bounds = { x1: 0, y1: 0, x2: 20, y2: 20 }) {
+function harness(scale = sandbox.window.Appearance.CSS_PX_PER_MM, bounds = { x1: 0, y1: 0, x2: 20, y2: 20 }, isVisibleValue) {
   const calls = [], ctx = {}, viewport = { scale };
   for (const name of ["save", "restore", "beginPath", "moveTo", "lineTo", "closePath", "clip", "fill", "stroke"]) ctx[name] = (...args) => calls.push([name, ...args]);
-  const renderer = sandbox.window.HatchRenderer.create({ viewport, visibleWorldBounds: () => bounds, canvasThemeColor: color => `theme:${color}` });
+  const renderer = sandbox.window.HatchRenderer.create({ isVisibleValue, viewport, visibleWorldBounds: () => bounds, canvasThemeColor: color => `theme:${color}` });
   const appearance = { ...sandbox.window.Appearance.DEFAULT_HATCH_APPEARANCE, patternType: "parallel", angle: 0, spacing: 2 };
   return { calls, ctx, viewport, appearance, draw: (region = resolved, style = appearance, origin = { x: 0, y: 0 }, state) => renderer.drawResolvedHatchContent(ctx, region, style, origin, state) };
 }
@@ -50,4 +50,14 @@ test("invalid, hidden and offscreen hatches do not touch the canvas; preview rem
   h.draw(resolved, h.appearance, undefined, { preview: true });
   assert.ok(h.calls.findIndex(call => call[0] === "clip") < h.calls.findIndex(call => call[0] === "fill"));
   assert.equal(h.ctx.strokeStyle, "theme:#0ea5e9"); assert.equal(h.calls.at(-1)[0], "restore");
+});
+
+test("show hidden override paints without changing appearance and restores when switched off", () => {
+  let showHidden = false;
+  const h = harness(undefined, undefined, visible => showHidden || visible !== false);
+  const appearance = { ...h.appearance, visible: false, patternType: "solid" };
+  h.draw(resolved, appearance); assert.equal(h.calls.length, 0);
+  showHidden = true; h.draw(resolved, appearance); assert.ok(h.calls.some(call => call[0] === "fill"));
+  assert.equal(appearance.visible, false);
+  h.calls.length = 0; showHidden = false; h.draw(resolved, appearance); assert.equal(h.calls.length, 0);
 });

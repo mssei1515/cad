@@ -19,9 +19,9 @@
     }
   }
 
-  function create({ viewport, visibleWorldBounds, canvasThemeColor }) {
+  function create({ viewport, visibleWorldBounds, canvasThemeColor, isVisibleValue = visible => visible !== false }) {
     function drawResolvedHatchContent(targetContext, resolved, appearance, origin, { selected = false, hovered = false, preview = false, alpha = 1 } = {}) {
-      if (!resolved?.ok || !resolved.loops?.length || appearance.visible === false) return;
+      if (!resolved?.ok || !resolved.loops?.length || !isVisibleValue(appearance.visible)) return;
       const bounds = intersectBounds(resolvedLoopBounds(resolved), visibleWorldBounds());
       if (!bounds) return;
       targetContext.save();

@@ -11,21 +11,22 @@ const empty = () => ({ points: [], lines: [], circles: [], arcs: [], splines: []
 const point = (id, x, y = 0) => ({ id, x, y, sketchId: 'S1' });
 const line = (id, y = 0, drawingOrder = 0) => ({ id, p1: point('a', -20, y), p2: point('b', 20, y), sketchId: 'S1', drawingOrder });
 function fixture() {
-  let model = empty(), scale = 1, edited = [], status = false;
+  let model = empty(), scale = 1, edited = [], showHidden = false;
   const visible = item => item.visible !== false && item.sketchId !== 'hidden';
   const query = sandbox.window.CanvasContextQuery.create({ currentScope: () => model, viewportScale: () => scale,
     canvasContextPointIsSelectable: p => p.selectable !== false, editedFitPoints: () => edited,
+    isVisibleValue: visible => showHidden || visible !== false,
     sketches: { isEditableSketchId: id => id === 'S1', isVisibleSketchId: id => id !== 'hidden',
       isEditableSketchElement: item => item.sketchId === 'S1', isVisibleSketchElement: visible,
       activeSketchId: () => 'S1', isActiveSketchConstraint: item => item.sketchId === 'S1', constraintSketchId: item => item.sketchId },
     projections: { blockProjectionBundle: item => item.bundle, geometryInstanceBundle: item => item.bundle },
     dimensions: { targetFromConstraint: c => c.target, defaultDimensionForTarget: () => ({}),
-      effectiveDimensionAppearance: d => d, dimensionLayout: target => target, showConstraintStatus: () => status },
+      effectiveDimensionAppearance: d => d, dimensionLayout: target => target },
     annotations: { canvasContextAnnotationHit: item => item.hit },
     hatches: { resolvedHatchBoundary: item => ({ ok: item.valid !== false }), hatchAppearanceForDisplay: item => item,
       hatchContainsSelectablePoint: (item, resolved) => resolved.ok && item.contains === true } });
   return { query, model: () => model, scope: value => { model = value; }, zoom: value => { scale = value; },
-    edit: value => { edited = value; }, status: value => { status = value; } };
+    edit: value => { edited = value; }, showHidden: value => { showHidden = value; } };
 }
 const ids = hits => Array.from(hits, h => h.item.id);
 test('candidate order uses distance, kind priority and descending drawing order without mutating source arrays', () => {
@@ -55,11 +56,11 @@ test('projected geometry and annotation hits aggregate to their owning block or 
   assert.deepEqual(ids(f.query.candidatesAt({ x: 0, y: 0 })), ['B', 'I']);
   block.sketchId = 'S2'; assert.deepEqual(ids(f.query.candidatesAt({ x: 0, y: 0 })), ['I']);
 });
-test('dimension visibility follows constraint status and preserves label priority on a line overlap', () => {
+test('dimension visibility follows show hidden elements and preserves label priority on a line overlap', () => {
   const f = fixture(), constraint = { id: 'D', sketchId: 'S1', dimension: { visible: false },
     target: { text: { x: 0, y: 0 }, hitA: { x: -10, y: 0 }, hitB: { x: 10, y: 0 } } };
   f.model().constraints.push(constraint); assert.equal(f.query.candidatesAt({ x: 0, y: 0 }).length, 0);
-  f.status(true); const [hit] = f.query.candidatesAt({ x: 0, y: 0 });
+  f.showHidden(true); const [hit] = f.query.candidatesAt({ x: 0, y: 0 });
   assert.equal(hit.item, constraint); assert.equal(hit.hit.part, 'label'); assert.equal(hit.contextDistance, 0);
 });
 test('candidate presentation uses injected labels, live block names and annotation truncation', () => {

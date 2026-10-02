@@ -2569,6 +2569,7 @@ test("Appearance cascades, used file colors are selectable, and constraint statu
   await statusMenuInput.check();
   await expect(page.locator("#constraintStatusViewBtn")).toHaveAttribute("aria-pressed", "true");
   expect(await page.evaluate(() => window.__jot2dTest.viewStateForTest())).toEqual(expect.objectContaining({ constraintStatus: true, mouseLatched: true, spaceHeld: false }));
+  await page.locator("#viewShowHiddenElementsInput").check();
   await statusMenuInput.uncheck();
   await expect(page.locator("#constraintStatusViewBtn")).toHaveAttribute("aria-pressed", "false");
   await viewMenuSummary.click();
@@ -3063,6 +3064,10 @@ test("Constraint dimensions expose defining geometry and inheritable appearance 
   await properties.locator('[data-dimension-display="visible"]').selectOption("false");
   expect(await page.evaluate(() => window.__jot2dTest.drawnDimensionLabelsForTest())).not.toEqual(expect.arrayContaining([expect.stringMatching(/REF .* mm/)]));
   await page.locator("#constraintStatusViewBtn").click();
+  expect(await page.evaluate(() => window.__jot2dTest.drawnDimensionLabelsForTest())).not.toEqual(expect.arrayContaining([expect.stringMatching(/REF .* mm/)]));
+  await page.locator(".app-menu > summary").nth(2).click();
+  await page.locator("#viewShowHiddenElementsInput").check();
+  await page.locator(".app-menu > summary").nth(2).click();
   expect(await page.evaluate(() => window.__jot2dTest.drawnDimensionLabelsForTest())).toEqual(expect.arrayContaining([expect.stringMatching(/REF .* mm/)]));
   await page.locator("#constraintStatusViewBtn").click();
   const serialized = await page.evaluate(() => window.__jot2dTest.serializedModelForTest());
@@ -3428,8 +3433,15 @@ test("unified canvas exposes dimensions from every visible sketch", async ({ pag
   expect(result.drawnDimensionSketchIds).toEqual(["S1", "S2"]);
   expect(new Set(result.drawnDimensionLabels)).toEqual(new Set(["100", "160"]));
   expect(result.labelsAfterHidingSecondSketch).toEqual(["100"]);
+  const hiddenSketchFixture = await page.evaluate(() => window.__jot2dTest.serializedModelForTest());
+  hiddenSketchFixture.sketches.find(sketch => sketch.id === "S2").appearance.visible = false;
+  await page.evaluate(data => window.__jot2dTest.loadDocumentFixtureForDragTest(data, "hidden-sketch.jot2d"), hiddenSketchFixture);
   expect(await page.evaluate(() => window.__jot2dTest.drawnDimensionColorsForTest())).toEqual(["#64748b"]);
   await page.locator("#constraintStatusViewBtn").click();
+  expect(await page.evaluate(() => window.__jot2dTest.drawnDimensionColorsForTest())).toEqual(["#64748b"]);
+  await page.locator(".app-menu > summary").nth(2).click();
+  await page.locator("#viewShowHiddenElementsInput").check();
+  await page.locator(".app-menu > summary").nth(2).click();
   expect(new Set(await page.evaluate(() => window.__jot2dTest.drawnDimensionColorsForTest()))).toEqual(new Set(["#64748b", "#cbd5e1"]));
   await page.locator("#constraintStatusViewBtn").click();
 });

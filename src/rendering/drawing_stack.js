@@ -4,7 +4,7 @@
   const { Line, Circle, Arc, Spline } = window.GeometrySolver;
   const { normalizedDrawingOrder, drawingOrderOwner, ensureDrawingOrderState } = window.DrawingOrder;
   const DRAWING_STACK_KIND_ORDER = Object.freeze({ hatch: 0, line: 1, circle: 2, arc: 3, spline: 4 });
-  function create({ currentScope, activeSketchId, geometryReads, isVisibleSketchId, isVisibleSketchElement, hatchAppearanceForDisplay, painters }) {
+  function create({ currentScope, activeSketchId, geometryReads, isVisibleSketchId, isVisibleSketchElement, hatchAppearanceForDisplay, painters, isVisibleValue = visible => visible !== false }) {
     const { allHatches, allGeometryLines, allGeometryCircles, allGeometryArcs, allGeometrySplines } = geometryReads;
     function drawingOrderInternalValue(item, kind) {
       if (!item?.blockProjection && !item?.derivedProjection) return 0;
@@ -21,7 +21,7 @@
           entries.push({ kind, item, owner: drawingOrderOwner(item), insertionIndex: entries.length });
         }
       };
-      append("hatch", allHatches(), (item) => isVisibleSketchId(item.sketchId) && hatchAppearanceForDisplay(item).visible !== false);
+      append("hatch", allHatches(), (item) => isVisibleSketchId(item.sketchId) && isVisibleValue(hatchAppearanceForDisplay(item).visible));
       append("line", allGeometryLines(), isVisibleSketchElement);
       append("circle", allGeometryCircles(), isVisibleSketchElement);
       append("arc", allGeometryArcs(), isVisibleSketchElement);
@@ -57,7 +57,7 @@
           ...model.circles,
           ...model.arcs,
           ...model.splines,
-        ].filter((item) => isVisibleSketchId(item.sketchId) && (item instanceof Line || item instanceof Circle || item instanceof Arc || item instanceof Spline ? isVisibleSketchElement(item) : hatchAppearanceForDisplay(item).visible !== false));
+        ].filter((item) => isVisibleSketchId(item.sketchId) && (item instanceof Line || item instanceof Circle || item instanceof Arc || item instanceof Spline ? isVisibleSketchElement(item) : isVisibleValue(hatchAppearanceForDisplay(item).visible)));
         const visibleSketchIds = new Set(collectionOrdered.map((item) => String(item.sketchId)));
         const alreadyInCollectionOrder = collectionOrdered.every((item, index) => index === 0 || item.drawingOrder > collectionOrdered[index - 1].drawingOrder);
         if (visibleSketchIds.size <= 1 && alreadyInCollectionOrder) {

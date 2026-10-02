@@ -229,7 +229,7 @@
   const { blockProjectionId, blockProjectionLocalId, blockWorldPoint, createBlockProjectionBundle, blockAllProjectionBundle, blockProjectionBundle, invalidateBlockProjectionCache } = blockProjections;
   const { annotationBounds, pointInAnnotationTextBox, hitAnnotationElement, canvasContextAnnotationHit } = window.AnnotationSpatialQuery.create({
     viewportScale: () => viewport.scale, annotationTextWorldHeight: style => annotationTextWorldHeight(style),
-    formatDisplayNumber, allAnnotations: () => allAnnotations(), isVisibleSketchId, activeSketchId,
+    formatDisplayNumber, allAnnotations: () => allAnnotations(), isVisibleSketchId, activeSketchId, isVisibleValue,
     annotationLeaderAnchor: element => annotationLeaderAnchor(element),
   });
   const { blockLocalGeometryBounds, blockInstanceDisplayCenter, blockInstanceTranslationForAnchor } = window.BlockLayout.create({
@@ -465,7 +465,7 @@
     }),
   });
   const { schedule: scheduleCanvasPointerMove, flush: flushScheduledCanvasPointerMove } = pointerMoveScheduler;
-  const viewState = { constraintStatus: false, geometryIds: false };
+  const viewState = { constraintStatus: false, geometryIds: false, showHiddenElements: false };
   let constraintStatusMouseLatched = false;
   let constraintStatusSpaceHeld = false;
   const MIN_ZOOM = CSS_PX_PER_MM * 0.001;
@@ -583,14 +583,14 @@
   const { resolvedLoopBounds } = window.HatchRegionEngine;
   const drawingBounds = window.DrawingBounds.create({
     currentScope: workspace.current, geometryReads, activeSketchId, elementSketchId, isVisibleSketchElement,
-    isVisibleSketchId, annotationBounds, resolvedLoopBounds, resolvedHatchBoundary, hatchAppearanceForDisplay,
+    isVisibleSketchId, annotationBounds, resolvedLoopBounds, resolvedHatchBoundary, hatchAppearanceForDisplay, isVisibleValue,
   });
   const { sketchGeometryBounds, allGeometryBounds, visibleGeometryBounds } = drawingBounds;
   const { scaleSketchForFirstDimension } = window.FirstDimensionScaling.create({
     currentScope: workspace.current, activeSketchId, constraintSketchId, elementSketchId, sketchGeometryBounds, minLength: MIN_LINE_LENGTH,
   });
 
-  const { drawResolvedHatchContent } = window.HatchRenderer.create({ viewport, visibleWorldBounds, canvasThemeColor });
+  const { drawResolvedHatchContent } = window.HatchRenderer.create({ viewport, visibleWorldBounds, canvasThemeColor, isVisibleValue });
   const { annotationTextWorldHeight, drawAnnotationText, drawAnnotationLeader } = window.AnnotationRenderer.create({ ctx, viewport, withCanvasState, annotationDisplayColor, annotationLeaderAnchor, appearanceLineDash, formatValue: formatDisplayNumber });
   const annotationCommand = window.AnnotationCommand.create({
     currentScope: workspace.current, getPending: () => pendingCommand, setPending: value => { pendingCommand = value; },
@@ -606,7 +606,7 @@
   });
   const { drawingStackEntries, drawDrawingStack } = window.DrawingStack.create({
     currentScope: workspace.current, activeSketchId, geometryReads,
-    isVisibleSketchId, isVisibleSketchElement, hatchAppearanceForDisplay,
+    isVisibleSketchId, isVisibleSketchElement, hatchAppearanceForDisplay, isVisibleValue,
     painters: { hatch: items => drawHatches(items, { includePreview: false }), line: drawLines, circle: drawCircles, arc: drawArcs, spline: drawSplines },
   });
   const MIN_ARC_LENGTH = MIN_LINE_LENGTH;
@@ -1338,7 +1338,7 @@
   function hitHatchAt(x, y, { activeOnly = true } = {}) {
     const point = { x, y };
     const candidates = allHatches().filter((hatch) => {
-      if (!isVisibleSketchId(hatch.sketchId) || hatchAppearanceForDisplay(hatch).visible === false) return false;
+      if (!isVisibleSketchId(hatch.sketchId) || !isVisibleValue(hatchAppearanceForDisplay(hatch).visible)) return false;
       if (!activeOnly) return true;
       return hatch.sketchId === activeSketchId();
     });
@@ -1354,7 +1354,7 @@
     const point = { x, y };
     for (let index = model.referenceImages.length - 1; index >= 0; index -= 1) {
       const item = model.referenceImages[index];
-      if (item.visible === false || !isVisibleSketchId(item.sketchId)) continue;
+      if (!isVisibleValue(item.visible) || !isVisibleSketchId(item.sketchId)) continue;
       if (activeOnly && item.sketchId !== activeSketchId()) continue;
       const local = referenceImageWorldToLocal(item, point);
       if (Math.abs(local.x) <= item.pixelWidth / 2 && Math.abs(local.y) <= item.pixelHeight / 2) return item;
@@ -1437,17 +1437,20 @@
     return window.SketchHierarchy.sketchDepth(model.sketches, sketch);
   }
 
+  function isVisibleValue(visible) {
+    return viewState.showHiddenElements || visible !== false;
+  }
+
   function isVisibleSketchId(sketchId) {
     const id = sketchId || activeSketchId();
-    if (viewState.constraintStatus) return true;
     const sketch = sketchById(id);
     if (!sketch) return false;
     const appearance = effectiveAppearanceForSketch(sketch);
-    return appearance.visible !== false;
+    return isVisibleValue(appearance.visible);
   }
 
   function isVisibleSketchElement(item) {
-    return viewState.constraintStatus || (isVisibleSketchId(elementSketchId(item)) && effectiveAppearanceForElement(item).visible !== false);
+    return isVisibleSketchId(elementSketchId(item)) && isVisibleValue(effectiveAppearanceForElement(item).visible);
   }
 
   function assignConstraintSketchId(constraint, sketchId = activeSketchId()) {
@@ -1742,7 +1745,7 @@
     button?.setAttribute("aria-pressed", String(next));
     const menuInput = document.getElementById("viewConstraintStatusInput");
     if (menuInput) menuInput.checked = next;
-    if (hint && changed) setHint(next ? "拘束状態表示: Document内の全Geometryを表示しています" : "通常表示");
+    if (hint && changed) setHint(next ? "拘束状態表示: 表示中のGeometryの拘束状態を表示しています" : "通常表示");
     if (changed) draw();
   }
 
@@ -3224,7 +3227,7 @@
       const target = targetFromConstraint(constraint);
       if (!target) continue;
       const dimension = constraint.dimension || defaultDimensionForTarget(target);
-      if (!viewState.constraintStatus && effectiveDimensionAppearance(dimension, constraintSketchId(constraint)).visible === false) continue;
+      if (!isVisibleValue(effectiveDimensionAppearance(dimension, constraintSketchId(constraint)).visible)) continue;
       const layout = dimensionLayout(target, dimension);
       if (!layout) continue;
       const appearance = effectiveDimensionAppearance(dimension, constraintSketchId(constraint));
@@ -3279,7 +3282,7 @@
       })) return instance;
       if ((bundle.hatches || []).some((hatch) => {
         const resolved = resolvedHatchBoundary(hatch);
-        return resolved.ok && hatchAppearanceForDisplay(hatch).visible !== false && hatchContainsSelectablePoint(hatch, resolved, { x, y });
+        return resolved.ok && isVisibleValue(hatchAppearanceForDisplay(hatch).visible) && hatchContainsSelectablePoint(hatch, resolved, { x, y });
       })) return instance;
     }
     return null;
@@ -4071,14 +4074,14 @@
     lineIntersectsRect, bboxInRect, lineBBox, isVisibleSketchElement, primitiveBBox, bboxIntersectsRect,
     arcSamplePoints, viewScale: () => viewport.scale, isEditableSketchId, isVisibleSketchId, blockProjectionBundle, mergeBounds,
     splineBBox, annotationBounds, resolvedLoopBounds, resolvedHatchBoundary, activeSketchId,
-    hatchAppearanceForDisplay, referenceImageBounds,
+    hatchAppearanceForDisplay, referenceImageBounds, isVisibleValue,
     dimensionSelectionBounds: constraint => {
       if (!isActiveSketchConstraint(constraint) || !isVisibleSketchId(constraintSketchId(constraint))) return null;
       const target = targetFromConstraint(constraint);
       if (!target) return null;
       const dimension = constraint.dimension || defaultDimensionForTarget(target);
       const appearance = effectiveDimensionAppearance(dimension, constraintSketchId(constraint));
-      if (appearance.visible === false) return null;
+      if (!isVisibleValue(appearance.visible)) return null;
       const layout = dimensionLayout(target, dimension, appearance);
       if (!layout) return null;
       const metrics = dimensionTextDrawingMetrics(appearance);
@@ -4185,13 +4188,13 @@
 
 
   function drawReferenceImages() {
-    referenceImageRenderer.drawImages(model.referenceImages.filter(item => item.visible !== false && isVisibleSketchId(item.sketchId)));
+    referenceImageRenderer.drawImages(model.referenceImages.filter(item => isVisibleValue(item.visible) && isVisibleSketchId(item.sketchId)));
   }
 
   function drawReferenceImageOverlays() {
     const item = canvasSelection.referenceImages.length === 1 ? canvasSelection.referenceImages[0] : canvasHover.current.referenceImage;
     referenceImageRenderer.drawOverlays(
-      item && item.visible !== false && item.sketchId === activeSketchId() ? item : null,
+      item && isVisibleValue(item.visible) && isVisibleSketchId(item.sketchId) && item.sketchId === activeSketchId() ? item : null,
       canvasSelection.referenceImages.includes(item),
       referenceImageInteraction.calibrationPoints,
     );
@@ -4376,7 +4379,7 @@
       if (!target) continue;
       const dimension = c.dimension || defaultDimensionForTarget(target);
       const sketchId = constraintSketchId(c);
-      if (!viewState.constraintStatus && effectiveDimensionAppearance(dimension, sketchId).visible === false) continue;
+      if (!isVisibleValue(effectiveDimensionAppearance(dimension, sketchId).visible)) continue;
       const highlighted = c === canvasHover.current.dimension || canvasSelection.constraintSelectedInCanvas(c) || c === dimensionDrag.constraint;
       const label = dimensionLabelForConstraint(c, target, dimension);
       const editing = pendingCommand?.type === "distance-value" && pendingCommand.constraint === c;
@@ -4389,7 +4392,7 @@
 
   function drawAnnotations() {
     for (const element of allAnnotations()) {
-      if (element.visible === false || !isVisibleSketchId(element.sketchId)) continue;
+      if (!isVisibleValue(element.visible) || !isVisibleSketchId(element.sketchId)) continue;
       if (element.type === "leader") drawAnnotationLeader(element);
       else if (element.type === "text") drawAnnotationText(element);
     }
@@ -4510,7 +4513,7 @@
       { width: canvas.clientWidth, height: canvas.clientHeight });
   }
 
-  function drawArcEndpointHandles() { geometryRenderer.drawArcEndpointHandles(allGeometryArcs()); }
+  function drawArcEndpointHandles() { geometryRenderer.drawArcEndpointHandles(allGeometryArcs().filter(isVisibleSketchElement)); }
 
   function drawPoints() {
     geometryRenderer.drawPoints(drawOrderBySketch(allGeometryPoints()));
@@ -5536,6 +5539,7 @@
     updateSelectionUI: updateGeometrySelectionUI,
     openContextMenu: (event, id) => {
       closeCanvasContextMenu();
+      if (isRootSketch(sketchById(id))) { sketchContextController.close(); return; }
       sketchContextController.open({ event, target: { id }, items: [{ action: "sketch-edit", label: applicationText("編集", "Edit"), disabled: id === activeSketchId() }] });
     },
     unfixPoint: point => { point.fixed = false; solveAndRefresh(`固定解除 ${point.id}`); },
@@ -6753,12 +6757,12 @@
   }
 
   const { candidatesAt: canvasContextCandidatesAt } = window.CanvasContextQuery.create({
-    hitReferenceImageAt,
+    hitReferenceImageAt, isVisibleValue,
     currentScope: workspace.current, viewportScale: () => viewport.scale,
     canvasContextPointIsSelectable, editedFitPoints: () => splineEditSession?.spline?.fitPoints,
     sketches: { isEditableSketchId, isVisibleSketchId, isEditableSketchElement, isVisibleSketchElement, activeSketchId, isActiveSketchConstraint, constraintSketchId },
     projections: { blockProjectionBundle, geometryInstanceBundle },
-    dimensions: { targetFromConstraint, defaultDimensionForTarget, effectiveDimensionAppearance, dimensionLayout, showConstraintStatus: () => viewState.constraintStatus },
+    dimensions: { targetFromConstraint, defaultDimensionForTarget, effectiveDimensionAppearance, dimensionLayout },
     annotations: { canvasContextAnnotationHit }, hatches: { resolvedHatchBoundary, hatchAppearanceForDisplay, hatchContainsSelectablePoint },
   });
 
@@ -7517,6 +7521,10 @@
   document.getElementById("viewConstraintStatusInput")?.addEventListener("change", (event) => {
     constraintStatusMouseLatched = event.target.checked;
     syncConstraintStatusView();
+  });
+  document.getElementById("viewShowHiddenElementsInput")?.addEventListener("change", (event) => {
+    viewState.showHiddenElements = event.target.checked;
+    draw();
   });
   document.getElementById("viewGeometryIdsInput")?.addEventListener("change", (event) => {
     viewState.geometryIds = event.target.checked;

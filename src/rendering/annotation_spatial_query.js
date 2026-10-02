@@ -5,7 +5,7 @@
   const { hypot2 } = window.GeometrySolver;
   const { distancePointToSegmentPoints } = window.GeometryKernel;
   const { mergeBounds, pointInExpandedBox } = window.GeometryBounds;
-  function create({ viewportScale, annotationTextWorldHeight, formatDisplayNumber, allAnnotations, isVisibleSketchId, activeSketchId, annotationLeaderAnchor }) {
+  function create({ viewportScale, annotationTextWorldHeight, formatDisplayNumber, allAnnotations, isVisibleSketchId, activeSketchId, annotationLeaderAnchor, isVisibleValue = visible => visible !== false }) {
     function annotationBounds(element) {
       if (!element) return null;
       const style = normalizeAnnotationStyle(element.style);
@@ -84,7 +84,7 @@
       const annotations = allAnnotations();
       for (let i = annotations.length - 1; i >= 0; i--) {
         const element = annotations[i];
-        if (!element || element.visible === false || !isVisibleSketchId(element.sketchId)) continue;
+        if (!element || !isVisibleValue(element.visible) || !isVisibleSketchId(element.sketchId)) continue;
         if (!element.blockProjection && element.sketchId !== activeSketchId()) continue;
         if (element.type === "leader") {
           const start = annotationLeaderAnchor(element);
@@ -103,7 +103,7 @@
     }
 
     function canvasContextAnnotationHit(element, pointer) {
-      if (!element || element.visible === false) return null;
+      if (!element || !isVisibleValue(element.visible)) return null;
       const threshold = 12 / viewportScale();
       if (element.type === "leader") {
         const start = annotationLeaderAnchor(element);

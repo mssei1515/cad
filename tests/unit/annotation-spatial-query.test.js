@@ -9,14 +9,15 @@ const sources = vm.runInNewContext(fs.readFileSync(path.join(root, 'index.html')
 for (const file of sources.filter(p => p.startsWith('src/'))) vm.runInContext(fs.readFileSync(path.join(root, file), 'utf8'), sandbox);
 
 function fixture() {
-  let scale = 2, elements = [], active = 'S1', anchor = null;
+  let scale = 2, elements = [], active = 'S1', anchor = null, showHidden = false;
   const query = sandbox.window.AnnotationSpatialQuery.create({
+    isVisibleValue: visible => showHidden || visible !== false,
     viewportScale: () => scale, annotationTextWorldHeight: () => 10 / scale,
     formatDisplayNumber: value => value.toFixed(1), allAnnotations: () => elements,
     isVisibleSketchId: id => id !== 'hidden', activeSketchId: () => active,
     annotationLeaderAnchor: element => anchor || element.start,
   });
-  return { query, zoom: value => { scale = value; }, list: value => { elements = value; },
+  return { query, showHidden: value => { showHidden = value; }, zoom: value => { scale = value; }, list: value => { elements = value; },
     activate: value => { active = value; }, anchor: value => { anchor = value; } };
 }
 const text = overrides => ({ type: 'text', x: 0, y: 0, text: 'X', sketchId: 'S1', style: {}, ...overrides });
@@ -69,4 +70,14 @@ test('projected parameter labels measure current formatted value and affixes', (
   assert.ok(f.query.annotationBounds(label).x2 > original.x2);
   const projected = { ...label, localElement: { parameterEnabled: true, evaluatedParameterValue: 1 } };
   assert.equal(f.query.annotationBounds(projected).x2, original.x2);
+});
+
+test('show hidden restores annotation hit and context queries without changing its flag', () => {
+  const f = fixture(), label = text({ visible: false }); f.list([label]);
+  assert.equal(f.query.hitAnnotationElement(2, 0), null);
+  assert.equal(f.query.canvasContextAnnotationHit(label, { x: 2, y: 0 }), null);
+  f.showHidden(true); assert.equal(f.query.hitAnnotationElement(2, 0).element, label);
+  assert.ok(f.query.canvasContextAnnotationHit(label, { x: 2, y: 0 }));
+  assert.equal(label.visible, false);
+  f.showHidden(false); assert.equal(f.query.hitAnnotationElement(2, 0), null);
 });

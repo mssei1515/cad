@@ -5,7 +5,7 @@
     lineIntersectsRect, bboxInRect, lineBBox, isVisibleSketchElement, primitiveBBox, bboxIntersectsRect,
     arcSamplePoints, viewScale, isEditableSketchId, isVisibleSketchId, blockProjectionBundle, mergeBounds,
     splineBBox, annotationBounds, resolvedLoopBounds, resolvedHatchBoundary, activeSketchId,
-    hatchAppearanceForDisplay, referenceImageBounds, dimensionSelectionBounds = () => null }) {
+    hatchAppearanceForDisplay, referenceImageBounds, dimensionSelectionBounds = () => null, isVisibleValue = visible => visible !== false }) {
     function addUnique(target, item) { if (item && !target.includes(item)) target.push(item); }
     function read(rect, crossing) {
       const model = currentScope();
@@ -64,21 +64,21 @@
         if (selected) addUnique(nextBlocks, instance);
       }
       for (const annotation of model.annotations) {
-        if (annotation.sketchId !== activeSketchId() || annotation.visible === false || !isVisibleSketchId(annotation.sketchId)) continue;
+        if (annotation.sketchId !== activeSketchId() || !isVisibleValue(annotation.visible) || !isVisibleSketchId(annotation.sketchId)) continue;
         const box = annotationBounds(annotation);
         if (!box) continue;
         const selected = crossing ? bboxIntersectsRect(box, rect) : bboxInRect(box, rect);
         if (selected) addUnique(nextAnnotations, annotation);
       }
       for (const hatch of model.hatches) {
-        if (hatch.sketchId !== activeSketchId() || hatchAppearanceForDisplay(hatch).visible === false || !isVisibleSketchId(hatch.sketchId)) continue;
+        if (hatch.sketchId !== activeSketchId() || !isVisibleValue(hatchAppearanceForDisplay(hatch).visible) || !isVisibleSketchId(hatch.sketchId)) continue;
         const box = resolvedLoopBounds(resolvedHatchBoundary(hatch));
         if (!box) continue;
         const selected = crossing ? bboxIntersectsRect(box, rect) : bboxInRect(box, rect);
         if (selected) addUnique(nextHatches, hatch);
       }
       for (const image of model.referenceImages) {
-        if (image.sketchId !== activeSketchId() || image.visible === false || !isVisibleSketchId(image.sketchId)) continue;
+        if (image.sketchId !== activeSketchId() || !isVisibleValue(image.visible) || !isVisibleSketchId(image.sketchId)) continue;
         const box = referenceImageBounds(image);
         const selected = crossing ? bboxIntersectsRect(box, rect) : bboxInRect(box, rect);
         if (selected) addUnique(nextReferenceImages, image);
