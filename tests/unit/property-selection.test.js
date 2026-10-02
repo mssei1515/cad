@@ -70,3 +70,15 @@ test('explicit sketch and inspection targets are independent of the active sketc
   target = f.query.selectedPropertiesTarget(); assert.equal(target.kind, 'multiple'); assert.equal(target.readOnly, true);
   f.selection.inspection = null; assert.equal(f.query.selectedPropertiesTarget().active, true);
 });
+
+test('bulk dimension appearance preserves independent measurement and placement', () => {
+ const f=fixture(),a={value:100,dimension:{offset:30,display:{}}},b={value:160,dimension:{offset:40,display:{}}};
+ f.selection.dimensionConstraints=[a,b]; const target=f.query.selectedPropertiesTarget(); assert.equal(target.kind,'multiple'); assert.equal(target.count,2);
+ const command=w.BulkPropertyCommand.create({...f.editing, multiplePropertySupports:f.query.multiplePropertySupports, draw(){},recordHistory(){},updateUI(){}});
+ command.apply(target,'prefix',' custom '); command.apply(target,'color','#ff0000'); command.apply(target,'precision','2');
+ for(const item of [a,b]) assert.deepEqual(item.dimension.display,{prefix:' custom ',color:'#ff0000',precision:2});
+ assert.equal(a.value,100);assert.equal(b.value,160);assert.equal(a.dimension.offset,30);assert.equal(b.dimension.offset,40);
+ f.geometry.push(new Line());assert.equal(f.query.selectedPropertiesTarget().count,3);
+ assert.equal(f.query.multiplePropertySupports({kind:'constraint',item:a},'lineType'),false);
+ assert.equal(f.query.multiplePropertySupports({kind:'constraint',item:a},'value'),false);
+});

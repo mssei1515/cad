@@ -2,7 +2,7 @@
 (() => {
   "use strict";
   const fields = Object.freeze(["point","endpointPoint","line","circle","arc","spline","block","geometryInstance","arcEndpoint","dimension","annotation","hatch","referenceImage","sketchIdentity"]);
-  const contextFields = fields.filter(field => field !== "referenceImage");
+  const contextFields = fields;
   function create({ isEndpointPoint }) {
     const empty = () => Object.fromEntries(fields.map(field => [field, null]));
     let current = Object.freeze(empty());
@@ -31,6 +31,7 @@
       else if (target.kind === "geometry-instance") update({ geometryInstance: target.item });
       else if (target.kind === "annotation") update({ annotation: target.item });
       else if (target.kind === "hatch") update({ hatch: target.item });
+      else if (target.kind === "image") update({ referenceImage: target.item });
     }
 
     return Object.freeze({ get current() { return current; }, update, clear, capture, restore, previewCandidate });

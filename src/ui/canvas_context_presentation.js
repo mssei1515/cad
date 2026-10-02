@@ -53,6 +53,12 @@
         id: item.id,
         secondary: blockDefinitionById(item.definitionId)?.name || item.definitionId,
       };
+      if (target.kind === "image") return {
+        icon: toolbarSvgMarkup("#importReferenceImageBtn"),
+        type: applicationText("参照画像", "Reference Image"),
+        id: item.id,
+        secondary: item.name || "",
+      };
       if (target.kind === "geometry-instance") return {
         icon: toolbarSvgMarkup(target.item.type === "free" ? "#toolFreeInstance" : target.item.type === "mirror" ? "#toolMirror" : target.item.type === "pattern" ? "#toolPattern" : "#toolSketchProjection"),
         type: applicationText("派生インスタンス", "Derived Instance"),
@@ -61,7 +67,7 @@
       };
       return {
         icon: toolbarSvgMarkup("#toolHatch"),
-        type: applicationText("ハッチング", "Hatch"),
+        type: applicationText("塗りつぶし", "Fill"),
         id: item.id,
         secondary: hatchPatternTypeLabel(hatchAppearanceForDisplay(item).patternType),
       };

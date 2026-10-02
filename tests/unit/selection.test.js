@@ -135,11 +135,25 @@ test('drag points preserve geometry identity, source order and shared point mult
   assert.deepEqual(Array.from(result),[p,p,q,r,q,p,r]);
   result.pop();assert.equal(selection.splines[0].fitPoints.length,2);assert.equal(selection.points.length,1);
 });
-test('element count includes drawable selections and endpoint separately but excludes tree and constraints', () => {
+test('element count includes drawable selections and endpoint separately but excludes tree and other constraints', () => {
   const selection=create();
   for(const field of ['points','lines','circles','arcs','splines','blockInstances','geometryInstances','annotations','hatches','referenceImages']) selection.set(field,[{}]);
   selection.set('arcEndpoint',{arc:{},endpoint:'start'});selection.set('dimensionConstraint',{});selection.set('constraint',{});
-  assert.equal(selection.selectedElementCount(),11);
+  assert.equal(selection.selectedElementCount(),12);
   selection.clear();selection.set('sketchId','S');selection.set('inspection',{});selection.set('constraint',{});
   assert.equal(selection.selectedElementCount(),0);
 });
+
+ test('dimensions toggle by identity, coexist with geometry and survive additive rectangles', () => {
+  const selection=create(),a={},b={},line={id:'L'};
+  selection.toggleDimensionConstraint(a); selection.toggleDimensionConstraint(b);
+  assert.equal(selection.dimensionConstraint,null); assert.equal(selection.dimensionConstraints.length,2);
+  selection.setGeometrySelection({kind:'line',item:line},true);
+  assert.equal(selection.lines[0],line); assert.equal(selection.constraintSelectedInCanvas(b),true);
+  selection.applyRectangle({dimensionConstraints:[a]},true);
+  assert.equal(selection.dimensionConstraints.length,2);
+  selection.toggleDimensionConstraint(a); assert.equal(selection.dimensionConstraint,b);
+  selection.applyRectangle({dimensionConstraints:[a,b]}); assert.equal(selection.dimensionConstraints.length,2); assert.equal(selection.lines.length,0);
+  selection.set('dimensionConstraint',a); assert.equal(selection.dimensionConstraints.length,1);
+  selection.clear(); assert.equal(selection.dimensionConstraints.length,0);
+ });

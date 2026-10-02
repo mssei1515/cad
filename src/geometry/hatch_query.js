@@ -56,8 +56,8 @@
     }
 
     function resolvedHatchBoundary(hatch) {
-      if (!hatch) return { ok: false, code: "missing-hatch", reason: applicationText("ハッチングが見つかりません", "Hatch not found") };
-      if (hatch.blockProjection) return hatch.resolvedBoundary || { ok: false, code: "invalid-boundary", reason: applicationText("ブロック内の境界が無効です", "The block hatch boundary is invalid") };
+      if (!hatch) return { ok: false, code: "missing-hatch", reason: applicationText("塗りつぶしが見つかりません", "Fill not found") };
+      if (hatch.blockProjection) return hatch.resolvedBoundary || { ok: false, code: "invalid-boundary", reason: applicationText("ブロック内の境界が無効です", "The block fill boundary is invalid") };
       const fingerprint = hatchBoundaryFingerprint(hatch);
       const cached = hatchResolutionCache.get(hatch);
       if (cached?.fingerprint === fingerprint) return cached.result;

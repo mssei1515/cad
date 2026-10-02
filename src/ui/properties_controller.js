@@ -63,10 +63,10 @@
         elementPropertyCommand.geometryInstance(target.item, input.dataset.geometryInstanceProperty, input.value, { commit: false });
         return;
       }
-      const rawValue = input.type === "number" || input.dataset.annotationStyle && !["prefix", "suffix"].includes(input.dataset.annotationStyle) || input.dataset.hatchProperty || input.dataset.bulkProperty || input.dataset.appearanceKey
+      const rawValue = input.type === "number" || input.dataset.annotationStyle && !["prefix", "suffix"].includes(input.dataset.annotationStyle) || input.dataset.hatchProperty || input.dataset.bulkProperty && !["prefix", "suffix"].includes(input.dataset.bulkProperty) || input.dataset.appearanceKey
         ? input.value.trim()
         : input.value;
-      const appearanceAllowsEmpty = Boolean(input.dataset.appearanceKey || input.dataset.dimensionDisplay || ["prefix", "suffix"].includes(input.dataset.annotationStyle));
+      const appearanceAllowsEmpty = Boolean(["prefix", "suffix"].includes(input.dataset.bulkProperty) || input.dataset.appearanceKey || input.dataset.dimensionDisplay || ["prefix", "suffix"].includes(input.dataset.annotationStyle));
       const colorInput = input.dataset.appearanceKey === "color"
         || input.dataset.dimensionDisplay === "color"
         || input.dataset.annotationStyle === "color"
@@ -106,7 +106,7 @@
         return;
       }
       if (target.kind === "multiple" && input.dataset.bulkProperty) {
-        const raw = input.type === "checkbox" ? input.checked : input.value.trim();
+        const raw = input.type === "checkbox" ? input.checked : ["prefix", "suffix"].includes(input.dataset.bulkProperty) ? input.value : input.value.trim();
         applyMultipleProperty(target, input.dataset.bulkProperty, raw);
         return;
       }

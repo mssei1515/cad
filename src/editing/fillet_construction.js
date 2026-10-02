@@ -23,6 +23,7 @@
       if (!arc) return { ok: false, reason: "R面取り円弧を作成できません" };
       const radiusConstraint = new RadiusConstraint(arc, finalRadius);
       radiusConstraint.dimension = defaultDimensionForTarget({ kind: "radius", primitive: arc, value: finalRadius });
+      radiusConstraint.dimension.display = { ...radiusConstraint.dimension.display, prefix: "R" };
       syncLineOrientationHints();
       [
         new ArcEndpointCoincidentConstraint(arc, "start", t1),

@@ -14,7 +14,7 @@
       definitions: loadedBlockDefinitions, definitionById: loadedDefinitionById, blockInstances: loadedBlockInstances,
       geometryInstances: loadedGeometryInstances, normalizeLoadedDimensionAppearance, normalizeLoadedExpression }) {
       const rawLoadedAnnotations = Array.isArray(data.annotations) ? data.annotations : [];
-      if (sourceVersion >= 13 && (!validSerializedHatchList(data.hatches) || !Number.isInteger(Number(data.nextHatchIndex)) || Number(data.nextHatchIndex) < 1)) throw new Error(applicationText("ハッチングの形式または採番値が正しくありません", "Invalid hatch data or sequence"));
+      if (sourceVersion >= 13 && (!validSerializedHatchList(data.hatches) || !Number.isInteger(Number(data.nextHatchIndex)) || Number(data.nextHatchIndex) < 1)) throw new Error(applicationText("塗りつぶしの形式または採番値が正しくありません", "Invalid fill data or sequence"));
       const rawLoadedHatches = sourceVersion >= 13 ? data.hatches : [];
       const rawLoadedReferenceImages = sourceVersion >= 18 ? data.referenceImages : [];
 
@@ -41,10 +41,10 @@
       const loadedAnnotations = normalizeAnnotations(rawLoadedAnnotations, loadedAnnotationFallback);
       if (sourceVersion >= 13) {
         const invalidHatchOwner = rawLoadedHatches.find((hatch) => hatch?.sketchId === ROOT_SKETCH_ID || !loadedSketchIds.has(String(hatch?.sketchId || "")));
-        if (invalidHatchOwner) throw new Error(`${applicationText("ハッチング", "Hatch")} ${invalidHatchOwner?.id || "?"}: ${applicationText("所属Sketchが正しくありません", "invalid owning sketch")}`);
+        if (invalidHatchOwner) throw new Error(`${applicationText("塗りつぶし", "Fill")} ${invalidHatchOwner?.id || "?"}: ${applicationText("所属Sketchが正しくありません", "invalid owning sketch")}`);
       }
       const loadedHatches = normalizeHatches(rawLoadedHatches, loadedAnnotationFallback);
-      if (sourceVersion >= 13 && loadedHatches.length !== rawLoadedHatches.length) throw new Error(applicationText("ハッチングの形式が正しくありません", "Invalid hatch data"));
+      if (sourceVersion >= 13 && loadedHatches.length !== rawLoadedHatches.length) throw new Error(applicationText("塗りつぶしの形式が正しくありません", "Invalid fill data"));
       if (sourceVersion >= 18) {
         const invalidImageOwner = rawLoadedReferenceImages.find((image) => image?.sketchId === ROOT_SKETCH_ID || !loadedSketchIds.has(String(image?.sketchId || "")));
         if (invalidImageOwner) throw new Error(`${applicationText("参照画像", "Reference image")} ${invalidImageOwner?.id || "?"}: ${applicationText("所属Sketchが正しくありません", "invalid owning sketch")}`);

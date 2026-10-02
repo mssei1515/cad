@@ -2,7 +2,7 @@
 (() => {
   "use strict";
   function create({ guardSketchProjectionShapeEdit, applicationText, updatePropertiesUI, draw,
-    multiplePropertySupports, applyAnnotationStyleValue, normalizeHatchAppearance, applyAppearanceInput,
+    multiplePropertySupports, applyDimensionAppearanceValue, applyAnnotationStyleValue, normalizeHatchAppearance, applyAppearanceInput,
     invalidateBlockProjectionCache, synchronizeSketchProjectionMetadata, recordHistory, updateUI }) {
     function applyMultipleProperty(target, key, rawValue, { commit = true } = {}) {
       if (target?.kind !== "multiple" || !key) return false;
@@ -20,6 +20,10 @@
         if (key === "construction") {
           entry.item.construction = Boolean(rawValue);
           continue;
+        }
+        if (entry.kind === "referenceImage") { entry.item.visible = rawValue === true || rawValue === "true"; continue; }
+        if (entry.kind === "constraint") {
+          applyDimensionAppearanceValue((entry.item.dimension.display ||= {}), key, String(rawValue)); continue;
         }
         if (entry.kind === "annotation") {
           if (key === "visible") entry.item.visible = rawValue === true || rawValue === "true";

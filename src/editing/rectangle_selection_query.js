@@ -5,7 +5,7 @@
     lineIntersectsRect, bboxInRect, lineBBox, isVisibleSketchElement, primitiveBBox, bboxIntersectsRect,
     arcSamplePoints, viewScale, isEditableSketchId, isVisibleSketchId, blockProjectionBundle, mergeBounds,
     splineBBox, annotationBounds, resolvedLoopBounds, resolvedHatchBoundary, activeSketchId,
-    hatchAppearanceForDisplay, referenceImageBounds }) {
+    hatchAppearanceForDisplay, referenceImageBounds, dimensionSelectionBounds = () => null }) {
     function addUnique(target, item) { if (item && !target.includes(item)) target.push(item); }
     function read(rect, crossing) {
       const model = currentScope();
@@ -84,7 +84,11 @@
         if (selected) addUnique(nextReferenceImages, image);
       }
   
-      return { points: nextPoints, lines: nextLines, circles: nextCircles, arcs: nextArcs, splines: nextSplines, blockInstances: nextBlocks, annotations: nextAnnotations, hatches: nextHatches, referenceImages: nextReferenceImages };
+      const dimensions = (model.constraints || []).filter(constraint => {
+        const box = dimensionSelectionBounds(constraint);
+        return box && (crossing ? bboxIntersectsRect(box, rect) : bboxInRect(box, rect));
+      });
+      return { points: nextPoints, lines: nextLines, circles: nextCircles, arcs: nextArcs, splines: nextSplines, blockInstances: nextBlocks, annotations: nextAnnotations, hatches: nextHatches, referenceImages: nextReferenceImages, dimensionConstraints: dimensions };
     }
     return Object.freeze({ read });
   }

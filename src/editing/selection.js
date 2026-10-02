@@ -15,7 +15,7 @@
       instanceGeometry: null,
       arcEndpoint: null,
       arcEndpointPair: null,
-      dimensionConstraint: null,
+      dimensionConstraints: [],
       constraint: null,
       annotations: [],
       hatches: [],
@@ -25,6 +25,7 @@
     };
     const arrayFields = Object.keys(state).filter(field => Array.isArray(state[field]));
     const fields = Object.keys(state);
+    Object.defineProperty(state, "dimensionConstraint", { get: () => state.dimensionConstraints.length === 1 ? state.dimensionConstraints[0] : null, set: value => { state.dimensionConstraints = value ? [value] : []; } });
     function set(field, value) {
       if (!Object.hasOwn(state, field)) throw new TypeError('Unknown selection field: ' + field);
       if (field !== "sketchId" && field !== "inspection" && (Array.isArray(value) ? value.length : value)) clearTreeSelection();
@@ -43,21 +44,20 @@
       if (!item) return;
       clearTreeSelection();
       const items = state[field];
-      const index = items.findIndex(selected => selected === item || selected?.id === item.id);
+      const index = items.findIndex(selected => selected === item || item.id != null && selected?.id === item.id);
       if (index >= 0) items.splice(index, 1);
       else items.push(item);
     }
 
     function applyRectangle(candidates, additive = false) {
       clearTreeSelection();
-      for (const field of ["points", "lines", "circles", "arcs", "splines", "blockInstances", "annotations", "hatches", "referenceImages"]) {
+      for (const field of ["points", "lines", "circles", "arcs", "splines", "blockInstances", "annotations", "hatches", "referenceImages", "dimensionConstraints"]) {
         const next = additive ? [...state[field]] : [];
-        for (const item of candidates[field]) if (item && !next.includes(item)) next.push(item);
+        for (const item of candidates[field] || []) if (item && !next.includes(item)) next.push(item);
         state[field] = next;
       }
       state.arcEndpoint = null;
       state.arcEndpointPair = null;
-      state.dimensionConstraint = null;
       state.constraint = null;
     }
 
@@ -127,7 +127,7 @@
         state.geometryInstances.length > 0 ||
         Boolean(state.arcEndpoint) ||
         Boolean(state.arcEndpointPair) ||
-        Boolean(state.dimensionConstraint);
+        state.dimensionConstraints.length > 0;
     }
 
     function effectiveSelectedConstraint() {
@@ -191,7 +191,7 @@
     }
 
     function selectedConstructionTogglePrimitives() {
-      if (state.points.length > 0 || state.arcEndpoint || state.arcEndpointPair || state.dimensionConstraint) return [];
+      if (state.points.length > 0 || state.arcEndpoint || state.arcEndpointPair || state.dimensionConstraints.length) return [];
       return [...state.lines, ...state.circles, ...state.arcs, ...state.splines];
     }
 
@@ -285,7 +285,7 @@
     }
 
     function constraintSelectedInCanvas(constraint) {
-      return Boolean(constraint && (state.dimensionConstraint === constraint || effectiveSelectedConstraint() === constraint));
+      return Boolean(constraint && (state.dimensionConstraints.includes(constraint) || effectiveSelectedConstraint() === constraint));
     }
 
     function hasSelection() {
@@ -297,7 +297,7 @@
         state.blockInstances.length > 0 ||
         state.geometryInstances.length > 0 ||
         Boolean(state.arcEndpoint) ||
-        Boolean(state.dimensionConstraint) ||
+        state.dimensionConstraints.length > 0 ||
         state.annotations.length > 0 ||
         state.hatches.length > 0 ||
         state.referenceImages.length > 0 ||
@@ -314,11 +314,12 @@
     }
 
     function selectedElementCount() {
-      return state.points.length + state.lines.length + state.circles.length + state.arcs.length + state.splines.length + state.blockInstances.length + state.geometryInstances.length + state.annotations.length + state.hatches.length + state.referenceImages.length + (state.arcEndpoint ? 1 : 0);
+      return state.dimensionConstraints.length + state.points.length + state.lines.length + state.circles.length + state.arcs.length + state.splines.length + state.blockInstances.length + state.geometryInstances.length + state.annotations.length + state.hatches.length + state.referenceImages.length + (state.arcEndpoint ? 1 : 0);
     }
 
     // Read views retain geometry identity. Mutations go through this instance's API.
     const api = {
+      toggleDimensionConstraint: item => { if (!item) return; clearTreeSelection(); state.constraint = null; const index = state.dimensionConstraints.indexOf(item); if (index < 0) state.dimensionConstraints.push(item); else state.dimensionConstraints.splice(index, 1); },
       selectedDragPoints, selectedElementCount, set, clear, append, removeAt, toggleById, applyRectangle,
       selectedGeometryItems, appearanceSelectionTarget, setGeometrySelection, currentConstraintTargets,
       hasPrimaryCanvasSelection, effectiveSelectedConstraint, selectedPrimitives,
@@ -327,7 +328,7 @@
       trimConstraintSelection, pushPrimitiveSelection, geometryItemSelectedInCanvas,
       constraintSelectedInCanvas, hasSelection,
     };
-    for (const field of fields) Object.defineProperty(api, field, { get: () => state[field], enumerable: true });
+    for (const field of [...fields, "dimensionConstraint"]) Object.defineProperty(api, field, { get: () => state[field], enumerable: true });
     return Object.freeze(api);
   }
   window.CanvasSelection = Object.freeze({ create });

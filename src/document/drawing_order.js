@@ -114,6 +114,6 @@
 
   window.DrawingOrder = Object.freeze({
     normalizedDrawingOrder, drawingOrderItemsForScope, ensureDrawingOrderState,
-    drawingOrderOwner, ownersForScope, topmostOwner, commandState, reorder,
+    drawingOrderOwner, ownersForScope, topmostOwner, orderedItems, commandState, reorder,
   });
 })();

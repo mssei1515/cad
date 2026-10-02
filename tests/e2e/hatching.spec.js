@@ -35,7 +35,7 @@ async function canvasInkAround(page, client, radius = 50) {
 test("creates associative hatching, exposes Tree and Properties, and persists the current version", async ({ page }) => {
   const fixture = await page.evaluate(() => window.__jot2dTest.resetForHatchTest());
   await page.locator("#toolHatch").click();
-  await expect(page.locator("#statusCommand")).toHaveText("ハッチング");
+  await expect(page.locator("#statusCommand")).toHaveText("塗りつぶし");
   await page.mouse.move(fixture.client.x, fixture.client.y);
   await expect.poll(() => page.evaluate(() => window.__jot2dTest.hatchStateForTest().preview)).toEqual({ ok: true, code: null });
   await page.mouse.click(fixture.client.x, fixture.client.y);
@@ -44,10 +44,12 @@ test("creates associative hatching, exposes Tree and Properties, and persists th
   expect(state.mode).toBe("hatch");
   expect(state.direct).toHaveLength(1);
   expect(state.direct[0]).toEqual(expect.objectContaining({ id: "H1", valid: true }));
-  expect(state.direct[0].appearance).toEqual({ visible: true, patternType: "parallel", angle: 45, spacing: 3, color: "#64748b", lineWidth: 1, opacity: 1 });
+  expect(state.direct[0].appearance).toEqual({ visible: true, patternType: "solid", angle: 45, spacing: 3, color: "#64748b", lineWidth: 1, opacity: 0.5 });
+  await expect(page.locator('#propertiesPanel [data-hatch-property="patternType"]')).toHaveValue("solid");
+  await expect(page.locator('#propertiesPanel [data-hatch-property="opacity"]')).toHaveValue("50");
   expect(state.serialized.version).toBe(22);
   expect(state.serialized.hatches).toHaveLength(1);
-  expect(state.propertiesText).toContain("ハッチング");
+  expect(state.propertiesText).toContain("塗りつぶし");
   expect(state.propertiesText).toContain("境界状態");
 
   await page.keyboard.press("Escape");
@@ -64,7 +66,7 @@ test("creates associative hatching, exposes Tree and Properties, and persists th
   await expect(row).toContainText("H1");
   expect(await row.locator("svg path").count()).toBeGreaterThan(0);
   await row.click();
-  await expect(page.locator("#propertiesPanel .property-section > h3")).toHaveText(["基本情報", "ハッチング外観"]);
+  await expect(page.locator("#propertiesPanel .property-section > h3")).toHaveText(["基本情報", "塗りつぶし外観"]);
   await page.mouse.click(fixture.client.x, fixture.client.y, { button: "right" });
   await expect(page.locator('#canvasContextMenu [data-context-action="hatch-repair"]')).toBeVisible();
   await page.keyboard.press("Escape");
@@ -151,6 +153,53 @@ test("hatches an annular sector whose circular boundaries are split into adjacen
   expect(new Set(state.direct[0].boundaryLoops[0].spans.map((span) => span.source.path[0]))).toEqual(new Set(["L1", "L2", "A1", "A2", "A3", "A4"]));
 });
 
+test("valid fill regions can be reselected from Properties and the context menu", async ({ page }) => {
+  const fixture = await page.evaluate(() => window.__jot2dTest.resetForHatchTest());
+  const data = fixture.serialized;
+  data.points.push(
+    { ...data.points[0], id: "P5", x: 60, y: 0 },
+    { ...data.points[0], id: "P6", x: 60, y: 80 },
+  );
+  data.lines.push({ ...data.lines[0], id: "L5", p1: "P5", p2: "P6" });
+  expect((await page.evaluate(data => window.__jot2dTest.loadDocumentFixtureForDragTest(data, "fill-regions.jot2d"), data)).success).toBe(true);
+  const left = await page.evaluate(() => window.__jot2dTest.worldClientPositionForTest({ x: 30, y: 40 }));
+  const right = await page.evaluate(() => window.__jot2dTest.worldClientPositionForTest({ x: 90, y: 40 }));
+  await expect(page.locator('#toolHatch')).toHaveAttribute("title", "塗りつぶし");
+  await expect(page.locator('[data-menu-tool="toolHatch"]')).toHaveText("塗りつぶし");
+  await page.locator("#toolHatch").click();
+  await page.mouse.click(left.x, left.y);
+  await page.keyboard.press("Escape");
+  const before = (await page.evaluate(() => window.__jot2dTest.hatchStateForTest())).serialized.hatches[0];
+  const reselect = page.locator('[data-property-action="hatch-repair"]');
+  await expect(reselect).toBeVisible();
+  await reselect.click();
+  await page.mouse.move(right.x, right.y);
+  await page.keyboard.press("Escape");
+  expect((await page.evaluate(() => window.__jot2dTest.hatchStateForTest())).serialized.hatches[0]).toEqual(before);
+
+  await page.mouse.click(left.x, left.y);
+  await reselect.click();
+  await page.mouse.click(right.x, right.y);
+  let state = await page.evaluate(() => window.__jot2dTest.hatchStateForTest());
+  expect(state.mode).toBe("select");
+  expect(state.direct).toHaveLength(1);
+  expect(state.direct[0].valid).toBe(true);
+  const after = state.serialized.hatches[0];
+  expect(after).toEqual({ ...before, seed: after.seed, boundaryLoops: after.boundaryLoops });
+  expect(after.seed.x).toBeCloseTo(90, 6);
+  expect(after.boundaryLoops).not.toEqual(before.boundaryLoops);
+  await page.keyboard.press("Control+z");
+  expect((await page.evaluate(() => window.__jot2dTest.hatchStateForTest())).serialized.hatches[0]).toEqual(before);
+  await page.keyboard.press("Control+y");
+  expect((await page.evaluate(() => window.__jot2dTest.hatchStateForTest())).serialized.hatches[0]).toEqual(after);
+
+  await page.mouse.click(right.x, right.y, { button: "right" });
+  await page.locator('#canvasContextMenu [data-context-action="hatch-repair"]').click();
+  await page.mouse.click(left.x, left.y);
+  state = await page.evaluate(() => window.__jot2dTest.hatchStateForTest());
+  expect(state.serialized.hatches[0]).toEqual(before);
+});
+
 test("invalid boundaries remain as repairable hatch objects", async ({ page }) => {
   const fixture = await page.evaluate(() => window.__jot2dTest.resetForHatchTest());
   await page.locator("#toolHatch").click();
@@ -197,7 +246,8 @@ test("supports parallel, cross, and solid fill appearances", async ({ page }) =>
   await page.keyboard.press("Escape");
 
   const type = page.locator('#propertiesPanel [data-hatch-property="patternType"]');
-  await expect(type).toHaveValue("parallel");
+  await expect(type).toHaveValue("solid");
+  await type.selectOption("parallel");
   await page.locator('#propertiesPanel [data-hatch-property="angle"]').fill("0");
   await page.locator('#propertiesPanel [data-hatch-property="angle"]').press("Tab");
   const canvas = await page.locator("#canvas").boundingBox();
@@ -262,7 +312,7 @@ test("solid fill keeps inner boundary loops transparent", async ({ page }) => {
   const fixture = await page.evaluate(() => window.__jot2dTest.resetForSolidHatchHoleTest());
   const fill = await canvasInkAround(page, fixture.fillClient, 2);
   const hole = await canvasInkAround(page, fixture.holeClient, 2);
-  expect(fill.center).toEqual([15, 118, 110, 255]);
+  expect(fill.center).toEqual([16, 118, 110, 128]);
   expect(hole.center).toEqual([0, 0, 0, 0]);
 });
 

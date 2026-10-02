@@ -2,6 +2,7 @@
 const { spawnSync } = require("node:child_process");
 const path = require("node:path");
 const files = [
+  "tests/e2e/multiple-dimensions.spec.js",
   "tests/unit/property-selection.test.js",
   "src/editing/property_selection.js",
   "src/editing/appearance_editing.js",
@@ -60,6 +61,8 @@ const files = [
   "src/diagnostics/interaction_profiler.js",
   "src/ui/choice_dialog.js",
   "tests/e2e/choice-dialog.spec.js",
+  "tests/e2e/dimension-prefix.spec.js",
+  "tests/e2e/sketch-edit.spec.js",
   "tests/e2e/fixed-command.spec.js",
   "tests/e2e/block-geometry-fixed.spec.js",
   "app.js",

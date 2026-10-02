@@ -63,12 +63,12 @@
   };
   const DEFAULT_HATCH_APPEARANCE = {
     visible: true,
-    patternType: "parallel",
+    patternType: "solid",
     angle: 45,
     spacing: 3,
     color: "#64748b",
     lineWidth: 1,
-    opacity: 1,
+    opacity: 0.5,
   };
   const DEFAULT_ANNOTATION_STYLE = {
     color: "#111827",

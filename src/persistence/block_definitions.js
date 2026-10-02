@@ -45,13 +45,13 @@
           })(),
           hatches: (() => {
             if (sourceVersion < 13) return [];
-            if (!Number.isInteger(Number(rawDefinition.nextHatchIndex)) || Number(rawDefinition.nextHatchIndex) < 1) throw new Error(`${applicationText("ブロックハッチングの採番値が正しくありません", "Invalid block hatch sequence")}`);
-            if (!validSerializedHatchList(rawDefinition.hatches)) throw new Error(`${applicationText("ブロックハッチングの形式が正しくありません", "Invalid block hatch data")}`);
+            if (!Number.isInteger(Number(rawDefinition.nextHatchIndex)) || Number(rawDefinition.nextHatchIndex) < 1) throw new Error(`${applicationText("ブロック塗りつぶしの採番値が正しくありません", "Invalid block fill sequence")}`);
+            if (!validSerializedHatchList(rawDefinition.hatches)) throw new Error(`${applicationText("ブロック塗りつぶしの形式が正しくありません", "Invalid block fill data")}`);
             const rawHatches = rawDefinition.hatches;
             const invalidOwner = rawHatches.find((hatch) => hatch?.sketchId === ROOT_SKETCH_ID || !definitionSketchIds.has(String(hatch?.sketchId || "")));
-            if (invalidOwner) throw new Error(`${applicationText("ブロックハッチング", "Block hatch")} ${invalidOwner?.id || "?"}: ${applicationText("所属Sketchが正しくありません", "invalid owning sketch")}`);
+            if (invalidOwner) throw new Error(`${applicationText("ブロック塗りつぶし", "Block fill")} ${invalidOwner?.id || "?"}: ${applicationText("所属Sketchが正しくありません", "invalid owning sketch")}`);
             const normalized = normalizeHatches(rawHatches, normalizeDefinitionSketchId(rawDefinition.activeSketchId));
-            if (normalized.length !== rawHatches.length) throw new Error(`${applicationText("ブロックハッチングの形式が正しくありません", "Invalid block hatch data")}`);
+            if (normalized.length !== rawHatches.length) throw new Error(`${applicationText("ブロック塗りつぶしの形式が正しくありません", "Invalid block fill data")}`);
             return normalized;
           })(),
           referenceImages: (() => {

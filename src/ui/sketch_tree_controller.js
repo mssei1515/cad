@@ -4,7 +4,7 @@
   function create({ currentScope, activeSketchId, setActiveSketch, clearSelection, canvasSelection,
     sidebarGeometryItem, toggleBlockInstanceSelection, targetFromConstraint, updateUI, draw,
     sketchTreeView, updateSketchUI, toggleSketchVisibility, renameSketch, deleteSketch, deleteElements, unfixPoint,
-    resolveSelectionEntry, updateSelectionUI = updateUI, hover = {} }) {
+    resolveSelectionEntry, updateSelectionUI = updateUI, hover = {}, move = {}, openContextMenu = () => {} }) {
     const { canvasHover, setSidebarHover, clearSidebarHover, sidebarHoverElementsForItem, sidebarHoverElementsForConstraint, elementSketchId, ROOT_SKETCH_ID } = hover;
     let hoveredSketchTreeId = null;
     function selectSketch(sketchId) {
@@ -13,6 +13,12 @@
       canvasSelection.set("sketchId", sketchId);
       updateSelectionUI();
       draw();
+    }
+
+    function editSketch(sketchId) {
+      if (move.active?.() || !currentScope().sketches.some(sketch => sketch.id === sketchId)) return;
+      setActiveSketch(sketchId);
+      selectSketch(sketchId);
     }
 
     function inspectObject(row, additive) {
@@ -44,7 +50,7 @@
       }
       const model = currentScope();
       if (canvasSelection.inspection || canvasSelection.sketchId) additive = false;
-      if (!additive || category === "constraint" || canvasSelection.inspection || canvasSelection.sketchId) clearSelection();
+      if (!additive || canvasSelection.inspection || canvasSelection.sketchId) clearSelection();
       if (["point", "line", "circle", "arc", "spline"].includes(category)) {
         const item = sidebarGeometryItem(category, row.dataset.id);
         if (item) {
@@ -73,13 +79,14 @@
           if (additive) canvasSelection.toggleById("annotations", item); else canvasSelection.append("annotations", item);
         }
       } else if (row.dataset.fixedPointId) {
+        clearSelection();
         const point = model.points.find((item) => item.id === row.dataset.fixedPointId);
         if (point) canvasSelection.set("points", [point]);
       } else {
         const constraint = model.constraints[Number(row.dataset.constraintIndex)];
         if (constraint) {
-          if (targetFromConstraint(constraint)) canvasSelection.set("dimensionConstraint", constraint);
-          else canvasSelection.set("constraint", constraint);
+          if (targetFromConstraint(constraint)) { if (additive) canvasSelection.toggleDimensionConstraint(constraint); else canvasSelection.set("dimensionConstraint", constraint); }
+          else { clearSelection(); canvasSelection.set("constraint", constraint); }
         }
       }
       updateUI();
@@ -102,7 +109,17 @@
         updateSketchUI();
         return;
       }
+      if (move.active?.()) {
+        if (action?.dataset.sketchMoveAction === "commit") move.commit();
+        else if (action?.dataset.sketchMoveAction === "cancel") move.cancel();
+        else if (!event.target.closest(".sketch-object-row") && (!action || action.classList.contains("sketchActivateBtn"))) {
+          const row = event.target.closest(".sketch-item");
+          if (row) move.choose(row.dataset.id);
+        }
+        return;
+      }
       if (action?.classList.contains("sketchVisibilityBtn")) return void toggleSketchVisibility(action.dataset.id);
+      if (action?.classList.contains("sketchEditBtn")) return void editSketch(action.dataset.id);
       if (action?.classList.contains("sketchRenameBtn")) return void renameSketch(action.dataset.id);
       if (action?.classList.contains("sketchDeleteBtn")) return void deleteSketch(action.dataset.id);
       if (action?.classList.contains("removePointBtn")) return void deleteElements({ points: [model.points.find((item) => item.id === action.dataset.id)].filter(Boolean) });
@@ -123,12 +140,21 @@
     }
 
     function activateRow(event) {
+      if (move.active?.()) return;
       const action = event.target.closest("button");
       if (action && !action.classList.contains("sketchActivateBtn")) return;
       const row = event.target.closest(".sketch-item");
       if (!row) return;
-      setActiveSketch(row.dataset.id);
+      editSketch(row.dataset.id);
+    }
+
+    function contextMenu(event) {
+      event.preventDefault();
+      if (move.active?.() || event.target.closest(".sketch-object-row, .sketch-group-row")) return;
+      const row = event.target.closest(".sketch-item");
+      if (!row) return;
       selectSketch(row.dataset.id);
+      openContextMenu(event, row.dataset.id);
     }
 
     function keyDown(event) {
@@ -136,11 +162,13 @@
       if (!button || !["Enter", " "].includes(event.key)) return;
       event.preventDefault();
       event.stopPropagation();
+      if (move.active?.()) { move.choose(button.dataset.id); return; }
       if (event.key === "Enter" && event.altKey) activateRow(event);
       else selectSketch(button.dataset.id);
     }
 
     function handleSketchTreePointerOver(event) {
+      if (move.active?.()) return;
       const objectRow = event.target.closest(".sketch-object-row");
       if (objectRow && !objectRow.contains(event.relatedTarget) && objectRow.dataset.sketchId === activeSketchId()) {
         const category = objectRow.dataset.objectKind;
@@ -199,7 +227,7 @@
       canvasHover.update({ block: null, annotation: null, hatch: null, referenceImage: null });
       draw();
     }
-    return Object.freeze({ pointerOver: handleSketchTreePointerOver, pointerOut: handleSketchTreePointerOut, isHighlightedElement: isSidebarHighlightedElement, clearHoverSketch, leave, click: handleSketchTreeClick, doubleClick: activateRow, keyDown, activateObject: activateSketchTreeObject });
+    return Object.freeze({ pointerOver: handleSketchTreePointerOver, pointerOut: handleSketchTreePointerOut, isHighlightedElement: isSidebarHighlightedElement, clearHoverSketch, leave, click: handleSketchTreeClick, doubleClick: activateRow, keyDown, contextMenu, editSketch, activateObject: activateSketchTreeObject });
   }
   window.SketchTreeController = Object.freeze({ create });
 })();

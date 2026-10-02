@@ -15,7 +15,7 @@
     let blockCompletionChoicePending = false;
 
     function validateBlockDraft(draft) {
-      if (draft.lines.length + draft.circles.length + draft.arcs.length + (draft.splines?.length || 0) + (draft.annotations?.length || 0) + (draft.hatches?.length || 0) + (draft.blockInstances?.length || 0) + (draft.geometryInstances?.length || 0) === 0) return { success: false, reason: applicationText("ブロックには図形、ハッチングまたは注記が必要です", "A block must contain geometry, hatching, or annotations") };
+      if (draft.lines.length + draft.circles.length + draft.arcs.length + (draft.splines?.length || 0) + (draft.annotations?.length || 0) + (draft.hatches?.length || 0) + (draft.blockInstances?.length || 0) + (draft.geometryInstances?.length || 0) === 0) return { success: false, reason: applicationText("ブロックには図形、塗りつぶしまたは注記が必要です", "A block must contain geometry, fill, or annotations") };
       const outOfScopeInstance = (draft.blockInstances || []).find((instance) => blockDefinitionById(instance.definitionId)?.parentDefinitionId !== draft.id);
       if (outOfScopeInstance) return { success: false, reason: "現在のブロックに属さない子ブロックが含まれています" };
       const cycle = blockDefinitionCyclePath(draft.id);

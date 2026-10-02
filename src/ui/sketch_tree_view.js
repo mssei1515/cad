@@ -4,7 +4,7 @@
   function create({ document, sketchOverlay, sketchOverlayResizeHandle, getScopeKey,
     currentScope, ensureSketchState, isRootSketch, activeSketchId, applicationText, escapeHtml,
     objects, selectedSketchId = () => null, sketchHasSolveError, referenceConstraintErrorCountForSketch,
-    constraintDuplicateCountForSketch, actions }) {
+    constraintDuplicateCountForSketch, actions, moveState = () => null }) {
     const { index: sketchTreeObjectIndex, row: sketchTreeObjectRow,
       selected: sketchTreeObjectSelected, hovered: sketchTreeObjectHovered,
       summary: sketchConstraintSummaryMarkup } = objects;
@@ -102,6 +102,10 @@
       const sketchList = document.getElementById("sketchList");
       if (!sketchList) return;
       const objectIndex = sketchTreeObjectIndex();
+      const moving = moveState();
+      const focused = moving && sketchList.contains(document.activeElement) ? document.activeElement : null;
+      const focusedSketchId = focused?.classList.contains("sketchActivateBtn") ? focused.dataset.id : null;
+      const focusedMoveAction = focused?.dataset.sketchMoveAction;
       const children = new Map();
       for (const sketch of model.sketches) {
         const key = sketch.parentSketchId || "";
@@ -110,9 +114,13 @@
       }
       const categoryDefinitions = [
         ["point", applicationText("点", "Point")], ["line", applicationText("線", "Line")], ["circle", applicationText("円", "Circle")],
-        ["arc", applicationText("円弧", "Arc")], ["spline", applicationText("スプライン", "Spline")], ["hatch", applicationText("ハッチング", "Hatching")], ["image", applicationText("画像", "Image")], ["block", applicationText("ブロック", "Block")], ["instance", applicationText("派生インスタンス", "Derived Instance")], ["constraint", applicationText("拘束", "Constraint")], ["annotation", applicationText("注記", "Annotation")],
+        ["arc", applicationText("円弧", "Arc")], ["spline", applicationText("スプライン", "Spline")], ["hatch", applicationText("塗りつぶし", "Fill")], ["image", applicationText("画像", "Image")], ["block", applicationText("ブロック", "Block")], ["instance", applicationText("派生インスタンス", "Derived Instance")], ["constraint", applicationText("拘束", "Constraint")], ["annotation", applicationText("注記", "Annotation")],
       ];
       const html = [];
+      if (moving) {
+        const target = model.sketches.find(sketch => sketch.id === moving.targetId);
+        html.push(`<div class="sketch-move-panel" role="region" aria-label="${applicationText("スケッチ間の移動", "Move between sketches")}"><strong>${applicationText(`${moving.count}個の図形を移動`, `Move ${moving.count} objects`)}</strong><span>${applicationText("移動先", "Destination")}: ${target ? escapeHtml(`${target.name} (${target.id})`) : applicationText("スケッチ行を選択してください", "Select a sketch row")}</span>${moving.reason ? `<span class="sketch-move-error" role="alert">${escapeHtml(moving.reason)}</span>` : ""}<div class="sketch-move-actions"><button type="button" data-sketch-move-action="commit" ${moving.canCommit ? "" : "disabled"}>${applicationText("移動", "Move")}</button><button type="button" data-sketch-move-action="cancel">${applicationText("取消", "Cancel")}</button></div></div>`);
+      }
       const renderSketch = (sketch, depth, ancestorHasNext, isLast) => {
         const groups = objectIndex.get(sketch.id) || { point: [], line: [], circle: [], arc: [], spline: [], hatch: [], image: [], block: [], instance: [], constraint: [], annotation: [] };
         const nonEmptyCategories = isRootSketch(sketch) ? [] : categoryDefinitions.filter(([category]) => groups[category].length > 0);
@@ -133,7 +141,7 @@
           ? `<button class="sketchExpandBtn" type="button" data-id="${escapeHtml(sketch.id)}" title="${applicationText(open ? "図形と拘束を折りたたむ" : "図形と拘束を展開する", open ? "Collapse objects and constraints" : "Expand objects and constraints")}" aria-label="${applicationText(open ? `${sketch.name}の図形と拘束を折りたたむ` : `${sketch.name}の図形と拘束を展開する`, `${open ? "Collapse" : "Expand"} objects and constraints in ${sketch.name}`)}" aria-expanded="${open}"><span class="sketch-expand-chevron" aria-hidden="true">${open ? "▼" : "▶"}</span></button>`
           : '<span class="sketch-expand-spacer" aria-hidden="true">▼</span>';
         const expandedAttribute = hasGroups ? ` aria-expanded="${open}"` : "";
-        html.push(`<div class="item sketch-item ${isActive ? "active" : ""} ${isSelected ? "selected" : ""} ${visibilityEnabled ? "visible" : ""} ${solveError ? "solve-error" : ""} ${referenceErrorCount ? "reference-error" : ""} ${hasGroups ? "has-groups" : ""} ${open ? "open" : ""}" data-id="${escapeHtml(sketch.id)}" style="--sketch-depth:${depth}"${expandedAttribute}>${sketchTreeGutter(segments)}${expandButton}<button class="sketchActivateBtn" data-id="${escapeHtml(sketch.id)}" aria-current="${isActive}" aria-pressed="${isSelected}" title="${applicationText("クリックで選択、ダブルクリックまたはAlt+Enterでアクティブ", "Click to select; double-click or Alt+Enter to activate")}">${sketchTreeSketchIcon()}<span class="sketch-name">${escapeHtml(sketch.name)}</span></button><span class="sketch-badges">${isActive ? `<span class="sketch-active-label">${applicationText("アクティブ", "Active")}</span>` : ""}${solveError ? '<span class="badge">!</span>' : ""}${referenceErrorCount ? `<span class="badge sketch-reference-error-badge">${applicationText("参照", "Ref")}!${referenceErrorCount}</span>` : ""}${duplicateCount ? `<span class="badge">${applicationText("重複", "Duplicate")}${duplicateCount}</span>` : ""}<span class="badge">${count}</span></span>${visibilityButton}${isRoot ? "" : `<button class="sketchRenameBtn icon-small-btn" data-id="${escapeHtml(sketch.id)}" title="${applicationText("名前変更", "Rename")}">Aa</button><button class="sketchDeleteBtn icon-small-btn" data-id="${escapeHtml(sketch.id)}" title="${applicationText("スケッチ削除", "Delete sketch")}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3M7 7l1 13h8l1-13"/></svg></button>`}</div>`);
+        html.push(`<div class="item sketch-item ${isActive ? "active" : ""} ${isSelected ? "selected" : ""} ${visibilityEnabled ? "visible" : ""} ${solveError ? "solve-error" : ""} ${referenceErrorCount ? "reference-error" : ""} ${hasGroups ? "has-groups" : ""} ${open ? "open" : ""}" data-id="${escapeHtml(sketch.id)}" style="--sketch-depth:${depth}"${expandedAttribute}>${sketchTreeGutter(segments)}${expandButton}<button class="sketchActivateBtn" data-id="${escapeHtml(sketch.id)}" aria-current="${isActive}" aria-pressed="${isSelected}" title="${applicationText("クリックで選択、ダブルクリックまたはAlt+Enterで編集", "Click to select; double-click or Alt+Enter to edit")}">${sketchTreeSketchIcon()}<span class="sketch-name">${escapeHtml(sketch.name)}</span></button><span class="sketch-badges"><button type="button" class="sketchEditBtn" data-id="${escapeHtml(sketch.id)}" title="${applicationText("このスケッチを編集", "Edit this sketch")}" ${moving || isActive && !isSelected ? "hidden" : ""} ${isActive ? "disabled" : ""}>${applicationText("編集", "Edit")}</button>${isActive ? `<span class="sketch-active-label"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m4 16 12-12 4 4-12 12H4Z"/><path d="m13 7 4 4"/></svg>${applicationText("編集中", "Editing")}</span>` : ""}${solveError ? '<span class="badge">!</span>' : ""}${referenceErrorCount ? `<span class="badge sketch-reference-error-badge">${applicationText("参照", "Ref")}!${referenceErrorCount}</span>` : ""}${duplicateCount ? `<span class="badge">${applicationText("重複", "Duplicate")}${duplicateCount}</span>` : ""}<span class="badge">${count}</span></span>${visibilityButton}${isRoot ? "" : `<button class="sketchRenameBtn icon-small-btn" data-id="${escapeHtml(sketch.id)}" title="${applicationText("名前変更", "Rename")}">Aa</button><button class="sketchDeleteBtn icon-small-btn" data-id="${escapeHtml(sketch.id)}" title="${applicationText("スケッチ削除", "Delete sketch")}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3M7 7l1 13h8l1-13"/></svg></button>`}</div>`);
         const entries = [
           ...(open ? nonEmptyCategories.map(([category, label]) => ({ type: "category", category, label })) : []),
           ...childSketches.map((child) => ({ type: "sketch", sketch: child })),
@@ -164,6 +172,23 @@
       const roots = children.get("") || model.sketches.filter((sketch) => !sketch.parentSketchId);
       roots.forEach((sketch, index) => renderSketch(sketch, 0, [], index === roots.length - 1));
       sketchList.innerHTML = html.join("");
+      if (moving) {
+        for (const row of sketchList.querySelectorAll(".sketch-item")) {
+          const candidate = moving.destinations.get(row.dataset.id);
+          row.classList.add(candidate?.ok ? "move-eligible" : "move-unavailable");
+          if (row.dataset.id === moving.targetId) row.classList.add("move-destination");
+          row.title = candidate?.ok ? applicationText("クリックで移動先に指定", "Click to choose destination") : candidate?.reason || "";
+          const button = row.querySelector(".sketchActivateBtn");
+          button.disabled = !candidate?.ok;
+          button.title = row.title;
+          button.setAttribute("aria-pressed", String(row.dataset.id === moving.targetId));
+        }
+        for (const button of sketchList.querySelectorAll(".sketchEditBtn, .sketchVisibilityBtn, .sketchRenameBtn, .sketchDeleteBtn, .sketch-object-row button")) button.disabled = true;
+        const focusTarget = focusedSketchId
+          ? [...sketchList.querySelectorAll(".sketchActivateBtn")].find(button => button.dataset.id === focusedSketchId && !button.disabled)
+          : [...sketchList.querySelectorAll("[data-sketch-move-action]")].find(button => button.dataset.sketchMoveAction === focusedMoveAction && !button.disabled);
+        (focusTarget || sketchList.querySelector('[data-sketch-move-action="cancel"]'))?.focus();
+      }
       sketchList.onclick = actions.click;
       sketchList.ondblclick = actions.doubleClick;
       sketchList.onkeydown = actions.keyDown;
@@ -175,6 +200,8 @@
     function updateSketchTreeSelectionState() {
       for (const row of document.querySelectorAll("#sketchList .sketch-item")) {
         row.classList.toggle("selected", row.dataset.id === selectedSketchId());
+        const edit = row.querySelector(".sketchEditBtn");
+        if (edit) edit.hidden = Boolean(moveState()) || row.classList.contains("active") && row.dataset.id !== selectedSketchId();
         row.querySelector(".sketchActivateBtn")?.setAttribute("aria-pressed", String(row.dataset.id === selectedSketchId()));
       }
       const selectedConstraintElements = objects.selectedReferenceElements();
