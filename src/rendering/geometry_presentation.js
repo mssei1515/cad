@@ -4,7 +4,8 @@
   function create({ Point, canvasSelection, canvasHover, viewState,
     effectiveAppearanceForElement, isEditableSketchElement, isConstraintOperandSelected, isPendingReferenceTarget,
     isSidebarHighlightedElement, isSidebarHoveredElement, isReferenceHoverElement, isSelectedConstraintRelatedElement,
-    sketchAlpha, sketchStrokeWidth, constraintStatusColor, canvasThemeColor, constructionAlpha, pointQueries = {} }) {
+    sketchAlpha, sketchStrokeWidth, constraintStatusColor, canvasThemeColor, constructionAlpha, pointQueries = {}, handleQueries = {} }) {
+    const { sameArcEndpoint, arcEndpointPoint, findArcEndpointFixedConstraint, isDraggingArcEndpoint, editedSpline, currentScope } = handleQueries;
     const { isSplineOnlyFitPoint, isEditableSplineFitPoint, isExplicitPoint, isPointUsedByPrimitive, isReferencePoint,
       isAnyLineEndpoint, isEndpointPoint, isDraggingPoint, isDraggingCenter, sidebarHoveredItem, pointLockedByLineFixed } = pointQueries;
     function geometryDisplayColor(item, appearance, selected = false, hovered = false) {
@@ -102,7 +103,28 @@
         showFixed: p.fixed && !p.derivedProjection && (sel || hovered),
       };
     }
-    return Object.freeze({ pointPaintState, geometryDisplayColor, geometryStrokeWidth, ownerInstanceSelected, ownerInstanceHovered, geometryPaintState });
+    function shouldShowArcEndpointHandle(arc, endpoint) {
+      if (sameArcEndpoint(canvasHover.current.arcEndpoint, { arc, endpoint }) || sameArcEndpoint(canvasSelection.arcEndpoint, { arc, endpoint })) return true;
+      if (canvasSelection.arcEndpointPair?.some((item) => sameArcEndpoint(item, { arc, endpoint }))) return true;
+      if (isDraggingArcEndpoint(arc, endpoint)) return true;
+      return false;
+    }
+    function arcEndpointPaintState(arc, endpoint) {
+      if (!isEditableSketchElement(arc) || !shouldShowArcEndpointHandle(arc, endpoint)) return null;
+      const point = arcEndpointPoint(arc, endpoint);
+      const selected = sameArcEndpoint(canvasSelection.arcEndpoint, { arc, endpoint }) || canvasSelection.arcEndpointPair?.some((item) => sameArcEndpoint(item, { arc, endpoint })) || isConstraintOperandSelected(arc, { arcEndpoint: { arc, endpoint } }) || isDraggingArcEndpoint(arc, endpoint);
+      const hovered = sameArcEndpoint(canvasHover.current.arcEndpoint, { arc, endpoint });
+      const fixed = Boolean(findArcEndpointFixedConstraint(arc, endpoint));
+      return { point, radius: selected ? 7 : 5,
+        fillColor: fixed ? "#fee2e2" : selected ? "#2563eb" : hovered ? "#eff6ff" : "#fff",
+        color: canvasThemeColor(fixed ? "#dc2626" : selected || hovered ? "#2563eb" : "#111827") };
+    }
+    function splineHandleState() {
+      const spline = editedSpline();
+      if (!spline || !currentScope().splines.includes(spline)) return null;
+      return { closed: spline.closed, points: spline.fitPoints.map(point => ({ point, selected: canvasSelection.points.includes(point) })) };
+    }
+    return Object.freeze({ arcEndpointPaintState, splineHandleState, pointPaintState, geometryDisplayColor, geometryStrokeWidth, ownerInstanceSelected, ownerInstanceHovered, geometryPaintState });
   }
   window.GeometryPresentation = Object.freeze({ create });
 })();

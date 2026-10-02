@@ -2,7 +2,7 @@
 (function () {
   "use strict";
   const { arcSweep } = window.GeometryKernel;
-  function create({ ctx, viewport, paintState, pointPaintState, fixedPointLabel, appearanceLineDash, lineDisplaySegment, canvasThemeColor }) {
+  function create({ ctx, viewport, paintState, pointPaintState, arcEndpointPaintState, withCanvasState, fixedPointLabel, appearanceLineDash, lineDisplaySegment, canvasThemeColor }) {
     function drawLines(items) {
       ctx.save();
       const lines = items;
@@ -164,7 +164,46 @@
       }
       ctx.restore();
     }
-    return Object.freeze({ drawPoints, drawLines, drawCircles, drawArcs, drawSplines, traceSplinePath });
+    function drawArcEndpointHandles(arcs) {
+      ctx.save();
+      for (const arc of arcs) {
+        for (const endpoint of ["start", "end"]) {
+          const state = arcEndpointPaintState(arc, endpoint);
+          if (!state) continue;
+          ctx.beginPath();
+          ctx.arc(state.point.x, state.point.y, state.radius / viewport.scale, 0, Math.PI * 2);
+          ctx.fillStyle = state.fillColor;
+          ctx.fill();
+          ctx.strokeStyle = state.color;
+          ctx.lineWidth = 2 / viewport.scale;
+          ctx.stroke();
+        }
+      }
+      ctx.restore();
+    }
+    function drawSplineEditHandles(state) {
+      if (!state) return;
+      withCanvasState(() => {
+        ctx.strokeStyle = "rgba(37, 99, 235, 0.55)";
+        ctx.lineWidth = 1 / viewport.scale;
+        ctx.setLineDash([4 / viewport.scale, 4 / viewport.scale]);
+        ctx.beginPath();
+        state.points.forEach(({ point }, index) => index === 0 ? ctx.moveTo(point.x, point.y) : ctx.lineTo(point.x, point.y));
+        if (state.closed) ctx.closePath();
+        ctx.stroke();
+        ctx.setLineDash([]);
+        for (const { point, selected } of state.points) {
+          ctx.fillStyle = selected ? "#ef4444" : "#ffffff";
+          ctx.strokeStyle = "#2563eb";
+          ctx.lineWidth = 1.5 / viewport.scale;
+          ctx.beginPath();
+          ctx.arc(point.x, point.y, 4.5 / viewport.scale, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.stroke();
+        }
+      });
+    }
+    return Object.freeze({ drawArcEndpointHandles, drawSplineEditHandles, drawPoints, drawLines, drawCircles, drawArcs, drawSplines, traceSplinePath });
   }
   window.GeometryRenderer = Object.freeze({ create });
 })();

@@ -15,7 +15,12 @@ function fixture() {
     isPendingReferenceTarget: item => !!item.reference, isSidebarHighlightedElement: item => !!item.tree,
     isSidebarHoveredElement: item => !!item.sidebar, isReferenceHoverElement: item => !!item.referenceHover,
     isSelectedConstraintRelatedElement: item => !!item.related, sketchAlpha: () => 0.5, sketchStrokeWidth: () => 2,
-    constraintStatusColor: () => 'constraint', canvasThemeColor: value => `theme:${value}`, constructionAlpha: 0.72, pointQueries: {
+    constraintStatusColor: () => 'constraint', canvasThemeColor: value => `theme:${value}`, constructionAlpha: 0.72, handleQueries: {
+      sameArcEndpoint: (a, b) => !!a && a.arc === b.arc && a.endpoint === b.endpoint,
+      arcEndpointPoint: (arc, end) => arc[end], findArcEndpointFixedConstraint: arc => arc.fixed,
+      isDraggingArcEndpoint: (arc, end) => arc.dragEnd === end,
+      editedSpline: () => view.editedSpline, currentScope: () => view.scope,
+    }, pointQueries: {
       isSplineOnlyFitPoint: p => !!p.splineOnly, isEditableSplineFitPoint: p => !!p.editableFit,
       isExplicitPoint: p => p.kind === 'explicit', isPointUsedByPrimitive: p => !!p.used,
       isReferencePoint: p => !!p.referencePoint, isAnyLineEndpoint: p => !!p.lineEnd,
@@ -114,4 +119,27 @@ test('primitive centers follow selection, hover, sidebar and drag while fixed co
   assert.equal(state.color, '#0ea5e9'); assert.equal(state.fillColor, '#fee2e2');
   point.derivedProjection = {}; state = f.presentation.pointPaintState(point);
   assert.equal(state.showFixed, false); assert.equal(state.fillColor, '#1d4ed8');
+});
+
+test('arc handles require editable geometry and an actual selected, hovered or dragged endpoint', () => {
+  const f = fixture(), arc = { start: { x: 1, y: 2 }, end: { x: 3, y: 4 }, operand: true };
+  assert.equal(f.presentation.arcEndpointPaintState(arc, 'start'), null);
+  f.hover.current.arcEndpoint = { arc, endpoint: 'start' };
+  assert.equal(f.presentation.arcEndpointPaintState(arc, 'start').radius, 7);
+  arc.operand = false; assert.equal(f.presentation.arcEndpointPaintState(arc, 'start').radius, 5);
+  arc.fixed = true; assert.equal(f.presentation.arcEndpointPaintState(arc, 'start').color, 'theme:#dc2626');
+  arc.inactive = true; assert.equal(f.presentation.arcEndpointPaintState(arc, 'start'), null);
+  arc.inactive = false; f.hover.current = {}; f.selection.arcEndpointPair = [{ arc, endpoint: 'end' }];
+  assert.equal(f.presentation.arcEndpointPaintState(arc, 'end').point, arc.end);
+  arc.dragEnd = 'start'; assert.equal(f.presentation.arcEndpointPaintState(arc, 'start').radius, 7);
+});
+test('spline handle state follows current scope identity and point selection', () => {
+  const f = fixture(), a = {}, b = {}, spline = { id: 'S1', closed: true, fitPoints: [a, b] };
+  assert.equal(f.presentation.splineHandleState(), null);
+  f.view.editedSpline = spline; f.view.scope = { splines: [{ id: 'S1' }] };
+  assert.equal(f.presentation.splineHandleState(), null);
+  f.view.scope.splines = [spline]; f.selection.points.push(b);
+  const state = f.presentation.splineHandleState();
+  assert.equal(state.closed, true); assert.equal(state.points[0].point, a);
+  assert.equal(state.points[0].selected, false); assert.equal(state.points[1].selected, true);
 });

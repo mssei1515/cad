@@ -531,16 +531,19 @@
     ctx, viewport, metrics: dimensionMetrics, canvasThemeColor,
     onExpressionMark: mark => dimensionExpressionMarkCapture?.(mark),
   });
-  const { geometryDisplayColor, geometryStrokeWidth, geometryPaintState, pointPaintState } = window.GeometryPresentation.create({
+  const { geometryDisplayColor, geometryStrokeWidth, geometryPaintState, pointPaintState, arcEndpointPaintState, splineHandleState } = window.GeometryPresentation.create({
     Point, canvasSelection, canvasHover, viewState,
     effectiveAppearanceForElement, isEditableSketchElement, isConstraintOperandSelected, isPendingReferenceTarget,
     isSidebarHighlightedElement, isSidebarHoveredElement, isReferenceHoverElement, isSelectedConstraintRelatedElement,
     sketchAlpha, sketchStrokeWidth, constraintStatusColor, canvasThemeColor, constructionAlpha: CONSTRUCTION_GEOMETRY_ALPHA,
+    handleQueries: { sameArcEndpoint, arcEndpointPoint, findArcEndpointFixedConstraint,
+      isDraggingArcEndpoint: (arc, endpoint) => geometryDrag.isArcEndpoint(arc, endpoint),
+      editedSpline: () => splineEditSession?.spline, currentScope: workspace.current },
     pointQueries: { isSplineOnlyFitPoint, isEditableSplineFitPoint, isExplicitPoint, isPointUsedByPrimitive, isReferencePoint,
       isAnyLineEndpoint, isEndpointPoint, pointLockedByLineFixed, sidebarHoveredItem: () => selectionHighlight.current?.item,
       isDraggingPoint: point => geometryDrag.isPoint(point), isDraggingCenter: point => geometryDrag.isCenter(point) },
   });
-  const geometryRenderer = window.GeometryRenderer.create({ ctx, viewport, paintState: geometryPaintState, pointPaintState, fixedPointLabel: () => applicationText("固定", "Fixed"), appearanceLineDash, lineDisplaySegment, canvasThemeColor });
+  const geometryRenderer = window.GeometryRenderer.create({ ctx, viewport, paintState: geometryPaintState, pointPaintState, arcEndpointPaintState, withCanvasState, fixedPointLabel: () => applicationText("固定", "Fixed"), appearanceLineDash, lineDisplaySegment, canvasThemeColor });
   const { traceSplinePath } = geometryRenderer;
   const { resolvedLoopBounds } = window.HatchRegionEngine;
   const drawingBounds = window.DrawingBounds.create({
@@ -4343,29 +4346,7 @@
     });
   }
 
-  function drawSplineEditHandles() {
-    const spline = splineEditSession?.spline;
-    if (!spline || !model.splines.includes(spline)) return;
-    withCanvasState(() => {
-      ctx.strokeStyle = "rgba(37, 99, 235, 0.55)";
-      ctx.lineWidth = 1 / viewport.scale;
-      ctx.setLineDash([4 / viewport.scale, 4 / viewport.scale]);
-      ctx.beginPath();
-      spline.fitPoints.forEach((point, index) => index === 0 ? ctx.moveTo(point.x, point.y) : ctx.lineTo(point.x, point.y));
-      if (spline.closed) ctx.closePath();
-      ctx.stroke();
-      ctx.setLineDash([]);
-      for (const point of spline.fitPoints) {
-        ctx.fillStyle = canvasSelection.points.includes(point) ? "#ef4444" : "#ffffff";
-        ctx.strokeStyle = "#2563eb";
-        ctx.lineWidth = 1.5 / viewport.scale;
-        ctx.beginPath();
-        ctx.arc(point.x, point.y, 4.5 / viewport.scale, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.stroke();
-      }
-    });
-  }
+  function drawSplineEditHandles() { geometryRenderer.drawSplineEditHandles(splineHandleState()); }
 
 
 
@@ -4814,34 +4795,7 @@
     });
   }
 
-  function shouldShowArcEndpointHandle(arc, endpoint) {
-    if (sameArcEndpoint(canvasHover.current.arcEndpoint, { arc, endpoint }) || sameArcEndpoint(canvasSelection.arcEndpoint, { arc, endpoint })) return true;
-    if (canvasSelection.arcEndpointPair?.some((item) => sameArcEndpoint(item, { arc, endpoint }))) return true;
-    if (geometryDrag.isArcEndpoint(arc, endpoint)) return true;
-    return false;
-  }
-
-  function drawArcEndpointHandles() {
-    ctx.save();
-    for (const arc of allGeometryArcs()) {
-      if (!isEditableSketchElement(arc)) continue;
-      for (const endpoint of ["start", "end"]) {
-        if (!shouldShowArcEndpointHandle(arc, endpoint)) continue;
-        const p = arcEndpointPoint(arc, endpoint);
-        const selected = sameArcEndpoint(canvasSelection.arcEndpoint, { arc, endpoint }) || canvasSelection.arcEndpointPair?.some((item) => sameArcEndpoint(item, { arc, endpoint })) || isConstraintOperandSelected(arc, { arcEndpoint: { arc, endpoint } }) || (geometryDrag.isArcEndpoint(arc, endpoint));
-        const hovered = sameArcEndpoint(canvasHover.current.arcEndpoint, { arc, endpoint });
-        const fixed = Boolean(findArcEndpointFixedConstraint(arc, endpoint));
-        ctx.beginPath();
-        ctx.arc(p.x, p.y, (selected ? 7 : 5) / viewport.scale, 0, Math.PI * 2);
-        ctx.fillStyle = fixed ? "#fee2e2" : selected ? "#2563eb" : hovered ? "#eff6ff" : "#fff";
-        ctx.fill();
-        ctx.strokeStyle = canvasThemeColor(fixed ? "#dc2626" : selected || hovered ? "#2563eb" : "#111827");
-        ctx.lineWidth = 2 / viewport.scale;
-        ctx.stroke();
-      }
-    }
-    ctx.restore();
-  }
+  function drawArcEndpointHandles() { geometryRenderer.drawArcEndpointHandles(allGeometryArcs()); }
 
   function drawPoints() {
     geometryRenderer.drawPoints(drawOrderBySketch(allGeometryPoints()));

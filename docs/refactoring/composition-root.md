@@ -6,6 +6,10 @@
 
 ## 現在の再開地点（2026-10-02）
 
+円弧端点／Spline編集ハンドルの表示状態をGeometryPresentationへ、描画をGeometryRendererへ統合。円弧の編集可否・端点対選択・固定強調、Splineのscope同一性・閉曲線・選択色、CanvasSurfaceのresetを保持。新moduleなし。app.jsは13,368行から13,322行へ縮小。構文324件・単体720件・関連E2E192件が成功（exit 0）。ログはcad-handles-{check,unit,e2e}.log。全体目標と全体E2Eは未完了。
+
+### 前回の区切り
+
 点の表示条件と中心強調をGeometryPresentationへ、円／影／ID／固定ラベルの描画をGeometryRendererへ統合。新moduleは追加しない。Spline編集点・端点・参照点・投影点・拘束表示の条件と色の優先順位を維持。app.jsは13,419行から13,368行へ縮小。構文324件・単体717件・関連E2E192件が成功。E2Eは直近のsandbox内server終了待ちを避けるため承認済み権限で実行し、server手動停止なしでexit 0。ログはcad-point-render-{check,unit,e2e}.log。全体目標と全体E2Eは未完了。
 
 ### 前回の区切り
