@@ -428,3 +428,5 @@ AuthoringPreviewRendererへSpline／Centerline／Trim描画も統合。Spline構
 
 - `CanvasPressQuery`（`src/editing/canvas_press_query.js`）: pointerdownのGeometry・scene hit snapshotを読取り専用で構成。
 - PointerInteractionControllerの`down`が各入力ownerを順に呼び出す。appのpointerdown listenerはflushと委譲のみ。press接続は入力専用query／座標／操作APIに限定する。
+
+- PointerInteractionControllerのdoubleClick／leaveにCanvasの残るpointer操作を集約。CanvasPressQuery.readDoubleClickが専用hit順序を保持し、Spline編集の開始だけはappのsession操作へ接続。

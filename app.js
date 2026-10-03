@@ -2144,6 +2144,15 @@
     draw();
   }
 
+  function beginSplineEditFromDoubleClick(hitS) {
+    clearSelection();
+    canvasSelection.set("splines", [hitS]);
+    splineEditSession = { spline: hitS };
+    setHint(applicationText(`${hitS.id} の通過点を編集します。Escまたは空白のダブルクリックで終了します`, `Editing fit points of ${hitS.id}. Press Esc or double-click blank canvas to finish.`));
+    updateUI({ refreshAnalysis: false });
+    draw();
+  }
+
   function finishSplineEditSession() {
     if (!splineEditSession) return false;
     splineEditSession = null;
@@ -7177,7 +7186,11 @@
     getMode: () => mode, getPendingCommand: () => pendingCommand,
     getPendingConstraintCommand: () => pendingConstraintCommand, setLastPointer: point => { lastPointerWorld = point; },
     updateHatchPreview, updateFilletRadiusPlacement, updatePendingDistanceRetargetHover, hitDimension, hitSketchIdentityElement,
-    press: { query: canvasPressQuery, worldPoint: canvasPoint, screenPoint: canvasScreenPoint,
+    press: { discardMove: () => flushScheduledCanvasPointerMove({ discard: true }),
+      activation: { selection: canvasSelection, finalizeSpline: finalizeSplineFromDoubleClick, submitOffset: submitOffsetValue,
+        startDimensionEdit: startDimensionEditInput, startDistanceValue: startDistanceValueInput, submitDistance: submitDistanceValue,
+        constraintDoubleClick: handleConstraintTargetDoubleClick, enterBlock: enterBlockDefinitionEdit, beginSplineEdit: beginSplineEditFromDoubleClick },
+      query: canvasPressQuery, worldPoint: canvasPoint, screenPoint: canvasScreenPoint,
       closeContextMenu: closeCanvasContextMenu, insertDimensionParameter: insertClickedDimensionParameter,
       commitHatch: commitHatchAt, calibrateImage: handleReferenceImageCalibrationClick,
       placeFilletRadius: submitFilletRadiusPlacement, placeBlock: handleBlockPlacementClick, blankGesture: blankCanvasGesture,
@@ -7207,77 +7220,10 @@
 
   canvas.addEventListener("pointerup", endDrag);
   canvas.addEventListener("pointercancel", endDrag);
-  canvas.addEventListener("pointerleave", () => {
-    if (geometryDrag.active || dimensionDrag.active || annotationDrag.active || selectionRectangle.active || canvasNavigation.panning) return;
-    flushScheduledCanvasPointerMove({ discard: true });
-    clearCanvasHover();
-    draw();
-  });
+  canvas.addEventListener("pointerleave", () => pointerInteractionController.leave());
   canvas.addEventListener("dblclick", (e) => {
     flushScheduledCanvasPointerMove();
-    if (blankCanvasGesture.takeSuppression()) {
-      e.preventDefault();
-      return;
-    }
-    const p = canvasPoint(e);
-    if (mode === "select" && !pendingCommand && !pendingConstraintCommand
-      && canvasSelection.instanceGeometry && hitDerivedGeometryForDrag(p.x, p.y)?.instance.id === canvasSelection.instanceGeometry.instanceId) {
-      e.preventDefault();
-      return;
-    }
-    const hitL = hitLine(p.x, p.y);
-    const hitP = hitPoint(p.x, p.y);
-    const hitC = hitCircle(p.x, p.y);
-    const hitArcEnd = hitArcEndpoint(p.x, p.y);
-    const hitA = hitArc(p.x, p.y);
-    const hitS = hitSpline(p.x, p.y);
-    const hitD = hitDimension(p.x, p.y);
-    const hitBlock = hitBlockInstance(p.x, p.y);
-    if (mode === "spline") {
-      e.preventDefault();
-      finalizeSplineFromDoubleClick(p);
-      return;
-    }
-    if (pendingCommand?.type === "offset-value") {
-      e.preventDefault();
-      submitOffsetValue();
-      return;
-    }
-    if (!pendingCommand && hitD && startDimensionEditInput(hitD)) {
-      e.preventDefault();
-      return;
-    }
-    if (pendingCommand?.type?.startsWith("distance")) {
-      e.preventDefault();
-      if (pendingCommand.type === "distance-place") {
-        startDistanceValueInput(p);
-      }
-      submitDistanceValue();
-      return;
-    }
-    if (handleConstraintTargetDoubleClick(hitP, hitL, p)) {
-      e.preventDefault();
-      return;
-    }
-    if (!pendingCommand && !pendingConstraintCommand && hitBlock) {
-      e.preventDefault();
-      enterBlockDefinitionEdit(hitBlock.definitionId);
-      return;
-    }
-    if (!pendingCommand && !pendingConstraintCommand && hitS && !hitS.blockProjection) {
-      e.preventDefault();
-      clearSelection();
-      canvasSelection.set("splines", [hitS]);
-      splineEditSession = { spline: hitS };
-      setHint(applicationText(`${hitS.id} の通過点を編集します。Escまたは空白のダブルクリックで終了します`, `Editing fit points of ${hitS.id}. Press Esc or double-click blank canvas to finish.`));
-      updateUI({ refreshAnalysis: false });
-      draw();
-      return;
-    }
-    if (blankCanvasGesture.handle(p, { hitP, hitL, hitC, hitArcEnd, hitA, hitS, hitD })) {
-      e.preventDefault();
-      return;
-    }
+    pointerInteractionController.doubleClick(e);
   });
   canvas.addEventListener("auxclick", (e) => {
     if (e.button === 1) {

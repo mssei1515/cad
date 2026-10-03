@@ -34,7 +34,18 @@
 
       return { hitP, hitL, hitC, hitArcEnd, hitA, hitS, hatchHit, referenceImageHit, hitD, hitBlockHandle, hitBlock, hitDerivedGeometry, hitDerivedInstance, directGeometryHit, sketchIdentity, inactiveHit, blankAnnotationHit, annotationTargetHit };
     }
-    return Object.freeze({ read });
+    function readDoubleClick(p) {
+      const hitL = hitLine(p.x, p.y);
+      const hitP = hitPoint(p.x, p.y);
+      const hitC = hitCircle(p.x, p.y);
+      const hitArcEnd = hitArcEndpoint(p.x, p.y);
+      const hitA = hitArc(p.x, p.y);
+      const hitS = hitSpline(p.x, p.y);
+      const hitD = hitDimension(p.x, p.y);
+      const hitBlock = hitBlockInstance(p.x, p.y);
+      return { hitL, hitP, hitC, hitArcEnd, hitA, hitS, hitD, hitBlock };
+    }
+    return Object.freeze({ read, readDoubleClick, derivedGeometryAt: p => hitDerivedGeometryForDrag(p.x, p.y) });
   }
   window.CanvasPressQuery = Object.freeze({ create });
 })();

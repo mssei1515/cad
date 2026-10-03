@@ -69,6 +69,68 @@
       press.inputs.selection.begin(e, p, { hitP, hitL, hitC, hitA, hitS, hitArcEnd, hitD, hitDerivedGeometry, hitDerivedInstance, hitBlock, hitBlockHandle, hatchHit, referenceImageHit, directGeometryHit });
     }
 
+    function doubleClick(e) {
+      const activation = press.activation;
+      if (press.blankGesture.takeSuppression()) {
+        e.preventDefault();
+        return;
+      }
+      const p = press.worldPoint(e);
+      if (getMode() === "select" && !getPendingCommand() && !getPendingConstraintCommand()
+        && activation.selection.instanceGeometry && press.query.derivedGeometryAt(p)?.instance.id === activation.selection.instanceGeometry.instanceId) {
+        e.preventDefault();
+        return;
+      }
+      const { hitL, hitP, hitC, hitArcEnd, hitA, hitS, hitD, hitBlock } = press.query.readDoubleClick(p);
+      if (getMode() === "spline") {
+        e.preventDefault();
+        activation.finalizeSpline(p);
+        return;
+      }
+      if (getPendingCommand()?.type === "offset-value") {
+        e.preventDefault();
+        activation.submitOffset();
+        return;
+      }
+      if (!getPendingCommand() && hitD && activation.startDimensionEdit(hitD)) {
+        e.preventDefault();
+        return;
+      }
+      if (getPendingCommand()?.type?.startsWith("distance")) {
+        e.preventDefault();
+        if (getPendingCommand().type === "distance-place") {
+          activation.startDistanceValue(p);
+        }
+        activation.submitDistance();
+        return;
+      }
+      if (activation.constraintDoubleClick(hitP, hitL, p)) {
+        e.preventDefault();
+        return;
+      }
+      if (!getPendingCommand() && !getPendingConstraintCommand() && hitBlock) {
+        e.preventDefault();
+        activation.enterBlock(hitBlock.definitionId);
+        return;
+      }
+      if (!getPendingCommand() && !getPendingConstraintCommand() && hitS && !hitS.blockProjection) {
+        e.preventDefault();
+        activation.beginSplineEdit(hitS);
+        return;
+      }
+      if (press.blankGesture.handle(p, { hitP, hitL, hitC, hitArcEnd, hitA, hitS, hitD })) {
+        e.preventDefault();
+        return;
+      }
+    }
+
+    function leave() {
+      if (geometryDrag.active || dimensionDrag.active || annotationDrag.active || selectionRectangle.active || canvasNavigation.panning) return;
+      press.discardMove();
+      canvasHover.clear();
+      draw();
+    }
+
     function move(screenPoint, p, shiftKey) {
       if (canvasNavigation.movePan(screenPoint)) return;
 
@@ -186,7 +248,7 @@
       // The first Line endpoint is provisional until a segment is completed.
       if (!transientAuthoring.hasLineStart) recordHistory("操作");
     }
-    return Object.freeze({ down, move, finish });
+    return Object.freeze({ down, doubleClick, leave, move, finish });
   }
   window.PointerInteractionController = Object.freeze({ create });
 })();

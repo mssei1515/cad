@@ -140,3 +140,36 @@ test('press hit snapshot preserves handle and derived-geometry short circuits an
   values.hitDerivedGeometryForDrag=null;values.hitBlockRotationHandle=null;calls.length=0;assert.equal(query.read(point).directGeometryHit,false);assert.ok(calls.includes('hitBlockInstance'));assert.ok(calls.includes('hitGeometryInstance'));
   values.hitSpline={id:'S'};assert.equal(query.read(point).directGeometryHit,true);
 });
+
+
+function activationFixture() {
+  const f={calls:[],mode:'select',pending:null,constraint:null,suppressed:false,selected:null,derived:null,hits:{},consume:null};
+  const action=name=>(...args)=>{f.calls.push(name);f[name+'Args']=args;return f.consume===name;};
+  const interaction={active:false};f.guards=[interaction,{active:false},{active:false},{active:false},{panning:false}];
+  f.controller=sandbox.window.PointerInteractionController.create({getMode:()=>f.mode,getPendingCommand:()=>f.pending,getPendingConstraintCommand:()=>f.constraint,
+    geometryDrag:f.guards[0],dimensionDrag:f.guards[1],annotationDrag:f.guards[2],selectionRectangle:f.guards[3],canvasNavigation:f.guards[4],canvasHover:{clear:action('clearHover')},draw:action('draw'),
+    press:{discardMove:action('discard'),worldPoint:()=>{f.calls.push('world');return f.point;},blankGesture:{takeSuppression:()=>f.suppressed,handle:action('blank')},
+      query:{derivedGeometryAt:()=>{f.calls.push('derived');return f.derived;},readDoubleClick:()=>{f.calls.push('query');return f.hits;}},
+      activation:{selection:{get instanceGeometry(){return f.selected;}},finalizeSpline:action('spline'),submitOffset:action('offset'),startDimensionEdit:action('dimension'),startDistanceValue:action('value'),submitDistance:action('distance'),constraintDoubleClick:action('constraint'),enterBlock:action('block'),beginSplineEdit:action('editSpline')}}});
+  f.point={x:1,y:2};f.event={preventDefault:action('prevent')};f.click=()=>f.controller.doubleClick(f.event);return f;
+}
+test('double click suppresses native duplicates and selected derived geometry before querying ordinary hits',()=>{
+  const f=activationFixture();f.suppressed=true;f.click();assert.deepEqual(f.calls,['prevent']);
+  f.suppressed=false;f.selected={instanceId:'I'};f.derived={instance:{id:'I'}};f.calls=[];f.click();assert.deepEqual(f.calls,['world','derived','prevent']);
+});
+test('double click preserves spline, offset, dimension and distance placement precedence',()=>{
+  const f=activationFixture();f.mode='spline';f.pending={type:'offset-value'};f.click();assert.deepEqual(f.calls,['world','query','prevent','spline']);
+  f.mode='select';f.calls=[];f.click();assert.deepEqual(f.calls,['world','query','prevent','offset']);
+  f.pending=null;f.hits.hitD={};f.consume='dimension';f.calls=[];f.click();assert.deepEqual(f.calls,['world','query','dimension','prevent']);
+  f.pending={type:'distance-place'};f.calls=[];f.click();assert.deepEqual(f.calls,['world','query','prevent','value','distance']);
+});
+test('double click constraint handling wins over Block and Spline editing, then falls back to blank gestures',()=>{
+  const f=activationFixture();f.hits={hitBlock:{definitionId:'D'},hitS:{id:'S'}};f.consume='constraint';f.click();assert.deepEqual(f.calls,['world','query','constraint','prevent']);
+  f.consume=null;f.calls=[];f.click();assert.deepEqual(f.calls,['world','query','constraint','prevent','block']);assert.equal(f.blockArgs[0],'D');
+  f.hits.hitBlock=null;f.calls=[];f.click();assert.deepEqual(f.calls,['world','query','constraint','prevent','editSpline']);assert.equal(f.editSplineArgs[0],f.hits.hitS);
+  f.hits.hitS.blockProjection=true;f.consume='blank';f.calls=[];f.click();assert.deepEqual(f.calls,['world','query','constraint','blank','prevent']);
+});
+test('pointer leave retains active interactions and otherwise discards pending moves before clearing hover',()=>{
+  const f=activationFixture();for(let i=0;i<f.guards.length;i++){const key=i===4?'panning':'active';f.guards[i][key]=true;f.controller.leave();assert.deepEqual(f.calls,[]);f.guards[i][key]=false;}
+  f.controller.leave();assert.deepEqual(f.calls,['discard','clearHover','draw']);
+});

@@ -96,19 +96,12 @@
 - 仕様と実装配置が一致し、未解決の不具合・未検証項目を隠していない。
 - 差分確認、Commit、許可された範囲のPush、実行コミット情報更新が済んでいる。
 
-## 8. 再開地点（2026-10-02、一時停止）
+## 8. 再開地点（2026-10-03）
 
-週枠残量が49%となり、ユーザー指定の50%未満の停止条件に達したため、新たな分離を停止した。実行中の全体検証は最後まで確認し、全E2E327件が成功（19.5分、exit 0）。コードは4ead051、構文347件・単体785件も成功済み。ログはTEMPのcad-refactor-full-e2e.log、直前の構文／単体はcad-pointer-press-{check,unit}.log。
+週枠残量86%へ回復して再開。前回のc15d5f7リリース後、共通コマンドパネル等の変更が入っているため、最新develop 4cc11d8からcodex/canvas-input-lifecycleを作成した。mainは別worktree C:/dev/cad-release-mainが所有している。次のリリース時もworktreeの現物を確認し、mainは最後に反映する。
 
-この記録のcommitを作業branchからdevelopへ反映し、mainを最後に更新してlocal／remoteの両branchを同期する。再開時はGitの現物で同期結果を確認する。codex/composition-root-nextは目標が未完了で継続作業に使うため保持する。
+PointerInteractionControllerへdoubleClickとleaveを追加し、入力優先順位・イベント抑止・hover消去を集約。CanvasPressQueryにdouble click専用の読取順序を追加した。Spline編集sessionの更新はappの開始操作への限定した接続として残る。検証と行数はcomposition-root.md先頭を参照。
 
-app.jsは12,190行。今回の検証単位では行数変更なし。pointerdown／move／finishの入力順序はPointerInteractionController、hit snapshotはCanvasPressQuery、各command受付は個別入力moduleへ分離済み。所有者と依存はspec/architecture/モジュール構成.md、区切りの検証記録はcomposition-root.mdを参照する。
+次はキーボード／寸法値入力と入力module組立て、共通モード遷移・pending session、描画調整、共通編集・Document操作、診断hookを責務単位で整理する。installTestHooksは約4,200行あるが巨大contextへの移動は避ける。数百行のcomposition root目標は未達。
 
-再開後の候補は以下。行数だけを削るために巨大なapp contextを別moduleへ渡さない。
-
-- dblclick／pointerleave／キーボード入力と入力moduleの組立てを整理する。
-- 共通モード遷移・pending配置sessionの所有者を揃え、既存の暫定callback接続を減らす。
-- Dimension preview・描画調整・共通編集・Document操作・起動接続を整理する。
-- installTestHooksは現時点で約4,200行ある。機能ごとの公開境界とfixture生成を分ける。単に巨大なclosureを移さない。
-
-数百行程度のcomposition rootという全体目標は未達。全テスト成功は互換性の確認であり、設計目標の完了ではない。週枠回復後、ユーザーの再開指示を受けてAGENTS.mdと本書、Git状態、使用量を確認し、サブエージェントを使わず再開する。
+サブエージェントは使わない。週枠残量50%未満で新たな分離を停止し、最後のcommitをdevelop・mainへ反映して同期する。前回の全E2E327件成功は4ead051時点の記録であり、以後の変更は個別の検証結果と区別する。

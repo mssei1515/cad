@@ -4,7 +4,11 @@
 
 開始点はdevelopの`457adea`。承認された最終目標は、`app.js`を数百行程度の生成・接続・起動・終了へ整理すること。部分的な抽出や中間のテスト成功をもって、この目標の完了とはしない。
 
-## 現在の再開地点（2026-10-02）
+## 現在の再開地点（2026-10-03）
+
+週枠残量86%への回復後、最新develop 4cc11d8からcodex/canvas-input-lifecycleで再開。PointerInteractionControllerへdoubleClick／leaveの入力優先順位と終了処理を統合し、CanvasPressQueryへdouble click用のhit照会を集約。Spline編集sessionの変更はapp側の明示actionとして保持。重複抑止、派生図形、寸法・Block・Spline編集の優先順位、drag中のhover保持とflush順を維持。app.jsは12,389行から12,335行へ縮小（54行減）。構文355件・単体813件・関連E2E198件成功（exit 0、2.4分）。ログはcad-activation-{check,unit,e2e}.log。全体E2Eは今回未実行。次はキーボード／寸法数値入力と入力module組立ての責務を整理する。全体目標は未完了、mainへの反映は停止時の最後に行う。
+
+### 前回の停止地点（2026-10-02）
 
 停止・リリース検証の区切り。週枠残量49%で新たな分離を停止。コード4ead051の全E2E327件が成功（exit 0、19.5分、cad-refactor-full-e2e.log）。Fillet 3,744・Offset 10,296・航空機1,872 previewの回帰も成功。構文347件・単体785件は同じコードで成功済み。今回の変更はこの検証・再開記録のみで、app.jsは12,190行のまま。この記録をCommit・Push後、develop→mainの順に反映し両branchを同期して一時停止する。全体リファクタリングは未完了。作業branchは継続用に保持。詳細な再開候補はrefactoring-policy-and-resume.mdの第8節。
 
