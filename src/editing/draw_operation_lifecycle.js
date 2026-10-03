@@ -15,9 +15,7 @@
       "arc": "円弧の中心をクリックしてください。Escで選択モードに戻ります",
       "three-point-arc": "3点円弧の始点をクリックしてください。Escで選択モードに戻ります"
     };
-    function start(mode) {
-      if (!Object.hasOwn(startHints, mode)) return false;
-      cancelConstraintTargetCommand("");
+    function prepare(mode) {
       setMode(mode);
       line.reset();
       rectangle.reset();
@@ -26,11 +24,17 @@
       circular.resetCircle();
       if (mode === "slot") circular.resetCenterArc();
       else circular.resetArcs();
-      if (mode === "trim") {
+      if (mode === "trim" || mode === "offset") {
         preview.reset();
         offset.reset();
-        clearTrimHover();
+        if (mode === "trim") clearTrimHover();
       } else preview.setPointer(null);
+    }
+
+    function start(mode) {
+      if (!Object.hasOwn(startHints, mode)) return false;
+      cancelConstraintTargetCommand("");
+      prepare(mode);
       clearSnap();
       updateToolbar();
       setHint(startHints[mode]);
@@ -110,7 +114,7 @@
     }
 
 
-    return Object.freeze({ start, exitLine: exitLineMode, exit: exitDrawMode, active: hasActiveDrawOperation, cancel: cancelActiveDrawOperation });
+    return Object.freeze({ start, prepare, exitLine: exitLineMode, exit: exitDrawMode, active: hasActiveDrawOperation, cancel: cancelActiveDrawOperation });
   }
   window.DrawOperationLifecycle = Object.freeze({ create });
 })();

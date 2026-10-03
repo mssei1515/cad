@@ -6,12 +6,35 @@
     offsetChainErrorText, formatDisplayNumber, formatDimensionLabel, setHint, updateToolbar,
     syncDimensionValueInput, focusDimensionValueInput, hideDimensionValueInput, draw,
     clearPointerPreview, clearSelection, setPointerPreview, syncOffsetChainSelection,
-    applicationText, updateGeometrySelectionUI }) {
+    applicationText, updateGeometrySelectionUI, cancelConstraintTargetCommand, cancelPendingCommand,
+    clearSnap, updateUI, Arc, selectedGeometry, prepareStart, addOffsetChainGeometry }) {
     const { offsetDistanceFromPointer, offsetDraftGeometry, offsetDimensionTarget,
       offsetChainDistanceFromPointer, offsetChainDraft } = plans;
     const { dimensionWithLabelAt, dimensionFromAnchor } = placement;
     const { createOffsetGeometry, createOffsetChainGeometry } = construction;
     const { isClosed: offsetChainIsClosed } = offsetSelection;
+    function begin() {
+      cancelConstraintTargetCommand("");
+      cancelPendingCommand("");
+      prepareStart();
+      const selected = selectedGeometry();
+      if (selected.length === 1 && selected[0] instanceof Circle) {
+        offsetSelection.selectSource(selected[0]);
+      } else if (selected.length === 1 && (selected[0] instanceof Line || selected[0] instanceof Arc)) {
+        addOffsetChainGeometry(selected[0]);
+        offsetSelection.commitSelection();
+      } else {
+        clearSelection();
+      }
+      clearSnap();
+      updateToolbar();
+      setHint(offsetSelection.source && (offsetSelection.source instanceof Circle || offsetSelection.committed)
+        ? "オフセットする側と距離の目安をクリックしてください"
+        : applicationText("オフセットする線または円弧を順番にクリックしてください。円は単独で選択します", "Select connected lines or arcs in order. Select a circle by itself."));
+      updateUI();
+      draw();
+    }
+
     function startOffsetDistanceInput(source, pointer) {
       if (!source || !pointer) return false;
       let { distance, sign } = offsetDistanceFromPointer(source, pointer);
@@ -205,7 +228,7 @@
       }
       return { geometries, target, dimension, distance };
     }
-    return Object.freeze({ click, canConfirmSelection, confirmSelection, preview, start: startOffsetDistanceInput, startChain: startOffsetChainDistanceInput, submit: submitOffsetValue });
+    return Object.freeze({ begin, click, canConfirmSelection, confirmSelection, preview, start: startOffsetDistanceInput, startChain: startOffsetChainDistanceInput, submit: submitOffsetValue });
   }
   window.OffsetCommand = Object.freeze({ create });
 })();

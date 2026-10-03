@@ -106,3 +106,20 @@ test('preview updates the input target while the renderer consumes only a plan a
   renderer.draw(null); assert.equal(calls.length, 5);
   assert.equal(JSON.stringify(f.model), before);
 });
+
+test('begin cancels input before reading selection and preserves circle or chain preselection', () => {
+  class Line {} class Circle {} class Arc {}
+  for (const selected of [[new Circle()], [new Line()], [new Arc()], [], [new Line(), new Arc()]]) {
+    const calls = [], selection = { isClosed() {}, commitSelection: () => { calls.push('commitSelection'); selection.committed = true; }, selectSource: item => { selection.source = item; calls.push('source'); } };
+    const command = w.OffsetCommand.create({ plans: {}, construction: {}, placement: {}, offsetSelection: selection, Line, Circle, Arc,
+      cancelConstraintTargetCommand: () => calls.push('cancelConstraint'), cancelPendingCommand: () => calls.push('cancelPending'),
+      prepareStart: () => calls.push('prepare'), selectedGeometry: () => { calls.push('read'); return selected; },
+      addOffsetChainGeometry: item => { selection.source = item; calls.push('chain'); }, clearSelection: () => calls.push('clearSelection'),
+      clearSnap: () => calls.push('snap'), updateToolbar: () => calls.push('toolbar'), setHint: () => calls.push('hint'),
+      updateUI: () => calls.push('ui'), draw: () => calls.push('draw'), applicationText: text => text });
+    command.begin();
+    const middle = selected.length !== 1 ? ['clearSelection'] : selected[0] instanceof Circle ? ['source'] : ['chain', 'commitSelection'];
+    assert.deepEqual(calls, ['cancelConstraint', 'cancelPending', 'prepare', 'read', ...middle, 'snap', 'toolbar', 'hint', 'ui', 'draw']);
+    if (selected.length === 1) assert.equal(selection.source, selected[0]);
+  }
+});

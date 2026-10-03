@@ -4,7 +4,19 @@
   function create({ getPending, setPending, guardSketchProjectionShapeEdit, filletGeometryBasis, filletGeometryFromPointer,
     hideDimensionValueInput, snapshotGeometryMutationState, restoreGeometryMutationState, createFillet,
     clearSelection, selection, stabilize, acceptError, invalidateAnalysis, refreshConstraintAnalysis,
-    applicationText, setHint, updateUI, updateGeometrySelectionUI, draw, recordHistory }) {
+    applicationText, setHint, updateUI, updateGeometrySelectionUI, draw, recordHistory, cancelConstraintTargetCommand, selectedLines, getPointer, prepareStart, clearSnap, updateToolbar }) {
+    function begin() {
+      cancelConstraintTargetCommand("");
+      if (selectedLines().length === 2) {
+        if (startFilletRadiusPlacement(selectedLines()[0], selectedLines()[1], getPointer())) reset();
+        return;
+      }
+      prepareStart();
+      clearSnap();
+      updateToolbar();
+      setHint("R面取りする接続線を2本クリックしてください");
+      draw();
+    }
     let firstLine = null;
     function reset() { firstLine = null; }
     function startFilletRadiusPlacement(line1, line2, pointer = null) {
@@ -102,7 +114,7 @@
       }
       if (startFilletRadiusPlacement(firstLine, line, pointer)) firstLine = null;
     }
-    return Object.freeze({ start: startFilletRadiusPlacement, update: updateFilletRadiusPlacement,
+    return Object.freeze({ begin, start: startFilletRadiusPlacement, update: updateFilletRadiusPlacement,
       submit: submitFilletRadiusPlacement, click: handleFilletClick, reset, get firstLine() { return firstLine; } });
   }
   window.FilletCommand = Object.freeze({ create });

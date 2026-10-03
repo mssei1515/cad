@@ -56,3 +56,18 @@ test('geometry creation failure restores without stabilization', () => {
   assert.equal(f.pending(), null);
   assert.deepEqual(f.calls, ['snapshot', 'restore', 'hint', 'ui', 'draw']);
 });
+
+test('begin routes two selected lines directly to radius input and otherwise prepares pick mode', () => {
+  const events = [], a = {}, b = {}, pointer = { x: 2, y: 3 };
+  const f = fixture({ cancelConstraintTargetCommand: () => events.push('cancel'), selectedLines: () => [a, b], getPointer: () => pointer,
+    prepareStart: () => events.push('prepare'), clearSnap: () => events.push('snap'), updateToolbar: () => events.push('toolbar') });
+  f.command.begin(); assert.deepEqual(events, ['cancel']); assert.equal(f.pending().line1, a); assert.equal(f.pending().line2, b);
+  const g = fixture({ cancelConstraintTargetCommand: () => events.push('cancel'), selectedLines: () => [a], getPointer: () => pointer,
+    prepareStart: () => events.push('prepare'), clearSnap: () => events.push('snap'), updateToolbar: () => events.push('toolbar') });
+  events.length = 0; g.command.begin(); assert.deepEqual(events, ['cancel', 'prepare', 'snap', 'toolbar']); assert.equal(g.pending(), null);
+});
+test('rejected preselected fillet does not fall through into normal pick mode', () => {
+  const f = fixture({ cancelConstraintTargetCommand() {}, selectedLines: () => [{}, {}], getPointer: () => null,
+    guardSketchProjectionShapeEdit: () => false, prepareStart: () => assert.fail('no fallback') });
+  f.command.begin(); assert.equal(f.pending(), null); assert.deepEqual(f.calls, ['draw']);
+});

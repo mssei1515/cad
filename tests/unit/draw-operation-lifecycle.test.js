@@ -51,3 +51,10 @@ test('specialized or unknown modes are not started through the basic transition'
   const f = fixture(); for (const mode of ['fillet', 'offset', 'spline', 'unknown', 'toString']) assert.equal(f.controller.start(mode), false);
   assert.deepEqual(f.calls, []);
 });
+
+test('specialized preparation resets only mode inputs and leaves selection and feedback to the command', () => {
+  const f = fixture(); f.controller.prepare('offset');
+  assert.deepEqual(f.calls, ['offset', 'line', 'rectangle', 'fillet', 'circle', 'arcs', 'preview', 'offset']);
+  f.calls.length = 0; f.controller.prepare('fillet');
+  assert.deepEqual(f.calls, ['fillet', 'line', 'rectangle', 'fillet', 'circle', 'arcs', 'pointer']);
+});

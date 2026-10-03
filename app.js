@@ -690,6 +690,9 @@
   });
   const { createOffsetGeometry, createOffsetChainGeometry } = offsetConstruction;
   const offsetCommand = window.OffsetCommand.create({
+    cancelConstraintTargetCommand, cancelPendingCommand, clearSnap, updateUI, Arc,
+    selectedGeometry: () => [...canvasSelection.lines, ...canvasSelection.circles, ...canvasSelection.arcs],
+    prepareStart: () => drawOperationLifecycle.prepare("offset"), addOffsetChainGeometry,
     getPending: () => pendingCommand, setPending: value => { pendingCommand = value; },
     plans: offsetGeometry, construction: offsetConstruction, placement: dimensionPlacement, offsetSelection,
     viewport, Line, Circle, minOrientationLength: MIN_ORIENTATION_LENGTH, offsetPairSign,
@@ -738,6 +741,8 @@
     profile: work => interactionProfiler.active ? profileInteractionWork("parameters", work) : work(),
   });
   const filletCommand = window.FilletCommand.create({
+    cancelConstraintTargetCommand, selectedLines: () => canvasSelection.lines, getPointer: () => lastPointerWorld,
+    prepareStart: () => drawOperationLifecycle.prepare("fillet"), clearSnap, updateToolbar,
     getPending: () => pendingCommand, setPending: value => { pendingCommand = value; },
     guardSketchProjectionShapeEdit, filletGeometryBasis, filletGeometryFromPointer, hideDimensionValueInput,
     snapshotGeometryMutationState, restoreGeometryMutationState, createFillet, clearSelection, selection: canvasSelection,
@@ -7239,56 +7244,12 @@
 
   document.getElementById("toolRectangle")?.addEventListener("click", () => drawOperationLifecycle.start("rectangle"));
   document.getElementById("toolSlot")?.addEventListener("click", () => drawOperationLifecycle.start("slot"));
-  document.getElementById("toolFillet")?.addEventListener("click", () => {
-    cancelConstraintTargetCommand("");
-    if (canvasSelection.lines.length === 2) {
-      if (startFilletRadiusPlacement(canvasSelection.lines[0], canvasSelection.lines[1], lastPointerWorld)) filletCommand.reset();
-      return;
-    }
-    mode = "fillet";
-    lineCommand.reset();
-    rectangleCommand.reset();
-    filletCommand.reset();
-    circularCommands.resetCircle();
-    resetArcCommandState();
-    drawingPreview.setPointer(null);
-    clearSnap();
-    updateToolbar();
-    setHint("R面取りする接続線を2本クリックしてください");
-    draw();
-  });
+  document.getElementById("toolFillet")?.addEventListener("click", filletCommand.begin);
 
   document.getElementById("toolTrim")?.addEventListener("click", () => drawOperationLifecycle.start("trim"));
   document.getElementById("toolCreateBlock")?.addEventListener("click", startBlockCreation);
 
-  document.getElementById("toolOffset")?.addEventListener("click", () => {
-    cancelConstraintTargetCommand("");
-    cancelPendingCommand("");
-    mode = "offset";
-    lineCommand.reset();
-    rectangleCommand.reset();
-    filletCommand.reset();
-    circularCommands.resetCircle();
-    resetArcCommandState();
-    drawingPreview.reset();
-    offsetSelection.reset();
-    const selected = [...canvasSelection.lines, ...canvasSelection.circles, ...canvasSelection.arcs];
-    if (selected.length === 1 && selected[0] instanceof Circle) {
-      offsetSelection.selectSource(selected[0]);
-    } else if (selected.length === 1 && (selected[0] instanceof Line || selected[0] instanceof Arc)) {
-      addOffsetChainGeometry(selected[0]);
-      offsetSelection.commitSelection();
-    } else {
-      clearSelection();
-    }
-    clearSnap();
-    updateToolbar();
-    setHint(offsetSelection.source && (offsetSelection.source instanceof Circle || offsetSelection.committed)
-      ? "オフセットする側と距離の目安をクリックしてください"
-      : applicationText("オフセットする線または円弧を順番にクリックしてください。円は単独で選択します", "Select connected lines or arcs in order. Select a circle by itself."));
-    updateUI();
-    draw();
-  });
+  document.getElementById("toolOffset")?.addEventListener("click", offsetCommand.begin);
 
   document.getElementById("toolCircle").addEventListener("click", () => drawOperationLifecycle.start("circle"));
   document.getElementById("toolArc").addEventListener("click", () => drawOperationLifecycle.start("arc"));

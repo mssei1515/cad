@@ -6,6 +6,10 @@
 
 ## 現在の再開地点（2026-10-03）
 
+FilletCommand.begin／OffsetCommand.beginへ事前選択付き開始を統合。2線からの半径入力と拒否時の打切り、Offsetの初期化後の選択読取り・単独円／線／円弧の引継ぎを維持。DrawOperationLifecycle.prepareは共通初期化だけを担当し、選択と案内はコマンドに残す。app.jsは11,750行から11,711行へ縮小（39行減）。構文検査・単体850件・関連E2E122件成功（exit 0、1.5分）。ログはcad-special-start-{check,unit,e2e}.log。全体E2Eは今回未実行。開始時週枠残量66%。次はConstruction切替、共通取消優先順位と入力module組立て。全体目標は未完了。
+
+### 前回の区切り
+
 DrawOperationLifecycle.startへToolbarの基本9モード開始を統合。共通の初期化順と案内を集約し、Slotのcenter arc reset、Trimのpreview／Offset候補／限定hover消去を例外として維持。pending値入力やSelectionを追加で消去しない。app.jsは11,881行から11,750行へ縮小（131行減）。構文検査・単体846件・関連E2E198件成功（exit 0、2.6分）。ログはcad-basic-start-{check,unit,e2e}.log。全体E2Eは今回未実行。開始時週枠残量67%。次はConstruction切替、Fillet／Offsetの事前選択付き開始、共通取消優先順位と入力module組立て。全体目標は未完了。
 
 ### 前回の区切り

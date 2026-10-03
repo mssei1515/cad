@@ -450,3 +450,5 @@ AuthoringPreviewRendererへSpline／Centerline／Trim描画も統合。Spline構
 - DrawOperationLifecycle: 複数作図コマンドの終了／取消／進行中判定の調整。draft所有は各コマンドに残る。
 
 - DrawOperationLifecycle.start: 基本9モードの開始を統合。Slot／Trimの初期化差分を明示し、ToolbarはDOM接続だけにする。
+
+- FilletCommand.begin／OffsetCommand.begin: 事前選択付き開始を所有。共通初期化はDrawOperationLifecycle.prepareへ委譲し、Toolbarは開始APIに接続。
