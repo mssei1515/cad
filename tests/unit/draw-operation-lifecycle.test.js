@@ -6,7 +6,9 @@ function fixture() {
   const calls = [], deps = {}; const record = name => () => calls.push(name);
   for (const name of ['instances', 'instanceSources', 'centerline', 'line', 'rectangle', 'slot', 'fillet', 'spline', 'splineEditing', 'projection', 'preview', 'offset', 'hatch']) deps[name] = { reset: record(name) };
   deps.centerline.targets = []; deps.spline.points = []; deps.offset.entries = []; deps.spline.cancel = record('splineCancel');
-  deps.circular = { resetCircle: record('circle'), resetArcs: record('arcs') };
+  deps.circular = { resetCircle: record('circle'), resetArcs: record('arcs'), resetCenterArc: record('centerArc') };
+  deps.preview.setPointer = value => { assert.equal(value, null); calls.push('pointer'); };
+  deps.cancelConstraintTargetCommand = record('cancelConstraint'); deps.setMode = value => calls.push(value); deps.clearTrimHover = record('trimHover');
   deps.transient = { clearPoint: record('clearPoint'), clearLineCompletion: record('clearCompletion'), rollbackLineStart: record('rollbackLine') };
   for (const name of ['clearSnap', 'clearSelection', 'selectMode', 'updateToolbar', 'setHint', 'updateUI', 'draw']) deps[name] = record(name);
   return { deps, calls, controller: sandbox.window.DrawOperationLifecycle.create(deps) };
@@ -30,5 +32,22 @@ test('activity reads each live command draft without changing it', () => {
     assert.equal(f.controller.active(), true, owner + '.' + field); assert.equal(f.deps[owner][field], value);
     f.deps[owner][field] = before; assert.equal(f.controller.active(), false);
   }
+  assert.deepEqual(f.calls, []);
+});
+
+test('basic starts preserve partial reset scope without clearing selection or pending value input', () => {
+  for (const mode of ['select', 'point', 'line', 'rectangle', 'circle', 'arc', 'three-point-arc']) {
+    const f = fixture(); assert.equal(f.controller.start(mode), true);
+    assert.deepEqual(f.calls, ['cancelConstraint', mode, 'line', 'rectangle', 'fillet', 'circle', 'arcs', 'pointer', 'clearSnap', 'updateToolbar', 'setHint', 'draw']);
+  }
+});
+test('slot start retains the distinct center arc reset and trim clears only its preview and hover', () => {
+  const slot = fixture(); slot.controller.start('slot');
+  assert.deepEqual(slot.calls, ['cancelConstraint', 'slot', 'line', 'rectangle', 'slot', 'fillet', 'circle', 'centerArc', 'pointer', 'clearSnap', 'updateToolbar', 'setHint', 'draw']);
+  const trim = fixture(); trim.controller.start('trim');
+  assert.deepEqual(trim.calls, ['cancelConstraint', 'trim', 'line', 'rectangle', 'fillet', 'circle', 'arcs', 'preview', 'offset', 'trimHover', 'clearSnap', 'updateToolbar', 'setHint', 'draw']);
+});
+test('specialized or unknown modes are not started through the basic transition', () => {
+  const f = fixture(); for (const mode of ['fillet', 'offset', 'spline', 'unknown', 'toString']) assert.equal(f.controller.start(mode), false);
   assert.deepEqual(f.calls, []);
 });

@@ -2740,6 +2740,8 @@
     spline: splineDraft, splineEditing, projection: sketchProjectionCommand, preview: drawingPreview, offset: offsetSelection, hatch: { reset: () => hatchCommand.reset() },
     transient: { clearPoint: clearTransientPointRollback, clearLineCompletion: clearTransientLineCompletionRollback, rollbackLineStart: rollbackTransientLineStart },
     clearSnap, clearSelection, selectMode: () => { mode = "select"; }, updateToolbar, setHint, updateUI, draw,
+    cancelConstraintTargetCommand, setMode: value => { mode = value; },
+    clearTrimHover: () => canvasHover.update({ point: null, endpointPoint: null, line: null, circle: null, arcEndpoint: null, arc: null, dimension: null }),
   });
   function exitLineMode() { return drawOperationLifecycle.exitLine(); }
   function exitDrawMode() { return drawOperationLifecycle.exit(); }
@@ -7190,51 +7192,9 @@
   applicationSettings.start();
   blockView.bind();
 
-  document.getElementById("toolSelect").addEventListener("click", () => {
-    cancelConstraintTargetCommand("");
-    mode = "select";
-    lineCommand.reset();
-    rectangleCommand.reset();
-    filletCommand.reset();
-    circularCommands.resetCircle();
-    resetArcCommandState();
-    drawingPreview.setPointer(null);
-    clearSnap();
-    updateToolbar();
-    setHint("選択・ドラッグできます。Shift/Ctrlクリックで複数選択できます。");
-    draw();
-  });
-
-  document.getElementById("toolPoint").addEventListener("click", () => {
-    cancelConstraintTargetCommand("");
-    mode = "point";
-    lineCommand.reset();
-    rectangleCommand.reset();
-    filletCommand.reset();
-    circularCommands.resetCircle();
-    resetArcCommandState();
-    drawingPreview.setPointer(null);
-    clearSnap();
-    updateToolbar();
-    setHint("キャンバスをクリックして点を追加します。");
-    draw();
-  });
-
-  document.getElementById("toolLine").addEventListener("click", () => {
-    cancelConstraintTargetCommand("");
-    mode = "line";
-    lineCommand.reset();
-    rectangleCommand.reset();
-    filletCommand.reset();
-    circularCommands.resetCircle();
-    resetArcCommandState();
-    drawingPreview.setPointer(null);
-    clearSnap();
-    updateToolbar();
-    setHint("端点位置をクリックして連続線を作成します。終了はEscです。");
-    draw();
-  });
-
+  document.getElementById("toolSelect").addEventListener("click", () => drawOperationLifecycle.start("select"));
+  document.getElementById("toolPoint").addEventListener("click", () => drawOperationLifecycle.start("point"));
+  document.getElementById("toolLine").addEventListener("click", () => drawOperationLifecycle.start("line"));
   document.getElementById("toolCenterline")?.addEventListener("click", startCenterlineCommand);
   document.getElementById("toolCircleCenterCross")?.addEventListener("click", startCircleCenterCrossCommand);
   document.getElementById("toolSketchProjection")?.addEventListener("click", startSketchProjectionCommand);
@@ -7277,37 +7237,8 @@
     draw();
   });
 
-  document.getElementById("toolRectangle")?.addEventListener("click", () => {
-    cancelConstraintTargetCommand("");
-    mode = "rectangle";
-    lineCommand.reset();
-    rectangleCommand.reset();
-    filletCommand.reset();
-    circularCommands.resetCircle();
-    resetArcCommandState();
-    drawingPreview.setPointer(null);
-    clearSnap();
-    updateToolbar();
-    setHint("矩形の1つ目の角をクリックしてください。Escで選択モードに戻ります");
-    draw();
-  });
-
-  document.getElementById("toolSlot")?.addEventListener("click", () => {
-    cancelConstraintTargetCommand("");
-    mode = "slot";
-    lineCommand.reset();
-    rectangleCommand.reset();
-    resetSlotCommandState();
-    filletCommand.reset();
-    circularCommands.resetCircle();
-    circularCommands.resetCenterArc();
-    drawingPreview.setPointer(null);
-    clearSnap();
-    updateToolbar();
-    setHint("長穴の1つ目の半円中心をクリックしてください。Escで選択モードに戻ります");
-    draw();
-  });
-
+  document.getElementById("toolRectangle")?.addEventListener("click", () => drawOperationLifecycle.start("rectangle"));
+  document.getElementById("toolSlot")?.addEventListener("click", () => drawOperationLifecycle.start("slot"));
   document.getElementById("toolFillet")?.addEventListener("click", () => {
     cancelConstraintTargetCommand("");
     if (canvasSelection.lines.length === 2) {
@@ -7327,27 +7258,7 @@
     draw();
   });
 
-  document.getElementById("toolTrim")?.addEventListener("click", () => {
-    cancelConstraintTargetCommand("");
-    mode = "trim";
-    lineCommand.reset();
-    rectangleCommand.reset();
-    filletCommand.reset();
-    circularCommands.resetCircle();
-    resetArcCommandState();
-    drawingPreview.reset();
-    offsetSelection.reset();
-    canvasHover.update({
-      point: null, endpointPoint: null, line: null,
-      circle: null, arcEndpoint: null, arc: null,
-      dimension: null,
-    });
-    clearSnap();
-    updateToolbar();
-    setHint("トリムする線、円、円弧の削除したい区間をクリックしてください。Escで選択モードに戻ります");
-    draw();
-  });
-
+  document.getElementById("toolTrim")?.addEventListener("click", () => drawOperationLifecycle.start("trim"));
   document.getElementById("toolCreateBlock")?.addEventListener("click", startBlockCreation);
 
   document.getElementById("toolOffset")?.addEventListener("click", () => {
@@ -7379,51 +7290,9 @@
     draw();
   });
 
-  document.getElementById("toolCircle").addEventListener("click", () => {
-    cancelConstraintTargetCommand("");
-    mode = "circle";
-    lineCommand.reset();
-    rectangleCommand.reset();
-    filletCommand.reset();
-    circularCommands.resetCircle();
-    resetArcCommandState();
-    drawingPreview.setPointer(null);
-    clearSnap();
-    updateToolbar();
-    setHint("円の中心をクリックしてください。Escで選択モードに戻ります");
-    draw();
-  });
-
-  document.getElementById("toolArc").addEventListener("click", () => {
-    cancelConstraintTargetCommand("");
-    mode = "arc";
-    lineCommand.reset();
-    rectangleCommand.reset();
-    filletCommand.reset();
-    circularCommands.resetCircle();
-    resetArcCommandState();
-    drawingPreview.setPointer(null);
-    clearSnap();
-    updateToolbar();
-    setHint("円弧の中心をクリックしてください。Escで選択モードに戻ります");
-    draw();
-  });
-
-  document.getElementById("toolThreePointArc")?.addEventListener("click", () => {
-    cancelConstraintTargetCommand("");
-    mode = "three-point-arc";
-    lineCommand.reset();
-    rectangleCommand.reset();
-    filletCommand.reset();
-    circularCommands.resetCircle();
-    resetArcCommandState();
-    drawingPreview.setPointer(null);
-    clearSnap();
-    updateToolbar();
-    setHint("3点円弧の始点をクリックしてください。Escで選択モードに戻ります");
-    draw();
-  });
-
+  document.getElementById("toolCircle").addEventListener("click", () => drawOperationLifecycle.start("circle"));
+  document.getElementById("toolArc").addEventListener("click", () => drawOperationLifecycle.start("arc"));
+  document.getElementById("toolThreePointArc")?.addEventListener("click", () => drawOperationLifecycle.start("three-point-arc"));
   document.getElementById("toolSpline")?.addEventListener("click", beginSplineCreation);
 
   document.getElementById("exportBtn").addEventListener("click", () => void saveJot2DFile());

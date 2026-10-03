@@ -6,6 +6,10 @@
 
 ## 現在の再開地点（2026-10-03）
 
+DrawOperationLifecycle.startへToolbarの基本9モード開始を統合。共通の初期化順と案内を集約し、Slotのcenter arc reset、Trimのpreview／Offset候補／限定hover消去を例外として維持。pending値入力やSelectionを追加で消去しない。app.jsは11,881行から11,750行へ縮小（131行減）。構文検査・単体846件・関連E2E198件成功（exit 0、2.6分）。ログはcad-basic-start-{check,unit,e2e}.log。全体E2Eは今回未実行。開始時週枠残量67%。次はConstruction切替、Fillet／Offsetの事前選択付き開始、共通取消優先順位と入力module組立て。全体目標は未完了。
+
+### 前回の区切り
+
 DrawOperationLifecycleへ通常終了・連続線終了・作図取消・進行中判定を分離。各draftは既存commandが所有し、通常終了のresetと取消のLine／Spline rollback、mode維持と選択復帰の違いを保持。app.jsは11,939行から11,881行へ縮小（58行減）。構文検査・単体843件成功。初回E2EはHatch生成前の直接参照で起動失敗し中断。resetだけを遅延接続して修正し、構文再検査と同範囲E2E198件が成功（exit 0、2.5分）。ログはcad-draw-lifecycle-{check,unit,e2e,e2e-recheck}.log。全体E2Eは今回未実行。開始時週枠残量71%。次はToolbarのモード開始と共通取消優先順位、入力module組立て。全体目標は未完了。
 
 ### 前回の区切り

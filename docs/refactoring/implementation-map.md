@@ -448,3 +448,5 @@ AuthoringPreviewRendererへSpline／Centerline／Trim描画も統合。Spline構
 - RectangleSelectionQuery.readProjection: 投影元の矩形照会を統合。通常選択と幾何判定を共有し、投影元の適格性・候補providerは分ける。
 
 - DrawOperationLifecycle: 複数作図コマンドの終了／取消／進行中判定の調整。draft所有は各コマンドに残る。
+
+- DrawOperationLifecycle.start: 基本9モードの開始を統合。Slot／Trimの初期化差分を明示し、ToolbarはDOM接続だけにする。

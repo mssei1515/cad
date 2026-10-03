@@ -3,7 +3,41 @@
   "use strict";
   function create({ instances, instanceSources, centerline, line, rectangle, slot, fillet, circular,
     spline, splineEditing, projection, preview, offset, hatch, transient,
-    clearSnap, clearSelection, selectMode, updateToolbar, setHint, updateUI, draw }) {
+    clearSnap, clearSelection, selectMode, updateToolbar, setHint, updateUI, draw, cancelConstraintTargetCommand, setMode, clearTrimHover }) {
+    const startHints = {
+      "select": "選択・ドラッグできます。Shift/Ctrlクリックで複数選択できます。",
+      "point": "キャンバスをクリックして点を追加します。",
+      "line": "端点位置をクリックして連続線を作成します。終了はEscです。",
+      "rectangle": "矩形の1つ目の角をクリックしてください。Escで選択モードに戻ります",
+      "slot": "長穴の1つ目の半円中心をクリックしてください。Escで選択モードに戻ります",
+      "trim": "トリムする線、円、円弧の削除したい区間をクリックしてください。Escで選択モードに戻ります",
+      "circle": "円の中心をクリックしてください。Escで選択モードに戻ります",
+      "arc": "円弧の中心をクリックしてください。Escで選択モードに戻ります",
+      "three-point-arc": "3点円弧の始点をクリックしてください。Escで選択モードに戻ります"
+    };
+    function start(mode) {
+      if (!Object.hasOwn(startHints, mode)) return false;
+      cancelConstraintTargetCommand("");
+      setMode(mode);
+      line.reset();
+      rectangle.reset();
+      if (mode === "slot") slot.reset();
+      fillet.reset();
+      circular.resetCircle();
+      if (mode === "slot") circular.resetCenterArc();
+      else circular.resetArcs();
+      if (mode === "trim") {
+        preview.reset();
+        offset.reset();
+        clearTrimHover();
+      } else preview.setPointer(null);
+      clearSnap();
+      updateToolbar();
+      setHint(startHints[mode]);
+      draw();
+      return true;
+    }
+
     function exitLineMode() {
       centerline.reset();
       line.reset();
@@ -76,7 +110,7 @@
     }
 
 
-    return Object.freeze({ exitLine: exitLineMode, exit: exitDrawMode, active: hasActiveDrawOperation, cancel: cancelActiveDrawOperation });
+    return Object.freeze({ start, exitLine: exitLineMode, exit: exitDrawMode, active: hasActiveDrawOperation, cancel: cancelActiveDrawOperation });
   }
   window.DrawOperationLifecycle = Object.freeze({ create });
 })();
