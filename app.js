@@ -2733,76 +2733,18 @@
     return isEditableSketchElement(item);
   }
 
-  function exitLineMode() {
-    resetCenterlineCommandState();
-    lineCommand.reset();
-    rectangleCommand.reset();
-    resetSlotCommandState();
-    filletCommand.reset();
-    drawingPreview.reset();
-    offsetSelection.reset();
-    clearSnap();
-    mode = "select";
-    updateToolbar();
-    setHint("連続線を終了しました");
-    updateUI();
-    draw();
-  }
-
-  function exitDrawMode() {
-    geometryInstanceCommand.reset();
-    instanceSourceCommand.reset();
-    resetCenterlineCommandState();
-    lineCommand.reset();
-    clearTransientPointRollback();
-    clearTransientLineCompletionRollback();
-    rectangleCommand.reset();
-    resetSlotCommandState();
-    filletCommand.reset();
-    circularCommands.resetCircle();
-    resetArcCommandState();
-    splineDraft.reset();
-    splineEditing.reset();
-    sketchProjectionCommand.reset();
-    drawingPreview.reset();
-    offsetSelection.reset();
-    hatchCommand.reset();
-    clearSnap();
-    mode = "select";
-    updateToolbar();
-    setHint("選択・ドラッグモードに戻りました");
-    updateUI();
-    draw();
-  }
-
-  function hasActiveDrawOperation() {
-    return Boolean(lineCommand.startPoint || centerlineCommand.targets.length || centerlineCommand.firstPoint || rectangleCommand.startPoint || slotCommand.firstCenter || slotCommand.secondCenter || filletCommand.firstLine || circularCommands.circleCenterPoint || circularCommands.arcCenterPoint || circularCommands.arcStartPoint || circularCommands.threePointArcStart || circularCommands.threePointArcEnd || splineDraft.points.length || offsetSelection.source || offsetSelection.entries.length);
-  }
-
-
-  function cancelActiveDrawOperation() {
-    resetCenterlineCommandState();
-    rollbackTransientLineStart();
-    clearTransientPointRollback();
-    clearTransientLineCompletionRollback();
-    lineCommand.reset();
-    rectangleCommand.reset();
-    resetSlotCommandState();
-    filletCommand.reset();
-    circularCommands.resetCircle();
-    resetArcCommandState();
-    splineDraft.cancel();
-    splineEditing.reset();
-    sketchProjectionCommand.reset();
-    drawingPreview.reset();
-    offsetSelection.reset();
-    hatchCommand.reset();
-    clearSnap();
-    clearSelection();
-    setHint("作図操作をキャンセルしました");
-    updateUI();
-    draw();
-  }
+  const drawOperationLifecycle = window.DrawOperationLifecycle.create({
+    instances: geometryInstanceCommand, instanceSources: instanceSourceCommand, centerline: centerlineCommand,
+    line: lineCommand, rectangle: rectangleCommand, slot: slotCommand, fillet: filletCommand,
+    circular: circularCommands,
+    spline: splineDraft, splineEditing, projection: sketchProjectionCommand, preview: drawingPreview, offset: offsetSelection, hatch: { reset: () => hatchCommand.reset() },
+    transient: { clearPoint: clearTransientPointRollback, clearLineCompletion: clearTransientLineCompletionRollback, rollbackLineStart: rollbackTransientLineStart },
+    clearSnap, clearSelection, selectMode: () => { mode = "select"; }, updateToolbar, setHint, updateUI, draw,
+  });
+  function exitLineMode() { return drawOperationLifecycle.exitLine(); }
+  function exitDrawMode() { return drawOperationLifecycle.exit(); }
+  function hasActiveDrawOperation() { return drawOperationLifecycle.active(); }
+  function cancelActiveDrawOperation() { return drawOperationLifecycle.cancel(); }
 
   function sampleModel() {
     resetModelState();

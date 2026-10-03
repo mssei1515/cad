@@ -6,6 +6,10 @@
 
 ## 現在の再開地点（2026-10-03）
 
+DrawOperationLifecycleへ通常終了・連続線終了・作図取消・進行中判定を分離。各draftは既存commandが所有し、通常終了のresetと取消のLine／Spline rollback、mode維持と選択復帰の違いを保持。app.jsは11,939行から11,881行へ縮小（58行減）。構文検査・単体843件成功。初回E2EはHatch生成前の直接参照で起動失敗し中断。resetだけを遅延接続して修正し、構文再検査と同範囲E2E198件が成功（exit 0、2.5分）。ログはcad-draw-lifecycle-{check,unit,e2e,e2e-recheck}.log。全体E2Eは今回未実行。開始時週枠残量71%。次はToolbarのモード開始と共通取消優先順位、入力module組立て。全体目標は未完了。
+
+### 前回の区切り
+
 RectangleSelectionQueryへ投影元の矩形照会を統合し、通常選択と線／bbox／曲線sampleの判定を共有。投影元provider・適格性判定を分け、通常選択のactive制限を混入させず候補順・Geometry参照・crossing／包含を維持。app.jsは11,964行から11,939行へ縮小（25行減）。構文検査・単体839件・関連E2E134件成功（exit 0、1.6分）。ログはcad-projection-rect-{check,unit,e2e}.log。全体E2Eは今回未実行。開始時週枠残量73%。次は共通モード遷移／取消、投影の適格性・投影済み照会、入力module組立て。全体目標は未完了。
 
 ### 前回の区切り
