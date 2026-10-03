@@ -266,7 +266,9 @@ test("synchronized instance command previews rotation and reflection, cancels an
   await expect(rotation).toHaveValue("-30");
   await rotation.fill("90"); await rotation.press("Tab");
   await page.locator('[data-free-instance-property="mirrorX"]').check();
+  await page.locator('#commandPanelInput-destination').click();
   await clickWorld(page, { x: 20, y: 30 });
+  await page.locator('#commandPanel [data-action="finish"]').click();
   let current = await state(page);
   expect(current.serialized.geometryInstances[0]).toMatchObject({ type: "free", rotation: Math.PI / 2, mirrorX: true, mirrorY: false });
   expect(current.instances[0].valid).toBe(true);

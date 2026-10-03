@@ -112,7 +112,9 @@ test("free placement settings share the existing draft and cancellation closes t
   await panel(page).locator('[data-setting="rotation"]').fill("30");
   await panel(page).locator('[data-setting="mirrorX"]').check();
   const destination = await page.evaluate(() => window.__jot2dTest.worldClientPositionForTest({ x: 40, y: 20 }));
+  await page.locator('#commandPanelInput-destination').click();
   await page.mouse.click(destination.x, destination.y);
+  await finish(page).click();
   await expect(panel(page)).toBeHidden();
   expect((await instances(page))[0]).toMatchObject({ type: "free", rotation: Math.PI / 6, mirrorX: true });
   await page.evaluate(id => window.__jot2dTest.selectGeometryIdsForTest({ lines: [id] }), fixture.sourceId);
@@ -120,4 +122,78 @@ test("free placement settings share the existing draft and cancellation closes t
   await panel(page).locator('[data-action="cancel"]').click();
   await expect(panel(page)).toBeHidden();
   expect(await instances(page)).toHaveLength(1);
+});
+
+test('empty starts allow reference first, row selection and removal without deleting geometry', async ({ page }) => {
+  for (const tool of ['Mirror', 'Pattern']) {
+    const f = await page.evaluate(() => window.__jot2dTest.resetForGeometryInstanceCommandTest());
+    const source = await page.evaluate(() => window.__jot2dTest.worldClientPositionForTest({x:-40,y:25}));
+    await page.click('#tool' + tool);
+    await expect(panel(page)).toContainText('複写元: 0');
+    await page.locator('#commandPanelInput-reference').click();
+    await page.mouse.click(f.axis.x, f.axis.y);
+    await page.locator('#commandPanelInput-sources').click();
+    await page.mouse.click(source.x, source.y);
+    const row = panel(page).locator('[data-input="sources"][data-input-item="0"]');
+    await row.click(); await expect(row).toHaveAttribute('aria-selected','true');
+    await row.press('Enter'); expect(await instances(page)).toHaveLength(0);
+    await row.press('Delete'); await expect(finish(page)).toBeDisabled();
+    await expect(panel(page).locator('[data-input="reference"][data-input-item="0"]')).toBeVisible();
+    await page.mouse.click(source.x,source.y);
+    await expect(finish(page)).toBeEnabled();
+    await page.keyboard.press('Enter'); expect(await instances(page)).toHaveLength(1);
+    await page.click('#undoBtn'); expect(await instances(page)).toHaveLength(0);
+    expect(await page.evaluate(() => window.__jot2dTest.derivedInstanceStateForTest().serialized.lines.length)).toBe(3);
+  }
+});
+
+test('free inputs allow destination and settings before sources and anchor', async ({ page }) => {
+  await page.evaluate(() => window.__jot2dTest.resetForGeometryInstanceCommandTest());
+  const points = await page.evaluate(() => [{x:40,y:20},{x:-40,y:25},{x:-55,y:15}].map(p=>window.__jot2dTest.worldClientPositionForTest(p)));
+  await page.click('#toolFreeInstance');
+  await panel(page).locator('[data-setting="rotation"]').fill('30');
+  await page.locator('#commandPanelInput-destination').click();
+  await page.mouse.click(points[0].x,points[0].y);
+  await page.locator('#commandPanelInput-sources').click();
+  await page.mouse.click(points[1].x,points[1].y);
+  await page.locator('#commandPanelInput-origin').click();
+  await page.mouse.click(points[2].x,points[2].y);
+  await expect(finish(page)).toBeEnabled(); expect(await instances(page)).toHaveLength(0);
+  await panel(page).locator('[data-input="origin"][data-input-item="0"]').press('Backspace');
+  await expect(finish(page)).toBeDisabled();
+  await page.mouse.click(points[2].x,points[2].y);
+  await finish(page).click();
+  expect((await instances(page))[0]).toMatchObject({x:40,y:20,origin:{x:-55,y:15},rotation:Math.PI/6});
+});
+
+test('projection and source editing rows remove only draft selections', async ({ page }) => {
+  const f = await page.evaluate(() => window.__jot2dTest.resetForSketchProjectionTest());
+  await page.click('#toolSketchProjection'); await page.mouse.click(f.clients.line1.x,f.clients.line1.y);
+  const row = panel(page).locator('[data-input="sources"][data-input-item="0"]');
+  await row.click(); await row.press('Delete'); await expect(finish(page)).toBeDisabled();
+  await page.mouse.click(f.clients.line1.x,f.clients.line1.y); await finish(page).click();
+  await page.click('[data-property-action="instance-sources"]');
+  await row.click(); await row.press('Delete'); await expect(finish(page)).toBeDisabled();
+  expect((await instances(page))[0].sources).toHaveLength(1);
+  await panel(page).locator('[data-action="cancel"]').click();
+  expect((await instances(page))[0].sources).toHaveLength(1);
+});
+
+test('listboxes accept empty input selection and arrow-key target selection', async ({ page }) => {
+  const f = await page.evaluate(() => window.__jot2dTest.resetForGeometryInstanceCommandTest());
+  const source = await page.evaluate(() => window.__jot2dTest.worldClientPositionForTest({x:-40,y:25}));
+  await page.click('#toolMirror');
+  const boxes = panel(page).getByRole('listbox');
+  await boxes.nth(1).click();
+  await expect(page.locator('#commandPanelInput-reference')).toHaveAttribute('aria-pressed','true');
+  await page.mouse.click(f.axis.x,f.axis.y);
+  await boxes.nth(0).click();
+  await page.mouse.click(source.x,source.y); await page.mouse.click(f.direction.x,f.direction.y);
+  await boxes.nth(0).focus(); await page.keyboard.press('ArrowDown');
+  await expect(boxes.nth(0).getByRole('option').nth(0)).toHaveAttribute('aria-selected','true');
+  await page.keyboard.press('End');
+  await expect(boxes.nth(0).getByRole('option').nth(1)).toHaveAttribute('aria-selected','true');
+  await page.keyboard.press('Delete');
+  await expect(boxes.nth(0).getByRole('option')).toHaveCount(1);
+  await expect(finish(page)).toBeEnabled();
 });

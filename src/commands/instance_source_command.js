@@ -93,9 +93,16 @@
       draw();
       return true;
     }
+    function remove(index) {
+      if (!instanceSourceEdit || getMode() !== "instance-sources" || !Number.isInteger(index) || index < 0 || index >= instanceSourceEdit.sources.length) return false;
+      instanceSourceEdit.sources.splice(index, 1);
+      updatePropertiesUI();
+      draw();
+      return true;
+    }
     function reset() { instanceSourceEdit = null; }
     function includesRef(ref) { return Boolean(instanceSourceEdit?.sources.some(source => geometryRefsEqual(source, ref))); }
-    return Object.freeze({ start: startInstanceSourceEdit, toggle: toggleInstanceSource, finish: finishInstanceSourceEdit, reset, includesRef,
+    return Object.freeze({ start: startInstanceSourceEdit, toggle: toggleInstanceSource, remove, finish: finishInstanceSourceEdit, reset, includesRef,
       get instance() { return instanceSourceEdit?.instance || null; },
       get current() { return instanceSourceEdit ? { instance: instanceSourceEdit.instance, sources: [...instanceSourceEdit.sources] } : null; },
     });

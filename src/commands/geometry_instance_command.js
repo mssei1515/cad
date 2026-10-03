@@ -1,132 +1,173 @@
-/* Own pending sources and creation of free, mirror and pattern instances. */
+/* Own independently editable inputs and creation of free, mirror and pattern instances. */
 (() => {
   "use strict";
   function create({ cancelConstraintTargetCommand, cancelPendingCommand, canCreateInActiveSketch, rejectRootSketchCreation,
-    selectedItemsForGeometryInstance, geometryRefForItem, clearSelection, normalizeGeometryInstance,
+    selectedItemsForGeometryInstance, geometryRefForItem, geometryRefsEqual, isVisibleSketchElement, clearSelection, normalizeGeometryInstance,
     previewFreeId, nextInstanceId, activeSketchId, getMode, setMode, updateToolbar, updateUI,
     applicationText, setHint, draw, currentScope, canvasSelection, recordHistory,
     Line, lineHasDirection, elementSketchId, resolveGeometryRef, createGeometryInstanceBundle }) {
     let freeInstancePlacement = null;
-    let geometryInstanceCommandSources = [];
-    let referenceLine = null;
+    let sources = [];
+    let referenceRef = null;
+    let commandType = null;
+    let activeInput = "sources";
+    let origin = null;
+    let destination = null;
+    let previewingDestination = false;
     let settings = { spacing: 10, copies: 2, reversed: false };
-    function startGeometryInstanceCommand(type) {
-      cancelConstraintTargetCommand("");
-      cancelPendingCommand("");
-      if (!canCreateInActiveSketch()) return void rejectRootSketchCreation();
-      const sources = selectedItemsForGeometryInstance();
-      if (sources.length === 0) {
-        setHint(applicationText("同じSketchの複写元Geometryを先に選択してください", "Select source geometry in the active sketch first."), "error");
-        return;
-      }
-      geometryInstanceCommandSources = sources.map(geometryRefForItem).filter(Boolean);
-      referenceLine = null;
-      settings = { spacing: 10, copies: 2, reversed: false };
-      clearSelection();
-      if (type === "free") {
-        freeInstancePlacement = normalizeGeometryInstance({ id: previewFreeId(), type: "free", sources: geometryInstanceCommandSources, sketchId: activeSketchId() });
-        setMode("free-instance-origin");
-        updateToolbar();
-        updateUI({ refreshAnalysis: false });
-        setHint(applicationText("配置基準点をクリックしてください。Escでキャンセルします", "Click the source anchor. Press Esc to cancel."));
-        draw();
-        return;
-      }
-      setMode(type === "mirror" ? "mirror-axis" : "pattern-direction");
-      updateToolbar();
-      setHint(type === "mirror"
-        ? applicationText("対称軸にする線をクリックしてください。Escでキャンセルします", "Click the mirror axis line. Press Esc to cancel.")
-        : applicationText("配列方向にする線をクリックしてください。Escでキャンセルします", "Click the pattern direction line. Press Esc to cancel."));
-      draw();
-    }
-
-    function placeFreeInstance(pointer) {
-      if (!freeInstancePlacement) return;
-      if (getMode() === "free-instance-origin") {
-        freeInstancePlacement.origin = { x: pointer.x, y: pointer.y };
-        setMode("free-instance-place");
-        setHint(applicationText("配置先をクリックしてください。回転と鏡像はPropertiesで設定できます", "Click the destination. Set rotation and reflection in Properties."));
-        updateUI({ refreshAnalysis: false });
-      } else {
-        Object.assign(freeInstancePlacement, { x: pointer.x, y: pointer.y, id: nextInstanceId("free") });
-        const instance = freeInstancePlacement;
-        currentScope().geometryInstances.push(instance);
-        freeInstancePlacement = null;
-        geometryInstanceCommandSources = [];
-        setMode("select");
-        clearSelection();
-        canvasSelection.set("geometryInstances", [instance]);
-        recordHistory("同期インスタンス追加");
-        updateUI();
-        setHint(applicationText("同期インスタンスを作成しました", "Synchronized instance created"));
-      }
-      updateToolbar();
-      draw();
-    }
-
-    function selectReference(line) {
-      if (!(line instanceof Line) || !lineHasDirection(line) || elementSketchId(line) !== activeSketchId()) {
-        setHint(applicationText("同じSketchの有効な線を選択してください", "Select a valid line in the active sketch."), "error");
-        return false;
-      }
-      const type = getMode() === "mirror-axis" ? "mirror" : getMode() === "pattern-direction" ? "pattern" : null;
-      if (!type || geometryInstanceCommandSources.length === 0) return false;
-      referenceLine = line;
-      setHint(applicationText("基準線を選択しました。完了またはEnterで確定してください", "Reference selected. Confirm with Finish or Enter."));
-      draw();
-      return true;
-    }
-    function finish() {
-      const type = getMode() === "mirror-axis" ? "mirror" : getMode() === "pattern-direction" ? "pattern" : null;
-      if (!type || !referenceLine || !geometryInstanceCommandSources.length) return false;
-      const line = referenceLine;
-      if (!(line instanceof Line) || !lineHasDirection(line) || elementSketchId(line) !== activeSketchId()) return false;
-      const { spacing, copies, reversed } = settings;
-      if (type === "pattern") {
-        if (!validSettings()) {
-          setHint(applicationText("間隔は正数、コピー数は1〜1000で指定してください", "Spacing must be positive and copies must be from 1 to 1000."), "error");
-          return false;
-        }
-      }
-      const id = nextInstanceId(type);
-      const raw = { id, type, sketchId: activeSketchId(), sources: geometryInstanceCommandSources, appearanceOverride: {} };
-      if (type === "mirror") raw.axis = geometryRefForItem(line);
-      else Object.assign(raw, { direction: geometryRefForItem(line), spacing, copies, reversed });
-      const instance = normalizeGeometryInstance(raw);
-      currentScope().geometryInstances.push(instance);
-      geometryInstanceCommandSources = [];
-      referenceLine = null;
-      setMode("select");
-      clearSelection();
-      canvasSelection.set("geometryInstances", [instance]);
+    const active = () => commandType === "free" ? getMode().startsWith("free-instance-")
+      : commandType === "mirror" ? getMode() === "mirror-axis" : commandType === "pattern" && getMode() === "pattern-direction";
+    const reference = () => referenceRef ? resolveGeometryRef(referenceRef) : null;
+    function refresh() {
+      if (freeInstancePlacement) freeInstancePlacement.sources = [...sources];
       updateToolbar();
       updateUI({ refreshAnalysis: false });
       draw();
-      recordHistory(type === "mirror" ? "ミラーインスタンス追加" : "パターンインスタンス追加");
-      setHint(type === "mirror" ? applicationText("ミラーインスタンスを作成しました", "Mirror instance created") : applicationText("パターンインスタンスを作成しました", "Pattern instance created"));
+    }
+    function start(type) {
+      const selected = selectedItemsForGeometryInstance();
+      cancelConstraintTargetCommand("");
+      cancelPendingCommand("");
+      if (!canCreateInActiveSketch()) return void rejectRootSketchCreation();
+      reset();
+      commandType = type;
+      sources = selected.map(geometryRefForItem).filter(Boolean);
+      settings = { spacing: 10, copies: 2, reversed: false };
+      clearSelection();
+      if (type === "free") {
+        freeInstancePlacement = normalizeGeometryInstance({ id: previewFreeId(), type: "free", sources, sketchId: activeSketchId() });
+        setMode("free-instance-origin");
+      } else setMode(type === "mirror" ? "mirror-axis" : "pattern-direction");
+      activeInput = sources.length ? (type === "free" ? "origin" : "reference") : "sources";
+      setHint(applicationText("リストで入力項目を選び、キャンバスで指定してください。完了で確定、Escでキャンセル", "Select an input in the list, then pick on the canvas. Finish confirms; Esc cancels."));
+      refresh();
+    }
+    function selectInput(key) {
+      if (!active() || !["sources", ...(commandType === "free" ? ["origin", "destination"] : ["reference"])].includes(key)) return false;
+      activeInput = key;
+      previewingDestination = key === "destination";
+      if (commandType === "free") setMode(key === "destination" || origin ? "free-instance-place" : "free-instance-origin");
+      refresh();
       return true;
     }
-    function validSettings() { return Number.isFinite(settings.spacing) && settings.spacing > 0 && Number.isInteger(settings.copies) && settings.copies > 0 && settings.copies <= 1000; }
+    function toggleSource(item) {
+      if (!active() || !item) return false;
+      const ref = geometryRefForItem(item);
+      const index = sources.findIndex(source => geometryRefsEqual(source, ref));
+      if (index >= 0) return removeInput("sources", index);
+      if (!ref || elementSketchId(item) !== activeSketchId() || !isVisibleSketchElement(item)) {
+        setHint(applicationText("同じSketchの表示中の図形を選択してください", "Select visible geometry in the same sketch."), "error");
+        return false;
+      }
+      sources.push(ref);
+      refresh();
+      return true;
+    }
+    function removeInput(key, index = 0) {
+      if (!active()) return false;
+      if (key === "sources") {
+        if (!Number.isInteger(index) || index < 0 || index >= sources.length) return false;
+        sources.splice(index, 1);
+      } else if (key === "reference") referenceRef = null;
+      else if (key === "origin") origin = null;
+      else if (key === "destination") destination = null;
+      else return false;
+      activeInput = key;
+      previewingDestination = key === "destination";
+      refresh();
+      return true;
+    }
+    function placeFree(pointer) {
+      if (!active() || commandType !== "free" || !["origin", "destination"].includes(activeInput)
+        || !Number.isFinite(pointer?.x) || !Number.isFinite(pointer?.y)) return false;
+      const point = { x: pointer.x, y: pointer.y };
+      if (activeInput === "origin") {
+        origin = point;
+        freeInstancePlacement.origin = { ...point };
+      } else {
+        destination = point;
+        Object.assign(freeInstancePlacement, point);
+        previewingDestination = false;
+      }
+      setMode(origin ? "free-instance-place" : "free-instance-origin");
+      refresh();
+      return true;
+    }
+    function validReference(line) {
+      return line instanceof Line && lineHasDirection(line) && elementSketchId(line) === activeSketchId() && isVisibleSketchElement(line);
+    }
+    function selectReference(line) {
+      if (!active() || commandType === "free" || !validReference(line)) {
+        setHint(applicationText("同じSketchの有効な線を選択してください", "Select a valid line in the same sketch."), "error");
+        return false;
+      }
+      referenceRef = geometryRefForItem(line);
+      refresh();
+      return true;
+    }
+    function validSettings() {
+      return Number.isFinite(settings.spacing) && settings.spacing > 0 && Number.isInteger(settings.copies) && settings.copies > 0 && settings.copies <= 1000;
+    }
+    function canFinish() {
+      if (!active() || !sources.length || sources.some(ref => {
+        const item = resolveGeometryRef(ref);
+        return !item || elementSketchId(item) !== activeSketchId() || !isVisibleSketchElement(item);
+      })) return false;
+      if (commandType === "free") return Boolean(origin && destination);
+      return validReference(reference()) && (commandType !== "pattern" || validSettings());
+    }
+    function finish() {
+      if (!canFinish()) return false;
+      const type = commandType;
+      const id = nextInstanceId(type);
+      let instance;
+      if (type === "free") {
+        instance = freeInstancePlacement;
+        Object.assign(instance, { id, sources: [...sources], origin: { ...origin }, x: destination.x, y: destination.y });
+      } else {
+        const raw = { id, type, sketchId: activeSketchId(), sources: [...sources], appearanceOverride: {} };
+        if (type === "mirror") raw.axis = referenceRef;
+        else Object.assign(raw, { direction: referenceRef, ...settings });
+        instance = normalizeGeometryInstance(raw);
+      }
+      currentScope().geometryInstances.push(instance);
+      reset();
+      setMode("select");
+      clearSelection();
+      canvasSelection.set("geometryInstances", [instance]);
+      recordHistory(type === "free" ? "同期インスタンス追加" : type === "mirror" ? "ミラーインスタンス追加" : "パターンインスタンス追加");
+      updateToolbar();
+      updateUI();
+      draw();
+      setHint(applicationText("派生インスタンスを作成しました", "Derived instance created."));
+      return true;
+    }
     function changeSetting(key, value) {
-      if (!["spacing", "copies", "reversed"].includes(key)) return false;
+      if (!active() || commandType !== "pattern" || !["spacing", "copies", "reversed"].includes(key)) return false;
       settings[key] = key === "reversed" ? Boolean(value) : String(value).trim() === "" ? NaN : Number(value);
       draw();
       return validSettings();
     }
-    function clearSources() { geometryInstanceCommandSources = []; referenceLine = null; }
-    function clearPlacement() { freeInstancePlacement = null; }
-    function reset() { clearSources(); clearPlacement(); }
+    function clearSources() { sources = []; referenceRef = null; }
+    function clearPlacement() { freeInstancePlacement = null; origin = null; destination = null; previewingDestination = false; }
+    function reset() { clearSources(); clearPlacement(); commandType = null; activeInput = "sources"; }
     function preview(pointer) {
-      if (getMode() !== "free-instance-place" || !freeInstancePlacement || !pointer) return null;
-      Object.assign(freeInstancePlacement, { x: pointer.x, y: pointer.y });
-      const sources = freeInstancePlacement.sources.map(ref => ({ ref, item: resolveGeometryRef(ref) }));
-      if (sources.some(({ item }) => !item)) return null;
-      return createGeometryInstanceBundle(freeInstancePlacement, sources, null, null);
+      if (!active() || !freeInstancePlacement || !origin || !sources.length) return null;
+      const point = previewingDestination && pointer ? pointer : destination;
+      if (!point) return null;
+      // Preview never overwrites the explicitly picked destination.
+      Object.assign(freeInstancePlacement, { x: point.x, y: point.y, origin: { ...origin } });
+      const resolved = sources.map(ref => ({ ref, item: resolveGeometryRef(ref) }));
+      if (resolved.some(({ item }) => !item)) return null;
+      return createGeometryInstanceBundle(freeInstancePlacement, resolved, null, null);
     }
-    return Object.freeze({ start: startGeometryInstanceCommand, placeFree: placeFreeInstance,
-      selectReference, finish, changeSetting, validSettings, clearSources, clearPlacement, reset, preview,
-      get sources() { return [...geometryInstanceCommandSources]; },
-      get reference() { return referenceLine; },
+    return Object.freeze({ start, placeFree, selectInput, toggleSource, removeInput, selectReference, canFinish, finish,
+      changeSetting, validSettings, clearSources, clearPlacement, reset, preview,
+      get activeInput() { return activeInput; },
+      get sources() { return [...sources]; },
+      get reference() { return reference(); },
+      get origin() { return origin && { ...origin }; },
+      get destination() { return destination && { ...destination }; },
       get settings() { return { ...settings }; },
       isPlacing: instance => instance === freeInstancePlacement,
       get pending() { return freeInstancePlacement; },

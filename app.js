@@ -408,9 +408,11 @@
   let geometryClipboard = null;
   const HISTORY_LIMIT = 80;
   let commandPanel = null;
+  let derivedPanel = null;
+  let commandPanelSelectedItem = null;
   const geometryInstanceCommand = window.GeometryInstanceCommand.create({
     cancelConstraintTargetCommand, cancelPendingCommand, canCreateInActiveSketch, rejectRootSketchCreation,
-    selectedItemsForGeometryInstance, geometryRefForItem, clearSelection, normalizeGeometryInstance,
+    selectedItemsForGeometryInstance, geometryRefForItem, geometryRefsEqual, isVisibleSketchElement, clearSelection, normalizeGeometryInstance,
     previewFreeId: () => `FI${freeInstanceSeq}`,
     nextInstanceId: type => type === "free" ? `FI${freeInstanceSeq++}` : type === "mirror" ? `MI${mirrorInstanceSeq++}` : `PI${patternInstanceSeq++}`,
     activeSketchId, getMode: () => mode, setMode: value => { mode = value; }, updateToolbar, updateUI,
@@ -1529,6 +1531,7 @@
 
   function isConstraintOperandSelected(item, options = {}) {
     if (!item) return false;
+    if (commandPanelSelectedItem) return geometryRefsEqual(geometryRefForItem(item), geometryRefForItem(commandPanelSelectedItem));
     if (mode === "instance-sources" && instanceSourceCommand.includesRef(geometryRefForItem(item))) return true;
     if (mode === "sketch-projection" && sketchProjectionSources.some((entry) => entry.item === item)) return true;
     if (["mirror-axis", "pattern-direction"].includes(mode) || mode.startsWith("free-instance-")) {
@@ -1817,12 +1820,14 @@
   }
 
   function startSketchProjectionCommand() {
+    const selectedSources = selectedGeometryItems().map(sketchProjectionEntryFromItem)
+      .filter(entry => entry && !sketchProjectionSourceIsCovered(entry.item));
     cancelConstraintTargetCommand("");
     cancelPendingCommand("");
     if (!canCreateInActiveSketch()) return void rejectRootSketchCreation();
     clearSelection();
     mode = "sketch-projection";
-    sketchProjectionSources = [];
+    sketchProjectionSources = [...new Map(selectedSources.map(entry => [entry.key, entry])).values()];
     clearSnap();
     updateToolbar();
     setHint(applicationText("投影する先祖SketchのGeometryを複数選択し、Enterまたは右クリックメニューの「実行」で確定してください。Escでキャンセルします", "Select geometry from ancestor sketches, then confirm with Enter or Execute in the context menu. Press Esc to cancel."));
@@ -4219,6 +4224,7 @@
 
   function draw() {
     commandPanel?.update();
+    commandPanelSelectedItem = derivedPanel?.selectedItem() || null;
     if (!interactionProfiler.active) return drawUnprofiled();
     return profileInteractionWork("draw", () => drawUnprofiled());
   }
@@ -7129,6 +7135,7 @@
     getMode: () => mode, instanceSourceCommand, geometryInstanceCommand, hitReferenceTarget, hitDerivedProjectionOperand,
     hitBlockProjectionOperand, operandElement, toggleSketchProjectionSource, clearSnap, selectionRectangle,
     capturePointer: id => canvas.setPointerCapture(id), snapForDrawing, makeConstraintOperand, setHint, applicationText,
+    releasePanelFocus: () => { if (document.activeElement?.closest("#commandPanel")) document.activeElement.blur(); },
   });
 
   const pointCommand = window.PointCommand.create({
@@ -7385,7 +7392,7 @@
       return;
     }
 
-    if (!textEditingTarget && ["mirror-axis", "pattern-direction"].includes(mode) && e.key === "Enter") {
+    if (!textEditingTarget && (["mirror-axis", "pattern-direction"].includes(mode) || mode.startsWith("free-instance-")) && e.key === "Enter") {
       e.preventDefault();
       geometryInstanceCommand.finish();
       return;
@@ -12337,11 +12344,16 @@
     };
   }
 
-  const derivedPanel = window.DerivedCommandPanel.create({
+  derivedPanel = window.DerivedCommandPanel.create({
     getMode: () => mode, projectionSources: () => sketchProjectionSources,
     geometryCommand: geometryInstanceCommand, sourceCommand: instanceSourceCommand,
-    resolveGeometryRef, sketchName, activeSketchId, elementSketchId, applicationText,
+    resolveGeometryRef, sketchName, activeSketchId, elementSketchId, geometryRefForItem, applicationText,
     finishProjection: commitSketchProjectionCommand,
+    removeProjectionSource: index => {
+      if (mode !== "sketch-projection" || index < 0 || index >= sketchProjectionSources.length) return;
+      sketchProjectionSources.splice(index, 1);
+      draw();
+    },
     cancel: () => {
       if (mode === "instance-sources") return finishInstanceSourceEdit(false);
       exitDrawMode();

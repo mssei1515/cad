@@ -9,7 +9,7 @@ function fixture(){
     hitReferenceTarget:()=>{record('referenceHit')();return f.reference;},hitDerivedProjectionOperand:()=>{record('derivedHit')();return f.derived;},
     hitBlockProjectionOperand:()=>{record('blockHit')();return f.block;},operandElement:operand=>operand.element,toggleSketchProjectionSource:record('projection'),
     clearSnap:record('clearSnap'),selectionRectangle:{begin:record('rectangle')},capturePointer:record('capture'),snapForDrawing:p=>{assert.equal(p,f.p);record('snap')();return f.snapped;},
-    makeConstraintOperand:(kind,{line})=>({kind,line}),setHint:record('hint'),applicationText:a=>a});
+    makeConstraintOperand:(kind,{line})=>({kind,line}),setHint:record('hint'),applicationText:a=>a,releasePanelFocus() {}});
   f.click=hits=>f.controller.click(f.e,f.p,hits||{});f.names=()=>f.calls.map(c=>c.name);return f;
 }
 test('source editing uses projection reference queries or derived-before-block operands',()=>{

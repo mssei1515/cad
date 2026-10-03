@@ -1,7 +1,7 @@
 /* Shared command presentation. Commands retain ownership of drafts and validation. */
 (() => {
   "use strict";
-  function create({ document, host, readState, onAction, onSetting }) {
+  function create({ document, host, readState, onAction, onSetting, onSelect, onRemove }) {
     const panel = document.createElement("section");
     panel.id = "commandPanel";
     panel.className = "command-panel";
@@ -33,7 +33,7 @@
       panel.hidden = false;
       panel.dataset.command = state.id;
       panel.setAttribute("aria-label", state.title);
-      const schema = JSON.stringify([state.id, (state.selections || []).map(group => group.label),
+      const schema = JSON.stringify([state.id, (state.selections || []).map(group => group.key),
         (state.settings || []).map(setting => [setting.key, setting.type]), (state.actions || []).map(action => action.id)]);
       if (schema !== structure) {
         structure = schema;
@@ -42,12 +42,20 @@
         panel.replaceChildren(view.title, view.step);
         for (const group of state.selections || []) {
           const section = node("div", null, "command-panel-selection");
-          const heading = node("strong");
+          const heading = node("div", null, "command-panel-input");
+          heading.tabIndex = 0;
+          heading.setAttribute("role", "button");
+          heading.dataset.input = group.key;
+          heading.id = "commandPanelInput-" + group.key;
           section.append(heading);
           const list = node("ul");
+          list.tabIndex = 0;
+          list.dataset.input = group.key;
+          list.setAttribute("role", "listbox");
+          list.setAttribute("aria-labelledby", heading.id);
           section.append(list);
           panel.append(section);
-          view.groups.push({ heading, list, signature: "" });
+          view.groups.push({ section, heading, list, signature: "", items: [] });
         }
         for (const setting of state.settings || []) {
           const label = node("label", null, "command-panel-setting");
@@ -76,11 +84,29 @@
       (state.selections || []).forEach((group, index) => {
         const entry = view.groups[index];
         entry.heading.textContent = `${group.label}: ${group.items.length}`;
-        const next = JSON.stringify(group.items);
+        entry.section.classList.toggle("active", Boolean(group.active));
+        entry.heading.setAttribute("aria-pressed", String(Boolean(group.active)));
+        entry.list.dataset.emptyLabel = group.emptyLabel || "";
+        const next = JSON.stringify(group.items.map(item => item.key));
         if (entry.signature !== next) {
           entry.signature = next;
-          entry.list.replaceChildren(...group.items.map(item => node("li", item)));
+          const hadFocus = entry.list.contains(document.activeElement);
+          entry.items = group.items.map((item, itemIndex) => {
+            const row = node("li");
+            row.tabIndex = 0;
+            row.setAttribute("role", "option");
+            row.dataset.input = group.key;
+            row.dataset.inputItem = String(itemIndex);
+            return row;
+          });
+          entry.list.replaceChildren(...entry.items);
+          if (hadFocus) entry.list.focus();
         }
+        group.items.forEach((item, itemIndex) => {
+          const row = entry.items[itemIndex];
+          row.textContent = item.label;
+          row.setAttribute("aria-selected", String(Boolean(item.selected)));
+        });
       });
       (state.settings || []).forEach((setting, index) => {
         const { input, text } = view.settings[index];
@@ -99,6 +125,8 @@
       });
     }
     panel.addEventListener("click", event => {
+      const row = event.target.closest("[data-input]");
+      if (row) { onSelect?.(row.dataset.input, row.dataset.inputItem == null ? null : Number(row.dataset.inputItem)); return; }
       const button = event.target.closest("button[data-action]");
       if (button && !button.disabled) onAction(button.dataset.action);
     });
@@ -107,6 +135,30 @@
       if (input.dataset.setting) onSetting(input.dataset.setting, input.type === "checkbox" ? input.checked : input.value);
     });
     panel.addEventListener("keydown", event => {
+      const row = event.target.closest("[data-input]");
+      const list = event.target.closest('[role="listbox"]');
+      if (list && ["ArrowUp", "ArrowDown", "Home", "End"].includes(event.key)) {
+        event.preventDefault(); event.stopPropagation();
+        const items = [...list.children];
+        const current = items.indexOf(event.target);
+        const index = event.key === "Home" ? 0 : event.key === "End" ? items.length - 1
+          : Math.max(0, Math.min(items.length - 1, current + (event.key === "ArrowDown" ? 1 : -1)));
+        if (items[index]) {
+          items[index].focus();
+          onSelect?.(list.dataset.input, index);
+        }
+        return;
+      }
+      if (row && ["Delete", "Backspace"].includes(event.key)) {
+        event.preventDefault(); event.stopPropagation();
+        if (row.dataset.inputItem != null) onRemove?.(row.dataset.input, Number(row.dataset.inputItem));
+        return;
+      }
+      if (row && ["Enter", " "].includes(event.key)) {
+        event.preventDefault(); event.stopPropagation();
+        onSelect?.(row.dataset.input, row.dataset.inputItem == null ? null : Number(row.dataset.inputItem));
+        return;
+      }
       if (event.key === "Escape") { event.preventDefault(); event.stopPropagation(); onAction("cancel"); }
       if (event.key === "Enter") {
         event.preventDefault(); event.stopPropagation();

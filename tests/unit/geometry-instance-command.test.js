@@ -6,18 +6,20 @@ const test = require('node:test');
 const sandbox = { window: {} }; vm.createContext(sandbox);
 vm.runInContext(fs.readFileSync(path.resolve(__dirname, '../../src/commands/geometry_instance_command.js'), 'utf8'), sandbox);
 class Line { constructor(id, sketchId = 'S1') { this.id = id; this.sketchId = sketchId; } }
-function fixture() {
+function fixture(preselect = true) {
   let mode = 'select', ids = 0;
   const source = new Line('L1'), model = { geometryInstances: [] }, calls = [];
+  const items = new Map([[source.id, source]]);
   const command = sandbox.window.GeometryInstanceCommand.create({
     cancelConstraintTargetCommand() {}, cancelPendingCommand() {}, canCreateInActiveSketch: () => true, rejectRootSketchCreation() {},
-    selectedItemsForGeometryInstance: () => [source], geometryRefForItem: item => ({ kind: 'line', id: item.id }), clearSelection() {},
+    selectedItemsForGeometryInstance: () => preselect ? [source] : [], geometryRefForItem: item => { if (!item) return null; items.set(item.id, item); return { kind: 'line', id: item.id }; },
+    geometryRefsEqual: (a,b) => a?.id === b?.id, isVisibleSketchElement: item => !item.hidden, clearSelection() {},
     normalizeGeometryInstance: raw => ({ rotation: 0, ...raw }), previewFreeId: () => 'FI1', nextInstanceId: type => { ids++; return `${type}-${ids}`; },
     activeSketchId: () => 'S1', getMode: () => mode, setMode: value => { mode = value; }, updateToolbar() {}, updateUI() {},
     applicationText: (_ja, en) => en, setHint: () => calls.push('hint'), draw() {}, currentScope: () => model,
     canvasSelection: { set: (_field, items) => calls.push(items[0]) }, recordHistory: () => calls.push('history'),
     Line, lineHasDirection: () => true, elementSketchId: item => item.sketchId,
-    resolveGeometryRef: () => source, createGeometryInstanceBundle: instance => ({ instance }),
+    resolveGeometryRef: ref => items.get(ref.id), createGeometryInstanceBundle: instance => ({ instance }),
   });
   return { command, source, model, calls, mode: () => mode, ids: () => ids };
 }
@@ -26,9 +28,11 @@ test('free placement allocates only on commit and previews use the same pending 
   const f = fixture(); f.command.start('free'); const pending = f.command.pending;
   assert.equal(f.mode(), 'free-instance-origin'); assert.equal(pending.id, 'FI1'); assert.equal(f.ids(), 0);
   f.command.placeFree({ x: 10, y: 20 }); assert.equal(f.mode(), 'free-instance-place');
+  f.command.selectInput('destination');
   assert.equal(pending.origin.x, 10); assert.equal(f.command.preview({ x: 40, y: 50 }).instance, pending);
   assert.equal(pending.x, 40); assert.equal(f.ids(), 0); assert.equal(f.model.geometryInstances.length, 0);
   f.command.placeFree({ x: 60, y: 70 });
+  assert.equal(f.model.geometryInstances.length, 0); f.command.finish();
   assert.equal(f.model.geometryInstances[0], pending); assert.equal(pending.x, 60); assert.equal(f.ids(), 1);
   assert.equal(f.command.pending, null); assert.equal(f.mode(), 'select'); assert.equal(f.calls.filter(v => v === 'history').length, 1);
 });
@@ -70,4 +74,26 @@ test('pattern rejects invalid spacing and fractional or excessive copies without
     assert.equal(f.command.changeSetting(key, value), false); assert.equal(f.command.finish(), false);
     assert.equal(f.ids(), 0); assert.equal(f.model.geometryInstances.length, 0);
   }
+});
+
+test('empty start retains independently editable reference and sources', () => {
+  for (const type of ['mirror','pattern']) {
+    const f=fixture(false); f.command.start(type);
+    assert.equal(f.command.canFinish(),false);
+    f.command.selectInput('reference'); f.command.selectReference(f.source);
+    f.command.selectInput('sources'); f.command.toggleSource(f.source);
+    assert.equal(f.command.canFinish(),true);
+    f.command.removeInput('sources',0); assert.equal(f.command.canFinish(),false);
+    assert.equal(f.command.reference,f.source);
+    f.command.toggleSource(f.source); assert.equal(f.command.finish(),true);
+  }
+});
+test('preview cannot overwrite a destination picked before the anchor', () => {
+  const f=fixture(false); f.command.start('free');
+  f.command.selectInput('destination'); f.command.placeFree({x:60,y:70});
+  f.command.selectInput('sources'); f.command.toggleSource(f.source);
+  f.command.selectInput('origin'); f.command.placeFree({x:5,y:10});
+  f.command.selectInput('destination'); f.command.preview({x:900,y:900});
+  assert.equal(f.command.destination.x,60); f.command.finish();
+  assert.equal(f.model.geometryInstances[0].x,60);
 });

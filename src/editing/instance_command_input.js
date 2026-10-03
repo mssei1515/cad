@@ -3,8 +3,9 @@
   "use strict";
   function create({ getMode, instanceSourceCommand, geometryInstanceCommand, hitReferenceTarget, hitDerivedProjectionOperand,
     hitBlockProjectionOperand, operandElement, toggleSketchProjectionSource, clearSnap, selectionRectangle,
-    capturePointer, snapForDrawing, makeConstraintOperand, setHint, applicationText }) {
+    capturePointer, snapForDrawing, makeConstraintOperand, setHint, applicationText, releasePanelFocus }) {
     function click(e, p, { hitP, hitL, hitC, hitA, hitS }) {
+      if (["instance-sources", "sketch-projection", "mirror-axis", "pattern-direction"].includes(getMode()) || getMode().startsWith("free-instance-")) releasePanelFocus();
       if (getMode() === "instance-sources") {
         e.preventDefault();
         const operand = instanceSourceCommand.instance.type === "sketchProjection"
@@ -23,6 +24,12 @@
         clearSnap();
         selectionRectangle.begin(p, { kind: "sketch-projection" });
         capturePointer(e.pointerId);
+        return true;
+      }
+      if ((getMode().startsWith("free-instance-") || ["mirror-axis", "pattern-direction"].includes(getMode())) && geometryInstanceCommand.activeInput === "sources") {
+        e.preventDefault();
+        const operand = hitDerivedProjectionOperand(p.x, p.y) || hitBlockProjectionOperand(p.x, p.y);
+        geometryInstanceCommand.toggleSource(operand ? operandElement(operand) : hitP || hitL || hitC || hitA || hitS);
         return true;
       }
       if (getMode().startsWith("free-instance-")) {
