@@ -115,7 +115,7 @@ const files = [
   "tests/unit/sketch-hierarchy.test.js",
   "src/document/annotations.js",
   "src/document/hatches.js",
-  "src/document/reference_images.js", "src/persistence/reference_image_import.js",
+  "src/document/reference_images.js", "src/persistence/reference_image_import.js", "src/commands/reference_image_command.js",
   "tests/unit/document-elements.test.js",
   "src/persistence/document_snapshot.js",
   "tests/unit/document-snapshot.test.js",

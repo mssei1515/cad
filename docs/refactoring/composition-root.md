@@ -6,6 +6,10 @@
 
 ## 現在の再開地点（2026-10-03）
 
+ReferenceImageCommandへ画像準備後の現在scopeへの配置・選択・履歴を分離。既存の準備後のSketch／viewport照会タイミングを維持。app.jsは11,288行から11,252行へ縮小（36行減）。今回の再開全体では12,389行から1,137行減。構文367ファイル・単体876件・全E2E367件成功（exit 0、19.8分）。ログはcad-image-command-{check,unit}.logとcad-refactor-final-e2e.log。週枠残量49%を確認して新規抽出を停止し、develop先行・main最後の統合と同期後に一時停止する。再開方針はrefactoring-policy-and-resume.mdのsection 8を参照。全体目標は未完了。
+
+### 前回の区切り
+
 ReferenceImageImportへ参照画像の形式判定・読取・デコード・縮小を分離。Document非依存のprepare APIとし、Sketchへの配置・選択・履歴はappに残す。app.jsは11,325行から11,288行へ縮小（37行減）。構文366ファイル・単体874件・関連E2E103件成功（exit 0、1.2分）。ログはcad-image-import-{check,unit,e2e}.log。全体E2Eは今回未実行。次は画像配置、Document読込適用、描画調整、入力module組立て、pending session、診断の責務。全体目標は未完了。
 
 ### 前回の区切り
