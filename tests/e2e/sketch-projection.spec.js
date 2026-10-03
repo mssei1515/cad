@@ -180,12 +180,14 @@ test("projection, mirror, and pattern toolbar commands create grouped instances"
   await page.evaluate((sourceId) => window.__jot2dTest.selectGeometryIdsForTest({ lines: [sourceId] }), copyFixture.sourceId);
   await page.click("#toolMirror");
   await page.mouse.click(copyFixture.axis.x, copyFixture.axis.y);
+  await page.keyboard.press("Enter");
 
   await page.evaluate((sourceId) => window.__jot2dTest.selectGeometryIdsForTest({ lines: [sourceId] }), copyFixture.sourceId);
   await page.click("#toolPattern");
-  const answers = ["12.5", "4"];
-  page.on("dialog", async (dialog) => dialog.accept(answers.shift()));
+  await page.locator('#commandPanel [data-setting="spacing"]').fill("12.5");
+  await page.locator('#commandPanel [data-setting="copies"]').fill("4");
   await page.mouse.click(copyFixture.direction.x, copyFixture.direction.y);
+  await page.locator('#commandPanel [data-action="finish"]').click();
 
   state = await page.evaluate(() => window.__jot2dTest.derivedInstanceStateForTest());
   expect(state.serialized.geometryInstances.map((item) => item.type)).toEqual(["mirror", "pattern"]);

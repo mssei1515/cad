@@ -254,6 +254,15 @@ button:disabled { opacity: .45; cursor: default; }
 .constraint-summary-row { min-height: 34px; display: flex; align-items: center; padding: 5px 8px; border-bottom: 1px solid var(--border); color: var(--text-secondary); background: var(--panel-2); font-size: 12px; font-weight: 600; line-height: 1.45; }
 
 .canvas-area { position: relative; min-width: 0; min-height: 0; overflow: hidden; background: var(--canvas); }
+.command-panel { position: absolute; top: 12px; right: 12px; z-index: 20; width: 260px; max-width: calc(100% - 24px); max-height: calc(100% - 24px); overflow: auto; padding: 12px; border: 1px solid var(--context-border); border-radius: 8px; background: var(--panel); color: var(--text); box-shadow: 0 4px 16px #0002; font-size: 12px; }
+.command-panel[hidden] { display: none; }
+.command-panel h2 { font-size: 14px; margin: 0 0 8px; }
+.command-panel-step, .command-panel-message { margin: 8px 0; line-height: 1.5; }
+.command-panel-selection { margin: 8px 0; }
+.command-panel-selection ul { margin: 4px 0; padding-left: 18px; max-height: 100px; overflow: auto; overflow-wrap: anywhere; }
+.command-panel-setting { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin: 8px 0; }
+.command-panel-setting input[type=number] { width: 90px; min-width: 0; }
+.command-panel-actions { display: flex; justify-content: flex-end; gap: 6px; margin-top: 12px; }
 #canvas { display: block; width: 100%; height: 100%; cursor: default; }
 #canvas.is-dragging { cursor: default; }
 #canvas.is-panning { cursor: grabbing; }

@@ -407,6 +407,7 @@
   let dimensionExpressionMarkCapture = null;
   let geometryClipboard = null;
   const HISTORY_LIMIT = 80;
+  let commandPanel = null;
   const geometryInstanceCommand = window.GeometryInstanceCommand.create({
     cancelConstraintTargetCommand, cancelPendingCommand, canCreateInActiveSketch, rejectRootSketchCreation,
     selectedItemsForGeometryInstance, geometryRefForItem, clearSelection, normalizeGeometryInstance,
@@ -414,10 +415,10 @@
     nextInstanceId: type => type === "free" ? `FI${freeInstanceSeq++}` : type === "mirror" ? `MI${mirrorInstanceSeq++}` : `PI${patternInstanceSeq++}`,
     activeSketchId, getMode: () => mode, setMode: value => { mode = value; }, updateToolbar, updateUI,
     applicationText, setHint, draw, currentScope: workspace.current, canvasSelection, recordHistory,
-    Line, lineHasDirection, elementSketchId, prompt: (message, initial) => window.prompt(message, initial),
+    Line, lineHasDirection, elementSketchId,
     resolveGeometryRef, createGeometryInstanceBundle,
   });
-  const { start: startGeometryInstanceCommand, placeFree: placeFreeInstance, commitReference: commitGeometryInstanceReference } = geometryInstanceCommand;
+  const { start: startGeometryInstanceCommand, placeFree: placeFreeInstance } = geometryInstanceCommand;
   const instanceSourceCommand = window.InstanceSourceCommand.create({
     currentScope: workspace.current, activeSketchId, exitDrawMode, cancelConstraintTargetCommand, cancelPendingCommand,
     clearSelection, canvasSelection, getMode: () => mode, setMode: value => { mode = value; }, updateToolbar, updateUI, updatePropertiesUI,
@@ -1530,6 +1531,9 @@
     if (!item) return false;
     if (mode === "instance-sources" && instanceSourceCommand.includesRef(geometryRefForItem(item))) return true;
     if (mode === "sketch-projection" && sketchProjectionSources.some((entry) => entry.item === item)) return true;
+    if (["mirror-axis", "pattern-direction"].includes(mode) || mode.startsWith("free-instance-")) {
+      if (item === geometryInstanceCommand.reference || geometryInstanceCommand.sources.some(ref => geometryRefsEqual(ref, geometryRefForItem(item)))) return true;
+    }
     if (options.arcEndpoint) {
       return constraintOperands.some((operand) => operand.kind === "arc-endpoint" && sameArcEndpoint(operand, options.arcEndpoint));
     }
@@ -2975,6 +2979,7 @@
   }
 
   function exitDrawMode() {
+    geometryInstanceCommand.reset();
     instanceSourceCommand.reset();
     resetCenterlineCommandState();
     lineCommand.reset();
@@ -4213,6 +4218,7 @@
   }
 
   function draw() {
+    commandPanel?.update();
     if (!interactionProfiler.active) return drawUnprofiled();
     return profileInteractionWork("draw", () => drawUnprofiled());
   }
@@ -7376,6 +7382,12 @@
     if (!textEditingTarget && mode === "sketch-projection" && e.key === "Enter") {
       e.preventDefault();
       commitSketchProjectionCommand();
+      return;
+    }
+
+    if (!textEditingTarget && ["mirror-axis", "pattern-direction"].includes(mode) && e.key === "Enter") {
+      e.preventDefault();
+      geometryInstanceCommand.finish();
       return;
     }
 
@@ -12324,6 +12336,23 @@
       },
     };
   }
+
+  const derivedPanel = window.DerivedCommandPanel.create({
+    getMode: () => mode, projectionSources: () => sketchProjectionSources,
+    geometryCommand: geometryInstanceCommand, sourceCommand: instanceSourceCommand,
+    resolveGeometryRef, sketchName, activeSketchId, elementSketchId, applicationText,
+    finishProjection: commitSketchProjectionCommand,
+    cancel: () => {
+      if (mode === "instance-sources") return finishInstanceSourceEdit(false);
+      exitDrawMode();
+      updateUI({ refreshAnalysis: false });
+      setHint(applicationText("コマンドをキャンセルしました", "Command canceled."));
+      draw();
+    },
+    changeFreeProperty: changeFreeInstanceProperty,
+    refresh: () => { updatePropertiesUI(); draw(); },
+  });
+  commandPanel = window.CommandPanel.create({ document, host: canvas.parentElement, ...derivedPanel });
 
   installTestHooks();
   installExpressionInputHighlights(document);
