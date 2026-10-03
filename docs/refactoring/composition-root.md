@@ -6,6 +6,10 @@
 
 ## 現在の再開地点（2026-10-03）
 
+KeyboardInteractionController.createCancellationへEsc取消の優先順位を統合。各commandの状態所有を維持し、一度のEscで一操作だけ処理する。配置確定の拒否時にも後続取消へ進まない。app.jsは11,627行から11,594行へ縮小（33行減）。構文362ファイル・単体859件・関連E2E192件成功（exit 0、2.2分）。ログはcad-keyboard-cancel-{check,unit,e2e}.log。全体E2Eは今回未実行。週枠残量57%。次は入力module組立て、pending session、Document／描画／診断の責務。全体目標は未完了。
+
+### 前回の区切り
+
 CanvasInputBindingへCanvasイベント接続・移動flush境界・終了計測・座標表示を分離し、CanvasNavigationへwheel倍率変更を統合。元eventと処理順、pointer中心のworld座標維持、倍率制限、寸法入力同期を保持。app.jsは11,672行から11,627行へ縮小（45行減）。構文検査・単体858件・関連E2E198件成功（exit 0、2.2分）。ログはcad-canvas-binding-{check,unit,e2e}.log。全体E2Eは今回未実行。開始時週枠残量61%。次は共通取消優先順位、入力module組立て、残るDocument／描画／診断の責務。全体目標は未完了。
 
 ### 前回の区切り

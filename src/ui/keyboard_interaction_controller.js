@@ -1,6 +1,22 @@
 /* Route application keyboard input without owning document or operation state. */
 (() => {
   "use strict";
+  // Escape unwinds one operation only; command owners retain their own state.
+  function createCancellation({ getMode, instances, projection, referenceImage, splineEditing, blockPlacement,
+    pending, constraint, drawing, selection }) {
+    return function cancel() {
+      if (instances.cancel()) return;
+      if (getMode() === "sketch-projection") { projection.cancel(); return; }
+      if (referenceImage.calibrating) { referenceImage.cancelCalibration(); return; }
+      if (splineEditing.current) { splineEditing.finish(); return; }
+      if (getMode() === "block-place") { blockPlacement.finishOrCancel(); return; }
+      if (pending.active()) { pending.cancel(); return; }
+      if (constraint.active()) { constraint.cancel(); return; }
+      if (drawing.active()) { drawing.cancel(); return; }
+      if (drawing.isToolMode()) { drawing.exit(); return; }
+      if (selection.active()) selection.clear();
+    };
+  }
   function create({ menus, sketchMove, constraintStatusView, shortcuts, dimensionInput, operations, isTextEditingTarget }) {
     function keydown(e) {
       if (e.key === "Escape" && menus.closeSketch()) { e.preventDefault(); return; }
@@ -98,5 +114,5 @@
     }
     return Object.freeze({ keydown });
   }
-  window.KeyboardInteractionController = Object.freeze({ create });
+  window.KeyboardInteractionController = Object.freeze({ create, createCancellation });
 })();

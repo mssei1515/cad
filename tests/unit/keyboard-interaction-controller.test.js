@@ -56,3 +56,32 @@ test('mode completion, offset pointer and cancellation route to command APIs', (
   f.state.mode = 'select'; f.calls.length = 0; f.key('Escape'); assert.deepEqual(f.calls, [['prevent'], ['cancel']]);
   f.calls.length = 0; f.key('Delete'); assert.deepEqual(f.calls, [['delete'], ['prevent']]);
 });
+
+
+test('Escape unwinds exactly one active operation in priority order', () => {
+  const calls = []; const state = { mode: 'sketch-projection', instance: true, image: true, spline: {}, pending: true, constraint: true, drawing: true, tool: true, selection: true };
+  const record = name => () => calls.push(name);
+  const cancel = sandbox.window.KeyboardInteractionController.createCancellation({
+    getMode: () => state.mode,
+    instances: { cancel: () => { if (!state.instance) return false; calls.push('instance'); return true; } },
+    projection: { cancel: record('projection') },
+    referenceImage: { get calibrating() { return state.image; }, cancelCalibration: record('image') },
+    splineEditing: { get current() { return state.spline; }, finish: record('spline') },
+    blockPlacement: { finishOrCancel: record('block') },
+    pending: { active: () => state.pending, cancel: record('pending') },
+    constraint: { active: () => state.constraint, cancel: record('constraint') },
+    drawing: { active: () => state.drawing, cancel: record('drawing'), isToolMode: () => state.tool, exit: record('exit') },
+    selection: { active: () => state.selection, clear: record('selection') },
+  });
+  const expect = name => { calls.length = 0; cancel(); assert.deepEqual(calls, name ? [name] : []); };
+  expect('instance'); state.instance = false;
+  expect('projection'); state.mode = 'block-place';
+  expect('image'); state.image = false;
+  expect('spline'); state.spline = null;
+  expect('block'); expect('block'); // A rejected placement must not fall through to pending input.
+  state.mode = 'line'; expect('pending'); state.pending = false;
+  expect('constraint'); state.constraint = false;
+  expect('drawing'); state.drawing = false;
+  expect('exit'); state.tool = false;
+  expect('selection'); state.selection = false; expect(null);
+});

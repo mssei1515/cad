@@ -6906,47 +6906,14 @@
   canvasInputBinding.bind();
   dimensionInputController.bindInput(dimensionValueInput);
 
-  function cancelKeyboardOperation() {
-    if (geometryInstanceCommand.cancel()) return;
-    if (mode === "sketch-projection") {
-      sketchProjectionCommand.cancel();
-      return;
-    }
-    if (referenceImageInteraction.calibrating) {
-      cancelReferenceImageCalibration();
-      return;
-    }
-    if (splineEditing.current) {
-      finishSplineEditSession();
-      return;
-    }
-    if (mode === "block-place") {
-      blockPlacementCommand.finishOrCancel();
-      return;
-    }
-    if (pendingCommand) {
-      cancelPendingCommand();
-      return;
-    }
-    if (pendingConstraintCommand) {
-      cancelConstraintTargetCommand();
-      return;
-    }
-    if (hasActiveDrawOperation()) {
-      cancelActiveDrawOperation();
-      return;
-    }
-    if (isDrawToolMode()) {
-      exitDrawMode();
-      return;
-    }
-    if (hasSelection()) {
-      clearSelection();
-      setHint("選択を解除しました");
-      updateUI();
-      draw();
-    }
-  }
+  const cancelKeyboardOperation = window.KeyboardInteractionController.createCancellation({
+    getMode: () => mode, instances: geometryInstanceCommand, projection: sketchProjectionCommand,
+    referenceImage: referenceImageInteraction, splineEditing, blockPlacement: blockPlacementCommand,
+    pending: { active: () => Boolean(pendingCommand), cancel: cancelPendingCommand },
+    constraint: { active: () => Boolean(pendingConstraintCommand), cancel: cancelConstraintTargetCommand },
+    drawing: { active: hasActiveDrawOperation, cancel: cancelActiveDrawOperation, isToolMode: isDrawToolMode, exit: exitDrawMode },
+    selection: { active: hasSelection, clear: () => { clearSelection(); setHint("選択を解除しました"); updateUI(); draw(); } },
+  });
   const keyboardInteraction = window.KeyboardInteractionController.create({
     menus: { closeSketch: () => sketchContextController.close(),
       canvasVisible: () => canvasContextMenu && !canvasContextMenu.hidden, closeCanvas: closeCanvasContextMenu },
