@@ -7,11 +7,18 @@ function fixture() {
   const session = sandbox.window.DocumentFiles.create();
   const state = { data: { documentName: 'Drawing', points: [] }, block: false, choice: 'discard', imported: [], checkpoints: [], hints: [] };
   session.markCheckpoint('new', state.data);
-  const browser = { location: { search: '' }, URLSearchParams };
+  const browser = { location: { search: '' }, URLSearchParams, FileReader: class {
+    constructor() { this.listeners = {}; }
+    addEventListener(type, fn) { this.listeners[type] = fn; }
+    readAsText(file) {
+      state.finishRead = () => { this.result = file.content ?? JSON.stringify({ documentName: 'Loaded' }); this.listeners[file.error ? 'error' : 'load'](); };
+      if (!state.holdRead) state.finishRead();
+    }
+  } };
   const command = sandbox.window.DocumentFileCommand.create({ window: browser, document: { getElementById: () => null }, fileSession: session,
     choiceDialog: { show: async () => state.choice }, applicationText: (ja, en) => en,
     isEditingBlock: () => state.block, getDocumentName: () => state.data.documentName,
-    serializeModel: () => state.data, importFileData: async (file, options) => { state.imported.push([file, options]); return state.accept !== false; },
+    serializeModel: () => state.data, applyLoadedDocument: (data, name) => { if (state.accept === false) throw new Error('Invalid document'); state.imported.push([data, name]); },
     markDocumentFileCheckpoint: (kind, data) => { state.checkpoints.push([kind, data]); session.markCheckpoint(kind, data); },
     updateDocumentNameUI() {}, setHint: (...args) => state.hints.push(args), log() {},
   });
@@ -39,7 +46,7 @@ test('failed import preserves the save target and releases native open exclusion
   const file = { name: 'new.jot2d' }; f.state.accept = false;
   f.browser.showOpenFilePicker = async () => [{ getFile: async () => file }];
   assert.equal(await f.command.open(), false);
-  assert.equal(f.state.imported[0][0], file); assert.equal(f.session.handle, original); assert.equal(f.session.busy, false);
+  assert.equal(f.state.imported.length, 0); assert.equal(f.session.handle, original); assert.equal(f.session.busy, false);
 });
 test('canceling replacement from file input clears input but preserves target and model', async () => {
   const f = fixture(); f.state.data = { documentName: 'Edited' }; f.state.choice = null;
@@ -53,4 +60,23 @@ test('unload checks live data and pending writes, independently of history statu
   check(false); f.state.data.points.push(1); check(true); f.state.data.points.pop();
   f.session.beginSave(); check(true); f.session.finishSave(); check(false);
   f.state.block = true; check(true);
+});
+
+test('read completion rechecks live changes and Block editing before applying data', async () => {
+  for (const edit of ['document', 'block']) {
+    const f = fixture(); f.state.holdRead = true;
+    const expectedContentSignature = sandbox.window.DocumentFiles.documentContentSignature(f.state.data);
+    const reading = f.command.importFileData({ name: 'held.jot2d' }, { expectedContentSignature });
+    if (edit === 'document') f.state.data.points.push(1); else f.state.block = true;
+    f.state.finishRead(); assert.equal(await reading, false); assert.equal(f.state.imported.length, 0);
+  }
+});
+test('read parses data before model application and reports read or JSON failures', async () => {
+  const f = fixture();
+  assert.equal(await f.command.importFileData(null), false);
+  assert.equal(await f.command.importFileData({ name: 'broken', content: '{' }), false);
+  assert.equal(await f.command.importFileData({ name: 'unreadable', error: true }), false);
+  assert.equal(f.state.imported.length, 0);
+  assert.equal(await f.command.importFileData({ name: 'valid.jot2d', content: '{"documentName":"Parsed"}' }), true);
+  assert.equal(f.state.imported[0][0].documentName, 'Parsed'); assert.equal(f.state.imported[0][1], 'valid.jot2d');
 });

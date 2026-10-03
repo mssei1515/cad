@@ -6,6 +6,10 @@
 
 ## 現在の再開地点（2026-10-03）
 
+DocumentFileCommandへFileReader読込・JSON解析・待機前後のBlock編集確認と内容変更検知を統合。appはapplyLoadedDocumentで図面適用・求解・履歴・checkpoint・表示調整を接続し、診断hookも同じ読込APIを利用する。app.jsは11,361行から11,325行へ縮小（36行減）。構文365ファイル・単体871件・関連E2E149件成功（exit 0、1.7分）。ログはcad-file-import-{check,unit,e2e}.log。全体E2Eは今回未実行。開始時週枠残量53%。次はDocument読込適用、描画調整、入力module組立て、pending session、診断の責務。全体目標は未完了。
+
+### 前回の区切り
+
 DocumentStatusViewへ履歴に基づくDocument保存状態表示、DocumentFileCommandへ実データによるbeforeunload保護を分離。状態所有はDocumentFiles／履歴に維持し、表示と終了保護の判定対象の違いを保持。app.jsは11,386行から11,361行へ縮小（25行減）。構文365ファイル・単体869件・関連E2E112件成功（exit 0、1.3分）。ログはcad-document-status-{check,unit,e2e}.log。全体E2Eは今回未実行。次はDocument読込適用、描画調整、入力module組立て、pending session、診断の責務。全体目標は未完了。
 
 ### 前回の区切り

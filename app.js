@@ -2374,55 +2374,19 @@
   const documentFileCommand = window.DocumentFileCommand.create({
     window, document, fileSession, choiceDialog, applicationText,
     isEditingBlock: () => Boolean(blockEditor.current), getDocumentName: () => documentModel.documentName,
-    serializeModel, importFileData, markDocumentFileCheckpoint, updateDocumentNameUI, setHint, log,
+    serializeModel, markDocumentFileCheckpoint, updateDocumentNameUI, setHint, log,
+    applyLoadedDocument: (data, fileName) => {
+      loadModelData(data, { documentNameOverride: fileNameStem(fileName) });
+      solveAndRefresh("ファイル読み込み");
+      resetHistory("ファイル読み込み");
+      markDocumentFileCheckpoint("saved");
+      updateDocumentNameUI();
+      fitAllGeometryToViewport();
+      draw();
+      if (lastLoadBlockConstraintRepairMessage) setHint(lastLoadBlockConstraintRepairMessage);
+    },
   });
-  const { save: saveJot2DFile, saveAs: saveJot2DFileAs, open: openJot2DFile } = documentFileCommand;
-
-  function importFileData(file, { expectedContentSignature = null } = {}) {
-    if (!file) return Promise.resolve(false);
-    if (blockEditor.current) {
-      setHint("ブロック定義編集を終了してから読み込んでください", "error");
-      return Promise.resolve(false);
-    }
-
-    return new Promise((resolve) => {
-      const reader = new FileReader();
-      reader.addEventListener("load", () => {
-        try {
-          if (blockEditor.current) {
-            setHint("ブロック定義編集を終了してから読み込んでください", "error");
-            resolve(false);
-            return;
-          }
-          if (expectedContentSignature !== null && documentContentSignature(serializeModel()) !== expectedContentSignature) {
-            setHint(applicationText("読込待機中に図面が変更されたため、ファイルを開く操作を中止しました", "Opening was canceled because the drawing changed while the file was being read."));
-            resolve(false);
-            return;
-          }
-          loadModelData(JSON.parse(String(reader.result)), { documentNameOverride: fileNameStem(file.name) });
-          solveAndRefresh("ファイル読み込み");
-          resetHistory("ファイル読み込み");
-          markDocumentFileCheckpoint("saved");
-          updateDocumentNameUI();
-          fitAllGeometryToViewport();
-          draw();
-          if (lastLoadBlockConstraintRepairMessage) setHint(lastLoadBlockConstraintRepairMessage);
-          log(`ファイルを読み込みました: ${file.name}`);
-          resolve(true);
-        } catch (err) {
-          setHint(`ファイル読み込みに失敗しました: ${err.message}`);
-          log(`ファイル読み込みに失敗しました: ${err.message}`);
-          resolve(false);
-        }
-      });
-      reader.addEventListener("error", () => {
-        setHint("ファイル読み込みに失敗しました");
-        log("ファイル読み込みに失敗しました");
-        resolve(false);
-      });
-      reader.readAsText(file);
-    });
-  }
+  const { save: saveJot2DFile, saveAs: saveJot2DFileAs, open: openJot2DFile, importFileData } = documentFileCommand;
 
   function readFileAsDataUrl(file) {
     return new Promise((resolve, reject) => {

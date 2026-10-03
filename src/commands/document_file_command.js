@@ -4,7 +4,7 @@
   const { JOT2D_FILE_EXTENSION, JOT2D_FILE_MIME_TYPE, safeDownloadBaseName,
     documentContentSignature, writeJot2DFile } = window.DocumentFiles;
   function create({ window, document, fileSession, choiceDialog, applicationText,
-    isEditingBlock, getDocumentName, serializeModel, importFileData,
+    isEditingBlock, getDocumentName, serializeModel, applyLoadedDocument,
     markDocumentFileCheckpoint, updateDocumentNameUI, setHint, log }) {
     async function confirmDocumentReplacement() {
       if (!isEditingBlock() && fileSession.matchesCheckpoint(serializeModel())) return true;
@@ -185,13 +185,52 @@
         fileSession.finishOpen();
       }
     }
+    function importFileData(file, { expectedContentSignature = null } = {}) {
+      if (!file) return Promise.resolve(false);
+      if (isEditingBlock()) {
+        setHint("ブロック定義編集を終了してから読み込んでください", "error");
+        return Promise.resolve(false);
+      }
+
+      return new Promise((resolve) => {
+        const reader = new window.FileReader();
+        reader.addEventListener("load", () => {
+          try {
+            if (isEditingBlock()) {
+              setHint("ブロック定義編集を終了してから読み込んでください", "error");
+              resolve(false);
+              return;
+            }
+            if (expectedContentSignature !== null && documentContentSignature(serializeModel()) !== expectedContentSignature) {
+              setHint(applicationText("読込待機中に図面が変更されたため、ファイルを開く操作を中止しました", "Opening was canceled because the drawing changed while the file was being read."));
+              resolve(false);
+              return;
+            }
+            applyLoadedDocument(JSON.parse(String(reader.result)), file.name);
+            log(`ファイルを読み込みました: ${file.name}`);
+            resolve(true);
+          } catch (err) {
+            setHint(`ファイル読み込みに失敗しました: ${err.message}`);
+            log(`ファイル読み込みに失敗しました: ${err.message}`);
+            resolve(false);
+          }
+        });
+        reader.addEventListener("error", () => {
+          setHint("ファイル読み込みに失敗しました");
+          log("ファイル読み込みに失敗しました");
+          resolve(false);
+        });
+        reader.readAsText(file);
+      });
+    }
+
     function beforeUnload(event) {
       const dirty = isEditingBlock() || fileSession.savePending || !fileSession.matchesCheckpoint(serializeModel());
       if (!dirty) return;
       event.preventDefault();
       event.returnValue = "";
     }
-    return Object.freeze({ beforeUnload, save: saveJot2DFile, saveAs: saveJot2DFileAs, open: openJot2DFile, fileInputChanged });
+    return Object.freeze({ importFileData, beforeUnload, save: saveJot2DFile, saveAs: saveJot2DFileAs, open: openJot2DFile, fileInputChanged });
   }
   window.DocumentFileCommand = Object.freeze({ create });
 })();
