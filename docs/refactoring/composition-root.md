@@ -6,6 +6,10 @@
 
 ## 現在の再開地点（2026-10-03）
 
+RuntimeVersionViewへHelpの実行コミット情報の検証・状態保持・再描画を分離。起動済みデータをloadで受け取り、言語変更はrenderだけを呼ぶ。HTTP／file起動方式は維持。app.jsは11,594行から11,557行へ縮小（37行減）。構文363ファイル・単体862件・関連E2E102件成功（exit 0、1.2分）。ログはcad-runtime-view-{check,unit,e2e}.log。全体E2Eは今回未実行。開始時週枠残量57%。次は描画用表示方針、入力module組立て、pending session、Document／診断の責務。全体目標は未完了。
+
+### 前回の区切り
+
 KeyboardInteractionController.createCancellationへEsc取消の優先順位を統合。各commandの状態所有を維持し、一度のEscで一操作だけ処理する。配置確定の拒否時にも後続取消へ進まない。app.jsは11,627行から11,594行へ縮小（33行減）。構文362ファイル・単体859件・関連E2E192件成功（exit 0、2.2分）。ログはcad-keyboard-cancel-{check,unit,e2e}.log。全体E2Eは今回未実行。週枠残量57%。次は入力module組立て、pending session、Document／描画／診断の責務。全体目標は未完了。
 
 ### 前回の区切り

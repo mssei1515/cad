@@ -190,7 +190,7 @@ const files = [
   "src/editing/drawing_snap.js",
   "src/editing/snap_constraints.js",
   "tests/unit/drawing-snap.test.js",
-  "src/ui/application_menus.js", "src/ui/canvas_context_menu.js", "src/ui/canvas_context_presentation.js",
+  "src/ui/runtime_version_view.js", "src/ui/application_menus.js", "src/ui/canvas_context_menu.js", "src/ui/canvas_context_presentation.js",
   "tests/e2e/application-menus.spec.js",
   "src/parameters/dialog_draft.js",
   "tests/unit/parameter-dialog-draft.test.js",
