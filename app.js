@@ -561,7 +561,7 @@
     cancelPendingCommand, startDistanceValueInput, defaultDimensionForTarget,
     submitOffsetValue: () => submitOffsetValue(), submitDistanceValue: () => submitDistanceValue(), applicationText, setHint, draw,
   });
-  const { hide: hideDimensionValueInput, sync: syncDimensionValueInput, focus: focusDimensionValueInput, handleKey: handleDistanceKey, updateBufferLabel: updateDistanceBufferLabel } = dimensionInputController;
+  const { hide: hideDimensionValueInput, sync: syncDimensionValueInput, focus: focusDimensionValueInput, updateBufferLabel: updateDistanceBufferLabel } = dimensionInputController;
   function dimensionLayout(target, dimension, appearance = effectiveDimensionAppearance(dimension)) {
     return dimensionLayouts.dimensionLayout(target, dimension, appearance);
   }
@@ -7238,173 +7238,99 @@
     { passive: false },
   );
 
-  window.addEventListener("keydown", (e) => {
-    if (e.key === "Escape" && sketchContextController.close()) { e.preventDefault(); return; }
-    if (sketchMoveCommand.active) {
-      if (e.key === "Escape") sketchMoveCommand.cancel();
-      else if (e.target.closest?.("#sketchList") && !e.ctrlKey && !e.metaKey && ["Tab", "Enter", " ", "ArrowUp", "ArrowDown"].includes(e.key)) return;
-      e.preventDefault(); return;
-    }
-    if (e.key === "Escape" && canvasContextMenu && !canvasContextMenu.hidden) {
-      e.preventDefault();
-      closeCanvasContextMenu();
-      return;
-    }
-    const key = e.key.toLowerCase();
-    const commandKey = e.ctrlKey || e.metaKey;
-    const textEditingTarget = e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement || e.target?.isContentEditable;
-    if (constraintStatusView.hold(e, textEditingTarget)) return;
-    if (commandKey && key === "s") {
-      e.preventDefault();
-      if (e.repeat) return;
-      if (e.shiftKey) void saveJot2DFileAs();
-      else void saveJot2DFile();
-      return;
-    }
-    if (commandKey && isGeometryMode() && !textEditingTarget && ["c", "x", "v"].includes(key)) {
-      e.preventDefault();
-      if (key === "c") copySelectionToClipboard();
-      else if (key === "x") copySelectionToClipboard({ cut: true });
-      else pasteGeometryClipboard();
-      return;
-    }
-    if (commandKey && key === "z" && !e.shiftKey) {
-      e.preventDefault();
-      undoHistory();
-      return;
-    }
-    if (commandKey && (key === "y" || (key === "z" && e.shiftKey))) {
-      e.preventDefault();
-      redoHistory();
-      return;
-    }
-
-    if (handleDistanceKey(e)) return;
-
-    if (!textEditingTarget && mode === "instance-sources" && ["Enter", "Escape"].includes(e.key)) {
-      e.preventDefault();
-      finishInstanceSourceEdit(e.key === "Enter");
-      return;
-    }
-
-    if (!textEditingTarget && mode === "spline" && e.key === "Enter") {
-      e.preventDefault();
-      finalizeSplineCreation(false);
-      return;
-    }
-
-    if (!textEditingTarget && mode === "sketch-projection" && e.key === "Enter") {
-      e.preventDefault();
-      commitSketchProjectionCommand();
-      return;
-    }
-
-    if (!textEditingTarget && (["mirror-axis", "pattern-direction"].includes(mode) || mode.startsWith("free-instance-")) && e.key === "Enter") {
-      e.preventDefault();
-      geometryInstanceCommand.finish();
-      return;
-    }
-
-    if (!textEditingTarget && mode === "spline" && e.key === "Backspace") {
-      e.preventDefault();
-      splineDraft.removeLast();
-      setHint(applicationText("通過点をクリックしてください。Enterまたは空白のダブルクリックで終了（ダブルクリック位置は追加しません）、始点クリックで閉じます", "Click fit points. Press Enter or double-click blank canvas to finish without adding that position, or click the start point to close."));
+  function cancelKeyboardOperation() {
+    if (mode.startsWith("free-instance-")) {
+      geometryInstanceCommand.reset();
+      mode = "select";
+      updateUI({ refreshAnalysis: false });
+      updateToolbar();
       draw();
       return;
     }
-
-    if (!textEditingTarget && e.key === "Enter" && mode === "offset" && offsetCommand.canConfirmSelection()) {
-      e.preventDefault();
-      offsetCommand.confirmSelection(lastPointerWorld);
+    if (mode === "mirror-axis" || mode === "pattern-direction") {
+      geometryInstanceCommand.clearSources();
+      mode = "select";
+      updateToolbar();
+      setHint(applicationText("派生インスタンス作成をキャンセルしました", "Derived instance creation canceled."));
+      draw();
       return;
     }
-
-    if (!textEditingTarget && (e.key === "Delete" || e.key === "Backspace") && isGeometryMode() && deleteCurrentSelection()) {
-      e.preventDefault();
+    if (mode === "sketch-projection") {
+      sketchProjectionSources = [];
+      mode = "select";
+      canvasHover.update({
+        point: null, line: null, circle: null,
+        arc: null, spline: null, sketchIdentity: null,
+      });
+      updateToolbar();
+      setHint(applicationText("スケッチ投影をキャンセルしました", "Sketch projection was canceled."));
+      updateUI({ refreshAnalysis: false });
+      draw();
       return;
     }
-
-    if (e.key === "Enter" && completePendingDimensionLineLength()) {
-      e.preventDefault();
+    if (referenceImageInteraction.calibrating) {
+      cancelReferenceImageCalibration();
       return;
     }
-
-    if (e.key === "Escape") {
-      e.preventDefault();
-      if (mode.startsWith("free-instance-")) {
-        geometryInstanceCommand.reset();
+    if (splineEditSession) {
+      finishSplineEditSession();
+      return;
+    }
+    if (mode === "block-place") {
+      if (blockPlacementCommand.anchor) commitBlockPlacement(0);
+      else {
+        blockPlacementCommand.reset({ preservePanelState: true });
+        drawingPreview.setPointer(null);
         mode = "select";
-        updateUI({ refreshAnalysis: false });
-        updateToolbar();
-        draw();
-        return;
-      }
-      if (mode === "mirror-axis" || mode === "pattern-direction") {
-        geometryInstanceCommand.clearSources();
-        mode = "select";
-        updateToolbar();
-        setHint(applicationText("派生インスタンス作成をキャンセルしました", "Derived instance creation canceled."));
-        draw();
-        return;
-      }
-      if (mode === "sketch-projection") {
-        sketchProjectionSources = [];
-        mode = "select";
-        canvasHover.update({
-          point: null, line: null, circle: null,
-          arc: null, spline: null, sketchIdentity: null,
-        });
-        updateToolbar();
-        setHint(applicationText("スケッチ投影をキャンセルしました", "Sketch projection was canceled."));
-        updateUI({ refreshAnalysis: false });
-        draw();
-        return;
-      }
-      if (referenceImageInteraction.calibrating) {
-        cancelReferenceImageCalibration();
-        return;
-      }
-      if (splineEditSession) {
-        finishSplineEditSession();
-        return;
-      }
-      if (mode === "block-place") {
-        if (blockPlacementCommand.anchor) commitBlockPlacement(0);
-        else {
-          blockPlacementCommand.reset({ preservePanelState: true });
-          drawingPreview.setPointer(null);
-          mode = "select";
-          restoreBlockPlacementPropertiesPanel();
-          setHint("ブロック配置をキャンセルしました");
-          updateUI();
-          draw();
-        }
-        return;
-      }
-      if (pendingCommand) {
-        cancelPendingCommand();
-        return;
-      }
-      if (pendingConstraintCommand) {
-        cancelConstraintTargetCommand();
-        return;
-      }
-      if (hasActiveDrawOperation()) {
-        cancelActiveDrawOperation();
-        return;
-      }
-      if (isDrawToolMode()) {
-        exitDrawMode();
-        return;
-      }
-      if (hasSelection()) {
-        clearSelection();
-        setHint("選択を解除しました");
+        restoreBlockPlacementPropertiesPanel();
+        setHint("ブロック配置をキャンセルしました");
         updateUI();
         draw();
       }
+      return;
     }
+    if (pendingCommand) {
+      cancelPendingCommand();
+      return;
+    }
+    if (pendingConstraintCommand) {
+      cancelConstraintTargetCommand();
+      return;
+    }
+    if (hasActiveDrawOperation()) {
+      cancelActiveDrawOperation();
+      return;
+    }
+    if (isDrawToolMode()) {
+      exitDrawMode();
+      return;
+    }
+    if (hasSelection()) {
+      clearSelection();
+      setHint("選択を解除しました");
+      updateUI();
+      draw();
+    }
+  }
+  function removeLastSplineInputPoint() {
+    splineDraft.removeLast();
+    setHint(applicationText("通過点をクリックしてください。Enterまたは空白のダブルクリックで終了（ダブルクリック位置は追加しません）、始点クリックで閉じます", "Click fit points. Press Enter or double-click blank canvas to finish without adding that position, or click the start point to close."));
+    draw();
+  }
+  const keyboardInteraction = window.KeyboardInteractionController.create({
+    menus: { closeSketch: () => sketchContextController.close(),
+      canvasVisible: () => canvasContextMenu && !canvasContextMenu.hidden, closeCanvas: closeCanvasContextMenu },
+    sketchMove: sketchMoveCommand, constraintStatusView, dimensionInput: dimensionInputController,
+    shortcuts: { save: saveJot2DFile, saveAs: saveJot2DFileAs, copy: copySelectionToClipboard,
+      paste: pasteGeometryClipboard, undo: undoHistory, redo: redoHistory },
+    operations: { getMode: () => mode, isGeometryMode, finishSources: finishInstanceSourceEdit,
+      finishSpline: finalizeSplineCreation, finishProjection: commitSketchProjectionCommand,
+      finishInstance: () => geometryInstanceCommand.finish(), removeSplinePoint: removeLastSplineInputPoint,
+      offset: offsetCommand, getPointer: () => lastPointerWorld, deleteSelection: deleteCurrentSelection,
+      completeLineLength: completePendingDimensionLineLength, cancel: cancelKeyboardOperation },
+    isTextEditingTarget: target => target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement || target?.isContentEditable,
   });
+  window.addEventListener("keydown", keyboardInteraction.keydown);
   window.addEventListener("keyup", constraintStatusView.release);
   window.addEventListener("blur", constraintStatusView.blur);
 

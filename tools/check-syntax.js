@@ -46,7 +46,7 @@ const files = [
   "tests/unit/spline-command.test.js",
   "src/editing/spline_draft.js",
   "tests/unit/spline-draft.test.js",
-  "src/ui/constraint_status_view.js", "src/ui/canvas_navigation.js", "src/ui/pointer_move_scheduler.js",
+  "src/ui/keyboard_interaction_controller.js", "src/ui/constraint_status_view.js", "src/ui/canvas_navigation.js", "src/ui/pointer_move_scheduler.js",
   "tests/unit/pointer-move-scheduler.test.js", "tests/unit/canvas-navigation.test.js",
   "src/document/state.js",
   "tests/unit/document-state.test.js",
