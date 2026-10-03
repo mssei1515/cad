@@ -112,7 +112,7 @@ test("free placement settings share the existing draft and cancellation closes t
   await panel(page).locator('[data-setting="rotation"]').fill("30");
   await panel(page).locator('[data-setting="mirrorX"]').check();
   const destination = await page.evaluate(() => window.__jot2dTest.worldClientPositionForTest({ x: 40, y: 20 }));
-  await page.locator('#commandPanelInput-destination').click();
+  await page.locator('#commandPanel [role="listbox"][data-input="destination"]').click();
   await page.mouse.click(destination.x, destination.y);
   await finish(page).click();
   await expect(panel(page)).toBeHidden();
@@ -130,9 +130,9 @@ test('empty starts allow reference first, row selection and removal without dele
     const source = await page.evaluate(() => window.__jot2dTest.worldClientPositionForTest({x:-40,y:25}));
     await page.click('#tool' + tool);
     await expect(panel(page)).toContainText('複写元: 0');
-    await page.locator('#commandPanelInput-reference').click();
+    await page.locator('#commandPanel [role="listbox"][data-input="reference"]').click();
     await page.mouse.click(f.axis.x, f.axis.y);
-    await page.locator('#commandPanelInput-sources').click();
+    await page.locator('#commandPanel [role="listbox"][data-input="sources"]').click();
     await page.mouse.click(source.x, source.y);
     const row = panel(page).locator('[data-input="sources"][data-input-item="0"]');
     await row.click(); await expect(row).toHaveAttribute('aria-selected','true');
@@ -152,11 +152,11 @@ test('free inputs allow destination and settings before sources and anchor', asy
   const points = await page.evaluate(() => [{x:40,y:20},{x:-40,y:25},{x:-55,y:15}].map(p=>window.__jot2dTest.worldClientPositionForTest(p)));
   await page.click('#toolFreeInstance');
   await panel(page).locator('[data-setting="rotation"]').fill('30');
-  await page.locator('#commandPanelInput-destination').click();
+  await page.locator('#commandPanel [role="listbox"][data-input="destination"]').click();
   await page.mouse.click(points[0].x,points[0].y);
-  await page.locator('#commandPanelInput-sources').click();
+  await page.locator('#commandPanel [role="listbox"][data-input="sources"]').click();
   await page.mouse.click(points[1].x,points[1].y);
-  await page.locator('#commandPanelInput-origin').click();
+  await page.locator('#commandPanel [role="listbox"][data-input="origin"]').click();
   await page.mouse.click(points[2].x,points[2].y);
   await expect(finish(page)).toBeEnabled(); expect(await instances(page)).toHaveLength(0);
   await panel(page).locator('[data-input="origin"][data-input-item="0"]').press('Backspace');
@@ -185,7 +185,10 @@ test('listboxes accept empty input selection and arrow-key target selection', as
   await page.click('#toolMirror');
   const boxes = panel(page).getByRole('listbox');
   await boxes.nth(1).click();
-  await expect(page.locator('#commandPanelInput-reference')).toHaveAttribute('aria-pressed','true');
+  await expect(boxes.nth(1).locator('..')).toHaveClass(/active/);
+  await expect(page.locator('#commandPanelInput-reference')).not.toHaveAttribute('aria-pressed');
+  await expect(page.locator('#commandPanelInput-reference')).not.toHaveAttribute('role');
+  await expect(page.locator('#commandPanelInput-reference')).not.toHaveAttribute('tabindex');
   await page.mouse.click(f.axis.x,f.axis.y);
   await boxes.nth(0).click();
   await page.mouse.click(source.x,source.y); await page.mouse.click(f.direction.x,f.direction.y);

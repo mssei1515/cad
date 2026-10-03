@@ -266,7 +266,7 @@ test("synchronized instance command previews rotation and reflection, cancels an
   await expect(rotation).toHaveValue("-30");
   await rotation.fill("90"); await rotation.press("Tab");
   await page.locator('[data-free-instance-property="mirrorX"]').check();
-  await page.locator('#commandPanelInput-destination').click();
+  await page.locator('#commandPanel [role="listbox"][data-input="destination"]').click();
   await clickWorld(page, { x: 20, y: 30 });
   await page.locator('#commandPanel [data-action="finish"]').click();
   let current = await state(page);

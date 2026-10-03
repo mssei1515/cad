@@ -43,9 +43,6 @@
         for (const group of state.selections || []) {
           const section = node("div", null, "command-panel-selection");
           const heading = node("div", null, "command-panel-input");
-          heading.tabIndex = 0;
-          heading.setAttribute("role", "button");
-          heading.dataset.input = group.key;
           heading.id = "commandPanelInput-" + group.key;
           section.append(heading);
           const list = node("ul");
@@ -85,7 +82,6 @@
         const entry = view.groups[index];
         entry.heading.textContent = `${group.label}: ${group.items.length}`;
         entry.section.classList.toggle("active", Boolean(group.active));
-        entry.heading.setAttribute("aria-pressed", String(Boolean(group.active)));
         entry.list.dataset.emptyLabel = group.emptyLabel || "";
         const next = JSON.stringify(group.items.map(item => item.key));
         if (entry.signature !== next) {

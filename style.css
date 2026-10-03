@@ -260,12 +260,11 @@ button:disabled { opacity: .45; cursor: default; }
 .command-panel-step, .command-panel-message { margin: 8px 0; line-height: 1.5; }
 .command-panel-message { white-space: pre-line; }
 .command-panel-selection { margin: 8px 0; }
-.command-panel-input { font-weight: 600; padding: 4px; cursor: pointer; border-radius: 3px; }
-.command-panel-selection.active > .command-panel-input { background: var(--panel-2); box-shadow: inset 3px 0 var(--accent); }
-.command-panel-input:hover, .command-panel-selection li:hover { background: var(--panel-2); }
+.command-panel-input { font-weight: 600; padding: 4px; }
+.command-panel-selection li:hover { background: var(--panel-2); }
 .command-panel-selection li { padding: 3px 4px; cursor: pointer; border-radius: 3px; }
 .command-panel-selection li[aria-selected="true"] { background: var(--panel-2); outline: 1px solid var(--accent); }
-.command-panel-input:focus-visible, .command-panel-selection li:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.command-panel-selection li:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 .command-panel-selection ul { margin: 4px 0; padding: 3px; min-height: 32px; max-height: 100px; overflow: auto; overflow-wrap: anywhere; list-style: none; border: 1px solid var(--context-border); border-radius: 3px; cursor: pointer; }
 .command-panel-selection.active ul { border-color: var(--accent); }
 .command-panel-selection ul:empty::before { content: attr(data-empty-label); display: block; padding: 3px 4px; color: var(--muted); }
