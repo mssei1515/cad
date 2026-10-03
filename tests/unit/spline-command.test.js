@@ -6,7 +6,7 @@ const test = require('node:test');
 const sandbox = { window: { GeometrySolver: { hypot2: (x, y) => Math.sqrt(x * x + y * y) } } };
 vm.createContext(sandbox);
 vm.runInContext(fs.readFileSync(path.resolve(__dirname, '../../src/commands/spline_command.js'), 'utf8'), sandbox);
-function fixture(count = 3, success = true) {
+function fixture(count = 3, success = true, allowed = true) {
   const calls = [];
   const points = Array.from({ length: count }, (_, i) => ({ x: i * 10, y: 0 }));
   const spline = { id: 'SP1' };
@@ -14,6 +14,10 @@ function fixture(count = 3, success = true) {
     add: () => true, discardDoubleClick: () => false };
   let creation;
   const command = sandbox.window.SplineCommand.create({ draft, scale: () => 2,
+    cancelConstraintTargetCommand: () => calls.push("cancelConstraint"), cancelPendingCommand: () => calls.push("cancelPending"),
+    canCreateInActiveSketch: () => allowed, rejectRootSketchCreation: () => calls.push("reject"),
+    setMode: value => calls.push(value), resetEditing: () => calls.push("editReset"),
+    resetBlankCandidate: () => calls.push("blankReset"), updateToolbar: () => calls.push("toolbar"),
     snapForDrawing: point => point,
     addSpline: (fitPoints, closed) => { calls.push('create'); creation = { fitPoints, closed }; return success ? spline : null; },
     clearProjectionSources: () => calls.push('projection'), setPointerPreview: () => calls.push('preview'),
@@ -48,4 +52,20 @@ test('failed double-click completion redraws when it discarded a point', () => {
   };
   assert.equal(f.command.doubleClick({ x: 50, y: 0 }), false);
   assert.deepEqual(f.calls, ['hint', 'draw']);
+});
+
+test('start cancels pending operations before root guard and leaves rejected draft untouched', () => {
+  const f = fixture(3, true, false); f.draft.begin = () => assert.fail('root cannot begin');
+  f.command.start(); assert.deepEqual(f.calls, ['cancelConstraint', 'cancelPending', 'reject']);
+  assert.equal(f.draft.points.length, 3);
+});
+test('start resets editing and gesture state in order without solve or history', () => {
+  const f = fixture(); f.draft.begin = () => { f.calls.push('begin'); f.draft.points = []; };
+  f.command.start();
+  assert.deepEqual(f.calls, ['cancelConstraint', 'cancelPending', 'spline', 'begin', 'projection', 'editReset', 'blankReset', 'preview', 'clearSelection', 'snap', 'toolbar', 'hint', 'draw']);
+  assert.equal(f.draft.points.length, 0);
+});
+test('removeLast delegates rollback to the draft then updates authoring feedback', () => {
+  const f = fixture(); f.draft.removeLast = () => { f.calls.push('remove'); f.draft.points.pop(); };
+  f.command.removeLast(); assert.equal(f.draft.points.length, 2); assert.deepEqual(f.calls, ['remove', 'hint', 'draw']);
 });

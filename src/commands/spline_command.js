@@ -4,7 +4,32 @@
   const { hypot2 } = window.GeometrySolver;
   function create({ draft, addSpline, snapForDrawing, scale, clearProjectionSources, setPointerPreview,
     clearSnap, clearSelection, selectCreatedSpline, solveAndRefresh, recordHistory,
-    applicationText, setHint, updateUI, draw }) {
+    applicationText, setHint, updateUI, draw, cancelConstraintTargetCommand, cancelPendingCommand,
+    canCreateInActiveSketch, rejectRootSketchCreation, setMode, resetEditing, resetBlankCandidate, updateToolbar }) {
+    function beginSplineCreation() {
+      cancelConstraintTargetCommand("");
+      cancelPendingCommand("");
+      if (!canCreateInActiveSketch()) return void rejectRootSketchCreation();
+      setMode("spline");
+      draft.begin();
+      clearProjectionSources();
+      resetEditing();
+      resetBlankCandidate();
+      setPointerPreview(null);
+      clearSelection();
+      clearSnap();
+      updateToolbar();
+      showInputHint();
+      draw();
+    }
+
+    function removeLastSplineInputPoint() {
+      draft.removeLast();
+      showInputHint();
+      draw();
+    }
+    function showInputHint() { setHint(applicationText("通過点をクリックしてください。Enterまたは空白のダブルクリックで終了（ダブルクリック位置は追加しません）、始点クリックで閉じます", "Click fit points. Press Enter or double-click blank canvas to finish without adding that position, or click the start point to close.")); }
+
     function finalizeSplineCreation(closed = false) {
       if (draft.points.length < 3) {
         setHint("スプラインには3点以上の通過点が必要です", "error");
@@ -53,7 +78,7 @@
       if (!finalized && discarded) draw();
       return finalized;
     }
-    return Object.freeze({ finalize: finalizeSplineCreation, click: handleSplineClick, doubleClick: finalizeSplineFromDoubleClick });
+    return Object.freeze({ start: beginSplineCreation, removeLast: removeLastSplineInputPoint, finalize: finalizeSplineCreation, click: handleSplineClick, doubleClick: finalizeSplineFromDoubleClick });
   }
   window.SplineCommand = Object.freeze({ create });
 })();

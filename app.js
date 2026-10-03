@@ -649,13 +649,16 @@
   function snapForDrawing(point) { return drawingSnap.resolve(point, 10 / viewport.scale); }
   const splineCommand = window.SplineCommand.create({
     draft: splineDraft, addSpline, snapForDrawing, scale: () => viewport.scale,
+    cancelConstraintTargetCommand, cancelPendingCommand, canCreateInActiveSketch, rejectRootSketchCreation,
+    setMode: value => { mode = value; }, resetEditing: () => splineEditing.reset(),
+    resetBlankCandidate: () => blankCanvasGesture.resetCandidate(), updateToolbar,
     clearProjectionSources: () => { sketchProjectionCommand.reset(); },
     setPointerPreview: value => { drawingPreview.setPointer(value); },
     clearSnap, clearSelection,
     selectCreatedSpline: spline => { canvasSelection.set("splines", [spline]); mode = "select"; },
     solveAndRefresh, recordHistory, applicationText, setHint, updateUI, draw,
   });
-  const { finalize: finalizeSplineCreation, click: handleSplineClick, doubleClick: finalizeSplineFromDoubleClick } = splineCommand;
+  const { start: beginSplineCreation, removeLast: removeLastSplineInputPoint, finalize: finalizeSplineCreation, click: handleSplineClick, doubleClick: finalizeSplineFromDoubleClick } = splineCommand;
   const snapConstraints = window.SnapConstraints.create({ isActiveSketchElement, elementSketchId, isReferenceSourceSketchId, addPoint, addConstraintIfMissing });
   const { addPointSnapConstraints, addArcEndpointSnapConstraints, addCircularBoundarySnapConstraints, addLineBoundarySnapConstraints } = snapConstraints;
   const lineCommand = window.LineCommand.create({
@@ -2038,23 +2041,6 @@
 
 
 
-
-  function beginSplineCreation() {
-    cancelConstraintTargetCommand("");
-    cancelPendingCommand("");
-    if (!canCreateInActiveSketch()) return void rejectRootSketchCreation();
-    mode = "spline";
-    splineDraft.begin();
-    sketchProjectionCommand.reset();
-    splineEditing.reset();
-    blankCanvasGesture.resetCandidate();
-    drawingPreview.setPointer(null);
-    clearSelection();
-    clearSnap();
-    updateToolbar();
-    setHint(applicationText("通過点をクリックしてください。Enterまたは空白のダブルクリックで終了（ダブルクリック位置は追加しません）、始点クリックで閉じます", "Click fit points. Press Enter or double-click blank canvas to finish without adding that position, or click the start point to close."));
-    draw();
-  }
 
   const splineEditing = window.SplineEditCommand.create({
     currentScope: () => model, ids: geometryIds, clearSelection, canvasSelection, applicationText, setHint, updateUI, draw,
@@ -7087,11 +7073,6 @@
       updateUI();
       draw();
     }
-  }
-  function removeLastSplineInputPoint() {
-    splineDraft.removeLast();
-    setHint(applicationText("通過点をクリックしてください。Enterまたは空白のダブルクリックで終了（ダブルクリック位置は追加しません）、始点クリックで閉じます", "Click fit points. Press Enter or double-click blank canvas to finish without adding that position, or click the start point to close."));
-    draw();
   }
   const keyboardInteraction = window.KeyboardInteractionController.create({
     menus: { closeSketch: () => sketchContextController.close(),
