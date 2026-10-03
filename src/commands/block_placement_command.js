@@ -107,12 +107,25 @@
       commitBlockPlacement(blockPlacementRotation(pointer));
     }
 
+    // The current placement stage determines whether Escape commits or cancels.
+    function finishOrCancel() {
+      if (blockPlacementAnchor) return commitBlockPlacement(0);
+      reset({ preservePanelState: true });
+      setPointerPreview(null);
+      setMode("select");
+      restoreBlockPlacementPropertiesPanel();
+      setHint("ブロック配置をキャンセルしました");
+      updateUI();
+      draw();
+      return null;
+    }
+
     function restoreBlockPlacementPropertiesPanel() {
       if (blockPlacementPropertiesWasCollapsed) setPropertiesPanelCollapsed(true);
       blockPlacementPropertiesWasCollapsed = null;
     }
     return Object.freeze({ start: startBlockPlacement, commit: commitBlockPlacement, click: handleBlockPlacementClick,
-      rotation: blockPlacementRotation, restorePropertiesPanel: restoreBlockPlacementPropertiesPanel,
+      finishOrCancel, rotation: blockPlacementRotation, restorePropertiesPanel: restoreBlockPlacementPropertiesPanel,
       reset, prepare, setAnchor, setEnabledSketchIds, setRotationLocked, preview,
       get definitionId() { return blockPlacementDefinitionId; },
       get anchor() { return blockPlacementAnchor ? { ...blockPlacementAnchor } : null; },

@@ -148,6 +148,25 @@
       draw();
       return validSettings();
     }
+    function cancel() {
+      if (getMode().startsWith("free-instance-")) {
+        reset();
+        setMode("select");
+        updateUI({ refreshAnalysis: false });
+        updateToolbar();
+        draw();
+        return true;
+      }
+      if (getMode() === "mirror-axis" || getMode() === "pattern-direction") {
+        clearSources();
+        setMode("select");
+        updateToolbar();
+        setHint(applicationText("派生インスタンス作成をキャンセルしました", "Derived instance creation canceled."));
+        draw();
+        return true;
+      }
+      return false;
+    }
     function clearSources() { sources = []; referenceRef = null; }
     function clearPlacement() { freeInstancePlacement = null; origin = null; destination = null; previewingDestination = false; }
     function reset() { clearSources(); clearPlacement(); commandType = null; activeInput = "sources"; }
@@ -161,7 +180,7 @@
       if (resolved.some(({ item }) => !item)) return null;
       return createGeometryInstanceBundle(freeInstancePlacement, resolved, null, null);
     }
-    return Object.freeze({ start, placeFree, selectInput, toggleSource, removeInput, selectReference, canFinish, finish,
+    return Object.freeze({ start, placeFree, selectInput, toggleSource, removeInput, selectReference, canFinish, finish, cancel,
       changeSetting, validSettings, clearSources, clearPlacement, reset, preview,
       get activeInput() { return activeInput; },
       get sources() { return [...sources]; },

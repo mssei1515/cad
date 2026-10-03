@@ -97,3 +97,23 @@ test('preview cannot overwrite a destination picked before the anchor', () => {
   assert.equal(f.command.destination.x,60); f.command.finish();
   assert.equal(f.model.geometryInstances[0].x,60);
 });
+
+test('cancel discards free placement without allocating an instance or history', () => {
+  const f = fixture(); f.command.start('free'); f.command.placeFree({ x: 2, y: 3 });
+  f.command.selectInput('destination'); f.command.placeFree({ x: 8, y: 9 }); f.calls.length = 0;
+  assert.equal(f.command.cancel(), true); assert.equal(f.mode(), 'select');
+  assert.equal(f.command.pending, null); assert.equal(f.command.origin, null); assert.equal(f.command.destination, null);
+  assert.equal(f.command.sources.length, 0); assert.equal(f.model.geometryInstances.length, 0); assert.equal(f.ids(), 0);
+  assert.deepEqual(f.calls, []);
+  assert.equal(f.command.cancel(), false); assert.deepEqual(f.calls, []);
+});
+test('cancel clears mirror and pattern operands while retaining existing settings semantics', () => {
+  for (const type of ['mirror', 'pattern']) {
+    const f = fixture(); f.command.start(type); f.command.selectReference(f.source);
+    if (type === 'pattern') f.command.changeSetting('copies', 5);
+    f.calls.length = 0; assert.equal(f.command.cancel(), true);
+    assert.equal(f.mode(), 'select'); assert.equal(f.command.sources.length, 0); assert.equal(f.command.reference, null);
+    assert.equal(f.model.geometryInstances.length, 0); assert.equal(f.ids(), 0); assert.deepEqual(f.calls, ['hint']);
+    if (type === 'pattern') assert.equal(f.command.settings.copies, 5);
+  }
+});

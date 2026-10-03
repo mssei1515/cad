@@ -436,3 +436,5 @@ AuthoringPreviewRendererへSpline／Centerline／Trim描画も統合。Spline構
 - ConstraintStatusView: 拘束状態表示の固定／Space保持状態、blur解除、表示同期。appは入力順と接続を担当する。
 
 - KeyboardInteractionController: キーボード受付順と操作APIへの委譲。取消時の共通状態更新はapp側に残り、次の整理対象。
+
+- GeometryInstanceCommand.cancel／BlockPlacementCommand.finishOrCancel: Esc時の配置状態更新とUI復元を既存の状態所有者へ集約。追加の依存注入は不要。

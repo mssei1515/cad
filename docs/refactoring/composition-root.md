@@ -6,6 +6,10 @@
 
 ## 現在の再開地点（2026-10-03）
 
+GeometryInstanceCommand.cancelへFree／Mirror／Patternの取消、BlockPlacementCommand.finishOrCancelへanchor未指定時の取消／指定済み時の0度確定を集約。既存の状態所有者と依存だけで処理し、取消時の履歴非追加、Properties復元、配置拒否時のdraft保持を維持。app.jsは12,211行から12,187行へ縮小（24行減）。構文検査・単体826件・関連E2E160件成功（exit 0、2.0分）。ログはcad-command-cancel-{check,unit,e2e}.log。全体E2Eは今回未実行。開始時週枠残量79%。次はSketch投影／Spline編集sessionと共通モード遷移の状態所有。全体目標は未完了。
+
+### 前回の区切り
+
 KeyboardInteractionControllerへキーボードの受付優先順位と操作APIへの委譲を分離。メニュー／移動の抑止、保存repeat、文字編集対象、履歴・寸法入力・モード終了の順を保持。取消の共通状態更新とSpline点削除後の通知はappの明示actionとして残す。取消本体は分離前と処理内容が一致することを確認。app.jsは12,285行から12,211行へ縮小（74行減）。構文検査・単体822件・関連E2E198件成功（exit 0、2.4分）。ログはcad-keyboard-{check,unit,e2e}.log。全体E2Eは今回未実行。開始時週枠残量81%。次は取消操作と共通モード遷移の状態所有を整理する。全体目標は未完了。
 
 ### 前回の区切り

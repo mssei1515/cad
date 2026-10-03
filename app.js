@@ -7239,22 +7239,7 @@
   );
 
   function cancelKeyboardOperation() {
-    if (mode.startsWith("free-instance-")) {
-      geometryInstanceCommand.reset();
-      mode = "select";
-      updateUI({ refreshAnalysis: false });
-      updateToolbar();
-      draw();
-      return;
-    }
-    if (mode === "mirror-axis" || mode === "pattern-direction") {
-      geometryInstanceCommand.clearSources();
-      mode = "select";
-      updateToolbar();
-      setHint(applicationText("派生インスタンス作成をキャンセルしました", "Derived instance creation canceled."));
-      draw();
-      return;
-    }
+    if (geometryInstanceCommand.cancel()) return;
     if (mode === "sketch-projection") {
       sketchProjectionSources = [];
       mode = "select";
@@ -7277,16 +7262,7 @@
       return;
     }
     if (mode === "block-place") {
-      if (blockPlacementCommand.anchor) commitBlockPlacement(0);
-      else {
-        blockPlacementCommand.reset({ preservePanelState: true });
-        drawingPreview.setPointer(null);
-        mode = "select";
-        restoreBlockPlacementPropertiesPanel();
-        setHint("ブロック配置をキャンセルしました");
-        updateUI();
-        draw();
-      }
+      blockPlacementCommand.finishOrCancel();
       return;
     }
     if (pendingCommand) {

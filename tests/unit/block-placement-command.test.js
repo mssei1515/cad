@@ -57,3 +57,21 @@ test('cancel restores the previously collapsed panel once while document reset d
   f.command.start('D1'); f.command.reset(); f.command.restorePropertiesPanel();
   assert.equal(f.collapsed(), false);
 });
+
+test('finishOrCancel before anchor restores the panel and leaves the document untouched', () => {
+  const f = fixture(); f.command.start('D1'); f.calls.length = 0;
+  assert.equal(f.command.finishOrCancel(), null);
+  assert.equal(f.mode(), 'select'); assert.equal(f.command.definitionId, null); assert.equal(f.command.anchor, null);
+  assert.equal(f.pointer(), null); assert.equal(f.collapsed(), true); assert.equal(f.model.blockInstances.length, 0);
+  assert.deepEqual(f.calls, ['collapsed:true', 'hint', 'ui', 'draw']);
+});
+test('finishOrCancel after anchor commits at zero rotation and rejected placement retains its draft', () => {
+  const f = fixture(); f.command.start('D1'); f.command.click({ x: 20, y: 30 });
+  f.command.setEnabledSketchIds(['S2']); f.calls.length = 0;
+  assert.equal(f.command.finishOrCancel(), null); assert.equal(f.mode(), 'block-place');
+  assert.equal(f.command.anchor.x, 20); assert.equal(f.collapsed(), false); assert.deepEqual(f.calls, ['hint']);
+  f.command.setEnabledSketchIds(['S1']); f.calls.length = 0;
+  const placed = f.command.finishOrCancel(); assert.equal(placed.rotation, 0);
+  assert.equal(f.model.blockInstances[0], placed); assert.equal(f.mode(), 'select'); assert.equal(f.collapsed(), true);
+  assert.equal(f.calls.filter(call => call === 'history').length, 1);
+});
