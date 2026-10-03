@@ -460,3 +460,5 @@ AuthoringPreviewRendererへSpline／Centerline／Trim描画も統合。Spline構
 - KeyboardInteractionController.createCancellation: Escの一段取消と優先順位。状態は各commandから照会し、appはcommandとpending／selectionの限定APIを接続する。
 
 - src/ui/runtime_version_view.js: 実行コミット情報の検証・状態保持・Help表示。appが起動データと翻訳を接続。
+
+- src/commands/document_file_command.js: 保存・別名保存・native／互換入力による読込の進行と置換確認。DocumentFilesが排他・保存先・checkpointを所有し、appのimportFileDataへ読込適用を依頼する。

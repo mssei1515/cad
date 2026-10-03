@@ -103,7 +103,7 @@ const files = [
   "tests/unit/interaction-profiler.test.js",
   "src/document/appearance.js", "src/commands/hatch_command.js", "src/commands/annotation_command.js",
   "src/document/drawing_order.js", "src/editing/canvas_context_query.js", "src/editing/geometry_hit_query.js",
-  "src/persistence/document_files.js",
+  "src/persistence/document_files.js", "src/commands/document_file_command.js",
   "tests/unit/appearance.test.js",
   "tests/unit/drawing-order.test.js",
   "tests/unit/document-files.test.js",

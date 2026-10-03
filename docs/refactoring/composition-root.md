@@ -6,6 +6,10 @@
 
 ## 現在の再開地点（2026-10-03）
 
+DocumentFileCommandへ保存／別名保存／native・互換入力の読込進行と置換前確認を分離。DocumentFilesの排他・保存先・checkpoint所有を維持し、Document読込適用・求解・履歴初期化はappのimportFileDataへ接続。保存中編集のsnapshot区別と待機後のBlock編集再確認を維持。app.jsは11,557行から11,386行へ縮小（171行減）。構文364ファイル・単体866件・関連E2E118件成功（exit 0、1.3分）。ログはcad-document-file-command-{check,unit,e2e}.log。全体E2Eは今回未実行。開始時週枠残量56%。次はDocument表示・読込適用、描画調整、入力module組立て、pending session、診断の責務。全体目標は未完了。
+
+### 前回の区切り
+
 RuntimeVersionViewへHelpの実行コミット情報の検証・状態保持・再描画を分離。起動済みデータをloadで受け取り、言語変更はrenderだけを呼ぶ。HTTP／file起動方式は維持。app.jsは11,594行から11,557行へ縮小（37行減）。構文363ファイル・単体862件・関連E2E102件成功（exit 0、1.2分）。ログはcad-runtime-view-{check,unit,e2e}.log。全体E2Eは今回未実行。開始時週枠残量57%。次は描画用表示方針、入力module組立て、pending session、Document／診断の責務。全体目標は未完了。
 
 ### 前回の区切り
