@@ -6,6 +6,10 @@
 
 ## 現在の再開地点（2026-10-03）
 
+SplineEditCommandへ既存Splineの編集sessionと開始／終了／reset、通過点追加・削除・求解失敗時の復元を分離。作成用SplineDraftとは分離を維持し、描画・選択・パネル・削除は同じsessionを照会。Geometry参照、共有点削除条件、注記／拘束復元、ID・履歴順を保持。求解・注記等への明示依存は多く、共通編集サービスの整理時に見直す。app.jsは12,100行から11,983行へ縮小（117行減）。構文検査・単体834件・関連E2E155件成功（exit 0、1.9分）。ログはcad-spline-edit-{check,unit,e2e}.log。全体E2Eは今回未実行。開始時週枠残量76%。次はSpline作成開始／点取消と共通モード遷移、投影の読取り照会。全体目標は未完了。
+
+### 前回の区切り
+
 SketchProjectionCommandへ投影元draftと開始・切替・範囲追加・パネル除去・確定・取消・resetを分離。Document切替やモード終了からも同じresetへ接続し、appからリストへの直接書込みを除去。幾何候補・既存投影判定は読取りportとして残し、Geometry参照・ID・Instance形式・履歴順を維持。app.jsは12,187行から12,100行へ縮小（87行減）。構文検査・単体830件・関連E2E171件成功（exit 0、2.1分）。ログはcad-projection-command-{check,unit,e2e}.log。全体E2Eは今回未実行。開始時週枠残量78%。次はSpline編集sessionと共通モード遷移、残る投影の読取り照会。全体目標は未完了。
 
 ### 前回の区切り

@@ -440,3 +440,5 @@ AuthoringPreviewRendererへSpline／Centerline／Trim描画も統合。Spline構
 - GeometryInstanceCommand.cancel／BlockPlacementCommand.finishOrCancel: Esc時の配置状態更新とUI復元を既存の状態所有者へ集約。追加の依存注入は不要。
 
 - SketchProjectionCommand: 投影元draftと開始／選択／確定／取消／reset。幾何範囲照会はappの読取り関数に残り、既存Projection編集moduleは保存済み投影の同期を担当する。
+
+- SplineEditCommand: 既存Spline編集sessionと通過点の追加／削除／求解復元。SplineDraftは新規作成、SplineCommandは作成確定を担当する。

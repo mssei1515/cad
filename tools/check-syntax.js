@@ -42,7 +42,7 @@ const files = [
   "tests/unit/rectangle-command.test.js",
   "src/editing/transient_authoring.js",
   "tests/unit/transient-authoring.test.js",
-  "src/commands/spline_command.js",
+  "src/commands/spline_edit_command.js", "src/commands/spline_command.js",
   "tests/unit/spline-command.test.js",
   "src/editing/spline_draft.js",
   "tests/unit/spline-draft.test.js",
