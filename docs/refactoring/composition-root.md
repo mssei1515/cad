@@ -6,6 +6,10 @@
 
 ## 現在の再開地点（2026-10-03）
 
+CanvasInputBindingへCanvasイベント接続・移動flush境界・終了計測・座標表示を分離し、CanvasNavigationへwheel倍率変更を統合。元eventと処理順、pointer中心のworld座標維持、倍率制限、寸法入力同期を保持。app.jsは11,672行から11,627行へ縮小（45行減）。構文検査・単体858件・関連E2E198件成功（exit 0、2.2分）。ログはcad-canvas-binding-{check,unit,e2e}.log。全体E2Eは今回未実行。開始時週枠残量61%。次は共通取消優先順位、入力module組立て、残るDocument／描画／診断の責務。全体目標は未完了。
+
+### 前回の区切り
+
 ConstructionCommandへ補助作図設定・選択図形切替・ボタン表示照会を分離。選択ありは属性変更と履歴、選択なしは今後の作図設定の変更として独立させ、Document resetとUndo／Redo時の設定維持も同じ所有者へ接続。app.jsは11,711行から11,672行へ縮小（39行減）。構文検査・単体854件・関連E2E133件成功（exit 0、1.5分）。ログはcad-construction-command-{check,unit,e2e}.log。全体E2Eは今回未実行。開始時週枠残量63%。次は共通取消優先順位、Canvas入力接続と入力module組立て。全体目標は未完了。
 
 ### 前回の区切り

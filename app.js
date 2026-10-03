@@ -477,11 +477,11 @@
     requestFrame: (callback) => requestAnimationFrame(callback),
     cancelFrame: (frame) => cancelAnimationFrame(frame),
     processMove: (pointer) => profileInteractionPhase("preview", () => {
-      withGeometryReadCache(() => processCanvasPointerMove(pointer));
+      withGeometryReadCache(() => canvasInputBinding.processMove(pointer));
       if (pendingCommand && ["distance-value", "offset-value"].includes(pendingCommand.type)) syncDimensionValueInput();
     }),
   });
-  const { schedule: scheduleCanvasPointerMove, flush: flushScheduledCanvasPointerMove } = pointerMoveScheduler;
+  const { flush: flushScheduledCanvasPointerMove } = pointerMoveScheduler;
   let toolFlyouts = null;
   const viewState = { constraintStatus: false, geometryIds: false, showHiddenElements: false };
   const constraintStatusView = window.ConstraintStatusView.create({
@@ -6868,11 +6868,6 @@
     scene: { hitHatchAt, hitReferenceImageAt, hitDimension, hitBlockRotationHandle, hitBlockInstance,
       hitDerivedGeometryForDrag, hitGeometryInstance, hitSketchIdentityElement, hitAnnotationElement, hitAnnotationTarget },
   });
-  canvas.addEventListener("pointerdown", (e) => {
-    flushScheduledCanvasPointerMove();
-    pointerInteractionController.down(e);
-  });
-
   const pointerHover = window.PointerHover.create({
     canvasHover, sameArcEndpoint, isActiveSketchConstraint,
     geometry: { hitEndpointPoint, hitExplicitPoint, hitLine, hitCircle, hitArcEndpoint, hitArc, hitSpline },
@@ -6898,58 +6893,18 @@
         drawing: drawingCommandInput, selection: canvasSelectionInteraction } },
   });
 
-  function processCanvasPointerMove(e) {
-    const screenPoint = { x: e.offsetX, y: e.offsetY };
-    const coordinatePoint = screenToWorld(screenPoint);
-    const coordinateStatus = document.getElementById("statusCoordinates");
-    const coordinateText = `X ${formatDisplayNumber(coordinatePoint.x, 3)} / Y ${formatDisplayNumber(coordinatePoint.y, 3)}`;
-    if (coordinateStatus && coordinateStatus.textContent !== coordinateText) coordinateStatus.textContent = coordinateText;
-    pointerInteractionController.move(screenPoint, coordinatePoint, e.shiftKey);
-  }
-
-  canvas.addEventListener("pointermove", scheduleCanvasPointerMove);
-
-  function endDrag(e) {
-    flushScheduledCanvasPointerMove();
-    return profileInteractionPhase("commit", () => pointerInteractionController.finish(e));
-  }
-
   function isDrawToolMode() {
     return mode === "instance-sources" || mode === "line" || mode === "centerline" || mode === "circle-center-cross" || mode === "point" || mode === "rectangle" || mode === "slot" || mode === "fillet" || mode === "trim" || mode === "offset" || mode === "circle" || mode === "arc" || mode === "three-point-arc" || mode === "spline" || mode === "sketch-projection" || mode === "hatch" || mode === "hatch-repair";
   }
 
-  canvas.addEventListener("pointerup", endDrag);
-  canvas.addEventListener("pointercancel", endDrag);
-  canvas.addEventListener("pointerleave", () => pointerInteractionController.leave());
-  canvas.addEventListener("dblclick", (e) => {
-    flushScheduledCanvasPointerMove();
-    pointerInteractionController.doubleClick(e);
+  const canvasInputBinding = window.CanvasInputBinding.create({
+    canvas, pointer: pointerInteractionController, scheduler: pointerMoveScheduler, navigation: canvasNavigation,
+    profileCommit: work => profileInteractionPhase("commit", work), closeContextMenu: closeCanvasContextMenu,
+    afterZoom: () => { if (pendingCommand && ["distance-value", "offset-value"].includes(pendingCommand.type)) syncDimensionValueInput(); },
+    screenToWorld, formatCoordinate: formatDisplayNumber, coordinateStatus: () => document.getElementById("statusCoordinates"),
   });
-  canvas.addEventListener("auxclick", (e) => {
-    if (e.button === 1) {
-      e.preventDefault();
-      canvasNavigation.doubleClickFit(e);
-    }
-  });
+  canvasInputBinding.bind();
   dimensionInputController.bindInput(dimensionValueInput);
-  canvas.addEventListener(
-    "wheel",
-    (e) => {
-      e.preventDefault();
-      flushScheduledCanvasPointerMove();
-      closeCanvasContextMenu();
-      const screen = canvasScreenPoint(e);
-      const world = screenToWorld(screen);
-      const nextScale = clampZoom(viewport.scale * Math.exp(-e.deltaY * 0.001));
-      viewport.update({ scale: nextScale });
-      viewport.update({ x: screen.x - world.x * viewport.scale });
-      viewport.update({ y: screen.y - world.y * viewport.scale });
-      setHint(`表示倍率: ${formatZoom(viewport.scale)}`);
-      draw();
-      if (pendingCommand && ["distance-value", "offset-value"].includes(pendingCommand.type)) syncDimensionValueInput();
-    },
-    { passive: false },
-  );
 
   function cancelKeyboardOperation() {
     if (geometryInstanceCommand.cancel()) return;

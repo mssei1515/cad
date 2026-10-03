@@ -454,3 +454,5 @@ AuthoringPreviewRendererへSpline／Centerline／Trim描画も統合。Spline構
 - FilletCommand.begin／OffsetCommand.begin: 事前選択付き開始を所有。共通初期化はDrawOperationLifecycle.prepareへ委譲し、Toolbarは開始APIに接続。
 
 - ConstructionCommand: 選択図形の補助作図切替と未来の作図設定を所有。DrawOperationLifecycle.resetInputsは既に設定済みのmodeに対するdraft初期化だけを担当する。
+
+- CanvasInputBinding: Canvas DOM入力接続と座標表示。CanvasNavigation.zoom: pointer中心の倍率変更。操作判断と状態は既存controllerへ委譲。

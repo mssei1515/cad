@@ -69,3 +69,15 @@ test('reset discards pan and click state without invoking viewport or UI callbac
   assert.equal(f.navigation.panning, false);
   assert.equal(f.navigation.doubleClickFit(f.event()), false);
 });
+
+test('wheel zoom clamps scale while preserving the world point under the pointer', () => {
+  const f = fixture(); f.viewport.scale = 2;
+  f.viewport.screenToWorld = p => ({ x: (p.x - f.viewport.x) / f.viewport.scale, y: (p.y - f.viewport.y) / f.viewport.scale });
+  f.viewport.clampZoom = value => Math.min(4, Math.max(1, value)); f.viewport.formatZoom = String;
+  const e = { clientX: 100, clientY: 80, deltaY: -10000 }, before = f.viewport.screenToWorld({ x: 100, y: 80 });
+  f.navigation.zoom(e); assert.equal(f.viewport.scale, 4);
+  assert.deepEqual(f.viewport.screenToWorld({ x: 100, y: 80 }), before);
+  assert.deepEqual(f.calls.map(c => c[0]), ['hint','draw']);
+  f.navigation.zoom({ ...e, deltaY: 10000 }); assert.equal(f.viewport.scale, 1);
+  assert.deepEqual(f.viewport.screenToWorld({ x: 100, y: 80 }), before);
+});

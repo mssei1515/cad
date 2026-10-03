@@ -48,9 +48,20 @@
       return true;
     }
 
+    function zoom(event) {
+      const screen = viewport.canvasScreenPoint(event);
+      const world = viewport.screenToWorld(screen);
+      const nextScale = viewport.clampZoom(viewport.scale * Math.exp(-event.deltaY * 0.001));
+      viewport.update({ scale: nextScale });
+      viewport.update({ x: screen.x - world.x * viewport.scale });
+      viewport.update({ y: screen.y - world.y * viewport.scale });
+      setHint(`表示倍率: ${viewport.formatZoom(viewport.scale)}`);
+      draw();
+    }
+
     // Document reset discards gesture state; event routing owns capture lifetime.
     function reset() { pan = null; lastMiddleClick = null; }
-    return Object.freeze({ beginPan, movePan, endPan, doubleClickFit, reset, get panning() { return pan !== null; } });
+    return Object.freeze({ beginPan, movePan, endPan, doubleClickFit, zoom, reset, get panning() { return pan !== null; } });
   }
   window.CanvasNavigation = Object.freeze({ create });
 })();
