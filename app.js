@@ -470,8 +470,10 @@
   const { schedule: scheduleCanvasPointerMove, flush: flushScheduledCanvasPointerMove } = pointerMoveScheduler;
   let toolFlyouts = null;
   const viewState = { constraintStatus: false, geometryIds: false, showHiddenElements: false };
-  let constraintStatusMouseLatched = false;
-  let constraintStatusSpaceHeld = false;
+  const constraintStatusView = window.ConstraintStatusView.create({
+    viewState, button: document.getElementById("constraintStatusViewBtn"),
+    menuInput: document.getElementById("viewConstraintStatusInput"), setHint, draw,
+  });
   const MIN_ZOOM = CSS_PX_PER_MM * 0.001;
   const MAX_ZOOM = CSS_PX_PER_MM * 10000000;
 
@@ -1743,21 +1745,6 @@
       ? `Fully constrained: ${s.full} / Supported position: ${s.support} / Under-constrained: ${s.under} / Conflict: ${s.conflict}${constraintDuplicateSummary()}${referenceConstraintErrorSummary()}`
       : `完全拘束: ${s.full} / 支持位置拘束: ${s.support} / 未拘束: ${s.under} / 矛盾: ${s.conflict}${constraintDuplicateSummary()}${referenceConstraintErrorSummary()}`;
   }
-
-  function syncConstraintStatusView({ hint = true } = {}) {
-    const next = constraintStatusMouseLatched || constraintStatusSpaceHeld;
-    const changed = viewState.constraintStatus !== next;
-    viewState.constraintStatus = next;
-    const button = document.getElementById("constraintStatusViewBtn");
-    button?.classList.toggle("active", next);
-    button?.setAttribute("aria-pressed", String(next));
-    const menuInput = document.getElementById("viewConstraintStatusInput");
-    if (menuInput) menuInput.checked = next;
-    if (hint && changed) setHint(next ? "拘束状態表示: 表示中のGeometryの拘束状態を表示しています" : "通常表示");
-    if (changed) draw();
-  }
-
-
 
   function sketchProjectionSourceKey(item) {
     return geometryElementKey(item);
@@ -7266,12 +7253,7 @@
     const key = e.key.toLowerCase();
     const commandKey = e.ctrlKey || e.metaKey;
     const textEditingTarget = e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement || e.target?.isContentEditable;
-    if (e.code === "Space" && !textEditingTarget && !constraintStatusSpaceHeld) {
-      e.preventDefault();
-      constraintStatusSpaceHeld = true;
-      syncConstraintStatusView();
-      return;
-    }
+    if (constraintStatusView.hold(e, textEditingTarget)) return;
     if (commandKey && key === "s") {
       e.preventDefault();
       if (e.repeat) return;
@@ -7423,17 +7405,8 @@
       }
     }
   });
-  window.addEventListener("keyup", (e) => {
-    if (e.code !== "Space" || !constraintStatusSpaceHeld) return;
-    e.preventDefault();
-    constraintStatusSpaceHeld = false;
-    syncConstraintStatusView();
-  });
-  window.addEventListener("blur", () => {
-    if (!constraintStatusSpaceHeld) return;
-    constraintStatusSpaceHeld = false;
-    syncConstraintStatusView({ hint: false });
-  });
+  window.addEventListener("keyup", constraintStatusView.release);
+  window.addEventListener("blur", constraintStatusView.blur);
 
   document.getElementById("undoBtn")?.addEventListener("click", undoHistory);
   document.getElementById("redoBtn")?.addEventListener("click", redoHistory);
@@ -7461,12 +7434,10 @@
   document.getElementById("annotationLeaderBtn")?.addEventListener("click", createLeaderAnnotation);
   document.getElementById("annotationTextBtn")?.addEventListener("click", createTextAnnotation);
   document.getElementById("constraintStatusViewBtn")?.addEventListener("click", () => {
-    constraintStatusMouseLatched = !constraintStatusMouseLatched;
-    syncConstraintStatusView();
+    constraintStatusView.toggle();
   });
   document.getElementById("viewConstraintStatusInput")?.addEventListener("change", (event) => {
-    constraintStatusMouseLatched = event.target.checked;
-    syncConstraintStatusView();
+    constraintStatusView.setLatched(event.target.checked);
   });
   document.getElementById("viewShowHiddenElementsInput")?.addEventListener("change", (event) => {
     viewState.showHiddenElements = event.target.checked;
@@ -9512,8 +9483,8 @@
       viewStateForTest() {
         return {
           ...viewState,
-          mouseLatched: constraintStatusMouseLatched,
-          spaceHeld: constraintStatusSpaceHeld,
+          mouseLatched: constraintStatusView.mouseLatched,
+          spaceHeld: constraintStatusView.spaceHeld,
         };
       },
       async importDocumentNameFixture(data, fileName) {

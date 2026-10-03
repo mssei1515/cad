@@ -6,6 +6,10 @@
 
 ## 現在の再開地点（2026-10-03）
 
+ConstraintStatusViewへ拘束状態表示の固定／Space保持状態と表示同期を分離。状態のOR、keyup／blurでの解除、変更時だけの描画とhint、Toolbar／menu同期を維持。Document／Selection／履歴は変更しない。app.jsは12,314行から12,285行へ縮小（29行減）。構文検査・単体818件・関連E2E101件成功（exit 0、1.2分）。ログはcad-status-view-{check,unit,e2e}.log。全体E2Eは今回未実行。開始時週枠残量82%。次は残るkeyboard終了／取消の操作責務と共通モード遷移。全体目標は未完了。
+
+### 前回の区切り
+
 DimensionInputControllerへ寸法／Offsetの入力欄イベントとbuffer更新を統合。app.jsは要素の接続のみとなり、新しいmoduleや依存の追加なし。入力欄の通常編集とCanvasの数値キー入力の違い、最新pendingの参照、確定・取消の伝播抑止を維持。app.jsは12,335行から12,314行へ縮小（21行減）。構文検査・単体815件・関連E2E130件成功（exit 0、1.5分）。ログはcad-dimension-binding-{check,unit,e2e}.log。全体E2Eは今回未実行。開始時週枠残量83%。次はキーボードの操作終了／取消と共通状態の所有者を整理する。全体目標は未完了。
 
 ### 前回の区切り

@@ -432,3 +432,5 @@ AuthoringPreviewRendererへSpline／Centerline／Trim描画も統合。Spline構
 - PointerInteractionControllerのdoubleClick／leaveにCanvasの残るpointer操作を集約。CanvasPressQuery.readDoubleClickが専用hit順序を保持し、Spline編集の開始だけはappのsession操作へ接続。
 
 - DimensionInputController: 寸法／Offset入力欄のイベント受付とbuffer更新を既存の表示・キー入力責務へ統合。app.jsはbindInputで接続する。
+
+- ConstraintStatusView: 拘束状態表示の固定／Space保持状態、blur解除、表示同期。appは入力順と接続を担当する。
