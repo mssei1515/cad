@@ -466,3 +466,5 @@ AuthoringPreviewRendererへSpline／Centerline／Trim描画も統合。Spline構
 - src/ui/document_status_view.js: 履歴に基づくDocumentの保存状態表示。DocumentFileCommand.beforeUnloadは実データによる終了保護を担当。
 
 - DocumentFileCommand.importFileData: 読取と待機中変更検知。appのapplyLoadedDocumentはDocument適用・求解・履歴・表示更新を接続する。
+
+- src/persistence/reference_image_import.js: 参照画像の読取・デコード・縮小。図面への配置とは独立したprepare API。

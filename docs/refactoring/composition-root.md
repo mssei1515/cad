@@ -6,6 +6,10 @@
 
 ## 現在の再開地点（2026-10-03）
 
+ReferenceImageImportへ参照画像の形式判定・読取・デコード・縮小を分離。Document非依存のprepare APIとし、Sketchへの配置・選択・履歴はappに残す。app.jsは11,325行から11,288行へ縮小（37行減）。構文366ファイル・単体874件・関連E2E103件成功（exit 0、1.2分）。ログはcad-image-import-{check,unit,e2e}.log。全体E2Eは今回未実行。次は画像配置、Document読込適用、描画調整、入力module組立て、pending session、診断の責務。全体目標は未完了。
+
+### 前回の区切り
+
 DocumentFileCommandへFileReader読込・JSON解析・待機前後のBlock編集確認と内容変更検知を統合。appはapplyLoadedDocumentで図面適用・求解・履歴・checkpoint・表示調整を接続し、診断hookも同じ読込APIを利用する。app.jsは11,361行から11,325行へ縮小（36行減）。構文365ファイル・単体871件・関連E2E149件成功（exit 0、1.7分）。ログはcad-file-import-{check,unit,e2e}.log。全体E2Eは今回未実行。開始時週枠残量53%。次はDocument読込適用、描画調整、入力module組立て、pending session、診断の責務。全体目標は未完了。
 
 ### 前回の区切り

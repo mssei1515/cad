@@ -1,7 +1,7 @@
 /* Application composition, editing commands, Canvas UI and event handling. */
 (function () {
   "use strict";
-  const { referenceImageMimeType, validReferenceImageDataUrl, normalizeReferenceImages, serializeReferenceImage, REFERENCE_IMAGE_MAX_SIDE_PX } = window.ReferenceImageData;
+  const { validReferenceImageDataUrl, normalizeReferenceImages, serializeReferenceImage, REFERENCE_IMAGE_MAX_SIDE_PX } = window.ReferenceImageData;
   const { pointInExpandedBox, rectFromPoints, pointInRect, bboxInRect, bboxIntersectsRect, lineBBox, primitiveBBox, mergeBounds, splineBBox } = window.GeometryBounds;
   const { referenceImageLocalToWorld, referenceImageWorldToLocal, referenceImageCorners, referenceImageBounds } = window.ReferenceImageGeometry;
   const { normalizeHatches, validSerializedHatch, validSerializedHatchList, serializeHatch } = window.HatchData;
@@ -2388,44 +2388,7 @@
   });
   const { save: saveJot2DFile, saveAs: saveJot2DFileAs, open: openJot2DFile, importFileData } = documentFileCommand;
 
-  function readFileAsDataUrl(file) {
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.addEventListener("load", () => resolve(String(reader.result)));
-      reader.addEventListener("error", () => reject(reader.error || new Error(applicationText("画像を読み込めません", "The image could not be read"))));
-      reader.readAsDataURL(file);
-    });
-  }
-
-  function decodeImageDataUrl(dataUrl) {
-    return new Promise((resolve, reject) => {
-      const image = new Image();
-      image.addEventListener("load", () => resolve(image), { once: true });
-      image.addEventListener("error", () => reject(new Error(applicationText("画像をデコードできません", "The image could not be decoded"))), { once: true });
-      image.src = dataUrl;
-    });
-  }
-
-  async function preparedReferenceImageData(file) {
-    const extension = String(file?.name || "").split(".").pop()?.toLowerCase();
-    const fallbackMimeType = extension === "png" ? "image/png" : ["jpg", "jpeg"].includes(extension) ? "image/jpeg" : extension === "webp" ? "image/webp" : null;
-    const mimeType = referenceImageMimeType(file?.type) || fallbackMimeType;
-    if (!mimeType) throw new Error(applicationText("PNG、JPEG、WebP画像を選択してください", "Select a PNG, JPEG, or WebP image"));
-    const readDataUrl = await readFileAsDataUrl(file);
-    const dataSeparatorIndex = readDataUrl.indexOf(",");
-    if (dataSeparatorIndex < 0) throw new Error(applicationText("画像データの形式が正しくありません", "Invalid image data"));
-    const originalDataUrl = `data:${mimeType};base64,${readDataUrl.slice(dataSeparatorIndex + 1)}`;
-    const decoded = await decodeImageDataUrl(originalDataUrl);
-    const ratio = Math.min(1, REFERENCE_IMAGE_MAX_SIDE_PX / Math.max(decoded.naturalWidth, decoded.naturalHeight));
-    if (ratio >= 1) return { dataUrl: originalDataUrl, mimeType, pixelWidth: decoded.naturalWidth, pixelHeight: decoded.naturalHeight, resized: false };
-    const pixelWidth = Math.max(1, Math.round(decoded.naturalWidth * ratio));
-    const pixelHeight = Math.max(1, Math.round(decoded.naturalHeight * ratio));
-    const resizeCanvas = document.createElement("canvas");
-    resizeCanvas.width = pixelWidth;
-    resizeCanvas.height = pixelHeight;
-    resizeCanvas.getContext("2d").drawImage(decoded, 0, 0, pixelWidth, pixelHeight);
-    return { dataUrl: resizeCanvas.toDataURL(mimeType, 0.92), mimeType, pixelWidth, pixelHeight, resized: true };
-  }
+  const referenceImageImport = window.ReferenceImageImport.create({ window, document, applicationText });
 
   async function importReferenceImageFile(file) {
     if (!file) return false;
@@ -2434,7 +2397,7 @@
       return false;
     }
     try {
-      const prepared = await preparedReferenceImageData(file);
+      const prepared = await referenceImageImport.prepare(file);
       const rect = canvas.getBoundingClientRect();
       const screenScale = Math.min(Math.max(80, rect.width * 0.68) / prepared.pixelWidth, Math.max(80, rect.height * 0.68) / prepared.pixelHeight);
       const center = screenToWorld({ x: rect.width / 2, y: rect.height / 2 });
