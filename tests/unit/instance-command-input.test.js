@@ -3,7 +3,7 @@ const assert=require('node:assert/strict'),fs=require('node:fs'),path=require('n
 const sandbox={window:{}};vm.createContext(sandbox);vm.runInContext(fs.readFileSync(path.resolve(__dirname,'../../src/editing/instance_command_input.js'),'utf8'),sandbox);
 function fixture(){
   const f={mode:'select',calls:[],reference:null,derived:null,block:null};const record=name=>(...args)=>f.calls.push({name,args});
-  f.source={instance:{type:'mirror'},toggle:record('toggle')};f.geometry={placeFree:record('place'),commitReference:record('commit')};
+  f.source={instance:{type:'mirror'},toggle:record('toggle')};f.geometry={placeFree:record('place'),selectReference:record('commit')};
   f.p={x:1,y:2};f.snapped={x:3,y:4};f.e={pointerId:7,preventDefault:record('prevent')};
   f.controller=sandbox.window.InstanceCommandInput.create({getMode:()=>f.mode,instanceSourceCommand:f.source,geometryInstanceCommand:f.geometry,
     hitReferenceTarget:()=>{record('referenceHit')();return f.reference;},hitDerivedProjectionOperand:()=>{record('derivedHit')();return f.derived;},

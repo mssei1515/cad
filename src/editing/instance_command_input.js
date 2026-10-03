@@ -32,7 +32,7 @@
       if (getMode() === "mirror-axis" || getMode() === "pattern-direction") {
         e.preventDefault();
         const operand = hitDerivedProjectionOperand(p.x, p.y) || hitBlockProjectionOperand(p.x, p.y) || (hitL ? makeConstraintOperand("line", { line: hitL }) : null);
-        if (operand?.kind === "line") geometryInstanceCommand.commitReference(operand.line);
+        if (operand?.kind === "line") geometryInstanceCommand.selectReference(operand.line);
         else setHint(applicationText("基準にする線をクリックしてください", "Click a reference line."), "error");
         return true;
       }

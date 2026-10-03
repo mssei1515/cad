@@ -2,6 +2,7 @@
 const { spawnSync } = require("node:child_process");
 const path = require("node:path");
 const files = [
+  "src/ui/command_panel.js", "src/ui/derived_command_panel.js", "tests/e2e/command-panel.spec.js",
   "src/ui/tool_flyouts.js", "tests/e2e/tool-flyouts.spec.js",
   "tests/e2e/multiple-dimensions.spec.js",
   "tests/unit/property-selection.test.js",

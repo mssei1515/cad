@@ -20,19 +20,25 @@
 
 ### 2.1 スケッチ投影インスタンス
 
-表示中の先祖SketchにあるPoint、Line、Circle、Arc、SplineまたはBlock Projectionを、アクティブSketchのworld XYへ恒等変換で投影する。複数候補をclickまたは範囲選択し、Enterまたは右clickメニューの「実行」で1個のインスタンスを作る。
+表示中の先祖SketchにあるPoint、Line、Circle、Arc、SplineまたはBlock Projectionを、アクティブSketchのworld XYへ恒等変換で投影する。複数候補をclickまたは範囲選択し、コマンドパネルの完了、Enterまたは右clickメニューの「実行」で1個のインスタンスを作る。
 
 自己、子孫、兄弟、Root、非表示Geometryは対象外とし、同じ参照元を同じSketchへ重複投影しない。生成Geometryは子Sketch内の通常Geometryとの通常拘束を含む参照対象として利用できるが、先祖Sketchの参照元を変更するドラッグは行えない。
 
 ### 2.2 ミラーインスタンス
 
+軸線クリックは仮選択とし、コマンドパネルの完了またはEnterで生成する。確定前は別の軸線へ変更でき、Escまたはキャンセルで破棄する。
+
 同じアクティブSketch内で先に選択したGeometry群を、次にclickしたLineの支持直線を対称軸として1組ミラーコピーする。対称軸の位置・方向が変わると生成Geometryも追従する。
 
 ### 2.3 直線パターンインスタンス
 
+作成時はコマンドパネルで間隔・コピー数・反転を指定する。初期値は10mm・2個・反転OFF。間隔は有限の正数、コピー数は1〜1000の整数とする。方向Lineは仮選択で変更でき、完了またはEnterで確定する。Escまたはキャンセルは生成せず終了する。
+
 同じアクティブSketch内で先に選択したGeometry群を、次にclickしたLineの向きへ一定間隔で複数コピーする。`copies`は元Geometryを含まないコピー数、`spacing`はmm単位の正数、`reversed`はLine方向の反転である。方向Lineの回転へ追従する。Propertiesから間隔、コピー数、反転を編集する。
 
 ### 2.4 同期インスタンス
+
+作成中は[コマンドパネル](../ui/コマンドパネル.md)に複写元と件数、次の操作を表示する。配置先指定中の角度・鏡像設定はパネルからもPropertiesと同じ仮Instanceを編集できる。Canvasの配置先クリックで確定する。
 
 同じアクティブSketchのGeometry群を先に選択し、ToolbarまたはGeometry menuの「同期インスタンス」を実行する。通常Geometry、Block Projection、同一Sketchの派生Geometryを参照でき、共有Pointと非循環の参照関係を維持する。
 
@@ -65,6 +71,8 @@ Sketch Treeには「派生インスタンス」分類を設け、インスタン
 ## 5. 編集と削除
 
 ### 対象図形の編集
+
+コマンドパネルにも仮選択した参照元の一覧・件数を表示し、完了buttonで確定、キャンセルbuttonで破棄できる。
 
 アクティブSketchの生成済みInstanceを選択し、Propertiesの「対象図形を編集」で参照元の選択を変更する。スケッチ投影、ミラー、直線パターン、同期インスタンスに共通の操作とする。
 
