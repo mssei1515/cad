@@ -959,30 +959,11 @@
     return effectiveDocumentNameFromValue(documentModel.documentName);
   }
 
-  function updateDocumentNameUI() {
-    const displayName = effectiveDocumentName();
-    const dirty = hasUnsavedDocumentChanges();
-    document.title = `${dirty ? "● " : ""}${displayName} - Jot2D`;
-    const status = document.getElementById("documentSaveStatus");
-    if (status) {
-      const label = fileSession.savePending ? applicationText("保存中…", "Saving…")
-        : blockEditor.current ? applicationText("ブロック編集中", "Editing block")
-        : dirty ? applicationText("未保存の変更", "Unsaved changes")
-        : fileSession.checkpointKind === "new" ? applicationText("新規ドキュメント", "New document")
-        : fileSession.checkpointKind === "download" ? applicationText("ダウンロード開始済み", "Download started")
-        : applicationText("保存済み", "Saved");
-      const text = `${displayName} · ${label}`;
-      if (status.textContent !== text) status.textContent = text;
-      status.title = fileSession.handle ? `${text}\n${fileSession.handle.name}` : text;
-      status.dataset.dirty = String(dirty);
-    }
-  }
-
-  function hasUnsavedDocumentChanges() {
-    return fileSession.hasUnsavedChanges({
-      snapshot: documentHistory.currentSnapshot, documentName: effectiveDocumentName(), editingBlock: Boolean(blockEditor.current),
-    });
-  }
+  const documentStatusView = window.DocumentStatusView.create({
+    document, applicationText, fileSession, getDocumentName: effectiveDocumentName,
+    currentSnapshot: () => documentHistory.currentSnapshot, isEditingBlock: () => Boolean(blockEditor.current),
+  });
+  function updateDocumentNameUI() { documentStatusView.render(); }
 
   function markDocumentFileCheckpoint(kind, data = serializeModel()) {
     fileSession.markCheckpoint(kind, data);
@@ -11376,11 +11357,5 @@
   canvasSurface.start();
   resetHistory("起動");
   markDocumentFileCheckpoint("new");
-  window.addEventListener("beforeunload", (event) => {
-    const dirty = blockEditor.current || fileSession.savePending
-      || !fileSession.matchesCheckpoint(serializeModel());
-    if (!dirty) return;
-    event.preventDefault();
-    event.returnValue = "";
-  });
+  window.addEventListener("beforeunload", documentFileCommand.beforeUnload);
 })();

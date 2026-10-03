@@ -185,7 +185,13 @@
         fileSession.finishOpen();
       }
     }
-    return Object.freeze({ save: saveJot2DFile, saveAs: saveJot2DFileAs, open: openJot2DFile, fileInputChanged });
+    function beforeUnload(event) {
+      const dirty = isEditingBlock() || fileSession.savePending || !fileSession.matchesCheckpoint(serializeModel());
+      if (!dirty) return;
+      event.preventDefault();
+      event.returnValue = "";
+    }
+    return Object.freeze({ beforeUnload, save: saveJot2DFile, saveAs: saveJot2DFileAs, open: openJot2DFile, fileInputChanged });
   }
   window.DocumentFileCommand = Object.freeze({ create });
 })();

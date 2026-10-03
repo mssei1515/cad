@@ -6,6 +6,10 @@
 
 ## 現在の再開地点（2026-10-03）
 
+DocumentStatusViewへ履歴に基づくDocument保存状態表示、DocumentFileCommandへ実データによるbeforeunload保護を分離。状態所有はDocumentFiles／履歴に維持し、表示と終了保護の判定対象の違いを保持。app.jsは11,386行から11,361行へ縮小（25行減）。構文365ファイル・単体869件・関連E2E112件成功（exit 0、1.3分）。ログはcad-document-status-{check,unit,e2e}.log。全体E2Eは今回未実行。次はDocument読込適用、描画調整、入力module組立て、pending session、診断の責務。全体目標は未完了。
+
+### 前回の区切り
+
 DocumentFileCommandへ保存／別名保存／native・互換入力の読込進行と置換前確認を分離。DocumentFilesの排他・保存先・checkpoint所有を維持し、Document読込適用・求解・履歴初期化はappのimportFileDataへ接続。保存中編集のsnapshot区別と待機後のBlock編集再確認を維持。app.jsは11,557行から11,386行へ縮小（171行減）。構文364ファイル・単体866件・関連E2E118件成功（exit 0、1.3分）。ログはcad-document-file-command-{check,unit,e2e}.log。全体E2Eは今回未実行。開始時週枠残量56%。次はDocument表示・読込適用、描画調整、入力module組立て、pending session、診断の責務。全体目標は未完了。
 
 ### 前回の区切り

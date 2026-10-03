@@ -47,3 +47,10 @@ test('canceling replacement from file input clears input but preserves target an
   await f.command.fileInputChanged({ currentTarget: input });
   assert.equal(input.value, ''); assert.equal(f.state.imported.length, 0); assert.equal(f.session.busy, false);
 });
+
+test('unload checks live data and pending writes, independently of history status', () => {
+  const f = fixture(); const check = expected => { let prevented = false; const event = { preventDefault() { prevented = true; } }; f.command.beforeUnload(event); assert.equal(prevented, expected); assert.equal(event.returnValue, expected ? '' : undefined); };
+  check(false); f.state.data.points.push(1); check(true); f.state.data.points.pop();
+  f.session.beginSave(); check(true); f.session.finishSave(); check(false);
+  f.state.block = true; check(true);
+});
