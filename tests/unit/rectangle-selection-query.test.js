@@ -53,3 +53,25 @@ test('dimension rectangles distinguish containment and crossing while excluding 
  assert.deepEqual(Array.from(f.query.read(f.rect,false).dimensionConstraints),[inside]);
  assert.deepEqual(Array.from(f.query.read(f.rect,true).dimensionConstraints),[inside,crossing]);
 });
+
+test('projection rectangles read supplied geometry in order with caller eligibility and original identities', () => {
+  const f = fixture(), order = [];
+  const point = { x: 2, y: 2, kind: 'explicit', sketchId: 'ancestor' }, reference = { x: 2, y: 2, reference: true };
+  const line = { box: { x1: 1, y1: 1, x2: 3, y2: 3 }, blockProjection: true };
+  const circle = { box: line.box }, arc = { samples: [point] }, spline = { curve: () => [point] };
+  const lists = { points: [point, { ...point, kind: 'support' }, reference], lines: [line, line], circles: [circle], arcs: [arc], splines: [spline] };
+  const geometry = Object.fromEntries(Object.entries(lists).map(([kind, items]) => [kind, () => { order.push(kind); return items; }]));
+  const entries = f.query.readProjection(f.rect, false, geometry, item => item === circle ? null : { item });
+  assert.deepEqual(order, ['points', 'lines', 'circles', 'arcs', 'splines']);
+  assert.deepEqual(Array.from(entries, entry => entry.item), [point, reference, line, line, arc, spline]);
+  assert.equal(f.state.model.points.length, 0);
+});
+test('projection rectangles preserve containment versus crossing and resolve geometry anew', () => {
+  const f = fixture(); let lines = [{ box: { x1: -1, y1: 1, x2: 3, y2: 3 } }];
+  const samples = [{ x: 2, y: 2 }, { x: 20, y: 2 }], arc = { samples }, spline = { curve: () => samples };
+  const geometry = { points: () => [], lines: () => lines, circles: () => [], arcs: () => [arc], splines: () => [spline] };
+  const entry = item => ({ item });
+  assert.equal(f.query.readProjection(f.rect, false, geometry, entry).length, 0);
+  assert.deepEqual(Array.from(f.query.readProjection(f.rect, true, geometry, entry), x => x.item), [lines[0], arc, spline]);
+  lines = []; assert.equal(f.query.readProjection(f.rect, true, geometry, entry).length, 2);
+});

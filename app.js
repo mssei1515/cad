@@ -1819,35 +1819,10 @@
   }
 
   function sketchProjectionEntriesByRect(rect, crossing) {
-    const entries = [];
-    const append = (item) => {
-      const entry = sketchProjectionEntryFromItem(item);
-      if (entry) entries.push(entry);
-    };
-    for (const point of allGeometryPoints()) {
-      if (!isExplicitPoint(point) && !isReferencePoint(point)) continue;
-      if (pointInRect(point, rect)) append(point);
-    }
-    for (const line of allGeometryLines()) {
-      const selected = crossing ? lineIntersectsRect(line, rect) : bboxInRect(lineBBox(line), rect);
-      if (selected) append(line);
-    }
-    for (const circle of allGeometryCircles()) {
-      const box = primitiveBBox(circle);
-      const selected = crossing ? bboxIntersectsRect(box, rect) : bboxInRect(box, rect);
-      if (selected) append(circle);
-    }
-    for (const arc of allGeometryArcs()) {
-      const samples = arcSamplePoints(arc);
-      const selected = crossing ? samples.some((point) => pointInRect(point, rect)) : samples.every((point) => pointInRect(point, rect));
-      if (selected) append(arc);
-    }
-    for (const spline of allGeometrySplines()) {
-      const samples = window.SplineGeometry.flatten(spline.curve(), { tolerance: Math.max(0.1, 0.75 / viewport.scale) }).map((entry) => entry.point);
-      const selected = crossing ? samples.some((point) => pointInRect(point, rect)) : samples.every((point) => pointInRect(point, rect));
-      if (selected) append(spline);
-    }
-    return entries;
+    return rectangleSelectionQuery.readProjection(rect, crossing, {
+      points: allGeometryPoints, lines: allGeometryLines, circles: allGeometryCircles,
+      arcs: allGeometryArcs, splines: allGeometrySplines,
+    }, sketchProjectionEntryFromItem);
   }
 
   function selectCreatedSketchProjectionTargets(targets) {

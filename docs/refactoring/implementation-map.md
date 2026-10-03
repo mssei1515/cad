@@ -444,3 +444,5 @@ AuthoringPreviewRendererへSpline／Centerline／Trim描画も統合。Spline構
 - SplineEditCommand: 既存Spline編集sessionと通過点の追加／削除／求解復元。SplineDraftは新規作成、SplineCommandは作成確定を担当する。
 
 - SplineCommand: 作成開始とBackspaceによる直前点取消も統合。appはToolbar／keyboardから公開操作を接続する。
+
+- RectangleSelectionQuery.readProjection: 投影元の矩形照会を統合。通常選択と幾何判定を共有し、投影元の適格性・候補providerは分ける。

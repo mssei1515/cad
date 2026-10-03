@@ -6,6 +6,10 @@
 
 ## 現在の再開地点（2026-10-03）
 
+RectangleSelectionQueryへ投影元の矩形照会を統合し、通常選択と線／bbox／曲線sampleの判定を共有。投影元provider・適格性判定を分け、通常選択のactive制限を混入させず候補順・Geometry参照・crossing／包含を維持。app.jsは11,964行から11,939行へ縮小（25行減）。構文検査・単体839件・関連E2E134件成功（exit 0、1.6分）。ログはcad-projection-rect-{check,unit,e2e}.log。全体E2Eは今回未実行。開始時週枠残量73%。次は共通モード遷移／取消、投影の適格性・投影済み照会、入力module組立て。全体目標は未完了。
+
+### 前回の区切り
+
 SplineCommandへ作成開始と直前点取消の操作案内を統合。既存pending取消とRoot判定の順、各draft／session／gestureの初期化順を維持し、点の復元はSplineDraftへ委譲する。作成開始・入力・確定の責務が同じコマンドへ収束。app.jsは11,983行から11,964行へ縮小（19行減）。構文検査・単体837件・関連E2E107件成功（exit 0、1.3分）。ログはcad-spline-start-{check,unit,e2e}.log。全体E2Eは今回未実行。開始時週枠残量74%。次は共通モード遷移／取消、投影の読取り照会と入力module組立て。全体目標は未完了。
 
 ### 前回の区切り
