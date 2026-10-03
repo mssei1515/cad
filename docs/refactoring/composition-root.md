@@ -6,6 +6,10 @@
 
 ## 現在の再開地点（2026-10-03）
 
+ConstructionCommandへ補助作図設定・選択図形切替・ボタン表示照会を分離。選択ありは属性変更と履歴、選択なしは今後の作図設定の変更として独立させ、Document resetとUndo／Redo時の設定維持も同じ所有者へ接続。app.jsは11,711行から11,672行へ縮小（39行減）。構文検査・単体854件・関連E2E133件成功（exit 0、1.5分）。ログはcad-construction-command-{check,unit,e2e}.log。全体E2Eは今回未実行。開始時週枠残量63%。次は共通取消優先順位、Canvas入力接続と入力module組立て。全体目標は未完了。
+
+### 前回の区切り
+
 FilletCommand.begin／OffsetCommand.beginへ事前選択付き開始を統合。2線からの半径入力と拒否時の打切り、Offsetの初期化後の選択読取り・単独円／線／円弧の引継ぎを維持。DrawOperationLifecycle.prepareは共通初期化だけを担当し、選択と案内はコマンドに残す。app.jsは11,750行から11,711行へ縮小（39行減）。構文検査・単体850件・関連E2E122件成功（exit 0、1.5分）。ログはcad-special-start-{check,unit,e2e}.log。全体E2Eは今回未実行。開始時週枠残量66%。次はConstruction切替、共通取消優先順位と入力module組立て。全体目標は未完了。
 
 ### 前回の区切り

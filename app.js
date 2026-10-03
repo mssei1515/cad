@@ -349,7 +349,12 @@
   let pendingConstraintCommand = null;
   let constraintOperands = [];
   let lastPointerWorld = null;
-  let constructionLineMode = false;
+  const constructionCommand = window.ConstructionCommand.create({
+    cancelConstraintTargetCommand, selectedConstructionTogglePrimitives, guardSketchProjectionShapeEdit, applicationText,
+    synchronizeSketchProjectionMetadata: () => synchronizeSketchProjectionMetadata(), setHint, clearSelection, updateUI, draw, recordHistory,
+    setLineMode: () => { mode = "line"; }, resetLineInputs: () => drawOperationLifecycle.resetInputs("line"),
+    clearSnap: () => clearSnap(), updateToolbar,
+  });
   const selectionHighlight = window.SelectionHighlight.create({
     canvasSelection, blockProjectionBundle, geometryRefsEqual, geometryRefForItem,
     constraintGraphNodes, types: { Point, Line, Circle, Arc, Spline, OffsetChainConstraint }, effectiveSelectedConstraint, targetFromConstraint,
@@ -632,7 +637,7 @@
   const placementPreview = window.PlacementPreviewRenderer.create({ ctx, viewport, withCanvasState, traceSplinePath,
     drawResolvedHatch, resolvedHatchBoundary, hatchAppearanceForDisplay, hatchPatternOrigin, drawAnnotationLeader, drawAnnotationText });
   const geometryCreation = window.GeometryCreation.create({
-    currentScope: workspace.current, ids: geometryIds, assignSketchId, currentConstruction: () => constructionLineMode,
+    currentScope: workspace.current, ids: geometryIds, assignSketchId, currentConstruction: () => constructionCommand.enabled,
     minLineLength: MIN_LINE_LENGTH, minArcLength: MIN_ARC_LENGTH,
   });
   const { addPoint, addPointToSketch, addLine, addCircle, addArc, addSpline, ensureLineMinimumLength, normalizeArcSweep, enforceMinimumLineLengths, normalizeArcSweeps } = geometryCreation;
@@ -2181,7 +2186,7 @@
     pendingCommand = null;
     pendingConstraintCommand = null;
     constraintOperands = [];
-    constructionLineMode = false;
+    constructionCommand.restore(false);
     canvasHover.update({
       point: null, endpointPoint: null, line: null,
       circle: null, arc: null, spline: null,
@@ -2365,12 +2370,12 @@
   }
 
   function restoreHistorySnapshot(snapshot, label) {
-    const constructionModeBeforeRestore = constructionLineMode;
+    const constructionModeBeforeRestore = constructionCommand.enabled;
     const documentNameBeforeRestore = documentModel.documentName;
     return historyController.restore(() => {
       loadModelData(JSON.parse(snapshot), { documentNameFallback: documentNameBeforeRestore, preserveSketchTreeState: true });
       documentModel.documentName = documentNameBeforeRestore;
-      constructionLineMode = constructionModeBeforeRestore;
+      constructionCommand.restore(constructionModeBeforeRestore);
       clearInteractionForSketchChange();
       solveAndRefresh(label);
       setHint(label);
@@ -4325,18 +4330,7 @@
       splineEditing: Boolean(splineEditing.current), mode });
   }
 
-  function constructionToggleState(geometryMode = isGeometryMode()) {
-    if (!geometryMode) return { active: false, mixed: false };
-    const primitives = selectedConstructionTogglePrimitives();
-    if (primitives.length > 0) {
-      const constructionCount = primitives.filter((item) => item.construction).length;
-      return {
-        active: constructionCount === primitives.length,
-        mixed: false,
-      };
-    }
-    return { active: constructionLineMode, mixed: false };
-  }
+  function constructionToggleState(geometryMode = isGeometryMode()) { return constructionCommand.state(geometryMode); }
 
   function canApplyConstraint(type) {
     if (!isGeometryMode()) return false;
@@ -7207,40 +7201,7 @@
   document.getElementById("toolMirror")?.addEventListener("click", () => startGeometryInstanceCommand("mirror"));
   document.getElementById("toolPattern")?.addEventListener("click", () => startGeometryInstanceCommand("pattern"));
 
-  document.getElementById("toolConstructionLine")?.addEventListener("click", () => {
-    cancelConstraintTargetCommand("");
-    const primitives = selectedConstructionTogglePrimitives();
-    if (primitives.length > 0) {
-      if (!guardSketchProjectionShapeEdit(primitives, {
-        includeSharedNodes: false,
-        action: applicationText("通常／補助作図切替", "Construction toggle"),
-      })) {
-        draw();
-        return;
-      }
-      const next = !primitives.every((item) => item.construction);
-      for (const item of primitives) item.construction = next;
-      synchronizeSketchProjectionMetadata();
-      setHint(next ? "選択図形を補助作図にしました" : "選択図形を通常作図にしました");
-      clearSelection();
-      updateUI();
-      draw();
-      recordHistory("補助線切替");
-      return;
-    }
-    mode = "line";
-    constructionLineMode = !constructionLineMode;
-    lineCommand.reset();
-    rectangleCommand.reset();
-    filletCommand.reset();
-    circularCommands.resetCircle();
-    resetArcCommandState();
-    drawingPreview.setPointer(null);
-    clearSnap();
-    updateToolbar();
-    setHint(constructionLineMode ? "補助線作図: 端点位置をクリックしてください" : "通常線作図に戻しました");
-    draw();
-  });
+  document.getElementById("toolConstructionLine")?.addEventListener("click", constructionCommand.toggle);
 
   document.getElementById("toolRectangle")?.addEventListener("click", () => drawOperationLifecycle.start("rectangle"));
   document.getElementById("toolSlot")?.addEventListener("click", () => drawOperationLifecycle.start("slot"));
@@ -9961,7 +9922,7 @@
           blockEditing: Boolean(blockEditor.current),
           undoDisabled: document.getElementById("undoBtn")?.disabled,
           redoDisabled: document.getElementById("redoBtn")?.disabled,
-          constructionLineMode,
+          constructionLineMode: constructionCommand.enabled,
           constructionButtonActive: document.getElementById("toolConstructionLine")?.classList.contains("active"),
         };
       },

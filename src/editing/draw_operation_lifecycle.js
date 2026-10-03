@@ -17,6 +17,9 @@
     };
     function prepare(mode) {
       setMode(mode);
+      resetInputs(mode);
+    }
+    function resetInputs(mode) {
       line.reset();
       rectangle.reset();
       if (mode === "slot") slot.reset();
@@ -114,7 +117,7 @@
     }
 
 
-    return Object.freeze({ start, prepare, exitLine: exitLineMode, exit: exitDrawMode, active: hasActiveDrawOperation, cancel: cancelActiveDrawOperation });
+    return Object.freeze({ start, prepare, resetInputs, exitLine: exitLineMode, exit: exitDrawMode, active: hasActiveDrawOperation, cancel: cancelActiveDrawOperation });
   }
   window.DrawOperationLifecycle = Object.freeze({ create });
 })();
