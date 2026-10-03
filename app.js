@@ -326,7 +326,17 @@
     updateGeometrySelectionUI: (...args) => updateGeometrySelectionUI(...args),
   });
   let splineEditSession = null;
-  let sketchProjectionSources = [];
+  const sketchProjectionCommand = window.SketchProjectionCommand.create({
+    selectedGeometryItems, sketchProjectionEntryFromItem, sketchProjectionEntryFromOperand, sketchProjectionSourceIsCovered, sketchProjectionEntriesByRect,
+    cancelConstraintTargetCommand, cancelPendingCommand, canCreateInActiveSketch, rejectRootSketchCreation,
+    clearSelection, getMode: () => mode, setMode: value => { mode = value; }, clearSnap: () => clearSnap(),
+    updateToolbar, setHint, applicationText, updateUI, draw, activeSketchId, normalizeGeometryInstance,
+    nextId: () => `SPI${sketchProjectionInstanceSeq++}`, geometryRefForItem, currentScope: () => model,
+    canvasSelection, refreshConstraintAnalysis, recordHistory,
+    clearHover: () => canvasHover.update({ point: null, line: null, circle: null, arc: null, spline: null, sketchIdentity: null }),
+  });
+  const { start: startSketchProjectionCommand, toggle: toggleSketchProjectionSource,
+    addByRect: addSketchProjectionSourcesByRect, commit: commitSketchProjectionCommand } = sketchProjectionCommand;
   const drawingPreview = window.DrawingPreview.create({ types: { Point, Line, Circle, Arc }, canvasHover,
     canCreateInActiveSketch, clearSnap: () => clearSnap(), snapForDrawing, draw,
     linePreviewPoint: (point, shiftKey) => lineCommand.previewPoint(point, shiftKey),
@@ -640,7 +650,7 @@
   function snapForDrawing(point) { return drawingSnap.resolve(point, 10 / viewport.scale); }
   const splineCommand = window.SplineCommand.create({
     draft: splineDraft, addSpline, snapForDrawing, scale: () => viewport.scale,
-    clearProjectionSources: () => { sketchProjectionSources = []; },
+    clearProjectionSources: () => { sketchProjectionCommand.reset(); },
     setPointerPreview: value => { drawingPreview.setPointer(value); },
     clearSnap, clearSelection,
     selectCreatedSpline: spline => { canvasSelection.set("splines", [spline]); mode = "select"; },
@@ -1535,7 +1545,7 @@
     if (!item) return false;
     if (commandPanelSelectedItem) return geometryRefsEqual(geometryRefForItem(item), geometryRefForItem(commandPanelSelectedItem));
     if (mode === "instance-sources" && instanceSourceCommand.includesRef(geometryRefForItem(item))) return true;
-    if (mode === "sketch-projection" && sketchProjectionSources.some((entry) => entry.item === item)) return true;
+    if (mode === "sketch-projection" && sketchProjectionCommand.includes(item)) return true;
     if (["mirror-axis", "pattern-direction"].includes(mode) || mode.startsWith("free-instance-")) {
       if (item === geometryInstanceCommand.reference || geometryInstanceCommand.sources.some(ref => geometryRefsEqual(ref, geometryRefForItem(item)))) return true;
     }
@@ -1806,43 +1816,6 @@
     return null;
   }
 
-  function startSketchProjectionCommand() {
-    const selectedSources = selectedGeometryItems().map(sketchProjectionEntryFromItem)
-      .filter(entry => entry && !sketchProjectionSourceIsCovered(entry.item));
-    cancelConstraintTargetCommand("");
-    cancelPendingCommand("");
-    if (!canCreateInActiveSketch()) return void rejectRootSketchCreation();
-    clearSelection();
-    mode = "sketch-projection";
-    sketchProjectionSources = [...new Map(selectedSources.map(entry => [entry.key, entry])).values()];
-    clearSnap();
-    updateToolbar();
-    setHint(applicationText("投影する先祖SketchのGeometryを複数選択し、Enterまたは右クリックメニューの「実行」で確定してください。Escでキャンセルします", "Select geometry from ancestor sketches, then confirm with Enter or Execute in the context menu. Press Esc to cancel."));
-    updateUI({ refreshAnalysis: false });
-    draw();
-  }
-
-  function toggleSketchProjectionSource(operand) {
-    const entry = sketchProjectionEntryFromOperand(operand);
-    if (!entry) {
-      setHint(applicationText("表示中の先祖SketchにあるGeometryを選択してください", "Select visible geometry from an ancestor sketch."), "error");
-      return false;
-    }
-    const selectedIndex = sketchProjectionSources.findIndex((item) => item.kind === entry.kind && item.key === entry.key);
-    if (selectedIndex >= 0) {
-      sketchProjectionSources.splice(selectedIndex, 1);
-    } else {
-      if (sketchProjectionSourceIsCovered(entry.item)) {
-        setHint(applicationText(`${entry.item.id} は既に投影されています`, `${entry.item.id} is already projected.`), "error");
-        return false;
-      }
-      sketchProjectionSources.push(entry);
-    }
-    setHint(applicationText(`投影対象: ${sketchProjectionSources.length}件。Enterまたは右クリックメニューの「実行」で確定、Escでキャンセル`, `Projection targets: ${sketchProjectionSources.length}. Confirm with Enter or Execute in the context menu; press Esc to cancel.`));
-    draw();
-    return true;
-  }
-
   function sketchProjectionEntriesByRect(rect, crossing) {
     const entries = [];
     const append = (item) => {
@@ -1875,24 +1848,6 @@
     return entries;
   }
 
-  function addSketchProjectionSourcesByRect(rect, crossing) {
-    const stagedKeys = new Set(sketchProjectionSources.map((entry) => `${entry.kind}:${entry.key}`));
-    let added = 0;
-    for (const entry of sketchProjectionEntriesByRect(rect, crossing)) {
-      const key = `${entry.kind}:${entry.key}`;
-      if (stagedKeys.has(key) || sketchProjectionSourceIsCovered(entry.item)) continue;
-      sketchProjectionSources.push(entry);
-      stagedKeys.add(key);
-      added += 1;
-    }
-    setHint(applicationText(
-      `範囲選択で${added}件追加しました。投影対象: ${sketchProjectionSources.length}件。Enterまたは右クリックメニューの「実行」で確定、Escでキャンセル`,
-      `Added ${added} by area selection. Projection targets: ${sketchProjectionSources.length}. Confirm with Enter or Execute in the context menu; press Esc to cancel.`,
-    ));
-    draw();
-    return added;
-  }
-
   function selectCreatedSketchProjectionTargets(targets) {
     clearSelection();
     canvasSelection.set("points", targets.filter((item) => item instanceof Point));
@@ -1900,35 +1855,6 @@
     canvasSelection.set("circles", targets.filter((item) => item instanceof Circle));
     canvasSelection.set("arcs", targets.filter((item) => item instanceof Arc));
     canvasSelection.set("splines", targets.filter((item) => item instanceof Spline));
-  }
-
-  function commitSketchProjectionCommand() {
-    if (mode !== "sketch-projection") return false;
-    const entries = sketchProjectionSources.filter((entry) => !sketchProjectionSourceIsCovered(entry.item));
-    if (entries.length === 0) {
-      setHint(applicationText("投影するGeometryを1つ以上選択してください", "Select at least one geometry to project."), "error");
-      return false;
-    }
-    const targetSketchId = activeSketchId();
-    const instance = normalizeGeometryInstance({
-      id: `SPI${sketchProjectionInstanceSeq++}`,
-      type: "sketchProjection",
-      sketchId: targetSketchId,
-      sources: entries.map((entry) => geometryRefForItem(entry.item)),
-      appearanceOverride: {},
-    });
-    model.geometryInstances.push(instance);
-    mode = "select";
-    sketchProjectionSources = [];
-    clearSelection();
-    canvasSelection.set("geometryInstances", [instance]);
-    refreshConstraintAnalysis();
-    updateToolbar();
-    updateUI({ refreshAnalysis: false });
-    draw();
-    setHint(applicationText(`${entries.length}件のGeometryを投影インスタンスにしました`, `Created a projection instance from ${entries.length} geometry item(s).`));
-    recordHistory("スケッチ投影");
-    return true;
   }
 
   function selectedItemsForGeometryInstance() {
@@ -2120,7 +2046,7 @@
     if (!canCreateInActiveSketch()) return void rejectRootSketchCreation();
     mode = "spline";
     splineDraft.begin();
-    sketchProjectionSources = [];
+    sketchProjectionCommand.reset();
     splineEditSession = null;
     blankCanvasGesture.resetCandidate();
     drawingPreview.setPointer(null);
@@ -2397,7 +2323,7 @@
     circularCommands.resetCircle();
     resetArcCommandState();
     splineDraft.reset();
-    sketchProjectionSources = [];
+    sketchProjectionCommand.reset();
     geometryInstanceCommand.clearSources();
     instanceSourceCommand.reset();
     splineEditSession = null;
@@ -2993,7 +2919,7 @@
     resetArcCommandState();
     splineDraft.reset();
     splineEditSession = null;
-    sketchProjectionSources = [];
+    sketchProjectionCommand.reset();
     drawingPreview.reset();
     offsetSelection.reset();
     hatchCommand.reset();
@@ -3023,7 +2949,7 @@
     resetArcCommandState();
     splineDraft.cancel();
     splineEditSession = null;
-    sketchProjectionSources = [];
+    sketchProjectionCommand.reset();
     drawingPreview.reset();
     offsetSelection.reset();
     hatchCommand.reset();
@@ -5391,7 +5317,7 @@
     offsetSelection.reset();
     pendingCommand = null;
     pendingConstraintCommand = null;
-    sketchProjectionSources = [];
+    sketchProjectionCommand.reset();
     geometryInstanceCommand.clearSources();
     instanceSourceCommand.reset();
     canvasHover.update({ sketchIdentity: null });
@@ -6963,7 +6889,7 @@
     const groups = [];
     if (commandActive) {
       if (mode === "sketch-projection") {
-        groups.push([{ action: "sketch-projection-commit", label: applicationText("実行", "Execute"), shortcut: "Enter", disabled: sketchProjectionSources.length === 0 }]);
+        groups.push([{ action: "sketch-projection-commit", label: applicationText("実行", "Execute"), shortcut: "Enter", disabled: sketchProjectionCommand.count === 0 }]);
       }
       groups.push([{ action: "cancel-command", label: applicationText("コマンドをキャンセル", "Cancel Command"), shortcut: "Esc" }]);
       groups.push([
@@ -7241,16 +7167,7 @@
   function cancelKeyboardOperation() {
     if (geometryInstanceCommand.cancel()) return;
     if (mode === "sketch-projection") {
-      sketchProjectionSources = [];
-      mode = "select";
-      canvasHover.update({
-        point: null, line: null, circle: null,
-        arc: null, spline: null, sketchIdentity: null,
-      });
-      updateToolbar();
-      setHint(applicationText("スケッチ投影をキャンセルしました", "Sketch projection was canceled."));
-      updateUI({ refreshAnalysis: false });
-      draw();
+      sketchProjectionCommand.cancel();
       return;
     }
     if (referenceImageInteraction.calibrating) {
@@ -8806,7 +8723,7 @@
         };
         return {
           mode,
-          stagedCount: sketchProjectionSources.length,
+          stagedCount: sketchProjectionCommand.count,
           constraints: constraints.map((constraint) => ({
             kind: constraint.kind,
             source: geometryState(constraint.source),
@@ -12143,15 +12060,11 @@
   }
 
   derivedPanel = window.DerivedCommandPanel.create({
-    getMode: () => mode, projectionSources: () => sketchProjectionSources,
+    getMode: () => mode, projectionSources: () => sketchProjectionCommand.sources,
     geometryCommand: geometryInstanceCommand, sourceCommand: instanceSourceCommand,
     resolveGeometryRef, sketchName, activeSketchId, elementSketchId, geometryRefForItem, applicationText,
     finishProjection: commitSketchProjectionCommand,
-    removeProjectionSource: index => {
-      if (mode !== "sketch-projection" || index < 0 || index >= sketchProjectionSources.length) return;
-      sketchProjectionSources.splice(index, 1);
-      draw();
-    },
+    removeProjectionSource: sketchProjectionCommand.remove,
     cancel: () => {
       if (mode === "instance-sources") return finishInstanceSourceEdit(false);
       exitDrawMode();
