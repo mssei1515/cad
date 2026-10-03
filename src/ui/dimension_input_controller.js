@@ -52,6 +52,33 @@
       draw();
     }
 
+    // Native text editing stays in the input; only command keys are intercepted.
+    function bindInput(input) {
+      if (!input) return;
+      input.addEventListener("pointerdown", e => e.stopPropagation());
+      input.addEventListener("dblclick", e => e.stopPropagation());
+      input.addEventListener("input", () => {
+        const pending = getPending();
+        if (!pending || !["distance-value", "offset-value"].includes(pending.type)) return;
+        pending.buffer = input.value;
+        pending.editing = true;
+        updateDistanceBufferLabel();
+      });
+      input.addEventListener("keydown", e => {
+        const pending = getPending();
+        if (!pending || !["distance-value", "offset-value"].includes(pending.type)) return;
+        e.stopPropagation();
+        if (e.key === "Enter") {
+          e.preventDefault();
+          if (pending.type === "offset-value") submitOffsetValue();
+          else submitDistanceValue();
+        } else if (e.key === "Escape") {
+          e.preventDefault();
+          cancelPendingCommand("寸法入力をキャンセルしました");
+        }
+      });
+    }
+
     function handleDistanceKey(e) {
       const pendingCommand = getPending();
       if (!pendingCommand || !["distance-place", "distance-value", "offset-value"].includes(pendingCommand.type)) return false;
@@ -100,7 +127,7 @@
       return false;
     }
 
-    return Object.freeze({ handleKey: handleDistanceKey, updateBufferLabel: updateDistanceBufferLabel, hide: hideDimensionValueInput, sync: syncDimensionValueInput, focus: focusDimensionValueInput });
+    return Object.freeze({ bindInput, handleKey: handleDistanceKey, updateBufferLabel: updateDistanceBufferLabel, hide: hideDimensionValueInput, sync: syncDimensionValueInput, focus: focusDimensionValueInput });
   }
   window.DimensionInputController = Object.freeze({ create });
 })();

@@ -7231,28 +7231,7 @@
       canvasNavigation.doubleClickFit(e);
     }
   });
-  if (dimensionValueInput) {
-    dimensionValueInput.addEventListener("pointerdown", (e) => e.stopPropagation());
-    dimensionValueInput.addEventListener("dblclick", (e) => e.stopPropagation());
-    dimensionValueInput.addEventListener("input", () => {
-      if (!pendingCommand || !["distance-value", "offset-value"].includes(pendingCommand.type)) return;
-      pendingCommand.buffer = dimensionValueInput.value;
-      pendingCommand.editing = true;
-      updateDistanceBufferLabel();
-    });
-    dimensionValueInput.addEventListener("keydown", (e) => {
-      if (!pendingCommand || !["distance-value", "offset-value"].includes(pendingCommand.type)) return;
-      e.stopPropagation();
-      if (e.key === "Enter") {
-        e.preventDefault();
-        if (pendingCommand.type === "offset-value") submitOffsetValue();
-        else submitDistanceValue();
-      } else if (e.key === "Escape") {
-        e.preventDefault();
-        cancelPendingCommand("寸法入力をキャンセルしました");
-      }
-    });
-  }
+  dimensionInputController.bindInput(dimensionValueInput);
   canvas.addEventListener(
     "wheel",
     (e) => {

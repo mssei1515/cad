@@ -10,7 +10,7 @@
 
 ユーザーは長時間の段階的な実装を許可している。「無理に終わらせる必要はない」「今後の開発に過不足なく良い単位で分離する」が最新方針であり、残りクレジットに合わせて設計を急いだり、分離数を固定したりしない。
 
-2026-10-02のユーザー指示により、週枠の残り50%未満で自動停止する条件は解除した。残量による停止条件を再適用せず、責務単位の検証・Commit・Pushを続ける。全体目標や責務境界を縮小しない。
+最新の目標継続指示に従い、週枠残量50%未満で新たな分離を停止する。停止時は検証・Commit・Pushを済ませ、developの後にmainへ反映して同期する。全体目標や責務境界を縮小しない。
 
 ## 2. 維持するもの
 
@@ -80,7 +80,7 @@
 - 新module追加時は`index.html`、`tools/check-syntax.js`、必要なら`package.json`の明示的な単体一覧、`tests/e2e/unified-ui.spec.js`の読込順期待を更新する。script順とapp内の初期化順の両方を確認する。
 - E2E実行中にアプリのソースを変更しない。長時間のテストは同じprocess/sessionを追跡し、出力待ちのtimeoutだけで再起動しない。
 - 過去の「今回はテストをスキップ」はその時点だけの許可。今後の常時スキップには引き継がない。
-- originは`https://github.com/mssei1515/cad`。通常の作業branchとdevelopへのPushは継続許可がある。現在の作業branchは`codex/composition-root-next`。
+- originは`https://github.com/mssei1515/cad`。通常の作業branchとdevelopへのPushは継続許可がある。現在の作業branchは`codex/canvas-input-lifecycle`。
 - 現在は作業branchで進める。最新の目標継続指示で指定された最後のコミットをリリースする際にdevelop／mainへ統合する。各抽出の途中では自動リリースしない。
 - Commit後には`npm run write:runtime-version`を実行する。生成物はGitに含めない。
 
@@ -102,6 +102,6 @@
 
 PointerInteractionControllerへdoubleClickとleaveを追加し、入力優先順位・イベント抑止・hover消去を集約。CanvasPressQueryにdouble click専用の読取順序を追加した。Spline編集sessionの更新はappの開始操作への限定した接続として残る。検証と行数はcomposition-root.md先頭を参照。
 
-次はキーボード／寸法値入力と入力module組立て、共通モード遷移・pending session、描画調整、共通編集・Document操作、診断hookを責務単位で整理する。installTestHooksは約4,200行あるが巨大contextへの移動は避ける。数百行のcomposition root目標は未達。
+寸法／Offsetの入力欄イベントもDimensionInputControllerへ統合済み。次はキーボードの操作終了／取消と入力module組立て、共通モード遷移・pending session、描画調整、共通編集・Document操作、診断hookを責務単位で整理する。installTestHooksは約4,200行あるが巨大contextへの移動は避ける。数百行のcomposition root目標は未達。
 
 サブエージェントは使わない。週枠残量50%未満で新たな分離を停止し、最後のcommitをdevelop・mainへ反映して同期する。前回の全E2E327件成功は4ead051時点の記録であり、以後の変更は個別の検証結果と区別する。

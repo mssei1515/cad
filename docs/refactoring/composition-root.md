@@ -6,6 +6,10 @@
 
 ## 現在の再開地点（2026-10-03）
 
+DimensionInputControllerへ寸法／Offsetの入力欄イベントとbuffer更新を統合。app.jsは要素の接続のみとなり、新しいmoduleや依存の追加なし。入力欄の通常編集とCanvasの数値キー入力の違い、最新pendingの参照、確定・取消の伝播抑止を維持。app.jsは12,335行から12,314行へ縮小（21行減）。構文検査・単体815件・関連E2E130件成功（exit 0、1.5分）。ログはcad-dimension-binding-{check,unit,e2e}.log。全体E2Eは今回未実行。開始時週枠残量83%。次はキーボードの操作終了／取消と共通状態の所有者を整理する。全体目標は未完了。
+
+### 前回の区切り
+
 週枠残量86%への回復後、最新develop 4cc11d8からcodex/canvas-input-lifecycleで再開。PointerInteractionControllerへdoubleClick／leaveの入力優先順位と終了処理を統合し、CanvasPressQueryへdouble click用のhit照会を集約。Spline編集sessionの変更はapp側の明示actionとして保持。重複抑止、派生図形、寸法・Block・Spline編集の優先順位、drag中のhover保持とflush順を維持。app.jsは12,389行から12,335行へ縮小（54行減）。構文355件・単体813件・関連E2E198件成功（exit 0、2.4分）。ログはcad-activation-{check,unit,e2e}.log。全体E2Eは今回未実行。次はキーボード／寸法数値入力と入力module組立ての責務を整理する。全体目標は未完了、mainへの反映は停止時の最後に行う。
 
 ### 前回の停止地点（2026-10-02）

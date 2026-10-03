@@ -53,7 +53,7 @@ function keyboardFixture() {
     startDistanceValueInput: point => calls.push(point), defaultDimensionForTarget: () => 'default-position',
     submitOffsetValue: () => calls.push('offset'), submitDistanceValue: () => calls.push('dimension'),
   });
-  return { calls, get pending() { return pending; }, setPending: value => { pending = value; },
+  return { controller, calls, get pending() { return pending; }, setPending: value => { pending = value; },
     key: key => controller.handleKey({ key, preventDefault: () => calls.push('prevent') }) };
 }
 
@@ -84,4 +84,39 @@ test('keyboard routes placement, distance and offset without consuming unrelated
   f.setPending({ type: 'fillet-value' }); const before = f.calls.length;
   assert.equal(f.key('Enter'), false); assert.equal(f.calls.length, before);
   f.setPending(null); assert.equal(f.key('Escape'), false);
+});
+
+function inputFixture() {
+  const f = keyboardFixture(); const listeners = {};
+  const input = { value: '', addEventListener: (name, handler) => { listeners[name] = handler; } };
+  f.controller.bindInput(input);
+  return { ...f, input, emit: (name, key) => listeners[name]({ key,
+    stopPropagation: () => f.calls.push('stop'), preventDefault: () => f.calls.push('prevent') }) };
+}
+
+test('input edits use the current command and preserve arbitrary expression text', () => {
+  const f = inputFixture();
+  const pending = { type: 'distance-value', buffer: '20', editing: false };
+  f.setPending(pending); f.input.value = '=2 * "width"'; f.emit('input');
+  assert.equal(pending.buffer, '=2 * "width"'); assert.equal(pending.editing, true);
+  assert.deepEqual(f.calls, ['hint', 'draw']);
+  f.calls.length = 0; f.emit('keydown', 'Backspace');
+  assert.deepEqual(f.calls, ['stop']); assert.equal(pending.buffer, '=2 * "width"');
+  f.setPending({ type: 'distance-place', buffer: 'unchanged' });
+  f.calls.length = 0; f.emit('input'); f.emit('keydown', 'Enter');
+  assert.deepEqual(f.calls, []);
+  f.setPending(null); f.emit('input'); f.emit('keydown', 'Escape');
+  assert.deepEqual(f.calls, []);
+});
+
+test('input isolates pointer events and routes only confirmation and cancellation', () => {
+  const f = inputFixture();
+  f.emit('pointerdown'); f.emit('dblclick'); assert.deepEqual(f.calls, ['stop', 'stop']);
+  for (const [type, action] of [['distance-value', 'dimension'], ['offset-value', 'offset']]) {
+    f.setPending({ type }); f.calls.length = 0; f.emit('keydown', 'Enter');
+    assert.deepEqual(f.calls, ['stop', 'prevent', action]);
+    f.calls.length = 0; f.emit('keydown', 'Escape');
+    assert.deepEqual(f.calls, ['stop', 'prevent', 'cancel']);
+  }
+  f.controller.bindInput(null);
 });
