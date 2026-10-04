@@ -6,7 +6,7 @@
 
 ## 現在の再開地点（2026-10-04）
 
-最新develop 166169aからcodex/rendering-policyで再開。CanvasThemeColorsへテーマ依存の表示色補正・hex解析・contrast計算を分離し、themeは明示引数にした。永続appearance値は変更しない。app.jsは11,271行から11,232行へ縮小（39行減、隣接空行整理を含む）。構文368ファイル・単体882件・関連E2E103件成功（exit 0、1.2分）。ログはcad-theme-colors-{check,unit,e2e}.log。全体E2Eは今回未実行。開始時週枠残量42%、停止条件は40%未満。全体目標は未完了。
+最新develop 166169aからcodex/rendering-policyで再開。CanvasThemeColorsへテーマ依存の表示色補正・hex解析・contrast計算を分離し、themeは明示引数にした。永続appearance値は変更しない。app.jsは11,271行から11,232行へ縮小（39行減、隣接空行整理を含む）。構文368ファイル・単体882件・関連E2E103件成功（exit 0、1.2分）。ログはcad-theme-colors-{check,unit,e2e}.log。コードcommit a66067dに対し、全E2E369件も成功（exit 0、19.7分、cad-theme-release-e2e.log）。週枠残量39%を確認し、新規分離を停止。develop・mainへ統合して同期後に一時停止する。全体目標は未完了。
 
 ### 前回の区切り
 
