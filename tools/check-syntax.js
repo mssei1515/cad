@@ -147,7 +147,7 @@ const files = [
   "tests/unit/drawing-bounds.test.js", "tests/unit/first-dimension-scaling.test.js", "tests/unit/viewport.test.js",
   "src/rendering/dimension_metrics.js",
   "tests/unit/dimension-metrics.test.js",
-  "src/rendering/geometry_presentation.js", "src/rendering/geometry_renderer.js",
+  "src/rendering/canvas_theme_colors.js", "src/rendering/geometry_presentation.js", "src/rendering/geometry_renderer.js",
   "tests/unit/interaction-overlay-renderer.test.js", "tests/unit/placement-preview-renderer.test.js", "tests/unit/authoring-preview-renderer.test.js", "tests/unit/geometry-renderer.test.js",
   "src/rendering/drawing_stack.js",
   "tests/unit/drawing-stack.test.js",

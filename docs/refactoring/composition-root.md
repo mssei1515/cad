@@ -4,7 +4,11 @@
 
 開始点はdevelopの`457adea`。承認された最終目標は、`app.js`を数百行程度の生成・接続・起動・終了へ整理すること。部分的な抽出や中間のテスト成功をもって、この目標の完了とはしない。
 
-## 現在の再開地点（2026-10-03）
+## 現在の再開地点（2026-10-04）
+
+最新develop 166169aからcodex/rendering-policyで再開。CanvasThemeColorsへテーマ依存の表示色補正・hex解析・contrast計算を分離し、themeは明示引数にした。永続appearance値は変更しない。app.jsは11,271行から11,232行へ縮小（39行減、隣接空行整理を含む）。構文368ファイル・単体882件・関連E2E103件成功（exit 0、1.2分）。ログはcad-theme-colors-{check,unit,e2e}.log。全体E2Eは今回未実行。開始時週枠残量42%、停止条件は40%未満。全体目標は未完了。
+
+### 前回の区切り
 
 ReferenceImageCommandへ画像準備後の現在scopeへの配置・選択・履歴を分離。既存の準備後のSketch／viewport照会タイミングを維持。app.jsは11,288行から11,252行へ縮小（36行減）。今回の再開全体では12,389行から1,137行減。構文367ファイル・単体876件・全E2E367件成功（exit 0、19.8分）。ログはcad-image-command-{check,unit}.logとcad-refactor-final-e2e.log。週枠残量49%を確認して新規抽出を停止し、develop先行・main最後の統合と同期後に一時停止する。再開方針はrefactoring-policy-and-resume.mdのsection 8を参照。全体目標は未完了。
 

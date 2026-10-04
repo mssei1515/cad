@@ -470,3 +470,5 @@ AuthoringPreviewRendererへSpline／Centerline／Trim描画も統合。Spline構
 - src/persistence/reference_image_import.js: 参照画像の読取・デコード・縮小。図面への配置とは独立したprepare API。
 
 - src/commands/reference_image_command.js: 画像準備後の現在scopeへの配置・選択・履歴更新。準備失敗ではDocumentとIDを変更しない。
+
+- src/rendering/canvas_theme_colors.js: themeを明示した表示色補正・hex解析・contrast計算。appは現在themeを接続する。
