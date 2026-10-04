@@ -30,14 +30,10 @@
         : ["point", "line", "circle", "arc", "spline"].includes(category) || entry.point ? "geometry"
           : ({ image: "referenceImage", instance: "geometryInstance" }[category] || category);
       const target = { kind, item, category };
-      const previous = canvasSelection.inspection;
-      let targets = additive && category !== "constraint" && previous?.sketchId === data.sketchId
-        && previous.targets.every((candidate) => candidate.category !== "constraint") ? [...previous.targets] : [];
-      const index = targets.findIndex((candidate) => candidate.kind === kind && candidate.category === category
-        && (candidate.item === item || item.id && candidate.item.id === item.id));
-      if (index >= 0) targets.splice(index, 1); else targets.push(target);
+      if (!canvasSelection.selectInspection(target, data.sketchId, additive)) return;
+      const inspection = canvasSelection.inspection;
       clearSelection();
-      if (targets.length) canvasSelection.set("inspection", { sketchId: data.sketchId, targets });
+      canvasSelection.set("inspection", inspection);
       updateUI();
       draw();
     }
@@ -49,6 +45,7 @@
         return inspectObject(row, additive);
       }
       const model = currentScope();
+      if (additive && canvasSelection.inspection) return;
       if (canvasSelection.inspection || canvasSelection.sketchId) additive = false;
       if (!additive || canvasSelection.inspection || canvasSelection.sketchId) clearSelection();
       if (["point", "line", "circle", "arc", "spline"].includes(category)) {

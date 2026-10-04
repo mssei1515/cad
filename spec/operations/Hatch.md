@@ -10,7 +10,7 @@ Hatchのspacingは画面上の概算mmで保持し、`spacing × 96 / 25.4 / vie
 
 hover／選択では線色または塗り色を一時強調する。線patternと塗りつぶしは境界まで描画して視覚的な隙間を設けず、その直後にそのHatch自身が参照する境界Geometryだけを同じAppearanceで再描画する。
 
-したがって境界線はHatchより前に置かれていても見えるが、境界でない下位GeometryはHatchに隠れ得る。非アクティブSketchでは表示だけを行い、Canvas hover・selection対象にしない。
+したがって境界線はHatchより前に置かれていても見えるが、境界でない下位GeometryはHatchに隠れ得る。非アクティブSketchでも表示中のHatchを読み取り専用で選択できる。hoverでは所属Sketch名と編集不可を表示する。
 
 無効境界ではpatternも塗りも描画しない。
 
@@ -40,7 +40,7 @@ ToolbarまたはGeometry menuから塗りつぶしを開始し、閉領域内を
 
 一方、境界でない下位GeometryはHatchに隠れ得る。選択またはhoverではハッチ線色または塗り色を強調する。
 
-通常clickは共通の重なり順で最前面のObjectを優先する。Hatch自身の境界Geometryを選択できるよう、境界線幅の半分に画面上1pxを加えた帯域はHatch領域のhit対象から除外する。この帯域はzoomに依存しない選択判定だけの余裕であり、描画には適用しない。非アクティブSketchでは表示だけを行い、Canvasからhover、選択、編集しない。
+通常clickは共通の重なり順で最前面のObjectを優先する。Hatch自身の境界Geometryを選択できるよう、境界線幅の半分に画面上1pxを加えた帯域はHatch領域のhit対象から除外する。この帯域はzoomに依存しない選択判定だけの余裕であり、描画には適用しない。非アクティブSketchでも表示中のHatchを読み取り専用で選択できる。編集するには所属Sketchをアクティブ化する。
 
 Propertiesは「基本情報」に種類、ID、所属Sketch、境界状態を、`塗りつぶし外観`／`Fill Appearance`に編集可能な種類、色、表示を出す。平行線・クロスでは角度、間隔、線幅も表示し、塗りつぶしではそれらを非表示にして0～100%の不透明度を表示する。色は線patternの線色とsolidの塗り色を兼ね、共通Color Paletteを使用する。Sketch TreeではArcの後、Blockの前へ「塗りつぶし」分類を置き、空分類は表示せず初期状態を折り畳む。Object rowはToolbarと同じSVGを使う。
 

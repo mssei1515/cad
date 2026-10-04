@@ -79,13 +79,13 @@
       };
     }
 
-    function hitAnnotationElement(x, y) {
+    function hitAnnotationElement(x, y, { activeOnly = true } = {}) {
       const threshold = 12 / viewportScale();
       const annotations = allAnnotations();
       for (let i = annotations.length - 1; i >= 0; i--) {
         const element = annotations[i];
         if (!element || !isVisibleValue(element.visible) || !isVisibleSketchId(element.sketchId)) continue;
-        if (!element.blockProjection && element.sketchId !== activeSketchId()) continue;
+        if (activeOnly && element.sketchId !== activeSketchId()) continue;
         if (element.type === "leader") {
           const start = annotationLeaderAnchor(element);
           if (!start || !element.end) continue;

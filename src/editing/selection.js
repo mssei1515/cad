@@ -36,6 +36,21 @@
       for (const field of fields) state[field] = arrayFields.includes(field) ? [] : null;
     }
     function clearTreeSelection() { state.sketchId = null; state.inspection = null; }
+    function inspectionContains(item) {
+      return Boolean(item && state.inspection?.targets.some(target => target.item === item));
+    }
+    function selectInspection(target, sketchId, additive = false) {
+      const previous = state.inspection;
+      if (additive && ((previous && previous.sketchId !== sketchId) || selectedElementCount() > 0 || state.constraint)) return false;
+      const targets = additive && previous?.sketchId === sketchId && target.category !== "constraint"
+        && previous.targets.every(candidate => candidate.category !== "constraint") ? [...previous.targets] : [];
+      const index = targets.findIndex(candidate => candidate.kind === target.kind && candidate.category === target.category
+        && (candidate.item === target.item || target.item.id != null && candidate.item.id === target.item.id));
+      if (index >= 0) targets.splice(index, 1); else targets.push(target);
+      clear();
+      if (targets.length) state.inspection = { sketchId, targets };
+      return true;
+    }
     function append(field, ...items) { clearTreeSelection(); return state[field].push(...items); }
     function removeAt(field, index, count) { return state[field].splice(index, count); }
     // Sidebar rows survive regenerated projections: their identity rule uses the ID.
@@ -320,7 +335,7 @@
     // Read views retain geometry identity. Mutations go through this instance's API.
     const api = {
       toggleDimensionConstraint: item => { if (!item) return; clearTreeSelection(); state.constraint = null; const index = state.dimensionConstraints.indexOf(item); if (index < 0) state.dimensionConstraints.push(item); else state.dimensionConstraints.splice(index, 1); },
-      selectedDragPoints, selectedElementCount, set, clear, append, removeAt, toggleById, applyRectangle,
+      inspectionContains, selectInspection, selectedDragPoints, selectedElementCount, set, clear, append, removeAt, toggleById, applyRectangle,
       selectedGeometryItems, appearanceSelectionTarget, setGeometrySelection, currentConstraintTargets,
       hasPrimaryCanvasSelection, effectiveSelectedConstraint, selectedPrimitives,
       togglePointSelection, toggleLineSelection, toggleCircleSelection, toggleArcSelection,

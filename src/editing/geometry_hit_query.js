@@ -5,7 +5,8 @@
   const { distancePointToSegment, arcEndpointPoint, angleOnSignedSweep } = window.GeometryKernel;
   const { normalizedDrawingOrder } = window.DrawingOrder;
   function create({ currentScope, viewportScale, isEditableSketchElement, isSelectableEndpointPoint, isExplicitPoint,
-    hitDimension, constraintSketchId, elementSketchId, isVisibleSketchElement, hitBlockInstance, blockDefinitionById }) {
+    hitDimension, constraintSketchId, elementSketchId, isVisibleSketchElement, hitBlockInstance, blockDefinitionById,
+    hitGeometryInstance = () => null, hitAnnotationElement = () => null, hitHatchAt = () => null, hitReferenceImageAt = () => null }) {
     function hitPointByPredicate(x, y, predicate) {
       const model = currentScope();
       const radius = 10 / viewportScale();
@@ -120,6 +121,7 @@
       for (let i = model.points.length - 1; i >= 0; i--) {
         const p = model.points[i];
         if (!accepts(p)) continue;
+        if (!isExplicitPoint(p) && !isSelectableEndpointPoint(p)) continue;
         if (hypot2(p.x - x, p.y - y) <= pointThreshold) return { id: p.id, sketchId: elementSketchId(p), item: p, kind: "point" };
       }
       for (let i = model.lines.length - 1; i >= 0; i--) {
@@ -154,6 +156,14 @@
           item: block,
           kind: "block",
         };
+      }
+      for (const [kind, item] of [
+        ["instance", hitGeometryInstance(x, y, !allowInactiveGeometry)],
+        ["annotation", hitAnnotationElement(x, y, { activeOnly: !allowInactiveGeometry })?.element],
+        ["hatch", hitHatchAt(x, y, { activeOnly: !allowInactiveGeometry })],
+        ["image", hitReferenceImageAt(x, y, { activeOnly: !allowInactiveGeometry })],
+      ]) {
+        if (item) return { item, id: item.id, sketchId: elementSketchId(item), kind };
       }
       return null;
     }

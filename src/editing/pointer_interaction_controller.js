@@ -54,6 +54,10 @@
         return;
       }
 
+      if (getMode() === "select" && !getPendingCommand() && !getPendingConstraintCommand()) {
+        if (inactiveHit && press.selectInactive) { press.selectInactive(e, inactiveHit); return; }
+        if (press.prepareSelection?.(e)) return;
+      }
       if (press.inputs.annotation.select(e, p, { blankAnnotationHit, directGeometryHit, hitD })) return;
 
       if (press.inputs.constraint.click(e, p, { hitD, directGeometryHit, hitP, hitL, hitC, hitA, hitS, hitArcEnd, inactiveHit })) return;
@@ -76,6 +80,10 @@
         return;
       }
       const p = press.worldPoint(e);
+      if (getMode() === "select" && !getPendingCommand() && !getPendingConstraintCommand() && press.query.read?.(p).inactiveHit) {
+        e.preventDefault();
+        return;
+      }
       if (getMode() === "select" && !getPendingCommand() && !getPendingConstraintCommand()
         && activation.selection.instanceGeometry && press.query.derivedGeometryAt(p)?.instance.id === activation.selection.instanceGeometry.instanceId) {
         e.preventDefault();

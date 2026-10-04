@@ -4,6 +4,8 @@ const path = require('node:path');
 const vm = require('node:vm');
 const test = require('node:test');
 const sandbox = { window: {} }; vm.createContext(sandbox);
+sandbox.window.GeometrySolver = {};
+vm.runInContext(fs.readFileSync(path.resolve(__dirname, '../../src/editing/selection.js'), 'utf8'), sandbox);
 for (const file of ['sketch_tree_objects', 'sketch_tree_controller']) {
   vm.runInContext(fs.readFileSync(path.resolve(__dirname, '../../src/ui', `${file}.js`), 'utf8'), sandbox);
 }
@@ -46,6 +48,13 @@ function controllerFixture() {
   selection.set = (key, value) => { selection[key] = value; };
   selection.append = (key, item) => calls.push([key, item]);
   selection.toggleById = (key, item) => calls.push(['toggle', key, item]);
+  selection.selectInspection = (target, sketchId, additive) => {
+    const state = sandbox.window.CanvasSelection.create();
+    state.set('inspection', selection.inspection);
+    const changed = state.selectInspection(target, sketchId, additive);
+    selection.inspection = state.inspection; selection.sketchId = null;
+    return changed;
+  };
   const controller = sandbox.window.SketchTreeController.create({
     currentScope: () => model, activeSketchId: () => active, setActiveSketch: id => { active = id; calls.push('activate'); },
     clearSelection: () => { calls.push('clear'); selection.inspection = null; selection.sketchId = null; }, canvasSelection: selection,
@@ -69,7 +78,7 @@ test('inactive objects are inspected without activation or editable Canvas targe
   assert.equal(f.calls.some(Array.isArray), false);
 });
 
-test('inspection adds within one sketch, toggles by ID and replaces across sketches or constraints', () => {
+test('inspection adds within one sketch, toggles by ID and ignores additive clicks across sketches', () => {
   const f = controllerFixture();
   f.controller.activateObject(f.row('S2'), false);
   f.controller.activateObject(f.row('S2', 'line', 'L1'), true);
@@ -77,13 +86,16 @@ test('inspection adds within one sketch, toggles by ID and replaces across sketc
   f.controller.activateObject(f.row('S2'), true);
   assert.equal(f.selection.inspection.targets.length, 1);
   f.controller.activateObject(f.row('S3'), true);
-  assert.equal(f.selection.inspection.targets.length, 1); assert.equal(f.selection.inspection.sketchId, 'S3');
+  assert.equal(f.selection.inspection.targets.length, 1); assert.equal(f.selection.inspection.sketchId, 'S2');
+  f.controller.activateObject(f.row('S3'), false);
   f.model.constraint = { name: 'horizontal' };
   f.controller.activateObject(f.row('S3', 'constraint'), true);
   assert.equal(f.selection.inspection.targets[0].kind, 'constraint'); assert.equal(f.selection.inspection.targets.length, 1);
   f.controller.activateObject(f.row('S3'), true);
   assert.equal(f.selection.inspection.targets.length, 1); assert.equal(f.selection.inspection.targets[0].kind, 'geometry');
   f.controller.activateObject(f.row('S1'), true);
+  assert.equal(f.selection.inspection.sketchId, 'S3');
+  f.controller.activateObject(f.row('S1'), false);
   assert.equal(f.selection.inspection, null); assert.deepEqual(f.calls.at(-3), ['points', { id: 'P1' }]);
 });
 

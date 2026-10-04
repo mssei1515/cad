@@ -2559,6 +2559,7 @@
     currentScope: workspace.current, viewportScale: () => viewport.scale,
     isEditableSketchElement, isSelectableEndpointPoint, isExplicitPoint,
     hitDimension, constraintSketchId, elementSketchId, isVisibleSketchElement, hitBlockInstance, blockDefinitionById,
+    hitGeometryInstance, hitAnnotationElement: (...args) => hitAnnotationElement(...args), hitHatchAt, hitReferenceImageAt,
   });
 
   function fitSketchToViewport(sketchId = activeSketchId(), paddingPx = 96) {
@@ -3588,7 +3589,7 @@
     for (const hatch of items || allHatches()) {
       if (!isVisibleSketchId(hatch.sketchId)) continue;
       const appearance = hatchAppearanceForDisplay(hatch);
-      const selected = hatch.blockProjection ? canvasSelection.blockInstances.includes(hatch.blockInstance) : hatch.sketchId === activeSketchId() && canvasSelection.hatches.includes(hatch);
+      const selected = canvasSelection.inspectionContains(hatch) || canvasSelection.inspectionContains(hatch.blockInstance) || (hatch.blockProjection ? canvasSelection.blockInstances.includes(hatch.blockInstance) : hatch.sketchId === activeSketchId() && canvasSelection.hatches.includes(hatch));
       const hovered = hatch.blockProjection ? canvasHover.current.block === hatch.blockInstance : hatch.sketchId === activeSketchId() && canvasHover.current.hatch === hatch;
       drawResolvedHatch(resolvedHatchBoundary(hatch), appearance, hatchPatternOrigin(hatch), { hatch, selected, hovered, alpha: sketchAlpha(hatch) });
     }
@@ -3606,10 +3607,10 @@
   }
 
   function drawReferenceImageOverlays() {
-    const item = canvasSelection.referenceImages.length === 1 ? canvasSelection.referenceImages[0] : canvasHover.current.referenceImage;
+    const item = canvasSelection.inspection?.targets.find(target => target.kind === "referenceImage")?.item || (canvasSelection.referenceImages.length === 1 ? canvasSelection.referenceImages[0] : canvasHover.current.referenceImage);
     referenceImageRenderer.drawOverlays(
-      item && isVisibleValue(item.visible) && isVisibleSketchId(item.sketchId) && item.sketchId === activeSketchId() ? item : null,
-      canvasSelection.referenceImages.includes(item),
+      item && isVisibleValue(item.visible) && isVisibleSketchId(item.sketchId) && (item.sketchId === activeSketchId() || canvasSelection.inspectionContains(item)) ? item : null,
+      canvasSelection.referenceImages.includes(item) || canvasSelection.inspectionContains(item),
       referenceImageInteraction.calibrationPoints,
     );
   }
@@ -3796,7 +3797,7 @@
       const dimension = c.dimension || defaultDimensionForTarget(target);
       const sketchId = constraintSketchId(c);
       if (!isVisibleValue(effectiveDimensionAppearance(dimension, sketchId).visible)) continue;
-      const highlighted = c === canvasHover.current.dimension || canvasSelection.constraintSelectedInCanvas(c) || c === dimensionDrag.constraint;
+      const highlighted = canvasSelection.inspectionContains(c) || c === canvasHover.current.dimension || canvasSelection.constraintSelectedInCanvas(c) || c === dimensionDrag.constraint;
       const label = dimensionLabelForConstraint(c, target, dimension);
       const editing = pendingCommand?.type === "distance-value" && pendingCommand.constraint === c;
       const colorOverride = viewState.constraintStatus && !isActiveSketchConstraint(c) ? INACTIVE_CONSTRAINT_STATUS_COLOR : null;
@@ -3815,7 +3816,7 @@
   }
 
   function annotationDisplayColor(element, style = normalizeAnnotationStyle(element?.style)) {
-    if (canvasSelection.annotations.includes(element)) return canvasThemeColor("#2563eb");
+    if (canvasSelection.annotations.includes(element) || canvasSelection.inspectionContains(element) || canvasSelection.inspectionContains(element.blockInstance)) return canvasThemeColor("#2563eb");
     if (element === canvasHover.current.annotation) return canvasThemeColor("#0ea5e9");
     return canvasThemeColor(style.color);
   }
@@ -6549,7 +6550,7 @@
   const canvasPressQuery = window.CanvasPressQuery.create({
     geometry: { hitPoint, hitLine, hitCircle, hitArcEndpoint, hitArc, hitSpline },
     scene: { hitHatchAt, hitReferenceImageAt, hitDimension, hitBlockRotationHandle, hitBlockInstance,
-      hitDerivedGeometryForDrag, hitGeometryInstance, hitSketchIdentityElement, hitAnnotationElement, hitAnnotationTarget },
+      hitDerivedGeometryForDrag, hitGeometryInstance, hitSketchIdentityElement, hitAnnotationElement, hitAnnotationTarget, activeSketchId },
   });
   const pointerHover = window.PointerHover.create({
     canvasHover, sameArcEndpoint, isActiveSketchConstraint,
@@ -6565,6 +6566,24 @@
     getPendingConstraintCommand: () => pendingConstraintCommand, setLastPointer: point => { lastPointerWorld = point; },
     updateHatchPreview, updateFilletRadiusPlacement, updatePendingDistanceRetargetHover, hitDimension, hitSketchIdentityElement,
     press: { discardMove: () => flushScheduledCanvasPointerMove({ discard: true }),
+      selectInactive: (event, identity) => {
+        let item = identity.item, category = identity.kind;
+        if (item.blockInstance) { item = item.blockInstance; category = "block"; }
+        else if (item.derivedInstance) { item = item.derivedInstance; category = "instance"; }
+        if (category === "dimension") category = "constraint";
+        const kind = ["point", "line", "circle", "arc", "spline"].includes(category) ? "geometry"
+          : ({ image: "referenceImage", instance: "geometryInstance" }[category] || category);
+        if (!canvasSelection.selectInspection({ kind, item, category }, identity.sketchId, event.ctrlKey || event.shiftKey)) { draw(); return; }
+        const inspection = canvasSelection.inspection;
+        clearSelection(); canvasSelection.set("inspection", inspection);
+        setHint(inspection ? applicationText("編集不可：編集するには所属スケッチをアクティブにしてください", "Read-only: activate the owning sketch to edit") : applicationText("選択を解除しました", "Selection cleared"));
+        updateGeometrySelectionUI(); draw();
+      },
+      prepareSelection: event => {
+        if (canvasSelection.inspection && (event.ctrlKey || event.shiftKey)) return true;
+        if (canvasSelection.inspection || canvasSelection.sketchId) clearSelection();
+        return false;
+      },
       activation: { selection: canvasSelection, finalizeSpline: finalizeSplineFromDoubleClick, submitOffset: submitOffsetValue,
         startDimensionEdit: startDimensionEditInput, startDistanceValue: startDistanceValueInput, submitDistance: submitDistanceValue,
         constraintDoubleClick: handleConstraintTargetDoubleClick, enterBlock: enterBlockDefinitionEdit, beginSplineEdit: beginSplineEditFromDoubleClick },

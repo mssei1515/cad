@@ -3,7 +3,8 @@
   "use strict";
   function create({ geometry: { hitPoint, hitLine, hitCircle, hitArcEndpoint, hitArc, hitSpline },
     scene: { hitHatchAt, hitReferenceImageAt, hitDimension, hitBlockRotationHandle, hitBlockInstance,
-      hitDerivedGeometryForDrag, hitGeometryInstance, hitSketchIdentityElement, hitAnnotationElement, hitAnnotationTarget } }) {
+      hitDerivedGeometryForDrag, hitGeometryInstance, hitSketchIdentityElement, hitAnnotationElement, hitAnnotationTarget,
+      activeSketchId = () => null } }) {
     function read(p) {
       const hitP = hitPoint(p.x, p.y);
       const hitL = hitLine(p.x, p.y);
@@ -28,8 +29,10 @@
         hitDerivedGeometry
       );
       const sketchIdentity = hitSketchIdentityElement(p.x, p.y, { allowInactiveGeometry: true });
-      const inactiveHit = null;
       const blankAnnotationHit = hitAnnotationElement(p.x, p.y);
+      // Active Sketch content is painted in front of inactive Sketch content.
+      const activeHit = hitP || hitL || hitC || hitArcEnd || hitA || hitS || hitD || hitBlock || hitDerivedInstance || hatchHit || blankAnnotationHit;
+      const inactiveHit = !activeHit && activeSketchId() && sketchIdentity?.sketchId !== activeSketchId() ? sketchIdentity : null;
       const annotationTargetHit = hitAnnotationTarget(p.x, p.y);
 
       return { hitP, hitL, hitC, hitArcEnd, hitA, hitS, hatchHit, referenceImageHit, hitD, hitBlockHandle, hitBlock, hitDerivedGeometry, hitDerivedInstance, directGeometryHit, sketchIdentity, inactiveHit, blankAnnotationHit, annotationTargetHit };

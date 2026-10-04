@@ -63,10 +63,30 @@ test('identity query optionally includes inactive geometry but always excludes h
   const model = empty(), p = Object.assign(point('P', 0, 0), { sketchId: 'S2' }), block = { id: 'B', definitionId: 'D', sketchId: 'S1' };
   model.points.push(p); const flags = [];
   const query = sandbox.window.GeometryHitQuery.create({ currentScope: () => model, viewportScale: () => 1, hitDimension: () => null,
+    isExplicitPoint: () => true, isSelectableEndpointPoint: () => false,
     isVisibleSketchElement: item => item.visible !== false, isEditableSketchElement: item => item.sketchId === 'S1', elementSketchId: item => item.sketchId,
     hitBlockInstance: (x, y, editableOnly) => { flags.push(editableOnly); return block; }, blockDefinitionById: () => ({ name: 'Door' }) });
   assert.equal(query.hitSketchIdentityElement(0, 0).item, block); assert.equal(flags[0], true);
   assert.equal(query.hitSketchIdentityElement(0, 0, { allowInactiveGeometry: true }).item, p);
   p.visible = false; const result = query.hitSketchIdentityElement(0, 0, { allowInactiveGeometry: true });
   assert.equal(result.label, 'Block B: Door'); assert.equal(flags.at(-1), false);
+});
+
+test('visible inactive curves expose their owning sketch without entering editable hit queries', () => {
+  const model = empty();
+  const circle = Object.assign(new Circle('C', point('O', 0, 0), 20), { sketchId: 'S2' });
+  const arc = Object.assign(new Arc('A', point('AO', 100, 0), 20, 0, Math.PI), { sketchId: 'S2' });
+  const spline = Object.assign(new Spline('S', [point('a', 200, 0), point('b', 220, 0), point('c', 240, 0)]), { sketchId: 'S2' });
+  model.circles.push(circle); model.arcs.push(arc); model.splines.push(spline);
+  const query = sandbox.window.GeometryHitQuery.create({ currentScope: () => model, viewportScale: () => 1,
+    isEditableSketchElement: item => item.sketchId === 'S1', isVisibleSketchElement: item => item.visible !== false,
+    isExplicitPoint: () => true, isSelectableEndpointPoint: () => false,
+    hitDimension: () => null, hitBlockInstance: () => null, elementSketchId: item => item.sketchId });
+  for (const [item, x, kind] of [[circle, 20, 'circle'], [arc, 120, 'arc'], [spline, 220, 'spline']]) {
+    const hit = query.hitSketchIdentityElement(x, 0, { allowInactiveGeometry: true });
+    assert.equal(hit.item, item); assert.equal(hit.kind, kind); assert.equal(hit.sketchId, 'S2');
+    assert.equal(query.hitSketchIdentityElement(x, 0), null);
+    item.visible = false;
+    assert.equal(query.hitSketchIdentityElement(x, 0, { allowInactiveGeometry: true }), null);
+  }
 });

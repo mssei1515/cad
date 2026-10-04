@@ -11,6 +11,26 @@ for (const file of ["src/geometry/geometry_kernel.js", "src/geometry/spline_geom
 const { Point, Line, Circle, Arc } = sandbox.window.GeometrySolver;
 const create = sandbox.window.CanvasSelection.create;
 
+test('read-only selection shares tree and canvas targets but never exposes edit operands across sketches', () => {
+  const selection = create(), line = new Line('L1', new Point('P1', 0, 0), new Point('P2', 10, 0));
+  const target = { kind: 'geometry', category: 'line', item: line };
+  selection.selectInspection(target, 'S1');
+  assert.equal(selection.inspectionContains(line), true);
+  assert.equal(selection.selectedElementCount(), 0);
+  assert.equal(selection.currentConstraintTargets().lines.length, 0);
+  selection.selectInspection({ ...target, item: { id: 'L2' } }, 'S2', true);
+  assert.equal(selection.inspection.sketchId, 'S1');
+  assert.equal(selection.inspection.targets.length, 1);
+  selection.selectInspection({ ...target, item: { id: 'L3' } }, 'S1', true);
+  assert.equal(selection.inspection.targets.length, 2);
+  selection.selectInspection(target, 'S1', true);
+  assert.equal(selection.inspectionContains(line), false);
+  selection.set('lines', [line]);
+  selection.selectInspection(target, 'S2', true);
+  assert.equal(selection.inspection, null);
+  assert.equal(selection.lines[0], line);
+});
+
 test("selection instances are isolated and preserve Canvas identity versus sidebar ID matching", () => {
   const first = create(), second = create();
   const point = new Point("P1", 0, 0), regenerated = new Point("P1", 0, 0);

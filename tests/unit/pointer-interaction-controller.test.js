@@ -101,6 +101,7 @@ function pressFixture() {
   const stage=name=>(...args)=>{f.calls.push(name);f[name+'Args']=args;return f.consume===name;};
   const input=name=>({click:stage(name)});
   const controller=sandbox.window.PointerInteractionController.create({getMode:()=>f.mode,getPendingCommand:()=>f.pending,
+    getPendingConstraintCommand:()=>null,
     canvasNavigation:{beginPan:stage('pan')},referenceImageInteraction:{get calibrating(){return f.calibrating;}},
     canvasHover:{update:stage('hover')},setLastPointer:stage('last'),press:{
       closeContextMenu:stage('close'),worldPoint:()=>{f.calls.push('world');return f.point;},screenPoint:()=>({x:10,y:20}),

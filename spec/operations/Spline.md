@@ -42,7 +42,7 @@ Propertiesの基本情報は種類、ID、定義方式、次数、fit point ID�
 
 ## 2. Selection、Sketch Tree、Annotation
 
-Splineは1つの作図可能Sketchへ所属する。非アクティブSketchでは表示だけを行い、Canvasからhover、選択、dragしない。Sketch TreeではArcの後、Hatchの前にSpline分類を置き、Object rowにはToolbarと同じicon、Spline ID、fit point数、開／閉を表示する。通常の選択、矩形選択、Copy、Cut、Delete、右clickの補助Geometry切替、Leader追加、選択からBlock作成に対応する。
+Splineは1つの作図可能Sketchへ所属する。非アクティブSketchでも表示中のSplineを読み取り専用で選択できる。hoverでは所属Sketch名と編集不可を表示し、dragやdouble-click編集には所属Sketchのアクティブ化が必要となる。Sketch TreeではArcの後、Hatchの前にSpline分類を置き、Object rowにはToolbarと同じicon、Spline ID、fit point数、開／閉を表示する。通常の選択、矩形選択、Copy、Cut、Delete、右clickの補助Geometry切替、Leader追加、選択からBlock作成に対応する。
 
 LeaderをSplineへ付ける場合はclick位置に最も近いcurve上の点を開始位置として保存する。fit point変更後は、他の曲線Geometryと同じく保存済み開始位置に最も近い新しいcurve上の点へ開始位置を再投影する。
 

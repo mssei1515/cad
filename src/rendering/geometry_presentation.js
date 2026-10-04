@@ -23,6 +23,7 @@
     }
 
     function ownerInstanceSelected(item) {
+      if (canvasSelection.inspectionContains?.(item?.blockInstance) || canvasSelection.inspectionContains?.(item?.derivedInstance)) return true;
       if (item?.derivedInstance && canvasSelection.geometryInstances.includes(item.derivedInstance)) {
         return canvasSelection.instanceGeometry?.instanceId === item.derivedInstance.id
           ? canvasSelection.instanceGeometry.id === item.id
@@ -41,7 +42,7 @@
     function geometryPaintState(item, kind) {
       const appearance = effectiveAppearanceForElement(item);
       const active = isEditableSketchElement(item);
-      const ownSelected = active && canvasSelection[kind].includes(item);
+      const ownSelected = (active && canvasSelection[kind].includes(item)) || canvasSelection.inspectionContains?.(item);
       const geometrySelected = ownSelected || isConstraintOperandSelected(item) || (kind !== "splines" && isPendingReferenceTarget(item));
       const selected = ownerInstanceSelected(item) || geometrySelected;
       const treeHovered = isSidebarHighlightedElement(item);
@@ -79,7 +80,7 @@
       const sidebarHovered = isSidebarHoveredElement(p);
       const relatedHighlighted = isSelectedConstraintRelatedElement(p);
       const auxiliaryHighlighted = relatedHighlighted;
-      const sel = (active && canvasSelection.points.includes(p)) || refSelected || ownerInstanceSelected(p);
+      const sel = (active && canvasSelection.points.includes(p)) || canvasSelection.inspectionContains?.(p) || refSelected || ownerInstanceSelected(p);
       const endpoint = isEndpointPoint(p);
       const canvasHovered = (active || isReferenceHoverElement(p)) && (canvasHover.current.point === p || canvasHover.current.endpointPoint === p);
       if (viewState.constraintStatus && p.kind === "endpoint" && !canvasHovered && !sel) return null;

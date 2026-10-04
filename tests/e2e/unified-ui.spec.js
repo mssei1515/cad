@@ -3226,7 +3226,7 @@ test("fixed explicit points show red emphasis and the fixed label only while hov
   }));
 });
 
-test("inactive sketch geometry, blocks, and dimensions show identity without hover emphasis or selection", async ({ page }) => {
+test("inactive sketch geometry, blocks, and dimensions show identity and select read-only without hover emphasis", async ({ page }) => {
   await openTestDocument(page);
   const points = await page.evaluate(() => window.__jot2dTest.resetForInactiveDimensionAndBlockHover());
   expect(points.relation).toBe("参照可");
@@ -3254,6 +3254,8 @@ test("inactive sketch geometry, blocks, and dimensions show identity without hov
     blockHovered: false,
   }));
   await page.mouse.click(points.line.x, points.line.y);
+  await expect(page.locator('#propertiesPanel')).toContainText(/読み取り専用|Read-only/);
+  await expect(page.locator('#propertiesPanel')).toContainText(points.lineId);
   expect(await page.evaluate(() => window.__jot2dTest.selectedGeometryIdsForTest())).toEqual({ points: [], lines: [], circles: [], arcs: [], splines: [], blockInstances: [] });
 
   await page.mouse.move(points.block.x, points.block.y);
@@ -3270,7 +3272,12 @@ test("inactive sketch geometry, blocks, and dimensions show identity without hov
     blockHovered: false,
   }));
   await page.mouse.click(points.block.x, points.block.y);
+  await expect(page.locator('#propertiesPanel')).toContainText(/読み取り専用|Read-only/);
+  await expect(page.locator('#propertiesPanel')).toContainText(points.blockId);
   expect((await page.evaluate(() => window.__jot2dTest.selectedGeometryIdsForTest())).blockInstances).toEqual([]);
+  await page.mouse.click(points.dimension.x, points.dimension.y);
+  await expect(page.locator('#propertiesPanel')).toContainText(/読み取り専用|Read-only/);
+  await expect(page.locator('#dimensionValueInput')).toBeHidden();
 });
 
 test("duplicate dimensions become read-only reference dimensions", async ({ page }) => {
@@ -4233,6 +4240,83 @@ test("slot creation stays one undo step and cancellation leaves completed geomet
 });
 
 
+test("inactive Canvas annotations, fills and images select read-only and hidden objects are excluded", async ({ page }) => {
+  await openTestDocument(page);
+  const setup = await page.evaluate(() => window.__jot2dTest.resetForHatchTest());
+  await page.locator('#toolHatch').click();
+  await page.mouse.click(setup.client.x, setup.client.y);
+  await page.keyboard.press('Escape');
+  const data = await page.evaluate(() => {
+    const data = window.__jot2dTest.serializedModelForTest();
+    const image = document.createElement('canvas'); image.width = 20; image.height = 20;
+    data.annotations = [{ id: 'AN1', type: 'text', sketchId: 'S1', text: 'Note', x: 150, y: 40, visible: true, style: {} }];
+    data.referenceImages = [{ id: 'IMG1', name: 'Image', sketchId: 'S1', mimeType: 'image/png', dataUrl: image.toDataURL(), pixelWidth: 20, pixelHeight: 20, scale: 1, x: 200, y: 40, rotation: 0, opacity: 0.5, visible: true, locked: false }];
+    data.sketches.push({ id: 'S2', name: 'Other', parentSketchId: 'ROOT', kind: 'sketch', appearance: {} });
+    data.activeSketchId = 'S2'; return data;
+  });
+  expect(await page.evaluate(data => window.__jot2dTest.loadDocumentFixtureForDragTest(data), data)).toEqual(expect.objectContaining({ success: true }));
+  await page.evaluate(() => window.__jot2dTest.fitAllGeometryForTest());
+  for (const [category, id, point] of [['hatch', 'H1', { x: 60, y: 40 }], ['annotation', 'AN1', { x: 155, y: 40 }], ['image', 'IMG1', { x: 200, y: 40 }]]) {
+    await expandSketchTreeGroup(page, category, 'S1');
+    const client = await page.evaluate(p => window.__jot2dTest.worldClientPositionForTest(p), point);
+    await page.mouse.click(client.x, client.y);
+    await expect(page.locator(`.sketch-object-row[data-object-kind="${category}"][data-id="${id}"]`)).toHaveClass(/selected/);
+    await expect(page.locator('#propertiesPanel')).toContainText(/読み取り専用|Read-only/);
+    const before = await page.evaluate(() => window.__jot2dTest.serializedModelForTest());
+    await page.mouse.down(); await page.mouse.move(client.x + 20, client.y + 15); await page.mouse.up(); await page.keyboard.press('Delete');
+    const after = await page.evaluate(() => window.__jot2dTest.serializedModelForTest());
+    for (const key of ['annotations', 'hatches', 'referenceImages']) expect(after[key]).toEqual(before[key]);
+    expect(after.activeSketchId).toBe('S2');
+  }
+  data.annotations[0].visible = false; data.referenceImages[0].visible = false; data.hatches[0].appearance.visible = false;
+  await page.evaluate(data => window.__jot2dTest.loadDocumentFixtureForDragTest(data), data);
+  for (const point of [{ x: 60, y: 40 }, { x: 155, y: 40 }, { x: 200, y: 40 }]) {
+    const client = await page.evaluate(p => window.__jot2dTest.worldClientPositionForTest(p), point);
+    await page.mouse.click(client.x, client.y);
+    await expect(page.locator('#propertiesPanel .properties-read-only')).toHaveCount(0);
+  }
+});
+
+test("visible Canvas objects select across sketches, synchronize the tree and only edit after activation", async ({ page }) => {
+  await openTestDocument(page);
+  const fixture = annotationSketchFixture();
+  fixture.annotations = [];
+  fixture.points.push({ id: 'P5', x: -60, y: -60, kind: 'endpoint', sketchId: 'S1' }, { id: 'P6', x: 60, y: -60, kind: 'endpoint', sketchId: 'S1' });
+  fixture.lines.push({ id: 'L3', p1: 'P5', p2: 'P6', sketchId: 'S1' });
+  await page.evaluate(data => window.__jot2dTest.loadDocumentFixtureForDragTest(data), fixture);
+  await page.evaluate(() => window.__jot2dTest.fitAllGeometryForTest());
+  await expandSketchTreeGroup(page, 'line', 'S1');
+  await expandSketchTreeGroup(page, 'line', 'S2');
+  const position = p => page.evaluate(p => window.__jot2dTest.worldClientPositionForTest(p), p);
+  const line1 = await position({ x: 0, y: 0 }), line2 = await position({ x: 0, y: 50 }), line3 = await position({ x: 0, y: -60 });
+  const row = id => page.locator(`.sketch-object-row[data-object-kind="line"][data-id="${id}"]`);
+  await page.mouse.click(line1.x, line1.y);
+  await expect(row('L1')).toHaveClass(/selected/);
+  await expect(page.locator('#propertiesPanel')).toContainText(/読み取り専用|Read-only/);
+  const before = await page.evaluate(() => window.__jot2dTest.serializedModelForTest());
+  await page.mouse.move(line1.x, line1.y); await page.mouse.down();
+  await page.mouse.move(line1.x + 35, line1.y + 25, { steps: 3 }); await page.mouse.up();
+  await page.keyboard.press('Delete');
+  await page.mouse.dblclick(line1.x, line1.y);
+  const after = await page.evaluate(() => window.__jot2dTest.serializedModelForTest());
+  expect(after.points).toEqual(before.points); expect(after.lines).toEqual(before.lines); expect(after.activeSketchId).toBe('S2');
+  await page.keyboard.down('Control');
+  await page.mouse.click(line2.x, line2.y);
+  await expect(row('L1')).toHaveClass(/selected/); await expect(row('L2')).not.toHaveClass(/selected/);
+  await page.mouse.click(line3.x, line3.y); await page.keyboard.up('Control');
+  await expect(row('L1')).toHaveClass(/selected/); await expect(row('L3')).toHaveClass(/selected/);
+  await page.mouse.click(line2.x, line2.y);
+  await expect(row('L2')).toHaveClass(/selected/); await expect(row('L1')).not.toHaveClass(/selected/);
+  await page.keyboard.down('Shift'); await page.mouse.click(line1.x, line1.y); await page.keyboard.up('Shift');
+  await expect(row('L2')).toHaveClass(/selected/); await expect(row('L1')).not.toHaveClass(/selected/);
+  await sketchTreeSketch(page, 'S1').locator('.sketchActivateBtn').dblclick();
+  await page.mouse.click(line1.x, line1.y);
+  await expect(page.locator('#propertiesPanel .properties-read-only')).toHaveCount(0);
+  await expect(row('L1')).toHaveClass(/selected/);
+  await page.keyboard.press('Delete');
+  expect((await page.evaluate(() => window.__jot2dTest.serializedModelForTest())).lines.map(line => line.id)).not.toContain('L1');
+});
+
 test("inactive tree objects are read-only, add only within one sketch, and clear on reload", async ({ page }) => {
   await openTestDocument(page);
   const fixture = annotationSketchFixture();
@@ -4261,8 +4345,8 @@ test("inactive tree objects are read-only, add only within one sketch, and clear
   await expect(page.locator("#propertiesPanel")).toContainText(/読み取り専用|Read-only/);
   await expandSketchTreeGroup(page, "annotation", "S3");
   await page.locator('.sketch-object-row[data-object-kind="annotation"][data-id="AN3"]').click({ modifiers: ["Control"] });
-  await expect(line).not.toHaveClass(/selected/); await expect(annotation).not.toHaveClass(/selected/);
-  await expect(page.locator("#propertiesPanel")).toContainText("AN3");
+  await expect(line).toHaveClass(/selected/); await expect(annotation).toHaveClass(/selected/);
+  await expect(page.locator('.sketch-object-row[data-object-kind="annotation"][data-id="AN3"]')).not.toHaveClass(/selected/);
   await expandSketchTreeGroup(page, "constraint", "S1");
   const constraint = page.locator('.sketch-object-row[data-object-kind="constraint"][data-sketch-id="S1"]').first();
   await constraint.click();

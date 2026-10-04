@@ -35,6 +35,11 @@
     }
 
     function selectedSketchIdentityElement(canvasSelection) {
+      const inspection = canvasSelection.inspection;
+      if (inspection?.targets.length) {
+        const item = inspection.targets.at(-1).item;
+        return { id: item.id || item.name, sketchId: inspection.sketchId, item };
+      }
       if (canvasSelection.arcEndpoint?.arc) return { id: `${canvasSelection.arcEndpoint.arc.id}端点`, sketchId: elementSketchId(canvasSelection.arcEndpoint.arc), item: canvasSelection.arcEndpoint.arc };
       const item = canvasSelection.points.at(-1) || canvasSelection.lines.at(-1) || canvasSelection.circles.at(-1) || canvasSelection.arcs.at(-1) || canvasSelection.splines.at(-1);
       return item ? { id: item.id, sketchId: elementSketchId(item), item } : null;
@@ -66,7 +71,7 @@
       const identity = hoveredIdentity || selectedSketchIdentityElement(selection);
       if (!identity || !pointer || !isVisibleSketchId(identity.sketchId) || identity.sketchId === activeSketchId()) return;
       const baseLabel = `${identity.label || identity.id} / ${sketchName(identity.sketchId)}`;
-      const relationLabel = sketchIdentityRelationLabel(identity.sketchId);
+      const relationLabel = `${applicationText("別スケッチ・編集不可", "Other sketch / read-only")} / ${sketchIdentityRelationLabel(identity.sketchId)}`;
       const separator = relationLabel ? " / " : "";
       ctx.save();
       ctx.font = `${11 / viewport.scale}px system-ui`;

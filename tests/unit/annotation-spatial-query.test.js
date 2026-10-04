@@ -43,12 +43,13 @@ test('bounds include rotated text and saved leader points without resolving anch
   assert.equal(f.query.annotationBounds(null), null);
 });
 
-test('selection queries preserve reverse order, visibility and projected sketch exceptions', () => {
+test('selection queries preserve reverse order and visibility; inactive projections require read-only queries', () => {
   const f = fixture(), first = text(), second = text(); f.list([first, second]);
   assert.equal(f.query.hitAnnotationElement(2, 0).element, second);
   second.visible = false; assert.equal(f.query.hitAnnotationElement(2, 0).element, first);
   first.sketchId = 'S2'; assert.equal(f.query.hitAnnotationElement(2, 0), null);
-  first.blockProjection = true; assert.equal(f.query.hitAnnotationElement(2, 0).element, first);
+  first.blockProjection = true; assert.equal(f.query.hitAnnotationElement(2, 0), null);
+  assert.equal(f.query.hitAnnotationElement(2, 0, { activeOnly: false }).element, first);
   first.sketchId = 'hidden'; assert.equal(f.query.hitAnnotationElement(2, 0), null);
 });
 
