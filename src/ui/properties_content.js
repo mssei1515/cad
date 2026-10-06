@@ -95,7 +95,7 @@
         const heading = item instanceof SketchProjectionConstraint
           ? applicationText("スケッチ投影", "Sketch Projection")
           : localizedConstraintName(item.name, { typeOnly: true });
-        return `<h2 class="property-heading">${escapeHtml(heading)}</h2><section class="property-section">${basicInformationHeading}<div class="property-row"><span>Type</span><span class="property-readonly">${escapeHtml(item.constructor.name)}</span></div>${projectionRows}${definingGeometryRows}${parameterRows}</section>${dimension ? `<section class="property-section"><h3>${applicationText("寸法外観", "Dimension Appearance")}</h3>${annotationDisplayPropertyRows(dimension.display || {})}${dimensionAppearancePropertyRows(dimension.display || {}, display)}</section>` : ""}`;
+        return `<h2 class="property-heading">${escapeHtml(heading)}</h2><section class="property-section">${basicInformationHeading}<div class="property-row"><span>Type</span><span class="property-readonly">${escapeHtml(item.constructor.name)}</span></div>${projectionRows}${definingGeometryRows}${parameterRows}</section>${dimension ? `<section class="property-section"><h3>${applicationText("寸法外観", "Dimension Appearance")}</h3>${annotationDisplayPropertyRows(dimension.display || {}, { sizeLock: true })}${dimensionAppearancePropertyRows(dimension.display || {}, display)}</section>` : ""}`;
       } else if (target.kind === "annotation") {
         const annotationType = item.type === "leader" ? applicationText("引出線", "Leader") : applicationText("自由テキスト", "Free Text");
         const information = propertyReadonlyRow("種類", "Type", annotationType)

@@ -23,9 +23,9 @@
         const current = value(key);
         return `<input data-bulk-property="${key}" type="${type}" ${attributes} placeholder="${current === MULTIPLE_PROPERTY_MIXED ? mixedLabel : ""}" value="${current === MULTIPLE_PROPERTY_MIXED ? "" : escapeHtml(current)}">`;
       };
-      const checkbox = (key) => {
+      const checkbox = (key, attributes = "") => {
         const current = value(key);
-        return `<input data-bulk-property="${key}" type="checkbox" ${current === true ? "checked" : ""} ${current === MULTIPLE_PROPERTY_MIXED ? 'data-mixed="true"' : ""}>`;
+        return `<input data-bulk-property="${key}" type="checkbox" ${attributes} ${current === true ? "checked" : ""} ${current === MULTIPLE_PROPERTY_MIXED ? 'data-mixed="true"' : ""}>`;
       };
       const visibleRow = `<div class="property-row"><label>${applicationText("表示", "Visible")}</label>${select("visible", (current) => option("true", applicationText("表示", "Visible"), String(current)) + option("false", applicationText("非表示", "Hidden"), String(current)))}</div>`;
       const commonColor = value("color");
@@ -58,6 +58,8 @@
         if (allSupport("terminatorType")) specificRows += `<div class="property-row"><label>${applicationText("端末記号", "Terminator")}</label>${select("terminatorType", (current) => option("arrow", applicationText("標準矢印", "Standard arrow"), current) + option("filledArrow", applicationText("塗りつぶし矢印", "Filled arrow"), current) + option("dot", applicationText("点", "Dot"), current) + option("none", applicationText("なし", "None"), current))}</div><div class="property-row"><label>${applicationText("端末サイズ", "Terminator size")}</label><div class="property-input-with-unit">${textInput("terminatorSize", "number", 'min="0.1" max="100" step="0.1"')}<span class="property-input-unit">mm</span></div></div>`;
       }
       if (sameType && items.every(entry => entry.kind === "constraint")) {
+        const sizeLockTooltip = applicationText("図形に対する注記の大きさを固定", "Keep annotation size relative to geometry");
+        if (allSupport("modelRelativeSize")) specificRows += `<div class="property-row" title="${sizeLockTooltip}"><label for="dimensionBulkSizeLock">${applicationText("サイズロック", "Size lock")}</label>${checkbox("modelRelativeSize", 'id="dimensionBulkSizeLock"')}</div>`;
         for (const [key, ja, en] of [["prefix", "接頭辞", "Prefix"], ["suffix", "接尾辞", "Suffix"]]) {
           const current = value(key);
           specificRows += `<div class="property-row"><label>${applicationText(ja, en)}</label><textarea rows="1" wrap="off" data-affix-input data-user-content data-bulk-property="${key}" placeholder="${current === MULTIPLE_PROPERTY_MIXED ? mixedLabel : ""}">\n${current === MULTIPLE_PROPERTY_MIXED ? "" : escapeHtml(current)}</textarea></div>`;
@@ -206,9 +208,10 @@
         .join("");
     }
 
-    function annotationDisplayPropertyRows(owner) {
+    function annotationDisplayPropertyRows(owner, { sizeLock = false } = {}) {
       const settings = window.Appearance.annotationDisplaySettings(owner);
-      return `<div class="property-row"><label for="annotationModelRelativeSize">${applicationText("図形に対する注記の大きさを固定", "Keep annotation size relative to geometry")}</label><input id="annotationModelRelativeSize" data-annotation-display="modelRelativeSize" type="checkbox" ${settings.fixedDisplaySize ? "" : "checked"}></div>
+      const tooltip = applicationText("図形に対する注記の大きさを固定", "Keep annotation size relative to geometry");
+      return `<div class="property-row" ${sizeLock ? `title="${tooltip}"` : ""}><label for="annotationModelRelativeSize">${sizeLock ? applicationText("サイズロック", "Size lock") : tooltip}</label><input id="annotationModelRelativeSize" data-annotation-display="modelRelativeSize" type="checkbox" ${settings.fixedDisplaySize ? "" : "checked"}></div>
         ${settings.fixedDisplaySize ? "" : `<div class="property-row"><label for="annotationDisplayScale">${applicationText("基準倍率", "Reference zoom")}</label><div class="property-input-with-unit"><input id="annotationDisplayScale" data-annotation-display="displayScale" type="number" min="0.000001" step="any" value="${(settings.displayScale * 100).toFixed(1)}"><span class="property-input-unit">%</span></div></div>`}`;
     }
 

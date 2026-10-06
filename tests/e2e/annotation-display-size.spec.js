@@ -43,7 +43,8 @@ for (const type of ["text", "leader", "dimension"]) {
     await select(page, type);
     const fixed = page.locator('[data-annotation-display="modelRelativeSize"]');
     const scale = page.locator('[data-annotation-display="displayScale"]');
-    await expect(page.locator('label[for="annotationModelRelativeSize"]')).toHaveText("図形に対する注記の大きさを固定");
+    await expect(page.locator('label[for="annotationModelRelativeSize"]')).toHaveText(type === "dimension" ? "サイズロック" : "図形に対する注記の大きさを固定");
+    if (type === "dimension") await expect(fixed.locator('..')).toHaveAttribute('title', '図形に対する注記の大きさを固定');
     await expect(fixed).not.toBeChecked();
     await expect(scale).toHaveCount(0);
     const before = await state(page, type);

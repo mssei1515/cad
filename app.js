@@ -5091,6 +5091,7 @@
   const { owner: appearanceOwnerForPropertiesTarget } = appearancePropertyCommand;
 
   const { apply: applyMultipleProperty } = window.BulkPropertyCommand.create({
+    viewport,
     guardSketchProjectionShapeEdit, applicationText, updatePropertiesUI, draw,
     multiplePropertySupports, applyDimensionAppearanceValue, applyAnnotationStyleValue, normalizeHatchAppearance, applyAppearanceInput,
     invalidateBlockProjectionCache, synchronizeSketchProjectionMetadata, recordHistory, updateUI,
