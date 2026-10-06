@@ -43,14 +43,14 @@ for (const type of ["text", "leader", "dimension"]) {
     await select(page, type);
     const fixed = page.locator(type === "leader" ? '[data-leader-style="fixedDisplaySize"]' : '[data-annotation-display="modelRelativeSize"]');
     const scale = page.locator(type === "leader" ? '[data-leader-style="displayScale"]' : '[data-annotation-display="displayScale"]');
-    if (type !== "leader") await expect(page.locator('label[for="annotationModelRelativeSize"]')).toHaveText(type === "dimension" ? "サイズロック" : "図形に対する注記の大きさを固定");
+    await expect(page.locator(type === "leader" ? 'label[for="annotationFixedDisplaySize"]' : 'label[for="annotationModelRelativeSize"]')).toHaveText(type === "text" ? "図形に対する注記の大きさを固定" : "サイズロック");
     if (type === "dimension") await expect(fixed.locator('..')).toHaveAttribute('title', '図形に対する注記の大きさを固定');
-    if (type === "leader") await expect(fixed).toHaveValue("true"); else await expect(fixed).not.toBeChecked();
+    await expect(fixed).not.toBeChecked();
     await expect(scale).toHaveCount(0);
     const before = await state(page, type);
-    if (type === "leader") await fixed.selectOption("false"); else await fixed.check();
+    await fixed.check();
     await expect(page.locator('label[for="annotationDisplayScale"]')).toHaveText("基準倍率");
-    await expect(scale).toHaveValue(type === "leader" ? "150" : "150.0");
+    await expect(scale).toHaveValue("150.0");
     const captured = await state(page, type);
     expect(captured.settings.displayScale).toBeCloseTo(1.5);
     expect(captured.height).toBeCloseTo(before.height);
@@ -84,9 +84,9 @@ for (const type of ["text", "leader", "dimension"]) {
     }
     expect(await page.evaluate(data => window.__jot2dTest.loadDocumentFixtureForDragTest(data, "roundtrip.jot2d"), saved)).toEqual(expect.objectContaining({ success: true }));
     await select(page, type);
-    if (type === "leader") await expect(fixed).toHaveValue("false"); else await expect(fixed).toBeChecked();
-    await expect(scale).toHaveValue(type === "leader" ? "300" : "300.0");
-    if (type === "leader") await fixed.selectOption("true"); else await fixed.uncheck();
+    await expect(fixed).toBeChecked();
+    await expect(scale).toHaveValue("300.0");
+    await fixed.uncheck();
     await expect(scale).toHaveCount(0);
     expect((await state(page, type)).settings).not.toHaveProperty("displayScale");
     await page.evaluate(scale => window.__jot2dTest.focusWorldForTest({ x: 0, y: 0 }, scale), PX * 0.5);

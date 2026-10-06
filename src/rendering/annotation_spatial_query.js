@@ -5,13 +5,14 @@
   const { hypot2 } = window.GeometrySolver;
   const { distancePointToSegmentPoints } = window.GeometryKernel;
   const { mergeBounds, pointInExpandedBox } = window.GeometryBounds;
-  function create({ viewportScale, annotationTextWorldHeight, formatDisplayNumber, allAnnotations, isVisibleSketchId, activeSketchId, annotationLeaderAnchor, annotationTextLayout = () => null, effectiveAnnotationStyle = element => normalizeAnnotationStyle(element?.style), isVisibleValue = visible => visible !== false }) {
+  function create({ viewportScale, annotationTextWorldHeight, formatDisplayNumber, allAnnotations, isVisibleSketchId, activeSketchId, annotationLeaderAnchor, annotationTextLayout = () => null, annotationLeaderDisplayGeometry = element => element, effectiveAnnotationStyle = element => normalizeAnnotationStyle(element?.style), isVisibleValue = visible => visible !== false }) {
     function annotationBounds(element) {
       if (!element) return null;
       const layout = annotationTextLayout(element);
+      const geometry = element.type === "leader" ? annotationLeaderDisplayGeometry(element) || element : element;
       if (layout) {
         let bounds = { ...layout.bounds };
-        for (const point of [annotationLeaderAnchor(element), element.elbow, element.end]) {
+        for (const point of [annotationLeaderAnchor(element), geometry.elbow, geometry.end]) {
           if (point) bounds = mergeBounds(bounds, { x1: point.x, y1: point.y, x2: point.x, y2: point.y });
         }
         return bounds;
@@ -23,7 +24,7 @@
       const lines = window.AnnotationRenderer.displayText(element, formatDisplayNumber).split(/\r\n|\r|\n/);
       const textWidth = Math.max(28 * paddingScale, ...lines.map(line => line.length * fontSize * 0.62));
       const textHeight = fontSize * (1 + (lines.length - 1) * 1.2) + 10 * paddingScale;
-      const center = { x: Number(element.x) || 0, y: Number(element.y) || 0 };
+      const center = { x: Number(geometry.x) || 0, y: Number(geometry.y) || 0 };
       const rotation = element.type === "leader" && element.appearanceInheritance ? (style.rotation || 0) + (element.annotationTransformRotation || 0) : Number(element.rotation) || 0;
       const cos = Math.cos(rotation);
       const sin = Math.sin(rotation);
@@ -45,7 +46,7 @@
         y2: Math.max(...textCorners.map((point) => point.y)),
       };
       if (element.type === "leader") {
-        for (const point of [annotationLeaderAnchor(element), element.elbow, element.end]) {
+        for (const point of [annotationLeaderAnchor(element), geometry.elbow, geometry.end]) {
           if (point) bounds = mergeBounds(bounds, { x1: point.x, y1: point.y, x2: point.x, y2: point.y });
         }
       }
@@ -67,6 +68,7 @@
 
     function pointInAnnotationTextBox(x, y, element, padding = 0) {
       const layout = annotationTextLayout(element);
+      const geometry = element.type === "leader" ? annotationLeaderDisplayGeometry(element) || element : element;
       if (layout) {
         const dx = x - layout.x, dy = y - layout.y;
         const localX = dx * Math.cos(layout.rotation) + dy * Math.sin(layout.rotation);
@@ -75,13 +77,13 @@
           && localY >= -layout.height / 2 - padding && localY <= layout.height / 2 + padding;
       }
       const rotation = -(element?.type === "leader" && element.appearanceInheritance ? (effectiveAnnotationStyle(element).rotation || 0) + (element.annotationTransformRotation || 0) : Number(element?.rotation) || 0);
-      const dx = x - (Number(element?.x) || 0);
-      const dy = y - (Number(element?.y) || 0);
-      const localX = dx * Math.cos(rotation) - dy * Math.sin(rotation) + (Number(element?.x) || 0);
-      const localY = dx * Math.sin(rotation) + dy * Math.cos(rotation) + (Number(element?.y) || 0);
+      const dx = x - (Number(geometry?.x) || 0);
+      const dy = y - (Number(geometry?.y) || 0);
+      const localX = dx * Math.cos(rotation) - dy * Math.sin(rotation) + (Number(geometry?.x) || 0);
+      const localY = dx * Math.sin(rotation) + dy * Math.cos(rotation) + (Number(geometry?.y) || 0);
       const style = effectiveAnnotationStyle(element);
       const fontSize = annotationTextWorldHeight(style);
-      return pointInExpandedBox(localX, localY, textHitBox(window.AnnotationRenderer.displayText(element || {}, formatDisplayNumber), element?.x, element?.y, fontSize, style.textAlign), padding);
+      return pointInExpandedBox(localX, localY, textHitBox(window.AnnotationRenderer.displayText(element || {}, formatDisplayNumber), geometry?.x, geometry?.y, fontSize, style.textAlign), padding);
     }
 
     function boxFromPoints(points) {
@@ -103,14 +105,15 @@
         if (!element || !isVisibleValue(element.visible) || !isVisibleSketchId(element.sketchId)) continue;
         if (activeOnly && element.sketchId !== activeSketchId()) continue;
         if (element.type === "leader") {
-          const text = annotationTextLayout(element) || element;
+          const geometry = annotationLeaderDisplayGeometry(element) || element;
+          const text = annotationTextLayout(element) || geometry;
           const start = annotationLeaderAnchor(element);
           if (!start || !element.end) continue;
-          const elbow = element.elbow || { x: (start.x + element.end.x) / 2, y: element.end.y };
-          if (distancePointToSegmentPoints(x, y, start, elbow) <= threshold * 2.2 || distancePointToSegmentPoints(x, y, elbow, element.end) <= threshold * 2.2) return { element, type: "leader", part: "line" };
+          const elbow = geometry.elbow || { x: (start.x + geometry.end.x) / 2, y: geometry.end.y };
+          if (distancePointToSegmentPoints(x, y, start, elbow) <= threshold * 2.2 || distancePointToSegmentPoints(x, y, elbow, geometry.end) <= threshold * 2.2) return { element, type: "leader", part: "line" };
           if (pointInAnnotationTextBox(x, y, element, threshold)) return { element, type: "leader", part: "label" };
           if (hypot2(x - text.x, y - text.y) <= threshold * 3) return { element, type: "leader", part: "label" };
-          const leaderBox = boxFromPoints([start, elbow, element.end, { x: text.x, y: text.y }]);
+          const leaderBox = boxFromPoints([start, elbow, geometry.end, { x: text.x, y: text.y }]);
           if (leaderBox && pointInExpandedBox(x, y, leaderBox, threshold * 2.2)) return { element, type: "leader", part: "line" };
         } else if (element.type === "text") {
           if (pointInAnnotationTextBox(x, y, element, threshold)) return { element, type: "text", part: "label" };
@@ -123,18 +126,19 @@
       if (!element || !isVisibleValue(element.visible)) return null;
       const threshold = 12 / viewportScale();
       if (element.type === "leader") {
-        const text = annotationTextLayout(element) || element;
+        const geometry = annotationLeaderDisplayGeometry(element) || element;
+        const text = annotationTextLayout(element) || geometry;
         const start = annotationLeaderAnchor(element);
         if (!start || !element.end) return null;
-        const elbow = element.elbow || { x: (start.x + element.end.x) / 2, y: element.end.y };
+        const elbow = geometry.elbow || { x: (start.x + geometry.end.x) / 2, y: geometry.end.y };
         const firstDistance = distancePointToSegmentPoints(pointer.x, pointer.y, start, elbow);
-        const secondDistance = distancePointToSegmentPoints(pointer.x, pointer.y, elbow, element.end);
+        const secondDistance = distancePointToSegmentPoints(pointer.x, pointer.y, elbow, geometry.end);
         const lineDistance = Math.min(firstDistance, secondDistance);
         if (lineDistance <= threshold * 2.2) return { element, type: "leader", part: "line", distance: lineDistance };
         if (pointInAnnotationTextBox(pointer.x, pointer.y, element, threshold)) return { element, type: "leader", part: "label", distance: 0 };
         const labelDistance = hypot2(pointer.x - text.x, pointer.y - text.y);
         if (labelDistance <= threshold * 3) return { element, type: "leader", part: "label", distance: labelDistance };
-        const leaderBox = boxFromPoints([start, elbow, element.end, { x: text.x, y: text.y }]);
+        const leaderBox = boxFromPoints([start, elbow, geometry.end, { x: text.x, y: text.y }]);
         if (leaderBox && pointInExpandedBox(pointer.x, pointer.y, leaderBox, threshold * 2.2)) {
           return { element, type: "leader", part: "line", distance: Math.min(lineDistance, labelDistance) };
         }

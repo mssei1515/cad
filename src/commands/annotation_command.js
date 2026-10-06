@@ -67,6 +67,11 @@
       return { start: anchor, elbow, end, text: { x: (elbow.x + end.x) / 2, y: end.y - 10 / viewScale() } };
     }
 
+    function shelfReferenceScale() {
+      const style = effectiveAnnotationStyle({ type: "leader", appearanceInheritance: true, sketchId: activeSketchId(), style: {} });
+      return viewScale() / window.Appearance.annotationDisplayFactor(style, viewScale());
+    }
+
     function currentLeaderAnchor(target) {
       return annotationLeaderAnchor({ start: target.anchor, geometryRef: target.geometryRef, attachment: target.attachment }) || target.anchor;
     }
@@ -102,6 +107,7 @@
         attachment: target.attachment,
         appearanceInheritance: true,
         textPlacement: "shelf",
+        shelfReferenceScale: shelfReferenceScale(),
         style: {},
       });
       setPending(null);
@@ -123,6 +129,7 @@
         type: "leader",
         appearanceInheritance: true,
         textPlacement: "shelf",
+        shelfReferenceScale: shelfReferenceScale(),
         style: { ...effectiveAnnotationStyle({ type: "leader", appearanceInheritance: true, sketchId: activeSketchId(), style: {} }), color: "#2563eb" },
       };
     }

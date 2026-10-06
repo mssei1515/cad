@@ -57,6 +57,7 @@
       if (element.appearanceInheritance === true) data.appearanceInheritance = true;
       if (element.textPlacement === "shelf") data.textPlacement = "shelf";
       if (element.attachment) data.attachment = { ...element.attachment };
+      if (Number.isFinite(element.shelfReferenceScale) && element.shelfReferenceScale > 0) data.shelfReferenceScale = element.shelfReferenceScale;
       data.geometryRef = element.geometryRef && typeof element.geometryRef === "object" ? { ...element.geometryRef } : null;
       data.start = element.start;
       data.elbow = element.elbow;

@@ -34,7 +34,7 @@
         if (input.type === "checkbox" && category === "dimension" && target.kind === "constraint") value = String(input.checked);
       }
       // UI checks model-relative sizing; the persisted flag describes screen-fixed sizing.
-      if (category === "annotationDisplay" && data.annotationDisplay === "modelRelativeSize") value = !input.checked;
+      if (category === "annotationDisplay" && data.annotationDisplay === "modelRelativeSize" || category === "leader" && key === "fixedDisplaySize" && input.type === "checkbox") value = !input.checked;
       return appearancePropertyCommand.apply(target, { category, key, value, context: sketchDefaultAppearanceContext(input, target) }, { commit });
     }
 
@@ -169,6 +169,7 @@
     function handlePropertiesClick(event) {
       if (selectedPropertiesTarget().readOnly) return false;
       const action = event.target.closest("[data-property-action]")?.dataset.propertyAction;
+      if (action === "leader-size-default") return appearancePropertyCommand.apply(selectedPropertiesTarget(), { category: "leader", key: "fixedDisplaySize", value: "" });
       if (action === "instance-sources") return startInstanceSourceEdit(selectedPropertiesTarget().item);
       if (action === "reference-image-calibrate") {
         const target = selectedPropertiesTarget();

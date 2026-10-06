@@ -19,7 +19,7 @@ test("OFF leaders scale text, terminators and strokes while keeping all path coo
   const px = sandbox.window.Appearance.CSS_PX_PER_MM;
   h.viewport.scale = px * 3;
   const element = { start: { x: 10, y: 20 }, elbow: { x: 30, y: 20 }, end: { x: 40, y: 20 }, x: 40, y: 20, text: "note",
-    style: { fixedDisplaySize: false, displayScale: 1.5, textHeight: 3, terminatorType: "dot", terminatorSize: 2, lineWidth: 1.5 } };
+    shelfReferenceScale: px * 1.5, style: { fixedDisplaySize: false, displayScale: 1.5, textHeight: 3, terminatorType: "dot", terminatorSize: 2, lineWidth: 1.5 } };
   h.renderer.drawAnnotationLeader(element);
   assert.equal(parseFloat(h.ctx.font), 2);
   assert.ok(Math.abs(h.ctx.lineWidth * h.viewport.scale - 3) < 1e-12);
@@ -115,4 +115,29 @@ test("shelf text gap follows text bounds, rotation, multiline labels and display
   assert.deepEqual(element.elbow, JSON.parse(original).elbow);
   assert.deepEqual(element.end, JSON.parse(original).end);
   assert.equal(renderer.annotationTextLayout({ ...element, textPlacement: undefined }), null);
+});
+
+test("shelf display preserves signed span and rotated block direction, and legacy baseline is 100 percent", () => {
+  const h = create(), px = sandbox.window.Appearance.CSS_PX_PER_MM;
+  for (const vector of [{ x: -20, y: 0 }, { x: 0, y: 20 }]) {
+    const element = { type: "leader", start: { x: 0, y: 0 }, elbow: { x: 30, y: 40 },
+      end: { x: 30 + vector.x, y: 40 + vector.y }, x: 35, y: 20, shelfReferenceScale: 3, style: {} };
+    const before = JSON.stringify(element);
+    h.viewport.scale = 3;
+    const a = h.renderer.annotationLeaderDisplayGeometry(element);
+    h.viewport.scale = 6;
+    const b = h.renderer.annotationLeaderDisplayGeometry(element);
+    assert.equal((b.end.x - b.elbow.x) * 6, (a.end.x - a.elbow.x) * 3);
+    assert.equal((b.end.y - b.elbow.y) * 6, (a.end.y - a.elbow.y) * 3);
+    assert.equal(b.x - element.x, (b.end.x - element.end.x) / 2);
+    assert.equal(JSON.stringify(element), before);
+    element.style = { fixedDisplaySize: false, displayScale: 6 / px };
+    const locked = h.renderer.annotationLeaderDisplayGeometry(element);
+    h.viewport.scale = 12;
+    const zoomed = h.renderer.annotationLeaderDisplayGeometry(element);
+    assert.deepEqual(zoomed, locked);
+    delete element.shelfReferenceScale; element.style = {};
+    h.viewport.scale = px;
+    assert.equal(JSON.stringify(h.renderer.annotationLeaderDisplayGeometry(element).end), JSON.stringify(element.end));
+  }
 });

@@ -229,7 +229,7 @@
   const { blockProjectionId, blockProjectionLocalId, blockWorldPoint, createBlockProjectionBundle, blockAllProjectionBundle, blockProjectionBundle, invalidateBlockProjectionCache } = blockProjections;
   const { annotationBounds, pointInAnnotationTextBox, hitAnnotationElement, canvasContextAnnotationHit } = window.AnnotationSpatialQuery.create({
     viewportScale: () => viewport.scale, annotationTextWorldHeight: style => annotationTextWorldHeight(style),
-    formatDisplayNumber, annotationTextLayout: element => annotationTextLayout(element), effectiveAnnotationStyle, allAnnotations: () => allAnnotations(), isVisibleSketchId, activeSketchId, isVisibleValue,
+    formatDisplayNumber, annotationTextLayout: element => annotationTextLayout(element), annotationLeaderDisplayGeometry: element => annotationLeaderDisplayGeometry(element), effectiveAnnotationStyle, allAnnotations: () => allAnnotations(), isVisibleSketchId, activeSketchId, isVisibleValue,
     annotationLeaderAnchor: element => annotationLeaderAnchor(element),
   });
   const { blockLocalGeometryBounds, blockInstanceDisplayCenter, blockInstanceTranslationForAnchor } = window.BlockLayout.create({
@@ -611,7 +611,7 @@
   });
 
   const { drawResolvedHatchContent } = window.HatchRenderer.create({ viewport, visibleWorldBounds, canvasThemeColor, isVisibleValue });
-  const { annotationTextLayout, annotationTextWorldHeight, drawAnnotationText, drawAnnotationLeader } = window.AnnotationRenderer.create({ ctx, viewport, withCanvasState, annotationDisplayColor, annotationLeaderAnchor, appearanceLineDash, formatValue: formatDisplayNumber, effectiveAnnotationStyle });
+  const { annotationLeaderDisplayGeometry, annotationTextLayout, annotationTextWorldHeight, drawAnnotationText, drawAnnotationLeader } = window.AnnotationRenderer.create({ ctx, viewport, withCanvasState, annotationDisplayColor, annotationLeaderAnchor, appearanceLineDash, formatValue: formatDisplayNumber, effectiveAnnotationStyle });
   const annotationCommand = window.AnnotationCommand.create({
     currentScope: workspace.current, getPending: () => pendingCommand, setPending: value => { pendingCommand = value; },
     lastPointer: () => lastPointerWorld, viewScale: () => viewport.scale, promptText: (...args) => window.prompt(...args),
@@ -6819,7 +6819,7 @@
     leaderFields.onchange = event => {
       const key = event.target.dataset.leaderStyle;
       if (!key) return;
-      appearanceEditing.applyLeaderAppearanceValue(documentModel.defaultLeaderAppearance, key, event.target.value,
+      appearanceEditing.applyLeaderAppearanceValue(documentModel.defaultLeaderAppearance, key, event.target.type === "checkbox" ? !event.target.checked : event.target.value,
         { viewportScale: viewport.scale, effective: effectiveLeaderAppearanceForSketch(null) });
       renderSharedDefaults();
       recordHistory("Document引出線外観変更");
@@ -9497,6 +9497,7 @@
           screenTextHeight: annotationTextWorldHeight(style) * viewport.scale,
           screenTerminatorSize: style.terminatorSize * ANNOTATION_SCREEN_PX_PER_MM * window.Appearance.annotationDisplayFactor(style, viewport.scale),
           textLayout: annotationTextLayout(annotation),
+          displayGeometry: annotation.type === "leader" ? annotationLeaderDisplayGeometry(annotation) : null,
           resolvedStart: annotation.type === "leader" ? annotationLeaderAnchor(annotation) : null,
           displayedText: window.AnnotationRenderer.displayText(annotation, formatDisplayNumber),
           serialized: serializeAnnotation(annotation),
@@ -9505,7 +9506,7 @@
       annotationOwnershipStateForTest() {
         const rect = canvas.getBoundingClientRect();
         const clientPoint = (annotation) => {
-          const screen = worldToCanvasScreen({ x: annotation.x, y: annotation.y });
+          const screen = worldToCanvasScreen(annotationTextLayout(annotation) || (annotation.type === "leader" ? annotationLeaderDisplayGeometry(annotation) : null) || annotation);
           return { x: rect.left + screen.x, y: rect.top + screen.y };
         };
         return {
@@ -9524,7 +9525,8 @@
             client: clientPoint(annotation),
             effectiveStyle: effectiveAnnotationStyle(annotation),
             textLayout: annotationTextLayout(annotation),
-          resolvedStart: annotation.type === "leader" ? annotationLeaderAnchor(annotation) : null,
+            displayGeometry: annotation.type === "leader" ? annotationLeaderDisplayGeometry(annotation) : null,
+            resolvedStart: annotation.type === "leader" ? annotationLeaderAnchor(annotation) : null,
             ownerId: annotation.blockInstance?.id || null,
           })),
           selectedIds: canvasSelection.annotations.map((annotation) => annotation.id),

@@ -175,7 +175,7 @@ test('text gap is inherited and remains below rotated multiline text through zoo
   await page.evaluate(() => window.__jot2dTest.focusWorldForTest({ x: 50, y: 0 }, 6));
   const zoomed = await metrics();
   expect(zoomed.textLayout.gapWorld * 2).toBeCloseTo(first.textLayout.gapWorld, 8);
-  await page.locator('#annotationFixedDisplaySize').selectOption('false');
+  await page.locator('#annotationFixedDisplaySize').check();
   const relative = await metrics();
   await page.evaluate(() => window.__jot2dTest.focusWorldForTest({ x: 50, y: 0 }, 3));
   expect((await metrics()).textLayout.gapWorld).toBeCloseTo(relative.textLayout.gapWorld, 8);
@@ -188,23 +188,98 @@ test('text gap is inherited and remains below rotated multiline text through zoo
   expect((await metrics()).style.textGap).toBe(1);
 });
 
-test('shelf screen length follows canvas zoom independently of fixed text and terminal sizes', async ({ page }) => {
+test('shelf and text stay screen-fixed, then size lock captures zoom and persists with inherited reset', async ({ page }) => {
   await setup(page); const leader = await createLeader(page);
-  const screenLength = () => page.evaluate(({ elbow, end }) => {
-    const a = window.__jot2dTest.worldClientPositionForTest(elbow), b = window.__jot2dTest.worldClientPositionForTest(end);
-    return Math.hypot(b.x - a.x, b.y - a.y);
-  }, leader);
-  const length = await screenLength();
-  const text = await page.evaluate(() => window.__jot2dTest.annotationAppearanceStateForTest('leader'));
+  const metrics = () => page.evaluate(() => window.__jot2dTest.annotationAppearanceStateForTest('leader'));
+  const screenLength = async () => {
+    const geometry = (await metrics()).displayGeometry;
+    return page.evaluate(({ elbow, end }) => {
+      const a = window.__jot2dTest.worldClientPositionForTest(elbow), b = window.__jot2dTest.worldClientPositionForTest(end);
+      return Math.hypot(b.x - a.x, b.y - a.y);
+    }, geometry);
+  };
+  const length = await screenLength(), first = await metrics();
+  expect(length).toBeCloseTo(45, 0);
+  expect(leader.shelfReferenceScale).toBeCloseTo(3);
   await page.evaluate(() => window.__jot2dTest.focusWorldForTest({ x: 50, y: 0 }, 6));
-  expect(await screenLength()).toBeCloseTo(length * 2, 8);
-  const zoomed = await page.evaluate(() => window.__jot2dTest.annotationAppearanceStateForTest('leader'));
-  expect(zoomed.screenTextHeight).toBeCloseTo(text.screenTextHeight, 8);
-  expect(zoomed.screenTerminatorSize).toBeCloseTo(text.screenTerminatorSize, 8);
+  expect(await screenLength()).toBeCloseTo(length, 8);
+  const zoomed = await metrics();
+  expect(zoomed.screenTextHeight).toBeCloseTo(first.screenTextHeight, 8);
+  expect(zoomed.displayGeometry.elbow).toEqual(first.displayGeometry.elbow);
   await selectLeader(page);
-  await page.locator('#annotationFixedDisplaySize').selectOption('false');
-  await page.evaluate(() => window.__jot2dTest.focusWorldForTest({ x: 50, y: 0 }, 1.5));
+  await expect(page.locator('#annotationFixedDisplaySize')).not.toBeChecked();
+  await page.locator('#annotationFixedDisplaySize').check();
+  expect(await screenLength()).toBeCloseTo(length, 8);
+  await page.evaluate(() => window.__jot2dTest.focusWorldForTest({ x: 50, y: 0 }, 3));
   expect(await screenLength()).toBeCloseTo(length / 2, 8);
-  const saved = (await data(page)).annotations[0];
-  expect(saved.elbow).toEqual(leader.elbow); expect(saved.end).toEqual(leader.end);
+  expect((await metrics()).screenTextHeight).toBeCloseTo(first.screenTextHeight / 2, 8);
+  const saved = await data(page);
+  expect(saved.annotations[0].elbow).toEqual(leader.elbow); expect(saved.annotations[0].end).toEqual(leader.end);
+  await page.evaluate(data => window.__jot2dTest.loadDocumentFixtureForDragTest(data), saved);
+  expect(await screenLength()).toBeCloseTo(length / 2, 8);
+  await selectLeader(page);
+  await page.locator('[data-property-action="leader-size-default"]').click();
+  expect(await screenLength()).toBeCloseTo(length, 8);
+  await expect(page.locator('#annotationFixedDisplaySize')).not.toBeChecked();
+  expect((await data(page)).annotations[0].style).not.toHaveProperty('fixedDisplaySize');
+});
+
+test('displayed shelf endpoint remains selectable beyond stored coordinates and moves as one leader', async ({ page }) => {
+  await setup(page); const leader = await createLeader(page);
+  await page.evaluate(() => window.__jot2dTest.focusWorldForTest({ x: 50, y: 0 }, 0.75));
+  const geometry = await page.evaluate(() => window.__jot2dTest.annotationAppearanceStateForTest('leader').displayGeometry);
+  expect(geometry.end.x).toBeGreaterThan(leader.end.x + 30);
+  const client = await page.evaluate(p => window.__jot2dTest.worldClientPositionForTest(p), geometry.end);
+  expect(await page.evaluate(p => window.__jot2dTest.annotationHitAt(p), client)).toEqual({ type: 'leader', part: 'line' });
+  await page.mouse.move(client.x, client.y); await page.mouse.down();
+  await page.mouse.move(client.x + 15, client.y + 7.5, { steps: 4 }); await page.mouse.up();
+  const moved = (await data(page)).annotations[0];
+  expect(moved.elbow.x).toBeCloseTo(leader.elbow.x + 20, 0);
+  expect(moved.end.x).toBeCloseTo(leader.end.x + 20, 0);
+  expect(moved.end.y).toBe(moved.elbow.y);
+  expect(moved.shelfReferenceScale).toBe(leader.shelfReferenceScale);
+  await page.locator('#undoBtn').click();
+  expect((await data(page)).annotations[0]).toEqual(leader);
+});
+
+test('Document size lock is inherited and creation preserves clicked shelf length at a different zoom', async ({ page }) => {
+  await setup(page);
+  await page.locator('.app-menu > summary').first().click(); await page.locator('#documentSettingsBtn').click();
+  await page.locator('#documentLeaderFixedDisplaySize').check();
+  await page.locator('#documentSettingsDialog footer button').click();
+  await page.evaluate(() => window.__jot2dTest.focusWorldForTest({ x: 50, y: 0 }, 6));
+  const leader = await createLeader(page, 40);
+  const first = await page.evaluate(() => window.__jot2dTest.annotationAppearanceStateForTest('leader'));
+  expect(first.style.fixedDisplaySize).toBe(false);
+  expect(leader.style).toEqual({});
+  expect(first.displayGeometry.end.x).toBeCloseTo(leader.end.x, 8);
+  const before = first.displayGeometry.elbow.x - first.displayGeometry.end.x;
+  await page.evaluate(() => window.__jot2dTest.focusWorldForTest({ x: 50, y: 0 }, 3));
+  const next = await page.evaluate(() => window.__jot2dTest.annotationAppearanceStateForTest('leader'));
+  expect(next.displayGeometry.elbow.x - next.displayGeometry.end.x).toBeCloseTo(before, 8);
+  const saved = await data(page);
+  await page.evaluate(data => window.__jot2dTest.loadDocumentFixtureForDragTest(data), saved);
+  expect((await data(page)).annotations[0].shelfReferenceScale).toBe(leader.shelfReferenceScale);
+  await selectLeader(page);
+  await expect(page.locator('#annotationFixedDisplaySize')).toBeChecked();
+  await expect(page.locator('[data-property-action="leader-size-default"]')).toBeDisabled();
+});
+
+test('Sketch size lock overrides Document and individual reset returns to the Sketch setting', async ({ page }) => {
+  await setup(page); await createLeader(page);
+  await page.locator('.sketch-item[data-id="S1"] .sketch-name').click();
+  const section = page.locator('[data-property-section="leader"]');
+  if (await section.getAttribute('open') === null) await section.locator('summary').click();
+  await page.locator('#sketchLeaderFixedDisplaySize').check();
+  expect((await data(page)).sketches.find(s => s.id === 'S1').leaderAppearance.fixedDisplaySize).toBe(false);
+  await selectLeader(page);
+  await expect(page.locator('#annotationFixedDisplaySize')).toBeChecked();
+  await page.locator('#annotationFixedDisplaySize').uncheck();
+  expect((await data(page)).annotations[0].style.fixedDisplaySize).toBe(true);
+  await page.locator('[data-property-action="leader-size-default"]').click();
+  await expect(page.locator('#annotationFixedDisplaySize')).toBeChecked();
+  await page.locator('#undoBtn').click();
+  expect((await data(page)).annotations[0].style.fixedDisplaySize).toBe(true);
+  await page.locator('#redoBtn').click();
+  expect((await data(page)).annotations[0].style).not.toHaveProperty('fixedDisplaySize');
 });
