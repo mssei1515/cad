@@ -1344,7 +1344,7 @@
   function effectiveAppearanceForElement(item) {
     const cached = geometryReads.readAppearance(item);
     if (cached) return cached;
-    if (item?.derivedProjection && item.derivedInstance?.type === "mirror" && item.sourceElement) {
+    if (item?.derivedProjection && item.sourceElement) {
       const result = { ...effectiveAppearanceForElement(item.sourceElement), ...normalizeAppearance(item.derivedInstance.appearanceOverride) };
       geometryReads.cacheAppearance(item, result);
       return result;
