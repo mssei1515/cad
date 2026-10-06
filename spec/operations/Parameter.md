@@ -27,7 +27,7 @@ Canvas寸法入力、Properties、Parameter画面の編集可能な式入力で�
 
 Canvasの寸法ラベルは式やsymbol名を表示せず、prefix／suffixを含む評価後の数値表示を維持する。数値リテラル以外の式で駆動される寸法は、Canvas上の評価値の前にカミナリマークを表示して数式寸法であることを識別する。
 
-Canvas寸法入力、Propertiesの寸法`値 / 数式`、または表示中Canvasと同じ名前空間を編集中のParameter画面で数式入力欄へfocusしている間は、Canvas上の既存寸法をクリックすると、その寸法の`parameterName`をダブルクオーテーションで括り、現在のcaret位置または選択範囲へ挿入する。この操作は通常の寸法selection／dragを開始せず、入力欄のfocusを維持する。
+Canvas寸法入力、Propertiesの寸法・自由テキスト・引出線の`値 / 数式`、または表示中Canvasと同じ名前空間を編集中のParameter画面で数式入力欄へfocusしている間は、Canvas上の既存寸法をクリックすると、その寸法の`parameterName`をダブルクオーテーションで括り、現在のcaret位置または選択範囲へ挿入する。参照入力の対象は同じ名前空間の表示中の寸法であり、所属Sketchのアクティブ状態には依存しない。この操作は通常の寸法selection／dragを開始せず、入力欄のfocusを維持する。
 
 入力が数式形式でなければ先頭の`=`も自動付与する。別Block Definitionなど、表示中Canvasと異なる名前空間のParameter画面からはCanvas寸法を参照できない。
 

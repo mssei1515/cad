@@ -3,6 +3,23 @@ const fs = require('node:fs');
 const vm = require('node:vm');
 const test = require('node:test');
 const sandbox = { window: {} }; vm.runInNewContext(fs.readFileSync('src/commands/annotation_drag.js', 'utf8'), sandbox);
+test('multiple free texts use shared displacement, current identities and one history entry', () => {
+  const items = [{ id: 'AN1', type: 'text', x: 10, y: 20 }, { id: 'AN2', type: 'text', x: -5, y: 7 }];
+  const selection = { annotations: items, set: (kind, value) => { selection[kind] = value; } };
+  const current = new Map(items.map(item => [item.id, item]));
+  let commits = 0;
+  const command = sandbox.window.AnnotationDrag.create({ annotationById: id => current.get(id), canvasSelection: selection,
+    beginPointer() {}, endPointer() {}, setHint() {}, updateUI() {}, draw() {}, recordHistory() { commits++; } });
+  command.begin({ pointerId: 1 }, { type: 'text', element: items[0] }, { x: 2, y: 3 });
+  current.set('AN2', { ...items[1] });
+  command.update({ x: 5, y: 7 });
+  command.update({ x: 6, y: 8 });
+  assert.deepEqual([items[0].x, items[0].y, current.get('AN2').x, current.get('AN2').y], [14, 25, -1, 12]);
+  assert.equal(items[1].x, -5);
+  assert.equal(selection.annotations.length, 2);
+  command.finish({ pointerId: 1 });
+  assert.equal(commits, 1);
+});
 function fixture() {
   const item = { id: 'AN1', x: 10, y: 20, start: { x: 0, y: 0 }, end: { x: 4, y: 5 }, elbow: { x: 2, y: 3 } }, state = { item }, events = [];
   const command = sandbox.window.AnnotationDrag.create({ annotationById: id => id === state.item?.id ? state.item : null,

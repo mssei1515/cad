@@ -4,6 +4,9 @@
   function create({ annotationById, canvasSelection, beginPointer, endPointer, setHint, updateUI, draw, recordHistory }) {
     let annotationDragSession = null;
     function beginAnnotationDrag(e, hit, pointer) {
+      const selected = canvasSelection.annotations || [];
+      const elements = hit.type === "text" && selected.includes(hit.element) && selected.every(item => item.type === "text")
+        ? selected : [hit.element];
       annotationDragSession = {
         pointerId: e.pointerId,
         elementId: hit.element?.id || null,
@@ -12,8 +15,9 @@
         startEnd: hit.element?.end ? { ...hit.element.end } : null,
         startElbow: hit.element?.elbow ? { ...hit.element.elbow } : null,
         startText: hit.element ? { x: hit.element.x, y: hit.element.y } : null,
+        texts: hit.type === "text" ? elements.map(element => ({ element, id: element.id, x: element.x, y: element.y })) : [],
       };
-      canvasSelection.set("annotations", [hit.element]);
+      canvasSelection.set("annotations", elements);
       beginPointer(e.pointerId);
       setHint(hit.type === "leader" ? "引出線を移動中" : "テキストを移動中");
     }
@@ -32,9 +36,12 @@
           element.x = session.startText.x + dx;
           element.y = session.startText.y + dy;
         }
-      } else if (session.hit.type === "text" && session.startText) {
-        element.x = session.startText.x + dx;
-        element.y = session.startText.y + dy;
+      } else if (session.hit.type === "text") {
+        for (const start of session.texts) {
+          const text = annotationById(start.id) || start.element;
+          text.x = start.x + dx;
+          text.y = start.y + dy;
+        }
       }
       draw();
     }

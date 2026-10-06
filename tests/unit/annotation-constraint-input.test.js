@@ -16,6 +16,22 @@ test('annotation placement routes each pending state and falls through for unrel
   const f=fixture(),target={};for(const [type,name] of [['annotation-text-place','text'],['annotation-leader-select','target'],['annotation-leader-place','leader']]){f.pending={type};f.calls=[];assert.equal(f.annotation.place(f.e,f.p,target),true);assert.deepEqual(f.names(),['prevent',name]);assert.equal(f.calls[1].args.at(-1),f.p);}
   assert.equal(f.calls[1].args[0],f.p);f.pending=null;f.calls=[];assert.equal(f.annotation.place(f.e,f.p,target),false);assert.deepEqual(f.calls,[]);
 });
+
+test('dragging a selected free text preserves a selection of free texts only',()=>{
+  const f=fixture(),first={id:'A',type:'text'},second={id:'B',type:'text'};
+  const selection={annotations:[first,second],selectedElementCount:()=>2};
+  const input=sandbox.window.AnnotationCommandInput.create({getMode:()=>f.mode,getPending:()=>null,getPendingConstraint:()=>null,
+    canvasSelection:selection,clearSelection:()=>f.calls.push({name:'clear'}),annotationDrag:{begin:()=>f.calls.push({name:'drag'})},
+    updateUI(){},draw(){}});
+  input.select(f.e,f.p,{blankAnnotationHit:{type:'text',element:first}});
+  assert.equal(f.names().includes('clear'),false);assert.ok(f.names().includes('drag'));
+  f.calls=[];selection.selectedElementCount=()=>3;
+  input.select(f.e,f.p,{blankAnnotationHit:{type:'text',element:first}});
+  assert.ok(f.names().includes('clear'));
+  f.calls=[];selection.selectedElementCount=()=>2;second.type='leader';
+  input.select(f.e,f.p,{blankAnnotationHit:{type:'text',element:first}});
+  assert.ok(f.names().includes('clear'));
+});
 test('annotation selection is blocked by direct geometry, dimensions or active commands',()=>{
   const f=fixture(),hit={element:{id:'N'}};for(const extra of [{directGeometryHit:true},{hitD:{}}])assert.equal(f.annotation.select(f.e,f.p,{blankAnnotationHit:hit,...extra}),false);
   f.constraint={};assert.equal(f.annotation.select(f.e,f.p,{blankAnnotationHit:hit}),false);assert.deepEqual(f.calls,[]);

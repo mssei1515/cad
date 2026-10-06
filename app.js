@@ -6550,6 +6550,7 @@
         constraintDoubleClick: handleConstraintTargetDoubleClick, enterBlock: enterBlockDefinitionEdit, beginSplineEdit: beginSplineEditFromDoubleClick },
       query: canvasPressQuery, worldPoint: canvasPoint, screenPoint: canvasScreenPoint,
       closeContextMenu: closeCanvasContextMenu, insertDimensionParameter: insertClickedDimensionParameter,
+      referenceDimensionAt: point => focusedExpressionInputContext() ? hitDimension(point.x, point.y, { activeOnly: false }) : null,
       commitHatch: commitHatchAt, calibrateImage: handleReferenceImageCalibrationClick,
       placeFilletRadius: submitFilletRadiusPlacement, placeBlock: handleBlockPlacementClick, blankGesture: blankCanvasGesture,
       inputs: { instance: instanceCommandInput, annotation: annotationCommandInput, constraint: constraintCommandInput,
@@ -6687,7 +6688,7 @@
     const rect = canvas.getBoundingClientRect();
     if (event.clientX < rect.left || event.clientX > rect.right || event.clientY < rect.top || event.clientY > rect.bottom) return;
     const point = canvasPoint(event);
-    const hit = hitDimension(point.x, point.y);
+    const hit = hitDimension(point.x, point.y, { activeOnly: false });
     if (hit) insertClickedDimensionParameter(event, hit);
   }
 
