@@ -5,7 +5,7 @@
   function create({ Point, Line, canvasSelection, getOperation, effectiveSelectedConstraint,
     selectedGeometryItems, blockDefinitionById, sketchById, activeSketchId, blockProjectionBundle,
     effectiveAppearanceForElement, documentModel, normalizeAppearance, hatchAppearanceForDisplay,
-    normalizeAnnotationStyle, effectiveDimensionAppearance = () => ({}) }) {
+    normalizeAnnotationStyle, effectiveAnnotationStyle = element => normalizeAnnotationStyle(element.style), effectiveDimensionAppearance = () => ({}) }) {
     function selectedPropertiesTarget() {
       const { mode, instanceSourceEdit, freeInstancePlacement, blockPlacementDefinitionId } = getOperation();
       if (mode === "instance-sources" && instanceSourceEdit) return { kind: "geometryInstance", item: instanceSourceEdit.instance };
@@ -72,7 +72,7 @@
       if (target.kind === "geometry") return effectiveAppearanceForElement(target.item);
       if (target.kind === "block") return blockPropertyAppearance(target.item);
       if (target.kind === "hatch") return hatchAppearanceForDisplay(target.item);
-      if (target.kind === "annotation") return { ...normalizeAnnotationStyle(target.item.style), visible: target.item.visible !== false };
+      if (target.kind === "annotation") return { ...effectiveAnnotationStyle(target.item), visible: target.item.visible !== false };
       return {};
     }
 
@@ -88,7 +88,7 @@
       if (target.kind === "constraint") return ["prefix", "suffix", "precision", "terminatorType", "dimensionTextHeight", "dimensionTextGap", "terminatorSize", "arrowheadAngle", "extensionLineOvershoot", "extensionLineOriginGap"].includes(key);
       if (["patternType", "angle", "spacing", "opacity"].includes(key)) return target.kind === "hatch";
       if (["textHeight", "fontFamily", "bold", "italic", "textAlign", "rotation"].includes(key)) return target.kind === "annotation";
-      if (["terminatorType", "terminatorSize"].includes(key)) return target.kind === "annotation" && target.item.type === "leader";
+      if (["terminatorType", "terminatorSize", "arrowheadAngle"].includes(key)) return target.kind === "annotation" && target.item.type === "leader";
       return false;
     }
 
@@ -96,7 +96,7 @@
       const values = (target.items || []).map((entry) => {
         if (key === "modelRelativeSize") return !window.Appearance.annotationDisplaySettings(entry.item.dimension?.display || {}).fixedDisplaySize;
         if (key === "construction") return Boolean(entry.item.construction);
-        if (key === "rotation") return (Number(entry.item.rotation) || 0) * 180 / Math.PI;
+        if (key === "rotation") return (entry.item.type === "leader" ? effectiveAnnotationStyle(entry.item).rotation || 0 : Number(entry.item.rotation) || 0) * 180 / Math.PI;
         const appearance = multiplePropertyAppearance(entry);
         return key === "opacity" ? Number(appearance.opacity) * 100 : appearance[key];
       });

@@ -4,7 +4,7 @@ const path = require("node:path");
 const vm = require("node:vm");
 const test = require("node:test");
 const sandbox = { window: {} }; vm.createContext(sandbox);
-for (const file of ["src/document/appearance.js", "src/rendering/dimension_metrics.js", "src/rendering/dimension_renderer.js"]) vm.runInContext(fs.readFileSync(path.resolve(__dirname, "../..", file), "utf8"), sandbox, { filename: file });
+for (const file of ["src/document/appearance.js", "src/rendering/dimension_metrics.js", "src/rendering/terminator_renderer.js", "src/rendering/dimension_renderer.js"]) vm.runInContext(fs.readFileSync(path.resolve(__dirname, "../..", file), "utf8"), sandbox, { filename: file });
 function harness() {
   const calls = [], marks = [], ctx = {}, viewport = { scale: 2 };
   for (const name of ["save", "restore", "beginPath", "moveTo", "lineTo", "stroke", "arc", "fill", "closePath", "setLineDash", "translate", "rotate", "fillText", "rect", "fillRect"]) ctx[name] = (...args) => calls.push([name, ...args]);

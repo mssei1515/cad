@@ -6,7 +6,7 @@
     geometryRefId, expressionInputValue, numericDimensionExpression, sketchName, localizedConstraintName,
     collapsibleSketchAppearanceSection }) {
     const { annotationDisplayPropertyRows, multiplePropertiesRows, geometryPropertyName, geometryAppearanceSectionName, propertyReadonlyRow, geometryPropertyRows, blockPropertiesConfiguration, blockRotationPropertyRow, dimensionGeometryPropertyRows, constraintDefiningGeometryPropertyRows, annotationAppearancePropertyRows } = rows;
-    const { appearancePropertyRows, dimensionAppearancePropertyRows, colorPickerValue } = appearanceControls;
+    const { appearancePropertyRows, dimensionAppearancePropertyRows, leaderAppearancePropertyRows, colorPickerValue } = appearanceControls;
     function freeInstancePropertyRows(item, info) {
       const placementRows = info.placing ? "" : propertyReadonlyRow("X座標", "X coordinate", formatDisplayNumber(item.x))
         + propertyReadonlyRow("Y座標", "Y coordinate", formatDisplayNumber(item.y))
@@ -139,7 +139,8 @@ ${escapeHtml(style.suffix)}</textarea></div>`
           item.dimensionAppearance,
           info.dimensionAppearance,
           { idPrefix: "sketchDimension" },
-        ), ' data-sketch-default-appearance="dimension"');
+        ), ' data-sketch-default-appearance="dimension"') + collapsibleSketchAppearanceSection("leader", "引出線の外観", "Leader Appearance",
+          leaderAppearancePropertyRows(item.leaderAppearance, info.leaderAppearance, { idPrefix: "sketchLeader" }), ' data-sketch-default-appearance="leader"');
         return `<h2 class="property-heading">${applicationText("スケッチ", "Sketch")}</h2><section class="property-section">${basicInformationHeading}${rows}</section>${appearanceSections}`;
       }
     }

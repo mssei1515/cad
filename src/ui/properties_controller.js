@@ -16,11 +16,11 @@
     function applyAppearancePropertyInput(target, input, { commit = true, rawValue } = {}) {
       if (target.readOnly) return false;
       const data = input.dataset;
-      const category = data.annotationDisplay ? "annotationDisplay" : target.kind === "annotation" && data.annotationStyle ? "annotation"
+      const category = data.leaderStyle ? "leader" : data.annotationDisplay ? "annotationDisplay" : target.kind === "annotation" && data.annotationStyle ? "annotation"
         : target.kind === "hatch" && data.hatchProperty ? "hatch"
           : data.appearanceKey ? "appearance" : data.dimensionDisplay ? "dimension" : null;
       if (!category) return false;
-      const key = category === "annotationDisplay" ? (data.annotationDisplay === "modelRelativeSize" ? "fixedDisplaySize" : data.annotationDisplay) : category === "annotation" ? data.annotationStyle : category === "hatch" ? data.hatchProperty
+      const key = category === "leader" ? data.leaderStyle : category === "annotationDisplay" ? (data.annotationDisplay === "modelRelativeSize" ? "fixedDisplaySize" : data.annotationDisplay) : category === "annotation" ? data.annotationStyle : category === "hatch" ? data.hatchProperty
         : category === "appearance" ? data.appearanceKey : data.dimensionDisplay;
       if (target.kind === "sketch" && target.item.id === activeSketchId() && category === "appearance" && key === "visible"
         && !sketchDefaultAppearanceContext(input, target) && input.value === "false") {
@@ -66,8 +66,8 @@
       const rawValue = input.type === "number" || input.dataset.annotationStyle && !["prefix", "suffix"].includes(input.dataset.annotationStyle) || input.dataset.hatchProperty || input.dataset.bulkProperty && !["prefix", "suffix"].includes(input.dataset.bulkProperty) || input.dataset.appearanceKey
         ? input.value.trim()
         : input.value;
-      const appearanceAllowsEmpty = Boolean(["prefix", "suffix"].includes(input.dataset.bulkProperty) || input.dataset.appearanceKey || input.dataset.dimensionDisplay || ["prefix", "suffix"].includes(input.dataset.annotationStyle));
-      const colorInput = input.dataset.appearanceKey === "color"
+      const appearanceAllowsEmpty = Boolean(input.dataset.leaderStyle || ["prefix", "suffix"].includes(input.dataset.bulkProperty) || input.dataset.appearanceKey || input.dataset.dimensionDisplay || ["prefix", "suffix"].includes(input.dataset.annotationStyle));
+      const colorInput = input.dataset.leaderStyle === "color" || input.dataset.appearanceKey === "color"
         || input.dataset.dimensionDisplay === "color"
         || input.dataset.annotationStyle === "color"
         || input.dataset.hatchProperty === "color"

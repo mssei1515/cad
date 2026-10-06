@@ -41,16 +41,16 @@ for (const type of ["text", "leader", "dimension"]) {
   test(`${type}: unchecked defaults, checked capture, editable baseline, history and persistence`, async ({ page }) => {
     await loadFixture(page);
     await select(page, type);
-    const fixed = page.locator('[data-annotation-display="modelRelativeSize"]');
-    const scale = page.locator('[data-annotation-display="displayScale"]');
-    await expect(page.locator('label[for="annotationModelRelativeSize"]')).toHaveText(type === "dimension" ? "サイズロック" : "図形に対する注記の大きさを固定");
+    const fixed = page.locator(type === "leader" ? '[data-leader-style="fixedDisplaySize"]' : '[data-annotation-display="modelRelativeSize"]');
+    const scale = page.locator(type === "leader" ? '[data-leader-style="displayScale"]' : '[data-annotation-display="displayScale"]');
+    if (type !== "leader") await expect(page.locator('label[for="annotationModelRelativeSize"]')).toHaveText(type === "dimension" ? "サイズロック" : "図形に対する注記の大きさを固定");
     if (type === "dimension") await expect(fixed.locator('..')).toHaveAttribute('title', '図形に対する注記の大きさを固定');
-    await expect(fixed).not.toBeChecked();
+    if (type === "leader") await expect(fixed).toHaveValue("true"); else await expect(fixed).not.toBeChecked();
     await expect(scale).toHaveCount(0);
     const before = await state(page, type);
-    await fixed.check();
+    if (type === "leader") await fixed.selectOption("false"); else await fixed.check();
     await expect(page.locator('label[for="annotationDisplayScale"]')).toHaveText("基準倍率");
-    await expect(scale).toHaveValue("150.0");
+    await expect(scale).toHaveValue(type === "leader" ? "150" : "150.0");
     const captured = await state(page, type);
     expect(captured.settings.displayScale).toBeCloseTo(1.5);
     expect(captured.height).toBeCloseTo(before.height);
@@ -78,15 +78,15 @@ for (const type of ["text", "leader", "dimension"]) {
       expect(saved.constraints[i].target).toEqual(before.data.constraints[i].target);
     }
     for (let i = 0; i < saved.annotations.length; i++) {
-      const { style: ignoredBefore, ...coordinatesBefore } = before.data.annotations[i];
-      const { style: ignoredAfter, ...coordinatesAfter } = saved.annotations[i];
+      const { style: ignoredBefore, appearanceInheritance: ignoredMarkerBefore, ...coordinatesBefore } = before.data.annotations[i];
+      const { style: ignoredAfter, appearanceInheritance: ignoredMarkerAfter, ...coordinatesAfter } = saved.annotations[i];
       expect(coordinatesAfter).toEqual(coordinatesBefore);
     }
     expect(await page.evaluate(data => window.__jot2dTest.loadDocumentFixtureForDragTest(data, "roundtrip.jot2d"), saved)).toEqual(expect.objectContaining({ success: true }));
     await select(page, type);
-    await expect(fixed).toBeChecked();
-    await expect(scale).toHaveValue("300.0");
-    await fixed.uncheck();
+    if (type === "leader") await expect(fixed).toHaveValue("false"); else await expect(fixed).toBeChecked();
+    await expect(scale).toHaveValue(type === "leader" ? "300" : "300.0");
+    if (type === "leader") await fixed.selectOption("true"); else await fixed.uncheck();
     await expect(scale).toHaveCount(0);
     expect((await state(page, type)).settings).not.toHaveProperty("displayScale");
     await page.evaluate(scale => window.__jot2dTest.focusWorldForTest({ x: 0, y: 0 }, scale), PX * 0.5);

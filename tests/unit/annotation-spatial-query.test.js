@@ -32,14 +32,14 @@ test('rotated text hit uses local coordinates and current viewport scale', () =>
   assert.equal(f.query.pointInAnnotationTextBox(9, 10, label), false);
 });
 
-test('bounds include rotated text and saved leader points without resolving anchors', () => {
+test('bounds include rotated text and resolved leader anchors', () => {
   const f = fixture(), label = text(), flat = f.query.annotationBounds(label);
   const rotated = f.query.annotationBounds({ ...label, rotation: Math.PI / 2 });
   assert.ok(Math.abs((flat.x2-flat.x1)-(rotated.y2-rotated.y1)) < 1e-8);
   f.anchor({ x: -500, y: -500 });
   const bounds = f.query.annotationBounds({ ...label, type: 'leader', start: { x: -100, y: -80 }, end: { x: 200, y: 100 } });
-  assert.equal(bounds.x1, -100); assert.equal(bounds.x2, 200);
-  assert.equal(bounds.y1, -80); assert.equal(bounds.y2, 100);
+  assert.equal(bounds.x1, -500); assert.equal(bounds.x2, 200);
+  assert.equal(bounds.y1, -500); assert.equal(bounds.y2, 100);
   assert.equal(f.query.annotationBounds(null), null);
 });
 

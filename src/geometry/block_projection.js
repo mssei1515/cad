@@ -68,6 +68,7 @@
         localElement: localAnnotation,
         blockLocalId: localPath.join("/"),
         blockAppearanceOverrides: appearanceOverrides,
+        annotationTransformRotation: Number(transform.rotation) || 0,
       };
       if (localAnnotation.geometryRef?.kind && Array.isArray(localAnnotation.geometryRef.path)) {
         projected.geometryRef = createGeometryRef(localAnnotation.geometryRef.kind, [...localPath.slice(0, -1), ...localAnnotation.geometryRef.path]);
@@ -159,6 +160,7 @@
         item.sketchId = ownerInstance.sketchId;
         item.blockProjection = true;
         item.blockInstance = ownerInstance;
+        Object.defineProperty(item, "blockProjectionRotation", { configurable: true, get: () => instance.rotation });
         item.blockDefinition = definition;
         item.localElement = localElement;
         item.blockLocalId = geometryRefId(createGeometryRef(kind, path));

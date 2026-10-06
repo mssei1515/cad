@@ -175,6 +175,7 @@
         appearance: normalizeAppearance(sketch.appearance || (sketch.visible === false ? { visible: false } : {})),
         constructionAppearance: normalizeConstructionAppearance(sketch.constructionAppearance),
         dimensionAppearance: dimensionAppearanceLoader(sketch.dimensionAppearance),
+        leaderAppearance: window.Appearance.normalizeLeaderAppearance(sketch.leaderAppearance),
       })) : [],
     };
     if (!scope.sketches.some((sketch) => !isRootSketch(sketch))) {

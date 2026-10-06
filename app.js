@@ -229,7 +229,7 @@
   const { blockProjectionId, blockProjectionLocalId, blockWorldPoint, createBlockProjectionBundle, blockAllProjectionBundle, blockProjectionBundle, invalidateBlockProjectionCache } = blockProjections;
   const { annotationBounds, pointInAnnotationTextBox, hitAnnotationElement, canvasContextAnnotationHit } = window.AnnotationSpatialQuery.create({
     viewportScale: () => viewport.scale, annotationTextWorldHeight: style => annotationTextWorldHeight(style),
-    formatDisplayNumber, allAnnotations: () => allAnnotations(), isVisibleSketchId, activeSketchId, isVisibleValue,
+    formatDisplayNumber, annotationTextLayout: element => annotationTextLayout(element), effectiveAnnotationStyle, allAnnotations: () => allAnnotations(), isVisibleSketchId, activeSketchId, isVisibleValue,
     annotationLeaderAnchor: element => annotationLeaderAnchor(element),
   });
   const { blockLocalGeometryBounds, blockInstanceDisplayCenter, blockInstanceTranslationForAnchor } = window.BlockLayout.create({
@@ -468,7 +468,7 @@
     documentHistory, currentBlockHistory: () => blockEditor.current?.history,
     changed: updateHistoryButtons, log,
   });
-  const CURRENT_JSON_VERSION = 22;
+  const CURRENT_JSON_VERSION = 23;
   const CLIPBOARD_PASTE_OFFSET_SCREEN_PX = 24;
   const BLOCK_ORTHOGONAL_ROTATION_STEP = Math.PI / 2;
 
@@ -611,12 +611,12 @@
   });
 
   const { drawResolvedHatchContent } = window.HatchRenderer.create({ viewport, visibleWorldBounds, canvasThemeColor, isVisibleValue });
-  const { annotationTextWorldHeight, drawAnnotationText, drawAnnotationLeader } = window.AnnotationRenderer.create({ ctx, viewport, withCanvasState, annotationDisplayColor, annotationLeaderAnchor, appearanceLineDash, formatValue: formatDisplayNumber });
+  const { annotationTextLayout, annotationTextWorldHeight, drawAnnotationText, drawAnnotationLeader } = window.AnnotationRenderer.create({ ctx, viewport, withCanvasState, annotationDisplayColor, annotationLeaderAnchor, appearanceLineDash, formatValue: formatDisplayNumber, effectiveAnnotationStyle });
   const annotationCommand = window.AnnotationCommand.create({
     currentScope: workspace.current, getPending: () => pendingCommand, setPending: value => { pendingCommand = value; },
     lastPointer: () => lastPointerWorld, viewScale: () => viewport.scale, promptText: (...args) => window.prompt(...args),
     nextAnnotationId: () => `AN${annotationSeq++}`, activeSketchId, canCreateInActiveSketch, rejectRootSketchCreation,
-    annotationLeaderTargetFromSelection, annotationLeaderTargetFromHit, setGeometrySelection, clearSelection, cancelPendingCommand,
+    annotationLeaderTargetFromSelection, annotationLeaderTargetFromHit, annotationLeaderAnchor, effectiveAnnotationStyle, setGeometrySelection, clearSelection, cancelPendingCommand,
     setHint, updateToolbar, updateUI, draw, recordHistory,
   });
   const { pushAnnotation, createLeaderAnnotation, handleLeaderAnnotationTargetClick,
@@ -986,19 +986,22 @@
       appearance: normalizeAppearance(sketch?.appearance),
       constructionAppearance: normalizeConstructionAppearance(sketch?.constructionAppearance),
       dimensionAppearance: normalizeDimensionAppearance(sketch?.dimensionAppearance),
+      leaderAppearance: window.Appearance.normalizeLeaderAppearance(sketch?.leaderAppearance),
     };
   }
 
   function effectiveDimensionAppearance(dimension, sketchId = activeSketchId(), sketches = model.sketches) {
     const sketch = sketches.find((item) => item.id === sketchId) || sketches.find((item) => isRootSketch(item)) || null;
-    return resolveDimensionAppearance(documentModel.defaultDimensionAppearance,
+    return resolveDimensionAppearance({ ...documentModel.defaultDimensionAppearance, ...documentModel.defaultTerminatorAppearance },
       sketch && !isRootSketch(sketch) ? sketch.dimensionAppearance : null, dimension?.display);
   }
 
   function ensureAppearanceState() {
+    documentModel.defaultTerminatorAppearance = window.Appearance.normalizeTerminator(documentModel.defaultTerminatorAppearance || documentModel.defaultDimensionAppearance, { partial: false });
+    documentModel.defaultLeaderAppearance = window.Appearance.leaderDefaults(documentModel.defaultLeaderAppearance);
     documentModel.defaultAppearance = normalizeAppearance(documentModel.defaultAppearance, { partial: false });
     documentModel.defaultConstructionAppearance = normalizeConstructionAppearance(documentModel.defaultConstructionAppearance, { partial: false });
-    documentModel.defaultDimensionAppearance = normalizeDimensionAppearance(documentModel.defaultDimensionAppearance, { partial: false });
+    documentModel.defaultDimensionAppearance = window.Appearance.dimensionDefaults(documentModel.defaultDimensionAppearance);
     const root = model.sketches.find((sketch) => isRootSketch(sketch));
     if (root) {
       const legacyAppearance = normalizeAppearance(root.appearance);
@@ -1013,7 +1016,8 @@
       } else {
         documentModel.defaultAppearance = { ...documentModel.defaultAppearance, ...legacyAppearance };
         documentModel.defaultConstructionAppearance = { ...documentModel.defaultConstructionAppearance, ...legacyConstructionAppearance };
-        documentModel.defaultDimensionAppearance = { ...documentModel.defaultDimensionAppearance, ...legacyDimensionAppearance };
+        Object.assign(documentModel.defaultTerminatorAppearance, window.Appearance.normalizeTerminator(legacyDimensionAppearance));
+        documentModel.defaultDimensionAppearance = window.Appearance.dimensionDefaults({ ...documentModel.defaultDimensionAppearance, ...legacyDimensionAppearance });
       }
       root.appearance = {};
       root.constructionAppearance = {};
@@ -3776,7 +3780,29 @@
     }
   }
 
-  function annotationDisplayColor(element, style = normalizeAnnotationStyle(element?.style)) {
+  function effectiveLeaderAppearanceForSketch(sketch) {
+    return window.Appearance.resolveLeaderAppearance(documentModel.defaultLeaderAppearance, documentModel.defaultTerminatorAppearance, sketch?.leaderAppearance);
+  }
+
+  function effectiveAnnotationStyle(element) {
+    if (element?.type !== "leader") return normalizeAnnotationStyle(element?.style);
+    const source = element.localElement || element;
+    const sketches = element.blockDefinition?.sketches || model.sketches;
+    const sketch = sketches.find(item => item.id === source.sketchId);
+    const direct = source.appearanceInheritance ? source.style : {
+      ...normalizeAnnotationStyle(source.style), ...window.Appearance.annotationDisplaySettings(source.style), rotation: Number(source.rotation) || 0
+    };
+    const style = window.Appearance.resolveLeaderAppearance(documentModel.defaultLeaderAppearance, documentModel.defaultTerminatorAppearance, sketch?.leaderAppearance, direct);
+    Object.assign(style, { prefix: String(source.style?.prefix || ""), suffix: String(source.style?.suffix || "") });
+    for (const override of element.blockAppearanceOverrides || []) {
+      const normalized = normalizeAppearance(override);
+      if (normalized.color) style.color = normalized.color;
+      if (normalized.lineWidth != null) style.lineWidth = normalized.lineWidth;
+    }
+    return style;
+  }
+
+  function annotationDisplayColor(element, style = effectiveAnnotationStyle(element)) {
     if (canvasSelection.annotations.includes(element) || canvasSelection.inspectionContains(element) || canvasSelection.inspectionContains(element.blockInstance)) return canvasThemeColor("#2563eb");
     if (element === canvasHover.current.annotation) return canvasThemeColor("#0ea5e9");
     return canvasThemeColor(style.color);
@@ -5047,7 +5073,7 @@
   }
 
   function effectiveDimensionAppearanceForSketch(sketch) {
-    return resolveDimensionAppearance(documentModel.defaultDimensionAppearance,
+    return resolveDimensionAppearance({ ...documentModel.defaultDimensionAppearance, ...documentModel.defaultTerminatorAppearance },
       sketch && !isRootSketch(sketch) ? sketch.dimensionAppearance : null);
   }
 
@@ -5071,7 +5097,7 @@
     getOperation: () => ({ mode, instanceSourceEdit: instanceSourceCommand.current, freeInstancePlacement: geometryInstanceCommand.pending, blockPlacementDefinitionId: blockPlacementCommand.definitionId }),
     effectiveSelectedConstraint, selectedGeometryItems, blockDefinitionById, sketchById, activeSketchId,
     blockProjectionBundle, effectiveAppearanceForElement, documentModel, normalizeAppearance,
-    hatchAppearanceForDisplay, normalizeAnnotationStyle, effectiveDimensionAppearance,
+    hatchAppearanceForDisplay, normalizeAnnotationStyle, effectiveAnnotationStyle, effectiveDimensionAppearance,
   });
   const { selectedPropertiesTarget, multiplePropertyTypeKey, multiplePropertySameType, blockPropertyAppearance, multiplePropertyAppearance, multiplePropertySupports, multiplePropertyValue } = propertySelection;
   const geometryPropertyCommand = window.GeometryPropertyCommand.create({
@@ -5085,7 +5111,7 @@
   });
   const { applyAppearanceInput, applyAnnotationStyleValue, applyHatchAppearanceInput, applyDimensionAppearanceValue } = appearanceEditing;
   const appearancePropertyCommand = window.AppearancePropertyCommand.create({
-    editing: appearanceEditing, viewport, normalizeHatchAppearance, normalizeAnnotationStyle,
+    editing: appearanceEditing, viewport, effectiveAnnotationStyle, effectiveLeaderAppearanceForSketch, normalizeHatchAppearance, normalizeAnnotationStyle,
     invalidateBlockProjectionCache, recordHistory, updateUI, updatePropertiesUI, draw,
   });
   const { owner: appearanceOwnerForPropertiesTarget } = appearancePropertyCommand;
@@ -5107,7 +5133,7 @@
     mixedValue: MULTIPLE_PROPERTY_MIXED, colorPickerValue, sketchProjectionConstraintForTarget, sketchName,
     constraintGeometryId, constraintStatusBadge, constraintStatusOf, angleDegrees,
     blockInstanceEnabledSketchSet, blockDefinitionSketchRows, snappedBlockRotation,
-    constraintDefiningGeometryEntries, normalizeAnnotationStyle
+    constraintDefiningGeometryEntries, normalizeAnnotationStyle, effectiveAnnotationStyle, leaderAppearancePropertyRows: appearanceControls.leaderAppearancePropertyRows
   });
 
   const appearancePalette = window.AppearancePalette.create({
@@ -5140,7 +5166,7 @@
     geometryInstanceBundle, activeSketchId, targetFromConstraint, dimensionDisplayState,
     constraintSketchId, isReadOnlyDimension, measuredDimensionValue, angleDegrees,
     sketchById, isRootSketch, effectiveAppearanceForSketch, effectiveConstructionAppearanceForSketch,
-    effectiveDimensionAppearanceForSketch, blockDefinitionSketchRows,
+    effectiveDimensionAppearanceForSketch, effectiveLeaderAppearanceForSketch, blockDefinitionSketchRows,
   });
   const propertiesContent = window.PropertiesContent.create({
     presentation: propertyPresentation, rows: propertyRows, appearanceControls, Line, SketchProjectionConstraint,
@@ -6745,8 +6771,8 @@
     }
     const dimensionFields = document.getElementById("documentDimensionAppearanceFields");
     if (dimensionFields) {
-      const appearance = normalizeDimensionAppearance(documentModel.defaultDimensionAppearance, { partial: false });
-      dimensionFields.innerHTML = dimensionAppearancePropertyRows(appearance, appearance, { allowInheritance: false, idPrefix: "documentDimension" });
+      const appearance = normalizeDimensionAppearance({ ...documentModel.defaultDimensionAppearance, ...documentModel.defaultTerminatorAppearance }, { partial: false });
+      dimensionFields.innerHTML = dimensionAppearancePropertyRows(appearance, appearance, { allowInheritance: false, idPrefix: "documentDimension", terminals: false });
       prepareAffixInputs(dimensionFields);
       localizeApplicationUI(dimensionFields);
       updateDimensionTerminatorAngleVisibility(dimensionFields);
@@ -6755,7 +6781,7 @@
         const key = input.dataset.dimensionDisplay;
         const rawValue = ["prefix", "suffix"].includes(key) ? input.value : input.value.trim();
         applyDimensionAppearanceValue(documentModel.defaultDimensionAppearance, key, rawValue, { allowInheritance: false });
-        documentModel.defaultDimensionAppearance = normalizeDimensionAppearance(documentModel.defaultDimensionAppearance, { partial: false });
+        documentModel.defaultDimensionAppearance = window.Appearance.dimensionDefaults(documentModel.defaultDimensionAppearance);
         if (history) recordHistory("Document Default Dimension Appearance変更");
         draw();
       };
@@ -6772,6 +6798,38 @@
         if (button) openAppearanceColorPalette(button, "document-dimension");
       };
     }
+    const terminalFields = document.getElementById("documentTerminatorAppearanceFields");
+    const leaderFields = document.getElementById("documentLeaderAppearanceFields");
+    const renderSharedDefaults = () => {
+      const terminal = documentModel.defaultTerminatorAppearance;
+      terminalFields.innerHTML = appearanceControls.terminatorPropertyRows(terminal, terminal, { allowInheritance: false, idPrefix: "documentTerminator", attribute: "data-terminal-style" });
+      const leader = effectiveLeaderAppearanceForSketch(null);
+      leaderFields.innerHTML = appearanceControls.leaderAppearancePropertyRows(leader, leader, { allowInheritance: false, idPrefix: "documentLeader", terminals: false });
+    };
+    renderSharedDefaults();
+    terminalFields.onchange = event => {
+      const key = event.target.dataset.terminalStyle;
+      if (!key) return;
+      Object.assign(documentModel.defaultTerminatorAppearance, window.Appearance.normalizeTerminator({ [key]: event.target.value }));
+      renderSharedDefaults();
+      recordHistory("Document端末記号変更");
+      updateUI();
+      draw();
+    };
+    leaderFields.onchange = event => {
+      const key = event.target.dataset.leaderStyle;
+      if (!key) return;
+      appearanceEditing.applyLeaderAppearanceValue(documentModel.defaultLeaderAppearance, key, event.target.value,
+        { viewportScale: viewport.scale, effective: effectiveLeaderAppearanceForSketch(null) });
+      renderSharedDefaults();
+      recordHistory("Document引出線外観変更");
+      updateUI();
+      draw();
+    };
+    leaderFields.onclick = event => {
+      const button = event.target.closest("[data-appearance-palette-open]");
+      if (button) openAppearanceColorPalette(button, "document-leader");
+    };
     document.getElementById("documentSettingsDialog")?.showModal();
   });
   appearancePalette.bind();
@@ -8060,7 +8118,7 @@
         const sketchId = constraint ? constraintSketchId(constraint) : activeSketchId();
         const sketch = model.sketches.find((item) => item.id === sketchId) || null;
         return {
-          documentDefault: structuredClone(normalizeDimensionAppearance(documentModel.defaultDimensionAppearance, { partial: false })),
+          documentDefault: structuredClone(normalizeDimensionAppearance({ ...documentModel.defaultDimensionAppearance, ...documentModel.defaultTerminatorAppearance }, { partial: false })),
           sketchDirect: structuredClone(normalizeDimensionAppearance(sketch?.dimensionAppearance)),
           sketchEffective: structuredClone(effectiveDimensionAppearanceForSketch(sketch)),
           direct: structuredClone(normalizeDimensionAppearance(constraint?.dimension?.display)),
@@ -8083,7 +8141,7 @@
         const dimension = dimensionFromAnchor(target, circlePointAtAngle(arc, dimensionAngle));
         dimension.labelOffsetU = Number.isFinite(options.labelOffsetU) ? options.labelOffsetU : arc.radius() / 2;
         const appearance = {
-          ...normalizeDimensionAppearance(documentModel.defaultDimensionAppearance, { partial: false }),
+          ...normalizeDimensionAppearance({ ...documentModel.defaultDimensionAppearance, ...documentModel.defaultTerminatorAppearance }, { partial: false }),
           terminatorType,
         };
         const layout = dimensionLayout(target, dimension, appearance);
@@ -8152,7 +8210,7 @@
       },
       dimensionTerminatorFitForTest(availableScreenPixels, label = "100", terminatorType = "arrow", expressionMark = false) {
         const appearance = {
-          ...normalizeDimensionAppearance(documentModel.defaultDimensionAppearance, { partial: false }),
+          ...normalizeDimensionAppearance({ ...documentModel.defaultDimensionAppearance, ...documentModel.defaultTerminatorAppearance }, { partial: false }),
           terminatorType,
         };
         const availableLength = Math.max(0, Number(availableScreenPixels) || 0) / viewport.scale;
@@ -8180,7 +8238,7 @@
         viewport.update({ scale: Math.max(0.05, Number(viewportScale) || 1) });
         try {
           const appearance = {
-            ...normalizeDimensionAppearance(documentModel.defaultDimensionAppearance, { partial: false }),
+            ...normalizeDimensionAppearance({ ...documentModel.defaultDimensionAppearance, ...documentModel.defaultTerminatorAppearance }, { partial: false }),
             terminatorType: "arrow",
             lineWidth,
             arrowheadAngle,
@@ -9431,13 +9489,15 @@
         const annotation = model.annotations.find((element) => element.type === type) || null;
         if (scale != null) viewport.update({ scale: clampZoom(Number(scale) || 1) });
         if (!annotation) return null;
-        const style = normalizeAnnotationStyle(annotation.style);
+        const style = effectiveAnnotationStyle(annotation);
         draw();
         return {
           style: structuredClone(style),
           rotation: Number(annotation.rotation) || 0,
           screenTextHeight: annotationTextWorldHeight(style) * viewport.scale,
           screenTerminatorSize: style.terminatorSize * ANNOTATION_SCREEN_PX_PER_MM * window.Appearance.annotationDisplayFactor(style, viewport.scale),
+          textLayout: annotationTextLayout(annotation),
+          resolvedStart: annotation.type === "leader" ? annotationLeaderAnchor(annotation) : null,
           displayedText: window.AnnotationRenderer.displayText(annotation, formatDisplayNumber),
           serialized: serializeAnnotation(annotation),
         };
@@ -9462,6 +9522,9 @@
             visible: annotation.visible !== false,
             style: { ...(annotation.style || {}) },
             client: clientPoint(annotation),
+            effectiveStyle: effectiveAnnotationStyle(annotation),
+            textLayout: annotationTextLayout(annotation),
+          resolvedStart: annotation.type === "leader" ? annotationLeaderAnchor(annotation) : null,
             ownerId: annotation.blockInstance?.id || null,
           })),
           selectedIds: canvasSelection.annotations.map((annotation) => annotation.id),

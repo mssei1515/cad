@@ -62,7 +62,45 @@
         <div class="property-row"><label for="${idPrefix}LineWidth">${applicationText("線幅", "Line width")}</label><input id="${idPrefix}LineWidth" data-appearance-key="lineWidth" type="number" min="0.1" max="20" step="0.1" placeholder="${escapeHtml(allowInheritance ? inheritedLabel("lineWidth") : "")}" value="${direct.lineWidth ?? ""}" /></div>${endpointRows}`;
     }
 
-    function dimensionAppearancePropertyRows(owner, effective, { allowInheritance = true, idPrefix = "dimensionProperty" } = {}) {
+    function terminatorPropertyRows(owner, effective, { allowInheritance = true, idPrefix = "terminal", attribute = "data-dimension-display" } = {}) {
+      const direct = window.Appearance.normalizeTerminator(owner);
+      const option = (value, label, selected) => `<option value="${value}" ${selected ? "selected" : ""}>${label}</option>`;
+      const labels = { arrow: ["標準矢印", "Standard arrow"], filledArrow: ["塗りつぶし矢印", "Filled arrow"], dot: ["点", "Dot"], none: ["なし", "None"] };
+      const label = type => applicationText(...(labels[type] || labels.arrow));
+      const inherited = key => `${defaultAppearanceLabel()} (${key === "terminatorType" ? label(effective[key]) : formatDisplayNumber(effective[key]) + (key === "arrowheadAngle" ? "°" : " mm")})`;
+      const type = direct.terminatorType || effective.terminatorType;
+      const numeric = (key, suffix, ja, en, min, max, unit) => `<div class="property-row"><label for="${idPrefix}${suffix}">${applicationText(ja, en)}</label><div class="property-input-with-unit"><input id="${idPrefix}${suffix}" ${attribute}="${key}" type="number" min="${min}" max="${max}" step="0.1" placeholder="${allowInheritance ? escapeHtml(inherited(key)) : ""}" value="${direct[key] ?? (allowInheritance ? "" : effective[key])}"><span class="property-input-unit">${unit}</span></div></div>`;
+      return `<div class="dimension-appearance-group" data-terminator-controls data-dimension-appearance-group="terminators"><div class="dimension-appearance-group-title">${applicationText("端末記号", "Terminators")}</div>
+        <div class="property-row"><label for="${idPrefix}TerminatorType">${applicationText("種類", "Type")}</label><select id="${idPrefix}TerminatorType" ${attribute}="terminatorType" data-inherited-terminator-type="${effective.terminatorType}">
+        ${allowInheritance ? option("", inherited("terminatorType"), !direct.terminatorType) : ""}
+        ${Object.keys(labels).map(value => option(value, label(value), direct.terminatorType === value || !allowInheritance && type === value)).join("")}</select></div>
+        ${numeric("terminatorSize", "TerminatorSize", "サイズ", "Size", 0.1, 1000, "mm")}
+        <div data-terminator-angle-row ${["arrow", "filledArrow"].includes(type) ? "" : "hidden"}>${numeric("arrowheadAngle", "ArrowheadAngle", "開き角", "Opening angle", 1, 179, "°")}</div></div>`;
+    }
+
+    function leaderAppearancePropertyRows(owner, effective, { allowInheritance = true, idPrefix = "annotation", terminals = true } = {}) {
+      const direct = window.Appearance.normalizeLeaderAppearance(owner);
+      const inherited = key => `${defaultAppearanceLabel()} (${effective[key]})`;
+      const input = (key, suffix, ja, en, { min = 0.1, max = 100, unit = "", factor = 1 } = {}) => `<div class="property-row"><label for="${idPrefix}${suffix}">${applicationText(ja, en)}</label><div class="property-input-with-unit"><input id="${idPrefix}${suffix}" data-leader-style="${key}" type="number" min="${min}" max="${max}" step="any" placeholder="${allowInheritance ? escapeHtml(defaultAppearanceLabel() + ' (' + formatDisplayNumber(effective[key] * factor, 3) + ')') : ""}" value="${direct[key] == null ? "" : formatDisplayNumber(direct[key] * factor, 6)}"><span class="property-input-unit">${unit}</span></div></div>`;
+      const select = (key, suffix, ja, en, options) => `<div class="property-row"><label for="${idPrefix}${suffix}">${applicationText(ja, en)}</label><select id="${idPrefix}${suffix}" data-leader-style="${key}">${allowInheritance ? `<option value="" ${direct[key] == null ? "selected" : ""}>${defaultAppearanceLabel()} (${applicationText(...(options.find(([value]) => String(value) === String(effective[key]))?.slice(1) || [String(effective[key]), String(effective[key])]))})</option>` : ""}${options.map(([value, ja, en]) => `<option value="${value}" ${String(direct[key]) === String(value) ? "selected" : ""}>${applicationText(ja, en)}</option>`).join("")}</select></div>`;
+      const color = colorPickerValue(direct.color || effective.color);
+      return `
+        <div class="property-row"><label for="${idPrefix}Color">${applicationText("色", "Color")}</label><div class="property-color-control"><input id="${idPrefix}Color" data-leader-style="color" type="text" value="${direct.color || ""}" placeholder="${allowInheritance ? escapeHtml(inherited("color")) : ""}"><button class="property-color-picker" data-appearance-palette-open data-current-color="${color}" type="button" title="${applicationText("カラーパレット", "Color palette")}"><span class="property-color-picker-swatch" style="--swatch-color:${color}"></span></button></div></div>
+        ${input("lineWidth", "LineWidth", "線幅", "Line width", { min: 0.5, max: 10 })}
+        ${select("lineType", "LineType", "線種", "Line type", [["solid","実線","Solid"],["dashed","破線","Dashed"],["dashdot","一点鎖線","Dash-dot"],["dashdotdot","二点鎖線","Dash-dot-dot"],["dotted","点線","Dotted"]])}
+        ${terminals ? terminatorPropertyRows(direct, effective, { allowInheritance, idPrefix, attribute: "data-leader-style" }) : ""}
+        ${select("fixedDisplaySize", "FixedDisplaySize", "表示サイズ", "Display size", [[true,"画面上で固定","Fixed on screen"],[false,"図形に対して固定","Fixed relative to geometry"]])}
+        ${effective.fixedDisplaySize === false ? input("displayScale", "DisplayScale", "基準倍率", "Reference zoom", { min: 0.000001, max: 1e12, unit: "%", factor: 100 }) : ""}
+        ${input("textHeight", "TextHeight", "文字高さ", "Text height", { min: 0.5, max: 100, unit: "mm" })}
+        ${input("textGap", "TextGap", "文字と横線の間隔", "Text gap from shelf", { min: 0, max: 1000, unit: "mm" })}
+        ${select("fontFamily", "FontFamily", "フォント", "Font", [["sans-serif","ゴシック体","Sans serif"],["serif","明朝体","Serif"],["monospace","等幅","Monospace"]])}
+        ${select("bold", "Bold", "太字", "Bold", [[true,"あり","Enabled"],[false,"なし","Disabled"]])}
+        ${select("italic", "Italic", "斜体", "Italic", [[true,"あり","Enabled"],[false,"なし","Disabled"]])}
+        ${select("textAlign", "TextAlign", "文字揃え", "Text alignment", [["left","左揃え","Left"],["center","中央揃え","Center"],["right","右揃え","Right"]])}
+        ${input("rotation", "Rotation", "回転", "Rotation", { min: -3600, max: 3600, unit: "°", factor: 180 / Math.PI })}`;
+    }
+
+    function dimensionAppearancePropertyRows(owner, effective, { allowInheritance = true, idPrefix = "dimensionProperty", terminals = true } = {}) {
       const direct = normalizeDimensionAppearance(owner);
       const hasDirect = (key) => Object.prototype.hasOwnProperty.call(direct, key);
       const option = (value, label, selected) => `<option value="${value}" ${selected ? "selected" : ""}>${label}</option>`;
@@ -75,6 +113,7 @@
             arrow: ["標準矢印", "Standard arrow"],
             filledArrow: ["塗りつぶし矢印", "Filled arrow"],
             dot: ["点", "Dot"],
+            none: ["なし", "None"],
           };
           const label = labels[value] || labels.arrow;
           return applicationText(label[0], label[1]);
@@ -96,13 +135,6 @@
         option("auto", applicationText("自動", "Auto"), hasDirect("precision") && direct.precision == null || !allowInheritance && effective.precision == null),
         ...Array.from({ length: 11 }, (_, precision) => option(String(precision), String(precision), direct.precision === precision || !allowInheritance && effective.precision === precision)),
       ].join("");
-      const terminatorType = hasDirect("terminatorType") ? direct.terminatorType : effective.terminatorType;
-      const terminatorTypeOptions = [
-        allowInheritance ? option("", inheritedLabel("terminatorType"), !hasDirect("terminatorType")) : "",
-        option("arrow", applicationText("標準矢印", "Standard arrow"), direct.terminatorType === "arrow" || !allowInheritance && effective.terminatorType === "arrow"),
-        option("filledArrow", applicationText("塗りつぶし矢印", "Filled arrow"), direct.terminatorType === "filledArrow" || !allowInheritance && effective.terminatorType === "filledArrow"),
-        option("dot", applicationText("点", "Dot"), direct.terminatorType === "dot" || !allowInheritance && effective.terminatorType === "dot"),
-      ].join("");
       const numericRow = (key, idSuffix, labelJa, labelEn, { min = 0, max = 1000, step = 0.1, titleJa = "", titleEn = "" } = {}) => {
         const value = hasDirect(key) ? direct[key] : "";
         const title = titleJa ? ` title="${escapeHtml(applicationText(titleJa, titleEn))}"` : "";
@@ -123,24 +155,21 @@ ${escapeHtml(direct.suffix ?? "")}</textarea></div>
         ${group("extension-lines", "寸法補助線", "Extension lines", `
           ${numericRow("extensionLineOvershoot", "ExtensionLineOvershoot", "突出量", "Overshoot", { titleJa: "寸法補助線が寸法線を越えて外側へ伸びる長さ", titleEn: "Length that extension lines project beyond the dimension line" })}
           ${numericRow("extensionLineOriginGap", "ExtensionLineOriginGap", "起点すき間", "Origin gap", { titleJa: "寸法対象の図形と寸法補助線の開始位置との間隔", titleEn: "Gap between measured geometry and the start of extension lines" })}`)}
-        ${group("terminators", "端末記号", "Terminators", `
-          <div class="property-row"><label for="${idPrefix}TerminatorType">${applicationText("種類", "Type")}</label><select id="${idPrefix}TerminatorType" data-dimension-display="terminatorType" data-inherited-terminator-type="${escapeHtml(effective.terminatorType)}">${terminatorTypeOptions}</select></div>
-          ${numericRow("terminatorSize", "TerminatorSize", "サイズ", "Size", { min: 0.1, titleJa: "端末記号の代表寸法。矢印は長さ、点は直径", titleEn: "Representative terminator dimension: arrow length or dot diameter" })}
-          <div data-terminator-angle-row ${terminatorType === "dot" ? "hidden" : ""}>${numericRow("arrowheadAngle", "ArrowheadAngle", "開き角", "Opening angle", { min: 1, max: 179, step: 1, titleJa: "矢印を構成する2辺のなす角度（度）", titleEn: "Included angle between the two arrow sides in degrees" })}</div>`)}
+        ${terminals ? terminatorPropertyRows(direct, effective, { allowInheritance, idPrefix }) : ""}
         ${group("dimension-text", "寸法文字", "Dimension text", `
           ${numericRow("dimensionTextHeight", "DimensionTextHeight", "高さ", "Height", { min: 0.1, titleJa: "寸法文字の表示高さ", titleEn: "Display height of dimension text" })}
           ${numericRow("dimensionTextGap", "DimensionTextGap", "寸法線との間隔", "Gap from dimension line", { titleJa: "寸法文字領域と寸法線との間隔", titleEn: "Gap between the dimension text region and dimension line" })}`)}`;
     }
 
     function updateDimensionTerminatorAngleVisibility(container) {
-      const select = container?.querySelector('[data-dimension-display="terminatorType"]');
-      const row = container?.querySelector("[data-terminator-angle-row]");
-      if (!select || !row) return;
-      const type = select.value || select.dataset.inheritedTerminatorType || DEFAULT_DIMENSION_APPEARANCE.terminatorType;
-      row.hidden = type === "dot";
+      for (const group of container?.querySelectorAll("[data-terminator-controls]") || []) {
+        const select = group.querySelector("[data-inherited-terminator-type]");
+        const row = group.querySelector("[data-terminator-angle-row]");
+        if (select && row) row.hidden = !["arrow", "filledArrow"].includes(select.value || select.dataset.inheritedTerminatorType);
+      }
     }
 
-    return Object.freeze({ defaultAppearanceLabel, colorPickerValue, appearancePropertyRows, dimensionAppearancePropertyRows, updateDimensionTerminatorAngleVisibility, prepareAffixInputs });
+    return Object.freeze({ terminatorPropertyRows, leaderAppearancePropertyRows, defaultAppearanceLabel, colorPickerValue, appearancePropertyRows, dimensionAppearancePropertyRows, updateDimensionTerminatorAngleVisibility, prepareAffixInputs });
   }
   window.AppearanceControls = Object.freeze({ create });
 })();

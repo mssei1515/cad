@@ -2,7 +2,7 @@
 (() => {
   "use strict";
   function create({ editing, normalizeHatchAppearance, normalizeAnnotationStyle,
-    invalidateBlockProjectionCache, recordHistory, updateUI, updatePropertiesUI, draw, viewport }) {
+    invalidateBlockProjectionCache, recordHistory, updateUI, updatePropertiesUI, draw, viewport, effectiveAnnotationStyle = element => element.style, effectiveLeaderAppearanceForSketch = sketch => sketch.leaderAppearance }) {
     function owner(target) {
       if (target.kind === "block" || target.kind === "geometryInstance") return (target.item.appearanceOverride ||= {});
       if (target.kind === "hatch") return (target.item.appearance ||= normalizeHatchAppearance());
@@ -14,7 +14,14 @@
     function apply(target, { category, key, value, context = null }, { commit = true } = {}) {
       let label;
       let refresh = "all";
-      if (category === "annotationDisplay") {
+      if (category === "leader") {
+        const appearance = target.kind === "sketch" ? (target.item.leaderAppearance ||= {}) : target.kind === "annotation" && target.item.type === "leader" ? editing.prepareLeaderStyle(target.item) : null;
+        if (!appearance) return false;
+        if (target.kind === "annotation" && key === "textGap") target.item.textPlacement = "shelf";
+        editing.applyLeaderAppearanceValue(appearance, key, value, { viewportScale: viewport.scale,
+          effective: target.kind === "sketch" ? effectiveLeaderAppearanceForSketch(target.item) : effectiveAnnotationStyle(target.item) });
+        label = "引出線外観変更";
+      } else if (category === "annotationDisplay") {
         const displayOwner = target.kind === "annotation" ? (target.item.style ||= normalizeAnnotationStyle())
           : target.kind === "constraint" && target.item.dimension ? (target.item.dimension.display ||= {}) : null;
         if (!displayOwner || !window.Appearance.applyAnnotationDisplaySetting(displayOwner, key, value, viewport.scale)) return false;

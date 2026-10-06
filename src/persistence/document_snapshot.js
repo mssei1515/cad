@@ -49,6 +49,7 @@
       appearance: normalizeAppearance(sketch.appearance),
       constructionAppearance: normalizeConstructionAppearance(sketch.constructionAppearance),
       dimensionAppearance: normalizeDimensionAppearance(sketch.dimensionAppearance),
+      leaderAppearance: window.Appearance.normalizeLeaderAppearance(sketch.leaderAppearance),
     };
   }
 
@@ -107,7 +108,9 @@
         version, savedAt, documentName, units: { ...scope.units },
         defaultAppearance: normalizeAppearance(scope.defaultAppearance, { partial: false }),
         defaultConstructionAppearance: normalizeConstructionAppearance(scope.defaultConstructionAppearance, { partial: false }),
-        defaultDimensionAppearance: normalizeDimensionAppearance(scope.defaultDimensionAppearance, { partial: false }),
+        defaultDimensionAppearance: window.Appearance.dimensionDefaults(scope.defaultDimensionAppearance),
+        defaultTerminatorAppearance: window.Appearance.normalizeTerminator(scope.defaultTerminatorAppearance, { partial: false }),
+        defaultLeaderAppearance: window.Appearance.leaderDefaults(scope.defaultLeaderAppearance),
         sketches: scope.sketches.map(serializeSketch), activeSketchId: scope.activeSketchId,
         annotations: normalizeAnnotations(scope.annotations).map(serializeAnnotation),
         hatches: normalizeHatches(scope.hatches).map(serializeHatch),

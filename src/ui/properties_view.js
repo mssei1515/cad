@@ -3,7 +3,7 @@
   "use strict";
   function create({ document, applicationText, localizeApplicationUI, installExpressionInputHighlights,
     content, onInput, onChange, onClick, prepareAffixInputs = () => {} }) {
-    const sketchAppearanceSectionOpenState = { general: false, construction: false, dimension: false };
+    const sketchAppearanceSectionOpenState = { general: false, construction: false, dimension: false, leader: false };
     function collapsibleSketchAppearanceSection(key, labelJa, labelEn, content, attributes = "") {
       const open = sketchAppearanceSectionOpenState[key] === true ? " open" : "";
       return `<details class="property-section property-section-collapsible" data-property-section="${key}"${attributes}${open}><summary><h3>${applicationText(labelJa, labelEn)}</h3></summary><div class="property-section-content">${content}</div></details>`;

@@ -154,6 +154,7 @@ const files = [
   "src/rendering/reference_image_renderer.js",
   "tests/unit/reference-image-renderer.test.js",
   "src/rendering/annotation_renderer.js", "src/rendering/annotation_spatial_query.js",
+  "src/rendering/terminator_renderer.js", "tests/e2e/leader-appearance.spec.js",
   "tests/unit/annotation-renderer.test.js",
   "src/rendering/canvas_surface.js",
   "tests/unit/canvas-surface.test.js",

@@ -102,6 +102,11 @@
       } else if (context === "document-dimension") {
         owner = documentModel.defaultDimensionAppearance;
         historyLabel = "Document Default Dimension Appearance変更";
+      } else if (context === "document-leader") {
+        owner = documentModel.defaultLeaderAppearance;
+      } else if (context === "sketch-leader") {
+        target = selectedPropertiesTarget();
+        owner = (target.item.leaderAppearance ||= {});
       } else if (context === "sketch-construction") {
         target = selectedPropertiesTarget();
         owner = (target.item.constructionAppearance ||= {});
@@ -134,7 +139,7 @@
         historyLabel,
         context,
         sourceButton: button,
-        sourceInput: button.closest(".property-color-control")?.querySelector('[data-appearance-key="color"], [data-dimension-display="color"], [data-hatch-property="color"], [data-annotation-style="color"], [data-bulk-property="color"]') || null,
+        sourceInput: button.closest(".property-color-control")?.querySelector('[data-appearance-key="color"], [data-dimension-display="color"], [data-hatch-property="color"], [data-annotation-style="color"], [data-leader-style="color"], [data-bulk-property="color"]') || null,
       };
       const selected = colorPaletteSession.sourceInput?.value.trim() || button.dataset.currentColor || owner.color;
       renderColorPaletteDialog(selected);
@@ -159,7 +164,7 @@
       if (target?.kind === "block") invalidateBlockProjectionCache(target.item.id);
       if (context === "document") documentModel.defaultAppearance = normalizeAppearance(documentModel.defaultAppearance, { partial: false });
       if (context === "document-construction") documentModel.defaultConstructionAppearance = normalizeConstructionAppearance(documentModel.defaultConstructionAppearance, { partial: false });
-      if (context === "document-dimension") documentModel.defaultDimensionAppearance = normalizeDimensionAppearance(documentModel.defaultDimensionAppearance, { partial: false });
+      if (context === "document-dimension") documentModel.defaultDimensionAppearance = window.Appearance.dimensionDefaults(documentModel.defaultDimensionAppearance);
       if (sourceInput) sourceInput.value = color;
       if (sourceButton) {
         sourceButton.dataset.currentColor = color;

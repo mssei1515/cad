@@ -41,7 +41,9 @@
     document.activeSketchId = DEFAULT_SKETCH_ID;
     document.defaultAppearance = { ...DEFAULT_APPEARANCE };
     document.defaultConstructionAppearance = { ...DEFAULT_CONSTRUCTION_APPEARANCE };
-    document.defaultDimensionAppearance = { ...DEFAULT_DIMENSION_APPEARANCE };
+    document.defaultDimensionAppearance = window.Appearance.dimensionDefaults();
+    document.defaultTerminatorAppearance = { ...window.Appearance.DEFAULT_TERMINATOR };
+    document.defaultLeaderAppearance = window.Appearance.leaderDefaults();
     document.annotations = [];
     document.hatches = [];
     document.referenceImages = [];

@@ -116,3 +116,22 @@ test("construction, derived and dimension layers do not inherit unrelated appear
   assert.equal(dimension.prefix, "R");
   assert.equal(dimension.color, "#123456");
 });
+
+test("leader hierarchy keeps sparse overrides, shared terminal defaults and legacy complete values", () => {
+  const { resolveLeaderAppearance: resolve, annotationStoredStyle: stored, normalizeTerminator } = appearance;
+  assert.deepEqual(plain(normalizeTerminator(null, { partial: false })), { terminatorType: "arrow", terminatorSize: 4, arrowheadAngle: 30 });
+  const defaults = { color: "#123456", textHeight: 8, fixedDisplaySize: false, displayScale: 2 };
+  const terminal = { terminatorType: "filledArrow", terminatorSize: 6, arrowheadAngle: 40 };
+  const sketch = { textHeight: 9, arrowheadAngle: 50 };
+  const direct = { textHeight: 10, terminatorType: "none", displayScale: 3 };
+  const result = resolve(defaults, terminal, sketch, direct);
+  assert.equal(result.textHeight, 10); assert.equal(result.arrowheadAngle, 50);
+  assert.equal(result.terminatorSize, 6); assert.equal(result.terminatorType, "none"); assert.equal(result.displayScale, 3);
+  assert.equal(resolve(defaults, terminal, sketch, {}).textHeight, 9);
+  assert.equal(resolve(defaults, terminal, {}, {}).textHeight, 8);
+  assert.deepEqual(plain(stored({ type: "leader", appearanceInheritance: true, style: {} })), {});
+  const legacy = stored({ type: "leader", style: {} });
+  assert.equal(legacy.terminatorType, "filledArrow"); assert.equal(legacy.arrowheadAngle, 27);
+  assert.equal(legacy.terminatorSize, 10 / appearance.CSS_PX_PER_MM);
+  assert.equal(resolve({}, terminal, {}, legacy).arrowheadAngle, 27);
+});

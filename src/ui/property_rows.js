@@ -7,7 +7,7 @@
     mixedValue: MULTIPLE_PROPERTY_MIXED, colorPickerValue, sketchProjectionConstraintForTarget, sketchName,
     constraintGeometryId, constraintStatusBadge, constraintStatusOf, angleDegrees,
     blockInstanceEnabledSketchSet, blockDefinitionSketchRows, snappedBlockRotation,
-    constraintDefiningGeometryEntries, normalizeAnnotationStyle }) {
+    constraintDefiningGeometryEntries, normalizeAnnotationStyle, effectiveAnnotationStyle = item => normalizeAnnotationStyle(item.style), leaderAppearancePropertyRows }) {
     function multiplePropertiesRows(target) {
       const items = target.items || [];
       const sameType = multiplePropertySameType(target);
@@ -57,6 +57,9 @@
         specificRows += `<div class="property-row"><label>${applicationText("回転", "Rotation")}</label><div class="property-input-with-unit">${textInput("rotation", "number", 'min="-3600" max="3600" step="1"')}<span class="property-input-unit">°</span></div></div>`;
         if (allSupport("terminatorType")) specificRows += `<div class="property-row"><label>${applicationText("端末記号", "Terminator")}</label>${select("terminatorType", (current) => option("arrow", applicationText("標準矢印", "Standard arrow"), current) + option("filledArrow", applicationText("塗りつぶし矢印", "Filled arrow"), current) + option("dot", applicationText("点", "Dot"), current) + option("none", applicationText("なし", "None"), current))}</div><div class="property-row"><label>${applicationText("端末サイズ", "Terminator size")}</label><div class="property-input-with-unit">${textInput("terminatorSize", "number", 'min="0.1" max="100" step="0.1"')}<span class="property-input-unit">mm</span></div></div>`;
       }
+      if (sameType && items.every(entry => entry.kind === "annotation" && entry.item.type === "leader") && items.some(entry => ["arrow", "filledArrow"].includes(multiplePropertyAppearance(entry).terminatorType))) {
+        specificRows += `<div class="property-row"><label>${applicationText("開き角", "Opening angle")}</label>${textInput("arrowheadAngle", "number", 'min="1" max="179" step="1"')}°</div>`;
+      }
       if (sameType && items.every(entry => entry.kind === "constraint")) {
         const sizeLockTooltip = applicationText("図形に対する注記の大きさを固定", "Keep annotation size relative to geometry");
         if (allSupport("modelRelativeSize")) specificRows += `<div class="property-row" title="${sizeLockTooltip}"><label for="dimensionBulkSizeLock">${applicationText("サイズロック", "Size lock")}</label>${checkbox("modelRelativeSize", 'id="dimensionBulkSizeLock"')}</div>`;
@@ -65,8 +68,9 @@
           specificRows += `<div class="property-row"><label>${applicationText(ja, en)}</label><textarea rows="1" wrap="off" data-affix-input data-user-content data-bulk-property="${key}" placeholder="${current === MULTIPLE_PROPERTY_MIXED ? mixedLabel : ""}">\n${current === MULTIPLE_PROPERTY_MIXED ? "" : escapeHtml(current)}</textarea></div>`;
         }
         specificRows += `<div class="property-row"><label>${applicationText("精度", "Precision")}</label>${select("precision", current => option("auto", applicationText("自動", "Auto"), current == null ? "auto" : String(current)) + Array.from({ length: 11 }, (_, i) => option(String(i), String(i), String(current))).join(""))}</div>`;
-        specificRows += `<div class="property-row"><label>${applicationText("端末記号", "Terminator")}</label>${select("terminatorType", current => option("arrow", applicationText("標準矢印", "Standard arrow"), current) + option("filledArrow", applicationText("塗りつぶし矢印", "Filled arrow"), current) + option("dot", applicationText("点", "Dot"), current))}</div>`;
+        specificRows += `<div class="property-row"><label>${applicationText("端末記号", "Terminator")}</label>${select("terminatorType", current => option("arrow", applicationText("標準矢印", "Standard arrow"), current) + option("filledArrow", applicationText("塗りつぶし矢印", "Filled arrow"), current) + option("dot", applicationText("点", "Dot"), current) + option("none", applicationText("なし", "None"), current))}</div>`;
         for (const [key, ja, en] of [["dimensionTextHeight", "文字高さ", "Text height"], ["dimensionTextGap", "文字間隔", "Text gap"], ["terminatorSize", "端末サイズ", "Terminator size"], ["arrowheadAngle", "矢印角度", "Arrow angle"], ["extensionLineOvershoot", "補助線の延長", "Extension overshoot"], ["extensionLineOriginGap", "補助線の開始間隔", "Extension origin gap"]]) {
+          if (key === "arrowheadAngle" && !items.some(entry => ["arrow", "filledArrow"].includes(multiplePropertyAppearance(entry).terminatorType))) continue;
           specificRows += `<div class="property-row"><label>${applicationText(ja, en)}</label>${textInput(key, "number", 'min="0" step="0.1"')}</div>`;
         }
 
@@ -216,7 +220,11 @@
     }
 
     function annotationAppearancePropertyRows(item) {
-      const style = normalizeAnnotationStyle(item.style);
+      const style = effectiveAnnotationStyle(item);
+      if (item.type === "leader") {
+        const direct = item.appearanceInheritance ? item.style : { ...style, rotation: Number(item.rotation) || 0 };
+        return `<div class="property-row"><label for="annotationVisible">${applicationText("表示", "Visible")}</label><input id="annotationVisible" data-property="annotation-visible" type="checkbox" ${item.visible !== false ? "checked" : ""}></div>` + leaderAppearancePropertyRows(direct, style);
+      }
       const color = colorPickerValue(style.color);
       const option = (value, label, selected) => `<option value="${value}" ${selected ? "selected" : ""}>${label}</option>`;
       const fontOptions = [
@@ -239,25 +247,7 @@
         <div class="property-row"><label for="annotationItalic">${applicationText("斜体", "Italic")}</label><input id="annotationItalic" data-annotation-style="italic" type="checkbox" ${style.italic ? "checked" : ""}></div>
         <div class="property-row"><label for="annotationTextAlign">${applicationText("横位置", "Horizontal alignment")}</label><select id="annotationTextAlign" data-annotation-style="textAlign">${alignOptions}</select></div>
         <div class="property-row"><label for="annotationRotation">${applicationText("回転", "Rotation")}</label><div class="property-input-with-unit"><input id="annotationRotation" data-property="annotation-rotation" type="number" min="-3600" max="3600" step="1" value="${formatDisplayNumber((Number(item.rotation) || 0) * 180 / Math.PI, 3)}"><span class="property-input-unit" aria-hidden="true">°</span></div></div>`;
-      if (item.type !== "leader") return common;
-      const lineTypeOptions = [
-        option("solid", applicationText("実線", "Solid"), style.lineType === "solid"),
-        option("dashed", applicationText("破線", "Dashed"), style.lineType === "dashed"),
-        option("dashdot", applicationText("一点鎖線", "Dash-dot"), style.lineType === "dashdot"),
-        option("dashdotdot", applicationText("二点鎖線", "Dash-dot-dot"), style.lineType === "dashdotdot"),
-        option("dotted", applicationText("点線", "Dotted"), style.lineType === "dotted"),
-      ].join("");
-      const terminatorOptions = [
-        option("arrow", applicationText("標準矢印", "Standard arrow"), style.terminatorType === "arrow"),
-        option("filledArrow", applicationText("塗りつぶし矢印", "Filled arrow"), style.terminatorType === "filledArrow"),
-        option("dot", applicationText("点", "Dot"), style.terminatorType === "dot"),
-        option("none", applicationText("なし", "None"), style.terminatorType === "none"),
-      ].join("");
-      return `${common}
-        <div class="property-row"><label for="annotationLineWidth">${applicationText("線幅", "Line width")}</label><input id="annotationLineWidth" data-annotation-style="lineWidth" type="number" min="0.5" max="10" step="0.1" value="${style.lineWidth}"></div>
-        <div class="property-row"><label for="annotationLineType">${applicationText("線種", "Line type")}</label><select id="annotationLineType" data-annotation-style="lineType">${lineTypeOptions}</select></div>
-        <div class="property-row"><label for="annotationTerminatorType">${applicationText("端末記号", "Terminator")}</label><select id="annotationTerminatorType" data-annotation-style="terminatorType">${terminatorOptions}</select></div>
-        <div class="property-row"><label for="annotationTerminatorSize">${applicationText("端末サイズ", "Terminator size")}</label><div class="property-input-with-unit"><input id="annotationTerminatorSize" data-annotation-style="terminatorSize" type="number" min="0.1" max="100" step="0.1" value="${formatDisplayNumber(style.terminatorSize, 3)}"><span class="property-input-unit" aria-hidden="true">mm</span></div></div>`;
+      return common;
     }
 
     return Object.freeze({ annotationDisplayPropertyRows, multiplePropertiesRows, geometryPropertyName, geometryAppearanceSectionName, propertyReadonlyRow, geometryPropertyRows, blockPropertiesConfiguration, blockRotationPropertyRow, dimensionGeometryPropertyRows, constraintDefiningGeometryPropertyRows, annotationAppearancePropertyRows });

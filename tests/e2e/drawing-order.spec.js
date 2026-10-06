@@ -20,7 +20,7 @@ test("reorders lines, hatches, blocks, and derived instances only within the act
   const fixture = await page.evaluate(() => window.__jot2dTest.resetForDrawingOrderTest());
   let state = await page.evaluate(() => window.__jot2dTest.drawingOrderStateForTest());
 
-  expect(state.serialized.version).toBe(22);
+  expect(state.serialized.version).toBe(23);
   expect(state.bySketch.S1[0]).toEqual(expect.objectContaining({ kind: "hatch", id: "H1", drawingOrder: 0 }));
   expect(state.bySketch.S1.map((item) => item.drawingOrder)).toEqual(state.bySketch.S1.map((_item, index) => index));
   expect(state.bySketch.S1).toEqual(expect.arrayContaining([
@@ -89,7 +89,7 @@ test("migrates documents without drawingOrder to the legacy visual order", async
 
   expect(await page.evaluate((data) => window.__jot2dTest.loadDocumentFixtureForDragTest(data, "drawing-order-v21.jot2d"), legacy)).toEqual(expect.objectContaining({ success: true }));
   const state = await page.evaluate(() => window.__jot2dTest.drawingOrderStateForTest());
-  expect(state.serialized.version).toBe(22);
+  expect(state.serialized.version).toBe(23);
   expect(state.bySketch.S1[0]).toEqual(expect.objectContaining({ kind: "hatch", id: "H1" }));
   expect(state.bySketch.S1.map((item) => item.drawingOrder)).toEqual(state.bySketch.S1.map((_item, index) => index));
   expect(state.bySketch.S2).toEqual([{ kind: "line", id: fixture.otherLineId, drawingOrder: 0 }]);

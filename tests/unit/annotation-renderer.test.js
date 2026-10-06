@@ -4,11 +4,12 @@ const path = require("node:path");
 const vm = require("node:vm");
 const test = require("node:test");
 const sandbox = { window: {} }; vm.createContext(sandbox);
-for (const file of ["src/geometry/geometry_kernel.js", "src/geometry/spline_geometry.js", "src/solver/constraint_solver.js", "src/document/appearance.js", "src/rendering/annotation_renderer.js"]) vm.runInContext(fs.readFileSync(path.resolve(__dirname, "../..", file), "utf8"), sandbox, { filename: file });
+for (const file of ["src/geometry/geometry_kernel.js", "src/geometry/spline_geometry.js", "src/solver/constraint_solver.js", "src/document/appearance.js", "src/rendering/dimension_metrics.js", "src/rendering/terminator_renderer.js", "src/rendering/annotation_renderer.js"]) vm.runInContext(fs.readFileSync(path.resolve(__dirname, "../..", file), "utf8"), sandbox, { filename: file });
 function create(anchor = { x: 10, y: 20 }) {
   const calls = [], ctx = {}, viewport = { scale: 2 };
   let anchorReads = 0;
   for (const name of ["save", "restore", "translate", "rotate", "fillText", "beginPath", "moveTo", "lineTo", "stroke", "closePath", "fill", "arc", "setLineDash"]) ctx[name] = (...args) => calls.push([name, ...args]);
+  ctx.measureText = text => ({ width: text.length * 8 });
   const renderer = sandbox.window.AnnotationRenderer.create({ ctx, viewport, withCanvasState: callback => callback(), annotationDisplayColor: () => "blue", annotationLeaderAnchor: () => { anchorReads++; return anchor; }, appearanceLineDash: () => [1, 2] });
   return { renderer, viewport, ctx, calls, anchorReads: () => anchorReads };
 }
@@ -77,4 +78,41 @@ test("unchecked text preserves its body and projected parameters read their defi
   const render = sandbox.window.AnnotationRenderer.displayText;
   assert.equal(render({ text: 'body', style: { prefix: 'prefix', suffix: 'suffix' } }), 'body');
   assert.equal(render({ text: 'body', parameterEnabled: true, localElement: { parameterEnabled: true, evaluatedParameterValue: 150 }, style: { prefix: 'Width: ', suffix: ' mm' } }), 'Width: 150 mm');
+});
+
+test("leaders and dimensions use identical terminal paths for all types and angles", () => {
+  for (const terminatorType of ["arrow", "filledArrow", "dot", "none"]) for (const angle of [15, 30, 75]) {
+    const leader = create({ x: 10, y: 20 }), shared = create();
+    const style = { ...sandbox.window.Appearance.DEFAULT_DIMENSION_APPEARANCE, terminatorType, arrowheadAngle: angle, lineWidth: 2, terminatorSize: 4 };
+    leader.renderer.drawAnnotationLeader({ start: { x: 10, y: 20 }, elbow: { x: 30, y: 20 }, end: { x: 40, y: 20 }, style });
+    shared.ctx.lineWidth = 1;
+    sandbox.window.TerminatorRenderer.create({ ctx: shared.ctx, viewport: shared.viewport }).draw({ x: 10, y: 20 }, { x: 1, y: 0 }, style);
+    const terminalStart = leader.calls.findIndex(c => c[0] === "setLineDash" && c[1].length === 0) + 1;
+    assert.deepEqual(leader.calls.slice(terminalStart), shared.calls);
+  }
+});
+
+test("shelf text gap follows text bounds, rotation, multiline labels and display zoom without changing geometry", () => {
+  const h = create();
+  const element = { type: "leader", appearanceInheritance: true, textPlacement: "shelf", text: "Text",
+    start: { x: 10, y: 20 }, elbow: { x: 30, y: 40 }, end: { x: 70, y: 40 }, style: { textGap: 2, textHeight: 5, lineWidth: 2 } };
+  // This harness resolves styles directly; use the production hierarchy to retain Leader-only settings.
+  const renderer = sandbox.window.AnnotationRenderer.create({ ctx: h.ctx, viewport: h.viewport,
+    effectiveAnnotationStyle: item => sandbox.window.Appearance.resolveLeaderAppearance({}, {}, {}, item.style) });
+  const original = JSON.stringify(element);
+  for (const rotation of [0, 0.7, -1, Math.PI]) {
+    element.style.rotation = rotation;
+    element.text = "First\nSecond";
+    const layout = renderer.annotationTextLayout(element);
+    assert.ok(Math.abs(element.end.y - layout.bounds.y2 - layout.strokeHalfWidth - layout.gapWorld) < 1e-8);
+    assert.ok(Math.abs(layout.gapWorld * h.viewport.scale - 2 * sandbox.window.Appearance.CSS_PX_PER_MM) < 1e-8);
+  }
+  element.style.fixedDisplaySize = false; element.style.displayScale = 1.5;
+  const before = renderer.annotationTextLayout(element);
+  h.viewport.scale *= 2;
+  const after = renderer.annotationTextLayout(element);
+  assert.equal(before.gapWorld, after.gapWorld);
+  assert.deepEqual(element.elbow, JSON.parse(original).elbow);
+  assert.deepEqual(element.end, JSON.parse(original).end);
+  assert.equal(renderer.annotationTextLayout({ ...element, textPlacement: undefined }), null);
 });

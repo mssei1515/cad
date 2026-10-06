@@ -46,18 +46,17 @@
     endpointOverhang: true,
     endpointMarkers: true,
   };
+  const DEFAULT_TERMINATOR = Object.freeze({ terminatorType: "arrow", terminatorSize: 4, arrowheadAngle: 30 });
   const DEFAULT_DIMENSION_APPEARANCE = {
+    ...DEFAULT_TERMINATOR,
     visible: true,
     color: "#64748b",
     lineWidth: 1.2,
     precision: null,
     prefix: "",
     suffix: "",
-    terminatorType: "arrow",
     extensionLineOvershoot: 1.5,
     extensionLineOriginGap: 1.5,
-    terminatorSize: 4,
-    arrowheadAngle: 30,
     dimensionTextHeight: 5,
     dimensionTextGap: 0,
   };
@@ -82,6 +81,63 @@
     terminatorType: "filledArrow",
     terminatorSize: 10 / CSS_PX_PER_MM,
   };
+  const TERMINATOR_KEYS = Object.freeze(["terminatorType", "terminatorSize", "arrowheadAngle"]);
+  const DEFAULT_LEADER_APPEARANCE = Object.freeze({ ...DEFAULT_ANNOTATION_STYLE, ...DEFAULT_TERMINATOR, fixedDisplaySize: true, rotation: 0, textGap: 1 });
+
+  function normalizeTerminator(value, { partial = true } = {}) {
+    const source = value && typeof value === "object" ? value : {};
+    const result = partial ? {} : { ...DEFAULT_TERMINATOR };
+    if (["arrow", "filledArrow", "dot", "none"].includes(source.terminatorType)) result.terminatorType = source.terminatorType;
+    for (const [key, min, max] of [["terminatorSize", 0.1, 1000], ["arrowheadAngle", 1, 179]]) {
+      if (source[key] == null || source[key] === "") continue;
+      const numeric = Number(source[key]);
+      if (Number.isFinite(numeric)) result[key] = Math.max(min, Math.min(max, numeric));
+    }
+    return result;
+  }
+
+  function normalizeLeaderAppearance(value, { partial = true } = {}) {
+    const source = value && typeof value === "object" ? value : {};
+    const normalized = normalizeAnnotationStyle(source);
+    const result = partial ? {} : { ...DEFAULT_LEADER_APPEARANCE };
+    for (const key of Object.keys(DEFAULT_LEADER_APPEARANCE)) {
+      if (Object.hasOwn(source, key) && key !== "rotation" && key !== "textGap" && !TERMINATOR_KEYS.includes(key)) result[key] = normalized[key];
+    }
+    if (Object.hasOwn(source, "displayScale") && Number.isFinite(Number(source.displayScale)) && Number(source.displayScale) > 0) result.displayScale = Number(source.displayScale);
+    if (Object.hasOwn(source, "rotation") && Number.isFinite(Number(source.rotation))) result.rotation = Number(source.rotation);
+    if (Object.hasOwn(source, "textGap") && source.textGap !== "" && Number.isFinite(Number(source.textGap))) result.textGap = Math.max(0, Math.min(1000, Number(source.textGap)));
+    Object.assign(result, normalizeTerminator(source));
+    return result;
+  }
+
+  function dimensionDefaults(value) {
+    const result = normalizeDimensionAppearance(value, { partial: false });
+    for (const key of TERMINATOR_KEYS) delete result[key];
+    return result;
+  }
+
+  function leaderDefaults(value) {
+    const result = normalizeLeaderAppearance(value, { partial: false });
+    for (const key of TERMINATOR_KEYS) delete result[key];
+    return result;
+  }
+
+  function resolveLeaderAppearance(defaults, terminal, sketch, style) {
+    const result = { ...DEFAULT_LEADER_APPEARANCE, ...leaderDefaults(defaults), ...normalizeTerminator(terminal, { partial: false }), ...normalizeLeaderAppearance(sketch), ...normalizeLeaderAppearance(style) };
+    Object.assign(result, annotationDisplaySettings(result));
+    if (result.fixedDisplaySize !== false) delete result.displayScale;
+    return result;
+  }
+
+  function annotationStoredStyle(element) {
+    if (element.type === "leader" && element.appearanceInheritance === true) {
+      const result = normalizeLeaderAppearance(element.style);
+      for (const key of ["prefix", "suffix"]) if (Object.hasOwn(element.style || {}, key)) result[key] = String(element.style[key] || "");
+      return result;
+    }
+    return normalizeAnnotationStyle(element.style);
+  }
+
   const DIMENSION_APPEARANCE_NUMERIC_RULES = {
     lineWidth: { min: 0.5, max: 10 },
     extensionLineOvershoot: { min: 0, max: 1000 },
@@ -131,9 +187,9 @@
       const tolerance = Number(source.toleranceLower);
       result.toleranceLower = source.toleranceLower == null || source.toleranceLower === "" || !Number.isFinite(tolerance) ? null : tolerance;
     }
-    if (["arrow", "filledArrow", "dot"].includes(source.terminatorType)) result.terminatorType = source.terminatorType;
+    Object.assign(result, normalizeTerminator(source));
     for (const [key, rule] of Object.entries(DIMENSION_APPEARANCE_NUMERIC_RULES)) {
-      if (!Object.prototype.hasOwnProperty.call(source, key)) continue;
+      if (TERMINATOR_KEYS.includes(key) || !Object.prototype.hasOwnProperty.call(source, key)) continue;
       if (source[key] == null || source[key] === "") continue;
       const numeric = Number(source[key]);
       if (Number.isFinite(numeric)) result[key] = Math.max(rule.min, Math.min(rule.max, numeric));
@@ -212,6 +268,7 @@
       lineWidth: Number.isFinite(lineWidth) ? Math.max(0.5, Math.min(10, lineWidth)) : DEFAULT_ANNOTATION_STYLE.lineWidth,
       lineType,
       terminatorType,
+      arrowheadAngle: Number.isFinite(Number(source.arrowheadAngle)) ? Math.max(1, Math.min(179, Number(source.arrowheadAngle))) : 27,
       terminatorSize: Number.isFinite(terminatorSize) ? Math.max(0.1, Math.min(100, terminatorSize)) : DEFAULT_ANNOTATION_STYLE.terminatorSize,
     };
   }
@@ -242,6 +299,7 @@
   for (const rule of Object.values(DIMENSION_APPEARANCE_NUMERIC_RULES)) Object.freeze(rule);
   for (const value of [DEFAULT_APPEARANCE, DEFAULT_CONSTRUCTION_APPEARANCE, DEFAULT_DIMENSION_APPEARANCE, DEFAULT_HATCH_APPEARANCE, DEFAULT_ANNOTATION_STYLE, DIMENSION_APPEARANCE_LENGTH_KEYS, DIMENSION_APPEARANCE_NUMERIC_RULES]) Object.freeze(value);
   window.Appearance = Object.freeze({
+    TERMINATOR_KEYS, DEFAULT_TERMINATOR, DEFAULT_LEADER_APPEARANCE, normalizeTerminator, normalizeLeaderAppearance, resolveLeaderAppearance, annotationStoredStyle, dimensionDefaults, leaderDefaults,
     annotationDisplaySettings, annotationDisplayFactor, applyAnnotationDisplaySetting,
     CSS_PX_PER_MM, DEFAULT_APPEARANCE, DEFAULT_CONSTRUCTION_APPEARANCE,
     DEFAULT_DIMENSION_APPEARANCE, DEFAULT_HATCH_APPEARANCE, DEFAULT_ANNOTATION_STYLE,

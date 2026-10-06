@@ -11,7 +11,8 @@
     return `${style.prefix}${value}${style.suffix}`;
   }
 
-  function create({ ctx, viewport, withCanvasState, annotationDisplayColor, annotationLeaderAnchor, appearanceLineDash, formatValue }) {
+  function create({ ctx, viewport, withCanvasState, annotationDisplayColor, annotationLeaderAnchor, appearanceLineDash, formatValue, effectiveAnnotationStyle = element => normalizeAnnotationStyle(element.style) }) {
+    const drawTerminator = window.TerminatorRenderer.create({ ctx, viewport }).draw;
     function annotationFontFamilyStack(fontFamily) {
       if (fontFamily === "serif") return 'Georgia, "Times New Roman", serif';
       if (fontFamily === "monospace") return 'ui-monospace, SFMono-Regular, Consolas, monospace';
@@ -26,8 +27,39 @@
       return annotationTextScreenHeight(style) / viewport.scale;
     }
 
+    // New leaders locate text from the shelf, preserving its gap after font, zoom and rotation changes.
+    // Legacy annotations retain their explicit x/y until the gap is individually edited.
+    function annotationTextLayout(element) {
+      if (element?.type !== "leader" || element.textPlacement !== "shelf" || !element.elbow || !element.end) return null;
+      const style = effectiveAnnotationStyle(element);
+      const fontSize = annotationTextWorldHeight(style);
+      const lines = displayText(element, formatValue).split(/\r\n|\r|\n/);
+      ctx.save();
+      ctx.font = `${style.italic ? "italic " : ""}${style.bold ? "700 " : ""}${fontSize}px ${annotationFontFamilyStack(style.fontFamily)}`;
+      const width = Math.max(0, ...lines.map(line => ctx.measureText(line).width));
+      ctx.restore();
+      const height = fontSize * (1 + (lines.length - 1) * 1.2);
+      const left = style.textAlign === "center" ? -width / 2 : style.textAlign === "right" ? -width : 0;
+      const corners = [{ x: left, y: -height / 2 }, { x: left + width, y: -height / 2 },
+        { x: left + width, y: height / 2 }, { x: left, y: height / 2 }];
+      const localRotation = Number(style.rotation) || 0;
+      const transformRotation = Number(element.annotationTransformRotation) || 0;
+      const rotation = localRotation + transformRotation;
+      const bottom = Math.max(...corners.map(point => point.x * Math.sin(localRotation) + point.y * Math.cos(localRotation)));
+      const gapWorld = (Number(style.textGap) || 0) * ANNOTATION_SCREEN_PX_PER_MM / viewport.scale * window.Appearance.annotationDisplayFactor(style, viewport.scale);
+      const strokeHalfWidth = style.lineWidth / viewport.scale * window.Appearance.annotationDisplayFactor(style, viewport.scale) / 2;
+      const offset = bottom + gapWorld + strokeHalfWidth;
+      const x = (element.elbow.x + element.end.x) / 2 + Math.sin(transformRotation) * offset;
+      const y = (element.elbow.y + element.end.y) / 2 - Math.cos(transformRotation) * offset;
+      const worldCorners = corners.map(point => ({ x: x + point.x * Math.cos(rotation) - point.y * Math.sin(rotation), y: y + point.x * Math.sin(rotation) + point.y * Math.cos(rotation) }));
+      return { x, y, rotation, fontSize, width, height, gapWorld, strokeHalfWidth, left,
+        bounds: { x1: Math.min(...worldCorners.map(p => p.x)), y1: Math.min(...worldCorners.map(p => p.y)),
+          x2: Math.max(...worldCorners.map(p => p.x)), y2: Math.max(...worldCorners.map(p => p.y)) } };
+    }
+
     function drawAnnotationText(element, colorOverride = null) {
-      const style = normalizeAnnotationStyle(element.style);
+      const style = effectiveAnnotationStyle(element);
+      const layout = annotationTextLayout(element);
       const fontSize = annotationTextWorldHeight(style);
       const fontPrefix = `${style.italic ? "italic " : ""}${style.bold ? "700 " : ""}`;
       ctx.save();
@@ -35,40 +67,11 @@
       ctx.fillStyle = colorOverride || annotationDisplayColor(element, style);
       ctx.textAlign = style.textAlign;
       ctx.textBaseline = "middle";
-      ctx.translate(element.x, element.y);
-      ctx.rotate(Number(element.rotation) || 0);
+      ctx.translate(layout?.x ?? element.x, layout?.y ?? element.y);
+      ctx.rotate(element.type === "leader" && element.appearanceInheritance ? (style.rotation || 0) + (element.annotationTransformRotation || 0) : Number(element.rotation) || 0);
       const lines = displayText(element, formatValue).split(/\r\n|\r|\n/);
       lines.forEach((line, index) => ctx.fillText(line, 0, (index - (lines.length - 1) / 2) * fontSize * 1.2));
       ctx.restore();
-    }
-
-    function drawAnnotationTerminator(point, direction, annotationStyle) {
-      const style = normalizeAnnotationStyle(annotationStyle);
-      if (style.terminatorType === "none") return;
-      const size = style.terminatorSize * ANNOTATION_SCREEN_PX_PER_MM / viewport.scale * window.Appearance.annotationDisplayFactor(style, viewport.scale);
-      if (style.terminatorType === "dot") {
-        ctx.beginPath();
-        ctx.arc(point.x, point.y, size / 2, 0, Math.PI * 2);
-        ctx.fill();
-        return;
-      }
-      const wing = size * Math.tan(27 * Math.PI / 360);
-      const normal = { x: -direction.y, y: direction.x };
-      const wing1 = { x: point.x + direction.x * size + normal.x * wing, y: point.y + direction.y * size + normal.y * wing };
-      const wing2 = { x: point.x + direction.x * size - normal.x * wing, y: point.y + direction.y * size - normal.y * wing };
-      ctx.beginPath();
-      if (style.terminatorType === "arrow") {
-        ctx.moveTo(wing1.x, wing1.y);
-        ctx.lineTo(point.x, point.y);
-        ctx.lineTo(wing2.x, wing2.y);
-        ctx.stroke();
-      } else {
-        ctx.moveTo(point.x, point.y);
-        ctx.lineTo(wing1.x, wing1.y);
-        ctx.lineTo(wing2.x, wing2.y);
-        ctx.closePath();
-        ctx.fill();
-      }
     }
 
     function drawAnnotationLeader(element, preview = false) {
@@ -80,7 +83,7 @@
         y: element.end.y,
       };
       withCanvasState(() => {
-        const style = normalizeAnnotationStyle(element.style);
+        const style = effectiveAnnotationStyle(element);
         const color = annotationDisplayColor(element, style);
         ctx.strokeStyle = color;
         ctx.fillStyle = color;
@@ -96,11 +99,11 @@
         const dx = elbow.x - start.x;
         const dy = elbow.y - start.y;
         const len = Math.max(1e-9, hypot2(dx, dy));
-        drawAnnotationTerminator(start, { x: dx / len, y: dy / len }, style);
+        drawTerminator(start, { x: dx / len, y: dy / len }, style);
         if (element.parameterEnabled || element.text) drawAnnotationText(element, color);
       });
     }
-    return Object.freeze({ annotationTextWorldHeight, drawAnnotationText, drawAnnotationLeader });
+    return Object.freeze({ annotationTextLayout, annotationTextWorldHeight, drawAnnotationText, drawAnnotationLeader });
   }
   window.AnnotationRenderer = Object.freeze({ create, displayText });
 })();

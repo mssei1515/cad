@@ -35,13 +35,15 @@ test('cancelled text and leader prompts clear pending without creating data or h
   const f = fixture(); f.reply(null); f.command.createTextAnnotation();
   assert.equal(f.command.commitTextAnnotationAt({ x: 0, y: 0 }), true);
   assert.equal(f.pending, null);
-  f.command.startLeaderAnnotationPlacement(target()); f.reply(''); f.command.commitLeaderAnnotationAt({ x: 4, y: 8 });
+  f.command.startLeaderAnnotationPlacement(target()); f.reply(''); f.command.commitLeaderAnnotationAt({ x: 4, y: 8 }); f.command.commitLeaderAnnotationAt({ x: 12, y: 80 });
   assert.equal(f.pending, null); assert.equal(f.scope.annotations.length, 0); assert.equal(f.history.length, 0);
 });
 
-test('leader preview and committed geometry share the same zoom-dependent layout', () => {
+test('leader preview and committed geometry share the exact three-click layout', () => {
   const f = fixture(), t = target(); f.command.startLeaderAnnotationPlacement(t);
   assert.equal(f.pending.pointer.x, 45); assert.equal(f.pending.pointer.y, -18);
+  f.command.commitLeaderAnnotationAt({ x: 13, y: -7 });
+  f.pending.pointer = { x: -20, y: 99 };
   const preview = f.command.leaderPreview();
   assert.equal(preview.text, '注記'); assert.equal(f.scope.annotations.length, 0);
   f.command.commitLeaderAnnotationAt(f.pending.pointer);
@@ -62,7 +64,7 @@ test('leader creation selects a target or waits for a valid hit without recordin
   assert.equal(f.pending.leaderTarget, hit.target); assert.ok(f.calls.includes(hit));
   assert.equal(f.command.handleLeaderAnnotationTargetClick(hit, { x: 3, y: 4 }), false);
   assert.equal(f.history.length, 0);
-  f.select(target()); f.command.createLeaderAnnotation(); assert.equal(f.pending.type, 'annotation-leader-place');
+  f.select(target()); f.command.createLeaderAnnotation(); assert.equal(f.pending.type, 'annotation-leader-select');
 });
 
 test('root rejection and scope switching preserve the current document boundary', () => {
@@ -72,4 +74,18 @@ test('root rejection and scope switching preserve the current document boundary'
   f.command.pushAnnotation({ type: 'text', text: 'new scope', rotation: '30' });
   assert.equal(previous.annotations.length, 0); assert.equal(f.scope.annotations[0].rotation, 30);
   assert.equal(f.history.length, 0);
+});
+
+test('free elbow and horizontal end allow both directions without zoom-dependent length constraints', () => {
+  for (const endX of [-2, 14]) for (const zoom of [0.5, 10]) {
+    const f = fixture(); f.zoom(zoom); f.command.startLeaderAnnotationPlacement(target(), { x: 0, y: 0 });
+    f.command.commitLeaderAnnotationAt({ x: 3, y: 7 });
+    assert.equal(f.scope.annotations.length, 0); assert.equal(f.history.length, 0);
+    f.command.commitLeaderAnnotationAt({ x: endX, y: 900 });
+    const item = f.scope.annotations[0];
+    assert.deepEqual({ ...item.elbow }, { x: 3, y: 7 });
+    assert.deepEqual({ ...item.end }, { x: endX, y: 7 });
+    assert.equal(item.appearanceInheritance, true);
+    assert.equal(Object.keys(item.style).length, 0);
+  }
 });

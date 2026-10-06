@@ -15,13 +15,45 @@
       for (const existingKey of ["visible", "color", "lineType", "lineWidth", "endpointOverhang", "endpointMarkers"]) if (next[existingKey] == null) delete target[existingKey];
     }
 
+    function prepareLeaderStyle(annotation) {
+      if (!annotation.appearanceInheritance) {
+        annotation.style = { ...normalizeAnnotationStyle(annotation.style), ...window.Appearance.annotationDisplaySettings(annotation.style), rotation: Number(annotation.rotation) || 0 };
+        annotation.appearanceInheritance = true;
+      }
+      return (annotation.style ||= {});
+    }
+
+    function applyLeaderAppearanceValue(owner, key, rawValue, { viewportScale = 96 / 25.4, effective = owner } = {}) {
+      if (!owner) return false;
+      if (rawValue === "") {
+        delete owner[key];
+        if (key === "fixedDisplaySize") delete owner.displayScale;
+        return true;
+      }
+      if (key === "fixedDisplaySize") {
+        const fixed = rawValue === true || rawValue === "true";
+        if (!fixed && effective.fixedDisplaySize !== false) owner.displayScale = viewportScale / (96 / 25.4);
+        owner.fixedDisplaySize = fixed;
+        if (fixed) delete owner.displayScale;
+        return true;
+      }
+      const value = ["bold", "italic"].includes(key) ? rawValue === true || rawValue === "true"
+        : key === "rotation" ? Number(rawValue) * Math.PI / 180
+        : key === "displayScale" ? Number(rawValue) / 100 : rawValue;
+      const normalized = window.Appearance.normalizeLeaderAppearance({ [key]: value });
+      if (!Object.hasOwn(normalized, key)) return false;
+      owner[key] = normalized[key];
+      return true;
+    }
+
     function applyAnnotationStyleValue(annotation, key, rawValue) {
       if (!annotation) return false;
-      const next = { ...normalizeAnnotationStyle(annotation.style) };
+      if (annotation.type === "leader" && !["prefix", "suffix"].includes(key)) return applyLeaderAppearanceValue(prepareLeaderStyle(annotation), key, rawValue);
+      const next = annotation.type === "leader" ? { ...prepareLeaderStyle(annotation) } : { ...normalizeAnnotationStyle(annotation.style) };
       if (["bold", "italic"].includes(key)) next[key] = Boolean(rawValue);
       else if (["textHeight", "lineWidth", "terminatorSize"].includes(key)) next[key] = Number(rawValue);
       else next[key] = rawValue;
-      annotation.style = normalizeAnnotationStyle(next);
+      annotation.style = annotation.type === "leader" ? next : normalizeAnnotationStyle(next);
       return true;
     }
 
@@ -43,7 +75,7 @@
       const next = { ...normalizeDimensionAppearance(owner) };
       if (allowInheritance && rawValue === "") delete next[key];
       else if (key === "visible") next[key] = rawValue === "true";
-      else if (key === "terminatorType") next[key] = ["arrow", "filledArrow", "dot"].includes(rawValue) ? rawValue : DEFAULT_DIMENSION_APPEARANCE.terminatorType;
+      else if (key === "terminatorType") next[key] = ["arrow", "filledArrow", "dot", "none"].includes(rawValue) ? rawValue : DEFAULT_DIMENSION_APPEARANCE.terminatorType;
       else if (key === "precision") {
         next[key] = rawValue === "auto" || rawValue === "" ? null : Math.max(0, Math.min(10, Math.round(Number(rawValue))));
       } else if (key === "toleranceUpper" || key === "toleranceLower") next[key] = rawValue === "" ? null : Number(rawValue);
@@ -55,7 +87,7 @@
       return true;
     }
 
-    return Object.freeze({ applyAppearanceInput, applyAnnotationStyleValue, applyHatchAppearanceInput, applyDimensionAppearanceValue });
+    return Object.freeze({ prepareLeaderStyle, applyLeaderAppearanceValue, applyAppearanceInput, applyAnnotationStyleValue, applyHatchAppearanceInput, applyDimensionAppearanceValue });
   }
   window.AppearanceEditing = Object.freeze({ create });
 })();
