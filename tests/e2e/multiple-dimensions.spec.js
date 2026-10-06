@@ -10,6 +10,104 @@ async function fixture(page) {
 }
 async function state(page){return page.evaluate(()=>window.__jot2dTest.multipleDimensionSelectionForTest());}
 
+async function selectBoth(page, positions) {
+ await page.mouse.click(positions[0].x,positions[0].y);
+ await page.keyboard.down('Control');await page.mouse.click(positions[1].x,positions[1].y);await page.keyboard.up('Control');
+ expect((await state(page)).dimensions).toEqual([0,1]);
+}
+async function model(page){return page.evaluate(()=>window.__jot2dTest.serializedModelForTest());}
+async function client(page,point){return page.evaluate(p=>window.__jot2dTest.worldClientPositionForTest(p),point);}
+
+test('align to right-clicked dimension preserves values, geometry, labels, undo and saved placement',async({page})=>{
+ const positions=await fixture(page);await selectBoth(page,positions);
+ const before=await model(page);
+ const reference=await client(page,{x:20,y:50});
+ await page.mouse.click(reference.x,reference.y,{button:'right'});
+ await expect(page.locator('[data-context-action="dimension-align"]')).toBeEnabled();
+ await page.locator('[data-context-action="dimension-align"]').click();
+ const aligned=await model(page);
+ expect((await state(page)).dimensions).toEqual([0,1]);
+ expect(aligned.constraints[0].dimension.y).toBeCloseTo(50);
+ expect(aligned.constraints[1]).toEqual(before.constraints[1]);
+ expect(aligned.points).toEqual(before.points);expect(aligned.lines).toEqual(before.lines);
+ for(let i=0;i<2;i++) {
+  expect(aligned.constraints[i].value).toBe(before.constraints[i].value);
+  expect(aligned.constraints[i].expression).toBe(before.constraints[i].expression);
+  expect(aligned.constraints[i].dimension.labelOffsetU).toBe(before.constraints[i].dimension.labelOffsetU);
+ }
+ await page.click('#undoBtn');expect((await model(page)).constraints).toEqual(before.constraints);
+ await page.click('#redoBtn');expect((await model(page)).constraints).toEqual(aligned.constraints);
+ expect((await page.evaluate(data=>window.__jot2dTest.loadDocumentFixtureForDragTest(data,'aligned.jot2d'),aligned)).success).toBe(true);
+ expect((await model(page)).constraints).toEqual(aligned.constraints);
+});
+
+test('drag a selected dimension line moves parallel lines together preserving spacing and one undo',async({page})=>{
+ const positions=await fixture(page);await selectBoth(page,positions);
+ const before=await model(page);
+ const start=await client(page,{x:15,y:-30}),end=await client(page,{x:23,y:-18});
+ await page.mouse.move(start.x,start.y);await page.mouse.down();await page.mouse.move(end.x,end.y,{steps:8});await page.mouse.up();
+ const moved=await model(page);
+ expect((await state(page)).dimensions).toEqual([0,1]);
+ for(let i=0;i<2;i++) {
+  expect(moved.constraints[i].dimension.y-before.constraints[i].dimension.y).toBeCloseTo(12,1);
+  expect(moved.constraints[i].dimension.x).toBeCloseTo(before.constraints[i].dimension.x);
+  expect(moved.constraints[i].dimension.labelOffsetU).toBe(before.constraints[i].dimension.labelOffsetU);
+  expect(moved.constraints[i].value).toBe(before.constraints[i].value);
+ }
+ expect(moved.points).toEqual(before.points);expect(moved.lines).toEqual(before.lines);
+ await page.click('#undoBtn');expect((await model(page)).constraints).toEqual(before.constraints);
+ await page.click('#redoBtn');expect((await model(page)).constraints).toEqual(moved.constraints);
+ expect((await page.evaluate(data=>window.__jot2dTest.loadDocumentFixtureForDragTest(data,'moved.jot2d'),moved)).success).toBe(true);
+ expect((await model(page)).constraints).toEqual(moved.constraints);
+});
+
+test('nonparallel dimensions disable alignment and retain individual dragging',async({page})=>{
+ await fixture(page);
+ const positions=await page.evaluate(()=>{
+  const t=window.__jot2dTest,data=t.serializedModelForTest();
+  for(const point of data.points) if(point.y===80 && point.x===160){point.x=0;point.y=240;}
+  const result=t.loadDocumentFixtureForDragTest(data,'nonparallel.jot2d');if(!result.success)throw Error(JSON.stringify(result));
+  t.focusWorldForTest({x:60,y:100},2);
+  return [t.dimensionClientPositionForTest(0),t.dimensionClientPositionForTest(1)];
+ });
+ await selectBoth(page,positions);const before=await model(page);
+ await page.mouse.click(positions[0].x,positions[0].y,{button:'right'});
+ await expect(page.locator('[data-context-action="dimension-align"]')).toBeDisabled();
+ await page.keyboard.press('Escape');
+ const start=await client(page,{x:15,y:-30}),end=await client(page,{x:15,y:-18});
+ await page.mouse.move(start.x,start.y);await page.mouse.down();await page.mouse.move(end.x,end.y,{steps:6});await page.mouse.up();
+ expect((await state(page)).dimensions).toEqual([0]);
+ expect((await model(page)).constraints[1]).toEqual(before.constraints[1]);
+});
+
+test('dragging a selected label moves parallel lines together',async({page})=>{
+ const positions=await fixture(page);await selectBoth(page,positions);
+ const before=await model(page);
+ const end=await client(page,{x:58,y:-18});
+ await page.mouse.move(positions[0].x,positions[0].y);await page.mouse.down();
+ await page.mouse.move(end.x,end.y,{steps:6});await page.mouse.up();
+ expect((await state(page)).dimensions).toEqual([0,1]);
+ const after=await model(page);
+ for(let i=0;i<2;i++) {
+  expect(after.constraints[i].dimension.y-before.constraints[i].dimension.y).toBeCloseTo(12,1);
+  expect(after.constraints[i].dimension.labelOffsetU).toBe(before.constraints[i].dimension.labelOffsetU);
+  expect(after.constraints[i].value).toBe(before.constraints[i].value);
+ }
+ expect(after.points).toEqual(before.points);
+ await page.click('#undoBtn');expect((await model(page)).constraints).toEqual(before.constraints);
+ await page.click('#redoBtn');expect((await model(page)).constraints).toEqual(after.constraints);
+});
+
+test('dragging a single selected label keeps individual editing',async({page})=>{
+ const positions=await fixture(page);await page.mouse.click(positions[0].x,positions[0].y);
+ const before=await model(page);
+ await page.mouse.move(positions[0].x,positions[0].y);await page.mouse.down();
+ await page.mouse.move(positions[0].x+30,positions[0].y+20,{steps:6});await page.mouse.up();
+ expect((await state(page)).dimensions).toEqual([0]);
+ const after=await model(page);expect(after.constraints[1]).toEqual(before.constraints[1]);
+ expect(after.constraints[0].dimension).not.toEqual(before.constraints[0].dimension);
+});
+
 test('bulk dimension size lock handles mixed state, zoom, undo and persistence',async({page})=>{
  await fixture(page);
  const positions=await page.evaluate(()=>{

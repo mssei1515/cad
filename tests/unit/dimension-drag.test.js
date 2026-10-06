@@ -38,6 +38,21 @@ test('radius labels anchor at the pointer and angle labels tolerate unresolved p
   angle.state.angleResult = { radial: 9 }; angle.command.update({ x: 4, y: 6 }); assert.equal(angle.constraint.dimension.display.text, 'kept');
   angle.events.length = 0; angle.command.finish({ pointerId: 3 }); assert.equal(angle.events.includes('ui'), true); assert.equal(angle.events.includes('input'), false);
 });
+test('parallel group drag preserves selection and commits one history entry', () => {
+  const events = [], reference = {}, group = {};
+  const command = sandbox.window.DimensionDrag.create({
+    dimensionAnchor: () => ({ x: 0, y: 0 }), migrateAngleDimensionLabelPlacement: () => {},
+    canvasSelection: { set: key => events.push(key) }, isDimensionConstraintCommandActive: () => false,
+    selectedLineGroup: constraint => { assert.equal(constraint, reference); return group; },
+    translateLineGroup: (actual, delta) => { assert.equal(actual, group); events.push([delta.x, delta.y]); },
+    beginPointer: () => {}, endPointer: () => {}, setHint: () => {}, clearSnap: () => {}, draw: () => {},
+    updateGeometrySelectionUI: () => {}, syncDimensionValueInput: () => {}, recordHistory: () => events.push('history'),
+  });
+  command.begin({ pointerId: 1 }, { constraint: reference, target: { kind: 'line-length' }, part: 'line' }, { x: 2, y: 3 });
+  command.update({ x: 9, y: 11 }); command.finish({ pointerId: 1 });
+  assert.deepEqual(events, ['constraint', [7, 8], 'history']);
+});
+
 test('angle line offsets survive dragging and reset discards the session without committing', () => {
   const f = fixture('angle'); f.begin(); f.command.update({ x: 4, y: 6 });
   assert.deepEqual([f.constraint.dimension.radial, f.constraint.dimension.tangent], [4, 5]); assert.equal(f.command.constraint, f.constraint);

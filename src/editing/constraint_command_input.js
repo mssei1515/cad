@@ -3,14 +3,14 @@
   "use strict";
   function create({ getPending, getPendingConstraint, canvasSelection, canvasHover, isDimensionConstraintCommandActive,
     beginDimensionDrag, retargetDistancePlaceWithOperand, startDistanceValueInput, constraintTargetHint,
-    handleConstraintOperandClick, setHint, updateGeometrySelectionUI, draw }) {
+    handleConstraintOperandClick, setHint, updateGeometrySelectionUI, draw, canDragDimensionGroup = () => false }) {
     function click(e, p, { hitD, directGeometryHit, hitP, hitL, hitC, hitA, hitS, hitArcEnd, inactiveHit }) {
       if (hitD && !directGeometryHit && (e.shiftKey || e.ctrlKey) && !getPending() && !getPendingConstraint()) {
         e.preventDefault(); canvasSelection.toggleDimensionConstraint(hitD.constraint); updateGeometrySelectionUI(); draw(); return true;
       }
       if (hitD && !directGeometryHit && !e.shiftKey && !e.ctrlKey && ((!getPending() && !getPendingConstraint()) || isDimensionConstraintCommandActive())) {
         e.preventDefault();
-        if (!isDimensionConstraintCommandActive()) {
+        if (!isDimensionConstraintCommandActive() && !canDragDimensionGroup(hitD)) {
           canvasSelection.clear();
         }
         beginDimensionDrag(e, hitD, p, { hitP, hitL, hitC, hitA, hitArcEnd });

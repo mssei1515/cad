@@ -8,7 +8,7 @@ function fixture(){
   const common={getMode:()=>f.mode,getPending:()=>f.pending,getPendingConstraint:()=>f.constraint,canvasSelection:selection,draw:record('draw')};
   f.annotation=sandbox.window.AnnotationCommandInput.create({...common,annotationCommand:{commitTextAnnotationAt:record('text'),handleLeaderAnnotationTargetClick:record('target'),commitLeaderAnnotationAt:record('leader')},clearSelection:record('clear'),annotationDrag:{begin:record('annotationDrag')},updateUI:record('ui')});
   f.input=sandbox.window.ConstraintCommandInput.create({...common,canvasHover:{update:record('hover')},isDimensionConstraintCommandActive:()=>f.dimensionCommand,
-    beginDimensionDrag:record('dimensionDrag'),retargetDistancePlaceWithOperand:(...args)=>{record('retarget')(...args);return f.retarget;},startDistanceValueInput:record('value'),
+    canDragDimensionGroup:()=>f.groupDrag,beginDimensionDrag:record('dimensionDrag'),retargetDistancePlaceWithOperand:(...args)=>{record('retarget')(...args);return f.retarget;},startDistanceValueInput:record('value'),
     constraintTargetHint:type=>'hint:'+type,handleConstraintOperandClick:record('operand'),setHint:record('hint'),updateGeometrySelectionUI:record('ui')});
   f.e={preventDefault:record('prevent')};f.p={x:1,y:2};f.names=()=>f.calls.map(c=>c.name);f.click=hits=>f.input.click(f.e,f.p,hits||{});return f;
 }
@@ -44,6 +44,12 @@ test('ordinary annotation starts drag while additive annotation and block projec
 test('dimension drag clears basic geometry only outside dimension commands',()=>{
   const f=fixture(),dimension={id:'D'},point={id:'P'};f.click({hitD:dimension,hitP:point});assert.equal(f.names().at(-1),'dimensionDrag');assert.ok(f.names().includes('clear')); assert.equal(f.calls.at(-1).args[3].hitP,point);
   f.pending={type:'distance-place'};f.dimensionCommand=true;f.calls=[];f.click({hitD:dimension});assert.deepEqual(f.names(),['prevent','dimensionDrag']);
+});
+test('parallel dimension line and label presses retain selection; individual edits clear it',()=>{
+  const f=fixture();f.groupDrag=true;f.click({hitD:{part:'line'}});
+  assert.deepEqual(f.names(),['prevent','dimensionDrag']);
+  f.calls=[];f.click({hitD:{part:'label'}});assert.deepEqual(f.names(),['prevent','dimensionDrag']);
+  f.groupDrag=false;f.calls=[];f.click({hitD:{part:'label'}});assert.deepEqual(f.names(),['prevent','clear','dimensionDrag']);
 });
 test('distance placement retargets before accepting location and value entry consumes clicks',()=>{
   const f=fixture();f.pending={type:'distance-place'};f.retarget=true;f.click({});assert.deepEqual(f.names(),['prevent','retarget']);
