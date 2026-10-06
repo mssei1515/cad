@@ -497,9 +497,9 @@ test("document annotation edits never modify geometry or solve state", async ({ 
   const analysisBefore = await page.evaluate(() => window.__jot2dTest.constraintAnalysisForTest());
 
   const snapshot = await page.evaluate(() => window.__jot2dTest.annotationSnapshot());
-  await page.mouse.move(snapshot.leader.viewport.x, snapshot.leader.viewport.y);
+  await page.mouse.move(snapshot.leader.bodyViewport.x, snapshot.leader.bodyViewport.y);
   await page.mouse.down();
-  await page.mouse.move(snapshot.leader.viewport.x + 55, snapshot.leader.viewport.y + 30, { steps: 6 });
+  await page.mouse.move(snapshot.leader.bodyViewport.x + 55, snapshot.leader.bodyViewport.y + 30, { steps: 6 });
   await page.mouse.up();
 
   const after = await page.evaluate(() => window.__jot2dTest.serializedModelForTest());

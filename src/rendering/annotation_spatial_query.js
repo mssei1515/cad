@@ -109,6 +109,7 @@
           const text = annotationTextLayout(element) || geometry;
           const start = annotationLeaderAnchor(element);
           if (!start || !element.end) continue;
+          if (element.elbow && hypot2(x - geometry.end.x, y - geometry.end.y) <= 8 / viewportScale()) return { element, type: "leader", part: "end" };
           const elbow = geometry.elbow || { x: (start.x + geometry.end.x) / 2, y: geometry.end.y };
           if (distancePointToSegmentPoints(x, y, start, elbow) <= threshold * 2.2 || distancePointToSegmentPoints(x, y, elbow, geometry.end) <= threshold * 2.2) return { element, type: "leader", part: "line" };
           if (pointInAnnotationTextBox(x, y, element, threshold)) return { element, type: "leader", part: "label" };
@@ -130,6 +131,8 @@
         const text = annotationTextLayout(element) || geometry;
         const start = annotationLeaderAnchor(element);
         if (!start || !element.end) return null;
+        const endDistance = hypot2(pointer.x - geometry.end.x, pointer.y - geometry.end.y);
+        if (element.elbow && endDistance <= 8 / viewportScale()) return { element, type: "leader", part: "end", distance: endDistance };
         const elbow = geometry.elbow || { x: (start.x + geometry.end.x) / 2, y: geometry.end.y };
         const firstDistance = distancePointToSegmentPoints(pointer.x, pointer.y, start, elbow);
         const secondDistance = distancePointToSegmentPoints(pointer.x, pointer.y, elbow, geometry.end);

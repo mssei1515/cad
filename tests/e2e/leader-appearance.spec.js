@@ -170,7 +170,7 @@ test('text gap is inherited and remains below rotated multiline text through zoo
   const metrics = () => page.evaluate(() => window.__jot2dTest.annotationAppearanceStateForTest('leader'));
   const first = await metrics();
   expect(first.style.textGap).toBe(3);
-  expect(first.serialized.end.y - first.textLayout.bounds.y2 - first.textLayout.strokeHalfWidth).toBeCloseTo(first.textLayout.gapWorld, 8);
+  expect(first.displayGeometry.end.y - first.textLayout.bounds.y2 - first.textLayout.strokeHalfWidth).toBeCloseTo(first.textLayout.gapWorld, 8);
   await page.screenshot({ path: testInfo.outputPath('leader-gap.png') });
   await page.evaluate(() => window.__jot2dTest.focusWorldForTest({ x: 50, y: 0 }, 6));
   const zoomed = await metrics();
@@ -205,7 +205,8 @@ test('shelf and text stay screen-fixed, then size lock captures zoom and persist
   expect(await screenLength()).toBeCloseTo(length, 8);
   const zoomed = await metrics();
   expect(zoomed.screenTextHeight).toBeCloseTo(first.screenTextHeight, 8);
-  expect(zoomed.displayGeometry.elbow).toEqual(first.displayGeometry.elbow);
+  expect((zoomed.displayGeometry.elbow.x - zoomed.resolvedStart.x) * 2).toBeCloseTo(first.displayGeometry.elbow.x - first.resolvedStart.x, 8);
+  expect((zoomed.displayGeometry.elbow.y - zoomed.resolvedStart.y) * 2).toBeCloseTo(first.displayGeometry.elbow.y - first.resolvedStart.y, 8);
   await selectLeader(page);
   await expect(page.locator('#annotationFixedDisplaySize')).not.toBeChecked();
   await page.locator('#annotationFixedDisplaySize').check();
@@ -224,18 +225,18 @@ test('shelf and text stay screen-fixed, then size lock captures zoom and persist
   expect((await data(page)).annotations[0].style).not.toHaveProperty('fixedDisplaySize');
 });
 
-test('displayed shelf endpoint remains selectable beyond stored coordinates and moves as one leader', async ({ page }) => {
+test('displayed shelf endpoint resizes beyond stored coordinates and preserves the elbow', async ({ page }) => {
   await setup(page); const leader = await createLeader(page);
   await page.evaluate(() => window.__jot2dTest.focusWorldForTest({ x: 50, y: 0 }, 0.75));
   const geometry = await page.evaluate(() => window.__jot2dTest.annotationAppearanceStateForTest('leader').displayGeometry);
   expect(geometry.end.x).toBeGreaterThan(leader.end.x + 30);
   const client = await page.evaluate(p => window.__jot2dTest.worldClientPositionForTest(p), geometry.end);
-  expect(await page.evaluate(p => window.__jot2dTest.annotationHitAt(p), client)).toEqual({ type: 'leader', part: 'line' });
+  expect(await page.evaluate(p => window.__jot2dTest.annotationHitAt(p), client)).toEqual({ type: 'leader', part: 'end' });
   await page.mouse.move(client.x, client.y); await page.mouse.down();
   await page.mouse.move(client.x + 15, client.y + 7.5, { steps: 4 }); await page.mouse.up();
   const moved = (await data(page)).annotations[0];
-  expect(moved.elbow.x).toBeCloseTo(leader.elbow.x + 20, 0);
-  expect(moved.end.x).toBeCloseTo(leader.end.x + 20, 0);
+  expect(moved.elbow).toEqual(leader.elbow);
+  expect(moved.end.x).toBeCloseTo(leader.end.x + 5, 0);
   expect(moved.end.y).toBe(moved.elbow.y);
   expect(moved.shelfReferenceScale).toBe(leader.shelfReferenceScale);
   await page.locator('#undoBtn').click();
@@ -282,4 +283,87 @@ test('Sketch size lock overrides Document and individual reset returns to the Sk
   expect((await data(page)).annotations[0].style.fixedDisplaySize).toBe(true);
   await page.locator('#redoBtn').click();
   expect((await data(page)).annotations[0].style).not.toHaveProperty('fixedDisplaySize');
+});
+
+for (const locked of [false, true]) test(`shelf endpoint crosses the elbow in both directions with size lock ${locked}`, async ({ page }, testInfo) => {
+  await setup(page); const original = await createLeader(page);
+  await selectLeader(page);
+  if (locked) await page.locator('#annotationFixedDisplaySize').check();
+  await page.evaluate(() => window.__jot2dTest.focusWorldForTest({ x: 50, y: 0 }, 6));
+  const metrics = () => page.evaluate(() => window.__jot2dTest.annotationAppearanceStateForTest('leader'));
+  const client = point => page.evaluate(p => window.__jot2dTest.worldClientPositionForTest(p), point);
+  const before = (await data(page)).annotations[0];
+  for (const width of [-60, 90]) {
+    const start = await metrics();
+    const end = await client(start.displayGeometry.end), elbow = await client(start.displayGeometry.elbow);
+    await page.mouse.move(end.x, end.y); await page.mouse.down();
+    await page.mouse.move(elbow.x, elbow.y, { steps: 4 });
+    await expect.poll(async () => {
+      const m = await metrics(); return Math.abs(m.displayGeometry.end.x - m.displayGeometry.elbow.x);
+    }).toBeLessThan(0.2);
+    await page.mouse.move(elbow.x + width, elbow.y + 20, { steps: 5 }); await page.mouse.up();
+    const resized = await metrics(), displayed = await client(resized.displayGeometry.end);
+    expect(displayed.x).toBeCloseTo(elbow.x + width, 0);
+    expect(displayed.y).toBeCloseTo(elbow.y, 0);
+    expect(resized.serialized.elbow).toEqual(original.elbow);
+    expect(resized.serialized.start).toEqual(original.start);
+    expect(resized.serialized.geometryRef).toEqual(original.geometryRef);
+    expect(resized.serialized.shelfReferenceScale).toBe(original.shelfReferenceScale);
+    expect(resized.textLayout.x).toBeCloseTo((resized.displayGeometry.elbow.x + resized.displayGeometry.end.x) / 2, 8);
+  }
+  const saved = await data(page), after = saved.annotations[0];
+  await page.screenshot({ path: testInfo.outputPath('shelf-resize.png') });
+  await page.locator('#undoBtn').click();
+  expect((await data(page)).annotations[0].end.x).toBeLessThan(original.elbow.x);
+  await page.locator('#undoBtn').click();
+  expect((await data(page)).annotations[0]).toEqual(before);
+  await page.locator('#redoBtn').click(); await page.locator('#redoBtn').click();
+  expect((await data(page)).annotations[0]).toEqual(after);
+  await page.evaluate(d => window.__jot2dTest.loadDocumentFixtureForDragTest(d), saved);
+  expect((await data(page)).annotations[0]).toEqual(after);
+});
+
+test('dragging the shelf body still moves the leader without changing its length', async ({ page }) => {
+  await setup(page); const original = await createLeader(page, 130);
+  const geometry = await page.evaluate(() => window.__jot2dTest.annotationAppearanceStateForTest('leader').displayGeometry);
+  const point = { x: (geometry.elbow.x + geometry.end.x) / 2, y: geometry.end.y };
+  const client = await page.evaluate(p => window.__jot2dTest.worldClientPositionForTest(p), point);
+  await page.mouse.move(client.x, client.y); await page.mouse.down();
+  await page.mouse.move(client.x + 30, client.y + 15, { steps: 4 }); await page.mouse.up();
+  const moved = (await data(page)).annotations[0];
+  expect(moved.elbow.x).toBeCloseTo(original.elbow.x + 10, 0);
+  expect(moved.end.x).toBeCloseTo(original.end.x + 10, 0);
+  expect(moved.end.y).toBeCloseTo(original.end.y + 5, 0);
+  expect(moved.start).toEqual(original.start);
+});
+
+for (const locked of [false, true]) test(`leader elbow keeps its displayed offset when target geometry moves and deforms, size lock ${locked}`, async ({ page }) => {
+  await setup(page); await createLeader(page);
+  await selectLeader(page);
+  if (locked) await page.locator('#annotationFixedDisplaySize').check();
+  const before = await page.evaluate(() => window.__jot2dTest.annotationAppearanceStateForTest('leader'));
+  const saved = await data(page), original = structuredClone(saved.annotations[0]);
+  const line = saved.lines.find(l => l.id === original.geometryRef.path[0]);
+  const p1 = saved.points.find(p => p.id === line.p1), p2 = saved.points.find(p => p.id === line.p2);
+  saved.constraints = [];
+  p1.x += 20; p1.y += 30;
+  p2.x += 50; p2.y -= 10;
+  expect(await page.evaluate(d => window.__jot2dTest.loadDocumentFixtureForDragTest(d), saved)).toEqual(expect.objectContaining({ success: true }));
+  const after = await page.evaluate(() => window.__jot2dTest.annotationAppearanceStateForTest('leader'));
+  const shift = { x: after.resolvedStart.x - before.resolvedStart.x, y: after.resolvedStart.y - before.resolvedStart.y };
+  expect(Math.abs(shift.x) + Math.abs(shift.y)).toBeGreaterThan(1);
+  for (const key of ['elbow', 'end']) {
+    expect(after.displayGeometry[key].x - before.displayGeometry[key].x).toBeCloseTo(shift.x, 8);
+    expect(after.displayGeometry[key].y - before.displayGeometry[key].y).toBeCloseTo(shift.y, 8);
+  }
+  expect(after.textLayout.x - before.textLayout.x).toBeCloseTo(shift.x, 8);
+  expect(after.textLayout.y - before.textLayout.y).toBeCloseTo(shift.y, 8);
+  expect((await data(page)).annotations[0]).toEqual(original);
+  const end = await page.evaluate(p => window.__jot2dTest.worldClientPositionForTest(p), after.displayGeometry.end);
+  await page.mouse.move(end.x, end.y); await page.mouse.down();
+  await page.mouse.move(end.x + 30, end.y + 10, { steps: 4 }); await page.mouse.up();
+  const resized = await page.evaluate(() => window.__jot2dTest.annotationAppearanceStateForTest('leader'));
+  expect(resized.displayGeometry.elbow).toEqual(after.displayGeometry.elbow);
+  expect(resized.resolvedStart).toEqual(after.resolvedStart);
+  expect(resized.displayGeometry.end.x - after.displayGeometry.end.x).toBeCloseTo(10, 0);
 });

@@ -67,6 +67,7 @@
     ["スプラインには3点以上の通過点が必要です", "A spline requires at least three fit points."],
     ["閉じる", "Closed"], ["通過点", "Fit points"], ["編集", "Edit"], ["スプライン編集", "Edit spline"],
     ["引出線を付ける図形をクリックしてください", "Click geometry to attach the leader."], ["引出線の文字位置をクリックしてください", "Click the leader text position."],
+    ["引出線の横棒の長さを変更中", "Resizing leader shelf"], ["引出線の横棒の長さを更新しました", "Leader shelf length updated"],
     ["引出線の折れ位置をクリックしてください", "Click the leader elbow position."], ["引出線の横線の終端をクリックしてください", "Click the end of the horizontal leader segment."],
     ["引出線をキャンセルしました", "Leader creation was canceled."], ["引出線を追加しました", "Leader was added."],
     ["テキストを配置する位置をクリックしてください", "Click where you want to place the text."], ["テキストを追加しました", "Text was added."], ["テキストをキャンセルしました", "Text creation was canceled."],

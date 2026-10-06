@@ -82,3 +82,13 @@ test('show hidden restores annotation hit and context queries without changing i
   assert.equal(label.visible, false);
   f.showHidden(false); assert.equal(f.query.hitAnnotationElement(2, 0), null);
 });
+
+test('leader endpoint takes priority over shelf body with a screen-sized hit radius', () => {
+  const f = fixture(), leader = text({ type: 'leader', start: { x: 0, y: 0 }, elbow: { x: 20, y: 20 }, end: { x: 60, y: 20 } });
+  f.list([leader]);
+  assert.equal(f.query.hitAnnotationElement(63, 20).part, 'end');
+  assert.equal(f.query.canvasContextAnnotationHit(leader, { x: 63, y: 20 }).part, 'end');
+  f.zoom(4);
+  assert.equal(f.query.hitAnnotationElement(63, 20).part, 'line');
+  assert.equal(f.query.hitAnnotationElement(60, 20).part, 'end');
+});

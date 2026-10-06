@@ -611,7 +611,7 @@
   });
 
   const { drawResolvedHatchContent } = window.HatchRenderer.create({ viewport, visibleWorldBounds, canvasThemeColor, isVisibleValue });
-  const { annotationLeaderDisplayGeometry, annotationTextLayout, annotationTextWorldHeight, drawAnnotationText, drawAnnotationLeader } = window.AnnotationRenderer.create({ ctx, viewport, withCanvasState, annotationDisplayColor, annotationLeaderAnchor, appearanceLineDash, formatValue: formatDisplayNumber, effectiveAnnotationStyle });
+  const { annotationLeaderDisplayGeometry, annotationTextLayout, annotationTextWorldHeight, drawAnnotationText, drawAnnotationLeader } = window.AnnotationRenderer.create({ ctx, viewport, withCanvasState, annotationDisplayColor, annotationLeaderAnchor, appearanceLineDash, formatValue: formatDisplayNumber, effectiveAnnotationStyle, showLeaderEndHandle: element => !element.blockProjection && element.sketchId === activeSketchId() && (canvasSelection.annotations.includes(element) || canvasHover.current.annotation === element) });
   const annotationCommand = window.AnnotationCommand.create({
     currentScope: workspace.current, getPending: () => pendingCommand, setPending: value => { pendingCommand = value; },
     lastPointer: () => lastPointerWorld, viewScale: () => viewport.scale, promptText: (...args) => window.prompt(...args),
@@ -3818,7 +3818,7 @@
   }
 
   const annotationDrag = window.AnnotationDrag.create({
-    annotationById, canvasSelection, setHint, updateUI, draw, recordHistory,
+    annotationById, canvasSelection, setHint, updateUI, draw, recordHistory, annotationLeaderDisplayGeometry,
     beginPointer: (id) => { canvas.setPointerCapture(id); canvas.classList.add("is-dragging"); },
     endPointer: (id) => { canvas.classList.remove("is-dragging"); try { canvas.releasePointerCapture(id); } catch (_) {} },
   });
@@ -9468,6 +9468,7 @@
       annotationSnapshot() {
         const leaderElement = [...model.annotations].reverse().find((element) => element.type === "leader");
         const textElement = [...model.annotations].reverse().find((element) => element.type === "text");
+        const leaderGeometry = leaderElement ? annotationLeaderDisplayGeometry(leaderElement) : null;
         const canvasRect = canvas.getBoundingClientRect();
         const toViewport = (point) => {
           const screen = worldToCanvasScreen(point);
@@ -9477,7 +9478,9 @@
           leader: leaderElement
             ? {
                 world: { ...leaderElement.end },
-                viewport: toViewport(leaderElement.end),
+                viewport: toViewport(leaderGeometry.end),
+                displayEnd: { ...leaderGeometry.end },
+                bodyViewport: toViewport({ x: (leaderGeometry.elbow.x + leaderGeometry.end.x) / 2, y: leaderGeometry.end.y }),
                 end: { ...leaderElement.end },
                 elbow: leaderElement.elbow ? { ...leaderElement.elbow } : null,
               }

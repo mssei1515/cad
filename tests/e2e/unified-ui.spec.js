@@ -555,14 +555,14 @@ test("document annotations can be dragged on the unified canvas", async ({ page 
   expect(afterText.text.world.y - beforeText.text.world.y).toBeCloseTo(70 / displayZoom.viewportScale, 5);
 
   const beforeLeader = afterText;
-  await page.mouse.move(beforeLeader.leader.viewport.x, beforeLeader.leader.viewport.y);
+  await page.mouse.move(beforeLeader.leader.bodyViewport.x, beforeLeader.leader.bodyViewport.y);
   await page.mouse.down();
-  await page.mouse.move(beforeLeader.leader.viewport.x + 70, beforeLeader.leader.viewport.y - 35, { steps: 8 });
+  await page.mouse.move(beforeLeader.leader.bodyViewport.x + 70, beforeLeader.leader.bodyViewport.y - 35, { steps: 8 });
   await page.mouse.up();
 
   const afterLeader = await page.evaluate(() => window.__jot2dTest.annotationSnapshot());
-  expect(afterLeader.leader.world.x - beforeLeader.leader.world.x).toBeCloseTo(70 / displayZoom.viewportScale, 5);
-  expect(afterLeader.leader.world.y - beforeLeader.leader.world.y).toBeCloseTo(-35 / displayZoom.viewportScale, 5);
+  expect(afterLeader.leader.displayEnd.x - beforeLeader.leader.displayEnd.x).toBeCloseTo(70 / displayZoom.viewportScale, 5);
+  expect(afterLeader.leader.displayEnd.y - beforeLeader.leader.displayEnd.y).toBeCloseTo(-35 / displayZoom.viewportScale, 5);
   await expect(page.locator("#propertiesPanel .property-heading")).toHaveText("引出線");
   await expect(page.locator("#propertiesPanel .property-section h3").first()).toHaveText("基本情報");
   const annotationRows = await page.locator("#propertiesPanel .property-section").first().locator(".property-row").allTextContents();
@@ -571,8 +571,8 @@ test("document annotations can be dragged on the unified canvas", async ({ page 
 
   await page.keyboard.press("Control+Z");
   const afterUndo = await page.evaluate(() => window.__jot2dTest.annotationSnapshot());
-  expect(afterUndo.leader.world.x).toBeCloseTo(beforeLeader.leader.world.x, 5);
-  expect(afterUndo.leader.world.y).toBeCloseTo(beforeLeader.leader.world.y, 5);
+  expect(afterUndo.leader.displayEnd.x).toBeCloseTo(beforeLeader.leader.displayEnd.x, 5);
+  expect(afterUndo.leader.displayEnd.y).toBeCloseTo(beforeLeader.leader.displayEnd.y, 5);
 
   for (let i = 0; i < 12; i += 1) {
     const state = await page.evaluate(() => window.__jot2dTest.historyState());
@@ -580,8 +580,8 @@ test("document annotations can be dragged on the unified canvas", async ({ page 
     await page.keyboard.press("Control+Y");
   }
   const afterRedo = await page.evaluate(() => window.__jot2dTest.annotationSnapshot());
-  expect(afterRedo.leader.world.x).toBeCloseTo(afterLeader.leader.world.x, 5);
-  expect(afterRedo.leader.world.y).toBeCloseTo(afterLeader.leader.world.y, 5);
+  expect(afterRedo.leader.displayEnd.x).toBeCloseTo(afterLeader.leader.displayEnd.x, 5);
+  expect(afterRedo.leader.displayEnd.y).toBeCloseTo(afterLeader.leader.displayEnd.y, 5);
 });
 
 test("annotation Properties edit complete appearance in approximate millimeters", async ({ page }) => {

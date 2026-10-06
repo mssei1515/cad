@@ -104,7 +104,7 @@ test("shelf text gap follows text bounds, rotation, multiline labels and display
     element.style.rotation = rotation;
     element.text = "First\nSecond";
     const layout = renderer.annotationTextLayout(element);
-    assert.ok(Math.abs(element.end.y - layout.bounds.y2 - layout.strokeHalfWidth - layout.gapWorld) < 1e-8);
+    assert.ok(Math.abs(renderer.annotationLeaderDisplayGeometry(element).end.y - layout.bounds.y2 - layout.strokeHalfWidth - layout.gapWorld) < 1e-8);
     assert.ok(Math.abs(layout.gapWorld * h.viewport.scale - 2 * sandbox.window.Appearance.CSS_PX_PER_MM) < 1e-8);
   }
   element.style.fixedDisplaySize = false; element.style.displayScale = 1.5;
@@ -118,7 +118,7 @@ test("shelf text gap follows text bounds, rotation, multiline labels and display
 });
 
 test("shelf display preserves signed span and rotated block direction, and legacy baseline is 100 percent", () => {
-  const h = create(), px = sandbox.window.Appearance.CSS_PX_PER_MM;
+  const h = create({ x: 0, y: 0 }), px = sandbox.window.Appearance.CSS_PX_PER_MM;
   for (const vector of [{ x: -20, y: 0 }, { x: 0, y: 20 }]) {
     const element = { type: "leader", start: { x: 0, y: 0 }, elbow: { x: 30, y: 40 },
       end: { x: 30 + vector.x, y: 40 + vector.y }, x: 35, y: 20, shelfReferenceScale: 3, style: {} };
@@ -129,7 +129,9 @@ test("shelf display preserves signed span and rotated block direction, and legac
     const b = h.renderer.annotationLeaderDisplayGeometry(element);
     assert.equal((b.end.x - b.elbow.x) * 6, (a.end.x - a.elbow.x) * 3);
     assert.equal((b.end.y - b.elbow.y) * 6, (a.end.y - a.elbow.y) * 3);
-    assert.equal(b.x - element.x, (b.end.x - element.end.x) / 2);
+    assert.equal(b.x * 6, a.x * 3);
+    assert.equal(b.elbow.x * 6, a.elbow.x * 3);
+    assert.equal(b.elbow.y * 6, a.elbow.y * 3);
     assert.equal(JSON.stringify(element), before);
     element.style = { fixedDisplaySize: false, displayScale: 6 / px };
     const locked = h.renderer.annotationLeaderDisplayGeometry(element);
@@ -139,5 +141,25 @@ test("shelf display preserves signed span and rotated block direction, and legac
     delete element.shelfReferenceScale; element.style = {};
     h.viewport.scale = px;
     assert.equal(JSON.stringify(h.renderer.annotationLeaderDisplayGeometry(element).end), JSON.stringify(element.end));
+  }
+});
+
+test("leader elbow, shelf and legacy label follow anchor displacement without rewriting saved coordinates", () => {
+  const anchor = { x: 10, y: 20 }, h = create(anchor);
+  const element = { type: "leader", start: { x: 10, y: 20 }, elbow: { x: 30, y: 40 }, end: { x: 60, y: 40 },
+    x: 45, y: 35, shelfReferenceScale: 2, style: {} };
+  const saved = JSON.stringify(element);
+  for (const scale of [1, 2, 5]) {
+    h.viewport.scale = scale;
+    anchor.x = 10; anchor.y = 20;
+    const before = h.renderer.annotationLeaderDisplayGeometry(element);
+    anchor.x = 37; anchor.y = -5;
+    const after = h.renderer.annotationLeaderDisplayGeometry(element);
+    assert.equal((after.elbow.x - anchor.x) * scale, 40); assert.equal((after.elbow.y - anchor.y) * scale, 40);
+    for (const key of ["elbow", "end"]) {
+      assert.equal(after[key].x - before[key].x, 27); assert.equal(after[key].y - before[key].y, -25);
+    }
+    assert.equal(after.x - before.x, 27); assert.equal(after.y - before.y, -25);
+    assert.equal(JSON.stringify(element), saved);
   }
 });

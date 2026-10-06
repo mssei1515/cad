@@ -11,7 +11,7 @@
     return `${style.prefix}${value}${style.suffix}`;
   }
 
-  function create({ ctx, viewport, withCanvasState, annotationDisplayColor, annotationLeaderAnchor, appearanceLineDash, formatValue, effectiveAnnotationStyle = element => normalizeAnnotationStyle(element.style) }) {
+  function create({ ctx, viewport, withCanvasState, annotationDisplayColor, annotationLeaderAnchor, appearanceLineDash, formatValue, showLeaderEndHandle = () => false, effectiveAnnotationStyle = element => normalizeAnnotationStyle(element.style) }) {
     const drawTerminator = window.TerminatorRenderer.create({ ctx, viewport }).draw;
     function annotationFontFamilyStack(fontFamily) {
       if (fontFamily === "serif") return 'Georgia, "Times New Roman", serif';
@@ -27,15 +27,21 @@
       return annotationTextScreenHeight(style) / viewport.scale;
     }
 
-    // Coordinates remain authoritative; only the displayed shelf span follows annotation sizing.
-    function annotationLeaderDisplayGeometry(element, start = element.start) {
+    // Coordinates remain authoritative; resolve the entire annotation around its attached arrow.
+    function annotationLeaderDisplayGeometry(element, start = annotationLeaderAnchor?.(element) || element?.start) {
       if (!element?.end || !element.elbow && !start) return null;
-      const elbow = element.elbow || { x: (start.x + element.end.x) / 2, y: element.end.y };
+      const storedStart = element.start || start;
+      const storedElbow = element.elbow || { x: (storedStart.x + element.end.x) / 2, y: element.end.y };
       const reference = Number(element.shelfReferenceScale);
       const referenceScale = Number.isFinite(reference) && reference > 0 ? reference : ANNOTATION_SCREEN_PX_PER_MM;
       const factor = referenceScale / viewport.scale * window.Appearance.annotationDisplayFactor(effectiveAnnotationStyle(element), viewport.scale);
-      const end = { x: elbow.x + (element.end.x - elbow.x) * factor, y: elbow.y + (element.end.y - elbow.y) * factor };
-      return { elbow, end, x: (Number(element.x) || 0) + (end.x - element.end.x) / 2, y: (Number(element.y) || 0) + (end.y - element.end.y) / 2 };
+      const origin = start || storedStart || { x: 0, y: 0 };
+      const base = storedStart || origin;
+      const displayPoint = point => ({ x: origin.x + (point.x - base.x) * factor, y: origin.y + (point.y - base.y) * factor });
+      const elbow = displayPoint(storedElbow), end = displayPoint(element.end);
+      const text = displayPoint({ x: Number(element.x) || 0, y: Number(element.y) || 0 });
+      return { elbow, end, shelfScale: factor,
+        x: text.x, y: text.y };
     }
 
     // New leaders locate text from the shelf, preserving its gap after font, zoom and rotation changes.
@@ -111,6 +117,15 @@
         const len = Math.max(1e-9, hypot2(dx, dy));
         drawTerminator(start, { x: dx / len, y: dy / len }, style);
         if (element.parameterEnabled || element.text) drawAnnotationText(element, color);
+        if (!preview && showLeaderEndHandle(element)) {
+          const size = 8 / viewport.scale;
+          ctx.lineWidth = 1 / viewport.scale;
+          ctx.fillStyle = "#ffffff";
+          ctx.beginPath();
+          ctx.rect(end.x - size / 2, end.y - size / 2, size, size);
+          ctx.fill();
+          ctx.stroke();
+        }
       });
     }
     return Object.freeze({ annotationLeaderDisplayGeometry, annotationTextLayout, annotationTextWorldHeight, drawAnnotationText, drawAnnotationLeader });
