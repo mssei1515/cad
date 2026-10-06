@@ -5,6 +5,39 @@ test.beforeEach(async ({ page }) => {
   await page.waitForFunction(() => Boolean(window.__jot2dTest));
 });
 
+test("mirror inherits each source appearance, follows edits and preserves sparse overrides on reload", async ({ page }) => {
+  const data = await page.evaluate(() => window.__jot2dTest.resetForDerivedInstanceTest().serialized);
+  data.sketches.find((sketch) => sketch.id === "S2").appearance = { color: "#112233", lineType: "solid", lineWidth: 2 };
+  data.lines.find((line) => line.id === "L1").appearance = { color: "#cc3344", lineType: "dashed", lineWidth: 4 };
+  data.arcs[0].appearance = { color: "#3355cc", lineType: "dotted", lineWidth: 3, visible: false };
+  const mirror = data.geometryInstances.find((item) => item.id === "MI1");
+  mirror.sources.push({ kind: "line", path: ["L3"] });
+  data.lines.find((line) => line.id === "L3").appearance = { endpointMarkers: false, endpointOverhang: false };
+  data.geometryInstances.find((item) => item.id === "SPI1").appearanceOverride = { color: "#559933", lineType: "dashdotdot" };
+  data.geometryInstances.push({ ...mirror, id: "MI2", sources: [{ kind: "line", path: ["MI1", "L1"] }], appearanceOverride: { lineWidth: 6 } });
+  expect(await page.evaluate((value) => window.__jot2dTest.loadDocumentFixtureForDragTest(value, "mirror-appearance.jot2d", { resetLoadedHistory: true }), data)).toMatchObject({ success: true });
+  const appearance = (kind, id) => page.evaluate(([k, i]) => window.__jot2dTest.appearanceStateForTest(k, i).effective, [kind, id]);
+  expect(await appearance("line", "MI1@L1")).toMatchObject({ color: "#cc3344", lineType: "dashed", lineWidth: 4 });
+  expect(await appearance("arc", `MI1@${data.arcs[0].id}`)).toMatchObject({ color: "#3355cc", lineType: "dotted", lineWidth: 3, visible: false });
+  expect(await appearance("line", "MI1@L3")).toMatchObject({ lineType: "dashdot", endpointMarkers: false, endpointOverhang: false });
+  expect(await appearance("circle", "MI1@SPI1@C1")).toMatchObject({ color: "#559933", lineType: "dashdotdot" });
+  expect(await appearance("line", "MI2@MI1@L1")).toMatchObject({ color: "#cc3344", lineType: "dashed", lineWidth: 6 });
+  expect(await appearance("line", "PI1@1@L1")).toMatchObject({ color: "#112233", lineType: "solid", lineWidth: 2 });
+
+  await page.evaluate(() => window.__jot2dTest.selectGeometryIdsForTest({ lines: ["L1"] }));
+  await page.locator('#propertiesPanel [data-appearance-key="lineType"]').selectOption("dotted");
+  expect(await appearance("line", "MI1@L1")).toMatchObject({ lineType: "dotted", lineWidth: 4 });
+  expect(await appearance("line", "MI2@MI1@L1")).toMatchObject({ lineType: "dotted", lineWidth: 6 });
+  await page.click("#undoBtn");
+  expect(await appearance("line", "MI1@L1")).toMatchObject({ lineType: "dashed" });
+  await page.click("#redoBtn");
+  const saved = await page.evaluate(() => window.__jot2dTest.serializedModelForTest());
+  expect(saved.geometryInstances.find((item) => item.id === "MI1").appearanceOverride).toEqual({});
+  expect(saved.geometryInstances.find((item) => item.id === "MI2").appearanceOverride).toEqual({ lineWidth: 6 });
+  await page.evaluate((value) => window.__jot2dTest.loadModelForDerivedInstanceTest(value), saved);
+  expect(await appearance("line", "MI2@MI1@L1")).toMatchObject({ color: "#cc3344", lineType: "dotted", lineWidth: 6 });
+});
+
 test("projection, mirror, and linear pattern are persisted as derived instances", async ({ page }) => {
   await page.evaluate(() => window.__jot2dTest.resetForDerivedInstanceTest());
   await page.locator('.sketch-item[data-id="S2"] .sketchExpandBtn').click();

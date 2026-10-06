@@ -1344,6 +1344,11 @@
   function effectiveAppearanceForElement(item) {
     const cached = geometryReads.readAppearance(item);
     if (cached) return cached;
+    if (item?.derivedProjection && item.derivedInstance?.type === "mirror" && item.sourceElement) {
+      const result = { ...effectiveAppearanceForElement(item.sourceElement), ...normalizeAppearance(item.derivedInstance.appearanceOverride) };
+      geometryReads.cacheAppearance(item, result);
+      return result;
+    }
     const construction = (item instanceof Line || item instanceof Circle || item instanceof Arc || item instanceof Spline) && item.construction;
     const outerSketch = sketchById(elementSketchId(item));
     const definitionSketch = item?.blockProjection && !item?.derivedProjection
