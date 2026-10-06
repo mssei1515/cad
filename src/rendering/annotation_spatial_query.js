@@ -86,17 +86,6 @@
       return pointInExpandedBox(localX, localY, textHitBox(window.AnnotationRenderer.displayText(element || {}, formatDisplayNumber), geometry?.x, geometry?.y, fontSize, style.textAlign), padding);
     }
 
-    function boxFromPoints(points) {
-      const valid = points.filter((p) => p && Number.isFinite(p.x) && Number.isFinite(p.y));
-      if (valid.length === 0) return null;
-      return {
-        left: Math.min(...valid.map((p) => p.x)),
-        right: Math.max(...valid.map((p) => p.x)),
-        top: Math.min(...valid.map((p) => p.y)),
-        bottom: Math.max(...valid.map((p) => p.y)),
-      };
-    }
-
     function hitAnnotationElement(x, y, { activeOnly = true } = {}) {
       const threshold = 12 / viewportScale();
       const annotations = allAnnotations();
@@ -106,16 +95,12 @@
         if (activeOnly && element.sketchId !== activeSketchId()) continue;
         if (element.type === "leader") {
           const geometry = annotationLeaderDisplayGeometry(element) || element;
-          const text = annotationTextLayout(element) || geometry;
           const start = annotationLeaderAnchor(element);
           if (!start || !element.end) continue;
           if (element.elbow && hypot2(x - geometry.end.x, y - geometry.end.y) <= 8 / viewportScale()) return { element, type: "leader", part: "end" };
           const elbow = geometry.elbow || { x: (start.x + geometry.end.x) / 2, y: geometry.end.y };
-          if (distancePointToSegmentPoints(x, y, start, elbow) <= threshold * 2.2 || distancePointToSegmentPoints(x, y, elbow, geometry.end) <= threshold * 2.2) return { element, type: "leader", part: "line" };
+          if (distancePointToSegmentPoints(x, y, start, elbow) <= threshold || distancePointToSegmentPoints(x, y, elbow, geometry.end) <= threshold) return { element, type: "leader", part: "line" };
           if (pointInAnnotationTextBox(x, y, element, threshold)) return { element, type: "leader", part: "label" };
-          if (hypot2(x - text.x, y - text.y) <= threshold * 3) return { element, type: "leader", part: "label" };
-          const leaderBox = boxFromPoints([start, elbow, geometry.end, { x: text.x, y: text.y }]);
-          if (leaderBox && pointInExpandedBox(x, y, leaderBox, threshold * 2.2)) return { element, type: "leader", part: "line" };
         } else if (element.type === "text") {
           if (pointInAnnotationTextBox(x, y, element, threshold)) return { element, type: "text", part: "label" };
         }
@@ -128,7 +113,6 @@
       const threshold = 12 / viewportScale();
       if (element.type === "leader") {
         const geometry = annotationLeaderDisplayGeometry(element) || element;
-        const text = annotationTextLayout(element) || geometry;
         const start = annotationLeaderAnchor(element);
         if (!start || !element.end) return null;
         const endDistance = hypot2(pointer.x - geometry.end.x, pointer.y - geometry.end.y);
@@ -137,14 +121,8 @@
         const firstDistance = distancePointToSegmentPoints(pointer.x, pointer.y, start, elbow);
         const secondDistance = distancePointToSegmentPoints(pointer.x, pointer.y, elbow, geometry.end);
         const lineDistance = Math.min(firstDistance, secondDistance);
-        if (lineDistance <= threshold * 2.2) return { element, type: "leader", part: "line", distance: lineDistance };
+        if (lineDistance <= threshold) return { element, type: "leader", part: "line", distance: lineDistance };
         if (pointInAnnotationTextBox(pointer.x, pointer.y, element, threshold)) return { element, type: "leader", part: "label", distance: 0 };
-        const labelDistance = hypot2(pointer.x - text.x, pointer.y - text.y);
-        if (labelDistance <= threshold * 3) return { element, type: "leader", part: "label", distance: labelDistance };
-        const leaderBox = boxFromPoints([start, elbow, geometry.end, { x: text.x, y: text.y }]);
-        if (leaderBox && pointInExpandedBox(pointer.x, pointer.y, leaderBox, threshold * 2.2)) {
-          return { element, type: "leader", part: "line", distance: Math.min(lineDistance, labelDistance) };
-        }
         return null;
       }
       if (element.type === "text" && pointInAnnotationTextBox(pointer.x, pointer.y, element, threshold)) {

@@ -92,3 +92,23 @@ test('leader endpoint takes priority over shelf body with a screen-sized hit rad
   assert.equal(f.query.hitAnnotationElement(63, 20).part, 'line');
   assert.equal(f.query.hitAnnotationElement(60, 20).part, 'end');
 });
+
+
+test('leader pointer queries reject empty bounding-box space and wide label halos at every zoom', () => {
+  for (const scale of [0.5, 2, 8]) {
+    const f = fixture(); f.zoom(scale);
+    const leader = text({ type: 'leader', x: 200, y: 100,
+      start: { x: 0, y: 0 }, elbow: { x: 100, y: 100 }, end: { x: 200, y: 100 } });
+    f.list([leader]);
+    for (const point of [{ x: 150, y: 20 }, { x: 150, y: 100 + 13 / scale }, { x: 200 - 30 / scale, y: 100 + 18 / scale }]) {
+      assert.equal(f.query.hitAnnotationElement(point.x, point.y), null);
+      assert.equal(f.query.canvasContextAnnotationHit(leader, point), null);
+    }
+    for (const point of [{ x: 50, y: 50 }, { x: 150, y: 100 + 11 / scale }, { x: 205, y: 100 }]) {
+      assert.ok(f.query.hitAnnotationElement(point.x, point.y));
+      assert.ok(f.query.canvasContextAnnotationHit(leader, point));
+    }
+    const bounds = f.query.annotationBounds(leader);
+    assert.equal(bounds.x1, 0); assert.equal(bounds.y1, 0);
+  }
+});
