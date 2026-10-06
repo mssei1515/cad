@@ -6066,7 +6066,19 @@
     return window.DimensionQueries.hasDirectRadiusDimension(model.constraints, primitive);
   }
 
+  const dimensionLineGroup = window.DimensionLineGroup.create({ placement: dimensionPlacement, Line });
+  function selectedDimensionLineGroup(reference) {
+    const constraints = canvasSelection.dimensionConstraints;
+    if (constraints.some(constraint => !model.constraints.includes(constraint) || !isActiveSketchConstraint(constraint)
+      || !isVisibleSketchId(constraintSketchId(constraint)))) return null;
+    const entries = constraints.map(constraint => ({ constraint, target: targetFromConstraint(constraint) }));
+    if (entries.some(({ constraint, target }) => !target || !isVisibleValue(effectiveDimensionAppearance(
+      constraint.dimension || defaultDimensionForTarget(target), constraintSketchId(constraint)).visible))) return null;
+    return dimensionLineGroup.group(entries, reference);
+  }
+
   const dimensionDrag = window.DimensionDrag.create({
+    selectedLineGroup: selectedDimensionLineGroup, translateLineGroup: dimensionLineGroup.translate,
     dimensionAnchor, migrateAngleDimensionLabelPlacement, canvasSelection, angleDimensionLabelOffsets,
     viewScale: () => viewport.scale, isDimensionConstraintCommandActive, setHint, clearSnap, hypot2,
     beginPointer: (id) => { canvas.classList.add("is-dragging"); canvas.setPointerCapture(id); },
@@ -6381,6 +6393,7 @@
       }
       if (target.kind === "dimension") {
         specific.push({ action: "dimension-edit", label: applicationText("値 / 数式を編集", "Edit Value / Expression"), disabled: isReadOnlyDimension(target.item) });
+        specific.push({ action: "dimension-align", label: applicationText("寸法線を揃える", "Align Dimension Lines"), disabled: !selectedDimensionLineGroup(target.item) });
       }
       if (target.kind === "block") {
         specific.push({ action: "block-edit", label: applicationText("ブロック定義を編集", "Edit Block Definition"), disabled: Boolean(blockDefinitionScopeError(target.item.definitionId) || blockDefinitionEditError(target.item.definitionId)) });
@@ -6493,6 +6506,15 @@
     else if (action === "block-edit" && target?.item) enterBlockDefinitionEdit(target.item.definitionId);
     else if (action === "block-rotation-toggle" && target?.item) setBlockInstanceRotationLocked(target.item, !target.item.rotationLocked);
     else if (action === "dimension-edit" && target?.hit) startDimensionEditInput(target.hit);
+    else if (action === "dimension-align" && target?.item) {
+      const group = selectedDimensionLineGroup(target.item);
+      if (group && dimensionLineGroup.align(group)) {
+        updateGeometrySelectionUI();
+        draw();
+        recordHistory(applicationText("寸法線整列", "Align dimension lines"));
+        setHint(applicationText("基準の寸法線に揃えました", "Aligned to the reference dimension line."));
+      }
+    }
     else if (action === "sketch-move") sketchMoveCommand.start();
     else if (action === "hatch-repair" && target?.item) startHatchBoundaryRepair(target.item);
     else if (["drawing-front", "drawing-forward", "drawing-backward", "drawing-back"].includes(action)) reorderSelectedDrawingObjects(action);
@@ -6512,6 +6534,7 @@
     annotationCommand, canvasSelection, clearSelection, annotationDrag, updateUI, draw,
   });
   const constraintCommandInput = window.ConstraintCommandInput.create({
+    canDragDimensionGroup: hit => Boolean(selectedDimensionLineGroup(hit.constraint)),
     getPending: () => pendingCommand, getPendingConstraint: () => pendingConstraintCommand, canvasSelection, canvasHover, isDimensionConstraintCommandActive,
     beginDimensionDrag, retargetDistancePlaceWithOperand, startDistanceValueInput, constraintTargetHint,
     handleConstraintOperandClick, setHint, updateGeometrySelectionUI, draw,

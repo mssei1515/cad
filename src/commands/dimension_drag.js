@@ -5,15 +5,17 @@
     viewScale, isDimensionConstraintCommandActive, beginPointer, endPointer, setHint, clearSnap, hypot2,
     angleDimensionFromLabelPoint, dimensionWithLabelAt, dimensionFromAnchor, setAngleDimensionLabelOffsets,
     syncAngleConstraintFromDimension, draw, continueCommandClick, updateUI, updateGeometrySelectionUI,
-    syncDimensionValueInput, recordHistory }) {
+    syncDimensionValueInput, recordHistory, selectedLineGroup = () => null, translateLineGroup }) {
     let dimensionDragSession = null;
     function beginDimensionDrag(e, hit, pointer, commandHits = null) {
       const anchor = dimensionAnchor(hit.target, hit.dimension);
       migrateAngleDimensionLabelPlacement(hit.target, hit.dimension);
-      canvasSelection.set("dimensionConstraint", hit.constraint);
+      const lineGroup = !isDimensionConstraintCommandActive() ? selectedLineGroup(hit.constraint) : null;
+      if (!lineGroup) canvasSelection.set("dimensionConstraint", hit.constraint);
       canvasSelection.set("constraint", null);
       dimensionDragSession = {
         pointerId: e.pointerId,
+        lineGroup,
         constraint: hit.constraint,
         target: hit.target,
         part: hit.part || "line",
@@ -43,6 +45,11 @@
       clearSnap();
       const dx = p.x - dimensionDragSession.startPointer.x;
       const dy = p.y - dimensionDragSession.startPointer.y;
+      if (dimensionDragSession.lineGroup) {
+        translateLineGroup(dimensionDragSession.lineGroup, { x: dx, y: dy });
+        draw();
+        return;
+      }
       if (dimensionDragSession.startedDuringDimensionCommand && !dimensionDragSession.moved) {
         if (hypot2(dx, dy) * viewScale() <= 3) return;
         dimensionDragSession.moved = true;
