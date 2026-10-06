@@ -7,7 +7,7 @@
     geometryInstanceBundle, activeSketchId, targetFromConstraint, dimensionDisplayState,
     constraintSketchId, isReadOnlyDimension, measuredDimensionValue, angleDegrees,
     sketchById, isRootSketch, effectiveAppearanceForSketch, effectiveConstructionAppearanceForSketch,
-    effectiveDimensionAppearanceForSketch, blockDefinitionSketchRows }) {
+    effectiveDimensionAppearanceForSketch, effectiveLeaderAppearanceForSketch = () => ({}), blockDefinitionSketchRows }) {
     function read(target) {
       const item = target.item;
       if (target.kind === "multiple") return {};
@@ -48,7 +48,7 @@
       }
       const parent = sketchById(item.parentSketchId), root = isRootSketch(item);
       return { parent, root, active: item.id === activeSketchId(), ...(root ? {} : { effective: effectiveAppearanceForSketch(item),
-        constructionAppearance: effectiveConstructionAppearanceForSketch(item), dimensionAppearance: effectiveDimensionAppearanceForSketch(item) }) };
+        constructionAppearance: effectiveConstructionAppearanceForSketch(item), dimensionAppearance: effectiveDimensionAppearanceForSketch(item), leaderAppearance: effectiveLeaderAppearanceForSketch(item) }) };
     }
     return Object.freeze({ read });
   }

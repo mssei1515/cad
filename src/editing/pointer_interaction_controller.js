@@ -23,7 +23,8 @@
       const { hitP, hitL, hitC, hitArcEnd, hitA, hitS, hatchHit, referenceImageHit, hitD, hitBlockHandle, hitBlock, hitDerivedGeometry, hitDerivedInstance, directGeometryHit, sketchIdentity, inactiveHit, blankAnnotationHit, annotationTargetHit } = hits;
       canvasHover.update({ sketchIdentity });
 
-      if (hitD && press.insertDimensionParameter(e, hitD)) return;
+      const referenceDimension = hitD || press.referenceDimensionAt?.(p);
+      if (referenceDimension && press.insertDimensionParameter(e, referenceDimension)) return;
 
       if (getMode() === "hatch" || getMode() === "hatch-repair") {
         e.preventDefault();

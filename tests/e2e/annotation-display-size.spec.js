@@ -41,9 +41,10 @@ for (const type of ["text", "leader", "dimension"]) {
   test(`${type}: unchecked defaults, checked capture, editable baseline, history and persistence`, async ({ page }) => {
     await loadFixture(page);
     await select(page, type);
-    const fixed = page.locator('[data-annotation-display="modelRelativeSize"]');
-    const scale = page.locator('[data-annotation-display="displayScale"]');
-    await expect(page.locator('label[for="annotationModelRelativeSize"]')).toHaveText("図形に対する注記の大きさを固定");
+    const fixed = page.locator(type === "leader" ? '[data-leader-style="fixedDisplaySize"]' : '[data-annotation-display="modelRelativeSize"]');
+    const scale = page.locator(type === "leader" ? '[data-leader-style="displayScale"]' : '[data-annotation-display="displayScale"]');
+    await expect(page.locator(type === "leader" ? 'label[for="annotationFixedDisplaySize"]' : 'label[for="annotationModelRelativeSize"]')).toHaveText(type === "text" ? "図形に対する注記の大きさを固定" : "サイズロック");
+    if (type === "dimension") await expect(fixed.locator('..')).toHaveAttribute('title', '図形に対する注記の大きさを固定');
     await expect(fixed).not.toBeChecked();
     await expect(scale).toHaveCount(0);
     const before = await state(page, type);
@@ -77,8 +78,8 @@ for (const type of ["text", "leader", "dimension"]) {
       expect(saved.constraints[i].target).toEqual(before.data.constraints[i].target);
     }
     for (let i = 0; i < saved.annotations.length; i++) {
-      const { style: ignoredBefore, ...coordinatesBefore } = before.data.annotations[i];
-      const { style: ignoredAfter, ...coordinatesAfter } = saved.annotations[i];
+      const { style: ignoredBefore, appearanceInheritance: ignoredMarkerBefore, ...coordinatesBefore } = before.data.annotations[i];
+      const { style: ignoredAfter, appearanceInheritance: ignoredMarkerAfter, ...coordinatesAfter } = saved.annotations[i];
       expect(coordinatesAfter).toEqual(coordinatesBefore);
     }
     expect(await page.evaluate(data => window.__jot2dTest.loadDocumentFixtureForDragTest(data, "roundtrip.jot2d"), saved)).toEqual(expect.objectContaining({ success: true }));

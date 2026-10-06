@@ -40,7 +40,11 @@
           draw();
           return true;
         }
-        clearSelection();
+        const selected = canvasSelection.annotations || [];
+        const preserveTextSelection = blankAnnotationHit.type === "text" && selected.includes(blankAnnotationHit.element)
+          && selected.length > 1 && selected.every(item => item.type === "text")
+          && canvasSelection.selectedElementCount() === selected.length;
+        if (!preserveTextSelection) clearSelection();
         annotationDrag.begin(e, blankAnnotationHit, p);
         updateUI({ refreshAnalysis: false });
         draw();

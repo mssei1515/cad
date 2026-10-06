@@ -71,6 +71,22 @@ test('explicit sketch and inspection targets are independent of the active sketc
   f.selection.inspection = null; assert.equal(f.query.selectedPropertiesTarget().active, true);
 });
 
+test('bulk size lock captures only newly locked baselines and commits once', () => {
+ const f=fixture(),a={value:100,dimension:{offset:30,display:{}}},b={value:160,dimension:{offset:40,display:{fixedDisplaySize:false,displayScale:2}}};
+ const target={kind:'multiple',items:[{kind:'constraint',item:a},{kind:'constraint',item:b}]};
+ assert.equal(f.query.multiplePropertyValue(target,'modelRelativeSize'),w.PropertySelection.mixedValue);
+ assert.equal(f.query.multiplePropertySupports({kind:'geometry',item:new Line()},'modelRelativeSize'),false);
+ const viewport={scale:appearance.CSS_PX_PER_MM*1.5};let commits=0;
+ const command=w.BulkPropertyCommand.create({viewport,multiplePropertySupports:f.query.multiplePropertySupports,draw(){},recordHistory(){commits++;},updateUI(){}});
+ command.apply(target,'modelRelativeSize',true);
+ assert.equal(a.dimension.display.displayScale,1.5);assert.equal(b.dimension.display.displayScale,2);
+ assert.equal(f.query.multiplePropertyValue(target,'modelRelativeSize'),true);assert.equal(commits,1);
+ viewport.scale*=2;command.apply(target,'modelRelativeSize',false);
+ for(const item of [a,b]) {assert.equal(item.dimension.display.fixedDisplaySize,true);assert.equal(Object.hasOwn(item.dimension.display,'displayScale'),false);}
+ assert.equal(f.query.multiplePropertyValue(target,'modelRelativeSize'),false);assert.equal(commits,2);
+ assert.equal(a.value,100);assert.equal(b.value,160);assert.equal(a.dimension.offset,30);assert.equal(b.dimension.offset,40);
+});
+
 test('bulk dimension appearance preserves independent measurement and placement', () => {
  const f=fixture(),a={value:100,dimension:{offset:30,display:{}}},b={value:160,dimension:{offset:40,display:{}}};
  f.selection.dimensionConstraints=[a,b]; const target=f.query.selectedPropertiesTarget(); assert.equal(target.kind,'multiple'); assert.equal(target.count,2);

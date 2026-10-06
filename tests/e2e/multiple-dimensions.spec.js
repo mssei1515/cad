@@ -9,6 +9,50 @@ async function fixture(page) {
  });
 }
 async function state(page){return page.evaluate(()=>window.__jot2dTest.multipleDimensionSelectionForTest());}
+
+test('bulk dimension size lock handles mixed state, zoom, undo and persistence',async({page})=>{
+ await fixture(page);
+ const positions=await page.evaluate(()=>{
+  const t=window.__jot2dTest,data=t.serializedModelForTest();
+  data.constraints[0].dimension.display={fixedDisplaySize:false,displayScale:2};
+  const result=t.loadDocumentFixtureForDragTest(data,'mixed-lock.jot2d');if(!result.success)throw Error(JSON.stringify(result));
+  t.focusWorldForTest({x:60,y:15},96/25.4*1.5);
+  return [t.dimensionClientPositionForTest(0),t.dimensionClientPositionForTest(1)];
+ });
+ await page.mouse.click(positions[0].x,positions[0].y);
+ await page.keyboard.down('Control');await page.mouse.click(positions[1].x,positions[1].y);await page.keyboard.up('Control');
+ const checkbox=page.locator('[data-bulk-property="modelRelativeSize"]');
+ await expect(page.locator('label[for="dimensionBulkSizeLock"]')).toHaveText('サイズロック');
+ await expect(checkbox.locator('..')).toHaveAttribute('title','図形に対する注記の大きさを固定');
+ await expect(checkbox).toHaveJSProperty('indeterminate',true);
+ const before=await page.evaluate(()=>window.__jot2dTest.serializedModelForTest());
+ await checkbox.check();
+ const locked=await page.evaluate(()=>window.__jot2dTest.serializedModelForTest());
+ expect(locked.constraints[0].dimension.display.displayScale).toBe(2);
+ expect(locked.constraints[1].dimension.display.displayScale).toBeCloseTo(1.5);
+ await expect(checkbox).toBeChecked();await expect(checkbox).toHaveJSProperty('indeterminate',false);
+ await page.click('#undoBtn');expect((await page.evaluate(()=>window.__jot2dTest.serializedModelForTest())).constraints).toEqual(before.constraints);
+ await page.click('#redoBtn');expect((await page.evaluate(()=>window.__jot2dTest.serializedModelForTest())).constraints).toEqual(locked.constraints);
+ await page.evaluate(()=>window.__jot2dTest.focusWorldForTest({x:60,y:10},96/25.4*2));
+ // Restoring history clears selection; select the restored dimensions again.
+ const restoredPositions=await page.evaluate(()=>[0,1].map(i=>window.__jot2dTest.dimensionClientPositionForTest(i)));
+ await page.mouse.click(restoredPositions[0].x,restoredPositions[0].y);
+ await page.keyboard.down('Control');await page.mouse.click(restoredPositions[1].x,restoredPositions[1].y);await page.keyboard.up('Control');
+ expect((await state(page)).dimensions).toEqual([0,1]);
+ await checkbox.uncheck();
+ const unlocked=await page.evaluate(()=>window.__jot2dTest.serializedModelForTest());
+ for(let i=0;i<2;i++){
+  expect(unlocked.constraints[i].dimension.display.fixedDisplaySize).toBe(true);
+  expect(unlocked.constraints[i].dimension.display.displayScale).toBeUndefined();
+  const {display:ignored,...placement}=unlocked.constraints[i].dimension;
+  const {display:ignoredBefore,...original}=before.constraints[i].dimension;
+  expect(placement).toEqual(original);expect(unlocked.constraints[i].value).toBe(before.constraints[i].value);
+ }
+ await page.click('#undoBtn');expect((await page.evaluate(()=>window.__jot2dTest.serializedModelForTest())).constraints).toEqual(locked.constraints);
+ await page.click('#redoBtn');
+ expect((await page.evaluate(data=>window.__jot2dTest.loadDocumentFixtureForDragTest(data,'saved-lock.jot2d'),unlocked)).success).toBe(true);
+ expect((await page.evaluate(()=>window.__jot2dTest.serializedModelForTest())).constraints).toEqual(unlocked.constraints);
+});
 test('canvas additive dimensions edit common appearance, reload and delete with undo',async({page})=>{
  const positions=await fixture(page);
  await page.mouse.click(positions[0].x,positions[0].y);

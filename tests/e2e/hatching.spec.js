@@ -47,7 +47,7 @@ test("creates associative hatching, exposes Tree and Properties, and persists th
   expect(state.direct[0].appearance).toEqual({ visible: true, patternType: "solid", angle: 45, spacing: 3, color: "#64748b", lineWidth: 1, opacity: 0.5 });
   await expect(page.locator('#propertiesPanel [data-hatch-property="patternType"]')).toHaveValue("solid");
   await expect(page.locator('#propertiesPanel [data-hatch-property="opacity"]')).toHaveValue("50");
-  expect(state.serialized.version).toBe(22);
+  expect(state.serialized.version).toBe(23);
   expect(state.serialized.hatches).toHaveLength(1);
   expect(state.propertiesText).toContain("塗りつぶし");
   expect(state.propertiesText).toContain("境界状態");

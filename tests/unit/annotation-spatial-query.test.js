@@ -32,14 +32,14 @@ test('rotated text hit uses local coordinates and current viewport scale', () =>
   assert.equal(f.query.pointInAnnotationTextBox(9, 10, label), false);
 });
 
-test('bounds include rotated text and saved leader points without resolving anchors', () => {
+test('bounds include rotated text and resolved leader anchors', () => {
   const f = fixture(), label = text(), flat = f.query.annotationBounds(label);
   const rotated = f.query.annotationBounds({ ...label, rotation: Math.PI / 2 });
   assert.ok(Math.abs((flat.x2-flat.x1)-(rotated.y2-rotated.y1)) < 1e-8);
   f.anchor({ x: -500, y: -500 });
   const bounds = f.query.annotationBounds({ ...label, type: 'leader', start: { x: -100, y: -80 }, end: { x: 200, y: 100 } });
-  assert.equal(bounds.x1, -100); assert.equal(bounds.x2, 200);
-  assert.equal(bounds.y1, -80); assert.equal(bounds.y2, 100);
+  assert.equal(bounds.x1, -500); assert.equal(bounds.x2, 200);
+  assert.equal(bounds.y1, -500); assert.equal(bounds.y2, 100);
   assert.equal(f.query.annotationBounds(null), null);
 });
 
@@ -81,4 +81,34 @@ test('show hidden restores annotation hit and context queries without changing i
   assert.ok(f.query.canvasContextAnnotationHit(label, { x: 2, y: 0 }));
   assert.equal(label.visible, false);
   f.showHidden(false); assert.equal(f.query.hitAnnotationElement(2, 0), null);
+});
+
+test('leader endpoint takes priority over shelf body with a screen-sized hit radius', () => {
+  const f = fixture(), leader = text({ type: 'leader', start: { x: 0, y: 0 }, elbow: { x: 20, y: 20 }, end: { x: 60, y: 20 } });
+  f.list([leader]);
+  assert.equal(f.query.hitAnnotationElement(63, 20).part, 'end');
+  assert.equal(f.query.canvasContextAnnotationHit(leader, { x: 63, y: 20 }).part, 'end');
+  f.zoom(4);
+  assert.equal(f.query.hitAnnotationElement(63, 20).part, 'line');
+  assert.equal(f.query.hitAnnotationElement(60, 20).part, 'end');
+});
+
+
+test('leader pointer queries reject empty bounding-box space and wide label halos at every zoom', () => {
+  for (const scale of [0.5, 2, 8]) {
+    const f = fixture(); f.zoom(scale);
+    const leader = text({ type: 'leader', x: 200, y: 100,
+      start: { x: 0, y: 0 }, elbow: { x: 100, y: 100 }, end: { x: 200, y: 100 } });
+    f.list([leader]);
+    for (const point of [{ x: 150, y: 20 }, { x: 150, y: 100 + 13 / scale }, { x: 200 - 30 / scale, y: 100 + 18 / scale }]) {
+      assert.equal(f.query.hitAnnotationElement(point.x, point.y), null);
+      assert.equal(f.query.canvasContextAnnotationHit(leader, point), null);
+    }
+    for (const point of [{ x: 50, y: 50 }, { x: 150, y: 100 + 11 / scale }, { x: 205, y: 100 }]) {
+      assert.ok(f.query.hitAnnotationElement(point.x, point.y));
+      assert.ok(f.query.canvasContextAnnotationHit(leader, point));
+    }
+    const bounds = f.query.annotationBounds(leader);
+    assert.equal(bounds.x1, 0); assert.equal(bounds.y1, 0);
+  }
 });

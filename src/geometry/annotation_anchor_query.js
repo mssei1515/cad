@@ -20,26 +20,28 @@
 
     function annotationLeaderTargetFromItem(item, pointer = null) {
       if (!item || elementSketchId(item) !== activeSketchId()) return null;
-      if (item instanceof Point) return { item, anchor: { x: item.x, y: item.y }, geometryRef: geometryRefForItem(item) };
+      if (item instanceof Point) return { item, anchor: { x: item.x, y: item.y }, attachment: { kind: "point" }, geometryRef: geometryRefForItem(item) };
       if (item instanceof Line) {
         const anchor = pointer ? projectPointToSegmentPoint(pointer, item) : { x: (item.p1.x + item.p2.x) / 2, y: (item.p1.y + item.p2.y) / 2 };
-        return { item, anchor, geometryRef: geometryRefForItem(item) };
+        const dx = item.p2.x - item.p1.x, dy = item.p2.y - item.p1.y;
+        const t = ((anchor.x - item.p1.x) * dx + (anchor.y - item.p1.y) * dy) / (dx * dx + dy * dy || 1);
+        return { item, anchor, attachment: { kind: "line", t }, geometryRef: geometryRefForItem(item) };
       }
       if (item instanceof Circle) {
         const base = pointer || { x: item.center.x + item.radius(), y: item.center.y };
         const angle = Math.atan2(base.y - item.center.y, base.x - item.center.x);
-        return { item, anchor: { x: item.center.x + Math.cos(angle) * item.radius(), y: item.center.y + Math.sin(angle) * item.radius() }, geometryRef: geometryRefForItem(item) };
+        return { item, anchor: { x: item.center.x + Math.cos(angle) * item.radius(), y: item.center.y + Math.sin(angle) * item.radius() }, attachment: { kind: "circle", angle: angle - (item.blockProjectionRotation || 0) }, geometryRef: geometryRefForItem(item) };
       }
       if (item instanceof Arc) {
         const base = pointer || arcEndpointPoint(item, "start");
         const angle = clampAngleToArcSweep(item, Math.atan2(base.y - item.center.y, base.x - item.center.x));
-        return { item, anchor: { x: item.center.x + Math.cos(angle) * item.radius(), y: item.center.y + Math.sin(angle) * item.radius() }, geometryRef: geometryRefForItem(item) };
+        return { item, anchor: { x: item.center.x + Math.cos(angle) * item.radius(), y: item.center.y + Math.sin(angle) * item.radius() }, attachment: { kind: "arc", t: arcFraction(item, angle) }, geometryRef: geometryRefForItem(item) };
       }
       if (item instanceof Spline) {
         const base = pointer || window.SplineGeometry.evaluate(item.curve(), 0.5);
         const closest = base ? window.SplineGeometry.closestPoint(item.curve(), base, { samplesPerSpan: 28 }) : null;
         const anchor = closest?.point || window.SplineGeometry.evaluate(item.curve(), 0.5);
-        return anchor ? { item, anchor, geometryRef: geometryRefForItem(item) } : null;
+        return anchor ? { item, anchor, attachment: { kind: "spline", t: closest?.t ?? 0.5 }, geometryRef: geometryRefForItem(item) } : null;
       }
       return null;
     }
@@ -47,7 +49,23 @@
     function annotationLeaderAnchor(element) {
       const item = resolveGeometryRef(element?.geometryRef);
       if (!item) return element?.start || null;
+      const attachment = element.attachment;
+      if (attachment?.kind === "point" && item instanceof Point) return { x: item.x, y: item.y };
+      if (attachment?.kind === "line" && item instanceof Line && Number.isFinite(attachment.t)) return { x: item.p1.x + (item.p2.x - item.p1.x) * attachment.t, y: item.p1.y + (item.p2.y - item.p1.y) * attachment.t };
+      if (attachment?.kind === "spline" && item instanceof Spline && Number.isFinite(attachment.t)) return window.SplineGeometry.evaluate(item.curve(), attachment.t);
+      if (attachment?.kind === "circle" && item instanceof Circle || attachment?.kind === "arc" && item instanceof Arc) {
+        const angle = attachment.kind === "arc" ? item.startAngle + (item.endAngle - item.startAngle) * attachment.t : attachment.angle + (item.blockProjectionRotation || 0);
+        if (Number.isFinite(angle)) return { x: item.center.x + item.radius() * Math.cos(angle), y: item.center.y + item.radius() * Math.sin(angle) };
+      }
       return annotationLeaderTargetFromItem(item, element.start || null)?.anchor || element.start || null;
+    }
+
+    function arcFraction(arc, angle) {
+      const sweep = arc.endAngle - arc.startAngle;
+      if (Math.abs(sweep) < 1e-12) return 0;
+      const tau = Math.PI * 2;
+      const delta = sweep >= 0 ? ((angle - arc.startAngle) % tau + tau) % tau : -((arc.startAngle - angle) % tau + tau) % tau;
+      return Math.max(0, Math.min(1, delta / sweep));
     }
 
     function clampAngleToArcSweep(arc, angle) {

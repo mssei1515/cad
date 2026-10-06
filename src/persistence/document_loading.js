@@ -74,7 +74,9 @@
         activeSketchId: normalizeSketchId(data.activeSketchId),
         defaultAppearance: normalizeAppearance(data.defaultAppearance, { partial: false }),
         defaultConstructionAppearance: normalizeConstructionAppearance(data.defaultConstructionAppearance, { partial: false }),
-        defaultDimensionAppearance: normalizeLoadedDimensionAppearance(data.defaultDimensionAppearance, { partial: false }),
+        defaultDimensionAppearance: window.Appearance.dimensionDefaults(normalizeLoadedDimensionAppearance(data.defaultDimensionAppearance, { partial: false })),
+        defaultTerminatorAppearance: window.Appearance.normalizeTerminator(data.defaultTerminatorAppearance || normalizeLoadedDimensionAppearance(data.defaultDimensionAppearance, { partial: false }), { partial: false }),
+        defaultLeaderAppearance: window.Appearance.leaderDefaults(data.defaultLeaderAppearance),
         annotations: loadedAnnotations, hatches: loadedHatches, referenceImages: loadedReferenceImages,
         nextHatchIndex: Math.max(nextSeq(loadedHatches, "H"), Number(data.nextHatchIndex) || 1),
         blockDefinitions: loadedBlockDefinitions, blockInstances: loadedBlockInstances,
@@ -91,7 +93,7 @@
       scope.sketches.length = 0;
       scope.sketches.push(...candidate.sketches);
       scope.activeSketchId = candidate.activeSketchId;
-      for (const key of ["defaultAppearance", "defaultConstructionAppearance", "defaultDimensionAppearance"]) document[key] = candidate[key];
+      for (const key of ["defaultAppearance", "defaultConstructionAppearance", "defaultDimensionAppearance", "defaultTerminatorAppearance", "defaultLeaderAppearance"]) document[key] = candidate[key];
       for (const key of ["annotations", "hatches", "referenceImages", "nextHatchIndex"]) scope[key] = candidate[key];
       document.blockDefinitions = candidate.blockDefinitions;
       scope.blockInstances = candidate.blockInstances;

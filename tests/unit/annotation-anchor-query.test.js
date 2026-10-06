@@ -90,3 +90,32 @@ test('annotation target query ignores orphan endpoints except projected points a
   assert.equal(f.query.hitAnnotationTarget(0, 0), null); f.data.points = [point('Q', 0, 0)];
   assert.equal(f.query.hitAnnotationTarget(0, 0).item.id, 'Q');
 });
+
+test('relative line attachment follows translation and stretch, while legacy retains nearest-point projection', () => {
+  const f = fixture(), a = point('a', 0, 0), b = point('b', 100, 0), line = scoped(new Line('L1', a, b));
+  const target = f.query.annotationLeaderTargetFromItem(line, { x: 25, y: 0 });
+  const leader = { start: target.anchor, geometryRef: target.geometryRef, attachment: target.attachment };
+  f.resolve(line); a.x = 100; b.x = 300; a.y = b.y = 20;
+  near(f.query.annotationLeaderAnchor(leader).x, 150); near(f.query.annotationLeaderAnchor(leader).y, 20);
+  near(f.query.annotationLeaderAnchor({ ...leader, attachment: undefined }).x, 100);
+  f.activate('S2'); near(f.query.annotationLeaderAnchor(leader).x, 150);
+});
+
+test('circle, signed arc and spline attachments preserve their curve parameter after deformation', () => {
+  const f = fixture(), c = point('c', 0, 0), circle = scoped(new Circle('C1', c, 10));
+  const target = f.query.annotationLeaderTargetFromItem(circle, { x: 0, y: 10 });
+  f.resolve(circle); c.x = 30; c.y = 40; circle.radiusValue = 20;
+  const leader = { start: target.anchor, attachment: target.attachment };
+  near(f.query.annotationLeaderAnchor(leader).x, 30); near(f.query.annotationLeaderAnchor(leader).y, 60);
+  const arc = scoped(new Arc('A1', c, 20, 0, -Math.PI / 2));
+  const arcTarget = f.query.annotationLeaderTargetFromItem(arc, { x: 40, y: 30 });
+  near(arcTarget.attachment.t, 0.5); f.resolve(arc);
+  arc.endAngle = -Math.PI;
+  const anchor = f.query.annotationLeaderAnchor({ start: arcTarget.anchor, attachment: arcTarget.attachment });
+  near(anchor.x, 30); near(anchor.y, 20);
+  const spline = scoped(new Spline('SP1', [point('P1', 0, 0), point('P2', 10, 0), point('P3', 20, 0)]));
+  const st = f.query.annotationLeaderTargetFromItem(spline, { x: 7, y: 0 });
+  spline.fitPoints.forEach(p => { p.x += 100; p.y += 25; }); f.resolve(spline);
+  const sa = f.query.annotationLeaderAnchor({ start: st.anchor, attachment: st.attachment });
+  near(sa.x, 107); near(sa.y, 25);
+});

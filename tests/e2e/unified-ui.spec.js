@@ -358,7 +358,7 @@ test("document parameters, quoted dimension formulas, rename propagation, and cu
   expect(state.valid).toBe(true);
   expect(state.parameters.map((item) => item.name)).toEqual(["span", "margin"]);
   expect(state.dimensions.find((item) => !item.readOnly).expression).toContain("span");
-  expect(state.serialized.version).toBe(22);
+  expect(state.serialized.version).toBe(23);
   expect(state.serialized.constraints.every((constraint) => !constraint.dimension || constraint.parameterName)).toBe(true);
 });
 
@@ -495,7 +495,7 @@ test("v16 formulas migrate to quoted references and current unquoted references 
   const migrated = await page.evaluate((data) => window.__jot2dTest.loadDocumentFixtureForDragTest(data, "legacy-v16-formulas.jot2d"), legacy);
   expect(migrated.success).toBe(true);
   const migratedState = await page.evaluate(() => window.__jot2dTest.serializedModelForTest());
-  expect(migratedState.version).toBe(22);
+  expect(migratedState.version).toBe(23);
   expect(migratedState.parameters[0].expression).toMatch(/^"d\d+" \* 2$/);
   expect(migratedState.constraints.find((constraint) => constraint.expression?.includes("width"))?.expression).toBe('"width" / 2 + "margin"');
 
@@ -555,14 +555,14 @@ test("document annotations can be dragged on the unified canvas", async ({ page 
   expect(afterText.text.world.y - beforeText.text.world.y).toBeCloseTo(70 / displayZoom.viewportScale, 5);
 
   const beforeLeader = afterText;
-  await page.mouse.move(beforeLeader.leader.viewport.x, beforeLeader.leader.viewport.y);
+  await page.mouse.move(beforeLeader.leader.bodyViewport.x, beforeLeader.leader.bodyViewport.y);
   await page.mouse.down();
-  await page.mouse.move(beforeLeader.leader.viewport.x + 70, beforeLeader.leader.viewport.y - 35, { steps: 8 });
+  await page.mouse.move(beforeLeader.leader.bodyViewport.x + 70, beforeLeader.leader.bodyViewport.y - 35, { steps: 8 });
   await page.mouse.up();
 
   const afterLeader = await page.evaluate(() => window.__jot2dTest.annotationSnapshot());
-  expect(afterLeader.leader.world.x - beforeLeader.leader.world.x).toBeCloseTo(70 / displayZoom.viewportScale, 5);
-  expect(afterLeader.leader.world.y - beforeLeader.leader.world.y).toBeCloseTo(-35 / displayZoom.viewportScale, 5);
+  expect(afterLeader.leader.displayEnd.x - beforeLeader.leader.displayEnd.x).toBeCloseTo(70 / displayZoom.viewportScale, 5);
+  expect(afterLeader.leader.displayEnd.y - beforeLeader.leader.displayEnd.y).toBeCloseTo(-35 / displayZoom.viewportScale, 5);
   await expect(page.locator("#propertiesPanel .property-heading")).toHaveText("引出線");
   await expect(page.locator("#propertiesPanel .property-section h3").first()).toHaveText("基本情報");
   const annotationRows = await page.locator("#propertiesPanel .property-section").first().locator(".property-row").allTextContents();
@@ -571,8 +571,8 @@ test("document annotations can be dragged on the unified canvas", async ({ page 
 
   await page.keyboard.press("Control+Z");
   const afterUndo = await page.evaluate(() => window.__jot2dTest.annotationSnapshot());
-  expect(afterUndo.leader.world.x).toBeCloseTo(beforeLeader.leader.world.x, 5);
-  expect(afterUndo.leader.world.y).toBeCloseTo(beforeLeader.leader.world.y, 5);
+  expect(afterUndo.leader.displayEnd.x).toBeCloseTo(beforeLeader.leader.displayEnd.x, 5);
+  expect(afterUndo.leader.displayEnd.y).toBeCloseTo(beforeLeader.leader.displayEnd.y, 5);
 
   for (let i = 0; i < 12; i += 1) {
     const state = await page.evaluate(() => window.__jot2dTest.historyState());
@@ -580,8 +580,8 @@ test("document annotations can be dragged on the unified canvas", async ({ page 
     await page.keyboard.press("Control+Y");
   }
   const afterRedo = await page.evaluate(() => window.__jot2dTest.annotationSnapshot());
-  expect(afterRedo.leader.world.x).toBeCloseTo(afterLeader.leader.world.x, 5);
-  expect(afterRedo.leader.world.y).toBeCloseTo(afterLeader.leader.world.y, 5);
+  expect(afterRedo.leader.displayEnd.x).toBeCloseTo(afterLeader.leader.displayEnd.x, 5);
+  expect(afterRedo.leader.displayEnd.y).toBeCloseTo(afterLeader.leader.displayEnd.y, 5);
 });
 
 test("annotation Properties edit complete appearance in approximate millimeters", async ({ page }) => {
@@ -636,16 +636,16 @@ test("annotation Properties edit complete appearance in approximate millimeters"
   const leaderRow = page.locator('.sketch-object-row[data-object-kind="annotation"][data-id="AN2"]');
   await leaderRow.click();
   await expect(page.locator("#propertiesPanel .property-section > h3")).toHaveText(["基本情報", "内容", "引出線の外観"]);
-  await expect(page.locator('[data-annotation-style="lineWidth"]')).toBeVisible();
-  await expect(page.locator('[data-annotation-style="terminatorType"]')).toBeVisible();
+  await expect(page.locator('[data-leader-style="lineWidth"]')).toBeVisible();
+  await expect(page.locator('[data-leader-style="terminatorType"]')).toBeVisible();
   await page.locator('[data-property="annotation-text"]').fill("Styled leader");
   await page.locator('[data-property="annotation-text"]').press("Tab");
-  await page.locator('[data-annotation-style="lineWidth"]').fill("2.4");
-  await page.locator('[data-annotation-style="lineWidth"]').press("Tab");
-  await page.locator('[data-annotation-style="lineType"]').selectOption("dashdot");
-  await page.locator('[data-annotation-style="terminatorType"]').selectOption("dot");
-  await page.locator('[data-annotation-style="terminatorSize"]').fill("4.2");
-  await page.locator('[data-annotation-style="terminatorSize"]').press("Tab");
+  await page.locator('[data-leader-style="lineWidth"]').fill("2.4");
+  await page.locator('[data-leader-style="lineWidth"]').press("Tab");
+  await page.locator('[data-leader-style="lineType"]').selectOption("dashdot");
+  await page.locator('[data-leader-style="terminatorType"]').selectOption("dot");
+  await page.locator('[data-leader-style="terminatorSize"]').fill("4.2");
+  await page.locator('[data-leader-style="terminatorSize"]').press("Tab");
 
   const leader = await page.evaluate(() => window.__jot2dTest.annotationAppearanceStateForTest("leader", 2));
   expect(leader.style).toEqual(expect.objectContaining({ lineWidth: 2.4, lineType: "dashdot", terminatorType: "dot", terminatorSize: 4.2 }));
@@ -658,7 +658,7 @@ test("annotation Properties edit complete appearance in approximate millimeters"
   await expect(page.locator("#propertiesPanel .property-section > h3")).toHaveText(["Basic Information", "Content", "Leader Appearance"]);
   await expect(page.locator("#propertiesPanel")).toContainText("Text height");
   await expect(page.locator("#propertiesPanel")).toContainText("Line type");
-  await expect(page.locator("#propertiesPanel")).toContainText("Terminator size");
+  await expect(page.locator("#propertiesPanel")).toContainText("Terminators");
 });
 
 test("multiple selection edits only changed common properties and supports dash-dot-dot lines", async ({ page }) => {
@@ -819,7 +819,7 @@ test("v10 annotations migrate by target or active sketch and invalid v11 ownersh
   const legacy = annotationSketchFixture(10);
   expect(await page.evaluate((data) => window.__jot2dTest.loadDocumentFixtureForDragTest(data, "annotation-v10.json"), legacy)).toEqual(expect.objectContaining({ success: true }));
   const migrated = await page.evaluate(() => window.__jot2dTest.serializedModelForTest());
-  expect(migrated.version).toBe(22);
+  expect(migrated.version).toBe(23);
   expect(migrated.annotations.find((annotation) => annotation.id === "AN1").sketchId).toBe("S2");
   expect(migrated.annotations.find((annotation) => annotation.id === "AN2").sketchId).toBe("S1");
 
@@ -1517,7 +1517,7 @@ test("Jot2D files open, overwrite, save as, and cancel without errors", async ({
   expect(state.suggestedName).toBe("無題.jot2d");
   expect(state.excludeAcceptAllOption).toBe(true);
   expect(state.accept).toEqual({ "application/json": [".jot2d"] });
-  expect(state.saved.version).toBe(22);
+  expect(state.saved.version).toBe(23);
   expect(state.saved.documentName).toBe("無題");
   expect(state.fileState).toEqual({ hasHandle: true, handleName: "first-save.jot2d" });
 
@@ -1638,7 +1638,7 @@ test("file URL Help menu reads the generated Git commit file", async ({ page }) 
     "src/geometry/hatch_region.js", "src/geometry/offset_chain.js", "src/solver/constraint_solver.js", "src/constraints/references.js", "src/constraints/operand_hit_query.js", "src/geometry/objects.js", "src/geometry/annotation_anchor_query.js", "src/geometry/hatch_query.js", "src/geometry/instance_projection.js",
     "src/parameters/parameter_engine.js", "src/editing/edit_history.js", "src/editing/history_controller.js", "src/editing/workspace.js", "src/editing/block_editor_session.js", "src/editing/block_editing_queries.js", "src/editing/block_selection_query.js", "src/editing/sketch_move.js", "src/editing/block_definition_editing.js", "src/editing/block_history_snapshot.js", "src/editing/sketch_context.js", "src/editing/selection.js", "src/editing/canvas_hover.js", "src/editing/point_usage.js", "src/commands/construction_command.js", "src/editing/draw_operation_lifecycle.js", "src/editing/drawing_preview.js", "src/commands/point_command.js", "src/editing/annotation_command_input.js", "src/editing/constraint_command_input.js", "src/editing/instance_command_input.js", "src/editing/drawing_command_input.js", "src/editing/blank_canvas_gesture.js", "src/editing/canvas_selection_interaction.js", "src/editing/canvas_press_query.js", "src/editing/pointer_interaction_controller.js", "src/editing/pointer_hover.js", "src/editing/rectangle_selection_query.js", "src/editing/geometry_drag_plan.js", "src/editing/geometry_drag_editing.js", "src/solver/geometry_drag_solver.js", "src/solver/solve_scope_query.js", "src/solver/sketch_solving.js", "src/constraints/reference_constraint_state.js", "src/constraints/constraint_redundancy.js", "src/constraints/constraint_analysis.js", "src/constraints/sketch_projection_queries.js", "src/editing/sketch_projection_editing.js", "src/editing/selection_highlight.js", "src/editing/geometry_ids.js", "src/editing/spline_draft.js", "src/editing/offset_selection.js", "src/geometry/offset_geometry.js", "src/editing/offset_construction.js", "src/commands/offset_command.js", "src/rendering/interaction_overlay_renderer.js", "src/rendering/placement_preview_renderer.js", "src/rendering/authoring_preview_renderer.js", "src/rendering/offset_preview_renderer.js", "src/editing/transient_authoring.js", "src/editing/geometry_creation.js", "src/editing/first_dimension_scaling.js", "src/editing/checkpoint.js", "src/editing/trim_query.js", "src/editing/trim_editing.js", "src/geometry/fillet_geometry.js", "src/editing/fillet_construction.js", "src/geometry/centerline_geometry.js", "src/editing/centerline_construction.js", "src/commands/centerline_command.js", "src/editing/drawing_snap.js", "src/editing/snap_constraints.js", "src/ui/document_status_view.js", "src/ui/runtime_version_view.js", "src/ui/application_menus.js", "src/ui/tool_flyouts.js", "src/ui/canvas_context_menu.js", "src/ui/canvas_context_presentation.js", "src/parameters/dialog_draft.js", "src/parameters/application.js", "src/parameters/stabilization.js", "src/parameters/block_propagation.js", "src/constraints/rebinding.js", "src/persistence/block_ownership.js", "src/ui/expression_input_view.js", "src/ui/parameter_dialog_view.js", "src/ui/parameter_dialog_controller.js", "src/editing/slot_construction.js", "src/commands/slot_command.js", "src/commands/rectangle_command.js", "src/commands/line_command.js", "src/commands/fillet_command.js", "src/commands/dimension_value_command.js", "src/commands/spline_edit_command.js", "src/commands/spline_command.js", "src/editing/circular_construction.js", "src/commands/circular_commands.js", "src/diagnostics/interaction_profiler.js", "src/ui/keyboard_interaction_controller.js", "src/ui/constraint_status_view.js", "src/ui/canvas_input_binding.js", "src/ui/canvas_navigation.js", "src/ui/pointer_move_scheduler.js", "src/ui/command_cursor.js", "src/ui/command_panel.js", "src/ui/derived_command_panel.js", "src/ui/sketch_tree_view.js", "src/ui/sketch_tree_objects.js", "src/ui/sketch_tree_controller.js", "src/ui/appearance_controls.js", "src/ui/property_rows.js", "src/ui/properties_view.js", "src/ui/block_view.js", "src/ui/appearance_palette.js", "src/editing/property_selection.js", "src/editing/appearance_editing.js", "src/commands/bulk_property_command.js", "src/commands/geometry_property_command.js", "src/commands/appearance_property_command.js", "src/commands/element_property_command.js", "src/commands/block_placement_command.js", "src/commands/instance_source_command.js", "src/commands/sketch_projection_command.js", "src/commands/geometry_instance_command.js", "src/commands/instance_transform_command.js", "src/commands/block_configuration_command.js", "src/commands/block_completion_command.js", "src/commands/block_definition_command.js", "src/commands/sketch_command.js", "src/commands/sketch_move_command.js", "src/commands/reference_image_interaction.js", "src/commands/annotation_drag.js", "src/commands/geometry_drag.js", "src/commands/dimension_drag.js", "src/commands/selection_rectangle.js", "src/commands/sketch_deletion_command.js", "src/ui/properties_controller.js", "src/ui/properties_content.js", "src/editing/property_presentation.js", "src/ui/dimension_input_view.js", "src/ui/dimension_input_controller.js", "src/ui/choice_dialog.js", "src/ui/application_settings.js",
     "src/document/appearance.js", "src/commands/hatch_command.js", "src/commands/annotation_command.js", "src/document/drawing_order.js", "src/editing/canvas_context_query.js", "src/editing/geometry_hit_query.js", "src/document/sketch_hierarchy.js",
-    "src/document/annotations.js", "src/document/hatches.js", "src/document/reference_images.js", "src/persistence/reference_image_import.js", "src/commands/reference_image_command.js", "src/document/block_catalog.js", "src/geometry/block_projection.js", "src/geometry/read_model.js", "src/geometry/bounds.js", "src/geometry/block_layout.js", "src/geometry/reference_image_geometry.js", "src/rendering/drawing_bounds.js", "src/rendering/viewport.js", "src/rendering/canvas_surface.js", "src/rendering/dimension_metrics.js", "src/rendering/dimension_placement.js", "src/rendering/dimension_layout.js", "src/rendering/dimension_renderer.js", "src/rendering/canvas_theme_colors.js", "src/rendering/geometry_presentation.js", "src/rendering/geometry_renderer.js", "src/rendering/hatch_renderer.js", "src/rendering/drawing_stack.js", "src/rendering/annotation_renderer.js", "src/rendering/annotation_spatial_query.js", "src/rendering/reference_image_renderer.js",
+    "src/document/annotations.js", "src/document/hatches.js", "src/document/reference_images.js", "src/persistence/reference_image_import.js", "src/commands/reference_image_command.js", "src/document/block_catalog.js", "src/geometry/block_projection.js", "src/geometry/read_model.js", "src/geometry/bounds.js", "src/geometry/block_layout.js", "src/geometry/reference_image_geometry.js", "src/rendering/drawing_bounds.js", "src/rendering/viewport.js", "src/rendering/canvas_surface.js", "src/rendering/dimension_metrics.js", "src/rendering/dimension_placement.js", "src/rendering/dimension_layout.js", "src/rendering/dimension_renderer.js", "src/rendering/canvas_theme_colors.js", "src/rendering/geometry_presentation.js", "src/rendering/geometry_renderer.js", "src/rendering/hatch_renderer.js", "src/rendering/drawing_stack.js", "src/rendering/terminator_renderer.js", "src/rendering/annotation_renderer.js", "src/rendering/annotation_spatial_query.js", "src/rendering/reference_image_renderer.js",
     "src/persistence/constraint_codec_registry.js", "src/persistence/constraints.js", "src/constraints/dimension_queries.js", "src/constraints/candidates.js", "src/parameters/namespace.js", "src/persistence/geometry.js", "src/persistence/geometry_instances.js", "src/persistence/block_definitions.js", "src/persistence/block_instances.js", "src/persistence/block_connections.js", "src/persistence/document_geometry.js",
     "src/persistence/document_files.js", "src/commands/document_file_command.js", "src/persistence/document_snapshot.js", "src/persistence/document_sequences.js", "src/persistence/document_loading.js", "src/document/state.js",
   ];
@@ -2160,11 +2160,11 @@ test("application language defaults to Japanese and persists the full UI selecti
   await page.locator("#applicationSettingsDialog button[value=cancel]").first().click();
   await openDocumentSettings(page);
   await expect(page.locator("#documentSettingsDialog")).toContainText("Document Settings");
-  await expect(page.locator("#documentSettingsDialog h3")).toHaveText(["General Appearance", "Construction Appearance", "Dimension Appearance"]);
+  await expect(page.locator("#documentSettingsDialog h3")).toHaveText(["General Appearance", "Construction Appearance", "Shared terminators (dimensions / leaders)", "Leader Appearance", "Dimension Appearance"]);
   await expect(page.locator('#documentAppearanceFields select[data-appearance-key="visible"] option')).toHaveText(["Visible", "Hidden"]);
   await expect(page.locator('#documentConstructionAppearanceFields select[data-appearance-key="lineType"] option')).toHaveText(["Solid", "Dashed", "Dash-dot", "Dash-dot-dot", "Dotted"]);
   await expect(page.locator('#documentDimensionAppearanceFields select[data-dimension-display="visible"] option')).toHaveText(["Visible", "Hidden"]);
-  await expect(page.locator("#documentDimensionAppearanceFields .dimension-appearance-group-title")).toHaveText(["Extension lines", "Terminators", "Dimension text"]);
+  await expect(page.locator("#documentDimensionAppearanceFields .dimension-appearance-group-title")).toHaveText(["Extension lines", "Dimension text"]);
   expect(await page.locator("#documentDimensionAppearanceFields .dimension-appearance-group").first().evaluate((element) => {
     const style = getComputedStyle(element);
     return {
@@ -2184,12 +2184,12 @@ test("application language defaults to Japanese and persists the full UI selecti
     borderRadius: "0px",
   });
   await expect(page.locator('#documentDimensionAppearanceFields [data-dimension-display="extensionLines"]')).toHaveCount(0);
-  await expect(page.locator("#documentDimensionAppearanceFields .property-input-unit")).toHaveText(["mm", "mm", "mm", "°", "mm", "mm"]);
+  await expect(page.locator("#documentDimensionAppearanceFields .property-input-unit")).toHaveText(["mm", "mm", "mm", "mm"]);
   await expect(page.locator('label[for="documentDimensionExtensionLineOvershoot"]')).toHaveText("Overshoot");
   await expect(page.locator('label[for="documentDimensionExtensionLineOriginGap"]')).toHaveText("Origin gap");
-  await expect(page.locator('label[for="documentDimensionTerminatorType"]')).toHaveText("Type");
-  await expect(page.locator('label[for="documentDimensionTerminatorSize"]')).toHaveText("Size");
-  await expect(page.locator('label[for="documentDimensionArrowheadAngle"]')).toHaveText("Opening angle");
+  await expect(page.locator('label[for="documentTerminatorTerminatorType"]')).toHaveText("Type");
+  await expect(page.locator('label[for="documentTerminatorTerminatorSize"]')).toHaveText("Size");
+  await expect(page.locator('label[for="documentTerminatorArrowheadAngle"]')).toHaveText("Opening angle");
   await expect(page.locator('label[for="documentDimensionDimensionTextHeight"]')).toHaveText("Height");
   await expect(page.locator('label[for="documentDimensionDimensionTextGap"]')).toHaveText("Gap from dimension line");
   await page.locator("#documentSettingsDialog button[value=cancel]").first().click();
@@ -2304,20 +2304,18 @@ test("Document owns appearance defaults while only non-root Sketches expose comp
     precision: null,
     prefix: "",
     suffix: "",
-    terminatorType: "arrow",
     extensionLineOvershoot: 1.5,
     extensionLineOriginGap: 1.5,
-    terminatorSize: 4,
-    arrowheadAngle: 30,
     dimensionTextHeight: 5,
     dimensionTextGap: 0,
   });
+  expect(initialDefaults.defaultTerminatorAppearance).toEqual({ terminatorType: "arrow", terminatorSize: 4, arrowheadAngle: 30 });
   await selectSketch(page, "ROOT");
   await expect(page.locator("#propertiesPanel .property-section h3")).toHaveText(["基本情報"]);
   await expect(page.locator("#propertiesPanel [data-appearance-key], #propertiesPanel [data-dimension-display]")).toHaveCount(0);
 
   await openDocumentSettings(page);
-  await expect(page.locator("#documentSettingsDialog h3")).toHaveText(["一般外観", "補助線外観", "寸法外観"]);
+  await expect(page.locator("#documentSettingsDialog h3")).toHaveText(["一般外観", "補助線外観", "共通端末記号（寸法・引出線）", "引出線の外観", "寸法外観"]);
   await page.locator("#documentPropertyColor").fill("#2563eb");
   await page.locator("#documentPropertyColor").blur();
   await page.locator("#documentConstructionPropertyColor").fill("#dc2626");
@@ -2342,8 +2340,8 @@ test("Document owns appearance defaults while only non-root Sketches expose comp
   await selectSketch(page, "S1");
   await expect(page.locator("#propertiesPanel .property-section h3")).toContainText(["基本情報", "一般外観", "補助線外観", "寸法外観"]);
   const appearanceSections = page.locator("#propertiesPanel .property-section-collapsible");
-  await expect(appearanceSections).toHaveCount(3);
-  for (const key of ["general", "construction", "dimension"]) {
+  await expect(appearanceSections).toHaveCount(4);
+  for (const key of ["general", "construction", "dimension", "leader"]) {
     const section = page.locator(`[data-property-section="${key}"]`);
     await expect(section).not.toHaveAttribute("open", "");
     await expect(section.locator(".property-section-content")).toBeHidden();
@@ -2352,7 +2350,7 @@ test("Document owns appearance defaults while only non-root Sketches expose comp
   }
   await selectSketch(page, "ROOT");
   await selectSketch(page, "S1");
-  for (const key of ["general", "construction", "dimension"]) await expect(page.locator(`[data-property-section="${key}"]`)).toHaveAttribute("open", "");
+  for (const key of ["general", "construction", "dimension", "leader"]) await expect(page.locator(`[data-property-section="${key}"]`)).toHaveAttribute("open", "");
   const compactMetrics = await page.evaluate(() => ({
     panelPadding: getComputedStyle(document.querySelector("#propertiesPanel")).paddingTop,
     sectionPadding: getComputedStyle(document.querySelector("#propertiesPanel .property-section")).paddingTop,
@@ -2908,18 +2906,18 @@ test("Constraint dimensions expose defining geometry and inheritable appearance 
 
   await openDocumentSettings(page);
   await expect(page.locator("#documentSettingsDialog")).toContainText("寸法外観");
-  await expect(page.locator("#documentDimensionAppearanceFields .dimension-appearance-group-title")).toHaveText(["寸法補助線", "端末記号", "寸法文字"]);
+  await expect(page.locator("#documentDimensionAppearanceFields .dimension-appearance-group-title")).toHaveText(["寸法補助線", "寸法文字"]);
   await expect(page.locator('#documentDimensionAppearanceFields [data-dimension-display="extensionLines"], #documentDimensionAppearanceFields [data-dimension-display="arrows"]')).toHaveCount(0);
   await expect(page.locator("#documentDimensionExtensionLineOvershoot")).toHaveValue("1.5");
   await expect(page.locator("#documentDimensionLineWidth")).toHaveValue("1.2");
   await expect(page.locator("#documentDimensionExtensionLineOriginGap")).toHaveValue("1.5");
-  await expect(page.locator("#documentDimensionTerminatorType")).toHaveValue("arrow");
-  await expect(page.locator("#documentDimensionTerminatorSize")).toHaveValue("4");
-  await expect(page.locator("#documentDimensionArrowheadAngle")).toHaveValue("30");
-  await page.locator("#documentDimensionTerminatorType").selectOption("dot");
-  await expect(page.locator("#documentDimensionAppearanceFields [data-terminator-angle-row]")).toBeHidden();
-  await page.locator("#documentDimensionTerminatorType").selectOption("arrow");
-  await expect(page.locator("#documentDimensionAppearanceFields [data-terminator-angle-row]")).toBeVisible();
+  await expect(page.locator("#documentTerminatorTerminatorType")).toHaveValue("arrow");
+  await expect(page.locator("#documentTerminatorTerminatorSize")).toHaveValue("4");
+  await expect(page.locator("#documentTerminatorArrowheadAngle")).toHaveValue("30");
+  await page.locator("#documentTerminatorTerminatorType").selectOption("dot");
+  await expect(page.locator("#documentTerminatorAppearanceFields [data-terminator-angle-row]")).toBeHidden();
+  await page.locator("#documentTerminatorTerminatorType").selectOption("arrow");
+  await expect(page.locator("#documentTerminatorAppearanceFields [data-terminator-angle-row]")).toBeVisible();
   await expect(page.locator("#documentDimensionDimensionTextHeight")).toHaveValue("5");
   await expect(page.locator("#documentDimensionDimensionTextGap")).toHaveValue("0");
   await page.locator("#documentDimensionColor").fill("#0e7490");
@@ -2928,8 +2926,8 @@ test("Constraint dimensions expose defining geometry and inheritable appearance 
     ["#documentDimensionLineWidth", "2.4"],
     ["#documentDimensionExtensionLineOvershoot", "2"],
     ["#documentDimensionExtensionLineOriginGap", "1.8"],
-    ["#documentDimensionTerminatorSize", "3"],
-    ["#documentDimensionArrowheadAngle", "30"],
+    ["#documentTerminatorTerminatorSize", "3"],
+    ["#documentTerminatorArrowheadAngle", "30"],
     ["#documentDimensionDimensionTextHeight", "3.5"],
     ["#documentDimensionDimensionTextGap", "1.2"],
   ]) {
@@ -3094,7 +3092,7 @@ test("Constraint dimensions expose defining geometry and inheritable appearance 
   expect(serialized.annotations).toEqual([]);
   await page.evaluate((documentData) => window.__jot2dTest.loadDocumentFixtureForDragTest(documentData, "dimension-appearance.json"), serialized);
   const roundTrip = await page.evaluate(() => window.__jot2dTest.serializedModelForTest());
-  expect(roundTrip.version).toBe(22);
+  expect(roundTrip.version).toBe(23);
   expect(roundTrip.defaultDimensionAppearance).toEqual(serialized.defaultDimensionAppearance);
   expect(roundTrip.constraints[0].dimension.display).toEqual(serialized.constraints[0].dimension.display);
 
@@ -3127,7 +3125,7 @@ test("Constraint dimensions expose defining geometry and inheritable appearance 
   expect(migratedPixels.direct.terminatorSize).toBeCloseTo(18 * 25.4 / 96, 8);
   expect(migratedPixels.direct.terminatorType).toBeUndefined();
   const migratedSerialized = await page.evaluate(() => window.__jot2dTest.serializedModelForTest());
-  expect(migratedSerialized.version).toBe(22);
+  expect(migratedSerialized.version).toBe(23);
   expect(migratedSerialized.defaultDimensionAppearance).not.toHaveProperty("arrows");
   expect(migratedSerialized.defaultDimensionAppearance).not.toHaveProperty("extensionLines");
   expect(migratedSerialized.constraints[0].dimension.display).not.toHaveProperty("arrowheadLength");
@@ -3776,7 +3774,7 @@ test("offset tool builds an explicitly connected line chain with one editable di
   expect(state.offsetIds).toHaveLength(2);
   expect(state.resultJoins[0].end.x).toBeCloseTo(state.resultJoins[0].start.x, 6);
   expect(state.resultJoins[0].end.y).toBeCloseTo(state.resultJoins[0].start.y, 6);
-  expect(state.jsonVersion).toBe(22);
+  expect(state.jsonVersion).toBe(23);
   expect(state.serializedTypes).toBe(1);
 
   await page.keyboard.press("Control+z");
