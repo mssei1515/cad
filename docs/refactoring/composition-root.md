@@ -6,6 +6,10 @@
 
 ## 現在の再開地点（2026-10-08）
 
+HistoryRestorationへDocument／Block履歴の復元手順を分離。現在名・補助作図設定・Tree状態の保持、Block定義clone、投影無効化と再求解順を維持。履歴抑止はHistoryControllerが所有する。app.jsは11,187行から11,170行へ縮小（17行減）。構文381ファイル・単体926件・関連E2E151件成功（exit 0、1.8分）。ログはcad-history-restore-{check,unit,e2e}.log。全体E2Eは今回未実行。全体目標は未完了。
+
+### 前回の区切り
+
 DimensionPersistenceへ寸法保存データへの変換を分離。角度ラベルの移行順序と保存互換値を維持し、配置adapterを明示。app.jsは11,214行から11,187行へ縮小（27行減）。構文380ファイル・単体923件・関連E2E122件成功（exit 0、1.5分）。ログはcad-dimension-codec-{check,unit,e2e}.log。全体E2Eは今回未実行。GitHub障害は前段af5b2aeのPush時に解消し、未反映分もPush済み。全体目標は未完了。
 
 ### 前回の区切り

@@ -2077,31 +2077,14 @@
     return historyController.record(label);
   }
 
-  function restoreHistorySnapshot(snapshot, label) {
-    const constructionModeBeforeRestore = constructionCommand.enabled;
-    const documentNameBeforeRestore = documentModel.documentName;
-    return historyController.restore(() => {
-      loadModelData(JSON.parse(snapshot), { documentNameFallback: documentNameBeforeRestore, preserveSketchTreeState: true });
-      documentModel.documentName = documentNameBeforeRestore;
-      constructionCommand.restore(constructionModeBeforeRestore);
-      clearInteractionForSketchChange();
-      solveAndRefresh(label);
-      setHint(label);
-    });
-  }
-
-  function restoreBlockEditorHistorySnapshot(snapshot, label) {
-    if (!blockEditor.current || !snapshot?.definition) return false;
-    return historyController.restore(() => {
-      const restored = cloneBlockDefinition(snapshot.definition);
-      blockEditor.replaceDraft(restored);
-      invalidateBlockProjectionCache();
-      clearInteractionForSketchChange();
-      solveAndRefresh(label);
-      setHint(label);
-      return true;
-    });
-  }
+  const historyRestoration = window.HistoryRestoration.create({
+    historyController, document: { getName: () => documentModel.documentName,
+      setName: name => { documentModel.documentName = name; }, load: loadModelData },
+    constructionCommand, blockEditor, cloneBlockDefinition, invalidateBlockProjectionCache,
+    clearInteractionForSketchChange, solveAndRefresh, setHint,
+  });
+  function restoreHistorySnapshot(snapshot, label) { return historyRestoration.document(snapshot, label); }
+  function restoreBlockEditorHistorySnapshot(snapshot, label) { return historyRestoration.block(snapshot, label); }
 
   function undoHistory() {
     return historyController.undo();
