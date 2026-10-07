@@ -229,6 +229,13 @@
       return [...new Set(dependents)];
     }
 
+    function symbolDeletionDependents(constraints, namespace = currentParameterNamespace()) {
+      const removedConstraints = new Set(constraints || []);
+      const removedNames = [...removedConstraints].filter(item => isDimensionConstraint(item) || item.parameterEnabled === true).map(item => item.parameterName).filter(Boolean);
+      const dependents = removedNames.length === 0 ? [] : parameterDependents(namespace, removedNames, removedConstraints);
+      return { removedNames, dependents };
+    }
+
     function evaluateDimensionExpressionDraft(constraint, expression, namespace = currentParameterNamespace()) {
       ensureParameterNamespace(namespace);
       validateParameterSymbolNames(namespace.parameters, symbolElementsInNamespace(namespace));
@@ -283,7 +290,7 @@
       rewriteExpressionInputIdentifiers, dimensionConstraintsInNamespace, symbolElementsInNamespace, allocateDimensionParameterName,
       ensureDimensionParameter, ensureParameterNamespace, parameterErrorText,
       referenceDimensionValues, validateParameterSymbolNames, evaluateParameterNamespace,
-      validateParameterNamespace, prepareLoadedParameterNamespace, parameterDependents,
+      validateParameterNamespace, prepareLoadedParameterNamespace, parameterDependents, symbolDeletionDependents,
     });
   }
   window.ParameterNamespace = Object.freeze({ create });

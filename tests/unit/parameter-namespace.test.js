@@ -195,3 +195,32 @@ test("annotation symbols share evaluation, rename and dependency guards without 
   annotation.parameterEnabled = false;
   assert.equal(api.symbolElementsInNamespace(scope).length, 0);
 });
+
+
+test('symbol deletion query finds dimension and enabled annotation references while excluding removed formulas', () => {
+  const d = Object.assign(dimension(), { parameterName: 'Width', expression: '12' });
+  const note = { type: 'text', parameterEnabled: true, parameterName: 'Label', expression: '"Width"*2' };
+  const ns = namespace([d]); ns.annotations = [note]; ns.parameters = [{ name: 'Total', expression: '"Label"+"Width"' }];
+  const api = create(() => ns);
+  const first = api.symbolDeletionDependents([d]);
+  assert.deepEqual(Array.from(first.removedNames), ['Width']); assert.deepEqual(Array.from(first.dependents), ['Total', 'Label']);
+  const together = api.symbolDeletionDependents([d, note, d]);
+  assert.deepEqual(Array.from(together.removedNames), ['Width', 'Label']); assert.deepEqual(Array.from(together.dependents), ['Total']);
+  assert.equal(ns.constraints[0], d); assert.equal(ns.annotations[0], note);
+});
+
+test('symbol deletion query skips ordinary annotations and unnamed objects without normalizing the namespace', () => {
+  const ns = { constraints: [] }, api = create(() => ns);
+  for (const items of [null, [], [{ type: 'text', parameterEnabled: false, parameterName: 'Label' }], [dimension()]]) {
+    const result = api.symbolDeletionDependents(items);
+    assert.equal(result.removedNames.length, 0); assert.equal(result.dependents.length, 0);
+  }
+  assert.equal('parameters' in ns, false);
+});
+
+test('symbol deletion query uses an explicitly supplied Block namespace instead of the current document', () => {
+  const d = Object.assign(dimension(), { parameterName: 'Width', expression: '12' });
+  const document = namespace([]), block = namespace([d]); block.parameters = [{ name: 'Local', expression: '"Width"+1' }];
+  const api = create(() => document), result = api.symbolDeletionDependents([d], block);
+  assert.deepEqual(Array.from(result.dependents), ['Local']); assert.equal(document.parameters.length, 0);
+});

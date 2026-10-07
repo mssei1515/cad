@@ -500,3 +500,5 @@ AuthoringPreviewRendererへSpline／Centerline／Trim描画も統合。Spline構
 - src/geometry/appearance_query.js: 有効外観の継承と可視性照会。描画と選択で共用し、キャッシュの期間管理はGeometryReadModelに残す。
 
 - src/commands/annotation_parameter_command.js: 注記Parameterのガード・編集・求解・失敗復元・履歴確定を調整。Parameter規則とcheckpointは既存所有者へ委譲する。
+
+- src/parameters/namespace.js: symbolDeletionDependentsで削除対象記号と依存する式の照会を所有。削除の拒否と案内表示は呼出側が担当する。

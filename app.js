@@ -1002,10 +1002,7 @@
   const commitAnnotationParameterEdit = annotationParameterCommand.commit;
 
   function guardDimensionSymbolDeletion(constraints, namespace = currentParameterNamespace()) {
-    const removedConstraints = new Set(constraints || []);
-    const removedNames = [...removedConstraints].filter(item => isDimensionConstraint(item) || item.parameterEnabled === true).map((constraint) => constraint.parameterName).filter(Boolean);
-    if (removedNames.length === 0) return true;
-    const dependents = parameterDependents(namespace, removedNames, removedConstraints);
+    const { removedNames, dependents } = parameterNamespace.symbolDeletionDependents(constraints, namespace);
     if (dependents.length === 0) return true;
     const message = applicationSettings.language === "en"
       ? `Cannot delete ${removedNames.join(", ")}; referenced by ${dependents.join(", ")}`
