@@ -113,7 +113,7 @@ for (const body of ['Updated note', '  Updated\nsecond line  ', '']) {
     await affix.press('Tab');
     await enabled.uncheck();
     saved = await page.evaluate(() => window.__jot2dTest.serializedModelForTest());
-    expect(saved.annotations[0].text).toBe('First note');
+    expect(saved.annotations[0].text).toBe(prefix);
     expect(saved.annotations[0].style.prefix).toBe(prefix);
     expect((await page.evaluate(data => window.__jot2dTest.loadDocumentFixtureForDragTest(data), saved)).success).toBe(true);
     await page.evaluate(() => window.__jot2dTest.focusWorldForTest({ x: 50, y: 0 }, 2));

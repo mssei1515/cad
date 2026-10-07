@@ -387,3 +387,38 @@ test('leader targets ancestor geometry from the active child sketch and persists
   expect((await page.evaluate(data => window.__jot2dTest.loadDocumentFixtureForDragTest(data), saved)).success).toBe(true);
   expect((await data(page)).annotations[0]).toEqual(leader);
 });
+
+for (const prefix of ['  New leader\nsecond line  ', '']) {
+  test(`leader copies body and prefix in both directions ${JSON.stringify(prefix)}`, async ({ page }) => {
+    await setup(page); await createLeader(page); await selectLeader(page);
+    const enabled = page.locator('[data-property="annotation-parameter-enabled"]');
+    const affix = page.locator('[data-annotation-style="prefix"]');
+    const body = page.locator('[data-property="annotation-text"]');
+    await enabled.check();
+    await expect(affix).toHaveValue('Leader');
+    await page.locator('[data-property="annotation-expression"]').fill('12');
+    await page.locator('[data-property="annotation-expression"]').press('Tab');
+    await page.locator('[data-annotation-style="suffix"]').fill(' mm');
+    await page.locator('[data-annotation-style="suffix"]').press('Tab');
+    await affix.fill(prefix); await affix.press('Tab');
+    const before = (await data(page)).annotations[0];
+    await enabled.uncheck();
+    await expect(body).toHaveValue(prefix);
+    let result = (await data(page)).annotations[0];
+    expect(result.text).toBe(prefix);
+    expect(result.style.suffix).toBe(' mm');
+    expect(result.expression).toBe(before.expression);
+    expect(result.parameterName).toBe(before.parameterName);
+    await page.click('#undoBtn');
+    expect((await data(page)).annotations[0]).toEqual(before);
+    await page.click('#redoBtn');
+    expect((await data(page)).annotations[0]).toEqual(result);
+    const saved = await data(page);
+    expect((await page.evaluate(data => window.__jot2dTest.loadDocumentFixtureForDragTest(data), saved)).success).toBe(true);
+    await selectLeader(page);
+    await body.fill('Changed body'); await body.press('Tab');
+    await enabled.check();
+    await expect(affix).toHaveValue('Changed body');
+    expect((await data(page)).annotations[0].expression).toBe(before.expression);
+  });
+}

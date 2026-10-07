@@ -1213,8 +1213,10 @@
     try {
       if (property === "annotation-parameter-enabled") {
         if (!value && !guardDimensionSymbolDeletion([item])) return false;
-        if (value && !item.parameterEnabled && item.type === "text") {
+        if (value && !item.parameterEnabled) {
           (item.style ||= {}).prefix = item.text || "";
+        } else if (!value && item.parameterEnabled) {
+          item.text = item.style?.prefix || "";
         }
         item.parameterEnabled = Boolean(value);
         if (item.parameterEnabled) ensureDimensionParameter(item, currentParameterNamespace());

@@ -4554,8 +4554,8 @@ test("annotation parameter checkbox switches body and formula modes with live va
   expect(copy.expression).toBe(original.expression);
   await page.locator('.sketch-object-row[data-object-kind="annotation"][data-id="AN1"]').click();
   await page.locator('[data-property="annotation-parameter-enabled"]').uncheck();
-  await expect(page.locator('[data-property="annotation-text"]')).toHaveValue('Room note');
-  expect((await state('text')).displayedText).toBe('Room note');
+  await expect(page.locator('[data-property="annotation-text"]')).toHaveValue('幅：\n');
+  expect((await state('text')).displayedText).toBe('幅：\n');
   await page.click('#undoBtn');
   expect((await state('text')).serialized.parameterEnabled).toBe(true);
   await page.click('#redoBtn');
