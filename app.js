@@ -923,10 +923,6 @@
     const hint = constraintFeedback.resultHint(label, solved, analysis, dependent, constraintRedundancy.count);
     setHint(hint.message, hint.kind);
   }
-  function constraintSummaryText() {
-    return constraintFeedback.summaryText(constraintAnalysis.summary(), constraintRedundancy.count,
-      referenceConstraintState.errorCount, applicationSettings.language);
-  }
 
   function effectiveDocumentName() {
     return effectiveDocumentNameFromValue(documentModel.documentName);
@@ -4717,8 +4713,6 @@
       offset: applicationText("オフセット", "Offset"), hatch: applicationText("塗りつぶし", "Fill"), "hatch-repair": applicationText("境界を再指定", "Reselect boundary"), "block-place": applicationText("ブロック配置", "Block placement"),
     };
     if (command) command.textContent = pendingCommand?.type?.startsWith("annotation-") ? applicationText("注記", "Annotation") : pendingConstraintCommand ? applicationText("拘束", "Constraint") : modeLabels[mode] || mode;
-    const constraint = document.getElementById("statusConstraint");
-    if (constraint) constraint.textContent = viewState.constraintStatus ? "拘束状態表示中" : constraintSummaryText();
   }
 
   function updateUI({ refreshAnalysis = true } = {}) {

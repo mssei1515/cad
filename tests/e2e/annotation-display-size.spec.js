@@ -117,7 +117,7 @@ test("status zoom follows wheel, fit, reload and canvas redraw in the same foote
   await synced();
   const zoomBox = await status.boundingBox();
   const coordinates = await page.locator("#statusCoordinates").boundingBox();
-  expect(zoomBox.y).toBeCloseTo(coordinates.y);
+  expect(zoomBox.y + zoomBox.height / 2).toBeCloseTo(coordinates.y + coordinates.height / 2);
 });
 
 test("enlarged model-relative dimension text remains selectable beyond its old hit radius", async ({ page }) => {

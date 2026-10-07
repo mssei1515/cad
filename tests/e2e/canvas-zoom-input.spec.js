@@ -1,5 +1,22 @@
 const { test, expect, openTestDocument } = require("./test-fixture");
 
+test("zoom is visibly editable and the footer omits the constraint summary", async ({ page }) => {
+  await openTestDocument(page);
+  const button = page.locator("#statusZoom");
+  const appearance = await button.evaluate(element => ({
+    border: getComputedStyle(element).borderTopWidth,
+  }));
+  expect(parseFloat(appearance.border)).toBeGreaterThan(0);
+  await expect(page.locator("#statusZoomLabel")).toHaveText("表示倍率:");
+  await expect(page.locator("#statusConstraint")).toHaveCount(0);
+  await page.locator("#constraintStatusViewBtn").click();
+  await expect(page.locator("#statusConstraint")).toHaveCount(0);
+  await expect(button).toBeVisible();
+  await page.screenshot({ path: "test-results/zoom-status-bar.png", clip: await page.locator("#bottomBar").boundingBox() });
+  await button.click();
+  await expect(page.locator("#statusZoomInput")).toBeVisible();
+});
+
 test("custom zoom preserves the canvas center and document, including fractional and boundary values", async ({ page }) => {
   await openTestDocument(page);
   const center = { x: 37, y: -24 };
