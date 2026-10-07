@@ -142,7 +142,7 @@ const files = [
   "tests/unit/block-layout.test.js", "tests/unit/block-projection.test.js",
   "src/geometry/read_model.js",
   "tests/unit/geometry-read-model.test.js",
-  "src/constraints/candidates.js",
+  "src/constraints/candidates.js", "src/constraints/operands.js",
   "tests/unit/constraint-candidates.test.js",
   "src/geometry/bounds.js", "src/geometry/block_layout.js", "src/geometry/reference_image_geometry.js", "src/rendering/drawing_bounds.js", "src/rendering/viewport.js",
   "tests/unit/drawing-bounds.test.js", "tests/unit/first-dimension-scaling.test.js", "tests/unit/viewport.test.js",
