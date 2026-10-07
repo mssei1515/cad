@@ -159,7 +159,6 @@
   const ctx = canvas.getContext("2d");
   let pngRender = null;
   let pngExportCommand = null;
-  let pngViewport = null;
   let pngPreviousMode = null;
   const dimensionValueInput = document.getElementById("dimensionValueInput");
   const dimensionValueInputShell = document.getElementById("dimensionValueInputShell");
@@ -6926,16 +6925,13 @@
   const canvasExport = window.CanvasExport.create({
     canvas, createCanvas: () => document.createElement("canvas"), text: applicationText,
     render: (region, ratio) => {
-      pngViewport = viewport.snapshot();
-      viewport.update({ x: 0, y: 0, scale: 96 / 25.4 });
-      pngRender = { region: { x: region.x * viewport.scale, y: region.y * viewport.scale },
+      pngRender = { region: { x: viewport.x + region.x * viewport.scale, y: viewport.y + region.y * viewport.scale },
         ratio: { x: ratio.x / viewport.scale, y: ratio.y / viewport.scale },
         worldBounds: { x1: region.x, y1: region.y, x2: region.x + region.width, y2: region.y + region.height } };
       withGeometryReadCache(drawCanvas);
     },
     restore: () => {
-      if (pngViewport) viewport.update(pngViewport);
-      pngViewport = null; pngRender = null; syncCanvasBitmapSize(); draw();
+      pngRender = null; syncCanvasBitmapSize(); draw();
     },
   });
   const pngFile = window.PngFile.create({ window, document, capture: canvasExport.capture, documentName: effectiveDocumentName, text: applicationText,
@@ -6945,7 +6941,8 @@
     },
   });
   pngExportCommand = window.PngExportCommand.create({
-    text: applicationText, save: pngFile.save, setHint, refresh: draw,
+    text: applicationText, save: (region, dpi) => pngFile.save(region, dpi / 96 * viewport.scale),
+    viewScale: () => viewport.scale, setHint, refresh: draw,
     begin: () => { pngPreviousMode = mode; mode = "png-export"; pendingCommand = { type: "png-export" }; },
     end: () => { if (pendingCommand?.type === "png-export") pendingCommand = null; if (mode === "png-export") mode = pngPreviousMode; pngPreviousMode = null; },
     resolvePoint: point => withGeometryReadCache(() => {

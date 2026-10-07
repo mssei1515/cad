@@ -2,8 +2,8 @@
 (() => {
   "use strict";
   function create({ canvas, createCanvas, render, restore, text }) {
-    function capture(region, dpi = 300) {
-      const size = window.ExportRegion.pixelSize(region, dpi);
+    function capture(region, pixelsPerMm = 96 / 25.4) {
+      const size = window.ExportRegion.pixelSize(region, pixelsPerMm);
       if (!size?.supported) throw new Error(text("出力サイズが大きすぎます。範囲またはDPIを小さくしてください", "Output is too large. Reduce the region or resolution"));
       const output = createCanvas();
       output.width = size.width;

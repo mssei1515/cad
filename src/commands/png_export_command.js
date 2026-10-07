@@ -1,7 +1,7 @@
 /* World-space PNG crop draft. Never modifies drawing geometry or history. */
 (() => {
   "use strict";
-  function create({ text, resolvePoint, save, refresh, begin, end, setHint }) {
+  function create({ text, resolvePoint, save, viewScale, refresh, begin, end, setHint }) {
     let active = false, busy = false, first = null, pointer = null, region = null, dpi = 300, error = "";
     function clear() { first = pointer = region = null; error = ""; }
     function open() { clear(); dpi = 300; active = true; begin(); refresh(); }
@@ -20,11 +20,11 @@
     }
     function readState() {
       if (!active) return null;
-      const size = window.ExportRegion.pixelSize(region, dpi);
+      const size = window.ExportRegion.pixelSize(region, dpi / 96 * viewScale());
       return { id: "png-export", title: text("PNG出力", "Export PNG"),
         step: first ? text("対角の2点目をクリックしてください", "Click the opposite corner") : region ? text("出力範囲を指定しました", "Region selected") : text("対角の1点目をクリックしてください", "Click the first corner"),
         settings: [{ key: "dpi", label: text("解像度（DPI）", "Resolution (DPI)"), type: "number", min: 1, step: 1, value: dpi }],
-        message: error || (busy ? text("PNGを生成しています…", "Preparing PNG…") : size ? `${size.width} × ${size.height} px — ${text("背景透過", "Transparent background")}` + (size.supported ? "" : text(" — 範囲またはDPIを小さくしてください", " — Reduce the region or DPI")) : text("図面寸法とDPIから出力サイズを計算します", "Output size is based on drawing dimensions and DPI")),
+        message: error || (busy ? text("PNGを生成しています…", "Preparing PNG…") : size ? `${size.width} × ${size.height} px — ${text("背景透過", "Transparent background")}` + (size.supported ? "" : text(" — 範囲またはDPIを小さくしてください", " — Reduce the region or DPI")) : text("96dpiを画面等倍として出力します", "96 DPI corresponds to the current on-screen size")),
         actions: [{ id: "clear", label: text("範囲をクリア", "Clear region"), disabled: busy },
           { id: "cancel", label: text("キャンセル", "Cancel"), disabled: busy },
           { id: "finish", label: text("PNGを保存", "Save PNG"), disabled: busy || !size?.supported }] };
@@ -34,7 +34,7 @@
       if (busy) return;
       if (action === "cancel") return cancel();
       if (action === "clear") { clear(); refresh(); return; }
-      if (action !== "finish" || !window.ExportRegion.pixelSize(region, dpi)?.supported) return;
+      if (action !== "finish" || !window.ExportRegion.pixelSize(region, dpi / 96 * viewScale())?.supported) return;
       busy = true; error = ""; refresh();
       try {
         const result = await save(region, dpi);

@@ -48,31 +48,33 @@ test.beforeEach(async ({ page }) => {
   await page.evaluate(() => window.__jot2dTest.focusWorldForTest({ x: 0, y: 0 }, 3));
 });
 
-test('world region uses editable DPI, transparent background and preserves document', async ({ page }) => {
+test('screen size maps to 96, 192 and 300 DPI and preserves document', async ({ page }) => {
   const before = await state(page);
-  await openExport(page);
-  await expect(page.locator('[data-action="finish"]')).toBeDisabled();
-  await crop(page);
-  await dpi(page, 254);
-  const image = await download(page);
-  expect(image).toMatchObject({ width: 800, height: 400 });
-  expect((await pixels(page, image, [[1, 1]]))[0][3]).toBe(0);
-  expect(await state(page)).toEqual(before);
+  for (const value of [96, 192, 300]) {
+    await openExport(page);
+    await expect(page.locator('[data-action="finish"]')).toBeDisabled();
+    await crop(page); await dpi(page, value);
+    const image = await download(page);
+    expect(image).toMatchObject({ width: Math.round(240 * value / 96), height: Math.round(120 * value / 96) });
+    expect((await pixels(page, image, [[1, 1]]))[0][3]).toBe(0);
+    expect(await state(page)).toEqual(before);
+  }
 });
 
-test('same world region produces identical PNG across zoom and window sizes', async ({ page }) => {
+test('same world region follows screen zoom and selected DPI', async ({ page }) => {
   await page.evaluate(() => window.__jot2dTest.resetForAnnotationDrag());
   const outputs = [];
   for (const [width, height, scale] of [[1200, 900, 2], [1500, 1000, 3]]) {
     await page.setViewportSize({ width, height });
     await page.evaluate(scale => window.__jot2dTest.focusWorldForTest({ x: 0, y: 0 }, scale), scale);
-    await openExport(page); await crop(page, [-110, -45], [120, 100]); await dpi(page, 127);
+    await openExport(page); await crop(page, [-110, -45], [120, 100]); await dpi(page, 96);
     outputs.push(await download(page));
   }
-  expect(outputs[0].width).toBe(1150);
-  expect(outputs[0].height).toBe(725);
-  expect(outputs[0].data).toBe(outputs[1].data);
-  expect((await pixels(page, outputs[0], [[250, 100]]))[0][3]).toBeGreaterThan(0);
+  expect(outputs[0].width).toBe(460);
+  expect(outputs[0].height).toBe(290);
+  expect(outputs[1].width).toBe(690);
+  expect(outputs[1].height).toBe(435);
+  expect((await pixels(page, outputs[0], [[100, 40]]))[0][3]).toBeGreaterThan(0);
 });
 
 test('two corners, invalid DPI, clear and Escape do not edit the document', async ({ page }) => {
@@ -85,7 +87,7 @@ test('two corners, invalid DPI, clear and Escape do not edit the document', asyn
   await page.click('[data-action="clear"]'); await crop(page);
   await dpi(page, 0); await expect(page.locator('[data-action="finish"]')).toBeDisabled();
   await dpi(page, 100000); await expect(page.locator('[data-action="finish"]')).toBeDisabled();
-  await dpi(page, 150); await expect(page.locator('[data-action="finish"]')).toBeEnabled();
+  await dpi(page, 144); await expect(page.locator('[data-action="finish"]')).toBeEnabled();
   await page.keyboard.press('Escape');
   await expect(page.locator('#commandPanel')).toBeHidden();
   expect((await state(page)).doc).toEqual(before);
@@ -123,10 +125,10 @@ test('corner snapping remains in world coordinates while panning and zooming', a
   await page.mouse.move(c.x + 300, c.y + 250); await page.mouse.down({ button: 'middle' });
   await page.mouse.move(c.x + 330, c.y + 270, { steps: 4 }); await page.mouse.up({ button: 'middle' });
   await page.mouse.wheel(0, -120);
-  await clickWorld(page, 59, 34); await dpi(page, 254);
-  await expect(page.locator('.command-panel-message')).toContainText('1200 × 600 px');
+  await clickWorld(page, 59, 34); await dpi(page, 192);
+  const scale = await page.evaluate(() => { const a = window.__jot2dTest.worldClientPositionForTest({x:0,y:0}), b = window.__jot2dTest.worldClientPositionForTest({x:1,y:0}); return b.x - a.x; });
   const image = await download(page);
-  expect(image).toMatchObject({ width: 1200, height: 600 });
+  expect(image).toMatchObject({ width: Math.round(120 * scale * 2), height: Math.round(60 * scale * 2) });
 });
 
 test('file URL exports transparent PNG without opening an export dialog', async ({ page }) => {
@@ -134,9 +136,9 @@ test('file URL exports transparent PNG without opening an export dialog', async 
   await page.goto(pathToFileURL(path.resolve(__dirname, '../../index.html')).href + '?test=1');
   await page.waitForFunction(() => window.__jot2dTest);
   await page.evaluate(() => window.__jot2dTest.focusWorldForTest({ x: 0, y: 0 }, 3));
-  await openExport(page); await crop(page); await dpi(page, 127);
+  await openExport(page); await crop(page); await dpi(page, 96);
   await expect(page.locator('dialog[open]')).toHaveCount(0);
-  const image = await download(page); expect(image.width).toBe(400);
+  const image = await download(page); expect(image.width).toBe(240);
   expect((await pixels(page, image, [[1, 1]]))[0][3]).toBe(0);
 });
 
@@ -155,7 +157,7 @@ test('reference image colors survive transparent PNG export', async ({ page }) =
     await window.__jot2dTest.importReferenceImageDataForTest(c.toDataURL(), 'red.png', 'image/png');
     window.__jot2dTest.focusWorldForTest({ x: 0, y: 0 }, 3);
   });
-  await openExport(page); await crop(page); await dpi(page, 127);
+  await openExport(page); await crop(page); await dpi(page, 96);
   const image = await download(page);
   const counts = await page.evaluate(async data => {
     const bitmap = await createImageBitmap(await (await fetch(`data:image/png;base64,${data}`)).blob());

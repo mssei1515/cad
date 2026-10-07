@@ -2,14 +2,14 @@
 (() => {
   "use strict";
   function create({ window, document, capture, documentName, text, prepare = async () => {} }) {
-    async function save(region, dpi) {
+    async function save(region, pixelsPerMm) {
       const name = `${window.DocumentFiles.safeDownloadBaseName(documentName())}.png`;
       let handle = null;
       if (typeof window.showSaveFilePicker === "function") {
         handle = await window.showSaveFilePicker({ suggestedName: name, types: [{ description: "PNG", accept: { "image/png": [".png"] } }] });
       }
       await prepare();
-      const bitmap = capture(region, dpi);
+      const bitmap = capture(region, pixelsPerMm);
       const blob = await new Promise((resolve, reject) => bitmap.toBlob(value => value ? resolve(value)
         : reject(new Error(text("PNG画像を生成できませんでした", "Could not create the PNG image"))), "image/png"));
       if (handle) {
