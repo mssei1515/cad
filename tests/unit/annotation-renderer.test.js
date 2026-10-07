@@ -163,3 +163,19 @@ test("leader elbow, shelf and legacy label follow anchor displacement without re
     assert.equal(JSON.stringify(element), saved);
   }
 });
+
+
+test("shelf text reference follows the left end in either direction and rotated blocks", () => {
+  const h = create();
+  for (const scale of [1, 4]) for (const direction of [-1, 1]) for (const angle of [0, Math.PI / 2, Math.PI]) {
+    h.viewport.scale = scale;
+    const c = Math.cos(angle), s = Math.sin(angle);
+    const element = { type: "leader", textPlacement: "shelf", text: "Label", start: { x: 0, y: 0 },
+      elbow: { x: 30 * c - 40 * s, y: 30 * s + 40 * c },
+      end: { x: (30 + direction * 20) * c - 40 * s, y: (30 + direction * 20) * s + 40 * c },
+      annotationTransformRotation: angle, shelfReferenceScale: 2, style: {} };
+    const layout = h.renderer.annotationTextLayout(element), geometry = h.renderer.annotationLeaderDisplayGeometry(element);
+    const left = direction < 0 ? geometry.end : geometry.elbow;
+    assert.ok(Math.abs((layout.x - left.x) * c + (layout.y - left.y) * s) < 1e-8);
+  }
+});

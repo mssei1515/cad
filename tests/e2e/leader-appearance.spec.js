@@ -309,7 +309,7 @@ for (const locked of [false, true]) test(`shelf endpoint crosses the elbow in bo
     expect(resized.serialized.start).toEqual(original.start);
     expect(resized.serialized.geometryRef).toEqual(original.geometryRef);
     expect(resized.serialized.shelfReferenceScale).toBe(original.shelfReferenceScale);
-    expect(resized.textLayout.x).toBeCloseTo((resized.displayGeometry.elbow.x + resized.displayGeometry.end.x) / 2, 8);
+    expect(resized.textLayout.x).toBeCloseTo(Math.min(resized.displayGeometry.elbow.x, resized.displayGeometry.end.x), 8);
   }
   const saved = await data(page), after = saved.annotations[0];
   await page.screenshot({ path: testInfo.outputPath('shelf-resize.png') });

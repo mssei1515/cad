@@ -67,8 +67,11 @@
       const gapWorld = (Number(style.textGap) || 0) * ANNOTATION_SCREEN_PX_PER_MM / viewport.scale * window.Appearance.annotationDisplayFactor(style, viewport.scale);
       const strokeHalfWidth = style.lineWidth / viewport.scale * window.Appearance.annotationDisplayFactor(style, viewport.scale) / 2;
       const offset = bottom + gapWorld + strokeHalfWidth;
-      const x = (shelf.elbow.x + shelf.end.x) / 2 + Math.sin(transformRotation) * offset;
-      const y = (shelf.elbow.y + shelf.end.y) / 2 - Math.cos(transformRotation) * offset;
+      const along = (shelf.end.x - shelf.elbow.x) * Math.cos(transformRotation)
+        + (shelf.end.y - shelf.elbow.y) * Math.sin(transformRotation);
+      const leftEnd = along < 0 ? shelf.end : shelf.elbow;
+      const x = leftEnd.x + Math.sin(transformRotation) * offset;
+      const y = leftEnd.y - Math.cos(transformRotation) * offset;
       const worldCorners = corners.map(point => ({ x: x + point.x * Math.cos(rotation) - point.y * Math.sin(rotation), y: y + point.x * Math.sin(rotation) + point.y * Math.cos(rotation) }));
       return { x, y, rotation, fontSize, width, height, gapWorld, strokeHalfWidth, left,
         bounds: { x1: Math.min(...worldCorners.map(p => p.x)), y1: Math.min(...worldCorners.map(p => p.y)),
