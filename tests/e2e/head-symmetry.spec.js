@@ -11,7 +11,7 @@ async function expectFullyConstrained(page, duplicates) {
   expect(status.stable).toBe(true);
   expect(status.freeDof).toBe(0);
   for (const id of ["L20", "L21"]) expect(status.items.find(item => item.id === id).status).toBe("full");
-  await expect(page.locator("#statusConstraint")).toContainText(`重複拘束: ${duplicates}`);
+  await expect(page.locator(".sketch-item.active .sketch-badges")).toContainText(`重複${duplicates}`);
 }
 
 test("the fully constrained asymmetric head rejects an additional dependent symmetry without changing shape or history", async ({ page }) => {

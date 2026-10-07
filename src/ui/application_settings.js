@@ -4,6 +4,8 @@
   const APPLICATION_LANGUAGE_STORAGE_KEY = "jot2d.application.language";
   const APPLICATION_THEME_STORAGE_KEY = "jot2d.application.theme";
   const UI_TRANSLATIONS = [
+    ["表示倍率 (%)", "Zoom (%)"],
+    ["表示倍率を入力（Enterで確定、Escで取消）", "Enter zoom (Enter to apply, Esc to cancel)"],
     ["保存ツールを表示", "Show save tools"], ["円弧ツールを表示", "Show arc tools"], ["保存", "Save"],
     ["選択した図形の表示／非表示", "Show/hide selected objects"],
     ["アプリ操作", "Application"], ["履歴関連操作", "History"], ["作図", "Drawing"], ["修正", "Modify"],
