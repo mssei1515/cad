@@ -472,3 +472,5 @@ AuthoringPreviewRendererへSpline／Centerline／Trim描画も統合。Spline構
 - src/commands/reference_image_command.js: 画像準備後の現在scopeへの配置・選択・履歴更新。準備失敗ではDocumentとIDを変更しない。
 
 - src/rendering/canvas_theme_colors.js: themeを明示した表示色補正・hex解析・contrast計算。appは現在themeを接続する。
+
+- src/ui/sidebar_controller.js: サイドバーの開閉・タブ選択・入力接続。appはdocumentとsetHintを接続して一度bindする。

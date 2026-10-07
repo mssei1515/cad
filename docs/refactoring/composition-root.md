@@ -4,7 +4,11 @@
 
 開始点はdevelopの`457adea`。承認された最終目標は、`app.js`を数百行程度の生成・接続・起動・終了へ整理すること。部分的な抽出や中間のテスト成功をもって、この目標の完了とはしない。
 
-## 現在の再開地点（2026-10-04）
+## 現在の再開地点（2026-10-08）
+
+最新develop 71b139bからcodex/sidebar-lifecycleで再開。SidebarControllerへタブ選択・開閉・ラベル同期と入力接続を分離。DOMを既存の状態所有者として維持し、Document依存を持たない。app.jsは11,403行から11,358行へ縮小（45行減）。構文377ファイル・単体912件・関連E2E104件成功（exit 0、1.2分）。ログはcad-sidebar-{check,unit,e2e}.log。全体E2Eは今回未実行。停止条件は週枠残量50%未満。全体目標は未完了。
+
+### 前回の区切り
 
 最新develop 166169aからcodex/rendering-policyで再開。CanvasThemeColorsへテーマ依存の表示色補正・hex解析・contrast計算を分離し、themeは明示引数にした。永続appearance値は変更しない。app.jsは11,271行から11,232行へ縮小（39行減、隣接空行整理を含む）。構文368ファイル・単体882件・関連E2E103件成功（exit 0、1.2分）。ログはcad-theme-colors-{check,unit,e2e}.log。コードcommit a66067dに対し、全E2E369件も成功（exit 0、19.7分、cad-theme-release-e2e.log）。週枠残量39%を確認し、新規分離を停止。develop・mainへ統合して同期後に一時停止する。全体目標は未完了。
 

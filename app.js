@@ -888,33 +888,6 @@
     el.textContent = `${msg}\n` + el.textContent;
   }
 
-  function activateSidebarTab(tabId) {
-    for (const button of document.querySelectorAll("[data-sidebar-tab]")) {
-      const active = button.dataset.sidebarTab === tabId;
-      button.classList.toggle("active", active);
-      button.setAttribute("aria-selected", String(active));
-    }
-    for (const panel of document.querySelectorAll("[data-sidebar-panel]")) {
-      const active = panel.dataset.sidebarPanel === tabId;
-      panel.classList.toggle("active", active);
-      panel.hidden = !active;
-    }
-  }
-
-  function setSidebarCollapsed(collapsed, hintText = "") {
-    const app = document.querySelector(".app");
-    if (!app) return false;
-    const changed = app.classList.contains("side-collapsed") !== collapsed;
-    app.classList.toggle("side-collapsed", collapsed);
-    const btn = document.getElementById("toggleSideBtn");
-    const label = collapsed ? "サイドバーを開く" : "サイドバーをたたむ";
-    btn?.setAttribute("aria-label", label);
-    btn?.setAttribute("title", label);
-    if (btn) btn.dataset.tooltip = label;
-    if (hintText) setHint(hintText);
-    return changed;
-  }
-
   function setHint(msg, kind = "normal") {
     if (!interactionProfiler.active) return setHintUnprofiled(msg, kind);
     return profileInteractionWork("ui", () => setHintUnprofiled(msg, kind));
@@ -6973,25 +6946,7 @@
   document.getElementById("addSketchBtn")?.addEventListener("click", () => createSketch("sibling"));
   document.getElementById("addChildSketchBtn")?.addEventListener("click", () => createSketch("child"));
 
-  document.getElementById("toggleSideBtn")?.addEventListener("click", () => {
-    const app = document.querySelector(".app");
-    const isCollapsed = app?.classList.contains("side-collapsed");
-    setSidebarCollapsed(!isCollapsed, isCollapsed ? "サイドバーを表示しました" : "サイドバーをたたみました");
-  });
-
-  for (const button of document.querySelectorAll("[data-sidebar-tab]")) {
-    button.addEventListener("click", () => {
-      const app = document.querySelector(".app");
-      const isCollapsed = app?.classList.contains("side-collapsed");
-      const isActive = button.classList.contains("active");
-      if (isActive && !isCollapsed) {
-        setSidebarCollapsed(true);
-        return;
-      }
-      activateSidebarTab(button.dataset.sidebarTab);
-      setSidebarCollapsed(false);
-    });
-  }
+  window.SidebarController.create({ document, setHint }).bind();
 
   for (const btn of constraintButtons) {
     btn.addEventListener("click", () => {
