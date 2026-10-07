@@ -870,8 +870,6 @@
   };
   const INACTIVE_CONSTRAINT_STATUS_COLOR = "#cbd5e1";
   const SKETCH_SOLVE_ERROR_COLOR = "#dc2626";
-  let lastLoadLineRepairMessage = "";
-  let lastLoadBlockConstraintRepairMessage = "";
   const runtimeVersionView = window.RuntimeVersionView.create({ document, applicationText });
 
   const constraintButtons = Array.from(document.querySelectorAll("[data-constraint]"));
@@ -2102,38 +2100,19 @@
     return geometryInstancePersistence.listError(instances);
   }
 
+  const documentApplication = window.DocumentApplication.create({
+    documentLoading, document: documentModel, model, resetEditingState: resetModelState,
+    sketchTreeView: { capture: () => sketchTreeView.capture(), restore: state => sketchTreeView.restore(state) },
+    refreshReferenceConstraintValidity, enforceMinimumLineLengths, ensureDimensionDefaults,
+    restoreSequences: sequences => {
+      reserveGeometryElementSequences(sequences.geometry);
+      ({ sketchSeq, annotationSeq, hatchSeq, referenceImageSeq, blockDefinitionSeq, blockInstanceSeq,
+        sketchProjectionInstanceSeq, freeInstanceSeq, mirrorInstanceSeq, patternInstanceSeq, blockElementSeq } = sequences);
+    },
+    ensureAppearanceState, ensureBlockState, log,
+  });
   function loadModelData(data, options = {}) {
-    if (!data || !Array.isArray(data.points) || !Array.isArray(data.lines) || !Array.isArray(data.constraints)) {
-      throw new Error("保存データの形式が正しくありません");
-    }
-    lastLoadBlockConstraintRepairMessage = "";
-    const preservedSketchTree = options.preserveSketchTreeState ? sketchTreeView.capture() : null;
-    const candidate = documentLoading.decode(data, options);
-    const { repairedBlockConstraintCount } = candidate;
-
-    resetModelState();
-    if (preservedSketchTree) sketchTreeView.restore(preservedSketchTree);
-    documentLoading.install(candidate, documentModel, model);
-    refreshReferenceConstraintValidity();
-    const lineRepair = enforceMinimumLineLengths(model.lines);
-    lastLoadLineRepairMessage =
-      lineRepair.changed > 0 || lineRepair.failed > 0
-        ? `短すぎる線を補正しました: ${lineRepair.changed}件${lineRepair.failed ? ` / 補正不能 ${lineRepair.failed}件` : ""}`
-        : "";
-    if (lastLoadLineRepairMessage) log(lastLoadLineRepairMessage);
-    lastLoadBlockConstraintRepairMessage = repairedBlockConstraintCount > 0
-      ? `参照先が見つからないブロック内部拘束を${repairedBlockConstraintCount}件解除しました`
-      : "";
-    if (lastLoadBlockConstraintRepairMessage) log(lastLoadBlockConstraintRepairMessage);
-    ensureDimensionDefaults();
-    const recoveredSequences = window.DocumentSequences.recover(model, documentModel.blockDefinitions);
-    reserveGeometryElementSequences(recoveredSequences.geometry);
-    ({ sketchSeq, annotationSeq, hatchSeq, referenceImageSeq, blockDefinitionSeq, blockInstanceSeq,
-      sketchProjectionInstanceSeq, freeInstanceSeq, mirrorInstanceSeq, patternInstanceSeq, blockElementSeq } = recoveredSequences);
-    ensureAppearanceState();
-    ensureBlockState();
-    ensureDrawingOrderState(model);
-    for (const definition of documentModel.blockDefinitions) ensureDrawingOrderState(definition);
+    return documentApplication.load(data, options);
   }
 
   const documentFileCommand = window.DocumentFileCommand.create({
@@ -2148,7 +2127,7 @@
       updateDocumentNameUI();
       fitAllGeometryToViewport();
       draw();
-      if (lastLoadBlockConstraintRepairMessage) setHint(lastLoadBlockConstraintRepairMessage);
+      if (documentApplication.blockConstraintRepairMessage) setHint(documentApplication.blockConstraintRepairMessage);
     },
   });
   const { save: saveJot2DFile, saveAs: saveJot2DFileAs, open: openJot2DFile, importFileData } = documentFileCommand;

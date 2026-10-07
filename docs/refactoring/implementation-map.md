@@ -484,3 +484,5 @@ AuthoringPreviewRendererへSpline／Centerline／Trim描画も統合。Spline構
 - src/persistence/dimensions.js: 寸法の保存用変換。配置adapterは明示し、保存・履歴・診断から同じcodecを利用する。
 
 - src/editing/history_restoration.js: Document／Blockの復元調整。モデル読込・draft所有・履歴抑止は各既存所有者へ依頼する。
+
+- src/editing/document_application.js: 復号済みDocumentの編集状態への適用順と補正結果を所有。decode／installはDocumentLoading、reset・ID予約・既定値補正は既存adapterへ委譲し、ファイルUIや履歴は持たない。

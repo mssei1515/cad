@@ -6,6 +6,10 @@
 
 ## 現在の再開地点（2026-10-08）
 
+DocumentApplicationへDocumentの適用順と読込補正結果を分離。decode失敗時に既存モデルを消さない順序、Treeの任意保持、参照・最小線長・寸法・ID・外観・Block・描画順の同期を維持。Tree生成前参照による初回E2E起動失敗を遅延adapterで修正後、構文382ファイル・単体929件・関連E2E151件成功（exit 0、2.3分）。app.jsは11,170行から11,149行へ縮小（21行減）。ログはcad-document-apply-{check,unit,e2e}.log。全体E2Eは今回未実行。週枠残量61%で継続。全体目標は未完了。
+
+### 前回の区切り
+
 HistoryRestorationへDocument／Block履歴の復元手順を分離。現在名・補助作図設定・Tree状態の保持、Block定義clone、投影無効化と再求解順を維持。履歴抑止はHistoryControllerが所有する。app.jsは11,187行から11,170行へ縮小（17行減）。構文381ファイル・単体926件・関連E2E151件成功（exit 0、1.8分）。ログはcad-history-restore-{check,unit,e2e}.log。全体E2Eは今回未実行。全体目標は未完了。
 
 ### 前回の区切り
