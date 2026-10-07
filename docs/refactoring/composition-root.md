@@ -6,6 +6,10 @@
 
 ## 現在の再開地点（2026-10-08）
 
+CenterlineCommand.startへ事前選択付き開始を統合。開始とdraft入力の所有者を揃え、Root拒否・準備失敗時の対象選択移行を維持。app.jsは11,358行から11,335行へ縮小（23行減）。構文377ファイル・単体914件・関連E2E109件成功（exit 0、1.3分）。ログはcad-centerline-start-{check,unit,e2e}.log。全体E2Eは今回未実行。次は円中心十字の作成・求解失敗復元、共通編集・Document適用、描画・入力組立て。全体目標は未完了。
+
+### 前回の区切り
+
 最新develop 71b139bからcodex/sidebar-lifecycleで再開。SidebarControllerへタブ選択・開閉・ラベル同期と入力接続を分離。DOMを既存の状態所有者として維持し、Document依存を持たない。app.jsは11,403行から11,358行へ縮小（45行減）。構文377ファイル・単体912件・関連E2E104件成功（exit 0、1.2分）。ログはcad-sidebar-{check,unit,e2e}.log。全体E2Eは今回未実行。停止条件は週枠残量50%未満。全体目標は未完了。
 
 ### 前回の区切り

@@ -2,7 +2,30 @@
 (function () {
   "use strict";
   const { Point, Line, hypot2 } = window.GeometrySolver;
-  function create({ plans, construction, selection: canvasSelection, sameSketchElements, activeSketchId, isActiveSketchElement, applicationText, minLineLength: MIN_LINE_LENGTH, snapForDrawing, clearSnap, setPointerPreview, setMode, invalidateAnalysis, setHint, updateUI, draw }) {
+  function create({ cancelConstraintTargetCommand, cancelPendingCommand, canCreateInActiveSketch, rejectRootSketchCreation, clearSelection, updateToolbar, plans, construction, selection: canvasSelection, sameSketchElements, activeSketchId, isActiveSketchElement, applicationText, minLineLength: MIN_LINE_LENGTH, snapForDrawing, clearSnap, setPointerPreview, setMode, invalidateAnalysis, setHint, updateUI, draw }) {
+    function startCenterlineCommand() {
+      cancelConstraintTargetCommand("");
+      cancelPendingCommand("");
+      if (!canCreateInActiveSketch()) return void rejectRootSketchCreation();
+      const preselected = canvasSelection.lines.length === 2 && canvasSelection.points.length === 0
+        ? canvasSelection.lines.slice()
+        : canvasSelection.points.length === 2 && canvasSelection.lines.length === 0
+          ? canvasSelection.points.slice()
+          : [];
+      resetCenterlineCommandState();
+      setMode("centerline");
+      setPointerPreview(null);
+      clearSnap();
+      if (preselected.length === 2 && prepareCenterlineEndpointPlacement(preselected)) {
+        updateToolbar();
+        return;
+      }
+      clearSelection();
+      updateToolbar();
+      setHint(applicationText("平行な2線、または2点を順にクリックしてください", "Select two parallel lines or two points"));
+      updateUI({ refreshAnalysis: false });
+      draw();
+    }
     let centerlineTargets = [];
     let centerlineSupport = null;
     let centerlineFirstPoint = null;
@@ -123,7 +146,7 @@
       }
       commitCenterline(projected, snap);
     }
-    return Object.freeze({ reset: resetCenterlineCommandState, prepare: prepareCenterlineEndpointPlacement, click: handleCenterlineClick, projectPointToCenterlineSupport,
+    return Object.freeze({ start: startCenterlineCommand, reset: resetCenterlineCommandState, prepare: prepareCenterlineEndpointPlacement, click: handleCenterlineClick, projectPointToCenterlineSupport,
       get targets() { return centerlineTargets.slice(); }, get support() { return centerlineSupport; }, get firstPoint() { return centerlineFirstPoint; } });
   }
   window.CenterlineCommand = Object.freeze({ create });

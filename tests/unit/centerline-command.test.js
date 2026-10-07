@@ -18,7 +18,7 @@ function fixture() {
     addPointSnapConstraints(point, snap) { state.snaps.push([point, snap]); if (snap) model.constraints.push({ point, snap }); },
     commitNewConstraint(type, constraint) { state.events.push('commit'); state.commitInputs = { targets: command.targets, first: command.firstPoint }; model.constraints.push(constraint); if (!state.success) ids.allocate('circle'); return state.success; },
   });
-  command = sandbox.window.CenterlineCommand.create({ plans, construction, selection: { set: (kind, values) => { state.selected[kind] = Array.from(values); } }, sameSketchElements: () => state.validSketch, activeSketchId: () => 'S1', isActiveSketchElement: item => item.sketchId === 'S1', applicationText: text, minLineLength: 1,
+  command = sandbox.window.CenterlineCommand.create({ cancelConstraintTargetCommand: () => state.events.push('cancel-constraint'), cancelPendingCommand: () => state.events.push('cancel-pending'), canCreateInActiveSketch: () => state.root !== true, rejectRootSketchCreation: () => state.events.push('reject-root'), clearSelection: () => { state.selected = {}; state.events.push('clear-selection'); }, updateToolbar: () => state.events.push('toolbar'), plans, construction, selection: { get lines() { return state.selected.lines || []; }, get points() { return state.selected.points || []; }, set: (kind, values) => { state.selected[kind] = Array.from(values); } }, sameSketchElements: () => state.validSketch, activeSketchId: () => 'S1', isActiveSketchElement: item => item.sketchId === 'S1', applicationText: text, minLineLength: 1,
     snapForDrawing: pointer => ({ point: pointer, snap: state.snap }), clearSnap() { state.snap = null; state.events.push('clear-snap'); }, setPointerPreview: value => { state.preview = value; }, setMode: value => { state.mode = value; state.events.push('mode'); }, invalidateAnalysis: () => state.events.push('invalidate'), setHint: (message, severity) => { state.hint = [message, severity]; }, updateUI: () => state.events.push('ui'), draw: () => state.events.push('draw'),
   });
   return { model, state, ids, geometry, plans, command };
@@ -59,4 +59,20 @@ test('parallel-line creation uses its own constraint type and reset only clears 
   h.command.prepare([a, b]); assert.equal(Object.isFrozen(h.command.support.anchor), true); h.command.click({ x: 0, y: 90 }); h.command.click({ x: 20, y: -90 });
   assert.ok(h.model.constraints.at(-1) instanceof ParallelLinesCenterlineConstraint); assert.equal(h.model.lines[2].p1.y, 5);
   h.command.prepare([a, b]); h.command.click({ x: 0, y: 0 }); h.command.reset(); assert.equal(h.command.support, null); assert.equal(h.command.firstPoint, null); assert.equal(h.model.lines.length, 3);
+});
+
+test('start prepares selected points and resets prior endpoint input', () => {
+  const h = fixture(), a = h.geometry.addPoint(0, 0), b = h.geometry.addPoint(10, 0);
+  h.state.selected.points = [a, b]; h.command.start();
+  assert.deepEqual(Array.from(h.command.targets), [a, b]); assert.ok(h.command.support);
+  assert.equal(h.command.firstPoint, null); assert.equal(h.state.mode, 'centerline');
+  assert.deepEqual(h.state.events.slice(0, 2), ['cancel-constraint', 'cancel-pending']);
+  assert.equal(h.state.events.includes('clear-selection'), false);
+});
+test('start rejects root before changing mode and falls back to target input for mixed selection', () => {
+  const h = fixture(); h.state.root = true; h.state.mode = 'select'; h.command.start();
+  assert.equal(h.state.mode, 'select'); assert.deepEqual(h.state.events, ['cancel-constraint', 'cancel-pending', 'reject-root']);
+  h.state.root = false; h.state.selected = { points: [{}], lines: [{}] }; h.command.start();
+  assert.equal(h.state.mode, 'centerline'); assert.equal(h.command.targets.length, 0);
+  assert.equal(h.state.preview, null); assert.equal(h.state.hint[0], 'Select two parallel lines or two points');
 });

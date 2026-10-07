@@ -830,12 +830,13 @@
   const centerlinePlans = window.CenterlineGeometry.create({ applicationText, parallelTolerance: CENTERLINE_PARALLEL_TOLERANCE });
   const centerlineConstruction = window.CenterlineConstruction.create({ currentScope: workspace.current, geometry: geometryCreation, ids: geometryIds, addPointSnapConstraints, commitNewConstraint });
   const centerlineCommand = window.CenterlineCommand.create({
+    cancelConstraintTargetCommand, cancelPendingCommand, canCreateInActiveSketch, rejectRootSketchCreation, clearSelection, updateToolbar,
     plans: centerlinePlans, construction: centerlineConstruction, selection: canvasSelection, sameSketchElements, activeSketchId, isActiveSketchElement, applicationText, minLineLength: MIN_LINE_LENGTH,
     snapForDrawing: pointer => ({ point: snapForDrawing(pointer), snap: drawingSnap.active }), clearSnap,
     setPointerPreview: value => { drawingPreview.setPointer(value); }, setMode: value => { mode = value; },
     invalidateAnalysis: () => { constraintAnalysis.invalidate(); }, setHint, updateUI, draw,
   });
-  const { reset: resetCenterlineCommandState, prepare: prepareCenterlineEndpointPlacement, click: handleCenterlineClick, projectPointToCenterlineSupport } = centerlineCommand;
+  const { start: startCenterlineCommand, reset: resetCenterlineCommandState, prepare: prepareCenterlineEndpointPlacement, click: handleCenterlineClick, projectPointToCenterlineSupport } = centerlineCommand;
   const circularConstruction = window.CircularConstruction.create({
     endpointAt, addPoint, addCircle, addArc, addPointSnapConstraints, addArcEndpointSnapConstraints, addCircularBoundarySnapConstraints,
     currentScope: workspace.current, sequences: geometryIds,
@@ -1744,30 +1745,6 @@
 
 
 
-
-  function startCenterlineCommand() {
-    cancelConstraintTargetCommand("");
-    cancelPendingCommand("");
-    if (!canCreateInActiveSketch()) return void rejectRootSketchCreation();
-    const preselected = canvasSelection.lines.length === 2 && canvasSelection.points.length === 0
-      ? canvasSelection.lines.slice()
-      : canvasSelection.points.length === 2 && canvasSelection.lines.length === 0
-        ? canvasSelection.points.slice()
-        : [];
-    resetCenterlineCommandState();
-    mode = "centerline";
-    drawingPreview.setPointer(null);
-    clearSnap();
-    if (preselected.length === 2 && prepareCenterlineEndpointPlacement(preselected)) {
-      updateToolbar();
-      return;
-    }
-    clearSelection();
-    updateToolbar();
-    setHint(applicationText("平行な2線、または2点を順にクリックしてください", "Select two parallel lines or two points"));
-    updateUI({ refreshAnalysis: false });
-    draw();
-  }
 
   function createCircleCenterCrosses(circles) {
     const targets = [...new Set(Array.isArray(circles) ? circles : [])];
