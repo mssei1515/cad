@@ -52,53 +52,15 @@
 
 ## 5. 現在地と残作業
 
-2026-09-29時点、保存読込の構成要素、描画器、Properties、Sketchツリー、多くの作図command、Instanceの作成・編集、Block定義操作と編集session、履歴制御、Sketch操作、画像／注記／寸法のドラッグ、選択矩形を分離済み。通常図形ドラッグは計画生成・求解方針に続き、操作sessionと確定・復元の調整を分離した。ただし`app.js`は16,501行あり、入力・操作状態・共通編集・起動接続の整理は未完了である。
+2026-10-08時点、保存読込・描画器・Properties・Sketchツリー・作図command・Instance／Block操作・履歴・ドラッグ・選択・Document適用と正規化を段階的に分離済み。app.jsは10,782行で、入力・操作状態・共通編集・起動接続・診断APIの整理は未完了。最新の検証と再開条件はsection 8を参照する。
 
-各区切りのコミットと検証記録は[composition-root.md](composition-root.md)へ集約する。この文書の「再開地点」は最新の一件に置き換え、過去の未コミット表示や次の候補を積み重ねない。
+週枠残量49%を確認したため新規分離を停止。コードの最終commitはa936cc2。今回の再開はdevelop 71b139bを基準とし、15個の責務単位のcommitでapp.jsを11,403行から10,782行へ縮小した（621行減）。数百行のcomposition rootを目指す全体目標は未完了。
 
-残る主要な領域は以下。順番や個数は固定しない。
+今回整理したのは、Sidebar、Centerline開始、円中心十字、拘束後の線の潰れ照会、寸法保存変換、履歴復元、Document適用、外観／Block正規化、寸法配置補正、拘束対象の値変換、求解結果表示、外観／可視性照会、注記Parameter編集、記号削除時の依存照会。責務の配置はimplementation-map.mdとspec/architecture/モジュール構成.mdを参照する。
 
-- Block履歴adapter。拘束複製と選択候補照会は分離済み。下書き生成・確定・定義操作・依存照会は分離済みで、残る接続の整理を行う。
-- 拘束操作・Selection編集・コピー／削除・Sketch編集の調整。
-- ドラッグsession、hover／hit判定、Canvasとキーボードの入力振分け、共通モード遷移。
-- Annotation／Reference Image／Hatch等の残る操作状態と編集処理。
-- Document操作の進行、履歴adapter、保存読込後のUI・操作状態の同期。
-- 描画前の表示情報取得・preview構成など、既存rendererへ渡す情報の整理。
-- test hookと診断の公開境界。
-- 分離済み機能の組立て方の整理、`app.js`の起動側への収束、全体検証。
+最終検証は構文387ファイル・単体955件・全E2E413件が成功（exit 0）。全E2Eはdevelop上のa936cc2で21.2分、ログは一時ディレクトリのcad-refactor-oct8-final-e2e.log。今回の最新機能を含む現物を検証しており、以前の369件成功記録を流用していない。この記録をCommit／Pushし、developを先に、mainを最後に反映して両者を同期する停止手順を適用する。
 
-「あと何ファイル」や「あと何回」とは見積もらない。まず一つの機能の所有者と依存を揃え、その結果を見て次のまとまりを選ぶ。
-
-## 6. 実装・検証・履歴の進め方
-
-- サブエージェントは使わない（ユーザーの明示指示）。
-- 最新の目標継続指示で週枠残量50%未満の停止条件が再提示されたため適用する。停止時の最後のコミットをmainへマージする指示も受領。残量はusage toolで確認し、リリース時はdevelop先行・main最後・両ブランチ同期の手順を守る。
-- 開始時にAGENTS.md、Gitのbranch／status、関連仕様・テストを確認する。既存の無関係な変更を混ぜない。
-- 責務としてまとまった単位で実装し、差分を確認し、関連仕様を更新して検証・Commit・Pushする。将来の原因調査で区切りを追える履歴を残す。
-- 構文は`npm run check`、単体は`npm run test:unit`。関連E2Eを実施し、全体完了前には全体E2Eも確認する。
-- `.test.js`の変更は分離した責務の境界検証や読込一覧の更新に必要な範囲とする。テストの整備だけで分離が進んだことにはしない。
-- 新module追加時は`index.html`、`tools/check-syntax.js`、必要なら`package.json`の明示的な単体一覧、`tests/e2e/unified-ui.spec.js`の読込順期待を更新する。script順とapp内の初期化順の両方を確認する。
-- E2E実行中にアプリのソースを変更しない。長時間のテストは同じprocess/sessionを追跡し、出力待ちのtimeoutだけで再起動しない。
-- 過去の「今回はテストをスキップ」はその時点だけの許可。今後の常時スキップには引き継がない。
-- originは`https://github.com/mssei1515/cad`。通常の作業branchとdevelopへのPushは継続許可がある。現在の作業branchは`codex/sidebar-lifecycle`。
-- 現在は作業branchで進める。最新の目標継続指示で指定された最後のコミットをリリースする際にdevelop／mainへ統合する。各抽出の途中では自動リリースしない。
-- Commit後には`npm run write:runtime-version`を実行する。生成物はGitに含めない。
-
-2026-10-02、コードcommit `4ead051`に対する全E2E327件が成功した（19.5分、exit 0）。構文347件・単体785件も同じコードで成功済み。全体リファクタリングの完成とは区別し、以後コードを変更した場合は変更に応じて再検証する。Offset問題の過去の判断・修正は履歴に残っているため、古い進捗記録の「未回答」だけを根拠に同じ質問や修正をやり直さない。
-
-## 7. 全体の完了条件
-
-責務が複数ファイルになっただけでは完了としない。以下を現物で確認する。
-
-- `app.js`が主に機能の生成・接続・起動を担い、数百行程度という目標に照らして説明できる構成になっている。
-- 状態の所有者と更新APIが明確で、元のglobal依存が別ファイルに移っただけではない。
-- UI・動作・保存互換性が維持され、既存テストと必要な全体検証が通っている。
-- 仕様と実装配置が一致し、未解決の不具合・未検証項目を隠していない。
-- 差分確認、Commit、許可された範囲のPush、実行コミット情報更新が済んでいる。
-
-## 8. 再開地点（2026-10-08）
-
-週枠残量76%で再開。停止条件は50%未満へ更新。最新develop 71b139bからcodex/sidebar-lifecycleを作成し、SidebarControllerへサイドバー開閉・タブ選択・イベント受付を分離した。CenterlineCommandへ事前選択付き開始も統合済み。CircleCenterCrossCommandへ円中心十字の作成・求解・失敗復元も分離済み。拘束後の線の潰れ判定はLineCollapseQueryへ分離済み。寸法の保存用変換はDimensionPersistenceへ分離済み。Document／Blockの履歴復元手順はHistoryRestorationへ分離済み。Document適用順と読込補正結果はDocumentApplicationへ分離済み。外観正規化はDocumentStateへ統合済み。Block定義・配置の正規化はBlockStateへ分離済み。寸法配置の補正はDimensionPlacementへ統合済み。拘束対象の値変換はConstraintOperandsへ分離済み。求解・拘束状態の文面はConstraintFeedbackへ分離済み。幾何外観・可視性はGeometryAppearanceQueryへ分離済み。注記Parameter編集はAnnotationParameterCommandへ分離済み。記号削除時の依存照会はParameterNamespaceへ統合済み（app.js 10,782行）。週枠残量49%を確認し、新規分離を停止。最終検証とdevelop→mainの反映・同期を行う。開始時app.jsは11,403行。前回以降の機能変更を含む現物を基準とし、以前のテスト成功を今回の証拠に流用しない。次はDocument適用・描画調整・入力組立て・診断APIの責務を整理する。
+再開時はusage tool、Git状態、worktree、remote main／developと祖先関係を確認し、最新developから新しい作業branchを作成する。旧codex/sidebar-lifecycleは統合完了後に削除する。runtime-version.jsを再生成する。次の候補はClipboardの参照付替え・貼付けtransaction、拘束意図の解決／確定・失敗復元、resetModelStateの操作session所有、描画・入力の組立て、installTestHooksの機能ごとのAPI境界。巨大contextを移すだけにせず、入力／出力と状態所有を先に決める。既に分離したDocumentApplication／BlockState／GeometryAppearanceQueryを再抽出しない。
 
 ### 前回の停止記録（2026-10-04）
 
