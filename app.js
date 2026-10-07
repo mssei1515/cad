@@ -3002,26 +3002,9 @@
   }
 
   function ensureDimensionDefaults() {
-    for (const c of model.constraints) {
-      const target = targetFromConstraint(c);
-      if (!target) continue;
-      if (!c.dimension) {
-        c.dimension = defaultDimensionForTarget(target);
-      } else if (target.kind === "angle") {
-        migrateAngleDimensionLabelPlacement(target, c.dimension);
-        if (!Number.isFinite(c.dimension.angleRadius) || !Number.isInteger(c.dimension.angleStartFlip) || !Number.isInteger(c.dimension.angleEndFlip)) {
-          const previousDimension = c.dimension;
-          const previousAnchor = dimensionAnchor(target, previousDimension);
-          c.dimension = dimensionFromAnchor(target, previousAnchor, { allowPointAxis: false });
-          setAngleDimensionLabelOffsets(c.dimension, angleDimensionLabelOffsets(target, previousDimension));
-        }
-      } else if (!Number.isFinite(c.dimension.offsetU) || !Number.isFinite(c.dimension.offsetN)) {
-        const previous = c.dimension;
-        c.dimension = dimensionFromAnchor(target, previous, { allowPointAxis: false });
-        c.dimension.labelOffsetU = Number.isFinite(previous.labelOffsetU) ? previous.labelOffsetU : 0;
-        if (target.dimensionAxis) c.dimension.axis = target.dimensionAxis;
-      }
-      if (!Number.isFinite(c.dimension.labelOffsetU)) c.dimension.labelOffsetU = 0;
+    for (const constraint of model.constraints) {
+      const target = targetFromConstraint(constraint);
+      if (target) constraint.dimension = dimensionPlacement.normalizeDimension(target, constraint.dimension);
     }
   }
 

@@ -368,7 +368,28 @@
       return dimension;
     }
 
-    return Object.freeze({ targetDirection, targetPointsForDimension, dimensionFromAnchor, angleDimensionLabelBasis, angleDimensionLabelOffsets, setAngleDimensionLabelOffsets, migrateAngleDimensionLabelPlacement, dimensionWithLabelAt, angleDimensionFromLabelPoint, applyDefaultCircleDimensionLabelOffset, storedDimensionAxis, dimensionAnchor, defaultDimensionForTarget });
+    function normalizeDimension(target, dimension) {
+      if (!dimension) {
+        dimension = defaultDimensionForTarget(target);
+      } else if (target.kind === "angle") {
+        migrateAngleDimensionLabelPlacement(target, dimension);
+        if (!Number.isFinite(dimension.angleRadius) || !Number.isInteger(dimension.angleStartFlip) || !Number.isInteger(dimension.angleEndFlip)) {
+          const previousDimension = dimension;
+          const previousAnchor = dimensionAnchor(target, previousDimension);
+          dimension = dimensionFromAnchor(target, previousAnchor, { allowPointAxis: false });
+          setAngleDimensionLabelOffsets(dimension, angleDimensionLabelOffsets(target, previousDimension));
+        }
+      } else if (!Number.isFinite(dimension.offsetU) || !Number.isFinite(dimension.offsetN)) {
+        const previous = dimension;
+        dimension = dimensionFromAnchor(target, previous, { allowPointAxis: false });
+        dimension.labelOffsetU = Number.isFinite(previous.labelOffsetU) ? previous.labelOffsetU : 0;
+        if (target.dimensionAxis) dimension.axis = target.dimensionAxis;
+      }
+      if (!Number.isFinite(dimension.labelOffsetU)) dimension.labelOffsetU = 0;
+      return dimension;
+    }
+
+    return Object.freeze({ normalizeDimension, targetDirection, targetPointsForDimension, dimensionFromAnchor, angleDimensionLabelBasis, angleDimensionLabelOffsets, setAngleDimensionLabelOffsets, migrateAngleDimensionLabelPlacement, dimensionWithLabelAt, angleDimensionFromLabelPoint, applyDefaultCircleDimensionLabelOffset, storedDimensionAxis, dimensionAnchor, defaultDimensionForTarget });
   }
   window.DimensionPlacement = Object.freeze({ create });
 })();

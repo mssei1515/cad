@@ -99,3 +99,38 @@ test("angle extensions scale with the viewport and parallel angle targets have n
   const target = angleTarget(); target.line2 = new Line("parallel", new Point("A", 0, 10), new Point("B", 100, 10));
   assert.equal(layouts.angleDimensionLayout(target, placement.dimensionFromAnchor(target, { x: 20, y: 20 })), null);
 });
+
+
+test('dimension normalization creates defaults and preserves an already relative placement by identity', () => {
+  const { placement } = create();
+  const target = { kind: 'line-length', p1: new Point('a', 0, 0), p2: new Point('b', 100, 0) };
+  const created = placement.normalizeDimension(target, null);
+  assert.deepEqual(plain(created), plain(placement.defaultDimensionForTarget(target)));
+  assert.equal(placement.normalizeDimension(target, created), created);
+  created.labelOffsetU = NaN;
+  assert.equal(placement.normalizeDimension(target, created), created); assert.equal(created.labelOffsetU, 0);
+});
+
+test('legacy linear placement keeps its anchor, explicit axis and label displacement', () => {
+  const { placement } = create();
+  const target = { kind: 'point-point', p1: new Point('a', 0, 0), p2: new Point('b', 100, 50), dimensionAxis: 'horizontal' };
+  const previous = { x: 70, y: 30, labelOffsetU: 12 };
+  const normalized = placement.normalizeDimension(target, previous);
+  assert.notEqual(normalized, previous); assert.equal(normalized.labelOffsetU, 12); assert.equal(normalized.axis, 'horizontal');
+  const anchor = placement.dimensionAnchor(target, normalized); close(anchor.x, 70); close(anchor.y, 30);
+  assert.equal(previous.x, 70); assert.equal(previous.y, 30);
+});
+
+test('angle normalization rebuilds missing radius and flips while preserving migrated label offsets', () => {
+  const { placement } = create(), target = angleTarget();
+  const previous = { x: 30, y: 30, labelOffsetU: 0, angleLabelOffsetR: 7, angleLabelOffsetT: -3, angleLabelPlacementVersion: 2 };
+  const normalized = placement.normalizeDimension(target, previous);
+  assert.notEqual(normalized, previous);
+  assert.ok(Number.isFinite(normalized.angleRadius)); assert.ok(Number.isInteger(normalized.angleStartFlip)); assert.ok(Number.isInteger(normalized.angleEndFlip));
+  assert.equal(normalized.angleLabelOffsetR, 7); assert.equal(normalized.angleLabelOffsetT, -3);
+  assert.equal(normalized.angleLabelPlacementVersion, 2);
+  assert.equal(placement.normalizeDimension(target, normalized), normalized);
+  const legacy = { ...normalized, angleLabelPlacementVersion: 1, angleLabelOffsetR: 20, angleLabelOffsetT: 30, labelX: 100, labelY: 200 };
+  assert.equal(placement.normalizeDimension(target, legacy), legacy);
+  assert.equal(legacy.angleLabelOffsetR, 0); assert.equal(legacy.angleLabelOffsetT, 0); assert.equal('labelX' in legacy, false);
+});

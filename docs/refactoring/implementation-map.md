@@ -490,3 +490,5 @@ AuthoringPreviewRendererへSpline／Centerline／Trim描画も統合。Spline構
 - src/document/state.js: 初期化・resetに加え、Document／Block scopeの外観正規化を所有。旧Root外観の引継ぎ先は明示したblockEditing値で選び、編集sessionは参照しない。
 
 - src/document/block_state.js: Block定義・親子所有・scope配置の正規化。BlockCatalogとSketchContextの限定した照会・補完に依存し、編集先はコンテナ定義IDで受け取る。
+
+- src/rendering/dimension_placement.js: normalizeDimensionで欠損配置の既定値生成と旧配置の補正も所有。対象と配置を明示引数にし、拘束の列挙と書戻しは呼出側に残す。

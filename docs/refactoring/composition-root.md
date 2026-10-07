@@ -6,6 +6,10 @@
 
 ## 現在の再開地点（2026-10-08）
 
+DimensionPlacementへ寸法の既定配置・旧配置補正を統合。対象と配置を引数とし、拘束列挙・書戻しだけappに残す。角度ラベル移行順、axis、offset、既存相対配置の参照同一性を維持。app.jsは10,976行から10,959行へ縮小（17行減）。構文383ファイル・単体939件・関連E2E126件成功（exit 0、1.7分）。ログはcad-dimension-normalize-{check,unit,e2e}.log。全体E2Eは今回未実行。全体目標は未完了。
+
+### 前回の区切り
+
 BlockStateへBlock定義・Sketch所属・親子所有・scope配置の正規化を分離。BlockCatalog／SketchContextの限定した照会と補完を注入し、編集コンテナはIDで渡す。旧処理本体との機械照合で依存置換以外の一致を確認。app.jsは11,119行から10,976行へ縮小（143行減）。構文383ファイル・単体936件・関連E2E159件成功（exit 0、2.1分）。ログはcad-block-state-{check,unit,e2e}.log。全体E2Eは今回未実行。全体目標は未完了。
 
 ### 前回の区切り
