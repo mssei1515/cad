@@ -6,6 +6,10 @@
 
 ## 現在の再開地点（2026-10-08）
 
+DocumentStateへDocument／Block scopeの外観正規化を統合。旧Root外観の引継ぎ先をblockEditingの明示引数にし、編集session依存を除去。補助要素の所属補完と幾何参照保持を維持。app.jsは11,149行から11,119行へ縮小（30行減）。構文382ファイル・単体932件・関連E2E157件成功（exit 0、2.1分）。ログはcad-appearance-state-{check,unit,e2e}.log。全体E2Eは今回未実行。全体目標は未完了。
+
+### 前回の区切り
+
 DocumentApplicationへDocumentの適用順と読込補正結果を分離。decode失敗時に既存モデルを消さない順序、Treeの任意保持、参照・最小線長・寸法・ID・外観・Block・描画順の同期を維持。Tree生成前参照による初回E2E起動失敗を遅延adapterで修正後、構文382ファイル・単体929件・関連E2E151件成功（exit 0、2.3分）。app.jsは11,170行から11,149行へ縮小（21行減）。ログはcad-document-apply-{check,unit,e2e}.log。全体E2Eは今回未実行。週枠残量61%で継続。全体目標は未完了。
 
 ### 前回の区切り

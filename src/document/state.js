@@ -50,5 +50,44 @@
     document.nextHatchIndex = 1;
   }
 
-  window.DocumentState = Object.freeze({ DEFAULT_DOCUMENT_UNITS, create, clearContent, resetDefaults });
+  function normalizeAppearanceState(document, scope, { blockEditing = false } = {}) {
+    const { normalizeAppearance, normalizeConstructionAppearance, normalizeDimensionAppearance } = window.Appearance;
+    const { isRootSketch } = window.SketchHierarchy;
+    const { normalizeAnnotations } = window.AnnotationData;
+    const { normalizeHatches } = window.HatchData;
+    const { normalizeReferenceImages } = window.ReferenceImageData;
+    document.defaultTerminatorAppearance = window.Appearance.normalizeTerminator(document.defaultTerminatorAppearance || document.defaultDimensionAppearance, { partial: false });
+    document.defaultLeaderAppearance = window.Appearance.leaderDefaults(document.defaultLeaderAppearance);
+    document.defaultAppearance = normalizeAppearance(document.defaultAppearance, { partial: false });
+    document.defaultConstructionAppearance = normalizeConstructionAppearance(document.defaultConstructionAppearance, { partial: false });
+    document.defaultDimensionAppearance = window.Appearance.dimensionDefaults(document.defaultDimensionAppearance);
+    const root = scope.sketches.find((sketch) => isRootSketch(sketch));
+    if (root) {
+      const legacyAppearance = normalizeAppearance(root.appearance);
+      const legacyConstructionAppearance = normalizeConstructionAppearance(root.constructionAppearance);
+      const legacyDimensionAppearance = normalizeDimensionAppearance(root.dimensionAppearance);
+      if (blockEditing) {
+        for (const sketch of scope.sketches.filter((item) => !isRootSketch(item))) {
+          sketch.appearance = { ...legacyAppearance, ...normalizeAppearance(sketch.appearance) };
+          sketch.constructionAppearance = { ...legacyConstructionAppearance, ...normalizeConstructionAppearance(sketch.constructionAppearance) };
+          sketch.dimensionAppearance = { ...legacyDimensionAppearance, ...normalizeDimensionAppearance(sketch.dimensionAppearance) };
+        }
+      } else {
+        document.defaultAppearance = { ...document.defaultAppearance, ...legacyAppearance };
+        document.defaultConstructionAppearance = { ...document.defaultConstructionAppearance, ...legacyConstructionAppearance };
+        Object.assign(document.defaultTerminatorAppearance, window.Appearance.normalizeTerminator(legacyDimensionAppearance));
+        document.defaultDimensionAppearance = window.Appearance.dimensionDefaults({ ...document.defaultDimensionAppearance, ...legacyDimensionAppearance });
+      }
+      root.appearance = {};
+      root.constructionAppearance = {};
+      root.dimensionAppearance = {};
+    }
+    const fallbackSketchId = scope.sketches.find((sketch) => !isRootSketch(sketch))?.id || DEFAULT_SKETCH_ID;
+    scope.annotations = normalizeAnnotations(scope.annotations, fallbackSketchId);
+    scope.hatches = normalizeHatches(scope.hatches, fallbackSketchId);
+    scope.referenceImages = normalizeReferenceImages(scope.referenceImages, fallbackSketchId);
+    for (const item of [...scope.points, ...scope.lines, ...scope.circles, ...scope.arcs, ...scope.splines]) item.appearance = normalizeAppearance(item.appearance);
+  }
+
+  window.DocumentState = Object.freeze({ DEFAULT_DOCUMENT_UNITS, create, clearContent, resetDefaults, normalizeAppearanceState });
 })();

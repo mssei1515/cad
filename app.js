@@ -974,37 +974,7 @@
   }
 
   function ensureAppearanceState() {
-    documentModel.defaultTerminatorAppearance = window.Appearance.normalizeTerminator(documentModel.defaultTerminatorAppearance || documentModel.defaultDimensionAppearance, { partial: false });
-    documentModel.defaultLeaderAppearance = window.Appearance.leaderDefaults(documentModel.defaultLeaderAppearance);
-    documentModel.defaultAppearance = normalizeAppearance(documentModel.defaultAppearance, { partial: false });
-    documentModel.defaultConstructionAppearance = normalizeConstructionAppearance(documentModel.defaultConstructionAppearance, { partial: false });
-    documentModel.defaultDimensionAppearance = window.Appearance.dimensionDefaults(documentModel.defaultDimensionAppearance);
-    const root = model.sketches.find((sketch) => isRootSketch(sketch));
-    if (root) {
-      const legacyAppearance = normalizeAppearance(root.appearance);
-      const legacyConstructionAppearance = normalizeConstructionAppearance(root.constructionAppearance);
-      const legacyDimensionAppearance = normalizeDimensionAppearance(root.dimensionAppearance);
-      if (blockEditor.current) {
-        for (const sketch of model.sketches.filter((item) => !isRootSketch(item))) {
-          sketch.appearance = { ...legacyAppearance, ...normalizeAppearance(sketch.appearance) };
-          sketch.constructionAppearance = { ...legacyConstructionAppearance, ...normalizeConstructionAppearance(sketch.constructionAppearance) };
-          sketch.dimensionAppearance = { ...legacyDimensionAppearance, ...normalizeDimensionAppearance(sketch.dimensionAppearance) };
-        }
-      } else {
-        documentModel.defaultAppearance = { ...documentModel.defaultAppearance, ...legacyAppearance };
-        documentModel.defaultConstructionAppearance = { ...documentModel.defaultConstructionAppearance, ...legacyConstructionAppearance };
-        Object.assign(documentModel.defaultTerminatorAppearance, window.Appearance.normalizeTerminator(legacyDimensionAppearance));
-        documentModel.defaultDimensionAppearance = window.Appearance.dimensionDefaults({ ...documentModel.defaultDimensionAppearance, ...legacyDimensionAppearance });
-      }
-      root.appearance = {};
-      root.constructionAppearance = {};
-      root.dimensionAppearance = {};
-    }
-    const fallbackSketchId = model.sketches.find((sketch) => !isRootSketch(sketch))?.id || DEFAULT_SKETCH_ID;
-    model.annotations = normalizeAnnotations(model.annotations, fallbackSketchId);
-    model.hatches = normalizeHatches(model.hatches, fallbackSketchId);
-    model.referenceImages = normalizeReferenceImages(model.referenceImages, fallbackSketchId);
-    for (const item of [...model.points, ...model.lines, ...model.circles, ...model.arcs, ...model.splines]) item.appearance = normalizeAppearance(item.appearance);
+    window.DocumentState.normalizeAppearanceState(documentModel, model, { blockEditing: Boolean(blockEditor.current) });
   }
 
   function ensureBlockState() {
