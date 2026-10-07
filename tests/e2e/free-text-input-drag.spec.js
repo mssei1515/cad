@@ -39,12 +39,12 @@ for (const inactive of [false, true]) {
     await input.press('Tab');
     const saved = await page.evaluate(() => window.__jot2dTest.serializedModelForTest());
     expect(saved.annotations[0].expression).toBe(`"${positions.name}" + 2`);
-    expect((await page.evaluate(() => window.__jot2dTest.annotationAppearanceStateForTest('text'))).displayedText).toBe('42');
+    expect((await page.evaluate(() => window.__jot2dTest.annotationAppearanceStateForTest('text'))).displayedText).toBe('First note42');
     await page.click('#undoBtn');
     expect((await page.evaluate(() => window.__jot2dTest.serializedModelForTest())).annotations[0].expression).toBe('0');
     await page.click('#redoBtn');
     expect((await page.evaluate(data => window.__jot2dTest.loadDocumentFixtureForDragTest(data, 'saved.jot2d'), saved)).success).toBe(true);
-    expect((await page.evaluate(() => window.__jot2dTest.annotationAppearanceStateForTest('text'))).displayedText).toBe('42');
+    expect((await page.evaluate(() => window.__jot2dTest.annotationAppearanceStateForTest('text'))).displayedText).toBe('First note42');
   });
 }
 
@@ -92,3 +92,33 @@ test('multiple free texts size lock captures zoom with one undo and persists', a
   await page.evaluate(data => window.__jot2dTest.loadDocumentFixtureForDragTest(data), saved);
   expect((await page.evaluate(() => window.__jot2dTest.serializedModelForTest())).annotations).toEqual(saved.annotations);
 });
+
+for (const prefix of ['Custom prefix', '']) {
+  test(`free text initializes prefix once and retains edited prefix ${JSON.stringify(prefix)} after reload`, async ({ page }) => {
+    const positions = await fixture(page);
+    await page.mouse.click(positions.notes[0].x, positions.notes[0].y);
+    const enabled = page.locator('[data-property="annotation-parameter-enabled"]');
+    const affix = page.locator('[data-annotation-style="prefix"]');
+    await enabled.check();
+    await expect(affix).toHaveValue('First note');
+    await page.click('#undoBtn');
+    let saved = await page.evaluate(() => window.__jot2dTest.serializedModelForTest());
+    expect(saved.annotations[0].parameterEnabled).toBe(false);
+    expect(saved.annotations[0].style.prefix || '').toBe('');
+    await page.click('#redoBtn');
+    await page.mouse.click(positions.notes[0].x, positions.notes[0].y);
+    await expect(affix).toHaveValue('First note');
+    await affix.fill(prefix);
+    await affix.press('Tab');
+    await enabled.uncheck();
+    saved = await page.evaluate(() => window.__jot2dTest.serializedModelForTest());
+    expect(saved.annotations[0].text).toBe('First note');
+    expect(saved.annotations[0].style.prefix).toBe(prefix);
+    expect((await page.evaluate(data => window.__jot2dTest.loadDocumentFixtureForDragTest(data), saved)).success).toBe(true);
+    await page.evaluate(() => window.__jot2dTest.focusWorldForTest({ x: 50, y: 0 }, 2));
+    const point = await page.evaluate(() => window.__jot2dTest.worldClientPositionForTest({ x: 0, y: -45 }));
+    await page.mouse.click(point.x, point.y);
+    await enabled.check();
+    await expect(affix).toHaveValue(prefix);
+  });
+}

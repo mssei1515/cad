@@ -1211,6 +1211,9 @@
     try {
       if (property === "annotation-parameter-enabled") {
         if (!value && !guardDimensionSymbolDeletion([item])) return false;
+        if (value && !item.parameterEnabled && !item.parameterName && item.type === "text") {
+          (item.style ||= {}).prefix = item.text || "";
+        }
         item.parameterEnabled = Boolean(value);
         if (item.parameterEnabled) ensureDimensionParameter(item, currentParameterNamespace());
       } else if (property === "annotation-parameter-name") parameterNamespace.renameDimension(item, value);
