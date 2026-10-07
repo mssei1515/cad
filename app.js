@@ -290,6 +290,10 @@
     profileRead: read => interactionProfiler.active ? profileInteractionWork("geometryReads", read) : read(),
   });
   const { scopeGeometryItem: sidebarGeometryItem, withGeometryReadCache, blockProjectionBundles, geometryInstanceBundles, geometryInstanceBundle, allGeometryPoints, allGeometryLines, allGeometryCircles, allGeometryArcs, allGeometrySplines, allAnnotations, allHatches, allGeometryPrimitives, resolveGeometryRef, geometryElementFromKey } = geometryReads;
+  const geometryAppearance = window.GeometryAppearanceQuery.create({
+    document: documentModel, readAppearance: geometryReads.readAppearance, cacheAppearance: geometryReads.cacheAppearance,
+    sketchById, elementSketchId, isRootSketch, activeSketchId, showHiddenElements: () => viewState.showHiddenElements,
+  });
   const { hitAnnotationTarget, annotationLeaderTargetFromSelection, annotationLeaderTargetFromHit, annotationLeaderTargetFromItem, annotationLeaderAnchor } = window.AnnotationAnchorQuery.create({
     isReferenceSourceSketchId,
     selectedGeometryItems, elementSketchId, activeSketchId, resolveGeometryRef,
@@ -1131,31 +1135,7 @@
     return data;
   }
 
-  function effectiveAppearanceForElement(item) {
-    const cached = geometryReads.readAppearance(item);
-    if (cached) return cached;
-    if (item?.derivedProjection && item.sourceElement) {
-      const result = { ...effectiveAppearanceForElement(item.sourceElement), ...normalizeAppearance(item.derivedInstance.appearanceOverride) };
-      geometryReads.cacheAppearance(item, result);
-      return result;
-    }
-    const construction = (item instanceof Line || item instanceof Circle || item instanceof Arc || item instanceof Spline) && item.construction;
-    const outerSketch = sketchById(elementSketchId(item));
-    const definitionSketch = item?.blockProjection && !item?.derivedProjection
-      ? item.blockDefinition?.sketches?.find((sketch) => sketch.id === item.localElement?.sketchId) : null;
-    const result = resolveGeometryAppearance({
-      defaults: construction ? documentModel.defaultConstructionAppearance : documentModel.defaultAppearance,
-      construction,
-      sketchAppearance: sketchGeometryAppearanceLayer(outerSketch, construction),
-      definitionSketchAppearance: sketchGeometryAppearanceLayer(definitionSketch, construction),
-      elementAppearance: item?.derivedProjection ? null : item?.blockProjection ? item.localElement?.appearance : item?.appearance,
-      overrides: item?.derivedProjection ? [item.derivedInstance?.appearanceOverride]
-        : item?.blockProjection ? item.blockAppearanceOverrides || [item.blockInstance?.appearanceOverride] : [],
-    });
-    geometryReads.cacheAppearance(item, result);
-    return result;
-  }
-
+  function effectiveAppearanceForElement(...args) { return geometryAppearance.effectiveAppearanceForElement(...args); }
   function setAppearanceForSelection(patch) {
     const target = appearanceSelectionTarget();
     if (!target) return false;
@@ -1190,22 +1170,9 @@
     return window.SketchHierarchy.sketchDepth(model.sketches, sketch);
   }
 
-  function isVisibleValue(visible) {
-    return viewState.showHiddenElements || visible !== false;
-  }
-
-  function isVisibleSketchId(sketchId) {
-    const id = sketchId || activeSketchId();
-    const sketch = sketchById(id);
-    if (!sketch) return false;
-    const appearance = effectiveAppearanceForSketch(sketch);
-    return isVisibleValue(appearance.visible);
-  }
-
-  function isVisibleSketchElement(item) {
-    return isVisibleSketchId(elementSketchId(item)) && isVisibleValue(effectiveAppearanceForElement(item).visible);
-  }
-
+  function isVisibleValue(...args) { return geometryAppearance.isVisibleValue(...args); }
+  function isVisibleSketchId(...args) { return geometryAppearance.isVisibleSketchId(...args); }
+  function isVisibleSketchElement(...args) { return geometryAppearance.isVisibleSketchElement(...args); }
   function assignConstraintSketchId(constraint, sketchId = activeSketchId()) {
     const targetSketchId = isDrawableSketch(sketchId) ? sketchId : firstDrawableSketchId();
     if (constraint) constraint.sketchId = targetSketchId || activeSketchId();
@@ -4553,29 +4520,13 @@
     return true;
   }
 
-  function sketchGeometryAppearanceLayer(sketch, construction = false) {
-    if (!sketch || isRootSketch(sketch)) return null;
-    return construction ? sketch.constructionAppearance : sketch.appearance;
-  }
-
-  function effectiveConstructionAppearanceForSketch(sketch) {
-    return resolveGeometryAppearance({
-      defaults: documentModel.defaultConstructionAppearance, construction: true,
-      sketchAppearance: sketchGeometryAppearanceLayer(sketch, true),
-    });
-  }
-
+  function effectiveConstructionAppearanceForSketch(...args) { return geometryAppearance.effectiveConstructionAppearanceForSketch(...args); }
   function effectiveDimensionAppearanceForSketch(sketch) {
     return resolveDimensionAppearance({ ...documentModel.defaultDimensionAppearance, ...documentModel.defaultTerminatorAppearance },
       sketch && !isRootSketch(sketch) ? sketch.dimensionAppearance : null);
   }
 
-  function effectiveAppearanceForSketch(sketch) {
-    return resolveGeometryAppearance({
-      defaults: documentModel.defaultAppearance, sketchAppearance: sketchGeometryAppearanceLayer(sketch),
-    });
-  }
-
+  function effectiveAppearanceForSketch(...args) { return geometryAppearance.effectiveAppearanceForSketch(...args); }
 
 
 

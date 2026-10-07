@@ -140,7 +140,7 @@ const files = [
   "src/document/block_catalog.js", "src/document/block_state.js",
   "src/geometry/block_projection.js",
   "tests/unit/block-layout.test.js", "tests/unit/block-projection.test.js",
-  "src/geometry/read_model.js",
+  "src/geometry/read_model.js", "src/geometry/appearance_query.js",
   "tests/unit/geometry-read-model.test.js",
   "src/constraints/candidates.js", "src/constraints/operands.js",
   "tests/unit/constraint-candidates.test.js",

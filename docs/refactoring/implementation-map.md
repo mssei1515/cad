@@ -496,3 +496,5 @@ AuthoringPreviewRendererへSpline／Centerline／Trim描画も統合。Spline構
 - src/constraints/operands.js: 拘束対象の生成・参照target／subject変換・同一性判定。Sketch関係は注入した照会で都度解決し、選択・コマンド状態には依存しない。
 
 - src/ui/constraint_feedback.js: 求解案内・拘束状態ラベル・集計文面。状態を参照せず、呼出側が渡す結果と件数からmessage／kindまたは文字列を返す。
+
+- src/geometry/appearance_query.js: 有効外観の継承と可視性照会。描画と選択で共用し、キャッシュの期間管理はGeometryReadModelに残す。

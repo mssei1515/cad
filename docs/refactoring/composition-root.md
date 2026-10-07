@@ -6,6 +6,10 @@
 
 ## 現在の再開地点（2026-10-08）
 
+GeometryAppearanceQueryへ幾何外観継承・Sketch外観・可視性の照会を分離。Document／Sketch／Block／派生投影の優先順と参照を維持し、キャッシュ期間はGeometryReadModelが所有する。app.jsは10,850行から10,801行へ縮小（49行減）。構文386ファイル・単体948件・関連E2E141件成功（exit 0、1.9分）。ログはcad-appearance-query-{check,unit,e2e}.log。全体E2Eは今回未実行。全体目標は未完了。
+
+### 前回の区切り
+
 ConstraintFeedbackへ求解案内・拘束状態ラベル・集計文面を分離。結果と件数を明示入力にし、Solver／解析状態／DOMを参照しない。既存の成功・警告・失敗の条件と日英文面を維持。app.jsは10,896行から10,850行へ縮小（46行減）。構文385ファイル・単体945件・関連E2E104件成功（exit 0、1.4分）。ログはcad-feedback-{check,unit,e2e}.log。全体E2Eは今回未実行。全体目標は未完了。
 
 ### 前回の区切り
