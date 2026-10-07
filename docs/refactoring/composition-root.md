@@ -6,6 +6,10 @@
 
 ## 現在の再開地点（2026-10-08）
 
+DimensionPersistenceへ寸法保存データへの変換を分離。角度ラベルの移行順序と保存互換値を維持し、配置adapterを明示。app.jsは11,214行から11,187行へ縮小（27行減）。構文380ファイル・単体923件・関連E2E122件成功（exit 0、1.5分）。ログはcad-dimension-codec-{check,unit,e2e}.log。全体E2Eは今回未実行。GitHub障害は前段af5b2aeのPush時に解消し、未反映分もPush済み。全体目標は未完了。
+
+### 前回の区切り
+
 LineCollapseQueryへ拘束後の線の潰れ判定を分離。対象拘束型・snapshot参照・接続成分内のSketch・閾値は維持し、対象Sketchは明示引数とした。app.jsは11,259行から11,214行へ縮小（45行減、隣接空行整理を含む）。構文379ファイル・単体920件・関連E2E121件成功（exit 0、2.0分）。ログはcad-collapse-query-{check,unit,e2e}.log。全体E2Eは今回未実行。GitHubのInternal Server Errorが継続しており、Push完了はリモートrefで確認すること。全体目標は未完了。
 
 ### 前回の区切り

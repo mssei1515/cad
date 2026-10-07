@@ -108,7 +108,7 @@ const files = [
   "tests/unit/appearance.test.js",
   "tests/unit/drawing-order.test.js",
   "tests/unit/document-files.test.js",
-  "src/persistence/constraints.js",
+  "src/persistence/dimensions.js", "src/persistence/constraints.js",
   "tests/unit/constraint-persistence.test.js",
   "src/persistence/geometry.js",
   "tests/unit/geometry-persistence.test.js",

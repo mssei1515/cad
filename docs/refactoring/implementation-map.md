@@ -480,3 +480,5 @@ AuthoringPreviewRendererへSpline／Centerline／Trim描画も統合。Spline構
 - src/commands/circle_center_cross_command.js: 円中心十字の開始と単位操作。重複円の排除、8拘束の生成、求解失敗復元、成功履歴を集約。
 
 - src/constraints/line_collapse_query.js: 拘束後の線の潰れ判定。対象Sketchを明示し、モデルを変更しない。
+
+- src/persistence/dimensions.js: 寸法の保存用変換。配置adapterは明示し、保存・履歴・診断から同じcodecを利用する。
