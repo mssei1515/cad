@@ -6917,6 +6917,10 @@
   const pngFile = window.PngFile.create({ window, document, capture: canvasExport.capture, documentName: effectiveDocumentName, text: applicationText });
   const pngExportDialog = window.PngExportDialog.create({
     dialog: document.getElementById("pngExportDialog"), text: applicationText, capture: canvasExport.capture, save: pngFile.save, setHint,
+    resolvePoint: (point, threshold) => withGeometryReadCache(() => {
+      const snap = drawingSnap.find(screenToWorld(point), threshold / viewport.scale);
+      return { point: snap ? worldToCanvasScreen(snap) : point, snapped: Boolean(snap) };
+    }),
     prepare: async () => {
       await document.fonts.ready;
       await referenceImageRenderer.ready(model.referenceImages.filter(item => isVisibleValue(item.visible) && isVisibleSketchId(item.sketchId)));

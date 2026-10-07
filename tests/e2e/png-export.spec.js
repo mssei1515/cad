@@ -21,8 +21,8 @@ async function previewPoint(page, x, y) {
 }
 async function crop(page, a, b) {
   const p = await previewPoint(page, ...a), q = await previewPoint(page, ...b);
-  await page.mouse.move(p.x, p.y); await page.mouse.down();
-  await page.mouse.move(q.x, q.y, { steps: 3 }); await page.mouse.up();
+  await page.mouse.click(p.x, p.y);
+  await page.mouse.move(q.x, q.y, { steps: 3 }); await page.mouse.click(q.x, q.y);
 }
 async function state(page) {
   return page.evaluate(() => {
@@ -52,7 +52,7 @@ test.beforeEach(async ({ page }) => {
   await openTestDocument(page);
 });
 
-test("drag crop exports a sharp opaque PNG and preserves document, selected objects, viewport and save status", async ({ page }) => {
+test("two-corner crop exports a sharp opaque PNG and preserves document, selected objects, viewport and save status", async ({ page }) => {
   await rectangle(page);
   await page.evaluate(() => window.__jot2dTest.selectDrawingOrderObjectForTest("line", "L1"));
   const before = await state(page);
@@ -68,6 +68,62 @@ test("drag crop exports a sharp opaque PNG and preserves document, selected obje
   expect(outside).toEqual(background);
   await expect(page.locator("#pngExportDialog")).not.toBeVisible();
   expect(await state(page)).toEqual(before);
+});
+
+test("two clicks work without geometry and only the second click commits the preview", async ({ page }) => {
+  const before = await state(page);
+  expect(before.doc.lines).toHaveLength(0);
+  expect(before.doc.points).toHaveLength(0);
+  await openExport(page);
+  await expect(page.locator("[data-png-status]")).toContainText("1点目");
+  const first = await previewPoint(page, 414, 368), second = await previewPoint(page, 123, 145);
+  await page.mouse.click(first.x, first.y);
+  await expect(page.locator("[data-png-status]")).toContainText("2点目");
+  await expect(page.locator("[data-png-save]")).toBeDisabled();
+  const initial = await page.locator("#pngExportDialog canvas").evaluate(canvas => canvas.toDataURL());
+  await page.mouse.move(second.x, second.y);
+  await expect(page.locator("[data-png-save]")).toBeDisabled();
+  expect(await page.locator("#pngExportDialog canvas").evaluate(canvas => canvas.toDataURL())).not.toBe(initial);
+  await page.click("[data-png-clear]");
+  await expect(page.locator("[data-png-status]")).toContainText("1点目");
+  await expect(page.locator("[data-png-save]")).toBeDisabled();
+  await page.mouse.click(first.x, first.y);
+  await page.mouse.click(second.x, second.y);
+  expect(await download(page)).toMatchObject({ width: 582, height: 446 });
+  expect(await state(page)).toEqual(before);
+});
+
+test("separate points snap in the resized preview without needing a rectangle or adding geometry", async ({ page }) => {
+  await page.click("#toolPoint");
+  await page.locator("#canvas").click({ position: { x: 180, y: 130 } });
+  await page.locator("#canvas").click({ position: { x: 480, y: 330 } });
+  await page.keyboard.press("Escape");
+  const before = await state(page);
+  expect(before.doc.lines).toHaveLength(0);
+  expect(before.doc.points).toHaveLength(2);
+  await openExport(page);
+  const first = await previewPoint(page, 180, 130), second = await previewPoint(page, 480, 330);
+  await page.mouse.move(first.x + 7, first.y + 3);
+  await expect(page.locator("[data-png-status]")).toContainText("スナップ");
+  await page.mouse.click(first.x + 7, first.y + 3);
+  await page.mouse.move(second.x - 7, second.y - 3);
+  await expect(page.locator("[data-png-status]")).toContainText("スナップ");
+  await page.mouse.click(second.x - 7, second.y - 3);
+  expect(await download(page)).toMatchObject({ width: 600, height: 400 });
+  expect(await state(page)).toEqual(before);
+});
+
+test("endpoint snaps take precedence over nearby edges and zero-area corners remain pending", async ({ page }) => {
+  await rectangle(page);
+  await openExport(page);
+  const first = await previewPoint(page, 185, 132);
+  await page.mouse.click(first.x, first.y);
+  await page.mouse.click(first.x, first.y);
+  await expect(page.locator("[data-png-save]")).toBeDisabled();
+  await expect(page.locator("[data-png-error]")).toContainText("幅と高さ");
+  const second = await previewPoint(page, 475, 328);
+  await page.mouse.click(second.x, second.y);
+  expect(await download(page)).toMatchObject({ width: 600, height: 400 });
 });
 
 test("existing rectangle uses four edges and all three resolutions; Escape restores the selection", async ({ page }) => {
@@ -121,6 +177,7 @@ test("dark background and English labels are exported without selection coloring
   await page.reload(); await page.waitForFunction(() => window.__jot2dTest);
   await rectangle(page); await openExport(page);
   await expect(page.locator("#pngExportTitle")).toHaveText("Export PNG");
+  await expect(page.locator("[data-png-mode] option:checked")).toHaveText("Pick two opposite corners");
   await crop(page, [100, 80], [140, 110]);
   await page.selectOption("[data-png-scale]", "1");
   const image = await download(page);

@@ -26,6 +26,20 @@ test('candidate reads reflect visibility, fit-point exclusions and other-sketch 
   const candidates = drawing.candidates({ x: 0, y: 0 }); assert.equal(candidates.length, 1); assert.equal(candidates[0].label, '点 / Sketch S2'); assert.equal(candidates[0].data.point, foreign);
   state.points = []; assert.equal(drawing.candidates({ x: 0, y: 0 }).length, 0);
 });
+
+test('read-only snap queries preserve the active drawing snap for hits and misses', () => {
+  const { state, drawing } = fixture();
+  const first = point('P1', 0, 0), second = point('P2', 50, 40);
+  state.points = [first, second];
+  drawing.resolve({ x: 1, y: 1 }, 10);
+  const active = drawing.active;
+  assert.equal(drawing.find({ x: 52, y: 42 }, 10).data.point, second);
+  assert.equal(drawing.active, active);
+  assert.equal(drawing.find({ x: 100, y: 100 }, 10), null);
+  assert.equal(drawing.active, active);
+  assert.deepEqual(state.points, [first, second]);
+  assert.equal(state.constraints.length, 0);
+});
 test('arc candidates include endpoints but limit circumference projection to the signed sweep', () => {
   const { state, drawing } = fixture(); const arc = Object.assign(new Arc('A1', point('C', 0, 0), 10, 0, Math.PI / 2), { sketchId: 'S1' }); state.arcs = [arc];
   let candidates = drawing.candidates({ x: -10, y: 0 }); assert.equal(candidates.length, 3); assert.equal(candidates.filter(c => c.data.endpoint).length, 2);

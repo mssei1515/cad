@@ -72,7 +72,7 @@
       return candidates;
     }
 
-    function snapForDrawing(p, threshold) {
+    function findSnap(p, threshold) {
       let best = null;
       for (const candidate of snapCandidates(p)) {
         if (candidate.distance > threshold) continue;
@@ -84,11 +84,15 @@
           best = candidate;
         }
       }
+      return best;
+    }
+    function snapForDrawing(p, threshold) {
+      const best = findSnap(p, threshold);
       activeSnap = best;
       return best ? { x: best.x, y: best.y } : p;
     }
     function clear() { activeSnap = null; }
-    return Object.freeze({ candidates: snapCandidates, resolve: snapForDrawing, clear, get active() { return activeSnap; } });
+    return Object.freeze({ candidates: snapCandidates, find: findSnap, resolve: snapForDrawing, clear, get active() { return activeSnap; } });
   }
   window.DrawingSnap = Object.freeze({ create });
 })();
