@@ -59,9 +59,22 @@
       draw();
     }
 
+    function setScale(scale) {
+      if (!Number.isFinite(scale) || scale <= 0) return false;
+      const rect = canvas.getBoundingClientRect();
+      if (rect.width <= 0 || rect.height <= 0) return false;
+      const screen = { x: rect.width / 2, y: rect.height / 2 };
+      const world = viewport.screenToWorld(screen);
+      const nextScale = viewport.clampZoom(scale);
+      viewport.update({ scale: nextScale, x: screen.x - world.x * nextScale, y: screen.y - world.y * nextScale });
+      setHint(`表示倍率: ${viewport.formatZoom(viewport.scale)}`);
+      draw();
+      return true;
+    }
+
     // Document reset discards gesture state; event routing owns capture lifetime.
     function reset() { pan = null; lastMiddleClick = null; }
-    return Object.freeze({ beginPan, movePan, endPan, doubleClickFit, zoom, reset, get panning() { return pan !== null; } });
+    return Object.freeze({ beginPan, movePan, endPan, doubleClickFit, zoom, setScale, reset, get panning() { return pan !== null; } });
   }
   window.CanvasNavigation = Object.freeze({ create });
 })();

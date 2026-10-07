@@ -81,3 +81,24 @@ test('wheel zoom clamps scale while preserving the world point under the pointer
   f.navigation.zoom({ ...e, deltaY: 10000 }); assert.equal(f.viewport.scale, 1);
   assert.deepEqual(f.viewport.screenToWorld({ x: 100, y: 80 }), before);
 });
+
+test('numeric zoom preserves canvas center and rejects invalid scales without callbacks', () => {
+  const f = fixture(); f.viewport.scale = 2;
+  f.viewport.screenToWorld = p => ({ x: (p.x - f.viewport.x) / f.viewport.scale, y: (p.y - f.viewport.y) / f.viewport.scale });
+  f.viewport.clampZoom = value => Math.min(4, Math.max(1, value)); f.viewport.formatZoom = String;
+  f.navigation.reset();
+  // The canvas fixture is shared through the captured navigation port.
+  const sandboxCanvas = { getBoundingClientRect: () => ({ width: 800, height: 600 }) };
+  const navigation = sandbox.window.CanvasNavigation.create({ canvas: sandboxCanvas, viewport: f.viewport,
+    draw: () => f.calls.push(['draw']), setHint: () => f.calls.push(['hint']) });
+  const before = f.viewport.screenToWorld({ x: 400, y: 300 });
+  assert.equal(navigation.setScale(3.125), true);
+  assert.equal(f.viewport.scale, 3.125);
+  assert.deepEqual(f.viewport.screenToWorld({ x: 400, y: 300 }), before);
+  const count = f.calls.length;
+  for (const value of [NaN, Infinity, 0, -1]) assert.equal(navigation.setScale(value), false);
+  assert.equal(f.calls.length, count);
+  navigation.setScale(100);
+  assert.equal(f.viewport.scale, 4);
+  assert.deepEqual(f.viewport.screenToWorld({ x: 400, y: 300 }), before);
+});

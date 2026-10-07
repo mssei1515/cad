@@ -548,6 +548,17 @@
   const canvasNavigation = window.CanvasNavigation.create({
     canvas, viewport, draw, setHint, fitVisibleGeometry: fitVisibleGeometryToViewport,
   });
+  const canvasZoomControl = window.CanvasZoomControl.create({
+    button: document.getElementById("statusZoom"), input: document.getElementById("statusZoomInput"),
+    readPercent: () => viewport.scale / CSS_PX_PER_MM * 100,
+    format: () => formatZoom(viewport.scale),
+    applyPercent: percent => {
+      pointerMoveScheduler.flush();
+      const applied = canvasNavigation.setScale(percent / 100 * CSS_PX_PER_MM);
+      syncDimensionValueInput();
+      return applied;
+    },
+  });
   const splineDraft = window.SplineDraft.create({
     currentScope: workspace.current, ids: geometryIds, endpointAt, samePosition, isPointUsedByPrimitive,
   });
@@ -3032,9 +3043,7 @@
   }
 
   function drawCanvas() {
-    const zoomStatus = document.getElementById("statusZoom");
-    const zoomText = formatZoom(viewport.scale);
-    if (zoomStatus && zoomStatus.textContent !== zoomText) zoomStatus.textContent = zoomText;
+    canvasZoomControl.sync();
     if (canvasSurface.width <= 0 || canvasSurface.height <= 0) syncCanvasBitmapSize();
     const dpr = canvasSurface.dpr;
     if (!pngRender) pointerMoveScheduler.recordDraw();

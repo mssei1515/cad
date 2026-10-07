@@ -393,6 +393,10 @@ button.property-color-swatch:hover:not(:disabled), button.property-color-swatch:
 #hint.error { color: #fecaca; font-weight: 700; }
 #statusConstraint, #statusCoordinates, #statusZoom { white-space: nowrap; }
 #statusZoom { font-variant-numeric: tabular-nums; }
+.status-zoom-control { display: flex; align-items: center; }
+#statusZoom { padding: 0; border: 0; border-radius: 2px; background: transparent; color: inherit; font: inherit; cursor: pointer; }
+#statusZoom:hover { text-decoration: underline; }
+#statusZoomInput { width: 110px; min-height: 0; padding: 0 3px; border: 1px solid var(--border-strong); border-radius: 2px; font: inherit; font-variant-numeric: tabular-nums; }
 #statusCoordinates { text-align: right; font-variant-numeric: tabular-nums; }
 
 .settings-dialog { width: min(460px, calc(100vw - 40px)); padding: 0; color: var(--text); background: var(--dialog-bg); border: 1px solid var(--border-strong); border-radius: 8px; box-shadow: 0 20px 50px var(--dialog-shadow); }
