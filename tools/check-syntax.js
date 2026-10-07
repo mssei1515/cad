@@ -137,7 +137,7 @@ const files = [
   "src/geometry/objects.js", "src/geometry/annotation_anchor_query.js", "src/geometry/hatch_query.js",
   "src/geometry/instance_projection.js",
   "tests/unit/instance-projection.test.js",
-  "src/document/block_catalog.js",
+  "src/document/block_catalog.js", "src/document/block_state.js",
   "src/geometry/block_projection.js",
   "tests/unit/block-layout.test.js", "tests/unit/block-projection.test.js",
   "src/geometry/read_model.js",

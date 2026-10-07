@@ -6,6 +6,10 @@
 
 ## 現在の再開地点（2026-10-08）
 
+BlockStateへBlock定義・Sketch所属・親子所有・scope配置の正規化を分離。BlockCatalog／SketchContextの限定した照会と補完を注入し、編集コンテナはIDで渡す。旧処理本体との機械照合で依存置換以外の一致を確認。app.jsは11,119行から10,976行へ縮小（143行減）。構文383ファイル・単体936件・関連E2E159件成功（exit 0、2.1分）。ログはcad-block-state-{check,unit,e2e}.log。全体E2Eは今回未実行。全体目標は未完了。
+
+### 前回の区切り
+
 DocumentStateへDocument／Block scopeの外観正規化を統合。旧Root外観の引継ぎ先をblockEditingの明示引数にし、編集session依存を除去。補助要素の所属補完と幾何参照保持を維持。app.jsは11,149行から11,119行へ縮小（30行減）。構文382ファイル・単体932件・関連E2E157件成功（exit 0、2.1分）。ログはcad-appearance-state-{check,unit,e2e}.log。全体E2Eは今回未実行。全体目標は未完了。
 
 ### 前回の区切り
