@@ -2,7 +2,7 @@
 const { spawnSync } = require("node:child_process");
 const path = require("node:path");
 const files = [
-  "src/geometry/export_region.js", "src/rendering/canvas_export.js", "src/persistence/png_file.js", "src/ui/png_export_dialog.js", "tests/unit/png-export.test.js", "tests/e2e/png-export.spec.js",
+  "src/geometry/export_region.js", "src/rendering/canvas_export.js", "src/persistence/png_file.js", "src/commands/png_export_command.js", "tests/unit/png-export.test.js", "tests/e2e/png-export.spec.js",
   "src/ui/command_panel.js", "src/ui/derived_command_panel.js", "tests/e2e/command-panel.spec.js",
   "src/ui/tool_flyouts.js", "tests/e2e/tool-flyouts.spec.js",
   "tests/e2e/multiple-dimensions.spec.js",

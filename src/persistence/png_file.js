@@ -1,14 +1,15 @@
 /* PNG output has its own destination and does not mark the Document saved. */
 (() => {
   "use strict";
-  function create({ window, document, capture, documentName, text }) {
-    async function save(region, multiplier) {
+  function create({ window, document, capture, documentName, text, prepare = async () => {} }) {
+    async function save(region, dpi) {
       const name = `${window.DocumentFiles.safeDownloadBaseName(documentName())}.png`;
       let handle = null;
       if (typeof window.showSaveFilePicker === "function") {
         handle = await window.showSaveFilePicker({ suggestedName: name, types: [{ description: "PNG", accept: { "image/png": [".png"] } }] });
       }
-      const bitmap = capture(region, multiplier);
+      await prepare();
+      const bitmap = capture(region, dpi);
       const blob = await new Promise((resolve, reject) => bitmap.toBlob(value => value ? resolve(value)
         : reject(new Error(text("PNG画像を生成できませんでした", "Could not create the PNG image"))), "image/png"));
       if (handle) {

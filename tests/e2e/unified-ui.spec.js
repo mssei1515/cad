@@ -1633,7 +1633,7 @@ test("file URL Help menu reads the generated Git commit file", async ({ page }) 
     }),
   );
   const expectedPaths = [
-    "src/geometry/export_region.js", "src/rendering/canvas_export.js", "src/persistence/png_file.js", "src/ui/png_export_dialog.js",
+    "src/geometry/export_region.js", "src/rendering/canvas_export.js", "src/persistence/png_file.js", "src/commands/png_export_command.js",
     "src/commands/dimension_line_group.js",
     "runtime-version.js", "app.js",
     "src/geometry/geometry_kernel.js", "src/geometry/geometry_ref.js", "src/geometry/spline_geometry.js",

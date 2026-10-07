@@ -158,6 +158,9 @@
   const canvas = document.getElementById("canvas");
   const ctx = canvas.getContext("2d");
   let pngRender = null;
+  let pngExportCommand = null;
+  let pngViewport = null;
+  let pngPreviousMode = null;
   const dimensionValueInput = document.getElementById("dimensionValueInput");
   const dimensionValueInputShell = document.getElementById("dimensionValueInputShell");
   const canvasContextMenu = document.getElementById("canvasContextMenu");
@@ -3603,6 +3606,7 @@
   }
 
   function draw() {
+    if (pngExportCommand?.active && !pngExportCommand.busy && (pendingCommand?.type !== "png-export" || mode !== "png-export")) pngExportCommand.cancel();
     commandPanel?.update();
     commandPanelSelectedItem = derivedPanel?.selectedItem() || null;
     if (!interactionProfiler.active) return drawUnprofiled();
@@ -3666,6 +3670,7 @@
     drawReferenceImageOverlays();
     drawSketchIdentityLabel();
     drawSelectionRect();
+    pngExportCommand?.drawOverlay(ctx, viewport.scale);
     resetCanvasStrokeState();
     ctx.restore();
     resetCanvasStrokeState();
@@ -4554,6 +4559,7 @@
   function cancelPendingCommand(message = "コマンドをキャンセルしました") {
     geometryInstanceCommand.clearPlacement();
     if (!pendingCommand) return;
+    if (pendingCommand.type === "png-export") { pngExportCommand.cancel(); return; }
     if (pendingCommand.type === "offset-value") {
       offsetSelection.reset();
       drawingPreview.setPointer(null);
@@ -6634,7 +6640,16 @@
   }
 
   const canvasInputBinding = window.CanvasInputBinding.create({
-    canvas, pointer: pointerInteractionController, scheduler: pointerMoveScheduler, navigation: canvasNavigation,
+    canvas, pointer: {
+      ...pointerInteractionController,
+      down: e => pngExportCommand?.active && e.button === 0 ? pngExportCommand.pick(screenToWorld({ x: e.offsetX, y: e.offsetY })) : pointerInteractionController.down(e),
+      move: (screen, world, shift) => {
+        if (pngExportCommand?.active) { if (!canvasNavigation.movePan(screen)) pngExportCommand.move(world); }
+        else pointerInteractionController.move(screen, world, shift);
+      },
+      finish: e => { if (!pngExportCommand?.active || e.button !== 0) pointerInteractionController.finish(e); },
+      doubleClick: e => { if (!pngExportCommand?.active) pointerInteractionController.doubleClick(e); },
+    }, scheduler: pointerMoveScheduler, navigation: canvasNavigation,
     profileCommit: work => profileInteractionPhase("commit", work), closeContextMenu: closeCanvasContextMenu,
     afterZoom: () => { if (pendingCommand && ["distance-value", "offset-value"].includes(pendingCommand.type)) syncDimensionValueInput(); },
     screenToWorld, formatCoordinate: formatDisplayNumber, coordinateStatus: () => document.getElementById("statusCoordinates"),
@@ -6910,30 +6925,33 @@
   document.getElementById("exportBtn").addEventListener("click", () => void saveJot2DFile());
   const canvasExport = window.CanvasExport.create({
     canvas, createCanvas: () => document.createElement("canvas"), text: applicationText,
-    background: () => getComputedStyle(canvas.closest(".canvas-area")).backgroundColor,
     render: (region, ratio) => {
-      const a = screenToWorld({ x: region.x, y: region.y });
-      const b = screenToWorld({ x: region.x + region.width, y: region.y + region.height });
-      pngRender = { region, ratio, worldBounds: { x1: a.x, y1: a.y, x2: b.x, y2: b.y } };
+      pngViewport = viewport.snapshot();
+      viewport.update({ x: 0, y: 0, scale: 96 / 25.4 });
+      pngRender = { region: { x: region.x * viewport.scale, y: region.y * viewport.scale },
+        ratio: { x: ratio.x / viewport.scale, y: ratio.y / viewport.scale },
+        worldBounds: { x1: region.x, y1: region.y, x2: region.x + region.width, y2: region.y + region.height } };
       withGeometryReadCache(drawCanvas);
     },
-    restore: () => { pngRender = null; syncCanvasBitmapSize(); draw(); },
+    restore: () => {
+      if (pngViewport) viewport.update(pngViewport);
+      pngViewport = null; pngRender = null; syncCanvasBitmapSize(); draw();
+    },
   });
-  const pngFile = window.PngFile.create({ window, document, capture: canvasExport.capture, documentName: effectiveDocumentName, text: applicationText });
-  const pngExportDialog = window.PngExportDialog.create({
-    dialog: document.getElementById("pngExportDialog"), text: applicationText, capture: canvasExport.capture, save: pngFile.save, setHint,
-    resolvePoint: (point, threshold) => withGeometryReadCache(() => {
-      const snap = drawingSnap.find(screenToWorld(point), threshold / viewport.scale);
-      return { point: snap ? worldToCanvasScreen(snap) : point, snapped: Boolean(snap) };
-    }),
+  const pngFile = window.PngFile.create({ window, document, capture: canvasExport.capture, documentName: effectiveDocumentName, text: applicationText,
     prepare: async () => {
       await document.fonts.ready;
       await referenceImageRenderer.ready(model.referenceImages.filter(item => isVisibleValue(item.visible) && isVisibleSketchId(item.sketchId)));
-      const rect = canvas.getBoundingClientRect();
-      return { width: rect.width, height: rect.height, lines: allGeometryLines().filter(isVisibleSketchElement).map(line => ({
-        id: line.id, p1: worldToCanvasScreen(line.p1), p2: worldToCanvasScreen(line.p2), selected: canvasSelection.lines.includes(line),
-      })) };
     },
+  });
+  pngExportCommand = window.PngExportCommand.create({
+    text: applicationText, save: pngFile.save, setHint, refresh: draw,
+    begin: () => { pngPreviousMode = mode; mode = "png-export"; pendingCommand = { type: "png-export" }; },
+    end: () => { if (pendingCommand?.type === "png-export") pendingCommand = null; if (mode === "png-export") mode = pngPreviousMode; pngPreviousMode = null; },
+    resolvePoint: point => withGeometryReadCache(() => {
+      const snap = drawingSnap.find(point, 10 / viewport.scale);
+      return { point: snap ? { x: snap.x, y: snap.y } : point, snapped: Boolean(snap) };
+    }),
   });
   document.getElementById("pngExportBtn").addEventListener("click", () => {
     flushScheduledCanvasPointerMove();
@@ -6941,7 +6959,7 @@
       setHint(applicationText("進行中の操作を完了またはキャンセルしてからPNG出力を開始してください", "Finish or cancel the current operation before exporting PNG"));
       return;
     }
-    void pngExportDialog.open();
+    pngExportCommand.open();
   });
   document.getElementById("saveAsBtn")?.addEventListener("click", () => void saveJot2DFileAs());
   document.getElementById("importBtn").addEventListener("click", () => void openJot2DFile());
@@ -11363,7 +11381,11 @@
     changeFreeProperty: changeFreeInstanceProperty,
     refresh: () => { updatePropertiesUI(); draw(); },
   });
-  commandPanel = window.CommandPanel.create({ document, host: canvas.parentElement, ...derivedPanel });
+  commandPanel = window.CommandPanel.create({ document, host: canvas.parentElement, ...derivedPanel,
+    readState: () => pngExportCommand.active ? pngExportCommand.readState() : derivedPanel.readState(),
+    onAction: action => pngExportCommand.active ? pngExportCommand.onAction(action) : derivedPanel.onAction(action),
+    onSetting: (key, value) => pngExportCommand.active ? pngExportCommand.onSetting(key, value) : derivedPanel.onSetting(key, value),
+  });
 
   installTestHooks();
   installExpressionInputHighlights(document);

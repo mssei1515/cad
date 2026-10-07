@@ -1,10 +1,10 @@
 /* Re-render at output resolution and restore the interactive bitmap synchronously. */
 (() => {
   "use strict";
-  function create({ canvas, createCanvas, render, restore, background, text }) {
-    function capture(region, multiplier = 1) {
-      const size = window.ExportRegion.pixelSize(region, multiplier);
-      if (!size?.supported) throw new Error(text("出力サイズが大きすぎます。範囲または倍率を小さくしてください", "Output is too large. Reduce the region or resolution"));
+  function create({ canvas, createCanvas, render, restore, text }) {
+    function capture(region, dpi = 300) {
+      const size = window.ExportRegion.pixelSize(region, dpi);
+      if (!size?.supported) throw new Error(text("出力サイズが大きすぎます。範囲またはDPIを小さくしてください", "Output is too large. Reduce the region or resolution"));
       const output = createCanvas();
       output.width = size.width;
       output.height = size.height;
@@ -15,8 +15,6 @@
         canvas.width = size.width;
         canvas.height = size.height;
         render(region, { x: size.width / region.width, y: size.height / region.height });
-        target.fillStyle = background();
-        target.fillRect(0, 0, size.width, size.height);
         target.drawImage(canvas, 0, 0);
       } finally {
         canvas.width = original.width;
