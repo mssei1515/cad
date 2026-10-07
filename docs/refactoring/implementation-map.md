@@ -494,3 +494,5 @@ AuthoringPreviewRendererへSpline／Centerline／Trim描画も統合。Spline構
 - src/rendering/dimension_placement.js: normalizeDimensionで欠損配置の既定値生成と旧配置の補正も所有。対象と配置を明示引数にし、拘束の列挙と書戻しは呼出側に残す。
 
 - src/constraints/operands.js: 拘束対象の生成・参照target／subject変換・同一性判定。Sketch関係は注入した照会で都度解決し、選択・コマンド状態には依存しない。
+
+- src/ui/constraint_feedback.js: 求解案内・拘束状態ラベル・集計文面。状態を参照せず、呼出側が渡す結果と件数からmessage／kindまたは文字列を返す。

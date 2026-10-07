@@ -902,37 +902,15 @@
     el.classList.toggle("error", kind === "error");
   }
 
-  function solveOperationLabel(label) {
-    const labels = {
-      "点追加": ["点の追加", "Point creation"],
-      "線追加": ["連続線の追加", "Polyline creation"],
-      "矩形追加": ["矩形の追加", "Rectangle creation"],
-      "長穴追加": ["長穴の追加", "Slot creation"],
-      "円追加": ["円の追加", "Circle creation"],
-      "円弧追加": ["円弧の追加", "Arc creation"],
-      "3点円弧追加": ["3点円弧の追加", "Three-point arc creation"],
-      "スプライン追加": ["スプラインの追加", "Spline creation"],
-      "ブロック配置": ["ブロック配置", "Block placement"],
-      "インスタンス削除": ["インスタンス削除", "Instance deletion"],
-      "貼り付け": ["貼り付け", "Paste"],
-      "ファイル読み込み": ["ファイル読み込み", "File load"],
-      "サンプル復元": ["サンプル復元", "Sample restore"],
-    };
-    const pair = labels[String(label)];
-    return applicationText(pair?.[0] || String(label), pair?.[1] || String(label));
-  }
-
+  const constraintFeedback = window.ConstraintFeedback.create({ applicationText });
+  const { constraintStatusBadge } = constraintFeedback;
   function setSolveResultHint(label, solved, analysis, dependent) {
-    const hasDependentError = dependent?.success === false;
-    const hasDuplicateConstraints = (constraintRedundancy.count) > 0;
-    const stable = Boolean(solved?.success && analysis?.analysis?.stable && !hasDependentError && !hasDuplicateConstraints);
-    const operation = solveOperationLabel(label);
-    const message = stable
-      ? applicationText(`${operation}が完了しました`, `${operation} completed`)
-      : solved?.success
-        ? applicationText(`${operation}が完了しました。拘束状態を確認してください`, `${operation} completed. Check the constraint status`)
-        : applicationText(`${operation}を完了できませんでした。拘束や形状を確認してください`, `${operation} could not be completed. Check the constraints and geometry`);
-    setHint(message, stable ? "normal" : "error");
+    const hint = constraintFeedback.resultHint(label, solved, analysis, dependent, constraintRedundancy.count);
+    setHint(hint.message, hint.kind);
+  }
+  function constraintSummaryText() {
+    return constraintFeedback.summaryText(constraintAnalysis.summary(), constraintRedundancy.count,
+      referenceConstraintState.errorCount, applicationSettings.language);
   }
 
   function effectiveDocumentName() {
@@ -1298,16 +1276,6 @@
     return Boolean(result) && Number.isFinite(result.errorNorm) && result.errorNorm <= CONSTRAINT_ACCEPT_ERROR;
   }
 
-  function constraintDuplicateSummary() {
-    const count = constraintRedundancy.count;
-    return count > 0 ? applicationSettings.language === "en" ? ` / Duplicate constraints: ${count}` : ` / 重複拘束: ${count}` : "";
-  }
-
-  function referenceConstraintErrorSummary() {
-    const count = referenceConstraintState.errorCount;
-    return count > 0 ? applicationSettings.language === "en" ? ` / Reference errors: ${count}` : ` / 参照エラー: ${count}` : "";
-  }
-
   function clearSketchSolveState(...args) { return sketchSolving.clearSketchSolveState(...args); }
   function setSketchSolveOk(...args) { return sketchSolving.setSketchSolveOk(...args); }
   function setSketchSolveError(...args) { return sketchSolving.setSketchSolveError(...args); }
@@ -1394,20 +1362,6 @@
     if (relation === "active") return 1;
     if (relation === "reference" || relation === "descendant" || relation === "inactive") return 1;
     return 0;
-  }
-
-  function constraintStatusBadge(status) {
-    if (status === "conflict") return applicationText("矛盾", "Conflict");
-    if (status === "support") return applicationText("支持位置拘束", "Supported position");
-    if (status === "under") return applicationText("未拘束", "Under-constrained");
-    return applicationText("完全拘束", "Fully constrained");
-  }
-
-  function constraintSummaryText() {
-    const s = constraintAnalysis.summary();
-    return applicationSettings.language === "en"
-      ? `Fully constrained: ${s.full} / Supported position: ${s.support} / Under-constrained: ${s.under} / Conflict: ${s.conflict}${constraintDuplicateSummary()}${referenceConstraintErrorSummary()}`
-      : `完全拘束: ${s.full} / 支持位置拘束: ${s.support} / 未拘束: ${s.under} / 矛盾: ${s.conflict}${constraintDuplicateSummary()}${referenceConstraintErrorSummary()}`;
   }
 
   function sketchProjectionSourceKey(item) {
