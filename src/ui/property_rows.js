@@ -60,9 +60,11 @@
       if (sameType && items.every(entry => entry.kind === "annotation" && entry.item.type === "leader") && items.some(entry => ["arrow", "filledArrow"].includes(multiplePropertyAppearance(entry).terminatorType))) {
         specificRows += `<div class="property-row"><label>${applicationText("開き角", "Opening angle")}</label>${textInput("arrowheadAngle", "number", 'min="1" max="179" step="1"')}°</div>`;
       }
-      if (sameType && items.every(entry => entry.kind === "constraint")) {
+      if (allSupport("modelRelativeSize")) {
         const sizeLockTooltip = applicationText("図形に対する注記の大きさを固定", "Keep annotation size relative to geometry");
         if (allSupport("modelRelativeSize")) specificRows += `<div class="property-row" title="${sizeLockTooltip}"><label for="dimensionBulkSizeLock">${applicationText("サイズロック", "Size lock")}</label>${checkbox("modelRelativeSize", 'id="dimensionBulkSizeLock"')}</div>`;
+      }
+      if (sameType && items.every(entry => entry.kind === "constraint")) {
         for (const [key, ja, en] of [["prefix", "接頭辞", "Prefix"], ["suffix", "接尾辞", "Suffix"]]) {
           const current = value(key);
           specificRows += `<div class="property-row"><label>${applicationText(ja, en)}</label><textarea rows="1" wrap="off" data-affix-input data-user-content data-bulk-property="${key}" placeholder="${current === MULTIPLE_PROPERTY_MIXED ? mixedLabel : ""}">\n${current === MULTIPLE_PROPERTY_MIXED ? "" : escapeHtml(current)}</textarea></div>`;

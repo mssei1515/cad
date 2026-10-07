@@ -71,3 +71,24 @@ test('selected free texts drag together and undo/redo preserves both positions',
   await page.click('#redoBtn');
   expect((await page.evaluate(() => window.__jot2dTest.serializedModelForTest())).annotations).toEqual(after.annotations);
 });
+
+test('multiple free texts size lock captures zoom with one undo and persists', async ({ page }) => {
+  const positions = await fixture(page);
+  await page.mouse.click(positions.notes[0].x, positions.notes[0].y);
+  await page.keyboard.down('Control');
+  await page.mouse.click(positions.notes[1].x, positions.notes[1].y);
+  await page.keyboard.up('Control');
+  const before = await page.evaluate(() => window.__jot2dTest.serializedModelForTest());
+  await page.locator('[data-bulk-property="modelRelativeSize"]').check();
+  const saved = await page.evaluate(() => window.__jot2dTest.serializedModelForTest());
+  for (const item of saved.annotations) {
+    expect(item.style.fixedDisplaySize).toBe(false);
+    expect(item.style.displayScale).toBeCloseTo(2 / (96 / 25.4));
+  }
+  await page.click('#undoBtn');
+  expect((await page.evaluate(() => window.__jot2dTest.serializedModelForTest())).annotations).toEqual(before.annotations);
+  await page.click('#redoBtn');
+  expect((await page.evaluate(() => window.__jot2dTest.serializedModelForTest())).annotations).toEqual(saved.annotations);
+  await page.evaluate(data => window.__jot2dTest.loadDocumentFixtureForDragTest(data), saved);
+  expect((await page.evaluate(() => window.__jot2dTest.serializedModelForTest())).annotations).toEqual(saved.annotations);
+});

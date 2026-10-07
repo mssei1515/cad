@@ -60,8 +60,8 @@
         for (const annotation of loadedAnnotations) {
           if (annotation.type !== "leader") continue;
           const referenced = resolveLoadedGeometryRef(annotation.geometryRef);
-          if (!referenced || elementSketchId(referenced) !== annotation.sketchId) {
-            throw new Error(`${applicationText("引出線", "Leader")} ${annotation.id}: ${applicationText("参照先は同じ所属Sketchに必要です", "target must belong to the same sketch")}`);
+          if (!referenced || (elementSketchId(referenced) !== annotation.sketchId && !window.SketchHierarchy.isReferenceSourceSketchId(loadedSketches, elementSketchId(referenced), annotation.sketchId))) {
+            throw new Error(`${applicationText("引出線", "Leader")} ${annotation.id}: ${applicationText("参照先は所属Sketchまたは参照可能Sketchに必要です", "target must belong to the owning or a referenceable sketch")}`);
           }
         }
       } else {

@@ -11,10 +11,10 @@ const { Point, Line, Circle, Arc, Spline } = sandbox.window.GeometrySolver;
 const near = (a, b) => assert.ok(Math.abs(a - b) < 1e-7, `${a} != ${b}`);
 const point = (id, x, y) => Object.assign(new Point(id, x, y), { sketchId: 'S1' });
 const scoped = item => Object.assign(item, { sketchId: 'S1' });
-function fixture() {
+function fixture(reference = () => false) {
   let selected = [], active = 'S1', resolved = null;
   const query = sandbox.window.AnnotationAnchorQuery.create({ selectedGeometryItems: () => selected,
-    activeSketchId: () => active, elementSketchId: item => item.sketchId, resolveGeometryRef: () => resolved });
+    isReferenceSourceSketchId: reference, activeSketchId: () => active, elementSketchId: item => item.sketchId, resolveGeometryRef: () => resolved });
   return { query, select: value => { selected = value; }, activate: value => { active = value; }, resolve: value => { resolved = value; } };
 }
 
@@ -69,7 +69,7 @@ test('spline anchors use the fitted curve and retain the canonical geometry refe
 
 function targetFixture() {
   const data = { points: [], lines: [], circles: [], arcs: [], splines: [] };
-  const query = sandbox.window.AnnotationAnchorQuery.create({ viewportScale: () => 1,
+  const query = sandbox.window.AnnotationAnchorQuery.create({ viewportScale: () => 1, activeSketchId: () => 'S1', elementSketchId: item => item.sketchId || 'S1',
     isVisibleSketchElement: item => item.visible !== false, isExplicitPoint: item => item.kind !== 'endpoint',
     isPointUsedByPrimitive: () => false, isPointUsedByLine: () => false, isReferencePoint: () => false,
     geometry: { allGeometryPoints: () => data.points, allGeometryLines: () => data.lines, allGeometryCircles: () => data.circles,
@@ -118,4 +118,15 @@ test('circle, signed arc and spline attachments preserve their curve parameter a
   spline.fitPoints.forEach(p => { p.x += 100; p.y += 25; }); f.resolve(spline);
   const sa = f.query.annotationLeaderAnchor({ start: st.anchor, attachment: st.attachment });
   near(sa.x, 107); near(sa.y, 25);
+});
+
+test('leader accepts referenceable ancestors but rejects unrelated sketches', () => {
+  const f = fixture(id => id === 'PARENT');
+  const p = Object.assign(point('P1', 4, 8), { sketchId: 'PARENT' });
+  const target = f.query.annotationLeaderTargetFromHit({ item: p });
+  assert.equal(target.item, p);
+  f.resolve(p); p.x = 25;
+  near(f.query.annotationLeaderAnchor({ ...target, start: target.anchor }).x, 25);
+  p.sketchId = 'UNRELATED';
+  assert.equal(f.query.annotationLeaderTargetFromHit({ item: p }), null);
 });

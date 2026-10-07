@@ -78,7 +78,7 @@
 
     function multiplePropertySupports(target, key) {
       if (key === "visible") return true;
-      if (key === "modelRelativeSize") return target.kind === "constraint" && Boolean(target.item.dimension);
+      if (key === "modelRelativeSize") return target.kind === "annotation" || target.kind === "constraint" && Boolean(target.item.dimension);
       if (target.kind === "referenceImage") return false;
       if (key === "color") return true;
       if (key === "lineType") return target.kind === "geometry" || target.kind === "block" || (target.kind === "annotation" && target.item.type === "leader");
@@ -94,7 +94,7 @@
 
     function multiplePropertyValue(target, key) {
       const values = (target.items || []).map((entry) => {
-        if (key === "modelRelativeSize") return !window.Appearance.annotationDisplaySettings(entry.item.dimension?.display || {}).fixedDisplaySize;
+        if (key === "modelRelativeSize") return !window.Appearance.annotationDisplaySettings(entry.kind === "annotation" ? effectiveAnnotationStyle(entry.item) : entry.item.dimension?.display || {}).fixedDisplaySize;
         if (key === "construction") return Boolean(entry.item.construction);
         if (key === "rotation") return (entry.item.type === "leader" ? effectiveAnnotationStyle(entry.item).rotation || 0 : Number(entry.item.rotation) || 0) * 180 / Math.PI;
         const appearance = multiplePropertyAppearance(entry);

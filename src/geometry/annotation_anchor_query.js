@@ -5,8 +5,11 @@
   const { distancePointToSegment, projectPointToSegmentPoint, arcEndpointPoint, angleOnSignedSweep } = window.GeometryKernel;
   const { geometryRefForItem } = window.GeometryObjects;
   function create({ selectedGeometryItems, elementSketchId, activeSketchId, resolveGeometryRef,
-    viewportScale, isVisibleSketchElement, isExplicitPoint, isPointUsedByPrimitive, isPointUsedByLine, isReferencePoint, geometry = {} }) {
+    viewportScale, isVisibleSketchElement, isExplicitPoint, isPointUsedByPrimitive, isPointUsedByLine, isReferencePoint, isReferenceSourceSketchId = () => false, geometry = {} }) {
     const { allGeometryPoints, allGeometryLines, allGeometryCircles, allGeometryArcs, allGeometrySplines } = geometry;
+    function canReference(item) {
+      return elementSketchId(item) === activeSketchId() || isReferenceSourceSketchId(elementSketchId(item));
+    }
     function annotationLeaderTargetFromSelection(pointer = null) {
       const items = selectedGeometryItems();
       if (items.length !== 1) return null;
@@ -19,7 +22,7 @@
     }
 
     function annotationLeaderTargetFromItem(item, pointer = null) {
-      if (!item || elementSketchId(item) !== activeSketchId()) return null;
+      if (!item || !canReference(item)) return null;
       if (item instanceof Point) return { item, anchor: { x: item.x, y: item.y }, attachment: { kind: "point" }, geometryRef: geometryRefForItem(item) };
       if (item instanceof Line) {
         const anchor = pointer ? projectPointToSegmentPoint(pointer, item) : { x: (item.p1.x + item.p2.x) / 2, y: (item.p1.y + item.p2.y) / 2 };
@@ -90,29 +93,29 @@
       const splines = allGeometrySplines();
       for (let i = points.length - 1; i >= 0; i--) {
         const point = points[i];
-        if (!isVisibleSketchElement(point)) continue;
+        if (!isVisibleSketchElement(point) || !canReference(point)) continue;
         if (!point.blockProjection && !isExplicitPoint(point) && !isPointUsedByPrimitive(point) && !isPointUsedByLine(point) && !isReferencePoint(point)) continue;
         if (hypot2(point.x - x, point.y - y) <= pointThreshold) return { kind: "point", item: point };
       }
       for (let i = arcs.length - 1; i >= 0; i--) {
         const arc = arcs[i];
-        if (!isVisibleSketchElement(arc)) continue;
+        if (!isVisibleSketchElement(arc) || !canReference(arc)) continue;
         const angle = Math.atan2(y - arc.center.y, x - arc.center.x);
         if (Math.abs(hypot2(x - arc.center.x, y - arc.center.y) - arc.radius()) <= threshold && angleOnSignedSweep(angle, arc.startAngle, arc.endAngle)) return { kind: "arc", item: arc };
       }
       for (let i = circles.length - 1; i >= 0; i--) {
         const circle = circles[i];
-        if (!isVisibleSketchElement(circle)) continue;
+        if (!isVisibleSketchElement(circle) || !canReference(circle)) continue;
         if (Math.abs(hypot2(x - circle.center.x, y - circle.center.y) - circle.radius()) <= threshold) return { kind: "circle", item: circle };
       }
       for (let i = lines.length - 1; i >= 0; i--) {
         const line = lines[i];
-        if (!isVisibleSketchElement(line)) continue;
+        if (!isVisibleSketchElement(line) || !canReference(line)) continue;
         if (distancePointToSegment(x, y, line) <= threshold) return { kind: "line", item: line };
       }
       for (let i = splines.length - 1; i >= 0; i--) {
         const spline = splines[i];
-        if (!isVisibleSketchElement(spline)) continue;
+        if (!isVisibleSketchElement(spline) || !canReference(spline)) continue;
         const closest = window.SplineGeometry.closestPoint(spline.curve(), { x, y }, { samplesPerSpan: 28 });
         if (closest?.distance <= threshold) return { kind: "spline", item: spline };
       }

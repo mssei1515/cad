@@ -3,7 +3,7 @@
   "use strict";
   function create({ guardSketchProjectionShapeEdit, applicationText, updatePropertiesUI, draw,
     multiplePropertySupports, applyDimensionAppearanceValue, applyAnnotationStyleValue, normalizeHatchAppearance, applyAppearanceInput,
-    invalidateBlockProjectionCache, synchronizeSketchProjectionMetadata, recordHistory, updateUI, viewport }) {
+    invalidateBlockProjectionCache, synchronizeSketchProjectionMetadata, recordHistory, updateUI, viewport, appearancePropertyCommand }) {
     function applyMultipleProperty(target, key, rawValue, { commit = true } = {}) {
       if (target?.kind !== "multiple" || !key) return false;
       const geometryItems = (target.items || []).filter((entry) => entry.kind === "geometry").map((entry) => entry.item);
@@ -30,6 +30,10 @@
           applyDimensionAppearanceValue((entry.item.dimension.display ||= {}), key, String(rawValue)); continue;
         }
         if (entry.kind === "annotation") {
+          if (key === "modelRelativeSize") {
+            appearancePropertyCommand.apply(entry, { category: entry.item.type === "leader" ? "leader" : "annotationDisplay", key: "fixedDisplaySize", value: !(rawValue === true || rawValue === "true") }, { commit: false });
+            continue;
+          }
           if (key === "visible") entry.item.visible = rawValue === true || rawValue === "true";
           else if (key === "rotation" && entry.item.type !== "leader") entry.item.rotation = Math.max(-3600, Math.min(3600, Number(rawValue) || 0)) * Math.PI / 180;
           else applyAnnotationStyleValue(entry.item, key, rawValue);

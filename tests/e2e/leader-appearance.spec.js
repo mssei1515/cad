@@ -367,3 +367,23 @@ for (const locked of [false, true]) test(`leader elbow keeps its displayed offse
   expect(resized.resolvedStart).toEqual(after.resolvedStart);
   expect(resized.displayGeometry.end.x - after.displayGeometry.end.x).toBeCloseTo(10, 0);
 });
+
+test('leader targets ancestor geometry from the active child sketch and persists', async ({ page }) => {
+  await setup(page);
+  const source = await data(page);
+  source.sketches.push({ id: 'NOTES', name: 'Notes', parentSketchId: 'S1', kind: 'sketch', appearance: {} });
+  source.activeSketchId = 'NOTES';
+  expect((await page.evaluate(data => window.__jot2dTest.loadDocumentFixtureForDragTest(data), source)).success).toBe(true);
+  await page.evaluate(() => window.__jot2dTest.focusWorldForTest({ x: 50, y: 0 }, 3));
+  const leader = await createLeader(page);
+  expect(leader.sketchId).toBe('NOTES');
+  expect(leader.geometryRef.kind).toBe('line');
+  expect(source.lines.some(line => line.id === leader.geometryRef.path[0] && line.sketchId === 'S1')).toBe(true);
+  const saved = await data(page);
+  await page.click('#undoBtn');
+  expect((await data(page)).annotations).toHaveLength(0);
+  await page.click('#redoBtn');
+  expect((await data(page)).annotations[0]).toEqual(leader);
+  expect((await page.evaluate(data => window.__jot2dTest.loadDocumentFixtureForDragTest(data), saved)).success).toBe(true);
+  expect((await data(page)).annotations[0]).toEqual(leader);
+});

@@ -4,10 +4,10 @@ const path = require('node:path');
 const vm = require('node:vm');
 const test = require('node:test');
 const sandbox = { window: { GeometrySolver: {} } }; vm.createContext(sandbox);
-for (const file of ['src/geometry/geometry_ref.js', 'src/geometry/objects.js', 'src/persistence/block_connections.js']) vm.runInContext(fs.readFileSync(path.resolve(__dirname, '../..', file), 'utf8'), sandbox);
+for (const file of ['src/document/appearance.js', 'src/document/sketch_hierarchy.js', 'src/geometry/geometry_ref.js', 'src/geometry/objects.js', 'src/persistence/block_connections.js']) vm.runInContext(fs.readFileSync(path.resolve(__dirname, '../..', file), 'utf8'), sandbox);
 function fixture(rawConstraints = [], annotations = [], invalidDerived = false) {
   const point = { id: 'P1', sketchId: 'S2' }, projected = { id: 'BI1@P2', sketchId: 'S1' };
-  const scope = { id: 'B1', name: 'Block', points: [point], lines: [], circles: [], arcs: [], splines: [], annotations, activeSketchId: 'S1', blockInstances: [{ definitionId: 'child' }] };
+  const scope = { id: 'B1', name: 'Block', sketches: [{ id: 'S1' }, { id: 'S2' }], points: [point], lines: [], circles: [], arcs: [], splines: [], annotations, activeSketchId: 'S1', blockInstances: [{ definitionId: 'child' }] };
   const calls = [], metadata = new Map([['B1', { rawDefinition: { constraints: rawConstraints }, normalizeDefinitionSketchId: id => id || 'S1' }]]);
   const codec = sandbox.window.BlockConnectionsPersistence.create({
     createBlockProjectionBundle: () => ({ points: [projected], lines: [], circles: [], arcs: [] }),
@@ -38,10 +38,17 @@ test('legacy leader ownership follows target while text follows active sketch', 
   const leader = { type: 'leader', geometryRef: { kind: 'point', path: ['P1'] } }, text = { type: 'text' };
   const f = fixture([], [leader, text]); f.restore(10); assert.equal(leader.sketchId, 'S2'); assert.equal(text.sketchId, 'S1');
 });
-test('modern leaders must resolve in the same sketch', () => {
+test('modern leaders reject unrelated sketches', () => {
   const leader = { id: 'A1', type: 'leader', sketchId: 'S1', geometryRef: { kind: 'point', path: ['P1'] } };
-  const f = fixture([], [leader]); assert.throws(() => f.restore(11), /same sketch/); assert.deepEqual(f.calls, []);
+  const f = fixture([], [leader]); assert.throws(() => f.restore(11), /referenceable sketch/); assert.deepEqual(f.calls, []);
 });
 test('invalid derived bundle fails before decoding constraints', () => {
   const f = fixture([{ type: 'valid', target: 'P1' }], [], true); assert.throws(() => f.restore(22), /GI: broken/); assert.deepEqual(f.calls, []);
+});
+
+test('modern block leaders accept ancestor geometry', () => {
+  const leader = { id: 'A1', type: 'leader', sketchId: 'S1', geometryRef: { kind: 'point', path: ['P1'] } };
+  const f = fixture([], [leader]);
+  f.scope.sketches[0].parentSketchId = 'S2';
+  assert.doesNotThrow(() => f.restore(23));
 });
