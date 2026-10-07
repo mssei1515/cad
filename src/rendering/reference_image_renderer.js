@@ -13,6 +13,12 @@
       return image;
     }
     function clear() { images.clear(); }
+    async function ready(items) {
+      await Promise.all(items.map(async item => {
+        const image = cachedImage(item);
+        await image.decode();
+      }));
+    }
     function drawImages(items) {
       for (const item of items) {
         const image = cachedImage(item);
@@ -68,7 +74,7 @@
         });
       }
     }
-    return Object.freeze({ clear, drawImages, drawOverlays });
+    return Object.freeze({ clear, ready, drawImages, drawOverlays });
   }
   window.ReferenceImageRenderer = Object.freeze({ create });
 })();

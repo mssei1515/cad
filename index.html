@@ -26,6 +26,7 @@
           <button type="button" data-menu-tool="exportBtn">上書き保存 <kbd>Ctrl+S</kbd></button>
           <button type="button" data-menu-tool="importBtn">開く</button>
           <button type="button" data-menu-tool="saveAsBtn">名前を付けて保存 <kbd>Ctrl+Shift+S</kbd></button>
+          <button id="pngExportBtn" type="button" data-i18n-ja="PNG出力…" data-i18n-en="Export PNG…">PNG出力…</button>
           <button id="parametersBtn" type="button">Parameter…</button>
           <button id="documentSettingsBtn" type="button">ドキュメント設定</button>
           <button id="applicationSettingsBtn" type="button">アプリケーション設定</button>
@@ -175,6 +176,23 @@
   <dialog id="blockDefinitionsDialog" class="settings-dialog block-definitions-dialog"><form method="dialog"><header><strong>ブロック定義</strong><button value="cancel">×</button></header><section><div id="blockList" class="block-definition-list"></div></section><footer><button value="cancel">閉じる</button></footer></form></dialog>
   <dialog id="colorPaletteDialog" class="settings-dialog color-palette-dialog"><form method="dialog"><header><strong>カラーパレット</strong><button value="cancel">×</button></header><section><h3>標準色</h3><div id="defaultColorPalette" class="color-palette-grid"></div><h3>このファイルで使用中の色</h3><div id="usedColorPalette" class="color-palette-grid"></div><div class="settings-row color-custom-row"><label for="customColorPicker">任意の色</label><input id="customColorPicker" type="color" value="#111827" /></div></section><footer><button value="cancel">キャンセル</button><button id="applyCustomColorBtn" class="primary" type="button">適用</button></footer></form></dialog>
 
+  <dialog id="pngExportDialog" class="settings-dialog png-export-dialog" aria-labelledby="pngExportTitle">
+    <form method="dialog">
+      <header><strong id="pngExportTitle" data-png-ja="PNG出力" data-png-en="Export PNG">PNG出力</strong><button type="button" data-png-close aria-label="閉じる">×</button></header>
+      <section>
+        <div class="png-export-controls">
+          <label><span data-png-ja="出力範囲" data-png-en="Region">出力範囲</span> <select data-png-mode><option value="draw" data-png-ja="矩形を指定" data-png-en="Draw a rectangle">矩形を指定</option><option value="existing" data-png-ja="既存の矩形を使う" data-png-en="Use an existing rectangle">既存の矩形を使う</option></select></label>
+          <label><span data-png-ja="解像度" data-png-en="Resolution">解像度</span> <select data-png-scale><option value="1">1×</option><option value="2" selected>2×</option><option value="4">4×</option></select></label>
+          <button type="button" data-png-clear data-png-ja="範囲をクリア" data-png-en="Clear region">範囲をクリア</button>
+        </div>
+        <p data-png-status role="status"></p>
+        <div class="png-export-preview"><canvas aria-label="PNG出力範囲"></canvas></div>
+        <p class="png-export-note" data-png-ja="画面表示サイズを基準に、選んだ倍率で出力します。既存矩形の辺も図形として画像に含まれます。" data-png-en="Resolution is relative to the on-screen size. Existing rectangle edges remain part of the drawing in the image.">画面表示サイズを基準に、選んだ倍率で出力します。既存矩形の辺も図形として画像に含まれます。</p>
+        <p data-png-error role="alert"></p>
+      </section>
+      <footer><button type="button" data-png-close data-png-ja="キャンセル" data-png-en="Cancel">キャンセル</button><button type="button" class="primary" data-png-save data-png-ja="PNGを保存" data-png-en="Save PNG" disabled>PNGを保存</button></footer>
+    </form>
+  </dialog>
   <dialog id="choiceDialog" class="settings-dialog choice-dialog" aria-labelledby="choiceDialogTitle" aria-describedby="choiceDialogMessage"><form method="dialog"><header><strong id="choiceDialogTitle" data-choice-title></strong><button type="button" data-choice-close>×</button></header><section><p id="choiceDialogMessage" data-choice-message></p></section><footer data-choice-actions></footer></form></dialog>
 
   <script>
@@ -207,6 +225,7 @@
         "src/parameters/namespace.js",
         "src/persistence/geometry.js", "src/persistence/geometry_instances.js", "src/persistence/block_definitions.js", "src/persistence/block_instances.js", "src/persistence/block_connections.js", "src/persistence/document_geometry.js", "src/persistence/document_sequences.js", "src/persistence/document_loading.js",
         "src/persistence/document_snapshot.js",
+        "src/geometry/export_region.js", "src/rendering/canvas_export.js", "src/persistence/png_file.js", "src/ui/png_export_dialog.js",
         "app.js",
       ];
       document.write(sources.map((source) => `<script src="./${source}?load=${loadId}"><\/script>`).join(""));

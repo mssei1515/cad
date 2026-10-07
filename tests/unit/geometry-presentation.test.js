@@ -9,7 +9,7 @@ class Point {}
 function fixture() {
   const selection = { points: [], lines: [], circles: [], arcs: [], splines: [], blockInstances: [], geometryInstances: [] };
   const hover = { current: {} }, view = { geometryIds: false, constraintStatus: false };
-  const presentation = sandbox.window.GeometryPresentation.create({ Point, canvasSelection: selection, canvasHover: hover, viewState: view,
+  const presentation = sandbox.window.GeometryPresentation.create({ Point, canvasSelection: selection, canvasHover: hover, viewState: view, isExporting: () => !!view.exporting,
     effectiveAppearanceForElement: item => item.appearance || { color: 'normal', lineWidth: 1.5 },
     isEditableSketchElement: item => !item.inactive, isConstraintOperandSelected: item => !!item.operand,
     isPendingReferenceTarget: item => !!item.reference, isSidebarHighlightedElement: item => !!item.tree,
@@ -30,6 +30,17 @@ function fixture() {
     } });
   return { presentation, selection, hover, view };
 }
+test('export paints document appearance without interaction highlights or editing points', () => {
+  const f = fixture(), line = { related: true, operand: true, sidebar: true };
+  f.selection.lines.push(line); f.hover.current.line = line;
+  f.view.exporting = true; f.view.constraintStatus = true; f.view.geometryIds = true;
+  const state = f.presentation.geometryPaintState(line, 'lines');
+  assert.equal(state.selected, false); assert.equal(state.hovered, false); assert.equal(state.showId, false);
+  assert.equal(state.color, 'theme:normal'); assert.equal(state.strokeWidth, 1.5);
+  assert.equal(f.presentation.pointPaintState({ kind: 'endpoint', used: true }), null);
+  assert.equal(f.presentation.pointPaintState({ kind: 'explicit', fixed: true }).showFixed, false);
+  assert.deepEqual(f.selection.lines, [line]);
+});
 test('instance ownership distinguishes whole instances, internal geometry and point projections', () => {
   const f = fixture(), instance = { id: 'FI1' }, line = { id: 'L1', derivedInstance: instance };
   const point = Object.assign(new Point(), { derivedInstance: instance });

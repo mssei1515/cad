@@ -4,7 +4,7 @@
   function create({ Point, canvasSelection, canvasHover, viewState,
     effectiveAppearanceForElement, isEditableSketchElement, isConstraintOperandSelected, isPendingReferenceTarget,
     isSidebarHighlightedElement, isSidebarHoveredElement, isReferenceHoverElement, isSelectedConstraintRelatedElement,
-    sketchAlpha, sketchStrokeWidth, constraintStatusColor, canvasThemeColor, constructionAlpha, pointQueries = {}, handleQueries = {} }) {
+    sketchAlpha, sketchStrokeWidth, constraintStatusColor, canvasThemeColor, constructionAlpha, pointQueries = {}, handleQueries = {}, isExporting = () => false }) {
     const { sameArcEndpoint, arcEndpointPoint, findArcEndpointFixedConstraint, isDraggingArcEndpoint, editedSpline, currentScope } = handleQueries;
     const { isSplineOnlyFitPoint, isEditableSplineFitPoint, isExplicitPoint, isPointUsedByPrimitive, isReferencePoint,
       isAnyLineEndpoint, isEndpointPoint, isDraggingPoint, isDraggingCenter, sidebarHoveredItem, pointLockedByLineFixed } = pointQueries;
@@ -41,6 +41,11 @@
 
     function geometryPaintState(item, kind) {
       const appearance = effectiveAppearanceForElement(item);
+      if (isExporting()) {
+        const construction = Boolean(item.construction);
+        return { appearance, construction, sel: false, selected: false, hovered: false, auxiliaryHighlighted: false, relatedHighlighted: false,
+          alpha: sketchAlpha(item) * (construction ? constructionAlpha : 1), color: canvasThemeColor(appearance.color), strokeWidth: appearance.lineWidth, showId: false };
+      }
       const active = isEditableSketchElement(item);
       const ownSelected = (active && canvasSelection[kind].includes(item)) || canvasSelection.inspectionContains?.(item);
       const geometrySelected = ownSelected || isConstraintOperandSelected(item) || (kind !== "splines" && isPendingReferenceTarget(item));
@@ -70,6 +75,12 @@
     }
 
     function pointPaintState(p) {
+      if (isExporting()) {
+        if (!isExplicitPoint(p)) return null;
+        const appearance = effectiveAppearanceForElement(p);
+        return { alpha: sketchAlpha(p), radius: 5, fillColor: "#fff", color: canvasThemeColor(appearance.color),
+          strokeWidth: Math.max(1.2, sketchStrokeWidth(p)), emphasized: false, showId: false, showFixed: false };
+      }
       if (isSplineOnlyFitPoint(p) && !isEditableSplineFitPoint(p)) return null;
       const appearance = effectiveAppearanceForElement(p);
       if (!viewState.constraintStatus && !p.blockProjection && !p.derivedProjection && !isExplicitPoint(p) && !isPointUsedByPrimitive(p) && !isReferencePoint(p)) return null;

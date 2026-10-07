@@ -157,6 +157,7 @@
 
   const canvas = document.getElementById("canvas");
   const ctx = canvas.getContext("2d");
+  let pngRender = null;
   const dimensionValueInput = document.getElementById("dimensionValueInput");
   const dimensionValueInputShell = document.getElementById("dimensionValueInputShell");
   const canvasContextMenu = document.getElementById("canvasContextMenu");
@@ -585,6 +586,7 @@
   });
   const { geometryDisplayColor, geometryStrokeWidth, geometryPaintState, pointPaintState, arcEndpointPaintState, splineHandleState } = window.GeometryPresentation.create({
     Point, canvasSelection, canvasHover, viewState,
+    isExporting: () => Boolean(pngRender),
     effectiveAppearanceForElement, isEditableSketchElement, isConstraintOperandSelected, isPendingReferenceTarget,
     isSidebarHighlightedElement, isSidebarHoveredElement, isReferenceHoverElement, isSelectedConstraintRelatedElement,
     sketchAlpha, sketchStrokeWidth, constraintStatusColor, canvasThemeColor, constructionAlpha: CONSTRUCTION_GEOMETRY_ALPHA,
@@ -610,8 +612,8 @@
     currentScope: workspace.current, activeSketchId, constraintSketchId, elementSketchId, sketchGeometryBounds, minLength: MIN_LINE_LENGTH,
   });
 
-  const { drawResolvedHatchContent } = window.HatchRenderer.create({ viewport, visibleWorldBounds, canvasThemeColor, isVisibleValue });
-  const { annotationLeaderDisplayGeometry, annotationTextLayout, annotationTextWorldHeight, drawAnnotationText, drawAnnotationLeader } = window.AnnotationRenderer.create({ ctx, viewport, withCanvasState, annotationDisplayColor, annotationLeaderAnchor, appearanceLineDash, formatValue: formatDisplayNumber, effectiveAnnotationStyle, showLeaderEndHandle: element => !element.blockProjection && element.sketchId === activeSketchId() && (canvasSelection.annotations.includes(element) || canvasHover.current.annotation === element) });
+  const { drawResolvedHatchContent } = window.HatchRenderer.create({ viewport, visibleWorldBounds: () => pngRender?.worldBounds || visibleWorldBounds(), canvasThemeColor, isVisibleValue });
+  const { annotationLeaderDisplayGeometry, annotationTextLayout, annotationTextWorldHeight, drawAnnotationText, drawAnnotationLeader } = window.AnnotationRenderer.create({ ctx, viewport, withCanvasState, annotationDisplayColor, annotationLeaderAnchor, appearanceLineDash, formatValue: formatDisplayNumber, effectiveAnnotationStyle, showLeaderEndHandle: element => !pngRender && !element.blockProjection && element.sketchId === activeSketchId() && (canvasSelection.annotations.includes(element) || canvasHover.current.annotation === element) });
   const annotationCommand = window.AnnotationCommand.create({
     currentScope: workspace.current, getPending: () => pendingCommand, setPending: value => { pendingCommand = value; },
     lastPointer: () => lastPointerWorld, viewScale: () => viewport.scale, promptText: (...args) => window.prompt(...args),
@@ -3561,9 +3563,9 @@
       const appearance = hatchAppearanceForDisplay(hatch);
       const selected = canvasSelection.inspectionContains(hatch) || canvasSelection.inspectionContains(hatch.blockInstance) || (hatch.blockProjection ? canvasSelection.blockInstances.includes(hatch.blockInstance) : hatch.sketchId === activeSketchId() && canvasSelection.hatches.includes(hatch));
       const hovered = hatch.blockProjection ? canvasHover.current.block === hatch.blockInstance : hatch.sketchId === activeSketchId() && canvasHover.current.hatch === hatch;
-      drawResolvedHatch(resolvedHatchBoundary(hatch), appearance, hatchPatternOrigin(hatch), { hatch, selected, hovered, alpha: sketchAlpha(hatch) });
+      drawResolvedHatch(resolvedHatchBoundary(hatch), appearance, hatchPatternOrigin(hatch), { hatch, selected: !pngRender && selected, hovered: !pngRender && hovered, alpha: sketchAlpha(hatch) });
     }
-    if (includePreview && ["hatch", "hatch-repair"].includes(mode) && hatchCommand.preview?.result?.ok) {
+    if (!pngRender && includePreview && ["hatch", "hatch-repair"].includes(mode) && hatchCommand.preview?.result?.ok) {
       drawResolvedHatch({ ...hatchCommand.preview.result.resolved, ok: true }, DEFAULT_HATCH_APPEARANCE, { x: 0, y: 0 }, { preview: true });
     }
   }
@@ -3613,11 +3615,12 @@
     if (zoomStatus && zoomStatus.textContent !== zoomText) zoomStatus.textContent = zoomText;
     if (canvasSurface.width <= 0 || canvasSurface.height <= 0) syncCanvasBitmapSize();
     const dpr = canvasSurface.dpr;
-    pointerMoveScheduler.recordDraw();
+    if (!pngRender) pointerMoveScheduler.recordDraw();
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     resetCanvasStrokeState();
     ctx.clearRect(0, 0, canvas.width, canvas.height);
-    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    if (pngRender) ctx.setTransform(pngRender.ratio.x, 0, 0, pngRender.ratio.y, -pngRender.region.x * pngRender.ratio.x, -pngRender.region.y * pngRender.ratio.y);
+    else ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     resetCanvasStrokeState();
     ctx.save();
     ctx.translate(viewport.x, viewport.y);
@@ -3626,6 +3629,14 @@
     drawReferenceImages();
     drawHatches([], { includePreview: true });
     drawDrawingStack();
+    if (pngRender) {
+      drawDimensions();
+      drawAnnotations();
+      drawPoints();
+      ctx.restore();
+      resetCanvasStrokeState();
+      return;
+    }
     drawBlockInstanceHandles();
     drawDimensions();
     drawDimensionPreview();
@@ -3770,9 +3781,9 @@
       const highlighted = canvasSelection.inspectionContains(c) || c === canvasHover.current.dimension || canvasSelection.constraintSelectedInCanvas(c) || c === dimensionDrag.constraint;
       const label = dimensionLabelForConstraint(c, target, dimension);
       const editing = pendingCommand?.type === "distance-value" && pendingCommand.constraint === c;
-      const colorOverride = viewState.constraintStatus && !isActiveSketchConstraint(c) ? INACTIVE_CONSTRAINT_STATUS_COLOR : null;
+      const colorOverride = !pngRender && viewState.constraintStatus && !isActiveSketchConstraint(c) ? INACTIVE_CONSTRAINT_STATUS_COLOR : null;
       ctx.save();
-      drawDimension(target, dimension, label, false, highlighted || editing, editing ? { hidden: true } : null, colorOverride, sketchId, dimensionUsesExpression(c));
+      drawDimension(target, dimension, label, false, !pngRender && (highlighted || editing), !pngRender && editing ? { hidden: true } : null, colorOverride, sketchId, !pngRender && dimensionUsesExpression(c));
       ctx.restore();
     }
   }
@@ -3808,6 +3819,7 @@
   }
 
   function annotationDisplayColor(element, style = effectiveAnnotationStyle(element)) {
+    if (pngRender) return canvasThemeColor(style.color);
     if (canvasSelection.annotations.includes(element) || canvasSelection.inspectionContains(element) || canvasSelection.inspectionContains(element.blockInstance)) return canvasThemeColor("#2563eb");
     if (element === canvasHover.current.annotation) return canvasThemeColor("#0ea5e9");
     return canvasThemeColor(style.color);
@@ -6891,6 +6903,37 @@
   document.getElementById("toolSpline")?.addEventListener("click", beginSplineCreation);
 
   document.getElementById("exportBtn").addEventListener("click", () => void saveJot2DFile());
+  const canvasExport = window.CanvasExport.create({
+    canvas, createCanvas: () => document.createElement("canvas"), text: applicationText,
+    background: () => getComputedStyle(canvas.closest(".canvas-area")).backgroundColor,
+    render: (region, ratio) => {
+      const a = screenToWorld({ x: region.x, y: region.y });
+      const b = screenToWorld({ x: region.x + region.width, y: region.y + region.height });
+      pngRender = { region, ratio, worldBounds: { x1: a.x, y1: a.y, x2: b.x, y2: b.y } };
+      withGeometryReadCache(drawCanvas);
+    },
+    restore: () => { pngRender = null; syncCanvasBitmapSize(); draw(); },
+  });
+  const pngFile = window.PngFile.create({ window, document, capture: canvasExport.capture, documentName: effectiveDocumentName, text: applicationText });
+  const pngExportDialog = window.PngExportDialog.create({
+    dialog: document.getElementById("pngExportDialog"), text: applicationText, capture: canvasExport.capture, save: pngFile.save, setHint,
+    prepare: async () => {
+      await document.fonts.ready;
+      await referenceImageRenderer.ready(model.referenceImages.filter(item => isVisibleValue(item.visible) && isVisibleSketchId(item.sketchId)));
+      const rect = canvas.getBoundingClientRect();
+      return { width: rect.width, height: rect.height, lines: allGeometryLines().filter(isVisibleSketchElement).map(line => ({
+        id: line.id, p1: worldToCanvasScreen(line.p1), p2: worldToCanvasScreen(line.p2), selected: canvasSelection.lines.includes(line),
+      })) };
+    },
+  });
+  document.getElementById("pngExportBtn").addEventListener("click", () => {
+    flushScheduledCanvasPointerMove();
+    if (fileSession.busy || hasActiveDrawOperation() || pendingCommand || pendingConstraintCommand || mode === "block-place") {
+      setHint(applicationText("進行中の操作を完了またはキャンセルしてからPNG出力を開始してください", "Finish or cancel the current operation before exporting PNG"));
+      return;
+    }
+    void pngExportDialog.open();
+  });
   document.getElementById("saveAsBtn")?.addEventListener("click", () => void saveJot2DFileAs());
   document.getElementById("importBtn").addEventListener("click", () => void openJot2DFile());
   document.getElementById("documentFileInput")?.addEventListener("change", documentFileCommand.fileInputChanged);
