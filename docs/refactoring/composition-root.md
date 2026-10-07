@@ -6,6 +6,10 @@
 
 ## 現在の再開地点（2026-10-08）
 
+LineCollapseQueryへ拘束後の線の潰れ判定を分離。対象拘束型・snapshot参照・接続成分内のSketch・閾値は維持し、対象Sketchは明示引数とした。app.jsは11,259行から11,214行へ縮小（45行減、隣接空行整理を含む）。構文379ファイル・単体920件・関連E2E121件成功（exit 0、2.0分）。ログはcad-collapse-query-{check,unit,e2e}.log。全体E2Eは今回未実行。GitHubのInternal Server Errorが継続しており、Push完了はリモートrefで確認すること。全体目標は未完了。
+
+### 前回の区切り
+
 CircleCenterCrossCommandへ円中心十字の開始・検証・作成・求解と失敗復元・成功履歴を分離。geometryとcheckpoint／solverの既存所有者へ明示接続する。app.jsは11,335行から11,259行へ縮小（76行減）。構文378ファイル・単体917件・関連E2E109件成功（exit 0、1.3分）。ログはcad-center-cross-{check,unit,e2e}.log。全体E2Eは今回未実行。GitHubのInternal Server Errorにより前段c8fd85aのPushが未完了だったため、今回のcommitと合わせて再試行する。全体目標は未完了。
 
 ### 前回の区切り
