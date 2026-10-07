@@ -6,6 +6,10 @@
 
 ## 現在の再開地点（2026-10-08）
 
+CircleCenterCrossCommandへ円中心十字の開始・検証・作成・求解と失敗復元・成功履歴を分離。geometryとcheckpoint／solverの既存所有者へ明示接続する。app.jsは11,335行から11,259行へ縮小（76行減）。構文378ファイル・単体917件・関連E2E109件成功（exit 0、1.3分）。ログはcad-center-cross-{check,unit,e2e}.log。全体E2Eは今回未実行。GitHubのInternal Server Errorにより前段c8fd85aのPushが未完了だったため、今回のcommitと合わせて再試行する。全体目標は未完了。
+
+### 前回の区切り
+
 CenterlineCommand.startへ事前選択付き開始を統合。開始とdraft入力の所有者を揃え、Root拒否・準備失敗時の対象選択移行を維持。app.jsは11,358行から11,335行へ縮小（23行減）。構文377ファイル・単体914件・関連E2E109件成功（exit 0、1.3分）。ログはcad-centerline-start-{check,unit,e2e}.log。全体E2Eは今回未実行。次は円中心十字の作成・求解失敗復元、共通編集・Document適用、描画・入力組立て。全体目標は未完了。
 
 ### 前回の区切り

@@ -187,7 +187,7 @@ const files = [
   "tests/unit/fillet-construction.test.js",
   "src/geometry/centerline_geometry.js",
   "src/editing/centerline_construction.js",
-  "src/commands/centerline_command.js",
+  "src/commands/centerline_command.js", "src/commands/circle_center_cross_command.js",
   "tests/unit/centerline-command.test.js",
   "src/editing/drawing_snap.js",
   "src/editing/snap_constraints.js",
