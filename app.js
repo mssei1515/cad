@@ -992,30 +992,14 @@
     ]);
   }
 
-  function commitAnnotationParameterEdit(item, property, value) {
-    const snapshot = snapshotModelState();
-    try {
-      if (property === "annotation-parameter-enabled") {
-        if (!value && !guardDimensionSymbolDeletion([item])) return false;
-        if (value && !item.parameterEnabled) {
-          (item.style ||= {}).prefix = item.text || "";
-        } else if (!value && item.parameterEnabled) {
-          item.text = item.style?.prefix || "";
-        }
-        item.parameterEnabled = Boolean(value);
-        if (item.parameterEnabled) ensureDimensionParameter(item, currentParameterNamespace());
-      } else if (property === "annotation-parameter-name") parameterNamespace.renameDimension(item, value);
-      else if (property === "annotation-expression") item.expression = expressionFromUserInput(value);
-      const solved = stabilizeActiveParameterNamespace(activeSketchId(), { allSketches: model.sketches.filter(sketch => !isRootSketch(sketch)).map(sketch => sketch.id) });
-      if (!solved.success || solved.dependent?.success === false) throw new Error(solved.result.reason);
-      recordHistory("注記Parameter変更");
-      return true;
-    } catch (error) {
-      restoreModelState(snapshot);
-      setHint(parameterErrorText(error), "error");
-      return false;
-    }
-  }
+  const annotationParameterCommand = window.AnnotationParameterCommand.create({
+    capture: snapshotModelState, restore: restoreModelState, guardDimensionSymbolDeletion,
+    ensureParameter: item => ensureDimensionParameter(item, currentParameterNamespace()),
+    renameParameter: parameterNamespace.renameDimension, expressionFromUserInput,
+    stabilize: () => stabilizeActiveParameterNamespace(activeSketchId(), { allSketches: model.sketches.filter(sketch => !isRootSketch(sketch)).map(sketch => sketch.id) }),
+    recordHistory, setHint, parameterErrorText,
+  });
+  const commitAnnotationParameterEdit = annotationParameterCommand.commit;
 
   function guardDimensionSymbolDeletion(constraints, namespace = currentParameterNamespace()) {
     const removedConstraints = new Set(constraints || []);

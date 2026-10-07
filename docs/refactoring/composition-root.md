@@ -6,6 +6,10 @@
 
 ## 現在の再開地点（2026-10-08）
 
+AnnotationParameterCommandへ注記Parameterの切替・名称・式変更とガード・求解・失敗復元・履歴確定を分離。checkpointとnamespaceの所有は既存moduleへ残す。app.jsは10,801行から10,785行へ縮小（16行減）。構文387ファイル・単体952件・関連E2E105件成功（exit 0、1.4分）。ログはcad-annotation-parameter-{check,unit,e2e}.log。週枠残量51%で継続。全体E2Eは今回未実行。全体目標は未完了。
+
+### 前回の区切り
+
 GeometryAppearanceQueryへ幾何外観継承・Sketch外観・可視性の照会を分離。Document／Sketch／Block／派生投影の優先順と参照を維持し、キャッシュ期間はGeometryReadModelが所有する。app.jsは10,850行から10,801行へ縮小（49行減）。構文386ファイル・単体948件・関連E2E141件成功（exit 0、1.9分）。ログはcad-appearance-query-{check,unit,e2e}.log。全体E2Eは今回未実行。全体目標は未完了。
 
 ### 前回の区切り
