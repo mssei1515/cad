@@ -70,8 +70,9 @@
       const along = (shelf.end.x - shelf.elbow.x) * Math.cos(transformRotation)
         + (shelf.end.y - shelf.elbow.y) * Math.sin(transformRotation);
       const leftEnd = along < 0 ? shelf.end : shelf.elbow;
-      const x = leftEnd.x + Math.sin(transformRotation) * offset;
-      const y = leftEnd.y - Math.cos(transformRotation) * offset;
+      const inset = fontSize / 2;
+      const x = leftEnd.x + Math.cos(transformRotation) * inset + Math.sin(transformRotation) * offset;
+      const y = leftEnd.y + Math.sin(transformRotation) * inset - Math.cos(transformRotation) * offset;
       const worldCorners = corners.map(point => ({ x: x + point.x * Math.cos(rotation) - point.y * Math.sin(rotation), y: y + point.x * Math.sin(rotation) + point.y * Math.cos(rotation) }));
       return { x, y, rotation, fontSize, width, height, gapWorld, strokeHalfWidth, left,
         bounds: { x1: Math.min(...worldCorners.map(p => p.x)), y1: Math.min(...worldCorners.map(p => p.y)),

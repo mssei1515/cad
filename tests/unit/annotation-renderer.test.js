@@ -165,7 +165,7 @@ test("leader elbow, shelf and legacy label follow anchor displacement without re
 });
 
 
-test("shelf text reference follows the left end in either direction and rotated blocks", () => {
+test("shelf text has a half-font-height inset in either direction and rotated blocks", () => {
   const h = create();
   for (const scale of [1, 4]) for (const direction of [-1, 1]) for (const angle of [0, Math.PI / 2, Math.PI]) {
     h.viewport.scale = scale;
@@ -176,6 +176,6 @@ test("shelf text reference follows the left end in either direction and rotated 
       annotationTransformRotation: angle, shelfReferenceScale: 2, style: {} };
     const layout = h.renderer.annotationTextLayout(element), geometry = h.renderer.annotationLeaderDisplayGeometry(element);
     const left = direction < 0 ? geometry.end : geometry.elbow;
-    assert.ok(Math.abs((layout.x - left.x) * c + (layout.y - left.y) * s) < 1e-8);
+    assert.ok(Math.abs((layout.x - left.x) * c + (layout.y - left.y) * s - layout.fontSize / 2) < 1e-8);
   }
 });
