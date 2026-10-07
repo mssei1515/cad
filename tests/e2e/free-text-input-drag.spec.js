@@ -93,8 +93,9 @@ test('multiple free texts size lock captures zoom with one undo and persists', a
   expect((await page.evaluate(() => window.__jot2dTest.serializedModelForTest())).annotations).toEqual(saved.annotations);
 });
 
-for (const prefix of ['Custom prefix', '']) {
-  test(`free text initializes prefix once and retains edited prefix ${JSON.stringify(prefix)} after reload`, async ({ page }) => {
+for (const body of ['Updated note', '  Updated\nsecond line  ', '']) {
+  const prefix = 'Custom prefix';
+  test(`free text copies current body ${JSON.stringify(body)} on every parameter enable after reload`, async ({ page }) => {
     const positions = await fixture(page);
     await page.mouse.click(positions.notes[0].x, positions.notes[0].y);
     const enabled = page.locator('[data-property="annotation-parameter-enabled"]');
@@ -118,7 +119,19 @@ for (const prefix of ['Custom prefix', '']) {
     await page.evaluate(() => window.__jot2dTest.focusWorldForTest({ x: 50, y: 0 }, 2));
     const point = await page.evaluate(() => window.__jot2dTest.worldClientPositionForTest({ x: 0, y: -45 }));
     await page.mouse.click(point.x, point.y);
+    await page.locator('[data-property="annotation-text"]').fill(body);
+    await page.locator('[data-property="annotation-text"]').press('Tab');
     await enabled.check();
-    await expect(affix).toHaveValue(prefix);
+    await expect(affix).toHaveValue(body);
+    const changed = await page.evaluate(() => window.__jot2dTest.serializedModelForTest());
+    expect(changed.annotations[0].text).toBe(body);
+    expect(changed.annotations[0].parameterName).toBe(saved.annotations[0].parameterName);
+    expect(changed.annotations[0].expression).toBe(saved.annotations[0].expression);
+    await page.click('#undoBtn');
+    const undone = await page.evaluate(() => window.__jot2dTest.serializedModelForTest());
+    expect(undone.annotations[0].parameterEnabled).toBe(false);
+    expect(undone.annotations[0].style.prefix).toBe(prefix);
+    await page.click('#redoBtn');
+    expect((await page.evaluate(() => window.__jot2dTest.serializedModelForTest())).annotations[0].style.prefix).toBe(body);
   });
 }
