@@ -210,7 +210,7 @@
     orderedSketches, childSketchesOf, descendantSketchIds,
     ancestorSketchIds, isReferenceSourceSketchId, referenceSourceSketchIds,
     activeSketch, activeSketchId, assignSketchId,
-    elementSketchId, sameSketchElements, isEditableSketchId,
+    elementSketchId, sameSketchElements, isEditableSketchId, canEditSketch,
     sketchRelationToActive, constraintSketchId, isActiveSketchConstraint,
     constraintTargetsAreActive, constraintReferencesSketch, wouldCreateSketchCycle,
     sketchTreeRows, isActiveSketchElement, isEditableSketchElement,
@@ -230,7 +230,7 @@
     blockCatalog, geometryInstanceBundlesForScope, emptyGeometryInstanceBundle, hatchPrimitivesFromElements, hatchPrimitivesForScope,
   });
   const { blockProjectionId, blockProjectionLocalId, blockWorldPoint, createBlockProjectionBundle, blockAllProjectionBundle, blockProjectionBundle, invalidateBlockProjectionCache } = blockProjections;
-  const { annotationBounds, pointInAnnotationTextBox, hitAnnotationElement, canvasContextAnnotationHit } = window.AnnotationSpatialQuery.create({
+  const { annotationBounds, pointInAnnotationTextBox, hitAnnotationElement: queryAnnotationElement, canvasContextAnnotationHit } = window.AnnotationSpatialQuery.create({
     viewportScale: () => viewport.scale, annotationTextWorldHeight: style => annotationTextWorldHeight(style),
     formatDisplayNumber, annotationTextLayout: element => annotationTextLayout(element), annotationLeaderDisplayGeometry: element => annotationLeaderDisplayGeometry(element), effectiveAnnotationStyle, allAnnotations: () => allAnnotations(), isVisibleSketchId, activeSketchId, isVisibleValue,
     annotationLeaderAnchor: element => annotationLeaderAnchor(element),
@@ -815,6 +815,7 @@
   });
   const { changeFreeInstanceProperty, setBlockInstanceRotationLocked, setBlockInstanceOrthogonalRotation } = instanceTransformCommand;
   const dimensionValueCommand = window.DimensionValueCommand.create({
+    canEdit: (id, operation) => guardSketchEdit(id, operation),
     renameDimension: parameterNamespace.renameDimension,
     getPending: () => pendingCommand, setPending: value => { pendingCommand = value; },
     expressionFromUserInput, evaluateDimensionExpressionDraft, applicationText, parameterErrorText,
@@ -1041,6 +1042,7 @@
   }
 
   function guardSketchProjectionShapeEdit(items, { includeSharedNodes = true, action = "" } = {}) {
+    if (!items.filter(Boolean).every(item => guardSketchEdit(elementSketchId(item)))) return false;
     if (sketchProjectionConstraintsAffectingItems(items, { includeSharedNodes }).length === 0) return true;
     setHint(sketchProjectionShapeEditBlockedMessage(action), "error");
     return false;
@@ -1075,7 +1077,11 @@
     return applicationText("スケッチ投影", "Sketch Projection");
   }
 
-  function hitHatchAt(x, y, { activeOnly = true } = {}) {
+  function hitAnnotationElement(x, y, options = {}) {
+    return queryAnnotationElement(x, y, { activeOnly: !ordinarySelectionMode(), ...options });
+  }
+
+  function hitHatchAt(x, y, { activeOnly = !ordinarySelectionMode() } = {}) {
     const point = { x, y };
     const candidates = allHatches().filter((hatch) => {
       if (!isVisibleSketchId(hatch.sketchId) || !isVisibleValue(hatchAppearanceForDisplay(hatch).visible)) return false;
@@ -1090,7 +1096,7 @@
     return null;
   }
 
-  function hitReferenceImageAt(x, y, { activeOnly = true } = {}) {
+  function hitReferenceImageAt(x, y, { activeOnly = !ordinarySelectionMode() } = {}) {
     const point = { x, y };
     for (let index = model.referenceImages.length - 1; index >= 0; index -= 1) {
       const item = model.referenceImages[index];
@@ -1103,6 +1109,7 @@
   }
 
   const referenceImageInteraction = window.ReferenceImageInteraction.create({
+    canEdit: item => guardSketchEdit(item.sketchId),
     clearSelection, canvasSelection, applicationText, setHint, updateUI, draw, clearSnap,
     beginPointer: (id) => { canvas.classList.add("is-dragging"); canvas.setPointerCapture(id); },
     endPointer: (id) => { canvas.classList.remove("is-dragging"); try { canvas.releasePointerCapture(id); } catch (_) {} },
@@ -1135,13 +1142,62 @@
     return true;
   }
 
+  function selectionItems() {
+    return [...selectedGeometryItems(), ...canvasSelection.blockInstances, ...canvasSelection.geometryInstances,
+      ...canvasSelection.annotations, ...canvasSelection.hatches, ...canvasSelection.referenceImages,
+      ...canvasSelection.dimensionConstraints, canvasSelection.constraint, canvasSelection.arcEndpoint?.arc].filter(Boolean);
+  }
+
+  function selectIdentity(identity, additive = false) {
+    let item = identity.item, kind = identity.kind;
+    if (item.blockInstance) { item = item.blockInstance; kind = "block"; }
+    else if (item.derivedInstance) { item = item.derivedInstance; kind = "instance"; }
+    if (additive && selectionSketchId() && selectionSketchId() !== identity.sketchId) return false;
+    if (!additive) clearSelection();
+    const field = { point: "points", line: "lines", circle: "circles", arc: "arcs", spline: "splines",
+      block: "blockInstances", instance: "geometryInstances", "geometry-instance": "geometryInstances",
+      dimension: "dimensionConstraints", annotation: "annotations", hatch: "hatches", image: "referenceImages" }[kind];
+    if (!field) return false;
+    if (additive) canvasSelection.toggleById(field, item); else canvasSelection.set(field, [item]);
+    updateGeometrySelectionUI(); draw(); return true;
+  }
+
+  function selectionSketchId() { return selectionItems()[0]?.sketchId || canvasSelection.inspection?.sketchId || null; }
+
+  function guardSketchEdit(sketchId = activeSketchId(), operation = "edit") {
+    if (canEditSketch(sketchId, operation)) return true;
+    setHint(sketchById(sketchId)?.locked
+      ? applicationText("スケッチはロック中です。ロック解除または作図先変更が必要です", "Sketch is locked. Unlock it or change the drawing sketch.")
+      : applicationText("この操作には所属スケッチを作図先に指定してください", "Set the owning sketch as the drawing sketch for this operation."), "error");
+    return false;
+  }
+
+  function guardSelectionEdit(operation = "edit") {
+    return [...new Set(selectionItems().map(elementSketchId))].every(id => guardSketchEdit(id, operation));
+  }
+
+  function ordinarySelectionMode() { return mode === "select" && !pendingCommand && !pendingConstraintCommand; }
+  function hitSketchAllowed(id) {
+    return isVisibleSketchId(id) && (ordinarySelectionMode() || id === activeSketchId() && isEditableSketchId(id));
+  }
+  function hitElementAllowed(item) { return isVisibleSketchElement(item) && hitSketchAllowed(elementSketchId(item)); }
+
+  function toggleSketchLock(id) {
+    const sketch = sketchById(id);
+    if (!sketch || isRootSketch(sketch)) return false;
+    cancelPendingCommand(""); cancelConstraintTargetCommand(""); exitDrawMode();
+    sketch.locked = !sketch.locked;
+    updateUI(); draw(); recordHistory(applicationText("スケッチロック切替", "Toggle sketch lock"));
+    return true;
+  }
+
   function canCreateInActiveSketch() {
-    return isGeometryMode() && isDrawableSketch(activeSketchId());
+    return isGeometryMode() && canEditSketch(activeSketchId(), "create");
   }
 
   function rejectRootSketchCreation() {
     if (canCreateInActiveSketch()) return false;
-    setHint("Root Sketchには図形を作成できません。子スケッチをダブルクリックしてアクティブにしてください。", "error");
+    guardSketchEdit(activeSketchId(), "create");
     clearSnap();
     drawingPreview.setPointer(null);
     draw();
@@ -1175,7 +1231,7 @@
   }
 
   function operandRelationForSketch(sketchId) {
-    if (isEditableSketchId(sketchId)) return "active";
+    if (sketchId === activeSketchId()) return "active";
     if (descendantSketchIds(activeSketchId()).includes(sketchId)) return "descendant";
     if (isReferenceSourceSketchId(sketchId)) return "reference";
     return null;
@@ -1254,8 +1310,8 @@
     return ` / 参照スケッチ破綻: ${sketchName(first.sketchId)} (error=${first.result.errorNorm.toExponential(3)})`;
   }
 
-  function solveAndRefresh(label = "自動solve") {
-    const solved = stabilizeActiveParameterNamespace(activeSketchId());
+  function solveAndRefresh(label = "自動solve", sketchId = activeSketchId()) {
+    const solved = stabilizeActiveParameterNamespace(sketchId);
     const result = solved.result;
     const analysis = refreshConstraintAnalysis();
     setSolveResultHint(label, solved, analysis, solved.dependent);
@@ -1309,7 +1365,7 @@
   }
 
   function drawOrderBySketch(items) {
-    return items.filter(isVisibleSketchElement).sort((a, b) => Number(isEditableSketchElement(a)) - Number(isEditableSketchElement(b)));
+    return items.filter(isVisibleSketchElement).sort((a, b) => Number(isActiveSketchElement(a)) - Number(isActiveSketchElement(b)));
   }
 
   function sketchAlpha(item) {
@@ -1434,6 +1490,7 @@
   });
 
   const splineEditing = window.SplineEditCommand.create({
+    canEditStructure: item => guardSketchEdit(elementSketchId(item), "structure"),
     currentScope: () => model, ids: geometryIds, clearSelection, canvasSelection, applicationText, setHint, updateUI, draw,
     restoreModelState, snapshotModelState, stabilizeActiveParameterNamespace, elementSketchId,
     invalidateAnalysis: () => constraintAnalysis.invalidate(), recordHistory, guardSketchProjectionShapeEdit,
@@ -1476,7 +1533,7 @@
 
   const blockDefinitionCommand = window.BlockDefinitionCommand.create({
     blockEditor, blockDefinitionEditing, blockCatalog, blockEditingQueries, documentModel,
-    currentScope: workspace.current, canStartCreation: () => isGeometryMode() && canCreateInActiveSketch(),
+    currentScope: workspace.current, canStartCreation: () => isGeometryMode() && canCreateInActiveSketch() && guardSelectionEdit("structure"),
     canvasSelection, captureHost: () => ({ ...workspace.capture(), viewport: viewport.snapshot() }),
     defaultName: () => `Block-${blockDefinitionSeq}`, blockSelectionGeometry, blockSelectionBoundsCenter,
     guardDimensionSymbolDeletion, resetBlockEditorHistory, clearSelection,
@@ -1840,10 +1897,11 @@
   }
 
   function selectableSketchElement(item) {
-    return isEditableSketchElement(item);
+    return isActiveSketchElement(item) && isVisibleSketchElement(item);
   }
 
   const drawOperationLifecycle = window.DrawOperationLifecycle.create({
+    canStart: nextMode => nextMode === "select" || guardSketchEdit(activeSketchId(), "create") && (nextMode !== "trim" || guardSelectionEdit("structure")),
     instances: geometryInstanceCommand, instanceSources: instanceSourceCommand, centerline: centerlineCommand,
     line: lineCommand, rectangle: rectangleCommand, slot: slotCommand, fillet: filletCommand,
     circular: circularCommands,
@@ -1974,7 +2032,7 @@
 
   const { hitSketchIdentityElement, hitEndpointPoint, hitExplicitPoint, hitAnyPoint, hitPoint, hitLine, hitCircle, hitArc, hitArcEndpoint, hitSpline } = window.GeometryHitQuery.create({
     currentScope: workspace.current, viewportScale: () => viewport.scale,
-    isEditableSketchElement, isSelectableEndpointPoint, isExplicitPoint,
+    isEditableSketchElement: hitElementAllowed, isSelectableEndpointPoint, isExplicitPoint, preferredSketchId: activeSketchId,
     hitDimension, constraintSketchId, elementSketchId, isVisibleSketchElement, hitBlockInstance, blockDefinitionById,
     hitGeometryInstance, hitAnnotationElement: (...args) => hitAnnotationElement(...args), hitHatchAt, hitReferenceImageAt,
   });
@@ -2050,7 +2108,7 @@
     return true;
   }
 
-  function hitDimension(x, y, { activeOnly = true } = {}) {
+  function hitDimension(x, y, { activeOnly = !ordinarySelectionMode() } = {}) {
     const threshold = 12 / viewport.scale;
     for (let i = model.constraints.length - 1; i >= 0; i--) {
       const constraint = model.constraints[i];
@@ -2100,7 +2158,7 @@
     const threshold = 8 / viewport.scale;
     const instances = model.blockInstances.slice().sort((a, b) => (normalizedDrawingOrder(b.drawingOrder) ?? 0) - (normalizedDrawingOrder(a.drawingOrder) ?? 0));
     for (const instance of instances) {
-      if (editableOnly && !isEditableSketchId(instance.sketchId)) continue;
+      if (editableOnly && !hitSketchAllowed(instance.sketchId)) continue;
       if (!isVisibleSketchId(instance.sketchId)) continue;
       const bundle = blockProjectionBundle(instance);
       if (bundle.points.some((point) => hypot2(point.x - x, point.y - y) <= threshold)) return instance;
@@ -2135,7 +2193,7 @@
   function hitGeometryInstance(x, y, editableOnly = true) {
     const bundles = geometryInstanceBundles().slice().sort((a, b) => (normalizedDrawingOrder(b.instance.drawingOrder) ?? 0) - (normalizedDrawingOrder(a.instance.drawingOrder) ?? 0));
     for (const bundle of bundles) {
-      if (editableOnly && !isEditableSketchId(bundle.instance.sketchId)) continue;
+      if (editableOnly && !hitSketchAllowed(bundle.instance.sketchId)) continue;
       if (isVisibleSketchId(bundle.instance.sketchId) && geometryBundleHit(bundle, x, y)) return bundle.instance;
     }
     return null;
@@ -2146,7 +2204,7 @@
     const pointThreshold = 10 / viewport.scale;
     const bundles = geometryInstanceBundles().slice().sort((a, b) => (normalizedDrawingOrder(b.instance.drawingOrder) ?? 0) - (normalizedDrawingOrder(a.instance.drawingOrder) ?? 0));
     for (const bundle of bundles) {
-      if (!isEditableSketchId(bundle.instance.sketchId) || !isVisibleSketchId(bundle.instance.sketchId)) continue;
+      if (!hitSketchAllowed(bundle.instance.sketchId)) continue;
       for (const point of bundle.points.slice().reverse()) {
         if (hypot2(point.x - x, point.y - y) <= pointThreshold) return { kind: "point", item: point, instance: bundle.instance };
       }
@@ -2256,6 +2314,8 @@
   }
 
   function deleteElements({ points = [], lines = [], circles = [], arcs = [], splines = [], constraints = [] } = {}) {
+    if (![...points, ...lines, ...circles, ...arcs, ...splines, ...constraints].every(item => guardSketchEdit(elementSketchId(item)))) return false;
+    const ownerIds = [...new Set([...points, ...lines, ...circles, ...arcs, ...splines, ...constraints].map(elementSketchId))];
     const pointSet = new Set(points);
     const lineSet = new Set(lines);
     const circleSet = new Set(circles);
@@ -2353,7 +2413,8 @@
     if (constraintSet.has(canvasSelection.constraint)) canvasSelection.set("constraint", null);
     if (constraintSet.has(canvasHover.current.dimension)) canvasHover.update({ dimension: null });
 
-    const result = solveActiveSketch();
+    const results = ownerIds.map(id => solveSketchAndDependents(id));
+    const result = { success: results.every(entry => entry.success), errorNorm: Math.max(0, ...results.map(entry => entry.result?.errorNorm || 0)) };
     normalizeArcSweeps();
     updateToolbar();
     updateUI();
@@ -2367,6 +2428,8 @@
   }
 
   function deleteCurrentSelection() {
+    if (!guardSelectionEdit()) return false;
+    const ownerSketchId = selectionSketchId() || activeSketchId();
     const annotationsToDelete = canvasSelection.annotations.filter((annotation) => model.annotations.includes(annotation));
     const hatchesToDelete = canvasSelection.hatches.filter((hatch) => model.hatches.includes(hatch));
     const referenceImagesToDelete = canvasSelection.referenceImages.filter((image) => model.referenceImages.includes(image));
@@ -2431,7 +2494,7 @@
     if (deletedGeometry) return true;
     if (deletedBlockCount === 0 && deletedInstanceCount === 0 && annotationsToDelete.length === 0 && hatchesToDelete.length === 0 && referenceImagesToDelete.length === 0) return false;
     clearSelection();
-    if (deletedBlockCount > 0 || deletedInstanceCount > 0) solveAndRefresh("インスタンス削除");
+    if (deletedBlockCount > 0 || deletedInstanceCount > 0) solveAndRefresh("インスタンス削除", ownerSketchId);
     else {
       updateUI();
       draw();
@@ -2632,7 +2695,7 @@
       return false;
     }
     if (!canCreateInActiveSketch()) {
-      setHint("貼り付け先のスケッチをアクティブにしてください", "error");
+      guardSketchEdit(activeSketchId(), "create");
       return false;
     }
 
@@ -2887,7 +2950,7 @@
   const rectangleSelectionQuery = window.RectangleSelectionQuery.create({
     currentScope: workspace.current, selectableSketchElement, isExplicitPoint, isReferencePoint, pointInRect,
     lineIntersectsRect, bboxInRect, lineBBox, isVisibleSketchElement, primitiveBBox, bboxIntersectsRect,
-    arcSamplePoints, viewScale: () => viewport.scale, isEditableSketchId, isVisibleSketchId, blockProjectionBundle, mergeBounds,
+    arcSamplePoints, viewScale: () => viewport.scale, isEditableSketchId: id => id === activeSketchId(), isVisibleSketchId, blockProjectionBundle, mergeBounds,
     splineBBox, annotationBounds, resolvedLoopBounds, resolvedHatchBoundary, activeSketchId,
     hatchAppearanceForDisplay, referenceImageBounds, isVisibleValue,
     dimensionSelectionBounds: constraint => {
@@ -2909,6 +2972,7 @@
     },
   });
   function selectByRect(rect, crossing, additive = false) {
+    if (additive && selectionSketchId() && selectionSketchId() !== activeSketchId()) return;
     canvasSelection.set("instanceGeometry", null);
     canvasSelection.applyRectangle(rectangleSelectionQuery.read(rect, crossing), additive);
   }
@@ -3263,6 +3327,7 @@
   }
 
   const annotationDrag = window.AnnotationDrag.create({
+    canEdit: item => guardSketchEdit(item.sketchId),
     annotationById, canvasSelection, setHint, updateUI, draw, recordHistory, annotationLeaderDisplayGeometry,
     beginPointer: (id) => { canvas.setPointerCapture(id); canvas.classList.add("is-dragging"); },
     endPointer: (id) => { canvas.classList.remove("is-dragging"); try { canvas.releasePointerCapture(id); } catch (_) {} },
@@ -3553,6 +3618,7 @@
   }
 
   function startConstraintTargetCommand(type) {
+    if (!guardSketchEdit(activeSketchId(), "create") || !guardSelectionEdit("constraint")) return;
     cancelPendingCommand("");
     resetCenterlineCommandState();
     resetSlotCommandState();
@@ -3924,6 +3990,7 @@
   }
 
   function startDistanceCommand() {
+    if (!guardSketchEdit(activeSketchId(), "create") || !guardSelectionEdit("constraint")) return;
     if (constraintOperands.length === 0) constraintOperands = constraintOperandsFromSelection();
     const resolution = constraintResolutionFromCurrentSelection("distance");
     if (!resolution) return;
@@ -3957,6 +4024,7 @@
   }
 
   function startPrimitiveDimensionCommand(kind) {
+    if (!guardSketchEdit(activeSketchId(), "create") || !guardSelectionEdit("constraint")) return;
     const primitive = selectedPrimitives()[0];
     if (!primitive) return;
     const value = kind === "diameter" ? primitive.radius() * 2 : primitive.radius();
@@ -4094,6 +4162,7 @@
   }
 
   function startDimensionEditInput(hit) {
+    if (hit?.constraint && !guardSketchEdit(constraintSketchId(hit.constraint))) return true;
     if (!hit?.constraint) return false;
     const target = targetFromConstraint(hit.constraint);
     if (!target) return false;
@@ -4136,7 +4205,7 @@
     const sketchIds = new Set([...points, ...lines].map(elementSketchId));
     if (sketchIds.size !== 1) return null;
     const sketchId = [...sketchIds][0];
-    if (!isEditableSketchId(sketchId)) return null;
+    if (!canEditSketch(sketchId, "constraint")) return null;
     return { points, lines, sketchId };
   }
 
@@ -4238,7 +4307,9 @@
     setHint, updateUI, draw, recordHistory, promptName: (title, name) => window.prompt(title, name),
     effectiveAppearanceForElement, clearTreeHover: () => sketchTreeController.clearHoverSketch(), clearSnap,
   });
-  const { createSketch, activate: setActiveSketch, rename: renameSketch, toggleVisibility: toggleSketchVisibility } = sketchCommand;
+  const { createSketch, activate: setActiveSketch, rename: renameSketchCommand, toggleVisibility: toggleSketchVisibilityCommand } = sketchCommand;
+  function renameSketch(id) { if (guardSketchEdit(id)) return renameSketchCommand(id); }
+  function toggleSketchVisibility(id) { return toggleSketchVisibilityCommand(id); }
   const sketchMoveQuery = window.SketchMove.create({
     currentScope: workspace.current, activeSketchId, constraintGraphNodes, constraintSketchId,
     resolveGeometryRef, geometryInstanceDependencyRefs, isReferenceSourceSketchId, applicationText,
@@ -4372,7 +4443,7 @@
   const sketchTreeController = window.SketchTreeController.create({
     currentScope: () => model, activeSketchId, setActiveSketch, clearSelection, canvasSelection,
     sidebarGeometryItem, toggleBlockInstanceSelection, targetFromConstraint, updateUI, draw,
-    sketchTreeView, updateSketchUI, toggleSketchVisibility, renameSketch, deleteSketch, deleteElements,
+    sketchTreeView, updateSketchUI, toggleSketchVisibility, toggleSketchLock, guardSketchEdit, selectionSketchId, renameSketch, deleteSketch, deleteElements,
     hover: { canvasHover, setSidebarHover, clearSidebarHover, sidebarHoverElementsForItem, sidebarHoverElementsForConstraint, elementSketchId, ROOT_SKETCH_ID },
     resolveSelectionEntry: sketchTreeObjects.resolveSelectionEntry,
     move: { active: () => sketchMoveCommand.active, choose: sketchMoveCommand.choose, commit: sketchMoveCommand.commit, cancel: sketchMoveCommand.cancel },
@@ -4380,16 +4451,20 @@
     openContextMenu: (event, id) => {
       closeCanvasContextMenu();
       if (isRootSketch(sketchById(id))) { sketchContextController.close(); return; }
-      sketchContextController.open({ event, target: { id }, items: [{ action: "sketch-edit", label: applicationText("編集", "Edit"), disabled: id === activeSketchId() }] });
+      sketchContextController.open({ event, target: { id }, items: [{ action: "sketch-edit", label: applicationText("作図先", "Drawing sketch"), disabled: id === activeSketchId() },
+        { action: "sketch-rename", label: applicationText("名前変更", "Rename"), disabled: Boolean(sketchById(id)?.locked) }] });
     },
-    unfixPoint: point => { point.fixed = false; solveAndRefresh(`固定解除 ${point.id}`); },
+    unfixPoint: point => { if (!guardSketchEdit(elementSketchId(point), "constraint")) return; point.fixed = false; solveAndRefresh(`固定解除 ${point.id}`); },
   });
   const { refreshSelection: updateSketchTreeSelectionState, render: updateSketchUIUnprofiled, applyWidth: applySketchTreeWidth } = sketchTreeView;
   sketchContextController = window.CanvasContextMenu.create({
     document, window, canvas: document.getElementById("sketchList"), menu: document.getElementById("sketchContextMenu"),
     escapeHtml, applicationText, ariaLabel: () => applicationText("スケッチメニュー", "Sketch menu"),
     onOpen: event => sketchTreeController.contextMenu(event),
-    onAction: (_action, target) => sketchTreeController.editSketch(target.id),
+    onAction: (action, target) => {
+      if (action === "sketch-rename") renameSketch(target.id);
+      else if (action === "sketch-edit") sketchTreeController.editSketch(target.id);
+    },
   });
   sketchContextController.start();
 
@@ -4529,7 +4604,16 @@
     blockProjectionBundle, effectiveAppearanceForElement, documentModel, normalizeAppearance,
     hatchAppearanceForDisplay, normalizeAnnotationStyle, effectiveAnnotationStyle, effectiveDimensionAppearance,
   });
-  const { selectedPropertiesTarget, multiplePropertyTypeKey, multiplePropertySameType, blockPropertyAppearance, multiplePropertyAppearance, multiplePropertySupports, multiplePropertyValue } = propertySelection;
+  const { selectedPropertiesTarget: resolvePropertiesTarget, multiplePropertyTypeKey, multiplePropertySameType, blockPropertyAppearance, multiplePropertyAppearance, multiplePropertySupports, multiplePropertyValue } = propertySelection;
+  function selectedPropertiesTarget() {
+    const target = resolvePropertiesTarget();
+    const items = target.kind === "multiple" ? target.items.map(entry => entry.item) : [target.item];
+    const locked = items.some(item => sketchById(target.kind === "sketch" ? item?.id : item?.sketchId)?.locked);
+    const ownerId = target.kind === "sketch" ? target.item?.id : items[0]?.sketchId;
+    return { ...target, readOnly: target.readOnly || locked, locked,
+      owningSketchLabel: ownerId ? `${sketchName(ownerId)} (${ownerId})` : null,
+      drawingSketchLabel: `${sketchName(activeSketchId())} (${activeSketchId()})` };
+  }
   const geometryPropertyCommand = window.GeometryPropertyCommand.create({
     currentScope: workspace.current, SplineLineTangentConstraint, SplineSplineTangentConstraint,
     guardSketchProjectionShapeEdit, applicationText, synchronizeSketchProjectionMetadata,
@@ -4579,6 +4663,7 @@
   const elementPropertyCommand = window.ElementPropertyCommand.create({ recordHistory, updateUI, updatePropertiesUI, draw });
   const propertiesController = window.PropertiesController.create({
     HTMLTextAreaElement, HTMLInputElement, Spline, selectedPropertiesTarget, activeSketchId,
+    canEditStructure: item => guardSketchEdit(elementSketchId(item), "structure"),
     elementPropertyCommand, appearancePropertyCommand, geometryPropertyCommand, applyMultipleProperty,
     changeFreeInstanceProperty, commitDimensionPropertyEdit, commitAnnotationParameterEdit, updateUI, updatePropertiesUI, draw,
     applicationText, setHint,
@@ -4897,6 +4982,7 @@
   }
 
   function commitNewConstraint(type, constraint) {
+    if (!guardSketchEdit(activeSketchId(), "constraint")) return false;
     if (!constraintTargetsAreActive(constraint)) {
       const msg = "別スケッチ同士は通常拘束できません";
       setHint(msg, "error");
@@ -5128,7 +5214,7 @@
     const subjectElement = referenceSubjectElement(subject);
     const subjectSketchId = referenceSubjectSketchId(subject);
     const referenceSketchId = referenceSketchIdFromPair(subject, referenceTarget);
-    if (!subject || !subjectElement || !isEditableSketchElement(subjectElement)) {
+    if (!subject || !subjectElement || !isActiveSketchElement(subjectElement) || !isEditableSketchElement(subjectElement)) {
       return { error: "アクティブスケッチ側の対象を選択してください" };
     }
     if (!referenceTarget || !referenceSketchId) {
@@ -5202,6 +5288,7 @@
   }
 
   function commitConstraintResolution(resolution, pointer = null) {
+    if (!guardSketchEdit(resolution?.sketchId || activeSketchId(), "constraint")) return false;
     if (!resolution || resolution.error) {
       if (resolution?.error) setHint(resolution.error, "error");
       return false;
@@ -5335,6 +5422,7 @@
   const attachLocalSolveContext = geometryDragEditing.prepare;
 
   const geometryDrag = window.GeometryDrag.create({
+    canEdit: id => guardSketchEdit(id),
     prepareSession: attachLocalSolveContext, dragResultForSession, solveFinalDragSession,
     currentScope: workspace.current, activeSketchId, viewScale: () => viewport.scale,
     beginPointer: (id) => { canvas.classList.add("is-dragging"); canvas.setPointerCapture(id); },
@@ -5364,6 +5452,7 @@
   }
 
   function beginDerivedGeometryDrag(e, hit, pointer) {
+    if (!guardSketchEdit(hit.instance.sketchId)) return;
     const wholeSelected = canvasSelection.geometryInstances.includes(hit.instance) && canvasSelection.instanceGeometry?.instanceId !== hit.instance.id;
     if (["free", "mirror", "pattern"].includes(hit.instance.type)
       && (!canvasSelection.geometryInstances.includes(hit.instance) || wholeSelected)) {
@@ -5493,7 +5582,7 @@
   const dimensionLineGroup = window.DimensionLineGroup.create({ placement: dimensionPlacement, Line });
   function selectedDimensionLineGroup(reference) {
     const constraints = canvasSelection.dimensionConstraints;
-    if (constraints.some(constraint => !model.constraints.includes(constraint) || !isActiveSketchConstraint(constraint)
+    if (constraints.some(constraint => !model.constraints.includes(constraint) || !isEditableSketchId(constraintSketchId(constraint))
       || !isVisibleSketchId(constraintSketchId(constraint)))) return null;
     const entries = constraints.map(constraint => ({ constraint, target: targetFromConstraint(constraint) }));
     if (entries.some(({ constraint, target }) => !target || !isVisibleValue(effectiveDimensionAppearance(
@@ -5502,6 +5591,7 @@
   }
 
   const dimensionDrag = window.DimensionDrag.create({
+    canEdit: item => guardSketchEdit(constraintSketchId(item)),
     selectedLineGroup: selectedDimensionLineGroup, translateLineGroup: dimensionLineGroup.translate,
     dimensionAnchor, migrateAngleDimensionLabelPlacement, canvasSelection, angleDimensionLabelOffsets,
     viewScale: () => viewport.scale, isDimensionConstraintCommandActive, setHint, clearSnap, hypot2,
@@ -5557,6 +5647,8 @@
 
 
   function executeTrimAt(pointer) {
+    const identity = hitSketchIdentityElement(pointer.x, pointer.y, { allowInactiveGeometry: true });
+    if (!guardSketchEdit(identity?.sketchId || activeSketchId(), "structure")) return false;
     const preview = computeTrimPreview(pointer);
     if (!preview) {
       setHint("トリムできる交点がありません", "error");
@@ -5593,6 +5685,7 @@
   }
 
   const { candidatesAt: canvasContextCandidatesAt } = window.CanvasContextQuery.create({
+    selectionScope: { sketch: isVisibleSketchId, element: isVisibleSketchElement },
     hitReferenceImageAt, isVisibleValue,
     currentScope: workspace.current, viewportScale: () => viewport.scale,
     canvasContextPointIsSelectable, editedFitPoints: () => splineEditing.current?.spline?.fitPoints,
@@ -5747,15 +5840,22 @@
   }
 
   function topmostDrawingOrderOwner(items) {
-    return window.DrawingOrder.topmostOwner(model, activeSketchId(), items);
+    const active = window.DrawingOrder.topmostOwner(model, activeSketchId(), items);
+    if (active || !ordinarySelectionMode()) return active;
+    for (const sketch of [...model.sketches].reverse()) {
+      const owner = window.DrawingOrder.topmostOwner(model, sketch.id, items);
+      if (owner) return owner;
+    }
+    return null;
   }
 
   function drawingOrderCommandState() {
-    return window.DrawingOrder.commandState(model, activeSketchId(), selectedDrawingOrderCandidates());
+    return window.DrawingOrder.commandState(model, selectionSketchId() || activeSketchId(), selectedDrawingOrderCandidates());
   }
 
   function reorderSelectedDrawingObjects(action) {
-    if (!window.DrawingOrder.reorder(model, activeSketchId(), selectedDrawingOrderCandidates(), action)) return false;
+    if (!guardSelectionEdit()) return false;
+    if (!window.DrawingOrder.reorder(model, selectionSketchId() || activeSketchId(), selectedDrawingOrderCandidates(), action)) return false;
     updateUI({ refreshAnalysis: false });
     draw();
     recordHistory(applicationText("重なり順変更", "Drawing order changed"));
@@ -5912,6 +6012,10 @@
   }
 
   function executeCanvasContextAction(action, target, pointer) {
+    const editsTarget = ["cut", "delete", "construction-toggle", "fix-toggle", "block-rotation-toggle", "dimension-edit", "dimension-align", "sketch-move", "hatch-repair", "drawing-front", "drawing-forward", "drawing-backward", "drawing-back", "spline-fit-point-add", "spline-fit-point-delete", "create-block"];
+    if (editsTarget.includes(action) && (!guardSelectionEdit() || target?.item && !guardSketchEdit(elementSketchId(target.item)))) return;
+    if (["fix-toggle", "hatch-repair", "spline-fit-point-add", "spline-fit-point-delete", "create-block"].includes(action)
+      && !guardSketchEdit(target?.item ? elementSketchId(target.item) : selectionSketchId() || activeSketchId(), "structure")) return;
     if (action === "sketch-projection-commit") commitSketchProjectionCommand();
     else if (action === "cancel-command") cancelCanvasCommandFromContextMenu();
     else if (action === "undo") undoHistory();
@@ -6007,19 +6111,16 @@
     updateHatchPreview, updateFilletRadiusPlacement, updatePendingDistanceRetargetHover, hitDimension, hitSketchIdentityElement,
     press: { discardMove: () => flushScheduledCanvasPointerMove({ discard: true }),
       selectInactive: (event, identity) => {
-        let item = identity.item, category = identity.kind;
-        if (item.blockInstance) { item = item.blockInstance; category = "block"; }
-        else if (item.derivedInstance) { item = item.derivedInstance; category = "instance"; }
-        if (category === "dimension") category = "constraint";
-        const kind = ["point", "line", "circle", "arc", "spline"].includes(category) ? "geometry"
-          : ({ image: "referenceImage", instance: "geometryInstance" }[category] || category);
-        if (!canvasSelection.selectInspection({ kind, item, category }, identity.sketchId, event.ctrlKey || event.shiftKey)) { draw(); return; }
-        const inspection = canvasSelection.inspection;
-        clearSelection(); canvasSelection.set("inspection", inspection);
-        setHint(inspection ? applicationText("編集不可：編集するには所属スケッチをアクティブにしてください", "Read-only: activate the owning sketch to edit") : applicationText("選択を解除しました", "Selection cleared"));
-        updateGeometrySelectionUI(); draw();
+        selectIdentity(identity, event.ctrlKey || event.shiftKey);
+        if (sketchById(identity.sketchId)?.locked) guardSketchEdit(identity.sketchId);
       },
-      prepareSelection: event => {
+      prepareSelection: (event, hits) => {
+        const identity = hits.sketchIdentity;
+        if ((event.ctrlKey || event.shiftKey) && identity && selectionSketchId() && selectionSketchId() !== identity.sketchId) return true;
+        if (identity && sketchById(identity.sketchId)?.locked) {
+          selectIdentity(identity, event.ctrlKey || event.shiftKey);
+          guardSketchEdit(identity.sketchId); return true;
+        }
         if (canvasSelection.inspection && (event.ctrlKey || event.shiftKey)) return true;
         if (canvasSelection.inspection || canvasSelection.sketchId) clearSelection();
         return false;
@@ -6087,6 +6188,7 @@
   document.getElementById("redoBtn")?.addEventListener("click", redoHistory);
   document.getElementById("selectionVisibilityBtn")?.addEventListener("click", () => {
     if (!isGeometryMode()) return;
+    if (!guardSelectionEdit()) return;
     const targets = selectedVisibilityTargets();
     if (targets.length === 0) return;
     const visible = selectionVisibilityIsHidden(targets);
@@ -6409,6 +6511,7 @@
   }
 
   function toggleGeometryFixedOperand(operand) {
+    if (!guardSketchEdit(elementSketchId(operandElement(operand)), "constraint")) return false;
     const geometry = operand.element;
     if (!guardSketchProjectionShapeEdit([geometry], { action: applicationText("固定", "Fix") })) return false;
     let existing;
@@ -6429,6 +6532,7 @@
   }
 
   function toggleSelectedFixed() {
+    if (!guardSelectionEdit("constraint")) return false;
     const projectedSelection = [...canvasSelection.points, ...canvasSelection.lines, ...canvasSelection.circles, ...canvasSelection.arcs, ...canvasSelection.splines].filter((item) => item?.blockProjection);
     const projectedInstances = [...new Set(projectedSelection.map((item) => item.blockInstance))];
     const instance = canvasSelection.blockInstances.length === 1

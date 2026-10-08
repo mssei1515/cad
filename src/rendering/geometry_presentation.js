@@ -47,7 +47,7 @@
           alpha: sketchAlpha(item) * (construction ? constructionAlpha : 1), color: canvasThemeColor(appearance.color), strokeWidth: appearance.lineWidth, showId: false };
       }
       const active = isEditableSketchElement(item);
-      const ownSelected = (active && canvasSelection[kind].includes(item)) || canvasSelection.inspectionContains?.(item);
+      const ownSelected = canvasSelection[kind].includes(item) || canvasSelection.inspectionContains?.(item);
       const geometrySelected = ownSelected || isConstraintOperandSelected(item) || (kind !== "splines" && isPendingReferenceTarget(item));
       const selected = ownerInstanceSelected(item) || geometrySelected;
       const treeHovered = isSidebarHighlightedElement(item);
@@ -91,7 +91,7 @@
       const sidebarHovered = isSidebarHoveredElement(p);
       const relatedHighlighted = isSelectedConstraintRelatedElement(p);
       const auxiliaryHighlighted = relatedHighlighted;
-      const sel = (active && canvasSelection.points.includes(p)) || canvasSelection.inspectionContains?.(p) || refSelected || ownerInstanceSelected(p);
+      const sel = canvasSelection.points.includes(p) || canvasSelection.inspectionContains?.(p) || refSelected || ownerInstanceSelected(p);
       const endpoint = isEndpointPoint(p);
       const canvasHovered = (active || isReferenceHoverElement(p)) && (canvasHover.current.point === p || canvasHover.current.endpointPoint === p);
       if (viewState.constraintStatus && p.kind === "endpoint" && !canvasHovered && !sel) return null;

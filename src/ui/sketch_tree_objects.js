@@ -142,7 +142,7 @@
         data += ` data-constraint-index="${entry.modelIndex}"`;
       }
       const selected = sketchTreeObjectSelected(category, entry);
-      if (activeSketchId && sketchId !== activeSketchId()) action = action.replaceAll("<button ", "<button disabled ");
+      if (currentScope().sketches.find(sketch => sketch.id === sketchId)?.locked) action = action.replaceAll("<button ", "<button disabled ");
       const hovered = sketchTreeObjectHovered(category, entry);
       const related = category === "constraint" && entry.kind !== "fixed-point"
         ? constraintDirectlyReferencesCanvasSelection(entry.constraint, selectedConstraintReferenceElements())

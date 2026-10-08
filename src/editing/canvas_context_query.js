@@ -18,14 +18,17 @@
     hatch: 10,
     image: 11,
   });
-  function create({ currentScope, viewportScale, canvasContextPointIsSelectable, editedFitPoints, sketches, projections, dimensions, annotations, hatches, hitReferenceImageAt = () => null, isVisibleValue = visible => visible !== false }) {
+  function create({ currentScope, viewportScale, canvasContextPointIsSelectable, editedFitPoints, sketches, projections, dimensions, annotations, hatches, selectionScope = null, hitReferenceImageAt = () => null, isVisibleValue = visible => visible !== false }) {
     const { isEditableSketchId, isVisibleSketchId, isEditableSketchElement, isVisibleSketchElement, activeSketchId, isActiveSketchConstraint, constraintSketchId } = sketches;
+    // These predicates only collect inspectable candidates; action execution checks editing separately.
+    const acceptsSketch = selectionScope?.sketch || isEditableSketchId;
+    const acceptsElement = selectionScope?.element || isEditableSketchElement;
     const { blockProjectionBundle, geometryInstanceBundle } = projections;
     const { targetFromConstraint, defaultDimensionForTarget, effectiveDimensionAppearance, dimensionLayout } = dimensions;
     const { canvasContextAnnotationHit } = annotations;
     const { resolvedHatchBoundary, hatchAppearanceForDisplay, hatchContainsSelectablePoint } = hatches;
     function canvasContextBlockHitDistance(instance, pointer) {
-      if (!instance || !isEditableSketchId(instance.sketchId) || !isVisibleSketchId(instance.sketchId)) return null;
+      if (!instance || !acceptsSketch(instance.sketchId) || !isVisibleSketchId(instance.sketchId)) return null;
       const threshold = 8 / viewportScale();
       let distance = Infinity;
       const bundle = blockProjectionBundle(instance);
@@ -67,7 +70,7 @@
     }
 
     function canvasContextGeometryInstanceHitDistance(instance, pointer) {
-      if (!instance || !isEditableSketchId(instance.sketchId) || !isVisibleSketchId(instance.sketchId)) return null;
+      if (!instance || !acceptsSketch(instance.sketchId) || !isVisibleSketchId(instance.sketchId)) return null;
       const threshold = 8 / viewportScale();
       let distance = Infinity;
       const bundle = geometryInstanceBundle(instance);
@@ -109,13 +112,13 @@
 
       const pointThreshold = 10 / viewportScale();
       model.points.forEach((point, index) => {
-        if (!isEditableSketchElement(point) || !isVisibleSketchElement(point) || !canvasContextPointIsSelectable(point)) return;
+        if (!acceptsElement(point) || !isVisibleSketchElement(point) || !canvasContextPointIsSelectable(point)) return;
         const distance = hypot2(point.x - pointer.x, point.y - pointer.y);
         if (distance <= pointThreshold) push({ kind: "point", item: point }, distance, index);
       });
 
       model.arcs.forEach((arc, index) => {
-        if (!isEditableSketchElement(arc) || !isVisibleSketchElement(arc)) return;
+        if (!acceptsElement(arc) || !isVisibleSketchElement(arc)) return;
         for (const endpoint of ["start", "end"]) {
           const point = arcEndpointPoint(arc, endpoint);
           const distance = hypot2(point.x - pointer.x, point.y - pointer.y);
@@ -125,30 +128,30 @@
 
       const geometryThreshold = 7 / viewportScale();
       model.lines.forEach((line, index) => {
-        if (!isEditableSketchElement(line) || !isVisibleSketchElement(line)) return;
+        if (!acceptsElement(line) || !isVisibleSketchElement(line)) return;
         const distance = distancePointToSegment(pointer.x, pointer.y, line);
         if (distance <= geometryThreshold) push({ kind: "line", item: line }, distance, normalizedDrawingOrder(line.drawingOrder) ?? index);
       });
       model.circles.forEach((circle, index) => {
-        if (!isEditableSketchElement(circle) || !isVisibleSketchElement(circle)) return;
+        if (!acceptsElement(circle) || !isVisibleSketchElement(circle)) return;
         const distance = Math.abs(hypot2(pointer.x - circle.center.x, pointer.y - circle.center.y) - circle.radius());
         if (distance <= geometryThreshold) push({ kind: "circle", item: circle }, distance, normalizedDrawingOrder(circle.drawingOrder) ?? index);
       });
       model.arcs.forEach((arc, index) => {
-        if (!isEditableSketchElement(arc) || !isVisibleSketchElement(arc)) return;
+        if (!acceptsElement(arc) || !isVisibleSketchElement(arc)) return;
         const distance = Math.abs(hypot2(pointer.x - arc.center.x, pointer.y - arc.center.y) - arc.radius());
         const angle = Math.atan2(pointer.y - arc.center.y, pointer.x - arc.center.x);
         if (distance <= geometryThreshold && angleOnSignedSweep(angle, arc.startAngle, arc.endAngle)) push({ kind: "arc", item: arc }, distance, normalizedDrawingOrder(arc.drawingOrder) ?? index);
       });
       model.splines.forEach((spline, index) => {
-        if (!isEditableSketchElement(spline) || !isVisibleSketchElement(spline)) return;
+        if (!acceptsElement(spline) || !isVisibleSketchElement(spline)) return;
         const closest = window.SplineGeometry.closestPoint(spline.curve(), pointer, { samplesPerSpan: 28 });
         if (closest?.distance <= geometryThreshold) push({ kind: "spline", item: spline }, closest.distance, normalizedDrawingOrder(spline.drawingOrder) ?? index);
       });
 
       const dimensionThreshold = 12 / viewportScale();
       model.constraints.forEach((constraint, index) => {
-        if (!isActiveSketchConstraint(constraint) || !isVisibleSketchId(constraintSketchId(constraint))) return;
+        if (!isVisibleSketchId(constraintSketchId(constraint))) return;
         const target = targetFromConstraint(constraint);
         if (!target) return;
         const dimension = constraint.dimension || defaultDimensionForTarget(target);
@@ -165,7 +168,7 @@
       });
 
       model.annotations.forEach((annotation, index) => {
-        if (annotation.sketchId !== activeSketchId() || !isVisibleSketchId(annotation.sketchId)) return;
+        if (!isVisibleSketchId(annotation.sketchId)) return;
         const hit = canvasContextAnnotationHit(annotation, pointer);
         if (hit) push({ kind: "annotation", item: annotation, hit }, hit.distance, index);
       });
@@ -181,7 +184,7 @@
       });
 
       model.hatches.forEach((hatch, index) => {
-        if (hatch.sketchId !== activeSketchId() || !isVisibleSketchId(hatch.sketchId) || !isVisibleValue(hatchAppearanceForDisplay(hatch).visible)) return;
+        if (!isVisibleSketchId(hatch.sketchId) || !isVisibleValue(hatchAppearanceForDisplay(hatch).visible)) return;
         const resolved = resolvedHatchBoundary(hatch);
         if (hatchContainsSelectablePoint(hatch, resolved, pointer)) push({ kind: "hatch", item: hatch }, 0, normalizedDrawingOrder(hatch.drawingOrder) ?? index);
       });

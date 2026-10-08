@@ -1,9 +1,10 @@
 /* Own an existing spline edit session and reversible fit-point mutations. */
 (() => {
   "use strict";
-  function create({ currentScope, ids, clearSelection, canvasSelection, applicationText, setHint, updateUI, draw, restoreModelState, snapshotModelState, stabilizeActiveParameterNamespace, elementSketchId, invalidateAnalysis, recordHistory, guardSketchProjectionShapeEdit, addPoint, isPointUsedByLine, isPointUsedByCircle, isPointUsedByArc, constraintReferencesPoint, guardDimensionSymbolDeletion, geometryElementKey, annotationReferencesRemovedGeometry }) {
+  function create({ currentScope, ids, clearSelection, canvasSelection, applicationText, setHint, updateUI, draw, restoreModelState, snapshotModelState, stabilizeActiveParameterNamespace, elementSketchId, invalidateAnalysis, recordHistory, guardSketchProjectionShapeEdit, canEditStructure = () => true, addPoint, isPointUsedByLine, isPointUsedByCircle, isPointUsedByArc, constraintReferencesPoint, guardDimensionSymbolDeletion, geometryElementKey, annotationReferencesRemovedGeometry }) {
     let session = null;
     function beginSplineEditFromDoubleClick(hitS) {
+      if (!canEditStructure(hitS)) return false;
       clearSelection();
       canvasSelection.set("splines", [hitS]);
       session = { spline: hitS };
@@ -65,6 +66,7 @@
     }
 
     function addSplineFitPointFromContext(spline, pointer) {
+      if (!canEditStructure(spline)) return false;
       if (!session || session.spline !== spline || !currentScope().splines.includes(spline)) return false;
       if (!guardSketchProjectionShapeEdit([spline], { action: applicationText("スプライン通過点追加", "Add spline fit point") })) {
         draw();
@@ -91,6 +93,7 @@
     }
 
     function deleteSplineFitPointFromContext(spline, point) {
+      if (!canEditStructure(spline)) return false;
       if (!session || session.spline !== spline || !spline.fitPoints.includes(point)) return false;
       if (!guardSketchProjectionShapeEdit([spline, point], { action: applicationText("スプライン通過点削除", "Delete spline fit point") })) {
         draw();
@@ -130,7 +133,7 @@
     }
 
 
-    function activate(spline) { session = { spline }; }
+    function activate(spline) { if (canEditStructure(spline)) session = { spline }; }
     function reset() { session = null; }
     function forgetDeleted(splines) { if (session && splines.has(session.spline)) reset(); }
     return Object.freeze({ begin: beginSplineEditFromDoubleClick, finish: finishSplineEditSession,

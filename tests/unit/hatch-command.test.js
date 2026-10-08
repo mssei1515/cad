@@ -37,10 +37,12 @@ test('creation keeps continuous mode and commits one history entry per hatch', (
   assert.notEqual(f.scope.hatches[0].appearance, f.scope.hatches[1].appearance);
 });
 
-test('repair switches sketch, preserves object identity and returns to selection after commit', () => {
+test('repair requires explicit drawing destination, preserves identity and returns to selection after commit', () => {
   const f = fixture(), hatch = { id: 'H9', sketchId: 'S2', appearance: { spacing: 8 } };
   f.scope.hatches.push(hatch);
-  assert.equal(f.command.startHatchBoundaryRepair(hatch), true); assert.equal(f.sketch, 'S2');
+  assert.equal(f.command.startHatchBoundaryRepair(hatch), false); assert.equal(f.sketch, 'S1');
+  hatch.sketchId = 'S1';
+  assert.equal(f.command.startHatchBoundaryRepair(hatch), true);
   assert.equal(f.command.commitHatchAt({ x: 10, y: 12 }), true);
   assert.equal(f.scope.hatches.length, 1); assert.equal(f.selected[0], hatch);
   assert.equal(hatch.seed.x, 10); assert.equal(hatch.appearance.spacing, 8);

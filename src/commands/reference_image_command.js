@@ -12,6 +12,10 @@
       }
       try {
         const prepared = await referenceImageImport.prepare(file);
+        if (!canCreateInActiveSketch()) {
+          setHint(applicationText("作図先のロック解除または作図先変更が必要です", "Unlock or change the drawing sketch"), "error");
+          return false;
+        }
         const rect = canvas.getBoundingClientRect();
         const screenScale = Math.min(Math.max(80, rect.width * 0.68) / prepared.pixelWidth, Math.max(80, rect.height * 0.68) / prepared.pixelHeight);
         const center = screenToWorld({ x: rect.width / 2, y: rect.height / 2 });

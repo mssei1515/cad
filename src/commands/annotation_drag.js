@@ -1,9 +1,10 @@
 /* Own annotation drag identity, initial coordinates and commit lifecycle. */
 (() => {
   "use strict";
-  function create({ annotationById, canvasSelection, beginPointer, endPointer, setHint, updateUI, draw, recordHistory, annotationLeaderDisplayGeometry = element => ({ ...element, shelfScale: 1 }) }) {
+  function create({ canEdit = () => true, annotationById, canvasSelection, beginPointer, endPointer, setHint, updateUI, draw, recordHistory, annotationLeaderDisplayGeometry = element => ({ ...element, shelfScale: 1 }) }) {
     let annotationDragSession = null;
     function beginAnnotationDrag(e, hit, pointer) {
+      if (!canEdit(hit.element)) return;
       const selected = canvasSelection.annotations || [];
       const elements = hit.type === "text" && selected.includes(hit.element) && selected.every(item => item.type === "text")
         ? selected : [hit.element];

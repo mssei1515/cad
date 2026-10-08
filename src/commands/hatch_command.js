@@ -35,7 +35,11 @@
 
     function startHatchBoundaryRepair(hatch) {
       if (!hatch || hatch.blockProjection || !currentScope().hatches.includes(hatch)) return false;
-      if (hatch.sketchId !== activeSketchId()) setActiveSketch(hatch.sketchId);
+      if (hatch.sketchId !== activeSketchId()) {
+        setHint(applicationText("境界を変更するには所属スケッチを作図先に指定してください", "Set the owning sketch as the drawing sketch to change boundaries"), "error");
+        return false;
+      }
+      if (!canCreateInActiveSketch()) { rejectRootSketchCreation(); return false; }
       setMode("hatch-repair");
       hatchRepairTarget = hatch;
       hatchPreview = null;

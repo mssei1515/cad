@@ -21,6 +21,7 @@
         && constraint.referenceSketchId === sketch.id
         && descendants.includes(constraintSketchId(constraint)));
       const sketchIds = new Set(preserveDescendants ? [sketch.id] : [sketch.id, ...descendants]);
+      if ([...sketchIds].some(id => sketchById(id)?.locked)) { setHint("ロック中のスケッチは削除できません / Unlock the sketch before deleting", "error"); return false; }
       const geometryInstancesToRemove = model.geometryInstances.filter((instance) => sketchIds.has(instance.sketchId));
       const externallyDependentInstances = model.geometryInstances.filter((instance) => !geometryInstancesToRemove.includes(instance) && geometryInstanceDependencyRefs(instance).some((ref) => {
         const referenced = resolveGeometryRef(ref);

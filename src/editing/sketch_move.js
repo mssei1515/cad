@@ -13,6 +13,7 @@
 
     function collect(selection) {
       const scope = currentScope(), sourceId = activeSketchId();
+      if (scope.sketches.find(sketch => sketch.id === sourceId)?.locked) return fail("ロックを解除してください", "Unlock the source sketch");
       if (selection.geometryInstances?.length || selection.instanceGeometry || selection.inspection
         || selection.constraint || selection.dimensionConstraint || selection.dimensionConstraints?.length || selection.arcEndpoint || selection.arcEndpointPair) {
         return fail("派生図形・拘束・閲覧対象は移動できません", "Derived geometry, constraints, and inspected objects cannot be moved");
@@ -71,6 +72,7 @@
       if (!sketch || sketch.kind === "root" || sketch.id === window.SketchHierarchy.ROOT_SKETCH_ID || targetId === plan.sourceId) {
         return fail("移動元とRoot以外のスケッチを選択してください", "Choose a sketch other than the source or Root");
       }
+      if (sketch.locked) return fail("移動先のロックを解除してください", "Unlock the destination sketch");
       const afterSketch = item => plan.isMoved(item) ? targetId : owner(item)?.sketchId;
       const updates = [];
       for (const { constraint, nodes, moveOwner } of plan.constraints) {

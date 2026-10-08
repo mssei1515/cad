@@ -1,7 +1,7 @@
 /* Coordinate draw-operation exit and cancellation without owning command drafts. */
 (() => {
   "use strict";
-  function create({ instances, instanceSources, centerline, line, rectangle, slot, fillet, circular,
+  function create({ canStart = () => true, instances, instanceSources, centerline, line, rectangle, slot, fillet, circular,
     spline, splineEditing, projection, preview, offset, hatch, transient,
     clearSnap, clearSelection, selectMode, updateToolbar, setHint, updateUI, draw, cancelConstraintTargetCommand, setMode, clearTrimHover }) {
     const startHints = {
@@ -35,7 +35,7 @@
     }
 
     function start(mode) {
-      if (!Object.hasOwn(startHints, mode)) return false;
+      if (!Object.hasOwn(startHints, mode) || !canStart(mode)) return false;
       cancelConstraintTargetCommand("");
       prepare(mode);
       clearSnap();

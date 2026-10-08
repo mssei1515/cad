@@ -2,7 +2,7 @@
 (() => {
   "use strict";
   const { hypot2 } = window.GeometrySolver;
-  function create({ prepareSession, dragResultForSession, solveFinalDragSession,
+  function create({ canEdit = () => true, prepareSession, dragResultForSession, solveFinalDragSession,
     currentScope, activeSketchId, viewScale, beginPointer, endPointer, projectionBlockedMessage,
     canvasSelection, restoreModelState, restoreSolverState, solveReferenceDependentSketches,
     normalizeArcSweeps, clearSketchSolveState, invalidateBlockProjectionCache,
@@ -10,6 +10,7 @@
     applicationText, setHint, updateUI, updateGeometrySelectionUI, draw, recordHistory }) {
     let session = null;
     function begin(event, plan) {
+      if (plan && !canEdit(plan.sketchId || activeSketchId())) return false;
       session = plan ? { ...plan } : null;
       if (!session) return false;
       prepareSession(session);

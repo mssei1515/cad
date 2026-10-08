@@ -49,3 +49,15 @@ test('closed dialog does not capture or apply', () => {
   const f = fixture(); assert.equal(f.application.apply(null, () => assert.fail()).success, false);
   assert.deepEqual(f.calls, []);
 });
+
+test('parameter dialog rejects direct edits to a locked sketch dimension before solving', () => {
+  const f = fixture();
+  f.driving.sketchId = 'S1';
+  f.scope.sketches = [{ id: 'S1', locked: true }];
+  const before = { ...f.driving };
+  const outcome = f.apply();
+  assert.equal(outcome.success, false);
+  assert.match(outcome.error.message, /Unlock/);
+  assert.deepEqual(f.driving, before);
+  assert.equal(f.calls.includes('solve'), false);
+});

@@ -7,7 +7,7 @@
     applicationText, setHint, setPlacementRotationLocked, setPlacementSketchIds,
     setBlockInstanceRotationLocked, setBlockInstanceEnabledSketchIds, setBlockInstanceOrthogonalRotation,
     startInstanceSourceEdit, startReferenceImageCalibration, startHatchBoundaryRepair, startSplineEdit,
-    openAppearanceColorPalette, activeSketchId = () => null }) {
+    openAppearanceColorPalette, canEditStructure = () => true, activeSketchId = () => null }) {
     function sketchDefaultAppearanceContext(input, target = selectedPropertiesTarget()) {
       if (target.kind !== "sketch") return null;
       return input.closest("[data-sketch-default-appearance]")?.dataset.sketchDefaultAppearance || null;
@@ -139,6 +139,7 @@
         return;
       }
       if (target.kind === "geometry" && (property === "construction" || target.item instanceof Spline && property === "spline-closed")) {
+        if (property === "spline-closed" && !canEditStructure(target.item)) { updatePropertiesUI(); return; }
         const result = property === "construction"
           ? geometryPropertyCommand.setConstruction(target.item, input.checked)
           : geometryPropertyCommand.setSplineClosed(target.item, input.checked);
@@ -170,6 +171,7 @@
       if (selectedPropertiesTarget().readOnly) return false;
       const action = event.target.closest("[data-property-action]")?.dataset.propertyAction;
       if (action === "leader-size-default") return appearancePropertyCommand.apply(selectedPropertiesTarget(), { category: "leader", key: "fixedDisplaySize", value: "" });
+      if (["instance-sources", "hatch-repair", "spline-edit"].includes(action) && !canEditStructure(selectedPropertiesTarget().item)) return false;
       if (action === "instance-sources") return startInstanceSourceEdit(selectedPropertiesTarget().item);
       if (action === "reference-image-calibrate") {
         const target = selectedPropertiesTarget();

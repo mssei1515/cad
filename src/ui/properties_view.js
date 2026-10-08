@@ -18,10 +18,16 @@
         return;
       }
       panel.innerHTML = content(target);
+      if (target.owningSketchLabel) {
+        const ownership = document.createElement("p");
+        ownership.className = "properties-sketch-ownership";
+        ownership.textContent = `${applicationText("所属スケッチ", "Owning sketch")}: ${target.owningSketchLabel} / ${applicationText("作図先", "Drawing sketch")}: ${target.drawingSketchLabel}`;
+        panel.prepend(ownership);
+      }
       prepareAffixInputs(panel);
       localizeApplicationUI(panel);
       if (target.readOnly) {
-        panel.insertAdjacentHTML("afterbegin", `<p class="properties-read-only">${applicationText("読み取り専用：編集するには所属スケッチをアクティブにしてください", "Read-only: activate the owning sketch to edit")}</p>`);
+        panel.insertAdjacentHTML("afterbegin", `<p class="properties-read-only">${applicationText("ロック中：編集するには所属スケッチのロックを解除してください", "Locked: unlock the owning sketch to edit")}</p>`);
         for (const control of panel.querySelectorAll("input, select, textarea, button")) control.disabled = true;
       }
       if (target.kind === "sketch" && target.active) {
