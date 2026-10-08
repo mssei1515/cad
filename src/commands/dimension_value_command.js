@@ -1,7 +1,7 @@
 /* Apply a dimension value while preserving rollback and first-dimension framing. */
 (() => {
   "use strict";
-  function create({ renameDimension, getPending, setPending, expressionFromUserInput, evaluateDimensionExpressionDraft,
+  function create({ canEdit = () => true, renameDimension, getPending, setPending, expressionFromUserInput, evaluateDimensionExpressionDraft,
     applicationText, parameterErrorText, setHint, syncDimensionValueInput, draw, activeSketchId,
     sketchHasDimensionConstraint, captureSketchScreenFootprint, snapshotModelState, restoreModelState,
     withTemporarySolveStepNorm, solveStepNormForConstraint, stabilizeActiveParameterNamespace,
@@ -10,6 +10,7 @@
     function submit() {
       const pendingCommand = getPending();
       if (!pendingCommand || pendingCommand.type !== "distance-value") return;
+      if (!canEdit(pendingCommand.constraint ? constraintSketchId(pendingCommand.constraint) : activeSketchId(), pendingCommand.constraint ? "edit" : "create")) return;
       let expression;
       let value;
       try {
@@ -62,6 +63,7 @@
       }
     }
     function commitProperty(constraint, property, value) {
+      if (!canEdit(constraintSketchId(constraint), "edit")) return false;
       const snapshot = snapshotModelState();
       try {
         if (property === "constraint-parameter-name") renameDimension(constraint, value);

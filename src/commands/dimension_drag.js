@@ -1,13 +1,14 @@
 /* Own dimension placement drag state and commit routing. */
 (() => {
   "use strict";
-  function create({ dimensionAnchor, migrateAngleDimensionLabelPlacement, canvasSelection, angleDimensionLabelOffsets,
+  function create({ canEdit = () => true, dimensionAnchor, migrateAngleDimensionLabelPlacement, canvasSelection, angleDimensionLabelOffsets,
     viewScale, isDimensionConstraintCommandActive, beginPointer, endPointer, setHint, clearSnap, hypot2,
     angleDimensionFromLabelPoint, dimensionWithLabelAt, dimensionFromAnchor, setAngleDimensionLabelOffsets,
     syncAngleConstraintFromDimension, draw, continueCommandClick, updateUI, updateGeometrySelectionUI,
     syncDimensionValueInput, recordHistory, selectedLineGroup = () => null, translateLineGroup }) {
     let dimensionDragSession = null;
     function beginDimensionDrag(e, hit, pointer, commandHits = null) {
+      if (!canEdit(hit.constraint)) return;
       const anchor = dimensionAnchor(hit.target, hit.dimension);
       migrateAngleDimensionLabelPlacement(hit.target, hit.dimension);
       const lineGroup = !isDimensionConstraintCommandActive() ? selectedLineGroup(hit.constraint) : null;

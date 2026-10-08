@@ -4,6 +4,7 @@
   function create({ currentScope, activeSketchId, setActiveSketch, clearSelection, canvasSelection,
     sidebarGeometryItem, toggleBlockInstanceSelection, targetFromConstraint, updateUI, draw,
     sketchTreeView, updateSketchUI, toggleSketchVisibility, renameSketch, deleteSketch, deleteElements, unfixPoint,
+    toggleSketchLock = () => {}, guardSketchEdit = () => true, selectionSketchId = () => null,
     resolveSelectionEntry, updateSelectionUI = updateUI, hover = {}, move = {}, openContextMenu = () => {} }) {
     const { canvasHover, setSidebarHover, clearSidebarHover, sidebarHoverElementsForItem, sidebarHoverElementsForConstraint, elementSketchId, ROOT_SKETCH_ID } = hover;
     let hoveredSketchTreeId = null;
@@ -41,9 +42,7 @@
     function activateSketchTreeObject(row, additive) {
       const sketchId = row.dataset.sketchId;
       const category = row.dataset.objectKind;
-      if (sketchId !== activeSketchId()) {
-        return inspectObject(row, additive);
-      }
+      if (additive && selectionSketchId() && selectionSketchId() !== sketchId) return;
       const model = currentScope();
       if (additive && canvasSelection.inspection) return;
       if (canvasSelection.inspection || canvasSelection.sketchId) additive = false;
@@ -100,7 +99,8 @@
       }
       const action = event.target.closest("button");
       const actionObjectRow = action?.closest(".sketch-object-row");
-      if (actionObjectRow && actionObjectRow.dataset.sketchId !== activeSketchId()) return;
+      if (actionObjectRow && !guardSketchEdit(actionObjectRow.dataset.sketchId)) return;
+      if (action?.classList.contains("sketchLockBtn")) return void toggleSketchLock(action.dataset.id);
       if (action?.classList.contains("sketchExpandBtn")) {
         sketchTreeView.setSketchOpen(action.dataset.id, action.getAttribute("aria-expanded") !== "true");
         updateSketchUI();

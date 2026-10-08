@@ -54,7 +54,7 @@ test("active, ancestor reference, descendant and unrelated Sketches remain disti
   assert.equal(context.sketchRelationToActive("S4"), "descendant");
   assert.equal(context.sketchRelationToActive("S3"), "inactive");
   assert.equal(context.wouldCreateSketchCycle("S1", "S4"), true);
-  assert.equal(context.isEditableSketchId("S1"), false);
+  assert.equal(context.isEditableSketchId("S1"), true);
   assert.equal(context.isEditableSketchId("S2"), true);
 });
 
@@ -69,4 +69,19 @@ test("constraint ownership and editing targets distinguish intrinsic source depe
   assert.equal(context.constraintSketchId({ sketchId: "EXPLICIT" }), "EXPLICIT");
   assert.equal(context.constraintTargetsAreActive({}), true);
   assert.equal(context.constraintReferencesSketch({}, "SOURCE"), true);
+});
+
+test("manual editing policy separates ownership, destination and lock without changing active state", () => {
+  const document = scope("Source");
+  document.sketches.push({ id: "S2", name: "Other", parentSketchId: "ROOT" });
+  const context = create({ currentScope: () => document, constraintGraphNodes: () => [] });
+  for (const id of ["S1", "S2"]) for (const locked of [false, true]) {
+    context.sketchById(id).locked = locked;
+    for (const operation of ["edit", "create", "constraint", "structure", "inspect", "reference"]) {
+      const expected = ["inspect", "reference"].includes(operation) || !locked && (operation === "edit" || id === "S1");
+      assert.equal(context.canEditSketch(id, operation), expected, id + ":" + locked + ":" + operation);
+      assert.equal(document.activeSketchId, "S1");
+    }
+  }
+  assert.equal(context.canEditSketch("ROOT", "create"), false);
 });

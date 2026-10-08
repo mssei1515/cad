@@ -57,7 +57,7 @@
 
       if (getMode() === "select" && !getPendingCommand() && !getPendingConstraintCommand()) {
         if (inactiveHit && press.selectInactive) { press.selectInactive(e, inactiveHit); return; }
-        if (press.prepareSelection?.(e)) return;
+        if (press.prepareSelection?.(e, hits)) return;
       }
       if (press.inputs.annotation.select(e, p, { blankAnnotationHit, directGeometryHit, hitD })) return;
 

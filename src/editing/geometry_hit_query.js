@@ -6,12 +6,15 @@
   const { normalizedDrawingOrder } = window.DrawingOrder;
   function create({ currentScope, viewportScale, isEditableSketchElement, isSelectableEndpointPoint, isExplicitPoint,
     hitDimension, constraintSketchId, elementSketchId, isVisibleSketchElement, hitBlockInstance, blockDefinitionById,
-    hitGeometryInstance = () => null, hitAnnotationElement = () => null, hitHatchAt = () => null, hitReferenceImageAt = () => null }) {
+    hitGeometryInstance = () => null, hitAnnotationElement = () => null, hitHatchAt = () => null, hitReferenceImageAt = () => null, preferredSketchId = () => null }) {
+    function preferredOrder(items) {
+      const id = preferredSketchId();
+      return id ? items.sort((a, b) => Number((b.sketchId || elementSketchId(b)) === id) - Number((a.sketchId || elementSketchId(a)) === id)) : items;
+    }
     function hitPointByPredicate(x, y, predicate) {
       const model = currentScope();
       const radius = 10 / viewportScale();
-      for (let i = model.points.length - 1; i >= 0; i--) {
-        const p = model.points[i];
+      for (const p of preferredOrder(model.points.slice().reverse())) {
         if (!isEditableSketchElement(p)) continue;
         if (!predicate(p)) continue;
         if (hypot2(p.x - x, p.y - y) <= radius) return p;
@@ -39,7 +42,7 @@
       const model = currentScope();
       const threshold = 7 / viewportScale();
       const lines = model.lines.slice().sort((a, b) => (normalizedDrawingOrder(b.drawingOrder) ?? 0) - (normalizedDrawingOrder(a.drawingOrder) ?? 0));
-      for (const l of lines) {
+      for (const l of preferredOrder(lines)) {
         if (!isEditableSketchElement(l)) continue;
         if (distancePointToSegment(x, y, l) <= threshold) return l;
       }
@@ -50,7 +53,7 @@
       const model = currentScope();
       const threshold = 7 / viewportScale();
       const circles = model.circles.slice().sort((a, b) => (normalizedDrawingOrder(b.drawingOrder) ?? 0) - (normalizedDrawingOrder(a.drawingOrder) ?? 0));
-      for (const c of circles) {
+      for (const c of preferredOrder(circles)) {
         if (!isEditableSketchElement(c)) continue;
         const d = hypot2(x - c.center.x, y - c.center.y);
         if (Math.abs(d - c.radius()) <= threshold) return c;
@@ -62,7 +65,7 @@
       const model = currentScope();
       const threshold = 7 / viewportScale();
       const arcs = model.arcs.slice().sort((a, b) => (normalizedDrawingOrder(b.drawingOrder) ?? 0) - (normalizedDrawingOrder(a.drawingOrder) ?? 0));
-      for (const a of arcs) {
+      for (const a of preferredOrder(arcs)) {
         if (!isEditableSketchElement(a)) continue;
         const radius = a.radius();
         const d = hypot2(x - a.center.x, y - a.center.y);
@@ -76,8 +79,7 @@
     function hitArcEndpoint(x, y) {
       const model = currentScope();
       const threshold = 10 / viewportScale();
-      for (let i = model.arcs.length - 1; i >= 0; i--) {
-        const arc = model.arcs[i];
+      for (const arc of preferredOrder(model.arcs.slice().reverse())) {
         if (!isEditableSketchElement(arc)) continue;
         for (const endpoint of ["end", "start"]) {
           const point = arcEndpointPoint(arc, endpoint);
@@ -91,7 +93,7 @@
       const model = currentScope();
       const threshold = 7 / viewportScale();
       const splines = model.splines.slice().sort((a, b) => (normalizedDrawingOrder(b.drawingOrder) ?? 0) - (normalizedDrawingOrder(a.drawingOrder) ?? 0));
-      for (const spline of splines) {
+      for (const spline of preferredOrder(splines)) {
         if (!isEditableSketchElement(spline)) continue;
         const closest = window.SplineGeometry.closestPoint(spline.curve(), { x, y }, { samplesPerSpan: 28 });
         if (closest && closest.distance <= threshold) return spline;
@@ -118,8 +120,7 @@
         };
       }
 
-      for (let i = model.points.length - 1; i >= 0; i--) {
-        const p = model.points[i];
+      for (const p of preferredOrder(model.points.slice().reverse())) {
         if (!accepts(p)) continue;
         if (!isExplicitPoint(p) && !isSelectableEndpointPoint(p)) continue;
         if (hypot2(p.x - x, p.y - y) <= pointThreshold) return { id: p.id, sketchId: elementSketchId(p), item: p, kind: "point" };
@@ -134,8 +135,7 @@
         if (!accepts(circle)) continue;
         if (Math.abs(hypot2(x - circle.center.x, y - circle.center.y) - circle.radius()) <= threshold) return { id: circle.id, sketchId: elementSketchId(circle), item: circle, kind: "circle" };
       }
-      for (let i = model.arcs.length - 1; i >= 0; i--) {
-        const arc = model.arcs[i];
+      for (const arc of preferredOrder(model.arcs.slice().reverse())) {
         if (!accepts(arc)) continue;
         const angle = Math.atan2(y - arc.center.y, x - arc.center.x);
         if (Math.abs(hypot2(x - arc.center.x, y - arc.center.y) - arc.radius()) <= threshold && angleOnSignedSweep(angle, arc.startAngle, arc.endAngle)) return { id: arc.id, sketchId: elementSketchId(arc), item: arc, kind: "arc" };

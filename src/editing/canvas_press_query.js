@@ -5,20 +5,23 @@
     scene: { hitHatchAt, hitReferenceImageAt, hitDimension, hitBlockRotationHandle, hitBlockInstance,
       hitDerivedGeometryForDrag, hitGeometryInstance, hitSketchIdentityElement, hitAnnotationElement, hitAnnotationTarget,
       activeSketchId = () => null } }) {
+    function hitItem(hit) { return hit?.constraint || hit?.arc || hit?.instance || hit; }
+    function preferDrawingSketch(hits) {
+      const id = activeSketchId();
+      if (!id || !Object.values(hits).some(hit => hitItem(hit)?.sketchId === id)) return hits;
+      return Object.fromEntries(Object.entries(hits).map(([key, hit]) => [key, hitItem(hit)?.sketchId === id ? hit : null]));
+    }
     function read(p) {
-      const hitP = hitPoint(p.x, p.y);
-      const hitL = hitLine(p.x, p.y);
-      const hitC = hitCircle(p.x, p.y);
-      const hitArcEnd = hitArcEndpoint(p.x, p.y);
-      const hitA = hitArc(p.x, p.y);
-      const hitS = hitSpline(p.x, p.y);
-      const hatchHit = hitHatchAt(p.x, p.y);
-      const referenceImageHit = hitReferenceImageAt(p.x, p.y);
-      const hitD = hitDimension(p.x, p.y);
-      const hitBlockHandle = hitBlockRotationHandle(p.x, p.y);
-      const hitBlock = hitBlockHandle || hitBlockInstance(p.x, p.y);
-      const hitDerivedGeometry = hitDerivedGeometryForDrag(p.x, p.y);
-      const hitDerivedInstance = hitDerivedGeometry?.instance || hitGeometryInstance(p.x, p.y);
+      const blockHandle = hitBlockRotationHandle(p.x, p.y);
+      const derivedGeometry = hitDerivedGeometryForDrag(p.x, p.y);
+      const { hitP, hitL, hitC, hitArcEnd, hitA, hitS, hatchHit, referenceImageHit, hitD, hitBlockHandle, hitBlock, hitDerivedGeometry, hitDerivedInstance, blankAnnotationHit } = preferDrawingSketch({
+        hitP: hitPoint(p.x, p.y), hitL: hitLine(p.x, p.y), hitC: hitCircle(p.x, p.y),
+        hitArcEnd: hitArcEndpoint(p.x, p.y), hitA: hitArc(p.x, p.y), hitS: hitSpline(p.x, p.y),
+        hatchHit: hitHatchAt(p.x, p.y), referenceImageHit: hitReferenceImageAt(p.x, p.y), hitD: hitDimension(p.x, p.y),
+        hitBlockHandle: blockHandle, hitBlock: blockHandle || hitBlockInstance(p.x, p.y),
+        hitDerivedGeometry: derivedGeometry, hitDerivedInstance: derivedGeometry?.instance || hitGeometryInstance(p.x, p.y),
+        blankAnnotationHit: hitAnnotationElement(p.x, p.y),
+      });
       const directGeometryHit = Boolean(
         (hitP && !hitP.blockProjection) ||
         (hitArcEnd && !hitArcEnd.arc.blockProjection) ||
@@ -28,8 +31,13 @@
         || (hitS && !hitS.blockProjection) ||
         hitDerivedGeometry
       );
-      const sketchIdentity = hitSketchIdentityElement(p.x, p.y, { allowInactiveGeometry: true });
-      const blankAnnotationHit = hitAnnotationElement(p.x, p.y);
+      let sketchIdentity = hitSketchIdentityElement(p.x, p.y, { allowInactiveGeometry: true });
+      const preferred = [["point", hitP], ["arc", hitArcEnd], ["line", hitL], ["circle", hitC], ["arc", hitA], ["spline", hitS], ["dimension", hitD], ["block", hitBlock], ["instance", hitDerivedInstance], ["hatch", hatchHit], ["annotation", blankAnnotationHit], ["image", referenceImageHit]]
+        .find(([, hit]) => hitItem(hit)?.sketchId === activeSketchId());
+      if (preferred && sketchIdentity?.sketchId !== activeSketchId()) {
+        const item = hitItem(preferred[1]);
+        sketchIdentity = { kind: preferred[0], item, sketchId: item.sketchId, id: item.id, label: item.id };
+      }
       // Active Sketch content is painted in front of inactive Sketch content.
       const activeHit = hitP || hitL || hitC || hitArcEnd || hitA || hitS || hitD || hitBlock || hitDerivedInstance || hatchHit || blankAnnotationHit;
       const inactiveHit = !activeHit && activeSketchId() && sketchIdentity?.sketchId !== activeSketchId() ? sketchIdentity : null;
@@ -46,7 +54,7 @@
       const hitS = hitSpline(p.x, p.y);
       const hitD = hitDimension(p.x, p.y);
       const hitBlock = hitBlockInstance(p.x, p.y);
-      return { hitL, hitP, hitC, hitArcEnd, hitA, hitS, hitD, hitBlock };
+      return preferDrawingSketch({ hitL, hitP, hitC, hitArcEnd, hitA, hitS, hitD, hitBlock });
     }
     return Object.freeze({ read, readDoubleClick, derivedGeometryAt: p => hitDerivedGeometryForDrag(p.x, p.y) });
   }

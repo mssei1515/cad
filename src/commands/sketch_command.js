@@ -44,7 +44,7 @@
       model.sketches.push(sketch);
       model.activeSketchId = sketch.id;
       clearInteractionForSketchChange();
-      setHint(parentSketchId ? `編集中: ${sketch.name} / 親: ${sketchName(parentSketchId)}` : `編集中: ${sketch.name}`);
+      setHint(parentSketchId ? `作図先: ${sketch.name} / 親: ${sketchName(parentSketchId)}` : `作図先: ${sketch.name}`);
       updateUI();
       draw();
       recordHistory("スケッチ追加");
@@ -60,7 +60,7 @@
       sketch.visible = true;
       model.activeSketchId = sketchId;
       clearInteractionForSketchChange();
-      setHint(`編集中: ${sketchName(sketchId)}`);
+      setHint(`作図先: ${sketchName(sketchId)}`);
       updateUI();
       draw();
     }

@@ -20,6 +20,7 @@
 
     function buildDragSession(kind, item, pointer) {
       const sketchId = dragSketchIdFor(kind, item);
+      if (!isEditableSketchId(sketchId)) return null;
       if (kind === "block" || kind === "block-rotation") {
         if (item.fixed || (kind === "block-rotation" && item.rotationLocked)) return null;
         const definition = blockDefinitionById(item.definitionId);

@@ -8,6 +8,13 @@
       if (!session) return { success: false };
       const checkpoint = capture();
       try {
+        for (const dimension of session.dimensions) {
+          const item = dimension.constraint;
+          if (!session.namespace.sketches?.some(sketch => sketch.id === item.sketchId && sketch.locked)) continue;
+          if (dimension.name.trim() !== item.parameterName || !dimension.readOnly && namespace.expressionFromUserInput(dimension.expression) !== item.expression) {
+            throw new Error(applicationText("ロック中のスケッチの寸法・注記は変更できません", "Unlock the owning sketch to edit dimensions or annotations"));
+          }
+        }
         session.namespace.parameters = session.parameters.map(parameter => ({
           name: parameter.name.trim(), expression: namespace.expressionFromUserInput(parameter.expression),
         }));

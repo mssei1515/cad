@@ -1,7 +1,7 @@
 /* Own reference-image drag and two-point scale-calibration sessions. */
 (() => {
   "use strict";
-  function create({ clearSelection, canvasSelection, applicationText, setHint, updateUI, draw,
+  function create({ canEdit = () => true, clearSelection, canvasSelection, applicationText, setHint, updateUI, draw,
     beginPointer, endPointer, viewScale, hypot2, clearSnap, hitReferenceImageAt,
     referenceImageWorldToLocal, referenceImageLocalToWorld, promptDistance, formatDisplayNumber, recordHistory }) {
     let referenceImageDragSession = null;
@@ -9,6 +9,7 @@
     function beginReferenceImageDrag(event, item, pointer) {
       clearSelection();
       canvasSelection.set("referenceImages", [item]);
+      if (!canEdit(item)) return;
       if (item.locked) {
         setHint(applicationText("位置がロックされた画像です", "This image position is locked"));
         updateUI({ refreshAnalysis: false });
@@ -35,7 +36,7 @@
     }
 
     function startReferenceImageCalibration(item) {
-      if (!item || item.locked || item.visible === false) return false;
+      if (!item || !canEdit(item) || item.locked || item.visible === false) return false;
       referenceImageCalibrationSession = { item, localPoints: [], worldPoints: [] };
       clearSnap();
       setHint(applicationText("画像上の1点目をクリックしてください", "Click the first point on the image"));

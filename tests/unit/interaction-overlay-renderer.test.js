@@ -49,7 +49,7 @@ test('read-only selection keeps owning sketch and editability visible after hove
   f.selection.inspection = { sketchId: 'other', targets: [{ item: { id: 'L1' }, kind: 'geometry', category: 'line' }] };
   f.draw(null, { x: 100, y: 200 });
   assert.equal(f.calls.find(c => c[0] === 'fillText')[1], 'L1 / Sketch other');
-  assert.match(f.calls.filter(c => c[0] === 'fillText').at(-1)[1], /Other sketch \/ read-only/);
+  assert.match(f.calls.filter(c => c[0] === 'fillText').at(-1)[1], /Other sketch/);
   assert.equal(f.selection.lines.length, 0);
 });
 test('relation labels and colors use current language and retain distinct reference and descendant states',()=>{
@@ -59,6 +59,6 @@ test('relation labels and colors use current language and retain distinct refere
   assert.equal(f.renderer.sketchIdentityRelationLabel('active'),'');
   f.language='ja';assert.equal(f.renderer.sketchIdentityRelationLabel('child'),'参照不可（子孫）');
   f.draw({id:'X',sketchId:'child'});
-  assert.equal(f.calls.filter(c=>c[0]==='fillText').at(-1)[1],'別スケッチ・編集不可 / 参照不可（子孫）');
+  assert.equal(f.calls.filter(c=>c[0]==='fillText').at(-1)[1],'別スケッチ / 参照不可（子孫）');
   assert.equal(f.ctx.fillStyle,'#b91c1c');assert.equal(f.calls.at(-1)[0],'restore');
 });

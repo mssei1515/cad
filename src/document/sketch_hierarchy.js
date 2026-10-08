@@ -31,6 +31,7 @@
     for (const sketch of scope.sketches) {
       if (sketch === root) continue;
       sketch.kind = "sketch";
+      sketch.locked = sketch.locked === true;
       sketch.appearance = normalizeAppearance(sketch.appearance || (sketch.visible === false ? { visible: false } : {}));
       sketch.constructionAppearance = normalizeConstructionAppearance(sketch.constructionAppearance);
       sketch.dimensionAppearance = normalizeDimensionAppearance(sketch.dimensionAppearance);
@@ -169,6 +170,7 @@
     const scope = {
       sketches: Array.isArray(items) && items.length > 0 ? items.map((sketch, index) => ({
         id: String(sketch.id || `S${index + 1}`),
+        locked: sketch.locked === true,
         name: String(sketch.name || sketch.id || `Sketch-${index + 1}`),
         parentSketchId: sketch.parentSketchId == null ? null : String(sketch.parentSketchId),
         kind: sketch.kind === "root" || sketch.id === ROOT_SKETCH_ID ? "root" : "sketch",

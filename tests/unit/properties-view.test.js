@@ -44,11 +44,11 @@ test('Properties marks mixed checkboxes without editing targets or installing ex
 });
 
 
-test('inspection disables all editable controls and displays the reason', () => {
+test('locked selection disables all editable controls and displays the reason', () => {
   const controls = [{}, {}, {}], panel = { innerHTML: '', insertAdjacentHTML: (_where, text) => { panel.innerHTML = text + panel.innerHTML; },
     querySelectorAll: selector => selector === 'input, select, textarea, button' ? controls : [] };
   const view = sandbox.window.PropertiesView.create({ document: { getElementById: () => panel },
     applicationText: (_ja, en) => en, content: () => '<input>', localizeApplicationUI() {}, installExpressionInputHighlights() {} });
   view.render({ kind: 'geometry', item: {}, readOnly: true });
-  assert.ok(panel.innerHTML.includes('Read-only')); assert.ok(controls.every(control => control.disabled));
+  assert.ok(panel.innerHTML.includes('Locked')); assert.ok(controls.every(control => control.disabled));
 });

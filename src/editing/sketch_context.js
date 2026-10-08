@@ -95,7 +95,15 @@
 
     function isEditableSketchId(sketchId) {
       const id = sketchId || activeSketchId();
-      return id === activeSketchId();
+      const sketch = sketchById(id);
+      return Boolean(sketch && !isRootSketch(sketch) && !sketch.locked);
+    }
+
+    function canEditSketch(sketchId, operation = "edit") {
+      const id = sketchId || activeSketchId();
+      if (operation === "inspect" || operation === "reference") return Boolean(sketchById(id));
+      if (!isEditableSketchId(id)) return false;
+      return !["create", "constraint", "structure"].includes(operation) || id === activeSketchId();
     }
 
     function sketchRelationToActive(sketchId) {
@@ -154,7 +162,7 @@
       orderedSketches, childSketchesOf, descendantSketchIds,
       ancestorSketchIds, isReferenceSourceSketchId, referenceSourceSketchIds,
       activeSketch, activeSketchId, assignSketchId,
-      elementSketchId, sameSketchElements, isEditableSketchId,
+      elementSketchId, sameSketchElements, isEditableSketchId, canEditSketch,
       sketchRelationToActive, constraintSketchId, isActiveSketchConstraint,
       constraintTargetsAreActive, constraintReferencesSketch, wouldCreateSketchCycle,
       sketchTreeRows, isActiveSketchElement, isEditableSketchElement,
