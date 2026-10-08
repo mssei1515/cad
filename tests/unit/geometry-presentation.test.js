@@ -57,14 +57,14 @@ test('instance ownership distinguishes whole instances, internal geometry and po
   assert.equal(f.presentation.ownerInstanceHovered({ blockInstance: block }), true);
   assert.equal(f.presentation.ownerInstanceSelected(Object.assign(new Point(), { blockInstance: block })), false);
 });
-test('inactive geometry is not selected or hovered except through explicit reference hover', () => {
+test('selection highlight is independent of editability; hover follows its own policy', () => {
   const f = fixture(), item = { inactive: true };
   f.selection.lines.push(item); f.hover.current.line = item;
   let state = f.presentation.geometryPaintState(item, 'lines');
-  assert.equal(state.selected, false); assert.equal(state.hovered, false);
+  assert.equal(state.selected, true); assert.equal(state.hovered, false);
   item.referenceHover = true;
   state = f.presentation.geometryPaintState(item, 'lines');
-  assert.equal(state.hovered, true); assert.equal(state.strokeWidth, 2.2); assert.equal(state.showId, true);
+  assert.equal(state.hovered, true); assert.equal(state.strokeWidth, 3); assert.equal(state.showId, true);
   f.hover.current = {}; assert.equal(f.presentation.geometryPaintState(item, 'lines').hovered, false);
 });
 test('construction dimming and reference selection preserve spline-specific display rules', () => {

@@ -71,7 +71,7 @@
       const identity = hoveredIdentity || selectedSketchIdentityElement(selection);
       if (!identity || !pointer || !isVisibleSketchId(identity.sketchId) || identity.sketchId === activeSketchId()) return;
       const baseLabel = `${identity.label || identity.id} / ${sketchName(identity.sketchId)}`;
-      const relationLabel = `${applicationText("別スケッチ・編集不可", "Other sketch / read-only")} / ${sketchIdentityRelationLabel(identity.sketchId)}`;
+      const relationLabel = `${applicationText("別スケッチ", "Other sketch")} / ${sketchIdentityRelationLabel(identity.sketchId)}`;
       const separator = relationLabel ? " / " : "";
       ctx.save();
       ctx.font = `${11 / viewport.scale}px system-ui`;

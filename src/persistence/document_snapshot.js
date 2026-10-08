@@ -46,6 +46,7 @@
     return {
       id: sketch.id, name: sketch.name, parentSketchId: sketch.parentSketchId || null,
       kind: sketch.kind === "root" ? "root" : "sketch",
+      locked: sketch.locked === true,
       appearance: normalizeAppearance(sketch.appearance),
       constructionAppearance: normalizeConstructionAppearance(sketch.constructionAppearance),
       dimensionAppearance: normalizeDimensionAppearance(sketch.dimensionAppearance),

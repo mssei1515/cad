@@ -26,6 +26,7 @@
         committedName: constraint.parameterName,
         expression: isReadOnlyDimension(constraint) ? "" : expressionInputValue(constraint.expression),
         readOnly: isReadOnlyDimension(constraint),
+        locked: scope.namespace.sketches?.some(sketch => sketch.id === constraint.sketchId && sketch.locked) === true,
       }));
       const session = {
         key: scope.key,
@@ -76,7 +77,7 @@
       }
       if (data.dimensionRow != null) {
         const row = parameterDialogSession.dimensions[Number(data.dimensionRow)];
-        if (row && !(row.readOnly && data.dimensionField === "expression")) row[data.dimensionField] = value;
+        if (row && !row.locked && !(row.readOnly && data.dimensionField === "expression")) row[data.dimensionField] = value;
       }
     }
     function commitName(data) {

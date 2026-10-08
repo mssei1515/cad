@@ -9,7 +9,7 @@ test('selected row exposes Edit while the editing marker remains independent; al
   await expect(source).toHaveClass(/selected/); await expect(source).not.toHaveClass(/active/);
   await expect(source.locator('.sketchEditBtn')).toBeVisible();
   await expect(other.locator('.sketchEditBtn')).toBeHidden();
-  await expect(other.locator('.sketch-active-label')).toHaveText('編集中');
+  await expect(other.locator('.sketch-active-label')).toHaveText('作図先');
   await expect(other.locator('.sketch-active-label svg')).toBeVisible();
   await source.locator('.sketchEditBtn').click();
   await expect(source).toHaveClass(/active/); await expect(source).toHaveClass(/selected/);

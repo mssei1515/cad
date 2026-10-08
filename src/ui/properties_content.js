@@ -127,7 +127,7 @@ ${escapeHtml(style.suffix)}</textarea></div>`
           + propertyReadonlyRow("ID", "ID", item.id)
           + propertyReadonlyRow("名前", "Name", item.name, { userContent: true })
           + propertyReadonlyRow("親スケッチ", "Parent sketch", parentLabel, { userContent: Boolean(parent) })
-          + propertyReadonlyRow("アクティブ", "Active", info.active ? applicationText("はい", "Yes") : applicationText("いいえ", "No"));
+          + propertyReadonlyRow("作図先", "Drawing sketch", info.active ? applicationText("はい", "Yes") : applicationText("いいえ", "No"));
         const appearanceSections = info.root ? "" : collapsibleSketchAppearanceSection("general", "一般外観", "General Appearance", appearancePropertyRows(
           item.appearance,
           info.effective,
