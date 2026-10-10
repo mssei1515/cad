@@ -1295,9 +1295,9 @@ test("workspace integrates background-blurred compact Object groups into Sketch 
     };
   });
   expect(treeChevrons).toEqual({
-    sketch: { text: "▼", areaWidth: 10, fontSize: "7px", color: "rgb(148, 163, 184)" },
+    sketch: { text: "▼", areaWidth: 24, fontSize: "9px", color: "rgb(148, 163, 184)" },
     group: { text: "▼", areaWidth: 12, fontSize: "7px", color: "rgb(148, 163, 184)" },
-    empty: { text: "▼", areaWidth: 10, fontSize: "7px", color: "rgb(203, 213, 225)" },
+    empty: { text: "▼", areaWidth: 24, fontSize: "7px", color: "rgb(203, 213, 225)" },
   });
   const constraintGroup = await expandSketchTreeGroup(page, "constraint");
   await expect(constraintGroup).toHaveAttribute("aria-expanded", "true");

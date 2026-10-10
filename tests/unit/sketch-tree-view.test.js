@@ -67,4 +67,6 @@ test('selected active Sketch keeps its editing marker but hides Edit; Root never
   const root = fixture({ root: true, selected: true }); root.view.render();
   assert.match(root.list.innerHTML, /class="sketchEditBtn"[^>]* hidden /);
   assert.equal(root.list.innerHTML.includes('sketch-active-label'), false);
+  assert.equal(root.list.innerHTML.includes('sketchDeleteBtn'), false);
+  assert.ok(active.list.innerHTML.includes('sketchDeleteBtn'));
 });

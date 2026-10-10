@@ -57,6 +57,7 @@ function controllerFixture() {
     targetFromConstraint: () => false,
     updateUI: () => calls.push('ui'), draw: () => calls.push('draw'),
     sketchTreeView: { setSketchOpen: () => calls.push('expand') }, deleteElements: () => calls.push('delete'),
+    deleteCurrentSelection: () => calls.push('delete-selection'),
   });
   const row=(sketchId,category='point',id='P1')=>({dataset:{sketchId,objectKind:category,id}});
   const event=id=>{const sketchRow={dataset:{id}}; return {target:{closest:selector=>selector==='.sketch-item'||selector==='.sketchActivateBtn'?sketchRow:null}};};
@@ -95,4 +96,17 @@ test('locked object delete buttons are guarded even if a click is dispatched man
   const action = { closest: () => row };
   f.controller.click({ target: { closest: selector => selector === 'button' ? action : null } });
   assert.deepEqual(f.calls, []);
+});
+
+test('block, hatch and instance delete buttons target only their row without switching drawing sketch', () => {
+  for (const [category, id, field, buttonClass] of [['block', 'B1', 'blockInstances', 'removeBlockBtn'], ['hatch', 'H1', 'hatches', 'removeHatchBtn'], ['instance', 'I1', 'geometryInstances', 'removeInstanceBtn']]) {
+    const f = controllerFixture(), row = f.row('S2', category, id);
+    f.selection.append('points', f.model.points[0]);
+    const action = { closest: () => row, classList: { contains: name => name === buttonClass } };
+    f.controller.click({ target: { closest: selector => selector === 'button' ? action : null } });
+    assert.equal(f.selection[field][0].id, id);
+    assert.equal(f.selection.points.length, 0);
+    assert.equal(f.calls.filter(call => call === 'delete-selection').length, 1);
+    assert.equal(f.active(), 'S1');
+  }
 });

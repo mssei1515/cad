@@ -3,7 +3,7 @@
   "use strict";
   function create({ currentScope, activeSketchId, setActiveSketch, clearSelection, canvasSelection,
     sidebarGeometryItem, toggleBlockInstanceSelection, targetFromConstraint, updateUI, draw,
-    sketchTreeView, updateSketchUI, toggleSketchVisibility, renameSketch, deleteSketch, deleteElements, unfixPoint,
+    sketchTreeView, updateSketchUI, toggleSketchVisibility, renameSketch, deleteSketch, deleteElements, deleteCurrentSelection, unfixPoint,
     toggleSketchLock = () => {}, guardSketchEdit = () => true, selectionSketchId = () => null,
     resolveSelectionEntry, updateSelectionUI = updateUI, hover = {}, move = {}, openContextMenu = () => {} }) {
     const { canvasHover, setSidebarHover, clearSidebarHover, sidebarHoverElementsForItem, sidebarHoverElementsForConstraint, elementSketchId, ROOT_SKETCH_ID } = hover;
@@ -119,6 +119,10 @@
       if (action?.classList.contains("sketchEditBtn")) return void editSketch(action.dataset.id);
       if (action?.classList.contains("sketchRenameBtn")) return void renameSketch(action.dataset.id);
       if (action?.classList.contains("sketchDeleteBtn")) return void deleteSketch(action.dataset.id);
+      if (actionObjectRow && ["removeBlockBtn", "removeHatchBtn", "removeInstanceBtn"].some(name => action.classList.contains(name))) {
+        activateSketchTreeObject(actionObjectRow, false);
+        return void deleteCurrentSelection();
+      }
       if (action?.classList.contains("removePointBtn")) return void deleteElements({ points: [model.points.find((item) => item.id === action.dataset.id)].filter(Boolean) });
       if (action?.classList.contains("removeLineBtn")) return void deleteElements({ lines: [model.lines.find((item) => item.id === action.dataset.id)].filter(Boolean) });
       if (action?.classList.contains("removeCircleBtn")) return void deleteElements({ circles: [model.circles.find((item) => item.id === action.dataset.id)].filter(Boolean) });

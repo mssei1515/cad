@@ -141,6 +141,8 @@
         action = `<button data-idx="${entry.modelIndex}" class="removeConstraintBtn" title="${applicationText("削除", "Delete")}" aria-label="${applicationText("削除", "Delete")}">${deleteSvg}</button>`;
         data += ` data-constraint-index="${entry.modelIndex}"`;
       }
+      const deleteClass = { block: "removeBlockBtn", hatch: "removeHatchBtn", instance: "removeInstanceBtn" }[category];
+      if (deleteClass) action = `<button type="button" data-id="${escapeHtml(entry.id)}" class="${deleteClass} icon-delete-btn" title="${applicationText("削除", "Delete")}" aria-label="${applicationText("削除", "Delete")}">${deleteSvg}</button>`;
       const selected = sketchTreeObjectSelected(category, entry);
       if (currentScope().sketches.find(sketch => sketch.id === sketchId)?.locked) action = action.replaceAll("<button ", "<button disabled ");
       const hovered = sketchTreeObjectHovered(category, entry);

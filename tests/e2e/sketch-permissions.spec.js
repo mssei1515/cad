@@ -114,19 +114,20 @@ test('selection does not redirect paste or new drawing and additive selection st
   expect(data.lines.filter(l=>l.sketchId==='S2')).toHaveLength(3);
 });
 
-test('sketch row has monochrome visibility and lock controls without rename or delete buttons', async ({ page }) => {
+test('sketch row has aligned visibility, delete and lock controls without a rename button', async ({ page }) => {
   await setup(page, fixture());
   for (const id of ['S1', 'S2']) {
     const row = page.locator(`.sketch-item[data-id="${id}"]`);
     const boxes = await Promise.all(['.sketchVisibilityBtn', '.sketchLockBtn'].map(selector => row.locator(selector).boundingBox()));
     for (const box of boxes) expect(Math.abs(box.y - boxes[0].y)).toBeLessThan(2);
     expect(boxes[1].x).toBeGreaterThan(boxes[0].x);
-    await expect(row.locator(".sketchDeleteBtn")).toHaveCount(0);
+    await expect(row.locator(".sketchDeleteBtn")).toBeVisible();
     await expect(row.locator(".sketchRenameBtn")).toHaveCount(0);
     await expect(row.locator(".sketchLockBtn svg")).toBeVisible();
     const bounds = await row.boundingBox();
     expect(Math.abs(boxes[1].x + boxes[1].width - bounds.x - bounds.width)).toBeLessThan(2);
   }
+  await expect(page.locator('.sketch-item[data-id="ROOT"] .sketchDeleteBtn')).toHaveCount(0);
 });
 
 test('locked sketch visibility can change without unlocking or changing drawing destination', async ({ page }) => {
