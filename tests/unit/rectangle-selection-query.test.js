@@ -5,7 +5,7 @@ const test = require('node:test');
 const sandbox = { window: { SplineGeometry: { flatten: curve => curve.map(point => ({ point })) } } };
 vm.runInNewContext(fs.readFileSync('src/editing/rectangle_selection_query.js', 'utf8'), sandbox);
 function fixture() {
-  const state = { model: { points: [], lines: [], circles: [], arcs: [], splines: [], blockInstances: [], annotations: [], hatches: [], referenceImages: [] } };
+  const state = { model: { points: [], lines: [], circles: [], arcs: [], splines: [], blockInstances: [], geometryInstances: [], annotations: [], hatches: [], referenceImages: [] } };
   const inside = (p, r) => p.x >= r.x1 && p.x <= r.x2 && p.y >= r.y1 && p.y <= r.y2;
   const contains = (b, r) => b.x1 >= r.x1 && b.y1 >= r.y1 && b.x2 <= r.x2 && b.y2 <= r.y2;
   const intersects = (b, r) => b.x1 <= r.x2 && b.x2 >= r.x1 && b.y1 <= r.y2 && b.y2 >= r.y1;
@@ -15,7 +15,7 @@ function fixture() {
     lineIntersectsRect: (line, rect) => intersects(line.box, rect), bboxInRect: contains, lineBBox: item => item.box,
     isVisibleSketchElement: item => item.visible !== false, primitiveBBox: item => item.box, bboxIntersectsRect: intersects,
     arcSamplePoints: arc => arc.samples, viewScale: () => 2, isEditableSketchId: id => id === 'S1', isVisibleSketchId: id => id !== 'hidden',
-    blockProjectionBundle: instance => instance.bundle,
+    blockProjectionBundle: instance => instance.bundle, geometryInstanceBundle: instance => instance.bundle,
     mergeBounds: (a, b) => !b ? a : !a ? b : ({ x1: Math.min(a.x1, b.x1), y1: Math.min(a.y1, b.y1), x2: Math.max(a.x2, b.x2), y2: Math.max(a.y2, b.y2) }),
     splineBBox: item => item.box, annotationBounds: item => item.box, resolvedLoopBounds: value => value,
     resolvedHatchBoundary: item => item.box, activeSketchId: () => 'S1', hatchAppearanceForDisplay: h => ({ visible: h.visible }), referenceImageBounds: item => item.box, dimensionSelectionBounds: item => item.visible === false || item.sketchId !== 'S1' ? null : item.box });
@@ -74,4 +74,15 @@ test('projection rectangles preserve containment versus crossing and resolve geo
   assert.equal(f.query.readProjection(f.rect, false, geometry, entry).length, 0);
   assert.deepEqual(Array.from(f.query.readProjection(f.rect, true, geometry, entry), x => x.item), [lines[0], arc, spline]);
   lines = []; assert.equal(f.query.readProjection(f.rect, true, geometry, entry).length, 2);
+});
+
+for (const type of ['mirror', 'pattern', 'free', 'sketchProjection']) test(type + ' rectangle selection uses visible output bounds and active sketch', () => {
+  const f = fixture(), box = { x1: 8, y1: 2, x2: 12, y2: 4 };
+  const bundle = { points: [], lines: [{ box }], circles: [], arcs: [], splines: [], hatches: [] };
+  const item = { id: 'I1', type, sketchId: 'S1', bundle };
+  f.state.model.geometryInstances = [item, { ...item, sketchId: 'S2' }, { ...item, bundle: { ...bundle, lines: [{ box, visible: false }] } }];
+  assert.equal(f.query.read(f.rect, false).geometryInstances.length, 0);
+  assert.deepEqual(Array.from(f.query.read(f.rect, true).geometryInstances), [item]);
+  bundle.lines[0].box = { x1: 2, y1: 2, x2: 4, y2: 4 };
+  assert.equal(f.query.read(f.rect, false).geometryInstances[0], item);
 });

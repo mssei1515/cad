@@ -2571,7 +2571,7 @@
   }
 
   const clipboardPayload = window.ClipboardPayload.create({
-    blockProjectionBundle, blockProjectionLocalId, resolveGeometryRef, constraintGraphNodes, applicationText,
+    geometryInstanceBundle, geometryInstanceSourcePoints, serializeGeometryInstance, blockProjectionBundle, blockProjectionLocalId, resolveGeometryRef, constraintGraphNodes, applicationText,
     serializeConstraint: constraint => decorateSerializedConstraint(serializeConstraint(constraint), constraint),
   });
   function copyableSelectionPayload() {
@@ -2583,7 +2583,7 @@
 
   function clipboardPayloadCount(payload = geometryClipboard) {
     if (!payload) return 0;
-    return payload.points.length + payload.lines.length + payload.circles.length + payload.arcs.length + (payload.splines?.length || 0) + payload.blockInstances.length + (payload.hatches?.length || 0) + (payload.annotations?.length || 0) + (payload.referenceImages?.length || 0);
+    return payload.points.length + payload.lines.length + payload.circles.length + payload.arcs.length + (payload.splines?.length || 0) + payload.blockInstances.length + (payload.hatches?.length || 0) + (payload.annotations?.length || 0) + (payload.referenceImages?.length || 0) + (payload.geometryInstances?.length || 0);
   }
 
   function copySelectionToClipboard(options = {}) {
@@ -2607,7 +2607,7 @@
     return true;
   }
 
-  const { remapClipboardValue, translatedClipboardConstraintData, mapClipboardBlockProjection } =
+  const { remapGeometryRef, copiedGeometryInstance, copiedFreeOrigin, translatedClipboardConstraintData, mapClipboardBlockProjection } =
     window.ClipboardTransfer.create({ blockProjectionBundle, blockProjectionLocalId });
 
   function serializedDimensionExpressionValue(data) {
@@ -2646,11 +2646,12 @@
       splines: model.splines.length,
       constraints: model.constraints.length,
       blockInstances: model.blockInstances.length,
+      geometryInstances: model.geometryInstances.length,
       annotations: model.annotations.length,
       hatches: model.hatches.length,
       referenceImages: model.referenceImages.length,
     };
-    const initialSequences = { ...geometryIds.snapshot(), annotationSeq, hatchSeq, referenceImageSeq, nextHatchIndex: model.nextHatchIndex, blockInstanceSeq, nextDimensionParameterIndex: model.nextDimensionParameterIndex };
+    const initialSequences = { ...geometryIds.snapshot(), annotationSeq, hatchSeq, referenceImageSeq, sketchProjectionInstanceSeq, mirrorInstanceSeq, patternInstanceSeq, freeInstanceSeq, nextHatchIndex: model.nextHatchIndex, blockInstanceSeq, nextDimensionParameterIndex: model.nextDimensionParameterIndex };
 
     try {
       const idMap = new Map();
@@ -2723,6 +2724,25 @@
       }
       if (pastedBlockInstances.length > 0) invalidateBlockProjectionCache();
       payload.blockInstances.forEach((source, index) => mapClipboardBlockProjection(source, pastedBlockInstances[index], idMap, pointById, lineById, primitiveById));
+      const copiedInstances = payload.geometryInstances || [];
+      for (const source of payload.hatches || []) idMap.set(source.id, 'H' + hatchSeq++);
+      for (const source of copiedInstances) {
+        const id = source.type === 'free' ? 'FI' + freeInstanceSeq++ : source.type === 'mirror' ? 'MI' + mirrorInstanceSeq++ : source.type === 'pattern' ? 'PI' + patternInstanceSeq++ : 'SPI' + sketchProjectionInstanceSeq++;
+        idMap.set(source.id, id);
+      }
+      const projectionRecords = copiedInstances.flatMap(source => Object.values(source.projection || {}).flat());
+      // Resolve legacy output IDs and multi-level instance paths before rewriting references.
+      for (let pass = 0; pass <= copiedInstances.length; pass++) {
+        for (const record of projectionRecords) idMap.set(record.id, record.path.flatMap(id => (idMap.get(id) || id).split('@')).join('@'));
+      }
+      const destinationNamespace = currentBlockDefinitionScopeId() ? 'block:' + currentBlockDefinitionScopeId() : 'document';
+      if (payload.parameterNamespaceKey !== destinationNamespace && copiedInstances.some(source =>
+        [...source.sources, source.axis, source.direction].filter(Boolean).some(ref => !idMap.has(ref.path.join('@')) && !idMap.has(ref.path[0])))) {
+        throw new Error(applicationText('別の名前空間へ派生インスタンスを貼り付けるには参照先も選択してください', 'Also select referenced geometry to paste derived instances into another namespace'));
+      }
+      const pastedGeometryInstances = copiedInstances.map(source => normalizeGeometryInstance(copiedGeometryInstance(source, idMap, targetSketchId, dx, dy)));
+      model.geometryInstances.push(...pastedGeometryInstances);
+      invalidateBlockProjectionCache();
       const pastedAnnotations = [];
       for (const source of payload.annotations || []) {
         const annotation = serializeAnnotation(source);
@@ -2731,7 +2751,7 @@
         annotation.x += dx;
         annotation.y += dy;
         for (const key of ["start", "elbow", "end"]) if (annotation[key]) annotation[key] = { x: annotation[key].x + dx, y: annotation[key].y + dy };
-        if (annotation.geometryRef) annotation.geometryRef = remapClipboardValue(annotation.geometryRef, idMap);
+        if (annotation.geometryRef) annotation.geometryRef = remapGeometryRef(annotation.geometryRef, idMap);
         model.annotations.push(annotation);
         pastedAnnotations.push(annotation);
         idMap.set(source.id, annotation.id);
@@ -2745,7 +2765,7 @@
         if (!boundaryLoops) throw new Error(`${source.id}: ${applicationText("塗りつぶし境界を書き換えられません", "Could not rewrite fill boundary")}`);
         const hatch = {
           ...serializeHatch(source),
-          id: `H${hatchSeq++}`,
+          id: idMap.get(source.id),
           sketchId: targetSketchId,
           seed: { x: Number(source.seed?.x) + dx, y: Number(source.seed?.y) + dy },
           boundaryLoops,
@@ -2760,6 +2780,30 @@
       }));
       model.referenceImages.push(...pastedImages);
 
+      invalidateBlockProjectionCache();
+      // Re-evaluate from upstream to downstream so projected sources do not add a false offset.
+      for (let pass = 0; pass < pastedGeometryInstances.length; pass++) {
+        let changed = false;
+        pastedGeometryInstances.forEach((instance, index) => {
+          if (instance.type !== 'free') return;
+          const origin = copiedFreeOrigin(copiedInstances[index], instance, ref => {
+            const item = resolveGeometryRef(ref);
+            const points = geometryInstanceSourcePoints(item);
+            return points.length ? points : item?.seed ? [item.seed] : [];
+          });
+          if (Math.abs(origin.x - instance.origin.x) > 1e-8 || Math.abs(origin.y - instance.origin.y) > 1e-8) {
+            instance.origin = origin; changed = true;
+          }
+        });
+        if (!changed) break;
+      }
+      for (const instance of pastedGeometryInstances) {
+        const bundle = geometryInstanceBundle(instance);
+        if (!bundle.valid) throw new Error(instance.id + ': ' + bundle.reason + ' ' + applicationText('必要な参照先も選択してください', 'Also select required referenced geometry'));
+        for (const item of bundle.points) pointById.set(item.id, item);
+        for (const item of bundle.lines) lineById.set(item.id, item);
+        for (const item of [...bundle.circles, ...bundle.arcs, ...bundle.splines]) primitiveById.set(item.id, item);
+      }
       const targetNamespaceKey = currentBlockDefinitionScopeId() ? `block:${currentBlockDefinitionScopeId()}` : "document";
       const sameNamespace = payload.parameterNamespaceKey === targetNamespaceKey;
       const copiedDimensionNames = new Map();
@@ -2811,6 +2855,7 @@
       canvasSelection.set("blockInstances", pastedBlockInstances);
       canvasSelection.set("annotations", (selectedIds.annotations || []).map((id) => pastedAnnotations.find((annotation) => annotation.id === idMap.get(id))).filter(Boolean));
       canvasSelection.set("hatches", (selectedIds.hatches || []).map((id) => pastedHatches.find((hatch) => hatch.id === idMap.get(id))).filter(Boolean));
+      canvasSelection.set("geometryInstances", pastedGeometryInstances);
       canvasSelection.set("referenceImages", pastedImages);
       payload.pasteCount = pasteNumber;
       mode = "select";
@@ -2825,11 +2870,13 @@
       model.splines.length = initialLengths.splines;
       model.constraints.length = initialLengths.constraints;
       model.blockInstances.length = initialLengths.blockInstances;
+      model.geometryInstances.length = initialLengths.geometryInstances;
       model.annotations.length = initialLengths.annotations;
       model.hatches.length = initialLengths.hatches;
       model.referenceImages.length = initialLengths.referenceImages;
       geometryIds.restore(initialSequences);
       blockInstanceSeq = initialSequences.blockInstanceSeq;
+      ({ sketchProjectionInstanceSeq, mirrorInstanceSeq, patternInstanceSeq, freeInstanceSeq } = initialSequences);
       annotationSeq = initialSequences.annotationSeq;
       hatchSeq = initialSequences.hatchSeq;
       referenceImageSeq = initialSequences.referenceImageSeq;
@@ -2884,7 +2931,7 @@
   const rectangleSelectionQuery = window.RectangleSelectionQuery.create({
     currentScope: workspace.current, selectableSketchElement, isExplicitPoint, isReferencePoint, pointInRect,
     lineIntersectsRect, bboxInRect, lineBBox, isVisibleSketchElement, primitiveBBox, bboxIntersectsRect,
-    arcSamplePoints, viewScale: () => viewport.scale, isEditableSketchId: id => id === activeSketchId(), isVisibleSketchId, blockProjectionBundle, mergeBounds,
+    arcSamplePoints, viewScale: () => viewport.scale, isEditableSketchId: id => id === activeSketchId(), isVisibleSketchId, blockProjectionBundle, geometryInstanceBundle, mergeBounds,
     splineBBox, annotationBounds, resolvedLoopBounds, resolvedHatchBoundary, activeSketchId,
     hatchAppearanceForDisplay, referenceImageBounds, isVisibleValue,
     dimensionSelectionBounds: constraint => {

@@ -1,7 +1,7 @@
 /* Build detached copied values from explicit scope and selection; no clipboard session or UI writes. */
 (() => {
   "use strict";
-  function create({ blockProjectionBundle, blockProjectionLocalId, resolveGeometryRef,
+  function create({ geometryInstanceBundle, geometryInstanceSourcePoints, serializeGeometryInstance, blockProjectionBundle, blockProjectionLocalId, resolveGeometryRef,
     constraintGraphNodes, serializeConstraint, applicationText }) {
     const { SketchProjectionConstraint, LineFixedConstraint, ArcEndpointFixedConstraint, GeometryFixedConstraint } = window.GeometrySolver;
     const { normalizeAppearance } = window.Appearance;
@@ -18,6 +18,7 @@
       const arcs = canvasSelection.arcs.filter((arc) => model.arcs.includes(arc));
       const splines = canvasSelection.splines.filter((spline) => model.splines.includes(spline));
       const blockInstances = canvasSelection.blockInstances.filter((instance) => model.blockInstances.includes(instance));
+      const geometryInstances = (canvasSelection.geometryInstances || []).filter(instance => (model.geometryInstances || []).includes(instance));
       const annotations = canvasSelection.annotations.filter((annotation) => model.annotations.includes(annotation));
       const hatches = canvasSelection.hatches.filter((hatch) => model.hatches.includes(hatch));
       const referenceImages = canvasSelection.referenceImages.filter(image => model.referenceImages.includes(image));
@@ -38,7 +39,7 @@
           dependentPoints.add(point);
         }
       }
-      if (points.size + lines.length + circles.length + arcs.length + splines.length + blockInstances.length + annotations.length + hatches.length + referenceImages.length === 0) return { payload: null, error: null };
+      if (points.size + lines.length + circles.length + arcs.length + splines.length + blockInstances.length + geometryInstances.length + annotations.length + hatches.length + referenceImages.length === 0) return { payload: null, error: null };
 
       const selectedNodes = new Set([...points, ...lines, ...circles, ...arcs, ...splines, ...blockInstances]);
       const selectedBlockProjectionIds = new Set();
@@ -58,6 +59,19 @@
           splines: (bundle.splines || []).map((item) => ({ id: item.id, localId: blockProjectionLocalId(item) })),
         });
       }
+      const instanceProjectionData = new Map();
+      for (const instance of geometryInstances) {
+        const bundle = geometryInstanceBundle(instance);
+        const projection = {};
+        for (const kind of ['points', 'lines', 'circles', 'arcs', 'splines', 'hatches']) {
+          projection[kind] = (bundle[kind] || []).map(item => {
+            selectedNodes.add(item); selectedBlockProjectionIds.add(item.id);
+            const sourceRef = window.GeometryObjects.geometryRefForItem(item.sourceElement);
+            return { id: item.id, path: [instance.id, ...(instance.type === 'pattern' ? [String(item.occurrenceIndex)] : []), ...(sourceRef?.path || [item.sourceElement.id])] };
+          });
+        }
+        instanceProjectionData.set(instance, projection);
+      }
       for (const annotation of annotations) {
         if (annotation.type !== "leader") continue;
         const referenced = resolveGeometryRef(annotation.geometryRef);
@@ -66,6 +80,10 @@
         }
       }
       const selectedBoundaryKeys = new Set([...lines, ...circles, ...arcs, ...splines].map((item) => `${geometryKindForItem(item)}:${item.id}`));
+      for (const instance of geometryInstances) {
+        const bundle = geometryInstanceBundle(instance);
+        for (const item of [...bundle.lines, ...bundle.circles, ...bundle.arcs, ...(bundle.splines || [])]) selectedBoundaryKeys.add(geometryKindForItem(item) + ':' + item.id);
+      }
       for (const hatch of hatches) {
         const missing = hatchBoundaryGeometryRefs(hatch.boundaryLoops).filter((ref) => !selectedBoundaryKeys.has(`${ref.kind}:${geometryRefId(ref)}`));
         if (missing.length) {
@@ -76,8 +94,8 @@
       const constraints = model.constraints.map((constraint) => {
         if (constraint instanceof SketchProjectionConstraint) return null;
         if (constraint instanceof LineFixedConstraint || constraint instanceof ArcEndpointFixedConstraint || constraint instanceof GeometryFixedConstraint) return null;
-        const nodes = constraintGraphNodes(constraint);
-        if (nodes.length === 0 || !nodes.every((node) => selectedNodes.has(node) || Boolean(node?.blockProjection && selectedBlockProjectionIds.has(node.id)))) return null;
+        const nodes = constraintGraphNodes(constraint, { includeIntrinsicDependencies: false });
+        if (nodes.length === 0 || !nodes.every((node) => selectedNodes.has(node) || Boolean((node?.blockProjection || node?.derivedProjection) && selectedBlockProjectionIds.has(node.id)))) return null;
         return serializeConstraint(constraint);
       }).filter(Boolean);
       const orderedPoints = model.points.filter((point) => points.has(point));
@@ -110,6 +128,12 @@
           appearanceOverride: normalizeAppearance(instance.appearanceOverride),
           projection: blockProjectionData.get(instance),
         })),
+        geometryInstances: geometryInstances.map(instance => ({ ...serializeGeometryInstance(instance), projection: instanceProjectionData.get(instance),
+          sourcePositions: instance.type === 'free' ? instance.sources.map(ref => {
+            const item = resolveGeometryRef(ref);
+            return (geometryInstanceSourcePoints(item).length ? geometryInstanceSourcePoints(item) : item?.seed ? [item.seed] : []).map(point => ({ x: point.x, y: point.y }));
+          }) : undefined,
+        })),
         annotations: annotations.map(annotation => ({ ...serializeAnnotation(annotation), parameterValue: annotation.evaluatedParameterValue })),
         hatches: hatches.map(serializeHatch),
         referenceImages: referenceImages.map(serializeReferenceImage),
@@ -120,6 +144,7 @@
           arcs: arcs.map((arc) => arc.id),
           splines: splines.map((spline) => spline.id),
           blockInstances: blockInstances.map((instance) => instance.id),
+          geometryInstances: geometryInstances.map(instance => instance.id),
           annotations: annotations.map((annotation) => annotation.id),
           hatches: hatches.map((hatch) => hatch.id),
         },

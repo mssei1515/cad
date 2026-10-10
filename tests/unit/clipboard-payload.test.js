@@ -6,12 +6,12 @@ const sandbox = { window: {} }; vm.createContext(sandbox);
 const sources = vm.runInNewContext(fs.readFileSync('index.html', 'utf8').match(/const sources = (\[[\s\S]*?\]);/)[1]);
 for (const file of sources.filter(file => file.startsWith('src/'))) vm.runInContext(fs.readFileSync(file, 'utf8'), sandbox, { filename: file });
 const { Point, Line, GeometryFixedConstraint, SketchProjectionConstraint } = sandbox.window.GeometrySolver;
-const arrays = ['points','lines','circles','arcs','splines','blockInstances','annotations','hatches','referenceImages'];
+const arrays = ['points','lines','circles','arcs','splines','blockInstances','geometryInstances','annotations','hatches','referenceImages'];
 function fixture() {
   const model = Object.fromEntries([...arrays, 'constraints'].map(key => [key, []]));
   const selection = Object.fromEntries(arrays.map(key => [key, []]));
   const state = { target: null, serialized: [] }, bundle = { points: [], lines: [], circles: [], arcs: [], splines: [] };
-  const builder = sandbox.window.ClipboardPayload.create({ blockProjectionBundle: () => bundle, blockProjectionLocalId: item => item.localId,
+  const builder = sandbox.window.ClipboardPayload.create({ geometryInstanceBundle: () => bundle, serializeGeometryInstance: sandbox.window.DocumentSnapshot.serializeGeometryInstance, blockProjectionBundle: () => bundle, blockProjectionLocalId: item => item.localId,
     resolveGeometryRef: () => state.target, constraintGraphNodes: c => c.nodes,
     serializeConstraint: c => { state.serialized.push(c); return { tag: c.tag }; }, applicationText: (_ja, en) => en });
   return { model, selection, state, bundle, build: scope => builder.build(model, selection, scope) };
@@ -50,4 +50,17 @@ test('block projection IDs allow reference reconnection even when graph nodes us
   assert.equal(payload.blockInstances[0].projection.points[0].localId, 'P1'); assert.equal(payload.constraints[0].tag, 'projected');
   payload.blockInstances[0].enabledSketchIds.push('S2'); assert.deepEqual(instance.enabledSketchIds, ['S1']);
   assert.equal(payload.pasteCount, 0); assert.equal(payload.cut, false); assert.equal(payload.parameterNamespaceKey, 'document');
+});
+
+test('derived instance payload preserves detached settings and includes projected constraints and leader targets', () => {
+  const f=fixture(), a=new Point('P1',0,0), b=new Point('P2',10,0), line=new Line('L1',a,b);
+  const instance={id:'MI1',type:'mirror',sketchId:'S1',sources:[{kind:'line',path:['L1']}],axis:{kind:'line',path:['L2']},appearanceOverride:{color:'#123456'}};
+  const output=new Line('MI1@L1',a,b);Object.assign(output,{derivedProjection:true,derivedInstance:instance,sourceElement:line,occurrenceIndex:0});
+  f.model.geometryInstances=[instance];f.selection.geometryInstances=[instance];f.bundle.lines=[output];
+  f.model.constraints=[{tag:'dimension',nodes:[{...output}]}];
+  f.state.target=output;f.model.annotations=[{id:'AN1',type:'leader',geometryRef:{kind:'line',path:['MI1','L1']}}];f.selection.annotations=f.model.annotations;
+  const result=f.build();assert.equal(result.error,null);const payload=result.payload;
+  assert.equal(payload.geometryInstances[0].projection.lines[0].id,output.id);assert.equal(payload.constraints[0].tag,'dimension');
+  assert.deepEqual(Array.from(payload.selection.geometryInstances),['MI1']);
+  payload.geometryInstances[0].sources[0].path[0]='different';assert.equal(instance.sources[0].path[0],'L1');
 });

@@ -49,3 +49,21 @@ test('projection remapping reconnects all kinds by local ID and preserves destin
   api.mapClipboardBlockProjection({}, { id: 'new' }, ids, points, lines, primitives);
   assert.equal(ids.size, 5);
 });
+
+test('derived clipboard copies rewrite paths, retain uncopied references and shift free placement', () => {
+  const api=create(),map=new Map([['FI1','FI2'],['MI1','MI2'],['L1','L9'],['legacy','MI2@L9']]);
+  const source={id:'FI1',type:'free',sketchId:'S1',sources:[{kind:'line',path:['L1']}],origin:{x:1,y:2},x:10,y:20,rotation:0.4,mirrorX:true,mirrorY:false,appearanceOverride:{color:'red'}};
+  let copy=api.copiedGeometryInstance(source,map,'S2',3,4);
+  assert.deepEqual(plain(copy.sources),[{kind:'line',path:['L9']}]);assert.deepEqual(plain(copy.origin),source.origin);assert.equal(copy.x,13);assert.equal(copy.y,24);
+  map.delete('L1');copy=api.copiedGeometryInstance(source,map,'S1',3,4);assert.deepEqual(plain(copy.origin),source.origin);assert.equal(copy.sources[0].path[0],'L1');
+  assert.deepEqual(plain(api.remapGeometryRef({kind:'line',path:['legacy']},map)),{kind:'line',path:['MI2','L9']});
+  assert.deepEqual(plain(api.remapGeometryRef({kind:'line',path:['MI1','L1']},map)),{kind:'line',path:['MI2','L1']});
+  assert.equal(source.x,10);
+});
+
+test('free origin follows the actual uniform source translation rather than copied owner IDs', () => {
+  const api=create(),source={origin:{x:1,y:2},sourcePositions:[[{x:10,y:20},{x:30,y:40}]]},instance={sources:[{}]};
+  assert.deepEqual(plain(api.copiedFreeOrigin(source,instance,()=>[{x:13,y:24},{x:33,y:44}])),{x:4,y:6});
+  assert.deepEqual(plain(api.copiedFreeOrigin(source,instance,()=>[{x:10,y:20},{x:30,y:40}])),source.origin);
+  assert.deepEqual(plain(api.copiedFreeOrigin(source,instance,()=>[{x:13,y:24},{x:30,y:40}])),source.origin);
+});

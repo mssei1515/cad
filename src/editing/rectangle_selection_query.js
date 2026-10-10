@@ -3,13 +3,24 @@
   "use strict";
   function create({ currentScope, selectableSketchElement, isExplicitPoint, isReferencePoint, pointInRect,
     lineIntersectsRect, bboxInRect, lineBBox, isVisibleSketchElement, primitiveBBox, bboxIntersectsRect,
-    arcSamplePoints, viewScale, isEditableSketchId, isVisibleSketchId, blockProjectionBundle, mergeBounds,
+    arcSamplePoints, viewScale, isEditableSketchId, isVisibleSketchId, blockProjectionBundle, geometryInstanceBundle, mergeBounds,
     splineBBox, annotationBounds, resolvedLoopBounds, resolvedHatchBoundary, activeSketchId,
     hatchAppearanceForDisplay, referenceImageBounds, dimensionSelectionBounds = () => null, isVisibleValue = visible => visible !== false }) {
     function lineSelected(line, rect, crossing) { return crossing ? lineIntersectsRect(line, rect) : bboxInRect(lineBBox(line), rect); }
     function boxSelected(box, rect, crossing) { return crossing ? bboxIntersectsRect(box, rect) : bboxInRect(box, rect); }
     function samplesSelected(samples, rect, crossing) { return crossing ? samples.some(point => pointInRect(point, rect)) : samples.every(point => pointInRect(point, rect)); }
     function addUnique(target, item) { if (item && !target.includes(item)) target.push(item); }
+    function bundleBounds(bundle) {
+      let box = null;
+      for (const line of bundle.lines) box = mergeBounds(box, lineBBox(line));
+      for (const circle of bundle.circles) box = mergeBounds(box, primitiveBBox(circle));
+      for (const arc of bundle.arcs) box = mergeBounds(box, primitiveBBox(arc));
+      for (const spline of bundle.splines || []) box = mergeBounds(box, splineBBox(spline));
+      for (const point of bundle.points) box = mergeBounds(box, { x1: point.x, y1: point.y, x2: point.x, y2: point.y });
+      for (const annotation of bundle.annotations || []) box = mergeBounds(box, annotationBounds(annotation));
+      for (const hatch of bundle.hatches || []) box = mergeBounds(box, resolvedLoopBounds(resolvedHatchBoundary(hatch)));
+      return box;
+    }
     function read(rect, crossing) {
       const model = currentScope();
       const nextPoints = [];
@@ -18,6 +29,7 @@
       const nextArcs = [];
       const nextSplines = [];
       const nextBlocks = [];
+      const nextInstances = [];
       const nextAnnotations = [];
       const nextHatches = [];
       const nextReferenceImages = [];
@@ -54,17 +66,22 @@
       for (const instance of model.blockInstances) {
         if (!isEditableSketchId(instance.sketchId) || !isVisibleSketchId(instance.sketchId)) continue;
         const bundle = blockProjectionBundle(instance);
-        let box = null;
-        for (const line of bundle.lines) box = mergeBounds(box, lineBBox(line));
-        for (const circle of bundle.circles) box = mergeBounds(box, primitiveBBox(circle));
-        for (const arc of bundle.arcs) box = mergeBounds(box, primitiveBBox(arc));
-        for (const spline of bundle.splines || []) box = mergeBounds(box, splineBBox(spline));
-        for (const point of bundle.points) box = mergeBounds(box, { x1: point.x, y1: point.y, x2: point.x, y2: point.y });
-        for (const annotation of bundle.annotations || []) box = mergeBounds(box, annotationBounds(annotation));
-        for (const hatch of bundle.hatches || []) box = mergeBounds(box, resolvedLoopBounds(resolvedHatchBoundary(hatch)));
+        const box = bundleBounds(bundle);
         if (!box) continue;
         const selected = boxSelected(box, rect, crossing);
         if (selected) addUnique(nextBlocks, instance);
+      }
+      for (const instance of model.geometryInstances || []) {
+        if (instance.sketchId !== activeSketchId() || !isVisibleSketchId(instance.sketchId)) continue;
+        const bundle = geometryInstanceBundle(instance);
+        const visible = { ...bundle,
+          points: bundle.points.filter(isVisibleSketchElement), lines: bundle.lines.filter(isVisibleSketchElement),
+          circles: bundle.circles.filter(isVisibleSketchElement), arcs: bundle.arcs.filter(isVisibleSketchElement),
+          splines: (bundle.splines || []).filter(isVisibleSketchElement),
+          hatches: (bundle.hatches || []).filter(h => isVisibleValue(hatchAppearanceForDisplay(h).visible)),
+        };
+        const box = bundleBounds(visible);
+        if (box && boxSelected(box, rect, crossing)) addUnique(nextInstances, instance);
       }
       for (const annotation of model.annotations) {
         if (annotation.sketchId !== activeSketchId() || !isVisibleValue(annotation.visible) || !isVisibleSketchId(annotation.sketchId)) continue;
@@ -91,7 +108,7 @@
         const box = dimensionSelectionBounds(constraint);
         return box && (boxSelected(box, rect, crossing));
       });
-      return { points: nextPoints, lines: nextLines, circles: nextCircles, arcs: nextArcs, splines: nextSplines, blockInstances: nextBlocks, annotations: nextAnnotations, hatches: nextHatches, referenceImages: nextReferenceImages, dimensionConstraints: dimensions };
+      return { points: nextPoints, lines: nextLines, circles: nextCircles, arcs: nextArcs, splines: nextSplines, blockInstances: nextBlocks, geometryInstances: nextInstances, annotations: nextAnnotations, hatches: nextHatches, referenceImages: nextReferenceImages, dimensionConstraints: dimensions };
     }
     function readProjection(rect, crossing, geometry, entryFromItem) {
       const entries = [];

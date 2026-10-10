@@ -66,7 +66,7 @@
 
     function applyRectangle(candidates, additive = false) {
       clearTreeSelection();
-      for (const field of ["points", "lines", "circles", "arcs", "splines", "blockInstances", "annotations", "hatches", "referenceImages", "dimensionConstraints"]) {
+      for (const field of ["points", "lines", "circles", "arcs", "splines", "blockInstances", "geometryInstances", "annotations", "hatches", "referenceImages", "dimensionConstraints"]) {
         const next = additive ? [...state[field]] : [];
         for (const item of candidates[field] || []) if (item && !next.includes(item)) next.push(item);
         state[field] = next;
