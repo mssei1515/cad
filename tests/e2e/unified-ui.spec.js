@@ -1506,6 +1506,7 @@ test("Jot2D files open, overwrite, save as, and cancel without errors", async ({
   await expect(page.locator("#saveAsBtn")).toHaveAttribute("aria-label", "名前を付けて保存");
   await page.click("#exportBtn");
   await expect.poll(() => page.evaluate(() => window.__jot2dFsMock.records[0]?.writeCount)).toBe(1);
+  await expect(page.locator("#documentSaveStatus")).toContainText("保存済み");
   let state = await page.evaluate(() => ({
     saveCallCount: window.__jot2dFsMock.saveCalls.length,
     suggestedName: window.__jot2dFsMock.saveCalls[0].suggestedName,
@@ -1524,10 +1525,12 @@ test("Jot2D files open, overwrite, save as, and cancel without errors", async ({
 
   await page.keyboard.press("Control+S");
   await expect.poll(() => page.evaluate(() => window.__jot2dFsMock.records[0].writeCount)).toBe(2);
+  await expect(page.locator("#documentSaveStatus")).toContainText("保存済み");
   expect(await page.evaluate(() => window.__jot2dFsMock.saveCalls.length)).toBe(1);
 
   await page.keyboard.press("Control+Shift+S");
   await expect.poll(() => page.evaluate(() => window.__jot2dFsMock.records[1]?.writeCount)).toBe(1);
+  await expect(page.locator("#documentSaveStatus")).toContainText("保存済み");
   state = await page.evaluate(() => ({
     saveCallCount: window.__jot2dFsMock.saveCalls.length,
     fileState: window.__jot2dTest.fileSystemAccessStateForTest(),
@@ -1548,6 +1551,7 @@ test("Jot2D files open, overwrite, save as, and cancel without errors", async ({
   await page.click("#importBtn");
   await expect.poll(() => page.evaluate(() => window.__jot2dTest.fileSystemAccessStateForTest().handleName))
     .toBe("opened-design.jot2d");
+  await expect(page.locator("#hint")).toHaveText("ファイルを開きました: opened-design.jot2d");
   state = await page.evaluate(() => ({
     openCallCount: window.__jot2dFsMock.openCalls.length,
     multiple: window.__jot2dFsMock.openCalls[0].multiple,
@@ -1568,6 +1572,7 @@ test("Jot2D files open, overwrite, save as, and cancel without errors", async ({
 
   await page.keyboard.press("Control+S");
   await expect.poll(() => page.evaluate(() => window.__jot2dFsMock.openRecord.writeCount)).toBe(1);
+  await expect(page.locator("#documentSaveStatus")).toContainText("保存済み");
   expect(await page.evaluate(() => window.__jot2dFsMock.saveCalls.length)).toBe(2);
 
   await page.evaluate(() => { window.__jot2dFsMock.cancelNextSave = true; });
@@ -1644,7 +1649,7 @@ test("file URL Help menu reads the generated Git commit file", async ({ page }) 
     "src/document/appearance.js", "src/commands/hatch_command.js", "src/commands/annotation_command.js", "src/document/drawing_order.js", "src/editing/canvas_context_query.js", "src/editing/geometry_hit_query.js", "src/document/sketch_hierarchy.js",
     "src/document/annotations.js", "src/document/hatches.js", "src/document/reference_images.js", "src/persistence/reference_image_import.js", "src/commands/reference_image_command.js", "src/document/block_catalog.js", "src/document/block_state.js", "src/geometry/block_projection.js", "src/geometry/read_model.js", "src/geometry/appearance_query.js", "src/geometry/bounds.js", "src/geometry/block_layout.js", "src/geometry/reference_image_geometry.js", "src/rendering/drawing_bounds.js", "src/rendering/viewport.js", "src/rendering/canvas_surface.js", "src/rendering/dimension_metrics.js", "src/rendering/dimension_placement.js", "src/rendering/dimension_layout.js", "src/rendering/dimension_renderer.js", "src/rendering/canvas_theme_colors.js", "src/rendering/geometry_presentation.js", "src/rendering/geometry_renderer.js", "src/rendering/hatch_renderer.js", "src/rendering/drawing_stack.js", "src/rendering/terminator_renderer.js", "src/rendering/annotation_renderer.js", "src/rendering/annotation_spatial_query.js", "src/rendering/reference_image_renderer.js",
     "src/persistence/constraint_codec_registry.js", "src/persistence/dimensions.js", "src/persistence/constraints.js", "src/constraints/dimension_queries.js", "src/constraints/candidates.js", "src/constraints/operands.js", "src/parameters/namespace.js", "src/persistence/geometry.js", "src/persistence/geometry_instances.js", "src/persistence/block_definitions.js", "src/persistence/block_instances.js", "src/persistence/block_connections.js", "src/persistence/document_geometry.js",
-    "src/persistence/document_files.js", "src/commands/document_file_command.js", "src/persistence/document_snapshot.js", "src/persistence/document_sequences.js", "src/persistence/document_loading.js", "src/document/state.js",
+    "src/persistence/document_files.js", "src/persistence/document_bookmarks.js", "src/commands/document_file_command.js", "src/persistence/document_snapshot.js", "src/persistence/document_sequences.js", "src/persistence/document_loading.js", "src/document/state.js",
   ];
   expect(loadedScripts).toHaveLength(expectedPaths.length);
   for (const expectedPath of expectedPaths) {
