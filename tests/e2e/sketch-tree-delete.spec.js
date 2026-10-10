@@ -64,6 +64,22 @@ test('tree hatch deletion retains the existing dependency guard', async ({ page 
   await expect(page.locator('.removeHatchBtn')).toBeVisible();
 });
 
+test('empty leaf sketch delete skips confirmation and supports Undo and Redo', async ({ page }) => {
+  await openTestDocument(page);
+  await page.locator('#addSketchBtn').click();
+  const row = page.locator('.sketch-item[data-id="S1"]');
+  const before = await state(page);
+  let dialogs = 0;
+  page.on('dialog', async dialog => { dialogs++; await dialog.dismiss(); });
+  await row.locator('.sketchDeleteBtn').click();
+  await expect(row).toHaveCount(0);
+  expect(dialogs).toBe(0);
+  await page.keyboard.press('Control+z');
+  expect(await state(page)).toEqual(before);
+  await page.keyboard.press('Control+y');
+  await expect(row).toHaveCount(0);
+});
+
 test('wide chevron opens at its edge; sketch delete confirms, respects locks, and supports Undo', async ({ page }) => {
   await openTestDocument(page);
   await page.evaluate(() => window.__jot2dTest.resetForHatchTest());

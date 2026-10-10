@@ -53,7 +53,7 @@ Sketch削除は原則として子孫を含むサブツリー削除とする。
 既存のSketchProjectionConstraintで削除対象を参照する子孫Sketchがある場合は、対象Sketchだけを削除し、直下の子を対象の親（なければRoot）へ移す。削除対象への投影拘束は整理する。派生Instanceからの外部参照には通常の削除拒否規則を適用する。
 
 1. 削除範囲外の参照を確認する。
-2. 削除されるGeometry件数を示してユーザー確認を取る。
+2. 削除されるGeometry件数を示してユーザー確認を取る。ただし、子孫Sketchも所属Object（Geometry・Constraint・Block Instance・派生Instance・Annotation・Hatch・Reference Image）もない空のSketchは、確認ダイアログなしで削除する。空の子Sketchがある場合も確認は行う。Root・ロック・参照関係の削除制限とUndo/Redoは通常どおり適用する。
 3. 削除される寸法symbolへの依存を確認し、成立する場合に所属Objectと、削除Projection等を参照するConstraint・Leaderを整理する。
 4. active Sketchが削除範囲に含まれる場合は、削除対象外の親、なければRootをactiveにする。
 
