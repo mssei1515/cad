@@ -15,6 +15,8 @@ async function registerDrawing(page) {
   });
   await page.click('#importBtn');
   await expect(page).toHaveTitle('bookmarked - Jot2D');
+  await expect(page).toHaveURL(/document=[a-f0-9-]{36}/);
+  expect(new URL(page.url()).searchParams.get('test')).toBe('1');
   await page.locator('.app-menu > summary').first().click();
   await page.click('#copyDocumentLinkBtn');
   await expect(page.locator('#documentLinkDialog')).toBeVisible();
@@ -91,4 +93,61 @@ test('file URL startup supports registration storage and reports unavailable reg
     const registry = window.DocumentBookmarks.create({ indexedDB, crypto });
     return (await registry.get('unknown')) === undefined && typeof showOpenFilePicker === 'function';
   })).toBe(true);
+});
+
+test('Save As changes the registered URL and compatible import clears it only after successful reading', async ({ page }) => {
+  const original = await registerDrawing(page);
+  await page.evaluate(async () => {
+    const root = await navigator.storage.getDirectory();
+    const handle = await root.getFileHandle('second.jot2d', { create: true });
+    window.showSaveFilePicker = async () => handle;
+  });
+  await page.keyboard.press('Control+Shift+s');
+  await expect.poll(() => new URL(page.url()).searchParams.get('document')).not.toBe(new URL(original).searchParams.get('document'));
+  const second = new URL(page.url()).searchParams.get('document');
+  expect(second).toMatch(/^[a-f0-9-]{36}$/);
+  const data = await page.evaluate(() => window.__jot2dTest.serializedModelForTest());
+  await page.locator('#documentFileInput').setInputFiles({ name: 'invalid.jot2d', mimeType: 'application/json', buffer: Buffer.from('{') });
+  await expect(page.locator('#hint')).toContainText('失敗');
+  expect(new URL(page.url()).searchParams.get('document')).toBe(second);
+  await page.locator('#documentFileInput').setInputFiles({ name: 'compatible.jot2d', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify(data)) });
+  await expect(page).toHaveTitle('compatible - Jot2D');
+  await expect.poll(() => new URL(page.url()).searchParams.has('document')).toBe(false);
+});
+
+test('unsupported browser capabilities hide link controls and preserve normal file input and download saving', async ({ page }) => {
+  await page.addInitScript(() => {
+    window.showOpenFilePicker = undefined;
+    window.showSaveFilePicker = undefined;
+  });
+  await page.goto('/index.html?test=1&document=foreign');
+  await page.waitForFunction(() => window.__jot2dTest);
+  await expect.poll(() => new URL(page.url()).searchParams.has('document')).toBe(false);
+  await page.locator('.app-menu > summary').first().click();
+  await expect(page.locator('#copyDocumentLinkBtn')).toBeHidden();
+  await expect(page.locator('#openDocumentLinkBtn')).toBeHidden();
+  const data = await page.evaluate(() => window.__jot2dTest.serializedModelForTest());
+  await page.locator('.app-menu > summary').first().click();
+  await page.locator('#documentFileInput').setInputFiles({ name: 'fallback.jot2d', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify(data)) });
+  await expect(page).toHaveTitle('fallback - Jot2D');
+  const downloaded = page.waitForEvent('download');
+  await page.keyboard.press('Control+s');
+  expect((await downloaded).suggestedFilename()).toBe('fallback.jot2d');
+});
+
+test('registration storage errors leave loaded drawings usable and remove stale URLs', async ({ page }) => {
+  await openTestDocument(page);
+  const data = await page.evaluate(() => window.__jot2dTest.serializedModelForTest());
+  await page.evaluate(data => {
+    history.replaceState(null, '', '?test=1&document=old');
+    indexedDB.open = () => { throw new Error('Storage unavailable'); };
+    window.showOpenFilePicker = async () => [{ getFile: async () => new File([JSON.stringify(data)], 'usable.jot2d') }];
+  }, data);
+  await page.click('#importBtn');
+  await expect(page).toHaveTitle('usable - Jot2D');
+  await expect.poll(() => new URL(page.url()).searchParams.has('document')).toBe(false);
+  await page.click('#toolPoint');
+  await page.locator('#canvas').click({ position: { x: 500, y: 300 } });
+  await page.keyboard.press('Escape');
+  expect(await page.evaluate(() => window.__jot2dTest.serializedModelForTest().points.length)).toBe(1);
 });
