@@ -1,4 +1,34 @@
 const { test, expect, openTestDocument } = require('./test-fixture');
+test('separated clicks toggle the selected Sketch while double-click only changes drawing destination', async ({ page }) => {
+  await openTestDocument(page);
+  await page.evaluate(() => window.__jot2dTest.resetForHatchTest());
+  await page.locator('#addSketchBtn').click();
+  const source = page.locator('.sketch-item[data-id="S1"]');
+  const name = source.locator('.sketchActivateBtn');
+  await name.click();
+  await expect(source).toHaveClass(/selected/);
+  await expect(source).toHaveAttribute('aria-expanded', 'false');
+  await page.waitForTimeout(550);
+  await name.click();
+  await expect(source).toHaveAttribute('aria-expanded', 'true');
+  await expect(source).not.toHaveClass(/active/);
+  await page.waitForTimeout(550);
+  await name.click();
+  await expect(source).toHaveAttribute('aria-expanded', 'false');
+  await page.waitForTimeout(550);
+  await name.dblclick();
+  await expect(source).toHaveClass(/active/);
+  await page.waitForTimeout(550);
+  await expect(source).toHaveAttribute('aria-expanded', 'false');
+  await source.locator('.sketchExpandBtn').click();
+  await expect(source).toHaveAttribute('aria-expanded', 'true');
+  await name.focus();
+  await page.keyboard.press('Enter');
+  await page.keyboard.press('Space');
+  await page.waitForTimeout(550);
+  await expect(source).toHaveAttribute('aria-expanded', 'true');
+});
+
 test('selected row exposes Edit while the editing marker remains independent; all editing routes agree', async ({ page }) => {
   await openTestDocument(page);
   await page.evaluate(() => window.__jot2dTest.resetForHatchTest());

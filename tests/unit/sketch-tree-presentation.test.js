@@ -44,6 +44,8 @@ test('object labels are escaped and constraint summaries include only blocks own
 
 function controllerFixture() {
   const calls = [], selection = sandbox.window.CanvasSelection.create();
+  let time = 0, nextTimer = 0;
+  const timers = new Map(), open = new Map();
   const model = { sketches: [{ id: 'S1' }, { id: 'S2' }, { id: 'S3' }], points: [], lines: [], circles: [], arcs: [], splines: [], hatches: [], referenceImages: [], blockInstances: [], geometryInstances: [], constraints: [], annotations: [] };
   for (const [field, id] of [['points','P1'], ['lines','L1'], ['circles','C1'], ['arcs','A1'], ['splines','SP1'], ['hatches','H1'], ['referenceImages','IMG1'], ['blockInstances','B1'], ['geometryInstances','I1'], ['annotations','AN1']]) model[field].push({ id, sketchId: 'S2' });
   let active = 'S1';
@@ -56,11 +58,14 @@ function controllerFixture() {
     toggleBlockInstanceSelection: selection.toggleBlockInstanceSelection,
     targetFromConstraint: () => false,
     updateUI: () => calls.push('ui'), draw: () => calls.push('draw'),
-    sketchTreeView: { setSketchOpen: () => calls.push('expand') }, deleteElements: () => calls.push('delete'),
+    updateSketchUI: () => calls.push('tree'),
+    now: () => time, schedule: callback => { timers.set(++nextTimer, callback); return nextTimer; }, cancelSchedule: timer => timers.delete(timer),
+    sketchTreeView: { setSketchOpen: (id, value) => { open.set(id, value); calls.push('expand'); } }, deleteElements: () => calls.push('delete'),
   });
   const row=(sketchId,category='point',id='P1')=>({dataset:{sketchId,objectKind:category,id}});
-  const event=id=>{const sketchRow={dataset:{id}}; return {target:{closest:selector=>selector==='.sketch-item'||selector==='.sketchActivateBtn'?sketchRow:null}};};
-  return {calls,selection,controller,row,event,model,active:()=>active};
+  const event=(id,detail=1)=>{const sketchRow={dataset:{id},getAttribute:()=>String(open.get(id) === true)}; return {detail,target:{closest:selector=>selector==='.sketch-item'||selector==='.sketchActivateBtn'?sketchRow:null}};};
+  const flush = () => { const callbacks = [...timers.values()]; timers.clear(); callbacks.forEach(callback => callback()); };
+  return {calls,selection,controller,row,event,model,open,flush,advance: ms => { time += ms; },active:()=>active};
 }
 test('other sketch objects share editable selection without changing drawing destination', () => {
  const f=controllerFixture();
@@ -95,4 +100,40 @@ test('locked object delete buttons are guarded even if a click is dispatched man
   const action = { closest: () => row };
   f.controller.click({ target: { closest: selector => selector === 'button' ? action : null } });
   assert.deepEqual(f.calls, []);
+});
+
+test('selected sketch opens and closes on separated clicks without changing drawing destination', () => {
+  const f = controllerFixture();
+  f.controller.click(f.event('S2')); f.flush();
+  assert.equal(f.open.has('S2'), false);
+  f.advance(499); f.controller.click(f.event('S2')); f.flush();
+  assert.equal(f.open.has('S2'), false);
+  f.advance(500); f.controller.click(f.event('S2'));
+  assert.equal(f.open.has('S2'), false);
+  f.flush(); assert.equal(f.open.get('S2'), true);
+  f.advance(60000); f.controller.click(f.event('S2')); f.flush();
+  assert.equal(f.open.get('S2'), false);
+  assert.equal(f.selection.sketchId, 'S2'); assert.equal(f.active(), 'S1');
+});
+
+test('double-click cancels pending expansion even when the row was already selected', () => {
+  const f = controllerFixture();
+  f.controller.click(f.event('S2')); f.advance(1000);
+  f.controller.click(f.event('S2')); f.advance(100);
+  f.controller.click(f.event('S2', 2)); f.controller.doubleClick(f.event('S2', 2)); f.flush();
+  assert.equal(f.open.has('S2'), false); assert.equal(f.active(), 'S2');
+});
+
+test('pending expansion is discarded after another selection or scope replacement', () => {
+  for (const change of [f => f.controller.click(f.event('S3')), f => f.selection.set('sketchId', null), f => { f.model.sketches = [...f.model.sketches]; }]) {
+    const f = controllerFixture();
+    f.controller.click(f.event('S2')); f.advance(1000); f.controller.click(f.event('S2'));
+    change(f); f.flush(); assert.equal(f.open.has('S2'), false);
+  }
+});
+
+test('keyboard-generated click selects without scheduling expansion', () => {
+  const f = controllerFixture();
+  f.controller.click(f.event('S2')); f.advance(1000); f.controller.click(f.event('S2', 0)); f.flush();
+  assert.equal(f.selection.sketchId, 'S2'); assert.equal(f.open.has('S2'), false);
 });

@@ -5,10 +5,19 @@
     sidebarGeometryItem, toggleBlockInstanceSelection, targetFromConstraint, updateUI, draw,
     sketchTreeView, updateSketchUI, toggleSketchVisibility, renameSketch, deleteSketch, deleteElements, unfixPoint,
     toggleSketchLock = () => {}, guardSketchEdit = () => true, selectionSketchId = () => null,
-    resolveSelectionEntry, updateSelectionUI = updateUI, hover = {}, move = {}, openContextMenu = () => {} }) {
+    resolveSelectionEntry, updateSelectionUI = updateUI, hover = {}, move = {}, openContextMenu = () => {},
+    now = () => Date.now(), schedule = (callback, delay) => setTimeout(callback, delay), cancelSchedule = (timer) => clearTimeout(timer) }) {
     const { canvasHover, setSidebarHover, clearSidebarHover, sidebarHoverElementsForItem, sidebarHoverElementsForConstraint, elementSketchId, ROOT_SKETCH_ID } = hover;
     let hoveredSketchTreeId = null;
+    const ROW_CLICK_INTERVAL = 500;
+    let lastRowClick = null, pendingRowToggle = null;
+    function cancelRowToggle() {
+      if (pendingRowToggle !== null) cancelSchedule(pendingRowToggle);
+      pendingRowToggle = null;
+    }
     function selectSketch(sketchId) {
+      cancelRowToggle();
+      lastRowClick = null;
       if (!currentScope().sketches.some((sketch) => sketch.id === sketchId)) return;
       clearSelection();
       canvasSelection.set("sketchId", sketchId);
@@ -90,6 +99,7 @@
     }
 
     function handleSketchTreeClick(event) {
+      cancelRowToggle();
       const model = currentScope();
       const categoryRow = event.target.closest(".sketch-group-row");
       if (categoryRow) {
@@ -133,10 +143,30 @@
       const objectRow = event.target.closest(".sketch-object-row");
       if (objectRow) return void activateSketchTreeObject(objectRow, event.ctrlKey || event.shiftKey);
       const sketchRow = event.target.closest(".sketch-item");
-      if (sketchRow) selectSketch(sketchRow.dataset.id);
+      if (sketchRow) {
+        const id = sketchRow.dataset.id, time = now();
+        const selected = canvasSelection.sketchId === id;
+        const separated = !lastRowClick || lastRowClick.sketches !== model.sketches || lastRowClick.id !== id || time - lastRowClick.time >= ROW_CLICK_INTERVAL;
+        const expanded = sketchRow.getAttribute?.("aria-expanded");
+        selectSketch(id);
+        lastRowClick = { id, time, sketches: model.sketches };
+        if (event.detail === 1 && selected && separated && expanded != null) {
+          const sketches = model.sketches;
+          // Wait for a possible second click before changing the tree under the pointer.
+          pendingRowToggle = schedule(() => {
+            pendingRowToggle = null;
+            if (move.active?.() || currentScope().sketches !== sketches || canvasSelection.sketchId !== id) return;
+            if (!sketches.some(sketch => sketch.id === id)) return;
+            sketchTreeView.setSketchOpen(id, expanded !== "true");
+            updateSketchUI();
+          }, ROW_CLICK_INTERVAL);
+        }
+      }
     }
 
     function activateRow(event) {
+      cancelRowToggle();
+      lastRowClick = null;
       if (move.active?.()) return;
       const action = event.target.closest("button");
       if (action && !action.classList.contains("sketchActivateBtn")) return;
