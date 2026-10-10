@@ -87,7 +87,13 @@
         return;
       }
       const p = press.worldPoint(e);
-      if (getPendingCommand()?.annotationDraft || getPendingCommand()?.type === "annotation-value") { e.preventDefault(); return; }
+      if (getPendingCommand()?.annotationDraft) { e.preventDefault(); return; }
+      if (getPendingCommand()?.type === "annotation-value") {
+        const hits = press.query.read(p);
+        press.blankGesture.handle(p, { ...hits, annotationHit: hits.blankAnnotationHit });
+        e.preventDefault();
+        return;
+      }
       if (getMode() === "select" && !getPendingCommand() && !getPendingConstraintCommand() && press.query.read?.(p).inactiveHit) {
         e.preventDefault();
         return;

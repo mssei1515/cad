@@ -1,4 +1,4 @@
-/* Edit an existing annotation in place; model changes happen only on Enter. */
+/* Edit an existing annotation in place; model changes happen only on confirmation. */
 (() => {
   "use strict";
   function create({ document, host, getPending, setPending, find, canEdit, prepare, select,

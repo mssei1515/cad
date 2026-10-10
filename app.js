@@ -319,6 +319,7 @@
     finishSplineEditSession: (...args) => finishSplineEditSession(...args),
     submitDistanceValue: (...args) => submitDistanceValue(...args),
     submitOffsetValue: (...args) => submitOffsetValue(...args),
+    submitAnnotationValue: () => annotationInputController.finish(),
     cancelPendingCommand: (...args) => cancelPendingCommand(...args),
     isDrawToolMode: (...args) => isDrawToolMode(...args),
     exitDrawMode: (...args) => exitDrawMode(...args),

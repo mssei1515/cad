@@ -9,7 +9,7 @@ function fixture(){
   const ports={getMode:()=>f.mode,getPending:()=>f.pending,getPendingConstraint:()=>f.constraint,getSplineEditSession:()=>f.edit,
     getLineCommand:()=>f.line,getTransientAuthoring:()=>f.transient,getTime:()=>f.time,hypot2:Math.hypot,
     isDrawToolMode:()=>f.drawMode,hasActiveDrawOperation:()=>f.active,hasSelection:()=>f.selected};
-  for(const name of ['clearPreview','finalizeSplineFromDoubleClick','finishSplineEditSession','submitDistanceValue','submitOffsetValue','cancelPendingCommand','exitDrawMode','cancelConstraintTargetCommand','rollbackTransientLineCompletion','clearSnap','clearSelection','setHint','updateUI','draw','cancelActiveDrawOperation','rollbackTransientPoint','updateGeometrySelectionUI'])ports[name]=record(name);
+  for(const name of ['clearPreview','finalizeSplineFromDoubleClick','finishSplineEditSession','submitDistanceValue','submitOffsetValue','submitAnnotationValue','cancelPendingCommand','exitDrawMode','cancelConstraintTargetCommand','rollbackTransientLineCompletion','clearSnap','clearSelection','setHint','updateUI','draw','cancelActiveDrawOperation','rollbackTransientPoint','updateGeometrySelectionUI'])ports[name]=record(name);
   f.gesture=sandbox.window.BlankCanvasGesture.create(ports);return f;
 }
 test('blank repeat uses inclusive 450ms and 6px bounds and rejected hits reset its candidate',()=>{
@@ -48,4 +48,12 @@ test('active drawing wins over selection clearing and idle blank clicks fall thr
   const f=fixture();f.active=true;f.selected=true;f.gesture.handle({});assert.deepEqual(f.calls,['cancelActiveDrawOperation','exitDrawMode']);
   f.active=false;f.calls=[];f.gesture.handle({});assert.deepEqual(f.calls,['clearSelection','setHint','updateGeometrySelectionUI','draw']);
   f.selected=false;f.calls=[];assert.equal(f.gesture.handle({}),false);assert.deepEqual(f.calls,[]);
+});
+
+test('annotation blank confirmation submits instead of cancelling and rejects occupied canvas',()=>{
+  const f=fixture();f.pending={type:'annotation-value'};
+  for(const key of ['hitP','hitL','hitC','hitArcEnd','hitA','hitS','hitD','hitBlock','hitDerivedInstance','hatchHit','referenceImageHit','annotationHit','inactiveHit']) {
+    assert.equal(f.gesture.handle({}, {[key]:{}}),false);assert.deepEqual(f.calls,[]);
+  }
+  assert.equal(f.gesture.handle({}),true);assert.deepEqual(f.calls,['submitAnnotationValue']);
 });

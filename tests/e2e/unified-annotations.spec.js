@@ -356,3 +356,41 @@ test('legacy leader inline input uses the displayed position after zoom and canc
   await expect(page.locator('#statusCommand')).toHaveText('選択');
   expect((await data(page)).annotations[0]).toEqual(before);
 });
+
+async function doubleClickWorld(page, p) {
+  const point = await page.evaluate(p => window.__jot2dTest.worldClientPositionForTest(p), p);
+  await page.mouse.dblclick(point.x, point.y);
+}
+
+test('inline text commits only on a blank double click and supports undo and redo', async ({ page }) => {
+  await setup(page); await createText(page);
+  const before = (await data(page)).annotations[0];
+  await doubleClickNote(page);
+  const input = page.locator('#annotationValueInput');
+  await input.fill('Blank confirmation\nSecond line');
+  await clickWorld(page, { x: 100, y: 60 });
+  await expect(input).toBeVisible(); expect((await data(page)).annotations[0]).toEqual(before);
+  await doubleClickWorld(page, { x: 0, y: 0 });
+  await expect(input).toBeVisible(); expect((await data(page)).annotations[0]).toEqual(before);
+  await doubleClickWorld(page, { x: 100, y: 60 });
+  await expect(input).toBeHidden();
+  const after = (await data(page)).annotations[0];
+  expect(after).toEqual({ ...before, text: 'Blank confirmation\nSecond line' });
+  await page.locator('#undoBtn').click(); expect((await data(page)).annotations[0]).toEqual(before);
+  await page.locator('#redoBtn').click(); expect((await data(page)).annotations[0]).toEqual(after);
+});
+
+test('blank double click retains invalid annotation formulas and commits corrected input', async ({ page }) => {
+  await setup(page); await createText(page);
+  await page.locator('[data-property="annotation-parameter-enabled"]').check();
+  await page.locator('[data-property-action=annotation-attach]').click(); await clickWorld(page, { x: 0, y: 0 });
+  await page.locator('#commandPanel [data-action=finish]').click();
+  const before = (await data(page)).annotations[0];
+  await doubleClickNote(page, 'leader');
+  const input = page.locator('#annotationValueInput');
+  await input.fill('=1 / 0'); await doubleClickWorld(page, { x: 100, y: 60 });
+  await expect(input).toBeVisible(); expect((await data(page)).annotations[0]).toEqual(before);
+  await input.fill('=-3 * 2'); await doubleClickWorld(page, { x: 100, y: 60 });
+  await expect(input).toBeHidden();
+  expect((await data(page)).annotations[0]).toMatchObject({ id: before.id, parameterName: before.parameterName, expression: '-3 * 2' });
+});
