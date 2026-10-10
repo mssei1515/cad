@@ -25,7 +25,7 @@
       const textWidth = Math.max(28 * paddingScale, ...lines.map(line => line.length * fontSize * 0.62));
       const textHeight = fontSize * (1 + (lines.length - 1) * 1.2) + 10 * paddingScale;
       const center = { x: Number(geometry.x) || 0, y: Number(geometry.y) || 0 };
-      const rotation = element.type === "leader" && element.appearanceInheritance ? (style.rotation || 0) + (element.annotationTransformRotation || 0) : Number(element.rotation) || 0;
+      const rotation = element.appearanceInheritance ? (style.rotation || 0) + (element.annotationTransformRotation || 0) : Number(element.rotation) || 0;
       const cos = Math.cos(rotation);
       const sin = Math.sin(rotation);
       const left = style.textAlign === "center" ? -textWidth / 2 : style.textAlign === "right" ? -textWidth : 0;
@@ -76,7 +76,7 @@
         return localX >= layout.left - padding && localX <= layout.left + layout.width + padding
           && localY >= -layout.height / 2 - padding && localY <= layout.height / 2 + padding;
       }
-      const rotation = -(element?.type === "leader" && element.appearanceInheritance ? (effectiveAnnotationStyle(element).rotation || 0) + (element.annotationTransformRotation || 0) : Number(element?.rotation) || 0);
+      const rotation = -(element?.appearanceInheritance ? (effectiveAnnotationStyle(element).rotation || 0) + (element.annotationTransformRotation || 0) : Number(element?.rotation) || 0);
       const dx = x - (Number(geometry?.x) || 0);
       const dy = y - (Number(geometry?.y) || 0);
       const localX = dx * Math.cos(rotation) - dy * Math.sin(rotation) + (Number(geometry?.x) || 0);

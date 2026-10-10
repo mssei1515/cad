@@ -17,7 +17,7 @@
       const constraint = dimension.constraint;
       const sketchId = constraint.sketchId || DEFAULT_SKETCH_ID;
       const sketch = (namespace.sketches || []).find((item) => item.id === sketchId);
-      const kind = constraint.parameterEnabled === true ? (constraint.type === "leader" ? applicationText("引出線", "Leader") : applicationText("自由テキスト", "Free Text")) : isReadOnlyDimension(constraint) ? applicationText("参照寸法", "Reference dimension") : applicationText("拘束寸法", "Driving dimension");
+      const kind = constraint.parameterEnabled === true ? applicationText("注記", "Annotation") : isReadOnlyDimension(constraint) ? applicationText("参照寸法", "Reference dimension") : applicationText("拘束寸法", "Driving dimension");
       return `${kind} / ${sketch?.name || sketchId}`;
     }
 

@@ -7,13 +7,13 @@
     toolbarSvgMarkup, constraintToolbarIcon, sketchTreeGutter, isSketchProjectedGeometry,
     findLineFixedConstraint, blockDefinitionById, geometryInstanceTypeLabel, geometryInstanceBundle,
     resolvedHatchBoundary, hatchPatternTypeLabel, hatchAppearanceForDisplay,
-    isDimensionConstraint, localizedConstraintName, constraintGeometryId, isReadOnlyDimension,
+    isDimensionConstraint = () => false, localizedConstraintName, constraintGeometryId, isReadOnlyDimension,
     constraintIsRedundant, referenceConstraintErrorInfo, sketchTreeObjectSelected, sketchTreeObjectHovered,
-    constraintDirectlyReferencesCanvasSelection, selectedConstraintReferenceElements, activeSketchId }) {
+    constraintDirectlyReferencesCanvasSelection, selectedConstraintReferenceElements, activeSketchId, objectVisible = () => true }) {
     const { ParallelLinesCenterlineConstraint, PointPairCenterlineConstraint, SketchProjectionConstraint } = types;
     function sketchTreeObjectIndex() {
       const model = currentScope();
-      const index = new Map(model.sketches.map((sketch) => [sketch.id, { point: [], line: [], circle: [], arc: [], spline: [], hatch: [], image: [], block: [], instance: [], constraint: [], annotation: [] }]));
+      const index = new Map(model.sketches.map((sketch) => [sketch.id, { point: [], line: [], circle: [], arc: [], spline: [], hatch: [], image: [], block: [], instance: [], dimension: [], constraint: [], annotation: [] }]));
       const group = (sketchId, category) => index.get(sketchId)?.[category];
       for (const point of model.points) if ((isExplicitPoint(point) || isPointUsedByLine(point)) && group(elementSketchId(point), "point")) group(elementSketchId(point), "point").push(point);
       for (const line of model.lines) group(elementSketchId(line), "line")?.push(line);
@@ -24,7 +24,7 @@
       for (const image of model.referenceImages) group(image.sketchId, "image")?.push(image);
       for (const block of model.blockInstances) group(block.sketchId, "block")?.push(block);
       for (const instance of model.geometryInstances) group(instance.sketchId, "instance")?.push(instance);
-      model.constraints.forEach((constraint, modelIndex) => group(constraintSketchId(constraint), "constraint")?.push({ kind: "constraint", constraint, modelIndex }));
+      model.constraints.forEach((constraint, modelIndex) => group(constraintSketchId(constraint), isDimensionConstraint(constraint) ? "dimension" : "constraint")?.push({ kind: "constraint", constraint, modelIndex }));
       for (const point of model.points.filter((item) => item.fixed)) group(elementSketchId(point), "constraint")?.push({ kind: "fixed-point", point });
       for (const annotation of model.annotations) group(annotation.sketchId, "annotation")?.push(annotation);
       return index;
@@ -61,6 +61,7 @@
     }
 
     function sketchTreeObjectRow(category, entry, segments, sketchId) {
+      if (category === "dimension") category = "constraint";
       const model = currentScope();
       const deleteSvg = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3M7 7l1 13h8l1-13"/></svg>';
       let icon = "";
@@ -119,7 +120,7 @@
         if (entry.locked) badges += `<span class="badge">${applicationText("固定", "Locked")}</span>`;
         data += ` data-id="${escapeHtml(entry.id)}"`;
       } else if (category === "annotation") {
-        icon = toolbarSvgMarkup(entry.type === "leader" ? "#annotationLeaderBtn" : "#annotationTextBtn"); primary = entry.id;
+        icon = toolbarSvgMarkup(entry.type === "leader" ? "#annotationLeaderIcon" : "#annotationTextBtn"); primary = entry.id;
         secondary = `${entry.type === "leader" ? applicationText("引出線", "Leader") : applicationText("テキスト", "Text")} ${String(entry.text || "").slice(0, 28)}`;
         data += ` data-id="${escapeHtml(entry.id)}"`;
       } else if (entry.kind === "fixed-point") {
@@ -140,6 +141,12 @@
         if (referenceConstraintErrorInfo(constraint)) badges += `<span class="badge constraint-reference-error-badge">${applicationText("参照エラー", "Reference error")}</span>`;
         action = `<button data-idx="${entry.modelIndex}" class="removeConstraintBtn" title="${applicationText("削除", "Delete")}" aria-label="${applicationText("削除", "Delete")}">${deleteSvg}</button>`;
         data += ` data-constraint-index="${entry.modelIndex}"`;
+      }
+      const deleteClass = { block: "removeBlockBtn", hatch: "removeHatchBtn", instance: "removeInstanceBtn" }[category];
+      if (deleteClass) action = `<button type="button" data-id="${escapeHtml(entry.id)}" class="${deleteClass} icon-delete-btn" title="${applicationText("削除", "Delete")}" aria-label="${applicationText("削除", "Delete")}">${deleteSvg}</button>`;
+      if (["point", "line", "circle", "arc", "spline", "hatch", "block", "instance"].includes(category) || category === "constraint" && entry.constraint && isDimensionConstraint(entry.constraint)) {
+        const visible = objectVisible(category, entry);
+        action = `<button type="button" class="objectVisibilityBtn icon-small-btn" title="${visible ? applicationText("非表示にする", "Hide") : applicationText("表示する", "Show")}" aria-label="${visible ? applicationText("非表示にする", "Hide") : applicationText("表示する", "Show")}" aria-pressed="${visible}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2.5 12s3.5-6 9.5-6 9.5 6 9.5 6-3.5 6-9.5 6-9.5-6-9.5-6Z"/><circle cx="12" cy="12" r="2.6"/>${visible ? "" : '<path d="M4 4l16 16"/>'}</svg></button>${action}`;
       }
       const selected = sketchTreeObjectSelected(category, entry);
       if (currentScope().sketches.find(sketch => sketch.id === sketchId)?.locked) action = action.replaceAll("<button ", "<button disabled ");
@@ -179,7 +186,8 @@
     }
     return Object.freeze({ resolveSelectionEntry, selectedReferenceElements: selectedConstraintReferenceElements, related: constraintDirectlyReferencesCanvasSelection, index: sketchTreeObjectIndex, row: sketchTreeObjectRow,
       summary: sketchConstraintSummaryMarkup, summaryCounts: sketchConstraintSummaryCounts,
-      selected: sketchTreeObjectSelected, hovered: sketchTreeObjectHovered });
+      selected: (category, entry) => sketchTreeObjectSelected(category === "dimension" ? "constraint" : category, entry),
+      hovered: (category, entry) => sketchTreeObjectHovered(category === "dimension" ? "constraint" : category, entry) });
   }
   window.SketchTreeObjects = Object.freeze({ create });
 })();

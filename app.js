@@ -319,6 +319,7 @@
     finishSplineEditSession: (...args) => finishSplineEditSession(...args),
     submitDistanceValue: (...args) => submitDistanceValue(...args),
     submitOffsetValue: (...args) => submitOffsetValue(...args),
+    submitAnnotationValue: () => annotationInputController.finish(),
     cancelPendingCommand: (...args) => cancelPendingCommand(...args),
     isDrawToolMode: (...args) => isDrawToolMode(...args),
     exitDrawMode: (...args) => exitDrawMode(...args),
@@ -636,16 +637,35 @@
   });
 
   const { drawResolvedHatchContent } = window.HatchRenderer.create({ viewport, visibleWorldBounds: () => pngRender?.worldBounds || visibleWorldBounds(), canvasThemeColor, isVisibleValue });
-  const { annotationLeaderDisplayGeometry, annotationTextLayout, annotationTextWorldHeight, drawAnnotationText, drawAnnotationLeader } = window.AnnotationRenderer.create({ ctx, viewport, withCanvasState, annotationDisplayColor, annotationLeaderAnchor, appearanceLineDash, formatValue: formatDisplayNumber, effectiveAnnotationStyle, showLeaderEndHandle: element => !pngRender && !element.blockProjection && element.sketchId === activeSketchId() && (canvasSelection.annotations.includes(element) || canvasHover.current.annotation === element) });
+  const { annotationLeaderDisplayGeometry, annotationTextLayout, annotationTextWorldHeight, annotationTextMetrics, drawAnnotationText, drawAnnotationLeader } = window.AnnotationRenderer.create({ ctx, viewport, withCanvasState, annotationDisplayColor, annotationLeaderAnchor, appearanceLineDash, formatValue: formatDisplayNumber, effectiveAnnotationStyle, showLeaderEndHandle: element => !pngRender && !element.blockProjection && element.sketchId === activeSketchId() && (canvasSelection.annotations.includes(element) || canvasHover.current.annotation === element) });
   const annotationCommand = window.AnnotationCommand.create({
     currentScope: workspace.current, getPending: () => pendingCommand, setPending: value => { pendingCommand = value; },
-    lastPointer: () => lastPointerWorld, viewScale: () => viewport.scale, promptText: (...args) => window.prompt(...args),
+    lastPointer: () => lastPointerWorld, viewScale: () => viewport.scale,
+    annotationTextLayout, annotationLeaderDisplayGeometry, annotationTextMetrics,
+    nextParameterName: () => parameterNamespace.allocateDimensionParameterName({ ...model, parameters: model.parameters.map(item => ({ ...item })), annotations: [...model.annotations] }),
+    validateParameter: draft => {
+      const name = String(draft.parameterName || "").trim(), expression = expressionFromUserInput(draft.expression);
+      const symbols = parameterNamespace.symbolElementsInNamespace(model);
+      parameterNamespace.validateParameterSymbolNames(model.parameters, [...symbols, { parameterName: name }]);
+      const definitions = [...model.parameters.map(item => ({ ...item, kind: "parameter" })),
+        ...symbols.filter(item => !isReadOnlyDimension(item)).map(item => ({ name: item.parameterName, expression: item.expression, kind: "dimension" })),
+        { name, expression, kind: "dimension" }];
+      const values = new Map(symbols.filter(isReadOnlyDimension).map(item => [item.parameterName, item.evaluatedParameterValue]));
+      const value = window.ParameterEngine.evaluateDefinitions(definitions, values).values.get(name);
+      if (!Number.isFinite(value)) throw new Error(applicationText("値を計算できません", "Value could not be evaluated"));
+      return { expression, value };
+    },
+    commitParameter: item => { ensureDimensionParameter(item, model); parameterNamespace.evaluateParameterNamespace(model); },
+    applyStyle: (style, key, value, effective) => appearanceEditing.applyLeaderAppearanceValue(style, key, value, { viewportScale: viewport.scale, effective }),
+    parameterErrorText,
+    selectAnnotation: item => canvasSelection.set("annotations", [item]),
+    canEdit: item => guardSketchEdit(elementSketchId(item), "structure") && !item.blockProjection,
+    prepare: () => { exitDrawMode(); cancelConstraintTargetCommand(""); },
     nextAnnotationId: () => `AN${annotationSeq++}`, activeSketchId, canCreateInActiveSketch, rejectRootSketchCreation,
-    annotationLeaderTargetFromSelection, annotationLeaderTargetFromHit, annotationLeaderAnchor, effectiveAnnotationStyle, setGeometrySelection, clearSelection, cancelPendingCommand,
+    annotationLeaderTargetFromHit, annotationLeaderAnchor, effectiveAnnotationStyle, clearSelection, cancelPendingCommand,
     setHint, updateToolbar, updateUI, draw, recordHistory,
   });
-  const { pushAnnotation, createLeaderAnnotation, handleLeaderAnnotationTargetClick,
-    startLeaderAnnotationPlacement, commitLeaderAnnotationAt, createTextAnnotation, commitTextAnnotationAt } = annotationCommand;
+  const { pushAnnotation } = annotationCommand;
   const referenceImageRenderer = window.ReferenceImageRenderer.create({
     ctx, viewport, withCanvasState, createImage: () => new Image(), onImageLoad: draw, referenceImageCorners,
   });
@@ -1010,6 +1030,19 @@
     recordHistory, setHint, parameterErrorText,
   });
   const commitAnnotationParameterEdit = annotationParameterCommand.commit;
+  const annotationInputController = window.AnnotationInputController.create({
+    document, host: canvas.parentElement, getPending: () => pendingCommand, setPending: value => { pendingCommand = value; },
+    find: id => workspace.current().annotations.find(item => item.id === id),
+    canEdit: item => guardSketchEdit(elementSketchId(item)) && !item.blockProjection,
+    prepare: () => { exitDrawMode(); cancelConstraintTargetCommand(""); cancelPendingCommand(""); annotationDrag.reset(); },
+    select: item => { clearSelection(); canvasSelection.set("annotations", [item]); },
+    layout: item => { const box = annotationTextLayout(item) || annotationTextMetrics(item, item.type === "leader" ? annotationLeaderDisplayGeometry(item) : item); return { ...box, screenFontSize: box.fontSize * viewport.scale }; },
+    toScreen: worldToCanvasScreen, expressionInputValue, applicationText,
+    commit: (item, value) => {
+      if (item.parameterEnabled) return commitAnnotationParameterEdit(item, "annotation-expression", value);
+      item.text = value; recordHistory("注記変更"); return true;
+    }, draw, updateUI,
+  });
 
   function guardDimensionSymbolDeletion(constraints, namespace = currentParameterNamespace()) {
     const { removedNames, dependents } = parameterNamespace.symbolDeletionDependents(constraints, namespace);
@@ -1849,6 +1882,7 @@
 
   const documentFileCommand = window.DocumentFileCommand.create({
     window, document, fileSession, choiceDialog, applicationText,
+    bookmarks: window.DocumentBookmarks.create({ indexedDB: window.indexedDB, crypto: window.crypto }),
     isEditingBlock: () => Boolean(blockEditor.current), getDocumentName: () => documentModel.documentName,
     serializeModel, markDocumentFileCheckpoint, updateDocumentNameUI, setHint, log,
     applyLoadedDocument: (data, fileName) => {
@@ -2538,7 +2572,7 @@
   }
 
   const clipboardPayload = window.ClipboardPayload.create({
-    blockProjectionBundle, blockProjectionLocalId, resolveGeometryRef, constraintGraphNodes, applicationText,
+    geometryInstanceBundle, geometryInstanceSourcePoints, serializeGeometryInstance, blockProjectionBundle, blockProjectionLocalId, resolveGeometryRef, constraintGraphNodes, applicationText,
     serializeConstraint: constraint => decorateSerializedConstraint(serializeConstraint(constraint), constraint),
   });
   function copyableSelectionPayload() {
@@ -2550,7 +2584,7 @@
 
   function clipboardPayloadCount(payload = geometryClipboard) {
     if (!payload) return 0;
-    return payload.points.length + payload.lines.length + payload.circles.length + payload.arcs.length + (payload.splines?.length || 0) + payload.blockInstances.length + (payload.hatches?.length || 0) + (payload.annotations?.length || 0) + (payload.referenceImages?.length || 0);
+    return payload.points.length + payload.lines.length + payload.circles.length + payload.arcs.length + (payload.splines?.length || 0) + payload.blockInstances.length + (payload.hatches?.length || 0) + (payload.annotations?.length || 0) + (payload.referenceImages?.length || 0) + (payload.geometryInstances?.length || 0);
   }
 
   function copySelectionToClipboard(options = {}) {
@@ -2574,7 +2608,7 @@
     return true;
   }
 
-  const { remapClipboardValue, translatedClipboardConstraintData, mapClipboardBlockProjection } =
+  const { remapGeometryRef, copiedGeometryInstance, copiedFreeOrigin, translatedClipboardConstraintData, mapClipboardBlockProjection } =
     window.ClipboardTransfer.create({ blockProjectionBundle, blockProjectionLocalId });
 
   function serializedDimensionExpressionValue(data) {
@@ -2613,11 +2647,12 @@
       splines: model.splines.length,
       constraints: model.constraints.length,
       blockInstances: model.blockInstances.length,
+      geometryInstances: model.geometryInstances.length,
       annotations: model.annotations.length,
       hatches: model.hatches.length,
       referenceImages: model.referenceImages.length,
     };
-    const initialSequences = { ...geometryIds.snapshot(), annotationSeq, hatchSeq, referenceImageSeq, nextHatchIndex: model.nextHatchIndex, blockInstanceSeq, nextDimensionParameterIndex: model.nextDimensionParameterIndex };
+    const initialSequences = { ...geometryIds.snapshot(), annotationSeq, hatchSeq, referenceImageSeq, sketchProjectionInstanceSeq, mirrorInstanceSeq, patternInstanceSeq, freeInstanceSeq, nextHatchIndex: model.nextHatchIndex, blockInstanceSeq, nextDimensionParameterIndex: model.nextDimensionParameterIndex };
 
     try {
       const idMap = new Map();
@@ -2690,6 +2725,25 @@
       }
       if (pastedBlockInstances.length > 0) invalidateBlockProjectionCache();
       payload.blockInstances.forEach((source, index) => mapClipboardBlockProjection(source, pastedBlockInstances[index], idMap, pointById, lineById, primitiveById));
+      const copiedInstances = payload.geometryInstances || [];
+      for (const source of payload.hatches || []) idMap.set(source.id, 'H' + hatchSeq++);
+      for (const source of copiedInstances) {
+        const id = source.type === 'free' ? 'FI' + freeInstanceSeq++ : source.type === 'mirror' ? 'MI' + mirrorInstanceSeq++ : source.type === 'pattern' ? 'PI' + patternInstanceSeq++ : 'SPI' + sketchProjectionInstanceSeq++;
+        idMap.set(source.id, id);
+      }
+      const projectionRecords = copiedInstances.flatMap(source => Object.values(source.projection || {}).flat());
+      // Resolve legacy output IDs and multi-level instance paths before rewriting references.
+      for (let pass = 0; pass <= copiedInstances.length; pass++) {
+        for (const record of projectionRecords) idMap.set(record.id, record.path.flatMap(id => (idMap.get(id) || id).split('@')).join('@'));
+      }
+      const destinationNamespace = currentBlockDefinitionScopeId() ? 'block:' + currentBlockDefinitionScopeId() : 'document';
+      if (payload.parameterNamespaceKey !== destinationNamespace && copiedInstances.some(source =>
+        [...source.sources, source.axis, source.direction].filter(Boolean).some(ref => !idMap.has(ref.path.join('@')) && !idMap.has(ref.path[0])))) {
+        throw new Error(applicationText('別の名前空間へ派生インスタンスを貼り付けるには参照先も選択してください', 'Also select referenced geometry to paste derived instances into another namespace'));
+      }
+      const pastedGeometryInstances = copiedInstances.map(source => normalizeGeometryInstance(copiedGeometryInstance(source, idMap, targetSketchId, dx, dy)));
+      model.geometryInstances.push(...pastedGeometryInstances);
+      invalidateBlockProjectionCache();
       const pastedAnnotations = [];
       for (const source of payload.annotations || []) {
         const annotation = serializeAnnotation(source);
@@ -2698,7 +2752,7 @@
         annotation.x += dx;
         annotation.y += dy;
         for (const key of ["start", "elbow", "end"]) if (annotation[key]) annotation[key] = { x: annotation[key].x + dx, y: annotation[key].y + dy };
-        if (annotation.geometryRef) annotation.geometryRef = remapClipboardValue(annotation.geometryRef, idMap);
+        if (annotation.geometryRef) annotation.geometryRef = remapGeometryRef(annotation.geometryRef, idMap);
         model.annotations.push(annotation);
         pastedAnnotations.push(annotation);
         idMap.set(source.id, annotation.id);
@@ -2712,7 +2766,7 @@
         if (!boundaryLoops) throw new Error(`${source.id}: ${applicationText("塗りつぶし境界を書き換えられません", "Could not rewrite fill boundary")}`);
         const hatch = {
           ...serializeHatch(source),
-          id: `H${hatchSeq++}`,
+          id: idMap.get(source.id),
           sketchId: targetSketchId,
           seed: { x: Number(source.seed?.x) + dx, y: Number(source.seed?.y) + dy },
           boundaryLoops,
@@ -2727,6 +2781,30 @@
       }));
       model.referenceImages.push(...pastedImages);
 
+      invalidateBlockProjectionCache();
+      // Re-evaluate from upstream to downstream so projected sources do not add a false offset.
+      for (let pass = 0; pass < pastedGeometryInstances.length; pass++) {
+        let changed = false;
+        pastedGeometryInstances.forEach((instance, index) => {
+          if (instance.type !== 'free') return;
+          const origin = copiedFreeOrigin(copiedInstances[index], instance, ref => {
+            const item = resolveGeometryRef(ref);
+            const points = geometryInstanceSourcePoints(item);
+            return points.length ? points : item?.seed ? [item.seed] : [];
+          });
+          if (Math.abs(origin.x - instance.origin.x) > 1e-8 || Math.abs(origin.y - instance.origin.y) > 1e-8) {
+            instance.origin = origin; changed = true;
+          }
+        });
+        if (!changed) break;
+      }
+      for (const instance of pastedGeometryInstances) {
+        const bundle = geometryInstanceBundle(instance);
+        if (!bundle.valid) throw new Error(instance.id + ': ' + bundle.reason + ' ' + applicationText('必要な参照先も選択してください', 'Also select required referenced geometry'));
+        for (const item of bundle.points) pointById.set(item.id, item);
+        for (const item of bundle.lines) lineById.set(item.id, item);
+        for (const item of [...bundle.circles, ...bundle.arcs, ...bundle.splines]) primitiveById.set(item.id, item);
+      }
       const targetNamespaceKey = currentBlockDefinitionScopeId() ? `block:${currentBlockDefinitionScopeId()}` : "document";
       const sameNamespace = payload.parameterNamespaceKey === targetNamespaceKey;
       const copiedDimensionNames = new Map();
@@ -2778,6 +2856,7 @@
       canvasSelection.set("blockInstances", pastedBlockInstances);
       canvasSelection.set("annotations", (selectedIds.annotations || []).map((id) => pastedAnnotations.find((annotation) => annotation.id === idMap.get(id))).filter(Boolean));
       canvasSelection.set("hatches", (selectedIds.hatches || []).map((id) => pastedHatches.find((hatch) => hatch.id === idMap.get(id))).filter(Boolean));
+      canvasSelection.set("geometryInstances", pastedGeometryInstances);
       canvasSelection.set("referenceImages", pastedImages);
       payload.pasteCount = pasteNumber;
       mode = "select";
@@ -2792,11 +2871,13 @@
       model.splines.length = initialLengths.splines;
       model.constraints.length = initialLengths.constraints;
       model.blockInstances.length = initialLengths.blockInstances;
+      model.geometryInstances.length = initialLengths.geometryInstances;
       model.annotations.length = initialLengths.annotations;
       model.hatches.length = initialLengths.hatches;
       model.referenceImages.length = initialLengths.referenceImages;
       geometryIds.restore(initialSequences);
       blockInstanceSeq = initialSequences.blockInstanceSeq;
+      ({ sketchProjectionInstanceSeq, mirrorInstanceSeq, patternInstanceSeq, freeInstanceSeq } = initialSequences);
       annotationSeq = initialSequences.annotationSeq;
       hatchSeq = initialSequences.hatchSeq;
       referenceImageSeq = initialSequences.referenceImageSeq;
@@ -2851,7 +2932,7 @@
   const rectangleSelectionQuery = window.RectangleSelectionQuery.create({
     currentScope: workspace.current, selectableSketchElement, isExplicitPoint, isReferencePoint, pointInRect,
     lineIntersectsRect, bboxInRect, lineBBox, isVisibleSketchElement, primitiveBBox, bboxIntersectsRect,
-    arcSamplePoints, viewScale: () => viewport.scale, isEditableSketchId: id => id === activeSketchId(), isVisibleSketchId, blockProjectionBundle, mergeBounds,
+    arcSamplePoints, viewScale: () => viewport.scale, isEditableSketchId: id => id === activeSketchId(), isVisibleSketchId, blockProjectionBundle, geometryInstanceBundle, mergeBounds,
     splineBBox, annotationBounds, resolvedLoopBounds, resolvedHatchBoundary, activeSketchId,
     hatchAppearanceForDisplay, referenceImageBounds, isVisibleValue,
     dimensionSelectionBounds: constraint => {
@@ -3001,6 +3082,7 @@
   function draw() {
     if (pngExportCommand?.active && !pngExportCommand.busy && (pendingCommand?.type !== "png-export" || mode !== "png-export")) pngExportCommand.cancel();
     commandPanel?.update();
+    annotationInputController.sync();
     commandPanelSelectedItem = derivedPanel?.selectedItem() || null;
     if (!interactionProfiler.active) return drawUnprofiled();
     return profileInteractionWork("draw", () => drawUnprofiled());
@@ -3040,8 +3122,9 @@
     drawDimensions();
     drawDimensionPreview();
     drawAnnotations();
-    const leaderPreview = annotationCommand.leaderPreview();
-    if (leaderPreview) drawAnnotationLeader(leaderPreview, true);
+    const annotationPreview = annotationCommand.preview();
+    if (annotationPreview?.type === "leader") drawAnnotationLeader(annotationPreview, true);
+    else if (annotationPreview) drawAnnotationText(annotationPreview, "#2563eb");
     drawTemporaryLine();
     drawCenterlinePreview();
     drawRectanglePreview();
@@ -3213,7 +3296,7 @@
   }
 
   function effectiveAnnotationStyle(element) {
-    if (element?.type !== "leader") return normalizeAnnotationStyle(element?.style);
+    if (element?.type !== "leader" && !element?.appearanceInheritance) return normalizeAnnotationStyle(element?.style);
     const source = element.localElement || element;
     const sketches = element.blockDefinition?.sketches || model.sketches;
     const sketch = sketches.find(item => item.id === source.sketchId);
@@ -3221,7 +3304,7 @@
       ...normalizeAnnotationStyle(source.style), ...window.Appearance.annotationDisplaySettings(source.style), rotation: Number(source.rotation) || 0
     };
     const style = window.Appearance.resolveLeaderAppearance(documentModel.defaultLeaderAppearance, documentModel.defaultTerminatorAppearance, sketch?.leaderAppearance, direct);
-    Object.assign(style, { prefix: String(source.style?.prefix || ""), suffix: String(source.style?.suffix || "") });
+    Object.assign(style, { precision: normalizeAnnotationStyle(source.style).precision, prefix: String(source.style?.prefix || ""), suffix: String(source.style?.suffix || "") });
     for (const override of element.blockAppearanceOverrides || []) {
       const normalized = normalizeAppearance(override);
       if (normalized.color) style.color = normalized.color;
@@ -3354,7 +3437,11 @@
   }
 
   function selectedVisibilityTargets() {
-    if (canvasSelection.inspection || canvasSelection.sketchId) return [];
+    if (canvasSelection.inspection) return [];
+    if (canvasSelection.sketchId) {
+      const sketch = sketchById(canvasSelection.sketchId);
+      return sketch && !isRootSketch(sketch) && sketch.id !== activeSketchId() ? [{ kind: "sketch", item: sketch }] : [];
+    }
     return [
       ...selectedGeometryItems().filter(item => !item.blockProjection).map(item => ({ kind: "geometry", item })),
       ...canvasSelection.blockInstances.map(item => ({ kind: "block", item })),
@@ -3362,20 +3449,40 @@
       ...canvasSelection.annotations.map(item => ({ kind: "annotation", item })),
       ...canvasSelection.hatches.map(item => ({ kind: "hatch", item })),
       ...canvasSelection.referenceImages.map(item => ({ kind: "referenceImage", item })),
+      ...[...new Set([...canvasSelection.dimensionConstraints, effectiveSelectedConstraint()].filter(item => item && isDimensionConstraint(item)))].map(item => ({ kind: "constraint", item })),
     ];
   }
 
   function selectionVisibilityIsHidden(targets) {
     return targets.length > 0 && targets.every(target => {
+      if (target.kind === "sketch") return target.item.visible === false;
       if (target.kind !== "geometryInstance") return multiplePropertyAppearance(target).visible === false;
       if (typeof target.item.appearanceOverride?.visible === "boolean") return !target.item.appearanceOverride.visible;
       const bundle = geometryInstanceBundle(target.item);
       const geometry = [...bundle.points, ...bundle.lines, ...bundle.circles, ...bundle.arcs, ...bundle.splines];
-      if (geometry.length) return geometry.every(item => effectiveAppearanceForElement(item).visible === false);
+      const appearances = [...geometry.map(effectiveAppearanceForElement), ...(bundle.hatches || []).map(hatchAppearanceForDisplay)];
+      if (appearances.length) return appearances.every(appearance => appearance.visible === false);
       return resolveGeometryAppearance({ defaults: documentModel.defaultAppearance,
         sketchAppearance: sketchById(target.item.sketchId)?.appearance,
         overrides: [target.item.appearanceOverride] }).visible === false;
     });
+  }
+
+  function toggleSelectedVisibility() {
+    if (!isGeometryMode()) return;
+    const targets = selectedVisibilityTargets();
+    if (targets.length === 0) return;
+    if (targets[0].kind === "sketch") return toggleSketchVisibility(targets[0].item.id);
+    if (!guardSelectionEdit()) return;
+    const visible = selectionVisibilityIsHidden(targets);
+    const ordinaryTargets = targets.filter(target => target.kind !== "geometryInstance");
+    if (ordinaryTargets.length) applyMultipleProperty({ kind: "multiple", items: ordinaryTargets }, "visible", visible, { commit: false });
+    for (const target of targets.filter(target => target.kind === "geometryInstance")) {
+      appearancePropertyCommand.apply(target, { category: "appearance", key: "visible", value: String(visible) }, { commit: false });
+    }
+    recordHistory("選択図形の表示切替");
+    updateUI();
+    draw();
   }
 
   function updateToolbar() {
@@ -3403,8 +3510,7 @@
       toolMirror: geometryMode && mode === "mirror-axis",
       toolPattern: geometryMode && mode === "pattern-direction",
       toolHatch: geometryMode && (mode === "hatch" || mode === "hatch-repair"),
-      annotationLeaderBtn: Boolean(pendingCommand?.type?.startsWith("annotation-leader")),
-      annotationTextBtn: pendingCommand?.type === "annotation-text-place",
+      annotationTextBtn: Boolean(pendingCommand?.annotationDraft),
     };
     for (const [id, active] of Object.entries(states)) {
       const button = document.getElementById(id);
@@ -3422,7 +3528,8 @@
     const visibilityTargets = selectedVisibilityTargets();
     if (visibilityButton) {
       const hidden = selectionVisibilityIsHidden(visibilityTargets);
-      visibilityButton.disabled = !geometryMode || visibilityTargets.length === 0;
+      visibilityButton.disabled = !geometryMode || visibilityTargets.length === 0 || visibilityTargets.some(target => target.kind !== "sketch"
+        && !canEditSketch(target.kind === "constraint" ? constraintSketchId(target.item) : elementSketchId(target.item)));
       visibilityButton.classList.toggle("active", hidden);
       visibilityButton.setAttribute("aria-pressed", String(hidden));
     }
@@ -3966,6 +4073,7 @@
   function cancelPendingCommand(message = "コマンドをキャンセルしました") {
     geometryInstanceCommand.clearPlacement();
     if (!pendingCommand) return;
+    if (pendingCommand.annotationDraft) { annotationCommand.cancel(); return; }
     if (pendingCommand.type === "png-export") { pngExportCommand.cancel(); return; }
     if (pendingCommand.type === "offset-value") {
       offsetSelection.reset();
@@ -4337,6 +4445,11 @@
 
   const sketchTreeObjects = window.SketchTreeObjects.create({
     sidebarGeometryItem, activeSketchId,
+    objectVisible: (category, entry) => !selectionVisibilityIsHidden([{
+      kind: category === "constraint" ? "constraint" : ["point", "line", "circle", "arc", "spline"].includes(category) ? "geometry"
+        : category === "instance" ? "geometryInstance" : category,
+      item: category === "constraint" ? entry.constraint : entry,
+    }]),
     currentScope: () => model, getLanguage: () => applicationSettings.language,
     ensureAnalysis: constraintAnalysis.ensure, types: window.GeometrySolver,
     isExplicitPoint, isPointUsedByLine, elementSketchId, constraintSketchId,
@@ -4363,7 +4476,7 @@
   const sketchTreeController = window.SketchTreeController.create({
     currentScope: () => model, activeSketchId, setActiveSketch, clearSelection, canvasSelection,
     sidebarGeometryItem, toggleBlockInstanceSelection, targetFromConstraint, updateUI, draw,
-    sketchTreeView, updateSketchUI, toggleSketchVisibility, toggleSketchLock, guardSketchEdit, selectionSketchId, renameSketch, deleteSketch, deleteElements,
+    sketchTreeView, updateSketchUI, toggleSketchVisibility, toggleSketchLock, guardSketchEdit, selectionSketchId, renameSketch, deleteSketch, deleteElements, deleteCurrentSelection, toggleSelectedVisibility,
     hover: { canvasHover, setSidebarHover, clearSidebarHover, sidebarHoverElementsForItem, sidebarHoverElementsForConstraint, elementSketchId, ROOT_SKETCH_ID },
     resolveSelectionEntry: sketchTreeObjects.resolveSelectionEntry,
     move: { active: () => sketchMoveCommand.active, choose: sketchMoveCommand.choose, commit: sketchMoveCommand.commit, cancel: sketchMoveCommand.cancel },
@@ -4444,7 +4557,8 @@
 
   function focusedExpressionInputContext() {
     const input = document.activeElement;
-    if (!(input instanceof HTMLInputElement) || input.readOnly || input.disabled) return null;
+    if (!(input instanceof HTMLInputElement || input instanceof HTMLTextAreaElement) || input.readOnly || input.disabled) return null;
+    if (input.matches('#commandPanel [data-setting="expression"]') || input.id === "annotationValueInput" && input.dataset.expression === "true") return { input, namespace: model };
     if (input === dimensionValueInput && pendingCommand?.type === "distance-value") return { input, namespace: model };
     if (input.matches('#propertiesPanel [data-property="constraint-expression"], #propertiesPanel [data-property="annotation-expression"]')) return { input, namespace: model };
     const parameterExpression = input.matches('[data-parameter-field="expression"], [data-dimension-field="expression"]');
@@ -4474,6 +4588,14 @@
     input.value = `${value.slice(0, start)}${insertion}${value.slice(end)}`;
     const caret = start + insertion.length;
     input.dispatchEvent(new Event("input", { bubbles: true }));
+    // Programmatic insertion alone does not make the browser emit change on blur.
+    let changed = false;
+    const onChange = () => { changed = true; };
+    input.addEventListener("change", onChange, { once: true });
+    input.addEventListener("blur", () => {
+      if (!changed && input.isConnected) input.dispatchEvent(new Event("change", { bubbles: true }));
+      input.removeEventListener("change", onChange);
+    }, { once: true });
     input.focus({ preventScroll: true });
     input.setSelectionRange(caret, caret);
   }
@@ -4498,6 +4620,24 @@
     setHint(applicationSettings.language === "en"
       ? `Inserted ${dimensionHit.constraint.parameterName}.`
       : `${dimensionHit.constraint.parameterName} を挿入しました`);
+    return true;
+  }
+
+  function insertClickedAnnotationParameter(event, annotationHit) {
+    const context = focusedExpressionInputContext();
+    const item = annotationHit?.element;
+    if (!context || !item?.parameterEnabled || !item.parameterName || !model.annotations.includes(item)) return false;
+    event.preventDefault();
+    event.stopPropagation();
+    if (context.namespace !== model) {
+      const message = applicationText("表示中のCanvasと異なる名前空間のため、この注記は参照できません", "This annotation cannot be referenced because the canvas shows a different namespace.");
+      setParameterDialogError(message);
+      setHint(message, "error");
+      return true;
+    }
+    insertIdentifierIntoExpressionInput(context.input, item.parameterName);
+    setParameterDialogError("");
+    setHint(applicationSettings.language === "en" ? `Inserted ${item.parameterName}.` : `${item.parameterName} を挿入しました`);
     return true;
   }
 
@@ -4590,7 +4730,7 @@
     setPlacementRotationLocked: blockPlacementCommand.setRotationLocked,
     setPlacementSketchIds: blockPlacementCommand.setEnabledSketchIds,
     setBlockInstanceRotationLocked, setBlockInstanceEnabledSketchIds, setBlockInstanceOrthogonalRotation,
-    startInstanceSourceEdit, startReferenceImageCalibration, startHatchBoundaryRepair,
+    annotationCommand, startInstanceSourceEdit, startReferenceImageCalibration, startHatchBoundaryRepair,
     startSplineEdit: spline => splineEditing.activate(spline), openAppearanceColorPalette,
   });
   const { input: handlePropertiesInput, change: handlePropertiesChange, click: handlePropertiesClick } = propertiesController;
@@ -5981,6 +6121,7 @@
   const annotationCommandInput = window.AnnotationCommandInput.create({
     getMode: () => mode, getPending: () => pendingCommand, getPendingConstraint: () => pendingConstraintCommand,
     annotationCommand, canvasSelection, clearSelection, annotationDrag, updateUI, draw,
+    releasePanelFocus: () => { if (document.activeElement?.closest("#commandPanel")) document.activeElement.blur(); },
   });
   const constraintCommandInput = window.ConstraintCommandInput.create({
     canDragDimensionGroup: hit => Boolean(selectedDimensionLineGroup(hit.constraint)),
@@ -6048,11 +6189,13 @@
         return false;
       },
       activation: { selection: canvasSelection, finalizeSpline: finalizeSplineFromDoubleClick, submitOffset: submitOffsetValue,
-        startDimensionEdit: startDimensionEditInput, startDistanceValue: startDistanceValueInput, submitDistance: submitDistanceValue,
+        startAnnotationEdit: annotationInputController.start, startDimensionEdit: startDimensionEditInput, startDistanceValue: startDistanceValueInput, submitDistance: submitDistanceValue,
         constraintDoubleClick: handleConstraintTargetDoubleClick, enterBlock: enterBlockDefinitionEdit, beginSplineEdit: beginSplineEditFromDoubleClick },
       query: canvasPressQuery, worldPoint: canvasPoint, screenPoint: canvasScreenPoint,
       closeContextMenu: closeCanvasContextMenu, insertDimensionParameter: insertClickedDimensionParameter,
       referenceDimensionAt: point => focusedExpressionInputContext() ? hitDimension(point.x, point.y, { activeOnly: false }) : null,
+      insertAnnotationParameter: insertClickedAnnotationParameter,
+      referenceAnnotationAt: point => focusedExpressionInputContext() ? hitAnnotationElement(point.x, point.y, { activeOnly: false }) : null,
       commitHatch: commitHatchAt, calibrateImage: handleReferenceImageCalibrationClick,
       placeFilletRadius: submitFilletRadiusPlacement, placeBlock: handleBlockPlacementClick, blankGesture: blankCanvasGesture,
       inputs: { instance: instanceCommandInput, annotation: annotationCommandInput, constraint: constraintCommandInput,
@@ -6096,7 +6239,7 @@
     shortcuts: { save: saveJot2DFile, saveAs: saveJot2DFileAs, copy: copySelectionToClipboard,
       paste: pasteGeometryClipboard, nativePaste: true, nativeCopy: true, undo: undoHistory, redo: redoHistory },
     operations: { getMode: () => mode, isGeometryMode, finishSources: finishInstanceSourceEdit,
-      finishSpline: finalizeSplineCreation, finishProjection: commitSketchProjectionCommand, finishHatch: hatchCommand.finish,
+      annotation: annotationCommand, finishSpline: finalizeSplineCreation, finishProjection: commitSketchProjectionCommand, finishHatch: hatchCommand.finish,
       finishInstance: () => geometryInstanceCommand.finish(), removeSplinePoint: removeLastSplineInputPoint,
       offset: offsetCommand, getPointer: () => lastPointerWorld, deleteSelection: deleteCurrentSelection,
       completeLineLength: completePendingDimensionLineLength, cancel: cancelKeyboardOperation },
@@ -6108,21 +6251,7 @@
 
   document.getElementById("undoBtn")?.addEventListener("click", undoHistory);
   document.getElementById("redoBtn")?.addEventListener("click", redoHistory);
-  document.getElementById("selectionVisibilityBtn")?.addEventListener("click", () => {
-    if (!isGeometryMode()) return;
-    if (!guardSelectionEdit()) return;
-    const targets = selectedVisibilityTargets();
-    if (targets.length === 0) return;
-    const visible = selectionVisibilityIsHidden(targets);
-    const ordinaryTargets = targets.filter(target => target.kind !== "geometryInstance");
-    if (ordinaryTargets.length) applyMultipleProperty({ kind: "multiple", items: ordinaryTargets }, "visible", visible, { commit: false });
-    for (const target of targets.filter(target => target.kind === "geometryInstance")) {
-      appearancePropertyCommand.apply(target, { category: "appearance", key: "visible", value: String(visible) }, { commit: false });
-    }
-    recordHistory("選択図形の表示切替");
-    updateUI();
-    draw();
-  });
+  document.getElementById("selectionVisibilityBtn")?.addEventListener("click", toggleSelectedVisibility);
   document.getElementById("deleteSelectionBtn")?.addEventListener("click", () => {
     if (!isGeometryMode()) return;
     if (deleteCurrentSelection()) {
@@ -6130,8 +6259,7 @@
       draw();
     }
   });
-  document.getElementById("annotationLeaderBtn")?.addEventListener("click", createLeaderAnnotation);
-  document.getElementById("annotationTextBtn")?.addEventListener("click", createTextAnnotation);
+  document.getElementById("annotationTextBtn")?.addEventListener("click", () => annotationCommand.start());
   document.getElementById("constraintStatusViewBtn")?.addEventListener("click", () => {
     constraintStatusView.toggle();
   });
@@ -6202,6 +6330,7 @@
     const point = canvasPoint(event);
     const hit = hitDimension(point.x, point.y, { activeOnly: false });
     if (hit) insertClickedDimensionParameter(event, hit);
+    else insertClickedAnnotationParameter(event, hitAnnotationElement(point.x, point.y, { activeOnly: false }));
   }
 
   const applicationMenus = window.ApplicationMenus.create({ document, window, activateTool: id => document.getElementById(id)?.click() });
@@ -6387,6 +6516,8 @@
   document.getElementById("saveAsBtn")?.addEventListener("click", () => void saveJot2DFileAs());
   document.getElementById("importBtn").addEventListener("click", () => void openJot2DFile());
   document.getElementById("documentFileInput")?.addEventListener("change", documentFileCommand.fileInputChanged);
+  document.getElementById("copyDocumentLinkBtn")?.addEventListener("click", () => void documentFileCommand.copyDocumentLink());
+  document.getElementById("openDocumentLinkBtn")?.addEventListener("click", () => void documentFileCommand.openLinkedDocument());
   document.getElementById("dxfImportBtn").addEventListener("click", () => {
     flushScheduledCanvasPointerMove();
     if (fileSession.busy || !canImportDxf()) {
@@ -9018,7 +9149,8 @@
         draw();
         return {
           style: structuredClone(style),
-          rotation: Number(annotation.rotation) || 0,
+          rotation: annotation.appearanceInheritance ? style.rotation || 0 : Number(annotation.rotation) || 0,
+          textMetrics: annotationTextMetrics(annotation, annotationTextLayout(annotation) || (annotation.type === "leader" ? annotationLeaderDisplayGeometry(annotation) : annotation)),
           screenTextHeight: annotationTextWorldHeight(style) * viewport.scale,
           screenTerminatorSize: style.terminatorSize * ANNOTATION_SCREEN_PX_PER_MM * window.Appearance.annotationDisplayFactor(style, viewport.scale),
           textLayout: annotationTextLayout(annotation),
@@ -10808,12 +10940,13 @@
   const hatchPanel = window.HatchCommandPanel.create({ command: hatchCommand, getMode: () => mode, applicationText, formatDisplayNumber,
     cancel: () => { exitDrawMode(); updateUI({ refreshAnalysis: false }); draw(); },
   });
-  const currentCommandPanel = () => ["hatch", "hatch-repair"].includes(mode) ? hatchPanel : derivedPanel;
+  const annotationPanel = window.AnnotationCommandPanel.create({ command: annotationCommand, applicationText, effectiveStyle: item => effectiveAnnotationStyle({ ...item, sketchId: activeSketchId() }) });
+  const currentCommandPanel = () => annotationCommand.active ? annotationPanel : ["hatch", "hatch-repair"].includes(mode) ? hatchPanel : derivedPanel;
   commandPanel = window.CommandPanel.create({ document, host: canvas.parentElement, ...derivedPanel,
     readState: () => pngExportCommand.active ? pngExportCommand.readState() : currentCommandPanel().readState(),
     onAction: action => pngExportCommand.active ? pngExportCommand.onAction(action) : currentCommandPanel().onAction(action),
-    onSelect: (key, index) => currentCommandPanel().onSelect(key, index),
-    onRemove: (key, index) => currentCommandPanel().onRemove(key, index),
+    onSelect: (key, index) => currentCommandPanel().onSelect?.(key, index),
+    onRemove: (key, index) => currentCommandPanel().onRemove?.(key, index),
     onSetting: (key, value) => pngExportCommand.active ? pngExportCommand.onSetting(key, value) : currentCommandPanel().onSetting(key, value),
   });
 
@@ -10831,4 +10964,5 @@
   resetHistory("起動");
   markDocumentFileCheckpoint("new");
   window.addEventListener("beforeunload", documentFileCommand.beforeUnload);
+  void documentFileCommand.openStartupDocument();
 })();

@@ -12,7 +12,7 @@ function fixture() {
     buttons.set(id, value); return value;
   };
   const fixed = button('fixPointBtn'), distance = button('', 'distance');
-  for (const id of ['toolLine', 'toolSpline', 'toolFillet', 'annotationLeaderBtn']) button(id);
+  for (const id of ['toolLine', 'toolSpline', 'toolFillet', 'annotationTextBtn']) button(id);
   const canvas = { dataset: {}, style: { setProperty: (name, value) => writes.push({ name, value }) }, classList: { add: value => classes.add(value) } };
   const cursor = sandbox.window.CommandCursor.create({ canvas, document: { getElementById: id => buttons.get(id) || null }, fixPointBtn: fixed, constraintButtons: [distance] });
   return { cursor, canvas, writes, classes, buttons };
@@ -24,7 +24,7 @@ test('fixed and pending commands take precedence over drawing modes', () => {
   f.cursor.update({ pendingType: 'distance-value', mode: 'line' });
   assert.equal(f.canvas.dataset.commandCursorSource, 'constraint:distance');
   f.cursor.update({ pendingType: 'annotation-leader-place', mode: 'line' });
-  assert.equal(f.canvas.dataset.commandCursorSource, 'annotationLeaderBtn');
+  assert.equal(f.canvas.dataset.commandCursorSource, 'annotationTextBtn');
   f.cursor.update({ splineEditing: true, mode: 'line' });
   assert.equal(f.canvas.dataset.commandCursorSource, 'toolSpline');
 });

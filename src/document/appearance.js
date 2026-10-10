@@ -130,9 +130,10 @@
   }
 
   function annotationStoredStyle(element) {
-    if (element.type === "leader" && element.appearanceInheritance === true) {
+    if (element.appearanceInheritance === true) {
       const result = normalizeLeaderAppearance(element.style);
       for (const key of ["prefix", "suffix"]) if (Object.hasOwn(element.style || {}, key)) result[key] = String(element.style[key] || "");
+      if (Object.hasOwn(element.style || {}, "precision")) result.precision = normalizeAnnotationStyle(element.style).precision;
       return result;
     }
     return normalizeAnnotationStyle(element.style);
@@ -261,6 +262,8 @@
           : DEFAULT_ANNOTATION_STYLE.textHeight,
       prefix: String(source.prefix || ""),
       suffix: String(source.suffix || ""),
+      ...(Object.hasOwn(source, "precision") ? { precision: source.precision == null || source.precision === "" || !Number.isFinite(Number(source.precision))
+        ? null : Math.max(0, Math.min(10, Math.round(Number(source.precision)))) } : {}),
       fontFamily,
       bold: source.bold === true || source.fontWeight === "bold" || Number(source.fontWeight) >= 600,
       italic: source.italic === true || source.fontStyle === "italic",

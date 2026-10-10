@@ -223,33 +223,9 @@
 
     function annotationAppearancePropertyRows(item) {
       const style = effectiveAnnotationStyle(item);
-      if (item.type === "leader") {
-        const direct = item.appearanceInheritance ? item.style : { ...style, rotation: Number(item.rotation) || 0 };
-        return `<div class="property-row"><label for="annotationVisible">${applicationText("表示", "Visible")}</label><input id="annotationVisible" data-property="annotation-visible" type="checkbox" ${item.visible !== false ? "checked" : ""}></div>` + leaderAppearancePropertyRows(direct, style);
-      }
-      const color = colorPickerValue(style.color);
-      const option = (value, label, selected) => `<option value="${value}" ${selected ? "selected" : ""}>${label}</option>`;
-      const fontOptions = [
-        option("sans-serif", applicationText("ゴシック体", "Sans serif"), style.fontFamily === "sans-serif"),
-        option("serif", applicationText("明朝体", "Serif"), style.fontFamily === "serif"),
-        option("monospace", applicationText("等幅", "Monospace"), style.fontFamily === "monospace"),
-      ].join("");
-      const alignOptions = [
-        option("left", applicationText("左揃え", "Left"), style.textAlign === "left"),
-        option("center", applicationText("中央揃え", "Center"), style.textAlign === "center"),
-        option("right", applicationText("右揃え", "Right"), style.textAlign === "right"),
-      ].join("");
-      const common = `
-        ${annotationDisplayPropertyRows(style)}
-        <div class="property-row"><label for="annotationVisible">${applicationText("表示", "Visible")}</label><input id="annotationVisible" data-property="annotation-visible" type="checkbox" ${item.visible !== false ? "checked" : ""}></div>
-        <div class="property-row"><label for="annotationColor">${applicationText("色", "Color")}</label><div class="property-color-control"><input id="annotationColor" data-annotation-style="color" type="text" value="${escapeHtml(style.color)}"><button class="property-color-picker" data-appearance-palette-open data-current-color="${color}" type="button" title="${applicationText("カラーパレット", "Color palette")}" aria-label="${applicationText("カラーパレット", "Color palette")}"><span class="property-color-picker-swatch" style="--swatch-color:${color}" aria-hidden="true"></span></button></div></div>
-        <div class="property-row"><label for="annotationTextHeight">${applicationText("文字高さ", "Text height")}</label><div class="property-input-with-unit"><input id="annotationTextHeight" data-annotation-style="textHeight" type="number" min="0.5" max="100" step="0.1" value="${formatDisplayNumber(style.textHeight, 3)}"><span class="property-input-unit" aria-hidden="true">mm</span></div></div>
-        <div class="property-row"><label for="annotationFontFamily">${applicationText("フォント", "Font")}</label><select id="annotationFontFamily" data-annotation-style="fontFamily">${fontOptions}</select></div>
-        <div class="property-row"><label for="annotationBold">${applicationText("太字", "Bold")}</label><input id="annotationBold" data-annotation-style="bold" type="checkbox" ${style.bold ? "checked" : ""}></div>
-        <div class="property-row"><label for="annotationItalic">${applicationText("斜体", "Italic")}</label><input id="annotationItalic" data-annotation-style="italic" type="checkbox" ${style.italic ? "checked" : ""}></div>
-        <div class="property-row"><label for="annotationTextAlign">${applicationText("横位置", "Horizontal alignment")}</label><select id="annotationTextAlign" data-annotation-style="textAlign">${alignOptions}</select></div>
-        <div class="property-row"><label for="annotationRotation">${applicationText("回転", "Rotation")}</label><div class="property-input-with-unit"><input id="annotationRotation" data-property="annotation-rotation" type="number" min="-3600" max="3600" step="1" value="${formatDisplayNumber((Number(item.rotation) || 0) * 180 / Math.PI, 3)}"><span class="property-input-unit" aria-hidden="true">°</span></div></div>`;
-      return common;
+      const direct = item.appearanceInheritance ? item.style : { ...style, ...window.Appearance.annotationDisplaySettings(style), rotation: Number(item.rotation) || 0 };
+      return `<div class="property-row"><label for="annotationVisible">${applicationText("表示", "Visible")}</label><input id="annotationVisible" data-property="annotation-visible" type="checkbox" ${item.visible !== false ? "checked" : ""}></div>`
+        + leaderAppearancePropertyRows(direct, style, { leader: item.type === "leader", terminals: item.type === "leader" });
     }
 
     return Object.freeze({ annotationDisplayPropertyRows, multiplePropertiesRows, geometryPropertyName, geometryAppearanceSectionName, propertyReadonlyRow, geometryPropertyRows, blockPropertiesConfiguration, blockRotationPropertyRow, dimensionGeometryPropertyRows, constraintDefiningGeometryPropertyRows, annotationAppearancePropertyRows });

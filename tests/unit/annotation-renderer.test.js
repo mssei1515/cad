@@ -14,6 +14,20 @@ function create(anchor = { x: 10, y: 20 }) {
   return { renderer, viewport, ctx, calls, anchorReads: () => anchorReads };
 }
 
+test("parameter decimal places format text and projected leaders without changing evaluation", () => {
+  const { displayText } = sandbox.window.AnnotationRenderer;
+  const element = { parameterEnabled: true, evaluatedParameterValue: 1.2, style: { precision: 3, prefix: "P:", suffix: "mm" } };
+  assert.equal(displayText(element), "P:1.200mm");
+  assert.equal(element.evaluatedParameterValue, 1.2);
+  assert.equal(displayText({ localElement: element, style: element.style }), "P:1.200mm");
+  assert.equal(displayText({ ...element, style: { precision: 0 } }), "1");
+  assert.equal(displayText({ ...element, style: { precision: null } }, value => `auto:${value}`), "auto:1.2");
+  assert.equal(displayText({ ...element, evaluatedParameterValue: NaN }), "P:—mm");
+  assert.equal(displayText({ ...element, parameterEnabled: false, text: "plain" }), "plain");
+  const style = sandbox.window.Appearance.annotationStoredStyle({ type: "leader", appearanceInheritance: true, style: { precision: 3 } });
+  assert.equal(style.precision, 3);
+});
+
 test("OFF leaders scale text, terminators and strokes while keeping all path coordinates", () => {
   const h = create();
   const px = sandbox.window.Appearance.CSS_PX_PER_MM;

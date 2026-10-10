@@ -150,7 +150,7 @@ function activationFixture() {
   f.controller=sandbox.window.PointerInteractionController.create({getMode:()=>f.mode,getPendingCommand:()=>f.pending,getPendingConstraintCommand:()=>f.constraint,
     geometryDrag:f.guards[0],dimensionDrag:f.guards[1],annotationDrag:f.guards[2],selectionRectangle:f.guards[3],canvasNavigation:f.guards[4],canvasHover:{clear:action('clearHover')},draw:action('draw'),
     press:{discardMove:action('discard'),worldPoint:()=>{f.calls.push('world');return f.point;},blankGesture:{takeSuppression:()=>f.suppressed,handle:action('blank')},
-      query:{derivedGeometryAt:()=>{f.calls.push('derived');return f.derived;},readDoubleClick:()=>{f.calls.push('query');return f.hits;}},
+      query:{read:()=>{if(f.pending?.type==='annotation-value')f.calls.push('read');return f.hits;},derivedGeometryAt:()=>{f.calls.push('derived');return f.derived;},readDoubleClick:()=>{f.calls.push('query');return f.hits;}},
       activation:{selection:{get instanceGeometry(){return f.selected;}},finalizeSpline:action('spline'),submitOffset:action('offset'),startDimensionEdit:action('dimension'),startDistanceValue:action('value'),submitDistance:action('distance'),constraintDoubleClick:action('constraint'),enterBlock:action('block'),beginSplineEdit:action('editSpline')}}});
   f.point={x:1,y:2};f.event={preventDefault:action('prevent')};f.click=()=>f.controller.doubleClick(f.event);return f;
 }
@@ -173,4 +173,13 @@ test('double click constraint handling wins over Block and Spline editing, then 
 test('pointer leave retains active interactions and otherwise discards pending moves before clearing hover',()=>{
   const f=activationFixture();for(let i=0;i<f.guards.length;i++){const key=i===4?'panning':'active';f.guards[i][key]=true;f.controller.leave();assert.deepEqual(f.calls,[]);f.guards[i][key]=false;}
   f.controller.leave();assert.deepEqual(f.calls,['discard','clearHover','draw']);
+});
+
+test('annotation editing routes the complete hit snapshot to blank confirmation and consumes the double click',()=>{
+  const f=activationFixture();f.pending={type:'annotation-value'};
+  f.hits={blankAnnotationHit:{id:'A'},hatchHit:{id:'H'},referenceImageHit:{id:'I'},inactiveHit:{id:'S'}};
+  f.click();assert.deepEqual(f.calls,['world','read','blank','prevent']);
+  assert.equal(f.blankArgs[0],f.point);assert.equal(f.blankArgs[1].annotationHit,f.hits.blankAnnotationHit);
+  for(const key of ['hatchHit','referenceImageHit','inactiveHit'])assert.equal(f.blankArgs[1][key],f.hits[key]);
+  f.pending={annotationDraft:true};f.calls=[];f.click();assert.deepEqual(f.calls,['world','prevent']);
 });

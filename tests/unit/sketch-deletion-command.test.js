@@ -26,6 +26,40 @@ function fixture() {
     confirmDeletion: text => { events.push(['confirm', text]); return state.confirm; } });
   return { state, events, cmd, p, childPoint, external };
 }
+
+function emptyFixture() {
+  const f = fixture();
+  for (const key of ['points', 'lines', 'circles', 'arcs', 'splines', 'constraints', 'geometryInstances', 'blockInstances', 'annotations', 'hatches', 'referenceImages']) f.state.model[key] = [];
+  f.state.confirm = false;
+  return f;
+}
+
+test('empty leaf Sketch deletes without confirmation and records one history', () => {
+  const f = emptyFixture();
+  assert.equal(f.cmd.remove('S3'), true);
+  assert.equal(f.events.some(event => event[0] === 'confirm'), false);
+  assert.equal(f.events.filter(event => event[0] === 'history').length, 1);
+});
+
+test('empty children and every owned object category retain deletion confirmation', () => {
+  const child = emptyFixture();
+  assert.equal(child.cmd.remove('S1'), false);
+  assert.equal(child.events.some(event => event[0] === 'confirm'), true);
+  for (const key of ['points', 'lines', 'circles', 'arcs', 'splines', 'constraints', 'geometryInstances', 'blockInstances', 'annotations', 'hatches', 'referenceImages']) {
+    const f = emptyFixture();
+    f.state.model[key].push({ sketchId: 'S3', bundle: { points: [], lines: [], circles: [], arcs: [] } });
+    assert.equal(f.cmd.remove('S3'), false, key);
+    assert.equal(f.events.some(event => event[0] === 'confirm'), true, key);
+  }
+});
+
+test('empty Sketch still respects Root and lock restrictions', () => {
+  const f = emptyFixture();
+  f.state.model.sketches.find(sketch => sketch.id === 'S3').locked = true;
+  assert.equal(f.cmd.remove('S3'), false);
+  assert.equal(f.cmd.remove('ROOT'), false);
+  assert.equal(f.events.some(event => event[0] === 'confirm'), false);
+});
 test('Sketch deletion rejects dependent instances and external constraints without mutation or confirmation', () => {
   for (const kind of ['instance', 'constraint']) {
     const f = fixture();

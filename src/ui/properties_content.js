@@ -97,7 +97,7 @@
           : localizedConstraintName(item.name, { typeOnly: true });
         return `<h2 class="property-heading">${escapeHtml(heading)}</h2><section class="property-section">${basicInformationHeading}<div class="property-row"><span>Type</span><span class="property-readonly">${escapeHtml(item.constructor.name)}</span></div>${projectionRows}${definingGeometryRows}${parameterRows}</section>${dimension ? `<section class="property-section"><h3>${applicationText("寸法外観", "Dimension Appearance")}</h3>${annotationDisplayPropertyRows(dimension.display || {}, { sizeLock: true })}${dimensionAppearancePropertyRows(dimension.display || {}, display)}</section>` : ""}`;
       } else if (target.kind === "annotation") {
-        const annotationType = item.type === "leader" ? applicationText("引出線", "Leader") : applicationText("自由テキスト", "Free Text");
+        const annotationType = applicationText("注記", "Annotation");
         const information = propertyReadonlyRow("種類", "Type", annotationType)
           + propertyReadonlyRow("ID", "ID", item.id)
           + propertyReadonlyRow("所属スケッチ", "Owning sketch", `${info.owningSketchName} (${item.sketchId})`, { userContent: true });
@@ -109,14 +109,14 @@
               <div class="property-row"><label>${applicationText("接頭辞", "Prefix")}</label><textarea data-annotation-style="prefix" data-affix-input rows="1" wrap="off" data-user-content>
 ${escapeHtml(style.prefix)}</textarea></div>
               <div class="property-row"><label>${applicationText("値 / 数式", "Value / Expression")}</label><input data-property="annotation-expression" value="${escapeHtml(expressionInputValue(item.expression || "0"))}"></div>
+              <div class="property-row"><label>${applicationText("小数点以下の桁数", "Decimal places")}</label><select data-annotation-style="precision"><option value="auto" ${style.precision == null ? "selected" : ""}>${applicationText("自動", "Auto")}</option>${Array.from({ length: 11 }, (_, digits) => `<option value="${digits}" ${style.precision === digits ? "selected" : ""}>${digits}</option>`).join("")}</select></div>
               <div class="property-row"><label>${applicationText("接尾辞", "Suffix")}</label><textarea data-annotation-style="suffix" data-affix-input rows="1" wrap="off" data-user-content>
 ${escapeHtml(style.suffix)}</textarea></div>`
               + propertyReadonlyRow("評価値", "Evaluated value", Number.isFinite(item.evaluatedParameterValue) ? formatDisplayNumber(item.evaluatedParameterValue) : "—")
-            : `<div class="property-row"><label for="annotationText">${applicationText("本文", "Text")}</label><textarea id="annotationText" data-property="annotation-text" data-user-content>${escapeHtml(item.text || "")}</textarea></div>`);
-        const appearanceHeading = item.type === "leader"
-          ? applicationText("引出線の外観", "Leader Appearance")
-          : applicationText("自由テキストの外観", "Free Text Appearance");
-        return `<h2 class="property-heading">${annotationType}</h2><section class="property-section">${basicInformationHeading}${information}</section><section class="property-section"><h3>${applicationText("内容", "Content")}</h3>${content}</section><section class="property-section"><h3>${appearanceHeading}</h3>${annotationAppearancePropertyRows(item)}</section>`;
+            : `<div class="property-row"><label for="annotationText">${applicationText("本文", "Text")}</label><textarea id="annotationText" data-property="annotation-text" data-user-content>\n${escapeHtml(item.text || "")}</textarea></div>`);
+        const appearanceHeading = applicationText("注記の外観", "Annotation Appearance");
+        const leaderAction = `<button type="button" class="property-action-button" data-property-action="${item.type === "leader" ? "annotation-detach" : "annotation-attach"}">${item.type === "leader" ? applicationText("引出線を解除", "Remove leader") : applicationText("引出線を追加", "Add leader")}</button>`;
+        return `<h2 class="property-heading">${annotationType}</h2><section class="property-section">${basicInformationHeading}${information}${leaderAction}</section><section class="property-section"><h3>${applicationText("内容", "Content")}</h3>${content}</section><section class="property-section"><h3>${appearanceHeading}</h3>${annotationAppearancePropertyRows(item)}</section>`;
       } else if (target.kind === "blockPlacement") {
         const enabled = new Set(info.enabledSketchIds);
         return `<h2 class="property-heading">${applicationText("ブロック配置", "Block placement")}</h2><section class="property-section">${basicInformationHeading}${propertyReadonlyRow("ブロック定義", "Block definition", item.name, { userContent: true })}<div class="property-option-group"><div class="property-option-group-title">${applicationText("回転モード", "Rotation mode")}</div><label class="property-option"><input type="radio" name="placementRotationMode" data-placement-rotation-mode="locked" ${info.rotationLocked ? "checked" : ""}><span>${applicationText("直交回転ロック", "Orthogonal rotation lock")}</span></label><label class="property-option"><input type="radio" name="placementRotationMode" data-placement-rotation-mode="free" ${info.rotationLocked ? "" : "checked"}><span>${applicationText("自由回転", "Free rotation")}</span></label></div><div class="property-option-group"><div class="property-option-group-title">${applicationText("配置するスケッチ", "Sketches to place")}</div>${info.sketchRows.map(({ sketch, depth, count }) => `<label class="property-option property-sketch-option" style="--property-sketch-depth:${depth}"><input type="checkbox" data-placement-sketch-id="${escapeHtml(sketch.id)}" ${enabled.has(sketch.id) ? "checked" : ""}><span data-user-content>${escapeHtml(sketch.name)}</span><small>${count}</small></label>`).join("")}</div></section>`;
@@ -139,7 +139,7 @@ ${escapeHtml(style.suffix)}</textarea></div>`
           item.dimensionAppearance,
           info.dimensionAppearance,
           { idPrefix: "sketchDimension" },
-        ), ' data-sketch-default-appearance="dimension"') + collapsibleSketchAppearanceSection("leader", "引出線の外観", "Leader Appearance",
+        ), ' data-sketch-default-appearance="dimension"') + collapsibleSketchAppearanceSection("leader", "注記の外観", "Annotation Appearance",
           leaderAppearancePropertyRows(item.leaderAppearance, info.leaderAppearance, { idPrefix: "sketchLeader" }), ' data-sketch-default-appearance="leader"');
         return `<h2 class="property-heading">${applicationText("スケッチ", "Sketch")}</h2><section class="property-section">${basicInformationHeading}${rows}</section>${appearanceSections}`;
       }

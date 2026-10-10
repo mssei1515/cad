@@ -51,10 +51,14 @@
         return [...bundle.points, ...bundle.lines, ...bundle.circles, ...bundle.arcs, ...(bundle.splines || [])];
       });
       const geometryCount = [...model.points, ...model.lines, ...model.circles, ...model.arcs, ...model.splines].filter((item) => sketchIds.has(elementSketchId(item))).length + blockProjectionItemsToRemove.length;
+      const hasContents = descendants.length > 0 || geometryCount > 0
+        || blockInstancesToRemove.length > 0 || geometryInstancesToRemove.length > 0
+        || model.constraints.some(constraint => sketchIds.has(constraintSketchId(constraint)))
+        || [...model.annotations, ...model.hatches, ...model.referenceImages].some(item => sketchIds.has(item.sketchId));
       const confirmation = preserveDescendants
         ? `${sketch.name} を削除します。配下のスケッチは親へ移動します。\n図形 ${geometryCount} 件と、このスケッチの派生インスタンスも削除されます。`
         : `${sketch.name} と配下のスケッチを削除します。\n図形 ${geometryCount} 件も削除されます。`;
-      if (confirmFirst && !confirmDeletion(confirmation)) return false;
+      if (confirmFirst && hasContents && !confirmDeletion(confirmation)) return false;
   
       const pointSet = new Set(model.points.filter((point) => sketchIds.has(elementSketchId(point))));
       const lineSet = new Set(model.lines.filter((line) => sketchIds.has(elementSketchId(line)) || pointSet.has(line.p1) || pointSet.has(line.p2)));

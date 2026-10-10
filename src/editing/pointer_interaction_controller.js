@@ -25,6 +25,10 @@
 
       const referenceDimension = hitD || press.referenceDimensionAt?.(p);
       if (referenceDimension && press.insertDimensionParameter(e, referenceDimension)) return;
+      const referenceAnnotation = press.referenceAnnotationAt?.(p);
+      if (referenceAnnotation && press.insertAnnotationParameter?.(e, referenceAnnotation)) return;
+
+      if (getPendingCommand()?.type === "annotation-value") { e.preventDefault(); return; }
 
       if (getMode() === "hatch" || getMode() === "hatch-repair") {
         e.preventDefault();
@@ -39,6 +43,8 @@
       }
 
       if (press.inputs.instance.click(e, p, { hitP, hitL, hitC, hitA, hitS, hatchHit })) return;
+
+      if (getPendingCommand()?.annotationDraft && press.inputs.annotation.place(e, p, annotationTargetHit)) return;
 
       const blankDoubleClickHits = { hitP, hitL, hitC, hitArcEnd, hitA, hitS, hitD, hitBlock, hitDerivedInstance, hatchHit, referenceImageHit, inactiveHit, annotationHit: blankAnnotationHit };
       if (press.blankGesture.isRepeated(press.screenPoint(e), blankDoubleClickHits) && press.blankGesture.handle(p, blankDoubleClickHits)) {
@@ -81,6 +87,13 @@
         return;
       }
       const p = press.worldPoint(e);
+      if (getPendingCommand()?.annotationDraft) { e.preventDefault(); return; }
+      if (getPendingCommand()?.type === "annotation-value") {
+        const hits = press.query.read(p);
+        press.blankGesture.handle(p, { ...hits, annotationHit: hits.blankAnnotationHit });
+        e.preventDefault();
+        return;
+      }
       if (getMode() === "select" && !getPendingCommand() && !getPendingConstraintCommand() && press.query.read?.(p).inactiveHit) {
         e.preventDefault();
         return;
@@ -90,7 +103,8 @@
         e.preventDefault();
         return;
       }
-      const { hitL, hitP, hitC, hitArcEnd, hitA, hitS, hitD, hitBlock } = press.query.readDoubleClick(p);
+      const { hitL, hitP, hitC, hitArcEnd, hitA, hitS, hitD, hitBlock, hitAnnotation } = press.query.readDoubleClick(p);
+      if (!getPendingCommand() && !getPendingConstraintCommand() && hitAnnotation && activation.startAnnotationEdit?.(hitAnnotation)) { e.preventDefault(); return; }
       if (getMode() === "spline") {
         e.preventDefault();
         activation.finalizeSpline(p);

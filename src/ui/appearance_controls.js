@@ -78,7 +78,7 @@
         <div data-terminator-angle-row ${["arrow", "filledArrow"].includes(type) ? "" : "hidden"}>${numeric("arrowheadAngle", "ArrowheadAngle", "開き角", "Opening angle", 1, 179, "°")}</div></div>`;
     }
 
-    function leaderAppearancePropertyRows(owner, effective, { allowInheritance = true, idPrefix = "annotation", terminals = true } = {}) {
+    function leaderAppearancePropertyRows(owner, effective, { allowInheritance = true, idPrefix = "annotation", terminals = true, leader = true } = {}) {
       const direct = window.Appearance.normalizeLeaderAppearance(owner);
       const inherited = key => `${defaultAppearanceLabel()} (${effective[key]})`;
       const input = (key, suffix, ja, en, { min = 0.1, max = 100, unit = "", factor = 1 } = {}) => `<div class="property-row"><label for="${idPrefix}${suffix}">${applicationText(ja, en)}</label><div class="property-input-with-unit"><input id="${idPrefix}${suffix}" data-leader-style="${key}" type="number" min="${min}" max="${max}" step="any" placeholder="${allowInheritance ? escapeHtml(defaultAppearanceLabel() + ' (' + formatDisplayNumber(effective[key] * factor, 3) + ')') : ""}" value="${direct[key] == null ? "" : key === "displayScale" ? (direct[key] * factor).toFixed(1) : formatDisplayNumber(direct[key] * factor, 6)}"><span class="property-input-unit">${unit}</span></div></div>`;
@@ -86,13 +86,13 @@
       const color = colorPickerValue(direct.color || effective.color);
       return `
         <div class="property-row"><label for="${idPrefix}Color">${applicationText("色", "Color")}</label><div class="property-color-control"><input id="${idPrefix}Color" data-leader-style="color" type="text" value="${direct.color || ""}" placeholder="${allowInheritance ? escapeHtml(inherited("color")) : ""}"><button class="property-color-picker" data-appearance-palette-open data-current-color="${color}" type="button" title="${applicationText("カラーパレット", "Color palette")}"><span class="property-color-picker-swatch" style="--swatch-color:${color}"></span></button></div></div>
-        ${input("lineWidth", "LineWidth", "線幅", "Line width", { min: 0.5, max: 10 })}
-        ${select("lineType", "LineType", "線種", "Line type", [["solid","実線","Solid"],["dashed","破線","Dashed"],["dashdot","一点鎖線","Dash-dot"],["dashdotdot","二点鎖線","Dash-dot-dot"],["dotted","点線","Dotted"]])}
+        ${leader ? input("lineWidth", "LineWidth", "線幅", "Line width", { min: 0.5, max: 10 }) : ""}
+        ${leader ? select("lineType", "LineType", "線種", "Line type", [["solid","実線","Solid"],["dashed","破線","Dashed"],["dashdot","一点鎖線","Dash-dot"],["dashdotdot","二点鎖線","Dash-dot-dot"],["dotted","点線","Dotted"]]) : ""}
         ${terminals ? terminatorPropertyRows(direct, effective, { allowInheritance, idPrefix, attribute: "data-leader-style" }) : ""}
         <div class="property-row" title="${applicationText("図形に対する注記の大きさを固定", "Keep annotation size relative to geometry")}"><label for="${idPrefix}FixedDisplaySize">${applicationText("サイズロック", "Size lock")}</label><div class="property-input-with-unit"><input id="${idPrefix}FixedDisplaySize" data-leader-style="fixedDisplaySize" type="checkbox" ${effective.fixedDisplaySize === false ? "checked" : ""}>${allowInheritance ? `<button type="button" data-property-action="leader-size-default" ${direct.fixedDisplaySize == null ? "disabled" : ""}>${applicationText("既定", "Default")}</button>` : ""}</div></div>
         ${effective.fixedDisplaySize === false ? input("displayScale", "DisplayScale", "基準倍率", "Reference zoom", { min: 0.000001, max: 1e12, unit: "%", factor: 100 }) : ""}
         ${input("textHeight", "TextHeight", "文字高さ", "Text height", { min: 0.5, max: 100, unit: "mm" })}
-        ${input("textGap", "TextGap", "文字と横線の間隔", "Text gap from shelf", { min: 0, max: 1000, unit: "mm" })}
+        ${leader ? input("textGap", "TextGap", "文字と横線の間隔", "Text gap from shelf", { min: 0, max: 1000, unit: "mm" }) : ""}
         ${select("fontFamily", "FontFamily", "フォント", "Font", [["sans-serif","ゴシック体","Sans serif"],["serif","明朝体","Serif"],["monospace","等幅","Monospace"]])}
         ${select("bold", "Bold", "太字", "Bold", [[true,"あり","Enabled"],[false,"なし","Disabled"]])}
         ${select("italic", "Italic", "斜体", "Italic", [[true,"あり","Enabled"],[false,"なし","Disabled"]])}
@@ -147,7 +147,7 @@
         <div class="property-row"><label for="${idPrefix}Visible">${applicationText("表示", "Visible")}</label><select id="${idPrefix}Visible" data-dimension-display="visible">${booleanOptions("visible")}</select></div>
         <div class="property-row"><label for="${idPrefix}Color">${applicationText("色", "Color")}</label><div class="property-color-control"><input id="${idPrefix}Color" data-dimension-display="color" type="text" placeholder="${escapeHtml(allowInheritance ? inheritedLabel("color") : "")}" value="${escapeHtml(direct.color || "")}" /><button class="property-color-picker" data-appearance-palette-open data-current-color="${colorValue}" type="button" title="${applicationText("カラーパレット", "Color palette")}" aria-label="${applicationText("カラーパレット", "Color palette")}"><span class="property-color-picker-swatch" style="--swatch-color:${colorValue}" aria-hidden="true"></span></button></div></div>
         <div class="property-row"><label for="${idPrefix}LineWidth">${applicationText("線幅", "Line width")}</label><input id="${idPrefix}LineWidth" data-dimension-display="lineWidth" type="number" min="0.5" max="10" step="0.1" placeholder="${escapeHtml(allowInheritance ? inheritedLabel("lineWidth") : "")}" value="${hasDirect("lineWidth") ? direct.lineWidth : ""}"></div>
-        <div class="property-row"><label for="${idPrefix}Precision">${applicationText("精度", "Precision")}</label><select id="${idPrefix}Precision" data-dimension-display="precision">${precisionOptions}</select></div>
+        <div class="property-row"><label for="${idPrefix}Precision">${applicationText("小数点以下の桁数", "Decimal places")}</label><select id="${idPrefix}Precision" data-dimension-display="precision">${precisionOptions}</select></div>
         <div class="property-row"><label for="${idPrefix}Prefix">${applicationText("接頭辞", "Prefix")}</label><textarea id="${idPrefix}Prefix" data-dimension-display="prefix" data-affix-input rows="1" wrap="off" data-user-content placeholder="${escapeHtml(allowInheritance ? inheritedLabel("prefix") : "")}">
 ${escapeHtml(direct.prefix ?? "")}</textarea></div>
         <div class="property-row"><label for="${idPrefix}Suffix">${applicationText("接尾辞", "Suffix")}</label><textarea id="${idPrefix}Suffix" data-dimension-display="suffix" data-affix-input rows="1" wrap="off" data-user-content placeholder="${escapeHtml(allowInheritance ? inheritedLabel("suffix") : "")}">

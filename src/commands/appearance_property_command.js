@@ -15,12 +15,12 @@
       let label;
       let refresh = "all";
       if (category === "leader") {
-        const appearance = target.kind === "sketch" ? (target.item.leaderAppearance ||= {}) : target.kind === "annotation" && target.item.type === "leader" ? editing.prepareLeaderStyle(target.item) : null;
+        const appearance = target.kind === "sketch" ? (target.item.leaderAppearance ||= {}) : target.kind === "annotation" ? editing.prepareLeaderStyle(target.item) : null;
         if (!appearance) return false;
-        if (target.kind === "annotation" && key === "textGap") target.item.textPlacement = "shelf";
+        if (target.kind === "annotation" && target.item.type === "leader" && target.item.textPlacement !== "text" && key === "textGap") target.item.textPlacement = "shelf";
         editing.applyLeaderAppearanceValue(appearance, key, value, { viewportScale: viewport.scale,
           effective: target.kind === "sketch" ? effectiveLeaderAppearanceForSketch(target.item) : effectiveAnnotationStyle(target.item) });
-        label = "引出線外観変更";
+        label = "注記外観変更";
       } else if (category === "annotationDisplay") {
         const displayOwner = target.kind === "annotation" ? (target.item.style ||= normalizeAnnotationStyle())
           : target.kind === "constraint" && target.item.dimension ? (target.item.dimension.display ||= {}) : null;

@@ -5,7 +5,141 @@
     documentContentSignature, writeJot2DFile } = window.DocumentFiles;
   function create({ window, document, fileSession, choiceDialog, applicationText,
     isEditingBlock, getDocumentName, serializeModel, applyLoadedDocument,
-    markDocumentFileCheckpoint, updateDocumentNameUI, setHint, log }) {
+    markDocumentFileCheckpoint, updateDocumentNameUI, setHint, log, bookmarks }) {
+    let linkedHandle = null;
+    let linkGeneration = 0;
+
+    function linksSupported() {
+      const prototype = window.FileSystemFileHandle?.prototype;
+      return Boolean(bookmarks && window.indexedDB && window.crypto?.randomUUID
+        && typeof window.showOpenFilePicker === "function"
+        && typeof prototype?.isSameEntry === "function"
+        && typeof prototype?.queryPermission === "function"
+        && typeof prototype?.requestPermission === "function");
+    }
+
+    function replaceDocumentId(id = null) {
+      try {
+        const url = new window.URL(window.location.href);
+        if (id) url.searchParams.set("document", id);
+        else url.searchParams.delete("document");
+        if (url.href !== window.location.href) window.history.replaceState(window.history.state, "", url.href);
+      } catch (_error) {
+        // Optional URL updates must never turn a successful file operation into a failure.
+      }
+    }
+
+    async function synchronizeDocumentLink(handle) {
+      const generation = ++linkGeneration;
+      linkedHandle = null;
+      const retry = document.getElementById("openDocumentLinkBtn");
+      if (retry) retry.hidden = true;
+      replaceDocumentId();
+      if (!handle || !linksSupported()) return;
+      try {
+        const id = await bookmarks.register(handle);
+        if (generation === linkGeneration && fileSession.handle === handle) replaceDocumentId(id);
+      } catch (_error) {
+        // Reading and saving do not depend on registration storage being available.
+      }
+    }
+
+    async function copyDocumentLink() {
+      if (!linksSupported()) return false;
+      const handle = fileSession.handle;
+      if (!handle || !bookmarks) {
+        setHint(applicationText("ファイルを開くか、名前を付けて保存してからリンクを作成してください", "Open a file or Save As before creating a link."), "error");
+        return false;
+      }
+      try {
+        const id = await bookmarks.register(handle);
+        const url = new window.URL(window.location.href);
+        url.search = "";
+        url.hash = "";
+        url.searchParams.set("document", id);
+        const input = document.getElementById("documentLinkInput");
+        const dialog = document.getElementById("documentLinkDialog");
+        if (input && dialog) {
+          input.value = url.href;
+          const link = document.getElementById("documentLinkOpen");
+          if (link) link.href = url.href;
+          if (!dialog.open) dialog.showModal();
+          input.focus();
+          input.select();
+        }
+        try {
+          await window.navigator.clipboard.writeText(url.href);
+          setHint(applicationText("図面のリンクをコピーしました。Chromeのブックマークに登録できます", "Drawing link copied. Add it as a Chrome bookmark."));
+        } catch (_error) {
+          setHint(applicationText("専用リンクを作成しました。表示されたURLをコピーしてください", "Drawing link created. Copy the displayed URL."));
+        }
+        return url.href;
+      } catch (error) {
+        setHint(applicationText(`図面のリンクを作成できません: ${error.message}`, `Unable to create drawing link: ${error.message}`), "error");
+        return false;
+      }
+    }
+
+    async function openLinkedDocument({ requestPermission = true } = {}) {
+      if (!linkedHandle || isEditingBlock() || !fileSession.beginOpen()) return false;
+      const handle = linkedHandle;
+      try {
+        // Request immediately from the retry button/dialog click, before asynchronous file reads.
+        const permission = requestPermission
+          ? await handle.requestPermission({ mode: "read" })
+          : await handle.queryPermission({ mode: "read" });
+        if (permission !== "granted") {
+          setHint(applicationText("図面を開くにはファイルへのアクセス許可が必要です。ファイルメニューから再試行できます", "File access is required. Retry from the File menu."), "error");
+          return false;
+        }
+        if (!await confirmDocumentReplacement()) return false;
+        const expectedContentSignature = documentContentSignature(serializeModel());
+        const file = await handle.getFile();
+        if (!await importFileData(file, { expectedContentSignature })) return false;
+        fileSession.setHandle(handle);
+        updateDocumentNameUI();
+        await synchronizeDocumentLink(fileSession.handle);
+        setHint(applicationText(`ファイルを開きました: ${file.name}`, `Opened: ${file.name}`));
+        return true;
+      } catch (error) {
+        setHint(applicationText(`リンクの図面を開けません: ${error.message}`, `Unable to open linked drawing: ${error.message}`), "error");
+        return false;
+      } finally {
+        fileSession.finishOpen();
+      }
+    }
+
+    async function openStartupDocument() {
+      const supported = linksSupported();
+      const copyButton = document.getElementById("copyDocumentLinkBtn");
+      if (copyButton) copyButton.hidden = !supported;
+      if (!supported) { replaceDocumentId(); return false; }
+      const id = new window.URLSearchParams(window.location.search).get("document");
+      if (!id || !bookmarks) return false;
+      const generation = linkGeneration;
+      try {
+        const registration = await bookmarks.get(id);
+        if (generation !== linkGeneration) return false;
+        linkedHandle = registration?.handle || null;
+        if (!linkedHandle) {
+          setHint(applicationText("この図面の登録情報がありません。元のファイルを開いてリンクを作り直してください", "This drawing is not registered here. Open the original file and create a new link."), "error");
+          return false;
+        }
+        const button = document.getElementById("openDocumentLinkBtn");
+        if (button) button.hidden = false;
+        if (await linkedHandle.queryPermission({ mode: "read" }) === "granted") return await openLinkedDocument({ requestPermission: false });
+        const choice = await choiceDialog.show({
+          title: applicationText("リンクの図面を開く", "Open linked drawing"),
+          message: applicationText(`${linkedHandle.name} へのアクセスを許可して開きます`, `Allow access to ${linkedHandle.name} and open it.`),
+          choices: [{ value: "open", label: applicationText("許可して開く", "Allow and open") }],
+          defaultValue: "open", cancelLabel: applicationText("キャンセル", "Cancel"),
+        });
+        return choice === "open" ? await openLinkedDocument() : false;
+      } catch (error) {
+        setHint(applicationText(`リンクの図面を開けません: ${error.message}`, `Unable to open linked drawing: ${error.message}`), "error");
+        return false;
+      }
+    }
     async function confirmDocumentReplacement() {
       if (!isEditingBlock() && fileSession.matchesCheckpoint(serializeModel())) return true;
       const choice = await choiceDialog.show({
@@ -86,6 +220,7 @@
           downloadJot2DFile(content, name);
         }
         markDocumentFileCheckpoint(handle ? "saved" : "download", JSON.parse(content));
+        await synchronizeDocumentLink(handle);
         const message = handle ? applicationText(`保存しました: ${name}`, `Saved: ${name}`)
           : applicationText(`ダウンロードを開始しました: ${name}`, `Download started: ${name}`);
         setHint(message);
@@ -147,6 +282,7 @@
         if (!opened) return false;
         fileSession.setHandle(handle);
         updateDocumentNameUI();
+        await synchronizeDocumentLink(handle);
         const message = applicationText(`ファイルを開きました: ${file.name}`, `Opened: ${file.name}`);
         setHint(message);
         log(message);
@@ -176,6 +312,7 @@
         if (!opened) return;
         fileSession.setHandle(null);
         updateDocumentNameUI();
+        await synchronizeDocumentLink(null);
         const message = applicationText(`ファイルを開きました: ${file.name}`, `Opened: ${file.name}`);
         setHint(message);
         log(message);
@@ -230,7 +367,7 @@
       event.preventDefault();
       event.returnValue = "";
     }
-    return Object.freeze({ importFileData, beforeUnload, save: saveJot2DFile, saveAs: saveJot2DFileAs, open: openJot2DFile, fileInputChanged });
+    return Object.freeze({ importFileData, beforeUnload, save: saveJot2DFile, saveAs: saveJot2DFileAs, open: openJot2DFile, fileInputChanged, copyDocumentLink, openLinkedDocument, openStartupDocument });
   }
   window.DocumentFileCommand = Object.freeze({ create });
 })();

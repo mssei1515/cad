@@ -2,8 +2,11 @@
 const { spawnSync } = require("node:child_process");
 const path = require("node:path");
 const files = [
+  "src/persistence/document_bookmarks.js", "tests/e2e/document-bookmarks.spec.js",
+  "tests/e2e/derived-selection-copy.spec.js",
   "src/editing/clipboard_transfer.js", "src/editing/clipboard_payload.js", "tests/unit/clipboard-transfer.test.js",
   "src/geometry/export_region.js", "src/rendering/canvas_export.js", "src/persistence/png_file.js", "src/commands/png_export_command.js", "tests/unit/png-export.test.js", "tests/e2e/png-export.spec.js",
+  "src/ui/annotation_command_panel.js", "src/ui/annotation_input_controller.js", "tests/e2e/unified-annotations.spec.js",
   "src/ui/command_panel.js", "src/ui/derived_command_panel.js", "tests/e2e/command-panel.spec.js",
   "src/ui/tool_flyouts.js", "tests/e2e/tool-flyouts.spec.js",
   "tests/e2e/multiple-dimensions.spec.js",

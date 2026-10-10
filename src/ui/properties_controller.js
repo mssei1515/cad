@@ -6,7 +6,7 @@
     changeFreeInstanceProperty, commitDimensionPropertyEdit, commitAnnotationParameterEdit, updateUI, updatePropertiesUI, draw,
     applicationText, setHint, setPlacementRotationLocked, setPlacementSketchIds,
     setBlockInstanceRotationLocked, setBlockInstanceEnabledSketchIds, setBlockInstanceOrthogonalRotation,
-    startInstanceSourceEdit, startReferenceImageCalibration, startHatchBoundaryRepair, startSplineEdit,
+    annotationCommand, startInstanceSourceEdit, startReferenceImageCalibration, startHatchBoundaryRepair, startSplineEdit,
     openAppearanceColorPalette, canEditStructure = () => true, activeSketchId = () => null }) {
     function sketchDefaultAppearanceContext(input, target = selectedPropertiesTarget()) {
       if (target.kind !== "sketch") return null;
@@ -170,6 +170,11 @@
     function handlePropertiesClick(event) {
       if (selectedPropertiesTarget().readOnly) return false;
       const action = event.target.closest("[data-property-action]")?.dataset.propertyAction;
+      if (["annotation-attach", "annotation-detach"].includes(action)) {
+        const target = selectedPropertiesTarget();
+        if (target.readOnly || target.kind !== "annotation" || !canEditStructure(target.item)) return false;
+        return action === "annotation-attach" ? annotationCommand.addLeader(target.item) : annotationCommand.removeLeader(target.item);
+      }
       if (action === "leader-size-default") return appearancePropertyCommand.apply(selectedPropertiesTarget(), { category: "leader", key: "fixedDisplaySize", value: "" });
       if (["instance-sources", "hatch-repair", "spline-edit"].includes(action) && !canEditStructure(selectedPropertiesTarget().item)) return false;
       if (action === "instance-sources") return startInstanceSourceEdit(selectedPropertiesTarget().item);

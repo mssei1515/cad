@@ -35,7 +35,7 @@
         const offset = dx / session.shelfScale;
         element.end = { x: session.startEnd.x + offset, y: session.startElbow.y };
         // Legacy text follows the shelf midpoint; shelf-positioned labels resolve this at draw time.
-        if (session.startText) element.x = session.startText.x + offset / 2;
+        if (session.startText && element.textPlacement !== "text") element.x = session.startText.x + offset / 2;
       } else if (session.hit.type === "leader") {
         const offsetX = dx / session.shelfScale, offsetY = dy / session.shelfScale;
         if (session.startEnd) element.end = { x: session.startEnd.x + offsetX, y: session.startEnd.y + offsetY };

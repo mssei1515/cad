@@ -42,8 +42,8 @@
         secondary: localizedConstraintName(item.name),
       };
       if (target.kind === "annotation") return {
-        icon: toolbarSvgMarkup(item.type === "leader" ? "#annotationLeaderBtn" : "#annotationTextBtn"),
-        type: item.type === "leader" ? applicationText("引出線", "Leader") : applicationText("自由テキスト", "Free Text"),
+        icon: toolbarSvgMarkup(item.type === "leader" ? "#annotationLeaderIcon" : "#annotationTextBtn"),
+        type: applicationText("注記", "Annotation"),
         id: item.id,
         secondary: String(item.text || "").slice(0, 40),
       };

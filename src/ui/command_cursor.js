@@ -6,7 +6,7 @@
     const commandCursorCache = new Map();
     function activeCommandToolbarButton({ pendingType, constraintType, splineEditing, mode }) {
       if (constraintType === "fixed") return fixPointBtn;
-      if (pendingType?.startsWith("annotation-leader")) return document.getElementById("annotationLeaderBtn");
+      if (pendingType?.startsWith("annotation-leader")) return document.getElementById("annotationTextBtn");
       if (pendingType === "annotation-text-place") return document.getElementById("annotationTextBtn");
       if (pendingType?.startsWith("distance")) return constraintButtons.find((button) => button.dataset.constraint === "distance") || null;
       if (pendingType === "fillet-radius-place") return document.getElementById("toolFillet");

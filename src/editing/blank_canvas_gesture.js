@@ -2,7 +2,7 @@
 (() => {
   "use strict";
   function create({ getMode, getPending, getPendingConstraint, getSplineEditSession, getLineCommand, getTransientAuthoring,
-    getTime, hypot2, clearPreview, finalizeSplineFromDoubleClick, finishSplineEditSession, submitDistanceValue, submitOffsetValue, cancelPendingCommand, isDrawToolMode, exitDrawMode, cancelConstraintTargetCommand, rollbackTransientLineCompletion, clearSnap, clearSelection, setHint, updateUI, draw, cancelActiveDrawOperation, rollbackTransientPoint, hasActiveDrawOperation, hasSelection, updateGeometrySelectionUI }) {
+    getTime, hypot2, clearPreview, finalizeSplineFromDoubleClick, finishSplineEditSession, submitDistanceValue, submitOffsetValue, submitAnnotationValue, cancelPendingCommand, isDrawToolMode, exitDrawMode, cancelConstraintTargetCommand, rollbackTransientLineCompletion, clearSnap, clearSelection, setHint, updateUI, draw, cancelActiveDrawOperation, rollbackTransientPoint, hasActiveDrawOperation, hasSelection, updateGeometrySelectionUI }) {
     let blankDoubleClickCandidate = null;
     let suppressNextBlankDoubleClickEvent = false;
     function isBlankCanvasHit(hits = {}) {
@@ -91,6 +91,10 @@
       }
       if (getPending()?.type === "offset-value") {
         submitOffsetValue();
+        return true;
+      }
+      if (getPending()?.type === "annotation-value") {
+        submitAnnotationValue();
         return true;
       }
       if (getPending()) {
