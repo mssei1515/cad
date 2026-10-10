@@ -6,6 +6,10 @@
 
 ## 現在の再開地点（2026-10-10）
 
+ClipboardPayloadへscope・Selectionからの依存要素収集、参照不足の検出、対象内拘束の選別、コピー値生成を分離。生成値／エラーを返しUIとClipboard sessionを書き換えない。app.jsは10,940→10,834行（106行減）。構文390ファイル・単体992件・関連E2E140件成功（exit 0、1.8分）。ログはcad-clipboard-payload-{check,unit,e2e}.log。全体E2Eは今回未実行。全体目標は未完了。
+
+### 前回の区切り
+
 最新develop 3fc42beからcodex/clipboard-transferで再開。停止条件は週枠が尽きる前へ更新（最終検証・統合の余裕を残す）。ClipboardTransferへID再帰置換・拘束座標移動・Block投影再接続を分離し、貼付けsessionとデータ変換を分けた。元の3関数と処理本体が一致することを機械照合。app.jsは10,977→10,940行（37行減）。構文389ファイル・単体989件・関連E2E140件成功（exit 0、1.8分）。ログはcad-clipboard-transfer-{check,unit,e2e}.log。全体E2Eは今回未実行。全体目標は未完了。
 
 ## 前回の停止地点（2026-10-08）

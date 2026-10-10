@@ -98,7 +98,7 @@
 
 ## 8. 再開地点（2026-10-10）
 
-週枠残量11%で再開。現在のdevelop 3fc42beからcodex/clipboard-transferを作成。開始時app.jsは10,977行。ClipboardTransferへ値のID再帰置換・拘束座標移動・Block投影再接続を分離し10,940行（37行減）。貼付けtransactionはまだappに残る。次はpayload生成・貼付けの状態所有を引き続き整理する。最新の検証結果はcomposition-root.mdを参照。
+週枠残量11%で再開。現在のdevelop 3fc42beからcodex/clipboard-transferを作成。開始時app.jsは10,977行。ClipboardTransferへ値のID再帰置換・拘束座標移動・Block投影再接続を分離し10,940行（37行減）。ClipboardPayloadへ依存要素収集・拘束選別・payload生成も分離し10,834行（前段から106行減）。貼付けtransactionはまだappに残る。次はClipboard session・貼付けの状態所有を引き続き整理する。最新の検証結果はcomposition-root.mdを参照。
 
 ### 前回の停止地点（2026-10-08）
 

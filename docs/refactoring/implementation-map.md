@@ -504,3 +504,5 @@ AuthoringPreviewRendererへSpline／Centerline／Trim描画も統合。Spline構
 - src/parameters/namespace.js: symbolDeletionDependentsで削除対象記号と依存する式の照会を所有。削除の拒否と案内表示は呼出側が担当する。
 
 - src/editing/clipboard_transfer.js: コピー値のID／座標変換とBlock投影参照の再接続。貼付けの状態管理から独立した入力・出力とMap更新を持つ。
+
+- src/editing/clipboard_payload.js: scopeとSelectionから依存要素・対象内拘束を集めてコピー値を生成し、参照不足はエラーとして返す。
