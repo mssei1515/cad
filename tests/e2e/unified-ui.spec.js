@@ -1234,7 +1234,8 @@ test("workspace integrates background-blurred compact Object groups into Sketch 
   expect(groupState).toEqual([
     { category: "point", open: "false", height: 20, count: 4 },
     { category: "line", open: "false", height: 20, count: 4 },
-    { category: "constraint", open: "false", height: 20, count: 6 },
+    { category: "dimension", open: "false", height: 20, count: 2 },
+    { category: "constraint", open: "false", height: 20, count: 4 },
   ]);
   await expect(page.locator(".sketch-object-row")).toHaveCount(0);
 
@@ -2213,7 +2214,7 @@ test("application language defaults to Japanese and persists the full UI selecti
   ]);
   await page.locator("#parametersCloseBtn").click();
   await page.evaluate(() => window.__jot2dTest.resetForReadOnlyDuplicateDimension());
-  await expandSketchTreeGroup(page, "constraint");
+  await expandSketchTreeGroup(page, "dimension");
   await page.locator('.sketch-object-row[data-object-kind="constraint"]').first().click();
   await expect(page.locator("#propertiesPanel")).toContainText("Value / Expression");
   await openBlockDefinitions(page);
@@ -2881,7 +2882,7 @@ test("open dimension arrow tips align without pushing reversed wings into their 
 test("Constraint dimensions expose defining geometry and inheritable appearance without creating annotation dimensions", async ({ page }) => {
   await openTestDocument(page);
   await page.evaluate(() => window.__jot2dTest.resetForReadOnlyDuplicateDimension());
-  await expandSketchTreeGroup(page, "constraint");
+  await expandSketchTreeGroup(page, "dimension");
   await page.locator('.sketch-object-row[data-object-kind="constraint"]').first().click();
   await expect(page.locator("#propertiesPanel .property-section h3")).toContainText(["基本情報", "寸法外観"]);
   await expect(page.locator("#propertiesPanel")).toContainText("値 / 数式");
@@ -2972,7 +2973,7 @@ test("Constraint dimensions expose defining geometry and inheritable appearance 
   }));
   await page.locator("#sketchDimensionColor").fill("");
   await page.locator("#sketchDimensionColor").blur();
-  await expandSketchTreeGroup(page, "constraint");
+  await expandSketchTreeGroup(page, "dimension");
   await page.locator('.sketch-object-row[data-object-kind="constraint"]').first().click();
   const properties = page.locator("#propertiesPanel");
   await properties.locator('[data-dimension-display="precision"]').selectOption("3");
@@ -3676,6 +3677,7 @@ test("constraint rows highlight only directly related selected geometry", async 
   await openTestDocument(page);
   const ids = await page.evaluate(() => window.__jot2dTest.resetForSidebarInspection());
   await expandSketchTreeGroup(page, "constraint");
+  await expandSketchTreeGroup(page, "dimension");
   const constraintRow = page.locator('.sketch-object-row[data-object-kind="constraint"][data-constraint-index]');
   await expect(constraintRow).toHaveCount(2);
 

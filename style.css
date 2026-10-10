@@ -325,8 +325,11 @@ button:disabled { opacity: .45; cursor: default; }
 .sketch-object-primary { flex: 0 0 auto; font-size: 11px; font-weight: 650; }
 .sketch-object-secondary { min-width: 0; overflow: hidden; color: #64748b; font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
 .sketch-object-actions { min-width: 23px; display: flex; justify-content: flex-end; }
-.sketch-object-row .icon-delete-btn, .sketch-object-row .removeConstraintBtn { width: 22px; height: 20px; padding: 2px; border-color: transparent; background: transparent; opacity: .34; }
+.sketch-object-row .icon-delete-btn, .sketch-object-row .removeConstraintBtn, .sketch-object-row .objectVisibilityBtn { width: 22px; height: 20px; padding: 2px; border-color: transparent; background: transparent; opacity: .34; }
 .sketch-object-row:hover .icon-delete-btn, .sketch-object-row:hover .removeConstraintBtn, .sketch-object-row .icon-delete-btn:focus-visible, .sketch-object-row .removeConstraintBtn:focus-visible { opacity: 1; }
+.sketch-object-row .objectVisibilityBtn { opacity: 1; }
+.sketch-object-row .objectVisibilityBtn[aria-pressed="false"] { opacity: .6; }
+.sketch-object-row .objectVisibilityBtn:disabled { opacity: .45; }
 .sketch-tree-summary { min-height: 22px; display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: center; color: var(--text-subtle); background: transparent; font-size: 9px; line-height: 1; }
 .sketch-tree-summary-content { min-width: 0; display: flex; align-items: center; gap: 6px; padding: 0 5px 0 2px; overflow: hidden; white-space: nowrap; }
 .sketch-tree-summary-item { min-width: 0; display: inline-flex; align-items: center; gap: 2px; }

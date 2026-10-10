@@ -185,7 +185,7 @@ test('Shift toggle and mixed geometry retain dimensions, rectangular selection i
 
 test('active Sketch tree dimensions allow additive selection',async({page})=>{
  await fixture(page);const sketch=page.locator('.sketch-item[data-id="S1"]');
- await sketch.locator('.sketchExpandBtn').click();await page.locator('.sketch-group-row[data-sketch-id="S1"][data-category="constraint"]').click();
+ await sketch.locator('.sketchExpandBtn').click();await page.locator('.sketch-group-row[data-sketch-id="S1"][data-category="dimension"]').click();
  const rows=page.locator('.sketch-object-row[data-sketch-id="S1"][data-object-kind="constraint"]');
  await rows.nth(0).click();await rows.nth(1).click({modifiers:['Control']});expect((await state(page)).dimensions).toEqual([0,1]);
  await rows.nth(0).click({modifiers:['Shift']});expect((await state(page)).dimensions).toEqual([1]);

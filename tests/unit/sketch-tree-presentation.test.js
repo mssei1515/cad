@@ -16,6 +16,7 @@ function objectFixture() {
     isExplicitPoint: item => item.explicit, isPointUsedByLine: item => item.used, elementSketchId: item => item.sketchId,
     constraintSketchId: item => item.sketchId, constraintStatusOf: item => item.status,
     blockProjectionBundle: instance => instance.bundle, applicationText: (_ja, en) => en, escapeHtml: escape,
+    isDimensionConstraint: item => Boolean(item.dimension),
     toolbarSvgMarkup: () => '<svg></svg>', sketchTreeGutter: () => '',
     sketchTreeObjectSelected: () => true, sketchTreeObjectHovered: () => false });
   return { model, objects };
@@ -40,6 +41,14 @@ test('object labels are escaped and constraint summaries include only blocks own
     { sketchId: 'S2', bundle: { lines: [{ status: 'conflict' }], circles: [], arcs: [] } });
   const counts = f.objects.summaryCounts('S1', { point: [{ status: 'under' }], line: [], circle: [], arc: [], spline: [] });
   assert.equal(counts.full, 1); assert.equal(counts.under, 1); assert.equal(counts.conflict, 0);
+});
+
+test('dimension category separates constraint and reference dimensions while retaining model indices', () => {
+  const f = objectFixture();
+  f.model.constraints.push({ sketchId: 'S1', dimension: {} }, { sketchId: 'S1' }, { sketchId: 'S1', dimension: {}, readOnlyDimension: true });
+  const groups = f.objects.index().get('S1');
+  assert.deepEqual(Array.from(groups.dimension, entry => entry.modelIndex), [0, 2]);
+  assert.deepEqual(Array.from(groups.constraint, entry => entry.modelIndex), [1]);
 });
 
 function controllerFixture() {

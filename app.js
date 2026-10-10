@@ -3436,7 +3436,11 @@
   }
 
   function selectedVisibilityTargets() {
-    if (canvasSelection.inspection || canvasSelection.sketchId) return [];
+    if (canvasSelection.inspection) return [];
+    if (canvasSelection.sketchId) {
+      const sketch = sketchById(canvasSelection.sketchId);
+      return sketch && !isRootSketch(sketch) && sketch.id !== activeSketchId() ? [{ kind: "sketch", item: sketch }] : [];
+    }
     return [
       ...selectedGeometryItems().filter(item => !item.blockProjection).map(item => ({ kind: "geometry", item })),
       ...canvasSelection.blockInstances.map(item => ({ kind: "block", item })),
@@ -3444,20 +3448,40 @@
       ...canvasSelection.annotations.map(item => ({ kind: "annotation", item })),
       ...canvasSelection.hatches.map(item => ({ kind: "hatch", item })),
       ...canvasSelection.referenceImages.map(item => ({ kind: "referenceImage", item })),
+      ...[...new Set([...canvasSelection.dimensionConstraints, effectiveSelectedConstraint()].filter(item => item && isDimensionConstraint(item)))].map(item => ({ kind: "constraint", item })),
     ];
   }
 
   function selectionVisibilityIsHidden(targets) {
     return targets.length > 0 && targets.every(target => {
+      if (target.kind === "sketch") return target.item.visible === false;
       if (target.kind !== "geometryInstance") return multiplePropertyAppearance(target).visible === false;
       if (typeof target.item.appearanceOverride?.visible === "boolean") return !target.item.appearanceOverride.visible;
       const bundle = geometryInstanceBundle(target.item);
       const geometry = [...bundle.points, ...bundle.lines, ...bundle.circles, ...bundle.arcs, ...bundle.splines];
-      if (geometry.length) return geometry.every(item => effectiveAppearanceForElement(item).visible === false);
+      const appearances = [...geometry.map(effectiveAppearanceForElement), ...(bundle.hatches || []).map(hatchAppearanceForDisplay)];
+      if (appearances.length) return appearances.every(appearance => appearance.visible === false);
       return resolveGeometryAppearance({ defaults: documentModel.defaultAppearance,
         sketchAppearance: sketchById(target.item.sketchId)?.appearance,
         overrides: [target.item.appearanceOverride] }).visible === false;
     });
+  }
+
+  function toggleSelectedVisibility() {
+    if (!isGeometryMode()) return;
+    const targets = selectedVisibilityTargets();
+    if (targets.length === 0) return;
+    if (targets[0].kind === "sketch") return toggleSketchVisibility(targets[0].item.id);
+    if (!guardSelectionEdit()) return;
+    const visible = selectionVisibilityIsHidden(targets);
+    const ordinaryTargets = targets.filter(target => target.kind !== "geometryInstance");
+    if (ordinaryTargets.length) applyMultipleProperty({ kind: "multiple", items: ordinaryTargets }, "visible", visible, { commit: false });
+    for (const target of targets.filter(target => target.kind === "geometryInstance")) {
+      appearancePropertyCommand.apply(target, { category: "appearance", key: "visible", value: String(visible) }, { commit: false });
+    }
+    recordHistory("選択図形の表示切替");
+    updateUI();
+    draw();
   }
 
   function updateToolbar() {
@@ -3503,7 +3527,8 @@
     const visibilityTargets = selectedVisibilityTargets();
     if (visibilityButton) {
       const hidden = selectionVisibilityIsHidden(visibilityTargets);
-      visibilityButton.disabled = !geometryMode || visibilityTargets.length === 0;
+      visibilityButton.disabled = !geometryMode || visibilityTargets.length === 0 || visibilityTargets.some(target => target.kind !== "sketch"
+        && !canEditSketch(target.kind === "constraint" ? constraintSketchId(target.item) : elementSketchId(target.item)));
       visibilityButton.classList.toggle("active", hidden);
       visibilityButton.setAttribute("aria-pressed", String(hidden));
     }
@@ -4419,6 +4444,11 @@
 
   const sketchTreeObjects = window.SketchTreeObjects.create({
     sidebarGeometryItem, activeSketchId,
+    objectVisible: (category, entry) => !selectionVisibilityIsHidden([{
+      kind: category === "constraint" ? "constraint" : ["point", "line", "circle", "arc", "spline"].includes(category) ? "geometry"
+        : category === "instance" ? "geometryInstance" : category,
+      item: category === "constraint" ? entry.constraint : entry,
+    }]),
     currentScope: () => model, getLanguage: () => applicationSettings.language,
     ensureAnalysis: constraintAnalysis.ensure, types: window.GeometrySolver,
     isExplicitPoint, isPointUsedByLine, elementSketchId, constraintSketchId,
@@ -4445,7 +4475,7 @@
   const sketchTreeController = window.SketchTreeController.create({
     currentScope: () => model, activeSketchId, setActiveSketch, clearSelection, canvasSelection,
     sidebarGeometryItem, toggleBlockInstanceSelection, targetFromConstraint, updateUI, draw,
-    sketchTreeView, updateSketchUI, toggleSketchVisibility, toggleSketchLock, guardSketchEdit, selectionSketchId, renameSketch, deleteSketch, deleteElements, deleteCurrentSelection,
+    sketchTreeView, updateSketchUI, toggleSketchVisibility, toggleSketchLock, guardSketchEdit, selectionSketchId, renameSketch, deleteSketch, deleteElements, deleteCurrentSelection, toggleSelectedVisibility,
     hover: { canvasHover, setSidebarHover, clearSidebarHover, sidebarHoverElementsForItem, sidebarHoverElementsForConstraint, elementSketchId, ROOT_SKETCH_ID },
     resolveSelectionEntry: sketchTreeObjects.resolveSelectionEntry,
     move: { active: () => sketchMoveCommand.active, choose: sketchMoveCommand.choose, commit: sketchMoveCommand.commit, cancel: sketchMoveCommand.cancel },
@@ -6220,21 +6250,7 @@
 
   document.getElementById("undoBtn")?.addEventListener("click", undoHistory);
   document.getElementById("redoBtn")?.addEventListener("click", redoHistory);
-  document.getElementById("selectionVisibilityBtn")?.addEventListener("click", () => {
-    if (!isGeometryMode()) return;
-    if (!guardSelectionEdit()) return;
-    const targets = selectedVisibilityTargets();
-    if (targets.length === 0) return;
-    const visible = selectionVisibilityIsHidden(targets);
-    const ordinaryTargets = targets.filter(target => target.kind !== "geometryInstance");
-    if (ordinaryTargets.length) applyMultipleProperty({ kind: "multiple", items: ordinaryTargets }, "visible", visible, { commit: false });
-    for (const target of targets.filter(target => target.kind === "geometryInstance")) {
-      appearancePropertyCommand.apply(target, { category: "appearance", key: "visible", value: String(visible) }, { commit: false });
-    }
-    recordHistory("選択図形の表示切替");
-    updateUI();
-    draw();
-  });
+  document.getElementById("selectionVisibilityBtn")?.addEventListener("click", toggleSelectedVisibility);
   document.getElementById("deleteSelectionBtn")?.addEventListener("click", () => {
     if (!isGeometryMode()) return;
     if (deleteCurrentSelection()) {

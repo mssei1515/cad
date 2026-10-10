@@ -62,7 +62,7 @@ for (const active of ['S1', 'S2']) for (const locked of [false, true]) {
 
 test('other sketch dimension value solves its owner; new constraints and trim require drawing destination', async ({ page }) => {
   await setup(page, fixture());
-  await group(page, 'constraint');
+  await group(page, 'dimension');
   await page.locator('.sketch-object-row[data-sketch-id="S1"][data-object-kind="constraint"]').click();
   const expression = page.locator('#propertiesPanel [data-property="constraint-expression"]');
   await expect(expression).toBeEnabled();
@@ -94,7 +94,7 @@ test('lock persists through reload and undo; locked destination rejects creation
   await page.keyboard.press('Escape'); await page.locator('#undoBtn').click();
   expect((await state(page)).sketches.find(s => s.id === 'S1').locked).toBe(false);
   await setup(page, before); await expect(lock).toHaveAttribute('aria-pressed', 'true');
-  await group(page, 'constraint'); await page.locator('.sketch-object-row[data-object-kind="constraint"]').click();
+  await group(page, 'dimension'); await page.locator('.sketch-object-row[data-object-kind="constraint"]').click();
   await expect(page.locator('#propertiesPanel [data-property="constraint-expression"]')).toBeDisabled();
 });
 
@@ -114,18 +114,19 @@ test('selection does not redirect paste or new drawing and additive selection st
   expect(data.lines.filter(l=>l.sketchId==='S2')).toHaveLength(3);
 });
 
-test('sketch row has aligned visibility, delete and lock controls without a rename button', async ({ page }) => {
+test('sketch row orders visibility, lock and delete controls without a rename button', async ({ page }) => {
   await setup(page, fixture());
   for (const id of ['S1', 'S2']) {
     const row = page.locator(`.sketch-item[data-id="${id}"]`);
-    const boxes = await Promise.all(['.sketchVisibilityBtn', '.sketchLockBtn'].map(selector => row.locator(selector).boundingBox()));
+    const boxes = await Promise.all(['.sketchVisibilityBtn', '.sketchLockBtn', '.sketchDeleteBtn'].map(selector => row.locator(selector).boundingBox()));
     for (const box of boxes) expect(Math.abs(box.y - boxes[0].y)).toBeLessThan(2);
     expect(boxes[1].x).toBeGreaterThan(boxes[0].x);
+    expect(boxes[2].x).toBeGreaterThan(boxes[1].x);
     await expect(row.locator(".sketchDeleteBtn")).toBeVisible();
     await expect(row.locator(".sketchRenameBtn")).toHaveCount(0);
     await expect(row.locator(".sketchLockBtn svg")).toBeVisible();
     const bounds = await row.boundingBox();
-    expect(Math.abs(boxes[1].x + boxes[1].width - bounds.x - bounds.width)).toBeLessThan(2);
+    expect(Math.abs(boxes[2].x + boxes[2].width - bounds.x - bounds.width)).toBeLessThan(2);
   }
   await expect(page.locator('.sketch-item[data-id="ROOT"] .sketchDeleteBtn')).toHaveCount(0);
 });
@@ -166,7 +167,7 @@ test('locked projected sketch follows source dimension changes and remains locke
   await setup(page, data);
   const projected = () => page.evaluate(() => window.__jot2dTest.derivedInstanceStateForTest().instances.find(i => i.id === 'SPI1'));
   const before = await projected(); expect(before.valid).toBe(true);
-  await group(page, 'constraint'); await page.locator('.sketch-object-row[data-object-kind="constraint"]').click();
+  await group(page, 'dimension'); await page.locator('.sketch-object-row[data-object-kind="constraint"]').click();
   const input = page.locator('#propertiesPanel [data-property="constraint-expression"]');
   await input.fill('180'); await input.press('Tab');
   const after = await projected();
