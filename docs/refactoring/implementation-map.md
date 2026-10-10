@@ -502,3 +502,5 @@ AuthoringPreviewRendererへSpline／Centerline／Trim描画も統合。Spline構
 - src/commands/annotation_parameter_command.js: 注記Parameterのガード・編集・求解・失敗復元・履歴確定を調整。Parameter規則とcheckpointは既存所有者へ委譲する。
 
 - src/parameters/namespace.js: symbolDeletionDependentsで削除対象記号と依存する式の照会を所有。削除の拒否と案内表示は呼出側が担当する。
+
+- src/editing/clipboard_transfer.js: コピー値のID／座標変換とBlock投影参照の再接続。貼付けの状態管理から独立した入力・出力とMap更新を持つ。

@@ -1633,7 +1633,7 @@ test("file URL Help menu reads the generated Git commit file", async ({ page }) 
     }),
   );
   const expectedPaths = [
-    "src/editing/image_clipboard.js", "src/persistence/dxf_import.js", "src/commands/dxf_import_command.js",
+    "src/editing/image_clipboard.js", "src/editing/clipboard_transfer.js", "src/persistence/dxf_import.js", "src/commands/dxf_import_command.js",
     "src/geometry/export_region.js", "src/rendering/canvas_export.js", "src/persistence/png_file.js", "src/commands/png_export_command.js",
     "src/commands/dimension_line_group.js",
     "runtime-version.js", "app.js",
