@@ -80,7 +80,7 @@
 - 新module追加時は`index.html`、`tools/check-syntax.js`、必要なら`package.json`の明示的な単体一覧、`tests/e2e/unified-ui.spec.js`の読込順期待を更新する。script順とapp内の初期化順の両方を確認する。
 - E2E実行中にアプリのソースを変更しない。長時間のテストは同じprocess/sessionを追跡し、出力待ちのtimeoutだけで再起動しない。
 - 過去の「今回はテストをスキップ」はその時点だけの許可。今後の常時スキップには引き継がない。
-- originは`https://github.com/mssei1515/cad`。通常の作業branchとdevelopへのPushは継続許可がある。今回の作業branchは`codex/sidebar-lifecycle`。停止時の統合後は削除し、再開時に最新developから新しく作成する。
+- originは`https://github.com/mssei1515/cad`。通常の作業branchとdevelopへのPushは継続許可がある。今回の作業branchは`codex/clipboard-transfer`。停止時の統合後は削除し、再開時に最新developから新しく作成する。
 - 現在は作業branchで進める。最新の目標継続指示で指定された最後のコミットをリリースする際にdevelop／mainへ統合する。各抽出の途中では自動リリースしない。
 - Commit後には`npm run write:runtime-version`を実行する。生成物はGitに含めない。
 
@@ -98,7 +98,11 @@
 
 ## 8. 再開地点（2026-10-10）
 
-週枠残量11%で再開。現在のdevelop 3fc42beからcodex/clipboard-transferを作成。開始時app.jsは10,977行。ClipboardTransferへ値のID再帰置換・拘束座標移動・Block投影再接続を分離し10,940行（37行減）。ClipboardPayloadへ依存要素収集・拘束選別・payload生成も分離し10,834行（前段から106行減）。貼付けtransactionはまだappに残る。次はClipboard session・貼付けの状態所有を引き続き整理する。最新の検証結果はcomposition-root.mdを参照。
+週枠残量11%で再開し、残量5%で最終検証・統合の余力を確保するため新規分離を停止。develop 3fc42beを基準にcodex/clipboard-transferで2単位を実装した。ClipboardTransfer（c1dc30c）はID再帰置換・拘束座標移動・Block投影再接続、ClipboardPayload（05eecd3）は依存要素収集・拘束選別・コピー値生成を担当する。app.jsは10,977→10,940→10,834行、合計143行減。全体目標は未完了。
+
+コード05eecd3をdevelopへ統合して最終検証済み。構文390ファイル・単体992件・全E2E441件が成功（exit 0、全E2E23.1分）。ログは一時ディレクトリのcad-refactor-oct10-final-{check,unit,e2e}.log。この停止記録をCommit／Pushし、develop先行・main最後で同期して一時停止する。統合後は作業branchをローカル・リモートとも削除しruntime-version.jsを再生成する。
+
+再開時はusage、Git状態、worktree、remote main／developと祖先関係を確認し、最新developから新しい作業branchを作る。次はClipboard sessionと貼付けtransactionの状態所有を整理する。コピー内容・貼付け回数を単なるgetter/setterとして外へ出すだけでなく、コピー／切取り／貼付け成功・失敗の境界を定める。現在は切取り削除失敗でもコピー内容が残り、貼付け回数はsolveAndRefresh前に更新されcatchで巻き戻らない。診断hookによるpayload代入・クリア・照会も存在する。この既存動作を無断で変えず、保存形式やUIの変更と混ぜない。既に分離したClipboardTransfer／ClipboardPayloadは再抽出しない。最終検証後の新しい実装変更はない。
 
 ### 前回の停止地点（2026-10-08）
 
