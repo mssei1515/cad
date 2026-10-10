@@ -1092,7 +1092,7 @@ test("undo preserves construction drawing mode", async ({ page }) => {
   expect(state.constructionButtonActive).toBe(true);
 });
 
-test("workspace integrates transparent compact Object groups into Sketch Tree and removes Explorer", async ({ page }) => {
+test("workspace integrates background-blurred compact Object groups into Sketch Tree and removes Explorer", async ({ page }) => {
   await openTestDocument(page);
   await page.evaluate(() => window.__jot2dTest.resetForResponsiveLineDragTest());
   await expect(sketchTreeSketch(page, "ROOT")).not.toHaveAttribute("aria-expanded", /.+/);
@@ -1209,7 +1209,7 @@ test("workspace integrates transparent compact Object groups into Sketch Tree an
     border: ["0px", "0px", "0px", "0px"],
     radius: "0px",
     shadow: "none",
-    backdropFilter: "none",
+    backdropFilter: "blur(4px)",
     headerBackground: "rgba(0, 0, 0, 0)",
     headerBorderBottom: "0px",
     groupBackground: "rgba(0, 0, 0, 0)",
@@ -2246,6 +2246,8 @@ test("application theme switches the full UI to dark mode, preserves the menu ba
   await expect(page.locator("#applicationThemeSelect")).toHaveValue("light");
   await page.locator("#applicationThemeSelect").selectOption("dark");
   await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
+  await expect(page.locator("#sketchOverlay")).toHaveCSS("backdrop-filter", "blur(4px)");
+  await expect(page.locator("#sketchOverlay")).toHaveCSS("filter", "none");
   const darkTheme = await page.evaluate(() => {
     const color = (selector, property = "backgroundColor") => getComputedStyle(document.querySelector(selector))[property];
     return {

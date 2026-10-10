@@ -298,7 +298,7 @@ button:disabled { opacity: .45; cursor: default; }
 .canvas-context-candidate-primary strong { overflow: hidden; color: var(--text-strong); font-size: 12px; text-overflow: ellipsis; }
 .canvas-context-candidate-secondary { overflow: hidden; color: #64748b; font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
 .canvas-context-menu button.canvas-context-candidate:hover .sketch-object-icon, .canvas-context-menu button.canvas-context-candidate:focus-visible .sketch-object-icon { color: #1d4ed8; }
-.sketch-overlay { position: absolute; top: 12px; left: 12px; z-index: 3; width: min(320px, calc(100% - 24px)); max-height: min(70vh, 680px); display: grid; gap: 2px; overflow: visible; color: var(--text); background: transparent; border: 0; border-radius: 0; box-shadow: none; backdrop-filter: none; }
+.sketch-overlay { position: absolute; top: 12px; left: 12px; z-index: 3; width: min(320px, calc(100% - 24px)); max-height: min(70vh, 680px); display: grid; gap: 2px; overflow: visible; color: var(--text); background: transparent; border: 0; border-radius: 0; box-shadow: none; -webkit-backdrop-filter: blur(4px); backdrop-filter: blur(4px); }
 .sketch-overlay-header { min-height: 27px; display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 4px; padding: 2px 5px 2px 8px; border: 0; background: transparent; }
 .sketch-overlay-header strong { overflow: hidden; font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
 .sketch-overlay-header span { display: flex; gap: 3px; }
