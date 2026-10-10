@@ -13,14 +13,16 @@ async function clickWorld(page, point) {
   await page.mouse.click(client.x, client.y);
 }
 async function createLeader(page, endX = 85) {
-  await page.locator('#annotationLeaderBtn').click();
-  await expect(page.locator('#commandPanel')).toBeHidden();
+  await page.locator('#annotationTextBtn').click();
+  await page.locator('#commandPanel [data-setting=withLeader]').check();
+  await page.locator('#commandPanel textarea').fill('Leader');
+  await expect(page.locator('#commandPanel')).toBeVisible();
   await clickWorld(page, { x: 0, y: 0 });
   await clickWorld(page, { x: 70, y: -30 });
-  await expect(page.locator('#commandPanel')).toBeHidden();
+  await expect(page.locator('#commandPanel')).toBeVisible();
   expect((await data(page)).annotations).toHaveLength(0);
-  page.once('dialog', dialog => dialog.accept('Leader'));
   await clickWorld(page, { x: endX, y: -5 });
+  await page.locator('#commandPanel [data-action=finish]').click();
   return (await data(page)).annotations[0];
 }
 async function data(page) { return page.evaluate(() => window.__jot2dTest.serializedModelForTest()); }

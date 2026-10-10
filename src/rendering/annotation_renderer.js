@@ -42,16 +42,22 @@
       const displayPoint = point => ({ x: origin.x + (point.x - base.x) * factor, y: origin.y + (point.y - base.y) * factor });
       const elbow = displayPoint(storedElbow), end = displayPoint(element.end);
       const text = displayPoint({ x: Number(element.x) || 0, y: Number(element.y) || 0 });
+      if (element.textPlacement === "text") {
+        const style = effectiveAnnotationStyle(element);
+        const metrics = annotationTextMetrics({ ...element, annotationTransformRotation: 0 }, { x: 0, y: 0 });
+        const gap = ((style.textGap ?? 1) * ANNOTATION_SCREEN_PX_PER_MM + style.lineWidth / 2)
+          / viewport.scale * window.Appearance.annotationDisplayFactor(style, viewport.scale);
+        const rotation = element.annotationTransformRotation || 0;
+        const normal = { x: -Math.sin(rotation), y: Math.cos(rotation) };
+        const offset = metrics.bounds.y2 + gap - ((elbow.x - text.x) * normal.x + (elbow.y - text.y) * normal.y);
+        for (const point of [elbow, end]) { point.x += normal.x * offset; point.y += normal.y * offset; }
+      }
       return { elbow, end, shelfScale: factor,
         x: text.x, y: text.y };
     }
 
-    // New leaders locate text from the shelf, preserving its gap after font, zoom and rotation changes.
-    // Legacy annotations retain stored x/y and follow the shelf span until the gap is individually edited.
-    function annotationTextLayout(element) {
-      if (element?.type !== "leader" || element.textPlacement !== "shelf" || !element.elbow || !element.end) return null;
+    function annotationTextMetrics(element, position = element) {
       const style = effectiveAnnotationStyle(element);
-      const shelf = annotationLeaderDisplayGeometry(element);
       const fontSize = annotationTextWorldHeight(style);
       const lines = displayText(element, formatValue).split(/\r\n|\r|\n/);
       ctx.save();
@@ -60,6 +66,24 @@
       ctx.restore();
       const height = fontSize * (1 + (lines.length - 1) * 1.2);
       const left = style.textAlign === "center" ? -width / 2 : style.textAlign === "right" ? -width : 0;
+      const rotation = element.appearanceInheritance ? (Number(style.rotation) || 0) + (element.annotationTransformRotation || 0) : Number(element.rotation) || 0;
+      const { x, y } = position;
+      const corners = [{ x: left, y: -height / 2 }, { x: left + width, y: -height / 2 },
+        { x: left + width, y: height / 2 }, { x: left, y: height / 2 }];
+      const world = corners.map(p => ({ x: x + p.x * Math.cos(rotation) - p.y * Math.sin(rotation), y: y + p.x * Math.sin(rotation) + p.y * Math.cos(rotation) }));
+      return { x, y, rotation, fontSize, width, height, left,
+        bounds: { x1: Math.min(...world.map(p => p.x)), y1: Math.min(...world.map(p => p.y)),
+          x2: Math.max(...world.map(p => p.x)), y2: Math.max(...world.map(p => p.y)) } };
+    }
+
+    // New leaders locate text from the shelf, preserving its gap after font, zoom and rotation changes.
+    // Legacy annotations retain stored x/y and follow the shelf span until the gap is individually edited.
+    function annotationTextLayout(element) {
+      if (element?.type === "leader" && element.textPlacement === "text") return annotationTextMetrics(element, annotationLeaderDisplayGeometry(element));
+      if (element?.type !== "leader" || element.textPlacement !== "shelf" || !element.elbow || !element.end) return null;
+      const style = effectiveAnnotationStyle(element);
+      const shelf = annotationLeaderDisplayGeometry(element);
+      const { fontSize, width, height, left } = annotationTextMetrics(element);
       const corners = [{ x: left, y: -height / 2 }, { x: left + width, y: -height / 2 },
         { x: left + width, y: height / 2 }, { x: left, y: height / 2 }];
       const localRotation = Number(style.rotation) || 0;
@@ -93,7 +117,7 @@
       ctx.textAlign = style.textAlign;
       ctx.textBaseline = "middle";
       ctx.translate(position.x, position.y);
-      ctx.rotate(element.type === "leader" && element.appearanceInheritance ? (style.rotation || 0) + (element.annotationTransformRotation || 0) : Number(element.rotation) || 0);
+      ctx.rotate(element.appearanceInheritance ? (style.rotation || 0) + (element.annotationTransformRotation || 0) : Number(element.rotation) || 0);
       const lines = displayText(element, formatValue).split(/\r\n|\r|\n/);
       lines.forEach((line, index) => ctx.fillText(line, 0, (index - (lines.length - 1) / 2) * fontSize * 1.2));
       ctx.restore();
@@ -134,7 +158,7 @@
         }
       });
     }
-    return Object.freeze({ annotationLeaderDisplayGeometry, annotationTextLayout, annotationTextWorldHeight, drawAnnotationText, drawAnnotationLeader });
+    return Object.freeze({ annotationLeaderDisplayGeometry, annotationTextLayout, annotationTextMetrics, annotationTextWorldHeight, drawAnnotationText, drawAnnotationLeader });
   }
   window.AnnotationRenderer = Object.freeze({ create, displayText });
 })();

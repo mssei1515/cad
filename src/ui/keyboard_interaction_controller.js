@@ -70,6 +70,10 @@
         return;
       }
 
+      if (!textEditingTarget && e.key === "Enter" && operations.annotation?.active) {
+        e.preventDefault(); operations.annotation.finish(); return;
+      }
+
       if (!textEditingTarget && operations.getMode() === "spline" && e.key === "Enter") {
         e.preventDefault();
         operations.finishSpline(false);

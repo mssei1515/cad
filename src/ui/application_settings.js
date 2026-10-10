@@ -21,7 +21,7 @@
     ["実線／補助線", "Normal / Construction"], ["トリム", "Trim"], ["R面取り", "Fillet"], ["フィレット", "Fillet"], ["オフセット", "Offset"], ["塗りつぶし", "Fill"],
     ["寸法・注記", "Dimensions and annotations"], ["寸法", "Dimension"], ["一致", "Coincident"], ["水平", "Horizontal"], ["垂直", "Vertical"], ["平行", "Parallel"], ["直角", "Perpendicular"],
     ["対称", "Symmetry"], ["同心", "Concentric"], ["等寸", "Equal"], ["接線", "Tangent"], ["固定／解除", "Fix / Unfix"], ["固定解除", "Unfix"],
-    ["引出線", "Leader"], ["自由テキスト", "Free Text"], ["画像を読み込み", "Import Image"], ["画像", "Image"], ["参照画像", "Reference Image"], ["位置ロック", "Position lock"], ["2点から縮尺を設定", "Calibrate scale from two points"], ["幅", "Width"], ["非表示要素を表示", "Show Hidden Elements"], ["拘束状態表示", "Constraint Status View"],
+    ["注記", "Annotation"], ["引出線", "Leader"], ["自由テキスト", "Free Text"], ["画像を読み込み", "Import Image"], ["画像", "Image"], ["参照画像", "Reference Image"], ["位置ロック", "Position lock"], ["2点から縮尺を設定", "Calibrate scale from two points"], ["幅", "Width"], ["非表示要素を表示", "Show Hidden Elements"], ["拘束状態表示", "Constraint Status View"],
     ["拘束状態表示を切り替え（Space長押しでも一時表示）", "Toggle constraint status view (hold Space for temporary view)"],
     ["拘束ツールはツールバーから選択します", "Select constraint tools from the toolbar"],
     ["プロパティ", "Properties"], ["スケッチ", "Sketch"], ["スケッチツリー", "Sketch Tree"],

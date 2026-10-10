@@ -96,7 +96,7 @@
       const values = (target.items || []).map((entry) => {
         if (key === "modelRelativeSize") return !window.Appearance.annotationDisplaySettings(entry.kind === "annotation" ? effectiveAnnotationStyle(entry.item) : entry.item.dimension?.display || {}).fixedDisplaySize;
         if (key === "construction") return Boolean(entry.item.construction);
-        if (key === "rotation") return (entry.item.type === "leader" ? effectiveAnnotationStyle(entry.item).rotation || 0 : Number(entry.item.rotation) || 0) * 180 / Math.PI;
+        if (key === "rotation") return ((entry.item.type === "leader" || entry.item.appearanceInheritance) ? effectiveAnnotationStyle(entry.item).rotation || 0 : Number(entry.item.rotation) || 0) * 180 / Math.PI;
         const appearance = multiplePropertyAppearance(entry);
         return key === "opacity" ? Number(appearance.opacity) * 100 : appearance[key];
       });

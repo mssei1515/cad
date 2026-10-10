@@ -130,7 +130,7 @@
   }
 
   function annotationStoredStyle(element) {
-    if (element.type === "leader" && element.appearanceInheritance === true) {
+    if (element.appearanceInheritance === true) {
       const result = normalizeLeaderAppearance(element.style);
       for (const key of ["prefix", "suffix"]) if (Object.hasOwn(element.style || {}, key)) result[key] = String(element.style[key] || "");
       if (Object.hasOwn(element.style || {}, "precision")) result.precision = normalizeAnnotationStyle(element.style).precision;

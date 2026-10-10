@@ -48,13 +48,13 @@
 
     function applyAnnotationStyleValue(annotation, key, rawValue) {
       if (!annotation) return false;
-      if (annotation.type === "leader" && !["prefix", "suffix", "precision"].includes(key)) return applyLeaderAppearanceValue(prepareLeaderStyle(annotation), key, rawValue);
-      const next = annotation.type === "leader" ? { ...prepareLeaderStyle(annotation) } : { ...normalizeAnnotationStyle(annotation.style) };
+      if ((annotation.type === "leader" || annotation.appearanceInheritance) && !["prefix", "suffix", "precision"].includes(key)) return applyLeaderAppearanceValue(prepareLeaderStyle(annotation), key, rawValue);
+      const next = (annotation.type === "leader" || annotation.appearanceInheritance) ? { ...prepareLeaderStyle(annotation) } : { ...normalizeAnnotationStyle(annotation.style) };
       if (["bold", "italic"].includes(key)) next[key] = Boolean(rawValue);
       else if (key === "precision") next.precision = rawValue === "auto" ? null : window.Appearance.normalizeAnnotationStyle({ precision: rawValue }).precision;
       else if (["textHeight", "lineWidth", "terminatorSize"].includes(key)) next[key] = Number(rawValue);
       else next[key] = rawValue;
-      annotation.style = annotation.type === "leader" ? next : normalizeAnnotationStyle(next);
+      annotation.style = (annotation.type === "leader" || annotation.appearanceInheritance) ? next : normalizeAnnotationStyle(next);
       return true;
     }
 

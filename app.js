@@ -636,16 +636,19 @@
   });
 
   const { drawResolvedHatchContent } = window.HatchRenderer.create({ viewport, visibleWorldBounds: () => pngRender?.worldBounds || visibleWorldBounds(), canvasThemeColor, isVisibleValue });
-  const { annotationLeaderDisplayGeometry, annotationTextLayout, annotationTextWorldHeight, drawAnnotationText, drawAnnotationLeader } = window.AnnotationRenderer.create({ ctx, viewport, withCanvasState, annotationDisplayColor, annotationLeaderAnchor, appearanceLineDash, formatValue: formatDisplayNumber, effectiveAnnotationStyle, showLeaderEndHandle: element => !pngRender && !element.blockProjection && element.sketchId === activeSketchId() && (canvasSelection.annotations.includes(element) || canvasHover.current.annotation === element) });
+  const { annotationLeaderDisplayGeometry, annotationTextLayout, annotationTextWorldHeight, annotationTextMetrics, drawAnnotationText, drawAnnotationLeader } = window.AnnotationRenderer.create({ ctx, viewport, withCanvasState, annotationDisplayColor, annotationLeaderAnchor, appearanceLineDash, formatValue: formatDisplayNumber, effectiveAnnotationStyle, showLeaderEndHandle: element => !pngRender && !element.blockProjection && element.sketchId === activeSketchId() && (canvasSelection.annotations.includes(element) || canvasHover.current.annotation === element) });
   const annotationCommand = window.AnnotationCommand.create({
     currentScope: workspace.current, getPending: () => pendingCommand, setPending: value => { pendingCommand = value; },
-    lastPointer: () => lastPointerWorld, viewScale: () => viewport.scale, promptText: (...args) => window.prompt(...args),
+    lastPointer: () => lastPointerWorld, viewScale: () => viewport.scale,
+    annotationTextLayout, annotationLeaderDisplayGeometry, annotationTextMetrics,
+    selectAnnotation: item => canvasSelection.set("annotations", [item]),
+    canEdit: item => guardSketchEdit(elementSketchId(item), "structure") && !item.blockProjection,
+    prepare: () => { exitDrawMode(); cancelConstraintTargetCommand(""); },
     nextAnnotationId: () => `AN${annotationSeq++}`, activeSketchId, canCreateInActiveSketch, rejectRootSketchCreation,
-    annotationLeaderTargetFromSelection, annotationLeaderTargetFromHit, annotationLeaderAnchor, effectiveAnnotationStyle, setGeometrySelection, clearSelection, cancelPendingCommand,
+    annotationLeaderTargetFromHit, annotationLeaderAnchor, effectiveAnnotationStyle, clearSelection, cancelPendingCommand,
     setHint, updateToolbar, updateUI, draw, recordHistory,
   });
-  const { pushAnnotation, createLeaderAnnotation, handleLeaderAnnotationTargetClick,
-    startLeaderAnnotationPlacement, commitLeaderAnnotationAt, createTextAnnotation, commitTextAnnotationAt } = annotationCommand;
+  const { pushAnnotation } = annotationCommand;
   const referenceImageRenderer = window.ReferenceImageRenderer.create({
     ctx, viewport, withCanvasState, createImage: () => new Image(), onImageLoad: draw, referenceImageCorners,
   });
@@ -3040,8 +3043,9 @@
     drawDimensions();
     drawDimensionPreview();
     drawAnnotations();
-    const leaderPreview = annotationCommand.leaderPreview();
-    if (leaderPreview) drawAnnotationLeader(leaderPreview, true);
+    const annotationPreview = annotationCommand.preview();
+    if (annotationPreview?.type === "leader") drawAnnotationLeader(annotationPreview, true);
+    else if (annotationPreview) drawAnnotationText(annotationPreview, "#2563eb");
     drawTemporaryLine();
     drawCenterlinePreview();
     drawRectanglePreview();
@@ -3213,7 +3217,7 @@
   }
 
   function effectiveAnnotationStyle(element) {
-    if (element?.type !== "leader") return normalizeAnnotationStyle(element?.style);
+    if (element?.type !== "leader" && !element?.appearanceInheritance) return normalizeAnnotationStyle(element?.style);
     const source = element.localElement || element;
     const sketches = element.blockDefinition?.sketches || model.sketches;
     const sketch = sketches.find(item => item.id === source.sketchId);
@@ -3221,7 +3225,7 @@
       ...normalizeAnnotationStyle(source.style), ...window.Appearance.annotationDisplaySettings(source.style), rotation: Number(source.rotation) || 0
     };
     const style = window.Appearance.resolveLeaderAppearance(documentModel.defaultLeaderAppearance, documentModel.defaultTerminatorAppearance, sketch?.leaderAppearance, direct);
-    Object.assign(style, { prefix: String(source.style?.prefix || ""), suffix: String(source.style?.suffix || "") });
+    Object.assign(style, { precision: normalizeAnnotationStyle(source.style).precision, prefix: String(source.style?.prefix || ""), suffix: String(source.style?.suffix || "") });
     for (const override of element.blockAppearanceOverrides || []) {
       const normalized = normalizeAppearance(override);
       if (normalized.color) style.color = normalized.color;
@@ -3403,8 +3407,7 @@
       toolMirror: geometryMode && mode === "mirror-axis",
       toolPattern: geometryMode && mode === "pattern-direction",
       toolHatch: geometryMode && (mode === "hatch" || mode === "hatch-repair"),
-      annotationLeaderBtn: Boolean(pendingCommand?.type?.startsWith("annotation-leader")),
-      annotationTextBtn: pendingCommand?.type === "annotation-text-place",
+      annotationTextBtn: Boolean(pendingCommand?.annotationDraft),
     };
     for (const [id, active] of Object.entries(states)) {
       const button = document.getElementById(id);
@@ -3966,6 +3969,7 @@
   function cancelPendingCommand(message = "コマンドをキャンセルしました") {
     geometryInstanceCommand.clearPlacement();
     if (!pendingCommand) return;
+    if (pendingCommand.annotationDraft) { annotationCommand.cancel(); return; }
     if (pendingCommand.type === "png-export") { pngExportCommand.cancel(); return; }
     if (pendingCommand.type === "offset-value") {
       offsetSelection.reset();
@@ -4616,7 +4620,7 @@
     setPlacementRotationLocked: blockPlacementCommand.setRotationLocked,
     setPlacementSketchIds: blockPlacementCommand.setEnabledSketchIds,
     setBlockInstanceRotationLocked, setBlockInstanceEnabledSketchIds, setBlockInstanceOrthogonalRotation,
-    startInstanceSourceEdit, startReferenceImageCalibration, startHatchBoundaryRepair,
+    annotationCommand, startInstanceSourceEdit, startReferenceImageCalibration, startHatchBoundaryRepair,
     startSplineEdit: spline => splineEditing.activate(spline), openAppearanceColorPalette,
   });
   const { input: handlePropertiesInput, change: handlePropertiesChange, click: handlePropertiesClick } = propertiesController;
@@ -6007,6 +6011,7 @@
   const annotationCommandInput = window.AnnotationCommandInput.create({
     getMode: () => mode, getPending: () => pendingCommand, getPendingConstraint: () => pendingConstraintCommand,
     annotationCommand, canvasSelection, clearSelection, annotationDrag, updateUI, draw,
+    releasePanelFocus: () => { if (document.activeElement?.closest("#commandPanel")) document.activeElement.blur(); },
   });
   const constraintCommandInput = window.ConstraintCommandInput.create({
     canDragDimensionGroup: hit => Boolean(selectedDimensionLineGroup(hit.constraint)),
@@ -6124,7 +6129,7 @@
     shortcuts: { save: saveJot2DFile, saveAs: saveJot2DFileAs, copy: copySelectionToClipboard,
       paste: pasteGeometryClipboard, nativePaste: true, nativeCopy: true, undo: undoHistory, redo: redoHistory },
     operations: { getMode: () => mode, isGeometryMode, finishSources: finishInstanceSourceEdit,
-      finishSpline: finalizeSplineCreation, finishProjection: commitSketchProjectionCommand, finishHatch: hatchCommand.finish,
+      annotation: annotationCommand, finishSpline: finalizeSplineCreation, finishProjection: commitSketchProjectionCommand, finishHatch: hatchCommand.finish,
       finishInstance: () => geometryInstanceCommand.finish(), removeSplinePoint: removeLastSplineInputPoint,
       offset: offsetCommand, getPointer: () => lastPointerWorld, deleteSelection: deleteCurrentSelection,
       completeLineLength: completePendingDimensionLineLength, cancel: cancelKeyboardOperation },
@@ -6158,8 +6163,7 @@
       draw();
     }
   });
-  document.getElementById("annotationLeaderBtn")?.addEventListener("click", createLeaderAnnotation);
-  document.getElementById("annotationTextBtn")?.addEventListener("click", createTextAnnotation);
+  document.getElementById("annotationTextBtn")?.addEventListener("click", () => annotationCommand.start());
   document.getElementById("constraintStatusViewBtn")?.addEventListener("click", () => {
     constraintStatusView.toggle();
   });
@@ -9047,7 +9051,8 @@
         draw();
         return {
           style: structuredClone(style),
-          rotation: Number(annotation.rotation) || 0,
+          rotation: annotation.appearanceInheritance ? style.rotation || 0 : Number(annotation.rotation) || 0,
+          textMetrics: annotationTextMetrics(annotation, annotationTextLayout(annotation) || (annotation.type === "leader" ? annotationLeaderDisplayGeometry(annotation) : annotation)),
           screenTextHeight: annotationTextWorldHeight(style) * viewport.scale,
           screenTerminatorSize: style.terminatorSize * ANNOTATION_SCREEN_PX_PER_MM * window.Appearance.annotationDisplayFactor(style, viewport.scale),
           textLayout: annotationTextLayout(annotation),
@@ -10837,12 +10842,13 @@
   const hatchPanel = window.HatchCommandPanel.create({ command: hatchCommand, getMode: () => mode, applicationText, formatDisplayNumber,
     cancel: () => { exitDrawMode(); updateUI({ refreshAnalysis: false }); draw(); },
   });
-  const currentCommandPanel = () => ["hatch", "hatch-repair"].includes(mode) ? hatchPanel : derivedPanel;
+  const annotationPanel = window.AnnotationCommandPanel.create({ command: annotationCommand, applicationText });
+  const currentCommandPanel = () => annotationCommand.active ? annotationPanel : ["hatch", "hatch-repair"].includes(mode) ? hatchPanel : derivedPanel;
   commandPanel = window.CommandPanel.create({ document, host: canvas.parentElement, ...derivedPanel,
     readState: () => pngExportCommand.active ? pngExportCommand.readState() : currentCommandPanel().readState(),
     onAction: action => pngExportCommand.active ? pngExportCommand.onAction(action) : currentCommandPanel().onAction(action),
-    onSelect: (key, index) => currentCommandPanel().onSelect(key, index),
-    onRemove: (key, index) => currentCommandPanel().onRemove(key, index),
+    onSelect: (key, index) => currentCommandPanel().onSelect?.(key, index),
+    onRemove: (key, index) => currentCommandPanel().onRemove?.(key, index),
     onSetting: (key, value) => pngExportCommand.active ? pngExportCommand.onSetting(key, value) : currentCommandPanel().onSetting(key, value),
   });
 

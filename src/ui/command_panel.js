@@ -58,8 +58,9 @@
           const label = node("label", null, "command-panel-setting");
           const text = node("span");
           label.append(text);
-          const input = node("input");
-          input.type = setting.type || "number";
+          const input = node(setting.type === "textarea" ? "textarea" : "input");
+          if (setting.type === "textarea") input.rows = 3;
+          else input.type = setting.type || "number";
           input.dataset.setting = setting.key;
           label.append(input);
           panel.append(label);
@@ -126,6 +127,9 @@
       const button = event.target.closest("button[data-action]");
       if (button && !button.disabled) onAction(button.dataset.action);
     });
+    panel.addEventListener("input", event => {
+      if (event.target.tagName === "TEXTAREA" && event.target.dataset.setting) onSetting(event.target.dataset.setting, event.target.value);
+    });
     panel.addEventListener("change", event => {
       const input = event.target;
       if (input.dataset.setting) onSetting(input.dataset.setting, input.type === "checkbox" ? input.checked : input.value);
@@ -161,6 +165,7 @@
         return;
       }
       if (event.key === "Escape") { event.preventDefault(); event.stopPropagation(); onAction("cancel"); }
+      if (event.key === "Enter" && event.target.tagName === "TEXTAREA") { event.stopPropagation(); return; }
       if (event.key === "Enter") {
         event.preventDefault(); event.stopPropagation();
         if (event.target.dataset.action) {

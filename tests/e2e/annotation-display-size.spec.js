@@ -41,9 +41,9 @@ for (const type of ["text", "leader", "dimension"]) {
   test(`${type}: unchecked defaults, checked capture, editable baseline, history and persistence`, async ({ page }) => {
     await loadFixture(page);
     await select(page, type);
-    const fixed = page.locator(type === "leader" ? '[data-leader-style="fixedDisplaySize"]' : '[data-annotation-display="modelRelativeSize"]');
-    const scale = page.locator(type === "leader" ? '[data-leader-style="displayScale"]' : '[data-annotation-display="displayScale"]');
-    await expect(page.locator(type === "leader" ? 'label[for="annotationFixedDisplaySize"]' : 'label[for="annotationModelRelativeSize"]')).toHaveText(type === "text" ? "図形に対する注記の大きさを固定" : "サイズロック");
+    const fixed = page.locator(type !== "dimension" ? '[data-leader-style="fixedDisplaySize"]' : '[data-annotation-display="modelRelativeSize"]');
+    const scale = page.locator(type !== "dimension" ? '[data-leader-style="displayScale"]' : '[data-annotation-display="displayScale"]');
+    await expect(page.locator(type !== "dimension" ? 'label[for="annotationFixedDisplaySize"]' : 'label[for="annotationModelRelativeSize"]')).toHaveText("サイズロック");
     if (type === "dimension") await expect(fixed.locator('..')).toHaveAttribute('title', '図形に対する注記の大きさを固定');
     await expect(fixed).not.toBeChecked();
     await expect(scale).toHaveCount(0);
@@ -140,8 +140,8 @@ test("reference zoom shows one decimal without rounding its captured baseline", 
   await select(page, "text");
   await page.evaluate(scale => window.__jot2dTest.focusWorldForTest({ x: 0, y: 0 }, scale), PX * 1.234567);
   const before = await state(page, "text");
-  await page.locator('[data-annotation-display="modelRelativeSize"]').check();
-  await expect(page.locator('[data-annotation-display="displayScale"]')).toHaveValue("123.5");
+  await page.locator('[data-leader-style="fixedDisplaySize"]').check();
+  await expect(page.locator('[data-leader-style="displayScale"]')).toHaveValue("123.5");
   const after = await state(page, "text");
   expect(after.settings.displayScale).toBeCloseTo(1.234567, 10);
   expect(after.height).toBeCloseTo(before.height, 10);

@@ -119,7 +119,7 @@
         if (entry.locked) badges += `<span class="badge">${applicationText("固定", "Locked")}</span>`;
         data += ` data-id="${escapeHtml(entry.id)}"`;
       } else if (category === "annotation") {
-        icon = toolbarSvgMarkup(entry.type === "leader" ? "#annotationLeaderBtn" : "#annotationTextBtn"); primary = entry.id;
+        icon = toolbarSvgMarkup(entry.type === "leader" ? "#annotationLeaderIcon" : "#annotationTextBtn"); primary = entry.id;
         secondary = `${entry.type === "leader" ? applicationText("引出線", "Leader") : applicationText("テキスト", "Text")} ${String(entry.text || "").slice(0, 28)}`;
         data += ` data-id="${escapeHtml(entry.id)}"`;
       } else if (entry.kind === "fixed-point") {

@@ -53,9 +53,9 @@
       rotation: Number(element.rotation) || 0,
       style: window.Appearance.annotationStoredStyle(element),
     };
+    if (element.appearanceInheritance === true) data.appearanceInheritance = true;
     if (element.type === "leader") {
-      if (element.appearanceInheritance === true) data.appearanceInheritance = true;
-      if (element.textPlacement === "shelf") data.textPlacement = "shelf";
+      if (["shelf", "text"].includes(element.textPlacement)) data.textPlacement = element.textPlacement;
       if (element.attachment) data.attachment = { ...element.attachment };
       if (Number.isFinite(element.shelfReferenceScale) && element.shelfReferenceScale > 0) data.shelfReferenceScale = element.shelfReferenceScale;
       data.geometryRef = element.geometryRef && typeof element.geometryRef === "object" ? { ...element.geometryRef } : null;

@@ -31,11 +31,11 @@
         }
         if (entry.kind === "annotation") {
           if (key === "modelRelativeSize") {
-            appearancePropertyCommand.apply(entry, { category: entry.item.type === "leader" ? "leader" : "annotationDisplay", key: "fixedDisplaySize", value: !(rawValue === true || rawValue === "true") }, { commit: false });
+            appearancePropertyCommand.apply(entry, { category: (entry.item.type === "leader" || entry.item.appearanceInheritance) ? "leader" : "annotationDisplay", key: "fixedDisplaySize", value: !(rawValue === true || rawValue === "true") }, { commit: false });
             continue;
           }
           if (key === "visible") entry.item.visible = rawValue === true || rawValue === "true";
-          else if (key === "rotation" && entry.item.type !== "leader") entry.item.rotation = Math.max(-3600, Math.min(3600, Number(rawValue) || 0)) * Math.PI / 180;
+          else if (key === "rotation" && entry.item.type !== "leader" && !entry.item.appearanceInheritance) entry.item.rotation = Math.max(-3600, Math.min(3600, Number(rawValue) || 0)) * Math.PI / 180;
           else applyAnnotationStyleValue(entry.item, key, rawValue);
           continue;
         }

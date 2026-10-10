@@ -1,8 +1,9 @@
 /* Route annotation placement and selection without owning annotation or selection state. */
 (() => {
   "use strict";
-  function create({ getMode, getPending, getPendingConstraint, annotationCommand, canvasSelection, clearSelection, annotationDrag, updateUI, draw }) {
+  function create({ getMode, getPending, getPendingConstraint, annotationCommand, canvasSelection, clearSelection, annotationDrag, updateUI, draw, releasePanelFocus = () => {} }) {
     function place(e, p, annotationTargetHit) {
+      if (getPending()?.annotationDraft) releasePanelFocus();
       if (getPending()?.type === "annotation-text-place") {
         e.preventDefault();
         annotationCommand.commitTextAnnotationAt(p);
