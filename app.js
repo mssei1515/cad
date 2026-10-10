@@ -641,6 +641,22 @@
     currentScope: workspace.current, getPending: () => pendingCommand, setPending: value => { pendingCommand = value; },
     lastPointer: () => lastPointerWorld, viewScale: () => viewport.scale,
     annotationTextLayout, annotationLeaderDisplayGeometry, annotationTextMetrics,
+    nextParameterName: () => parameterNamespace.allocateDimensionParameterName({ ...model, parameters: model.parameters.map(item => ({ ...item })), annotations: [...model.annotations] }),
+    validateParameter: draft => {
+      const name = String(draft.parameterName || "").trim(), expression = expressionFromUserInput(draft.expression);
+      const symbols = parameterNamespace.symbolElementsInNamespace(model);
+      parameterNamespace.validateParameterSymbolNames(model.parameters, [...symbols, { parameterName: name }]);
+      const definitions = [...model.parameters.map(item => ({ ...item, kind: "parameter" })),
+        ...symbols.filter(item => !isReadOnlyDimension(item)).map(item => ({ name: item.parameterName, expression: item.expression, kind: "dimension" })),
+        { name, expression, kind: "dimension" }];
+      const values = new Map(symbols.filter(isReadOnlyDimension).map(item => [item.parameterName, item.evaluatedParameterValue]));
+      const value = window.ParameterEngine.evaluateDefinitions(definitions, values).values.get(name);
+      if (!Number.isFinite(value)) throw new Error(applicationText("値を計算できません", "Value could not be evaluated"));
+      return { expression, value };
+    },
+    commitParameter: item => { ensureDimensionParameter(item, model); parameterNamespace.evaluateParameterNamespace(model); },
+    applyStyle: (style, key, value, effective) => appearanceEditing.applyLeaderAppearanceValue(style, key, value, { viewportScale: viewport.scale, effective }),
+    parameterErrorText,
     selectAnnotation: item => canvasSelection.set("annotations", [item]),
     canEdit: item => guardSketchEdit(elementSketchId(item), "structure") && !item.blockProjection,
     prepare: () => { exitDrawMode(); cancelConstraintTargetCommand(""); },
@@ -1013,6 +1029,19 @@
     recordHistory, setHint, parameterErrorText,
   });
   const commitAnnotationParameterEdit = annotationParameterCommand.commit;
+  const annotationInputController = window.AnnotationInputController.create({
+    document, host: canvas.parentElement, getPending: () => pendingCommand, setPending: value => { pendingCommand = value; },
+    find: id => workspace.current().annotations.find(item => item.id === id),
+    canEdit: item => guardSketchEdit(elementSketchId(item)) && !item.blockProjection,
+    prepare: () => { exitDrawMode(); cancelConstraintTargetCommand(""); cancelPendingCommand(""); annotationDrag.reset(); },
+    select: item => { clearSelection(); canvasSelection.set("annotations", [item]); },
+    layout: item => { const box = annotationTextLayout(item) || annotationTextMetrics(item, item.type === "leader" ? annotationLeaderDisplayGeometry(item) : item); return { ...box, screenFontSize: box.fontSize * viewport.scale }; },
+    toScreen: worldToCanvasScreen, expressionInputValue, applicationText,
+    commit: (item, value) => {
+      if (item.parameterEnabled) return commitAnnotationParameterEdit(item, "annotation-expression", value);
+      item.text = value; recordHistory("注記変更"); return true;
+    }, draw, updateUI,
+  });
 
   function guardDimensionSymbolDeletion(constraints, namespace = currentParameterNamespace()) {
     const { removedNames, dependents } = parameterNamespace.symbolDeletionDependents(constraints, namespace);
@@ -3004,6 +3033,7 @@
   function draw() {
     if (pngExportCommand?.active && !pngExportCommand.busy && (pendingCommand?.type !== "png-export" || mode !== "png-export")) pngExportCommand.cancel();
     commandPanel?.update();
+    annotationInputController.sync();
     commandPanelSelectedItem = derivedPanel?.selectedItem() || null;
     if (!interactionProfiler.active) return drawUnprofiled();
     return profileInteractionWork("draw", () => drawUnprofiled());
@@ -4448,7 +4478,8 @@
 
   function focusedExpressionInputContext() {
     const input = document.activeElement;
-    if (!(input instanceof HTMLInputElement) || input.readOnly || input.disabled) return null;
+    if (!(input instanceof HTMLInputElement || input instanceof HTMLTextAreaElement) || input.readOnly || input.disabled) return null;
+    if (input.matches('#commandPanel [data-setting="expression"]') || input.id === "annotationValueInput" && input.dataset.expression === "true") return { input, namespace: model };
     if (input === dimensionValueInput && pendingCommand?.type === "distance-value") return { input, namespace: model };
     if (input.matches('#propertiesPanel [data-property="constraint-expression"], #propertiesPanel [data-property="annotation-expression"]')) return { input, namespace: model };
     const parameterExpression = input.matches('[data-parameter-field="expression"], [data-dimension-field="expression"]');
@@ -6079,7 +6110,7 @@
         return false;
       },
       activation: { selection: canvasSelection, finalizeSpline: finalizeSplineFromDoubleClick, submitOffset: submitOffsetValue,
-        startDimensionEdit: startDimensionEditInput, startDistanceValue: startDistanceValueInput, submitDistance: submitDistanceValue,
+        startAnnotationEdit: annotationInputController.start, startDimensionEdit: startDimensionEditInput, startDistanceValue: startDistanceValueInput, submitDistance: submitDistanceValue,
         constraintDoubleClick: handleConstraintTargetDoubleClick, enterBlock: enterBlockDefinitionEdit, beginSplineEdit: beginSplineEditFromDoubleClick },
       query: canvasPressQuery, worldPoint: canvasPoint, screenPoint: canvasScreenPoint,
       closeContextMenu: closeCanvasContextMenu, insertDimensionParameter: insertClickedDimensionParameter,
@@ -10842,7 +10873,7 @@
   const hatchPanel = window.HatchCommandPanel.create({ command: hatchCommand, getMode: () => mode, applicationText, formatDisplayNumber,
     cancel: () => { exitDrawMode(); updateUI({ refreshAnalysis: false }); draw(); },
   });
-  const annotationPanel = window.AnnotationCommandPanel.create({ command: annotationCommand, applicationText });
+  const annotationPanel = window.AnnotationCommandPanel.create({ command: annotationCommand, applicationText, effectiveStyle: item => effectiveAnnotationStyle({ ...item, sketchId: activeSketchId() }) });
   const currentCommandPanel = () => annotationCommand.active ? annotationPanel : ["hatch", "hatch-repair"].includes(mode) ? hatchPanel : derivedPanel;
   commandPanel = window.CommandPanel.create({ document, host: canvas.parentElement, ...derivedPanel,
     readState: () => pngExportCommand.active ? pngExportCommand.readState() : currentCommandPanel().readState(),

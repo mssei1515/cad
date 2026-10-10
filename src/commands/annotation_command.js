@@ -6,6 +6,8 @@
     annotationLeaderAnchor = element => element.start, effectiveAnnotationStyle = element => window.Appearance.normalizeAnnotationStyle(element.style),
     annotationTextLayout, annotationLeaderDisplayGeometry, annotationTextMetrics, selectAnnotation = () => {},
     canEdit = () => true, prepare = () => {}, clearSelection, cancelPendingCommand,
+    nextParameterName = () => "d1", validateParameter = () => ({ value: 0 }), commitParameter = () => {},
+    applyStyle = (style, key, value) => { style[key] = value; }, parameterErrorText = error => error.message,
     setHint, updateToolbar, updateUI, draw, recordHistory }) {
     let lastWithLeader = false;
     const active = () => Boolean(getPending()?.annotationDraft);
@@ -22,19 +24,55 @@
       if (rejectRootSketchCreation()) return;
       prepare(); cancelPendingCommand(""); clearSelection();
       setPending({ annotationDraft: true, type: withLeader ? "annotation-leader-select" : "annotation-text-place",
-        withLeader, text: "", pointer: lastPointer() || { x: 0, y: 0 } });
+        withLeader, text: "", style: {}, visible: true, parameterEnabled: false, parameterName: nextParameterName(), expression: "0", pointer: lastPointer() || { x: 0, y: 0 } });
       updateUI(); refresh();
     }
     function changeSetting(key, value) {
       const draft = getPending();
       if (!active() || draft.editId) return;
-      if (key === "text") draft.text = String(value);
+      draft.error = "";
+      if (["text", "parameterName", "expression"].includes(key)) draft[key] = String(value);
+      if (key === "visible") draft.visible = Boolean(value);
+      if (key === "parameterEnabled" && Boolean(value) !== draft.parameterEnabled) {
+        if (value) draft.style.prefix = draft.text;
+        else draft.text = draft.style.prefix || "";
+        draft.parameterEnabled = Boolean(value);
+      }
+      if (key.startsWith("style.")) {
+        const name = key.slice(6);
+        if (["prefix", "suffix"].includes(name)) draft.style[name] = String(value);
+        else if (name === "precision") draft.style.precision = value === "auto" ? null : Number(value);
+        else applyStyle(draft.style, name, value, effectiveAnnotationStyle({ type: "text", sketchId: activeSketchId(), appearanceInheritance: true, style: draft.style }));
+      }
       if (key === "withLeader" && Boolean(value) !== draft.withLeader) {
         lastWithLeader = Boolean(value);
-        setPending({ annotationDraft: true, type: value ? "annotation-leader-select" : "annotation-text-place",
-          withLeader: Boolean(value), text: draft.text, pointer: lastPointer() || { x: 0, y: 0 } });
+        resetPlacement(draft, Boolean(value));
       }
       refresh();
+    }
+    function resetPlacement(draft, withLeader = draft.withLeader) {
+      const next = { ...draft, withLeader, style: { ...draft.style }, type: withLeader ? "annotation-leader-select" : "annotation-text-place", pointer: lastPointer() || { x: 0, y: 0 } };
+      for (const key of ["position", "leaderTarget", "elbow", "end"]) delete next[key];
+      setPending(next);
+    }
+    function content() {
+      const draft = getPending();
+      const item = { type: draft.withLeader ? "leader" : "text", sketchId: activeSketchId(),
+        text: draft.text, style: { ...draft.style }, visible: draft.visible !== false, appearanceInheritance: true, rotation: 0 };
+      if (draft.parameterEnabled) {
+        item.parameterEnabled = true; item.parameterName = draft.parameterName.trim();
+        try { const result = validateParameter(draft); item.expression = result.expression; item.evaluatedParameterValue = result.value; }
+        catch (error) { draft.error = parameterErrorText(error); }
+      }
+      return item;
+    }
+    function validContent() {
+      const draft = getPending();
+      if (draft.parameterEnabled) {
+        try { validateParameter(draft); draft.error = ""; return true; }
+        catch (error) { draft.error = parameterErrorText(error); return false; }
+      }
+      return draft.text.length > 0;
     }
     function handleLeaderAnnotationTargetClick(hit, pointer) {
       const draft = getPending();
@@ -52,11 +90,13 @@
       if (!draft.elbow) draft.elbow = { ...pointer };
       else draft.end = { x: pointer.x, y: draft.elbow.y };
       draft.pointer = { ...pointer };
+      if (draft.end) place();
       refresh(); return true;
     }
     function commitTextAnnotationAt(pointer) {
       if (!active() || getPending().type !== "annotation-text-place") return false;
       getPending().position = { ...pointer };
+      place();
       refresh(); return true;
     }
     function currentAnchor(target) {
@@ -84,7 +124,7 @@
         const metrics = annotationTextMetrics(source);
         const gap = ((style.textGap ?? 1) * window.Appearance.CSS_PX_PER_MM + style.lineWidth / 2)
           / viewScale() * window.Appearance.annotationDisplayFactor(style, viewScale());
-        const left = { x: metrics.bounds.x1, y: metrics.bounds.y2 + gap };
+        const left = { x: metrics.bounds.x1 - metrics.fontSize / 2, y: metrics.bounds.y2 + gap };
         const right = { x: metrics.bounds.x2, y: left.y };
         const start = currentAnchor(draft.leaderTarget);
         const leftNear = Math.hypot(start.x - left.x, start.y - left.y) <= Math.hypot(start.x - right.x, start.y - right.y);
@@ -94,8 +134,7 @@
         result.shelfReferenceScale = referenceScale(result);
         return result;
       }
-      const item = { type: draft.withLeader ? "leader" : "text", sketchId: activeSketchId(),
-        text: draft.text, style: {}, appearanceInheritance: true, rotation: 0 };
+      const item = content();
       if (!draft.withLeader) return { ...item, ...(draft.position || draft.pointer) };
       if (!draft.leaderTarget) return null;
       const start = currentAnchor(draft.leaderTarget);
@@ -109,23 +148,28 @@
       const draft = getPending();
       if (!active()) return false;
       if (draft.editId) return Boolean(draft.leaderTarget);
-      return draft.text.length > 0 && Boolean(draft.withLeader ? draft.end : draft.position);
+      return true;
+    }
+    function place() {
+      const draft = getPending();
+      if (!active() || draft.editId || !validContent() || !(draft.withLeader ? draft.end : draft.position)) return false;
+      const item = pushAnnotation(preview());
+      if (!item) return false;
+      if (item.parameterEnabled) commitParameter(item);
+      lastWithLeader = draft.withLeader;
+      clearSelection(); selectAnnotation(item); recordHistory("注記追加");
+      resetPlacement({ ...draft, parameterName: nextParameterName(), error: "" });
+      updateUI(); refresh(); return true;
     }
     function finish() {
       if (!canFinish()) return false;
+      if (!getPending().editId) { setPending(null); updateUI(); refresh(); return true; }
       const draft = getPending(), value = preview();
-      let item;
-      if (draft.editId) {
-        item = currentScope().annotations.find(item => item.id === draft.editId);
-        if (!item || !canEdit(item)) return false;
-        Object.assign(item, value);
-      } else {
-        item = pushAnnotation(value);
-        if (!item) return false;
-        lastWithLeader = draft.withLeader;
-      }
+      const item = currentScope().annotations.find(item => item.id === draft.editId);
+      if (!item || !canEdit(item)) return false;
+      Object.assign(item, value);
       setPending(null); clearSelection(); selectAnnotation(item);
-      recordHistory(draft.editId ? "引出線追加" : "注記追加");
+      recordHistory("引出線追加");
       updateUI(); refresh(); return true;
     }
     function cancel() {
@@ -154,7 +198,7 @@
     }
     return Object.freeze({ start, createTextAnnotation: () => start(false), createLeaderAnnotation: () => start(true),
       pushAnnotation, handleLeaderAnnotationTargetClick, commitLeaderAnnotationAt, commitTextAnnotationAt,
-      changeSetting, preview, canFinish, finish, cancel, addLeader, removeLeader,
+      changeSetting, preview, canFinish, validContent, evaluatedValue: () => content().evaluatedParameterValue, finish, cancel, addLeader, removeLeader,
       get active() { return active(); }, get draft() { return active() ? getPending() : null; } });
   }
   window.AnnotationCommand = Object.freeze({ create });

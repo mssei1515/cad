@@ -12,7 +12,7 @@ async function clickWorld(page, p) {
 async function createText(page) {
   await page.locator('#annotationTextBtn').click();
   await page.locator('#commandPanel [data-setting=withLeader]').uncheck();
-  await page.locator('#commandPanel textarea').fill('Note\nSecond line');
+  await page.locator('#commandPanel [data-setting=text]').fill('Note\nSecond line');
   await clickWorld(page, { x: 40, y: -30 });
   await page.locator('#commandPanel [data-action=finish]').click();
 }
@@ -23,30 +23,34 @@ async function selectNote(page) {
   if (await group.getAttribute('aria-expanded') !== 'true') await group.click();
   await page.locator('.sketch-object-row[data-object-kind="annotation"]').first().click();
 }
-test('single annotation entry, multiline draft, mode switching, cancellation and remembered setting', async ({ page }) => {
+test('single annotation entry places repeatedly, preserves multiline draft and remembers leader mode', async ({ page }) => {
   await setup(page);
   await expect(page.locator('#annotationLeaderBtn')).toHaveCount(0);
   await page.locator('#annotationTextBtn').click();
-  await expect(page.locator('#commandPanel')).toBeVisible();
-  const text = page.locator('#commandPanel textarea'), finish = page.locator('#commandPanel [data-action=finish]');
-  await expect(finish).toBeDisabled();
+  const text = page.locator('#commandPanel [data-setting=text]');
+  await clickWorld(page, { x: 40, y: -30 });
+  expect((await data(page)).annotations).toHaveLength(0);
   await text.fill('First'); await text.press('End'); await text.press('Enter'); await text.pressSequentially('Second');
   await expect(text).toHaveValue('First\nSecond'); await expect(text).toBeFocused();
-  expect((await data(page)).annotations).toHaveLength(0);
-  await clickWorld(page, { x: 40, y: -30 }); await expect(finish).toBeEnabled();
-  await page.locator('#commandPanel [data-setting=withLeader]').check(); await expect(finish).toBeDisabled();
+  await clickWorld(page, { x: 40, y: -30 });
+  expect((await data(page)).annotations).toHaveLength(1);
+  await expect(page.locator('#commandPanel')).toBeVisible();
+  await clickWorld(page, { x: 70, y: -30 });
+  expect((await data(page)).annotations).toHaveLength(2);
+  await page.locator('#commandPanel [data-setting=withLeader]').check();
+  await clickWorld(page, { x: 0, y: 0 }); await clickWorld(page, { x: 40, y: 30 });
+  expect((await data(page)).annotations).toHaveLength(2);
+  await page.locator('#commandPanel [data-setting=withLeader]').uncheck();
+  await page.locator('#commandPanel [data-setting=withLeader]').check();
   await expect(text).toHaveValue('First\nSecond');
-  await clickWorld(page, { x: 0, y: 0 }); await clickWorld(page, { x: 40, y: -30 }); await clickWorld(page, { x: 70, y: -10 });
-  await expect(finish).toBeEnabled(); expect((await data(page)).annotations).toHaveLength(0);
-  await page.keyboard.press('Enter');
-  await expect(page.locator('#commandPanel')).toBeHidden();
-  expect((await data(page)).annotations[0]).toMatchObject({ type: 'leader', text: 'First\nSecond', appearanceInheritance: true });
-  await expect(page.locator('#propertiesPanel .property-heading')).toHaveText('注記');
+  await clickWorld(page, { x: 0, y: 0 }); await clickWorld(page, { x: 40, y: 30 }); await clickWorld(page, { x: 70, y: 30 });
+  expect((await data(page)).annotations[2]).toMatchObject({ type: 'leader', text: 'First\nSecond', appearanceInheritance: true });
+  await page.keyboard.press('Enter'); await expect(page.locator('#commandPanel')).toBeHidden();
   await page.locator('#annotationTextBtn').click(); await expect(page.locator('#commandPanel [data-setting=withLeader]')).toBeChecked();
   await text.fill('cancel me'); await text.press('Escape');
-  expect((await data(page)).annotations).toHaveLength(1);
-  await page.locator('#undoBtn').click(); expect((await data(page)).annotations).toHaveLength(0);
-  await page.locator('#redoBtn').click(); expect((await data(page)).annotations).toHaveLength(1);
+  expect((await data(page)).annotations).toHaveLength(3);
+  await page.locator('#undoBtn').click(); expect((await data(page)).annotations).toHaveLength(2);
+  await page.locator('#redoBtn').click(); expect((await data(page)).annotations).toHaveLength(3);
 });
 for (const locked of [false, true]) test(`attach/detach preserves displayed text, parameter identity and history, lock ${locked}`, async ({ page }) => {
   await setup(page); await createText(page);
@@ -187,7 +191,7 @@ test('rotated Block projections preserve attached text layout and shared text ap
 test('multiline annotation preserves leading and trailing newlines and clears old Properties on next creation', async ({ page }) => {
   await setup(page);
   const body = '\n first\n\n last\n';
-  await page.locator('#annotationTextBtn').click(); await page.locator('#commandPanel textarea').fill(body);
+  await page.locator('#annotationTextBtn').click(); await page.locator('#commandPanel [data-setting=text]').fill(body);
   await clickWorld(page, { x: 40, y: -30 }); await page.locator('#commandPanel [data-action=finish]').click();
   await expect(page.locator('#annotationText')).toHaveValue(body);
   const saved = await data(page); expect(saved.annotations[0].text).toBe(body);
@@ -195,7 +199,7 @@ test('multiline annotation preserves leading and trailing newlines and clears ol
   await selectNote(page); await expect(page.locator('#annotationText')).toHaveValue(body);
   await page.locator('#annotationTextBtn').click();
   await expect(page.locator('#annotationText')).toHaveCount(0);
-  await page.locator('#commandPanel textarea').press('Escape');
+  await page.locator('#commandPanel [data-setting=text]').press('Escape');
   expect((await data(page)).annotations[0].text).toBe(body);
 });
 
@@ -213,4 +217,142 @@ test('legacy screen-fixed text can reset size to shared document defaults before
   expect((await metrics(page, 'text')).style.displayScale).toBeCloseTo(0.4);
   await page.locator('#undoBtn').click();
   expect((await metrics(page, 'text')).style.fixedDisplaySize).not.toBe(false);
+});
+
+test('palette parameter inputs validate, retain appearance, allocate fresh names and save repeated placements', async ({ page }) => {
+  await setup(page);
+  await page.locator('#annotationTextBtn').click();
+  const field = key => page.locator(`#commandPanel [data-setting="${key}"]`);
+  await field('text').fill('Value ');
+  await field('parameterEnabled').check();
+  await expect(field('style.prefix')).toHaveValue('Value ');
+  await field('expression').fill('=-2 + 0.5');
+  await expect(field('evaluated')).toHaveValue('-1.5');
+  await field('parameterName').fill('result');
+  await field('style.suffix').fill('\nmm');
+  await field('style.precision').selectOption('2');
+  await page.locator('#commandPanel summary').click();
+  await field('style.textHeight').fill('5'); await field('style.textHeight').press('Tab');
+  await field('style.bold').selectOption('true');
+  await field('style.fixedDisplaySize').selectOption('false');
+  await field('style.rotation').fill('15'); await field('style.rotation').press('Tab');
+  await clickWorld(page, { x: 30, y: -35 });
+  let saved = await data(page);
+  expect(saved.annotations).toHaveLength(1);
+  expect(saved.annotations[0]).toMatchObject({ parameterEnabled: true, parameterName: 'result', expression: '-2 + 0.5', style: { prefix: 'Value ', suffix: '\nmm', precision: 2, textHeight: 5, bold: true, fixedDisplaySize: false } });
+  await expect(field('expression')).toHaveValue('=-2 + 0.5');
+  await expect(field('parameterName')).not.toHaveValue('result');
+  await field('parameterName').fill('result');
+  await clickWorld(page, { x: 60, y: 40 }); expect((await data(page)).annotations).toHaveLength(1);
+  await expect(page.locator('.command-panel-message')).toContainText('重複');
+  await field('parameterName').fill('nextValue'); await field('expression').fill('=1 / 0');
+  await clickWorld(page, { x: 60, y: 40 }); expect((await data(page)).annotations).toHaveLength(1);
+  await field('expression').fill('="result" + 2');
+  await clickWorld(page, { x: 60, y: 40 });
+  saved = await data(page); expect(saved.annotations).toHaveLength(2);
+  expect(saved.annotations[1].style).toEqual(saved.annotations[0].style);
+  await page.locator('#commandPanel [data-action=finish]').click();
+  await page.locator('#undoBtn').click(); expect((await data(page)).annotations).toHaveLength(1);
+  await page.locator('#redoBtn').click(); expect((await data(page)).annotations).toEqual(saved.annotations);
+  expect((await page.evaluate(d => window.__jot2dTest.loadDocumentFixtureForDragTest(d), saved)).success).toBe(true);
+  expect((await data(page)).annotations).toEqual(saved.annotations);
+});
+
+async function doubleClickNote(page, type = 'text') {
+  const m = await metrics(page, type);
+  const point = await page.evaluate(p => window.__jot2dTest.worldClientPositionForTest(p), { x: m.textMetrics.x + 1, y: m.textMetrics.y });
+  await page.mouse.dblclick(point.x, point.y);
+}
+test('double click edits multiline text in place with commit, cancel and history', async ({ page }) => {
+  await setup(page); await createText(page);
+  const before = (await data(page)).annotations[0];
+  await doubleClickNote(page);
+  const input = page.locator('#annotationValueInput');
+  await expect(input).toBeVisible(); await expect(input).toBeFocused();
+  await input.fill('Updated'); await input.press('End'); await input.press('Shift+Enter'); await input.pressSequentially('line');
+  expect((await data(page)).annotations[0]).toEqual(before);
+  await input.press('Enter'); await expect(input).toBeHidden();
+  expect((await data(page)).annotations[0]).toMatchObject({ id: before.id, text: 'Updated\nline', x: before.x, y: before.y });
+  await page.locator('#undoBtn').click(); expect((await data(page)).annotations[0]).toEqual(before);
+  await page.locator('#redoBtn').click();
+  await doubleClickNote(page); await input.fill('discard'); await input.press('Escape');
+  expect((await data(page)).annotations[0].text).toBe('Updated\nline');
+  await expect(page.locator('#statusCommand')).toHaveText('選択');
+});
+
+test('double click edits leader formulas, rejects invalid input and retains identity and attachment', async ({ page }) => {
+  await setup(page); await createText(page);
+  await page.locator('[data-property="annotation-parameter-enabled"]').check();
+  await page.locator('[data-property-action=annotation-attach]').click(); await clickWorld(page, { x: 0, y: 0 });
+  await page.locator('#commandPanel [data-action=finish]').click();
+  const before = (await data(page)).annotations[0];
+  const m = await metrics(page, 'leader');
+  expect(m.textMetrics.bounds.x1 - Math.min(m.displayGeometry.elbow.x, m.displayGeometry.end.x)).toBeCloseTo(m.textMetrics.fontSize / 2, 8);
+  await doubleClickNote(page, 'leader');
+  const input = page.locator('#annotationValueInput'); await expect(input).toBeVisible();
+  await input.fill('=1 / 0'); await input.press('Enter'); await expect(input).toBeVisible();
+  expect((await data(page)).annotations[0]).toEqual(before);
+  await input.fill('=-3 * 2'); await input.press('Enter'); await expect(input).toBeHidden();
+  const after = (await data(page)).annotations[0];
+  expect(after).toMatchObject({ id: before.id, parameterName: before.parameterName, expression: '-3 * 2', geometryRef: before.geometryRef });
+  await page.locator('#undoBtn').click(); expect((await data(page)).annotations[0]).toEqual(before);
+  await page.locator('#redoBtn').click(); expect((await data(page)).annotations[0]).toEqual(after);
+});
+
+test('palette and inline formulas insert canvas references without placing or moving annotations', async ({ page }) => {
+  await setup(page); await page.locator('#annotationTextBtn').click();
+  const field = key => page.locator(`#commandPanel [data-setting="${key}"]`);
+  await field('withLeader').check(); await field('parameterEnabled').check(); await field('expression').fill('=');
+  await clickWorld(page, { x: 0, y: -28 });
+  await expect(field('expression')).toHaveValue('="d1"');
+  await expect(field('evaluated')).toHaveValue('100');
+  expect((await data(page)).annotations).toHaveLength(0);
+  await field('withLeader').uncheck();
+  await clickWorld(page, { x: 90, y: 30 });
+  await page.locator('#commandPanel [data-action=finish]').click();
+  const before = (await data(page)).annotations[0];
+  await doubleClickNote(page);
+  const input = page.locator('#annotationValueInput'); await input.fill('=');
+  await clickWorld(page, { x: 0, y: -28 }); await expect(input).toHaveValue('="d1"');
+  await input.press('End'); await input.pressSequentially(' + 2'); await input.press('Enter');
+  expect((await data(page)).annotations[0]).toMatchObject({ id: before.id, expression: '"d1" + 2', x: before.x, y: before.y });
+});
+
+test('inline editing follows owning sketch permissions and preserves saved appearance', async ({ page }) => {
+  await setup(page); await createText(page);
+  let saved = await data(page);
+  saved.sketches.push({ ...saved.sketches.find(s => s.id === 'S1'), id: 'S2', name: 'Other', parentId: 'S1' });
+  saved.activeSketchId = 'S2';
+  expect((await page.evaluate(d => window.__jot2dTest.loadDocumentFixtureForDragTest(d), saved)).success).toBe(true);
+  await doubleClickNote(page);
+  const input = page.locator('#annotationValueInput'); await expect(input).toBeVisible();
+  await input.fill('Other sketch note'); await input.press('Enter');
+  saved = await data(page); expect(saved.annotations[0].text).toBe('Other sketch note'); expect(saved.activeSketchId).toBe('S2');
+  saved.sketches.find(s => s.id === 'S1').locked = true;
+  expect((await page.evaluate(d => window.__jot2dTest.loadDocumentFixtureForDragTest(d), saved)).success).toBe(true);
+  await doubleClickNote(page); await expect(input).toBeHidden();
+  expect((await data(page)).annotations[0]).toEqual(saved.annotations[0]);
+});
+
+test('legacy leader inline input uses the displayed position after zoom and cancel restores command status', async ({ page }) => {
+  await setup(page); await createText(page);
+  await page.locator('[data-property-action=annotation-attach]').click(); await clickWorld(page, { x: 0, y: 0 });
+  await page.locator('#commandPanel [data-action=finish]').click();
+  const saved = await data(page), item = saved.annotations[0];
+  item.style = (await metrics(page, 'leader')).style;
+  delete item.appearanceInheritance; delete item.textPlacement;
+  item.shelfReferenceScale = 3;
+  expect((await page.evaluate(d => window.__jot2dTest.loadDocumentFixtureForDragTest(d), saved)).success).toBe(true);
+  await page.evaluate(() => window.__jot2dTest.focusWorldForTest({ x: 40, y: -30 }, 5));
+  const before = (await data(page)).annotations[0], m = await metrics(page, 'leader');
+  expect(m.textMetrics.x).not.toBe(before.x);
+  const expected = await page.evaluate(p => window.__jot2dTest.worldClientPositionForTest(p), m.textMetrics);
+  await doubleClickNote(page, 'leader');
+  const input = page.locator('#annotationValueInput'); await expect(input).toBeVisible();
+  const bounds = await input.boundingBox();
+  expect(bounds.x).toBeCloseTo(expected.x, 0);
+  expect(bounds.y + bounds.height / 2).toBeCloseTo(expected.y, 0);
+  await input.fill('Cancelled edit'); await input.press('Escape');
+  await expect(page.locator('#statusCommand')).toHaveText('選択');
+  expect((await data(page)).annotations[0]).toEqual(before);
 });

@@ -14,7 +14,7 @@ function fixture() {
     rejectRootSketchCreation: () => !allowed, canEdit: () => allowed,
     annotationLeaderTargetFromHit: hit => hit?.target || null, clearSelection: () => { selected = null; }, selectAnnotation: item => { selected = item; },
     effectiveAnnotationStyle: item => ({ ...sandbox.window.Appearance.resolveLeaderAppearance({}, {}, {}, item.style), prefix: item.style?.prefix || '', suffix: item.style?.suffix || '', precision: item.style?.precision }),
-    annotationTextMetrics: item => ({ bounds: { x1: item.x, x2: item.x + 20, y1: item.y - 5, y2: item.y + 5 } }),
+    annotationTextMetrics: item => ({ fontSize: 10, bounds: { x1: item.x, x2: item.x + 20, y1: item.y - 5, y2: item.y + 5 } }),
     annotationTextLayout: item => ({ x: item.x + 100, y: item.y + 200 }), annotationLeaderDisplayGeometry: item => item,
     cancelPendingCommand: () => { pending = null; }, setHint: () => {}, updateToolbar: () => {}, updateUI: () => {}, draw: () => {}, recordHistory: label => history.push(label),
   });
@@ -29,54 +29,56 @@ function placeLeader(f, endX = 14) {
   f.command.commitLeaderAnnotationAt({ x: 3, y: 7 });
   f.command.commitLeaderAnnotationAt({ x: endX, y: 900 });
 }
-test('text placement stays provisional until Finish, preserving newlines and one history entry', () => {
+test('placement clicks commit one annotation each and preserve the multiline draft until Done', () => {
   const f = fixture(); f.command.start();
-  assert.equal(f.pending.type, 'annotation-text-place');
   f.command.commitTextAnnotationAt({ x: 4, y: 8 });
-  assert.equal(f.command.canFinish(), false); assert.equal(f.command.finish(), false);
-  f.command.changeSetting('text', '\n note\nline 2');
   assert.equal(f.scope.annotations.length, 0);
-  assert.equal(f.panel.readState().actions[0].disabled, false);
-  f.command.finish();
+  f.command.changeSetting('text', '\n note\nline 2');
+  f.command.commitTextAnnotationAt({ x: 4, y: 8 });
   const item = f.scope.annotations[0];
-  assert.equal(item.id, 'AN1'); assert.equal(item.sketchId, 'S1'); assert.equal(item.rotation, 0);
   assert.equal(item.text, '\n note\nline 2'); assert.equal(item.x, 4); assert.equal(item.y, 8);
-  assert.equal(item.appearanceInheritance, true); assert.equal(Object.keys(item.style).length, 0);
-  assert.equal(f.selected, item); assert.equal(f.pending, null); assert.deepEqual(f.history, ['注記追加']);
+  assert.equal(item.appearanceInheritance, true); assert.equal(f.selected, item);
+  assert.equal(f.pending.text, item.text); assert.equal(f.pending.position, undefined);
+  f.command.commitTextAnnotationAt({ x: 14, y: 18 });
+  assert.equal(f.scope.annotations.length, 2); assert.notEqual(f.scope.annotations[1].id, item.id);
+  assert.equal(f.command.finish(), true); assert.equal(f.pending, null);
+  assert.deepEqual(f.history, ['注記追加', '注記追加']);
 });
-test('switching leader setting retains text, clears geometry and remembers mode for next command', () => {
-  const f = fixture(); placeLeader(f);
+
+test('switching leader setting retains content, clears incomplete placement and remembers mode', () => {
+  const f = fixture(); f.command.start(); f.command.changeSetting('text', 'note');
+  f.command.changeSetting('withLeader', true);
+  f.command.handleLeaderAnnotationTargetClick({ target: target() }, { x: 0, y: 0 });
+  f.command.commitLeaderAnnotationAt({ x: 3, y: 7 });
   f.command.changeSetting('withLeader', false);
-  assert.equal(f.pending.text, 'note\nline 2'); assert.equal(f.pending.leaderTarget, undefined);
-  assert.equal(f.command.canFinish(), false);
+  assert.equal(f.pending.text, 'note'); assert.equal(f.pending.leaderTarget, undefined); assert.equal(f.pending.elbow, undefined);
   f.command.changeSetting('withLeader', true); f.command.cancel();
   f.command.start(); assert.equal(f.pending.withLeader, true); assert.equal(f.pending.text, '');
   assert.equal(f.scope.annotations.length, 0); assert.equal(f.history.length, 0);
 });
-test('leader preview and Finish share three-point geometry in either direction and at different zooms', () => {
+
+test('leader endpoint click commits in either direction and resets only placement', () => {
   for (const endX of [-2, 14, 3]) for (const scale of [0.5, 10]) {
     const f = fixture(); f.zoom(scale); placeLeader(f, endX);
-    const preview = f.command.preview();
-    assert.equal(f.scope.annotations.length, 0); assert.equal(f.history.length, 0);
-    assert.equal(f.command.finish(), true);
     const item = f.scope.annotations[0];
-    for (const key of ['start', 'elbow', 'end', 'attachment', 'geometryRef']) assert.deepEqual(item[key], preview[key]);
     assert.deepEqual({ ...item.elbow }, { x: 3, y: 7 });
     assert.deepEqual({ ...item.end }, { x: endX, y: 7 });
     assert.equal(item.textPlacement, 'shelf'); assert.equal(item.shelfReferenceScale, scale);
-    assert.equal(f.command.preview(), null); assert.deepEqual(f.history, ['注記追加']);
-    f.command.start(); assert.equal(f.pending.withLeader, true);
+    assert.equal(f.pending.type, 'annotation-leader-select'); assert.equal(f.pending.text, 'note\nline 2');
+    assert.deepEqual(f.history, ['注記追加']);
+    f.command.cancel(); assert.equal(f.scope.annotations.length, 1);
   }
 });
+
 test('invalid targets and incomplete placement do not create annotations', () => {
   const f = fixture(); f.command.createLeaderAnnotation(); f.command.changeSetting('text', 'note');
   f.command.handleLeaderAnnotationTargetClick({}, { x: 0, y: 0 });
-  assert.equal(f.pending.type, 'annotation-leader-select'); assert.equal(f.command.canFinish(), false);
+  assert.equal(f.pending.type, 'annotation-leader-select');
   f.command.handleLeaderAnnotationTargetClick({ target: target() }, { x: 0, y: 0 });
-  f.command.commitLeaderAnnotationAt({ x: 3, y: 7 });
-  assert.equal(f.command.canFinish(), false); f.command.cancel();
+  f.command.commitLeaderAnnotationAt({ x: 3, y: 7 }); f.command.cancel();
   assert.equal(f.pending, null); assert.equal(f.scope.annotations.length, 0); assert.equal(f.history.length, 0);
 });
+
 test('root rejection and scope switching preserve document boundaries', () => {
   const f = fixture(); f.allow(false); f.command.start();
   assert.equal(f.pending, null); assert.equal(f.command.pushAnnotation({ type: 'text' }), null);
@@ -97,7 +99,7 @@ test('adding and removing leader preserves identity, parameter references, text 
     assert.equal(JSON.stringify(source), before);
     const preview = f.command.preview();
     assert.equal(preview.x, 10); assert.equal(preview.y, 15);
-    assert.equal(preview.elbow.x, x <= 20 ? 10 : 30);
+    assert.equal(preview.elbow.x, x < 20 ? 5 : 30);
     assert.equal(preview.elbow.y, preview.end.y);
     f.command.finish(); assert.equal(source, f.scope.annotations[0]);
     assert.equal(source.style.rotation, 0.7); assert.equal(source.style.color, '#abcdef');

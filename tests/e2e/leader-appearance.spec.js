@@ -15,7 +15,7 @@ async function clickWorld(page, point) {
 async function createLeader(page, endX = 85) {
   await page.locator('#annotationTextBtn').click();
   await page.locator('#commandPanel [data-setting=withLeader]').check();
-  await page.locator('#commandPanel textarea').fill('Leader');
+  await page.locator('#commandPanel [data-setting=text]').fill('Leader');
   await expect(page.locator('#commandPanel')).toBeVisible();
   await clickWorld(page, { x: 0, y: 0 });
   await clickWorld(page, { x: 70, y: -30 });

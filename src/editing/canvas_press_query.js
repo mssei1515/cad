@@ -5,7 +5,7 @@
     scene: { hitHatchAt, hitReferenceImageAt, hitDimension, hitBlockRotationHandle, hitBlockInstance,
       hitDerivedGeometryForDrag, hitGeometryInstance, hitSketchIdentityElement, hitAnnotationElement, hitAnnotationTarget,
       activeSketchId = () => null } }) {
-    function hitItem(hit) { return hit?.constraint || hit?.arc || hit?.instance || hit; }
+    function hitItem(hit) { return hit?.constraint || hit?.arc || hit?.instance || hit?.element || hit; }
     function preferDrawingSketch(hits) {
       const id = activeSketchId();
       if (!id || !Object.values(hits).some(hit => hitItem(hit)?.sketchId === id)) return hits;
@@ -54,7 +54,7 @@
       const hitS = hitSpline(p.x, p.y);
       const hitD = hitDimension(p.x, p.y);
       const hitBlock = hitBlockInstance(p.x, p.y);
-      return preferDrawingSketch({ hitL, hitP, hitC, hitArcEnd, hitA, hitS, hitD, hitBlock });
+      return preferDrawingSketch({ hitL, hitP, hitC, hitArcEnd, hitA, hitS, hitD, hitBlock, hitAnnotation: hitAnnotationElement(p.x, p.y) });
     }
     return Object.freeze({ read, readDoubleClick, derivedGeometryAt: p => hitDerivedGeometryForDrag(p.x, p.y) });
   }

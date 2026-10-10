@@ -34,7 +34,7 @@
       panel.dataset.command = state.id;
       panel.setAttribute("aria-label", state.title);
       const schema = JSON.stringify([state.id, (state.selections || []).map(group => group.key),
-        (state.settings || []).map(setting => [setting.key, setting.type]), (state.actions || []).map(action => action.id)]);
+        (state.settings || []).map(setting => [setting.key, setting.type, setting.group, setting.options?.map(option => option.value)]), (state.actions || []).map(action => action.id)]);
       if (schema !== structure) {
         structure = schema;
         view = { title: node("h2"), step: node("p", null, "command-panel-step"), groups: [], settings: [],
@@ -54,17 +54,26 @@
           panel.append(section);
           view.groups.push({ section, heading, list, signature: "", items: [] });
         }
+        const settingGroups = new Map();
         for (const setting of state.settings || []) {
           const label = node("label", null, "command-panel-setting");
           const text = node("span");
           label.append(text);
-          const input = node(setting.type === "textarea" ? "textarea" : "input");
+          const input = node(setting.type === "textarea" ? "textarea" : setting.type === "select" ? "select" : "input");
           if (setting.type === "textarea") input.rows = 3;
+          else if (setting.type === "select") { for (const option of setting.options || []) { const element = node("option", option.label); element.value = option.value; input.append(element); } }
           else input.type = setting.type || "number";
           input.dataset.setting = setting.key;
           label.append(input);
-          panel.append(label);
-          view.settings.push({ input, text });
+          let container = panel;
+          if (setting.group) {
+            if (!settingGroups.has(setting.group)) {
+              const details = node("details", null, "command-panel-settings-group"); details.append(node("summary", setting.group)); panel.append(details); settingGroups.set(setting.group, details);
+            }
+            container = settingGroups.get(setting.group);
+          }
+          container.append(label);
+          view.settings.push({ input, text, label });
         }
         panel.append(view.message);
         const actions = node("div", null, "command-panel-actions");
@@ -106,12 +115,18 @@
         });
       });
       (state.settings || []).forEach((setting, index) => {
-        const { input, text } = view.settings[index];
+        const { input, text, label } = view.settings[index];
+        label.hidden = Boolean(setting.hidden);
+        input.dataset.live = String(Boolean(setting.live));
+        input.readOnly = Boolean(setting.readOnly);
+        if (setting.type === "textarea") { input.rows = setting.rows || 3; input.wrap = setting.rows ? "off" : "soft"; input.dataset.affix = String(Boolean(setting.rows)); }
+        input.placeholder = setting.placeholder || "";
+        if (setting.type === "select") [...input.options].forEach((option, i) => { option.textContent = setting.options[i].label; });
         text.textContent = setting.label;
         input.setAttribute("aria-label", setting.label);
         // Keep the live input node and unsent text through selection/preview updates.
         if (input.type === "checkbox") input.checked = Boolean(setting.value);
-        else if (document.activeElement !== input) input.value = String(setting.value);
+        else if (document.activeElement !== input) input.value = String(setting.value ?? "");
         for (const key of ["min", "max", "step"]) if (setting[key] != null) input[key] = setting[key];
       });
       view.message.hidden = !state.message;
@@ -128,7 +143,7 @@
       if (button && !button.disabled) onAction(button.dataset.action);
     });
     panel.addEventListener("input", event => {
-      if (event.target.tagName === "TEXTAREA" && event.target.dataset.setting) onSetting(event.target.dataset.setting, event.target.value);
+      if ((event.target.tagName === "TEXTAREA" || event.target.dataset.live === "true") && event.target.dataset.setting) onSetting(event.target.dataset.setting, event.target.value);
     });
     panel.addEventListener("change", event => {
       const input = event.target;
@@ -164,6 +179,7 @@
         onSelect?.(row.dataset.input, row.dataset.inputItem == null ? null : Number(row.dataset.inputItem));
         return;
       }
+      if (event.isComposing) return;
       if (event.key === "Escape") { event.preventDefault(); event.stopPropagation(); onAction("cancel"); }
       if (event.key === "Enter" && event.target.tagName === "TEXTAREA") { event.stopPropagation(); return; }
       if (event.key === "Enter") {
