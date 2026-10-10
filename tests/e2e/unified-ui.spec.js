@@ -2976,7 +2976,9 @@ test("Constraint dimensions expose defining geometry and inheritable appearance 
   await expandSketchTreeGroup(page, "dimension");
   await page.locator('.sketch-object-row[data-object-kind="constraint"]').first().click();
   const properties = page.locator("#propertiesPanel");
+  await expect(properties.locator('label[for="dimensionPropertyPrecision"]')).toHaveText("小数点以下の桁数");
   await properties.locator('[data-dimension-display="precision"]').selectOption("3");
+  expect(await page.evaluate(() => window.__jot2dTest.drawnDimensionLabelsForTest())).toEqual(expect.arrayContaining([expect.stringMatching(/^\d+\.\d{3}$/)]));
   await expect(page.locator('[data-dimension-display="toleranceUpper"], [data-dimension-display="toleranceLower"]')).toHaveCount(0);
   const prefix = properties.locator('[data-dimension-display="prefix"]');
   await prefix.fill("REF ");
