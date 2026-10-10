@@ -1864,6 +1864,23 @@
 
   const referenceImageImport = window.ReferenceImageImport.create({ window, document, applicationText });
 
+  const canImportDxf = () => canCreateInActiveSketch() && !hasActiveDrawOperation()
+    && !pendingCommand && !pendingConstraintCommand && mode !== "block-place";
+  const dxfImportCommand = window.DxfImportCommand.create({
+    parser: window.DxfImport, geometry: geometryCreation, ids: geometryIds,
+    currentScope: workspace.current, activeSketchId, canImport: canImportDxf,
+    signature: () => window.DocumentFiles.documentContentSignature(serializeModel()),
+    fileSession, requestChoice: options => choiceDialog.show(options), applicationText,
+    minimumLength: MIN_LINE_LENGTH, setHint,
+    onImported: () => {
+      clearSelection();
+      updateUI();
+      recordHistory("DXF読み込み");
+      fitAllGeometryToViewport();
+      draw();
+    },
+  });
+
   const referenceImageCommand = window.ReferenceImageCommand.create({
     referenceImageImport, canvas, viewport, screenToWorld, currentScope: workspace.current, activeSketchId,
     nextId: () => `IMG${referenceImageSeq++}`, canCreateInActiveSketch, clearSelection, canvasSelection,
@@ -6470,6 +6487,19 @@
   document.getElementById("saveAsBtn")?.addEventListener("click", () => void saveJot2DFileAs());
   document.getElementById("importBtn").addEventListener("click", () => void openJot2DFile());
   document.getElementById("documentFileInput")?.addEventListener("change", documentFileCommand.fileInputChanged);
+  document.getElementById("dxfImportBtn").addEventListener("click", () => {
+    flushScheduledCanvasPointerMove();
+    if (fileSession.busy || !canImportDxf()) {
+      setHint(applicationText("作図可能なスケッチを選び、進行中の操作を終了してください", "Select an editable sketch and finish the current operation"), "error");
+      return;
+    }
+    document.getElementById("dxfFileInput").click();
+  });
+  document.getElementById("dxfFileInput").addEventListener("change", event => {
+    const input = event.currentTarget, file = input.files?.[0];
+    input.value = "";
+    void dxfImportCommand.importFile(file);
+  });
   document.getElementById("importReferenceImageBtn")?.addEventListener("click", () => document.getElementById("referenceImageFileInput")?.click());
   document.getElementById("referenceImageFileInput")?.addEventListener("change", (event) => {
     const input = event.currentTarget;

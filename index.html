@@ -26,6 +26,8 @@
           <button type="button" data-menu-tool="exportBtn">上書き保存 <kbd>Ctrl+S</kbd></button>
           <button type="button" data-menu-tool="importBtn">開く</button>
           <button type="button" data-menu-tool="saveAsBtn">名前を付けて保存 <kbd>Ctrl+Shift+S</kbd></button>
+          <button id="dxfImportBtn" type="button" data-i18n-ja="DXF読込…" data-i18n-en="Import DXF…">DXF読込…</button>
+          <input id="dxfFileInput" type="file" accept=".dxf" hidden />
           <button id="pngExportBtn" type="button" data-i18n-ja="PNG出力…" data-i18n-en="Export PNG…">PNG出力…</button>
           <button id="parametersBtn" type="button">Parameter…</button>
           <button id="documentSettingsBtn" type="button">ドキュメント設定</button>
@@ -203,6 +205,7 @@
         "src/document/hatches.js",
         "src/document/reference_images.js", "src/persistence/reference_image_import.js", "src/commands/reference_image_command.js", "src/document/block_catalog.js", "src/document/block_state.js", "src/geometry/block_projection.js", "src/geometry/read_model.js", "src/geometry/appearance_query.js", "src/geometry/bounds.js", "src/geometry/block_layout.js", "src/geometry/reference_image_geometry.js", "src/rendering/drawing_bounds.js", "src/rendering/viewport.js", "src/rendering/canvas_surface.js", "src/rendering/dimension_metrics.js", "src/rendering/dimension_placement.js", "src/rendering/dimension_layout.js", "src/rendering/terminator_renderer.js", "src/rendering/dimension_renderer.js", "src/rendering/canvas_theme_colors.js", "src/rendering/geometry_presentation.js", "src/rendering/geometry_renderer.js", "src/rendering/hatch_renderer.js", "src/rendering/drawing_stack.js", "src/rendering/annotation_renderer.js", "src/rendering/annotation_spatial_query.js", "src/rendering/reference_image_renderer.js",
         "src/persistence/document_files.js", "src/commands/document_file_command.js", "src/document/state.js",
+        "src/persistence/dxf_import.js", "src/commands/dxf_import_command.js",
         "src/constraints/candidates.js", "src/constraints/operands.js",
         "src/persistence/dimensions.js", "src/persistence/constraints.js",
         "src/parameters/namespace.js",
