@@ -25,6 +25,8 @@
 
       const referenceDimension = hitD || press.referenceDimensionAt?.(p);
       if (referenceDimension && press.insertDimensionParameter(e, referenceDimension)) return;
+      const referenceAnnotation = press.referenceAnnotationAt?.(p);
+      if (referenceAnnotation && press.insertAnnotationParameter?.(e, referenceAnnotation)) return;
 
       if (getMode() === "hatch" || getMode() === "hatch-repair") {
         e.preventDefault();

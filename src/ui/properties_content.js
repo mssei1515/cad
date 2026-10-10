@@ -109,6 +109,7 @@
               <div class="property-row"><label>${applicationText("接頭辞", "Prefix")}</label><textarea data-annotation-style="prefix" data-affix-input rows="1" wrap="off" data-user-content>
 ${escapeHtml(style.prefix)}</textarea></div>
               <div class="property-row"><label>${applicationText("値 / 数式", "Value / Expression")}</label><input data-property="annotation-expression" value="${escapeHtml(expressionInputValue(item.expression || "0"))}"></div>
+              <div class="property-row"><label>${applicationText("小数点以下の桁数", "Decimal places")}</label><select data-annotation-style="precision"><option value="auto" ${style.precision == null ? "selected" : ""}>${applicationText("自動", "Auto")}</option>${Array.from({ length: 11 }, (_, digits) => `<option value="${digits}" ${style.precision === digits ? "selected" : ""}>${digits}</option>`).join("")}</select></div>
               <div class="property-row"><label>${applicationText("接尾辞", "Suffix")}</label><textarea data-annotation-style="suffix" data-affix-input rows="1" wrap="off" data-user-content>
 ${escapeHtml(style.suffix)}</textarea></div>`
               + propertyReadonlyRow("評価値", "Evaluated value", Number.isFinite(item.evaluatedParameterValue) ? formatDisplayNumber(item.evaluatedParameterValue) : "—")

@@ -4474,6 +4474,14 @@
     input.value = `${value.slice(0, start)}${insertion}${value.slice(end)}`;
     const caret = start + insertion.length;
     input.dispatchEvent(new Event("input", { bubbles: true }));
+    // Programmatic insertion alone does not make the browser emit change on blur.
+    let changed = false;
+    const onChange = () => { changed = true; };
+    input.addEventListener("change", onChange, { once: true });
+    input.addEventListener("blur", () => {
+      if (!changed && input.isConnected) input.dispatchEvent(new Event("change", { bubbles: true }));
+      input.removeEventListener("change", onChange);
+    }, { once: true });
     input.focus({ preventScroll: true });
     input.setSelectionRange(caret, caret);
   }
@@ -4498,6 +4506,24 @@
     setHint(applicationSettings.language === "en"
       ? `Inserted ${dimensionHit.constraint.parameterName}.`
       : `${dimensionHit.constraint.parameterName} を挿入しました`);
+    return true;
+  }
+
+  function insertClickedAnnotationParameter(event, annotationHit) {
+    const context = focusedExpressionInputContext();
+    const item = annotationHit?.element;
+    if (!context || !item?.parameterEnabled || !item.parameterName || !model.annotations.includes(item)) return false;
+    event.preventDefault();
+    event.stopPropagation();
+    if (context.namespace !== model) {
+      const message = applicationText("表示中のCanvasと異なる名前空間のため、この注記は参照できません", "This annotation cannot be referenced because the canvas shows a different namespace.");
+      setParameterDialogError(message);
+      setHint(message, "error");
+      return true;
+    }
+    insertIdentifierIntoExpressionInput(context.input, item.parameterName);
+    setParameterDialogError("");
+    setHint(applicationSettings.language === "en" ? `Inserted ${item.parameterName}.` : `${item.parameterName} を挿入しました`);
     return true;
   }
 
@@ -6053,6 +6079,8 @@
       query: canvasPressQuery, worldPoint: canvasPoint, screenPoint: canvasScreenPoint,
       closeContextMenu: closeCanvasContextMenu, insertDimensionParameter: insertClickedDimensionParameter,
       referenceDimensionAt: point => focusedExpressionInputContext() ? hitDimension(point.x, point.y, { activeOnly: false }) : null,
+      insertAnnotationParameter: insertClickedAnnotationParameter,
+      referenceAnnotationAt: point => focusedExpressionInputContext() ? hitAnnotationElement(point.x, point.y, { activeOnly: false }) : null,
       commitHatch: commitHatchAt, calibrateImage: handleReferenceImageCalibrationClick,
       placeFilletRadius: submitFilletRadiusPlacement, placeBlock: handleBlockPlacementClick, blankGesture: blankCanvasGesture,
       inputs: { instance: instanceCommandInput, annotation: annotationCommandInput, constraint: constraintCommandInput,
@@ -6202,6 +6230,7 @@
     const point = canvasPoint(event);
     const hit = hitDimension(point.x, point.y, { activeOnly: false });
     if (hit) insertClickedDimensionParameter(event, hit);
+    else insertClickedAnnotationParameter(event, hitAnnotationElement(point.x, point.y, { activeOnly: false }));
   }
 
   const applicationMenus = window.ApplicationMenus.create({ document, window, activateTool: id => document.getElementById(id)?.click() });

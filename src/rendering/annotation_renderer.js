@@ -7,7 +7,9 @@
     const source = element.localElement || element;
     if (source.parameterEnabled !== true) return String(element.text || "");
     const style = normalizeAnnotationStyle(element.style);
-    const value = Number.isFinite(source.evaluatedParameterValue) ? formatValue(source.evaluatedParameterValue) : "—";
+    const value = Number.isFinite(source.evaluatedParameterValue)
+      ? style.precision == null ? formatValue(source.evaluatedParameterValue) : source.evaluatedParameterValue.toFixed(style.precision)
+      : "—";
     return `${style.prefix}${value}${style.suffix}`;
   }
 
