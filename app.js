@@ -1882,6 +1882,7 @@
 
   const documentFileCommand = window.DocumentFileCommand.create({
     window, document, fileSession, choiceDialog, applicationText,
+    bookmarks: window.DocumentBookmarks.create({ indexedDB: window.indexedDB, crypto: window.crypto }),
     isEditingBlock: () => Boolean(blockEditor.current), getDocumentName: () => documentModel.documentName,
     serializeModel, markDocumentFileCheckpoint, updateDocumentNameUI, setHint, log,
     applyLoadedDocument: (data, fileName) => {
@@ -6515,6 +6516,8 @@
   document.getElementById("saveAsBtn")?.addEventListener("click", () => void saveJot2DFileAs());
   document.getElementById("importBtn").addEventListener("click", () => void openJot2DFile());
   document.getElementById("documentFileInput")?.addEventListener("change", documentFileCommand.fileInputChanged);
+  document.getElementById("copyDocumentLinkBtn")?.addEventListener("click", () => void documentFileCommand.copyDocumentLink());
+  document.getElementById("openDocumentLinkBtn")?.addEventListener("click", () => void documentFileCommand.openLinkedDocument());
   document.getElementById("dxfImportBtn").addEventListener("click", () => {
     flushScheduledCanvasPointerMove();
     if (fileSession.busy || !canImportDxf()) {
@@ -10961,4 +10964,5 @@
   resetHistory("起動");
   markDocumentFileCheckpoint("new");
   window.addEventListener("beforeunload", documentFileCommand.beforeUnload);
+  void documentFileCommand.openStartupDocument();
 })();

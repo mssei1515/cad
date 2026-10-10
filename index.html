@@ -26,6 +26,8 @@
           <button type="button" data-menu-tool="exportBtn">上書き保存 <kbd>Ctrl+S</kbd></button>
           <button type="button" data-menu-tool="importBtn">開く</button>
           <button type="button" data-menu-tool="saveAsBtn">名前を付けて保存 <kbd>Ctrl+Shift+S</kbd></button>
+          <button id="copyDocumentLinkBtn" type="button" data-i18n-ja="この図面のリンクをコピー" data-i18n-en="Copy link to this drawing">この図面のリンクをコピー</button>
+          <button id="openDocumentLinkBtn" type="button" data-i18n-ja="リンクの図面を開く…" data-i18n-en="Open linked drawing…" hidden>リンクの図面を開く…</button>
           <button id="dxfImportBtn" type="button" data-i18n-ja="DXF読込…" data-i18n-en="Import DXF…">DXF読込…</button>
           <input id="dxfFileInput" type="file" accept=".dxf" hidden />
           <button id="pngExportBtn" type="button" data-i18n-ja="PNG出力…" data-i18n-en="Export PNG…">PNG出力…</button>
@@ -177,6 +179,7 @@
   <dialog id="blockDefinitionsDialog" class="settings-dialog block-definitions-dialog"><form method="dialog"><header><strong>ブロック定義</strong><button value="cancel">×</button></header><section><div id="blockList" class="block-definition-list"></div></section><footer><button value="cancel">閉じる</button></footer></form></dialog>
   <dialog id="colorPaletteDialog" class="settings-dialog color-palette-dialog"><form method="dialog"><header><strong>カラーパレット</strong><button value="cancel">×</button></header><section><h3>標準色</h3><div id="defaultColorPalette" class="color-palette-grid"></div><h3>このファイルで使用中の色</h3><div id="usedColorPalette" class="color-palette-grid"></div><div class="settings-row color-custom-row"><label for="customColorPicker">任意の色</label><input id="customColorPicker" type="color" value="#111827" /></div></section><footer><button value="cancel">キャンセル</button><button id="applyCustomColorBtn" class="primary" type="button">適用</button></footer></form></dialog>
 
+  <dialog id="documentLinkDialog" class="settings-dialog" aria-labelledby="documentLinkTitle"><form method="dialog"><header><strong id="documentLinkTitle" data-i18n-ja="この図面の専用リンク" data-i18n-en="Link to this drawing">この図面の専用リンク</strong><button value="close" data-i18n-ja="閉じる" data-i18n-en="Close">閉じる</button></header><section><label for="documentLinkInput" data-i18n-ja="ブックマークに登録するURL" data-i18n-en="URL to bookmark">ブックマークに登録するURL</label><input id="documentLinkInput" type="text" readonly style="width:100%;box-sizing:border-box" /><p><a id="documentLinkOpen" target="_blank" rel="noopener" data-i18n-ja="リンクを開く（Ctrl+Dでブックマークに登録）" data-i18n-en="Open link (press Ctrl+D to bookmark)">リンクを開く（Ctrl+Dでブックマークに登録）</a></p><p data-i18n-ja="同じChromeで、保存済みの元ファイルを開きます。未保存の変更はリンクに含まれません。" data-i18n-en="Opens the saved original file in the same Chrome profile. Unsaved changes are not included.">同じChromeで、保存済みの元ファイルを開きます。未保存の変更はリンクに含まれません。</p></section></form></dialog>
   <dialog id="choiceDialog" class="settings-dialog choice-dialog" aria-labelledby="choiceDialogTitle" aria-describedby="choiceDialogMessage"><form method="dialog"><header><strong id="choiceDialogTitle" data-choice-title></strong><button type="button" data-choice-close>×</button></header><section><p id="choiceDialogMessage" data-choice-message></p></section><footer data-choice-actions></footer></form></dialog>
 
   <script>
@@ -203,7 +206,7 @@
         "src/document/annotations.js",
         "src/document/hatches.js",
         "src/document/reference_images.js", "src/persistence/reference_image_import.js", "src/editing/image_clipboard.js", "src/editing/clipboard_transfer.js", "src/editing/clipboard_payload.js", "src/commands/reference_image_command.js", "src/document/block_catalog.js", "src/document/block_state.js", "src/geometry/block_projection.js", "src/geometry/read_model.js", "src/geometry/appearance_query.js", "src/geometry/bounds.js", "src/geometry/block_layout.js", "src/geometry/reference_image_geometry.js", "src/rendering/drawing_bounds.js", "src/rendering/viewport.js", "src/rendering/canvas_surface.js", "src/rendering/dimension_metrics.js", "src/rendering/dimension_placement.js", "src/rendering/dimension_layout.js", "src/rendering/terminator_renderer.js", "src/rendering/dimension_renderer.js", "src/rendering/canvas_theme_colors.js", "src/rendering/geometry_presentation.js", "src/rendering/geometry_renderer.js", "src/rendering/hatch_renderer.js", "src/rendering/drawing_stack.js", "src/rendering/annotation_renderer.js", "src/rendering/annotation_spatial_query.js", "src/rendering/reference_image_renderer.js",
-        "src/persistence/document_files.js", "src/commands/document_file_command.js", "src/document/state.js",
+        "src/persistence/document_files.js", "src/persistence/document_bookmarks.js", "src/commands/document_file_command.js", "src/document/state.js",
         "src/persistence/dxf_import.js", "src/commands/dxf_import_command.js",
         "src/constraints/candidates.js", "src/constraints/operands.js",
         "src/persistence/dimensions.js", "src/persistence/constraints.js",
