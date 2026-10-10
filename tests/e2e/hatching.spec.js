@@ -5,6 +5,83 @@ test.beforeEach(async ({ page }) => {
   await page.waitForFunction(() => Boolean(window.__jot2dTest));
 });
 
+for (const type of ['pattern', 'free', 'sketchProjection']) {
+  test(`hatch alone is a ${type} source with region and save/reload support`, async ({ page }) => {
+    const fixture = await page.evaluate(() => window.__jot2dTest.resetForHatchTest());
+    await page.click('#toolHatch'); await page.mouse.click(fixture.client.x, fixture.client.y);
+    await page.locator('#commandPanel [data-action="finish"]').click(); await page.keyboard.press('Escape');
+    if (type === 'sketchProjection') {
+      await page.evaluate(() => {
+        const saved = window.__jot2dTest.hatchStateForTest().serialized;
+        saved.sketches.push({ ...saved.sketches.find(sketch => sketch.id === 'S1'), id: 'S2', name: 'Child', parentSketchId: 'S1' });
+        saved.activeSketchId = 'S2'; window.__jot2dTest.loadModelForDerivedInstanceTest(saved);
+      });
+      await page.click('#toolSketchProjection');
+      const source = await page.evaluate(() => window.__jot2dTest.worldClientPositionForTest({ x: 60, y: 40 }));
+      await page.mouse.click(source.x, source.y);
+    } else {
+      await page.evaluate(() => window.__jot2dTest.selectGeometryIdsForTest({ hatches: ['H1'] }));
+      await page.click(type === 'pattern' ? '#toolPattern' : '#toolFreeInstance');
+      if (type === 'pattern') await page.mouse.click(fixture.boundaryClient.x, fixture.boundaryClient.y);
+      else {
+        await page.mouse.click(fixture.client.x, fixture.client.y);
+        await page.locator('#commandPanel [role="listbox"][data-input="destination"]').click();
+        const destination = await page.evaluate(() => window.__jot2dTest.worldClientPositionForTest({ x: 80, y: 40 }));
+        await page.mouse.click(destination.x, destination.y);
+      }
+    }
+    await page.locator('#commandPanel [data-action="finish"]').click();
+    let state = await page.evaluate(() => window.__jot2dTest.hatchStateForTest());
+    expect(state.serialized.geometryInstances[0].sources).toEqual([{ kind: 'hatch', path: ['H1'] }]);
+    expect(state.projected).toHaveLength(type === 'pattern' ? 2 : 1);
+    expect(state.projected.every(hatch => hatch.valid && Math.abs(hatch.area - 9600) < 0.001)).toBe(true);
+    await page.evaluate(data => window.__jot2dTest.loadModelForDerivedInstanceTest(data), state.serialized);
+    state = await page.evaluate(() => window.__jot2dTest.hatchStateForTest());
+    expect(state.projected.every(hatch => hatch.valid)).toBe(true);
+  });
+}
+
+test('construction boundary toggle enables regions and survives finish, undo and reload', async ({ page }) => {
+  const fixture = await page.evaluate(() => window.__jot2dTest.resetForHatchTest({ constructionBoundary: true }));
+  await page.click('#toolHatch');
+  const setting = page.locator('#commandPanel [data-setting="includeConstruction"]');
+  await expect(setting).not.toBeChecked();
+  await page.mouse.click(fixture.client.x, fixture.client.y);
+  await expect(page.locator('#commandPanel [data-action="finish"]')).toBeDisabled();
+  await setting.check();
+  await page.mouse.click(fixture.client.x, fixture.client.y);
+  await page.locator('#commandPanel [data-action="finish"]').click();
+  expect((await page.evaluate(() => window.__jot2dTest.hatchStateForTest())).direct[0].valid).toBe(true);
+  await page.keyboard.press('Escape'); await page.keyboard.press('Control+z');
+  expect((await page.evaluate(() => window.__jot2dTest.hatchStateForTest())).direct).toHaveLength(0);
+  await page.keyboard.press('Control+y');
+  const saved = await page.evaluate(() => window.__jot2dTest.hatchStateForTest().serialized);
+  await page.evaluate(data => window.__jot2dTest.loadModelForDerivedInstanceTest(data), saved);
+  expect((await page.evaluate(() => window.__jot2dTest.hatchStateForTest())).direct[0].valid).toBe(true);
+});
+
+test('hatch alone is a mirror source with persisted references and protected source deletion', async ({ page }) => {
+  const fixture = await page.evaluate(() => window.__jot2dTest.resetForHatchTest());
+  await page.click('#toolHatch'); await page.mouse.click(fixture.client.x, fixture.client.y);
+  await page.locator('#commandPanel [data-action="finish"]').click(); await page.keyboard.press('Escape');
+  await page.evaluate(() => window.__jot2dTest.selectGeometryIdsForTest({ hatches: ['H1'] }));
+  await page.click('#toolMirror');
+  await expect(page.locator('#commandPanel')).toContainText('複写元: 1');
+  await page.mouse.click(fixture.boundaryClient.x, fixture.boundaryClient.y);
+  await page.locator('#commandPanel [data-action="finish"]').click();
+  let state = await page.evaluate(() => window.__jot2dTest.hatchStateForTest());
+  expect(state.serialized.geometryInstances[0].sources).toEqual([{ kind: 'hatch', path: ['H1'] }]);
+  expect(state.projected).toHaveLength(1); expect(state.projected[0]).toMatchObject({ valid: true, seed: { x: 60, y: -40 } });
+  expect(state.projected[0].area).toBeCloseTo(9600, 3);
+  await page.evaluate(data => window.__jot2dTest.loadModelForDerivedInstanceTest(data), state.serialized);
+  state = await page.evaluate(() => window.__jot2dTest.hatchStateForTest());
+  expect(state.projected[0].valid).toBe(true);
+  await page.evaluate(() => window.__jot2dTest.selectGeometryIdsForTest({ hatches: ['H1'] }));
+  await page.keyboard.press('Delete');
+  expect((await page.evaluate(() => window.__jot2dTest.hatchStateForTest())).direct).toHaveLength(1);
+  await expect(page.locator('#hint')).toContainText('派生インスタンス');
+});
+
 async function expandSketchTreeGroup(page, category, sketchId = "S1") {
   const sketch = page.locator(`.sketch-item[data-id="${sketchId}"]`);
   if ((await sketch.getAttribute("aria-expanded")) !== "true") await sketch.locator(".sketchExpandBtn").click();

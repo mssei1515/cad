@@ -20,7 +20,7 @@
     }
 
     function toggleSketchProjectionSource(operand) {
-      const entry = sketchProjectionEntryFromOperand(operand);
+      const entry = operand?.kind === "hatch" ? sketchProjectionEntryFromItem(operand.item) : sketchProjectionEntryFromOperand(operand);
       if (!entry) {
         setHint(applicationText("表示中の先祖SketchにあるGeometryを選択してください", "Select visible geometry from an ancestor sketch."), "error");
         return false;

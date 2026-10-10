@@ -89,9 +89,9 @@
 
     function createProjectedHatch(transform, ownerInstance, definition, localHatch, localPath, appearanceOverrides = [], localGeometry = null) {
       const primitives = localGeometry
-        ? hatchPrimitivesFromElements(localGeometry, localHatch.sketchId)
-        : hatchPrimitivesForScope(definition, localHatch.sketchId);
-      const localResolved = resolveHatchBoundaryLoops(localHatch.boundaryLoops, primitives);
+        ? hatchPrimitivesFromElements(localGeometry, localHatch.sketchId, { includeConstruction: true })
+        : hatchPrimitivesForScope(definition, localHatch.sketchId, { includeConstruction: true });
+      const localResolved = localHatch.derivedProjection ? localHatch.resolvedBoundary : resolveHatchBoundaryLoops(localHatch.boundaryLoops, primitives);
       const appearance = normalizeHatchAppearance(localHatch.appearance);
       for (const override of appearanceOverrides) {
         const normalized = normalizeAppearance(override);
@@ -123,7 +123,7 @@
       };
       Object.defineProperties(projected, {
         seed: { configurable: true, enumerable: true, get: () => blockWorldPoint(transform, localHatch.seed) },
-        patternOrigin: { configurable: true, enumerable: true, get: () => blockWorldPoint(transform, { x: 0, y: 0 }) },
+        patternOrigin: { configurable: true, enumerable: true, get: () => blockWorldPoint(transform, localHatch.patternOrigin || { x: 0, y: 0 }) },
         appearance: { configurable: true, enumerable: true, get: () => ({ ...appearance, angle: appearance.angle + (Number(transform.rotation) || 0) * 180 / Math.PI }) },
         resolvedBoundary: { configurable: true, enumerable: true, get: projectResolvedBoundary },
       });
@@ -270,6 +270,7 @@
             arcs.push(arc);
           }
           for (const localSpline of localBundle.splines) splines.push(markDerived(new Spline(localSpline.id, localSpline.fitPoints.map((point) => localPointMap.get(point)), localSpline.closed, localSpline.construction), localSpline, "spline"));
+          for (const localHatch of localBundle.hatches || []) hatches.push(createProjectedHatch(instance, ownerInstance, definition, localHatch, localPath(localHatch.id), appearanceOverrides));
         }
       }
       return { definition, revision: definition.revision, sketchId: instance.sketchId, enabledSketchKey: [...enabledSketchIds].sort().join("|"), instance, points, lines, circles, arcs, splines, hatches, annotations, pointByLocalId };

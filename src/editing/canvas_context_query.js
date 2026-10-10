@@ -95,6 +95,10 @@
         const closest = window.SplineGeometry.closestPoint(spline.curve(), pointer, { samplesPerSpan: 28 });
         if (closest?.distance <= threshold) distance = Math.min(distance, closest.distance);
       }
+      for (const hatch of bundle.hatches || []) {
+        const resolved = resolvedHatchBoundary(hatch);
+        if (resolved.ok && isVisibleValue(hatchAppearanceForDisplay(hatch).visible) && hatchContainsSelectablePoint(hatch, resolved, pointer)) distance = 0;
+      }
       return Number.isFinite(distance) ? distance : null;
     }
 

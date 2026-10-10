@@ -24,6 +24,15 @@ function fixture({ allowDeletion = true } = {}) {
   return { command, instance, model, calls };
 }
 
+test('bulk source addition maps own outputs to sources and keeps retained entries', () => {
+  const f = fixture();
+  const source = { id: 'C' };
+  f.command.addSources([{ id: 'A' }, { id: 'I1@C', derivedInstance: f.instance, sourceElement: source }]);
+  assert.deepEqual(Array.from(f.command.current.sources, ref => ref.id), ['A', 'B', 'C']);
+  f.command.addSources([{ id: 'C' }]);
+  assert.equal(f.command.current.sources.length, 3);
+});
+
 test('source edits keep retained order and legacy output identity even after removing and readding the first source', () => {
   const f = fixture();
   f.command.toggle({ id: 'A' }); f.command.toggle({ id: 'C' }); f.command.toggle({ id: 'A' });

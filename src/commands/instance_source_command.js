@@ -24,7 +24,7 @@
       draw();
     }
 
-    function toggleInstanceSource(item) {
+    function toggleInstanceSource(item, { deferRefresh = false } = {}) {
       const model = currentScope();
       const edit = instanceSourceEdit;
       if (!edit || !item) return;
@@ -45,8 +45,8 @@
         if (!bundle?.valid) return void setHint(bundle?.reason || applicationText("参照が無効です", "Invalid reference"), "error");
         edit.sources.push(ref);
       }
-      updatePropertiesUI();
-      draw();
+      if (!deferRefresh) { updatePropertiesUI(); draw(); }
+      return true;
     }
 
     function finishInstanceSourceEdit(commit) {
@@ -101,8 +101,17 @@
       return true;
     }
     function reset() { instanceSourceEdit = null; }
+    function addSources(items) {
+      let changed = false;
+      for (let item of items) {
+        if (item.derivedInstance === instanceSourceEdit?.instance) item = item.sourceElement;
+        const ref = geometryRefForItem(item);
+        if (ref && !includesRef(ref)) changed = toggleInstanceSource(item, { deferRefresh: true }) || changed;
+      }
+      if (changed) { updatePropertiesUI(); draw(); }
+    }
     function includesRef(ref) { return Boolean(instanceSourceEdit?.sources.some(source => geometryRefsEqual(source, ref))); }
-    return Object.freeze({ start: startInstanceSourceEdit, toggle: toggleInstanceSource, remove, finish: finishInstanceSourceEdit, reset, includesRef,
+    return Object.freeze({ start: startInstanceSourceEdit, toggle: toggleInstanceSource, addSources, remove, finish: finishInstanceSourceEdit, reset, includesRef,
       get instance() { return instanceSourceEdit?.instance || null; },
       get current() { return instanceSourceEdit ? { instance: instanceSourceEdit.instance, sources: [...instanceSourceEdit.sources] } : null; },
     });

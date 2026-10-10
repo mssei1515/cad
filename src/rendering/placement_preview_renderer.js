@@ -36,6 +36,9 @@
     function drawFreeInstance(bundle) {
       if (!bundle) return;
       withCanvasState(() => {
+        for (const hatch of bundle.hatches || []) {
+          drawResolvedHatch(resolvedHatchBoundary(hatch), { ...hatchAppearanceForDisplay(hatch), color: "#2563eb" }, hatchPatternOrigin(hatch), { preview: true, alpha: 0.75 });
+        }
         drawGeometry(bundle);
         for (const point of bundle.points) {
           ctx.beginPath(); ctx.arc(point.x, point.y, 3 / viewport.scale, 0, Math.PI * 2); ctx.stroke();

@@ -43,7 +43,7 @@
       }
       for (const hatch of definition.hatches || []) {
         if (!enabled.has(String(hatch.sketchId)) || hatch.appearance?.visible === false) continue;
-        const resolved = resolveHatchBoundaryLoops(hatch.boundaryLoops, hatchPrimitivesForScope(definition, hatch.sketchId));
+        const resolved = resolveHatchBoundaryLoops(hatch.boundaryLoops, hatchPrimitivesForScope(definition, hatch.sketchId, { includeConstruction: true }));
         if (resolved.ok) for (const loop of resolved.loops) points.push(...loop.points);
         else if (hatch.seed) points.push(hatch.seed);
       }
@@ -81,6 +81,11 @@
           for (const spline of bundle.splines || []) {
             const bounds = splineBBox(spline);
             if (bounds) points.push({ x: bounds.x1, y: bounds.y1 }, { x: bounds.x2, y: bounds.y2 });
+          }
+          for (const hatch of bundle.hatches || []) {
+            if (hatch.appearance?.visible === false) continue;
+            const resolved = hatch.resolvedBoundary;
+            if (resolved?.ok) for (const loop of resolved.loops) points.push(...loop.points);
           }
         }
       }

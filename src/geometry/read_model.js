@@ -64,8 +64,8 @@
 
     function allHatches() {
       return cachedGeometryRead("allHatches", () => {
-        if (currentScope().hatches.length === 0 && !hasBlockHatches()) return [];
-        return [...currentScope().hatches, ...blockProjectionBundles().flatMap((bundle) => bundle.hatches || [])];
+        if (currentScope().hatches.length === 0 && !hasBlockHatches() && !currentScope().geometryInstances?.length) return [];
+        return [...currentScope().hatches, ...blockProjectionBundles().flatMap((bundle) => bundle.hatches || []), ...geometryInstanceBundles().flatMap((bundle) => bundle.hatches || [])];
       });
     }
 
@@ -79,6 +79,7 @@
       if (kind === "circle") return currentScope().circles.find((item) => item.id === id) || null;
       if (kind === "arc") return currentScope().arcs.find((item) => item.id === id) || null;
       if (kind === "spline") return currentScope().splines.find((item) => item.id === id) || null;
+      if (kind === "hatch") return currentScope().hatches.find((item) => item.id === id) || null;
       return null;
     }
 
@@ -89,6 +90,7 @@
         if (kind === "circle") return allGeometryCircles().find((item) => item.id === canonicalId);
         if (kind === "arc") return allGeometryArcs().find((item) => item.id === canonicalId);
         if (kind === "spline") return allGeometrySplines().find((item) => item.id === canonicalId);
+        if (kind === "hatch") return allHatches().find((item) => window.GeometryRef.id(window.GeometryObjects.geometryRefForItem(item)) === canonicalId);
         return null;
       });
     }

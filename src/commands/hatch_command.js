@@ -12,12 +12,14 @@
     let regions = [];
     let sequence = 0;
     let selectedRegion = null;
+    let includeConstruction = false;
+    const faceAt = pointer => hatchFaceAt(pointer, { includeConstruction });
     const regionKey = loops => JSON.stringify(loops.map(loop => ({ role: loop.role, spans: loop.spans
       .map(span => JSON.stringify(span)).sort() })).sort((a, b) => JSON.stringify(a).localeCompare(JSON.stringify(b))));
     function refresh() { updateStatusUI(); draw(); }
     function updateHatchPreview(pointer) {
       if (!pointer || !["hatch", "hatch-repair"].includes(getMode())) return;
-      hatchPreview = { pointer: { x: pointer.x, y: pointer.y }, result: hatchFaceAt(pointer) };
+      hatchPreview = { pointer: { x: pointer.x, y: pointer.y }, result: faceAt(pointer) };
     }
 
     function startHatchCreation() {
@@ -28,6 +30,7 @@
         return;
       }
       setMode("hatch");
+      includeConstruction = false;
       hatchRepairTarget = null;
       regions = []; selectedRegion = null; sequence = 0;
       setPointerPreview(lastPointer());
@@ -48,6 +51,7 @@
       }
       if (!canCreateInActiveSketch()) { rejectRootSketchCreation(); return false; }
       setMode("hatch-repair");
+      includeConstruction = false;
       hatchRepairTarget = hatch;
       regions = []; selectedRegion = null; sequence = 0;
       hatchPreview = null;
@@ -62,7 +66,7 @@
 
     function commitHatchAt(pointer) {
       if (!["hatch", "hatch-repair"].includes(getMode())) return false;
-      const result = hatchFaceAt(pointer);
+      const result = faceAt(pointer);
       hatchPreview = { pointer: { x: pointer.x, y: pointer.y }, result };
       if (!result.ok) {
         setHint(hatchRegionErrorText(result), "error");
@@ -82,7 +86,7 @@
     function finish() {
       if (!regions.length || !["hatch", "hatch-repair"].includes(getMode())) return false;
       // Revalidate against current geometry before applying one atomic edit.
-      const checked = regions.map(region => hatchFaceAt(region.seed));
+      const checked = regions.map(region => faceAt(region.seed));
       if (checked.some((result, index) => !result.ok || regionKey(result.boundaryLoops) !== regions[index].key)) {
         setHint(applicationText("選択した領域の境界が変わりました。領域を選び直してください", "Selected boundaries changed. Select the regions again."), "error");
         refresh(); return false;
@@ -130,7 +134,25 @@
     function reset() { hatchPreview = null; hatchRepairTarget = null; regions = []; selectedRegion = null; }
     function select(index) { selectedRegion = regions[index]?.id ?? null; refresh(); }
     function remove(index) { if (!regions[index]) return; regions.splice(index, 1); selectedRegion = null; refresh(); }
-    return Object.freeze({ updateHatchPreview, startHatchCreation, startHatchBoundaryRepair, commitHatchAt, finish, reset, select, remove,
+    function changeSetting(key, value) {
+      if (key !== "includeConstruction" || !["hatch", "hatch-repair"].includes(getMode())) return false;
+      includeConstruction = Boolean(value);
+      // Rebuild selected faces under the new boundary rule, merging duplicate faces.
+      const next = new Map();
+      for (const region of regions) {
+        const result = faceAt(region.seed);
+        if (result.ok) {
+          const key = regionKey(result.boundaryLoops);
+          if (!next.has(key)) next.set(key, { ...region, key, result });
+        }
+      }
+      regions = [...next.values()]; selectedRegion = null;
+      updateHatchPreview(getPointerPreview());
+      refresh();
+      return true;
+    }
+    return Object.freeze({ updateHatchPreview, startHatchCreation, startHatchBoundaryRepair, commitHatchAt, finish, reset, select, remove, changeSetting,
+      get includeConstruction() { return includeConstruction; },
       get regions() { return regions.map(region => ({ id: region.id, selected: selectedRegion === region.id, area: region.result.resolved?.area, resolved: region.result.resolved })); },
       get preview() { return hatchPreview ? { pointer: { ...hatchPreview.pointer }, result: hatchPreview.result } : null; },
     });

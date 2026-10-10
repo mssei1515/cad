@@ -8,6 +8,30 @@ const panel = page => page.locator("#commandPanel");
 const finish = page => panel(page).locator('[data-action="finish"]');
 const instances = page => page.evaluate(() => window.__jot2dTest.derivedInstanceStateForTest().serialized.geometryInstances);
 
+test('canvas rectangle adds sources to mirror and source editing without toggling retained sources', async ({ page }) => {
+  const fixture = await page.evaluate(() => window.__jot2dTest.resetForHatchTest());
+  const rect = await page.evaluate(() => ({
+    start: window.__jot2dTest.worldClientPositionForTest({ x: -5, y: -5 }),
+    end: window.__jot2dTest.worldClientPositionForTest({ x: 125, y: 85 }),
+  }));
+  const drag = async () => { await page.mouse.move(rect.start.x, rect.start.y); await page.mouse.down();
+    await page.mouse.move(rect.end.x, rect.end.y, { steps: 8 }); await page.mouse.up(); };
+  await page.click('#toolMirror');
+  await drag();
+  await expect(panel(page)).toContainText('複写元: 4');
+  await drag();
+  await expect(panel(page)).toContainText('複写元: 4');
+  await page.locator('#commandPanel [role="listbox"][data-input="reference"]').click();
+  await page.mouse.click(fixture.boundaryClient.x, fixture.boundaryClient.y); await finish(page).click();
+  expect((await instances(page))[0].sources).toHaveLength(4);
+  await page.click('[data-property-action="instance-sources"]');
+  await panel(page).locator('[data-input="sources"][data-input-item="0"]').press('Delete');
+  await expect(panel(page)).toContainText('対象図形: 3');
+  await drag();
+  await expect(panel(page)).toContainText('対象図形: 4');
+  await finish(page).click(); expect((await instances(page))[0].sources).toHaveLength(4);
+});
+
 test("projection panel follows selections, completion, cancel and command switching", async ({ page }) => {
   const fixture = await page.evaluate(() => window.__jot2dTest.resetForSketchProjectionTest());
   await expect(panel(page)).toBeHidden();

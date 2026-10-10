@@ -28,7 +28,8 @@
         for (const primitive of [...bundle.circles, ...bundle.arcs, ...(bundle.splines || [])]) primitiveById.set(primitive.id, primitive);
       }
       const loadedBlockBundles = loadedBlockInstances.map((instance) => createBlockProjectionBundle(instance, loadedBlockDefinitions.find((item) => item.id === instance.definitionId), null, { definitionResolver: loadedDefinitionById }));
-      const loadedDerivedBundles = geometryInstanceBundlesForScope({ sketches: loadedSketches, points, lines, circles, arcs, splines, geometryInstances: loadedGeometryInstances }, loadedBlockBundles);
+      const loadedDerivedBundles = geometryInstanceBundlesForScope({ sketches: loadedSketches, points, lines, circles, arcs, splines,
+        hatches: normalizeHatches(rawLoadedHatches, normalizeSketchId(data.activeSketchId)), geometryInstances: loadedGeometryInstances }, loadedBlockBundles);
       const invalidLoadedDerived = loadedDerivedBundles.find((bundle) => !bundle.valid);
       if (invalidLoadedDerived) throw new Error(`${applicationText("派生インスタンス", "Derived instance")} ${invalidLoadedDerived.instance.id}: ${invalidLoadedDerived.reason}`);
       for (const bundle of loadedDerivedBundles) addGeometryBundleToMaps(bundle, pointById, lineById, primitiveById);

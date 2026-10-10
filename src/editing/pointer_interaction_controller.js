@@ -38,7 +38,7 @@
         return;
       }
 
-      if (press.inputs.instance.click(e, p, { hitP, hitL, hitC, hitA, hitS })) return;
+      if (press.inputs.instance.click(e, p, { hitP, hitL, hitC, hitA, hitS, hatchHit })) return;
 
       const blankDoubleClickHits = { hitP, hitL, hitC, hitArcEnd, hitA, hitS, hitD, hitBlock, hitDerivedInstance, hatchHit, referenceImageHit, inactiveHit, annotationHit: blankAnnotationHit };
       if (press.blankGesture.isRepeated(press.screenPoint(e), blankDoubleClickHits) && press.blankGesture.handle(p, blankDoubleClickHits)) {

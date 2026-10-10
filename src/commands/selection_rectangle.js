@@ -2,7 +2,7 @@
 (() => {
   "use strict";
   function create({ rectFromPoints, hypot2, viewScale, releasePointer, clearSelection,
-    selectByRect, addSketchProjectionSourcesByRect, setHint, updateGeometrySelectionUI, draw }) {
+    selectByRect, addSketchProjectionSourcesByRect, addInstanceSourcesByRect, setHint, updateGeometrySelectionUI, draw }) {
     let session = null;
     function begin(start, { current = start, kind, additive = false } = {}) {
       session = { start, current, kind, additive };
@@ -19,6 +19,11 @@
       releasePointer(event.pointerId);
       const current = completed.current || completed.start;
       const moved = hypot2(current.x - completed.start.x, current.y - completed.start.y);
+      if (completed.kind === "instance-sources") {
+        if (moved > 3 / viewScale()) addInstanceSourcesByRect(rectFromPoints(completed.start, current), current.x < completed.start.x);
+        draw();
+        return true;
+      }
       if (completed.kind === "sketch-projection") {
         if (moved > 3 / viewScale()) {
           addSketchProjectionSourcesByRect(rectFromPoints(completed.start, current), current.x < completed.start.x);

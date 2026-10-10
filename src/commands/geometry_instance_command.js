@@ -50,7 +50,7 @@
       refresh();
       return true;
     }
-    function toggleSource(item) {
+    function toggleSource(item, { deferRefresh = false } = {}) {
       if (!active() || !item) return false;
       const ref = geometryRefForItem(item);
       const index = sources.findIndex(source => geometryRefsEqual(source, ref));
@@ -60,7 +60,7 @@
         return false;
       }
       sources.push(ref);
-      refresh();
+      if (!deferRefresh) refresh();
       return true;
     }
     function removeInput(key, index = 0) {
@@ -76,6 +76,14 @@
       previewingDestination = key === "destination";
       refresh();
       return true;
+    }
+    function addSources(items) {
+      let changed = false;
+      for (const item of items) {
+        const ref = geometryRefForItem(item);
+        if (ref && !sources.some(source => geometryRefsEqual(source, ref))) changed = toggleSource(item, { deferRefresh: true }) || changed;
+      }
+      if (changed) refresh();
     }
     function placeFree(pointer) {
       if (!active() || commandType !== "free" || !["origin", "destination"].includes(activeInput)
@@ -180,7 +188,7 @@
       if (resolved.some(({ item }) => !item)) return null;
       return createGeometryInstanceBundle(freeInstancePlacement, resolved, null, null);
     }
-    return Object.freeze({ start, placeFree, selectInput, toggleSource, removeInput, selectReference, canFinish, finish, cancel,
+    return Object.freeze({ start, placeFree, selectInput, toggleSource, addSources, removeInput, selectReference, canFinish, finish, cancel,
       changeSetting, validSettings, clearSources, clearPlacement, reset, preview,
       get activeInput() { return activeInput; },
       get sources() { return [...sources]; },

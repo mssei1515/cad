@@ -42,6 +42,9 @@
         return;
       }
       if (commandKey && operations.isGeometryMode() && !textEditingTarget && ["c", "x", "v"].includes(key)) {
+        // Native paste carries image files, including on file: URLs.
+        if (key === "v" && shortcuts.nativePaste) return;
+        if (["c", "x"].includes(key) && shortcuts.nativeCopy) return;
         e.preventDefault();
         if (key === "c") shortcuts.copy();
         else if (key === "x") shortcuts.copy({ cut: true });

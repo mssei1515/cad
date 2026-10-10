@@ -122,6 +122,10 @@
         const selected = samplesSelected(samples, rect, crossing);
         if (selected) append(spline);
       }
+      for (const hatch of geometry.hatches?.() || []) {
+        const box = resolvedLoopBounds(resolvedHatchBoundary(hatch));
+        if (box && boxSelected(box, rect, crossing)) append(hatch);
+      }
       return entries;
     }
 

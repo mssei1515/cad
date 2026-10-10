@@ -217,7 +217,9 @@
     sketchRelationOfElement,
   } = window.SketchContext.create({ currentScope: workspace.current, constraintGraphNodes });
   const { geometryKindForItem, geometryRefForItem, addGeometryBundleToMaps } = window.GeometryObjects;
-  const instanceProjections = window.InstanceProjection.create({ elementSketchId, applicationText });
+  const instanceProjections = window.InstanceProjection.create({ elementSketchId, applicationText,
+    resolveHatch: (hatch, elements) => resolvedHatchBoundary(hatch, elements),
+  });
   const { emptyGeometryInstanceBundle, geometryInstanceSourcePoints, createGeometryInstanceBundle, geometryInstanceBundlesForScope } = instanceProjections;
   const blockCatalog = window.BlockCatalog.create({ definitions: () => documentModel.blockDefinitions });
   const { blockDefinitionOwnedSubtreeIds, blockDefinitionSketchRows, blockDefinitionById, blockDefinitionDrawableSketchIds, blockDefinitionHasGeometry, blockDefinitionGeometrySketchIds, blockInstanceEnabledSketchSet } = blockCatalog;
@@ -1438,7 +1440,7 @@
   function sketchProjectionEntriesByRect(rect, crossing) {
     return rectangleSelectionQuery.readProjection(rect, crossing, {
       points: allGeometryPoints, lines: allGeometryLines, circles: allGeometryCircles,
-      arcs: allGeometryArcs, splines: allGeometrySplines,
+      arcs: allGeometryArcs, splines: allGeometrySplines, hatches: allHatches,
     }, sketchProjectionEntryFromItem);
   }
 
@@ -1452,14 +1454,14 @@
   }
 
   function selectedItemsForGeometryInstance() {
-    const items = [...selectedGeometryItems()];
+    const items = [...selectedGeometryItems(), ...canvasSelection.hatches.filter(hatch => model.hatches.includes(hatch))];
     for (const instance of canvasSelection.blockInstances) {
       const bundle = blockProjectionBundle(instance);
-      items.push(...bundle.lines, ...bundle.circles, ...bundle.arcs, ...bundle.splines, ...bundle.points.filter((point) => point.localElement?.kind === "explicit"));
+      items.push(...bundle.lines, ...bundle.circles, ...bundle.arcs, ...bundle.splines, ...(bundle.hatches || []), ...bundle.points.filter((point) => point.localElement?.kind === "explicit"));
     }
     for (const instance of canvasSelection.geometryInstances) {
       const bundle = geometryInstanceBundle(instance);
-      items.push(...bundle.lines, ...bundle.circles, ...bundle.arcs, ...bundle.splines);
+      items.push(...bundle.lines, ...bundle.circles, ...bundle.arcs, ...bundle.splines, ...(bundle.hatches || []));
       for (const point of bundle.points) if (point.sourceElement instanceof Point && point.sourceElement.kind === "explicit") items.push(point);
     }
     return [...new Set(items)].filter((item) => elementSketchId(item) === activeSketchId() && geometryRefForItem(item));
@@ -1886,6 +1888,14 @@
     nextId: () => `IMG${referenceImageSeq++}`, canCreateInActiveSketch, clearSelection, canvasSelection,
     updateUI, draw, recordHistory, setHint, applicationText,
   });
+  const imageClipboard = window.ImageClipboard.create({ window,
+    importFile: referenceImageCommand.importFile, pasteGeometry: pasteGeometryClipboard, copyGeometry: copySelectionToClipboard,
+    isGeometryMode, isTextEditingTarget: target => target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement || target?.isContentEditable,
+    setHint, applicationText,
+  });
+  document.addEventListener("paste", imageClipboard.paste);
+  document.addEventListener("copy", imageClipboard.copy);
+  document.addEventListener("cut", imageClipboard.copy);
   const { importFile: importReferenceImageFile } = referenceImageCommand;
 
   function pointAt(x, y) {
@@ -2200,6 +2210,8 @@
   }
 
   function geometryBundleHit(bundle, x, y, threshold = 8 / viewport.scale) {
+    if ((bundle.hatches || []).some(hatch => isVisibleValue(hatchAppearanceForDisplay(hatch).visible)
+      && hatchContainsSelectablePoint(hatch, resolvedHatchBoundary(hatch), { x, y }))) return true;
     if (bundle.points.some((point) => hypot2(point.x - x, point.y - y) <= threshold)) return true;
     if (bundle.lines.some((line) => distancePointToSegment(x, y, line) <= threshold)) return true;
     if (bundle.circles.some((circle) => Math.abs(hypot2(x - circle.center.x, y - circle.center.y) - circle.radius()) <= threshold)) return true;
@@ -2450,6 +2462,10 @@
     const annotationsToDelete = canvasSelection.annotations.filter((annotation) => model.annotations.includes(annotation));
     const hatchesToDelete = canvasSelection.hatches.filter((hatch) => model.hatches.includes(hatch));
     const referenceImagesToDelete = canvasSelection.referenceImages.filter((image) => model.referenceImages.includes(image));
+    const hatchKeys = new Set(hatchesToDelete.map(hatch => geometryRefKey(geometryRefForItem(hatch))));
+    const hatchDependents = model.geometryInstances.filter(instance => !canvasSelection.geometryInstances.includes(instance)
+      && geometryInstanceUsesRemovedGeometry(instance, hatchKeys));
+    if (rejectReferencedGeometryDeletion(hatchDependents, applicationText("選択した塗りつぶし", "the selected fill"))) return false;
     if (annotationsToDelete.length > 0 && !guardDimensionSymbolDeletion(annotationsToDelete)) return false;
     if (annotationsToDelete.length > 0) {
       model.annotations = model.annotations.filter((item) => !annotationsToDelete.includes(item));
@@ -2530,6 +2546,7 @@
     const blockInstances = canvasSelection.blockInstances.filter((instance) => model.blockInstances.includes(instance));
     const annotations = canvasSelection.annotations.filter((annotation) => model.annotations.includes(annotation));
     const hatches = canvasSelection.hatches.filter((hatch) => model.hatches.includes(hatch));
+    const referenceImages = canvasSelection.referenceImages.filter(image => model.referenceImages.includes(image));
     const dependentPoints = new Set();
     for (const line of lines) {
       points.add(line.p1);
@@ -2547,7 +2564,7 @@
         dependentPoints.add(point);
       }
     }
-    if (points.size + lines.length + circles.length + arcs.length + splines.length + blockInstances.length + annotations.length + hatches.length === 0) return null;
+    if (points.size + lines.length + circles.length + arcs.length + splines.length + blockInstances.length + annotations.length + hatches.length + referenceImages.length === 0) return null;
 
     const selectedNodes = new Set([...points, ...lines, ...circles, ...arcs, ...splines, ...blockInstances]);
     const selectedBlockProjectionIds = new Set();
@@ -2623,6 +2640,7 @@
       })),
       annotations: annotations.map(annotation => ({ ...serializeAnnotation(annotation), parameterValue: annotation.evaluatedParameterValue })),
       hatches: hatches.map(serializeHatch),
+      referenceImages: referenceImages.map(serializeReferenceImage),
       selection: {
         points: canvasSelection.points.filter((point) => points.has(point)).map((point) => point.id),
         lines: lines.map((line) => line.id),
@@ -2638,7 +2656,7 @@
 
   function clipboardPayloadCount(payload = geometryClipboard) {
     if (!payload) return 0;
-    return payload.points.length + payload.lines.length + payload.circles.length + payload.arcs.length + (payload.splines?.length || 0) + payload.blockInstances.length + (payload.hatches?.length || 0) + (payload.annotations?.length || 0);
+    return payload.points.length + payload.lines.length + payload.circles.length + payload.arcs.length + (payload.splines?.length || 0) + payload.blockInstances.length + (payload.hatches?.length || 0) + (payload.annotations?.length || 0) + (payload.referenceImages?.length || 0);
   }
 
   function copySelectionToClipboard(options = {}) {
@@ -2651,6 +2669,7 @@
     }
     geometryClipboard = payload;
     geometryClipboard.cut = Boolean(options.cut);
+    imageClipboard.markCopy();
     updateToolbar();
     if (options.cut) {
       const deleted = deleteCurrentSelection();
@@ -2739,8 +2758,9 @@
       blockInstances: model.blockInstances.length,
       annotations: model.annotations.length,
       hatches: model.hatches.length,
+      referenceImages: model.referenceImages.length,
     };
-    const initialSequences = { ...geometryIds.snapshot(), annotationSeq, hatchSeq, nextHatchIndex: model.nextHatchIndex, blockInstanceSeq, nextDimensionParameterIndex: model.nextDimensionParameterIndex };
+    const initialSequences = { ...geometryIds.snapshot(), annotationSeq, hatchSeq, referenceImageSeq, nextHatchIndex: model.nextHatchIndex, blockInstanceSeq, nextDimensionParameterIndex: model.nextDimensionParameterIndex };
 
     try {
       const idMap = new Map();
@@ -2845,6 +2865,10 @@
         idMap.set(source.id, hatch.id);
       }
       model.nextHatchIndex = Math.max(hatchSeq, Number(model.nextHatchIndex) || 1);
+      const pastedImages = (payload.referenceImages || []).map(source => ({ ...serializeReferenceImage(source),
+        id: `IMG${referenceImageSeq++}`, sketchId: targetSketchId, x: source.x + dx, y: source.y + dy,
+      }));
+      model.referenceImages.push(...pastedImages);
 
       const targetNamespaceKey = currentBlockDefinitionScopeId() ? `block:${currentBlockDefinitionScopeId()}` : "document";
       const sameNamespace = payload.parameterNamespaceKey === targetNamespaceKey;
@@ -2897,6 +2921,7 @@
       canvasSelection.set("blockInstances", pastedBlockInstances);
       canvasSelection.set("annotations", (selectedIds.annotations || []).map((id) => pastedAnnotations.find((annotation) => annotation.id === idMap.get(id))).filter(Boolean));
       canvasSelection.set("hatches", (selectedIds.hatches || []).map((id) => pastedHatches.find((hatch) => hatch.id === idMap.get(id))).filter(Boolean));
+      canvasSelection.set("referenceImages", pastedImages);
       payload.pasteCount = pasteNumber;
       mode = "select";
       solveAndRefresh("貼り付け");
@@ -2912,10 +2937,12 @@
       model.blockInstances.length = initialLengths.blockInstances;
       model.annotations.length = initialLengths.annotations;
       model.hatches.length = initialLengths.hatches;
+      model.referenceImages.length = initialLengths.referenceImages;
       geometryIds.restore(initialSequences);
       blockInstanceSeq = initialSequences.blockInstanceSeq;
       annotationSeq = initialSequences.annotationSeq;
       hatchSeq = initialSequences.hatchSeq;
+      referenceImageSeq = initialSequences.referenceImageSeq;
       model.nextHatchIndex = initialSequences.nextHatchIndex;
       model.nextDimensionParameterIndex = initialSequences.nextDimensionParameterIndex;
       invalidateBlockProjectionCache();
@@ -3014,6 +3041,7 @@
 
 
   function hatchBoundaryGeometryItems(hatch) {
+    if (hatch?.derivedProjection) return [];
     const refIds = new Set(hatchBoundaryGeometryRefs(hatch?.boundaryLoops).map((ref) => `${ref.kind}:${geometryRefId(ref)}`));
     if (refIds.size === 0) return [];
     const geometry = [...allGeometryLines(), ...allGeometryCircles(), ...allGeometryArcs(), ...allGeometrySplines()];
@@ -3070,8 +3098,9 @@
     for (const hatch of items || allHatches()) {
       if (!isVisibleSketchId(hatch.sketchId)) continue;
       const appearance = hatchAppearanceForDisplay(hatch);
-      const selected = canvasSelection.inspectionContains(hatch) || canvasSelection.inspectionContains(hatch.blockInstance) || (hatch.blockProjection ? canvasSelection.blockInstances.includes(hatch.blockInstance) : hatch.sketchId === activeSketchId() && canvasSelection.hatches.includes(hatch));
-      const hovered = hatch.blockProjection ? canvasHover.current.block === hatch.blockInstance : hatch.sketchId === activeSketchId() && canvasHover.current.hatch === hatch;
+      const selected = isConstraintOperandSelected(hatch) || canvasSelection.inspectionContains(hatch) || canvasSelection.inspectionContains(hatch.blockInstance) || canvasSelection.inspectionContains(hatch.derivedInstance) || (hatch.derivedProjection ? canvasSelection.geometryInstances.includes(hatch.derivedInstance) : hatch.blockProjection ? canvasSelection.blockInstances.includes(hatch.blockInstance) : hatch.sketchId === activeSketchId() && canvasSelection.hatches.includes(hatch));
+      const hovered = hatch.derivedProjection ? canvasHover.current.geometryInstance === hatch.derivedInstance
+        : hatch.blockProjection ? canvasHover.current.block === hatch.blockInstance : hatch.sketchId === activeSketchId() && canvasHover.current.hatch === hatch;
       drawResolvedHatch(resolvedHatchBoundary(hatch), appearance, hatchPatternOrigin(hatch), { hatch, selected: !pngRender && selected, hovered: !pngRender && hovered, alpha: sketchAlpha(hatch) });
     }
     if (!pngRender && includePreview && ["hatch", "hatch-repair"].includes(mode)) {
@@ -3184,7 +3213,19 @@
   const selectionRectangle = window.SelectionRectangle.create({
     rectFromPoints, hypot2, viewScale: () => viewport.scale,
     releasePointer: (id) => { try { canvas.releasePointerCapture(id); } catch (_) {} },
-    clearSelection, selectByRect, addSketchProjectionSourcesByRect, setHint, updateGeometrySelectionUI, draw,
+    clearSelection, selectByRect, addSketchProjectionSourcesByRect,
+    addInstanceSourcesByRect: (rect, crossing) => {
+      if (mode === "instance-sources" && instanceSourceCommand.instance?.type === "sketchProjection") {
+        const entries = sketchProjectionEntriesByRect(rect, crossing);
+        instanceSourceCommand.addSources(entries.map(entry => entry.item));
+      } else {
+        const items = rectangleSelectionQuery.readProjection(rect, crossing, {
+          points: allGeometryPoints, lines: allGeometryLines, circles: allGeometryCircles,
+          arcs: allGeometryArcs, splines: allGeometrySplines, hatches: allHatches,
+        }, item => elementSketchId(item) === activeSketchId() && isVisibleSketchElement(item) ? item : null);
+        (mode === "instance-sources" ? instanceSourceCommand : geometryInstanceCommand).addSources(items);
+      }
+    }, setHint, updateGeometrySelectionUI, draw,
   });
 
   function drawSelectionRect() {
@@ -5829,7 +5870,8 @@
       canvasSelection.splines.some((item) => model.splines.includes(item)) ||
       canvasSelection.blockInstances.some((item) => model.blockInstances.includes(item)) ||
       canvasSelection.annotations.some((item) => model.annotations.includes(item)) ||
-      canvasSelection.hatches.some((item) => model.hatches.includes(item));
+      canvasSelection.hatches.some((item) => model.hatches.includes(item)) ||
+      canvasSelection.referenceImages.some(item => model.referenceImages.includes(item));
     if (!hasSelectionItems) return false;
     const selectedNodes = new Set([...canvasSelection.points, ...canvasSelection.lines, ...canvasSelection.circles, ...canvasSelection.arcs, ...canvasSelection.splines, ...canvasSelection.blockInstances]);
     for (const line of canvasSelection.lines) selectedNodes.add(line.p1).add(line.p2);
@@ -5919,7 +5961,7 @@
         { action: "redo", label: applicationText("やり直す", "Redo"), shortcut: "Ctrl+Y", disabled: Boolean(document.getElementById("redoBtn")?.disabled) },
       ]);
     } else if (target.kind === "blank") {
-      groups.push([{ action: "paste", label: applicationText("貼り付け", "Paste"), shortcut: "Ctrl+V", disabled: !geometryClipboard || !canCreateInActiveSketch() }]);
+      groups.push([{ action: "paste", label: applicationText("貼り付け", "Paste"), shortcut: "Ctrl+V", disabled: !canCreateInActiveSketch() }]);
       groups.push([
         { action: "undo", label: applicationText("元に戻す", "Undo"), shortcut: "Ctrl+Z", disabled: Boolean(document.getElementById("undoBtn")?.disabled) },
         { action: "redo", label: applicationText("やり直す", "Redo"), shortcut: "Ctrl+Y", disabled: Boolean(document.getElementById("redoBtn")?.disabled) },
@@ -6044,7 +6086,7 @@
     else if (action === "redo") redoHistory();
     else if (action === "cut") copySelectionToClipboard({ cut: true });
     else if (action === "copy") copySelectionToClipboard();
-    else if (action === "paste") pasteGeometryClipboard();
+    else if (action === "paste") void imageClipboard.pasteFromMenu();
     else if (action === "delete") document.getElementById("deleteSelectionBtn")?.click();
     else if (action === "show-properties") showSelectedObjectProperties();
     else if (action === "construction-toggle") document.getElementById("toolConstructionLine")?.click();
@@ -6093,6 +6135,7 @@
   const instanceCommandInput = window.InstanceCommandInput.create({
     getMode: () => mode, instanceSourceCommand, geometryInstanceCommand, hitReferenceTarget, hitDerivedProjectionOperand,
     hitBlockProjectionOperand, operandElement, toggleSketchProjectionSource, clearSnap, selectionRectangle,
+    hitHatch: p => hitHatchAt(p.x, p.y, { activeOnly: false }),
     capturePointer: id => canvas.setPointerCapture(id), snapForDrawing, makeConstraintOperand, setHint, applicationText,
     releasePanelFocus: () => { if (document.activeElement?.closest("#commandPanel")) document.activeElement.blur(); },
   });
@@ -6194,7 +6237,7 @@
       canvasVisible: () => canvasContextMenu && !canvasContextMenu.hidden, closeCanvas: closeCanvasContextMenu },
     sketchMove: sketchMoveCommand, constraintStatusView, dimensionInput: dimensionInputController,
     shortcuts: { save: saveJot2DFile, saveAs: saveJot2DFileAs, copy: copySelectionToClipboard,
-      paste: pasteGeometryClipboard, undo: undoHistory, redo: redoHistory },
+      paste: pasteGeometryClipboard, nativePaste: true, nativeCopy: true, undo: undoHistory, redo: redoHistory },
     operations: { getMode: () => mode, isGeometryMode, finishSources: finishInstanceSourceEdit,
       finishSpline: finalizeSplineCreation, finishProjection: commitSketchProjectionCommand, finishHatch: hatchCommand.finish,
       finishInstance: () => geometryInstanceCommand.finish(), removeSplinePoint: removeLastSplineInputPoint,
@@ -6828,7 +6871,7 @@
           serialized,
         };
       },
-      resetForHatchTest() {
+      resetForHatchTest({ constructionBoundary = false } = {}) {
         resetModelState();
         viewport.update({ scale: 1 });
         const points = [
@@ -6839,6 +6882,7 @@
         addLine(points[1], points[2]);
         addLine(points[2], points[3]);
         addLine(points[3], points[0]);
+        if (constructionBoundary) model.lines[0].construction = true;
         fitSketchToViewport(activeSketchId(), 160);
         resetHistory("hatch test");
         updateUI();
@@ -7057,6 +7101,9 @@
       hatchStateForTest() {
         return {
           mode,
+          projected: allHatches().filter(hatch => hatch.derivedProjection).map(hatch => ({ id: hatch.id,
+            valid: resolvedHatchBoundary(hatch).ok, area: resolvedHatchBoundary(hatch).area,
+            seed: hatch.seed, appearance: hatch.appearance, loops: resolvedHatchBoundary(hatch).loops })),
           direct: model.hatches.map((hatch) => {
             const resolved = resolvedHatchBoundary(hatch);
             return { ...serializeHatch(hatch), valid: resolved.ok, reason: resolved.ok ? null : hatchRegionErrorText(resolved) };
@@ -10910,7 +10957,7 @@
     onAction: action => pngExportCommand.active ? pngExportCommand.onAction(action) : currentCommandPanel().onAction(action),
     onSelect: (key, index) => currentCommandPanel().onSelect(key, index),
     onRemove: (key, index) => currentCommandPanel().onRemove(key, index),
-    onSetting: (key, value) => pngExportCommand.active ? pngExportCommand.onSetting(key, value) : derivedPanel.onSetting(key, value),
+    onSetting: (key, value) => pngExportCommand.active ? pngExportCommand.onSetting(key, value) : currentCommandPanel().onSetting(key, value),
   });
 
   installTestHooks();

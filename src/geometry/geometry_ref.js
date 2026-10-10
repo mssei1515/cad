@@ -2,7 +2,7 @@
 (function () {
   "use strict";
 
-  const KINDS = Object.freeze(["point", "line", "circle", "arc", "spline"]);
+  const KINDS = Object.freeze(["point", "line", "circle", "arc", "spline", "hatch"]);
   const KIND_SET = new Set(KINDS);
   const EMPTY_PATH = Object.freeze([]);
 

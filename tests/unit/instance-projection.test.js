@@ -17,6 +17,30 @@ const free = (id, sources, fields = {}) => ({ id, type: "free", sources, sketchI
 const scope = (points, instances, extra = {}) => ({ points, lines: [], circles: [], arcs: [], splines: [], geometryInstances: instances, ...extra });
 const near = (actual, expected) => assert.ok(Math.abs(actual - expected) < 1e-10, `${actual} != ${expected}`);
 
+test('hatch-only mirror, pattern and chained free instances retain live boundaries and pattern transforms', () => {
+  const a = point('P1', 0, 0), b = point('P2', 0, 10);
+  const axis = Object.assign(new Line('L1', a, b), { sketchId: 'S1' });
+  const hatch = { id: 'H1', sketchId: 'S1', seed: { x: 2, y: 3 }, boundaryLoops: [], appearance: { angle: 30, color: '#123456' } };
+  let width = 5;
+  const api = sandbox.window.InstanceProjection.create({ elementSketchId: item => item.sketchId, applicationText: (_ja, en) => en,
+    resolveHatch: () => ({ ok: true, area: width * 2, loops: [{ role: 'outer', points: [{ x: 1, y: 2 }, { x: width, y: 2 }] }] }),
+  });
+  const mirror = { id: 'MI1', type: 'mirror', sources: [ref('hatch', 'H1')], axis: ref('line', 'L1'), sketchId: 'S1' };
+  const pattern = { id: 'PI1', type: 'pattern', sources: [ref('hatch', 'MI1@H1')], direction: ref('line', 'L1'), sketchId: 'S1', copies: 2, spacing: 5 };
+  const synced = free('FI1', [ref('hatch', 'PI1@2@MI1@H1')], { rotation: Math.PI / 2 });
+  const bundles = api.geometryInstanceBundlesForScope(scope([a, b], [synced, pattern, mirror], { lines: [axis], hatches: [hatch] }));
+  assert.ok(bundles.every(bundle => bundle.valid));
+  assert.equal(bundles[2].lines.length, 0); assert.equal(bundles[2].hatches.length, 1);
+  near(bundles[2].hatches[0].seed.x, -2); near(bundles[2].hatches[0].appearance.angle, 150);
+  near(bundles[1].hatches[1].seed.y, 13);
+  near(bundles[0].hatches[0].seed.x, -3); near(bundles[0].hatches[0].seed.y, 18);
+  width = 9;
+  near(bundles[2].hatches[0].resolvedBoundary.loops[0].points[1].x, -9);
+  near(bundles[0].hatches[0].resolvedBoundary.area, 18);
+  mirror.axis = ref('line', 'missing');
+  assert.equal(api.geometryInstanceBundlesForScope(scope([a, b], [mirror], { lines: [axis], hatches: [hatch] }))[0].valid, false);
+});
+
 test("derived points retain source identity, live transforms and the inverse mapping", () => {
   const api = create();
   const a = point("P1", 2, 3), b = point("P2", 6, 3);

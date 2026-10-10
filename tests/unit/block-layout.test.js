@@ -27,6 +27,16 @@ function line(id, x1, y1, x2, y2, sketchId = 'S1') {
   return inSketch(new Line(id, inSketch(new Point(`${id}a`, x1, y1), sketchId), inSketch(new Point(`${id}b`, x2, y2), sketchId)), sketchId);
 }
 
+test('a hatch-only derived sketch contributes its generated region to block placement bounds', () => {
+  const d = definition('D'); d.sketches.find(sketch => sketch.id === 'S2').parentSketchId = 'S1';
+  d.hatches.push({ id: 'H1', sketchId: 'S1', seed: { x: 2, y: 3 }, boundaryLoops: [], appearance: { visible: true },
+    resolvedBoundary: { ok: true, loops: [{ points: [{ x: 2, y: 3 }, { x: 7, y: 9 }] }] } });
+  d.geometryInstances.push({ id: 'SPI1', type: 'sketchProjection', sketchId: 'S2', sources: [{ kind: 'hatch', path: ['H1'] }] });
+  const { layout } = fixture([d]);
+  const bounds = layout.blockLocalGeometryBounds(d, ['S2']);
+  near(bounds.minX, 2); near(bounds.minY, 3); near(bounds.maxX, 7); near(bounds.maxY, 9);
+});
+
 test('enabled sketches and arc sweeps determine local placement bounds', () => {
   const d = definition('D');
   d.lines.push(line('L', -100, -100, 100, 100, 'S2'));

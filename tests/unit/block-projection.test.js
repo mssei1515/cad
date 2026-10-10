@@ -19,7 +19,9 @@ function definition(id) {
 const instance = (id, definitionId, fields = {}) => ({ id, definitionId, sketchId: "S1", x: 10, y: 20, rotation: 0, ...fields });
 function services(definitions) {
   const catalog = sandbox.window.BlockCatalog.create({ definitions });
-  const derived = sandbox.window.InstanceProjection.create({ elementSketchId: item => item.sketchId, applicationText: (_ja, en) => en });
+  const derived = sandbox.window.InstanceProjection.create({ elementSketchId: item => item.sketchId, applicationText: (_ja, en) => en,
+    resolveHatch: (hatch, elements) => sandbox.window.HatchRegionEngine.resolveBoundary(hatch.boundaryLoops, hatchPrimitivesFromElements(elements)),
+  });
   const hatchPrimitivesFromElements = elements => elements.flatMap(item => {
     if (item instanceof Line) return [{ kind: "line", id: item.id, p1: item.p1, p2: item.p2 }];
     if (item instanceof Circle) return [{ kind: "circle", id: item.id, center: item.center, radius: item.radius() }];
@@ -28,6 +30,24 @@ function services(definitions) {
   const projection = sandbox.window.BlockProjection.create({ blockCatalog: catalog, ...derived, hatchPrimitivesFromElements, hatchPrimitivesForScope: scope => hatchPrimitivesFromElements(scope.lines) });
   return { catalog, projection };
 }
+
+test('block definitions project hatch-only derived instances using their own geometry namespace', () => {
+  const local = definition('hatch-derived');
+  const center = point('PC', 2, 3);
+  const circle = Object.assign(new Circle('C1', center, 2), { sketchId: 'S1' });
+  local.points.push(center); local.circles.push(circle);
+  const engine = sandbox.window.HatchRegionEngine;
+  const face = engine.findFaceInIndex(engine.createRegionIndex([{ kind: 'circle', id: 'C1', center, radius: 2 }]), center);
+  local.hatches.push({ id: 'H1', sketchId: 'S1', seed: { x: 2, y: 3 }, boundaryLoops: face.boundaryLoops,
+    appearance: { patternType: 'parallel', angle: 45, spacing: 4, lineWidth: 1, color: '#123456', visible: true, opacity: 0.5 } });
+  local.geometryInstances.push({ id: 'MI1', type: 'mirror', sketchId: 'S1', sources: [{ kind: 'hatch', path: ['H1'] }], axis: { kind: 'line', path: ['L1'] } });
+  const { projection } = services(() => [local]);
+  const bundle = projection.createBlockProjectionBundle(instance('outer', local.id), local);
+  const mirrored = bundle.hatches.find(hatch => hatch.id === 'outer/MI1@H1');
+  assert.ok(mirrored?.resolvedBoundary.ok);
+  near(mirrored.seed.x, 12); near(mirrored.seed.y, 17); near(mirrored.appearance.angle, -45);
+  assert.equal(sandbox.window.GeometryRef.id(sandbox.window.GeometryObjects.geometryRefForItem(mirrored)), 'outer@MI1@H1');
+});
 
 test("rigid projection Jacobians match dense evaluation through nested and derived geometry", () => {
   const { Constraint, ConstraintSolver, CoincidentConstraint, PointOnLineConstraint } = sandbox.window.GeometrySolver;

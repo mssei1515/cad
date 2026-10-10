@@ -166,7 +166,11 @@
           }
         }
       } else if (hatchHit && drawingHitIsTop(hatchHit)) {
-        if (hatchHit.blockProjection) {
+        if (hatchHit.derivedProjection) {
+          if (!multiSelect) clearSelection();
+          if (multiSelect) canvasSelection.toggleById("geometryInstances", hatchHit.derivedInstance);
+          else canvasSelection.set("geometryInstances", [hatchHit.derivedInstance]);
+        } else if (hatchHit.blockProjection) {
           if (!multiSelect) clearSelection();
           if (multiSelect) canvasSelection.toggleBlockInstanceSelection(hatchHit.blockInstance);
           else canvasSelection.set("blockInstances", [hatchHit.blockInstance]);

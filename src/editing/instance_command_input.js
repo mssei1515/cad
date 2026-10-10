@@ -2,16 +2,18 @@
 (() => {
   "use strict";
   function create({ getMode, instanceSourceCommand, geometryInstanceCommand, hitReferenceTarget, hitDerivedProjectionOperand,
-    hitBlockProjectionOperand, operandElement, toggleSketchProjectionSource, clearSnap, selectionRectangle,
+    hitBlockProjectionOperand, operandElement, toggleSketchProjectionSource, hitHatch = () => null, clearSnap, selectionRectangle,
     capturePointer, snapForDrawing, makeConstraintOperand, setHint, applicationText, releasePanelFocus }) {
-    function click(e, p, { hitP, hitL, hitC, hitA, hitS }) {
+    function click(e, p, { hitP, hitL, hitC, hitA, hitS, hatchHit }) {
       if (["instance-sources", "sketch-projection", "mirror-axis", "pattern-direction"].includes(getMode()) || getMode().startsWith("free-instance-")) releasePanelFocus();
       if (getMode() === "instance-sources") {
         e.preventDefault();
         const operand = instanceSourceCommand.instance.type === "sketchProjection"
           ? hitReferenceTarget(p.x, p.y)
           : hitDerivedProjectionOperand(p.x, p.y) || hitBlockProjectionOperand(p.x, p.y);
-        instanceSourceCommand.toggle(operand ? operandElement(operand) : hitP || hitL || hitC || hitA || hitS);
+        const item = operand ? operandElement(operand) : hitP || hitL || hitC || hitA || hitS || hatchHit || hitHatch(p);
+        if (item) instanceSourceCommand.toggle(item);
+        else { clearSnap(); selectionRectangle.begin(p, { kind: "instance-sources" }); capturePointer(e.pointerId); }
         return true;
       }
       if (getMode() === "sketch-projection") {
@@ -21,6 +23,8 @@
           toggleSketchProjectionSource(target);
           return true;
         }
+        const hatch = hitHatch(p);
+        if (hatch) { toggleSketchProjectionSource({ kind: "hatch", item: hatch }); return true; }
         clearSnap();
         selectionRectangle.begin(p, { kind: "sketch-projection" });
         capturePointer(e.pointerId);
@@ -29,7 +33,9 @@
       if ((getMode().startsWith("free-instance-") || ["mirror-axis", "pattern-direction"].includes(getMode())) && geometryInstanceCommand.activeInput === "sources") {
         e.preventDefault();
         const operand = hitDerivedProjectionOperand(p.x, p.y) || hitBlockProjectionOperand(p.x, p.y);
-        geometryInstanceCommand.toggleSource(operand ? operandElement(operand) : hitP || hitL || hitC || hitA || hitS);
+        const item = operand ? operandElement(operand) : hitP || hitL || hitC || hitA || hitS || hatchHit;
+        if (item) geometryInstanceCommand.toggleSource(item);
+        else { clearSnap(); selectionRectangle.begin(p, { kind: "instance-sources" }); capturePointer(e.pointerId); }
         return true;
       }
       if (getMode().startsWith("free-instance-")) {

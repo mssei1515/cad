@@ -9,9 +9,18 @@ function fixture() {
     rectFromPoints: (a, b) => ({ x1: Math.min(a.x, b.x), y1: Math.min(a.y, b.y), x2: Math.max(a.x, b.x), y2: Math.max(a.y, b.y) }),
     hypot2: Math.hypot, viewScale: () => state.scale, releasePointer: id => events.push(['release', id]), clearSelection: () => events.push('clear'),
     selectByRect: (...args) => events.push(['select', ...args]), addSketchProjectionSourcesByRect: (...args) => events.push(['projection', ...args]),
+    addInstanceSourcesByRect: (...args) => events.push(['instance', ...args]),
     setHint: text => events.push(['hint', text]), updateGeometrySelectionUI: () => events.push('ui'), draw: () => events.push('draw') });
   return { command, events, state };
 }
+test('instance rectangles clear their preview even when no candidate was added', () => {
+  const f = fixture(); f.command.begin({ x: 10, y: 0 }, { kind: 'instance-sources' });
+  f.command.update({ x: 0, y: 4 }); f.command.finish({ pointerId: 2 });
+  assert.equal(f.command.preview(), null);
+  assert.equal(f.events[1][0], 'instance'); assert.equal(f.events[1][2], true);
+  assert.deepEqual(f.events[2], 'draw'); assert.equal(f.events.includes('ui'), false);
+});
+
 test('rectangle selection preserves crossing direction, additive choice and update order', () => {
   const f = fixture(); f.command.begin({ x: 10, y: 10 }, { additive: true }); f.command.update({ x: 1, y: 2 });
   const preview = f.command.preview(); assert.equal(preview.crossing, true); assert.deepEqual(preview.rect, { x1: 1, y1: 2, x2: 10, y2: 10 });

@@ -6,9 +6,9 @@
   const { parseId: parseGeometryRefId, resolve: resolveGeometryRefValue } = window.GeometryRef;
   const { geometryKindForItem, geometryRefForItem, addGeometryBundleToMaps } = window.GeometryObjects;
 
-  function create({ elementSketchId, applicationText }) {
+  function create({ elementSketchId, applicationText, resolveHatch = hatch => hatch.resolvedBoundary }) {
     function emptyGeometryInstanceBundle(instance, reason = "") {
-      return { instance, valid: false, reason, points: [], lines: [], circles: [], arcs: [], splines: [] };
+      return { instance, valid: false, reason, points: [], lines: [], circles: [], arcs: [], splines: [], hatches: [] };
     }
 
     function geometryInstanceSourcePoints(item) {
@@ -19,7 +19,7 @@
       return [];
     }
 
-    function createGeometryInstanceBundle(instance, resolvedSources, axis, direction) {
+    function createGeometryInstanceBundle(instance, resolvedSources, axis, direction, resolveSourceHatch = resolveHatch) {
       const occurrences = instance.type === "pattern"
         ? Array.from({ length: Math.max(0, instance.copies) }, (_, index) => index + 1)
         : [0];
@@ -66,7 +66,7 @@
       };
       const sourceRefByItem = new Map(resolvedSources.map(({ ref, item }) => [item, ref]));
       const pointRef = (point) => geometryRefForItem(point) || parseGeometryRefId("point", point.id);
-      const outputs = { instance, valid: true, reason: "", points: [], lines: [], circles: [], arcs: [], splines: [] };
+      const outputs = { instance, valid: true, reason: "", points: [], lines: [], circles: [], arcs: [], splines: [], hatches: [] };
       const legacy = instance.legacyOutput && occurrences.length === 1 ? instance.legacyOutput : null;
       for (const occurrence of occurrences) {
         const mappedPoints = new Map();
@@ -110,6 +110,27 @@
               endAngle: { configurable: true, enumerable: true, get: () => transformedStartAngle() + (instance.type === "mirror" || (instance.type === "free" && instance.mirrorX !== instance.mirrorY) ? -1 : 1) * arcSweep(item) },
             });
           } else if (item instanceof Spline) output = new Spline(outputId, item.fitPoints.map((point) => mappedPoints.get(point)), item.closed, item.construction);
+          else if (ref.kind === "hatch") {
+            output = { boundaryLoops: item.boundaryLoops };
+            Object.defineProperties(output, {
+              seed: { enumerable: true, get: () => transform(item.seed, occurrence) },
+              patternOrigin: { enumerable: true, get: () => transform(item.patternOrigin || { x: 0, y: 0 }, occurrence) },
+              appearance: { enumerable: true, get: () => {
+                const appearance = { ...item.appearance, ...instance.appearanceOverride };
+                const angle = (Number(item.appearance?.angle) || 0) * Math.PI / 180;
+                const start = transform({ x: 0, y: 0 }, occurrence);
+                const end = transform({ x: Math.cos(angle), y: Math.sin(angle) }, occurrence);
+                appearance.angle = Math.atan2(end.y - start.y, end.x - start.x) * 180 / Math.PI;
+                return appearance;
+              } },
+              resolvedBoundary: { enumerable: true, get: () => {
+                const resolved = resolveSourceHatch(item);
+                return resolved?.ok ? { ...resolved, loops: resolved.loops.map(loop => ({ ...loop,
+                  points: loop.points.map(point => transform(point, occurrence)) })) }
+                  : resolved || { ok: false, code: "invalid-boundary" };
+              } },
+            });
+          }
           if (!output) continue;
           output.id = outputId;
           output.sketchId = instance.sketchId;
@@ -120,7 +141,7 @@
           output.occurrenceIndex = occurrence;
           output.derivedInversePoint = (value) => inverseTransform(value, occurrence);
           const kind = geometryKindForItem(output);
-          if (kind && kind !== "point") outputs[`${kind}s`].push(output);
+          if (kind && kind !== "point") outputs[kind === "hatch" ? "hatches" : `${kind}s`].push(output);
         }
       }
       return outputs;
@@ -142,7 +163,7 @@
       };
       const pointById = new Map((scope?.points || []).map((item) => [item.id, item]));
       const lineById = new Map((scope?.lines || []).map((item) => [item.id, item]));
-      const primitiveById = new Map([...(scope?.circles || []), ...(scope?.arcs || []), ...(scope?.splines || [])].map((item) => [item.id, item]));
+      const primitiveById = new Map([...(scope?.circles || []), ...(scope?.arcs || []), ...(scope?.splines || []), ...(scope?.hatches || [])].map((item) => [item.id, item]));
       for (const bundle of blockBundles) addGeometryBundleToMaps(bundle, pointById, lineById, primitiveById);
       const resolve = (ref) => resolveGeometryRefValue(ref, (kind, id) => kind === "point" ? pointById.get(id) : kind === "line" ? lineById.get(id) : primitiveById.get(id));
       const results = [];
@@ -184,7 +205,9 @@
           } else if (instance.type === "pattern" && (!(instance.spacing > 0) || !(instance.copies > 0) || instance.copies > 1000 || direction.length() < MIN_ORIENTATION_LENGTH)) {
             results.push(emptyGeometryInstanceBundle(instance, applicationText("パターン設定が正しくありません", "Invalid pattern settings")));
           } else {
-            const bundle = createGeometryInstanceBundle(instance, resolvedSources, axis, direction);
+            const bundle = createGeometryInstanceBundle(instance, resolvedSources, axis, direction,
+              hatch => hatch.derivedProjection || hatch.blockProjection ? hatch.resolvedBoundary
+                : resolveHatch(hatch, [...lineById.values(), ...primitiveById.values()]));
             results.push(bundle);
             addGeometryBundleToMaps(bundle, pointById, lineById, primitiveById);
           }

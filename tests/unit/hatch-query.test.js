@@ -28,6 +28,19 @@ function fixture() {
   };
 }
 
+test('derived occurrences reuse source boundary resolution in an explicit geometry namespace', () => {
+  const f = fixture(), hatch = f.hatch();
+  const other = Object.assign(Object.create(Object.getPrototypeOf(f.circle)), f.circle, { radiusValue: 20 });
+  const elements = [other];
+  const first = f.query.resolvedHatchBoundary(hatch, elements);
+  assert.equal(first.ok, true); assert.ok(Math.abs(first.area - Math.PI * 400) < 1);
+  for (let occurrence = 0; occurrence < 100; occurrence++) assert.equal(f.query.resolvedHatchBoundary(hatch, elements), first);
+  assert.equal(f.calls.resolve, 1);
+  other.radiusValue = 25;
+  assert.notEqual(f.query.resolvedHatchBoundary(hatch, elements), first); assert.equal(f.calls.resolve, 2);
+  assert.equal(f.query.resolvedHatchBoundary(hatch).ok, true); assert.equal(f.calls.resolve, 3);
+});
+
 test('face index reuse follows geometry, visibility and active sketch changes', () => {
   const f = fixture();
   assert.equal(f.query.hatchFaceAt({ x: 0, y: 0 }).ok, true);
@@ -77,4 +90,16 @@ test('current scope includes projected elements while other scopes use their own
   assert.equal(f.query.hatchPrimitivesForScope(other, 'S1').length, 0);
   f.setScope({ lines: [], circles: [], arcs: [], splines: [] });
   assert.equal(f.query.hatchPrimitivesForScope(f.scope, 'S1')[0].id, 'projected');
+});
+
+test('construction boundaries are opt-in during selection and remain resolvable after creation', () => {
+  const f = fixture(); f.circle.construction = true;
+  assert.equal(f.query.hatchFaceAt({ x: 0, y: 0 }).ok, false);
+  const face = f.query.hatchFaceAt({ x: 0, y: 0 }, { includeConstruction: true });
+  assert.equal(face.ok, true);
+  const hatch = { sketchId: 'S1', boundaryLoops: face.boundaryLoops };
+  assert.equal(f.query.resolvedHatchBoundary(hatch).ok, true);
+  f.circle.radiusValue = 15;
+  assert.ok(Math.abs(f.query.resolvedHatchBoundary(hatch).area - Math.PI * 225) < 1);
+  assert.equal(f.query.hatchFaceAt({ x: 0, y: 0 }).ok, false);
 });

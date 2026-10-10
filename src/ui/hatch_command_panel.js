@@ -11,6 +11,8 @@
         id: mode, title: mode === "hatch" ? t("塗りつぶし", "Fill") : t("境界を再指定", "Reselect boundary"),
         step: t("閉領域をクリックして追加・解除します", "Click closed regions to add/remove them."),
         completeOnEnter: true,
+        settings: [{ key: "includeConstruction", type: "checkbox", value: command.includeConstruction,
+          label: t("補助線を境界に含める", "Include construction geometry as boundaries") }],
         selections: [{ key: "regions", label: t("選択した領域", "Selected regions"), active: true,
           emptyLabel: t("閉領域の内側をクリック", "Click inside a closed region"),
           items: regions.map((region, index) => ({ key: String(region.id), selected: region.selected,
@@ -23,6 +25,7 @@
     }
     function onAction(action) { if (action === "finish") command.finish(); else if (action === "cancel") cancel(); }
     return Object.freeze({ readState, onAction,
+      onSetting: command.changeSetting,
       onSelect: (key, index) => { if (key === "regions") command.select(index); },
       onRemove: (key, index) => { if (key === "regions") command.remove(index); },
     });

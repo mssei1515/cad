@@ -1633,6 +1633,7 @@ test("file URL Help menu reads the generated Git commit file", async ({ page }) 
     }),
   );
   const expectedPaths = [
+    "src/editing/image_clipboard.js", "src/persistence/dxf_import.js", "src/commands/dxf_import_command.js",
     "src/geometry/export_region.js", "src/rendering/canvas_export.js", "src/persistence/png_file.js", "src/commands/png_export_command.js",
     "src/commands/dimension_line_group.js",
     "runtime-version.js", "app.js",
@@ -1811,7 +1812,7 @@ test("Canvas context menu exposes common and object-specific operations", async 
     disabled: button.disabled,
   })));
   expect(blankItems).toEqual([
-    { action: "paste", label: "貼り付け", disabled: true },
+    { action: "paste", label: "貼り付け", disabled: false },
     { action: "undo", label: "元に戻す", disabled: true },
     { action: "redo", label: "やり直す", disabled: true },
     { action: "fit-visible", label: "表示中図形へフィット", disabled: false },
@@ -1821,7 +1822,7 @@ test("Canvas context menu exposes common and object-specific operations", async 
   expect(menuBounds.y).toBeGreaterThanOrEqual(canvasArea.y);
   expect(menuBounds.x + menuBounds.width).toBeLessThanOrEqual(canvasArea.x + canvasArea.width);
   expect(menuBounds.y + menuBounds.height).toBeLessThanOrEqual(canvasArea.y + canvasArea.height);
-  expect(await page.evaluate(() => document.activeElement?.dataset.contextAction)).toBe("fit-visible");
+  expect(await page.evaluate(() => document.activeElement?.dataset.contextAction)).toBe("paste");
   await page.keyboard.press("Escape");
   await expect(menu).toBeHidden();
 

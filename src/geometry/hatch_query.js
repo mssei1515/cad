@@ -24,29 +24,27 @@
       return `${primitive.kind}:${primitive.id}:${primitive.center?.x}:${primitive.center?.y}:${primitive.radius}:${primitive.startAngle ?? ""}:${primitive.endAngle ?? ""}`;
     }
 
-    function hatchPrimitivesFromElements(elements, sketchId, { visibleOnly = false } = {}) {
+    function hatchPrimitivesFromElements(elements, sketchId, { visibleOnly = false, includeConstruction = false } = {}) {
       return elements
-        .filter((element) => String(element.sketchId) === String(sketchId) && !element.construction)
+        .filter((element) => String(element.sketchId) === String(sketchId) && (includeConstruction || !element.construction))
         .filter((element) => !visibleOnly || effectiveAppearanceForElement(element).visible !== false)
         .map(hatchPrimitiveForElement)
         .filter(Boolean);
     }
 
-    function hatchPrimitivesForScope(scope, sketchId, { visibleOnly = false } = {}) {
+    function hatchPrimitivesForScope(scope, sketchId, options = {}) {
       const elements = scope === currentScope()
         ? boundaryGeometry()
         : [...(scope?.lines || []), ...(scope?.circles || []), ...(scope?.arcs || []), ...(scope?.splines || [])];
-      return hatchPrimitivesFromElements(elements, sketchId, { visibleOnly });
+      return hatchPrimitivesFromElements(elements, sketchId, options);
     }
 
-    function hatchBoundaryFingerprint(hatch, scope = currentScope()) {
-      const elements = scope === currentScope()
-        ? boundaryGeometry()
-        : [...(scope.lines || []), ...(scope.circles || []), ...(scope.arcs || []), ...(scope.splines || [])];
+    function hatchBoundaryFingerprint(hatch, suppliedElements = null) {
+      const elements = suppliedElements || boundaryGeometry();
       const byKey = new Map([
         ...elements.map((item) => [`${geometryKindForItem(item)}:${item.id}`, item]),
       ]);
-      return hatchBoundaryGeometryRefs(hatch.boundaryLoops).map((ref) => {
+      return JSON.stringify(hatch.boundaryLoops) + "|" + hatchBoundaryGeometryRefs(hatch.boundaryLoops).map((ref) => {
         const item = byKey.get(`${ref.kind}:${geometryRefId(ref)}`);
         if (!item) return `${ref.kind}:${geometryRefId(ref)}:missing`;
         if (item instanceof Line) return `line:${item.id}:${item.construction}:${item.p1.x}:${item.p1.y}:${item.p2.x}:${item.p2.y}`;
@@ -55,20 +53,23 @@
       }).join("|");
     }
 
-    function resolvedHatchBoundary(hatch) {
+    function resolvedHatchBoundary(hatch, suppliedElements = null) {
       if (!hatch) return { ok: false, code: "missing-hatch", reason: applicationText("塗りつぶしが見つかりません", "Fill not found") };
-      if (hatch.blockProjection) return hatch.resolvedBoundary || { ok: false, code: "invalid-boundary", reason: applicationText("ブロック内の境界が無効です", "The block fill boundary is invalid") };
-      const fingerprint = hatchBoundaryFingerprint(hatch);
+      if (hatch.blockProjection || hatch.derivedProjection) return hatch.resolvedBoundary || { ok: false, code: "invalid-boundary", reason: applicationText("投影内の境界が無効です", "The projected fill boundary is invalid") };
+      const fingerprint = hatchBoundaryFingerprint(hatch, suppliedElements);
       const cached = hatchResolutionCache.get(hatch);
       if (cached?.fingerprint === fingerprint) return cached.result;
-      const result = resolveHatchBoundaryLoops(hatch.boundaryLoops, hatchPrimitivesForScope(currentScope(), hatch.sketchId));
+      const primitives = suppliedElements
+        ? hatchPrimitivesFromElements(suppliedElements, hatch.sketchId, { includeConstruction: true })
+        : hatchPrimitivesForScope(currentScope(), hatch.sketchId, { includeConstruction: true });
+      const result = resolveHatchBoundaryLoops(hatch.boundaryLoops, primitives);
       hatchResolutionCache.set(hatch, { fingerprint, result });
       return result;
     }
 
-    function hatchFaceAt(pointer) {
+    function hatchFaceAt(pointer, { includeConstruction = false } = {}) {
       const sketchId = activeSketchId();
-      const primitives = hatchPrimitivesForScope(currentScope(), sketchId, { visibleOnly: true });
+      const primitives = hatchPrimitivesForScope(currentScope(), sketchId, { visibleOnly: true, includeConstruction });
       const fingerprint = primitives.map(hatchPrimitiveFingerprint).join("|");
       let cached = hatchFaceCache.get(sketchId);
       if (!cached || cached.fingerprint !== fingerprint) {

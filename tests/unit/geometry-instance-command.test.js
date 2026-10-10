@@ -8,7 +8,7 @@ vm.runInContext(fs.readFileSync(path.resolve(__dirname, '../../src/commands/geom
 class Line { constructor(id, sketchId = 'S1') { this.id = id; this.sketchId = sketchId; } }
 function fixture(preselect = true) {
   let mode = 'select', ids = 0;
-  const source = new Line('L1'), model = { geometryInstances: [] }, calls = [];
+  const source = new Line('L1'), model = { geometryInstances: [] }, calls = [], view = { draws: 0 };
   const items = new Map([[source.id, source]]);
   const command = sandbox.window.GeometryInstanceCommand.create({
     cancelConstraintTargetCommand() {}, cancelPendingCommand() {}, canCreateInActiveSketch: () => true, rejectRootSketchCreation() {},
@@ -16,13 +16,20 @@ function fixture(preselect = true) {
     geometryRefsEqual: (a,b) => a?.id === b?.id, isVisibleSketchElement: item => !item.hidden, clearSelection() {},
     normalizeGeometryInstance: raw => ({ rotation: 0, ...raw }), previewFreeId: () => 'FI1', nextInstanceId: type => { ids++; return `${type}-${ids}`; },
     activeSketchId: () => 'S1', getMode: () => mode, setMode: value => { mode = value; }, updateToolbar() {}, updateUI() {},
-    applicationText: (_ja, en) => en, setHint: () => calls.push('hint'), draw() {}, currentScope: () => model,
+    applicationText: (_ja, en) => en, setHint: () => calls.push('hint'), draw: () => { view.draws++; }, currentScope: () => model,
     canvasSelection: { set: (_field, items) => calls.push(items[0]) }, recordHistory: () => calls.push('history'),
     Line, lineHasDirection: () => true, elementSketchId: item => item.sketchId,
     resolveGeometryRef: ref => items.get(ref.id), createGeometryInstanceBundle: instance => ({ instance }),
   });
-  return { command, source, model, calls, mode: () => mode, ids: () => ids };
+  return { command, source, model, calls, view, mode: () => mode, ids: () => ids };
 }
+
+test('rectangle source additions update the view once and retain duplicate sources', () => {
+  const f = fixture(); f.command.start('mirror'); f.view.draws = 0;
+  f.command.addSources([new Line('L2'), new Line('L3'), new Line('L2')]);
+  assert.equal(f.command.sources.length, 3); assert.equal(f.view.draws, 1);
+  f.command.addSources([new Line('L2')]); assert.equal(f.view.draws, 1);
+});
 
 test('free placement allocates only on commit and previews use the same pending instance', () => {
   const f = fixture(); f.command.start('free'); const pending = f.command.pending;

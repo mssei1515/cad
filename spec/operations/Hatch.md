@@ -24,7 +24,9 @@ Block Instanceと派生Geometry InstanceはInstance全体を1つのObjectとし�
 
 塗りつぶしは、アクティブSketchの通常Line、Circle、Arc、Splineから、pointerで指定した有界な閉領域を自動検出して作成するSketch所属Objectである。Geometryが交点で分割されていなくても交点で区間分割した平面グラフを内部生成し、half-edge探索で面を求める。選択した面に直接含まれる内側の閉輪郭は穴として除外する。
 
-補助Geometry、非アクティブSketch、Block Projectionは境界候補に含めない。Block Definition内の塗りつぶしはBlock Editorで作成する。実際の隙間を自動補完せず、開放境界、境界上のclick、重複区間など面を一意に決められない場合は理由を表示して作成しない。
+補助Geometryは初期状態では境界候補に含めない。作成・境界再指定のコマンドパレットに「補助線を境界に含める」／`Include construction geometry as boundaries`を表示し、ONの場合は同じSketchの表示中の補助Line、Circle、Arc、Splineも候補に含める。コマンド開始時はOFFとし、切替時は選択済み領域のseedから候補を再計算する。同じ面に統合された領域は1件にまとめ、成立しない領域は仮選択から除く。確定後は保存した境界参照に補助Geometryがあっても境界を解決し、再開時のOFF設定で無効にしない。
+
+非アクティブSketchは境界候補に含めない。Block Definition内の塗りつぶしはBlock Editorで作成する。実際の隙間を自動補完せず、開放境界、境界上のclick、重複区間など面を一意に決められない場合は理由を表示して作成しない。
 
 ToolbarまたはGeometry menuから塗りつぶしを開始し、閉領域内をclickすると領域を追加し、同じ領域の再clickで解除する。離れた領域、隣接する領域、穴の内側の別領域を同時に選べる。共有境界もGeometry参照として保持する。コマンドパレットは選択領域をリストで表示し、各領域の面積と合計面積を示す。行選択で対象を強調し、Delete／Backspaceで解除する。Enterまたは「完了」で選択した全領域を1つのObject・1つのUndo単位として確定する。領域が空の場合は確定できない。確定後も同じcommandを継続し、Escまたは「キャンセル」で未確定の選択だけを破棄して選択modeへ戻る。pointer移動中は候補面を、選択済み領域は継続してpreviewする。
 
@@ -51,6 +53,8 @@ Propertiesは「基本情報」に種類、ID、所属Sketch、境界状態、�
 塗りつぶしのCopy、Cut、Pasteおよび選択GeometryからのBlock化では、参照する全境界Geometryを同時選択しなければならない。不足時は対象境界IDを表示して操作全体を中止する。Pasteでは新しいGeometry IDへすべての境界参照と交差相手参照を書き換え、seedへpaste offsetを加える。Block化ではBlockローカル座標へseedを移し、内部Geometry参照を維持する。History、Block Editor draft、local履歴、clipboardは塗りつぶしと採番値を含む。
 
 ## 5. Block Projection
+
+塗りつぶしはスケッチ投影、ミラー、直線パターン、同期インスタンスの複写元にもできる。境界Geometryの同時選択は不要で、領域と穴、seed、pattern原点・角度をInstance変換に従わせる。元の境界や外観の変更に追従し、境界が無効なら生成領域も描画しない。派生塗りつぶしから元の境界線を再描画しない。通常clickでは所有する派生Instanceを選択する。詳しくは[派生Instance](派生Instance.md)を参照する。
 
 Block Definition内塗りつぶしをProjection bundleへ含める。Projection IDは`BI1/H1`、入れ子では`BI1/BI2/H1`の形式とする。輪郭、seed、pattern原点、angleへInstance変換を合成し、Block回転時はパターン角度も同時に回転する。表示する内部Sketch、入れ子Block、配置preview、bounds、fit、hit test、保存復元へ反映する。
 

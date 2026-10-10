@@ -1,8 +1,52 @@
 const { test, expect } = require("./test-fixture");
+const path = require('node:path');
+const { pathToFileURL } = require('node:url');
 
 test.beforeEach(async ({ page }) => {
   await page.goto("/?test=1");
   await page.waitForFunction(() => Boolean(window.__jot2dTest));
+});
+
+test('native image paste works from file URLs and preserves text-field paste', async ({ page }) => {
+  const url = pathToFileURL(path.resolve(__dirname, '../../index.html')); url.searchParams.set('test', '1');
+  await page.goto(url.href); await page.waitForFunction(() => window.__jot2dTest);
+  const dataUrl = await canvasImageDataUrl(page, 'image/png', 32, 16);
+  const prevented = await page.evaluate(async data => {
+    const blob = await (await fetch(data)).blob();
+    const clipboardData = new DataTransfer(); clipboardData.items.add(new File([blob], 'clip.png', { type: 'image/png' }));
+    const input = document.createElement('input'); document.body.append(input);
+    const textPaste = new ClipboardEvent('paste', { clipboardData, bubbles: true, cancelable: true });
+    input.dispatchEvent(textPaste); input.remove();
+    document.getElementById('canvas').dispatchEvent(new ClipboardEvent('paste', { clipboardData, bubbles: true, cancelable: true }));
+    return textPaste.defaultPrevented;
+  }, dataUrl);
+  expect(prevented).toBe(false);
+  await expect.poll(() => page.evaluate(() => window.__jot2dTest.referenceImageStateForTest().images.length)).toBe(1);
+});
+
+test('pastes clipboard images and copies selected reference images with undo and persistence', async ({ page }) => {
+  const dataUrl = await canvasImageDataUrl(page, 'image/png', 400, 200);
+  await page.evaluate(async url => {
+    const blob = await (await fetch(url)).blob();
+    const clipboardData = new DataTransfer();
+    clipboardData.items.add(new File([blob], 'clipboard.png', { type: 'image/png' }));
+    document.getElementById('canvas').dispatchEvent(new ClipboardEvent('paste', { clipboardData, bubbles: true, cancelable: true }));
+  }, dataUrl);
+  await expect.poll(() => page.evaluate(() => window.__jot2dTest.referenceImageStateForTest().images.length)).toBe(1);
+  const first = await page.evaluate(() => window.__jot2dTest.referenceImageStateForTest().images[0]);
+  expect(first).toMatchObject({ pixelWidth: 400, pixelHeight: 200, opacity: 0.5, sketchId: 'S1' });
+  await page.keyboard.press('Control+c');
+  await page.keyboard.press('Control+v');
+  await expect.poll(() => page.evaluate(() => window.__jot2dTest.referenceImageStateForTest().images.length)).toBe(2);
+  let state = await page.evaluate(() => window.__jot2dTest.referenceImageStateForTest());
+  expect(state.images[1].dataUrl).toBe(first.dataUrl); expect(state.images[1].x).toBeGreaterThan(first.x);
+  await page.keyboard.press('Control+z');
+  expect((await page.evaluate(() => window.__jot2dTest.referenceImageStateForTest())).images).toHaveLength(1);
+  await page.keyboard.press('Control+y');
+  const serialized = await page.evaluate(() => window.__jot2dTest.hatchStateForTest().serialized);
+  await page.evaluate(data => window.__jot2dTest.loadModelForDerivedInstanceTest(data), serialized);
+  state = await page.evaluate(() => window.__jot2dTest.referenceImageStateForTest());
+  expect(state.images).toHaveLength(2); expect(state.images[1].dataUrl).toBe(first.dataUrl);
 });
 
 async function expandSketchTreeGroup(page, category, sketchId = "S1") {
