@@ -103,6 +103,7 @@
         ? {
             ok: true,
             epsilon: localResolved.epsilon,
+            area: localResolved.area,
             loops: localResolved.loops.map((loop) => ({
               role: loop.role,
               points: loop.points.map((point) => blockWorldPoint(transform, point)),

@@ -107,7 +107,7 @@ test('cancel preserves selection and ownership; shared geometry prevents startin
 });
 test('fill and all boundaries move together and inherit the destination appearance', async ({ page }) => {
   const fixture = await page.evaluate(() => window.__jot2dTest.resetForHatchTest());
-  await page.locator('#toolHatch').click(); await page.mouse.click(fixture.client.x, fixture.client.y); await page.keyboard.press('Escape');
+  await page.locator('#toolHatch').click(); await page.mouse.click(fixture.client.x, fixture.client.y); await page.keyboard.press('Enter'); await page.keyboard.press('Escape');
   const data = (await state(page)).serialized;
   data.sketches.push({ ...data.sketches.find(s => s.id === 'S1'), id: 'S2', name: '移動先', parentSketchId: 'ROOT', appearance: { color: '#dd0011', lineWidth: 3 } });
   expect((await page.evaluate(data => window.__jot2dTest.loadDocumentFixtureForDragTest(data, 'fill-move.jot2d'), data)).success).toBe(true);

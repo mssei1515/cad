@@ -79,6 +79,12 @@
         return;
       }
 
+      if (!textEditingTarget && ["hatch", "hatch-repair"].includes(operations.getMode()) && e.key === "Enter") {
+        e.preventDefault();
+        operations.finishHatch();
+        return;
+      }
+
       if (!textEditingTarget && (["mirror-axis", "pattern-direction"].includes(operations.getMode()) || operations.getMode().startsWith("free-instance-")) && e.key === "Enter") {
         e.preventDefault();
         operations.finishInstance();

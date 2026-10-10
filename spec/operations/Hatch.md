@@ -26,7 +26,7 @@ Block Instanceと派生Geometry InstanceはInstance全体を1つのObjectとし�
 
 補助Geometry、非アクティブSketch、Block Projectionは境界候補に含めない。Block Definition内の塗りつぶしはBlock Editorで作成する。実際の隙間を自動補完せず、開放境界、境界上のclick、重複区間など面を一意に決められない場合は理由を表示して作成しない。
 
-ToolbarまたはGeometry menuから塗りつぶしを開始し、閉領域内を1clickすると1つのUndo単位で確定する。確定後も同じcommandを継続し、Escで選択modeへ戻る。pointer移動中は候補面の淡色表示と仮ハッチをpreviewする。
+ToolbarまたはGeometry menuから塗りつぶしを開始し、閉領域内をclickすると領域を追加し、同じ領域の再clickで解除する。離れた領域、隣接する領域、穴の内側の別領域を同時に選べる。共有境界もGeometry参照として保持する。コマンドパレットは選択領域をリストで表示し、各領域の面積と合計面積を示す。行選択で対象を強調し、Delete／Backspaceで解除する。Enterまたは「完了」で選択した全領域を1つのObject・1つのUndo単位として確定する。領域が空の場合は確定できない。確定後も同じcommandを継続し、Escまたは「キャンセル」で未確定の選択だけを破棄して選択modeへ戻る。pointer移動中は候補面を、選択済み領域は継続してpreviewする。
 
 新規作成の外観は塗りつぶし（`solid`）、不透明度50%（`opacity: 0.5`、透明度50%）を既定値とする。平行線とクロスも引き続き選択できる。保存済みの種類と不透明度は維持し、旧ファイルで不透明度が省略されている場合は互換性のため100%へ補完する。
 
@@ -42,7 +42,7 @@ ToolbarまたはGeometry menuから塗りつぶしを開始し、閉領域内を
 
 通常clickは共通の重なり順で最前面のObjectを優先する。Hatch自身の境界Geometryを選択できるよう、境界線幅の半分に画面上1pxを加えた帯域はHatch領域のhit対象から除外する。この帯域はzoomに依存しない選択判定だけの余裕であり、描画には適用しない。作図先以外でも表示中のHatchを選択でき、未ロックなら外観を編集できる。境界再指定は所属Sketchを明示的に作図先にして行い、自動切替しない。
 
-Propertiesは「基本情報」に種類、ID、所属Sketch、境界状態を、`塗りつぶし外観`／`Fill Appearance`に編集可能な種類、色、表示を出す。平行線・クロスでは角度、間隔、線幅も表示し、塗りつぶしではそれらを非表示にして0～100%の不透明度を表示する。色は線patternの線色とsolidの塗り色を兼ね、共通Color Paletteを使用する。Sketch TreeではArcの後、Blockの前へ「塗りつぶし」分類を置き、空分類は表示せず初期状態を折り畳む。Object rowはToolbarと同じSVGを使う。
+Propertiesは「基本情報」に種類、ID、所属Sketch、境界状態、穴を除いた全領域の合計面積（mm²、読取専用）を、`塗りつぶし外観`／`Fill Appearance`に編集可能な種類、色、表示を出す。平行線・クロスでは角度、間隔、線幅も表示し、塗りつぶしではそれらを非表示にして0～100%の不透明度を表示する。色は線patternの線色とsolidの塗り色を兼ね、共通Color Paletteを使用する。Sketch TreeではArcの後、Blockの前へ「塗りつぶし」分類を置き、空分類は表示せず初期状態を折り畳む。Object rowはToolbarと同じSVGを使う。
 
 ## 4. 削除、コピー、Block化
 
@@ -68,4 +68,4 @@ Block Definition内塗りつぶしをProjection bundleへ含める。Projection 
 
 作成後は保存済みの境界Geometryだけから輪郭を再構築する。後から別Geometryを追加しても既存塗りつぶしを自動分割しない。境界Geometryの座標、半径、角度が変化した場合は、保存した端点、交点順、進行方向から同じ位相を復元して追従する。
 
-境界Geometryの削除、交点順の変化、開放、重複、collapse等で復元できない場合はObjectを削除せず無効状態にする。無効時はCanvasへパターンを描画せず、Sketch Treeへ境界エラーbadge、Propertiesへ理由を表示する。境界の有効・無効にかかわらずPropertiesに「境界を再指定」／`Reselect boundary`を表示する。Propertiesまたは有効な塗りつぶしのCanvas右click menuから再指定commandを開始し、新しい閉領域のclickでIDとAppearanceを維持したまま境界とseedだけを置換する。再指定は1つのUndo単位とし、Escによる取消では元の境界を維持する。同じIDと位相がUndo等で復元された場合は自動的に有効へ戻る。
+境界Geometryの削除、交点順の変化、開放、重複、collapse等で復元できない場合はObjectを削除せず無効状態にする。無効時はCanvasへパターンを描画せず、Sketch Treeへ境界エラーbadge、Propertiesへ理由を表示する。境界の有効・無効にかかわらずPropertiesに「境界を再指定」／`Reselect boundary`を表示する。Propertiesまたは有効な塗りつぶしのCanvas右click menuから再指定commandを開始し、新規作成と同じコマンドパレットで複数の新しい閉領域を選択し、Enterまたは「完了」でIDとAppearanceを維持したまま境界とseedだけを置換する。seedは先頭の選択領域のclick位置とする。境界が無効な場合の面積は「算出不可」／`Unavailable`とし、0として表示しない。再指定は1つのUndo単位とし、Escによる取消では元の境界を維持する。同じIDと位相がUndo等で復元された場合は自動的に有効へ戻る。

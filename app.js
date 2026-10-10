@@ -476,7 +476,7 @@
     documentHistory, currentBlockHistory: () => blockEditor.current?.history,
     changed: updateHistoryButtons, log,
   });
-  const CURRENT_JSON_VERSION = 23;
+  const CURRENT_JSON_VERSION = 24;
   const CLIPBOARD_PASTE_OFFSET_SCREEN_PX = 24;
   const BLOCK_ORTHOGONAL_ROTATION_STEP = Math.PI / 2;
 
@@ -3056,6 +3056,11 @@
       const selected = canvasSelection.inspectionContains(hatch) || canvasSelection.inspectionContains(hatch.blockInstance) || (hatch.blockProjection ? canvasSelection.blockInstances.includes(hatch.blockInstance) : hatch.sketchId === activeSketchId() && canvasSelection.hatches.includes(hatch));
       const hovered = hatch.blockProjection ? canvasHover.current.block === hatch.blockInstance : hatch.sketchId === activeSketchId() && canvasHover.current.hatch === hatch;
       drawResolvedHatch(resolvedHatchBoundary(hatch), appearance, hatchPatternOrigin(hatch), { hatch, selected: !pngRender && selected, hovered: !pngRender && hovered, alpha: sketchAlpha(hatch) });
+    }
+    if (!pngRender && includePreview && ["hatch", "hatch-repair"].includes(mode)) {
+      for (const region of hatchCommand.regions) {
+        drawResolvedHatch(region.resolved, DEFAULT_HATCH_APPEARANCE, { x: 0, y: 0 }, { preview: true, selected: region.selected });
+      }
     }
     if (!pngRender && includePreview && ["hatch", "hatch-repair"].includes(mode) && hatchCommand.preview?.result?.ok) {
       drawResolvedHatch({ ...hatchCommand.preview.result.resolved, ok: true }, DEFAULT_HATCH_APPEARANCE, { x: 0, y: 0 }, { preview: true });
@@ -6174,7 +6179,7 @@
     shortcuts: { save: saveJot2DFile, saveAs: saveJot2DFileAs, copy: copySelectionToClipboard,
       paste: pasteGeometryClipboard, undo: undoHistory, redo: redoHistory },
     operations: { getMode: () => mode, isGeometryMode, finishSources: finishInstanceSourceEdit,
-      finishSpline: finalizeSplineCreation, finishProjection: commitSketchProjectionCommand,
+      finishSpline: finalizeSplineCreation, finishProjection: commitSketchProjectionCommand, finishHatch: hatchCommand.finish,
       finishInstance: () => geometryInstanceCommand.finish(), removeSplinePoint: removeLastSplineInputPoint,
       offset: offsetCommand, getPointer: () => lastPointerWorld, deleteSelection: deleteCurrentSelection,
       completeLineLength: completePendingDimensionLineLength, cancel: cancelKeyboardOperation },
@@ -10866,9 +10871,15 @@
     changeFreeProperty: changeFreeInstanceProperty,
     refresh: () => { updatePropertiesUI(); draw(); },
   });
+  const hatchPanel = window.HatchCommandPanel.create({ command: hatchCommand, getMode: () => mode, applicationText, formatDisplayNumber,
+    cancel: () => { exitDrawMode(); updateUI({ refreshAnalysis: false }); draw(); },
+  });
+  const currentCommandPanel = () => ["hatch", "hatch-repair"].includes(mode) ? hatchPanel : derivedPanel;
   commandPanel = window.CommandPanel.create({ document, host: canvas.parentElement, ...derivedPanel,
-    readState: () => pngExportCommand.active ? pngExportCommand.readState() : derivedPanel.readState(),
-    onAction: action => pngExportCommand.active ? pngExportCommand.onAction(action) : derivedPanel.onAction(action),
+    readState: () => pngExportCommand.active ? pngExportCommand.readState() : currentCommandPanel().readState(),
+    onAction: action => pngExportCommand.active ? pngExportCommand.onAction(action) : currentCommandPanel().onAction(action),
+    onSelect: (key, index) => currentCommandPanel().onSelect(key, index),
+    onRemove: (key, index) => currentCommandPanel().onRemove(key, index),
     onSetting: (key, value) => pngExportCommand.active ? pngExportCommand.onSetting(key, value) : derivedPanel.onSetting(key, value),
   });
 

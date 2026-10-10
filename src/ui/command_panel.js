@@ -152,6 +152,11 @@
       }
       if (row && ["Enter", " "].includes(event.key)) {
         event.preventDefault(); event.stopPropagation();
+        if (event.key === "Enter" && readState()?.completeOnEnter) {
+          const finish = readState().actions.find(action => action.id === "finish");
+          if (finish && !finish.disabled) onAction("finish");
+          return;
+        }
         onSelect?.(row.dataset.input, row.dataset.inputItem == null ? null : Number(row.dataset.inputItem));
         return;
       }

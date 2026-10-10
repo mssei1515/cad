@@ -39,6 +39,7 @@ test("creates associative hatching, exposes Tree and Properties, and persists th
   await page.mouse.move(fixture.client.x, fixture.client.y);
   await expect.poll(() => page.evaluate(() => window.__jot2dTest.hatchStateForTest().preview)).toEqual({ ok: true, code: null });
   await page.mouse.click(fixture.client.x, fixture.client.y);
+  await page.keyboard.press("Enter");
 
   let state = await page.evaluate(() => window.__jot2dTest.hatchStateForTest());
   expect(state.mode).toBe("hatch");
@@ -47,7 +48,7 @@ test("creates associative hatching, exposes Tree and Properties, and persists th
   expect(state.direct[0].appearance).toEqual({ visible: true, patternType: "solid", angle: 45, spacing: 3, color: "#64748b", lineWidth: 1, opacity: 0.5 });
   await expect(page.locator('#propertiesPanel [data-hatch-property="patternType"]')).toHaveValue("solid");
   await expect(page.locator('#propertiesPanel [data-hatch-property="opacity"]')).toHaveValue("50");
-  expect(state.serialized.version).toBe(23);
+  expect(state.serialized.version).toBe(24);
   expect(state.serialized.hatches).toHaveLength(1);
   expect(state.propertiesText).toContain("塗りつぶし");
   expect(state.propertiesText).toContain("境界状態");
@@ -146,6 +147,7 @@ test("hatches an annular sector whose circular boundaries are split into adjacen
   await page.mouse.move(client.x, client.y);
   await expect.poll(() => page.evaluate(() => window.__jot2dTest.hatchStateForTest().preview)).toEqual({ ok: true, code: null });
   await page.mouse.click(client.x, client.y);
+  await page.keyboard.press("Enter");
 
   const state = await page.evaluate(() => window.__jot2dTest.hatchStateForTest());
   expect(state.direct).toHaveLength(1);
@@ -168,6 +170,7 @@ test("valid fill regions can be reselected from Properties and the context menu"
   await expect(page.locator('[data-menu-tool="toolHatch"]')).toHaveText("塗りつぶし");
   await page.locator("#toolHatch").click();
   await page.mouse.click(left.x, left.y);
+  await page.keyboard.press("Enter");
   await page.keyboard.press("Escape");
   const before = (await page.evaluate(() => window.__jot2dTest.hatchStateForTest())).serialized.hatches[0];
   const reselect = page.locator('[data-property-action="hatch-repair"]');
@@ -180,6 +183,7 @@ test("valid fill regions can be reselected from Properties and the context menu"
   await page.mouse.click(left.x, left.y);
   await reselect.click();
   await page.mouse.click(right.x, right.y);
+  await page.keyboard.press("Enter");
   let state = await page.evaluate(() => window.__jot2dTest.hatchStateForTest());
   expect(state.mode).toBe("select");
   expect(state.direct).toHaveLength(1);
@@ -196,6 +200,7 @@ test("valid fill regions can be reselected from Properties and the context menu"
   await page.mouse.click(right.x, right.y, { button: "right" });
   await page.locator('#canvasContextMenu [data-context-action="hatch-repair"]').click();
   await page.mouse.click(left.x, left.y);
+  await page.keyboard.press("Enter");
   state = await page.evaluate(() => window.__jot2dTest.hatchStateForTest());
   expect(state.serialized.hatches[0]).toEqual(before);
 });
@@ -204,6 +209,7 @@ test("invalid boundaries remain as repairable hatch objects", async ({ page }) =
   const fixture = await page.evaluate(() => window.__jot2dTest.resetForHatchTest());
   await page.locator("#toolHatch").click();
   await page.mouse.click(fixture.client.x, fixture.client.y);
+  await page.keyboard.press("Enter");
   await page.keyboard.press("Escape");
   await page.evaluate(() => window.__jot2dTest.selectGeometryIdsForTest({ lines: ["L1"] }));
   await page.keyboard.press("Delete");
@@ -233,6 +239,7 @@ test("invalid boundaries remain as repairable hatch objects", async ({ page }) =
   await page.locator('[data-property-action="hatch-repair"]').click();
   expect((await page.evaluate(() => window.__jot2dTest.hatchStateForTest())).mode).toBe("hatch-repair");
   await page.mouse.click(replacement.client.x, replacement.client.y);
+  await page.keyboard.press("Enter");
   state = await page.evaluate(() => window.__jot2dTest.hatchStateForTest());
   expect(state.direct).toHaveLength(1);
   expect(state.direct[0]).toEqual(expect.objectContaining({ id: "H1", valid: true }));
@@ -243,6 +250,7 @@ test("supports parallel, cross, and solid fill appearances", async ({ page }) =>
   const fixture = await page.evaluate(() => window.__jot2dTest.resetForHatchTest());
   await page.locator("#toolHatch").click();
   await page.mouse.click(fixture.client.x, fixture.client.y);
+  await page.keyboard.press("Enter");
   await page.keyboard.press("Escape");
 
   const type = page.locator('#propertiesPanel [data-hatch-property="patternType"]');
@@ -336,6 +344,7 @@ test("requires complete boundaries for copy and block creation and rewrites refe
   const fixture = await page.evaluate(() => window.__jot2dTest.resetForHatchTest());
   await page.locator("#toolHatch").click();
   await page.mouse.click(fixture.client.x, fixture.client.y);
+  await page.keyboard.press("Enter");
   await page.keyboard.press("Escape");
   const state = await page.evaluate(() => window.__jot2dTest.exerciseHatchTransferForTest());
   expect(state.missingCopyAccepted).toBe(false);
@@ -344,4 +353,84 @@ test("requires complete boundaries for copy and block creation and rewrites refe
   expect(state.pasted.refs).toEqual(["L5", "L6", "L7", "L8"]);
   expect(state.missingBlockError).toContain("境界");
   expect(state.block).toEqual(expect.objectContaining({ id: "H1", valid: true }));
+});
+
+
+test("region palette toggles and removes faces, commits once and repairs multiple regions atomically", async ({ page }) => {
+  const { serialized } = await page.evaluate(() => window.__jot2dTest.resetForHatchTest());
+  serialized.points.push({ ...serialized.points[0], id: "P5", x: 60, y: 0 }, { ...serialized.points[0], id: "P6", x: 60, y: 80 });
+  serialized.lines.push({ ...serialized.lines[0], id: "L5", p1: "P5", p2: "P6" });
+  expect((await page.evaluate(data => window.__jot2dTest.loadDocumentFixtureForDragTest(data), serialized)).success).toBe(true);
+  const left = await page.evaluate(() => window.__jot2dTest.worldClientPositionForTest({ x: 30, y: 60 }));
+  const right = await page.evaluate(() => window.__jot2dTest.worldClientPositionForTest({ x: 90, y: 60 }));
+  const palette = page.locator('#commandPanel');
+  const rows = palette.locator('[role="option"]');
+  const finish = palette.locator('[data-action="finish"]');
+  await page.locator('#toolHatch').click();
+  await expect(palette).toBeVisible(); await expect(finish).toBeDisabled();
+  await page.mouse.click(left.x, left.y); await page.mouse.click(right.x, right.y);
+  await expect(rows).toHaveCount(2); await expect(palette).toContainText('合計面積: 9600 mm²');
+  expect((await page.evaluate(() => window.__jot2dTest.hatchStateForTest())).direct).toHaveLength(0);
+  await page.mouse.click(left.x, left.y); await expect(rows).toHaveCount(1);
+  await page.mouse.click(left.x, left.y); await expect(rows).toHaveCount(2);
+  await rows.first().click(); await expect(rows.first()).toHaveAttribute('aria-selected', 'true');
+  await rows.first().press('Delete'); await expect(rows).toHaveCount(1);
+  await page.mouse.click(right.x, right.y); await expect(rows).toHaveCount(2);
+  await finish.click();
+  let state = await page.evaluate(() => window.__jot2dTest.hatchStateForTest());
+  expect(state.direct).toHaveLength(1); expect(state.direct[0].boundaryLoops.map(loop => loop.role)).toEqual(['outer', 'outer']);
+  await expect(rows).toHaveCount(0); await expect(finish).toBeDisabled();
+  await expect(page.locator('#propertiesPanel')).toContainText('面積9600 mm²');
+  await page.keyboard.press('Escape');
+  expect((await canvasInkAround(page, left, 1)).center[3]).toBeGreaterThan(0);
+  expect((await canvasInkAround(page, right, 1)).center[3]).toBeGreaterThan(0);
+  await page.mouse.click(right.x, right.y);
+  expect((await page.evaluate(() => window.__jot2dTest.hatchStateForTest())).selectedIds).toEqual(['H1']);
+  await page.keyboard.press('Control+z'); expect((await page.evaluate(() => window.__jot2dTest.hatchStateForTest())).direct).toHaveLength(0);
+  await page.keyboard.press('Control+y'); expect((await page.evaluate(() => window.__jot2dTest.hatchStateForTest())).direct).toHaveLength(1);
+  const saved = (await page.evaluate(() => window.__jot2dTest.hatchStateForTest())).serialized;
+  expect((await page.evaluate(data => window.__jot2dTest.loadDocumentFixtureForDragTest(data), saved)).success).toBe(true);
+  await page.mouse.click(right.x, right.y); await expect(page.locator('#propertiesPanel')).toContainText('面積9600 mm²');
+  const repair = page.locator('[data-property-action="hatch-repair"]');
+  await repair.click(); await page.mouse.click(left.x, left.y); await page.keyboard.press('Escape');
+  expect((await page.evaluate(() => window.__jot2dTest.hatchStateForTest())).serialized.hatches).toEqual(saved.hatches);
+  await repair.click(); await page.mouse.click(left.x, left.y); await rows.first().press('Enter');
+  await expect(palette).toBeHidden(); await expect(page.locator('#propertiesPanel')).toContainText('面積4800 mm²');
+  await repair.click(); await page.mouse.click(left.x, left.y); await page.mouse.click(right.x, right.y); await finish.click();
+  state = await page.evaluate(() => window.__jot2dTest.hatchStateForTest());
+  expect(state.direct[0].id).toBe('H1'); expect(state.direct[0].appearance).toEqual(saved.hatches[0].appearance);
+  expect(state.direct[0].boundaryLoops).toHaveLength(2);
+  await page.keyboard.press('Control+z'); await page.mouse.click(left.x, left.y); await expect(page.locator('#propertiesPanel')).toContainText('面積4800 mm²');
+  await page.keyboard.press('Control+y'); await page.mouse.click(left.x, left.y); await expect(page.locator('#propertiesPanel')).toContainText('面積9600 mm²');
+});
+
+test("disconnected regions retain holes, area and selection after save/reload", async ({ page }) => {
+  const { serialized } = await page.evaluate(() => window.__jot2dTest.resetForHatchTest());
+  serialized.points.push({ ...serialized.points[0], id: 'P5', x: 60, y: 40 }, { ...serialized.points[0], id: 'P6', x: 180, y: 40 });
+  serialized.circles = [
+    { id: 'C1', center: 'P5', radius: 10, construction: false, sketchId: 'S1', appearance: {} },
+    { id: 'C2', center: 'P6', radius: 10, construction: false, sketchId: 'S1', appearance: {} },
+  ];
+  expect((await page.evaluate(data => window.__jot2dTest.loadDocumentFixtureForDragTest(data), serialized)).success).toBe(true);
+  await page.evaluate(() => window.__jot2dTest.fitAllGeometryForTest());
+  let clients = await page.evaluate(() => [{ x: 30, y: 60 }, { x: 180, y: 46 }, { x: 60, y: 40 }].map(p => window.__jot2dTest.worldClientPositionForTest(p)));
+  await page.locator('#toolHatch').click();
+  for (const p of clients.slice(0, 2)) await page.mouse.click(p.x, p.y);
+  await expect(page.locator('#commandPanel [role="option"]')).toHaveCount(2);
+  await expect(page.locator('#commandPanel')).toContainText('合計面積: 9600 mm²');
+  await page.keyboard.press('Enter'); await page.keyboard.press('Escape');
+  const state = await page.evaluate(() => window.__jot2dTest.hatchStateForTest());
+  expect(state.direct[0].boundaryLoops.map(loop => loop.role)).toEqual(['outer', 'hole', 'outer']);
+  for (const p of clients.slice(0, 2)) expect((await canvasInkAround(page, p, 1)).center[3]).toBeGreaterThan(0);
+  expect((await canvasInkAround(page, clients[2], 1)).center[3]).toBe(0);
+  expect((await page.evaluate(data => window.__jot2dTest.loadDocumentFixtureForDragTest(data), state.serialized)).success).toBe(true);
+  clients = await page.evaluate(() => [{ x: 30, y: 60 }, { x: 180, y: 46 }, { x: 60, y: 40 }].map(p => window.__jot2dTest.worldClientPositionForTest(p)));
+  await page.mouse.click(clients[1].x, clients[1].y);
+  expect((await page.evaluate(() => window.__jot2dTest.hatchStateForTest())).selectedIds).toEqual(['H1']);
+  await expect(page.locator('#propertiesPanel')).toContainText('面積9600 mm²');
+  await page.locator('[data-property-action="hatch-repair"]').click();
+  await page.mouse.click(clients[0].x, clients[0].y);
+  await page.mouse.click(clients[2].x, clients[2].y);
+  await page.keyboard.press('Enter');
+  expect((await canvasInkAround(page, clients[2], 1)).center[3]).toBeGreaterThan(0);
 });

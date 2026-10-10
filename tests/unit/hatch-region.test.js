@@ -167,3 +167,47 @@ test("reuses a region index for repeated preview point queries", () => {
   assert.equal(engine.findFaceInIndex(index, { x: 5, y: 5 }).ok, true);
   assert.equal(engine.findFaceInIndex(index, { x: 25, y: 5 }).code, "open-region");
 });
+
+
+test("area uses exact circular integrals, subtracts holes and follows geometry changes", () => {
+  const primitives = [circle("C1", 1000000, -1000000, 20), circle("C2", 1000000, -1000000, 5)];
+  const face = engine.findFaceAtPoint(primitives, { x: 1000010, y: -1000000 });
+  const resolved = engine.resolveBoundary(face.boundaryLoops, primitives);
+  assert.equal(resolved.ok, true);
+  assert.ok(Math.abs(resolved.area - Math.PI * 375) < 1e-8);
+  primitives[0].radius = 30;
+  assert.ok(Math.abs(engine.resolveBoundary(face.boundaryLoops, primitives).area - Math.PI * 875) < 1e-8);
+  const semicircle = [line("L", -30, 0, 30, 0), arc("A", 0, 0, 30, 0, Math.PI)];
+  const half = engine.findFaceAtPoint(semicircle, { x: 0, y: 10 }).resolved;
+  assert.ok(Math.abs(half.area - Math.PI * 450) < 1e-8);
+});
+
+test("multiple outer boundaries preserve holes, hit each island and survive reference rewriting", () => {
+  const primitives = [...rectangle("L", 0, 0, 100, 100), circle("C", 50, 50, 10), ...rectangle("R", 150, 0, 180, 40)];
+  const left = engine.findFaceAtPoint(primitives, { x: 20, y: 20 });
+  const right = engine.findFaceAtPoint(primitives, { x: 160, y: 20 });
+  const loops = [...left.boundaryLoops, ...right.boundaryLoops];
+  const resolved = engine.resolveBoundary(loops, primitives);
+  assert.equal(resolved.ok, true);
+  assert.deepEqual(Array.from(resolved.loops, loop => loop.role), ["outer", "hole", "outer"]);
+  assert.ok(Math.abs(resolved.area - (11200 - Math.PI * 100)) < 1e-8);
+  assert.equal(engine.containsPoint(resolved, { x: 20, y: 20 }), true);
+  assert.equal(engine.containsPoint(resolved, { x: 160, y: 20 }), true);
+  assert.equal(engine.containsPoint(resolved, { x: 50, y: 50 }), false);
+  const filledHole = engine.findFaceAtPoint(primitives, { x: 50, y: 50 });
+  const all = engine.resolveBoundary([...loops, ...filledHole.boundaryLoops], primitives);
+  assert.equal(engine.containsPoint(all, { x: 50, y: 50 }), true);
+  assert.ok(Math.abs(all.area - 11200) < 1e-8);
+  const mapped = engine.rewriteBoundaryRefs(loops, ref => ({ ...ref, path: ["copy-" + ref.path[0]] }));
+  assert.deepEqual(Array.from(mapped, loop => loop.role), ["outer", "hole", "outer"]);
+  assert.equal(engine.resolveBoundary(mapped, primitives.map(item => ({ ...item, id: "copy-" + item.id }))).ok, true);
+});
+
+test("adjacent selected faces share references without excluding either interior", () => {
+  const primitives = [...rectangle("L", 0, 0, 100, 60), line("D", 50, 0, 50, 60)];
+  const loops = [{ x: 20, y: 20 }, { x: 80, y: 20 }].flatMap(point => engine.findFaceAtPoint(primitives, point).boundaryLoops);
+  const resolved = engine.resolveBoundary(loops, primitives);
+  assert.equal(resolved.ok, true); assert.equal(resolved.area, 6000);
+  assert.equal(engine.containsPoint(resolved, { x: 20, y: 20 }), true);
+  assert.equal(engine.containsPoint(resolved, { x: 80, y: 20 }), true);
+});

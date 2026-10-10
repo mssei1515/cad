@@ -12,7 +12,7 @@ function fixture() {
     shortcuts: Object.fromEntries(['save', 'saveAs', 'copy', 'paste', 'undo', 'redo'].map(k => [k, record(k)])),
     dimensionInput: { handleKey: () => Boolean(state.dimension) },
     operations: { getMode: () => state.mode, isGeometryMode: () => state.geometry !== false,
-      finishSources: record('sources'), finishSpline: record('spline'), finishProjection: record('projection'),
+      finishSources: record('sources'), finishSpline: record('spline'), finishProjection: record('projection'), finishHatch: record('hatch'),
       finishInstance: record('instance'), removeSplinePoint: record('removeSpline'),
       offset: { canConfirmSelection: () => state.offsetReady, confirmSelection: record('offset') },
       getPointer: () => state.pointer, deleteSelection: () => { calls.push(['delete']); return true; },
@@ -47,7 +47,7 @@ test('dimension input wins over mode completion and text inputs skip geometry ac
 });
 test('mode completion, offset pointer and cancellation route to command APIs', () => {
   const f = fixture();
-  for (const [mode, expected] of [['instance-sources', ['sources', true]], ['sketch-projection', ['projection']], ['mirror-axis', ['instance']], ['pattern-direction', ['instance']], ['free-instance-origin', ['instance']]]) {
+  for (const [mode, expected] of [['instance-sources', ['sources', true]], ['sketch-projection', ['projection']], ['hatch', ['hatch']], ['hatch-repair', ['hatch']], ['mirror-axis', ['instance']], ['pattern-direction', ['instance']], ['free-instance-origin', ['instance']]]) {
     f.state.mode = mode; f.calls.length = 0; f.key('Enter'); assert.deepEqual(f.calls, [['prevent'], expected]);
   }
   f.state.mode = 'instance-sources'; f.calls.length = 0; f.key('Escape'); assert.deepEqual(f.calls, [['prevent'], ['sources', false]]);

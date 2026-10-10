@@ -82,7 +82,7 @@ test("projection, mirror, and linear pattern are persisted as derived instances"
   await page.locator('.sketch-group-row[data-sketch-id="S2"][data-category="instance"]').click();
   const state = await page.evaluate(() => window.__jot2dTest.derivedInstanceStateForTest());
 
-  expect(state.serialized.version).toBe(23);
+  expect(state.serialized.version).toBe(24);
   expect(state.serialized.geometryInstances.map((item) => item.type)).toEqual(["sketchProjection", "mirror", "pattern"]);
   expect(state.serialized.constraints.some((item) => item.type === "sketchProjection")).toBe(false);
   expect(state.serialized.geometryInstances[2]).toMatchObject({ spacing: 15, copies: 3, reversed: false });
@@ -338,7 +338,7 @@ test("v20 sketch projection constraints migrate one-to-one to current instances"
     constraints: [{ type: "sketchProjection", kind: "line", source: "L1", target: "L2", enabled: true, reference: true, referenceSketchId: "S1", sketchId: "S2" }],
   };
   const state = await page.evaluate((data) => window.__jot2dTest.loadModelForDerivedInstanceTest(data), legacy);
-  expect(state.serialized.version).toBe(23);
+  expect(state.serialized.version).toBe(24);
   expect(state.serialized.constraints).toHaveLength(0);
   expect(state.serialized.lines.map((line) => line.id)).toEqual(["L1"]);
   expect(state.serialized.geometryInstances).toHaveLength(1);

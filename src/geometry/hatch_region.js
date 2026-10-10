@@ -583,13 +583,17 @@
     if (arrangement.overlaps.some((overlap) => overlapAffectsCycle(overlap, selected.cycle))) {
       return { ok: false, code: "overlapping-boundary", reason: "The boundary contains overlapping geometry." };
     }
+    if (selected.cycle.faceResult) return selected.cycle.faceResult;
     const holes = arrangement.cycles.filter((cycle) => cycle.parent === selected.index);
     const boundaryLoops = [serializeCycle(selected.cycle, "outer"), ...holes.map((cycle) => serializeCycle(cycle, "hole"))];
-    return {
+    const resolved = resolveBoundary(boundaryLoops, arrangement.primitives);
+    if (!resolved.ok) return resolved;
+    selected.cycle.faceResult = {
       ok: true,
       boundaryLoops,
-      resolved: { loops: [{ role: "outer", points: selected.cycle.points }, ...holes.map((cycle) => ({ role: "hole", points: cycle.points }))] },
+      resolved,
     };
+    return selected.cycle.faceResult;
   }
 
   function createRegionIndex(rawPrimitives) {
@@ -615,7 +619,7 @@
     for (let loopIndex = 0; loopIndex < boundaryLoops.length; loopIndex++) {
       const loop = boundaryLoops[loopIndex];
       if (!loop || !Array.isArray(loop.spans) || loop.spans.length === 0) return null;
-      const role = loopIndex === 0 ? "outer" : "hole";
+      const role = loopIndex === 0 || loop.role === "outer" ? "outer" : "hole";
       const spans = [];
       for (const rawSpan of loop.spans) {
         if (!rawSpan || !refKey(rawSpan.source)) return null;
@@ -703,19 +707,44 @@
       if (Math.abs(polygonArea(points)) <= epsilon * epsilon * 8) return { ok: false, code: "collapsed-boundary", reason: "The hatch boundary has collapsed." };
       resolvedLoops.push({ role: loop.role, spans: resolvedSpans, points });
     }
-    const outer = resolvedLoops[0];
+    let outer = resolvedLoops[0];
     for (const hole of resolvedLoops.slice(1)) {
+      if (hole.role === "outer") { outer = hole; continue; }
       const representative = cycleRepresentative(hole, epsilon);
       if (!pointInPolygon(representative, outer.points, epsilon).inside) return { ok: false, code: "changed-topology", reason: "A hatch hole is no longer inside its outer boundary." };
     }
-    return { ok: true, loops: resolvedLoops, epsilon };
+    return { ok: true, loops: resolvedLoops, epsilon, area: resolvedArea(resolvedLoops) };
   }
 
   function containsPoint(resolved, point) {
     if (!resolved?.loops?.length || !finitePoint(point)) return false;
     const epsilon = resolved.epsilon || DEFAULT_EPSILON;
-    if (!pointInPolygon(point, resolved.loops[0].points, epsilon).inside) return false;
-    return !resolved.loops.slice(1).some((loop) => pointInPolygon(point, loop.points, epsilon).inside);
+    return resolved.loops.reduce((inside, loop) => pointInPolygon(point, loop.points, epsilon).inside ? !inside : inside, false);
+  }
+
+  function resolvedArea(loops) {
+    return loops.reduce((total, loop) => {
+      const origin = loop.points[0];
+      let integral = 0;
+      if (!loop.spans?.length) integral = polygonArea(loop.points.map(point => ({ x: point.x - origin.x, y: point.y - origin.y })));
+      else for (const span of loop.spans) {
+        const { primitive, startT, endT, reversed } = span;
+        const start = pointAt(primitive, reversed ? endT : startT);
+        const end = pointAt(primitive, reversed ? startT : endT);
+        if (primitive.kind === "line") integral += ((start.x - origin.x) * (end.y - origin.y) - (end.x - origin.x) * (start.y - origin.y)) / 2;
+        else if (primitive.kind === "circle" || primitive.kind === "arc") {
+          const sweep = (endT - startT) * (primitive.kind === "circle" ? TWO_PI : primitive.endAngle - primitive.startAngle) * (reversed ? -1 : 1);
+          integral += ((primitive.center.x - origin.x) * (end.y - start.y) - (primitive.center.y - origin.y) * (end.x - start.x) + primitive.radius * primitive.radius * sweep) / 2;
+        } else {
+          const points = sampleSpan(primitive, startT, endT, reversed);
+          for (let index = 1; index < points.length; index++) {
+            const a = points[index - 1], b = points[index];
+            integral += ((a.x - origin.x) * (b.y - origin.y) - (b.x - origin.x) * (a.y - origin.y)) / 2;
+          }
+        }
+      }
+      return total + (loop.role === "hole" ? -1 : 1) * Math.abs(integral);
+    }, 0);
   }
 
   function boundaryGeometryRefs(boundaryLoops) {
