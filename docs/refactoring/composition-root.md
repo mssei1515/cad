@@ -6,6 +6,10 @@
 
 ## 現在の再開地点（2026-10-12）
 
+Hatchの通常／穴付き領域fixture、状態照会、表示倍率、境界破損／復旧の六つのテスト支援APIをHatchTestDriver（src/testing/hatch_test_driver.js）へ分離。test query時だけ生成し、既存API名／戻り値を直接接続する。現在scope・modeを呼出し時に照会し、モデル／ID／cache／履歴／表示／保存の状態は既存所有者へ委譲する。元の六つの本体との一致、fixture座標・Hatch ID／nextIndex・Construction・scope照会・UI／draw順を確認。classic script／構文／E2Eの読込一覧を更新。app.jsは8,884→8,804行（80行減、今回の合計2,254行減）。構文451ファイル・単体1,241件・利用するE2E全10ファイルの180件成功（exit 0、2.7分）。ログはcad-hatch-test-driver-{check,unit,e2e}.log。新しい単体テストは追加せず、既存E2EでDriverの実利用を検証。全E2Eはこの単位では未実行。全体目標は未完了。
+
+### 前回の区切り
+
 Parameterダイアログの適用後の履歴・結果案内・scope再読込・error表示・UI／drawの進行を既存ParameterDialogController.createApplicationへ分離。ParameterApplicationはモデル適用・安定化・Block伝播・checkpoint回復の所有を維持する。成功callback内の表示例外も既存の復元範囲に含め、成功／失敗の順序・捕捉したsession.key・error変換二回を保持する。元本体との一致と4つの境界テスト（実ParameterApplicationによるcallback例外回復を含む）を確認。app.jsは8,900→8,884行（16行減、今回の合計2,174行減）。構文450ファイル・単体1,241件・関連E2E152件成功（exit 0、2.3分）。E2Eの実対象はparameter-dialog-controller／unified-ui／blocks／sketch-permissionsの4ファイルで、指定したparameter-dialog-draft.spec.jsは存在せず追加対象になっていない。ログはcad-parameter-dialog-application-{check,unit,e2e}.log。全E2Eはこの単位では未実行。全体目標は未完了。
 
 ### 前回の区切り

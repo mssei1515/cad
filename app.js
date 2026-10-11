@@ -4838,6 +4838,12 @@
 
   function installTestHooks() {
     if (!new URLSearchParams(window.location.search).has("test")) return;
+    const hatchTestDriver = window.HatchTestDriver.create({
+      resetModelState, viewport, addPoint, addLine, addCircle, currentScope: workspace.current,
+      fitSketchToViewport, activeSketchId, resetHistory, updateUI, draw, canvas, worldToCanvasScreen, serializeModel,
+      readMode: () => mode, allHatches, hatchGeometryQuery, serializeHatch, hatchRegionErrorText, canvasSelection, hatchCommand, document,
+      DEFAULT_SKETCH_ID, DEFAULT_HATCH_APPEARANCE, HATCH_SCREEN_PX_PER_MM,
+    });
     const splineTestDriver = window.SplineTestDriver.create({
       resetModelState, viewport, resizeCanvas, resetHistory, updateUI, draw, canvas, worldToCanvasScreen, serializeModel,
       readOperation: () => ({ mode, editSplineId: splineEditing.current?.spline?.id || null }),
@@ -4890,31 +4896,7 @@
       splineHatchPreviewCacheForTest: splineTestDriver.hatchPreviewCache,
       exerciseSplineTransferForTest: splineTransferDriver.exercise,
       exerciseSplineConstraintsForTest: splineTestDriver.exerciseConstraints,
-      resetForHatchTest({ constructionBoundary = false } = {}) {
-        resetModelState();
-        viewport.update({ scale: 1 });
-        const points = [
-          addPoint(0, 0, false, "endpoint"), addPoint(120, 0, false, "endpoint"),
-          addPoint(120, 80, false, "endpoint"), addPoint(0, 80, false, "endpoint"),
-        ];
-        addLine(points[0], points[1]);
-        addLine(points[1], points[2]);
-        addLine(points[2], points[3]);
-        addLine(points[3], points[0]);
-        if (constructionBoundary) model.lines[0].construction = true;
-        fitSketchToViewport(activeSketchId(), 160);
-        resetHistory("hatch test");
-        updateUI();
-        draw();
-        const rect = canvas.getBoundingClientRect();
-        const screen = worldToCanvasScreen({ x: 60, y: 40 });
-        const boundaryScreen = worldToCanvasScreen({ x: 60, y: 0 });
-        return {
-          client: { x: rect.left + screen.x, y: rect.top + screen.y },
-          boundaryClient: { x: rect.left + boundaryScreen.x, y: rect.top + boundaryScreen.y },
-          serialized: serializeModel(),
-        };
-      },
+      resetForHatchTest: hatchTestDriver.reset,
       resetForDrawingOrderTest() {
         resetModelState();
         viewport.update({ scale: 3 });
@@ -5020,32 +5002,7 @@
         reorderSelectedDrawingObjects(action);
         return this.drawingOrderStateForTest();
       },
-      resetForSolidHatchHoleTest() {
-        resetModelState();
-        viewport.update({ scale: 1 });
-        const corners = [
-          addPoint(0, 0, false, "endpoint"), addPoint(120, 0, false, "endpoint"),
-          addPoint(120, 80, false, "endpoint"), addPoint(0, 80, false, "endpoint"),
-        ];
-        addLine(corners[0], corners[1]);
-        addLine(corners[1], corners[2]);
-        addLine(corners[2], corners[3]);
-        addLine(corners[3], corners[0]);
-        addCircle(addPoint(60, 40, false, "center"), 20, false);
-        const face = findHatchFaceInIndex(createHatchRegionIndex(hatchPrimitivesForScope(model, DEFAULT_SKETCH_ID)), { x: 20, y: 40 });
-        model.hatches.push({ id: "H1", sketchId: DEFAULT_SKETCH_ID, seed: { x: 20, y: 40 }, boundaryLoops: face.boundaryLoops, appearance: { ...DEFAULT_HATCH_APPEARANCE, patternType: "solid", color: "#0f766e" } });
-        model.nextHatchIndex = 2;
-        fitSketchToViewport(activeSketchId(), 160);
-        resetHistory("solid hatch hole test");
-        updateUI();
-        draw();
-        const rect = canvas.getBoundingClientRect();
-        const clientPoint = (point) => {
-          const screen = worldToCanvasScreen(point);
-          return { x: rect.left + screen.x, y: rect.top + screen.y };
-        };
-        return { fillClient: clientPoint({ x: 20, y: 40 }), holeClient: clientPoint({ x: 65, y: 40 }) };
-      },
+      resetForSolidHatchHoleTest: hatchTestDriver.resetSolidHole,
       resetForProjectedHatchTest() {
         resetModelState();
         const child = createEmptyBlockDefinition("Hatch Child");
@@ -5117,47 +5074,10 @@
           block: blockHatch ? { id: blockHatch.id, valid: Boolean(blockBoundary?.ok) } : null,
         };
       },
-      hatchStateForTest() {
-        return {
-          mode,
-          projected: allHatches().filter(hatch => hatch.derivedProjection).map(hatch => ({ id: hatch.id,
-            valid: resolvedHatchBoundary(hatch).ok, area: resolvedHatchBoundary(hatch).area,
-            seed: hatch.seed, appearance: hatch.appearance, loops: resolvedHatchBoundary(hatch).loops })),
-          direct: model.hatches.map((hatch) => {
-            const resolved = resolvedHatchBoundary(hatch);
-            return { ...serializeHatch(hatch), valid: resolved.ok, reason: resolved.ok ? null : hatchRegionErrorText(resolved) };
-          }),
-          selectedIds: canvasSelection.hatches.map((hatch) => hatch.id),
-          preview: hatchCommand.preview ? { ok: Boolean(hatchCommand.preview.result?.ok), code: hatchCommand.preview.result?.code || null } : null,
-          serialized: serializeModel(),
-          treeHatchRows: document.querySelectorAll('#sketchList [data-object-kind="hatch"]').length,
-          propertiesText: document.getElementById("propertiesPanel")?.textContent || "",
-          spacingWorldAtScale: model.hatches[0] ? model.hatches[0].appearance.spacing * HATCH_SCREEN_PX_PER_MM / viewport.scale : null,
-        };
-      },
-      setViewportScaleForHatchTest(scale) {
-        viewport.update({ scale: Math.max(0.01, Number(scale) || 1) });
-        draw();
-        return model.hatches[0] ? model.hatches[0].appearance.spacing * HATCH_SCREEN_PX_PER_MM / viewport.scale : null;
-      },
-      breakFirstHatchBoundaryForTest() {
-        if (!model.lines.length) return false;
-        model.lines.splice(0, 1);
-        updateUI({ refreshAnalysis: false });
-        draw();
-        return true;
-      },
-      restoreClosedBoundaryForHatchTest() {
-        const first = model.points.find((point) => Math.abs(point.x) < 1e-9 && Math.abs(point.y) < 1e-9);
-        const second = model.points.find((point) => Math.abs(point.x - 120) < 1e-9 && Math.abs(point.y) < 1e-9);
-        if (!first || !second) return null;
-        const line = addLine(first, second);
-        updateUI({ refreshAnalysis: false });
-        draw();
-        const rect = canvas.getBoundingClientRect();
-        const screen = worldToCanvasScreen({ x: 60, y: 40 });
-        return { id: line?.id || null, client: { x: rect.left + screen.x, y: rect.top + screen.y } };
-      },
+      hatchStateForTest: hatchTestDriver.state,
+      setViewportScaleForHatchTest: hatchTestDriver.setScale,
+      breakFirstHatchBoundaryForTest: hatchTestDriver.breakBoundary,
+      restoreClosedBoundaryForHatchTest: hatchTestDriver.restoreBoundary,
       commitConstraintWithForcedSolveResultForTest(forcedResult) {
         resetModelState();
         const p1 = addPoint(0, 0, true, "endpoint");
