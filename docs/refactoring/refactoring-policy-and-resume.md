@@ -99,17 +99,17 @@
 
 ## 8. 再開地点（2026-10-12）
 
-2026-10-11に週枠残量97%で再開し、develop 8e7e7c7からcodex/clipboard-placementを作成した。開始時app.jsは11,058行。現在は7,630行（今回の合計3,428行減）で、全体目標は未完了。作業branch上で区切りごとにCommit／Pushし、develop／mainへの統合は停止または最終リリース時に行う。週枠残量は直近確認で69%。新規分離を停止し、develop統合→最新全体検証→停止記録Commit／Push→main反映→develop同期／作業branch削除→runtime再生成→一時停止の準備に入る。停止条件と手順はsection 1／6に従う。
+2026-10-11に週枠残量97%で再開し、develop 8e7e7c7からcodex/clipboard-placementを作成した。開始時app.jsは11,058行。現在は7,630行（今回の合計3,428行減）で、全体目標は未完了。週枠残量69%を確認したため新規分離を停止。76個の区切りのcommitを保持し、コード最終commit 8e6fc2aをdevelopのcab7c6dへ統合・Pushして最新全体検証を完了した。この停止記録をCommit／Pushした後、mainへ反映し、直ちにdevelopをmainへfast-forwardして両者をPush・同期する。統合済み作業branchはローカル・リモートとも削除し、runtime再生成後に目標を一時停止する。停止条件と手順はsection 1／6に従う。
 
 Hover表示の観測を既存PropertiesTestDriver.createHoverObservationへ分離。既存Geometry一覧／Block投影・外観・Tree強調／Sidebar／Canvas／Block Hoverと表示色／線幅へ接続し、対象なしのnull、検索・Block内Geometryの優先順／短絡、Pointの投影・線端点除外、同一参照照合・constructionと照会順を保持する。独自Geometry／Hover／表示ルールを追加せず、test query時だけ生成して既存API名へ接続。元の処理本体との一致を確認。app.jsは7,652→7,630行（22行減、今回の合計3,428行減）。構文469ファイル・単体1,261件・関連E2E103件成功（exit 0、2.0分）。新規テストはなく、全利用箇所のunified-ui既存E2EでTree／Canvas強調、Point／Block、色／線幅を確認。全テスト本体とworker終了後の専用サーバー終了待ちは当該processを確認して終了し、正常終了を回収。ログはcad-hover-observation-{check,unit,e2e}.log。全E2Eはこの単位では未実行。全体目標は未完了。
 
-最新の全E2E一括実行は直前の0cf13d4（DocumentTestDriver検証）で560件成功（24.8分、exit 0）。b494ab6時点の550件成功・DXF保存再読込1件失敗は過去の結果であり、保存完了待機の修正後の今回実行では同項目も成功した。その560件は全体検証済みだが、以降のテスト支援変更後の全体一括実行ではない。以後のコード変更には変更に応じた再検証を行い、リリース前の最新状態を確認する。
+最終検証はdevelopのcab7c6dで構文469ファイル・単体1,261件・全E2E560件が成功（すべてexit 0、全E2E24.8分）。ログは一時ディレクトリのcad-refactor-oct12-final-{check,unit,e2e}.log。全テスト本体とworker終了後に専用サーバーだけの終了待ちが残ったため、processの実体を確認してそのサーバーを終了し、同じ実行の正常終了を回収した。0cf13d4の全E2E560件は以前の区切りの結果であり、今回の最終結果は以降のHover観測まで含む最新コードで再実行したもの。b494ab6時点のDXF保存再読込の失敗も保存完了待機の修正後に成功している。最終検証後は停止記録以外の実装変更を行わない。
 
 Sketch Projectionのテスト支援は用途別に分離済み。Reference Imageの状態／import・Block下書きfixtureも分離済み。寸法Appearanceの状態／描画寸法観測も分離済み。円弧半径の描画plan／終端fit・矢印先端も分離済み。寸法色の描画観測も分離済み。Parameterのfixture／状態照会／編集支援も分離済み。外観／複数Properties／固定のテスト支援も分離済み。Document読込fixtureも分離・全体検証済み。Canvasメニュー選択fixture／候補・Hover観測も分離済み。拘束入力／Intent解決支援も分離済み。Geometry ID選択も分離済み。Sketch移動・表示倍率の観測も分離済み。hit観測／Geometry client位置も分離済み。Hover表示観測も分離済み。再開後の次候補はsnap・作図状態など残るテスト支援と診断、入力・mode変更・command開始の既存所有者の境界。生成／編集／観測の依存を巨大contextへまとめず、共有readTestHistory／readTestSelectedGeometryは用途境界を確認して扱う。独自scope／seq／cacheを追加しない。
 
 既存のSpline／Hatch／描画順／Clipboard／派生Instance／Canvas表示支援・render probe・hit／描画／layout／取消の分離を再細分化するだけの変更は避ける。既存ConstraintIntentResolver／ConstraintSelectionQuery／ConstraintOperands／CanvasSelectionとPendingCommandSession／DrawOperationLifecycleの所有を維持する。旧handleConstraintTargetClickは撤去済み。Document初期化・Sketch切替・削除のreset、EscとCanvasメニュー取消は解除対象と順序が異なるため汎用resetへ統一しない。ParameterApplicationのcheckpoint／回復・安定化・Block伝播と成功callbackの表示例外復元範囲も維持する。reloadSharedVersion19のデータ加工は互換性fixtureに留め、製品migrationへ移さない。
 
-共通mode／DOMへのadapterと、注入依存の多いcommandの生成／接続は残る。状態の所有と開始・更新・確定・取消の入口を揃え、巨大contextを渡した別ファイルへ移すだけにしない。次回は現物のGit状態とruntime情報を確認して継続する。
+共通mode／DOMへのadapterと、注入依存の多いcommandの生成／接続は残る。状態の所有と開始・更新・確定・取消の入口を揃え、巨大contextを渡した別ファイルへ移すだけにしない。再開時はusage、Git状態、worktree、remote main／developと祖先関係、runtime情報を確認する。終了済みcodex/clipboard-placementは再使用せず、最新developから新しい作業branchを作成して継続する。
 
 ### 前回の停止地点（2026-10-10）
 
