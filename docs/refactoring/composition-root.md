@@ -6,6 +6,10 @@
 
 ## 現在の再開地点（2026-10-12）
 
+Hatch境界のGeometry収集・除外幅・解決済みloop距離・選択可能な内部点の4照会を既存HatchGeometryQueryへ集約。boundaryGeometryを再利用し、既定線幅と現在倍率を数値照会callbackとして明示する。直接／Block投影の所有者と参照、派生投影のoverlay対象なし、有限線幅の最大値／fallback、閉じる辺・穴を含む距離、厳密な大なりの選択判定を保持する。元処理との本体一致と3つの境界テストで確認。app.jsは9,151→9,110行（41行減、今回の合計1,948行減）。初回関連E2Eは既存drawingOrderStateForTestへの除外幅照会接続漏れで2件失敗し、接続を修正した。修正後に構文444ファイル・単体1,213件・同じ関連E2E179件が成功（exit 0、2.6分）。ログはcad-hatch-boundary-query-{check,unit}.logとcad-hatch-boundary-query-fixed-e2e.log。全E2Eはこの単位では未実行。全体目標は未完了。
+
+### 前回の区切り
+
 Hatchの表示レイヤーを既存HatchRenderer.createLayerへ集約。解決済み領域paint→型別境界overlay、直接／Block／派生とinspection／operandの選択強調、owner別hover、作成／修復のregionと現在preview、PNG中の強調／preview抑制を担当する。幾何照会・cache・編集状態の更新は持ち込まず、read callbackと描画painterを明示する。HatchCommandは遅延参照し、appのhoisted入口は早期接続用に保持する。元処理との本体一致を、明示した状態読取と型順painter変換を除いて確認。描画順序・参照同一性・選択／hover・非表示Sketch・live preview・export抑制の3境界テストを追加。app.jsは9,176→9,151行（25行減、今回の合計1,907行減）。構文444ファイル・単体1,210件・関連E2E179件成功（exit 0、2.6分）。ログはcad-hatch-layer-{check,unit,e2e}.log。全E2Eはこの単位では未実行。全体目標は未完了。
 
 ### 前回の区切り

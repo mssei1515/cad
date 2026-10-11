@@ -226,8 +226,9 @@
   const hatchGeometryQuery = window.HatchGeometryQuery.create({
     currentScope: workspace.current, activeSketchId, effectiveAppearanceForElement, applicationText,
     boundaryGeometry: () => [...allGeometryLines(), ...allGeometryCircles(), ...allGeometryArcs(), ...allGeometrySplines()],
+    defaultLineWidth: () => Number(documentModel.defaultAppearance?.lineWidth) || DEFAULT_APPEARANCE.lineWidth, viewportScale: () => viewport.scale,
   });
-  const { hatchPrimitivesFromElements, hatchPrimitivesForScope, resolvedHatchBoundary } = hatchGeometryQuery;
+  const { hatchPrimitivesFromElements, hatchPrimitivesForScope, resolvedHatchBoundary, hatchBoundaryGeometryItems, hatchBoundaryHitExclusionScreenPx, hatchContainsSelectablePoint } = hatchGeometryQuery;
   const blockProjections = window.BlockProjection.create({
     blockCatalog, geometryInstanceBundlesForScope, emptyGeometryInstanceBundle, hatchPrimitivesFromElements, hatchPrimitivesForScope,
   });
@@ -518,7 +519,6 @@
   const ANNOTATION_SCREEN_PX_PER_MM = CSS_PX_PER_MM;
   const { DIMENSION_OUTSIDE_SHAFT_LENGTH_FACTOR } = window.DimensionLayout;
   const HATCH_SCREEN_PX_PER_MM = CSS_PX_PER_MM;
-  const HATCH_BOUNDARY_HIT_MARGIN_SCREEN_PX = 1;
   const DIMENSION_DISPLAY_PRECISION = 1e-6;
   const MEASURED_DIMENSION_SNAP_TOLERANCE = 1e-5;
   const CONSTRAINT_ACCEPT_ERROR = 1e-4;
@@ -2607,47 +2607,6 @@
 
 
 
-
-
-  function hatchBoundaryGeometryItems(hatch) {
-    if (hatch?.derivedProjection) return [];
-    const refIds = new Set(hatchBoundaryGeometryRefs(hatch?.boundaryLoops).map((ref) => `${ref.kind}:${geometryRefId(ref)}`));
-    if (refIds.size === 0) return [];
-    const geometry = [...allGeometryLines(), ...allGeometryCircles(), ...allGeometryArcs(), ...allGeometrySplines()];
-    return geometry.filter((item) => {
-      if (hatch?.blockProjection) {
-        if (item.blockInstance !== hatch.blockInstance) return false;
-        const local = item.localElement || item.sourceElement;
-        return local && refIds.has(`${geometryKindForItem(local)}:${local.id}`);
-      }
-      return refIds.has(`${geometryKindForItem(item)}:${item.id}`);
-    });
-  }
-
-  function hatchBoundaryHitExclusionScreenPx(hatch) {
-    const widths = hatchBoundaryGeometryItems(hatch).map((item) => Number(effectiveAppearanceForElement(item).lineWidth)).filter(Number.isFinite);
-    const boundaryLineWidth = widths.length > 0 ? Math.max(...widths) : Number(documentModel.defaultAppearance?.lineWidth) || DEFAULT_APPEARANCE.lineWidth;
-    return Math.max(0.5, boundaryLineWidth / 2) + HATCH_BOUNDARY_HIT_MARGIN_SCREEN_PX;
-  }
-
-  function resolvedHatchBoundaryDistance(resolved, point) {
-    let distance = Infinity;
-    for (const loop of resolved?.loops || []) {
-      const points = loop.points || [];
-      for (let index = 0; index < points.length; index += 1) {
-        const p1 = points[index];
-        const p2 = points[(index + 1) % points.length];
-        distance = Math.min(distance, distancePointToSegmentPoints(point.x, point.y, p1, p2));
-      }
-    }
-    return distance;
-  }
-
-  function hatchContainsSelectablePoint(hatch, resolved, point) {
-    return Boolean(resolved?.ok)
-      && hatchContainsPoint(resolved, point)
-      && resolvedHatchBoundaryDistance(resolved, point) > hatchBoundaryHitExclusionScreenPx(hatch) / viewport.scale;
-  }
 
 
   function drawResolvedHatch(...args) { return hatchLayer.drawResolvedHatch(...args); }
