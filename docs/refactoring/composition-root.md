@@ -6,6 +6,10 @@
 
 ## 現在の再開地点（2026-10-12）
 
+CanvasRenderProbeへCanvasの描画観測を集約した。Geometry IDラベル、拘束端点／Point／Arc端点のマーカー数、指定Pointの外観、寸法ラベルと式マークの7入口を明示したcontext・Geometry照会・描画callbackだけで実行し、model／Selection／DOM／履歴を持ち込まない。contextメソッドを計測中だけ差し替え、例外時を含め元の関数へ復元する。式マークの記録状態もProbe内へ移し、appの可変capture変数を廃止した。既存テストAPI名は各入口への直接接続で維持する。7処理の本体は記録状態の名称と所有先以外元処理と一致し、元メソッドのreceiver／引数／戻り値、例外復元、Object同一性、ネスト終了時の既存clear動作を境界テストで確認した。app.jsは9,402→9,290行（112行減、今回の合計1,768行減）。構文443ファイル・単体1,207件・関連E2E143件成功（exit 0、2.1分）。ログはcad-canvas-probe-{check,unit,e2e}.log。今回の変更では全E2Eを再実行していない。前区切りc5e049dの全E2E551件成功（24.2分）を、今回の変更後の全体検証と扱わない。全体目標は未完了。巨大なテスト用contextを別ファイルへ移さず、残る診断／シナリオAPIを機能単位で整理する。
+
+### 前回の区切り
+
 PendingCommandSessionへ共有の保留操作Objectの保持・読取り・置換・通知なしクリアと取消経路を集約した。appの可変pendingCommandを廃止し、各commandのgetPending／setPendingへSessionのread／replaceを接続する。Objectを複製せずbuffer／pointerの直接更新を保持する。取消ではInstance配置解除→注記／PNG専用command委譲またはOffset選択／pointer解除→pending解除→入力非表示→hint→Toolbar→拘束ボタン→drawの既存順序を維持する。PNG busyの拒否は強制クリアせず、Document初期化／Sketch切替／削除の直接clearを取消と混同しない。app全体の変更はSession接続と取消委譲だけであること、取消本体は明示した依存port以外元処理と一致することを照合した。初期化前の入力表示参照を遅延callbackへ修正し、修正版の起動確認と全検証が成功した。app.jsは9,412→9,402行（10行減、今回の合計1,656行減）。構文441ファイル・単体1,201件・全E2E551件成功（exit 0、24.2分、拘束ドラッグ回帰12.4分）。ログはcad-pending-session-{check,unit}.logとcad-pending-session-full-e2e.log。現在の作業branch全体をこの状態で検証しており、旧checkpointの成功件数を流用していない。全体目標は未完了。残る共有mode、command生成・接続、テスト用APIの機能ごとの境界は今後の対象とする。
 
 ### 前回の区切り

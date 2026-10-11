@@ -98,11 +98,11 @@
 
 ## 8. 再開地点（2026-10-12）
 
-2026-10-11に週枠残量97%で再開し、develop 8e7e7c7からcodex/clipboard-placementを作成した。開始時app.jsは11,058行。現在は9,402行（今回の合計1,656行減）で、全体目標は未完了。作業branch上で区切りごとにCommit／Pushしており、develop／mainへの統合は停止または最終リリース時に行う。週枠残量は直近確認で84%。停止条件と手順はsection 1／6に従う。
+2026-10-11に週枠残量97%で再開し、develop 8e7e7c7からcodex/clipboard-placementを作成した。開始時app.jsは11,058行。現在は9,290行（今回の合計1,768行減）で、全体目標は未完了。作業branch上で区切りごとにCommit／Pushしており、develop／mainへの統合は停止または最終リリース時に行う。週枠残量は直近確認で84%。停止条件と手順はsection 1／6に従う。
 
 今回の分離は、Clipboardのpayload／session／checkpoint／モデル構築／操作、GeometryDeletionの計画／適用と混在Selection削除、拘束の対象受入／hit／session／操作／意図解決／寸法生成・読取判定・配置／commit、Solver前処理とSelection変換に及ぶ。各単位のcommit・検証・行数はcomposition-root.md、現在の責務はimplementation-map.mdと正式なarchitecture仕様を参照する。既存の分離をもう一度細分化するだけの変更は避ける。
 
-最新の区切りでは共有の保留状態と取消経路をPendingCommandSessionへ集約し、appの可変pendingCommandを廃止した。Object同一性と直接field更新、Instance配置解除から始まる取消の優先順位、PNG busyの拒否、通知なしclearと通常取消の違いを維持する。初期化前の入力表示参照は遅延callbackへ修正済み。app.jsは9,412→9,402行（10行減）。構文441ファイル・単体1,201件・全E2E551件成功（exit 0、24.2分、拘束ドラッグ回帰12.4分）。ログはcad-pending-session-{check,unit}.logとcad-pending-session-full-e2e.log。今回の作業branch全体をこの修正版で検証している。以後の実装変更をこの全E2E成功で検証済みとは扱わず、リリース前には最新状態に対する検証を行う。
+最新の区切りではCanvas描画の観測と寸法式マークの記録状態をCanvasRenderProbeへ分離した。contextとGeometry照会・描画入口だけを受け取り、7つの既存テストAPI名を維持する。context復元、nativeメソッドの呼出し、記録の同一性とネスト終了時のclearを保持する。app.jsは9,402→9,290行（112行減）。構文443ファイル・単体1,207件・関連E2E143件成功（exit 0、2.1分）。ログはcad-canvas-probe-{check,unit,e2e}.log。前区切りc5e049dでは全E2E551件が成功（24.2分、拘束ドラッグ回帰12.4分）しているが、今回の実装変更後の全E2Eは未実行。リリース前には最新状態を検証する。
 
 次は残る拘束の準備／確定入口、共有modeと各commandの組立て所有、テスト用APIの機能ごとの境界を確認する。保留状態の保持と取消はPendingCommandSessionへ分離済みであり、再抽出しない。ConstraintIntentResolverは明示したoperandを、ConstraintSelectionQueryは現在Selection／sessionの照会を、ConstraintOperandsはSelectionからの値変換を、CanvasSelectionは対象反映を所有する。旧handleConstraintTargetClickは撤去済みであり、再抽出しない。Document初期化・Sketch切替・削除のresetは解除対象と順序が異なるため、汎用resetへ無理に統合しない。
 

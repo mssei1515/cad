@@ -437,7 +437,10 @@
     blockDefinitionDependsOn, storedBlockInstancesReferencing, blockDefinitionUsageCount,
     blockDefinitionEditError, blockDefinitionCyclePath } = blockEditingQueries;
 
-  let dimensionExpressionMarkCapture = null;
+  const canvasRenderProbe = window.CanvasRenderProbe.create({
+    ctx, allGeometryPoints, allGeometryLines, allGeometryCircles, allGeometryArcs,
+    drawLines, drawCircles, drawArcs, drawPoints, drawArcEndpointHandles, drawDimensions,
+  });
   const HISTORY_LIMIT = 80;
   let commandPanel = null;
   let derivedPanel = null;
@@ -615,7 +618,7 @@
   }
   const dimensionRenderer = window.DimensionRenderer.create({
     ctx, viewport, metrics: dimensionMetrics, canvasThemeColor,
-    onExpressionMark: mark => dimensionExpressionMarkCapture?.(mark),
+    onExpressionMark: canvasRenderProbe.captureExpressionMark,
   });
   const { geometryDisplayColor, geometryStrokeWidth, geometryPaintState, pointPaintState, arcEndpointPaintState, splineHandleState } = window.GeometryPresentation.create({
     Point, canvasSelection, canvasHover, viewState,
@@ -8983,128 +8986,13 @@
           arcEndpointId: canvasHover.current.arcEndpoint ? `${canvasHover.current.arcEndpoint.arc.id}.${canvasHover.current.arcEndpoint.endpoint}` : null,
         };
       },
-      drawnGeometryIdLabelsForTest() {
-        const geometryIds = new Set([
-          ...allGeometryPoints().map((point) => point.id),
-          ...allGeometryLines().map((line) => line.id),
-          ...allGeometryCircles().map((circle) => circle.id),
-          ...allGeometryArcs().map((arc) => arc.id),
-        ]);
-        const labels = [];
-        const originalFillText = ctx.fillText;
-        ctx.fillText = (value) => {
-          if (geometryIds.has(String(value))) labels.push(String(value));
-        };
-        try {
-          drawLines();
-          drawCircles();
-          drawArcs();
-          drawPoints();
-        } finally {
-          ctx.fillText = originalFillText;
-        }
-        return labels;
-      },
-      constraintStatusEndpointMarkerCountForTest() {
-        let count = 0;
-        const originalArc = ctx.arc;
-        ctx.arc = (...args) => {
-          count += 1;
-          return originalArc.apply(ctx, args);
-        };
-        try {
-          drawLines();
-          drawPoints();
-        } finally {
-          ctx.arc = originalArc;
-        }
-        return count;
-      },
-      drawnPointMarkerCountForTest() {
-        let count = 0;
-        const originalArc = ctx.arc;
-        ctx.arc = (...args) => {
-          count += 1;
-          return originalArc.apply(ctx, args);
-        };
-        try {
-          drawPoints();
-        } finally {
-          ctx.arc = originalArc;
-        }
-        return count;
-      },
-      arcEndpointHandleCountForTest() {
-        let count = 0;
-        const originalArc = ctx.arc;
-        ctx.arc = (...args) => {
-          count += 1;
-          return originalArc.apply(ctx, args);
-        };
-        try {
-          drawArcEndpointHandles();
-        } finally {
-          ctx.arc = originalArc;
-        }
-        return count;
-      },
-      pointDisplayStateForTest(id) {
-        const point = allGeometryPoints().find((item) => item.id === id);
-        if (!point) return null;
-        let drawingTarget = false;
-        let marker = null;
-        const labels = [];
-        const originalArc = ctx.arc;
-        const originalFill = ctx.fill;
-        const originalStroke = ctx.stroke;
-        const originalFillText = ctx.fillText;
-        ctx.arc = (x, y, ...args) => {
-          drawingTarget = Math.abs(x - point.x) < 1e-9 && Math.abs(y - point.y) < 1e-9;
-          return originalArc.call(ctx, x, y, ...args);
-        };
-        ctx.fill = (...args) => {
-          if (drawingTarget) marker = { ...(marker || {}), fill: String(ctx.fillStyle) };
-          return originalFill.apply(ctx, args);
-        };
-        ctx.stroke = (...args) => {
-          if (drawingTarget) marker = { ...(marker || {}), stroke: String(ctx.strokeStyle), lineWidth: ctx.lineWidth };
-          return originalStroke.apply(ctx, args);
-        };
-        ctx.fillText = (value, ...args) => {
-          if (drawingTarget) labels.push(String(value));
-          return originalFillText.call(ctx, value, ...args);
-        };
-        try {
-          drawPoints();
-        } finally {
-          ctx.arc = originalArc;
-          ctx.fill = originalFill;
-          ctx.stroke = originalStroke;
-          ctx.fillText = originalFillText;
-        }
-        return { ...(marker || {}), labels };
-      },
-      drawnDimensionLabelsForTest() {
-        const labels = [];
-        const originalFillText = ctx.fillText;
-        ctx.fillText = (value) => labels.push(String(value));
-        try {
-          drawDimensions();
-        } finally {
-          ctx.fillText = originalFillText;
-        }
-        return labels;
-      },
-      drawnDimensionExpressionMarksForTest() {
-        const marks = [];
-        dimensionExpressionMarkCapture = (mark) => marks.push(mark);
-        try {
-          drawDimensions();
-        } finally {
-          dimensionExpressionMarkCapture = null;
-        }
-        return marks;
-      },
+      drawnGeometryIdLabelsForTest: canvasRenderProbe.geometryIdLabels,
+      constraintStatusEndpointMarkerCountForTest: canvasRenderProbe.constraintEndpointMarkerCount,
+      drawnPointMarkerCountForTest: canvasRenderProbe.pointMarkerCount,
+      arcEndpointHandleCountForTest: canvasRenderProbe.arcEndpointHandleCount,
+      pointDisplayStateForTest: canvasRenderProbe.pointDisplayState,
+      drawnDimensionLabelsForTest: canvasRenderProbe.dimensionLabels,
+      drawnDimensionExpressionMarksForTest: canvasRenderProbe.dimensionExpressionMarks,
       dimensionClientPositionForTest(index = 0) {
         const constraint = model.constraints.filter(isDimensionConstraint)[index] || null;
         const target = targetFromConstraint(constraint);
