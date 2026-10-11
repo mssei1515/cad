@@ -109,5 +109,34 @@
     }
     return Object.freeze({ addFixedPoint });
   }
-  window.CanvasSelectionTestDriver = Object.freeze({ createOverlapFixture, createEndpointFixture, createObservation, createPointInsertion });
+  function createIdSelection({ clearSelection, currentScope, canvasSelection, updateUI, draw, blockSelectionGeometry, readSelectedGeometry }) {
+    function select(ids = {}) {
+      clearSelection();
+      const pointIds = new Set(ids.points || []);
+      const lineIds = new Set(ids.lines || []);
+      const circleIds = new Set(ids.circles || []);
+      const arcIds = new Set(ids.arcs || []);
+      const splineIds = new Set(ids.splines || []);
+      const blockInstanceIds = new Set(ids.blockInstances || []);
+      canvasSelection.set("points", currentScope().points.filter((point) => pointIds.has(point.id)));
+      canvasSelection.set("lines", currentScope().lines.filter((line) => lineIds.has(line.id)));
+      canvasSelection.set("circles", currentScope().circles.filter((circle) => circleIds.has(circle.id)));
+      canvasSelection.set("arcs", currentScope().arcs.filter((arc) => arcIds.has(arc.id)));
+      canvasSelection.set("splines", currentScope().splines.filter((spline) => splineIds.has(spline.id)));
+      canvasSelection.set("blockInstances", currentScope().blockInstances.filter((instance) => blockInstanceIds.has(instance.id)));
+      for (const field of ["hatches", "annotations", "referenceImages"]) canvasSelection.set(field, currentScope()[field].filter(item => (ids[field] || []).includes(item.id)));
+      updateUI();
+      draw();
+      const selection = blockSelectionGeometry();
+      return {
+        selected: readSelectedGeometry(),
+        blockError: selection.error || null,
+        internalConstraintCount: selection.constraints?.length || 0,
+        externalConstraintCount: selection.externalConstraints?.length || 0,
+      };
+    }
+    return Object.freeze({ select });
+  }
+
+  window.CanvasSelectionTestDriver = Object.freeze({ createOverlapFixture, createEndpointFixture, createObservation, createPointInsertion, createIdSelection });
 })();

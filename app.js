@@ -4919,6 +4919,9 @@
       readSelectedGeometry: readTestSelectedGeometry, canvasSelection, constraintTargetSession, operandElement,
     });
     const constraintIntentTestDriver = window.ConstraintTestDriver.createIntentResolution({ currentScope: workspace.current, makeConstraintOperand, resolveConstraintIntent, serializeConstraint });
+    const geometryIdSelection = window.CanvasSelectionTestDriver.createIdSelection({
+      clearSelection, currentScope: workspace.current, canvasSelection, updateUI, draw, blockSelectionGeometry, readSelectedGeometry: readTestSelectedGeometry,
+    });
     const overlapSelectionFixture = window.CanvasSelectionTestDriver.createOverlapFixture({
       resetModelState, addLine, addPoint, currentScope: workspace.current, ROOT_SKETCH_ID, DEFAULT_SKETCH_ID, createEmptyBlockDefinition, Point, Line,
       appendDefinition: definition => documentModel.blockDefinitions.push(definition), nextInstanceId: () => `BI${blockInstanceSeq++}`,
@@ -5210,31 +5213,7 @@
           serialized: serializeModel(), editingBlock: Boolean(blockEditor.current),
         };
       },
-      selectGeometryIdsForTest(ids = {}) {
-        clearSelection();
-        const pointIds = new Set(ids.points || []);
-        const lineIds = new Set(ids.lines || []);
-        const circleIds = new Set(ids.circles || []);
-        const arcIds = new Set(ids.arcs || []);
-        const splineIds = new Set(ids.splines || []);
-        const blockInstanceIds = new Set(ids.blockInstances || []);
-        canvasSelection.set("points", model.points.filter((point) => pointIds.has(point.id)));
-        canvasSelection.set("lines", model.lines.filter((line) => lineIds.has(line.id)));
-        canvasSelection.set("circles", model.circles.filter((circle) => circleIds.has(circle.id)));
-        canvasSelection.set("arcs", model.arcs.filter((arc) => arcIds.has(arc.id)));
-        canvasSelection.set("splines", model.splines.filter((spline) => splineIds.has(spline.id)));
-        canvasSelection.set("blockInstances", model.blockInstances.filter((instance) => blockInstanceIds.has(instance.id)));
-        for (const field of ["hatches", "annotations", "referenceImages"]) canvasSelection.set(field, model[field].filter(item => (ids[field] || []).includes(item.id)));
-        updateUI();
-        draw();
-        const selection = blockSelectionGeometry();
-        return {
-          selected: this.selectedGeometryIdsForTest(),
-          blockError: selection.error || null,
-          internalConstraintCount: selection.constraints?.length || 0,
-          externalConstraintCount: selection.externalConstraints?.length || 0,
-        };
-      },
+      selectGeometryIdsForTest: geometryIdSelection.select,
       focusWorldForTest: canvasTestDriver.focus,
       displayZoomStateForTest(zoomRatio = null) {
         if (zoomRatio != null) viewport.update({ scale: clampZoom(Number(zoomRatio) * CSS_PX_PER_MM) });

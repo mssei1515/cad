@@ -6,6 +6,10 @@
 
 ## 現在の再開地点（2026-10-12）
 
+Geometry IDのテスト用選択を既存CanvasSelectionTestDriver.createIdSelectionへ分離。現在scopeの九種別の同一Geometry参照を既存Selectionへ設定し、clear→種別順の設定→UI→draw→Block選択query→選択ID照会を保持する。入力既定値、scope配列順、重複IDの扱いとBlockエラー／内部・外部拘束数のfallbackを維持し、独自scope／Selection／選択ルールを追加しない。this経由のhook参照はreadSelectedGeometryへ置換し、test query時だけ生成して既存API名へ接続。元の処理本体との一致を確認。app.jsは7,717→7,696行（21行減、今回の合計3,362行減）。構文469ファイル・単体1,261件・関連E2E263件成功（exit 0、4.1分）。新規テストはなく、全利用箇所14ファイルの既存E2Eで選択を使う編集／Block／投影／外観／表示／Undoを確認。最初のE2EはWindowsパスを検索正規表現として渡したため対象を収集できずexit 1。区切りをスラッシュへ修正し、同じ対象で正常終了を確認した。全テスト本体とworker終了後の専用サーバー終了待ちは当該processを確認して終了し、正常終了を回収。ログはcad-id-selection-{check,unit,e2e,e2e-final}.log。全E2Eはこの単位では未実行。全体目標は未完了。
+
+### 前回の区切り
+
 拘束入力の状態照会とIntent解決の二つのAPIを既存ConstraintTestDriver.createInputObservation／createIntentResolutionへ分離。前者は現在Selection／ConstraintTargetSession・operandElementとreadSelectedGeometryへ接続し、Instance／arcEndpoint／pair・operand／pending typeを観測する。後者は現在scopeの入力IDを同一Geometryへ結び付け、既存makeConstraintOperand／resolver／serializeConstraintへ委譲。arc-endpointのarc keyとendpoint／parameter、未存在IDの例外、resolutionなしのnullと結果fallbackを維持する。観測にモデル検索／resolver、Intent支援にSelection／session操作を持ち込まず、既存の拘束判断・操作状態を複製しない。test query時だけ生成し、既存API名へ接続。元の二つの処理本体との一致を確認。app.jsは7,738→7,717行（21行減、今回の合計3,341行減）。構文469ファイル・単体1,261件・関連E2E124件成功（exit 0、2.1分）。単体1件を追加し、call-time Geometry同一参照・端点情報、未存在入力のresolver短絡とnull／serialization境界を確認。全利用箇所のphase0-characterization／unified-ui既存E2EでIntentの入力状態非変更・拘束入力と表示回帰を検証。全テスト本体とworker終了後の専用サーバー終了待ちは当該processを確認して終了し、正常終了を回収。ログはcad-constraint-input-test-driver-{check,unit,e2e}.log。全E2Eはこの単位では未実行。全体目標は未完了。
 
 ### 前回の区切り
