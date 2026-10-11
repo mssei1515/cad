@@ -246,7 +246,7 @@ index.htmlは既存の通常script読込列で両moduleをapp.jsより先に読�
 
 ### 注記と参照画像の描画
 
-`AnnotationRenderer`は注記文字・引出線・終端記号、`ReferenceImageRenderer`は参照画像のURL cache・画像本体・選択枠・較正markerを所有する。appは対象の可視性や操作状態を判断し、描画入力と参照点解決を接続する。
+`AnnotationRenderer`は注記文字・引出線・終端記号、`ReferenceImageRenderer`は参照画像のURL cache・画像本体・選択枠・較正markerを所有する。Annotationの描画入力と参照点解決はappが接続する。ReferenceImageの表示入力は同rendererのcreateLayerが読取り専用の照会から構成する。
 
 ### Canvas surface
 
@@ -635,3 +635,6 @@ HatchRenderer.createLayerはHatchの表示レイヤーを構成する。既存�
 
 
 HatchGeometryQueryは既存の境界解決・face cacheに加え、描画／hit判定で使う境界Geometry収集、線幅からの画面上の除外幅、解決済みloopからの最短境界距離、選択可能な内部点判定を所有する。既存boundaryGeometry照会を再利用し、直接参照はkind／ID、Block投影はinstance同一性とlocalElement／sourceElementで照合する。派生投影は従来どおり境界overlay対象なしとする。Geometry参照と順序を変えず、モデル・外観・選択を書き換えない。有限な表示線幅の最大値またはDocument既定幅を使用し、半幅の最小値0.5pxに1pxを足し、現在倍率でworld距離へ換算する。境界距離は穴・複数loopと閉じる辺も含み、厳密な大なり比較を維持する。既定幅と倍率は数値照会callbackとして注入し、DOM／viewport自体は保持しない。appは照会を取得してrenderer／hit入力へ接続する。
+
+
+ReferenceImageRenderer.createLayerは画像の可視性／Sketch可視性による表示対象収集と、inspection→単一選択→hoverの優先順によるoverlay候補を所有する。候補の可視性とactive Sketch／inspectionを検査し、候補拒否時に別候補へfallbackしない既存動作を維持する。selected flagは候補が表示されなくても元候補から求め、較正markerは独立して既存rendererへ渡す。画像配列・hover・較正点は現在値を照会し、Geometry参照・順序・Selectionを変更しない。描画とURL cache／ready／clearは既存のresource rendererを共有する。表示レイヤーは画像のimport・hit／編集権限・drag・較正状態の更新を所有しない。appは生成時に限定した照会を接続し、二つの描画入口を既存Canvas描画へ直接渡す。

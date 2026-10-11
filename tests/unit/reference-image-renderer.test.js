@@ -36,3 +36,43 @@ test("selection overlays include the lock and calibration markers keep screen si
   assert.equal(h.calls.find(call => call[0] === "fillText")[1], "🔒");
   assert.deepEqual(h.calls.filter(call => call[0] === "arc").map(call => call.slice(1, 4)), [[1, 2, 2.5], [3, 4, 2.5]]);
 });
+
+function layerFixture() {
+  const calls = [], inspected = new Set();
+  const selection = { inspection: null, referenceImages: [], inspectionContains: item => inspected.has(item) };
+  const state = { images: [], hover: {}, calibration: null };
+  const renderer = { drawImages: items => calls.push(['images', items]), drawOverlays: (...args) => calls.push(['overlays', ...args]) };
+  const layer = sandbox.window.ReferenceImageRenderer.createLayer({
+    renderer, readImages: () => state.images, canvasSelection: selection, readHover: () => state.hover,
+    isVisibleValue: value => value !== false, isVisibleSketchId: id => id !== 'hidden', activeSketchId: () => 'active',
+    readCalibrationPoints: () => state.calibration,
+  });
+  return { layer, state, selection, inspected, calls };
+}
+
+test('image presentation filters visibility using current inputs and preserves image references and order', () => {
+  const h = layerFixture();
+  const first = { sketchId: 'active' }, last = { sketchId: 'other' };
+  h.state.images = [first, { visible: false }, { sketchId: 'hidden' }, last];
+  h.layer.drawImages(); assert.deepEqual(h.calls[0][1], [first, last]); assert.equal(h.calls[0][1][0], first);
+  h.state.images = [last]; h.layer.drawImages(); assert.deepEqual(h.calls[1][1], [last]);
+  assert.equal(h.state.images.length, 1);
+});
+
+test('overlay priority is inspection then single selection then hover, without fallback after visibility rejection', () => {
+  const h = layerFixture(), inspected = { sketchId: 'other' }, selected = { sketchId: 'active' }, hovered = { sketchId: 'active' };
+  h.selection.inspection = { targets: [{ kind: 'line', item: selected }, { kind: 'referenceImage', item: inspected }] };
+  h.inspected.add(inspected); h.selection.referenceImages = [selected]; h.state.hover.referenceImage = hovered;
+  h.layer.drawOverlays(); assert.deepEqual(h.calls.at(-1).slice(1), [inspected, true, null]);
+  inspected.visible = false; h.layer.drawOverlays(); assert.equal(h.calls.at(-1)[1], null);
+  h.selection.inspection = null; h.layer.drawOverlays(); assert.equal(h.calls.at(-1)[1], selected);
+  h.selection.referenceImages = [selected, inspected]; h.layer.drawOverlays(); assert.equal(h.calls.at(-1)[1], hovered); assert.equal(h.calls.at(-1)[2], false);
+  h.state.hover.referenceImage = { sketchId: 'other' }; h.layer.drawOverlays(); assert.equal(h.calls.at(-1)[1], null);
+});
+
+test('calibration markers remain available without an eligible overlay and use current interaction data', () => {
+  const h = layerFixture(); h.state.calibration = [{ x: 1, y: 2 }];
+  h.layer.drawOverlays(); assert.equal(h.calls[0][1], null); assert.equal(h.calls[0][3], h.state.calibration);
+  h.state.calibration = [{ x: 3, y: 4 }, { x: 5, y: 6 }]; h.layer.drawOverlays(); assert.equal(h.calls[1][3], h.state.calibration);
+  assert.equal(h.selection.referenceImages.length, 0);
+});

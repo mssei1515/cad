@@ -6,6 +6,10 @@
 
 ## 現在の再開地点（2026-10-12）
 
+Reference Imageの可視対象収集とoverlay候補・selected flag・較正点の表示構成を既存ReferenceImageRenderer.createLayerへ集約。resource rendererを受け取りcache／ready／clearとpaintを共有し、現在画像・hover・較正点の照会を明示する。inspection→単一選択→hover、候補拒否後のfallbackなし、active Sketch／inspectionの資格、画像参照と順序、overlayがなくても較正点を描く動作を保持。元処理との本体一致と3つの境界テストで確認。app.jsは9,110→9,101行（9行減、今回の合計1,957行減）。構文444ファイル・単体1,216件・関連E2E141件成功（exit 0、2.1分）。ログはcad-image-layer-{check,unit,e2e}.log。全E2Eはこの単位では未実行。全体目標は未完了。
+
+### 前回の区切り
+
 Hatch境界のGeometry収集・除外幅・解決済みloop距離・選択可能な内部点の4照会を既存HatchGeometryQueryへ集約。boundaryGeometryを再利用し、既定線幅と現在倍率を数値照会callbackとして明示する。直接／Block投影の所有者と参照、派生投影のoverlay対象なし、有限線幅の最大値／fallback、閉じる辺・穴を含む距離、厳密な大なりの選択判定を保持する。元処理との本体一致と3つの境界テストで確認。app.jsは9,151→9,110行（41行減、今回の合計1,948行減）。初回関連E2Eは既存drawingOrderStateForTestへの除外幅照会接続漏れで2件失敗し、接続を修正した。修正後に構文444ファイル・単体1,213件・同じ関連E2E179件が成功（exit 0、2.6分）。ログはcad-hatch-boundary-query-{check,unit}.logとcad-hatch-boundary-query-fixed-e2e.log。全E2Eはこの単位では未実行。全体目標は未完了。
 
 ### 前回の区切り

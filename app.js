@@ -727,6 +727,10 @@
   const referenceImageRenderer = window.ReferenceImageRenderer.create({
     ctx, viewport, withCanvasState, createImage: () => new Image(), onImageLoad: draw, referenceImageCorners,
   });
+  const { drawImages: drawReferenceImages, drawOverlays: drawReferenceImageOverlays } = window.ReferenceImageRenderer.createLayer({
+    renderer: referenceImageRenderer, readImages: () => model.referenceImages, canvasSelection, readHover: () => canvasHover.current,
+    isVisibleValue, isVisibleSketchId, activeSketchId, readCalibrationPoints: () => referenceImageInteraction.calibrationPoints,
+  });
   const { drawingStackEntries, drawDrawingStack } = window.DrawingStack.create({
     currentScope: workspace.current, activeSketchId, geometryReads,
     isVisibleSketchId, isVisibleSketchElement, hatchAppearanceForDisplay, isVisibleValue,
@@ -2612,19 +2616,6 @@
   function drawResolvedHatch(...args) { return hatchLayer.drawResolvedHatch(...args); }
 
   function drawHatches(...args) { return hatchLayer.drawHatches(...args); }
-
-  function drawReferenceImages() {
-    referenceImageRenderer.drawImages(model.referenceImages.filter(item => isVisibleValue(item.visible) && isVisibleSketchId(item.sketchId)));
-  }
-
-  function drawReferenceImageOverlays() {
-    const item = canvasSelection.inspection?.targets.find(target => target.kind === "referenceImage")?.item || (canvasSelection.referenceImages.length === 1 ? canvasSelection.referenceImages[0] : canvasHover.current.referenceImage);
-    referenceImageRenderer.drawOverlays(
-      item && isVisibleValue(item.visible) && isVisibleSketchId(item.sketchId) && (item.sketchId === activeSketchId() || canvasSelection.inspectionContains(item)) ? item : null,
-      canvasSelection.referenceImages.includes(item) || canvasSelection.inspectionContains(item),
-      referenceImageInteraction.calibrationPoints,
-    );
-  }
 
   function drawBlockPlacementPreview() {
     if (mode !== "block-place" || !blockPlacementCommand.definitionId || !drawingPreview.pointer) return;
