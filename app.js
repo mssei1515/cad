@@ -4860,6 +4860,16 @@
         blockInstances: canvasSelection.blockInstances.map((instance) => instance.id),
       };
     }
+    const derivedInstanceInteraction = window.DerivedInstanceTestDriver.createInteraction({
+      currentScope: workspace.current, serializeModel, geometryInstanceBundle, constraintStatusColor, arcSweep, canvasSelection,
+      resolvedHatchBoundary, document, loadModelData, updateUI, draw, deleteElements, deleteCurrentSelection,
+    });
+    const derivedInstanceFixture = window.DerivedInstanceTestDriver.createFixture({
+      resetModelState, addCircle, addPoint, addLine, addArc, currentScope: workspace.current, DEFAULT_SKETCH_ID, DEFAULT_HATCH_APPEARANCE,
+      normalizeGeometryInstance, activeSketchId, geometryRefForItem, parseGeometryRefId, hatchGeometryQuery,
+      nextProjectionId: () => `SPI${sketchProjectionInstanceSeq++}`, nextMirrorId: () => `MI${mirrorInstanceSeq++}`, nextPatternId: () => `PI${patternInstanceSeq++}`,
+      resetHistory, updateUI, draw, readState: derivedInstanceInteraction.state,
+    });
     const clipboardTestObservation = window.ClipboardTestDriver.createObservation({
       currentScope: workspace.current, serializeModel, isRootSketch, elementSketchId, activeSketchId,
       readSelected: readTestSelectedGeometry, canvasSelection, clipboardSession, readHistory: readTestHistory,
@@ -4994,32 +5004,8 @@
       serializedModelForTest() {
         return structuredClone(serializeModel());
       },
-      loadModelForDerivedInstanceTest(data) {
-        loadModelData(structuredClone(data));
-        updateUI();
-        draw();
-        return this.derivedInstanceStateForTest();
-      },
-      resetForDerivedInstanceTest() {
-        resetModelState();
-        const sourceCircle = addCircle(addPoint(-25, -20, false, "endpoint"), 8, false);
-        model.sketches.push({ id: "S2", name: "Derived Target", parentSketchId: DEFAULT_SKETCH_ID, kind: "sketch", appearance: {}, constructionAppearance: {}, dimensionAppearance: {}, visible: true });
-        model.activeSketchId = "S2";
-        const sourceLine = addLine(addPoint(-40, 10, false, "endpoint"), addPoint(-10, 30, false, "endpoint"), false);
-        const sourceArc = addArc(addPoint(-55, -25, false, "endpoint"), 9, 3, 3.5, false);
-        const axis = addLine(addPoint(0, -50, false, "endpoint"), addPoint(0, 50, false, "endpoint"), true);
-        const direction = addLine(addPoint(20, -40, false, "endpoint"), addPoint(60, -40, false, "endpoint"), true);
-        const projection = normalizeGeometryInstance({ id: `SPI${sketchProjectionInstanceSeq++}`, type: "sketchProjection", sketchId: activeSketchId(), sources: [geometryRefForItem(sourceCircle)] });
-        const mirror = normalizeGeometryInstance({ id: `MI${mirrorInstanceSeq++}`, type: "mirror", sketchId: activeSketchId(), sources: [geometryRefForItem(sourceLine), parseGeometryRefId("circle", `${projection.id}@${sourceCircle.id}`), geometryRefForItem(sourceArc)], axis: geometryRefForItem(axis) });
-        const pattern = normalizeGeometryInstance({ id: `PI${patternInstanceSeq++}`, type: "pattern", sketchId: activeSketchId(), sources: [geometryRefForItem(sourceLine)], direction: geometryRefForItem(direction), spacing: 15, copies: 3, reversed: false });
-        model.geometryInstances.push(projection, mirror, pattern);
-        const projectedCircleFace = findHatchFaceInIndex(createHatchRegionIndex(hatchPrimitivesForScope(model, activeSketchId())), { x: sourceCircle.center.x, y: sourceCircle.center.y });
-        if (projectedCircleFace) model.hatches.push({ id: "H1", sketchId: activeSketchId(), seed: { x: sourceCircle.center.x, y: sourceCircle.center.y }, boundaryLoops: projectedCircleFace.boundaryLoops, appearance: { ...DEFAULT_HATCH_APPEARANCE } });
-        resetHistory("derived instance test");
-        updateUI();
-        draw();
-        return this.derivedInstanceStateForTest();
-      },
+      loadModelForDerivedInstanceTest: derivedInstanceInteraction.load,
+      resetForDerivedInstanceTest: derivedInstanceFixture.reset,
       resetForGeometryInstanceCommandTest() {
         resetModelState();
         const source = addLine(addPoint(-55, 15, false, "endpoint"), addPoint(-25, 35, false, "endpoint"), false);
@@ -5035,37 +5021,9 @@
           direction: this.worldClientPositionForTest({ x: (direction.p1.x + direction.p2.x) / 2, y: (direction.p1.y + direction.p2.y) / 2 }),
         };
       },
-      derivedInstanceStateForTest() {
-        return {
-          serialized: structuredClone(serializeModel()),
-          instances: model.geometryInstances.map((instance) => {
-            const bundle = geometryInstanceBundle(instance);
-            return {
-              id: instance.id,
-              type: instance.type,
-              valid: bundle.valid,
-              reason: bundle.reason,
-              points: bundle.points.map((point) => ({ id: point.id, x: point.x, y: point.y })),
-              lines: bundle.lines.map((line) => ({ id: line.id, p1: { x: line.p1.x, y: line.p1.y }, p2: { x: line.p2.x, y: line.p2.y }, color: constraintStatusColor(line) })),
-              circles: bundle.circles.map((circle) => ({ id: circle.id, center: { x: circle.center.x, y: circle.center.y }, radius: circle.radius(), color: constraintStatusColor(circle) })),
-              arcs: bundle.arcs.map((arc) => ({ id: arc.id, startAngle: arc.startAngle, endAngle: arc.endAngle, sweep: arcSweep(arc), color: constraintStatusColor(arc) })),
-            };
-          }),
-          selectedIds: canvasSelection.geometryInstances.map((instance) => instance.id),
-          selectedGeometry: canvasSelection.instanceGeometry ? { ...canvasSelection.instanceGeometry } : null,
-          hatchValidity: model.hatches.map((hatch) => resolvedHatchBoundary(hatch).ok),
-          treeCount: document.querySelectorAll('#sketchList [data-object-kind="instance"]').length,
-          propertiesText: document.getElementById("propertiesPanel")?.textContent || "",
-        };
-      },
-      deleteDerivedSourceForTest() {
-        const source = model.lines.find((line) => line.id === "L1");
-        return { deleted: source ? deleteElements({ lines: [source] }) : false, state: this.derivedInstanceStateForTest(), hint: document.getElementById("hint")?.textContent || "" };
-      },
-      deleteDerivedInstanceForTest(id) {
-        canvasSelection.set("geometryInstances", model.geometryInstances.filter((instance) => instance.id === id));
-        return { deleted: deleteCurrentSelection(), state: this.derivedInstanceStateForTest(), hint: document.getElementById("hint")?.textContent || "" };
-      },
+      derivedInstanceStateForTest: derivedInstanceInteraction.state,
+      deleteDerivedSourceForTest: derivedInstanceInteraction.deleteSource,
+      deleteDerivedInstanceForTest: derivedInstanceInteraction.deleteInstance,
       resetForSketchProjectionTest() {
         resetModelState();
         const sourceSketchId = DEFAULT_SKETCH_ID;

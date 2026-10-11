@@ -6,6 +6,10 @@
 
 ## 現在の再開地点（2026-10-12）
 
+派生Instanceのfixture／状態照会・読込・source／Instance削除の五つのテスト支援APIをDerivedInstanceTestDriverのcreateFixture／createInteractionへ分離。現在scopeと既存投影／削除・ID採番入口へ委譲し、Projection→Mirror→Patternの参照／採番順・Hatch生成・履歴／表示・clone／読込／削除後観測の順を保持する。独自モデル／seq／cacheを持たず、this経由のhook参照はDriver内stateと明示したreadStateへ置換。元の五つの本体との一致を確認し、classic script／構文／E2E読込一覧を更新。app.jsは8,567→8,525行（42行減、今回の合計2,533行減）。構文456ファイル・単体1,244件・関連E2E199件成功（exit 0、2.7分）。ログはcad-derived-instance-test-driver-{check,unit,e2e}.log。新しい単体テストは追加せず、利用する全9ファイルとunified-uiの既存E2Eで実利用を検証。全E2Eはこの単位では未実行。全体目標は未完了。
+
+### 前回の区切り
+
 Clipboardの状態照会／通常図形fixture／Block fixtureをClipboardTestDriverの三つの独立した生成入口へ分離。観測は九つの依存だけで動き、生成型・seq・描画依存を持たない。fixtureは既存Geometry／拘束・定義追加・ID採番・ClipboardSession／Selection・履歴／表示へ委譲し、現在scopeの再照会・保存→Geometry→選択→payload→履歴の順と結果を保持する。this経由のhook相互参照をreadState／readSelected／readHistoryへ置換し、共有test選択readerは旧selectedGeometryIdsForTestにも接続。三つの本体と選択readerの元処理との一致を確認し、classic script／構文／E2E読込一覧を更新。app.jsは8,634→8,567行（67行減、今回の合計2,491行減）。構文455ファイル・単体1,244件・関連E2E171件成功（exit 0、2.3分）。ログはcad-clipboard-test-driver-{check,unit,e2e}.log。新しい単体テストは追加せず、全利用箇所のsketch-tree-visibility／sketch-tree-delete／unified-uiとblocksの既存E2Eで実利用を検証。全E2Eはこの単位では未実行。全体目標は未完了。
 
 ### 前回の区切り
