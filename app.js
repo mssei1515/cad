@@ -593,6 +593,11 @@
     },
   });
   const { syncCanvasBitmapSize, resetCanvasStrokeState, withCanvasState, appearanceLineDash } = canvasSurface;
+  const canvasWorkspaceLayout = window.CanvasWorkspaceLayout.create({
+    canvas, document, viewport, syncCanvasBitmapSize, applySketchTreeWidth: () => applySketchTreeWidth(), draw,
+    isValueInputPending: () => pendingCommandSession.current && ["distance-value", "offset-value"].includes(pendingCommandSession.current.type),
+    syncDimensionValueInput: () => syncDimensionValueInput(), currentCanvasCenterWorld, applicationText, readLanguage: () => applicationSettings.language,
+  });
   const { DIMENSION_SCREEN_PX_PER_MM, DIMENSION_TERMINATOR_FIT_MARGIN_FACTOR, DIMENSION_ARROW_MITER_LIMIT } = window.DimensionMetrics;
   const dimensionMetrics = window.DimensionMetrics.create({ ctx, viewport });
   const dimensionInputView = window.DimensionInputView.create({
@@ -2014,38 +2019,8 @@
     log("サンプルを復元しました");
   }
 
-  function resizeCanvas(options = {}) {
-    const rect = canvas.getBoundingClientRect();
-    syncCanvasBitmapSize(rect.width, rect.height);
-    if (options.centerWorld && rect.width > 0 && rect.height > 0) {
-      viewport.update({ x: rect.width / 2 - options.centerWorld.x * viewport.scale });
-      viewport.update({ y: rect.height / 2 - options.centerWorld.y * viewport.scale });
-    }
-    applySketchTreeWidth();
-    draw();
-    if (pendingCommandSession.current && ["distance-value", "offset-value"].includes(pendingCommandSession.current.type)) syncDimensionValueInput();
-  }
-
-
-  function setPropertiesPanelCollapsed(collapsed) {
-    const workspace = document.querySelector(".workspace");
-    const button = document.getElementById("togglePropertiesPanelBtn");
-    if (!workspace || !button) return;
-    const centerWorld = currentCanvasCenterWorld();
-    const label = applicationText("プロパティ", "Properties");
-    workspace.classList.toggle("properties-collapsed", collapsed);
-    button.setAttribute("aria-expanded", String(!collapsed));
-    const actionLabel = applicationSettings.language === "en" ? `${collapsed ? "Expand" : "Collapse"} ${label}` : `${label}を${collapsed ? "展開" : "最小化"}`;
-    button.setAttribute("aria-label", actionLabel);
-    button.title = actionLabel;
-    resizeCanvas({ centerWorld });
-  }
-
-
-
-
-
-
+  function resizeCanvas(...args) { return canvasWorkspaceLayout.resizeCanvas(...args); }
+  function setPropertiesPanelCollapsed(...args) { return canvasWorkspaceLayout.setPropertiesPanelCollapsed(...args); }
 
   function formatDisplayNumber(value, maxFractionDigits = 10, snapTolerance = DIMENSION_DISPLAY_PRECISION) {
     const n = Number(value);

@@ -6,6 +6,10 @@
 
 ## 現在の再開地点（2026-10-12）
 
+Canvasのサイズ調整とPropertiesパネル開閉の表示構成をCanvasWorkspaceLayoutへ分離。bitmap同期・viewport中心保持・Tree幅適用・draw・値入力位置同期を既存所有者へ明示したportで接続する。中心はDOM更新前に取得し、pendingはdraw後に読む。空領域／中心指定なしのviewport維持、必要DOMなしの無変更、現在言語のARIA／titleを保持する。Treeと値入力の後期生成は遅延callbackで接続する。元処理との本体一致と4つの境界テストを確認し、classic script・構文・単体・E2E読込一覧を更新。app.jsは8,984→8,959行（25行減、今回の合計2,099行減）。構文446ファイル・単体1,229件・関連E2E147件成功（exit 0、2.2分）。ログはcad-workspace-layout-{check,unit,e2e}.log。全E2Eはこの単位では未実行。全体目標は未完了。
+
+### 前回の区切り
+
 Hatch／Reference Imageの内部領域hitを既存GeometryHitQuery.createRegionsへ集約。現在scope・通常選択mode・可視性・作図先とHatch列／owner順・既存幾何照会を明示する。Hatchのowner描画順と同順位の安定順、画像の配列逆順・回転／scale変換と辺を含むpixel矩形判定、activeOnlyの既定値、画像lockをhitで除外しない動作を保持する。元処理との本体一致と3つの境界テストで参照・順序・資格・変換を確認。app.jsは9,004→8,984行（20行減、今回の合計2,074行減）。構文444ファイル・単体1,225件・関連E2E197件成功（exit 0、2.8分）。ログはcad-region-hit-query-{check,unit,e2e}.log。全E2Eはこの単位では未実行。全体目標は未完了。
 
 ### 前回の区切り
