@@ -6,6 +6,10 @@
 
 ## 現在の再開地点（2026-10-11）
 
+ConstraintTargetCommandへ対象選択の開始・取消・確定要求と線長寸法完了を分離。Annotation委譲・権限・作図準備・同種toggle取消・session開始と選択整理・意図の配置／確定、取消時のUI更新とblurの順序を保持する。共有mode／作図draftの準備とDOM blurはappの限定adapterへ接続。状態・受入・案内の既存所有者を組み合わせ、Canvas hit／clickと実commitはまだ呼出側に残る。app.jsは10,537→10,463行（74行減、今回の合計595行減）。構文419ファイル・単体1,109件・関連E2E166件成功（exit 0、2.3分）。ログはcad-constraint-command-{check,unit,e2e}.log。全E2Eはこの単位では未実行。全体目標は未完了。
+
+### 前回の区切り
+
 ConstraintTargetSessionへpending拘束commandと順序付きoperand列の状態所有を集約。begin／append／resetと、commandだけ・operandだけの解除を区別し、appの2変数を撤去。入力・UI・描画・Annotation・診断の照会と更新をsessionへ接続し、受入拒否時の無変更と参照同一性を確認した。確定／取消の操作調整や共有modeは呼出側に残る。app.jsは10,541→10,537行（4行減、今回の合計521行減）。行数より状態更新の入口を揃えることを優先した単位。構文417ファイル・単体1,102件・関連E2E166件成功（exit 0、2.4分）。ログはcad-constraint-session-{check,unit,e2e}.log。全E2Eはこの単位では未実行。全体目標は未完了。
 
 ### 前回の区切り

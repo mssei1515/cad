@@ -3220,106 +3220,32 @@
   function constraintTargetHint(type) { return constraintFeedback.targetHint(type, constraintTargetSession.operands, applicationSettings.language, () => constraintLabel(type)); }
   function invalidConstraintTargetHint(type) { return constraintFeedback.invalidTargetHint(type, constraintTargetSession.operands, applicationSettings.language); }
 
-  function startConstraintTargetCommand(type) {
-    if (startAnnotationAnchorConstraint(type)) return;
-    if (!guardSketchEdit(activeSketchId(), "create") || !guardSelectionEdit("constraint")) return;
-    cancelPendingCommand("");
-    resetCenterlineCommandState();
-    resetSlotCommandState();
-    mode = "select";
-    lineCommand.reset();
-    rectangleCommand.reset();
-    filletCommand.reset();
-    circularCommands.resetCircle();
-    resetArcCommandState();
-    drawingPreview.reset();
-    updateToolbar();
-    if (constraintTargetSession.command?.type === type) {
-      cancelConstraintTargetCommand(`${constraintLabel(type)}の対象選択をキャンセルしました`);
-      return;
-    }
-    if (type === "symmetry") clearSelection();
-    constraintTargetSession.begin(type, type === "symmetry" ? [] : constraintOperandsFromSelection());
-    trimConstraintSelection(type);
-    if (constraintTargetSession.operands.length > 0) {
-      const resolution = resolveConstraintIntent(type, constraintTargetSession.operands);
-      if (resolution?.action === "place-dimension") {
-        startDistanceResolution(resolution, null);
-        return;
-      }
-      if (resolution?.action === "commit" && resolution.constraint) {
-        commitConstraintResolution(resolution);
-        return;
-      }
-      syncSelectionFromConstraintOperands();
-    }
-    updateToolbar();
-    updateConstraintButtons();
-    setHint(constraintTargetHint(type));
-    draw();
-  }
-
-  function cancelConstraintTargetCommand(message = "拘束対象の選択をキャンセルしました") {
-    if (mode === "centerline") resetCenterlineCommandState();
-    if (mode === "slot") resetSlotCommandState();
-    if (!constraintTargetSession.command) return;
-    constraintTargetSession.reset();
-    if (message) setHint(message);
-    updateConstraintButtons();
-    updateToolbar();
-    if (document.activeElement instanceof HTMLElement && document.activeElement.matches("[data-constraint], #fixPointBtn")) {
-      document.activeElement.blur();
-    }
-    draw();
-  }
-
-  function executeConstraintCommandIfReady() {
-    if (!constraintTargetSession.command) return false;
-    const type = constraintTargetSession.command.type;
-    if (constraintTargetSession.operands.length > 0) {
-      const resolution = resolveConstraintIntent(type, constraintTargetSession.operands);
-      if (resolution?.error) {
-        setHint(resolution.error, "error");
-        return false;
-      }
-      if (resolution?.action === "place-dimension") {
-        startDistanceResolution(resolution, null);
-        return true;
-      }
-      if (resolution?.action === "commit" && resolution.constraint) {
-        commitConstraintResolution(resolution);
-        return true;
-      }
-      setHint(constraintTargetHint(type));
-      return false;
-    }
-    if (!canCompleteConstraintCommand(type)) {
-      const target = type === "distance" ? distanceTargetFromSelection() : null;
-      if (target?.kind === "invalid") {
-        setHint(target.reason, "error");
-        return false;
-      }
-      if (target?.kind === "line-length") {
-        updateConstraintButtons();
-        startDistanceCommand();
-        return true;
-      }
-      setHint(constraintTargetHint(type));
-      return false;
-    }
-    updateConstraintButtons();
-    addConstraint(type);
-    return true;
-  }
-
-  function completePendingDimensionLineLength() {
-    if (constraintTargetSession.command?.type !== "distance") return false;
-    const target = distanceTargetFromSelection();
-    if (!target || target.kind !== "line-length") return false;
-    updateConstraintButtons();
-    startDistanceCommand();
-    return true;
-  }
+  const constraintTargetCommand = window.ConstraintTargetCommand.create({
+    session: constraintTargetSession, startAnnotationAnchorConstraint,
+    canStart: () => guardSketchEdit(activeSketchId(), "create") && guardSelectionEdit("constraint"),
+    prepareStart: () => {
+      cancelPendingCommand("");
+      resetCenterlineCommandState();
+      resetSlotCommandState();
+      mode = "select";
+      lineCommand.reset();
+      rectangleCommand.reset();
+      filletCommand.reset();
+      circularCommands.resetCircle();
+      resetArcCommandState();
+      drawingPreview.reset();
+    },
+    prepareCancel: () => { if (mode === "centerline") resetCenterlineCommandState(); if (mode === "slot") resetSlotCommandState(); },
+    constraintLabel, clearSelection, constraintOperandsFromSelection, trimConstraintSelection,
+    resolveConstraintIntent, startDistanceResolution, commitConstraintResolution, syncSelectionFromConstraintOperands,
+    updateToolbar, updateConstraintButtons, setHint, constraintTargetHint, draw,
+    blurConstraintControl: () => { if (document.activeElement instanceof HTMLElement && document.activeElement.matches("[data-constraint], #fixPointBtn")) document.activeElement.blur(); },
+    canCompleteConstraintCommand, distanceTargetFromSelection, startDistanceCommand, addConstraint,
+  });
+  function startConstraintTargetCommand(type) { return constraintTargetCommand.start(type); }
+  function cancelConstraintTargetCommand(message) { return constraintTargetCommand.cancel(message); }
+  function executeConstraintCommandIfReady() { return constraintTargetCommand.complete(); }
+  function completePendingDimensionLineLength() { return constraintTargetCommand.completeLineLength(); }
 
   function hitConstraintOperand(pointer, type, hits = {}) {
     const hitP = hits.hitP ?? hitPoint(pointer.x, pointer.y);
