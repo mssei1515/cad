@@ -82,3 +82,38 @@ test('reload clones saved data, converts version and observes replacement only a
   calls.length = 0; fail = true;
   assert.throws(() => command.reload(), /load failed/); assert.deepEqual(calls, ['load']);
 });
+
+test('transfer skips paste on copy refusal and observes live post-paste constraints and payload', () => {
+  const calls = [], state = { selected: true, copied: false, constraints: [{}] }, clipboardSession = { payload: null };
+  const command = sandbox.window.SketchProjectionTestDriver.createTransfer({
+    select: () => state.selected ? {} : null, readConstraints: () => state.constraints,
+    copySelectionToClipboard: () => { calls.push('copy'); return state.copied; },
+    pasteGeometryClipboard: () => { calls.push('paste'); state.constraints.push({}); clipboardSession.payload = { constraints: [{ type: 'sketchProjection' }, { type: 'distance' }] }; return {}; },
+    clipboardSession, readState: () => { calls.push('state'); return state.constraints.length; },
+  });
+  state.selected = false; assert.equal(command.copyAndPaste(), null); assert.deepEqual(calls, []);
+  state.selected = true; assert.equal(command.copyAndPaste().pasted, false); assert.deepEqual(calls, ['copy', 'state']);
+  calls.length = 0; state.copied = true;
+  const result = command.copyAndPaste();
+  assert.equal(result.before, 1); assert.equal(result.after, 2); assert.equal(result.pasted, true);
+  assert.equal(result.clipboardProjectionCount, 1); assert.equal(result.state, 2);
+  assert.deepEqual(calls, ['copy', 'paste', 'state']);
+});
+
+test('block transfer preserves selection references and returns validation errors before creating a definition', () => {
+  class Projection {}
+  const center = { x: 3, y: 4 }, selection = { externalConstraints: [new Projection(), {}] }, calls = [];
+  const command = sandbox.window.SketchProjectionTestDriver.createTransfer({
+    select: () => ({}), blockSelectionGeometry: () => selection, SketchProjectionConstraint: Projection,
+    blockSelectionBoundsCenter: value => { assert.equal(value, selection); return center; },
+    createBlockDefinitionFromSelection: (value, origin, name) => {
+      assert.equal(value, selection); assert.equal(origin, center); assert.equal(name, 'Projected Geometry Block'); calls.push('create');
+      return { constraints: [new Projection(), {}], lines: [{}], circles: [{}], arcs: [], splines: [{}] };
+    },
+  });
+  selection.error = 'invalid'; assert.equal(command.blockize().error, 'invalid'); assert.deepEqual(calls, []);
+  delete selection.error; const result = command.blockize();
+  assert.equal(result.error, null); assert.equal(result.geometryCount, 3);
+  assert.equal(result.projectionConstraintCount, 1); assert.equal(result.externalProjectionCount, 1);
+  assert.deepEqual(calls, ['create']);
+});

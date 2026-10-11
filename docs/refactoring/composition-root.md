@@ -6,6 +6,10 @@
 
 ## 現在の再開地点（2026-10-12）
 
+Sketch Projectionの資格fixtureを既存SketchProjectionTestDriver.createEligibilityFixtureへ、投影targetのコピー／貼付け・Block化の観測をcreateTransferへ分離。資格fixtureは現在scope・Geometry生成と既存資格判定へ委譲し、固定ID／座標・Hierarchy・activeSketch切替と照会順を保持する。転送は既存select・ClipboardSessionとcopy／paste・Block Selection／中心／定義作成へ接続し、コピー拒否時のpaste短絡、前後拘束数／Boolean化／現在payload→state、Block検証エラー時の作成中止、Definition／外部投影拘束の集計を維持する。thisによるhook参照をselect／readStateへ置換し、モデル／Selection／Clipboard／Definition／cacheを複製しない。元の三つの本体との一致を確認。app.jsは8,225→8,176行（49行減、今回の合計2,882行減）。構文461ファイル・単体1,254件・関連E2E186件成功（exit 0、3.5分）。転送の拒否／短絡・同一Selection参照・payloadと事後観測の単体2件、祖先／可視性／Root等の資格E2E1件を追加。テスト本体終了後の専用サーバー終了待ちは当該processを確認して終了し、正常終了を回収した。ログはcad-sketch-projection-transfer-driver-{check,unit,e2e}.log。Sketch Projectionテスト支援の実装本体は分離済みで、appには生成／接続と既存API名の対応付けが残る。全E2Eはこの単位では未実行。全体目標は未完了。
+
+### 前回の区切り
+
 Sketch Projectionのsource移動／形状・Spline構造変更とchain作成を既存SketchProjectionTestDriver.createSourceEditingへ、保存再読込をcreateReloadへ分離。source編集は現在scope／所属Sketch／拘束を照会して既存Point参照を変更し、target生成・参照metadata／拘束追加・同期と依存求解→UI→draw→stateへ委譲する。chainのupstream target同一参照、S4重複追加の回避、upstreamなしのnull、dependent求解の失敗判定を保持する。reloadは独立した六依存で保存値clone→版数Number変換→既存load→UI→draw→stateを保持し、Geometry生成／Solver依存を持たない。モデル／seq／cacheは複製せず、this経由のhook参照をreadStateへ置換。元の三つの処理本体との一致を確認。app.jsは8,271→8,225行（46行減、今回の合計2,833行減）。構文461ファイル・単体1,252件・関連E2E185件成功（exit 0、3.5分）。source形状／Spline構造の追随とchain参照の保存再読込のE2E2件、reloadのclone／変換・順序・load例外伝播の単体1件を追加した。最初のE2E起動は追加testの重複titleで収集に失敗し、重複分を除いて同じ対象を再実行し成功。テスト本体終了後の専用サーバー終了待ちは当該processを確認して終了し、正常終了を回収した。ログはcad-sketch-projection-source-driver-{check,unit,e2e,final-check,e2e-final}.log。全E2Eはこの単位では未実行。全体目標は未完了。
 
 ### 前回の区切り

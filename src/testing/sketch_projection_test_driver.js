@@ -397,5 +397,75 @@
     return Object.freeze({ reload });
   }
 
-  window.SketchProjectionTestDriver = Object.freeze({ createObservation, createGeometryFixture, createCompatibilityFixture, createBlockEditorFixture, createBlockProjectionFixture, createBlockProjectionInteraction, createGeometryInteraction, createSourceEditing, createReload });
+  function createEligibilityFixture({ resetModelState, currentScope, DEFAULT_SKETCH_ID, ROOT_SKETCH_ID, addPointToSketch, Line, sketchProjectionEntryFromOperand }) {
+    function read() {
+      resetModelState();
+      const addSketch = (id, parentSketchId) => currentScope().sketches.push({ id, name: id, parentSketchId, kind: "sketch", appearance: {}, constructionAppearance: {}, dimensionAppearance: {}, visible: true });
+      const makeLine = (id, sketchId, y, appearance = {}) => {
+        const p1 = addPointToSketch(-20, y, sketchId, "endpoint");
+        const p2 = addPointToSketch(20, y, sketchId, "endpoint");
+        const line = new Line(id, p1, p2, false);
+        line.sketchId = sketchId;
+        line.appearance = appearance;
+        currentScope().lines.push(line);
+        return line;
+      };
+      addSketch("S3", DEFAULT_SKETCH_ID);
+      addSketch("S4", DEFAULT_SKETCH_ID);
+      addSketch("S5", "S3");
+      const ancestor = makeLine("EL1", DEFAULT_SKETCH_ID, -30);
+      const hiddenAncestor = makeLine("EL2", DEFAULT_SKETCH_ID, -20, { visible: false });
+      const self = makeLine("EL3", "S3", -10);
+      const sibling = makeLine("EL4", "S4", 0);
+      const child = makeLine("EL5", "S5", 10);
+      const root = makeLine("EL6", ROOT_SKETCH_ID, 20);
+      currentScope().activeSketchId = "S3";
+      const eligible = (line) => Boolean(sketchProjectionEntryFromOperand({ kind: "line", line, sketchId: line.sketchId }));
+      return {
+        ancestor: eligible(ancestor),
+        hiddenAncestor: eligible(hiddenAncestor),
+        self: eligible(self),
+        sibling: eligible(sibling),
+        child: eligible(child),
+        root: eligible(root),
+      };
+    }
+    return Object.freeze({ read });
+  }
+
+  function createTransfer({ select, readConstraints, copySelectionToClipboard, pasteGeometryClipboard, clipboardSession, readState,
+    blockSelectionGeometry, createBlockDefinitionFromSelection, blockSelectionBoundsCenter, SketchProjectionConstraint }) {
+    function copyAndPaste(kind = "circle") {
+      const selected = select(kind);
+      if (!selected) return null;
+      const before = readConstraints().length;
+      const copied = copySelectionToClipboard();
+      const pasted = copied ? pasteGeometryClipboard() : false;
+      return {
+        copied,
+        pasted: Boolean(pasted),
+        before,
+        after: readConstraints().length,
+        clipboardProjectionCount: (clipboardSession.payload?.constraints || []).filter((constraint) => constraint.type === "sketchProjection").length,
+        state: readState(),
+      };
+    }
+
+    function blockize(kind = "spline") {
+      const selected = select(kind);
+      if (!selected) return null;
+      const selection = blockSelectionGeometry();
+      if (selection.error) return { error: selection.error };
+      const definition = createBlockDefinitionFromSelection(selection, blockSelectionBoundsCenter(selection), "Projected Geometry Block");
+      return {
+        error: null,
+        projectionConstraintCount: definition.constraints.filter((constraint) => constraint instanceof SketchProjectionConstraint).length,
+        geometryCount: definition.lines.length + definition.circles.length + definition.arcs.length + definition.splines.length,
+        externalProjectionCount: selection.externalConstraints.filter((constraint) => constraint instanceof SketchProjectionConstraint).length,
+      };
+    }
+    return Object.freeze({ copyAndPaste, blockize });
+  }
+
+  window.SketchProjectionTestDriver = Object.freeze({ createObservation, createGeometryFixture, createCompatibilityFixture, createBlockEditorFixture, createBlockProjectionFixture, createBlockProjectionInteraction, createGeometryInteraction, createSourceEditing, createReload, createEligibilityFixture, createTransfer });
 })();

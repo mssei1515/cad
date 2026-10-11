@@ -31,6 +31,11 @@ test('projection chain keeps its upstream target reference through normal save r
   expect(reloaded.sketches.filter(sketch => sketch.id === 'S4')).toHaveLength(1);
 });
 
+test('projection eligibility fixture respects ancestry, visibility and Root restrictions', async ({ page }) => {
+  const result = await page.evaluate(() => window.__jot2dTest.sketchProjectionEligibilityForTest());
+  expect(result).toEqual({ ancestor: true, hiddenAncestor: false, self: false, sibling: false, child: false, root: false });
+});
+
 for (const reloadSharedVersion19 of [false, true]) {
   test(`rectangle projection retains shared sources and independent target endpoints, legacy reload ${reloadSharedVersion19}`, async ({ page }) => {
     const state = await page.evaluate(options => window.__jot2dTest.resetForSketchProjectionRectangleTest(options), { reloadSharedVersion19 });

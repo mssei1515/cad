@@ -4907,6 +4907,14 @@
     const sketchProjectionReload = window.SketchProjectionTestDriver.createReload({
       CURRENT_JSON_VERSION, serializeModel, loadModelData, updateUI, draw, readState: sketchProjectionTestObservation.state,
     });
+    const sketchProjectionEligibilityFixture = window.SketchProjectionTestDriver.createEligibilityFixture({
+      resetModelState, currentScope: workspace.current, DEFAULT_SKETCH_ID, ROOT_SKETCH_ID, addPointToSketch, Line, sketchProjectionEntryFromOperand,
+    });
+    const sketchProjectionTransfer = window.SketchProjectionTestDriver.createTransfer({
+      select: sketchProjectionGeometryInteraction.select, readConstraints: sketchProjectionConstraints,
+      copySelectionToClipboard, pasteGeometryClipboard, clipboardSession, readState: sketchProjectionTestObservation.state,
+      blockSelectionGeometry, createBlockDefinitionFromSelection, blockSelectionBoundsCenter, SketchProjectionConstraint,
+    });
     const instanceCommandFixture = window.DerivedInstanceTestDriver.createCommandFixture({
       resetModelState, addPoint, addLine, focus: canvasTestDriver.focus, clientPosition: canvasTestDriver.clientPosition,
       resetHistory, updateUI, draw,
@@ -5064,38 +5072,7 @@
       resetForSketchProjectionTest: sketchProjectionGeometryFixture.reset,
       resetForSketchProjectionRectangleTest: sketchProjectionCompatibilityFixture.resetRectangle,
       resetForSketchProjectionSharedKindsTest: sketchProjectionCompatibilityFixture.resetSharedKinds,
-      sketchProjectionEligibilityForTest() {
-        resetModelState();
-        const addSketch = (id, parentSketchId) => model.sketches.push({ id, name: id, parentSketchId, kind: "sketch", appearance: {}, constructionAppearance: {}, dimensionAppearance: {}, visible: true });
-        const makeLine = (id, sketchId, y, appearance = {}) => {
-          const p1 = addPointToSketch(-20, y, sketchId, "endpoint");
-          const p2 = addPointToSketch(20, y, sketchId, "endpoint");
-          const line = new Line(id, p1, p2, false);
-          line.sketchId = sketchId;
-          line.appearance = appearance;
-          model.lines.push(line);
-          return line;
-        };
-        addSketch("S3", DEFAULT_SKETCH_ID);
-        addSketch("S4", DEFAULT_SKETCH_ID);
-        addSketch("S5", "S3");
-        const ancestor = makeLine("EL1", DEFAULT_SKETCH_ID, -30);
-        const hiddenAncestor = makeLine("EL2", DEFAULT_SKETCH_ID, -20, { visible: false });
-        const self = makeLine("EL3", "S3", -10);
-        const sibling = makeLine("EL4", "S4", 0);
-        const child = makeLine("EL5", "S5", 10);
-        const root = makeLine("EL6", ROOT_SKETCH_ID, 20);
-        model.activeSketchId = "S3";
-        const eligible = (line) => Boolean(sketchProjectionEntryFromOperand({ kind: "line", line, sketchId: line.sketchId }));
-        return {
-          ancestor: eligible(ancestor),
-          hiddenAncestor: eligible(hiddenAncestor),
-          self: eligible(self),
-          sibling: eligible(sibling),
-          child: eligible(child),
-          root: eligible(root),
-        };
-      },
+      sketchProjectionEligibilityForTest: sketchProjectionEligibilityFixture.read,
       resetForSketchProjectionBlockEditorTest: sketchProjectionBlockEditorFixture.reset,
       completeSketchProjectionBlockEditorForTest: sketchProjectionBlockEditorFixture.complete,
       resetForBlockProjectionSketchProjectionTest: sketchProjectionBlockFixture.reset,
@@ -5110,34 +5087,8 @@
       deleteSketchProjectionSourceGeometryForTest: sketchProjectionGeometryInteraction.deleteSource,
       deleteSketchProjectionTargetGeometryForTest: sketchProjectionGeometryInteraction.deleteTarget,
       deleteSketchProjectionSourceSketchForTest: sketchProjectionGeometryInteraction.deleteSourceSketch,
-      copySketchProjectionTargetForTest(kind = "circle") {
-        const selected = this.selectSketchProjectionTargetForTest(kind);
-        if (!selected) return null;
-        const before = sketchProjectionConstraints().length;
-        const copied = copySelectionToClipboard();
-        const pasted = copied ? pasteGeometryClipboard() : false;
-        return {
-          copied,
-          pasted: Boolean(pasted),
-          before,
-          after: sketchProjectionConstraints().length,
-          clipboardProjectionCount: (clipboardSession.payload?.constraints || []).filter((constraint) => constraint.type === "sketchProjection").length,
-          state: this.sketchProjectionStateForTest(),
-        };
-      },
-      blockizeSketchProjectionTargetForTest(kind = "spline") {
-        const selected = this.selectSketchProjectionTargetForTest(kind);
-        if (!selected) return null;
-        const selection = blockSelectionGeometry();
-        if (selection.error) return { error: selection.error };
-        const definition = createBlockDefinitionFromSelection(selection, blockSelectionBoundsCenter(selection), "Projected Geometry Block");
-        return {
-          error: null,
-          projectionConstraintCount: definition.constraints.filter((constraint) => constraint instanceof SketchProjectionConstraint).length,
-          geometryCount: definition.lines.length + definition.circles.length + definition.arcs.length + definition.splines.length,
-          externalProjectionCount: selection.externalConstraints.filter((constraint) => constraint instanceof SketchProjectionConstraint).length,
-        };
-      },
+      copySketchProjectionTargetForTest: sketchProjectionTransfer.copyAndPaste,
+      blockizeSketchProjectionTargetForTest: sketchProjectionTransfer.blockize,
       reloadSketchProjectionForTest: sketchProjectionReload.reload,
       referenceImageStateForTest() {
         return {
