@@ -432,7 +432,6 @@
     blockDefinitionEditError, blockDefinitionCyclePath } = blockEditingQueries;
 
   let dimensionExpressionMarkCapture = null;
-  let geometryClipboard = null;
   const HISTORY_LIMIT = 80;
   let commandPanel = null;
   let derivedPanel = null;
@@ -2640,10 +2639,11 @@
     return result.payload;
   }
 
-  function clipboardPayloadCount(payload = geometryClipboard) {
-    if (!payload) return 0;
-    return payload.points.length + payload.lines.length + payload.circles.length + payload.arcs.length + (payload.splines?.length || 0) + payload.blockInstances.length + (payload.hatches?.length || 0) + (payload.annotations?.length || 0) + (payload.referenceImages?.length || 0) + (payload.geometryInstances?.length || 0);
-  }
+  const clipboardSession = window.ClipboardSession.create({
+    pasteOffsetScreenPx: CLIPBOARD_PASTE_OFFSET_SCREEN_PX,
+    onCopyStored: () => { imageClipboard.markCopy(); updateToolbar(); },
+    deleteSelection: deleteCurrentSelection,
+  });
 
   function copySelectionToClipboard(options = {}) {
     if (!isGeometryMode()) return false;
@@ -2653,16 +2653,12 @@
       updateToolbar();
       return false;
     }
-    geometryClipboard = payload;
-    geometryClipboard.cut = Boolean(options.cut);
-    imageClipboard.markCopy();
-    updateToolbar();
+    const deleted = clipboardSession.copy(payload, options.cut);
     if (options.cut) {
-      const deleted = deleteCurrentSelection();
-      if (deleted) setHint(`図形をカットしました（${clipboardPayloadCount(payload)}要素）`);
+      if (deleted) setHint(`図形をカットしました（${clipboardSession.count(payload)}要素）`);
       return deleted;
     }
-    setHint(`図形をコピーしました（${clipboardPayloadCount(payload)}要素）`);
+    setHint(`図形をコピーしました（${clipboardSession.count(payload)}要素）`);
     return true;
   }
 
@@ -2684,7 +2680,7 @@
   });
 
   function pasteGeometryClipboard() {
-    if (!isGeometryMode() || !geometryClipboard) {
+    if (!isGeometryMode() || !clipboardSession.payload) {
       setHint("貼り付ける図形がありません", "error");
       return false;
     }
@@ -2693,7 +2689,7 @@
       return false;
     }
 
-    const payload = geometryClipboard;
+    const payload = clipboardSession.payload;
     if (payload.blockInstances.length > 0) {
       const invalid = payload.blockInstances.find((instance) => blockDefinitionScopeError(instance.definitionId));
       if (invalid) {
@@ -2702,10 +2698,8 @@
       }
     }
     const targetSketchId = activeSketchId();
-    const pasteNumber = payload.pasteCount + 1;
-    const offset = (CLIPBOARD_PASTE_OFFSET_SCREEN_PX * pasteNumber) / viewport.scale;
-    const dx = offset;
-    const dy = offset;
+    const pastePlan = clipboardSession.preparePaste(viewport.scale);
+    const { dx, dy } = pastePlan;
     const checkpoint = clipboardPasteCheckpoint.capture(model);
 
     try {
@@ -2800,10 +2794,10 @@
         blockInstances: pastedBlockInstances, annotations: pastedAnnotations, hatches: pastedHatches,
         geometryInstances: pastedGeometryInstances, referenceImages: pastedImages,
       });
-      payload.pasteCount = pasteNumber;
+      clipboardSession.recordPaste(pastePlan);
       mode = "select";
       solveAndRefresh("貼り付け");
-      setHint(`${sketchName(targetSketchId)} に図形を貼り付けました（${clipboardPayloadCount(payload)}要素）`);
+      setHint(`${sketchName(targetSketchId)} に図形を貼り付けました（${clipboardSession.count(payload)}要素）`);
       return true;
     } catch (error) {
       checkpoint.rollback();
@@ -6755,7 +6749,7 @@
         canvasSelection.set("splines", [source]);
         canvasSelection.set("annotations", annotation ? [annotation] : []);
         const payload = copyableSelectionPayload();
-        geometryClipboard = payload;
+        clipboardSession.replaceForDiagnostics(payload);
         const pasted = payload && pasteGeometryClipboard() ? model.splines.find((item) => item !== source) : null;
         const sourceAnnotation = annotation ? model.annotations.find((item) => item.id === annotation.id) || null : null;
         const pastedAnnotation = annotation ? model.annotations.find((item) => item.id !== annotation.id) || null : null;
@@ -7020,7 +7014,7 @@
         const missingCopyAccepted = Boolean(copyableSelectionPayload());
         canvasSelection.set("lines", boundaryLines);
         const payload = copyableSelectionPayload();
-        geometryClipboard = payload;
+        clipboardSession.replaceForDiagnostics(payload);
         const pasteAccepted = Boolean(payload && pasteGeometryClipboard());
         const pasted = model.hatches.find((item) => item !== hatch);
         const pastedRefs = pasted ? hatchBoundaryGeometryRefs(pasted.boundaryLoops).map(geometryRefId) : [];
@@ -7112,7 +7106,7 @@
       },
       resetForGeometryClipboardTest() {
         resetModelState();
-        geometryClipboard = null;
+        clipboardSession.clear();
         viewport.update({ scale: 1 });
         model.sketches.push({ id: "S2", name: "Sketch-2", parentSketchId: ROOT_SKETCH_ID, kind: "sketch", visible: true });
         const p1 = addPoint(-120, -30, true, "endpoint");
@@ -7144,7 +7138,7 @@
       },
       resetForBlockClipboardTest() {
         resetModelState();
-        geometryClipboard = null;
+        clipboardSession.clear();
         viewport.update({ scale: 1 });
         model.sketches.push({ id: "S2", name: "Sketch-2", parentSketchId: ROOT_SKETCH_ID, kind: "sketch", visible: true });
         const definition = createEmptyBlockDefinition("Clipboard Block");
@@ -7185,15 +7179,15 @@
           constraints: serialized.constraints.map((item) => ({ type: item.type, sketchId: item.sketchId, line: item.line || null, reference: Boolean(item.reference), dimension: item.dimension || null })),
           selected: this.selectedGeometryIdsForTest(),
           selectedBlockInstanceIds: canvasSelection.blockInstances.map((item) => item.id),
-          clipboard: geometryClipboard ? {
-            pasteCount: geometryClipboard.pasteCount,
-            points: geometryClipboard.points.length,
-            lines: geometryClipboard.lines.length,
-            circles: geometryClipboard.circles.length,
-            arcs: geometryClipboard.arcs.length,
-            splines: geometryClipboard.splines.length,
-            constraints: geometryClipboard.constraints.length,
-            blockInstances: geometryClipboard.blockInstances.length,
+          clipboard: clipboardSession.payload ? {
+            pasteCount: clipboardSession.payload.pasteCount,
+            points: clipboardSession.payload.points.length,
+            lines: clipboardSession.payload.lines.length,
+            circles: clipboardSession.payload.circles.length,
+            arcs: clipboardSession.payload.arcs.length,
+            splines: clipboardSession.payload.splines.length,
+            constraints: clipboardSession.payload.constraints.length,
+            blockInstances: clipboardSession.payload.blockInstances.length,
           } : null,
           history: this.historyState(),
         };
@@ -7663,7 +7657,7 @@
           pasted: Boolean(pasted),
           before,
           after: sketchProjectionConstraints().length,
-          clipboardProjectionCount: (geometryClipboard?.constraints || []).filter((constraint) => constraint.type === "sketchProjection").length,
+          clipboardProjectionCount: (clipboardSession.payload?.constraints || []).filter((constraint) => constraint.type === "sketchProjection").length,
           state: this.sketchProjectionStateForTest(),
         };
       },

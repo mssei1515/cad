@@ -6,6 +6,10 @@
 
 ## 現在の再開地点（2026-10-11）
 
+ClipboardSessionへコピー内容・cut保持・要素数・貼付け位置／回数の状態所有を分離。コピー通知→切取り削除、失敗時のpayload保持、求解前の回数更新を維持。診断hookの代入と消去もsession APIへ接続。app.jsは10,923→10,917行（6行減）。構文405ファイル・単体1,058件・関連E2E171件成功（exit 0、2.2分）。ログはcad-clipboard-session-{check,unit,e2e}.log。全E2Eはこの単位では未実行。全体目標は未完了。
+
+### 前回の区切り
+
 CanvasSelectionへ貼付け後の生成IDと実オブジェクトによる選択復元を集約。種別フィルタと注記／Hatchの選択ID限定、Instance／画像全体選択を維持。呼出側で先に選択関連UIを解除する。app.jsは10,930→10,923行（7行減）。構文403ファイル・単体1,054件・関連E2E171件成功（exit 0、2.2分）。ログはcad-clipboard-selection-{check,unit,e2e}.log。全E2Eはこの単位では未実行。全体目標は未完了。
 
 ### 前回の区切り
