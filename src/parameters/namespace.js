@@ -73,6 +73,48 @@
       return `d${index}`;
     }
 
+    // Reserve all copied symbols before rewriting expressions that reference one another.
+    function prepareCopiedSymbols(payload, pastedAnnotations, namespace, sameNamespace) {
+      const copiedDimensionNames = new Map();
+      for (const source of payload.constraints) {
+        if (!source.parameterName) continue;
+        const keepCutName = payload.cut && sameNamespace
+          && !symbolElementsInNamespace(namespace).some((constraint) => constraint.parameterName === source.parameterName)
+          && !(namespace.parameters || []).some((parameter) => parameter.name === source.parameterName);
+        copiedDimensionNames.set(source.parameterName, keepCutName ? source.parameterName : allocateDimensionParameterName(namespace));
+      }
+      (payload.annotations || []).forEach((source, index) => {
+        const annotation = pastedAnnotations[index];
+        if (!annotation?.parameterEnabled) return;
+        const nextName = allocateDimensionParameterName(namespace);
+        if (source.parameterName) copiedDimensionNames.set(source.parameterName, nextName);
+        annotation.parameterName = nextName;
+      });
+      (payload.annotations || []).forEach((source, index) => {
+        const annotation = pastedAnnotations[index];
+        if (!annotation?.parameterEnabled) return;
+        annotation.expression = sameNamespace ? rewriteParameterIdentifiers(source.expression || "0", copiedDimensionNames) : String(Number(source.parameterValue) || 0);
+      });
+      return copiedDimensionNames;
+    }
+
+    function serializedDimensionExpressionValue(data) {
+      const value = Number(data?.target);
+      return data?.type === "lineAngle" ? angleDegrees(value) : value;
+    }
+
+    function rewriteCopiedConstraintSymbol(data, source, copiedDimensionNames, sameNamespace) {
+      if (source.parameterName) {
+        data.parameterName = copiedDimensionNames.get(source.parameterName);
+        if (!data.readOnlyDimension) {
+          data.expression = sameNamespace
+            ? rewriteParameterIdentifiers(source.expression || String(serializedDimensionExpressionValue(source)), copiedDimensionNames)
+            : String(serializedDimensionExpressionValue(source));
+        }
+      }
+      return data;
+    }
+
     function ensureDimensionParameter(constraint, namespace = currentParameterNamespace()) {
       if (!isDimensionConstraint(constraint) && constraint.parameterEnabled !== true) return constraint;
       if (!constraint.parameterName) constraint.parameterName = allocateDimensionParameterName(namespace);
@@ -288,7 +330,7 @@
       evaluateDimensionExpressionDraft, renameDimension, dimensionExpressionValue, numericDimensionExpression, isDirectNumericExpressionInput,
       dimensionUsesExpression, expressionInputValue, expressionFromUserInput,
       rewriteExpressionInputIdentifiers, dimensionConstraintsInNamespace, symbolElementsInNamespace, allocateDimensionParameterName,
-      ensureDimensionParameter, ensureParameterNamespace, parameterErrorText,
+      prepareCopiedSymbols, rewriteCopiedConstraintSymbol, ensureDimensionParameter, ensureParameterNamespace, parameterErrorText,
       referenceDimensionValues, validateParameterSymbolNames, evaluateParameterNamespace,
       validateParameterNamespace, prepareLoadedParameterNamespace, parameterDependents, symbolDeletionDependents,
     });

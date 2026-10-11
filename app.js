@@ -2683,11 +2683,6 @@
     },
   });
 
-  function serializedDimensionExpressionValue(data) {
-    const value = Number(data?.target);
-    return data?.type === "lineAngle" ? angleDegrees(value) : value;
-  }
-
   function pasteGeometryClipboard() {
     if (!isGeometryMode() || !geometryClipboard) {
       setHint("貼り付ける図形がありません", "error");
@@ -2809,36 +2804,10 @@
       }
       const targetNamespaceKey = currentBlockDefinitionScopeId() ? `block:${currentBlockDefinitionScopeId()}` : "document";
       const sameNamespace = payload.parameterNamespaceKey === targetNamespaceKey;
-      const copiedDimensionNames = new Map();
-      for (const source of payload.constraints) {
-        if (!source.parameterName) continue;
-        const keepCutName = payload.cut && sameNamespace
-          && !parameterNamespace.symbolElementsInNamespace(currentParameterNamespace()).some((constraint) => constraint.parameterName === source.parameterName)
-          && !(currentParameterNamespace().parameters || []).some((parameter) => parameter.name === source.parameterName);
-        copiedDimensionNames.set(source.parameterName, keepCutName ? source.parameterName : allocateDimensionParameterName(currentParameterNamespace()));
-      }
-      (payload.annotations || []).forEach((source, index) => {
-        const annotation = pastedAnnotations[index];
-        if (!annotation?.parameterEnabled) return;
-        const nextName = allocateDimensionParameterName(currentParameterNamespace());
-        if (source.parameterName) copiedDimensionNames.set(source.parameterName, nextName);
-        annotation.parameterName = nextName;
-      });
-      (payload.annotations || []).forEach((source, index) => {
-        const annotation = pastedAnnotations[index];
-        if (!annotation?.parameterEnabled) return;
-        annotation.expression = sameNamespace ? rewriteParameterIdentifiers(source.expression || "0", copiedDimensionNames) : String(Number(source.parameterValue) || 0);
-      });
+      const copiedDimensionNames = parameterNamespace.prepareCopiedSymbols(payload, pastedAnnotations, currentParameterNamespace(), sameNamespace);
       for (const source of payload.constraints) {
         const data = translatedClipboardConstraintData(source, idMap, dx, dy);
-        if (source.parameterName) {
-          data.parameterName = copiedDimensionNames.get(source.parameterName);
-          if (!data.readOnlyDimension) {
-            data.expression = sameNamespace
-              ? rewriteParameterIdentifiers(source.expression || String(serializedDimensionExpressionValue(source)), copiedDimensionNames)
-              : String(serializedDimensionExpressionValue(source));
-          }
-        }
+        parameterNamespace.rewriteCopiedConstraintSymbol(data, source, copiedDimensionNames, sameNamespace);
         const constraint = deserializeConstraint(data, pointById, lineById, primitiveById);
         if (!constraint) throw new Error(`拘束 ${source.type} を複製できません`);
         constraint.sketchId = targetSketchId;
