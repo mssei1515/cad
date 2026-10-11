@@ -64,6 +64,32 @@
       else items.push(item);
     }
 
+    function discardDeletedGeometry({ pointSet, lineSet, circleSet, arcSet, splineSet }, retainedAnnotations) {
+      set("annotations", state.annotations.filter((annotation) => retainedAnnotations.includes(annotation)));
+      set("points", state.points.filter((p) => !pointSet.has(p)));
+      set("lines", state.lines.filter((l) => !lineSet.has(l)));
+      set("circles", state.circles.filter((c) => !circleSet.has(c)));
+      set("arcs", state.arcs.filter((a) => !arcSet.has(a)));
+      set("splines", state.splines.filter((spline) => !splineSet.has(spline)));
+    }
+    function discardDeletedConstraints(constraintSet) {
+      set("dimensionConstraints", state.dimensionConstraints.filter(item => !constraintSet.has(item)));
+      if (constraintSet.has(state.constraint)) set("constraint", null);
+    }
+
+    function applyClipboard(selectedIds, { idMap, pointById, lineById, primitiveById }, pasted) {
+      set("points", selectedIds.points.map((id) => pointById.get(idMap.get(id))).filter(Boolean));
+      set("lines", selectedIds.lines.map((id) => lineById.get(idMap.get(id))).filter(Boolean));
+      set("circles", selectedIds.circles.map((id) => primitiveById.get(idMap.get(id))).filter((item) => item instanceof Circle));
+      set("arcs", selectedIds.arcs.map((id) => primitiveById.get(idMap.get(id))).filter((item) => item instanceof Arc));
+      set("splines", (selectedIds.splines || []).map((id) => primitiveById.get(idMap.get(id))).filter((item) => item instanceof Spline));
+      set("blockInstances", pasted.blockInstances);
+      set("annotations", (selectedIds.annotations || []).map((id) => pasted.annotations.find((annotation) => annotation.id === idMap.get(id))).filter(Boolean));
+      set("hatches", (selectedIds.hatches || []).map((id) => pasted.hatches.find((hatch) => hatch.id === idMap.get(id))).filter(Boolean));
+      set("geometryInstances", pasted.geometryInstances);
+      set("referenceImages", pasted.referenceImages);
+    }
+
     function applyRectangle(candidates, additive = false) {
       clearTreeSelection();
       for (const field of ["points", "lines", "circles", "arcs", "splines", "blockInstances", "geometryInstances", "annotations", "hatches", "referenceImages", "dimensionConstraints"]) {
@@ -121,6 +147,19 @@
         if (additive && state.splines.includes(hit.item)) state.splines = state.splines.filter((item) => item !== hit.item);
         else if (!state.splines.includes(hit.item)) state.splines.push(hit.item);
       }
+    }
+
+    function applyConstraintTargets(targets) {
+      set("points", targets.points);
+      set("lines", targets.lines);
+      set("circles", targets.circles);
+      set("arcs", targets.arcs);
+      set("splines", targets.splines);
+      set("arcEndpointPair", targets.arcEndpointPair);
+      set("arcEndpoint", targets.arcEndpoint);
+      set("blockInstances", []);
+      set("geometryInstances", []);
+      set("instanceGeometry", null);
     }
 
     function currentConstraintTargets() {
@@ -335,8 +374,8 @@
     // Read views retain geometry identity. Mutations go through this instance's API.
     const api = {
       toggleDimensionConstraint: item => { if (!item) return; clearTreeSelection(); state.constraint = null; const index = state.dimensionConstraints.indexOf(item); if (index < 0) state.dimensionConstraints.push(item); else state.dimensionConstraints.splice(index, 1); },
-      inspectionContains, selectInspection, selectedDragPoints, selectedElementCount, set, clear, append, removeAt, toggleById, applyRectangle,
-      selectedGeometryItems, appearanceSelectionTarget, setGeometrySelection, currentConstraintTargets,
+      inspectionContains, selectInspection, selectedDragPoints, selectedElementCount, set, clear, append, removeAt, toggleById, applyRectangle, applyClipboard, discardDeletedGeometry, discardDeletedConstraints,
+      selectedGeometryItems, appearanceSelectionTarget, setGeometrySelection, applyConstraintTargets, currentConstraintTargets,
       hasPrimaryCanvasSelection, effectiveSelectedConstraint, selectedPrimitives,
       togglePointSelection, toggleLineSelection, toggleCircleSelection, toggleArcSelection,
       toggleSplineSelection, toggleBlockInstanceSelection, selectedConstructionTogglePrimitives,

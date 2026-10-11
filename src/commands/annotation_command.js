@@ -24,7 +24,7 @@
       if (rejectRootSketchCreation()) return;
       prepare(); cancelPendingCommand(""); clearSelection();
       setPending({ annotationDraft: true, type: withLeader ? "annotation-leader-select" : "annotation-text-place",
-        withLeader, text: "", style: {}, visible: true, parameterEnabled: false, parameterName: nextParameterName(), expression: "0", pointer: lastPointer() || { x: 0, y: 0 } });
+        withLeader, text: "", anchorPosition: "left-middle", style: {}, visible: true, parameterEnabled: false, parameterName: nextParameterName(), expression: "0", pointer: lastPointer() || { x: 0, y: 0 } });
       updateUI(); refresh();
     }
     function changeSetting(key, value) {
@@ -33,6 +33,7 @@
       draft.error = "";
       if (["text", "parameterName", "expression"].includes(key)) draft[key] = String(value);
       if (key === "visible") draft.visible = Boolean(value);
+      if (key === "anchorPosition" && window.AnnotationAnchorConstraints.POSITIONS.includes(value)) draft.anchorPosition = value;
       if (key === "parameterEnabled" && Boolean(value) !== draft.parameterEnabled) {
         if (value) draft.style.prefix = draft.text;
         else draft.text = draft.style.prefix || "";
@@ -58,7 +59,7 @@
     function content() {
       const draft = getPending();
       const item = { type: draft.withLeader ? "leader" : "text", sketchId: activeSketchId(),
-        text: draft.text, style: { ...draft.style }, visible: draft.visible !== false, appearanceInheritance: true, rotation: 0 };
+        text: draft.text, anchorPosition: draft.anchorPosition || "left-middle", style: { ...draft.style }, visible: draft.visible !== false, appearanceInheritance: true, rotation: 0 };
       if (draft.parameterEnabled) {
         item.parameterEnabled = true; item.parameterName = draft.parameterName.trim();
         try { const result = validateParameter(draft); item.expression = result.expression; item.evaluatedParameterValue = result.value; }
@@ -128,7 +129,7 @@
         const right = { x: metrics.bounds.x2, y: left.y };
         const start = currentAnchor(draft.leaderTarget);
         const leftNear = Math.hypot(start.x - left.x, start.y - left.y) <= Math.hypot(start.x - right.x, start.y - right.y);
-        const result = { ...source, type: "leader", appearanceInheritance: true, style: storedStyle, textPlacement: "text",
+        const result = { ...source, type: "leader", appearanceInheritance: true, style: storedStyle, textPlacement: source.anchorPosition ? "anchor" : "text",
           start, elbow: leftNear ? left : right, end: leftNear ? right : left,
           geometryRef: draft.leaderTarget.geometryRef, attachment: draft.leaderTarget.attachment };
         result.shelfReferenceScale = referenceScale(result);
@@ -153,7 +154,12 @@
     function place() {
       const draft = getPending();
       if (!active() || draft.editId || !validContent() || !(draft.withLeader ? draft.end : draft.position)) return false;
-      const item = pushAnnotation(preview());
+      const placed = preview();
+      if (placed.type === "leader" && placed.anchorPosition) {
+        const layout = annotationTextLayout(placed);
+        placed.x = layout.anchorX ?? layout.x; placed.y = layout.anchorY ?? layout.y; placed.textPlacement = "anchor";
+      }
+      const item = pushAnnotation(placed);
       if (!item) return false;
       if (item.parameterEnabled) commitParameter(item);
       lastWithLeader = draft.withLeader;
@@ -191,7 +197,7 @@
       const position = annotationTextLayout(item) || annotationLeaderDisplayGeometry(item) || item;
       const style = preservedStyle(item);
       const rotation = item.appearanceInheritance ? effectiveAnnotationStyle(item).rotation || 0 : Number(item.rotation) || 0;
-      Object.assign(item, { type: "text", x: position.x, y: position.y, rotation,
+      Object.assign(item, { type: "text", x: item.anchorPosition ? position.anchorX : position.x, y: item.anchorPosition ? position.anchorY : position.y, rotation,
         appearanceInheritance: true, style });
       for (const key of ["geometryRef", "attachment", "start", "elbow", "end", "textPlacement", "shelfReferenceScale"]) delete item[key];
       recordHistory("引出線解除"); updateUI(); refresh(); return true;

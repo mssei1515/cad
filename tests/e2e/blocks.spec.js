@@ -1,5 +1,33 @@
 const { test, expect, openTestDocument, completeBlockEdit } = require("./test-fixture");
 
+test('projection block editor fixture completes in its draft without adding host geometry', async ({ page }) => {
+  await openTestDocument(page);
+  const fixture = await page.evaluate(() => window.__jot2dTest.resetForSketchProjectionBlockEditorTest());
+  expect(Number.isFinite(fixture.client.x) && Number.isFinite(fixture.client.y)).toBe(true);
+  expect(await page.evaluate(() => window.__jot2dTest.blockEditorState())).toMatchObject({ editing: true, editorLineCount: 1, hostLineCount: 0 });
+  const result = await page.evaluate(() => window.__jot2dTest.completeSketchProjectionBlockEditorForTest());
+  expect(result.completed).toBe(true);
+  expect(result.serialized.lines).toHaveLength(0);
+  expect(result.serialized.blockDefinitions).toHaveLength(1);
+  expect(result.serialized.blockDefinitions[0].lines[0].id).toBe(fixture.lineId);
+  expect(result.serialized.blockDefinitions[0].sketches.some(sketch => sketch.id === 'S3')).toBe(true);
+});
+
+test('block projection fixture moves and deletes its instance while retaining the source definition', async ({ page }) => {
+  await openTestDocument(page);
+  const fixture = await page.evaluate(() => window.__jot2dTest.resetForBlockProjectionSketchProjectionTest());
+  expect(Number.isFinite(fixture.client.x) && Number.isFinite(fixture.client.y)).toBe(true);
+  const moved = await page.evaluate(() => window.__jot2dTest.moveBlockProjectionSketchProjectionSourceForTest());
+  expect(moved.success).toBe(true);
+  expect(moved.state.serialized.blockInstances[0]).toMatchObject({ id: fixture.instanceId, x: 28, y: 4, rotation: Math.PI / 2 });
+  const deleted = await page.evaluate(() => window.__jot2dTest.deleteBlockProjectionSketchProjectionSourceForTest());
+  expect(deleted.deleted).toBe(true);
+  expect(deleted.state.serialized.blockInstances).toHaveLength(0);
+  expect(deleted.state.serialized.blockDefinitions).toHaveLength(1);
+  expect(deleted.state.serialized.blockDefinitions[0].lines[0].id).toBe('BL1');
+  expect(await page.evaluate(() => window.__jot2dTest.moveBlockProjectionSketchProjectionSourceForTest())).toBeNull();
+});
+
 async function openBlockDefinitions(page) {
   const dialog = page.locator("#blockDefinitionsDialog");
   if (!(await dialog.isVisible())) {
@@ -626,7 +654,7 @@ test("creates, places, drags, edits, and reloads local-coordinate blocks", async
   expect(edited.lengths[1]).toBeCloseTo(edited.lengths[0], 6);
 
   const reloaded = await page.evaluate(() => window.__jot2dTest.reloadBlockState());
-  expect(reloaded).toEqual({ definitions: 1, instances: 2, projectionLines: 8, serializedVersion: 24 });
+  expect(reloaded).toEqual({ definitions: 1, instances: 2, projectionLines: 8, serializedVersion: 25 });
 
   await openBlockDefinitions(page);
   await page.click(".blockDeleteBtn");
@@ -1224,7 +1252,7 @@ test("legacy block data migrates into an internal Sketch-1 without changing proj
 
   const before = await page.evaluate(() => window.__jot2dTest.blockState());
   const migrated = await page.evaluate(() => window.__jot2dTest.reloadLegacyBlockState());
-  expect(migrated.version).toBe(24);
+  expect(migrated.version).toBe(25);
   expect(migrated.origin).toEqual({ x: 0, y: 0 });
   expect(migrated.sketches).toEqual([
     expect.objectContaining({ id: "ROOT", kind: "root" }),

@@ -1,7 +1,7 @@
 /* Transform copied values and reconnect projection IDs; no selection, paste session or history. */
 (() => {
   "use strict";
-  function create({ blockProjectionBundle, blockProjectionLocalId }) {
+  function create({ blockProjectionBundle, blockProjectionLocalId, resolveGeometryRef, geometryInstanceSourcePoints, geometryInstanceBundle, applicationText }) {
     function remapClipboardValue(value, idMap) {
       if (typeof value === "string") return idMap.get(value) || value;
       if (Array.isArray(value)) return value.map((item) => remapClipboardValue(item, idMap));
@@ -27,6 +27,31 @@
       if (!ref) return ref;
       const mapped = idMap.get(ref.path.join("@"));
       return { kind: ref.kind, path: mapped ? mapped.split("@") : ref.path.flatMap(id => (idMap.get(id) || id).split("@")) };
+    }
+
+    function translateAnnotation(annotation, idMap, dx, dy) {
+      annotation.x += dx;
+      annotation.y += dy;
+      for (const key of ["start", "elbow", "end"]) if (annotation[key]) annotation[key] = { x: annotation[key].x + dx, y: annotation[key].y + dy };
+      if (annotation.geometryRef) annotation.geometryRef = remapGeometryRef(annotation.geometryRef, idMap);
+      if (annotation.anchorConstraints) annotation.anchorConstraints = annotation.anchorConstraints.map(relation => relation.type === "fixed" ? { ...relation, x: relation.x + dx, y: relation.y + dy } : { ...relation, geometryRef: remapGeometryRef(relation.geometryRef, idMap), ...(relation.axisRef ? { axisRef: remapGeometryRef(relation.axisRef, idMap) } : {}) });
+      return annotation;
+    }
+
+    function copiedHatch(source, idMap, targetSketchId, dx, dy) {
+      const boundaryLoops = window.HatchRegionEngine.rewriteBoundaryRefs(source.boundaryLoops, ref => {
+        const mappedId = idMap.get(window.GeometryRef.id(ref));
+        return mappedId ? window.GeometryRef.create(ref.kind, mappedId) : null;
+      });
+      if (!boundaryLoops) return null;
+      return { ...window.HatchData.serializeHatch(source), id: idMap.get(source.id), sketchId: targetSketchId,
+        seed: { x: Number(source.seed?.x) + dx, y: Number(source.seed?.y) + dy }, boundaryLoops };
+    }
+
+    function translateReferenceImage(image, dx, dy) {
+      image.x += dx;
+      image.y += dy;
+      return image;
     }
 
     function copiedGeometryInstance(source, idMap, targetSketchId, dx, dy) {
@@ -58,6 +83,32 @@
       return { x: source.origin.x + delta.x, y: source.origin.y + delta.y };
     }
 
+    function reconnectDerivedInstances(copiedInstances, instances, pointById, lineById, primitiveById) {
+      // Re-evaluate from upstream to downstream so projected sources do not add a false offset.
+      for (let pass = 0; pass < instances.length; pass++) {
+        let changed = false;
+        instances.forEach((instance, index) => {
+          if (instance.type !== 'free') return;
+          const origin = copiedFreeOrigin(copiedInstances[index], instance, ref => {
+            const item = resolveGeometryRef(ref);
+            const points = geometryInstanceSourcePoints(item);
+            return points.length ? points : item?.seed ? [item.seed] : [];
+          });
+          if (Math.abs(origin.x - instance.origin.x) > 1e-8 || Math.abs(origin.y - instance.origin.y) > 1e-8) {
+            instance.origin = origin; changed = true;
+          }
+        });
+        if (!changed) break;
+      }
+      for (const instance of instances) {
+        const bundle = geometryInstanceBundle(instance);
+        if (!bundle.valid) throw new Error(instance.id + ': ' + bundle.reason + ' ' + applicationText('必要な参照先も選択してください', 'Also select required referenced geometry'));
+        for (const item of bundle.points) pointById.set(item.id, item);
+        for (const item of bundle.lines) lineById.set(item.id, item);
+        for (const item of [...bundle.circles, ...bundle.arcs, ...bundle.splines]) primitiveById.set(item.id, item);
+      }
+    }
+
     function mapClipboardBlockProjection(source, instance, idMap, pointById, lineById, primitiveById) {
       const projection = source.projection || {};
       const bundle = blockProjectionBundle(instance);
@@ -76,7 +127,7 @@
       mapKind(projection.arcs, bundle.arcs, primitiveById);
       mapKind(projection.splines, bundle.splines || [], primitiveById);
     }
-    return Object.freeze({ remapClipboardValue, remapGeometryRef, copiedGeometryInstance, copiedFreeOrigin, translatedClipboardConstraintData, mapClipboardBlockProjection });
+    return Object.freeze({ translateAnnotation, copiedHatch, translateReferenceImage, remapClipboardValue, remapGeometryRef, copiedGeometryInstance, copiedFreeOrigin, reconnectDerivedInstances, translatedClipboardConstraintData, mapClipboardBlockProjection });
   }
   window.ClipboardTransfer = Object.freeze({ create });
 })();

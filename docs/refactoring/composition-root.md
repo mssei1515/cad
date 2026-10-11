@@ -4,7 +4,315 @@
 
 開始点はdevelopの`457adea`。承認された最終目標は、`app.js`を数百行程度の生成・接続・起動・終了へ整理すること。部分的な抽出や中間のテスト成功をもって、この目標の完了とはしない。
 
-## 現在の再開地点（2026-10-10）
+## 現在の再開地点（2026-10-12）
+
+週枠残量69%を確認したため新規分離を停止。今回の76個の区切りのcommitを保持し、最終コード8e6fc2aをdevelopのcab7c6dへ統合・Pushした。app.jsは11,058→7,630行（合計3,428行減）。構文469ファイル・単体1,261件・全E2E560件が最新統合コードで成功（exit 0、全E2E24.8分）。ログはcad-refactor-oct12-final-{check,unit,e2e}.log。全テスト本体とworker終了後、実体を確認した専用サーバーの終了待ちを解消して同じ実行の正常終了を回収した。この停止記録をCommit／Pushした後、mainを最後に反映してdevelopとローカル・リモートを同期し、統合済み作業branchを削除・runtime再生成して一時停止する。全体目標は未完了。再開手順と次の責務候補はrefactoring-policy-and-resume.md section 8を参照する。
+
+### 最後の分離単位
+
+Hover表示の観測を既存PropertiesTestDriver.createHoverObservationへ分離。既存Geometry一覧／Block投影・外観・Tree強調／Sidebar／Canvas／Block Hoverと表示色／線幅へ接続し、対象なしのnull、検索・Block内Geometryの優先順／短絡、Pointの投影・線端点除外、同一参照照合・constructionと照会順を保持する。独自Geometry／Hover／表示ルールを追加せず、test query時だけ生成して既存API名へ接続。元の処理本体との一致を確認。app.jsは7,652→7,630行（22行減、今回の合計3,428行減）。構文469ファイル・単体1,261件・関連E2E103件成功（exit 0、2.0分）。新規テストはなく、全利用箇所のunified-ui既存E2EでTree／Canvas強調、Point／Block、色／線幅を確認。全テスト本体とworker終了後の専用サーバー終了待ちは当該processを確認して終了し、正常終了を回収。ログはcad-hover-observation-{check,unit,e2e}.log。全E2Eはこの単位では未実行。全体目標は未完了。
+
+### 前回の区切り
+
+hit観測とGeometryのclient位置取得を既存CanvasTestDriver.createHitObservation／createGeometryPositionへ分離。hit側は入力座標を元どおり数値正規化し、Arc端点→Point／Line／Circle／Arc／Splineの既存query結果をID／端点／nullへ変換する。位置側は現在scopeのGeometryからPoint位置・線中点・円右端・円弧の指定端点または従来の角度平均・Splineの0／1／0.5評価位置を取得し、既存client変換へ渡す。Spline evaluateを明示した依存へ、thisによるclient hook参照を既存CanvasTestDriver.clientPositionへ置換する。detail既定値／未存在Geometryのnull・式／順序を維持し、hitルール／幾何計算／scope／viewportを複製しない。test query時だけ生成し、既存API名へ接続。元の二つの処理本体との一致を確認。app.jsは7,683→7,652行（31行減、今回の合計3,406行減）。構文469ファイル・単体1,261件・関連E2E144件成功（exit 0、3.1分）。新規テストはなく、全利用箇所のadversarial-authoring-performance／head-symmetry／phase0-characterization／spline／unified-ui既存E2Eで応答性・円弧／Spline操作・hit観測を確認。全テスト本体とworker終了後の専用サーバー終了待ちは当該processを確認して終了し、正常終了を回収。ログはcad-hit-position-observation-{check,unit,e2e}.log。全E2Eはこの単位では未実行。全体目標は未完了。
+
+### 前回の区切り
+
+Sketch移動と表示倍率のテスト観測を既存CanvasSelectionTestDriver.createMoveObservation／CanvasTestDriver.createZoomObservationへ分離。移動の観測は既存command／fields・現在Selection／scopeと拘束serialize／保存値／Block編集状態を照会し、開始中target／所属／描画順を返す。倍率の支援は指定時だけ既存clampでviewportを更新し、現在Document unitsの複製と倍率／format表示を返す。null既定値・数値変換・式・照会順を保持し、移動session／Selection／viewportを別に保持しない。移動側にviewport依存、倍率側にGeometry／Selection／履歴依存を持ち込まず、test query時だけ生成して既存API名へ接続。元の二つの処理本体との一致を確認。app.jsは7,696→7,683行（13行減、今回の合計3,375行減）。構文469ファイル・単体1,261件・関連E2E141件成功（exit 0、2.6分）。新規テストはなく、全利用箇所のsketch-move／canvas-zoom-input／annotation-display-size／phase0-characterization／unified-ui既存E2Eで移動の開始／確定／取消・倍率表示・注記サイズ／保存を確認。全テスト本体とworker終了後の専用サーバー終了待ちは当該processを確認して終了し、正常終了を回収。ログはcad-move-zoom-observation-{check,unit,e2e}.log。全E2Eはこの単位では未実行。全体目標は未完了。
+
+### 前回の区切り
+
+Geometry IDのテスト用選択を既存CanvasSelectionTestDriver.createIdSelectionへ分離。現在scopeの九種別の同一Geometry参照を既存Selectionへ設定し、clear→種別順の設定→UI→draw→Block選択query→選択ID照会を保持する。入力既定値、scope配列順、重複IDの扱いとBlockエラー／内部・外部拘束数のfallbackを維持し、独自scope／Selection／選択ルールを追加しない。this経由のhook参照はreadSelectedGeometryへ置換し、test query時だけ生成して既存API名へ接続。元の処理本体との一致を確認。app.jsは7,717→7,696行（21行減、今回の合計3,362行減）。構文469ファイル・単体1,261件・関連E2E263件成功（exit 0、4.1分）。新規テストはなく、全利用箇所14ファイルの既存E2Eで選択を使う編集／Block／投影／外観／表示／Undoを確認。最初のE2EはWindowsパスを検索正規表現として渡したため対象を収集できずexit 1。区切りをスラッシュへ修正し、同じ対象で正常終了を確認した。全テスト本体とworker終了後の専用サーバー終了待ちは当該processを確認して終了し、正常終了を回収。ログはcad-id-selection-{check,unit,e2e,e2e-final}.log。全E2Eはこの単位では未実行。全体目標は未完了。
+
+### 前回の区切り
+
+拘束入力の状態照会とIntent解決の二つのAPIを既存ConstraintTestDriver.createInputObservation／createIntentResolutionへ分離。前者は現在Selection／ConstraintTargetSession・operandElementとreadSelectedGeometryへ接続し、Instance／arcEndpoint／pair・operand／pending typeを観測する。後者は現在scopeの入力IDを同一Geometryへ結び付け、既存makeConstraintOperand／resolver／serializeConstraintへ委譲。arc-endpointのarc keyとendpoint／parameter、未存在IDの例外、resolutionなしのnullと結果fallbackを維持する。観測にモデル検索／resolver、Intent支援にSelection／session操作を持ち込まず、既存の拘束判断・操作状態を複製しない。test query時だけ生成し、既存API名へ接続。元の二つの処理本体との一致を確認。app.jsは7,738→7,717行（21行減、今回の合計3,341行減）。構文469ファイル・単体1,261件・関連E2E124件成功（exit 0、2.1分）。単体1件を追加し、call-time Geometry同一参照・端点情報、未存在入力のresolver短絡とnull／serialization境界を確認。全利用箇所のphase0-characterization／unified-ui既存E2EでIntentの入力状態非変更・拘束入力と表示回帰を検証。全テスト本体とworker終了後の専用サーバー終了待ちは当該processを確認して終了し、正常終了を回収。ログはcad-constraint-input-test-driver-{check,unit,e2e}.log。全E2Eはこの単位では未実行。全体目標は未完了。
+
+### 前回の区切り
+
+Canvasメニューの重なり選択fixture／円弧端点fixture・状態観測・固定点追加の四つのAPIをCanvasSelectionTestDriverへ分離。createOverlapFixtureは同座標の二線／非表示・inactive線／Block内線を準備し、Definition追加／Instance採番は既存所有者callbackへ委譲する。createEndpointFixtureは線と二円弧の端点選択用Geometryを準備する。固定ID／座標／Sketch切替・Selection、cache無効化・fit→履歴→UI→draw→client照会の順序を維持。createObservationは既存controllerの候補と表示query・現在Hover／Selectionを観測し、Hover優先順／id・parameterName fallback／arcEndpointを保持する。createPointInsertionは現在Canvas矩形／viewportから固定explicit Pointを追加し、UI→draw後のclientを返す。this経由のhook参照を既存CanvasTestDriver.clientPosition／readSelectedGeometryへ置換。観測・Point追加にBlock生成／採番依存を持ち込まず、候補・hit・選択ルールや独自状態を追加しない。test query時だけ生成し、既存API名へ接続。元の四つの処理本体との一致を確認。classic script／構文／E2E読込一覧を同期。app.jsは7,815→7,738行（77行減、今回の合計3,320行減）。構文469ファイル・単体1,260件・関連E2E103件成功（exit 0、2.0分）。新規テストはなく、全利用箇所のunified-ui既存E2Eで候補表示／Hover／選択、固定点除外、円弧端点拘束入力を確認。全テスト本体とworker終了後の専用サーバー終了待ちは当該processを確認して終了し、正常終了を回収。ログはcad-canvas-selection-test-driver-{check,unit,e2e}.log。全E2Eはこの単位では未実行。全体目標は未完了。
+
+### 前回の区切り
+
+Documentのファイル名fixture読込とドラッグ検証用の直接適用をDocumentTestDriver.createImport／createLoadへ分離。importはJSON→File→既存importFileDataをawaitし、完了後のDocument／表示／保存名・titleと経過時間を照会する。直接適用は入力clone→file名overrideで既存load→任意の履歴reset→UI→draw→現在scopeの拘束数を取得。拒否false、async例外伝播、直接適用のload／history／UI／drawを含むcatch範囲と既定値を保持し、形式変換／モデル置換／復元は既存所有者へ委譲する。test query時だけ生成し、既存二つのAPI名へ直接接続。元の二つの処理本体との一致を確認。classic script／構文／unit／E2E読込一覧を同期。app.jsは7,833→7,815行（18行減、今回の合計3,243行減）。構文468ファイル・単体1,260件・全E2E560件成功（exit 0、24.8分）。単体4件を追加してawait後の名前／時間・拒否／例外、cloneと適用後scope、履歴／表示更新を含む失敗境界を確認した。直接適用APIが多数の画面テストで使用されるため全E2Eを一括実行し、前回失敗したDXF保存再読込を含め全件成功。全テスト本体とworker終了後の専用サーバー終了待ちは当該processを確認して終了し、正常終了を回収。ログはcad-document-test-driver-{check,unit,full-e2e}.log。全体目標は未完了。
+
+### 前回の区切り
+
+外観の照会、複数選択Propertiesのfixture／状態照会、固定のfixture／状態照会の五つのAPIをPropertiesTestDriverへ分離。createAppearanceObservationは既存Geometry／Block投影・外観／可視性を使い、種別別検索・Block内Geometry優先順と対象なしのnullを保持する。createFixtureは既存reset／図形生成／Selectionへ委譲し、座標／直接外観・mixedTypesの円、固定用S2／Point・Lineと履歴→UI→drawを維持する。createPropertiesObservation／createFixedObservationは現在Selection／scopeを照会し、既存外観／固定判定・DOM／ボタン／readHistoryへ接続。this経由の履歴hook参照をreadHistoryへ置換し、fixtureの図形生成を観測に持ち込まない。独自モデル／選択状態／外観継承／固定ルールを追加しない。test query時だけ生成し、既存五つのAPI名へ直接接続。明示した所有者参照への置換を除き、元の処理本体との一致を確認。classic script／構文／E2E読込一覧を同期。app.jsは7,886→7,833行（53行減、今回の合計3,225行減）。構文466ファイル・単体1,256件・関連E2E121件成功（exit 0、2.1分）。新規テストはなく、全利用箇所のunified-ui／sketch-projection／view-visibility既存E2Eで複数Properties／固定・解除／Undo、投影外観、表示・非表示を確認。全テスト本体とworker終了後の専用サーバー終了待ちは当該processを確認して終了し、正常終了を回収。ログはcad-properties-test-driver-{check,unit,e2e}.log。全E2Eはこの単位では未実行。全体目標は未完了。
+
+### 前回の区切り
+
+Parameterの準備／フィードバックfixture、状態照会、Block化／寸法名指定削除の五つのAPIをParameterTestDriver.createFixture／createObservation／createInteractionへ分離。fixtureは既存reset／Geometry生成／拘束登録・名前空間補完／安定化へ委譲し、定義追加／Instance採番は既存所有者へのcallbackとする。固定ID／座標／式、参照寸法フラグ、cache無効化→安定化→履歴→UI→drawを保持する。観測は現在scope／Documentを照会し、既存validateの後にParameter値・寸法／Block名前空間・投影長・保存値を返す。操作は既存Selection／Block Selection／定義作成／削除に委譲し、対象なし・拒否と操作後の名前一覧／hintを維持する。観測／操作へGeometry生成／採番／Solver依存を持ち込まず、独自モデル／評価／採番／cacheを追加しない。test query時だけ生成し、既存API名へ直接接続。明示した所有者参照への置換を除き、元の五つの処理本体との一致を確認。classic script／構文／E2E読込一覧を同期。app.jsは8,000→7,886行（114行減、今回の合計3,172行減）。構文465ファイル・単体1,256件・関連E2E114件成功（exit 0、2.1分）。追加テストはなく、五つのAPIの全利用箇所のunified-ui／free-text-input-drag既存E2EでParameter更新・参照寸法削除保護／Block式凍結／フィードバック・注記反映を確認。全テスト本体とworker終了後の専用サーバー終了待ちは当該processを確認して終了し、正常終了を回収。ログはcad-parameter-test-driver-{check,unit,e2e}.log。全E2Eはこの単位では未実行。全体目標は未完了。
+
+### 前回の区切り
+
+寸法色の観測を既存DimensionTestDriver.createColorObservationへ分離。四つの依存（Selection／Hover／ctx／既存drawDimensions）で、呼出し時の寸法選択・拘束選択・寸法Hoverとstroke参照を保存し、一時解除／差替え→描画→finally復元を所有する。strokeは元ctxと引数で転送し、色の小文字化・初出順の重複排除、同一選択参照、他のHover状態、描画例外の伝播を保持する。通常CanvasRenderProbeへSelection操作を混ぜず、製品描画・独自状態を追加しない。test query時だけ生成し、既存API名へ直接接続。元の処理本体との一致を確認。app.jsは8,021→8,000行（21行減、今回の合計3,058行減）。構文464ファイル・単体1,256件・関連E2E103件成功（exit 0、2.1分）。単体1件を追加し、成功／描画失敗の双方でのcall-time選択／Hover／stroke同一参照の復元、呼出し転送、色の重複排除を確認。全利用箇所のunified-ui既存E2Eも検証。全テスト本体とworker終了後の専用サーバー終了待ちは当該processを確認して終了し、正常終了を回収。ログはcad-dimension-color-observation-{check,unit,e2e}.log。全E2Eはこの単位では未実行。全体目標は未完了。
+
+### 前回の区切り
+
+円弧半径の描画plan、終端記号のfit、矢印先端の観測を既存DimensionTestDriver.createRadiusFixture／createTerminatorFixtureへ分離。円弧fixtureだけがPoint／Arc生成とDimensionPlacementを使い、終端fixtureはDimensionLayout／DimensionMetricsと一時倍率操作へ接続する。両者は呼出し時の既定外観をreaderで照会し、固定ID／座標／半径・入力既定値／数値正規化・演算式／結果形式を維持する。テスト用Geometryはモデル／採番へ登録せず、製品描画の実装・独自viewportを追加しない。矢印は呼出し時の倍率を保存し、成功／例外ともfinallyで復元する。test query時だけappが生成し、既存三つのAPI名へ接続。明示した所有者参照への置換を除き、元の三つの処理本体との一致を確認。app.jsは8,110→8,021行（89行減、今回の合計3,037行減）。構文464ファイル・単体1,255件・関連E2E103件成功（exit 0、1.9分）。単体1件を追加して外観／線幅／矢印点／join計算での例外伝播と呼出し前倍率への復元を確認し、unit／構文一覧を同期した。全利用箇所のunified-ui既存E2Eで円弧補助線／終端配置／矢印先端の実描画計算を検証。全テスト本体とworker終了後の専用サーバー終了待ちは当該processを確認して終了し、正常終了を回収。ログはcad-dimension-render-fixture-{check,unit,e2e}.log。全E2Eはこの単位では未実行。全体目標は未完了。
+
+### 前回の区切り
+
+寸法Appearanceの状態照会と描画寸法の観測をDimensionTestDriver.createAppearanceObservation／createRenderObservationへ分離。状態照会は現在scope／Documentと既存Appearance照会へ、描画観測は既存DimensionPlacement／DimensionLayout／DimensionMetrics・viewport／表示倍率へ接続する。対象なし・angle時のnull、既定寸法の生成条件、clone、Block内のSketch参照、数値式と呼出し順を維持し、独自モデル／描画計算を追加しない。test query時だけ生成し、既存二つのAPI名へ直接接続する。明示した所有者参照への置換を除き、元の二つの処理本体との一致を確認。classic script／構文／E2E読込一覧と責務配置を更新。app.jsは8,155→8,110行（45行減、今回の合計2,948行減）。構文463ファイル・単体1,254件・関連E2E127件成功（exit 0、3.0分）。単体の追加はせず、全利用箇所のannotation-display-size／leader-appearance／unified-ui既存E2Eで外観継承・表示寸法・保存再読込を確認。全テスト本体とworker終了後の専用サーバー終了待ちは当該processを確認して終了し、正常終了を回収。ログはcad-dimension-observation-{check,unit,e2e}.log。全E2Eはこの単位では未実行。全体目標は未完了。
+
+### 前回の区切り
+
+Reference Imageの状態照会／data URL読込／Block下書き準備・確定の四つのAPIをReferenceImageTestDriver.createObservation／createImport／createBlockFixtureへ分離。観測・native読込・fixture生成の依存を分け、現在scope／Block編集状態・既存画像operation／Selection／履歴／viewportへ接続する。観測の選択ID→scope／下書き画像serialize→calibration／drag→履歴→viewport、読込のfetch→Blob→File→既存importとawait／既定値／例外、preserveDocument指定と固定Point／Line ID・座標・所属Sketch、確定後の保存値cloneを保持する。this経由の履歴hook参照をreadHistoryへ置換し、独自モデル／operation／viewport／seq／cacheを持たない。元の四つの本体との一致を確認し、classic script／構文／E2E読込一覧を更新。app.jsは8,176→8,155行（21行減、今回の合計2,903行減）。構文462ファイル・単体1,254件・関連E2E167件成功（exit 0、3.5分）。新しい単体テストは追加せず、全利用箇所のreference-images／dxf-import／png-export／sketch-moveとunified-ui／blocksの既存E2Eで実利用を検証。テスト本体終了後の専用サーバー終了待ちは当該processを確認して終了し、正常終了を回収した。ログはcad-reference-image-test-driver-{check,unit,e2e}.log。全E2Eはこの単位では未実行。全体目標は未完了。
+
+### 前回の区切り
+
+Sketch Projectionの資格fixtureを既存SketchProjectionTestDriver.createEligibilityFixtureへ、投影targetのコピー／貼付け・Block化の観測をcreateTransferへ分離。資格fixtureは現在scope・Geometry生成と既存資格判定へ委譲し、固定ID／座標・Hierarchy・activeSketch切替と照会順を保持する。転送は既存select・ClipboardSessionとcopy／paste・Block Selection／中心／定義作成へ接続し、コピー拒否時のpaste短絡、前後拘束数／Boolean化／現在payload→state、Block検証エラー時の作成中止、Definition／外部投影拘束の集計を維持する。thisによるhook参照をselect／readStateへ置換し、モデル／Selection／Clipboard／Definition／cacheを複製しない。元の三つの本体との一致を確認。app.jsは8,225→8,176行（49行減、今回の合計2,882行減）。構文461ファイル・単体1,254件・関連E2E186件成功（exit 0、3.5分）。転送の拒否／短絡・同一Selection参照・payloadと事後観測の単体2件、祖先／可視性／Root等の資格E2E1件を追加。テスト本体終了後の専用サーバー終了待ちは当該processを確認して終了し、正常終了を回収した。ログはcad-sketch-projection-transfer-driver-{check,unit,e2e}.log。Sketch Projectionテスト支援の実装本体は分離済みで、appには生成／接続と既存API名の対応付けが残る。全E2Eはこの単位では未実行。全体目標は未完了。
+
+### 前回の区切り
+
+Sketch Projectionのsource移動／形状・Spline構造変更とchain作成を既存SketchProjectionTestDriver.createSourceEditingへ、保存再読込をcreateReloadへ分離。source編集は現在scope／所属Sketch／拘束を照会して既存Point参照を変更し、target生成・参照metadata／拘束追加・同期と依存求解→UI→draw→stateへ委譲する。chainのupstream target同一参照、S4重複追加の回避、upstreamなしのnull、dependent求解の失敗判定を保持する。reloadは独立した六依存で保存値clone→版数Number変換→既存load→UI→draw→stateを保持し、Geometry生成／Solver依存を持たない。モデル／seq／cacheは複製せず、this経由のhook参照をreadStateへ置換。元の三つの処理本体との一致を確認。app.jsは8,271→8,225行（46行減、今回の合計2,833行減）。構文461ファイル・単体1,252件・関連E2E185件成功（exit 0、3.5分）。source形状／Spline構造の追随とchain参照の保存再読込のE2E2件、reloadのclone／変換・順序・load例外伝播の単体1件を追加した。最初のE2E起動は追加testの重複titleで収集に失敗し、重複分を除いて同じ対象を再実行し成功。テスト本体終了後の専用サーバー終了待ちは当該processを確認して終了し、正常終了を回収した。ログはcad-sketch-projection-source-driver-{check,unit,e2e,final-check,e2e-final}.log。全E2Eはこの単位では未実行。全体目標は未完了。
+
+### 前回の区切り
+
+Sketch Projectionのtarget選択／外観変更、最初の投影拘束・source／target Geometry・source Sketch削除の六つのAPIを既存SketchProjectionTestDriver.createGeometryInteractionへ分離。呼出し時の拘束reader・Geometry型・Selectionと既存編集／削除・表示／観測／client変換を明示し、fixture生成・Solver・Clipboard／Block化依存を持たせない。種別別Geometryの参照同一性、選択→UI→draw→state→client、編集／削除後state、対象なしのnull／falseと拒否結果を保持する。thisによるhook参照をprivate selectとreadState／clientPositionへ置換し、モデル／Selection／履歴／cacheは複製しない。元の六つの本体との一致を確認。app.jsは8,311→8,271行（40行減、今回の合計2,787行減）。構文461ファイル・単体1,251件・関連E2E183件成功（exit 0、3.5分）。既存E2Eに六つのhookの直接利用がなかったため、4つの単体境界テストを追加して五Geometry種別の同一参照、live readerと対象なし、操作拒否、削除payload、操作後観測を検証。対象E2Eはsketch-projection／互換fixture／command-panel／unified-ui／blocks／sketch-permissions。テスト本体終了後の専用サーバー終了待ちは当該processを確認して終了し、正常終了を回収した。ログはcad-sketch-projection-geometry-driver-{check,unit,e2e}.log。全E2Eはこの単位では未実行。全体目標は未完了。
+
+### 前回の区切り
+
+Sketch ProjectionのBlock下書きfixture／確定、Block投影fixture、Instance移動／削除の五つのAPIを既存SketchProjectionTestDriverのcreateBlockEditorFixture／createBlockProjectionFixture／createBlockProjectionInteractionへ分離。独立した入口により、操作支援に生成型・Definition追加・採番依存を持ち込まない。編集scope切替後の再照会、Definition追加／IDの既存所有者、cache無効化・bundle解決・focus／履歴／表示順、移動の依存求解・削除後state照会、無Instance時のnullを維持する。this経由のhook参照を明示した表示／readStateへ置換し、モデル／seq／cache／履歴は複製しない。元の五つの本体との一致を確認。app.jsは8,352→8,311行（41行減、今回の合計2,747行減）。構文460ファイル・単体1,247件・関連E2E183件成功（exit 0、3.7分）。既存のfixture直接利用テストがなかったため、Block E2Eに下書き確定時のhost Geometry分離とInstance移動／削除時のDefinition保持／無Instance分岐を検証する2件を追加した。対象はsketch-projection／互換fixture／command-panel／unified-ui／blocks／sketch-permissions。テスト本体終了後の専用サーバー終了待ちは当該processを確認して終了し、正常終了を回収した。ログはcad-sketch-projection-block-driver-{check,unit,e2e}.log。全E2Eはこの単位では未実行。全体目標は未完了。
+
+### 前回の区切り
+
+Sketch Projectionの矩形／共有種別fixtureと旧共有target Pointの再現を既存SketchProjectionTestDriver.createCompatibilityFixtureへ分離。現在scope・Geometry生成・投影target／拘束／metadata／求解・保存／読込・履歴／表示／状態照会を明示し、元の二つの処理本体との一致を確認。通常生成の共有source参照・座標・採番／Construction、旧形式指定時の保存値clone→target Point共有化→不要Point除去→既存load、履歴→UI→draw→readStateの順を保持する。製品migrationには移さず、独自モデル／seq／cacheを持たない。app.jsは8,443→8,352行（91行減、今回の合計2,706行減）。構文460ファイル・単体1,247件成功（exit 0）。既存fixtureの直接利用テストがなかったため、矩形／複数種別の通常生成・旧形式再読込に対する4つのE2Eを追加し、共有source Pointと独立target Point、矩形座標と所属Sketchを検証。関連既存E2E177件（3.5分）と新しい4件（1.6分）がそれぞれ成功（exit 0、計181件）。テスト本体終了後の専用サーバー終了待ちは当該processを確認して終了し、結果を回収した。ログはcad-sketch-projection-compatibility-driver-{check,unit,e2e,final-check,focused}.log。全E2Eはこの単位では未実行。全体目標は未完了。
+
+### 前回の区切り
+
+Sketch Projectionの通常Geometry fixtureと投影状態照会をSketchProjectionTestDriver.createGeometryFixture／createObservationへ分離。観測に生成・求解・表示更新依存を持たせず、呼出し時のscope／mode／command件数／投影拘束と既存外観・拘束状態・保存・履歴・DOM readerへ接続する。fixtureの共有Point参照・座標・Construction・activeSketch切替・focus→履歴→UI→draw→client位置照会、観測のGeometry／外観／保存／履歴／階層／DOM順を保持する。独自モデル／seq／cacheを持たず、this経由のhook相互参照を明示した表示・履歴入口へ置換。元の二つの処理本体との一致を確認し、classic script／構文／E2E読込一覧を更新。app.jsは8,502→8,443行（59行減、今回の合計2,615行減）。構文459ファイル・単体1,247件・関連E2E177件成功（exit 0、3.9分）。新しい単体テストは追加せず、全利用箇所のsketch-projection／command-panelとunified-ui／blocks／sketch-permissionsの既存E2Eで実利用を検証。テスト本体完了後に当該実行の専用サーバー終了待ちを解消して正常終了を回収した。ログはcad-sketch-projection-test-driver-{check,unit,e2e}.log。全E2Eはこの単位では未実行。全体目標は未完了。
+
+### 前回の区切り
+
+Canvasのtest用focus／world-to-client座標照会をCanvasTestDriverへ、派生Instance作図fixtureを既存DerivedInstanceTestDriver.createCommandFixtureへ分離。viewport／resize／drawと現在Canvas矩形の照会順、数値fallback、fixture座標・Construction・履歴／表示順を保持し、thisによるhook相互参照を明示したfocus／clientPositionへ置換する。モデル・seq・cache・表示状態を複製しない。元の三つの本体との一致と三つの境界テストを確認し、classic script／構文／単体／E2E読込一覧を更新。app.jsは8,525→8,502行（23行減、今回の合計2,556行減）。構文458ファイル・全単体1,247件成功（exit 0）。全E2Eは550件成功・DXF保存再読込の1件失敗（exit 1、24.6分）。既存保存処理ではcheckpoint更新後も保存中の排他が続くため、変更なし表示だけで読込を始めていたテストの待機条件を保存済み表示までに修正。期待するタイトル・Geometry・保存読込の検証は維持する。修正後はDXF／file-safetyを各3回、計45件成功（exit 0、2.9分）。テスト本体完了後のサーバー終了待ちは、当該実行の専用サーバーを確認して終了し結果を回収した。ログはcad-canvas-test-driver-{check,unit,full-e2e,final-check,dxf-recheck,save-recheck}.log。修正後の全E2E一括再実行は未実施であり、全551件が一括成功したとは扱わない。リリース前に最新状態の全E2Eを確認する。全体目標は未完了。
+
+### 前回の区切り
+
+派生Instanceのfixture／状態照会・読込・source／Instance削除の五つのテスト支援APIをDerivedInstanceTestDriverのcreateFixture／createInteractionへ分離。現在scopeと既存投影／削除・ID採番入口へ委譲し、Projection→Mirror→Patternの参照／採番順・Hatch生成・履歴／表示・clone／読込／削除後観測の順を保持する。独自モデル／seq／cacheを持たず、this経由のhook参照はDriver内stateと明示したreadStateへ置換。元の五つの本体との一致を確認し、classic script／構文／E2E読込一覧を更新。app.jsは8,567→8,525行（42行減、今回の合計2,533行減）。構文456ファイル・単体1,244件・関連E2E199件成功（exit 0、2.7分）。ログはcad-derived-instance-test-driver-{check,unit,e2e}.log。新しい単体テストは追加せず、利用する全9ファイルとunified-uiの既存E2Eで実利用を検証。全E2Eはこの単位では未実行。全体目標は未完了。
+
+### 前回の区切り
+
+Clipboardの状態照会／通常図形fixture／Block fixtureをClipboardTestDriverの三つの独立した生成入口へ分離。観測は九つの依存だけで動き、生成型・seq・描画依存を持たない。fixtureは既存Geometry／拘束・定義追加・ID採番・ClipboardSession／Selection・履歴／表示へ委譲し、現在scopeの再照会・保存→Geometry→選択→payload→履歴の順と結果を保持する。this経由のhook相互参照をreadState／readSelected／readHistoryへ置換し、共有test選択readerは旧selectedGeometryIdsForTestにも接続。三つの本体と選択readerの元処理との一致を確認し、classic script／構文／E2E読込一覧を更新。app.jsは8,634→8,567行（67行減、今回の合計2,491行減）。構文455ファイル・単体1,244件・関連E2E171件成功（exit 0、2.3分）。ログはcad-clipboard-test-driver-{check,unit,e2e}.log。新しい単体テストは追加せず、全利用箇所のsketch-tree-visibility／sketch-tree-delete／unified-uiとblocksの既存E2Eで実利用を検証。全E2Eはこの単位では未実行。全体目標は未完了。
+
+### 前回の区切り
+
+拘束確定時のSolver結果を一時差替えするテスト支援をConstraintTestDriver.createForcedCommitへ分離。七つの明示した依存で既存fixture生成・commit・現在scope／DOM照会へ接続し、finallyの元Solver関数復元・例外伝播・結果変換・literal true判定・復元後の照会を保持する。元本体との一致と三つの境界テスト（通常／例外の復元と置換scopeの再照会）を確認し、classic script／構文／単体／E2E読込一覧を更新。app.jsは8,658→8,634行（24行減、今回の合計2,424行減）。構文454ファイル・単体1,244件・関連E2E124件成功（exit 0、1.7分）。ログはcad-constraint-test-driver-{check,unit,e2e}.log。全E2Eはこの単位では未実行。全体目標は未完了。
+
+### 前回の区切り
+
+描画順のfixture／観測／選択／並替えの四つのテスト支援APIをDrawingOrderTestDriverへ分離。createFixtureとcreateInteractionを独立して生成し、操作観測に図形生成・Block定義依存を持ち込まない。現在scope・既存DrawingOrder／Hatch境界／Selection／並替えcommandへ委譲し、fixture座標・ID・外観・一時activeSketch切替・cache／fit／履歴／表示の順を保持する。this経由のhook間参照をDriver内stateと明示した共有test履歴readerへ置換し、既存historyState APIも同じreaderに接続。DrawingOrderは後期script定義のため生成時に注入。四つの本体と共有履歴readerの元処理との一致を確認し、classic script／構文／E2E読込一覧を更新。app.jsは8,746→8,658行（88行減、今回の合計2,400行減）。構文452ファイル・単体1,241件・関連E2E157件成功（exit 0、2.3分）。ログはcad-drawing-order-test-driver-{check,unit,e2e}.log。新しい単体テストは追加せず、既存drawing-order／unified-ui／hatching／blocksのE2Eで実利用を検証。全E2Eはこの単位では未実行。全体目標は未完了。
+
+### 前回の区切り
+
+HatchのネストBlock投影fixture／状態照会とコピー・貼付け／Block化の検証手順を、既存HatchTestDriver.createProjection／createTransferへ分離。独立した生成入口により、転送に投影の型・描画依存を持ち込まない。現在scopeの再照会と元Hatch／境界Lineの参照を保持し、定義追加・projection cache無効化・UI／fit／draw・既存Clipboard／Block操作の順を維持する。元の三つの本体との一致を確認し、既存API名と結果を直接接続。app.jsは8,804→8,746行（58行減、今回の合計2,312行減）。構文451ファイル・単体1,241件・関連E2E163件成功（exit 0、2.4分）。ログはcad-hatch-projection-transfer-driver-{check,unit,e2e}.log。新しい単体テストは追加せず、全利用箇所のhatching／sketch-moveとunified-ui／blocksの既存E2Eで実利用を検証。全E2Eはこの単位では未実行。全体目標は未完了。
+
+### 前回の区切り
+
+Hatchの通常／穴付き領域fixture、状態照会、表示倍率、境界破損／復旧の六つのテスト支援APIをHatchTestDriver（src/testing/hatch_test_driver.js）へ分離。test query時だけ生成し、既存API名／戻り値を直接接続する。現在scope・modeを呼出し時に照会し、モデル／ID／cache／履歴／表示／保存の状態は既存所有者へ委譲する。元の六つの本体との一致、fixture座標・Hatch ID／nextIndex・Construction・scope照会・UI／draw順を確認。classic script／構文／E2Eの読込一覧を更新。app.jsは8,884→8,804行（80行減、今回の合計2,254行減）。構文451ファイル・単体1,241件・利用するE2E全10ファイルの180件成功（exit 0、2.7分）。ログはcad-hatch-test-driver-{check,unit,e2e}.log。新しい単体テストは追加せず、既存E2EでDriverの実利用を検証。全E2Eはこの単位では未実行。全体目標は未完了。
+
+### 前回の区切り
+
+Parameterダイアログの適用後の履歴・結果案内・scope再読込・error表示・UI／drawの進行を既存ParameterDialogController.createApplicationへ分離。ParameterApplicationはモデル適用・安定化・Block伝播・checkpoint回復の所有を維持する。成功callback内の表示例外も既存の復元範囲に含め、成功／失敗の順序・捕捉したsession.key・error変換二回を保持する。元本体との一致と4つの境界テスト（実ParameterApplicationによるcallback例外回復を含む）を確認。app.jsは8,900→8,884行（16行減、今回の合計2,174行減）。構文450ファイル・単体1,241件・関連E2E152件成功（exit 0、2.3分）。E2Eの実対象はparameter-dialog-controller／unified-ui／blocks／sketch-permissionsの4ファイルで、指定したparameter-dialog-draft.spec.jsは存在せず追加対象になっていない。ログはcad-parameter-dialog-application-{check,unit,e2e}.log。全E2Eはこの単位では未実行。全体目標は未完了。
+
+### 前回の区切り
+
+寸法配置中の対象変更候補の照会と強調表示更新を既存ConstraintCommandInput.createRetargetHoverへ分離。pendingとCanvasHoverは既存所有者に保持し、8つの明示した依存でoperandのhit・同一判定・意図解決・参照対象変換を接続する。単独operand・line-length／radius／diameter限定、他hoverの保持、対象外配置の限定解除、更新順序と参照／changed戻り値を維持する。元本体との一致と4つの境界テストを確認。app.jsは8,930→8,900行（30行減、今回の合計2,158行減）。構文449ファイル・単体1,237件・関連E2E181件成功（exit 0、2.6分）。ログはcad-dimension-retarget-hover-{check,unit,e2e}.log。全E2Eはこの単位では未実行。全体目標は未完了。
+
+### 前回の区切り
+
+Canvasメニューのcommand取消可否と順次取消をCanvasCommandCancellationへ分離。mode・pending・拘束・作図operationをその時点で照会し、Block配置→pending→拘束→作図取消→tool終了を既存所有者へ委譲する。Blockのpanel保持reset／preview解除／mode／Properties復元／案内、最後の共通案内→UI→draw、無対象時の無変更、query短絡順を維持する。Escの優先取消とは統一しない。状態／rollback／履歴を複製せず、元処理との本体一致と4つの境界テストでlive再照会・順序を確認。classic script・構文・単体・E2E読込一覧を更新。app.jsは8,959→8,930行（29行減、今回の合計2,128行減）。構文448ファイル・単体1,233件・関連E2E205件成功（exit 0、3.0分）。ログはcad-canvas-command-cancellation-{check,unit,e2e}.log。全E2Eはこの単位では未実行。全体目標は未完了。
+
+### 前回の区切り
+
+Canvasのサイズ調整とPropertiesパネル開閉の表示構成をCanvasWorkspaceLayoutへ分離。bitmap同期・viewport中心保持・Tree幅適用・draw・値入力位置同期を既存所有者へ明示したportで接続する。中心はDOM更新前に取得し、pendingはdraw後に読む。空領域／中心指定なしのviewport維持、必要DOMなしの無変更、現在言語のARIA／titleを保持する。Treeと値入力の後期生成は遅延callbackで接続する。元処理との本体一致と4つの境界テストを確認し、classic script・構文・単体・E2E読込一覧を更新。app.jsは8,984→8,959行（25行減、今回の合計2,099行減）。構文446ファイル・単体1,229件・関連E2E147件成功（exit 0、2.2分）。ログはcad-workspace-layout-{check,unit,e2e}.log。全E2Eはこの単位では未実行。全体目標は未完了。
+
+### 前回の区切り
+
+Hatch／Reference Imageの内部領域hitを既存GeometryHitQuery.createRegionsへ集約。現在scope・通常選択mode・可視性・作図先とHatch列／owner順・既存幾何照会を明示する。Hatchのowner描画順と同順位の安定順、画像の配列逆順・回転／scale変換と辺を含むpixel矩形判定、activeOnlyの既定値、画像lockをhitで除外しない動作を保持する。元処理との本体一致と3つの境界テストで参照・順序・資格・変換を確認。app.jsは9,004→8,984行（20行減、今回の合計2,074行減）。構文444ファイル・単体1,225件・関連E2E197件成功（exit 0、2.8分）。ログはcad-region-hit-query-{check,unit,e2e}.log。全E2Eはこの単位では未実行。全体目標は未完了。
+
+### 前回の区切り
+
+寸法ラベル／寸法線のCanvas hitを既存GeometryHitQuery.createDimensionsへ集約。scope・倍率・mode・Sketch資格／可視性とtarget／dimension・外観／layout／text metrics／式flagを明示し、操作状態や寸法値を更新しない。拘束配列逆順、activeOnly既定値、各照会の順序・回数、回転／複数行／world-sizeラベル、ラベル優先、結果の参照同一性を保持。矩形判定の初期化時static参照は既存script順では未定義となるため、生成時の明示portに修正した。元処理との本体一致と3つの境界テストを確認。app.jsは9,030→9,004行（26行減、今回の合計2,054行減）。構文444ファイル・単体1,222件・関連E2E181件成功（exit 0、2.6分）。ログはcad-dimension-hit-query-{check,unit,e2e}.log。全E2Eはこの単位では未実行。全体目標は未完了。
+
+### 前回の区切り
+
+Block／派生インスタンスの全体hit・bundle hit・派生drag用部分Geometry hitを既存GeometryHitQuery.createInstancesへ集約。現在scope・倍率・投影bundle・可視性／操作資格・Annotation bounds・Hatch照会を明示し、Selection／mode／モデルを変更しない。BlockのGeometry→Annotation→Hatchと派生bundleのHatch優先の差、全体hitの描画順、dragの点→円弧端点→線→円→円弧→Splineと種別内逆順／end優先を保持する。元処理との本体一致と3境界テストで所有者・参照・順序・資格・現在倍率を確認。app.jsは9,101→9,030行（71行減、今回の合計2,028行減）。構文444ファイル・単体1,219件・関連E2E216件成功（exit 0、4.8分、ドラッグ回帰1.8分）。ログはcad-instance-hit-query-{check,unit,e2e}.log。全E2Eはこの単位では未実行。全体目標は未完了。
+
+### 前回の区切り
+
+Reference Imageの可視対象収集とoverlay候補・selected flag・較正点の表示構成を既存ReferenceImageRenderer.createLayerへ集約。resource rendererを受け取りcache／ready／clearとpaintを共有し、現在画像・hover・較正点の照会を明示する。inspection→単一選択→hover、候補拒否後のfallbackなし、active Sketch／inspectionの資格、画像参照と順序、overlayがなくても較正点を描く動作を保持。元処理との本体一致と3つの境界テストで確認。app.jsは9,110→9,101行（9行減、今回の合計1,957行減）。構文444ファイル・単体1,216件・関連E2E141件成功（exit 0、2.1分）。ログはcad-image-layer-{check,unit,e2e}.log。全E2Eはこの単位では未実行。全体目標は未完了。
+
+### 前回の区切り
+
+Hatch境界のGeometry収集・除外幅・解決済みloop距離・選択可能な内部点の4照会を既存HatchGeometryQueryへ集約。boundaryGeometryを再利用し、既定線幅と現在倍率を数値照会callbackとして明示する。直接／Block投影の所有者と参照、派生投影のoverlay対象なし、有限線幅の最大値／fallback、閉じる辺・穴を含む距離、厳密な大なりの選択判定を保持する。元処理との本体一致と3つの境界テストで確認。app.jsは9,151→9,110行（41行減、今回の合計1,948行減）。初回関連E2Eは既存drawingOrderStateForTestへの除外幅照会接続漏れで2件失敗し、接続を修正した。修正後に構文444ファイル・単体1,213件・同じ関連E2E179件が成功（exit 0、2.6分）。ログはcad-hatch-boundary-query-{check,unit}.logとcad-hatch-boundary-query-fixed-e2e.log。全E2Eはこの単位では未実行。全体目標は未完了。
+
+### 前回の区切り
+
+Hatchの表示レイヤーを既存HatchRenderer.createLayerへ集約。解決済み領域paint→型別境界overlay、直接／Block／派生とinspection／operandの選択強調、owner別hover、作成／修復のregionと現在preview、PNG中の強調／preview抑制を担当する。幾何照会・cache・編集状態の更新は持ち込まず、read callbackと描画painterを明示する。HatchCommandは遅延参照し、appのhoisted入口は早期接続用に保持する。元処理との本体一致を、明示した状態読取と型順painter変換を除いて確認。描画順序・参照同一性・選択／hover・非表示Sketch・live preview・export抑制の3境界テストを追加。app.jsは9,176→9,151行（25行減、今回の合計1,907行減）。構文444ファイル・単体1,210件・関連E2E179件成功（exit 0、2.6分）。ログはcad-hatch-layer-{check,unit,e2e}.log。全E2Eはこの単位では未実行。全体目標は未完了。
+
+### 前回の区切り
+
+Splineのコピー／貼付け／Block投影テストシナリオをSplineTestDriver.createTransferへ分離。初期化／拘束Driverの依存を増やさず用途別に生成し、採番・定義追加・Workspace照会・Clipboard・Blockの既存入口を明示する。現在scopeは必要な時点で取得し、貼付けや復元前の配列を捕捉しない。テストfixtureのLeader／instanceと操作順序、参照、観測結果は元処理と一致する。機能実装やcache・sequence・rollbackをDriverへ複製しない。app.jsは9,227→9,176行（51行減、今回の合計1,882行減）。構文444ファイル・単体1,207件・関連E2E131件成功（exit 0、1.9分）。コピーされたSpline／LeaderのID、Block定義・投影と保存読込を既存E2Eで確認した。ログはcad-spline-transfer-driver-{check,unit,e2e}.log。全E2Eはこの単位では未実行。全体目標は未完了。Spline用の五つのテストAPIは機能別の支援モジュールへ移行済み。
+
+### 前回の区切り
+
+Splineの拘束テストシナリオを既存SplineTestDriverへ集約。対象Splineの読取り、幾何評価と型constructor、Geometry生成・拘束登録・求解・直列化を明示し、IDやSolver状態をDriverに所有させない。閉Spline／対象なしの無変更と、PointOnSpline→接線Line→SplineLineTangent→求解→直列化の順序・参照を維持する。元処理との本体一致と、appの変更が接続に限られることを確認した。app.jsは9,246→9,227行（19行減、今回の合計1,831行減）。構文444ファイル・単体1,207件・関連E2E131件成功（exit 0、1.9分）。ログはcad-spline-constraint-driver-{check,unit,e2e}.log。全E2Eはこの単位では未実行。全体目標は未完了。次は転送シナリオのClipboard／Block操作と採番の境界を確認し、既存Driverへの注入が過大になる場合は用途別の生成入口を検討する。
+
+### 前回の区切り
+
+Splineのブラウザテスト用初期化・状態照会・Hatchキャッシュ確認をSplineTestDriverへ分離。src/testing/はテストの準備と観測を担い、通常の編集や診断計測の所有者と区別する。必要な操作・照会を明示して受け取り、test指定時だけ生成する。既存3 API名、実行順序、Geometryの参照同一性を維持。転送／拘束シナリオは依存を確認するためappに保持する。app.jsは9,290→9,246行（44行減、今回の合計1,812行減）。構文444ファイル・単体1,207件・関連E2E131件成功（exit 0、1.9分）。ログはcad-spline-driver-{check,unit,e2e}.log。全E2Eはこの単位では未実行。全体目標は未完了。
+
+### 前回の区切り
+
+CanvasRenderProbeへCanvasの描画観測を集約した。Geometry IDラベル、拘束端点／Point／Arc端点のマーカー数、指定Pointの外観、寸法ラベルと式マークの7入口を明示したcontext・Geometry照会・描画callbackだけで実行し、model／Selection／DOM／履歴を持ち込まない。contextメソッドを計測中だけ差し替え、例外時を含め元の関数へ復元する。式マークの記録状態もProbe内へ移し、appの可変capture変数を廃止した。既存テストAPI名は各入口への直接接続で維持する。7処理の本体は記録状態の名称と所有先以外元処理と一致し、元メソッドのreceiver／引数／戻り値、例外復元、Object同一性、ネスト終了時の既存clear動作を境界テストで確認した。app.jsは9,402→9,290行（112行減、今回の合計1,768行減）。構文443ファイル・単体1,207件・関連E2E143件成功（exit 0、2.1分）。ログはcad-canvas-probe-{check,unit,e2e}.log。今回の変更では全E2Eを再実行していない。前区切りc5e049dの全E2E551件成功（24.2分）を、今回の変更後の全体検証と扱わない。全体目標は未完了。巨大なテスト用contextを別ファイルへ移さず、残る診断／シナリオAPIを機能単位で整理する。
+
+### 前回の区切り
+
+PendingCommandSessionへ共有の保留操作Objectの保持・読取り・置換・通知なしクリアと取消経路を集約した。appの可変pendingCommandを廃止し、各commandのgetPending／setPendingへSessionのread／replaceを接続する。Objectを複製せずbuffer／pointerの直接更新を保持する。取消ではInstance配置解除→注記／PNG専用command委譲またはOffset選択／pointer解除→pending解除→入力非表示→hint→Toolbar→拘束ボタン→drawの既存順序を維持する。PNG busyの拒否は強制クリアせず、Document初期化／Sketch切替／削除の直接clearを取消と混同しない。app全体の変更はSession接続と取消委譲だけであること、取消本体は明示した依存port以外元処理と一致することを照合した。初期化前の入力表示参照を遅延callbackへ修正し、修正版の起動確認と全検証が成功した。app.jsは9,412→9,402行（10行減、今回の合計1,656行減）。構文441ファイル・単体1,201件・全E2E551件成功（exit 0、24.2分、拘束ドラッグ回帰12.4分）。ログはcad-pending-session-{check,unit}.logとcad-pending-session-full-e2e.log。現在の作業branch全体をこの状態で検証しており、旧checkpointの成功件数を流用していない。全体目標は未完了。残る共有mode、command生成・接続、テスト用APIの機能ごとの境界は今後の対象とする。
+
+### 前回の区切り
+
+既存寸法の編集開始をDimensionValueCommand.startEditへ、線長寸法のダブルクリック入力開始をDimensionPlacementCommand.targetDoubleClickへ集約した。新規ファイルは増やさず、既存commandへ開始入口を揃える。権限拒否の処理済み返却、hit／target検査、読取専用ではpendingを置換しない動作、保存配置／hit配置／既定値の優先順位、式の数値fallback、選択とdrag解除→hint→draw→focusを維持する。ダブルクリックでは単独Lineとhit一致を確認し、配置開始後だけ既定位置から値入力へ進む。2処理の本体は明示した依存adapter以外元処理と一致。app.jsは9,444→9,412行（32行減、今回の合計1,646行減）。構文439ファイル・単体1,195件・関連E2E180件成功（exit 0、2.5分）。ログはcad-dimension-entry-{check,unit,e2e}.log。全E2Eはこの単位では未実行。全体目標は未完了。選択／drag解除のportと共有pendingの取得・反映、依存の多いcommandの生成・接続はappに残り、今後の状態所有と組立て境界の整理対象とする。
+
+### 前回の区切り
+
+ConstraintControlsViewへ拘束ボタン／メニュー／Fixボタンのactive・ARIAとhint title反映を分離し、ConstraintSelectionQueryへFix一括対象・全対象の固定状態・操作可否の照会を集約した。Geometry mode外の短絡、保留寸法確認→拘束ボタン→メニュー→Fix→hintの順序、メニューがFix更新前の属性を読む既存動作を保持する。appは寸法取消条件と操作を接続し、Viewはmodel・Selectionやpendingを変更しない。元の対象照会・固定判定・可否式・DOM更新順序との一致を確認した。app.jsは9,508→9,444行（64行減、今回の合計1,614行減）。構文439ファイル・単体1,189件成功。関連E2E151件（2.2分）とFix専用4件（4.3秒）が成功（いずれもexit 0、合計155件）。ログはcad-constraint-controls-{check,unit,e2e}.logとcad-constraint-controls-fixed-e2e.log。全E2Eはこの単位では未実行。全体目標は未完了。共有pendingと残る寸法編集／取消入口、command生成・接続の整理は続く。
+
+### 前回の区切り
+
+選択可視性の対象収集と全対象の非表示判定をPropertySelectionへ、変更／履歴／UI更新をSelectionVisibilityCommandへ分離した。Properties対象の優先順位と混同せず、inspection／Root／作図Sketch／Block投影の除外、寸法の同一参照による重複除去、Instanceの明示上書き／実効外観／空bundleの継承判定を保持する。通常対象の一括変更→派生Instance上書き→一回の履歴の順序と既存の中間drawを維持する。3処理の本体は依存先と名称以外元処理と一致。コマンド生成を外観依存の初期化後へ配置し、E2Eで検出した起動時参照エラーを解消した。app.jsは9,548→9,508行（40行減、今回の合計1,550行減）。構文437ファイル・単体1,181件・関連E2E168件成功（exit 0、2.4分）。ログはcad-selection-visibility-{check,unit,e2e}.log。全E2Eはこの単位では未実行。全体目標は未完了。appは3つのhoisted入口と明示した生成／接続を保持する。
+
+### 前回の区切り
+
+ToolbarViewへToolbarのactive／ARIA／disabledと選択可視性の反映を分離。操作は表示値だけを渡し、可視性と編集可否は既存照会へ委譲する。ボタン反映→履歴→可視性→Flyout→カーソル、DOMがない場合と権限の短絡評価、Flyout後の最新操作状態の読取りを維持する。appは生成／接続とhoisted updateToolbar入口を保持。app.jsは9,590→9,548行（42行減、今回の合計1,510行減）。構文435ファイル・単体1,174件・関連E2E186件成功（exit 0、2.6分）。ログはcad-toolbar-view-{check,unit,e2e}.log。全E2Eはこの単位では未実行。全体目標は未完了。選択可視性の対象照会／判断／変更、共有pendingとmode、操作commandの組立て整理は残る。
+
+### 前回の区切り
+
+ConstraintSelectionQueryへ現在Selection／対象sessionからの拘束意図と実行／完了可否を集約。対象session→Spline対象変換→通常Selectionの優先、Geometry modeの適用範囲、command中の線長寸法の追加対象待ちを維持する。Selection・対象session・候補・意図照会を明示し、状態更新とUIを持ち込まない。6処理の本体は明示した所有者以外元処理と一致し、不要となったappの候補／subject変換の分解代入も撤去。app.jsは9,627→9,590行（37行減、今回の合計1,468行減）。構文433ファイル・単体1,168件・関連E2E171件成功（exit 0、2.4分）。ログはcad-constraint-query-{check,unit,e2e}.log。全E2Eはこの単位では未実行。全体目標は未完了。共有pending・modeと、注入依存の多い操作commandの組立て整理は残る。
+
+### 前回の区切り
+
+ConstraintCommitCommandへ読取寸法の登録、解決済み意図の配置／通常／参照commit振分け、寸法生成後の式設定と確定を集約。重複寸法は復元後に同じcommand内の登録へ進み、appへの戻り依存を撤去した。3処理の本体は元処理と一致し、測定値とdisabled flag、Selection→分析→UI→draw→案内／log→履歴、通常expression／参照省略、意図による既存の追加履歴を維持する。app.jsは9,665→9,627行（38行減、今回の合計1,431行減）。構文431ファイル・単体1,162件・関連E2E171件成功（exit 0、2.4分）。ログはcad-constraint-registration-{check,unit,e2e}.log。全E2Eはこの単位では未実行。全体目標は未完了。新規moduleは増やさず既存確定所有者へ統合し、生成・配置・現在Selection・共有sessionの接続整理は残る。
+
+### 前回の区切り
+
+未使用のhandleConstraintTargetClickを撤去し、拘束Canvas入力を既存ConstraintCommandInput→ConstraintTargetCommand→ConstraintTargetSessionの経路へ揃えた。Selectionから対象を作る処理はConstraintOperands.fromSelection、解決済み対象のCanvas選択反映はCanvasSelection.applyConstraintTargetsへ集約し、appには現在operand／Selection／pointerを渡す接続を保持。対象順序、円弧端点の重複除外、Spline最近点のfallbackとsampling、参照同一性、解除する選択範囲を維持する。変換本体は明示した入力以外元処理と一致。app.jsは9,822→9,665行（157行減、今回の合計1,393行減）。構文431ファイル・単体1,157件・関連E2E171件成功（exit 0、2.4分）。ログはcad-constraint-selection-{check,unit,e2e}.log。全E2Eはこの単位では未実行。全体目標は未完了。未使用APIの削除を広げず、既存CanvasSelectionの公開helperとダブルクリック経路は保持する。
+
+### 前回の区切り
+
+ConstraintSolvePreparationへ円弧端点・Offset／OffsetChainの幾何前処理、求解ステップ幅の算定と一時変更／復元を分離。型・幾何照会・半径寸法保護・最小長さ・OffsetChain計画を明示し、UI・Selection・Document配列・履歴を持ち込まない。処理本体は元処理と一致。角度の周回、既存Geometryと点の参照、半径寸法保護、finallyでの数値設定復元を境界テストで確認。app.jsは9,954→9,822行（132行減、今回の合計1,236行減）。構文431ファイル・単体1,154件成功。関連E2E186件成功（exit 0、14.9分、うち拘束ドラッグ回帰12.5分）。ログはcad-solve-preparation-{check,unit,e2e}.log。全E2Eはこの単位では未実行。全体目標は未完了。appの3つのhoisted入口は早期接続用で、snapshot／求解実行／失敗復元は既存commandが所有する。
+
+### 前回の区切り
+
+ConstraintIntentResolverへ通常／参照／対称／Splineの意図解決と下位判定を集約。候補生成はConstraintCandidates、対象変換はConstraintOperandsへ委譲し、対象列を入力として配置／commit意図または拒否理由を返す。Selection・session・pending・モデル配列・UI／履歴を直接変更しない。子孫／複数Sketch／参照対象数／権限／循環／Spline端点の判定順序と参照同一性を保持し、処理本体は元処理と一致。app.jsは10,069→9,954行（115行減、今回の合計1,104行減）。構文429ファイル・単体1,148件・関連E2E171件成功（exit 0、2.4分）。ログはcad-intent-resolver-{check,unit,e2e}.log。全E2Eはこの単位では未実行。全体目標は未完了。現在Selectionの取得adapterと操作の進行、command組立ての依存整理は残る。
+
+### 前回の区切り
+
+DimensionPlacementCommandへ選択／半径・直径／解決済み意図からの配置開始、追加対象による再解決、値入力または読取登録への進行を分離。既存の配置計算・読取判定・対象sessionへ委譲し、開始経路ごとのdraft解除／mode変更と初期pointerの違い、draw後のfocus、retarget後のpending更新順序を維持する。5処理の本体は明示した依存adapter以外元処理と一致。app.jsは10,203→10,069行（134行減、今回の合計989行減）。構文427ファイル・単体1,141件・関連E2E165件成功（exit 0、2.3分）。ログはcad-dimension-placement-{check,unit,e2e}.log。全E2Eはこの単位では未実行。全体目標は未完了。共有pendingCommandは他種別と分離しておらず、appのget／set adapterが残る。操作依存も多いため、session／入力表示の所有を整理する際に組立て境界を再確認する。
+
+### 前回の区切り
+
+DimensionReadOnlyQueryへ寸法配置候補の読取判定を分離し、ConstraintRedundancyへ候補の一時追加／解析／除去を集約。明示測定→単一Block→owner／参照付与→重複probeの順序と、候補Object・残存拘束の同一性、配列置換と表示診断を更新しない契約を維持する。appは生成／接続とhoisted入口を保持。app.jsは10,210→10,203行（7行減、今回の合計855行減）。行数以上に、一時モデル書込みの所有者とUIを持たない判定境界を揃える単位。構文425ファイル・単体1,135件・関連E2E165件成功（exit 0、2.3分）。ログはcad-readonly-query-{check,unit,e2e}.log。全E2Eはこの単位では未実行。全体目標は未完了。
+
+### 前回の区切り
+
+DimensionConstraintFactoryへ寸法拘束の種類選択・生成と角度単位／接頭辞の適用を分離。型constructorと平行判定を明示して注入し、Document・UI・操作状態を持ち込まない。平行線拒否の案内とsilent制御は呼出側へ保持し、参照同一性と寸法displayの複製範囲を維持する。対象要素の照会は既存DimensionQueriesへ集約。app.jsは10,252→10,210行（42行減、今回の合計848行減）。構文423ファイル・単体1,130件・関連E2E165件成功（exit 0、2.3分）。ログはcad-dimension-factory-{check,unit,e2e}.log。全E2Eはこの単位では未実行。全体目標は未完了。
+
+### 前回の区切り
+
+ConstraintCommitCommandへ通常／参照拘束の追加とsnapshot・前処理・求解・Parameter安定化・退化／重複判定・失敗復元・成功後の分析／UI／履歴を分離。参照metadata入口、重複寸法の読取変換、通常拒否undefined／参照拒否false、成功後の性能記録の順序も保持。元処理本体は時計／性能記録port以外一致。app.jsは10,368→10,252行（116行減、今回の合計806行減）。構文421ファイル・単体1,125件・関連E2E166件成功（exit 0、2.4分）。ログはcad-constraint-commit-{check,unit,e2e}.log。全E2Eはこの単位では未実行。全体目標は未完了。依存は明示したが多く、後続の組立て整理でcheckpoint・Solver・Parameter・UIの境界を再確認する。
+
+### 前回の区切り
+
+ConstraintTargetCommandへ拘束候補clickのAnnotation委譲・固定切替・対象追加・意図の配置／commit振分けを集約。hit／受入／sessionの所有者を接続し、固定後のcommand参照復元と拒否／エラー／未完了の表示順序を維持。処理本体は明示したsession依存以外元処理と一致。app.jsは10,432→10,368行（64行減、今回の合計690行減）。構文419ファイル・単体1,119件・関連E2E166件成功（exit 0、2.3分）。ログはcad-constraint-click-{check,unit,e2e}.log。全E2Eはこの単位では未実行。全体目標は未完了。依存の増えたcommandは、残るcommit／寸法配置の所有を整理する際に境界と引数数を再確認する。
+
+### 前回の区切り
+
+OperandHitQueryへ拘束候補の通常hit・対称段階の優先・円弧端点・Spline parameterと投影／参照へのfallbackを集約。現在operand列と既知hitを明示し、各providerの評価順序とnullish再照会を維持する。照会本体は明示したoperand引数以外元処理と一致。app.jsは10,463→10,432行（31行減、今回の合計626行減）。構文419ファイル・単体1,113件・関連E2E166件成功（exit 0、2.3分）。ログはcad-constraint-hit-{check,unit,e2e}.log。全E2Eはこの単位では未実行。全体目標は未完了。
+
+### 前回の区切り
+
+ConstraintTargetCommandへ対象選択の開始・取消・確定要求と線長寸法完了を分離。Annotation委譲・権限・作図準備・同種toggle取消・session開始と選択整理・意図の配置／確定、取消時のUI更新とblurの順序を保持する。共有mode／作図draftの準備とDOM blurはappの限定adapterへ接続。状態・受入・案内の既存所有者を組み合わせ、Canvas hit／clickと実commitはまだ呼出側に残る。app.jsは10,537→10,463行（74行減、今回の合計595行減）。構文419ファイル・単体1,109件・関連E2E166件成功（exit 0、2.3分）。ログはcad-constraint-command-{check,unit,e2e}.log。全E2Eはこの単位では未実行。全体目標は未完了。
+
+### 前回の区切り
+
+ConstraintTargetSessionへpending拘束commandと順序付きoperand列の状態所有を集約。begin／append／resetと、commandだけ・operandだけの解除を区別し、appの2変数を撤去。入力・UI・描画・Annotation・診断の照会と更新をsessionへ接続し、受入拒否時の無変更と参照同一性を確認した。確定／取消の操作調整や共有modeは呼出側に残る。app.jsは10,541→10,537行（4行減、今回の合計521行減）。行数より状態更新の入口を揃えることを優先した単位。構文417ファイル・単体1,102件・関連E2E166件成功（exit 0、2.4分）。ログはcad-constraint-session-{check,unit,e2e}.log。全E2Eはこの単位では未実行。全体目標は未完了。
+
+### 前回の区切り
+
+ConstraintOperandsへ拘束候補の受入判断と次operand列の生成を集約。対称の段階／同種／重複／短線拒否、通常種別制限、再選択時の末尾移動と対象数上限を維持し、入力・Geometry・Selection・操作状態を変更しない。appは成功列を反映してSelection同期する。元処理と728ケースで受入可否・拒否文・結果列が一致。app.jsは10,572→10,541行（31行減、今回の合計517行減）。構文415ファイル・単体1,098件・関連E2E134件成功（exit 0、1.9分）。ログはcad-operand-acceptance-{check,unit,e2e}.log。全E2Eはこの単位では未実行。全体目標は未完了。
+
+### 前回の区切り
+
+ConstraintFeedbackへ拘束の対象選択中／拒否時の案内文を集約。種別・operand列・言語を明示し、汎用案内のlabelだけ遅延評価する。DOM・Document・pending sessionを変更しない。日英と対象段階の360ケースで元の処理と一致。Document初期化／Sketch切替／削除はreset対象と順序が異なるため、この単位では汎用resetへまとめず保持する。app.jsは10,641→10,572行（69行減、今回の合計486行減）。構文415ファイル・単体1,093件・関連E2E128件成功（exit 0、1.8分）。ログはcad-constraint-hints-{check,unit,e2e}.log。全E2Eはこの単位では未実行。全体目標は未完了。
+
+### 前回の区切り
+
+SelectionDeletionCommandへ混在Canvas選択の削除調整を分離。Annotation／Hatch／画像→派生Instance→Block→通常図形の既存順序を維持し、GeometryDeletion・GeometryDeletionCommand・ReferenceImageInteractionへ編集を委譲する。通常図形削除が確定した場合の履歴委譲、owner Sketch求解と種別別履歴、途中ガード拒否時の既存の部分削除を境界テストで確認。元の処理本体はscope取得／表示adapter以外一致。app.jsは10,695→10,641行（54行減、今回の合計417行減）。構文415ファイル・単体1,090件・関連E2E223件成功（exit 0、3.2分）。ログはcad-selection-deletion-{check,unit,e2e}.log。全E2Eはこの単位では未実行。全体目標は未完了。
+
+### 前回の区切り
+
+GeometryDeletionへBlock／派生Instanceの投影依存計画と削除適用を統合。投影ObjectとGeometry keyの参照、Block owner拘束、falsy keyの扱い、古いBlock bundleのsplines省略を維持する。計画は非破壊で、適用は拘束→付随注記→対象Instance配列だけを更新する。依存／Parameterガードとcache・選択・求解・履歴は呼出側が既存順序で調整。app.jsは10,711→10,695行（16行減、今回の合計363行減）。構文413ファイル・単体1,084件・関連E2E219件成功（exit 0、3.1分）。ログはcad-instance-deletion-{check,unit,e2e}.log。全E2Eはこの単位では未実行。全体目標は未完了。
+
+### 前回の区切り
+
+GeometryDeletionCommandへプリミティブ／拘束の削除操作を分離。権限・派生参照・Parameter保護の順序、削除適用→Selection／Spline／hover整理→ownerごとの求解→表示→案内／履歴を維持する。共通操作状態の終了・表示・analysis照会を限定したadapterでappへ接続する。求解不成功でも削除を記録する既存挙動を維持し、deleteElements入口はhoisted wrapperとした。app.jsは10,732→10,711行（21行減、今回の合計347行減）。構文413ファイル・単体1,081件・関連E2E147件成功（exit 0、2.1分）。ログはcad-deletion-command-{check,unit,e2e}.log。全E2Eはこの単位では未実行。全体目標は未完了。
+
+### 前回の区切り
+
+GeometryDeletionへ計画の適用を統合し、plan／applyを明示した編集APIとして整理。削除配列の置換と付随注記の除去は同じ所有者へ、選択整理はCanvasSelectionへ集約。Spline編集解除を選択更新の二段階の間に挟む既存順序と、残存図形／拘束のObject同一性を維持する。app.jsは10,745→10,732行（13行減、今回の合計326行減）。構文411ファイル・単体1,076件・関連E2E147件成功（exit 0、2.1分）。ログはcad-deletion-apply-{check,unit,e2e}.log。モデル適用本体は元の処理と照合済み。全E2Eはこの単位では未実行。全体目標は未完了。
+
+### 前回の区切り
+
+GeometryDeletionPlanへ、共有端点を保持しながら関連する点／図形／拘束を含める削除対象計算を分離。明示したmodelと候補から実オブジェクトの集合を返し、model・入力・Selectionは変更しない。PointUsageと拘束参照判定を注入する。元の計算本体は改行正規化後に機械照合して一致。権限／参照／Parameter保護、操作終了、削除適用、選択、求解・履歴・表示は呼出側へ保持。app.jsは10,796→10,745行（51行減、今回の合計313行減）。構文411ファイル・単体1,074件・関連E2E147件成功（exit 0、2.1分）。ログはcad-deletion-plan-{check,unit,e2e}.log。全E2Eはこの単位では未実行。全体目標は未完了。
+
+### 前回の区切り
+
+ClipboardCommandへコピー／切取り／貼付けのガード、実行順序、成功案内と失敗復元の調整を分離。モデル構築、session、checkpoint、Selectionの各所有者へ委譲し、appは現在scope・作成権限・mode・求解／履歴・表示同期との接続を保持する。既存の早期接続のため入口はhoisted wrapperを維持。app.jsは10,844→10,796行（48行減、今回の合計262行減）。構文409ファイル・単体1,070件・関連E2E201件成功（exit 0、2.6分）。ログはcad-clipboard-command-{check,unit,e2e}.log。全E2Eはこの単位では未実行。全体目標は未完了。
+
+### 前回の区切り
+
+ClipboardGraphへ貼付けるモデルの構築順序を集約。Geometry／Transfer／Parameterの既存所有者を7つの限定した依存で接続し、UI・session・checkpoint・求解・履歴を持ち込まない。生成結果と参照Mapを返し、構築失敗は操作側へ伝える。app.jsは10,889→10,844行（45行減）。構文407ファイル・単体1,064件・関連E2E201件成功（exit 0、2.6分）。ログはcad-clipboard-graph-{check,unit,e2e}.log。全E2Eはこの単位では未実行。全体目標は未完了。
+
+### 前回の区切り
+
+ClipboardGeometryへ派生InstanceのID予約・生成経路再接続・名前空間参照検査・正規化と追加を集約。生成後の投影参照登録はClipboardTransferに残し、順序を保つ。app.jsは10,901→10,889行（12行減）。構文405ファイル・単体1,062件・関連E2E197件成功（exit 0、2.5分）。ログはcad-clipboard-derived-build-{check,unit,e2e}.log。全E2Eはこの単位では未実行。全体目標は未完了。
+
+### 前回の区切り
+
+ClipboardGeometryへBlock Instanceの定義確認・生成・配置・ID対応表更新を集約。採番adapter以外の本体は元コードと機械照合して一致。投影cache／再接続と失敗復元は呼出側へ保持。app.jsは10,917→10,901行（16行減）。構文405ファイル・単体1,060件・関連E2E167件成功（exit 0、2.2分）。ログはcad-clipboard-blocks-{check,unit,e2e}.log。全E2Eはこの単位では未実行。全体目標は未完了。
+
+### 前回の区切り
+
+ClipboardSessionへコピー内容・cut保持・要素数・貼付け位置／回数の状態所有を分離。コピー通知→切取り削除、失敗時のpayload保持、求解前の回数更新を維持。診断hookの代入と消去もsession APIへ接続。app.jsは10,923→10,917行（6行減）。構文405ファイル・単体1,058件・関連E2E171件成功（exit 0、2.2分）。ログはcad-clipboard-session-{check,unit,e2e}.log。全E2Eはこの単位では未実行。全体目標は未完了。
+
+### 前回の区切り
+
+CanvasSelectionへ貼付け後の生成IDと実オブジェクトによる選択復元を集約。種別フィルタと注記／Hatchの選択ID限定、Instance／画像全体選択を維持。呼出側で先に選択関連UIを解除する。app.jsは10,930→10,923行（7行減）。構文403ファイル・単体1,054件・関連E2E171件成功（exit 0、2.2分）。ログはcad-clipboard-selection-{check,unit,e2e}.log。全E2Eはこの単位では未実行。全体目標は未完了。
+
+### 前回の区切り
+
+ClipboardTransferへ派生Instanceの原点調整・bundle検査・参照Map登録を集約。scope／配列／cacheの所有を持ち込まず、必要な参照照会だけを注入。元の反復順序と上限を機械照合して維持。app.jsは10,952→10,930行（22行減）。構文403ファイル・単体1,052件・関連E2E197件成功（exit 0、2.5分）。ログはcad-clipboard-derived-{check,unit,e2e}.log。全E2Eはこの単位では未実行。全体目標は未完了。
+
+### 前回の区切り
+
+ParameterNamespaceへコピー寸法／注記の名前予約と式の付替えを集約。同一名前空間での切取り名保持、衝突回避、別名前空間での現在値化、角度の度換算、読取専用の除外を維持。appはscope選択と拘束復元・追加を調整する。app.jsは10,983→10,952行（31行減）。構文403ファイル・単体1,049件・関連E2E167件成功（exit 0、2.2分）。ログはcad-clipboard-symbols-{check,unit,e2e}.log。全E2Eはこの単位では未実行。全体目標は未完了。
+
+### 前回の区切り
+
+ClipboardTransferへ注記・塗りつぶし・参照画像の貼付け値変換を統合。serializeした注記・画像だけを移動し、塗りつぶしの参照不足はnullで呼出側へ返す。ID発行・配列追加・UI例外・履歴は操作側に残す。app.jsは10,995→10,983行（12行減）。構文403ファイル・単体1,046件・関連E2E186件成功（exit 0、2.4分）。ログはcad-clipboard-elements-{check,unit,e2e}.log。全E2Eはこの単位では未実行。全体目標は未完了。
+
+### 前回の区切り
+
+ClipboardPasteCheckpointへ貼付け直前の配列長・採番・modelカウンタの保持と復元を分離。明示したscopeを保持し既存Objectを複製せず、復元対象と順序を維持する。採番変数へのadapterはappに残る。app.jsは11,014→10,995行（19行減）。構文403ファイル・単体1,043件・関連E2E167件成功（exit 0、2.2分）。ログはcad-clipboard-checkpoint-{check,unit,e2e}.log。全E2Eはこの単位では未実行。全体目標は未完了。
+
+### 前回の区切り
+
+ClipboardGeometryへコピーしたプリミティブの生成・指定Sketchへの追加・IDと参照Mapの構築を分離。GeometryCreationの最小長／円弧正規化を注入し、Selection・履歴・pasteCount・失敗復元を持ち込まない。生成処理本体は元コードと機械照合して一致。app.jsは11,058→11,014行（44行減）。構文401ファイル・単体1,040件・関連E2E167件成功（exit 0、2.2分）。ログはcad-clipboard-geometry-{check,unit,e2e}.log。全E2Eは今回未実行。週枠残量70%未満で停止する最新指示へ方針書を更新。全体目標は未完了。
+
+## 前回の停止地点（2026-10-10）
 
 停止・リリース検証：コード05eecd3をdevelopへ統合し、構文390ファイル・単体992件・全E2E441件成功（exit 0、23.1分）。ログは一時ディレクトリのcad-refactor-oct10-final-{check,unit,e2e}.log。週枠残量5%で新規分離を停止し、記録をCommit／Push後、develop先行・main最後で同期して一時停止する。今回2コミットでapp.jsは10,977→10,834行（143行減）。再開時は方針書section 8を参照。全体目標は未完了。
 

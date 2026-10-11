@@ -3,6 +3,33 @@ const fs = require('node:fs');
 const vm = require('node:vm');
 const test = require('node:test');
 const sandbox = { window: {} }; vm.runInNewContext(fs.readFileSync('src/commands/annotation_drag.js', 'utf8'), sandbox);
+
+test('rotated frame resize keeps anchor and padding, can cancel and commits once', () => {
+  const item = { id: 'AN1', type: 'text', x: 10, y: 20, anchorPosition: 'center-middle', style: { textHeight: 5, framePaddingX: 2, framePaddingY: 3 } };
+  let commits = 0, releases = 0;
+  const drag = sandbox.window.AnnotationDrag.create({ annotationById: () => item, canvasSelection: { annotations: [item], set() {} },
+    beginPointer() {}, endPointer() { releases++; }, setHint() {}, updateUI() {}, draw() {}, recordHistory() { commits++; },
+    annotationTextLayout: () => ({ width: 40, height: 20, rotation: Math.PI / 2 }), effectiveAnnotationStyle: () => item.style,
+    resizeText: (note, height) => { note.style.textHeight = height; } });
+  const hit = { element: item, type: 'text', part: 'frame', resizeX: 1, resizeY: 1 };
+  drag.begin({ pointerId: 1 }, hit, { x: 0, y: 0 }); drag.update({ x: -10, y: 20 });
+  assert.equal(item.style.textHeight, 10); assert.deepEqual([item.x, item.y, item.style.framePaddingX, item.style.framePaddingY], [10, 20, 2, 3]);
+  drag.reset(); assert.equal(item.style.textHeight, 5); assert.equal(commits, 0);
+  drag.begin({ pointerId: 2 }, hit, { x: 0, y: 0 }); drag.update({ x: -10000, y: 20000 });
+  assert.equal(item.style.textHeight, 100); drag.finish({ pointerId: 2 }); assert.equal(commits, 1); assert.equal(releases, 2);
+});
+test('frame activation only enables handles and selection changes disable them without history', () => {
+  const item = { id: 'AN1', type: 'text', x: 10, y: 20 }, selection = { annotations: [item], set(key, items) { this[key] = items; } };
+  let records = 0;
+  const drag = sandbox.window.AnnotationDrag.create({ annotationById: () => item, canvasSelection: selection,
+    setHint() {}, draw() {}, recordHistory() { records++; }, beginPointer() { throw new Error('Activation must not begin a drag'); } });
+  drag.begin({ pointerId: 1 }, { element: item, type: 'text', part: 'frame-enable' }, { x: 0, y: 0 });
+  assert.equal(drag.active, false); assert.equal(drag.resizeEnabled(item), true); assert.equal(records, 0);
+  drag.syncResizeSelection(); assert.equal(drag.handlesActive, true);
+  selection.annotations = []; drag.syncResizeSelection(); assert.equal(drag.handlesActive, false);
+  selection.annotations = [item]; drag.syncResizeSelection(); assert.equal(drag.resizeEnabled(item), false);
+});
+
 test('multiple free texts use shared displacement, current identities and one history entry', () => {
   const items = [{ id: 'AN1', type: 'text', x: 10, y: 20 }, { id: 'AN2', type: 'text', x: -5, y: 7 }];
   const selection = { annotations: items, set: (kind, value) => { selection[kind] = value; } };
@@ -77,4 +104,16 @@ test('whole leader drag converts display displacement at non-unit annotation sca
   assert.equal(f.item.end.x, original.end.x + 10); assert.equal(f.item.end.y, original.end.y - 6);
   assert.equal(f.item.x, original.x + 10); assert.equal(f.item.y, original.y - 6);
   assert.deepEqual(f.item.start, original.start);
+});
+
+test('coincident geometry drag delegates without starting a competing annotation session; handles remain independent', () => {
+  const item = { id: 'AN1', type: 'text', x: 10, y: 20 }, selection = { annotations: [item], set(key, value) { this[key] = value; } };
+  let delegated = 0;
+  const command = sandbox.window.AnnotationDrag.create({ canvasSelection: selection, canEdit: () => true,
+    beginConstrainedDrag: (event, element, pointer) => { assert.equal(element, item); assert.equal(pointer.x, 3); delegated++; return true; },
+    setHint() {}, draw() {}, beginPointer() { throw new Error('Annotation drag must not capture the delegated pointer'); } });
+  command.begin({ pointerId: 1 }, { element: item, type: 'text', part: 'label' }, { x: 3, y: 4 });
+  assert.equal(delegated, 1); assert.equal(command.active, false); assert.equal(selection.annotations[0], item);
+  command.begin({ pointerId: 1 }, { element: item, type: 'text', part: 'frame-enable' }, { x: 3, y: 4 });
+  assert.equal(delegated, 1); assert.equal(command.handlesActive, true);
 });

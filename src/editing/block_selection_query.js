@@ -56,14 +56,15 @@
         }
       }
       for (const annotation of annotations) {
-        if (annotation.type !== "leader") continue;
-        const referenced = resolveGeometryRef(annotation.geometryRef);
-        if (!referenced || !isSelectedNode(referenced)) return { error: applicationText(`注記 ${annotation.id} の参照先も選択してください`, `Also select the target referenced by annotation ${annotation.id}`) };
+        for (const ref of window.AnnotationAnchorConstraints?.refs(annotation) || (annotation.type === "leader" ? [annotation.geometryRef] : [])) {
+          const referenced = resolveGeometryRef(ref);
+          if (!referenced || !isSelectedNode(referenced)) return { error: applicationText(`注記 ${annotation.id} の参照先も選択してください`, `Also select the target referenced by annotation ${annotation.id}`) };
+        }
       }
       for (const annotation of model.annotations) {
         if (annotations.includes(annotation)) continue;
-        const referenced = annotation.type === "leader" ? resolveGeometryRef(annotation.geometryRef) : null;
-        if (referenced && isSelectedNode(referenced)) return { error: `注記 ${annotation.id} が選択図形を参照しています` };
+        const references = window.AnnotationAnchorConstraints?.refs(annotation) || (annotation.type === "leader" ? [annotation.geometryRef] : []);
+        if (references.some(ref => isSelectedNode(resolveGeometryRef(ref)))) return { error: `注記 ${annotation.id} が選択図形を参照しています` };
       }
       const selectedBoundaryKeys = new Set([...lines, ...circles, ...arcs, ...splines].map((item) => `${geometryKindForItem(item)}:${item.id}`));
       for (const hatch of hatches) {

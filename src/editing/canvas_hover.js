@@ -1,7 +1,7 @@
 /* Own canvas hover references and transient preview/restore operations. */
 (() => {
   "use strict";
-  const fields = Object.freeze(["point","endpointPoint","line","circle","arc","spline","block","geometryInstance","arcEndpoint","dimension","annotation","hatch","referenceImage","sketchIdentity"]);
+  const fields = Object.freeze(["point","endpointPoint","line","circle","arc","spline","block","geometryInstance","arcEndpoint","dimension","annotation","annotationHandle","hatch","referenceImage","sketchIdentity"]);
   const contextFields = fields;
   function create({ isEndpointPoint }) {
     const empty = () => Object.fromEntries(fields.map(field => [field, null]));

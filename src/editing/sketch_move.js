@@ -44,11 +44,12 @@
         }
       }
       for (const annotation of scope.annotations || []) {
-        if (annotation.type !== "leader") continue;
-        const target = resolveGeometryRef(annotation.geometryRef);
-        if (!moved.has(annotation) && !isMoved(target)) continue;
-        if (!target || moved.has(annotation) !== isMoved(target)) {
-          return fail(`引出線と参照先を一緒に選択してください: ${moved.has(annotation) ? label(target) : annotation.id}`, `Select the leader and its target together: ${moved.has(annotation) ? label(target) : annotation.id}`);
+        for (const ref of window.AnnotationAnchorConstraints?.refs(annotation) || (annotation.type === "leader" ? [annotation.geometryRef] : [])) {
+          const target = resolveGeometryRef(ref);
+          if (!moved.has(annotation) && !isMoved(target)) continue;
+          if (!target || moved.has(annotation) !== isMoved(target)) {
+            return fail(`注記と参照先を一緒に選択してください: ${moved.has(annotation) ? label(target) : annotation.id}`, `Select the annotation and its target together: ${moved.has(annotation) ? label(target) : annotation.id}`);
+          }
         }
       }
       const constraints = [];

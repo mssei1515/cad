@@ -78,3 +78,20 @@ test('unstable or missing contributions are never presented as duplicates', () =
   state.analysis = { stable: true, byConstraint: new Map() };
   service.refreshConstraintRedundancy(); assert.equal(service.constraintIsRedundant(a), false);
 });
+
+
+test('candidate probing includes the candidate in its owner analysis and removes it without refreshing diagnostics', () => {
+  const { state, service } = fixture();
+  const retained = {}, other = { sketchId: 'S2' }, candidate = {};
+  const original = [retained, other]; state.scope.constraints = original;
+  state.analysis.byConstraint.set(candidate, { redundant: true, rankBefore: 1, rankAfter: 1 });
+  const result = service.probeCandidate(candidate, 'S1');
+  assert.equal(result.redundant, true);
+  assert.deepEqual(Array.from(state.calls[0].constraints), [retained, candidate]);
+  assert.deepEqual(Array.from(state.scope.constraints), [retained, other]);
+  assert.notEqual(state.scope.constraints, original); assert.equal(original[2], candidate);
+  assert.equal(service.count, 0); assert.equal(service.constraintRedundancyInfo(candidate), null);
+  state.analysis.stable = false;
+  assert.equal(service.probeCandidate(candidate, 'S1').unstable, true);
+  assert.deepEqual(Array.from(state.scope.constraints), [retained, other]);
+});

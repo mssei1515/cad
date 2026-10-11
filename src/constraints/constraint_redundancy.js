@@ -43,6 +43,13 @@
       };
     }
 
+    function probeCandidate(constraint, sketchId) {
+      currentScope().constraints.push(constraint);
+      const duplicate = redundantConstraintInfo(constraint, sketchId);
+      currentScope().constraints = currentScope().constraints.filter((item) => item !== constraint);
+      return duplicate;
+    }
+
     function refreshConstraintRedundancy(precomputedBySketch = null) {
       const byConstraint = new Map();
       const bySketch = new Map();
@@ -89,7 +96,7 @@
         sketches: new Map(constraintRedundancyState.sketches), count: constraintRedundancyState.count };
     }
     return Object.freeze({
-      redundantConstraintInfo, refreshConstraintRedundancy, constraintRedundancyInfo,
+      probeCandidate, redundantConstraintInfo, refreshConstraintRedundancy, constraintRedundancyInfo,
       constraintIsRedundant, constraintDuplicateCountForSketch,
       get count() { return constraintRedundancyState.count; },
       // Rejecting a new constraint only discards its detail; counts refresh with the next analysis.

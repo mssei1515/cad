@@ -17,6 +17,25 @@ function definition(id) {
   return { id, revision: 1, sketches: [{ id: "ROOT", kind: "root" }, { id: "S1" }, { id: "S2" }], points: [a, b], lines: [line], circles: [], arcs: [], splines: [], annotations: [], hatches: [], blockInstances: [], geometryInstances: [] };
 }
 const instance = (id, definitionId, fields = {}) => ({ id, definitionId, sketchId: "S1", x: 10, y: 20, rotation: 0, ...fields });
+
+test('annotation curve and symmetry references retain their kinds through a rotated block', () => {
+  const local = definition('anchor-block');
+  local.annotations = [
+    { id: 'AN1', type: 'text', sketchId: 'S1', text: 'line', x: 2, y: 3, anchorPosition: 'left-middle', anchorConstraints: [{ type: 'on-line', geometryRef: { kind: 'line', path: ['L1'] } }] },
+    { id: 'AN2', type: 'text', sketchId: 'S1', text: 'symmetry', x: 2, y: 3, anchorPosition: 'left-middle', anchorConstraints: [{ type: 'symmetry', geometryRef: { kind: 'point', path: ['P1'] }, axisRef: { kind: 'line', path: ['L1'] } }] },
+  ];
+  const { projection } = services(() => [local]);
+  const bundle = projection.createBlockProjectionBundle(instance('BI1', local.id, { rotation: Math.PI / 2 }), local);
+  const resolve = ref => sandbox.window.GeometryRef.resolve(ref, (kind, id) => (kind === 'point' ? bundle.points : bundle.lines).find(item => item.id === id));
+  const A = sandbox.window.AnnotationAnchorConstraints;
+  assert.equal(bundle.annotations[0].anchorConstraints[0].geometryRef.kind, 'line');
+  assert.deepEqual(Array.from(bundle.annotations[1].anchorConstraints[0].axisRef.path), ['BI1', 'L1']);
+  for (const item of bundle.annotations) {
+    const position = A.resolve(item, { x: item.x, y: item.y }, resolve);
+    near(position.x, 10);
+    if (item.id.endsWith('AN2')) near(position.y, 21);
+  }
+});
 function services(definitions) {
   const catalog = sandbox.window.BlockCatalog.create({ definitions });
   const derived = sandbox.window.InstanceProjection.create({ elementSketchId: item => item.sketchId, applicationText: (_ja, en) => en,

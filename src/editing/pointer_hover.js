@@ -5,14 +5,23 @@
   function create({ canvasHover, sameArcEndpoint, isActiveSketchConstraint, geometry, scene }) {
     const { hitEndpointPoint, hitExplicitPoint, hitLine, hitCircle, hitArcEndpoint, hitArc, hitSpline } = geometry;
     const { hitDimension, hitDerivedProjectionOperand, hitBlockProjectionOperand, hitReferenceTarget, hitSketchIdentityElement,
-      hitBlockInstance, hitGeometryInstance, hitAnnotationElement, hitHatchAt, hitReferenceImageAt } = scene;
+      hitBlockInstance, hitGeometryInstance, hitAnnotationElement, hitAnnotationInteraction, hitHatchAt, hitReferenceImageAt } = scene;
+    function highlightAnnotation(hit) {
+      const element = hit.element || hit;
+      const handle = hit.part === "frame" ? { element, resizeX: hit.resizeX, resizeY: hit.resizeY } : null;
+      const previous = canvasHover.current.annotationHandle;
+      if (canvasHover.current.annotation === element && handle?.resizeX === previous?.resizeX && handle?.resizeY === previous?.resizeY && Object.entries(canvasHover.current).every(([key, value]) => key === "annotation" || key === "annotationHandle" || !value)) return false;
+      canvasHover.clear(); canvasHover.update({ annotation: element, annotationHandle: handle }); return true;
+    }
     function updateConstraint(p, constraintType) {
+      const annotation = hitAnnotationInteraction?.(p.x, p.y, true);
+      if (annotation) return highlightAnnotation(annotation);
       const hitD = constraintType === "distance" ? hitDimension(p.x, p.y) : null;
       if (hitD) {
         canvasHover.update({
           point: null, endpointPoint: null, line: null,
           circle: null, arcEndpoint: null, arc: null,
-          dimension: hitD.constraint, block: null,
+          dimension: hitD.constraint, block: null, ...(hitAnnotationInteraction ? { annotation: null, annotationHandle: null } : {}),
         });
         return true;
       }
@@ -21,7 +30,7 @@
         canvasHover.update({
           point: blockOperand.kind === "point" ? blockOperand.point : null, endpointPoint: null, line: blockOperand.kind === "line" ? blockOperand.line : null,
           circle: blockOperand.kind === "primitive" && blockOperand.primitive instanceof Circle ? blockOperand.primitive : null, arc: blockOperand.kind === "primitive" && blockOperand.primitive instanceof Arc ? blockOperand.primitive : null, arcEndpoint: blockOperand.kind === "arc-endpoint" ? { arc: blockOperand.arc, endpoint: blockOperand.endpoint } : null,
-          dimension: null, block: null,
+          dimension: null, block: null, ...(hitAnnotationInteraction ? { annotation: null, annotationHandle: null } : {}),
         });
         return true;
       }
@@ -45,13 +54,14 @@
         : nextPointHover || nextLineHover || nextCircleHover || nextArcEndpointHover
           ? null
           : hitArc(p.x, p.y);
+      const nextAnnotationHover = nextPointHover || nextLineHover || nextCircleHover || nextArcEndpointHover || nextArcHover ? (hitAnnotationInteraction ? null : canvasHover.current.annotation) : hitAnnotationElement(p.x, p.y)?.element || null;
       if (
         nextPointHover !== canvasHover.current.point ||
         nextEndpointHover !== canvasHover.current.endpointPoint ||
         nextLineHover !== canvasHover.current.line ||
         nextCircleHover !== canvasHover.current.circle ||
         !sameArcEndpoint(nextArcEndpointHover, canvasHover.current.arcEndpoint) ||
-        nextArcHover !== canvasHover.current.arc ||
+        nextArcHover !== canvasHover.current.arc || nextAnnotationHover !== canvasHover.current.annotation || canvasHover.current.annotationHandle ||
         canvasHover.current.dimension ||
         nextSketchIdentity?.item !== canvasHover.current.sketchIdentity?.item ||
         Boolean(nextSketchIdentity)
@@ -59,7 +69,7 @@
         canvasHover.update({
           point: nextPointHover, endpointPoint: nextEndpointHover, line: nextLineHover,
           circle: nextCircleHover, arcEndpoint: nextArcEndpointHover, arc: nextArcHover,
-          dimension: null, sketchIdentity: nextSketchIdentity,
+          dimension: null, sketchIdentity: nextSketchIdentity, annotation: nextAnnotationHover, annotationHandle: null,
         });
         return true;
       }
@@ -67,6 +77,8 @@
     }
 
     function updateOrdinary(p) {
+      const annotation = hitAnnotationInteraction?.(p.x, p.y, false);
+      if (annotation) return highlightAnnotation(annotation);
       const hitD = hitDimension(p.x, p.y, { activeOnly: false });
       const nextHover = hitD && isActiveSketchConstraint(hitD.constraint) ? hitD.constraint : null;
       const nextEndpointHover = nextHover ? null : hitEndpointPoint(p.x, p.y);
@@ -100,7 +112,7 @@
         nextHover !== canvasHover.current.dimension ||
         nextSketchIdentity?.item !== canvasHover.current.sketchIdentity?.item ||
         Boolean(nextSketchIdentity) || nextBlockHover !== canvasHover.current.block || nextGeometryInstanceHover !== canvasHover.current.geometryInstance ||
-        nextAnnotationHover !== canvasHover.current.annotation ||
+        nextAnnotationHover !== canvasHover.current.annotation || canvasHover.current.annotationHandle ||
         nextHatchHover !== canvasHover.current.hatch ||
         nextReferenceImageHover !== canvasHover.current.referenceImage
       ) {
@@ -108,7 +120,7 @@
           point: nextPointHover, endpointPoint: nextEndpointHover, line: nextLineHover,
           circle: nextCircleHover, arcEndpoint: nextArcEndpointHover, arc: nextArcHover,
           spline: nextSplineHover, dimension: nextHover, sketchIdentity: nextSketchIdentity,
-          block: nextBlockHover, geometryInstance: nextGeometryInstanceHover, annotation: nextAnnotationHover,
+          block: nextBlockHover, geometryInstance: nextGeometryInstanceHover, annotation: nextAnnotationHover, annotationHandle: null,
           hatch: nextHatchHover, referenceImage: nextReferenceImageHover,
         });
         return true;

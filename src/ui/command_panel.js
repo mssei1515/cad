@@ -56,11 +56,18 @@
         }
         const settingGroups = new Map();
         for (const setting of state.settings || []) {
-          const label = node("label", null, "command-panel-setting");
+          const label = node(setting.type === "radio-grid" ? "div" : "label", null, "command-panel-setting");
           const text = node("span");
           label.append(text);
-          const input = node(setting.type === "textarea" ? "textarea" : setting.type === "select" ? "select" : "input");
-          if (setting.type === "textarea") input.rows = 3;
+          const input = node(setting.type === "radio-grid" ? "div" : setting.type === "textarea" ? "textarea" : setting.type === "select" ? "select" : "input");
+          if (setting.type === "radio-grid") {
+            input.className = "annotation-anchor-grid"; input.setAttribute("role", "radiogroup");
+            for (const option of setting.options || []) {
+              const cell = node("label"), radio = node("input"); radio.type = "radio"; radio.name = "command-" + setting.key; radio.value = option.value; radio.dataset.setting = setting.key;
+              cell.append(radio, node("span", option.label)); input.append(cell);
+            }
+          }
+          else if (setting.type === "textarea") input.rows = 3;
           else if (setting.type === "select") { for (const option of setting.options || []) { const element = node("option", option.label); element.value = option.value; input.append(element); } }
           else input.type = setting.type || "number";
           input.dataset.setting = setting.key;
@@ -122,6 +129,7 @@
         if (setting.type === "textarea") { input.rows = setting.rows || 3; input.wrap = setting.rows ? "off" : "soft"; input.dataset.affix = String(Boolean(setting.rows)); }
         input.placeholder = setting.placeholder || "";
         if (setting.type === "select") [...input.options].forEach((option, i) => { option.textContent = setting.options[i].label; });
+        if (setting.type === "radio-grid") [...input.querySelectorAll('input')].forEach(radio => { radio.checked = radio.value === setting.value; radio.parentElement.querySelector('span').textContent = setting.options.find(option => option.value === radio.value).label; });
         text.textContent = setting.label;
         input.setAttribute("aria-label", setting.label);
         // Keep the live input node and unsent text through selection/preview updates.

@@ -76,7 +76,7 @@
         defaultConstructionAppearance: normalizeConstructionAppearance(data.defaultConstructionAppearance, { partial: false }),
         defaultDimensionAppearance: window.Appearance.dimensionDefaults(normalizeLoadedDimensionAppearance(data.defaultDimensionAppearance, { partial: false })),
         defaultTerminatorAppearance: window.Appearance.normalizeTerminator(data.defaultTerminatorAppearance || normalizeLoadedDimensionAppearance(data.defaultDimensionAppearance, { partial: false }), { partial: false }),
-        defaultLeaderAppearance: window.Appearance.leaderDefaults(data.defaultLeaderAppearance),
+        defaultLeaderAppearance: window.Appearance.leaderDefaults(sourceVersion < 25 ? { textHeight: window.Appearance.DEFAULT_ANNOTATION_STYLE.textHeight, ...data.defaultLeaderAppearance } : data.defaultLeaderAppearance),
         annotations: loadedAnnotations, hatches: loadedHatches, referenceImages: loadedReferenceImages,
         nextHatchIndex: Math.max(nextSeq(loadedHatches, "H"), Number(data.nextHatchIndex) || 1),
         blockDefinitions: loadedBlockDefinitions, blockInstances: loadedBlockInstances,

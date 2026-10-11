@@ -2,7 +2,7 @@
 (() => {
   "use strict";
   const { Point } = window.GeometrySolver;
-  function create({ currentScope, geometryReads, activeSketchId, elementSketchId, constraintSketchId, isVisibleSketchElement, constraintIsOperational, constraintGraphNodes, geometryInstanceDependencyRefs, minimumLength }) {
+  function create({ currentScope, geometryReads, activeSketchId, elementSketchId, constraintSketchId, isVisibleSketchElement, constraintIsOperational, constraintGraphNodes, geometryInstanceDependencyRefs, minimumLength, additionalVariables = () => [] }) {
     const { allGeometryPoints, allGeometryLines, allGeometryCircles, allGeometryArcs, allGeometrySplines, resolveGeometryRef } = geometryReads;
     function addIntrinsicGraphEdges(adjacency, a, b) {
       if (!a || !b) return;
@@ -112,6 +112,7 @@
         vars.push({ object: instance, prop: "y", label: `${instance.id}.y` });
         if (!instance.rotationLocked) vars.push({ object: instance, prop: "rotation", label: `${instance.id}.rotation` });
       }
+      vars.push(...additionalVariables().filter(variable => constraintSketchId(variable.object) === sketchId && constraintGraphNodes(variable.object).some(node => component.has(node))));
       return vars;
     }
 
@@ -155,6 +156,7 @@
         vars.push({ object: instance, prop: "y", label: `${instance.id}.y` });
         if (!instance.rotationLocked) vars.push({ object: instance, prop: "rotation", label: `${instance.id}.rotation` });
       }
+      vars.push(...additionalVariables().filter(variable => constraintSketchId(variable.object) === sketchId));
       return vars;
     }
 

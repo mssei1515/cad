@@ -5,8 +5,10 @@
   const { geometryKindForItem } = window.GeometryObjects;
   const { id: geometryRefId } = window.GeometryRef;
   const { createRegionIndex: createHatchRegionIndex, findFaceInIndex: findHatchFaceInIndex,
-    resolveBoundary: resolveHatchBoundaryLoops, boundaryGeometryRefs: hatchBoundaryGeometryRefs } = window.HatchRegionEngine;
-  function create({ currentScope, boundaryGeometry, activeSketchId, effectiveAppearanceForElement, applicationText }) {
+    resolveBoundary: resolveHatchBoundaryLoops, boundaryGeometryRefs: hatchBoundaryGeometryRefs, containsPoint: hatchContainsPoint } = window.HatchRegionEngine;
+  const { distancePointToSegmentPoints } = window.GeometryKernel;
+  const HATCH_BOUNDARY_HIT_MARGIN_SCREEN_PX = 1;
+  function create({ currentScope, boundaryGeometry, activeSketchId, effectiveAppearanceForElement, applicationText, defaultLineWidth, viewportScale }) {
     let hatchResolutionCache = new WeakMap();
     let hatchFaceCache = new Map();
     function hatchPrimitiveForElement(element) {
@@ -80,9 +82,50 @@
     }
 
 
+    function hatchBoundaryGeometryItems(hatch) {
+      if (hatch?.derivedProjection) return [];
+      const refIds = new Set(hatchBoundaryGeometryRefs(hatch?.boundaryLoops).map((ref) => `${ref.kind}:${geometryRefId(ref)}`));
+      if (refIds.size === 0) return [];
+      const geometry = boundaryGeometry();
+      return geometry.filter((item) => {
+        if (hatch?.blockProjection) {
+          if (item.blockInstance !== hatch.blockInstance) return false;
+          const local = item.localElement || item.sourceElement;
+          return local && refIds.has(`${geometryKindForItem(local)}:${local.id}`);
+        }
+        return refIds.has(`${geometryKindForItem(item)}:${item.id}`);
+      });
+    }
+
+    function hatchBoundaryHitExclusionScreenPx(hatch) {
+      const widths = hatchBoundaryGeometryItems(hatch).map((item) => Number(effectiveAppearanceForElement(item).lineWidth)).filter(Number.isFinite);
+      const boundaryLineWidth = widths.length > 0 ? Math.max(...widths) : defaultLineWidth();
+      return Math.max(0.5, boundaryLineWidth / 2) + HATCH_BOUNDARY_HIT_MARGIN_SCREEN_PX;
+    }
+
+    function resolvedHatchBoundaryDistance(resolved, point) {
+      let distance = Infinity;
+      for (const loop of resolved?.loops || []) {
+        const points = loop.points || [];
+        for (let index = 0; index < points.length; index += 1) {
+          const p1 = points[index];
+          const p2 = points[(index + 1) % points.length];
+          distance = Math.min(distance, distancePointToSegmentPoints(point.x, point.y, p1, p2));
+        }
+      }
+      return distance;
+    }
+
+    function hatchContainsSelectablePoint(hatch, resolved, point) {
+      return Boolean(resolved?.ok)
+        && hatchContainsPoint(resolved, point)
+        && resolvedHatchBoundaryDistance(resolved, point) > hatchBoundaryHitExclusionScreenPx(hatch) / viewportScale();
+    }
+
+
     function forget(hatch) { hatchResolutionCache.delete(hatch); }
     function clear() { hatchResolutionCache = new WeakMap(); hatchFaceCache = new Map(); }
-    return Object.freeze({ hatchPrimitivesFromElements, hatchPrimitivesForScope, resolvedHatchBoundary, hatchFaceAt, forget, clear });
+    return Object.freeze({ hatchPrimitivesFromElements, hatchPrimitivesForScope, resolvedHatchBoundary, hatchFaceAt, hatchBoundaryGeometryItems, hatchBoundaryHitExclusionScreenPx, resolvedHatchBoundaryDistance, hatchContainsSelectablePoint, forget, clear });
   }
   window.HatchGeometryQuery = Object.freeze({ create });
 })();

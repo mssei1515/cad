@@ -5,7 +5,7 @@
   const { hypot2 } = window.GeometrySolver;
   const { distancePointToSegmentPoints } = window.GeometryKernel;
   const { mergeBounds, pointInExpandedBox } = window.GeometryBounds;
-  function create({ viewportScale, annotationTextWorldHeight, formatDisplayNumber, allAnnotations, isVisibleSketchId, activeSketchId, annotationLeaderAnchor, annotationTextLayout = () => null, annotationLeaderDisplayGeometry = element => element, effectiveAnnotationStyle = element => normalizeAnnotationStyle(element?.style), isVisibleValue = visible => visible !== false }) {
+  function create({ viewportScale, annotationTextWorldHeight, formatDisplayNumber, allAnnotations, isVisibleSketchId, activeSketchId, annotationLeaderAnchor, annotationTextLayout = () => null, annotationLeaderDisplayGeometry = element => element, effectiveAnnotationStyle = element => normalizeAnnotationStyle(element?.style), isVisibleValue = visible => visible !== false, isFrameInteractive = () => false, resizeHandlesEnabled = () => false }) {
     function annotationBounds(element) {
       if (!element) return null;
       const layout = annotationTextLayout(element);
@@ -73,8 +73,9 @@
         const dx = x - layout.x, dy = y - layout.y;
         const localX = dx * Math.cos(layout.rotation) + dy * Math.sin(layout.rotation);
         const localY = -dx * Math.sin(layout.rotation) + dy * Math.cos(layout.rotation);
-        return localX >= layout.left - padding && localX <= layout.left + layout.width + padding
-          && localY >= -layout.height / 2 - padding && localY <= layout.height / 2 + padding;
+        const box = layout.frame || { left: layout.left, top: -layout.height / 2, width: layout.width, height: layout.height };
+        return localX >= box.left - padding && localX <= box.left + box.width + padding
+          && localY >= box.top - padding && localY <= box.top + box.height + padding;
       }
       const rotation = -(element?.appearanceInheritance ? (effectiveAnnotationStyle(element).rotation || 0) + (element.annotationTransformRotation || 0) : Number(element?.rotation) || 0);
       const dx = x - (Number(geometry?.x) || 0);
@@ -93,6 +94,23 @@
         const element = annotations[i];
         if (!element || !isVisibleValue(element.visible) || !isVisibleSketchId(element.sketchId)) continue;
         if (activeOnly && element.sketchId !== activeSketchId()) continue;
+        const layout = annotationTextLayout(element);
+        if (layout && element.anchorPosition && !element.blockProjection && hypot2(x - layout.anchorX, y - layout.anchorY) <= 6 / viewportScale()) return { element, type: element.type, part: "anchor" };
+        if (layout?.frame && !element.blockProjection && isFrameInteractive(element)) {
+          if (hypot2(x - layout.anchorX, y - layout.anchorY) <= 6 / viewportScale()) return { element, type: element.type, part: "anchor" };
+          const dx = x - layout.x, dy = y - layout.y, cos = Math.cos(layout.rotation), sin = Math.sin(layout.rotation);
+          const px = dx * cos + dy * sin, py = -dx * sin + dy * cos, margin = 4 / viewportScale();
+          const handle = resizeHandlesEnabled(element) && window.AnnotationRenderer.resizeHandles(layout).find(item => Math.abs(px - item.x) <= margin && Math.abs(py - item.y) <= margin);
+          if (handle) return { element, type: element.type, part: "frame", resizeX: handle.resizeX, resizeY: handle.resizeY };
+          const box = layout.frame;
+          if (px >= box.left - margin && px <= box.left + box.width + margin && py >= box.top - margin && py <= box.top + box.height + margin
+            && (Math.abs(px - box.left) <= margin || Math.abs(px - box.left - box.width) <= margin || Math.abs(py - box.top) <= margin || Math.abs(py - box.top - box.height) <= margin)) return { element, type: element.type, part: "frame-enable" };
+        }
+        if (layout) {
+          const dx = x - layout.x, dy = y - layout.y, cos = Math.cos(layout.rotation), sin = Math.sin(layout.rotation);
+          const px = dx * cos + dy * sin, py = -dx * sin + dy * cos;
+          if (px >= layout.left && px <= layout.left + layout.width && Math.abs(py) <= layout.height / 2) return { element, type: element.type, part: "label", textBody: true };
+        }
         if (element.type === "leader") {
           const geometry = annotationLeaderDisplayGeometry(element) || element;
           const start = annotationLeaderAnchor(element);

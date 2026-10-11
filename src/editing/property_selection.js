@@ -5,7 +5,40 @@
   function create({ Point, Line, canvasSelection, getOperation, effectiveSelectedConstraint,
     selectedGeometryItems, blockDefinitionById, sketchById, activeSketchId, blockProjectionBundle,
     effectiveAppearanceForElement, documentModel, normalizeAppearance, hatchAppearanceForDisplay,
-    normalizeAnnotationStyle, effectiveAnnotationStyle = element => normalizeAnnotationStyle(element.style), effectiveDimensionAppearance = () => ({}) }) {
+    normalizeAnnotationStyle, effectiveAnnotationStyle = element => normalizeAnnotationStyle(element.style), effectiveDimensionAppearance = () => ({}),
+    isRootSketch, isDimensionConstraint, geometryInstanceBundle, resolveGeometryAppearance }) {
+    function visibilityTargets() {
+      if (canvasSelection.inspection) return [];
+      if (canvasSelection.sketchId) {
+        const sketch = sketchById(canvasSelection.sketchId);
+        return sketch && !isRootSketch(sketch) && sketch.id !== activeSketchId() ? [{ kind: "sketch", item: sketch }] : [];
+      }
+      return [
+        ...selectedGeometryItems().filter(item => !item.blockProjection).map(item => ({ kind: "geometry", item })),
+        ...canvasSelection.blockInstances.map(item => ({ kind: "block", item })),
+        ...canvasSelection.geometryInstances.map(item => ({ kind: "geometryInstance", item })),
+        ...canvasSelection.annotations.map(item => ({ kind: "annotation", item })),
+        ...canvasSelection.hatches.map(item => ({ kind: "hatch", item })),
+        ...canvasSelection.referenceImages.map(item => ({ kind: "referenceImage", item })),
+        ...[...new Set([...canvasSelection.dimensionConstraints, effectiveSelectedConstraint()].filter(item => item && isDimensionConstraint(item)))].map(item => ({ kind: "constraint", item })),
+      ];
+    }
+
+    function visibilityIsHidden(targets) {
+      return targets.length > 0 && targets.every(target => {
+        if (target.kind === "sketch") return target.item.visible === false;
+        if (target.kind !== "geometryInstance") return multiplePropertyAppearance(target).visible === false;
+        if (typeof target.item.appearanceOverride?.visible === "boolean") return !target.item.appearanceOverride.visible;
+        const bundle = geometryInstanceBundle(target.item);
+        const geometry = [...bundle.points, ...bundle.lines, ...bundle.circles, ...bundle.arcs, ...bundle.splines];
+        const appearances = [...geometry.map(effectiveAppearanceForElement), ...(bundle.hatches || []).map(hatchAppearanceForDisplay)];
+        if (appearances.length) return appearances.every(appearance => appearance.visible === false);
+        return resolveGeometryAppearance({ defaults: documentModel.defaultAppearance,
+          sketchAppearance: sketchById(target.item.sketchId)?.appearance,
+          overrides: [target.item.appearanceOverride] }).visible === false;
+      });
+    }
+
     function selectedPropertiesTarget() {
       const { mode, instanceSourceEdit, freeInstancePlacement, blockPlacementDefinitionId } = getOperation();
       if (mode === "instance-sources" && instanceSourceEdit) return { kind: "geometryInstance", item: instanceSourceEdit.instance };
@@ -104,7 +137,7 @@
       return values.every((value) => Object.is(value, values[0])) ? values[0] : MULTIPLE_PROPERTY_MIXED;
     }
 
-    return Object.freeze({ selectedPropertiesTarget, multiplePropertyTypeKey, multiplePropertySameType, blockPropertyAppearance, multiplePropertyAppearance, multiplePropertySupports, multiplePropertyValue });
+    return Object.freeze({ visibilityTargets, visibilityIsHidden, selectedPropertiesTarget, multiplePropertyTypeKey, multiplePropertySameType, blockPropertyAppearance, multiplePropertyAppearance, multiplePropertySupports, multiplePropertyValue });
   }
   window.PropertySelection = Object.freeze({ create, mixedValue: MULTIPLE_PROPERTY_MIXED });
 })();

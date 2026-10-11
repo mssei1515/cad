@@ -16,7 +16,7 @@ function fixture() {
     activeSketchId: () => state.sketch, elementSketchId: item => item.sketchId || 'S1',
     constraintSketchId: item => item.sketchId || 'S1', isVisibleSketchElement: item => !item.hidden,
     constraintIsOperational: item => item.enabled !== false, constraintGraphNodes: item => item.nodes,
-    geometryInstanceDependencyRefs: item => item.refs || [], minimumLength: 0.01 });
+    geometryInstanceDependencyRefs: item => item.refs || [], minimumLength: 0.01, additionalVariables: () => state.extra || [] });
   return { state, query };
 }
 test('fixed shared points stop connectivity while retaining their identity in the local component', () => {
@@ -70,4 +70,15 @@ test('constraint scope, fixed-only references and replacing the current workspac
   state.scope = { ...state.scope, constraints: [], points: [p] };
   assert.equal(query.sketchSolveConstraints().length, 0);
   assert.equal(query.localSolveContextFromSeeds([p]).variables[0].object, p);
+});
+
+test('transient annotation spline parameters are limited to the component and owning sketch', () => {
+  const {state, query} = fixture(), a = new Point('a', 0, 0), b = new Point('b', 10, 0);
+  state.scope.points = [a, b];
+  const own = { nodes: [a], sketchId: 'S1' }, separate = { nodes: [b], sketchId: 'S1' }, foreign = { nodes: [a], sketchId: 'S2' };
+  state.extra = [own, separate, foreign].map(object => ({ object, prop: 'parameter', min: 0, max: 1 }));
+  const local = query.localSolveContextFromSeeds([a]);
+  assert.deepEqual(Array.from(local.variables.filter(v => v.prop === 'parameter'), v => v.object), [own]);
+  assert.deepEqual(Array.from(query.sketchSolveVariables().filter(v => v.prop === 'parameter'), v => v.object), [own, separate]);
+  state.extra = []; assert.equal(query.sketchSolveVariables().some(v => v.prop === 'parameter'), false);
 });

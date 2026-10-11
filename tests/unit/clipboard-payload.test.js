@@ -33,11 +33,11 @@ test('payload retains model point order and collects dependent endpoints while c
   assert.equal(f.model.lines[0], line); assert.equal(f.selection.points.length, 2);
 });
 
-test('empty selection returns no payload and a leader requires its referenced geometry', () => {
+test('empty selection returns no payload and a standalone leader copy drops its reference', () => {
   const f = fixture(); assert.equal(f.build().payload, null); assert.equal(f.build().error, null);
   const leader = { id: 'AN1', type: 'leader', geometryRef: {} };
   f.model.annotations = [leader]; f.selection.annotations = [leader];
-  const result = f.build(); assert.equal(result.payload, null); assert.equal(result.error, 'Also select the target referenced by annotation AN1');
+  const result = f.build(); assert.ok(result.payload); assert.equal(result.error, null); assert.equal(result.payload.annotations[0].geometryRef, null); assert.deepEqual(leader.geometryRef, {});
   assert.equal(f.model.annotations[0], leader);
 });
 
@@ -63,4 +63,19 @@ test('derived instance payload preserves detached settings and includes projecte
   assert.equal(payload.geometryInstances[0].projection.lines[0].id,output.id);assert.equal(payload.constraints[0].tag,'dimension');
   assert.deepEqual(Array.from(payload.selection.geometryInstances),['MI1']);
   payload.geometryInstances[0].sources[0].path[0]='different';assert.equal(instance.sources[0].path[0],'L1');
+});
+
+test('annotation-only copy drops fixed and geometry anchor constraints without modifying originals', () => {
+  const f = fixture(), target = new Point('P1', 100, 200); f.state.target = target;
+  const notes = [
+    { id: 'AN1', type: 'text', x: 5, y: 6, anchorPosition: 'left-middle', anchorConstraints: [{ type: 'coincident', geometryRef: { kind: 'point', path: ['P1'] } }] },
+    { id: 'AN2', type: 'text', x: 20, y: 30, anchorPosition: 'left-middle', anchorConstraints: [{ type: 'fixed', x: 20, y: 30 }] },
+  ];
+  f.model.annotations = notes; f.selection.annotations = notes;
+  const before = JSON.stringify(notes), result = f.build();
+  assert.equal(result.error, null);
+  assert.ok(result.payload.annotations.every(note => !note.anchorConstraints));
+  assert.equal(JSON.stringify(notes), before);
+  f.model.points = [target]; f.selection.points = [target];
+  assert.equal(f.build().payload.annotations[0].anchorConstraints[0].geometryRef.path[0], 'P1');
 });

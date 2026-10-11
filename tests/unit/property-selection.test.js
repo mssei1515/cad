@@ -9,14 +9,17 @@ for (const file of ['document/appearance', 'editing/property_selection', 'editin
 }
 const w = sandbox.window, appearance = w.Appearance;
 class Point {} class Line {}
-function fixture() {
-  const selection = { geometryInstances: [], referenceImages: [], hatches: [], annotations: [], blockInstances: [] }, geometry = [], operation = {}, sketch = {};
+function fixture(overrides = {}) {
+  const selection = { geometryInstances: [], referenceImages: [], hatches: [], annotations: [], blockInstances: [], dimensionConstraints: [] }, geometry = [], operation = {}, sketch = {};
   const query = w.PropertySelection.create({ Point, Line, canvasSelection: selection, getOperation: () => operation,
     effectiveSelectedConstraint: () => selection.constraint, selectedGeometryItems: () => geometry,
     blockDefinitionById: id => ({ id }), sketchById: () => sketch, activeSketchId: () => 'S1',
     blockProjectionBundle: () => ({}), effectiveAppearanceForElement: item => appearance.normalizeAppearance(item.appearance, { partial: false }),
     documentModel: { defaultAppearance: {} }, normalizeAppearance: appearance.normalizeAppearance,
-    hatchAppearanceForDisplay: item => appearance.normalizeHatchAppearance(item.appearance), normalizeAnnotationStyle: appearance.normalizeAnnotationStyle });
+    hatchAppearanceForDisplay: item => appearance.normalizeHatchAppearance(item.appearance), normalizeAnnotationStyle: appearance.normalizeAnnotationStyle,
+    isRootSketch: item => item.id === 'ROOT', isDimensionConstraint: item => Boolean(item.dimension),
+    geometryInstanceBundle: item => item.bundle,
+    resolveGeometryAppearance: appearance.resolveGeometryAppearance, ...overrides });
   const editing = w.AppearanceEditing.create({ ...appearance, defaultDimensionAppearance: appearance.DEFAULT_DIMENSION_APPEARANCE, dimensionNumericRules: appearance.DIMENSION_APPEARANCE_NUMERIC_RULES });
   return { selection, geometry, operation, sketch, query, editing };
 }
@@ -97,4 +100,48 @@ test('bulk dimension appearance preserves independent measurement and placement'
  f.geometry.push(new Line());assert.equal(f.query.selectedPropertiesTarget().count,3);
  assert.equal(f.query.multiplePropertySupports({kind:'constraint',item:a},'lineType'),false);
  assert.equal(f.query.multiplePropertySupports({kind:'constraint',item:a},'value'),false);
+});
+
+
+test('visibility targets preserve category order and identity, omit projections and deduplicate dimensions', () => {
+  const f=fixture(), point=new Point(), projection={blockProjection:true}, dimension={dimension:{}}, invalid={};
+  f.geometry.push(point,projection);
+  for(const key of ['blockInstances','geometryInstances','annotations','hatches','referenceImages']) f.selection[key].push({id:key});
+  f.selection.dimensionConstraints.push(dimension,invalid); f.selection.constraint=dimension;
+  const targets=f.query.visibilityTargets();
+  assert.deepEqual(Array.from(targets,t=>t.kind),['geometry','block','geometryInstance','annotation','hatch','referenceImage','constraint']);
+  assert.equal(targets[0].item,point);assert.equal(targets[6].item,dimension);
+  assert.equal(f.geometry[1],projection);assert.equal(f.selection.dimensionConstraints.length,2);
+});
+
+test('visibility excludes inspection, Root, current and missing sketches without falling back to objects', () => {
+  const f=fixture();f.geometry.push(new Point());f.selection.sketchId='S2';f.sketch.id='S2';
+  assert.equal(f.query.visibilityTargets()[0].item,f.sketch);
+  f.selection.inspection={targets:[]};assert.equal(f.query.visibilityTargets().length,0);
+  f.selection.inspection=null;f.sketch.id='S1';assert.equal(f.query.visibilityTargets().length,0);
+  f.sketch.id='ROOT';assert.equal(f.query.visibilityTargets().length,0);
+  f.selection.sketchId=null;assert.equal(f.query.visibilityTargets().length,1);
+  const missing=fixture({sketchById:()=>null});missing.selection.sketchId='missing';missing.geometry.push(new Point());
+  assert.equal(missing.query.visibilityTargets().length,0);
+});
+
+test('visibility requires every effective appearance hidden, respecting instance overrides and empty-bundle inheritance', () => {
+  const f=fixture(), line=new Line();line.appearance={visible:false};
+  const ordinary={kind:'geometry',item:line}, image={kind:'referenceImage',item:{visible:false}};
+  assert.equal(f.query.visibilityIsHidden([]),false);
+  assert.equal(f.query.visibilityIsHidden([ordinary,image]),true);image.item.visible=true;
+  assert.equal(f.query.visibilityIsHidden([ordinary,image]),false);
+  const instance={kind:'geometryInstance',item:{appearanceOverride:{visible:false}}};
+  assert.equal(f.query.visibilityIsHidden([instance]),true);instance.item.appearanceOverride.visible=true;
+  assert.equal(f.query.visibilityIsHidden([instance]),false);
+  delete instance.item.appearanceOverride.visible;
+  instance.item.bundle={points:[],lines:[line],circles:[],arcs:[],splines:[],hatches:[{appearance:{visible:false}}]};
+  assert.equal(f.query.visibilityIsHidden([instance]),true);instance.item.bundle.hatches[0].appearance.visible=true;
+  assert.equal(f.query.visibilityIsHidden([instance]),false);
+  instance.item.bundle.lines=[];instance.item.bundle.hatches=[];f.sketch.appearance={visible:false};
+  assert.equal(f.query.visibilityIsHidden([instance]),true);f.sketch.appearance.visible=true;
+  assert.equal(f.query.visibilityIsHidden([instance]),false);
+  const defaults=fixture({documentModel:{defaultAppearance:{visible:false}},sketchById:()=>null});
+  assert.equal(defaults.query.visibilityIsHidden([instance]),true);
+  assert.equal(f.query.visibilityIsHidden([{kind:'sketch',item:{visible:false}}]),true);
 });

@@ -3,7 +3,7 @@
   "use strict";
   const { hypot2 } = window.GeometrySolver;
   const { closestPointOnSegment, arcEndpointPoint, angleOnSignedSweep, circlePointAtPointer } = window.GeometryKernel;
-  function create({ geometryReads, isVisibleSketchElement, isActiveSketchElement, isSplineOnlyFitPoint, isReferencePoint, isPrimitiveCenterPoint, isEndpointPoint, isPointUsedByPrimitive, isExplicitPoint, sketchName, elementSketchId, applicationText }) {
+  function create({ geometryReads, annotationAnchors = () => [], isVisibleSketchElement, isActiveSketchElement, isSplineOnlyFitPoint, isReferencePoint, isPrimitiveCenterPoint, isEndpointPoint, isPointUsedByPrimitive, isExplicitPoint, sketchName, elementSketchId, applicationText }) {
     const { allGeometryPoints, allGeometryLines, allGeometryCircles, allGeometryArcs, allGeometrySplines } = geometryReads;
     let activeSnap = null;
     function makeSnapCandidate(source, x, y, label, priority, data = {}) {
@@ -27,6 +27,9 @@
 
     function snapCandidates(source) {
       const candidates = [];
+      for (const { element, x, y } of annotationAnchors()) {
+        if (isVisibleSketchElement(element)) addSnapCandidate(candidates, source, x, y, applicationText("注記基準点", "Annotation anchor"), 0, { annotation: element });
+      }
       for (const p of allGeometryPoints()) {
         if (!isVisibleSketchElement(p)) continue;
         if (isSplineOnlyFitPoint(p)) continue;

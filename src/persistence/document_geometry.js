@@ -57,9 +57,13 @@
         if (kind === "circle" || kind === "arc" || kind === "spline") return primitiveById.get(canonicalId) || null;
         return null;
       });
+      for (const annotation of loadedAnnotations) for (const ref of (annotation.anchorConstraints || []).flatMap(relation => [relation.geometryRef, relation.axisRef].filter(Boolean))) {
+        const target = resolveLoadedGeometryRef(ref);
+        if (!target || (elementSketchId(target) !== annotation.sketchId && !window.SketchHierarchy.isReferenceSourceSketchId(loadedSketches, elementSketchId(target), annotation.sketchId))) throw new Error(`${annotation.id}: Invalid annotation anchor target`);
+      }
       if (sourceVersion >= 11) {
         for (const annotation of loadedAnnotations) {
-          if (annotation.type !== "leader") continue;
+          if (annotation.type !== "leader" || !annotation.geometryRef && annotation.start && annotation.elbow && annotation.end) continue;
           const referenced = resolveLoadedGeometryRef(annotation.geometryRef);
           if (!referenced || (elementSketchId(referenced) !== annotation.sketchId && !window.SketchHierarchy.isReferenceSourceSketchId(loadedSketches, elementSketchId(referenced), annotation.sketchId))) {
             throw new Error(`${applicationText("引出線", "Leader")} ${annotation.id}: ${applicationText("参照先は所属Sketchまたは参照可能Sketchに必要です", "target must belong to the owning or a referenceable sketch")}`);
@@ -96,7 +100,7 @@
       const retainedPoints = points.filter((p) => {
         if (p.kind !== "endpoint") return true;
         if (isPointUsedByLine(p, lines) || isPointUsedByCircle(p, circles) || isPointUsedByArc(p, arcs) || splines.some((spline) => spline.fitPoints.includes(p))) return true;
-        return constraints.some((constraint) => constraintReferencesPoint(constraint, p));
+        return constraints.some((constraint) => constraintReferencesPoint(constraint, p)) || loadedAnnotations.some(annotation => (annotation.anchorConstraints || []).some(relation => relation.geometryRef && resolveLoadedGeometryRef(relation.geometryRef) === p));
       });
 
       return { retainedPoints, lines, circles, arcs, splines, constraints, loadedAnnotations, loadedHatches, loadedReferenceImages, loadedRootNamespace };

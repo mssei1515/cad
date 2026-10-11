@@ -17,6 +17,44 @@ const dimension = () => new DistanceConstraint(new Point("P1", 0, 0), new Point(
 const namespace = constraints => ({ parameters: [], constraints, nextDimensionParameterIndex: 1 });
 const create = currentParameterNamespace => sandbox.window.ParameterNamespace.create({ currentParameterNamespace, applicationText: (_ja, en) => en });
 
+test('clipboard symbols reserve dimension and annotation names before rewriting their mutual references', () => {
+  const existing = Object.assign(dimension(), { parameterName: 'd1', expression: '12' });
+  const target = namespace([existing]), api = create(() => target);
+  const pasted = [{ parameterEnabled: true }, { parameterEnabled: true }, { parameterEnabled: false }];
+  target.annotations = pasted;
+  const payload = { cut: false, constraints: [{ parameterName: 'd1', target: 12, expression: '"a" + "b"' }],
+    annotations: [{ parameterName: 'a', expression: '"d1" + "b"' }, { parameterName: 'b', expression: '"d1" + 2' }, {}] };
+  const before = JSON.stringify(payload);
+  const names = api.prepareCopiedSymbols(payload, pasted, target, true);
+  assert.equal(names.get('d1'), 'd2'); assert.equal(pasted[0].parameterName, 'd3'); assert.equal(pasted[1].parameterName, 'd4');
+  assert.equal(pasted[0].expression, '"d2" + "d4"'); assert.equal(pasted[1].expression, '"d2" + 2');
+  const data = api.rewriteCopiedConstraintSymbol({ target: 12 }, payload.constraints[0], names, true);
+  assert.equal(data.parameterName, 'd2'); assert.equal(data.expression, '"d3" + "d4"');
+  assert.equal(pasted[2].parameterName, undefined); assert.equal(existing.parameterName, 'd1'); assert.equal(JSON.stringify(payload), before);
+});
+
+test('same namespace cut keeps available dimension names but allocates around ordinary parameter collisions', () => {
+  const target = namespace([]); target.parameters = [{ name: 'reserved', expression: '1' }];
+  const api = create(() => target);
+  const names = api.prepareCopiedSymbols({ cut: true, constraints: [{ parameterName: 'available' }, { parameterName: 'reserved' }], annotations: [] }, [], target, true);
+  assert.equal(names.get('available'), 'available'); assert.equal(names.get('reserved'), 'd1');
+  const other = namespace([]);
+  const otherNames = api.prepareCopiedSymbols({ cut: true, constraints: [{ parameterName: 'available' }] }, [], other, false);
+  assert.equal(otherNames.get('available'), 'd1');
+});
+
+test('cross namespace clipboard expressions use current numeric values and angle degrees while references stay read-only', () => {
+  const target = namespace([]), api = create(() => target), pasted = [{ parameterEnabled: true }]; target.annotations = pasted;
+  const source = { parameterName: 'angle', type: 'lineAngle', target: Math.PI / 2, expression: 'external' };
+  const names = api.prepareCopiedSymbols({ cut: false, constraints: [source], annotations: [{ parameterName: 'text', parameterValue: 17, expression: 'external' }] }, pasted, target, false);
+  assert.equal(pasted[0].expression, '17');
+  const data = api.rewriteCopiedConstraintSymbol({}, source, names, false); assert.equal(data.expression, '90');
+  const readOnly = { readOnlyDimension: true, expression: 'unchanged' };
+  assert.equal(api.rewriteCopiedConstraintSymbol(readOnly, source, names, false), readOnly); assert.equal(readOnly.expression, 'unchanged');
+  const unnamed = { target: 2 }; api.rewriteCopiedConstraintSymbol(unnamed, { target: 2 }, names, false);
+  assert.equal(unnamed.parameterName, undefined); assert.equal(unnamed.expression, undefined);
+});
+
 test("dimension queries distinguish geometric measurements, targets and the stored angle sector", () => {
   const distance = dimension();
   assert.equal(queries.measuredDimensionValue(queries.targetFromConstraint(distance)), 5);

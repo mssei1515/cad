@@ -2,7 +2,7 @@
 (() => {
   "use strict";
   function create({ geometryInstanceBundle, geometryInstanceSourcePoints, serializeGeometryInstance, blockProjectionBundle, blockProjectionLocalId, resolveGeometryRef,
-    constraintGraphNodes, serializeConstraint, applicationText }) {
+    constraintGraphNodes, serializeConstraint, applicationText, detachedAnnotation = annotation => window.AnnotationData.serializeAnnotation(annotation) }) {
     const { SketchProjectionConstraint, LineFixedConstraint, ArcEndpointFixedConstraint, GeometryFixedConstraint } = window.GeometrySolver;
     const { normalizeAppearance } = window.Appearance;
     const { geometryKindForItem } = window.GeometryObjects;
@@ -72,13 +72,19 @@
         }
         instanceProjectionData.set(instance, projection);
       }
-      for (const annotation of annotations) {
-        if (annotation.type !== "leader") continue;
-        const referenced = resolveGeometryRef(annotation.geometryRef);
-        if (!referenced || (!selectedNodes.has(referenced) && !selectedBlockProjectionIds.has(referenced.id))) {
-          return { payload: null, error: applicationText(`注記 ${annotation.id} の参照先も選択してください`, `Also select the target referenced by annotation ${annotation.id}`) };
+      const copiedAnnotations = annotations.map(annotation => {
+        const refs = window.AnnotationAnchorConstraints?.refs(annotation) || [];
+        const detached = (refs.length > 0 || annotation.anchorConstraints?.length > 0) && (selectedNodes.size === 0 && geometryInstances.length === 0 || refs.some(ref => {
+          const referenced = resolveGeometryRef(ref);
+          return !referenced || !selectedNodes.has(referenced) && !selectedBlockProjectionIds.has(referenced.id);
+        }));
+        const data = detached ? detachedAnnotation(annotation) : serializeAnnotation(annotation);
+        if (detached) {
+          delete data.anchorConstraints;
+          if (data.type === "leader") { data.geometryRef = null; delete data.attachment; }
         }
-      }
+        return { ...data, parameterValue: annotation.evaluatedParameterValue };
+      });
       const selectedBoundaryKeys = new Set([...lines, ...circles, ...arcs, ...splines].map((item) => `${geometryKindForItem(item)}:${item.id}`));
       for (const instance of geometryInstances) {
         const bundle = geometryInstanceBundle(instance);
@@ -134,7 +140,7 @@
             return (geometryInstanceSourcePoints(item).length ? geometryInstanceSourcePoints(item) : item?.seed ? [item.seed] : []).map(point => ({ x: point.x, y: point.y }));
           }) : undefined,
         })),
-        annotations: annotations.map(annotation => ({ ...serializeAnnotation(annotation), parameterValue: annotation.evaluatedParameterValue })),
+        annotations: copiedAnnotations,
         hatches: hatches.map(serializeHatch),
         referenceImages: referenceImages.map(serializeReferenceImage),
         selection: {

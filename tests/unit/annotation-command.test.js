@@ -63,7 +63,7 @@ test('leader endpoint click commits in either direction and resets only placemen
     const item = f.scope.annotations[0];
     assert.deepEqual({ ...item.elbow }, { x: 3, y: 7 });
     assert.deepEqual({ ...item.end }, { x: endX, y: 7 });
-    assert.equal(item.textPlacement, 'shelf'); assert.equal(item.shelfReferenceScale, scale);
+    assert.equal(item.textPlacement, 'anchor'); assert.equal(item.shelfReferenceScale, scale);
     assert.equal(f.pending.type, 'annotation-leader-select'); assert.equal(f.pending.text, 'note\nline 2');
     assert.deepEqual(f.history, ['注記追加']);
     f.command.cancel(); assert.equal(f.scope.annotations.length, 1);

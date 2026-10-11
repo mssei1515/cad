@@ -23,6 +23,10 @@
         const invalidDerived = derivedBundles.find((bundle) => !bundle.valid);
         if (invalidDerived) throw new Error(`${applicationText("派生インスタンス", "Derived instance")} ${invalidDerived.instance.id}: ${invalidDerived.reason}`);
         for (const bundle of derivedBundles) addGeometryBundleToMaps(bundle, pointById, lineById, primitiveById);
+        for (const annotation of definition.annotations) for (const ref of (annotation.anchorConstraints || []).flatMap(relation => [relation.geometryRef, relation.axisRef].filter(Boolean))) {
+          const target = resolveGeometryRefValue(ref, (kind, id) => kind === "point" ? pointById.get(id) : kind === "line" ? lineById.get(id) : primitiveById.get(id));
+          if (!target || (elementSketchId(target) !== annotation.sketchId && !window.SketchHierarchy.isReferenceSourceSketchId(definition.sketches, elementSketchId(target), annotation.sketchId))) throw new Error(`${annotation.id}: Invalid annotation anchor target`);
+        }
         if (sourceVersion >= 11) {
           for (const annotation of definition.annotations) {
             if (annotation.type !== "leader") continue;

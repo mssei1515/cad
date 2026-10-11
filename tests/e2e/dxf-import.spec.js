@@ -36,6 +36,9 @@ test('menu import combines layers in active sketch, preserves geometry through u
   });
   await page.keyboard.press('Control+s');
   await expect(page.locator('#documentSaveStatus')).toHaveAttribute('data-dirty', 'false');
+  // The checkpoint can become clean before optional file registration finishes.
+  // Wait for the save operation to finish before starting another file operation.
+  await expect(page.locator('#documentSaveStatus')).toContainText('保存済み');
   const saved = await page.evaluate(() => window.dxfSaved);
   await page.locator('#documentFileInput').setInputFiles({ name: 'dxf-converted.jot2d', mimeType: 'application/json', buffer: Buffer.from(saved) });
   await expect(page).toHaveTitle('dxf-converted - Jot2D');

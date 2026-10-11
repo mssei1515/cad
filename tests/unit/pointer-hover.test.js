@@ -12,12 +12,22 @@ function fixture() {
   const port = name => (...args) => { calls.push([name, args]); return values[name] || null; };
   const geometry = Object.fromEntries(['hitEndpointPoint', 'hitExplicitPoint', 'hitLine', 'hitCircle', 'hitArcEndpoint', 'hitArc', 'hitSpline'].map(name => [name, port(name)]));
   const scene = Object.fromEntries(['hitDimension', 'hitDerivedProjectionOperand', 'hitBlockProjectionOperand', 'hitReferenceTarget', 'hitSketchIdentityElement', 'hitBlockInstance', 'hitGeometryInstance', 'hitAnnotationElement', 'hitHatchAt', 'hitReferenceImageAt'].map(name => [name, port(name)]));
+  scene.hitAnnotationInteraction = (...args) => values.interaction?.(...args) || null;
   const controller = sandbox.window.PointerHover.create({ canvasHover: hover, geometry, scene,
     sameArcEndpoint: (a, b) => a?.arc === b?.arc && a?.endpoint === b?.endpoint,
     isActiveSketchConstraint: c => c.active !== false });
   return { hover, controller, values, calls };
 }
 const p = { x: 1, y: 2 };
+test('annotation handles and text outrank overlapping geometry and stop highlighting after leaving', () => {
+  const f = fixture(), annotation = {}, line = {};
+  f.values.hitLine = line; f.values.interaction = () => annotation;
+  assert.equal(f.controller.updateOrdinary(p), true); assert.equal(f.hover.current.annotation, annotation); assert.equal(f.hover.current.line, null);
+  assert.equal(f.controller.updateOrdinary(p), false);
+  assert.equal(f.controller.updateConstraint(p, 'coincident'), false);
+  f.values.interaction = null;
+  assert.equal(f.controller.updateConstraint(p, 'coincident'), true); assert.equal(f.hover.current.annotation, null); assert.equal(f.hover.current.line, line);
+});
 test('ordinary hover prioritizes endpoints and skips lower primitive queries, then avoids unchanged updates', () => {
   const f = fixture(), point = {}; f.values.hitEndpointPoint = point;
   assert.equal(f.controller.updateOrdinary(p), true); assert.equal(f.hover.current.point, point);
@@ -52,12 +62,37 @@ test('constraint hover prefers derived operands to block operands and ordinary g
   assert.equal(f.hover.current.block, null); assert.ok(!f.calls.some(([name]) => name === 'hitBlockProjectionOperand'));
   assert.ok(!f.calls.some(([name]) => name === 'hitLine'));
 });
-test('reference target outranks ordinary endpoints and clears dimension without clearing unrelated types', () => {
+test('reference target outranks ordinary endpoints and clears annotation hover after leaving it', () => {
   const f = fixture(), point = {}, annotation = {}; f.hover.update({ dimension: {}, annotation });
   f.values.hitReferenceTarget = { kind: 'point', point };
   assert.equal(f.controller.updateConstraint(p, 'coincident'), true);
   assert.equal(f.hover.current.point, point); assert.equal(f.hover.current.endpointPoint, null);
-  assert.equal(f.hover.current.dimension, null); assert.equal(f.hover.current.annotation, annotation);
+  assert.equal(f.hover.current.dimension, null); assert.equal(f.hover.current.annotation, null);
   assert.ok(!f.calls.some(([name]) => name === 'hitEndpointPoint'));
   assert.equal(f.controller.updateConstraint(p, 'coincident'), false);
+});
+
+test('corner hover refreshes within one annotation and clears on body, frame activation and leaving', () => {
+  const f = fixture(), element = {};
+  let hit = { element, part: 'frame', resizeX: -1, resizeY: -1 };
+  f.values.interaction = () => hit;
+  assert.equal(f.controller.updateOrdinary(p), true);
+  assert.equal(f.hover.current.annotationHandle.resizeX, -1);
+  assert.equal(f.controller.updateOrdinary(p), false);
+  hit = { ...hit, resizeX: 1 };
+  assert.equal(f.controller.updateOrdinary(p), true);
+  assert.equal(f.hover.current.annotationHandle.resizeX, 1);
+  for (const part of ['label', 'frame-enable', 'anchor']) {
+    hit = { element, part: 'frame', resizeX: -1, resizeY: 1 };
+    f.controller.updateOrdinary(p);
+    hit = { element, part };
+    assert.equal(f.controller.updateOrdinary(p), true);
+    assert.equal(f.hover.current.annotation, element);
+    assert.equal(f.hover.current.annotationHandle, null);
+  }
+  hit = { element, part: 'frame', resizeX: -1, resizeY: 1 };
+  f.controller.updateOrdinary(p); hit = null;
+  assert.equal(f.controller.updateOrdinary(p), true);
+  assert.equal(f.hover.current.annotationHandle, null);
+  assert.equal(f.hover.current.annotation, null);
 });

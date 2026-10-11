@@ -170,6 +170,11 @@
     function handlePropertiesClick(event) {
       if (selectedPropertiesTarget().readOnly) return false;
       const action = event.target.closest("[data-property-action]")?.dataset.propertyAction;
+      if (action === "annotation-anchor-clear") {
+        const target = selectedPropertiesTarget();
+        if (target.kind !== "annotation" || !canEditStructure(target.item)) return false;
+        elementPropertyCommand.annotation(target.item, "annotation-anchor-clear", ""); return true;
+      }
       if (["annotation-attach", "annotation-detach"].includes(action)) {
         const target = selectedPropertiesTarget();
         if (target.readOnly || target.kind !== "annotation" || !canEditStructure(target.item)) return false;

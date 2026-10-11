@@ -74,7 +74,7 @@ for (const locked of [false, true]) test(`attach/detach preserves displayed text
   expect(attached.serialized.expression).toBe(before.serialized.expression);
   expect(attached.displayedText).toBe(before.displayedText);
   expect(attached.textMetrics).toEqual(before.textMetrics);
-  expect(attached.serialized.textPlacement).toBe('text');
+  expect(attached.serialized.textPlacement).toBe('anchor');
   const saved = await data(page);
   await page.locator('#undoBtn').click(); expect((await data(page)).annotations[0]).toEqual(before.serialized);
   await page.locator('#redoBtn').click(); expect((await data(page)).annotations[0]).toEqual(saved.annotations[0]);
@@ -183,7 +183,7 @@ test('rotated Block projections preserve attached text layout and shared text ap
   expect(leader.textLayout.y).toBeCloseTo(100 + direct.textMetrics.x, 8);
   expect(leader.textLayout.rotation).toBeCloseTo(Math.PI / 2, 8);
   expect(text.effectiveStyle).toMatchObject({ textHeight: 8, rotation: 0.4, color: '#ff0000' });
-  const saved = await data(page); expect(saved.blockDefinitions[0].annotations[0].textPlacement).toBe('text');
+  const saved = await data(page); expect(saved.blockDefinitions[0].annotations[0].textPlacement).toBe('anchor');
   expect((await page.evaluate(d => window.__jot2dTest.loadDocumentFixtureForDragTest(d), saved)).success).toBe(true);
   expect((await page.evaluate(() => window.__jot2dTest.annotationOwnershipStateForTest())).projected).toEqual(state.projected);
 });
