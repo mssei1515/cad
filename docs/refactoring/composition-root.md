@@ -6,6 +6,10 @@
 
 ## 現在の再開地点（2026-10-11）
 
+SelectionDeletionCommandへ混在Canvas選択の削除調整を分離。Annotation／Hatch／画像→派生Instance→Block→通常図形の既存順序を維持し、GeometryDeletion・GeometryDeletionCommand・ReferenceImageInteractionへ編集を委譲する。通常図形削除が確定した場合の履歴委譲、owner Sketch求解と種別別履歴、途中ガード拒否時の既存の部分削除を境界テストで確認。元の処理本体はscope取得／表示adapter以外一致。app.jsは10,695→10,641行（54行減、今回の合計417行減）。構文415ファイル・単体1,090件・関連E2E223件成功（exit 0、3.2分）。ログはcad-selection-deletion-{check,unit,e2e}.log。全E2Eはこの単位では未実行。全体目標は未完了。
+
+### 前回の区切り
+
 GeometryDeletionへBlock／派生Instanceの投影依存計画と削除適用を統合。投影ObjectとGeometry keyの参照、Block owner拘束、falsy keyの扱い、古いBlock bundleのsplines省略を維持する。計画は非破壊で、適用は拘束→付随注記→対象Instance配列だけを更新する。依存／Parameterガードとcache・選択・求解・履歴は呼出側が既存順序で調整。app.jsは10,711→10,695行（16行減、今回の合計363行減）。構文413ファイル・単体1,084件・関連E2E219件成功（exit 0、3.1分）。ログはcad-instance-deletion-{check,unit,e2e}.log。全E2Eはこの単位では未実行。全体目標は未完了。
 
 ### 前回の区切り
