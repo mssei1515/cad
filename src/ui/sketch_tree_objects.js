@@ -132,7 +132,7 @@
         icon = constraintToolbarIcon(constraint);
         primary = constraint instanceof SketchProjectionConstraint
           ? applicationText("スケッチ投影", "Sketch Projection")
-          : isDimensionConstraint(constraint) ? constraint.parameterName || "—" : localizedConstraintName(constraint.name);
+          : isDimensionConstraint(constraint) ? constraint.annotationOwner ? constraint.annotationOwner.id + " / " + applicationText("距離", "Distance") : constraint.parameterName || "—" : localizedConstraintName(constraint.name);
         secondary = constraint instanceof SketchProjectionConstraint
           ? `${constraintGeometryId(constraint.source) || "—"} → ${constraintGeometryId(constraint.target) || "—"}`
           : isDimensionConstraint(constraint) ? localizedConstraintName(constraint.name) : "";

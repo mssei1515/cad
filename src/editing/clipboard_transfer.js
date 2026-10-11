@@ -34,7 +34,10 @@
       annotation.y += dy;
       for (const key of ["start", "elbow", "end"]) if (annotation[key]) annotation[key] = { x: annotation[key].x + dx, y: annotation[key].y + dy };
       if (annotation.geometryRef) annotation.geometryRef = remapGeometryRef(annotation.geometryRef, idMap);
-      if (annotation.anchorConstraints) annotation.anchorConstraints = annotation.anchorConstraints.map(relation => relation.type === "fixed" ? { ...relation, x: relation.x + dx, y: relation.y + dy } : { ...relation, geometryRef: remapGeometryRef(relation.geometryRef, idMap), ...(relation.axisRef ? { axisRef: remapGeometryRef(relation.axisRef, idMap) } : {}) });
+      if (annotation.anchorConstraints) annotation.anchorConstraints = annotation.anchorConstraints.map(relation => ({
+        ...(relation.type === "fixed" ? { ...relation, x: relation.x + dx, y: relation.y + dy } : { ...relation, geometryRef: remapGeometryRef(relation.geometryRef, idMap), ...(relation.axisRef ? { axisRef: remapGeometryRef(relation.axisRef, idMap) } : {}) }),
+        ...(relation.dimension ? { dimension: translatedClipboardConstraintData({ dimension: relation.dimension }, idMap, dx, dy).dimension } : {}),
+      }));
       return annotation;
     }
 

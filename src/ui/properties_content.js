@@ -80,7 +80,7 @@
         const dimension = item.dimension;
         const { targetValue, display, value } = info;
         const parameterRows = dimension
-          ? `<div class="property-row"><label>${applicationText("Parameter名", "Parameter name")}</label><input data-property="constraint-parameter-name" value="${escapeHtml(item.parameterName || "")}"></div>`
+          ? (item.annotationOwner ? propertyReadonlyRow("注記", "Annotation", item.annotationOwner.id) : `<div class="property-row"><label>${applicationText("Parameter名", "Parameter name")}</label><input data-property="constraint-parameter-name" value="${escapeHtml(item.parameterName || "")}"></div>`)
             + (!info.readOnly
               ? `<div class="property-row"><label>${applicationText("値 / 数式", "Value / Expression")}</label><input data-property="constraint-expression" inputmode="text" value="${escapeHtml(expressionInputValue(item.expression || numericDimensionExpression(item)))}"></div>`
               : `<div class="property-row"><span>${applicationText("値 / 数式", "Value / Expression")}</span><span class="property-readonly">${applicationText("Geometryから測定", "Measured from geometry")}</span></div>`)

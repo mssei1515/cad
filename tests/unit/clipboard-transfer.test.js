@@ -79,7 +79,7 @@ test('annotation transfer shifts fixed anchors and leader points and reconnects 
     start: { x: 3, y: 4 }, elbow: { x: 5, y: 6 }, end: { x: 7, y: 8 },
     geometryRef: { kind: 'line', path: ['L1'] },
     anchorConstraints: [{ type: 'fixed', anchor: 'topLeft', x: 9, y: 10 },
-      { type: 'distance', geometryRef: { kind: 'point', path: ['BI1', 'P1'] }, axisRef: { kind: 'line', path: ['L1'] }, value: 20 }] };
+      { type: 'distance', geometryRef: { kind: 'point', path: ['BI1', 'P1'] }, axisRef: { kind: 'line', path: ['L1'] }, value: 20, dimension: { x: 12, y: 13, labelX: 14, labelY: 15, textOffset: 2 } }] };
   const before = structuredClone(source), copy = elements.AnnotationData.serializeAnnotation(source);
   const result = elementTransfer.translateAnnotation(copy, new Map([['L1', 'L2'], ['BI1', 'BI2']]), 100, -10);
   assert.equal(result, copy); assert.equal(copy.x, 101); assert.equal(copy.y, -8);
@@ -87,7 +87,9 @@ test('annotation transfer shifts fixed anchors and leader points and reconnects 
   assert.equal(copy.geometryRef.path[0], 'L2'); assert.equal(copy.anchorConstraints[0].x, 109);
   assert.equal(copy.anchorConstraints[0].y, 0); assert.equal(copy.anchorConstraints[1].value, 20);
   assert.deepEqual(plain(copy.anchorConstraints[1].geometryRef.path), ['BI2', 'P1']);
-  assert.equal(copy.anchorConstraints[1].axisRef.path[0], 'L2'); assert.deepEqual(source, before);
+  assert.equal(copy.anchorConstraints[1].axisRef.path[0], 'L2');
+  assert.deepEqual(plain(copy.anchorConstraints[1].dimension), { x: 112, y: 3, labelX: 114, labelY: 5, textOffset: 2 });
+  assert.deepEqual(source, before);
 });
 
 test('hatch transfer returns detached mapped boundaries and rejects missing geometry without changing the source', () => {

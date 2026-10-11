@@ -16,7 +16,8 @@
       && (item.type !== "symmetry" || item.axisRef?.kind === "line" && window.GeometryRef.create("line", item.axisRef.path))).map(item => ({
       type: item.type, ...(item.type === "fixed" ? { x: Number(item.x), y: Number(item.y) } : { geometryRef: window.GeometryRef.create(item.geometryRef.kind, item.geometryRef.path), value: Number(item.value) || 0,
         ...(item.endpoint ? { endpoint: item.endpoint } : {}), ...(item.axisRef ? { axisRef: window.GeometryRef.create("line", item.axisRef.path) } : {}),
-        ...(item.type === "distance-line" ? { sign: item.sign === -1 ? -1 : 1 } : {}), ...(item.type === "on-spline" ? { parameter: Math.max(0, Math.min(1, Number(item.parameter) || 0)) } : {}) })
+        ...(item.type === "distance-line" ? { sign: item.sign === -1 ? -1 : 1 } : {}), ...(item.type === "on-spline" ? { parameter: Math.max(0, Math.min(1, Number(item.parameter) || 0)) } : {}),
+        ...(item.type.startsWith("distance") && item.dimension && typeof item.dimension === "object" ? { dimension: JSON.parse(JSON.stringify(item.dimension)) } : {}) })
     })).filter(item => item.type === "fixed" ? Number.isFinite(item.x) && Number.isFinite(item.y) : Boolean(item.geometryRef) && (!item.type.startsWith("distance") || item.type.startsWith("distance-") && item.type !== "distance-line" || item.value >= 0));
   }
   const refs = element => [...(element.type === "leader" && element.geometryRef ? [element.geometryRef] : []), ...normalize(element.anchorConstraints).flatMap(item => [item.geometryRef, item.axisRef].filter(Boolean))];
@@ -83,6 +84,53 @@
       for (const axis of axes(item.type)) result[axis] = point[axis] + (item.type === `distance-${axis}` ? item.value : 0);
     }
     return { x: origin.x + result.x * cos - result.y * sin, y: origin.y + result.x * sin + result.y * cos };
+  }
+  function createDimensions({ annotations, anchor, resolveRef, defaultDimension, normalizeDimension, capturePosition, evaluateValue, applicationText = (ja, en) => ja }) {
+    const cache = new WeakMap(), G = window.GeometrySolver;
+    const pointAt = (id, read, sketchId) => {
+      const point = new G.Point(id, 0, 0); point.sketchId = sketchId;
+      Object.defineProperties(point, { x: { get: () => read()?.x || 0 }, y: { get: () => read()?.y || 0 } });
+      return point;
+    };
+    function entries() {
+      return annotations().flatMap(annotation => (annotation.anchorConstraints || []).filter(relation => relation.type.startsWith("distance")).map(relation => {
+        const ref = () => resolveRef(relation.geometryRef);
+        if (!ref()) return null;
+        if (cache.has(relation)) return cache.get(relation);
+        const point = pointAt(annotation.id + ".anchor", () => anchor(annotation), annotation.sketchId);
+        const targetPoint = pointAt(window.GeometryRef.id(relation.geometryRef), () => relation.endpoint ? window.GeometryKernel.arcEndpointPoint(ref(), relation.endpoint) : ref(), ref().sketchId);
+        const constraint = relation.type === "distance-line" ? new G.PointLineDistanceConstraint(point, ref(), relation.value, relation.sign)
+          : relation.type === "distance" ? new G.DistanceConstraint(point, targetPoint, relation.value)
+          : new G.PointAxisDistanceConstraint(point, targetPoint, Math.abs(relation.value), relation.type.endsWith("x") ? "x" : "y");
+        constraint.sketchId = annotation.sketchId; constraint.annotationOwner = annotation; constraint.annotationRelation = relation;
+        const label = relation.type === "distance-x" ? applicationText("水平距離", "Horizontal distance") : relation.type === "distance-y" ? applicationText("垂直距離", "Vertical distance") : relation.type === "distance-line" ? applicationText("線への距離", "Distance to line") : applicationText("距離", "Distance");
+        constraint.name = applicationText("注記", "Annotation") + " " + annotation.id + " / " + label;
+        if (relation.type === "distance-line") Object.defineProperty(constraint, "line", { get: ref });
+        Object.defineProperties(constraint, {
+          target: { get: () => Math.abs(relation.value), set: value => { relation.value = Number(value) * (relation.value < 0 ? -1 : 1); } },
+          expression: { get: () => String(Math.abs(relation.value)), set: expression => {
+            if (!setValue(constraint, evaluateValue(expression))) throw new Error("注記の距離拘束が成立しません");
+          } },
+          dimension: { get: () => relation.dimension, set: dimension => { relation.dimension = dimension; } },
+        });
+        relation.dimension = normalizeDimension(window.DimensionQueries.targetFromConstraint(constraint), relation.dimension || defaultDimension(window.DimensionQueries.targetFromConstraint(constraint)));
+        cache.set(relation, constraint); return constraint;
+      }).filter(Boolean));
+    }
+    function setValue(constraint, value) {
+      const annotation = constraint.annotationOwner, relation = constraint.annotationRelation;
+      if (!annotation?.anchorConstraints?.includes(relation) || !Number.isFinite(value) || value <= 0) return false;
+      const next = { ...relation, value: value * (relation.value < 0 ? -1 : 1) };
+      if (!solvePlacement({ ...annotation, anchorConstraints: annotation.anchorConstraints.map(item => item === relation ? next : item) }, anchor(annotation), resolveRef, true).valid) return false;
+      relation.value = next.value; return true;
+    }
+    function remove(constraint) {
+      const annotation = constraint.annotationOwner, relation = constraint.annotationRelation;
+      if (!annotation?.anchorConstraints?.includes(relation)) return false;
+      Object.assign(annotation, capturePosition(annotation));
+      annotation.anchorConstraints = annotation.anchorConstraints.filter(item => item !== relation); return true;
+    }
+    return Object.freeze({ entries, setValue, remove });
   }
   function create({ getCommand, setCommand, selectedAnnotation, byId, canEdit, canReference, anchor, materialize,
     pointRef, resolveRef, recordHistory, updateUI, draw, setHint, cancelCommands, applicationText: t, startDistancePlacement = () => {} }) {
@@ -152,6 +200,7 @@
         setHint(t("同じ方向の基準点拘束が既にあります。解除してから設定してください", "An anchor constraint already controls this axis. Remove it first."), "error"); return false;
       }
       const relation = { type, geometryRef: draft.target, value: Number(draft.value), ...(draft.endpoint ? { endpoint: draft.endpoint } : {}),
+        ...(draft.dimension ? { dimension: JSON.parse(JSON.stringify(draft.dimension)) } : {}),
         ...(type === "symmetry" ? { axisRef: draft.axisRef } : {}), ...(type === "distance-line" ? { sign: draft.sign } : {}), ...(type === "on-spline" ? { parameter: draft.parameter } : {}) };
       if (normalize([relation]).length !== 1 || !solvePlacement({ ...item, anchorConstraints: [...existing, relation] }, anchor(item), resolveRef, true).valid) {
         setHint(t("基準点拘束が成立しません", "The anchor constraints cannot be satisfied."), "error"); return false;
@@ -161,17 +210,18 @@
       draft = null; setCommand(null); recordHistory("注記基準点拘束追加"); updateUI(); draw(); return true;
     }
     function cancel() { draft = null; setCommand(null); updateUI(); draw(); }
-    function submitDistance(value, axis) {
+    function submitDistance(value, axis, dimension) {
       if (!active() || draft.type !== "distance" || !draft.target) return false;
       const item = byId(draft.id), target = resolveRef(draft.target);
       if (!item || !target) return false;
       draft.axis = draft.target.kind === "line" ? "normal" : axis || "length";
       const p = draft.endpoint ? window.GeometryKernel.arcEndpointPoint(target, draft.endpoint) : target;
+      draft.dimension = dimension;
       draft.value = value;
       if (["x", "y"].includes(draft.axis)) draft.value *= anchor(item)[draft.axis] < p[draft.axis] ? -1 : 1;
       return finish();
     }
     return Object.freeze({ start, click, complete: finish, cancel, submitDistance, get active() { return active(); }, reset: () => { draft = null; } });
   }
-  window.AnnotationAnchorConstraints = Object.freeze({ POSITIONS, LABELS, normalize, resolve, solvePlacement, createDragGeometry, axes, degree, refs, create });
+  window.AnnotationAnchorConstraints = Object.freeze({ POSITIONS, LABELS, normalize, resolve, solvePlacement, createDragGeometry, createDimensions, axes, degree, refs, create });
 })();

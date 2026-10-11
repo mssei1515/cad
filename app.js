@@ -179,13 +179,16 @@
   const currentParameterNamespace = workspace.current;
   const parameterNamespace = window.ParameterNamespace.create({ currentParameterNamespace, applicationText });
   const {
-    evaluateDimensionExpressionDraft, dimensionExpressionValue, numericDimensionExpression, isDirectNumericExpressionInput,
+    evaluateDimensionExpressionDraft: evaluateNamedDimensionExpressionDraft, dimensionExpressionValue, numericDimensionExpression, isDirectNumericExpressionInput,
     dimensionUsesExpression, expressionInputValue, expressionFromUserInput,
     dimensionConstraintsInNamespace, allocateDimensionParameterName,
     ensureDimensionParameter, ensureParameterNamespace, parameterErrorText,
     referenceDimensionValues, validateParameterSymbolNames, evaluateParameterNamespace,
     validateParameterNamespace, prepareLoadedParameterNamespace, parameterDependents,
   } = parameterNamespace;
+  function evaluateDimensionExpressionDraft(constraint, expression, namespace) {
+    return evaluateNamedDimensionExpressionDraft(constraint?.annotationOwner ? null : constraint, expression, namespace);
+  }
   const parameterDraft = window.ParameterDialogDraft.create({ namespace: parameterNamespace });
   const expressionInputView = window.ExpressionInputView.create({
     document, InputElement: HTMLInputElement, referenceNamesForInput: expressionReferenceNamesForInput, escapeHtml,
@@ -696,6 +699,13 @@
     recordHistory, updateUI, draw, setHint, cancelCommands: () => { cancelPendingCommand(""); cancelConstraintTargetCommand(""); }, applicationText,
     startDistancePlacement: resolution => startDistanceResolution(resolution, null),
   });
+  const annotationDimensions = window.AnnotationAnchorConstraints.createDimensions({
+    annotations: () => model.annotations, anchor: annotationPlacementAnchor, resolveRef: resolveGeometryRef,
+    defaultDimension: defaultDimensionForTarget, normalizeDimension: dimensionPlacement.normalizeDimension,
+    capturePosition: item => materializeAnnotationAnchor(item, { capture: true }),
+    evaluateValue: expression => evaluateDimensionExpressionDraft(null, expression), applicationText,
+  });
+  function dimensionPresentationScope() { return { ...model, constraints: [...model.constraints, ...annotationDimensions.entries()] }; }
   function startAnnotationAnchorConstraint(type, item = canvasSelection.annotations.length === 1 ? canvasSelection.annotations[0] : null) {
     if (!item) return false;
     if (annotationAnchorConstraints.active && constraintTargetSession.command?.type === type) { cancelPendingCommand(""); annotationAnchorConstraints.cancel(); return true; }
@@ -921,7 +931,21 @@
       canvasSelection.set("dimensionConstraint", constraint); canvasSelection.set("constraint", null); dimensionDrag.reset();
     },
     addDistanceConstraintFromTarget,
-    submitSpecialDistance: (pending, value) => pending.target?.annotationAnchor ? annotationAnchorConstraints.submitDistance(value, pending.target.dimensionAxis) : null,
+    submitSpecialDistance: (pending, value) => {
+      if (pending.constraint?.annotationOwner) {
+        if (!annotationDimensions.setValue(pending.constraint, value)) { setHint("注記の距離拘束が成立しません", "error"); return false; }
+        recordHistory("注記寸法値変更"); return true;
+      }
+      return pending.target?.annotationAnchor ? annotationAnchorConstraints.submitDistance(value, pending.target.dimensionAxis, pending.dimension) : null;
+    },
+    commitSpecialProperty: (constraint, property, input) => {
+      if (!constraint.annotationOwner) return null;
+      try {
+        const value = evaluateDimensionExpressionDraft(null, expressionFromUserInput(input));
+        if (property !== "constraint-expression" || !annotationDimensions.setValue(constraint, value)) throw new Error("注記の距離拘束が成立しません");
+        recordHistory("注記寸法値変更"); return true;
+      } catch (error) { setHint(parameterErrorText(error), "error"); return false; }
+    },
     restoreSketchScreenFootprint: (sketchId, footprint) => viewport.restoreBoundsFootprint(sketchGeometryBounds(sketchId), footprint),
   });
   const { submit: submitDistanceValue, commitProperty: commitDimensionPropertyEdit } = dimensionValueCommand;
@@ -2088,7 +2112,7 @@
     activeSketchId, drawingOrderOwner, resolvedHatchBoundary, hatchContainsSelectablePoint, referenceImageWorldToLocal,
   });
   const dimensionHitQuery = window.GeometryHitQuery.createDimensions({
-    currentScope: workspace.current, viewportScale: () => viewport.scale, ordinarySelectionMode, isActiveSketchConstraint, isVisibleSketchId,
+    currentScope: dimensionPresentationScope, viewportScale: () => viewport.scale, ordinarySelectionMode, isActiveSketchConstraint, isVisibleSketchId,
     constraintSketchId, targetFromConstraint, defaultDimensionForTarget, isVisibleValue, effectiveDimensionAppearance, dimensionLayout,
     dimensionLabelForConstraint, dimensionTextDrawingMetrics, dimensionTextWidth, dimensionUsesExpression, pointInExpandedBox,
   });
@@ -2278,7 +2302,7 @@
     isPointUsedByLine, isPointUsedByCircle, isPointUsedByArc, isPointUsedBySpline,
     constraintReferencesPoint, constraintReferencesLine, constraintReferencesPrimitive,
     geometryElementKey, annotationReferencesRemovedGeometry,
-    geometryInstanceBundle, blockAllProjectionBundle, constraintGraphNodes,
+    geometryInstanceBundle, blockAllProjectionBundle, constraintGraphNodes, removeAnnotationConstraint: constraint => annotationDimensions.remove(constraint),
   });
 
   const geometryDeletionCommand = window.GeometryDeletionCommand.create({
@@ -2426,7 +2450,7 @@
   }
 
   const rectangleSelectionQuery = window.RectangleSelectionQuery.create({
-    currentScope: workspace.current, selectableSketchElement, isExplicitPoint, isReferencePoint, pointInRect,
+    currentScope: dimensionPresentationScope, selectableSketchElement, isExplicitPoint, isReferencePoint, pointInRect,
     lineIntersectsRect, bboxInRect, lineBBox, isVisibleSketchElement, primitiveBBox, bboxIntersectsRect,
     arcSamplePoints, viewScale: () => viewport.scale, isEditableSketchId: id => id === activeSketchId(), isVisibleSketchId, blockProjectionBundle, geometryInstanceBundle, mergeBounds,
     splineBBox, annotationBounds, resolvedLoopBounds, resolvedHatchBoundary, activeSketchId,
@@ -2676,7 +2700,7 @@
 
 
   function drawDimensions() {
-    for (const c of [...model.constraints].sort((a, b) => Number(isActiveSketchConstraint(a)) - Number(isActiveSketchConstraint(b)))) {
+    for (const c of dimensionPresentationScope().constraints.sort((a, b) => Number(isActiveSketchConstraint(a)) - Number(isActiveSketchConstraint(b)))) {
       if (!isVisibleSketchId(constraintSketchId(c))) continue;
       const target = targetFromConstraint(c);
       if (!target) continue;
@@ -3120,7 +3144,7 @@
         : category === "instance" ? "geometryInstance" : category,
       item: category === "constraint" ? entry.constraint : entry,
     }]),
-    currentScope: () => model, getLanguage: () => applicationSettings.language,
+    currentScope: dimensionPresentationScope, getLanguage: () => applicationSettings.language,
     ensureAnalysis: constraintAnalysis.ensure, types: window.GeometrySolver,
     isExplicitPoint, isPointUsedByLine, elementSketchId, constraintSketchId,
     constraintStatusOf, blockProjectionBundle, applicationText, escapeHtml, formatDisplayNumber,
@@ -3144,7 +3168,7 @@
     },
   });
   const sketchTreeController = window.SketchTreeController.create({
-    currentScope: () => model, activeSketchId, setActiveSketch, clearSelection, canvasSelection,
+    currentScope: dimensionPresentationScope, activeSketchId, setActiveSketch, clearSelection, canvasSelection,
     sidebarGeometryItem, toggleBlockInstanceSelection, targetFromConstraint, updateUI, draw,
     sketchTreeView, updateSketchUI, toggleSketchVisibility, toggleSketchLock, guardSketchEdit, selectionSketchId, renameSketch, deleteSketch, deleteElements, deleteCurrentSelection, toggleSelectedVisibility,
     hover: { canvasHover, setSidebarHover, clearSidebarHover, sidebarHoverElementsForItem, sidebarHoverElementsForConstraint, elementSketchId, ROOT_SKETCH_ID },
@@ -3273,7 +3297,7 @@
 
   function insertClickedDimensionParameter(event, dimensionHit) {
     const context = focusedExpressionInputContext();
-    if (!context || !dimensionHit?.constraint) return false;
+    if (!context || !dimensionHit?.constraint || dimensionHit.constraint.annotationOwner) return false;
     if (context.namespace !== model) {
       const message = applicationText("表示中のCanvasと異なる名前空間のため、この寸法は参照できません", "This dimension cannot be referenced because the canvas shows a different namespace.");
       setParameterDialogError(message);
@@ -5931,6 +5955,15 @@
             : null,
           text: textElement ? { world: { x: textElement.x, y: textElement.y }, viewport: toViewport(textElement) } : null,
         };
+      },
+      annotationDimensionStateForTest() {
+        return annotationDimensions.entries().map(constraint => {
+          const target = targetFromConstraint(constraint), dimension = constraint.dimension;
+          const layout = dimensionLayout(target, dimension, effectiveDimensionAppearance(dimension, constraint.sketchId));
+          return { annotationId: constraint.annotationOwner.id, type: constraint.annotationRelation.type, value: constraint.target,
+            dimension: JSON.parse(JSON.stringify(dimension)), label: dimensionLabelForConstraint(constraint, target, dimension),
+            text: layout?.text, hit: layout && { a: layout.hitA, b: layout.hitB } };
+        });
       },
       annotationAppearanceStateForTest(type = "text", scale = null) {
         const annotation = model.annotations.find((element) => element.type === type) || null;

@@ -7,7 +7,7 @@
     withTemporarySolveStepNorm, solveStepNormForConstraint, stabilizeActiveParameterNamespace,
     constraintSketchId, acceptError, hideDimensionValueInput, recordHistory, updateUI,
     scaleSketchForFirstDimension, addDistanceConstraintFromTarget, restoreSketchScreenFootprint, targetFromConstraint, isReadOnlyDimension,
-    selectEditedConstraint, defaultDimensionForTarget, expressionInputValue, numericDimensionExpression, focusDimensionValueInput, submitSpecialDistance = () => null }) {
+    selectEditedConstraint, defaultDimensionForTarget, expressionInputValue, numericDimensionExpression, focusDimensionValueInput, submitSpecialDistance = () => null, commitSpecialProperty = () => null }) {
     function startEdit(hit) {
       if (hit?.constraint && !canEdit(constraintSketchId(hit.constraint))) return true;
       if (!hit?.constraint) return false;
@@ -96,6 +96,8 @@
     }
     function commitProperty(constraint, property, value) {
       if (!canEdit(constraintSketchId(constraint), "edit")) return false;
+      const specialResult = commitSpecialProperty(constraint, property, value);
+      if (specialResult !== null) return specialResult;
       const snapshot = snapshotModelState();
       try {
         if (property === "constraint-parameter-name") renameDimension(constraint, value);
