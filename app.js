@@ -2662,14 +2662,14 @@
     return true;
   }
 
-  const { translateAnnotation, copiedHatch, translateReferenceImage, copiedGeometryInstance, reconnectDerivedInstances, translatedClipboardConstraintData, mapClipboardBlockProjection } =
+  const clipboardTransfer =
     window.ClipboardTransfer.create({ blockProjectionBundle, blockProjectionLocalId, resolveGeometryRef, geometryInstanceSourcePoints, geometryInstanceBundle, applicationText });
 
   const clipboardGeometry = window.ClipboardGeometry.create({
     geometryIds, ensureLineMinimumLength, normalizeArcSweep, blockDefinitionById,
     allocateBlockInstanceId: () => `BI${blockInstanceSeq++}`,
     allocateGeometryInstanceId: type => type === "free" ? "FI" + freeInstanceSeq++ : type === "mirror" ? "MI" + mirrorInstanceSeq++ : type === "pattern" ? "PI" + patternInstanceSeq++ : "SPI" + sketchProjectionInstanceSeq++,
-    normalizeGeometryInstance, copiedGeometryInstance, applicationText,
+    normalizeGeometryInstance, copiedGeometryInstance: clipboardTransfer.copiedGeometryInstance, applicationText,
   });
 
   const clipboardPasteCheckpoint = window.ClipboardPasteCheckpoint.create({
@@ -2682,6 +2682,13 @@
       hatchSeq = sequences.hatchSeq;
       referenceImageSeq = sequences.referenceImageSeq;
     },
+  });
+
+  const clipboardGraph = window.ClipboardGraph.create({
+    geometry: clipboardGeometry, transfer: clipboardTransfer, parameters: parameterNamespace,
+    elementIds: { hatch: () => "H" + hatchSeq++, annotation: () => "AN" + annotationSeq++,
+      image: () => "IMG" + referenceImageSeq++, nextHatchIndex: () => hatchSeq },
+    deserializeConstraint, invalidateProjection: invalidateBlockProjectionCache, applicationText,
   });
 
   function pasteGeometryClipboard() {
@@ -2708,64 +2715,12 @@
     const checkpoint = clipboardPasteCheckpoint.capture(model);
 
     try {
-      const { idMap, pointById, lineById, primitiveById } =
-        clipboardGeometry.append(model, payload, targetSketchId, dx, dy);
-      const pastedBlockInstances = clipboardGeometry.appendBlocks(model, payload, targetSketchId, dx, dy, idMap);
-      if (pastedBlockInstances.length > 0) invalidateBlockProjectionCache();
-      payload.blockInstances.forEach((source, index) => mapClipboardBlockProjection(source, pastedBlockInstances[index], idMap, pointById, lineById, primitiveById));
-      const copiedInstances = payload.geometryInstances || [];
-      for (const source of payload.hatches || []) idMap.set(source.id, 'H' + hatchSeq++);
-      const destinationNamespace = currentBlockDefinitionScopeId() ? 'block:' + currentBlockDefinitionScopeId() : 'document';
-      const pastedGeometryInstances = clipboardGeometry.appendDerived(model, payload, targetSketchId, dx, dy, idMap, destinationNamespace);
-      invalidateBlockProjectionCache();
-      const pastedAnnotations = [];
-      for (const source of payload.annotations || []) {
-        const annotation = serializeAnnotation(source);
-        annotation.id = `AN${annotationSeq++}`;
-        annotation.sketchId = targetSketchId;
-        translateAnnotation(annotation, idMap, dx, dy);
-        model.annotations.push(annotation);
-        pastedAnnotations.push(annotation);
-        idMap.set(source.id, annotation.id);
-      }
-      const pastedHatches = [];
-      for (const source of payload.hatches || []) {
-        const hatch = copiedHatch(source, idMap, targetSketchId, dx, dy);
-        if (!hatch) throw new Error(`${source.id}: ${applicationText("塗りつぶし境界を書き換えられません", "Could not rewrite fill boundary")}`);
-        model.hatches.push(hatch);
-        pastedHatches.push(hatch);
-        idMap.set(source.id, hatch.id);
-      }
-      model.nextHatchIndex = Math.max(hatchSeq, Number(model.nextHatchIndex) || 1);
-      const pastedImages = (payload.referenceImages || []).map(source => {
-        const image = serializeReferenceImage(source);
-        image.id = `IMG${referenceImageSeq++}`; image.sketchId = targetSketchId;
-        return translateReferenceImage(image, dx, dy);
+      const pasted = clipboardGraph.append(model, payload, {
+        sketchId: targetSketchId, dx, dy, namespace: currentParameterNamespace(),
+        namespaceKey: currentBlockDefinitionScopeId() ? `block:${currentBlockDefinitionScopeId()}` : "document",
       });
-      model.referenceImages.push(...pastedImages);
-
-      invalidateBlockProjectionCache();
-      reconnectDerivedInstances(copiedInstances, pastedGeometryInstances, pointById, lineById, primitiveById);
-      const targetNamespaceKey = currentBlockDefinitionScopeId() ? `block:${currentBlockDefinitionScopeId()}` : "document";
-      const sameNamespace = payload.parameterNamespaceKey === targetNamespaceKey;
-      const copiedDimensionNames = parameterNamespace.prepareCopiedSymbols(payload, pastedAnnotations, currentParameterNamespace(), sameNamespace);
-      for (const source of payload.constraints) {
-        const data = translatedClipboardConstraintData(source, idMap, dx, dy);
-        parameterNamespace.rewriteCopiedConstraintSymbol(data, source, copiedDimensionNames, sameNamespace);
-        const constraint = deserializeConstraint(data, pointById, lineById, primitiveById);
-        if (!constraint) throw new Error(`拘束 ${source.type} を複製できません`);
-        constraint.sketchId = targetSketchId;
-        constraint.reference = false;
-        constraint.referenceSketchId = null;
-        model.constraints.push(constraint);
-        ensureDimensionParameter(constraint, currentParameterNamespace());
-      }
-
       clearSelection();
-      canvasSelection.applyClipboard(payload.selection, { idMap, pointById, lineById, primitiveById }, {
-        blockInstances: pastedBlockInstances, annotations: pastedAnnotations, hatches: pastedHatches,
-        geometryInstances: pastedGeometryInstances, referenceImages: pastedImages,
-      });
+      canvasSelection.applyClipboard(payload.selection, pasted.maps, pasted);
       clipboardSession.recordPaste(pastePlan);
       mode = "select";
       solveAndRefresh("貼り付け");

@@ -533,3 +533,6 @@ ClipboardGeometry.appendBlocksはコピーしたBlock Instanceの定義存在確
 
 
 ClipboardGeometry.appendDerivedは派生Instance全体のIDを先に予約し、legacy生成IDと多段参照経路を繰り返し付け替え、別名前空間では必要な参照先がコピー対象か検査してから正規化・配列追加を行う。型別ID発行、既存コピー値変換、Instance正規化、翻訳を注入し、名前空間は呼出側が明示する。同じ名前空間ではコピーされない参照先を保持できる既存規則を維持する。Hatch IDの事前予約、投影cacheと生成後の再接続、失敗時の採番復元は操作側へ残す。
+
+
+ClipboardGraph（src/editing/clipboard_graph.js）は明示したmodel・payload・貼付け先Sketch／Parameter名前空間／移動量から、貼付けるモデルの参照グラフを構築する。ClipboardGeometry、ClipboardTransfer、ParameterNamespace、要素ID発行、拘束復元、投影無効化、翻訳の7つの依存を組み合わせ、プリミティブ→Block→Hatch ID予約→派生Instance→注記／Hatch／画像→投影再接続→記号予約→拘束復元の順序を所有する。生成要素と参照Mapを返し、Selection・Clipboard session・UI・求解・履歴・checkpointを持ち込まない。構築途中の失敗は例外として外へ伝え、呼出側が既存checkpointで復元する。名前空間とscopeは同期処理の開始時に明示して渡し、この構築中には切替えない。

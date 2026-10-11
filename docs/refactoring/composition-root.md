@@ -6,6 +6,10 @@
 
 ## 現在の再開地点（2026-10-11）
 
+ClipboardGraphへ貼付けるモデルの構築順序を集約。Geometry／Transfer／Parameterの既存所有者を7つの限定した依存で接続し、UI・session・checkpoint・求解・履歴を持ち込まない。生成結果と参照Mapを返し、構築失敗は操作側へ伝える。app.jsは10,889→10,844行（45行減）。構文407ファイル・単体1,064件・関連E2E201件成功（exit 0、2.6分）。ログはcad-clipboard-graph-{check,unit,e2e}.log。全E2Eはこの単位では未実行。全体目標は未完了。
+
+### 前回の区切り
+
 ClipboardGeometryへ派生InstanceのID予約・生成経路再接続・名前空間参照検査・正規化と追加を集約。生成後の投影参照登録はClipboardTransferに残し、順序を保つ。app.jsは10,901→10,889行（12行減）。構文405ファイル・単体1,062件・関連E2E197件成功（exit 0、2.5分）。ログはcad-clipboard-derived-build-{check,unit,e2e}.log。全E2Eはこの単位では未実行。全体目標は未完了。
 
 ### 前回の区切り
