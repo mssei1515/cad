@@ -257,3 +257,31 @@ test('line coincidence, line distance and point symmetry use the ordinary constr
   expect(result.textLayout.anchorX).toBeCloseTo(10, 6); expect(result.textLayout.anchorY).toBeCloseTo(-15, 6);
   expect((await data(page)).lines).toEqual(before.lines); expect((await data(page)).points.slice(0, points.length)).toEqual(points);
 });
+
+for (const leader of [false, true]) test(`enabled ${leader ? 'leader' : 'text'} resize corners fill only within their draggable hover area`, async ({ page }) => {
+  await setup(page); await create(page, leader);
+  const before = await data(page), first = await state(page, leader ? 'leader' : 'text');
+  const corners = first.textLayout.frameCorners, corner = corners[3], other = corners[0];
+  await clickWorld(page, { x: corner.x, y: (corner.y + other.y) / 2 });
+  const move = async point => {
+    const client = await page.evaluate(p => window.__jot2dTest.worldClientPositionForTest(p), point);
+    await page.mouse.move(client.x, client.y);
+  };
+  const pixels = async () => page.evaluate(points => points.map(p => {
+    const canvas = document.querySelector('#canvas'), rect = canvas.getBoundingClientRect();
+    const client = window.__jot2dTest.worldClientPositionForTest(p);
+    return Array.from(canvas.getContext('2d').getImageData(Math.floor((client.x - rect.left) * canvas.width / rect.width), Math.floor((client.y - rect.top) * canvas.height / rect.height), 1, 1).data).slice(0, 3);
+  }), [corner, other]);
+  const white = [255, 255, 255];
+  await move({ x: 100, y: 50 });
+  await expect.poll(pixels).toEqual([white, white]);
+  const nearCorner = await page.evaluate(p => window.__jot2dTest.worldClientPositionForTest(p), corner);
+  // A point inside the square but away from its center must also highlight it.
+  await page.mouse.move(nearCorner.x + 2, nearCorner.y - 2);
+  await expect.poll(async () => { const colors = await pixels(); return colors[0].join() !== white.join() && colors[1].join() === white.join(); }).toBe(true);
+  await move(other);
+  await expect.poll(async () => { const colors = await pixels(); return colors[0].join() === white.join() && colors[1].join() !== white.join(); }).toBe(true);
+  await page.mouse.move(nearCorner.x - 5, nearCorner.y + 5);
+  await expect.poll(pixels).toEqual([white, white]);
+  expect((await data(page)).annotations).toEqual(before.annotations);
+});

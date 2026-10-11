@@ -71,3 +71,28 @@ test('reference target outranks ordinary endpoints and clears annotation hover a
   assert.ok(!f.calls.some(([name]) => name === 'hitEndpointPoint'));
   assert.equal(f.controller.updateConstraint(p, 'coincident'), false);
 });
+
+test('corner hover refreshes within one annotation and clears on body, frame activation and leaving', () => {
+  const f = fixture(), element = {};
+  let hit = { element, part: 'frame', resizeX: -1, resizeY: -1 };
+  f.values.interaction = () => hit;
+  assert.equal(f.controller.updateOrdinary(p), true);
+  assert.equal(f.hover.current.annotationHandle.resizeX, -1);
+  assert.equal(f.controller.updateOrdinary(p), false);
+  hit = { ...hit, resizeX: 1 };
+  assert.equal(f.controller.updateOrdinary(p), true);
+  assert.equal(f.hover.current.annotationHandle.resizeX, 1);
+  for (const part of ['label', 'frame-enable', 'anchor']) {
+    hit = { element, part: 'frame', resizeX: -1, resizeY: 1 };
+    f.controller.updateOrdinary(p);
+    hit = { element, part };
+    assert.equal(f.controller.updateOrdinary(p), true);
+    assert.equal(f.hover.current.annotation, element);
+    assert.equal(f.hover.current.annotationHandle, null);
+  }
+  hit = { element, part: 'frame', resizeX: -1, resizeY: 1 };
+  f.controller.updateOrdinary(p); hit = null;
+  assert.equal(f.controller.updateOrdinary(p), true);
+  assert.equal(f.hover.current.annotationHandle, null);
+  assert.equal(f.hover.current.annotation, null);
+});

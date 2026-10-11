@@ -22,7 +22,7 @@
       x: box.left + box.width * (resizeX + 1) / 2, y: box.top + box.height * (resizeY + 1) / 2, resizeX, resizeY,
     }))).filter(handle => Math.hypot(handle.x - anchorX, handle.y - anchorY) > 1e-8);
   }
-  function create({ ctx, viewport, withCanvasState, annotationDisplayColor, annotationLeaderAnchor, appearanceLineDash, formatValue, showLeaderEndHandle = () => false, showFrame = () => false, showResizeHandles = () => false, resolvePlacement = (element, point) => point, effectiveAnnotationStyle = element => normalizeAnnotationStyle(element.style) }) {
+  function create({ ctx, viewport, withCanvasState, annotationDisplayColor, annotationLeaderAnchor, appearanceLineDash, formatValue, showLeaderEndHandle = () => false, showFrame = () => false, showResizeHandles = () => false, isResizeHandleHovered = () => false, resolvePlacement = (element, point) => point, effectiveAnnotationStyle = element => normalizeAnnotationStyle(element.style) }) {
     const drawTerminator = window.TerminatorRenderer.create({ ctx, viewport }).draw;
     function annotationFontFamilyStack(fontFamily) {
       if (fontFamily === "serif") return 'Georgia, "Times New Roman", serif';
@@ -205,8 +205,9 @@
           ctx.beginPath(); ctx.arc(x, y, size / 2, 0, Math.PI * 2); ctx.stroke();
           if (showResizeHandles(element)) {
             const handleSize = 8 / viewport.scale;
-            ctx.fillStyle = "#ffffff"; ctx.lineWidth = 1 / viewport.scale;
+            ctx.lineWidth = 1 / viewport.scale;
             for (const handle of resizeHandles(layout)) {
+              ctx.fillStyle = isResizeHandleHovered(element, handle) ? ctx.strokeStyle : "#ffffff";
               ctx.beginPath(); ctx.rect(handle.x - handleSize / 2, handle.y - handleSize / 2, handleSize, handleSize); ctx.fill(); ctx.stroke();
             }
           }

@@ -9,13 +9,14 @@ const sources = vm.runInNewContext(fs.readFileSync(path.join(root, 'index.html')
 for (const file of sources.filter(p => p.startsWith('src/'))) vm.runInContext(fs.readFileSync(path.join(root, file), 'utf8'), sandbox);
 const { AnnotationAnchorConstraints: A, AnnotationData: D, Appearance } = sandbox.window;
 const near = (a, b) => assert.ok(Math.abs(a - b) < 1e-8, `${a} != ${b}`);
-function renderer(handles = false) {
+function renderer(handles = false, hoveredHandle = null) {
   const calls = [], ctx = {}, viewport = { scale: Appearance.CSS_PX_PER_MM };
   for (const key of ['save', 'restore', 'translate', 'rotate', 'fillText', 'beginPath', 'moveTo', 'lineTo', 'stroke', 'rect', 'arc', 'setLineDash', 'fill', 'closePath']) ctx[key] = (...args) => calls.push([key, ...args]);
+  ctx.fill = () => calls.push(['fill', ctx.fillStyle]);
   ctx.measureText = text => ({ width: text.length * 2 });
   let target = { x: 30, y: 40 }, arrow = { x: 0, y: 0 }, hover = false;
   const api = sandbox.window.AnnotationRenderer.create({ ctx, viewport, withCanvasState: f => f(), annotationLeaderAnchor: () => arrow, annotationDisplayColor: () => 'blue', appearanceLineDash: type => type === 'dashed' ? [2, 1] : [],
-    effectiveAnnotationStyle: element => Appearance.resolveLeaderAppearance({}, {}, {}, element.style), showFrame: () => hover, showResizeHandles: () => handles,
+    effectiveAnnotationStyle: element => Appearance.resolveLeaderAppearance({}, {}, {}, element.style), showFrame: () => hover, showResizeHandles: () => handles, isResizeHandleHovered: (element, handle) => handle.resizeX === hoveredHandle?.resizeX && handle.resizeY === hoveredHandle?.resizeY,
     resolvePlacement: (element, base) => A.resolve(element, base, () => target) });
   return { api, calls, viewport, target: p => { target = p; }, arrow: p => { arrow = p; }, hover: value => { hover = value; } };
 }
@@ -146,4 +147,16 @@ test('curve, concentric, symmetry and length constraints solve only the annotati
   assert.equal(solved.valid, true); assert.ok(Math.abs(solved.point.y - 7) < 1e-6); assert.ok(Math.abs(Math.hypot(solved.point.x, solved.point.y) - 10) < 1e-6);
   combined.anchorConstraints[0] = { type: 'on-line', geometryRef: ref('line', 'L1') };
   assert.equal(A.solvePlacement(combined, { x: 12, y: 20 }, resolve, true).valid, false);
+});
+
+test('only the hovered enabled resize corner is filled in the interaction color', () => {
+  const item = note({ anchorPosition: 'right-top' });
+  for (const enabled of [false, true]) {
+    const h = renderer(enabled, { resizeX: -1, resizeY: 1 }); h.hover(true);
+    h.api.drawAnnotationText(item);
+    const fills = h.calls.filter(call => call[0] === 'fill');
+    assert.equal(fills.length, enabled ? 3 : 0);
+    assert.equal(fills.filter(call => call[1] === 'blue').length, enabled ? 1 : 0);
+    assert.equal(fills.filter(call => call[1] === '#ffffff').length, enabled ? 2 : 0);
+  }
 });
