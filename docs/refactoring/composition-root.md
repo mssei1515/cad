@@ -6,6 +6,10 @@
 
 ## 現在の再開地点（2026-10-12）
 
+選択可視性の対象収集と全対象の非表示判定をPropertySelectionへ、変更／履歴／UI更新をSelectionVisibilityCommandへ分離した。Properties対象の優先順位と混同せず、inspection／Root／作図Sketch／Block投影の除外、寸法の同一参照による重複除去、Instanceの明示上書き／実効外観／空bundleの継承判定を保持する。通常対象の一括変更→派生Instance上書き→一回の履歴の順序と既存の中間drawを維持する。3処理の本体は依存先と名称以外元処理と一致。コマンド生成を外観依存の初期化後へ配置し、E2Eで検出した起動時参照エラーを解消した。app.jsは9,548→9,508行（40行減、今回の合計1,550行減）。構文437ファイル・単体1,181件・関連E2E168件成功（exit 0、2.4分）。ログはcad-selection-visibility-{check,unit,e2e}.log。全E2Eはこの単位では未実行。全体目標は未完了。appは3つのhoisted入口と明示した生成／接続を保持する。
+
+### 前回の区切り
+
 ToolbarViewへToolbarのactive／ARIA／disabledと選択可視性の反映を分離。操作は表示値だけを渡し、可視性と編集可否は既存照会へ委譲する。ボタン反映→履歴→可視性→Flyout→カーソル、DOMがない場合と権限の短絡評価、Flyout後の最新操作状態の読取りを維持する。appは生成／接続とhoisted updateToolbar入口を保持。app.jsは9,590→9,548行（42行減、今回の合計1,510行減）。構文435ファイル・単体1,174件・関連E2E186件成功（exit 0、2.6分）。ログはcad-toolbar-view-{check,unit,e2e}.log。全E2Eはこの単位では未実行。全体目標は未完了。選択可視性の対象照会／判断／変更、共有pendingとmode、操作commandの組立て整理は残る。
 
 ### 前回の区切り

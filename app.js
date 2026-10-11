@@ -3051,54 +3051,9 @@
     geometryRenderer.drawPoints(drawOrderBySketch(allGeometryPoints()));
   }
 
-  function selectedVisibilityTargets() {
-    if (canvasSelection.inspection) return [];
-    if (canvasSelection.sketchId) {
-      const sketch = sketchById(canvasSelection.sketchId);
-      return sketch && !isRootSketch(sketch) && sketch.id !== activeSketchId() ? [{ kind: "sketch", item: sketch }] : [];
-    }
-    return [
-      ...selectedGeometryItems().filter(item => !item.blockProjection).map(item => ({ kind: "geometry", item })),
-      ...canvasSelection.blockInstances.map(item => ({ kind: "block", item })),
-      ...canvasSelection.geometryInstances.map(item => ({ kind: "geometryInstance", item })),
-      ...canvasSelection.annotations.map(item => ({ kind: "annotation", item })),
-      ...canvasSelection.hatches.map(item => ({ kind: "hatch", item })),
-      ...canvasSelection.referenceImages.map(item => ({ kind: "referenceImage", item })),
-      ...[...new Set([...canvasSelection.dimensionConstraints, effectiveSelectedConstraint()].filter(item => item && isDimensionConstraint(item)))].map(item => ({ kind: "constraint", item })),
-    ];
-  }
-
-  function selectionVisibilityIsHidden(targets) {
-    return targets.length > 0 && targets.every(target => {
-      if (target.kind === "sketch") return target.item.visible === false;
-      if (target.kind !== "geometryInstance") return multiplePropertyAppearance(target).visible === false;
-      if (typeof target.item.appearanceOverride?.visible === "boolean") return !target.item.appearanceOverride.visible;
-      const bundle = geometryInstanceBundle(target.item);
-      const geometry = [...bundle.points, ...bundle.lines, ...bundle.circles, ...bundle.arcs, ...bundle.splines];
-      const appearances = [...geometry.map(effectiveAppearanceForElement), ...(bundle.hatches || []).map(hatchAppearanceForDisplay)];
-      if (appearances.length) return appearances.every(appearance => appearance.visible === false);
-      return resolveGeometryAppearance({ defaults: documentModel.defaultAppearance,
-        sketchAppearance: sketchById(target.item.sketchId)?.appearance,
-        overrides: [target.item.appearanceOverride] }).visible === false;
-    });
-  }
-
-  function toggleSelectedVisibility() {
-    if (!isGeometryMode()) return;
-    const targets = selectedVisibilityTargets();
-    if (targets.length === 0) return;
-    if (targets[0].kind === "sketch") return toggleSketchVisibility(targets[0].item.id);
-    if (!guardSelectionEdit()) return;
-    const visible = selectionVisibilityIsHidden(targets);
-    const ordinaryTargets = targets.filter(target => target.kind !== "geometryInstance");
-    if (ordinaryTargets.length) applyMultipleProperty({ kind: "multiple", items: ordinaryTargets }, "visible", visible, { commit: false });
-    for (const target of targets.filter(target => target.kind === "geometryInstance")) {
-      appearancePropertyCommand.apply(target, { category: "appearance", key: "visible", value: String(visible) }, { commit: false });
-    }
-    recordHistory("選択図形の表示切替");
-    updateUI();
-    draw();
-  }
+  function selectedVisibilityTargets() { return propertySelection.visibilityTargets(); }
+  function selectionVisibilityIsHidden(targets) { return propertySelection.visibilityIsHidden(targets); }
+  function toggleSelectedVisibility() { return selectionVisibilityCommand.toggle(); }
 
   const toolbarView = window.ToolbarView.create({
     document, isGeometryMode, constructionToggleState,
@@ -3726,6 +3681,7 @@
     effectiveSelectedConstraint, selectedGeometryItems, blockDefinitionById, sketchById, activeSketchId,
     blockProjectionBundle, effectiveAppearanceForElement, documentModel, normalizeAppearance,
     hatchAppearanceForDisplay, normalizeAnnotationStyle, effectiveAnnotationStyle, effectiveDimensionAppearance,
+    isRootSketch, isDimensionConstraint, geometryInstanceBundle, resolveGeometryAppearance,
   });
   const { selectedPropertiesTarget: resolvePropertiesTarget, multiplePropertyTypeKey, multiplePropertySameType, blockPropertyAppearance, multiplePropertyAppearance, multiplePropertySupports, multiplePropertyValue } = propertySelection;
   function selectedPropertiesTarget() {
@@ -3760,6 +3716,10 @@
     guardSketchProjectionShapeEdit, applicationText, updatePropertiesUI, draw,
     multiplePropertySupports, applyDimensionAppearanceValue, applyAnnotationStyleValue, normalizeHatchAppearance, applyAppearanceInput,
     invalidateBlockProjectionCache, synchronizeSketchProjectionMetadata, recordHistory, updateUI,
+  });
+  const selectionVisibilityCommand = window.SelectionVisibilityCommand.create({
+    isGeometryMode, selectedVisibilityTargets, selectionVisibilityIsHidden, toggleSketchVisibility, guardSelectionEdit,
+    applyMultipleProperty, applyAppearance: appearancePropertyCommand.apply, recordHistory, updateUI, draw,
   });
   const appearanceControls = window.AppearanceControls.create({
     applicationText, escapeHtml, formatDisplayNumber, normalizeAppearance, normalizeDimensionAppearance,
