@@ -6,6 +6,10 @@
 
 ## 現在の再開地点（2026-10-12）
 
+Canvasメニューのcommand取消可否と順次取消をCanvasCommandCancellationへ分離。mode・pending・拘束・作図operationをその時点で照会し、Block配置→pending→拘束→作図取消→tool終了を既存所有者へ委譲する。Blockのpanel保持reset／preview解除／mode／Properties復元／案内、最後の共通案内→UI→draw、無対象時の無変更、query短絡順を維持する。Escの優先取消とは統一しない。状態／rollback／履歴を複製せず、元処理との本体一致と4つの境界テストでlive再照会・順序を確認。classic script・構文・単体・E2E読込一覧を更新。app.jsは8,959→8,930行（29行減、今回の合計2,128行減）。構文448ファイル・単体1,233件・関連E2E205件成功（exit 0、3.0分）。ログはcad-canvas-command-cancellation-{check,unit,e2e}.log。全E2Eはこの単位では未実行。全体目標は未完了。
+
+### 前回の区切り
+
 Canvasのサイズ調整とPropertiesパネル開閉の表示構成をCanvasWorkspaceLayoutへ分離。bitmap同期・viewport中心保持・Tree幅適用・draw・値入力位置同期を既存所有者へ明示したportで接続する。中心はDOM更新前に取得し、pendingはdraw後に読む。空領域／中心指定なしのviewport維持、必要DOMなしの無変更、現在言語のARIA／titleを保持する。Treeと値入力の後期生成は遅延callbackで接続する。元処理との本体一致と4つの境界テストを確認し、classic script・構文・単体・E2E読込一覧を更新。app.jsは8,984→8,959行（25行減、今回の合計2,099行減）。構文446ファイル・単体1,229件・関連E2E147件成功（exit 0、2.2分）。ログはcad-workspace-layout-{check,unit,e2e}.log。全E2Eはこの単位では未実行。全体目標は未完了。
 
 ### 前回の区切り

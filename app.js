@@ -4045,43 +4045,14 @@
     };
   }
 
-  function hasCancellableCanvasCommand() {
-    return mode === "block-place" || Boolean(pendingCommandSession.current) || Boolean(constraintTargetSession.command) || hasActiveDrawOperation() || isDrawToolMode();
-  }
-
-  function cancelCanvasCommandFromContextMenu() {
-    let canceled = false;
-    if (mode === "block-place") {
-      blockPlacementCommand.reset({ preservePanelState: true });
-      drawingPreview.setPointer(null);
-      mode = "select";
-      restoreBlockPlacementPropertiesPanel();
-      setHint(applicationText("ブロック配置をキャンセルしました", "Block placement canceled."));
-      canceled = true;
-    }
-    if (pendingCommandSession.current) {
-      cancelPendingCommand("");
-      canceled = true;
-    }
-    if (constraintTargetSession.command) {
-      cancelConstraintTargetCommand("");
-      canceled = true;
-    }
-    if (hasActiveDrawOperation()) {
-      cancelActiveDrawOperation();
-      canceled = true;
-    }
-    if (isDrawToolMode()) {
-      exitDrawMode();
-      canceled = true;
-    }
-    if (canceled) {
-      setHint(applicationText("コマンドをキャンセルしました", "Command canceled."));
-      updateUI();
-      draw();
-    }
-    return canceled;
-  }
+  const canvasCommandCancellation = window.CanvasCommandCancellation.create({
+    readMode: () => mode, selectMode: () => { mode = "select"; }, blockPlacementCommand, drawingPreview, restoreBlockPlacementPropertiesPanel,
+    readPending: pendingCommandSession.read, cancelPendingCommand, readConstraintCommand: () => constraintTargetSession.command, cancelConstraintTargetCommand,
+    drawing: { active: hasActiveDrawOperation, cancel: cancelActiveDrawOperation, isToolMode: isDrawToolMode, exit: exitDrawMode },
+    applicationText, setHint, updateUI, draw,
+  });
+  function hasCancellableCanvasCommand() { return canvasCommandCancellation.hasCancellable(); }
+  function cancelCanvasCommandFromContextMenu() { return canvasCommandCancellation.cancel(); }
 
   function hasCopyableCanvasSelection() {
     const hasSelectionItems = canvasSelection.points.some((item) => model.points.includes(item)) ||
