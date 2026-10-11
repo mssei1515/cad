@@ -6,6 +6,10 @@
 
 ## 現在の再開地点（2026-10-11）
 
+ConstraintFeedbackへ拘束の対象選択中／拒否時の案内文を集約。種別・operand列・言語を明示し、汎用案内のlabelだけ遅延評価する。DOM・Document・pending sessionを変更しない。日英と対象段階の360ケースで元の処理と一致。Document初期化／Sketch切替／削除はreset対象と順序が異なるため、この単位では汎用resetへまとめず保持する。app.jsは10,641→10,572行（69行減、今回の合計486行減）。構文415ファイル・単体1,093件・関連E2E128件成功（exit 0、1.8分）。ログはcad-constraint-hints-{check,unit,e2e}.log。全E2Eはこの単位では未実行。全体目標は未完了。
+
+### 前回の区切り
+
 SelectionDeletionCommandへ混在Canvas選択の削除調整を分離。Annotation／Hatch／画像→派生Instance→Block→通常図形の既存順序を維持し、GeometryDeletion・GeometryDeletionCommand・ReferenceImageInteractionへ編集を委譲する。通常図形削除が確定した場合の履歴委譲、owner Sketch求解と種別別履歴、途中ガード拒否時の既存の部分削除を境界テストで確認。元の処理本体はscope取得／表示adapter以外一致。app.jsは10,695→10,641行（54行減、今回の合計417行減）。構文415ファイル・単体1,090件・関連E2E223件成功（exit 0、3.2分）。ログはcad-selection-deletion-{check,unit,e2e}.log。全E2Eはこの単位では未実行。全体目標は未完了。
 
 ### 前回の区切り
