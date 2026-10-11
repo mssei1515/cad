@@ -4571,6 +4571,7 @@
   }
 
   function updateGeometrySelectionUIUnprofiled() {
+    annotationDrag.syncResizeSelection(mode === "select" && !pendingCommand && !pendingConstraintCommand);
     updateToolbar();
     updateConstraintButtons();
     if (document.getElementById("blockDefinitionsDialog")?.open) updateBlockUI();

@@ -190,6 +190,21 @@ for (const order of ['both-selected', 'target-then-anchor', 'target-selected']) 
   expect((await state(page)).textLayout.anchorX).toBeCloseTo(target.x, 6);
 });
 
+for (const leader of [false, true]) for (const route of ['blank', 'rectangle', 'geometry']) test(`${route} deselection disables armed handles before reselecting ${leader ? 'leaders' : 'text'}`, async ({ page }) => {
+  await setup(page); await create(page, leader);
+  const type = leader ? 'leader' : 'text', first = await state(page, type), before = await data(page);
+  const corner = first.textLayout.frameCorners[3];
+  await clickWorld(page, corner);
+  expect((await page.evaluate(p => window.__jot2dTest.annotationHitAt(window.__jot2dTest.worldClientPositionForTest(p)), corner)).part).toBe('frame');
+  if (route === 'rectangle') await dragWorld(page, { x: 80, y: 40 }, { x: 100, y: 50 });
+  else await clickWorld(page, route === 'geometry' ? { x: 0, y: 0 } : { x: 100, y: 50 });
+  await clickWorld(page, { x: first.textLayout.anchorX, y: first.textLayout.anchorY });
+  expect((await page.evaluate(p => window.__jot2dTest.annotationHitAt(window.__jot2dTest.worldClientPositionForTest(p)), corner)).part).toBe('frame-enable');
+  await dragWorld(page, corner, { x: corner.x - 6, y: corner.y + 6 });
+  expect((await state(page, type)).style.textHeight).toBe(first.style.textHeight);
+  expect((await data(page)).annotations).toEqual(before.annotations);
+});
+
 for (const leader of [false, true]) test(`frame resizing and text/anchor movement work for ${leader ? 'leaders' : 'text'}`, async ({ page }) => {
   await setup(page); await create(page, leader);
   const type = leader ? 'leader' : 'text', first = await state(page, type), before = await data(page);
