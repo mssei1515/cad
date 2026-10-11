@@ -6,6 +6,10 @@
 
 ## 現在の再開地点（2026-10-12）
 
+未使用のhandleConstraintTargetClickを撤去し、拘束Canvas入力を既存ConstraintCommandInput→ConstraintTargetCommand→ConstraintTargetSessionの経路へ揃えた。Selectionから対象を作る処理はConstraintOperands.fromSelection、解決済み対象のCanvas選択反映はCanvasSelection.applyConstraintTargetsへ集約し、appには現在operand／Selection／pointerを渡す接続を保持。対象順序、円弧端点の重複除外、Spline最近点のfallbackとsampling、参照同一性、解除する選択範囲を維持する。変換本体は明示した入力以外元処理と一致。app.jsは9,822→9,665行（157行減、今回の合計1,393行減）。構文431ファイル・単体1,157件・関連E2E171件成功（exit 0、2.4分）。ログはcad-constraint-selection-{check,unit,e2e}.log。全E2Eはこの単位では未実行。全体目標は未完了。未使用APIの削除を広げず、既存CanvasSelectionの公開helperとダブルクリック経路は保持する。
+
+### 前回の区切り
+
 ConstraintSolvePreparationへ円弧端点・Offset／OffsetChainの幾何前処理、求解ステップ幅の算定と一時変更／復元を分離。型・幾何照会・半径寸法保護・最小長さ・OffsetChain計画を明示し、UI・Selection・Document配列・履歴を持ち込まない。処理本体は元処理と一致。角度の周回、既存Geometryと点の参照、半径寸法保護、finallyでの数値設定復元を境界テストで確認。app.jsは9,954→9,822行（132行減、今回の合計1,236行減）。構文431ファイル・単体1,154件成功。関連E2E186件成功（exit 0、14.9分、うち拘束ドラッグ回帰12.5分）。ログはcad-solve-preparation-{check,unit,e2e}.log。全E2Eはこの単位では未実行。全体目標は未完了。appの3つのhoisted入口は早期接続用で、snapshot／求解実行／失敗復元は既存commandが所有する。
 
 ### 前回の区切り

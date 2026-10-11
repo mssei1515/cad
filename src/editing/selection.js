@@ -149,6 +149,19 @@
       }
     }
 
+    function applyConstraintTargets(targets) {
+      set("points", targets.points);
+      set("lines", targets.lines);
+      set("circles", targets.circles);
+      set("arcs", targets.arcs);
+      set("splines", targets.splines);
+      set("arcEndpointPair", targets.arcEndpointPair);
+      set("arcEndpoint", targets.arcEndpoint);
+      set("blockInstances", []);
+      set("geometryInstances", []);
+      set("instanceGeometry", null);
+    }
+
     function currentConstraintTargets() {
       const axisPointPair = state.arcEndpointPair?.length === 2
         ? state.arcEndpointPair.map((item) => ({ kind: "arc-endpoint", arc: item.arc, endpoint: item.endpoint }))
@@ -362,7 +375,7 @@
     const api = {
       toggleDimensionConstraint: item => { if (!item) return; clearTreeSelection(); state.constraint = null; const index = state.dimensionConstraints.indexOf(item); if (index < 0) state.dimensionConstraints.push(item); else state.dimensionConstraints.splice(index, 1); },
       inspectionContains, selectInspection, selectedDragPoints, selectedElementCount, set, clear, append, removeAt, toggleById, applyRectangle, applyClipboard, discardDeletedGeometry, discardDeletedConstraints,
-      selectedGeometryItems, appearanceSelectionTarget, setGeometrySelection, currentConstraintTargets,
+      selectedGeometryItems, appearanceSelectionTarget, setGeometrySelection, applyConstraintTargets, currentConstraintTargets,
       hasPrimaryCanvasSelection, effectiveSelectedConstraint, selectedPrimitives,
       togglePointSelection, toggleLineSelection, toggleCircleSelection, toggleArcSelection,
       toggleSplineSelection, toggleBlockInstanceSelection, selectedConstructionTogglePrimitives,

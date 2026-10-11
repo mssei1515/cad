@@ -267,7 +267,7 @@
     hasPrimaryCanvasSelection, effectiveSelectedConstraint, selectedPrimitives,
     togglePointSelection, toggleLineSelection, toggleCircleSelection, toggleArcSelection,
     toggleSplineSelection, toggleBlockInstanceSelection, selectedConstructionTogglePrimitives,
-    trimConstraintSelection, pushPrimitiveSelection, geometryItemSelectedInCanvas,
+    trimConstraintSelection, geometryItemSelectedInCanvas,
     constraintSelectedInCanvas, hasSelection,
   } = canvasSelection;
   const { isPointUsedByLine, isAnyLineEndpoint, isPointUsedByCircle, isPointUsedByArc, isPointUsedBySpline, isSplineOnlyFitPoint, isEditableSplineFitPoint, isPointUsedByPrimitive, isEndpointPoint, isExplicitPoint, isReferencePoint, isPrimitiveCenterPoint, isStandalonePoint, isSelectableEndpointPoint } = window.PointUsage.create({
@@ -519,7 +519,7 @@
     constraintAcceptError: CONSTRAINT_ACCEPT_ERROR,
   });
   const { sameArcEndpoint, constraintTargetsFromOperands, linesAreParallel, distanceTargetFromTargets, distanceTargetFromOperands, referenceDistanceTargetForSubject, canApplyConstraintToTargets, referenceConstraintForType, symmetryConstraintFromOperands, constraintFromTargets } = constraintCandidates;
-  const constraintOperandValues = window.ConstraintOperands.create({ elementSketchId, operandRelationForSketch, sameArcEndpoint, Arc, lineHasDirection });
+  const constraintOperandValues = window.ConstraintOperands.create({ elementSketchId, operandRelationForSketch, sameArcEndpoint, Arc, lineHasDirection, closestSplinePoint: window.SplineGeometry.closestPoint });
   const { operandElement, makeConstraintOperand, operandFromReferenceTarget, referenceTargetFromOperand,
     subjectFromOperand, sameConstraintOperand, referenceSubjectElement, referenceSubjectSketchId } = constraintOperandValues;
   const PARAMETER_STABILIZATION_MAX_PASSES = 20;
@@ -1331,37 +1331,9 @@
     return constraintTargetSession.operands.some((operand) => operandElement(operand) === item);
   }
 
-  function syncSelectionFromConstraintOperands() {
-    const targets = constraintTargetsFromOperands(constraintTargetSession.operands);
-    canvasSelection.set("points", targets.points);
-    canvasSelection.set("lines", targets.lines);
-    canvasSelection.set("circles", targets.circles);
-    canvasSelection.set("arcs", targets.arcs);
-    canvasSelection.set("splines", targets.splines);
-    canvasSelection.set("arcEndpointPair", targets.arcEndpointPair);
-    canvasSelection.set("arcEndpoint", targets.arcEndpoint);
-    canvasSelection.set("blockInstances", []);
-    canvasSelection.set("geometryInstances", []);
-    canvasSelection.set("instanceGeometry", null);
-  }
+  function syncSelectionFromConstraintOperands() { canvasSelection.applyConstraintTargets(constraintTargetsFromOperands(constraintTargetSession.operands)); }
 
-  function constraintOperandsFromSelection() {
-    const operands = [];
-    for (const p of canvasSelection.points) operands.push(makeConstraintOperand("point", { point: p }));
-    for (const l of canvasSelection.lines) operands.push(makeConstraintOperand("line", { line: l }));
-    for (const c of canvasSelection.circles) operands.push(makeConstraintOperand("primitive", { primitive: c }));
-    for (const a of canvasSelection.arcs) {
-      if (canvasSelection.arcEndpoint?.arc === a) continue;
-      operands.push(makeConstraintOperand("primitive", { primitive: a }));
-    }
-    if (canvasSelection.arcEndpoint) operands.push(makeConstraintOperand("arc-endpoint", { arc: canvasSelection.arcEndpoint.arc, endpoint: canvasSelection.arcEndpoint.endpoint }));
-    for (const spline of canvasSelection.splines) {
-      const closest = window.SplineGeometry.closestPoint(spline.curve(), lastPointerWorld || spline.startPoint() || { x: 0, y: 0 }, { samplesPerSpan: 28 });
-      const parameter = closest?.t ?? 0;
-      operands.push(makeConstraintOperand("spline", { spline, parameter, endpoint: parameter <= 0.5 ? "start" : "end" }));
-    }
-    return operands.filter(Boolean);
-  }
+  function constraintOperandsFromSelection() { return constraintOperandValues.fromSelection(canvasSelection, lastPointerWorld); }
 
   function resultIsAccepted(result) {
     return Boolean(result) && Number.isFinite(result.errorNorm) && result.errorNorm <= CONSTRAINT_ACCEPT_ERROR;
@@ -3253,135 +3225,6 @@
   function hitConstraintOperand(pointer, type, hits = {}) { return queryConstraintOperand(pointer, type, constraintTargetSession.operands, hits); }
 
   function handleConstraintOperandClick(pointer, type, hits = {}) { return constraintTargetCommand.operandClick(pointer, type, hits); }
-
-  function handleConstraintTargetClick(hitP, hitL, hitC, hitA, hitArcEnd) {
-    if (!constraintTargetSession.command) return false;
-    const type = constraintTargetSession.command.type;
-    canvasSelection.set("dimensionConstraint", null);
-    const hitPrimitive = hitC || hitA;
-
-    if (type === "coincident") {
-      if (!hitP && !hitL && !hitPrimitive && !hitArcEnd) {
-        setHint(invalidConstraintTargetHint(type), "error");
-        return true;
-      }
-      if (hitArcEnd) {
-        const next = { arc: hitArcEnd.arc, endpoint: hitArcEnd.endpoint };
-        if (canvasSelection.arcEndpoint && !sameArcEndpoint(canvasSelection.arcEndpoint, next)) canvasSelection.set("arcEndpointPair", [canvasSelection.arcEndpoint, next]);
-        canvasSelection.set("arcEndpoint", next);
-      } else if (hitP) {
-        canvasSelection.set("arcEndpointPair", null);
-        if (!canvasSelection.points.includes(hitP)) canvasSelection.append("points", hitP);
-        canvasSelection.set("points", canvasSelection.points.slice(-2));
-        if (canvasSelection.points.length >= 2) canvasSelection.set("lines", []);
-      } else if (hitL) {
-        canvasSelection.set("arcEndpointPair", null);
-        if (canvasSelection.points.length > 0) {
-          canvasSelection.set("lines", [hitL]);
-          canvasSelection.set("points", canvasSelection.points.slice(0, 1));
-        } else {
-          if (!canvasSelection.lines.includes(hitL)) canvasSelection.append("lines", hitL);
-          canvasSelection.set("lines", canvasSelection.lines.slice(-2));
-        }
-        canvasSelection.set("circles", []);
-        canvasSelection.set("arcs", []);
-      } else if (hitPrimitive) {
-        canvasSelection.set("arcEndpointPair", null);
-        pushPrimitiveSelection(hitPrimitive);
-        canvasSelection.set("points", canvasSelection.points.slice(0, 1));
-        canvasSelection.set("lines", []);
-      }
-    } else if (type === "horizontal" || type === "vertical") {
-      if (!hitL && !hitP) {
-        setHint(invalidConstraintTargetHint(type), "error");
-        return true;
-      }
-      if (hitP) {
-        canvasSelection.set("lines", []);
-        if (!canvasSelection.points.includes(hitP)) canvasSelection.append("points", hitP);
-        canvasSelection.set("points", canvasSelection.points.slice(-2));
-      } else if (!lineHasDirection(hitL)) {
-        setHint("向き拘束の対象線が短すぎます", "error");
-        return true;
-      } else {
-        canvasSelection.set("lines", [hitL]);
-        canvasSelection.set("points", []);
-      }
-    } else if (type === "parallel" || type === "perpendicular" || type === "collinear") {
-      if (!hitL) {
-        setHint(invalidConstraintTargetHint(type), "error");
-        return true;
-      }
-      if (!lineHasDirection(hitL)) {
-        setHint("向き拘束の対象線が短すぎます", "error");
-        return true;
-      }
-      canvasSelection.set("points", []);
-      if (!canvasSelection.lines.includes(hitL)) canvasSelection.append("lines", hitL);
-      canvasSelection.set("lines", canvasSelection.lines.slice(-2));
-    } else if (type === "distance") {
-      if (!hitP && !hitL && !hitPrimitive) {
-        const target = distanceTargetFromSelection();
-        if (target?.kind === "line-length") {
-          setHint("線の長さ寸法は、配置したい位置をダブルクリックしてください");
-          return true;
-        }
-        setHint(invalidConstraintTargetHint(type), "error");
-        return true;
-      }
-      if (hitP) {
-        if (!canvasSelection.points.includes(hitP)) canvasSelection.append("points", hitP);
-        canvasSelection.set("points", canvasSelection.points.slice(-2));
-        canvasSelection.set("lines", canvasSelection.lines.slice(0, 1));
-      } else if (hitL) {
-        if (!canvasSelection.lines.includes(hitL)) canvasSelection.append("lines", hitL);
-        canvasSelection.set("lines", canvasSelection.lines.slice(-2));
-        canvasSelection.set("points", canvasSelection.points.slice(0, 1));
-        canvasSelection.set("circles", []);
-        canvasSelection.set("arcs", []);
-      } else if (hitPrimitive) {
-        canvasSelection.set("points", []);
-        canvasSelection.set("lines", []);
-        canvasSelection.set("circles", []);
-        canvasSelection.set("arcs", []);
-        pushPrimitiveSelection(hitPrimitive);
-      }
-      trimConstraintSelection(type);
-    } else if (type === "equal") {
-      if (hitL) {
-        canvasSelection.set("points", []);
-        canvasSelection.set("circles", []);
-        canvasSelection.set("arcs", []);
-        if (!canvasSelection.lines.includes(hitL)) canvasSelection.append("lines", hitL);
-        canvasSelection.set("lines", canvasSelection.lines.slice(-2));
-      } else if (hitPrimitive) {
-        canvasSelection.set("points", []);
-        canvasSelection.set("lines", []);
-        pushPrimitiveSelection(hitPrimitive);
-      } else {
-        setHint(invalidConstraintTargetHint(type), "error");
-        return true;
-      }
-      trimConstraintSelection(type);
-    } else if (type === "concentric" || type === "equalRadius" || type === "pointOnCircle" || type === "tangent") {
-      if (hitP && (type === "concentric" || type === "pointOnCircle")) {
-        if (!canvasSelection.points.includes(hitP)) canvasSelection.append("points", hitP);
-        canvasSelection.set("points", canvasSelection.points.slice(-1));
-      } else if (hitL && type === "tangent") {
-        canvasSelection.set("lines", [hitL]);
-      } else if (hitPrimitive) {
-        pushPrimitiveSelection(hitPrimitive);
-      } else {
-        setHint(invalidConstraintTargetHint(type), "error");
-        return true;
-      }
-      trimConstraintSelection(type);
-    }
-
-    updateUI();
-    if (!executeConstraintCommandIfReady()) draw();
-    return true;
-  }
 
   function handleConstraintTargetDoubleClick(hitP, hitL, pointer) {
     if (constraintTargetSession.command?.type !== "distance") return false;

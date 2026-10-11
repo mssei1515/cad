@@ -221,3 +221,14 @@ test('deletion selection cleanup retains survivors by identity and preserves sep
  assert.deepEqual(selection.dimensionConstraints, [keptConstraint]); assert.equal(selection.constraint, null);
  assert.equal(selection.hatches.length, 1); assert.equal(selection.sketchId, null);
 });
+
+
+test('constraint target reflection owns geometry selection and clears only the existing tree and instance fields', () => {
+ const selection=create(),p={},l={},c={},a={},s={},endpoint={arc:a,endpoint:'start'},pair=[endpoint,endpoint],annotation={};
+ const target={points:[p],lines:[l],circles:[c],arcs:[a],splines:[s],arcEndpoint:endpoint,arcEndpointPair:pair};
+ selection.set('annotations',[annotation]);selection.set('blockInstances',[{}]);selection.set('geometryInstances',[{}]);selection.set('instanceGeometry',{});selection.set('sketchId','S1');
+ selection.applyConstraintTargets(target);
+ for(const field of ['points','lines','circles','arcs','splines'])assert.equal(selection[field],target[field]);
+ assert.equal(selection.arcEndpoint,endpoint);assert.equal(selection.arcEndpointPair,pair);assert.equal(selection.annotations[0],annotation);
+ assert.equal(selection.blockInstances.length,0);assert.equal(selection.geometryInstances.length,0);assert.equal(selection.instanceGeometry,null);assert.equal(selection.sketchId,null);
+});

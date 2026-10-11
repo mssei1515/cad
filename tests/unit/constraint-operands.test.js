@@ -5,12 +5,12 @@ const vm = require('node:vm');
 const sandbox = { window: {} };
 vm.runInNewContext(fs.readFileSync('src/constraints/operands.js', 'utf8'), sandbox);
 class TestArc {}
-function create() {
+function create(overrides = {}) {
   const relations = new Map([['S1', 'active'], ['S2', 'reference'], ['S3', 'descendant']]);
   const values = sandbox.window.ConstraintOperands.create({ elementSketchId: element => element?.sketchId || null,
     operandRelationForSketch: id => relations.get(id) || null,
     sameArcEndpoint: (a, b) => a?.arc === b?.arc && a?.endpoint === b?.endpoint,
-    Arc: TestArc, lineHasDirection: line => line.direction !== false });
+    Arc: TestArc, lineHasDirection: line => line.direction !== false, ...overrides });
   return { values, relations };
 }
 
@@ -91,4 +91,25 @@ test('invalid guidance is evaluated only on rejection and directional line guard
  assert.equal(v.appendTarget('parallel', [], { kind: 'line', line: {} }, hint).ok, true); assert.equal(reads, 0);
  assert.equal(v.appendTarget('parallel', [], null, hint).error, 'invalid'); assert.equal(reads, 1);
  assert.match(v.appendTarget('parallel', [], { kind: 'line', line: { direction: false } }, hint).error, /短すぎ/); assert.equal(reads, 1);
+});
+
+
+test('selection conversion retains kind order and geometry identities without duplicating selected arc endpoints', () => {
+ const { values } = create(), item = () => ({ sketchId: 'S1' });
+ const p=item(),l=item(),c=item(),a=item(),whole=item(),excluded={sketchId:'other'};
+ const selection={points:[p,excluded],lines:[l],circles:[c],arcs:[a,whole],arcEndpoint:{arc:a,endpoint:'end'},splines:[]};
+ const result=values.fromSelection(selection,null);
+ assert.deepEqual(Array.from(result,operand=>operand.kind),['point','line','primitive','primitive','arc-endpoint']);
+ assert.equal(result[0].point,p);assert.equal(result[1].line,l);assert.equal(result[2].primitive,c);assert.equal(result[3].primitive,whole);assert.equal(result[4].arc,a);
+ assert.equal(result[4].endpoint,'end');assert.deepEqual(selection.arcs,[a,whole]);assert.equal(selection.points[1],excluded);
+});
+test('Spline conversion uses explicit pointer, then start point, then origin, preserving sampling and endpoint rules', () => {
+ const calls=[], curve={},start={x:3,y:4},pointer={x:5,y:6};let t=0.75;
+ const { values }=create({closestSplinePoint:(...args)=>{calls.push(args);return t==null?null:{t};}});
+ const spline={sketchId:'S2',curve:()=>curve,startPoint:()=>start};
+ const selection={points:[],lines:[],circles:[],arcs:[],arcEndpoint:null,splines:[spline]};
+ const first=values.fromSelection(selection,pointer)[0];assert.equal(first.spline,spline);assert.equal(first.parameter,0.75);assert.equal(first.endpoint,'end');assert.equal(first.relation,'reference');
+ assert.equal(calls[0][0],curve);assert.equal(calls[0][1],pointer);assert.equal(calls[0][2].samplesPerSpan,28);
+ t=0.5;assert.equal(values.fromSelection(selection,null)[0].endpoint,'start');assert.equal(calls[1][1],start);
+ t=null;spline.startPoint=()=>null;assert.equal(values.fromSelection(selection,null)[0].parameter,0);assert.equal(calls[2][1].x,0);assert.equal(calls[2][1].y,0);
 });

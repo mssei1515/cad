@@ -1,7 +1,25 @@
 /* Constraint operand values; geometry identity is retained and selection is caller-owned. */
 (() => {
   "use strict";
-  function create({ elementSketchId, operandRelationForSketch, sameArcEndpoint, Arc, lineHasDirection }) {
+  function create({ elementSketchId, operandRelationForSketch, sameArcEndpoint, Arc, lineHasDirection, closestSplinePoint }) {
+    function fromSelection(selection, pointer) {
+      const operands = [];
+      for (const p of selection.points) operands.push(makeConstraintOperand("point", { point: p }));
+      for (const l of selection.lines) operands.push(makeConstraintOperand("line", { line: l }));
+      for (const c of selection.circles) operands.push(makeConstraintOperand("primitive", { primitive: c }));
+      for (const a of selection.arcs) {
+        if (selection.arcEndpoint?.arc === a) continue;
+        operands.push(makeConstraintOperand("primitive", { primitive: a }));
+      }
+      if (selection.arcEndpoint) operands.push(makeConstraintOperand("arc-endpoint", { arc: selection.arcEndpoint.arc, endpoint: selection.arcEndpoint.endpoint }));
+      for (const spline of selection.splines) {
+        const closest = closestSplinePoint(spline.curve(), pointer || spline.startPoint() || { x: 0, y: 0 }, { samplesPerSpan: 28 });
+        const parameter = closest?.t ?? 0;
+        operands.push(makeConstraintOperand("spline", { spline, parameter, endpoint: parameter <= 0.5 ? "start" : "end" }));
+      }
+      return operands.filter(Boolean);
+    }
+
     function operandElement(operand) {
       if (!operand) return null;
       if (operand.kind === "point") return operand.point;
@@ -102,7 +120,7 @@
       return { ok: true, operands: next };
     }
 
-    return Object.freeze({ appendTarget, operandElement, makeConstraintOperand, operandFromReferenceTarget, referenceTargetFromOperand, subjectFromOperand, sameConstraintOperand, referenceSubjectElement, referenceSubjectSketchId });
+    return Object.freeze({ fromSelection, appendTarget, operandElement, makeConstraintOperand, operandFromReferenceTarget, referenceTargetFromOperand, subjectFromOperand, sameConstraintOperand, referenceSubjectElement, referenceSubjectSketchId });
   }
   window.ConstraintOperands = Object.freeze({ create });
 })();
