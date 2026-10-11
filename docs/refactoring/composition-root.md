@@ -4,7 +4,11 @@
 
 開始点はdevelopの`457adea`。承認された最終目標は、`app.js`を数百行程度の生成・接続・起動・終了へ整理すること。部分的な抽出や中間のテスト成功をもって、この目標の完了とはしない。
 
-## 現在の再開地点（2026-10-11）
+## 現在の再開地点（2026-10-12）
+
+ConstraintIntentResolverへ通常／参照／対称／Splineの意図解決と下位判定を集約。候補生成はConstraintCandidates、対象変換はConstraintOperandsへ委譲し、対象列を入力として配置／commit意図または拒否理由を返す。Selection・session・pending・モデル配列・UI／履歴を直接変更しない。子孫／複数Sketch／参照対象数／権限／循環／Spline端点の判定順序と参照同一性を保持し、処理本体は元処理と一致。app.jsは10,069→9,954行（115行減、今回の合計1,104行減）。構文429ファイル・単体1,148件・関連E2E171件成功（exit 0、2.4分）。ログはcad-intent-resolver-{check,unit,e2e}.log。全E2Eはこの単位では未実行。全体目標は未完了。現在Selectionの取得adapterと操作の進行、command組立ての依存整理は残る。
+
+### 前回の区切り
 
 DimensionPlacementCommandへ選択／半径・直径／解決済み意図からの配置開始、追加対象による再解決、値入力または読取登録への進行を分離。既存の配置計算・読取判定・対象sessionへ委譲し、開始経路ごとのdraft解除／mode変更と初期pointerの違い、draw後のfocus、retarget後のpending更新順序を維持する。5処理の本体は明示した依存adapter以外元処理と一致。app.jsは10,203→10,069行（134行減、今回の合計989行減）。構文427ファイル・単体1,141件・関連E2E165件成功（exit 0、2.3分）。ログはcad-dimension-placement-{check,unit,e2e}.log。全E2Eはこの単位では未実行。全体目標は未完了。共有pendingCommandは他種別と分離しておらず、appのget／set adapterが残る。操作依存も多いため、session／入力表示の所有を整理する際に組立て境界を再確認する。
 
