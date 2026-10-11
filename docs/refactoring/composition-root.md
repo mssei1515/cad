@@ -6,6 +6,10 @@
 
 ## 現在の再開地点（2026-10-12）
 
+Block／派生インスタンスの全体hit・bundle hit・派生drag用部分Geometry hitを既存GeometryHitQuery.createInstancesへ集約。現在scope・倍率・投影bundle・可視性／操作資格・Annotation bounds・Hatch照会を明示し、Selection／mode／モデルを変更しない。BlockのGeometry→Annotation→Hatchと派生bundleのHatch優先の差、全体hitの描画順、dragの点→円弧端点→線→円→円弧→Splineと種別内逆順／end優先を保持する。元処理との本体一致と3境界テストで所有者・参照・順序・資格・現在倍率を確認。app.jsは9,101→9,030行（71行減、今回の合計2,028行減）。構文444ファイル・単体1,219件・関連E2E216件成功（exit 0、4.8分、ドラッグ回帰1.8分）。ログはcad-instance-hit-query-{check,unit,e2e}.log。全E2Eはこの単位では未実行。全体目標は未完了。
+
+### 前回の区切り
+
 Reference Imageの可視対象収集とoverlay候補・selected flag・較正点の表示構成を既存ReferenceImageRenderer.createLayerへ集約。resource rendererを受け取りcache／ready／clearとpaintを共有し、現在画像・hover・較正点の照会を明示する。inspection→単一選択→hover、候補拒否後のfallbackなし、active Sketch／inspectionの資格、画像参照と順序、overlayがなくても較正点を描く動作を保持。元処理との本体一致と3つの境界テストで確認。app.jsは9,110→9,101行（9行減、今回の合計1,957行減）。構文444ファイル・単体1,216件・関連E2E141件成功（exit 0、2.1分）。ログはcad-image-layer-{check,unit,e2e}.log。全E2Eはこの単位では未実行。全体目標は未完了。
 
 ### 前回の区切り

@@ -2129,6 +2129,10 @@
 
 
 
+  const instanceHitQuery = window.GeometryHitQuery.createInstances({
+    currentScope: workspace.current, viewportScale: () => viewport.scale, hitSketchAllowed, isVisibleSketchId, blockProjectionBundle,
+    annotationBounds, resolvedHatchBoundary, isVisibleValue, hatchAppearanceForDisplay, hatchContainsSelectablePoint, geometryInstanceBundles,
+  });
   const { hitSketchIdentityElement, hitEndpointPoint, hitExplicitPoint, hitAnyPoint, hitPoint, hitLine, hitCircle, hitArc, hitArcEndpoint, hitSpline } = window.GeometryHitQuery.create({
     currentScope: workspace.current, viewportScale: () => viewport.scale,
     isEditableSketchElement: hitElementAllowed, isSelectableEndpointPoint, isExplicitPoint, preferredSketchId: activeSketchId,
@@ -2251,85 +2255,10 @@
 
   function distanceTargetFromSelection() { return constraintSelectionQuery.distanceTarget(); }
 
-  function hitBlockInstance(x, y, editableOnly = true) {
-    const threshold = 8 / viewport.scale;
-    const instances = model.blockInstances.slice().sort((a, b) => (normalizedDrawingOrder(b.drawingOrder) ?? 0) - (normalizedDrawingOrder(a.drawingOrder) ?? 0));
-    for (const instance of instances) {
-      if (editableOnly && !hitSketchAllowed(instance.sketchId)) continue;
-      if (!isVisibleSketchId(instance.sketchId)) continue;
-      const bundle = blockProjectionBundle(instance);
-      if (bundle.points.some((point) => hypot2(point.x - x, point.y - y) <= threshold)) return instance;
-      if (bundle.lines.some((line) => distancePointToSegment(x, y, line) <= threshold)) return instance;
-      if (bundle.circles.some((circle) => Math.abs(hypot2(x - circle.center.x, y - circle.center.y) - circle.radius()) <= threshold)) return instance;
-      if (bundle.arcs.some((arc) => Math.abs(hypot2(x - arc.center.x, y - arc.center.y) - arc.radius()) <= threshold && angleOnSignedSweep(Math.atan2(y - arc.center.y, x - arc.center.x), arc.startAngle, arc.endAngle))) return instance;
-      if ((bundle.splines || []).some((spline) => window.SplineGeometry.closestPoint(spline.curve(), { x, y }, { samplesPerSpan: 28 })?.distance <= threshold)) return instance;
-      if ((bundle.annotations || []).some((annotation) => {
-        const bounds = annotationBounds(annotation);
-        return bounds && x >= bounds.x1 - threshold && x <= bounds.x2 + threshold && y >= bounds.y1 - threshold && y <= bounds.y2 + threshold;
-      })) return instance;
-      if ((bundle.hatches || []).some((hatch) => {
-        const resolved = resolvedHatchBoundary(hatch);
-        return resolved.ok && isVisibleValue(hatchAppearanceForDisplay(hatch).visible) && hatchContainsSelectablePoint(hatch, resolved, { x, y });
-      })) return instance;
-    }
-    return null;
-  }
-
-  function hitBlockRotationHandle(x, y) {
-    return null;
-  }
-
-  function geometryBundleHit(bundle, x, y, threshold = 8 / viewport.scale) {
-    if ((bundle.hatches || []).some(hatch => isVisibleValue(hatchAppearanceForDisplay(hatch).visible)
-      && hatchContainsSelectablePoint(hatch, resolvedHatchBoundary(hatch), { x, y }))) return true;
-    if (bundle.points.some((point) => hypot2(point.x - x, point.y - y) <= threshold)) return true;
-    if (bundle.lines.some((line) => distancePointToSegment(x, y, line) <= threshold)) return true;
-    if (bundle.circles.some((circle) => Math.abs(hypot2(x - circle.center.x, y - circle.center.y) - circle.radius()) <= threshold)) return true;
-    if (bundle.arcs.some((arc) => Math.abs(hypot2(x - arc.center.x, y - arc.center.y) - arc.radius()) <= threshold && angleOnSignedSweep(Math.atan2(y - arc.center.y, x - arc.center.x), arc.startAngle, arc.endAngle))) return true;
-    return bundle.splines.some((spline) => window.SplineGeometry.closestPoint(spline.curve(), { x, y }, { samplesPerSpan: 28 })?.distance <= threshold);
-  }
-
-  function hitGeometryInstance(x, y, editableOnly = true) {
-    const bundles = geometryInstanceBundles().slice().sort((a, b) => (normalizedDrawingOrder(b.instance.drawingOrder) ?? 0) - (normalizedDrawingOrder(a.instance.drawingOrder) ?? 0));
-    for (const bundle of bundles) {
-      if (editableOnly && !hitSketchAllowed(bundle.instance.sketchId)) continue;
-      if (isVisibleSketchId(bundle.instance.sketchId) && geometryBundleHit(bundle, x, y)) return bundle.instance;
-    }
-    return null;
-  }
-
-  function hitDerivedGeometryForDrag(x, y) {
-    const threshold = 7 / viewport.scale;
-    const pointThreshold = 10 / viewport.scale;
-    const bundles = geometryInstanceBundles().slice().sort((a, b) => (normalizedDrawingOrder(b.instance.drawingOrder) ?? 0) - (normalizedDrawingOrder(a.instance.drawingOrder) ?? 0));
-    for (const bundle of bundles) {
-      if (!hitSketchAllowed(bundle.instance.sketchId)) continue;
-      for (const point of bundle.points.slice().reverse()) {
-        if (hypot2(point.x - x, point.y - y) <= pointThreshold) return { kind: "point", item: point, instance: bundle.instance };
-      }
-      for (const arc of bundle.arcs.slice().reverse()) {
-        for (const endpoint of ["end", "start"]) {
-          const point = arcEndpointPoint(arc, endpoint);
-          if (hypot2(point.x - x, point.y - y) <= pointThreshold) return { kind: "arc-endpoint", item: arc, endpoint, instance: bundle.instance };
-        }
-      }
-      for (const line of bundle.lines.slice().reverse()) {
-        if (distancePointToSegment(x, y, line) <= threshold) return { kind: "line", item: line, instance: bundle.instance };
-      }
-      for (const circle of bundle.circles.slice().reverse()) {
-        if (Math.abs(hypot2(x - circle.center.x, y - circle.center.y) - circle.radius()) <= threshold) return { kind: "circle", item: circle, instance: bundle.instance };
-      }
-      for (const arc of bundle.arcs.slice().reverse()) {
-        const angle = Math.atan2(y - arc.center.y, x - arc.center.x);
-        if (Math.abs(hypot2(x - arc.center.x, y - arc.center.y) - arc.radius()) <= threshold && angleOnSignedSweep(angle, arc.startAngle, arc.endAngle)) return { kind: "arc", item: arc, instance: bundle.instance };
-      }
-      for (const spline of bundle.splines.slice().reverse()) {
-        const closest = window.SplineGeometry.closestPoint(spline.curve(), { x, y }, { samplesPerSpan: 28 });
-        if (closest?.distance <= threshold) return { kind: "spline", item: spline, instance: bundle.instance };
-      }
-    }
-    return null;
-  }
+  function hitBlockInstance(...args) { return instanceHitQuery.hitBlockInstance(...args); }
+  function hitGeometryInstance(...args) { return instanceHitQuery.hitGeometryInstance(...args); }
+  function hitDerivedGeometryForDrag(...args) { return instanceHitQuery.hitDerivedGeometryForDrag(...args); }
+  function hitBlockRotationHandle(x, y) { return null; }
 
 
 

@@ -90,3 +90,53 @@ test('visible inactive curves expose their owning sketch without entering editab
     assert.equal(query.hitSketchIdentityElement(x, 0, { allowInactiveGeometry: true }), null);
   }
 });
+
+function instanceFixture() {
+  const state = { scope: { blockInstances: [] }, bundles: [], scale: 1 }, calls = [];
+  const bundleFor = owner => ({ instance: owner, points: [], lines: [], circles: [], arcs: [], splines: [], annotations: [], hatches: [] });
+  const query = sandbox.window.GeometryHitQuery.createInstances({
+    currentScope: () => state.scope, viewportScale: () => state.scale,
+    hitSketchAllowed: id => id !== 'blocked', isVisibleSketchId: id => id !== 'hidden',
+    blockProjectionBundle: instance => state.bundles.find(bundle => bundle.instance === instance), geometryInstanceBundles: () => state.bundles,
+    annotationBounds: annotation => { calls.push('annotation'); return annotation.bounds; },
+    resolvedHatchBoundary: hatch => { calls.push('resolve'); return hatch.resolved; },
+    isVisibleValue: value => value !== false, hatchAppearanceForDisplay: hatch => hatch.appearance || {},
+    hatchContainsSelectablePoint: hatch => { calls.push('hatch'); return hatch.contains; },
+  });
+  return { query, state, calls, bundleFor };
+}
+
+test('instance hits use drawing order, visibility and explicit eligibility without reordering source arrays', () => {
+  const f = instanceFixture(), low = { id: 'low', sketchId: 'active', drawingOrder: 0 }, high = { id: 'high', sketchId: 'blocked', drawingOrder: 2 }, hidden = { id: 'hidden', sketchId: 'hidden', drawingOrder: 3 };
+  const owners = [low, high, hidden]; f.state.scope.blockInstances = owners;
+  f.state.bundles = owners.map(owner => ({ ...f.bundleFor(owner), points: [point('p', 0, 0)] }));
+  assert.equal(f.query.hitBlockInstance(0, 0), low); assert.equal(f.query.hitBlockInstance(0, 0, false), high);
+  assert.equal(f.query.hitGeometryInstance(0, 0), low); assert.equal(f.query.hitGeometryInstance(0, 0, false), high);
+  assert.deepEqual(owners, [low, high, hidden]); assert.deepEqual(f.state.bundles.map(bundle => bundle.instance), owners);
+  f.state.scope = { blockInstances: [low] }; f.state.scale = 2;
+  assert.equal(f.query.hitBlockInstance(5, 0), null);
+  f.state.scale = 1; assert.equal(f.query.hitBlockInstance(5, 0), low);
+});
+
+test('Block and derived hits preserve their different geometry and hatch evaluation order', () => {
+  const f = instanceFixture(), owner = { sketchId: 'active' }, bundle = f.bundleFor(owner);
+  bundle.points.push(point('p', 0, 0)); bundle.hatches.push({ contains: true, resolved: { ok: true } });
+  f.state.scope.blockInstances = [owner]; f.state.bundles = [bundle];
+  assert.equal(f.query.hitBlockInstance(0, 0), owner); assert.equal(f.calls.length, 0);
+  assert.equal(f.query.hitGeometryInstance(0, 0), owner); assert.deepEqual(f.calls, ['resolve', 'hatch']);
+  bundle.points.length = 0; bundle.hatches[0].resolved.ok = false; f.calls.length = 0;
+  assert.equal(f.query.hitBlockInstance(0, 0), null); assert.deepEqual(f.calls, ['resolve']);
+  bundle.hatches.length = 0; bundle.annotations.push({ bounds: { x1: 0, y1: 0, x2: 2, y2: 2 } });
+  assert.equal(f.query.hitBlockInstance(1, 1), owner); assert.equal(f.query.hitGeometryInstance(1, 1), null);
+});
+
+test('derived drag hits preserve point priority, reverse occurrence order and end before start', () => {
+  const f = instanceFixture(), owner = { sketchId: 'active' }, bundle = f.bundleFor(owner);
+  const first = point('first', 0, 0), last = point('last', 1, 0);
+  bundle.points.push(first, last); bundle.lines.push(new Line('line', first, point('end', 30, 0)));
+  const arc = new Arc('arc', point('center', 0, 0), 1, 0, Math.PI / 2); bundle.arcs.push(arc);
+  f.state.bundles = [bundle];
+  let hit = f.query.hitDerivedGeometryForDrag(0, 0); assert.equal(hit.kind, 'point'); assert.equal(hit.item, last); assert.equal(hit.instance, owner);
+  bundle.points.length = 0; hit = f.query.hitDerivedGeometryForDrag(0, 0); assert.equal(hit.kind, 'arc-endpoint'); assert.equal(hit.item, arc); assert.equal(hit.endpoint, 'end');
+  owner.sketchId = 'blocked'; assert.equal(f.query.hitDerivedGeometryForDrag(0, 0), null);
+});
