@@ -40,3 +40,26 @@ test('missing forced fields keep existing coercion and only literal true means c
   assert.equal(f.state.result.success, false); assert.ok(Number.isNaN(f.state.result.errorNorm));
   assert.equal(f.state.result.iterations, 0); assert.equal(f.state.result.reason, 'test'); assert.equal(f.solver.solveSubset, f.original);
 });
+
+test('intent fixture resolves call-time geometry references and rejects missing input before calling the resolver', () => {
+  const oldPoint = { id: 'P1' }, livePoint = { id: 'P1' }, arc = { id: 'A1' }, constraint = {}, normalized = [];
+  let scope = { points: [oldPoint] }, calls = 0, resolution = null, serialized = 0;
+  const driver = sandbox.window.ConstraintTestDriver.createIntentResolution({ currentScope: () => scope,
+    makeConstraintOperand: (kind, input) => { normalized.push({ kind, input }); return { kind, input }; },
+    resolveConstraintIntent: (type, operands) => { assert.equal(type, 'coincidence'); calls += 1; assert.equal(operands[0].input.point, livePoint); return resolution; },
+    serializeConstraint: value => { assert.equal(value, constraint); serialized += 1; return { type: 'serialized' }; },
+  });
+  scope = { points: [livePoint], lines: [], splines: [], circles: [], arcs: [arc] };
+  const inputs = [{ kind: 'point', id: 'P1' }, { kind: 'arc-endpoint', id: 'A1', endpoint: 'start', parameter: 0.25 }];
+  assert.equal(driver.resolve('coincidence', inputs), null);
+  assert.equal(serialized, 0);
+  assert.equal(normalized[1].input.arc, arc);
+  assert.equal(normalized[1].input.endpoint, 'start');
+  assert.equal(normalized[1].input.parameter, 0.25);
+  assert.throws(() => driver.resolve('coincidence', [{ kind: 'point', id: 'missing' }]), /Missing test operand: missing/);
+  assert.equal(calls, 1);
+  resolution = { constraint, target: { kind: 'arc-endpoint' } };
+  assert.deepEqual(JSON.parse(JSON.stringify(driver.resolve('coincidence', inputs))), { action: null, error: null, constraint: { type: 'serialized' }, targetKind: 'arc-endpoint' });
+  assert.equal(serialized, 1);
+  assert.deepEqual(inputs, [{ kind: 'point', id: 'P1' }, { kind: 'arc-endpoint', id: 'A1', endpoint: 'start', parameter: 0.25 }]);
+});

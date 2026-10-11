@@ -32,5 +32,40 @@
     }
     return Object.freeze({ commit });
   }
-  window.ConstraintTestDriver = Object.freeze({ createForcedCommit });
+  function createInputObservation({ readSelectedGeometry, canvasSelection, constraintTargetSession, operandElement }) {
+    function state() {
+      return {
+        selected: readSelectedGeometry(),
+        geometryInstances: canvasSelection.geometryInstances.map((item) => item.id),
+        arcEndpoint: canvasSelection.arcEndpoint ? { arc: canvasSelection.arcEndpoint.arc.id, endpoint: canvasSelection.arcEndpoint.endpoint } : null,
+        arcEndpointPair: canvasSelection.arcEndpointPair?.map((item) => ({ arc: item.arc.id, endpoint: item.endpoint })) || null,
+        operands: constraintTargetSession.operands.map((item) => ({ kind: item.kind, id: operandElement(item)?.id, endpoint: item.endpoint })),
+        pendingType: constraintTargetSession.command?.type || null,
+      };
+    }
+    return Object.freeze({ state });
+  }
+
+  function createIntentResolution({ currentScope, makeConstraintOperand, resolveConstraintIntent, serializeConstraint }) {
+    function resolve(type, inputs) {
+      const operands = inputs.map(({ kind, id, endpoint, parameter }) => {
+        const items = kind === "point" ? currentScope().points : kind === "line" ? currentScope().lines
+          : kind === "spline" ? currentScope().splines : kind === "arc-endpoint" ? currentScope().arcs : [...currentScope().circles, ...currentScope().arcs];
+        const element = items.find((item) => item.id === id);
+        if (!element) throw new Error(`Missing test operand: ${id}`);
+        const key = kind === "arc-endpoint" ? "arc" : kind;
+        return makeConstraintOperand(kind, { [key]: element, endpoint, parameter });
+      });
+      const resolution = resolveConstraintIntent(type, operands);
+      return resolution ? {
+        action: resolution.action || null,
+        error: resolution.error || null,
+        constraint: resolution.constraint ? serializeConstraint(resolution.constraint) : null,
+        targetKind: resolution.target?.kind || null,
+      } : null;
+    }
+    return Object.freeze({ resolve });
+  }
+
+  window.ConstraintTestDriver = Object.freeze({ createForcedCommit, createInputObservation, createIntentResolution });
 })();

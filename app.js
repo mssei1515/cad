@@ -4915,6 +4915,10 @@
       copySelectionToClipboard, pasteGeometryClipboard, clipboardSession, readState: sketchProjectionTestObservation.state,
       blockSelectionGeometry, createBlockDefinitionFromSelection, blockSelectionBoundsCenter, SketchProjectionConstraint,
     });
+    const constraintInputObservation = window.ConstraintTestDriver.createInputObservation({
+      readSelectedGeometry: readTestSelectedGeometry, canvasSelection, constraintTargetSession, operandElement,
+    });
+    const constraintIntentTestDriver = window.ConstraintTestDriver.createIntentResolution({ currentScope: workspace.current, makeConstraintOperand, resolveConstraintIntent, serializeConstraint });
     const overlapSelectionFixture = window.CanvasSelectionTestDriver.createOverlapFixture({
       resetModelState, addLine, addPoint, currentScope: workspace.current, ROOT_SKETCH_ID, DEFAULT_SKETCH_ID, createEmptyBlockDefinition, Point, Line,
       appendDefinition: definition => documentModel.blockDefinitions.push(definition), nextInstanceId: () => `BI${blockInstanceSeq++}`,
@@ -5194,33 +5198,8 @@
       resetForArcEndpointConstraintSelectionTest: endpointSelectionFixture.reset,
       canvasContextSelectionStateForTest: contextSelectionObservation.state,
       addIsolatedFixedPointForContextTest: contextPointInsertion.addFixedPoint,
-      constraintInputStateForTest() {
-        return {
-          selected: this.selectedGeometryIdsForTest(),
-          geometryInstances: canvasSelection.geometryInstances.map((item) => item.id),
-          arcEndpoint: canvasSelection.arcEndpoint ? { arc: canvasSelection.arcEndpoint.arc.id, endpoint: canvasSelection.arcEndpoint.endpoint } : null,
-          arcEndpointPair: canvasSelection.arcEndpointPair?.map((item) => ({ arc: item.arc.id, endpoint: item.endpoint })) || null,
-          operands: constraintTargetSession.operands.map((item) => ({ kind: item.kind, id: operandElement(item)?.id, endpoint: item.endpoint })),
-          pendingType: constraintTargetSession.command?.type || null,
-        };
-      },
-      resolveConstraintIntentForTest(type, inputs) {
-        const operands = inputs.map(({ kind, id, endpoint, parameter }) => {
-          const items = kind === "point" ? model.points : kind === "line" ? model.lines
-            : kind === "spline" ? model.splines : kind === "arc-endpoint" ? model.arcs : [...model.circles, ...model.arcs];
-          const element = items.find((item) => item.id === id);
-          if (!element) throw new Error(`Missing test operand: ${id}`);
-          const key = kind === "arc-endpoint" ? "arc" : kind;
-          return makeConstraintOperand(kind, { [key]: element, endpoint, parameter });
-        });
-        const resolution = resolveConstraintIntent(type, operands);
-        return resolution ? {
-          action: resolution.action || null,
-          error: resolution.error || null,
-          constraint: resolution.constraint ? serializeConstraint(resolution.constraint) : null,
-          targetKind: resolution.target?.kind || null,
-        } : null;
-      },
+      constraintInputStateForTest: constraintInputObservation.state,
+      resolveConstraintIntentForTest: constraintIntentTestDriver.resolve,
       sketchMoveStateForTest() {
         const state = sketchMoveCommand.state();
         return {

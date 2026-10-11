@@ -6,6 +6,10 @@
 
 ## 現在の再開地点（2026-10-12）
 
+拘束入力の状態照会とIntent解決の二つのAPIを既存ConstraintTestDriver.createInputObservation／createIntentResolutionへ分離。前者は現在Selection／ConstraintTargetSession・operandElementとreadSelectedGeometryへ接続し、Instance／arcEndpoint／pair・operand／pending typeを観測する。後者は現在scopeの入力IDを同一Geometryへ結び付け、既存makeConstraintOperand／resolver／serializeConstraintへ委譲。arc-endpointのarc keyとendpoint／parameter、未存在IDの例外、resolutionなしのnullと結果fallbackを維持する。観測にモデル検索／resolver、Intent支援にSelection／session操作を持ち込まず、既存の拘束判断・操作状態を複製しない。test query時だけ生成し、既存API名へ接続。元の二つの処理本体との一致を確認。app.jsは7,738→7,717行（21行減、今回の合計3,341行減）。構文469ファイル・単体1,261件・関連E2E124件成功（exit 0、2.1分）。単体1件を追加し、call-time Geometry同一参照・端点情報、未存在入力のresolver短絡とnull／serialization境界を確認。全利用箇所のphase0-characterization／unified-ui既存E2EでIntentの入力状態非変更・拘束入力と表示回帰を検証。全テスト本体とworker終了後の専用サーバー終了待ちは当該processを確認して終了し、正常終了を回収。ログはcad-constraint-input-test-driver-{check,unit,e2e}.log。全E2Eはこの単位では未実行。全体目標は未完了。
+
+### 前回の区切り
+
 Canvasメニューの重なり選択fixture／円弧端点fixture・状態観測・固定点追加の四つのAPIをCanvasSelectionTestDriverへ分離。createOverlapFixtureは同座標の二線／非表示・inactive線／Block内線を準備し、Definition追加／Instance採番は既存所有者callbackへ委譲する。createEndpointFixtureは線と二円弧の端点選択用Geometryを準備する。固定ID／座標／Sketch切替・Selection、cache無効化・fit→履歴→UI→draw→client照会の順序を維持。createObservationは既存controllerの候補と表示query・現在Hover／Selectionを観測し、Hover優先順／id・parameterName fallback／arcEndpointを保持する。createPointInsertionは現在Canvas矩形／viewportから固定explicit Pointを追加し、UI→draw後のclientを返す。this経由のhook参照を既存CanvasTestDriver.clientPosition／readSelectedGeometryへ置換。観測・Point追加にBlock生成／採番依存を持ち込まず、候補・hit・選択ルールや独自状態を追加しない。test query時だけ生成し、既存API名へ接続。元の四つの処理本体との一致を確認。classic script／構文／E2E読込一覧を同期。app.jsは7,815→7,738行（77行減、今回の合計3,320行減）。構文469ファイル・単体1,260件・関連E2E103件成功（exit 0、2.0分）。新規テストはなく、全利用箇所のunified-ui既存E2Eで候補表示／Hover／選択、固定点除外、円弧端点拘束入力を確認。全テスト本体とworker終了後の専用サーバー終了待ちは当該processを確認して終了し、正常終了を回収。ログはcad-canvas-selection-test-driver-{check,unit,e2e}.log。全E2Eはこの単位では未実行。全体目標は未完了。
 
 ### 前回の区切り
