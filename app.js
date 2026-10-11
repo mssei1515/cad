@@ -4915,6 +4915,15 @@
       copySelectionToClipboard, pasteGeometryClipboard, clipboardSession, readState: sketchProjectionTestObservation.state,
       blockSelectionGeometry, createBlockDefinitionFromSelection, blockSelectionBoundsCenter, SketchProjectionConstraint,
     });
+    const readTestDefaultDimensionAppearance = () => normalizeDimensionAppearance({ ...documentModel.defaultDimensionAppearance, ...documentModel.defaultTerminatorAppearance }, { partial: false });
+    const radiusFixture = window.DimensionTestDriver.createRadiusFixture({
+      Point, Arc, placement: dimensionPlacement, layouts: dimensionLayouts, circlePointAtAngle, readDefaultAppearance: readTestDefaultDimensionAppearance,
+      viewport, hypot2, screenPxPerMm: DIMENSION_SCREEN_PX_PER_MM, outsideShaftLengthFactor: DIMENSION_OUTSIDE_SHAFT_LENGTH_FACTOR,
+    });
+    const terminatorFixture = window.DimensionTestDriver.createTerminatorFixture({
+      readDefaultAppearance: readTestDefaultDimensionAppearance, layouts: dimensionLayouts, metrics: dimensionMetrics, viewport,
+      screenPxPerMm: DIMENSION_SCREEN_PX_PER_MM, fitMarginFactor: DIMENSION_TERMINATOR_FIT_MARGIN_FACTOR, outsideShaftLengthFactor: DIMENSION_OUTSIDE_SHAFT_LENGTH_FACTOR, hypot2,
+    });
     const dimensionAppearanceObservation = window.DimensionTestDriver.createAppearanceObservation({
       currentScope: workspace.current, readDocument: () => documentModel, isDimensionConstraint, constraintSketchId, activeSketchId,
       normalizeDimensionAppearance, effectiveDimensionAppearanceForSketch, dimensionDisplayState,
@@ -5112,108 +5121,10 @@
       openReferenceImageBlockEditorForTest: referenceImageBlockFixture.open,
       completeReferenceImageBlockEditorForTest: referenceImageBlockFixture.complete,
       dimensionAppearanceStateForTest: dimensionAppearanceObservation.state,
-      arcRadiusDimensionRenderPlanForTest(terminatorType = "arrow", options = {}) {
-        const center = new Point("P_ARC_RADIUS_TEST", 0, 0, false, "explicit");
-        const arc = new Arc("A_ARC_RADIUS_TEST", center, 30, 0, Math.PI / 2, false);
-        const target = { kind: "radius", primitive: arc, value: arc.radius() };
-        const dimensionAngle = Number.isFinite(options.dimensionAngle) ? options.dimensionAngle : Math.PI / 4;
-        const dimension = dimensionFromAnchor(target, circlePointAtAngle(arc, dimensionAngle));
-        dimension.labelOffsetU = Number.isFinite(options.labelOffsetU) ? options.labelOffsetU : arc.radius() / 2;
-        const appearance = {
-          ...normalizeDimensionAppearance({ ...documentModel.defaultDimensionAppearance, ...documentModel.defaultTerminatorAppearance }, { partial: false }),
-          terminatorType,
-        };
-        const layout = dimensionLayout(target, dimension, appearance);
-        const plan = linearDimensionRenderPlan(target, layout, options.label || "R30", appearance, dimension);
-        const arcExtension = arcRadiusDimensionExtensionSegment(target, layout, appearance);
-        return {
-          centerTerminatorVisible: Boolean(plan.firstTerminator),
-          arcTerminatorVisible: Boolean(plan.secondTerminator),
-          terminatorsOutside: plan.outside,
-          lineStartDistanceFromCenter: hypot2(plan.lineStart.x - center.x, plan.lineStart.y - center.y),
-          lineEndDistanceFromCenter: hypot2(plan.lineEnd.x - center.x, plan.lineEnd.y - center.y),
-          rawExtendedLineEndDistanceFromCenter: hypot2(layout.lineB.x - center.x, layout.lineB.y - center.y),
-          labelDistanceFromCenter: hypot2(layout.text.x - center.x, layout.text.y - center.y),
-          shaftLengths: plan.shafts.map((shaft) => hypot2(shaft.end.x - shaft.start.x, shaft.end.y - shaft.start.y) * viewport.scale),
-          shaftEndDistancesFromCenter: plan.shafts.map((shaft) => hypot2(shaft.end.x - center.x, shaft.end.y - center.y)),
-          visibleExtensionCount: layout.points.filter((point) => point.showExtension !== false).length,
-          arcExtensionVisible: Boolean(arcExtension),
-          arcExtensionSourceEndpoint: arcExtension?.sourceEndpoint || null,
-          arcExtensionOriginGap: arcExtension
-            ? Math.abs(arcExtension.startAngle - arcExtension.sourceAngle) * arcExtension.radius * viewport.scale
-            : null,
-          arcExtensionOvershoot: arcExtension
-            ? Math.abs(arcExtension.endAngle - arcExtension.intersectionAngle) * arcExtension.radius * viewport.scale
-            : null,
-          arcRadius: arc.radius(),
-          expectedShaftLength: appearance.terminatorSize * DIMENSION_SCREEN_PX_PER_MM * DIMENSION_OUTSIDE_SHAFT_LENGTH_FACTOR,
-          expectedExtensionOriginGap: appearance.extensionLineOriginGap * DIMENSION_SCREEN_PX_PER_MM,
-          expectedExtensionOvershoot: appearance.extensionLineOvershoot * DIMENSION_SCREEN_PX_PER_MM,
-        };
-      },
+      arcRadiusDimensionRenderPlanForTest: radiusFixture.radiusPlan,
       dimensionAppearanceRenderMetricsForTest: dimensionRenderObservation.appearanceMetrics,
-      dimensionTerminatorFitForTest(availableScreenPixels, label = "100", terminatorType = "arrow", expressionMark = false) {
-        const appearance = {
-          ...normalizeDimensionAppearance({ ...documentModel.defaultDimensionAppearance, ...documentModel.defaultTerminatorAppearance }, { partial: false }),
-          terminatorType,
-        };
-        const availableLength = Math.max(0, Number(availableScreenPixels) || 0) / viewport.scale;
-        const layout = {
-          span: availableLength,
-          d: { x: 1, y: 0 },
-          a: { x: 0, y: 0 },
-          b: { x: availableLength, y: 0 },
-          lineA: { x: 0, y: 0 },
-          lineB: { x: availableLength, y: 0 },
-        };
-        const plan = linearDimensionRenderPlan({ kind: "point-point" }, layout, label, appearance, null, expressionMark);
-        const directions = linearDimensionTerminatorDirections({ x: 1, y: 0 }, plan.outside);
-        return {
-          outside: plan.outside,
-          textWidth: dimensionTextWidth(label, appearance, expressionMark) * viewport.scale,
-          fitMargin: appearance.terminatorSize * DIMENSION_SCREEN_PX_PER_MM * DIMENSION_TERMINATOR_FIT_MARGIN_FACTOR,
-          shaftLengths: plan.shafts.map((shaft) => hypot2(shaft.end.x - shaft.start.x, shaft.end.y - shaft.start.y) * viewport.scale),
-          firstDirection: directions.first,
-          secondDirection: directions.second,
-        };
-      },
-      dimensionArrowTipAlignmentForTest({ lineWidth = 1.2, arrowheadAngle = 30, highlighted = false, viewportScale = viewport.scale, outside = false } = {}) {
-        const previousScale = viewport.scale;
-        viewport.update({ scale: Math.max(0.05, Number(viewportScale) || 1) });
-        try {
-          const appearance = {
-            ...normalizeDimensionAppearance({ ...documentModel.defaultDimensionAppearance, ...documentModel.defaultTerminatorAppearance }, { partial: false }),
-            terminatorType: "arrow",
-            lineWidth,
-            arrowheadAngle,
-          };
-          const strokeWidth = dimensionStrokeWidth(appearance, highlighted) / viewport.scale;
-          const direction = outside ? { x: -1, y: 0 } : { x: 1, y: 0 };
-          const points = dimensionOpenArrowheadRenderPoints({ x: 0, y: 0 }, direction, appearance, strokeWidth);
-          const alongDirectionWorld = (point) => point.x * direction.x + point.y * direction.y;
-          const pathTipInsetWorld = alongDirectionWorld(points[0]);
-          const wingDistanceWorld = alongDirectionWorld(points[1]);
-          const wingHalfWidthWorld = Math.abs(points[1].x * -direction.y + points[1].y * direction.x);
-          const renderedHalfAngle = Math.atan2(wingHalfWidthWorld, Math.max(1e-9, wingDistanceWorld - pathTipInsetWorld));
-          const visualProjection = dimensionOpenArrowJoinProjection(strokeWidth, renderedHalfAngle);
-          const visualMiterApex = {
-            x: points[0].x - direction.x * visualProjection,
-            y: points[0].y - direction.y * visualProjection,
-          };
-          const alongDirection = (point) => alongDirectionWorld(point) * viewport.scale;
-          const shaftLength = appearance.terminatorSize * DIMENSION_SCREEN_PX_PER_MM * DIMENSION_OUTSIDE_SHAFT_LENGTH_FACTOR;
-          return {
-            strokeWidth: strokeWidth * viewport.scale,
-            pathTipInset: alongDirection(points[0]),
-            visualTipOffset: alongDirection(visualMiterApex),
-            wingDistance: alongDirection(points[1]),
-            nominalArrowSize: appearance.terminatorSize * DIMENSION_SCREEN_PX_PER_MM,
-            rearShaftLength: shaftLength - alongDirection(points[1]),
-          };
-        } finally {
-          viewport.update({ scale: previousScale });
-        }
-      },
+      dimensionTerminatorFitForTest: terminatorFixture.fit,
+      dimensionArrowTipAlignmentForTest: terminatorFixture.arrowAlignment,
       drawnDimensionColorsForTest() {
         const colors = [];
         const previousSelectedDimension = canvasSelection.dimensionConstraint;

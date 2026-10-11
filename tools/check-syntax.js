@@ -105,7 +105,7 @@ const files = [
   "tests/e2e/adversarial-drag-fixture.spec.js",
   "tests/e2e/adversarial-authoring-performance.spec.js",
   "tests/unit/edit-history.test.js",
-  "tests/unit/interaction-profiler.test.js", "tests/unit/canvas-render-probe.test.js", "tests/unit/constraint-test-driver.test.js", "tests/unit/canvas-test-driver.test.js", "tests/unit/sketch-projection-test-driver.test.js",
+  "tests/unit/interaction-profiler.test.js", "tests/unit/canvas-render-probe.test.js", "tests/unit/constraint-test-driver.test.js", "tests/unit/canvas-test-driver.test.js", "tests/unit/dimension-test-driver.test.js", "tests/unit/sketch-projection-test-driver.test.js",
   "src/document/appearance.js", "src/commands/hatch_command.js", "src/commands/annotation_command.js",
   "src/document/drawing_order.js", "src/editing/canvas_context_query.js", "src/editing/geometry_hit_query.js",
   "src/persistence/document_files.js", "src/commands/document_file_command.js",
