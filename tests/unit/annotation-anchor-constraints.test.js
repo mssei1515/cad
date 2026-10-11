@@ -9,13 +9,13 @@ const sources = vm.runInNewContext(fs.readFileSync(path.join(root, 'index.html')
 for (const file of sources.filter(p => p.startsWith('src/'))) vm.runInContext(fs.readFileSync(path.join(root, file), 'utf8'), sandbox);
 const { AnnotationAnchorConstraints: A, AnnotationData: D, Appearance } = sandbox.window;
 const near = (a, b) => assert.ok(Math.abs(a - b) < 1e-8, `${a} != ${b}`);
-function renderer() {
+function renderer(handles = false) {
   const calls = [], ctx = {}, viewport = { scale: Appearance.CSS_PX_PER_MM };
-  for (const key of ['save', 'restore', 'translate', 'rotate', 'fillText', 'beginPath', 'moveTo', 'lineTo', 'stroke', 'rect', 'setLineDash', 'fill', 'closePath']) ctx[key] = (...args) => calls.push([key, ...args]);
+  for (const key of ['save', 'restore', 'translate', 'rotate', 'fillText', 'beginPath', 'moveTo', 'lineTo', 'stroke', 'rect', 'arc', 'setLineDash', 'fill', 'closePath']) ctx[key] = (...args) => calls.push([key, ...args]);
   ctx.measureText = text => ({ width: text.length * 2 });
   let target = { x: 30, y: 40 }, arrow = { x: 0, y: 0 }, hover = false;
   const api = sandbox.window.AnnotationRenderer.create({ ctx, viewport, withCanvasState: f => f(), annotationLeaderAnchor: () => arrow, annotationDisplayColor: () => 'blue', appearanceLineDash: type => type === 'dashed' ? [2, 1] : [],
-    effectiveAnnotationStyle: element => Appearance.resolveLeaderAppearance({}, {}, {}, element.style), showFrame: () => hover,
+    effectiveAnnotationStyle: element => Appearance.resolveLeaderAppearance({}, {}, {}, element.style), showFrame: () => hover, showResizeHandles: () => handles,
     resolvePlacement: (element, base) => A.resolve(element, base, () => target) });
   return { api, calls, viewport, target: p => { target = p; }, arrow: p => { arrow = p; }, hover: value => { hover = value; } };
 }
@@ -58,10 +58,28 @@ test('independent leader arrow and constrained label both follow their targets',
 });
 test('hidden borders appear only for interaction; visible border uses its own dash and color', () => {
   const h = renderer(), item = note(); h.api.drawAnnotationText(item); assert.equal(h.calls.some(call => call[0] === 'rect'), false);
-  h.hover(true); h.api.drawAnnotationText(item); assert.equal(h.calls.filter(call => call[0] === 'rect').length, 2);
+  h.hover(true); h.api.drawAnnotationText(item); assert.equal(h.calls.filter(call => call[0] === 'rect').length, 1);
+  assert.equal(h.calls.filter(call => call[0] === 'arc').length, 1);
   h.hover(false); item.style.frameVisible = true; item.style.frameLineType = 'dashed'; h.api.drawAnnotationText(item);
   assert.ok(h.calls.some(call => call[0] === 'setLineDash' && call[1].length === 2 && call[1][0] === 2));
 });
+test('selected annotation handles are distinct from its anchor and only the handles resize', () => {
+  const h = renderer(true), item = note({ anchorPosition: 'right-top' }); h.hover(true);
+  const layout = h.api.annotationTextLayout(item), handles = sandbox.window.AnnotationRenderer.resizeHandles(layout);
+  assert.equal(handles.length, 3); h.api.drawAnnotationText(item);
+  assert.equal(h.calls.filter(call => call[0] === 'fill').length, 3);
+  let selected = false, enabled = false;
+  const query = sandbox.window.AnnotationSpatialQuery.create({ viewportScale: () => h.viewport.scale, annotationTextWorldHeight: () => 5, formatDisplayNumber: String,
+    allAnnotations: () => [item], isVisibleSketchId: () => true, activeSketchId: () => 'S1', annotationLeaderAnchor: () => null,
+    annotationTextLayout: () => layout, isFrameInteractive: () => selected, resizeHandlesEnabled: () => enabled });
+  const handle = handles[0], pointer = { x: layout.x + handle.x, y: layout.y + handle.y };
+  assert.notEqual(query.hitAnnotationElement(pointer.x, pointer.y).part, 'frame');
+  selected = true; assert.equal(query.hitAnnotationElement(pointer.x, pointer.y).part, 'frame-enable');
+  enabled = true; assert.equal(query.hitAnnotationElement(pointer.x, pointer.y).part, 'frame');
+  assert.equal(query.hitAnnotationElement(layout.anchorX, layout.anchorY).part, 'anchor');
+  assert.notEqual(query.hitAnnotationElement(layout.x + layout.frame.left, layout.y + layout.frame.top + layout.frame.height / 4).part, 'frame');
+});
+
 test('shelf preview and committed anchor layout agree with padding, rotation and every chosen point', () => {
   const h = renderer();
   for (const position of A.POSITIONS) {
@@ -89,11 +107,43 @@ test('constraint drafting is atomic, rejects another relation on the same axis a
     pointRef: point => sandbox.window.GeometryRef.create('point', point.id), resolveRef: () => target,
     recordHistory: () => { records++; }, updateUI: () => {}, draw: () => {}, setHint: () => {}, cancelCommands: () => { pending = null; }, applicationText: (ja, en) => en });
   const original = JSON.stringify(item);
-  assert.equal(command.start('horizontal'), true); command.click(target); assert.equal(JSON.stringify(item), original);
+  assert.equal(command.start('horizontal'), true); assert.equal(JSON.stringify(item), original);
   command.onAction('cancel'); assert.equal(JSON.stringify(item), original); assert.equal(records, 0);
-  command.start('horizontal'); command.click(target); command.onAction('finish'); assert.equal(records, 1);
+  command.start('horizontal'); command.click(target); assert.equal(records, 1); assert.equal(pending, null);
   const constrained = JSON.stringify(item);
   command.start('coincident'); command.click(target); assert.equal(command.onAction('finish'), false); assert.equal(JSON.stringify(item), constrained); assert.equal(records, 1);
   command.onAction('cancel'); command.start('distance'); command.click(target); command.onSetting('axis', 'x'); command.onSetting('value', -5); command.onAction('finish');
   assert.equal(records, 2); const resolved = A.resolve(item, item, () => target); near(resolved.x, -5); near(resolved.y, 0); assert.deepEqual(target, { id: 'P1', sketchId: 'S1', x: 0, y: 0 });
+});
+
+test('curve, concentric, symmetry and length constraints solve only the annotation point', () => {
+  const G = sandbox.window.GeometrySolver, ref = (kind, id) => sandbox.window.GeometryRef.create(kind, id);
+  const origin = new G.Point('P1', 0, 0), end = new G.Point('P2', 100, 0);
+  const line = new G.Line('L1', origin, end), circle = new G.Circle('C1', origin, 10), arc = new G.Arc('A1', origin, 10, 0, Math.PI / 2);
+  const target = new G.Point('P3', 5, 7), spline = new G.Spline('SP1', [origin, new G.Point('PM', 50, 0), end]), targets = { L1: line, C1: circle, A1: arc, P3: target, SP1: spline };
+  spline.curve();
+  const resolve = r => targets[r.path[0]], original = JSON.stringify(targets);
+  const cases = [
+    [{ type: 'on-line', geometryRef: ref('line', 'L1') }, p => Math.abs(p.y) < 1e-6],
+    [{ type: 'on-spline', geometryRef: ref('spline', 'SP1'), parameter: 0.5 }, p => Math.abs(p.y) < 1e-6 && p.x >= 0 && p.x <= 100],
+    [{ type: 'on-circle', geometryRef: ref('circle', 'C1') }, p => Math.abs(Math.hypot(p.x, p.y) - 10) < 1e-6],
+    [{ type: 'concentric', geometryRef: ref('circle', 'C1') }, p => Math.hypot(p.x, p.y) < 1e-6],
+    [{ type: 'endpoint', geometryRef: ref('arc', 'A1'), endpoint: 'end' }, p => Math.hypot(p.x, p.y - 10) < 1e-6],
+    [{ type: 'symmetry', geometryRef: ref('point', 'P3'), axisRef: ref('line', 'L1') }, p => Math.hypot(p.x - 5, p.y + 7) < 1e-6],
+    [{ type: 'distance', geometryRef: ref('point', 'P3'), value: 8 }, p => Math.abs(Math.hypot(p.x - 5, p.y - 7) - 8) < 1e-6],
+    [{ type: 'distance-line', geometryRef: ref('line', 'L1'), value: 3, sign: -1 }, p => Math.abs(p.y + 3) < 1e-6],
+  ];
+  for (const [relation, check] of cases) {
+    const item = note({ anchorConstraints: [relation] }), result = A.solvePlacement(item, { x: 12, y: 20 }, resolve, true);
+    assert.equal(result.valid, true, relation.type); assert.ok(check(result.point), relation.type);
+    const saved = D.serializeAnnotation(item); assert.equal(D.normalizeAnnotations([saved])[0].anchorConstraints[0].type, relation.type);
+  }
+  assert.equal(JSON.stringify(targets), original);
+  const beyond = A.solvePlacement(note({ anchorConstraints: [{ type: 'on-spline', geometryRef: ref('spline', 'SP1'), parameter: 0.5 }] }), { x: 200, y: 20 }, resolve, true);
+  assert.equal(beyond.valid, true); near(beyond.point.x, 100); near(beyond.point.y, 0);
+  const combined = note({ anchorConstraints: [{ type: 'on-circle', geometryRef: ref('circle', 'C1') }, { type: 'horizontal', geometryRef: ref('point', 'P3') }] });
+  const solved = A.solvePlacement(combined, { x: 12, y: 20 }, resolve, true);
+  assert.equal(solved.valid, true); assert.ok(Math.abs(solved.point.y - 7) < 1e-6); assert.ok(Math.abs(Math.hypot(solved.point.x, solved.point.y) - 10) < 1e-6);
+  combined.anchorConstraints[0] = { type: 'on-line', geometryRef: ref('line', 'L1') };
+  assert.equal(A.solvePlacement(combined, { x: 12, y: 20 }, resolve, true).valid, false);
 });

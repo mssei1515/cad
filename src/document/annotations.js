@@ -32,7 +32,8 @@
       if (item.anchorConstraints) {
         const relations = window.AnnotationAnchorConstraints.normalize(item.anchorConstraints);
         const axes = relations.flatMap(relation => window.AnnotationAnchorConstraints.axes(relation.type));
-        if (!Array.isArray(item.anchorConstraints) || relations.length !== item.anchorConstraints.length || new Set(axes).size !== axes.length || !item.anchorPosition) throw new Error(`${item.id}: Invalid annotation anchor constraints`);
+        if (!Array.isArray(item.anchorConstraints) || relations.length !== item.anchorConstraints.length || new Set(axes).size !== axes.length
+          || relations.reduce((sum, relation) => sum + window.AnnotationAnchorConstraints.degree(relation.type), 0) > 2 || !item.anchorPosition) throw new Error(`${item.id}: Invalid annotation anchor constraints`);
         item.anchorConstraints = relations;
       }
       if (type !== "leader") {

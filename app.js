@@ -236,6 +236,8 @@
     viewportScale: () => viewport.scale, annotationTextWorldHeight: style => annotationTextWorldHeight(style),
     formatDisplayNumber, annotationTextLayout: element => annotationTextLayout(element), annotationLeaderDisplayGeometry: element => annotationLeaderDisplayGeometry(element), effectiveAnnotationStyle, allAnnotations: () => allAnnotations(), isVisibleSketchId, activeSketchId, isVisibleValue,
     annotationLeaderAnchor: element => annotationLeaderAnchor(element),
+    isFrameInteractive: element => canvasSelection.annotations.includes(element) && isEditableSketchElement(element),
+    resizeHandlesEnabled: element => annotationDrag.resizeEnabled(element),
   });
   const { blockLocalGeometryBounds, blockInstanceDisplayCenter, blockInstanceTranslationForAnchor } = window.BlockLayout.create({
     catalog: blockCatalog, projections: blockProjections, instanceProjections, annotationBounds, hatchPrimitivesForScope,
@@ -640,6 +642,7 @@
   const { annotationLeaderDisplayGeometry, annotationTextLayout, annotationTextWorldHeight, annotationTextMetrics, drawAnnotationText, drawAnnotationLeader } = window.AnnotationRenderer.create({ ctx, viewport, withCanvasState, annotationDisplayColor, annotationLeaderAnchor, appearanceLineDash, formatValue: formatDisplayNumber, effectiveAnnotationStyle,
     resolvePlacement: (element, base) => window.AnnotationAnchorConstraints.resolve(element, base, resolveGeometryRef),
     showFrame: element => !pngRender && (canvasSelection.annotations.includes(element) || canvasSelection.inspectionContains(element) || canvasHover.current.annotation === element || canvasSelection.inspectionContains(element.blockInstance)),
+    showResizeHandles: element => !pngRender && !element.blockProjection && canvasSelection.annotations.includes(element) && isEditableSketchElement(element) && annotationDrag.resizeEnabled(element),
     showLeaderEndHandle: element => !pngRender && !element.blockProjection && !element.anchorConstraints?.length && element.sketchId === activeSketchId() && (canvasSelection.annotations.includes(element) || canvasHover.current.annotation === element) });
   function annotationPlacementAnchor(element) {
     const layout = annotationTextLayout(element) || annotationTextMetrics(element, element.type === "leader" ? annotationLeaderDisplayGeometry(element) : element);
@@ -669,6 +672,12 @@
     anchor: annotationPlacementAnchor, materialize: materializeAnnotationAnchor, pointRef: geometryRefForItem, resolveRef: resolveGeometryRef,
     recordHistory, updateUI, draw, setHint, cancelCommands: () => { cancelPendingCommand(""); cancelConstraintTargetCommand(""); }, applicationText,
   });
+  function startAnnotationAnchorConstraint(type, item = canvasSelection.annotations.length === 1 ? canvasSelection.annotations[0] : null) {
+    if (!item) return false;
+    const targets = pendingConstraintCommand && !pendingConstraintCommand.annotationAnchor ? [...constraintOperands] : constraintOperandsFromSelection();
+    if (targets.length > (type === "symmetry" ? 2 : 1)) { setHint(applicationText("注記基準点の参照対象を選び直してください", "Select the reference targets for the annotation anchor again."), "error"); return true; }
+    return annotationAnchorConstraints.start(type, item, targets);
+  }
   const annotationCommand = window.AnnotationCommand.create({
     currentScope: workspace.current, getPending: () => pendingCommand, setPending: value => { pendingCommand = value; },
     lastPointer: () => lastPointerWorld, viewScale: () => viewport.scale,
@@ -2785,7 +2794,7 @@
         annotation.y += dy;
         for (const key of ["start", "elbow", "end"]) if (annotation[key]) annotation[key] = { x: annotation[key].x + dx, y: annotation[key].y + dy };
         if (annotation.geometryRef) annotation.geometryRef = remapGeometryRef(annotation.geometryRef, idMap);
-        if (annotation.anchorConstraints) annotation.anchorConstraints = annotation.anchorConstraints.map(relation => relation.type === "fixed" ? { ...relation, x: relation.x + dx, y: relation.y + dy } : { ...relation, geometryRef: remapGeometryRef(relation.geometryRef, idMap) });
+        if (annotation.anchorConstraints) annotation.anchorConstraints = annotation.anchorConstraints.map(relation => relation.type === "fixed" ? { ...relation, x: relation.x + dx, y: relation.y + dy } : { ...relation, geometryRef: remapGeometryRef(relation.geometryRef, idMap), ...(relation.axisRef ? { axisRef: remapGeometryRef(relation.axisRef, idMap) } : {}) });
         model.annotations.push(annotation);
         pastedAnnotations.push(annotation);
         idMap.set(source.id, annotation.id);
@@ -3365,6 +3374,8 @@
   const annotationDrag = window.AnnotationDrag.create({
     canEdit: item => guardSketchEdit(item.sketchId),
     annotationById, canvasSelection, setHint, updateUI, draw, recordHistory, annotationLeaderDisplayGeometry,
+    annotationTextLayout, effectiveAnnotationStyle, materializeAnchor: materializeAnnotationAnchor,
+    resizeText: (item, height) => appearanceEditing.applyAnnotationStyleValue(item, "textHeight", height),
     beginPointer: (id) => { canvas.setPointerCapture(id); canvas.classList.add("is-dragging"); },
     endPointer: (id) => { canvas.classList.remove("is-dragging"); try { canvas.releasePointerCapture(id); } catch (_) {} },
   });
@@ -3678,7 +3689,7 @@
   }
 
   function startConstraintTargetCommand(type) {
-    if (annotationAnchorConstraints.start(type)) return;
+    if (startAnnotationAnchorConstraint(type)) return;
     if (!guardSketchEdit(activeSketchId(), "create") || !guardSelectionEdit("constraint")) return;
     cancelPendingCommand("");
     resetCenterlineCommandState();
@@ -3856,7 +3867,7 @@
   function handleConstraintOperandClick(pointer, type, hits = {}) {
     if (annotationAnchorConstraints.active) {
       const operand = hitConstraintOperand(pointer, type, hits);
-      return annotationAnchorConstraints.click(operand?.kind === "point" ? operand.point : operand?.kind === "primitive" ? operand.primitive.center : null);
+      return annotationAnchorConstraints.click(operand);
     }
     const operand = hitConstraintOperand(pointer, type, hits);
     if (type === "fixed") {
@@ -4906,6 +4917,7 @@
   }
 
   function updateUIUnprofiled({ refreshAnalysis = true } = {}) {
+    annotationDrag.syncResizeSelection(mode === "select" && !pendingCommand && !pendingConstraintCommand);
     ensureParameterNamespace(currentParameterNamespace());
     if (refreshAnalysis) refreshConstraintAnalysis();
     updateDocumentNameUI();
@@ -6162,6 +6174,7 @@
   const annotationCommandInput = window.AnnotationCommandInput.create({
     getMode: () => mode, getPending: () => pendingCommand, getPendingConstraint: () => pendingConstraintCommand,
     annotationCommand, canvasSelection, clearSelection, annotationDrag, updateUI, draw,
+    startAnchorConstraint: startAnnotationAnchorConstraint,
     releasePanelFocus: () => { if (document.activeElement?.closest("#commandPanel")) document.activeElement.blur(); },
   });
   const constraintCommandInput = window.ConstraintCommandInput.create({
@@ -6204,7 +6217,11 @@
     canvasHover, sameArcEndpoint, isActiveSketchConstraint,
     geometry: { hitEndpointPoint, hitExplicitPoint, hitLine, hitCircle, hitArcEndpoint, hitArc, hitSpline },
     scene: { hitDimension, hitDerivedProjectionOperand, hitBlockProjectionOperand, hitReferenceTarget, hitSketchIdentityElement,
-      hitBlockInstance, hitGeometryInstance, hitAnnotationElement, hitHatchAt, hitReferenceImageAt },
+      hitBlockInstance, hitGeometryInstance, hitAnnotationElement, hitHatchAt, hitReferenceImageAt,
+      hitAnnotationInteraction: (x, y, anchorsOnly) => {
+        const hit = hitAnnotationElement(x, y);
+        return hit && !hit.element.blockProjection && (hit.part === "anchor" || !anchorsOnly && (["frame", "frame-enable"].includes(hit.part) || hit.textBody)) ? hit.element : null;
+      } },
   });
 
   const pointerInteractionController = window.PointerInteractionController.create({
@@ -6268,6 +6285,7 @@
   const cancelKeyboardOperation = window.KeyboardInteractionController.createCancellation({
     getMode: () => mode, instances: geometryInstanceCommand, projection: sketchProjectionCommand,
     referenceImage: referenceImageInteraction, splineEditing, blockPlacement: blockPlacementCommand,
+    annotationDrag: { active: () => annotationDrag.resizing || annotationDrag.handlesActive, cancel: () => { annotationDrag.reset(); updateUI(); draw(); } },
     pending: { active: () => Boolean(pendingCommand), cancel: cancelPendingCommand },
     constraint: { active: () => Boolean(pendingConstraintCommand), cancel: cancelConstraintTargetCommand },
     drawing: { active: hasActiveDrawOperation, cancel: cancelActiveDrawOperation, isToolMode: isDrawToolMode, exit: exitDrawMode },
@@ -6589,6 +6607,8 @@
       const type = btn.dataset.constraint;
       if (pendingConstraintCommand?.type === type) {
         cancelConstraintTargetCommand(`${constraintLabel(type)}の対象選択をキャンセルしました`);
+      } else if (startAnnotationAnchorConstraint(type)) {
+        return;
       } else if (type === "symmetry") {
         startConstraintTargetCommand(type);
       } else if (canApplyConstraint(type)) {
@@ -6716,7 +6736,7 @@
 
   fixPointBtn.addEventListener("click", () => {
     if (!isGeometryMode()) return;
-    if (annotationAnchorConstraints.start("fixed")) return;
+    if (startAnnotationAnchorConstraint("fixed")) return;
     if (pendingConstraintCommand?.type === "fixed") {
       cancelConstraintTargetCommand();
     } else if (!hasSelection()) {

@@ -36,6 +36,22 @@ test('annotation selection is blocked by direct geometry, dimensions or active c
   const f=fixture(),hit={element:{id:'N'}};for(const extra of [{directGeometryHit:true},{hitD:{}}])assert.equal(f.annotation.select(f.e,f.p,{blankAnnotationHit:hit,...extra}),false);
   f.constraint={};assert.equal(f.annotation.select(f.e,f.p,{blankAnnotationHit:hit}),false);assert.deepEqual(f.calls,[]);
 });
+test('a pending supported constraint can pick an annotation without starting a drag',()=>{
+  const f=fixture(),item={id:'N',type:'text'};
+  const input=sandbox.window.AnnotationCommandInput.create({getMode:()=>f.mode,getPending:()=>f.pending,getPendingConstraint:()=>f.constraint,
+    canvasSelection:{set:(key,value)=>{f.state[key]=value;}},clearSelection(){},annotationDrag:{begin(){throw new Error('Unexpected annotation drag');}},
+    startAnchorConstraint:(type,selected)=>{f.calls.push({name:type,args:[selected]});return !selected.blockProjection;},updateUI(){},draw(){}});
+  for(const type of ['coincident','horizontal','vertical','distance','fixed']){
+    f.constraint={type};assert.equal(input.select(f.e,f.p,{blankAnnotationHit:{element:item}}),true);
+    assert.equal(f.state.annotations[0],item);assert.equal(f.calls.at(-2).name,type);
+  }
+  for(const constraint of [{type:'tangent'},{type:'coincident',annotationAnchor:true}]){
+    f.constraint=constraint;assert.equal(input.select(f.e,f.p,{blankAnnotationHit:{element:item}}),false);
+  }
+  f.constraint={type:'coincident'};
+  for(const extra of [{directGeometryHit:true},{hitD:{}}])assert.equal(input.select(f.e,f.p,{blankAnnotationHit:{element:item},...extra}),false);
+  assert.equal(input.select(f.e,f.p,{blankAnnotationHit:{element:{...item,blockProjection:true}}}),false);
+});
 test('ordinary annotation starts drag while additive annotation and block projections update selection',()=>{
   const f=fixture(),hit={element:{id:'N'}};f.annotation.select(f.e,f.p,{blankAnnotationHit:hit});assert.deepEqual(f.names(),['prevent','clear','annotationDrag','ui','draw']);assert.equal(f.calls[2].args[1],hit);
   f.calls=[];f.e.ctrlKey=true;f.annotation.select(f.e,f.p,{blankAnnotationHit:hit});assert.deepEqual(f.names(),['prevent','toggle','ui','draw']);

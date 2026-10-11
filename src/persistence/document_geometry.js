@@ -57,9 +57,8 @@
         if (kind === "circle" || kind === "arc" || kind === "spline") return primitiveById.get(canonicalId) || null;
         return null;
       });
-      for (const annotation of loadedAnnotations) for (const relation of annotation.anchorConstraints || []) {
-        if (!relation.geometryRef) continue;
-        const target = resolveLoadedGeometryRef(relation.geometryRef);
+      for (const annotation of loadedAnnotations) for (const ref of (annotation.anchorConstraints || []).flatMap(relation => [relation.geometryRef, relation.axisRef].filter(Boolean))) {
+        const target = resolveLoadedGeometryRef(ref);
         if (!target || (elementSketchId(target) !== annotation.sketchId && !window.SketchHierarchy.isReferenceSourceSketchId(loadedSketches, elementSketchId(target), annotation.sketchId))) throw new Error(`${annotation.id}: Invalid annotation anchor target`);
       }
       if (sourceVersion >= 11) {

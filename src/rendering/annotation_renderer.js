@@ -13,7 +13,16 @@
     return `${style.prefix}${value}${style.suffix}`;
   }
 
-  function create({ ctx, viewport, withCanvasState, annotationDisplayColor, annotationLeaderAnchor, appearanceLineDash, formatValue, showLeaderEndHandle = () => false, showFrame = () => false, resolvePlacement = (element, point) => point, effectiveAnnotationStyle = element => normalizeAnnotationStyle(element.style) }) {
+  function resizeHandles(layout) {
+    if (!layout?.frame) return [];
+    const box = layout.frame, cos = Math.cos(layout.rotation), sin = Math.sin(layout.rotation);
+    const dx = layout.anchorX - layout.x, dy = layout.anchorY - layout.y;
+    const anchorX = dx * cos + dy * sin, anchorY = -dx * sin + dy * cos;
+    return [-1, 1].flatMap(resizeY => [-1, 1].map(resizeX => ({
+      x: box.left + box.width * (resizeX + 1) / 2, y: box.top + box.height * (resizeY + 1) / 2, resizeX, resizeY,
+    }))).filter(handle => Math.hypot(handle.x - anchorX, handle.y - anchorY) > 1e-8);
+  }
+  function create({ ctx, viewport, withCanvasState, annotationDisplayColor, annotationLeaderAnchor, appearanceLineDash, formatValue, showLeaderEndHandle = () => false, showFrame = () => false, showResizeHandles = () => false, resolvePlacement = (element, point) => point, effectiveAnnotationStyle = element => normalizeAnnotationStyle(element.style) }) {
     const drawTerminator = window.TerminatorRenderer.create({ ctx, viewport }).draw;
     function annotationFontFamilyStack(fontFamily) {
       if (fontFamily === "serif") return 'Georgia, "Times New Roman", serif';
@@ -193,7 +202,14 @@
           ctx.setLineDash([]); const size = 6 / viewport.scale;
           const dx = layout.anchorX - layout.x, dy = layout.anchorY - layout.y;
           const x = dx * Math.cos(layout.rotation) + dy * Math.sin(layout.rotation), y = -dx * Math.sin(layout.rotation) + dy * Math.cos(layout.rotation);
-          ctx.beginPath(); ctx.rect(x - size / 2, y - size / 2, size, size); ctx.stroke();
+          ctx.beginPath(); ctx.arc(x, y, size / 2, 0, Math.PI * 2); ctx.stroke();
+          if (showResizeHandles(element)) {
+            const handleSize = 8 / viewport.scale;
+            ctx.fillStyle = "#ffffff"; ctx.lineWidth = 1 / viewport.scale;
+            for (const handle of resizeHandles(layout)) {
+              ctx.beginPath(); ctx.rect(handle.x - handleSize / 2, handle.y - handleSize / 2, handleSize, handleSize); ctx.fill(); ctx.stroke();
+            }
+          }
         }
         ctx.restore();
       }
@@ -236,5 +252,5 @@
     }
     return Object.freeze({ annotationLeaderDisplayGeometry, annotationTextLayout, annotationTextMetrics, annotationTextWorldHeight, drawAnnotationText, drawAnnotationLeader });
   }
-  window.AnnotationRenderer = Object.freeze({ create, displayText });
+  window.AnnotationRenderer = Object.freeze({ create, displayText, resizeHandles });
 })();

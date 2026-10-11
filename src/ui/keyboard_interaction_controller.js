@@ -3,8 +3,9 @@
   "use strict";
   // Escape unwinds one operation only; command owners retain their own state.
   function createCancellation({ getMode, instances, projection, referenceImage, splineEditing, blockPlacement,
-    pending, constraint, drawing, selection }) {
+    pending, constraint, drawing, selection, annotationDrag }) {
     return function cancel() {
+      if (annotationDrag?.active()) { annotationDrag.cancel(); return; }
       if (instances.cancel()) return;
       if (getMode() === "sketch-projection") { projection.cancel(); return; }
       if (referenceImage.calibrating) { referenceImage.cancelCalibration(); return; }

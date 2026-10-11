@@ -1,7 +1,7 @@
 /* Route annotation placement and selection without owning annotation or selection state. */
 (() => {
   "use strict";
-  function create({ getMode, getPending, getPendingConstraint, annotationCommand, canvasSelection, clearSelection, annotationDrag, updateUI, draw, releasePanelFocus = () => {} }) {
+  function create({ getMode, getPending, getPendingConstraint, annotationCommand, canvasSelection, clearSelection, annotationDrag, updateUI, draw, releasePanelFocus = () => {}, startAnchorConstraint = () => false }) {
     function place(e, p, annotationTargetHit) {
       if (getPending()?.annotationDraft) releasePanelFocus();
       if (getPending()?.type === "annotation-text-place") {
@@ -25,7 +25,19 @@
       return false;
     }
     function select(e, p, { blankAnnotationHit, directGeometryHit, hitD }) {
-      if (blankAnnotationHit && !directGeometryHit && !hitD && getMode() === "select" && !getPending() && !getPendingConstraint()) {
+      const constraint = getPendingConstraint();
+      if (blankAnnotationHit && (!directGeometryHit || blankAnnotationHit.part === "anchor") && (!hitD || blankAnnotationHit.part === "anchor") && getMode() === "select" && !getPending()
+        && constraint && !constraint.annotationAnchor && ["coincident", "pointOnCircle", "concentric", "horizontal", "vertical", "distance", "symmetry", "fixed"].includes(constraint.type)
+        && startAnchorConstraint(constraint.type, blankAnnotationHit.element)) {
+        e.preventDefault();
+        clearSelection();
+        canvasSelection.set("annotations", [blankAnnotationHit.element]);
+        updateUI({ refreshAnalysis: false });
+        draw();
+        return true;
+      }
+      const annotationHandle = ["anchor", "frame", "frame-enable"].includes(blankAnnotationHit?.part) || blankAnnotationHit?.textBody === true;
+      if (blankAnnotationHit && (!directGeometryHit || annotationHandle) && (!hitD || annotationHandle) && getMode() === "select" && !getPending() && !getPendingConstraint()) {
         e.preventDefault();
         if (blankAnnotationHit.element.blockProjection) {
           if (!e.ctrlKey && !e.shiftKey) clearSelection();
