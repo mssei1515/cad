@@ -60,3 +60,31 @@ test('legacy payloads may omit splines and keep the point-kind fallback', () => 
   api.append(model, { points: [{ id: 'p', x: 0, y: 1, kind: 'unknown' }], lines: [], circles: [], arcs: [] }, 'S3', 0, 0);
   assert.equal(model.points[0].kind, 'explicit'); assert.equal(model.splines.length, 0);
 });
+
+test('Block materialization preserves drawing intent and owns detached copied values with explicit target IDs', () => {
+  const calls = []; let sequence = 3;
+  const api = sandbox.window.ClipboardGeometry.create({
+    blockDefinitionById: id => { calls.push(id); return { id }; }, allocateBlockInstanceId: () => 'BI' + sequence++,
+  });
+  const source = { id: 'old', definitionId: 'BD1', x: 2, y: 3, rotation: 0.7, fixed: true, rotationLocked: true,
+    enabledSketchIds: ['S1', 'S2'], appearanceOverride: { color: '#123456' } };
+  const before = structuredClone(source), existing = { id: 'BI1' }, model = { blockInstances: [existing] }, ids = new Map();
+  const result = api.appendBlocks(model, { blockInstances: [source] }, 'S9', 10, -4, ids);
+  assert.deepEqual(calls, ['BD1']); assert.equal(model.blockInstances[0], existing); assert.equal(result[0], model.blockInstances[1]);
+  const instance = result[0]; assert.equal(instance.id, 'BI3'); assert.equal(ids.get('old'), 'BI3'); assert.equal(instance.sketchId, 'S9');
+  assert.equal(instance.x, 12); assert.equal(instance.y, -1); assert.equal(instance.rotation, 0.7);
+  assert.equal(instance.fixed, true); assert.equal(instance.rotationLocked, true); assert.equal(instance.definitionId, 'BD1');
+  instance.enabledSketchIds.push('changed'); instance.appearanceOverride.color = '#abcdef'; assert.deepEqual(source, before);
+});
+
+test('missing Block definition fails before allocating its ID and leaves earlier appends to the enclosing rollback', () => {
+  let allocated = 0;
+  const api = sandbox.window.ClipboardGeometry.create({ blockDefinitionById: id => id === 'valid' ? {} : null,
+    allocateBlockInstanceId: () => 'BI' + ++allocated });
+  const model = { blockInstances: [] }, ids = new Map();
+  assert.throws(() => api.appendBlocks(model, { blockInstances: [
+    { id: 'first', definitionId: 'valid', x: 0, y: 0, enabledSketchIds: [] },
+    { id: 'second', definitionId: 'missing' },
+  ] }, 'S1', 0, 0, ids), /missing/);
+  assert.equal(allocated, 1); assert.equal(model.blockInstances.length, 1); assert.equal(ids.get('first'), 'BI1'); assert.equal(ids.has('second'), false);
+});

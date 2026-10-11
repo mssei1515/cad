@@ -1,7 +1,7 @@
-/* Materialize copied primitive geometry; the caller owns paste rollback and commit. */
+/* Materialize copied primitive geometry and Block instances; the caller owns paste rollback and commit. */
 (() => {
   "use strict";
-  function create({ geometryIds, ensureLineMinimumLength, normalizeArcSweep }) {
+  function create({ geometryIds, ensureLineMinimumLength, normalizeArcSweep, blockDefinitionById, allocateBlockInstanceId }) {
     const { Point, Line, Circle, Arc, Spline } = window.GeometrySolver;
     const { normalizeAppearance } = window.Appearance;
     function append(model, payload, targetSketchId, dx, dy) {
@@ -55,7 +55,30 @@
       }
       return { idMap, pointById, lineById, primitiveById };
     }
-    return Object.freeze({ append });
+    function appendBlocks(model, payload, targetSketchId, dx, dy, idMap) {
+      const pastedBlockInstances = [];
+      for (const source of payload.blockInstances) {
+        const definition = blockDefinitionById(source.definitionId);
+        if (!definition) throw new Error(`ブロック定義 ${source.definitionId} が見つかりません`);
+        const instance = {
+          id: allocateBlockInstanceId(),
+          definitionId: source.definitionId,
+          sketchId: targetSketchId,
+          x: source.x + dx,
+          y: source.y + dy,
+          rotation: source.rotation,
+          fixed: source.fixed,
+          rotationLocked: Boolean(source.rotationLocked),
+          enabledSketchIds: source.enabledSketchIds.slice(),
+          appearanceOverride: normalizeAppearance(source.appearanceOverride),
+        };
+        model.blockInstances.push(instance);
+        pastedBlockInstances.push(instance);
+        idMap.set(source.id, instance.id);
+      }
+      return pastedBlockInstances;
+    }
+    return Object.freeze({ append, appendBlocks });
   }
   window.ClipboardGeometry = Object.freeze({ create });
 })();

@@ -2665,7 +2665,10 @@
   const { translateAnnotation, copiedHatch, translateReferenceImage, copiedGeometryInstance, reconnectDerivedInstances, translatedClipboardConstraintData, mapClipboardBlockProjection } =
     window.ClipboardTransfer.create({ blockProjectionBundle, blockProjectionLocalId, resolveGeometryRef, geometryInstanceSourcePoints, geometryInstanceBundle, applicationText });
 
-  const clipboardGeometry = window.ClipboardGeometry.create({ geometryIds, ensureLineMinimumLength, normalizeArcSweep });
+  const clipboardGeometry = window.ClipboardGeometry.create({
+    geometryIds, ensureLineMinimumLength, normalizeArcSweep, blockDefinitionById,
+    allocateBlockInstanceId: () => `BI${blockInstanceSeq++}`,
+  });
 
   const clipboardPasteCheckpoint = window.ClipboardPasteCheckpoint.create({
     geometryIds,
@@ -2705,26 +2708,7 @@
     try {
       const { idMap, pointById, lineById, primitiveById } =
         clipboardGeometry.append(model, payload, targetSketchId, dx, dy);
-      const pastedBlockInstances = [];
-      for (const source of payload.blockInstances) {
-        const definition = blockDefinitionById(source.definitionId);
-        if (!definition) throw new Error(`ブロック定義 ${source.definitionId} が見つかりません`);
-        const instance = {
-          id: `BI${blockInstanceSeq++}`,
-          definitionId: source.definitionId,
-          sketchId: targetSketchId,
-          x: source.x + dx,
-          y: source.y + dy,
-          rotation: source.rotation,
-          fixed: source.fixed,
-          rotationLocked: Boolean(source.rotationLocked),
-          enabledSketchIds: source.enabledSketchIds.slice(),
-          appearanceOverride: normalizeAppearance(source.appearanceOverride),
-        };
-        model.blockInstances.push(instance);
-        pastedBlockInstances.push(instance);
-        idMap.set(source.id, instance.id);
-      }
+      const pastedBlockInstances = clipboardGeometry.appendBlocks(model, payload, targetSketchId, dx, dy, idMap);
       if (pastedBlockInstances.length > 0) invalidateBlockProjectionCache();
       payload.blockInstances.forEach((source, index) => mapClipboardBlockProjection(source, pastedBlockInstances[index], idMap, pointById, lineById, primitiveById));
       const copiedInstances = payload.geometryInstances || [];
