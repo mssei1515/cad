@@ -81,5 +81,72 @@
     }
     return Object.freeze({ reset, state, hatchPreviewCache, exerciseConstraints });
   }
-  window.SplineTestDriver = Object.freeze({ create });
+  // Transfer fixtures have Clipboard / Block ports independent from setup and constraint fixtures.
+  function createTransfer({ currentScope, splineGeometry, annotationLeaderTargetFromItem, nextAnnotationId,
+    activeSketchId, defaultAnnotationStyle, clearSelection, canvasSelection, copyableSelectionPayload, clipboardSession,
+    pasteGeometryClipboard, blockSelectionGeometry, createBlockDefinitionFromSelection, blockSelectionBoundsCenter,
+    appendDefinition, nextInstanceId, blockDefinitionDrawableSketchIds, invalidateBlockProjectionCache, blockProjectionBundle, updateUI, draw }) {
+    function exercise() {
+      const source = currentScope().splines[0] || null;
+      if (!source) return null;
+      const leaderTarget = annotationLeaderTargetFromItem(source, splineGeometry.evaluate(source.curve(), 0.5));
+      const annotation = leaderTarget ? {
+        id: nextAnnotationId(),
+        type: "leader",
+        visible: true,
+        sketchId: activeSketchId(),
+        geometryRef: leaderTarget.geometryRef,
+        start: { ...leaderTarget.anchor },
+        elbow: { x: leaderTarget.anchor.x + 30, y: leaderTarget.anchor.y - 20 },
+        end: { x: leaderTarget.anchor.x + 80, y: leaderTarget.anchor.y - 20 },
+        x: leaderTarget.anchor.x + 55,
+        y: leaderTarget.anchor.y - 28,
+        text: "Spline",
+        style: { ...defaultAnnotationStyle },
+      } : null;
+      if (annotation) currentScope().annotations.push(annotation);
+      clearSelection();
+      canvasSelection.set("splines", [source]);
+      canvasSelection.set("annotations", annotation ? [annotation] : []);
+      const payload = copyableSelectionPayload();
+      clipboardSession.replaceForDiagnostics(payload);
+      const pasted = payload && pasteGeometryClipboard() ? currentScope().splines.find((item) => item !== source) : null;
+      const sourceAnnotation = annotation ? currentScope().annotations.find((item) => item.id === annotation.id) || null : null;
+      const pastedAnnotation = annotation ? currentScope().annotations.find((item) => item.id !== annotation.id) || null : null;
+
+      clearSelection();
+      canvasSelection.set("splines", [currentScope().splines.find((item) => item.id === source.id) || source]);
+      canvasSelection.set("annotations", sourceAnnotation ? [sourceAnnotation] : []);
+      const selection = blockSelectionGeometry();
+      const definition = selection.error ? null : createBlockDefinitionFromSelection(selection, blockSelectionBoundsCenter(selection), "Spline Transfer");
+      if (definition) appendDefinition(definition);
+      const instance = definition ? {
+        id: nextInstanceId(),
+        definitionId: definition.id,
+        sketchId: activeSketchId(),
+        x: 240,
+        y: 80,
+        rotation: Math.PI / 4,
+        fixed: false,
+        rotationLocked: false,
+        enabledSketchIds: blockDefinitionDrawableSketchIds(definition),
+        appearanceOverride: {},
+      } : null;
+      if (instance) currentScope().blockInstances.push(instance);
+      invalidateBlockProjectionCache();
+      const projected = instance ? blockProjectionBundle(instance).splines?.[0] || null : null;
+      updateUI();
+      draw();
+      return {
+        copied: Boolean(payload),
+        pasted: pasted ? { id: pasted.id, fitPoints: pasted.fitPoints.map((point) => point.id) } : null,
+        leader: annotation ? { id: annotation.id, kind: annotation.geometryRef.kind, pastedId: pastedAnnotation?.id || null } : null,
+        blockError: selection.error || null,
+        definition: definition ? { id: definition.id, splineCount: definition.splines.length, pointCount: definition.points.length, annotationCount: definition.annotations.length } : null,
+        projection: projected ? { id: projected.id, ownerId: projected.blockInstance?.id || null, fitPointCount: projected.fitPoints.length, annotationCount: blockProjectionBundle(instance).annotations.length } : null,
+      };
+    }
+    return Object.freeze({ exercise });
+  }
+  window.SplineTestDriver = Object.freeze({ create, createTransfer });
 })();

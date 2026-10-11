@@ -6,6 +6,10 @@
 
 ## 現在の再開地点（2026-10-12）
 
+Splineのコピー／貼付け／Block投影テストシナリオをSplineTestDriver.createTransferへ分離。初期化／拘束Driverの依存を増やさず用途別に生成し、採番・定義追加・Workspace照会・Clipboard・Blockの既存入口を明示する。現在scopeは必要な時点で取得し、貼付けや復元前の配列を捕捉しない。テストfixtureのLeader／instanceと操作順序、参照、観測結果は元処理と一致する。機能実装やcache・sequence・rollbackをDriverへ複製しない。app.jsは9,227→9,176行（51行減、今回の合計1,882行減）。構文444ファイル・単体1,207件・関連E2E131件成功（exit 0、1.9分）。コピーされたSpline／LeaderのID、Block定義・投影と保存読込を既存E2Eで確認した。ログはcad-spline-transfer-driver-{check,unit,e2e}.log。全E2Eはこの単位では未実行。全体目標は未完了。Spline用の五つのテストAPIは機能別の支援モジュールへ移行済み。
+
+### 前回の区切り
+
 Splineの拘束テストシナリオを既存SplineTestDriverへ集約。対象Splineの読取り、幾何評価と型constructor、Geometry生成・拘束登録・求解・直列化を明示し、IDやSolver状態をDriverに所有させない。閉Spline／対象なしの無変更と、PointOnSpline→接線Line→SplineLineTangent→求解→直列化の順序・参照を維持する。元処理との本体一致と、appの変更が接続に限られることを確認した。app.jsは9,246→9,227行（19行減、今回の合計1,831行減）。構文444ファイル・単体1,207件・関連E2E131件成功（exit 0、1.9分）。ログはcad-spline-constraint-driver-{check,unit,e2e}.log。全E2Eはこの単位では未実行。全体目標は未完了。次は転送シナリオのClipboard／Block操作と採番の境界を確認し、既存Driverへの注入が過大になる場合は用途別の生成入口を検討する。
 
 ### 前回の区切り
