@@ -29,6 +29,31 @@
       return { kind: ref.kind, path: mapped ? mapped.split("@") : ref.path.flatMap(id => (idMap.get(id) || id).split("@")) };
     }
 
+    function translateAnnotation(annotation, idMap, dx, dy) {
+      annotation.x += dx;
+      annotation.y += dy;
+      for (const key of ["start", "elbow", "end"]) if (annotation[key]) annotation[key] = { x: annotation[key].x + dx, y: annotation[key].y + dy };
+      if (annotation.geometryRef) annotation.geometryRef = remapGeometryRef(annotation.geometryRef, idMap);
+      if (annotation.anchorConstraints) annotation.anchorConstraints = annotation.anchorConstraints.map(relation => relation.type === "fixed" ? { ...relation, x: relation.x + dx, y: relation.y + dy } : { ...relation, geometryRef: remapGeometryRef(relation.geometryRef, idMap), ...(relation.axisRef ? { axisRef: remapGeometryRef(relation.axisRef, idMap) } : {}) });
+      return annotation;
+    }
+
+    function copiedHatch(source, idMap, targetSketchId, dx, dy) {
+      const boundaryLoops = window.HatchRegionEngine.rewriteBoundaryRefs(source.boundaryLoops, ref => {
+        const mappedId = idMap.get(window.GeometryRef.id(ref));
+        return mappedId ? window.GeometryRef.create(ref.kind, mappedId) : null;
+      });
+      if (!boundaryLoops) return null;
+      return { ...window.HatchData.serializeHatch(source), id: idMap.get(source.id), sketchId: targetSketchId,
+        seed: { x: Number(source.seed?.x) + dx, y: Number(source.seed?.y) + dy }, boundaryLoops };
+    }
+
+    function translateReferenceImage(image, dx, dy) {
+      image.x += dx;
+      image.y += dy;
+      return image;
+    }
+
     function copiedGeometryInstance(source, idMap, targetSketchId, dx, dy) {
       const data = { ...source, id: idMap.get(source.id), sketchId: targetSketchId,
         sources: source.sources.map(ref => remapGeometryRef(ref, idMap)),
@@ -76,7 +101,7 @@
       mapKind(projection.arcs, bundle.arcs, primitiveById);
       mapKind(projection.splines, bundle.splines || [], primitiveById);
     }
-    return Object.freeze({ remapClipboardValue, remapGeometryRef, copiedGeometryInstance, copiedFreeOrigin, translatedClipboardConstraintData, mapClipboardBlockProjection });
+    return Object.freeze({ translateAnnotation, copiedHatch, translateReferenceImage, remapClipboardValue, remapGeometryRef, copiedGeometryInstance, copiedFreeOrigin, translatedClipboardConstraintData, mapClipboardBlockProjection });
   }
   window.ClipboardTransfer = Object.freeze({ create });
 })();

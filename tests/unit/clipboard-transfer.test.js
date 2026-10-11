@@ -67,3 +67,47 @@ test('free origin follows the actual uniform source translation rather than copi
   assert.deepEqual(plain(api.copiedFreeOrigin(source,instance,()=>[{x:10,y:20},{x:30,y:40}])),source.origin);
   assert.deepEqual(plain(api.copiedFreeOrigin(source,instance,()=>[{x:13,y:24},{x:30,y:40}])),source.origin);
 });
+
+const elementSandbox = { window: {} }; vm.createContext(elementSandbox);
+const scriptSources = vm.runInNewContext(fs.readFileSync('index.html', 'utf8').match(/const sources = (\[[\s\S]*?\]);/)[1]);
+for (const file of scriptSources.filter(file => file.startsWith('src/'))) vm.runInContext(fs.readFileSync(file, 'utf8'), elementSandbox, { filename: file });
+const elements = elementSandbox.window;
+const elementTransfer = elements.ClipboardTransfer.create({});
+
+test('annotation transfer shifts fixed anchors and leader points and reconnects geometry and axis paths', () => {
+  const source = { id: 'AN1', type: 'leader', sketchId: 'S1', x: 1, y: 2,
+    start: { x: 3, y: 4 }, elbow: { x: 5, y: 6 }, end: { x: 7, y: 8 },
+    geometryRef: { kind: 'line', path: ['L1'] },
+    anchorConstraints: [{ type: 'fixed', anchor: 'topLeft', x: 9, y: 10 },
+      { type: 'distance', geometryRef: { kind: 'point', path: ['BI1', 'P1'] }, axisRef: { kind: 'line', path: ['L1'] }, value: 20 }] };
+  const before = structuredClone(source), copy = elements.AnnotationData.serializeAnnotation(source);
+  const result = elementTransfer.translateAnnotation(copy, new Map([['L1', 'L2'], ['BI1', 'BI2']]), 100, -10);
+  assert.equal(result, copy); assert.equal(copy.x, 101); assert.equal(copy.y, -8);
+  assert.deepEqual(plain(copy.start), { x: 103, y: -6 }); assert.deepEqual(plain(copy.end), { x: 107, y: -2 });
+  assert.equal(copy.geometryRef.path[0], 'L2'); assert.equal(copy.anchorConstraints[0].x, 109);
+  assert.equal(copy.anchorConstraints[0].y, 0); assert.equal(copy.anchorConstraints[1].value, 20);
+  assert.deepEqual(plain(copy.anchorConstraints[1].geometryRef.path), ['BI2', 'P1']);
+  assert.equal(copy.anchorConstraints[1].axisRef.path[0], 'L2'); assert.deepEqual(source, before);
+});
+
+test('hatch transfer returns detached mapped boundaries and rejects missing geometry without changing the source', () => {
+  const circle = { kind: 'circle', id: 'C1', center: { x: 0, y: 0 }, radius: 10 };
+  const face = elements.HatchRegionEngine.findFaceAtPoint([circle], { x: 0, y: 0 });
+  assert.equal(face.ok, true);
+  const source = { id: 'H1', sketchId: 'S1', seed: { x: '2', y: 3 }, boundaryLoops: plain(face.boundaryLoops), appearance: {} };
+  const before = structuredClone(source);
+  const result = elementTransfer.copiedHatch(source, new Map([['H1', 'H2'], ['C1', 'C2']]), 'S2', 5, -4);
+  assert.equal(result.id, 'H2'); assert.equal(result.sketchId, 'S2'); assert.deepEqual(plain(result.seed), { x: 7, y: -1 });
+  assert.equal(result.boundaryLoops[0].spans[0].source.path[0], 'C2');
+  assert.equal(elementTransfer.copiedHatch(source, new Map(), 'S2', 5, -4), null);
+  result.seed.x = 100; result.boundaryLoops[0].spans[0].source.path[0] = 'changed'; assert.deepEqual(source, before);
+});
+
+test('reference image transfer shifts only placement and preserves scale rotation and embedded data', () => {
+  const source = { id: 'IMG1', x: 5, y: 6, scale: 2, rotation: 0.4, dataUrl: 'data:image/png;base64,AA==' };
+  const copy = elements.ReferenceImageData.serializeReferenceImage(source);
+  const result = elementTransfer.translateReferenceImage(copy, -3, 10);
+  assert.equal(result, copy); assert.equal(copy.x, 2); assert.equal(copy.y, 16);
+  assert.equal(copy.scale, 2); assert.equal(copy.rotation, 0.4); assert.equal(copy.dataUrl, source.dataUrl);
+  assert.equal(source.x, 5); assert.equal(source.y, 6);
+});

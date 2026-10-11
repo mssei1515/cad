@@ -2666,7 +2666,7 @@
     return true;
   }
 
-  const { remapGeometryRef, copiedGeometryInstance, copiedFreeOrigin, translatedClipboardConstraintData, mapClipboardBlockProjection } =
+  const { translateAnnotation, copiedHatch, translateReferenceImage, copiedGeometryInstance, copiedFreeOrigin, translatedClipboardConstraintData, mapClipboardBlockProjection } =
     window.ClipboardTransfer.create({ blockProjectionBundle, blockProjectionLocalId });
 
   const clipboardGeometry = window.ClipboardGeometry.create({ geometryIds, ensureLineMinimumLength, normalizeArcSweep });
@@ -2762,37 +2762,25 @@
         const annotation = serializeAnnotation(source);
         annotation.id = `AN${annotationSeq++}`;
         annotation.sketchId = targetSketchId;
-        annotation.x += dx;
-        annotation.y += dy;
-        for (const key of ["start", "elbow", "end"]) if (annotation[key]) annotation[key] = { x: annotation[key].x + dx, y: annotation[key].y + dy };
-        if (annotation.geometryRef) annotation.geometryRef = remapGeometryRef(annotation.geometryRef, idMap);
-        if (annotation.anchorConstraints) annotation.anchorConstraints = annotation.anchorConstraints.map(relation => relation.type === "fixed" ? { ...relation, x: relation.x + dx, y: relation.y + dy } : { ...relation, geometryRef: remapGeometryRef(relation.geometryRef, idMap), ...(relation.axisRef ? { axisRef: remapGeometryRef(relation.axisRef, idMap) } : {}) });
+        translateAnnotation(annotation, idMap, dx, dy);
         model.annotations.push(annotation);
         pastedAnnotations.push(annotation);
         idMap.set(source.id, annotation.id);
       }
       const pastedHatches = [];
       for (const source of payload.hatches || []) {
-        const boundaryLoops = rewriteHatchBoundaryRefs(source.boundaryLoops, (ref) => {
-          const mappedId = idMap.get(geometryRefId(ref));
-          return mappedId ? createGeometryRef(ref.kind, mappedId) : null;
-        });
-        if (!boundaryLoops) throw new Error(`${source.id}: ${applicationText("塗りつぶし境界を書き換えられません", "Could not rewrite fill boundary")}`);
-        const hatch = {
-          ...serializeHatch(source),
-          id: idMap.get(source.id),
-          sketchId: targetSketchId,
-          seed: { x: Number(source.seed?.x) + dx, y: Number(source.seed?.y) + dy },
-          boundaryLoops,
-        };
+        const hatch = copiedHatch(source, idMap, targetSketchId, dx, dy);
+        if (!hatch) throw new Error(`${source.id}: ${applicationText("塗りつぶし境界を書き換えられません", "Could not rewrite fill boundary")}`);
         model.hatches.push(hatch);
         pastedHatches.push(hatch);
         idMap.set(source.id, hatch.id);
       }
       model.nextHatchIndex = Math.max(hatchSeq, Number(model.nextHatchIndex) || 1);
-      const pastedImages = (payload.referenceImages || []).map(source => ({ ...serializeReferenceImage(source),
-        id: `IMG${referenceImageSeq++}`, sketchId: targetSketchId, x: source.x + dx, y: source.y + dy,
-      }));
+      const pastedImages = (payload.referenceImages || []).map(source => {
+        const image = serializeReferenceImage(source);
+        image.id = `IMG${referenceImageSeq++}`; image.sketchId = targetSketchId;
+        return translateReferenceImage(image, dx, dy);
+      });
       model.referenceImages.push(...pastedImages);
 
       invalidateBlockProjectionCache();

@@ -98,7 +98,7 @@
 
 ## 8. 再開地点（2026-10-11）
 
-週枠残量97%で再開。最新develop 8e7e7c7からcodex/clipboard-placementを作成。開始時app.jsは11,058行（前回以降の機能追加を含む）。ClipboardGeometryへプリミティブ生成と参照Map構築を分離し、11,014行へ縮小。続いてClipboardPasteCheckpointへ貼付けの配列長・採番・modelカウンタの保持と復元を分離し10,995行へ縮小（19行減、今回の合計63行減）。Clipboard session・貼付け全体の成功／失敗調整・履歴とUIはappに残る。次はこれらの状態所有を、最新の派生Instance・注記拘束付きコピーにも対応して整理する。
+週枠残量97%で再開。最新develop 8e7e7c7からcodex/clipboard-placementを作成。開始時app.jsは11,058行（前回以降の機能追加を含む）。ClipboardGeometryへプリミティブ生成と参照Map構築を分離し、11,014行へ縮小。続いてClipboardPasteCheckpointへ貼付けの配列長・採番・modelカウンタの保持と復元を分離し10,995行へ縮小（19行減、今回の合計63行減）。さらにClipboardTransferへ注記・塗りつぶし・画像の値変換を統合し10,983行（12行減、今回の合計75行減）。Clipboard session・貼付け全体の成功／失敗調整・履歴とUIはappに残る。次はこれらの状態所有を、最新の派生Instance・注記拘束付きコピーにも対応して整理する。
 
 ### 前回の停止地点（2026-10-10）
 

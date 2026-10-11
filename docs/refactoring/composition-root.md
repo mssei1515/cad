@@ -6,6 +6,10 @@
 
 ## 現在の再開地点（2026-10-11）
 
+ClipboardTransferへ注記・塗りつぶし・参照画像の貼付け値変換を統合。serializeした注記・画像だけを移動し、塗りつぶしの参照不足はnullで呼出側へ返す。ID発行・配列追加・UI例外・履歴は操作側に残す。app.jsは10,995→10,983行（12行減）。構文403ファイル・単体1,046件・関連E2E186件成功（exit 0、2.4分）。ログはcad-clipboard-elements-{check,unit,e2e}.log。全E2Eはこの単位では未実行。全体目標は未完了。
+
+### 前回の区切り
+
 ClipboardPasteCheckpointへ貼付け直前の配列長・採番・modelカウンタの保持と復元を分離。明示したscopeを保持し既存Objectを複製せず、復元対象と順序を維持する。採番変数へのadapterはappに残る。app.jsは11,014→10,995行（19行減）。構文403ファイル・単体1,043件・関連E2E167件成功（exit 0、2.2分）。ログはcad-clipboard-checkpoint-{check,unit,e2e}.log。全E2Eはこの単位では未実行。全体目標は未完了。
 
 ### 前回の区切り
