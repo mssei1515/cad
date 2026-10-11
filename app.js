@@ -4460,27 +4460,11 @@
     clearSelection();
   }
 
-  function applyParameterDialogDraft() {
-    const session = parameterDraft.current;
-    if (!session) return false;
-    const outcome = parameterApplication.apply(session, () => {
-      recordHistory("Parameter変更");
-      setHint(applicationText("Parameterを適用しました", "Parameters applied"));
-      loadParameterDialogScope(session.key);
-      updateUI();
-      draw();
-    });
-    if (!outcome.success) {
-      const { error } = outcome;
-      const scopeKey = session.key;
-      loadParameterDialogScope(scopeKey);
-      setParameterDialogError(parameterErrorText(error));
-      setHint(parameterErrorText(error), "error");
-      updateUI();
-      draw();
-    }
-    return outcome.success;
-  }
+  const parameterDialogApplication = window.ParameterDialogController.createApplication({
+    draft: parameterDraft, application: parameterApplication, recordHistory, applicationText, setHint,
+    loadScope: loadParameterDialogScope, setError: setParameterDialogError, parameterErrorText, updateUI, draw,
+  });
+  function applyParameterDialogDraft() { return parameterDialogApplication.apply(); }
 
   function pickParameterDialogDimension(event) {
     const rect = canvas.getBoundingClientRect();

@@ -6,6 +6,10 @@
 
 ## 現在の再開地点（2026-10-12）
 
+Parameterダイアログの適用後の履歴・結果案内・scope再読込・error表示・UI／drawの進行を既存ParameterDialogController.createApplicationへ分離。ParameterApplicationはモデル適用・安定化・Block伝播・checkpoint回復の所有を維持する。成功callback内の表示例外も既存の復元範囲に含め、成功／失敗の順序・捕捉したsession.key・error変換二回を保持する。元本体との一致と4つの境界テスト（実ParameterApplicationによるcallback例外回復を含む）を確認。app.jsは8,900→8,884行（16行減、今回の合計2,174行減）。構文450ファイル・単体1,241件・関連E2E152件成功（exit 0、2.3分）。E2Eの実対象はparameter-dialog-controller／unified-ui／blocks／sketch-permissionsの4ファイルで、指定したparameter-dialog-draft.spec.jsは存在せず追加対象になっていない。ログはcad-parameter-dialog-application-{check,unit,e2e}.log。全E2Eはこの単位では未実行。全体目標は未完了。
+
+### 前回の区切り
+
 寸法配置中の対象変更候補の照会と強調表示更新を既存ConstraintCommandInput.createRetargetHoverへ分離。pendingとCanvasHoverは既存所有者に保持し、8つの明示した依存でoperandのhit・同一判定・意図解決・参照対象変換を接続する。単独operand・line-length／radius／diameter限定、他hoverの保持、対象外配置の限定解除、更新順序と参照／changed戻り値を維持する。元本体との一致と4つの境界テストを確認。app.jsは8,930→8,900行（30行減、今回の合計2,158行減）。構文449ファイル・単体1,237件・関連E2E181件成功（exit 0、2.6分）。ログはcad-dimension-retarget-hover-{check,unit,e2e}.log。全E2Eはこの単位では未実行。全体目標は未完了。
 
 ### 前回の区切り

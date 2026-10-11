@@ -202,6 +202,7 @@ const files = [
   "tests/unit/parameter-dialog-draft.test.js",
   "src/ui/expression_input_view.js", "src/ui/parameter_dialog_view.js",
   "src/ui/parameter_dialog_controller.js",
+  "tests/unit/parameter-dialog-application.test.js",
   "tests/e2e/parameter-dialog-controller.spec.js",
   "src/parameters/application.js", "src/parameters/stabilization.js",
   "tests/unit/parameter-application.test.js",
