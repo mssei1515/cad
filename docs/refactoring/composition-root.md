@@ -6,6 +6,10 @@
 
 ## 現在の再開地点（2026-10-12）
 
+ConstraintSelectionQueryへ現在Selection／対象sessionからの拘束意図と実行／完了可否を集約。対象session→Spline対象変換→通常Selectionの優先、Geometry modeの適用範囲、command中の線長寸法の追加対象待ちを維持する。Selection・対象session・候補・意図照会を明示し、状態更新とUIを持ち込まない。6処理の本体は明示した所有者以外元処理と一致し、不要となったappの候補／subject変換の分解代入も撤去。app.jsは9,627→9,590行（37行減、今回の合計1,468行減）。構文433ファイル・単体1,168件・関連E2E171件成功（exit 0、2.4分）。ログはcad-constraint-query-{check,unit,e2e}.log。全E2Eはこの単位では未実行。全体目標は未完了。共有pending・modeと、注入依存の多い操作commandの組立て整理は残る。
+
+### 前回の区切り
+
 ConstraintCommitCommandへ読取寸法の登録、解決済み意図の配置／通常／参照commit振分け、寸法生成後の式設定と確定を集約。重複寸法は復元後に同じcommand内の登録へ進み、appへの戻り依存を撤去した。3処理の本体は元処理と一致し、測定値とdisabled flag、Selection→分析→UI→draw→案内／log→履歴、通常expression／参照省略、意図による既存の追加履歴を維持する。app.jsは9,665→9,627行（38行減、今回の合計1,431行減）。構文431ファイル・単体1,162件・関連E2E171件成功（exit 0、2.4分）。ログはcad-constraint-registration-{check,unit,e2e}.log。全E2Eはこの単位では未実行。全体目標は未完了。新規moduleは増やさず既存確定所有者へ統合し、生成・配置・現在Selection・共有sessionの接続整理は残る。
 
 ### 前回の区切り

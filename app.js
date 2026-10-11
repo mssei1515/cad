@@ -263,7 +263,7 @@
   let mode = "select";
   const canvasSelection = window.CanvasSelection.create();
   const {
-    selectedElementCount, selectedGeometryItems, appearanceSelectionTarget, setGeometrySelection, currentConstraintTargets,
+    selectedElementCount, selectedGeometryItems, appearanceSelectionTarget, setGeometrySelection,
     hasPrimaryCanvasSelection, effectiveSelectedConstraint, selectedPrimitives,
     togglePointSelection, toggleLineSelection, toggleCircleSelection, toggleArcSelection,
     toggleSplineSelection, toggleBlockInstanceSelection, selectedConstructionTogglePrimitives,
@@ -518,10 +518,9 @@
     sameSketchElements, syncLineOrientationHints: () => solver.syncLineOrientationHints?.(),
     constraintAcceptError: CONSTRAINT_ACCEPT_ERROR,
   });
-  const { sameArcEndpoint, constraintTargetsFromOperands, linesAreParallel, distanceTargetFromTargets, distanceTargetFromOperands, referenceDistanceTargetForSubject, canApplyConstraintToTargets, referenceConstraintForType, symmetryConstraintFromOperands, constraintFromTargets } = constraintCandidates;
+  const { sameArcEndpoint, constraintTargetsFromOperands, linesAreParallel } = constraintCandidates;
   const constraintOperandValues = window.ConstraintOperands.create({ elementSketchId, operandRelationForSketch, sameArcEndpoint, Arc, lineHasDirection, closestSplinePoint: window.SplineGeometry.closestPoint });
-  const { operandElement, makeConstraintOperand, operandFromReferenceTarget, referenceTargetFromOperand,
-    subjectFromOperand, sameConstraintOperand, referenceSubjectElement, referenceSubjectSketchId } = constraintOperandValues;
+  const { operandElement, makeConstraintOperand, operandFromReferenceTarget, referenceTargetFromOperand, sameConstraintOperand } = constraintOperandValues;
   const PARAMETER_STABILIZATION_MAX_PASSES = 20;
   const PARAMETER_STABILIZATION_RELATIVE_TOLERANCE = 1e-7;
   const DRAG_PREVIEW_MAX_MODEL_ERROR = 0.125;
@@ -2227,9 +2226,7 @@
   }
 
 
-  function distanceTargetFromSelection() {
-    return distanceTargetFromTargets(currentConstraintTargets());
-  }
+  function distanceTargetFromSelection() { return constraintSelectionQuery.distanceTarget(); }
 
   function hitBlockInstance(x, y, editableOnly = true) {
     const threshold = 8 / viewport.scale;
@@ -3158,31 +3155,13 @@
 
   function constructionToggleState(geometryMode = isGeometryMode()) { return constructionCommand.state(geometryMode); }
 
-  function canApplyConstraint(type) {
-    if (!isGeometryMode()) return false;
-    if (constraintTargetSession.command?.type === type && constraintTargetSession.operands.length > 0) {
-      const resolution = resolveConstraintIntent(type, constraintTargetSession.operands);
-      return Boolean(resolution && !resolution.error && (resolution.constraint || resolution.target || resolution.action));
-    }
-    return canApplyConstraintToSelection(type);
-  }
+  const constraintSelectionQuery = window.ConstraintSelectionQuery.create({
+    session: constraintTargetSession, selection: canvasSelection, candidates: constraintCandidates,
+    resolveConstraintIntent, constraintOperandsFromSelection, activeSketchId, isGeometryMode,
+  });
+  function canApplyConstraint(type) { return constraintSelectionQuery.canApply(type); }
 
-  function canApplyConstraintToSelection(type) {
-    return canApplyConstraintToTargets(type, currentConstraintTargets(), activeSketchId());
-  }
-
-  function canCompleteConstraintCommand(type) {
-    if (constraintTargetSession.operands.length > 0) {
-      const resolution = resolveConstraintIntent(type, constraintTargetSession.operands);
-      if (!resolution || resolution.error) return false;
-      if (type === "distance") return Boolean(resolution.target);
-      return Boolean(resolution.constraint);
-    }
-    if (type !== "distance") return canApplyConstraint(type);
-    const target = distanceTargetFromSelection();
-    if (!target || target.kind === "invalid") return false;
-    return target.kind !== "line-length" || !constraintTargetSession.command;
-  }
+  function canCompleteConstraintCommand(type) { return constraintSelectionQuery.canComplete(type); }
 
   function constraintLabel(type) {
     if (type === "fixed") return applicationText("固定", "Fix");
@@ -4043,19 +4022,7 @@
   });
   function resolveConstraintIntent(type, operands) { return constraintIntentResolver.resolve(type, operands); }
 
-  function constraintResolutionFromCurrentSelection(type) {
-    if (constraintTargetSession.operands.length > 0) return resolveConstraintIntent(type, constraintTargetSession.operands);
-    if (canvasSelection.splines.length > 0) return resolveConstraintIntent(type, constraintOperandsFromSelection());
-    if (type === "distance") {
-      const target = distanceTargetFromSelection();
-      if (!target) return null;
-      if (target.kind === "invalid") return { error: target.reason };
-      return { type, target, sketchId: activeSketchId() };
-    }
-    const constraint = constraintFromSelection(type);
-    if (!constraint) return null;
-    return { type, constraint, sketchId: activeSketchId() };
-  }
+  function constraintResolutionFromCurrentSelection(type) { return constraintSelectionQuery.resolution(type); }
 
   function startDistanceResolution(resolution, pointer) { return dimensionPlacementCommand.startDistanceResolution(resolution, pointer); }
 
@@ -4082,10 +4049,6 @@
   }
 
   function addDistanceConstraintFromTarget(...args) { return constraintCommitCommand.dimension(...args); }
-
-  function constraintFromSelection(type) {
-    return constraintFromTargets(type, currentConstraintTargets(), activeSketchId());
-  }
 
   function addConstraint(type) {
     const resolution = constraintResolutionFromCurrentSelection(type);
