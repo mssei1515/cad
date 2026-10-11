@@ -6,6 +6,10 @@
 
 ## 現在の再開地点（2026-10-11）
 
+ConstraintTargetSessionへpending拘束commandと順序付きoperand列の状態所有を集約。begin／append／resetと、commandだけ・operandだけの解除を区別し、appの2変数を撤去。入力・UI・描画・Annotation・診断の照会と更新をsessionへ接続し、受入拒否時の無変更と参照同一性を確認した。確定／取消の操作調整や共有modeは呼出側に残る。app.jsは10,541→10,537行（4行減、今回の合計521行減）。行数より状態更新の入口を揃えることを優先した単位。構文417ファイル・単体1,102件・関連E2E166件成功（exit 0、2.4分）。ログはcad-constraint-session-{check,unit,e2e}.log。全E2Eはこの単位では未実行。全体目標は未完了。
+
+### 前回の区切り
+
 ConstraintOperandsへ拘束候補の受入判断と次operand列の生成を集約。対称の段階／同種／重複／短線拒否、通常種別制限、再選択時の末尾移動と対象数上限を維持し、入力・Geometry・Selection・操作状態を変更しない。appは成功列を反映してSelection同期する。元処理と728ケースで受入可否・拒否文・結果列が一致。app.jsは10,572→10,541行（31行減、今回の合計517行減）。構文415ファイル・単体1,098件・関連E2E134件成功（exit 0、1.9分）。ログはcad-operand-acceptance-{check,unit,e2e}.log。全E2Eはこの単位では未実行。全体目標は未完了。
 
 ### 前回の区切り

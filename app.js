@@ -314,7 +314,7 @@
   });
   const { sketchProjectionConstraints, sketchProjectionConstraintForTarget, sketchProjectionConstraintsForTarget, isSketchProjectedGeometry, sketchProjectionPointPairs, sketchProjectionConstraintsAffectingItems } = sketchProjectionQueries;
   const blankCanvasGesture = window.BlankCanvasGesture.create({
-    getMode: () => mode, getPending: () => pendingCommand, getPendingConstraint: () => pendingConstraintCommand,
+    getMode: () => mode, getPending: () => pendingCommand, getPendingConstraint: () => constraintTargetSession.command,
     getSplineEditSession: () => splineEditing.current, getLineCommand: () => lineCommand, getTransientAuthoring: () => transientAuthoring,
     getTime: () => performance.now(), hypot2, clearPreview: () => drawingPreview.setPointer(null),
     finalizeSplineFromDoubleClick: (...args) => finalizeSplineFromDoubleClick(...args),
@@ -359,8 +359,9 @@
   });
 
   let pendingCommand = null;
-  let pendingConstraintCommand = null;
-  let constraintOperands = [];
+  const constraintTargetSession = window.ConstraintTargetSession.create({
+    acceptTarget: (...args) => constraintOperandValues.appendTarget(...args),
+  });
   let lastPointerWorld = null;
   const constructionCommand = window.ConstructionCommand.create({
     cancelConstraintTargetCommand, selectedConstructionTogglePrimitives, guardSketchProjectionShapeEdit, applicationText,
@@ -667,7 +668,7 @@
     return { x: element.x, y: element.y };
   }
   const annotationAnchorConstraints = window.AnnotationAnchorConstraints.create({
-    getCommand: () => pendingConstraintCommand, setCommand: value => { pendingConstraintCommand = value; },
+    getCommand: () => constraintTargetSession.command, setCommand: value => { constraintTargetSession.replaceCommand(value); },
     selectedAnnotation: () => canvasSelection.selectedElementCount() === 1 ? canvasSelection.annotations[0] : null,
     byId: id => model.annotations.find(item => item.id === id),
     canEdit: item => !item.blockProjection && guardSketchEdit(elementSketchId(item), "structure"),
@@ -677,7 +678,7 @@
   });
   function startAnnotationAnchorConstraint(type, item = canvasSelection.annotations.length === 1 ? canvasSelection.annotations[0] : null) {
     if (!item) return false;
-    const targets = pendingConstraintCommand && !pendingConstraintCommand.annotationAnchor ? [...constraintOperands] : constraintOperandsFromSelection();
+    const targets = constraintTargetSession.command && !constraintTargetSession.command.annotationAnchor ? [...constraintTargetSession.operands] : constraintOperandsFromSelection();
     if (targets.length > (type === "symmetry" ? 2 : 1)) { setHint(applicationText("注記基準点の参照対象を選び直してください", "Select the reference targets for the annotation anchor again."), "error"); return true; }
     return annotationAnchorConstraints.start(type, item, targets);
   }
@@ -1255,7 +1256,7 @@
     return [...new Set(selectionItems().map(elementSketchId))].every(id => guardSketchEdit(id, operation));
   }
 
-  function ordinarySelectionMode() { return mode === "select" && !pendingCommand && !pendingConstraintCommand; }
+  function ordinarySelectionMode() { return mode === "select" && !pendingCommand && !constraintTargetSession.command; }
   function hitSketchAllowed(id) {
     return isVisibleSketchId(id) && (ordinarySelectionMode() || id === activeSketchId() && isEditableSketchId(id));
   }
@@ -1325,13 +1326,13 @@
       if (item === geometryInstanceCommand.reference || geometryInstanceCommand.sources.some(ref => geometryRefsEqual(ref, geometryRefForItem(item)))) return true;
     }
     if (options.arcEndpoint) {
-      return constraintOperands.some((operand) => operand.kind === "arc-endpoint" && sameArcEndpoint(operand, options.arcEndpoint));
+      return constraintTargetSession.operands.some((operand) => operand.kind === "arc-endpoint" && sameArcEndpoint(operand, options.arcEndpoint));
     }
-    return constraintOperands.some((operand) => operandElement(operand) === item);
+    return constraintTargetSession.operands.some((operand) => operandElement(operand) === item);
   }
 
   function syncSelectionFromConstraintOperands() {
-    const targets = constraintTargetsFromOperands(constraintOperands);
+    const targets = constraintTargetsFromOperands(constraintTargetSession.operands);
     canvasSelection.set("points", targets.points);
     canvasSelection.set("lines", targets.lines);
     canvasSelection.set("circles", targets.circles);
@@ -1431,11 +1432,11 @@
   }
 
   function isReferenceHoverElement(item) {
-    return Boolean(pendingConstraintCommand && item && !isActiveSketchElement(item) && isReferenceSourceSketchId(elementSketchId(item)));
+    return Boolean(constraintTargetSession.command && item && !isActiveSketchElement(item) && isReferenceSourceSketchId(elementSketchId(item)));
   }
 
   function isPendingReferenceTarget(item) {
-    const target = pendingConstraintCommand?.referenceTarget || pendingCommand?.referenceTarget;
+    const target = constraintTargetSession.command?.referenceTarget || pendingCommand?.referenceTarget;
     if (!target || !item) return false;
     if (target.kind === "point") return target.point === item;
     if (target.kind === "line") return target.line === item;
@@ -1726,8 +1727,7 @@
     drawingPreview.setPointer(null);
     offsetSelection.reset();
     pendingCommand = null;
-    pendingConstraintCommand = null;
-    constraintOperands = [];
+    constraintTargetSession.reset();
     constructionCommand.restore(false);
     canvasHover.update({
       point: null, endpointPoint: null, line: null,
@@ -1945,7 +1945,7 @@
   const referenceImageImport = window.ReferenceImageImport.create({ window, document, applicationText });
 
   const canImportDxf = () => canCreateInActiveSketch() && !hasActiveDrawOperation()
-    && !pendingCommand && !pendingConstraintCommand && mode !== "block-place";
+    && !pendingCommand && !constraintTargetSession.command && mode !== "block-place";
   const dxfImportCommand = window.DxfImportCommand.create({
     parser: window.DxfImport, geometry: geometryCreation, ids: geometryIds,
     currentScope: workspace.current, activeSketchId, canImport: canImportDxf,
@@ -1990,7 +1990,7 @@
 
   function clearSelection() {
     canvasSelection.clear();
-    constraintOperands = [];
+    constraintTargetSession.clearOperands();
     canvasHover.update({
       sketchIdentity: null, block: null, geometryInstance: null,
     });
@@ -2436,7 +2436,7 @@
       dimensionDrag.reset();
       annotationDrag.reset();
       pendingCommand = null;
-      pendingConstraintCommand = null;
+      constraintTargetSession.clearCommand();
       lineCommand.reset();
       circularCommands.resetCircle();
       resetArcCommandState();
@@ -3134,7 +3134,7 @@
     const geometryMode = isGeometryMode();
     const constructionState = constructionToggleState(geometryMode);
     const states = {
-      toolSelect: geometryMode && mode === "select" && !pendingConstraintCommand && !pendingCommand,
+      toolSelect: geometryMode && mode === "select" && !constraintTargetSession.command && !pendingCommand,
       toolPoint: geometryMode && mode === "point",
       toolLine: geometryMode && mode === "line",
       toolCenterline: geometryMode && mode === "centerline",
@@ -3179,7 +3179,7 @@
       visibilityButton.setAttribute("aria-pressed", String(hidden));
     }
     toolFlyouts?.sync();
-    commandCursor.update({ pendingType: pendingCommand?.type, constraintType: pendingConstraintCommand?.type,
+    commandCursor.update({ pendingType: pendingCommand?.type, constraintType: constraintTargetSession.command?.type,
       splineEditing: Boolean(splineEditing.current), mode });
   }
 
@@ -3187,8 +3187,8 @@
 
   function canApplyConstraint(type) {
     if (!isGeometryMode()) return false;
-    if (pendingConstraintCommand?.type === type && constraintOperands.length > 0) {
-      const resolution = resolveConstraintIntent(type, constraintOperands);
+    if (constraintTargetSession.command?.type === type && constraintTargetSession.operands.length > 0) {
+      const resolution = resolveConstraintIntent(type, constraintTargetSession.operands);
       return Boolean(resolution && !resolution.error && (resolution.constraint || resolution.target || resolution.action));
     }
     return canApplyConstraintToSelection(type);
@@ -3199,8 +3199,8 @@
   }
 
   function canCompleteConstraintCommand(type) {
-    if (constraintOperands.length > 0) {
-      const resolution = resolveConstraintIntent(type, constraintOperands);
+    if (constraintTargetSession.operands.length > 0) {
+      const resolution = resolveConstraintIntent(type, constraintTargetSession.operands);
       if (!resolution || resolution.error) return false;
       if (type === "distance") return Boolean(resolution.target);
       return Boolean(resolution.constraint);
@@ -3208,7 +3208,7 @@
     if (type !== "distance") return canApplyConstraint(type);
     const target = distanceTargetFromSelection();
     if (!target || target.kind === "invalid") return false;
-    return target.kind !== "line-length" || !pendingConstraintCommand;
+    return target.kind !== "line-length" || !constraintTargetSession.command;
   }
 
   function constraintLabel(type) {
@@ -3217,8 +3217,8 @@
     return btn?.dataset.label || btn?.title || type;
   }
 
-  function constraintTargetHint(type) { return constraintFeedback.targetHint(type, constraintOperands, applicationSettings.language, () => constraintLabel(type)); }
-  function invalidConstraintTargetHint(type) { return constraintFeedback.invalidTargetHint(type, constraintOperands, applicationSettings.language); }
+  function constraintTargetHint(type) { return constraintFeedback.targetHint(type, constraintTargetSession.operands, applicationSettings.language, () => constraintLabel(type)); }
+  function invalidConstraintTargetHint(type) { return constraintFeedback.invalidTargetHint(type, constraintTargetSession.operands, applicationSettings.language); }
 
   function startConstraintTargetCommand(type) {
     if (startAnnotationAnchorConstraint(type)) return;
@@ -3234,16 +3234,15 @@
     resetArcCommandState();
     drawingPreview.reset();
     updateToolbar();
-    if (pendingConstraintCommand?.type === type) {
+    if (constraintTargetSession.command?.type === type) {
       cancelConstraintTargetCommand(`${constraintLabel(type)}の対象選択をキャンセルしました`);
       return;
     }
     if (type === "symmetry") clearSelection();
-    constraintOperands = type === "symmetry" ? [] : constraintOperandsFromSelection();
-    pendingConstraintCommand = { type };
+    constraintTargetSession.begin(type, type === "symmetry" ? [] : constraintOperandsFromSelection());
     trimConstraintSelection(type);
-    if (constraintOperands.length > 0) {
-      const resolution = resolveConstraintIntent(type, constraintOperands);
+    if (constraintTargetSession.operands.length > 0) {
+      const resolution = resolveConstraintIntent(type, constraintTargetSession.operands);
       if (resolution?.action === "place-dimension") {
         startDistanceResolution(resolution, null);
         return;
@@ -3263,9 +3262,8 @@
   function cancelConstraintTargetCommand(message = "拘束対象の選択をキャンセルしました") {
     if (mode === "centerline") resetCenterlineCommandState();
     if (mode === "slot") resetSlotCommandState();
-    if (!pendingConstraintCommand) return;
-    pendingConstraintCommand = null;
-    constraintOperands = [];
+    if (!constraintTargetSession.command) return;
+    constraintTargetSession.reset();
     if (message) setHint(message);
     updateConstraintButtons();
     updateToolbar();
@@ -3276,10 +3274,10 @@
   }
 
   function executeConstraintCommandIfReady() {
-    if (!pendingConstraintCommand) return false;
-    const type = pendingConstraintCommand.type;
-    if (constraintOperands.length > 0) {
-      const resolution = resolveConstraintIntent(type, constraintOperands);
+    if (!constraintTargetSession.command) return false;
+    const type = constraintTargetSession.command.type;
+    if (constraintTargetSession.operands.length > 0) {
+      const resolution = resolveConstraintIntent(type, constraintTargetSession.operands);
       if (resolution?.error) {
         setHint(resolution.error, "error");
         return false;
@@ -3315,7 +3313,7 @@
   }
 
   function completePendingDimensionLineLength() {
-    if (pendingConstraintCommand?.type !== "distance") return false;
+    if (constraintTargetSession.command?.type !== "distance") return false;
     const target = distanceTargetFromSelection();
     if (!target || target.kind !== "line-length") return false;
     updateConstraintButtons();
@@ -3331,8 +3329,8 @@
     const hitS = hits.hitS ?? hitSpline(pointer.x, pointer.y);
     const hitArcEnd = hits.hitArcEnd ?? hitArcEndpoint(pointer.x, pointer.y);
     if (type === "symmetry") {
-      const subjectKind = constraintOperands[1]?.kind || null;
-      if (constraintOperands.length === 0 && hitL) return makeConstraintOperand("line", { line: hitL });
+      const subjectKind = constraintTargetSession.operands[1]?.kind || null;
+      if (constraintTargetSession.operands.length === 0 && hitL) return makeConstraintOperand("line", { line: hitL });
       if (subjectKind === "point" && hitP) return makeConstraintOperand("point", { point: hitP });
       if (subjectKind === "line" && hitL) return makeConstraintOperand("line", { line: hitL });
       if (subjectKind === "primitive" && hitA) return makeConstraintOperand("primitive", { primitive: hitA });
@@ -3358,11 +3356,9 @@
   }
 
   function appendConstraintOperand(type, operand) {
-    const result = constraintOperandValues.appendTarget(type, constraintOperands, operand, () => invalidConstraintTargetHint(type));
-    if (!result.ok) return result;
-    constraintOperands = result.operands;
-    syncSelectionFromConstraintOperands();
-    return { ok: true };
+    const result = constraintTargetSession.append(type, operand, () => invalidConstraintTargetHint(type));
+    if (result.ok) syncSelectionFromConstraintOperands();
+    return result;
   }
 
   function handleConstraintOperandClick(pointer, type, hits = {}) {
@@ -3378,12 +3374,12 @@
         return true;
       }
       clearSelection();
-      constraintOperands = [operand];
+      constraintTargetSession.replaceOperands([operand]);
       syncSelectionFromConstraintOperands();
-      const command = pendingConstraintCommand;
+      const command = constraintTargetSession.command;
       const individualGeometry = operand.element?.blockProjection || operand.kind === "primitive";
       if (individualGeometry ? toggleGeometryFixedOperand(operand) : toggleSelectedFixed()) clearSelection();
-      pendingConstraintCommand = command;
+      constraintTargetSession.replaceCommand(command);
       updateGeometrySelectionUI();
       updateToolbar();
       updateConstraintButtons();
@@ -3391,7 +3387,7 @@
       return true;
     }
     if (!operand && type === "distance") {
-      const resolution = resolveConstraintIntent(type, constraintOperands);
+      const resolution = resolveConstraintIntent(type, constraintTargetSession.operands);
       if (resolution?.action === "place-dimension" && resolution.target?.kind === "line-length") {
         startDistanceResolution(resolution, pointer);
         startDistanceValueInput(pointer);
@@ -3403,14 +3399,14 @@
       setHint(added.error, "error");
       return true;
     }
-    const resolution = resolveConstraintIntent(type, constraintOperands);
+    const resolution = resolveConstraintIntent(type, constraintTargetSession.operands);
     if (resolution?.error) {
       setHint(resolution.error, "error");
       draw();
       return true;
     }
     if (resolution?.action === "place-dimension") {
-      if (resolution.target?.kind === "line-length" && constraintOperands.length === 1) {
+      if (resolution.target?.kind === "line-length" && constraintTargetSession.operands.length === 1) {
         startDistanceResolution(resolution, pointer);
         return true;
       }
@@ -3428,8 +3424,8 @@
   }
 
   function handleConstraintTargetClick(hitP, hitL, hitC, hitA, hitArcEnd) {
-    if (!pendingConstraintCommand) return false;
-    const type = pendingConstraintCommand.type;
+    if (!constraintTargetSession.command) return false;
+    const type = constraintTargetSession.command.type;
     canvasSelection.set("dimensionConstraint", null);
     const hitPrimitive = hitC || hitA;
 
@@ -3557,7 +3553,7 @@
   }
 
   function handleConstraintTargetDoubleClick(hitP, hitL, pointer) {
-    if (pendingConstraintCommand?.type !== "distance") return false;
+    if (constraintTargetSession.command?.type !== "distance") return false;
     if (canvasSelection.points.length !== 0 || canvasSelection.lines.length !== 1) return false;
     if (hitL && canvasSelection.lines[0] !== hitL) return false;
     updateConstraintButtons();
@@ -3568,7 +3564,7 @@
 
   function startDistanceCommand() {
     if (!guardSketchEdit(activeSketchId(), "create") || !guardSelectionEdit("constraint")) return;
-    if (constraintOperands.length === 0) constraintOperands = constraintOperandsFromSelection();
+    if (constraintTargetSession.operands.length === 0) constraintTargetSession.replaceOperands(constraintOperandsFromSelection());
     const resolution = constraintResolutionFromCurrentSelection("distance");
     if (!resolution) return;
     if (resolution.error) {
@@ -3583,13 +3579,13 @@
     circularCommands.resetCircle();
     resetArcCommandState();
     drawingPreview.reset();
-    pendingConstraintCommand = { type: "distance" };
+    constraintTargetSession.replaceCommand({ type: "distance" });
     pendingCommand = {
       type: "distance-place",
       target: resolution.target,
       resolution,
       pointer: defaultDimensionForTarget(resolution.target),
-      operands: resolution.operands || constraintOperands.slice(),
+      operands: resolution.operands || constraintTargetSession.operands.slice(),
       referenceSketchId: resolution.referenceSketchId,
       sketchId: resolution.sketchId,
       readOnlyDimension: resolution.readOnlyDimension === true,
@@ -3612,7 +3608,7 @@
     circularCommands.resetCircle();
     resetArcCommandState();
     drawingPreview.reset();
-    pendingConstraintCommand = { type: "distance" };
+    constraintTargetSession.replaceCommand({ type: "distance" });
     pendingCommand = { type: "distance-place", target: { kind, primitive, value }, pointer: defaultDimensionForTarget({ kind, primitive, value }) };
     updateConstraintButtons();
     updateToolbar();
@@ -3815,7 +3811,7 @@
 
     for (const btn of constraintButtons) {
       btn.setAttribute("aria-disabled", "false");
-      const active = pendingConstraintCommand?.type === btn.dataset.constraint;
+      const active = constraintTargetSession.command?.type === btn.dataset.constraint;
       btn.classList.toggle("active", active);
       btn.setAttribute("aria-pressed", String(active));
     }
@@ -3839,7 +3835,7 @@
       (selectedProjectionItems.length > 0 && selectedProjectionInstances.length === 1 && selectedProjectionItems.length === canvasSelection.points.length + canvasSelection.lines.length + canvasSelection.circles.length + canvasSelection.arcs.length + canvasSelection.splines.length) ||
       Boolean(canvasSelection.arcEndpoint) ||
       Boolean(fixedBatch);
-    const fixedCommandActive = pendingConstraintCommand?.type === "fixed";
+    const fixedCommandActive = constraintTargetSession.command?.type === "fixed";
     fixPointBtn.setAttribute("aria-disabled", String(!canToggleFixed && hasSelection() && !fixedCommandActive));
     fixPointBtn.classList.toggle("active", fixedCommandActive);
     fixPointBtn.setAttribute("aria-pressed", String(fixedCommandActive));
@@ -3868,7 +3864,7 @@
     drawingPreview.reset();
     offsetSelection.reset();
     pendingCommand = null;
-    pendingConstraintCommand = null;
+    constraintTargetSession.clearCommand();
     sketchProjectionCommand.reset();
     geometryInstanceCommand.clearSources();
     instanceSourceCommand.reset();
@@ -4072,7 +4068,7 @@
   }
 
   function updateGeometrySelectionUIUnprofiled() {
-    annotationDrag.syncResizeSelection(mode === "select" && !pendingCommand && !pendingConstraintCommand);
+    annotationDrag.syncResizeSelection(mode === "select" && !pendingCommand && !constraintTargetSession.command);
     updateToolbar();
     updateConstraintButtons();
     if (document.getElementById("blockDefinitionsDialog")?.open) updateBlockUI();
@@ -4410,7 +4406,7 @@
       slot: applicationText("長穴", "Slot"), circle: applicationText("円", "Circle"), arc: applicationText("円弧", "Arc"), "three-point-arc": applicationText("3点円弧", "Three-point Arc"), spline: applicationText("スプライン", "Spline"), fillet: applicationText("R面取り", "Fillet"), trim: applicationText("トリム", "Trim"),
       offset: applicationText("オフセット", "Offset"), hatch: applicationText("塗りつぶし", "Fill"), "hatch-repair": applicationText("境界を再指定", "Reselect boundary"), "block-place": applicationText("ブロック配置", "Block placement"),
     };
-    if (command) command.textContent = pendingCommand?.type?.startsWith("annotation-") ? applicationText("注記", "Annotation") : pendingConstraintCommand ? applicationText("拘束", "Constraint") : modeLabels[mode] || mode;
+    if (command) command.textContent = pendingCommand?.type?.startsWith("annotation-") ? applicationText("注記", "Annotation") : constraintTargetSession.command ? applicationText("拘束", "Constraint") : modeLabels[mode] || mode;
   }
 
   function updateUI({ refreshAnalysis = true } = {}) {
@@ -4419,7 +4415,7 @@
   }
 
   function updateUIUnprofiled({ refreshAnalysis = true } = {}) {
-    annotationDrag.syncResizeSelection(mode === "select" && !pendingCommand && !pendingConstraintCommand);
+    annotationDrag.syncResizeSelection(mode === "select" && !pendingCommand && !constraintTargetSession.command);
     ensureParameterNamespace(currentParameterNamespace());
     if (refreshAnalysis) refreshConstraintAnalysis();
     updateDocumentNameUI();
@@ -4848,7 +4844,7 @@
   }
 
   function constraintResolutionFromCurrentSelection(type) {
-    if (constraintOperands.length > 0) return resolveConstraintIntent(type, constraintOperands);
+    if (constraintTargetSession.operands.length > 0) return resolveConstraintIntent(type, constraintTargetSession.operands);
     if (canvasSelection.splines.length > 0) return resolveConstraintIntent(type, constraintOperandsFromSelection());
     if (type === "distance") {
       const target = distanceTargetFromSelection();
@@ -4870,17 +4866,17 @@
     const initialDimension = pointer ? null : defaultDimensionForTarget(resolution.target);
     const initialPointer = pointer || dimensionAnchor(resolution.target, initialDimension);
     if (resolution.operands) {
-      constraintOperands = resolution.operands.slice();
+      constraintTargetSession.replaceOperands(resolution.operands.slice());
       syncSelectionFromConstraintOperands();
     }
-    pendingConstraintCommand = { type: "distance" };
+    constraintTargetSession.replaceCommand({ type: "distance" });
     pendingCommand = {
       type: "distance-place",
       target: resolution.target,
       resolution,
       pointer: initialPointer,
       dimension: initialDimension,
-      operands: resolution.operands || constraintOperands.slice(),
+      operands: resolution.operands || constraintTargetSession.operands.slice(),
       referenceSketchId: resolution.referenceSketchId,
       sketchId: resolution.sketchId,
       readOnlyDimension: resolution.readOnlyDimension === true,
@@ -5241,7 +5237,7 @@
       const pointer = canvasPoint(event);
       if (pendingCommand?.type === "distance-place") {
         if (!retargetDistancePlaceWithOperand(pointer, hits)) startDistanceValueInput(pointer);
-      } else if (pendingConstraintCommand?.type === "distance") {
+      } else if (constraintTargetSession.command?.type === "distance") {
         handleConstraintOperandClick(pointer, "distance", hits);
       }
     },
@@ -5249,7 +5245,7 @@
   const { begin: beginDimensionDrag } = dimensionDrag;
 
   function isDimensionConstraintCommandActive() {
-    return pendingConstraintCommand?.type === "distance" && pendingCommand?.type !== "distance-value";
+    return constraintTargetSession.command?.type === "distance" && pendingCommand?.type !== "distance-value";
   }
 
   function syncAngleConstraintFromDimension(constraint, target, dimension) {
@@ -5399,7 +5395,7 @@
   }
 
   function hasCancellableCanvasCommand() {
-    return mode === "block-place" || Boolean(pendingCommand) || Boolean(pendingConstraintCommand) || hasActiveDrawOperation() || isDrawToolMode();
+    return mode === "block-place" || Boolean(pendingCommand) || Boolean(constraintTargetSession.command) || hasActiveDrawOperation() || isDrawToolMode();
   }
 
   function cancelCanvasCommandFromContextMenu() {
@@ -5416,7 +5412,7 @@
       cancelPendingCommand("");
       canceled = true;
     }
-    if (pendingConstraintCommand) {
+    if (constraintTargetSession.command) {
       cancelConstraintTargetCommand("");
       canceled = true;
     }
@@ -5531,7 +5527,7 @@
     } else {
       const specific = [];
       if (["point", "line", "circle", "arc", "spline", "block", "hatch", "annotation", "image"].includes(target.kind)) {
-        specific.push({ action: "sketch-move", label: applicationText("別スケッチへ移動…", "Move to Another Sketch…"), disabled: mode !== "select" || Boolean(pendingCommand || pendingConstraintCommand) });
+        specific.push({ action: "sketch-move", label: applicationText("別スケッチへ移動…", "Move to Another Sketch…"), disabled: mode !== "select" || Boolean(pendingCommand || constraintTargetSession.command) });
       }
       const editingFitPoint = target.kind === "point" && Boolean(splineEditing.current?.spline?.fitPoints.includes(target.item));
       if (target.kind === "spline" && splineEditing.current?.spline === target.item) {
@@ -5596,7 +5592,7 @@
 
 
   function selectCanvasContextCandidate(target, pointer) {
-    const commandType = pendingConstraintCommand?.type;
+    const commandType = constraintTargetSession.command?.type;
     if (commandType) {
       handleConstraintOperandClick(pointer || { x: 0, y: 0 }, commandType, constraintHitsFromCanvasContextTarget(target));
       return;
@@ -5615,7 +5611,7 @@
     const pointer = canvasPoint(event);
     lastPointerWorld = pointer;
     const commandActive = hasCancellableCanvasCommand();
-    const constraintCommandActive = Boolean(pendingConstraintCommand);
+    const constraintCommandActive = Boolean(constraintTargetSession.command);
     const candidates = commandActive && !constraintCommandActive ? [] : canvasContextCandidatesAt(pointer);
     const multipleCandidates = candidates.length > 1;
     const showCandidates = constraintCommandActive ? candidates.length > 0 : multipleCandidates;
@@ -5683,14 +5679,14 @@
   canvasContextController.start();
 
   const annotationCommandInput = window.AnnotationCommandInput.create({
-    getMode: () => mode, getPending: () => pendingCommand, getPendingConstraint: () => pendingConstraintCommand,
+    getMode: () => mode, getPending: () => pendingCommand, getPendingConstraint: () => constraintTargetSession.command,
     annotationCommand, canvasSelection, clearSelection, annotationDrag, updateUI, draw,
     startAnchorConstraint: startAnnotationAnchorConstraint,
     releasePanelFocus: () => { if (document.activeElement?.closest("#commandPanel")) document.activeElement.blur(); },
   });
   const constraintCommandInput = window.ConstraintCommandInput.create({
     canDragDimensionGroup: hit => Boolean(selectedDimensionLineGroup(hit.constraint)),
-    getPending: () => pendingCommand, getPendingConstraint: () => pendingConstraintCommand, canvasSelection, canvasHover, isDimensionConstraintCommandActive,
+    getPending: () => pendingCommand, getPendingConstraint: () => constraintTargetSession.command, canvasSelection, canvasHover, isDimensionConstraintCommandActive,
     beginDimensionDrag, retargetDistancePlaceWithOperand, startDistanceValueInput, constraintTargetHint,
     handleConstraintOperandClick, setHint, updateGeometrySelectionUI, draw,
   });
@@ -5739,7 +5735,7 @@
     canvasNavigation, drawingPreview, canvasHover, clearSnap, draw, transientAuthoring, recordHistory,
     selectionRectangle, annotationDrag, referenceImageInteraction, dimensionDrag, geometryDrag, pointerHover,
     getMode: () => mode, getPendingCommand: () => pendingCommand,
-    getPendingConstraintCommand: () => pendingConstraintCommand, setLastPointer: point => { lastPointerWorld = point; },
+    getPendingConstraintCommand: () => constraintTargetSession.command, setLastPointer: point => { lastPointerWorld = point; },
     updateHatchPreview, updateFilletRadiusPlacement, updatePendingDistanceRetargetHover, hitDimension, hitSketchIdentityElement,
     press: { discardMove: () => flushScheduledCanvasPointerMove({ discard: true }),
       selectInactive: (event, identity) => {
@@ -5798,7 +5794,7 @@
     referenceImage: referenceImageInteraction, splineEditing, blockPlacement: blockPlacementCommand,
     annotationDrag: { active: () => annotationDrag.resizing || annotationDrag.handlesActive, cancel: () => { annotationDrag.reset(); updateUI(); draw(); } },
     pending: { active: () => Boolean(pendingCommand), cancel: cancelPendingCommand },
-    constraint: { active: () => Boolean(pendingConstraintCommand), cancel: cancelConstraintTargetCommand },
+    constraint: { active: () => Boolean(constraintTargetSession.command), cancel: cancelConstraintTargetCommand },
     drawing: { active: hasActiveDrawOperation, cancel: cancelActiveDrawOperation, isToolMode: isDrawToolMode, exit: exitDrawMode },
     selection: { active: hasSelection, clear: () => { clearSelection(); setHint("選択を解除しました"); updateUI(); draw(); } },
   });
@@ -6077,7 +6073,7 @@
   });
   document.getElementById("pngExportBtn").addEventListener("click", () => {
     flushScheduledCanvasPointerMove();
-    if (fileSession.busy || hasActiveDrawOperation() || pendingCommand || pendingConstraintCommand || mode === "block-place") {
+    if (fileSession.busy || hasActiveDrawOperation() || pendingCommand || constraintTargetSession.command || mode === "block-place") {
       setHint(applicationText("進行中の操作を完了またはキャンセルしてからPNG出力を開始してください", "Finish or cancel the current operation before exporting PNG"));
       return;
     }
@@ -6116,7 +6112,7 @@
   for (const btn of constraintButtons) {
     btn.addEventListener("click", () => {
       const type = btn.dataset.constraint;
-      if (pendingConstraintCommand?.type === type) {
+      if (constraintTargetSession.command?.type === type) {
         cancelConstraintTargetCommand(`${constraintLabel(type)}の対象選択をキャンセルしました`);
       } else if (startAnnotationAnchorConstraint(type)) {
         return;
@@ -6127,7 +6123,7 @@
         if (type === "distance") startDistanceCommand();
         else {
           cancelPendingCommand("");
-          pendingConstraintCommand = { type };
+          constraintTargetSession.replaceCommand({ type });
           updateToolbar();
           updateConstraintButtons();
           addConstraint(type);
@@ -6248,7 +6244,7 @@
   fixPointBtn.addEventListener("click", () => {
     if (!isGeometryMode()) return;
     if (startAnnotationAnchorConstraint("fixed")) return;
-    if (pendingConstraintCommand?.type === "fixed") {
+    if (constraintTargetSession.command?.type === "fixed") {
       cancelConstraintTargetCommand();
     } else if (!hasSelection()) {
       startConstraintTargetCommand("fixed");
@@ -7863,8 +7859,8 @@
           geometryInstances: canvasSelection.geometryInstances.map((item) => item.id),
           arcEndpoint: canvasSelection.arcEndpoint ? { arc: canvasSelection.arcEndpoint.arc.id, endpoint: canvasSelection.arcEndpoint.endpoint } : null,
           arcEndpointPair: canvasSelection.arcEndpointPair?.map((item) => ({ arc: item.arc.id, endpoint: item.endpoint })) || null,
-          operands: constraintOperands.map((item) => ({ kind: item.kind, id: operandElement(item)?.id, endpoint: item.endpoint })),
-          pendingType: pendingConstraintCommand?.type || null,
+          operands: constraintTargetSession.operands.map((item) => ({ kind: item.kind, id: operandElement(item)?.id, endpoint: item.endpoint })),
+          pendingType: constraintTargetSession.command?.type || null,
         };
       },
       resolveConstraintIntentForTest(type, inputs) {
@@ -8017,7 +8013,7 @@
       authoringStateForTest() {
         return {
           mode,
-          pendingConstraintType: pendingConstraintCommand?.type || null,
+          pendingConstraintType: constraintTargetSession.command?.type || null,
           pendingCommandType: pendingCommand?.type || null,
           pendingPlacementPoint: pendingCommand?.type === "distance-place" && pendingCommand.pointer
             ? { x: pendingCommand.pointer.x, y: pendingCommand.pointer.y }
@@ -8394,7 +8390,7 @@
         const line = addLine(p1, p2);
         const target = { kind: "line-length", line, p1, p2, value: line.length() };
         addDistanceConstraintFromTarget(target, line.length(), dimensionFromAnchor(target, { x: 0, y: -28 }), { sketchId: activeSketchId() });
-        pendingConstraintCommand = { type: "distance" };
+        constraintTargetSession.replaceCommand({ type: "distance" });
         pendingCommand = {
           type: "distance-place",
           target,
@@ -9720,7 +9716,7 @@
         constraint.dimension = dimensionFromAnchor(target, { x: 0, y: -30 });
         pushModelConstraint(constraint);
         canvasSelection.set("dimensionConstraint", constraint);
-        pendingConstraintCommand = { type: "parallel" };
+        constraintTargetSession.replaceCommand({ type: "parallel" });
         updateUI();
         fitAllGeometryToViewport(180);
         draw();
@@ -9730,7 +9726,7 @@
       constraintDimensionSelectionState() {
         return {
           selected: Boolean(canvasSelection.dimensionConstraint),
-          command: pendingConstraintCommand?.type || null,
+          command: constraintTargetSession.command?.type || null,
         };
       },
       resetForSupportConstraintStatus() {
@@ -9879,7 +9875,7 @@
         const p3 = addPoint(-55, 55, false, "endpoint");
         const p4 = addPoint(55, 55, false, "endpoint");
         const commandLine = addLine(p3, p4);
-        constraintOperands = [];
+        constraintTargetSession.clearOperands();
         canvasSelection.set("points", []);
         canvasSelection.set("lines", [commandLine]);
         canvasSelection.set("circles", []);
@@ -9957,7 +9953,7 @@
         return {
           pendingCommandType: pendingCommand?.type || null,
           previewTargetKind: pendingCommand?.target?.kind || null,
-          operandKinds: constraintOperands.map((operand) => operand.kind),
+          operandKinds: constraintTargetSession.operands.map((operand) => operand.kind),
           constraints: serialized.constraints.filter((constraint) =>
             constraint.type === "lineCircleDistance" || constraint.type === "concentricRadiusDifferenceDimension"),
           geometry: constraints.map((constraint) => {
@@ -10021,7 +10017,7 @@
         const target = targetFromConstraint(constraint);
         return {
           anchor: constraint && target ? dimensionAnchor(target, constraint.dimension) : null,
-          pendingConstraintType: pendingConstraintCommand?.type || null,
+          pendingConstraintType: constraintTargetSession.command?.type || null,
           pendingCommandType: pendingCommand?.type || null,
           selectedLineIds: canvasSelection.lines.map((line) => line.id),
           dragging: dimensionDrag.active,
@@ -10114,7 +10110,7 @@
       },
       blockProjectionHoverState() {
         return {
-          command: pendingConstraintCommand?.type || null,
+          command: constraintTargetSession.command?.type || null,
           blockInstanceId: canvasHover.current.block?.id || null,
           pointId: canvasHover.current.point?.id || null,
           pointIsBlockProjection: Boolean(canvasHover.current.point?.blockProjection),
