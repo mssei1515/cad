@@ -73,10 +73,11 @@
         instanceProjectionData.set(instance, projection);
       }
       for (const annotation of annotations) {
-        if (annotation.type !== "leader") continue;
-        const referenced = resolveGeometryRef(annotation.geometryRef);
-        if (!referenced || (!selectedNodes.has(referenced) && !selectedBlockProjectionIds.has(referenced.id))) {
-          return { payload: null, error: applicationText(`注記 ${annotation.id} の参照先も選択してください`, `Also select the target referenced by annotation ${annotation.id}`) };
+        for (const ref of window.AnnotationAnchorConstraints?.refs(annotation) || (annotation.type === "leader" ? [annotation.geometryRef] : [])) {
+          const referenced = resolveGeometryRef(ref);
+          if (!referenced || (!selectedNodes.has(referenced) && !selectedBlockProjectionIds.has(referenced.id))) {
+            return { payload: null, error: applicationText(`注記 ${annotation.id} の参照先も選択してください`, `Also select the target referenced by annotation ${annotation.id}`) };
+          }
         }
       }
       const selectedBoundaryKeys = new Set([...lines, ...circles, ...arcs, ...splines].map((item) => `${geometryKindForItem(item)}:${item.id}`));

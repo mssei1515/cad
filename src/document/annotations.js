@@ -28,6 +28,13 @@
         }
       }
       Object.assign(item, normalized);
+      if (item.anchorPosition != null && !window.AnnotationAnchorConstraints?.POSITIONS.includes(item.anchorPosition)) throw new Error(`${item.id}: Invalid annotation anchor position`);
+      if (item.anchorConstraints) {
+        const relations = window.AnnotationAnchorConstraints.normalize(item.anchorConstraints);
+        const axes = relations.flatMap(relation => window.AnnotationAnchorConstraints.axes(relation.type));
+        if (!Array.isArray(item.anchorConstraints) || relations.length !== item.anchorConstraints.length || new Set(axes).size !== axes.length || !item.anchorPosition) throw new Error(`${item.id}: Invalid annotation anchor constraints`);
+        item.anchorConstraints = relations;
+      }
       if (type !== "leader") {
         delete item.geometryRef;
         delete item.start;
@@ -54,8 +61,10 @@
       style: window.Appearance.annotationStoredStyle(element),
     };
     if (element.appearanceInheritance === true) data.appearanceInheritance = true;
+    if (window.AnnotationAnchorConstraints?.POSITIONS.includes(element.anchorPosition)) data.anchorPosition = element.anchorPosition;
+    if (element.anchorConstraints?.length) data.anchorConstraints = window.AnnotationAnchorConstraints.normalize(element.anchorConstraints);
     if (element.type === "leader") {
-      if (["shelf", "text"].includes(element.textPlacement)) data.textPlacement = element.textPlacement;
+      if (["shelf", "text", "anchor"].includes(element.textPlacement)) data.textPlacement = element.textPlacement;
       if (element.attachment) data.attachment = { ...element.attachment };
       if (Number.isFinite(element.shelfReferenceScale) && element.shelfReferenceScale > 0) data.shelfReferenceScale = element.shelfReferenceScale;
       data.geometryRef = element.geometryRef && typeof element.geometryRef === "object" ? { ...element.geometryRef } : null;

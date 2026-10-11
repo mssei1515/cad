@@ -224,7 +224,12 @@
     function annotationAppearancePropertyRows(item) {
       const style = effectiveAnnotationStyle(item);
       const direct = item.appearanceInheritance ? item.style : { ...style, ...window.Appearance.annotationDisplaySettings(style), rotation: Number(item.rotation) || 0 };
-      return `<div class="property-row"><label for="annotationVisible">${applicationText("表示", "Visible")}</label><input id="annotationVisible" data-property="annotation-visible" type="checkbox" ${item.visible !== false ? "checked" : ""}></div>`
+      const positions = window.AnnotationAnchorConstraints?.POSITIONS || [];
+      const anchor = item.anchorPosition || `${style.textAlign}-middle`;
+      const anchorRows = `<div class="property-row"><label>${applicationText("配置基準点", "Placement anchor")}</label><div class="annotation-anchor-grid" role="radiogroup" aria-label="${applicationText("配置基準点", "Placement anchor")}">${positions.map((value, i) => `<label><input type="radio" name="annotationAnchor" data-property="annotation-anchor-position" value="${value}" ${anchor === value ? "checked" : ""}>${applicationText(window.AnnotationAnchorConstraints.LABELS[i], value)}</label>`).join("")}</div></div>`;
+      const constraints = item.anchorConstraints || [];
+      const constraintRows = constraints.length ? `<div class="property-row"><label>${applicationText("基準点拘束", "Anchor constraints")}</label><div>${constraints.map(relation => `<div>${escapeHtml(applicationText(({ coincident: "一致", horizontal: "水平", vertical: "垂直", "distance-x": "水平距離", "distance-y": "垂直距離", fixed: "位置固定" })[relation.type], relation.type))}${relation.geometryRef ? `: ${escapeHtml(relation.geometryRef.path.join("@"))}` : ""}${relation.type.startsWith("distance-") ? ` (${relation.value} mm)` : ""}</div>`).join("")}<button type="button" data-property-action="annotation-anchor-clear">${applicationText("基準点拘束を解除", "Remove anchor constraints")}</button></div></div>` : "";
+      return anchorRows + constraintRows + `<div class="property-row"><label for="annotationVisible">${applicationText("表示", "Visible")}</label><input id="annotationVisible" data-property="annotation-visible" type="checkbox" ${item.visible !== false ? "checked" : ""}></div>`
         + leaderAppearancePropertyRows(direct, style, { leader: item.type === "leader", terminals: item.type === "leader" });
     }
 

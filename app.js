@@ -479,7 +479,7 @@
     documentHistory, currentBlockHistory: () => blockEditor.current?.history,
     changed: updateHistoryButtons, log,
   });
-  const CURRENT_JSON_VERSION = 24;
+  const CURRENT_JSON_VERSION = 25;
   const CLIPBOARD_PASTE_OFFSET_SCREEN_PX = 24;
   const BLOCK_ORTHOGONAL_ROTATION_STEP = Math.PI / 2;
 
@@ -637,7 +637,38 @@
   });
 
   const { drawResolvedHatchContent } = window.HatchRenderer.create({ viewport, visibleWorldBounds: () => pngRender?.worldBounds || visibleWorldBounds(), canvasThemeColor, isVisibleValue });
-  const { annotationLeaderDisplayGeometry, annotationTextLayout, annotationTextWorldHeight, annotationTextMetrics, drawAnnotationText, drawAnnotationLeader } = window.AnnotationRenderer.create({ ctx, viewport, withCanvasState, annotationDisplayColor, annotationLeaderAnchor, appearanceLineDash, formatValue: formatDisplayNumber, effectiveAnnotationStyle, showLeaderEndHandle: element => !pngRender && !element.blockProjection && element.sketchId === activeSketchId() && (canvasSelection.annotations.includes(element) || canvasHover.current.annotation === element) });
+  const { annotationLeaderDisplayGeometry, annotationTextLayout, annotationTextWorldHeight, annotationTextMetrics, drawAnnotationText, drawAnnotationLeader } = window.AnnotationRenderer.create({ ctx, viewport, withCanvasState, annotationDisplayColor, annotationLeaderAnchor, appearanceLineDash, formatValue: formatDisplayNumber, effectiveAnnotationStyle,
+    resolvePlacement: (element, base) => window.AnnotationAnchorConstraints.resolve(element, base, resolveGeometryRef),
+    showFrame: element => !pngRender && (canvasSelection.annotations.includes(element) || canvasSelection.inspectionContains(element) || canvasHover.current.annotation === element || canvasSelection.inspectionContains(element.blockInstance)),
+    showLeaderEndHandle: element => !pngRender && !element.blockProjection && !element.anchorConstraints?.length && element.sketchId === activeSketchId() && (canvasSelection.annotations.includes(element) || canvasHover.current.annotation === element) });
+  function annotationPlacementAnchor(element) {
+    const layout = annotationTextLayout(element) || annotationTextMetrics(element, element.type === "leader" ? annotationLeaderDisplayGeometry(element) : element);
+    return { x: layout.anchorX ?? layout.x, y: layout.anchorY ?? layout.y };
+  }
+  function materializeAnnotationAnchor(element, { capture = false } = {}) {
+    if (!element.anchorPosition || capture) {
+      const anchor = annotationPlacementAnchor(element);
+      const position = { ...anchor };
+      if (element.type === "leader") {
+        const geometry = annotationLeaderDisplayGeometry(element), start = annotationLeaderAnchor(element) || element.start;
+        position.x = element.start.x + (anchor.x - start.x) / geometry.shelfScale;
+        position.y = element.start.y + (anchor.y - start.y) / geometry.shelfScale;
+        element.textPlacement = "anchor";
+      }
+      if (!element.anchorPosition) { element.x = position.x; element.y = position.y; element.anchorPosition = `${effectiveAnnotationStyle(element).textAlign}-middle`; }
+      return position;
+    }
+    return { x: element.x, y: element.y };
+  }
+  const annotationAnchorConstraints = window.AnnotationAnchorConstraints.create({
+    getCommand: () => pendingConstraintCommand, setCommand: value => { pendingConstraintCommand = value; },
+    selectedAnnotation: () => canvasSelection.selectedElementCount() === 1 ? canvasSelection.annotations[0] : null,
+    byId: id => model.annotations.find(item => item.id === id),
+    canEdit: item => !item.blockProjection && guardSketchEdit(elementSketchId(item), "structure"),
+    canReference: (item, point) => elementSketchId(point) === item.sketchId || isReferenceSourceSketchId(elementSketchId(point), item.sketchId),
+    anchor: annotationPlacementAnchor, materialize: materializeAnnotationAnchor, pointRef: geometryRefForItem, resolveRef: resolveGeometryRef,
+    recordHistory, updateUI, draw, setHint, cancelCommands: () => { cancelPendingCommand(""); cancelConstraintTargetCommand(""); }, applicationText,
+  });
   const annotationCommand = window.AnnotationCommand.create({
     currentScope: workspace.current, getPending: () => pendingCommand, setPending: value => { pendingCommand = value; },
     lastPointer: () => lastPointerWorld, viewScale: () => viewport.scale,
@@ -692,6 +723,7 @@
   });
   const { separateSharedSketchProjectionTargetPoints, synchronizeSketchProjectionMetadata } = sketchProjectionEditing;
   const drawingSnap = window.DrawingSnap.create({
+    annotationAnchors: () => allAnnotations().filter(element => isVisibleSketchElement(element) && element.visible !== false).map(element => ({ element, ...annotationPlacementAnchor(element) })),
     geometryReads, isVisibleSketchElement, isActiveSketchElement, isSplineOnlyFitPoint, isReferencePoint, isPrimitiveCenterPoint, isEndpointPoint, isPointUsedByPrimitive, isExplicitPoint, sketchName, elementSketchId, applicationText,
   });
   const { candidates: snapCandidates, clear: clearSnap } = drawingSnap;
@@ -2753,6 +2785,7 @@
         annotation.y += dy;
         for (const key of ["start", "elbow", "end"]) if (annotation[key]) annotation[key] = { x: annotation[key].x + dx, y: annotation[key].y + dy };
         if (annotation.geometryRef) annotation.geometryRef = remapGeometryRef(annotation.geometryRef, idMap);
+        if (annotation.anchorConstraints) annotation.anchorConstraints = annotation.anchorConstraints.map(relation => relation.type === "fixed" ? { ...relation, x: relation.x + dx, y: relation.y + dy } : { ...relation, geometryRef: remapGeometryRef(relation.geometryRef, idMap) });
         model.annotations.push(annotation);
         pastedAnnotations.push(annotation);
         idMap.set(source.id, annotation.id);
@@ -3645,6 +3678,7 @@
   }
 
   function startConstraintTargetCommand(type) {
+    if (annotationAnchorConstraints.start(type)) return;
     if (!guardSketchEdit(activeSketchId(), "create") || !guardSelectionEdit("constraint")) return;
     cancelPendingCommand("");
     resetCenterlineCommandState();
@@ -3820,6 +3854,10 @@
   }
 
   function handleConstraintOperandClick(pointer, type, hits = {}) {
+    if (annotationAnchorConstraints.active) {
+      const operand = hitConstraintOperand(pointer, type, hits);
+      return annotationAnchorConstraints.click(operand?.kind === "point" ? operand.point : operand?.kind === "primitive" ? operand.primitive.center : null);
+    }
     const operand = hitConstraintOperand(pointer, type, hits);
     if (type === "fixed") {
       const supported = operand && (["point", "line", "arc-endpoint"].includes(operand.kind) || (operand.kind === "primitive" && (operand.primitive instanceof Circle || operand.primitive instanceof Arc)));
@@ -4284,6 +4322,7 @@
     const selectedProjectionInstances = [...new Set(selectedProjectionItems.map((item) => item.blockInstance))];
     const fixedBatch = selectedFixedBatchTargets();
     const canToggleFixed =
+      (canvasSelection.annotations.length === 1 && canvasSelection.selectedElementCount() === 1) ||
       (canvasSelection.blockInstances.length === 1 && selectedGeometryItems().length === 0 && canvasSelection.annotations.length === 0 && canvasSelection.hatches.length === 0 && canvasSelection.referenceImages.length === 0) ||
       (selectedProjectionItems.length > 0 && selectedProjectionInstances.length === 1 && selectedProjectionItems.length === canvasSelection.points.length + canvasSelection.lines.length + canvasSelection.circles.length + canvasSelection.arcs.length + canvasSelection.splines.length) ||
       Boolean(canvasSelection.arcEndpoint) ||
@@ -4382,10 +4421,10 @@
   }
 
   function annotationReferencesRemovedGeometry(annotation, removedIds, removedKeys) {
-    if (annotation?.type !== "leader" || !annotation.geometryRef) return false;
-    const id = geometryRefId(annotation.geometryRef);
-    const key = geometryRefKey(annotation.geometryRef);
-    return Boolean((id && removedIds.has(id)) || (key && removedKeys.has(key)));
+    return window.AnnotationAnchorConstraints.refs(annotation).some(ref => {
+      const id = geometryRefId(ref), key = geometryRefKey(ref);
+      return Boolean((id && removedIds.has(id)) || (key && removedKeys.has(key)));
+    });
   }
 
   const sketchDeletionCommand = window.SketchDeletionCommand.create({
@@ -4685,6 +4724,7 @@
   });
   const { applyAppearanceInput, applyAnnotationStyleValue, applyHatchAppearanceInput, applyDimensionAppearanceValue } = appearanceEditing;
   const appearancePropertyCommand = window.AppearancePropertyCommand.create({
+    materializeAnchor: materializeAnnotationAnchor,
     editing: appearanceEditing, viewport, effectiveAnnotationStyle, effectiveLeaderAppearanceForSketch, normalizeHatchAppearance, normalizeAnnotationStyle,
     invalidateBlockProjectionCache, recordHistory, updateUI, updatePropertiesUI, draw,
   });
@@ -4720,7 +4760,7 @@
     normalizeConstructionAppearance, normalizeDimensionAppearance, recordHistory, updateUI, draw,
   });
   const { open: openAppearanceColorPalette, commit: commitColorPaletteValue } = appearancePalette;
-  const elementPropertyCommand = window.ElementPropertyCommand.create({ recordHistory, updateUI, updatePropertiesUI, draw });
+  const elementPropertyCommand = window.ElementPropertyCommand.create({ recordHistory, updateUI, updatePropertiesUI, draw, materializeAnchor: materializeAnnotationAnchor });
   const propertiesController = window.PropertiesController.create({
     HTMLTextAreaElement, HTMLInputElement, Spline, selectedPropertiesTarget, activeSketchId,
     canEditStructure: item => guardSketchEdit(elementSketchId(item), "structure"),
@@ -5887,9 +5927,10 @@
     ]);
     if (!canvasSelection.hatches.every((hatch) => hatchBoundaryGeometryRefs(hatch.boundaryLoops).every((ref) => selectedGeometryRefs.has(`${ref.kind}:${geometryRefId(ref)}`)))) return false;
     return canvasSelection.annotations.every((annotation) => {
-      if (annotation.type !== "leader") return true;
-      const referenced = resolveGeometryRef(annotation.geometryRef);
-      return Boolean(referenced && (selectedNodes.has(referenced) || selectedProjectionIds.has(referenced.id)));
+      return window.AnnotationAnchorConstraints.refs(annotation).every(ref => {
+        const referenced = resolveGeometryRef(ref);
+        return Boolean(referenced && (selectedNodes.has(referenced) || selectedProjectionIds.has(referenced.id)));
+      });
     });
   }
 
@@ -6675,6 +6716,7 @@
 
   fixPointBtn.addEventListener("click", () => {
     if (!isGeometryMode()) return;
+    if (annotationAnchorConstraints.start("fixed")) return;
     if (pendingConstraintCommand?.type === "fixed") {
       cancelConstraintTargetCommand();
     } else if (!hasSelection()) {
@@ -10941,7 +10983,7 @@
     cancel: () => { exitDrawMode(); updateUI({ refreshAnalysis: false }); draw(); },
   });
   const annotationPanel = window.AnnotationCommandPanel.create({ command: annotationCommand, applicationText, effectiveStyle: item => effectiveAnnotationStyle({ ...item, sketchId: activeSketchId() }) });
-  const currentCommandPanel = () => annotationCommand.active ? annotationPanel : ["hatch", "hatch-repair"].includes(mode) ? hatchPanel : derivedPanel;
+  const currentCommandPanel = () => annotationAnchorConstraints.active ? annotationAnchorConstraints : annotationCommand.active ? annotationPanel : ["hatch", "hatch-repair"].includes(mode) ? hatchPanel : derivedPanel;
   commandPanel = window.CommandPanel.create({ document, host: canvas.parentElement, ...derivedPanel,
     readState: () => pngExportCommand.active ? pngExportCommand.readState() : currentCommandPanel().readState(),
     onAction: action => pngExportCommand.active ? pngExportCommand.onAction(action) : currentCommandPanel().onAction(action),

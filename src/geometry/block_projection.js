@@ -69,7 +69,10 @@
         blockLocalId: localPath.join("/"),
         blockAppearanceOverrides: appearanceOverrides,
         annotationTransformRotation: Number(transform.rotation) || 0,
+        annotationTransformOrigin: blockWorldPoint(transform, { x: 0, y: 0 }),
       };
+      if (projected.anchorConstraints) projected.anchorConstraints = projected.anchorConstraints.map(relation => ({ ...relation,
+        ...(relation.geometryRef ? { geometryRef: createGeometryRef("point", [String(ownerInstance.id), ...localPath.slice(0, -1), ...relation.geometryRef.path]) } : {}) }));
       if (localAnnotation.geometryRef?.kind && Array.isArray(localAnnotation.geometryRef.path)) {
         projected.geometryRef = createGeometryRef(localAnnotation.geometryRef.kind, [...localPath.slice(0, -1), ...localAnnotation.geometryRef.path]);
         if (projected.geometryRef) projected.geometryRef = createGeometryRef(projected.geometryRef.kind, [String(ownerInstance.id), ...projected.geometryRef.path]);

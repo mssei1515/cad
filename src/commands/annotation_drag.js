@@ -8,6 +8,8 @@
       const selected = canvasSelection.annotations || [];
       const elements = hit.type === "text" && selected.includes(hit.element) && selected.every(item => item.type === "text")
         ? selected : [hit.element];
+      canvasSelection.set("annotations", elements);
+      if (hit.part === "end" && hit.element.anchorConstraints?.length || (hit.element.anchorConstraints || []).some(item => item.type === "fixed" || item.type === "coincident")) return;
       annotationDragSession = {
         pointerId: e.pointerId,
         elementId: hit.element?.id || null,
@@ -27,15 +29,18 @@
     function updateAnnotationDrag(pointer) {
       const session = annotationDragSession;
       if (!session) return;
-      const dx = pointer.x - session.startPointer.x;
-      const dy = pointer.y - session.startPointer.y;
+      let dx = pointer.x - session.startPointer.x;
+      let dy = pointer.y - session.startPointer.y;
       const element = annotationById(session.elementId) || session.hit.element;
       if (!element) return;
+      const axes = (element.anchorConstraints || []).flatMap(item => window.AnnotationAnchorConstraints.axes(item.type));
+      if (axes.includes("x")) dx = 0;
+      if (axes.includes("y")) dy = 0;
       if (session.hit.type === "leader" && session.hit.part === "end" && session.startEnd && session.startElbow) {
         const offset = dx / session.shelfScale;
         element.end = { x: session.startEnd.x + offset, y: session.startElbow.y };
         // Legacy text follows the shelf midpoint; shelf-positioned labels resolve this at draw time.
-        if (session.startText && element.textPlacement !== "text") element.x = session.startText.x + offset / 2;
+        if (session.startText && !["text", "anchor"].includes(element.textPlacement)) element.x = session.startText.x + offset / 2;
       } else if (session.hit.type === "leader") {
         const offsetX = dx / session.shelfScale, offsetY = dy / session.shelfScale;
         if (session.startEnd) element.end = { x: session.startEnd.x + offsetX, y: session.startEnd.y + offsetY };
@@ -47,8 +52,9 @@
       } else if (session.hit.type === "text") {
         for (const start of session.texts) {
           const text = annotationById(start.id) || start.element;
-          text.x = start.x + dx;
-          text.y = start.y + dy;
+          const lockedAxes = (text.anchorConstraints || []).flatMap(item => window.AnnotationAnchorConstraints.axes(item.type));
+          text.x = start.x + (lockedAxes.includes("x") ? 0 : dx);
+          text.y = start.y + (lockedAxes.includes("y") ? 0 : dy);
         }
       }
       draw();

@@ -29,6 +29,7 @@
         field('evaluated', '評価値', 'Evaluated value', 'text', parameter && valid ? command.evaluatedValue() ?? '—' : '—', { hidden: !parameter, readOnly: true });
         const group = t('注記の外観', 'Annotation Appearance');
         field('visible', '表示', 'Visible', 'checkbox', draft.visible !== false, { group });
+        field('anchorPosition', '配置基準点', 'Placement anchor', 'radio-grid', draft.anchorPosition || 'left-middle', { group, options: window.AnnotationAnchorConstraints.POSITIONS.map((value, i) => ({ value, label: t(window.AnnotationAnchorConstraints.LABELS[i], value) })) });
         const appearance = (key, ja, en, options = null, extra = {}) => {
           const factor = key === 'rotation' ? 180 / Math.PI : key === 'displayScale' ? 100 : 1;
           const value = style[key] == null ? '' : typeof style[key] === 'number' ? Number((style[key] * factor).toPrecision(10)) : String(style[key]);
@@ -51,7 +52,13 @@
         appearance('fontFamily', 'フォント', 'Font', [['sans-serif','ゴシック体','Sans serif'],['serif','明朝体','Serif'],['monospace','等幅','Monospace']]);
         appearance('bold', '太字', 'Bold', [[true,'あり','Enabled'],[false,'なし','Disabled']]);
         appearance('italic', '斜体', 'Italic', [[true,'あり','Enabled'],[false,'なし','Disabled']]);
-        appearance('textAlign', '文字揃え', 'Text alignment', [['left','左揃え','Left'],['center','中央揃え','Center'],['right','右揃え','Right']]);
+        appearance('textAlign', '行の揃え', 'Line alignment', [['left','左揃え','Left'],['center','中央揃え','Center'],['right','右揃え','Right']]);
+        appearance('frameVisible', '枠線', 'Frame border', [[true,'表示','Visible'],[false,'非表示','Hidden']]);
+        appearance('framePaddingY', '上下の余白 (mm)', 'Vertical padding (mm)', null, { min: 0, max: 1000 });
+        appearance('framePaddingX', '左右の余白 (mm)', 'Horizontal padding (mm)', null, { min: 0, max: 1000 });
+        appearance('frameColor', '枠線の色', 'Frame color', null, { type: 'text' });
+        appearance('frameLineWidth', '枠線の線幅', 'Frame line width', null, { min: 0.5, max: 10 });
+        appearance('frameLineType', '枠線の線種', 'Frame line type', [['solid','実線','Solid'],['dashed','破線','Dashed'],['dashdot','一点鎖線','Dash-dot'],['dashdotdot','二点鎖線','Dash-dot-dot'],['dotted','点線','Dotted']]);
         appearance('rotation', '回転 (°)', 'Rotation (°)', null, { min: -3600, max: 3600 });
       }
       return { id: attaching ? 'annotation-attach' : 'annotation', title: t('注記', 'Annotation'), step, settings,

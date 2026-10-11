@@ -73,8 +73,9 @@
         const dx = x - layout.x, dy = y - layout.y;
         const localX = dx * Math.cos(layout.rotation) + dy * Math.sin(layout.rotation);
         const localY = -dx * Math.sin(layout.rotation) + dy * Math.cos(layout.rotation);
-        return localX >= layout.left - padding && localX <= layout.left + layout.width + padding
-          && localY >= -layout.height / 2 - padding && localY <= layout.height / 2 + padding;
+        const box = layout.frame || { left: layout.left, top: -layout.height / 2, width: layout.width, height: layout.height };
+        return localX >= box.left - padding && localX <= box.left + box.width + padding
+          && localY >= box.top - padding && localY <= box.top + box.height + padding;
       }
       const rotation = -(element?.appearanceInheritance ? (effectiveAnnotationStyle(element).rotation || 0) + (element.annotationTransformRotation || 0) : Number(element?.rotation) || 0);
       const dx = x - (Number(geometry?.x) || 0);

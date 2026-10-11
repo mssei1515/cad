@@ -626,7 +626,7 @@ test("creates, places, drags, edits, and reloads local-coordinate blocks", async
   expect(edited.lengths[1]).toBeCloseTo(edited.lengths[0], 6);
 
   const reloaded = await page.evaluate(() => window.__jot2dTest.reloadBlockState());
-  expect(reloaded).toEqual({ definitions: 1, instances: 2, projectionLines: 8, serializedVersion: 24 });
+  expect(reloaded).toEqual({ definitions: 1, instances: 2, projectionLines: 8, serializedVersion: 25 });
 
   await openBlockDefinitions(page);
   await page.click(".blockDeleteBtn");
@@ -1224,7 +1224,7 @@ test("legacy block data migrates into an internal Sketch-1 without changing proj
 
   const before = await page.evaluate(() => window.__jot2dTest.blockState());
   const migrated = await page.evaluate(() => window.__jot2dTest.reloadLegacyBlockState());
-  expect(migrated.version).toBe(24);
+  expect(migrated.version).toBe(25);
   expect(migrated.origin).toEqual({ x: 0, y: 0 });
   expect(migrated.sketches).toEqual([
     expect.objectContaining({ id: "ROOT", kind: "root" }),

@@ -79,6 +79,7 @@
     }
 
     function leaderAppearancePropertyRows(owner, effective, { allowInheritance = true, idPrefix = "annotation", terminals = true, leader = true } = {}) {
+      effective = { ...window.Appearance.DEFAULT_LEADER_APPEARANCE, ...effective };
       const direct = window.Appearance.normalizeLeaderAppearance(owner);
       const inherited = key => `${defaultAppearanceLabel()} (${effective[key]})`;
       const input = (key, suffix, ja, en, { min = 0.1, max = 100, unit = "", factor = 1 } = {}) => `<div class="property-row"><label for="${idPrefix}${suffix}">${applicationText(ja, en)}</label><div class="property-input-with-unit"><input id="${idPrefix}${suffix}" data-leader-style="${key}" type="number" min="${min}" max="${max}" step="any" placeholder="${allowInheritance ? escapeHtml(defaultAppearanceLabel() + ' (' + formatDisplayNumber(effective[key] * factor, 3) + ')') : ""}" value="${direct[key] == null ? "" : key === "displayScale" ? (direct[key] * factor).toFixed(1) : formatDisplayNumber(direct[key] * factor, 6)}"><span class="property-input-unit">${unit}</span></div></div>`;
@@ -96,7 +97,13 @@
         ${select("fontFamily", "FontFamily", "フォント", "Font", [["sans-serif","ゴシック体","Sans serif"],["serif","明朝体","Serif"],["monospace","等幅","Monospace"]])}
         ${select("bold", "Bold", "太字", "Bold", [[true,"あり","Enabled"],[false,"なし","Disabled"]])}
         ${select("italic", "Italic", "斜体", "Italic", [[true,"あり","Enabled"],[false,"なし","Disabled"]])}
-        ${select("textAlign", "TextAlign", "文字揃え", "Text alignment", [["left","左揃え","Left"],["center","中央揃え","Center"],["right","右揃え","Right"]])}
+        ${select("textAlign", "TextAlign", "行の揃え", "Line alignment", [["left","左揃え","Left"],["center","中央揃え","Center"],["right","右揃え","Right"]])}
+        ${select("frameVisible", "FrameVisible", "枠線", "Frame border", [[true,"表示","Visible"],[false,"非表示","Hidden"]])}
+        ${input("framePaddingY", "FramePaddingY", "上下の余白", "Vertical padding", { min: 0, max: 1000, unit: "mm" })}
+        ${input("framePaddingX", "FramePaddingX", "左右の余白", "Horizontal padding", { min: 0, max: 1000, unit: "mm" })}
+        <div class="property-row"><label for="${idPrefix}FrameColor">${applicationText("枠線の色", "Frame color")}</label><input id="${idPrefix}FrameColor" data-leader-style="frameColor" type="text" placeholder="${allowInheritance ? escapeHtml(inherited("frameColor")) : ""}" value="${direct.frameColor || ""}"></div>
+        ${input("frameLineWidth", "FrameLineWidth", "枠線の線幅", "Frame line width", { min: 0.5, max: 10 })}
+        ${select("frameLineType", "FrameLineType", "枠線の線種", "Frame line type", [["solid","実線","Solid"],["dashed","破線","Dashed"],["dashdot","一点鎖線","Dash-dot"],["dashdotdot","二点鎖線","Dash-dot-dot"],["dotted","点線","Dotted"]])}
         ${input("rotation", "Rotation", "回転", "Rotation", { min: -3600, max: 3600, unit: "°", factor: 180 / Math.PI })}`;
     }
 

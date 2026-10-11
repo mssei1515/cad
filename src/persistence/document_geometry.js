@@ -57,6 +57,11 @@
         if (kind === "circle" || kind === "arc" || kind === "spline") return primitiveById.get(canonicalId) || null;
         return null;
       });
+      for (const annotation of loadedAnnotations) for (const relation of annotation.anchorConstraints || []) {
+        if (!relation.geometryRef) continue;
+        const target = resolveLoadedGeometryRef(relation.geometryRef);
+        if (!target || (elementSketchId(target) !== annotation.sketchId && !window.SketchHierarchy.isReferenceSourceSketchId(loadedSketches, elementSketchId(target), annotation.sketchId))) throw new Error(`${annotation.id}: Invalid annotation anchor target`);
+      }
       if (sourceVersion >= 11) {
         for (const annotation of loadedAnnotations) {
           if (annotation.type !== "leader") continue;
@@ -96,7 +101,7 @@
       const retainedPoints = points.filter((p) => {
         if (p.kind !== "endpoint") return true;
         if (isPointUsedByLine(p, lines) || isPointUsedByCircle(p, circles) || isPointUsedByArc(p, arcs) || splines.some((spline) => spline.fitPoints.includes(p))) return true;
-        return constraints.some((constraint) => constraintReferencesPoint(constraint, p));
+        return constraints.some((constraint) => constraintReferencesPoint(constraint, p)) || loadedAnnotations.some(annotation => (annotation.anchorConstraints || []).some(relation => relation.geometryRef && resolveLoadedGeometryRef(relation.geometryRef) === p));
       });
 
       return { retainedPoints, lines, circles, arcs, splines, constraints, loadedAnnotations, loadedHatches, loadedReferenceImages, loadedRootNamespace };

@@ -147,6 +147,7 @@
       for (const annotation of definition.annotations || []) {
         annotation.x += dx;
         annotation.y += dy;
+        for (const relation of annotation.anchorConstraints || []) if (relation.type === "fixed") { relation.x += dx; relation.y += dy; }
         for (const key of ["start", "elbow", "end"]) if (annotation[key]) annotation[key] = { x: annotation[key].x + dx, y: annotation[key].y + dy };
       }
       for (const hatch of definition.hatches || []) {
@@ -345,6 +346,7 @@
         cloned.sketchId = DEFAULT_SKETCH_ID;
         cloned.x -= origin.x;
         cloned.y -= origin.y;
+        for (const relation of cloned.anchorConstraints || []) if (relation.type === "fixed") { relation.x -= origin.x; relation.y -= origin.y; }
         for (const key of ["start", "elbow", "end"]) if (cloned[key]) cloned[key] = { x: cloned[key].x - origin.x, y: cloned[key].y - origin.y };
         return cloned;
       });

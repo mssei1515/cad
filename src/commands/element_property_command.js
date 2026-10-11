@@ -1,7 +1,7 @@
 /* Edit element properties that do not require solving geometry constraints. */
 (() => {
   "use strict";
-  function create({ recordHistory, updateUI, updatePropertiesUI, draw }) {
+  function create({ recordHistory, updateUI, updatePropertiesUI, draw, materializeAnchor = () => {} }) {
     function applyReferenceImageProperty(item, key, rawValue) {
       if (!item || !key) return false;
       if (key === "name") item.name = String(rawValue || "").trim() || item.name;
@@ -44,6 +44,12 @@
       if (key === "annotation-visible") item.visible = value;
       if (key === "annotation-text") item.text = value;
       if (key === "annotation-rotation") item.rotation = Math.max(-3600, Math.min(3600, commit ? Number(value) || 0 : Number(value))) * Math.PI / 180;
+      if (key === "annotation-anchor-position" && window.AnnotationAnchorConstraints.POSITIONS.includes(value)) { materializeAnchor(item); item.anchorPosition = value; }
+      if (key === "annotation-anchor-clear") {
+        const position = materializeAnchor(item, { capture: true });
+        if (position) { item.x = position.x; item.y = position.y; }
+        delete item.anchorConstraints;
+      }
       if (commit) {
         recordHistory("注記変更");
         updateUI();

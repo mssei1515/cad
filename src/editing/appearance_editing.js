@@ -37,7 +37,7 @@
         if (fixed) delete owner.displayScale;
         return true;
       }
-      const value = ["bold", "italic"].includes(key) ? rawValue === true || rawValue === "true"
+      const value = ["bold", "italic", "frameVisible"].includes(key) ? rawValue === true || rawValue === "true"
         : key === "rotation" ? Number(rawValue) * Math.PI / 180
         : key === "displayScale" ? Number(rawValue) / 100 : rawValue;
       const normalized = window.Appearance.normalizeLeaderAppearance({ [key]: value });

@@ -2,7 +2,7 @@
 (() => {
   "use strict";
   function create({ editing, normalizeHatchAppearance, normalizeAnnotationStyle,
-    invalidateBlockProjectionCache, recordHistory, updateUI, updatePropertiesUI, draw, viewport, effectiveAnnotationStyle = element => element.style, effectiveLeaderAppearanceForSketch = sketch => sketch.leaderAppearance }) {
+    invalidateBlockProjectionCache, recordHistory, updateUI, updatePropertiesUI, draw, viewport, materializeAnchor = () => {}, effectiveAnnotationStyle = element => element.style, effectiveLeaderAppearanceForSketch = sketch => sketch.leaderAppearance }) {
     function owner(target) {
       if (target.kind === "block" || target.kind === "geometryInstance") return (target.item.appearanceOverride ||= {});
       if (target.kind === "hatch") return (target.item.appearance ||= normalizeHatchAppearance());
@@ -15,9 +15,10 @@
       let label;
       let refresh = "all";
       if (category === "leader") {
+        if (target.kind === "annotation" && (key.startsWith("frame") || key === "textAlign")) materializeAnchor(target.item);
         const appearance = target.kind === "sketch" ? (target.item.leaderAppearance ||= {}) : target.kind === "annotation" ? editing.prepareLeaderStyle(target.item) : null;
         if (!appearance) return false;
-        if (target.kind === "annotation" && target.item.type === "leader" && target.item.textPlacement !== "text" && key === "textGap") target.item.textPlacement = "shelf";
+        if (target.kind === "annotation" && target.item.type === "leader" && !["text", "anchor"].includes(target.item.textPlacement) && key === "textGap") target.item.textPlacement = "shelf";
         editing.applyLeaderAppearanceValue(appearance, key, value, { viewportScale: viewport.scale,
           effective: target.kind === "sketch" ? effectiveLeaderAppearanceForSketch(target.item) : effectiveAnnotationStyle(target.item) });
         label = "注記外観変更";

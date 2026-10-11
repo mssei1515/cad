@@ -82,7 +82,18 @@
     terminatorSize: 10 / CSS_PX_PER_MM,
   };
   const TERMINATOR_KEYS = Object.freeze(["terminatorType", "terminatorSize", "arrowheadAngle"]);
-  const DEFAULT_LEADER_APPEARANCE = Object.freeze({ ...DEFAULT_ANNOTATION_STYLE, ...DEFAULT_TERMINATOR, fixedDisplaySize: true, rotation: 0, textGap: 1 });
+  const DEFAULT_LEADER_APPEARANCE = Object.freeze({ ...DEFAULT_ANNOTATION_STYLE, ...DEFAULT_TERMINATOR, textHeight: 5, fixedDisplaySize: true, rotation: 0, textGap: 1,
+    frameVisible: false, framePaddingX: 0, framePaddingY: 0, frameColor: "#111827", frameLineWidth: 1, frameLineType: "solid" });
+  function normalizeAnnotationFrame(source) {
+    const result = {};
+    for (const key of ["framePaddingX", "framePaddingY", "frameLineWidth"]) {
+      if (Object.hasOwn(source, key) && source[key] !== "" && Number.isFinite(Number(source[key]))) result[key] = Math.max(key === "frameLineWidth" ? 0.5 : 0, Math.min(key === "frameLineWidth" ? 10 : 1000, Number(source[key])));
+    }
+    if (Object.hasOwn(source, "frameVisible")) result.frameVisible = source.frameVisible === true || source.frameVisible === "true";
+    if (typeof source.frameColor === "string" && /^#[0-9a-fA-F]{6}$/.test(source.frameColor)) result.frameColor = source.frameColor.toLowerCase();
+    if (["solid", "dashed", "dashdot", "dashdotdot", "dotted"].includes(source.frameLineType)) result.frameLineType = source.frameLineType;
+    return result;
+  }
 
   function normalizeTerminator(value, { partial = true } = {}) {
     const source = value && typeof value === "object" ? value : {};
@@ -101,12 +112,13 @@
     const normalized = normalizeAnnotationStyle(source);
     const result = partial ? {} : { ...DEFAULT_LEADER_APPEARANCE };
     for (const key of Object.keys(DEFAULT_LEADER_APPEARANCE)) {
-      if (Object.hasOwn(source, key) && key !== "rotation" && key !== "textGap" && !TERMINATOR_KEYS.includes(key)) result[key] = normalized[key];
+      if (Object.hasOwn(source, key) && key !== "rotation" && key !== "textGap" && !key.startsWith("frame") && !TERMINATOR_KEYS.includes(key)) result[key] = normalized[key];
     }
     if (Object.hasOwn(source, "displayScale") && Number.isFinite(Number(source.displayScale)) && Number(source.displayScale) > 0) result.displayScale = Number(source.displayScale);
     if (Object.hasOwn(source, "rotation") && Number.isFinite(Number(source.rotation))) result.rotation = Number(source.rotation);
     if (Object.hasOwn(source, "textGap") && source.textGap !== "" && Number.isFinite(Number(source.textGap))) result.textGap = Math.max(0, Math.min(1000, Number(source.textGap)));
     Object.assign(result, normalizeTerminator(source));
+    Object.assign(result, normalizeAnnotationFrame(source));
     return result;
   }
 
@@ -252,6 +264,7 @@
       : DEFAULT_ANNOTATION_STYLE.terminatorType;
     return {
       ...(Object.hasOwn(source, "fixedDisplaySize") ? annotationDisplaySettings(source) : {}),
+      ...normalizeAnnotationFrame(source),
       color: typeof source.color === "string" && /^#[0-9a-fA-F]{6}$/.test(source.color)
         ? source.color.toLowerCase()
         : DEFAULT_ANNOTATION_STYLE.color,
