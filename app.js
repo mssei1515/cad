@@ -4915,6 +4915,15 @@
       copySelectionToClipboard, pasteGeometryClipboard, clipboardSession, readState: sketchProjectionTestObservation.state,
       blockSelectionGeometry, createBlockDefinitionFromSelection, blockSelectionBoundsCenter, SketchProjectionConstraint,
     });
+    const dimensionAppearanceObservation = window.DimensionTestDriver.createAppearanceObservation({
+      currentScope: workspace.current, readDocument: () => documentModel, isDimensionConstraint, constraintSketchId, activeSketchId,
+      normalizeDimensionAppearance, effectiveDimensionAppearanceForSketch, dimensionDisplayState,
+    });
+    const dimensionRenderObservation = window.DimensionTestDriver.createRenderObservation({
+      currentScope: workspace.current, isDimensionConstraint, targetFromConstraint, constraintSketchId, activeSketchId, effectiveDimensionAppearance,
+      placement: dimensionPlacement, layouts: dimensionLayouts, metrics: dimensionMetrics, viewport, screenPxPerMm: DIMENSION_SCREEN_PX_PER_MM,
+      displayFactor: window.Appearance.annotationDisplayFactor, hypot2,
+    });
     const referenceImageTestObservation = window.ReferenceImageTestDriver.createObservation({
       canvasSelection, currentScope: workspace.current, serializeReferenceImage, isEditingBlock: () => Boolean(blockEditor.current),
       liveBlockEditorDefinition, referenceImageInteraction, readHistory: readTestHistory, viewport,
@@ -5102,26 +5111,7 @@
       importReferenceImageDataForTest: referenceImageTestImport.importData,
       openReferenceImageBlockEditorForTest: referenceImageBlockFixture.open,
       completeReferenceImageBlockEditorForTest: referenceImageBlockFixture.complete,
-      dimensionAppearanceStateForTest(index = 0) {
-        const constraint = model.constraints.filter(isDimensionConstraint)[index] || null;
-        const sketchId = constraint ? constraintSketchId(constraint) : activeSketchId();
-        const sketch = model.sketches.find((item) => item.id === sketchId) || null;
-        return {
-          documentDefault: structuredClone(normalizeDimensionAppearance({ ...documentModel.defaultDimensionAppearance, ...documentModel.defaultTerminatorAppearance }, { partial: false })),
-          sketchDirect: structuredClone(normalizeDimensionAppearance(sketch?.dimensionAppearance)),
-          sketchEffective: structuredClone(effectiveDimensionAppearanceForSketch(sketch)),
-          direct: structuredClone(normalizeDimensionAppearance(constraint?.dimension?.display)),
-          effective: constraint ? structuredClone(dimensionDisplayState(constraint.dimension, sketchId)) : null,
-          blockDefinitions: documentModel.blockDefinitions.map((definition) => ({
-            id: definition.id,
-            dimensions: (definition.constraints || []).filter(isDimensionConstraint).map((item) => ({
-              sketchDirect: structuredClone(normalizeDimensionAppearance(definition.sketches.find((sketchItem) => sketchItem.id === item.sketchId)?.dimensionAppearance)),
-              direct: structuredClone(normalizeDimensionAppearance(item.dimension?.display)),
-              effective: structuredClone(dimensionDisplayState(item.dimension, item.sketchId, definition.sketches)),
-            })),
-          })),
-        };
-      },
+      dimensionAppearanceStateForTest: dimensionAppearanceObservation.state,
       arcRadiusDimensionRenderPlanForTest(terminatorType = "arrow", options = {}) {
         const center = new Point("P_ARC_RADIUS_TEST", 0, 0, false, "explicit");
         const arc = new Arc("A_ARC_RADIUS_TEST", center, 30, 0, Math.PI / 2, false);
@@ -5161,42 +5151,7 @@
           expectedExtensionOvershoot: appearance.extensionLineOvershoot * DIMENSION_SCREEN_PX_PER_MM,
         };
       },
-      dimensionAppearanceRenderMetricsForTest(index = 0) {
-        const constraint = model.constraints.filter(isDimensionConstraint)[index] || null;
-        const target = targetFromConstraint(constraint);
-        const sketchId = constraint ? constraintSketchId(constraint) : activeSketchId();
-        const dimension = constraint?.dimension || (target ? defaultDimensionForTarget(target) : null);
-        const appearance = effectiveDimensionAppearance(dimension, sketchId);
-        const layout = target && target.kind !== "angle" ? dimensionLayout(target, dimension, appearance) : null;
-        const firstExtension = layout?.points?.find((point) => point.showExtension !== false) || null;
-        const arrow = dimensionArrowheadPoints({ x: 0, y: 0 }, { x: 1, y: 0 }, appearance);
-        const arrowLength = (arrow[1].x - arrow[0].x) * viewport.scale;
-        const arrowHalfWidth = Math.abs(arrow[1].y - arrow[0].y) * viewport.scale;
-        const text = dimensionTextDrawingMetrics(appearance);
-        const angleRadius = 50 / viewport.scale;
-        const [angleExtension] = angleDimensionExtensionSegments({ vertex: { x: 0, y: 0 }, radius: angleRadius, start: 0, end: Math.PI / 2 }, appearance);
-        return {
-          appearance: structuredClone(appearance),
-          linearExtension: firstExtension ? {
-            originGap: hypot2(firstExtension.extensionStart.x - firstExtension.source.x, firstExtension.extensionStart.y - firstExtension.source.y) * viewport.scale,
-            overshoot: hypot2(firstExtension.extensionEnd.x - firstExtension.onDimension.x, firstExtension.extensionEnd.y - firstExtension.onDimension.y) * viewport.scale,
-          } : null,
-          angleExtension: {
-            originGap: hypot2(angleExtension.start.x, angleExtension.start.y) * viewport.scale,
-            overshoot: (hypot2(angleExtension.end.x, angleExtension.end.y) - angleRadius) * viewport.scale,
-          },
-          terminator: {
-            type: appearance.terminatorType,
-            size: appearance.terminatorSize * DIMENSION_SCREEN_PX_PER_MM * window.Appearance.annotationDisplayFactor(appearance, viewport.scale),
-            openingAngle: appearance.terminatorType === "dot" ? null : Math.atan2(arrowHalfWidth, arrowLength) * 360 / Math.PI,
-          },
-          lineWidth: dimensionStrokeWidth(appearance) * window.Appearance.annotationDisplayFactor(appearance, viewport.scale),
-          text: {
-            height: text.height * viewport.scale,
-            gap: text.gap * viewport.scale,
-          },
-        };
-      },
+      dimensionAppearanceRenderMetricsForTest: dimensionRenderObservation.appearanceMetrics,
       dimensionTerminatorFitForTest(availableScreenPixels, label = "100", terminatorType = "arrow", expressionMark = false) {
         const appearance = {
           ...normalizeDimensionAppearance({ ...documentModel.defaultDimensionAppearance, ...documentModel.defaultTerminatorAppearance }, { partial: false }),
