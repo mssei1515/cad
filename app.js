@@ -4893,6 +4893,11 @@
       currentScope: workspace.current, invalidateBlockProjectionCache, solveSketchAndDependents, DEFAULT_SKETCH_ID,
       updateUI, draw, readState: sketchProjectionTestObservation.state, clearSelection, canvasSelection, deleteCurrentSelection,
     });
+    const sketchProjectionGeometryInteraction = window.SketchProjectionTestDriver.createGeometryInteraction({
+      types: { Point, Line, Circle, Arc, Spline }, readConstraints: sketchProjectionConstraints, clearSelection, canvasSelection, updateUI, draw,
+      readState: sketchProjectionTestObservation.state, clientPosition: canvasTestDriver.clientPosition, constraintGeometryId,
+      setAppearanceForSelection, deleteElements, deleteCurrentSelection, deleteSketch, DEFAULT_SKETCH_ID,
+    });
     const instanceCommandFixture = window.DerivedInstanceTestDriver.createCommandFixture({
       resetModelState, addPoint, addLine, focus: canvasTestDriver.focus, clientPosition: canvasTestDriver.clientPosition,
       resetHistory, updateUI, draw,
@@ -5138,57 +5143,12 @@
         draw();
         return { success: solved.success && solved.dependent?.success !== false, state: this.sketchProjectionStateForTest() };
       },
-      selectSketchProjectionTargetForTest(kind = "line") {
-        const constraint = sketchProjectionConstraints().find((item) => item.kind === kind) || null;
-        if (!constraint) return null;
-        clearSelection();
-        if (constraint.target instanceof Point) canvasSelection.set("points", [constraint.target]);
-        else if (constraint.target instanceof Line) canvasSelection.set("lines", [constraint.target]);
-        else if (constraint.target instanceof Circle) canvasSelection.set("circles", [constraint.target]);
-        else if (constraint.target instanceof Arc) canvasSelection.set("arcs", [constraint.target]);
-        else if (constraint.target instanceof Spline) canvasSelection.set("splines", [constraint.target]);
-        updateUI();
-        draw();
-        const state = this.sketchProjectionStateForTest();
-        const point = constraint.target instanceof Point
-          ? constraint.target
-          : constraint.target instanceof Line
-            ? { x: (constraint.target.p1.x + constraint.target.p2.x) / 2, y: (constraint.target.p1.y + constraint.target.p2.y) / 2 }
-            : constraint.target.center || constraint.target.fitPoints[1];
-        return { targetId: constraintGeometryId(constraint.target), client: this.worldClientPositionForTest(point), propertiesText: state.propertiesText };
-      },
-      removeFirstSketchProjectionConstraintForTest() {
-        const constraint = sketchProjectionConstraints()[0];
-        if (!constraint) return false;
-        return deleteElements({ constraints: [constraint] });
-      },
-      setSketchProjectionAppearanceForTest(kind = "line") {
-        const selected = this.selectSketchProjectionTargetForTest(kind);
-        if (!selected) return null;
-        const before = sketchProjectionConstraints().length;
-        const changed = setAppearanceForSelection({ color: "#8B5CF6" });
-        return { changed, before, targetId: selected.targetId, state: this.sketchProjectionStateForTest() };
-      },
-      deleteSketchProjectionSourceGeometryForTest(kind = "line") {
-        const constraint = sketchProjectionConstraints().find((item) => item.kind === kind) || null;
-        if (!constraint) return false;
-        const source = constraint.source;
-        if (source instanceof Point) return deleteElements({ points: [source] });
-        if (source instanceof Line) return deleteElements({ lines: [source] });
-        if (source instanceof Circle) return deleteElements({ circles: [source] });
-        if (source instanceof Arc) return deleteElements({ arcs: [source] });
-        return deleteElements({ splines: [source] });
-      },
-      deleteSketchProjectionTargetGeometryForTest(kind = "line") {
-        const selected = this.selectSketchProjectionTargetForTest(kind);
-        if (!selected) return null;
-        const deleted = deleteCurrentSelection();
-        return { deleted, state: this.sketchProjectionStateForTest() };
-      },
-      deleteSketchProjectionSourceSketchForTest() {
-        const deleted = deleteSketch(DEFAULT_SKETCH_ID, false);
-        return { deleted, state: this.sketchProjectionStateForTest() };
-      },
+      selectSketchProjectionTargetForTest: sketchProjectionGeometryInteraction.select,
+      removeFirstSketchProjectionConstraintForTest: sketchProjectionGeometryInteraction.removeConstraint,
+      setSketchProjectionAppearanceForTest: sketchProjectionGeometryInteraction.setAppearance,
+      deleteSketchProjectionSourceGeometryForTest: sketchProjectionGeometryInteraction.deleteSource,
+      deleteSketchProjectionTargetGeometryForTest: sketchProjectionGeometryInteraction.deleteTarget,
+      deleteSketchProjectionSourceSketchForTest: sketchProjectionGeometryInteraction.deleteSourceSketch,
       copySketchProjectionTargetForTest(kind = "circle") {
         const selected = this.selectSketchProjectionTargetForTest(kind);
         if (!selected) return null;

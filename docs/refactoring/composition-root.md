@@ -6,6 +6,10 @@
 
 ## 現在の再開地点（2026-10-12）
 
+Sketch Projectionのtarget選択／外観変更、最初の投影拘束・source／target Geometry・source Sketch削除の六つのAPIを既存SketchProjectionTestDriver.createGeometryInteractionへ分離。呼出し時の拘束reader・Geometry型・Selectionと既存編集／削除・表示／観測／client変換を明示し、fixture生成・Solver・Clipboard／Block化依存を持たせない。種別別Geometryの参照同一性、選択→UI→draw→state→client、編集／削除後state、対象なしのnull／falseと拒否結果を保持する。thisによるhook参照をprivate selectとreadState／clientPositionへ置換し、モデル／Selection／履歴／cacheは複製しない。元の六つの本体との一致を確認。app.jsは8,311→8,271行（40行減、今回の合計2,787行減）。構文461ファイル・単体1,251件・関連E2E183件成功（exit 0、3.5分）。既存E2Eに六つのhookの直接利用がなかったため、4つの単体境界テストを追加して五Geometry種別の同一参照、live readerと対象なし、操作拒否、削除payload、操作後観測を検証。対象E2Eはsketch-projection／互換fixture／command-panel／unified-ui／blocks／sketch-permissions。テスト本体終了後の専用サーバー終了待ちは当該processを確認して終了し、正常終了を回収した。ログはcad-sketch-projection-geometry-driver-{check,unit,e2e}.log。全E2Eはこの単位では未実行。全体目標は未完了。
+
+### 前回の区切り
+
 Sketch ProjectionのBlock下書きfixture／確定、Block投影fixture、Instance移動／削除の五つのAPIを既存SketchProjectionTestDriverのcreateBlockEditorFixture／createBlockProjectionFixture／createBlockProjectionInteractionへ分離。独立した入口により、操作支援に生成型・Definition追加・採番依存を持ち込まない。編集scope切替後の再照会、Definition追加／IDの既存所有者、cache無効化・bundle解決・focus／履歴／表示順、移動の依存求解・削除後state照会、無Instance時のnullを維持する。this経由のhook参照を明示した表示／readStateへ置換し、モデル／seq／cache／履歴は複製しない。元の五つの本体との一致を確認。app.jsは8,352→8,311行（41行減、今回の合計2,747行減）。構文460ファイル・単体1,247件・関連E2E183件成功（exit 0、3.7分）。既存のfixture直接利用テストがなかったため、Block E2Eに下書き確定時のhost Geometry分離とInstance移動／削除時のDefinition保持／無Instance分岐を検証する2件を追加した。対象はsketch-projection／互換fixture／command-panel／unified-ui／blocks／sketch-permissions。テスト本体終了後の専用サーバー終了待ちは当該processを確認して終了し、正常終了を回収した。ログはcad-sketch-projection-block-driver-{check,unit,e2e}.log。全E2Eはこの単位では未実行。全体目標は未完了。
 
 ### 前回の区切り

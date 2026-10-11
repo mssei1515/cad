@@ -1,0 +1,67 @@
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const path = require('node:path');
+const vm = require('node:vm');
+const test = require('node:test');
+const sandbox = { window: {} }; vm.createContext(sandbox);
+vm.runInContext(fs.readFileSync(path.resolve(__dirname, '../../src/testing/sketch_projection_test_driver.js'), 'utf8'), sandbox);
+class Point { constructor(id, x = 10, y = 20) { Object.assign(this, { id, x, y }); } }
+class Line { constructor(id) { Object.assign(this, { id, p1: new Point('a', 0, 0), p2: new Point('b', 20, 40) }); } }
+class Circle { constructor(id) { Object.assign(this, { id, center: new Point('c') }); } }
+class Arc { constructor(id) { Object.assign(this, { id, center: new Point('c') }); } }
+class Spline { constructor(id) { Object.assign(this, { id, fitPoints: [new Point('f1'), new Point('f2')] }); } }
+function fixture() {
+  const calls = [], state = { constraints: [], result: false, scope: 'original' };
+  const command = sandbox.window.SketchProjectionTestDriver.createGeometryInteraction({
+    types: { Point, Line, Circle, Arc, Spline },
+    readConstraints: () => { calls.push(['constraints']); return state.constraints; },
+    clearSelection: () => calls.push(['clear']),
+    canvasSelection: { set: (kind, items) => calls.push(['selection', kind, items]) },
+    updateUI: () => calls.push(['ui']), draw: () => calls.push(['draw']),
+    readState: () => { calls.push(['state']); return { propertiesText: state.scope }; },
+    clientPosition: point => { calls.push(['client', point]); return point; },
+    constraintGeometryId: item => item.id,
+    setAppearanceForSelection: patch => { calls.push(['appearance', patch]); state.scope = 'after appearance'; return state.result; },
+    deleteElements: payload => { calls.push(['delete', payload]); return state.result; },
+    deleteCurrentSelection: () => { calls.push(['delete selection']); state.scope = 'after deletion'; return state.result; },
+    deleteSketch: (id, force) => { calls.push(['delete sketch', id, force]); state.scope = 'after sketch deletion'; return state.result; },
+    DEFAULT_SKETCH_ID: 'source-sketch',
+  });
+  return { command, calls, state };
+}
+test('selection retains geometry references for every type and reads display state after repaint', () => {
+  for (const [kind, Type, collection] of [['point', Point, 'points'], ['line', Line, 'lines'], ['circle', Circle, 'circles'], ['arc', Arc, 'arcs'], ['spline', Spline, 'splines']]) {
+    const f = fixture(), target = new Type('target'); f.state.constraints = [{ kind, target }];
+    const selected = f.command.select(kind);
+    assert.equal(f.calls[2][1], collection); assert.equal(f.calls[2][2][0], target);
+    assert.deepEqual(f.calls.slice(3, 6), [['ui'], ['draw'], ['state']]);
+    assert.equal(selected.targetId, 'target'); assert.equal(selected.propertiesText, 'original');
+    assert.deepEqual({ x: selected.client.x, y: selected.client.y }, { x: 10, y: 20 });
+    f.state.constraints = []; f.calls.length = 0;
+    assert.equal(f.command.select(kind), null); assert.deepEqual(f.calls, [['constraints']]);
+  }
+});
+test('appearance keeps rejection result and observes state after the delegated edit', () => {
+  const f = fixture(); f.state.constraints = [{ kind: 'line', target: new Line('target') }];
+  const result = f.command.setAppearance();
+  assert.equal(result.changed, false); assert.equal(result.before, 1); assert.equal(result.state.propertiesText, 'after appearance');
+  assert.equal(f.calls.at(-2)[0], 'appearance'); assert.equal(f.calls.at(-1)[0], 'state');
+});
+test('source and constraint deletion pass original references and preserve refusal results', () => {
+  for (const [kind, Type, collection] of [['point', Point, 'points'], ['line', Line, 'lines'], ['circle', Circle, 'circles'], ['arc', Arc, 'arcs'], ['spline', Spline, 'splines']]) {
+    const f = fixture(), source = new Type('source'), constraint = { kind, source }; f.state.constraints = [constraint];
+    assert.equal(f.command.deleteSource(kind), false); assert.equal(f.calls.at(-1)[1][collection][0], source);
+    assert.equal(f.command.removeConstraint(), false); assert.equal(f.calls.at(-1)[1].constraints[0], constraint);
+    f.state.constraints = []; f.calls.length = 0;
+    assert.equal(f.command.deleteSource(kind), false); assert.equal(f.command.removeConstraint(), false);
+    assert.deepEqual(f.calls, [['constraints'], ['constraints']]);
+  }
+});
+test('target and sketch deletion observe current state after delegated operations', () => {
+  const f = fixture(); f.state.constraints = [{ kind: 'line', target: new Line('target') }];
+  assert.equal(f.command.deleteTarget().state.propertiesText, 'after deletion');
+  assert.deepEqual(f.calls.slice(-2), [['delete selection'], ['state']]);
+  const result = f.command.deleteSourceSketch();
+  assert.equal(result.deleted, false); assert.equal(result.state.propertiesText, 'after sketch deletion');
+  assert.deepEqual(f.calls.slice(-2), [['delete sketch', 'source-sketch', false], ['state']]);
+});
