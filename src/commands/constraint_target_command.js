@@ -41,6 +41,7 @@
 
     function cancelConstraintTargetCommand(message = "拘束対象の選択をキャンセルしました") {
       prepareCancel();
+      annotationAnchorConstraints.reset?.();
       if (!session.command) return;
       session.reset();
       if (message) setHint(message);
@@ -51,6 +52,7 @@
     }
 
     function executeConstraintCommandIfReady() {
+      if (annotationAnchorConstraints.active) return annotationAnchorConstraints.complete();
       if (!session.command) return false;
       const type = session.command.type;
       if (session.operands.length > 0) {

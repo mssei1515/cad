@@ -7,7 +7,7 @@
     withTemporarySolveStepNorm, solveStepNormForConstraint, stabilizeActiveParameterNamespace,
     constraintSketchId, acceptError, hideDimensionValueInput, recordHistory, updateUI,
     scaleSketchForFirstDimension, addDistanceConstraintFromTarget, restoreSketchScreenFootprint, targetFromConstraint, isReadOnlyDimension,
-    selectEditedConstraint, defaultDimensionForTarget, expressionInputValue, numericDimensionExpression, focusDimensionValueInput }) {
+    selectEditedConstraint, defaultDimensionForTarget, expressionInputValue, numericDimensionExpression, focusDimensionValueInput, submitSpecialDistance = () => null }) {
     function startEdit(hit) {
       if (hit?.constraint && !canEdit(constraintSketchId(hit.constraint))) return true;
       if (!hit?.constraint) return false;
@@ -54,6 +54,11 @@
         setHint(applicationText("寸法値の範囲が正しくありません", "Dimension value is out of range"), "error");
         draw();
         return;
+      }
+      const specialResult = submitSpecialDistance(pendingCommand, value);
+      if (specialResult !== null) {
+        if (specialResult) { setPending(null); hideDimensionValueInput(); }
+        updateUI(); draw(); return;
       }
       const { target, dimension, constraint, referenceSketchId, sketchId } = pendingCommand;
       const targetSketchId = sketchId || activeSketchId();

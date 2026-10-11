@@ -77,3 +77,12 @@ test('blank constraint click clears existing constraint selection before accepti
   f.calls=[];const point={id:'P'};f.click({hitP:point});assert.deepEqual(f.names(),['prevent','operand']);assert.equal(f.calls[1].args[2].hitP,point);
   f.constraint=null;f.calls=[];assert.equal(f.click({}),false);assert.deepEqual(f.calls,[]);
 });
+
+test('an annotation anchor can retarget a provisional line length but cannot take over value entry',()=>{
+  let pending={type:'distance-place',target:{kind:'line-length'}}, started=0;
+  const input=sandbox.window.AnnotationCommandInput.create({getMode:()=> 'select',getPending:()=>pending,getPendingConstraint:()=>({type:'distance'}),
+    startAnchorConstraint:()=>{started++;return true;},clearSelection(){},canvasSelection:{set(){}},updateUI(){},draw(){}});
+  const hit={blankAnnotationHit:{element:{id:'AN1'},part:'anchor'}},event={preventDefault(){}};
+  assert.equal(input.select(event,{x:1,y:2},hit),true);assert.equal(started,1);
+  pending={type:'distance-value'};assert.equal(input.select(event,{x:1,y:2},hit),false);assert.equal(started,1);
+});

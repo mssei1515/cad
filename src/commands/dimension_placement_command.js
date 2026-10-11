@@ -72,7 +72,7 @@
             : pendingCommand.target.kind === "angle"
               ? angleDegrees(angleDimensionAngles(pendingCommand.target, pointer, dimension).signed)
             : pendingCommand.target.value;
-      const readOnlyConstraint = readOnlyDimensionConstraintForPlacement(target, value, dimension, { referenceSketchId, sketchId, readOnlyDimension });
+      const readOnlyConstraint = target.annotationAnchor ? null : readOnlyDimensionConstraintForPlacement(target, value, dimension, { referenceSketchId, sketchId, readOnlyDimension });
       if (readOnlyConstraint) {
         setPending(null);
         hideDimensionValueInput();
@@ -132,7 +132,7 @@
         constraintTargetSession.replaceOperands(resolution.operands.slice());
         syncSelectionFromConstraintOperands();
       }
-      constraintTargetSession.replaceCommand({ type: "distance" });
+      constraintTargetSession.replaceCommand({ type: "distance", ...(resolution.target.annotationAnchor ? { annotationAnchor: true } : {}) });
       setPending({
         type: "distance-place",
         target: resolution.target,

@@ -85,7 +85,7 @@
     return { x: origin.x + result.x * cos - result.y * sin, y: origin.y + result.x * sin + result.y * cos };
   }
   function create({ getCommand, setCommand, selectedAnnotation, byId, canEdit, canReference, anchor, materialize,
-    pointRef, resolveRef, recordHistory, updateUI, draw, setHint, cancelCommands, applicationText: t }) {
+    pointRef, resolveRef, recordHistory, updateUI, draw, setHint, cancelCommands, applicationText: t, startDistancePlacement = () => {} }) {
     let draft = null;
     function start(type, selected = selectedAnnotation(), targets = []) {
       if (!selected || !canEdit(selected)) return false;
@@ -101,7 +101,8 @@
         recordHistory("注記基準点固定変更"); updateUI(); draw(); return true;
       }
       draft = { id: selected.id, type, axis: "x", value: 0, target: null, axisRef: null, endpoint: null };
-      setCommand({ type, annotationAnchor: true }); updateUI(); draw();
+      setCommand({ type, annotationAnchor: true });
+      setHint(t("拘束する相手の図形を指定してください。Escで終了します", "Choose the other geometry to constrain. Press Esc to cancel.")); updateUI(); draw();
       for (const target of targets) { if (!active()) break; click(target); }
       return true;
     }
@@ -129,7 +130,13 @@
         }
       }
       updateUI(); draw();
-      if (draft.type !== "distance" && draft.target && (draft.type !== "symmetry" || draft.axisRef)) finish();
+      if (draft.type === "distance" && draft.target) {
+        const base = anchor(item), point = new window.GeometrySolver.Point("annotation-anchor:" + item.id, base.x, base.y);
+        point.sketchId = item.sketchId;
+        const referenced = draft.endpoint ? window.GeometryKernel.arcEndpointPoint(target, draft.endpoint) : target;
+        const dimensionTarget = ref.kind === "line" ? { kind: "point-line", point, line: target, value: draft.value } : { kind: "point-point", p1: point, p2: referenced, value: draft.value };
+        startDistancePlacement({ target: { ...dimensionTarget, annotationAnchor: true }, sketchId: item.sketchId });
+      } else if (draft.target && (draft.type !== "symmetry" || draft.axisRef)) finish();
       return true;
     }
     function active() { return Boolean(draft && getCommand()?.annotationAnchor); }
@@ -154,14 +161,17 @@
       draft = null; setCommand(null); recordHistory("注記基準点拘束追加"); updateUI(); draw(); return true;
     }
     function cancel() { draft = null; setCommand(null); updateUI(); draw(); }
-    function readState() {
-      if (!active()) return null;
-      return { id: "annotation-anchor-constraint", title: t("注記基準点の拘束", "Annotation anchor constraint"), step: draft.type === "distance" ? t("参照対象と距離を指定し、完了してください", "Choose a target and distance, then finish.") : draft.type === "symmetry" ? t("相手の点と対称軸を指定してください", "Choose the other point and symmetry axis.") : t("参照対象を指定してください", "Choose the reference target."),
-        selections: [{ key: "target", label: t("参照対象", "Reference target"), active: true, items: [draft.target, draft.axisRef].filter(Boolean).map(ref => ({ key: window.GeometryRef.key(ref), label: window.GeometryRef.id(ref) })) }],
-        settings: draft.type === "distance" ? [{ key: "axis", label: t("方向", "Direction"), type: "select", value: draft.axis, options: draft.target?.kind === "line" ? [{ value: "normal", label: t("線への垂直距離", "Normal distance to line") }] : [{ value: "length", label: t("2点間距離", "Point-to-point distance") }, { value: "x", label: t("水平距離", "Horizontal distance") }, { value: "y", label: t("垂直距離", "Vertical distance") }] }, { key: "value", label: t("距離 (mm、水平・垂直は符号付き)", "Distance (mm, signed for X/Y)"), type: "number", step: "any", value: draft.value }] : [],
-        actions: [{ id: "finish", label: t("完了", "Finish"), disabled: !draft.target || draft.type === "symmetry" && !draft.axisRef }, { id: "cancel", label: t("キャンセル", "Cancel") }] };
+    function submitDistance(value, axis) {
+      if (!active() || draft.type !== "distance" || !draft.target) return false;
+      const item = byId(draft.id), target = resolveRef(draft.target);
+      if (!item || !target) return false;
+      draft.axis = draft.target.kind === "line" ? "normal" : axis || "length";
+      const p = draft.endpoint ? window.GeometryKernel.arcEndpointPoint(target, draft.endpoint) : target;
+      draft.value = value;
+      if (["x", "y"].includes(draft.axis)) draft.value *= anchor(item)[draft.axis] < p[draft.axis] ? -1 : 1;
+      return finish();
     }
-    return Object.freeze({ start, click, readState, get active() { return active(); }, onAction: action => action === "finish" ? finish() : cancel(), onSetting: (key, value) => { if (active() && ["axis", "value"].includes(key)) { draft[key] = value; draw(); } }, onSelect: () => {}, reset: () => { draft = null; } });
+    return Object.freeze({ start, click, complete: finish, cancel, submitDistance, get active() { return active(); }, reset: () => { draft = null; } });
   }
   window.AnnotationAnchorConstraints = Object.freeze({ POSITIONS, LABELS, normalize, resolve, solvePlacement, createDragGeometry, axes, degree, refs, create });
 })();

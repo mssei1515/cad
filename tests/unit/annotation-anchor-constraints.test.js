@@ -109,12 +109,12 @@ test('constraint drafting is atomic, rejects another relation on the same axis a
     recordHistory: () => { records++; }, updateUI: () => {}, draw: () => {}, setHint: () => {}, cancelCommands: () => { pending = null; }, applicationText: (ja, en) => en });
   const original = JSON.stringify(item);
   assert.equal(command.start('horizontal'), true); assert.equal(JSON.stringify(item), original);
-  command.onAction('cancel'); assert.equal(JSON.stringify(item), original); assert.equal(records, 0);
+  command.cancel(); assert.equal(JSON.stringify(item), original); assert.equal(records, 0);
   command.start('horizontal'); command.click(target); assert.equal(records, 1); assert.equal(pending, null);
   const constrained = JSON.stringify(item);
-  command.start('coincident'); command.click(target); assert.equal(command.onAction('finish'), false); assert.equal(JSON.stringify(item), constrained); assert.equal(records, 1);
-  command.onAction('cancel'); command.start('distance'); command.click(target); command.onSetting('axis', 'x'); command.onSetting('value', -5); command.onAction('finish');
-  assert.equal(records, 2); const resolved = A.resolve(item, item, () => target); near(resolved.x, -5); near(resolved.y, 0); assert.deepEqual(target, { id: 'P1', sketchId: 'S1', x: 0, y: 0 });
+  command.start('coincident'); command.click(target); assert.equal(command.complete(), false); assert.equal(JSON.stringify(item), constrained); assert.equal(records, 1);
+  command.cancel(); command.start('distance'); command.click(target); command.submitDistance(5, 'x');
+  assert.equal(records, 2); const resolved = A.resolve(item, item, () => target); near(resolved.x, 5); near(resolved.y, 0); assert.deepEqual(target, { id: 'P1', sketchId: 'S1', x: 0, y: 0 });
 });
 
 test('curve, concentric, symmetry and length constraints solve only the annotation point', () => {

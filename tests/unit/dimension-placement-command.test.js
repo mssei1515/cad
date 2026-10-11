@@ -88,3 +88,14 @@ test('distance target double-click consumes a single-line gesture and opens valu
  assert.equal(f.state.pending.buffer,'12');assert.deepEqual(f.events.slice(-3),['input','draw','focus']);
  assert.deepEqual(f.events.slice(0,3),['buttons','prepare','pending']);
 });
+
+test('annotation point distance uses normal placement and input while retaining its command and skipping geometric duplicate detection', () => {
+ const f = fixture(), target = { kind: 'point-point', annotationAnchor: true, p1: {x:0,y:0}, p2: {x:10,y:20}, value: 22 };
+ f.state.readOnly = {};
+ f.command.startDistanceResolution({target, sketchId: 'S'}, null);
+ assert.equal(f.session.command.annotationAnchor, true); assert.equal(f.state.pending.type, 'distance-place');
+ f.command.startDistanceValueInput({x:20,y:40});
+ assert.equal(f.state.pending.type, 'distance-value'); assert.equal(f.state.pending.target.annotationAnchor, true);
+ assert.equal(f.state.pending.target.dimensionAxis, 'x'); assert.equal(f.state.probe, undefined);
+ assert.ok(!f.events.includes('readOnly'));
+});
