@@ -98,15 +98,15 @@
 
 ## 8. 再開地点（2026-10-12）
 
-2026-10-11に週枠残量97%で再開し、develop 8e7e7c7からcodex/clipboard-placementを作成した。開始時app.jsは11,058行。現在は9,412行（今回の合計1,646行減）で、全体目標は未完了。作業branch上で区切りごとにCommit／Pushしており、develop／mainへの統合は停止または最終リリース時に行う。週枠残量は直近確認で86%。停止条件と手順はsection 1／6に従う。
+2026-10-11に週枠残量97%で再開し、develop 8e7e7c7からcodex/clipboard-placementを作成した。開始時app.jsは11,058行。現在は9,402行（今回の合計1,656行減）で、全体目標は未完了。作業branch上で区切りごとにCommit／Pushしており、develop／mainへの統合は停止または最終リリース時に行う。週枠残量は直近確認で84%。停止条件と手順はsection 1／6に従う。
 
 今回の分離は、Clipboardのpayload／session／checkpoint／モデル構築／操作、GeometryDeletionの計画／適用と混在Selection削除、拘束の対象受入／hit／session／操作／意図解決／寸法生成・読取判定・配置／commit、Solver前処理とSelection変換に及ぶ。各単位のcommit・検証・行数はcomposition-root.md、現在の責務はimplementation-map.mdと正式なarchitecture仕様を参照する。既存の分離をもう一度細分化するだけの変更は避ける。
 
-最新の区切りでは既存寸法の編集開始をDimensionValueCommandへ、Line対象のダブルクリックによる入力開始をDimensionPlacementCommandへ集約した。権限拒否／読取専用／配置と式のfallback／選択とdrag解除／draw後のfocus、配置開始後だけ既定位置から入力へ進む順序を保持する。app.jsは9,444→9,412行（32行減）。構文439ファイル・単体1,195件・関連E2E180件成功（exit 0、2.5分）。ログはcad-dimension-entry-{check,unit,e2e}.log。今回の作業branchでは全E2Eは未実行で、リリース前に実施する。Solver前処理の区切りでは拘束ドラッグ回帰を含む関連186件が成功（14.9分、うちドラッグ回帰12.5分）している。
+最新の区切りでは共有の保留状態と取消経路をPendingCommandSessionへ集約し、appの可変pendingCommandを廃止した。Object同一性と直接field更新、Instance配置解除から始まる取消の優先順位、PNG busyの拒否、通知なしclearと通常取消の違いを維持する。初期化前の入力表示参照は遅延callbackへ修正済み。app.jsは9,412→9,402行（10行減）。構文441ファイル・単体1,201件・全E2E551件成功（exit 0、24.2分、拘束ドラッグ回帰12.4分）。ログはcad-pending-session-{check,unit}.logとcad-pending-session-full-e2e.log。今回の作業branch全体をこの修正版で検証している。以後の実装変更をこの全E2E成功で検証済みとは扱わず、リリース前には最新状態に対する検証を行う。
 
-次は残る寸法の取消と拘束の準備／確定入口、共有pending session、各commandの組立て所有を確認する。ConstraintIntentResolverは明示したoperandを、ConstraintSelectionQueryは現在Selection／sessionの照会を、ConstraintOperandsはSelectionからの値変換を、CanvasSelectionは対象反映を所有する。旧handleConstraintTargetClickは撤去済みであり、再抽出しない。Document初期化・Sketch切替・削除のresetは解除対象と順序が異なるため、汎用resetへ無理に統合しない。
+次は残る拘束の準備／確定入口、共有modeと各commandの組立て所有、テスト用APIの機能ごとの境界を確認する。保留状態の保持と取消はPendingCommandSessionへ分離済みであり、再抽出しない。ConstraintIntentResolverは明示したoperandを、ConstraintSelectionQueryは現在Selection／sessionの照会を、ConstraintOperandsはSelectionからの値変換を、CanvasSelectionは対象反映を所有する。旧handleConstraintTargetClickは撤去済みであり、再抽出しない。Document初期化・Sketch切替・削除のresetは解除対象と順序が異なるため、汎用resetへ無理に統合しない。
 
-共通mode／pendingCommand／DOMへのadapterと、注入依存の多いcommandの生成／接続は残る。状態の所有と開始・更新・確定・取消の入口を揃え、巨大contextを渡した別ファイルへ移すだけにしない。次回は現物のGit状態とruntime情報を確認して継続する。
+共通mode／DOMへのadapterと、注入依存の多いcommandの生成／接続は残る。状態の所有と開始・更新・確定・取消の入口を揃え、巨大contextを渡した別ファイルへ移すだけにしない。次回は現物のGit状態とruntime情報を確認して継続する。
 
 ### 前回の停止地点（2026-10-10）
 

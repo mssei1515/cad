@@ -314,7 +314,7 @@
   });
   const { sketchProjectionConstraints, sketchProjectionConstraintForTarget, sketchProjectionConstraintsForTarget, isSketchProjectedGeometry, sketchProjectionPointPairs, sketchProjectionConstraintsAffectingItems } = sketchProjectionQueries;
   const blankCanvasGesture = window.BlankCanvasGesture.create({
-    getMode: () => mode, getPending: () => pendingCommand, getPendingConstraint: () => constraintTargetSession.command,
+    getMode: () => mode, getPending: () => pendingCommandSession.current, getPendingConstraint: () => constraintTargetSession.command,
     getSplineEditSession: () => splineEditing.current, getLineCommand: () => lineCommand, getTransientAuthoring: () => transientAuthoring,
     getTime: () => performance.now(), hypot2, clearPreview: () => drawingPreview.setPointer(null),
     finalizeSplineFromDoubleClick: (...args) => finalizeSplineFromDoubleClick(...args),
@@ -358,7 +358,12 @@
       hitCircle: (x, y) => hitCircle(x, y), hitArc: (x, y) => hitArc(x, y) },
   });
 
-  let pendingCommand = null;
+  const pendingCommandSession = window.PendingCommandSession.create({
+    clearPlacement: () => geometryInstanceCommand.clearPlacement(), cancelAnnotation: () => annotationCommand.cancel(),
+    cancelPngExport: () => pngExportCommand.cancel(), resetOffset: () => offsetSelection.reset(),
+    clearPreviewPointer: () => drawingPreview.setPointer(null), hideInput: () => hideDimensionValueInput(),
+    setHint, updateToolbar, updateConstraintButtons, draw,
+  });
   const constraintTargetSession = window.ConstraintTargetSession.create({
     acceptTarget: (...args) => constraintOperandValues.appendTarget(...args),
   });
@@ -491,7 +496,7 @@
     cancelFrame: (frame) => cancelAnimationFrame(frame),
     processMove: (pointer) => profileInteractionPhase("preview", () => {
       withGeometryReadCache(() => canvasInputBinding.processMove(pointer));
-      if (pendingCommand && ["distance-value", "offset-value"].includes(pendingCommand.type)) syncDimensionValueInput();
+      if (pendingCommandSession.current && ["distance-value", "offset-value"].includes(pendingCommandSession.current.type)) syncDimensionValueInput();
     }),
   });
   const { flush: flushScheduledCanvasPointerMove } = pointerMoveScheduler;
@@ -581,7 +586,7 @@
     canvas, ctx, viewport, readPixelRatio: () => window.devicePixelRatio || 1, ResizeObserverClass: window.ResizeObserver,
     onResize: () => {
       draw();
-      if (pendingCommand && ["distance-value", "offset-value"].includes(pendingCommand.type)) syncDimensionValueInput();
+      if (pendingCommandSession.current && ["distance-value", "offset-value"].includes(pendingCommandSession.current.type)) syncDimensionValueInput();
     },
   });
   const { syncCanvasBitmapSize, resetCanvasStrokeState, withCanvasState, appearanceLineDash } = canvasSurface;
@@ -598,7 +603,7 @@
   const { linearDimensionRenderPlan, jisDimensionTextAngle, dimensionTextOffset, arcRadiusDimensionExtensionSegment, angleDimensionLayout, angleDimensionExtensionSegments } = dimensionLayouts;
   const dimensionInputController = window.DimensionInputController.create({
     displayFactor: appearance => window.Appearance.annotationDisplayFactor(appearance, viewport.scale),
-    view: dimensionInputView, enabled: Boolean(dimensionValueInput), getPending: () => pendingCommand,
+    view: dimensionInputView, enabled: Boolean(dimensionValueInput), getPending: pendingCommandSession.read,
     dimensionLayout, worldToCanvasScreen, effectiveDimensionAppearance, constraintSketchId, activeSketchId,
     dimensionTextOffset, evaluateDimensionExpressionDraft, expressionFromUserInput,
     cancelPendingCommand, startDistanceValueInput, defaultDimensionForTarget,
@@ -682,7 +687,7 @@
     return annotationAnchorConstraints.start(type, item, targets);
   }
   const annotationCommand = window.AnnotationCommand.create({
-    currentScope: workspace.current, getPending: () => pendingCommand, setPending: value => { pendingCommand = value; },
+    currentScope: workspace.current, getPending: pendingCommandSession.read, setPending: pendingCommandSession.replace,
     lastPointer: () => lastPointerWorld, viewScale: () => viewport.scale,
     annotationTextLayout, annotationLeaderDisplayGeometry, annotationTextMetrics,
     nextParameterName: () => parameterNamespace.allocateDimensionParameterName({ ...model, parameters: model.parameters.map(item => ({ ...item })), annotations: [...model.annotations] }),
@@ -787,7 +792,7 @@
     cancelConstraintTargetCommand, cancelPendingCommand, clearSnap, updateUI, Arc,
     selectedGeometry: () => [...canvasSelection.lines, ...canvasSelection.circles, ...canvasSelection.arcs],
     prepareStart: () => drawOperationLifecycle.prepare("offset"), addOffsetChainGeometry,
-    getPending: () => pendingCommand, setPending: value => { pendingCommand = value; },
+    getPending: pendingCommandSession.read, setPending: pendingCommandSession.replace,
     plans: offsetGeometry, construction: offsetConstruction, placement: dimensionPlacement, offsetSelection,
     viewport, Line, Circle, minOrientationLength: MIN_ORIENTATION_LENGTH, offsetPairSign,
     offsetChainErrorText, formatDisplayNumber, formatDimensionLabel, setHint, updateToolbar,
@@ -837,7 +842,7 @@
   const filletCommand = window.FilletCommand.create({
     cancelConstraintTargetCommand, selectedLines: () => canvasSelection.lines, getPointer: () => lastPointerWorld,
     prepareStart: () => drawOperationLifecycle.prepare("fillet"), clearSnap, updateToolbar,
-    getPending: () => pendingCommand, setPending: value => { pendingCommand = value; },
+    getPending: pendingCommandSession.read, setPending: pendingCommandSession.replace,
     guardSketchProjectionShapeEdit, filletGeometryBasis, filletGeometryFromPointer, hideDimensionValueInput,
     snapshotGeometryMutationState, restoreGeometryMutationState, createFillet, clearSelection, selection: canvasSelection,
     stabilize: () => stabilizeActiveParameterNamespace(activeSketchId()), acceptError: CONSTRAINT_ACCEPT_ERROR,
@@ -883,7 +888,7 @@
   const dimensionValueCommand = window.DimensionValueCommand.create({
     canEdit: (id, operation) => guardSketchEdit(id, operation),
     renameDimension: parameterNamespace.renameDimension,
-    getPending: () => pendingCommand, setPending: value => { pendingCommand = value; },
+    getPending: pendingCommandSession.read, setPending: pendingCommandSession.replace,
     expressionFromUserInput, evaluateDimensionExpressionDraft, applicationText, parameterErrorText,
     setHint, syncDimensionValueInput, draw, activeSketchId, sketchHasDimensionConstraint,
     captureSketchScreenFootprint: (sketchId = activeSketchId()) => viewport.captureBoundsFootprint(sketchGeometryBounds(sketchId)),
@@ -1079,7 +1084,7 @@
   });
   const commitAnnotationParameterEdit = annotationParameterCommand.commit;
   const annotationInputController = window.AnnotationInputController.create({
-    document, host: canvas.parentElement, getPending: () => pendingCommand, setPending: value => { pendingCommand = value; },
+    document, host: canvas.parentElement, getPending: pendingCommandSession.read, setPending: pendingCommandSession.replace,
     find: id => workspace.current().annotations.find(item => item.id === id),
     canEdit: item => guardSketchEdit(elementSketchId(item)) && !item.blockProjection,
     prepare: () => { exitDrawMode(); cancelConstraintTargetCommand(""); cancelPendingCommand(""); annotationDrag.reset(); },
@@ -1259,7 +1264,7 @@
     return [...new Set(selectionItems().map(elementSketchId))].every(id => guardSketchEdit(id, operation));
   }
 
-  function ordinarySelectionMode() { return mode === "select" && !pendingCommand && !constraintTargetSession.command; }
+  function ordinarySelectionMode() { return mode === "select" && !pendingCommandSession.current && !constraintTargetSession.command; }
   function hitSketchAllowed(id) {
     return isVisibleSketchId(id) && (ordinarySelectionMode() || id === activeSketchId() && isEditableSketchId(id));
   }
@@ -1411,7 +1416,7 @@
   }
 
   function isPendingReferenceTarget(item) {
-    const target = constraintTargetSession.command?.referenceTarget || pendingCommand?.referenceTarget;
+    const target = constraintTargetSession.command?.referenceTarget || pendingCommandSession.current?.referenceTarget;
     if (!target || !item) return false;
     if (target.kind === "point") return target.point === item;
     if (target.kind === "line") return target.line === item;
@@ -1701,7 +1706,7 @@
     splineEditing.reset();
     drawingPreview.setPointer(null);
     offsetSelection.reset();
-    pendingCommand = null;
+    pendingCommandSession.clear();
     constraintTargetSession.reset();
     constructionCommand.restore(false);
     canvasHover.update({
@@ -1920,7 +1925,7 @@
   const referenceImageImport = window.ReferenceImageImport.create({ window, document, applicationText });
 
   const canImportDxf = () => canCreateInActiveSketch() && !hasActiveDrawOperation()
-    && !pendingCommand && !constraintTargetSession.command && mode !== "block-place";
+    && !pendingCommandSession.current && !constraintTargetSession.command && mode !== "block-place";
   const dxfImportCommand = window.DxfImportCommand.create({
     parser: window.DxfImport, geometry: geometryCreation, ids: geometryIds,
     currentScope: workspace.current, activeSketchId, canImport: canImportDxf,
@@ -2028,7 +2033,7 @@
     }
     applySketchTreeWidth();
     draw();
-    if (pendingCommand && ["distance-value", "offset-value"].includes(pendingCommand.type)) syncDimensionValueInput();
+    if (pendingCommandSession.current && ["distance-value", "offset-value"].includes(pendingCommandSession.current.type)) syncDimensionValueInput();
   }
 
 
@@ -2409,7 +2414,7 @@
       geometryDrag.reset();
       dimensionDrag.reset();
       annotationDrag.reset();
-      pendingCommand = null;
+      pendingCommandSession.clear();
       constraintTargetSession.clearCommand();
       lineCommand.reset();
       circularCommands.resetCircle();
@@ -2696,7 +2701,7 @@
   }
 
   function draw() {
-    if (pngExportCommand?.active && !pngExportCommand.busy && (pendingCommand?.type !== "png-export" || mode !== "png-export")) pngExportCommand.cancel();
+    if (pngExportCommand?.active && !pngExportCommand.busy && (pendingCommandSession.current?.type !== "png-export" || mode !== "png-export")) pngExportCommand.cancel();
     commandPanel?.update();
     annotationInputController.sync();
     commandPanelSelectedItem = derivedPanel?.selectedItem() || null;
@@ -2891,7 +2896,7 @@
       if (!isVisibleValue(effectiveDimensionAppearance(dimension, sketchId).visible)) continue;
       const highlighted = canvasSelection.inspectionContains(c) || c === canvasHover.current.dimension || canvasSelection.constraintSelectedInCanvas(c) || c === dimensionDrag.constraint;
       const label = dimensionLabelForConstraint(c, target, dimension);
-      const editing = pendingCommand?.type === "distance-value" && pendingCommand.constraint === c;
+      const editing = pendingCommandSession.current?.type === "distance-value" && pendingCommandSession.current.constraint === c;
       const colorOverride = !pngRender && viewState.constraintStatus && !isActiveSketchConstraint(c) ? INACTIVE_CONSTRAINT_STATUS_COLOR : null;
       ctx.save();
       drawDimension(target, dimension, label, false, !pngRender && (highlighted || editing), !pngRender && editing ? { hidden: true } : null, colorOverride, sketchId, !pngRender && dimensionUsesExpression(c));
@@ -2957,8 +2962,8 @@
   const { begin: beginAnnotationDrag, update: updateAnnotationDrag } = annotationDrag;
 
   function drawDimensionPreview() {
-    if (pendingCommand?.type === "fillet-radius-place") {
-      const geometry = pendingCommand.preview;
+    if (pendingCommandSession.current?.type === "fillet-radius-place") {
+      const geometry = pendingCommandSession.current.preview;
       if (!geometry.ok) return;
       const primitive = {
         id: "R",
@@ -2966,7 +2971,7 @@
         radius: () => geometry.radius,
       };
       const target = { kind: "radius", primitive, value: geometry.radius };
-      const anchor = pendingCommand.pointer || {
+      const anchor = pendingCommandSession.current.pointer || {
         x: geometry.center.x + Math.cos((geometry.startAngle + geometry.endAngle) / 2) * geometry.radius,
         y: geometry.center.y + Math.sin((geometry.startAngle + geometry.endAngle) / 2) * geometry.radius,
       };
@@ -2978,42 +2983,42 @@
       });
       return;
     }
-    if (!pendingCommand?.type?.startsWith("distance")) return;
+    if (!pendingCommandSession.current?.type?.startsWith("distance")) return;
     const dimension =
-      pendingCommand.type === "distance-place"
-        ? pendingCommand.dimension || applyDefaultCircleDimensionLabelOffset(pendingCommand.target, pendingCommand.pointer ? dimensionFromAnchor(pendingCommand.target, pendingCommand.pointer) : defaultDimensionForTarget(pendingCommand.target))
-        : pendingCommand.dimension;
-    if (pendingCommand.type === "distance-value") {
+      pendingCommandSession.current.type === "distance-place"
+        ? pendingCommandSession.current.dimension || applyDefaultCircleDimensionLabelOffset(pendingCommandSession.current.target, pendingCommandSession.current.pointer ? dimensionFromAnchor(pendingCommandSession.current.target, pendingCommandSession.current.pointer) : defaultDimensionForTarget(pendingCommandSession.current.target))
+        : pendingCommandSession.current.dimension;
+    if (pendingCommandSession.current.type === "distance-value") {
       let value = NaN;
       let invalid = false;
       try {
-        value = evaluateDimensionExpressionDraft(pendingCommand.constraint || null, pendingCommand.buffer);
-        invalid = value <= 0 || (pendingCommand.target.kind === "angle" && value >= 180);
+        value = evaluateDimensionExpressionDraft(pendingCommandSession.current.constraint || null, pendingCommandSession.current.buffer);
+        invalid = value <= 0 || (pendingCommandSession.current.target.kind === "angle" && value >= 180);
       } catch (_error) {
         invalid = true;
       }
-      const suffix = pendingCommand.target.kind === "angle" ? "°" : "";
-      drawDimension(pendingCommand.target, dimension, `${Number.isFinite(value) ? formatDisplayNumber(value) : "_"}${suffix}|`, true, false, {
-        selecting: !pendingCommand.editing,
+      const suffix = pendingCommandSession.current.target.kind === "angle" ? "°" : "";
+      drawDimension(pendingCommandSession.current.target, dimension, `${Number.isFinite(value) ? formatDisplayNumber(value) : "_"}${suffix}|`, true, false, {
+        selecting: !pendingCommandSession.current.editing,
         invalid,
         hidden: true,
       });
       return;
     }
     const previewTarget =
-      pendingCommand.target.kind === "point-point" && (dimension.axis === "x" || dimension.axis === "y")
-        ? { ...pendingCommand.target, dimensionAxis: dimension.axis }
-        : pendingCommand.target;
+      pendingCommandSession.current.target.kind === "point-point" && (dimension.axis === "x" || dimension.axis === "y")
+        ? { ...pendingCommandSession.current.target, dimensionAxis: dimension.axis }
+        : pendingCommandSession.current.target;
     const previewValue =
       previewTarget.kind === "point-point" && previewTarget.dimensionAxis === "x"
         ? Math.abs(previewTarget.p2.x - previewTarget.p1.x)
         : previewTarget.kind === "point-point" && previewTarget.dimensionAxis === "y"
           ? Math.abs(previewTarget.p2.y - previewTarget.p1.y)
           : previewTarget.kind === "angle"
-            ? angleDegrees(angleDimensionAngles(previewTarget, pendingCommand.pointer || dimensionAnchor(previewTarget, dimension), dimension).signed)
+            ? angleDegrees(angleDimensionAngles(previewTarget, pendingCommandSession.current.pointer || dimensionAnchor(previewTarget, dimension), dimension).signed)
           : previewTarget.value;
     const label = previewTarget.kind === "angle" ? formatDimensionLabel(previewValue, "°") : formatDimensionLabel(previewValue);
-    drawDimension(previewTarget, dimensionWithLabelAt(previewTarget, dimension, pendingCommand.pointer), label, true);
+    drawDimension(previewTarget, dimensionWithLabelAt(previewTarget, dimension, pendingCommandSession.current.pointer), label, true);
   }
 
 
@@ -3061,8 +3066,8 @@
 
   const toolbarView = window.ToolbarView.create({
     document, isGeometryMode, constructionToggleState,
-    readInteraction: () => ({ mode, hasPending: Boolean(pendingCommand), hasConstraint: Boolean(constraintTargetSession.command),
-      annotationDraft: Boolean(pendingCommand?.annotationDraft), pendingType: pendingCommand?.type,
+    readInteraction: () => ({ mode, hasPending: Boolean(pendingCommandSession.current), hasConstraint: Boolean(constraintTargetSession.command),
+      annotationDraft: Boolean(pendingCommandSession.current?.annotationDraft), pendingType: pendingCommandSession.current?.type,
       constraintType: constraintTargetSession.command?.type, splineEditing: Boolean(splineEditing.current) }),
     updateHistoryButtons, selectedVisibilityTargets, selectionVisibilityIsHidden,
     canEditTarget: target => canEditSketch(target.kind === "constraint" ? constraintSketchId(target.item) : elementSketchId(target.item)),
@@ -3126,7 +3131,7 @@
   function handleConstraintTargetDoubleClick(hitP, hitL, pointer) { return dimensionPlacementCommand.targetDoubleClick(hitP, hitL, pointer); }
 
   const dimensionPlacementCommand = window.DimensionPlacementCommand.create({
-    session: constraintTargetSession, selection: canvasSelection, getPending: () => pendingCommand, setPending: value => { pendingCommand = value; },
+    session: constraintTargetSession, selection: canvasSelection, getPending: pendingCommandSession.read, setPending: pendingCommandSession.replace,
     canStart: () => guardSketchEdit(activeSketchId(), "create") && guardSelectionEdit("constraint"),
     prepareStart: () => {
       mode = "select";
@@ -3145,22 +3150,7 @@
 
   function startPrimitiveDimensionCommand(kind) { return dimensionPlacementCommand.startPrimitiveDimensionCommand(kind); }
 
-  function cancelPendingCommand(message = "コマンドをキャンセルしました") {
-    geometryInstanceCommand.clearPlacement();
-    if (!pendingCommand) return;
-    if (pendingCommand.annotationDraft) { annotationCommand.cancel(); return; }
-    if (pendingCommand.type === "png-export") { pngExportCommand.cancel(); return; }
-    if (pendingCommand.type === "offset-value") {
-      offsetSelection.reset();
-      drawingPreview.setPointer(null);
-    }
-    pendingCommand = null;
-    hideDimensionValueInput();
-    if (message) setHint(message);
-    updateToolbar();
-    updateConstraintButtons();
-    draw();
-  }
+  function cancelPendingCommand(message) { return pendingCommandSession.cancel(message); }
 
   function startDistanceValueInput(pointer) { return dimensionPlacementCommand.startDistanceValueInput(pointer); }
 
@@ -3175,14 +3165,14 @@
   }
 
   function updatePendingDistanceRetargetHover(pointer) {
-    if (pendingCommand?.type !== "distance-place" || !["line-length", "radius", "diameter"].includes(pendingCommand.target.kind)) {
+    if (pendingCommandSession.current?.type !== "distance-place" || !["line-length", "radius", "diameter"].includes(pendingCommandSession.current.target.kind)) {
       canvasHover.update({
         point: null, endpointPoint: null, line: null,
         circle: null, arc: null,
       });
       return false;
     }
-    const baseOperands = (pendingCommand.operands || []).filter(Boolean);
+    const baseOperands = (pendingCommandSession.current.operands || []).filter(Boolean);
     const operand = baseOperands.length === 1 ? hitConstraintOperand(pointer, "distance") : null;
     const resolution = operand && !sameConstraintOperand(baseOperands[0], operand)
       ? resolveConstraintIntent("distance", [baseOperands[0], operand])
@@ -3213,7 +3203,7 @@
   const constraintControlsView = window.ConstraintControlsView.create({
     document, constraintButtons, constraintMenuButtons, fixPointBtn, isGeometryMode,
     prepareGeometryControls: () => {
-      if (pendingCommand?.type?.startsWith("distance")) {
+      if (pendingCommandSession.current?.type?.startsWith("distance")) {
         const target = distanceTargetFromSelection();
         if (!target || target.kind === "invalid") cancelPendingCommand("寸法入力をキャンセルしました");
       }
@@ -3237,7 +3227,7 @@
     resetArcCommandState();
     drawingPreview.reset();
     offsetSelection.reset();
-    pendingCommand = null;
+    pendingCommandSession.clear();
     constraintTargetSession.clearCommand();
     sketchProjectionCommand.reset();
     geometryInstanceCommand.clearSources();
@@ -3442,7 +3432,7 @@
   }
 
   function updateGeometrySelectionUIUnprofiled() {
-    annotationDrag.syncResizeSelection(mode === "select" && !pendingCommand && !constraintTargetSession.command);
+    annotationDrag.syncResizeSelection(mode === "select" && !pendingCommandSession.current && !constraintTargetSession.command);
     updateToolbar();
     updateConstraintButtons();
     if (document.getElementById("blockDefinitionsDialog")?.open) updateBlockUI();
@@ -3481,7 +3471,7 @@
     const input = document.activeElement;
     if (!(input instanceof HTMLInputElement || input instanceof HTMLTextAreaElement) || input.readOnly || input.disabled) return null;
     if (input.matches('#commandPanel [data-setting="expression"]') || input.id === "annotationValueInput" && input.dataset.expression === "true") return { input, namespace: model };
-    if (input === dimensionValueInput && pendingCommand?.type === "distance-value") return { input, namespace: model };
+    if (input === dimensionValueInput && pendingCommandSession.current?.type === "distance-value") return { input, namespace: model };
     if (input.matches('#propertiesPanel [data-property="constraint-expression"], #propertiesPanel [data-property="annotation-expression"]')) return { input, namespace: model };
     const parameterExpression = input.matches('[data-parameter-field="expression"], [data-dimension-field="expression"]');
     if (parameterExpression && input.closest("#parametersDialog") && parameterDraft.current) {
@@ -3785,7 +3775,7 @@
       slot: applicationText("長穴", "Slot"), circle: applicationText("円", "Circle"), arc: applicationText("円弧", "Arc"), "three-point-arc": applicationText("3点円弧", "Three-point Arc"), spline: applicationText("スプライン", "Spline"), fillet: applicationText("R面取り", "Fillet"), trim: applicationText("トリム", "Trim"),
       offset: applicationText("オフセット", "Offset"), hatch: applicationText("塗りつぶし", "Fill"), "hatch-repair": applicationText("境界を再指定", "Reselect boundary"), "block-place": applicationText("ブロック配置", "Block placement"),
     };
-    if (command) command.textContent = pendingCommand?.type?.startsWith("annotation-") ? applicationText("注記", "Annotation") : constraintTargetSession.command ? applicationText("拘束", "Constraint") : modeLabels[mode] || mode;
+    if (command) command.textContent = pendingCommandSession.current?.type?.startsWith("annotation-") ? applicationText("注記", "Annotation") : constraintTargetSession.command ? applicationText("拘束", "Constraint") : modeLabels[mode] || mode;
   }
 
   function updateUI({ refreshAnalysis = true } = {}) {
@@ -3794,7 +3784,7 @@
   }
 
   function updateUIUnprofiled({ refreshAnalysis = true } = {}) {
-    annotationDrag.syncResizeSelection(mode === "select" && !pendingCommand && !constraintTargetSession.command);
+    annotationDrag.syncResizeSelection(mode === "select" && !pendingCommandSession.current && !constraintTargetSession.command);
     ensureParameterNamespace(currentParameterNamespace());
     if (refreshAnalysis) refreshConstraintAnalysis();
     updateDocumentNameUI();
@@ -4110,7 +4100,7 @@
     continueCommandClick: (event, hits) => {
       canvasHover.update({ dimension: null });
       const pointer = canvasPoint(event);
-      if (pendingCommand?.type === "distance-place") {
+      if (pendingCommandSession.current?.type === "distance-place") {
         if (!retargetDistancePlaceWithOperand(pointer, hits)) startDistanceValueInput(pointer);
       } else if (constraintTargetSession.command?.type === "distance") {
         handleConstraintOperandClick(pointer, "distance", hits);
@@ -4120,7 +4110,7 @@
   const { begin: beginDimensionDrag } = dimensionDrag;
 
   function isDimensionConstraintCommandActive() {
-    return constraintTargetSession.command?.type === "distance" && pendingCommand?.type !== "distance-value";
+    return constraintTargetSession.command?.type === "distance" && pendingCommandSession.current?.type !== "distance-value";
   }
 
   function syncAngleConstraintFromDimension(constraint, target, dimension) {
@@ -4270,7 +4260,7 @@
   }
 
   function hasCancellableCanvasCommand() {
-    return mode === "block-place" || Boolean(pendingCommand) || Boolean(constraintTargetSession.command) || hasActiveDrawOperation() || isDrawToolMode();
+    return mode === "block-place" || Boolean(pendingCommandSession.current) || Boolean(constraintTargetSession.command) || hasActiveDrawOperation() || isDrawToolMode();
   }
 
   function cancelCanvasCommandFromContextMenu() {
@@ -4283,7 +4273,7 @@
       setHint(applicationText("ブロック配置をキャンセルしました", "Block placement canceled."));
       canceled = true;
     }
-    if (pendingCommand) {
+    if (pendingCommandSession.current) {
       cancelPendingCommand("");
       canceled = true;
     }
@@ -4402,7 +4392,7 @@
     } else {
       const specific = [];
       if (["point", "line", "circle", "arc", "spline", "block", "hatch", "annotation", "image"].includes(target.kind)) {
-        specific.push({ action: "sketch-move", label: applicationText("別スケッチへ移動…", "Move to Another Sketch…"), disabled: mode !== "select" || Boolean(pendingCommand || constraintTargetSession.command) });
+        specific.push({ action: "sketch-move", label: applicationText("別スケッチへ移動…", "Move to Another Sketch…"), disabled: mode !== "select" || Boolean(pendingCommandSession.current || constraintTargetSession.command) });
       }
       const editingFitPoint = target.kind === "point" && Boolean(splineEditing.current?.spline?.fitPoints.includes(target.item));
       if (target.kind === "spline" && splineEditing.current?.spline === target.item) {
@@ -4554,14 +4544,14 @@
   canvasContextController.start();
 
   const annotationCommandInput = window.AnnotationCommandInput.create({
-    getMode: () => mode, getPending: () => pendingCommand, getPendingConstraint: () => constraintTargetSession.command,
+    getMode: () => mode, getPending: pendingCommandSession.read, getPendingConstraint: () => constraintTargetSession.command,
     annotationCommand, canvasSelection, clearSelection, annotationDrag, updateUI, draw,
     startAnchorConstraint: startAnnotationAnchorConstraint,
     releasePanelFocus: () => { if (document.activeElement?.closest("#commandPanel")) document.activeElement.blur(); },
   });
   const constraintCommandInput = window.ConstraintCommandInput.create({
     canDragDimensionGroup: hit => Boolean(selectedDimensionLineGroup(hit.constraint)),
-    getPending: () => pendingCommand, getPendingConstraint: () => constraintTargetSession.command, canvasSelection, canvasHover, isDimensionConstraintCommandActive,
+    getPending: pendingCommandSession.read, getPendingConstraint: () => constraintTargetSession.command, canvasSelection, canvasHover, isDimensionConstraintCommandActive,
     beginDimensionDrag, retargetDistancePlaceWithOperand, startDistanceValueInput, constraintTargetHint,
     handleConstraintOperandClick, setHint, updateGeometrySelectionUI, draw,
   });
@@ -4609,7 +4599,7 @@
   const pointerInteractionController = window.PointerInteractionController.create({
     canvasNavigation, drawingPreview, canvasHover, clearSnap, draw, transientAuthoring, recordHistory,
     selectionRectangle, annotationDrag, referenceImageInteraction, dimensionDrag, geometryDrag, pointerHover,
-    getMode: () => mode, getPendingCommand: () => pendingCommand,
+    getMode: () => mode, getPendingCommand: pendingCommandSession.read,
     getPendingConstraintCommand: () => constraintTargetSession.command, setLastPointer: point => { lastPointerWorld = point; },
     updateHatchPreview, updateFilletRadiusPlacement, updatePendingDistanceRetargetHover, hitDimension, hitSketchIdentityElement,
     press: { discardMove: () => flushScheduledCanvasPointerMove({ discard: true }),
@@ -4658,7 +4648,7 @@
       doubleClick: e => { if (!pngExportCommand?.active) pointerInteractionController.doubleClick(e); },
     }, scheduler: pointerMoveScheduler, navigation: canvasNavigation,
     profileCommit: work => profileInteractionPhase("commit", work), closeContextMenu: closeCanvasContextMenu,
-    afterZoom: () => { if (pendingCommand && ["distance-value", "offset-value"].includes(pendingCommand.type)) syncDimensionValueInput(); },
+    afterZoom: () => { if (pendingCommandSession.current && ["distance-value", "offset-value"].includes(pendingCommandSession.current.type)) syncDimensionValueInput(); },
     screenToWorld, formatCoordinate: formatDisplayNumber, coordinateStatus: () => document.getElementById("statusCoordinates"),
   });
   canvasInputBinding.bind();
@@ -4668,7 +4658,7 @@
     getMode: () => mode, instances: geometryInstanceCommand, projection: sketchProjectionCommand,
     referenceImage: referenceImageInteraction, splineEditing, blockPlacement: blockPlacementCommand,
     annotationDrag: { active: () => annotationDrag.resizing || annotationDrag.handlesActive, cancel: () => { annotationDrag.reset(); updateUI(); draw(); } },
-    pending: { active: () => Boolean(pendingCommand), cancel: cancelPendingCommand },
+    pending: { active: () => Boolean(pendingCommandSession.current), cancel: cancelPendingCommand },
     constraint: { active: () => Boolean(constraintTargetSession.command), cancel: cancelConstraintTargetCommand },
     drawing: { active: hasActiveDrawOperation, cancel: cancelActiveDrawOperation, isToolMode: isDrawToolMode, exit: exitDrawMode },
     selection: { active: hasSelection, clear: () => { clearSelection(); setHint("選択を解除しました"); updateUI(); draw(); } },
@@ -4939,8 +4929,8 @@
   pngExportCommand = window.PngExportCommand.create({
     text: applicationText, save: (region, dpi) => pngFile.save(region, dpi / 96 * viewport.scale),
     viewScale: () => viewport.scale, setHint, refresh: draw,
-    begin: () => { pngPreviousMode = mode; mode = "png-export"; pendingCommand = { type: "png-export" }; },
-    end: () => { if (pendingCommand?.type === "png-export") pendingCommand = null; if (mode === "png-export") mode = pngPreviousMode; pngPreviousMode = null; },
+    begin: () => { pngPreviousMode = mode; mode = "png-export"; pendingCommandSession.replace({ type: "png-export" }); },
+    end: () => { if (pendingCommandSession.current?.type === "png-export") pendingCommandSession.clear(); if (mode === "png-export") mode = pngPreviousMode; pngPreviousMode = null; },
     resolvePoint: point => withGeometryReadCache(() => {
       const snap = drawingSnap.find(point, 10 / viewport.scale);
       return { point: snap ? { x: snap.x, y: snap.y } : point, snapped: Boolean(snap) };
@@ -4948,7 +4938,7 @@
   });
   document.getElementById("pngExportBtn").addEventListener("click", () => {
     flushScheduledCanvasPointerMove();
-    if (fileSession.busy || hasActiveDrawOperation() || pendingCommand || constraintTargetSession.command || mode === "block-place") {
+    if (fileSession.busy || hasActiveDrawOperation() || pendingCommandSession.current || constraintTargetSession.command || mode === "block-place") {
       setHint(applicationText("進行中の操作を完了またはキャンセルしてからPNG出力を開始してください", "Finish or cancel the current operation before exporting PNG"));
       return;
     }
@@ -6889,12 +6879,12 @@
         return {
           mode,
           pendingConstraintType: constraintTargetSession.command?.type || null,
-          pendingCommandType: pendingCommand?.type || null,
-          pendingPlacementPoint: pendingCommand?.type === "distance-place" && pendingCommand.pointer
-            ? { x: pendingCommand.pointer.x, y: pendingCommand.pointer.y }
+          pendingCommandType: pendingCommandSession.current?.type || null,
+          pendingPlacementPoint: pendingCommandSession.current?.type === "distance-place" && pendingCommandSession.current.pointer
+            ? { x: pendingCommandSession.current.pointer.x, y: pendingCommandSession.current.pointer.y }
             : null,
-          pendingCommandPreview: pendingCommand?.type === "fillet-radius-place"
-            ? pendingCommand.preview
+          pendingCommandPreview: pendingCommandSession.current?.type === "fillet-radius-place"
+            ? pendingCommandSession.current.preview
             : null,
           activeSnapLabel: drawingSnap.active?.label || null,
           centerlineTargetIds: centerlineCommand.targets.map((item) => item.id),
@@ -7266,15 +7256,15 @@
         const target = { kind: "line-length", line, p1, p2, value: line.length() };
         addDistanceConstraintFromTarget(target, line.length(), dimensionFromAnchor(target, { x: 0, y: -28 }), { sketchId: activeSketchId() });
         constraintTargetSession.replaceCommand({ type: "distance" });
-        pendingCommand = {
+        pendingCommandSession.replace({
           type: "distance-place",
           target,
           pointer: { x: 0, y: -54 },
           sketchId: activeSketchId(),
-        };
+        });
         startDistanceValueInput({ x: 0, y: -54 });
         return {
-          pendingType: pendingCommand?.type || null,
+          pendingType: pendingCommandSession.current?.type || null,
           inputHidden: dimensionValueInput.hidden,
           readOnlyCount: model.constraints.filter(isReadOnlyDimension).length,
           dimensionCount: model.constraints.filter(isDimensionConstraint).length,
@@ -8076,7 +8066,7 @@
         const constraints = model.constraints.filter((constraint) => constraint instanceof OffsetConstraint);
         const preview = offsetSelection.source && drawingPreview.pointer ? offsetDistanceFromPointer(offsetSelection.source, drawingPreview.pointer) : null;
         return {
-          pendingType: pendingCommand?.type || null,
+          pendingType: pendingCommandSession.current?.type || null,
           lineCount: model.lines.length,
           constraintCount: constraints.length,
           targets: constraints.map((constraint) => constraint.target),
@@ -8142,7 +8132,7 @@
         return {
           selectedCount: offsetSelection.entries.length,
           selectionCommitted: offsetSelection.committed,
-          pendingType: pendingCommand?.type || null,
+          pendingType: pendingCommandSession.current?.type || null,
           lineCount: model.lines.length,
           constraintCount: constraints.length,
           target: constraints[0]?.target ?? null,
@@ -8826,8 +8816,8 @@
         const constraints = model.constraints.filter((constraint) =>
           constraint instanceof LineCircleDistanceConstraint || constraint instanceof ConcentricRadiusDifferenceConstraint);
         return {
-          pendingCommandType: pendingCommand?.type || null,
-          previewTargetKind: pendingCommand?.target?.kind || null,
+          pendingCommandType: pendingCommandSession.current?.type || null,
+          previewTargetKind: pendingCommandSession.current?.target?.kind || null,
           operandKinds: constraintTargetSession.operands.map((operand) => operand.kind),
           constraints: serialized.constraints.filter((constraint) =>
             constraint.type === "lineCircleDistance" || constraint.type === "concentricRadiusDifferenceDimension"),
@@ -8882,9 +8872,9 @@
           dimensionCount: constraints.length,
           target: constraint?.target ?? null,
           inputHidden: Boolean(dimensionValueInput?.hidden),
-          pendingCommandType: pendingCommand?.type || null,
-          previewTargetKind: pendingCommand?.target?.kind || null,
-          previewPointer: pendingCommand?.pointer ? { ...pendingCommand.pointer } : null,
+          pendingCommandType: pendingCommandSession.current?.type || null,
+          previewTargetKind: pendingCommandSession.current?.target?.kind || null,
+          previewPointer: pendingCommandSession.current?.pointer ? { ...pendingCommandSession.current.pointer } : null,
         };
       },
       dimensionCommandLineDragState() {
@@ -8893,7 +8883,7 @@
         return {
           anchor: constraint && target ? dimensionAnchor(target, constraint.dimension) : null,
           pendingConstraintType: constraintTargetSession.command?.type || null,
-          pendingCommandType: pendingCommand?.type || null,
+          pendingCommandType: pendingCommandSession.current?.type || null,
           selectedLineIds: canvasSelection.lines.map((line) => line.id),
           dragging: dimensionDrag.active,
         };

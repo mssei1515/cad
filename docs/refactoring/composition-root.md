@@ -6,6 +6,10 @@
 
 ## 現在の再開地点（2026-10-12）
 
+PendingCommandSessionへ共有の保留操作Objectの保持・読取り・置換・通知なしクリアと取消経路を集約した。appの可変pendingCommandを廃止し、各commandのgetPending／setPendingへSessionのread／replaceを接続する。Objectを複製せずbuffer／pointerの直接更新を保持する。取消ではInstance配置解除→注記／PNG専用command委譲またはOffset選択／pointer解除→pending解除→入力非表示→hint→Toolbar→拘束ボタン→drawの既存順序を維持する。PNG busyの拒否は強制クリアせず、Document初期化／Sketch切替／削除の直接clearを取消と混同しない。app全体の変更はSession接続と取消委譲だけであること、取消本体は明示した依存port以外元処理と一致することを照合した。初期化前の入力表示参照を遅延callbackへ修正し、修正版の起動確認と全検証が成功した。app.jsは9,412→9,402行（10行減、今回の合計1,656行減）。構文441ファイル・単体1,201件・全E2E551件成功（exit 0、24.2分、拘束ドラッグ回帰12.4分）。ログはcad-pending-session-{check,unit}.logとcad-pending-session-full-e2e.log。現在の作業branch全体をこの状態で検証しており、旧checkpointの成功件数を流用していない。全体目標は未完了。残る共有mode、command生成・接続、テスト用APIの機能ごとの境界は今後の対象とする。
+
+### 前回の区切り
+
 既存寸法の編集開始をDimensionValueCommand.startEditへ、線長寸法のダブルクリック入力開始をDimensionPlacementCommand.targetDoubleClickへ集約した。新規ファイルは増やさず、既存commandへ開始入口を揃える。権限拒否の処理済み返却、hit／target検査、読取専用ではpendingを置換しない動作、保存配置／hit配置／既定値の優先順位、式の数値fallback、選択とdrag解除→hint→draw→focusを維持する。ダブルクリックでは単独Lineとhit一致を確認し、配置開始後だけ既定位置から値入力へ進む。2処理の本体は明示した依存adapter以外元処理と一致。app.jsは9,444→9,412行（32行減、今回の合計1,646行減）。構文439ファイル・単体1,195件・関連E2E180件成功（exit 0、2.5分）。ログはcad-dimension-entry-{check,unit,e2e}.log。全E2Eはこの単位では未実行。全体目標は未完了。選択／drag解除のportと共有pendingの取得・反映、依存の多いcommandの生成・接続はappに残り、今後の状態所有と組立て境界の整理対象とする。
 
 ### 前回の区切り
