@@ -31,7 +31,7 @@ const files = [
   "src/commands/offset_command.js",
   "src/editing/offset_selection.js",
   "tests/unit/offset-selection.test.js",
-  "src/commands/dimension_value_command.js",
+  "src/commands/dimension_placement_command.js", "tests/unit/dimension-placement-command.test.js", "src/commands/dimension_value_command.js",
   "tests/unit/dimension-value-command.test.js",
   "src/ui/dimension_input_controller.js",
   "tests/unit/dimension-input-controller.test.js",

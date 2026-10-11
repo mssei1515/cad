@@ -3393,59 +3393,25 @@
     return true;
   }
 
-  function startDistanceCommand() {
-    if (!guardSketchEdit(activeSketchId(), "create") || !guardSelectionEdit("constraint")) return;
-    if (constraintTargetSession.operands.length === 0) constraintTargetSession.replaceOperands(constraintOperandsFromSelection());
-    const resolution = constraintResolutionFromCurrentSelection("distance");
-    if (!resolution) return;
-    if (resolution.error) {
-      setHint(resolution.error, "error");
-      log(resolution.error);
-      return;
-    }
-    mode = "select";
-    lineCommand.reset();
-    rectangleCommand.reset();
-    filletCommand.reset();
-    circularCommands.resetCircle();
-    resetArcCommandState();
-    drawingPreview.reset();
-    constraintTargetSession.replaceCommand({ type: "distance" });
-    pendingCommand = {
-      type: "distance-place",
-      target: resolution.target,
-      resolution,
-      pointer: defaultDimensionForTarget(resolution.target),
-      operands: resolution.operands || constraintTargetSession.operands.slice(),
-      referenceSketchId: resolution.referenceSketchId,
-      sketchId: resolution.sketchId,
-      readOnlyDimension: resolution.readOnlyDimension === true,
-    };
-    updateConstraintButtons();
-    updateToolbar();
-    setHint("寸法線の位置をクリックしてください");
-    draw();
-  }
+  const dimensionPlacementCommand = window.DimensionPlacementCommand.create({
+    session: constraintTargetSession, getPending: () => pendingCommand, setPending: value => { pendingCommand = value; },
+    canStart: () => guardSketchEdit(activeSketchId(), "create") && guardSelectionEdit("constraint"),
+    prepareStart: () => {
+      mode = "select";
+      lineCommand.reset(); rectangleCommand.reset(); filletCommand.reset(); circularCommands.resetCircle();
+      resetArcCommandState(); drawingPreview.reset();
+    },
+    selectMode: () => { mode = "select"; },
+    constraintOperandsFromSelection, constraintResolutionFromCurrentSelection, selectedPrimitives,
+    placement: dimensionPlacement, angleDegrees, angleDimensionAngles, readOnlyDimensionConstraintForPlacement,
+    addReadOnlyDimensionConstraint, activeSketchId, syncSelectionFromConstraintOperands,
+    makeConstraintOperand, hitConstraintOperand, sameConstraintOperand, resolveConstraintIntent,
+    hideDimensionValueInput, syncDimensionValueInput, focusDimensionValueInput,
+    applicationText, setHint, log, updateConstraintButtons, updateToolbar, draw,
+  });
+  function startDistanceCommand() { return dimensionPlacementCommand.startDistanceCommand(); }
 
-  function startPrimitiveDimensionCommand(kind) {
-    if (!guardSketchEdit(activeSketchId(), "create") || !guardSelectionEdit("constraint")) return;
-    const primitive = selectedPrimitives()[0];
-    if (!primitive) return;
-    const value = kind === "diameter" ? primitive.radius() * 2 : primitive.radius();
-    mode = "select";
-    lineCommand.reset();
-    rectangleCommand.reset();
-    filletCommand.reset();
-    circularCommands.resetCircle();
-    resetArcCommandState();
-    drawingPreview.reset();
-    constraintTargetSession.replaceCommand({ type: "distance" });
-    pendingCommand = { type: "distance-place", target: { kind, primitive, value }, pointer: defaultDimensionForTarget({ kind, primitive, value }) };
-    updateConstraintButtons();
-    updateToolbar();
-    setHint("寸法線の位置をクリックしてください");
-    draw();
-  }
+  function startPrimitiveDimensionCommand(kind) { return dimensionPlacementCommand.startPrimitiveDimensionCommand(kind); }
 
   function cancelPendingCommand(message = "コマンドをキャンセルしました") {
     geometryInstanceCommand.clearPlacement();
@@ -3464,71 +3430,9 @@
     draw();
   }
 
-  function startDistanceValueInput(pointer) {
-    if (!pendingCommand || pendingCommand.type !== "distance-place") return;
-    const referenceSketchId = pendingCommand.referenceSketchId;
-    const sketchId = pendingCommand.sketchId;
-    const readOnlyDimension = pendingCommand.readOnlyDimension === true;
-    const dimension = dimensionWithLabelAt(
-      pendingCommand.target,
-      applyDefaultCircleDimensionLabelOffset(pendingCommand.target, dimensionFromAnchor(pendingCommand.target, pointer)),
-      pointer,
-    );
-    const target = { ...pendingCommand.target, dimensionAxis: dimension.axis };
-    const value =
-      pendingCommand.target.kind === "point-point" && dimension.axis === "x"
-        ? Math.abs(pendingCommand.target.p2.x - pendingCommand.target.p1.x)
-        : pendingCommand.target.kind === "point-point" && dimension.axis === "y"
-          ? Math.abs(pendingCommand.target.p2.y - pendingCommand.target.p1.y)
-          : pendingCommand.target.kind === "angle"
-            ? angleDegrees(angleDimensionAngles(pendingCommand.target, pointer, dimension).signed)
-          : pendingCommand.target.value;
-    const readOnlyConstraint = readOnlyDimensionConstraintForPlacement(target, value, dimension, { referenceSketchId, sketchId, readOnlyDimension });
-    if (readOnlyConstraint) {
-      pendingCommand = null;
-      hideDimensionValueInput();
-      addReadOnlyDimensionConstraint(readOnlyConstraint, sketchId || activeSketchId(), readOnlyDimension ? "参照元の測定寸法" : referenceSketchId ? "重複参照寸法" : "重複寸法");
-      return;
-    }
-    pendingCommand = {
-      type: "distance-value",
-      target,
-      dimension,
-      buffer: String(value),
-      editing: false,
-      referenceSketchId,
-      sketchId,
-    };
-    setHint(applicationText("寸法値を入力中: 数式は = から開始し、Parameter参照はダブルクオーテーションで括ります。Canvas寸法のクリックで参照を挿入できます", "Editing dimension: begin expressions with = and enclose parameter references in double quotes. Click a canvas dimension to insert a reference."));
-    updateConstraintButtons();
-    syncDimensionValueInput();
-    draw();
-    focusDimensionValueInput();
-  }
+  function startDistanceValueInput(pointer) { return dimensionPlacementCommand.startDistanceValueInput(pointer); }
 
-  function retargetDistancePlaceWithOperand(pointer, hits = {}) {
-    if (pendingCommand?.type !== "distance-place" || !["line-length", "radius", "diameter"].includes(pendingCommand.target.kind)) return false;
-    let baseOperands = pendingCommand.operands?.length ? pendingCommand.operands : [];
-    if (baseOperands.length === 0 && pendingCommand.target.kind === "line-length") {
-      baseOperands = [makeConstraintOperand("line", { line: pendingCommand.target.line })];
-    } else if (baseOperands.length === 0 && (pendingCommand.target.kind === "radius" || pendingCommand.target.kind === "diameter")) {
-      baseOperands = [makeConstraintOperand("primitive", { primitive: pendingCommand.target.primitive })];
-    }
-    baseOperands = baseOperands.filter(Boolean);
-    if (baseOperands.length !== 1) return false;
-    const operand = hitConstraintOperand(pointer, "distance", hits);
-    if (!operand || sameConstraintOperand(baseOperands[0], operand)) return false;
-    const resolution = resolveConstraintIntent("distance", [baseOperands[0], operand]);
-    if (resolution?.error) {
-      setHint(resolution.error, "error");
-      return true;
-    }
-    if (!resolution?.target) return false;
-    startDistanceResolution(resolution, null);
-    pendingCommand.pointer = pointer;
-    pendingCommand.dimension = null;
-    return true;
-  }
+  function retargetDistancePlaceWithOperand(pointer, hits = {}) { return dimensionPlacementCommand.retargetDistancePlaceWithOperand(pointer, hits); }
 
   function applyReferenceHoverTarget(referenceTarget) {
     canvasHover.update({ point: referenceTarget?.kind === "point" ? referenceTarget.point : null });
@@ -4572,45 +4476,7 @@
     return { type, constraint, sketchId: activeSketchId() };
   }
 
-  function startDistanceResolution(resolution, pointer) {
-    if (!resolution || resolution.error || !resolution.target) {
-      if (resolution?.error) setHint(resolution.error, "error");
-      return false;
-    }
-    mode = "select";
-    const initialDimension = pointer ? null : defaultDimensionForTarget(resolution.target);
-    const initialPointer = pointer || dimensionAnchor(resolution.target, initialDimension);
-    if (resolution.operands) {
-      constraintTargetSession.replaceOperands(resolution.operands.slice());
-      syncSelectionFromConstraintOperands();
-    }
-    constraintTargetSession.replaceCommand({ type: "distance" });
-    pendingCommand = {
-      type: "distance-place",
-      target: resolution.target,
-      resolution,
-      pointer: initialPointer,
-      dimension: initialDimension,
-      operands: resolution.operands || constraintTargetSession.operands.slice(),
-      referenceSketchId: resolution.referenceSketchId,
-      sketchId: resolution.sketchId,
-      readOnlyDimension: resolution.readOnlyDimension === true,
-    };
-    updateConstraintButtons();
-    updateToolbar();
-    const awaitingSecondOperand = (resolution.operands || []).length === 1;
-    setHint(
-      resolution.referenceSketchId
-        ? "参照寸法線の位置をクリックしてください"
-        : awaitingSecondOperand && resolution.target.kind === "line-length"
-          ? "仮寸法の位置をマウスで調整し、空白をクリックして線長寸法を確定してください。2本目の線で線間・角度寸法、円で円中心距離寸法になります。"
-          : awaitingSecondOperand && (resolution.target.kind === "radius" || resolution.target.kind === "diameter")
-            ? "仮寸法の位置をマウスで調整し、空白をクリックして単独寸法を確定してください。線で円中心距離寸法、同心の円または円弧で半径差寸法になります。"
-          : "寸法線の位置をクリックしてください",
-    );
-    draw();
-    return true;
-  }
+  function startDistanceResolution(resolution, pointer) { return dimensionPlacementCommand.startDistanceResolution(resolution, pointer); }
 
   function commitConstraintResolution(resolution, pointer = null) {
     if (!guardSketchEdit(resolution?.sketchId || activeSketchId(), "constraint")) return false;

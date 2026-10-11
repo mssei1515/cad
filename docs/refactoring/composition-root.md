@@ -6,6 +6,10 @@
 
 ## 現在の再開地点（2026-10-11）
 
+DimensionPlacementCommandへ選択／半径・直径／解決済み意図からの配置開始、追加対象による再解決、値入力または読取登録への進行を分離。既存の配置計算・読取判定・対象sessionへ委譲し、開始経路ごとのdraft解除／mode変更と初期pointerの違い、draw後のfocus、retarget後のpending更新順序を維持する。5処理の本体は明示した依存adapter以外元処理と一致。app.jsは10,203→10,069行（134行減、今回の合計989行減）。構文427ファイル・単体1,141件・関連E2E165件成功（exit 0、2.3分）。ログはcad-dimension-placement-{check,unit,e2e}.log。全E2Eはこの単位では未実行。全体目標は未完了。共有pendingCommandは他種別と分離しておらず、appのget／set adapterが残る。操作依存も多いため、session／入力表示の所有を整理する際に組立て境界を再確認する。
+
+### 前回の区切り
+
 DimensionReadOnlyQueryへ寸法配置候補の読取判定を分離し、ConstraintRedundancyへ候補の一時追加／解析／除去を集約。明示測定→単一Block→owner／参照付与→重複probeの順序と、候補Object・残存拘束の同一性、配列置換と表示診断を更新しない契約を維持する。appは生成／接続とhoisted入口を保持。app.jsは10,210→10,203行（7行減、今回の合計855行減）。行数以上に、一時モデル書込みの所有者とUIを持たない判定境界を揃える単位。構文425ファイル・単体1,135件・関連E2E165件成功（exit 0、2.3分）。ログはcad-readonly-query-{check,unit,e2e}.log。全E2Eはこの単位では未実行。全体目標は未完了。
 
 ### 前回の区切り
