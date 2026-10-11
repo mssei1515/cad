@@ -4838,6 +4838,30 @@
 
   function installTestHooks() {
     if (!new URLSearchParams(window.location.search).has("test")) return;
+    function readTestHistory() {
+      const history = activeEditHistory();
+      return {
+        undoCount: history.undoCount,
+        redoCount: history.redoCount,
+        blockEditing: Boolean(blockEditor.current),
+        undoDisabled: document.getElementById("undoBtn")?.disabled,
+        redoDisabled: document.getElementById("redoBtn")?.disabled,
+        constructionLineMode: constructionCommand.enabled,
+        constructionButtonActive: document.getElementById("toolConstructionLine")?.classList.contains("active"),
+      };
+    }
+    const drawingOrderFixture = window.DrawingOrderTestDriver.createFixture({
+      drawingOrder: window.DrawingOrder,
+      resetModelState, viewport, addPoint, addLine, currentScope: workspace.current, hatchGeometryQuery,
+      DEFAULT_SKETCH_ID, DEFAULT_HATCH_APPEARANCE, ROOT_SKETCH_ID, createEmptyBlockDefinition, Point, Line,
+      appendDefinition: definition => documentModel.blockDefinitions.push(definition), normalizeGeometryInstance, geometryRefForItem,
+      invalidateBlockProjectionCache, fitSketchToViewport, resetHistory, updateUI, draw, canvas, worldToCanvasScreen, serializeModel,
+    });
+    const drawingOrderInteraction = window.DrawingOrderTestDriver.createInteraction({
+      drawingOrder: window.DrawingOrder,
+      currentScope: workspace.current, hatchGeometryQuery, isRootSketch, serializeModel, readHistory: readTestHistory,
+      clearSelection, canvasSelection, updateUI, draw, reorderSelectedDrawingObjects,
+    });
     const hatchTestDriver = window.HatchTestDriver.create({
       resetModelState, viewport, addPoint, addLine, addCircle, currentScope: workspace.current,
       fitSketchToViewport, activeSketchId, resetHistory, updateUI, draw, canvas, worldToCanvasScreen, serializeModel,
@@ -4907,111 +4931,10 @@
       exerciseSplineTransferForTest: splineTransferDriver.exercise,
       exerciseSplineConstraintsForTest: splineTestDriver.exerciseConstraints,
       resetForHatchTest: hatchTestDriver.reset,
-      resetForDrawingOrderTest() {
-        resetModelState();
-        viewport.update({ scale: 3 });
-        const corners = [
-          addPoint(0, 0, false, "endpoint"), addPoint(120, 0, false, "endpoint"),
-          addPoint(120, 80, false, "endpoint"), addPoint(0, 80, false, "endpoint"),
-        ];
-        const boundaryLines = [[0, 1], [1, 2], [2, 3], [3, 0]].map(([first, second]) => {
-          const line = addLine(corners[first], corners[second]);
-          line.appearance = { color: "#008000", lineWidth: 4 };
-          return line;
-        });
-        const face = findHatchFaceInIndex(createHatchRegionIndex(hatchPrimitivesForScope(model, DEFAULT_SKETCH_ID)), { x: 60, y: 40 });
-        const crossLine = addLine(addPoint(20, 40, false, "endpoint"), addPoint(100, 40, false, "endpoint"));
-        crossLine.appearance = { color: "#ff0000", lineWidth: 4 };
-        const hatch = {
-          id: "H1",
-          sketchId: DEFAULT_SKETCH_ID,
-          drawingOrder: null,
-          seed: { x: 60, y: 25 },
-          boundaryLoops: face.boundaryLoops,
-          appearance: { ...DEFAULT_HATCH_APPEARANCE, patternType: "solid", color: "#0000ff", opacity: 1 },
-        };
-        model.hatches.push(hatch);
-        model.nextHatchIndex = 2;
-
-        const definition = createEmptyBlockDefinition("Drawing Order Block");
-        const bp1 = new Point("BP1", 20, 62, false, "endpoint");
-        const bp2 = new Point("BP2", 45, 62, false, "endpoint");
-        bp1.sketchId = DEFAULT_SKETCH_ID;
-        bp2.sketchId = DEFAULT_SKETCH_ID;
-        const blockLine = new Line("BL1", bp1, bp2);
-        blockLine.sketchId = DEFAULT_SKETCH_ID;
-        definition.points.push(bp1, bp2);
-        definition.lines.push(blockLine);
-        documentModel.blockDefinitions.push(definition);
-        const block = { id: "BI1", definitionId: definition.id, sketchId: DEFAULT_SKETCH_ID, x: 0, y: 0, rotation: 0, fixed: false, rotationLocked: false, enabledSketchIds: [DEFAULT_SKETCH_ID], appearanceOverride: {} };
-        model.blockInstances.push(block);
-        const derived = normalizeGeometryInstance({ id: "MI1", type: "mirror", sketchId: DEFAULT_SKETCH_ID, sources: [geometryRefForItem(crossLine)], axis: geometryRefForItem(boundaryLines[3]), appearanceOverride: {} });
-        model.geometryInstances.push(derived);
-
-        model.sketches.push({ id: "S2", name: "Other Sketch", parentSketchId: ROOT_SKETCH_ID, kind: "sketch", appearance: {}, constructionAppearance: {}, dimensionAppearance: {}, visible: true });
-        model.activeSketchId = "S2";
-        const otherLine = addLine(addPoint(15, 65, false, "endpoint"), addPoint(105, 65, false, "endpoint"));
-        model.activeSketchId = DEFAULT_SKETCH_ID;
-        ensureDrawingOrderState(model);
-        invalidateBlockProjectionCache();
-        fitSketchToViewport(DEFAULT_SKETCH_ID, 160);
-        resetHistory("drawing order test");
-        updateUI();
-        draw();
-        const rect = canvas.getBoundingClientRect();
-        const client = (point) => {
-          const screen = worldToCanvasScreen(point);
-          return { x: rect.left + screen.x, y: rect.top + screen.y };
-        };
-        return {
-          hatchClient: client({ x: 60, y: 25 }),
-          centerClient: client({ x: 60, y: 40 }),
-          boundaryClient: client({ x: 60, y: 0 }),
-          insideBoundaryClient: client({ x: 60, y: 3 }),
-          crossLineId: crossLine.id,
-          otherLineId: otherLine.id,
-          serialized: serializeModel(),
-        };
-      },
-      drawingOrderStateForTest() {
-        ensureDrawingOrderState(model);
-        const kindFor = (item) => model.hatches.includes(item) ? "hatch"
-          : model.lines.includes(item) ? "line"
-          : model.circles.includes(item) ? "circle"
-          : model.arcs.includes(item) ? "arc"
-          : model.splines.includes(item) ? "spline"
-          : model.blockInstances.includes(item) ? "block"
-          : "geometry-instance";
-        const bySketch = Object.fromEntries(model.sketches.filter((sketch) => !isRootSketch(sketch)).map((sketch) => [sketch.id,
-          drawingOrderItemsForScope(model, sketch.id)
-            .slice()
-            .sort((a, b) => a.drawingOrder - b.drawingOrder)
-            .map((item) => ({ kind: kindFor(item), id: item.id, drawingOrder: item.drawingOrder })),
-        ]));
-        const firstHatch = model.hatches[0] || null;
-        const resolved = firstHatch ? resolvedHatchBoundary(firstHatch) : null;
-        return {
-          bySketch,
-          serialized: structuredClone(serializeModel()),
-          hatchBoundaryHitExclusionScreenPx: firstHatch ? hatchBoundaryHitExclusionScreenPx(firstHatch) : null,
-          hatchSelectableAtBoundary: firstHatch && resolved ? hatchContainsSelectablePoint(firstHatch, resolved, { x: 60, y: 0 }) : null,
-          history: this.historyState(),
-        };
-      },
-      selectDrawingOrderObjectForTest(kind, id) {
-        clearSelection();
-        if (kind === "line") canvasSelection.set("lines", model.lines.filter((item) => item.id === id));
-        else if (kind === "hatch") canvasSelection.set("hatches", model.hatches.filter((item) => item.id === id));
-        else if (kind === "block") canvasSelection.set("blockInstances", model.blockInstances.filter((item) => item.id === id));
-        else if (kind === "geometry-instance") canvasSelection.set("geometryInstances", model.geometryInstances.filter((item) => item.id === id));
-        updateUI({ refreshAnalysis: false });
-        draw();
-        return this.drawingOrderStateForTest();
-      },
-      reorderDrawingOrderForTest(action) {
-        reorderSelectedDrawingObjects(action);
-        return this.drawingOrderStateForTest();
-      },
+      resetForDrawingOrderTest: drawingOrderFixture.reset,
+      drawingOrderStateForTest: drawingOrderInteraction.state,
+      selectDrawingOrderObjectForTest: drawingOrderInteraction.select,
+      reorderDrawingOrderForTest: drawingOrderInteraction.reorder,
       resetForSolidHatchHoleTest: hatchTestDriver.resetSolidHole,
       resetForProjectedHatchTest: hatchProjectionTestDriver.reset,
       projectedHatchStateForTest: hatchProjectionTestDriver.state,
@@ -7097,18 +7020,7 @@
       annotationDragActive() {
         return annotationDrag.inspect();
       },
-      historyState() {
-        const history = activeEditHistory();
-        return {
-          undoCount: history.undoCount,
-          redoCount: history.redoCount,
-          blockEditing: Boolean(blockEditor.current),
-          undoDisabled: document.getElementById("undoBtn")?.disabled,
-          redoDisabled: document.getElementById("redoBtn")?.disabled,
-          constructionLineMode: constructionCommand.enabled,
-          constructionButtonActive: document.getElementById("toolConstructionLine")?.classList.contains("active"),
-        };
-      },
+      historyState: readTestHistory,
       resetForActiveSketchDimensionVisibility() {
         resetModelState();
         const firstSketchId = activeSketchId();

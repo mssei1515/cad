@@ -6,6 +6,10 @@
 
 ## 現在の再開地点（2026-10-12）
 
+描画順のfixture／観測／選択／並替えの四つのテスト支援APIをDrawingOrderTestDriverへ分離。createFixtureとcreateInteractionを独立して生成し、操作観測に図形生成・Block定義依存を持ち込まない。現在scope・既存DrawingOrder／Hatch境界／Selection／並替えcommandへ委譲し、fixture座標・ID・外観・一時activeSketch切替・cache／fit／履歴／表示の順を保持する。this経由のhook間参照をDriver内stateと明示した共有test履歴readerへ置換し、既存historyState APIも同じreaderに接続。DrawingOrderは後期script定義のため生成時に注入。四つの本体と共有履歴readerの元処理との一致を確認し、classic script／構文／E2E読込一覧を更新。app.jsは8,746→8,658行（88行減、今回の合計2,400行減）。構文452ファイル・単体1,241件・関連E2E157件成功（exit 0、2.3分）。ログはcad-drawing-order-test-driver-{check,unit,e2e}.log。新しい単体テストは追加せず、既存drawing-order／unified-ui／hatching／blocksのE2Eで実利用を検証。全E2Eはこの単位では未実行。全体目標は未完了。
+
+### 前回の区切り
+
 HatchのネストBlock投影fixture／状態照会とコピー・貼付け／Block化の検証手順を、既存HatchTestDriver.createProjection／createTransferへ分離。独立した生成入口により、転送に投影の型・描画依存を持ち込まない。現在scopeの再照会と元Hatch／境界Lineの参照を保持し、定義追加・projection cache無効化・UI／fit／draw・既存Clipboard／Block操作の順を維持する。元の三つの本体との一致を確認し、既存API名と結果を直接接続。app.jsは8,804→8,746行（58行減、今回の合計2,312行減）。構文451ファイル・単体1,241件・関連E2E163件成功（exit 0、2.4分）。ログはcad-hatch-projection-transfer-driver-{check,unit,e2e}.log。新しい単体テストは追加せず、全利用箇所のhatching／sketch-moveとunified-ui／blocksの既存E2Eで実利用を検証。全E2Eはこの単位では未実行。全体目標は未完了。
 
 ### 前回の区切り
