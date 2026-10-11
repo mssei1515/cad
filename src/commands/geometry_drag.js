@@ -38,6 +38,7 @@
         draw();
         return;
       }
+      session.syncAnnotation?.();
       const dependentResult = solveReferenceDependentSketches(session.sketchId || activeSketchId());
       setHint(dependentResult.success
         ? applicationText("ドラッグ中: 拘束を保ちながら調整しています", "Dragging: maintaining constraints")
@@ -52,7 +53,7 @@
       const completedLabel = dragLabel(completed);
       session = null;
       endPointer(event.pointerId);
-      complete(completed, event, completedLabel);
+      try { complete(completed, event, completedLabel); } finally { completed.onEnd?.(); }
       return true;
     }
 
@@ -72,6 +73,7 @@
         return;
       }
       const result = solveFinalDragSession(session);
+      session.syncAnnotation?.();
       normalizeArcSweeps();
       const invalidSpline = currentScope().splines.find((spline) => !spline.curve().valid);
       if (!result.success || result.errorNorm > acceptError || invalidSpline) {
@@ -96,6 +98,7 @@
         draw();
         return;
       }
+      session.syncAnnotation?.();
       const dependentResult = stabilized.dependent;
       const analysis = refreshConstraintAnalysis();
       const stable = analysis.analysis.stable && dependentResult.success;
@@ -120,7 +123,7 @@
 
     return Object.freeze({
       begin, update, finish,
-      reset: () => { session = null; },
+      reset: () => { session?.onEnd?.(); session = null; },
       get active() { return Boolean(session); },
       get label() { return session ? dragLabel(session) : ""; },
       isCenter: (point) => Boolean(["circle", "arc", "arc-endpoint"].includes(session?.kind) && session.item?.center === point),

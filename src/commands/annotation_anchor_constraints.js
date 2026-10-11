@@ -20,15 +20,15 @@
     })).filter(item => item.type === "fixed" ? Number.isFinite(item.x) && Number.isFinite(item.y) : Boolean(item.geometryRef) && (!item.type.startsWith("distance") || item.type.startsWith("distance-") && item.type !== "distance-line" || item.value >= 0));
   }
   const refs = element => [...(element.type === "leader" && element.geometryRef ? [element.geometryRef] : []), ...normalize(element.anchorConstraints).flatMap(item => [item.geometryRef, item.axisRef].filter(Boolean))];
-  function solvePlacement(element, base, resolveRef, strict = false) {
+  function solvePlacement(element, base, resolveRef, strict = false, collectOnly = false) {
     const items = normalize(element.anchorConstraints), G = window.GeometrySolver;
-    const point = new G.Point("annotation-anchor", base.x, base.y), constraints = [], variables = [{ object: point, prop: "x" }, { object: point, prop: "y" }];
+    const point = new G.Point("annotation-anchor:" + element.id, base.x, base.y), constraints = [], variables = [{ object: point, prop: "x" }, { object: point, prop: "y" }];
     const rotation = element.annotationTransformRotation || 0, cos = Math.cos(rotation), sin = Math.sin(rotation), origin = element.annotationTransformOrigin || { x: 0, y: 0 };
     const local = p => ({ x: (p.x - origin.x) * cos + (p.y - origin.y) * sin, y: -(p.x - origin.x) * sin + (p.y - origin.y) * cos });
     for (const item of items) {
       const target = item.type === "fixed" ? { x: origin.x + item.x * cos - item.y * sin, y: origin.y + item.x * sin + item.y * cos } : resolveRef(item.geometryRef);
       if (!target) return { point: base, valid: false };
-      const reference = item.endpoint ? window.GeometryKernel.arcEndpointPoint(target, item.endpoint) : target;
+      const reference = item.endpoint ? { get x() { return window.GeometryKernel.arcEndpointPoint(target, item.endpoint).x; }, get y() { return window.GeometryKernel.arcEndpointPoint(target, item.endpoint).y; } } : target;
       let relation;
       if (["coincident", "fixed", "endpoint"].includes(item.type)) relation = new G.CoincidentConstraint(point, reference);
       else if (["horizontal", "vertical", "distance-x", "distance-y"].includes(item.type)) {
@@ -52,8 +52,12 @@
         relation = new G.SymmetryConstraint(point, reference, axis);
       }
       if (!relation) return { point: base, valid: false };
+      relation.sketchId = element.sketchId;
+      relation.annotationGeometryNodes = [point, target, ...(item.axisRef ? [resolveRef(item.axisRef)] : [])];
       constraints.push(relation);
     }
+    point.sketchId = element.sketchId;
+    if (collectOnly) return { point, constraints, variables, valid: true };
     const solver = new G.ConstraintSolver({ points: [point], constraints, lines: [] });
     solver.maxIterations = 100;
     const result = solver.solveSubset({ variables, constraints });
@@ -61,6 +65,7 @@
     const independent = !strict || solver.constraintRankState({ variables, constraints }).rank >= items.reduce((sum, item) => sum + degree(item.type), 0) + variables.length - 2;
     return { point: { x: point.x, y: point.y }, valid: valid && independent };
   }
+  function createDragGeometry(element, base, resolveRef) { return solvePlacement(element, base, resolveRef, false, true); }
   function resolve(element, base, resolveRef) {
     const items = normalize(element.anchorConstraints);
     if (!items.length) return base;
@@ -158,5 +163,5 @@
     }
     return Object.freeze({ start, click, readState, get active() { return active(); }, onAction: action => action === "finish" ? finish() : cancel(), onSetting: (key, value) => { if (active() && ["axis", "value"].includes(key)) { draft[key] = value; draw(); } }, onSelect: () => {}, reset: () => { draft = null; } });
   }
-  window.AnnotationAnchorConstraints = Object.freeze({ POSITIONS, LABELS, normalize, resolve, solvePlacement, axes, degree, refs, create });
+  window.AnnotationAnchorConstraints = Object.freeze({ POSITIONS, LABELS, normalize, resolve, solvePlacement, createDragGeometry, axes, degree, refs, create });
 })();

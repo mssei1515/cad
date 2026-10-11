@@ -105,3 +105,15 @@ test('whole leader drag converts display displacement at non-unit annotation sca
   assert.equal(f.item.x, original.x + 10); assert.equal(f.item.y, original.y - 6);
   assert.deepEqual(f.item.start, original.start);
 });
+
+test('coincident geometry drag delegates without starting a competing annotation session; handles remain independent', () => {
+  const item = { id: 'AN1', type: 'text', x: 10, y: 20 }, selection = { annotations: [item], set(key, value) { this[key] = value; } };
+  let delegated = 0;
+  const command = sandbox.window.AnnotationDrag.create({ canvasSelection: selection, canEdit: () => true,
+    beginConstrainedDrag: (event, element, pointer) => { assert.equal(element, item); assert.equal(pointer.x, 3); delegated++; return true; },
+    setHint() {}, draw() {}, beginPointer() { throw new Error('Annotation drag must not capture the delegated pointer'); } });
+  command.begin({ pointerId: 1 }, { element: item, type: 'text', part: 'label' }, { x: 3, y: 4 });
+  assert.equal(delegated, 1); assert.equal(command.active, false); assert.equal(selection.annotations[0], item);
+  command.begin({ pointerId: 1 }, { element: item, type: 'text', part: 'frame-enable' }, { x: 3, y: 4 });
+  assert.equal(delegated, 1); assert.equal(command.handlesActive, true);
+});

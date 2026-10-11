@@ -132,3 +132,18 @@ test('successful moved Block completion invalidates projection before parameters
   assert.equal(f.events[9].args[0], 'ブロック移動ドラッグ');
   assert.equal(f.command.finish(event), false);
 });
+
+test('annotation solve input is released on completion, failure and cancellation', () => {
+  for (const mode of ['finish', 'failure', 'reset']) {
+    const f = fixture(); let synced = 0, ended = 0;
+    f.plan.syncAnnotation = () => { synced++; };
+    f.plan.onEnd = () => { ended++; };
+    f.command.begin(event, f.plan); f.command.update({ x: 3, y: 0 });
+    assert.equal(synced, 1);
+    if (mode === 'failure') f.state.final = { success: false, errorNorm: 1 };
+    if (mode === 'reset') f.command.reset(); else f.command.finish(event);
+    assert.equal(ended, 1); assert.equal(f.command.active, false);
+    f.command.reset(); assert.equal(ended, 1);
+    if (mode === 'finish') assert.equal(synced, 3);
+  }
+});

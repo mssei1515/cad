@@ -285,3 +285,71 @@ for (const leader of [false, true]) test(`enabled ${leader ? 'leader' : 'text'} 
   await expect.poll(pixels).toEqual([white, white]);
   expect((await data(page)).annotations).toEqual(before.annotations);
 });
+
+for (const leader of [false, true]) test(`coincident ${leader ? 'leader' : 'text'} body drag moves the connected constrained line and preserves history`, async ({ page }) => {
+  await setup(page); await create(page, leader);
+  const seed = await data(page), target = seed.points.find(p => p.id === seed.lines[0].p2), note = seed.annotations[0];
+  seed.constraints = [{ type: 'horizontal', line: seed.lines[0].id, sketchId: 'S1' }];
+  note.anchorConstraints = [{ type: 'coincident', geometryRef: { kind: 'point', path: [target.id] } }];
+  expect(await page.evaluate(d => window.__jot2dTest.loadDocumentFixtureForDragTest(d, 'coincident-note.jot2d', { resetLoadedHistory: true }), seed)).toMatchObject({ success: true });
+  await page.evaluate(() => window.__jot2dTest.focusWorldForTest({ x: 40, y: 0 }, 3));
+  const first = await state(page, leader ? 'leader' : 'text'), before = await data(page);
+  const body = { x: first.textLayout.x + first.textLayout.left + first.textLayout.width / 2, y: first.textLayout.y };
+  await dragWorld(page, body, { x: body.x + 12, y: body.y + 8 });
+  const after = await data(page), moved = after.points.find(p => p.id === target.id), line = after.lines[0];
+  expect(Math.hypot(moved.x - target.x, moved.y - target.y)).toBeGreaterThan(1);
+  const p1 = after.points.find(p => p.id === line.p1), p2 = after.points.find(p => p.id === line.p2);
+  expect(p1.y).toBeCloseTo(p2.y, 5);
+  expect(after.annotations[0].anchorConstraints).toEqual(before.annotations[0].anchorConstraints);
+  const rendered = await state(page, leader ? 'leader' : 'text');
+  expect(rendered.textLayout.anchorX).toBeCloseTo(moved.x, 5); expect(rendered.textLayout.anchorY).toBeCloseTo(moved.y, 5);
+  await page.locator('#undoBtn').click(); expect((await data(page)).points).toEqual(before.points);
+  await page.locator('#redoBtn').click(); expect((await data(page)).points).toEqual(after.points);
+});
+for (const leader of [false, true]) test(`standalone constrained ${leader ? 'leader' : 'text'} copy detaches at its displayed position and leaves the source intact`, async ({ page }) => {
+  await setup(page); await create(page, leader);
+  const seed = await data(page), note = seed.annotations[0], target = seed.points.find(p => p.id === seed.lines[0].p2);
+  note.x -= 30; note.y -= 10;
+  note.anchorConstraints = [{ type: 'coincident', geometryRef: { kind: 'point', path: [target.id] } }];
+  expect(await page.evaluate(d => window.__jot2dTest.loadDocumentFixtureForDragTest(d, 'copy-note.jot2d', { resetLoadedHistory: true }), seed)).toMatchObject({ success: true });
+  await page.evaluate(() => window.__jot2dTest.focusWorldForTest({ x: 40, y: 0 }, 6));
+  const first = await state(page, leader ? 'leader' : 'text'), before = await data(page);
+  await clickWorld(page, { x: first.textLayout.x + first.textLayout.left + first.textLayout.width / 2, y: first.textLayout.y });
+  await page.keyboard.press('Control+c'); await page.keyboard.press('Control+v');
+  const copied = await data(page); expect(copied.annotations).toHaveLength(2);
+  expect(copied.annotations[0]).toEqual(before.annotations[0]); expect(copied.points).toEqual(before.points);
+  const clone = copied.annotations[1]; expect(clone.anchorConstraints).toBeUndefined();
+  if (leader) { expect(clone.geometryRef).toBeNull(); expect(clone.attachment).toBeUndefined(); }
+  const offset = clone.x - first.textLayout.anchorX;
+  expect(offset).toBeGreaterThan(0); expect(clone.y - first.textLayout.anchorY).toBeCloseTo(offset, 6);
+  if (leader) {
+    expect(clone.start.x - first.resolvedStart.x).toBeCloseTo(offset, 6);
+    expect(clone.elbow.x - first.displayGeometry.elbow.x).toBeCloseTo(offset, 6);
+    expect(clone.end.y - first.displayGeometry.end.y).toBeCloseTo(offset, 6);
+  }
+  await page.locator('#undoBtn').click(); expect((await data(page)).annotations).toEqual(before.annotations);
+  await page.locator('#redoBtn').click(); expect((await data(page)).annotations).toEqual(copied.annotations);
+  expect(await page.evaluate(d => window.__jot2dTest.loadDocumentFixtureForDragTest(d), copied)).toMatchObject({ success: true });
+  expect((await data(page)).annotations[1]).toEqual(clone);
+});
+
+for (const type of ['horizontal', 'vertical', 'distance-x', 'distance-y', 'distance', 'distance-line', 'on-line', 'on-circle', 'endpoint', 'concentric', 'symmetry', 'on-spline']) test(type + ' annotation body drag solves the anchor as an ordinary point', async ({ page }) => {
+  await setup(page); await create(page);
+  const seed = await data(page), item = seed.annotations[0]; seed.constraints = [];
+  seed.points.push(...[{ id: 'P91', x: 30, y: -20 }, { id: 'P92', x: 60, y: -20 }, { id: 'P93', x: 90, y: -20 }].map(p => ({ ...p, sketchId: 'S1', kind: 'explicit', fixed: false })));
+  seed.lines.push({ id: 'L91', p1: 'P91', p2: 'P92', sketchId: 'S1', construction: false });
+  seed.circles.push({ id: 'C91', center: 'P91', radius: 15, sketchId: 'S1', construction: false });
+  seed.splines.push({ id: 'SP91', definitionMode: 'fit', degree: 3, fitPoints: ['P91', 'P92', 'P93'], endCondition: 'natural', closed: false, sketchId: 'S1', construction: false });
+  seed.arcs.push({ id: 'A91', center: 'P91', radius: 15, startAngle: 0, endAngle: Math.PI / 2, sketchId: 'S1', construction: false });
+  const kind = ['on-line', 'distance-line'].includes(type) ? 'line' : type === 'endpoint' ? 'arc' : ['on-circle', 'concentric'].includes(type) ? 'circle' : type === 'on-spline' ? 'spline' : 'point';
+  item.anchorConstraints = [{ type, geometryRef: { kind, path: [kind === 'line' ? 'L91' : kind === 'circle' ? 'C91' : kind === 'spline' ? 'SP91' : kind === 'arc' ? 'A91' : 'P91'] }, value: type.startsWith('distance') ? 12 : 0, ...(type === 'endpoint' ? { endpoint: 'end' } : {}), ...(type === 'symmetry' ? { axisRef: { kind: 'line', path: ['L91'] } } : {}) }];
+  expect(await page.evaluate(d => window.__jot2dTest.loadDocumentFixtureForDragTest(d, 'point-note.jot2d', { resetLoadedHistory: true }), seed)).toMatchObject({ success: true });
+  await page.evaluate(() => window.__jot2dTest.focusWorldForTest({ x: 50, y: -20 }, 3));
+  const first = await state(page), before = await data(page);
+  const body = { x: first.textLayout.x + first.textLayout.left + first.textLayout.width / 2, y: first.textLayout.y };
+  await dragWorld(page, body, { x: body.x + 10, y: body.y + 8 });
+  const after = await state(page);
+  expect(Math.hypot(after.textLayout.anchorX - first.textLayout.anchorX, after.textLayout.anchorY - first.textLayout.anchorY)).toBeGreaterThan(1);
+  expect(after.serialized.anchorConstraints).toEqual(before.annotations[0].anchorConstraints);
+  await page.locator('#undoBtn').click(); expect((await data(page)).annotations).toEqual(before.annotations);
+});

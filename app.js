@@ -526,9 +526,12 @@
   const PARAMETER_STABILIZATION_RELATIVE_TOLERANCE = 1e-7;
   const DRAG_PREVIEW_MAX_MODEL_ERROR = 0.125;
   const MIN_LINE_LENGTH = Math.max(MIN_ORIENTATION_LENGTH, solver.minLineLength || 12);
+  let annotationSolveDrag = null;
   const solveScopeQuery = window.SolveScopeQuery.create({
-    currentScope: workspace.current, geometryReads, activeSketchId, elementSketchId, constraintSketchId,
-    isVisibleSketchElement, constraintIsOperational, constraintGraphNodes, geometryInstanceDependencyRefs, minimumLength: MIN_LINE_LENGTH,
+    currentScope: () => { const scope = workspace.current(); return annotationSolveDrag ? { ...scope, points: [...scope.points, annotationSolveDrag.point], constraints: [...scope.constraints, ...annotationSolveDrag.constraints] } : scope; },
+    additionalVariables: () => annotationSolveDrag?.variables.slice(2) || [],
+    geometryReads, activeSketchId, elementSketchId, constraintSketchId,
+    isVisibleSketchElement, constraintIsOperational, constraintGraphNodes: constraint => constraint.annotationGeometryNodes || constraintGraphNodes(constraint), geometryInstanceDependencyRefs, minimumLength: MIN_LINE_LENGTH,
   });
   const { connectedComponentFromSeeds, localSolveVariables, localSolveConstraints, localSolveLines, sketchSolveVariables, sketchSolveConstraints, sketchSolveLines, localSolveContextFromSeeds } = solveScopeQuery;
   const constraintRedundancy = window.ConstraintRedundancy.create({
@@ -2615,6 +2618,19 @@
 
   const clipboardPayload = window.ClipboardPayload.create({
     geometryInstanceBundle, geometryInstanceSourcePoints, serializeGeometryInstance, blockProjectionBundle, blockProjectionLocalId, resolveGeometryRef, constraintGraphNodes, applicationText,
+    detachedAnnotation: annotation => {
+      const data = serializeAnnotation(annotation);
+      const layout = annotationTextLayout(annotation) || annotationTextMetrics(annotation, annotation.type === "leader" ? annotationLeaderDisplayGeometry(annotation) : annotation);
+      data.x = layout.anchorX; data.y = layout.anchorY;
+      data.anchorPosition = annotation.anchorPosition || effectiveAnnotationStyle(annotation).textAlign + "-middle";
+      if (annotation.type === "leader") {
+        const geometry = annotationLeaderDisplayGeometry(annotation);
+        data.start = { ...annotationLeaderAnchor(annotation) }; data.elbow = { ...geometry.elbow }; data.end = { ...geometry.end };
+        data.textPlacement = "anchor";
+        data.shelfReferenceScale = viewport.scale / window.Appearance.annotationDisplayFactor(effectiveAnnotationStyle(annotation), viewport.scale);
+      }
+      return data;
+    },
     serializeConstraint: constraint => decorateSerializedConstraint(serializeConstraint(constraint), constraint),
   });
   function copyableSelectionPayload() {
@@ -3374,6 +3390,7 @@
 
   const annotationDrag = window.AnnotationDrag.create({
     canEdit: item => guardSketchEdit(item.sketchId),
+    beginConstrainedDrag: beginConstrainedAnnotationDrag,
     annotationById, canvasSelection, setHint, updateUI, draw, recordHistory, annotationLeaderDisplayGeometry,
     annotationTextLayout, effectiveAnnotationStyle, materializeAnchor: materializeAnnotationAnchor,
     resizeText: (item, height) => appearanceEditing.applyAnnotationStyleValue(item, "textHeight", height),
@@ -5548,6 +5565,29 @@
     applicationText, setHint, updateUI, updateGeometrySelectionUI, draw, recordHistory,
   });
 
+  function beginConstrainedAnnotationDrag(event, annotation, pointer) {
+    if (!annotation.anchorConstraints?.length) return false;
+    if (annotation.anchorConstraints.some(item => item.type === "fixed")) {
+      setHint(applicationText("注記の基準点が固定されているため移動できません", "The annotation anchor is fixed and cannot be moved."), "error"); return true;
+    }
+    const geometry = window.AnnotationAnchorConstraints.createDragGeometry(annotation, annotationPlacementAnchor(annotation), resolveGeometryRef);
+    if (!geometry.valid) { setHint(applicationText("注記の拘束先を解決できません", "The annotation constraint target could not be resolved."), "error"); return true; }
+    annotationSolveDrag = geometry;
+    const plan = buildDragSession("point", geometry.point, pointer);
+    if (!plan) { annotationSolveDrag = null; return true; }
+    plan.syncAnnotation = () => {
+      if (annotation.type === "leader") {
+        const display = annotationLeaderDisplayGeometry(annotation), start = annotationLeaderAnchor(annotation) || annotation.start;
+        annotation.x = annotation.start.x + (geometry.point.x - start.x) / display.shelfScale;
+        annotation.y = annotation.start.y + (geometry.point.y - start.y) / display.shelfScale;
+      } else { annotation.x = geometry.point.x; annotation.y = geometry.point.y; }
+    };
+    plan.onEnd = () => { annotationSolveDrag = null; constraintAnalysis.invalidate(); updateUI(); draw(); };
+    if (!geometryDrag.begin(event, plan)) { annotationSolveDrag = null; return true; }
+    setHint(applicationText("注記の基準点と図形を拘束を保ちながら移動中", "Moving the annotation anchor and geometry while maintaining constraints"));
+    return true;
+  }
+
   function resolveDerivedDragSource(hit, pointer) {
     let item = hit?.item || null;
     const inverseTransforms = [];
@@ -5924,15 +5964,6 @@
       canvasSelection.hatches.some((item) => model.hatches.includes(item)) ||
       canvasSelection.referenceImages.some(item => model.referenceImages.includes(item));
     if (!hasSelectionItems) return false;
-    const selectedNodes = new Set([...canvasSelection.points, ...canvasSelection.lines, ...canvasSelection.circles, ...canvasSelection.arcs, ...canvasSelection.splines, ...canvasSelection.blockInstances]);
-    for (const line of canvasSelection.lines) selectedNodes.add(line.p1).add(line.p2);
-    for (const primitive of [...canvasSelection.circles, ...canvasSelection.arcs]) selectedNodes.add(primitive.center);
-    for (const spline of canvasSelection.splines) for (const point of spline.fitPoints) selectedNodes.add(point);
-    const selectedProjectionIds = new Set();
-    for (const instance of canvasSelection.blockInstances) {
-      const bundle = blockProjectionBundle(instance);
-      for (const item of [...bundle.points, ...bundle.lines, ...bundle.circles, ...bundle.arcs, ...(bundle.splines || [])]) selectedProjectionIds.add(item.id);
-    }
     const selectedGeometryRefs = new Set([
       ...canvasSelection.lines.map((item) => `line:${item.id}`),
       ...canvasSelection.circles.map((item) => `circle:${item.id}`),
@@ -5940,12 +5971,7 @@
       ...canvasSelection.splines.map((item) => `spline:${item.id}`),
     ]);
     if (!canvasSelection.hatches.every((hatch) => hatchBoundaryGeometryRefs(hatch.boundaryLoops).every((ref) => selectedGeometryRefs.has(`${ref.kind}:${geometryRefId(ref)}`)))) return false;
-    return canvasSelection.annotations.every((annotation) => {
-      return window.AnnotationAnchorConstraints.refs(annotation).every(ref => {
-        const referenced = resolveGeometryRef(ref);
-        return Boolean(referenced && (selectedNodes.has(referenced) || selectedProjectionIds.has(referenced.id)));
-      });
-    });
+    return true;
   }
 
   function selectedDrawingOrderCandidates() {

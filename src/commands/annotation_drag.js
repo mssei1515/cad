@@ -1,7 +1,7 @@
 /* Own annotation drag identity, initial coordinates and commit lifecycle. */
 (() => {
   "use strict";
-  function create({ canEdit = () => true, annotationById, canvasSelection, beginPointer, endPointer, setHint, updateUI, draw, recordHistory, annotationLeaderDisplayGeometry = element => ({ ...element, shelfScale: 1 }), annotationTextLayout, effectiveAnnotationStyle, materializeAnchor = () => {}, resizeText }) {
+  function create({ canEdit = () => true, annotationById, canvasSelection, beginPointer, endPointer, setHint, updateUI, draw, recordHistory, annotationLeaderDisplayGeometry = element => ({ ...element, shelfScale: 1 }), annotationTextLayout, effectiveAnnotationStyle, materializeAnchor = () => {}, resizeText, beginConstrainedDrag = () => false }) {
     let annotationDragSession = null;
     let resizeHandlesId = null;
     function syncResizeSelection(enabled = true) {
@@ -30,6 +30,7 @@
           derivativeX, derivativeY, textHeight: effectiveAnnotationStyle(hit.element).textHeight, changed: false };
         beginPointer(e.pointerId); setHint("注記の文字サイズを変更中"); return;
       }
+      if (hit.part !== "end" && beginConstrainedDrag(e, hit.element, pointer)) return;
       if (hit.part === "end" && hit.element.anchorConstraints?.length || (hit.element.anchorConstraints || []).some(item => window.AnnotationAnchorConstraints.axes(item.type).length === 2)) return;
       annotationDragSession = {
         pointerId: e.pointerId,
