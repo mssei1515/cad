@@ -6,6 +6,10 @@
 
 ## 現在の再開地点（2026-10-11）
 
+ConstraintCommitCommandへ通常／参照拘束の追加とsnapshot・前処理・求解・Parameter安定化・退化／重複判定・失敗復元・成功後の分析／UI／履歴を分離。参照metadata入口、重複寸法の読取変換、通常拒否undefined／参照拒否false、成功後の性能記録の順序も保持。元処理本体は時計／性能記録port以外一致。app.jsは10,368→10,252行（116行減、今回の合計806行減）。構文421ファイル・単体1,125件・関連E2E166件成功（exit 0、2.4分）。ログはcad-constraint-commit-{check,unit,e2e}.log。全E2Eはこの単位では未実行。全体目標は未完了。依存は明示したが多く、後続の組立て整理でcheckpoint・Solver・Parameter・UIの境界を再確認する。
+
+### 前回の区切り
+
 ConstraintTargetCommandへ拘束候補clickのAnnotation委譲・固定切替・対象追加・意図の配置／commit振分けを集約。hit／受入／sessionの所有者を接続し、固定後のcommand参照復元と拒否／エラー／未完了の表示順序を維持。処理本体は明示したsession依存以外元処理と一致。app.jsは10,432→10,368行（64行減、今回の合計690行減）。構文419ファイル・単体1,119件・関連E2E166件成功（exit 0、2.3分）。ログはcad-constraint-click-{check,unit,e2e}.log。全E2Eはこの単位では未実行。全体目標は未完了。依存の増えたcommandは、残るcommit／寸法配置の所有を整理する際に境界と引数数を再確認する。
 
 ### 前回の区切り
