@@ -6,6 +6,10 @@
 
 ## 現在の再開地点（2026-10-12）
 
+拘束確定時のSolver結果を一時差替えするテスト支援をConstraintTestDriver.createForcedCommitへ分離。七つの明示した依存で既存fixture生成・commit・現在scope／DOM照会へ接続し、finallyの元Solver関数復元・例外伝播・結果変換・literal true判定・復元後の照会を保持する。元本体との一致と三つの境界テスト（通常／例外の復元と置換scopeの再照会）を確認し、classic script／構文／単体／E2E読込一覧を更新。app.jsは8,658→8,634行（24行減、今回の合計2,424行減）。構文454ファイル・単体1,244件・関連E2E124件成功（exit 0、1.7分）。ログはcad-constraint-test-driver-{check,unit,e2e}.log。全E2Eはこの単位では未実行。全体目標は未完了。
+
+### 前回の区切り
+
 描画順のfixture／観測／選択／並替えの四つのテスト支援APIをDrawingOrderTestDriverへ分離。createFixtureとcreateInteractionを独立して生成し、操作観測に図形生成・Block定義依存を持ち込まない。現在scope・既存DrawingOrder／Hatch境界／Selection／並替えcommandへ委譲し、fixture座標・ID・外観・一時activeSketch切替・cache／fit／履歴／表示の順を保持する。this経由のhook間参照をDriver内stateと明示した共有test履歴readerへ置換し、既存historyState APIも同じreaderに接続。DrawingOrderは後期script定義のため生成時に注入。四つの本体と共有履歴readerの元処理との一致を確認し、classic script／構文／E2E読込一覧を更新。app.jsは8,746→8,658行（88行減、今回の合計2,400行減）。構文452ファイル・単体1,241件・関連E2E157件成功（exit 0、2.3分）。ログはcad-drawing-order-test-driver-{check,unit,e2e}.log。新しい単体テストは追加せず、既存drawing-order／unified-ui／hatching／blocksのE2Eで実利用を検証。全E2Eはこの単位では未実行。全体目標は未完了。
 
 ### 前回の区切り
