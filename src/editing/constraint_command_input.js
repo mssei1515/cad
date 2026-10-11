@@ -61,5 +61,47 @@
     }
     return Object.freeze({ click });
   }
-  window.ConstraintCommandInput = Object.freeze({ create });
+  // Resolve the provisional operand without owning pending-command or hover state.
+  function createRetargetHover({ getPending, canvasHover, hitConstraintOperand, sameConstraintOperand,
+    resolveConstraintIntent, referenceTargetFromOperand, Circle, Arc }) {
+    function applyReferenceHoverTarget(referenceTarget) {
+      canvasHover.update({ point: referenceTarget?.kind === "point" ? referenceTarget.point : null });
+      canvasHover.update({
+        endpointPoint: canvasHover.current.point, line: referenceTarget?.kind === "line" ? referenceTarget.line : null, circle: referenceTarget?.primitive instanceof Circle ? referenceTarget.primitive : null,
+        arc: referenceTarget?.primitive instanceof Arc ? referenceTarget.primitive : null, arcEndpoint: null, dimension: null,
+      });
+    }
+
+    function update(pointer) {
+      if (getPending()?.type !== "distance-place" || !["line-length", "radius", "diameter"].includes(getPending().target.kind)) {
+        canvasHover.update({
+          point: null, endpointPoint: null, line: null,
+          circle: null, arc: null,
+        });
+        return false;
+      }
+      const baseOperands = (getPending().operands || []).filter(Boolean);
+      const operand = baseOperands.length === 1 ? hitConstraintOperand(pointer, "distance") : null;
+      const resolution = operand && !sameConstraintOperand(baseOperands[0], operand)
+        ? resolveConstraintIntent("distance", [baseOperands[0], operand])
+        : null;
+      const target = resolution?.target && resolution.target.kind !== "invalid" ? referenceTargetFromOperand(operand) : null;
+      const changed =
+        (target?.kind === "point" ? target.point : null) !== canvasHover.current.point ||
+        (target?.kind === "line" ? target.line : null) !== canvasHover.current.line ||
+        (target?.primitive instanceof Circle ? target.primitive : null) !== canvasHover.current.circle ||
+        (target?.primitive instanceof Arc ? target.primitive : null) !== canvasHover.current.arc ||
+        canvasHover.current.arcEndpoint ||
+        canvasHover.current.dimension;
+      applyReferenceHoverTarget(target);
+      canvasHover.update({
+        arcEndpoint: null, block: null,
+      });
+      return changed;
+    }
+
+
+    return Object.freeze({ update });
+  }
+  window.ConstraintCommandInput = Object.freeze({ create, createRetargetHover });
 })();

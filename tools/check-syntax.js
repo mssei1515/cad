@@ -52,7 +52,7 @@ const files = [
   "src/editing/spline_draft.js",
   "tests/unit/spline-draft.test.js",
   "src/ui/keyboard_interaction_controller.js", "src/ui/constraint_status_view.js", "src/ui/constraint_feedback.js", "src/ui/canvas_input_binding.js", "src/ui/canvas_navigation.js", "src/ui/canvas_workspace_layout.js", "src/ui/pointer_move_scheduler.js",
-  "tests/unit/pointer-move-scheduler.test.js", "tests/unit/canvas-navigation.test.js", "tests/unit/canvas-workspace-layout.test.js", "tests/unit/canvas-command-cancellation.test.js",
+  "tests/unit/pointer-move-scheduler.test.js", "tests/unit/canvas-navigation.test.js", "tests/unit/canvas-workspace-layout.test.js", "tests/unit/canvas-command-cancellation.test.js", "tests/unit/constraint-command-input.test.js",
   "src/document/state.js",
   "tests/unit/document-state.test.js",
   "src/persistence/document_loading.js",
