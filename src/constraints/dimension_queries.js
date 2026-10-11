@@ -151,8 +151,26 @@
     );
   }
 
+  function targetItems(target) {
+    return target.kind === "point-point"
+      ? [target.p1, target.p2]
+      : target.kind === "point-line"
+        ? [target.point, target.line]
+        : target.kind === "line-circle"
+          ? [target.line, target.circle]
+          : target.kind === "radius-difference"
+            ? [target.a, target.b]
+        : target.kind === "line-line" || target.kind === "angle"
+          ? [target.line1, target.line2]
+          : target.kind === "line-length"
+            ? [target.line]
+            : target.primitive
+              ? [target.primitive]
+              : [];
+  }
+
   window.DimensionQueries = Object.freeze({
-    targetFromConstraint, offsetPairSign, angleDegrees,
+    targetItems, targetFromConstraint, offsetPairSign, angleDegrees,
     angleDimensionSweep, signedAngleBetweenLines, measuredDimensionValue,
     angleDimensionAngles, angleDimensionCandidate, geometryTargetValue,
     isReadOnlyDimension, isDimensionConstraint, hasDirectRadiusDimension,

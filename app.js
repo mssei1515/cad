@@ -4627,64 +4627,22 @@
     return ok;
   }
 
+  const dimensionConstraintFactory = window.DimensionConstraintFactory.create({
+    types: { PointAxisDistanceConstraint, DistanceConstraint, PointLineDistanceConstraint, LineLineDistanceConstraint,
+      LineCircleDistanceConstraint, ConcentricRadiusDifferenceConstraint, LineAngleConstraint, RadiusConstraint, DiameterConstraint },
+    linesAreParallel,
+  });
   function distanceConstraintFromTarget(target, value, dimension, options = {}) {
-    if (!target || target.kind === "invalid") return null;
-    let constraint = null;
-    if (target.kind === "point-point" || target.kind === "line-length") {
-      const axis = target.dimensionAxis || dimension?.axis;
-      constraint = target.kind === "point-point" && (axis === "x" || axis === "y")
-        ? new PointAxisDistanceConstraint(target.p1, target.p2, value, axis)
-        : new DistanceConstraint(target.p1, target.p2, value);
-    } else if (target.kind === "point-line") {
-      constraint = new PointLineDistanceConstraint(target.point, target.line, value);
-    } else if (target.kind === "line-line") {
-      if (!linesAreParallel(target.line1, target.line2)) {
-        if (!options.silent) {
-          setHint("線-線寸法は平行線のみです", "error");
-          log("線-線寸法は平行線のみです");
-        }
-        return null;
-      }
-      constraint = new LineLineDistanceConstraint(target.line1, target.line2, value);
-    } else if (target.kind === "line-circle") {
-      constraint = new LineCircleDistanceConstraint(target.line, target.circle, value);
-    } else if (target.kind === "radius-difference") {
-      constraint = new ConcentricRadiusDifferenceConstraint(target.a, target.b, value);
-    } else if (target.kind === "angle") {
-      constraint = new LineAngleConstraint(target.line1, target.line2, (value * Math.PI) / 180, dimension?.angleStartFlip || 0, dimension?.angleEndFlip || 0);
-    } else if (target.kind === "radius") {
-      constraint = new RadiusConstraint(target.primitive, value);
-    } else if (target.kind === "diameter") {
-      constraint = new DiameterConstraint(target.primitive, value);
-    }
-    if (constraint) {
-      constraint.dimension = dimension;
-      if (dimension && ["radius", "diameter"].includes(target.kind)) {
-        constraint.dimension = { ...dimension, display: { ...dimension.display, prefix: target.kind === "diameter" ? "Φ" : "R" } };
-      }
-    }
-    return constraint;
+    const result = dimensionConstraintFactory.fromTarget(target, value, dimension);
+    if (result.error && !options.silent) { setHint(result.error, "error"); log(result.error); }
+    return result.constraint;
   }
 
   function readOnlyDimensionConstraintForPlacement(target, value, dimension, options = {}) {
     const constraint = distanceConstraintFromTarget(target, value, dimension, { silent: true });
     if (!constraint) return null;
     if (options.readOnlyDimension) return assignConstraintSketchId(constraint, options.sketchId || activeSketchId());
-    const targetItems = target.kind === "point-point"
-      ? [target.p1, target.p2]
-      : target.kind === "point-line"
-        ? [target.point, target.line]
-        : target.kind === "line-circle"
-          ? [target.line, target.circle]
-          : target.kind === "radius-difference"
-            ? [target.a, target.b]
-        : target.kind === "line-line" || target.kind === "angle"
-          ? [target.line1, target.line2]
-          : target.kind === "line-length"
-            ? [target.line]
-            : target.primitive
-              ? [target.primitive]
-              : [];
+    const targetItems = window.DimensionQueries.targetItems(target);
     const blockInstances = [...new Set(targetItems.map((item) => item?.blockInstance).filter(Boolean))];
     if (targetItems.length > 0 && blockInstances.length === 1 && targetItems.every((item) => item?.blockInstance === blockInstances[0])) return constraint;
     const sketchId = options.sketchId || activeSketchId();

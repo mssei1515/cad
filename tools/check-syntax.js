@@ -135,7 +135,7 @@ const files = [
   "src/editing/sketch_context.js",
   "tests/unit/sketch-context.test.js",
   "tests/unit/module-loading.test.js",
-  "src/constraints/dimension_queries.js",
+  "src/constraints/dimension_queries.js", "src/constraints/dimension_constraint_factory.js", "tests/unit/dimension-constraint-factory.test.js",
   "src/parameters/namespace.js",
   "tests/unit/parameter-namespace.test.js",
   "src/geometry/objects.js", "src/geometry/annotation_anchor_query.js", "src/geometry/hatch_query.js",
