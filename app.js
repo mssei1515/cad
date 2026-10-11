@@ -4919,6 +4919,10 @@
       readSelectedGeometry: readTestSelectedGeometry, canvasSelection, constraintTargetSession, operandElement,
     });
     const constraintIntentTestDriver = window.ConstraintTestDriver.createIntentResolution({ currentScope: workspace.current, makeConstraintOperand, resolveConstraintIntent, serializeConstraint });
+    const hoverDisplayObservation = window.PropertiesTestDriver.createHoverObservation({
+      allGeometryPoints, allGeometryLines, allGeometryCircles, allGeometryArcs, allGeometrySplines, blockInstanceById, blockProjectionBundle, effectiveAppearanceForElement,
+      isSidebarHighlightedElement, Point, isAnyLineEndpoint, isSidebarHoveredElement, canvasHover, geometryDisplayColor, geometryStrokeWidth,
+    });
     const geometryHitObservation = window.CanvasTestDriver.createHitObservation({ hitArcEndpoint, hitPoint, hitLine, hitCircle, hitArc, hitSpline });
     const geometryPositionObservation = window.CanvasTestDriver.createGeometryPosition({
       currentScope: workspace.current, evaluateSpline: window.SplineGeometry.evaluate, clientPosition: canvasTestDriver.clientPosition,
@@ -5219,33 +5223,7 @@
       worldClientPositionForTest: canvasTestDriver.clientPosition,
       hitGeometryAtWorldForTest: geometryHitObservation.hit,
       geometryClientPositionForTest: geometryPositionObservation.position,
-      hoverDisplayStateForTest(kind, id) {
-        let item = null;
-        if (kind === "point") item = allGeometryPoints().find((value) => value.id === id);
-        if (kind === "line") item = allGeometryLines().find((value) => value.id === id);
-        if (kind === "circle") item = allGeometryCircles().find((value) => value.id === id);
-        if (kind === "arc") item = allGeometryArcs().find((value) => value.id === id);
-        if (kind === "spline") item = allGeometrySplines().find((value) => value.id === id);
-        if (kind === "block") {
-          const instance = blockInstanceById(id);
-          item = instance ? blockProjectionBundle(instance).lines[0] || blockProjectionBundle(instance).circles[0] || blockProjectionBundle(instance).arcs[0] || blockProjectionBundle(instance).splines?.[0] : null;
-        }
-        if (!item) return null;
-        const appearance = effectiveAppearanceForElement(item);
-        const treeHovered = isSidebarHighlightedElement(item) && (!(item instanceof Point) || (!item.blockProjection && !isAnyLineEndpoint(item)));
-        const sidebarHovered = isSidebarHoveredElement(item);
-        const canvasHovered = canvasHover.current.line === item || canvasHover.current.circle === item || canvasHover.current.arc === item || canvasHover.current.spline === item || canvasHover.current.point === item || canvasHover.current.endpointPoint === item;
-        const blockHovered = Boolean(item.blockInstance && canvasHover.current.block === item.blockInstance);
-        const hovered = treeHovered || sidebarHovered || canvasHovered || blockHovered;
-        return {
-          treeHovered,
-          sidebarHovered,
-          canvasHovered,
-          blockHovered,
-          color: geometryDisplayColor(item, appearance, false, hovered),
-          width: geometryStrokeWidth(item, { hovered, appearance, construction: Boolean(item.construction) }),
-        };
-      },
+      hoverDisplayStateForTest: hoverDisplayObservation.state,
       snapLabelsAtWorldForTest(point) {
         const source = { x: Number(point?.x) || 0, y: Number(point?.y) || 0 };
         const threshold = 10 / viewport.scale;

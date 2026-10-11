@@ -6,6 +6,10 @@
 
 ## 現在の再開地点（2026-10-12）
 
+Hover表示の観測を既存PropertiesTestDriver.createHoverObservationへ分離。既存Geometry一覧／Block投影・外観・Tree強調／Sidebar／Canvas／Block Hoverと表示色／線幅へ接続し、対象なしのnull、検索・Block内Geometryの優先順／短絡、Pointの投影・線端点除外、同一参照照合・constructionと照会順を保持する。独自Geometry／Hover／表示ルールを追加せず、test query時だけ生成して既存API名へ接続。元の処理本体との一致を確認。app.jsは7,652→7,630行（22行減、今回の合計3,428行減）。構文469ファイル・単体1,261件・関連E2E103件成功（exit 0、2.0分）。新規テストはなく、全利用箇所のunified-ui既存E2EでTree／Canvas強調、Point／Block、色／線幅を確認。全テスト本体とworker終了後の専用サーバー終了待ちは当該processを確認して終了し、正常終了を回収。ログはcad-hover-observation-{check,unit,e2e}.log。全E2Eはこの単位では未実行。全体目標は未完了。
+
+### 前回の区切り
+
 hit観測とGeometryのclient位置取得を既存CanvasTestDriver.createHitObservation／createGeometryPositionへ分離。hit側は入力座標を元どおり数値正規化し、Arc端点→Point／Line／Circle／Arc／Splineの既存query結果をID／端点／nullへ変換する。位置側は現在scopeのGeometryからPoint位置・線中点・円右端・円弧の指定端点または従来の角度平均・Splineの0／1／0.5評価位置を取得し、既存client変換へ渡す。Spline evaluateを明示した依存へ、thisによるclient hook参照を既存CanvasTestDriver.clientPositionへ置換する。detail既定値／未存在Geometryのnull・式／順序を維持し、hitルール／幾何計算／scope／viewportを複製しない。test query時だけ生成し、既存API名へ接続。元の二つの処理本体との一致を確認。app.jsは7,683→7,652行（31行減、今回の合計3,406行減）。構文469ファイル・単体1,261件・関連E2E144件成功（exit 0、3.1分）。新規テストはなく、全利用箇所のadversarial-authoring-performance／head-symmetry／phase0-characterization／spline／unified-ui既存E2Eで応答性・円弧／Spline操作・hit観測を確認。全テスト本体とworker終了後の専用サーバー終了待ちは当該processを確認して終了し、正常終了を回収。ログはcad-hit-position-observation-{check,unit,e2e}.log。全E2Eはこの単位では未実行。全体目標は未完了。
 
 ### 前回の区切り
