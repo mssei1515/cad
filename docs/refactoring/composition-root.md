@@ -6,6 +6,10 @@
 
 ## 現在の再開地点（2026-10-11）
 
+ClipboardCommandへコピー／切取り／貼付けのガード、実行順序、成功案内と失敗復元の調整を分離。モデル構築、session、checkpoint、Selectionの各所有者へ委譲し、appは現在scope・作成権限・mode・求解／履歴・表示同期との接続を保持する。既存の早期接続のため入口はhoisted wrapperを維持。app.jsは10,844→10,796行（48行減、今回の合計262行減）。構文409ファイル・単体1,070件・関連E2E201件成功（exit 0、2.6分）。ログはcad-clipboard-command-{check,unit,e2e}.log。全E2Eはこの単位では未実行。全体目標は未完了。
+
+### 前回の区切り
+
 ClipboardGraphへ貼付けるモデルの構築順序を集約。Geometry／Transfer／Parameterの既存所有者を7つの限定した依存で接続し、UI・session・checkpoint・求解・履歴を持ち込まない。生成結果と参照Mapを返し、構築失敗は操作側へ伝える。app.jsは10,889→10,844行（45行減）。構文407ファイル・単体1,064件・関連E2E201件成功（exit 0、2.6分）。ログはcad-clipboard-graph-{check,unit,e2e}.log。全E2Eはこの単位では未実行。全体目標は未完了。
 
 ### 前回の区切り

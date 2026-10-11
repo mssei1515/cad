@@ -2645,22 +2645,7 @@
     deleteSelection: deleteCurrentSelection,
   });
 
-  function copySelectionToClipboard(options = {}) {
-    if (!isGeometryMode()) return false;
-    const payload = copyableSelectionPayload();
-    if (!payload) {
-      setHint("コピーする図形を選択してください", "error");
-      updateToolbar();
-      return false;
-    }
-    const deleted = clipboardSession.copy(payload, options.cut);
-    if (options.cut) {
-      if (deleted) setHint(`図形をカットしました（${clipboardSession.count(payload)}要素）`);
-      return deleted;
-    }
-    setHint(`図形をコピーしました（${clipboardSession.count(payload)}要素）`);
-    return true;
-  }
+  function copySelectionToClipboard(options = {}) { return clipboardCommand.copy(options); }
 
   const clipboardTransfer =
     window.ClipboardTransfer.create({ blockProjectionBundle, blockProjectionLocalId, resolveGeometryRef, geometryInstanceSourcePoints, geometryInstanceBundle, applicationText });
@@ -2691,51 +2676,18 @@
     deserializeConstraint, invalidateProjection: invalidateBlockProjectionCache, applicationText,
   });
 
-  function pasteGeometryClipboard() {
-    if (!isGeometryMode() || !clipboardSession.payload) {
-      setHint("貼り付ける図形がありません", "error");
-      return false;
-    }
-    if (!canCreateInActiveSketch()) {
-      guardSketchEdit(activeSketchId(), "create");
-      return false;
-    }
-
-    const payload = clipboardSession.payload;
-    if (payload.blockInstances.length > 0) {
-      const invalid = payload.blockInstances.find((instance) => blockDefinitionScopeError(instance.definitionId));
-      if (invalid) {
-        setHint(blockDefinitionScopeError(invalid.definitionId), "error");
-        return false;
-      }
-    }
-    const targetSketchId = activeSketchId();
-    const pastePlan = clipboardSession.preparePaste(viewport.scale);
-    const { dx, dy } = pastePlan;
-    const checkpoint = clipboardPasteCheckpoint.capture(model);
-
-    try {
-      const pasted = clipboardGraph.append(model, payload, {
-        sketchId: targetSketchId, dx, dy, namespace: currentParameterNamespace(),
-        namespaceKey: currentBlockDefinitionScopeId() ? `block:${currentBlockDefinitionScopeId()}` : "document",
-      });
-      clearSelection();
-      canvasSelection.applyClipboard(payload.selection, pasted.maps, pasted);
-      clipboardSession.recordPaste(pastePlan);
-      mode = "select";
-      solveAndRefresh("貼り付け");
-      setHint(`${sketchName(targetSketchId)} に図形を貼り付けました（${clipboardSession.count(payload)}要素）`);
-      return true;
-    } catch (error) {
-      checkpoint.rollback();
-      invalidateBlockProjectionCache();
-      clearSelection();
-      updateUI();
-      draw();
-      setHint(`貼り付けに失敗しました: ${error.message}`, "error");
-      return false;
-    }
-  }
+  const clipboardCommand = window.ClipboardCommand.create({
+    session: clipboardSession, graph: clipboardGraph, checkpoint: clipboardPasteCheckpoint, selection: canvasSelection,
+    isGeometryMode, buildCopyPayload: copyableSelectionPayload, blockDefinitionScopeError,
+    canCreate: () => { if (canCreateInActiveSketch()) return true; guardSketchEdit(activeSketchId(), "create"); return false; },
+    currentTarget: () => ({ model, sketchId: activeSketchId(), scale: viewport.scale }),
+    parameterTarget: () => ({ namespace: currentParameterNamespace(),
+      namespaceKey: currentBlockDefinitionScopeId() ? `block:${currentBlockDefinitionScopeId()}` : "document" }),
+    clearSelection, finishPaste: () => { mode = "select"; solveAndRefresh("貼り付け"); },
+    recoverView: () => { invalidateBlockProjectionCache(); clearSelection(); updateUI(); draw(); },
+    sketchName, setHint, updateToolbar,
+  });
+  function pasteGeometryClipboard() { return clipboardCommand.paste(); }
 
   function ensureDimensionDefaults() {
     for (const constraint of model.constraints) {

@@ -98,7 +98,7 @@
 
 ## 8. 再開地点（2026-10-11）
 
-週枠残量97%で再開。最新develop 8e7e7c7からcodex/clipboard-placementを作成。開始時app.jsは11,058行（前回以降の機能追加を含む）。ClipboardGeometryへプリミティブ生成と参照Map構築を分離し、11,014行へ縮小。続いてClipboardPasteCheckpointへ貼付けの配列長・採番・modelカウンタの保持と復元を分離し10,995行へ縮小（19行減、今回の合計63行減）。さらにClipboardTransferへ注記・塗りつぶし・画像の値変換を統合し10,983行（12行減、今回の合計75行減）。ParameterNamespaceへコピー記号の名前予約と式付替えも統合し10,952行（31行減、今回の合計106行減）。ClipboardTransferへ派生Instanceの原点調整・検査・再接続も集約し10,930行（22行減、今回の合計128行減）。CanvasSelectionへ貼付け選択復元を統合し10,923行（7行減、今回の合計135行減）。ClipboardSessionへコピー内容・cut・貼付け回数／位置の所有を分離し10,917行（6行減、今回の合計141行減）。ClipboardGeometryへBlock生成も統合し10,901行（16行減、今回の合計157行減）。派生Instanceの生成準備／追加もClipboardGeometryへ統合し10,889行（12行減、今回の合計169行減）。ClipboardGraphへモデル構築の順序も集約し10,844行（45行減、今回の合計214行減）。貼付け全体の成功／失敗調整・履歴とUIはappに残る。次はこれらの状態所有を、最新の派生Instance・注記拘束付きコピーにも対応して整理する。
+週枠残量97%で再開し、最新develop 8e7e7c7からcodex/clipboard-placementを作成した。開始時app.jsは11,058行（前回以降の機能追加を含む）。ClipboardGeometryへ生成と参照Map、ClipboardPasteCheckpointへ配列長・採番・modelカウンタの保持／復元、ClipboardTransferへ値変換と派生再接続、ParameterNamespaceへ記号予約と式付替え、CanvasSelectionへ選択復元、ClipboardSessionへコピー内容と貼付け回数／位置を集約した。ClipboardGraphはモデル構築順序を、ClipboardCommandはコピー／切取り／貼付けのガード・成功／失敗調整を所有する。最新の区切りではapp.jsは10,844→10,796行（48行減、今回の合計262行減）。構文409ファイル・単体1,070件・関連E2E201件成功。全E2Eは今回の作業branchでは未実行で、リリース前に実施する。各単位の検証と行数はcomposition-root.mdを参照。Clipboardのapp側には現在scope・作成権限・共通mode・求解／履歴・表示同期へのadapterと生成／接続が残る。次は残る共通編集・削除・入力／操作状態の依存を確認し、状態と更新を同じ所有者へ集められるまとまりを選ぶ。既に分離済みのClipboard責務を細分化するだけの変更は避ける。
 
 ### 前回の停止地点（2026-10-10）
 

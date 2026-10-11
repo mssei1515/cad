@@ -536,3 +536,6 @@ ClipboardGeometry.appendDerivedは派生Instance全体のIDを先に予約し、
 
 
 ClipboardGraph（src/editing/clipboard_graph.js）は明示したmodel・payload・貼付け先Sketch／Parameter名前空間／移動量から、貼付けるモデルの参照グラフを構築する。ClipboardGeometry、ClipboardTransfer、ParameterNamespace、要素ID発行、拘束復元、投影無効化、翻訳の7つの依存を組み合わせ、プリミティブ→Block→Hatch ID予約→派生Instance→注記／Hatch／画像→投影再接続→記号予約→拘束復元の順序を所有する。生成要素と参照Mapを返し、Selection・Clipboard session・UI・求解・履歴・checkpointを持ち込まない。構築途中の失敗は例外として外へ伝え、呼出側が既存checkpointで復元する。名前空間とscopeは同期処理の開始時に明示して渡し、この構築中には切替えない。
+
+
+ClipboardCommand（src/commands/clipboard_command.js）はコピー／切取り／貼付けのガード・実行順序・成功案内・失敗復元を調整する。ClipboardSession、ClipboardGraph、ClipboardPasteCheckpoint、CanvasSelectionの所有者へ委譲し、現在の貼付け先・Parameter名前空間を限定したproviderで照会する。Geometry作成権限のガード、求解／履歴確定、失敗後の投影・表示同期は既存adapterへ接続する。コピーpayload作成後の空選択案内、Block定義ガード、checkpoint捕捉後のParameter照会、選択→回数更新→求解、例外時のcheckpoint→表示復元の順序を維持する。Clipboard操作に関して、appは生成と接続、mode／共有表示更新のadapterを担当する。既存の早期接続で関数宣言を参照しているため、appのコピー／貼付け入口はhoisted wrapperを保つ。
