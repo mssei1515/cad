@@ -21,5 +21,19 @@
     }
     return Object.freeze({ focus, clientPosition });
   }
-  window.CanvasTestDriver = Object.freeze({ create });
+  function createZoomObservation({ viewport, clampZoom, readUnits, formatZoom, cssPxPerMm }) {
+    function state(zoomRatio = null) {
+      if (zoomRatio != null) viewport.update({ scale: clampZoom(Number(zoomRatio) * cssPxPerMm) });
+      return {
+        units: { ...readUnits() },
+        zoomRatio: viewport.scale / cssPxPerMm,
+        formatted: formatZoom(viewport.scale),
+        cssPixelsPerMillimeter: cssPxPerMm,
+        viewportScale: viewport.scale,
+      };
+    }
+    return Object.freeze({ state });
+  }
+
+  window.CanvasTestDriver = Object.freeze({ create, createZoomObservation });
 })();

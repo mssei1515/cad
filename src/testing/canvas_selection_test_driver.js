@@ -138,5 +138,19 @@
     return Object.freeze({ select });
   }
 
-  window.CanvasSelectionTestDriver = Object.freeze({ createOverlapFixture, createEndpointFixture, createObservation, createPointInsertion, createIdSelection });
+  function createMoveObservation({ sketchMoveCommand, activeSketchId, fields, canvasSelection, currentScope, decorateSerializedConstraint, serializeConstraint, serializeModel, isEditingBlock }) {
+    function state() {
+      const state = sketchMoveCommand.state();
+      return {
+        active: Boolean(state), targetId: state?.targetId || null, activeSketchId: activeSketchId(),
+        selected: Object.fromEntries(fields.map(field => [field, canvasSelection[field].map(item => item.id)])),
+        ownership: Object.fromEntries(fields.map(field => [field, currentScope()[field].map(item => ({ id: item.id, sketchId: item.sketchId, drawingOrder: item.drawingOrder }))])),
+        constraints: currentScope().constraints.map(constraint => decorateSerializedConstraint(serializeConstraint(constraint), constraint)),
+        serialized: serializeModel(), editingBlock: isEditingBlock(),
+      };
+    }
+    return Object.freeze({ state });
+  }
+
+  window.CanvasSelectionTestDriver = Object.freeze({ createOverlapFixture, createEndpointFixture, createObservation, createPointInsertion, createIdSelection, createMoveObservation });
 })();

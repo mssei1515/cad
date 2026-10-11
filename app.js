@@ -4919,6 +4919,11 @@
       readSelectedGeometry: readTestSelectedGeometry, canvasSelection, constraintTargetSession, operandElement,
     });
     const constraintIntentTestDriver = window.ConstraintTestDriver.createIntentResolution({ currentScope: workspace.current, makeConstraintOperand, resolveConstraintIntent, serializeConstraint });
+    const sketchMoveObservation = window.CanvasSelectionTestDriver.createMoveObservation({
+      sketchMoveCommand, activeSketchId, fields: window.SketchMove.fields, canvasSelection, currentScope: workspace.current,
+      decorateSerializedConstraint, serializeConstraint, serializeModel, isEditingBlock: () => Boolean(blockEditor.current),
+    });
+    const displayZoomObservation = window.CanvasTestDriver.createZoomObservation({ viewport, clampZoom, readUnits: () => documentModel.units, formatZoom, cssPxPerMm: CSS_PX_PER_MM });
     const geometryIdSelection = window.CanvasSelectionTestDriver.createIdSelection({
       clearSelection, currentScope: workspace.current, canvasSelection, updateUI, draw, blockSelectionGeometry, readSelectedGeometry: readTestSelectedGeometry,
     });
@@ -5203,28 +5208,10 @@
       addIsolatedFixedPointForContextTest: contextPointInsertion.addFixedPoint,
       constraintInputStateForTest: constraintInputObservation.state,
       resolveConstraintIntentForTest: constraintIntentTestDriver.resolve,
-      sketchMoveStateForTest() {
-        const state = sketchMoveCommand.state();
-        return {
-          active: Boolean(state), targetId: state?.targetId || null, activeSketchId: activeSketchId(),
-          selected: Object.fromEntries(window.SketchMove.fields.map(field => [field, canvasSelection[field].map(item => item.id)])),
-          ownership: Object.fromEntries(window.SketchMove.fields.map(field => [field, model[field].map(item => ({ id: item.id, sketchId: item.sketchId, drawingOrder: item.drawingOrder }))])),
-          constraints: model.constraints.map(constraint => decorateSerializedConstraint(serializeConstraint(constraint), constraint)),
-          serialized: serializeModel(), editingBlock: Boolean(blockEditor.current),
-        };
-      },
+      sketchMoveStateForTest: sketchMoveObservation.state,
       selectGeometryIdsForTest: geometryIdSelection.select,
       focusWorldForTest: canvasTestDriver.focus,
-      displayZoomStateForTest(zoomRatio = null) {
-        if (zoomRatio != null) viewport.update({ scale: clampZoom(Number(zoomRatio) * CSS_PX_PER_MM) });
-        return {
-          units: { ...documentModel.units },
-          zoomRatio: viewport.scale / CSS_PX_PER_MM,
-          formatted: formatZoom(viewport.scale),
-          cssPixelsPerMillimeter: CSS_PX_PER_MM,
-          viewportScale: viewport.scale,
-        };
-      },
+      displayZoomStateForTest: displayZoomObservation.state,
       worldClientPositionForTest: canvasTestDriver.clientPosition,
       hitGeometryAtWorldForTest(point) {
         const x = Number(point?.x) || 0;
