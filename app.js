@@ -4898,6 +4898,15 @@
       readState: sketchProjectionTestObservation.state, clientPosition: canvasTestDriver.clientPosition, constraintGeometryId,
       setAppearanceForSelection, deleteElements, deleteCurrentSelection, deleteSketch, DEFAULT_SKETCH_ID,
     });
+    const sketchProjectionSourceEditing = window.SketchProjectionTestDriver.createSourceEditing({
+      currentScope: workspace.current, DEFAULT_SKETCH_ID, elementSketchId, addPointToSketch, solveSketchAndDependents,
+      updateUI, draw, readState: sketchProjectionTestObservation.state, readConstraints: sketchProjectionConstraints,
+      constraintSketchId, sketchProjectionSourceKey, createSketchProjectionTarget, SketchProjectionConstraint,
+      markReferenceConstraint, pushModelConstraint, synchronizeSketchProjectionMetadata,
+    });
+    const sketchProjectionReload = window.SketchProjectionTestDriver.createReload({
+      CURRENT_JSON_VERSION, serializeModel, loadModelData, updateUI, draw, readState: sketchProjectionTestObservation.state,
+    });
     const instanceCommandFixture = window.DerivedInstanceTestDriver.createCommandFixture({
       resetModelState, addPoint, addLine, focus: canvasTestDriver.focus, clientPosition: canvasTestDriver.clientPosition,
       resetHistory, updateUI, draw,
@@ -5093,56 +5102,8 @@
       moveBlockProjectionSketchProjectionSourceForTest: sketchProjectionBlockInteraction.move,
       deleteBlockProjectionSketchProjectionSourceForTest: sketchProjectionBlockInteraction.deleteSource,
       sketchProjectionStateForTest: sketchProjectionTestObservation.state,
-      moveSketchProjectionSourcesForTest(dx = 12, dy = 7, { changeShape = true, changeSplineStructure = false } = {}) {
-        const sourceSketchId = DEFAULT_SKETCH_ID;
-        for (const point of model.points.filter((item) => elementSketchId(item) === sourceSketchId)) {
-          point.x += Number(dx) || 0;
-          point.y += Number(dy) || 0;
-        }
-        if (changeShape) {
-          const circle = model.circles.find((item) => elementSketchId(item) === sourceSketchId);
-          const arc = model.arcs.find((item) => elementSketchId(item) === sourceSketchId);
-          if (circle) circle.radiusValue += 3;
-          if (arc) {
-            arc.radiusValue += 2;
-            arc.startAngle += 0.15;
-            arc.endAngle += 0.25;
-          }
-        }
-        if (changeSplineStructure) {
-          const spline = model.splines.find((item) => elementSketchId(item) === sourceSketchId);
-          if (spline) {
-            const a = spline.fitPoints[1];
-            const b = spline.fitPoints[2];
-            const point = addPointToSketch((a.x + b.x) / 2, (a.y + b.y) / 2 + 9, sourceSketchId, "endpoint");
-            spline.fitPoints.splice(2, 0, point);
-            spline.closed = true;
-            spline._curveCache = null;
-          }
-        }
-        const solved = solveSketchAndDependents(sourceSketchId);
-        updateUI();
-        draw();
-        return { success: solved.success && solved.dependent?.success !== false, state: this.sketchProjectionStateForTest() };
-      },
-      createSketchProjectionChainForTest() {
-        const upstream = sketchProjectionConstraints().find((constraint) => constraint.kind === "line" && constraintSketchId(constraint) === "S3");
-        if (!upstream) return null;
-        if (!model.sketches.some((sketch) => sketch.id === "S4")) {
-          model.sketches.push({ id: "S4", name: "Projection Chain", parentSketchId: "S3", kind: "sketch", appearance: {}, constructionAppearance: {}, dimensionAppearance: {}, visible: true });
-        }
-        model.activeSketchId = "S4";
-        const entry = { item: upstream.target, kind: "line", sketchId: "S3", key: sketchProjectionSourceKey(upstream.target) };
-        const target = createSketchProjectionTarget(entry, "S4");
-        const constraint = new SketchProjectionConstraint("line", upstream.target, target);
-        markReferenceConstraint(constraint, "S3", "S4");
-        pushModelConstraint(constraint, "S4");
-        synchronizeSketchProjectionMetadata("S4");
-        const solved = solveSketchAndDependents("S3");
-        updateUI();
-        draw();
-        return { success: solved.success && solved.dependent?.success !== false, state: this.sketchProjectionStateForTest() };
-      },
+      moveSketchProjectionSourcesForTest: sketchProjectionSourceEditing.move,
+      createSketchProjectionChainForTest: sketchProjectionSourceEditing.createChain,
       selectSketchProjectionTargetForTest: sketchProjectionGeometryInteraction.select,
       removeFirstSketchProjectionConstraintForTest: sketchProjectionGeometryInteraction.removeConstraint,
       setSketchProjectionAppearanceForTest: sketchProjectionGeometryInteraction.setAppearance,
@@ -5177,14 +5138,7 @@
           externalProjectionCount: selection.externalConstraints.filter((constraint) => constraint instanceof SketchProjectionConstraint).length,
         };
       },
-      reloadSketchProjectionForTest(version = CURRENT_JSON_VERSION) {
-        const data = structuredClone(serializeModel());
-        data.version = Number(version);
-        loadModelData(data);
-        updateUI();
-        draw();
-        return this.sketchProjectionStateForTest();
-      },
+      reloadSketchProjectionForTest: sketchProjectionReload.reload,
       referenceImageStateForTest() {
         return {
           selectedIds: canvasSelection.referenceImages.map((item) => item.id),

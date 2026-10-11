@@ -6,6 +6,10 @@
 
 ## 現在の再開地点（2026-10-12）
 
+Sketch Projectionのsource移動／形状・Spline構造変更とchain作成を既存SketchProjectionTestDriver.createSourceEditingへ、保存再読込をcreateReloadへ分離。source編集は現在scope／所属Sketch／拘束を照会して既存Point参照を変更し、target生成・参照metadata／拘束追加・同期と依存求解→UI→draw→stateへ委譲する。chainのupstream target同一参照、S4重複追加の回避、upstreamなしのnull、dependent求解の失敗判定を保持する。reloadは独立した六依存で保存値clone→版数Number変換→既存load→UI→draw→stateを保持し、Geometry生成／Solver依存を持たない。モデル／seq／cacheは複製せず、this経由のhook参照をreadStateへ置換。元の三つの処理本体との一致を確認。app.jsは8,271→8,225行（46行減、今回の合計2,833行減）。構文461ファイル・単体1,252件・関連E2E185件成功（exit 0、3.5分）。source形状／Spline構造の追随とchain参照の保存再読込のE2E2件、reloadのclone／変換・順序・load例外伝播の単体1件を追加した。最初のE2E起動は追加testの重複titleで収集に失敗し、重複分を除いて同じ対象を再実行し成功。テスト本体終了後の専用サーバー終了待ちは当該processを確認して終了し、正常終了を回収した。ログはcad-sketch-projection-source-driver-{check,unit,e2e,final-check,e2e-final}.log。全E2Eはこの単位では未実行。全体目標は未完了。
+
+### 前回の区切り
+
 Sketch Projectionのtarget選択／外観変更、最初の投影拘束・source／target Geometry・source Sketch削除の六つのAPIを既存SketchProjectionTestDriver.createGeometryInteractionへ分離。呼出し時の拘束reader・Geometry型・Selectionと既存編集／削除・表示／観測／client変換を明示し、fixture生成・Solver・Clipboard／Block化依存を持たせない。種別別Geometryの参照同一性、選択→UI→draw→state→client、編集／削除後state、対象なしのnull／falseと拒否結果を保持する。thisによるhook参照をprivate selectとreadState／clientPositionへ置換し、モデル／Selection／履歴／cacheは複製しない。元の六つの本体との一致を確認。app.jsは8,311→8,271行（40行減、今回の合計2,787行減）。構文461ファイル・単体1,251件・関連E2E183件成功（exit 0、3.5分）。既存E2Eに六つのhookの直接利用がなかったため、4つの単体境界テストを追加して五Geometry種別の同一参照、live readerと対象なし、操作拒否、削除payload、操作後観測を検証。対象E2Eはsketch-projection／互換fixture／command-panel／unified-ui／blocks／sketch-permissions。テスト本体終了後の専用サーバー終了待ちは当該processを確認して終了し、正常終了を回収した。ログはcad-sketch-projection-geometry-driver-{check,unit,e2e}.log。全E2Eはこの単位では未実行。全体目標は未完了。
 
 ### 前回の区切り

@@ -328,5 +328,74 @@
     return Object.freeze({ select, removeConstraint, setAppearance, deleteSource, deleteTarget, deleteSourceSketch });
   }
 
-  window.SketchProjectionTestDriver = Object.freeze({ createObservation, createGeometryFixture, createCompatibilityFixture, createBlockEditorFixture, createBlockProjectionFixture, createBlockProjectionInteraction, createGeometryInteraction });
+  function createSourceEditing({ currentScope, DEFAULT_SKETCH_ID, elementSketchId, addPointToSketch, solveSketchAndDependents,
+    updateUI, draw, readState, readConstraints, constraintSketchId, sketchProjectionSourceKey, createSketchProjectionTarget,
+    SketchProjectionConstraint, markReferenceConstraint, pushModelConstraint, synchronizeSketchProjectionMetadata }) {
+    function move(dx = 12, dy = 7, { changeShape = true, changeSplineStructure = false } = {}) {
+      const sourceSketchId = DEFAULT_SKETCH_ID;
+      for (const point of currentScope().points.filter((item) => elementSketchId(item) === sourceSketchId)) {
+        point.x += Number(dx) || 0;
+        point.y += Number(dy) || 0;
+      }
+      if (changeShape) {
+        const circle = currentScope().circles.find((item) => elementSketchId(item) === sourceSketchId);
+        const arc = currentScope().arcs.find((item) => elementSketchId(item) === sourceSketchId);
+        if (circle) circle.radiusValue += 3;
+        if (arc) {
+          arc.radiusValue += 2;
+          arc.startAngle += 0.15;
+          arc.endAngle += 0.25;
+        }
+      }
+      if (changeSplineStructure) {
+        const spline = currentScope().splines.find((item) => elementSketchId(item) === sourceSketchId);
+        if (spline) {
+          const a = spline.fitPoints[1];
+          const b = spline.fitPoints[2];
+          const point = addPointToSketch((a.x + b.x) / 2, (a.y + b.y) / 2 + 9, sourceSketchId, "endpoint");
+          spline.fitPoints.splice(2, 0, point);
+          spline.closed = true;
+          spline._curveCache = null;
+        }
+      }
+      const solved = solveSketchAndDependents(sourceSketchId);
+      updateUI();
+      draw();
+      return { success: solved.success && solved.dependent?.success !== false, state: readState() };
+    }
+
+    function createChain() {
+      const upstream = readConstraints().find((constraint) => constraint.kind === "line" && constraintSketchId(constraint) === "S3");
+      if (!upstream) return null;
+      if (!currentScope().sketches.some((sketch) => sketch.id === "S4")) {
+        currentScope().sketches.push({ id: "S4", name: "Projection Chain", parentSketchId: "S3", kind: "sketch", appearance: {}, constructionAppearance: {}, dimensionAppearance: {}, visible: true });
+      }
+      currentScope().activeSketchId = "S4";
+      const entry = { item: upstream.target, kind: "line", sketchId: "S3", key: sketchProjectionSourceKey(upstream.target) };
+      const target = createSketchProjectionTarget(entry, "S4");
+      const constraint = new SketchProjectionConstraint("line", upstream.target, target);
+      markReferenceConstraint(constraint, "S3", "S4");
+      pushModelConstraint(constraint, "S4");
+      synchronizeSketchProjectionMetadata("S4");
+      const solved = solveSketchAndDependents("S3");
+      updateUI();
+      draw();
+      return { success: solved.success && solved.dependent?.success !== false, state: readState() };
+    }
+    return Object.freeze({ move, createChain });
+  }
+
+  function createReload({ CURRENT_JSON_VERSION, serializeModel, loadModelData, updateUI, draw, readState }) {
+    function reload(version = CURRENT_JSON_VERSION) {
+      const data = structuredClone(serializeModel());
+      data.version = Number(version);
+      loadModelData(data);
+      updateUI();
+      draw();
+      return readState();
+    }
+    return Object.freeze({ reload });
+  }
+
+  window.SketchProjectionTestDriver = Object.freeze({ createObservation, createGeometryFixture, createCompatibilityFixture, createBlockEditorFixture, createBlockProjectionFixture, createBlockProjectionInteraction, createGeometryInteraction, createSourceEditing, createReload });
 })();

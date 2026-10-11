@@ -4,6 +4,7 @@ const path = require('node:path');
 const vm = require('node:vm');
 const test = require('node:test');
 const sandbox = { window: {} }; vm.createContext(sandbox);
+sandbox.structuredClone = structuredClone;
 vm.runInContext(fs.readFileSync(path.resolve(__dirname, '../../src/testing/sketch_projection_test_driver.js'), 'utf8'), sandbox);
 class Point { constructor(id, x = 10, y = 20) { Object.assign(this, { id, x, y }); } }
 class Line { constructor(id) { Object.assign(this, { id, p1: new Point('a', 0, 0), p2: new Point('b', 20, 40) }); } }
@@ -64,4 +65,20 @@ test('target and sketch deletion observe current state after delegated operation
   const result = f.command.deleteSourceSketch();
   assert.equal(result.deleted, false); assert.equal(result.state.propertiesText, 'after sketch deletion');
   assert.deepEqual(f.calls.slice(-2), [['delete sketch', 'source-sketch', false], ['state']]);
+});
+
+test('reload clones saved data, converts version and observes replacement only after load and repaint', () => {
+  const saved = { version: 24, points: [{ id: 'point', x: 10 }] }, calls = [];
+  let loaded, fail = false;
+  const command = sandbox.window.SketchProjectionTestDriver.createReload({ CURRENT_JSON_VERSION: 24,
+    serializeModel: () => saved,
+    loadModelData: data => { calls.push('load'); loaded = data; if (fail) throw new Error('load failed'); },
+    updateUI: () => calls.push('ui'), draw: () => calls.push('draw'),
+    readState: () => { calls.push('state'); return loaded; },
+  });
+  const result = command.reload('19');
+  assert.equal(result.version, 19); assert.notEqual(result.points[0], saved.points[0]); assert.equal(saved.version, 24);
+  assert.deepEqual(calls, ['load', 'ui', 'draw', 'state']);
+  calls.length = 0; fail = true;
+  assert.throws(() => command.reload(), /load failed/); assert.deepEqual(calls, ['load']);
 });

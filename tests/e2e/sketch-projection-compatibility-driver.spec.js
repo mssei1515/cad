@@ -2,6 +2,35 @@ const { test, expect, openTestDocument } = require('./test-fixture');
 
 test.beforeEach(async ({ page }) => { await openTestDocument(page); });
 
+test('source editing updates dependent geometry while preserving projection references', async ({ page }) => {
+  await page.evaluate(() => window.__jot2dTest.resetForSketchProjectionSharedKindsTest());
+  const result = await page.evaluate(() => window.__jot2dTest.moveSketchProjectionSourcesForTest(10, -5, { changeShape: true, changeSplineStructure: true }));
+  expect(result.success).toBe(true);
+  const links = new Map(result.state.constraints.map(link => [link.kind, link]));
+  expect(links.get('point').source).toMatchObject({ x: -35, y: -25 });
+  expect(links.get('point').target).toMatchObject({ x: -35, y: -25 });
+  expect(links.get('circle').source.radius).toBe(21);
+  expect(links.get('circle').target.radius).toBe(21);
+  expect(links.get('arc').target.radius).toBe(links.get('arc').source.radius);
+  expect(links.get('spline').source.fitPoints).toHaveLength(4);
+  expect(links.get('spline').target.fitPoints).toHaveLength(4);
+  expect(links.get('spline').target.closed).toBe(true);
+});
+
+test('projection chain keeps its upstream target reference through normal save reload', async ({ page }) => {
+  expect(await page.evaluate(() => window.__jot2dTest.createSketchProjectionChainForTest())).toBeNull();
+  await page.evaluate(() => window.__jot2dTest.resetForSketchProjectionRectangleTest());
+  const result = await page.evaluate(() => window.__jot2dTest.createSketchProjectionChainForTest());
+  expect(result.success).toBe(true);
+  const upstream = result.state.constraints.find(link => link.sketchId === 'S3');
+  const downstream = result.state.constraints.find(link => link.sketchId === 'S4');
+  expect(downstream.sourceId).toBe(upstream.targetId);
+  expect(downstream.target.points).toEqual(upstream.target.points);
+  const reloaded = await page.evaluate(version => window.__jot2dTest.reloadSketchProjectionForTest(String(version)), result.state.serialized.version);
+  expect(reloaded.constraints.map(link => [link.sourceId, link.targetId, link.sketchId])).toEqual(result.state.constraints.map(link => [link.sourceId, link.targetId, link.sketchId]));
+  expect(reloaded.sketches.filter(sketch => sketch.id === 'S4')).toHaveLength(1);
+});
+
 for (const reloadSharedVersion19 of [false, true]) {
   test(`rectangle projection retains shared sources and independent target endpoints, legacy reload ${reloadSharedVersion19}`, async ({ page }) => {
     const state = await page.evaluate(options => window.__jot2dTest.resetForSketchProjectionRectangleTest(options), { reloadSharedVersion19 });
