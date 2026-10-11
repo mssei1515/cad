@@ -6,6 +6,10 @@
 
 ## 現在の再開地点（2026-10-12）
 
+ConstraintCommitCommandへ読取寸法の登録、解決済み意図の配置／通常／参照commit振分け、寸法生成後の式設定と確定を集約。重複寸法は復元後に同じcommand内の登録へ進み、appへの戻り依存を撤去した。3処理の本体は元処理と一致し、測定値とdisabled flag、Selection→分析→UI→draw→案内／log→履歴、通常expression／参照省略、意図による既存の追加履歴を維持する。app.jsは9,665→9,627行（38行減、今回の合計1,431行減）。構文431ファイル・単体1,162件・関連E2E171件成功（exit 0、2.4分）。ログはcad-constraint-registration-{check,unit,e2e}.log。全E2Eはこの単位では未実行。全体目標は未完了。新規moduleは増やさず既存確定所有者へ統合し、生成・配置・現在Selection・共有sessionの接続整理は残る。
+
+### 前回の区切り
+
 未使用のhandleConstraintTargetClickを撤去し、拘束Canvas入力を既存ConstraintCommandInput→ConstraintTargetCommand→ConstraintTargetSessionの経路へ揃えた。Selectionから対象を作る処理はConstraintOperands.fromSelection、解決済み対象のCanvas選択反映はCanvasSelection.applyConstraintTargetsへ集約し、appには現在operand／Selection／pointerを渡す接続を保持。対象順序、円弧端点の重複除外、Spline最近点のfallbackとsampling、参照同一性、解除する選択範囲を維持する。変換本体は明示した入力以外元処理と一致。app.jsは9,822→9,665行（157行減、今回の合計1,393行減）。構文431ファイル・単体1,157件・関連E2E171件成功（exit 0、2.4分）。ログはcad-constraint-selection-{check,unit,e2e}.log。全E2Eはこの単位では未実行。全体目標は未完了。未使用APIの削除を広げず、既存CanvasSelectionの公開helperとダブルクリック経路は保持する。
 
 ### 前回の区切り

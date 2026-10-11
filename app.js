@@ -4019,30 +4019,15 @@
   function solveStepNormForConstraint(constraint) { return constraintSolvePreparation.stepNorm(constraint); }
   function withTemporarySolveStepNorm(stepNorm, callback) { return constraintSolvePreparation.withStepNorm(stepNorm, callback); }
 
-  function addReadOnlyDimensionConstraint(constraint, sketchId = constraintSketchId(constraint), messagePrefix = "重複寸法") {
-    if (!isDimensionConstraint(constraint)) return false;
-    const target = targetFromConstraint(constraint);
-    if (!target) return false;
-    constraint.target = measuredConstraintTargetValue(constraint, target, constraint.dimension);
-    constraint.readOnlyDimension = true;
-    constraint.enabled = false;
-    pushModelConstraint(constraint, sketchId);
-    clearSelection();
-    refreshConstraintAnalysis();
-    updateUI({ refreshAnalysis: false });
-    draw();
-    setHint(`${messagePrefix}を読み取り専用寸法として追加しました`);
-    log(`${messagePrefix}を読み取り専用寸法として追加しました`);
-    recordHistory(`${messagePrefix}を読み取り専用寸法として追加`);
-    return true;
-  }
+  function addReadOnlyDimensionConstraint(...args) { return constraintCommitCommand.readOnly(...args); }
 
   const constraintCommitCommand = window.ConstraintCommitCommand.create({
     guardSketchEdit, activeSketchId, constraintTargetsAreActive, snapshotModelState, restoreModelState,
     solveStepNormForConstraint, pushModelConstraint, preconditionNewConstraint, withTemporarySolveStepNorm,
     solveConstraintComponentAndDependents, isDimensionConstraint, isReadOnlyDimension, stabilizeActiveParameterNamespace,
     constraintSketchId, lineCollapseQuery, redundantConstraintInfo, acceptError: CONSTRAINT_ACCEPT_ERROR,
-    addReadOnlyDimensionConstraint, clearSelection, refreshConstraintAnalysis, updateUI, draw, setHint, log,
+    targetFromConstraint, measuredConstraintTargetValue, startDistanceResolution, distanceConstraintFromTarget,
+    clearSelection, refreshConstraintAnalysis, updateUI, draw, setHint, log,
     recordHistory, applicationText, isReferenceSourceSketchId, descendantSketchIds, wouldCreateReferenceCycle,
     sketchName, now: () => performance.now(), recordPerformance: trace => { lastAuthoringPerformance = trace; },
   });
@@ -4074,20 +4059,7 @@
 
   function startDistanceResolution(resolution, pointer) { return dimensionPlacementCommand.startDistanceResolution(resolution, pointer); }
 
-  function commitConstraintResolution(resolution, pointer = null) {
-    if (!guardSketchEdit(resolution?.sketchId || activeSketchId(), "constraint")) return false;
-    if (!resolution || resolution.error) {
-      if (resolution?.error) setHint(resolution.error, "error");
-      return false;
-    }
-    if (resolution.type === "distance") return startDistanceResolution(resolution, resolution.referenceSketchId ? null : pointer);
-    if (!resolution.constraint) return false;
-    const ok = resolution.referenceSketchId
-      ? commitReferenceConstraint(resolution.type || "reference", resolution.constraint, resolution.referenceSketchId, resolution.sketchId || activeSketchId())
-      : commitNewConstraint(resolution.type || "constraint", resolution.constraint);
-    if (ok) recordHistory(`拘束追加: ${resolution.type || "constraint"}`);
-    return ok;
-  }
+  function commitConstraintResolution(...args) { return constraintCommitCommand.resolution(...args); }
 
   const dimensionConstraintFactory = window.DimensionConstraintFactory.create({
     types: { PointAxisDistanceConstraint, DistanceConstraint, PointLineDistanceConstraint, LineLineDistanceConstraint,
@@ -4109,17 +4081,7 @@
     return dimensionReadOnlyQuery.forPlacement(target, value, dimension, options);
   }
 
-  function addDistanceConstraintFromTarget(target, value, dimension, options = {}) {
-    const constraint = distanceConstraintFromTarget(target, value, dimension);
-    if (!constraint) return false;
-    if (!options.referenceSketchId) constraint.expression = String(options.expression || value);
-    return commitConstraintResolution({
-      type: options.referenceSketchId ? "referenceDimension" : "dimension",
-      constraint,
-      referenceSketchId: options.referenceSketchId,
-      sketchId: options.sketchId || activeSketchId(),
-    });
-  }
+  function addDistanceConstraintFromTarget(...args) { return constraintCommitCommand.dimension(...args); }
 
   function constraintFromSelection(type) {
     return constraintFromTargets(type, currentConstraintTargets(), activeSketchId());

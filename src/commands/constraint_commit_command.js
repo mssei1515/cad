@@ -5,7 +5,8 @@
     solveStepNormForConstraint, pushModelConstraint, preconditionNewConstraint, withTemporarySolveStepNorm,
     solveConstraintComponentAndDependents, isDimensionConstraint, isReadOnlyDimension, stabilizeActiveParameterNamespace,
     constraintSketchId, lineCollapseQuery, redundantConstraintInfo, acceptError: CONSTRAINT_ACCEPT_ERROR,
-    addReadOnlyDimensionConstraint, clearSelection, refreshConstraintAnalysis, updateUI, draw, setHint, log,
+    targetFromConstraint, measuredConstraintTargetValue, startDistanceResolution, distanceConstraintFromTarget,
+    clearSelection, refreshConstraintAnalysis, updateUI, draw, setHint, log,
     recordHistory, applicationText, isReferenceSourceSketchId, descendantSketchIds, wouldCreateReferenceCycle,
     sketchName, now, recordPerformance }) {
     function commitNewConstraint(type, constraint) {
@@ -137,7 +138,53 @@
       return true;
     }
 
-    return Object.freeze({ ordinary: commitNewConstraint, reference: commitReferenceConstraint, markReference: markReferenceConstraint });
+    function addReadOnlyDimensionConstraint(constraint, sketchId = constraintSketchId(constraint), messagePrefix = "重複寸法") {
+      if (!isDimensionConstraint(constraint)) return false;
+      const target = targetFromConstraint(constraint);
+      if (!target) return false;
+      constraint.target = measuredConstraintTargetValue(constraint, target, constraint.dimension);
+      constraint.readOnlyDimension = true;
+      constraint.enabled = false;
+      pushModelConstraint(constraint, sketchId);
+      clearSelection();
+      refreshConstraintAnalysis();
+      updateUI({ refreshAnalysis: false });
+      draw();
+      setHint(`${messagePrefix}を読み取り専用寸法として追加しました`);
+      log(`${messagePrefix}を読み取り専用寸法として追加しました`);
+      recordHistory(`${messagePrefix}を読み取り専用寸法として追加`);
+      return true;
+    }
+
+    function commitConstraintResolution(resolution, pointer = null) {
+      if (!guardSketchEdit(resolution?.sketchId || activeSketchId(), "constraint")) return false;
+      if (!resolution || resolution.error) {
+        if (resolution?.error) setHint(resolution.error, "error");
+        return false;
+      }
+      if (resolution.type === "distance") return startDistanceResolution(resolution, resolution.referenceSketchId ? null : pointer);
+      if (!resolution.constraint) return false;
+      const ok = resolution.referenceSketchId
+        ? commitReferenceConstraint(resolution.type || "reference", resolution.constraint, resolution.referenceSketchId, resolution.sketchId || activeSketchId())
+        : commitNewConstraint(resolution.type || "constraint", resolution.constraint);
+      if (ok) recordHistory(`拘束追加: ${resolution.type || "constraint"}`);
+      return ok;
+    }
+
+    function addDistanceConstraintFromTarget(target, value, dimension, options = {}) {
+      const constraint = distanceConstraintFromTarget(target, value, dimension);
+      if (!constraint) return false;
+      if (!options.referenceSketchId) constraint.expression = String(options.expression || value);
+      return commitConstraintResolution({
+        type: options.referenceSketchId ? "referenceDimension" : "dimension",
+        constraint,
+        referenceSketchId: options.referenceSketchId,
+        sketchId: options.sketchId || activeSketchId(),
+      });
+    }
+
+    return Object.freeze({ readOnly: addReadOnlyDimensionConstraint, resolution: commitConstraintResolution, dimension: addDistanceConstraintFromTarget,
+      ordinary: commitNewConstraint, reference: commitReferenceConstraint, markReference: markReferenceConstraint });
   }
   window.ConstraintCommitCommand = Object.freeze({ create });
 })();
