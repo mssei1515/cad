@@ -6,6 +6,10 @@
 
 ## 現在の再開地点（2026-10-11）
 
+ClipboardGeometryへ派生InstanceのID予約・生成経路再接続・名前空間参照検査・正規化と追加を集約。生成後の投影参照登録はClipboardTransferに残し、順序を保つ。app.jsは10,901→10,889行（12行減）。構文405ファイル・単体1,062件・関連E2E197件成功（exit 0、2.5分）。ログはcad-clipboard-derived-build-{check,unit,e2e}.log。全E2Eはこの単位では未実行。全体目標は未完了。
+
+### 前回の区切り
+
 ClipboardGeometryへBlock Instanceの定義確認・生成・配置・ID対応表更新を集約。採番adapter以外の本体は元コードと機械照合して一致。投影cache／再接続と失敗復元は呼出側へ保持。app.jsは10,917→10,901行（16行減）。構文405ファイル・単体1,060件・関連E2E167件成功（exit 0、2.2分）。ログはcad-clipboard-blocks-{check,unit,e2e}.log。全E2Eはこの単位では未実行。全体目標は未完了。
 
 ### 前回の区切り

@@ -1,7 +1,7 @@
 /* Materialize copied primitive geometry and Block instances; the caller owns paste rollback and commit. */
 (() => {
   "use strict";
-  function create({ geometryIds, ensureLineMinimumLength, normalizeArcSweep, blockDefinitionById, allocateBlockInstanceId }) {
+  function create({ geometryIds, ensureLineMinimumLength, normalizeArcSweep, blockDefinitionById, allocateBlockInstanceId, allocateGeometryInstanceId, normalizeGeometryInstance, copiedGeometryInstance, applicationText }) {
     const { Point, Line, Circle, Arc, Spline } = window.GeometrySolver;
     const { normalizeAppearance } = window.Appearance;
     function append(model, payload, targetSketchId, dx, dy) {
@@ -78,7 +78,26 @@
       }
       return pastedBlockInstances;
     }
-    return Object.freeze({ append, appendBlocks });
+    function appendDerived(model, payload, targetSketchId, dx, dy, idMap, destinationNamespace) {
+      const copiedInstances = payload.geometryInstances || [];
+      for (const source of copiedInstances) {
+        const id = allocateGeometryInstanceId(source.type);
+        idMap.set(source.id, id);
+      }
+      const projectionRecords = copiedInstances.flatMap(source => Object.values(source.projection || {}).flat());
+      // Resolve legacy output IDs and multi-level instance paths before rewriting references.
+      for (let pass = 0; pass <= copiedInstances.length; pass++) {
+        for (const record of projectionRecords) idMap.set(record.id, record.path.flatMap(id => (idMap.get(id) || id).split('@')).join('@'));
+      }
+      if (payload.parameterNamespaceKey !== destinationNamespace && copiedInstances.some(source =>
+        [...source.sources, source.axis, source.direction].filter(Boolean).some(ref => !idMap.has(ref.path.join('@')) && !idMap.has(ref.path[0])))) {
+        throw new Error(applicationText('別の名前空間へ派生インスタンスを貼り付けるには参照先も選択してください', 'Also select referenced geometry to paste derived instances into another namespace'));
+      }
+      const pastedGeometryInstances = copiedInstances.map(source => normalizeGeometryInstance(copiedGeometryInstance(source, idMap, targetSketchId, dx, dy)));
+      model.geometryInstances.push(...pastedGeometryInstances);
+      return pastedGeometryInstances;
+    }
+    return Object.freeze({ append, appendBlocks, appendDerived });
   }
   window.ClipboardGeometry = Object.freeze({ create });
 })();

@@ -88,3 +88,35 @@ test('missing Block definition fails before allocating its ID and leaves earlier
   ] }, 'S1', 0, 0, ids), /missing/);
   assert.equal(allocated, 1); assert.equal(model.blockInstances.length, 1); assert.equal(ids.get('first'), 'BI1'); assert.equal(ids.has('second'), false);
 });
+
+test('derived creation reserves all owners and legacy paths before normalizing or adding copied instances', () => {
+  const transfer = { window: {} }; vm.createContext(transfer);
+  vm.runInContext(fs.readFileSync('src/editing/clipboard_transfer.js', 'utf8'), transfer);
+  const { copiedGeometryInstance } = transfer.window.ClipboardTransfer.create({});
+  const ids = new Map([['L1', 'L9']]), calls = [], model = { geometryInstances: [] };
+  const api = sandbox.window.ClipboardGeometry.create({ allocateGeometryInstanceId: type => { calls.push(type); return type === 'free' ? 'FI9' : 'MI9'; },
+    copiedGeometryInstance, normalizeGeometryInstance: item => { assert.equal(ids.get('legacy'), 'MI9@FI9@L9'); calls.push(item.id); return item; }, applicationText: (_ja, en) => en });
+  const source = { parameterNamespaceKey: 'document', geometryInstances: [
+    { id: 'FI1', type: 'free', sources: [{ kind: 'line', path: ['L1'] }], origin: { x: 0, y: 0 }, x: 2, y: 3, appearanceOverride: {} },
+    { id: 'MI1', type: 'mirror', sources: [{ kind: 'line', path: ['FI1', 'L1'] }], axis: { kind: 'line', path: ['L1'] },
+      projection: { lines: [{ id: 'legacy', path: ['MI1', 'FI1', 'L1'] }] }, appearanceOverride: {} },
+  ] };
+  const before = JSON.stringify(source);
+  const result = api.appendDerived(model, source, 'S2', 10, -4, ids, 'document');
+  assert.deepEqual(calls, ['free', 'mirror', 'FI9', 'MI9']); assert.equal(model.geometryInstances[0], result[0]);
+  assert.equal(result[0].x, 12); assert.equal(result[0].y, -1); assert.equal(result[1].sketchId, 'S2');
+  assert.deepEqual(plain(result[1].sources[0].path), ['FI9', 'L9']); assert.equal(result[1].projection, undefined);
+  assert.equal(JSON.stringify(source), before);
+});
+
+test('derived creation rejects cross-namespace external references after reservation but before model additions', () => {
+  let allocated = 0, normalized = 0;
+  const api = sandbox.window.ClipboardGeometry.create({ allocateGeometryInstanceId: () => 'FI' + ++allocated,
+    normalizeGeometryInstance: item => { normalized++; return item; }, copiedGeometryInstance: item => item,
+    applicationText: (_ja, en) => en });
+  const model = { geometryInstances: [] }, ids = new Map();
+  const payload = { parameterNamespaceKey: 'document', geometryInstances: [{ id: 'old', type: 'free', sources: [{ kind: 'line', path: ['external'] }] }] };
+  assert.throws(() => api.appendDerived(model, payload, 'S1', 0, 0, ids, 'block:BD1'), /another namespace/);
+  assert.equal(allocated, 1); assert.equal(normalized, 0); assert.equal(model.geometryInstances.length, 0); assert.equal(ids.get('old'), 'FI1');
+  api.appendDerived(model, payload, 'S1', 0, 0, ids, 'document'); assert.equal(normalized, 1); assert.equal(model.geometryInstances.length, 1);
+});

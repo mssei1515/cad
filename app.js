@@ -2668,6 +2668,8 @@
   const clipboardGeometry = window.ClipboardGeometry.create({
     geometryIds, ensureLineMinimumLength, normalizeArcSweep, blockDefinitionById,
     allocateBlockInstanceId: () => `BI${blockInstanceSeq++}`,
+    allocateGeometryInstanceId: type => type === "free" ? "FI" + freeInstanceSeq++ : type === "mirror" ? "MI" + mirrorInstanceSeq++ : type === "pattern" ? "PI" + patternInstanceSeq++ : "SPI" + sketchProjectionInstanceSeq++,
+    normalizeGeometryInstance, copiedGeometryInstance, applicationText,
   });
 
   const clipboardPasteCheckpoint = window.ClipboardPasteCheckpoint.create({
@@ -2713,22 +2715,8 @@
       payload.blockInstances.forEach((source, index) => mapClipboardBlockProjection(source, pastedBlockInstances[index], idMap, pointById, lineById, primitiveById));
       const copiedInstances = payload.geometryInstances || [];
       for (const source of payload.hatches || []) idMap.set(source.id, 'H' + hatchSeq++);
-      for (const source of copiedInstances) {
-        const id = source.type === 'free' ? 'FI' + freeInstanceSeq++ : source.type === 'mirror' ? 'MI' + mirrorInstanceSeq++ : source.type === 'pattern' ? 'PI' + patternInstanceSeq++ : 'SPI' + sketchProjectionInstanceSeq++;
-        idMap.set(source.id, id);
-      }
-      const projectionRecords = copiedInstances.flatMap(source => Object.values(source.projection || {}).flat());
-      // Resolve legacy output IDs and multi-level instance paths before rewriting references.
-      for (let pass = 0; pass <= copiedInstances.length; pass++) {
-        for (const record of projectionRecords) idMap.set(record.id, record.path.flatMap(id => (idMap.get(id) || id).split('@')).join('@'));
-      }
       const destinationNamespace = currentBlockDefinitionScopeId() ? 'block:' + currentBlockDefinitionScopeId() : 'document';
-      if (payload.parameterNamespaceKey !== destinationNamespace && copiedInstances.some(source =>
-        [...source.sources, source.axis, source.direction].filter(Boolean).some(ref => !idMap.has(ref.path.join('@')) && !idMap.has(ref.path[0])))) {
-        throw new Error(applicationText('別の名前空間へ派生インスタンスを貼り付けるには参照先も選択してください', 'Also select referenced geometry to paste derived instances into another namespace'));
-      }
-      const pastedGeometryInstances = copiedInstances.map(source => normalizeGeometryInstance(copiedGeometryInstance(source, idMap, targetSketchId, dx, dy)));
-      model.geometryInstances.push(...pastedGeometryInstances);
+      const pastedGeometryInstances = clipboardGeometry.appendDerived(model, payload, targetSketchId, dx, dy, idMap, destinationNamespace);
       invalidateBlockProjectionCache();
       const pastedAnnotations = [];
       for (const source of payload.annotations || []) {
