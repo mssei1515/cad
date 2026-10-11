@@ -3071,6 +3071,7 @@
   const constraintSelectionQuery = window.ConstraintSelectionQuery.create({
     session: constraintTargetSession, selection: canvasSelection, candidates: constraintCandidates,
     resolveConstraintIntent, constraintOperandsFromSelection, activeSketchId, isGeometryMode,
+    elementSketchId, canEditSketch, findLineFixedConstraint, selectedGeometryItems,
   });
   function canApplyConstraint(type) { return constraintSelectionQuery.canApply(type); }
 
@@ -3239,85 +3240,20 @@
     return model.constraints.some((constraint) => constraintSketchId(constraint) === sketchId && constraint.dimension);
   }
 
-  function selectedFixedBatchTargets() {
-    const points = canvasSelection.points.filter((item) => !item.blockProjection);
-    const lines = canvasSelection.lines.filter((item) => !item.blockProjection);
-    const supportedCount = points.length + lines.length;
-    const selectedCount = canvasSelection.points.length + canvasSelection.lines.length + canvasSelection.circles.length + canvasSelection.arcs.length + canvasSelection.splines.length
-      + canvasSelection.blockInstances.length + canvasSelection.geometryInstances.length + canvasSelection.annotations.length + canvasSelection.hatches.length + canvasSelection.referenceImages.length;
-    if (canvasSelection.arcEndpoint || supportedCount === 0 || supportedCount !== selectedCount) return null;
-    const sketchIds = new Set([...points, ...lines].map(elementSketchId));
-    if (sketchIds.size !== 1) return null;
-    const sketchId = [...sketchIds][0];
-    if (!canEditSketch(sketchId, "constraint")) return null;
-    return { points, lines, sketchId };
-  }
-
-  function fixedBatchIsFullyFixed(batch) {
-    return Boolean(batch) && batch.points.every((point) => point.fixed) && batch.lines.every((line) => Boolean(findLineFixedConstraint(line)));
-  }
-
-  function updateConstraintButtons() {
-    if (!isGeometryMode()) {
-      for (const btn of constraintButtons) {
-        btn.classList.remove("active");
-        btn.setAttribute("aria-disabled", "true");
-        btn.setAttribute("aria-pressed", "false");
+  function selectedFixedBatchTargets() { return constraintSelectionQuery.fixedBatch(); }
+  function fixedBatchIsFullyFixed(batch) { return constraintSelectionQuery.fullyFixed(batch); }
+  const constraintControlsView = window.ConstraintControlsView.create({
+    document, constraintButtons, constraintMenuButtons, fixPointBtn, isGeometryMode,
+    prepareGeometryControls: () => {
+      if (pendingCommand?.type?.startsWith("distance")) {
+        const target = distanceTargetFromSelection();
+        if (!target || target.kind === "invalid") cancelPendingCommand("寸法入力をキャンセルしました");
       }
-      for (const btn of constraintMenuButtons) {
-        btn.classList.remove("active");
-        btn.setAttribute("aria-disabled", "true");
-        btn.setAttribute("aria-pressed", "false");
-      }
-      fixPointBtn?.setAttribute("aria-disabled", "true");
-      fixPointBtn?.setAttribute("aria-pressed", "false");
-      fixPointBtn?.classList.remove("active");
-      return;
-    }
-    if (pendingCommand?.type?.startsWith("distance")) {
-      const target = distanceTargetFromSelection();
-      if (!target || target.kind === "invalid") cancelPendingCommand("寸法入力をキャンセルしました");
-    }
-
-    for (const btn of constraintButtons) {
-      btn.setAttribute("aria-disabled", "false");
-      const active = constraintTargetSession.command?.type === btn.dataset.constraint;
-      btn.classList.toggle("active", active);
-      btn.setAttribute("aria-pressed", String(active));
-    }
-    for (const btn of constraintMenuButtons) {
-      const type = btn.dataset.menuConstraint;
-      const source = type === "fixed"
-        ? fixPointBtn
-        : constraintButtons.find((candidate) => candidate.dataset.constraint === type);
-      const disabled = source?.getAttribute("aria-disabled") === "true";
-      const active = source?.getAttribute("aria-pressed") === "true";
-      btn.classList.toggle("active", active);
-      btn.setAttribute("aria-disabled", String(disabled));
-      btn.setAttribute("aria-pressed", String(active));
-    }
-    const selectedProjectionItems = [...canvasSelection.points, ...canvasSelection.lines, ...canvasSelection.circles, ...canvasSelection.arcs, ...canvasSelection.splines].filter((item) => item?.blockProjection);
-    const selectedProjectionInstances = [...new Set(selectedProjectionItems.map((item) => item.blockInstance))];
-    const fixedBatch = selectedFixedBatchTargets();
-    const canToggleFixed =
-      (canvasSelection.annotations.length === 1 && canvasSelection.selectedElementCount() === 1) ||
-      (canvasSelection.blockInstances.length === 1 && selectedGeometryItems().length === 0 && canvasSelection.annotations.length === 0 && canvasSelection.hatches.length === 0 && canvasSelection.referenceImages.length === 0) ||
-      (selectedProjectionItems.length > 0 && selectedProjectionInstances.length === 1 && selectedProjectionItems.length === canvasSelection.points.length + canvasSelection.lines.length + canvasSelection.circles.length + canvasSelection.arcs.length + canvasSelection.splines.length) ||
-      Boolean(canvasSelection.arcEndpoint) ||
-      Boolean(fixedBatch);
-    const fixedCommandActive = constraintTargetSession.command?.type === "fixed";
-    fixPointBtn.setAttribute("aria-disabled", String(!canToggleFixed && hasSelection() && !fixedCommandActive));
-    fixPointBtn.classList.toggle("active", fixedCommandActive);
-    fixPointBtn.setAttribute("aria-pressed", String(fixedCommandActive));
-
-    const enabled = constraintButtons
-      .filter((btn) => btn.getAttribute("aria-disabled") !== "true")
-      .map((btn) => translatedExactText(btn.dataset.label || btn.title));
-    const help = enabled.length > 0
-      ? `${applicationText("追加可能", "Available")}: ${enabled.join(" / ")}`
-      : applicationText("点または線を選択すると、追加できる拘束だけが有効になります。", "Select points or lines to enable applicable constraints.");
-    document.getElementById("hint").title = help;
-  }
+    },
+    getCommandType: () => constraintTargetSession.command?.type,
+    fixedToggleAllowed: constraintSelectionQuery.fixedToggleAllowed, hasSelection, translatedExactText, applicationText,
+  });
+  function updateConstraintButtons() { constraintControlsView.update(); }
 
   function clearInteractionForSketchChange() {
     sketchMoveCommand?.reset();

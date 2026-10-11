@@ -6,6 +6,10 @@
 
 ## 現在の再開地点（2026-10-12）
 
+ConstraintControlsViewへ拘束ボタン／メニュー／Fixボタンのactive・ARIAとhint title反映を分離し、ConstraintSelectionQueryへFix一括対象・全対象の固定状態・操作可否の照会を集約した。Geometry mode外の短絡、保留寸法確認→拘束ボタン→メニュー→Fix→hintの順序、メニューがFix更新前の属性を読む既存動作を保持する。appは寸法取消条件と操作を接続し、Viewはmodel・Selectionやpendingを変更しない。元の対象照会・固定判定・可否式・DOM更新順序との一致を確認した。app.jsは9,508→9,444行（64行減、今回の合計1,614行減）。構文439ファイル・単体1,189件成功。関連E2E151件（2.2分）とFix専用4件（4.3秒）が成功（いずれもexit 0、合計155件）。ログはcad-constraint-controls-{check,unit,e2e}.logとcad-constraint-controls-fixed-e2e.log。全E2Eはこの単位では未実行。全体目標は未完了。共有pendingと残る寸法編集／取消入口、command生成・接続の整理は続く。
+
+### 前回の区切り
+
 選択可視性の対象収集と全対象の非表示判定をPropertySelectionへ、変更／履歴／UI更新をSelectionVisibilityCommandへ分離した。Properties対象の優先順位と混同せず、inspection／Root／作図Sketch／Block投影の除外、寸法の同一参照による重複除去、Instanceの明示上書き／実効外観／空bundleの継承判定を保持する。通常対象の一括変更→派生Instance上書き→一回の履歴の順序と既存の中間drawを維持する。3処理の本体は依存先と名称以外元処理と一致。コマンド生成を外観依存の初期化後へ配置し、E2Eで検出した起動時参照エラーを解消した。app.jsは9,548→9,508行（40行減、今回の合計1,550行減）。構文437ファイル・単体1,181件・関連E2E168件成功（exit 0、2.4分）。ログはcad-selection-visibility-{check,unit,e2e}.log。全E2Eはこの単位では未実行。全体目標は未完了。appは3つのhoisted入口と明示した生成／接続を保持する。
 
 ### 前回の区切り

@@ -1,7 +1,8 @@
 /* Read current selection and constraint session capabilities; intent execution stays with commands. */
 (() => {
   "use strict";
-  function create({ session, selection, candidates, resolveConstraintIntent, constraintOperandsFromSelection, activeSketchId, isGeometryMode }) {
+  function create({ session, selection, candidates, resolveConstraintIntent, constraintOperandsFromSelection, activeSketchId, isGeometryMode,
+    elementSketchId, canEditSketch, findLineFixedConstraint, selectedGeometryItems }) {
     const { distanceTargetFromTargets, canApplyConstraintToTargets, constraintFromTargets } = candidates;
     const currentConstraintTargets = selection.currentConstraintTargets;
     function distanceTargetFromSelection() {
@@ -51,7 +52,36 @@
     function constraintFromSelection(type) {
       return constraintFromTargets(type, currentConstraintTargets(), activeSketchId());
     }
-    return Object.freeze({ canApply: canApplyConstraint, canComplete: canCompleteConstraintCommand,
+    function selectedFixedBatchTargets() {
+      const points = selection.points.filter((item) => !item.blockProjection);
+      const lines = selection.lines.filter((item) => !item.blockProjection);
+      const supportedCount = points.length + lines.length;
+      const selectedCount = selection.points.length + selection.lines.length + selection.circles.length + selection.arcs.length + selection.splines.length
+        + selection.blockInstances.length + selection.geometryInstances.length + selection.annotations.length + selection.hatches.length + selection.referenceImages.length;
+      if (selection.arcEndpoint || supportedCount === 0 || supportedCount !== selectedCount) return null;
+      const sketchIds = new Set([...points, ...lines].map(elementSketchId));
+      if (sketchIds.size !== 1) return null;
+      const sketchId = [...sketchIds][0];
+      if (!canEditSketch(sketchId, "constraint")) return null;
+      return { points, lines, sketchId };
+    }
+
+    function fixedBatchIsFullyFixed(batch) {
+      return Boolean(batch) && batch.points.every((point) => point.fixed) && batch.lines.every((line) => Boolean(findLineFixedConstraint(line)));
+    }
+
+    function fixedToggleAllowed() {
+      const selectedProjectionItems = [...selection.points, ...selection.lines, ...selection.circles, ...selection.arcs, ...selection.splines].filter((item) => item?.blockProjection);
+      const selectedProjectionInstances = [...new Set(selectedProjectionItems.map((item) => item.blockInstance))];
+      const fixedBatch = selectedFixedBatchTargets();
+      return (selection.annotations.length === 1 && selection.selectedElementCount() === 1) ||
+        (selection.blockInstances.length === 1 && selectedGeometryItems().length === 0 && selection.annotations.length === 0 && selection.hatches.length === 0 && selection.referenceImages.length === 0) ||
+        (selectedProjectionItems.length > 0 && selectedProjectionInstances.length === 1 && selectedProjectionItems.length === selection.points.length + selection.lines.length + selection.circles.length + selection.arcs.length + selection.splines.length) ||
+        Boolean(selection.arcEndpoint) ||
+        Boolean(fixedBatch);
+    }
+
+    return Object.freeze({ fixedBatch: selectedFixedBatchTargets, fullyFixed: fixedBatchIsFullyFixed, fixedToggleAllowed, canApply: canApplyConstraint, canComplete: canCompleteConstraintCommand,
       resolution: constraintResolutionFromCurrentSelection, distanceTarget: distanceTargetFromSelection });
   }
   window.ConstraintSelectionQuery = Object.freeze({ create });
