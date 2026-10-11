@@ -6,6 +6,10 @@
 
 ## 現在の再開地点（2026-10-11）
 
+ClipboardPasteCheckpointへ貼付け直前の配列長・採番・modelカウンタの保持と復元を分離。明示したscopeを保持し既存Objectを複製せず、復元対象と順序を維持する。採番変数へのadapterはappに残る。app.jsは11,014→10,995行（19行減）。構文403ファイル・単体1,043件・関連E2E167件成功（exit 0、2.2分）。ログはcad-clipboard-checkpoint-{check,unit,e2e}.log。全E2Eはこの単位では未実行。全体目標は未完了。
+
+### 前回の区切り
+
 ClipboardGeometryへコピーしたプリミティブの生成・指定Sketchへの追加・IDと参照Mapの構築を分離。GeometryCreationの最小長／円弧正規化を注入し、Selection・履歴・pasteCount・失敗復元を持ち込まない。生成処理本体は元コードと機械照合して一致。app.jsは11,058→11,014行（44行減）。構文401ファイル・単体1,040件・関連E2E167件成功（exit 0、2.2分）。ログはcad-clipboard-geometry-{check,unit,e2e}.log。全E2Eは今回未実行。週枠残量70%未満で停止する最新指示へ方針書を更新。全体目標は未完了。
 
 ## 前回の停止地点（2026-10-10）

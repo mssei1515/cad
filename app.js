@@ -2671,6 +2671,18 @@
 
   const clipboardGeometry = window.ClipboardGeometry.create({ geometryIds, ensureLineMinimumLength, normalizeArcSweep });
 
+  const clipboardPasteCheckpoint = window.ClipboardPasteCheckpoint.create({
+    geometryIds,
+    captureSequences: () => ({ annotationSeq, hatchSeq, referenceImageSeq, sketchProjectionInstanceSeq, mirrorInstanceSeq, patternInstanceSeq, freeInstanceSeq, blockInstanceSeq }),
+    restoreSequences: sequences => {
+      blockInstanceSeq = sequences.blockInstanceSeq;
+      ({ sketchProjectionInstanceSeq, mirrorInstanceSeq, patternInstanceSeq, freeInstanceSeq } = sequences);
+      annotationSeq = sequences.annotationSeq;
+      hatchSeq = sequences.hatchSeq;
+      referenceImageSeq = sequences.referenceImageSeq;
+    },
+  });
+
   function serializedDimensionExpressionValue(data) {
     const value = Number(data?.target);
     return data?.type === "lineAngle" ? angleDegrees(value) : value;
@@ -2699,20 +2711,7 @@
     const offset = (CLIPBOARD_PASTE_OFFSET_SCREEN_PX * pasteNumber) / viewport.scale;
     const dx = offset;
     const dy = offset;
-    const initialLengths = {
-      points: model.points.length,
-      lines: model.lines.length,
-      circles: model.circles.length,
-      arcs: model.arcs.length,
-      splines: model.splines.length,
-      constraints: model.constraints.length,
-      blockInstances: model.blockInstances.length,
-      geometryInstances: model.geometryInstances.length,
-      annotations: model.annotations.length,
-      hatches: model.hatches.length,
-      referenceImages: model.referenceImages.length,
-    };
-    const initialSequences = { ...geometryIds.snapshot(), annotationSeq, hatchSeq, referenceImageSeq, sketchProjectionInstanceSeq, mirrorInstanceSeq, patternInstanceSeq, freeInstanceSeq, nextHatchIndex: model.nextHatchIndex, blockInstanceSeq, nextDimensionParameterIndex: model.nextDimensionParameterIndex };
+    const checkpoint = clipboardPasteCheckpoint.capture(model);
 
     try {
       const { idMap, pointById, lineById, primitiveById } =
@@ -2879,25 +2878,7 @@
       setHint(`${sketchName(targetSketchId)} に図形を貼り付けました（${clipboardPayloadCount(payload)}要素）`);
       return true;
     } catch (error) {
-      model.points.length = initialLengths.points;
-      model.lines.length = initialLengths.lines;
-      model.circles.length = initialLengths.circles;
-      model.arcs.length = initialLengths.arcs;
-      model.splines.length = initialLengths.splines;
-      model.constraints.length = initialLengths.constraints;
-      model.blockInstances.length = initialLengths.blockInstances;
-      model.geometryInstances.length = initialLengths.geometryInstances;
-      model.annotations.length = initialLengths.annotations;
-      model.hatches.length = initialLengths.hatches;
-      model.referenceImages.length = initialLengths.referenceImages;
-      geometryIds.restore(initialSequences);
-      blockInstanceSeq = initialSequences.blockInstanceSeq;
-      ({ sketchProjectionInstanceSeq, mirrorInstanceSeq, patternInstanceSeq, freeInstanceSeq } = initialSequences);
-      annotationSeq = initialSequences.annotationSeq;
-      hatchSeq = initialSequences.hatchSeq;
-      referenceImageSeq = initialSequences.referenceImageSeq;
-      model.nextHatchIndex = initialSequences.nextHatchIndex;
-      model.nextDimensionParameterIndex = initialSequences.nextDimensionParameterIndex;
+      checkpoint.rollback();
       invalidateBlockProjectionCache();
       clearSelection();
       updateUI();

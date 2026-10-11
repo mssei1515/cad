@@ -509,3 +509,6 @@ AuthoringPreviewRendererへSpline／Centerline／Trim描画も統合。Spline構
 
 
 ClipboardGeometry（src/editing/clipboard_geometry.js）はコピー値からPoint・Line・Circle・Arc・Splineを生成し、指定scopeの配列へ順に追加する。ID発行器と既存の最小長／円弧正規化を注入し、明示したmodel・payload・Sketch・移動量を使用する。端点・中心・通過点は生成済みの実オブジェクトへ結び直し、後続のBlock／拘束再接続に必要なID Map・オブジェクトMapを返す。途中失敗で追加された要素と採番の巻戻しは貼付け全体のtransactionが担当し、このmoduleはSelection・履歴・Clipboard session・UIを所有しない。GeometryCreationの通常作図とはコピー値の復元と参照Map生成が異なり、正規化方針は同じ既存APIへ委譲する。
+
+
+ClipboardPasteCheckpoint（src/editing/clipboard_paste_checkpoint.js）は貼付け直前のscope配列長・Geometry採番・他要素の採番・model内カウンタを保持し、失敗時に同じscopeへ復元する。要素をdeep cloneせず既存Objectと配列の同一性を保つ。復元順は配列長、Geometry採番、他の採番、modelカウンタ。appの採番変数はcaptureSequences／restoreSequences adapterで接続する。既存要素の値、ClipboardのpasteCount、Selection、mode、履歴、投影cacheはこのcheckpointの対象外で、既存の失敗復元範囲を拡張しない。操作全体のtry/catchとUI更新は呼出側が所有する。

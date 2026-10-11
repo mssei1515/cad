@@ -4,7 +4,7 @@ const path = require("node:path");
 const files = [
   "src/persistence/document_bookmarks.js", "tests/e2e/document-bookmarks.spec.js",
   "tests/e2e/derived-selection-copy.spec.js",
-  "src/editing/clipboard_transfer.js", "src/editing/clipboard_payload.js", "src/editing/clipboard_geometry.js", "tests/unit/clipboard-transfer.test.js", "tests/unit/clipboard-geometry.test.js",
+  "src/editing/clipboard_transfer.js", "src/editing/clipboard_payload.js", "src/editing/clipboard_geometry.js", "src/editing/clipboard_paste_checkpoint.js", "tests/unit/clipboard-transfer.test.js", "tests/unit/clipboard-geometry.test.js", "tests/unit/clipboard-paste-checkpoint.test.js",
   "src/geometry/export_region.js", "src/rendering/canvas_export.js", "src/persistence/png_file.js", "src/commands/png_export_command.js", "tests/unit/png-export.test.js", "tests/e2e/png-export.spec.js",
   "src/ui/annotation_command_panel.js", "src/ui/annotation_input_controller.js", "tests/e2e/unified-annotations.spec.js",
   "src/ui/command_panel.js", "src/ui/derived_command_panel.js", "tests/e2e/command-panel.spec.js",
