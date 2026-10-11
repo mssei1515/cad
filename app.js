@@ -4915,6 +4915,19 @@
       copySelectionToClipboard, pasteGeometryClipboard, clipboardSession, readState: sketchProjectionTestObservation.state,
       blockSelectionGeometry, createBlockDefinitionFromSelection, blockSelectionBoundsCenter, SketchProjectionConstraint,
     });
+    const propertyAppearanceObservation = window.PropertiesTestDriver.createAppearanceObservation({
+      allGeometryPoints, allGeometryLines, allGeometryCircles, allGeometryArcs, allGeometrySplines, blockInstanceById, blockProjectionBundle,
+      normalizeAppearance, effectiveAppearanceForElement, isVisibleSketchElement,
+    });
+    const propertiesFixture = window.PropertiesTestDriver.createFixture({
+      resetModelState, clearSelection, addPoint, addLine, addCircle, canvasSelection, currentScope: workspace.current, ROOT_SKETCH_ID, resetHistory, updateUI, draw,
+    });
+    const propertiesObservation = window.PropertiesTestDriver.createPropertiesObservation({
+      selectedPropertiesTarget, canvasSelection, normalizeAppearance, effectiveAppearanceForElement, document, readHistory: readTestHistory,
+    });
+    const fixedObservation = window.PropertiesTestDriver.createFixedObservation({
+      currentScope: workspace.current, elementSketchId, findLineFixedConstraint, LineFixedConstraint, fixPointBtn, readHistory: readTestHistory,
+    });
     const parameterFixture = window.ParameterTestDriver.createFixture({
       resetModelState, addPoint, addLine, pushModelConstraint, HorizontalConstraint, DistanceConstraint, dimensionFromAnchor, currentScope: workspace.current,
       formatParameterReference, createEmptyBlockDefinition, Point, Line, DEFAULT_SKETCH_ID, ensureParameterNamespace,
@@ -5146,77 +5159,11 @@
       parameterStateForTest: parameterObservation.state,
       blockParameterFreezeForTest: parameterInteraction.freezeBlock,
       deleteDimensionByNameForTest: parameterInteraction.deleteDimension,
-      appearanceStateForTest(kind, id) {
-        let item = null;
-        if (kind === "point") item = allGeometryPoints().find((value) => value.id === id);
-        if (kind === "line") item = allGeometryLines().find((value) => value.id === id);
-        if (kind === "circle") item = allGeometryCircles().find((value) => value.id === id);
-        if (kind === "arc") item = allGeometryArcs().find((value) => value.id === id);
-        if (kind === "spline") item = allGeometrySplines().find((value) => value.id === id);
-        if (kind === "block") {
-          const instance = blockInstanceById(id);
-          item = instance ? [...blockProjectionBundle(instance).lines, ...blockProjectionBundle(instance).circles, ...blockProjectionBundle(instance).arcs, ...(blockProjectionBundle(instance).splines || [])][0] : null;
-        }
-        return item ? { direct: normalizeAppearance(item.appearance), effective: effectiveAppearanceForElement(item), visible: isVisibleSketchElement(item) } : null;
-      },
-      resetForMultiplePropertiesTest(mixedTypes = false) {
-        resetModelState();
-        clearSelection();
-        const lines = [
-          addLine(addPoint(-80, -20, false, "endpoint"), addPoint(-20, -20, false, "endpoint")),
-          addLine(addPoint(20, 20, false, "endpoint"), addPoint(80, 20, false, "endpoint")),
-        ];
-        lines[0].appearance = { color: "#dc2626", lineType: "solid", lineWidth: 1 };
-        lines[1].appearance = { color: "#2563eb", lineType: "dotted", lineWidth: 3 };
-        canvasSelection.set("lines", mixedTypes ? [lines[0]] : lines);
-        if (mixedTypes) {
-          const circle = addCircle(addPoint(0, 65, false, "endpoint"), 20);
-          circle.appearance = { color: "#16a34a", lineType: "dashed", lineWidth: 4 };
-          canvasSelection.set("circles", [circle]);
-        }
-        resetHistory("multiple properties test");
-        updateUI();
-        draw();
-        return { ids: lines.map((line) => line.id) };
-      },
-      multiplePropertiesStateForTest() {
-        return {
-          targetKind: selectedPropertiesTarget().kind,
-          lines: canvasSelection.lines.map((line) => ({ id: line.id, construction: line.construction, appearance: normalizeAppearance(line.appearance), effective: effectiveAppearanceForElement(line) })),
-          circles: canvasSelection.circles.map((circle) => ({ id: circle.id, construction: circle.construction, appearance: normalizeAppearance(circle.appearance), effective: effectiveAppearanceForElement(circle) })),
-          propertiesText: document.getElementById("propertiesPanel")?.textContent || "",
-          history: this.historyState(),
-        };
-      },
-      resetForMultipleFixedTest() {
-        resetModelState();
-        model.sketches.push({ id: "S2", name: "Batch Fix", parentSketchId: ROOT_SKETCH_ID, kind: "sketch", appearance: {}, constructionAppearance: {}, dimensionAppearance: {} });
-        model.activeSketchId = "S2";
-        const p1 = addPoint(-60, -20, false, "endpoint");
-        const p2 = addPoint(-10, -20, false, "endpoint");
-        const p3 = addPoint(10, 20, false, "endpoint");
-        const p4 = addPoint(60, 20, false, "endpoint");
-        const point = addPoint(0, 70, false, "explicit");
-        const lines = [addLine(p1, p2), addLine(p3, p4)];
-        clearSelection();
-        canvasSelection.set("points", [point]);
-        canvasSelection.set("lines", lines);
-        resetHistory("multiple fixed test");
-        updateUI();
-        draw();
-        return { pointId: point.id, lineIds: lines.map((line) => line.id) };
-      },
-      multipleFixedStateForTest() {
-        const sketchPoints = model.points.filter((point) => elementSketchId(point) === "S2");
-        const sketchLines = model.lines.filter((line) => elementSketchId(line) === "S2");
-        return {
-          fixedPointIds: sketchPoints.filter((point) => point.fixed).map((point) => point.id),
-          fixedLineIds: sketchLines.filter((line) => findLineFixedConstraint(line)).map((line) => line.id),
-          constraintCount: model.constraints.filter((constraint) => constraint instanceof LineFixedConstraint).length,
-          buttonDisabled: fixPointBtn.getAttribute("aria-disabled"),
-          history: this.historyState(),
-        };
-      },
+      appearanceStateForTest: propertyAppearanceObservation.appearance,
+      resetForMultiplePropertiesTest: propertiesFixture.resetProperties,
+      multiplePropertiesStateForTest: propertiesObservation.state,
+      resetForMultipleFixedTest: propertiesFixture.resetFixed,
+      multipleFixedStateForTest: fixedObservation.state,
       viewStateForTest() {
         return {
           ...viewState,
