@@ -4850,6 +4850,33 @@
         constructionButtonActive: document.getElementById("toolConstructionLine")?.classList.contains("active"),
       };
     }
+    function readTestSelectedGeometry() {
+      return {
+        points: canvasSelection.points.map((point) => point.id),
+        lines: canvasSelection.lines.map((line) => line.id),
+        circles: canvasSelection.circles.map((circle) => circle.id),
+        arcs: canvasSelection.arcs.map((arc) => arc.id),
+        splines: canvasSelection.splines.map((spline) => spline.id),
+        blockInstances: canvasSelection.blockInstances.map((instance) => instance.id),
+      };
+    }
+    const clipboardTestObservation = window.ClipboardTestDriver.createObservation({
+      currentScope: workspace.current, serializeModel, isRootSketch, elementSketchId, activeSketchId,
+      readSelected: readTestSelectedGeometry, canvasSelection, clipboardSession, readHistory: readTestHistory,
+    });
+    const geometryClipboardFixture = window.ClipboardTestDriver.createGeometryFixture({
+      resetModelState, clipboardSession, viewport, currentScope: workspace.current, ROOT_SKETCH_ID, addPoint, addLine, addCircle, addArc,
+      pushModelConstraint, HorizontalConstraint, DistanceConstraint, RadiusConstraint, EqualRadiusConstraint,
+      PointVerticalConstraint, LineFixedConstraint, ArcEndpointFixedConstraint, dimensionFromAnchor, arcEndpointPoint,
+      canvasSelection, resetHistory, updateUI, draw, readState: clipboardTestObservation.state,
+    });
+    const blockClipboardFixture = window.ClipboardTestDriver.createBlockFixture({
+      resetModelState, clipboardSession, viewport, currentScope: workspace.current, ROOT_SKETCH_ID,
+      createEmptyBlockDefinition, Point, Line, HorizontalConstraint, DEFAULT_SKETCH_ID,
+      appendDefinition: definition => documentModel.blockDefinitions.push(definition), nextInstanceId: () => `BI${blockInstanceSeq++}`,
+      invalidateBlockProjectionCache, blockProjectionBundle, pushModelConstraint, canvasSelection, resetHistory, updateUI, draw,
+      readState: clipboardTestObservation.state,
+    });
     const forcedConstraintCommit = window.ConstraintTestDriver.createForcedCommit({
       resetModelState, addPoint, DistanceConstraint, solver, commitNewConstraint, currentScope: workspace.current, document,
     });
@@ -4947,94 +4974,9 @@
       breakFirstHatchBoundaryForTest: hatchTestDriver.breakBoundary,
       restoreClosedBoundaryForHatchTest: hatchTestDriver.restoreBoundary,
       commitConstraintWithForcedSolveResultForTest: forcedConstraintCommit.commit,
-      resetForGeometryClipboardTest() {
-        resetModelState();
-        clipboardSession.clear();
-        viewport.update({ scale: 1 });
-        model.sketches.push({ id: "S2", name: "Sketch-2", parentSketchId: ROOT_SKETCH_ID, kind: "sketch", visible: true });
-        const p1 = addPoint(-120, -30, true, "endpoint");
-        const p2 = addPoint(-20, -30, false, "endpoint");
-        const line = addLine(p1, p2, true);
-        const circleCenter = addPoint(50, -30, false, "endpoint");
-        const circle = addCircle(circleCenter, 25);
-        const arcCenter = addPoint(125, -30, false, "endpoint");
-        const arc = addArc(arcCenter, 30, 0, Math.PI * 1.5);
-        const standalone = addPoint(205, -30, false, "explicit");
-        const external = addPoint(-20, 40, false, "explicit");
-        pushModelConstraint(new HorizontalConstraint(line));
-        const length = pushModelConstraint(new DistanceConstraint(p1, p2, 100));
-        length.dimension = dimensionFromAnchor({ kind: "line-length", line, p1, p2, value: 100 }, { x: -70, y: -58 });
-        pushModelConstraint(new RadiusConstraint(circle, 25));
-        pushModelConstraint(new EqualRadiusConstraint(circle, arc));
-        pushModelConstraint(new PointVerticalConstraint(p2, external));
-        pushModelConstraint(new LineFixedConstraint(line, p1.x, p1.y, p2.x, p2.y));
-        const fixedArcEndpoint = arcEndpointPoint(arc, "start");
-        pushModelConstraint(new ArcEndpointFixedConstraint(arc, "start", fixedArcEndpoint.x, fixedArcEndpoint.y));
-        canvasSelection.set("points", [standalone]);
-        canvasSelection.set("lines", [line]);
-        canvasSelection.set("circles", [circle]);
-        canvasSelection.set("arcs", [arc]);
-        resetHistory("clipboard geometry test");
-        updateUI();
-        draw();
-        return this.clipboardStateForTest();
-      },
-      resetForBlockClipboardTest() {
-        resetModelState();
-        clipboardSession.clear();
-        viewport.update({ scale: 1 });
-        model.sketches.push({ id: "S2", name: "Sketch-2", parentSketchId: ROOT_SKETCH_ID, kind: "sketch", visible: true });
-        const definition = createEmptyBlockDefinition("Clipboard Block");
-        const bp1 = new Point("BP1", 0, 0, false, "endpoint");
-        const bp2 = new Point("BP2", 80, 0, false, "endpoint");
-        bp1.sketchId = DEFAULT_SKETCH_ID;
-        bp2.sketchId = DEFAULT_SKETCH_ID;
-        const blockLine = new Line("BL1", bp1, bp2);
-        blockLine.sketchId = DEFAULT_SKETCH_ID;
-        definition.points.push(bp1, bp2);
-        definition.lines.push(blockLine);
-        definition.constraints.push(Object.assign(new HorizontalConstraint(blockLine), { sketchId: DEFAULT_SKETCH_ID }));
-        documentModel.blockDefinitions.push(definition);
-        const instance = { id: `BI${blockInstanceSeq++}`, definitionId: definition.id, sketchId: DEFAULT_SKETCH_ID, x: 10, y: 20, rotation: 0, fixed: true, rotationLocked: true, enabledSketchIds: [DEFAULT_SKETCH_ID] };
-        model.blockInstances.push(instance);
-        invalidateBlockProjectionCache();
-        const projectionLine = blockProjectionBundle(instance).lines[0];
-        pushModelConstraint(new HorizontalConstraint(projectionLine));
-        canvasSelection.set("blockInstances", [instance]);
-        resetHistory("clipboard block test");
-        updateUI();
-        draw();
-        return this.clipboardStateForTest();
-      },
-      clipboardStateForTest() {
-        const serialized = serializeModel();
-        const geometryBySketch = Object.fromEntries(model.sketches.filter((sketch) => !isRootSketch(sketch)).map((sketch) => [sketch.id, {
-          points: model.points.filter((item) => elementSketchId(item) === sketch.id).map((item) => ({ id: item.id, x: item.x, y: item.y, kind: item.kind, fixed: Boolean(item.fixed) })),
-          lines: model.lines.filter((item) => elementSketchId(item) === sketch.id).map((item) => ({ id: item.id, p1: item.p1.id, p2: item.p2.id })),
-          circles: model.circles.filter((item) => elementSketchId(item) === sketch.id).map((item) => ({ id: item.id, center: item.center.id, radius: item.radius() })),
-          arcs: model.arcs.filter((item) => elementSketchId(item) === sketch.id).map((item) => ({ id: item.id, center: item.center.id, radius: item.radius() })),
-          splines: model.splines.filter((item) => elementSketchId(item) === sketch.id).map((item) => ({ id: item.id, fitPoints: item.fitPoints.map((point) => point.id), closed: item.closed })),
-          blockInstances: model.blockInstances.filter((item) => item.sketchId === sketch.id).map((item) => ({ id: item.id, x: item.x, y: item.y, definitionId: item.definitionId, fixed: Boolean(item.fixed), rotationLocked: Boolean(item.rotationLocked) })),
-        }]));
-        return {
-          activeSketchId: activeSketchId(),
-          geometryBySketch,
-          constraints: serialized.constraints.map((item) => ({ type: item.type, sketchId: item.sketchId, line: item.line || null, reference: Boolean(item.reference), dimension: item.dimension || null })),
-          selected: this.selectedGeometryIdsForTest(),
-          selectedBlockInstanceIds: canvasSelection.blockInstances.map((item) => item.id),
-          clipboard: clipboardSession.payload ? {
-            pasteCount: clipboardSession.payload.pasteCount,
-            points: clipboardSession.payload.points.length,
-            lines: clipboardSession.payload.lines.length,
-            circles: clipboardSession.payload.circles.length,
-            arcs: clipboardSession.payload.arcs.length,
-            splines: clipboardSession.payload.splines.length,
-            constraints: clipboardSession.payload.constraints.length,
-            blockInstances: clipboardSession.payload.blockInstances.length,
-          } : null,
-          history: this.historyState(),
-        };
-      },
+      resetForGeometryClipboardTest: geometryClipboardFixture.reset,
+      resetForBlockClipboardTest: blockClipboardFixture.reset,
+      clipboardStateForTest: clipboardTestObservation.state,
       documentNameState() {
         return {
           modelName: documentModel.documentName,
@@ -5973,16 +5915,7 @@
           return { success: false, error: error.message };
         }
       },
-      selectedGeometryIdsForTest() {
-        return {
-          points: canvasSelection.points.map((point) => point.id),
-          lines: canvasSelection.lines.map((line) => line.id),
-          circles: canvasSelection.circles.map((circle) => circle.id),
-          arcs: canvasSelection.arcs.map((arc) => arc.id),
-          splines: canvasSelection.splines.map((spline) => spline.id),
-          blockInstances: canvasSelection.blockInstances.map((instance) => instance.id),
-        };
-      },
+      selectedGeometryIdsForTest: readTestSelectedGeometry,
       resetForOverlappingContextSelectionTest() {
         resetModelState();
         const first = addLine(addPoint(-70, 0, false, "endpoint"), addPoint(70, 0, false, "endpoint"));
