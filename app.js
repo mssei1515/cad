@@ -4915,6 +4915,14 @@
       copySelectionToClipboard, pasteGeometryClipboard, clipboardSession, readState: sketchProjectionTestObservation.state,
       blockSelectionGeometry, createBlockDefinitionFromSelection, blockSelectionBoundsCenter, SketchProjectionConstraint,
     });
+    const referenceImageTestObservation = window.ReferenceImageTestDriver.createObservation({
+      canvasSelection, currentScope: workspace.current, serializeReferenceImage, isEditingBlock: () => Boolean(blockEditor.current),
+      liveBlockEditorDefinition, referenceImageInteraction, readHistory: readTestHistory, viewport,
+    });
+    const referenceImageTestImport = window.ReferenceImageTestDriver.createImport({ fetch, File, importReferenceImageFile });
+    const referenceImageBlockFixture = window.ReferenceImageTestDriver.createBlockFixture({
+      resetModelState, createEmptyBlockDefinition, Point, Line, DEFAULT_SKETCH_ID, openBlockDefinitionEditor, completeBlockDefinitionEdit, serializeModel,
+    });
     const instanceCommandFixture = window.DerivedInstanceTestDriver.createCommandFixture({
       resetModelState, addPoint, addLine, focus: canvasTestDriver.focus, clientPosition: canvasTestDriver.clientPosition,
       resetHistory, updateUI, draw,
@@ -5090,39 +5098,10 @@
       copySketchProjectionTargetForTest: sketchProjectionTransfer.copyAndPaste,
       blockizeSketchProjectionTargetForTest: sketchProjectionTransfer.blockize,
       reloadSketchProjectionForTest: sketchProjectionReload.reload,
-      referenceImageStateForTest() {
-        return {
-          selectedIds: canvasSelection.referenceImages.map((item) => item.id),
-          images: model.referenceImages.map(serializeReferenceImage),
-          liveBlockImages: blockEditor.current ? (liveBlockEditorDefinition().referenceImages || []).map(serializeReferenceImage) : [],
-          calibrationPointCount: referenceImageInteraction.calibrationPointCount,
-          dragging: referenceImageInteraction.dragging,
-          history: this.historyState(),
-          viewport: viewport.snapshot(),
-        };
-      },
-      async importReferenceImageDataForTest(dataUrl, name = "image.png", type = "image/png") {
-        const blob = await (await fetch(dataUrl)).blob();
-        return importReferenceImageFile(new File([blob], name, { type }));
-      },
-      openReferenceImageBlockEditorForTest(options = {}) {
-        if (!options.preserveDocument) resetModelState();
-        const draft = createEmptyBlockDefinition("Image Block");
-        const p1 = new Point("P1", -20, 0, false, "endpoint");
-        const p2 = new Point("P2", 20, 0, false, "endpoint");
-        p1.sketchId = DEFAULT_SKETCH_ID;
-        p2.sketchId = DEFAULT_SKETCH_ID;
-        const line = new Line("L1", p1, p2, false);
-        line.sketchId = DEFAULT_SKETCH_ID;
-        draft.points.push(p1, p2);
-        draft.lines.push(line);
-        openBlockDefinitionEditor(draft, { isNew: true });
-        return true;
-      },
-      completeReferenceImageBlockEditorForTest() {
-        completeBlockDefinitionEdit({ rotationLocked: true });
-        return structuredClone(serializeModel());
-      },
+      referenceImageStateForTest: referenceImageTestObservation.state,
+      importReferenceImageDataForTest: referenceImageTestImport.importData,
+      openReferenceImageBlockEditorForTest: referenceImageBlockFixture.open,
+      completeReferenceImageBlockEditorForTest: referenceImageBlockFixture.complete,
       dimensionAppearanceStateForTest(index = 0) {
         const constraint = model.constraints.filter(isDimensionConstraint)[index] || null;
         const sketchId = constraint ? constraintSketchId(constraint) : activeSketchId();

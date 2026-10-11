@@ -6,6 +6,10 @@
 
 ## 現在の再開地点（2026-10-12）
 
+Reference Imageの状態照会／data URL読込／Block下書き準備・確定の四つのAPIをReferenceImageTestDriver.createObservation／createImport／createBlockFixtureへ分離。観測・native読込・fixture生成の依存を分け、現在scope／Block編集状態・既存画像operation／Selection／履歴／viewportへ接続する。観測の選択ID→scope／下書き画像serialize→calibration／drag→履歴→viewport、読込のfetch→Blob→File→既存importとawait／既定値／例外、preserveDocument指定と固定Point／Line ID・座標・所属Sketch、確定後の保存値cloneを保持する。this経由の履歴hook参照をreadHistoryへ置換し、独自モデル／operation／viewport／seq／cacheを持たない。元の四つの本体との一致を確認し、classic script／構文／E2E読込一覧を更新。app.jsは8,176→8,155行（21行減、今回の合計2,903行減）。構文462ファイル・単体1,254件・関連E2E167件成功（exit 0、3.5分）。新しい単体テストは追加せず、全利用箇所のreference-images／dxf-import／png-export／sketch-moveとunified-ui／blocksの既存E2Eで実利用を検証。テスト本体終了後の専用サーバー終了待ちは当該processを確認して終了し、正常終了を回収した。ログはcad-reference-image-test-driver-{check,unit,e2e}.log。全E2Eはこの単位では未実行。全体目標は未完了。
+
+### 前回の区切り
+
 Sketch Projectionの資格fixtureを既存SketchProjectionTestDriver.createEligibilityFixtureへ、投影targetのコピー／貼付け・Block化の観測をcreateTransferへ分離。資格fixtureは現在scope・Geometry生成と既存資格判定へ委譲し、固定ID／座標・Hierarchy・activeSketch切替と照会順を保持する。転送は既存select・ClipboardSessionとcopy／paste・Block Selection／中心／定義作成へ接続し、コピー拒否時のpaste短絡、前後拘束数／Boolean化／現在payload→state、Block検証エラー時の作成中止、Definition／外部投影拘束の集計を維持する。thisによるhook参照をselect／readStateへ置換し、モデル／Selection／Clipboard／Definition／cacheを複製しない。元の三つの本体との一致を確認。app.jsは8,225→8,176行（49行減、今回の合計2,882行減）。構文461ファイル・単体1,254件・関連E2E186件成功（exit 0、3.5分）。転送の拒否／短絡・同一Selection参照・payloadと事後観測の単体2件、祖先／可視性／Root等の資格E2E1件を追加。テスト本体終了後の専用サーバー終了待ちは当該processを確認して終了し、正常終了を回収した。ログはcad-sketch-projection-transfer-driver-{check,unit,e2e}.log。Sketch Projectionテスト支援の実装本体は分離済みで、appには生成／接続と既存API名の対応付けが残る。全E2Eはこの単位では未実行。全体目標は未完了。
 
 ### 前回の区切り
