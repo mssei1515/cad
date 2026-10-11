@@ -6,6 +6,10 @@
 
 ## 現在の再開地点（2026-10-11）
 
+DimensionReadOnlyQueryへ寸法配置候補の読取判定を分離し、ConstraintRedundancyへ候補の一時追加／解析／除去を集約。明示測定→単一Block→owner／参照付与→重複probeの順序と、候補Object・残存拘束の同一性、配列置換と表示診断を更新しない契約を維持する。appは生成／接続とhoisted入口を保持。app.jsは10,210→10,203行（7行減、今回の合計855行減）。行数以上に、一時モデル書込みの所有者とUIを持たない判定境界を揃える単位。構文425ファイル・単体1,135件・関連E2E165件成功（exit 0、2.3分）。ログはcad-readonly-query-{check,unit,e2e}.log。全E2Eはこの単位では未実行。全体目標は未完了。
+
+### 前回の区切り
+
 DimensionConstraintFactoryへ寸法拘束の種類選択・生成と角度単位／接頭辞の適用を分離。型constructorと平行判定を明示して注入し、Document・UI・操作状態を持ち込まない。平行線拒否の案内とsilent制御は呼出側へ保持し、参照同一性と寸法displayの複製範囲を維持する。対象要素の照会は既存DimensionQueriesへ集約。app.jsは10,252→10,210行（42行減、今回の合計848行減）。構文423ファイル・単体1,130件・関連E2E165件成功（exit 0、2.3分）。ログはcad-dimension-factory-{check,unit,e2e}.log。全E2Eはこの単位では未実行。全体目標は未完了。
 
 ### 前回の区切り

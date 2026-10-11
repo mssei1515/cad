@@ -4638,20 +4638,13 @@
     return result.constraint;
   }
 
+  const dimensionReadOnlyQuery = window.DimensionReadOnlyQuery.create({
+    fromTarget: dimensionConstraintFactory.fromTarget, activeSketchId, assignSketch: assignConstraintSketchId,
+    markReference: markReferenceConstraint, probeRedundancy: constraintRedundancy.probeCandidate,
+    targetItems: window.DimensionQueries.targetItems,
+  });
   function readOnlyDimensionConstraintForPlacement(target, value, dimension, options = {}) {
-    const constraint = distanceConstraintFromTarget(target, value, dimension, { silent: true });
-    if (!constraint) return null;
-    if (options.readOnlyDimension) return assignConstraintSketchId(constraint, options.sketchId || activeSketchId());
-    const targetItems = window.DimensionQueries.targetItems(target);
-    const blockInstances = [...new Set(targetItems.map((item) => item?.blockInstance).filter(Boolean))];
-    if (targetItems.length > 0 && blockInstances.length === 1 && targetItems.every((item) => item?.blockInstance === blockInstances[0])) return constraint;
-    const sketchId = options.sketchId || activeSketchId();
-    assignConstraintSketchId(constraint, sketchId);
-    if (options.referenceSketchId) markReferenceConstraint(constraint, options.referenceSketchId, sketchId);
-    model.constraints.push(constraint);
-    const duplicate = redundantConstraintInfo(constraint, sketchId);
-    model.constraints = model.constraints.filter((item) => item !== constraint);
-    return duplicate?.redundant ? constraint : null;
+    return dimensionReadOnlyQuery.forPlacement(target, value, dimension, options);
   }
 
   function addDistanceConstraintFromTarget(target, value, dimension, options = {}) {
