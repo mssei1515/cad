@@ -73,3 +73,45 @@ test('property rename restores the entire checkpoint when dependent solving fail
   assert.deepEqual(state, { name: 'd1', expression: 'd1 * 2' });
   assert.deepEqual(calls, ['restore', 'hint']);
 });
+
+
+function editFixture() {
+ const events=[],state={pending:{type:'previous'},editable:true,target:{kind:'line-length'}},constraint={sketchId:'owner',expression:'= L',dimension:{offset:17}};
+ const command=sandbox.window.DimensionValueCommand.create({
+  canEdit:(id,operation)=>{events.push(['permission',id,operation]);return state.editable;},constraintSketchId:c=>c.sketchId,
+  targetFromConstraint:c=>{assert.equal(c,constraint);events.push('target');return state.target;},isReadOnlyDimension:c=>Boolean(c.readOnlyDimension),
+  setPending:value=>{events.push('pending');state.pending=value;},selectEditedConstraint:c=>{assert.equal(c,constraint);events.push('selection-and-drag');},
+  defaultDimensionForTarget:t=>{assert.equal(t,state.target);events.push('default');return state.defaultDimension={offset:99};},
+  expressionInputValue:value=>{events.push(['format',value]);return 'formatted:'+value;},numericDimensionExpression:c=>{assert.equal(c,constraint);events.push('numeric');return '12.5';},
+  applicationText:ja=>ja,setHint:text=>{state.hint=text;events.push('hint');},draw:()=>events.push('draw'),focusDimensionValueInput:()=>events.push('focus'),
+ });return {command,events,state,constraint};
+}
+test('dimension edit consumes denied owner hits without target resolution, while absent or unsupported constraints fall through',()=>{
+ const f=editFixture(),previous=f.state.pending;
+ assert.equal(f.command.startEdit(null),false);assert.deepEqual(f.events,[]);
+ f.state.editable=false;assert.equal(f.command.startEdit({constraint:f.constraint}),true);
+ assert.deepEqual(f.events,[['permission','owner',undefined]]);assert.equal(f.state.pending,previous);
+ f.events.length=0;f.state.editable=true;f.state.target=null;assert.equal(f.command.startEdit({constraint:f.constraint}),false);
+ assert.deepEqual(f.events,[['permission','owner',undefined],'target']);assert.equal(f.state.pending,previous);
+});
+test('read-only dimension selects and resets drag without replacing a pending command or focusing input',()=>{
+ const f=editFixture(),previous=f.state.pending;f.constraint.readOnlyDimension=true;
+ assert.equal(f.command.startEdit({constraint:f.constraint}),true);assert.equal(f.state.pending,previous);
+ assert.deepEqual(f.events,[['permission','owner',undefined],'target','selection-and-drag','hint','draw']);
+ assert.match(f.state.hint,/読み取り専用/);
+});
+test('dimension edit retains constraint and saved placement, formats existing expression and draws before focus',()=>{
+ const f=editFixture(),hitDimension={offset:20};assert.equal(f.command.startEdit({constraint:f.constraint,dimension:hitDimension}),true);
+ const pending=f.state.pending;assert.equal(pending.type,'distance-value');assert.equal(pending.constraint,f.constraint);
+ assert.equal(pending.target,f.state.target);assert.equal(pending.dimension,f.constraint.dimension);assert.equal(pending.editing,false);
+ assert.equal(pending.buffer,'formatted:= L');assert.equal(f.constraint.expression,'= L');
+ assert.deepEqual(f.events,[['permission','owner',undefined],'target',['format','= L'],'pending','selection-and-drag','hint','draw','focus']);
+});
+test('dimension edit falls back from saved placement to hit placement or default, and from empty expression to numeric expression',()=>{
+ for(const withHit of [true,false]){
+  const f=editFixture();delete f.constraint.dimension;f.constraint.expression='';const hit={constraint:f.constraint};if(withHit)hit.dimension={offset:30};
+  assert.equal(f.command.startEdit(hit),true);assert.equal(f.state.pending.dimension,withHit?hit.dimension:f.state.defaultDimension);
+  assert.equal(f.state.pending.buffer,'formatted:12.5');assert.equal(f.events.includes('default'),!withHit);assert.ok(f.events.includes('numeric'));
+  assert.deepEqual(f.events.slice(-4),['selection-and-drag','hint','draw','focus']);
+ }
+});

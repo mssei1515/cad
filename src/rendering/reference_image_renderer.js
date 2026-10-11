@@ -1,4 +1,4 @@
-/* Reference-image resources and Canvas painting; visibility and selection are caller-owned. */
+/* Reference-image resources, Canvas painting and read-only presentation. */
 (function () {
   "use strict";
   function create({ ctx, viewport, withCanvasState, createImage, onImageLoad, referenceImageCorners }) {
@@ -76,5 +76,21 @@
     }
     return Object.freeze({ clear, ready, drawImages, drawOverlays });
   }
-  window.ReferenceImageRenderer = Object.freeze({ create });
+  // Read-only presentation over the resource / paint renderer.
+  function createLayer({ renderer, readImages, canvasSelection, readHover, isVisibleValue, isVisibleSketchId, activeSketchId, readCalibrationPoints }) {
+    function drawImages() {
+      renderer.drawImages(readImages().filter(item => isVisibleValue(item.visible) && isVisibleSketchId(item.sketchId)));
+    }
+
+    function drawOverlays() {
+      const item = canvasSelection.inspection?.targets.find(target => target.kind === "referenceImage")?.item || (canvasSelection.referenceImages.length === 1 ? canvasSelection.referenceImages[0] : readHover().referenceImage);
+      renderer.drawOverlays(
+        item && isVisibleValue(item.visible) && isVisibleSketchId(item.sketchId) && (item.sketchId === activeSketchId() || canvasSelection.inspectionContains(item)) ? item : null,
+        canvasSelection.referenceImages.includes(item) || canvasSelection.inspectionContains(item),
+        readCalibrationPoints(),
+      );
+    }
+    return Object.freeze({ drawImages, drawOverlays });
+  }
+  window.ReferenceImageRenderer = Object.freeze({ create, createLayer });
 })();

@@ -118,5 +118,34 @@
     return Object.freeze({ start, dispose, open: openParametersDialog,
       render: renderParameterDialog, loadScope: loadParameterDialogScope });
   }
-  window.ParameterDialogController = Object.freeze({ create });
+  // Keep dialog feedback in the application callback's existing recovery boundary.
+  function createApplication({ draft: parameterDraft, application: parameterApplication, recordHistory,
+    applicationText, setHint, loadScope: loadParameterDialogScope, setError: setParameterDialogError,
+    parameterErrorText, updateUI, draw }) {
+    function apply() {
+      const session = parameterDraft.current;
+      if (!session) return false;
+      const outcome = parameterApplication.apply(session, () => {
+        recordHistory("Parameter変更");
+        setHint(applicationText("Parameterを適用しました", "Parameters applied"));
+        loadParameterDialogScope(session.key);
+        updateUI();
+        draw();
+      });
+      if (!outcome.success) {
+        const { error } = outcome;
+        const scopeKey = session.key;
+        loadParameterDialogScope(scopeKey);
+        setParameterDialogError(parameterErrorText(error));
+        setHint(parameterErrorText(error), "error");
+        updateUI();
+        draw();
+      }
+      return outcome.success;
+    }
+
+
+    return Object.freeze({ apply });
+  }
+  window.ParameterDialogController = Object.freeze({ create, createApplication });
 })();

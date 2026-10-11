@@ -35,3 +35,30 @@ test('constraint summary includes only positive diagnostic counts and never chan
   assert.equal(f.summaryText(counts, 0, 0, 'ja'), '完全拘束: 2 / 支持位置拘束: 3 / 未拘束: 4 / 矛盾: 1');
   assert.equal(f.summaryText(counts, 1, 2, 'ja'), '完全拘束: 2 / 支持位置拘束: 3 / 未拘束: 4 / 矛盾: 1 / 重複拘束: 1 / 参照エラー: 2');
 });
+
+
+test('dimension target feedback uses the supplied operand kind without touching the operand list', () => {
+ const f = feedback('en'); const operands = [{ kind: 'line' }]; const first = operands[0];
+ assert.match(f.targetHint('distance', operands, 'en'), /second line/);
+ assert.match(f.targetHint('distance', [{ kind: 'primitive' }], 'en'), /radius-difference/);
+ assert.equal(f.targetHint('distance', [], 'en'), 'Select dimension targets.');
+ assert.equal(operands[0], first); assert.equal(operands.length, 1);
+});
+test('symmetry feedback follows axis and matching subject stages in each language', () => {
+ for (const language of ['ja', 'en']) {
+  const f = feedback(language);
+  assert.match(f.targetHint('symmetry', [], language), language === 'en' ? /axis/ : /対称軸/);
+  for (const [kind, en, ja] of [['line', 'line', '線'], ['primitive', 'arc', '円弧'], ['point', 'point', '点']]) {
+   const operands = [{ kind: 'line' }, { kind }];
+   assert.match(f.targetHint('symmetry', operands, language), new RegExp(language === 'en' ? en : ja));
+   assert.match(f.invalidTargetHint('symmetry', operands, language), new RegExp(language === 'en' ? en : ja));
+  }
+ }
+});
+test('fallback label is read only for generic guidance and rejection needs no DOM or label', () => {
+ const f = feedback('en'); let reads = 0; const label = () => { reads++; return 'Custom'; };
+ f.targetHint('fixed', [], 'en', label); assert.equal(reads, 0);
+ assert.equal(f.targetHint('custom', [], 'en', label), 'Select targets for Custom.'); assert.equal(reads, 1);
+ assert.equal(f.invalidTargetHint('custom', [], 'en'), 'The current selection cannot be used for this constraint.');
+ assert.equal(feedback('ja').invalidTargetHint('custom', [], 'ja'), 'この拘束では選択できません');
+});

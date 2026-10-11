@@ -1,5 +1,33 @@
 const { test, expect, openTestDocument, completeBlockEdit } = require("./test-fixture");
 
+test('projection block editor fixture completes in its draft without adding host geometry', async ({ page }) => {
+  await openTestDocument(page);
+  const fixture = await page.evaluate(() => window.__jot2dTest.resetForSketchProjectionBlockEditorTest());
+  expect(Number.isFinite(fixture.client.x) && Number.isFinite(fixture.client.y)).toBe(true);
+  expect(await page.evaluate(() => window.__jot2dTest.blockEditorState())).toMatchObject({ editing: true, editorLineCount: 1, hostLineCount: 0 });
+  const result = await page.evaluate(() => window.__jot2dTest.completeSketchProjectionBlockEditorForTest());
+  expect(result.completed).toBe(true);
+  expect(result.serialized.lines).toHaveLength(0);
+  expect(result.serialized.blockDefinitions).toHaveLength(1);
+  expect(result.serialized.blockDefinitions[0].lines[0].id).toBe(fixture.lineId);
+  expect(result.serialized.blockDefinitions[0].sketches.some(sketch => sketch.id === 'S3')).toBe(true);
+});
+
+test('block projection fixture moves and deletes its instance while retaining the source definition', async ({ page }) => {
+  await openTestDocument(page);
+  const fixture = await page.evaluate(() => window.__jot2dTest.resetForBlockProjectionSketchProjectionTest());
+  expect(Number.isFinite(fixture.client.x) && Number.isFinite(fixture.client.y)).toBe(true);
+  const moved = await page.evaluate(() => window.__jot2dTest.moveBlockProjectionSketchProjectionSourceForTest());
+  expect(moved.success).toBe(true);
+  expect(moved.state.serialized.blockInstances[0]).toMatchObject({ id: fixture.instanceId, x: 28, y: 4, rotation: Math.PI / 2 });
+  const deleted = await page.evaluate(() => window.__jot2dTest.deleteBlockProjectionSketchProjectionSourceForTest());
+  expect(deleted.deleted).toBe(true);
+  expect(deleted.state.serialized.blockInstances).toHaveLength(0);
+  expect(deleted.state.serialized.blockDefinitions).toHaveLength(1);
+  expect(deleted.state.serialized.blockDefinitions[0].lines[0].id).toBe('BL1');
+  expect(await page.evaluate(() => window.__jot2dTest.moveBlockProjectionSketchProjectionSourceForTest())).toBeNull();
+});
+
 async function openBlockDefinitions(page) {
   const dialog = page.locator("#blockDefinitionsDialog");
   if (!(await dialog.isVisible())) {

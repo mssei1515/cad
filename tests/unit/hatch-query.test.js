@@ -17,13 +17,14 @@ function fixture() {
   vm.runInContext(fs.readFileSync(path.join(root, 'src/geometry/hatch_query.js'), 'utf8'), sandbox);
   const { Point, Circle } = sandbox.window.GeometrySolver;
   const circle = Object.assign(new Circle('C1', new Point('P1', 0, 0), 10), { sketchId: 'S1' });
-  let scope = { circles: [circle], lines: [], arcs: [], splines: [] }, projected = [], active = 'S1';
+  let scope = { circles: [circle], lines: [], arcs: [], splines: [] }, projected = [], active = 'S1', scale = 2;
   const query = sandbox.window.HatchGeometryQuery.create({ currentScope: () => scope,
     boundaryGeometry: () => [...scope.lines, ...scope.circles, ...scope.arcs, ...scope.splines, ...projected],
+    defaultLineWidth: () => 3, viewportScale: () => scale,
     activeSketchId: () => active, effectiveAppearanceForElement: item => item.appearance || {}, applicationText: (_ja, en) => en,
   });
   return { query, calls, circle, get scope() { return scope; }, project: items => { projected = items; },
-    activate: id => { active = id; }, setScope: next => { scope = next; },
+    setScale: value => { scale = value; }, activate: id => { active = id; }, setScope: next => { scope = next; },
     hatch() { return { sketchId: 'S1', boundaryLoops: query.hatchFaceAt({ x: 0, y: 0 }).boundaryLoops }; },
   };
 }
@@ -102,4 +103,50 @@ test('construction boundaries are opt-in during selection and remain resolvable 
   f.circle.radiusValue = 15;
   assert.ok(Math.abs(f.query.resolvedHatchBoundary(hatch).area - Math.PI * 225) < 1);
   assert.equal(f.query.hatchFaceAt({ x: 0, y: 0 }).ok, false);
+});
+
+test('boundary geometry lookup preserves occurrence ownership and original references', () => {
+  const f = fixture(), hatch = f.hatch();
+  assert.equal(f.query.hatchBoundaryGeometryItems(hatch)[0], f.circle);
+  const owner = {}, otherOwner = {};
+  const first = Object.assign(Object.create(Object.getPrototypeOf(f.circle)), f.circle, { id: 'BI1:C1', blockInstance: owner, localElement: f.circle });
+  const second = Object.assign(Object.create(Object.getPrototypeOf(f.circle)), f.circle, { id: 'BI2:C1', blockInstance: otherOwner, sourceElement: f.circle });
+  f.project([first, second]);
+  const projected = { ...hatch, blockProjection: true, blockInstance: owner };
+  assert.equal(f.query.hatchBoundaryGeometryItems(projected).length, 1);
+  assert.equal(f.query.hatchBoundaryGeometryItems(projected)[0], first);
+  projected.blockInstance = otherOwner;
+  assert.equal(f.query.hatchBoundaryGeometryItems(projected)[0], second);
+  assert.equal(f.query.hatchBoundaryGeometryItems({ ...hatch, derivedProjection: true }).length, 0);
+  assert.equal(f.query.hatchBoundaryGeometryItems({ boundaryLoops: [] }).length, 0);
+});
+
+test('boundary exclusion uses finite displayed widths, fallback and current viewport scale', () => {
+  const f = fixture(), hatch = f.hatch();
+  assert.equal(f.query.hatchBoundaryHitExclusionScreenPx(hatch), 2.5);
+  f.circle.appearance = { lineWidth: 10 };
+  assert.equal(f.query.hatchBoundaryHitExclusionScreenPx(hatch), 6);
+  f.circle.appearance.lineWidth = 'invalid';
+  assert.equal(f.query.hatchBoundaryHitExclusionScreenPx(hatch), 2.5);
+  f.circle.appearance.lineWidth = 0;
+  assert.equal(f.query.hatchBoundaryHitExclusionScreenPx(hatch), 1.5);
+  f.circle.appearance.lineWidth = 3;
+  const resolved = { ok: true, loops: [{ points: [{ x: 0, y: 0 }, { x: 10, y: 0 }, { x: 10, y: 10 }, { x: 0, y: 10 }] }] };
+  assert.equal(f.query.hatchContainsSelectablePoint(hatch, resolved, { x: 1.25, y: 5 }), false);
+  assert.equal(f.query.hatchContainsSelectablePoint(hatch, resolved, { x: 1.26, y: 5 }), true);
+  f.setScale(4);
+  assert.equal(f.query.hatchContainsSelectablePoint(hatch, resolved, { x: 1, y: 5 }), true);
+  assert.equal(f.query.hatchContainsSelectablePoint(hatch, { ...resolved, ok: false }, { x: 5, y: 5 }), false);
+  assert.equal(f.query.hatchContainsSelectablePoint(hatch, resolved, { x: 11, y: 5 }), false);
+});
+
+test('resolved boundary distance includes closing edges and every loop without mutation', () => {
+  const f = fixture();
+  const resolved = { loops: [{ points: [{ x: 0, y: 0 }, { x: 10, y: 0 }, { x: 10, y: 10 }, { x: 0, y: 10 }] }, { points: [{ x: 4, y: 4 }, { x: 6, y: 4 }, { x: 6, y: 6 }, { x: 4, y: 6 }] }] };
+  const before = JSON.stringify(resolved);
+  assert.equal(f.query.resolvedHatchBoundaryDistance(resolved, { x: 0, y: 5 }), 0);
+  assert.equal(f.query.resolvedHatchBoundaryDistance(resolved, { x: 5, y: 5 }), 1);
+  assert.equal(f.query.resolvedHatchBoundaryDistance(null, { x: 5, y: 5 }), Infinity);
+  assert.equal(f.query.resolvedHatchBoundaryDistance({ loops: [{ points: [] }] }, { x: 5, y: 5 }), Infinity);
+  assert.equal(JSON.stringify(resolved), before);
 });

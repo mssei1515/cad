@@ -11,6 +11,33 @@ for (const file of ["src/geometry/geometry_kernel.js", "src/geometry/spline_geom
 const { Point, Line, Circle, Arc } = sandbox.window.GeometrySolver;
 const create = sandbox.window.CanvasSelection.create;
 
+test('clipboard selection resolves copied IDs to actual objects and keeps primitive kinds separate', () => {
+  const selection = create(), p = new Point('P2', 0, 0), q = new Point('P3', 10, 0);
+  const line = new Line('L2', p, q), circle = new Circle('C2', p, 2), arc = new Arc('A2', p, 3, 0, 1);
+  const spline = new sandbox.window.GeometrySolver.Spline('SP2', [p, q], false, false);
+  const maps = { idMap: new Map([['p', p.id], ['l', line.id], ['c', circle.id], ['a', arc.id], ['s', spline.id]]),
+    pointById: new Map([[p.id, p]]), lineById: new Map([[line.id, line]]),
+    primitiveById: new Map([[circle.id, circle], [arc.id, arc], [spline.id, spline]]) };
+  selection.set('sketchId', 'S9');
+  selection.applyClipboard({ points: ['p', 'missing'], lines: ['l'], circles: ['c', 'a'], arcs: ['a', 'c'], splines: ['s', 'c'] }, maps,
+    { blockInstances: [], annotations: [], hatches: [], geometryInstances: [], referenceImages: [] });
+  assert.equal(selection.points.length, 1); assert.equal(selection.points[0], p); assert.equal(selection.lines[0], line);
+  assert.equal(selection.circles.length, 1); assert.equal(selection.circles[0], circle);
+  assert.equal(selection.arcs.length, 1); assert.equal(selection.arcs[0], arc);
+  assert.equal(selection.splines.length, 1); assert.equal(selection.splines[0], spline); assert.equal(selection.sketchId, null);
+});
+
+test('clipboard selection restricts annotations and hatches to selected IDs but selects every pasted instance and image', () => {
+  const selection = create(), annotation = { id: 'AN2' }, hatch = { id: 'H2' }, block = { id: 'BI2' }, instance = { id: 'FI2' }, image = { id: 'IMG2' };
+  const maps = { idMap: new Map([['an', 'AN2'], ['h', 'H2']]), pointById: new Map(), lineById: new Map(), primitiveById: new Map() };
+  selection.applyClipboard({ points: [], lines: [], circles: [], arcs: [], annotations: ['an', 'missing'], hatches: ['h'] }, maps,
+    { annotations: [annotation, { id: 'AN3' }], hatches: [hatch, { id: 'H3' }], blockInstances: [block], geometryInstances: [instance], referenceImages: [image] });
+  assert.equal(selection.annotations.length, 1); assert.equal(selection.annotations[0], annotation);
+  assert.equal(selection.hatches.length, 1); assert.equal(selection.hatches[0], hatch);
+  assert.equal(selection.blockInstances[0], block); assert.equal(selection.geometryInstances[0], instance); assert.equal(selection.referenceImages[0], image);
+  assert.equal(selection.splines.length, 0);
+});
+
 test('read-only selection shares tree and canvas targets but never exposes edit operands across sketches', () => {
   const selection = create(), line = new Line('L1', new Point('P1', 0, 0), new Point('P2', 10, 0));
   const target = { kind: 'geometry', category: 'line', item: line };
@@ -178,3 +205,30 @@ test('element count includes drawable selections and endpoint separately but exc
   selection.set('dimensionConstraint',a); assert.equal(selection.dimensionConstraints.length,1);
   selection.clear(); assert.equal(selection.dimensionConstraints.length,0);
  });
+
+
+test('deletion selection cleanup retains survivors by identity and preserves separate Spline/constraint phases', () => {
+ const selection = create(); const removed = new Point(0, 0), survivor = new Point(1, 1);
+ const removedAnnotation = { id: 'a1' }, annotation = { id: 'a2' }, deletedConstraint = {}, keptConstraint = {};
+ selection.set('points', [removed, survivor]); selection.set('annotations', [removedAnnotation, annotation]);
+ selection.set('dimensionConstraints', [deletedConstraint, keptConstraint]); selection.set('constraint', deletedConstraint);
+ selection.set('hatches', [{ id: 'h1' }]); selection.set('sketchId', 'S2');
+ const sets = { pointSet: new Set([removed]), lineSet: new Set(), circleSet: new Set(), arcSet: new Set(), splineSet: new Set() };
+ selection.discardDeletedGeometry(sets, [annotation]);
+ assert.deepEqual(selection.points, [survivor]); assert.deepEqual(selection.annotations, [annotation]);
+ assert.equal(selection.constraint, deletedConstraint); assert.equal(selection.dimensionConstraints.length, 2);
+ selection.discardDeletedConstraints(new Set([deletedConstraint]));
+ assert.deepEqual(selection.dimensionConstraints, [keptConstraint]); assert.equal(selection.constraint, null);
+ assert.equal(selection.hatches.length, 1); assert.equal(selection.sketchId, null);
+});
+
+
+test('constraint target reflection owns geometry selection and clears only the existing tree and instance fields', () => {
+ const selection=create(),p={},l={},c={},a={},s={},endpoint={arc:a,endpoint:'start'},pair=[endpoint,endpoint],annotation={};
+ const target={points:[p],lines:[l],circles:[c],arcs:[a],splines:[s],arcEndpoint:endpoint,arcEndpointPair:pair};
+ selection.set('annotations',[annotation]);selection.set('blockInstances',[{}]);selection.set('geometryInstances',[{}]);selection.set('instanceGeometry',{});selection.set('sketchId','S1');
+ selection.applyConstraintTargets(target);
+ for(const field of ['points','lines','circles','arcs','splines'])assert.equal(selection[field],target[field]);
+ assert.equal(selection.arcEndpoint,endpoint);assert.equal(selection.arcEndpointPair,pair);assert.equal(selection.annotations[0],annotation);
+ assert.equal(selection.blockInstances.length,0);assert.equal(selection.geometryInstances.length,0);assert.equal(selection.instanceGeometry,null);assert.equal(selection.sketchId,null);
+});
