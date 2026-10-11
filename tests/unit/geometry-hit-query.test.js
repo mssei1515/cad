@@ -184,3 +184,49 @@ test('rotated multiline and world-size dimension labels use text bounds and expr
   constraint.label = 'A'; assert.equal(f.query.hitDimension(30, 0), null);
   f.dimension.appearance = { fixedDisplaySize: false }; assert.equal(f.query.hitDimension(30, 0).part, 'label');
 });
+
+function regionFixture() {
+  const state = { referenceImages: [], hatches: [], ordinary: true }, resolved = [];
+  const query = sandbox.window.GeometryHitQuery.createRegions({
+    currentScope: () => state, ordinarySelectionMode: () => state.ordinary, allHatches: () => state.hatches,
+    isVisibleSketchId: id => id !== 'hidden', isVisibleValue: value => value !== false,
+    hatchAppearanceForDisplay: hatch => hatch.appearance || {}, activeSketchId: () => 'active', drawingOrderOwner: hatch => hatch.owner || hatch,
+    resolvedHatchBoundary: hatch => { resolved.push(hatch); return hatch.resolved; }, hatchContainsSelectablePoint: (_hatch, result) => Boolean(result?.inside),
+    referenceImageWorldToLocal: sandbox.window.ReferenceImageGeometry.referenceImageWorldToLocal,
+  });
+  return { query, state, resolved };
+}
+
+test('region Hatch hits use owner drawing order, scope and visibility without mutating candidate order', () => {
+  const f = regionFixture();
+  const first = { sketchId: 'active', drawingOrder: 2, resolved: { inside: true } };
+  const projected = { sketchId: 'other', drawingOrder: 0, owner: { drawingOrder: 4 }, resolved: { inside: true } };
+  const hidden = { sketchId: 'hidden', drawingOrder: 10, resolved: { inside: true } };
+  f.state.hatches = [first, projected, hidden];
+  assert.equal(f.query.hitHatchAt(0, 0), projected); assert.deepEqual(f.resolved, [projected]);
+  f.state.ordinary = false; assert.equal(f.query.hitHatchAt(0, 0), first);
+  assert.equal(f.query.hitHatchAt(0, 0, { activeOnly: false }), projected);
+  projected.appearance = { visible: false }; assert.equal(f.query.hitHatchAt(0, 0, { activeOnly: false }), first);
+  assert.deepEqual(f.state.hatches, [first, projected, hidden]);
+});
+
+test('region Hatch hits preserve stable ties and skip nonselectable interiors', () => {
+  const f = regionFixture(), first = { sketchId: 'active', resolved: { inside: false } }, second = { sketchId: 'active', resolved: { inside: true } };
+  f.state.hatches = [first, second]; assert.equal(f.query.hitHatchAt(0, 0), second); assert.deepEqual(f.resolved, [first, second]);
+  first.resolved.inside = true; assert.equal(f.query.hitHatchAt(0, 0), first);
+  f.state.hatches = []; assert.equal(f.query.hitHatchAt(0, 0), null);
+});
+
+test('Reference Image hits use reverse array order, transformed inclusive bounds and current eligibility', () => {
+  const f = regionFixture();
+  const first = { sketchId: 'active', drawingOrder: 10, x: 0, y: 0, scale: 2, rotation: Math.PI / 2, pixelWidth: 20, pixelHeight: 10 };
+  const last = { ...first, sketchId: 'other', drawingOrder: 0, locked: true };
+  f.state.referenceImages = [first, last]; assert.equal(f.query.hitReferenceImageAt(0, 20), last);
+  assert.equal(f.query.hitReferenceImageAt(0, 20.1), null);
+  f.state.ordinary = false; assert.equal(f.query.hitReferenceImageAt(0, 0), first);
+  assert.equal(f.query.hitReferenceImageAt(0, 0, { activeOnly: false }), last);
+  last.visible = false; assert.equal(f.query.hitReferenceImageAt(0, 0, { activeOnly: false }), first);
+  first.sketchId = 'hidden'; assert.equal(f.query.hitReferenceImageAt(0, 0), null);
+  assert.deepEqual(f.state.referenceImages, [first, last]);
+  f.state.referenceImages = []; assert.equal(f.query.hitReferenceImageAt(0, 0), null);
+});

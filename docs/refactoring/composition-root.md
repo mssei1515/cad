@@ -6,6 +6,10 @@
 
 ## 現在の再開地点（2026-10-12）
 
+Hatch／Reference Imageの内部領域hitを既存GeometryHitQuery.createRegionsへ集約。現在scope・通常選択mode・可視性・作図先とHatch列／owner順・既存幾何照会を明示する。Hatchのowner描画順と同順位の安定順、画像の配列逆順・回転／scale変換と辺を含むpixel矩形判定、activeOnlyの既定値、画像lockをhitで除外しない動作を保持する。元処理との本体一致と3つの境界テストで参照・順序・資格・変換を確認。app.jsは9,004→8,984行（20行減、今回の合計2,074行減）。構文444ファイル・単体1,225件・関連E2E197件成功（exit 0、2.8分）。ログはcad-region-hit-query-{check,unit,e2e}.log。全E2Eはこの単位では未実行。全体目標は未完了。
+
+### 前回の区切り
+
 寸法ラベル／寸法線のCanvas hitを既存GeometryHitQuery.createDimensionsへ集約。scope・倍率・mode・Sketch資格／可視性とtarget／dimension・外観／layout／text metrics／式flagを明示し、操作状態や寸法値を更新しない。拘束配列逆順、activeOnly既定値、各照会の順序・回数、回転／複数行／world-sizeラベル、ラベル優先、結果の参照同一性を保持。矩形判定の初期化時static参照は既存script順では未定義となるため、生成時の明示portに修正した。元処理との本体一致と3つの境界テストを確認。app.jsは9,030→9,004行（26行減、今回の合計2,054行減）。構文444ファイル・単体1,222件・関連E2E181件成功（exit 0、2.6分）。ログはcad-dimension-hit-query-{check,unit,e2e}.log。全E2Eはこの単位では未実行。全体目標は未完了。
 
 ### 前回の区切り

@@ -286,5 +286,35 @@
     }
     return Object.freeze({ hitDimension });
   }
-  window.GeometryHitQuery = Object.freeze({ create, createInstances, createDimensions });
+  function createRegions({ currentScope, ordinarySelectionMode, allHatches, isVisibleSketchId, isVisibleValue, hatchAppearanceForDisplay,
+    activeSketchId, drawingOrderOwner, resolvedHatchBoundary, hatchContainsSelectablePoint, referenceImageWorldToLocal }) {
+    function hitHatchAt(x, y, { activeOnly = !ordinarySelectionMode() } = {}) {
+      const point = { x, y };
+      const candidates = allHatches().filter((hatch) => {
+        if (!isVisibleSketchId(hatch.sketchId) || !isVisibleValue(hatchAppearanceForDisplay(hatch).visible)) return false;
+        if (!activeOnly) return true;
+        return hatch.sketchId === activeSketchId();
+      });
+      candidates.sort((a, b) => (normalizedDrawingOrder(drawingOrderOwner(b).drawingOrder) ?? 0) - (normalizedDrawingOrder(drawingOrderOwner(a).drawingOrder) ?? 0));
+      for (const hatch of candidates) {
+        const resolved = resolvedHatchBoundary(hatch);
+        if (hatchContainsSelectablePoint(hatch, resolved, point)) return hatch;
+      }
+      return null;
+    }
+
+    function hitReferenceImageAt(x, y, { activeOnly = !ordinarySelectionMode() } = {}) {
+      const point = { x, y };
+      for (let index = currentScope().referenceImages.length - 1; index >= 0; index -= 1) {
+        const item = currentScope().referenceImages[index];
+        if (!isVisibleValue(item.visible) || !isVisibleSketchId(item.sketchId)) continue;
+        if (activeOnly && item.sketchId !== activeSketchId()) continue;
+        const local = referenceImageWorldToLocal(item, point);
+        if (Math.abs(local.x) <= item.pixelWidth / 2 && Math.abs(local.y) <= item.pixelHeight / 2) return item;
+      }
+      return null;
+    }
+    return Object.freeze({ hitHatchAt, hitReferenceImageAt });
+  }
+  window.GeometryHitQuery = Object.freeze({ create, createInstances, createDimensions, createRegions });
 })();
