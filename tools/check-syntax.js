@@ -96,7 +96,7 @@ const files = [
   "tests/e2e/reference-images.spec.js",
   "tests/e2e/spline.spec.js",
   "tests/e2e/free-instance.spec.js",
-  "tests/e2e/sketch-projection.spec.js",
+  "tests/e2e/sketch-projection.spec.js", "tests/e2e/sketch-projection-compatibility-driver.spec.js",
   "tests/e2e/centerline.spec.js",
   "tests/e2e/blocks.spec.js",
   "tests/e2e/drag-smoothness.spec.js",

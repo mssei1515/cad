@@ -4872,6 +4872,12 @@
       focus: canvasTestDriver.focus, clientPosition: canvasTestDriver.clientPosition, splineGeometry: window.SplineGeometry,
       resetHistory, updateUI, draw,
     });
+    const sketchProjectionCompatibilityFixture = window.SketchProjectionTestDriver.createCompatibilityFixture({
+      resetModelState, currentScope: workspace.current, DEFAULT_SKETCH_ID, addPoint, addLine, addCircle, addArc, addSpline,
+      createSketchProjectionTarget, SketchProjectionConstraint, markReferenceConstraint, pushModelConstraint,
+      synchronizeSketchProjectionMetadata, solveSketchAndDependents, serializeModel, loadModelData,
+      resetHistory, updateUI, draw, readState: sketchProjectionTestObservation.state,
+    });
     const instanceCommandFixture = window.DerivedInstanceTestDriver.createCommandFixture({
       resetModelState, addPoint, addLine, focus: canvasTestDriver.focus, clientPosition: canvasTestDriver.clientPosition,
       resetHistory, updateUI, draw,
@@ -5027,105 +5033,8 @@
       deleteDerivedSourceForTest: derivedInstanceInteraction.deleteSource,
       deleteDerivedInstanceForTest: derivedInstanceInteraction.deleteInstance,
       resetForSketchProjectionTest: sketchProjectionGeometryFixture.reset,
-      resetForSketchProjectionRectangleTest({ reloadSharedVersion19 = false } = {}) {
-        resetModelState();
-        const sourceSketchId = DEFAULT_SKETCH_ID;
-        const corners = [
-          addPoint(-60, -40, false, "endpoint"),
-          addPoint(60, -40, false, "endpoint"),
-          addPoint(60, 40, false, "endpoint"),
-          addPoint(-60, 40, false, "endpoint"),
-        ];
-        const sourceLines = corners.map((point, index) => addLine(point, corners[(index + 1) % corners.length], false));
-        const targetSketchId = "S3";
-        model.sketches.push({ id: targetSketchId, name: "Projection Target", parentSketchId: sourceSketchId, kind: "sketch", appearance: {}, constructionAppearance: {}, dimensionAppearance: {}, visible: true });
-        model.activeSketchId = targetSketchId;
-        for (const source of sourceLines) {
-          const target = createSketchProjectionTarget({ item: source, kind: "line", sketchId: sourceSketchId }, targetSketchId);
-          const constraint = new SketchProjectionConstraint("line", source, target);
-          markReferenceConstraint(constraint, sourceSketchId, targetSketchId);
-          pushModelConstraint(constraint, targetSketchId);
-        }
-        synchronizeSketchProjectionMetadata(targetSketchId);
-        solveSketchAndDependents(sourceSketchId);
-        if (reloadSharedVersion19) {
-          const data = structuredClone(serializeModel());
-          const linesById = new Map(data.lines.map((line) => [String(line.id), line]));
-          const targetPointBySourcePoint = new Map();
-          const orphanedTargetPointIds = new Set();
-          for (const link of data.constraints.filter((constraint) => constraint.type === "sketchProjection" && constraint.kind === "line")) {
-            const source = linesById.get(String(link.source));
-            const target = linesById.get(String(link.target));
-            if (!source || !target) continue;
-            for (const key of ["p1", "p2"]) {
-              const sourcePointId = String(source[key]);
-              const existingTargetPointId = targetPointBySourcePoint.get(sourcePointId);
-              if (existingTargetPointId) {
-                orphanedTargetPointIds.add(String(target[key]));
-                target[key] = existingTargetPointId;
-              } else {
-                targetPointBySourcePoint.set(sourcePointId, String(target[key]));
-              }
-            }
-          }
-          data.points = data.points.filter((point) => !orphanedTargetPointIds.has(String(point.id)));
-          loadModelData(data);
-        }
-        resetHistory("sketch projection rectangle test");
-        updateUI();
-        draw();
-        return this.sketchProjectionStateForTest();
-      },
-      resetForSketchProjectionSharedKindsTest({ reloadSharedVersion19 = false } = {}) {
-        resetModelState();
-        const sourceSketchId = DEFAULT_SKETCH_ID;
-        const shared = addPoint(-45, -20, false, "explicit");
-        const sourceEntries = [
-          { item: shared, kind: "point", sketchId: sourceSketchId },
-          { item: addLine(shared, addPoint(30, -20, false, "endpoint"), false), kind: "line", sketchId: sourceSketchId },
-          { item: addCircle(shared, 18, false), kind: "circle", sketchId: sourceSketchId },
-          { item: addArc(shared, 24, -0.3, 1.2, false), kind: "arc", sketchId: sourceSketchId },
-          { item: addSpline([shared, addPoint(-5, 30, false, "endpoint"), addPoint(45, 10, false, "endpoint")], false, false), kind: "spline", sketchId: sourceSketchId },
-        ];
-        const targetSketchId = "S3";
-        model.sketches.push({ id: targetSketchId, name: "Projection Target", parentSketchId: sourceSketchId, kind: "sketch", appearance: {}, constructionAppearance: {}, dimensionAppearance: {}, visible: true });
-        model.activeSketchId = targetSketchId;
-        for (const entry of sourceEntries) {
-          const target = createSketchProjectionTarget(entry, targetSketchId);
-          const constraint = new SketchProjectionConstraint(entry.kind, entry.item, target);
-          markReferenceConstraint(constraint, sourceSketchId, targetSketchId);
-          pushModelConstraint(constraint, targetSketchId);
-        }
-        synchronizeSketchProjectionMetadata(targetSketchId);
-        solveSketchAndDependents(sourceSketchId);
-        if (reloadSharedVersion19) {
-          const data = structuredClone(serializeModel());
-          const links = new Map(data.constraints.filter((constraint) => constraint.type === "sketchProjection").map((constraint) => [constraint.kind, constraint]));
-          const linesById = new Map(data.lines.map((line) => [String(line.id), line]));
-          const circlesById = new Map(data.circles.map((circle) => [String(circle.id), circle]));
-          const arcsById = new Map(data.arcs.map((arc) => [String(arc.id), arc]));
-          const splinesById = new Map(data.splines.map((spline) => [String(spline.id), spline]));
-          const sharedTargetPointId = String(links.get("point")?.target || "");
-          const orphanedTargetPointIds = new Set();
-          const shareSlot = (owner, key, index = null) => {
-            if (!owner || !sharedTargetPointId) return;
-            const previous = index == null ? owner[key] : owner[key]?.[index];
-            if (String(previous) !== sharedTargetPointId) orphanedTargetPointIds.add(String(previous));
-            if (index == null) owner[key] = sharedTargetPointId;
-            else owner[key][index] = sharedTargetPointId;
-          };
-          shareSlot(linesById.get(String(links.get("line")?.target)), "p1");
-          shareSlot(circlesById.get(String(links.get("circle")?.target)), "center");
-          shareSlot(arcsById.get(String(links.get("arc")?.target)), "center");
-          shareSlot(splinesById.get(String(links.get("spline")?.target)), "fitPoints", 0);
-          data.points = data.points.filter((point) => !orphanedTargetPointIds.has(String(point.id)));
-          loadModelData(data);
-        }
-        resetHistory("sketch projection shared kinds test");
-        updateUI();
-        draw();
-        return this.sketchProjectionStateForTest();
-      },
+      resetForSketchProjectionRectangleTest: sketchProjectionCompatibilityFixture.resetRectangle,
+      resetForSketchProjectionSharedKindsTest: sketchProjectionCompatibilityFixture.resetSharedKinds,
       sketchProjectionEligibilityForTest() {
         resetModelState();
         const addSketch = (id, parentSketchId) => model.sketches.push({ id, name: id, parentSketchId, kind: "sketch", appearance: {}, constructionAppearance: {}, dimensionAppearance: {}, visible: true });

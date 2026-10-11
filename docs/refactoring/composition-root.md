@@ -6,6 +6,10 @@
 
 ## 現在の再開地点（2026-10-12）
 
+Sketch Projectionの矩形／共有種別fixtureと旧共有target Pointの再現を既存SketchProjectionTestDriver.createCompatibilityFixtureへ分離。現在scope・Geometry生成・投影target／拘束／metadata／求解・保存／読込・履歴／表示／状態照会を明示し、元の二つの処理本体との一致を確認。通常生成の共有source参照・座標・採番／Construction、旧形式指定時の保存値clone→target Point共有化→不要Point除去→既存load、履歴→UI→draw→readStateの順を保持する。製品migrationには移さず、独自モデル／seq／cacheを持たない。app.jsは8,443→8,352行（91行減、今回の合計2,706行減）。構文460ファイル・単体1,247件成功（exit 0）。既存fixtureの直接利用テストがなかったため、矩形／複数種別の通常生成・旧形式再読込に対する4つのE2Eを追加し、共有source Pointと独立target Point、矩形座標と所属Sketchを検証。関連既存E2E177件（3.5分）と新しい4件（1.6分）がそれぞれ成功（exit 0、計181件）。テスト本体終了後の専用サーバー終了待ちは当該processを確認して終了し、結果を回収した。ログはcad-sketch-projection-compatibility-driver-{check,unit,e2e,final-check,focused}.log。全E2Eはこの単位では未実行。全体目標は未完了。
+
+### 前回の区切り
+
 Sketch Projectionの通常Geometry fixtureと投影状態照会をSketchProjectionTestDriver.createGeometryFixture／createObservationへ分離。観測に生成・求解・表示更新依存を持たせず、呼出し時のscope／mode／command件数／投影拘束と既存外観・拘束状態・保存・履歴・DOM readerへ接続する。fixtureの共有Point参照・座標・Construction・activeSketch切替・focus→履歴→UI→draw→client位置照会、観測のGeometry／外観／保存／履歴／階層／DOM順を保持する。独自モデル／seq／cacheを持たず、this経由のhook相互参照を明示した表示・履歴入口へ置換。元の二つの処理本体との一致を確認し、classic script／構文／E2E読込一覧を更新。app.jsは8,502→8,443行（59行減、今回の合計2,615行減）。構文459ファイル・単体1,247件・関連E2E177件成功（exit 0、3.9分）。新しい単体テストは追加せず、全利用箇所のsketch-projection／command-panelとunified-ui／blocks／sketch-permissionsの既存E2Eで実利用を検証。テスト本体完了後に当該実行の専用サーバー終了待ちを解消して正常終了を回収した。ログはcad-sketch-projection-test-driver-{check,unit,e2e}.log。全E2Eはこの単位では未実行。全体目標は未完了。
 
 ### 前回の区切り
