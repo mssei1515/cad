@@ -2796,17 +2796,10 @@
       }
 
       clearSelection();
-      const selectedIds = payload.selection;
-      canvasSelection.set("points", selectedIds.points.map((id) => pointById.get(idMap.get(id))).filter(Boolean));
-      canvasSelection.set("lines", selectedIds.lines.map((id) => lineById.get(idMap.get(id))).filter(Boolean));
-      canvasSelection.set("circles", selectedIds.circles.map((id) => primitiveById.get(idMap.get(id))).filter((item) => item instanceof Circle));
-      canvasSelection.set("arcs", selectedIds.arcs.map((id) => primitiveById.get(idMap.get(id))).filter((item) => item instanceof Arc));
-      canvasSelection.set("splines", (selectedIds.splines || []).map((id) => primitiveById.get(idMap.get(id))).filter((item) => item instanceof Spline));
-      canvasSelection.set("blockInstances", pastedBlockInstances);
-      canvasSelection.set("annotations", (selectedIds.annotations || []).map((id) => pastedAnnotations.find((annotation) => annotation.id === idMap.get(id))).filter(Boolean));
-      canvasSelection.set("hatches", (selectedIds.hatches || []).map((id) => pastedHatches.find((hatch) => hatch.id === idMap.get(id))).filter(Boolean));
-      canvasSelection.set("geometryInstances", pastedGeometryInstances);
-      canvasSelection.set("referenceImages", pastedImages);
+      canvasSelection.applyClipboard(payload.selection, { idMap, pointById, lineById, primitiveById }, {
+        blockInstances: pastedBlockInstances, annotations: pastedAnnotations, hatches: pastedHatches,
+        geometryInstances: pastedGeometryInstances, referenceImages: pastedImages,
+      });
       payload.pasteCount = pasteNumber;
       mode = "select";
       solveAndRefresh("貼り付け");

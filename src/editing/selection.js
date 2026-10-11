@@ -64,6 +64,19 @@
       else items.push(item);
     }
 
+    function applyClipboard(selectedIds, { idMap, pointById, lineById, primitiveById }, pasted) {
+      set("points", selectedIds.points.map((id) => pointById.get(idMap.get(id))).filter(Boolean));
+      set("lines", selectedIds.lines.map((id) => lineById.get(idMap.get(id))).filter(Boolean));
+      set("circles", selectedIds.circles.map((id) => primitiveById.get(idMap.get(id))).filter((item) => item instanceof Circle));
+      set("arcs", selectedIds.arcs.map((id) => primitiveById.get(idMap.get(id))).filter((item) => item instanceof Arc));
+      set("splines", (selectedIds.splines || []).map((id) => primitiveById.get(idMap.get(id))).filter((item) => item instanceof Spline));
+      set("blockInstances", pasted.blockInstances);
+      set("annotations", (selectedIds.annotations || []).map((id) => pasted.annotations.find((annotation) => annotation.id === idMap.get(id))).filter(Boolean));
+      set("hatches", (selectedIds.hatches || []).map((id) => pasted.hatches.find((hatch) => hatch.id === idMap.get(id))).filter(Boolean));
+      set("geometryInstances", pasted.geometryInstances);
+      set("referenceImages", pasted.referenceImages);
+    }
+
     function applyRectangle(candidates, additive = false) {
       clearTreeSelection();
       for (const field of ["points", "lines", "circles", "arcs", "splines", "blockInstances", "geometryInstances", "annotations", "hatches", "referenceImages", "dimensionConstraints"]) {
@@ -335,7 +348,7 @@
     // Read views retain geometry identity. Mutations go through this instance's API.
     const api = {
       toggleDimensionConstraint: item => { if (!item) return; clearTreeSelection(); state.constraint = null; const index = state.dimensionConstraints.indexOf(item); if (index < 0) state.dimensionConstraints.push(item); else state.dimensionConstraints.splice(index, 1); },
-      inspectionContains, selectInspection, selectedDragPoints, selectedElementCount, set, clear, append, removeAt, toggleById, applyRectangle,
+      inspectionContains, selectInspection, selectedDragPoints, selectedElementCount, set, clear, append, removeAt, toggleById, applyRectangle, applyClipboard,
       selectedGeometryItems, appearanceSelectionTarget, setGeometrySelection, currentConstraintTargets,
       hasPrimaryCanvasSelection, effectiveSelectedConstraint, selectedPrimitives,
       togglePointSelection, toggleLineSelection, toggleCircleSelection, toggleArcSelection,
