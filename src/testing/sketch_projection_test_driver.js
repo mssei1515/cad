@@ -191,5 +191,80 @@
     return Object.freeze({ resetRectangle, resetSharedKinds });
   }
 
-  window.SketchProjectionTestDriver = Object.freeze({ createObservation, createGeometryFixture, createCompatibilityFixture });
+  function createBlockEditorFixture({ resetModelState, currentScope, DEFAULT_SKETCH_ID, createEmptyBlockDefinition, openBlockDefinitionEditor, addLine, addPoint, focus, clientPosition, resetBlockEditorHistory, updateUI, draw, completeBlockDefinitionEdit, isEditingBlock, serializeModel }) {
+    function reset() {
+      resetModelState();
+      const draft = createEmptyBlockDefinition("Projection Block");
+      openBlockDefinitionEditor(draft, { isNew: true });
+      currentScope().activeSketchId = DEFAULT_SKETCH_ID;
+      const line = addLine(addPoint(-45, 0, false, "endpoint"), addPoint(45, 0, false, "endpoint"), false);
+      currentScope().sketches.push({ id: "S3", name: "Projected Detail", parentSketchId: DEFAULT_SKETCH_ID, kind: "sketch", appearance: {}, constructionAppearance: {}, dimensionAppearance: {}, visible: true });
+      currentScope().activeSketchId = "S3";
+      focus({ x: 0, y: 0 }, 3);
+      resetBlockEditorHistory();
+      updateUI();
+      draw();
+      return { client: clientPosition({ x: 0, y: 0 }), lineId: line.id };
+    }
+
+    function complete() {
+      completeBlockDefinitionEdit({ rotationLocked: true });
+      return { completed: !isEditingBlock(), serialized: structuredClone(serializeModel()) };
+    }
+    return Object.freeze({ reset, complete });
+  }
+
+  function createBlockProjectionFixture({ resetModelState, createEmptyBlockDefinition, Point, Line, DEFAULT_SKETCH_ID, appendDefinition, nextInstanceId, currentScope, invalidateBlockProjectionCache, blockProjectionBundle, focus, clientPosition, resetHistory, updateUI, draw }) {
+    function reset() {
+      resetModelState();
+      const definition = createEmptyBlockDefinition("Source Block");
+      const p1 = new Point("BP1", -30, 0, false, "endpoint");
+      const p2 = new Point("BP2", 30, 0, false, "endpoint");
+      p1.sketchId = DEFAULT_SKETCH_ID;
+      p2.sketchId = DEFAULT_SKETCH_ID;
+      const line = new Line("BL1", p1, p2, false);
+      line.sketchId = DEFAULT_SKETCH_ID;
+      definition.points.push(p1, p2);
+      definition.lines.push(line);
+      definition.revision += 1;
+      appendDefinition(definition);
+      const instance = { id: nextInstanceId(), definitionId: definition.id, sketchId: DEFAULT_SKETCH_ID, x: -10, y: 15, rotation: 0, fixed: false, rotationLocked: false, enabledSketchIds: [DEFAULT_SKETCH_ID], appearanceOverride: {} };
+      currentScope().blockInstances.push(instance);
+      currentScope().sketches.push({ id: "S3", name: "Block Projection Target", parentSketchId: DEFAULT_SKETCH_ID, kind: "sketch", appearance: {}, constructionAppearance: {}, dimensionAppearance: {}, visible: true });
+      currentScope().activeSketchId = "S3";
+      invalidateBlockProjectionCache();
+      const projected = blockProjectionBundle(instance).lines[0];
+      focus({ x: -10, y: 15 }, 3);
+      resetHistory("block projection sketch projection test");
+      updateUI();
+      draw();
+      return { instanceId: instance.id, client: clientPosition({ x: (projected.p1.x + projected.p2.x) / 2, y: (projected.p1.y + projected.p2.y) / 2 }) };
+    }
+    return Object.freeze({ reset });
+  }
+
+  function createBlockProjectionInteraction({ currentScope, invalidateBlockProjectionCache, solveSketchAndDependents, DEFAULT_SKETCH_ID, updateUI, draw, readState, clearSelection, canvasSelection, deleteCurrentSelection }) {
+    function move() {
+      const instance = currentScope().blockInstances[0];
+      if (!instance) return null;
+      instance.x += 38;
+      instance.y -= 11;
+      instance.rotation += Math.PI / 2;
+      invalidateBlockProjectionCache(instance.id);
+      const solved = solveSketchAndDependents(DEFAULT_SKETCH_ID);
+      updateUI();
+      draw();
+      return { success: solved.success && solved.dependent?.success !== false, state: readState() };
+    }
+
+    function deleteSource() {
+      clearSelection();
+      canvasSelection.set("blockInstances", currentScope().blockInstances.slice(0, 1));
+      const deleted = deleteCurrentSelection();
+      return { deleted, state: readState() };
+    }
+    return Object.freeze({ move, deleteSource });
+  }
+
+  window.SketchProjectionTestDriver = Object.freeze({ createObservation, createGeometryFixture, createCompatibilityFixture, createBlockEditorFixture, createBlockProjectionFixture, createBlockProjectionInteraction });
 })();

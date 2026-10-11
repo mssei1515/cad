@@ -6,6 +6,10 @@
 
 ## 現在の再開地点（2026-10-12）
 
+Sketch ProjectionのBlock下書きfixture／確定、Block投影fixture、Instance移動／削除の五つのAPIを既存SketchProjectionTestDriverのcreateBlockEditorFixture／createBlockProjectionFixture／createBlockProjectionInteractionへ分離。独立した入口により、操作支援に生成型・Definition追加・採番依存を持ち込まない。編集scope切替後の再照会、Definition追加／IDの既存所有者、cache無効化・bundle解決・focus／履歴／表示順、移動の依存求解・削除後state照会、無Instance時のnullを維持する。this経由のhook参照を明示した表示／readStateへ置換し、モデル／seq／cache／履歴は複製しない。元の五つの本体との一致を確認。app.jsは8,352→8,311行（41行減、今回の合計2,747行減）。構文460ファイル・単体1,247件・関連E2E183件成功（exit 0、3.7分）。既存のfixture直接利用テストがなかったため、Block E2Eに下書き確定時のhost Geometry分離とInstance移動／削除時のDefinition保持／無Instance分岐を検証する2件を追加した。対象はsketch-projection／互換fixture／command-panel／unified-ui／blocks／sketch-permissions。テスト本体終了後の専用サーバー終了待ちは当該processを確認して終了し、正常終了を回収した。ログはcad-sketch-projection-block-driver-{check,unit,e2e}.log。全E2Eはこの単位では未実行。全体目標は未完了。
+
+### 前回の区切り
+
 Sketch Projectionの矩形／共有種別fixtureと旧共有target Pointの再現を既存SketchProjectionTestDriver.createCompatibilityFixtureへ分離。現在scope・Geometry生成・投影target／拘束／metadata／求解・保存／読込・履歴／表示／状態照会を明示し、元の二つの処理本体との一致を確認。通常生成の共有source参照・座標・採番／Construction、旧形式指定時の保存値clone→target Point共有化→不要Point除去→既存load、履歴→UI→draw→readStateの順を保持する。製品migrationには移さず、独自モデル／seq／cacheを持たない。app.jsは8,443→8,352行（91行減、今回の合計2,706行減）。構文460ファイル・単体1,247件成功（exit 0）。既存fixtureの直接利用テストがなかったため、矩形／複数種別の通常生成・旧形式再読込に対する4つのE2Eを追加し、共有source Pointと独立target Point、矩形座標と所属Sketchを検証。関連既存E2E177件（3.5分）と新しい4件（1.6分）がそれぞれ成功（exit 0、計181件）。テスト本体終了後の専用サーバー終了待ちは当該processを確認して終了し、結果を回収した。ログはcad-sketch-projection-compatibility-driver-{check,unit,e2e,final-check,focused}.log。全E2Eはこの単位では未実行。全体目標は未完了。
 
 ### 前回の区切り
