@@ -9,7 +9,8 @@ function fixture() {
  const session = sandbox.window.ConstraintTargetSession.create({ acceptTarget: () => ({ ok: true, operands: [] }) });
  const placement = { defaultDimensionForTarget: () => ({ x: 10, y: 20 }), dimensionAnchor: () => ({ x: 30, y: 40 }),
   dimensionFromAnchor: () => ({ axis: state.axis }), applyDefaultCircleDimensionLabelOffset: (t, d) => d, dimensionWithLabelAt: (t, d) => d };
- const command = sandbox.window.DimensionPlacementCommand.create({ session, placement,
+ const selection={points:[],lines:[]};
+ const command = sandbox.window.DimensionPlacementCommand.create({ session, selection, placement,
   getPending: () => state.pending, setPending: p => { events.push('pending'); state.pending = p; },
   canStart: () => state.editable, prepareStart: () => events.push('prepare'), selectMode: () => events.push('mode'),
   constraintOperandsFromSelection: () => state.operands, constraintResolutionFromCurrentSelection: () => state.resolution,
@@ -22,7 +23,7 @@ function fixture() {
   applicationText: text => text, setHint: (text, kind) => { events.push('hint'); state.hint = { text, kind }; }, log: () => events.push('log'),
   updateConstraintButtons: () => events.push('buttons'), updateToolbar: () => events.push('toolbar'), draw: () => events.push('draw'),
  });
- return { command, state, session, events };
+ return { command, state, session, selection, events };
 }
 test('denial and invalid selection resolution leave placement untouched and do not reset drawing', () => {
  const f = fixture(); f.state.editable = false; f.command.startDistanceCommand(); assert.deepEqual(f.events, []);
@@ -68,4 +69,22 @@ test('retargeting rejects repeated operands and preserves old placement on error
  f.state.resolution = { target: { kind: 'line-line' }, operands: [operand, f.state.hit] }; const pointer = { x: 50, y: 60 };
  assert.equal(f.command.retargetDistancePlaceWithOperand(pointer), true); assert.notEqual(f.state.pending, old);
  assert.equal(f.state.pending.pointer, pointer); assert.equal(f.state.pending.dimension, null); assert.equal(old.target.kind, 'line-length');
+});
+
+
+test('distance target double-click rejects inactive commands, point or multi-line selection and a different hit without side effects',()=>{
+ for(const variant of ['inactive','point','multiple','different']){
+  const f=fixture(),line={};f.selection.lines=[line];f.session.replaceCommand({type:variant==='inactive'?'parallel':'distance'});
+  if(variant==='point')f.selection.points=[{}];if(variant==='multiple')f.selection.lines.push({});
+  assert.equal(f.command.targetDoubleClick(null,variant==='different'?{}:line,{x:1,y:2}),false);
+  assert.deepEqual(f.events,[]);assert.equal(f.state.pending,null);
+ }
+});
+test('distance target double-click consumes a single-line gesture and opens value entry only after placement starts',()=>{
+ const f=fixture(),line={};f.selection.lines=[line];f.session.replaceCommand({type:'distance'});
+ assert.equal(f.command.targetDoubleClick(null,line,{x:9,y:9}),true);assert.deepEqual(f.events,['buttons']);assert.equal(f.state.pending,null);
+ f.events.length=0;f.state.resolution={target:{kind:'line-length',value:12}};
+ assert.equal(f.command.targetDoubleClick(null,null,{x:9,y:9}),true);assert.equal(f.state.pending.type,'distance-value');
+ assert.equal(f.state.pending.buffer,'12');assert.deepEqual(f.events.slice(-3),['input','draw','focus']);
+ assert.deepEqual(f.events.slice(0,3),['buttons','prepare','pending']);
 });

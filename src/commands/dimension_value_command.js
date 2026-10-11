@@ -1,4 +1,4 @@
-/* Apply a dimension value while preserving rollback and first-dimension framing. */
+/* Begin and apply dimension value edits, preserving selection, rollback and first-dimension framing. */
 (() => {
   "use strict";
   function create({ canEdit = () => true, renameDimension, getPending, setPending, expressionFromUserInput, evaluateDimensionExpressionDraft,
@@ -6,7 +6,34 @@
     sketchHasDimensionConstraint, captureSketchScreenFootprint, snapshotModelState, restoreModelState,
     withTemporarySolveStepNorm, solveStepNormForConstraint, stabilizeActiveParameterNamespace,
     constraintSketchId, acceptError, hideDimensionValueInput, recordHistory, updateUI,
-    scaleSketchForFirstDimension, addDistanceConstraintFromTarget, restoreSketchScreenFootprint }) {
+    scaleSketchForFirstDimension, addDistanceConstraintFromTarget, restoreSketchScreenFootprint, targetFromConstraint, isReadOnlyDimension,
+    selectEditedConstraint, defaultDimensionForTarget, expressionInputValue, numericDimensionExpression, focusDimensionValueInput }) {
+    function startEdit(hit) {
+      if (hit?.constraint && !canEdit(constraintSketchId(hit.constraint))) return true;
+      if (!hit?.constraint) return false;
+      const target = targetFromConstraint(hit.constraint);
+      if (!target) return false;
+      if (isReadOnlyDimension(hit.constraint)) {
+        selectEditedConstraint(hit.constraint);
+        setHint("読み取り専用寸法の値は編集できません");
+        draw();
+        return true;
+      }
+      setPending({
+        type: "distance-value",
+        target,
+        dimension: hit.constraint.dimension || hit.dimension || defaultDimensionForTarget(target),
+        buffer: expressionInputValue(hit.constraint.expression || numericDimensionExpression(hit.constraint)),
+        editing: false,
+        constraint: hit.constraint,
+      });
+      selectEditedConstraint(hit.constraint);
+      setHint(applicationText("寸法値を入力中: 数式は = から開始し、Parameter参照はダブルクオーテーションで括ります。Canvas寸法のクリックで参照を挿入できます", "Editing dimension: begin expressions with = and enclose parameter references in double quotes. Click a canvas dimension to insert a reference."));
+      draw();
+      focusDimensionValueInput();
+      return true;
+    }
+
     function submit() {
       const pendingCommand = getPending();
       if (!pendingCommand || pendingCommand.type !== "distance-value") return;
@@ -82,7 +109,7 @@
       }
     }
 
-    return Object.freeze({ submit, commitProperty });
+    return Object.freeze({ startEdit, submit, commitProperty });
   }
   window.DimensionValueCommand = Object.freeze({ create });
 })();

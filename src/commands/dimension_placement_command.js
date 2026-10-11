@@ -1,7 +1,7 @@
 /* Coordinate dimension placement and value-entry transitions through explicit owners. */
 (() => {
   "use strict";
-  function create({ session: constraintTargetSession, getPending, setPending, canStart, prepareStart, selectMode,
+  function create({ session: constraintTargetSession, selection, getPending, setPending, canStart, prepareStart, selectMode,
     constraintOperandsFromSelection, constraintResolutionFromCurrentSelection, selectedPrimitives,
     placement, angleDegrees, angleDimensionAngles, readOnlyDimensionConstraintForPlacement,
     addReadOnlyDimensionConstraint, activeSketchId, syncSelectionFromConstraintOperands,
@@ -159,7 +159,17 @@
       draw();
       return true;
     }
-    return Object.freeze({ startDistanceCommand, startPrimitiveDimensionCommand,
+    function targetDoubleClick(hitP, hitL, pointer) {
+      if (constraintTargetSession.command?.type !== "distance") return false;
+      if (selection.points.length !== 0 || selection.lines.length !== 1) return false;
+      if (hitL && selection.lines[0] !== hitL) return false;
+      updateConstraintButtons();
+      startDistanceCommand();
+      if (getPending()?.type === "distance-place") startDistanceValueInput(defaultDimensionForTarget(getPending().target));
+      return true;
+    }
+
+    return Object.freeze({ targetDoubleClick, startDistanceCommand, startPrimitiveDimensionCommand,
       startDistanceValueInput, retargetDistancePlaceWithOperand, startDistanceResolution });
   }
   window.DimensionPlacementCommand = Object.freeze({ create });

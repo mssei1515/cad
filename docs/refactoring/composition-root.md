@@ -6,6 +6,10 @@
 
 ## 現在の再開地点（2026-10-12）
 
+既存寸法の編集開始をDimensionValueCommand.startEditへ、線長寸法のダブルクリック入力開始をDimensionPlacementCommand.targetDoubleClickへ集約した。新規ファイルは増やさず、既存commandへ開始入口を揃える。権限拒否の処理済み返却、hit／target検査、読取専用ではpendingを置換しない動作、保存配置／hit配置／既定値の優先順位、式の数値fallback、選択とdrag解除→hint→draw→focusを維持する。ダブルクリックでは単独Lineとhit一致を確認し、配置開始後だけ既定位置から値入力へ進む。2処理の本体は明示した依存adapter以外元処理と一致。app.jsは9,444→9,412行（32行減、今回の合計1,646行減）。構文439ファイル・単体1,195件・関連E2E180件成功（exit 0、2.5分）。ログはcad-dimension-entry-{check,unit,e2e}.log。全E2Eはこの単位では未実行。全体目標は未完了。選択／drag解除のportと共有pendingの取得・反映、依存の多いcommandの生成・接続はappに残り、今後の状態所有と組立て境界の整理対象とする。
+
+### 前回の区切り
+
 ConstraintControlsViewへ拘束ボタン／メニュー／Fixボタンのactive・ARIAとhint title反映を分離し、ConstraintSelectionQueryへFix一括対象・全対象の固定状態・操作可否の照会を集約した。Geometry mode外の短絡、保留寸法確認→拘束ボタン→メニュー→Fix→hintの順序、メニューがFix更新前の属性を読む既存動作を保持する。appは寸法取消条件と操作を接続し、Viewはmodel・Selectionやpendingを変更しない。元の対象照会・固定判定・可否式・DOM更新順序との一致を確認した。app.jsは9,508→9,444行（64行減、今回の合計1,614行減）。構文439ファイル・単体1,189件成功。関連E2E151件（2.2分）とFix専用4件（4.3秒）が成功（いずれもexit 0、合計155件）。ログはcad-constraint-controls-{check,unit,e2e}.logとcad-constraint-controls-fixed-e2e.log。全E2Eはこの単位では未実行。全体目標は未完了。共有pendingと残る寸法編集／取消入口、command生成・接続の整理は続く。
 
 ### 前回の区切り

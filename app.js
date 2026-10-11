@@ -890,6 +890,10 @@
     snapshotModelState, restoreModelState, withTemporarySolveStepNorm, solveStepNormForConstraint,
     stabilizeActiveParameterNamespace, constraintSketchId, acceptError: CONSTRAINT_ACCEPT_ERROR,
     hideDimensionValueInput, recordHistory, updateUI, scaleSketchForFirstDimension,
+    targetFromConstraint, isReadOnlyDimension, defaultDimensionForTarget, expressionInputValue, numericDimensionExpression, focusDimensionValueInput,
+    selectEditedConstraint: constraint => {
+      canvasSelection.set("dimensionConstraint", constraint); canvasSelection.set("constraint", null); dimensionDrag.reset();
+    },
     addDistanceConstraintFromTarget,
     restoreSketchScreenFootprint: (sketchId, footprint) => viewport.restoreBoundsFootprint(sketchGeometryBounds(sketchId), footprint),
   });
@@ -3119,18 +3123,10 @@
 
   function handleConstraintOperandClick(pointer, type, hits = {}) { return constraintTargetCommand.operandClick(pointer, type, hits); }
 
-  function handleConstraintTargetDoubleClick(hitP, hitL, pointer) {
-    if (constraintTargetSession.command?.type !== "distance") return false;
-    if (canvasSelection.points.length !== 0 || canvasSelection.lines.length !== 1) return false;
-    if (hitL && canvasSelection.lines[0] !== hitL) return false;
-    updateConstraintButtons();
-    startDistanceCommand();
-    if (pendingCommand?.type === "distance-place") startDistanceValueInput(defaultDimensionForTarget(pendingCommand.target));
-    return true;
-  }
+  function handleConstraintTargetDoubleClick(hitP, hitL, pointer) { return dimensionPlacementCommand.targetDoubleClick(hitP, hitL, pointer); }
 
   const dimensionPlacementCommand = window.DimensionPlacementCommand.create({
-    session: constraintTargetSession, getPending: () => pendingCommand, setPending: value => { pendingCommand = value; },
+    session: constraintTargetSession, selection: canvasSelection, getPending: () => pendingCommand, setPending: value => { pendingCommand = value; },
     canStart: () => guardSketchEdit(activeSketchId(), "create") && guardSelectionEdit("constraint"),
     prepareStart: () => {
       mode = "select";
@@ -3206,35 +3202,7 @@
     return changed;
   }
 
-  function startDimensionEditInput(hit) {
-    if (hit?.constraint && !guardSketchEdit(constraintSketchId(hit.constraint))) return true;
-    if (!hit?.constraint) return false;
-    const target = targetFromConstraint(hit.constraint);
-    if (!target) return false;
-    if (isReadOnlyDimension(hit.constraint)) {
-      canvasSelection.set("dimensionConstraint", hit.constraint);
-      canvasSelection.set("constraint", null);
-      dimensionDrag.reset();
-      setHint("読み取り専用寸法の値は編集できません");
-      draw();
-      return true;
-    }
-    pendingCommand = {
-      type: "distance-value",
-      target,
-      dimension: hit.constraint.dimension || hit.dimension || defaultDimensionForTarget(target),
-      buffer: expressionInputValue(hit.constraint.expression || numericDimensionExpression(hit.constraint)),
-      editing: false,
-      constraint: hit.constraint,
-    };
-    canvasSelection.set("dimensionConstraint", hit.constraint);
-    canvasSelection.set("constraint", null);
-    dimensionDrag.reset();
-    setHint(applicationText("寸法値を入力中: 数式は = から開始し、Parameter参照はダブルクオーテーションで括ります。Canvas寸法のクリックで参照を挿入できます", "Editing dimension: begin expressions with = and enclose parameter references in double quotes. Click a canvas dimension to insert a reference."));
-    draw();
-    focusDimensionValueInput();
-    return true;
-  }
+  function startDimensionEditInput(hit) { return dimensionValueCommand.startEdit(hit); }
 
   function sketchHasDimensionConstraint(sketchId = activeSketchId()) {
     return model.constraints.some((constraint) => constraintSketchId(constraint) === sketchId && constraint.dimension);
