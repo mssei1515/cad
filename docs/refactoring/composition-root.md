@@ -6,6 +6,10 @@
 
 ## 現在の再開地点（2026-10-12）
 
+Canvasメニューの重なり選択fixture／円弧端点fixture・状態観測・固定点追加の四つのAPIをCanvasSelectionTestDriverへ分離。createOverlapFixtureは同座標の二線／非表示・inactive線／Block内線を準備し、Definition追加／Instance採番は既存所有者callbackへ委譲する。createEndpointFixtureは線と二円弧の端点選択用Geometryを準備する。固定ID／座標／Sketch切替・Selection、cache無効化・fit→履歴→UI→draw→client照会の順序を維持。createObservationは既存controllerの候補と表示query・現在Hover／Selectionを観測し、Hover優先順／id・parameterName fallback／arcEndpointを保持する。createPointInsertionは現在Canvas矩形／viewportから固定explicit Pointを追加し、UI→draw後のclientを返す。this経由のhook参照を既存CanvasTestDriver.clientPosition／readSelectedGeometryへ置換。観測・Point追加にBlock生成／採番依存を持ち込まず、候補・hit・選択ルールや独自状態を追加しない。test query時だけ生成し、既存API名へ接続。元の四つの処理本体との一致を確認。classic script／構文／E2E読込一覧を同期。app.jsは7,815→7,738行（77行減、今回の合計3,320行減）。構文469ファイル・単体1,260件・関連E2E103件成功（exit 0、2.0分）。新規テストはなく、全利用箇所のunified-ui既存E2Eで候補表示／Hover／選択、固定点除外、円弧端点拘束入力を確認。全テスト本体とworker終了後の専用サーバー終了待ちは当該processを確認して終了し、正常終了を回収。ログはcad-canvas-selection-test-driver-{check,unit,e2e}.log。全E2Eはこの単位では未実行。全体目標は未完了。
+
+### 前回の区切り
+
 Documentのファイル名fixture読込とドラッグ検証用の直接適用をDocumentTestDriver.createImport／createLoadへ分離。importはJSON→File→既存importFileDataをawaitし、完了後のDocument／表示／保存名・titleと経過時間を照会する。直接適用は入力clone→file名overrideで既存load→任意の履歴reset→UI→draw→現在scopeの拘束数を取得。拒否false、async例外伝播、直接適用のload／history／UI／drawを含むcatch範囲と既定値を保持し、形式変換／モデル置換／復元は既存所有者へ委譲する。test query時だけ生成し、既存二つのAPI名へ直接接続。元の二つの処理本体との一致を確認。classic script／構文／unit／E2E読込一覧を同期。app.jsは7,833→7,815行（18行減、今回の合計3,243行減）。構文468ファイル・単体1,260件・全E2E560件成功（exit 0、24.8分）。単体4件を追加してawait後の名前／時間・拒否／例外、cloneと適用後scope、履歴／表示更新を含む失敗境界を確認した。直接適用APIが多数の画面テストで使用されるため全E2Eを一括実行し、前回失敗したDXF保存再読込を含め全件成功。全テスト本体とworker終了後の専用サーバー終了待ちは当該processを確認して終了し、正常終了を回収。ログはcad-document-test-driver-{check,unit,full-e2e}.log。全体目標は未完了。
 
 ### 前回の区切り
