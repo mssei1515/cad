@@ -111,3 +111,44 @@ test('reference image transfer shifts only placement and preserves scale rotatio
   assert.equal(copy.scale, 2); assert.equal(copy.rotation, 0.4); assert.equal(copy.dataUrl, source.dataUrl);
   assert.equal(source.x, 5); assert.equal(source.y, 6);
 });
+
+test('derived reconnection propagates free origins through a reverse-ordered chain and registers actual projected objects', () => {
+  const copied = [
+    { origin: { x: 0, y: 0 }, sourcePositions: [[{ x: 0, y: 0 }]] },
+    { origin: { x: 0, y: 0 }, sourcePositions: [[{ x: 0, y: 0 }]] },
+  ];
+  const upstream = { type: 'free', id: 'FI1', origin: { x: 0, y: 0 }, sources: ['base'] };
+  const downstream = { type: 'free', id: 'FI2', origin: { x: 0, y: 0 }, sources: ['upstream'] };
+  const p = { id: 'FI2@P1' }, l = { id: 'FI2@L1' }, c = { id: 'FI2@C1' }, a = { id: 'FI2@A1' }, s = { id: 'FI2@SP1' };
+  const bundleCalls = [];
+  const api = sandbox.window.ClipboardTransfer.create({
+    resolveGeometryRef: ref => ref === 'base' ? { points: [{ x: 5, y: 6 }] } : { points: [upstream.origin] },
+    geometryInstanceSourcePoints: item => item.points,
+    geometryInstanceBundle: instance => {
+      bundleCalls.push(instance); assert.deepEqual(plain(downstream.origin), { x: 5, y: 6 });
+      return { valid: true, points: [p], lines: [l], circles: [c], arcs: [a], splines: [s] };
+    }, applicationText: (_ja, en) => en,
+  });
+  const points = new Map(), lines = new Map(), primitives = new Map();
+  api.reconnectDerivedInstances(copied, [downstream, upstream], points, lines, primitives);
+  assert.deepEqual(plain(upstream.origin), { x: 5, y: 6 }); assert.deepEqual(plain(downstream.origin), { x: 5, y: 6 });
+  assert.deepEqual(bundleCalls, [downstream, upstream]); assert.equal(points.get(p.id), p); assert.equal(lines.get(l.id), l);
+  for (const item of [c, a, s]) assert.equal(primitives.get(item.id), item);
+  assert.deepEqual(copied[0].origin, { x: 0, y: 0 });
+});
+
+test('invalid derived bundles reject before map registration and non-free origins stay untouched', () => {
+  const instance = { id: 'MI2', type: 'mirror', origin: { x: 1, y: 2 } }, points = new Map([['existing', {}]]);
+  const api = sandbox.window.ClipboardTransfer.create({ geometryInstanceBundle: () => ({ valid: false, reason: 'missing source' }), applicationText: (_ja, en) => en });
+  assert.throws(() => api.reconnectDerivedInstances([{}], [instance], points, new Map(), new Map()), /MI2: missing source Also select/);
+  assert.equal(points.size, 1); assert.deepEqual(instance.origin, { x: 1, y: 2 });
+});
+
+test('free copies with hatch seed sources use that seed when no geometry points exist', () => {
+  const source = { origin: { x: 2, y: 3 }, sourcePositions: [[{ x: 10, y: 20 }]] };
+  const instance = { id: 'FI3', type: 'free', origin: { x: 2, y: 3 }, sources: ['hatch'] };
+  const api = sandbox.window.ClipboardTransfer.create({ resolveGeometryRef: () => ({ seed: { x: 14, y: 25 } }),
+    geometryInstanceSourcePoints: () => [], geometryInstanceBundle: () => ({ valid: true, points: [], lines: [], circles: [], arcs: [], splines: [] }) });
+  api.reconnectDerivedInstances([source], [instance], new Map(), new Map(), new Map());
+  assert.deepEqual(plain(instance.origin), { x: 6, y: 8 });
+});

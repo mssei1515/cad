@@ -2666,8 +2666,8 @@
     return true;
   }
 
-  const { translateAnnotation, copiedHatch, translateReferenceImage, copiedGeometryInstance, copiedFreeOrigin, translatedClipboardConstraintData, mapClipboardBlockProjection } =
-    window.ClipboardTransfer.create({ blockProjectionBundle, blockProjectionLocalId });
+  const { translateAnnotation, copiedHatch, translateReferenceImage, copiedGeometryInstance, reconnectDerivedInstances, translatedClipboardConstraintData, mapClipboardBlockProjection } =
+    window.ClipboardTransfer.create({ blockProjectionBundle, blockProjectionLocalId, resolveGeometryRef, geometryInstanceSourcePoints, geometryInstanceBundle, applicationText });
 
   const clipboardGeometry = window.ClipboardGeometry.create({ geometryIds, ensureLineMinimumLength, normalizeArcSweep });
 
@@ -2779,29 +2779,7 @@
       model.referenceImages.push(...pastedImages);
 
       invalidateBlockProjectionCache();
-      // Re-evaluate from upstream to downstream so projected sources do not add a false offset.
-      for (let pass = 0; pass < pastedGeometryInstances.length; pass++) {
-        let changed = false;
-        pastedGeometryInstances.forEach((instance, index) => {
-          if (instance.type !== 'free') return;
-          const origin = copiedFreeOrigin(copiedInstances[index], instance, ref => {
-            const item = resolveGeometryRef(ref);
-            const points = geometryInstanceSourcePoints(item);
-            return points.length ? points : item?.seed ? [item.seed] : [];
-          });
-          if (Math.abs(origin.x - instance.origin.x) > 1e-8 || Math.abs(origin.y - instance.origin.y) > 1e-8) {
-            instance.origin = origin; changed = true;
-          }
-        });
-        if (!changed) break;
-      }
-      for (const instance of pastedGeometryInstances) {
-        const bundle = geometryInstanceBundle(instance);
-        if (!bundle.valid) throw new Error(instance.id + ': ' + bundle.reason + ' ' + applicationText('必要な参照先も選択してください', 'Also select required referenced geometry'));
-        for (const item of bundle.points) pointById.set(item.id, item);
-        for (const item of bundle.lines) lineById.set(item.id, item);
-        for (const item of [...bundle.circles, ...bundle.arcs, ...bundle.splines]) primitiveById.set(item.id, item);
-      }
+      reconnectDerivedInstances(copiedInstances, pastedGeometryInstances, pointById, lineById, primitiveById);
       const targetNamespaceKey = currentBlockDefinitionScopeId() ? `block:${currentBlockDefinitionScopeId()}` : "document";
       const sameNamespace = payload.parameterNamespaceKey === targetNamespaceKey;
       const copiedDimensionNames = parameterNamespace.prepareCopiedSymbols(payload, pastedAnnotations, currentParameterNamespace(), sameNamespace);
