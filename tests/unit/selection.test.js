@@ -205,3 +205,19 @@ test('element count includes drawable selections and endpoint separately but exc
   selection.set('dimensionConstraint',a); assert.equal(selection.dimensionConstraints.length,1);
   selection.clear(); assert.equal(selection.dimensionConstraints.length,0);
  });
+
+
+test('deletion selection cleanup retains survivors by identity and preserves separate Spline/constraint phases', () => {
+ const selection = create(); const removed = new Point(0, 0), survivor = new Point(1, 1);
+ const removedAnnotation = { id: 'a1' }, annotation = { id: 'a2' }, deletedConstraint = {}, keptConstraint = {};
+ selection.set('points', [removed, survivor]); selection.set('annotations', [removedAnnotation, annotation]);
+ selection.set('dimensionConstraints', [deletedConstraint, keptConstraint]); selection.set('constraint', deletedConstraint);
+ selection.set('hatches', [{ id: 'h1' }]); selection.set('sketchId', 'S2');
+ const sets = { pointSet: new Set([removed]), lineSet: new Set(), circleSet: new Set(), arcSet: new Set(), splineSet: new Set() };
+ selection.discardDeletedGeometry(sets, [annotation]);
+ assert.deepEqual(selection.points, [survivor]); assert.deepEqual(selection.annotations, [annotation]);
+ assert.equal(selection.constraint, deletedConstraint); assert.equal(selection.dimensionConstraints.length, 2);
+ selection.discardDeletedConstraints(new Set([deletedConstraint]));
+ assert.deepEqual(selection.dimensionConstraints, [keptConstraint]); assert.equal(selection.constraint, null);
+ assert.equal(selection.hatches.length, 1); assert.equal(selection.sketchId, null);
+});

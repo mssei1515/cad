@@ -2420,15 +2420,17 @@
     return true;
   }
 
-  const geometryDeletionPlan = window.GeometryDeletionPlan.create({
+  const geometryDeletion = window.GeometryDeletion.create({
     isPointUsedByLine, isPointUsedByCircle, isPointUsedByArc, isPointUsedBySpline,
     constraintReferencesPoint, constraintReferencesLine, constraintReferencesPrimitive,
+    geometryElementKey, annotationReferencesRemovedGeometry,
   });
 
   function deleteElements({ points = [], lines = [], circles = [], arcs = [], splines = [], constraints = [] } = {}) {
     if (![...points, ...lines, ...circles, ...arcs, ...splines, ...constraints].every(item => guardSketchEdit(elementSketchId(item)))) return false;
     const ownerIds = [...new Set([...points, ...lines, ...circles, ...arcs, ...splines, ...constraints].map(elementSketchId))];
-    const { pointSet, lineSet, circleSet, arcSet, splineSet, constraintSet } = geometryDeletionPlan.plan(model, { points, lines, circles, arcs, splines, constraints });
+    const deletionPlan = geometryDeletion.plan(model, { points, lines, circles, arcs, splines, constraints });
+    const { pointSet, lineSet, circleSet, arcSet, splineSet, constraintSet } = deletionPlan;
 
     const removedKeysForDependency = new Set([...pointSet, ...lineSet, ...circleSet, ...arcSet, ...splineSet].map(geometryElementKey).filter(Boolean));
     const dependentInstances = model.geometryInstances.filter((instance) => geometryInstanceUsesRemovedGeometry(instance, removedKeysForDependency));
@@ -2448,25 +2450,10 @@
     drawingPreview.setPointer(null);
     mode = "select";
 
-    model.constraints = model.constraints.filter((c) => !constraintSet.has(c));
-    model.lines = model.lines.filter((l) => !lineSet.has(l));
-    model.circles = model.circles.filter((c) => !circleSet.has(c));
-    model.arcs = model.arcs.filter((a) => !arcSet.has(a));
-    model.splines = model.splines.filter((spline) => !splineSet.has(spline));
-    model.points = model.points.filter((p) => !pointSet.has(p));
-    const removedGeometry = [...pointSet, ...lineSet, ...circleSet, ...arcSet, ...splineSet];
-    const removedIds = new Set(removedGeometry.map((item) => item.id));
-    const removedKeys = new Set(removedGeometry.map(geometryElementKey).filter(Boolean));
-    model.annotations = model.annotations.filter((annotation) => !annotationReferencesRemovedGeometry(annotation, removedIds, removedKeys));
-    canvasSelection.set("annotations", canvasSelection.annotations.filter((annotation) => model.annotations.includes(annotation)));
-    canvasSelection.set("points", canvasSelection.points.filter((p) => !pointSet.has(p)));
-    canvasSelection.set("lines", canvasSelection.lines.filter((l) => !lineSet.has(l)));
-    canvasSelection.set("circles", canvasSelection.circles.filter((c) => !circleSet.has(c)));
-    canvasSelection.set("arcs", canvasSelection.arcs.filter((a) => !arcSet.has(a)));
-    canvasSelection.set("splines", canvasSelection.splines.filter((spline) => !splineSet.has(spline)));
+    geometryDeletion.apply(model, deletionPlan);
+    canvasSelection.discardDeletedGeometry(deletionPlan, model.annotations);
     splineEditing.forgetDeleted(splineSet);
-    canvasSelection.set("dimensionConstraints", canvasSelection.dimensionConstraints.filter(item => !constraintSet.has(item)));
-    if (constraintSet.has(canvasSelection.constraint)) canvasSelection.set("constraint", null);
+    canvasSelection.discardDeletedConstraints(constraintSet);
     if (constraintSet.has(canvasHover.current.dimension)) canvasHover.update({ dimension: null });
 
     const results = ownerIds.map(id => solveSketchAndDependents(id));

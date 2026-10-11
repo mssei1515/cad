@@ -64,6 +64,19 @@
       else items.push(item);
     }
 
+    function discardDeletedGeometry({ pointSet, lineSet, circleSet, arcSet, splineSet }, retainedAnnotations) {
+      set("annotations", state.annotations.filter((annotation) => retainedAnnotations.includes(annotation)));
+      set("points", state.points.filter((p) => !pointSet.has(p)));
+      set("lines", state.lines.filter((l) => !lineSet.has(l)));
+      set("circles", state.circles.filter((c) => !circleSet.has(c)));
+      set("arcs", state.arcs.filter((a) => !arcSet.has(a)));
+      set("splines", state.splines.filter((spline) => !splineSet.has(spline)));
+    }
+    function discardDeletedConstraints(constraintSet) {
+      set("dimensionConstraints", state.dimensionConstraints.filter(item => !constraintSet.has(item)));
+      if (constraintSet.has(state.constraint)) set("constraint", null);
+    }
+
     function applyClipboard(selectedIds, { idMap, pointById, lineById, primitiveById }, pasted) {
       set("points", selectedIds.points.map((id) => pointById.get(idMap.get(id))).filter(Boolean));
       set("lines", selectedIds.lines.map((id) => lineById.get(idMap.get(id))).filter(Boolean));
@@ -348,7 +361,7 @@
     // Read views retain geometry identity. Mutations go through this instance's API.
     const api = {
       toggleDimensionConstraint: item => { if (!item) return; clearTreeSelection(); state.constraint = null; const index = state.dimensionConstraints.indexOf(item); if (index < 0) state.dimensionConstraints.push(item); else state.dimensionConstraints.splice(index, 1); },
-      inspectionContains, selectInspection, selectedDragPoints, selectedElementCount, set, clear, append, removeAt, toggleById, applyRectangle, applyClipboard,
+      inspectionContains, selectInspection, selectedDragPoints, selectedElementCount, set, clear, append, removeAt, toggleById, applyRectangle, applyClipboard, discardDeletedGeometry, discardDeletedConstraints,
       selectedGeometryItems, appearanceSelectionTarget, setGeometrySelection, currentConstraintTargets,
       hasPrimaryCanvasSelection, effectiveSelectedConstraint, selectedPrimitives,
       togglePointSelection, toggleLineSelection, toggleCircleSelection, toggleArcSelection,

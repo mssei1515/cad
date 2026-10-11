@@ -3,13 +3,14 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const vm = require('node:vm');
 const sandbox = { window: {} }; vm.createContext(sandbox);
-for (const file of ['src/editing/point_usage.js', 'src/editing/geometry_deletion_plan.js']) vm.runInContext(fs.readFileSync(file, 'utf8'), sandbox);
+for (const file of ['src/editing/point_usage.js', 'src/editing/geometry_deletion.js']) vm.runInContext(fs.readFileSync(file, 'utf8'), sandbox);
 function fixture() {
  const model = { points: [], lines: [], circles: [], arcs: [], splines: [], constraints: [] };
  const references = (constraint, item) => constraint.nodes.includes(item);
  const usage = sandbox.window.PointUsage.create({ currentScope: () => model, constraintReferencesPoint: references });
- const planner = sandbox.window.GeometryDeletionPlan.create({ ...usage,
-  constraintReferencesPoint: references, constraintReferencesLine: references, constraintReferencesPrimitive: references });
+ const planner = sandbox.window.GeometryDeletion.create({ ...usage,
+  constraintReferencesPoint: references, constraintReferencesLine: references, constraintReferencesPrimitive: references,
+  geometryElementKey: item => item.id, annotationReferencesRemovedGeometry: (item, ids, keys) => ids.has(item.anchorId) || keys.has(item.anchorKey) });
  return { model, planner };
 }
 const point = (id, kind = 'endpoint') => ({ id, kind });
@@ -49,4 +50,21 @@ test('constraint-only and empty plans retain object identity and do not imply ge
  const plan = planner.plan(model, { constraints: [constraint] });
  assert.equal(plan.constraintSet.has(constraint), true); assert.equal(plan.pointSet.size, 0);
  const empty = planner.plan(model); for (const set of Object.values(empty)) assert.equal(set.size, 0);
+});
+
+
+test('apply removes planned geometry and dependent annotations while retaining surviving object identity', () => {
+ const { model, planner } = fixture(); const removed = point('p1'), survivor = point('p2', 'explicit');
+ const line = { id: 'l1', p1: removed, p2: survivor }, keptCircle = { id: 'c1', center: survivor };
+ const constraint = { nodes: [line] }, keptConstraint = { nodes: [survivor] };
+ model.points.push(removed, survivor); model.lines.push(line); model.circles.push(keptCircle);
+ model.constraints.push(constraint, keptConstraint);
+ const annotation = { anchorId: 'p1' }, keyed = { anchorKey: 'l1' }, keptAnnotation = { anchorId: 'p2' };
+ model.annotations = [annotation, keyed, keptAnnotation]; model.hatches = [{ id: 'h1' }];
+ const originalPoints = model.points, hatches = model.hatches, plan = planner.plan(model, { lines: [line] });
+ planner.apply(model, plan);
+ assert.deepEqual(model.points, [survivor]); assert.notEqual(model.points, originalPoints);
+ assert.equal(model.lines.length, 0); assert.deepEqual(model.circles, [keptCircle]);
+ assert.deepEqual(model.constraints, [keptConstraint]); assert.deepEqual(model.annotations, [keptAnnotation]);
+ assert.equal(model.hatches, hatches); assert.equal(plan.lineSet.has(line), true); assert.equal(plan.pointSet.has(removed), true);
 });
