@@ -6,6 +6,10 @@
 
 ## 現在の再開地点（2026-10-11）
 
+GeometryDeletionCommandへプリミティブ／拘束の削除操作を分離。権限・派生参照・Parameter保護の順序、削除適用→Selection／Spline／hover整理→ownerごとの求解→表示→案内／履歴を維持する。共通操作状態の終了・表示・analysis照会を限定したadapterでappへ接続する。求解不成功でも削除を記録する既存挙動を維持し、deleteElements入口はhoisted wrapperとした。app.jsは10,732→10,711行（21行減、今回の合計347行減）。構文413ファイル・単体1,081件・関連E2E147件成功（exit 0、2.1分）。ログはcad-deletion-command-{check,unit,e2e}.log。全E2Eはこの単位では未実行。全体目標は未完了。
+
+### 前回の区切り
+
 GeometryDeletionへ計画の適用を統合し、plan／applyを明示した編集APIとして整理。削除配列の置換と付随注記の除去は同じ所有者へ、選択整理はCanvasSelectionへ集約。Spline編集解除を選択更新の二段階の間に挟む既存順序と、残存図形／拘束のObject同一性を維持する。app.jsは10,745→10,732行（13行減、今回の合計326行減）。構文411ファイル・単体1,076件・関連E2E147件成功（exit 0、2.1分）。ログはcad-deletion-apply-{check,unit,e2e}.log。モデル適用本体は元の処理と照合済み。全E2Eはこの単位では未実行。全体目標は未完了。
 
 ### 前回の区切り
