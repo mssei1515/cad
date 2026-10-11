@@ -73,5 +73,23 @@
     }
     return Object.freeze({ load, state, deleteSource, deleteInstance });
   }
-  window.DerivedInstanceTestDriver = Object.freeze({ createFixture, createInteraction });
+  function createCommandFixture({ resetModelState, addPoint, addLine, focus, clientPosition, resetHistory, updateUI, draw }) {
+    function reset() {
+      resetModelState();
+      const source = addLine(addPoint(-55, 15, false, "endpoint"), addPoint(-25, 35, false, "endpoint"), false);
+      const axis = addLine(addPoint(0, -55, false, "endpoint"), addPoint(0, 55, false, "endpoint"), true);
+      const direction = addLine(addPoint(25, -40, false, "endpoint"), addPoint(65, -40, false, "endpoint"), true);
+      focus({ x: 0, y: 0 }, 2.5);
+      resetHistory("geometry instance command test");
+      updateUI();
+      draw();
+      return {
+        sourceId: source.id,
+        axis: clientPosition({ x: (axis.p1.x + axis.p2.x) / 2, y: (axis.p1.y + axis.p2.y) / 2 }),
+        direction: clientPosition({ x: (direction.p1.x + direction.p2.x) / 2, y: (direction.p1.y + direction.p2.y) / 2 }),
+      };
+    }
+    return Object.freeze({ reset });
+  }
+  window.DerivedInstanceTestDriver = Object.freeze({ createFixture, createInteraction, createCommandFixture });
 })();

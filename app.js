@@ -4860,6 +4860,11 @@
         blockInstances: canvasSelection.blockInstances.map((instance) => instance.id),
       };
     }
+    const canvasTestDriver = window.CanvasTestDriver.create({ viewport, clampZoom, resizeCanvas, draw, canvas, currentCanvasCenterWorld, worldToCanvasScreen });
+    const instanceCommandFixture = window.DerivedInstanceTestDriver.createCommandFixture({
+      resetModelState, addPoint, addLine, focus: canvasTestDriver.focus, clientPosition: canvasTestDriver.clientPosition,
+      resetHistory, updateUI, draw,
+    });
     const derivedInstanceInteraction = window.DerivedInstanceTestDriver.createInteraction({
       currentScope: workspace.current, serializeModel, geometryInstanceBundle, constraintStatusColor, arcSweep, canvasSelection,
       resolvedHatchBoundary, document, loadModelData, updateUI, draw, deleteElements, deleteCurrentSelection,
@@ -5006,21 +5011,7 @@
       },
       loadModelForDerivedInstanceTest: derivedInstanceInteraction.load,
       resetForDerivedInstanceTest: derivedInstanceFixture.reset,
-      resetForGeometryInstanceCommandTest() {
-        resetModelState();
-        const source = addLine(addPoint(-55, 15, false, "endpoint"), addPoint(-25, 35, false, "endpoint"), false);
-        const axis = addLine(addPoint(0, -55, false, "endpoint"), addPoint(0, 55, false, "endpoint"), true);
-        const direction = addLine(addPoint(25, -40, false, "endpoint"), addPoint(65, -40, false, "endpoint"), true);
-        this.focusWorldForTest({ x: 0, y: 0 }, 2.5);
-        resetHistory("geometry instance command test");
-        updateUI();
-        draw();
-        return {
-          sourceId: source.id,
-          axis: this.worldClientPositionForTest({ x: (axis.p1.x + axis.p2.x) / 2, y: (axis.p1.y + axis.p2.y) / 2 }),
-          direction: this.worldClientPositionForTest({ x: (direction.p1.x + direction.p2.x) / 2, y: (direction.p1.y + direction.p2.y) / 2 }),
-        };
-      },
+      resetForGeometryInstanceCommandTest: instanceCommandFixture.reset,
       derivedInstanceStateForTest: derivedInstanceInteraction.state,
       deleteDerivedSourceForTest: derivedInstanceInteraction.deleteSource,
       deleteDerivedInstanceForTest: derivedInstanceInteraction.deleteInstance,
@@ -6029,17 +6020,7 @@
           externalConstraintCount: selection.externalConstraints?.length || 0,
         };
       },
-      focusWorldForTest(center, scale = 1) {
-        viewport.update({ scale: clampZoom(Number(scale) || 1) });
-        resizeCanvas({ centerWorld: { x: Number(center?.x) || 0, y: Number(center?.y) || 0 } });
-        draw();
-        const rect = canvas.getBoundingClientRect();
-        return {
-          scale: viewport.scale,
-          center: currentCanvasCenterWorld(),
-          canvas: { left: rect.left, top: rect.top, width: rect.width, height: rect.height },
-        };
-      },
+      focusWorldForTest: canvasTestDriver.focus,
       displayZoomStateForTest(zoomRatio = null) {
         if (zoomRatio != null) viewport.update({ scale: clampZoom(Number(zoomRatio) * CSS_PX_PER_MM) });
         return {
@@ -6050,11 +6031,7 @@
           viewportScale: viewport.scale,
         };
       },
-      worldClientPositionForTest(point) {
-        const rect = canvas.getBoundingClientRect();
-        const screen = worldToCanvasScreen({ x: Number(point?.x) || 0, y: Number(point?.y) || 0 });
-        return { x: rect.left + screen.x, y: rect.top + screen.y };
-      },
+      worldClientPositionForTest: canvasTestDriver.clientPosition,
       hitGeometryAtWorldForTest(point) {
         const x = Number(point?.x) || 0;
         const y = Number(point?.y) || 0;

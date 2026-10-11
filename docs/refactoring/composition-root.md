@@ -6,6 +6,10 @@
 
 ## 現在の再開地点（2026-10-12）
 
+Canvasのtest用focus／world-to-client座標照会をCanvasTestDriverへ、派生Instance作図fixtureを既存DerivedInstanceTestDriver.createCommandFixtureへ分離。viewport／resize／drawと現在Canvas矩形の照会順、数値fallback、fixture座標・Construction・履歴／表示順を保持し、thisによるhook相互参照を明示したfocus／clientPositionへ置換する。モデル・seq・cache・表示状態を複製しない。元の三つの本体との一致と三つの境界テストを確認し、classic script／構文／単体／E2E読込一覧を更新。app.jsは8,525→8,502行（23行減、今回の合計2,556行減）。構文458ファイル・全単体1,247件成功（exit 0）。全E2Eは550件成功・DXF保存再読込の1件失敗（exit 1、24.6分）。既存保存処理ではcheckpoint更新後も保存中の排他が続くため、変更なし表示だけで読込を始めていたテストの待機条件を保存済み表示までに修正。期待するタイトル・Geometry・保存読込の検証は維持する。修正後はDXF／file-safetyを各3回、計45件成功（exit 0、2.9分）。テスト本体完了後のサーバー終了待ちは、当該実行の専用サーバーを確認して終了し結果を回収した。ログはcad-canvas-test-driver-{check,unit,full-e2e,final-check,dxf-recheck,save-recheck}.log。修正後の全E2E一括再実行は未実施であり、全551件が一括成功したとは扱わない。リリース前に最新状態の全E2Eを確認する。全体目標は未完了。
+
+### 前回の区切り
+
 派生Instanceのfixture／状態照会・読込・source／Instance削除の五つのテスト支援APIをDerivedInstanceTestDriverのcreateFixture／createInteractionへ分離。現在scopeと既存投影／削除・ID採番入口へ委譲し、Projection→Mirror→Patternの参照／採番順・Hatch生成・履歴／表示・clone／読込／削除後観測の順を保持する。独自モデル／seq／cacheを持たず、this経由のhook参照はDriver内stateと明示したreadStateへ置換。元の五つの本体との一致を確認し、classic script／構文／E2E読込一覧を更新。app.jsは8,567→8,525行（42行減、今回の合計2,533行減）。構文456ファイル・単体1,244件・関連E2E199件成功（exit 0、2.7分）。ログはcad-derived-instance-test-driver-{check,unit,e2e}.log。新しい単体テストは追加せず、利用する全9ファイルとunified-uiの既存E2Eで実利用を検証。全E2Eはこの単位では未実行。全体目標は未完了。
 
 ### 前回の区切り
