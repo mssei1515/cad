@@ -140,3 +140,47 @@ test('derived drag hits preserve point priority, reverse occurrence order and en
   bundle.points.length = 0; hit = f.query.hitDerivedGeometryForDrag(0, 0); assert.equal(hit.kind, 'arc-endpoint'); assert.equal(hit.item, arc); assert.equal(hit.endpoint, 'end');
   owner.sketchId = 'blocked'; assert.equal(f.query.hitDerivedGeometryForDrag(0, 0), null);
 });
+
+function dimensionFixture() {
+  const state = { constraints: [], scale: 1, ordinary: true }, measured = [];
+  const query = sandbox.window.GeometryHitQuery.createDimensions({
+    pointInExpandedBox: sandbox.window.GeometryBounds.pointInExpandedBox,
+    currentScope: () => state, viewportScale: () => state.scale, ordinarySelectionMode: () => state.ordinary,
+    isActiveSketchConstraint: constraint => constraint.sketchId === 'active', isVisibleSketchId: id => id !== 'hidden',
+    constraintSketchId: constraint => constraint.sketchId, targetFromConstraint: constraint => constraint.target,
+    defaultDimensionForTarget: target => target.defaultDimension, isVisibleValue: value => value !== false,
+    effectiveDimensionAppearance: dimension => dimension.appearance || {}, dimensionLayout: (_target, dimension) => dimension.layout,
+    dimensionLabelForConstraint: constraint => constraint.label || '1', dimensionTextDrawingMetrics: () => ({ gap: 0, height: 20 }),
+    dimensionTextWidth: (label, _appearance, expression) => { measured.push({ label, expression }); return 10; }, dimensionUsesExpression: constraint => Boolean(constraint.expression),
+  });
+  const dimension = { layout: { text: { x: 0, y: 0 }, hitA: { x: 100, y: 100 }, hitB: { x: 200, y: 100 } } };
+  const make = (id, sketchId = 'active') => ({ id, sketchId, dimension, target: { id: 'target' } });
+  return { query, state, measured, dimension, make };
+}
+
+test('dimension hits preserve reverse constraint order, visibility, scope eligibility and returned references', () => {
+  const f = dimensionFixture(), first = f.make('first'), last = f.make('last', 'other'), hidden = f.make('hidden', 'hidden');
+  f.state.constraints = [first, last, hidden];
+  let hit = f.query.hitDimension(0, 0); assert.equal(hit.constraint, last); assert.equal(hit.target, last.target); assert.equal(hit.dimension, f.dimension); assert.equal(hit.part, 'label');
+  f.state.ordinary = false; assert.equal(f.query.hitDimension(0, 0).constraint, first);
+  assert.equal(f.query.hitDimension(0, 0, { activeOnly: false }).constraint, last);
+  first.dimension = { ...f.dimension, appearance: { visible: false } }; assert.equal(f.query.hitDimension(0, 0), null);
+  assert.deepEqual(f.state.constraints, [first, last, hidden]);
+});
+
+test('dimension hits distinguish line and label, use fallback dimensions and read current scale', () => {
+  const f = dimensionFixture(), constraint = f.make('c');
+  delete constraint.dimension; constraint.target.defaultDimension = f.dimension; f.state.constraints = [constraint];
+  assert.equal(f.query.hitDimension(150, 100).part, 'line'); assert.equal(f.query.hitDimension(0, 0).part, 'label');
+  assert.equal(f.query.hitDimension(30, 0), null); f.state.scale = 0.5;
+  assert.equal(f.query.hitDimension(30, 0).part, 'label');
+  f.state.constraints = []; assert.equal(f.query.hitDimension(0, 0), null);
+});
+
+test('rotated multiline and world-size dimension labels use text bounds and expression metrics', () => {
+  const f = dimensionFixture(), constraint = f.make('c'); f.state.constraints = [constraint];
+  f.dimension.layout.textAngle = Math.PI / 2; constraint.label = 'A\nB'; constraint.expression = true;
+  assert.equal(f.query.hitDimension(30, 0).part, 'label'); assert.deepEqual(f.measured.at(-1), { label: 'A\nB', expression: true });
+  constraint.label = 'A'; assert.equal(f.query.hitDimension(30, 0), null);
+  f.dimension.appearance = { fixedDisplaySize: false }; assert.equal(f.query.hitDimension(30, 0).part, 'label');
+});

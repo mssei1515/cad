@@ -6,6 +6,10 @@
 
 ## 現在の再開地点（2026-10-12）
 
+寸法ラベル／寸法線のCanvas hitを既存GeometryHitQuery.createDimensionsへ集約。scope・倍率・mode・Sketch資格／可視性とtarget／dimension・外観／layout／text metrics／式flagを明示し、操作状態や寸法値を更新しない。拘束配列逆順、activeOnly既定値、各照会の順序・回数、回転／複数行／world-sizeラベル、ラベル優先、結果の参照同一性を保持。矩形判定の初期化時static参照は既存script順では未定義となるため、生成時の明示portに修正した。元処理との本体一致と3つの境界テストを確認。app.jsは9,030→9,004行（26行減、今回の合計2,054行減）。構文444ファイル・単体1,222件・関連E2E181件成功（exit 0、2.6分）。ログはcad-dimension-hit-query-{check,unit,e2e}.log。全E2Eはこの単位では未実行。全体目標は未完了。
+
+### 前回の区切り
+
 Block／派生インスタンスの全体hit・bundle hit・派生drag用部分Geometry hitを既存GeometryHitQuery.createInstancesへ集約。現在scope・倍率・投影bundle・可視性／操作資格・Annotation bounds・Hatch照会を明示し、Selection／mode／モデルを変更しない。BlockのGeometry→Annotation→Hatchと派生bundleのHatch優先の差、全体hitの描画順、dragの点→円弧端点→線→円→円弧→Splineと種別内逆順／end優先を保持する。元処理との本体一致と3境界テストで所有者・参照・順序・資格・現在倍率を確認。app.jsは9,101→9,030行（71行減、今回の合計2,028行減）。構文444ファイル・単体1,219件・関連E2E216件成功（exit 0、4.8分、ドラッグ回帰1.8分）。ログはcad-instance-hit-query-{check,unit,e2e}.log。全E2Eはこの単位では未実行。全体目標は未完了。
 
 ### 前回の区切り

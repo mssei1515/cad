@@ -1,8 +1,8 @@
-/* Ordinary and projected-instance Canvas hit rules; no pointer events or selection mutation. */
+/* Geometry, dimension and projected-instance Canvas hit rules; no pointer events or selection mutation. */
 (() => {
   "use strict";
   const { hypot2 } = window.GeometrySolver;
-  const { distancePointToSegment, arcEndpointPoint, angleOnSignedSweep } = window.GeometryKernel;
+  const { distancePointToSegment, distancePointToSegmentPoints, arcEndpointPoint, angleOnSignedSweep } = window.GeometryKernel;
   const { normalizedDrawingOrder } = window.DrawingOrder;
   function create({ currentScope, viewportScale, isEditableSketchElement, isSelectableEndpointPoint, isExplicitPoint,
     hitDimension, constraintSketchId, elementSketchId, isVisibleSketchElement, hitBlockInstance, blockDefinitionById,
@@ -249,5 +249,42 @@
     }
     return Object.freeze({ hitBlockInstance, hitGeometryInstance, hitDerivedGeometryForDrag });
   }
-  window.GeometryHitQuery = Object.freeze({ create, createInstances });
+  function createDimensions({ currentScope, viewportScale, ordinarySelectionMode, isActiveSketchConstraint, isVisibleSketchId,
+    constraintSketchId, targetFromConstraint, defaultDimensionForTarget, isVisibleValue, effectiveDimensionAppearance,
+    dimensionLayout, dimensionLabelForConstraint, dimensionTextDrawingMetrics, dimensionTextWidth, dimensionUsesExpression, pointInExpandedBox }) {
+    function hitDimension(x, y, { activeOnly = !ordinarySelectionMode() } = {}) {
+      const threshold = 12 / viewportScale();
+      for (let i = currentScope().constraints.length - 1; i >= 0; i--) {
+        const constraint = currentScope().constraints[i];
+        if (activeOnly && !isActiveSketchConstraint(constraint)) continue;
+        if (!isVisibleSketchId(constraintSketchId(constraint))) continue;
+        const target = targetFromConstraint(constraint);
+        if (!target) continue;
+        const dimension = constraint.dimension || defaultDimensionForTarget(target);
+        if (!isVisibleValue(effectiveDimensionAppearance(dimension, constraintSketchId(constraint)).visible)) continue;
+        const layout = dimensionLayout(target, dimension);
+        if (!layout) continue;
+        const appearance = effectiveDimensionAppearance(dimension, constraintSketchId(constraint));
+        let scaledLabelHit = false;
+        if (appearance.fixedDisplaySize === false || /[\r\n]/.test(dimensionLabelForConstraint(constraint, target, dimension))) {
+          const label = dimensionLabelForConstraint(constraint, target, dimension);
+          const metrics = dimensionTextDrawingMetrics(appearance);
+          const width = dimensionTextWidth(label, appearance, dimensionUsesExpression(constraint));
+          const angle = -(Number(layout.textAngle) || 0);
+          const dx = x - layout.text.x, dy = y - layout.text.y;
+          scaledLabelHit = pointInExpandedBox(dx * Math.cos(angle) - dy * Math.sin(angle), dx * Math.sin(angle) + dy * Math.cos(angle),
+            { left: -width / 2, right: width / 2, top: -metrics.gap - metrics.height * (1 + (String(label).split(/\r\n|\r|\n/).length - 1) * 1.2), bottom: -metrics.gap }, threshold);
+        }
+        if (scaledLabelHit || hypot2(x - layout.text.x, y - layout.text.y) <= threshold * 2.2) {
+          return { constraint, target, dimension, part: "label" };
+        }
+        if (distancePointToSegmentPoints(x, y, layout.hitA, layout.hitB) <= threshold * 1.4) {
+          return { constraint, target, dimension, part: "line" };
+        }
+      }
+      return null;
+    }
+    return Object.freeze({ hitDimension });
+  }
+  window.GeometryHitQuery = Object.freeze({ create, createInstances, createDimensions });
 })();
