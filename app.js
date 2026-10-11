@@ -3242,6 +3242,8 @@
     updateToolbar, updateConstraintButtons, setHint, constraintTargetHint, draw,
     blurConstraintControl: () => { if (document.activeElement instanceof HTMLElement && document.activeElement.matches("[data-constraint], #fixPointBtn")) document.activeElement.blur(); },
     canCompleteConstraintCommand, distanceTargetFromSelection, startDistanceCommand, addConstraint,
+    annotationAnchorConstraints, hitConstraintOperand, invalidConstraintTargetHint,
+    toggleGeometryFixedOperand, toggleSelectedFixed, updateGeometrySelectionUI, startDistanceValueInput, types: { Circle, Arc },
   });
   function startConstraintTargetCommand(type) { return constraintTargetCommand.start(type); }
   function cancelConstraintTargetCommand(message) { return constraintTargetCommand.cancel(message); }
@@ -3250,73 +3252,7 @@
 
   function hitConstraintOperand(pointer, type, hits = {}) { return queryConstraintOperand(pointer, type, constraintTargetSession.operands, hits); }
 
-  function appendConstraintOperand(type, operand) {
-    const result = constraintTargetSession.append(type, operand, () => invalidConstraintTargetHint(type));
-    if (result.ok) syncSelectionFromConstraintOperands();
-    return result;
-  }
-
-  function handleConstraintOperandClick(pointer, type, hits = {}) {
-    if (annotationAnchorConstraints.active) {
-      const operand = hitConstraintOperand(pointer, type, hits);
-      return annotationAnchorConstraints.click(operand);
-    }
-    const operand = hitConstraintOperand(pointer, type, hits);
-    if (type === "fixed") {
-      const supported = operand && (["point", "line", "arc-endpoint"].includes(operand.kind) || (operand.kind === "primitive" && (operand.primitive instanceof Circle || operand.primitive instanceof Arc)));
-      if (!supported || operand.relation !== "active" || operand.element?.derivedProjection) {
-        setHint(constraintTargetHint(type), "error");
-        return true;
-      }
-      clearSelection();
-      constraintTargetSession.replaceOperands([operand]);
-      syncSelectionFromConstraintOperands();
-      const command = constraintTargetSession.command;
-      const individualGeometry = operand.element?.blockProjection || operand.kind === "primitive";
-      if (individualGeometry ? toggleGeometryFixedOperand(operand) : toggleSelectedFixed()) clearSelection();
-      constraintTargetSession.replaceCommand(command);
-      updateGeometrySelectionUI();
-      updateToolbar();
-      updateConstraintButtons();
-      draw();
-      return true;
-    }
-    if (!operand && type === "distance") {
-      const resolution = resolveConstraintIntent(type, constraintTargetSession.operands);
-      if (resolution?.action === "place-dimension" && resolution.target?.kind === "line-length") {
-        startDistanceResolution(resolution, pointer);
-        startDistanceValueInput(pointer);
-        return true;
-      }
-    }
-    const added = appendConstraintOperand(type, operand);
-    if (!added.ok) {
-      setHint(added.error, "error");
-      return true;
-    }
-    const resolution = resolveConstraintIntent(type, constraintTargetSession.operands);
-    if (resolution?.error) {
-      setHint(resolution.error, "error");
-      draw();
-      return true;
-    }
-    if (resolution?.action === "place-dimension") {
-      if (resolution.target?.kind === "line-length" && constraintTargetSession.operands.length === 1) {
-        startDistanceResolution(resolution, pointer);
-        return true;
-      }
-      startDistanceResolution(resolution, null);
-      return true;
-    }
-    if (resolution?.action === "commit" && resolution.constraint) {
-      commitConstraintResolution(resolution);
-      return true;
-    }
-    updateGeometrySelectionUI();
-    setHint(constraintTargetHint(type));
-    draw();
-    return true;
-  }
+  function handleConstraintOperandClick(pointer, type, hits = {}) { return constraintTargetCommand.operandClick(pointer, type, hits); }
 
   function handleConstraintTargetClick(hitP, hitL, hitC, hitA, hitArcEnd) {
     if (!constraintTargetSession.command) return false;
