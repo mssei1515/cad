@@ -1,9 +1,9 @@
 <div align="center">
-  <img src="./assets/jot2d-hero.png" alt="Jot2D Parametric 2D-CAD" width="640">
+  <img src="./assets/jot2d-wordmark.png" alt="Jot2D" width="640">
 </div>
 
 Jot2Dは、ブラウザ上で動作する開発中の2DパラメトリックCADです。
-Geometry、Constraint、Sketch階層、Block、Parameter、Hatch、Annotationを、1つのCanvas上で作成・編集できます。
+寸法や数式で形状を調整しながら、図形、拘束、階層化されたSketch、Block、塗りつぶし、注記を1つのCanvas上で作成・編集できます。
 
 ## ブラウザで試す
 
@@ -16,17 +16,55 @@ Geometry、Constraint、Sketch階層、Block、Parameter、Hatch、Annotationを
 
 ## 主な機能
 
-- Point、Line、Circle、Arc、Splineの作図と編集
+- 点、線分、円、円弧、Splineの作図と編集、トリム、フィレット、オフセット
 - 幾何拘束、拘束寸法、参照寸法
 - Document／Block DefinitionごとのParameterと数式
 - 階層化されたSketchとBlock Definition／Instance
+- 参照元に追従するスケッチ投影、ミラー、直線パターン、同期インスタンス
 - 閉領域を追従する平行線、クロス、塗りつぶしHatch
-- 引出線と自由テキストによるAnnotation
+- 引出線の有無を切り替えられる注記、Parameterや数式による値の表示
+- PNG／JPEG／WebPの参照画像読込・貼り付け、2点の実寸による縮尺設定
 - Geometry、補助線、寸法、Hatch、AnnotationのAppearance設定
 - Undo／Redo、Copy／Cut／Paste
 - `.jot2d`ファイルの開く、上書き保存、名前を付けて保存
+- テキストDXFの読込と、指定範囲の透過PNG出力
+
+DXF読込は点・線分・円・円弧・2Dポリラインを対象とし、現在の編集Sketchへ追加します。文字・寸法・Hatchなどの未対応要素はスキップされ、部分読込の確認が表示されます。DXF出力には対応していません。
 
 `.jot2d`ファイルの内容にはJSONを使用しています。現行のデータ形式と機能の詳細は、[仕様書](./spec/README.md)を参照してください。
+
+## 使い始める
+
+1. [Jot2Dを開く](https://mssei1515.github.io/cad/)。
+2. Sketch Treeで作図先のSketchを指定し、ツールバーから図形を作成する。
+3. 拘束や寸法を追加し、必要に応じてParameterに値や数式を設定する。
+4. Fileメニューから`.jot2d`ファイルを保存する。
+
+作図先は明示的に切り替えます。既存図形を選択しても、作図先は自動では変わりません。ファイルへの直接保存に対応しないブラウザでは、保存時に`.jot2d`ファイルをダウンロードします。
+
+## ローカルで起動する
+
+リポジトリをダウンロードし、`index.html`をブラウザで開くと起動できます。Node.jsを使用する場合は、リポジトリのフォルダで次を実行してください。
+
+```sh
+npm install
+npm run serve
+```
+
+[http://127.0.0.1:8765](http://127.0.0.1:8765)を開いて利用できます。
+
+## 開発・検証
+
+正式リリースは`main`、日常の開発は`develop`で管理しています。変更時は[作業ルール](./AGENTS.md)と[現在の仕様](./spec/README.md)を確認してください。
+
+```sh
+npm run check       # JavaScriptの構文確認
+npm run test:unit   # 単体テスト
+npx playwright install chromium  # E2E用ブラウザの準備（初回）
+npm run test:e2e    # ブラウザ操作のテスト
+```
+
+検証の詳細は[検証方法](./spec/verification/検証方法.md)、内部構成は[モジュール構成](./spec/architecture/モジュール構成.md)を参照してください。
 
 ## 免責事項
 
