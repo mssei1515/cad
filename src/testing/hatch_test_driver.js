@@ -1,7 +1,8 @@
 /* Hatch browser-test setup and observations; application owners retain live state. */
 (() => {
   "use strict";
-  const { createRegionIndex: createHatchRegionIndex, findFaceInIndex: findHatchFaceInIndex } = window.HatchRegionEngine;
+  const { createRegionIndex: createHatchRegionIndex, findFaceInIndex: findHatchFaceInIndex,
+    resolveBoundary: resolveHatchBoundaryLoops, boundaryGeometryRefs: hatchBoundaryGeometryRefs } = window.HatchRegionEngine;
   function create({ resetModelState, viewport, addPoint, addLine, addCircle, currentScope,
     fitSketchToViewport, activeSketchId, resetHistory, updateUI, draw, canvas, worldToCanvasScreen, serializeModel,
     readMode, allHatches, hatchGeometryQuery, serializeHatch, hatchRegionErrorText, canvasSelection, hatchCommand, document,
@@ -106,5 +107,88 @@
     }
     return Object.freeze({ reset, resetSolidHole, state, setScale, breakBoundary, restoreBoundary });
   }
-  window.HatchTestDriver = Object.freeze({ create });
+  function createProjection({ resetModelState, createEmptyBlockDefinition, Point, Line, DEFAULT_SKETCH_ID, DEFAULT_HATCH_APPEARANCE,
+    currentScope, appendDefinitions, invalidateBlockProjectionCache, updateUI, fitAllGeometryToViewport,
+    blockProjectionBundle, canvas, worldToCanvasScreen, draw, allHatches, hatchGeometryQuery, hitBlockInstance, serializeModel }) {
+    const { hatchPrimitivesForScope, resolvedHatchBoundary } = hatchGeometryQuery;
+    function reset() {
+      resetModelState();
+      const child = createEmptyBlockDefinition("Hatch Child");
+      const childPoints = [
+        new Point("P1", 0, 0, false, "endpoint"), new Point("P2", 100, 0, false, "endpoint"),
+        new Point("P3", 100, 60, false, "endpoint"), new Point("P4", 0, 60, false, "endpoint"),
+      ];
+      childPoints.forEach((point) => { point.sketchId = DEFAULT_SKETCH_ID; });
+      child.points.push(...childPoints);
+      [[0, 1], [1, 2], [2, 3], [3, 0]].forEach(([a, b], index) => {
+        const line = new Line(`L${index + 1}`, childPoints[a], childPoints[b]);
+        line.sketchId = DEFAULT_SKETCH_ID;
+        child.lines.push(line);
+      });
+      const face = findHatchFaceInIndex(createHatchRegionIndex(hatchPrimitivesForScope(child, DEFAULT_SKETCH_ID)), { x: 50, y: 30 });
+      child.hatches = [{ id: "H1", sketchId: DEFAULT_SKETCH_ID, seed: { x: 50, y: 30 }, boundaryLoops: face.boundaryLoops, appearance: { ...DEFAULT_HATCH_APPEARANCE, patternType: "cross" } }];
+      child.nextHatchIndex = 2;
+
+      const parent = createEmptyBlockDefinition("Hatch Parent");
+      child.parentDefinitionId = parent.id;
+      parent.blockInstances.push({ id: "BI_INNER", definitionId: child.id, sketchId: DEFAULT_SKETCH_ID, x: 20, y: 10, rotation: Math.PI / 6, fixed: false, rotationLocked: false, enabledSketchIds: [DEFAULT_SKETCH_ID], appearanceOverride: {} });
+      appendDefinitions(child, parent);
+      const instance = { id: "BI1", definitionId: parent.id, sketchId: DEFAULT_SKETCH_ID, x: 240, y: 180, rotation: Math.PI / 2, fixed: false, rotationLocked: false, enabledSketchIds: [DEFAULT_SKETCH_ID], appearanceOverride: { color: "#db2777", lineWidth: 3, visible: true } };
+      currentScope().blockInstances.push(instance);
+      invalidateBlockProjectionCache();
+      updateUI();
+      fitAllGeometryToViewport(160);
+      const projected = blockProjectionBundle(instance).hatches[0];
+      const rect = canvas.getBoundingClientRect();
+      const screen = worldToCanvasScreen(projected.seed);
+      draw();
+      return {
+        projected: { id: projected.id, patternType: projected.appearance.patternType, angle: projected.appearance.angle, color: projected.appearance.color, lineWidth: projected.appearance.lineWidth, valid: resolvedHatchBoundary(projected).ok },
+        ownerAtSeed: hitBlockInstance(projected.seed.x, projected.seed.y)?.id || null,
+        client: { x: rect.left + screen.x, y: rect.top + screen.y },
+        serialized: serializeModel(),
+      };
+    }
+    function state() {
+      const projected = allHatches().find((hatch) => hatch.blockProjection) || null;
+      return projected ? { id: projected.id, patternType: projected.appearance.patternType, angle: projected.appearance.angle, color: projected.appearance.color, lineWidth: projected.appearance.lineWidth, valid: resolvedHatchBoundary(projected).ok, ownerId: projected.blockInstance?.id || null } : null;
+    }
+    return Object.freeze({ reset, state });
+  }
+
+  function createTransfer({ currentScope, clearSelection, canvasSelection, copyableSelectionPayload, clipboardSession, pasteGeometryClipboard,
+    geometryRefId, blockSelectionGeometry, createBlockDefinitionFromSelection, blockSelectionBoundsCenter, hatchGeometryQuery }) {
+    const { hatchPrimitivesForScope, resolvedHatchBoundary } = hatchGeometryQuery;
+    function exercise() {
+      const hatch = currentScope().hatches[0];
+      const boundaryLines = currentScope().lines.slice();
+      clearSelection();
+      canvasSelection.set("hatches", hatch ? [hatch] : []);
+      const missingCopyAccepted = Boolean(copyableSelectionPayload());
+      canvasSelection.set("lines", boundaryLines);
+      const payload = copyableSelectionPayload();
+      clipboardSession.replaceForDiagnostics(payload);
+      const pasteAccepted = Boolean(payload && pasteGeometryClipboard());
+      const pasted = currentScope().hatches.find((item) => item !== hatch);
+      const pastedRefs = pasted ? hatchBoundaryGeometryRefs(pasted.boundaryLoops).map(geometryRefId) : [];
+
+      clearSelection();
+      canvasSelection.set("hatches", hatch ? [hatch] : []);
+      const missingBlock = blockSelectionGeometry();
+      canvasSelection.set("lines", boundaryLines);
+      const selection = blockSelectionGeometry();
+      const definition = selection.error ? null : createBlockDefinitionFromSelection(selection, blockSelectionBoundsCenter(selection), "Hatch Transfer");
+      const blockHatch = definition?.hatches?.[0] || null;
+      const blockBoundary = blockHatch ? resolveHatchBoundaryLoops(blockHatch.boundaryLoops, hatchPrimitivesForScope(definition, blockHatch.sketchId)) : null;
+      return {
+        missingCopyAccepted,
+        pasteAccepted,
+        pasted: pasted ? { id: pasted.id, refs: pastedRefs, valid: resolvedHatchBoundary(pasted).ok } : null,
+        missingBlockError: missingBlock.error || null,
+        block: blockHatch ? { id: blockHatch.id, valid: Boolean(blockBoundary?.ok) } : null,
+      };
+    }
+    return Object.freeze({ exercise });
+  }
+  window.HatchTestDriver = Object.freeze({ create, createProjection, createTransfer });
 })();

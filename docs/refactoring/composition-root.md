@@ -6,6 +6,10 @@
 
 ## 現在の再開地点（2026-10-12）
 
+HatchのネストBlock投影fixture／状態照会とコピー・貼付け／Block化の検証手順を、既存HatchTestDriver.createProjection／createTransferへ分離。独立した生成入口により、転送に投影の型・描画依存を持ち込まない。現在scopeの再照会と元Hatch／境界Lineの参照を保持し、定義追加・projection cache無効化・UI／fit／draw・既存Clipboard／Block操作の順を維持する。元の三つの本体との一致を確認し、既存API名と結果を直接接続。app.jsは8,804→8,746行（58行減、今回の合計2,312行減）。構文451ファイル・単体1,241件・関連E2E163件成功（exit 0、2.4分）。ログはcad-hatch-projection-transfer-driver-{check,unit,e2e}.log。新しい単体テストは追加せず、全利用箇所のhatching／sketch-moveとunified-ui／blocksの既存E2Eで実利用を検証。全E2Eはこの単位では未実行。全体目標は未完了。
+
+### 前回の区切り
+
 Hatchの通常／穴付き領域fixture、状態照会、表示倍率、境界破損／復旧の六つのテスト支援APIをHatchTestDriver（src/testing/hatch_test_driver.js）へ分離。test query時だけ生成し、既存API名／戻り値を直接接続する。現在scope・modeを呼出し時に照会し、モデル／ID／cache／履歴／表示／保存の状態は既存所有者へ委譲する。元の六つの本体との一致、fixture座標・Hatch ID／nextIndex・Construction・scope照会・UI／draw順を確認。classic script／構文／E2Eの読込一覧を更新。app.jsは8,884→8,804行（80行減、今回の合計2,254行減）。構文451ファイル・単体1,241件・利用するE2E全10ファイルの180件成功（exit 0、2.7分）。ログはcad-hatch-test-driver-{check,unit,e2e}.log。新しい単体テストは追加せず、既存E2EでDriverの実利用を検証。全E2Eはこの単位では未実行。全体目標は未完了。
 
 ### 前回の区切り
