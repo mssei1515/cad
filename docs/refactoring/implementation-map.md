@@ -506,3 +506,6 @@ AuthoringPreviewRendererへSpline／Centerline／Trim描画も統合。Spline構
 - src/editing/clipboard_transfer.js: コピー値のID／座標変換とBlock投影参照の再接続。貼付けの状態管理から独立した入力・出力とMap更新を持つ。
 
 - src/editing/clipboard_payload.js: scopeとSelectionから依存要素・対象内拘束を集めてコピー値を生成し、参照不足はエラーとして返す。
+
+
+ClipboardGeometry（src/editing/clipboard_geometry.js）はコピー値からPoint・Line・Circle・Arc・Splineを生成し、指定scopeの配列へ順に追加する。ID発行器と既存の最小長／円弧正規化を注入し、明示したmodel・payload・Sketch・移動量を使用する。端点・中心・通過点は生成済みの実オブジェクトへ結び直し、後続のBlock／拘束再接続に必要なID Map・オブジェクトMapを返す。途中失敗で追加された要素と採番の巻戻しは貼付け全体のtransactionが担当し、このmoduleはSelection・履歴・Clipboard session・UIを所有しない。GeometryCreationの通常作図とはコピー値の復元と参照Map生成が異なり、正規化方針は同じ既存APIへ委譲する。
