@@ -6,6 +6,10 @@
 
 ## 現在の再開地点（2026-10-11）
 
+OperandHitQueryへ拘束候補の通常hit・対称段階の優先・円弧端点・Spline parameterと投影／参照へのfallbackを集約。現在operand列と既知hitを明示し、各providerの評価順序とnullish再照会を維持する。照会本体は明示したoperand引数以外元処理と一致。app.jsは10,463→10,432行（31行減、今回の合計626行減）。構文419ファイル・単体1,113件・関連E2E166件成功（exit 0、2.3分）。ログはcad-constraint-hit-{check,unit,e2e}.log。全E2Eはこの単位では未実行。全体目標は未完了。
+
+### 前回の区切り
+
 ConstraintTargetCommandへ対象選択の開始・取消・確定要求と線長寸法完了を分離。Annotation委譲・権限・作図準備・同種toggle取消・session開始と選択整理・意図の配置／確定、取消時のUI更新とblurの順序を保持する。共有mode／作図draftの準備とDOM blurはappの限定adapterへ接続。状態・受入・案内の既存所有者を組み合わせ、Canvas hit／clickと実commitはまだ呼出側に残る。app.jsは10,537→10,463行（74行減、今回の合計595行減）。構文419ファイル・単体1,109件・関連E2E166件成功（exit 0、2.3分）。ログはcad-constraint-command-{check,unit,e2e}.log。全E2Eはこの単位では未実行。全体目標は未完了。
 
 ### 前回の区切り

@@ -2359,11 +2359,12 @@
 
 
 
-  const { hitDerivedProjectionOperand, hitBlockProjectionOperand, hitReferenceTarget } = window.OperandHitQuery.create({
+  const { hitConstraintOperand: queryConstraintOperand, hitDerivedProjectionOperand, hitBlockProjectionOperand, hitReferenceTarget } = window.OperandHitQuery.create({
     viewportScale: () => viewport.scale,
     geometry: { geometryInstanceBundles, blockProjectionBundles, allGeometryPoints, allGeometryLines, allGeometryCircles, allGeometryArcs, allGeometrySplines },
     sketches: { isVisibleSketchId, operandRelationForSketch, referenceSourceSketchIds, elementSketchId, isVisibleSketchElement },
-    points: { isExplicitPoint, isPointUsedByPrimitive, isReferencePoint }, makeConstraintOperand,
+    points: { isExplicitPoint, isPointUsedByPrimitive, isReferencePoint }, makeConstraintOperand, operandFromReferenceTarget,
+    hits: { hitPoint, hitLine, hitCircle, hitArc, hitSpline, hitArcEndpoint },
   });
 
   function measuredConstraintTargetValue(constraint, target = targetFromConstraint(constraint), dimension = constraint?.dimension) {
@@ -3247,39 +3248,7 @@
   function executeConstraintCommandIfReady() { return constraintTargetCommand.complete(); }
   function completePendingDimensionLineLength() { return constraintTargetCommand.completeLineLength(); }
 
-  function hitConstraintOperand(pointer, type, hits = {}) {
-    const hitP = hits.hitP ?? hitPoint(pointer.x, pointer.y);
-    const hitL = hits.hitL ?? hitLine(pointer.x, pointer.y);
-    const hitC = hits.hitC ?? hitCircle(pointer.x, pointer.y);
-    const hitA = hits.hitA ?? hitArc(pointer.x, pointer.y);
-    const hitS = hits.hitS ?? hitSpline(pointer.x, pointer.y);
-    const hitArcEnd = hits.hitArcEnd ?? hitArcEndpoint(pointer.x, pointer.y);
-    if (type === "symmetry") {
-      const subjectKind = constraintTargetSession.operands[1]?.kind || null;
-      if (constraintTargetSession.operands.length === 0 && hitL) return makeConstraintOperand("line", { line: hitL });
-      if (subjectKind === "point" && hitP) return makeConstraintOperand("point", { point: hitP });
-      if (subjectKind === "line" && hitL) return makeConstraintOperand("line", { line: hitL });
-      if (subjectKind === "primitive" && hitA) return makeConstraintOperand("primitive", { primitive: hitA });
-      if (!subjectKind && hitP) return makeConstraintOperand("point", { point: hitP });
-      if (!subjectKind && hitL) return makeConstraintOperand("line", { line: hitL });
-      if (!subjectKind && hitA) return makeConstraintOperand("primitive", { primitive: hitA });
-    }
-    if (hitArcEnd && (type === "coincident" || type === "pointOnCircle" || type === "fixed" || type === "horizontal" || type === "vertical")) return makeConstraintOperand("arc-endpoint", { arc: hitArcEnd.arc, endpoint: hitArcEnd.endpoint });
-    if (hitP) return makeConstraintOperand("point", { point: hitP });
-    if (hitL) return makeConstraintOperand("line", { line: hitL });
-    if (hitC || hitA) {
-      const primitive = hitC || hitA;
-      return makeConstraintOperand("primitive", { primitive, hitPoint: circlePointAtPointer(pointer, primitive) });
-    }
-    if (hitS) {
-      const closest = window.SplineGeometry.closestPoint(hitS.curve(), pointer, { samplesPerSpan: 28 });
-      const parameter = closest?.t ?? 0;
-      return makeConstraintOperand("spline", { spline: hitS, parameter, endpoint: parameter <= 0.5 ? "start" : "end" });
-    }
-    const blockOperand = hitDerivedProjectionOperand(pointer.x, pointer.y) || hitBlockProjectionOperand(pointer.x, pointer.y);
-    if (blockOperand) return blockOperand;
-    return operandFromReferenceTarget(hitReferenceTarget(pointer.x, pointer.y));
-  }
+  function hitConstraintOperand(pointer, type, hits = {}) { return queryConstraintOperand(pointer, type, constraintTargetSession.operands, hits); }
 
   function appendConstraintOperand(type, operand) {
     const result = constraintTargetSession.append(type, operand, () => invalidConstraintTargetHint(type));
