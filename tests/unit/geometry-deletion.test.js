@@ -68,3 +68,49 @@ test('apply removes planned geometry and dependent annotations while retaining s
  assert.deepEqual(model.constraints, [keptConstraint]); assert.deepEqual(model.annotations, [keptAnnotation]);
  assert.equal(model.hatches, hatches); assert.equal(plan.lineSet.has(line), true); assert.equal(plan.pointSet.has(removed), true);
 });
+
+
+function instanceFixture() {
+ const callbacks = [];
+ const editing = sandbox.window.GeometryDeletion.create({
+  geometryInstanceBundle: instance => { callbacks.push('derived:' + instance.id); return instance.bundle; },
+  blockAllProjectionBundle: instance => { callbacks.push('block:' + instance.id); return instance.bundle; },
+  constraintGraphNodes: constraint => constraint.nodes,
+  geometryElementKey: item => item.key,
+  annotationReferencesRemovedGeometry: (item, ids, keys) => ids.has(item.anchorId) || keys.has(item.anchorKey),
+ });
+ const projected = { id: 'p1', key: 'path/p1' }, regenerated = { id: 'p1', key: 'path/p1' };
+ const instance = { id: 'i1', key: 'owner/i1', bundle: { points: [projected], lines: [], circles: [], arcs: [], splines: [] } };
+ const survivor = { id: 'i2', key: 'owner/i2' };
+ const direct = { nodes: [instance] }, projection = { nodes: [projected] }, regeneratedConstraint = { nodes: [regenerated] }, unrelated = { nodes: [survivor] };
+ const attached = { anchorId: 'p1' }, keyed = { anchorKey: 'path/p1' }, annotation = { anchorId: 'p2' };
+ const model = { constraints: [direct, projection, regeneratedConstraint, unrelated], annotations: [attached, keyed, annotation],
+  geometryInstances: [instance, survivor], blockInstances: [instance, survivor], points: [projected] };
+ return { editing, model, instance, survivor, direct, projection, regeneratedConstraint, unrelated, annotation, callbacks };
+}
+test('derived removal plans projection identity and regenerated keys without treating owner nodes as projections', () => {
+ const f = instanceFixture(), constraints = f.model.constraints;
+ const plan = f.editing.planDerivedInstances(f.model, [f.instance]);
+ assert.deepEqual([...plan.removedConstraints], [f.projection, f.regeneratedConstraint]);
+ assert.equal(f.model.constraints, constraints); assert.equal(f.model.geometryInstances.length, 2);
+ f.editing.applyInstances(f.model, plan);
+ assert.deepEqual(f.model.constraints, [f.direct, f.unrelated]); assert.deepEqual(f.model.annotations, [f.annotation]);
+ assert.deepEqual(f.model.geometryInstances, [f.survivor]); assert.equal(f.model.blockInstances.length, 2);
+ assert.equal(f.model.points.length, 1); assert.deepEqual(f.callbacks, ['derived:i1']);
+});
+test('Block removal also includes constraints on owner nodes and supports older bundles without splines', () => {
+ const f = instanceFixture(); delete f.instance.bundle.splines;
+ const plan = f.editing.planBlockInstances(f.model, [f.instance]);
+ assert.deepEqual([...plan.removedConstraints], [f.direct, f.projection, f.regeneratedConstraint]);
+ f.editing.applyInstances(f.model, plan);
+ assert.deepEqual(f.model.constraints, [f.unrelated]); assert.deepEqual(f.model.blockInstances, [f.survivor]);
+ assert.equal(f.model.geometryInstances.length, 2); assert.deepEqual(f.callbacks, ['block:i1']);
+});
+test('derived projection keys omit falsy keys while Block keeps the existing key semantics', () => {
+ const f = instanceFixture(); const noKey = { id: 'p0' }; f.instance.bundle.points = [noKey];
+ const unrelatedNoKey = { nodes: [{}] }; f.model.constraints = [unrelatedNoKey];
+ const derived = f.editing.planDerivedInstances(f.model, [f.instance]);
+ assert.equal(derived.removedKeys.size, 0); assert.equal(derived.removedConstraints.size, 0);
+ const block = f.editing.planBlockInstances(f.model, [f.instance]);
+ assert.equal(block.removedKeys.has(undefined), true); assert.equal(block.removedConstraints.has(unrelatedNoKey), true);
+});

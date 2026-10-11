@@ -3,7 +3,8 @@
   "use strict";
   function create({ isPointUsedByLine, isPointUsedByCircle, isPointUsedByArc, isPointUsedBySpline,
     constraintReferencesPoint, constraintReferencesLine, constraintReferencesPrimitive,
-    geometryElementKey, annotationReferencesRemovedGeometry }) {
+    geometryElementKey, annotationReferencesRemovedGeometry,
+    geometryInstanceBundle, blockAllProjectionBundle, constraintGraphNodes }) {
     function plan(model, { points = [], lines = [], circles = [], arcs = [], splines = [], constraints = [] } = {}) {
       const pointSet = new Set(points);
       const lineSet = new Set(lines);
@@ -77,7 +78,28 @@
       const removedKeys = new Set(removedGeometry.map(geometryElementKey).filter(Boolean));
       model.annotations = model.annotations.filter((annotation) => !annotationReferencesRemovedGeometry(annotation, removedIds, removedKeys));
     }
-    return Object.freeze({ plan, apply });
+    function planInstances(model, instances, field) {
+      const block = field === "blockInstances";
+      const projectionItems = instances.flatMap(instance => {
+        const bundle = block ? blockAllProjectionBundle(instance) : geometryInstanceBundle(instance);
+        return [...bundle.points, ...bundle.lines, ...bundle.circles, ...bundle.arcs, ...(block ? bundle.splines || [] : bundle.splines)];
+      });
+      const removedIds = new Set(projectionItems.map(item => item.id));
+      const keys = projectionItems.map(geometryElementKey);
+      const removedKeys = new Set(block ? keys : keys.filter(Boolean));
+      const removedConstraints = new Set(model.constraints.filter(constraint => constraintGraphNodes(constraint).some(node =>
+        block && instances.includes(node) || projectionItems.includes(node) || removedKeys.has(geometryElementKey(node)))));
+      return { instances, field, removedIds, removedKeys, removedConstraints };
+    }
+    function applyInstances(model, { instances, field, removedIds, removedKeys, removedConstraints }) {
+      model.constraints = model.constraints.filter(constraint => !removedConstraints.has(constraint));
+      model.annotations = model.annotations.filter(annotation => !annotationReferencesRemovedGeometry(annotation, removedIds, removedKeys));
+      model[field] = model[field].filter(instance => !instances.includes(instance));
+    }
+    return Object.freeze({ plan, apply, applyInstances,
+      planDerivedInstances: (model, instances) => planInstances(model, instances, "geometryInstances"),
+      planBlockInstances: (model, instances) => planInstances(model, instances, "blockInstances"),
+    });
   }
   window.GeometryDeletion = Object.freeze({ create });
 })();

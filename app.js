@@ -2424,6 +2424,7 @@
     isPointUsedByLine, isPointUsedByCircle, isPointUsedByArc, isPointUsedBySpline,
     constraintReferencesPoint, constraintReferencesLine, constraintReferencesPrimitive,
     geometryElementKey, annotationReferencesRemovedGeometry,
+    geometryInstanceBundle, blockAllProjectionBundle, constraintGraphNodes,
   });
 
   const geometryDeletionCommand = window.GeometryDeletionCommand.create({
@@ -2479,17 +2480,9 @@
       const ownerIds = new Set(instances.map((instance) => instance.id));
       const dependent = model.geometryInstances.filter((instance) => !instances.includes(instance) && geometryInstanceUsesRemovedGeometry(instance, new Set(), ownerIds));
       if (rejectReferencedGeometryDeletion(dependent, applicationText("選択した派生インスタンス", "the selected derived instance"))) return false;
-      const projectionItems = instances.flatMap((instance) => {
-        const bundle = geometryInstanceBundle(instance);
-        return [...bundle.points, ...bundle.lines, ...bundle.circles, ...bundle.arcs, ...bundle.splines];
-      });
-      const removedIds = new Set(projectionItems.map((item) => item.id));
-      const removedKeys = new Set(projectionItems.map(geometryElementKey).filter(Boolean));
-      const removedConstraints = new Set(model.constraints.filter((constraint) => constraintGraphNodes(constraint).some((node) => projectionItems.includes(node) || removedKeys.has(geometryElementKey(node)))));
-      if (!guardDimensionSymbolDeletion([...removedConstraints, ...model.annotations.filter(annotation => annotationReferencesRemovedGeometry(annotation, removedIds, removedKeys))])) return false;
-      model.constraints = model.constraints.filter((constraint) => !removedConstraints.has(constraint));
-      model.annotations = model.annotations.filter((annotation) => !annotationReferencesRemovedGeometry(annotation, removedIds, removedKeys));
-      model.geometryInstances = model.geometryInstances.filter((instance) => !instances.includes(instance));
+      const removal = geometryDeletion.planDerivedInstances(model, instances);
+      if (!guardDimensionSymbolDeletion([...removal.removedConstraints, ...model.annotations.filter(annotation => annotationReferencesRemovedGeometry(annotation, removal.removedIds, removal.removedKeys))])) return false;
+      geometryDeletion.applyInstances(model, removal);
       canvasSelection.set("geometryInstances", []);
       canvasSelection.set("instanceGeometry", null);
       deletedInstanceCount = instances.length;
@@ -2499,18 +2492,9 @@
       const instances = [...canvasSelection.blockInstances];
       const dependent = model.geometryInstances.filter((instance) => geometryInstanceUsesRemovedGeometry(instance, new Set(), new Set(instances.map((entry) => entry.id))));
       if (rejectReferencedGeometryDeletion(dependent, applicationText("選択したブロック", "the selected block"))) return false;
-      const projectionItems = instances.flatMap((instance) => {
-        const bundle = blockAllProjectionBundle(instance);
-        return [...bundle.points, ...bundle.lines, ...bundle.circles, ...bundle.arcs, ...(bundle.splines || [])];
-      });
-      const removedIds = new Set(projectionItems.map((item) => item.id));
-      const removedKeys = new Set(projectionItems.map(geometryElementKey));
-      const removedConstraints = new Set(model.constraints.filter((constraint) => constraintGraphNodes(constraint).some((node) =>
-        instances.includes(node) || projectionItems.includes(node) || removedKeys.has(geometryElementKey(node)))));
-      if (!guardDimensionSymbolDeletion([...removedConstraints, ...model.annotations.filter(annotation => annotationReferencesRemovedGeometry(annotation, removedIds, removedKeys))])) return false;
-      model.constraints = model.constraints.filter((constraint) => !removedConstraints.has(constraint));
-      model.annotations = model.annotations.filter((annotation) => !annotationReferencesRemovedGeometry(annotation, removedIds, removedKeys));
-      model.blockInstances = model.blockInstances.filter((instance) => !instances.includes(instance));
+      const removal = geometryDeletion.planBlockInstances(model, instances);
+      if (!guardDimensionSymbolDeletion([...removal.removedConstraints, ...model.annotations.filter(annotation => annotationReferencesRemovedGeometry(annotation, removal.removedIds, removal.removedKeys))])) return false;
+      geometryDeletion.applyInstances(model, removal);
       invalidateBlockProjectionCache();
       canvasSelection.set("blockInstances", []);
       deletedBlockCount = instances.length;

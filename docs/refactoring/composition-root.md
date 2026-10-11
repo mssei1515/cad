@@ -6,6 +6,10 @@
 
 ## 現在の再開地点（2026-10-11）
 
+GeometryDeletionへBlock／派生Instanceの投影依存計画と削除適用を統合。投影ObjectとGeometry keyの参照、Block owner拘束、falsy keyの扱い、古いBlock bundleのsplines省略を維持する。計画は非破壊で、適用は拘束→付随注記→対象Instance配列だけを更新する。依存／Parameterガードとcache・選択・求解・履歴は呼出側が既存順序で調整。app.jsは10,711→10,695行（16行減、今回の合計363行減）。構文413ファイル・単体1,084件・関連E2E219件成功（exit 0、3.1分）。ログはcad-instance-deletion-{check,unit,e2e}.log。全E2Eはこの単位では未実行。全体目標は未完了。
+
+### 前回の区切り
+
 GeometryDeletionCommandへプリミティブ／拘束の削除操作を分離。権限・派生参照・Parameter保護の順序、削除適用→Selection／Spline／hover整理→ownerごとの求解→表示→案内／履歴を維持する。共通操作状態の終了・表示・analysis照会を限定したadapterでappへ接続する。求解不成功でも削除を記録する既存挙動を維持し、deleteElements入口はhoisted wrapperとした。app.jsは10,732→10,711行（21行減、今回の合計347行減）。構文413ファイル・単体1,081件・関連E2E147件成功（exit 0、2.1分）。ログはcad-deletion-command-{check,unit,e2e}.log。全E2Eはこの単位では未実行。全体目標は未完了。
 
 ### 前回の区切り
