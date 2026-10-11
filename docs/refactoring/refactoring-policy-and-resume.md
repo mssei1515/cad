@@ -34,7 +34,8 @@
 | `src/rendering/` | 解決済み情報の描画、Canvas状態の管理 | Document編集、履歴、コマンドの確定 |
 | `src/persistence/` | 保存・読込候補の生成、形式検査、互換性、ファイルsession | 編集中モデルの無条件な破壊、UIの直接操作 |
 | `src/parameters/` | Parameter名前空間、評価、依存と適用 | 任意のUI／アプリglobal |
-| `src/diagnostics/` | 診断・計測。将来、必要に応じてtest hookの境界も整理 | 通常機能を代わりに所有する実装 |
+| `src/diagnostics/` | 診断・計測と描画の観測 | 通常機能を代わりに所有する実装 |
+| `src/testing/` | ブラウザテストの準備・状態照会・シナリオ支援 | 通常機能の所有、アプリ全体の可変context |
 | `app.js` | 構築・接続・起動。移行中は未分離の責務も残る | 最終形での機能実装の集中 |
 
 この表は、既存フォルダを生かす基本方針である。新しい上位の機能組立てモジュールが必要なら、実際の依存を見て導入する。最初から固定の階層を押しつけず、`app.js`をそのまま移した別の巨大な組立てモジュールも作らない。
@@ -98,13 +99,13 @@
 
 ## 8. 再開地点（2026-10-12）
 
-2026-10-11に週枠残量97%で再開し、develop 8e7e7c7からcodex/clipboard-placementを作成した。開始時app.jsは11,058行。現在は9,290行（今回の合計1,768行減）で、全体目標は未完了。作業branch上で区切りごとにCommit／Pushしており、develop／mainへの統合は停止または最終リリース時に行う。週枠残量は直近確認で84%。停止条件と手順はsection 1／6に従う。
+2026-10-11に週枠残量97%で再開し、develop 8e7e7c7からcodex/clipboard-placementを作成した。開始時app.jsは11,058行。現在は9,246行（今回の合計1,812行減）で、全体目標は未完了。作業branch上で区切りごとにCommit／Pushしており、develop／mainへの統合は停止または最終リリース時に行う。週枠残量は直近確認で83%。停止条件と手順はsection 1／6に従う。
 
 今回の分離は、Clipboardのpayload／session／checkpoint／モデル構築／操作、GeometryDeletionの計画／適用と混在Selection削除、拘束の対象受入／hit／session／操作／意図解決／寸法生成・読取判定・配置／commit、Solver前処理とSelection変換に及ぶ。各単位のcommit・検証・行数はcomposition-root.md、現在の責務はimplementation-map.mdと正式なarchitecture仕様を参照する。既存の分離をもう一度細分化するだけの変更は避ける。
 
-最新の区切りではCanvas描画の観測と寸法式マークの記録状態をCanvasRenderProbeへ分離した。contextとGeometry照会・描画入口だけを受け取り、7つの既存テストAPI名を維持する。context復元、nativeメソッドの呼出し、記録の同一性とネスト終了時のclearを保持する。app.jsは9,402→9,290行（112行減）。構文443ファイル・単体1,207件・関連E2E143件成功（exit 0、2.1分）。ログはcad-canvas-probe-{check,unit,e2e}.log。前区切りc5e049dでは全E2E551件が成功（24.2分、拘束ドラッグ回帰12.4分）しているが、今回の実装変更後の全E2Eは未実行。リリース前には最新状態を検証する。
+Splineのブラウザテスト用初期化・状態照会・Hatchキャッシュ確認をSplineTestDriverへ分離。src/testing/はテストの準備と観測を担い、通常の編集や診断計測の所有者と区別する。必要な操作・照会を明示して受け取り、test指定時だけ生成する。既存3 API名、実行順序、Geometryの参照同一性を維持。転送／拘束シナリオは依存を確認するためappに保持する。app.jsは9,290→9,246行（44行減、今回の合計1,812行減）。構文444ファイル・単体1,207件・関連E2E131件成功（exit 0、1.9分）。ログはcad-spline-driver-{check,unit,e2e}.log。全E2Eはこの単位では未実行。全体目標は未完了。 前区切りc5e049dでは全E2E551件が成功（24.2分）しているが、その後のCanvasRenderProbeとSplineTestDriver変更後の全E2Eは未実行。リリース前には最新状態を検証する。
 
-次は残る拘束の準備／確定入口、共有modeと各commandの組立て所有、テスト用APIの機能ごとの境界を確認する。保留状態の保持と取消はPendingCommandSessionへ分離済みであり、再抽出しない。ConstraintIntentResolverは明示したoperandを、ConstraintSelectionQueryは現在Selection／sessionの照会を、ConstraintOperandsはSelectionからの値変換を、CanvasSelectionは対象反映を所有する。旧handleConstraintTargetClickは撤去済みであり、再抽出しない。Document初期化・Sketch切替・削除のresetは解除対象と順序が異なるため、汎用resetへ無理に統合しない。
+次は残る拘束の準備／確定入口、共有modeと各commandの組立て所有、テスト用APIの機能ごとの境界を確認する。Splineの転送と拘束シナリオはClipboard／Block／Solver等の依存を確認してから整理する。保留状態の保持と取消はPendingCommandSessionへ分離済みであり、再抽出しない。ConstraintIntentResolverは明示したoperandを、ConstraintSelectionQueryは現在Selection／sessionの照会を、ConstraintOperandsはSelectionからの値変換を、CanvasSelectionは対象反映を所有する。旧handleConstraintTargetClickは撤去済みであり、再抽出しない。Document初期化・Sketch切替・削除のresetは解除対象と順序が異なるため、汎用resetへ無理に統合しない。
 
 共通mode／DOMへのadapterと、注入依存の多いcommandの生成／接続は残る。状態の所有と開始・更新・確定・取消の入口を揃え、巨大contextを渡した別ファイルへ移すだけにしない。次回は現物のGit状態とruntime情報を確認して継続する。
 

@@ -5130,6 +5130,11 @@
 
   function installTestHooks() {
     if (!new URLSearchParams(window.location.search).has("test")) return;
+    const splineTestDriver = window.SplineTestDriver.create({
+      resetModelState, viewport, resizeCanvas, resetHistory, updateUI, draw, canvas, worldToCanvasScreen, serializeModel,
+      readOperation: () => ({ mode, editSplineId: splineEditing.current?.spline?.id || null }),
+      canvasSelection, document, addPoint, addSpline, hatchGeometryQuery,
+    });
     window.__jot2dTest = {
       applicationThemeStateForTest() {
         return {
@@ -5162,58 +5167,9 @@
         resetHistory("responsive line drag test");
         return serializeModel();
       },
-      resetForSplineTest() {
-        resetModelState();
-        viewport.update({ scale: 2 });
-        resizeCanvas({ centerWorld: { x: 0, y: 0 } });
-        resetHistory("spline test");
-        updateUI();
-        draw();
-        const rect = canvas.getBoundingClientRect();
-        const client = (point) => {
-          const screen = worldToCanvasScreen(point);
-          return { x: rect.left + screen.x, y: rect.top + screen.y };
-        };
-        return {
-          clients: [
-            client({ x: -90, y: 20 }),
-            client({ x: -30, y: -45 }),
-            client({ x: 30, y: 45 }),
-            client({ x: 90, y: -20 }),
-          ],
-          serialized: serializeModel(),
-        };
-      },
-      splineStateForTest() {
-        const serialized = serializeModel();
-        return {
-          mode,
-          editSplineId: splineEditing.current?.spline?.id || null,
-          direct: serialized.splines,
-          selectedIds: canvasSelection.splines.map((spline) => spline.id),
-          selectedPointIds: canvasSelection.points.map((point) => point.id),
-          treeRows: document.querySelectorAll('#sketchList [data-object-kind="spline"]').length,
-          propertiesText: document.getElementById("propertiesPanel")?.textContent || "",
-          serialized,
-        };
-      },
-      splineHatchPreviewCacheForTest() {
-        resetModelState();
-        const points = [
-          addPoint(0, 0, false, "endpoint"), addPoint(100, 0, false, "endpoint"),
-          addPoint(100, 80, false, "endpoint"), addPoint(0, 80, false, "endpoint"),
-        ];
-        const spline = addSpline(points, true, false);
-        const seed = { x: 50, y: 40 };
-        const before = hatchGeometryQuery.hatchFaceAt(seed);
-        points[1].x = 180;
-        points[2].x = 180;
-        const after = hatchGeometryQuery.hatchFaceAt(seed);
-        const maxX = (result) => result?.ok
-          ? Math.max(...result.resolved.loops.flatMap((loop) => loop.points.map((point) => point.x)))
-          : null;
-        return { splineId: spline?.id || null, beforeOk: Boolean(before?.ok), afterOk: Boolean(after?.ok), beforeMaxX: maxX(before), afterMaxX: maxX(after) };
-      },
+      resetForSplineTest: splineTestDriver.reset,
+      splineStateForTest: splineTestDriver.state,
+      splineHatchPreviewCacheForTest: splineTestDriver.hatchPreviewCache,
       exerciseSplineTransferForTest() {
         const source = model.splines[0] || null;
         if (!source) return null;
