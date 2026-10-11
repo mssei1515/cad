@@ -65,7 +65,7 @@ const files = [
   "src/persistence/constraint_codec_registry.js",
   "src/parameters/parameter_engine.js",
   "src/editing/edit_history.js", "src/editing/history_controller.js", "src/editing/history_restoration.js", "src/editing/document_application.js",
-  "src/diagnostics/interaction_profiler.js", "src/diagnostics/canvas_render_probe.js", "src/testing/spline_test_driver.js", "src/testing/hatch_test_driver.js", "src/testing/drawing_order_test_driver.js", "src/testing/constraint_test_driver.js", "src/testing/clipboard_test_driver.js", "src/testing/derived_instance_test_driver.js", "src/testing/canvas_test_driver.js", "src/testing/sketch_projection_test_driver.js", "src/testing/reference_image_test_driver.js", "src/testing/dimension_test_driver.js",
+  "src/diagnostics/interaction_profiler.js", "src/diagnostics/canvas_render_probe.js", "src/testing/spline_test_driver.js", "src/testing/hatch_test_driver.js", "src/testing/drawing_order_test_driver.js", "src/testing/constraint_test_driver.js", "src/testing/clipboard_test_driver.js", "src/testing/derived_instance_test_driver.js", "src/testing/canvas_test_driver.js", "src/testing/sketch_projection_test_driver.js", "src/testing/reference_image_test_driver.js", "src/testing/dimension_test_driver.js", "src/testing/parameter_test_driver.js",
   "src/ui/choice_dialog.js",
   "tests/e2e/choice-dialog.spec.js",
   "tests/e2e/dimension-prefix.spec.js",

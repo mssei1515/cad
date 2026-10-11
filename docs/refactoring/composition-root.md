@@ -6,6 +6,10 @@
 
 ## 現在の再開地点（2026-10-12）
 
+Parameterの準備／フィードバックfixture、状態照会、Block化／寸法名指定削除の五つのAPIをParameterTestDriver.createFixture／createObservation／createInteractionへ分離。fixtureは既存reset／Geometry生成／拘束登録・名前空間補完／安定化へ委譲し、定義追加／Instance採番は既存所有者へのcallbackとする。固定ID／座標／式、参照寸法フラグ、cache無効化→安定化→履歴→UI→drawを保持する。観測は現在scope／Documentを照会し、既存validateの後にParameter値・寸法／Block名前空間・投影長・保存値を返す。操作は既存Selection／Block Selection／定義作成／削除に委譲し、対象なし・拒否と操作後の名前一覧／hintを維持する。観測／操作へGeometry生成／採番／Solver依存を持ち込まず、独自モデル／評価／採番／cacheを追加しない。test query時だけ生成し、既存API名へ直接接続。明示した所有者参照への置換を除き、元の五つの処理本体との一致を確認。classic script／構文／E2E読込一覧を同期。app.jsは8,000→7,886行（114行減、今回の合計3,172行減）。構文465ファイル・単体1,256件・関連E2E114件成功（exit 0、2.1分）。追加テストはなく、五つのAPIの全利用箇所のunified-ui／free-text-input-drag既存E2EでParameter更新・参照寸法削除保護／Block式凍結／フィードバック・注記反映を確認。全テスト本体とworker終了後の専用サーバー終了待ちは当該processを確認して終了し、正常終了を回収。ログはcad-parameter-test-driver-{check,unit,e2e}.log。全E2Eはこの単位では未実行。全体目標は未完了。
+
+### 前回の区切り
+
 寸法色の観測を既存DimensionTestDriver.createColorObservationへ分離。四つの依存（Selection／Hover／ctx／既存drawDimensions）で、呼出し時の寸法選択・拘束選択・寸法Hoverとstroke参照を保存し、一時解除／差替え→描画→finally復元を所有する。strokeは元ctxと引数で転送し、色の小文字化・初出順の重複排除、同一選択参照、他のHover状態、描画例外の伝播を保持する。通常CanvasRenderProbeへSelection操作を混ぜず、製品描画・独自状態を追加しない。test query時だけ生成し、既存API名へ直接接続。元の処理本体との一致を確認。app.jsは8,021→8,000行（21行減、今回の合計3,058行減）。構文464ファイル・単体1,256件・関連E2E103件成功（exit 0、2.1分）。単体1件を追加し、成功／描画失敗の双方でのcall-time選択／Hover／stroke同一参照の復元、呼出し転送、色の重複排除を確認。全利用箇所のunified-ui既存E2Eも検証。全テスト本体とworker終了後の専用サーバー終了待ちは当該processを確認して終了し、正常終了を回収。ログはcad-dimension-color-observation-{check,unit,e2e}.log。全E2Eはこの単位では未実行。全体目標は未完了。
 
 ### 前回の区切り

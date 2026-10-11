@@ -99,13 +99,13 @@
 
 ## 8. 再開地点（2026-10-12）
 
-2026-10-11に週枠残量97%で再開し、develop 8e7e7c7からcodex/clipboard-placementを作成した。開始時app.jsは11,058行。現在は8,000行（今回の合計3,058行減）で、全体目標は未完了。作業branch上で区切りごとにCommit／Pushし、develop／mainへの統合は停止または最終リリース時に行う。週枠残量は直近確認で73%。停止条件と手順はsection 1／6に従う。
+2026-10-11に週枠残量97%で再開し、develop 8e7e7c7からcodex/clipboard-placementを作成した。開始時app.jsは11,058行。現在は7,886行（今回の合計3,172行減）で、全体目標は未完了。作業branch上で区切りごとにCommit／Pushし、develop／mainへの統合は停止または最終リリース時に行う。週枠残量は直近確認で73%。停止条件と手順はsection 1／6に従う。
 
-寸法色の観測を既存DimensionTestDriver.createColorObservationへ分離。四つの依存（Selection／Hover／ctx／既存drawDimensions）で、呼出し時の寸法選択・拘束選択・寸法Hoverとstroke参照を保存し、一時解除／差替え→描画→finally復元を所有する。strokeは元ctxと引数で転送し、色の小文字化・初出順の重複排除、同一選択参照、他のHover状態、描画例外の伝播を保持する。通常CanvasRenderProbeへSelection操作を混ぜず、製品描画・独自状態を追加しない。test query時だけ生成し、既存API名へ直接接続。元の処理本体との一致を確認。app.jsは8,021→8,000行（21行減、今回の合計3,058行減）。構文464ファイル・単体1,256件・関連E2E103件成功（exit 0、2.1分）。単体1件を追加し、成功／描画失敗の双方でのcall-time選択／Hover／stroke同一参照の復元、呼出し転送、色の重複排除を確認。全利用箇所のunified-ui既存E2Eも検証。全テスト本体とworker終了後の専用サーバー終了待ちは当該processを確認して終了し、正常終了を回収。ログはcad-dimension-color-observation-{check,unit,e2e}.log。全E2Eはこの単位では未実行。全体目標は未完了。
+Parameterの準備／フィードバックfixture、状態照会、Block化／寸法名指定削除の五つのAPIをParameterTestDriver.createFixture／createObservation／createInteractionへ分離。fixtureは既存reset／Geometry生成／拘束登録・名前空間補完／安定化へ委譲し、定義追加／Instance採番は既存所有者へのcallbackとする。固定ID／座標／式、参照寸法フラグ、cache無効化→安定化→履歴→UI→drawを保持する。観測は現在scope／Documentを照会し、既存validateの後にParameter値・寸法／Block名前空間・投影長・保存値を返す。操作は既存Selection／Block Selection／定義作成／削除に委譲し、対象なし・拒否と操作後の名前一覧／hintを維持する。観測／操作へGeometry生成／採番／Solver依存を持ち込まず、独自モデル／評価／採番／cacheを追加しない。test query時だけ生成し、既存API名へ直接接続。明示した所有者参照への置換を除き、元の五つの処理本体との一致を確認。classic script／構文／E2E読込一覧を同期。app.jsは8,000→7,886行（114行減、今回の合計3,172行減）。構文465ファイル・単体1,256件・関連E2E114件成功（exit 0、2.1分）。追加テストはなく、五つのAPIの全利用箇所のunified-ui／free-text-input-drag既存E2EでParameter更新・参照寸法削除保護／Block式凍結／フィードバック・注記反映を確認。全テスト本体とworker終了後の専用サーバー終了待ちは当該processを確認して終了し、正常終了を回収。ログはcad-parameter-test-driver-{check,unit,e2e}.log。全E2Eはこの単位では未実行。全体目標は未完了。
 
 最新の全E2E一括実行は前区切りb494ab6の検証で550件成功・DXF保存再読込1件失敗。テストの保存完了待機を修正してDXF／file-safety各3回・計45件は成功しているが、修正後の全E2E一括再実行は未実施。全551件一括成功とは扱わず、リリース前に最新状態を全体検証する。
 
-Sketch Projectionのテスト支援は用途別に分離済み。Reference Imageの状態／import・Block下書きfixtureも分離済み。寸法Appearanceの状態／描画寸法観測も分離済み。円弧半径の描画plan／終端fit・矢印先端も分離済み。寸法色の描画観測も分離済み。次候補はParameterのfixture／状態照会／編集支援など残るテスト支援と診断、入力・mode変更・command開始の既存所有者の境界。生成／編集／観測の依存を巨大contextへまとめず、共有readTestHistory／readTestSelectedGeometryは用途境界を確認して扱う。独自scope／seq／cacheを追加しない。
+Sketch Projectionのテスト支援は用途別に分離済み。Reference Imageの状態／import・Block下書きfixtureも分離済み。寸法Appearanceの状態／描画寸法観測も分離済み。円弧半径の描画plan／終端fit・矢印先端も分離済み。寸法色の描画観測も分離済み。Parameterのfixture／状態照会／編集支援も分離済み。次候補はAppearance／複数Properties／固定など残るテスト支援と診断、入力・mode変更・command開始の既存所有者の境界。生成／編集／観測の依存を巨大contextへまとめず、共有readTestHistory／readTestSelectedGeometryは用途境界を確認して扱う。独自scope／seq／cacheを追加しない。
 
 既存のSpline／Hatch／描画順／Clipboard／派生Instance／Canvas表示支援・render probe・hit／描画／layout／取消の分離を再細分化するだけの変更は避ける。既存ConstraintIntentResolver／ConstraintSelectionQuery／ConstraintOperands／CanvasSelectionとPendingCommandSession／DrawOperationLifecycleの所有を維持する。旧handleConstraintTargetClickは撤去済み。Document初期化・Sketch切替・削除のreset、EscとCanvasメニュー取消は解除対象と順序が異なるため汎用resetへ統一しない。ParameterApplicationのcheckpoint／回復・安定化・Block伝播と成功callbackの表示例外復元範囲も維持する。reloadSharedVersion19のデータ加工は互換性fixtureに留め、製品migrationへ移さない。
 
