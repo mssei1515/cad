@@ -5134,6 +5134,8 @@
       resetModelState, viewport, resizeCanvas, resetHistory, updateUI, draw, canvas, worldToCanvasScreen, serializeModel,
       readOperation: () => ({ mode, editSplineId: splineEditing.current?.spline?.id || null }),
       canvasSelection, document, addPoint, addSpline, hatchGeometryQuery,
+      readSpline: () => model.splines[0] || null, splineGeometry: window.SplineGeometry, addLine,
+      PointOnSplineConstraint, SplineLineTangentConstraint, pushModelConstraint, solveAndRefresh, serializeConstraint,
     });
     window.__jot2dTest = {
       applicationThemeStateForTest() {
@@ -5230,28 +5232,7 @@
           projection: projected ? { id: projected.id, ownerId: projected.blockInstance?.id || null, fitPointCount: projected.fitPoints.length, annotationCount: blockProjectionBundle(instance).annotations.length } : null,
         };
       },
-      exerciseSplineConstraintsForTest() {
-        const spline = model.splines[0] || null;
-        if (!spline || spline.closed) return null;
-        const parameter = 0.4;
-        const curvePoint = window.SplineGeometry.evaluate(spline.curve(), parameter);
-        const point = addPoint(curvePoint.x, curvePoint.y, false, "explicit");
-        const pointOnSpline = pushModelConstraint(new PointOnSplineConstraint(point, spline, parameter));
-        const endpoint = spline.fitPoints[0];
-        const tangent = window.SplineGeometry.derivative(spline.curve(), 0);
-        const tangentLength = Math.hypot(tangent.x, tangent.y);
-        const line = addLine(endpoint, addPoint(endpoint.x + tangent.x * 60 / tangentLength, endpoint.y + tangent.y * 60 / tangentLength, false, "endpoint"));
-        const splineLineTangent = pushModelConstraint(new SplineLineTangentConstraint(spline, "start", line));
-        const result = solveAndRefresh("spline constraint test");
-        const serialized = serializeModel();
-        return {
-          success: result?.success !== false,
-          types: serialized.constraints.filter((item) => ["pointOnSpline", "splineLineTangent"].includes(item.type)).map((item) => item.type),
-          pointOnSpline: serializeConstraint(pointOnSpline),
-          splineLineTangent: serializeConstraint(splineLineTangent),
-          serialized,
-        };
-      },
+      exerciseSplineConstraintsForTest: splineTestDriver.exerciseConstraints,
       resetForHatchTest({ constructionBoundary = false } = {}) {
         resetModelState();
         viewport.update({ scale: 1 });

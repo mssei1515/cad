@@ -2,7 +2,8 @@
 (() => {
   "use strict";
   function create({ resetModelState, viewport, resizeCanvas, resetHistory, updateUI, draw, canvas,
-    worldToCanvasScreen, serializeModel, readOperation, canvasSelection, document, addPoint, addSpline, hatchGeometryQuery }) {
+    worldToCanvasScreen, serializeModel, readOperation, canvasSelection, document, addPoint, addSpline, hatchGeometryQuery, readSpline, splineGeometry, addLine,
+    PointOnSplineConstraint, SplineLineTangentConstraint, pushModelConstraint, solveAndRefresh, serializeConstraint }) {
     function reset() {
       resetModelState();
       viewport.update({ scale: 2 });
@@ -56,7 +57,29 @@
         : null;
       return { splineId: spline?.id || null, beforeOk: Boolean(before?.ok), afterOk: Boolean(after?.ok), beforeMaxX: maxX(before), afterMaxX: maxX(after) };
     }
-    return Object.freeze({ reset, state, hatchPreviewCache });
+    function exerciseConstraints() {
+      const spline = readSpline();
+      if (!spline || spline.closed) return null;
+      const parameter = 0.4;
+      const curvePoint = splineGeometry.evaluate(spline.curve(), parameter);
+      const point = addPoint(curvePoint.x, curvePoint.y, false, "explicit");
+      const pointOnSpline = pushModelConstraint(new PointOnSplineConstraint(point, spline, parameter));
+      const endpoint = spline.fitPoints[0];
+      const tangent = splineGeometry.derivative(spline.curve(), 0);
+      const tangentLength = Math.hypot(tangent.x, tangent.y);
+      const line = addLine(endpoint, addPoint(endpoint.x + tangent.x * 60 / tangentLength, endpoint.y + tangent.y * 60 / tangentLength, false, "endpoint"));
+      const splineLineTangent = pushModelConstraint(new SplineLineTangentConstraint(spline, "start", line));
+      const result = solveAndRefresh("spline constraint test");
+      const serialized = serializeModel();
+      return {
+        success: result?.success !== false,
+        types: serialized.constraints.filter((item) => ["pointOnSpline", "splineLineTangent"].includes(item.type)).map((item) => item.type),
+        pointOnSpline: serializeConstraint(pointOnSpline),
+        splineLineTangent: serializeConstraint(splineLineTangent),
+        serialized,
+      };
+    }
+    return Object.freeze({ reset, state, hatchPreviewCache, exerciseConstraints });
   }
   window.SplineTestDriver = Object.freeze({ create });
 })();

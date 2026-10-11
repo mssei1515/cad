@@ -6,6 +6,10 @@
 
 ## 現在の再開地点（2026-10-12）
 
+Splineの拘束テストシナリオを既存SplineTestDriverへ集約。対象Splineの読取り、幾何評価と型constructor、Geometry生成・拘束登録・求解・直列化を明示し、IDやSolver状態をDriverに所有させない。閉Spline／対象なしの無変更と、PointOnSpline→接線Line→SplineLineTangent→求解→直列化の順序・参照を維持する。元処理との本体一致と、appの変更が接続に限られることを確認した。app.jsは9,246→9,227行（19行減、今回の合計1,831行減）。構文444ファイル・単体1,207件・関連E2E131件成功（exit 0、1.9分）。ログはcad-spline-constraint-driver-{check,unit,e2e}.log。全E2Eはこの単位では未実行。全体目標は未完了。次は転送シナリオのClipboard／Block操作と採番の境界を確認し、既存Driverへの注入が過大になる場合は用途別の生成入口を検討する。
+
+### 前回の区切り
+
 Splineのブラウザテスト用初期化・状態照会・Hatchキャッシュ確認をSplineTestDriverへ分離。src/testing/はテストの準備と観測を担い、通常の編集や診断計測の所有者と区別する。必要な操作・照会を明示して受け取り、test指定時だけ生成する。既存3 API名、実行順序、Geometryの参照同一性を維持。転送／拘束シナリオは依存を確認するためappに保持する。app.jsは9,290→9,246行（44行減、今回の合計1,812行減）。構文444ファイル・単体1,207件・関連E2E131件成功（exit 0、1.9分）。ログはcad-spline-driver-{check,unit,e2e}.log。全E2Eはこの単位では未実行。全体目標は未完了。
 
 ### 前回の区切り
