@@ -4924,6 +4924,7 @@
       readDefaultAppearance: readTestDefaultDimensionAppearance, layouts: dimensionLayouts, metrics: dimensionMetrics, viewport,
       screenPxPerMm: DIMENSION_SCREEN_PX_PER_MM, fitMarginFactor: DIMENSION_TERMINATOR_FIT_MARGIN_FACTOR, outsideShaftLengthFactor: DIMENSION_OUTSIDE_SHAFT_LENGTH_FACTOR, hypot2,
     });
+    const dimensionColorObservation = window.DimensionTestDriver.createColorObservation({ canvasSelection, canvasHover, ctx, drawDimensions });
     const dimensionAppearanceObservation = window.DimensionTestDriver.createAppearanceObservation({
       currentScope: workspace.current, readDocument: () => documentModel, isDimensionConstraint, constraintSketchId, activeSketchId,
       normalizeDimensionAppearance, effectiveDimensionAppearanceForSketch, dimensionDisplayState,
@@ -5125,29 +5126,7 @@
       dimensionAppearanceRenderMetricsForTest: dimensionRenderObservation.appearanceMetrics,
       dimensionTerminatorFitForTest: terminatorFixture.fit,
       dimensionArrowTipAlignmentForTest: terminatorFixture.arrowAlignment,
-      drawnDimensionColorsForTest() {
-        const colors = [];
-        const previousSelectedDimension = canvasSelection.dimensionConstraint;
-        const previousSelectedConstraint = canvasSelection.constraint;
-        const previousHoveredDimension = canvasHover.current.dimension;
-        const originalStroke = ctx.stroke;
-        canvasSelection.set("dimensionConstraint", null);
-        canvasSelection.set("constraint", null);
-        canvasHover.update({ dimension: null });
-        ctx.stroke = (...args) => {
-          colors.push(String(ctx.strokeStyle).toLowerCase());
-          return originalStroke.apply(ctx, args);
-        };
-        try {
-          drawDimensions();
-        } finally {
-          ctx.stroke = originalStroke;
-          canvasSelection.set("dimensionConstraint", previousSelectedDimension);
-          canvasSelection.set("constraint", previousSelectedConstraint);
-          canvasHover.update({ dimension: previousHoveredDimension });
-        }
-        return [...new Set(colors)];
-      },
+      drawnDimensionColorsForTest: dimensionColorObservation.colors,
       resetForParameterTest() {
         resetModelState();
         const p1 = addPoint(0, 0, true, "endpoint");

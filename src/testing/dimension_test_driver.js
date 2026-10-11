@@ -174,5 +174,32 @@
     return Object.freeze({ fit, arrowAlignment });
   }
 
-  window.DimensionTestDriver = Object.freeze({ createAppearanceObservation, createRenderObservation, createRadiusFixture, createTerminatorFixture });
+  function createColorObservation({ canvasSelection, canvasHover, ctx, drawDimensions }) {
+    function colors() {
+      const colors = [];
+      const previousSelectedDimension = canvasSelection.dimensionConstraint;
+      const previousSelectedConstraint = canvasSelection.constraint;
+      const previousHoveredDimension = canvasHover.current.dimension;
+      const originalStroke = ctx.stroke;
+      canvasSelection.set("dimensionConstraint", null);
+      canvasSelection.set("constraint", null);
+      canvasHover.update({ dimension: null });
+      ctx.stroke = (...args) => {
+        colors.push(String(ctx.strokeStyle).toLowerCase());
+        return originalStroke.apply(ctx, args);
+      };
+      try {
+        drawDimensions();
+      } finally {
+        ctx.stroke = originalStroke;
+        canvasSelection.set("dimensionConstraint", previousSelectedDimension);
+        canvasSelection.set("constraint", previousSelectedConstraint);
+        canvasHover.update({ dimension: previousHoveredDimension });
+      }
+      return [...new Set(colors)];
+    }
+    return Object.freeze({ colors });
+  }
+
+  window.DimensionTestDriver = Object.freeze({ createAppearanceObservation, createRenderObservation, createRadiusFixture, createTerminatorFixture, createColorObservation });
 })();

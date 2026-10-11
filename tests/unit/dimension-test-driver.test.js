@@ -29,3 +29,36 @@ test('arrow observation restores the current viewport scale and propagates appea
     assert.deepEqual(updates, [0.05, 7]);
   }
 });
+
+test('dimension color observation forwards stroke calls and restores live selection, hover and Canvas method after success or failure', () => {
+  for (const shouldFail of [false, true]) {
+    const dimension = {}, constraint = {}, hovered = {}, point = {}, calls = [], failure = new Error('draw failed');
+    const canvasSelection = { dimensionConstraint: null, constraint: null, set(key, value) { this[key] = value; } };
+    const canvasHover = { current: { dimension: null, point }, update(values) { Object.assign(this.current, values); } };
+    const originalStroke = function (...args) { assert.equal(this, ctx); calls.push(args); return 'forwarded'; };
+    const ctx = { stroke: originalStroke, strokeStyle: '#ABCDEF' };
+    const fixture = sandbox.window.DimensionTestDriver.createColorObservation({ canvasSelection, canvasHover, ctx,
+      drawDimensions() {
+        assert.equal(canvasSelection.dimensionConstraint, null);
+        assert.equal(canvasSelection.constraint, null);
+        assert.equal(canvasHover.current.dimension, null);
+        assert.equal(ctx.stroke('path', 3), 'forwarded');
+        ctx.strokeStyle = '#abcdef'; ctx.stroke('same color');
+        ctx.strokeStyle = '#123456'; ctx.stroke('other color');
+        if (shouldFail) throw failure;
+      },
+    });
+    // Capture these live references at observation time, rather than at factory creation.
+    canvasSelection.dimensionConstraint = dimension;
+    canvasSelection.constraint = constraint;
+    canvasHover.current.dimension = hovered;
+    if (shouldFail) assert.throws(() => fixture.colors(), error => error === failure);
+    else assert.deepEqual(Array.from(fixture.colors()), ['#abcdef', '#123456']);
+    assert.equal(ctx.stroke, originalStroke);
+    assert.equal(canvasSelection.dimensionConstraint, dimension);
+    assert.equal(canvasSelection.constraint, constraint);
+    assert.equal(canvasHover.current.dimension, hovered);
+    assert.equal(canvasHover.current.point, point);
+    assert.deepEqual(calls, [['path', 3], ['same color'], ['other color']]);
+  }
+});

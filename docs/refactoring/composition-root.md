@@ -6,6 +6,10 @@
 
 ## 現在の再開地点（2026-10-12）
 
+寸法色の観測を既存DimensionTestDriver.createColorObservationへ分離。四つの依存（Selection／Hover／ctx／既存drawDimensions）で、呼出し時の寸法選択・拘束選択・寸法Hoverとstroke参照を保存し、一時解除／差替え→描画→finally復元を所有する。strokeは元ctxと引数で転送し、色の小文字化・初出順の重複排除、同一選択参照、他のHover状態、描画例外の伝播を保持する。通常CanvasRenderProbeへSelection操作を混ぜず、製品描画・独自状態を追加しない。test query時だけ生成し、既存API名へ直接接続。元の処理本体との一致を確認。app.jsは8,021→8,000行（21行減、今回の合計3,058行減）。構文464ファイル・単体1,256件・関連E2E103件成功（exit 0、2.1分）。単体1件を追加し、成功／描画失敗の双方でのcall-time選択／Hover／stroke同一参照の復元、呼出し転送、色の重複排除を確認。全利用箇所のunified-ui既存E2Eも検証。全テスト本体とworker終了後の専用サーバー終了待ちは当該processを確認して終了し、正常終了を回収。ログはcad-dimension-color-observation-{check,unit,e2e}.log。全E2Eはこの単位では未実行。全体目標は未完了。
+
+### 前回の区切り
+
 円弧半径の描画plan、終端記号のfit、矢印先端の観測を既存DimensionTestDriver.createRadiusFixture／createTerminatorFixtureへ分離。円弧fixtureだけがPoint／Arc生成とDimensionPlacementを使い、終端fixtureはDimensionLayout／DimensionMetricsと一時倍率操作へ接続する。両者は呼出し時の既定外観をreaderで照会し、固定ID／座標／半径・入力既定値／数値正規化・演算式／結果形式を維持する。テスト用Geometryはモデル／採番へ登録せず、製品描画の実装・独自viewportを追加しない。矢印は呼出し時の倍率を保存し、成功／例外ともfinallyで復元する。test query時だけappが生成し、既存三つのAPI名へ接続。明示した所有者参照への置換を除き、元の三つの処理本体との一致を確認。app.jsは8,110→8,021行（89行減、今回の合計3,037行減）。構文464ファイル・単体1,255件・関連E2E103件成功（exit 0、1.9分）。単体1件を追加して外観／線幅／矢印点／join計算での例外伝播と呼出し前倍率への復元を確認し、unit／構文一覧を同期した。全利用箇所のunified-ui既存E2Eで円弧補助線／終端配置／矢印先端の実描画計算を検証。全テスト本体とworker終了後の専用サーバー終了待ちは当該processを確認して終了し、正常終了を回収。ログはcad-dimension-render-fixture-{check,unit,e2e}.log。全E2Eはこの単位では未実行。全体目標は未完了。
 
 ### 前回の区切り
