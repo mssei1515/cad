@@ -6,6 +6,10 @@
 
 ## 現在の再開地点（2026-10-12）
 
+ConstraintSolvePreparationへ円弧端点・Offset／OffsetChainの幾何前処理、求解ステップ幅の算定と一時変更／復元を分離。型・幾何照会・半径寸法保護・最小長さ・OffsetChain計画を明示し、UI・Selection・Document配列・履歴を持ち込まない。処理本体は元処理と一致。角度の周回、既存Geometryと点の参照、半径寸法保護、finallyでの数値設定復元を境界テストで確認。app.jsは9,954→9,822行（132行減、今回の合計1,236行減）。構文431ファイル・単体1,154件成功。関連E2E186件成功（exit 0、14.9分、うち拘束ドラッグ回帰12.5分）。ログはcad-solve-preparation-{check,unit,e2e}.log。全E2Eはこの単位では未実行。全体目標は未完了。appの3つのhoisted入口は早期接続用で、snapshot／求解実行／失敗復元は既存commandが所有する。
+
+### 前回の区切り
+
 ConstraintIntentResolverへ通常／参照／対称／Splineの意図解決と下位判定を集約。候補生成はConstraintCandidates、対象変換はConstraintOperandsへ委譲し、対象列を入力として配置／commit意図または拒否理由を返す。Selection・session・pending・モデル配列・UI／履歴を直接変更しない。子孫／複数Sketch／参照対象数／権限／循環／Spline端点の判定順序と参照同一性を保持し、処理本体は元処理と一致。app.jsは10,069→9,954行（115行減、今回の合計1,104行減）。構文429ファイル・単体1,148件・関連E2E171件成功（exit 0、2.4分）。ログはcad-intent-resolver-{check,unit,e2e}.log。全E2Eはこの単位では未実行。全体目標は未完了。現在Selectionの取得adapterと操作の進行、command組立ての依存整理は残る。
 
 ### 前回の区切り
