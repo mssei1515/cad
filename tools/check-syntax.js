@@ -37,7 +37,7 @@ const files = [
   "tests/unit/dimension-input-controller.test.js",
   "src/ui/dimension_input_view.js",
   "tests/unit/dimension-input-view.test.js",
-  "src/ui/command_cursor.js",
+  "src/ui/command_cursor.js", "src/ui/toolbar_view.js", "tests/unit/toolbar-view.test.js",
   "tests/unit/command-cursor.test.js",
   "src/commands/fillet_command.js",
   "tests/unit/fillet-command.test.js",

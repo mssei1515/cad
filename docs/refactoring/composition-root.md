@@ -6,6 +6,10 @@
 
 ## 現在の再開地点（2026-10-12）
 
+ToolbarViewへToolbarのactive／ARIA／disabledと選択可視性の反映を分離。操作は表示値だけを渡し、可視性と編集可否は既存照会へ委譲する。ボタン反映→履歴→可視性→Flyout→カーソル、DOMがない場合と権限の短絡評価、Flyout後の最新操作状態の読取りを維持する。appは生成／接続とhoisted updateToolbar入口を保持。app.jsは9,590→9,548行（42行減、今回の合計1,510行減）。構文435ファイル・単体1,174件・関連E2E186件成功（exit 0、2.6分）。ログはcad-toolbar-view-{check,unit,e2e}.log。全E2Eはこの単位では未実行。全体目標は未完了。選択可視性の対象照会／判断／変更、共有pendingとmode、操作commandの組立て整理は残る。
+
+### 前回の区切り
+
 ConstraintSelectionQueryへ現在Selection／対象sessionからの拘束意図と実行／完了可否を集約。対象session→Spline対象変換→通常Selectionの優先、Geometry modeの適用範囲、command中の線長寸法の追加対象待ちを維持する。Selection・対象session・候補・意図照会を明示し、状態更新とUIを持ち込まない。6処理の本体は明示した所有者以外元処理と一致し、不要となったappの候補／subject変換の分解代入も撤去。app.jsは9,627→9,590行（37行減、今回の合計1,468行減）。構文433ファイル・単体1,168件・関連E2E171件成功（exit 0、2.4分）。ログはcad-constraint-query-{check,unit,e2e}.log。全E2Eはこの単位では未実行。全体目標は未完了。共有pending・modeと、注入依存の多い操作commandの組立て整理は残る。
 
 ### 前回の区切り
