@@ -4915,6 +4915,10 @@
       copySelectionToClipboard, pasteGeometryClipboard, clipboardSession, readState: sketchProjectionTestObservation.state,
       blockSelectionGeometry, createBlockDefinitionFromSelection, blockSelectionBoundsCenter, SketchProjectionConstraint,
     });
+    const documentTestImport = window.DocumentTestDriver.createImport({
+      performance, File, importFileData, readDocumentName: () => documentModel.documentName, effectiveDocumentName, serializeModel, document,
+    });
+    const documentTestLoad = window.DocumentTestDriver.createLoad({ loadModelData, fileNameStem, resetHistory, updateUI, draw, currentScope: workspace.current });
     const propertyAppearanceObservation = window.PropertiesTestDriver.createAppearanceObservation({
       allGeometryPoints, allGeometryLines, allGeometryCircles, allGeometryArcs, allGeometrySplines, blockInstanceById, blockProjectionBundle,
       normalizeAppearance, effectiveAppearanceForElement, isVisibleSketchElement,
@@ -5171,30 +5175,8 @@
           spaceHeld: constraintStatusView.spaceHeld,
         };
       },
-      async importDocumentNameFixture(data, fileName) {
-        const startedAt = performance.now();
-        const file = new File([JSON.stringify(data)], fileName, { type: "application/json" });
-        const success = await importFileData(file);
-        return {
-          success,
-          elapsedMs: performance.now() - startedAt,
-          modelName: documentModel.documentName,
-          displayName: effectiveDocumentName(),
-          serializedName: serializeModel().documentName,
-          title: document.title,
-        };
-      },
-      loadDocumentFixtureForDragTest(data, fileName = "drag-fixture.json", { resetLoadedHistory = false } = {}) {
-        try {
-          loadModelData(structuredClone(data), { documentNameOverride: fileNameStem(fileName) });
-          if (resetLoadedHistory) resetHistory("fixture load");
-          updateUI();
-          draw();
-          return { success: true, constraintCount: model.constraints.length };
-        } catch (error) {
-          return { success: false, error: error.message };
-        }
-      },
+      importDocumentNameFixture: documentTestImport.importName,
+      loadDocumentFixtureForDragTest: documentTestLoad.load,
       selectedGeometryIdsForTest: readTestSelectedGeometry,
       resetForOverlappingContextSelectionTest() {
         resetModelState();

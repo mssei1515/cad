@@ -6,6 +6,10 @@
 
 ## 現在の再開地点（2026-10-12）
 
+Documentのファイル名fixture読込とドラッグ検証用の直接適用をDocumentTestDriver.createImport／createLoadへ分離。importはJSON→File→既存importFileDataをawaitし、完了後のDocument／表示／保存名・titleと経過時間を照会する。直接適用は入力clone→file名overrideで既存load→任意の履歴reset→UI→draw→現在scopeの拘束数を取得。拒否false、async例外伝播、直接適用のload／history／UI／drawを含むcatch範囲と既定値を保持し、形式変換／モデル置換／復元は既存所有者へ委譲する。test query時だけ生成し、既存二つのAPI名へ直接接続。元の二つの処理本体との一致を確認。classic script／構文／unit／E2E読込一覧を同期。app.jsは7,833→7,815行（18行減、今回の合計3,243行減）。構文468ファイル・単体1,260件・全E2E560件成功（exit 0、24.8分）。単体4件を追加してawait後の名前／時間・拒否／例外、cloneと適用後scope、履歴／表示更新を含む失敗境界を確認した。直接適用APIが多数の画面テストで使用されるため全E2Eを一括実行し、前回失敗したDXF保存再読込を含め全件成功。全テスト本体とworker終了後の専用サーバー終了待ちは当該processを確認して終了し、正常終了を回収。ログはcad-document-test-driver-{check,unit,full-e2e}.log。全体目標は未完了。
+
+### 前回の区切り
+
 外観の照会、複数選択Propertiesのfixture／状態照会、固定のfixture／状態照会の五つのAPIをPropertiesTestDriverへ分離。createAppearanceObservationは既存Geometry／Block投影・外観／可視性を使い、種別別検索・Block内Geometry優先順と対象なしのnullを保持する。createFixtureは既存reset／図形生成／Selectionへ委譲し、座標／直接外観・mixedTypesの円、固定用S2／Point・Lineと履歴→UI→drawを維持する。createPropertiesObservation／createFixedObservationは現在Selection／scopeを照会し、既存外観／固定判定・DOM／ボタン／readHistoryへ接続。this経由の履歴hook参照をreadHistoryへ置換し、fixtureの図形生成を観測に持ち込まない。独自モデル／選択状態／外観継承／固定ルールを追加しない。test query時だけ生成し、既存五つのAPI名へ直接接続。明示した所有者参照への置換を除き、元の処理本体との一致を確認。classic script／構文／E2E読込一覧を同期。app.jsは7,886→7,833行（53行減、今回の合計3,225行減）。構文466ファイル・単体1,256件・関連E2E121件成功（exit 0、2.1分）。新規テストはなく、全利用箇所のunified-ui／sketch-projection／view-visibility既存E2Eで複数Properties／固定・解除／Undo、投影外観、表示・非表示を確認。全テスト本体とworker終了後の専用サーバー終了待ちは当該processを確認して終了し、正常終了を回収。ログはcad-properties-test-driver-{check,unit,e2e}.log。全E2Eはこの単位では未実行。全体目標は未完了。
 
 ### 前回の区切り
