@@ -6,6 +6,10 @@
 
 ## 現在の再開地点（2026-10-11）
 
+ConstraintOperandsへ拘束候補の受入判断と次operand列の生成を集約。対称の段階／同種／重複／短線拒否、通常種別制限、再選択時の末尾移動と対象数上限を維持し、入力・Geometry・Selection・操作状態を変更しない。appは成功列を反映してSelection同期する。元処理と728ケースで受入可否・拒否文・結果列が一致。app.jsは10,572→10,541行（31行減、今回の合計517行減）。構文415ファイル・単体1,098件・関連E2E134件成功（exit 0、1.9分）。ログはcad-operand-acceptance-{check,unit,e2e}.log。全E2Eはこの単位では未実行。全体目標は未完了。
+
+### 前回の区切り
+
 ConstraintFeedbackへ拘束の対象選択中／拒否時の案内文を集約。種別・operand列・言語を明示し、汎用案内のlabelだけ遅延評価する。DOM・Document・pending sessionを変更しない。日英と対象段階の360ケースで元の処理と一致。Document初期化／Sketch切替／削除はreset対象と順序が異なるため、この単位では汎用resetへまとめず保持する。app.jsは10,641→10,572行（69行減、今回の合計486行減）。構文415ファイル・単体1,093件・関連E2E128件成功（exit 0、1.8分）。ログはcad-constraint-hints-{check,unit,e2e}.log。全E2Eはこの単位では未実行。全体目標は未完了。
 
 ### 前回の区切り
