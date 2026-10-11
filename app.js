@@ -4919,6 +4919,10 @@
       readSelectedGeometry: readTestSelectedGeometry, canvasSelection, constraintTargetSession, operandElement,
     });
     const constraintIntentTestDriver = window.ConstraintTestDriver.createIntentResolution({ currentScope: workspace.current, makeConstraintOperand, resolveConstraintIntent, serializeConstraint });
+    const geometryHitObservation = window.CanvasTestDriver.createHitObservation({ hitArcEndpoint, hitPoint, hitLine, hitCircle, hitArc, hitSpline });
+    const geometryPositionObservation = window.CanvasTestDriver.createGeometryPosition({
+      currentScope: workspace.current, evaluateSpline: window.SplineGeometry.evaluate, clientPosition: canvasTestDriver.clientPosition,
+    });
     const sketchMoveObservation = window.CanvasSelectionTestDriver.createMoveObservation({
       sketchMoveCommand, activeSketchId, fields: window.SketchMove.fields, canvasSelection, currentScope: workspace.current,
       decorateSerializedConstraint, serializeConstraint, serializeModel, isEditingBlock: () => Boolean(blockEditor.current),
@@ -5213,43 +5217,8 @@
       focusWorldForTest: canvasTestDriver.focus,
       displayZoomStateForTest: displayZoomObservation.state,
       worldClientPositionForTest: canvasTestDriver.clientPosition,
-      hitGeometryAtWorldForTest(point) {
-        const x = Number(point?.x) || 0;
-        const y = Number(point?.y) || 0;
-        const arcEndpoint = hitArcEndpoint(x, y);
-        return {
-          point: hitPoint(x, y)?.id || null,
-          line: hitLine(x, y)?.id || null,
-          circle: hitCircle(x, y)?.id || null,
-          arc: hitArc(x, y)?.id || null,
-          spline: hitSpline(x, y)?.id || null,
-          arcEndpoint: arcEndpoint ? { id: arcEndpoint.arc.id, endpoint: arcEndpoint.endpoint } : null,
-        };
-      },
-      geometryClientPositionForTest(kind, id, detail = null) {
-        let point = null;
-        if (kind === "point") point = model.points.find((item) => item.id === id) || null;
-        if (kind === "line") {
-          const line = model.lines.find((item) => item.id === id);
-          if (line) point = { x: (line.p1.x + line.p2.x) / 2, y: (line.p1.y + line.p2.y) / 2 };
-        }
-        if (kind === "circle") {
-          const circle = model.circles.find((item) => item.id === id);
-          if (circle) point = { x: circle.center.x + circle.radius(), y: circle.center.y };
-        }
-        if (kind === "arc") {
-          const arc = model.arcs.find((item) => item.id === id);
-          if (arc) {
-            const angle = detail === "start" ? arc.startAngle : detail === "end" ? arc.endAngle : arc.startAngle + (arc.endAngle - arc.startAngle) / 2;
-            point = { x: arc.center.x + arc.radius() * Math.cos(angle), y: arc.center.y + arc.radius() * Math.sin(angle) };
-          }
-        }
-        if (kind === "spline") {
-          const spline = model.splines.find((item) => item.id === id);
-          if (spline) point = window.SplineGeometry.evaluate(spline.curve(), detail === "start" ? 0 : detail === "end" ? 1 : 0.5);
-        }
-        return point ? this.worldClientPositionForTest(point) : null;
-      },
+      hitGeometryAtWorldForTest: geometryHitObservation.hit,
+      geometryClientPositionForTest: geometryPositionObservation.position,
       hoverDisplayStateForTest(kind, id) {
         let item = null;
         if (kind === "point") item = allGeometryPoints().find((value) => value.id === id);

@@ -6,6 +6,10 @@
 
 ## 現在の再開地点（2026-10-12）
 
+hit観測とGeometryのclient位置取得を既存CanvasTestDriver.createHitObservation／createGeometryPositionへ分離。hit側は入力座標を元どおり数値正規化し、Arc端点→Point／Line／Circle／Arc／Splineの既存query結果をID／端点／nullへ変換する。位置側は現在scopeのGeometryからPoint位置・線中点・円右端・円弧の指定端点または従来の角度平均・Splineの0／1／0.5評価位置を取得し、既存client変換へ渡す。Spline evaluateを明示した依存へ、thisによるclient hook参照を既存CanvasTestDriver.clientPositionへ置換する。detail既定値／未存在Geometryのnull・式／順序を維持し、hitルール／幾何計算／scope／viewportを複製しない。test query時だけ生成し、既存API名へ接続。元の二つの処理本体との一致を確認。app.jsは7,683→7,652行（31行減、今回の合計3,406行減）。構文469ファイル・単体1,261件・関連E2E144件成功（exit 0、3.1分）。新規テストはなく、全利用箇所のadversarial-authoring-performance／head-symmetry／phase0-characterization／spline／unified-ui既存E2Eで応答性・円弧／Spline操作・hit観測を確認。全テスト本体とworker終了後の専用サーバー終了待ちは当該processを確認して終了し、正常終了を回収。ログはcad-hit-position-observation-{check,unit,e2e}.log。全E2Eはこの単位では未実行。全体目標は未完了。
+
+### 前回の区切り
+
 Sketch移動と表示倍率のテスト観測を既存CanvasSelectionTestDriver.createMoveObservation／CanvasTestDriver.createZoomObservationへ分離。移動の観測は既存command／fields・現在Selection／scopeと拘束serialize／保存値／Block編集状態を照会し、開始中target／所属／描画順を返す。倍率の支援は指定時だけ既存clampでviewportを更新し、現在Document unitsの複製と倍率／format表示を返す。null既定値・数値変換・式・照会順を保持し、移動session／Selection／viewportを別に保持しない。移動側にviewport依存、倍率側にGeometry／Selection／履歴依存を持ち込まず、test query時だけ生成して既存API名へ接続。元の二つの処理本体との一致を確認。app.jsは7,696→7,683行（13行減、今回の合計3,375行減）。構文469ファイル・単体1,261件・関連E2E141件成功（exit 0、2.6分）。新規テストはなく、全利用箇所のsketch-move／canvas-zoom-input／annotation-display-size／phase0-characterization／unified-ui既存E2Eで移動の開始／確定／取消・倍率表示・注記サイズ／保存を確認。全テスト本体とworker終了後の専用サーバー終了待ちは当該processを確認して終了し、正常終了を回収。ログはcad-move-zoom-observation-{check,unit,e2e}.log。全E2Eはこの単位では未実行。全体目標は未完了。
 
 ### 前回の区切り
