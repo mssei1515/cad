@@ -649,6 +649,13 @@
   });
 
   const { drawResolvedHatchContent } = window.HatchRenderer.create({ viewport, visibleWorldBounds: () => pngRender?.worldBounds || visibleWorldBounds(), canvasThemeColor, isVisibleValue });
+  const hatchLayer = window.HatchRenderer.createLayer({
+    ctx, drawResolvedHatchContent, hatchBoundaryGeometryItems,
+    boundaryPainters: [{ type: Line, draw: drawLines }, { type: Circle, draw: drawCircles }, { type: Arc, draw: drawArcs }, { type: Spline, draw: drawSplines }],
+    allHatches, isVisibleSketchId, hatchAppearanceForDisplay, isConstraintOperandSelected, canvasSelection, activeSketchId,
+    readHover: () => canvasHover.current, resolvedHatchBoundary, hatchPatternOrigin, isExporting: () => Boolean(pngRender),
+    sketchAlpha, readMode: () => mode, readCommand: () => hatchCommand,
+  });
   const { annotationLeaderDisplayGeometry, annotationTextLayout, annotationTextWorldHeight, annotationTextMetrics, drawAnnotationText, drawAnnotationLeader } = window.AnnotationRenderer.create({ ctx, viewport, withCanvasState, annotationDisplayColor, annotationLeaderAnchor, appearanceLineDash, formatValue: formatDisplayNumber, effectiveAnnotationStyle,
     resolvePlacement: (element, base) => window.AnnotationAnchorConstraints.resolve(element, base, resolveGeometryRef),
     showFrame: element => !pngRender && (canvasSelection.annotations.includes(element) || canvasSelection.inspectionContains(element) || canvasHover.current.annotation === element || canvasSelection.inspectionContains(element.blockInstance)),
@@ -2643,41 +2650,9 @@
   }
 
 
-  function drawResolvedHatch(resolved, appearance, origin = { x: 0, y: 0 }, { hatch = null, selected = false, hovered = false, preview = false, alpha = 1 } = {}) {
-    drawResolvedHatchContent(ctx, resolved, appearance, origin, { selected, hovered, preview, alpha });
-    if (!preview && hatch) drawHatchBoundaryOverlay(hatch);
-  }
+  function drawResolvedHatch(...args) { return hatchLayer.drawResolvedHatch(...args); }
 
-  function drawHatchBoundaryOverlay(hatch) {
-    const items = hatchBoundaryGeometryItems(hatch);
-    drawLines(items.filter((item) => item instanceof Line));
-    drawCircles(items.filter((item) => item instanceof Circle));
-    drawArcs(items.filter((item) => item instanceof Arc));
-    drawSplines(items.filter((item) => item instanceof Spline));
-  }
-
-  function drawHatches(items = null, { includePreview = true } = {}) {
-    for (const hatch of items || allHatches()) {
-      if (!isVisibleSketchId(hatch.sketchId)) continue;
-      const appearance = hatchAppearanceForDisplay(hatch);
-      const selected = isConstraintOperandSelected(hatch) || canvasSelection.inspectionContains(hatch) || canvasSelection.inspectionContains(hatch.blockInstance) || canvasSelection.inspectionContains(hatch.derivedInstance) || (hatch.derivedProjection ? canvasSelection.geometryInstances.includes(hatch.derivedInstance) : hatch.blockProjection ? canvasSelection.blockInstances.includes(hatch.blockInstance) : hatch.sketchId === activeSketchId() && canvasSelection.hatches.includes(hatch));
-      const hovered = hatch.derivedProjection ? canvasHover.current.geometryInstance === hatch.derivedInstance
-        : hatch.blockProjection ? canvasHover.current.block === hatch.blockInstance : hatch.sketchId === activeSketchId() && canvasHover.current.hatch === hatch;
-      drawResolvedHatch(resolvedHatchBoundary(hatch), appearance, hatchPatternOrigin(hatch), { hatch, selected: !pngRender && selected, hovered: !pngRender && hovered, alpha: sketchAlpha(hatch) });
-    }
-    if (!pngRender && includePreview && ["hatch", "hatch-repair"].includes(mode)) {
-      for (const region of hatchCommand.regions) {
-        drawResolvedHatch(region.resolved, DEFAULT_HATCH_APPEARANCE, { x: 0, y: 0 }, { preview: true, selected: region.selected });
-      }
-    }
-    if (!pngRender && includePreview && ["hatch", "hatch-repair"].includes(mode) && hatchCommand.preview?.result?.ok) {
-      drawResolvedHatch({ ...hatchCommand.preview.result.resolved, ok: true }, DEFAULT_HATCH_APPEARANCE, { x: 0, y: 0 }, { preview: true });
-    }
-  }
-
-
-
-
+  function drawHatches(...args) { return hatchLayer.drawHatches(...args); }
 
   function drawReferenceImages() {
     referenceImageRenderer.drawImages(model.referenceImages.filter(item => isVisibleValue(item.visible) && isVisibleSketchId(item.sketchId)));

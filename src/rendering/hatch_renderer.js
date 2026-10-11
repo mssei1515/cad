@@ -1,4 +1,4 @@
-/* Paint resolved Hatch loops; model resolution, selection and boundary overlays belong to callers. */
+/* Paint resolved Hatch loops and compose their read-only layer presentation. */
 (function () {
   "use strict";
   const { CSS_PX_PER_MM: HATCH_SCREEN_PX_PER_MM, DEFAULT_HATCH_APPEARANCE } = window.Appearance;
@@ -75,5 +75,40 @@
 
     return Object.freeze({ drawResolvedHatchContent });
   }
-  window.HatchRenderer = Object.freeze({ create });
+  // Compose Hatch content, boundary overlays and draft previews without editing model or interaction state.
+  function createLayer({ ctx, drawResolvedHatchContent, hatchBoundaryGeometryItems, boundaryPainters, allHatches,
+    isVisibleSketchId, hatchAppearanceForDisplay, isConstraintOperandSelected, canvasSelection, activeSketchId,
+    readHover, resolvedHatchBoundary, hatchPatternOrigin, isExporting, sketchAlpha, readMode, readCommand }) {
+    function drawResolvedHatch(resolved, appearance, origin = { x: 0, y: 0 }, { hatch = null, selected = false, hovered = false, preview = false, alpha = 1 } = {}) {
+      drawResolvedHatchContent(ctx, resolved, appearance, origin, { selected, hovered, preview, alpha });
+      if (!preview && hatch) drawHatchBoundaryOverlay(hatch);
+    }
+
+    function drawHatchBoundaryOverlay(hatch) {
+      const items = hatchBoundaryGeometryItems(hatch);
+      for (const { type, draw } of boundaryPainters) draw(items.filter(item => item instanceof type));
+    }
+
+    function drawHatches(items = null, { includePreview = true } = {}) {
+      for (const hatch of items || allHatches()) {
+        if (!isVisibleSketchId(hatch.sketchId)) continue;
+        const appearance = hatchAppearanceForDisplay(hatch);
+        const selected = isConstraintOperandSelected(hatch) || canvasSelection.inspectionContains(hatch) || canvasSelection.inspectionContains(hatch.blockInstance) || canvasSelection.inspectionContains(hatch.derivedInstance) || (hatch.derivedProjection ? canvasSelection.geometryInstances.includes(hatch.derivedInstance) : hatch.blockProjection ? canvasSelection.blockInstances.includes(hatch.blockInstance) : hatch.sketchId === activeSketchId() && canvasSelection.hatches.includes(hatch));
+        const hovered = hatch.derivedProjection ? readHover().geometryInstance === hatch.derivedInstance
+          : hatch.blockProjection ? readHover().block === hatch.blockInstance : hatch.sketchId === activeSketchId() && readHover().hatch === hatch;
+        drawResolvedHatch(resolvedHatchBoundary(hatch), appearance, hatchPatternOrigin(hatch), { hatch, selected: !isExporting() && selected, hovered: !isExporting() && hovered, alpha: sketchAlpha(hatch) });
+      }
+      if (!isExporting() && includePreview && ["hatch", "hatch-repair"].includes(readMode())) {
+        for (const region of readCommand().regions) {
+          drawResolvedHatch(region.resolved, DEFAULT_HATCH_APPEARANCE, { x: 0, y: 0 }, { preview: true, selected: region.selected });
+        }
+      }
+      if (!isExporting() && includePreview && ["hatch", "hatch-repair"].includes(readMode()) && readCommand().preview?.result?.ok) {
+        drawResolvedHatch({ ...readCommand().preview.result.resolved, ok: true }, DEFAULT_HATCH_APPEARANCE, { x: 0, y: 0 }, { preview: true });
+      }
+    }
+
+    return Object.freeze({ drawResolvedHatch, drawHatches });
+  }
+  window.HatchRenderer = Object.freeze({ create, createLayer });
 })();

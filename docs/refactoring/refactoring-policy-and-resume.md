@@ -99,13 +99,13 @@
 
 ## 8. 再開地点（2026-10-12）
 
-2026-10-11に週枠残量97%で再開し、develop 8e7e7c7からcodex/clipboard-placementを作成した。開始時app.jsは11,058行。現在は9,176行（今回の合計1,882行減）で、全体目標は未完了。作業branch上で区切りごとにCommit／Pushしており、develop／mainへの統合は停止または最終リリース時に行う。週枠残量は直近確認で83%。停止条件と手順はsection 1／6に従う。
+2026-10-11に週枠残量97%で再開し、develop 8e7e7c7からcodex/clipboard-placementを作成した。開始時app.jsは11,058行。現在は9,151行（今回の合計1,907行減）で、全体目標は未完了。作業branch上で区切りごとにCommit／Pushしており、develop／mainへの統合は停止または最終リリース時に行う。週枠残量は直近確認で83%。停止条件と手順はsection 1／6に従う。
 
 今回の分離は、Clipboardのpayload／session／checkpoint／モデル構築／操作、GeometryDeletionの計画／適用と混在Selection削除、拘束の対象受入／hit／session／操作／意図解決／寸法生成・読取判定・配置／commit、Solver前処理とSelection変換に及ぶ。各単位のcommit・検証・行数はcomposition-root.md、現在の責務はimplementation-map.mdと正式なarchitecture仕様を参照する。既存の分離をもう一度細分化するだけの変更は避ける。
 
-Splineのコピー／貼付け／Block投影テストシナリオをSplineTestDriver.createTransferへ分離。初期化／拘束Driverの依存を増やさず用途別に生成し、採番・定義追加・Workspace照会・Clipboard・Blockの既存入口を明示する。現在scopeは必要な時点で取得し、貼付けや復元前の配列を捕捉しない。テストfixtureのLeader／instanceと操作順序、参照、観測結果は元処理と一致する。機能実装やcache・sequence・rollbackをDriverへ複製しない。app.jsは9,227→9,176行（51行減、今回の合計1,882行減）。構文444ファイル・単体1,207件・関連E2E131件成功（exit 0、1.9分）。コピーされたSpline／LeaderのID、Block定義・投影と保存読込を既存E2Eで確認した。ログはcad-spline-transfer-driver-{check,unit,e2e}.log。全E2Eはこの単位では未実行。全体目標は未完了。Spline用の五つのテストAPIは機能別の支援モジュールへ移行済み。 前区切りc5e049dでは全E2E551件が成功（24.2分）しているが、その後のCanvasRenderProbeとSplineTestDriver変更後の全E2Eは未実行。リリース前には最新状態を検証する。
+Hatchの表示レイヤーを既存HatchRenderer.createLayerへ集約。解決済み領域paint→型別境界overlay、直接／Block／派生とinspection／operandの選択強調、owner別hover、作成／修復のregionと現在preview、PNG中の強調／preview抑制を担当する。幾何照会・cache・編集状態の更新は持ち込まず、read callbackと描画painterを明示する。HatchCommandは遅延参照し、appのhoisted入口は早期接続用に保持する。元処理との本体一致を、明示した状態読取と型順painter変換を除いて確認。描画順序・参照同一性・選択／hover・非表示Sketch・live preview・export抑制の3境界テストを追加。app.jsは9,176→9,151行（25行減、今回の合計1,907行減）。構文444ファイル・単体1,210件・関連E2E179件成功（exit 0、2.6分）。ログはcad-hatch-layer-{check,unit,e2e}.log。全E2Eはこの単位では未実行。全体目標は未完了。 前区切りc5e049dでは全E2E551件が成功（24.2分）しているが、その後のCanvasRenderProbe・SplineTestDriver・Hatch表示レイヤー変更後の全E2Eは未実行。リリース前には最新状態を検証する。
 
-次は残る拘束の準備／確定入口、共有modeと各commandの組立て所有、テスト用APIの機能ごとの境界を確認する。Splineの初期化・状態・Hatchキャッシュ・拘束・転送のテスト支援は分離済み。次はHatch表示・previewの残る構成処理など通常機能の所有者を確認し、テストAPIの他機能も用途ごとの境界で整理する。テスト支援の生成引数は巨大contextへ束ねない。保留状態の保持と取消はPendingCommandSessionへ分離済みであり、再抽出しない。ConstraintIntentResolverは明示したoperandを、ConstraintSelectionQueryは現在Selection／sessionの照会を、ConstraintOperandsはSelectionからの値変換を、CanvasSelectionは対象反映を所有する。旧handleConstraintTargetClickは撤去済みであり、再抽出しない。Document初期化・Sketch切替・削除のresetは解除対象と順序が異なるため、汎用resetへ無理に統合しない。
+次は残る拘束の準備／確定入口、共有modeと各commandの組立て所有、テスト用APIの機能ごとの境界を確認する。Splineの初期化・状態・Hatchキャッシュ・拘束・転送のテスト支援は分離済み。Hatch表示・previewはHatchRenderer.createLayerへ分離済み。次はHatch境界のhit・描画用Geometry照会とReference Imageの表示選択など、通常機能の照会責務を確認する。テストAPIの他機能も用途ごとの境界で整理する。テスト支援の生成引数は巨大contextへ束ねない。保留状態の保持と取消はPendingCommandSessionへ分離済みであり、再抽出しない。ConstraintIntentResolverは明示したoperandを、ConstraintSelectionQueryは現在Selection／sessionの照会を、ConstraintOperandsはSelectionからの値変換を、CanvasSelectionは対象反映を所有する。旧handleConstraintTargetClickは撤去済みであり、再抽出しない。Document初期化・Sketch切替・削除のresetは解除対象と順序が異なるため、汎用resetへ無理に統合しない。
 
 共通mode／DOMへのadapterと、注入依存の多いcommandの生成／接続は残る。状態の所有と開始・更新・確定・取消の入口を揃え、巨大contextを渡した別ファイルへ移すだけにしない。次回は現物のGit状態とruntime情報を確認して継続する。
 
