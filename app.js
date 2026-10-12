@@ -7687,6 +7687,7 @@
   }
 
   derivedPanel = window.DerivedCommandPanel.create({
+    formatDisplayNumber,
     getMode: () => mode, projectionSources: () => sketchProjectionCommand.sources,
     geometryCommand: geometryInstanceCommand, sourceCommand: instanceSourceCommand,
     resolveGeometryRef, sketchName, activeSketchId, elementSketchId, geometryRefForItem, applicationText,

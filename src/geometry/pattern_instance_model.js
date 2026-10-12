@@ -67,6 +67,12 @@
     if (!target || !sourceContains(instance, target, resolve)) return null;
     return { kind, target, ...(endpoint ? { endpoint } : {}) };
   }
+  function anchorLabel(instance, t = ja => ja) {
+    const relation = instance.anchor?.relation;
+    if (!relation) return "";
+    const labels = { point: t("点", "Point"), lineEndpoint: t("線の端点", "Line endpoint"), arcEndpoint: t("円弧の端点", "Arc endpoint"), lineMidpoint: t("線の中点", "Line midpoint") };
+    return labels[relation.kind] + ": " + relation.target.path.join("@");
+  }
   function dependencies(instance) {
     return [...(instance.sources || []), instance.anchor?.relation?.target, instance.placement?.axis, instance.placement?.direction].filter(Boolean);
   }
@@ -112,12 +118,12 @@
       const line = resolve(p.direction), scale = (inverse ? -1 : 1) * (p.reversed ? -1 : 1) * p.spacing * index / line.length();
       return { x: point.x + line.dx() * scale, y: point.y + line.dy() * scale };
     }
-    const a = anchorPoint(instance, resolve), angle = instance.rotation - (p.kind === "circular" ? index * p.angleStep : 0);
+    const a = anchorPoint(instance, resolve), angle = (p.kind === "linear" ? index : 1) * instance.rotation - (p.kind === "circular" ? index * p.angleStep : 0);
     const b = p.kind === "circular" ? a : { x: a.x + index * (instance.x - a.x), y: a.y + index * (instance.y - a.y) };
     const c = Math.cos(angle), s = Math.sin(angle), sign = instance.reflected ? -1 : 1;
     if (inverse) { const x = point.x - b.x, y = point.y - b.y; return { x: a.x + sign * (c * x + s * y), y: a.y - s * x + c * y }; }
     const x = sign * (point.x - a.x), y = point.y - a.y;
     return { x: b.x + c * x - s * y, y: b.y + s * x + c * y };
   }
-  window.PatternInstanceModel = Object.freeze({ normalize, createDraft, resize, placed, sourceContains, anchorPoint, relationFromSnap, dependencies, variables, error, transform, sameRef });
+  window.PatternInstanceModel = Object.freeze({ normalize, createDraft, resize, placed, sourceContains, anchorPoint, relationFromSnap, anchorLabel, dependencies, variables, error, transform, sameRef });
 })();

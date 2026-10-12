@@ -52,9 +52,9 @@
     function selectReference(line) { if (!active() || !line?.p1 || d.elementSketchId(line) !== pending.sketchId) return false; pending.placement[pending.placement.kind === "axisReflection" ? "axis" : "direction"] = d.geometryRefForItem(line); refresh(); return true; }
     function applySetting(key, value) {
       if (!active()) return false;
-      if (key === "reflected" && pending.type === "pattern") return false;
+      if (key === "reflected") return false;
       if (key === "count") { const count = Number(value); if (!Number.isInteger(count) || count < 2 || count > 1001) return false; M.resize(pending, count); }
-      else if (["reflected", "rotationLocked"].includes(key)) pending[key] = Boolean(value);
+      else if (key === "rotationLocked") pending[key] = Boolean(value);
       else if (key === "rotation") { if (!String(value).trim() || !Number.isFinite(Number(value))) return false; pending.rotation = Number(value) * Math.PI / 180; }
       else if (key === "angleMode") pending.placement.angleMode = value;
       else if (key === "angleStep") { const angle = Number(value) * Math.PI / 180; if (!String(value).trim() || !Number.isFinite(angle) || !angle || Math.abs(angle) >= Math.PI * 2) return false; pending.placement.angleStep = angle; pending.placement.angleSign = Math.sign(angle); }

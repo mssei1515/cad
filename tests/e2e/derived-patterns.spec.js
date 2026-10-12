@@ -157,3 +157,34 @@ test('three tools are separate and mirror uses an axis with atomic history', asy
  await page.click('#toolCircularPattern'); await expect(page.locator('#commandPanel [data-input="destination"]')).toHaveCount(0); await page.keyboard.press('Escape');
  expect(errors).toEqual([]);
 });
+
+test('circular controls show a clean default angle and reference anchor without reflection', async ({ page }) => {
+ const errors=await setup(page); await page.click('#toolCircularPattern'); await click(page,{x:30,y:10});
+ await expect(page.locator('#commandPanel [data-setting="angleStep"]')).toHaveValue('30');
+ await expect(page.locator('#commandPanel [data-setting="reflected"]')).toHaveCount(0);
+ await expect(page.locator('#propertiesPanel [data-pattern-property="reflected"]')).toHaveCount(0);
+ await page.locator('#commandPanel ul[data-input="origin"]').click(); await click(page,{x:40,y:10});
+ await expect(page.locator('#commandPanel ul[data-input="origin"]')).toContainText('線の端点: L1');
+ await expect(page.locator('#propertiesPanel')).toContainText('線の端点: L1');
+ await page.locator('#commandPanel [data-action="finish"]').click();
+ await page.click('[data-property-action="instance-placement"]');
+ await expect(page.locator('#commandPanel [data-setting="angleStep"]')).toHaveValue('30');
+ expect(errors).toEqual([]);
+});
+test('linear copies accumulate angle, preserve spacing, and round trip', async ({ page }) => {
+ const errors=await setup(page); await page.click('#toolPattern'); await click(page,{x:30,y:10});
+ await page.locator('#commandPanel [data-input="origin"]').click(); await click(page,{x:20,y:10});
+ await page.locator('#commandPanel [data-setting="offsetX"]').fill('30'); await page.locator('#commandPanel [data-setting="offsetX"]').press('Tab');
+ await page.locator('#commandPanel [data-setting="offsetY"]').fill('0'); await page.locator('#commandPanel [data-setting="offsetY"]').press('Tab');
+ await page.locator('#commandPanel [data-setting="rotation"]').fill('30'); await page.locator('#commandPanel [data-setting="rotation"]').press('Tab');
+ await page.locator('#commandPanel [data-setting="count"]').fill('4'); await page.locator('#commandPanel [data-setting="count"]').press('Tab');
+ await page.locator('#commandPanel [data-action="finish"]').click();
+ const view=await page.evaluate(()=>window.__jot2dTest.derivedInstanceStateForTest()), lines=view.instances[0].lines;
+ for(const [n,line] of lines.entries()) {
+  expect(line.p1.x).toBeCloseTo(20+(n+1)*30,7); expect(line.p1.y).toBeCloseTo(10,7);
+  expect(Math.atan2(line.p2.y-line.p1.y,line.p2.x-line.p1.x)).toBeCloseTo((n+1)*Math.PI/6,7);
+ }
+ const data=await saved(page); expect(await page.evaluate(d=>window.__jot2dTest.loadDocumentFixtureForDragTest(d),data)).toMatchObject({success:true});
+ expect((await page.evaluate(()=>window.__jot2dTest.derivedInstanceStateForTest())).instances).toEqual(view.instances);
+ expect(errors).toEqual([]);
+});

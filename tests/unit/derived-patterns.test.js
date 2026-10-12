@@ -107,3 +107,21 @@ test('rotation lock and interval mode changes preserve configured angles', () =>
   f.instance.type = 'circularPattern'; f.instance.placement = { kind: 'circular', angleStep: -.7, angleMode: 'numeric', angleSign: -1 };
   assert.equal(f.editing.change(f.instance, 'angleMode', 'constraint'), true); near(f.instance.placement.angleStep, -.7);
 });
+
+test('linear occurrence angles accumulate while the placement vector stays constant', () => {
+  const f = fixture(), i = f.instance; i.anchor.relation = { kind: 'point', target: ref('point','P1') };
+  i.x = 50; i.y = 10; i.rotation = Math.PI / 6; M.resize(i,4);
+  for (const n of [1,2,3]) {
+    const anchor = M.transform(i,f.p,n,f.resolve), output = M.transform(i,f.q,n,f.resolve);
+    near(anchor.x,20+n*30); near(anchor.y,10);
+    near(output.x,anchor.x+20*Math.cos(n*Math.PI/6)); near(output.y,10+20*Math.sin(n*Math.PI/6));
+    const inverse=M.transform(i,output,n,f.resolve,true); near(inverse.x,f.q.x); near(inverse.y,f.q.y);
+  }
+  near(f.q.x,40); near(f.q.y,10);
+});
+test('anchor descriptions retain nested canonical references and relation roles', () => {
+  const i = fixture().instance;
+  i.anchor.relation = {kind:'lineEndpoint',target:ref('line','BI7@SPI5@L52'),endpoint:'end'};
+  assert.equal(M.anchorLabel(i),'線の端点: BI7@SPI5@L52');
+  i.anchor.relation.kind='lineMidpoint'; assert.equal(M.anchorLabel(i),'線の中点: BI7@SPI5@L52');
+});

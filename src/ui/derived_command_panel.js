@@ -3,7 +3,7 @@
   "use strict";
   function create({ getMode, projectionSources, geometryCommand, sourceCommand, resolveGeometryRef,
     sketchName, activeSketchId, elementSketchId, geometryRefForItem, applicationText: t, finishProjection, removeProjectionSource, cancel,
-    changeFreeProperty, refresh }) {
+    changeFreeProperty, refresh, formatDisplayNumber = value => Number(value.toPrecision(15)) }) {
     let selected = null;
     let previousSession = null;
     function itemLabel(item) { return item ? sketchName(elementSketchId(item)) + " / " + item.id : t("参照切れ", "Missing reference"); }
@@ -41,24 +41,22 @@
           const inputs = [...(["linear", "circular"].includes(kind) ? [["origin", t("配置基準点", "Source anchor")]] : []), ...(kind === "linear" ? [["destination", t("配置点", "Placement point")]] : [])];
           for (const [key, label] of inputs) {
             const point = geometryCommand[key];
-            state.selections.push(inputRows(key, label, point ? [{ id: key, label: "(" + point.x + ", " + point.y + ")" }] : [], input === key));
+            state.selections.push(inputRows(key, label, point ? [{ id: key, label: key === "origin" ? window.PatternInstanceModel.anchorLabel(pending, t) || t("固定座標", "Fixed coordinates") : "(" + point.x + ", " + point.y + ")" }] : [], input === key));
           }
           if (["axisReflection", "directionLinear"].includes(kind)) state.selections.push(inputRows("reference", kind === "axisReflection" ? t("対称軸", "Axis") : t("方向線", "Direction"), geometryCommand.reference ? [{ id: "reference", label: itemLabel(geometryCommand.reference) }] : [], input === "reference"));
           state.settings = [
             { key: "count", label: t("個数（元を含む）", "Count (including source)"), value: pending.count, min: 2, max: 1001, step: 1 },
-            { key: "rotation", label: t("配置角度 (°)", "Placement angle (°)"), value: pending.rotation * 180 / Math.PI, step: "any" },
-            { key: "reflected", label: t("反転", "Reflect"), value: pending.reflected, type: "checkbox" },
+            { key: "rotation", label: t("配置角度 (°)", "Placement angle (°)"), value: formatDisplayNumber(pending.rotation * 180 / Math.PI), step: "any" },
             { key: "rotationLocked", label: t("回転ロック", "Rotation lock"), value: pending.rotationLocked, type: "checkbox" },
           ];
-          if (!["linear", "circular"].includes(kind)) state.settings = state.settings.filter(setting => !["rotation", "reflected", "rotationLocked"].includes(setting.key));
+          if (!["linear", "circular"].includes(kind)) state.settings = state.settings.filter(setting => !["rotation", "rotationLocked"].includes(setting.key));
           if (kind === "axisReflection") state.settings = state.settings.filter(setting => !["count", "placement"].includes(setting.key));
-          if (kind === "linear" || kind === "directionLinear") state.settings = state.settings.filter(setting => setting.key !== "reflected");
           if (kind === "linear") {
             const a = geometryCommand.origin;
             for (const axis of ["X", "Y"]) state.settings.push({ key: "offset" + axis, label: t("相対" + axis + " (mm)", "Relative " + axis + " (mm)"), value: geometryCommand.destination && a ? pending[axis.toLowerCase()] - a[axis.toLowerCase()] : "", step: "any" });
           }
           if (kind === "circular") state.settings.push(
-            { key: "angleStep", label: t("角度間隔 (°)", "Angle interval (°)"), value: pending.placement.angleStep * 180 / Math.PI, step: "any" },
+            { key: "angleStep", label: t("角度間隔 (°)", "Angle interval (°)"), value: formatDisplayNumber(pending.placement.angleStep * 180 / Math.PI), step: "any" },
             { key: "angleMode", label: t("角度間隔の制御", "Interval control"), type: "select", value: pending.placement.angleMode, options: [{ value: "numeric", label: t("数値指定", "Numeric") }, { value: "constraint", label: t("拘束で制御", "Constraints") }] });
           if (kind === "directionLinear") state.settings.push({ key: "spacing", label: t("間隔 (mm)", "Spacing (mm)"), value: pending.placement.spacing, step: "any" }, { key: "reversed", label: t("方向反転", "Reverse direction"), type: "checkbox", value: pending.placement.reversed });
           state.step = input === "sources" ? t("コピー対象を選択してください", "Select sources") : input === "origin" ? t("コピー対象の点・端点・線の中点を指定してください", "Pick a source point, endpoint or midpoint") : t("配置点または参照線を指定してください", "Pick the placement point or reference line");

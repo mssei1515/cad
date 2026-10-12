@@ -46,9 +46,9 @@
       }
     }
     function change(instance, key, value) {
-      if (key === "reflected" && instance.type === "pattern") return false;
+      if (key === "reflected") return false;
       const candidate = structuredClone(instance);
-      if (["rotationLocked", "reflected"].includes(key)) candidate[key] = Boolean(value);
+      if (key === "rotationLocked") candidate[key] = Boolean(value);
       else if (key === "rotation") candidate.rotation = Number(value) * Math.PI / 180;
       else if (key === "count") { if (!Number.isInteger(Number(value)) || Number(value) < 2 || Number(value) > 1001) return false; window.PatternInstanceModel.resize(candidate, Number(value)); }
       else if (key === "angleMode") candidate.placement.angleMode = value;
