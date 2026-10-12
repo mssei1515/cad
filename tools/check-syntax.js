@@ -2,6 +2,9 @@
 const { spawnSync } = require("node:child_process");
 const path = require("node:path");
 const files = [
+ "tests/unit/synchronized-instance.test.js", "tests/e2e/synchronized-instance.spec.js",
+ "src/commands/synchronized_instance_editing.js",
+  "src/geometry/synchronized_instance.js",
   "src/persistence/document_bookmarks.js", "tests/e2e/document-bookmarks.spec.js",
   "tests/e2e/derived-selection-copy.spec.js",
   "src/editing/clipboard_transfer.js", "src/editing/clipboard_payload.js", "src/editing/clipboard_geometry.js", "src/editing/clipboard_paste_checkpoint.js", "src/editing/clipboard_session.js", "src/editing/clipboard_graph.js", "src/commands/clipboard_command.js", "tests/unit/clipboard-transfer.test.js", "tests/unit/clipboard-geometry.test.js", "tests/unit/clipboard-paste-checkpoint.test.js", "tests/unit/clipboard-session.test.js", "tests/unit/clipboard-graph.test.js", "tests/unit/clipboard-command.test.js",

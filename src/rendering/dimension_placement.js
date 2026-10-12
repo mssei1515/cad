@@ -158,7 +158,7 @@
 
     function dimensionFromAnchor(target, anchor, options = {}) {
       if (target.kind === "angle") {
-        const vertex = lineIntersection(target.line1, target.line2);
+        const vertex = (target.intervalCenter || lineIntersection(target.line1, target.line2));
         const angles = angleDimensionAngles(target, anchor);
         return {
           x: anchor.x,
@@ -190,7 +190,7 @@
 
     function angleDimensionLabelBasis(target, dimension) {
       if (target?.kind !== "angle" || !dimension) return null;
-      const vertex = lineIntersection(target.line1, target.line2);
+      const vertex = (target.intervalCenter || lineIntersection(target.line1, target.line2));
       if (!vertex) return null;
       const anchor = dimensionAnchor(target, dimension);
       const radius = Math.max(14 / viewport.scale, hypot2(anchor.x - vertex.x, anchor.y - vertex.y));
@@ -278,7 +278,7 @@
     function angleDimensionFromLabelPoint(target, labelPoint, labelOffsets = null) {
       if (target?.kind !== "angle" || !labelPoint) return null;
       const offsets = labelOffsets || { radial: 14 / viewport.scale, tangent: 0 };
-      const vertex = lineIntersection(target.line1, target.line2);
+      const vertex = (target.intervalCenter || lineIntersection(target.line1, target.line2));
       if (!vertex) return null;
       const angles = angleDimensionAngles(target, labelPoint);
       const radial = { x: Math.cos(angles.mid), y: Math.sin(angles.mid) };
@@ -312,7 +312,7 @@
         if (Number.isFinite(dimension.x) && Number.isFinite(dimension.y)) return { x: dimension.x, y: dimension.y };
       }
       if (target.kind === "angle") {
-        const vertex = lineIntersection(target.line1, target.line2);
+        const vertex = (target.intervalCenter || lineIntersection(target.line1, target.line2));
         if (vertex && Number.isFinite(dimension.angleRadius)) {
           const { mid } = angleDimensionAngles(target, null, dimension);
           return {
@@ -336,7 +336,7 @@
 
     function defaultDimensionForTarget(target) {
       if (target.kind === "angle") {
-        const vertex = lineIntersection(target.line1, target.line2);
+        const vertex = (target.intervalCenter || lineIntersection(target.line1, target.line2));
         if (!vertex) return { x: 0, y: 0, offsetU: NaN, offsetN: NaN, labelOffsetU: 0, axis: null };
         const angles = angleDimensionAngles(target);
         const radius = 45 / viewport.scale;

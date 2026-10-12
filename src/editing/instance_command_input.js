@@ -3,9 +3,9 @@
   "use strict";
   function create({ getMode, instanceSourceCommand, geometryInstanceCommand, hitReferenceTarget, hitDerivedProjectionOperand,
     hitBlockProjectionOperand, operandElement, toggleSketchProjectionSource, hitHatch = () => null, clearSnap, selectionRectangle,
-    capturePointer, snapForDrawing, makeConstraintOperand, setHint, applicationText, releasePanelFocus }) {
+    capturePointer, snapForDrawing, getSnap = () => null, makeConstraintOperand, setHint, applicationText, releasePanelFocus }) {
     function click(e, p, { hitP, hitL, hitC, hitA, hitS, hatchHit }) {
-      if (["instance-sources", "sketch-projection", "mirror-axis", "pattern-direction"].includes(getMode()) || getMode().startsWith("free-instance-")) releasePanelFocus();
+      if (["instance-sources", "sketch-projection"].includes(getMode()) || getMode().startsWith("free-instance-")) releasePanelFocus();
       if (getMode() === "instance-sources") {
         e.preventDefault();
         const operand = instanceSourceCommand.instance.type === "sketchProjection"
@@ -30,7 +30,7 @@
         capturePointer(e.pointerId);
         return true;
       }
-      if ((getMode().startsWith("free-instance-") || ["mirror-axis", "pattern-direction"].includes(getMode())) && geometryInstanceCommand.activeInput === "sources") {
+      if (getMode().startsWith("free-instance-") && geometryInstanceCommand.activeInput === "sources") {
         e.preventDefault();
         const operand = hitDerivedProjectionOperand(p.x, p.y) || hitBlockProjectionOperand(p.x, p.y);
         const item = operand ? operandElement(operand) : hitP || hitL || hitC || hitA || hitS || hatchHit;
@@ -39,14 +39,9 @@
         return true;
       }
       if (getMode().startsWith("free-instance-")) {
-        geometryInstanceCommand.placeFree(snapForDrawing(p));
-        return true;
-      }
-      if (getMode() === "mirror-axis" || getMode() === "pattern-direction") {
-        e.preventDefault();
-        const operand = hitDerivedProjectionOperand(p.x, p.y) || hitBlockProjectionOperand(p.x, p.y) || (hitL ? makeConstraintOperand("line", { line: hitL }) : null);
-        if (operand?.kind === "line") geometryInstanceCommand.selectReference(operand.line);
-        else setHint(applicationText("基準にする線をクリックしてください", "Click a reference line."), "error");
+        const point = snapForDrawing(p);
+        if (geometryInstanceCommand.activeInput === "reference") geometryInstanceCommand.selectReference(hitL || getSnap()?.data?.line);
+        else geometryInstanceCommand.placeFree(point, getSnap());
         return true;
       }
 

@@ -27,8 +27,6 @@
         toolSpline: geometryMode && mode === "spline",
         toolSketchProjection: geometryMode && mode === "sketch-projection",
         toolFreeInstance: geometryMode && mode.startsWith("free-instance-"),
-        toolMirror: geometryMode && mode === "mirror-axis",
-        toolPattern: geometryMode && mode === "pattern-direction",
         toolHatch: geometryMode && (mode === "hatch" || mode === "hatch-repair"),
         annotationTextBtn: interaction.annotationDraft,
       };

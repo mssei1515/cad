@@ -60,7 +60,7 @@
         secondary: item.name || "",
       };
       if (target.kind === "geometry-instance") return {
-        icon: toolbarSvgMarkup(target.item.type === "free" ? "#toolFreeInstance" : target.item.type === "mirror" ? "#toolMirror" : target.item.type === "pattern" ? "#toolPattern" : "#toolSketchProjection"),
+        icon: toolbarSvgMarkup(target.item.type === "free" ? "#toolFreeInstance" : "#toolSketchProjection"),
         type: applicationText("派生インスタンス", "Derived Instance"),
         id: item.id,
         secondary: geometryInstanceTypeLabel(item.type),

@@ -16,7 +16,7 @@
           fixed: instance.fixed,
           rotationLocked: instance.rotationLocked,
         })),
-        freeInstances: currentScope().geometryInstances.filter((instance) => instance.type === "free").map((instance) => ({ instance, x: instance.x, y: instance.y, rotation: instance.rotation, mirrorX: instance.mirrorX, mirrorY: instance.mirrorY })),
+        freeInstances: currentScope().geometryInstances.filter((instance) => instance.type === "free").map((instance) => ({ instance, state: structuredClone(instance), placementObject: instance.placement })),
         annotationParameters: (currentScope().annotations || []).map(annotation => ({ annotation, parameterEnabled: annotation.parameterEnabled, parameterName: annotation.parameterName, expression: annotation.expression, evaluatedParameterValue: annotation.evaluatedParameterValue })),
         constraintLength: currentScope().constraints.length,
         constraints: currentScope().constraints.map((constraint) => ({
@@ -70,7 +70,14 @@
     }
 
     function restoreModelState(snapshot) {
-      for (const { instance, ...values } of snapshot.freeInstances || []) Object.assign(instance, values);
+      for (const { instance, state, placementObject } of snapshot.freeInstances || []) {
+        for (const key of Object.keys(instance)) delete instance[key];
+        Object.assign(instance, structuredClone(state));
+        if (placementObject && state.placement) {
+          for (const key of Object.keys(placementObject)) delete placementObject[key];
+          Object.assign(placementObject, structuredClone(state.placement)); instance.placement = placementObject;
+        }
+      }
       for (const p of snapshot.points) {
         p.point.x = p.x;
         p.point.y = p.y;

@@ -59,15 +59,15 @@ async function clickWorld(page, point) {
   await page.mouse.click(client.x, client.y);
 }
 
-test("legacy midpoint constraints are removed and midpoint snapping is no longer offered", async ({ page }) => {
+test("legacy midpoint rules remain unchanged while new midpoint snapping is offered", async ({ page }) => {
   await openFixture(page);
   let serialized = await page.evaluate(() => window.__jot2dTest.serializedModelForTest());
-  expect(serialized.version).toBe(25);
+  expect(serialized.version).toBe(26);
   expect(serialized.constraints.some((constraint) => constraint.type === "pointOnLineMidpoint")).toBe(false);
 
   await page.click("#toolPoint");
   const snapLabels = await page.evaluate(() => window.__jot2dTest.snapLabelsAtWorldForTest({ x: 0, y: -50 }));
-  expect(snapLabels).not.toContain("中点");
+  expect(snapLabels).toContain("中点");
   await clickWorld(page, { x: 0, y: -50 });
   serialized = await page.evaluate(() => window.__jot2dTest.serializedModelForTest());
   expect(serialized.constraints.some((constraint) => constraint.type === "pointOnLineMidpoint")).toBe(false);
@@ -145,8 +145,8 @@ test("centerline command creates an associative line between two parallel suppor
   expect(points.get(centerline.p1).y).toBeCloseTo(0, 6);
   expect(points.get(centerline.p2).y).toBeCloseTo(0, 6);
   expect(state.model.constraints).toEqual(expect.arrayContaining([
-    expect.objectContaining({ type: "pointOnLine", point: centerline.p1, line: "L3" }),
-    expect.objectContaining({ type: "pointOnLine", point: centerline.p2, line: "L4" }),
+    expect.objectContaining({ type: "lineMidpointCoincident", point: centerline.p1, line: "L3" }),
+    expect.objectContaining({ type: "lineMidpointCoincident", point: centerline.p2, line: "L4" }),
   ]));
   expect(await page.evaluate((data) => window.__jot2dTest.loadDocumentFixtureForDragTest(data, "centerline-roundtrip.jot2d"), state.model)).toEqual(expect.objectContaining({ success: true }));
   expect((await page.evaluate(() => window.__jot2dTest.serializedModelForTest())).constraints).toEqual(expect.arrayContaining([

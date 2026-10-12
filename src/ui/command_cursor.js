@@ -26,8 +26,6 @@
         "sketch-projection": "toolSketchProjection",
         "free-instance-origin": "toolFreeInstance",
         "free-instance-place": "toolFreeInstance",
-        "mirror-axis": "toolMirror",
-        "pattern-direction": "toolPattern",
         hatch: "toolHatch",
         "hatch-repair": "toolHatch",
         fillet: "toolFillet",

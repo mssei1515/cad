@@ -31,38 +31,37 @@
         state.selections.push(inputRows("sources", t("投影対象", "Projection sources"), sources.map(entry => ({ id: entry.key, label: itemLabel(entry.item) })), true));
         state.message = t("投影先", "Destination") + ": " + sketchName(activeSketchId());
         ready = sources.length > 0;
-      } else if (["mirror-axis", "pattern-direction"].includes(mode) || (mode.startsWith("free-instance-") && geometryCommand.pending)) {
-        const free = mode.startsWith("free-instance-"), mirror = mode === "mirror-axis", input = geometryCommand.activeInput;
-        state.title = free ? t("同期インスタンス", "Synchronized Instance") : mirror ? t("ミラー投影", "Mirror Projection") : t("直線パターン", "Linear Pattern");
+      } else if ((mode.startsWith("free-instance-") && geometryCommand.pending)) {
+        const input = geometryCommand.activeInput;
+        state.title = t("同期インスタンス", "Synchronized Instance");
         state.selections.push(inputRows("sources", t("複写元", "Source geometry"), sourceRows(geometryCommand.sources), input === "sources"));
-        if (free) {
+        {
           const pending = geometryCommand.pending;
-          for (const [key, label] of [["origin", t("配置基準点", "Source anchor")], ["destination", t("配置先", "Destination")]]) {
+          const kind = pending.placement.kind;
+          const inputs = [...(["linear", "circular"].includes(kind) ? [["origin", t("配置基準点", "Source anchor")]] : []), ...(kind === "linear" ? [["destination", t("配置点", "Placement point")]] : [])];
+          for (const [key, label] of inputs) {
             const point = geometryCommand[key];
             state.selections.push(inputRows(key, label, point ? [{ id: key, label: "(" + point.x + ", " + point.y + ")" }] : [], input === key));
           }
+          if (["axisReflection", "directionLinear"].includes(kind)) state.selections.push(inputRows("reference", kind === "axisReflection" ? t("対称軸", "Axis") : t("方向線", "Direction"), geometryCommand.reference ? [{ id: "reference", label: itemLabel(geometryCommand.reference) }] : [], input === "reference"));
           state.settings = [
-            { key: "rotation", label: t("角度 (°)", "Angle (°)"), value: pending.rotation * 180 / Math.PI, step: "any" },
-            { key: "mirrorX", label: t("左右反転", "Reflect left/right"), value: pending.mirrorX, type: "checkbox" },
-            { key: "mirrorY", label: t("上下反転", "Reflect up/down"), value: pending.mirrorY, type: "checkbox" },
+            { key: "placement", label: t("配置方式", "Placement"), type: "select", value: kind, options: [{ value: "linear", label: t("直線", "Linear") }, { value: "circular", label: t("円形", "Circular") }, ...(["axisReflection", "directionLinear"].includes(kind) ? [{ value: kind, label: kind === "axisReflection" ? t("軸線に対する反射", "Axis reflection") : t("方向線による直線配置", "Direction linear") }] : [])] },
+            { key: "count", label: t("個数（元を含む）", "Count (including source)"), value: pending.count, min: 2, max: 1001, step: 1 },
+            { key: "rotation", label: t("配置角度 (°)", "Placement angle (°)"), value: pending.rotation * 180 / Math.PI, step: "any" },
+            { key: "reflected", label: t("反転", "Reflect"), value: pending.reflected, type: "checkbox" },
+            { key: "rotationLocked", label: t("回転ロック", "Rotation lock"), value: pending.rotationLocked, type: "checkbox" },
           ];
-          state.step = input === "sources" ? t("同じスケッチの複写元をクリックして追加・解除します", "Click source geometry in the same sketch to add/remove it.")
-            : input === "origin" ? t("配置基準点をクリックしてください", "Click the source anchor.") : t("配置先をクリックしてください", "Click the destination.");
-        } else {
-          const reference = geometryCommand.reference;
-          state.selections.push(inputRows("reference", mirror ? t("対称軸", "Mirror axis") : t("方向線", "Direction line"),
-            reference ? [{ id: JSON.stringify(geometryRefForItem(reference)), label: itemLabel(reference) }] : [], input === "reference"));
-          state.step = input === "sources" ? t("同じスケッチの複写元をクリックして追加・解除します", "Click source geometry in the same sketch to add/remove it.")
-            : mirror ? t("同じスケッチの対称軸となる線を選択してください", "Select a mirror axis line in the same sketch.") : t("同じスケッチの配列方向となる線を選択してください", "Select a direction line in the same sketch.");
-          if (!mirror) {
-            const settings = geometryCommand.settings;
-            state.settings = [
-              { key: "spacing", label: t("間隔 (mm)", "Spacing (mm)"), value: Number.isFinite(settings.spacing) ? settings.spacing : "", min: 0, step: "any" },
-              { key: "copies", label: t("コピー数（元を除く）", "Copies (excluding source)"), value: Number.isFinite(settings.copies) ? settings.copies : "", min: 1, max: 1000, step: 1 },
-              { key: "reversed", label: t("方向反転", "Reverse direction"), value: settings.reversed, type: "checkbox" },
-            ];
-            if (!geometryCommand.validSettings()) state.message = t("間隔は正数、コピー数は整数1〜1000で指定してください", "Use positive spacing and an integer copy count from 1 to 1000.");
+          if (!["linear", "circular"].includes(kind)) state.settings = state.settings.filter(setting => !["rotation", "reflected", "rotationLocked"].includes(setting.key));
+          if (kind === "axisReflection") state.settings = state.settings.filter(setting => setting.key !== "count");
+          if (kind === "linear") {
+            const a = geometryCommand.origin;
+            for (const axis of ["X", "Y"]) state.settings.push({ key: "offset" + axis, label: t("相対" + axis + " (mm)", "Relative " + axis + " (mm)"), value: geometryCommand.destination && a ? pending[axis.toLowerCase()] - a[axis.toLowerCase()] : "", step: "any" });
           }
+          if (kind === "circular") state.settings.push(
+            { key: "angleStep", label: t("角度間隔 (°)", "Angle interval (°)"), value: pending.placement.angleStep * 180 / Math.PI, step: "any" },
+            { key: "angleMode", label: t("角度間隔の制御", "Interval control"), type: "select", value: pending.placement.angleMode, options: [{ value: "numeric", label: t("数値指定", "Numeric") }, { value: "constraint", label: t("拘束で制御", "Constraints") }] });
+          if (kind === "directionLinear") state.settings.push({ key: "spacing", label: t("間隔 (mm)", "Spacing (mm)"), value: pending.placement.spacing, step: "any" }, { key: "reversed", label: t("方向反転", "Reverse direction"), type: "checkbox", value: pending.placement.reversed });
+          state.step = input === "sources" ? t("コピー対象を選択してください", "Select sources") : input === "origin" ? t("コピー対象の点・端点・線の中点を指定してください", "Pick a source point, endpoint or midpoint") : t("配置点または参照線を指定してください", "Pick the placement point or reference line");
         }
         ready = geometryCommand.canFinish();
       } else if (mode === "instance-sources" && sourceCommand.current) {
@@ -82,7 +81,7 @@
       const group = readState()?.selections.find(group => group.key === key);
       if (!group || (index != null && !group.items[index])) return;
       selected = index == null ? null : { group: key, id: group.items[index].key };
-      if (["mirror-axis", "pattern-direction"].includes(getMode()) || getMode().startsWith("free-instance-")) geometryCommand.selectInput(key);
+      if (getMode().startsWith("free-instance-")) geometryCommand.selectInput(key);
       else refresh();
     }
     function onRemove(key, index) {
@@ -101,8 +100,7 @@
       else geometryCommand.finish();
     }
     function onSetting(key, value) {
-      if (getMode() === "pattern-direction") geometryCommand.changeSetting(key, value);
-      else if (getMode().startsWith("free-instance-")) { changeFreeProperty(geometryCommand.pending, key, value); refresh(); }
+      if (getMode().startsWith("free-instance-")) { geometryCommand.changeSetting(key, value); }
     }
     function selectedItem() {
       if (!selected) return null;

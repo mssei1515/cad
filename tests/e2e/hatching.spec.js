@@ -20,17 +20,16 @@ for (const type of ['pattern', 'free', 'sketchProjection']) {
       const source = await page.evaluate(() => window.__jot2dTest.worldClientPositionForTest({ x: 60, y: 40 }));
       await page.mouse.click(source.x, source.y);
     } else {
-      await page.evaluate(() => window.__jot2dTest.selectGeometryIdsForTest({ hatches: ['H1'] }));
-      await page.click(type === 'pattern' ? '#toolPattern' : '#toolFreeInstance');
-      if (type === 'pattern') await page.mouse.click(fixture.boundaryClient.x, fixture.boundaryClient.y);
-      else {
-        await page.mouse.click(fixture.client.x, fixture.client.y);
-        await page.locator('#commandPanel [role="listbox"][data-input="destination"]').click();
-        const destination = await page.evaluate(() => window.__jot2dTest.worldClientPositionForTest({ x: 80, y: 40 }));
-        await page.mouse.click(destination.x, destination.y);
-      }
+      await page.evaluate(type => {
+        const data = window.__jot2dTest.hatchStateForTest().serialized; data.version = 25;
+        data.geometryInstances = [{ id: 'I1', type, sketchId: data.activeSketchId, sources: [{ kind: 'hatch', path: ['H1'] }], appearanceOverride: {},
+          ...(type === 'pattern' ? { direction: { kind: 'line', path: ['L1'] }, spacing: 10, copies: 2, reversed: false }
+            : { x: 80, y: 40, origin: { x: 60, y: 40 }, rotation: 0, mirrorX: false, mirrorY: false }) }];
+        window.__jot2dTest.loadModelForDerivedInstanceTest(data);
+      }, type);
+
     }
-    await page.locator('#commandPanel [data-action="finish"]').click();
+    if (type === "sketchProjection") await page.locator('#commandPanel [data-action="finish"]').click();
     let state = await page.evaluate(() => window.__jot2dTest.hatchStateForTest());
     expect(state.serialized.geometryInstances[0].sources).toEqual([{ kind: 'hatch', path: ['H1'] }]);
     expect(state.projected).toHaveLength(type === 'pattern' ? 2 : 1);
@@ -64,11 +63,11 @@ test('hatch alone is a mirror source with persisted references and protected sou
   const fixture = await page.evaluate(() => window.__jot2dTest.resetForHatchTest());
   await page.click('#toolHatch'); await page.mouse.click(fixture.client.x, fixture.client.y);
   await page.locator('#commandPanel [data-action="finish"]').click(); await page.keyboard.press('Escape');
-  await page.evaluate(() => window.__jot2dTest.selectGeometryIdsForTest({ hatches: ['H1'] }));
-  await page.click('#toolMirror');
-  await expect(page.locator('#commandPanel')).toContainText('複写元: 1');
-  await page.mouse.click(fixture.boundaryClient.x, fixture.boundaryClient.y);
-  await page.locator('#commandPanel [data-action="finish"]').click();
+  await page.evaluate(() => {
+    const data = window.__jot2dTest.hatchStateForTest().serialized; data.version = 25;
+    data.geometryInstances = [{ id: 'MI1', type: 'mirror', sketchId: data.activeSketchId, sources: [{ kind: 'hatch', path: ['H1'] }], axis: { kind: 'line', path: ['L1'] }, appearanceOverride: {} }];
+    window.__jot2dTest.loadModelForDerivedInstanceTest(data);
+  });
   let state = await page.evaluate(() => window.__jot2dTest.hatchStateForTest());
   expect(state.serialized.geometryInstances[0].sources).toEqual([{ kind: 'hatch', path: ['H1'] }]);
   expect(state.projected).toHaveLength(1); expect(state.projected[0]).toMatchObject({ valid: true, seed: { x: 60, y: -40 } });
@@ -125,7 +124,7 @@ test("creates associative hatching, exposes Tree and Properties, and persists th
   expect(state.direct[0].appearance).toEqual({ visible: true, patternType: "solid", angle: 45, spacing: 3, color: "#64748b", lineWidth: 1, opacity: 0.5 });
   await expect(page.locator('#propertiesPanel [data-hatch-property="patternType"]')).toHaveValue("solid");
   await expect(page.locator('#propertiesPanel [data-hatch-property="opacity"]')).toHaveValue("50");
-  expect(state.serialized.version).toBe(25);
+  expect(state.serialized.version).toBe(26);
   expect(state.serialized.hatches).toHaveLength(1);
   expect(state.propertiesText).toContain("塗りつぶし");
   expect(state.propertiesText).toContain("境界状態");

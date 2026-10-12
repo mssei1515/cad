@@ -90,7 +90,7 @@
         for (const record of projectionRecords) idMap.set(record.id, record.path.flatMap(id => (idMap.get(id) || id).split('@')).join('@'));
       }
       if (payload.parameterNamespaceKey !== destinationNamespace && copiedInstances.some(source =>
-        [...source.sources, source.axis, source.direction].filter(Boolean).some(ref => !idMap.has(ref.path.join('@')) && !idMap.has(ref.path[0])))) {
+        window.SynchronizedInstance.dependencies(source).some(ref => !idMap.has(ref.path.join('@')) && !idMap.has(ref.path[0])))) {
         throw new Error(applicationText('別の名前空間へ派生インスタンスを貼り付けるには参照先も選択してください', 'Also select referenced geometry to paste derived instances into another namespace'));
       }
       const pastedGeometryInstances = copiedInstances.map(source => normalizeGeometryInstance(copiedGeometryInstance(source, idMap, targetSketchId, dx, dy)));

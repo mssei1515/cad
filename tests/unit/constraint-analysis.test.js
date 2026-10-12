@@ -2,9 +2,9 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const vm = require('node:vm');
 const test = require('node:test');
-const sandbox = { window: {} };
+const sandbox = { structuredClone, window: {} };
 vm.createContext(sandbox);
-for (const file of ['src/geometry/geometry_kernel.js', 'src/geometry/spline_geometry.js', 'src/solver/constraint_solver.js', 'src/constraints/constraint_analysis.js']) {
+for (const file of ['src/geometry/geometry_kernel.js', 'src/geometry/spline_geometry.js', 'src/solver/constraint_solver.js', 'src/geometry/synchronized_instance.js', 'src/constraints/constraint_analysis.js']) {
   vm.runInContext(fs.readFileSync(file, 'utf8'), sandbox);
 }
 const G = sandbox.window.GeometrySolver;
@@ -95,7 +95,7 @@ test('derived projection follows source status while sketchProjection bypasses a
 test('Free Instance classification restores perturbed variables, caches status and restores on sampling exceptions', () => {
   const { state, service, a } = fixture(), instance = { x: 0, y: 0 }, source = point('source');
   const line = new G.Line('L', point('p1'), point('p2', 10));
-  Object.assign(line, { derivedProjection: true, sourceElement: source, derivedInstance: { type: 'free' } });
+  Object.assign(line, { derivedProjection: true, sourceElement: source, derivedInstance: { type: 'free', placement: { kind: 'linear' } } });
   a.variables = [{ object: instance, prop: 'x' }, { object: instance, prop: 'y' }]; a.nullspaceBasis = [[1, 0]];
   let samples = 0;
   state.sample = () => { samples++; return [{ x: instance.x, y: instance.y }, { x: 10 + instance.x, y: instance.y }]; };

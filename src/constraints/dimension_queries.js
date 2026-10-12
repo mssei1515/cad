@@ -15,6 +15,7 @@
 
   function isDimensionConstraint(constraint) {
     return (
+      constraint instanceof window.GeometrySolver.InstanceAngleIntervalConstraint ||
       constraint instanceof DistanceConstraint ||
       constraint instanceof PointAxisDistanceConstraint ||
       constraint instanceof PointLineDistanceConstraint ||
@@ -42,6 +43,14 @@
       const source = c.sources[index];
       const offset = c.offsets[index];
       return { kind: "offset-distance", source, offset, value: c.target, sign: offsetPairSign(source, offset, c.side) };
+    }
+    if (c instanceof window.GeometrySolver.InstanceAngleIntervalConstraint) {
+      const center = c.point, instance = center.derivedInstance;
+      const angle = instance.rotation, step = instance.placement.angleStep;
+      const endpoint = value => ({ x: center.x + Math.cos(value), y: center.y + Math.sin(value) });
+      const line1 = new Line(`${instance.id}:intervalStart`, center, endpoint(angle));
+      const line2 = new Line(`${instance.id}:intervalEnd`, center, endpoint(angle - step));
+      return { kind: "angle", interval: true, intervalCenter: center, instance, line1, line2, value: c.target * 180 / Math.PI, signedValue: -step };
     }
     if (c instanceof LineAngleConstraint) return { kind: "angle", line1: c.line1, line2: c.line2, value: angleDegrees(c.target), signedValue: angleDimensionSweep({ line1: c.line1, line2: c.line2 }) };
     if (c instanceof RadiusConstraint) return { kind: "radius", primitive: c.primitive, value: c.target };
@@ -71,12 +80,14 @@
   function measuredDimensionValue(target, dimension = null) {
     if (!target) return NaN;
     if (target.kind === "angle") {
+      if (target.interval) return target.instance.placement.angleStep * 180 / Math.PI;
       return angleDegrees(angleDimensionAngles(target, null, dimension).signed);
     }
     return geometryTargetValue(target);
   }
 
   function angleDimensionAngles(target, anchor = null, dimension = null) {
+    if (target.interval) { const start = target.instance.rotation, signed = -target.instance.placement.angleStep; return { start, end: start + signed, signed, mid: start + signed / 2, startFlip: 0, endFlip: 0 }; }
     if (dimension && Number.isInteger(dimension.angleStartFlip) && Number.isInteger(dimension.angleEndFlip)) {
       const stored = angleDimensionCandidate(target, dimension.angleStartFlip, dimension.angleEndFlip);
       if (stored) return stored;
@@ -152,6 +163,7 @@
   }
 
   function targetItems(target) {
+    if (target.interval) return [target.intervalCenter];
     return target.kind === "point-point"
       ? [target.p1, target.p2]
       : target.kind === "point-line"

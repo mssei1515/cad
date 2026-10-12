@@ -6,7 +6,7 @@
     changeFreeInstanceProperty, commitDimensionPropertyEdit, commitAnnotationParameterEdit, updateUI, updatePropertiesUI, draw,
     applicationText, setHint, setPlacementRotationLocked, setPlacementSketchIds,
     setBlockInstanceRotationLocked, setBlockInstanceEnabledSketchIds, setBlockInstanceOrthogonalRotation,
-    annotationCommand, startInstanceSourceEdit, startReferenceImageCalibration, startHatchBoundaryRepair, startSplineEdit,
+    annotationCommand, startInstanceSourceEdit, startInstancePlacementEdit, startInstanceAngleDimension, startReferenceImageCalibration, startHatchBoundaryRepair, startSplineEdit,
     openAppearanceColorPalette, canEditStructure = () => true, activeSketchId = () => null }) {
     function sketchDefaultAppearanceContext(input, target = selectedPropertiesTarget()) {
       if (target.kind !== "sketch") return null;
@@ -182,6 +182,11 @@
       }
       if (action === "leader-size-default") return appearancePropertyCommand.apply(selectedPropertiesTarget(), { category: "leader", key: "fixedDisplaySize", value: "" });
       if (["instance-sources", "hatch-repair", "spline-edit"].includes(action) && !canEditStructure(selectedPropertiesTarget().item)) return false;
+      if (["instance-placement", "instance-anchor", "instance-angle-dimension"].includes(action)) {
+        const target = selectedPropertiesTarget(); if (target.readOnly || !canEditStructure(target.item)) return false;
+        if (action === "instance-angle-dimension") return startInstanceAngleDimension(target.item);
+        return startInstancePlacementEdit(target.item, action === "instance-anchor" ? "origin" : "destination");
+      }
       if (action === "instance-sources") return startInstanceSourceEdit(selectedPropertiesTarget().item);
       if (action === "reference-image-calibrate") {
         const target = selectedPropertiesTarget();

@@ -7,33 +7,6 @@
     blockDefinitionById, blockLocalGeometryBounds, blockInstanceEnabledSketchSet, blockWorldPoint,
     invalidateBlockProjectionCache, updateBlockUI, refreshConstraintAnalysis, updateUI, draw,
     snappedBlockRotation, solveSketchAndDependents, updatePropertiesUI }) {
-    function changeFreeInstanceProperty(instance, key, value) {
-      if (!["rotation", "mirrorX", "mirrorY"].includes(key)) return false;
-      if (key === "rotation" && (String(value).trim() === "" || !Number.isFinite(Number(value)))) return false;
-      const snapshot = snapshotModelState();
-      instance[key] = key === "rotation" ? Number(value) * Math.PI / 180 : Boolean(value);
-      if (isPlacing(instance)) return true;
-      // A property edit specifies the transform; solving must not silently undo it
-      // or deform the shared source to make an impossible placement succeed.
-      const sources = geometryInstanceSourceObjects(instance);
-      const variables = sketchSolveVariables(instance.sketchId).filter((v) => !sources.has(v.object) && v.object !== instance);
-      const result = solver.solveSubset({ variables, constraints: sketchSolveConstraints(instance.sketchId), lines: sketchSolveLines(instance.sketchId) });
-      if (!result.success || result.errorNorm > acceptError) {
-        restoreModelState(snapshot);
-        setHint(applicationText("拘束が成立しないため配置の変更を戻しました", "Placement change was restored because constraints could not be satisfied."), "error");
-        return false;
-      }
-      const stabilized = stabilizeActiveParameterNamespace(instance.sketchId, { variableAllowed: (v) => !sources.has(v.object) && v.object !== instance });
-      if (!stabilized.success || stabilized.dependent?.success === false) {
-        restoreModelState(snapshot);
-        clearSketchSolveState(instance.sketchId);
-        setHint(applicationText("拘束が成立しないため配置の変更を戻しました", "Placement change was restored because constraints could not be satisfied."), "error");
-        return false;
-      }
-      recordHistory("同期インスタンス設定変更");
-      return true;
-    }
-
     function setBlockInstanceRotationAroundDisplayCenter(instance, rotation) {
       const definition = blockDefinitionById(instance?.definitionId);
       if (!instance || !definition) return false;
@@ -120,7 +93,7 @@
       recordHistory("ブロック直交回転角度変更");
       return true;
     }
-    return Object.freeze({ changeFreeInstanceProperty, setBlockInstanceRotationLocked, setBlockInstanceOrthogonalRotation });
+    return Object.freeze({ setBlockInstanceRotationLocked, setBlockInstanceOrthogonalRotation });
   }
   window.InstanceTransformCommand = Object.freeze({ create });
 })();
