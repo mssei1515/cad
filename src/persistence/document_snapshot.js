@@ -16,9 +16,13 @@
       sources: instance.sources.map((ref) => ({ kind: ref.kind, path: [...ref.path] })),
       appearanceOverride: normalizeAppearance(instance.appearanceOverride),
     };
-    if (instance.placement) return { ...data, count: instance.count, anchor: structuredClone(instance.anchor), placement: structuredClone(instance.placement),
-      x: instance.x, y: instance.y, placementPointDefined: instance.placementPointDefined, rotation: instance.rotation, reflected: instance.reflected, rotationLocked: instance.rotationLocked, occurrences: [...instance.occurrences],
+    if (instance.placement) {
+      const placement = structuredClone(instance.placement);
+      if (placement.kind === "circular") delete placement.angleMode;
+      return { ...data, count: instance.count, anchor: structuredClone(instance.anchor), placement,
+      x: instance.x, y: instance.y, placementPointDefined: instance.placementPointDefined, rotation: instance.rotation, reflected: instance.reflected, ...(placement.kind !== "circular" ? { rotationLocked: instance.rotationLocked } : {}), occurrences: [...instance.occurrences],
       ...(instance.legacyOutput ? { legacyOutput: structuredClone(instance.legacyOutput) } : {}) };
+    }
     if (instance.legacyOutput) data.legacyOutput = { ...instance.legacyOutput, pointIds: [...(instance.legacyOutput.pointIds || [])] };
     return data;
   }

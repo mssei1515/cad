@@ -46,7 +46,7 @@ test('circular creation has no destination input and preserves signed angle inte
   await expect(page.locator('#commandPanel [data-input="destination"]')).toHaveCount(0);
   await page.locator('#commandPanel [data-setting="angleStep"]').fill('-90'); await page.locator('#commandPanel [data-setting="angleStep"]').press('Tab');
   await page.locator('#commandPanel [data-action="finish"]').click();
-  expect((await saved(page)).geometryInstances[0].placement).toMatchObject({ kind: 'circular', angleMode: 'numeric', angleSign: -1 });
+  expect((await saved(page)).geometryInstances[0].placement).toMatchObject({ kind: 'circular', angleSign: -1 });
   expect(errors).toEqual([]);
 });
 test('direct interval dimension switches control, edits signed values and round trips', async ({ page }) => {
@@ -58,7 +58,7 @@ test('direct interval dimension switches control, edits signed values and round 
   await page.locator('#dimensionValueInput').fill('-90'); await page.locator('#dimensionValueInput').press('Enter');
   let data = await saved(page);
   expect(errors).toEqual([]);
-  expect(data.geometryInstances[0].placement, await page.locator('#hint').textContent()).toMatchObject({ angleMode: 'constraint', angleSign: -1 });
+  expect(data.geometryInstances[0].placement, await page.locator('#hint').textContent()).toMatchObject({ angleSign: -1 });
   expect(data.constraints.find(c => c.type === 'instanceAngleInterval').target).toBeCloseTo(-Math.PI / 2);
   expect(await page.evaluate(d => window.__jot2dTest.loadDocumentFixtureForDragTest(d), data)).toMatchObject({ success: true });
   expect((await saved(page)).constraints.find(c => c.type === 'instanceAngleInterval').target).toBeCloseTo(-Math.PI / 2);
@@ -187,4 +187,21 @@ test('linear copies accumulate angle, preserve spacing, and round trip', async (
  const data=await saved(page); expect(await page.evaluate(d=>window.__jot2dTest.loadDocumentFixtureForDragTest(d),data)).toMatchObject({success:true});
  expect((await page.evaluate(()=>window.__jot2dTest.derivedInstanceStateForTest())).instances).toEqual(view.instances);
  expect(errors).toEqual([]);
+});
+
+test('circular controls omit locks and interval modes and preserve constrained interval on reload', async ({page}) => {
+ await setup(page); await page.click('#toolCircularPattern'); await click(page,{x:30,y:10});
+ for(const key of ['rotationLocked','angleMode']) {
+  await expect(page.locator('#commandPanel [data-setting="'+key+'"]')).toHaveCount(0);
+  await expect(page.locator('#propertiesPanel [data-pattern-property="'+key+'"]')).toHaveCount(0);
+ }
+ await page.locator('#commandPanel ul[data-input="origin"]').click(); await click(page,{x:20,y:10});
+ await page.locator('#commandPanel [data-action="finish"]').click();
+ await page.click('[data-property-action="instance-angle-dimension"]'); await click(page,{x:60,y:-10});
+ await page.locator('#dimensionValueInput').fill('60'); await page.locator('#dimensionValueInput').press('Enter');
+ const data=await saved(page), i=data.geometryInstances[0];
+ expect(i).not.toHaveProperty('rotationLocked'); expect(i.placement).not.toHaveProperty('angleMode');
+ expect(i.placement.angleStep).toBeCloseTo(Math.PI/3);
+ expect(await page.evaluate(d=>window.__jot2dTest.loadDocumentFixtureForDragTest(d),data)).toMatchObject({success:true});
+ expect((await saved(page)).geometryInstances).toEqual(data.geometryInstances);
 });

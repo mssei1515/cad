@@ -46,12 +46,11 @@
       }
     }
     function change(instance, key, value) {
-      if (key === "reflected") return false;
+      if (key === "reflected" || key === "angleMode" || key === "rotationLocked" && instance.placement.kind === "circular") return false;
       const candidate = structuredClone(instance);
       if (key === "rotationLocked") candidate[key] = Boolean(value);
       else if (key === "rotation") candidate.rotation = Number(value) * Math.PI / 180;
       else if (key === "count") { if (!Number.isInteger(Number(value)) || Number(value) < 2 || Number(value) > 1001) return false; window.PatternInstanceModel.resize(candidate, Number(value)); }
-      else if (key === "angleMode") candidate.placement.angleMode = value;
       else if (key === "angleStep") { candidate.placement.angleStep = Number(value) * Math.PI / 180; candidate.placement.angleSign = Math.sign(Number(value)); }
       else if (key === "spacing") candidate.placement.spacing = Number(value);
       else if (key === "reversed") candidate.placement.reversed = Boolean(value);
@@ -66,7 +65,7 @@
       const oldConstraints = scope.constraints.slice();
       const constraint = pending.constraint || new window.GeometrySolver.InstanceAngleIntervalConstraint(pending.target.intervalCenter, value * Math.PI / 180);
       try {
-        instance.placement.angleMode = "constraint"; instance.placement.angleSign = Math.sign(value); instance.placement.angleStep = value * Math.PI / 180;
+        instance.placement.angleSign = Math.sign(value); instance.placement.angleStep = value * Math.PI / 180;
         constraint.target = value * Math.PI / 180; constraint.expression = expression;
         constraint.dimension = pending.dimension || constraint.dimension; constraint.sketchId = instance.sketchId;
         if (!pending.constraint) scope.constraints.push(constraint);

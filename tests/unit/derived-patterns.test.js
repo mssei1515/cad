@@ -53,10 +53,10 @@ test('forward and inverse mapping preserve reflected rotated shapes for both pat
   }
 });
 test('obsolete synchronized format is rejected', () => { assert.throws(() => M.normalize({ type: 'free' }), /同期インスタンス/); });
-test('copy keys survive growth/shrink and numeric angle intervals are excluded from solve variables', () => {
+test('copy keys survive growth/shrink and circular angles are always solver variables', () => {
   const f = fixture(), i = f.instance; i.occurrences = ['']; M.resize(i, 4); assert.deepEqual([...i.occurrences], ['', '1', '2']); M.resize(i, 3); assert.deepEqual([...i.occurrences], ['', '1']);
   assert.deepEqual(Array.from(M.variables(i), v => v.prop).sort(), ['x', 'y']); i.rotationLocked = false; assert.ok(M.variables(i).some(v => v.prop === 'rotation'));
-  i.placement = { kind: 'circular', angleStep: -.5, angleMode: 'numeric', angleSign: -1 }; assert.equal(M.variables(i).length, 1);
+  i.placement = { kind: 'circular', angleStep: -.5, angleMode: 'numeric', angleSign: -1 }; assert.equal(M.variables(i).length, 2);
   i.placement.angleMode = 'constraint'; const v = M.variables(i).find(v => v.prop === 'angleStep'); assert.ok(v.max < 0); assert.ok(v.min > -2 * Math.PI);
 });
 test('midpoint constraints stay live and interval constraints use the shared scalar', () => {
@@ -101,11 +101,11 @@ test('failed unified property edits restore the complete model and record no his
   const f = editor(false), before = structuredClone(f.instance);
   assert.equal(f.editing.change(f.instance, 'rotation', '25'), false); assert.deepEqual(structuredClone(f.instance), before); assert.equal(f.histories(), 0); assert.equal(f.restored(), 1);
 });
-test('rotation lock and interval mode changes preserve configured angles', () => {
+test('linear lock edits preserve angles and obsolete circular mode edits are refused', () => {
   const f = editor(); f.instance.rotation = .4;
   assert.equal(f.editing.change(f.instance, 'rotationLocked', false), true); near(f.instance.rotation, .4);
   f.instance.type = 'circularPattern'; f.instance.placement = { kind: 'circular', angleStep: -.7, angleMode: 'numeric', angleSign: -1 };
-  assert.equal(f.editing.change(f.instance, 'angleMode', 'constraint'), true); near(f.instance.placement.angleStep, -.7);
+  assert.equal(f.editing.change(f.instance, 'angleMode', 'constraint'), false); near(f.instance.placement.angleStep, -.7);
 });
 
 test('linear occurrence angles accumulate while the placement vector stays constant', () => {
@@ -124,4 +124,28 @@ test('anchor descriptions retain nested canonical references and relation roles'
   i.anchor.relation = {kind:'lineEndpoint',target:ref('line','BI7@SPI5@L52'),endpoint:'end'};
   assert.equal(M.anchorLabel(i),'線の端点: BI7@SPI5@L52');
   i.anchor.relation.kind='lineMidpoint'; assert.equal(M.anchorLabel(i),'線の中点: BI7@SPI5@L52');
+});
+
+test('circular constraints solve posture and interval with fixed sources and no mode switches', () => {
+ const f=fixture(), i=M.createDraft({id:'PI9',type:'circularPattern',sketchId:'S1',sources:[ref('line','L1')]});
+ i.anchor.relation={kind:'point',target:ref('point','P1')}; f.p.fixed=f.q.fixed=true;
+ const scope={points:[f.p,f.q],lines:[f.line],circles:[],arcs:[],splines:[],geometryInstances:[i],constraints:[]};
+ const provider=ctx.window.InstanceProjection.create({elementSketchId:item=>item.sketchId,applicationText:ja=>ja});
+ const bundle=provider.geometryInstanceBundlesForScope(scope)[0];
+ scope.constraints=[new G.HorizontalConstraint(bundle.lines[0]),new G.InstanceAngleIntervalConstraint(bundle.controlPoints[0],Math.PI/3)];
+ const before={px:f.p.x,py:f.p.y,qx:f.q.x,qy:f.q.y};
+ const result=new G.ConstraintSolver(scope).solve(); assert.equal(result.success,true);
+ assert.ok(Math.abs(i.placement.angleStep-Math.PI/3)<1e-6);
+ assert.ok(Math.abs(i.rotation-i.placement.angleStep)<1e-6);
+ assert.deepEqual({px:f.p.x,py:f.p.y,qx:f.q.x,qy:f.q.y},before);
+ assert.equal('rotationLocked' in i,false); assert.equal('angleMode' in i.placement,false);
+});
+
+test('old circular switches are discarded without changing saved angles or references', () => {
+ const i=M.createDraft({id:'PI7',type:'circularPattern',sources:[ref('line','L1')]});
+ i.rotation=.4; i.rotationLocked=true; i.placement.angleMode='numeric'; i.placement.angleStep=.7;
+ const normalized=M.normalize(i);
+ assert.equal(normalized.rotation,.4); assert.equal(normalized.placement.angleStep,.7);
+ assert.deepEqual(normalized.sources,i.sources); assert.equal('rotationLocked' in normalized,false); assert.equal('angleMode' in normalized.placement,false);
+ assert.deepEqual(Array.from(M.variables(normalized),v=>v.prop),['rotation','angleStep']);
 });

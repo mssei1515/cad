@@ -7,7 +7,11 @@
   function normalize(raw) {
     if (raw.type === "free") throw new Error("同期インスタンスは未対応です");
     if (raw.type === "sketchProjection") return raw;
-    if (raw.placement) return clone(raw);
+    if (raw.placement) {
+      const result = clone(raw);
+      if (result.placement.kind === "circular") { delete result.rotationLocked; delete result.placement.angleMode; }
+      return result;
+    }
     const result = { ...clone(raw), type: raw.type === "mirror" ? "mirror" : "pattern", count: raw.type === "pattern" ? Number(raw.copies) + 1 : 2,
       anchor: { relation: null, fallbackPosition: { x: 0, y: 0 } },
       x: 0, y: 0, rotation: 0, placementPointDefined: false,
@@ -20,8 +24,10 @@
     return result;
   }
   function createDraft(raw) {
-    return { ...raw, type: raw.type || "pattern", count: 2, x: 0, y: 0, placementPointDefined: false, rotation: 0, reflected: false, rotationLocked: true,
-      anchor: { relation: null, fallbackPosition: { x: 0, y: 0 } }, placement: raw.type === "mirror" ? { kind: "axisReflection", axis: null } : raw.type === "circularPattern" ? { kind: "circular", angleStep: Math.PI / 6, angleMode: "numeric", angleSign: 1 } : { kind: "linear" }, occurrences: ["1"] };
+    const draft = { ...raw, type: raw.type || "pattern", count: 2, x: 0, y: 0, placementPointDefined: false, rotation: 0, reflected: false, rotationLocked: true,
+      anchor: { relation: null, fallbackPosition: { x: 0, y: 0 } }, placement: raw.type === "mirror" ? { kind: "axisReflection", axis: null } : raw.type === "circularPattern" ? { kind: "circular", angleStep: Math.PI / 6, angleSign: 1 } : { kind: "linear" }, occurrences: ["1"] };
+    if (draft.placement.kind === "circular") delete draft.rotationLocked;
+    return draft;
   }
   function resize(instance, count) {
     instance.count = count;
@@ -79,10 +85,10 @@
   function variables(instance) {
     if (!placed(instance)) return [];
     const props = instance.placement.kind === "linear" ? ["x", "y"] : [];
-    if (!instance.rotationLocked) props.push("rotation");
+    if (instance.placement.kind === "circular" || !instance.rotationLocked) props.push("rotation");
     const result = props.map(prop => ({ object: instance, prop, label: `${instance.id}.${prop}` }));
     const p = instance.placement;
-    if (p.kind === "circular" && p.angleMode === "constraint") {
+    if (p.kind === "circular") {
       const sign = p.angleSign || Math.sign(p.angleStep);
       result.push({ object: p, prop: "angleStep", label: `${instance.id}.angleStep`,
         min: sign > 0 ? 1e-9 : -Math.PI * 2 + 1e-9, max: sign > 0 ? Math.PI * 2 - 1e-9 : -1e-9 });
@@ -93,7 +99,7 @@
     if (instance.type === "sketchProjection") return "";
     if (instance.type !== (instance.placement?.kind === "axisReflection" ? "mirror" : instance.placement?.kind === "circular" ? "circularPattern" : "pattern")) return "種類と配置方式が一致しません";
     if (!Number.isInteger(instance.count) || instance.count < 2 || instance.count > 1001) return "個数は2〜1001です";
-    if (![instance.x, instance.y, instance.rotation].every(Number.isFinite) || typeof instance.placementPointDefined !== "boolean" || typeof instance.reflected !== "boolean" || typeof instance.rotationLocked !== "boolean") return "配置設定が不正です";
+    if (![instance.x, instance.y, instance.rotation].every(Number.isFinite) || typeof instance.placementPointDefined !== "boolean" || typeof instance.reflected !== "boolean" || (instance.placement?.kind !== "circular" && typeof instance.rotationLocked !== "boolean")) return "配置設定が不正です";
     if (!Array.isArray(instance.occurrences) || instance.occurrences.length !== instance.count - 1 || instance.occurrences.some(key => typeof key !== "string") || new Set(instance.occurrences).size !== instance.occurrences.length) return "コピーの識別情報が不正です";
     const a = instance.anchor;
     if (!a || ![a.fallbackPosition?.x, a.fallbackPosition?.y].every(Number.isFinite)) return "基準点が不正です";
@@ -104,7 +110,7 @@
     if (!["linear", "circular", "axisReflection", "directionLinear"].includes(p?.kind)) return "配置方式が不正です";
     if (p.kind === "axisReflection" && (instance.count !== 2 || p.axis?.kind !== "line")) return "対称軸が不正です";
     if (p.kind === "directionLinear" && (p.direction?.kind !== "line" || !Number.isFinite(p.spacing) || p.spacing <= 0 || typeof p.reversed !== "boolean")) return "方向線の配置設定が不正です";
-    if (p.kind === "circular" && (!Number.isFinite(p.angleStep) || p.angleStep === 0 || Math.abs(p.angleStep) >= Math.PI * 2 || !["numeric", "constraint"].includes(p.angleMode) || ![-1, 1].includes(p.angleSign) || Math.sign(p.angleStep) !== p.angleSign)) return "角度間隔が不正です";
+    if (p.kind === "circular" && (!Number.isFinite(p.angleStep) || p.angleStep === 0 || Math.abs(p.angleStep) >= Math.PI * 2 || ![-1, 1].includes(p.angleSign) || Math.sign(p.angleStep) !== p.angleSign)) return "角度間隔が不正です";
     if (resolve && a.relation) {
       const point = anchorPoint(instance, resolve);
       if (!sourceContains(instance, a.relation.target, resolve) || !point || ![point.x, point.y].every(Number.isFinite)) return "基準点はコピー対象から指定してください";

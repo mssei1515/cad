@@ -50,14 +50,14 @@
             { key: "rotationLocked", label: t("回転ロック", "Rotation lock"), value: pending.rotationLocked, type: "checkbox" },
           ];
           if (!["linear", "circular"].includes(kind)) state.settings = state.settings.filter(setting => !["rotation", "rotationLocked"].includes(setting.key));
+          if (kind === "circular") state.settings = state.settings.filter(setting => setting.key !== "rotationLocked");
           if (kind === "axisReflection") state.settings = state.settings.filter(setting => !["count", "placement"].includes(setting.key));
           if (kind === "linear") {
             const a = geometryCommand.origin;
             for (const axis of ["X", "Y"]) state.settings.push({ key: "offset" + axis, label: t("相対" + axis + " (mm)", "Relative " + axis + " (mm)"), value: geometryCommand.destination && a ? pending[axis.toLowerCase()] - a[axis.toLowerCase()] : "", step: "any" });
           }
           if (kind === "circular") state.settings.push(
-            { key: "angleStep", label: t("角度間隔 (°)", "Angle interval (°)"), value: formatDisplayNumber(pending.placement.angleStep * 180 / Math.PI), step: "any" },
-            { key: "angleMode", label: t("角度間隔の制御", "Interval control"), type: "select", value: pending.placement.angleMode, options: [{ value: "numeric", label: t("数値指定", "Numeric") }, { value: "constraint", label: t("拘束で制御", "Constraints") }] });
+            { key: "angleStep", label: t("角度間隔 (°)", "Angle interval (°)"), value: formatDisplayNumber(pending.placement.angleStep * 180 / Math.PI), step: "any" });
           if (kind === "directionLinear") state.settings.push({ key: "spacing", label: t("間隔 (mm)", "Spacing (mm)"), value: pending.placement.spacing, step: "any" }, { key: "reversed", label: t("方向反転", "Reverse direction"), type: "checkbox", value: pending.placement.reversed });
           state.step = input === "sources" ? t("コピー対象を選択してください", "Select sources") : input === "origin" ? t("コピー対象の点・端点・線の中点を指定してください", "Pick a source point, endpoint or midpoint") : t("配置点または参照線を指定してください", "Pick the placement point or reference line");
         }
