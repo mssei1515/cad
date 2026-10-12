@@ -154,6 +154,7 @@
 
 
     return Object.freeze({
+      isBlank: isBlankCanvasHit,
       isRepeated: isRepeatedBlankDoubleClick, handle: handleBlankCanvasDoubleClick,
       resetCandidate: () => { blankDoubleClickCandidate = null; },
       suppressNext: () => { suppressNextBlankDoubleClickEvent = true; },

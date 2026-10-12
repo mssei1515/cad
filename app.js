@@ -4429,16 +4429,44 @@
     return mode === "instance-sources" || mode === "line" || mode === "centerline" || mode === "circle-center-cross" || mode === "point" || mode === "rectangle" || mode === "slot" || mode === "fillet" || mode === "trim" || mode === "offset" || mode === "circle" || mode === "arc" || mode === "three-point-arc" || mode === "spline" || mode === "sketch-projection" || mode === "hatch" || mode === "hatch-repair";
   }
 
+  function isBlankCommandPanelPoint(point) {
+    const hits = canvasPressQuery.read(point);
+    if (!blankCanvasGesture.isBlank({ ...hits, annotationHit: hits.blankAnnotationHit })) return false;
+    if ((mode === "sketch-projection" || mode === "instance-sources" && instanceSourceCommand.instance?.type === "sketchProjection")
+      && hitReferenceTarget(point.x, point.y)) return false;
+    if (["hatch", "hatch-repair"].includes(mode)
+      && hatchGeometryQuery.hatchFaceAt(point, { includeConstruction: hatchCommand.includeConstruction }).ok) return false;
+    return true;
+  }
   const canvasInputBinding = window.CanvasInputBinding.create({
     canvas, pointer: {
       ...pointerInteractionController,
-      down: e => pngExportCommand?.active && e.button === 0 ? pngExportCommand.pick(screenToWorld({ x: e.offsetX, y: e.offsetY })) : pointerInteractionController.down(e),
+      down: e => {
+        if (e.button === 0 && commandPanel?.active) {
+          if (commandPanel.canvasPress(canvasScreenPoint(e), isBlankCommandPanelPoint(canvasPoint(e)))) {
+            blankCanvasGesture.suppressNext();
+            e.preventDefault();
+            return;
+          }
+        }
+        if (pngExportCommand?.active && e.button === 0) pngExportCommand.pick(screenToWorld({ x: e.offsetX, y: e.offsetY }));
+        else pointerInteractionController.down(e);
+      },
       move: (screen, world, shift) => {
+        commandPanel?.canvasMove(screen);
         if (pngExportCommand?.active) { if (!canvasNavigation.movePan(screen)) pngExportCommand.move(world); }
         else pointerInteractionController.move(screen, world, shift);
       },
       finish: e => { if (!pngExportCommand?.active || e.button !== 0) pointerInteractionController.finish(e); },
-      doubleClick: e => { if (!pngExportCommand?.active) pointerInteractionController.doubleClick(e); },
+      doubleClick: e => {
+        if (blankCanvasGesture.takeSuppression()) { e.preventDefault(); return; }
+        if (commandPanel?.active) {
+          commandPanel.canvasDoubleClick(isBlankCommandPanelPoint(canvasPoint(e)));
+          e.preventDefault();
+          return;
+        }
+        if (!pngExportCommand?.active) pointerInteractionController.doubleClick(e);
+      },
     }, scheduler: pointerMoveScheduler, navigation: canvasNavigation,
     profileCommit: work => profileInteractionPhase("commit", work), closeContextMenu: closeCanvasContextMenu,
     afterZoom: () => { if (pendingCommandSession.current && ["distance-value", "offset-value"].includes(pendingCommandSession.current.type)) syncDimensionValueInput(); },

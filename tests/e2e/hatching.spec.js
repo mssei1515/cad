@@ -5,6 +5,20 @@ test.beforeEach(async ({ page }) => {
   await page.waitForFunction(() => Boolean(window.__jot2dTest));
 });
 
+test('blank double click discards selected fill regions', async ({ page }) => {
+  const f = await page.evaluate(() => window.__jot2dTest.resetForHatchTest({ constructionBoundary: true }));
+  const before = await page.evaluate(() => window.__jot2dTest.hatchStateForTest().serialized.hatches.length);
+  await page.click('#toolHatch');
+  await page.locator('#commandPanel [data-setting=includeConstruction]').check();
+  await page.mouse.click(f.client.x, f.client.y);
+  await expect(page.locator('#commandPanel [data-action=finish]')).toBeEnabled();
+  const box = await page.locator('#canvas').boundingBox();
+  const blank = { x: box.x + 25, y: box.y + box.height - 25 };
+  await page.mouse.dblclick(blank.x, blank.y);
+  await expect(page.locator('#commandPanel')).toBeHidden();
+  expect(await page.evaluate(() => window.__jot2dTest.hatchStateForTest().serialized.hatches.length)).toBe(before);
+});
+
 for (const type of ['pattern', 'circularPattern', 'sketchProjection']) {
   test(`hatch alone is a ${type} source with region and save/reload support`, async ({ page }) => {
     const fixture = await page.evaluate(() => window.__jot2dTest.resetForHatchTest());

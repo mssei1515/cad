@@ -57,3 +57,52 @@ test('annotation blank confirmation submits instead of cancelling and rejects oc
   }
   assert.equal(f.gesture.handle({}),true);assert.deepEqual(f.calls,['submitAnnotationValue']);
 });
+
+vm.runInContext(fs.readFileSync(path.resolve(__dirname, '../../src/ui/command_panel.js'), 'utf8'), sandbox);
+function panelFixture() {
+  const f = { time: 0, calls: [], state: { id: 'annotation', actions: [{ id: 'cancel' }] } };
+  const element = { setAttribute() {}, addEventListener() {} };
+  f.panel = sandbox.window.CommandPanel.create({ document: { createElement: () => element }, host: { append() {} },
+    readState: () => f.state, getTime: () => f.time, onAction: action => { f.calls.push(action); f.state = null; } });
+  return f;
+}
+test('panel blank double click cancels before the second placement even when the first created an annotation', () => {
+  const f = panelFixture();
+  assert.equal(f.panel.canvasPress({ x: 10, y: 20 }, true), false);
+  f.time = 450;
+  assert.equal(f.panel.canvasPress({ x: 16, y: 20 }, false), true);
+  assert.deepEqual(f.calls, ['cancel']);
+  assert.equal(f.panel.active, false);
+});
+test('panel preserves single clicks, drags, occupied starts and command switches', () => {
+  for (const change of ['time', 'distance', 'occupied', 'command']) {
+    const f = panelFixture();
+    f.panel.canvasPress({ x: 0, y: 0 }, change !== 'occupied');
+    f.time = change === 'time' ? 451 : 100;
+    if (change === 'command') f.state.id = 'projection';
+    assert.equal(f.panel.canvasPress({ x: change === 'distance' ? 6.01 : 0, y: 0 }, true), false);
+    assert.deepEqual(f.calls, []);
+  }
+});
+test('panel native double click only cancels on blank canvas with an enabled cancel action', () => {
+  const f = panelFixture();
+  assert.equal(f.panel.canvasDoubleClick(false), false);
+  f.state.actions[0].disabled = true;
+  assert.equal(f.panel.canvasDoubleClick(true), false);
+  f.state.actions[0].disabled = false;
+  assert.equal(f.panel.canvasDoubleClick(true), true);
+  assert.deepEqual(f.calls, ['cancel']);
+});
+test('panel drag movement clears the blank click candidate even when the pointer returns', () => {
+  const f = panelFixture();
+  f.panel.canvasPress({ x: 0, y: 0 }, true);
+  f.panel.canvasMove({ x: 20, y: 20 });
+  f.time = 100;
+  assert.equal(f.panel.canvasPress({ x: 0, y: 0 }, true), false);
+  assert.deepEqual(f.calls, []);
+});
+test('annotation panel without a cancel button uses the same cancel callback as Escape', () => {
+  const f = panelFixture(); f.state.actions = [{ id: 'finish' }];
+  assert.equal(f.panel.canvasDoubleClick(true), true);
+  assert.deepEqual(f.calls, ['cancel']);
+});

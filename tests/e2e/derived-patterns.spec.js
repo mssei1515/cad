@@ -13,6 +13,19 @@ async function setup(page) {
 }
 async function click(page, point) { const p = await page.evaluate(p => window.__jot2dTest.worldClientPositionForTest(p), point); await page.mouse.click(p.x, p.y); }
 const saved = page => page.evaluate(() => window.__jot2dTest.derivedInstanceStateForTest().serialized);
+
+test('blank double click discards pattern placement draft and keeps its sources', async ({ page }) => {
+  await setup(page);
+  const before = await saved(page);
+  await page.click('#toolPattern'); await click(page, { x: 30, y: 10 });
+  await page.locator('#commandPanel ul[data-input="destination"]').click();
+  const box = await page.locator('#canvas').boundingBox();
+  await page.mouse.dblclick(box.x + 25, box.y + box.height - 25);
+  await expect(page.locator('#commandPanel')).toBeHidden();
+  const after = await saved(page);
+  expect(after.geometryInstances).toEqual(before.geometryInstances);
+  expect(after.lines).toEqual(before.lines);
+});
 test('unified linear creation, midpoint anchor, total count and round trip', async ({ page }) => {
   const errors = await setup(page);
   await page.click('#toolPattern'); await click(page, { x: 30, y: 10 });
