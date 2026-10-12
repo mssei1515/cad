@@ -46,11 +46,9 @@
           if (["axisReflection", "directionLinear"].includes(kind)) state.selections.push(inputRows("reference", kind === "axisReflection" ? t("対称軸", "Axis") : t("方向線", "Direction"), geometryCommand.reference ? [{ id: "reference", label: itemLabel(geometryCommand.reference) }] : [], input === "reference"));
           state.settings = [
             { key: "count", label: t("個数（元を含む）", "Count (including source)"), value: pending.count, min: 2, max: 1001, step: 1 },
-            { key: "rotation", label: t("配置角度 (°)", "Placement angle (°)"), value: formatDisplayNumber(pending.rotation * 180 / Math.PI), step: "any" },
-            { key: "rotationLocked", label: t("回転ロック", "Rotation lock"), value: pending.rotationLocked, type: "checkbox" },
+            ...(kind === "linear" ? [{ key: "rotation", label: t("配置角度 (°)", "Placement angle (°)"), value: formatDisplayNumber(pending.rotation * 180 / Math.PI), step: "any" },
+            { key: "rotationLocked", label: t("回転ロック", "Rotation lock"), value: pending.rotationLocked, type: "checkbox" }] : []),
           ];
-          if (!["linear", "circular"].includes(kind)) state.settings = state.settings.filter(setting => !["rotation", "rotationLocked"].includes(setting.key));
-          if (kind === "circular") state.settings = state.settings.filter(setting => setting.key !== "rotationLocked");
           if (kind === "axisReflection") state.settings = state.settings.filter(setting => !["count", "placement"].includes(setting.key));
           if (kind === "linear") {
             const a = geometryCommand.origin;

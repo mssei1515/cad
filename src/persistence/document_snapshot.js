@@ -20,7 +20,7 @@
       const placement = structuredClone(instance.placement);
       if (placement.kind === "circular") delete placement.angleMode;
       return { ...data, count: instance.count, anchor: structuredClone(instance.anchor), placement,
-      x: instance.x, y: instance.y, placementPointDefined: instance.placementPointDefined, rotation: instance.rotation, reflected: instance.reflected, ...(placement.kind !== "circular" ? { rotationLocked: instance.rotationLocked } : {}), occurrences: [...instance.occurrences],
+      x: instance.x, y: instance.y, placementPointDefined: instance.placementPointDefined, reflected: instance.reflected, ...(placement.kind !== "circular" ? { rotation: instance.rotation, rotationLocked: instance.rotationLocked } : {}), occurrences: [...instance.occurrences],
       ...(instance.legacyOutput ? { legacyOutput: structuredClone(instance.legacyOutput) } : {}) };
     }
     if (instance.legacyOutput) data.legacyOutput = { ...instance.legacyOutput, pointIds: [...(instance.legacyOutput.pointIds || [])] };

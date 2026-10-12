@@ -191,7 +191,7 @@ test('linear copies accumulate angle, preserve spacing, and round trip', async (
 
 test('circular controls omit locks and interval modes and preserve constrained interval on reload', async ({page}) => {
  await setup(page); await page.click('#toolCircularPattern'); await click(page,{x:30,y:10});
- for(const key of ['rotationLocked','angleMode']) {
+ for(const key of ['rotation','rotationLocked','angleMode']) {
   await expect(page.locator('#commandPanel [data-setting="'+key+'"]')).toHaveCount(0);
   await expect(page.locator('#propertiesPanel [data-pattern-property="'+key+'"]')).toHaveCount(0);
  }
@@ -200,8 +200,23 @@ test('circular controls omit locks and interval modes and preserve constrained i
  await page.click('[data-property-action="instance-angle-dimension"]'); await click(page,{x:60,y:-10});
  await page.locator('#dimensionValueInput').fill('60'); await page.locator('#dimensionValueInput').press('Enter');
  const data=await saved(page), i=data.geometryInstances[0];
- expect(i).not.toHaveProperty('rotationLocked'); expect(i.placement).not.toHaveProperty('angleMode');
+ expect(i).not.toHaveProperty('rotation'); expect(i).not.toHaveProperty('rotationLocked'); expect(i.placement).not.toHaveProperty('angleMode');
  expect(i.placement.angleStep).toBeCloseTo(Math.PI/3);
  expect(await page.evaluate(d=>window.__jot2dTest.loadDocumentFixtureForDragTest(d),data)).toMatchObject({success:true});
  expect((await saved(page)).geometryInstances).toEqual(data.geometryInstances);
+});
+
+test('old circular posture is ignored and copies use only occurrence times interval after reload', async ({page}) => {
+ await setup(page); await page.click('#toolCircularPattern'); await click(page,{x:30,y:10});
+ await page.locator('#commandPanel ul[data-input="origin"]').click(); await click(page,{x:20,y:10});
+ await page.locator('#commandPanel [data-setting="count"]').fill('4'); await page.locator('#commandPanel [data-setting="count"]').press('Tab');
+ await page.locator('#commandPanel [data-action="finish"]').click();
+ const data=await saved(page); data.geometryInstances[0].rotation=.7;
+ expect(await page.evaluate(d=>window.__jot2dTest.loadDocumentFixtureForDragTest(d),data)).toMatchObject({success:true});
+ const view=await page.evaluate(()=>window.__jot2dTest.derivedInstanceStateForTest());
+ for(const [n,line] of view.instances[0].lines.entries()) {
+   expect(Math.atan2(line.p2.y-line.p1.y,line.p2.x-line.p1.x)).toBeCloseTo(-(n+1)*Math.PI/6,7);
+   expect(line.p1.x).toBeCloseTo(20,7); expect(line.p1.y).toBeCloseTo(10,7);
+ }
+ expect((await saved(page)).geometryInstances[0]).not.toHaveProperty('rotation');
 });

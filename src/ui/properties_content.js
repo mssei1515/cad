@@ -15,7 +15,7 @@
         + (p.kind === "linear" && !info.placing ? propertyReadonlyRow("X座標", "X coordinate", formatDisplayNumber(item.x)) + propertyReadonlyRow("Y座標", "Y coordinate", formatDisplayNumber(item.y)) : "")
         + (["linear", "circular"].includes(p.kind) ? propertyReadonlyRow("配置基準点", "Source anchor", item.anchor.relation ? window.PatternInstanceModel.anchorLabel(item, applicationText) : info.placing ? "未指定" : "固定座標") : "")
         + (p.kind !== "axisReflection" ? field("count", "個数（元を含む）", item.count) : "")
-        + (["linear", "circular"].includes(p.kind) ? field("rotation", "配置角度 (°)", formatDisplayNumber(item.rotation * 180 / Math.PI)) + (p.kind === "linear" ? field("rotationLocked", "回転ロック", item.rotationLocked, "checkbox") : "") : "")
+        + (p.kind === "linear" ? field("rotation", "配置角度 (°)", formatDisplayNumber(item.rotation * 180 / Math.PI)) + (p.kind === "linear" ? field("rotationLocked", "回転ロック", item.rotationLocked, "checkbox") : "") : "")
         + (p.kind === "circular" ? field("angleStep", "角度間隔 (°)", formatDisplayNumber(p.angleStep * 180 / Math.PI)) + `${!info.placing ? '<button data-property-action="instance-angle-dimension">角度間隔寸法を追加</button>' : ""}` : "")
         + (p.kind === "directionLinear" ? field("spacing", "間隔 (mm)", p.spacing) + field("reversed", "方向反転", p.reversed, "checkbox") : "")
         + (!info.placing ? `<button data-property-action="instance-placement">配置設定を編集</button>` + (["linear", "circular"].includes(p.kind) ? `<button data-property-action="instance-anchor">配置基準点を変更</button>` : "") : "");

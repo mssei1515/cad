@@ -46,7 +46,7 @@
       }
     }
     function change(instance, key, value) {
-      if (key === "reflected" || key === "angleMode" || key === "rotationLocked" && instance.placement.kind === "circular") return false;
+      if (key === "reflected" || key === "angleMode" || ["rotation", "rotationLocked"].includes(key) && instance.placement.kind === "circular") return false;
       const candidate = structuredClone(instance);
       if (key === "rotationLocked") candidate[key] = Boolean(value);
       else if (key === "rotation") candidate.rotation = Number(value) * Math.PI / 180;
@@ -70,7 +70,7 @@
         constraint.dimension = pending.dimension || constraint.dimension; constraint.sketchId = instance.sketchId;
         if (!pending.constraint) scope.constraints.push(constraint);
         const sources = d.geometryInstanceSourceObjects(instance);
-        const solved = d.stabilize(instance.sketchId, { variableAllowed: v => !sources.has(v.object) && !(v.object === instance && v.prop === "rotation") });
+        const solved = d.stabilize(instance.sketchId, { variableAllowed: v => !sources.has(v.object) });
         if (!solved.success || solved.dependent?.success === false || solved.result.errorNorm > d.acceptError) throw new Error("角度間隔の拘束が成立しません");
         d.recordHistory("角度間隔寸法設定"); return true;
       } catch (error) { scope.constraints = oldConstraints; d.restoreModelState(snapshot); d.setHint(error.message, "error"); return false; }

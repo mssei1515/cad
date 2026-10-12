@@ -9,7 +9,7 @@
     if (raw.type === "sketchProjection") return raw;
     if (raw.placement) {
       const result = clone(raw);
-      if (result.placement.kind === "circular") { delete result.rotationLocked; delete result.placement.angleMode; }
+      if (result.placement.kind === "circular") { delete result.rotation; delete result.rotationLocked; delete result.placement.angleMode; }
       return result;
     }
     const result = { ...clone(raw), type: raw.type === "mirror" ? "mirror" : "pattern", count: raw.type === "pattern" ? Number(raw.copies) + 1 : 2,
@@ -26,7 +26,7 @@
   function createDraft(raw) {
     const draft = { ...raw, type: raw.type || "pattern", count: 2, x: 0, y: 0, placementPointDefined: false, rotation: 0, reflected: false, rotationLocked: true,
       anchor: { relation: null, fallbackPosition: { x: 0, y: 0 } }, placement: raw.type === "mirror" ? { kind: "axisReflection", axis: null } : raw.type === "circularPattern" ? { kind: "circular", angleStep: Math.PI / 6, angleSign: 1 } : { kind: "linear" }, occurrences: ["1"] };
-    if (draft.placement.kind === "circular") delete draft.rotationLocked;
+    if (draft.placement.kind === "circular") { delete draft.rotation; delete draft.rotationLocked; }
     return draft;
   }
   function resize(instance, count) {
@@ -85,7 +85,7 @@
   function variables(instance) {
     if (!placed(instance)) return [];
     const props = instance.placement.kind === "linear" ? ["x", "y"] : [];
-    if (instance.placement.kind === "circular" || !instance.rotationLocked) props.push("rotation");
+    if (instance.placement.kind === "linear" && !instance.rotationLocked) props.push("rotation");
     const result = props.map(prop => ({ object: instance, prop, label: `${instance.id}.${prop}` }));
     const p = instance.placement;
     if (p.kind === "circular") {
@@ -99,7 +99,7 @@
     if (instance.type === "sketchProjection") return "";
     if (instance.type !== (instance.placement?.kind === "axisReflection" ? "mirror" : instance.placement?.kind === "circular" ? "circularPattern" : "pattern")) return "種類と配置方式が一致しません";
     if (!Number.isInteger(instance.count) || instance.count < 2 || instance.count > 1001) return "個数は2〜1001です";
-    if (![instance.x, instance.y, instance.rotation].every(Number.isFinite) || typeof instance.placementPointDefined !== "boolean" || typeof instance.reflected !== "boolean" || (instance.placement?.kind !== "circular" && typeof instance.rotationLocked !== "boolean")) return "配置設定が不正です";
+    if (![instance.x, instance.y, ...(instance.placement?.kind === "circular" ? [] : [instance.rotation])].every(Number.isFinite) || typeof instance.placementPointDefined !== "boolean" || typeof instance.reflected !== "boolean" || (instance.placement?.kind !== "circular" && typeof instance.rotationLocked !== "boolean")) return "配置設定が不正です";
     if (!Array.isArray(instance.occurrences) || instance.occurrences.length !== instance.count - 1 || instance.occurrences.some(key => typeof key !== "string") || new Set(instance.occurrences).size !== instance.occurrences.length) return "コピーの識別情報が不正です";
     const a = instance.anchor;
     if (!a || ![a.fallbackPosition?.x, a.fallbackPosition?.y].every(Number.isFinite)) return "基準点が不正です";
@@ -124,7 +124,7 @@
       const line = resolve(p.direction), scale = (inverse ? -1 : 1) * (p.reversed ? -1 : 1) * p.spacing * index / line.length();
       return { x: point.x + line.dx() * scale, y: point.y + line.dy() * scale };
     }
-    const a = anchorPoint(instance, resolve), angle = (p.kind === "linear" ? index : 1) * instance.rotation - (p.kind === "circular" ? index * p.angleStep : 0);
+    const a = anchorPoint(instance, resolve), angle = p.kind === "circular" ? -index * p.angleStep : index * instance.rotation;
     const b = p.kind === "circular" ? a : { x: a.x + index * (instance.x - a.x), y: a.y + index * (instance.y - a.y) };
     const c = Math.cos(angle), s = Math.sin(angle), sign = instance.reflected ? -1 : 1;
     if (inverse) { const x = point.x - b.x, y = point.y - b.y; return { x: a.x + sign * (c * x + s * y), y: a.y - s * x + c * y }; }
