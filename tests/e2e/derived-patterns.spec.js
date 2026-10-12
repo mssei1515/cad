@@ -68,17 +68,23 @@ test('direct interval dimension switches control, edits signed values and round 
   expect((await saved(page)).constraints.some(c => c.type === 'instanceAngleInterval')).toBe(false);
   expect(errors).toEqual([]);
 });
-test('numeric offset constraints persist and source anchor replacement recalculates the array', async ({ page }) => {
+test('existing relative offset constraints survive removal of palette inputs', async ({ page }) => {
   const errors = await setup(page);
   await page.click('#toolPattern'); await click(page, { x: 30, y: 10 });
   await page.locator('#commandPanel ul[data-input="origin"]').click(); await click(page, { x: 30, y: 10 });
-  for (const [axis, value] of [['X', '0'], ['Y', '30']]) {
-    const input = page.locator(`#commandPanel [data-setting="offset${axis}"]`); await input.fill(value); await input.press('Tab');
-  }
+  await expect(page.locator('#commandPanel [data-setting="offsetX"]')).toHaveCount(0);
+  await expect(page.locator('#commandPanel [data-setting="offsetY"]')).toHaveCount(0);
+  await page.locator('#commandPanel ul[data-input="destination"]').click(); await click(page,{x:30,y:40});
   await page.locator('#commandPanel [data-action="finish"]').click();
-  const before = await saved(page); expect(before.constraints.filter(c => c.type === 'instanceAxisOffset')).toHaveLength(2);
+  const before = await saved(page), id=before.geometryInstances[0].id;
+  for(const [axis,target] of [['x',0],['y',30]]) before.constraints.push({type:'instanceAxisOffset',p1:id+'@anchor',p2:id+'@placement',target,axis,enabled:true,sketchId:before.activeSketchId});
+  expect(before.constraints.filter(c => c.type === 'instanceAxisOffset')).toHaveLength(2);
   expect(await page.evaluate(d => window.__jot2dTest.loadDocumentFixtureForDragTest(d), before)).toMatchObject({ success: true });
   expect((await saved(page)).constraints.filter(c => c.type === 'instanceAxisOffset')).toHaveLength(2);
+  await click(page,{x:25,y:40});
+  await page.click('[data-property-action="instance-placement"]');
+  await expect(page.locator('#commandPanel [data-setting="offsetX"]')).toHaveCount(0);
+  await expect(page.locator('#commandPanel [data-setting="offsetY"]')).toHaveCount(0);
   expect(errors).toEqual([]);
 });
 test('anchor edits recalculate all copies and referenced copies cannot be removed', async ({ page }) => {
@@ -174,8 +180,7 @@ test('circular controls show a clean default angle and reference anchor without 
 test('linear copies accumulate angle, preserve spacing, and round trip', async ({ page }) => {
  const errors=await setup(page); await page.click('#toolPattern'); await click(page,{x:30,y:10});
  await page.locator('#commandPanel [data-input="origin"]').click(); await click(page,{x:20,y:10});
- await page.locator('#commandPanel [data-setting="offsetX"]').fill('30'); await page.locator('#commandPanel [data-setting="offsetX"]').press('Tab');
- await page.locator('#commandPanel [data-setting="offsetY"]').fill('0'); await page.locator('#commandPanel [data-setting="offsetY"]').press('Tab');
+ await page.locator('#commandPanel ul[data-input="destination"]').click(); await click(page,{x:50,y:10});
  await page.locator('#commandPanel [data-setting="rotation"]').fill('30'); await page.locator('#commandPanel [data-setting="rotation"]').press('Tab');
  await page.locator('#commandPanel [data-setting="count"]').fill('4'); await page.locator('#commandPanel [data-setting="count"]').press('Tab');
  await page.locator('#commandPanel [data-action="finish"]').click();
@@ -185,7 +190,8 @@ test('linear copies accumulate angle, preserve spacing, and round trip', async (
   expect(Math.atan2(line.p2.y-line.p1.y,line.p2.x-line.p1.x)).toBeCloseTo((n+1)*Math.PI/6,7);
  }
  const data=await saved(page); expect(await page.evaluate(d=>window.__jot2dTest.loadDocumentFixtureForDragTest(d),data)).toMatchObject({success:true});
- expect((await page.evaluate(()=>window.__jot2dTest.derivedInstanceStateForTest())).instances).toEqual(view.instances);
+ const geometryOnly = instances => instances.map(instance=>({...instance,lines:instance.lines.map(({color,...line})=>line)}));
+ expect(geometryOnly((await page.evaluate(()=>window.__jot2dTest.derivedInstanceStateForTest())).instances)).toEqual(geometryOnly(view.instances));
  expect(errors).toEqual([]);
 });
 

@@ -255,8 +255,9 @@ test("projection and unified toolbar commands create grouped instances", async (
     await page.mouse.click(anchor.x, anchor.y);
     await page.locator('#commandPanel [data-setting="count"]').fill(String(count));
     await expect(page.locator('#commandPanel [data-setting="reflected"]')).toHaveCount(0);
-    await page.locator('#commandPanel [data-setting="offsetX"]').fill("12.5");
-    await page.locator('#commandPanel [data-setting="offsetY"]').fill("0");
+    await page.locator('#commandPanel ul[data-input="destination"]').click();
+    const destination = await page.evaluate(() => window.__jot2dTest.worldClientPositionForTest({ x: -42.5, y: 15 }));
+    await page.mouse.click(destination.x, destination.y);
     await page.locator('#commandPanel [data-action="finish"]').click();
   }
   state = await page.evaluate(() => window.__jot2dTest.derivedInstanceStateForTest());
