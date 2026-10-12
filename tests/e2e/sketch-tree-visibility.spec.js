@@ -27,7 +27,7 @@ async function fixture(page, category, locked = false) {
   else if (category === 'instance') {
     await page.evaluate(() => window.__jot2dTest.resetForGeometryInstanceCommandTest());
     const data = await state(page);
-    data.geometryInstances = [{ id: 'FI1', type: 'free', sketchId: 'S1', sources: [{ kind: 'line', path: [data.lines[0].id] }], origin: { x: 0, y: 0 }, x: 100, y: 100, rotation: 0, mirrorX: false, mirrorY: false, appearanceOverride: {} }];
+    data.geometryInstances = [{ id: 'FI1', type: 'pattern', count: 2, occurrences: [''], placementPointDefined: true, anchor: { relation: null, fallbackPosition: {x:0,y:0} }, placement: {kind:'linear'}, reflected: false, rotationLocked: false, sketchId: 'S1', sources: [{ kind: 'line', path: [data.lines[0].id] }], origin: { x: 0, y: 0 }, x: 100, y: 100, rotation: 0, mirrorX: false, mirrorY: false, appearanceOverride: {} }];
     await page.evaluate(data => window.__jot2dTest.loadDocumentFixtureForDragTest(data), data);
   } else await page.evaluate(() => window.__jot2dTest.resetForSidebarInspection());
   const data = await state(page);
@@ -96,7 +96,7 @@ test('hatch-only derived instance visibility uses the inherited source state', a
   await fixture(page, 'hatch');
   const data = await state(page);
   data.hatches[0].appearance.visible = false;
-  data.geometryInstances = [{ id: 'FI1', type: 'free', sketchId: 'S1', sources: [{ kind: 'hatch', path: [data.hatches[0].id] }], origin: { x: 0, y: 0 }, x: 100, y: 100, rotation: 0, mirrorX: false, mirrorY: false, appearanceOverride: {} }];
+  data.geometryInstances = [{ id: 'FI1', type: 'pattern', count: 2, occurrences: [''], placementPointDefined: true, anchor: { relation: null, fallbackPosition: {x:0,y:0} }, placement: {kind:'linear'}, reflected: false, rotationLocked: false, sketchId: 'S1', sources: [{ kind: 'hatch', path: [data.hatches[0].id] }], origin: { x: 0, y: 0 }, x: 100, y: 100, rotation: 0, mirrorX: false, mirrorY: false, appearanceOverride: {} }];
   expect(await page.evaluate(data => window.__jot2dTest.loadDocumentFixtureForDragTest(data), data)).toMatchObject({ success: true });
   await expand(page, 'instance');
   const eye = page.locator('.sketch-object-row[data-object-kind="instance"] .objectVisibilityBtn');

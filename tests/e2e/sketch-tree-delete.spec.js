@@ -17,7 +17,7 @@ async function fixture(page, category, locked = false) {
     await page.keyboard.press('Escape');
   } else await page.evaluate(() => window.__jot2dTest.resetForGeometryInstanceCommandTest());
   const data = await state(page);
-  if (category === 'instance') data.geometryInstances = [{ id: 'FI1', type: 'free', sketchId: 'S1', sources: [{ kind: 'line', path: [data.lines[0].id] }], origin: { x: 0, y: 0 }, x: 100, y: 100, rotation: 0, mirrorX: false, mirrorY: false, appearanceOverride: {} }];
+  if (category === 'instance') data.geometryInstances = [{ id: 'FI1', type: 'pattern', count: 2, occurrences: [''], placementPointDefined: true, anchor: { relation: null, fallbackPosition: {x:0,y:0} }, placement: {kind:'linear'}, reflected: false, rotationLocked: false, sketchId: 'S1', sources: [{ kind: 'line', path: [data.lines[0].id] }], origin: { x: 0, y: 0 }, x: 100, y: 100, rotation: 0, mirrorX: false, mirrorY: false, appearanceOverride: {} }];
   data.sketches.find(sketch => sketch.id === 'S1').locked = locked;
   if (!data.sketches.some(sketch => sketch.id === 'S2')) data.sketches.push({ id: 'S2', name: 'Other', kind: 'sketch', parentSketchId: 'ROOT' });
   data.activeSketchId = 'S2';
@@ -53,7 +53,7 @@ for (const [category, field, buttonClass] of [['block', 'blockInstances', 'remov
 test('tree hatch deletion retains the existing dependency guard', async ({ page }) => {
   await fixture(page, 'hatch');
   const data = await state(page);
-  data.geometryInstances = [{ id: 'FI1', type: 'free', sketchId: 'S1', sources: [{ kind: 'hatch', path: [data.hatches[0].id] }], origin: { x: 0, y: 0 }, x: 100, y: 100, rotation: 0, mirrorX: false, mirrorY: false, appearanceOverride: {} }];
+  data.geometryInstances = [{ id: 'FI1', type: 'pattern', count: 2, occurrences: [''], placementPointDefined: true, anchor: { relation: null, fallbackPosition: {x:0,y:0} }, placement: {kind:'linear'}, reflected: false, rotationLocked: false, sketchId: 'S1', sources: [{ kind: 'hatch', path: [data.hatches[0].id] }], origin: { x: 0, y: 0 }, x: 100, y: 100, rotation: 0, mirrorX: false, mirrorY: false, appearanceOverride: {} }];
   const result = await page.evaluate(data => window.__jot2dTest.loadDocumentFixtureForDragTest(data), data);
   expect(result.success, JSON.stringify(result)).toBe(true);
   await page.locator('.sketch-item[data-id="S1"] .sketchExpandBtn').click();

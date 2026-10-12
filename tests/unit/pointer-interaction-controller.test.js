@@ -24,7 +24,7 @@ function fixture() {
 }
 test('pan consumes input before last pointer and free-instance placement takes priority over dragging',()=>{
   const f=fixture();f.pan=true;f.annotation.active=true;f.move();assert.deepEqual(f.calls,['pan']);assert.equal(f.last,null);
-  f.pan=false;f.mode='free-instance-mirror';f.calls=[];f.move();assert.deepEqual(f.calls,['pan','last','free']);assert.equal(f.last,f.point);
+  f.pan=false;f.mode='pattern-placement-mirror';f.calls=[];f.move();assert.deepEqual(f.calls,['pan','last','free']);assert.equal(f.last,f.point);
 });
 test('hatch, rectangle, annotation, image and calibration preserve exclusive precedence',()=>{
   const f=fixture();f.mode='hatch-repair';f.rectangle.active=true;f.annotation.active=true;f.image.dragging=true;f.image.calibrating=true;

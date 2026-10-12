@@ -138,11 +138,11 @@
         instance.y += dy;
       }
       for (const instance of definition.geometryInstances || []) {
-        if (instance.type !== "free") continue;
+        if (!instance.placement) continue;
         instance.x += dx;
         instance.y += dy;
-        instance.origin.x += dx;
-        instance.origin.y += dy;
+        instance.anchor.fallbackPosition.x += dx;
+        instance.anchor.fallbackPosition.y += dy;
       }
       for (const annotation of definition.annotations || []) {
         annotation.x += dx;

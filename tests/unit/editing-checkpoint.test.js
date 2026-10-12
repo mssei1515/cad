@@ -3,16 +3,24 @@ const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
 const test = require('node:test');
-const sandbox = { window: {} }; vm.createContext(sandbox);
+const sandbox = { structuredClone, window: {} }; vm.createContext(sandbox);
 for (const file of ['src/geometry/geometry_kernel.js', 'src/geometry/spline_geometry.js', 'src/solver/constraint_solver.js', 'src/editing/geometry_ids.js', 'src/editing/checkpoint.js']) vm.runInContext(fs.readFileSync(path.resolve(__dirname, '../..', file), 'utf8'), sandbox, { filename: file });
 const { Point, Line, Circle, Arc, Spline, PointOnSplineConstraint } = sandbox.window.GeometrySolver;
 const plain = value => JSON.parse(JSON.stringify(value));
+test('circular rollback retains the placement object referenced by an active solver context', () => {
+  const { model, checkpoint } = fixture(), instance = model.geometryInstances[0];
+  instance.placement = { kind: 'circular', angleStep: .7, angleMode: 'constraint', angleSign: 1 };
+  const placement = instance.placement, snapshot = checkpoint.captureValues();
+  instance.placement = { kind: 'linear' }; placement.angleStep = 1.4;
+  checkpoint.restoreValues(snapshot);
+  assert.equal(instance.placement, placement); assert.equal(placement.angleStep, .7); assert.equal(placement.kind, 'circular');
+});
 function fixture() {
   const points = [new Point('P1', 0, 0), new Point('P2', 10, 0), new Point('P3', 10, 10)];
   const spline = new Spline('SP1', points.slice(), false, false);
   const constraint = new PointOnSplineConstraint(points[0], spline, 0.25);
   Object.assign(constraint, { target: 5, parameterName: 'd1', expression: 'width / 2', evaluatedParameterValue: 5 });
-  const model = { points, lines: [new Line('L1', points[0], points[1])], circles: [new Circle('C1', points[0], 5)], arcs: [new Arc('A1', points[1], 8, 0.2, 1.4)], splines: [spline], annotations: [{ id: 'AN1' }], blockInstances: [{ id: 'BI1', x: 4, y: 8, rotation: 0.4, fixed: true, rotationLocked: true }], geometryInstances: [{ id: 'FI1', type: 'free', x: 2, y: 3, rotation: 0.3, mirrorX: true, mirrorY: false }, { id: 'MI1', type: 'mirror', x: 90 }], constraints: [constraint], parameters: [{ name: 'width', expression: '10' }], nextDimensionParameterIndex: 2 };
+  const model = { points, lines: [new Line('L1', points[0], points[1])], circles: [new Circle('C1', points[0], 5)], arcs: [new Arc('A1', points[1], 8, 0.2, 1.4)], splines: [spline], annotations: [{ id: 'AN1' }], blockInstances: [{ id: 'BI1', x: 4, y: 8, rotation: 0.4, fixed: true, rotationLocked: true }], geometryInstances: [{ id: 'FI1', type: 'pattern', placement: { kind: 'linear' }, x: 2, y: 3, rotation: 0.3, mirrorX: true, mirrorY: false }, { id: 'MI1', type: 'mirror', x: 90 }], constraints: [constraint], parameters: [{ name: 'width', expression: '10' }], nextDimensionParameterIndex: 2 };
   const state = { model, events: [] }, ids = sandbox.window.GeometryIds.create(); ids.reserve(model);
   const checkpoint = sandbox.window.EditingCheckpoint.create({ currentScope: () => state.model, ids, invalidateProjection: () => { state.events.push(['projection', state.model.points[0].x, state.model.constraints.length]); }, invalidateAnalysis: () => { state.events.push(['analysis', state.model.constraints.length, state.model.nextDimensionParameterIndex]); } });
   return { state, model, ids, checkpoint, constraint, spline };
@@ -26,7 +34,7 @@ test('value checkpoints restore geometry and placement without replacing referen
   assert.equal(model.points[0], p); assert.deepEqual([p.x, p.y, p.fixed], [0, 0, false]); assert.equal(model.circles[0], circle); assert.equal(circle.radiusValue, 5);
   assert.equal(model.arcs[0], arc); assert.deepEqual([arc.radiusValue, arc.startAngle, arc.endAngle], [8, 0.2, 1.4]);
   assert.deepEqual(model.blockInstances[0], { id: 'BI1', x: 4, y: 8, rotation: 0.4, fixed: true, rotationLocked: true });
-  assert.deepEqual(model.geometryInstances[0], { id: 'FI1', type: 'free', x: 2, y: 3, rotation: 0.3, mirrorX: true, mirrorY: false });
+  assert.deepEqual(model.geometryInstances[0], { id: 'FI1', type: 'pattern', placement: { kind: 'linear' }, x: 2, y: 3, rotation: 0.3, mirrorX: true, mirrorY: false });
   assert.equal(model.geometryInstances[1].x, 100, 'derived-instance fields are outside this checkpoint');
 });
 test('value restoration restores constraint identity and parameters before analysis invalidation', () => {

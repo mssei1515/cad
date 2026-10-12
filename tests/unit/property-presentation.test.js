@@ -11,7 +11,7 @@ const empty = () => ({ lines: [], circles: [], arcs: [], splines: [], points: []
 
 test('instance presentation follows placement and source-edit state without changing stored sources', () => {
   const item = { id: 'I1', sketchId: 'S1', sources: [{ kind: 'line', id: 'L1' }] };
-  const operation = { freeInstancePlacement: item, mode: 'free-instance-place' }, selection = {};
+  const operation = { freeInstancePlacement: item, mode: 'pattern-placement-place' }, selection = {};
   let scope = { geometryInstances: [] }, bundleCalls = 0;
   const query = sandbox.window.PropertyPresentation.create({
     currentScope: () => scope, getOperation: () => operation, canvasSelection: selection,

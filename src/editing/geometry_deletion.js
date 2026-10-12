@@ -83,7 +83,7 @@
       const block = field === "blockInstances";
       const projectionItems = instances.flatMap(instance => {
         const bundle = block ? blockAllProjectionBundle(instance) : geometryInstanceBundle(instance);
-        return [...bundle.points, ...bundle.lines, ...bundle.circles, ...bundle.arcs, ...(block ? bundle.splines || [] : bundle.splines)];
+        return [...bundle.points, ...(bundle.controlPoints || []), ...bundle.lines, ...bundle.circles, ...bundle.arcs, ...(block ? bundle.splines || [] : bundle.splines)];
       });
       const removedIds = new Set(projectionItems.map(item => item.id));
       const keys = projectionItems.map(geometryElementKey);

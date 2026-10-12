@@ -2,8 +2,8 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const vm = require('node:vm');
-const sandbox = { window: {} }; vm.createContext(sandbox);
-for (const file of ['src/constraints/rebinding.js', 'src/editing/clipboard_transfer.js']) vm.runInContext(fs.readFileSync(file, 'utf8'), sandbox);
+const sandbox = { structuredClone, window: {} }; vm.createContext(sandbox);
+for (const file of ['src/geometry/pattern_instance_model.js', 'src/constraints/rebinding.js', 'src/editing/clipboard_transfer.js']) vm.runInContext(fs.readFileSync(file, 'utf8'), sandbox);
 const plain = value => JSON.parse(JSON.stringify(value));
 const create = bundle => sandbox.window.ClipboardTransfer.create({ blockProjectionBundle: instance => { assert.equal(instance.id, 'new'); return bundle; }, blockProjectionLocalId: item => item.localId });
 
@@ -52,7 +52,7 @@ test('projection remapping reconnects all kinds by local ID and preserves destin
 
 test('derived clipboard copies rewrite paths, retain uncopied references and shift free placement', () => {
   const api=create(),map=new Map([['FI1','FI2'],['MI1','MI2'],['L1','L9'],['legacy','MI2@L9']]);
-  const source={id:'FI1',type:'free',sketchId:'S1',sources:[{kind:'line',path:['L1']}],origin:{x:1,y:2},x:10,y:20,rotation:0.4,mirrorX:true,mirrorY:false,appearanceOverride:{color:'red'}};
+  const source={id:'FI1',type:'free',sketchId:'S1',sources:[{kind:'line',path:['L1']}],occurrences:[''],anchor:{relation:null,fallbackPosition:{x:1,y:2}},placement:{kind:'linear'},origin:{x:1,y:2},x:10,y:20,rotation:0.4,mirrorX:true,mirrorY:false,appearanceOverride:{color:'red'}};
   let copy=api.copiedGeometryInstance(source,map,'S2',3,4);
   assert.deepEqual(plain(copy.sources),[{kind:'line',path:['L9']}]);assert.deepEqual(plain(copy.origin),source.origin);assert.equal(copy.x,13);assert.equal(copy.y,24);
   map.delete('L1');copy=api.copiedGeometryInstance(source,map,'S1',3,4);assert.deepEqual(plain(copy.origin),source.origin);assert.equal(copy.sources[0].path[0],'L1');
@@ -119,21 +119,21 @@ test('derived reconnection propagates free origins through a reverse-ordered cha
     { origin: { x: 0, y: 0 }, sourcePositions: [[{ x: 0, y: 0 }]] },
     { origin: { x: 0, y: 0 }, sourcePositions: [[{ x: 0, y: 0 }]] },
   ];
-  const upstream = { type: 'free', id: 'FI1', origin: { x: 0, y: 0 }, sources: ['base'] };
-  const downstream = { type: 'free', id: 'FI2', origin: { x: 0, y: 0 }, sources: ['upstream'] };
+  const upstream = { type: 'pattern', id: 'FI1', anchor: { fallbackPosition: { x: 0, y: 0 } }, placement: { kind: 'linear' }, sources: ['base'] };
+  const downstream = { type: 'pattern', id: 'FI2', anchor: { fallbackPosition: { x: 0, y: 0 } }, placement: { kind: 'linear' }, sources: ['upstream'] };
   const p = { id: 'FI2@P1' }, l = { id: 'FI2@L1' }, c = { id: 'FI2@C1' }, a = { id: 'FI2@A1' }, s = { id: 'FI2@SP1' };
   const bundleCalls = [];
   const api = sandbox.window.ClipboardTransfer.create({
-    resolveGeometryRef: ref => ref === 'base' ? { points: [{ x: 5, y: 6 }] } : { points: [upstream.origin] },
+    resolveGeometryRef: ref => ref === 'base' ? { points: [{ x: 5, y: 6 }] } : { points: [upstream.anchor.fallbackPosition] },
     geometryInstanceSourcePoints: item => item.points,
     geometryInstanceBundle: instance => {
-      bundleCalls.push(instance); assert.deepEqual(plain(downstream.origin), { x: 5, y: 6 });
+      bundleCalls.push(instance); assert.deepEqual(plain(downstream.anchor.fallbackPosition), { x: 5, y: 6 });
       return { valid: true, points: [p], lines: [l], circles: [c], arcs: [a], splines: [s] };
     }, applicationText: (_ja, en) => en,
   });
   const points = new Map(), lines = new Map(), primitives = new Map();
   api.reconnectDerivedInstances(copied, [downstream, upstream], points, lines, primitives);
-  assert.deepEqual(plain(upstream.origin), { x: 5, y: 6 }); assert.deepEqual(plain(downstream.origin), { x: 5, y: 6 });
+  assert.deepEqual(plain(upstream.anchor.fallbackPosition), { x: 5, y: 6 }); assert.deepEqual(plain(downstream.anchor.fallbackPosition), { x: 5, y: 6 });
   assert.deepEqual(bundleCalls, [downstream, upstream]); assert.equal(points.get(p.id), p); assert.equal(lines.get(l.id), l);
   for (const item of [c, a, s]) assert.equal(primitives.get(item.id), item);
   assert.deepEqual(copied[0].origin, { x: 0, y: 0 });
@@ -148,9 +148,9 @@ test('invalid derived bundles reject before map registration and non-free origin
 
 test('free copies with hatch seed sources use that seed when no geometry points exist', () => {
   const source = { origin: { x: 2, y: 3 }, sourcePositions: [[{ x: 10, y: 20 }]] };
-  const instance = { id: 'FI3', type: 'free', origin: { x: 2, y: 3 }, sources: ['hatch'] };
+  const instance = { id: 'FI3', type: 'pattern', anchor: { fallbackPosition: { x: 2, y: 3 } }, placement: { kind: 'linear' }, sources: ['hatch'] };
   const api = sandbox.window.ClipboardTransfer.create({ resolveGeometryRef: () => ({ seed: { x: 14, y: 25 } }),
     geometryInstanceSourcePoints: () => [], geometryInstanceBundle: () => ({ valid: true, points: [], lines: [], circles: [], arcs: [], splines: [] }) });
   api.reconnectDerivedInstances([source], [instance], new Map(), new Map(), new Map());
-  assert.deepEqual(plain(instance.origin), { x: 6, y: 8 });
+  assert.deepEqual(plain(instance.anchor.fallbackPosition), { x: 6, y: 8 });
 });

@@ -3,9 +3,9 @@ const fs = require("node:fs");
 const path = require("node:path");
 const vm = require("node:vm");
 const test = require("node:test");
-const sandbox = { window: {} };
+const sandbox = { structuredClone, window: {} };
 vm.createContext(sandbox);
-for (const file of ["src/geometry/spline_geometry.js", "src/geometry/hatch_region.js", "src/document/appearance.js", "src/document/drawing_order.js", "src/document/annotations.js", "src/document/hatches.js", "src/document/reference_images.js", "src/persistence/document_snapshot.js"]) {
+for (const file of ["src/geometry/spline_geometry.js", "src/geometry/hatch_region.js", "src/document/appearance.js", "src/document/drawing_order.js", "src/document/annotations.js", "src/document/hatches.js", "src/document/reference_images.js", "src/geometry/pattern_instance_model.js", "src/persistence/document_snapshot.js"]) {
   vm.runInContext(fs.readFileSync(path.resolve(__dirname, "../..", file), "utf8"), sandbox, { filename: file });
 }
 const snapshot = sandbox.window.DocumentSnapshot;
@@ -51,16 +51,16 @@ test("snapshot shares field writers while preserving local scope metadata and al
 test("derived instance serialization copies reference paths and retains type-specific fields", () => {
   const source = { kind: "line", path: ["BI1", "L1"] };
   const base = { id: "GI1", sketchId: "S1", sources: [source], drawingOrder: 4 };
-  const mirror = snapshot.serializeGeometryInstance({ ...base, type: "mirror", axis: source });
+  const mirror = snapshot.serializeGeometryInstance(sandbox.window.PatternInstanceModel.normalize({ ...base, type: "mirror", axis: source }));
   mirror.sources[0].path.push("changed");
-  mirror.axis.path.push("changed");
+  mirror.placement.axis.path.push("changed");
   assert.equal(source.path.length, 2);
   assert.equal(mirror.drawingOrder, 4);
-  const pattern = snapshot.serializeGeometryInstance({ ...base, type: "pattern", direction: source, spacing: 12, copies: 3, reversed: true });
-  assert.equal(pattern.copies, 3);
-  assert.equal(pattern.reversed, true);
+  const pattern = snapshot.serializeGeometryInstance(sandbox.window.PatternInstanceModel.normalize({ ...base, type: "pattern", direction: source, spacing: 12, copies: 3, reversed: true }));
+  assert.equal(pattern.count, 4);
+  assert.equal(pattern.placement.reversed, true);
   assert.equal("axis" in pattern, false);
-  const free = snapshot.serializeGeometryInstance({ ...base, type: "free", x: 1, y: 2, rotation: 0.3, origin: { x: 3, y: 4 }, mirrorX: true, mirrorY: false });
-  assert.equal(free.origin.x, 3);
-  assert.equal(free.mirrorX, true);
+  const free = snapshot.serializeGeometryInstance({ ...sandbox.window.PatternInstanceModel.createDraft({ ...base, type: "pattern" }), anchor: { relation: { kind: "lineMidpoint", target: source }, fallbackPosition: { x: 3, y: 4 } } });
+  assert.equal(free.anchor.fallbackPosition.x, 3);
+  assert.equal(free.reflected, false);
 });

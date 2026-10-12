@@ -54,7 +54,7 @@ Propertiesは「基本情報」に種類、ID、所属Sketch、境界状態、�
 
 ## 5. Block Projection
 
-塗りつぶしはスケッチ投影、ミラー、直線パターン、同期インスタンスの複写元にもできる。境界Geometryの同時選択は不要で、領域と穴、seed、pattern原点・角度をInstance変換に従わせる。元の境界や外観の変更に追従し、境界が無効なら生成領域も描画しない。派生塗りつぶしから元の境界線を再描画しない。通常clickでは所有する派生Instanceを選択する。詳しくは[派生Instance](派生Instance.md)を参照する。
+塗りつぶしはスケッチ投影、ミラー、直線パターン、円形パターンの複写元にもできる。境界Geometryの同時選択は不要で、領域と穴、seed、pattern原点・角度をInstance変換に従わせる。元の境界や外観の変更に追従し、境界が無効なら生成領域も描画しない。派生塗りつぶしから元の境界線を再描画しない。通常clickでは所有する派生Instanceを選択する。詳しくは[派生Instance](派生Instance.md)を参照する。
 
 Block Definition内塗りつぶしをProjection bundleへ含める。Projection IDは`BI1/H1`、入れ子では`BI1/BI2/H1`の形式とする。輪郭、seed、pattern原点、angleへInstance変換を合成し、Block回転時はパターン角度も同時に回転する。表示する内部Sketch、入れ子Block、配置preview、bounds、fit、hit test、保存復元へ反映する。
 

@@ -26,9 +26,9 @@
         toolThreePointArc: geometryMode && mode === "three-point-arc",
         toolSpline: geometryMode && mode === "spline",
         toolSketchProjection: geometryMode && mode === "sketch-projection",
-        toolFreeInstance: geometryMode && mode.startsWith("free-instance-"),
-        toolMirror: geometryMode && mode === "mirror-axis",
-        toolPattern: geometryMode && mode === "pattern-direction",
+        toolPattern: geometryMode && mode.startsWith("pattern-placement-") && !["pattern-placement-mirror", "pattern-placement-circular"].includes(mode),
+        toolMirror: geometryMode && mode === "pattern-placement-mirror",
+        toolCircularPattern: geometryMode && mode === "pattern-placement-circular",
         toolHatch: geometryMode && (mode === "hatch" || mode === "hatch-repair"),
         annotationTextBtn: interaction.annotationDraft,
       };

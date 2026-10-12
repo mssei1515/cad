@@ -3,18 +3,19 @@ const fs = require("node:fs");
 const path = require("node:path");
 const vm = require("node:vm");
 const test = require("node:test");
-const sandbox = { window: {} };
+const sandbox = { structuredClone, window: {} };
 vm.createContext(sandbox);
-for (const file of ["src/geometry/geometry_kernel.js", "src/geometry/geometry_ref.js", "src/geometry/spline_geometry.js", "src/solver/constraint_solver.js", "src/geometry/objects.js", "src/geometry/instance_projection.js"]) {
+for (const file of ["src/geometry/geometry_kernel.js", "src/geometry/geometry_ref.js", "src/geometry/spline_geometry.js", "src/solver/constraint_solver.js", "src/geometry/objects.js", "src/geometry/pattern_instance_model.js", "src/geometry/instance_projection.js"]) {
   vm.runInContext(fs.readFileSync(path.resolve(__dirname, "../..", file), "utf8"), sandbox, { filename: file });
 }
 const { Point, Line, Circle, Arc } = sandbox.window.GeometrySolver;
 const { parseId: ref } = sandbox.window.GeometryRef;
 const { geometryRefForItem, addGeometryBundleToMaps } = sandbox.window.GeometryObjects;
-const create = () => sandbox.window.InstanceProjection.create({ elementSketchId: item => item.sketchId, applicationText: (_ja, en) => en });
+const createBase = () => sandbox.window.InstanceProjection.create({ elementSketchId: item => item.sketchId, applicationText: (_ja, en) => en });
+const create = () => createBase();
 const point = (id, x, y, sketchId = "S1") => Object.assign(new Point(id, x, y), { sketchId });
-const free = (id, sources, fields = {}) => ({ id, type: "free", sources, sketchId: "S1", x: 10, y: 20, rotation: 0, origin: { x: 0, y: 0 }, mirrorX: false, mirrorY: false, ...fields });
-const scope = (points, instances, extra = {}) => ({ points, lines: [], circles: [], arcs: [], splines: [], geometryInstances: instances, ...extra });
+const free = (id, sources, fields = {}) => ({ id, type: "pattern", count: 2, occurrences: [""], placementPointDefined: true, placement: { kind: "linear" }, anchor: { relation: null, fallbackPosition: { x: 0, y: 0 } }, reflected: false, rotationLocked: false, sources, sketchId: "S1", x: 10, y: 20, rotation: 0, origin: { x: 0, y: 0 }, mirrorX: false, mirrorY: false, ...fields });
+const scope = (points, instances, extra = {}) => ({ points, lines: [], circles: [], arcs: [], splines: [], geometryInstances: instances.map(i => { if (!i.placement && i.type !== "sketchProjection") { const n = sandbox.window.PatternInstanceModel.normalize(i); for (const k of Object.keys(i)) delete i[k]; Object.assign(i, n); } return i; }), ...extra });
 const near = (actual, expected) => assert.ok(Math.abs(actual - expected) < 1e-10, `${actual} != ${expected}`);
 
 test('hatch-only mirror, pattern and chained free instances retain live boundaries and pattern transforms', () => {
@@ -37,7 +38,7 @@ test('hatch-only mirror, pattern and chained free instances retain live boundari
   width = 9;
   near(bundles[2].hatches[0].resolvedBoundary.loops[0].points[1].x, -9);
   near(bundles[0].hatches[0].resolvedBoundary.area, 18);
-  mirror.axis = ref('line', 'missing');
+  mirror.placement.axis = ref('line', 'missing');
   assert.equal(api.geometryInstanceBundlesForScope(scope([a, b], [mirror], { lines: [axis], hatches: [hatch] }))[0].valid, false);
 });
 
@@ -45,7 +46,7 @@ test("derived points retain source identity, live transforms and the inverse map
   const api = create();
   const a = point("P1", 2, 3), b = point("P2", 6, 3);
   const line = Object.assign(new Line("L1", a, b), { sketchId: "S1" });
-  const instance = free("FI1", [ref("line", "L1")], { rotation: Math.PI / 2, mirrorX: true });
+  const instance = free("FI1", [ref("line", "L1")], { rotation: Math.PI / 2, reflected: true });
   const bundle = api.geometryInstanceBundlesForScope(scope([a, b], [instance], { lines: [line] }))[0];
   assert.equal(bundle.valid, true);
   const output = bundle.lines[0];
@@ -124,7 +125,7 @@ test("curve read views preserve live radii, reflected arc sweep, legacy IDs and 
   const center = point("P1", 0, 0);
   const circle = Object.assign(new Circle("C1", center, 3), { sketchId: "S1" });
   const arc = Object.assign(new Arc("A1", center, 3, 0, Math.PI / 2), { sketchId: "S1" });
-  const instance = free("FI1", [ref("circle", "C1"), ref("arc", "A1")], { mirrorX: true, legacyOutput: { id: "OLD_C1", pointIds: ["OLD_P1"] } });
+  const instance = free("FI1", [ref("circle", "C1"), ref("arc", "A1")], { reflected: true, legacyOutput: { id: "OLD_C1", pointIds: ["OLD_P1"] } });
   const bundle = api.geometryInstanceBundlesForScope(scope([center], [instance], { circles: [circle], arcs: [arc] }))[0];
   assert.equal(bundle.circles[0].id, "OLD_C1");
   assert.equal(bundle.points[0].id, "OLD_P1");

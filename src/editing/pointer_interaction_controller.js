@@ -158,7 +158,7 @@
       if (canvasNavigation.movePan(screenPoint)) return;
 
       setLastPointer(p);
-      if (getMode().startsWith("free-instance-")) {
+      if (getMode().startsWith("pattern-placement-")) {
         drawingPreview.updateFreeInstance(p);
         return;
       }

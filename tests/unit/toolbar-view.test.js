@@ -4,7 +4,7 @@ const fs = require('node:fs');
 const vm = require('node:vm');
 const sandbox = { window: {} }; vm.createContext(sandbox);
 vm.runInContext(fs.readFileSync('src/ui/toolbar_view.js','utf8'),sandbox);
-const modeButtons = { select:'toolSelect',point:'toolPoint',line:'toolLine',centerline:'toolCenterline','circle-center-cross':'toolCircleCenterCross',rectangle:'toolRectangle',slot:'toolSlot',fillet:'toolFillet',trim:'toolTrim',offset:'toolOffset',circle:'toolCircle',arc:'toolArc','three-point-arc':'toolThreePointArc',spline:'toolSpline','sketch-projection':'toolSketchProjection','free-instance-origin':'toolFreeInstance','free-instance-place':'toolFreeInstance','mirror-axis':'toolMirror','pattern-direction':'toolPattern',hatch:'toolHatch','hatch-repair':'toolHatch' };
+const modeButtons = { select:'toolSelect',point:'toolPoint',line:'toolLine',centerline:'toolCenterline','circle-center-cross':'toolCircleCenterCross',rectangle:'toolRectangle',slot:'toolSlot',fillet:'toolFillet',trim:'toolTrim',offset:'toolOffset',circle:'toolCircle',arc:'toolArc','three-point-arc':'toolThreePointArc',spline:'toolSpline','sketch-projection':'toolSketchProjection','pattern-placement-origin':'toolPattern','pattern-placement-place':'toolPattern',hatch:'toolHatch','hatch-repair':'toolHatch' };
 function fixture() {
  const events=[],buttons=new Map();
  for(const id of [...new Set(Object.values(modeButtons)),'toolConstructionLine','toolCreateBlock','annotationTextBtn','selectionVisibilityBtn']) buttons.set(id,{active:false,disabled:false,attributes:{},classList:{toggle(name,value){buttons.get(id)[name]=value;}},setAttribute(name,value){this.attributes[name]=value;}});

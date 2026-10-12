@@ -2,13 +2,14 @@
 (() => {
   "use strict";
   function create({ readMode, selectMode, blockPlacementCommand, drawingPreview, restoreBlockPlacementPropertiesPanel,
-    readPending, cancelPendingCommand, readConstraintCommand, cancelConstraintTargetCommand, drawing, applicationText, setHint, updateUI, draw }) {
+    readPending, cancelPendingCommand, readConstraintCommand, cancelConstraintTargetCommand, drawing, applicationText, setHint, updateUI, draw, instances }) {
     function hasCancellable() {
       return readMode() === "block-place" || Boolean(readPending()) || Boolean(readConstraintCommand()) || drawing.active() || drawing.isToolMode();
     }
 
     function cancel() {
       let canceled = false;
+      if (instances?.cancel()) canceled = true;
       if (readMode() === "block-place") {
         blockPlacementCommand.reset({ preservePanelState: true });
         drawingPreview.setPointer(null);

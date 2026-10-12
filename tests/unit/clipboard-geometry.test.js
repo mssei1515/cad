@@ -2,8 +2,8 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const vm = require('node:vm');
-const sandbox = { window: {} }; vm.createContext(sandbox);
-for (const file of ['src/geometry/geometry_kernel.js', 'src/geometry/spline_geometry.js', 'src/solver/constraint_solver.js', 'src/document/appearance.js', 'src/editing/geometry_ids.js', 'src/editing/clipboard_geometry.js']) {
+const sandbox = { structuredClone, window: {} }; vm.createContext(sandbox);
+for (const file of ['src/geometry/geometry_kernel.js', 'src/geometry/spline_geometry.js', 'src/solver/constraint_solver.js', 'src/document/appearance.js', 'src/editing/geometry_ids.js', 'src/geometry/pattern_instance_model.js', 'src/editing/clipboard_geometry.js']) {
   vm.runInContext(fs.readFileSync(file, 'utf8'), sandbox, { filename: file });
 }
 const plain = value => JSON.parse(JSON.stringify(value));
@@ -90,14 +90,14 @@ test('missing Block definition fails before allocating its ID and leaves earlier
 });
 
 test('derived creation reserves all owners and legacy paths before normalizing or adding copied instances', () => {
-  const transfer = { window: {} }; vm.createContext(transfer);
+  const transfer = { structuredClone, window: {} }; vm.createContext(transfer);
   vm.runInContext(fs.readFileSync('src/editing/clipboard_transfer.js', 'utf8'), transfer);
   const { copiedGeometryInstance } = transfer.window.ClipboardTransfer.create({});
   const ids = new Map([['L1', 'L9']]), calls = [], model = { geometryInstances: [] };
   const api = sandbox.window.ClipboardGeometry.create({ allocateGeometryInstanceId: type => { calls.push(type); return type === 'free' ? 'FI9' : 'MI9'; },
     copiedGeometryInstance, normalizeGeometryInstance: item => { assert.equal(ids.get('legacy'), 'MI9@FI9@L9'); calls.push(item.id); return item; }, applicationText: (_ja, en) => en });
   const source = { parameterNamespaceKey: 'document', geometryInstances: [
-    { id: 'FI1', type: 'free', sources: [{ kind: 'line', path: ['L1'] }], origin: { x: 0, y: 0 }, x: 2, y: 3, appearanceOverride: {} },
+    { id: 'FI1', type: 'free', sources: [{ kind: 'line', path: ['L1'] }], occurrences: [''], placement: { kind: 'linear' }, anchor: { fallbackPosition: { x: 0, y: 0 } }, x: 2, y: 3, appearanceOverride: {} },
     { id: 'MI1', type: 'mirror', sources: [{ kind: 'line', path: ['FI1', 'L1'] }], axis: { kind: 'line', path: ['L1'] },
       projection: { lines: [{ id: 'legacy', path: ['MI1', 'FI1', 'L1'] }] }, appearanceOverride: {} },
   ] };

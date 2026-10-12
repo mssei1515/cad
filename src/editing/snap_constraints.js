@@ -35,7 +35,10 @@
           options,
         ) ? 1 : 0;
       }
-      if (line) {
+      if (line && snap.data.midpoint) {
+        const C = window.GeometrySolver.LineMidpointCoincidentConstraint;
+        added += addConstraintIfMissing(new C(point, line), c => c instanceof C && c.point === point && c.line === line, options) ? 1 : 0;
+      } else if (line) {
         added += addConstraintIfMissing(
           new PointOnLineConstraint(point, line),
           (c) => c instanceof PointOnLineConstraint && c.point === point && c.line === line,
@@ -86,7 +89,12 @@
           options,
         ) ? 1 : 0;
       }
-      if (line) {
+      if (line && snap.data.midpoint) {
+        const point = addPoint(snap.x, snap.y, false, "endpoint");
+        added += addPointSnapConstraints(point, snap);
+        added += addConstraintIfMissing(new ArcEndpointCoincidentConstraint(arc, endpointName, point),
+          c => c instanceof ArcEndpointCoincidentConstraint && c.arc === arc && c.endpoint === endpointName && c.point === point) ? 1 : 0;
+      } else if (line) {
         added += addConstraintIfMissing(
           new ArcEndpointOnLineConstraint(arc, endpointName, line),
           (c) => c instanceof ArcEndpointOnLineConstraint && c.arc === arc && c.endpoint === endpointName && c.line === line,

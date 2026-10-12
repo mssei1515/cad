@@ -25,6 +25,17 @@
   // Geometry IDs and dimension placement belong to the caller's display scope.
   function create({ geometryId, dimensionData }) {
     const constraintCodecs = window.ConstraintCodecRegistry.create([
+      { type: "lineMidpointCoincident", constraintClass: window.GeometrySolver.LineMidpointCoincidentConstraint, serialize: c => ({ point: geometryId(c.point), line: geometryId(c.line), enabled: c.enabled }), deserialize: (d, r) => new window.GeometrySolver.LineMidpointCoincidentConstraint(r.point(d.point), r.line(d.line)) },
+      { type: "instanceAxisOffset", constraintClass: window.GeometrySolver.InstanceAxisOffsetConstraint, serialize: c => ({ p1: geometryId(c.p1), p2: geometryId(c.p2), target: c.target, axis: c.axis, enabled: c.enabled }), deserialize: (d, r) => {
+        const point = r.point(d.p2), anchor = r.point(d.p1);
+        if (!Number.isFinite(d.target) || !["x", "y"].includes(d.axis) || point.instanceControl !== "placement" || anchor.instanceControl !== "anchor" || point.derivedInstance !== anchor.derivedInstance) throw new Error("相対配置拘束が不正です");
+        return new window.GeometrySolver.InstanceAxisOffsetConstraint(point, anchor, d.target, d.axis);
+      } },
+      { type: "instanceAngleInterval", constraintClass: window.GeometrySolver.InstanceAngleIntervalConstraint, serialize: c => ({ point: geometryId(c.point), target: c.target, dimension: dimensionData(c), enabled: c.enabled }), deserialize: (d, r) => {
+        const point = r.point(d.point);
+        if (!Number.isFinite(d.target) || !d.target || Math.abs(d.target) >= 2 * Math.PI || point.instanceControl !== "anchor" || point.derivedInstance?.placement?.kind !== "circular") throw new Error("角度間隔寸法が不正です");
+        return new window.GeometrySolver.InstanceAngleIntervalConstraint(point, d.target);
+      } },
       {
         type: "pointAxisDistance",
         constraintClass: PointAxisDistanceConstraint,

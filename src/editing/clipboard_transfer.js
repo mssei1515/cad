@@ -64,11 +64,17 @@
       delete data.projection;
       delete data.sourcePositions;
       delete data.legacyOutput;
+      if (source.placement) {
+        data.placement = structuredClone(source.placement); data.anchor = structuredClone(source.anchor); data.occurrences = [...source.occurrences];
+        if (data.placement.axis) data.placement.axis = remapGeometryRef(data.placement.axis, idMap);
+        if (data.placement.direction) data.placement.direction = remapGeometryRef(data.placement.direction, idMap);
+        if (data.anchor.relation) data.anchor.relation.target = remapGeometryRef(data.anchor.relation.target, idMap);
+      }
       if (source.axis) data.axis = remapGeometryRef(source.axis, idMap);
       if (source.direction) data.direction = remapGeometryRef(source.direction, idMap);
-      if (source.type === "free") {
+      if (Boolean(source.placement)) {
         data.x = source.x + dx; data.y = source.y + dy;
-        data.origin = { ...source.origin };
+        if (!source.placement) data.origin = { ...source.origin };
       }
       return data;
     }
@@ -91,14 +97,14 @@
       for (let pass = 0; pass < instances.length; pass++) {
         let changed = false;
         instances.forEach((instance, index) => {
-          if (instance.type !== 'free') return;
-          const origin = copiedFreeOrigin(copiedInstances[index], instance, ref => {
+          if (instance.type !== 'pattern' || instance.anchor?.relation || !window.PatternInstanceModel.placed(instance)) return;
+          const origin = copiedFreeOrigin({ ...copiedInstances[index], origin: copiedInstances[index].anchor?.fallbackPosition || copiedInstances[index].origin }, instance, ref => {
             const item = resolveGeometryRef(ref);
             const points = geometryInstanceSourcePoints(item);
             return points.length ? points : item?.seed ? [item.seed] : [];
           });
-          if (Math.abs(origin.x - instance.origin.x) > 1e-8 || Math.abs(origin.y - instance.origin.y) > 1e-8) {
-            instance.origin = origin; changed = true;
+          if (Math.abs(origin.x - instance.anchor.fallbackPosition.x) > 1e-8 || Math.abs(origin.y - instance.anchor.fallbackPosition.y) > 1e-8) {
+            instance.anchor.fallbackPosition = origin; changed = true;
           }
         });
         if (!changed) break;
@@ -106,7 +112,7 @@
       for (const instance of instances) {
         const bundle = geometryInstanceBundle(instance);
         if (!bundle.valid) throw new Error(instance.id + ': ' + bundle.reason + ' ' + applicationText('必要な参照先も選択してください', 'Also select required referenced geometry'));
-        for (const item of bundle.points) pointById.set(item.id, item);
+        for (const item of [...bundle.points, ...(bundle.controlPoints || [])]) pointById.set(item.id, item);
         for (const item of bundle.lines) lineById.set(item.id, item);
         for (const item of [...bundle.circles, ...bundle.arcs, ...bundle.splines]) primitiveById.set(item.id, item);
       }

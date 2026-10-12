@@ -71,7 +71,11 @@
         const removed = items(geometryInstanceBundle(instance)).filter((item) => !nextKeys.has(geometryElementKey(item)));
         const removedKeys = new Set(removed.map(geometryElementKey));
         const removedIds = new Set(removed.map((item) => item.id));
+        const referencesRemoved = value => typeof value === "string" ? removedIds.has(value)
+          : Array.isArray(value) ? removedIds.has(value.join("@")) || value.some(referencesRemoved)
+          : value && typeof value === "object" ? Object.values(value).some(referencesRemoved) : false;
         const constraints = new Set(model.constraints.filter((constraint) => constraintGraphNodes(constraint).some((node) => removedKeys.has(geometryElementKey(node)))));
+        if (Boolean(instance.placement) && (constraints.size || model.annotations.some(annotation => annotationReferencesRemovedGeometry(annotation, removedIds, removedKeys)) || (model.hatches || []).some(hatch => referencesRemoved(hatch.boundaryLoops)))) { setHint("参照されている対象図形は解除できません", "error"); return false; }
         if (!guardDimensionSymbolDeletion(constraints)) return false;
         const changed = instance.sources.length !== edit.sources.length || instance.sources.some((ref) => !edit.sources.some((entry) => geometryRefsEqual(ref, entry)));
         if (changed) {
