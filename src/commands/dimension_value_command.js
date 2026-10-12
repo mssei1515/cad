@@ -42,7 +42,7 @@
       let value;
       try {
         expression = expressionFromUserInput(pendingCommand.buffer);
-        value = evaluateDimensionExpressionDraft(pendingCommand.constraint || null, expression, undefined, { signedAngle: pendingCommand.target?.interval === true });
+        value = evaluateDimensionExpressionDraft(pendingCommand.constraint || null, expression);
       } catch (error) {
         setHint(`${applicationText("寸法の値 / 数式を評価できません", "Could not evaluate the dimension Value / Expression")}: ${parameterErrorText(error)}`, "error");
         syncDimensionValueInput();
@@ -50,7 +50,7 @@
         return;
       }
       const maxAngle = pendingCommand.target?.kind === "angle" ? 180 : Infinity;
-      if (!Number.isFinite(value) || (pendingCommand.target?.interval ? value === 0 || Math.abs(value) >= 360 : value <= 0 || value >= maxAngle)) {
+      if (!Number.isFinite(value) || value <= 0 || value >= maxAngle) {
         setHint(applicationText("寸法値の範囲が正しくありません", "Dimension value is out of range"), "error");
         draw();
         return;

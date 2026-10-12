@@ -30,8 +30,8 @@ test('projection empty-space input clears snap and begins a captured projection 
 test('free placement forwards snapped coordinates without suppressing browser input',()=>{
   const f=fixture();for(const mode of ['free-instance-origin','free-instance-place']){f.mode=mode;f.calls=[];assert.equal(f.click(),true);assert.deepEqual(f.names(),['snap','place']);assert.equal(f.calls[1].args[0],f.snapped);}
 });
-test('migrated line-reference placement edits use the unified input mode',()=>{
- const f=fixture();f.mode='free-instance-place';f.geometry.activeInput='reference';const line={id:'L'};
- f.click({hitL:line});assert.deepEqual(f.names(),['snap','commit']);assert.equal(f.calls.at(-1).args[0],line);
- f.mode='select';f.calls=[];assert.equal(f.click({hitL:line}),false);
+test('reference input honors operand priority and rejects a non-line without using an underlying line',()=>{
+  const f=fixture();f.mode='mirror-axis';const line={id:'L'};f.derived={kind:'point'};f.click({hitL:line});assert.deepEqual(f.names(),['prevent','derivedHit','hint']);
+  f.derived=null;f.calls=[];f.mode='pattern-direction';f.click({hitL:line});assert.deepEqual(f.names(),['prevent','derivedHit','blockHit','commit']);assert.equal(f.calls[3].args[0],line);
+  f.mode='select';f.calls=[];assert.equal(f.click({hitL:line}),false);assert.deepEqual(f.calls,[]);
 });

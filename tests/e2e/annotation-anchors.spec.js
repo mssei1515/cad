@@ -82,7 +82,7 @@ test('nine anchor choices preserve placement independently of multiline alignmen
   await page.locator('#annotationFrameLineType').selectOption('dashed');
   await page.locator('#annotationFrameColor').fill('#ff0000'); await page.locator('#annotationFrameColor').press('Tab');
   await page.screenshot({ path: require('node:path').join(require('node:os').tmpdir(), 'jot2d-annotation-anchor-preview.png') });
-  const saved = await data(page); expect(saved.version).toBe(26);
+  const saved = await data(page); expect(saved.version).toBe(25);
   expect(saved.annotations[0].style).toMatchObject({ textAlign: 'center', frameVisible: true, frameLineType: 'dashed', frameColor: '#ff0000' });
   expect((await page.evaluate(d => window.__jot2dTest.loadDocumentFixtureForDragTest(d), saved)).success).toBe(true);
   const loaded = await state(page); expect(loaded.textLayout.anchorX).toBeCloseTo(anchor.x, 8); expect(loaded.textLayout.anchorY).toBeCloseTo(anchor.y, 8);

@@ -2,8 +2,8 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const vm = require('node:vm');
-const sandbox = { structuredClone, window: {} }; vm.createContext(sandbox);
-for (const file of ['src/geometry/synchronized_instance.js', 'src/constraints/rebinding.js', 'src/editing/clipboard_transfer.js']) vm.runInContext(fs.readFileSync(file, 'utf8'), sandbox);
+const sandbox = { window: {} }; vm.createContext(sandbox);
+for (const file of ['src/constraints/rebinding.js', 'src/editing/clipboard_transfer.js']) vm.runInContext(fs.readFileSync(file, 'utf8'), sandbox);
 const plain = value => JSON.parse(JSON.stringify(value));
 const create = bundle => sandbox.window.ClipboardTransfer.create({ blockProjectionBundle: instance => { assert.equal(instance.id, 'new'); return bundle; }, blockProjectionLocalId: item => item.localId });
 
@@ -119,21 +119,21 @@ test('derived reconnection propagates free origins through a reverse-ordered cha
     { origin: { x: 0, y: 0 }, sourcePositions: [[{ x: 0, y: 0 }]] },
     { origin: { x: 0, y: 0 }, sourcePositions: [[{ x: 0, y: 0 }]] },
   ];
-  const upstream = { type: 'free', id: 'FI1', anchor: { fallbackPosition: { x: 0, y: 0 } }, placement: { kind: 'linear' }, sources: ['base'] };
-  const downstream = { type: 'free', id: 'FI2', anchor: { fallbackPosition: { x: 0, y: 0 } }, placement: { kind: 'linear' }, sources: ['upstream'] };
+  const upstream = { type: 'free', id: 'FI1', origin: { x: 0, y: 0 }, sources: ['base'] };
+  const downstream = { type: 'free', id: 'FI2', origin: { x: 0, y: 0 }, sources: ['upstream'] };
   const p = { id: 'FI2@P1' }, l = { id: 'FI2@L1' }, c = { id: 'FI2@C1' }, a = { id: 'FI2@A1' }, s = { id: 'FI2@SP1' };
   const bundleCalls = [];
   const api = sandbox.window.ClipboardTransfer.create({
-    resolveGeometryRef: ref => ref === 'base' ? { points: [{ x: 5, y: 6 }] } : { points: [upstream.anchor.fallbackPosition] },
+    resolveGeometryRef: ref => ref === 'base' ? { points: [{ x: 5, y: 6 }] } : { points: [upstream.origin] },
     geometryInstanceSourcePoints: item => item.points,
     geometryInstanceBundle: instance => {
-      bundleCalls.push(instance); assert.deepEqual(plain(downstream.anchor.fallbackPosition), { x: 5, y: 6 });
+      bundleCalls.push(instance); assert.deepEqual(plain(downstream.origin), { x: 5, y: 6 });
       return { valid: true, points: [p], lines: [l], circles: [c], arcs: [a], splines: [s] };
     }, applicationText: (_ja, en) => en,
   });
   const points = new Map(), lines = new Map(), primitives = new Map();
   api.reconnectDerivedInstances(copied, [downstream, upstream], points, lines, primitives);
-  assert.deepEqual(plain(upstream.anchor.fallbackPosition), { x: 5, y: 6 }); assert.deepEqual(plain(downstream.anchor.fallbackPosition), { x: 5, y: 6 });
+  assert.deepEqual(plain(upstream.origin), { x: 5, y: 6 }); assert.deepEqual(plain(downstream.origin), { x: 5, y: 6 });
   assert.deepEqual(bundleCalls, [downstream, upstream]); assert.equal(points.get(p.id), p); assert.equal(lines.get(l.id), l);
   for (const item of [c, a, s]) assert.equal(primitives.get(item.id), item);
   assert.deepEqual(copied[0].origin, { x: 0, y: 0 });
@@ -148,9 +148,9 @@ test('invalid derived bundles reject before map registration and non-free origin
 
 test('free copies with hatch seed sources use that seed when no geometry points exist', () => {
   const source = { origin: { x: 2, y: 3 }, sourcePositions: [[{ x: 10, y: 20 }]] };
-  const instance = { id: 'FI3', type: 'free', anchor: { fallbackPosition: { x: 2, y: 3 } }, placement: { kind: 'linear' }, sources: ['hatch'] };
+  const instance = { id: 'FI3', type: 'free', origin: { x: 2, y: 3 }, sources: ['hatch'] };
   const api = sandbox.window.ClipboardTransfer.create({ resolveGeometryRef: () => ({ seed: { x: 14, y: 25 } }),
     geometryInstanceSourcePoints: () => [], geometryInstanceBundle: () => ({ valid: true, points: [], lines: [], circles: [], arcs: [], splines: [] }) });
   api.reconnectDerivedInstances([source], [instance], new Map(), new Map(), new Map());
-  assert.deepEqual(plain(instance.anchor.fallbackPosition), { x: 6, y: 8 });
+  assert.deepEqual(plain(instance.origin), { x: 6, y: 8 });
 });

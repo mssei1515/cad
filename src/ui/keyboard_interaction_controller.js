@@ -93,7 +93,7 @@
         return;
       }
 
-      if (!textEditingTarget && operations.getMode().startsWith("free-instance-") && e.key === "Enter") {
+      if (!textEditingTarget && (["mirror-axis", "pattern-direction"].includes(operations.getMode()) || operations.getMode().startsWith("free-instance-")) && e.key === "Enter") {
         e.preventDefault();
         operations.finishInstance();
         return;

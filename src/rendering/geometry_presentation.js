@@ -92,7 +92,6 @@
       const relatedHighlighted = isSelectedConstraintRelatedElement(p);
       const auxiliaryHighlighted = relatedHighlighted;
       const sel = canvasSelection.points.includes(p) || canvasSelection.inspectionContains?.(p) || refSelected || ownerInstanceSelected(p);
-      if (p.instanceControl && !sel && !ownerInstanceHovered(p) && canvasHover.current.point !== p) return null;
       const endpoint = isEndpointPoint(p);
       const canvasHovered = (active || isReferenceHoverElement(p)) && (canvasHover.current.point === p || canvasHover.current.endpointPoint === p);
       if (viewState.constraintStatus && p.kind === "endpoint" && !canvasHovered && !sel) return null;

@@ -128,7 +128,7 @@ test("source editing rejects empty instances and broken downstream references", 
   await page.keyboard.press("Escape");
 });
 
-test("removing a referenced source is rejected and retains all output constraints", async ({ page }) => {
+test("removing a source cleans its output constraints and retains shared-point constraints", async ({ page }) => {
   const data = await fixture(page, 1);
   data.points.push({ id: "P5", x: 0, y: -20, fixed: true, kind: "explicit", sketchId: data.activeSketchId });
   data.constraints.push(
@@ -142,8 +142,8 @@ test("removing a referenced source is rejected and retains all output constraint
   await clickWorld(page, { x: 20, y: -20 });
   await page.keyboard.press("Enter");
   const after = (await state(page)).serialized;
-  expect(after.geometryInstances[0].sources).toHaveLength(4);
-  expect(after.constraints).toHaveLength(data.constraints.length);
+  expect(after.geometryInstances[0].sources).toHaveLength(3);
+  expect(after.constraints).toHaveLength(5);
   expect(after.constraints.at(-1).type).toBe("coincident");
   expect(await page.evaluate((d) => window.__jot2dTest.loadDocumentFixtureForDragTest(d, "references.jot2d"), after)).toMatchObject({ success: true });
 });
@@ -265,12 +265,12 @@ test("synchronized instance command previews rotation and reflection, cancels an
   await rotation.fill("-30"); await rotation.press("Tab");
   await expect(rotation).toHaveValue("-30");
   await rotation.fill("90"); await rotation.press("Tab");
-  await page.locator('[data-free-instance-property="reflected"]').check();
+  await page.locator('[data-free-instance-property="mirrorX"]').check();
   await page.locator('#commandPanel [role="listbox"][data-input="destination"]').click();
   await clickWorld(page, { x: 20, y: 30 });
   await page.locator('#commandPanel [data-action="finish"]').click();
   let current = await state(page);
-  expect(current.serialized.geometryInstances[0]).toMatchObject({ type: "free", rotation: Math.PI / 2, reflected: true });
+  expect(current.serialized.geometryInstances[0]).toMatchObject({ type: "free", rotation: Math.PI / 2, mirrorX: true, mirrorY: false });
   expect(current.instances[0].valid).toBe(true);
   expect(current.instances[0].lines[0].p2.x).toBeCloseTo(20, 0);
   expect(current.instances[0].lines[0].p2.y).toBeCloseTo(-10, 0);
@@ -369,10 +369,10 @@ test("placement constraints stop whole-instance dragging and reject incompatible
   await rotation.fill("30"); await rotation.press("Tab");
   expect((await state(page)).serialized.geometryInstances).toEqual(before.geometryInstances);
   await expect(page.locator("#hint")).toContainText("変更を戻しました");
-  await page.locator('[data-free-instance-property="reflected"]').check();
-  expect((await state(page)).serialized.geometryInstances[0].reflected).toBe(true);
+  await page.locator('[data-free-instance-property="mirrorX"]').check();
+  expect((await state(page)).serialized.geometryInstances[0].mirrorX).toBe(true);
   await page.click("#undoBtn");
-  expect((await state(page)).serialized.geometryInstances[0].reflected).toBe(false);
+  expect((await state(page)).serialized.geometryInstances[0].mirrorX).toBe(false);
 });
 
 test("rotated mirrored circles and arcs share editable radius and endpoint geometry", async ({ page }) => {
@@ -392,7 +392,7 @@ test("rotated mirrored circles and arcs share editable radius and endpoint geome
   await drag(page, { x: 30, y: -20 }, { x: 30 + 20 * Math.cos(-1), y: 20 * Math.sin(-1) });
   current = await state(page);
   expect(current.serialized.arcs[0].startAngle).not.toBeCloseTo(0, 2);
-  expect(current.serialized.geometryInstances[0]).toMatchObject({ x: 30, y: 0, rotation: Math.PI / 2, reflected: true });
+  expect(current.serialized.geometryInstances[0]).toMatchObject({ x: 30, y: 0, rotation: Math.PI / 2, mirrorX: true });
   const restored = await page.evaluate((d) => window.__jot2dTest.loadModelForDerivedInstanceTest(d), current.serialized);
   expect(restored.instances).toEqual(current.instances);
 });
@@ -400,7 +400,7 @@ test("rotated mirrored circles and arcs share editable radius and endpoint geome
 test("invalid free transforms and cross-sketch sources are rejected transactionally", async ({ page }) => {
   await fixture(page, 1);
   const baseline = (await state(page)).serialized;
-  for (const mutation of ["rotation", "anchor", "reflected", "scope", "cycle"]) {
+  for (const mutation of ["rotation", "origin", "mirrorX", "scope", "cycle"]) {
     const malformed = structuredClone(baseline);
     if (mutation === "scope") {
       malformed.sketches.push({ ...malformed.sketches.find((s) => s.id === malformed.activeSketchId), id: "S99", name: "Other" });

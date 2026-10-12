@@ -2,8 +2,8 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const vm = require('node:vm');
-const sandbox = { structuredClone, window: {} }; vm.createContext(sandbox);
-for (const file of ['src/geometry/geometry_kernel.js', 'src/geometry/spline_geometry.js', 'src/solver/constraint_solver.js', 'src/document/appearance.js', 'src/editing/geometry_ids.js', 'src/geometry/synchronized_instance.js', 'src/editing/clipboard_geometry.js']) {
+const sandbox = { window: {} }; vm.createContext(sandbox);
+for (const file of ['src/geometry/geometry_kernel.js', 'src/geometry/spline_geometry.js', 'src/solver/constraint_solver.js', 'src/document/appearance.js', 'src/editing/geometry_ids.js', 'src/editing/clipboard_geometry.js']) {
   vm.runInContext(fs.readFileSync(file, 'utf8'), sandbox, { filename: file });
 }
 const plain = value => JSON.parse(JSON.stringify(value));
@@ -90,7 +90,7 @@ test('missing Block definition fails before allocating its ID and leaves earlier
 });
 
 test('derived creation reserves all owners and legacy paths before normalizing or adding copied instances', () => {
-  const transfer = { structuredClone, window: {} }; vm.createContext(transfer);
+  const transfer = { window: {} }; vm.createContext(transfer);
   vm.runInContext(fs.readFileSync('src/editing/clipboard_transfer.js', 'utf8'), transfer);
   const { copiedGeometryInstance } = transfer.window.ClipboardTransfer.create({});
   const ids = new Map([['L1', 'L9']]), calls = [], model = { geometryInstances: [] };

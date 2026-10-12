@@ -3,8 +3,8 @@ const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
 const test = require('node:test');
-const sandbox = { structuredClone, window: {} }; vm.createContext(sandbox);
-for (const file of ['src/geometry/geometry_kernel.js', 'src/geometry/spline_geometry.js', 'src/solver/constraint_solver.js', 'src/geometry/synchronized_instance.js', 'src/constraints/references.js', 'src/editing/geometry_ids.js', 'src/editing/geometry_creation.js', 'src/editing/trim_query.js', 'src/editing/trim_editing.js']) vm.runInContext(fs.readFileSync(path.resolve(__dirname, '../..', file), 'utf8'), sandbox, { filename: file });
+const sandbox = { window: {} }; vm.createContext(sandbox);
+for (const file of ['src/geometry/geometry_kernel.js', 'src/geometry/spline_geometry.js', 'src/solver/constraint_solver.js', 'src/constraints/references.js', 'src/editing/geometry_ids.js', 'src/editing/geometry_creation.js', 'src/editing/trim_query.js', 'src/editing/trim_editing.js']) vm.runInContext(fs.readFileSync(path.resolve(__dirname, '../..', file), 'utf8'), sandbox, { filename: file });
 const { HorizontalConstraint, PointOnLineConstraint, ArcEndpointOnLineConstraint, DiameterConstraint, DistanceConstraint, PointOnCircleConstraint } = sandbox.window.GeometrySolver;
 const newScope = () => ({ points: [], lines: [], circles: [], arcs: [], splines: [], constraints: [] });
 function fixture() {

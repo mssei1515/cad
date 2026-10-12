@@ -31,9 +31,9 @@
       if (!invalid) {
         try {
           const value = pendingCommand.type === "distance-value"
-            ? evaluateDimensionExpressionDraft(pendingCommand.constraint || null, expressionFromUserInput(pendingCommand.buffer), undefined, { signedAngle: pendingCommand.target?.interval === true })
+            ? evaluateDimensionExpressionDraft(pendingCommand.constraint || null, expressionFromUserInput(pendingCommand.buffer))
             : Number(pendingCommand.buffer);
-          invalid = !Number.isFinite(value) || (pendingCommand.target?.interval ? value === 0 || Math.abs(value) >= 360 : value <= 0 || (pendingCommand.target?.kind === "angle" && value >= 180));
+          invalid = !Number.isFinite(value) || value <= 0 || (pendingCommand.target?.kind === "angle" && value >= 180);
         } catch (_error) {
           invalid = true;
         }

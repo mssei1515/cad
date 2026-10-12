@@ -29,6 +29,21 @@ function fixture({ placing = false, subsetSuccess = true, dependentSuccess = tru
   return { command, instance, calls };
 }
 
+test('Free transform preserves source variables and pending placement edits skip solver and history', () => {
+  const f = fixture(); assert.equal(f.command.changeFreeInstanceProperty(f.instance, 'rotation', '90'), true);
+  assert.equal(f.instance.rotation, Math.PI / 2); assert.deepEqual(f.calls, ['subset', 'stabilize', 'history']);
+  const pending = fixture({ placing: true }); assert.equal(pending.command.changeFreeInstanceProperty(pending.instance, 'mirrorX', true), true);
+  assert.equal(pending.instance.mirrorX, true); assert.deepEqual(pending.calls, []);
+});
+
+test('Free transform restores failed local or dependent solves without recording history', () => {
+  for (const options of [{ subsetSuccess: false }, { dependentSuccess: false }]) {
+    const f = fixture(options); assert.equal(f.command.changeFreeInstanceProperty(f.instance, 'rotation', '90'), false);
+    assert.equal(f.instance.rotation, 0); assert.equal(f.calls.includes('history'), false);
+    assert.ok(f.calls.includes('restore')); assert.equal(f.calls.includes('clearSolve'), options.dependentSuccess === false);
+  }
+});
+
 test('Block orthogonal rotation preserves the display center and a failed solve restores and resolves again', () => {
   const f = fixture(); assert.equal(f.command.setBlockInstanceOrthogonalRotation(f.instance, Math.PI / 2), true);
   assert.ok(Math.abs(f.instance.x - 15) < 1e-12); assert.ok(Math.abs(f.instance.y - 21) < 1e-12);

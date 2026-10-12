@@ -33,8 +33,7 @@
       for (const p of allGeometryPoints()) {
         if (!isVisibleSketchElement(p)) continue;
         if (isSplineOnlyFitPoint(p)) continue;
-        if (p.instanceControl) addSnapCandidate(candidates, source, p.x, p.y, applicationText(p.instanceControl === "anchor" ? "配置基準点" : "配置点", "Instance point"), 0, { point: p });
-        else if (p.blockProjection) addSnapCandidate(candidates, source, p.x, p.y, "ブロック点", 0, { point: p });
+        if (p.blockProjection) addSnapCandidate(candidates, source, p.x, p.y, "ブロック点", 0, { point: p });
         else if (isReferencePoint(p)) addSnapCandidate(candidates, source, p.x, p.y, "参照点", 0, { point: p });
         else if (isPrimitiveCenterPoint(p)) addSnapCandidate(candidates, source, p.x, p.y, "中心", 0, { point: p });
         else if (isEndpointPoint(p) && isPointUsedByPrimitive(p)) addSnapCandidate(candidates, source, p.x, p.y, "端点", 0, { point: p });
@@ -42,7 +41,6 @@
       }
       for (const line of allGeometryLines()) {
         if (!isVisibleSketchElement(line)) continue;
-        addSnapCandidate(candidates, source, (line.p1.x + line.p2.x) / 2, (line.p1.y + line.p2.y) / 2, applicationText("中点", "Midpoint"), 1, { line, midpoint: true });
         const closest = closestPointOnSegment(source.x, source.y, line);
         addSnapCandidate(candidates, source, closest.x, closest.y, "線上", 2, { line });
       }
@@ -77,10 +75,9 @@
       return candidates;
     }
 
-    function findSnap(p, threshold, accepts = () => true) {
+    function findSnap(p, threshold) {
       let best = null;
       for (const candidate of snapCandidates(p)) {
-        if (!accepts(candidate)) continue;
         if (candidate.distance > threshold) continue;
         if (
           !best ||
@@ -92,8 +89,8 @@
       }
       return best;
     }
-    function snapForDrawing(p, threshold, accepts) {
-      const best = findSnap(p, threshold, accepts);
+    function snapForDrawing(p, threshold) {
+      const best = findSnap(p, threshold);
       activeSnap = best;
       return best ? { x: best.x, y: best.y } : p;
     }

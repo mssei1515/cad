@@ -67,11 +67,9 @@
           projection[kind] = (bundle[kind] || []).map(item => {
             selectedNodes.add(item); selectedBlockProjectionIds.add(item.id);
             const sourceRef = window.GeometryObjects.geometryRefForItem(item.sourceElement);
-            return { id: item.id, path: [instance.id, ...(item.occurrenceKey ? [item.occurrenceKey] : []), ...(sourceRef?.path || [item.sourceElement.id])] };
+            return { id: item.id, path: [instance.id, ...(instance.type === 'pattern' ? [String(item.occurrenceIndex)] : []), ...(sourceRef?.path || [item.sourceElement.id])] };
           });
         }
-        projection.controls = (bundle.controlPoints || []).map(point => ({ id: point.id, path: [instance.id, point.instanceControl] }));
-        for (const point of bundle.controlPoints || []) selectedNodes.add(point);
         instanceProjectionData.set(instance, projection);
       }
       const copiedAnnotations = annotations.map(annotation => {

@@ -339,21 +339,6 @@
     }
   }
 
-  class LineMidpointCoincidentConstraint extends Constraint {
-    constructor(point, line) { super(`中点一致 ${point.id}-${line.id}`, 1); this.point = point; this.line = line; }
-    rawError() { return [this.point.x - (this.line.p1.x + this.line.p2.x) / 2, this.point.y - (this.line.p1.y + this.line.p2.y) / 2]; }
-  }
-
-  class InstanceAxisOffsetConstraint extends Constraint {
-    constructor(point, anchor, target, axis) { super(`相対配置 ${point.id}`, 1); this.p1 = anchor; this.p2 = point; this.target = target; this.axis = axis; }
-    rawError() { return this.p2[this.axis] - this.p1[this.axis] - this.target; }
-  }
-
-  class InstanceAngleIntervalConstraint extends Constraint {
-    constructor(anchor, target) { super(`角度間隔 ${anchor.id}`, 1); this.point = anchor; this.target = target; }
-    rawError() { return this.point.derivedInstance.placement.angleStep - this.target; }
-  }
-
   class CoincidentConstraint extends Constraint {
     constructor(p1, p2) {
       super(`一致 ${p1.id}-${p2.id}`, 1);
@@ -1452,7 +1437,7 @@
       }
       for (const instance of this.model.geometryInstances || []) {
         if (instance.type !== "free") continue;
-        vs.push(...window.SynchronizedInstance.variables(instance));
+        for (const prop of ["x", "y", "rotation"]) vs.push({ object: instance, prop, label: `${instance.id}.${prop}` });
       }
       for (const constraint of this.model.constraints || []) {
         if (constraint instanceof PointOnSplineConstraint && constraint.enabled !== false) {
@@ -2444,7 +2429,7 @@
     LineAngleConstraint,
     signedPointLineDistance,
     signedPointDirectedLineDistance,
-    CoincidentConstraint, LineMidpointCoincidentConstraint, InstanceAxisOffsetConstraint, InstanceAngleIntervalConstraint,
+    CoincidentConstraint,
     ArcEndpointCoincidentConstraint,
     ArcEndpointArcEndpointCoincidentConstraint,
     PointOnLineConstraint,

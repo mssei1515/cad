@@ -87,7 +87,7 @@
       const vars = [];
       for (const instance of currentScope().geometryInstances) {
         if (instance.type !== "free" || instance.sketchId !== sketchId || !component.has(instance)) continue;
-        vars.push(...window.SynchronizedInstance.variables(instance));
+        for (const prop of ["x", "y", "rotation"]) vars.push({ object: instance, prop, label: `${instance.id}.${prop}` });
       }
       for (const p of currentScope().points) {
         if (!isVisibleSketchElement(p)) continue;
@@ -132,7 +132,7 @@
       const vars = [];
       for (const instance of currentScope().geometryInstances) {
         if (instance.type !== "free" || instance.sketchId !== sketchId) continue;
-        vars.push(...window.SynchronizedInstance.variables(instance));
+        for (const prop of ["x", "y", "rotation"]) vars.push({ object: instance, prop, label: `${instance.id}.${prop}` });
       }
       for (const p of currentScope().points) {
         if (elementSketchId(p) === sketchId && !p.fixed) {

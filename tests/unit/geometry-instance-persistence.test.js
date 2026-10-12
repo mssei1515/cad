@@ -3,15 +3,15 @@ const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
 const test = require('node:test');
-const sandbox = { structuredClone, window: {} }; vm.createContext(sandbox);
-for (const file of ['src/geometry/geometry_ref.js', 'src/document/appearance.js', 'src/document/drawing_order.js', 'src/geometry/synchronized_instance.js', 'src/persistence/geometry_instances.js']) vm.runInContext(fs.readFileSync(path.resolve(__dirname, '../..', file), 'utf8'), sandbox);
+const sandbox = { window: {} }; vm.createContext(sandbox);
+for (const file of ['src/geometry/geometry_ref.js', 'src/document/appearance.js', 'src/document/drawing_order.js', 'src/persistence/geometry_instances.js']) vm.runInContext(fs.readFileSync(path.resolve(__dirname, '../..', file), 'utf8'), sandbox);
 const codec = sandbox.window.GeometryInstancePersistence.create({ applicationText: (_ja, en) => en });
 const ref = { kind: 'line', path: ['L1'] };
 const projection = () => ({ id: 'SPI1', type: 'sketchProjection', sources: [ref] });
 test('normalization uses explicit sketch resolver and creates typed instance data', () => {
   const instance = codec.normalize({ type: 'pattern', sources: [ref, {}], direction: 'L2', spacing: '5', copies: 3.9, reversed: 1 }, () => 'S2', 2);
   assert.equal(instance.id, 'PI3'); assert.equal(instance.sketchId, 'S2'); assert.equal(instance.sources.length, 1);
-  assert.equal(instance.placement.direction.path[0], 'L2'); assert.equal(instance.placement.spacing, 5); assert.equal(instance.count, 4); assert.equal(instance.placement.reversed, true);
+  assert.equal(instance.direction.path[0], 'L2'); assert.equal(instance.spacing, 5); assert.equal(instance.copies, 3); assert.equal(instance.reversed, true);
 });
 test('free instance validation requires finite numeric placement and boolean mirrors', () => {
   const data = { ...projection(), type: 'free', x: 0, y: 0, rotation: 0, origin: { x: 0, y: 0 }, mirrorX: false, mirrorY: false };

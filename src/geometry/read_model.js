@@ -39,7 +39,7 @@
     }
 
     function allGeometryPoints() {
-      return cachedGeometryRead("allGeometryPoints", () => [...currentScope().points, ...blockProjectionBundles().flatMap((bundle) => bundle.points), ...geometryInstanceBundles().flatMap((bundle) => [...bundle.points, ...(bundle.controlPoints || [])])]);
+      return cachedGeometryRead("allGeometryPoints", () => [...currentScope().points, ...blockProjectionBundles().flatMap((bundle) => bundle.points), ...geometryInstanceBundles().flatMap((bundle) => bundle.points)]);
     }
 
     function allGeometryLines() {

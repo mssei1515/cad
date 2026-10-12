@@ -3,19 +3,18 @@ const fs = require("node:fs");
 const path = require("node:path");
 const vm = require("node:vm");
 const test = require("node:test");
-const sandbox = { structuredClone, window: {} };
+const sandbox = { window: {} };
 vm.createContext(sandbox);
-for (const file of ["src/geometry/geometry_kernel.js", "src/geometry/geometry_ref.js", "src/geometry/spline_geometry.js", "src/solver/constraint_solver.js", "src/geometry/objects.js", "src/geometry/synchronized_instance.js", "src/geometry/instance_projection.js"]) {
+for (const file of ["src/geometry/geometry_kernel.js", "src/geometry/geometry_ref.js", "src/geometry/spline_geometry.js", "src/solver/constraint_solver.js", "src/geometry/objects.js", "src/geometry/instance_projection.js"]) {
   vm.runInContext(fs.readFileSync(path.resolve(__dirname, "../..", file), "utf8"), sandbox, { filename: file });
 }
 const { Point, Line, Circle, Arc } = sandbox.window.GeometrySolver;
 const { parseId: ref } = sandbox.window.GeometryRef;
 const { geometryRefForItem, addGeometryBundleToMaps } = sandbox.window.GeometryObjects;
-const createBase = () => sandbox.window.InstanceProjection.create({ elementSketchId: item => item.sketchId, applicationText: (_ja, en) => en });
-const create = () => createBase();
+const create = () => sandbox.window.InstanceProjection.create({ elementSketchId: item => item.sketchId, applicationText: (_ja, en) => en });
 const point = (id, x, y, sketchId = "S1") => Object.assign(new Point(id, x, y), { sketchId });
 const free = (id, sources, fields = {}) => ({ id, type: "free", sources, sketchId: "S1", x: 10, y: 20, rotation: 0, origin: { x: 0, y: 0 }, mirrorX: false, mirrorY: false, ...fields });
-const scope = (points, instances, extra = {}) => ({ points, lines: [], circles: [], arcs: [], splines: [], geometryInstances: instances.map(i => { if (!i.placement && i.type !== "sketchProjection") { const n = sandbox.window.SynchronizedInstance.normalize(i); for (const k of Object.keys(i)) delete i[k]; Object.assign(i, n); } return i; }), ...extra });
+const scope = (points, instances, extra = {}) => ({ points, lines: [], circles: [], arcs: [], splines: [], geometryInstances: instances, ...extra });
 const near = (actual, expected) => assert.ok(Math.abs(actual - expected) < 1e-10, `${actual} != ${expected}`);
 
 test('hatch-only mirror, pattern and chained free instances retain live boundaries and pattern transforms', () => {
@@ -38,7 +37,7 @@ test('hatch-only mirror, pattern and chained free instances retain live boundari
   width = 9;
   near(bundles[2].hatches[0].resolvedBoundary.loops[0].points[1].x, -9);
   near(bundles[0].hatches[0].resolvedBoundary.area, 18);
-  mirror.placement.axis = ref('line', 'missing');
+  mirror.axis = ref('line', 'missing');
   assert.equal(api.geometryInstanceBundlesForScope(scope([a, b], [mirror], { lines: [axis], hatches: [hatch] }))[0].valid, false);
 });
 

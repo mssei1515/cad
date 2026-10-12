@@ -245,7 +245,7 @@
         for (const localBundle of localDerivedBundles) {
           if (!localBundle.valid || !enabledSketchIds.has(String(localBundle.instance.sketchId))) continue;
           const localPointMap = new Map();
-          for (const localPoint of [...localBundle.points, ...(localBundle.controlPoints || [])]) {
+          for (const localPoint of localBundle.points) {
             const path = localPath(localPoint.id);
             const point = createProjectedPoint(instance, ownerInstance, definition, localPoint, path);
             point.blockAppearanceOverrides = [localBundle.instance.appearanceOverride, ...appearanceOverrides];

@@ -16,7 +16,6 @@
     function normalizeGeometryInstance(raw, normalizeSketch, index = 0) {
       const type = ["mirror", "pattern", "free"].includes(raw?.type) ? raw.type : "sketchProjection";
       const prefix = type === "free" ? "FI" : type === "mirror" ? "MI" : type === "pattern" ? "PI" : "SPI";
-      if (raw?.placement) return { ...window.SynchronizedInstance.normalize(raw), sketchId: normalizeSketch(raw.sketchId), appearanceOverride: normalizeAppearance(raw.appearanceOverride) };
       const sources = (Array.isArray(raw?.sources) ? raw.sources : [])
         .map((entry) => normalizeGeometryInstanceRef(entry))
         .filter(Boolean);
@@ -47,7 +46,7 @@
           pointIds: Array.isArray(raw.legacyOutput.pointIds) ? raw.legacyOutput.pointIds.map(String) : [],
         };
       }
-      return window.SynchronizedInstance.normalize(instance);
+      return instance;
     }
 
     function migrateLegacySketchProjectionNamespace(namespace, sourceVersion) {
@@ -105,8 +104,7 @@
         if (ids.has(id)) return applicationText(`ID ${id} が重複しています`, `contains duplicate ID ${id}`);
         ids.add(id);
         if (!supportedTypes.has(raw.type)) return applicationText(`種類 ${String(raw.type || "")} は未対応です`, `contains unsupported type ${String(raw.type || "")}`);
-        if (raw.placement) { const error = window.SynchronizedInstance.error(raw); if (error) return `${id}: ${error}`; }
-        if (!raw.placement && raw.type === "free" && (![raw.x, raw.y, raw.rotation, raw.origin?.x, raw.origin?.y].every((v) => typeof v === "number" && Number.isFinite(v)) || typeof raw.mirrorX !== "boolean" || typeof raw.mirrorY !== "boolean")) return applicationText(`${id} の配置設定が正しくありません`, `${id} has invalid placement settings`);
+        if (raw.type === "free" && (![raw.x, raw.y, raw.rotation, raw.origin?.x, raw.origin?.y].every((v) => typeof v === "number" && Number.isFinite(v)) || typeof raw.mirrorX !== "boolean" || typeof raw.mirrorY !== "boolean")) return applicationText(`${id} の配置設定が正しくありません`, `${id} has invalid placement settings`);
         if (!Array.isArray(raw.sources) || raw.sources.length === 0 || raw.sources.some((ref) => !normalizeGeometryInstanceRef(ref))) {
           return applicationText(`${id} の複写元が正しくありません`, `${id} has invalid source geometry`);
         }

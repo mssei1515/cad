@@ -103,9 +103,9 @@
         if (entry.fixed) badges += `<span class="badge">${applicationText("固定", "Fixed")}</span>`;
         data += ` data-id="${escapeHtml(entry.id)}"`;
       } else if (category === "instance") {
-        icon = toolbarSvgMarkup(entry.type === "free" ? "#toolFreeInstance" : "#toolSketchProjection");
+        icon = toolbarSvgMarkup(entry.type === "free" ? "#toolFreeInstance" : entry.type === "mirror" ? "#toolMirror" : entry.type === "pattern" ? "#toolPattern" : "#toolSketchProjection");
         primary = entry.id;
-        secondary = geometryInstanceTypeLabel(entry.type) + (entry.type === "free" ? ` (${entry.count})` : "");
+        secondary = entry.type === "pattern" ? applicationText(`直線パターン ${entry.copies}個`, `Linear Pattern ${entry.copies} copies`) : geometryInstanceTypeLabel(entry.type);
         const bundle = geometryInstanceBundle(entry);
         if (!bundle.valid) badges += `<span class="badge constraint-reference-error-badge">${applicationText("参照エラー", "Reference error")}</span>`;
         data += ` data-id="${escapeHtml(entry.id)}"`;

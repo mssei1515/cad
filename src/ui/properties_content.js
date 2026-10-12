@@ -8,18 +8,11 @@
     const { annotationDisplayPropertyRows, multiplePropertiesRows, geometryPropertyName, geometryAppearanceSectionName, propertyReadonlyRow, geometryPropertyRows, blockPropertiesConfiguration, blockRotationPropertyRow, dimensionGeometryPropertyRows, constraintDefiningGeometryPropertyRows, annotationAppearancePropertyRows } = rows;
     const { appearancePropertyRows, dimensionAppearancePropertyRows, leaderAppearancePropertyRows, colorPickerValue } = appearanceControls;
     function freeInstancePropertyRows(item, info) {
-      const p = item.placement;
-      const labels = { linear: "直線", circular: "円形", axisReflection: "軸線に対する反射", directionLinear: "方向線による直線配置" };
-      const field = (key, label, value, type = "number") => `<div class="property-row"><label>${label}</label><input data-free-instance-property="${key}" type="${type}" ${key === "count" ? 'min="2" max="1001" step="1"' : 'step="any"'} ${type === "checkbox" ? (value ? "checked" : "") : `value="${value}"`}></div>`;
-      return propertyReadonlyRow("配置方式", "Placement", labels[p.kind])
-        + (p.kind === "linear" && !info.placing ? propertyReadonlyRow("X座標", "X coordinate", formatDisplayNumber(item.x)) + propertyReadonlyRow("Y座標", "Y coordinate", formatDisplayNumber(item.y)) : "")
-        + (["linear", "circular"].includes(p.kind) ? propertyReadonlyRow("配置基準点", "Source anchor", item.anchor.relation ? ({ point: "点", lineEndpoint: "線の端点", arcEndpoint: "円弧の端点", lineMidpoint: "線の中点" }[item.anchor.relation.kind]) + ": " + geometryRefId(item.anchor.relation.target) : "固定座標") : "")
-        + (p.kind !== "axisReflection" ? field("count", "個数（元を含む）", item.count) : "")
-        + (["linear", "circular"].includes(p.kind) ? field("rotation", "配置角度 (°)", formatDisplayNumber(item.rotation * 180 / Math.PI)) + field("reflected", "反転", item.reflected, "checkbox") + field("rotationLocked", "回転ロック", item.rotationLocked, "checkbox") : "")
-        + (p.kind === "circular" ? field("angleStep", "角度間隔 (°)", formatDisplayNumber(p.angleStep * 180 / Math.PI)) + `<div class="property-row"><label>角度間隔の制御</label><select data-free-instance-property="angleMode"><option value="numeric" ${p.angleMode === "numeric" ? "selected" : ""}>数値指定</option><option value="constraint" ${p.angleMode === "constraint" ? "selected" : ""}>拘束で制御</option></select></div>${!info.placing ? '<button data-property-action="instance-angle-dimension">角度間隔寸法を追加</button>' : ""}` : "")
-        + (p.kind === "directionLinear" ? field("spacing", "間隔 (mm)", p.spacing) + field("reversed", "方向反転", p.reversed, "checkbox") : "")
-        + (!info.placing ? `<button data-property-action="instance-placement">配置設定を編集</button>` + (["linear", "circular"].includes(p.kind) ? `<button data-property-action="instance-anchor">配置基準点を変更</button>` : "") : "");
-
+      const placementRows = info.placing ? "" : propertyReadonlyRow("X座標", "X coordinate", formatDisplayNumber(item.x))
+        + propertyReadonlyRow("Y座標", "Y coordinate", formatDisplayNumber(item.y))
+        + propertyReadonlyRow("ドラッグ操作", "Drag action", !info.editingSharedShape ? applicationText("全体移動", "Move instance") : applicationText("共有形状の編集", "Edit shared shape"));
+      return placementRows + `<div class="property-row"><label>${applicationText("角度", "Angle")} (°)</label><input data-free-instance-property="rotation" type="number" step="1" value="${formatDisplayNumber(item.rotation * 180 / Math.PI)}"></div>`
+        + [ ["mirrorX", "左右反転", "Reflect left/right"], ["mirrorY", "上下反転", "Reflect up/down"] ].map(([key, ja, en]) => `<div class="property-row"><label>${applicationText(ja, en)}</label><input data-free-instance-property="${key}" type="checkbox" ${item[key] ? "checked" : ""}></div>`).join("");
     }
 
     function render(target) {
@@ -81,7 +74,7 @@
         const { bundle, effective } = info;
         const typeLabel = geometryInstanceTypeLabel(item.type);
         const refs = info.sources.map((ref) => `${ref.kind}:${geometryRefId(ref)}`).join(", ");
-        const settings = item.type === "free" ? freeInstancePropertyRows(item, info) : "";
+        const settings = item.type === "free" ? freeInstancePropertyRows(item, info) : item.type === "pattern" ? `<div class="property-row"><label>${applicationText("間隔", "Spacing")}</label><div class="property-input-with-unit"><input data-geometry-instance-property="spacing" type="number" min="0.000001" step="0.1" value="${item.spacing}"><span class="property-input-unit">mm</span></div></div><div class="property-row"><label>${applicationText("コピー数", "Copies")}</label><input data-geometry-instance-property="copies" type="number" min="1" max="1000" step="1" value="${item.copies}"></div><div class="property-row"><label>${applicationText("反転", "Reverse")}</label><input data-geometry-instance-property="reversed" type="checkbox" ${item.reversed ? "checked" : ""}></div>` : "";
         return `<h2 class="property-heading">${typeLabel}</h2><section class="property-section">${basicInformationHeading}${propertyReadonlyRow("種類", "Type", typeLabel)}${propertyReadonlyRow("ID", "ID", item.id)}${propertyReadonlyRow("複写元", "Sources", refs, { userContent: true })}${propertyReadonlyRow("状態", "Status", bundle.valid ? applicationText("有効", "Valid") : bundle.reason, { userContent: !bundle.valid })}${settings}${info.canEditSources ? `<button data-property-action="instance-sources" ${info.editingSources ? "disabled" : ""}>${applicationText("対象図形を編集", "Edit source geometry")}</button>` : ""}</section><section class="property-section"><h3>${applicationText("外観の上書き", "Appearance Override")}</h3>${appearancePropertyRows(item.appearanceOverride, effective)}</section>`;
       } else if (target.kind === "constraint") {
         const dimension = item.dimension;

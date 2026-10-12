@@ -2,9 +2,9 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const vm = require('node:vm');
 const test = require('node:test');
-const sandbox = { structuredClone, window: {} };
+const sandbox = { window: {} };
 vm.createContext(sandbox);
-for (const file of ['src/geometry/geometry_kernel.js', 'src/geometry/spline_geometry.js', 'src/solver/constraint_solver.js', 'src/geometry/synchronized_instance.js', 'src/solver/solve_scope_query.js']) {
+for (const file of ['src/geometry/geometry_kernel.js', 'src/geometry/spline_geometry.js', 'src/solver/constraint_solver.js', 'src/solver/solve_scope_query.js']) {
   vm.runInContext(fs.readFileSync(file, 'utf8'), sandbox, { filename: file });
 }
 const { Point, Line } = sandbox.window.GeometrySolver;
@@ -47,7 +47,7 @@ test('local and whole-sketch inputs preserve visibility differences, variable or
   const p = new Point('p', 0, 0); p.hidden = true;
   const fixed = new Point('fixed', 0, 0, true), other = new Point('other', 0, 0); other.sketchId = 'S2';
   const circle = { id: 'circle' }, arc = { id: 'arc' };
-  const free = { id: 'free', type: 'free', sketchId: 'S1', placement: { kind: 'linear' }, rotationLocked: false }, linked = { id: 'linked', type: 'linked', sketchId: 'S1' };
+  const free = { id: 'free', type: 'free', sketchId: 'S1' }, linked = { id: 'linked', type: 'linked', sketchId: 'S1' };
   const block = { id: 'block', sketchId: 'S1', rotationLocked: true }, locked = { id: 'locked', sketchId: 'S1', fixed: true };
   Object.assign(state.scope, { points: [p, fixed, other], circles: [circle], arcs: [arc], geometryInstances: [free, linked], blockInstances: [block, locked] });
   const component = new Set([p, fixed, other, circle, arc, free, linked, block, locked]);

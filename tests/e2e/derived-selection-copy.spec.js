@@ -51,7 +51,7 @@ test('rectangle selection copies sources, axes and chained instances to new refe
   const current=await state(page);expect(current.instances).toHaveLength(4);expect(current.instances.every(i=>i.valid)).toBe(true);
   const copies=current.serialized.geometryInstances.filter(i=>!['I1','I2'].includes(i.id));
   expect(copies[0].sources[0].path[0]).not.toBe(data.lines[0].id);
-  expect(copies[0].placement.axis.path[0]).not.toBe(data.lines[1].id);
+  expect(copies[0].axis.path[0]).not.toBe(data.lines[1].id);
   expect(copies[1].sources[0].path[0]).toBe(copies[0].id);
   await rectangle(page,{x:140,y:70},{x:150,y:80});expect((await state(page)).selectedIds).toEqual([]);
 });

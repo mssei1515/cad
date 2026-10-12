@@ -186,8 +186,8 @@
     referenceDimensionValues, validateParameterSymbolNames, evaluateParameterNamespace,
     validateParameterNamespace, prepareLoadedParameterNamespace, parameterDependents,
   } = parameterNamespace;
-  function evaluateDimensionExpressionDraft(constraint, expression, namespace, options) {
-    return evaluateNamedDimensionExpressionDraft(constraint?.annotationOwner ? null : constraint, expression, namespace, options);
+  function evaluateDimensionExpressionDraft(constraint, expression, namespace) {
+    return evaluateNamedDimensionExpressionDraft(constraint?.annotationOwner ? null : constraint, expression, namespace);
   }
   const parameterDraft = window.ParameterDialogDraft.create({ namespace: parameterNamespace });
   const expressionInputView = window.ExpressionInputView.create({
@@ -453,11 +453,11 @@
     cancelConstraintTargetCommand, cancelPendingCommand, canCreateInActiveSketch, rejectRootSketchCreation,
     selectedItemsForGeometryInstance, geometryRefForItem, geometryRefsEqual, isVisibleSketchElement, clearSelection, normalizeGeometryInstance,
     previewFreeId: () => `FI${freeInstanceSeq}`,
-    nextInstanceId: () => `FI${freeInstanceSeq++}`,
+    nextInstanceId: type => type === "free" ? `FI${freeInstanceSeq++}` : type === "mirror" ? `MI${mirrorInstanceSeq++}` : `PI${patternInstanceSeq++}`,
     activeSketchId, getMode: () => mode, setMode: value => { mode = value; }, updateToolbar, updateUI,
     applicationText, setHint, draw, currentScope: workspace.current, canvasSelection, recordHistory,
     Line, lineHasDirection, elementSketchId,
-    resolveGeometryRef, createGeometryInstanceBundle, commitDraft: (...args) => synchronizedInstanceEditing.commit(...args),
+    resolveGeometryRef, createGeometryInstanceBundle,
   });
   const { start: startGeometryInstanceCommand, placeFree: placeFreeInstance } = geometryInstanceCommand;
   const instanceSourceCommand = window.InstanceSourceCommand.create({
@@ -469,12 +469,7 @@
     constraintGraphNodes, guardDimensionSymbolDeletion, annotationReferencesRemovedGeometry,
     clearSketchSolveState, recordHistory,
   });
-  const { start: startProjectionSourceEdit, toggle: toggleInstanceSource, finish: finishInstanceSourceEdit } = instanceSourceCommand;
-  function startInstanceSourceEdit(instance) {
-    if (instance.type !== "free") return startProjectionSourceEdit(instance);
-    if (instance.sketchId !== activeSketchId() || !guardSketchEdit(instance.sketchId, "structure")) return false;
-    return geometryInstanceCommand.startEdit(instance, "sources");
-  }
+  const { start: startInstanceSourceEdit, toggle: toggleInstanceSource, finish: finishInstanceSourceEdit } = instanceSourceCommand;
   const blockPlacementCommand = window.BlockPlacementCommand.create({
     isGeometryMode, canCreateInActiveSketch, blockDefinitionById, blockDefinitionScopeError,
     blockDefinitionDrawableSketchIds, blockDefinitionGeometrySketchIds, snappedBlockRotation,
@@ -498,7 +493,7 @@
     documentHistory, currentBlockHistory: () => blockEditor.current?.history,
     changed: updateHistoryButtons, log,
   });
-  const CURRENT_JSON_VERSION = 26;
+  const CURRENT_JSON_VERSION = 25;
   const CLIPBOARD_PASTE_OFFSET_SCREEN_PX = 24;
   const BLOCK_ORTHOGONAL_ROTATION_STEP = Math.PI / 2;
 
@@ -911,12 +906,6 @@
     invalidateBlockProjectionCache, setHint, updateBlockUI, log, updateUI, draw, recordHistory,
   });
   const { setEnabledSketchIds: setBlockInstanceEnabledSketchIds } = blockConfigurationCommand;
-  const synchronizedInstanceEditing = window.SynchronizedInstanceEditing.create({
-    currentScope: workspace.current, snapshotModelState, restoreModelState, geometryInstanceBundle, geometryInstanceBundlesForScope,
-    blockProjectionBundles, serializeModel, addPointSnapConstraints, geometryInstanceSourceObjects,
-    rebind: () => constraintRebinding.rebuildDocument(model, [...blockProjectionBundles(), ...geometryInstanceBundles()]),
-    stabilize: stabilizeActiveParameterNamespace, acceptError: CONSTRAINT_ACCEPT_ERROR, resolveGeometryRef, setHint, recordHistory, updateUI, draw,
-  });
   const instanceTransformCommand = window.InstanceTransformCommand.create({
     isPlacing: geometryInstanceCommand.isPlacing, currentScope: workspace.current,
     snapshotModelState, restoreModelState, geometryInstanceSourceObjects,
@@ -926,11 +915,7 @@
     invalidateBlockProjectionCache, updateBlockUI, refreshConstraintAnalysis, updateUI, draw,
     snappedBlockRotation, solveSketchAndDependents, updatePropertiesUI,
   });
-  const { setBlockInstanceRotationLocked, setBlockInstanceOrthogonalRotation } = instanceTransformCommand;
-  function changeFreeInstanceProperty(instance, key, value) {
-    return geometryInstanceCommand.isPlacing(instance) ? geometryInstanceCommand.changeSetting(key, value)
-      : synchronizedInstanceEditing.change(instance, key, value);
-  }
+  const { changeFreeInstanceProperty, setBlockInstanceRotationLocked, setBlockInstanceOrthogonalRotation } = instanceTransformCommand;
   const dimensionValueCommand = window.DimensionValueCommand.create({
     canEdit: (id, operation) => guardSketchEdit(id, operation),
     renameDimension: parameterNamespace.renameDimension,
@@ -947,7 +932,6 @@
     },
     addDistanceConstraintFromTarget,
     submitSpecialDistance: (pending, value) => {
-      if (pending.target?.interval) return synchronizedInstanceEditing.interval(pending, value, expressionFromUserInput(pending.buffer));
       if (pending.constraint?.annotationOwner) {
         if (!annotationDimensions.setValue(pending.constraint, value)) { setHint("注記の距離拘束が成立しません", "error"); return false; }
         recordHistory("注記寸法値変更"); return true;
@@ -955,11 +939,6 @@
       return pending.target?.annotationAnchor ? annotationAnchorConstraints.submitDistance(value, pending.target.dimensionAxis, pending.dimension) : null;
     },
     commitSpecialProperty: (constraint, property, input) => {
-      if (constraint instanceof window.GeometrySolver.InstanceAngleIntervalConstraint) {
-        if (property !== "constraint-expression") return null;
-        try { const expression = expressionFromUserInput(input); return synchronizedInstanceEditing.interval({ constraint, target: targetFromConstraint(constraint), dimension: constraint.dimension }, evaluateDimensionExpressionDraft(constraint, expression), expression); }
-        catch (error) { setHint(parameterErrorText(error), "error"); return false; }
-      }
       if (!constraint.annotationOwner) return null;
       try {
         const value = evaluateDimensionExpressionDraft(null, expressionFromUserInput(input));
@@ -1227,6 +1206,8 @@
 
   function geometryInstanceTypeLabel(type) {
     if (type === "free") return applicationText("同期インスタンス", "Synchronized Instance");
+    if (type === "mirror") return applicationText("ミラー", "Mirror");
+    if (type === "pattern") return applicationText("直線パターン", "Linear Pattern");
     return applicationText("スケッチ投影", "Sketch Projection");
   }
 
@@ -1371,7 +1352,7 @@
     if (commandPanelSelectedItem) return geometryRefsEqual(geometryRefForItem(item), geometryRefForItem(commandPanelSelectedItem));
     if (mode === "instance-sources" && instanceSourceCommand.includesRef(geometryRefForItem(item))) return true;
     if (mode === "sketch-projection" && sketchProjectionCommand.includes(item)) return true;
-    if (mode.startsWith("free-instance-")) {
+    if (["mirror-axis", "pattern-direction"].includes(mode) || mode.startsWith("free-instance-")) {
       if (item === geometryInstanceCommand.reference || geometryInstanceCommand.sources.some(ref => geometryRefsEqual(ref, geometryRefForItem(item)))) return true;
     }
     if (options.arcEndpoint) {
@@ -2271,7 +2252,7 @@
 
   function dimensionLabelForConstraint(constraint, target, dimension) {
     const readOnly = isReadOnlyDimension(constraint);
-    const value = readOnly ? measuredDimensionValue(target, dimension) : target.interval ? constraint.target * 180 / Math.PI : target.kind === "angle" ? angleDegrees(constraint.target) : constraint.target;
+    const value = readOnly ? measuredDimensionValue(target, dimension) : target.kind === "angle" ? angleDegrees(constraint.target) : constraint.target;
     const formatLabel = readOnly ? formatMeasuredDimensionLabel : formatDimensionLabel;
     const display = dimensionDisplayState(dimension, constraintSketchId(constraint));
     const number = display.precision == null ? formatLabel(value) : Number(value).toFixed(display.precision);
@@ -2395,7 +2376,7 @@
   const clipboardGeometry = window.ClipboardGeometry.create({
     geometryIds, ensureLineMinimumLength, normalizeArcSweep, blockDefinitionById,
     allocateBlockInstanceId: () => `BI${blockInstanceSeq++}`,
-    allocateGeometryInstanceId: type => type === "sketchProjection" ? "SPI" + sketchProjectionInstanceSeq++ : "FI" + freeInstanceSeq++,
+    allocateGeometryInstanceId: type => type === "free" ? "FI" + freeInstanceSeq++ : type === "mirror" ? "MI" + mirrorInstanceSeq++ : type === "pattern" ? "PI" + patternInstanceSeq++ : "SPI" + sketchProjectionInstanceSeq++,
     normalizeGeometryInstance, copiedGeometryInstance: clipboardTransfer.copiedGeometryInstance, applicationText,
   });
 
@@ -2824,9 +2805,8 @@
       let value = NaN;
       let invalid = false;
       try {
-        value = evaluateDimensionExpressionDraft(pendingCommandSession.current.constraint || null, pendingCommandSession.current.buffer, undefined, { signedAngle: pendingCommandSession.current.target.interval === true });
-        invalid = pendingCommandSession.current.target.interval ? value === 0 || Math.abs(value) >= 360
-          : value <= 0 || (pendingCommandSession.current.target.kind === "angle" && value >= 180);
+        value = evaluateDimensionExpressionDraft(pendingCommandSession.current.constraint || null, pendingCommandSession.current.buffer);
+        invalid = value <= 0 || (pendingCommandSession.current.target.kind === "angle" && value >= 180);
       } catch (_error) {
         invalid = true;
       }
@@ -2979,15 +2959,6 @@
     hideDimensionValueInput, syncDimensionValueInput, focusDimensionValueInput,
     applicationText, setHint, log, updateConstraintButtons, updateToolbar, draw,
   });
-  function startInstanceAngleDimension(instance) {
-    if (!guardSketchEdit(instance.sketchId) || geometryInstanceCommand.isPlacing(instance) || instance.placement?.kind !== "circular") return false;
-    cancelPendingCommand(""); cancelConstraintTargetCommand(""); mode = "select";
-    const anchor = geometryInstanceBundle(instance).controlPoints.find(point => point.instanceControl === "anchor");
-    const c = new window.GeometrySolver.InstanceAngleIntervalConstraint(anchor, instance.placement.angleStep);
-    const target = targetFromConstraint(c);
-    pendingCommandSession.replace({ type: "distance-place", target, pointer: defaultDimensionForTarget(target), sketchId: instance.sketchId });
-    setHint("角度間隔寸法の表示位置をクリックしてください"); updateToolbar(); draw(); return true;
-  }
   function startDistanceCommand() { return dimensionPlacementCommand.startDistanceCommand(); }
 
   function startPrimitiveDimensionCommand(kind) { return dimensionPlacementCommand.startPrimitiveDimensionCommand(kind); }
@@ -3015,7 +2986,7 @@
   const constraintControlsView = window.ConstraintControlsView.create({
     document, constraintButtons, constraintMenuButtons, fixPointBtn, isGeometryMode,
     prepareGeometryControls: () => {
-      if (pendingCommandSession.current?.type?.startsWith("distance") && !pendingCommandSession.current.target?.annotationAnchor && !pendingCommandSession.current.target?.interval) {
+      if (pendingCommandSession.current?.type?.startsWith("distance") && !pendingCommandSession.current.target?.annotationAnchor) {
         const target = distanceTargetFromSelection();
         if (!target || target.kind === "invalid") cancelPendingCommand("寸法入力をキャンセルしました");
       }
@@ -3460,7 +3431,7 @@
     setPlacementRotationLocked: blockPlacementCommand.setRotationLocked,
     setPlacementSketchIds: blockPlacementCommand.setEnabledSketchIds,
     setBlockInstanceRotationLocked, setBlockInstanceEnabledSketchIds, setBlockInstanceOrthogonalRotation,
-    annotationCommand, startInstanceSourceEdit, startInstancePlacementEdit: geometryInstanceCommand.startEdit, startInstanceAngleDimension, startReferenceImageCalibration, startHatchBoundaryRepair,
+    annotationCommand, startInstanceSourceEdit, startReferenceImageCalibration, startHatchBoundaryRepair,
     startSplineEdit: spline => splineEditing.activate(spline), openAppearanceColorPalette,
   });
   const { input: handlePropertiesInput, change: handlePropertiesChange, click: handlePropertiesClick } = propertiesController;
@@ -3762,7 +3733,6 @@
   }
 
   function beginDerivedGeometryDrag(e, hit, pointer) {
-    if (hit.item?.instanceControl === "anchor") return;
     if (!guardSketchEdit(hit.instance.sketchId)) return;
     const wholeSelected = canvasSelection.geometryInstances.includes(hit.instance) && canvasSelection.instanceGeometry?.instanceId !== hit.instance.id;
     if (["free", "mirror", "pattern"].includes(hit.instance.type)
@@ -3775,7 +3745,7 @@
         startPointer: pointer, startX: instance.x, startY: instance.y,
         clickGeometrySelection: wholeSelected ? { instanceId: instance.id, id: hit.item.id, kind: hit.kind, endpoint: hit.endpoint } : null,
         variableAllowed: (v) => !sources.has(v.object) && !(v.object === instance && v.prop === "rotation") };
-      if (!window.SynchronizedInstance.placed(instance) || instance.placement.kind === "circular") {
+      if (instance.type !== "free") {
         const item = hit.item;
         let anchor = item instanceof Point ? item : item.center || geometryInstanceSourcePoints(item)[0];
         if (item instanceof Line) {
@@ -4073,7 +4043,6 @@
   }
 
   const canvasCommandCancellation = window.CanvasCommandCancellation.create({
-    instances: geometryInstanceCommand,
     readMode: () => mode, selectMode: () => { mode = "select"; }, blockPlacementCommand, drawingPreview, restoreBlockPlacementPropertiesPanel,
     readPending: pendingCommandSession.read, cancelPendingCommand, readConstraintCommand: () => constraintTargetSession.command, cancelConstraintTargetCommand,
     drawing: { active: hasActiveDrawOperation, cancel: cancelActiveDrawOperation, isToolMode: isDrawToolMode, exit: exitDrawMode },
@@ -4345,11 +4314,7 @@
     getMode: () => mode, instanceSourceCommand, geometryInstanceCommand, hitReferenceTarget, hitDerivedProjectionOperand,
     hitBlockProjectionOperand, operandElement, toggleSketchProjectionSource, clearSnap, selectionRectangle,
     hitHatch: p => hitHatchAt(p.x, p.y, { activeOnly: false }),
-    capturePointer: id => canvas.setPointerCapture(id),
-    snapForDrawing: point => geometryInstanceCommand.activeInput === "origin"
-      ? drawingSnap.resolve(point, 10 / viewport.scale, snap => Boolean(window.SynchronizedInstance.relationFromSnap(geometryInstanceCommand.pending, snap, geometryRefForItem, resolveGeometryRef)))
-      : snapForDrawing(point),
-    getSnap: () => drawingSnap.active, makeConstraintOperand, setHint, applicationText,
+    capturePointer: id => canvas.setPointerCapture(id), snapForDrawing, makeConstraintOperand, setHint, applicationText,
     releasePanelFocus: () => { if (document.activeElement?.closest("#commandPanel")) document.activeElement.blur(); },
   });
 
@@ -4661,6 +4626,8 @@
   document.getElementById("toolCircleCenterCross")?.addEventListener("click", startCircleCenterCrossCommand);
   document.getElementById("toolSketchProjection")?.addEventListener("click", startSketchProjectionCommand);
   document.getElementById("toolFreeInstance")?.addEventListener("click", () => startGeometryInstanceCommand("free"));
+  document.getElementById("toolMirror")?.addEventListener("click", () => startGeometryInstanceCommand("mirror"));
+  document.getElementById("toolPattern")?.addEventListener("click", () => startGeometryInstanceCommand("pattern"));
 
   document.getElementById("toolConstructionLine")?.addEventListener("click", constructionCommand.toggle);
 

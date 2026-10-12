@@ -141,8 +141,8 @@
         if (instance.type !== "free") continue;
         instance.x += dx;
         instance.y += dy;
-        instance.anchor.fallbackPosition.x += dx;
-        instance.anchor.fallbackPosition.y += dy;
+        instance.origin.x += dx;
+        instance.origin.y += dy;
       }
       for (const annotation of definition.annotations || []) {
         annotation.x += dx;

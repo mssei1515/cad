@@ -3,18 +3,10 @@ const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
 const test = require('node:test');
-const sandbox = { structuredClone, window: {} }; vm.createContext(sandbox);
+const sandbox = { window: {} }; vm.createContext(sandbox);
 for (const file of ['src/geometry/geometry_kernel.js', 'src/geometry/spline_geometry.js', 'src/solver/constraint_solver.js', 'src/editing/geometry_ids.js', 'src/editing/checkpoint.js']) vm.runInContext(fs.readFileSync(path.resolve(__dirname, '../..', file), 'utf8'), sandbox, { filename: file });
 const { Point, Line, Circle, Arc, Spline, PointOnSplineConstraint } = sandbox.window.GeometrySolver;
 const plain = value => JSON.parse(JSON.stringify(value));
-test('circular rollback retains the placement object referenced by an active solver context', () => {
-  const { model, checkpoint } = fixture(), instance = model.geometryInstances[0];
-  instance.placement = { kind: 'circular', angleStep: .7, angleMode: 'constraint', angleSign: 1 };
-  const placement = instance.placement, snapshot = checkpoint.captureValues();
-  instance.placement = { kind: 'linear' }; placement.angleStep = 1.4;
-  checkpoint.restoreValues(snapshot);
-  assert.equal(instance.placement, placement); assert.equal(placement.angleStep, .7); assert.equal(placement.kind, 'circular');
-});
 function fixture() {
   const points = [new Point('P1', 0, 0), new Point('P2', 10, 0), new Point('P3', 10, 10)];
   const spline = new Spline('SP1', points.slice(), false, false);

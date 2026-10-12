@@ -173,7 +173,7 @@
       let hasFreePlacement = false;
       while (current?.derivedProjection && current.sourceElement && !visited.has(current)) {
         visited.add(current);
-        if (window.SynchronizedInstance.placed(current.derivedInstance)) hasFreePlacement = true;
+        if (current.derivedInstance?.type === "free") hasFreePlacement = true;
         current = current.sourceElement;
       }
       if (hasFreePlacement) {

@@ -39,9 +39,7 @@
       performanceTrace.fullFallback = Boolean(result.fullFallback);
       const collapse = lineCollapseQuery.find(constraint, snapshot, constraintSketchId(constraint));
       const redundancyStartedAt = now();
-      // A centerline keeps the explicit support relation even when endpoint snaps
-      // already determine its current position (for example two midpoint snaps).
-      const duplicate = type !== "centerline" && solved.success && result.errorNorm <= CONSTRAINT_ACCEPT_ERROR && !collapse ? redundantConstraintInfo(constraint, constraintSketchId(constraint)) : null;
+      const duplicate = solved.success && result.errorNorm <= CONSTRAINT_ACCEPT_ERROR && !collapse ? redundantConstraintInfo(constraint, constraintSketchId(constraint)) : null;
       performanceTrace.redundancyMs = now() - redundancyStartedAt;
       if (!solved.success || result.errorNorm > CONSTRAINT_ACCEPT_ERROR || collapse || duplicate?.redundant) {
         if (duplicate?.redundant && isDimensionConstraint(constraint)) {

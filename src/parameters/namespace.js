@@ -11,7 +11,7 @@
   function create({ currentParameterNamespace, applicationText }) {
     function dimensionExpressionValue(constraint) {
       const target = targetFromConstraint(constraint);
-      return target?.interval ? constraint.target * 180 / Math.PI : target?.kind === "angle" ? angleDegrees(constraint.target) : Number(constraint.target);
+      return target?.kind === "angle" ? angleDegrees(constraint.target) : Number(constraint.target);
     }
 
     function numericDimensionExpression(constraint) {
@@ -100,7 +100,7 @@
 
     function serializedDimensionExpressionValue(data) {
       const value = Number(data?.target);
-      return data?.type === "instanceAngleInterval" ? value * 180 / Math.PI : data?.type === "lineAngle" ? angleDegrees(value) : value;
+      return data?.type === "lineAngle" ? angleDegrees(value) : value;
     }
 
     function rewriteCopiedConstraintSymbol(data, source, copiedDimensionNames, sameNamespace) {
@@ -210,7 +210,7 @@
         const target = targetFromConstraint(constraint);
         if (isDimensionConstraint(constraint) && !isReadOnlyDimension(constraint)) {
           const max = target?.kind === "angle" ? 180 : Infinity;
-          if ((target?.interval ? value === 0 || Math.abs(value) >= 360 : value <= 0 || value >= max)) throw new Error(`${constraint.parameterName}: ${applicationText("寸法値の範囲が正しくありません", "Dimension value is out of range")}`);
+          if (value <= 0 || value >= max) throw new Error(`${constraint.parameterName}: ${applicationText("寸法値の範囲が正しくありません", "Dimension value is out of range")}`);
           constraint.target = target?.kind === "angle" ? (value * Math.PI) / 180 : value;
         }
         constraint.evaluatedParameterValue = value;
@@ -278,7 +278,7 @@
       return { removedNames, dependents };
     }
 
-    function evaluateDimensionExpressionDraft(constraint, expression, namespace = currentParameterNamespace(), options = {}) {
+    function evaluateDimensionExpressionDraft(constraint, expression, namespace = currentParameterNamespace()) {
       ensureParameterNamespace(namespace);
       validateParameterSymbolNames(namespace.parameters, symbolElementsInNamespace(namespace));
       const referenceValues = new Map();
@@ -302,7 +302,7 @@
         : evaluateParameterExpression(String(expression), evaluated.values);
       const target = constraint ? targetFromConstraint(constraint) : null;
       const max = target?.kind === "angle" ? 180 : Infinity;
-      if (!Number.isFinite(value) || (target?.interval || options.signedAngle ? value === 0 || Math.abs(value) >= 360 : value <= 0 || value >= max)) throw new Error(applicationText("寸法値の範囲が正しくありません", "Dimension value is out of range"));
+      if (!Number.isFinite(value) || value <= 0 || value >= max) throw new Error(applicationText("寸法値の範囲が正しくありません", "Dimension value is out of range"));
       return value;
     }
 
