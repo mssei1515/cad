@@ -540,6 +540,11 @@
   const { sameArcEndpoint, constraintTargetsFromOperands, linesAreParallel } = constraintCandidates;
   const constraintOperandValues = window.ConstraintOperands.create({ elementSketchId, operandRelationForSketch, sameArcEndpoint, Arc, lineHasDirection, closestSplinePoint: window.SplineGeometry.closestPoint });
   const { operandElement, makeConstraintOperand, operandFromReferenceTarget, referenceTargetFromOperand, sameConstraintOperand } = constraintOperandValues;
+  const sketchProjectionSources = window.SketchProjectionQueries.createSources({
+    currentScope: () => model, activeSketchId, geometryRefForItem, geometryRefsEqual, queries: sketchProjectionQueries,
+    constraintIsOperational, constraintSketchId, geometryElementKey, geometryKindForItem, elementSketchId,
+    isReferenceSourceSketchId, isVisibleSketchElement, operandElement,
+  });
   const PARAMETER_STABILIZATION_MAX_PASSES = 20;
   const PARAMETER_STABILIZATION_RELATIVE_TOLERANCE = 1e-7;
   const DRAG_PREVIEW_MAX_MODEL_ERROR = 0.125;
@@ -1462,39 +1467,13 @@
 
   function sketchAlpha(...args) { return sketchPresentation.sketchAlpha(...args); }
 
-  function sketchProjectionSourceKey(item) {
-    return geometryElementKey(item);
-  }
+  function sketchProjectionSourceKey(...args) { return sketchProjectionSources.sketchProjectionSourceKey(...args); }
 
-  function sketchProjectionSourceIsCovered(item, targetSketchId = activeSketchId()) {
-    const itemRef = geometryRefForItem(item);
-    if (itemRef && model.geometryInstances.some((instance) => instance.type === "sketchProjection" && instance.sketchId === targetSketchId && instance.sources.some((ref) => geometryRefsEqual(ref, itemRef)))) return true;
-    if (!item) return false;
-    if (item instanceof Point) {
-      return sketchProjectionConstraints().some((constraint) =>
-        constraintIsOperational(constraint)
-        && constraint.kind === "point"
-        && constraintSketchId(constraint) === targetSketchId
-        && sketchProjectionPointPairs(constraint).some(([source]) => source === item || String(source?.id) === String(item.id)));
-    }
-    const key = sketchProjectionSourceKey(item);
-    return sketchProjectionConstraints().some((constraint) =>
-      constraintIsOperational(constraint)
-      && constraintSketchId(constraint) === targetSketchId
-      && constraint.kind === geometryKindForItem(item)
-      && sketchProjectionSourceKey(constraint.source) === key);
-  }
+  function sketchProjectionSourceIsCovered(...args) { return sketchProjectionSources.sketchProjectionSourceIsCovered(...args); }
 
-  function sketchProjectionEntryFromItem(item) {
-    const kind = geometryKindForItem(item);
-    const sketchId = elementSketchId(item);
-    if (!item || !kind || !isReferenceSourceSketchId(sketchId) || !isVisibleSketchElement(item)) return null;
-    return { item, kind, sketchId, key: sketchProjectionSourceKey(item) };
-  }
+  function sketchProjectionEntryFromItem(...args) { return sketchProjectionSources.sketchProjectionEntryFromItem(...args); }
 
-  function sketchProjectionEntryFromOperand(operand) {
-    return sketchProjectionEntryFromItem(operandElement(operand));
-  }
+  function sketchProjectionEntryFromOperand(...args) { return sketchProjectionSources.sketchProjectionEntryFromOperand(...args); }
 
   function projectedPointForCreation(sourcePoint, targetSketchId) {
     return addPointToSketch(sourcePoint.x, sourcePoint.y, targetSketchId, sourcePoint.kind || "endpoint");

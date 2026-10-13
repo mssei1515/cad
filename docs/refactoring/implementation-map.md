@@ -893,3 +893,6 @@ GeometryPresentation.createCommandTargetsはpanel選択snapshot／現在mode／I
 
 
 GeometryPresentation.createSketchStyleはsolve error／Sketch ID・関係／拘束status／可視性／activeの6照会portから色・線幅・alpha・描画順を返す。選択→Hover→solve error→非active→拘束statusの色優先、各Sketch関係の線幅／alpha、visible filter→stable inactive／active順と元item参照を維持する。表示色定義はGeometryPresentationが持ち、寸法で共有する非active色はINACTIVE_CONSTRAINT_STATUS_COLORを参照する。Solver・Sketch・Selectionの状態は照会のみで、元arrayやモデルを変更せず、appは既存callback用hoisted入口と接続を持つ。
+
+
+SketchProjectionQueries.createSourcesは現在model／active Sketch、Geometry ref・種類・key／同一性、既存投影拘束query／operational／Sketch・参照元／可視性、operand変換の13portでsource coverageと候補entryを照会する。Instance優先→従来拘束、Point constraintのObject同一性／string ID、他Geometryのkind／source key・target Sketch・operational条件と候補guard順を維持する。currentScope adapterは元model aliasをcall時に読み、既存拘束queryのscopeとcacheを変更しない。新cache／重複規則・モデル／session更新を持たず、appのhoisted入口は初期command callback登録を維持する。

@@ -81,5 +81,44 @@
 
     return Object.freeze({ sketchProjectionConstraints, sketchProjectionConstraintForTarget, sketchProjectionConstraintsForTarget, isSketchProjectedGeometry, sketchProjectionPointPairs, sketchProjectionConstraintsAffectingItems });
   }
-  window.SketchProjectionQueries = Object.freeze({ create });
+  function createSources({ currentScope, activeSketchId, geometryRefForItem, geometryRefsEqual, queries,
+    constraintIsOperational, constraintSketchId, geometryElementKey, geometryKindForItem,
+    elementSketchId, isReferenceSourceSketchId, isVisibleSketchElement, operandElement }) {
+    const { sketchProjectionConstraints, sketchProjectionPointPairs } = queries;
+    function sketchProjectionSourceKey(item) {
+      return geometryElementKey(item);
+    }
+
+    function sketchProjectionSourceIsCovered(item, targetSketchId = activeSketchId()) {
+      const itemRef = geometryRefForItem(item);
+      if (itemRef && currentScope().geometryInstances.some((instance) => instance.type === "sketchProjection" && instance.sketchId === targetSketchId && instance.sources.some((ref) => geometryRefsEqual(ref, itemRef)))) return true;
+      if (!item) return false;
+      if (item instanceof Point) {
+        return sketchProjectionConstraints().some((constraint) =>
+          constraintIsOperational(constraint)
+          && constraint.kind === "point"
+          && constraintSketchId(constraint) === targetSketchId
+          && sketchProjectionPointPairs(constraint).some(([source]) => source === item || String(source?.id) === String(item.id)));
+      }
+      const key = sketchProjectionSourceKey(item);
+      return sketchProjectionConstraints().some((constraint) =>
+        constraintIsOperational(constraint)
+        && constraintSketchId(constraint) === targetSketchId
+        && constraint.kind === geometryKindForItem(item)
+        && sketchProjectionSourceKey(constraint.source) === key);
+    }
+
+    function sketchProjectionEntryFromItem(item) {
+      const kind = geometryKindForItem(item);
+      const sketchId = elementSketchId(item);
+      if (!item || !kind || !isReferenceSourceSketchId(sketchId) || !isVisibleSketchElement(item)) return null;
+      return { item, kind, sketchId, key: sketchProjectionSourceKey(item) };
+    }
+
+    function sketchProjectionEntryFromOperand(operand) {
+      return sketchProjectionEntryFromItem(operandElement(operand));
+    }
+    return Object.freeze({ sketchProjectionSourceKey, sketchProjectionSourceIsCovered, sketchProjectionEntryFromItem, sketchProjectionEntryFromOperand });
+  }
+  window.SketchProjectionQueries = Object.freeze({ create, createSources });
 })();

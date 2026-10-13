@@ -20,7 +20,7 @@ const files = [
   "tests/unit/appearance-controls.test.js",
   "src/ui/appearance_controls.js", "src/ui/property_rows.js", "src/ui/properties_view.js", "src/ui/block_view.js", "tests/unit/properties-view.test.js", "tests/unit/block-view.test.js",
   "src/ui/appearance_palette.js",
-  "tests/unit/geometry-presentation.test.js", "tests/unit/selection-highlight.test.js",
+  "tests/unit/geometry-presentation.test.js", "tests/unit/sketch-projection-sources.test.js", "tests/unit/selection-highlight.test.js",
   "src/editing/selection_highlight.js",
   "tests/unit/sketch-tree-presentation.test.js",
   "src/ui/sketch_tree_controller.js",
