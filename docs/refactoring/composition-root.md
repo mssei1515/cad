@@ -6,6 +6,10 @@
 
 ## 現在の再開地点（2026-10-14）
 
+旧投影target生成の呼出元を調査し、現在はcompatibility／source-editing fixtureだけで使われると確認したため、製品編集ownerではなく既存SketchProjectionTestDriver.createLegacyTargetConstructionへ集約。test query有効時だけ5個のGeometryCreation入口へ接続する。Point／Line／Circle／Arc／Splineの座標・target Sketch／point kind・construction／closed・radius／angle、point生成→geometry生成順、独立参照とsource無変更、例外時の既存部分割当を維持し、ID／モデル編集の所有は動かさない。app.jsは4,948→4,924行（24行減、今回の再開から合計2,810行減）。構文504ファイル・単体1,379件・関連E2E188件が成功（すべてexit 0、E2E2.5分）。既存SketchProjectionTestDriver unitへ2件追加し、全種類の作成順／point・geometry参照・Sketch／flags／source無変更、unsupported kind無割当とradius失敗時の伝播／部分割当を確認。元2body一致と5port／全呼出元・test登録時点をaudit。sketch-projection／unified-ui／blocks／derived-selection-copy／phase0-characterizationを実行。新script／unitファイルは追加していない。製品投影commandや保存形式の新しい動作を追加していない。専用port8784サーバーは検証後に実体を確認して終了。ログはcad-projection-target-construction-{check,unit,e2e}.log。全E2Eはこの単位では未実行。全体目標は未完了。
+
+### 前回の区切り
+
 投影sourceのcoverageと候補entry変換を既存SketchProjectionQueries.createSourcesへ分離。現在model／active Sketch、Geometry ref・種類・key／同一性、既存投影拘束query／operational／Sketch・参照元／可視性、operand変換の13portへ接続。Instance優先→従来拘束、Point constraintのObject同一性／string ID、他Geometryのkind／source key・target Sketch・operational条件、候補guard順を維持する。currentScope adapterは元model aliasをcall時に読み、既存拘束queryのscope／cacheを変更しない。新cache／重複規則やモデル／session更新を持たず、早期command callback用hoisted入口を維持する。app.jsは4,969→4,948行（21行減、今回の再開から合計2,786行減）。構文504ファイル・単体1,377件・関連E2E204件が成功（すべてexit 0、E2E2.7分）。新source unit4件でInstance優先／現在model・target／null、従来Point identity／IDとkind／operational／target、primitive kind／key、候補metadata／参照元／visibilityとoperand変換を確認。元4body一致と13portの初期化順をauditし、operand helper生成後へ配置。sketch-projection／unified-ui／blocks／derived-selection-copy／hatching／phase0-characterizationを実行。新production scriptはなく、構文／unitリストへ新unitを同期。専用port8784サーバーは検証後に実体を確認して終了。ログはcad-projection-source-query-{check,unit,e2e}.log。全E2Eはこの単位では未実行。全体目標は未完了。
 
 ### 前回の区切り
