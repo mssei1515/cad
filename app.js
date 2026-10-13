@@ -296,6 +296,9 @@
     profileRead: read => interactionProfiler.active ? profileInteractionWork("geometryReads", read) : read(),
   });
   const { scopeGeometryItem: sidebarGeometryItem, withGeometryReadCache, blockProjectionBundles, geometryInstanceBundles, geometryInstanceBundle, allGeometryPoints, allGeometryLines, allGeometryCircles, allGeometryArcs, allGeometrySplines, allAnnotations, allHatches, allGeometryPrimitives, resolveGeometryRef, geometryElementFromKey } = geometryReads;
+  const instanceSourceSelection = window.InstanceProjection.createSourceSelection({
+    currentScope: () => model, selectedGeometryItems, canvasSelection, blockProjectionBundle, geometryInstanceBundle, elementSketchId, activeSketchId, geometryRefForItem,
+  });
   const geometryAppearance = window.GeometryAppearanceQuery.create({
     document: documentModel, readAppearance: geometryReads.readAppearance, cacheAppearance: geometryReads.cacheAppearance,
     sketchById, elementSketchId, isRootSketch, activeSketchId, showHiddenElements: () => viewState.showHiddenElements,
@@ -1466,19 +1469,7 @@
   }
 
 
-  function selectedItemsForGeometryInstance() {
-    const items = [...selectedGeometryItems(), ...canvasSelection.hatches.filter(hatch => model.hatches.includes(hatch))];
-    for (const instance of canvasSelection.blockInstances) {
-      const bundle = blockProjectionBundle(instance);
-      items.push(...bundle.lines, ...bundle.circles, ...bundle.arcs, ...bundle.splines, ...(bundle.hatches || []), ...bundle.points.filter((point) => point.localElement?.kind === "explicit"));
-    }
-    for (const instance of canvasSelection.geometryInstances) {
-      const bundle = geometryInstanceBundle(instance);
-      items.push(...bundle.lines, ...bundle.circles, ...bundle.arcs, ...bundle.splines, ...(bundle.hatches || []));
-      for (const point of bundle.points) if (point.sourceElement instanceof Point && point.sourceElement.kind === "explicit") items.push(point);
-    }
-    return [...new Set(items)].filter((item) => elementSketchId(item) === activeSketchId() && geometryRefForItem(item));
-  }
+  function selectedItemsForGeometryInstance() { return instanceSourceSelection.read(); }
 
 
 

@@ -201,5 +201,22 @@
 
     return Object.freeze({ emptyGeometryInstanceBundle, geometryInstanceSourcePoints, createGeometryInstanceBundle, geometryInstanceBundlesForScope });
   }
-  window.InstanceProjection = Object.freeze({ create });
+  function createSourceSelection({ currentScope, selectedGeometryItems, canvasSelection, blockProjectionBundle,
+    geometryInstanceBundle, elementSketchId, activeSketchId, geometryRefForItem }) {
+    function read() {
+      const items = [...selectedGeometryItems(), ...canvasSelection.hatches.filter(hatch => currentScope().hatches.includes(hatch))];
+      for (const instance of canvasSelection.blockInstances) {
+        const bundle = blockProjectionBundle(instance);
+        items.push(...bundle.lines, ...bundle.circles, ...bundle.arcs, ...bundle.splines, ...(bundle.hatches || []), ...bundle.points.filter((point) => point.localElement?.kind === "explicit"));
+      }
+      for (const instance of canvasSelection.geometryInstances) {
+        const bundle = geometryInstanceBundle(instance);
+        items.push(...bundle.lines, ...bundle.circles, ...bundle.arcs, ...bundle.splines, ...(bundle.hatches || []));
+        for (const point of bundle.points) if (point.sourceElement instanceof Point && point.sourceElement.kind === "explicit") items.push(point);
+      }
+      return [...new Set(items)].filter((item) => elementSketchId(item) === activeSketchId() && geometryRefForItem(item));
+    }
+    return Object.freeze({ read });
+  }
+  window.InstanceProjection = Object.freeze({ create, createSourceSelection });
 })();

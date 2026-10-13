@@ -139,3 +139,28 @@ test("curve read views preserve live radii, reflected arc sweep, legacy IDs and 
   assert.equal(primitives.get("FI1@A1"), bundle.arcs[0]);
   assert.deepEqual(Array.from(geometryRefForItem(bundle.arcs[0]).path), ["FI1", "A1"]);
 });
+
+test('Instance source selection keeps collection order, original refs and identity dedup across selected/Block/derived bundles', () => {
+  const calls = [], item = id => ({ id, sketchId: 'active' }), selected = item('selected'), sameId = item('selected'), hatch = item('hatch'), stale = item('stale'), blockLine = item('block-line'), blockHatch = item('block-hatch'), blockPoint = { ...item('block-point'), localElement: { kind: 'explicit' } }, skippedBlockPoint = { ...item('endpoint'), localElement: { kind: 'endpoint' } };
+  const derivedLine = item('derived-line'), derivedPoint = { ...item('derived-point'), sourceElement: Object.assign(new Point('P', 1, 2), { kind: 'explicit' }) }, skippedDerived = { ...item('plain'), sourceElement: { kind: 'explicit' } };
+  const block = {}, instance = {}, selection = { hatches: [hatch, stale], blockInstances: [block], geometryInstances: [instance] }, scope = { hatches: [hatch] };
+  const bundle = fields => ({ lines: [], circles: [], arcs: [], splines: [], points: [], ...fields });
+  const query = sandbox.window.InstanceProjection.createSourceSelection({ currentScope: () => scope, selectedGeometryItems: () => [selected, sameId], canvasSelection: selection,
+    blockProjectionBundle: value => { assert.equal(value, block); calls.push('block'); return bundle({ lines: [blockLine, selected], hatches: [blockHatch], points: [blockPoint, skippedBlockPoint] }); },
+    geometryInstanceBundle: value => { assert.equal(value, instance); calls.push('derived'); return bundle({ lines: [derivedLine, blockLine], points: [derivedPoint, skippedDerived] }); },
+    elementSketchId: value => value.sketchId, activeSketchId: () => 'active', geometryRefForItem: value => ({ id: value.id }),
+  });
+  const before = JSON.stringify(selection), result = query.read(); assert.deepEqual(Array.from(result), [selected, sameId, hatch, blockLine, blockHatch, blockPoint, derivedLine, derivedPoint]);
+  assert.deepEqual(calls, ['block', 'derived']); assert.equal(JSON.stringify(selection), before); assert.equal(scope.hatches[0], hatch);
+});
+test('Instance source selection reads current scope/selection/active target and rejects missing refs without new state', () => {
+  const a = { id: 'a', sketchId: 'A' }, b = { id: 'b', sketchId: 'B' }, noRef = { id: 'x', sketchId: 'A', noRef: true }, hatch = { id: 'h', sketchId: 'A' };
+  let active = 'A', items = [a, b, noRef], scope = { hatches: [hatch] }; const selection = { hatches: [hatch], blockInstances: [], geometryInstances: [] }, refs = [];
+  const query = sandbox.window.InstanceProjection.createSourceSelection({ currentScope: () => scope, selectedGeometryItems: () => items, canvasSelection: selection,
+    blockProjectionBundle: () => { throw Error('no Block selected'); }, geometryInstanceBundle: () => { throw Error('no Instance selected'); },
+    elementSketchId: value => value.sketchId, activeSketchId: () => active, geometryRefForItem: value => { refs.push(value); return value.noRef ? null : { id: value.id }; },
+  });
+  assert.deepEqual(Array.from(query.read()), [a, hatch]); assert.equal(refs.includes(b), false);
+  active = 'B'; scope = { hatches: [] }; items = [b]; assert.deepEqual(Array.from(query.read()), [b]);
+  items = []; selection.hatches = []; assert.equal(query.read().length, 0);
+});

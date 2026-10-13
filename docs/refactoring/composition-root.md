@@ -6,6 +6,10 @@
 
 ## 現在の再開地点（2026-10-14）
 
+選択対象からInstance sourceを構成する照会を既存InstanceProjection.createSourceSelectionへ集約。現在model／選択Geometry・CanvasSelection／Block・派生bundle／Sketch ID・active／refの8照会入口に接続し、選択Geometry→model内Hatch→Block→派生bundleの順、Block local kind explicit／派生Point source explicit、Object同一性のSet重複除去とactive／ref filterを維持する。元model aliasと現在selectionをcall時に読み、新cache／ID重複規則やSelection／session更新を持たず、早期Instance command用hoisted入口を維持。app.jsは4,863→4,854行（9行減、今回の再開から合計2,880行減）。構文506ファイル・単体1,388件・関連E2E204件が成功（すべてexit 0、E2E2.7分）。既存InstanceProjection unitへ2件追加し、収集順／元参照／identity dedup／同ID別object保持とexplicit種別、現在model／selection／activeとref短絡・無変更を確認。元body一致と8portの初期化順・early command登録をaudit。unified-ui／blocks／derived-selection-copy／hatching／sketch-projection／phase0-characterizationを実行。新script／unitファイルは追加していない。専用port8784サーバーは検証後に実体を確認して終了。ログはcad-instance-source-selection-{check,unit,e2e}.log。全E2Eはこの単位では未実行。全体目標は未完了。
+
+### 前回の区切り
+
 求解後の操作調整を新しいSolveRefreshCommandへ分離。active Sketch／ParameterStabilization・ConstraintAnalysis／hint／UI／draw／Historyと履歴記録の8入口へ接続する。求解→分析→hint→UI(refreshAnalysis:false)→描画→成功かつ現在restoringでない場合だけhistory確定の順、raw result／solved／analysis参照、default Sketch評価、失敗でも表示する流れと各段階の例外伝播／後続省略を維持。新求解／snapshot／回復規則や状態を持たず、モデル回復は既存ownerへ残す。app.jsは4,869→4,863行（6行減、今回の再開から合計2,871行減）。構文506ファイル・単体1,386件・関連E2E191件が成功（すべてexit 0）。新unit3件でdefault／explicit Sketchとresult参照・進行順、失敗／restoring時のhistory条件と描画後の現在値、各段階例外を確認。元body一致と8portの初期化順・早期command登録をaudit。unified-ui／blocks／file-safety／derived-selection-copy／constraint-fixed／phase0-characterizationの184件（2.4分）とconstraint-drag-regressionsのnative pointer reversals and undo限定7件（25.6秒）を実行。後者の全fileや全E2Eは未実行。index.html、構文／unit実行リスト、file URLのscript期待値を同期。専用port8784サーバーは検証後に実体を確認して終了。ログはcad-solve-refresh-command-{check,unit,e2e,native-e2e}.log。全体目標は未完了。
 
 ### 前回の区切り
