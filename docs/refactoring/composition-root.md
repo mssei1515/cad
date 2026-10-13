@@ -6,6 +6,10 @@
 
 ## 現在の再開地点（2026-10-13）
 
+Trimの拘束移送・construction境界・直径寸法移送のfixtureをTrimTestDriver.createLineTransferFixture／createConstructionBoundaryFixture／createDiameterTransferFixtureへ分離。固定Geometry／拘束準備は既存reset／生成へ、境界・preview／Trim・拘束移送は既存query／editingへ役割別に委譲する。固定入力とboundaryCountの数値化／下限、呼出し順・同一Geometry／拘束参照・fallbackと返却値を保持する。元の三つの処理本体との一致をscope port置換後に確認。app.jsは7,144→7,050行（94行減、今回の再開から合計684行減）。構文477ファイル・単体1,296件・関連E2E103件が成功（すべてexit 0、E2E1.3分）。全利用箇所のunified-uiを実行。新規テストはなく、既存の線拘束移送／construction除外／円の直径寸法保持とscript読込を確認した。classic script・構文一覧・E2E読込期待を同期。ログはcad-trim-test-driver-{check,unit,e2e}.log。全E2Eはこの単位では未実行。独自交点／区間計算・拘束移送・モデル／履歴は追加していない。全体目標は未完了。
+
+### 前回の区切り
+
 角度寸法ラベルの追従ケースを既存DimensionTestDriver.createAngleLabelFixtureへ分離。固定Geometryの準備・平行移動／半径変更／8回のlabelドラッグ手順と誤差観測を担当し、既存layout／basis／offset更新／labelからの配置／寸法保存値へ委譲する。旧label座標と破損relative offsetの固定入力、参照を更新するlayoutの呼出し順、保持offset・半径方向の誤差と保存version／legacy座標有無を維持する。元の処理本体との一致を確認。app.jsは7,241→7,144行（97行減、今回の再開から合計590行減）。構文476ファイル・単体1,296件・関連E2E103件が成功（すべてexit 0、E2E1.4分）。全利用箇所のunified-uiを実行。新規テストはなく、既存の角度ラベル追従・旧座標変換・繰り返し配置・保存値と周辺寸法操作を確認した。ログはcad-angle-label-fixture-{check,unit,e2e}.log。全E2Eはこの単位では未実行。製品の角度計算／寸法状態・保存形式／履歴は変更していない。全体目標は未完了。
 
 ### 前回の区切り

@@ -755,3 +755,6 @@ DimensionTestDriver.createExtensionVisibilityFixtureは固定の傾いた矩形G
 
 
 DimensionTestDriver.createAngleLabelFixtureは固定の直交線Geometryから、平行移動／半径変更／8回のlabelドラッグを行うテスト手順と観測を所有する。Geometry準備は既存reset／生成、角度layout・basis／offset読取と更新・label位置からの配置・寸法保存値は既存関数へ委譲する。旧label座標と破損relative offsetの入力、参照を更新するlayoutの呼出し順、保持offset・半径方向の誤差・保存version／legacy座標有無の観測を維持する。製品の角度計算／旧変換／寸法保存形式・状態／履歴を持たず、appはtest query時だけ生成して既存angleDimensionLabelFollowCaseへ接続する。
+
+
+TrimTestDriver（src/testing/trim_test_driver.js）はcreateLineTransferFixture（線Trim後の左右拘束参照）、createConstructionBoundaryFixture（線／円弧／円のconstruction境界とpreview区間）、createDiameterTransferFixture（円Trim後の直径拘束・寸法保存値）を役割別に生成する。固定Geometry・拘束の準備は既存reset／生成へ、境界とpreview・Trim実行・拘束移送は既存query／editingへ委譲する。固定入力・boundaryCount数値化／下限・呼出し順と同一Geometry／拘束参照、fallbackと返却値を保持する。独自交点／区間計算・拘束移送・モデル／履歴を持たず、appはtest query時だけ生成して既存三API名へ接続する。
