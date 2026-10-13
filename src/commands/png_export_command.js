@@ -60,5 +60,19 @@
     return Object.freeze({ open, cancel, move, pick, readState, onSetting, onAction, drawOverlay,
       get active() { return active; }, get busy() { return busy; } });
   }
-  window.PngExportCommand = Object.freeze({ create });
+  function createModeSession({ readMode, setMode, pendingCommandSession }) {
+    let previousMode = null;
+    function begin() {
+      previousMode = readMode();
+      setMode("png-export");
+      pendingCommandSession.replace({ type: "png-export" });
+    }
+    function end() {
+      if (pendingCommandSession.current?.type === "png-export") pendingCommandSession.clear();
+      if (readMode() === "png-export") setMode(previousMode);
+      previousMode = null;
+    }
+    return Object.freeze({ begin, end });
+  }
+  window.PngExportCommand = Object.freeze({ create, createModeSession });
 })();

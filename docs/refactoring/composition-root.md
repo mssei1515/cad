@@ -6,6 +6,10 @@
 
 ## 現在の再開地点（2026-10-14）
 
+PNG一時描画frameを既存CanvasExport.createRenderer、復元用previousModeをPngExportCommand.createModeSessionのprivate状態へ移し、appのpngRender／pngPreviousModeを削除。既存region／ratio／worldBoundsの変換とcache内draw、frame解除→bitmap同期→通常draw、mode退避→PNG mode／pending、PNG pendingだけclear→現在modeがPNGなら復元→退避解除を維持する。各renderer／描画はframe getterを照会し、appは直接stateへ代入しない。captureの既存try／finallyと例外伝播、foreign pending／mode・二回終了時の挙動を維持。app.jsは5,210→5,202行（8行減、今回の再開から合計2,532行減）。構文497ファイル・単体1,340件・関連E2E176件が成功（すべてexit 0、E2E2.5分）。既存PNG unitへ2件追加し、実captureとrendererを接続して成功／render・copy・sync失敗時のframe解除／bitmap復元／display順、mode復元／pending receiver・foreign状態保持と退避解除を確認。png-export／unified-ui／hatching／reference-images／unified-annotations／leader-appearance／annotation-display-sizeを実行。新script／unitファイルは追加していない。専用port8784のサーバーは検証後に実体を確認して終了。ログはcad-png-owned-state-{check,unit,e2e}.log。全E2Eはこの単位では未実行。独自Viewport／モデル・履歴・codecや新しい復元規則は追加していない。全体目標は未完了。
+
+### 前回の区切り
+
 Document共通Terminator／Leader既定値の表示／入力を既存DocumentAppearanceSettings.createSharedへ、値反映をDocumentDefaultAppearanceCommand.createSharedへ分離。Terminatorの部分normalize→同じobjectへassign、Leaderの現在値／viewportScale／Document実効外観→既存applyと、反映→共有再表示→履歴→UI→drawを維持する。UIはkey検査・checkbox反転／生文字列・palette対象・両section再表示を持ち、Document変更はcommandへ委譲。app.jsは5,233→5,210行（23行減、今回の再開から合計2,524行減）。構文497ファイル・単体1,338件・関連E2E169件が成功（すべてexit 0、E2E2.3分）。既存unitへ3件追加し、Terminator参照／無関係property保持、Leaderの最新倍率／実効外観と再表示／履歴／UI／draw順、key短絡・checkbox反転／raw値・rows receiver／palette・元の必須field失敗を確認。unified-ui／leader-appearance／unified-annotations／annotation-display-size／dimension-prefix／phase0-characterizationを実行。新script／unitファイルは追加していない。設定clickはGeometry→Dimension→Shared準備→dialog表示の接続へ縮小。専用port8784のサーバーは検証後に実体を確認して終了。ログはcad-document-shared-appearance-{check,unit,e2e}.log。全E2Eはこの単位では未実行。独自Document／外観規則・snapshot／履歴・DOM状態は追加していない。全体目標は未完了。
 
 ### 前回の区切り

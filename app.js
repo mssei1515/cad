@@ -157,9 +157,7 @@
 
   const canvas = document.getElementById("canvas");
   const ctx = canvas.getContext("2d");
-  let pngRender = null;
   let pngExportCommand = null;
-  let pngPreviousMode = null;
   const dimensionValueInput = document.getElementById("dimensionValueInput");
   const dimensionValueInputShell = document.getElementById("dimensionValueInputShell");
   const canvasContextMenu = document.getElementById("canvasContextMenu");
@@ -601,6 +599,7 @@
     },
   });
   const { syncCanvasBitmapSize, resetCanvasStrokeState, withCanvasState, appearanceLineDash } = canvasSurface;
+  const pngRendering = window.CanvasExport.createRenderer({ viewport, withGeometryReadCache, drawCanvas, syncCanvasBitmapSize, draw });
   const canvasWorkspaceLayout = window.CanvasWorkspaceLayout.create({
     canvas, document, viewport, syncCanvasBitmapSize, applySketchTreeWidth: () => applySketchTreeWidth(), draw,
     isValueInputPending: () => pendingCommandSession.current && ["distance-value", "offset-value"].includes(pendingCommandSession.current.type),
@@ -635,7 +634,7 @@
   });
   const { geometryDisplayColor, geometryStrokeWidth, geometryPaintState, pointPaintState, arcEndpointPaintState, splineHandleState } = window.GeometryPresentation.create({
     Point, canvasSelection, canvasHover, viewState,
-    isExporting: () => Boolean(pngRender),
+    isExporting: () => Boolean(pngRendering.frame),
     effectiveAppearanceForElement, isEditableSketchElement, isConstraintOperandSelected, isPendingReferenceTarget,
     isSidebarHighlightedElement, isSidebarHoveredElement, isReferenceHoverElement, isSelectedConstraintRelatedElement,
     sketchAlpha, sketchStrokeWidth, constraintStatusColor, canvasThemeColor, constructionAlpha: CONSTRUCTION_GEOMETRY_ALPHA,
@@ -661,20 +660,20 @@
     currentScope: workspace.current, activeSketchId, constraintSketchId, elementSketchId, sketchGeometryBounds, minLength: MIN_LINE_LENGTH,
   });
 
-  const { drawResolvedHatchContent } = window.HatchRenderer.create({ viewport, visibleWorldBounds: () => pngRender?.worldBounds || visibleWorldBounds(), canvasThemeColor, isVisibleValue });
+  const { drawResolvedHatchContent } = window.HatchRenderer.create({ viewport, visibleWorldBounds: () => pngRendering.frame?.worldBounds || visibleWorldBounds(), canvasThemeColor, isVisibleValue });
   const hatchLayer = window.HatchRenderer.createLayer({
     ctx, drawResolvedHatchContent, hatchBoundaryGeometryItems,
     boundaryPainters: [{ type: Line, draw: drawLines }, { type: Circle, draw: drawCircles }, { type: Arc, draw: drawArcs }, { type: Spline, draw: drawSplines }],
     allHatches, isVisibleSketchId, hatchAppearanceForDisplay, isConstraintOperandSelected, canvasSelection, activeSketchId,
-    readHover: () => canvasHover.current, resolvedHatchBoundary, hatchPatternOrigin, isExporting: () => Boolean(pngRender),
+    readHover: () => canvasHover.current, resolvedHatchBoundary, hatchPatternOrigin, isExporting: () => Boolean(pngRendering.frame),
     sketchAlpha, readMode: () => mode, readCommand: () => hatchCommand,
   });
   const { annotationLeaderDisplayGeometry, annotationTextLayout, annotationTextWorldHeight, annotationTextMetrics, drawAnnotationText, drawAnnotationLeader } = window.AnnotationRenderer.create({ ctx, viewport, withCanvasState, annotationDisplayColor, annotationLeaderAnchor, appearanceLineDash, formatValue: formatDisplayNumber, effectiveAnnotationStyle,
     resolvePlacement: (element, base) => window.AnnotationAnchorConstraints.resolve(element, base, resolveGeometryRef),
-    showFrame: element => !pngRender && (canvasSelection.annotations.includes(element) || canvasSelection.inspectionContains(element) || canvasHover.current.annotation === element || canvasSelection.inspectionContains(element.blockInstance)),
-    showResizeHandles: element => !pngRender && !element.blockProjection && canvasSelection.annotations.includes(element) && isEditableSketchElement(element) && annotationDrag.resizeEnabled(element),
+    showFrame: element => !pngRendering.frame && (canvasSelection.annotations.includes(element) || canvasSelection.inspectionContains(element) || canvasHover.current.annotation === element || canvasSelection.inspectionContains(element.blockInstance)),
+    showResizeHandles: element => !pngRendering.frame && !element.blockProjection && canvasSelection.annotations.includes(element) && isEditableSketchElement(element) && annotationDrag.resizeEnabled(element),
     isResizeHandleHovered: (element, handle) => canvasHover.current.annotationHandle?.element === element && canvasHover.current.annotationHandle.resizeX === handle.resizeX && canvasHover.current.annotationHandle.resizeY === handle.resizeY,
-    showLeaderEndHandle: element => !pngRender && !element.blockProjection && !element.anchorConstraints?.length && element.sketchId === activeSketchId() && (canvasSelection.annotations.includes(element) || canvasHover.current.annotation === element) });
+    showLeaderEndHandle: element => !pngRendering.frame && !element.blockProjection && !element.anchorConstraints?.length && element.sketchId === activeSketchId() && (canvasSelection.annotations.includes(element) || canvasHover.current.annotation === element) });
   function annotationPlacementAnchor(element) {
     const layout = annotationTextLayout(element) || annotationTextMetrics(element, element.type === "leader" ? annotationLeaderDisplayGeometry(element) : element);
     return { x: layout.anchorX ?? layout.x, y: layout.anchorY ?? layout.y };
@@ -2551,11 +2550,11 @@
     canvasZoomControl.sync();
     if (canvasSurface.width <= 0 || canvasSurface.height <= 0) syncCanvasBitmapSize();
     const dpr = canvasSurface.dpr;
-    if (!pngRender) pointerMoveScheduler.recordDraw();
+    if (!pngRendering.frame) pointerMoveScheduler.recordDraw();
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     resetCanvasStrokeState();
     ctx.clearRect(0, 0, canvas.width, canvas.height);
-    if (pngRender) ctx.setTransform(pngRender.ratio.x, 0, 0, pngRender.ratio.y, -pngRender.region.x * pngRender.ratio.x, -pngRender.region.y * pngRender.ratio.y);
+    if (pngRendering.frame) ctx.setTransform(pngRendering.frame.ratio.x, 0, 0, pngRendering.frame.ratio.y, -pngRendering.frame.region.x * pngRendering.frame.ratio.x, -pngRendering.frame.region.y * pngRendering.frame.ratio.y);
     else ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     resetCanvasStrokeState();
     ctx.save();
@@ -2565,7 +2564,7 @@
     drawReferenceImages();
     drawHatches([], { includePreview: true });
     drawDrawingStack();
-    if (pngRender) {
+    if (pngRendering.frame) {
       drawDimensions();
       drawAnnotations();
       drawPoints();
@@ -2731,9 +2730,9 @@
       const highlighted = canvasSelection.inspectionContains(c) || c === canvasHover.current.dimension || canvasSelection.constraintSelectedInCanvas(c) || c === dimensionDrag.constraint;
       const label = dimensionLabelForConstraint(c, target, dimension);
       const editing = pendingCommandSession.current?.type === "distance-value" && pendingCommandSession.current.constraint === c;
-      const colorOverride = !pngRender && viewState.constraintStatus && !isActiveSketchConstraint(c) ? INACTIVE_CONSTRAINT_STATUS_COLOR : null;
+      const colorOverride = !pngRendering.frame && viewState.constraintStatus && !isActiveSketchConstraint(c) ? INACTIVE_CONSTRAINT_STATUS_COLOR : null;
       ctx.save();
-      drawDimension(target, dimension, label, false, !pngRender && (highlighted || editing), !pngRender && editing ? { hidden: true } : null, colorOverride, sketchId, !pngRender && dimensionUsesExpression(c));
+      drawDimension(target, dimension, label, false, !pngRendering.frame && (highlighted || editing), !pngRendering.frame && editing ? { hidden: true } : null, colorOverride, sketchId, !pngRendering.frame && dimensionUsesExpression(c));
       ctx.restore();
     }
   }
@@ -2769,7 +2768,7 @@
   }
 
   function annotationDisplayColor(element, style = effectiveAnnotationStyle(element)) {
-    if (pngRender) return canvasThemeColor(style.color);
+    if (pngRendering.frame) return canvasThemeColor(style.color);
     if (canvasSelection.annotations.includes(element) || canvasSelection.inspectionContains(element) || canvasSelection.inspectionContains(element.blockInstance)) return canvasThemeColor("#2563eb");
     if (element === canvasHover.current.annotation) return canvasThemeColor("#0ea5e9");
     return canvasThemeColor(style.color);
@@ -4442,15 +4441,7 @@
   documentFileControls.bind();
   const canvasExport = window.CanvasExport.create({
     canvas, createCanvas: () => document.createElement("canvas"), text: applicationText,
-    render: (region, ratio) => {
-      pngRender = { region: { x: viewport.x + region.x * viewport.scale, y: viewport.y + region.y * viewport.scale },
-        ratio: { x: ratio.x / viewport.scale, y: ratio.y / viewport.scale },
-        worldBounds: { x1: region.x, y1: region.y, x2: region.x + region.width, y2: region.y + region.height } };
-      withGeometryReadCache(drawCanvas);
-    },
-    restore: () => {
-      pngRender = null; syncCanvasBitmapSize(); draw();
-    },
+    render: pngRendering.render, restore: pngRendering.restore,
   });
   const pngFile = window.PngFile.create({ window, document, capture: canvasExport.capture, documentName: effectiveDocumentName, text: applicationText,
     prepare: async () => {
@@ -4458,11 +4449,12 @@
       await referenceImageRenderer.ready(model.referenceImages.filter(item => isVisibleValue(item.visible) && isVisibleSketchId(item.sketchId)));
     },
   });
+  const pngModeSession = window.PngExportCommand.createModeSession({ readMode: () => mode, setMode: value => { mode = value; }, pendingCommandSession });
   pngExportCommand = window.PngExportCommand.create({
     text: applicationText, save: (region, dpi) => pngFile.save(region, dpi / 96 * viewport.scale),
     viewScale: () => viewport.scale, setHint, refresh: draw,
-    begin: () => { pngPreviousMode = mode; mode = "png-export"; pendingCommandSession.replace({ type: "png-export" }); },
-    end: () => { if (pendingCommandSession.current?.type === "png-export") pendingCommandSession.clear(); if (mode === "png-export") mode = pngPreviousMode; pngPreviousMode = null; },
+    begin: pngModeSession.begin,
+    end: pngModeSession.end,
     resolvePoint: point => withGeometryReadCache(() => {
       const snap = drawingSnap.find(point, 10 / viewport.scale);
       return { point: snap ? { x: snap.x, y: snap.y } : point, snapped: Boolean(snap) };
