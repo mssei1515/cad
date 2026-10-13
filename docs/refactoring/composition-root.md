@@ -6,6 +6,10 @@
 
 ## 現在の再開地点（2026-10-13）
 
+Canvas dash isolationの支援をCanvasRenderTestDriverの作図preview準備／Block準備／観測手順の三つに分離。既存command／preview・生成型／Definition追加／scopeとappのmode入口へ役割別に接続し、reset→viewport→preview／Selection reset→mode→setup→dash設定→draw→dash照会と12case順を保持する。組み直した処理が元のcase順／本体と一致することを依存port置換後に確認。app.jsは6,956→6,865行（91行減、今回の再開から合計869行減）。構文478ファイル・単体1,297件・関連E2E103件が成功（すべてexit 0、最終E2E1.5分）。初回E2Eは102件成功／dash1件失敗で、drawSelectionRectの依存受渡し忘れによる未定義参照を修正し、同じunified-ui全体を再実行して成功を確認した。新規テストはなく、既存12種のdash分離とscript読込を確認。classic script・構文一覧・E2E読込期待を同期。ログはcad-canvas-dash-driver-{check,unit,e2e,e2e-final}.log。全E2Eはこの単位では未実行。独自mode／command状態・Block定義／seq・renderer／履歴は追加していない。全体目標は未完了。
+
+### 前回の区切り
+
 Sketch寸法の可視性fixtureを既存DimensionTestDriver.createSketchVisibilityFixtureへ分離。二つのSketchの固定寸法準備は既存reset／Geometry・寸法生成へ、active Sketch切替と復元・可視性／描画は既存所有者へ接続する。非表示→label観測→再表示とfilter／返却値の順を維持し、fillText差替えは各描画のtry／finallyで元のmethodへ復元する。元の処理本体との一致を依存port置換後に確認。app.jsは7,002→6,956行（46行減、今回の再開から合計778行減）。構文477ファイル・単体1,297件・関連E2E116件が成功（すべてexit 0、E2E1.6分）。全利用箇所のview-visibility／multiple-dimensions／unified-uiを実行。単体1件を追加し、成功と一回目／二回目の描画例外でCanvas methodの復元と既存復元範囲を確認した。ログはcad-sketch-dimension-visibility-{check,unit,e2e}.log。全E2Eはこの単位では未実行。独自Sketch／寸法モデル・可視性／描画ルール／履歴は追加していない。全体目標は未完了。
 
 ### 前回の区切り

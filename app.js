@@ -5016,6 +5016,18 @@
       resetModelState, activeSketchId, addPoint, addLine, addDistanceConstraintFromTarget, dimensionFromAnchor, currentScope: workspace.current, rootSketchId: ROOT_SKETCH_ID,
       ctx, drawDimensions, sketchById, isDimensionConstraint, constraintSketchId, isVisibleSketchId,
     });
+    const setTestDrawingMode = value => { mode = value; };
+    const draftDashCases = window.CanvasRenderTestDriver.createDraftDashCases({
+      setMode: setTestDrawingMode, lineCommand, rectangleCommand, slotCommand, circularCommands, offsetSelection, drawingPreview, addLine, addPoint,
+      drawTemporaryLine, drawRectanglePreview, drawSlotPreview, drawCirclePreview, drawArcPreview, drawOffsetPreview, drawTrimPreview,
+    });
+    const blockDashCases = window.CanvasRenderTestDriver.createBlockDashCases({
+      createEmptyBlockDefinition, Point, Line, defaultSketchId: DEFAULT_SKETCH_ID, appendDefinition: definition => documentModel.blockDefinitions.push(definition),
+      setMode: setTestDrawingMode, blockPlacementCommand, drawingPreview, activeSketchId, currentScope: workspace.current, canvasSelection, drawBlockPlacementPreview, drawBlockInstanceHandles,
+    });
+    const canvasDashIsolation = window.CanvasRenderTestDriver.createDashIsolation({
+      resetModelState, viewport, drawingPreview, selectionRectangle, setMode: setTestDrawingMode, ctx, drawSelectionRect, draftCases: draftDashCases, blockCases: blockDashCases, drawAnnotationLeader, addLine, addPoint, draw,
+    });
     const canvasTestDriver = window.CanvasTestDriver.create({ viewport, clampZoom, resizeCanvas, draw, canvas, currentCanvasCenterWorld, worldToCanvasScreen });
     const sketchProjectionTestObservation = window.SketchProjectionTestDriver.createObservation({
       types: { Point, Line, Circle, Arc }, currentScope: workspace.current, readMode: () => mode,
@@ -5422,110 +5434,7 @@
       resetForAllGeometryFit: allGeometryFitFixture.reset,
       resetForMiddleButtonFit: middleButtonFitFixture.reset,
       middleButtonFitState: fitObservation.state,
-      canvasDashIsolationCases() {
-        const results = {};
-        const resetForCase = () => {
-          resetModelState();
-          viewport.update({ scale: 1 });
-          viewport.update({ x: 0 });
-          viewport.update({ y: 0 });
-          drawingPreview.reset();
-          selectionRectangle.reset();
-          mode = "select";
-        };
-        const capture = (name, setup, drawFn) => {
-          resetForCase();
-          setup();
-          ctx.setLineDash([13, 7]);
-          drawFn();
-          results[name] = ctx.getLineDash();
-        };
-        const makeBlockDefinition = () => {
-          const definition = createEmptyBlockDefinition("Block-Dash");
-          const p1 = new Point("BP1", 0, 0, false, "endpoint");
-          const p2 = new Point("BP2", 40, 0, false, "endpoint");
-          p1.sketchId = DEFAULT_SKETCH_ID;
-          p2.sketchId = DEFAULT_SKETCH_ID;
-          const line = new Line("BL1", p1, p2);
-          line.sketchId = DEFAULT_SKETCH_ID;
-          definition.points.push(p1, p2);
-          definition.lines.push(line);
-          documentModel.blockDefinitions.push(definition);
-          return definition;
-        };
-
-        capture("line", () => {
-          mode = "line";
-          lineCommand.click({ x: 0, y: 0 });
-          lineCommand.startPoint.fixed = true;
-          drawingPreview.setPointer({ x: 80, y: 0 });
-        }, drawTemporaryLine);
-        capture("rectangle", () => {
-          mode = "rectangle";
-          rectangleCommand.click({ x: 0, y: 0 }, null);
-          drawingPreview.setPointer({ x: 80, y: 45 });
-        }, drawRectanglePreview);
-        capture("slot", () => {
-          mode = "slot";
-          slotCommand.click({ x: 0, y: 0 }, null);
-          slotCommand.click({ x: 80, y: 0 }, null);
-          drawingPreview.setPointer({ x: 40, y: 20 });
-        }, drawSlotPreview);
-        capture("circle", () => {
-          mode = "circle";
-          circularCommands.clickCircle({ x: 0, y: 0 }, null);
-          Object.assign(circularCommands.circleCenterPoint, { fixed: true, kind: "center" });
-          drawingPreview.setPointer({ x: 35, y: 0 });
-        }, drawCirclePreview);
-        capture("arc", () => {
-          mode = "arc";
-          circularCommands.clickArc({ x: 0, y: 0 }, null);
-          Object.assign(circularCommands.arcCenterPoint, { fixed: true, kind: "center" });
-          circularCommands.clickArc({ x: 35, y: 0 }, null);
-          drawingPreview.setPointer({ x: 0, y: 35 });
-        }, drawArcPreview);
-        capture("offset", () => {
-          mode = "offset";
-          offsetSelection.selectSource(addLine(addPoint(0, 0, true, "endpoint"), addPoint(80, 0, true, "endpoint")));
-          drawingPreview.setPointer({ x: 40, y: 20 });
-        }, drawOffsetPreview);
-        capture("trim", () => {
-          mode = "trim";
-          drawingPreview.setTrim({
-            kind: "line",
-            interval: {
-              left: { point: { x: 0, y: 0 } },
-              right: { point: { x: 80, y: 0 } },
-            },
-          });
-        }, drawTrimPreview);
-        capture("selection", () => {
-          selectionRectangle.begin({ x: 0, y: 0 }, { current: { x: 80, y: 45 } });
-        }, drawSelectionRect);
-        capture("blockPlacement", () => {
-          const definition = makeBlockDefinition();
-          mode = "block-place";
-          blockPlacementCommand.prepare(definition.id, [DEFAULT_SKETCH_ID]);
-          drawingPreview.setPointer({ x: 120, y: 40 });
-        }, drawBlockPlacementPreview);
-        capture("blockHandles", () => {
-          const definition = makeBlockDefinition();
-          const instance = { id: "BI-DASH", definitionId: definition.id, sketchId: activeSketchId(), x: 20, y: 20, rotation: 0, fixed: false, enabledSketchIds: [DEFAULT_SKETCH_ID] };
-          model.blockInstances.push(instance);
-          canvasSelection.set("blockInstances", [instance]);
-        }, drawBlockInstanceHandles);
-        capture("annotationLeader", () => {}, () => drawAnnotationLeader({
-          start: { x: 0, y: 0 },
-          elbow: { x: 40, y: 15 },
-          end: { x: 80, y: 15 },
-          text: "note",
-          style: {},
-        }, true));
-        capture("frame", () => {
-          addLine(addPoint(0, 0, true, "endpoint"), addPoint(80, 0, true, "endpoint"));
-        }, draw);
-        return results;
-      },
+      canvasDashIsolationCases: canvasDashIsolation.cases,
       resetForSidebarInspection() {
         resetModelState();
         const p1 = addPoint(-80, 0, true, "endpoint");
