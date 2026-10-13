@@ -884,3 +884,6 @@ AuthoringPreviewRenderer.createLayerは現在mode／pointer／trimとLine／Rect
 
 
 PlacementPreviewRenderer.createLayerはrenderer／mode・pointer read／Block・Instance command／Block projectionの6portに接続し、Block配置のmode→definition→pointer→preview短絡とbundle生成・描画、Instanceのmodeに依存しない現在preview描画を扱う。OffsetPreviewRenderer.createLayerはrenderer／mode・pointer read／Offset commandの4portでmode短絡後に既存planを取得して描く。query／painterのreceiverと参照、null previewと呼出順を維持し、モデル／session更新は持たない。appは通常描画と生成後の診断入口を直接接続する。
+
+
+CanvasRefreshはCanvas表示更新の調整を10portで既存PNG command／pending・mode照会、CommandPanel／DerivedPanel、Annotation入力同期、profiling／Geometry read cache／Canvas描画へ接続する。panel選択対象の表示snapshotをprivate状態として所有し、取消→panel→入力→snapshot→profile／cache→描画の順を維持する。PNG busy／session／mode短絡とreceiver、snapshot代入前の失敗時は旧値保持、描画失敗の既存例外伝播とprofile／cacheのcleanup範囲を維持する。モデル／session／各commandを複製せず、snapshot getterは既存Geometry強調の入口へ接続する。appは生成接続と早期登録callback用のhoisted draw入口を持つ。

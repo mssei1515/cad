@@ -447,7 +447,11 @@
   const HISTORY_LIMIT = 80;
   let commandPanel = null;
   let derivedPanel = null;
-  let commandPanelSelectedItem = null;
+  const canvasRefresh = window.CanvasRefresh.create({
+    readPngCommand: () => pngExportCommand, readPending: () => pendingCommandSession.current, readMode: () => mode,
+    readCommandPanel: () => commandPanel, syncAnnotationInput: () => annotationInputController.sync(), readDerivedPanel: () => derivedPanel,
+    interactionProfiler, profileInteractionWork, withGeometryReadCache, drawCanvas,
+  });
   const geometryInstanceCommand = window.GeometryInstanceCommand.create({
     cancelConstraintTargetCommand, cancelPendingCommand, canCreateInActiveSketch, rejectRootSketchCreation,
     selectedItemsForGeometryInstance, geometryRefForItem, geometryRefsEqual, isVisibleSketchElement, clearSelection, normalizeGeometryInstance,
@@ -1391,7 +1395,7 @@
 
   function isConstraintOperandSelected(item, options = {}) {
     if (!item) return false;
-    if (commandPanelSelectedItem) return geometryRefsEqual(geometryRefForItem(item), geometryRefForItem(commandPanelSelectedItem));
+    if (canvasRefresh.selectedItem) return geometryRefsEqual(geometryRefForItem(item), geometryRefForItem(canvasRefresh.selectedItem));
     if (mode === "instance-sources" && instanceSourceCommand.includesRef(geometryRefForItem(item))) return true;
     if (mode === "sketch-projection" && sketchProjectionCommand.includes(item)) return true;
     if (mode.startsWith("pattern-placement-")) {
@@ -2546,18 +2550,7 @@
 
 
 
-  function draw() {
-    if (pngExportCommand?.active && !pngExportCommand.busy && (pendingCommandSession.current?.type !== "png-export" || mode !== "png-export")) pngExportCommand.cancel();
-    commandPanel?.update();
-    annotationInputController.sync();
-    commandPanelSelectedItem = derivedPanel?.selectedItem() || null;
-    if (!interactionProfiler.active) return drawUnprofiled();
-    return profileInteractionWork("draw", () => drawUnprofiled());
-  }
-
-  function drawUnprofiled() {
-    return withGeometryReadCache(drawCanvas);
-  }
+  function draw() { return canvasRefresh.draw(); }
 
   const canvasFrameRenderer = window.CanvasSurface.createFrameRenderer({
     canvas, ctx, viewport, surface: canvasSurface,

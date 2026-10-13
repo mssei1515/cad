@@ -89,7 +89,7 @@ const files = [
   "tests/unit/drawing-stack.test.js",
   "tests/unit/reference-image-renderer.test.js",
   "tests/unit/annotation-renderer.test.js",
-  "tests/unit/canvas-surface.test.js",
+  "tests/unit/canvas-surface.test.js", "tests/unit/canvas-refresh.test.js",
   "tests/unit/hatch-renderer.test.js",
   "tests/unit/dimension-renderer.test.js",
   "tests/unit/dimension-layout.test.js",

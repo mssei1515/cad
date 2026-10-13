@@ -6,6 +6,10 @@
 
 ## 現在の再開地点（2026-10-14）
 
+Canvas表示更新の調整とpanel選択対象の表示snapshotを新しいsrc/ui/canvas_refresh.jsのCanvasRefresh.createへ分離。PNG command／pending・mode照会、CommandPanel／DerivedPanel、Annotation入力同期、profiling／Geometry read cache／Canvas描画の10portに接続する。取消→panel→入力→snapshot→profile／cache→描画の順、PNG busy／session／mode短絡とreceiver、代入前の失敗時は旧snapshot保持、描画失敗の既存例外伝播とprofile／cacheのcleanup範囲を維持。commandPanelSelectedItemをprivate状態へ移し、Geometry強調はgetterへ接続。モデル／session／commandは複製しない。app.jsは5,017→5,010行（7行減、今回の再開から合計2,724行減）。構文503ファイル・単体1,367件・関連E2E192件が成功（すべてexit 0、E2E2.7分）。新unit3件で現在panel／入力／snapshot／profiling／cache順、PNG busy／終了判定とmode短絡、snapshot代入前／後の例外範囲・cleanupを検証。元body一致と10portの初期化順をauditし、後に生成されるAnnotation入力／panelはcallbackで参照。unified-ui／png-export／authoring-performance／blocks／unified-annotations／phase0-characterizationを実行。index.html、構文／unit実行リスト、file URLのscript期待値を同期。専用port8784サーバーは検証後に実体を確認して終了。ログはcad-canvas-refresh-{check,unit,e2e}.log。全E2Eはこの単位では未実行。全体目標は未完了。
+
+### 前回の区切り
+
 Block／Instance配置とOffsetのpreview情報取得・描画接続を既存PlacementPreviewRenderer.createLayer／OffsetPreviewRenderer.createLayerへ分離。配置はrenderer／mode・pointer read／Block・Instance command／Block projectionの6port、Offsetはrenderer／mode・pointer read／commandの4portを持つ。Blockのmode→definition→pointer→preview短絡とbundle生成・描画、Instanceのmodeに依存しないpreview、Offsetのmode短絡後の現在plan取得とreceiver・元参照／null／順序を維持する。モデル／session更新を持たず、appは通常描画と生成後の診断APIを直接接続して中継を除去。app.jsは5,022→5,017行（5行減、今回の再開から合計2,717行減）。構文501ファイル・単体1,364件・関連E2E189件が成功（すべてexit 0、E2E2.5分）。既存PlacementPreview／Offset unitへ3件追加し、全guard／projection／painter順・参照、modeに依存しないInstance、Offset plan短絡と現在pointer／null・receiverを確認。元3body一致と6／4portの初期化順・診断登録順をaudit。配置layerはrenderer生成後に置く。unified-ui／blocks／derived-selection-copy／hatching／phase0-characterizationを実行。新script／unitファイルは追加していない。専用port8784サーバーは検証後に実体を確認して終了。ログはcad-placement-offset-preview-{check,unit,e2e}.log。全E2Eはこの単位では未実行。全体目標は未完了。
 
 ### 前回の区切り
