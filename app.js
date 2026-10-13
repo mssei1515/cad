@@ -646,7 +646,7 @@
       isAnyLineEndpoint, isEndpointPoint, pointLockedByLineFixed, sidebarHoveredItem: () => selectionHighlight.current?.item,
       isDraggingPoint: point => geometryDrag.isPoint(point), isDraggingCenter: point => geometryDrag.isCenter(point) },
   });
-  const geometryRenderer = window.GeometryRenderer.create({ ctx, viewport, paintState: geometryPaintState, pointPaintState, arcEndpointPaintState, withCanvasState, fixedPointLabel: () => applicationText("固定", "Fixed"), appearanceLineDash, lineDisplaySegment, canvasThemeColor });
+  const geometryRenderer = window.GeometryRenderer.create({ ctx, viewport, readPixelRatio: () => canvasSurface.dpr, paintState: geometryPaintState, pointPaintState, arcEndpointPaintState, withCanvasState, fixedPointLabel: () => applicationText("固定", "Fixed"), appearanceLineDash, lineDisplaySegment, canvasThemeColor });
   const { traceSplinePath } = geometryRenderer;
   const interactionOverlay = window.InteractionOverlayRenderer.create({ ctx, viewport,
     elementSketchId, sketchRelationToActive, applicationText, isVisibleSketchId, activeSketchId, sketchName });

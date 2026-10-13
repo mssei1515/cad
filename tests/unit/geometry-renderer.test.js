@@ -5,13 +5,29 @@ const vm = require("node:vm");
 const test = require("node:test");
 const sandbox = { window: {} }; vm.createContext(sandbox);
 for (const file of ["src/geometry/geometry_kernel.js", "src/geometry/spline_geometry.js", "src/rendering/geometry_renderer.js"]) vm.runInContext(fs.readFileSync(path.resolve(__dirname, "../..", file), "utf8"), sandbox, { filename: file });
-function create(state = {}) {
+function create(state = {}, { scale = 2, dpr = 1 } = {}) {
   const calls = [];
   const ctx = {};
   for (const name of ["save", "restore", "beginPath", "closePath", "moveTo", "lineTo", "stroke", "fill", "arc", "fillText", "setLineDash"]) ctx[name] = (...args) => calls.push([name, ...args]);
-  const renderer = sandbox.window.GeometryRenderer.create({ ctx, viewport: { scale: 2 }, withCanvasState: fn => { calls.push(["state-enter"]); try { fn(); } finally { calls.push(["state-exit"]); } }, arcEndpointPaintState: (arc, endpoint) => arc[endpoint] || null, pointPaintState: p => p.hidden ? null : state, fixedPointLabel: () => "Fixed", paintState: () => ({ appearance: { lineType: "solid" }, alpha: 0.7, color: "red", strokeWidth: 4, ...state }), appearanceLineDash: () => [], lineDisplaySegment: line => line, canvasThemeColor: color => color });
+  const renderer = sandbox.window.GeometryRenderer.create({ ctx, viewport: { scale }, readPixelRatio: () => dpr, withCanvasState: fn => { calls.push(["state-enter"]); try { fn(); } finally { calls.push(["state-exit"]); } }, arcEndpointPaintState: (arc, endpoint) => arc[endpoint] || null, pointPaintState: p => p.hidden ? null : state, fixedPointLabel: () => "Fixed", paintState: () => ({ appearance: { lineType: "solid" }, alpha: 0.7, color: "red", strokeWidth: 4, ...state }), appearanceLineDash: () => [], lineDisplaySegment: line => line, canvasThemeColor: color => color });
   return { renderer, calls, ctx };
 }
+
+test('selection and related geometry glow keeps its screen size across zoom and pixel ratios', () => {
+  for (const scale of [0.003779527559, 0.02, 1, 100]) for (const dpr of [1, 2]) {
+    for (const state of [{ sel: true, emphasized: true }, { auxiliaryHighlighted: true, emphasized: true }, {}]) {
+      const { renderer, ctx } = create(state, { scale, dpr });
+      const blurs = [];
+      ctx.stroke = () => blurs.push(ctx.shadowBlur);
+      renderer.drawLines([{ p1: { x: 0, y: 0 }, p2: { x: 0, y: 29131 } }]);
+      renderer.drawCircles([{ center: { x: 0, y: 0 }, radius: () => 10 }]);
+      renderer.drawArcs([{ center: { x: 0, y: 0 }, radius: () => 10, startAngle: 0, endAngle: 1 }]);
+      renderer.drawPoints([{ x: 0, y: 0 }]);
+      assert.deepEqual(blurs, Array(4).fill(state.emphasized ? 8 * dpr : 0));
+      assert.equal(ctx.shadowBlur, 0);
+    }
+  }
+});
 test("line rendering consumes prepared visual state and preserves drawing order", () => {
   const { renderer, calls, ctx } = create({ showId: true });
   renderer.drawLines([{ id: "L1", p1: { x: 1, y: 2 }, p2: { x: 3, y: 4 } }]);
