@@ -67,5 +67,35 @@
       start, dispose, syncCanvasBitmapSize, resetCanvasStrokeState, withCanvasState, appearanceLineDash
     });
   }
-  window.CanvasSurface = Object.freeze({ create });
+  function createFrameRenderer({ canvas, ctx, viewport, surface, syncZoom, readExportFrame, recordDraw, drawContent, drawExport, drawInteractive }) {
+    function draw() {
+      syncZoom();
+      if (surface.width <= 0 || surface.height <= 0) surface.syncCanvasBitmapSize();
+      const dpr = surface.dpr;
+      if (!readExportFrame()) recordDraw();
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
+      surface.resetCanvasStrokeState();
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      if (readExportFrame()) ctx.setTransform(readExportFrame().ratio.x, 0, 0, readExportFrame().ratio.y, -readExportFrame().region.x * readExportFrame().ratio.x, -readExportFrame().region.y * readExportFrame().ratio.y);
+      else ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      surface.resetCanvasStrokeState();
+      ctx.save();
+      ctx.translate(viewport.x, viewport.y);
+      ctx.scale(viewport.scale, viewport.scale);
+      surface.resetCanvasStrokeState();
+      drawContent();
+      if (readExportFrame()) {
+        drawExport();
+        ctx.restore();
+        surface.resetCanvasStrokeState();
+        return;
+      }
+      drawInteractive();
+      surface.resetCanvasStrokeState();
+      ctx.restore();
+      surface.resetCanvasStrokeState();
+    }
+    return Object.freeze({ draw });
+  }
+  window.CanvasSurface = Object.freeze({ create, createFrameRenderer });
 })();

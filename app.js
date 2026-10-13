@@ -2546,32 +2546,18 @@
     return withGeometryReadCache(drawCanvas);
   }
 
-  function drawCanvas() {
-    canvasZoomControl.sync();
-    if (canvasSurface.width <= 0 || canvasSurface.height <= 0) syncCanvasBitmapSize();
-    const dpr = canvasSurface.dpr;
-    if (!pngRendering.frame) pointerMoveScheduler.recordDraw();
-    ctx.setTransform(1, 0, 0, 1, 0, 0);
-    resetCanvasStrokeState();
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-    if (pngRendering.frame) ctx.setTransform(pngRendering.frame.ratio.x, 0, 0, pngRendering.frame.ratio.y, -pngRendering.frame.region.x * pngRendering.frame.ratio.x, -pngRendering.frame.region.y * pngRendering.frame.ratio.y);
-    else ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    resetCanvasStrokeState();
-    ctx.save();
-    ctx.translate(viewport.x, viewport.y);
-    ctx.scale(viewport.scale, viewport.scale);
-    resetCanvasStrokeState();
-    drawReferenceImages();
-    drawHatches([], { includePreview: true });
-    drawDrawingStack();
-    if (pngRendering.frame) {
-      drawDimensions();
-      drawAnnotations();
-      drawPoints();
-      ctx.restore();
-      resetCanvasStrokeState();
-      return;
-    }
+  const canvasFrameRenderer = window.CanvasSurface.createFrameRenderer({
+    canvas, ctx, viewport, surface: canvasSurface,
+    syncZoom: () => canvasZoomControl.sync(), readExportFrame: () => pngRendering.frame,
+    recordDraw: () => pointerMoveScheduler.recordDraw(),
+    drawContent: () => { drawReferenceImages(); drawHatches([], { includePreview: true }); drawDrawingStack(); },
+    drawExport: () => { drawDimensions(); drawAnnotations(); drawPoints(); },
+    drawInteractive: drawInteractiveCanvas,
+  });
+
+  function drawCanvas() { return canvasFrameRenderer.draw(); }
+
+  function drawInteractiveCanvas() {
     drawBlockInstanceHandles();
     drawDimensions();
     drawDimensionPreview();
@@ -2599,9 +2585,6 @@
     drawSketchIdentityLabel();
     drawSelectionRect();
     pngExportCommand?.drawOverlay(ctx, viewport.scale);
-    resetCanvasStrokeState();
-    ctx.restore();
-    resetCanvasStrokeState();
   }
 
   const selectionRectangle = window.SelectionRectangle.create({

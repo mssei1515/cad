@@ -6,6 +6,10 @@
 
 ## 現在の再開地点（2026-10-14）
 
+Canvasのframe準備と描画段階の進行を既存CanvasSurface.createFrameRendererへ分離。bitmap準備→DPR／PNG transform→viewport→共通content→出力／対話stage→stroke reset／restoreの順序とPNG短絡を維持する。10個の限定portに既存surface・現在frame・zoom／描画計測・三つの描画入口を接続し、read cache／入力同期／profilingと各preview内容は従来の所有者へ残す。hoisted drawCanvas入口とcallback参照時点、例外伝播と既存の復元範囲を維持。app.jsは5,202→5,185行（17行減、今回の再開から合計2,549行減）。構文497ファイル・単体1,342件・関連E2E199件が成功（すべてexit 0、E2E2.6分）。既存CanvasSurface unitへ2件追加し、DPR／viewportの最新値、normal／PNG段階とtransform／stroke順、stage失敗時の例外／restore挙動を検証。対話stage本体の一致と10portの初期化順を確認。png-export／unified-ui／hatching／reference-images／blocks／annotation-display-size／phase0-characterizationを実行。新script／unitファイルは追加していない。専用port8784サーバーは検証後に実体を確認して終了。ログはcad-canvas-frame-{check,unit,e2e}.log。全E2Eはこの単位では未実行。全体目標は未完了。
+
+### 前回の区切り
+
 PNG一時描画frameを既存CanvasExport.createRenderer、復元用previousModeをPngExportCommand.createModeSessionのprivate状態へ移し、appのpngRender／pngPreviousModeを削除。既存region／ratio／worldBoundsの変換とcache内draw、frame解除→bitmap同期→通常draw、mode退避→PNG mode／pending、PNG pendingだけclear→現在modeがPNGなら復元→退避解除を維持する。各renderer／描画はframe getterを照会し、appは直接stateへ代入しない。captureの既存try／finallyと例外伝播、foreign pending／mode・二回終了時の挙動を維持。app.jsは5,210→5,202行（8行減、今回の再開から合計2,532行減）。構文497ファイル・単体1,340件・関連E2E176件が成功（すべてexit 0、E2E2.5分）。既存PNG unitへ2件追加し、実captureとrendererを接続して成功／render・copy・sync失敗時のframe解除／bitmap復元／display順、mode復元／pending receiver・foreign状態保持と退避解除を確認。png-export／unified-ui／hatching／reference-images／unified-annotations／leader-appearance／annotation-display-sizeを実行。新script／unitファイルは追加していない。専用port8784のサーバーは検証後に実体を確認して終了。ログはcad-png-owned-state-{check,unit,e2e}.log。全E2Eはこの単位では未実行。独自Viewport／モデル・履歴・codecや新しい復元規則は追加していない。全体目標は未完了。
 
 ### 前回の区切り
