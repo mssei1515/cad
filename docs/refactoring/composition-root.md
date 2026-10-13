@@ -6,6 +6,10 @@
 
 ## 現在の再開地点（2026-10-13）
 
+選択可能な線のclient位置照会を既存CanvasTestDriver.createSelectableLinePositionへ分離。現在scopeの線配列順と0.37／0.63／0.5位置、Point→同一参照Line→寸法のhit短絡、Canvas矩形の包含と画面の重なり判定を保持し、候補なしはnullを返す。元の処理本体との一致を依存port置換後に確認。app.jsは7,709→7,694行（15行減、今回の再開から合計40行減）。構文473ファイル・単体1,288件・関連E2E14件が成功（すべてexit 0、E2E1.8分）。既存利用箇所のadversarial-authoring-performance／adversarial-drag-fixtureを実行し、単体1件でcall-time scope／Canvas矩形・競合hitの同一参照／短絡・画面外／UI重なり／境界包含を確認した。ログはcad-selectable-position-{check,unit,e2e}.log。全E2Eはこの単位では未実行。選択／hitルールや独自モデルは追加していない。全体目標は未完了。
+
+### 前回の区切り
+
 作図状態とsnapラベルのテスト観測を既存CanvasTestDriver.createAuthoringObservation／createSnapObservationへ分離。現在のscope・mode・各session・計測・Selectionを既存所有者から照会し、距離10 CSS pxの境界、候補順・入力数値化、座標／計測値のコピー、preview／選択の参照、serialize→decorateとnull fallbackを保持する。元の二つの処理本体との一致を依存port置換後に確認。app.jsは7,734→7,709行（25行減）。構文473ファイル・単体1,287件・関連E2E211件が成功（すべてexit 0、E2E3.3分）。既存利用箇所の5ファイルを確認し、単体2件を追加して呼出し時のscope／zoomと参照・コピー境界を検証した。ログはcad-authoring-observation-{check,unit,e2e}.log。全E2Eはこの単位では未実行。独自モデル／session／snapルールは追加していない。全体目標は未完了。
 
 ### 前回の停止地点（2026-10-12）

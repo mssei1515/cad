@@ -120,5 +120,28 @@
     return Object.freeze({ state });
   }
 
-  window.CanvasTestDriver = Object.freeze({ create, createZoomObservation, createHitObservation, createGeometryPosition, createSnapObservation, createAuthoringObservation });
+  function createSelectableLinePosition({ currentScope, canvas, hitPoint, hitLine, hitDimension, worldToCanvasScreen, elementFromPoint }) {
+    function position() {
+      const rect = canvas.getBoundingClientRect();
+      for (const line of currentScope().lines) {
+        for (const t of [0.37, 0.63, 0.5]) {
+          const world = {
+            x: line.p1.x + (line.p2.x - line.p1.x) * t,
+            y: line.p1.y + (line.p2.y - line.p1.y) * t,
+          };
+          if (hitPoint(world.x, world.y) || hitLine(world.x, world.y) !== line || hitDimension(world.x, world.y)) continue;
+          const screen = worldToCanvasScreen(world);
+          const x = rect.left + screen.x;
+          const y = rect.top + screen.y;
+          if (x < rect.left || x > rect.right || y < rect.top || y > rect.bottom) continue;
+          if (elementFromPoint(x, y) !== canvas) continue;
+          return { id: line.id, x, y };
+        }
+      }
+      return null;
+    }
+    return Object.freeze({ position });
+  }
+
+  window.CanvasTestDriver = Object.freeze({ create, createZoomObservation, createHitObservation, createGeometryPosition, createSnapObservation, createAuthoringObservation, createSelectableLinePosition });
 })();

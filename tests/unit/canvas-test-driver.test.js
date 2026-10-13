@@ -80,3 +80,29 @@ test('snap observation uses current zoom, inclusive distance and existing candid
   assert.deepEqual(calls, [{ x: 3, y: 0 }, { x: 0, y: 0 }]);
   assert.deepEqual(point, { x: '3', y: 'invalid' });
 });
+
+test('selectable line position follows current scope and skips competing hits, bounds and overlays', () => {
+  let lines = [], rect = { left: 5, top: 10, right: 305, bottom: 110 };
+  const first = { id: 'L1', p1: { x: 0, y: 0 }, p2: { x: 100, y: 0 } };
+  const second = { id: 'L2', p1: { x: 200, y: 0 }, p2: { x: 300, y: 0 } };
+  const calls = [], canvas = { getBoundingClientRect: () => rect };
+  const observation = sandbox.window.CanvasTestDriver.createSelectableLinePosition({
+    currentScope: () => ({ lines }), canvas,
+    hitPoint: x => { calls.push(['point', x]); return x === 37; },
+    hitLine: x => { calls.push(['line', x]); return x === 63 ? { ...first } : x < 100 ? first : second; },
+    hitDimension: x => { calls.push(['dimension', x]); return x === 50; },
+    worldToCanvasScreen: p => ({ x: p.x === 237 ? 301 : p.x, y: p.y }),
+    elementFromPoint: x => { calls.push(['element', x]); return x === 268 ? {} : canvas; },
+  });
+  assert.equal(observation.position(), null);
+  lines = [first, second];
+  assert.deepEqual({ ...observation.position() }, { id: 'L2', x: 255, y: 10 });
+  assert.deepEqual(calls.filter(c => c[0] === 'point').map(c => c[1]), [37, 63, 50, 237, 263, 250]);
+  assert.equal(calls.some(c => c[0] === 'line' && c[1] === 37), false);
+  assert.equal(calls.some(c => c[0] === 'dimension' && c[1] === 63), false);
+  assert.deepEqual(calls.filter(c => c[0] === 'element'), [['element', 268], ['element', 255]]);
+  lines = [second]; rect = { left: 5, top: 10, right: 255, bottom: 10 };
+  assert.deepEqual({ ...observation.position() }, { id: 'L2', x: 255, y: 10 });
+  lines = [];
+  assert.equal(observation.position(), null);
+});

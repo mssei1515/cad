@@ -5022,6 +5022,9 @@
       readMode: () => mode, constraintTargetSession, pendingCommandSession, drawingSnap, centerlineCommand, currentScope: workspace.current,
       decorateSerializedConstraint, serializeConstraint, readPerformance: () => lastAuthoringPerformance, readSelectedGeometry: readTestSelectedGeometry,
     });
+    const selectableLinePosition = window.CanvasTestDriver.createSelectableLinePosition({
+      currentScope: workspace.current, canvas, hitPoint, hitLine, hitDimension, worldToCanvasScreen, elementFromPoint: (x, y) => document.elementFromPoint(x, y),
+    });
     const geometryHitObservation = window.CanvasTestDriver.createHitObservation({ hitArcEndpoint, hitPoint, hitLine, hitCircle, hitArc, hitSpline });
     const geometryPositionObservation = window.CanvasTestDriver.createGeometryPosition({
       currentScope: workspace.current, evaluateSpline: window.SplineGeometry.evaluate, clientPosition: canvasTestDriver.clientPosition,
@@ -5325,25 +5328,7 @@
       hoverDisplayStateForTest: hoverDisplayObservation.state,
       snapLabelsAtWorldForTest: snapObservation.labels,
       authoringStateForTest: authoringObservation.state,
-      selectableLineClientPositionForTest() {
-        const rect = canvas.getBoundingClientRect();
-        for (const line of model.lines) {
-          for (const t of [0.37, 0.63, 0.5]) {
-            const world = {
-              x: line.p1.x + (line.p2.x - line.p1.x) * t,
-              y: line.p1.y + (line.p2.y - line.p1.y) * t,
-            };
-            if (hitPoint(world.x, world.y) || hitLine(world.x, world.y) !== line || hitDimension(world.x, world.y)) continue;
-            const screen = worldToCanvasScreen(world);
-            const x = rect.left + screen.x;
-            const y = rect.top + screen.y;
-            if (x < rect.left || x > rect.right || y < rect.top || y > rect.bottom) continue;
-            if (document.elementFromPoint(x, y) !== canvas) continue;
-            return { id: line.id, x, y };
-          }
-        }
-        return null;
-      },
+      selectableLineClientPositionForTest: selectableLinePosition.position,
       guidedPointDragForTest(id, dx, dy) {
         const point = model.points.find((item) => item.id === id);
         if (!point) return null;
