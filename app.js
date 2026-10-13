@@ -4412,41 +4412,18 @@
     document, readDefault: key => documentModel[key], normalizeDimensionAppearance, dimensionAppearancePropertyRows,
     prepareAffixInputs, localizeApplicationUI, updateDimensionTerminatorAngleVisibility, updateUI, openAppearanceColorPalette, commands: documentDimensionAppearanceCommand,
   });
+  const documentSharedAppearanceCommand = window.DocumentDefaultAppearanceCommand.createShared({
+    readDefault: key => documentModel[key], normalizeTerminator: value => window.Appearance.normalizeTerminator(value),
+    applyLeaderAppearanceValue: (...args) => appearanceEditing.applyLeaderAppearanceValue(...args), readViewportScale: () => viewport.scale,
+    effectiveLeaderAppearanceForSketch, recordHistory, updateUI, draw,
+  });
+  const documentSharedAppearanceSettings = window.DocumentAppearanceSettings.createShared({
+    document, readDefault: key => documentModel[key], appearanceControls, effectiveLeaderAppearanceForSketch, openAppearanceColorPalette, commands: documentSharedAppearanceCommand,
+  });
   document.getElementById("documentSettingsBtn")?.addEventListener("click", () => {
     documentGeometryAppearanceSettings.prepare();
     documentDimensionAppearanceSettings.prepare();
-    const terminalFields = document.getElementById("documentTerminatorAppearanceFields");
-    const leaderFields = document.getElementById("documentLeaderAppearanceFields");
-    const renderSharedDefaults = () => {
-      const terminal = documentModel.defaultTerminatorAppearance;
-      terminalFields.innerHTML = appearanceControls.terminatorPropertyRows(terminal, terminal, { allowInheritance: false, idPrefix: "documentTerminator", attribute: "data-terminal-style" });
-      const leader = effectiveLeaderAppearanceForSketch(null);
-      leaderFields.innerHTML = appearanceControls.leaderAppearancePropertyRows(leader, leader, { allowInheritance: false, idPrefix: "documentLeader", terminals: false });
-    };
-    renderSharedDefaults();
-    terminalFields.onchange = event => {
-      const key = event.target.dataset.terminalStyle;
-      if (!key) return;
-      Object.assign(documentModel.defaultTerminatorAppearance, window.Appearance.normalizeTerminator({ [key]: event.target.value }));
-      renderSharedDefaults();
-      recordHistory("Document端末記号変更");
-      updateUI();
-      draw();
-    };
-    leaderFields.onchange = event => {
-      const key = event.target.dataset.leaderStyle;
-      if (!key) return;
-      appearanceEditing.applyLeaderAppearanceValue(documentModel.defaultLeaderAppearance, key, event.target.type === "checkbox" ? !event.target.checked : event.target.value,
-        { viewportScale: viewport.scale, effective: effectiveLeaderAppearanceForSketch(null) });
-      renderSharedDefaults();
-      recordHistory("Document引出線外観変更");
-      updateUI();
-      draw();
-    };
-    leaderFields.onclick = event => {
-      const button = event.target.closest("[data-appearance-palette-open]");
-      if (button) openAppearanceColorPalette(button, "document-leader");
-    };
+    documentSharedAppearanceSettings.prepare();
     document.getElementById("documentSettingsDialog")?.showModal();
   });
   appearancePalette.bind();

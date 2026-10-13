@@ -118,3 +118,62 @@ test('Dimension input preserves multiline affixes and separates live input from 
 test('missing Dimension field skips rendering and preparation dependencies', () => {
   const f = dimensionViewFixture(); f.field = null; f.view.prepare(); assert.equal(f.calls.length, 0);
 });
+
+test('shared defaults preserve object identity and refresh before history/UI/draw using live leader context', () => {
+  const defaults = { defaultTerminatorAppearance: { retained: true }, defaultLeaderAppearance: {} }, calls = [];
+  let scale = 2, effective = { color: 'old' };
+  const command = sandbox.window.DocumentDefaultAppearanceCommand.createShared({
+    readDefault: key => defaults[key], normalizeTerminator: value => { calls.push('normalize'); return value; },
+    applyLeaderAppearanceValue: (target, key, value, options) => {
+      assert.equal(target, defaults.defaultLeaderAppearance); assert.equal(options.viewportScale, scale); assert.equal(options.effective, effective);
+      calls.push('leader'); target[key] = value;
+    },
+    readViewportScale: () => scale, effectiveLeaderAppearanceForSketch: id => { assert.equal(id, null); return effective; },
+    recordHistory: label => calls.push(['history', label]), updateUI: () => calls.push('ui'), draw: () => calls.push('draw'),
+  });
+  const original = defaults.defaultTerminatorAppearance;
+  command.terminal('color', 'red', () => { assert.equal(original.color, 'red'); calls.push('refresh'); });
+  assert.equal(defaults.defaultTerminatorAppearance, original); assert.equal(original.retained, true);
+  assert.deepEqual(calls, ['normalize', 'refresh', ['history', 'Document端末記号変更'], 'ui', 'draw']);
+  calls.length = 0; scale = 4; effective = { color: 'latest' };
+  command.leader('sizeLock', false, () => { assert.equal(defaults.defaultLeaderAppearance.sizeLock, false); calls.push('refresh'); });
+  assert.deepEqual(calls, ['leader', 'refresh', ['history', 'Document引出線外観変更'], 'ui', 'draw']);
+});
+
+function sharedViewFixture() {
+  const f = { terminal: {}, leader: {}, defaults: { color: 'terminal' }, effective: { color: 'leader' }, calls: [] };
+  const controls = {
+    terminatorPropertyRows(direct, effective, options) { assert.equal(this, controls); assert.equal(direct, f.defaults); assert.equal(direct, effective); assert.equal(options.attribute, 'data-terminal-style'); f.calls.push('terminalRows'); return 'terminal'; },
+    leaderAppearancePropertyRows(direct, effective, options) { assert.equal(this, controls); assert.equal(direct, f.effective); assert.equal(direct, effective); assert.equal(options.terminals, false); f.calls.push('leaderRows'); return 'leader'; },
+  };
+  const changed = name => (key, value, refresh) => { f.calls.push([name, key, value]); refresh(); };
+  f.view = sandbox.window.DocumentAppearanceSettings.createShared({
+    document: { getElementById: id => id === 'documentTerminatorAppearanceFields' ? f.terminal : f.leader },
+    readDefault: key => { assert.equal(key, 'defaultTerminatorAppearance'); return f.defaults; }, appearanceControls: controls,
+    effectiveLeaderAppearanceForSketch: id => { assert.equal(id, null); return f.effective; },
+    openAppearanceColorPalette: (button, target) => f.calls.push(['palette', button, target]),
+    commands: { terminal: changed('terminal'), leader: changed('leader') },
+  });
+  return f;
+}
+test('shared fields guard keys, invert checkbox values, preserve other raw values and refresh both sections', () => {
+  const f = sharedViewFixture(); f.view.prepare(); assert.deepEqual(f.calls, ['terminalRows', 'leaderRows']);
+  f.calls.length = 0;
+  f.terminal.onchange({ target: { dataset: {}, get value() { throw new Error('missing key must skip value'); } } });
+  f.leader.onchange({ target: { dataset: {}, get type() { throw new Error('missing key must skip type'); } } });
+  assert.equal(f.calls.length, 0);
+  f.terminal.onchange({ target: { dataset: { terminalStyle: 'color' }, value: ' red ' } });
+  assert.deepEqual(f.calls, [['terminal', 'color', ' red '], 'terminalRows', 'leaderRows']);
+  f.calls.length = 0;
+  f.leader.onchange({ target: { dataset: { leaderStyle: 'sizeLock' }, type: 'checkbox', checked: true } });
+  assert.deepEqual(f.calls, [['leader', 'sizeLock', false], 'terminalRows', 'leaderRows']);
+  f.calls.length = 0;
+  f.leader.onchange({ target: { dataset: { leaderStyle: 'size' }, type: 'number', value: ' 9 ' } });
+  assert.deepEqual(f.calls, [['leader', 'size', ' 9 '], 'terminalRows', 'leaderRows']);
+  const button = {}; f.leader.onclick({ target: { closest: () => button } });
+  assert.deepEqual(f.calls.at(-1), ['palette', button, 'document-leader']);
+});
+test('shared settings retain required-field failure instead of silently skipping missing sections', () => {
+  const f = sharedViewFixture(); f.terminal = null;
+  assert.throws(() => f.view.prepare(), /innerHTML/);
+});

@@ -6,6 +6,10 @@
 
 ## 現在の再開地点（2026-10-14）
 
+Document共通Terminator／Leader既定値の表示／入力を既存DocumentAppearanceSettings.createSharedへ、値反映をDocumentDefaultAppearanceCommand.createSharedへ分離。Terminatorの部分normalize→同じobjectへassign、Leaderの現在値／viewportScale／Document実効外観→既存applyと、反映→共有再表示→履歴→UI→drawを維持する。UIはkey検査・checkbox反転／生文字列・palette対象・両section再表示を持ち、Document変更はcommandへ委譲。app.jsは5,233→5,210行（23行減、今回の再開から合計2,524行減）。構文497ファイル・単体1,338件・関連E2E169件が成功（すべてexit 0、E2E2.3分）。既存unitへ3件追加し、Terminator参照／無関係property保持、Leaderの最新倍率／実効外観と再表示／履歴／UI／draw順、key短絡・checkbox反転／raw値・rows receiver／palette・元の必須field失敗を確認。unified-ui／leader-appearance／unified-annotations／annotation-display-size／dimension-prefix／phase0-characterizationを実行。新script／unitファイルは追加していない。設定clickはGeometry→Dimension→Shared準備→dialog表示の接続へ縮小。専用port8784のサーバーは検証後に実体を確認して終了。ログはcad-document-shared-appearance-{check,unit,e2e}.log。全E2Eはこの単位では未実行。独自Document／外観規則・snapshot／履歴・DOM状態は追加していない。全体目標は未完了。
+
+### 前回の区切り
+
 Document既定寸法外観の表示／入力を既存DocumentAppearanceSettings.createDimensionへ、値反映をDocumentDefaultAppearanceCommand.createDimensionへ分離。現在寸法／Terminator合成・normalize／rows→affix準備→localize→angle表示、key検査・prefix／suffixの生文字列／他値trim・input履歴なし／change履歴ありとangle→UIを維持する。値反映は既存apply（継承なし）→dimensionDefaults→置換→必要な履歴→draw。既定値getter／setterとnormalize adapterはDocument／Appearance所有者へ接続する。app.jsは5,253→5,233行（20行減、今回の再開から合計2,501行減）。構文497ファイル・単体1,335件・関連E2E153件が成功（すべてexit 0、E2E2.1分）。既存unitへ3件追加し、現在の既定値／反映・preview／確定履歴、複数行affixと空白保持・trim・input対象限定／change順、無効keyの値照会省略と表示通知／palette、要素不在を確認。unified-ui／dimension-prefix／annotation-display-size／leader-appearance／view-visibility／phase0-characterizationを実行。新script／unitファイルは追加していない。Terminator／Leaderとdialog準備はappに残り次の単位とする。専用port8784のサーバーは検証後に実体を確認して終了。ログはcad-document-dimension-appearance-{check,unit,e2e}.log。全E2Eはこの単位では未実行。独自正規化／履歴／Document状態は追加していない。全体目標は未完了。
 
 ### 前回の区切り

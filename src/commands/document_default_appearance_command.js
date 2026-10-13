@@ -22,5 +22,23 @@
     }
     return Object.freeze({ apply });
   }
-  window.DocumentDefaultAppearanceCommand = Object.freeze({ createGeometry, createDimension });
+  function createShared({ readDefault, normalizeTerminator, applyLeaderAppearanceValue, readViewportScale, effectiveLeaderAppearanceForSketch, recordHistory, updateUI, draw }) {
+    function terminal(key, value, refresh) {
+      Object.assign(readDefault("defaultTerminatorAppearance"), normalizeTerminator({ [key]: value }));
+      refresh();
+      recordHistory("Document端末記号変更");
+      updateUI();
+      draw();
+    }
+    function leader(key, value, refresh) {
+      applyLeaderAppearanceValue(readDefault("defaultLeaderAppearance"), key, value,
+        { viewportScale: readViewportScale(), effective: effectiveLeaderAppearanceForSketch(null) });
+      refresh();
+      recordHistory("Document引出線外観変更");
+      updateUI();
+      draw();
+    }
+    return Object.freeze({ terminal, leader });
+  }
+  window.DocumentDefaultAppearanceCommand = Object.freeze({ createGeometry, createDimension, createShared });
 })();
